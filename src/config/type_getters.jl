@@ -262,9 +262,14 @@ function jacobian_from_parsed_args(parsed_args)
     if parsed_args["use_dense_jacobian"]
         return AutoDenseJacobian()
     elseif parsed_args["use_auto_jacobian"]
+        scaling_str = parsed_args["auto_jacobian_scaling"]
+        scaling_str in (nothing, "static") || error(
+            "Invalid auto_jacobian_scaling: $scaling_str (`~` or `static`)",
+        )
         return AutoSparseJacobian(;
             approximate_solve_iters,
             padding_bands_per_block = parsed_args["auto_jacobian_padding_bands"],
+            seed_scaling = isnothing(scaling_str) ? nothing : Symbol(scaling_str),
         )
     else
         return ManualSparseJacobian(; approximate_solve_iters)

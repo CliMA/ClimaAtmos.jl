@@ -107,6 +107,58 @@ function print_jacobian_summary(integrator)
     pretty_table(normalized_dense_rms_values; dense_table_kwargs...)
     println("<$('='^70)>\n")
 
+    # Aliasing risk audit for seed scaling: normalize the dense blocks by the
+    # ratios of the seed scales (instead of the state-dependent tendency
+    # ratios used above), and list the blocks outside of the sparsity
+    # structure whose seed-scale-normalized magnitudes are not negligible
+    # compared to the significance threshold 1/dt. These are the blocks whose
+    # entries can alias into same-colored columns of the sparsity structure;
+    # they measure what the padding band comments in auto_sparse_jacobian.jl
+    # can only estimate, and they indicate where the seed scales in
+    # default_jacobian_seed_scale need to be adjusted.
+    seed_scaling =
+        jacobian.alg isa CA.AutoSparseJacobian ? jacobian.alg.seed_scaling :
+        nothing
+    if !isnothing(seed_scaling)
+        seed_scales = Dict(
+            name => CA.seed_scale(FT, name, seed_scaling) for
+            name in scalar_names
+        )
+        seed_normalized_rms(block_key) =
+            rms(dense_blocks[block_key]) * seed_scales[block_key[2]] /
+            seed_scales[block_key[1]]
+        seed_normalized_dense_rms_values = map(block_keys) do block_key
+            seed_normalized_rms(block_key)
+        end
+        @info "seed-scale-normalized dense, RMS per block [s^-1]:"
+        pretty_table(seed_normalized_dense_rms_values; dense_table_kwargs...)
+        manual_blocks = all_sparse_blocks.manual
+        aliasing_risk_threshold = 1e-3 / FT(float(p.dt))
+        aliasing_risk_keys = filter(collect(block_keys)) do block_key
+            is_in_structure =
+                haskey(manual_blocks, block_key) &&
+                !(manual_blocks[block_key] isa UniformScaling)
+            !is_in_structure &&
+                seed_normalized_rms(block_key) > aliasing_risk_threshold
+        end
+        if isempty(aliasing_risk_keys)
+            @info "All blocks outside of the sparsity structure have \
+                   negligible seed-scale-normalized magnitudes"
+        else
+            @info "Blocks outside of the sparsity structure whose \
+                   seed-scale-normalized magnitudes exceed 1e-3 / dt (these \
+                   can alias into same-colored columns; adjust their seed \
+                   scales or add padding bands):"
+            for block_key in aliasing_risk_keys
+                (block_row_name, block_column_name) = block_key
+                value = seed_normalized_rms(block_key)
+                @info "    ∂Yₜ($block_row_name)/∂Y($block_column_name): \
+                       $value s^-1"
+            end
+        end
+        println("<$('='^70)>\n")
+    end
+
     if jacobian.alg isa CA.AutoSparseJacobian
         normalized_sparse_difference_rms_values = map(block_keys) do block_key
             (; manual, auto) = all_sparse_blocks

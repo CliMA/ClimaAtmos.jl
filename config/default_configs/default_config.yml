@@ -89,6 +89,9 @@ use_auto_jacobian:
 auto_jacobian_padding_bands:
   help: "Target number of bands to add in every block of the sparse Jacobian matrix, eliminating errors from Jacobian entries that lie outside of the default sparsity pattern; when unspecified, each block gets a predetermined number of padding bands based on the typical magnitudes of its entries (only used when `use_auto_jacobian` is `true`)"
   value: ~
+auto_jacobian_scaling:
+  help: "Scaling mode for the dual number seeds of the sparse autodiff Jacobian; `static` rescales each state variable's seed by its typical increment magnitude, so that Jacobian entries outside of the sparsity pattern alias below significance and fewer padding bands are needed (only used when `use_auto_jacobian` is `true`) [`~` (default, unscaled seeds), `static`]"
+  value: ~
 update_jacobian_every:
   help: "Frequency at which the Jacobian matrix should be updated (once per timestep, once per timestepper stage, or once per linear solve) [`dt`, `stage`, `solve` (default)]"
   value: "solve"

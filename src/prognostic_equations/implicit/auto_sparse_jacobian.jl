@@ -1,37 +1,53 @@
 import SparseMatrixColorings
 
 """
-    AutoSparseJacobian(sparse_jacobian_alg, [padding_bands_per_block])
+    AutoSparseJacobian(sparse_jacobian_alg, [padding_bands_per_block], [seed_scaling])
 
 A [`JacobianAlgorithm`](@ref) that computes the Jacobian using forward-mode
 automatic differentiation, assuming that the Jacobian's sparsity structure is
 given by `sparse_jacobian_alg`.
 
-Only entries that are exptected to be nonzero according to the sparsity
+Only entries that are expected to be nonzero according to the sparsity
 structure are updated, but any other entries that are nonzero can introduce
 errors to the updated entries. This issue can be avoided by adding padding bands
 to blocks that are likely to introduce errors. In cases where the default
 padding bands are insufficient, `padding_bands_per_block` can be specified to
 add a fixed number of padding bands to every block.
 
+The errors introduced by entries outside of the sparsity structure can also be
+reduced by rescaling the dual number seed of every Jacobian column by the
+typical increment magnitude of its state variable, which is enabled by setting
+`seed_scaling` to `:static`. When the seed of the column for ``Y_b`` is a
+typical increment ``s_b`` instead of 1, an entry ``∂Yₜ_i/∂Y_b`` outside of the
+sparsity structure modifies an entry ``∂Yₜ_i/∂Y_a`` that has the same color by
+``∂Yₜ_i/∂Y_b * s_b / s_a``, which is negligible compared to ``∂Yₜ_i/∂Y_a``
+whenever the increment-weighted criterion used to drop blocks from the sparsity
+structure applies. Entries inside the sparsity structure are unaffected because
+dual number arithmetic is linear in the seeds. Setting `seed_scaling` to a
+function that maps scalar field names to positive numbers overrides the default
+scales used by `:static`.
+
 For more information about this algorithm, see [Implicit Solver](@ref).
 """
-struct AutoSparseJacobian{A <: SparseJacobian, P} <: SparseJacobian
+struct AutoSparseJacobian{A <: SparseJacobian, P, S} <: SparseJacobian
     sparse_jacobian_alg::A
     padding_bands_per_block::P
+    seed_scaling::S
 end
 
 """
-    AutoSparseJacobian(sparse_jacobian_alg, [padding_bands_per_block = nothing])
+    AutoSparseJacobian(sparse_jacobian_alg, [padding_bands_per_block], [seed_scaling])
 
 Construct an [`AutoSparseJacobian`](@ref) that reuses the sparsity structure
 of the given `sparse_jacobian_alg`.
 """
 AutoSparseJacobian(sparse_jacobian_alg) =
-    AutoSparseJacobian(sparse_jacobian_alg, nothing)
+    AutoSparseJacobian(sparse_jacobian_alg, nothing, nothing)
+AutoSparseJacobian(sparse_jacobian_alg, padding_bands_per_block) =
+    AutoSparseJacobian(sparse_jacobian_alg, padding_bands_per_block, nothing)
 
 """
-    AutoSparseJacobian(; approximate_solve_iters = 1, padding_bands_per_block = nothing)
+    AutoSparseJacobian(; approximate_solve_iters = 1, padding_bands_per_block = nothing, seed_scaling = nothing)
 
 Construct an [`AutoSparseJacobian`](@ref) that reuses the sparsity structure
 of an inner [`ManualSparseJacobian`](@ref) built from `approximate_solve_iters`.
@@ -39,13 +55,95 @@ of an inner [`ManualSparseJacobian`](@ref) built from `approximate_solve_iters`.
 AutoSparseJacobian(;
     approximate_solve_iters::Int = 1,
     padding_bands_per_block = nothing,
+    seed_scaling = nothing,
 ) = AutoSparseJacobian(
     ManualSparseJacobian(; approximate_solve_iters),
     padding_bands_per_block,
+    seed_scaling,
 )
 
+"""
+    seed_scale(::Type{FT}, scalar_name, seed_scaling)
+
+The scale of the dual number seed for the Jacobian column that corresponds to
+the scalar field `scalar_name`, given the `seed_scaling` of an
+[`AutoSparseJacobian`](@ref). When `seed_scaling` is `nothing`, every seed is 1;
+when it is `:static`, the seed is the field's typical increment magnitude from
+[`default_jacobian_seed_scale`](@ref); when it is a function, the seed is
+`FT(seed_scaling(scalar_name))`.
+"""
+seed_scale(::Type{FT}, scalar_name, ::Nothing) where {FT} = one(FT)
+seed_scale(::Type{FT}, scalar_name, seed_scaling::Symbol) where {FT} =
+    seed_scaling == :static ? default_jacobian_seed_scale(FT, scalar_name) :
+    error("Unknown seed_scaling mode :$seed_scaling (the only mode is :static)")
+seed_scale(::Type{FT}, scalar_name, seed_scaling::F) where {FT, F <: Function} =
+    FT(seed_scaling(scalar_name))
+
+"""
+    default_jacobian_seed_scale(::Type{FT}, scalar_name)
+
+Typical magnitude of the change in the scalar field `scalar_name` over an
+implicit stage of the model, used to scale dual number seeds when an
+[`AutoSparseJacobian`](@ref) is constructed with `seed_scaling = :static`.
+
+These are order-of-magnitude estimates, and only the ratios between scales
+matter, since rescaling all seeds by a constant has no effect on aliasing
+errors. The scales make the increment-weighted comparisons in the padding band
+comments below executable; e.g., ``‖δᶜρ‖ ≪ ‖δᶜρe_tot‖`` becomes
+``s_ρ ≪ s_ρe_tot``. Scalar fields that are not listed here default to a scale
+of 1, which is safe for fields whose columns have no nonzero entries in the
+sparsity structure (their colors are 0, so their seeds are never set), but
+which may allow aliasing errors from new prognostic variables; the seed scales
+are logged when the Jacobian is constructed with `verbose = true`.
+"""
+function default_jacobian_seed_scale(::Type{FT}, scalar_name) where {FT}
+    uₕ_component_names =
+        (@name(c.uₕ.components.data.:(1)), @name(c.uₕ.components.data.:(2)))
+    grid_mean_condensate_names =
+        (@name(c.ρq_lcl), @name(c.ρq_icl), @name(c.ρq_rai), @name(c.ρq_sno))
+    sgs_condensate_names = (
+        @name(c.sgsʲs.:(1).q_lcl),
+        @name(c.sgsʲs.:(1).q_icl),
+        @name(c.sgsʲs.:(1).q_rai),
+        @name(c.sgsʲs.:(1).q_sno),
+    )
+    return if scalar_name == @name(c.ρ)
+        FT(1e-5) # δρ ~ dt * ρₜ, much smaller than δρe_tot / (cᵥ * T)
+    elseif scalar_name in uₕ_component_names
+        # δu ~ 0.01-0.1 m/s, times a horizontal metric factor of ~1e4-1e5 m on
+        # global meshes; this covariant component scale is geometry-dependent,
+        # which makes it the least certain entry in this table.
+        FT(1e3)
+    elseif scalar_name == @name(c.ρe_tot)
+        FT(1e2) # δT ~ 0.03-0.1 K, times ρ * cᵥ ~ 1e3 J/(K * m^3)
+    elseif scalar_name == @name(f.u₃.components.data.:(1)) ||
+           scalar_name == @name(f.sgsʲs.:(1).u₃.components.data.:(1))
+        FT(1e1) # δw ~ 0.01-0.1 m/s, times a vertical metric factor of ~1e2 m
+    elseif scalar_name == @name(c.ρq_tot)
+        FT(1e-6) # δq_tot ~ 1e-6 kg/kg, times ρ ~ 1 kg/m^3
+    elseif scalar_name in grid_mean_condensate_names
+        FT(1e-7) # δq ~ 1e-7 kg/kg for condensate and precipitation species
+    elseif scalar_name == @name(c.ρtke)
+        FT(1e-3) # δtke ~ 1e-3 m^2/s^2, times ρ ~ 1 kg/m^3
+    elseif scalar_name == @name(c.sgsʲs.:(1).ρa)
+        FT(1e-4) # δaʲ ~ 1e-4, times ρ ~ 1 kg/m^3
+    elseif scalar_name == @name(c.sgsʲs.:(1).mse)
+        FT(1e2) # δT ~ 0.03-0.1 K, times cₚ ~ 1e3 J/(K * kg)
+    elseif scalar_name == @name(c.sgsʲs.:(1).q_tot)
+        FT(1e-6) # δq_tot ~ 1e-6 kg/kg
+    elseif scalar_name in sgs_condensate_names
+        FT(1e-7) # δq ~ 1e-7 kg/kg for condensate and precipitation species
+    else
+        # All other fields (e.g., surface fields, gas tracers, and number
+        # concentrations) keep unscaled seeds. This is always safe for fields
+        # whose columns lie outside the sparsity structure, since their seeds
+        # are never set.
+        one(FT)
+    end
+end
+
 function jacobian_cache(alg::AutoSparseJacobian, Y, atmos; verbose = true)
-    (; sparse_jacobian_alg, padding_bands_per_block) = alg
+    (; sparse_jacobian_alg, padding_bands_per_block, seed_scaling) = alg
 
     FT = eltype(Y)
     DA = ClimaComms.array_type(Y)
@@ -245,8 +343,15 @@ function jacobian_cache(alg::AutoSparseJacobian, Y, atmos; verbose = true)
         end
     end
 
-    # Find a coloring that minimizes the number of required colors.
-    all_coloring_orders = SparseMatrixColorings.all_orders()
+    # Find a coloring that minimizes the number of required colors. Exclude
+    # RandomOrder from the candidate orders to make the coloring deterministic
+    # across cache constructions; when entries outside of the sparsity
+    # structure are nonzero, different colorings produce different aliasing
+    # errors, so a random coloring would make the Jacobian non-reproducible.
+    all_coloring_orders = filter(
+        order -> !(order isa SparseMatrixColorings.RandomOrder),
+        SparseMatrixColorings.all_orders(),
+    )
     jacobian_column_colorings = map(all_coloring_orders) do coloring_order
         SparseMatrixColorings.coloring(
             SparseMatrixColorings.sparse(padded_sparsity_mask),
@@ -322,12 +427,35 @@ function jacobian_cache(alg::AutoSparseJacobian, Y, atmos; verbose = true)
         end
     end
 
-    # iterator of pairs ((f, v), c), where the color c identifies a component
-    # of the dual number in row (f, v) of Y_dual that corresponds to the
-    # diagonal entry in the same row of the matrix ∂Y/∂Y (or 0 if the
-    # corresponding value in Y does not require autodiff)
+    # Seed scale of every scalar field, used to rescale the dual number seed of
+    # each Jacobian column (and to unscale the entries recovered from the
+    # output partials). Rescaling the seed of the column for Y_b by s_b makes
+    # the aliasing error it introduces into a same-colored column for Y_a
+    # proportional to s_b / s_a, which is negligible whenever the
+    # increment-weighted criterion for dropping blocks from the sparsity
+    # structure applies to the entries outside of that structure.
+    seed_scales =
+        unrolled_map(name -> seed_scale(FT, name, seed_scaling), scalar_names)
+    if verbose && !isnothing(seed_scaling)
+        seed_scale_pairs = unrolled_map(
+            name -> name => seed_scale(FT, name, seed_scaling),
+            scalar_names,
+        )
+        @info "Scaling dual number seeds by typical increment magnitudes: \
+               $(join(seed_scale_pairs, ", "))"
+    end
+
+    # iterator of tuples ((f, v), c, s), where the color c identifies a
+    # component of the dual number in row (f, v) of Y_dual that corresponds to
+    # the diagonal entry in the same row of the matrix ∂Y/∂Y (or 0 if the
+    # corresponding value in Y does not require autodiff), and s is the seed
+    # scale of the scalar field that contains this row
+    Y_index_seed_scales = Iterators.map(
+        ((scalar_index, _),) -> seed_scales[scalar_index],
+        field_vector_indices,
+    )
     Y_index_to_diagonal_color_map =
-        zip(field_vector_indices, jacobian_column_colors)
+        zip(field_vector_indices, jacobian_column_colors, Y_index_seed_scales)
 
     # Set the dual numbers in each FieldVector partition_εs so that the ε
     # components correspond to partitions of the N × N identity matrix ∂Y/∂Y.
@@ -349,12 +477,14 @@ function jacobian_cache(alg::AutoSparseJacobian, Y, atmos; verbose = true)
             column_index in column_indices,
             index_pair in DA(collect(Y_index_to_diagonal_color_map))
 
-            ((scalar_index, level_index), diagonal_entry_color) = index_pair
+            ((scalar_index, level_index), diagonal_entry_color, entry_scale) =
+                index_pair
             ε_offset = (partition_index - 1) * n_εs
             diagonal_entry_ε_index =
                 ε_offset < diagonal_entry_color <= ε_offset + n_εs ?
                 diagonal_entry_color - ε_offset : 0
-            ε_coefficients = ntuple(==(diagonal_entry_ε_index), n_εs_val)
+            ε_coefficients =
+                ntuple(i -> (i == diagonal_entry_ε_index) * entry_scale, n_εs_val)
             unrolled_applyat(scalar_index, scalar_names) do name
                 field = MatrixFields.get_field(partition_εs_data, name)
                 @inbounds point(field, level_index, column_index...)[] =
@@ -371,10 +501,11 @@ function jacobian_cache(alg::AutoSparseJacobian, Y, atmos; verbose = true)
             upper_band - lower_band + 1
         end
 
-    # iterator of pairs ((b, v), (f, cs)), where (b, v) is the index of a band
-    # matrix row in autodiff_matrix, (f, v) is the index of a dual number in
-    # Yₜ_dual, and cs is a tuple that contains the colors of the band matrix row
-    # entries, which is padded to have a constant size for GPU compatibility
+    # iterator of pairs ((b, v), (f, cs, s⁻¹)), where (b, v) is the index of a
+    # band matrix row in autodiff_matrix, (f, v) is the index of a dual number
+    # in Yₜ_dual, cs is a tuple that contains the colors of the band matrix row
+    # entries, which is padded to have a constant size for GPU compatibility,
+    # and s⁻¹ is the inverse of the seed scale of the block's column field
     # TODO: Use an iterator of pairs ((f, v), ((b1, cs1), (b2, cs2), ...)), so
     # that each pair corresponds to a dual number instead of a band matrix row.
     band_matrix_row_index_to_colors_map = Iterators.flatmap(
@@ -383,6 +514,8 @@ function jacobian_cache(alg::AutoSparseJacobian, Y, atmos; verbose = true)
         (block_row_name, block_column_name) = block_key
         (n_rows_in_block, n_columns_in_block, lower_band, upper_band) =
             MatrixFields.band_matrix_info(matrix_field)
+        inv_column_seed_scale =
+            inv(seed_scale(FT, block_column_name, seed_scaling))
 
         block_Yₜ_indices =
             Iterators.filter(field_vector_indices) do (scalar_index, _)
@@ -393,7 +526,7 @@ function jacobian_cache(alg::AutoSparseJacobian, Y, atmos; verbose = true)
                 ((scalar_index, _), _) = index_pair
                 scalar_names[scalar_index] == block_column_name
             end
-        block_colors = last.(block_Y_index_to_color_map)
+        block_colors = getindex.(block_Y_index_to_color_map, 2)
 
         map(block_Yₜ_indices) do (scalar_index, level_index)
             entry_colors = ntuple(colors_per_band_matrix_row) do band_index
@@ -407,7 +540,10 @@ function jacobian_cache(alg::AutoSparseJacobian, Y, atmos; verbose = true)
                     level_index_min <= level_index <= level_index_max
                 is_color_at_index ? block_colors[level_index + band] : 0
             end
-            ((block_index, level_index), (scalar_index, entry_colors))
+            (
+                (block_index, level_index),
+                (scalar_index, entry_colors, inv_column_seed_scale),
+            )
         end
     end
 
@@ -459,8 +595,10 @@ function update_jacobian!(::AutoSparseJacobian, cache, Y, p, dtγ, t)
             for column_index in column_indices,
                 index_pair in band_matrix_row_index_to_colors_map
 
-                ((block_index, level_index), (scalar_index, entry_colors)) =
-                    index_pair
+                (
+                    (block_index, level_index),
+                    (scalar_index, entry_colors, inv_column_seed_scale),
+                ) = index_pair
                 dual_number =
                     unrolled_applyat(scalar_index, scalar_names) do name
                         data = MatrixFields.get_field(Yₜ_dual_data, name)
@@ -475,11 +613,12 @@ function update_jacobian!(::AutoSparseJacobian, cache, Y, p, dtγ, t)
                     entries_data[] =
                         map(entry_colors, entries_data[]) do entry_color, entry
                             # If the entry has a color in the current partition,
-                            # set the entry to the ε coefficient for that color.
-                            # Otherwise, keep the value from the block's data.
+                            # set the entry to the ε coefficient for that color,
+                            # unscaled by the seed scale of the block's column
+                            # field. Otherwise, keep the block's current value.
                             ε_offset < entry_color <= ε_offset + n_εs ?
-                            (@inbounds ε_coefficients[entry_color - ε_offset]) :
-                            entry
+                            (@inbounds ε_coefficients[entry_color - ε_offset]) *
+                            inv_column_seed_scale : entry
                         end # TODO: Why does unrolled_map break GPU compilation?
                 end
             end
