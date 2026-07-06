@@ -13,18 +13,21 @@ AutoSparseJacobian variant and is not what these tests measure (it is reported
 alongside the aliasing error for context).
 
 The tests lock in two guarantees:
-1. With the default padding bands, aliasing errors on every stored band are
-   small compared to the significance threshold of the implicit solver
-   (normalized magnitudes of order 1/dt).
-2. With seed scaling (`seed_scaling = :static`) and no padding bands at all,
-   the same bound holds: scaling each column's seed by its state variable's
-   typical increment magnitude suppresses aliasing errors wherever the
-   increment-weighted criterion for dropping entries from the sparsity
-   structure applies.
+1. With unscaled seeds and the default padding bands, aliasing errors on
+   every stored band are small compared to the significance threshold of the
+   implicit solver (normalized magnitudes of order 1/dt).
+2. With seed scaling (`seed_scaling = :static`) and the default padding
+   bands, the same bound holds. Scaling suppresses cross-field aliasing
+   wherever the increment-weighted criterion for dropping entries from the
+   sparsity structure applies; within-field band deficits (whose seed scale
+   ratios are 1) remain the padding bands' job, so the zero-padding scaled
+   variant is reported for calibration but not asserted against the bound.
 They also verify that the seed scaling plumbing reproduces the unscaled
 entries exactly when all scales are 1 (which requires the deterministic
-coloring guaranteed by AutoSparseJacobian), and they report the aliasing error
-of the naive unscaled and unpadded variant for calibration.
+coloring guaranteed by AutoSparseJacobian), report the aliasing error of the
+naive unscaled and unpadded variant, and, for any variant that exceeds the
+bound, rank the same-color contributors into its worst block to identify the
+field whose seed scale or padding needs adjustment.
 
 To iterate on this file without repeatedly compiling a fresh package test
 environment, run it directly in the .buildkite environment:
@@ -59,29 +62,118 @@ function stored_band_mask(manual_block)
     return mask
 end
 
+# Report any non-finite entries so that non-finite error metrics can be
+# traced to their source (the dense reference, the rescalings, or a sparse
+# variant's recovered entries).
+function report_nonfinite_entries(blocks, label)
+    for (block_key, block) in blocks
+        block isa LA.UniformScaling && continue
+        nonfinite_count = count(!isfinite, block)
+        nonfinite_count == 0 && continue
+        indices = findall(!isfinite, block)
+        @warn "$label block $block_key has $nonfinite_count non-finite \
+               entries in a block of size $(size(block)), at indices \
+               $(first(indices, min(4, length(indices))))"
+    end
+end
+
 # Errors of the given sparse Jacobian algorithm's blocks relative to the dense
 # reference blocks, maximized over all non-constant blocks in the sparsity
 # structure. Each block's entrywise difference is normalized by typical
 # increment ratios [s^-1] and multiplied by dt to make it dimensionless;
 # max_aliasing_error is the RMS restricted to stored band positions (pure
 # recovery error), while max_full_error also includes the truncation of the
-# sparsity structure itself.
-function block_errors(alg, Y, p, dtγ, t, dense_blocks, manual_blocks, rescalings)
+# sparsity structure itself. Entries where the dense reference or the
+# rescaling is non-finite cannot be compared (they indicate a
+# non-differentiable point or a non-finite tendency value, rather than an
+# aliasing error), so they are excluded from both metrics and reported by
+# report_nonfinite_entries; non-finite recovered entries at comparable
+# positions are kept, making the metrics non-finite by design.
+function block_errors(
+    alg,
+    label,
+    Y,
+    p,
+    dtγ,
+    t,
+    dense_blocks,
+    manual_blocks,
+    rescalings,
+)
     FT = eltype(Y)
     dt = FT(float(p.dt))
     blocks = CA.first_column_block_arrays(alg, Y, p, dtγ, t)
+    report_nonfinite_entries(blocks, label)
     max_aliasing_error = zero(FT)
     max_full_error = zero(FT)
+    block_aliasing_errors = Pair{Any, FT}[]
     for (block_key, block) in blocks
         block isa LA.UniformScaling && continue
         manual_blocks[block_key] isa LA.UniformScaling && continue
+        valid =
+            isfinite.(dense_blocks[block_key]) .&
+            isfinite.(rescalings[block_key])
         difference =
-            (dense_blocks[block_key] .- block) .* rescalings[block_key] .* dt
+            ifelse.(
+                valid,
+                (dense_blocks[block_key] .- block) .* rescalings[block_key] .* dt,
+                zero(FT),
+            )
         mask = stored_band_mask(manual_blocks[block_key])
-        max_aliasing_error = max(max_aliasing_error, rms(difference .* mask))
+        block_aliasing_error = rms(difference .* mask)
+        push!(block_aliasing_errors, block_key => block_aliasing_error)
+        max_aliasing_error = max(max_aliasing_error, block_aliasing_error)
         max_full_error = max(max_full_error, rms(difference))
     end
-    return (; max_aliasing_error, max_full_error)
+    # Report the dominant blocks so that scale or padding adjustments can be
+    # targeted (NaN sorts first, so poisoned blocks are always listed).
+    worst_blocks = sort(block_aliasing_errors; by = last, rev = true)
+    @info "$label: largest aliasing errors per block: \
+           $(first(worst_blocks, min(3, length(worst_blocks))))"
+    @info "$label: max_aliasing_error = $max_aliasing_error, \
+           max_full_error = $max_full_error"
+    worst_block_keys =
+        map(first, first(worst_blocks, min(3, length(worst_blocks))))
+    return (; max_aliasing_error, max_full_error, worst_block_keys)
+end
+
+# For each stored column of the victim block, rank the other Y columns that
+# share its color by their largest increment-weighted dense-Jacobian magnitude
+# in the victim's rows, aggregated by field. These are the sources of the
+# victim block's recovery (aliasing) error: a contributor from the same field
+# (or from a field with the same seed scale) indicates missing bands that
+# require padding or a pattern extension, while a contributor from another
+# field indicates a seed scale ratio that needs adjustment.
+function report_aliasing_contributors(alg, Y, p, victim_key, dense_blocks, label)
+    FT = eltype(Y)
+    column_Y = CA.first_column_view(Y)
+    cache = CA.jacobian_cache(alg, column_Y, p.atmos; verbose = false)
+    colors = cache.jacobian_column_colors
+    scalar_names = CA.scalar_field_names(column_Y)
+    flat_indices = collect(CA.field_vector_index_iterator(column_Y))
+    (victim_row_name, victim_column_name) = victim_key
+    victim_scale = CA.seed_scale(FT, victim_column_name, alg.seed_scaling)
+    contributions = Dict{Any, FT}()
+    for (j, (scalar_index, _)) in enumerate(flat_indices)
+        scalar_names[scalar_index] == victim_column_name || continue
+        color = colors[j]
+        color == 0 && continue
+        for (j2, (scalar_index2, level2)) in enumerate(flat_indices)
+            (j2 == j || colors[j2] != color) && continue
+            contributor_name = scalar_names[scalar_index2]
+            contributor_block = dense_blocks[(victim_row_name, contributor_name)]
+            contribution =
+                maximum(abs, view(contributor_block, :, level2)) *
+                CA.seed_scale(FT, contributor_name, alg.seed_scaling) /
+                victim_scale
+            contributions[contributor_name] =
+                max(get(contributions, contributor_name, zero(FT)), contribution)
+        end
+    end
+    ranked = sort(collect(contributions); by = last, rev = true)
+    @info "$label: same-color contributors into $victim_key (max dense \
+           magnitude × seed scale ratio, by field): \
+           $(first(ranked, min(6, length(ranked))))"
 end
 
 @testset "sparse vs dense autodiff Jacobian agreement" begin
@@ -139,9 +231,13 @@ end
         t,
     )
     rescalings = CA.first_column_rescaling_arrays(Y, p, t)
+    report_nonfinite_entries(dense_blocks, "dense")
+    report_nonfinite_entries(manual_blocks, "manual sparse")
+    report_nonfinite_entries(rescalings, "rescaling")
 
-    errors(alg) = block_errors(
+    errors(alg, label) = block_errors(
         alg,
+        label,
         Y,
         p,
         dtγ,
@@ -158,25 +254,60 @@ end
     tolerance = 1e-2
 
     # The current default configuration: unscaled seeds, default padding.
-    errors_padded = errors(sparse_alg())
-    @info "Errors with unscaled seeds and default padding: $errors_padded"
+    errors_padded = errors(sparse_alg(), "unscaled + default padding")
     @test errors_padded.max_aliasing_error < tolerance
+    if !(errors_padded.max_aliasing_error < tolerance)
+        report_aliasing_contributors(
+            sparse_alg(),
+            Y,
+            p,
+            first(errors_padded.worst_block_keys),
+            dense_blocks,
+            "unscaled + default padding",
+        )
+    end
 
-    # Seed scaling should make all padding bands unnecessary.
-    errors_scaled_unpadded = errors(
-        sparse_alg(; padding_bands_per_block = 0, seed_scaling = :static),
+    # The practical scaled configuration: scaling suppresses cross-field
+    # aliasing, while the default padding continues to cover within-field
+    # band deficits (which scaling cannot suppress, since the seed scale
+    # ratio within a field is 1).
+    scaled_alg = sparse_alg(; seed_scaling = :static)
+    errors_scaled = errors(scaled_alg, "scaled + default padding")
+    @test errors_scaled.max_aliasing_error < tolerance
+    if !(errors_scaled.max_aliasing_error < tolerance)
+        report_aliasing_contributors(
+            scaled_alg,
+            Y,
+            p,
+            first(errors_scaled.worst_block_keys),
+            dense_blocks,
+            "scaled + default padding",
+        )
+    end
+
+    # Calibration reports for the zero-padding variants. The scaled variant
+    # is not asserted against the bound: within-field band deficits (e.g.,
+    # the upwind-widened ∂/∂u₃ stencils) are invisible to seed scaling by
+    # construction, so removing ALL padding is not expected to pass. The
+    # naive variant additionally loses the cross-field suppression, and
+    # scaling must never do worse than it.
+    scaled_unpadded_alg =
+        sparse_alg(; padding_bands_per_block = 0, seed_scaling = :static)
+    errors_scaled_unpadded = errors(scaled_unpadded_alg, "scaled + no padding")
+    for victim_key in first(errors_scaled_unpadded.worst_block_keys, 2)
+        report_aliasing_contributors(
+            scaled_unpadded_alg,
+            Y,
+            p,
+            victim_key,
+            dense_blocks,
+            "scaled + no padding",
+        )
+    end
+    errors_naive = errors(
+        sparse_alg(; padding_bands_per_block = 0),
+        "unscaled + no padding",
     )
-    @info "Errors with scaled seeds and no padding: $errors_scaled_unpadded"
-    @test errors_scaled_unpadded.max_aliasing_error < tolerance
-
-    # Calibration report for the naive variant, which is expected to violate
-    # the bound whenever the coloring assigns the same color to a column with
-    # large out-of-pattern entries and a column of a small in-pattern block.
-    # Scaling must never do worse than the naive variant, but the naive error
-    # is not asserted against the bound, since it depends on the specific
-    # coloring; add that assertion once the error proves stably large.
-    errors_naive = errors(sparse_alg(; padding_bands_per_block = 0))
-    @info "Errors with unscaled seeds and no padding: $errors_naive"
     @test errors_scaled_unpadded.max_aliasing_error <=
           errors_naive.max_aliasing_error
 

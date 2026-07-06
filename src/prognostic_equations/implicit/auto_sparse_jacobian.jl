@@ -162,8 +162,18 @@ function jacobian_cache(alg::AutoSparseJacobian, Y, atmos; verbose = true)
     # (; matrix) = jacobian_cache(sparse_jacobian_alg, Y, atmos)
     matrix_without_tree = jacobian_cache(sparse_jacobian_alg, Y, atmos).matrix
     tree = MatrixFields.FieldNameTree(Y)
+    inner_matrix =
+        MatrixFields.replace_name_tree(matrix_without_tree.matrix, tree)
+    # Zero-initialize all block storage: update_jacobian! only writes the band
+    # entries whose colors are in the current partition, so entries outside
+    # the vertical range of a band (near the domain boundaries) would
+    # otherwise keep whatever memory `similar` returned, which makes the
+    # Jacobian blocks non-deterministic across cache constructions.
+    foreach(values(inner_matrix)) do block
+        block isa Fields.Field && fill!(parent(block), zero(FT))
+    end
     matrix = MatrixFields.FieldMatrixWithSolver(
-        MatrixFields.replace_name_tree(matrix_without_tree.matrix, tree),
+        inner_matrix,
         matrix_without_tree.solver,
     )
 
@@ -192,16 +202,76 @@ function jacobian_cache(alg::AutoSparseJacobian, Y, atmos; verbose = true)
             (scalar_block_row_name, scalar_block_column_name)
         end
 
+    # Resolve the entry that the autodiff machinery can read band structure
+    # from and write recovered values into, for each scalarized key: the
+    # scalar view itself when it is a Field, or the parent block of
+    # tendency_matrix when the scalar view is an unwritable lazy wrapper but
+    # the parent is a Field whose entries occupy a single scalar component.
+    # The latter case covers the covector-valued advection blocks (∂χₜ/∂u₃)
+    # and single-component tensor blocks (∂u₃ʲₜ/∂u₃ʲ), whose scalar views are
+    # not Fields; without the parent fallback, they are misclassified as
+    # constant blocks and silently dropped from the Jacobian, leaving zeros
+    # in their place. Constant blocks resolve to `nothing` and are excluded.
+    parent_block_keys = map(identity, keys(tendency_matrix))
+    function autodiff_block_entry(scalar_block_key)
+        scalar_view = scalar_tendency_matrix[scalar_block_key]
+        scalar_view isa Fields.Field && return scalar_view
+        (scalar_row_name, scalar_column_name) = scalar_block_key
+        matching_parent_keys = unrolled_filter(parent_block_keys) do parent_key
+            (parent_row_name, parent_column_name) = parent_key
+            (
+                scalar_row_name == parent_row_name ||
+                MatrixFields.is_child_name(scalar_row_name, parent_row_name)
+            ) && (
+                scalar_column_name == parent_column_name ||
+                MatrixFields.is_child_name(
+                    scalar_column_name,
+                    parent_column_name,
+                )
+            )
+        end
+        isempty(matching_parent_keys) && return nothing
+        parent_block = tendency_matrix[matching_parent_keys[1]]
+        parent_block isa Fields.Field || return nothing
+        # Every band entry must be reinterpretable as a single scalar, since
+        # update_jacobian! writes recovered scalars into it with reinterpret.
+        sizeof(eltype(eltype(parent_block))) == sizeof(FT) || return nothing
+        return parent_block
+    end
+
     # Find keys of non-constant blocks, which are represented by matrix fields.
     non_constant_scalar_block_keys =
         unrolled_filter(scalar_block_keys) do scalar_block_key
-            scalar_tendency_matrix[scalar_block_key] isa Fields.Field
+            !isnothing(autodiff_block_entry(scalar_block_key))
         end
 
     # Create a new view of ∂Yₜ/∂Y that has scalar keys and non-constant blocks.
-    autodiff_matrix_keys =
-        MatrixFields.FieldMatrixKeys(non_constant_scalar_block_keys)
-    autodiff_matrix = scalar_tendency_matrix[autodiff_matrix_keys]
+    autodiff_matrix = MatrixFields.FieldNameDict(
+        MatrixFields.FieldMatrixKeys(non_constant_scalar_block_keys),
+        unrolled_map(autodiff_block_entry, non_constant_scalar_block_keys),
+    )
+    if verbose
+        @info "Scalar names of Y: $(join(collect(scalar_names), ", "))"
+        @info "Scalar block keys of the tendency matrix view: \
+               $(join(collect(keys(scalar_tendency_matrix)), ", "))"
+        @info "Autodiff matrix scalar block keys: \
+               $(join(collect(non_constant_scalar_block_keys), ", "))"
+        foreach(non_constant_scalar_block_keys) do scalar_block_key
+            scalar_tendency_matrix[scalar_block_key] isa Fields.Field ||
+                @info "Block $scalar_block_key uses its parent matrix block \
+                       for autodiff (scalar view type: \
+                       $(typeof(scalar_tendency_matrix[scalar_block_key])))"
+        end
+        dropped_scalar_block_keys =
+            unrolled_filter(scalar_block_keys) do scalar_block_key
+                !(scalar_block_key in non_constant_scalar_block_keys)
+            end
+        foreach(dropped_scalar_block_keys) do scalar_block_key
+            @info "Block $scalar_block_key was dropped from the autodiff \
+                   view; its scalar view has type \
+                   $(typeof(scalar_tendency_matrix[scalar_block_key]))"
+        end
+    end
 
     # Construct a mask for nonzero entries in autodiff_matrix as a dense array,
     # and a similar mask with additional padding bands in each block.
@@ -236,8 +306,11 @@ function jacobian_cache(alg::AutoSparseJacobian, Y, atmos; verbose = true)
         # Compute the lower and upper band indices of this block, with empty
         # blocks corresponding to index ranges whose length is -1 (centered
         # around 0 for square blocks and around ±1/2 for non-square blocks).
+        # The membership test uses exact comparison against the tuple of
+        # scalarized keys that the autodiff matrix view was built from, so
+        # that no block of the view can be silently dropped from the mask.
         (n_rows_in_block, n_columns_in_block) = size(block_sparsity_mask)
-        if block_key in keys(autodiff_matrix)
+        if block_key in non_constant_scalar_block_keys
             (_, _, lower_band, upper_band) =
                 MatrixFields.band_matrix_info(autodiff_matrix[block_key])
         else
@@ -245,6 +318,10 @@ function jacobian_cache(alg::AutoSparseJacobian, Y, atmos; verbose = true)
                 n_rows_in_block == n_columns_in_block ? (1 / 2, -1 / 2) :
                 (n_rows_in_block < n_columns_in_block ? (1, 0) : (0, -1))
         end
+        verbose &&
+            lower_band <= upper_band &&
+            @info "Sparsity structure of $block_key has bands \
+                   $(Int(lower_band)):$(Int(upper_band))"
 
         # Symmetrically expand the range of band indices, with the number of
         # new bands either limited by padding_bands_per_block, or hardcoded
@@ -272,8 +349,8 @@ function jacobian_cache(alg::AutoSparseJacobian, Y, atmos; verbose = true)
                 block_row_name == @name(f.sgsʲs.:(1).u₃.components.data.:(1)) &&
                 block_column_name in uₕ_component_names
             ) &&
-            !(block_key in keys(autodiff_matrix)) &&
-            (block_row_name, block_row_name) in keys(autodiff_matrix)
+            !(block_key in non_constant_scalar_block_keys) &&
+            (block_row_name, block_row_name) in non_constant_scalar_block_keys
         )
             # Missing off-diagonal blocks whose entries typically have
             # magnitudes that are larger than (or similar to) diagonal blocks in
@@ -294,8 +371,8 @@ function jacobian_cache(alg::AutoSparseJacobian, Y, atmos; verbose = true)
         elseif (
             block_row_name == @name(c.sgsʲs.:(1).ρa) &&
             block_column_name == @name(c.ρ) &&
-            !(block_key in keys(autodiff_matrix)) &&
-            (block_row_name, @name(c.sgsʲs.:(1).mse)) in keys(autodiff_matrix)
+            !(block_key in non_constant_scalar_block_keys) &&
+            (block_row_name, @name(c.sgsʲs.:(1).mse)) in non_constant_scalar_block_keys
         )
             # ‖∂ᶜρaʲₜ/∂ᶜρ‖ ≳ ‖∂ᶜρaʲₜ/∂ᶜmseʲ‖, as long as ‖δᶜρ‖ is relatively
             # smaller than ‖δᶜmseʲ‖. The ∂ᶜρaʲₜ/∂ᶜmseʲ block is important for
@@ -305,8 +382,8 @@ function jacobian_cache(alg::AutoSparseJacobian, Y, atmos; verbose = true)
         elseif (
             block_row_name == @name(f.u₃.components.data.:(1)) &&
             block_column_name in condensate_names &&
-            !(block_key in keys(autodiff_matrix)) &&
-            (block_row_name, uₕ_component_names[1]) in keys(autodiff_matrix)
+            !(block_key in non_constant_scalar_block_keys) &&
+            (block_row_name, uₕ_component_names[1]) in non_constant_scalar_block_keys
         )
             # ‖∂ᶜu₃ₜ/∂ᶜρχ‖ ≳ ‖∂ᶜu₃ₜ/∂ᶜuₕ‖ when χ is any specific humidity, as
             # long as ‖δᶜρχ‖ is relatively smaller than ‖δᶜuₕ‖. The ∂ᶜu₃ₜ/∂ᶜuₕ
@@ -314,6 +391,37 @@ function jacobian_cache(alg::AutoSparseJacobian, Y, atmos; verbose = true)
             # topography, so this potential error from ∂ᶜu₃ₜ/∂ᶜρχ blocks should
             # be avoided.
             2
+        elseif (
+            block_row_name in
+            (@name(c.ρ), @name(c.ρe_tot), @name(c.ρq_tot)) &&
+            block_column_name == @name(f.u₃.components.data.:(1)) &&
+            block_key in non_constant_scalar_block_keys
+        )
+            # Present blocks whose true bandwidth exceeds the stored bandwidth:
+            # the implicit advection of ρe_tot and ρq_tot includes upwind
+            # corrections whose derivatives with respect to u₃ extend beyond
+            # the stored bidiagonal, and the grid-mean continuity and energy
+            # rows also couple to u₃ at nearby levels through EDMF mass flux
+            # terms. These entries come from the same column field (or from
+            # u₃ʲ, which has the same typical increment), so no seed scale can
+            # suppress them; padding separates the colors of nearby u₃ columns
+            # instead.
+            4
+        elseif (
+            block_row_name == @name(c.ρe_tot) &&
+            block_column_name in (@name(c.ρq_tot), condensate_names...) &&
+            block_key in non_constant_scalar_block_keys
+        )
+            # Present blocks whose true bandwidth exceeds the stored bandwidth:
+            # ‖∂ᶜρe_totₜ/∂ᶜρχ‖ entries outside the stored bands of these
+            # blocks (e.g., from sedimentation and precipitation stencils) are
+            # much larger than ‖∂ᶜρe_totₜ/∂ᶜρe_tot‖ in raw units, so with
+            # unscaled seeds they can alias into the energy diagonal whenever
+            # a ρχ column shares a color with a ρe_tot column. Seed scaling
+            # suppresses this by ‖δᶜρχ‖ / ‖δᶜρe_tot‖, but the energy diagonal
+            # is critical for conservation, so the bands are padded regardless
+            # of the scaling mode.
+            4
         else
             0
         end
@@ -561,6 +669,7 @@ function jacobian_cache(alg::AutoSparseJacobian, Y, atmos; verbose = true)
         Yₜ_dual,
         I_matrix_partitions,
         band_matrix_row_index_to_colors_map,
+        jacobian_column_colors, # CPU-resident; only used for diagnostics
     )
 end
 
@@ -615,10 +724,16 @@ function update_jacobian!(::AutoSparseJacobian, cache, Y, p, dtγ, t)
                             # If the entry has a color in the current partition,
                             # set the entry to the ε coefficient for that color,
                             # unscaled by the seed scale of the block's column
-                            # field. Otherwise, keep the block's current value.
+                            # field, and reinterpreted to the entry type (which
+                            # is a single-scalar-component covector or tensor
+                            # for blocks that use their parent matrix blocks).
+                            # Otherwise, keep the block's current value.
                             ε_offset < entry_color <= ε_offset + n_εs ?
-                            (@inbounds ε_coefficients[entry_color - ε_offset]) *
-                            inv_column_seed_scale : entry
+                            reinterpret(
+                                typeof(entry),
+                                (@inbounds ε_coefficients[entry_color - ε_offset]) *
+                                inv_column_seed_scale,
+                            ) : entry
                         end # TODO: Why does unrolled_map break GPU compilation?
                 end
             end
