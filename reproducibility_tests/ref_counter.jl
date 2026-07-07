@@ -1,4 +1,4 @@
-370
+373
 
 # **README**
 #
@@ -32,6 +32,19 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+373
+- Route enforce_physical_constraints! through ClimaTimeSteppers' new
+  `constrain_state!` hook (per-step by default) and drop the separate
+  callback. Frequencies are configurable via `update_cache_every` /
+  `update_constrain_state_every`.
+
+372
+- Fix top boundary condition so total contravariant flux vanishes at the lid;
+  add SGS mass flux of q_tot to continuity equation; transport SGS tracers in difference form.
+
+371
+- Update Insolation.jl to v1.2.0
+
 370
 - Move ρe_tot/ρq_tot upwind correction into implicit advection (Wfact unchanged)
 

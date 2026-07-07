@@ -18,4 +18,4 @@ chemistry_tendency!(Yₜ, Y, p, t, ::Nothing) = nothing
 
 Source terms are provided by Musica extension.
 """
-chemistry_tendency!(Yₜ, Y, p, t, ::GasPhaseChem) = nothing
+function chemistry_tendency!(Yₜ, Y, p, t, ::GasPhaseChem) end

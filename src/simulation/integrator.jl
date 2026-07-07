@@ -83,8 +83,50 @@ function ode_configuration(::Type{FT}, ode_name, update_jacobian_every,
     end
 end
 
+"""
+    update_cache_signal_handler(freq_str)
+
+Map a YAML frequency string (`"stage"`, `"step"`) to the matching
+ClimaTimeSteppers `UpdateSignalHandler` for `ClimaODEFunction`'s
+`update_cache` field. `"dss"` is not a valid choice here because CTS never
+fires `cache!` with `WithDSSSignal` — only at state-ready
+(`EndOfStage`/`EndOfStep`) sites.
+"""
+function update_cache_signal_handler(freq_str)
+    if freq_str == "stage"
+        return CTS.UpdateEvery(CTS.EndOfStage)
+    elseif freq_str == "step"
+        return CTS.UpdateEvery(CTS.EndOfStep)
+    else
+        error("Unknown `update_cache_every = $(freq_str)`; expected `stage` or `step`")
+    end
+end
+
+"""
+    update_constrain_state_signal_handler(freq_str)
+
+Map a YAML frequency string (`"stage"`, `"step"`, `"dss"`) to the matching
+ClimaTimeSteppers `UpdateSignalHandler` for `ClimaODEFunction`'s
+`update_constrain_state` field. `"dss"` fires `constrain_state!` at every
+`dss!` site (including pre-implicit and post-`initialize_imp!` DSSes).
+"""
+function update_constrain_state_signal_handler(freq_str)
+    if freq_str == "stage"
+        return CTS.UpdateEvery(CTS.EndOfStage)
+    elseif freq_str == "step"
+        return CTS.UpdateEvery(CTS.EndOfStep)
+    elseif freq_str == "dss"
+        return CTS.UpdateEvery(CTS.WithDSS)
+    else
+        error(
+            "Unknown `update_constrain_state_every = $(freq_str)`; expected `stage`, `step`, or `dss`",
+        )
+    end
+end
+
 function args_integrator(Y, p, tspan, ode_algo, callback,
-    jacobian, debug_jacobian, prescribed_flow, dt_integrator;
+    jacobian, debug_jacobian, prescribed_flow, dt_integrator,
+    update_cache_every, update_constrain_state_every;
     verbose = false,
 )
     (; atmos) = p
@@ -111,7 +153,12 @@ function args_integrator(Y, p, tspan, ode_algo, callback,
         tendency_function = CTS.ClimaODEFunction(;
             T_exp_T_lim!, T_imp!,
             cache! = set_precomputed_quantities!, cache_imp!,
-            lim! = limiters_func!, dss! = constrain_state!,  # TODO: Rename ClimaODEFunction kwarg to `constrain_state!`
+            lim! = limiters_func!,
+            dss!, constrain_state!,
+            update_cache = update_cache_signal_handler(update_cache_every),
+            update_constrain_state = update_constrain_state_signal_handler(
+                update_constrain_state_every,
+            ),
             initialize_imp! = initialize_implicit_stage_problem!,
         )
     end
