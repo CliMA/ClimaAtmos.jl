@@ -267,8 +267,6 @@ function sgs_massflux_jacobian_blocks(Y, atmos)
         )...,
         (@name(c.ρe_tot), @name(c.sgsʲs.:(1).mse)) =>
             similar(Y.c, TridiagonalRow),
-        # (ρe_tot, ρ) and (ρq_tot, ρ) are also needed by implicit diffusion;
-        # duplicates are dropped by merge_jacobian_blocks.
         (@name(c.ρe_tot), @name(c.ρ)) => similar(Y.c, TridiagonalRow),
         (@name(c.ρq_tot), @name(c.ρ)) => similar(Y.c, TridiagonalRow),
     )
@@ -280,6 +278,11 @@ end
 De-duplicate Jacobian block pairs requested by multiple process builders,
 keeping the first occurrence of each `(row_name, col_name)` key. Requesting
 the same block with two different types is an error.
+
+Note: In principle two different types are possible
+(for example DiagonalRow from thermodynamics and TridiagonalRow from diffusion).
+We don't have an example like that right now, but in the future we might
+want to use the larger type.
 """
 merge_jacobian_blocks(block_pairs) =
     unrolled_reduce(block_pairs, ()) do merged, block_pair
@@ -1118,34 +1121,10 @@ function update_sgs_entr_detr_jacobian!(matrix, Y, p, dtγ)
         ),
     )
 
-    ∂ᶜq_totʲ_err_∂ᶜq_totʲ =
-        matrix[@name(c.sgsʲs.:(1).q_tot), @name(c.sgsʲs.:(1).q_tot)]
-    ∂ᶜmseʲ_err_∂ᶜmseʲ =
-        matrix[@name(c.sgsʲs.:(1).mse), @name(c.sgsʲs.:(1).mse)]
-    @. ∂ᶜq_totʲ_err_∂ᶜq_totʲ -=
-        dtγ * DiagonalMatrixRow(ᶜentrʲ + ᶜturb_entrʲs.:(1))
-    @. ∂ᶜmseʲ_err_∂ᶜmseʲ -=
-        dtγ * DiagonalMatrixRow(ᶜentrʲ + ᶜturb_entrʲs.:(1))
-
-    # TODO: The tendency also entrains the number concentration tracers
-    # (n_lcl, n_rai), but their entrainment derivatives are not included in
-    # the Jacobian.
-    if p.atmos.microphysics_model isa Union{
-        NonEquilibriumMicrophysics1M,
-        NonEquilibriumMicrophysics2M,
-    }
-        MatrixFields.unrolled_foreach(
-            sedimenting_sgs_mass_names(Y),
-        ) do qʲ_name
-            q_state_name = sgs_state_name(qʲ_name)
-            ∂ᶜqʲ_err_∂ᶜqʲ = matrix[q_state_name, q_state_name]
-            @. ∂ᶜqʲ_err_∂ᶜqʲ -=
-                dtγ * DiagonalMatrixRow(ᶜentrʲ + ᶜturb_entrʲs.:(1))
-        end
-    end
-
-    # passive tracers, e.g. chemistry tracers
-    MatrixFields.unrolled_foreach(passive_sgs_tracer_names(Y)) do χ_name
+    # All advected updraft scalars are entrained the same way: q_tot, mse,
+    # sedimenting tracers (masses and number concentrations), and passive
+    # tracers (e.g. chemistry tracers).
+    MatrixFields.unrolled_foreach(advected_sgs_scalar_names(Y)) do χ_name
         χ_state_name = sgs_state_name(χ_name)
         ∂ᶜχʲ_err_∂ᶜχʲ = matrix[χ_state_name, χ_state_name]
         @. ∂ᶜχʲ_err_∂ᶜχʲ -=
