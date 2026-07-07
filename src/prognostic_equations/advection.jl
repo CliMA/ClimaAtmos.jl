@@ -247,18 +247,15 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
 
     ᶜρ = Y.c.ρ
 
-    # Full vertical advection of passive tracers (like liq, rai, etc) ...
-    # If sgs_mass_flux is true, the advection term is computed from the sum of SGS fluxes
-    if !(
-        p.atmos.turbconv_model isa PrognosticEDMFX &&
-        p.atmos.edmfx_model.sgs_mass_flux isa Val{true}
-    )
-        foreach_gs_tracer(Yₜ, Y) do ᶜρχₜ, ᶜρχ, ρχ_name
-            if !(ρχ_name in (@name(ρe_tot), @name(ρq_tot)))
-                ᶜχ = @. lazy(specific(ᶜρχ, Y.c.ρ))
-                vtt = vertical_transport(ᶜρ, ᶠu³, ᶜχ, dt, tracer_upwinding)
-                @. ᶜρχₜ += vtt
-            end
+    # Full vertical advection of passive tracers (such as liq, rai, etc) with the
+    # grid-mean flow. When EDMFX sgs_mass_flux is active, difference-form SGS
+    # corrections ρᵏaᵏ(u³ᵏ - u³)(χᵏ - χ) are added on top of this in
+    # edmfx_sgs_mass_flux_tendency!.
+    foreach_gs_tracer(Yₜ, Y) do ᶜρχₜ, ᶜρχ, ρχ_name
+        if !(ρχ_name in (@name(ρe_tot), @name(ρq_tot)))
+            ᶜχ = @. lazy(specific(ᶜρχ, Y.c.ρ))
+            vtt = vertical_transport(ᶜρ, ᶠu³, ᶜχ, dt, tracer_upwinding)
+            @. ᶜρχₜ += vtt
         end
     end
     if !(p.atmos.microphysics_model isa DryModel)
