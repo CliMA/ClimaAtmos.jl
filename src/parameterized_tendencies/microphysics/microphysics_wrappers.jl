@@ -324,21 +324,15 @@ end
 @inline function microphysics_tendencies_1m( #microphysics_tendencies_quadrature_1m
     scheme, sgs_quad, cmp, thp, ρ, T, q_tot_nonneg,
     q_lcl, q_icl, q_rai, q_sno, T′T′, q′q′, corr_Tq,
-    λ_lagrange, α, dt, nsubs, args...,
+    # `λ` (liquid fraction) and `mu_S` (linearized SGS saturation-excess mean) are
+    # invariant across the quadrature, so the caller precomputes them once and
+    # passes them in rather than recomputing them at every quadrature point.
+    λ_lagrange, α, dt, nsubs, λ, mu_S, args...,
 )
     FT = typeof(ρ)
     # Clamp specific humidities to non-negative.
-    q_lcl_nonneg = max(FT(0), q_lcl)
-    q_icl_nonneg = max(FT(0), q_icl)
     q_rai_nonneg = max(FT(0), q_rai)
     q_sno_nonneg = max(FT(0), q_sno)
-
-    # Liquid fraction held fixed across quadrature.
-    λ = TD.liquid_fraction(thp, T, q_lcl_nonneg, q_icl_nonneg)
-
-    # Linearized SGS mean of S = q_tot − q_sat, computed at the mean state
-    # (same approximation that justifies the truncated-Gaussian closure).
-    mu_S = q_tot_nonneg - TD.q_vap_saturation(thp, T, ρ)
 
     evaluator = Microphysics1MEvaluator(
         scheme, cmp, thp, ρ,
