@@ -1,0 +1,40 @@
+# Layer 2 stability run: TRMM_LBA deep-convection column (0M) with the measured
+# padding mode built from rest. This is the adversarial case: the developed
+# convective flow has wide stencils, so the measured mask can grow past the
+# constant width (needing more colours than constant) rather than fewer. It is
+# the regression guard for mask over-growth and from-rest stability.
+# runtime_remeasure carries the transient-safety constant mask through spin-up,
+# then switches to the measured mask of the developed state and grows it
+# monotonically. debug_jacobian prints the Layer 1 :constant vs :measured
+# comparison at the final state.
+initial_condition: TRMM_LBA
+turbconv: prognostic_edmfx
+implicit_diffusion: true
+approximate_linear_solve_iters: 2
+use_auto_jacobian: true
+update_jacobian_every: stage
+auto_jacobian_padding_mode: measured
+auto_jacobian_runtime_remeasure: true
+debug_jacobian: true
+edmfx_entr_model: "PiGroups"
+edmfx_detr_model: "Generalized"
+edmfx_sgs_mass_flux: true
+edmfx_sgs_diffusive_flux: true
+edmfx_nh_pressure: true
+edmfx_vertical_diffusion: true
+edmfx_filter: true
+prognostic_tke: true
+cloud_model: "grid_scale"
+microphysics_model: "0M"
+config: column
+z_max: 16400
+x_elem: 2
+y_elem: 2
+z_elem: 82
+z_stretch: false
+dz_bottom: 30
+dt: 150secs
+t_end: 6hours
+toml: [toml/prognostic_edmfx_implicit_scm_calibrated_5_cases_shallow_deep_v1.toml]
+netcdf_interpolation_num_points: [8, 8, 82]
+ode_algo: "ARS222"

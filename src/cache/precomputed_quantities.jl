@@ -86,10 +86,20 @@ function implicit_precomputed_quantities(Y, atmos)
             ᶜq_iceʲs = similar(Y.c, NTuple{n, FT}),
             ᶜρʲs = similar(Y.c, NTuple{n, FT}),
         ) : (;)
-    # Microphysics quantities that are written during set_implicit_precomputed_quantities!
-    # and depend on Y (through ρa⁰), so they need Dual-typed copies for autodiff.
-    # TODO - are they not needed?
-    implicit_mp_quantities = (;)
+    # Microphysics quantities that are written by
+    # update_implicit_microphysics_cache! during
+    # set_implicit_precomputed_quantities! and depend on the current Newton
+    # iterate, so they need Dual-typed copies for autodiff. The 0M scheme
+    # recomputes the density-weighted source terms; 1M/2M only refresh the
+    # surface fluxes, which are covered below. Without these, autodiff
+    # Jacobian evaluations fail with a MethodError when the dual-valued
+    # broadcast is written into the real Float fields.
+    implicit_mp_quantities =
+        microphysics_model isa EquilibriumMicrophysics0M ?
+        (;
+            ᶜρ_dq_tot_dt = similar(Y.c, FT),
+            ᶜρ_de_tot_dt = similar(Y.c, FT),
+        ) : (;)
 
     # Surface precipitation fluxes need Dual-typed copies so that
     # set_precipitation_surface_fluxes! can be called during the implicit

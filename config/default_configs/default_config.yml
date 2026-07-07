@@ -89,6 +89,27 @@ use_auto_jacobian:
 auto_jacobian_padding_bands:
   help: "Target number of bands to add in every block of the sparse Jacobian matrix, eliminating errors from Jacobian entries that lie outside of the default sparsity pattern; when unspecified, each block gets a predetermined number of padding bands based on the typical magnitudes of its entries (only used when `use_auto_jacobian` is `true`)"
   value: ~
+auto_jacobian_scaling:
+  help: "Scaling mode for the dual number seeds of the sparse autodiff Jacobian; `static` rescales each state variable's seed by its typical increment magnitude, so that Jacobian entries outside of the sparsity pattern alias below significance and fewer padding bands are needed (only used when `use_auto_jacobian` is `true`) [`static` (default), `~` (unscaled seeds)]"
+  value: "static"
+auto_jacobian_padding_mode:
+  help: "How the sparse autodiff Jacobian's coloring mask is padded beyond the stored bands; `constant` (the default) pads every present block by a constant number of bands (4, i.e. plus or minus 2 levels) plus every rule in every scaling mode, which removes aliasing on the stored bands up to that fixed width (an assumption, not a measured stencil) at the cost of more colors and is robust for every configuration including from rest, `manual_rules` applies the hand-maintained padding rules, and `measured` derives the mask from a dense-AD measurement of stencil support and increment-weighted magnitudes with no hand rules (leaner where the measurement state is representative, but a from-rest configuration needs `auto_jacobian_runtime_remeasure` to be stable, and even then a config whose developed flow is richer than the constant width, e.g. trmm_0M, can need more colors than `constant`); no mode widens the stored bands, so the linear solver always uses the manual structure's truncation (only used when `use_auto_jacobian` is `true`) [`constant` (default), `manual_rules`, `measured`]"
+  value: "constant"
+auto_jacobian_manual_bands:
+  help: "DEPRECATED: use `auto_jacobian_padding_mode` instead (`true` maps to `manual_rules`, `false` to `constant`); when set, this key wins over `auto_jacobian_padding_mode` with a warning [`~` (default, unset), `true`, `false`]"
+  value: ~
+auto_jacobian_runtime_remeasure:
+  help: "Whether to build the `measured` padding mode's coloring mask through the `constant` branch at startup (the transient-safety ceiling), then replace it once at `auto_jacobian_remeasure_switch_step` with the lean measured mask of the developed state and grow it monotonically afterwards, so a from-rest configuration reaches a correct-and-lean mask without a representative measurement state; only valid with `auto_jacobian_padding_mode: measured` (only used when `use_auto_jacobian` is `true`) [`true`, `false` (default)]"
+  value: false
+auto_jacobian_remeasure_switch_step:
+  help: "Step after which `auto_jacobian_runtime_remeasure` takes its one measurement at the developed state and replaces the transient-safety `constant` mask with the lean measured mask; pick it past the spin-up transient (the run-specific length is why this is a knob and not auto-detected), since a state that is not yet developed can leave a coupling out of the measured mask (the geometric re-measure schedule after the switch is the safety net); only used with `auto_jacobian_runtime_remeasure: true`"
+  value: 10
+auto_jacobian_measured_cross_field_threshold:
+  help: "Significance threshold tau for the `measured` padding mode: an absent cross-field block a-b is kept in the coloring mask only if its increment-weighted magnitude `dtgamma * max|dYt| * s_b / s_a` exceeds tau for the worst victim in its row. Raising it drops more marginal cross-field couplings, giving a leaner mask (fewer colors) at the cost of more aliasing (the lean-vs-greedy knob); it only affects absent cross-field blocks, so it cannot shrink a mask whose colors come from wide within-field stencils. Only used with `auto_jacobian_padding_mode: measured` (only used when `use_auto_jacobian` is `true`)"
+  value: 1.0e-3
+auto_jacobian_measured_support_rtol:
+  help: "Relative within-field support tolerance for the `measured` padding mode: a band of a block joins the coloring mask only if its `|dYt|` exceeds this fraction of the block's peak `|dYt|` at some measured state. Being relative to the block's own magnitude it is dimensionless and timestep-independent, so one value is meaningful across blocks whose entries span many orders (energy row O(1e2), density row O(1e-5)). Raising it trims weak within-field stencil tails, giving a leaner mask (fewer colors); this is the lever for a config whose colors come from wide developed-flow stencils (e.g. trmm_0M), and it bounds the within-field aliasing to about this fraction of the diagonal it would corrupt. Within-field bands have a seed scale ratio of 1, so scaling cannot suppress that aliasing, so raise with care and verify the recovered Jacobian stays accurate. Only used with `auto_jacobian_padding_mode: measured` (only used when `use_auto_jacobian` is `true`)"
+  value: 1.0e-3
 update_jacobian_every:
   help: "Frequency at which the Jacobian matrix should be updated (once per timestep, once per timestepper stage, or once per linear solve) [`dt`, `stage`, `solve` (default)]"
   value: "solve"
