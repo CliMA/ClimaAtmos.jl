@@ -211,4 +211,102 @@ function print_jacobian_summary(integrator)
         @info "dense - $sparse_name sparse, relative RMS per block [unitless]:"
         pretty_table(sparse_error_relative_rms_values; table_kwargs...)
     end
+
+    # ------------------------------------------------------------------
+    # Layer 1: padding-mode comparison (:constant vs :measured) at this
+    # developed state. For each mode we report
+    #   - colours = the number of seeded tendency evaluations per Jacobian
+    #     build (the deterministic, noise-free cost unit),
+    #   - error vs the exact dense AD Jacobian on the stored bands (fidelity to
+    #     the truth), and
+    #   - the measured-minus-constant difference on the stored bands (the pure
+    #     aliasing delta between the two masks, independent of any reference).
+    # The dense AD Jacobian is the truth reference: no padding mode widens the
+    # stored bands, so a mode's deviation from dense there is aliasing from its
+    # coloring mask. The manual Jacobian is deliberately NOT used as truth: its
+    # hand formulas (e.g. the u₃ row) can differ from the exact derivative by
+    # more than the aliasing we are trying to measure. Where the dense Jacobian
+    # is non-finite (e.g. a diverged run), the vs-dense numbers are NaN but the
+    # measured-vs-constant difference still isolates the mask effect. Both modes
+    # are rebuilt fresh here, independent of whichever mode the run used.
+    if jacobian.alg isa CA.AutoSparseJacobian
+        configured = jacobian.alg
+        # Rebuild the configured algorithm with the padding mode overridden and
+        # runtime re-measure disabled (a one-shot build at this state); every
+        # other field, including the :static seed scaling, is preserved.
+        with_padding_mode(mode) = CA.AutoSparseJacobian(
+            configured.sparse_jacobian_alg,
+            configured.padding_bands_per_block,
+            configured.seed_scaling,
+            mode,
+            false,
+            configured.remeasure_switch_step,
+            configured.cross_field_threshold,
+            configured.support_rtol,
+        )
+        stored_keys = filter(collect(block_keys)) do block_key
+            haskey(all_sparse_blocks.manual, block_key) &&
+                !(all_sparse_blocks.manual[block_key] isa UniformScaling)
+        end
+        column_Y = CA.first_column_view(Y)
+        column_p = CA.first_column_view(p)
+        # Recover each mode's Jacobian blocks and its colour count.
+        mode_blocks = map((:constant, :measured)) do mode
+            alg_mode = with_padding_mode(mode)
+            column_cache = CA.column_jacobian_cache(
+                alg_mode,
+                Y,
+                p.atmos;
+                measurement = (; p, dtγ, t),
+            )
+            CA.update_jacobian!(alg_mode, column_cache, column_Y, column_p, dtγ, t)
+            column_∂R_∂Y = column_cache.matrix
+            blocks = Dict()
+            for block_key in stored_keys
+                block_key in keys(column_∂R_∂Y) || continue
+                block_value = Base.materialize(column_∂R_∂Y[block_key])
+                blocks[block_key] =
+                    block_value isa CA.Fields.Field ?
+                    CA.MatrixFields.column_field2array(block_value) : block_value
+            end
+            (; mode, n_colors = column_cache.rebuildable[].n_colors, blocks)
+        end
+        # Per-block normalized RMS of (a - b) over the stored keys they share.
+        block_diff_rms(a, b) =
+            map(stored_keys) do block_key
+                (haskey(a, block_key) && haskey(b, block_key)) || return FT(NaN)
+                rms((a[block_key] .- b[block_key]) .* block_rescalings[block_key])
+            end
+        (constant_r, measured_r) = mode_blocks
+        vs_dense(blocks) = block_diff_rms(blocks, dense_blocks)
+        mode_vs_mode = block_diff_rms(measured_r.blocks, constant_r.blocks)
+
+        println("<$('='^70)>\n")
+        @info "Padding-mode comparison at the developed state (Layer 1): \
+               colours = tendency evaluations per Jacobian build; error vs dense \
+               = recovered - exact-dense RMS on the stored bands [s^-1]"
+        for r in mode_blocks
+            ratio = round(r.n_colors / constant_r.n_colors; digits = 2)
+            e = vs_dense(r.blocks)
+            @info "    $(rpad(String(r.mode), 9)) colours = $(lpad(r.n_colors, 4)) \
+                   ($(ratio)x constant)   error vs dense: \
+                   mean = $(mean(e)), max = $(maximum(e)) [s^-1]"
+        end
+        @info "    measured - constant on stored bands: \
+               mean = $(mean(mode_vs_mode)), max = $(maximum(mode_vs_mode)) [s^-1] \
+               (pure aliasing delta; ~0 means the leaner mask recovers the same \
+               Jacobian)"
+        # Soft correctness guard: warn only when the leaner (measured) mask
+        # genuinely recovers a different Jacobian than the robust constant mask,
+        # i.e. the measured-vs-constant difference itself is significant. 1e-3
+        # s^-1 is the significance scale the aliasing-risk audit above uses
+        # (1e-3 / dt weighted by seed scales). Kept a warning, not a failure, so
+        # adversarial configs surface the number without turning CI red.
+        if isfinite(maximum(mode_vs_mode)) && maximum(mode_vs_mode) > 1e-3
+            @warn "measured padding mode recovers a Jacobian that differs from \
+                   the constant mask by $(maximum(mode_vs_mode)) [s^-1] on the \
+                   stored bands; its coloring mask may be too lean for this \
+                   configuration"
+        end
+    end
 end
