@@ -1,8 +1,6 @@
 using Test
-using ClimaAtmos
+import ClimaAtmos as CA
 using ClimaCore: Domains, Meshes, Spaces, Fields, Geometry
-
-const CA = ClimaAtmos
 
 function make_subcol_simulation(device; job_id)
     config = CA.AtmosConfig(
@@ -11,6 +9,7 @@ function make_subcol_simulation(device; job_id)
             "microphysics_model" => "0M",
             "config" => "column",
             "output_default_diagnostics" => false,
+            "dt_subcol" => "10mins",
             "device" => device,
         );
         job_id,
@@ -89,6 +88,7 @@ expected_maximum_mask(FT, isubcolumn, nsubcolumns, cloud_fraction) =
 
 function reference_scops_profiles(FT, cloud_profile, nsubcolumns, seed, overlap)
     nlev = length(cloud_profile)
+    coords = center_profile(Fields.coordinate_field(axes(make_center_profile_field(FT, cloud_profile))))
     thresholds = [Vector{FT}(undef, nlev) for _ in 1:nsubcolumns]
     masks = [Vector{FT}(undef, nlev) for _ in 1:nsubcolumns]
 
@@ -98,7 +98,6 @@ function reference_scops_profiles(FT, cloud_profile, nsubcolumns, seed, overlap)
             ilev == nlev ? zero(FT) :
             clamp(FT(cloud_profile[ilev + 1]), zero(FT), one(FT))
         convective_cloud = zero(FT)
-        fortran_ilev = nlev - ilev + 1
 
         for isubcolumn in 1:nsubcolumns
             box_position = (FT(isubcolumn) - FT(0.5)) / FT(nsubcolumns)
@@ -112,8 +111,7 @@ function reference_scops_profiles(FT, cloud_profile, nsubcolumns, seed, overlap)
                 convective_cloud,
                 old_threshold,
                 seed,
-                1,
-                fortran_ilev,
+                coords[ilev],
                 isubcolumn,
                 overlap,
             )
@@ -132,8 +130,7 @@ function reference_new_threshold(
     convective_cloud,
     old_threshold,
     seed,
-    ipoint,
-    ilev,
+    coords,
     isubcolumn,
     overlap,
 )
@@ -143,12 +140,10 @@ function reference_new_threshold(
         return box_position
     elseif overlap === :random
         threshold_min = convective_cloud
-        random_number = CA.COSPSubcolumns._rand_for_point(
+        random_number = CA.COSP.COSPSubcolumns._rand_for_point(
             seed,
-            ipoint,
-            ilev,
+            coords,
             isubcolumn,
-            typeof(threshold_min),
         )
 
         return in_convective_region ? box_position :
@@ -156,12 +151,10 @@ function reference_new_threshold(
     else
         common_cloud = min(previous_total_cloud, total_cloud)
         threshold_min = max(convective_cloud, common_cloud)
-        random_number = CA.COSPSubcolumns._rand_for_point(
+        random_number = CA.COSP.COSPSubcolumns._rand_for_point(
             seed,
-            ipoint,
-            ilev,
+            coords,
             isubcolumn,
-            typeof(threshold_min),
         )
         maximally_overlap_stratiform =
             old_threshold < common_cloud && old_threshold > convective_cloud
@@ -195,7 +188,7 @@ end
         large_scale_precipitation_flux =
             p.precomputed.ᶜlarge_scale_precipitation_flux
 
-        result = CA.COSPSubcolumns.scops!(
+        result = CA.COSP.COSPSubcolumns.scops!(
             frac_out,
             threshold,
             cloud_fraction,
@@ -222,7 +215,7 @@ end
             @. precip = FT(-1)
         end
 
-        precip_result = CA.COSPPrecipSubcolumns.prec_scops!(
+        precip_result = CA.COSP.COSPPrecipSubcolumns.prec_scops!(
             prec_frac,
             large_scale_precipitation_flux,
             frac_out,
@@ -261,7 +254,7 @@ end
         frac_out = make_subcolumn_fields(FT, 4, 3)
         threshold = make_subcolumn_fields(FT, 4, 3)
 
-        result = CA.COSPSubcolumns.scops!(
+        result = CA.COSP.COSPSubcolumns.scops!(
             frac_out,
             threshold,
             cloud_fraction,
@@ -288,7 +281,7 @@ end
             frac_out = make_subcolumn_fields(FT, nsubcolumns, 4)
             threshold = make_subcolumn_fields(FT, nsubcolumns, 4)
 
-            CA.COSPSubcolumns.scops!(
+            CA.COSP.COSPSubcolumns.scops!(
                 frac_out,
                 threshold,
                 cloud_fraction,
@@ -334,7 +327,7 @@ end
                     length(cloud_profile),
                 )
 
-                result = CA.COSPSubcolumns.scops!(
+                result = CA.COSP.COSPSubcolumns.scops!(
                     frac_out,
                     threshold,
                     cloud_fraction,
@@ -370,7 +363,7 @@ end
         frac_out = make_subcolumn_fields(FT, nsubcolumns, length(cloud_profile))
         threshold = make_subcolumn_fields(FT, nsubcolumns, length(cloud_profile))
 
-        result = CA.COSPSubcolumns.scops!(
+        result = CA.COSP.COSPSubcolumns.scops!(
             frac_out,
             threshold,
             cloud_fraction,
@@ -403,7 +396,7 @@ end
         )
         prec_frac = make_subcolumn_fields(FT, 4, 3)
 
-        result = CA.COSPPrecipSubcolumns.prec_scops!(
+        result = CA.COSP.COSPPrecipSubcolumns.prec_scops!(
             prec_frac,
             large_scale_precipitation_flux,
             frac_out,
@@ -428,7 +421,7 @@ end
         )
         prec_frac = make_subcolumn_fields(FT, 4, 3)
 
-        CA.COSPPrecipSubcolumns.prec_scops!(
+        CA.COSP.COSPPrecipSubcolumns.prec_scops!(
             prec_frac,
             large_scale_precipitation_flux,
             frac_out,
@@ -452,7 +445,7 @@ end
         )
         prec_frac = make_subcolumn_fields(FT, 4, 3)
 
-        CA.COSPPrecipSubcolumns.prec_scops!(
+        CA.COSP.COSPPrecipSubcolumns.prec_scops!(
             prec_frac,
             large_scale_precipitation_flux,
             frac_out,
@@ -488,7 +481,7 @@ end
         sampled_cloud_fraction = make_center_field(FT; value = -1, nelems = 3)
         sampled_precip_fraction = make_center_field(FT; value = -1, nelems = 3)
 
-        result = CA.COSPHydrometeorSubcolumns.slice_hydrometeor_subcolumns!(
+        result = CA.COSP.COSPHydrometeorSubcolumns.slice_hydrometeor_subcolumns!(
             subcolumns,
             cloud_mask,
             precip_mask,
@@ -537,7 +530,7 @@ end
         sampled_cloud_fraction = make_center_field(FT; value = -1, nelems = 2)
         sampled_precip_fraction = make_center_field(FT; value = -1, nelems = 2)
 
-        CA.COSPHydrometeorSubcolumns.slice_hydrometeor_subcolumns!(
+        CA.COSP.COSPHydrometeorSubcolumns.slice_hydrometeor_subcolumns!(
             subcolumns,
             cloud_mask,
             precip_mask,
@@ -661,7 +654,7 @@ end
 
         @test isnothing(result)
         N_lcl =
-            CA.COSP1MReffNpDiagnostics.DEFAULT_REFF_NP_1M_PARAMETERS.n_lcl
+            CA.COSP.COSP1MReffNpDiagnostics.DEFAULT_REFF_NP_1M_PARAMETERS.n_lcl
         @test center_profile(np.Np_lcl[1]) == FT[N_lcl, 0]
         @test center_profile(reff.Reff_lcl[1])[1] > FT(0)
         @test center_profile(reff.Reff_lcl[1])[2] == FT(0)

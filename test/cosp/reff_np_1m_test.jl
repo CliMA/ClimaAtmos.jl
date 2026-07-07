@@ -1,9 +1,7 @@
 using Test
-using ClimaAtmos
+import ClimaAtmos as CA
+import ClimaAtmos.COSP.COSP1MReffNpDiagnostics as CNR
 using ClimaCore: Domains, Meshes, Spaces, Fields, Geometry
-
-const CA = ClimaAtmos
-const CNR = CA.COSP1MReffNpDiagnostics
 
 function make_center_field(FT; value, nelems = 3)
     z_domain = Domains.IntervalDomain(

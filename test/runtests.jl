@@ -121,6 +121,9 @@ end
 @safetestset "COSP 1M Reff and Np diagnostics" begin
     @time include("cosp/reff_np_1m_test.jl")
 end
+@safetestset "COSP CloudSat optics scaffold" begin
+    @time include("cosp/cloudsat_optics_test.jl")
+end
 
 #! format: on
 
