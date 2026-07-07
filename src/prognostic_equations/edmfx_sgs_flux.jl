@@ -252,13 +252,49 @@ function edmfx_sgs_diffusive_flux_tendency!(
         ᶠρaK_u = p.scratch.ᶠtemp_scalar_2
         @. ᶠρaK_u = ᶠinterp(Y.c.ρ) * ᶠinterp(ᶜK_u)
 
-        # Total enthalpy diffusion
+        # Total enthalpy diffusion, using the dry-static-energy + water-
+        # enthalpy decomposition
+        #   F_h = -K_h ∇s_d + Σ_μ h_tot,μ F_qμ,   F_qμ = -K_h ∇q_μ,
+        # with s_d = h_d + Φ, h_tot,μ = h_μ(T) + Φ for μ ∈ {vap, liq, ice},
+        # and unit turbulent Lewis number (K_qμ = K_h). Diffusing h_tot
+        # directly would imply a spurious enthalpy flux carried by dry-air
+        # diffusion (h_tot depends on 1 - q_t through the dry-air mass
+        # fraction), systematically warming entrained air at inversions where
+        # h_tot jumps up while q_t jumps down. The thermal piece diffuses dry
+        # static energy (constant under dry-adiabatic displacement), and each
+        # water constituent carries its own enthalpy with its diffusive mass
+        # flux, consistent with the ρq_tot and ρ updates below.
+        #
+        # Note: F_qμ for liquid and ice uses unscaled K_h (omitting the tracer
+        # vertical diffusion factor α_vert_diff_tracer). While microphysics
+        # tracers are diffused with α * K_h to prevent unphysical upward
+        # transport of precipitation, omitting α here maintains exact energetic
+        # consistency with the unscaled ρq_tot diffusion equation, preserves
+        # total water invariance under moist-adiabatic processes, and aligns
+        # with the implicit solver's Jacobian formulation.
         ᶜdivᵥ_ρe_tot = Operators.DivergenceF2C(
             top = Operators.SetValue(C3(FT(0))),
             bottom = Operators.SetValue(C3(FT(0))),
         )
-        (; ᶜh_tot) = p.precomputed
-        @. Yₜ.c.ρe_tot -= ᶜdivᵥ_ρe_tot(-(ᶠρaK_h * ᶠgradᵥ(ᶜh_tot)))
+        thermo_params = CAP.thermodynamics_params(params)
+        (; ᶜΦ) = p.core
+        (; ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice) = p.precomputed
+        ᶜq_vap = @. lazy(
+            TD.vapor_specific_humidity(ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice),
+        )
+        @. Yₜ.c.ρe_tot -= ᶜdivᵥ_ρe_tot(
+            -(
+                ᶠρaK_h * (
+                    ᶠgradᵥ(TD.dry_static_energy(thermo_params, ᶜT, ᶜΦ)) +
+                    ᶠinterp(TD.enthalpy_vapor(thermo_params, ᶜT) + ᶜΦ) *
+                    ᶠgradᵥ(ᶜq_vap) +
+                    ᶠinterp(TD.enthalpy_liquid(thermo_params, ᶜT) + ᶜΦ) *
+                    ᶠgradᵥ(ᶜq_liq) +
+                    ᶠinterp(TD.enthalpy_ice(thermo_params, ᶜT) + ᶜΦ) *
+                    ᶠgradᵥ(ᶜq_ice)
+                )
+            ),
+        )
 
         if use_prognostic_tke(turbconv_model)
             # Turbulent TKE transport (diffusion)

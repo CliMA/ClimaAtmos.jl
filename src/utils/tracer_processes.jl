@@ -173,6 +173,17 @@ internal_energy_function(::TD.Liquid) = TD.internal_energy_liquid
 internal_energy_function(::TD.Ice) = TD.internal_energy_ice
 
 """
+    enthalpy_function(phase)
+
+The `Thermodynamics` function that computes the specific enthalpy of a
+condensate with the given phase (`TD.Liquid()` or `TD.Ice()`). Used by the
+dry-static-energy + water-enthalpy decomposition of the diffusive enthalpy
+flux and its Jacobian.
+"""
+enthalpy_function(::TD.Liquid) = TD.enthalpy_liquid
+enthalpy_function(::TD.Ice) = TD.enthalpy_ice
+
+"""
     condensate_e_int_offset(phase, params)
 
 Reference internal energy offset `e_int_χ0` of a condensate phase, used in

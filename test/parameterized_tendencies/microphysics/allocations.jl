@@ -89,10 +89,11 @@ function _allocs_cloud_fraction_simple()
     ε_rel = FT(0.02)
     σ_abs = FT(1e-7)
     CA._compute_cloud_fraction(
-        FT(1e-3), FT(3.16e-4), FT(5e-5), FT(1), ε_rel, σ_abs,
+        FT(1e-3), FT(-1e-4), FT(3.16e-4), FT(5e-5), FT(1), ε_rel, σ_abs,
     )
     return @allocated CA._compute_cloud_fraction(
         FT(1e-3),
+        FT(-1e-4),
         FT(3.16e-4),
         FT(5e-5),
         FT(1),

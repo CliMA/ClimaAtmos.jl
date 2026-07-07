@@ -806,17 +806,43 @@ function update_diffusion_jacobian!(
         @. ᶜdiffusion_u_matrix = ᶜadvdivᵥ_matrix() ⋅ ∂ᶠρχ_dif_flux_∂ᶜχ
     end
 
+    # Jacobian of the decomposed diffusive enthalpy flux
+    #   F_h = -K_h ∇s_d + Σ_μ h_tot,μ (-K_h ∇q_μ)
+    # (see edmfx_sgs_diffusive_flux_tendency! and
+    # vertical_diffusion_boundary_layer_tendency!). The derivatives below hold
+    # the h_tot,μ prefactors and the equilibrium condensate partition fixed
+    # (consistent with the other approximations in this Jacobian): each block
+    # is ∂(flux argument)/∂(prognostic variable), with ∂s_d/∂e_tot = cp_d/cv_m
+    # through T, plus the constituent enthalpy carried by the corresponding
+    # water-gradient term. The SGS mass-flux enthalpy Jacobian
+    # (update_sgs_massflux_jacobian!) is not decomposed: it transports whole
+    # parcels at h_tot and so does not incur the dry-air-diffusion artifact.
+    thermo_params = CAP.thermodynamics_params(params)
+    (; ᶜΦ) = p.core
+    (; ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice) = p.precomputed
+    cp_d = FT(CAP.cp_d(params))
+    Δcv_v = FT(CAP.cv_v(params)) - FT(CAP.cv_d(params))
+    e_int_v0 = FT(CAP.e_int_v0(params))
+    ᶜcv_m = @. lazy(TD.cv_m(thermo_params, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice))
+
     ∂ᶜρe_tot_err_∂ᶜρ = matrix[@name(c.ρe_tot), @name(c.ρ)]
     @. ∂ᶜρe_tot_err_∂ᶜρ = zero(typeof(∂ᶜρe_tot_err_∂ᶜρ))
     @. ∂ᶜρe_tot_err_∂ᶜρe_tot +=
-        dtγ * ᶜdiffusion_h_matrix ⋅ DiagonalMatrixRow((1 + ᶜkappa_m) / ᶜρ)
+        dtγ * ᶜdiffusion_h_matrix ⋅ DiagonalMatrixRow(cp_d / (ᶜcv_m * ᶜρ))
 
     if MatrixFields.has_field(Y, @name(c.ρq_tot))
         ∂ᶜρe_tot_err_∂ᶜρq_tot = matrix[@name(c.ρe_tot), @name(c.ρq_tot)]
         ∂ᶜρq_tot_err_∂ᶜρ = matrix[@name(c.ρq_tot), @name(c.ρ)]
         ∂ᶜρq_tot_err_∂ᶜρq_tot = matrix[@name(c.ρq_tot), @name(c.ρq_tot)]
+        # ∂F/∂q_tot: T changes at fixed e_tot (through cv_m and e_int_v0),
+        # and the vapor-gradient term carries h_tot,v = h_v + Φ.
         @. ∂ᶜρe_tot_err_∂ᶜρq_tot +=
-            dtγ * ᶜdiffusion_h_matrix ⋅ DiagonalMatrixRow(ᶜ∂p∂ρq_tot / ᶜρ)
+            dtγ * ᶜdiffusion_h_matrix ⋅ DiagonalMatrixRow(
+                (
+                    TD.enthalpy_vapor(thermo_params, ᶜT) + ᶜΦ -
+                    cp_d * (e_int_v0 + Δcv_v * (ᶜT - T_0)) / ᶜcv_m
+                ) / ᶜρ,
+            )
         @. ∂ᶜρq_tot_err_∂ᶜρ = zero(typeof(∂ᶜρq_tot_err_∂ᶜρ))
         @. ∂ᶜρq_tot_err_∂ᶜρq_tot +=
             dtγ * ᶜdiffusion_h_matrix ⋅ DiagonalMatrixRow(1 / ᶜρ)
@@ -830,12 +856,20 @@ function update_diffusion_jacobian!(
             phase = condensate_phase(ρq_name)
             e_int_q = condensate_e_int_offset(phase, params)
             ∂cv∂q = condensate_cv_difference(phase, params)
+            h_cond_func = enthalpy_function(phase)
             ∂ᶜρe_tot_err_∂ᶜρq =
                 matrix[@name(c.ρe_tot), center_state_name(ρq_name)]
+            # ∂F/∂q_cond at fixed q_tot: vapor→condensate conversion changes T
+            # (latent heating enters s_d) and moves water-gradient enthalpy
+            # from h_tot,v to h_tot,cond (the Φ parts cancel).
             @. ∂ᶜρe_tot_err_∂ᶜρq +=
                 dtγ * ᶜdiffusion_h_matrix ⋅
                 DiagonalMatrixRow(
-                    (ᶜkappa_m * (e_int_q - ∂cv∂q * (ᶜT - T_0)) - R_v * ᶜT) / ᶜρ,
+                    (
+                        cp_d * (e_int_q - ∂cv∂q * (ᶜT - T_0)) / ᶜcv_m +
+                        h_cond_func(thermo_params, ᶜT) -
+                        TD.enthalpy_vapor(thermo_params, ᶜT)
+                    ) / ᶜρ,
                 )
         end
     end

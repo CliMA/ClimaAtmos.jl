@@ -1,4 +1,4 @@
-374
+375
 
 # **README**
 #
@@ -32,6 +32,11 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+375
+- Remove coherent buoyancy production from TKE; decompose diffusive enthalpy
+  flux into dry static energy + water enthalpy; damp the cloud-fraction floor
+  as the subdomain mean saturates.
+
 374
 - Fix subsidence top BC (zero-gradient inflow at the lid instead of Extrapolate);
   remove the external-forcing top-cell tendency-zeroing workaround.
