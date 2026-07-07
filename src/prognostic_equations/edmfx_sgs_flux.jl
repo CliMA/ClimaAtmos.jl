@@ -44,7 +44,7 @@ function edmfx_sgs_mass_flux_tendency!(
 )
 
     n = n_mass_flux_subdomains(turbconv_model)
-    (; edmfx_sgsflux_upwinding, edmfx_tracer_upwinding) = p.atmos.numerics
+    (; edmfx_sgsflux_upwinding) = p.atmos.numerics
     (; ᶜp, ᶠu³) = p.precomputed
     (; ᶠu³ʲs, ᶜKʲs, ᶜρʲs) = p.precomputed
     (; ᶠu³⁰, ᶜK⁰, ᶜT⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰) = p.precomputed
@@ -135,8 +135,10 @@ function edmfx_sgs_mass_flux_tendency!(
         # Auto-discovered SGS tracer fluxes (microphysics species and any
         # user-defined passive tracers). Like the mse and q_tot fluxes above,
         # these are difference-form fluxes ρᵏaᵏ(u³ᵏ - u³)(χᵏ - χ), which
-        # vanish identically for uniform χ and are consistent with the SGS
-        # transport of q_tot. The grid-mean advection -∇·(ρ u³ χ) of each
+        # vanish identically for uniform χ, reconstructed with the same
+        # upwinding as the mse and q_tot fluxes so that the water-species
+        # fluxes stay consistent with the q_tot flux (the implied vapor flux
+        # is their difference). The grid-mean advection -∇·(ρ u³ χ) of each
         # tracer is applied in explicit_vertical_advection_tendency!.
         # Draft fluxes
         for χ_name in sgs_tracer_names(Y)
@@ -153,7 +155,7 @@ function edmfx_sgs_mass_flux_tendency!(
                     ᶠu³_diff,
                     ᶜa_scalar,
                     dt,
-                    edmfx_tracer_upwinding,
+                    edmfx_sgsflux_upwinding,
                 )
                 ᶜρχₜ = MatrixFields.get_field(Yₜ.c, ρχ_name)
                 @. ᶜρχₜ += vtt
@@ -172,7 +174,7 @@ function edmfx_sgs_mass_flux_tendency!(
                 ᶠu³_diff,
                 ᶜa_scalar,
                 dt,
-                edmfx_tracer_upwinding,
+                edmfx_sgsflux_upwinding,
             )
             ᶜρχₜ = MatrixFields.get_field(Yₜ.c, ρχ_name)
             @. ᶜρχₜ += vtt
