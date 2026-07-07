@@ -140,28 +140,40 @@ end
 # Code generation for tracer diagnostics
 # =============================================================================
 
-# Each entry: (short_name, long_name, state_field_symbol, model_types, model_accessor)
+# Each entry: (short_name, long_name, field_model_pairs, model_accessor)
 # - short_name: prefix for diagnostic names (e.g., "clw" → "clw_min", "clw_neg_mean", "clw_neg_frac")
 # - long_name: human-readable tracer name for descriptions
-# - state_field_symbol: symbol of the ρq field in state.c (e.g., :ρq_lcl)
-# - model_types: Union of model types that support this diagnostic
-# - model_accessor: expression to get the model from cache.atmos
+# - field_model_pairs: list of `(ρq_field_symbol, model_types)` — one typed
+#   implementation per pair, sharing a single dispatcher/registration. This lets
+#   a tracer name map to different state fields per scheme (e.g. cloud ice is
+#   `ρq_icl` in 1M but `ρq_ice` in 2M+P3).
+# - model_accessor: field of cache.atmos holding the model
 
 const MICROPHYSICS_MODELS =
-    Union{
-        NonEquilibriumMicrophysics1M,
-        NonEquilibriumMicrophysics2M,
-        NonEquilibriumMicrophysics2MP3,
-    }
+    Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M}
 const MOISTURE_MODELS = MoistMicrophysics
 
 const TRACER_DIAGNOSTICS = [
-    # (short_name, long_name, ρq_field, model_types, model_accessor_field)
-    ("clw", "Cloud Liquid Water", :ρq_lcl, MICROPHYSICS_MODELS, :microphysics_model),
-    ("cli", "Cloud Ice", :ρq_icl, MICROPHYSICS_MODELS, :microphysics_model),
-    ("husra", "Rain Specific Humidity", :ρq_rai, MICROPHYSICS_MODELS, :microphysics_model),
-    ("hussn", "Snow Specific Humidity", :ρq_sno, MICROPHYSICS_MODELS, :microphysics_model),
-    ("hus", "Specific Humidity", :ρq_tot, MOISTURE_MODELS, :microphysics_model),
+    # (short_name, long_name, [(ρq_field, model_types), ...], model_accessor_field)
+    ("clw", "Cloud Liquid Water", [(:ρq_lcl, MICROPHYSICS_MODELS)], :microphysics_model),
+    # Grid-mean cloud ice: `ρq_icl` for 1M, `ρq_ice` for 2M+P3.
+    (
+        "cli", "Cloud Ice",
+        [(:ρq_icl, NonEquilibriumMicrophysics1M), (:ρq_ice, NonEquilibriumMicrophysics2M)],
+        :microphysics_model,
+    ),
+    (
+        "husra", "Rain Specific Humidity",
+        [(:ρq_rai, MICROPHYSICS_MODELS)],
+        :microphysics_model,
+    ),
+    # Snow exists only in 1M (2M has no `ρq_sno`).
+    (
+        "hussn", "Snow Specific Humidity",
+        [(:ρq_sno, NonEquilibriumMicrophysics1M)],
+        :microphysics_model,
+    ),
+    ("hus", "Specific Humidity", [(:ρq_tot, MOISTURE_MODELS)], :microphysics_model),
 ]
 
 # Diagnostic types: (suffix, compute_func, long_name_template, units, comments_template)
@@ -225,7 +237,7 @@ const DIAGNOSTIC_TYPES = [
 ]
 
 # Generate all diagnostic functions and registrations
-for (short_name, long_name, ρq_field, model_types, model_accessor_field) in
+for (short_name, long_name, field_model_pairs, model_accessor_field) in
     TRACER_DIAGNOSTICS
 
     for (suffix, compute_func, long_name_prefix, units, comments_prefix) in
@@ -238,7 +250,7 @@ for (short_name, long_name, ρq_field, model_types, model_accessor_field) in
         full_long_name = "$long_name_prefix $long_name"
         full_comments = "$comments_prefix $long_name at each vertical level"
 
-        # Generate the functions using @eval
+        # Dispatcher, error fallback, and registration; generated once per (short_name, suffix).
         @eval begin
             # Dispatcher function
             $compute_name(out, state, cache, time) =
@@ -248,20 +260,6 @@ for (short_name, long_name, ρq_field, model_types, model_accessor_field) in
             $compute_name(_, _, _, _, model::T) where {T} =
                 error_diagnostic_variable($diag_name, model)
 
-            # Implementation for supported model types
-            function $compute_name(
-                out,
-                state,
-                cache,
-                time,
-                ::$model_types,
-            )
-                # Use scratch space to avoid allocation
-                q_field = cache.scratch.ᶜtemp_scalar
-                @. q_field = state.c.$ρq_field / state.c.ρ
-                $compute_func(out, q_field)
-            end
-
             # Register the diagnostic variable
             add_diagnostic_variable!(
                 short_name = $short_name * $suffix,
@@ -270,6 +268,17 @@ for (short_name, long_name, ρq_field, model_types, model_accessor_field) in
                 comments = $full_comments,
                 compute! = $compute_name,
             )
+        end
+
+        # Per-scheme typed implementation — one method per (field, model) pair,
+        # so a tracer name can read different state fields in different schemes.
+        for (ρq_field, model_types) in field_model_pairs
+            @eval function $compute_name(out, state, cache, time, ::$model_types)
+                # Use scratch space to avoid allocation
+                q_field = cache.scratch.ᶜtemp_scalar
+                @. q_field = state.c.$ρq_field / state.c.ρ
+                $compute_func(out, q_field)
+            end
         end
     end
 end

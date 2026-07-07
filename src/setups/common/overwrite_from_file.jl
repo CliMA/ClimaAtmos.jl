@@ -145,6 +145,9 @@ function assign_moisture_edmf!(
     if hasproperty(Y.c, :ρq_icl)
         fill!(Y.c.ρq_icl, 0)
     end
+    if hasproperty(Y.c, :ρq_ice)
+        fill!(Y.c.ρq_ice, 0)
+    end
     if hasproperty(Y.c, :ρq_rai) && hasproperty(Y.c, :ρq_sno)
         if !isnothing(ᶜq_rai)
             Y.c.ρq_rai .= ᶜq_rai .* Y.c.ρ
@@ -166,6 +169,7 @@ function assign_moisture_edmf!(
             # SGS 1M microphysics tracers
             hasproperty(s, :q_lcl) && fill!(s.q_lcl, 0)
             hasproperty(s, :q_icl) && fill!(s.q_icl, 0)
+            hasproperty(s, :q_ice) && fill!(s.q_ice, 0)
             if hasproperty(s, :q_rai) && hasproperty(s, :q_sno)
                 if !isnothing(ᶜq_rai)
                     s.q_rai .= ᶜq_rai

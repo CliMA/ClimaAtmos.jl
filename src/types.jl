@@ -19,18 +19,15 @@ struct NonEquilibriumMicrophysics1M <: AbstractMicrophysicsModel
     end
 end
 struct NonEquilibriumMicrophysics2M <: AbstractMicrophysicsModel end
-struct NonEquilibriumMicrophysics2MP3 <: AbstractMicrophysicsModel end
 
 const NonEquilibriumMicrophysics = Union{
     NonEquilibriumMicrophysics1M,
     NonEquilibriumMicrophysics2M,
-    NonEquilibriumMicrophysics2MP3,
 }
 const MoistMicrophysics = Union{
     EquilibriumMicrophysics0M,
     NonEquilibriumMicrophysics1M,
     NonEquilibriumMicrophysics2M,
-    NonEquilibriumMicrophysics2MP3,
 }
 
 """
@@ -59,7 +56,7 @@ Create a microphysics tracer nonnegativity constraint.
 
 Depending on the microphysics model, the constrained tracers include:
 
-  - `ρq_lcl`, `ρq_icl`, `ρq_rai`, `ρq_sno`,
+  - `ρq_lcl`, `ρq_rai`, `ρq_icl` (1M only), `ρq_sno` (1M only), `ρq_ice` (2M only)
   - If `include_qtot` is true, `q_tot` is also among the constrained tracers.
 
 # Arguments:
@@ -1128,7 +1125,7 @@ The default AtmosModel provides:
 
 ## AtmosWater
 
-  - `microphysics_model`: DryModel(), EquilibriumMicrophysics0M(), NonEquilibriumMicrophysics1M(), NonEquilibriumMicrophysics2M(), NonEquilibriumMicrophysics2MP3()
+  - `microphysics_model`: DryModel(), EquilibriumMicrophysics0M(), NonEquilibriumMicrophysics1M(), NonEquilibriumMicrophysics2M()
   - `cloud_model`: GridScaleCloud(), QuadratureCloud()
   - `microphysics_tendency_timestepping`: Explicit(), Implicit()
   - `sgs_quadrature`: nothing or SGSQuadrature (subgrid-scale quadrature for microphysics tendencies)

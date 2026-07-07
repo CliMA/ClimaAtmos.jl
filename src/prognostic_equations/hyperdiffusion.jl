@@ -252,7 +252,7 @@ NVTX.@annotate function apply_tracer_hyperdiffusion_tendency!(Yₜ, Y, p, t)
     foreach_gs_tracer(Yₜ, ᶜ∇²specific_tracers) do ᶜρχₜ, ᶜ∇²χ, ρχ_name
         ν₄_scalar_for_χ =
             ρχ_name in (
-                @name(ρq_lcl), @name(ρq_icl), @name(ρq_rai),
+                @name(ρq_lcl), @name(ρq_icl), @name(ρq_ice), @name(ρq_rai),
                 @name(ρq_sno), @name(ρn_lcl), @name(ρn_rai)
             ) ?
             ν₄_scalar_microphysics : ν₄_scalar
@@ -275,7 +275,7 @@ NVTX.@annotate function apply_tracer_hyperdiffusion_tendency!(Yₜ, Y, p, t)
         # reusing a single scratch field.
         if !isempty(sgs_tracer_names(Y))
             _microphysics_names = (
-                @name(q_lcl), @name(q_icl), @name(q_rai),
+                @name(q_lcl), @name(q_icl), @name(q_ice), @name(q_rai),
                 @name(q_sno), @name(n_lcl), @name(n_rai),
             )
             (; ᶜ∇²sgs_tracerʲs) = p.hyperdiff

@@ -228,8 +228,11 @@ compute_cliup(_, cache, _,
     ::EquilibriumMicrophysics0M, ::PrognosticEDMFX,
 ) = cache.precomputed.ᶜq_iceʲs.:1
 
-compute_cliup(state, _, _, ::NonEquilibriumMicrophysics, ::PrognosticEDMFX) =
+compute_cliup(state, _, _, ::NonEquilibriumMicrophysics1M, ::PrognosticEDMFX) =
     (state.c.sgsʲs.:1).q_icl
+
+compute_cliup(state, _, _, ::NonEquilibriumMicrophysics2M, ::PrognosticEDMFX) =
+    (state.c.sgsʲs.:1).q_ice
 
 add_diagnostic_variable!(short_name = "cliup", units = "kg kg^-1",
     long_name = "Updraft Mass Fraction of Cloud Ice",
@@ -292,9 +295,8 @@ compute_hussnup(_, _, _, _, _) =
     error_diagnostic_variable("Can only compute updraft snow specific humidity
                                with a 1M or 2M precip model and with EDMFX")
 
-compute_hussnup(state, _, _,
-    ::Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M}, ::PrognosticEDMFX,
-) = (state.c.sgsʲs.:1).q_sno
+compute_hussnup(state, _, _, ::NonEquilibriumMicrophysics1M, ::PrognosticEDMFX) =
+    (state.c.sgsʲs.:1).q_sno
 
 add_diagnostic_variable!(short_name = "hussnup", units = "kg kg^-1",
     long_name = "Updraft Mass Fraction of Snow",
@@ -639,8 +641,11 @@ compute_clien(_, _, _, _, _) =
 compute_clien(_, cache, _, ::EquilibriumMicrophysics0M, ::PrognosticEDMFX) =
     cache.precomputed.ᶜq_ice⁰
 
-compute_clien(state, cache, _, ::NonEquilibriumMicrophysics, ::PrognosticEDMFX) =
+compute_clien(state, cache, _, ::NonEquilibriumMicrophysics1M, ::PrognosticEDMFX) =
     ᶜspecific_env_value(@name(q_icl), state, cache)
+
+compute_clien(state, cache, _, ::NonEquilibriumMicrophysics2M, ::PrognosticEDMFX) =
+    ᶜspecific_env_value(@name(q_ice), state, cache)
 
 add_diagnostic_variable!(short_name = "clien", units = "kg kg^-1",
     long_name = "Environment Mass Fraction of Cloud Ice",
@@ -703,9 +708,8 @@ compute_hussnen(_, _, _, _, _) =
     error_diagnostic_variable("Can only compute environment snow specific humidity \
                                with a 1M or 2M model and with PrognosticEDMFX")
 
-compute_hussnen(state, cache, _,
-    ::Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M}, ::PrognosticEDMFX,
-) = ᶜspecific_env_value(@name(q_sno), state, cache)
+compute_hussnen(state, cache, _, ::NonEquilibriumMicrophysics1M, ::PrognosticEDMFX) =
+    ᶜspecific_env_value(@name(q_sno), state, cache)
 
 add_diagnostic_variable!(short_name = "hussnen", units = "kg kg^-1",
     long_name = "Environment Mass Fraction of Snow",

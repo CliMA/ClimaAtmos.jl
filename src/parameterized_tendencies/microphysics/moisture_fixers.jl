@@ -69,25 +69,26 @@ sourced from grid-mean vapor.
 Only active when `p.atmos.water.tracer_nonnegativity_method` is `TracerNonnegativityVaporTendency`.
 """
 function tracer_nonnegativity_vapor_tendency!(Yₜ, Y, p, t,
-    ::Union{
+    microphysics_model::Union{
         NonEquilibriumMicrophysics1M,
         NonEquilibriumMicrophysics2M,
     },
 )
     p.atmos.water.tracer_nonnegativity_method isa TracerNonnegativityVaporTendency || return
 
-    moisture_species = (
-        MF.@name(ρq_lcl), MF.@name(ρq_icl),
-        MF.@name(ρq_rai), MF.@name(ρq_sno),
-    )
-
-    # Compute vapor specific humidity: q_vap = q_tot - q_lcl - q_icl - q_rai - q_sno
+    # Compute vapor specific humidity: q_vap = q_tot - q_cond
     q_tot = @. lazy(specific(Y.c.ρq_tot, Y.c.ρ))
-    q_lcl = @. lazy(specific(Y.c.ρq_lcl, Y.c.ρ))
-    q_icl = @. lazy(specific(Y.c.ρq_icl, Y.c.ρ))
-    q_rai = @. lazy(specific(Y.c.ρq_rai, Y.c.ρ))
-    q_sno = @. lazy(specific(Y.c.ρq_sno, Y.c.ρ))
-    q_vap = @. lazy(q_tot - q_lcl - q_icl - q_rai - q_sno)
+    q_liq = @. lazy(specific(Y.c.ρq_lcl + Y.c.ρq_rai, Y.c.ρ))
+    if microphysics_model isa NonEquilibriumMicrophysics2M
+        moisture_species = (MF.@name(ρq_lcl), MF.@name(ρq_rai), MF.@name(ρq_ice))
+        q_ice = @. lazy(specific(Y.c.ρq_ice, Y.c.ρ))
+    else  # NonEquilibriumMicrophysics1M
+        moisture_species = (
+            MF.@name(ρq_lcl), MF.@name(ρq_rai), MF.@name(ρq_icl), MF.@name(ρq_sno),
+        )
+        q_ice = @. lazy(specific(Y.c.ρq_icl + Y.c.ρq_sno, Y.c.ρ))
+    end
+    q_vap = @. lazy(q_tot - q_liq - q_ice)
 
     MF.unrolled_foreach(moisture_species) do ρq_name
         ᶜρq = MF.get_field(Y.c, ρq_name)

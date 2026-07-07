@@ -304,22 +304,12 @@ function default_diagnostics(
     t_start;
     output_writer,
 )
-    precip_diagnostics = ["husra", "hussn", "rwp", "swp", "cdnc", "ncra"]
+    precip_diagnostics = ["husra", "rwp", "cdnc", "ncra", "ni", "qrim", "frim", "rhorim"]
     average_func = frequency_averages(duration)
     return [
         _moist_default_diagnostics(duration, start_date, t_start; output_writer)...,
         average_func(precip_diagnostics...; output_writer, start_date, t_start)...,
     ]
-end
-
-function default_diagnostics(
-    ::NonEquilibriumMicrophysics2MP3,
-    duration,
-    start_date,
-    t_start;
-    output_writer,
-)
-    return _moist_default_diagnostics(duration, start_date, t_start; output_writer)
 end
 
 function default_diagnostics(
