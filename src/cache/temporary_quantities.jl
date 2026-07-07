@@ -17,6 +17,7 @@ function implicit_temporary_quantities(Y, atmos)
         ᶠtemp_scalar = Fields.Field(FT, face_space), # ᶠρaK_h
         ᶠtemp_scalar_2 = Fields.Field(FT, face_space), # ᶠρaK_u
         ᶠtemp_scalar_3 = Fields.Field(FT, face_space), # ᶠwaχ in advection
+        ᶠtemp_scalar_4 = Fields.Field(FT, face_space), # ᶠstrain in set_face_diffusivities!
         ᶜtemp_scalar = Fields.Field(FT, center_space), # ᶜρχₜ_diffusion, ᶜa_scalar
         ᶜtemp_scalar_2 = Fields.Field(FT, center_space), # ᶜKᵥʲ
         ᶜtemp_scalar_3 = Fields.Field(FT, center_space), # ᶜK_h_scaled
@@ -44,6 +45,7 @@ function temporary_quantities(Y, atmos)
         ᶠtemp_scalar = Fields.Field(FT, face_space), # ᶠp, ᶠρK_h
         ᶠtemp_scalar_2 = Fields.Field(FT, face_space), # ᶠρK_u
         ᶠtemp_scalar_3 = Fields.Field(FT, face_space),
+        ᶠtemp_scalar_4 = Fields.Field(FT, face_space), # ᶠstrain in set_face_diffusivities!
         ᶜtemp_scalar = Fields.Field(FT, center_space), # ᶜ1
         ᶜtemp_scalar_2 = Fields.Field(FT, center_space), # ᶜtke_exch
         ᶜtemp_scalar_3 = Fields.Field(FT, center_space),

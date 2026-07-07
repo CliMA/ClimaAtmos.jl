@@ -59,6 +59,14 @@ function set_covariance_cache_and_cloud_fraction!(Y, p)
         set_cloud_fraction!(Y, p, microphysics_model, GridScaleCloud())
     end
 
+    # Materialize the pointwise buoyancy-gradient chain-rule coefficients and
+    # the exact face gradients of (θ_li, q_tot) once: the coefficients carry
+    # all of the expensive saturation thermodynamics and are independent of
+    # cloud fraction, so within the Picard iteration every buoyancy-gradient
+    # stencil below reduces to a cheap `blended_N²` FMA broadcast.
+    set_buoyancy_gradient_inputs!(Y, p, thermo_params)
+    (; ᶜbg_coeffs) = p.precomputed
+
     # One Picard step: use the current cloud fraction to update buoyancy
     # gradient and covariance cache, then recompute cloud fraction.
     #
@@ -67,19 +75,11 @@ function set_covariance_cache_and_cloud_fraction!(Y, p)
     # materialization during Picard. CF, μ_S, and λ are all written once after
     # Picard converges, in the final `set_sgs_moments_and_cloud_fraction!` call.
     function picard_step!()
-        @. ᶜlinear_buoygrad = buoyancy_gradients(
-            BuoyGradMean(), # TODO: modify for NonEq + 1M tracers if needed
-            thermo_params,
-            ᶜT,
-            Y.c.ρ,
-            ᶜq_tot_nonneg,
-            ᶜq_liq,
-            ᶜq_ice,
+        @. ᶜlinear_buoygrad = blended_N²(
+            ᶜbg_coeffs,
             ᶜcloud_fraction,
-            C3,
-            ᶜgradᵥ_q_tot,
-            ᶜgradᵥ_θ_liq_ice,
-            ᶜlg,
+            projected_vector_data(C3, ᶜgradᵥ_θ_liq_ice, ᶜlg),
+            projected_vector_data(C3, ᶜgradᵥ_q_tot, ᶜlg),
         )
 
         # Stability-biased buoyancy gradient for the mixing-length and
@@ -117,19 +117,11 @@ function set_covariance_cache_and_cloud_fraction!(Y, p)
     @. ᶜcloud_fraction = _aitken_picard_helper(c0, c1, c2)
 
     # Recompute buoyancy gradient and covariance cache with the final cloud fraction.
-    @. ᶜlinear_buoygrad = buoyancy_gradients(
-        BuoyGradMean(), # TODO: modify for NonEq + 1M tracers if needed
-        thermo_params,
-        ᶜT,
-        Y.c.ρ,
-        ᶜq_tot_nonneg,
-        ᶜq_liq,
-        ᶜq_ice,
+    @. ᶜlinear_buoygrad = blended_N²(
+        ᶜbg_coeffs,
         ᶜcloud_fraction,
-        C3,
-        ᶜgradᵥ_q_tot,
-        ᶜgradᵥ_θ_liq_ice,
-        ᶜlg,
+        projected_vector_data(C3, ᶜgradᵥ_θ_liq_ice, ᶜlg),
+        projected_vector_data(C3, ᶜgradᵥ_q_tot, ᶜlg),
     )
     set_stability_buoyancy_gradient!(Y, p, thermo_params)
     set_covariance_cache!(Y, p, thermo_params)

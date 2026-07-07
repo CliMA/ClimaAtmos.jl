@@ -231,44 +231,18 @@ function edmfx_sgs_diffusive_flux_tendency!(
 
     if p.atmos.edmfx_model.sgs_diffusive_flux isa Val{true}
 
-        (; ᶜbuoygrad_stab, ᶜstrain_rate_norm) = p.precomputed
-        # scratch to prevent GPU Kernel parameter memory error
-        ᶜmixing_length_field = p.scratch.ᶜtemp_scalar_2
-        ᶜmixing_length_field .= ᶜmixing_length(Y, p)
-        ᶜK_u = @. lazy(
-            eddy_viscosity(turbconv_params, ᶜtke, ᶜmixing_length_field),
-        )
-        ᶜprandtl_nvec = @. lazy(
-            turbulent_prandtl_number(
-                params,
-                ᶜbuoygrad_stab,
-                ᶜstrain_rate_norm,
-            ),
-        )
-        ᶜK_h = @. lazy(eddy_diffusivity(ᶜK_u, ᶜprandtl_nvec))
-
-        # Interpolate eddy diffusivities to cell faces with a harmonic mean
-        # (reciprocal of the interpolated reciprocal). At a face separating a
-        # turbulent layer (large K) from quiescent, strongly stratified air
-        # (K ≈ 0) — e.g., a stratocumulus-capping inversion — the diffusive
-        # flux should nearly vanish. Arithmetic averaging assigns ≈ K/2 to
-        # such a face, producing spurious entrainment; the harmonic mean is
-        # controlled by the smaller of the two adjacent values.
-        #
-        # The face-native interfacial entrainment diffusivity K_e (see
-        # `set_interface_entrainment_diffusivity!`) is added uniformly to all
-        # scalar and momentum face diffusivities: it represents finite-velocity
-        # entrainment across unresolved stable jumps, which the collapsed
-        # down-gradient diffusivity alone cannot carry. It is evaluated at the
-        # face and never interpolated.
-        (; ᶠK_entr) = p.precomputed
-        ϵK = eps(FT)
+        # Face-native eddy diffusivity/viscosity and interfacial entrainment
+        # diffusivity, evaluated at the faces where the fluxes live (see
+        # `set_face_diffusivities!`): the stability closure collapses K at an
+        # unresolved inversion at exactly (and only) the jump face, and K_e
+        # restores the finite-velocity entrainment flux there. K_e is added
+        # uniformly to all scalar and momentum face diffusivities, keeping
+        # energy, water, and momentum transport mutually consistent.
+        (; ᶠK_h, ᶠK_u, ᶠK_entr) = p.precomputed
         ᶠρaK_h = p.scratch.ᶠtemp_scalar
-        @. ᶠρaK_h =
-            ᶠinterp(Y.c.ρ) * (1 / ᶠinterp(1 / max(ᶜK_h, ϵK)) + ᶠK_entr)
+        @. ᶠρaK_h = ᶠinterp(Y.c.ρ) * (ᶠK_h + ᶠK_entr)
         ᶠρaK_u = p.scratch.ᶠtemp_scalar_2
-        @. ᶠρaK_u =
-            ᶠinterp(Y.c.ρ) * (1 / ᶠinterp(1 / max(ᶜK_u, ϵK)) + ᶠK_entr)
+        @. ᶠρaK_u = ᶠinterp(Y.c.ρ) * (ᶠK_u + ᶠK_entr)
 
         # Total enthalpy diffusion, using the dry-static-energy + water-
         # enthalpy decomposition
@@ -329,7 +303,7 @@ function edmfx_sgs_diffusive_flux_tendency!(
                         turbconv_params,
                         Y.c.ρtke,
                         ᶜtke,
-                        ᶜmixing_length_field,
+                        p.precomputed.ᶜl_mix,
                     ),
                     Y.c.ρtke / dt,
                 )

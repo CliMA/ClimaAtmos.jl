@@ -153,12 +153,31 @@ function precomputed_quantities(Y, atmos)
         # face-local N²_eff, including the unresolved-jump term); feeds the
         # mixing-length and Pr_t(Ri) closures near sharp inversions.
         ᶜbuoygrad_stab = similar(Y.c, FT),
-        # Face-native moist buoyancy gradient (exact two-point differences)
-        # and interfacial entrainment diffusivity K_e = γ w_e Δz; filled by
-        # `set_interface_entrainment_diffusivity!` for EDMF runs with
-        # prognostic TKE, zero otherwise.
+        # Pointwise chain-rule coefficients of the moist buoyancy gradient
+        # and exact two-point face gradients of (θ_li, q_tot); filled once
+        # per update by `set_buoyancy_gradient_inputs!` and shared by the
+        # centered, one-sided, and face-native buoyancy-gradient stencils.
+        ᶜbg_coeffs = similar(
+            Y.c,
+            @NamedTuple{Cθ_unsat::FT, ΔCθ::FT, Cq_unsat::FT, ΔCq::FT}
+        ),
+        ᶠ∂θli∂z = similar(Y.f, FT),
+        ᶠ∂qt∂z = similar(Y.f, FT),
+        # Face-native moist buoyancy gradient, face-native eddy diffusivity/
+        # viscosity, and interfacial entrainment diffusivity K_e = γ w_e Δz;
+        # filled by `set_face_diffusivities!` for EDMF runs with prognostic
+        # TKE, zero otherwise. Evaluating the stability closure at the faces,
+        # where the fluxes live, keeps the collapse of K at an unresolved
+        # inversion from leaking to the adjacent interior face (which a
+        # center-based evaluation with interpolation cannot avoid).
         ᶠbuoygrad = zeros(axes(Y.f)),
+        ᶠK_h = zeros(axes(Y.f)),
+        ᶠK_u = zeros(axes(Y.f)),
         ᶠK_entr = zeros(axes(Y.f)),
+        # Master mixing length at centers (dissipation, covariance closure,
+        # updraft internal diffusion, diagnostics); filled once per update
+        # after the cloud-fraction Picard iteration.
+        ᶜl_mix = similar(Y.c, FT),
         ᶜstrain_rate_norm = similar(Y.c, FT),
         sfc_conditions = similar(Spaces.level(Y.f, half), SCT),
     )
@@ -680,7 +699,15 @@ NVTX.@annotate function set_explicit_precomputed_quantities!(Y, p, t)
     # Interfacial entrainment diffusivity K_e at faces (interface-aware
     # stability closure). Needs the final cloud fraction and ᶜbuoygrad_stab
     # from the covariance/cloud-fraction update above.
-    set_interface_entrainment_diffusivity!(Y, p)
+    set_face_diffusivities!(Y, p)
+
+    # Master mixing length at centers, for consumers that live at centers
+    # (TKE dissipation, covariance closure, updraft internal diffusion,
+    # diagnostics); the face diffusivities above are the flux-side pipeline.
+    if p.atmos.turbconv_model isa AbstractEDMF &&
+       MatrixFields.has_field(Y, @name(c.ρtke))
+        p.precomputed.ᶜl_mix .= ᶜmixing_length(Y, p)
+    end
 
     # Cache precipitation terminal velocities for grid mean and prognostic EDMF updrafts.
     set_precipitation_velocities!(

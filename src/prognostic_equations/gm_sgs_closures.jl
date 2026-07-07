@@ -83,19 +83,15 @@ NVTX.@annotate function compute_gm_mixing_length(Y, p)
     ) =
         p.precomputed
 
-    @. ᶜlinear_buoygrad = buoyancy_gradients(
-        BuoyGradMean(),
-        thermo_params,
-        ᶜT,
-        Y.c.ρ,
-        ᶜq_tot_nonneg,
-        ᶜq_liq,
-        ᶜq_ice,
+    # Chain-rule coefficients and face gradients are materialized once per
+    # update by `set_buoyancy_gradient_inputs!` (called before the
+    # cloud-fraction Picard iteration); see `blended_N²`.
+    (; ᶜbg_coeffs) = p.precomputed
+    @. ᶜlinear_buoygrad = blended_N²(
+        ᶜbg_coeffs,
         ᶜcloud_fraction,
-        C3,
-        p.precomputed.ᶜgradᵥ_q_tot,
-        p.precomputed.ᶜgradᵥ_θ_liq_ice,
-        ᶜlg,
+        projected_vector_data(C3, p.precomputed.ᶜgradᵥ_θ_liq_ice, ᶜlg),
+        projected_vector_data(C3, p.precomputed.ᶜgradᵥ_q_tot, ᶜlg),
     )
     # Stability-biased buoyancy gradient (max of one-sided estimates) for
     # the mixing-length and Pr_t(Ri) closures; see

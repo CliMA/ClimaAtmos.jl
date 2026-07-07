@@ -794,7 +794,7 @@ function update_sedimentation_jacobian!(matrix, Y, p, dtγ)
 end
 
 # Eddy diffusivity and viscosity used by both grid-scale and SGS implicit
-# diffusion. May write to ᶜtemp_scalar_3, ᶜtemp_scalar_4, and ᶜtemp_scalar_6.
+# diffusion. May write to ᶜtemp_scalar_4 and ᶜtemp_scalar_6.
 function eddy_diffusivity_coefficients!(Y, p)
     (; params) = p
     (; turbconv_model, vertical_diffusion, smagorinsky_lilly) = p.atmos
@@ -813,12 +813,14 @@ function eddy_diffusivity_coefficients!(Y, p)
         ᶜK_u = p.precomputed.ᶜνₜ_v
         ᶜK_h = p.precomputed.ᶜD_v
     elseif turbconv_model isa AbstractEDMF
-        (; ᶜbuoygrad_stab, ᶜstrain_rate_norm) = p.precomputed
+        (; ᶜbuoygrad_stab, ᶜstrain_rate_norm, ᶜl_mix) = p.precomputed
         ᶜtke = @. lazy(specific(Y.c.ρtke, Y.c.ρ))
-        ᶜmixing_length_field = p.scratch.ᶜtemp_scalar_3
-        ᶜmixing_length_field .= ᶜmixing_length(Y, p)
+        # Center K (from the precomputed master mixing length) is needed only
+        # for the updraft internal-diffusion block
+        # (update_sgs_diffusion_jacobian!); the grid-mean diffusion matrices
+        # use the face-native ᶠK_h/ᶠK_u.
         ᶜK_u = p.scratch.ᶜtemp_scalar_4
-        @. ᶜK_u = eddy_viscosity(turbconv_params, ᶜtke, ᶜmixing_length_field)
+        @. ᶜK_u = eddy_viscosity(turbconv_params, ᶜtke, ᶜl_mix)
         ᶜprandtl_nvec = @. lazy(
             turbulent_prandtl_number(params, ᶜbuoygrad_stab, ᶜstrain_rate_norm),
         )
@@ -867,24 +869,29 @@ function update_diffusion_jacobian!(
     end
 
     ∂ᶠρχ_dif_flux_∂ᶜχ = ᶠp_grad_matrix
-    # Harmonic-mean face interpolation of K, consistent with the diffusive
-    # tendencies (see edmfx_sgs_diffusive_flux_tendency! and
-    # vertical_diffusion_boundary_layer_tendency!). Smagorinsky tendencies
-    # still use arithmetic interpolation, so their Jacobian does too.
-    # The additive interfacial entrainment diffusivity ᶠK_entr matches the
-    # EDMF diffusive tendencies; it is zero for configurations that do not
-    # fill it, so including it here is exact for all branches. Like K_h,
-    # it is treated as a frozen coefficient (no ∂K_e/∂state terms).
-    (; ᶠK_entr) = p.precomputed
+    # Face diffusivities, consistent with the diffusive tendencies:
+    # - AbstractEDMF: the face-native ᶠK_h/ᶠK_u plus the interfacial
+    #   entrainment diffusivity ᶠK_entr (see set_face_diffusivities! and
+    #   edmfx_sgs_diffusive_flux_tendency!), treated as frozen
+    #   coefficients (no ∂K/∂state terms).
+    # - VerticalDiffusion/DecayWithHeightDiffusion: harmonic-mean face
+    #   interpolation of the center K (see
+    #   vertical_diffusion_boundary_layer_tendency!).
+    # - Smagorinsky: arithmetic interpolation, matching its tendency.
+    (; ᶠK_h, ᶠK_u, ᶠK_entr) = p.precomputed
+    turbconv_model = p.atmos.turbconv_model
     ϵK = eps(FT)
-    if is_smagorinsky_vertical(p.atmos.smagorinsky_lilly)
+    if turbconv_model isa AbstractEDMF
+        @. ∂ᶠρχ_dif_flux_∂ᶜχ =
+            DiagonalMatrixRow(ᶠinterp(ᶜρ) * (ᶠK_h + ᶠK_entr)) ⋅
+            ᶠgradᵥ_matrix()
+    elseif is_smagorinsky_vertical(p.atmos.smagorinsky_lilly)
         @. ∂ᶠρχ_dif_flux_∂ᶜχ =
             DiagonalMatrixRow(ᶠinterp(ᶜρ) * ᶠinterp(ᶜK_h)) ⋅ ᶠgradᵥ_matrix()
     else
         @. ∂ᶠρχ_dif_flux_∂ᶜχ =
-            DiagonalMatrixRow(
-                ᶠinterp(ᶜρ) * (1 / ᶠinterp(1 / max(ᶜK_h, ϵK)) + ᶠK_entr),
-            ) ⋅ ᶠgradᵥ_matrix()
+            DiagonalMatrixRow(ᶠinterp(ᶜρ) / ᶠinterp(1 / max(ᶜK_h, ϵK))) ⋅
+            ᶠgradᵥ_matrix()
     end
     @. ᶜdiffusion_h_matrix = ᶜadvdivᵥ_matrix() ⋅ ∂ᶠρχ_dif_flux_∂ᶜχ
     if (
@@ -892,16 +899,18 @@ function update_diffusion_jacobian!(
         !isnothing(p.atmos.turbconv_model) ||
         !disable_momentum_vertical_diffusion(p.atmos.vertical_diffusion)
     )
-        if is_smagorinsky_vertical(p.atmos.smagorinsky_lilly)
+        if turbconv_model isa AbstractEDMF
+            @. ∂ᶠρχ_dif_flux_∂ᶜχ =
+                DiagonalMatrixRow(ᶠinterp(ᶜρ) * (ᶠK_u + ᶠK_entr)) ⋅
+                ᶠgradᵥ_matrix()
+        elseif is_smagorinsky_vertical(p.atmos.smagorinsky_lilly)
             @. ∂ᶠρχ_dif_flux_∂ᶜχ =
                 DiagonalMatrixRow(ᶠinterp(ᶜρ) * ᶠinterp(ᶜK_u)) ⋅
                 ᶠgradᵥ_matrix()
         else
             @. ∂ᶠρχ_dif_flux_∂ᶜχ =
-                DiagonalMatrixRow(
-                    ᶠinterp(ᶜρ) *
-                    (1 / ᶠinterp(1 / max(ᶜK_u, ϵK)) + ᶠK_entr),
-                ) ⋅ ᶠgradᵥ_matrix()
+                DiagonalMatrixRow(ᶠinterp(ᶜρ) / ᶠinterp(1 / max(ᶜK_u, ϵK))) ⋅
+                ᶠgradᵥ_matrix()
         end
         @. ᶜdiffusion_u_matrix = ᶜadvdivᵥ_matrix() ⋅ ∂ᶠρχ_dif_flux_∂ᶜχ
     end
@@ -1009,9 +1018,8 @@ function update_diffusion_jacobian!(
         ᶜtke = @. lazy(specific(Y.c.ρtke, Y.c.ρ))
         ᶜρtke = Y.c.ρtke
 
-        # scratch to prevent GPU Kernel parameter memory error
-        ᶜmixing_length_field = p.scratch.ᶜtemp_scalar_3
-        ᶜmixing_length_field .= ᶜmixing_length(Y, p)
+        # Precomputed master mixing length (see set_precomputed_quantities!)
+        ᶜmixing_length_field = p.precomputed.ᶜl_mix
 
         # The dissipation derivative below differentiates c_d √tke / l_mix
         # with respect to tke at frozen mixing length, although l_mix itself

@@ -186,12 +186,10 @@ function edmfx_vertical_diffusion_tendency!(
             bottom = Operators.SetValue(C3(0)),
         )
 
-        (; ᶜbuoygrad_stab, ᶜstrain_rate_norm) = p.precomputed
+        (; ᶜbuoygrad_stab, ᶜstrain_rate_norm, ᶜl_mix) = p.precomputed
         ᶜtke = @. lazy(specific(Y.c.ρtke, Y.c.ρ))
-        # scratch to prevent GPU Kernel parameter memory error
-        ᶜmixing_length_field = p.scratch.ᶜtemp_scalar
-        ᶜmixing_length_field .= ᶜmixing_length(Y, p)
-        ᶜK_u = @. lazy(eddy_viscosity(turbconv_params, ᶜtke, ᶜmixing_length_field))
+        # Precomputed master mixing length (see set_precomputed_quantities!)
+        ᶜK_u = @. lazy(eddy_viscosity(turbconv_params, ᶜtke, ᶜl_mix))
         ᶜprandtl_nvec = @. lazy(
             turbulent_prandtl_number(params, ᶜbuoygrad_stab, ᶜstrain_rate_norm),
         )
@@ -208,9 +206,12 @@ function edmfx_vertical_diffusion_tendency!(
             # Note: For this and other diffusive tendencies, we should use ρaʲ instead of ρʲ,
             # but it causes stability issues when ρaʲ is small
             @. Yₜ.c.sgsʲs.:($$j).mse -=
-                ᶜdivᵥ_mse(-(ᶠinterp(ᶜρʲ) / ᶠinterp(1 / max(ᶜK_h, ϵK)) * ᶠgradᵥ(ᶜmseʲ))) / ᶜρʲ
+                ᶜdivᵥ_mse(-(ᶠinterp(ᶜρʲ) / ᶠinterp(1 / max(ᶜK_h, ϵK)) * ᶠgradᵥ(ᶜmseʲ))) /
+                ᶜρʲ
             @. Yₜ.c.sgsʲs.:($$j).q_tot -=
-                ᶜdivᵥ_q_tot(-(ᶠinterp(ᶜρʲ) / ᶠinterp(1 / max(ᶜK_h, ϵK)) * ᶠgradᵥ(ᶜq_totʲ))) / ᶜρʲ
+                ᶜdivᵥ_q_tot(
+                    -(ᶠinterp(ᶜρʲ) / ᶠinterp(1 / max(ᶜK_h, ϵK)) * ᶠgradᵥ(ᶜq_totʲ)),
+                ) / ᶜρʲ
         end
 
         if !isempty(sgs_tracer_names(Y))
