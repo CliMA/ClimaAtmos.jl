@@ -127,6 +127,14 @@ TODO: Reduce the number of cached values by computing them on the fly.
 """
 function precomputed_quantities(Y, atmos)
     FT = eltype(Y)
+    # TEMPORARY: 2M and 2M+P3 microphysics are broken under the
+    # CloudMicrophysics 0.37 compat bump (missing required `q_tot` arg in - block
+    # them here until that's fixed. Remove this assertion once compatibility
+    # is restored.
+    @assert !(
+        atmos.microphysics_model isa
+        Union{NonEquilibriumMicrophysics2M, NonEquilibriumMicrophysics2MP3}
+    ) "2M and 2M+P3 microphysics are temporarily disabled: incompatible with CloudMicrophysics 0.37 pending a fix."
     @assert !(atmos.microphysics_model isa DryModel) ||
             !(atmos.turbconv_model isa PrognosticEDMFX)
     @assert isnothing(atmos.turbconv_model) ||
