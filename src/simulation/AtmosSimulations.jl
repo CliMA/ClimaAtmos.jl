@@ -269,6 +269,8 @@ function AtmosSimulation{FT}(;
     # Numerics
     jacobian::JacobianAlgorithm = ManualSparseJacobian(approximate_solve_iters = 1),
     debug_jacobian = false,
+    update_cache_every = "stage",
+    update_constrain_state_every = "step",
     # Misc
     checkpoint_frequency = Inf,
     log_to_file = false,
@@ -344,7 +346,9 @@ function AtmosSimulation{FT}(;
         callback_set,
         jacobian, debug_jacobian,
         model.prescribed_flow,
-        dt;
+        dt,
+        update_cache_every,
+        update_constrain_state_every;
         verbose,
     )
 
