@@ -20,9 +20,19 @@ numerical methods for reconstructing the advective flux `wχ` at cell faces:
   - `::Val{:first_order}`: Uses a first-order upwind reconstruction (`ᶠupwind1(ᶠu³, ᶜχ)`).
   - `::Val{:third_order}`: Uses a third-order upwind reconstruction (`ᶠupwind3(ᶠu³, ᶜχ)`).
 
-The formulation `ᶜρ * (ᶜsubdivᵥ(Flux) - ᶜχ * ᶜsubdivᵥ(ᶠu³))` is equivalent to
+The formulation `ᶜρ * (ᶜadvdivᵥ(Flux) - ᶜχ * ᶜadvdivᵥ(ᶠu³))` is equivalent to
 `ᶜρ * (ᶠu³ ⋅ ∇ᶜχ)`, implementing the advective form. The result is subtracted
 from `ᶜρχₜ`, effectively adding `ρ * (-ᶠu³ ⋅ ∇ᶜχ)` to it.
+
+Both divergences use `ᶜadvdivᵥ`, which zeroes the flux through the top and
+bottom faces. In the advective form this implements a zero-gradient boundary
+condition: for inflow through the lid (`w < 0` aloft, the usual subsidence
+case), the upwinded top-face flux `w χ_top` and the compensating `χ_top w`
+term cancel exactly, so zeroing both faces is equivalent to prescribing
+`χ = χ_top` above the lid, and the top-cell advective tendency vanishes. For
+outflow (`w > 0`), the top cell sees a one-sided upwind derivative. For
+uniform `χ`, the tendency vanishes identically at every level, so the
+`q ≡ 1` tracer-mass consistency test holds structurally.
 
 Arguments:
 
@@ -34,11 +44,11 @@ Arguments:
   - `scheme`: A `Val` type specifying the advection scheme (e.g., `Val{:first_order}()`).
 """
 subsidence!(ᶜρχₜ, ᶜρ, ᶠu³, ᶜχ, ::Val{:none}) =
-    @. ᶜρχₜ -= ᶜρ * (ᶜsubdivᵥ(ᶠu³ * ᶠinterp(ᶜχ)) - ᶜχ * ᶜsubdivᵥ(ᶠu³)) # Centered difference ρ * (-w * ∂χ/∂z)
+    @. ᶜρχₜ -= ᶜρ * (ᶜadvdivᵥ(ᶠu³ * ᶠinterp(ᶜχ)) - ᶜχ * ᶜadvdivᵥ(ᶠu³)) # Centered difference ρ * (-w * ∂χ/∂z)
 subsidence!(ᶜρχₜ, ᶜρ, ᶠu³, ᶜχ, ::Val{:first_order}) =
-    @. ᶜρχₜ -= ᶜρ * (ᶜsubdivᵥ(ᶠupwind1(ᶠu³, ᶜχ)) - ᶜχ * ᶜsubdivᵥ(ᶠu³)) # 1st-order upwind ρ * (-w * ∂χ/∂z)
+    @. ᶜρχₜ -= ᶜρ * (ᶜadvdivᵥ(ᶠupwind1(ᶠu³, ᶜχ)) - ᶜχ * ᶜadvdivᵥ(ᶠu³)) # 1st-order upwind ρ * (-w * ∂χ/∂z)
 subsidence!(ᶜρχₜ, ᶜρ, ᶠu³, ᶜχ, ::Val{:third_order}) =
-    @. ᶜρχₜ -= ᶜρ * (ᶜsubdivᵥ(ᶠupwind3(ᶠu³, ᶜχ)) - ᶜχ * ᶜsubdivᵥ(ᶠu³)) # 3rd-order upwind ρ * (-w * ∂χ/∂z)
+    @. ᶜρχₜ -= ᶜρ * (ᶜadvdivᵥ(ᶠupwind3(ᶠu³, ᶜχ)) - ᶜχ * ᶜadvdivᵥ(ᶠu³)) # 3rd-order upwind ρ * (-w * ∂χ/∂z)
 
 
 """
