@@ -11,7 +11,6 @@ edmfx_nh_pressure: true
 edmfx_vertical_diffusion: true
 edmfx_filter: true
 prognostic_tke: true
-update_cache_every: "step"
 microphysics_model: "1M"
 config: "column"
 x_elem: 2

@@ -16,7 +16,7 @@ function ClimaAtmos.chemistry_tendency!(
     t,
     ::ClimaAtmos.GasPhaseChem,
 )
-    @info "MUSICA version: $(pkgversion(Musica))"
+    @info "MUSICA version: $(Musica.get_version())"
     return nothing
 end
 

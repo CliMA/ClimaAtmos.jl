@@ -532,8 +532,6 @@ function get_simulation(config::AtmosConfig)
         ode_config = ode_configuration(FT, pa),
         jacobian = jacobian_from_parsed_args(pa),
         debug_jacobian = pa["debug_jacobian"],
-        update_cache_every = pa["update_cache_every"],
-        update_constrain_state_every = pa["update_constrain_state_every"],
         aerosol_names = Tuple(pa["prescribed_aerosols"]),
         time_varying_trace_gases = Tuple(pa["time_varying_trace_gases"]),
         vertical_water_borrowing_species =
