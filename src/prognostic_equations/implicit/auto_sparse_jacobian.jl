@@ -389,14 +389,26 @@ function perturb_column_state!(
 )
     FT = eltype(Y_base)
     Yk .= Y_base
-    for (scalar_index, level_index) in field_vector_indices
-        scale =
-            default_jacobian_seed_scale(FT, scalar_names[scalar_index], uₕ_scale)
-        scale == one(FT) && continue
-        shift = FT(multiplier) * scale * randn(rng, FT)
-        unrolled_applyat(scalar_index, scalar_names) do name
-            field = MatrixFields.get_field(Yk, name)
-            @inbounds point(field, level_index, column_index...)[] += shift
+    # These are per-level scalar writes into a single column. On a GPU-backed
+    # column they are scalar indexing, which is disallowed by default; allow it
+    # here because the measurement is a one-time pass over one column and a
+    # handful of perturbed states (see measure_block_support_and_magnitude), so
+    # the scalar cost is bounded and off the hot path. allowscalar is a no-op on
+    # CPU and CUDA.@allowscalar on GPU.
+    device = ClimaComms.device(Yk.c)
+    ClimaComms.allowscalar(device) do
+        for (scalar_index, level_index) in field_vector_indices
+            scale = default_jacobian_seed_scale(
+                FT,
+                scalar_names[scalar_index],
+                uₕ_scale,
+            )
+            scale == one(FT) && continue
+            shift = FT(multiplier) * scale * randn(rng, FT)
+            unrolled_applyat(scalar_index, scalar_names) do name
+                field = MatrixFields.get_field(Yk, name)
+                @inbounds point(field, level_index, column_index...)[] += shift
+            end
         end
     end
     return Yk

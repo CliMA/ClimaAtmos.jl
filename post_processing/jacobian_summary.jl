@@ -296,17 +296,50 @@ function print_jacobian_summary(integrator)
                mean = $(mean(mode_vs_mode)), max = $(maximum(mode_vs_mode)) [s^-1] \
                (pure aliasing delta; ~0 means the leaner mask recovers the same \
                Jacobian)"
-        # Soft correctness guard: warn only when the leaner (measured) mask
-        # genuinely recovers a different Jacobian than the robust constant mask,
-        # i.e. the measured-vs-constant difference itself is significant. 1e-3
-        # s^-1 is the significance scale the aliasing-risk audit above uses
-        # (1e-3 / dt weighted by seed scales). Kept a warning, not a failure, so
-        # adversarial configs surface the number without turning CI red.
-        if isfinite(maximum(mode_vs_mode)) && maximum(mode_vs_mode) > 1e-3
+        # Per-block localization of the scalar errors above: same normalized
+        # units (s^-1) so a table's max entry matches the mode's printed max,
+        # pinpointing which block drives it. Only the stored bands are part of
+        # this comparison; blocks outside them show 0 (dark gray). Read the two
+        # tables side by side to see where a mode aliases; the measured-minus-
+        # constant grid is deliberately omitted (the "aliasing delta" scalar
+        # above covers it, and on the stored bands it just tracks the constant
+        # error).
+        vs_dense_grid(blocks) =
+            map(block_keys) do block_key
+                (block_key in stored_keys && haskey(blocks, block_key)) ||
+                    return FT(0)
+                rms(
+                    (blocks[block_key] .- dense_blocks[block_key]) .*
+                    block_rescalings[block_key],
+                )
+            end
+        @info "dense - constant sparse, normalized RMS per block on stored \
+               bands [s^-1]:"
+        pretty_table(vs_dense_grid(constant_r.blocks); table_kwargs...)
+        @info "dense - measured sparse, normalized RMS per block on stored \
+               bands [s^-1]:"
+        pretty_table(vs_dense_grid(measured_r.blocks); table_kwargs...)
+        # Soft correctness guard against the dense truth, not the constant mask.
+        # The dense AD Jacobian is the reference (no padding mode widens the
+        # stored bands), so a mode is "too lean" only when it deviates from
+        # dense there. Keying off measured-vs-constant is wrong: that difference
+        # is dominated by the CONSTANT mask's own aliasing (measured - constant
+        # on the stored bands tracks constant's error vs dense), so it fires
+        # loudest exactly when measured is the accurate one. Fire only when
+        # measured is both significantly off from dense (> 1e-3 s^-1, the
+        # aliasing-risk scale the audit above uses) AND worse than constant.
+        # Kept a warning, not a failure, so adversarial configs surface the
+        # number without turning CI red.
+        measured_err = vs_dense(measured_r.blocks)
+        constant_err = vs_dense(constant_r.blocks)
+        if isfinite(maximum(measured_err)) &&
+           maximum(measured_err) > 1e-3 &&
+           maximum(measured_err) > maximum(constant_err)
             @warn "measured padding mode recovers a Jacobian that differs from \
-                   the constant mask by $(maximum(mode_vs_mode)) [s^-1] on the \
-                   stored bands; its coloring mask may be too lean for this \
-                   configuration"
+                   the dense truth by $(maximum(measured_err)) [s^-1] on the \
+                   stored bands, worse than the constant mask \
+                   ($(maximum(constant_err)) [s^-1]); its coloring mask may be \
+                   too lean for this configuration"
         end
     end
 end
