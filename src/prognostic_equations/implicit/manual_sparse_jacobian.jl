@@ -1105,11 +1105,11 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
                 # -∇·(ρ u³ χ) is handled explicitly). As for mse and q_tot,
                 # the derivatives are linearized with the central interpolant
                 # (exact for the default :none upwinding), and the environment
-                # contributions are neglected: (χ⁰ - χ), (u³⁰ - u³), and
-                # ∂(χ⁰a⁰)/∂(ρχ) are each O(aʲ), so every environment Jacobian
-                # entry is O(aʲ²) while the updraft entries are O(aʲ). The
-                # updraft entries reuse ᶜtridiagonal_matrix_scalar, which is
-                # the same for every scalar transported by the updraft flux.
+                # contributions are neglected: (χ⁰ - χ) and (u³⁰ - u³) are each
+                # O(aʲ), so every environment Jacobian entry is O(aʲ²) while
+                # the updraft entries are O(aʲ). The updraft entries reuse
+                # ᶜtridiagonal_matrix_scalar, which is the same for every scalar
+                # transported by the updraft flux.
                 if p.atmos.microphysics_model isa Union{
                     NonEquilibriumMicrophysics1M,
                     NonEquilibriumMicrophysics2M,
