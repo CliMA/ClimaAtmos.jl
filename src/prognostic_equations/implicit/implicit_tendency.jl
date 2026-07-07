@@ -118,13 +118,7 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     thermo_params = CAP.thermodynamics_params(params)
     cp_d = CAP.cp_d(params)
 
-    # Mass advection with zero flux through the top and bottom
-    # boundaries (ᶜadvdivᵥ). The state filter in
-    # set_implicit_precomputed_quantities! also sets ᶠu³ to 0 at both
-    # boundaries, and the ρ row of the manual Jacobian is built from
-    # ᶜadvdivᵥ_matrix(), so using ᶜadvdivᵥ here keeps the residual, the
-    # boundary conditions, and the Jacobian consistent.
-    @. Yₜ.c.ρ -= ᶜadvdivᵥ(ᶠinterp(Y.c.ρ * ᶜJ) / ᶠJ * ᶠu³)
+    @. Yₜ.c.ρ -= ᶜdivᵥ(ᶠinterp(Y.c.ρ * ᶜJ) / ᶠJ * ᶠu³)
 
     # Full vertical advection (central + upwind correction) of active tracers
     # (ρe_tot and ρq_tot). The Wfact linearization uses only the central

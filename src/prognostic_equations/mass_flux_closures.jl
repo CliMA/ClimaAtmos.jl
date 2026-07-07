@@ -231,6 +231,29 @@ function edmfx_vertical_diffusion_tendency!(
     end
 end
 
+"""
+    enforce_physical_constraints!(Y, p, t, turbconv_model)
+
+Enforce physical constraints on the model state `Y` in-place.
+
+This function is used as a callback and is not a tendency evaluation. It applies
+local corrective updates to keep prognostic variables in a physically admissible
+range.
+
+Currently, this includes:
+- For prognostic EDMF, handling non-positive updraft area fractions by
+  immediately mixing the affected updraft state with the environment.
+- For one- and two-moment microphysics, enforcing non-negative condensate
+  masses.
+- When total moisture is positive, rescaling condensate masses so that their
+  sum does not exceed total moisture.
+
+These corrections are intended to prevent nonphysical states such as negative
+area fractions, negative condensate masses, or condensate mass exceeding the
+available total moisture. Ideally, the need for this correction is minimized
+by the numerical scheme.
+"""
+
 # Private helper: clips grid-mean condensate tracers to non-negative values and
 # rescales the condensate sum so it cannot exceed the available total moisture.
 function enforce_grid_mean_microphysics_constraints!(Y, p, t)
@@ -318,7 +341,7 @@ end
 
 Enforce physical consistency of the model state by calling the appropriate
 constraint helpers based on the active microphysics and turbulence-convection
-models.
+models. `set_precomputed_quantities!` is called exactly once at the end.
 """
 function enforce_physical_constraints!(Y, p, t, atmos::AtmosModel)
     # Grid-mean microphysics: non-negativity + condensate ≤ total moisture.
@@ -334,5 +357,6 @@ function enforce_physical_constraints!(Y, p, t, atmos::AtmosModel)
         enforce_edmf_updraft_constraints!(Y, p, t, atmos.turbconv_model)
     end
 
+    set_precomputed_quantities!(Y, p, t)
     return nothing
 end

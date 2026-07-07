@@ -4,22 +4,6 @@ ClimaAtmos.jl Release Notes
 main
 ----
 
-- [#4637](https://github.com/CliMA/ClimaAtmos.jl/pull/4637) ![][badge-🔥behavioralΔ]
-  - Fix the spurious mass flux through the model top over sloped terrain-following coordinates: `set_velocity_at_top!` now cancels the contravariant projection of the horizontal wind (`u₃ = -uₕ³/g³³`, mirroring the surface treatment), and the continuity equation uses the same zero-boundary-flux divergence (`ᶜadvdivᵥ`) as the tracers, which also makes the `ρ`-row Jacobian exact.
-  - Transport auto-discovered EDMFX SGS tracers (`q_lcl`, `q_icl`, `q_rai`, `q_sno`, `n_*`) like `mse` and `q_tot`: grid-mean vertical advection plus difference-form SGS corrections `ρᵏaᵏ(u³ᵏ-u³)(χᵏ-χ)`, which vanish for uniform fields, instead of absolute subdomain fluxes. These corrections now use the same `edmfx_sgsflux_upwinding` reconstruction as the `mse`/`q_tot` fluxes (central by default, previously first-order upwind for the tracer fluxes), and their implicit Jacobian uses the matching central, updraft-only linearization (environment contributions, which are `O(aʲ²)`, are dropped).
-  - Add the moist-air-mass counterpart of the EDMFX SGS mass flux of `q_tot` to the continuity equation, mirroring the diffusive-flux treatment. A new tracer-mass consistency test asserts the `χ ≡ 1` identity for these transport pathways.
-
-0.41.1
--------
-
-- [#4622](https://github.com/CliMA/ClimaAtmos.jl/pull/4622) ![][badge-🔥behavioralΔ] Move the `ρe_tot`/`ρq_tot` upwind correction into the implicit advection tendency (the Wfact Jacobian is unchanged).
-- [#4621](https://github.com/CliMA/ClimaAtmos.jl/pull/4621) ![][badge-🔥behavioralΔ] Clamp the implicit `ρa` stage value to `[0, ρ·a_max]` per-cell in the column sweep for stability, so updraft area cannot exceed `a_max` when the explicit area limiters fail to prevent overshoot.
-- [#4623](https://github.com/CliMA/ClimaAtmos.jl/pull/4623) Hotfix: replace a rational exponent (`^(1 // 4)`) with `sqrt(sqrt(...))` in the Smagorinsky–Lilly stratification correction.
-- [#4618](https://github.com/CliMA/ClimaAtmos.jl/pull/4618) Add a verbose logging option for `AtmosSimulation`.
-- [#4606](https://github.com/CliMA/ClimaAtmos.jl/pull/4606) ![][badge-✨feature/enhancement] Add ARM VARANAL SCM forcing support.
-- [#4615](https://github.com/CliMA/ClimaAtmos.jl/pull/4615) Add microphysics 1M tendency plots for the Larcform1 case.
-- [#4610](https://github.com/CliMA/ClimaAtmos.jl/pull/4610) Add LES comparison plots for EDMF post-processing.
-
 0.41.0
 -------
 
