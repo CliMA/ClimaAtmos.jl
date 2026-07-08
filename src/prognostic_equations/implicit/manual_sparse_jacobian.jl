@@ -138,12 +138,29 @@ function diffusion_jacobian_blocks(Y, atmos, diffusion_flag)
     diffused_scalar_names =
         unrolled_map(center_state_name, diffused_gs_scalar_names(Y))
     mass_names = unrolled_map(center_state_name, sedimenting_mass_names(Y))
+    sedimenting_names =
+        unrolled_map(center_state_name, sedimenting_tracer_names(Y))
     ρtke_if_available =
         is_in_Y(@name(c.ρtke)) ? (@name(c.ρtke),) : ()
     return (
+        # (·, ρ) blocks exist only where they receive values: (ρe_tot, ρ) and
+        # (ρq_tot, ρ) accumulate the SGS mass-flux Jacobian, and (ρtke, ρ)
+        # holds the dissipation derivative. The microphysics tracers carry no
+        # (·, ρ) blocks: the ρ-dependence of their diffusion is neglected
+        # (like the other ∂K/∂state terms), so the blocks were identically
+        # zero, and the condensate-mass rows must in any case precede ρ in the
+        # scalar solve because the ρ row holds their sedimentation derivatives
+        # (see `sedimentation_jacobian_blocks` and
+        # `jacobian_solver_algorithm`).
         map(
             name -> (name, @name(c.ρ)) => similar(Y.c, TridiagonalRow),
-            (diffused_scalar_names..., ρtke_if_available...),
+            (
+                unrolled_filter(
+                    name -> !(name in sedimenting_names),
+                    diffused_scalar_names,
+                )...,
+                ρtke_if_available...,
+            ),
         )...,
         map(
             name -> (name, name) => similar(Y.c, TridiagonalRow),
@@ -203,6 +220,13 @@ function sedimentation_jacobian_blocks(Y, atmos)
         )...,
         map(
             name -> (@name(c.ρe_tot), name) => similar(Y.c, TridiagonalRow),
+            mass_names,
+        )...,
+        # Sedimentation moves mass: ∂(ρ tendency)/∂(ρq_x), matching the
+        # identical vtt added to Yₜ.c.ρ and Yₜ.c.ρq_tot in
+        # `vertical_advection_of_water_tendency!`.
+        map(
+            name -> (@name(c.ρ), name) => similar(Y.c, TridiagonalRow),
             mass_names,
         )...,
     )
@@ -387,17 +411,26 @@ function jacobian_solver_algorithm(
     )
     if use_derivative(diffusion_flag) ||
        !(atmos.microphysics_model isa DryModel)
+        # Scalar solve order: gs condensate masses precede ρ because the ρ row
+        # carries their sedimentation derivatives ∂(ρ tendency)/∂ρq_x; ρ
+        # precedes ρq_tot and ρe_tot, whose rows depend on the ρ column (SGS
+        # mass flux). The condensate-mass rows carry no (·, ρ) blocks (see
+        # `diffusion_jacobian_blocks`), so this order is block lower
+        # triangular.
         gs_scalar_subalg = if !(atmos.microphysics_model isa DryModel)
             MatrixFields.BlockLowerTriangularSolve(
                 mass_names...,
                 alg₂ = MatrixFields.BlockLowerTriangularSolve(
-                    @name(c.ρq_tot),
+                    mass_and_surface_names...;
+                    alg₂ = MatrixFields.BlockLowerTriangularSolve(
+                        @name(c.ρq_tot),
+                    ),
                 ),
             )
         else
-            MatrixFields.BlockDiagonalSolve()
+            MatrixFields.BlockLowerTriangularSolve(mass_and_surface_names...)
         end
-        scalar_subalg =
+        scalar_alg =
             if atmos.turbconv_model isa PrognosticEDMFX
                 MatrixFields.BlockLowerTriangularSolve(
                     sgs_sedimenting_names...;
@@ -410,10 +443,6 @@ function jacobian_solver_algorithm(
             else
                 gs_scalar_subalg
             end
-        scalar_alg = MatrixFields.BlockLowerTriangularSolve(
-            mass_and_surface_names...;
-            alg₂ = scalar_subalg,
-        )
         return MatrixFields.ApproximateBlockArrowheadIterativeSolve(
             available_scalar_names...;
             alg₁ = scalar_alg,
@@ -727,6 +756,14 @@ function update_sedimentation_jacobian!(matrix, Y, p, dtγ)
                 p.scratch.ᶜbidiagonal_adjoint_matrix_c3 ⋅
                 p.scratch.ᶠband_matrix_wvec
 
+            # Sedimentation moves (moist air) mass: the same vtt is added
+            # to Yₜ.c.ρ and Yₜ.c.ρq_tot in
+            # `vertical_advection_of_water_tendency!`.
+            ∂ᶜρ_err_∂ᶜρq = matrix[@name(c.ρ), ρχₚ_state_name]
+            @. ∂ᶜρ_err_∂ᶜρq =
+                p.scratch.ᶜbidiagonal_adjoint_matrix_c3 ⋅
+                p.scratch.ᶠband_matrix_wvec
+
             ∂ᶜρe_tot_err_∂ᶜρq = matrix[@name(c.ρe_tot), ρχₚ_state_name]
             e_int_func = internal_energy_function(phase)
             @. ∂ᶜρe_tot_err_∂ᶜρq =
@@ -895,12 +932,12 @@ function update_diffusion_jacobian!(
         end
     end
 
+    # The microphysics tracers carry no (·, ρ) blocks (see
+    # `diffusion_jacobian_blocks`), so only their diagonals are updated here.
     α_vert_diff_microphysics = CAP.α_vert_diff_tracer(params)
     MatrixFields.unrolled_foreach(sedimenting_tracer_names(Y)) do ρχ_name
         ρχ_state_name = center_state_name(ρχ_name)
-        ∂ᶜρχ_err_∂ᶜρ = matrix[ρχ_state_name, @name(c.ρ)]
         ∂ᶜρχ_err_∂ᶜρχ = matrix[ρχ_state_name, ρχ_state_name]
-        @. ∂ᶜρχ_err_∂ᶜρ = zero(typeof(∂ᶜρχ_err_∂ᶜρ))
         @. ∂ᶜρχ_err_∂ᶜρχ +=
             dtγ * α_vert_diff_microphysics * ᶜdiffusion_h_matrix ⋅
             DiagonalMatrixRow(1 / ᶜρ)
