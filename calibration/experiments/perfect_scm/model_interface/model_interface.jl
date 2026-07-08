@@ -31,19 +31,13 @@ analysis of the iteration is done by `ClimaCalibrate.analyze_iteration`.
 The calibration is saved in `output_dir`.
 """
 struct PerfectAtmosModelInterface{DIAGS <: Vector} <: ClimaCalibrate.AbstractModelInterface
-    """
-    A filepath to a configuration file for a ClimaAtmos simulation
-    """
+    # A filepath to a configuration file for a ClimaAtmos simulation
     config::String
 
-    """
-    The directory to save the calibration to
-    """
+    # The directory to save the calibration to
     output_dir::String
 
-    """
-    A vector of dictionaries following the schema specified by AtmosConfig
-    """
+    # A vector of dictionaries following the schema specified by AtmosConfig
     diagnostic_dicts::DIAGS
 end
 

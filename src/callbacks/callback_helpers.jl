@@ -167,13 +167,9 @@ frequency. (For instance, reporting something more frequently at the beginning o
 simulation, and less frequency later)
 """
 struct CappedGeometricSeriesSchedule <: AbstractSchedule
-    """
-    GeometricSeriesSchedule(integrator) is true every 2^N iterations or every max_steps
-    """
+    # GeometricSeriesSchedule(integrator) is true every 2^N iterations or every max_steps
     max_steps::Int
-    """
-    Last step that this returned true
-    """
+    # Last step that this returned true
     step_last::Base.RefValue{Int}
 
     function CappedGeometricSeriesSchedule(max_steps; step_last = Ref(0))

@@ -24,75 +24,49 @@ struct AtmosCache{
     """
     dt::FT
 
-    """
-    AtmosModel
-    """
+    # AtmosModel
     atmos::AM
 
-    """
-    Limiter
-    """
+    # Limiter
     numerics::NUM
 
-    """
-    ClimaAtmosParameters that have to be used
-    """
+    # ClimaAtmosParameters that have to be used
     params::CAP
 
-    """
-    Variables that are used generally, such as ᶜΦ
-    """
+    # Variables that are used generally, such as ᶜΦ
     core::COR
 
-    """
-    Used by update_surface_conditions! in set_precomputed_quantities! and coupler
-    """
+    # Used by update_surface_conditions! in set_precomputed_quantities! and coupler
     sfc_setup::SFC
 
-    """
-    Center and face ghost buffers used by DSS
-    """
+    # Center and face ghost buffers used by DSS
     ghost_buffer::GHOST
 
-    """
-    Quantities that are updated with set_precomputed_quantities!
-    """
+    # Quantities that are updated with set_precomputed_quantities!
     precomputed::PREC
 
-    """
-    Pre-allocated areas of memory to store temporary values
-    """
+    # Pre-allocated areas of memory to store temporary values
     scratch::SCRA
 
-    """
-    Hyperdiffision quantities for grid and subgrid scale quantities, potentially with
-    ghost buffers for DSS
-    """
+    # Hyperdiffision quantities for grid and subgrid scale quantities, potentially with
+    # ghost buffers for DSS
     hyperdiff::HYPE
 
-    """
-    Additional parameters used by the various tendencies
-    """
+    # Additional parameters used by the various tendencies
     external_forcing::EXTFORCING
     non_orographic_gravity_wave::NONGW
     orographic_gravity_wave::ORGW
     radiation::RAD
     tracers::TRAC
 
-    """
-    Net energy flux coming through top of atmosphere and surface
-    """
+    # Net energy flux coming through top of atmosphere and surface
     net_energy_flux_toa::NETFLUXTOA
     net_energy_flux_sfc::NETFLUXSFC
 
-    """
-    Predicted steady-state velocity, if `check_steady_state` is `true`
-    """
+    # Predicted steady-state velocity, if `check_steady_state` is `true`
     steady_state_velocity::SSV
 
-    """
-    Conservation check for prognostic surface temperature
-    """
+    # Conservation check for prognostic surface temperature
     conservation_check::CONSCHECK
 end
 

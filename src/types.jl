@@ -365,13 +365,9 @@ sponge = ViscousSponge(Float32; zd = 20_000, κ₂ = 1e6)
 ```
 """
 @kwdef struct ViscousSponge{FT} <: SpongeModel
-    """
-    Lower damping height, in meters
-    """
+    # Lower damping height, in meters
     zd::FT
-    """
-    Damping coefficient, in m²/s²
-    """
+    # Damping coefficient, in m²/s²
     κ₂::FT
 end
 
@@ -425,21 +421,13 @@ sponge = RayleighSponge(Float32; zd = 20_000)
 ```
 """
 @kwdef struct RayleighSponge{FT} <: SpongeModel
-    """
-    Lower damping height, in meters
-    """
+    # Lower damping height, in meters
     zd::FT
-    """
-    Damping coefficient for horizontal velocity, by default 0 (no damping)
-    """
+    # Damping coefficient for horizontal velocity, by default 0 (no damping)
     α_uₕ::FT = 0
-    """
-    Damping coefficient for vertical velocity, by default 1 (full damping)
-    """
+    # Damping coefficient for vertical velocity, by default 1 (full damping)
     α_w::FT = 1
-    """
-    Damping coefficient for tracer variables, by default 0 (no damping)
-    """
+    # Damping coefficient for tracer variables, by default 0 (no damping)
     α_tracer::FT = 0
 end
 
@@ -679,9 +667,7 @@ Base.broadcastable(x::AbstractSGSamplingType) = tuple(x)
 Base.broadcastable(x::AbstractTendencyModel) = tuple(x)
 
 @kwdef struct RadiationDYCOMS{FT}
-    """
-    Large-scale divergence
-    """
+    # Large-scale divergence
     divergence::FT = 3.75e-6
     alpha_z::FT = 1.0
     kappa::FT = 85.0
@@ -762,30 +748,20 @@ struct HardMinimumBlending <: AbstractScaleBlendingMethod end
 Base.broadcastable(x::AbstractScaleBlendingMethod) = tuple(x)
 
 struct AtmosNumerics{EN_UP, TR_UP, ED_UP, SG_UP, ED_TR_UP, TDC, RR, LIM, DM, HD}
-    """
-    Enable specific upwinding schemes for specific equations
-    """
+    # Enable specific upwinding schemes for specific equations
     energy_q_tot_upwinding::EN_UP
     tracer_upwinding::TR_UP
     edmfx_mse_q_tot_upwinding::ED_UP
     edmfx_sgsflux_upwinding::SG_UP
     edmfx_tracer_upwinding::ED_TR_UP
-    """
-    Add NaNs to certain equations to track down problems
-    """
+    # Add NaNs to certain equations to track down problems
     test_dycore_consistency::TDC
-    """
-    Whether the simulation is reproducible when restarting from a restart file
-    """
+    # Whether the simulation is reproducible when restarting from a restart file
     reproducible_restart::RR
     limiter::LIM
-    """
-    Timestepping mode for diffusion: Explicit() or Implicit()
-    """
+    # Timestepping mode for diffusion: Explicit() or Implicit()
     diff_mode::DM
-    """
-    Hyperdiffusion model: nothing or Hyperdiffusion()
-    """
+    # Hyperdiffusion model: nothing or Hyperdiffusion()
     hyperdiff::HD
 end
 Base.broadcastable(x::AtmosNumerics) = tuple(x)
@@ -1031,9 +1007,7 @@ struct AtmosModel{W, SCM, R, TC, PF, GW, VD, SP, SU, NU, CM}
     numerics::NU
     chemistry::CM
 
-    """
-    Whether to apply surface flux tendency (independent of surface conditions)
-    """
+    # Whether to apply surface flux tendency (independent of surface conditions)
     disable_surface_flux_tendency::Bool
 end
 
