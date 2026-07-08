@@ -2338,3 +2338,256 @@ end
         FT(beres.beres_L_system),
     )
 end
+
+#####
+##### Five-way native band-flux diagnostics (CPU-side)
+#####
+# Computes, per native column, the launched band fluxes for five variants of the
+# Beres source that share ALL inputs and differ only in flags/profile:
+#   base  — half-sine shape (production baseline)
+#   ext1  — sine transform of the gathered in-cloud profile
+#   ext3  — half-sine + mechanical steady source
+#   ext13 — both extensions
+#   hs0   — half-sine profile pushed THROUGH the transform at the actual z_bot
+#           (separates elevation interference from profile shape)
+# Runs on the CPU at diagnostic time (results are per-column SCALARS, so the
+# lat-lon remap afterwards is a harmless linear average — unlike remapping the
+# nonlinear operator's INPUTS, which produced inconsistent profile/envelope
+# pairs offline). The bin loop mirrors _beres_launch_spectrum exactly but
+# accumulates band sums directly (no NTuple{nc} construction: that unrolled
+# tuple is an hours-long CPU compile and a failed GPU compile).
+
+# Low-|c| band edge (m/s) separating the QBO-relevant slow waves from the rest.
+const BERES_FIVEWAY_C_BAND = 15
+
+# Copy of `b` with the two extension flags replaced (struct is immutable).
+function _beres_with_flags(
+    b::BeresSourceParams{FT},
+    shape_general::Bool,
+    mechanical::Bool,
+) where {FT}
+    return BeresSourceParams{FT}(;
+        Q0_threshold = b.Q0_threshold,
+        beres_scale_factor = b.beres_scale_factor,
+        σ_x = b.σ_x,
+        ν_min = b.ν_min,
+        ν_max = b.ν_max,
+        n_ν = b.n_ν,
+        h_heat_min = b.h_heat_min,
+        z_bot_floor = b.z_bot_floor,
+        beres_steady_source = b.beres_steady_source,
+        beres_steady_dc_frac = b.beres_steady_dc_frac,
+        beres_L_system = b.beres_L_system,
+        heating_latent = b.heating_latent,
+        detailed_diagnostics = b.detailed_diagnostics,
+        beres_shape_general = shape_general,
+        beres_mechanical_source = mechanical,
+        beres_obstacle_frac = b.beres_obstacle_frac,
+        beres_mech_weight = b.beres_mech_weight,
+        n_h_avg = b.n_h_avg,
+        Δh_frac = b.Δh_frac,
+        z_bot_Q_threshold = b.z_bot_Q_threshold,
+        moment_envelope = b.moment_envelope,
+    )
+end
+
+# Analytic half-sine (depth h, based at z_bot) sampled on the gather grid over
+# [z_bot, z_top], peak-normalized like the model gather (the hs0 variant).
+function _beres_hs_gprofile(z_bot::FT, z_top::FT, h::FT) where {FT}
+    span = max(z_top - z_bot, eps(FT))
+    dz_g = span / FT(N_BERES_PROFILE - 1)
+    hh = max(h, eps(FT))
+    raw = ntuple(Val(N_BERES_PROFILE)) do i
+        zi = z_bot + (i - 1) * dz_g
+        zi <= z_bot + hh ? max(sin(FT(π) * (zi - z_bot) / hh), FT(0)) : FT(0)
+    end
+    return _beres_peaknorm(raw)
+end
+
+# Band-accumulating mirror of _beres_launch_spectrum: identical steady block and
+# per-bin body, but sums (signed, |.|) per band instead of building NTuple{nc}.
+# Bands: |c| <= c_band is "low"; c > 0 is "E" (the c = 0 steady bin counts as
+# lowW). Returns (lowE, lowW, highE, highW, lowE_abs, lowW_abs, highE_abs,
+# highW_abs, c0, c0_abs) as Float64. The trailing c0 pair isolates the
+# stationary c = 0 bin (the steady/standing-wave deposit, also included in
+# lowW — subtract for the transient slow-westward flux); it is zero when the
+# phase-speed grid has no exact c = 0 bin.
+function _beres_banded_spectrum(
+    c,
+    u_heat::FT,
+    Q0::FT,
+    h::FT,
+    N_source::FT,
+    z_bot::FT,
+    span::FT,
+    gprofile,
+    w_obstacle::FT,
+    beres::BeresSourceParams{FT},
+    nc::Int,
+    c_band::FT,
+) where {FT}
+    (;
+        σ_x, ν_min, ν_max, n_ν, beres_scale_factor, n_h_avg, Δh_frac,
+        beres_steady_source, beres_steady_dc_frac, beres_L_system,
+        beres_shape_general, beres_mechanical_source, beres_mech_weight,
+    ) = beres
+    scale_factor = FT(beres_scale_factor)
+    L_system = FT(beres_L_system)
+    use_VG = beres_shape_general && (gprofile !== nothing)
+
+    boole_w = (FT(7), FT(32), FT(12), FT(32), FT(7))
+    dν = (ν_max - ν_min) / FT(n_ν - 1)
+    n_groups = (n_ν - 1) ÷ 4
+    N2 = N_source^2
+    σ_x_sq = σ_x^2
+    Q0_sq = Q0^2
+
+    dc = c[2] - c[1]
+    cmax = -c[1]
+    n_zero = clamp(round(Int, cmax / dc) + 1, 1, nc)
+    has_c0_bin = abs(c[n_zero]) < FT(1e-6)
+    steady_therm =
+        (beres_steady_source && has_c0_bin) ?
+        _beres_steady_flux(
+            u_heat, N_source, h, Q0, scale_factor, n_h_avg, Δh_frac, σ_x,
+            L_system, FT(beres_steady_dc_frac), ν_min, use_VG, gprofile,
+            z_bot, span,
+        ) : FT(0)
+    steady_mech =
+        (beres_mechanical_source && has_c0_bin) ?
+        _beres_mech_flux(
+            u_heat, N_source, w_obstacle, scale_factor,
+            FT(beres_mech_weight), σ_x, L_system,
+        ) : FT(0)
+    steady_flux = steady_therm + steady_mech
+
+    sums = (0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
+    for n in 1:nc
+        c_n = c[n]
+        c_hat = c_n - u_heat
+        val = if abs(c_hat) < FT(1e-6) || abs(c_n) < FT(1e-6)
+            FT(0)
+        else
+            result = if use_VG || n_h_avg <= 1
+                _beres_spectrum_single_h(
+                    c_n, c_hat, h, u_heat, N2, N_source,
+                    Q0_sq, σ_x_sq, ν_min, dν, n_groups, boole_w,
+                    use_VG, gprofile, z_bot, span,
+                )
+            else
+                Δh = Δh_frac * h
+                h_min = h - Δh
+                h_max = h + Δh
+                dh = (h_max - h_min) / FT(n_h_avg - 1)
+                acc = FT(0)
+                for ih in 1:n_h_avg
+                    h_i = h_min + FT(ih - 1) * dh
+                    acc += _beres_spectrum_single_h(
+                        c_n, c_hat, h_i, u_heat, N2, N_source,
+                        Q0_sq, σ_x_sq, ν_min, dν, n_groups, boole_w,
+                        false, nothing, z_bot, span,
+                    )
+                end
+                acc / FT(n_h_avg)
+            end
+            sign(c_hat) * scale_factor * result
+        end
+        v = Float64(val + steady_flux * FT(n == n_zero))
+        band = (abs(c_n) <= c_band) ? (c_n > 0 ? 1 : 2) : (c_n > 0 ? 3 : 4)
+        is_c0 = has_c0_bin && n == n_zero
+        sums = ntuple(
+            k ->
+                k == band ? sums[k] + v :
+                k == band + 4 ? sums[k] + abs(v) :
+                (k == 9 && is_c0) ? sums[k] + v :
+                ((k == 10 && is_c0) ? sums[k] + abs(v) : sums[k]),
+            Val(10),
+        )
+    end
+    return sums
+end
+
+# Memoized per-time computation of all five-way maps (CPU). Fills
+# gw_fiveway_maps[] with a Dict short_name => Array shaped like parent(gw_Q0).
+# Memo via module globals, NOT cache Refs: Refs in the cache change its type
+# (forcing kernel recompiles), and per-simulation state is fine as globals for
+# one-simulation-per-process drivers.
+const _B5_MEMO_T = Ref{Any}(nothing)
+const _B5_MEMO_MAPS = Ref{Any}(nothing)
+
+function _compute_beres_fiveway!(p, time)
+    nogw = p.non_orographic_gravity_wave
+    _B5_MEMO_T[] == time && return _B5_MEMO_MAPS[]
+
+    (; gw_beres_source, gw_c) = nogw
+    beres = gw_beres_source
+    FT = typeof(beres.σ_x)
+    nc = length(gw_c)
+    c_band = FT(BERES_FIVEWAY_C_BAND)
+
+    active = Array(parent(nogw.gw_beres_active))
+    Q0a = Array(parent(nogw.gw_Q0))
+    ha = Array(parent(nogw.gw_h_heat))
+    zba = Array(parent(nogw.gw_zbot))
+    zta = Array(parent(nogw.gw_ztop))
+    Na = Array(parent(nogw.gw_N_source))
+    ua = Array(parent(nogw.gw_u_heat))   # envelope-mean zonal wind (Pass 2)
+    wa = Array(parent(nogw.gw_w_obstacle))
+    gpa = Array(parent(nogw.gw_beres_gprofile))  # (..., N_BERES_PROFILE, ...)
+
+    variants = (
+        ("base", _beres_with_flags(beres, false, false), false),
+        ("ext1", _beres_with_flags(beres, true, false), false),
+        ("ext3", _beres_with_flags(beres, false, true), false),
+        ("ext13", _beres_with_flags(beres, true, true), false),
+        ("hs0", _beres_with_flags(beres, true, false), true),
+    )
+    bands = ("lowE", "lowW", "highE", "highW")
+    maps = Dict{String, Array{FT}}()
+    for (vname, _, _) in variants, (kb, bname) in enumerate(bands)
+        maps["nogw_b5_$(vname)_$(bname)"] = zeros(FT, size(active))
+        maps["nogw_b5_$(vname)_$(bname)_abs"] = zeros(FT, size(active))
+    end
+    for (vname, _, _) in variants
+        maps["nogw_b5_$(vname)_c0"] = zeros(FT, size(active))
+        maps["nogw_b5_$(vname)_c0_abs"] = zeros(FT, size(active))
+    end
+
+    # parent layout: 2D fields are (..., 1, ...) with one flat "F" axis; the
+    # gprofile field has N_BERES_PROFILE entries on that axis. Identify it by
+    # matching sizes against the 2D parent.
+    sz2 = size(active)
+    szg = size(gpa)
+    fdim = findfirst(d -> szg[d] == N_BERES_PROFILE && sz2[d] == 1, 1:ndims(gpa))
+    isnothing(fdim) && error("cannot locate gprofile component axis")
+
+    for I in CartesianIndices(active)
+        active[I] > FT(0.5) || continue
+        z_bot = zba[I]
+        z_top = zta[I]
+        gprof = ntuple(
+            k -> gpa[CartesianIndex(ntuple(
+                d -> d == fdim ? k : I[d],
+                Val(ndims(gpa)),
+            ))],
+            Val(N_BERES_PROFILE),
+        )
+        gprof_hs = _beres_hs_gprofile(z_bot, z_top, ha[I])
+        for (vname, vparams, use_hs) in variants
+            sums = _beres_banded_spectrum(
+                gw_c, ua[I], Q0a[I], ha[I], Na[I], z_bot, z_top - z_bot,
+                use_hs ? gprof_hs : gprof, wa[I], vparams, nc, c_band,
+            )
+            for (kb, bname) in enumerate(bands)
+                maps["nogw_b5_$(vname)_$(bname)"][I] = FT(sums[kb])
+                maps["nogw_b5_$(vname)_$(bname)_abs"][I] = FT(sums[kb + 4])
+            end
+            maps["nogw_b5_$(vname)_c0"][I] = FT(sums[9])
+            maps["nogw_b5_$(vname)_c0_abs"][I] = FT(sums[10])
+        end
+    end
+
+    _B5_MEMO_MAPS[] = maps
+    _B5_MEMO_T[] = time
+    return maps
+end
