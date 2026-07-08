@@ -55,6 +55,100 @@ end
 
 make_rho_air(FT) = make_center_profile_field(FT, [1.2, 1.0, 0.8])
 
+const COSP_MIE_REFERENCES = (;
+    water_small = (;
+        phase = :liquid,
+        D_m =  1.9999999494757503E-005,
+        T =  2.7314999389648438E+002,
+        number_m3 =  1.0000000000000000E+000,
+        m = ComplexF64( 2.7999734878540039E+000, -1.3627929687500000E+000),
+        qext =  1.4807554893195629E-002,
+        qbsca =  4.1043065834855952E-007,
+        z_vol =  5.8123325596959319E-011,
+        kr_vol =  2.0203076545044496E-008,
+        err = 0,
+    ),
+
+    water_medium = (;
+        phase = :liquid,
+        D_m =  1.0000000474974513E-003,
+        T =  2.7314999389648438E+002,
+        number_m3 =  1.0000000000000000E+000,
+        m = ComplexF64( 2.7999734878540039E+000, -1.3627929687500000E+000),
+        qext =  3.2664134502410889E+000,
+        qbsca =  1.4222202301025391E+000,
+        z_vol =  5.0352096557617188E-001,
+        kr_vol =  1.1141545139253139E-002,
+        err = 0,
+    ),
+
+    ice_small = (;
+        phase = :ice,
+        D_m =  1.9999999494757503E-005,
+        T =  2.5314999389648438E+002,
+        number_m3 =  1.0000000000000000E+000,
+        m = ComplexF64( 1.7825161218643188E+000, -2.8795218095183372E-003),
+        qext =  9.0639849076978862E-005,
+        qbsca =  1.0656524551677649E-007,
+        z_vol =  1.5091284125134941E-011,
+        kr_vol =  1.2366685453457649E-010,
+        err = 0,
+    ),
+
+    ice_medium = (;
+        phase = :ice,
+        D_m =  1.0000000474974513E-003,
+        T =  2.5314999389648438E+002,
+        number_m3 =  1.0000000000000000E+000,
+        m = ComplexF64( 1.7825161218643188E+000, -2.8795218095183372E-003),
+        qext =  4.8764702677726746E-001,
+        qbsca =  3.8374635577201843E-001,
+        z_vol =  1.3586105406284332E-001,
+        kr_vol =  1.6633353661745787E-003,
+        err = 0,
+    ),
+)
+
+function test_or_skip_isapprox(actual, expected; rtol, atol)
+    if ismissing(expected)
+        @test_skip "COSP scalar Mie reference value not filled yet"
+    else
+        @test isapprox(actual, expected; rtol, atol)
+    end
+end
+
+@testset "COSP CloudSat scalar Mie references" begin
+    FT = Float64
+    radar_cfg = CCO.CloudSatRadarConfig(FT; use_gas_abs = false)
+
+    for (case_name, ref) in pairs(COSP_MIE_REFERENCES)
+        @testset "$(case_name)" begin
+            D_m = FT(ref.D_m)
+            T = FT(ref.T)
+            number_m3 = FT(ref.number_m3)
+
+            m =
+                ref.phase === :liquid ?
+                CCO._m_wat(radar_cfg.freq, T) :
+                CCO._m_ice(radar_cfg.freq, T)
+            qext, qbsca = CCO._mie_efficiencies(D_m, T, radar_cfg, ref.phase)
+            z_vol, kr_vol = CCO._zeff_particle_integral(
+                D_m,
+                number_m3,
+                T,
+                radar_cfg,
+                ref.phase,
+            )
+
+            test_or_skip_isapprox(m, ref.m; rtol = 1e-6, atol = 1e-12)
+            test_or_skip_isapprox(qext, ref.qext; rtol = 1e-5, atol = 1e-12)
+            test_or_skip_isapprox(qbsca, ref.qbsca; rtol = 1e-5, atol = 1e-12)
+            test_or_skip_isapprox(z_vol, ref.z_vol; rtol = 1e-5, atol = 1e-12)
+            test_or_skip_isapprox(kr_vol, ref.kr_vol; rtol = 1e-5, atol = 1e-12)
+        end
+    end
+end
+
 @testset "COSP CloudSat optics scaffold" begin
     FT = Float64
     nsubcolumns = 2

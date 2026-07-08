@@ -49,6 +49,8 @@ end
 
 Base.broadcastable(params::Clima1MPSDParameters) = Ref(params)
 
+include("cloudsat_mie.jl")
+
 const O2_V0 = (
     49.4523790, 49.9622570, 50.4742380, 50.9877480, 51.5033500, 52.0214090,
     52.5423930, 53.0669060, 53.5957480, 54.1299999, 54.6711570, 55.2213650,
@@ -140,8 +142,8 @@ Fill first-stage CloudSat optical-volume quantities from existing subcolumn cach
 summed into those totals. 
 
 Hydrometeor particle distributions use hard-coded ClimaMicrophysics 1M PSD
-and mass-size assumptions, then an approximate Rayleigh-limit scattering
-closure with a bounded finite-size correction computes `z_vol` and `kr_vol`.
+and mass-size assumptions, then a QuickBeam Mie scattering kernel
+computes `z_vol` and `kr_vol`.
 Gas absorption uses the COSPv2 `gases` calculation.
 
 Note: For cloud water in the 1M scheme, the prescribed number concentration is
@@ -516,8 +518,9 @@ end
         r_mid = sqrt(r_prev * r_next)
         dr = r_next - r_prev
         number_density = n0 * exp(-lambda * r_mid) * dr
+        D_m = _scattering_diameter(r_mid, params)
         z_i, kr_i = _zeff_particle_integral(
-            FT(2) * r_mid,
+            D_m,
             number_density,
             T,
             radar_cfg,
@@ -530,73 +533,29 @@ end
     return max(zero(FT), z_vol), max(zero(FT), kr_vol)
 end
 
+@inline function _scattering_diameter(r, params)
+    params.phase === :liquid && return 2 * r
+    FT = typeof(r)
+    mass = params.m0 * (r / params.r0)^params.me
+    return cbrt(FT(6) * mass / (FT(pi) * _rho_ice(FT)))
+end
+
 @inline function _zeff_particle_integral(D_m, number_m3, T, radar_cfg, phase)
     FT = typeof(D_m + number_m3 + T)
     D_m > zero(FT) && number_m3 > zero(FT) || return zero(FT), zero(FT)
-    qe, backscatter_correction = _mie_efficiencies(D_m, T, radar_cfg, phase)
-    z_vol =
-        _rayleigh_reflectivity_factor(D_m, number_m3, T, radar_cfg, phase) *
-        backscatter_correction
-    area = FT(pi) * (D_m / FT(2))^2
-    kr_vol = FT(4.343e3) * number_m3 * max(zero(FT), qe) * area
-    return z_vol, kr_vol
-end
+    qext, qbsca = _mie_efficiencies(D_m, T, radar_cfg, phase)
+    wavelength = FT(0.299792458) / FT(radar_cfg.freq)
+    k2 = _dielectric_factor(radar_cfg)
 
-@inline function _rayleigh_reflectivity_factor(D_m, number_m3, T, radar_cfg, phase)
-    FT = typeof(D_m + number_m3 + T)
-    D_mm = D_m * FT(1000)
-    K2_particle = _dielectric_factor_particle(radar_cfg.freq, T, phase)
-    K2_reference = _dielectric_factor(radar_cfg)
-    # Effective reflectivity factor convention:
-    # in the small-particle Rayleigh limit, z_vol = N * D_mm^6 after
-    # dielectric normalization. Finite-size behavior is applied separately as a
-    # dimensionless Mie/Rayleigh backscatter correction in `_zeff_particle_integral`.
-    return number_m3 * D_mm^6 * K2_particle / K2_reference
-end
+    # QuickBeam `zeff` convention for one particle-size bin:
+    # eta_mie = 0.25 * pi * qbsca * N * D^2, then converted to mm^6 m^-3.
+    eta_mie = FT(0.25) * FT(pi) * qbsca * number_m3 * D_m^2
+    z_vol = wavelength^4 / FT(pi)^5 / k2 * eta_mie * FT(1e18)
 
-# This is not a full Mie solver. It is a Rayleigh-limit approximation with a
-# bounded finite-size backscatter correction, used until QuickBeam's MieInt
-# scattering kernel is ported.
-@inline function _mie_efficiencies(D_m, T, radar_cfg, phase)
-    FT = typeof(D_m + T)
-    wavelength = FT(299792458) / (FT(radar_cfg.freq) * FT(1e9))
-    x = FT(pi) * D_m / wavelength
-    m = phase === :liquid ? _m_wat(radar_cfg.freq, T) : _m_ice(radar_cfg.freq, T)
-    K = (m^2 - one(m)) / (m^2 + 2)
-    kabs = abs(imag(K))
-    kback = abs2(K)
-    qe_rayleigh = max(zero(FT), FT(4) * x * kabs + FT(8) / FT(3) * x^4 * kback)
-    qbsca_rayleigh = FT(4) * x^4 * kback
-    qe = min(FT(2), qe_rayleigh)
-    backscatter_correction =
-        qbsca_rayleigh > eps(FT) ? min(one(FT), FT(2) / qbsca_rayleigh) : one(FT)
-    return qe, backscatter_correction
-end
-
-@inline function _dielectric_factor_particle(freq, T, phase)
-    m = phase === :liquid ? _m_wat(freq, T) : _m_ice(freq, T)
-    return abs2((m^2 - one(m)) / (m^2 + 2))
-end
-
-# Simplified liquid-water refractive index used by the prototype Rayleigh path.
-# This is not a port of QuickBeam `optics_lib.F90::m_wat`; replace it with the
-# full frequency- and temperature-dependent routine when `MieInt` is ported.
-@inline function _m_wat(freq, T)
-    FT = typeof(freq + T)
-    temp_c = T - FT(273.15)
-    nr = FT(8.7) - FT(0.004) * temp_c
-    ni = FT(2.1) * (freq / FT(94)) * exp(-temp_c / FT(80))
-    return Complex(nr, ni)
-end
-
-# Simplified ice refractive index used by the prototype Rayleigh path. This is
-# not a port of QuickBeam `optics_lib.F90::m_ice`; replace it with the full
-# routine when `MieInt` is ported.
-@inline function _m_ice(freq, T)
-    FT = typeof(freq + T)
-    nr = FT(1.78)
-    ni = FT(0.003) * (freq / FT(94)) * exp((T - FT(273.15)) / FT(50))
-    return Complex(nr, ni)
+    # kr = 0.25 * pi * qext * N * D^2 * (1000 * 10 / log(10)), in dB km^-1.
+    k_sum = qext * number_m3 * D_m^2
+    kr_vol = FT(0.25) * FT(pi) * k_sum * (FT(1000) * FT(10) / log(FT(10)))
+    return max(zero(FT), z_vol), max(zero(FT), kr_vol)
 end
 
 @inline function _gamma_integer(x)
