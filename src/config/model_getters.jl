@@ -295,6 +295,13 @@ function get_non_orographic_gravity_wave_model(
                 )
             end
         end
+        shape_mode = get(parsed_args, "nogw_beres_shape_mode", "half_sine")
+        if !(shape_mode in ("half_sine", "sine_transform"))
+            error(
+                "nogw_beres_shape_mode must be \"half_sine\" or " *
+                "\"sine_transform\" (got: \"$shape_mode\")",
+            )
+        end
     end
     return if nogw_name == true
         (;
@@ -352,6 +359,23 @@ function get_non_orographic_gravity_wave_model(
                     parsed_args,
                     "nogw_beres_detailed_diagnostics",
                     false,
+                ),
+                # Extension 1 (generalized vertical shape, Beres-G).
+                beres_shape_general = (
+                    get(parsed_args, "nogw_beres_shape_mode", "half_sine") ==
+                    "sine_transform"
+                ),
+                # Extension 3 (mechanical / obstacle steady source).
+                beres_mechanical_source = get(
+                    parsed_args,
+                    "nogw_beres_mechanical_source",
+                    false,
+                ),
+                beres_obstacle_frac = FT(
+                    get(parsed_args, "nogw_beres_obstacle_level", 1.0),
+                ),
+                beres_mech_weight = FT(
+                    get(parsed_args, "nogw_beres_mechanical_weight", 1.0),
                 ),
             )
         else
@@ -920,6 +944,18 @@ function AtmosSurface(
     else
         error(
             """Uncaught prognostic_surface `$(pa["prognostic_surface"])`. Expected: "PrescribedSST" | "SlabOceanSST".""",
+        )
+    end
+
+    # Spatially-uniform SST warming: add a constant offset to the analytic SST
+    # formula. Only meaningful for AnalyticTemperature (PrescribedSST); a no-op
+    # at the default 0.0 so present-day runs are unchanged.
+    sst_offset = FT(pa["sst_uniform_offset"])
+    if sst_offset != 0 && temperature isa SurfaceConditions.AnalyticTemperature
+        inner_T = temperature.f
+        temperature = SurfaceConditions.AnalyticTemperature(
+            (coords, surface_temp_params, t) ->
+                inner_T(coords, surface_temp_params, t) + sst_offset,
         )
     end
 

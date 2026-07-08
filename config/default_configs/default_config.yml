@@ -315,6 +315,18 @@ nogw_beres_heating_latent:
 nogw_beres_detailed_diagnostics:
   help: "Enable Beres convective-source verification diagnostics (the `nogw_*` source-internal fields: Q0, h_heat, z_bot/z_top, a_cover, Q_conv, Q_conv_ic, half-sine, launched-spectrum summaries) and the extra per-callback computations they require. Off by default: a GCM run only needs the net drag (utendnogw/vtendnogw). [`false` (default), `true`]"
   value: false
+nogw_beres_shape_mode:
+  help: "Beres convective-source vertical shape factor. `half_sine` (default): the prescribed half-sine V_hs of Beres (2004). `sine_transform`: Beres-G (Extension 1), V_G = the finite sine transform of the actual EDMF in-cloud heating profile evaluated at the physical wavenumber. Holds Q0, h, sigma_x, coverage, propagation, and the efficiency E identical between modes. [`half_sine` (default), `sine_transform`]"
+  value: "half_sine"
+nogw_beres_mechanical_source:
+  help: "Add the Beres-G mechanical/obstacle steady (nu=0) source (Extension 3). The updraft is a moving obstacle the mean wind flows over, radiating a stationary wave with Garner base flux tau_mech ~ rho0*U*w_b^2/N (vanishes as U->0), deposited in the c~0 bin alongside the thermal steady term. [`false` (default), `true`]"
+  value: false
+nogw_beres_obstacle_level:
+  help: "Beres-G mechanical-source obstacle level as a fraction of the convective envelope: obstacle height = z_bot + frac*(z_top - z_bot). 1.0 = z_top (default; where the draft penetrates the stable shear layer above the convective top). w_b is sampled there. Sensitivity study deferred."
+  value: 1.0
+nogw_beres_mechanical_weight:
+  help: "Beres-G mechanical-source nu=0 weight (analogue of the thermal Q_t(0)^2 = dc_frac*nu_min). Sets beta_mech relative to beta_therm; calibrated via the steady-channel nu=0 weight, not the transient efficiency. [1.0 (default)]"
+  value: 1.0
 dt_nogw:
   help: "Time between calling non-orographic gravity wave update"
   value: "1800secs"
@@ -366,6 +378,9 @@ prognostic_tke:
 prognostic_surface:
   help: "Surface temperature model [`PrescribedSST` (default), `SlabOceanSST`]"
   value: "PrescribedSST"
+sst_uniform_offset:
+  help: "Uniform offset (K) added everywhere to a prescribed AnalyticTemperature SST. Used for spatially-uniform SST-warming experiments. No effect for SlabOceanSST/External/Coupled surface temperature. [`0.0` (default)]"
+  value: 0.0
 albedo_model:
   help: "Variable surface albedo [`ConstantAlbedo` (default), `RegressionFunctionAlbedo`, `CouplerAlbedo`]"
   value: "ConstantAlbedo"

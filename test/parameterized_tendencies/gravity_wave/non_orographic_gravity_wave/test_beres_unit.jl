@@ -25,6 +25,20 @@ const wave_source = CA.wave_source
 const V_hs_sq = CA.V_hs_sq
 const _beres_steady_flux = CA._beres_steady_flux
 const _beres_steady_horizontal_const = CA._beres_steady_horizontal_const
+const _beres_gs = CA._beres_gs
+const _beres_launch_spectrum = CA._beres_launch_spectrum
+const _beres_mech_flux = CA._beres_mech_flux
+const _beres_b0_band = CA._beres_b0_band
+const _beres_peaknorm = CA._beres_peaknorm
+
+# Unit half-sine sin(π·(i−1)/(ng−1)) sampled at `ng` points, as a CONCRETE
+# NTuple{ng,FT}. `Val{ng}` keeps the length in the type so `_beres_gs` /
+# `_beres_launch_spectrum` dispatch is type-stable and compiles quickly (a runtime
+# `ntuple(f, ng)` returns a non-concrete tuple → type-unstable, pathological
+# compile). Placement onto [z_bot, z_bot+span] is done by `_beres_gs` via its
+# z_bot/span args, so the shape alone lives here.
+_halfsine_profile(::Val{ng}, FT) where {ng} =
+    ntuple(i -> FT(sin(π * FT(i - 1) / FT(ng - 1))), Val(ng))
 
 # NOTE: The wave_source / Beres spectrum computation is EDMF-mode-agnostic.
 # It takes (Q0, h, u_heat, N_source) directly, so these unit tests apply
@@ -893,4 +907,254 @@ end
         n_ν = 9,
     )
     @test bsp.heating_latent == false
+end
+
+# ============================================================================
+# Beres-G Extension 1 — generalized vertical shape factor V_G = |gs(m)|²
+#
+# The sine-transform shape factor replaces the half-sine V_hs at the SAME call
+# site (R² = shape_sq·m²/(N²−ν̂²)²), pinned by the algebraic parity
+# V_hs_sq(m,h) = |gs_halfsine(m)|² (offline gate 1 = 6.5e-14). Here we test the
+# shipped Julia primitives: O(dz²) convergence of |gs|² to V_hs_sq for a sampled
+# half-sine, and that the full launch spectrum in sine_transform mode reproduces
+# the half-sine spectrum to the quadrature tolerance.
+# ============================================================================
+@testset "Beres-G Ext 1: V_G sine-transform shape factor" begin
+    FT = Float64
+    h = FT(5000.0)
+
+    @testset "Gate 2: O(dz²) convergence of |gs|² to V_hs_sq (half-sine)" begin
+        # `_beres_gs` is a plain loop over a runtime-indexed NTuple, so specializing
+        # it for a large tuple is a slow compile; keep ng modest (≤ 129) — enough
+        # to show the O(dz²) ratio. Note the ng values must be a compile-time
+        # literal tuple (each ng specializes _beres_gs on NTuple{ng}).
+        m_test = FT(1.7e-3)               # away from resonance π/h
+        Vref = V_hs_sq(m_test, h)
+        e33 = abs(_beres_gs(_halfsine_profile(Val(33), FT), FT(0), h, m_test)^2 - Vref) / Vref
+        e65 = abs(_beres_gs(_halfsine_profile(Val(65), FT), FT(0), h, m_test)^2 - Vref) / Vref
+        e129 = abs(_beres_gs(_halfsine_profile(Val(129), FT), FT(0), h, m_test)^2 - Vref) / Vref
+        # Each halving of dz quarters the error (O(dz²) ⇒ ratio → 4).
+        @test 3.5 < e33 / e65 < 4.5
+        @test 3.5 < e65 / e129 < 4.5
+    end
+
+    @testset "Gate 1 (in-source): sine_transform reduces to half-sine" begin
+        # Feed a half-sine on [0,h] at the PRODUCTION resolution (N_BERES_PROFILE);
+        # the full launch spectrum in sine_transform mode must match the half-sine
+        # spectrum to the quadrature tolerance (the algebraic NORMALIZATION parity
+        # is exact, 6.5e-14 offline; the residual here is the O(dz²) profile
+        # discretization at ng=64, ~4e-4). Use the production ng — a large ng would
+        # make specializing `_beres_launch_spectrum` on NTuple{ng} a slow compile.
+        dc = FT(4.0)
+        cmax = FT(100.0)
+        nc = Int(2 * cmax / dc + 1)
+        c = ntuple(n -> FT((n - 1) * dc - cmax), Val(nc))
+        N_source = FT(0.012)
+        Q0 = FT(10.0 / 86400.0)
+        u_heat = FT(0.0)
+
+        g = _halfsine_profile(Val(CA.N_BERES_PROFILE), FT)   # = 64 (production)
+
+        beres_hs = BeresSourceParams{FT}(;
+            Q0_threshold = FT(0), beres_scale_factor = FT(1.0),
+            σ_x = FT(4000.0), ν_min = FT(2π / (120 * 60)),
+            ν_max = FT(2π / (10 * 60)), n_ν = 9,
+            beres_shape_general = false,
+        )
+        beres_g = BeresSourceParams{FT}(;
+            Q0_threshold = FT(0), beres_scale_factor = FT(1.0),
+            σ_x = FT(4000.0), ν_min = FT(2π / (120 * 60)),
+            ν_max = FT(2π / (10 * 60)), n_ν = 9,
+            beres_shape_general = true,
+        )
+
+        # span = z_top - z_bot = h here (profile on [0, h]); passed to the sine
+        # transform (the arg after z_bot).
+        B_hs = _beres_launch_spectrum(
+            c, u_heat, Q0, h, N_source, FT(0), h, nothing, FT(0), beres_hs,
+            Val(nc),
+        )
+        B_g = _beres_launch_spectrum(
+            c, u_heat, Q0, h, N_source, FT(0), h, g, FT(0), beres_g, Val(nc),
+        )
+
+        peak = maximum(abs, B_hs)
+        maxabs = maximum(abs.(B_g .- B_hs))
+        @test peak > 0
+        @test maxabs / peak < 2e-3          # ng=64 → quadrature-limited match
+    end
+
+    @testset "shape_general=false with a profile present stays half-sine" begin
+        # The flag, not the presence of a profile, selects the shape factor: a
+        # Beres-G struct with shape_general=false and a gathered profile must
+        # produce the EXACT half-sine spectrum (so half_sine runs are unaffected).
+        dc = FT(4.0)
+        cmax = FT(100.0)
+        nc = Int(2 * cmax / dc + 1)
+        c = ntuple(n -> FT((n - 1) * dc - cmax), Val(nc))
+        N_source = FT(0.01)
+        Q0 = FT(8.0 / 86400.0)
+        u_heat = FT(7.0)
+        g = _halfsine_profile(Val(64), FT)
+        beres_off = BeresSourceParams{FT}(;
+            Q0_threshold = FT(0), beres_scale_factor = FT(1.0),
+            σ_x = FT(4000.0), ν_min = FT(2π / (120 * 60)),
+            ν_max = FT(2π / (10 * 60)), n_ν = 9, beres_shape_general = false,
+        )
+        B_with = _beres_launch_spectrum(
+            c, u_heat, Q0, FT(8000.0), N_source, FT(2000.0), FT(8000.0), g,
+            FT(0), beres_off, Val(nc),
+        )
+        B_plain = wave_source(c, u_heat, Q0, FT(8000.0), N_source, beres_off, Val(nc))
+        for n in 1:nc
+            @test B_with[n] == B_plain[n]    # bit-identical: profile is ignored
+        end
+    end
+
+    @testset "Peak-normalization to unit maximum" begin
+        t = (FT(0), FT(0.5), FT(2.0), FT(1.0), FT(0))
+        tn = _beres_peaknorm(t)
+        @test maximum(tn) ≈ FT(1.0)
+        @test tn[3] ≈ FT(1.0)               # the peak maps to 1
+        @test tn[2] ≈ FT(0.25)
+        # All-zero / nonpositive ⇒ zeros (no division blow-up).
+        @test all(==(FT(0)), _beres_peaknorm((FT(0), FT(0), FT(0))))
+    end
+end
+
+# ============================================================================
+# Beres-G Extension 3 — mechanical / obstacle steady (ν=0) source β_mech
+#
+# τ_mech ~ ρ0 U w_b²/N (eq:tau_mech): quadratic in w_b, LINEAR in U (vanishes as
+# U→0 — we implement this, NOT eq:beta_total's divergent 1/U form). Carried
+# through the same change of variables as the thermal steady term, into the c≈0
+# bin; relative size set by the mechanical ν=0 weight, not the transient
+# calibration; no heating shape factor.
+# ============================================================================
+@testset "Beres-G Ext 3: mechanical steady source β_mech" begin
+    FT = Float64
+    N_source = FT(0.012)
+    σ_x = FT(4000.0)
+    L_system = FT(1.0e6)
+    sf = FT(2.0e-6)
+    mw = FT(1.0)
+
+    mech(U, w; weight = mw) =
+        _beres_mech_flux(U, N_source, w, sf, weight, σ_x, L_system)
+
+    @testset "Gate 5 (scaling): τ_mech ~ ρ0 U w_b²/N functional form" begin
+        U = FT(15.0)
+        w = FT(2.0)
+        f0 = mech(U, w)
+        # quadratic in w_b
+        @test mech(U, FT(2) * w) ≈ FT(4) * f0 rtol = 1e-12
+        # linear in |U| (sign flips, magnitude doubles)
+        @test mech(FT(2) * U, w) ≈ FT(2) * f0 rtol = 1e-12
+        # ∝ 1/N: a source with 2N has half the magnitude
+        f_2N = _beres_mech_flux(U, FT(2) * N_source, w, sf, mw, σ_x, L_system)
+        @test abs(f_2N) ≈ abs(f0) / 2 rtol = 1e-12
+        # ∝ weight (the ν=0 mechanical weight)
+        @test mech(U, w; weight = FT(3) * mw) ≈ FT(3) * f0 rtol = 1e-12
+    end
+
+    @testset "Gate 6: U→0 limit (vanishes, not the 1/U divergence)" begin
+        w = FT(2.0)
+        @test mech(FT(1e-7), w) == FT(0)         # hard guard
+        @test mech(FT(0.0), w) == FT(0)
+        mags = FT[]
+        for U in (FT(20.0), FT(5.0), FT(1.0), FT(1e-2), FT(1e-3))
+            f = mech(U, w)
+            @test isfinite(f)
+            push!(mags, abs(f))
+        end
+        @test issorted(mags; rev = true)        # monotonically → 0 as U → 0
+    end
+
+    @testset "Sign: β_mech opposes U (decelerating)" begin
+        w = FT(3.0)
+        @test mech(FT(20.0), w) < 0             # U>0 ⇒ westward (negative)
+        @test mech(FT(-20.0), w) > 0            # U<0 ⇒ eastward (positive)
+        @test mech(FT(15.0), FT(0.0)) == FT(0)  # no obstacle ⇒ no flux
+    end
+
+    @testset "Gate 8: β_tot toggles with mechanical_source; lands at c≈0" begin
+        dc = FT(4.0)
+        cmax = FT(100.0)
+        nc = Int(2 * cmax / dc + 1)
+        c = ntuple(n -> FT((n - 1) * dc - cmax), Val(nc))
+        n_zero = clamp(round(Int, cmax / dc) + 1, 1, nc)
+        @test c[n_zero] == FT(0)
+        U = FT(15.0)
+        Q0 = FT(5e-5)
+        h = FT(6000.0)
+        w = FT(2.5)
+        z_bot = FT(3000.0)
+        g = _halfsine_profile(Val(64), FT)
+
+        kw = (; Q0_threshold = FT(0), beres_scale_factor = sf, σ_x = σ_x,
+            ν_min = FT(8.727e-4), ν_max = FT(1.047e-2), n_ν = 9,
+            beres_steady_source = true, beres_L_system = L_system,
+            beres_mech_weight = mw)
+        beres_nomech = BeresSourceParams{FT}(; kw..., beres_mechanical_source = false)
+        beres_mech = BeresSourceParams{FT}(; kw..., beres_mechanical_source = true)
+
+        # span (arg after z_bot) = z_top - z_bot = h (profile on [z_bot, z_bot+h]).
+        B_no = _beres_launch_spectrum(
+            c,
+            U,
+            Q0,
+            h,
+            N_source,
+            z_bot,
+            h,
+            g,
+            w,
+            beres_nomech,
+            Val(nc),
+        )
+        B_me = _beres_launch_spectrum(
+            c,
+            U,
+            Q0,
+            h,
+            N_source,
+            z_bot,
+            h,
+            g,
+            w,
+            beres_mech,
+            Val(nc),
+        )
+
+        # Only the c≈0 bin differs; the difference equals β_mech.
+        for n in 1:nc
+            n == n_zero && continue
+            @test B_me[n] == B_no[n]
+        end
+        @test (B_me[n_zero] - B_no[n_zero]) ≈ mech(U, w) rtol = 1e-12
+        # β_mech is concentrated at low-c (deposited only in the c≈0 bin).
+        @test _beres_b0_band(B_me .- B_no, c, FT(15.0), true, false) +
+              _beres_b0_band(B_me .- B_no, c, FT(15.0), true, true) ≈
+              (B_me[n_zero] - B_no[n_zero]) rtol = 1e-12
+
+        # Relative normalization set by the mechanical weight, not transient α:
+        # doubling mech_weight doubles only the c≈0 increment.
+        beres_mech2 = BeresSourceParams{FT}(; kw..., beres_mechanical_source = true,
+            beres_mech_weight = FT(2) * mw)
+        B_me2 = _beres_launch_spectrum(
+            c,
+            U,
+            Q0,
+            h,
+            N_source,
+            z_bot,
+            h,
+            g,
+            w,
+            beres_mech2,
+            Val(nc),
+        )
+        @test (B_me2[n_zero] - B_no[n_zero]) ≈ FT(2) * (B_me[n_zero] - B_no[n_zero]) rtol =
+            1e-12
+    end
 end

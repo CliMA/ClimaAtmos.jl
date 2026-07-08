@@ -58,6 +58,20 @@ Relative to a vapor reference, the liquid reservoir (`lcl + rai`) is weighted by
     ) / cpʲ
 end
 
+# Per-column precomputed Beres launch spectrum, stored in the gravity-wave
+# cache. The spectrum is deliberately wrapped in a struct rather than stored as
+# a bare NTuple{nc, FT} field: with the bare tuple, the eltype of the 16-slot
+# waveforcing input broadcast is a length-16 tuple type with a length-nc tuple
+# nested inside, and Julia's type-complexity limiter truncates that nested
+# tuple to a TypeVar while inferring the accumulate kernel. The abstractly
+# typed slot then boxes, which the GPU cannot compile (InvalidIRError:
+# gpu_gc_pool_alloc / checked getfield). A struct is opaque to the tuple
+# complexity walk (its type parameters {NC, FT} are shallow), so the input
+# eltype stays concrete. The stored bits are identical either way.
+struct BeresB0{NC, FT}
+    B0::NTuple{NC, FT}
+end
+
 non_orographic_gravity_wave_cache(Y, atmos::AtmosModel) =
     non_orographic_gravity_wave_cache(Y, atmos.non_orographic_gravity_wave)
 
@@ -127,6 +141,17 @@ function non_orographic_gravity_wave_cache(Y, gw::NonOrographicGravityWave)
             # Beres launch-level state
             beres_source_ρ_z_u_v_level =
             similar(Fields.level(Y.c.ρ, 1), Tuple{FT, FT, FT, FT, FT}),
+            # Beres-G (Ext 1) + mechanical (Ext 3) per-column state. The launch
+            # spectrum B0 is precomputed per column (it is AD99-wavenumber
+            # independent), so the propagation kernel reads it rather than
+            # rebuilding it inside the `ink` loop. gprofile = peak-normalised
+            # in-cloud heating shape; w_obstacle = obstacle-level updraft velocity.
+            gw_beres_B0_u = similar(Fields.level(Y.c.ρ, 1), BeresB0{nc, FT}),
+            gw_beres_B0_v = similar(Fields.level(Y.c.ρ, 1), BeresB0{nc, FT}),
+            gw_beres_gprofile =
+            similar(Fields.level(Y.c.ρ, 1), NTuple{N_BERES_PROFILE, FT}),
+            gw_w_obstacle = similar(Fields.level(Y.c.ρ, 1)),
+            gw_beres_mech_flux = similar(Fields.level(Y.c.ρ, 1)),
         )
     elseif issphere(axes(Y.c))
 
@@ -226,6 +251,17 @@ function non_orographic_gravity_wave_cache(Y, gw::NonOrographicGravityWave)
             # Beres launch-level state
             beres_source_ρ_z_u_v_level =
             similar(Fields.level(Y.c.ρ, 1), Tuple{FT, FT, FT, FT, FT}),
+            # Beres-G (Ext 1) + mechanical (Ext 3) per-column state. The launch
+            # spectrum B0 is precomputed per column (it is AD99-wavenumber
+            # independent), so the propagation kernel reads it rather than
+            # rebuilding it inside the `ink` loop. gprofile = peak-normalised
+            # in-cloud heating shape; w_obstacle = obstacle-level updraft velocity.
+            gw_beres_B0_u = similar(Fields.level(Y.c.ρ, 1), BeresB0{nc, FT}),
+            gw_beres_B0_v = similar(Fields.level(Y.c.ρ, 1), BeresB0{nc, FT}),
+            gw_beres_gprofile =
+            similar(Fields.level(Y.c.ρ, 1), NTuple{N_BERES_PROFILE, FT}),
+            gw_w_obstacle = similar(Fields.level(Y.c.ρ, 1)),
+            gw_beres_mech_flux = similar(Fields.level(Y.c.ρ, 1)),
         )
     else
         error("Only sphere and columns are supported")
@@ -406,7 +442,7 @@ Heating fields:
   - `gw_Q_conv` — grid-mean heating (weighted by area fraction aʲ); triggers column activation (`Q0_threshold` is calibrated to grid-mean magnitudes).
   - `gw_Q_conv_ic` — in-cloud heating (no area factor); the amplitude convention Beres' linear theory expects. Defines the envelope and Q0, then deposited flux is diluted by `a_cover` (see `waveforcing_column_accumulate!`), giving flux ∝ ā·Q_ic².
 
-Envelope `[z_bot, z_top]`: moment-matched, fits a half-sine to the in-cloud heating `gw_Q_conv_ic` by its centroid z_c and spread σ (over z ≥ `z_bot_floor`, which skips the EDMF PBL/dry-thermal signal below ~1 km). Then h = σ/√((π²−8)/4π²), z_bot = z_c − h/2, z_top = z_c + h/2.
+Envelope `[z_bot, z_top]`: moment-matched, fits a half-sine to the in-cloud heating `gw_Q_conv_ic` by its centroid z_c and spread σ (over z ≥ `z_bot_floor`, which skips the EDMF PBL/dry-thermal signal below ~2 km). Then h = σ/√((π²−8)/4π²), z_bot = z_c − h/2, z_top = z_c + h/2.
 
 `ᶜN` is N (s⁻¹), passed in because the cached `ᶜbuoyancy_frequency` still holds N².
 """
@@ -422,6 +458,14 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
         p.non_orographic_gravity_wave.gw_halfsine .= 0
         p.non_orographic_gravity_wave.gw_launch_flux .= 0
         p.non_orographic_gravity_wave.gw_c_centroid .= 0
+        # Zero the precomputed launch spectra/profile the kernel reads (this
+        # branch is unreachable when Beres is enabled — Beres requires EDMF — but
+        # the fields are always allocated, so keep them defined).
+        p.non_orographic_gravity_wave.gw_w_obstacle .= 0
+        p.non_orographic_gravity_wave.gw_beres_mech_flux .= 0
+        fill!(parent(p.non_orographic_gravity_wave.gw_beres_gprofile), 0)
+        fill!(parent(p.non_orographic_gravity_wave.gw_beres_B0_u), 0)
+        fill!(parent(p.non_orographic_gravity_wave.gw_beres_B0_v), 0)
         return
     end
 
@@ -446,6 +490,11 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
         gw_halfsine,
         gw_launch_flux,
         gw_c_centroid,
+        gw_beres_gprofile,
+        gw_w_obstacle,
+        gw_beres_B0_u,
+        gw_beres_B0_v,
+        gw_beres_mech_flux,
     ) = p.non_orographic_gravity_wave
 
     FT = Spaces.undertype(axes(Y.c))
@@ -798,6 +847,130 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
         FT(0),
     )
 
+    # --- Beres-G (Ext 1) + mechanical (Ext 3) per-column launch state ---
+    # Computed every call. The launch spectrum B0 is independent of the AD99
+    # horizontal wavenumber, so it is precomputed here (once per column, with full
+    # column access for the sine transform and obstacle velocity) and the
+    # propagation kernel reads it rather than rebuilding it inside the `ink` loop.
+    # half-sine + no-mechanical reproduces the classical kernel spectrum exactly.
+
+    # (1) Gather the in-cloud heating shape onto a fixed uniform grid spanning the
+    # convective envelope [z_bot, z_top], nearest-model-level resampled within each
+    # bracketing segment and positive-part masked, then peak-normalized (amplitude
+    # stays in Q0; mode (ii)). z is absolute (rigid-ground origin for sin(m z)).
+    # Heating below z_bot_floor is excluded, mirroring the moment-fit mask in
+    # Pass 1: z_bot = z_c − h/2 may legally dip below the floor, and without the
+    # mask the sine transform would ingest the PBL/surface-flux heating the fit
+    # deliberately excluded. Baseline (half_sine) is unaffected — only the V_G
+    # path reads the gathered profile.
+    ng_val = Val(N_BERES_PROFILE)
+    gather_input =
+        Base.Broadcast.broadcasted(tuple, ᶜz, gw_Q_conv_ic, gw_zbot, gw_ztop)
+    # The do-closure is a GPU kernel argument, so it may capture only isbits
+    # values — never the type FT itself (same rule the Pass-1 moment reduce
+    # follows). All FT-derived constants are let-bound as plain numbers.
+    let _z_floor = FT(gw_beres_source.z_bot_floor),
+        _zero = FT(0),
+        _eps = eps(FT),
+        _ng_m1 = FT(N_BERES_PROFILE - 1),
+        _ng_val = ng_val
+
+        Operators.column_reduce!(
+            gw_beres_gprofile,
+            gather_input;
+            init = (ntuple(_ -> FT(0), ng_val), FT(0), FT(0)),
+            transform = first,
+        ) do (vals, z_prev, Q_prev), (z, Q_ic, z_bot, z_top)
+            h_env = max(z_top - z_bot, _eps)
+            dz_g = h_env / _ng_m1
+            Q_pos = ifelse(z >= _z_floor, max(Q_ic, _zero), _zero)
+            newvals = ntuple(_ng_val) do i
+                z_i = z_bot + (i - 1) * dz_g
+                in_seg = (z_prev < z_i) & (z_i <= z)
+                nearer = abs(z_i - z_prev) <= abs(z_i - z) ? Q_prev : Q_pos
+                ifelse(in_seg, nearer, vals[i])
+            end
+            return (newvals, z, Q_pos)
+        end
+    end
+    @. gw_beres_gprofile = _beres_peaknorm(gw_beres_gprofile)
+
+    # (2) Obstacle-level updraft velocity w_b for the mechanical source (Ext 3):
+    # the per-draft physical vertical velocity where the draft penetrates the
+    # stable shear layer above the convective top, sampled at obstacle height =
+    # z_bot + obstacle_frac·h (default frac = 1 ⇒ z_top). Single updraft (draft 1);
+    # M>1 aggregation deferred (the manuscript configurations use M=1).
+    ᶜlg = Fields.local_geometry_field(Y.c)
+    ᶜw_up = p.scratch.ᶜtemp_scalar_3
+    @. ᶜw_up = get_physical_w(ᶜuʲs.:(1), ᶜlg)
+    obstacle_frac = FT(gw_beres_source.beres_obstacle_frac)
+    wobs_input = Base.Broadcast.broadcasted(tuple, ᶜz, ᶜw_up, gw_zbot, gw_h_heat)
+    Operators.column_reduce!(
+        gw_w_obstacle,
+        wobs_input;
+        init = (FT(0), FT(Inf)),
+        transform = first,
+    ) do (w_best, d_best), (z, w_up, z_bot, h)
+        z_obs = z_bot + obstacle_frac * h
+        d = abs(z - z_obs)
+        return d < d_best ? (w_up, d) : (w_best, d_best)
+    end
+
+    # (3) Precompute the per-column launch spectra (u and v azimuths). Zeros for
+    # non-convecting columns; half-sine or Beres-G transient bins per the shape
+    # mode, plus the steady c≈0 bin (β_therm + β_mech). The phase-speed grid
+    # `cgrid`, `ncv`, and `beres` are CAPTURED in the closure (plain tuples/Val
+    # would be iterated if passed as broadcast args); only fields are broadcast.
+    # `span = z_top - z_bot` is the CLAMPED envelope width the gather sampled on;
+    # it is passed to the sine transform (NOT gw_h_heat, the unclamped moment
+    # depth, which differs from the gather grid when the envelope is floored at 0
+    # or capped at the domain top — that mismatch would evaluate V_G at the wrong
+    # altitudes). gw_h_heat stays the half-sine depth (V_hs / Q0 / activation).
+    # GPU note: the shape mode is decided HERE, on the CPU, not inside the
+    # kernel, and is threaded into the launch-spectrum builder as a COMPILE-TIME
+    # `Val` (`Val(true)` for the transform branch, `Val(false)` for half-sine),
+    # NOT read from the runtime `beres.beres_shape_general` field inside the
+    # kernel. That keeps `use_VG` a compile-time constant, so each broadcast
+    # compiles exactly ONE shape path: half-sine passes `nothing` and strips the
+    # sine-transform code (`_beres_gs`), while the transform branch keeps a
+    # concrete `NTuple` profile so `_beres_gs` stays statically dispatched. A
+    # runtime-Bool switch instead forces BOTH branches into the kernel and widens
+    # the profile to `Union{Nothing,NTuple}` -> dynamic dispatch / GC allocation
+    # (the InvalidIRError the transform path used to fail with).
+    let beres = gw_beres_source, cgrid = gw_c, ncv = gw_ncval
+        if beres.beres_shape_general
+            b0g(active, u, Q0, h, N, zbot, ztop, gprof, w) = BeresB0(
+                _beres_launch_spectrum_or_zero(
+                    active, cgrid, u, Q0, h, N, zbot, ztop - zbot, gprof, w,
+                    beres, ncv, Val(true),
+                ),
+            )
+            @. gw_beres_B0_u = b0g(
+                gw_beres_active, gw_u_heat, gw_Q0, gw_h_heat, gw_N_source,
+                gw_zbot, gw_ztop, gw_beres_gprofile, gw_w_obstacle,
+            )
+            @. gw_beres_B0_v = b0g(
+                gw_beres_active, gw_v_heat, gw_Q0, gw_h_heat, gw_N_source,
+                gw_zbot, gw_ztop, gw_beres_gprofile, gw_w_obstacle,
+            )
+        else
+            b0hs(active, u, Q0, h, N, zbot, ztop, w) = BeresB0(
+                _beres_launch_spectrum_or_zero(
+                    active, cgrid, u, Q0, h, N, zbot, ztop - zbot, nothing, w,
+                    beres, ncv, Val(false),
+                ),
+            )
+            @. gw_beres_B0_u = b0hs(
+                gw_beres_active, gw_u_heat, gw_Q0, gw_h_heat, gw_N_source,
+                gw_zbot, gw_ztop, gw_w_obstacle,
+            )
+            @. gw_beres_B0_v = b0hs(
+                gw_beres_active, gw_v_heat, gw_Q0, gw_h_heat, gw_N_source,
+                gw_zbot, gw_ztop, gw_w_obstacle,
+            )
+        end
+    end
+
     # --- Diagnostics for source-shape & launched-spectrum ---
     gw_beres_source.detailed_diagnostics || return
 
@@ -813,32 +986,33 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
         FT(0),
     )
 
-    # Launched-spectrum summaries from the same per-column source state the
-    # forcing kernel uses:
+    # Launched-spectrum summaries reduced from the SAME precomputed launch spectrum
+    # gw_beres_B0_u the forcing kernel deposits (so they are Beres-G / mechanical
+    # aware, not a recomputed half-sine):
     # - total launched flux magnitude Σ|B0| (× a_cover deposition factor),
     # - the flux-weighted phase-speed centroid ⟨c⟩ = Σ c|B0| / Σ|B0|,
-    # both in the zonal (gw_u_heat) direction. The launched spectrum is the same
-    # for every horizontal wavenumber (the `ink` loop in the kernel), so one
-    # evaluation captures it — no `ink` sum needed here.
-    let beres = gw_beres_source, cgrid = gw_c, ncv = gw_ncval
-        flux_mag(active, u_src, Q0, h, N) =
-            _beres_launch_summary(beres, active, cgrid, u_src, Q0, h, N, ncv)[1]
-        centroid(active, u_src, Q0, h, N) = begin
-            (s0, s1) =
-                _beres_launch_summary(beres, active, cgrid, u_src, Q0, h, N, ncv)
-            ifelse(s0 > eps(typeof(s0)), s1 / s0, zero(s0))
-        end
+    # both in the zonal direction.
+    let cgrid = gw_c
+        cen(b0) = _beres_b0_centroid(b0, cgrid)
         @. gw_launch_flux = ifelse(
             gw_beres_active > FT(0.5),
-            gw_a_cover *
-            flux_mag(gw_beres_active, gw_u_heat, gw_Q0, gw_h_heat, gw_N_source),
+            gw_a_cover * _beres_b0_fluxmag(gw_beres_B0_u),
             FT(0),
         )
         @. gw_c_centroid = ifelse(
             gw_beres_active > FT(0.5),
-            centroid(gw_beres_active, gw_u_heat, gw_Q0, gw_h_heat, gw_N_source),
+            cen(gw_beres_B0_u),
             FT(0),
         )
+    end
+
+    # Mechanical (Ext 3) c≈0 launched flux β_mech, zonal direction — the
+    # band-resolved Ext-3 export. β_mech is deposited only in the c≈0 (low-`c`)
+    # bin and its sign carries the E/W deceleration direction (opposes U).
+    let beres = gw_beres_source
+        mech(active, u, N, w) = _beres_mech_flux_value(active, u, N, w, beres)
+        @. gw_beres_mech_flux =
+            mech(gw_beres_active, gw_u_heat, gw_N_source, gw_w_obstacle)
     end
 end
 
@@ -911,6 +1085,8 @@ function non_orographic_gravity_wave_forcing(
         gw_a_cover,
         gw_beres_source,
         beres_source_ρ_z_u_v_level,
+        gw_beres_B0_u,
+        gw_beres_B0_v,
     ) = p.non_orographic_gravity_wave
 
     # Beres launch-level state (per-column). Always extracted. 
@@ -1026,6 +1202,11 @@ function non_orographic_gravity_wave_forcing(
             gw_source_ampl,
         ),
     )
+    # Slot 8 carries the precomputed per-column launch spectrum B0 (NTuple{nc});
+    # the kernel reads it instead of rebuilding the Beres spectrum at level 1.
+    # Slots 9–12 (Q0, h, u/v_heat, N) are no longer read by the Beres kernel but
+    # are kept so the Beres tuple stays 16-wide and the AD99/Beres shared index
+    # logic typechecks for both specializations.
     input_u_beres = @. lazy(
         tuple(
             ᶜu_p1,
@@ -1035,7 +1216,7 @@ function non_orographic_gravity_wave_forcing(
             ᶜz_p1,
             ᶜz,
             ᶜlevel,
-            gw_beres_active,
+            gw_beres_B0_u,
             gw_Q0,
             gw_h_heat,
             gw_u_heat,
@@ -1055,7 +1236,7 @@ function non_orographic_gravity_wave_forcing(
             ᶜz_p1,
             ᶜz,
             ᶜlevel,
-            gw_beres_active,
+            gw_beres_B0_v,
             gw_Q0,
             gw_h_heat,
             gw_v_heat,
@@ -1235,146 +1416,172 @@ function waveforcing_column_accumulate!(
 ) where {nc, MODE}
     FT = eltype(waveforcing)
     # Here we use column_accumulate function to pass the variable B0 and mask through different levels, and calculate waveforcing at each level.
+    # The accumulate body lives in the named top-level function
+    # `waveforcing_accumulate_step` rather than in the do-block. With the Beres
+    # input tuple carrying the NTuple{nc} launch spectrum in slot 8, inference
+    # of the same body as an anonymous closure nested inside the accumulate
+    # kernel exhausts its budget and widens the state to an abstract type; on
+    # the GPU that surfaces as InvalidIRError (gpu_gc_pool_alloc / checked
+    # getfield) in the :beres specialization. A named function gets its own
+    # precisely-typed specialization, which inference resolves exactly.
     Operators.column_accumulate!(
         waveforcing,
         input;
         init = (FT(0.0), mask, FT(NaN), ntuple(i -> FT(NaN), Val(nc))),
         transform = first,
-    ) do (wave_forcing, mask, Bsum_or_NaN, B0_or_NaNs), inp
-        # Inputs are read by index, not destructured: the two source modes share
-        # only slots 1–7; slots 8–16 hold different fields per mode. Selecting the
-        # mode-specific fields under the compile-time `MODE` guard caps each
-        # specialization's parameter tuple at 16 fields.
-        #
-        # The source launch level differs by mode: AD99 uses a fixed level
-        # (pressure-based on the sphere, height-based in a column); Beres launches
-        # at the top of the convective heating envelope (gw_ztop), set per column
-        # in compute_tendency!.
-        u_kp1 = inp[1]
-        bf_kp1 = inp[2]
-        ρ_k = inp[3]
-        ρ_kp1 = inp[4]
-        z_kp1 = inp[5]
-        z_k = inp[6]
-        level = inp[7]
-        FT1 = typeof(u_kp1)
-        # Slots 8–16 hold AD99 source fields or Beres convective fields. These locals are captured by the inner `unrolled_reduce` closure, so we select them with a single-assignment ternary.
-        # Unused fields get a `zero(FT1)` dummy so the dead branch still typechecks.
-        u_source_eff = MODE == :ad99 ? inp[8] : inp[15]
-        ρ_source_eff = MODE == :ad99 ? inp[9] : inp[14]
-        source_level_eff = MODE == :ad99 ? inp[10] : inp[13]
-        Bw = MODE == :ad99 ? inp[11] : zero(FT1)
-        Bn = MODE == :ad99 ? inp[12] : zero(FT1)
-        cw = MODE == :ad99 ? inp[13] : zero(FT1)
-        cn = MODE == :ad99 ? inp[14] : zero(FT1)
-        flag = MODE == :ad99 ? inp[15] : zero(FT1)
-        source_ampl = MODE == :ad99 ? inp[16] : zero(FT1)
-        beres_active_val = MODE == :ad99 ? zero(FT1) : inp[8]
-        Q0_val = MODE == :ad99 ? zero(FT1) : inp[9]
-        h_val = MODE == :ad99 ? zero(FT1) : inp[10]
-        u_heat_val = MODE == :ad99 ? zero(FT1) : inp[11]
-        N_val = MODE == :ad99 ? zero(FT1) : inp[12]
-        beres_a_cover = MODE == :ad99 ? zero(FT1) : inp[16]
+    ) do state, inp
+        waveforcing_accumulate_step(
+            state, inp, c, c0, nk, ink, level_end, gw_ncval, source_mode,
+        )
+    end
+end
 
-        kwv = 2.0 * π / ((30.0 * (10.0^ink)) * 1.e3) # wave number of gravity waves
-        k2 = kwv * kwv
+# One level step of the waveforcing accumulation; see the note above the
+# column_accumulate! call for why this must be a named top-level function.
+@inline function waveforcing_accumulate_step(
+    state,
+    inp,
+    c,
+    c0,
+    nk,
+    ink,
+    level_end,
+    gw_ncval::Val{nc},
+    ::Val{MODE},
+) where {nc, MODE}
+    (wave_forcing, mask, Bsum_or_NaN, B0_or_NaNs) = state
+    # Inputs are read by index, not destructured: the two source modes share
+    # only slots 1–7; slots 8–16 hold different fields per mode. Selecting the
+    # mode-specific fields under the compile-time `MODE` guard caps each
+    # specialization's parameter tuple at 16 fields.
+    #
+    # The source launch level differs by mode: AD99 uses a fixed level
+    # (pressure-based on the sphere, height-based in a column); Beres launches
+    # at the top of the convective heating envelope (gw_ztop), set per column
+    # in compute_tendency!.
+    u_kp1 = inp[1]
+    bf_kp1 = inp[2]
+    ρ_k = inp[3]
+    ρ_kp1 = inp[4]
+    z_kp1 = inp[5]
+    z_k = inp[6]
+    level = inp[7]
+    FT1 = typeof(u_kp1)
+    # Slots 8–16 hold AD99 source fields or Beres convective fields. These locals are captured by the inner `unrolled_reduce` closure, so we select them with a single-assignment ternary.
+    # Unused fields get a `zero(FT1)` dummy so the dead branch still typechecks.
+    u_source_eff = MODE == :ad99 ? inp[8] : inp[15]
+    ρ_source_eff = MODE == :ad99 ? inp[9] : inp[14]
+    source_level_eff = MODE == :ad99 ? inp[10] : inp[13]
+    Bw = MODE == :ad99 ? inp[11] : zero(FT1)
+    Bn = MODE == :ad99 ? inp[12] : zero(FT1)
+    cw = MODE == :ad99 ? inp[13] : zero(FT1)
+    cn = MODE == :ad99 ? inp[14] : zero(FT1)
+    flag = MODE == :ad99 ? inp[15] : zero(FT1)
+    source_ampl = MODE == :ad99 ? inp[16] : zero(FT1)
+    # Beres slot 8 is the precomputed launch spectrum (a BeresB0-wrapped
+    # NTuple{nc}; see the struct's docstring for why it must be wrapped); for
+    # the AD99 specialization it is a dead zero tuple. The old per-column
+    # scalars (Q0/h/u_heat/N at slots 9–12) are no longer consumed — B0 already
+    # folds them in (shape mode, steady β_therm + β_mech) from
+    # compute_tendency!.
+    beres_B0 =
+        MODE == :beres ? inp[8].B0 : ntuple(_ -> zero(FT1), gw_ncval)
+    beres_a_cover = MODE == :ad99 ? zero(FT1) : inp[16]
 
-        fac = FT1(0.5) * (ρ_kp1 / ρ_source_eff) * kwv / bf_kp1
-        Hb = (z_kp1 - z_k) / log(ρ_k / ρ_kp1) # density scale height
-        alp2 = FT1(0.25) / (Hb * Hb)
-        ω_r = sqrt((bf_kp1 * bf_kp1 * k2) / (k2 + alp2)) # omc: (critical frequency that marks total internal reflection)
+    kwv = 2.0 * π / ((30.0 * (10.0^ink)) * 1.e3) # wave number of gravity waves
+    k2 = kwv * kwv
 
-        # calculate momentum flux carried by gravity waves with different phase speeds.
-        B0, Bsum = if level == 1
-            mask = StaticBitVector{nc}(_ -> true)
-            B1 = if MODE == :ad99
-                compute_ad99_spectrum(
-                    c, u_source_eff, Bw, Bn, cw, cn, c0, flag, gw_ncval,
-                )
-            else # MODE == :beres
-                compute_beres_spectrum(
-                    beres_source, beres_active_val,
-                    c, u_heat_val, Q0_val, h_val, N_val, gw_ncval,
-                )
-            end
-            Bsum1 = sum(abs, B1)
-            B1, Bsum1
-        else
-            B0_or_NaNs, Bsum_or_NaN
+    fac = FT1(0.5) * (ρ_kp1 / ρ_source_eff) * kwv / bf_kp1
+    Hb = (z_kp1 - z_k) / log(ρ_k / ρ_kp1) # density scale height
+    alp2 = FT1(0.25) / (Hb * Hb)
+    ω_r = sqrt((bf_kp1 * bf_kp1 * k2) / (k2 + alp2)) # omc: (critical frequency that marks total internal reflection)
+
+    # calculate momentum flux carried by gravity waves with different phase speeds.
+    B0, Bsum = if level == 1
+        mask = StaticBitVector{nc}(_ -> true)
+        B1 = if MODE == :ad99
+            compute_ad99_spectrum(
+                c, u_source_eff, Bw, Bn, cw, cn, c0, flag, gw_ncval,
+            )
+        else # MODE == :beres — read the precomputed per-column launch spectrum
+            beres_B0
         end
+        Bsum1 = sum(abs, B1)
+        B1, Bsum1
+    else
+        B0_or_NaNs, Bsum_or_NaN
+    end
 
-        if level >= source_level_eff - 1
-            # check break condition for each gravity waves and calculate momentum flux of breaking gravity waves at each level
-            # We use the unrolled_reduce function here because it performs better for parallel execution on the GPU, avoiding type instabilities.
-            # However, we need to prevent it from being inlined on the CPU to avoid large compilation times for several test cases in CI.
-            # Note that @noinline has no effect on the GPU, which requires all kernel code to be inlined.
-            (mask, fm) = @noinline unrolled_reduce(
-                StaticOneTo(nc),
-                (mask, FT1(0.0)),
-            ) do (mask, fm), (n)
-                if (mask[n]) == true
-                    c_hat = c[n] - u_kp1 # c0mu
-                    # f phase speed matches the wind speed, remove c(n) from the set of propagating waves.
-                    if c_hat == 0.0
+    if level >= source_level_eff - 1
+        # check break condition for each gravity waves and calculate momentum flux of breaking gravity waves at each level
+        # We use the unrolled_reduce function here because it performs better for parallel execution on the GPU, avoiding type instabilities.
+        # However, we need to prevent it from being inlined on the CPU to avoid large compilation times for several test cases in CI.
+        # Note that @noinline has no effect on the GPU, which requires all kernel code to be inlined.
+        (mask, fm) = @noinline unrolled_reduce(
+            StaticOneTo(nc),
+            (mask, FT1(0.0)),
+        ) do (mask, fm), (n)
+            if (mask[n]) == true
+                c_hat = c[n] - u_kp1 # c0mu
+                # f phase speed matches the wind speed, remove c(n) from the set of propagating waves.
+                if c_hat == 0.0
+                    mask = Base.setindex(mask, false, n)
+                else
+                    c_hat0 = c[n] - u_source_eff
+                    # define the criterion which determines if wave is reflected at this level (test).
+                    test = abs(c_hat) * kwv - ω_r
+                    if test >= 0.0
+                        # wave has undergone total internal reflection. remove it from the propagating set.
                         mask = Base.setindex(mask, false, n)
                     else
-                        c_hat0 = c[n] - u_source_eff
-                        # define the criterion which determines if wave is reflected at this level (test).
-                        test = abs(c_hat) * kwv - ω_r
-                        if test >= 0.0
-                            # wave has undergone total internal reflection. remove it from the propagating set.
+                        if level == level_end
+                            # this is added in MiMA implementation:
+                            # all momentum flux that escapes across the model top
+                            # is deposited to the extra level being added so that
+                            # momentum flux is conserved
                             mask = Base.setindex(mask, false, n)
+                            if level >= source_level_eff
+                                fm = fm + B0[n]
+                            end
                         else
-                            if level == level_end
-                                # this is added in MiMA implementation:
-                                # all momentum flux that escapes across the model top
-                                # is deposited to the extra level being added so that
-                                # momentum flux is conserved
+                            # if wave is not reflected at this level, determine if it is
+                            # breaking at this level (Foc >= 0), or if wave speed relative to
+                            # windspeed has changed sign from its value at the source level
+                            # (c_hat0[n] * c_hat <= 0). if it is above the source level and is
+                            # breaking, then add its momentum flux to the accumulated sum at
+                            # this level.
+                            # set mask=0.0 to remove phase speed band c[n] from the set of active
+                            # waves moving upwards to the next level.
+                            Foc = B0[n] / (c_hat)^3 - fac
+                            if Foc >= 0.0 || (c_hat0 * c_hat <= 0.0)
                                 mask = Base.setindex(mask, false, n)
                                 if level >= source_level_eff
                                     fm = fm + B0[n]
                                 end
-                            else
-                                # if wave is not reflected at this level, determine if it is
-                                # breaking at this level (Foc >= 0), or if wave speed relative to
-                                # windspeed has changed sign from its value at the source level
-                                # (c_hat0[n] * c_hat <= 0). if it is above the source level and is
-                                # breaking, then add its momentum flux to the accumulated sum at
-                                # this level.
-                                # set mask=0.0 to remove phase speed band c[n] from the set of active
-                                # waves moving upwards to the next level.
-                                Foc = B0[n] / (c_hat)^3 - fac
-                                if Foc >= 0.0 || (c_hat0 * c_hat <= 0.0)
-                                    mask = Base.setindex(mask, false, n)
-                                    if level >= source_level_eff
-                                        fm = fm + B0[n]
-                                    end
-                                end
                             end
-                        end # (test >= 0.0)
+                        end
+                    end # (test >= 0.0)
 
-                    end #(c_hat == 0.0)
-                end # mask = 0
-                return (mask, fm)
-            end
-
-            # compute the gravity wave momentum flux forcing
-            # obtained across the entire wave spectrum at this level.
-            eps = if MODE == :ad99
-                calc_intermitency(ρ_source_eff, source_ampl, nk, FT1(Bsum))
-            else # MODE == :beres
-                beres_a_cover / (ρ_source_eff * FT1(nk))
-            end
-            if level >= source_level_eff
-                rbh = sqrt(ρ_k * ρ_kp1)
-                wave_forcing = (ρ_source_eff / rbh) * FT1(fm) * eps / (z_kp1 - z_k)
-            else
-                wave_forcing = FT1(0.0)
-            end
+                end #(c_hat == 0.0)
+            end # mask = 0
+            return (mask, fm)
         end
-        return (wave_forcing, mask, Bsum, B0)
 
+        # compute the gravity wave momentum flux forcing
+        # obtained across the entire wave spectrum at this level.
+        eps = if MODE == :ad99
+            calc_intermitency(ρ_source_eff, source_ampl, nk, FT1(Bsum))
+        else # MODE == :beres
+            beres_a_cover / (ρ_source_eff * FT1(nk))
+        end
+        if level >= source_level_eff
+            rbh = sqrt(ρ_k * ρ_kp1)
+            wave_forcing = (ρ_source_eff / rbh) * FT1(fm) * eps / (z_kp1 - z_k)
+        else
+            wave_forcing = FT1(0.0)
+        end
     end
+    return (wave_forcing, mask, Bsum, B0)
 end
 
 # calculate the intermittency factor eps -> assuming constant Δc.
@@ -1437,6 +1644,111 @@ function wave_source(
     )
 end
 
+# Number of uniform samples in the gathered in-cloud heating profile used by the
+# Beres-G (sine_transform) shape factor. Compile-time constant for GPU type
+# stability; the offline O(dz²) convergence study (gate 2) shows ~4e-4 relative
+# error at 64 points for a 10-km heating layer. Bump (and re-alloc-check) if
+# finer profiles are needed.
+const N_BERES_PROFILE = 64
+
+"""
+    _beres_sine_segment(za, ga, zb, gb, m)
+
+Analytic `∫_{za}^{zb} g(z) sin(m z) dz` for `g` linear from `ga` (at `za`) to `gb`
+(at `zb`) — a Filon-type exact per-segment rule. Being exact for the
+piecewise-linear interpolant, it carries no oscillatory-quadrature error at any
+`m` (the half-sine closed form's `1/m²` roll-off is reproduced); the only error
+vs. a smooth shape is the `O(dz²)` interpolation error. Ported verbatim from the
+validated Python oracle `beres_g_reference.sine_transform_piecewise_linear`.
+"""
+@inline function _beres_sine_segment(za, ga, zb, gb, m)
+    FT = typeof(za)
+    D = zb - za
+    s = (gb - ga) / D
+    mD = m * D
+    sinmD = sin(mD)
+    cosmD = cos(mD)
+    cma = cos(m * za)
+    sma = sin(m * za)
+    inv_m = FT(1) / m
+    inv_m2 = inv_m * inv_m
+    I0 = (cma - cos(m * zb)) * inv_m
+    I1 =
+        cma * (sinmD * inv_m2 - D * cosmD * inv_m) +
+        sma * ((cosmD - FT(1)) * inv_m2 + D * sinmD * inv_m)
+    return ga * I0 + s * I1
+end
+
+"""
+    _beres_gs(gprofile, z_bot, span, m)
+
+Finite sine transform `gs(m) = ∫_0^{z_top} g(z) sin(m z) dz` (Beres-G,
+manuscript Eq. `eq:BeresG_Bkv_eq`) of the in-cloud heating shape `g`, sampled
+uniformly on the convective envelope `[z_bot, z_top]` with `span = z_top - z_bot`
+(the CLAMPED envelope width — `span` must equal the width the gather used, NOT the
+unclamped moment depth `h`, which can differ when the envelope is floored at 0 or
+capped at the domain top). `gprofile` is the peak-normalised `NTuple{ng}` of `g`
+at `z_i = z_bot + (i-1)·span/(ng-1)`; `g ≡ 0` below `z_bot` (masked), so
+`∫_0^{z_top} = ∫_{z_bot}^{z_top}` with `z` measured from the rigid ground `z=0`
+(the `W(0)=0` Dirichlet origin — Beres-G is sensitive to launch altitude through
+`sin(m z)`, unlike the half-sine `V_hs`).
+
+The squared transform `gs(m)²` is the Beres-G shape factor `V_G_sq`, used at the
+**same** call site and with the **same** `·m²/(N²−ν̂²)²` placement as
+`V_hs_sq`, by the algebraic parity `V_hs_sq(m,h) = |gs_halfsine(m)|²` (gate 1).
+"""
+@inline function _beres_gs(
+    gprofile::NTuple{ng, FT},
+    z_bot,
+    span,
+    m,
+) where {ng, FT}
+    m < FT(1e-12) && return FT(0)
+    dz = span / FT(ng - 1)
+    # Sum the ng-1 per-segment sine integrals with COMPILE-TIME segment indices:
+    # `ntuple(_, Val(ng - 1))` fully unrolls, so the profile tuple is read only at
+    # literal positions `gprofile[i]` / `gprofile[i + 1]`. A runtime `for i in
+    # 2:ng; gprofile[i]` loop instead forces the tuple to be spilled to memory to
+    # support dynamic indexing, which on the GPU is a heap allocation
+    # (gpu_gc_pool_alloc) and makes the kernel fail to compile (InvalidIRError).
+    # The half-sine `V_hs_sq` path never hit this because it is a closed form with
+    # no tuple access.
+    segs = ntuple(Val(ng - 1)) do i
+        z_a = z_bot + FT(i - 1) * dz
+        z_b = z_bot + FT(i) * dz
+        _beres_sine_segment(z_a, gprofile[i], z_b, gprofile[i + 1], m)
+    end
+    # `foldl(+, ...; init)` reduces strictly left-to-right, reproducing the exact
+    # accumulation order of the previous `acc = FT(0); for i ...; acc += segᵢ`
+    # loop (bit-identical, not merely `sum`'s pairwise order), so the only change
+    # from the old code is the removal of runtime tuple indexing.
+    return foldl(+, segs; init = FT(0))
+end
+
+"""
+    _beres_shape_factor_sq(shape_general, gprofile, z_bot, h, span, m)
+
+The squared vertical shape factor entering `R² = (·)·m²/(N²−ν̂²)²`, dispatching
+between the classical half-sine `V_hs_sq(m,h)` (`shape_general=false`, or
+`gprofile===nothing`) and the Beres-G generalized `|gs(m)|²`
+(`shape_general=true`). `h` is the (unclamped) half-sine depth used by `V_hs_sq`;
+`span = z_top - z_bot` is the gather/transform grid width used by `_beres_gs` —
+they differ only for a clamped envelope. Holding the `·m²/(N²−ν̂²)²` downstream
+factor fixed is the `1/m²`-parity pinned by gate 1.
+"""
+@inline _beres_shape_factor_sq(::Bool, ::Nothing, z_bot, h, span, m) =
+    V_hs_sq(m, h)
+@inline function _beres_shape_factor_sq(
+    shape_general::Bool,
+    gprofile::NTuple,
+    z_bot,
+    h,
+    span,
+    m,
+)
+    return shape_general ? _beres_gs(gprofile, z_bot, span, m)^2 : V_hs_sq(m, h)
+end
+
 """
     V_hs_sq(m, h)
 
@@ -1471,8 +1783,16 @@ Each node's integrand is the product of
 
 Here ν̂ = ν − k·u_heat is the intrinsic frequency. Evanescent/singular nodes
 (|ν̂| < 1e-4·N, |ν̂| ≥ N, or m² ≤ 0) contribute zero.
+
+@noinline (GPU compile-time guard): the launch-spectrum assembler unrolls this
+body once per phase-speed bin (nc = 251). Inlined, that yields a huge basic
+block that LLVM's SLP store-chain vectorizer chews on for HOURS (observed:
+
+> 75 min stuck in vectorizeStoreChain while compiling the B0 broadcast kernel).
+> Non-inlined, the body compiles once and is called 251 times — bit-identical
+> results, ~100x smaller block, negligible runtime cost at dt_nogw cadence.
 """
-@inline function _beres_spectrum_single_h(
+@noinline function _beres_spectrum_single_h(
     c_n,
     c_hat,
     h,
@@ -1485,6 +1805,10 @@ Here ν̂ = ν − k·u_heat is the intrinsic frequency. Evanescent/singular nod
     dν,
     n_groups,
     boole_w,
+    shape_general = false,
+    gprofile = nothing,
+    z_bot = zero(c_n),
+    span = zero(c_n),
 )
     FT = typeof(c_n)
     π_val = FT(π)
@@ -1515,10 +1839,20 @@ Here ν̂ = ν − k·u_heat is the intrinsic frequency. Evanescent/singular nod
 
             N2_minus_νhat2 = N2 - ν_hat^2
 
-            # Squared half-sine vertical shape factor, shared with the steady
-            # path via V_hs_sq: R² = V_hs_sq·m²/(N²−ν̂²)². Only R² is needed (the
-            # sign of R is squared away in B_sq).
-            R_sq = V_hs_sq(m, h) * m^2 / N2_minus_νhat2^2
+            # Squared vertical shape factor, shared with the steady path.
+            # Classical: V_hs_sq (half-sine). Beres-G: |gs(m)|² (sine transform of
+            # the EDMF profile) — same call site, same downstream m²/(N²−ν̂²)²
+            # (gate-1 1/m² parity). R² = shape_sq·m²/(N²−ν̂²)²; only R² is needed
+            # (the sign of R is squared away in B_sq).
+            shape_sq = _beres_shape_factor_sq(
+                shape_general,
+                gprofile,
+                z_bot,
+                h,
+                span,
+                m,
+            )
+            R_sq = shape_sq * m^2 / N2_minus_νhat2^2
 
             Q0Gk_sq =
                 Q0_sq * σ_x_sq / FT(2) * exp(-k^2 * σ_x_sq / FT(2))
@@ -1585,6 +1919,10 @@ Steady and transient carry orthogonal frequencies, so no double-counting; their 
     L_system,
     dc_frac,
     ν_min,
+    shape_general = false,
+    gprofile = nothing,
+    z_bot = zero(U),
+    span = zero(U),
 )
     FT = typeof(U)
     # U → 0 guard: m₀ = N/|U| → ∞, the stationary wave vanishes; also protects
@@ -1595,9 +1933,14 @@ Steady and transient carry orthogonal frequencies, so no double-counting; their 
     Uabs = abs(U)
     m0 = N_source / Uabs
 
-    # Half-sine shape, optionally h-averaged to smooth the m₀ ≈ π/h resonance
-    # (identical mechanism to the transient `n_h_avg` loop).
-    Vbar = if n_h_avg <= 1
+    # Vertical shape factor at m₀. Classical: half-sine V_hs_sq, optionally
+    # h-averaged to smooth the m₀ ≈ π/h resonance (the transient `n_h_avg`
+    # mechanism). Beres-G: |gs(m₀)|² of the gathered profile (single eval — the
+    # real profile self-smooths; Ext 1 applies to the thermal-steady term too).
+    # `span = z_top - z_bot` (clamped envelope width) must match the gather grid.
+    Vbar = if shape_general && gprofile !== nothing
+        _beres_gs(gprofile, z_bot, span, m0)^2
+    elseif n_h_avg <= 1
         V_hs_sq(m0, h)
     else
         Δh = Δh_frac * h
@@ -1622,6 +1965,58 @@ Steady and transient carry orthogonal frequencies, so no double-counting; their 
 end
 
 """
+    _beres_mech_flux(U, N_source, w_obstacle, scale_factor, mech_weight, σ_x, L_system)
+
+Mechanical / obstacle steady (ν=0) launch flux (Extension 3). A convective
+updraft is a moving obstacle the mean wind `U` flows over, radiating a stationary
+wave at `m₀ = N/|U|` — the same `ν=0` slot as the thermal steady term — with the
+Garner base-flux scaling (manuscript Eqs. `eq:garner_baseflux`–`eq:tau_mech`):
+
+    τ_mech ~ ρ₀ U w_b² / N,   h_eff = w_b/N
+
+quadratic in the obstacle-level draft velocity `w_b`, **linear in U** (vanishes as
+`U→0`). We implement the `eq:tau_mech` `U^{+1}` scaling, NOT `eq:beta_total`'s
+divergent `∝ 1/U` form (a manuscript inconsistency flagged for author fix).
+
+Carried through the **same** change of variables as the thermal steady term: same
+horizontal constant `H`, same `1/√(2π)`, same `scale_factor`, same `sign(U)`
+deceleration, into the same `c≈0` bin. Carries **no heating shape factor** (bare
+obstacle scaling — Ext 1's `V_G` generalizes `β_therm` only). Its size relative
+to `β_therm` is set by `mech_weight` (the `ν=0` weight, mechanical analogue of the
+thermal `Q_t²(0) = dc_frac·ν_min`), not by the transient calibration. The thermal
+term's `/(N·|U|³)` becomes the obstacle `·|U|/N` here, reproducing the
+manuscript's `β_therm ∝ U^{-3}` vs. `β_mech ∝ U^{+1}` split.
+
+Frame note: placed at `c≈0` (cell-stationary, manuscript convention). At `c≈0`
+the mechanical wave meets its critical level near the convective outflow and
+deposits low (like the thermal steady term); reaching QBO altitudes would require
+the deferred cell-speed / low-`c` framing — an open modeling decision (see report).
+"""
+@inline function _beres_mech_flux(
+    U,
+    N_source,
+    w_obstacle,
+    scale_factor,
+    mech_weight,
+    σ_x,
+    L_system,
+)
+    FT = typeof(U)
+    if abs(U) < FT(1e-6)
+        return FT(0)   # no obstacle problem without environmental wind
+    end
+    Uabs = abs(U)
+    H = _beres_steady_horizontal_const(σ_x, L_system)
+    # τ_mech ~ ρ₀ U w_b²/N (ρ₀ folded into scale_factor·mech_weight, as the
+    # thermal term folds ρ₀/(Lτ)); ∝ |U| ⇒ vanishes as U→0.
+    amp =
+        scale_factor * (FT(1) / sqrt(FT(2) * FT(π))) * mech_weight *
+        w_obstacle^2 * Uabs * H / N_source
+    # Sign: oppose U (decelerating, like the thermal steady term).
+    return -sign(U) * amp
+end
+
+"""
     wave_source(c, u_heat, Q0, h, N_source, beres::BeresSourceParams, gw_ncval)
 
 Compute the Beres (2004) convective gravity wave momentum flux spectrum.
@@ -1642,6 +2037,55 @@ function wave_source(
     beres::BeresSourceParams,
     gw_ncval::Val{nc},
 ) where {nc}
+    # Classical half-sine launch spectrum (no gathered profile, no mechanical
+    # term). Production Beres-G goes through `_beres_launch_spectrum` with the
+    # gathered EDMF profile and obstacle velocity; this wrapper preserves the
+    # test/diagnostic interface and the exact half-sine arithmetic (gprofile =
+    # nothing ⇒ V_hs everywhere regardless of `beres_shape_general`; w_obstacle =
+    # 0 ⇒ no mechanical contribution regardless of `beres_mechanical_source`).
+    FT = typeof(u_heat)
+    return _beres_launch_spectrum(
+        c, u_heat, Q0, h, N_source, FT(0), FT(0), nothing, FT(0), beres,
+        gw_ncval,
+    )
+end
+
+"""
+    _beres_launch_spectrum(c, u_heat, Q0, h, N_source, z_bot, span, gprofile, w_obstacle, beres, gw_ncval)
+
+The full per-column Beres launch momentum-flux spectrum `B0` (NTuple over phase
+speed), assembled once per column (it is independent of the AD99 horizontal
+wavenumber, so the propagation kernel reads it precomputed rather than rebuilding
+it inside the `ink` loop). Transient bins integrate the Beres (2004) spectral
+density over intrinsic frequency; the `c≈0` bin carries the steady (`ν=0`) terms.
+`h` is the half-sine depth (V_hs/Q0); `span = z_top - z_bot` is the clamped
+envelope width the gather sampled on, used by the Beres-G sine transform.
+
+`gprofile` (peak-normalised `NTuple{ng}` on `[z_bot, z_top]`) and the flag
+`beres.beres_shape_general` select the vertical shape factor:
+
+  - `gprofile === nothing` or `shape_general=false` → classical half-sine `V_hs`
+    (with `n_h_avg` resonance averaging), Beres (2004);
+  - `shape_general=true` with a profile → Beres-G `|gs(m)|²` (Ext 1), single
+    evaluation (the real profile self-smooths; `n_h_avg` bypassed).
+
+The `c≈0` bin sums `β_therm` (thermal steady, shape-aware) and, when
+`beres_mechanical_source`, `β_mech` (Ext 3 obstacle term from `w_obstacle`).
+"""
+function _beres_launch_spectrum(
+    c,
+    u_heat,
+    Q0,
+    h,
+    N_source,
+    z_bot,
+    span,
+    gprofile,
+    w_obstacle,
+    beres::BeresSourceParams,
+    gw_ncval::Val{nc},
+    shape_mode::Val{SG} = Val(beres.beres_shape_general),
+) where {nc, SG}
     (;
         σ_x,
         ν_min,
@@ -1653,9 +2097,22 @@ function wave_source(
         beres_steady_source,
         beres_steady_dc_frac,
         beres_L_system,
+        beres_mechanical_source,
+        beres_mech_weight,
     ) = beres
     FT = typeof(u_heat)
     scale_factor = FT(beres_scale_factor)
+    L_system = FT(beres_L_system)
+    # Beres-G uses the gathered profile only when the shape flag is on AND a
+    # profile is supplied (the wave_source wrapper passes `nothing` ⇒ always
+    # half-sine). `SG` is the flag threaded as a COMPILE-TIME `Val` (the
+    # production b0g/b0hs broadcasts pass `Val(true)`/`Val(false)`), so `use_VG`
+    # const-folds and the GPU kernel compiles exactly one shape path. A runtime
+    # `beres.beres_shape_general` read here would instead force BOTH the
+    # half-sine and `_beres_gs` transform branches into the kernel (dynamic
+    # dispatch / GC allocation). Behaviour is unchanged: the flag still selects
+    # the shape, so a profile present with the flag off stays exact half-sine.
+    use_VG = SG && (gprofile !== nothing)
 
     boole_w = (FT(7), FT(32), FT(12), FT(32), FT(7))
     dν = (ν_max - ν_min) / FT(n_ν - 1)
@@ -1665,16 +2122,15 @@ function wave_source(
     σ_x_sq = σ_x^2
     Q0_sq = Q0^2
 
-    # Steady (ν=0) contribution: a ground-stationary wave that lands in the c≈0 bin (kept empty by the transient spectrum, so no double-counting).
-
-    # It deposits only when 
-    #    (a) the steady source is enabled — true by default, and 
-    #    (b) an exact c=0 bin exists. Without a c=0 bin, `clamp` would corrupt a nonzero bin, so we zero the steady flux instead.
+    # Steady (ν=0): a ground-stationary wave landing in the c≈0 bin (kept empty by
+    # the transient spectrum, so no double-counting). Deposits only with an exact
+    # c=0 bin (else `clamp` would corrupt a nonzero bin → zero it). β_tot =
+    # β_therm + β_mech (Ext 3); each is independently flag-gated.
     dc = c[2] - c[1]
     cmax = -c[1]
     n_zero = clamp(round(Int, cmax / dc) + 1, 1, nc)
     has_c0_bin = abs(c[n_zero]) < FT(1e-6)
-    steady_flux =
+    steady_therm =
         (beres_steady_source && has_c0_bin) ?
         _beres_steady_flux(
             u_heat,
@@ -1685,10 +2141,26 @@ function wave_source(
             n_h_avg,
             Δh_frac,
             σ_x,
-            FT(beres_L_system),
+            L_system,
             FT(beres_steady_dc_frac),
             ν_min,
+            use_VG,
+            gprofile,
+            z_bot,
+            span,
         ) : FT(0)
+    steady_mech =
+        (beres_mechanical_source && has_c0_bin) ?
+        _beres_mech_flux(
+            u_heat,
+            N_source,
+            w_obstacle,
+            scale_factor,
+            FT(beres_mech_weight),
+            σ_x,
+            L_system,
+        ) : FT(0)
+    steady_flux = steady_therm + steady_mech
 
     ntuple(
         n -> begin
@@ -1698,28 +2170,31 @@ function wave_source(
             val = if abs(c_hat) < FT(1e-6) || abs(c_n) < FT(1e-6)
                 FT(0)
             else
-                if n_h_avg <= 1
-                    # Single h value (no averaging)
-                    result = _beres_spectrum_single_h(
+                result = if use_VG || n_h_avg <= 1
+                    # Beres-G (fixed gathered profile, no h-averaging) or the
+                    # classical single-h half-sine.
+                    _beres_spectrum_single_h(
                         c_n, c_hat, h, u_heat, N2, N_source,
                         Q0_sq, σ_x_sq, ν_min, dν, n_groups, boole_w,
+                        use_VG, gprofile, z_bot, span,
                     )
                 else
-                    # Average over n_h_avg values of h in [h - Δh, h + Δh]
-                    # per Beres (2004) Section 2, Figure 4
+                    # Half-sine averaged over n_h_avg values of h in [h-Δh, h+Δh]
+                    # per Beres (2004) Section 2, Figure 4.
                     Δh = Δh_frac * h
                     h_min = h - Δh
                     h_max = h + Δh
                     dh = (h_max - h_min) / FT(n_h_avg - 1)
-                    result = FT(0)
+                    acc = FT(0)
                     for ih in 1:n_h_avg
                         h_i = h_min + FT(ih - 1) * dh
-                        result += _beres_spectrum_single_h(
+                        acc += _beres_spectrum_single_h(
                             c_n, c_hat, h_i, u_heat, N2, N_source,
                             Q0_sq, σ_x_sq, ν_min, dν, n_groups, boole_w,
+                            false, nothing, z_bot, span,
                         )
                     end
-                    result = result / FT(n_h_avg)
+                    acc / FT(n_h_avg)
                 end
 
                 sign(c_hat) * scale_factor * result
@@ -1729,5 +2204,137 @@ function wave_source(
             val + steady_flux * FT(n == n_zero)
         end,
         Val(nc),
+    )
+end
+
+# When an `NTuple`-valued field (here `gw_beres_gprofile`) is read inside a
+# ClimaCore `@.` broadcast, ClimaCore wraps its per-node value in a
+# `ClimaCore.Utilities.AutoBroadcaster{NTuple{ng,FT}}` (so arithmetic broadcasts
+# elementwise over the tuple's subfields). The Beres-G shape functions
+# (`_beres_gs`, `_beres_shape_factor_sq`) dispatch on the raw `NTuple`, so the
+# wrapper does not match them and the call goes dynamic on the GPU -> heap alloc
+# (`gpu_gc_pool_alloc`) -> InvalidIRError. Unwrap it back to the `NTuple` here.
+# No-op for `nothing` (half-sine path) and for a plain `NTuple` (CPU / unit-test
+# path, where no AutoBroadcaster is ever introduced).
+@inline _beres_unwrap_gprofile(x::ClimaCore.Utilities.AutoBroadcaster) =
+    getfield(x, :itr)
+@inline _beres_unwrap_gprofile(x) = x
+
+# Per-column launch spectrum gated by the activation flag: zeros for non-convecting
+# columns (mirrors the old in-kernel `compute_beres_spectrum` gate), else the full
+# Beres / Beres-G spectrum. Called from a `@.` broadcast over surface fields in
+# `compute_beres_convective_heating!` (B0 is AD99-wavenumber independent, so it is
+# precomputed once per column rather than rebuilt inside the kernel `ink` loop).
+@inline function _beres_launch_spectrum_or_zero(
+    active,
+    c,
+    u_heat,
+    Q0,
+    h,
+    N_source,
+    z_bot,
+    span,
+    gprofile_raw,
+    w_obstacle,
+    beres::BeresSourceParams,
+    gw_ncval::Val{nc},
+    shape_mode::Val = Val(beres.beres_shape_general),
+) where {nc}
+    FT = typeof(u_heat)
+    # Unwrap ClimaCore's AutoBroadcaster (if present) to the concrete NTuple.
+    gprofile = _beres_unwrap_gprofile(gprofile_raw)
+    if active > FT(0.5)
+        return _beres_launch_spectrum(
+            c, u_heat, Q0, h, N_source, z_bot, span, gprofile, w_obstacle,
+            beres, gw_ncval, shape_mode,
+        )
+    else
+        return ntuple(_ -> FT(0), gw_ncval)
+    end
+end
+
+"""
+    _beres_peaknorm(t)
+
+Peak-normalize a gathered heating-profile tuple to unit maximum (mode (ii): the
+shape carries no amplitude, which stays in `Q0`, so the half-sine reduction holds
+and `Q0`/`h`/`E` are identical between shape modes). Returns zeros if the peak is
+nonpositive (inactive / cooling-only column).
+"""
+@inline function _beres_peaknorm(t::NTuple{ng, FT}) where {ng, FT}
+    mx = FT(0)
+    for i in 1:ng
+        mx = max(mx, t[i])
+    end
+    inv_mx = mx > eps(FT) ? FT(1) / mx : FT(0)
+    return ntuple(i -> t[i] * inv_mx, Val(ng))
+end
+
+# Total launched-flux magnitude Σ|B0[n]| of a precomputed launch spectrum B0
+# (the `gw_launch_flux` diagnostic, now Beres-G / mechanical aware via B0).
+@inline function _beres_b0_fluxmag(B0::NTuple{nc, FT}) where {nc, FT}
+    s = FT(0)
+    for n in 1:nc
+        s += abs(B0[n])
+    end
+    return s
+end
+@inline _beres_b0_fluxmag(b::BeresB0) = _beres_b0_fluxmag(b.B0)
+
+# Flux-weighted phase-speed centroid ⟨c⟩ = Σ c|B0| / Σ|B0| of a launch spectrum.
+@inline function _beres_b0_centroid(B0::NTuple{nc, FT}, c) where {nc, FT}
+    s0 = FT(0)
+    s1 = FT(0)
+    for n in 1:nc
+        b = abs(B0[n])
+        s0 += b
+        s1 += c[n] * b
+    end
+    return s0 > eps(FT) ? s1 / s0 : FT(0)
+end
+@inline _beres_b0_centroid(b::BeresB0, c) = _beres_b0_centroid(b.B0, c)
+
+# Band-resolved signed launched flux from B0 over a phase-speed band, for the
+# standing band-resolved reporting requirement (low-`c` |c|≤c_band vs. rest, with
+# eastward c>0 and westward c<0 kept separate by the sign of c). `want_low`
+# selects |c|≤c_band; `want_east` selects c>0. Signed sum (keeps E/W direction).
+@inline function _beres_b0_band(
+    B0::NTuple{nc, FT},
+    c,
+    c_band,
+    want_low::Bool,
+    want_east::Bool,
+) where {nc, FT}
+    s = FT(0)
+    for n in 1:nc
+        cn = c[n]
+        is_low = abs(cn) <= c_band
+        is_east = cn > FT(0)
+        if (is_low == want_low) && (is_east == want_east)
+            s += B0[n]
+        end
+    end
+    return s
+end
+
+# Signed mechanical (Ext 3) steady c≈0 flux β_mech for the diagnostic export.
+# Zero unless the column is active AND the mechanical source is enabled.
+@inline function _beres_mech_flux_value(
+    active,
+    u_heat,
+    N_source,
+    w_obstacle,
+    beres::BeresSourceParams,
+)
+    FT = typeof(u_heat)
+    (active > FT(0.5) && beres.beres_mechanical_source) || return FT(0)
+    return _beres_mech_flux(
+        u_heat,
+        N_source,
+        w_obstacle,
+        FT(beres.beres_scale_factor),
+        FT(beres.beres_mech_weight),
+        FT(beres.σ_x),
+        FT(beres.beres_L_system),
     )
 end
