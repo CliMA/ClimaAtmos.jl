@@ -1,4 +1,4 @@
-377
+378
 
 # **README**
 #
@@ -32,6 +32,13 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+378
+- Apply ρe_tot/ρq_tot upwind correction as a post-Newton hook (`T_post_imp!`
+  on `ClimaODEFunction`, requires ClimaTimeSteppers 0.10.4). Implicit vertical
+  advection reverts to central-only; the upwind correction is evaluated on
+  the Newton-solved velocity, so a sign flip of `ᶠu³` during the Newton step
+  no longer produces a wrong-cell upwind flux.
+
 377
 - Carry the energy of sedimenting water at each subdomain's own value under
   PrognosticEDMFX: the grid-mean sedimentation energy flux equals the sum of
