@@ -216,15 +216,20 @@ function edmfx_vertical_diffusion_tendency!(
                 top = Operators.SetValue(C3(FT(0))),
                 bottom = Operators.SetValue(C3(FT(0))),
             )
+            # Sedimenting microphysics species are diffused with
+            # α_vert_diff_tracer * K_h, passive tracers with the unscaled K_h,
+            # matching the grid-mean tracer diffusion and the implicit
+            # Jacobian (update_sgs_diffusion_jacobian!).
             for χ_name in sgs_tracer_names(Y)
+                α =
+                    χ_name in sgs_sedimenting_tracer_candidates ?
+                    α_vert_diff_microphysics :
+                    one(α_vert_diff_microphysics)
                 ᶜχʲ = MatrixFields.get_field(Y.c.sgsʲs.:(1), χ_name)
                 ᶜχʲₜ = MatrixFields.get_field(Yₜ.c.sgsʲs.:(1), χ_name)
                 @. ᶜχʲₜ -=
                     ᶜdivᵥ_q(
-                        -(
-                            ᶠinterp(ᶜρʲ) * ᶠinterp(ᶜK_h) * α_vert_diff_microphysics *
-                            ᶠgradᵥ(ᶜχʲ)
-                        ),
+                        -(ᶠinterp(ᶜρʲ) * ᶠinterp(ᶜK_h) * α * ᶠgradᵥ(ᶜχʲ)),
                     ) / ᶜρʲ
             end
         end

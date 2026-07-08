@@ -322,9 +322,6 @@ Applies tendencies from GCM or reanalysis-driven external forcings. This include
 The sum of horizontal advection, nudging, and vertical fluctuation tendencies for
 temperature and moisture are converted into tendencies for total energy (`ρe_tot`)
 and total specific humidity (`ρq_tot`).
-
-A top boundary condition is applied by zeroing out the `ρe_tot` and `ρq_tot`
-tendencies at the highest model level.
 """
 function external_forcing_tendency!(
     Yₜ,

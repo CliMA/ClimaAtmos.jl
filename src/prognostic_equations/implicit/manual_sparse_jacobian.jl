@@ -140,18 +140,22 @@ function diffusion_jacobian_blocks(Y, atmos, diffusion_flag)
     mass_names = unrolled_map(center_state_name, sedimenting_mass_names(Y))
     sedimenting_names =
         unrolled_map(center_state_name, sedimenting_tracer_names(Y))
+    passive_names =
+        unrolled_map(center_state_name, passive_gs_tracer_names(Y))
     ρtke_if_available =
         is_in_Y(@name(c.ρtke)) ? (@name(c.ρtke),) : ()
     return (
         # (·, ρ) blocks exist only where they receive values: (ρe_tot, ρ) and
         # (ρq_tot, ρ) accumulate the SGS mass-flux Jacobian, and (ρtke, ρ)
-        # holds the dissipation derivative. The microphysics tracers carry no
-        # (·, ρ) blocks: the ρ-dependence of their diffusion is neglected
-        # (like the other ∂K/∂state terms), so the blocks were identically
-        # zero, and the condensate-mass rows must in any case precede ρ in the
-        # scalar solve because the ρ row holds their sedimentation derivatives
-        # (see `sedimentation_jacobian_blocks` and
-        # `jacobian_solver_algorithm`).
+        # holds the dissipation derivative. The diffusive fluxes' own
+        # ρ-dependence — through χ = ρχ/ρ and the ρ factor in ρ K ∇χ, and
+        # through the Yₜ.c.ρ counterpart of the ρq_tot diffusion — is
+        # neglected everywhere (like the other ∂K/∂state terms), so the
+        # microphysics tracers and passive tracers carry no (·, ρ) blocks at
+        # all: they were identically zero, and the condensate-mass rows must
+        # in any case precede ρ in the scalar solve because the ρ row holds
+        # their sedimentation derivatives (see `sedimentation_jacobian_blocks`
+        # and `jacobian_solver_algorithm`).
         map(
             name -> (name, @name(c.ρ)) => similar(Y.c, TridiagonalRow),
             (
@@ -164,7 +168,11 @@ function diffusion_jacobian_blocks(Y, atmos, diffusion_flag)
         )...,
         map(
             name -> (name, name) => similar(Y.c, TridiagonalRow),
-            (diffused_scalar_names..., ρtke_if_available...),
+            (
+                diffused_scalar_names...,
+                passive_names...,
+                ρtke_if_available...,
+            ),
         )...,
         (
             is_in_Y(@name(c.ρq_tot)) ?
@@ -764,6 +772,14 @@ function update_sedimentation_jacobian!(matrix, Y, p, dtγ)
                 p.scratch.ᶜbidiagonal_adjoint_matrix_c3 ⋅
                 p.scratch.ᶠband_matrix_wvec
 
+            # This block carries only the grid-mean sedimentation energy flux
+            # (specific energy e_int + Φ + Kin). The EDMFX subdomain
+            # corrections to the sedimentation energy flux in
+            # `vertical_advection_of_water_tendency!` (water_advection.jl),
+            # which replace the grid-mean thermodynamic state with
+            # updraft/environment states, are treated explicitly and have no
+            # Jacobian counterpart — a convergence-rate approximation in EDMF
+            # columns with heavy sedimentation.
             ∂ᶜρe_tot_err_∂ᶜρq = matrix[@name(c.ρe_tot), ρχₚ_state_name]
             e_int_func = internal_energy_function(phase)
             @. ∂ᶜρe_tot_err_∂ᶜρq =
@@ -883,6 +899,12 @@ function update_diffusion_jacobian!(
     e_int_v0 = FT(CAP.e_int_v0(params))
     ᶜcv_m = @. lazy(TD.cv_m(thermo_params, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice))
 
+    # The (ρe_tot, ρ) and (ρq_tot, ρ) columns are zeroed here and later
+    # accumulate only the SGS mass-flux terms (update_sgs_massflux_jacobian!):
+    # the diffusive fluxes' ρ-dependence — through χ = ρχ/ρ and the ρ factor
+    # in ρ K ∇χ, and through the Yₜ.c.ρ counterpart of the ρq_tot diffusion —
+    # is neglected, like the other frozen-coefficient approximations in this
+    # Jacobian (convergence-rate impact only; the tendencies are exact).
     ∂ᶜρe_tot_err_∂ᶜρ = matrix[@name(c.ρe_tot), @name(c.ρ)]
     @. ∂ᶜρe_tot_err_∂ᶜρ = zero(typeof(∂ᶜρe_tot_err_∂ᶜρ))
     @. ∂ᶜρe_tot_err_∂ᶜρe_tot +=
@@ -943,6 +965,17 @@ function update_diffusion_jacobian!(
             DiagonalMatrixRow(1 / ᶜρ)
     end
 
+    # Passive (non-water) grid-scale tracers are diffused with the unscaled
+    # K_h (see edmfx_sgs_diffusive_flux_tendency! and
+    # vertical_diffusion_boundary_layer_tendency!). Their diagonals receive
+    # no other implicit contributions, so they are initialized here.
+    MatrixFields.unrolled_foreach(passive_gs_tracer_names(Y)) do ρχ_name
+        ρχ_state_name = center_state_name(ρχ_name)
+        ∂ᶜρχ_err_∂ᶜρχ = matrix[ρχ_state_name, ρχ_state_name]
+        @. ∂ᶜρχ_err_∂ᶜρχ =
+            dtγ * ᶜdiffusion_h_matrix ⋅ DiagonalMatrixRow(1 / ᶜρ) - (I,)
+    end
+
     if MatrixFields.has_field(Y, @name(c.ρtke))
         turbconv_params = CAP.turbconv_params(params)
         c_d = CAP.tke_diss_coeff(turbconv_params)
@@ -954,6 +987,12 @@ function update_diffusion_jacobian!(
         ᶜmixing_length_field = p.scratch.ᶜtemp_scalar_3
         ᶜmixing_length_field .= ᶜmixing_length(Y, p)
 
+        # The dissipation derivative below differentiates c_d √tke / l_mix
+        # with respect to tke at frozen mixing length, although l_mix itself
+        # depends on tke (through l_TKE and l_N). Like the frozen K_h/K_u
+        # coefficients above, this omits a ∂l_mix/∂tke chain term — a
+        # convergence-rate approximation that is largest in the strongly
+        # stable cells where l_N ∝ √tke dominates the mixing length.
         @inline tke_dissipation_rate_tendency(tke, mixing_length) =
             tke >= 0 ? c_d * sqrt(tke) / mixing_length : 1 / typeof(tke)(dt)
         @inline ∂tke_dissipation_rate_tendency_∂tke(tke, mixing_length) =
@@ -1155,6 +1194,10 @@ function update_sgs_diffusion_jacobian!(
 )
     p.atmos.turbconv_model isa PrognosticEDMFX || return nothing
     use_derivative(diffusion_flag) || return nothing
+    # Mirror the gate of the tendency this linearizes
+    # (edmfx_vertical_diffusion_tendency!): without it, the updraft scalar
+    # diagonals would carry diffusion terms that have no tendency counterpart.
+    p.atmos.edmfx_model.vertical_diffusion isa Val{true} || return nothing
     (; params) = p
     (; ᶜρʲs) = p.precomputed
     (; ᶜdiffusion_h_matrix) = p.scratch
@@ -1174,8 +1217,6 @@ function update_sgs_diffusion_jacobian!(
     @. ∂ᶜq_totʲ_err_∂ᶜq_totʲ +=
         dtγ * DiagonalMatrixRow(1 / ᶜρʲs.:(1)) ⋅ ᶜdiffusion_h_matrix
 
-    # TODO: The tendency also diffuses passive SGS tracers, but their
-    # diffusion derivatives are not included in the Jacobian.
     if p.atmos.microphysics_model isa Union{
         NonEquilibriumMicrophysics1M,
         NonEquilibriumMicrophysics2M,
@@ -1190,6 +1231,16 @@ function update_sgs_diffusion_jacobian!(
                 DiagonalMatrixRow(1 / ᶜρʲs.:(1)) ⋅
                 ᶜdiffusion_h_matrix
         end
+    end
+
+    # Passive SGS tracers are diffused with the unscaled K_h (see
+    # edmfx_vertical_diffusion_tendency!); their diagonals are initialized by
+    # update_sgs_advection_jacobian!, so the diffusion term is accumulated.
+    MatrixFields.unrolled_foreach(passive_sgs_tracer_names(Y)) do χ_name
+        χ_state_name = sgs_state_name(χ_name)
+        ∂ᶜχʲ_err_∂ᶜχʲ = matrix[χ_state_name, χ_state_name]
+        @. ∂ᶜχʲ_err_∂ᶜχʲ +=
+            dtγ * DiagonalMatrixRow(1 / ᶜρʲs.:(1)) ⋅ ᶜdiffusion_h_matrix
     end
     return nothing
 end
