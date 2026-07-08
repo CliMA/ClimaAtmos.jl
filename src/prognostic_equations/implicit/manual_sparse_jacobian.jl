@@ -593,18 +593,35 @@ function update_advection_jacobian!(matrix, Y, p, dtγ, topography_flag)
 
     ᶜθ_v = @. lazy(theta_v(thermo_params, ᶜT, ᶜp, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice))
     ᶜΠ = @. lazy(TD.exner_given_pressure(thermo_params, ᶜp))
-    # In implicit tendency, we use the new pressure-gradient formulation (PGF) and gravitational acceleration:
-    #              grad(p) / ρ + grad(Φ)  =  cp_d * θ_v * grad(Π) + grad(Φ).
-    # Here below, we use the old formulation of (grad(Φ) + grad(p) / ρ).
-    # This is because the new formulation would require computing the derivative of θ_v.
-    # The only exception is:
-    # We are rewriting grad(p) / ρ from the expansion of ∂ᶠu₃_err_∂ᶜρ with the new PGF.
+    # Exner-form PGF tendency: grad(Φ) - grad(Φ_r) + cp_d int(θ_v - θ_vr) grad(Π).
+    # The reference terms satisfy grad(Φ_r(p)) + cp_d θ_vr(p) grad(Π(p)) ≡ 0
+    # pointwise for ANY p field (Φ_r′ = -cp_d θ_vr Π′ by construction), so their
+    # state derivative vanishes identically and the exact linearization carries
+    # the full θ_v:
+    #   d(PGF)·δχ = cp_d (∂θ_v/∂χ δχ) grad(Π)              [thermal buoyancy]
+    #             + cp_d θ_v (κ_d Π / p) grad(∂p/∂χ δχ)    [acoustic]
+    #             + cp_d θ_v grad(κ_d Π / p) ∂p/∂χ δχ.     [pressure buoyancy]
+    # With grad(κ_d Π/p) = -(1 - κ_d) (κ_d Π/p) grad(p)/p and the equation of
+    # state ρ = p^(1-κ_d) p₀^κ_d / (R_d θ_v), i.e.
+    #   δρ/ρ = (1 - κ_d) δp/p - δθ_v/θ_v,
+    # the two buoyancy terms combine into a single term proportional to the
+    # thermodynamic density derivative:
+    #   thermal + pressure buoyancy = -cp_d θ_v grad(Π) (∂ρ/∂χ δχ) / ρ.
+    # It therefore vanishes identically in the columns perturbed at fixed ρ
+    # (ρe_tot, the ρq's, and K through the velocities), where thermal and
+    # pressure buoyancy are equal and opposite — cancelling them analytically
+    # here avoids computing two large opposing terms — and it reduces to
+    # grad(p) δρ/ρ² in the ρ column. Since cp_d θ_v κ_d Π/p = R_m T/p = 1/ρ
+    # pointwise, the acoustic factor is the familiar -grad(·)/ρ operator
+    # (ᶠp_grad_matrix). Sound and gravity waves are thus both treated fully
+    # implicitly: acoustics couple ᶠu₃ to every thermodynamic column through
+    # ∂p/∂χ, and buoyancy couples it to the ρ column.
+    ᶜ∂p∂ρ = @. lazy(
+        ᶜkappa_m * (T_0 * cp_d - ᶜK - ᶜΦ) + (R_d - ᶜkappa_m * cv_d) * ᶜT,
+    )
     @. ∂ᶠu₃_err_∂ᶜρ =
         dtγ * (
-            ᶠp_grad_matrix ⋅
-            DiagonalMatrixRow(
-                ᶜkappa_m * (T_0 * cp_d - ᶜK - ᶜΦ) + (R_d - ᶜkappa_m * cv_d) * ᶜT,
-            ) +
+            ᶠp_grad_matrix ⋅ DiagonalMatrixRow(ᶜ∂p∂ρ) +
             DiagonalMatrixRow(cp_d * ᶠinterp(ᶜθ_v) * ᶠgradᵥ(ᶜΠ) / ᶠinterp(ᶜρ)) ⋅
             ᶠinterp_matrix()
         )
@@ -625,9 +642,13 @@ function update_advection_jacobian!(matrix, Y, p, dtγ, topography_flag)
             e_int_q = condensate_e_int_offset(phase, params)
             ∂cv∂q = condensate_cv_difference(phase, params)
             ∂ᶠu₃_err_∂ᶜρq = matrix[@name(f.u₃), center_state_name(ρq_name)]
+            # The -R_v T term is ∂p/∂q_c at fixed q_tot: condensate replaces
+            # vapor, ∂R_m/∂q_c = -R_v (R_m = (1 - q_tot) R_d + q_vap R_v).
+            ᶜ∂p∂ρχ = @. lazy(
+                ᶜkappa_m * (e_int_q - ∂cv∂q * (ᶜT - T_0)) - R_v * ᶜT,
+            )
             @. ∂ᶠu₃_err_∂ᶜρq =
-                dtγ * ᶠp_grad_matrix ⋅
-                DiagonalMatrixRow(ᶜkappa_m * (e_int_q - ∂cv∂q * (ᶜT - T_0)) - R_v * ᶜT)
+                dtγ * ᶠp_grad_matrix ⋅ DiagonalMatrixRow(ᶜ∂p∂ρχ)
         end
     end
 
@@ -1155,14 +1176,33 @@ function update_sgs_entr_detr_jacobian!(matrix, Y, p, dtγ)
         ),
     )
 
+    # Entrainment relaxation of updraft scalars: the implicit tendency
+    # (edmfx_entr_detr_tendency!) applies (ε + ε_turb) * (χ⁰ - χʲ) to each
+    # updraft scalar χʲ. The diagonal includes both the direct dependence,
+    # ∂/∂χʲ = -(ε + ε_turb), and the feedback through the relaxation target,
+    # ∂χ⁰/∂χʲ = -w ρaʲ/ρa⁰ (the exact derivative of the regularized `specific`
+    # that diagnoses χ⁰ from the domain decomposition), which scales the
+    # diagonal by (1 + w ρaʲ/ρa⁰). Only the entrainment rates themselves are
+    # treated explicitly.
+    turbconv_model = p.atmos.turbconv_model
+    ᶜrelax_rateʲ = @. lazy(
+        (ᶜentrʲ + ᶜturb_entrʲs.:(1)) * (
+            1 + env_relaxation_feedback(
+                Y.c.sgsʲs.:(1).ρa,
+                ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model),
+                Y.c.ρ,
+                turbconv_model,
+            )
+        ),
+    )
+
     # All advected updraft scalars are entrained the same way: q_tot, mse,
     # sedimenting tracers (masses and number concentrations), and passive
     # tracers (e.g. chemistry tracers).
     MatrixFields.unrolled_foreach(advected_sgs_scalar_names(Y)) do χ_name
         χ_state_name = sgs_state_name(χ_name)
         ∂ᶜχʲ_err_∂ᶜχʲ = matrix[χ_state_name, χ_state_name]
-        @. ∂ᶜχʲ_err_∂ᶜχʲ -=
-            dtγ * DiagonalMatrixRow(ᶜentrʲ + ᶜturb_entrʲs.:(1))
+        @. ∂ᶜχʲ_err_∂ᶜχʲ -= dtγ * DiagonalMatrixRow(ᶜrelax_rateʲ)
     end
     return nothing
 end
