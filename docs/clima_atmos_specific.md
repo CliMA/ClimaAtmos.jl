@@ -29,31 +29,31 @@ This file contains everything specific to the ClimaAtmos.jl repository: director
 
 The universal layer model in [architectural_boundaries.md](architectural_boundaries.md) maps to ClimaAtmos as follows:
 
-- **Parameterizations layer**: `src/parameterized_tendencies/`. Defines *how* a physical tendency is computed.
-- **Infrastructure layer**: `src/cache/`, `src/prognostic_equations/`, `src/config/`, `src/simulation/`. Defines *where* results are stored and *how* the model time-steps them.
+  - **Parameterizations layer**: `src/parameterized_tendencies/`. Defines *how* a physical tendency is computed.
+  - **Infrastructure layer**: `src/cache/`, `src/prognostic_equations/`, `src/config/`, `src/simulation/`. Defines *where* results are stored and *how* the model time-steps them.
 
 A file under `src/parameterized_tendencies/` should not contain orchestration logic; orchestration belongs in `src/prognostic_equations/` or `src/cache/`.
 
 ## Configuration
 
-- Config files use `.yml` and usually encode scenario/family in the filename, e.g. `single_column_*`, `prognostic_edmfx_*`.
-- Config wiring is layered: default config loads first, then each repeated `--config_file` overlay is merged in order, with later files winning on conflicts.
-- Common pattern: one numerics file from `config/common_configs/` plus one scenario file from `config/model_configs/` or another config family.
-- YAML can point at parameter TOML via `toml: [toml/... ]`.
-- `job_id` must be unique across `config/`; this is enforced in `test/config.jl`.
-- If you add keys to `config/default_configs/default_config.yml`, keep the `help` and `value` wrapper.
+  - Config files use `.yml` and usually encode scenario/family in the filename, e.g. `single_column_*`, `prognostic_edmfx_*`.
+  - Config wiring is layered: default config loads first, then each repeated `--config_file` overlay is merged in order, with later files winning on conflicts.
+  - Common pattern: one numerics file from `config/common_configs/` plus one scenario file from `config/model_configs/` or another config family.
+  - YAML can point at parameter TOML via `toml: [toml/... ]`.
+  - `job_id` must be unique across `config/`; this is enforced in `test/config.jl`.
+  - If you add keys to `config/default_configs/default_config.yml`, keep the `help` and `value` wrapper.
 
 ## Test groups
 
 `test/runtests.jl` groups tests by `TEST_GROUP`: `infrastructure`, `diagnostics`, `dynamics`, `parameterizations`, `restarts`, `era5`. Map your changes to the relevant group.
 
-| Change area | Test group | Example Buildkite job |
-|:---|:---|:---|
-| Prognostic equations | `dynamics` | `sphere_baroclinic_wave_rhoe` |
-| Microphysics / EDMF | `parameterizations` | `prognostic_edmfx_*` |
-| Restarts | `restarts` | `restart_*` |
-| Diagnostics | `diagnostics` | any `--diagnostics` job |
-| Config semantics | `infrastructure` | `config.jl` |
+| Change area          | Test group          | Example Buildkite job         |
+|:-------------------- |:------------------- |:----------------------------- |
+| Prognostic equations | `dynamics`          | `sphere_baroclinic_wave_rhoe` |
+| Microphysics / EDMF  | `parameterizations` | `prognostic_edmfx_*`          |
+| Restarts             | `restarts`          | `restart_*`                   |
+| Diagnostics          | `diagnostics`       | any `--diagnostics` job       |
+| Config semantics     | `infrastructure`    | `config.jl`                   |
 
 ### Running a single test group
 
@@ -65,18 +65,18 @@ julia +1.11 --project=test -e '
 
 ### Test layout
 
-- `test/config/`, `test/diagnostics/`, `test/prognostic_equations/`, `test/parameterized_tendencies/`, `test/conservation/` mostly mirror the source layout.
-- `test/test_helpers.jl`: shared testing utilities.
-- `test/config.jl`: config invariants and uniqueness checks; inspect this before changing config semantics.
+  - `test/config/`, `test/diagnostics/`, `test/prognostic_equations/`, `test/parameterized_tendencies/`, `test/conservation/` mostly mirror the source layout.
+  - `test/test_helpers.jl`: shared testing utilities.
+  - `test/config.jl`: config invariants and uniqueness checks; inspect this before changing config semantics.
 
 ## Validation surfaces specific to ClimaAtmos
 
 When reviewing or writing changes, name the validation surface explicitly:
 
-- **`test/runtests.jl` test groups** for unit-level coverage.
-- **`.buildkite/ci_driver.jl` jobs** for config or runtime-workflow changes. Check `.buildkite/pipeline.yml` to identify the affected jobs.
-- **`reproducibility_tests/`** for changes that may shift simulation output. The reference counter in `reproducibility_tests/ref_counter.jl` must be incremented when output intentionally changes; do not edit it without explicit direction from the user.
-- **`perf/` allocation benchmarks** are not run in CI. Allocation regressions must be caught during review using the `@allocated` pattern.
+  - **`test/runtests.jl` test groups** for unit-level coverage.
+  - **`.buildkite/ci_driver.jl` jobs** for config or runtime-workflow changes. Check `.buildkite/pipeline.yml` to identify the affected jobs.
+  - **`reproducibility_tests/`** for changes that may shift simulation output. The reference counter in `reproducibility_tests/ref_counter.jl` must be incremented when output intentionally changes; do not edit it without explicit direction from the user.
+  - **`perf/` allocation benchmarks** are not run in CI. Allocation regressions must be caught during review using the `@allocated` pattern.
 
 ## MSE / reproducibility
 
@@ -86,9 +86,9 @@ When reviewing or writing changes, name the validation surface explicitly:
 
 ## Local commands
 
-- Prefer Julia 1.11.x for local work. CI also runs 1.10 and 1.11.
-- For runtime validation, prefer `julia +1.11 --project=.buildkite .buildkite/ci_driver.jl ...`.
-- For package tests, prefer `Pkg.test()` over manually `include`ing `test/runtests.jl` because test-only deps are loaded through the package test path.
+  - Prefer Julia 1.11.x for local work. CI also runs 1.10 and 1.11.
+  - For runtime validation, prefer `julia +1.11 --project=.buildkite .buildkite/ci_driver.jl ...`.
+  - For package tests, prefer `Pkg.test()` over manually `include`ing `test/runtests.jl` because test-only deps are loaded through the package test path.
 
 ## Self-correction
 
