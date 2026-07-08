@@ -18,6 +18,12 @@ edmfx_sgs_mass_flux: true
 edmfx_sgs_diffusive_flux: true
 implicit_diffusion: true
 use_auto_jacobian: true
+# Run the measured padding mode. runtime_remeasure starts from the
+# transient-safety constant mask, then switches to the lean measured mask of
+# the developed state; debug_jacobian prints the Layer 1 dense-vs-constant and
+# dense-vs-measured comparison at the final state.
+auto_jacobian_padding_mode: measured
+auto_jacobian_runtime_remeasure: true
 update_jacobian_every: stage
 ode_algo: "ARS222"
 debug_jacobian: true

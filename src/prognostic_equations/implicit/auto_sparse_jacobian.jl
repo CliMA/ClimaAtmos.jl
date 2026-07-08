@@ -83,7 +83,7 @@ function that maps scalar field names to positive numbers overrides the default
 scales used by `:static`, but keeps the full default padding.
 
 The `padding_mode` selects how the coloring mask is padded beyond the stored
-bands. `:measured` (the default) derives the mask from a one-time dense-AD
+bands. `:measured` derives the mask from a one-time dense-AD
 measurement pass (see [`measure_block_support_and_magnitude`](@ref)): each
 block's coloring bands are its detected stencil support if the block is
 present, plus any absent cross-field block whose increment-weighted magnitude
@@ -93,7 +93,7 @@ cache, `dtγ`, and `t`), threaded in from `get_jacobian` and the debug
 comparison path. `:manual_rules` instead applies the hand-maintained padding
 rules: they cover the blocks whose out-of-pattern entries have been measured
 or reasoned to be significant, and they are only applied in the scaling modes
-where those measurements were made. `:constant` pads every present block by a
+where those measurements were made. `:constant` (the default) pads every present block by a
 constant number of bands (`$constant_padding_bands`, i.e. ±2 levels) and
 applies every padding rule in every scaling mode. It is not stencil-informed:
 it removes aliasing on the stored bands only up to that fixed width, which is

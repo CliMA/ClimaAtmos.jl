@@ -257,7 +257,15 @@ function sgs_weight_function(a, a_half)
     elseif a > min(1, 42 * a_half) # autodiff generates NaNs when a is large
         one(a)
     else
-        (1 + tanh(2 * atanh(1 - 2 * (1 - a)^(-1 / log2(1 - a_half))))) / 2
+        # Use the identity tanh(2 * atanh(z)) == 2z / (1 + z^2). The two are
+        # mathematically equal, but the rational form has no singularity at
+        # z = ±1 (reached as a → 0 or a → 1), whereas atanh(z) has an infinite
+        # derivative there. Forward-mode autodiff of the original atanh form
+        # therefore returns a NaN derivative at a = 0 (0 * Inf) even though the
+        # value is ≈ 0 and the true derivative is 0 (see docstring); the
+        # rational form returns the correct finite derivative everywhere.
+        z = 1 - 2 * (1 - a)^(-1 / log2(1 - a_half))
+        (1 + 2 * z / (1 + z^2)) / 2
     end
 end
 
