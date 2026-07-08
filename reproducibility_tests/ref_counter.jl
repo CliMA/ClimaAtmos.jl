@@ -1,4 +1,4 @@
-375
+376
 
 # **README**
 #
@@ -32,6 +32,13 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+376
+- Implicit Jacobian only (tendencies unchanged): add the environment
+  feedback to the entrainment-relaxation diagonal, and include the
+  sedimentation velocity in the continuity-equation row. (The PGF Jacobian
+  stencils are unchanged: the complete Exner-form linearization collapses
+  analytically to the existing height-form blocks.)
+
 375
 - Remove coherent buoyancy production from TKE; decompose diffusive enthalpy
   flux into dry static energy + water enthalpy; damp the cloud-fraction floor
