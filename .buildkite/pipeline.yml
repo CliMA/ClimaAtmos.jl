@@ -1033,7 +1033,7 @@ steps:
       #     slurm_gpus: 1
       #     slurm_mem: 20GB
 
-  - group: "Timestep cost" 
+  - group: "Timestep cost"
     if: 'build.branch != "main"'
     steps:
       - label: ":alarm_clock: Timestep cost: Moist baroclinic wave"

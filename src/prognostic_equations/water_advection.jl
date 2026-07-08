@@ -158,7 +158,7 @@ function vertical_advection_of_water_tendency!(Yₜ, Y, p, t)
             # environment sedimentation velocity is not stored separately
             # (the environment mass flux is the residual ρqw - ρaʲqʲwʲ), so
             # Kin⁰ is approximated with the grid-mean terminal velocity ᶜw.
-            # TODO: Update for when updraft area fraction is not necessarily 
+            # TODO: Update for when updraft area fraction is not necessarily
             # small
             @. p.scratch.ᶜtemp_scalar_3 =
                 e_int_func(thp, ᶜT⁰) + $(Kin(ᶜw, ᶜu⁰)) -

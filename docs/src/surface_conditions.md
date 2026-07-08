@@ -11,8 +11,6 @@ The [User Guide](#User-Guide) covers the options and how to choose; the
 [Developer Guide](#Developer-Guide) covers the design, data flow, and how to
 extend or debug it.
 
-* * *
-
 ## User Guide
 
 ### The four knobs
@@ -219,8 +217,6 @@ the two patterns differ only in the `flux_scheme`/`temperature` pair:
     fluxes. Per-cell boundary overrides can be a
     `Fields.Field{<:SurfaceBoundaryOverrides}` on the cache. See
     `test/coupler_compatibility.jl`.
-
-* * *
 
 ## Developer Guide
 

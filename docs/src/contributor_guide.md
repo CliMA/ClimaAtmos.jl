@@ -223,12 +223,11 @@ alias julia_format_here="julia -e 'using JuliaFormatter; format(\".\")'"
 
 !!! note
 
-
-In the past, `ClimaAtmos` used to have a `.dev/climaformat.jl` script. We moved
-away from it to reduce complexity in our repository and to align with the
-general tools used by the Julia community. If you are still using
-`climaformat.jl`, migrate to `JuliaFormatter` (`climaformat.jl` was just a
-wrapper around `JuliaFormatter`).
+    In the past, `ClimaAtmos` used to have a `.dev/climaformat.jl` script. We moved
+    away from it to reduce complexity in our repository and to align with the
+    general tools used by the Julia community. If you are still using
+    `climaformat.jl`, migrate to `JuliaFormatter` (`climaformat.jl` was just a
+    wrapper around `JuliaFormatter`).
 
 ### Pre-commit hooks (recommended)
 
@@ -295,10 +294,9 @@ documentation for more information.
 
 !!! note
 
-
-In the past, `ClimaAtmos` used to have a `.dev/up_deps.jl` script. We moved away
-from it because `PkgDevTools` provides a much simpler and more efficient way to
-accomplish the same result.
+    In the past, `ClimaAtmos` used to have a `.dev/up_deps.jl` script. We moved away
+    from it because `PkgDevTools` provides a much simpler and more efficient way to
+    accomplish the same result.
 
 ## Credits
 
