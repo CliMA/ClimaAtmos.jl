@@ -1,5 +1,7 @@
 module Setups
 
+import ClimaComms
+import ClimaCore
 import ClimaCore.Geometry as Geometry
 import ClimaCore: Fields
 import Thermodynamics as TD
@@ -241,9 +243,24 @@ function initial_state(
     )
     surface_space = Fields.level(face_space, Fields.half)
 
+    device = ClimaComms.device(center_space)
+    if device isa ClimaComms.CUDADevice
+        center_space_cpu = ClimaCore.to_cpu(center_space)
+        face_space_cpu = ClimaCore.to_cpu(face_space)
+        c_cpu = center_ic.(Fields.local_geometry_field(center_space_cpu))
+        f_cpu = face_ic.(Fields.local_geometry_field(face_space_cpu))
+        c = Fields.Field(eltype(c_cpu), center_space)
+        f = Fields.Field(eltype(f_cpu), face_space)
+        copyto!(parent(c), parent(c_cpu))
+        copyto!(parent(f), parent(f_cpu))
+    else
+        c = center_ic.(Fields.local_geometry_field(center_space))
+        f = face_ic.(Fields.local_geometry_field(face_space))
+    end
+
     return Fields.FieldVector(;
-        c = center_ic.(Fields.local_geometry_field(center_space)),
-        f = face_ic.(Fields.local_geometry_field(face_space)),
+        c = c,
+        f = f,
         surface_kwargs(surface_space, atmos_model.surface.temperature)...,
     )
 end

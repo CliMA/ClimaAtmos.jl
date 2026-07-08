@@ -440,6 +440,8 @@ end
 ##### DYCOMS_RF01 and DYCOMS_RF02 radiation
 #####
 
+@inline make_isoline_nt(z::FT, ρ::FT, ρq_tot::FT) where {FT} = (; z, ρ, ρq_tot)
+
 function radiation_model_cache(Y, radiation_mode::RadiationDYCOMS)
     FT = Spaces.undertype(axes(Y.c))
     # The NT type is needed for the `column_reduce!` call below because
@@ -487,7 +489,7 @@ function radiation_tendency!(Yₜ, Y, p, t, radiation_mode::RadiationDYCOMS)
             abs(specific.(nt1.ρq_tot, nt1.ρ) - q_tot_isoline) <
             abs(specific.(nt2.ρq_tot, nt2.ρ) - q_tot_isoline) ? nt1 : nt2,
         isoline_z_ρ_ρq,
-        Base.broadcasted(NT ∘ tuple, ᶜz, Y.c.ρ, Y.c.ρq_tot),
+        Base.broadcasted(make_isoline_nt, ᶜz, Y.c.ρ, Y.c.ρq_tot),
     )
 
     zi = isoline_z_ρ_ρq.z
