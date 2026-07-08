@@ -19,7 +19,7 @@ This file contains everything specific to the ClimaAtmos.jl repository: director
 - `src/callbacks/`, `src/diagnostics/`, `src/setups/`, `src/surface_conditions/`, `src/topography/`, `src/parameters/`, `src/utils/`: remaining domain subtrees. Search by physics/runtime concept first.
 - `config/`: YAML/TOML config library. `default_configs/default_config.yml` is the schema baseline; `common_configs/` holds reusable numerics; `model_configs/`, `gpu_configs/`, `mpi_configs/`, `perf_configs/`, and `longrun_configs/` are scenario overlays.
 - `.buildkite/ci_driver.jl`: canonical run entry for CI-style simulations. It parses config, builds the simulation, runs `solve_atmos!`, and performs validation/output checks.
-- `.buildkite/pipeline.yml`: authoritative list of Buildkite jobs and their config combinations. Use it to see which config families are combined in automation.
+- `.buildkite/pipeline.yml`: authoritative list of Buildkite jobs and their config combinations. Use it to see which config families are combined in automation. Branch dispatch is inline: each job step is gated `if: build.branch != "main"`, and a single `main`-only step moves reproducibility results into the reference store (so a merge does not re-run simulations). New top-level jobs must carry the `if: build.branch != "main"` gate.
 - `docs/make.jl` and `docs/src/`: Documenter entry point plus user/contributor docs. Good references for API usage and config recipes.
 - `perf/`: allocation and performance benchmarks run separately from unit tests. Not run in CI; regressions must be caught in review.
 - `reproducibility_tests/`: reproducibility test infrastructure. `ref_counter.jl` holds a single integer counter that partitions commit history into reference bins — increment it when simulation output intentionally changes.
@@ -82,6 +82,7 @@ When reviewing or writing changes, name the validation surface explicitly:
 
 - The reference counter lives in `reproducibility_tests/ref_counter.jl`. Increment it when intentionally changing simulation output. Never edit it without explicit user direction (see [agent_autonomy.md](agent_autonomy.md)).
 - Float32 simulations may have looser MSE thresholds. Document this explicitly when setting a new threshold.
+- References are published **on merge** via a two-step **stage → publish** flow, not by a full `main` build. **Stage:** a green PR build's final step (`reproducibility_tests/stage_output.jl` → `stage_pr_data`) copies the bundle to `…/climaatmos-main-staging/pr-<n>/`. **Publish:** on `main`, `.buildkite/pipeline.yml` runs `reproducibility_tests/publish_reference.jl`, which moves it into the reference store. `move_data_to_save_dir` is the direct-publish path used only by a merge-queue build (dormant while a merge queue is off). See `reproducibility_tests/README.md`.
 
 ## Local commands
 
