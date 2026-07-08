@@ -27,6 +27,7 @@ if TEST_GROUP in ("infrastructure", "all")
     @safetestset "Grids" begin @time include("grids.jl") end
     @safetestset "Utilities" begin @time include("utilities.jl") end
     @safetestset "Variable manipulations" begin @time include("variable_manipulations_tests.jl") end
+    @safetestset "Tracer processes" begin @time include("tracer_processes_tests.jl") end
     @safetestset "Parameter tests" begin @time include("parameter_tests.jl") end
 
     @safetestset "Check TOML path" begin @time include("test_output_yaml_path.jl") end
