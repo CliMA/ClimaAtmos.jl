@@ -93,8 +93,8 @@ update_jacobian_every:
   help: "Frequency at which the Jacobian matrix should be updated (once per timestep, once per timestepper stage, or once per linear solve) [`dt`, `stage`, `solve` (default)]"
   value: "solve"
 update_cache_every:
-  help: "Frequency at which `set_precomputed_quantities!` is called by ClimaTimeSteppers [`step`, `stage` (default)]"
-  value: "stage"
+  help: "Frequency at which `set_precomputed_quantities!` is called by ClimaTimeSteppers [`step` (default), `stage`]"
+  value: "step"
 update_constrain_state_every:
   help: "Frequency at which `constrain_state!` is called by ClimaTimeSteppers [`step` (default), `stage`, `dss`]"
   value: "step"

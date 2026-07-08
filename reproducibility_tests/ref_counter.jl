@@ -1,4 +1,4 @@
-378
+379
 
 # **README**
 #
@@ -32,6 +32,9 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+379
+- By default update the cache once per step and not stage
+
 378
 - Apply ρe_tot/ρq_tot upwind correction as a post-Newton hook (`T_post_imp!`
   on `ClimaODEFunction`, requires ClimaTimeSteppers 0.10.4). Implicit vertical
