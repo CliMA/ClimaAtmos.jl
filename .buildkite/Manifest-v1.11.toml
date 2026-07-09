@@ -2,7 +2,7 @@
 
 julia_version = "1.11.9"
 manifest_format = "2.0"
-project_hash = "fcbf72194b7f4f4032c8b3902fc2579cdeb23a86"
+project_hash = "aeeaac05952b1bd7b4b384b4e16e0f20efe383ef"
 
 [[deps.ADTypes]]
 git-tree-sha1 = "d9aaef7c63466eee4de23b4d9dad03629df54bea"
@@ -1996,7 +1996,7 @@ uuid = "9c32591e-4766-534b-9725-b71a8799265b"
 version = "24.6.0+0"
 
 [[deps.PrecompileCI]]
-deps = ["ClimaAtmos", "ClimaComms", "ClimaCore", "ClimaParams", "Logging", "PrecompileTools"]
+deps = ["ClimaAtmos", "ClimaComms", "ClimaCore", "ClimaParams", "Dates", "Logging", "PrecompileTools"]
 path = "PrecompileCI"
 uuid = "76d61242-8ec2-4c91-8455-3234246697a2"
 version = "0.1.0"
