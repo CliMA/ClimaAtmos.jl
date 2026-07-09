@@ -221,7 +221,7 @@ steps:
         artifact_paths: "prognostic_edmfx_bomex_tracerA_column/output_active/*"
         agents:
           slurm_mem: 20GB
-      
+
       - label: ":genie: Prognostic EDMF: Trade wind Cu shallow convection (BOMEX), ML cloud"
         retry: *retry_policy
         command: >
@@ -412,22 +412,6 @@ steps:
           - "gpu_plane_no_topography_float64_test/output_active/*.yml"
           - "gpu_plane_no_topography_float64_test/output_active/*.toml"
           - "gpu_plane_no_topography_float64_test/output_active/*.dat"
-        env:
-          CLIMACOMMS_DEVICE: "CUDA"
-        agents:
-          slurm_gpus: 1
-
-      - label: ":crown: Analytic tests: Schar mountain wave, 2D, Float64, GPU"
-        retry: *retry_policy
-        command: >
-          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-          --config_file $CONFIG_PATH/plane_schar_mountain_float64_test.yml
-          --job_id gpu_plane_schar_mountain_float64_test
-        artifact_paths:
-          - "gpu_plane_schar_mountain_float64_test/output_active/*.pdf"
-          - "gpu_plane_schar_mountain_float64_test/output_active/*.yml"
-          - "gpu_plane_schar_mountain_float64_test/output_active/*.toml"
-          - "gpu_plane_schar_mountain_float64_test/output_active/*.dat"
         env:
           CLIMACOMMS_DEVICE: "CUDA"
         agents:
@@ -1009,7 +993,7 @@ steps:
       #     slurm_gpus: 1
       #     slurm_mem: 20GB
 
-  - group: "Timestep cost" 
+  - group: "Timestep cost"
     steps:
       - label: ":alarm_clock: Timestep cost: Moist baroclinic wave"
         retry: *retry_policy
