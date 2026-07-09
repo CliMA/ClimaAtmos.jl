@@ -38,7 +38,7 @@ ShowMethods.field_units(::MyType) = (; mass = "kg", velocity = "m/s")
 ```
 
 Fields present in the `NamedTuple` get `[unit]` printed after their value.
-Fields *not* in the `NamedTuple` (but whose type does define `field_units`)
+Fields absent from the `NamedTuple` (but whose type does define `field_units`)
 get `[-]` (dimensionless). Types with no `field_units` method get no
 unit annotations at all.
 """
@@ -156,8 +156,6 @@ end
 Print a parseable (copy-pasteable) one-line representation of `x`.
 Thin wrapper around [`compact_show_type_and_fields`](@ref) with
 `with_units = false` and `with_module_prefix = true` by default.
-
-Note: This assumes that the type
 
 # Examples
 
