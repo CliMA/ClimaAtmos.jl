@@ -51,6 +51,7 @@ makedocs(;
             "Dynamics & Numerics" => [
                 "Governing Equations" => "equations.md",
                 "Implicit Solver" => "implicit_solver.md",
+                "Acoustic Substepping" => "acoustic_substepping.md",
                 "Integer Time (ITime)" => "itime.md",
             ],
             "Physics & Parameterizations" => [

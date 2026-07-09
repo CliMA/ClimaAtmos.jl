@@ -50,11 +50,14 @@ function override_default_config(::Nothing)
 end
 
 # Keys that bypass scalar coercion: `named String | nothing` unions
-# (hyperdiff has a String default but accepts `~` to disable) and structured
-# values (`diagnostics` is a list of dicts).
+# (hyperdiff has a String default but accepts `~` to disable), structured
+# values (`diagnostics` is a list of dicts), and keys that accept either a
+# String sentinel or a number (`acoustic_substep_damping` takes `"auto"` or a
+# coefficient).
 const EXCEPTED_KEYS = Set([
     "hyperdiff",
     "diagnostics",
+    "acoustic_substep_damping",
 ])
 
 """

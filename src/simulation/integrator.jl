@@ -10,6 +10,7 @@ function get_jacobian(
     ode_algo, Y, atmos, jacobian::JacobianAlgorithm, debug_jacobian;
     verbose = false,
 )
+    ode_algo isa AcousticMultirate && (ode_algo = ode_algo.inner_alg)
     ode_algo isa Union{CTS.IMEXAlgorithm, CTS.RosenbrockAlgorithm} ||
         return nothing
     verbose && @info "Jacobian algorithm: $(summary_string(jacobian))"
