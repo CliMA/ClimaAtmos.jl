@@ -26,6 +26,7 @@ if TEST_GROUP in ("infrastructure", "all")
     @safetestset "Configuration tests" begin @time include("config.jl") end
     @safetestset "Grids" begin @time include("grids.jl") end
     @safetestset "Utilities" begin @time include("utilities.jl") end
+    @safetestset "Diffusion operators" begin @time include("diffusion_operators.jl") end
     @safetestset "Variable manipulations" begin @time include("variable_manipulations_tests.jl") end
     @safetestset "Tracer processes" begin @time include("tracer_processes_tests.jl") end
     @safetestset "Parameter tests" begin @time include("parameter_tests.jl") end

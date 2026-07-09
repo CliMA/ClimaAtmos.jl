@@ -40,6 +40,18 @@ const ᶜadvdivᵥ = Operators.DivergenceF2C(
 # Precipitation has no flux at the top, but it has free outflow at the bottom.
 const ᶜprecipdivᵥ = Operators.DivergenceF2C(top = Operators.SetValue(CT3(0)))
 
+# Diffusive scalar fluxes vanish through the top and bottom cell faces.
+const ᶜdiffdivᵥ = Operators.DivergenceF2C(
+    bottom = Operators.SetValue(C3(0)),
+    top = Operators.SetValue(C3(0)),
+)
+
+# Vertical-momentum (u₃) diffusive flux vanishes through the top and bottom faces.
+const ᶠdiffdivᵥ_u₃ = Operators.DivergenceC2F(
+    bottom = Operators.SetDivergence(0),
+    top = Operators.SetDivergence(0),
+)
+
 const ᶠleft_bias = Operators.LeftBiasedC2F()
 const ᶠright_bias = Operators.RightBiasedC2F() # for free outflow in ᶜprecipdivᵥ
 const ᶜleft_bias = Operators.LeftBiasedF2C()
