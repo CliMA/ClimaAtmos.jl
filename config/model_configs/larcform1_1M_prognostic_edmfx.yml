@@ -15,7 +15,7 @@ disable_surface_flux_tendency: false
 
 # Temporal
 FLOAT_TYPE: Float32
-t_end: 5days
+t_end: 2.5days
 dt: 30secs
 dt_rad: 60secs
 

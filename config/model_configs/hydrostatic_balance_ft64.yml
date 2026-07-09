@@ -1,6 +1,6 @@
 dt: "300secs"
-dt_save_state_to_disk: "8days"
-t_end: "8days"
+dt_save_state_to_disk: "4days"
+t_end: "4days"
 hyperdiff: ~
 perturb_initstate: false
 disable_surface_flux_tendency: true
