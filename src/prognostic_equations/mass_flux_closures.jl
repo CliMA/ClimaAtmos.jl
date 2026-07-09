@@ -175,7 +175,6 @@ function edmfx_vertical_diffusion_tendency!(
         (; params) = p
         (; ᶜρʲs) = p.precomputed
         FT = eltype(p.params)
-        turbconv_params = CAP.turbconv_params(params)
         n = n_mass_flux_subdomains(turbconv_model)
         ᶜdivᵥ_mse = Operators.DivergenceF2C(
             top = Operators.SetValue(C3(0)),
@@ -186,16 +185,8 @@ function edmfx_vertical_diffusion_tendency!(
             bottom = Operators.SetValue(C3(0)),
         )
 
-        (; ᶜlinear_buoygrad, ᶜstrain_rate_norm) = p.precomputed
-        ᶜtke = @. lazy(specific(Y.c.ρtke, Y.c.ρ))
-        # scratch to prevent GPU Kernel parameter memory error
-        ᶜmixing_length_field = p.scratch.ᶜtemp_scalar
-        ᶜmixing_length_field .= ᶜmixing_length(Y, p)
-        ᶜK_u = @. lazy(eddy_viscosity(turbconv_params, ᶜtke, ᶜmixing_length_field))
-        ᶜprandtl_nvec = @. lazy(
-            turbulent_prandtl_number(params, ᶜlinear_buoygrad, ᶜstrain_rate_norm),
-        )
-        ᶜK_h = @. lazy(eddy_diffusivity(ᶜK_u, ᶜprandtl_nvec))
+        (; ᶜK_h) =
+            ᶜeddy_diffusivities!(Y, p; ᶜmixing_length_field = p.scratch.ᶜtemp_scalar)
 
         for j in 1:n
             ᶜρʲ = ᶜρʲs.:($j)
@@ -244,21 +235,17 @@ function edmfx_horizontal_diffusion_tendency!(
     p.atmos.edmfx_model.horizontal_diffusion isa Val{true} || return nothing
     iscolumn(axes(Y.c)) && return nothing
     (; params) = p
-    (; ᶜρʲs, ᶜlinear_buoygrad, ᶜstrain_rate_norm) = p.precomputed
-    turbconv_params = CAP.turbconv_params(params)
+    (; ᶜρʲs, ᶜlinear_buoygrad) = p.precomputed
     n = n_mass_flux_subdomains(turbconv_model)
 
-    ᶜtke = @. lazy(specific(Y.c.ρtke, Y.c.ρ))
     Δx = Spaces.node_horizontal_length_scale(Spaces.horizontal_space(axes(Y.c)))
-    ᶜmixing_length_h = p.scratch.ᶜtemp_scalar
-    ᶜmixing_length_h .= ᶜmixing_length(
-        Y, p; grid_scale = Δx, buoyancy_gradient = ᶜlinear_buoygrad,
+    ᶜK = ᶜeddy_diffusivities!(
+        Y, p;
+        ᶜmixing_length_field = p.scratch.ᶜtemp_scalar,
+        grid_scale = Δx, buoyancy_gradient = ᶜlinear_buoygrad,
+        ᶜK_h_field = p.scratch.ᶜtemp_scalar_2,
     )
-    ᶜK_u_h = @. lazy(eddy_viscosity(turbconv_params, ᶜtke, ᶜmixing_length_h))
-    ᶜprandtl_nvec =
-        @. lazy(turbulent_prandtl_number(params, ᶜlinear_buoygrad, ᶜstrain_rate_norm))
-    ᶜK_h_h = p.scratch.ᶜtemp_scalar_2
-    @. ᶜK_h_h = eddy_diffusivity(ᶜK_u_h, ᶜprandtl_nvec)
+    ᶜK_h_h = ᶜK.ᶜK_h
 
     ᶜq_totʲₜ_diffusion = p.scratch.ᶜtemp_scalar_3
     α_diff_microphysics = CAP.α_vert_diff_tracer(params)

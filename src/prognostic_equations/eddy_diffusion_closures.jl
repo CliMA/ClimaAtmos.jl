@@ -469,6 +469,56 @@ function ᶜmixing_length(
 end
 
 """
+    ᶜeddy_diffusivities!(Y, p; ᶜmixing_length_field, grid_scale, buoyancy_gradient, ᶜK_u_field, ᶜK_h_field)
+
+Compute the eddy viscosity `K_u` and eddy diffusivity `K_h` of the TKE-based
+closure. The `ᶜ` prefix reflects the center-space `(; ᶜK_u, ᶜK_h)` return.
+
+# Keyword Arguments
+
+  - `ᶜmixing_length_field`: center field mutated in place with the materialized
+    mixing length.
+  - `grid_scale`: grid-scale limit on the mixing length. By default, the
+    vertical cell thickness.
+  - `buoyancy_gradient`: stability input of the mixing length and the turbulent
+    Prandtl number. By default, the centered `ᶜlinear_buoygrad`.
+  - `ᶜK_u_field`, `ᶜK_h_field`: output fields for `K_u` and `K_h`. By default
+    `nothing`, in which case the corresponding value is lazy.
+
+# Returns
+
+  - `(; ᶜK_u, ᶜK_h)`.
+"""
+function ᶜeddy_diffusivities!(
+    Y, p;
+    ᶜmixing_length_field,
+    grid_scale = Fields.Δz_field(axes(Y.c)),
+    buoyancy_gradient = p.precomputed.ᶜlinear_buoygrad,
+    ᶜK_u_field = nothing,
+    ᶜK_h_field = nothing,
+)
+    (; params) = p
+    (; ᶜstrain_rate_norm) = p.precomputed
+    turbconv_params = CAP.turbconv_params(params)
+    ᶜtke = @. lazy(specific(Y.c.ρtke, Y.c.ρ))
+    ᶜmixing_length_field .= ᶜmixing_length(Y, p; grid_scale, buoyancy_gradient)
+    ᶜK_u = if isnothing(ᶜK_u_field)
+        @. lazy(eddy_viscosity(turbconv_params, ᶜtke, ᶜmixing_length_field))
+    else
+        @. ᶜK_u_field =
+            eddy_viscosity(turbconv_params, ᶜtke, ᶜmixing_length_field)
+    end
+    ᶜprandtl_nvec =
+        @. lazy(turbulent_prandtl_number(params, buoyancy_gradient, ᶜstrain_rate_norm))
+    ᶜK_h = if isnothing(ᶜK_h_field)
+        @. lazy(eddy_diffusivity(ᶜK_u, ᶜprandtl_nvec))
+    else
+        @. ᶜK_h_field = eddy_diffusivity(ᶜK_u, ᶜprandtl_nvec)
+    end
+    return (; ᶜK_u, ᶜK_h)
+end
+
+"""
     gradient_richardson_number(params, ᶜN²_eff, ᶜstrain_rate_norm)
 
 Calculates the gradient Richardson number (Ri).

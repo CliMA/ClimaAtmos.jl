@@ -231,21 +231,8 @@ function edmfx_sgs_diffusive_flux_tendency!(
 
     if p.atmos.edmfx_model.sgs_diffusive_flux isa Val{true}
 
-        (; ᶜlinear_buoygrad, ᶜstrain_rate_norm) = p.precomputed
-        # scratch to prevent GPU Kernel parameter memory error
         ᶜmixing_length_field = p.scratch.ᶜtemp_scalar_2
-        ᶜmixing_length_field .= ᶜmixing_length(Y, p)
-        ᶜK_u = @. lazy(
-            eddy_viscosity(turbconv_params, ᶜtke, ᶜmixing_length_field),
-        )
-        ᶜprandtl_nvec = @. lazy(
-            turbulent_prandtl_number(
-                params,
-                ᶜlinear_buoygrad,
-                ᶜstrain_rate_norm,
-            ),
-        )
-        ᶜK_h = @. lazy(eddy_diffusivity(ᶜK_u, ᶜprandtl_nvec))
+        (; ᶜK_u, ᶜK_h) = ᶜeddy_diffusivities!(Y, p; ᶜmixing_length_field)
 
         ᶠρaK_h = p.scratch.ᶠtemp_scalar
         @. ᶠρaK_h = ᶠinterp(Y.c.ρ) * ᶠinterp(ᶜK_h)
@@ -382,25 +369,21 @@ function edmfx_sgs_horizontal_diffusive_flux_tendency!(
         return nothing
     iscolumn(axes(Y.c)) && return nothing
     (; params) = p
-    turbconv_params = CAP.turbconv_params(params)
-    (; ᶜlinear_buoygrad, ᶜstrain_rate_norm) = p.precomputed
+    (; ᶜlinear_buoygrad) = p.precomputed
     ᶜρ = Y.c.ρ
     ᶜtke = @. lazy(specific(Y.c.ρtke, ᶜρ))
 
     # Mixing length limited by the horizontal node spacing, with the centered
     # buoyancy gradient as the stability input
     Δx = Spaces.node_horizontal_length_scale(Spaces.horizontal_space(axes(Y.c)))
-    ᶜmixing_length_h = p.scratch.ᶜtemp_scalar_2
-    ᶜmixing_length_h .= ᶜmixing_length(
-        Y, p; grid_scale = Δx, buoyancy_gradient = ᶜlinear_buoygrad,
+    ᶜK = ᶜeddy_diffusivities!(
+        Y, p;
+        ᶜmixing_length_field = p.scratch.ᶜtemp_scalar_2,
+        grid_scale = Δx, buoyancy_gradient = ᶜlinear_buoygrad,
+        ᶜK_u_field = p.scratch.ᶜtemp_scalar_4, ᶜK_h_field = p.scratch.ᶜtemp_scalar,
     )
-
-    ᶜK_u_h = p.scratch.ᶜtemp_scalar_4
-    @. ᶜK_u_h = eddy_viscosity(turbconv_params, ᶜtke, ᶜmixing_length_h)
-    ᶜprandtl_nvec =
-        @. lazy(turbulent_prandtl_number(params, ᶜlinear_buoygrad, ᶜstrain_rate_norm))
-    ᶜK_h_h = p.scratch.ᶜtemp_scalar
-    @. ᶜK_h_h = eddy_diffusivity(ᶜK_u_h, ᶜprandtl_nvec)
+    ᶜK_u_h = ᶜK.ᶜK_u
+    ᶜK_h_h = ᶜK.ᶜK_h
 
     # Total enthalpy, using the dry-static-energy + water-enthalpy
     # decomposition; see the matching vertical term in

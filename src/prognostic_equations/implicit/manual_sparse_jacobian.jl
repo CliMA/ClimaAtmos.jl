@@ -793,12 +793,11 @@ function update_sedimentation_jacobian!(matrix, Y, p, dtγ)
     return nothing
 end
 
-# Eddy diffusivity and viscosity used by both grid-scale and SGS implicit
-# diffusion. May write to ᶜtemp_scalar_3, ᶜtemp_scalar_4, and ᶜtemp_scalar_6.
-function eddy_diffusivity_coefficients!(Y, p)
-    (; params) = p
+# Select the implicit-diffusion eddy viscosity and diffusivity coefficients per
+# scheme, returning center fields. May write to ᶜtemp_scalar_3, ᶜtemp_scalar_4,
+# and ᶜtemp_scalar_6.
+function ᶜimplicit_diffusion_coefficients!(Y, p)
     (; turbconv_model, vertical_diffusion, smagorinsky_lilly) = p.atmos
-    turbconv_params = CAP.turbconv_params(params)
     (; ᶜp) = p.precomputed
     ᶜK_u = p.scratch.ᶜtemp_scalar_4
     ᶜK_h = p.scratch.ᶜtemp_scalar_6
@@ -813,17 +812,13 @@ function eddy_diffusivity_coefficients!(Y, p)
         ᶜK_u = p.precomputed.ᶜνₜ_v
         ᶜK_h = p.precomputed.ᶜD_v
     elseif turbconv_model isa AbstractEDMF
-        (; ᶜlinear_buoygrad, ᶜstrain_rate_norm) = p.precomputed
-        ᶜtke = @. lazy(specific(Y.c.ρtke, Y.c.ρ))
-        ᶜmixing_length_field = p.scratch.ᶜtemp_scalar_3
-        ᶜmixing_length_field .= ᶜmixing_length(Y, p)
-        ᶜK_u = p.scratch.ᶜtemp_scalar_4
-        @. ᶜK_u = eddy_viscosity(turbconv_params, ᶜtke, ᶜmixing_length_field)
-        ᶜprandtl_nvec = @. lazy(
-            turbulent_prandtl_number(params, ᶜlinear_buoygrad, ᶜstrain_rate_norm),
+        ᶜK = ᶜeddy_diffusivities!(
+            Y, p;
+            ᶜmixing_length_field = p.scratch.ᶜtemp_scalar_3,
+            ᶜK_u_field = p.scratch.ᶜtemp_scalar_4, ᶜK_h_field = p.scratch.ᶜtemp_scalar_6,
         )
-        ᶜK_h = p.scratch.ᶜtemp_scalar_6
-        @. ᶜK_h = eddy_diffusivity(ᶜK_u, ᶜprandtl_nvec)
+        ᶜK_u = ᶜK.ᶜK_u
+        ᶜK_h = ᶜK.ᶜK_h
     end
     return (; ᶜK_u, ᶜK_h)
 end
@@ -1543,7 +1538,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
     update_advection_jacobian!(matrix, Y, p, dtγ, topography_flag)
     update_sedimentation_jacobian!(matrix, Y, p, dtγ)
     eddy_diffusivities =
-        use_derivative(diffusion_flag) ? eddy_diffusivity_coefficients!(Y, p) :
+        use_derivative(diffusion_flag) ? ᶜimplicit_diffusion_coefficients!(Y, p) :
         nothing
     update_diffusion_jacobian!(
         matrix,
