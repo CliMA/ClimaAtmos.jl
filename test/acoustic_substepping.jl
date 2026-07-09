@@ -114,6 +114,23 @@ end
         @test s < 1.0
     end
 
+    @testset "config accepts auto or a real factor" begin
+        # The key takes either the "auto" sentinel or a number, so it must bypass
+        # scalar coercion to the String default (EXCEPTED_KEYS).
+        for scaling in ("auto", 1.0, 0.5, 2)
+            config = CA.AtmosConfig(
+                hyperdiff_scaling_config(;
+                    acoustic_substeps = "4",
+                    scaling,
+                    dt = "10secs",
+                );
+                job_id = "hyperdiff_scaling_coerce",
+            )
+            @test config.parsed_args["acoustic_substep_hyperdiffusion_scaling"] ==
+                  scaling
+        end
+    end
+
     @testset "recovery identities" begin
         configured = 0.1857
         coeff(model) = model.numerics.hyperdiff.ν₄_vorticity_coeff

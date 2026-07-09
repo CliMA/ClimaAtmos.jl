@@ -53,11 +53,13 @@ end
 # (hyperdiff has a String default but accepts `~` to disable), structured
 # values (`diagnostics` is a list of dicts), and keys that accept either a
 # String sentinel or a number (`acoustic_substep_damping` takes `"auto"` or a
-# coefficient).
+# coefficient; `acoustic_substep_hyperdiffusion_scaling` takes `"auto"` or a
+# factor).
 const EXCEPTED_KEYS = Set([
     "hyperdiff",
     "diagnostics",
     "acoustic_substep_damping",
+    "acoustic_substep_hyperdiffusion_scaling",
 ])
 
 """
