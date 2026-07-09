@@ -127,6 +127,27 @@ frozen-mixing ceiling sits far above the ``4\text{–}6\times`` target and the
 binding constraint is expected elsewhere. Because those limits depend on the local
 flow, they are attributed empirically per configuration.
 
+**Hyperdiffusion coefficient scaling.** The hyperdiffusion is a numerical filter
+rather than a physical mixing term, so its coefficient can be scaled with the
+outer step to keep the frozen filter within its explicit limit. The forward-Euler
+limit is ``\Delta t_\mathrm{hd} = 2 \Delta x_\mathrm{node} / (F\, c_4\, \beta^4)``,
+where ``c_4`` is the vorticity hyperdiffusion coefficient,
+``F = \max(\text{divergence damping factor}, 1/\text{Prandtl number})`` is the
+strongest of the momentum and scalar channels, and ``\beta = 4`` is a
+maximum-wavenumber prefactor calibrated for degree-3 spectral elements from the
+measured limit ``\Delta t_\mathrm{hd} \approx 0.95`` s at
+``\Delta x_\mathrm{node} = 113`` m. With `acoustic_substep_hyperdiffusion_scaling:
+auto` (the default) the coefficient is multiplied by
+``\min(1, \Delta t_\mathrm{hd} / (\text{safety}\cdot\Delta t))`` with a safety
+factor of ``2``, so the ceiling rises in proportion to ``1/c_4`` (measured on the
+dry box: ``3\times`` unscaled, ``6\times`` at half strength, and the
+hyperdiffusion-off ceiling at one third). Because the coefficient falls as the
+outer step grows, the per-step filter strength ``c_4 k^4 \Delta t`` is held
+roughly fixed while the filter integrates stably. A real value scales the
+coefficient directly, with `1` reproducing the unscaled coefficient. Scaling
+applies only under substepping and only to the hyperdiffusion filter; the physical
+Smagorinsky and EDMF mixing coefficients are never scaled.
+
 **Outer advective consistency.** The second-order outer combination freezes
 advection over the outer step, so at a large outer step the advective Courant
 number of the frozen forcing approaches its stability limit. Both outer orders are
@@ -164,6 +185,7 @@ unchanged. The split requires `acoustic_substep_vertical: implicit`.
 | `acoustic_substep_damping_form` | Divergence used by the divergence damping: `3d` (default), `3d_perturbation`, or `horizontal`. |
 | `acoustic_substep_damping` | Divergence-damping coefficient ``\beta_d`` (``\nu_d = \beta_d c_\mathrm{ref}^2 \Delta t_\mathrm{sub}``). `auto` (default) resolves to `0.4` for `fast` kinetic energy and `1.5` for `slow`; a number keeps its direct value. |
 | `acoustic_substep_implicit_split` | Restrict the sub-cycle implicit solve to the vertical grid-mean acoustic block and solve the remaining implicit terms once per outer step (default `false`). Requires `acoustic_substep_vertical: implicit`. |
+| `acoustic_substep_hyperdiffusion_scaling` | Scaling of the vorticity hyperdiffusion coefficient under substepping. `auto` (default) reduces it to keep the frozen filter within its explicit limit; a number scales it directly, with `1` reproducing the unscaled coefficient. Ignored when `acoustic_substeps: 0`. |
 
 With `auto`, the sub-step count is
 

@@ -92,6 +92,9 @@ acoustic_substep_damping:
 acoustic_substep_implicit_split:
   help: "Solve the non-acoustic implicit terms once per outer step instead of every acoustic sub-step (inner/outer implicit split). Requires `acoustic_substep_vertical: implicit`."
   value: false
+acoustic_substep_hyperdiffusion_scaling:
+  help: "Scaling of the vorticity hyperdiffusion coefficient under acoustic substepping, where the hyperdiffusion is a frozen forward-Euler filter integrated over the outer step [`auto` (default): reduce the coefficient to keep the filter within its explicit stability limit; a number scales the coefficient directly, with `1` reproducing the unscaled coefficient]. Ignored when `acoustic_substeps: 0`."
+  value: "auto"
 krylov_rtol:
   help: "Relative tolerance of the Krylov method (only for ClimaTimeSteppers.jl; only used if `use_krylov_method` is `true`)"
   value: 0.1

@@ -256,12 +256,95 @@ function reference_sound_speed(p)
     return sqrt(cp_d / cv_d * R_d * T_ref)
 end
 
+# Mean horizontal node spacing of a space [m].
+horizontal_node_spacing(space) =
+    Spaces.node_horizontal_length_scale(Spaces.horizontal_space(space))
+
 # Auto sub-step count from the horizontal acoustic CFL:
 # n_sub = ceil(dt / (cfl_safety · Δx_node / c_ref)).
 function auto_n_sub(dt, Δx, c_ref)
     cfl_safety = oftype(c_ref, 0.5)
     safe_dt = cfl_safety * Δx / c_ref
     return max(1, ceil(Int, float(dt) / safe_dt))
+end
+
+"""
+    acoustic_hyperdiffusion_scale(scaling, hyperdiff, Δx_node, dt_outer)
+
+Compute the factor applied to the vorticity hyperdiffusion coefficient under
+acoustic substepping. See `docs/src/acoustic_substepping.md`.
+
+Under substepping the hyperdiffusion is integrated once per outer step as a
+frozen forward-Euler filter with stability limit
+`Δt_hd_limit = 2 Δx_node / (F ν₄_vorticity_coeff β⁴)`, where
+`F = max(divergence_damping_factor, 1 / prandtl_number)` and `β = 4`. For
+`scaling == "auto"` the factor is `min(1, Δt_hd_limit / (safety dt_outer))` with
+`safety = 2`, keeping the frozen filter within its limit. A real `scaling` is
+returned unchanged, so `1` reproduces the unscaled coefficient.
+"""
+acoustic_hyperdiffusion_scale(scaling::Real, hyperdiff, Δx_node, dt_outer) =
+    oftype(dt_outer, scaling)
+
+function acoustic_hyperdiffusion_scale(
+    scaling::AbstractString,
+    hyperdiff,
+    Δx_node,
+    dt_outer,
+)
+    scaling == "auto" ||
+        error("Unknown acoustic_substep_hyperdiffusion_scaling: $scaling")
+    # Maximum-wavenumber prefactor, calibrated for degree-3 spectral elements
+    # from the measured limit Δt_hd_limit ≈ 0.95 s at Δx_node = 113 m.
+    β = oftype(dt_outer, 4)
+    safety = oftype(dt_outer, 2)
+    F = max(hyperdiff.divergence_damping_factor, inv(hyperdiff.prandtl_number))
+    Δt_hd_limit = 2 * Δx_node / (F * hyperdiff.ν₄_vorticity_coeff * β^4)
+    return min(one(dt_outer), Δt_hd_limit / (safety * dt_outer))
+end
+
+"""
+    scale_hyperdiffusion_under_acoustic_substepping(model, grid, parsed_args)
+
+Return `model` with its vorticity hyperdiffusion coefficient scaled for acoustic
+substepping, folding the factor from [`acoustic_hyperdiffusion_scale`](@ref) into
+the stored coefficient so the hyperdiffusion tendency is unchanged at runtime.
+
+The model is returned unchanged when substepping is disabled
+(`acoustic_substeps = 0`), when it carries no hyperdiffusion, or when the factor
+is `1`, so those paths are byte-identical to a run without this feature.
+"""
+function scale_hyperdiffusion_under_acoustic_substepping(model, grid, parsed_args)
+    string(parsed_args["acoustic_substeps"]) == "0" && return model
+    hyperdiff = model.numerics.hyperdiff
+    hyperdiff isa Hyperdiffusion || return model
+    FT = typeof(hyperdiff.ν₄_vorticity_coeff)
+    Δx_node = FT(horizontal_node_spacing(get_spaces(grid).center_space))
+    dt_outer = FT(time_to_seconds(parsed_args["dt"]))
+    s = acoustic_hyperdiffusion_scale(
+        parsed_args["acoustic_substep_hyperdiffusion_scaling"],
+        hyperdiff,
+        Δx_node,
+        dt_outer,
+    )
+    s == one(FT) && return model
+    scaled = Hyperdiffusion{FT}(;
+        ν₄_vorticity_coeff = s * hyperdiff.ν₄_vorticity_coeff,
+        divergence_damping_factor = hyperdiff.divergence_damping_factor,
+        prandtl_number = hyperdiff.prandtl_number,
+    )
+    return replace_field(
+        model,
+        :numerics,
+        replace_field(model.numerics, :hyperdiff, scaled),
+    )
+end
+
+# Reconstruct an immutable struct with a single field replaced.
+function replace_field(obj::T, name::Symbol, value) where {T}
+    args = ntuple(fieldcount(T)) do i
+        fieldname(T, i) === name ? value : getfield(obj, i)
+    end
+    return T.name.wrapper(args...)
 end
 
 struct AcousticMultirateCache{F, B, C, II, OI, A}
@@ -283,7 +366,7 @@ function CTS.init_cache(prob, alg::AcousticMultirate; dt, kwargs...)
     (; u0, p) = prob
     f = prob.f
     FT = eltype(u0)
-    Δx = FT(Spaces.node_horizontal_length_scale(Spaces.horizontal_space(axes(u0.c))))
+    Δx = FT(horizontal_node_spacing(axes(u0.c)))
     c_ref = FT(reference_sound_speed(p))
     n_sub = alg.n_sub == 0 ? auto_n_sub(dt, Δx, c_ref) : alg.n_sub
     fast_dt = sub_timestep(dt, n_sub)

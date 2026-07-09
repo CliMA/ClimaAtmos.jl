@@ -53,6 +53,115 @@ function stepped_states(; order, implicit_split, checkpoints)
     return states
 end
 
+# Box config carrying hyperdiffusion, for the coefficient-scaling checks.
+function hyperdiff_scaling_config(; acoustic_substeps, scaling, dt)
+    return Dict{String, Any}(
+        "initial_condition" => "DryDensityCurrentProfile",
+        "config" => "box",
+        "FLOAT_TYPE" => "Float64",
+        "hyperdiff" => "Hyperdiffusion",
+        "smagorinsky_lilly" => nothing,
+        "x_max" => 6400.0,
+        "y_max" => 6400.0,
+        "z_max" => 6400.0,
+        "x_elem" => 2,
+        "y_elem" => 2,
+        "z_elem" => 8,
+        "z_stretch" => false,
+        "dt" => dt,
+        "t_end" => "60secs",
+        "acoustic_substeps" => acoustic_substeps,
+        "acoustic_substep_hyperdiffusion_scaling" => scaling,
+    )
+end
+
+# Build the model and grid the way `get_simulation` does, without the cache.
+function model_and_grid(config_dict; job_id)
+    config = CA.AtmosConfig(config_dict; job_id)
+    pa = config.parsed_args
+    params = CA.ClimaAtmosParameters(config)
+    setup = CA.get_setup_type(pa, CA.CAP.thermodynamics_params(params))
+    model = CA.get_atmos(config, params; setup_type = setup)
+    grid = CA.get_grid(pa, params, config.comms_ctx)
+    return (; model, grid, parsed_args = pa)
+end
+
+@testset "Acoustic substepping: hyperdiffusion coefficient scaling" begin
+    hyperdiff = CA.Hyperdiffusion{Float64}(;
+        ν₄_vorticity_coeff = 0.1857,
+        divergence_damping_factor = 5.0,
+        prandtl_number = 0.2,
+    )
+    Δx_node = 113.0
+    F = max(5.0, inv(0.2))
+    Δt_hd_limit = 2 * Δx_node / (F * 0.1857 * 4.0^4)
+
+    @testset "auto arithmetic and real pass-through" begin
+        # A real factor is returned unchanged (unclamped), independent of the limit.
+        @test CA.acoustic_hyperdiffusion_scale(0.5, hyperdiff, Δx_node, 1.0) == 0.5
+        @test CA.acoustic_hyperdiffusion_scale(1.0, hyperdiff, Δx_node, 1.0) == 1.0
+        @test CA.acoustic_hyperdiffusion_scale(2.0, hyperdiff, Δx_node, 1e-6) == 2.0
+
+        # auto clamps to 1 when the outer step is below the limit.
+        @test CA.acoustic_hyperdiffusion_scale("auto", hyperdiff, Δx_node, 1e-4) ==
+              1.0
+
+        # auto matches the hand-computed factor at a large outer step.
+        dt_outer = 2.0
+        expected = min(1.0, Δt_hd_limit / (2 * dt_outer))
+        s = CA.acoustic_hyperdiffusion_scale("auto", hyperdiff, Δx_node, dt_outer)
+        @test s ≈ expected
+        @test s < 1.0
+    end
+
+    @testset "recovery identities" begin
+        configured = 0.1857
+        coeff(model) = model.numerics.hyperdiff.ν₄_vorticity_coeff
+        (; model, grid, parsed_args) = model_and_grid(
+            hyperdiff_scaling_config(;
+                acoustic_substeps = "4",
+                scaling = "auto",
+                dt = "10secs",
+            );
+            job_id = "hyperdiff_scaling",
+        )
+
+        # acoustic_substeps = 0: the scaling key is ignored, the model is untouched.
+        parsed_off = copy(parsed_args)
+        parsed_off["acoustic_substeps"] = "0"
+        off = CA.scale_hyperdiffusion_under_acoustic_substepping(
+            model, grid, parsed_off,
+        )
+        @test off === model
+        @test coeff(off) == configured
+
+        # Real 1.0 under substepping leaves the coefficient unchanged.
+        parsed_one = copy(parsed_args)
+        parsed_one["acoustic_substep_hyperdiffusion_scaling"] = 1.0
+        one_scaled = CA.scale_hyperdiffusion_under_acoustic_substepping(
+            model, grid, parsed_one,
+        )
+        @test one_scaled === model
+        @test coeff(one_scaled) == configured
+
+        # auto under substepping folds the reduction into the stored coefficient.
+        Δx = CA.Spaces.node_horizontal_length_scale(
+            CA.Spaces.horizontal_space(CA.get_spaces(grid).center_space),
+        )
+        s = CA.acoustic_hyperdiffusion_scale("auto", model.numerics.hyperdiff, Δx, 10.0)
+        auto_scaled = CA.scale_hyperdiffusion_under_acoustic_substepping(
+            model, grid, parsed_args,
+        )
+        @test s < 1
+        @test auto_scaled !== model
+        @test coeff(auto_scaled) ≈ s * configured
+        # Every other channel derives from the vorticity coefficient, so the
+        # Prandtl number and divergence-damping factor are unchanged.
+        @test auto_scaled.numerics.hyperdiff.prandtl_number == 0.2
+        @test auto_scaled.numerics.hyperdiff.divergence_damping_factor == 5.0
+    end
+end
+
 @testset "Acoustic substepping: implicit split reproduces the unsplit sub-cycle" begin
     checkpoints = (2, 4)
     uₕ_relative_tolerance = 1e-12

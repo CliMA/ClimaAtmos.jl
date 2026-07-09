@@ -556,6 +556,7 @@ function get_simulation(config::AtmosConfig)
     setup = get_setup_type(pa, CAP.thermodynamics_params(params))
     model = get_atmos(config, params; setup_type = setup)
     grid = get_grid(pa, params, config.comms_ctx)
+    model = scale_hyperdiffusion_under_acoustic_substepping(model, grid, pa)
 
     log_context(config.comms_ctx)
 
