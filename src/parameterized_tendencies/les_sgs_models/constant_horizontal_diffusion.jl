@@ -15,7 +15,6 @@ function horizontal_constant_diffusion_tendency!(
     chd::ConstantHorizontalDiffusion,
 )
     FT = eltype(Y)
-    thermo_params = CAP.thermodynamics_params(p.params)
     (; ᶜtemp_scalar) = p.scratch
 
     ᶜD = @. ᶜtemp_scalar = FT(chd.D)

@@ -480,16 +480,29 @@ function saturation_adjustment_tuple(thermo_params, ::TD.ρe, ρ, e_int, q_tot)
     return (; T = sa_result.T, q_liq = sa_result.q_liq, q_ice = sa_result.q_ice)
 end
 
-function eddy_diffusivity_coefficient_H(D₀, H, z_sfc, z)
-    return D₀ * exp(-(z - z_sfc) / H)
-end
-function eddy_diffusivity_coefficient(C_E, norm_v_a, z_a, p)
-    p_pbl = 85000
-    p_strato = 10000
-    K_E = C_E * norm_v_a * z_a
-    return p > p_pbl ? K_E : K_E * exp(-((p_pbl - p) / p_strato)^2)
+function thermo_vars(moisture_model, microphysics_model, ᶜY, K, Φ)
+    energy_var = (; e_int = specific(ᶜY.ρe_tot, ᶜY.ρ) - K - Φ)
+    moisture_var = if moisture_model isa DryModel
+        (;)
+    elseif moisture_model isa EquilMoistModel
+        (; q_tot = specific(ᶜY.ρq_tot, ᶜY.ρ))
+    elseif moisture_model isa NonEquilMoistModel
+        q_pt_args = (;
+            q_tot = specific(ᶜY.ρq_tot, ᶜY.ρ),
+            q_liq = specific(ᶜY.ρq_liq, ᶜY.ρ) + specific(ᶜY.ρq_rai, ᶜY.ρ),
+            q_ice = specific(ᶜY.ρq_ice, ᶜY.ρ) + specific(ᶜY.ρq_sno, ᶜY.ρ),
+        )
+        (; q_pt = TD.PhasePartition(q_pt_args...))
+    end
+    return (; energy_var..., moisture_var...)
 end
 
+ts_gs(thermo_params, moisture_model, microphysics_model, ᶜY, K, Φ, ρ) =
+    thermo_state(
+        thermo_params;
+        thermo_vars(moisture_model, microphysics_model, ᶜY, K, Φ)...,
+        ρ,
+    )
 """
     set_implicit_precomputed_quantities!(Y, p, t)
 
