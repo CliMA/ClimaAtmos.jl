@@ -42,6 +42,27 @@ it with divergence damping on the horizontal momentum, which damps the divergent
 leaving the rotational flow untouched. The damping coefficient has a stable range: too little leaves the
 resonance, too much over-damps the resolved divergent flow.
 
+## Inner/outer implicit split
+
+By default the sub-cycle treats the whole implicit tendency implicitly at the sub-step size, so with
+prognostic EDMF, implicit vertical diffusion, or implicit microphysics active it re-solves the full
+implicit operator and re-factorizes its Jacobian every sub-step. The inner/outer implicit split restricts
+the implicit solve inside the sub-cycle to the vertical grid-mean acoustic block: the vertical mass-flux
+divergence on ``\rho``, the central vertical transport of total enthalpy on ``\rho e_\mathrm{tot}`` and
+total water on ``\rho q_\mathrm{tot}``, and the vertical pressure gradient, gravity, and Rayleigh sponge
+on ``u_3``. The restricted system carries a dedicated sparse Jacobian whose scalar block is diagonal, so
+it factorizes with the direct block-arrowhead solver instead of the iterative solver the full Jacobian
+requires.
+
+The remaining implicit terms — EDMF SGS, vertical diffusion, implicit microphysics, and sedimentation —
+are solved once per outer step by a separate outer implicit solve, rather than every sub-step. The
+first-order outer combination performs one outer solve per step; the second-order symmetric combination
+performs two.
+
+The split is additive: the full implicit tendency and its Jacobian are unchanged, and the restricted
+operator duplicates the acoustic subset rather than extracting it, so the mode-off and unsplit paths are
+unchanged. The split requires `acoustic_substep_vertical: implicit`.
+
 ## Configuration
 
 | Option | Meaning |
@@ -50,6 +71,7 @@ resonance, too much over-damps the resolved divergent flow.
 | `acoustic_substep_order` | Order of the outer combination (`1` or `2`). |
 | `acoustic_substep_vertical` | `implicit` (default) keeps the vertically-implicit acoustic solve; `explicit` advances it in the sub-cycle. |
 | `acoustic_substep_damping` | Divergence-damping coefficient (default `1.5`). |
+| `acoustic_substep_implicit_split` | Restrict the sub-cycle implicit solve to the vertical grid-mean acoustic block and solve the remaining implicit terms once per outer step (default `false`). Requires `acoustic_substep_vertical: implicit`. |
 
 With `auto`, the sub-step count is
 
@@ -84,10 +106,10 @@ outweigh the saving, so the mode is not beneficial there.
 
 ## Limitations
 
-- The sub-cycle treats the whole implicit tendency implicitly at the sub-step size. The mode is
-  validated for configurations whose implicit tendency is the vertical-acoustic block; configurations
-  that also place microphysics, turbulence, or vertical diffusion in the implicit tendency re-solve
-  those processes every sub-step.
+- By default the sub-cycle treats the whole implicit tendency implicitly at the sub-step size, so
+  configurations that place microphysics, turbulence, or vertical diffusion in the implicit tendency
+  re-solve those processes every sub-step. The inner/outer implicit split moves them to a per-outer-step
+  solve; its conditioning at large outer steps is untested.
 - The mode advances the vertical acoustic terms implicitly inside each sub-step; the explicit-vertical
   variant is a reference path limited by the vertical acoustic CFL on anisotropic grids.
 - The sub-cycle refreshes only the acoustic precomputed quantities; diagnostics that read the full cache

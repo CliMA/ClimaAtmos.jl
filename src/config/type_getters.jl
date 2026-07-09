@@ -297,6 +297,7 @@ function ode_configuration(::Type{FT}, args) where {FT}
         vertical,
         args["acoustic_substep_order"],
         args["acoustic_substep_damping"],
+        args["acoustic_substep_implicit_split"],
     )
 end
 

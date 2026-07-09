@@ -83,6 +83,9 @@ acoustic_substep_order:
 acoustic_substep_damping:
   help: "Divergence-damping coefficient for acoustic substepping. Suppresses the split-explicit resonance between the frozen slow forcing and the sub-cycled acoustic modes. Too small leaves the resonance, too large over-damps the resolved divergent flow."
   value: 1.5
+acoustic_substep_implicit_split:
+  help: "Solve the non-acoustic implicit terms once per outer step instead of every acoustic sub-step (inner/outer implicit split). Requires `acoustic_substep_vertical: implicit`."
+  value: false
 krylov_rtol:
   help: "Relative tolerance of the Krylov method (only for ClimaTimeSteppers.jl; only used if `use_krylov_method` is `true`)"
   value: 0.1

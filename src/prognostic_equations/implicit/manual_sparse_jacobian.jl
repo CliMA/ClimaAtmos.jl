@@ -1573,3 +1573,228 @@ end
 
 invert_jacobian!(::ManualSparseJacobian, cache, ΔY, R) =
     LinearAlgebra.ldiv!(ΔY, cache.matrix, R)
+
+"""
+    AcousticJacobian()
+
+A [`JacobianAlgorithm`](@ref) for the inner sub-cycle of the inner/outer implicit
+split of acoustic substepping. The matrix carries only the vertical grid-mean
+acoustic block (`grid_mean_acoustic_tendency!`): the active-scalar vertical
+advection derivatives and the vertical momentum couplings (pressure gradient,
+buoyancy, and Rayleigh sponge). Every other prognostic has a constant `-I`
+diagonal, which keeps the scalar block diagonal so the system factorizes through
+the direct `BlockArrowheadSolve`.
+"""
+struct AcousticJacobian <: SparseJacobian end
+
+function jacobian_cache(alg::AcousticJacobian, Y, atmos)
+    derivative_flags = _derivative_flags(atmos, Y)
+    (; topography_flag) = derivative_flags
+    FT = Spaces.undertype(axes(Y.c))
+
+    # Acoustic advection blocks: `advection_jacobian_blocks` restricted to the
+    # active scalars and their vertical momentum couplings, without the
+    # `(f.u₃, sedimenting mass)` blocks. The condensate masses are frozen in the
+    # inner solve (constant -I diagonals), so their pressure-gradient derivative
+    # does not enter the inner acoustic system.
+    (;
+        TridiagonalRow_ACT12,
+        BidiagonalRow_ACT3,
+        BidiagonalRow_C3,
+        BidiagonalRow_C3xACT12,
+        TridiagonalRow_C3xACT3,
+    ) = jacobian_row_types(FT)
+    active_scalar_names =
+        unrolled_map(center_state_name, advected_gs_scalar_names(Y))
+    process_block_pairs = (
+        (
+            use_derivative(topography_flag) ?
+            map(
+                name ->
+                    (name, @name(c.uₕ)) =>
+                        similar(Y.c, TridiagonalRow_ACT12),
+                active_scalar_names,
+            ) : ()
+        )...,
+        map(
+            name -> (name, @name(f.u₃)) => similar(Y.c, BidiagonalRow_ACT3),
+            active_scalar_names,
+        )...,
+        map(
+            name -> (@name(f.u₃), name) => similar(Y.f, BidiagonalRow_C3),
+            active_scalar_names,
+        )...,
+        (@name(f.u₃), @name(c.uₕ)) => similar(Y.f, BidiagonalRow_C3xACT12),
+        (@name(f.u₃), @name(f.u₃)) => similar(Y.f, TridiagonalRow_C3xACT3),
+    )
+
+    # Constant -I diagonals for every prognostic outside the acoustic block. The
+    # f.u₃ diagonal and the acoustic off-diagonals come from process_block_pairs.
+    block_pairs = (
+        process_block_pairs...,
+        fallback_identity_blocks(process_block_pairs, Y, FT)...,
+    )
+    matrix = MatrixFields.FieldMatrix(block_pairs...)
+
+    # The scalar block is diagonal (only the acoustic advection couples scalars to
+    # velocity), so the direct block-arrowhead solver factorizes it.
+    is_in_Y(name) = MatrixFields.has_field(Y, name)
+    sfc_if_available = is_in_Y(@name(sfc)) ? (@name(sfc),) : ()
+    ρtke_if_available = is_in_Y(@name(c.ρtke)) ? (@name(c.ρtke),) : ()
+    sgs_ρa_if_available =
+        is_in_Y(@name(c.sgsʲs.:(1).ρa)) ? (@name(c.sgsʲs.:(1).ρa),) : ()
+    sgs_u³_if_available =
+        is_in_Y(@name(f.sgsʲs.:(1).u₃)) ? (@name(f.sgsʲs.:(1).u₃),) : ()
+    sgs_scalar_names =
+        unrolled_map(sgs_state_name, advected_sgs_scalar_names(Y))
+    mass_and_surface_names = (@name(c.ρ), sfc_if_available...)
+    available_scalar_names = (
+        mass_and_surface_names...,
+        unrolled_map(center_state_name, microphysics_tracer_names(Y))...,
+        @name(c.ρe_tot),
+        ρtke_if_available...,
+        sgs_scalar_names...,
+        sgs_ρa_if_available...,
+    )
+    velocity_alg = MatrixFields.BlockLowerTriangularSolve(
+        @name(c.uₕ),
+        sgs_u³_if_available...,
+    )
+    full_alg = MatrixFields.BlockArrowheadSolve(
+        available_scalar_names...;
+        alg₂ = velocity_alg,
+    )
+
+    return (;
+        matrix = MatrixFields.FieldMatrixWithSolver(matrix, Y, full_alg),
+        derivative_flags,
+    )
+end
+
+function update_jacobian!(alg::AcousticJacobian, cache, Y, p, dtγ, t)
+    (; topography_flag) = cache.derivative_flags
+    (; matrix) = cache
+    (; params) = p
+    (; ᶜΦ) = p.core
+    (; ᶜK, ᶜp, ᶜT, ᶜh_tot) = p.precomputed
+    (; ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice) = p.precomputed
+    (; ∂ᶜK_∂ᶜuₕ, ∂ᶜK_∂ᶠu₃, ᶠp_grad_matrix, ᶜadvection_matrix) = p.scratch
+    rs = p.atmos.rayleigh_sponge
+
+    FT = Spaces.undertype(axes(Y.c))
+    one_C3xACT3 = C3(FT(1)) * CT3(FT(1))'
+
+    cv_d = FT(CAP.cv_d(params))
+    T_0 = FT(CAP.T_0(params))
+    R_d = FT(CAP.R_d(params))
+    cp_d = FT(CAP.cp_d(params))
+    thermo_params = CAP.thermodynamics_params(params)
+
+    ᶜρ = Y.c.ρ
+    ᶜuₕ = Y.c.uₕ
+    ᶠu₃ = Y.f.u₃
+    ᶜJ = Fields.local_geometry_field(Y.c).J
+    ᶠJ = Fields.local_geometry_field(Y.f).J
+    ᶜgⁱʲ = Fields.local_geometry_field(Y.c).gⁱʲ
+    ᶠgⁱʲ = Fields.local_geometry_field(Y.f).gⁱʲ
+    ᶠz = Fields.coordinate_field(Y.f).z
+    zmax = Spaces.z_max(axes(Y.f))
+
+    ᶜkappa_m = ᶜkappa_m_field!(Y, p)
+    ᶜ∂p∂ρq_tot = ᶜ∂p∂ρq_tot_field!(Y, p, ᶜkappa_m)
+
+    if use_derivative(topography_flag)
+        @. ∂ᶜK_∂ᶜuₕ = DiagonalMatrixRow(
+            adjoint(CT12(ᶜuₕ)) + adjoint(ᶜinterp(ᶠu₃)) * g³ʰ(ᶜgⁱʲ),
+        )
+    else
+        @. ∂ᶜK_∂ᶜuₕ = DiagonalMatrixRow(adjoint(CT12(ᶜuₕ)))
+    end
+    @. ∂ᶜK_∂ᶠu₃ =
+        ᶜinterp_matrix() ⋅ DiagonalMatrixRow(adjoint(CT3(ᶠu₃))) +
+        DiagonalMatrixRow(adjoint(CT3(ᶜuₕ))) ⋅ ᶜinterp_matrix()
+
+    @. ᶠp_grad_matrix = DiagonalMatrixRow(-1 / ᶠinterp(ᶜρ)) ⋅ ᶠgradᵥ_matrix()
+
+    @. ᶜadvection_matrix =
+        -(ᶜadvdivᵥ_matrix()) ⋅ DiagonalMatrixRow(ᶠinterp(ᶜρ * ᶜJ) / ᶠJ)
+    @. p.scratch.ᶠbidiagonal_matrix_ct3xct12 =
+        ᶠwinterp_matrix(ᶜJ * ᶜρ) ⋅ DiagonalMatrixRow(g³ʰ(ᶜgⁱʲ))
+    if use_derivative(topography_flag)
+        ∂ᶜρ_err_∂ᶜuₕ = matrix[@name(c.ρ), @name(c.uₕ)]
+        @. ∂ᶜρ_err_∂ᶜuₕ =
+            dtγ * ᶜadvection_matrix ⋅ p.scratch.ᶠbidiagonal_matrix_ct3xct12
+    end
+    ∂ᶜρ_err_∂ᶠu₃ = matrix[@name(c.ρ), @name(f.u₃)]
+    @. ∂ᶜρ_err_∂ᶠu₃ = dtγ * ᶜadvection_matrix ⋅ DiagonalMatrixRow(g³³(ᶠgⁱʲ))
+
+    tracer_info = (@name(c.ρe_tot), @name(c.ρq_tot))
+    MatrixFields.unrolled_foreach(tracer_info) do ρχ_name
+        MatrixFields.has_field(Y, ρχ_name) || return
+        ᶜχ =
+            ρχ_name === @name(c.ρe_tot) ? ᶜh_tot :
+            (@. lazy(specific(Y.c.ρq_tot, Y.c.ρ)))
+
+        if use_derivative(topography_flag)
+            ∂ᶜρχ_err_∂ᶜuₕ = matrix[ρχ_name, @name(c.uₕ)]
+            @. ∂ᶜρχ_err_∂ᶜuₕ =
+                dtγ * ᶜadvection_matrix ⋅ DiagonalMatrixRow(ᶠinterp(ᶜχ)) ⋅
+                p.scratch.ᶠbidiagonal_matrix_ct3xct12
+        end
+
+        ∂ᶜρχ_err_∂ᶠu₃ = matrix[ρχ_name, @name(f.u₃)]
+        @. ∂ᶜρχ_err_∂ᶠu₃ =
+            dtγ * ᶜadvection_matrix ⋅ DiagonalMatrixRow(ᶠinterp(ᶜχ) * g³³(ᶠgⁱʲ))
+    end
+
+    ∂ᶠu₃_err_∂ᶜρ = matrix[@name(f.u₃), @name(c.ρ)]
+    ∂ᶠu₃_err_∂ᶜρe_tot = matrix[@name(f.u₃), @name(c.ρe_tot)]
+
+    ᶜθ_v = @. lazy(theta_v(thermo_params, ᶜT, ᶜp, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice))
+    ᶜΠ = @. lazy(TD.exner_given_pressure(thermo_params, ᶜp))
+    ᶜ∂p∂ρ = @. lazy(
+        ᶜkappa_m * (T_0 * cp_d - ᶜK - ᶜΦ) + (R_d - ᶜkappa_m * cv_d) * ᶜT,
+    )
+    @. ∂ᶠu₃_err_∂ᶜρ =
+        dtγ * (
+            ᶠp_grad_matrix ⋅ DiagonalMatrixRow(ᶜ∂p∂ρ) +
+            DiagonalMatrixRow(cp_d * ᶠinterp(ᶜθ_v) * ᶠgradᵥ(ᶜΠ) / ᶠinterp(ᶜρ)) ⋅
+            ᶠinterp_matrix()
+        )
+    @. ∂ᶠu₃_err_∂ᶜρe_tot = dtγ * ᶠp_grad_matrix ⋅ DiagonalMatrixRow(ᶜkappa_m)
+
+    if MatrixFields.has_field(Y, @name(c.ρq_tot))
+        ∂ᶠu₃_err_∂ᶜρq_tot = matrix[@name(f.u₃), @name(c.ρq_tot)]
+        @. ∂ᶠu₃_err_∂ᶜρq_tot =
+            dtγ * ᶠp_grad_matrix ⋅ DiagonalMatrixRow(ᶜ∂p∂ρq_tot)
+    end
+
+    # The (f.u₃, sedimenting mass) pressure-gradient blocks are omitted: the
+    # condensate masses are frozen in the inner solve, so their derivative does
+    # not enter the inner acoustic system.
+
+    ∂ᶠu₃_err_∂ᶜuₕ = matrix[@name(f.u₃), @name(c.uₕ)]
+    ∂ᶠu₃_err_∂ᶠu₃ = matrix[@name(f.u₃), @name(f.u₃)]
+    I_u₃ = DiagonalMatrixRow(one_C3xACT3)
+    @. ∂ᶠu₃_err_∂ᶜuₕ =
+        dtγ * ᶠp_grad_matrix ⋅ DiagonalMatrixRow(-(ᶜkappa_m) * ᶜρ) ⋅ ∂ᶜK_∂ᶜuₕ
+    if rs isa RayleighSponge
+        @. ∂ᶠu₃_err_∂ᶠu₃ =
+            dtγ * (
+                ᶠp_grad_matrix ⋅ DiagonalMatrixRow(-(ᶜkappa_m) * ᶜρ) ⋅
+                ∂ᶜK_∂ᶠu₃ +
+                DiagonalMatrixRow(-β_rayleigh_u₃(rs, ᶠz, zmax) * (one_C3xACT3,))
+            ) - (I_u₃,)
+    else
+        @. ∂ᶠu₃_err_∂ᶠu₃ =
+            dtγ * ᶠp_grad_matrix ⋅ DiagonalMatrixRow(-(ᶜkappa_m) * ᶜρ) ⋅
+            ∂ᶜK_∂ᶠu₃ - (I_u₃,)
+    end
+
+    # NOTE: All velocity tendency derivatives should be set BEFORE this call.
+    zero_velocity_jacobian!(matrix, Y, p, t)
+    return nothing
+end
+
+invert_jacobian!(::AcousticJacobian, cache, ΔY, R) =
+    LinearAlgebra.ldiv!(ΔY, cache.matrix, R)
