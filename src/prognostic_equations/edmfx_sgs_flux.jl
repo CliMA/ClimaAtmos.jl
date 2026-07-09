@@ -336,15 +336,21 @@ function edmfx_sgs_diffusive_flux_tendency!(
             top = Operators.SetValue(C3(FT(0))),
             bottom = Operators.SetValue(C3(FT(0))),
         )
-        # Auto-discovered grid-scale tracers (microphysics species and any
-        # user-defined passive tracers)
-        for χ_name in sgs_tracer_names(Y)
-            ρχ_name = get_ρχ_name(χ_name)
-            MatrixFields.has_field(Y.c, ρχ_name) || continue
-            ᶜρχ = MatrixFields.get_field(Y.c, ρχ_name)
-            ᶜρχₜ = MatrixFields.get_field(Yₜ.c, ρχ_name)
+        # Auto-discovered grid-scale tracers: sedimenting microphysics species
+        # are diffused with α_vert_diff_tracer * K_h, all other tracers (e.g.
+        # passive chemistry) with the unscaled K_h, matching
+        # vertical_diffusion_boundary_layer_tendency! and the implicit
+        # Jacobian (update_diffusion_jacobian!). The tracers are enumerated
+        # from the grid-mean state — not from the updraft state, which is
+        # empty for EDOnlyEDMFX and need not carry every grid-mean tracer.
+        # ρq_tot is handled above, with its moist-air mass counterpart.
+        foreach_gs_tracer(Yₜ, Y) do ᶜρχₜ, ᶜρχ, ρχ_name
+            ρχ_name == @name(ρq_tot) && return
+            α =
+                ρχ_name in gs_sedimenting_tracer_candidates ?
+                α_vert_diff_microphysics : one(α_vert_diff_microphysics)
             ᶜχ = (@. lazy(specific(ᶜρχ, Y.c.ρ)))
-            @. ᶜρχₜ_diffusion = ᶜdivᵥ_ρq(-(ᶠρaK_h * α_vert_diff_microphysics * ᶠgradᵥ(ᶜχ)))
+            @. ᶜρχₜ_diffusion = ᶜdivᵥ_ρq(-(ᶠρaK_h * α * ᶠgradᵥ(ᶜχ)))
             @. ᶜρχₜ -= ᶜρχₜ_diffusion
         end
 

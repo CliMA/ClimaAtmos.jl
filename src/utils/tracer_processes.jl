@@ -244,6 +244,23 @@ receives additional dissipation terms and is treated separately).
 diffused_gs_scalar_names(Y) = (@name(ρe_tot), microphysics_tracer_names(Y)...)
 
 """
+    passive_gs_tracer_names(Y)
+
+`Tuple` of `@name`s (relative to `Y.c`) of the grid-scale tracers that are
+neither `ρq_tot` nor sedimenting microphysics species (e.g. passive chemistry
+tracers like `ρq_gas_A`). These are diffused with the unscaled eddy
+diffusivity `K_h`, both in the tendencies and in the implicit Jacobian.
+"""
+passive_gs_tracer_names(Y) =
+    unrolled_filter(
+        name -> !(
+            name == @name(ρq_tot) ||
+            name in gs_sedimenting_tracer_candidates
+        ),
+        gs_tracer_names(Y),
+    )
+
+"""
     passive_sgs_tracer_names(Y)
 
 `Tuple` of `@name`s (relative to `Y.c.sgsʲs.:(1)`) of the SGS tracers that do
