@@ -15,4 +15,7 @@ import .COSP1MReffNpDiagnostics
 include("cloudsat_optics.jl")
 import .COSPCloudSatOptics
 
+include("cloudsat_reflectivity.jl")
+import .COSPCloudSatReflectivity
+
 end

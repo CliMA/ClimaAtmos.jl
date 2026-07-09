@@ -171,6 +171,11 @@ function precomputed_quantities(Y, atmos)
             Np_rai = ntuple(_ -> similar(Y.c, FT), n_cosp_subcolumns),
             Np_sno = ntuple(_ -> similar(Y.c, FT), n_cosp_subcolumns),
         )
+        z_vol_cloudsat = ntuple(_ -> similar(Y.c, FT), n_cosp_subcolumns)
+        kr_vol_cloudsat = ntuple(_ -> similar(Y.c, FT), n_cosp_subcolumns)
+        g_vol_cloudsat = similar(Y.c, FT)
+        Ze_non_cloudsat = ntuple(_ -> similar(Y.c, FT), n_cosp_subcolumns)
+        DBZe_cloudsat = ntuple(_ -> similar(Y.c, FT), n_cosp_subcolumns)
         ᶜsampled_cloud_fraction = similar(Y.c, FT)
         ᶜsampled_precip_fraction = similar(Y.c, FT)
         @. ᶜsampled_cloud_fraction = FT(0)
@@ -183,6 +188,11 @@ function precomputed_quantities(Y, atmos)
             ᶜsubcolumn_hydrometeors,
             ᶜsubcolumn_reff,
             ᶜsubcolumn_Np,
+            z_vol_cloudsat,
+            kr_vol_cloudsat,
+            g_vol_cloudsat,
+            Ze_non_cloudsat,
+            DBZe_cloudsat,
             ᶜsampled_cloud_fraction,
             ᶜsampled_precip_fraction,
             ᶜlarge_scale_precipitation_flux,

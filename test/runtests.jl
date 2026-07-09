@@ -124,6 +124,9 @@ end
 @safetestset "COSP CloudSat optics scaffold" begin
     @time include("cosp/cloudsat_optics_test.jl")
 end
+@safetestset "COSP CloudSat reflectivity" begin
+    @time include("cosp/cloudsat_reflectivity_test.jl")
+end
 
 #! format: on
 

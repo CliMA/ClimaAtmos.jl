@@ -145,11 +145,6 @@ Hydrometeor particle distributions use hard-coded ClimaMicrophysics 1M PSD
 and mass-size assumptions, then a QuickBeam Mie scattering kernel
 computes `z_vol` and `kr_vol`.
 Gas absorption uses the COSPv2 `gases` calculation.
-
-Note: For cloud water in the 1M scheme, the prescribed number concentration is
-1e8 m^-3. For cloud ice and rain, the PSD uses a prescribed Marshall-Palmer intercept
-with slope diagnosed from mass conservation. For snow, the intercept is
-empirical and the slope is also diagnosed from mass conservation.
 """
 function cloudsat_optics!(
     z_vol_cloudsat::NTuple{N},

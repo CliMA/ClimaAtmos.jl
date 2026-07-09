@@ -151,6 +151,7 @@ NVTX.@annotate function subcol_model_callback!(integrator)
 
     set_cosp_hydrometeor_subcolumns!(Y, p, p.atmos.microphysics_model)
     set_cosp_reff_np_subcolumns!(Y, p, p.atmos.microphysics_model)
+    set_cosp_cloudsat_optics!(Y, p, p.atmos.microphysics_model)
 
     @debug "subcol callback" t = integrator.t
 
@@ -262,6 +263,72 @@ function set_cosp_reff_np_subcolumns!(Y, p, _)
             for diagnostic_field in diagnostic_fields
                 @. diagnostic_field = FT(0)
             end
+        end
+    end
+
+    return nothing
+end
+
+function set_cosp_cloudsat_optics!(
+    Y,
+    p,
+    ::NonEquilibriumMicrophysics1M,
+)
+    (;
+        z_vol_cloudsat,
+        kr_vol_cloudsat,
+        g_vol_cloudsat,
+        Ze_non_cloudsat,
+        DBZe_cloudsat,
+        ᶜsubcolumn_hydrometeors,
+        ᶜp,
+        ᶜT,
+        ᶜq_tot_nonneg,
+        ᶜq_liq,
+        ᶜq_ice,
+    ) = p.precomputed
+
+    ᶜq_vap = @. lazy(ᶜq_tot_nonneg - ᶜq_liq - ᶜq_ice)
+    thermo_state = (; ᶜp, ᶜT, ᶜq_vap)
+
+    COSP.COSPCloudSatOptics.cloudsat_optics!(
+        z_vol_cloudsat,
+        kr_vol_cloudsat,
+        g_vol_cloudsat,
+        ᶜsubcolumn_hydrometeors,
+        thermo_state,
+        Y.c.ρ,
+    )
+    COSP.COSPCloudSatReflectivity.cloudsat_reflectivity!(
+        Ze_non_cloudsat,
+        DBZe_cloudsat,
+        z_vol_cloudsat,
+        kr_vol_cloudsat,
+        g_vol_cloudsat,
+    )
+
+    return nothing
+end
+
+function set_cosp_cloudsat_optics!(Y, p, _)
+    (;
+        z_vol_cloudsat,
+        kr_vol_cloudsat,
+        g_vol_cloudsat,
+        Ze_non_cloudsat,
+        DBZe_cloudsat,
+    ) = p.precomputed
+    FT = eltype(Y)
+
+    @. g_vol_cloudsat = FT(0)
+    for cloudsat_fields in (z_vol_cloudsat, kr_vol_cloudsat)
+        for cloudsat_field in cloudsat_fields
+            @. cloudsat_field = FT(0)
+        end
+    end
+    for reflectivity_fields in (Ze_non_cloudsat, DBZe_cloudsat)
+        for reflectivity_field in reflectivity_fields
+            @. reflectivity_field = FT(-1e30)
         end
     end
 
