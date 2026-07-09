@@ -44,7 +44,9 @@ unit annotations at all.
 """
 field_units(_) = nothing
 
-"Print unit annotation for field `k` based on the units spec."
+"""
+Print unit annotation for field `k` based on the units spec.
+"""
 _print_unit(::IO, _, _) = nothing
 function _print_unit(io::IO, units::NamedTuple, k::Symbol)
     unit = haskey(units, k) ? units[k] : "-"
@@ -69,7 +71,12 @@ _is_nested_struct(v) =
 
 Print a verbose representation of the type and fields of `x` to `io`.
 """
-function verbose_show_type_and_fields(io::IO, mime::MIME"text/plain", x; with_module_prefix = false)
+function verbose_show_type_and_fields(
+    io::IO,
+    mime::MIME"text/plain",
+    x;
+    with_module_prefix = false,
+)
     compact = get(io, :compact, false)::Bool
     indent = get(io, :indent, "")::String
     typename = _type_name(x; with_module_prefix)
@@ -107,12 +114,14 @@ end
 Print a compact one-line representation of `x`: `TypeName(field = value, ...)`.
 
 # Keyword arguments
-- `with_units = true`: Append unit annotations from [`field_units`](@ref).
-- `with_kwargs = true`: Print fields as keyword arguments (`field = value`).
-- `with_module_prefix = false`: Use module-qualified type name.
-- `skip_fields_by_value = ()`: Skip fields whose values are in this tuple.
+
+  - `with_units = true`: Append unit annotations from [`field_units`](@ref).
+  - `with_kwargs = true`: Print fields as keyword arguments (`field = value`).
+  - `with_module_prefix = false`: Use module-qualified type name.
+  - `skip_fields_by_value = ()`: Skip fields whose values are in this tuple.
 
 # Example output
+
 ```julia-repl
 julia> import CloudMicrophysics.Parameters as CMP
 
@@ -142,15 +151,16 @@ function compact_show_type_and_fields(io::IO, ::MIME"text/plain", x;
 end
 
 """
-	parseable_show_with_fields_no_type_header(io::IO, x; kw...)
+    parseable_show_with_fields_no_type_header(io::IO, x; kw...)
 
 Print a parseable (copy-pasteable) one-line representation of `x`.
 Thin wrapper around [`compact_show_type_and_fields`](@ref) with
 `with_units = false` and `with_module_prefix = true` by default.
 
-Note: This assumes that the type 
+Note: This assumes that the type
 
 # Examples
+
 ```julia-repl
 julia> show(stdout, CM.Parameters.NumberAdjustmentHorn2012(τ = 3.0f0))
 CloudMicrophysics.Parameters.NumberAdjustmentHorn2012(τ = 3.0f0)
