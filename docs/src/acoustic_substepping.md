@@ -36,11 +36,101 @@ Per outer step the scheme:
 
 A first- or second-order outer combination of the sub-cycles is available.
 
-Sub-cycling a frozen slow forcing excites a parametric resonance with the grid-scale acoustic modes (the
-kinetic-energy gradient in the slow forcing oscillates at the acoustic frequency). The scheme suppresses
-it with divergence damping on the horizontal momentum, which damps the divergent (acoustic) modes while
-leaving the rotational flow untouched. The damping coefficient has a stable range: too little leaves the
-resonance, too much over-damps the resolved divergent flow.
+## Resonance source and divergence damping
+
+Freezing the slow forcing over an outer step and sub-cycling the acoustic system excites a parametric
+resonance with the grid-scale acoustic modes. The resonance grows fastest at the wavenumber where the
+acoustic phase advances by ``\pi`` per outer step, and that wavenumber migrates to larger scales as the
+outer step grows, so a damper tuned to the grid scale weakens as the outer step increases.
+
+The dominant source of the resonance is the kinetic-energy gradient. The grid-mean momentum tendency
+carries the gradients ``\nabla_h(K + \Phi - \Phi_r)`` on ``u_h`` and ``\partial_z K`` on ``u_3``, and
+``K = |u|^2/2`` oscillates at the acoustic frequency. Holding these gradients in the frozen slow forcing
+feeds an acoustic-frequency signal into the sub-cycle once per outer step, which is the resonant drive.
+By default (`acoustic_substep_kinetic_energy: fast`) these gradients are re-evaluated at every sub-step,
+so they follow the sub-cycled state and no longer act as a fixed periodic source; `slow` keeps the earlier
+behavior of holding them in the frozen forcing. Re-evaluating the gradients leaves the executed sub-step
+tendency unchanged at the outer-step start, where the frozen forcing is sampled, so the two treatments
+agree to first order in the outer step and differ only in the sub-cycle interior.
+
+The remaining resonant channels — the rotational momentum flux, upwind corrections, and frozen
+tracer/EDMF flux divergences — are weaker at the acoustic frequency and are held by divergence damping on
+the horizontal momentum. The damping adds ``\nu_d \, \nabla_h(\delta)`` to ``u_h``, with the damped
+divergence ``\delta`` selected by `acoustic_substep_damping_form`:
+
+| Form | Damped divergence ``\delta`` |
+|---|---|
+| `3d` (default) | ``\nabla_h \cdot u + \partial_z u^3`` — the three-dimensional divergence of the full velocity. |
+| `3d_perturbation` | ``\delta - \delta^0``, the deviation from the divergence at the outer-step start ``\delta^0``. |
+| `horizontal` | ``\nabla_h \cdot u_h`` — the horizontal divergence of the horizontal velocity. |
+
+Taking the horizontal divergence of the damped ``u_h`` equation gives a term ``-\nu_d k_h^2 \delta``, so
+horizontal and mixed acoustic modes are damped in proportion to ``k_h^2`` while purely vertical modes
+(``k_h = 0``), the rotational flow, and balanced flow are untouched.
+
+### Coefficient conventions
+
+The viscosity is ``\nu_d = \beta_d \, c_\mathrm{ref}^2 \, \Delta t_\mathrm{sub}``, and the per-sub-step
+grid-mode damping is ``\varepsilon_\mathrm{grid} = 4 \beta_d C_s^2`` with the sub-step acoustic Courant
+number ``C_s = c_\mathrm{ref} \Delta t_\mathrm{sub}/\Delta x_\mathrm{node} \approx 0.5``. Published
+split-explicit schemes use two normalizations, both of which map into this ``\beta_d``:
+
+| Normalization | Definition | Operational ``\beta_d`` |
+|---|---|---|
+| Forward-weighted pressure filter (WRF `smdiv`) | ``\nu = \gamma_d \, c^2 \Delta\tau`` | ``\gamma_d \approx 0.1`` |
+| Time-adjusted filter (MPAS / Klemp 2018) | ``\nu = a_d \, \Delta x^2/\Delta\tau`` | ``a_d/C_s^2 \approx 0.4`` at ``C_s = 0.5`` |
+
+The two describe different filters, so both are correct in their own convention; expressed in the
+``\nu_d = \beta_d c_\mathrm{ref}^2 \Delta t_\mathrm{sub}`` normalization used here they give a canonical
+band ``\beta_d \in [0.1, 0.6]`` (COSMO operational practice sits near ``0.3``). With
+`acoustic_substep_damping: auto` the coefficient resolves to ``0.4`` with `fast` kinetic energy and to
+``1.5`` with `slow`. The explicit-diffusion limit ``\varepsilon_\mathrm{grid} \le 1`` gives
+``\beta_d \lesssim 2`` at ``C_s = 0.5``; with a hand-set sub-step count at a higher per-sub-step Courant
+number, ``\beta_d`` must shrink in proportion to ``1/C_s^2``.
+
+With the resonance source removed the lower edge of the stable window is ``\beta_d = 0``, so divergence
+damping is no longer required for stability and a lighter coefficient is viable: on the dry box halving the
+default to ``\beta_d = 0.1`` roughly halves the divergent-flow distortion while remaining stable to the
+same outer step. The `3d_perturbation` form conserves energy slightly better than `3d` at the same
+settings, but does not reduce the distortion enough to change the default (`3d`).
+
+### Outer-step ceilings
+
+Once the resonance source is removed, two limits bound the outer step, both
+independent of the resonance.
+
+**Frozen explicit horizontal mixing.** Any explicit horizontal mixing tendency
+lives in the frozen slow forcing ``G``, so the outer combination integrates it
+effectively explicitly at the outer step ``\Delta t``. The frozen form carries no
+damping benefit inside the sub-cycle: each scheme's own explicit stability limit
+applies at the outer step. Which scheme binds depends on the configuration:
+
+| Scheme | Diffusivity | Explicit limit | Outer-step multiple |
+|---|---|---|---|
+| Hyperdiffusion (4th order) | ``\nu_4 = c_4 h^3`` | ``\Delta t \lesssim C_4/(\nu_4 k_\mathrm{max}^4) \propto h/c_4`` | resolution-independent; ``\approx 3\times`` measured on the dry box |
+| Smagorinsky | ``\nu = (C_s \Delta x)^2 |S|`` | ``\Delta t \le 1/(4 C_s^2 |S|)`` | strain timescale ``1/|S|`` (resolution-independent); ``O(50\text{–}1000)\times``, compressing where ``|S|`` spikes |
+| EDMF horizontal | ``\nu \sim \ell \sqrt{\mathrm{TKE}},\ \ell \propto \Delta x`` | ``\Delta t \le \Delta x/(4 c_\ell \sqrt{\mathrm{TKE}})`` | ``\approx c/(4 c_\ell \sqrt{\mathrm{TKE}}\,\mathrm{CFL})``, ``O(50\text{–}100)\times`` |
+
+The hyperdiffusivity scales as ``h^3`` while the baseline acoustic step scales as
+``h/c``, so the hyperdiffusion ceiling expressed as an outer-step multiple is
+resolution-independent (at fixed polynomial order and the ``\nu_4 \propto h^3``
+convention) — the same small multiple applies on production gray-zone grids. On
+hyperdiffusion-on configurations the frozen hyperdiffusion is therefore the
+binding constraint: the resonance is de-sourced to a ``\approx 6\times`` ceiling,
+but the frozen hyperdiffusion binds at ``\approx 3\times`` (stable at ``3\times``,
+unstable at ``4\times`` on the dry box). The resolution is a documented outer-step
+limit, not a scheme change; the follow-up lever is to sub-cycle or implicitly
+treat the horizontal hyperdiffusion (out of scope here). The Smagorinsky and EDMF
+limits are physical timescales (strain rate, eddy turnover), so their outer-step
+multiples are large; on hyperdiffusion-off gray-zone or LES configurations the
+frozen-mixing ceiling sits far above the ``4\text{–}6\times`` target and the
+binding constraint is expected elsewhere. Because those limits depend on the local
+flow, they are attributed empirically per configuration.
+
+**Outer advective consistency.** The second-order outer combination freezes
+advection over the outer step, so at a large outer step the advective Courant
+number of the frozen forcing approaches its stability limit. Both outer orders are
+available.
 
 ## Inner/outer implicit split
 
@@ -70,7 +160,9 @@ unchanged. The split requires `acoustic_substep_vertical: implicit`.
 | `acoustic_substeps` | `0` disables the mode; a positive integer fixes the sub-step count; `auto` selects it from the horizontal acoustic CFL. |
 | `acoustic_substep_order` | Order of the outer combination (`1` or `2`). |
 | `acoustic_substep_vertical` | `implicit` (default) keeps the vertically-implicit acoustic solve; `explicit` advances it in the sub-cycle. |
-| `acoustic_substep_damping` | Divergence-damping coefficient (default `1.5`). |
+| `acoustic_substep_kinetic_energy` | `fast` (default) re-evaluates the kinetic-energy and reference-relative geopotential gradients every sub-step; `slow` holds them in the frozen forcing. |
+| `acoustic_substep_damping_form` | Divergence used by the divergence damping: `3d` (default), `3d_perturbation`, or `horizontal`. |
+| `acoustic_substep_damping` | Divergence-damping coefficient ``\beta_d`` (``\nu_d = \beta_d c_\mathrm{ref}^2 \Delta t_\mathrm{sub}``). `auto` (default) resolves to `0.4` for `fast` kinetic energy and `1.5` for `slow`; a number keeps its direct value. |
 | `acoustic_substep_implicit_split` | Restrict the sub-cycle implicit solve to the vertical grid-mean acoustic block and solve the remaining implicit terms once per outer step (default `false`). Requires `acoustic_substep_vertical: implicit`. |
 
 With `auto`, the sub-step count is
@@ -94,8 +186,12 @@ y_elem: 30
 z_elem: 30
 dt: "4secs"
 acoustic_substeps: "auto"
-acoustic_substep_damping: 1.5
 ```
+
+The kinetic-energy treatment, damping form, and damping coefficient take their defaults (`fast`, `3d`,
+and `auto`), so no further keys are needed. The previously validated configuration is recovered with
+`acoustic_substep_kinetic_energy: slow`, `acoustic_substep_damping_form: horizontal`, and
+`acoustic_substep_damping: 1.5`.
 
 ## When to use it
 
@@ -115,3 +211,9 @@ outweigh the saving, so the mode is not beneficial there.
 - The sub-cycle refreshes only the acoustic precomputed quantities; diagnostics that read the full cache
   should refresh it after a step.
 - The divergence-damping coefficient must lie within its stable range; the automatic default targets it.
+- The stable outer step and the coefficient defaults are established on a flat, dry box. Terrain and
+  moist convection are not yet exercised at large outer steps: the kinetic-energy gradient is evaluated
+  in metric-aware form, but the reference-relative pressure-gradient cancellation over terrain is
+  sensitive in `Float32`, and the moist stable outer step may be set by limits other than the resonance.
+  The `horizontal` damping form is the documented fallback if the vertical divergence term destabilizes
+  on strongly anisotropic grids.

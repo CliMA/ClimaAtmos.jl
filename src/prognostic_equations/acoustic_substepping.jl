@@ -39,6 +39,29 @@ NVTX.@annotate function horizontal_acoustic_tendency!(Yₜ, Y, p, t)
 end
 
 """
+    kinetic_energy_gradient_tendency!(Yₜ, Y, p, t)
+
+Compute the kinetic-energy-gradient contributions to the grid-mean momentum
+tendencies: the horizontal gradient of `K + Φ − Φ_r` on `uₕ` and the vertical
+gradient of `K` on `u₃`.
+
+The advective subset of the grid-mean momentum tendency that carries an
+acoustic-frequency signal. Re-evaluated inside the acoustic sub-cycle rather than
+held in the frozen slow forcing when the timestepper uses `FastKineticEnergy`.
+The `uₕ` term matches `horizontal_dynamics_tendency!` and the `u₃` term matches
+`explicit_vertical_advection_tendency!`.
+"""
+NVTX.@annotate function kinetic_energy_gradient_tendency!(Yₜ, Y, p, t)
+    (; ᶜK, ᶜp) = p.precomputed
+    (; ᶜΦ) = p.core
+    thermo_params = CAP.thermodynamics_params(p.params)
+    ᶜΦ_r = @. lazy(phi_r(thermo_params, ᶜp))
+    @. Yₜ.c.uₕ -= C12(gradₕ(ᶜK + ᶜΦ - ᶜΦ_r))
+    @. Yₜ.f.u₃ -= ᶠgradᵥ(ᶜK)
+    return nothing
+end
+
+"""
     grid_mean_acoustic_tendency!(Yₜ, Y, p, t)
 
 Compute the vertical grid-mean acoustic (sound-wave) and vertical-transport contributions to the grid-mean

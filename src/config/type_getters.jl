@@ -291,14 +291,41 @@ function ode_configuration(::Type{FT}, args) where {FT}
         args["acoustic_substep_vertical"] == "explicit" ? ExplicitVertical() :
         ImplicitVertical()
     n_sub = substeps == "auto" ? 0 : parse(Int, substeps)
+    kinetic_energy =
+        args["acoustic_substep_kinetic_energy"] == "slow" ?
+        FrozenKineticEnergy() : FastKineticEnergy()
+    damping_form = acoustic_damping_form(args["acoustic_substep_damping_form"])
+    β_d = acoustic_damping_coefficient(
+        args["acoustic_substep_damping"],
+        kinetic_energy,
+    )
     return AcousticMultirate(
         inner_algo,
         n_sub,
         vertical,
         args["acoustic_substep_order"],
-        args["acoustic_substep_damping"],
+        β_d,
         args["acoustic_substep_implicit_split"],
+        kinetic_energy,
+        damping_form,
     )
+end
+
+# Resolve the acoustic-substepping divergence-damping form from its config value.
+function acoustic_damping_form(form)
+    form == "3d" && return FullDivergenceDamping()
+    form == "3d_perturbation" && return PerturbationDivergenceDamping()
+    form == "horizontal" && return HorizontalDivergenceDamping()
+    error("Unknown acoustic_substep_damping_form: $form")
+end
+
+# Resolve the divergence-damping coefficient β_d. "auto" resolves from the
+# kinetic-energy treatment (0.4 for fast, 1.5 for slow); a number or a numeric
+# string keeps its direct value.
+acoustic_damping_coefficient(β_d::Real, kinetic_energy) = Float64(β_d)
+function acoustic_damping_coefficient(β_d::AbstractString, kinetic_energy)
+    β_d == "auto" || return parse(Float64, β_d)
+    return kinetic_energy isa FastKineticEnergy ? 0.4 : 1.5
 end
 
 function get_comms_context(parsed_args)

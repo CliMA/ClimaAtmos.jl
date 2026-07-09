@@ -541,6 +541,14 @@ steps:
           --job_id box_acoustic_substep_split_conservation
         artifact_paths: "box_acoustic_substep_split_conservation/output_active/*"
 
+      - label: ":package: Non-spherical: 3D box, dry density current, acoustic substepping resonance-source removal, conservation"
+        retry: *retry_policy
+        command: >
+          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+          --config_file $CONFIG_PATH/box_acoustic_substep_resonance_conservation.yml
+          --job_id box_acoustic_substep_resonance_conservation
+        artifact_paths: "box_acoustic_substep_resonance_conservation/output_active/*"
+
       - label: ":package: Non-spherical: Reproducibility test for radiative convective equilibrium in a 3D box"
         retry: *retry_policy
         command: >

@@ -80,9 +80,15 @@ acoustic_substep_vertical:
 acoustic_substep_order:
   help: "Order of the acoustic-substepping outer scheme [`1`, `2` (default)]."
   value: 2
+acoustic_substep_kinetic_energy:
+  help: "Treatment of the kinetic-energy gradient and the horizontal reference-relative geopotential gradient under acoustic substepping [`fast` (default): re-evaluated every sub-step, removing the dominant source of the split-explicit resonance; `slow`: held in the frozen slow forcing]."
+  value: "fast"
+acoustic_substep_damping_form:
+  help: "Divergence used by the acoustic-substepping divergence damping [`3d` (default): the three-dimensional divergence of the full velocity; `3d_perturbation`: its deviation from the sub-cycle start value; `horizontal`: the horizontal divergence of the horizontal velocity]."
+  value: "3d"
 acoustic_substep_damping:
-  help: "Divergence-damping coefficient for acoustic substepping. Suppresses the split-explicit resonance between the frozen slow forcing and the sub-cycled acoustic modes. Too small leaves the resonance, too large over-damps the resolved divergent flow."
-  value: 1.5
+  help: "Divergence-damping coefficient for acoustic substepping, in the form nu_d = beta_d c_ref^2 fast_dt. Suppresses the split-explicit resonance between the slow forcing and the sub-cycled acoustic modes [`auto` (default): resolved from `acoustic_substep_kinetic_energy`, 0.4 for `fast` and 1.5 for `slow`; a number keeps its direct meaning]."
+  value: "auto"
 acoustic_substep_implicit_split:
   help: "Solve the non-acoustic implicit terms once per outer step instead of every acoustic sub-step (inner/outer implicit split). Requires `acoustic_substep_vertical: implicit`."
   value: false
