@@ -1,4 +1,4 @@
-377
+378
 
 # **README**
 #
@@ -32,6 +32,12 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+378
+- EDMFX inversion reconstruction: harmonic-mean face interpolation of eddy
+  diffusivities, stability-biased N², interface-aware effective stability
+  with interfacial entrainment diffusivity, and a face-native
+  stability/diffusivity pipeline.
+
 377
 - Carry the energy of sedimenting water at each subdomain's own value under
   PrognosticEDMFX: the grid-mean sedimentation energy flux equals the sum of

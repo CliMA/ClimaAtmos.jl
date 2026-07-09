@@ -195,9 +195,14 @@ function edmfx_vertical_diffusion_tendency!(
         )
         ᶜK_h = @. lazy(eddy_diffusivity(ᶜK_u, ᶜprandtl_nvec))
 
-        # Face diffusivities use a harmonic mean (reciprocal of interpolated
-        # reciprocal) so the flux collapses at faces bordering quiescent,
-        # strongly stratified air (see edmfx_sgs_diffusive_flux_tendency!).
+        # The updraft internal diffusivity ᶜK_h is computed at cell centers,
+        # so it is interpolated to faces with a harmonic mean (reciprocal of
+        # interpolated reciprocal) so the flux collapses at faces bordering
+        # quiescent, strongly stratified air, matching
+        # vertical_diffusion_boundary_layer_tendency!. (The EDMFX grid-mean
+        # diffusion in edmfx_sgs_diffusive_flux_tendency! instead uses the
+        # face-native ᶠK_h/ᶠK_entr, where the interface-aware closure handles
+        # the same collapse.)
         ϵK = eps(FT)
         for j in 1:n
             ᶜρʲ = ᶜρʲs.:($j)
