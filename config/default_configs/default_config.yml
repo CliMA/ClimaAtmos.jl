@@ -145,7 +145,7 @@ output_dir:
   help: "Output directory"
   value: ~
 output_dir_style:
-  help: "What to do when `output_dir` already exists. With `RemovePreexisting`, `output_dir` is overwritten with a new one. With `ActiveLink`, `output_dir` is treated as a base folder and numbered subfolders are created inside. A new subfolder is created every time a simulation is run, with `output_dir/output_active` pointing to the most recent results. Check out ClimaUtilities.OutputPathGenerator for more information. [`ActiveLink` (default), `RemovePreexisting`]"
+  help: "What to do when `output_dir` already exists. With `RemovePreexisting`, `output_dir` is overwritten with a new one. With `ActiveLink`, `output_dir` is treated as a base folder and numbered subfolders are created inside. A new subfolder is created every time a simulation is run, with `output_dir/output_active` pointing to the most recent results. With `ReuseExisting`, output is written directly into `output_dir` without creating a numbered subfolder and without removing existing contents, so a continuation run appends to the existing diagnostic files; `restart_file` must be passed explicitly. Check out ClimaUtilities.OutputPathGenerator for more information. [`ActiveLink` (default), `RemovePreexisting`, `ReuseExisting`]"
   value: "ActiveLink"
 device:
   help: "Device type to use [`auto` (default) `CPUSingleThreaded`, `CPUMultiThreaded`, `CUDADevice`]"

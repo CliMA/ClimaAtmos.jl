@@ -1,3 +1,4 @@
+import ClimaComms
 import ClimaCore: InputOutput
 import ClimaUtilities.OutputPathGenerator
 import ClimaUtilities.TimeManager: ITime
@@ -68,6 +69,34 @@ function handle_restart(
     spaces = (; center_space = axes(Y.c), face_space = axes(Y.f))
 
     return Y, t_start, spaces
+end
+
+"""
+    ReuseExistingStyle <: OutputPathGenerator.OutputPathGeneratorStyle
+
+Output directory style that writes directly into `output_dir` without creating an
+`output_NNNN` subdirectory and without removing any existing contents.
+
+Intended for continuing a simulation into an existing output directory, appending new
+time slices to the existing per-diagnostic NetCDF files and adding further checkpoint
+files alongside the existing ones.
+
+The diagnostics configuration of the continuation run must match the original run's;
+otherwise appending to an existing NetCDF file fails schema validation or corrupts it.
+"""
+struct ReuseExistingStyle <: OutputPathGenerator.OutputPathGeneratorStyle end
+
+function OutputPathGenerator.generate_output_path(
+    ::ReuseExistingStyle,
+    output_path;
+    context = nothing,
+)
+    output_path == "" && error("output_path cannot be empty")
+    if ClimaComms.iamroot(context)
+        isdir(output_path) || mkpath(output_path)
+    end
+    OutputPathGenerator.maybe_wait_filesystem(context, output_path)
+    return output_path
 end
 
 auto_detect_restart_file(::OutputPathGenerator.OutputPathGeneratorStyle, _) =
@@ -153,12 +182,22 @@ function setup_output_dir(
     allowed_dir_styles = Dict(
         "activelink" => OutputPathGenerator.ActiveLinkStyle(),
         "removepreexisting" => OutputPathGenerator.RemovePreexistingStyle(),
+        "reuseexisting" => ReuseExistingStyle(),
     )
 
     haskey(allowed_dir_styles, lowercase(output_dir_style)) ||
         error("output_dir_style $(output_dir_style) not available")
 
     output_dir_style_obj = allowed_dir_styles[lowercase(output_dir_style)]
+
+    if detect_restart_file &&
+       isnothing(restart_file) &&
+       output_dir_style_obj isa ReuseExistingStyle
+        error(
+            "detect_restart_file=true is not supported with " *
+            "output_dir_style=\"reuseexisting\"; pass restart_file explicitly.",
+        )
+    end
 
     final_restart_file = if detect_restart_file && isnothing(restart_file)
         auto_detect_restart_file(output_dir_style_obj, base_output_dir)
