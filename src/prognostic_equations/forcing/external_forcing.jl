@@ -457,34 +457,18 @@ function external_forcing_cache(
     column_target_space = axes(Y.c)
     surface_target_space = axes(Fields.level(Y.f.u₃, ClimaCore.Utilities.half))
 
-    extrapolation_bc = (Intp.Flat(), Intp.Flat(), Intp.Linear())
-
-    column_timevaryinginputs = [
-        TimeVaryingInput(
-            external_forcing_file,
-            name,
-            column_target_space;
-            reference_date = start_date,
-            regridder_kwargs = (; extrapolation_bc),
-            # useful for monthly averaged diurnal data - does not affect hourly era5 case because of time bounds flag
-            method = TimeVaryingInputs.LinearInterpolation(
-                TimeVaryingInputs.PeriodicCalendar(),
-            ),
-        ) for name in column_tendencies
-    ]
-
-    surface_timevaryinginputs = [
-        TimeVaryingInput(
-            external_forcing_file,
-            name,
-            surface_target_space;
-            reference_date = start_date,
-            regridder_kwargs = (; extrapolation_bc),
-            method = TimeVaryingInputs.LinearInterpolation(
-                TimeVaryingInputs.PeriodicCalendar(),
-            ),
-        ) for name in surface_tendencies
-    ]
+    column_timevaryinginputs = scm_forcing_timevaryinginputs(
+        external_forcing_file,
+        column_tendencies,
+        column_target_space,
+        start_date,
+    )
+    surface_timevaryinginputs = scm_forcing_timevaryinginputs(
+        external_forcing_file,
+        surface_tendencies,
+        surface_target_space,
+        start_date,
+    )
 
     column_variable_names_as_symbols = Symbol.(column_tendencies)
     surface_variable_names_as_symbols = Symbol.(surface_tendencies)
@@ -504,11 +488,6 @@ function external_forcing_cache(
             NTuple{length(surface_variable_names_as_symbols), eltype(params)},
         },
     )
-
-    column_timevaryinginputs =
-        (; zip(column_variable_names_as_symbols, column_timevaryinginputs)...)
-    surface_timevaryinginputs =
-        (; zip(surface_variable_names_as_symbols, surface_timevaryinginputs)...)
 
     era5_tv_column_cache = (; column_inputs, column_timevaryinginputs)
     era5_tv_surface_cache = (; surface_inputs, surface_timevaryinginputs)
@@ -541,6 +520,35 @@ function external_forcing_cache(
         ),
     )
     return (; era5_tv_column_cache..., era5_tv_surface_cache..., era5_cache...)
+end
+
+"""
+    scm_forcing_timevaryinginputs(file, names, target_space, start_date)
+
+Build a NamedTuple of `TimeVaryingInput`s (keyed by variable symbol) for `names`, read
+from `file` onto `target_space`. Factored out of the SCM external-forcing cache as the
+single seam where forcing `TimeVaryingInput`s are constructed — the first step toward a
+schema-driven reader (see `prototype/data_reader.jl`).
+
+The regridder uses a 3-component `extrapolation_bc` because the current SCM forcing
+files are stored as `(x, y, z)` boxes; `PeriodicCalendar` supports the
+monthly-averaged-diurnal case and is a no-op for the hourly trajectory case (time bounds).
+"""
+function scm_forcing_timevaryinginputs(file, names, target_space, start_date)
+    extrapolation_bc = (Intp.Flat(), Intp.Flat(), Intp.Linear())
+    tvis = map(names) do name
+        TimeVaryingInput(
+            file,
+            name,
+            target_space;
+            reference_date = start_date,
+            regridder_kwargs = (; extrapolation_bc),
+            method = TimeVaryingInputs.LinearInterpolation(
+                TimeVaryingInputs.PeriodicCalendar(),
+            ),
+        )
+    end
+    return (; zip(Symbol.(names), tvis)...)
 end
 
 """
