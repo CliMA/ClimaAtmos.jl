@@ -1,5 +1,6 @@
 module Setups
 
+import StaticArrays as SA
 import ClimaCore.Geometry as Geometry
 import ClimaCore: Fields
 import Thermodynamics as TD

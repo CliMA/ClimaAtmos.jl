@@ -131,29 +131,36 @@ const FunctionOrSpline =
 """
     ColumnInterpolatableField(::Fields.ColumnField)
 
-A column field object that can be interpolated
-in the z-coordinate. For example:
-
-!!! warn
-
-    This function allocates and is not GPU-compatible
-    so please avoid using this inside `step!` only use
-    this for initialization.
+Wrap a column field so it can be evaluated at any height `z` by linear
+interpolation between grid levels, with flat extrapolation outside the column
+bounds.
 """
-struct ColumnInterpolatableField{F, D}
-    f::F
-    data::D
-    function ColumnInterpolatableField(f::Fields.ColumnField)
-        zdata = vec(parent(Fields.Fields.coordinate_field(f).z))
-        fdata = vec(parent(f))
-        data = Intp.extrapolate(
-            Intp.interpolate((zdata,), fdata, Intp.Gridded(Intp.Linear())),
-            Intp.Flat(),
-        )
-        return new{typeof(f), typeof(data)}(f, data)
-    end
+struct ColumnInterpolatableField{N, FT}
+    z::SA.SVector{N, FT}
+    value::SA.SVector{N, FT}
+    z_min::FT
+    z_max::FT
 end
-(f::ColumnInterpolatableField)(z) = Spaces.undertype(axes(f.f))(f.data(z))
+function ColumnInterpolatableField(f::Fields.ColumnField)
+    zdata = vec(parent(Fields.coordinate_field(f).z))
+    fdata = vec(parent(f))
+    n = length(zdata)
+    z = SA.SVector{n}(zdata)
+    value = SA.SVector{n}(fdata)
+    return ColumnInterpolatableField(z, value, first(z), last(z))
+end
+@inline function (itp::ColumnInterpolatableField{N})(z) where {N}
+    zs = itp.z
+    zc = clamp(oftype(itp.z_min, z), itp.z_min, itp.z_max)
+    i = searchsortedfirst(zs, zc)
+    i = ifelse(i < 2, 2, ifelse(i > N, N, i))
+    z0 = @inbounds zs[i - 1]
+    z1 = @inbounds zs[i]
+    v0 = @inbounds itp.value[i - 1]
+    v1 = @inbounds itp.value[i]
+    w = (zc - z0) / (z1 - z0)
+    return (1 - w) * v0 + w * v1
+end
 
 """
     column_indefinite_integral(f, ϕ₀, zspan; nelems = 100)
