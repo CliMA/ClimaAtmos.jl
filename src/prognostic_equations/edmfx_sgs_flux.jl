@@ -259,29 +259,15 @@ function edmfx_sgs_diffusive_flux_tendency!(
         # consistency with the unscaled ρq_tot diffusion equation, preserves
         # total water invariance under moist-adiabatic processes, and aligns
         # with the implicit solver's Jacobian formulation.
-        ᶜdivᵥ_ρe_tot = Operators.DivergenceF2C(
-            top = Operators.SetValue(C3(FT(0))),
-            bottom = Operators.SetValue(C3(FT(0))),
-        )
         thermo_params = CAP.thermodynamics_params(params)
         (; ᶜΦ) = p.core
         (; ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice) = p.precomputed
         ᶜq_vap = @. lazy(
             TD.vapor_specific_humidity(ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice),
         )
-        @. Yₜ.c.ρe_tot -= ᶜdivᵥ_ρe_tot(
-            -(
-                ᶠρaK_h * (
-                    ᶠgradᵥ(TD.dry_static_energy(thermo_params, ᶜT, ᶜΦ)) +
-                    ᶠinterp(TD.enthalpy_vapor(thermo_params, ᶜT) + ᶜΦ) *
-                    ᶠgradᵥ(ᶜq_vap) +
-                    ᶠinterp(TD.enthalpy_liquid(thermo_params, ᶜT) + ᶜΦ) *
-                    ᶠgradᵥ(ᶜq_liq) +
-                    ᶠinterp(TD.enthalpy_ice(thermo_params, ᶜT) + ᶜΦ) *
-                    ᶠgradᵥ(ᶜq_ice)
-                )
-            ),
-        )
+        ᶠgrad_h =
+            ᶠtotal_enthalpy_gradientᵥ(thermo_params, ᶜT, ᶜΦ, ᶜq_vap, ᶜq_liq, ᶜq_ice)
+        @. Yₜ.c.ρe_tot -= ᶜdiffdivᵥ(-(ᶠρaK_h * ᶠgrad_h))
 
         if use_prognostic_tke(turbconv_model)
             # Turbulent TKE transport (diffusion)
@@ -307,22 +293,15 @@ function edmfx_sgs_diffusive_flux_tendency!(
         if !(p.atmos.microphysics_model isa DryModel)
             # Specific humidity diffusion
             ᶜρχₜ_diffusion = p.scratch.ᶜtemp_scalar
-            ᶜdivᵥ_ρq_tot = Operators.DivergenceF2C(
-                top = Operators.SetValue(C3(FT(0))),
-                bottom = Operators.SetValue(C3(FT(0))),
-            )
-            @. ᶜρχₜ_diffusion =
-                ᶜdivᵥ_ρq_tot(-(ᶠρaK_h * ᶠgradᵥ(specific(Y.c.ρq_tot, Y.c.ρ))))
+            ᶜq_tot = @. lazy(specific(Y.c.ρq_tot, Y.c.ρ))
+            ᶜ∇ᵥρD∇q_tot = ᶜdiffusive_flux_divergenceᵥ(ᶠρaK_h, ᶜq_tot)
+            @. ᶜρχₜ_diffusion = ᶜ∇ᵥρD∇q_tot
             @. Yₜ.c.ρq_tot -= ᶜρχₜ_diffusion
             @. Yₜ.c.ρ -= ᶜρχₜ_diffusion  # Effect of moisture diffusion on (moist) air mass
         end
 
         α_vert_diff_microphysics = CAP.α_vert_diff_tracer(params)
         ᶜρχₜ_diffusion = p.scratch.ᶜtemp_scalar
-        ᶜdivᵥ_ρq = Operators.DivergenceF2C(
-            top = Operators.SetValue(C3(FT(0))),
-            bottom = Operators.SetValue(C3(FT(0))),
-        )
         # Auto-discovered grid-scale tracers: sedimenting microphysics species
         # are diffused with α_vert_diff_tracer * K_h, all other tracers (e.g.
         # passive chemistry) with the unscaled K_h, matching
@@ -336,8 +315,10 @@ function edmfx_sgs_diffusive_flux_tendency!(
             α =
                 ρχ_name in gs_sedimenting_tracer_candidates ?
                 α_vert_diff_microphysics : one(α_vert_diff_microphysics)
-            ᶜχ = (@. lazy(specific(ᶜρχ, Y.c.ρ)))
-            @. ᶜρχₜ_diffusion = ᶜdivᵥ_ρq(-(ᶠρaK_h * α * ᶠgradᵥ(ᶜχ)))
+            ᶜχ = @. lazy(specific(ᶜρχ, Y.c.ρ))
+            ᶠcoef = @. lazy(ᶠρaK_h * α)
+            ᶜ∇ᵥρD∇χ = ᶜdiffusive_flux_divergenceᵥ(ᶠcoef, ᶜχ)
+            @. ᶜρχₜ_diffusion = ᶜ∇ᵥρD∇χ
             @. ᶜρχₜ -= ᶜρχₜ_diffusion
         end
 
