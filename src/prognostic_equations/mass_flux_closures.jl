@@ -174,16 +174,7 @@ function edmfx_vertical_diffusion_tendency!(
     if p.atmos.edmfx_model.vertical_diffusion isa Val{true}
         (; params) = p
         (; ᶜρʲs) = p.precomputed
-        FT = eltype(p.params)
         n = n_mass_flux_subdomains(turbconv_model)
-        ᶜdivᵥ_mse = Operators.DivergenceF2C(
-            top = Operators.SetValue(C3(0)),
-            bottom = Operators.SetValue(C3(0)),
-        )
-        ᶜdivᵥ_q_tot = Operators.DivergenceF2C(
-            top = Operators.SetValue(C3(0)),
-            bottom = Operators.SetValue(C3(0)),
-        )
 
         (; ᶜK_h) =
             ᶜeddy_diffusivities!(Y, p; ᶜmixing_length_field = p.scratch.ᶜtemp_scalar)
@@ -194,19 +185,16 @@ function edmfx_vertical_diffusion_tendency!(
             ᶜq_totʲ = Y.c.sgsʲs.:($j).q_tot
             # Note: For this and other diffusive tendencies, we should use ρaʲ instead of ρʲ,
             # but it causes stability issues when ρaʲ is small
-            @. Yₜ.c.sgsʲs.:($$j).mse -=
-                ᶜdivᵥ_mse(-(ᶠinterp(ᶜρʲ) * ᶠinterp(ᶜK_h) * ᶠgradᵥ(ᶜmseʲ))) / ᶜρʲ
-            @. Yₜ.c.sgsʲs.:($$j).q_tot -=
-                ᶜdivᵥ_q_tot(-(ᶠinterp(ᶜρʲ) * ᶠinterp(ᶜK_h) * ᶠgradᵥ(ᶜq_totʲ))) / ᶜρʲ
+            ᶠcoef = @. lazy(ᶠinterp(ᶜρʲ) * ᶠinterp(ᶜK_h))
+            ᶜ∇ᵥρD∇mseʲ = ᶜdiffusive_flux_divergenceᵥ(ᶠcoef, ᶜmseʲ)
+            @. Yₜ.c.sgsʲs.:($$j).mse -= ᶜ∇ᵥρD∇mseʲ / ᶜρʲ
+            ᶜ∇ᵥρD∇q_totʲ = ᶜdiffusive_flux_divergenceᵥ(ᶠcoef, ᶜq_totʲ)
+            @. Yₜ.c.sgsʲs.:($$j).q_tot -= ᶜ∇ᵥρD∇q_totʲ / ᶜρʲ
         end
 
         if !isempty(sgs_tracer_names(Y))
             α_vert_diff_microphysics = CAP.α_vert_diff_tracer(params)
             ᶜρʲ = ᶜρʲs.:(1)
-            ᶜdivᵥ_q = Operators.DivergenceF2C(
-                top = Operators.SetValue(C3(FT(0))),
-                bottom = Operators.SetValue(C3(FT(0))),
-            )
             # Sedimenting microphysics species are diffused with
             # α_vert_diff_tracer * K_h, passive tracers with the unscaled K_h,
             # matching the grid-mean tracer diffusion and the implicit
@@ -218,10 +206,9 @@ function edmfx_vertical_diffusion_tendency!(
                     one(α_vert_diff_microphysics)
                 ᶜχʲ = MatrixFields.get_field(Y.c.sgsʲs.:(1), χ_name)
                 ᶜχʲₜ = MatrixFields.get_field(Yₜ.c.sgsʲs.:(1), χ_name)
-                @. ᶜχʲₜ -=
-                    ᶜdivᵥ_q(
-                        -(ᶠinterp(ᶜρʲ) * ᶠinterp(ᶜK_h) * α * ᶠgradᵥ(ᶜχʲ)),
-                    ) / ᶜρʲ
+                ᶠcoef = @. lazy(ᶠinterp(ᶜρʲ) * ᶠinterp(ᶜK_h) * α)
+                ᶜ∇ᵥρD∇χʲ = ᶜdiffusive_flux_divergenceᵥ(ᶠcoef, ᶜχʲ)
+                @. ᶜχʲₜ -= ᶜ∇ᵥρD∇χʲ / ᶜρʲ
             end
         end
     end
