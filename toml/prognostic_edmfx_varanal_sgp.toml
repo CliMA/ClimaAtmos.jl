@@ -43,7 +43,7 @@ value = 1
 type = "float"
 
 [detr_massflux_vertdiv_coeff]
-value = 0.1
+value = 0.3
 type = "float"
 
 [pressure_normalmode_drag_coeff]
