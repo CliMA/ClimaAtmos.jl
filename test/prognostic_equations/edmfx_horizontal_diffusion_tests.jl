@@ -74,16 +74,21 @@ box_config_dict(; extra...) = bomex_edmfx_config_dict(;
     uniform_max = Dict(
         name => maximum(abs, parent(getproperty(Yₜ.c, name))) for name in rows
     )
+    uniform_max_uₕ = maximum(abs, parent(Yₜ.c.uₕ))
+    uniform_max_u₃ = maximum(abs, parent(Yₜ.f.u₃))
 
     # Perturb the state horizontally to activate every flux pathway. The
-    # enthalpy flux reads the precomputed `ᶜh_tot`, which is perturbed
-    # directly.
+    # enthalpy flux reads the precomputed `ᶜh_tot` and the momentum stress
+    # reads the precomputed `ᶜu`/`ᶠu`, which are perturbed directly.
     ᶜx = Fields.coordinate_field(Y.c).x
+    ᶠx = Fields.coordinate_field(Y.f).x
     ᶜpert = @. 1 + FT(0.1) * sin(FT(2π) * ᶜx / FT(6400))
     @. Y.c.ρq_tot *= ᶜpert
     @. Y.c.ρq_rai = FT(1e-5) * Y.c.ρ * ᶜpert
     @. Y.c.ρtke *= ᶜpert
     @. p.precomputed.ᶜh_tot *= 1 + FT(1e-3) * sin(FT(2π) * ᶜx / FT(6400))
+    @. p.precomputed.ᶜu *= ᶜpert
+    @. p.precomputed.ᶠu *= 1 + FT(0.1) * sin(FT(2π) * ᶠx / FT(6400))
 
     Yₜ .= zero(eltype(Yₜ))
     CA.edmfx_sgs_horizontal_diffusive_flux_tendency!(
@@ -93,11 +98,16 @@ box_config_dict(; extra...) = bomex_edmfx_config_dict(;
         name => maximum(abs, parent(getproperty(Yₜ.c, name))) for name in rows
     )
 
+    perturbed_max_uₕ = maximum(abs, parent(Yₜ.c.uₕ))
+    perturbed_max_u₃ = maximum(abs, parent(Yₜ.f.u₃))
+
     # Non-vacuous fluxes for every perturbed pathway.
     @test perturbed_max[:ρq_tot] > 0
     @test perturbed_max[:ρe_tot] > 0
     @test perturbed_max[:ρq_rai] > 0
     @test perturbed_max[:ρtke] > 0
+    @test perturbed_max_uₕ > 0
+    @test perturbed_max_u₃ > 0
 
     # The moist air mass tendency matches the ρq_tot tendency bitwise.
     @test parent(Yₜ.c.ρ) == parent(Yₜ.c.ρq_tot)
@@ -108,6 +118,20 @@ box_config_dict(; extra...) = bomex_edmfx_config_dict(;
         reference = max(perturbed_max[name], perturbed_max[:ρq_tot])
         @test uniform_max[name] <= FT(1e-10) * reference
     end
+    @test uniform_max_uₕ <= FT(1e-10) * perturbed_max_uₕ
+    @test uniform_max_u₃ <= FT(1e-10) * perturbed_max_u₃
+
+    # TKE shear production from horizontal gradients is positive definite:
+    # with uniform TKE the transport term vanishes and the production from
+    # the horizontally sheared velocity above remains.
+    @. Y.c.ρtke = FT(0.5) * Y.c.ρ
+    Yₜ .= zero(eltype(Yₜ))
+    CA.edmfx_sgs_horizontal_diffusive_flux_tendency!(
+        Yₜ, Y, p, t, p.atmos.turbconv_model,
+    )
+    production_max = maximum(parent(Yₜ.c.ρtke))
+    @test production_max > 0
+    @test minimum(parent(Yₜ.c.ρtke)) >= -FT(1e-10) * production_max
     # Identically zero tracers stay identically zero.
     for name in (:ρq_lcl, :ρq_icl, :ρq_sno)
         @test uniform_max[name] == 0
@@ -165,6 +189,8 @@ end
     for name in (:ρ, :ρe_tot, :ρq_tot, :ρq_lcl, :ρq_icl, :ρq_rai, :ρq_sno, :ρtke)
         @test maximum(abs, parent(getproperty(Yₜ.c, name))) == 0
     end
+    @test maximum(abs, parent(Yₜ.c.uₕ)) == 0
+    @test maximum(abs, parent(Yₜ.f.u₃)) == 0
 end
 
 @testset "Incompatible horizontal SGS closures are rejected" begin

@@ -4,6 +4,11 @@ ClimaAtmos.jl Release Notes
 main
 ----
 
+- [#4658](https://github.com/CliMA/ClimaAtmos.jl/pull/4658) ![][badge-✨feature/enhancement]
+  Add the momentum component of the horizontal EDMFX SGS diffusive flux — the
+  horizontal weak divergence of the stress `τ = -2 K_u S` with the full strain
+  rate — and the corresponding TKE shear production from horizontal gradients,
+  applied under the same `edmfx_sgs_horizontal_diffusive_flux` option.
 - [#4657](https://github.com/CliMA/ClimaAtmos.jl/pull/4657) ![][badge-✨feature/enhancement]
   Add a horizontal component to the EDMFX SGS diffusive flux, enabled by the opt-in
   `edmfx_sgs_horizontal_diffusive_flux` config option (default `false`), for

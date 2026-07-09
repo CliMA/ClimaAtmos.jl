@@ -359,8 +359,8 @@ function edmfx_sgs_horizontal_diffusive_flux_tendency!(
         buoyancy_gradient = ᶜlinear_buoygrad,
     )
 
-    ᶜK_u_h =
-        @. lazy(eddy_viscosity(turbconv_params, ᶜtke, ᶜmixing_length_h))
+    ᶜK_u_h = p.scratch.ᶜtemp_scalar_4
+    @. ᶜK_u_h = eddy_viscosity(turbconv_params, ᶜtke, ᶜmixing_length_h)
     ᶜprandtl_nvec = @. lazy(
         turbulent_prandtl_number(params, ᶜlinear_buoygrad, ᶜstrain_rate_norm),
     )
@@ -390,10 +390,26 @@ function edmfx_sgs_horizontal_diffusive_flux_tendency!(
         @. ᶜρχₜ += wdivₕ(ᶜρ * ᶜK_h_h * α_diff_tracer * gradₕ(ᶜχ))
     end
 
-    # Turbulent TKE transport
+    (; ᶜu, ᶠu) = p.precomputed
+
+    # Turbulent TKE transport, and shear production from horizontal gradients;
+    # the production from vertical gradients is applied in the TKE tendency.
     if use_prognostic_tke(turbconv_model)
         @. Yₜ.c.ρtke += wdivₕ(ᶜρ * ᶜK_u_h * gradₕ(ᶜtke))
+        ᶜS_h = compute_strain_rate_center_horizontal(ᶜu)
+        @. Yₜ.c.ρtke += 2 * ᶜρ * ᶜK_u_h * norm_sqr(ᶜS_h)
     end
+
+    # Momentum: horizontal weak divergence of the SGS stress `τ = -2 K_u S`
+    # with the full strain rate. The vertical stress divergence is handled by
+    # the vertical diffusion pathway.
+    ᶠρ = @. p.scratch.ᶠtemp_scalar = ᶠinterp(ᶜρ)
+    ᶜτ_h = compute_strain_rate_center_full!(p.scratch.ᶜtemp_UVWxUVW, ᶜu, ᶠu)
+    @. ᶜτ_h = -2 * ᶜK_u_h * ᶜτ_h
+    @. Yₜ.c.uₕ -= C12(wdivₕ(ᶜρ * ᶜτ_h) / ᶜρ)
+    ᶠτ_h = compute_strain_rate_face_full!(p.scratch.ᶠtemp_UVWxUVW, ᶜu, ᶠu)
+    @. ᶠτ_h = -2 * ᶠinterp(ᶜK_u_h) * ᶠτ_h
+    @. Yₜ.f.u₃ -= C3(wdivₕ(ᶠρ * ᶠτ_h) / ᶠρ)
 
     return nothing
 end

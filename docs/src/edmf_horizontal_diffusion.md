@@ -35,7 +35,32 @@ tracers — i.e. the same set the vertical flux diffuses. The microphysics and p
 tracers are scaled by the tracer diffusion factor ``\alpha`` (`α_vert_diff_tracer`,
 shared with the vertical flux). The total-specific-humidity flux additionally enters the
 air-mass tendency ``\partial_t \rho``; condensate and precipitation fluxes do not.
-Horizontal momentum diffusion is not included.
+
+The momentum tendency is the horizontal weak divergence of the subgrid-scale
+stress ``\tau = -2 K_u \mathcal{S}``, with ``\mathcal{S}`` the full
+three-dimensional strain rate of the grid-mean velocity,
+
+```math
+\partial_t u_h \mathrel{-}= \frac{1}{\rho} \nabla_h \cdot (\rho \, \tau),
+\qquad
+\partial_t u_3 \mathrel{-}= \frac{1}{\rho} \nabla_h \cdot (\rho \, \tau),
+```
+
+evaluated on cell centers for the horizontal wind and on cell faces for the
+vertical wind, mirroring the Smagorinsky-Lilly stress split by divergence
+direction; the vertical stress divergence is handled by the vertical diffusion
+pathway.
+
+The corresponding shear production of TKE uses the strain rate built from
+horizontal gradients only, ``\mathcal{S}_h``,
+
+```math
+\partial_t (\rho e) \mathrel{+}= 2 \rho \, K_u \, \mathcal{S}_h : \mathcal{S}_h ,
+```
+
+which is positive definite; the production from vertical gradients and its
+stencil are unchanged. This mirrors the decoupled Smagorinsky-Lilly split, in
+which each directional norm is built from that direction's gradients.
 
 The horizontal flux mirrors the vertical EDMFX diffusive flux: the same variables, the
 same tracer set, and the same scaling, with horizontal rather than vertical operators.
