@@ -4,6 +4,10 @@ ClimaAtmos.jl Release Notes
 main
 ----
 
+- [#4644](https://github.com/CliMA/ClimaAtmos.jl/pull/4644) ![][badge-🔥behavioralΔ]
+  - Remove the coherent (mass-flux) buoyancy production from the EDMFX TKE budget; the coherent updraft/environment buoyancy flux belongs to the resolved SGS circulation, not the isotropic turbulence that TKE represents.
+  - Decompose the diffusive enthalpy flux into dry static energy + water enthalpy, `F_h = -K_h ∇s_d + Σ_μ h_tot,μ (-K_h ∇q_μ)` with unit turbulent Lewis number, at both diffusion sites; diffusing `h_tot` directly implied a spurious enthalpy flux carried by dry-air diffusion that systematically warmed entrained air across capping inversions. The implicit-Jacobian diffusion factors are updated to match.
+  - Damp the relative part of the cloud-fraction floor as the subdomain mean saturates (`D = x/√(1+x²)`, `x = max(-μ_S, 0)/(ε_rel·q_sat)`), so an equilibrated overcast deck is no longer capped below full cloud cover by the patchiness floor. No new parameters.
 - [#4638](https://github.com/CliMA/ClimaAtmos.jl/pull/4638) ![][badge-🔥behavioralΔ] Fix the subsidence top boundary condition: the advective-form subsidence operator now uses the zero-boundary-flux divergence (`ᶜadvdivᵥ`), which is equivalent to a zero-gradient inflow condition `χ = χ_top` above the lid, instead of `Extrapolate` (which copied the cell below into the top cell). Remove the two `external_forcing.jl` blocks that hard-zeroed the accumulated top-cell `ρe_tot`/`ρq_tot` tendencies to mask that defect; GCM/ERA5-driven top-cell tendencies (radiation, nudging, subsidence) are no longer discarded.
 - [#4637](https://github.com/CliMA/ClimaAtmos.jl/pull/4637) ![][badge-🔥behavioralΔ]
   - Fix the spurious mass flux through the model top over sloped terrain-following coordinates: `set_velocity_at_top!` now cancels the contravariant projection of the horizontal wind (`u₃ = -uₕ³/g³³`, mirroring the surface treatment), and the continuity equation uses the same zero-boundary-flux divergence (`ᶜadvdivᵥ`) as the tracers, which also makes the `ρ`-row Jacobian exact.
