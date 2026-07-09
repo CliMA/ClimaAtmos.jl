@@ -215,10 +215,15 @@ struct PrescribedCloudInRadiation <: AbstractCloudInRadiation end
     ν₄_vorticity_coeff::FT
     divergence_damping_factor::FT
     prandtl_number::FT
+    # Safety factor limiting the vorticity coefficient by its explicit stability
+    # limit. `0` is the no-limit endpoint of the clamp (limit coefficient → ∞ as
+    # the factor → 0); a positive value reduces the coefficient so the
+    # hyperdiffusion is stable for `dt_limit_safety` timesteps.
+    dt_limit_safety::FT = 0
 end
 
 """
-    cam_se_hyperdiffusion(FT)
+    cam_se_hyperdiffusion(FT; dt_limit_safety = 0)
 
 Create a Hyperdiffusion with CAM_SE preset coefficients.
 
@@ -226,11 +231,12 @@ These coefficients match hyperviscosity coefficients from:
 (Lauritzen et al. (2017))[https://doi.org/10.1029/2017MS001257]
 for equations A18 and A19, scaled by `(1.1e5 / (sqrt(4 * pi / 6) * 6.371e6 / (3*30)) )^3 ≈ 1.238`
 """
-cam_se_hyperdiffusion(::Type{FT}) where {FT} =
+cam_se_hyperdiffusion(::Type{FT}; dt_limit_safety = 0) where {FT} =
     Hyperdiffusion{FT}(;
         ν₄_vorticity_coeff = 0.150 * 1.238,
         divergence_damping_factor = 5,
         prandtl_number = 0.2,
+        dt_limit_safety,
     )
 
 ### ------------------------------------ ###

@@ -33,6 +33,9 @@ vorticity_hyperdiffusion_coefficient:
 hyperdiffusion_prandtl_number:
   help: "Prandtl number for hyperdiffusion. Scalar hyperdiffusion coefficient = vorticity coefficient / Prandtl number."
   value: 0.2
+hyperdiffusion_dt_limit_safety:
+  help: "Safety factor limiting the vorticity hyperdiffusion coefficient by its explicit stability limit: when set, the coefficient is reduced so the hyperdiffusion is stable for `hyperdiffusion_dt_limit_safety * dt` (recommended `2`). `~` (default) applies no limit. Required for stability when the hyperdiffusion tendency is integrated once per step, e.g. under `acoustic_substeps`."
+  value: ~
 # Topography
 topography:
   help: "Define the surface elevation profile [`NoWarp` (default), `Earth`, `DCMIP200`, `Hughes2023`, `Agnesi`, `Schar`, `Cosine2D`, `Cosine3D`]"

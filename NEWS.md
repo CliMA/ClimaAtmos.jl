@@ -4,6 +4,10 @@ ClimaAtmos.jl Release Notes
 main
 ----
 
+- [#PRC](https://github.com/CliMA/ClimaAtmos.jl/pull/PRC) ![][badge-✨feature/enhancement] Add the `hyperdiffusion_dt_limit_safety` config option: when set, the vorticity hyperdiffusion coefficient is reduced so the hyperdiffusion is explicitly stable for `hyperdiffusion_dt_limit_safety * dt` (recommended `2`).
+  `~` (default) applies no limit, so existing configurations are unchanged.
+  The divergent and scalar coefficients scale with the vorticity coefficient; the physical Smagorinsky and EDMF mixing coefficients are not affected.
+
 0.41.2
 -------
 

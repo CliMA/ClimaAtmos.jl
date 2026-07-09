@@ -6,20 +6,49 @@ import ClimaCore.Geometry as Geometry
 import ClimaCore.Fields as Fields
 import ClimaCore.Spaces as Spaces
 
+# Maximum-wavenumber prefactor in the explicit stability limit of the vorticity
+# hyperdiffusion, calibrated for degree-3 spectral elements. See
+# `docs/src/equations.md` for the calibration.
+const HYPERDIFFUSION_MAX_WAVENUMBER_FACTOR = 4
+
 """
-    ν₄(hyperdiff, Y)
+    hyperdiffusion_dt_limit(hyperdiff, h)
+
+Compute the explicit (forward-Euler) stability limit [s] of the vorticity
+hyperdiffusion coefficient at mean nodal distance `h`, using the strongest of the
+divergent and scalar coefficients `F = max(divergence_damping_factor, 1 / prandtl_number)`.
+"""
+function hyperdiffusion_dt_limit(hyperdiff, h)
+    β = HYPERDIFFUSION_MAX_WAVENUMBER_FACTOR
+    F = max(hyperdiff.divergence_damping_factor, inv(hyperdiff.prandtl_number))
+    return 2 * h / (F * β^4 * hyperdiff.ν₄_vorticity_coeff)
+end
+
+"""
+    ν₄(hyperdiff, Y, dt)
 
 A `NamedTuple` of the hyperdiffusivity `ν₄_scalar` and the hyperviscosity
 `ν₄_vorticity`. These quantities are assumed to scale with `h^3`, where `h` is
 the mean nodal distance, following the empirical results of Lauritzen et al.
 (2018, https://doi.org/10.1029/2017MS001257). The scalar coefficient is computed
 as `ν₄_scalar = ν₄_vorticity / prandtl_number`, where `ν₄_vorticity = ν₄_vorticity_coeff * h^3`.
+
+When `hyperdiff.dt_limit_safety > 0`, `ν₄_vorticity` is reduced so that the
+hyperdiffusion is explicitly stable for `dt_limit_safety * dt`; see
+[`hyperdiffusion_dt_limit`](@ref).
 """
-function ν₄(hyperdiff, Y)
+function ν₄(hyperdiff, Y, dt)
     h = Spaces.node_horizontal_length_scale(Spaces.horizontal_space(axes(Y.c)))
-    # Vorticity coefficient unchanged
     ν₄_vorticity = hyperdiff.ν₄_vorticity_coeff * h^3
-    # Scalar coefficient = vorticity coefficient / Prandtl number
+    S = hyperdiff.dt_limit_safety
+    if S > 0
+        β = HYPERDIFFUSION_MAX_WAVENUMBER_FACTOR
+        F = max(hyperdiff.divergence_damping_factor, inv(hyperdiff.prandtl_number))
+        ν₄_vorticity = min(ν₄_vorticity, 2 * h^4 / (F * β^4 * S * float(dt)))
+    elseif float(dt) > hyperdiffusion_dt_limit(hyperdiff, h)
+        @warn "dt = $(float(dt)) s exceeds the explicit stability limit ($(hyperdiffusion_dt_limit(hyperdiff, h)) s) of the vorticity hyperdiffusion coefficient. Set hyperdiffusion_dt_limit_safety (recommended 2) or reduce vorticity_hyperdiffusion_coefficient." maxlog =
+            1
+    end
     ν₄_scalar = ν₄_vorticity / hyperdiff.prandtl_number
     return (; ν₄_scalar, ν₄_vorticity)
 end
@@ -123,7 +152,7 @@ NVTX.@annotate function apply_hyperdiffusion_tendency!(Yₜ, Y, p, t)
     isnothing(hyperdiff) && return nothing
 
     (; divergence_damping_factor) = hyperdiff
-    (; ν₄_scalar, ν₄_vorticity) = ν₄(hyperdiff, Y)
+    (; ν₄_scalar, ν₄_vorticity) = ν₄(hyperdiff, Y, p.dt)
 
     n = n_mass_flux_subdomains(turbconv_model)
     diffuse_tke = use_prognostic_tke(turbconv_model)
@@ -240,7 +269,7 @@ NVTX.@annotate function apply_tracer_hyperdiffusion_tendency!(Yₜ, Y, p, t)
     isnothing(hyperdiff) && return nothing
 
     # Rescale the hyperdiffusivity for precipitating species.
-    (; ν₄_scalar) = ν₄(hyperdiff, Y)
+    (; ν₄_scalar) = ν₄(hyperdiff, Y, p.dt)
     ν₄_scalar_microphysics = CAP.α_hyperdiff_tracer(p.params) * ν₄_scalar
 
     n = n_mass_flux_subdomains(turbconv_model)
