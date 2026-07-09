@@ -97,8 +97,48 @@ function (f::AcousticSubstepTendency)(Yₜ, Yₜ_lim, Y, p, t)
 end
 
 """
+    GridMeanAcousticTendency()
+
+Inner implicit operator of the inner/outer implicit split of acoustic substepping.
+
+Zeroes `Yₜ`, then accumulates the vertical grid-mean acoustic subset with
+`grid_mean_acoustic_tendency!`, so fields outside that subset have a zero
+tendency, matching `implicit_tendency!`.
+"""
+struct GridMeanAcousticTendency end
+function (::GridMeanAcousticTendency)(Yₜ, Y, p, t)
+    Yₜ .= zero(eltype(Yₜ))
+    grid_mean_acoustic_tendency!(Yₜ, Y, p, t)
+    return nothing
+end
+
+"""
+    OuterImplicitTendency(T_imp_full, buf)
+
+Outer implicit tendency of the inner/outer implicit split of acoustic
+substepping: the full implicit tendency minus the inner (vertical grid-mean
+acoustic) subset, `T_imp_full − grid_mean_acoustic_tendency!`.
+
+# Fields
+
+  - `T_imp_full`: the full implicit tendency function (`implicit_tendency!`).
+  - `buf`: scratch `FieldVector` holding the inner subset.
+"""
+struct OuterImplicitTendency{T, B}
+    T_imp_full::T
+    buf::B
+end
+function (o::OuterImplicitTendency)(Yₜ, Y, p, t)
+    o.T_imp_full(Yₜ, Y, p, t)
+    o.buf .= zero(eltype(o.buf))
+    grid_mean_acoustic_tendency!(o.buf, Y, p, t)
+    Yₜ .-= o.buf
+    return nothing
+end
+
+"""
     AcousticMultirate(inner_alg, n_sub, vertical, outer_stages = 2, β_d = 0.0,
-        damping_form = FullDivergenceDamping())
+        implicit_split = false, damping_form = FullDivergenceDamping())
 
 A multirate `TimeSteppingAlgorithm` that sub-cycles the acoustic modes. See
 `docs/src/acoustic_substepping.md`.
@@ -111,6 +151,11 @@ A multirate `TimeSteppingAlgorithm` that sub-cycles the acoustic modes. See
   - `vertical`: vertical-acoustic treatment.
   - `outer_stages`: order of the outer combination, `1` or `2`.
   - `β_d`: divergence-damping coefficient (`ν_d = β_d c_ref² fast_dt`).
+  - `implicit_split`: when `true` (and `vertical isa ImplicitVertical`), use the
+    inner/outer implicit split: the inner implicit solve is restricted to the
+    vertical grid-mean acoustic block (`grid_mean_acoustic_tendency!`) and the
+    remaining implicit terms are solved by an outer implicit half-step per outer
+    step. When `false`, the inner solve uses the full `implicit_tendency!`.
   - `damping_form`: divergence-damping form, `HorizontalDivergenceDamping` or
     `FullDivergenceDamping`.
 """
@@ -120,17 +165,25 @@ struct AcousticMultirate{A, V, D} <: CTS.TimeSteppingAlgorithm
     vertical::V
     outer_stages::Int
     β_d::Float64
+    implicit_split::Bool
     damping_form::D
 end
-AcousticMultirate(inner_alg, n_sub, vertical, outer_stages = 2, β_d = 0.0) =
-    AcousticMultirate(
-        inner_alg,
-        n_sub,
-        vertical,
-        outer_stages,
-        β_d,
-        FullDivergenceDamping(),
-    )
+AcousticMultirate(
+    inner_alg,
+    n_sub,
+    vertical,
+    outer_stages = 2,
+    β_d = 0.0,
+    implicit_split = false,
+) = AcousticMultirate(
+    inner_alg,
+    n_sub,
+    vertical,
+    outer_stages,
+    β_d,
+    implicit_split,
+    FullDivergenceDamping(),
+)
 
 # Sub-step size dt / n_sub. For `ITime`, refine to nanoseconds before dividing
 # so the result stays exact and positive even when the period is coarse relative
@@ -166,7 +219,7 @@ function auto_n_sub(dt, Δx, c_ref)
     return max(1, ceil(Int, float(dt) / safe_dt))
 end
 
-struct AcousticMultirateCache{F, B, II, A}
+struct AcousticMultirateCache{F, B, II, OI, A}
     f::F                 # the outer ClimaODEFunction
     G::B                 # frozen slow forcing (mutated; aliased into the inner forcing)
     G_lim::B             # frozen slow limited forcing (mutated; aliased)
@@ -176,6 +229,7 @@ struct AcousticMultirateCache{F, B, II, A}
     U0::B                # step-start state (restart point for the corrector)
     n_sub::Int           # resolved sub-step count (auto-selected when alg.n_sub = 0)
     inner_integ::II      # inner CTS integrator for the acoustic sub-cycle
+    outer_integ::OI      # outer CTS integrator for the inner/outer implicit split (nothing unless implicit_split)
     alg::A
 end
 
@@ -193,7 +247,24 @@ function CTS.init_cache(prob, alg::AcousticMultirate; dt, kwargs...)
     ν_d = FT(alg.β_d) * c_ref^2 * FT(float(fast_dt))
     forcing =
         AcousticSubstepTendency(G, G_lim, alg.vertical, ν_d, alg.damping_form)
-    T_imp! = alg.vertical isa ImplicitVertical ? f.T_imp! : nothing
+    implicit_split = alg.implicit_split && alg.vertical isa ImplicitVertical
+    # In the inner/outer implicit split the inner implicit solve is restricted to
+    # the vertical grid-mean acoustic block, so it factorizes the small
+    # acoustic-only `AcousticJacobian` rather than the full implicit Jacobian;
+    # otherwise the inner solve uses the full `implicit_tendency!` from
+    # `f.T_imp!`.
+    T_imp! =
+        if implicit_split
+            CTS.ODEFunction(
+                GridMeanAcousticTendency();
+                jac_prototype = Jacobian(AcousticJacobian(), u0, p.atmos),
+                Wfact = update_jacobian!,
+            )
+        elseif alg.vertical isa ImplicitVertical
+            f.T_imp!
+        else
+            nothing
+        end
     # The sub-cycle uses the lighter implicit cache (acoustic precomputed
     # quantities: velocities, pressure, enthalpy). The full (slow-physics) cache
     # is refreshed once per outer stage by `acoustic_slow_forcing!`.
@@ -214,9 +285,38 @@ function CTS.init_cache(prob, alg::AcousticMultirate; dt, kwargs...)
         saveat = (),
         save_everystep = false,
     )
+    # The outer implicit half-step solves the full implicit tendency minus the
+    # inner subset, once per outer step. It has no explicit tendency, so it needs
+    # only the implicit cache; the full (slow-physics) cache is refreshed by
+    # `acoustic_slow_forcing!` and the end-of-step `f.cache!`.
+    outer_integ =
+        if implicit_split
+            outer_f = CTS.ClimaODEFunction(;
+                T_exp_T_lim! = nothing,
+                T_imp! = CTS.ODEFunction(
+                    OuterImplicitTendency(f.T_imp!.f, zero(u0));
+                    jac_prototype = f.T_imp!.jac_prototype,
+                    Wfact = f.T_imp!.Wfact,
+                ),
+                cache! = f.cache_imp!,
+                cache_imp! = f.cache_imp!,
+                lim! = f.lim!,
+                dss! = f.dss!,
+                initialize_imp! = f.initialize_imp!,
+            )
+            CTS.init(
+                CTS.ODEProblem(outer_f, copy(u0), prob.tspan, p),
+                alg.inner_alg;
+                dt = fast_dt,
+                saveat = (),
+                save_everystep = false,
+            )
+        else
+            nothing
+        end
     return AcousticMultirateCache(
         f, G, G_lim, zero(u0), zero(u0), zero(u0), zero(u0),
-        n_sub, inner_integ, alg,
+        n_sub, inner_integ, outer_integ, alg,
     )
 end
 
@@ -253,12 +353,68 @@ function acoustic_subcycle!(inner, f, u_start, p, t, dt, n_sub)
     return inner.u
 end
 
+# Advance the outer implicit problem by `halfdt` from the current `u`, in place.
+function outer_half!(outer, u, p, t, halfdt)
+    outer.u .= u
+    outer.t = refine_ns(t)
+    # The outer integrator runs in the (nanosecond) sub-step period, so refine the
+    # half-step to match before assigning it (identity for `Float64` and for an
+    # already-refined `ITime`).
+    CTS.set_dt!(outer, refine_ns(halfdt))
+    empty!(outer.tstops)
+    CTS.step!(outer)
+    u .= outer.u
+    return nothing
+end
+
 function CTS.step_u!(integrator, cache::AcousticMultirateCache)
-    (; f, G, G_lim, G2, G2_lim, A_buf, U0, n_sub, inner_integ, alg) = cache
+    (;
+        f,
+        G,
+        G_lim,
+        G2,
+        G2_lim,
+        A_buf,
+        U0,
+        n_sub,
+        inner_integ,
+        outer_integ,
+        alg,
+    ) = cache
     u = integrator.u
     p = integrator.p
     t = integrator.t
     dt = integrator.dt
+
+    if alg.implicit_split && alg.vertical isa ImplicitVertical
+        if alg.outer_stages == 1
+            # First-order (Lie) inner/outer implicit split: one outer implicit
+            # solve over the full `dt`, then one inner acoustic sub-cycle with the
+            # slow forcing frozen at the step start.
+            outer_half!(outer_integ, u, p, t, dt)
+            acoustic_slow_forcing!(G, G_lim, A_buf, f, u, p, t)
+            acoustic_subcycle!(inner_integ, f, u, p, t, dt, n_sub)
+            u .= inner_integ.u
+            f.cache!(u, p, t + dt)
+            return u
+        end
+        # Second-order (Strang) inner/outer implicit split: symmetric composition
+        # of an outer implicit half-step, the inner acoustic sub-cycle over the
+        # full `dt`, and a second outer implicit half-step.
+        half = sub_timestep(dt, 2)
+        outer_half!(outer_integ, u, p, t, half)
+        U0 .= u
+        acoustic_slow_forcing!(G, G_lim, A_buf, f, U0, p, t)
+        acoustic_subcycle!(inner_integ, f, U0, p, t, dt, n_sub)
+        acoustic_slow_forcing!(G2, G2_lim, A_buf, f, inner_integ.u, p, t + dt)
+        @. G = (G + G2) / 2
+        @. G_lim = (G_lim + G2_lim) / 2
+        acoustic_subcycle!(inner_integ, f, U0, p, t, dt, n_sub)
+        u .= inner_integ.u
+        outer_half!(outer_integ, u, p, t + half, half)
+        f.cache!(u, p, t + dt)
+        return u
+    end
 
     if alg.outer_stages == 1
         # First-order: freeze the slow forcing over the whole step.

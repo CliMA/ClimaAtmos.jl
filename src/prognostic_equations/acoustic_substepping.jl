@@ -60,3 +60,48 @@ NVTX.@annotate function kinetic_energy_gradient_tendency!(Yₜ, Y, p, t)
     @. Yₜ.f.u₃ -= ᶠgradᵥ(ᶜK)
     return nothing
 end
+
+"""
+    grid_mean_acoustic_tendency!(Yₜ, Y, p, t)
+
+Compute the vertical grid-mean acoustic (sound-wave) and vertical-transport contributions to the grid-mean
+prognostic tendencies: the vertical mass-flux divergence on `ρ`, the vertical advection of total
+enthalpy on `ρe_tot` and (when moist) total specific humidity on `ρq_tot`, the vertical pressure-gradient
+and gravity (split θᵥ-Exner form) on `u₃`, and the Rayleigh sponge on `u₃`.
+
+The vertical grid-mean acoustic subset of `implicit_vertical_advection_tendency!`, duplicated rather than
+extracted. The inner operator of the inner/outer implicit split of acoustic substepping.
+"""
+function grid_mean_acoustic_tendency!(Yₜ, Y, p, t)
+    (; microphysics_model, rayleigh_sponge) = p.atmos
+    (; energy_q_tot_upwinding) = p.atmos.numerics
+    (; params, dt) = p
+    ᶜJ = Fields.local_geometry_field(axes(Y.c)).J
+    ᶠJ = Fields.local_geometry_field(axes(Y.f)).J
+    (; ᶠgradᵥ_ᶜΦ) = p.core
+    (; ᶠu³, ᶜp, ᶜh_tot, ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice) = p.precomputed
+    thermo_params = CAP.thermodynamics_params(params)
+    cp_d = CAP.cp_d(params)
+
+    @. Yₜ.c.ρ -= ᶜadvdivᵥ(ᶠinterp(Y.c.ρ * ᶜJ) / ᶠJ * ᶠu³)
+
+    vtt = vertical_transport(Y.c.ρ, ᶠu³, ᶜh_tot, dt, energy_q_tot_upwinding)
+    @. Yₜ.c.ρe_tot += vtt
+    if !(microphysics_model isa DryModel)
+        ᶜq_tot = @. lazy(specific(Y.c.ρq_tot, Y.c.ρ))
+        vtt = vertical_transport(Y.c.ρ, ᶠu³, ᶜq_tot, dt, energy_q_tot_upwinding)
+        @. Yₜ.c.ρq_tot += vtt
+    end
+
+    ᶜΦ_r = @. lazy(phi_r(thermo_params, ᶜp))
+    ᶜθ_v = p.scratch.ᶜtemp_scalar
+    @. ᶜθ_v = theta_v(thermo_params, ᶜT, ᶜp, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice)
+    ᶜθ_vr = @. lazy(theta_vr(thermo_params, ᶜp))
+    ᶜΠ = @. lazy(TD.exner_given_pressure(thermo_params, ᶜp))
+    @. Yₜ.f.u₃ -=
+        ᶠgradᵥ_ᶜΦ - ᶠgradᵥ(ᶜΦ_r) + cp_d * (ᶠinterp(ᶜθ_v - ᶜθ_vr)) * ᶠgradᵥ(ᶜΠ)
+
+    rst_u₃ = rayleigh_sponge_tendency_u₃(Y.f.u₃, rayleigh_sponge)
+    @. Yₜ.f.u₃ += rst_u₃
+    return nothing
+end
