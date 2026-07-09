@@ -236,6 +236,62 @@ function edmfx_vertical_diffusion_tendency!(
     end
 end
 
+edmfx_horizontal_diffusion_tendency!(Yₜ, Y, p, t, turbconv_model) = nothing
+
+function edmfx_horizontal_diffusion_tendency!(
+    Yₜ, Y, p, t, turbconv_model::PrognosticEDMFX,
+)
+    p.atmos.edmfx_model.horizontal_diffusion isa Val{true} || return nothing
+    iscolumn(axes(Y.c)) && return nothing
+    (; params) = p
+    (; ᶜρʲs, ᶜlinear_buoygrad, ᶜstrain_rate_norm) = p.precomputed
+    turbconv_params = CAP.turbconv_params(params)
+    n = n_mass_flux_subdomains(turbconv_model)
+
+    ᶜtke = @. lazy(specific(Y.c.ρtke, Y.c.ρ))
+    Δx = Spaces.node_horizontal_length_scale(Spaces.horizontal_space(axes(Y.c)))
+    ᶜmixing_length_h = p.scratch.ᶜtemp_scalar
+    ᶜmixing_length_h .= ᶜmixing_length(
+        Y, p; grid_scale = Δx, buoyancy_gradient = ᶜlinear_buoygrad,
+    )
+    ᶜK_u_h = @. lazy(eddy_viscosity(turbconv_params, ᶜtke, ᶜmixing_length_h))
+    ᶜprandtl_nvec =
+        @. lazy(turbulent_prandtl_number(params, ᶜlinear_buoygrad, ᶜstrain_rate_norm))
+    ᶜK_h_h = p.scratch.ᶜtemp_scalar_2
+    @. ᶜK_h_h = eddy_diffusivity(ᶜK_u_h, ᶜprandtl_nvec)
+
+    ᶜq_totʲₜ_diffusion = p.scratch.ᶜtemp_scalar_3
+    α_diff_microphysics = CAP.α_vert_diff_tracer(params)
+    for j in 1:n
+        ᶜρʲ = ᶜρʲs.:($j)
+        ᶜmseʲ = Y.c.sgsʲs.:($j).mse
+        ᶜq_totʲ = Y.c.sgsʲs.:($j).q_tot
+        @. Yₜ.c.sgsʲs.:($$j).mse +=
+            wdivₕ(ᶜρʲ * ᶜK_h_h * gradₕ(ᶜmseʲ)) / ᶜρʲ
+        @. ᶜq_totʲₜ_diffusion =
+            wdivₕ(ᶜρʲ * ᶜK_h_h * gradₕ(ᶜq_totʲ)) / ᶜρʲ
+        @. Yₜ.c.sgsʲs.:($$j).q_tot += ᶜq_totʲₜ_diffusion
+        # The updraft dry-air mass is unchanged by the water flux, so the
+        # area-weighted density responds to the change in total specific
+        # humidity, mirroring the hyperdiffusion treatment.
+        @. Yₜ.c.sgsʲs.:($$j).ρa +=
+            Y.c.sgsʲs.:($$j).ρa / (1 - ᶜq_totʲ) * ᶜq_totʲₜ_diffusion
+
+        # Sedimenting microphysics species are diffused with
+        # α_vert_diff_tracer * K_h, passive tracers with the unscaled K_h,
+        # matching the vertical updraft diffusion.
+        for χ_name in sgs_tracer_names(Y)
+            α =
+                χ_name in sgs_sedimenting_tracer_candidates ?
+                α_diff_microphysics : one(α_diff_microphysics)
+            ᶜχʲ = MatrixFields.get_field(Y.c.sgsʲs.:($j), χ_name)
+            ᶜχʲₜ = MatrixFields.get_field(Yₜ.c.sgsʲs.:($j), χ_name)
+            @. ᶜχʲₜ += wdivₕ(ᶜρʲ * ᶜK_h_h * α * gradₕ(ᶜχʲ)) / ᶜρʲ
+        end
+    end
+    return nothing
+end
+
 # Private helper: clips grid-mean condensate tracers to non-negative values and
 # rescales the condensate sum so it cannot exceed the available total moisture.
 function enforce_grid_mean_microphysics_constraints!(Y, p, t)

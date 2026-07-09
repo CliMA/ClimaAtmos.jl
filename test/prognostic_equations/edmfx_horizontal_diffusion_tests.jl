@@ -163,6 +163,52 @@ box_config_dict(; extra...) = bomex_edmfx_config_dict(;
     @test parent(ᶜl_buoygrad) == parent(ᶜl_default)
 end
 
+@testset "EDMFX updraft horizontal diffusion (Bomex box)" begin
+    config = CA.AtmosConfig(
+        box_config_dict(; edmfx_horizontal_diffusion = true);
+        job_id = "edmfx_updraft_horizontal_diffusion_box_test",
+    )
+    (; Y, p, simulation) = generate_test_simulation(config)
+    t = simulation.integrator.t
+    FT = eltype(Y)
+
+    @. Y.c.ρtke = FT(0.5) * Y.c.ρ
+    # A nonzero updraft area makes the ρa counterpart nonvacuous.
+    @. Y.c.sgsʲs.:(1).ρa = FT(0.1) * Y.c.ρ
+
+    up_row_max(Yₜ) = (
+        maximum(abs, parent(Yₜ.c.sgsʲs.:(1).mse)),
+        maximum(abs, parent(Yₜ.c.sgsʲs.:(1).q_tot)),
+        maximum(abs, parent(Yₜ.c.sgsʲs.:(1).ρa)),
+    )
+    Yₜ = similar(Y)
+    Yₜ .= zero(eltype(Yₜ))
+    CA.edmfx_horizontal_diffusion_tendency!(Yₜ, Y, p, t, p.atmos.turbconv_model)
+    uniform_mse, uniform_q_tot, uniform_ρa = up_row_max(Yₜ)
+
+    ᶜx = Fields.coordinate_field(Y.c).x
+    ᶜpert = @. 1 + FT(0.1) * sin(FT(2π) * ᶜx / FT(6400))
+    @. Y.c.sgsʲs.:(1).q_tot *= ᶜpert
+    @. Y.c.sgsʲs.:(1).mse *= 1 + FT(1e-3) * sin(FT(2π) * ᶜx / FT(6400))
+
+    Yₜ .= zero(eltype(Yₜ))
+    CA.edmfx_horizontal_diffusion_tendency!(Yₜ, Y, p, t, p.atmos.turbconv_model)
+    perturbed_mse, perturbed_q_tot, perturbed_ρa = up_row_max(Yₜ)
+    @test perturbed_mse > 0
+    @test perturbed_q_tot > 0
+    @test perturbed_ρa > 0
+    @test uniform_mse <= FT(1e-10) * perturbed_mse
+    @test uniform_q_tot <= FT(1e-10) * perturbed_q_tot
+    @test uniform_ρa <= FT(1e-10) * perturbed_ρa
+
+    # The ρa tendency is the q_tot tendency scaled by ρa / (1 - q_tot).
+    ᶜρa_expected = similar(Y.c.ρ)
+    @. ᶜρa_expected =
+        Y.c.sgsʲs.:(1).ρa / (1 - Y.c.sgsʲs.:(1).q_tot) *
+        Yₜ.c.sgsʲs.:(1).q_tot
+    @test parent(Yₜ.c.sgsʲs.:(1).ρa) ≈ parent(ᶜρa_expected) rtol = FT(1e-12)
+end
+
 @testset "EDMFX horizontal diffusive flux vanishes on a column" begin
     config = CA.AtmosConfig(
         bomex_edmfx_config_dict(;
@@ -172,6 +218,7 @@ end
             dt = "120secs",
             t_end = "30mins",
             z_elem = 30,
+            edmfx_horizontal_diffusion = true,
         );
         job_id = "edmfx_horizontal_diffusion_column_test",
     )
@@ -182,7 +229,7 @@ end
     @. Y.c.ρtke = FT(0.5) * Y.c.ρ
 
     # Spectral operators return exact zeros on a column, so all existing
-    # single-column results are unaffected by the option.
+    # single-column results are unaffected by the options.
     Yₜ = similar(Y)
     Yₜ .= zero(eltype(Yₜ))
     CA.edmfx_sgs_horizontal_diffusive_flux_tendency!(
@@ -193,6 +240,12 @@ end
     end
     @test maximum(abs, parent(Yₜ.c.uₕ)) == 0
     @test maximum(abs, parent(Yₜ.f.u₃)) == 0
+
+    Yₜ .= zero(eltype(Yₜ))
+    CA.edmfx_horizontal_diffusion_tendency!(Yₜ, Y, p, t, p.atmos.turbconv_model)
+    @test maximum(abs, parent(Yₜ.c.sgsʲs.:(1).mse)) == 0
+    @test maximum(abs, parent(Yₜ.c.sgsʲs.:(1).q_tot)) == 0
+    @test maximum(abs, parent(Yₜ.c.sgsʲs.:(1).ρa)) == 0
 end
 
 @testset "Incompatible horizontal SGS closures are rejected" begin

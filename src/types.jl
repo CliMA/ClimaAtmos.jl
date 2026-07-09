@@ -811,7 +811,8 @@ const ValTF = Union{Val{true}, Val{false}}
 
 struct EDMFXModel{
     EEM, EDM,
-    ESMF <: ValTF, ESDF <: ValTF, ESDFH <: ValTF, ENP <: ValTF, EVD <: ValTF, EF <: ValTF,
+    ESMF <: ValTF, ESDF <: ValTF, ESDFH <: ValTF, ENP <: ValTF, EVD <: ValTF,
+    EHD <: ValTF, EF <: ValTF,
     SBM <: AbstractScaleBlendingMethod,
 }
     entr_model::EEM
@@ -821,6 +822,7 @@ struct EDMFXModel{
     sgs_diffusive_flux_horizontal::ESDFH
     nh_pressure::ENP
     vertical_diffusion::EVD
+    horizontal_diffusion::EHD
     filter::EF
     scale_blending_method::SBM
 end
@@ -836,6 +838,7 @@ function EDMFXModel(;
     sgs_diffusive_flux_horizontal::Union{Bool, ValTF} = false,
     nh_pressure::Union{Bool, ValTF} = false,
     vertical_diffusion::Union{Bool, ValTF} = false,
+    horizontal_diffusion::Union{Bool, ValTF} = false,
     filter::Union{Bool, ValTF} = false,
     scale_blending_method,
     kwargs...,
@@ -851,6 +854,7 @@ function EDMFXModel(;
         parse_val_tf(sgs_diffusive_flux_horizontal),
         parse_val_tf(nh_pressure),
         parse_val_tf(vertical_diffusion),
+        parse_val_tf(horizontal_diffusion),
         parse_val_tf(filter),
         scale_blending_method,
     )

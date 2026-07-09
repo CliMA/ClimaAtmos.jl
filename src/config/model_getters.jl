@@ -782,6 +782,7 @@ function AtmosTurbconv(config::AtmosConfig, params, ::Type{FT}) where {FT}
         sgs_diffusive_flux_horizontal = pa["edmfx_sgs_horizontal_diffusive_flux"],
         nh_pressure = pa["edmfx_nh_pressure"],
         vertical_diffusion = pa["edmfx_vertical_diffusion"],
+        horizontal_diffusion = pa["edmfx_horizontal_diffusion"],
         filter = pa["edmfx_filter"],
         scale_blending_method,
     )

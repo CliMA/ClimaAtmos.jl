@@ -337,6 +337,7 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
     horizontal_constant_diffusion_tendency!(Yₜ, Y, p, t, chd)
 
     edmfx_sgs_horizontal_diffusive_flux_tendency!(Yₜ, Y, p, t, p.atmos.turbconv_model)
+    edmfx_horizontal_diffusion_tendency!(Yₜ, Y, p, t, p.atmos.turbconv_model)
 
     # Optional tendency to bring negative small tracers back from negative
     # at the cost of water vapor.

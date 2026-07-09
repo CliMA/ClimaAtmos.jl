@@ -434,6 +434,9 @@ edmfx_nh_pressure:
 edmfx_vertical_diffusion:
   help: "If set to true, it switches on vertical diffusion of prognostic EDMFX updrafts. [`true`, `false` (default)]"
   value: false
+edmfx_horizontal_diffusion:
+  help: "If set to true, it switches on horizontal diffusion of prognostic EDMFX updrafts, with the mixing length limited by the horizontal node spacing. Intended for high-resolution box runs.  [`true`, `false` (default)]"
+  value: false
 edmfx_entr_model:
   help: "EDMFX entrainment closure.  [`nothing` (default), `PiGroups`, `Generalized`]"
   value: ~

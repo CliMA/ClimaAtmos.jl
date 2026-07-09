@@ -42,6 +42,16 @@ The corresponding shear production of TKE uses the strain rate built from horizo
 
 which is positive definite; the production from vertical gradients and its stencil are unchanged. This mirrors the decoupled Smagorinsky-Lilly split, in which each directional norm is built from that direction's gradients.
 
+## Updraft horizontal diffusion
+
+The separate option `edmfx_horizontal_diffusion` (default `false`) switches on horizontal diffusion of the prognostic updraft variables, mirroring the vertical updraft diffusion of `edmfx_vertical_diffusion` with the horizontal mixing length: for each updraft,
+
+```math
+\partial_t \chi^j \mathrel{+}= \frac{1}{\rho^j} \nabla_h \cdot (\rho^j \, K_h \, \nabla_h \chi^j),
+```
+
+for the moist static energy, the total specific humidity, and the updraft SGS tracers (the latter scaled by ``\alpha``). The updraft dry-air mass is unchanged by the water flux, so the area-weighted density ``\rho a^j`` receives the counterpart tendency ``\rho a^j/(1 - q_\text{tot}^j)`` times the ``q_\text{tot}^j`` tendency, mirroring the hyperdiffusion treatment.
+
 The horizontal flux mirrors the vertical EDMFX diffusive flux: the same variables, the same tracer set, and the same scaling, with horizontal rather than vertical operators.
 
 ## Anisotropic length scale
