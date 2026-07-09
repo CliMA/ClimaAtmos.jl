@@ -1,4 +1,4 @@
-376
+377
 
 # **README**
 #
@@ -32,6 +32,12 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+377
+- Carry the energy of sedimenting water at each subdomain's own value under
+  PrognosticEDMFX: the grid-mean sedimentation energy flux equals the sum of
+  the updraft and environment fluxes, each carrying its subdomain internal
+  and kinetic energy.
+
 376
 - Implicit Jacobian only (tendencies unchanged): add the environment
   feedback to the entrainment-relaxation diagonal, and include the
