@@ -1,4 +1,4 @@
-377
+378
 
 # **README**
 #
@@ -32,6 +32,12 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+378
+- Halve t_end for the reproducibility tests that take >30 min of CI
+  time (moist baroclinic wave, Held-Suarez with moisture, aquaplanet
+  allsky varying insolation with gravity waves, RCE 3D box). Output
+  changes only because the integration is shorter; no scheme change.
+
 377
 - Carry the energy of sedimenting water at each subdomain's own value under
   PrognosticEDMFX: the grid-mean sedimentation energy flux equals the sum of

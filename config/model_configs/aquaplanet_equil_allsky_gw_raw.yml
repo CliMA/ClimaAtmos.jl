@@ -7,7 +7,7 @@ ode_algo: "SSPKnoth"
 orographic_gravity_wave: "raw_topo"
 dt: "400secs"
 surface_setup: "DefaultMoninObukhov"
-t_end: "15hours"
+t_end: "7.5hours"
 non_orographic_gravity_wave: true
 vert_diff: "VerticalDiffusion"
 insolation: "timevarying"
