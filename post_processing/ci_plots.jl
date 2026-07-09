@@ -733,7 +733,6 @@ const PeriodicTopographyTest3D = Union{
 }
 const MountainTest2D = Union{
     Val{:gpu_plane_agnesi_mountain_float64_test},
-    Val{:gpu_plane_schar_mountain_float64_test},
     Val{:gpu_plane_schar_mountain_float32_test},
 }
 const SteadyStateTest =
