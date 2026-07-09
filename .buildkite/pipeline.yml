@@ -9,7 +9,7 @@ env:
   SLURM_KILL_BAD_EXIT: 1
   JULIA_NVTX_CALLBACKS: gc
   JULIA_MAX_NUM_PRECOMPILE_FILES: 100
-  JULIA_DEPOT_PATH: "${BUILDKITE_BUILD_PATH}/${BUILDKITE_PIPELINE_SLUG}/depot/default"
+  JULIA_DEPOT_PATH: "${BUILDKITE_BUILD_PATH}/${BUILDKITE_PIPELINE_SLUG}/${BUILDKITE_BUILD_NUMBER}/depot:${BUILDKITE_BUILD_PATH}/${BUILDKITE_PIPELINE_SLUG}/depot/shared"
   COMMON_CONFIG_PATH: "config/common_configs"
   CONFIG_PATH: "config/model_configs"
   GPU_CONFIG_PATH: "config/gpu_configs"
@@ -26,20 +26,19 @@ steps:
     concurrency: 1
     concurrency_group: "depot/climaatmos-ci"
     command:
-      - "julia --project=.buildkite -e 'using Pkg; Pkg.instantiate()'"
+      # update_registry=false: the registry lives in the read-only depot/shared;
+      # skip the git-pull that would fail against it (see .buildkite/build_depot.sh).
+      - "julia --project=.buildkite -e 'using Pkg; Pkg.instantiate(; update_registry=false)'"
       - "julia --color=yes --project=.buildkite reproducibility_tests/publish_reference.jl"
 
   - label: "Initialize"
     if: 'build.branch != "main"'
     retry: *retry_policy
     key: "init_cpu_env"
-    concurrency: 1
-    concurrency_group: "depot/climaatmos-ci"
     command:
-      - "echo $$JULIA_DEPOT_PATH"
-
+      - echo $$JULIA_DEPOT_PATH
       - echo "--- Instantiate .buildkite"
-      - "julia --project=.buildkite -e 'using Pkg; Pkg.instantiate(;verbose=true); Pkg.precompile(;strict=true); Pkg.status()'"
+      - julia --project=.buildkite -e 'using Pkg; Pkg.instantiate(;verbose=true, update_registry=false); Pkg.precompile(;strict=true); Pkg.status()'
 
     agents:
       slurm_cpus_per_task: 8
