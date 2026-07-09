@@ -192,7 +192,8 @@ function diffusion_jacobian_blocks(Y, atmos, diffusion_flag)
         )...,
         (
             !isnothing(atmos.turbconv_model) ||
-            !disable_momentum_vertical_diffusion(atmos.vertical_diffusion) ?
+            !disable_momentum_vertical_diffusion(atmos.vertical_diffusion) ||
+            is_smagorinsky_vertical(atmos.smagorinsky_lilly) ?
             ((@name(c.uₕ), @name(c.uₕ)) => similar(Y.c, TridiagonalRow),) : ()
         )...,
     )
@@ -873,7 +874,8 @@ function update_diffusion_jacobian!(
     if (
         MatrixFields.has_field(Y, @name(c.ρtke)) ||
         !isnothing(p.atmos.turbconv_model) ||
-        !disable_momentum_vertical_diffusion(p.atmos.vertical_diffusion)
+        !disable_momentum_vertical_diffusion(p.atmos.vertical_diffusion) ||
+        is_smagorinsky_vertical(p.atmos.smagorinsky_lilly)
     )
         @. ∂ᶠρχ_dif_flux_∂ᶜχ =
             DiagonalMatrixRow(ᶠinterp(ᶜρ) * ᶠinterp(ᶜK_u)) ⋅ ᶠgradᵥ_matrix()
@@ -1029,12 +1031,20 @@ function update_diffusion_jacobian!(
 
     if (
         !isnothing(p.atmos.turbconv_model) ||
-        !disable_momentum_vertical_diffusion(p.atmos.vertical_diffusion)
+        !disable_momentum_vertical_diffusion(p.atmos.vertical_diffusion) ||
+        is_smagorinsky_vertical(p.atmos.smagorinsky_lilly)
     )
         ∂ᶜuₕ_err_∂ᶜuₕ = matrix[@name(c.uₕ), @name(c.uₕ)]
         @. ∂ᶜuₕ_err_∂ᶜuₕ =
             dtγ * DiagonalMatrixRow(1 / ᶜρ) ⋅ ᶜdiffusion_u_matrix - (I,)
     end
+
+    # u₃ receives no (f.u₃, f.u₃) diffusion block: `ᶜdiffusion_u_matrix` is a
+    # center-to-center operator with no face-space counterpart to add to
+    # `matrix[@name(f.u₃), @name(f.u₃)]`. The u₃ diffusion is still applied
+    # implicitly (see `vertical_smagorinsky_lilly_tendency!`); omitting its
+    # Jacobian term is a convergence-rate approximation, like the
+    # frozen-coefficient approximations above.
     return nothing
 end
 

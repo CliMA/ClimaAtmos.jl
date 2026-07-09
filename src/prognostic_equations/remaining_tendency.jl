@@ -327,7 +327,9 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
 
     sl = p.atmos.smagorinsky_lilly
     horizontal_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, sl)
-    vertical_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, sl)
+    if p.atmos.diff_mode == Explicit()
+        vertical_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, sl)
+    end
 
     amd = p.atmos.amd_les
     horizontal_amd_tendency!(Yₜ, Y, p, t, amd)

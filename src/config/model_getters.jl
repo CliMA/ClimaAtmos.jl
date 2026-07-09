@@ -652,6 +652,10 @@ function check_case_consistency(parsed_args)
     imp_vert_diff = parsed_args["implicit_diffusion"]
     vert_diff = parsed_args["vert_diff"]
     turbconv = parsed_args["turbconv"]
+    smagorinsky_lilly = parsed_args["smagorinsky_lilly"]
+    vertical_smagorinsky =
+        !isnothing(smagorinsky_lilly) &&
+        is_smagorinsky_vertical(SmagorinskyLilly(; axes = Symbol(smagorinsky_lilly)))
     topography = parsed_args["topography"]
     prescribed_flow = parsed_args["prescribed_flow"]
     config = parsed_args["config"]
@@ -677,9 +681,10 @@ function check_case_consistency(parsed_args)
     elseif imp_vert_diff
         # Implicit vertical diffusion is only supported for specific models:
         @assert(
-            !isnothing(turbconv) || !isnothing(vert_diff),
+            !isnothing(turbconv) || !isnothing(vert_diff) || vertical_smagorinsky,
             "Implicit vertical diffusion is only supported when using a " *
-            "turbulence convection model or vertical diffusion model.",
+            "turbulence convection model, vertical diffusion model, or " *
+            "vertical Smagorinsky-Lilly model.",
         )
     elseif !isnothing(prescribed_flow)
         @assert(topography == "NoWarp",
