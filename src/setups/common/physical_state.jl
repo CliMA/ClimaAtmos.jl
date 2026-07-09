@@ -126,7 +126,7 @@ import ClimaCore.Topologies as Topologies
 import ClimaCore.Spaces as Spaces
 
 const FunctionOrSpline =
-    Union{Function, APL.AbstractProfile, Intp.Extrapolation}
+    Union{Function, APL.AbstractProfile, Intp.Extrapolation, CI1D.Interpolate1D}
 
 """
     ColumnInterpolatableField(::Fields.ColumnField)

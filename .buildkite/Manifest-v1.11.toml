@@ -146,10 +146,10 @@ uuid = "56f22d72-fd6d-98f1-02f0-08ddc0907c33"
 version = "1.11.0"
 
 [[deps.AtmosphericProfilesLibrary]]
-deps = ["Interpolations", "LinearAlgebra"]
-git-tree-sha1 = "4f22cccc46fc221f3fa36c31ea6f57098aef8632"
+deps = ["ClimaInterpolations", "Interpolations", "LinearAlgebra", "StaticArrays"]
+git-tree-sha1 = "3e053ef899873642ac6a87b4a43be4a26333d376"
 uuid = "86bc3604-9858-485a-bdbe-831ec50de11d"
-version = "0.1.8"
+version = "0.1.9"
 
 [[deps.Atomix]]
 deps = ["UnsafeAtomics"]

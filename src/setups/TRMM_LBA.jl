@@ -39,13 +39,12 @@ function trmm_lba_profiles(thermo_params)
         q_v_sat = p_v_sat * (1 / Rv_over_Rd) / denominator
         return q_v_sat * measured_RH(z) / 100
     end
-    q_tot = Intp.extrapolate(
-        Intp.interpolate(
-            (measured_z_values,),
-            measured_q_tot_values,
-            Intp.Gridded(Intp.Linear()),
-        ),
-        Intp.Flat(),
+    n = length(measured_z_values)
+    q_tot = CI1D.Interpolate1D(
+        SA.SVector{n}(measured_z_values),
+        SA.SVector{n}(measured_q_tot_values);
+        interpolationorder = CI1D.Linear(),
+        extrapolationorder = CI1D.Flat(),
     )
 
     p = hydrostatic_pressure_profile(; thermo_params, p_0, T = T_profile, q_tot)
