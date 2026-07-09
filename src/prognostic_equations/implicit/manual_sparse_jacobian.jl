@@ -991,13 +991,38 @@ function update_diffusion_jacobian!(
 
     # The microphysics tracers carry no (·, ρ) blocks (see
     # `diffusion_jacobian_blocks`), so only their diagonals are updated here.
+    # Sedimenting microphysics tracers diffuse at α·K_h — the turbulent
+    # diffusivity scaled by α_vert_diff_tracer — but keep the interfacial-
+    # entrainment diffusivity K_entr at full weight, so their effective
+    # diffusivity is ρ(α·K_h + K_entr), matching
+    # edmfx_sgs_diffusive_flux_tendency!. ᶜdiffusion_h_matrix instead carries
+    # the full-weight ρ(K_h + K_entr) (used by the ρe_tot/ρq_tot diagonals and
+    # the passive tracers below), so under EDMFX a dedicated α-scaled tracer
+    # matrix is built here; the K_entr correction is nonzero only where the
+    # interface closure is active. For non-EDMFX vertical diffusion there is no
+    # K_entr and the diagonal keeps its original α·ᶜdiffusion_h_matrix form.
     α_vert_diff_microphysics = CAP.α_vert_diff_tracer(params)
-    MatrixFields.unrolled_foreach(sedimenting_tracer_names(Y)) do ρχ_name
-        ρχ_state_name = center_state_name(ρχ_name)
-        ∂ᶜρχ_err_∂ᶜρχ = matrix[ρχ_state_name, ρχ_state_name]
-        @. ∂ᶜρχ_err_∂ᶜρχ +=
-            dtγ * α_vert_diff_microphysics * ᶜdiffusion_h_matrix ⋅
-            DiagonalMatrixRow(1 / ᶜρ)
+    if turbconv_model isa AbstractEDMF
+        ᶜtracer_diffusion_matrix = p.scratch.ᶜtridiagonal_matrix_scalar
+        @. ∂ᶠρχ_dif_flux_∂ᶜχ =
+            DiagonalMatrixRow(
+                ᶠinterp(ᶜρ) * (α_vert_diff_microphysics * ᶠK_h + ᶠK_entr),
+            ) ⋅ ᶠgradᵥ_matrix()
+        @. ᶜtracer_diffusion_matrix = ᶜadvdivᵥ_matrix() ⋅ ∂ᶠρχ_dif_flux_∂ᶜχ
+        MatrixFields.unrolled_foreach(sedimenting_tracer_names(Y)) do ρχ_name
+            ρχ_state_name = center_state_name(ρχ_name)
+            ∂ᶜρχ_err_∂ᶜρχ = matrix[ρχ_state_name, ρχ_state_name]
+            @. ∂ᶜρχ_err_∂ᶜρχ +=
+                dtγ * ᶜtracer_diffusion_matrix ⋅ DiagonalMatrixRow(1 / ᶜρ)
+        end
+    else
+        MatrixFields.unrolled_foreach(sedimenting_tracer_names(Y)) do ρχ_name
+            ρχ_state_name = center_state_name(ρχ_name)
+            ∂ᶜρχ_err_∂ᶜρχ = matrix[ρχ_state_name, ρχ_state_name]
+            @. ∂ᶜρχ_err_∂ᶜρχ +=
+                dtγ * α_vert_diff_microphysics * ᶜdiffusion_h_matrix ⋅
+                DiagonalMatrixRow(1 / ᶜρ)
+        end
     end
 
     # Passive (non-water) grid-scale tracers are diffused with the unscaled
