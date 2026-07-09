@@ -49,7 +49,11 @@ import ClimaCoreSpectra: power_spectrum_2d
 
 using Poppler_jll: pdfunite, pdftoppm
 import Base.Filesystem
+import Dates
 import Statistics: mean
+import ClimaTimeSteppers as CTS
+import ClimaDiagnostics.Schedules: EveryCalendarDtSchedule
+import ClimaUtilities.TimeManager
 
 const days = 86400
 
@@ -1950,6 +1954,48 @@ function make_plots(sim_type::Larcform1Plots, output_paths::Vector{<:AbstractStr
         end
     end
 
+end
+
+"""
+    make_periodic_plot_callback(output_dir, start_date, t_start; period, plot_fn, plot_kw = NamedTuple())
+
+Wrap `plot_fn` into a `ClimaTimeSteppers.DiscreteCallback` that fires every `period` of
+calendar simulation time, so plots are produced periodically during a run rather than
+only at the end.
+
+`period` is a `Dates.Period`, or a string accepted by `ClimaAtmos.parse_checkpoint_frequency`
+(e.g. `"1days"`, `"6hours"`). `t_start` is the simulation start time, either in seconds or a
+`ClimaUtilities.TimeManager.ITime`. `plot_fn` is called as `plot_fn([output_dir]; plot_kw...)`;
+exceptions raised by `plot_fn` are caught and logged so a plotting failure does not
+terminate the simulation.
+"""
+function make_periodic_plot_callback(
+    output_dir,
+    start_date,
+    t_start;
+    period,
+    plot_fn,
+    plot_kw = NamedTuple(),
+)
+    period_dates = period isa Dates.Period ? period : CA.parse_checkpoint_frequency(period)
+    date_last = if t_start isa TimeManager.ITime
+        TimeManager.date(t_start)
+    else
+        start_date + Dates.Second(t_start)
+    end
+    schedule = EveryCalendarDtSchedule(period_dates; start_date, date_last)
+    cond = (u, t, integrator) -> schedule(integrator)
+    affect! = function (integrator)
+        try
+            t_h = round(Float64(integrator.t) / 3600; digits = 2)
+            @info "Generating periodic plots" t_h
+            plot_fn([output_dir]; plot_kw...)
+        catch e
+            @warn "Periodic plot callback failed; continuing simulation" exception =
+                (e, catch_backtrace())
+        end
+    end
+    return CTS.DiscreteCallback(cond, affect!)
 end
 
 # ARM VARANAL single-column case (model output + sonde observation comparison)
