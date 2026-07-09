@@ -133,7 +133,7 @@ outer step to keep the frozen filter within its explicit limit. The forward-Eule
 limit is ``\Delta t_\mathrm{hd} = 2 \Delta x_\mathrm{node} / (F\, c_4\, \beta^4)``,
 where ``c_4`` is the vorticity hyperdiffusion coefficient,
 ``F = \max(\text{divergence damping factor}, 1/\text{Prandtl number})`` is the
-strongest of the momentum and scalar channels, and ``\beta = 4`` is a
+larger of the momentum and scalar coefficient factors, and ``\beta = 4`` is a
 maximum-wavenumber prefactor calibrated for degree-3 spectral elements from the
 measured limit ``\Delta t_\mathrm{hd} \approx 0.95`` s at
 ``\Delta x_\mathrm{node} = 113`` m. With `acoustic_substep_hyperdiffusion_scaling:

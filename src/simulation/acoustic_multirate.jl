@@ -274,13 +274,10 @@ end
 Compute the factor applied to the vorticity hyperdiffusion coefficient under
 acoustic substepping. See `docs/src/acoustic_substepping.md`.
 
-Under substepping the hyperdiffusion is integrated once per outer step as a
-frozen forward-Euler filter with stability limit
-`Δt_hd_limit = 2 Δx_node / (F ν₄_vorticity_coeff β⁴)`, where
-`F = max(divergence_damping_factor, 1 / prandtl_number)` and `β = 4`. For
-`scaling == "auto"` the factor is `min(1, Δt_hd_limit / (safety dt_outer))` with
-`safety = 2`, keeping the frozen filter within its limit. A real `scaling` is
-returned unchanged, so `1` reproduces the unscaled coefficient.
+For `scaling == "auto"` the factor is `min(1, Δt_hd_limit / (2 dt_outer))` with
+`Δt_hd_limit = 2 Δx_node / (F ν₄_vorticity_coeff β⁴)`,
+`F = max(divergence_damping_factor, 1 / prandtl_number)`, and `β = 4`. A real
+`scaling` is returned unchanged, so `1` reproduces the unscaled coefficient.
 """
 acoustic_hyperdiffusion_scale(scaling::Real, hyperdiff, Δx_node, dt_outer) =
     oftype(dt_outer, scaling)
@@ -293,8 +290,8 @@ function acoustic_hyperdiffusion_scale(
 )
     scaling == "auto" ||
         error("Unknown acoustic_substep_hyperdiffusion_scaling: $scaling")
-    # Maximum-wavenumber prefactor, calibrated for degree-3 spectral elements
-    # from the measured limit Δt_hd_limit ≈ 0.95 s at Δx_node = 113 m.
+    # Maximum-wavenumber prefactor for degree-3 spectral elements; see
+    # docs/src/acoustic_substepping.md for the calibration.
     β = oftype(dt_outer, 4)
     safety = oftype(dt_outer, 2)
     F = max(hyperdiff.divergence_damping_factor, inv(hyperdiff.prandtl_number))
@@ -311,7 +308,7 @@ the stored coefficient so the hyperdiffusion tendency is unchanged at runtime.
 
 The model is returned unchanged when substepping is disabled
 (`acoustic_substeps = 0`), when it carries no hyperdiffusion, or when the factor
-is `1`, so those paths are byte-identical to a run without this feature.
+is `1`.
 """
 function scale_hyperdiffusion_under_acoustic_substepping(model, grid, parsed_args)
     string(parsed_args["acoustic_substeps"]) == "0" && return model

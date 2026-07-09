@@ -172,8 +172,8 @@ end
         @test s < 1
         @test auto_scaled !== model
         @test coeff(auto_scaled) ≈ s * configured
-        # Every other channel derives from the vorticity coefficient, so the
-        # Prandtl number and divergence-damping factor are unchanged.
+        # Only the vorticity coefficient is scaled; the Prandtl number and
+        # divergence-damping factor are unchanged.
         @test auto_scaled.numerics.hyperdiff.prandtl_number == 0.2
         @test auto_scaled.numerics.hyperdiff.divergence_damping_factor == 5.0
     end
