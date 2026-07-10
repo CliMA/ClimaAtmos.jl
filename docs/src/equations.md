@@ -359,16 +359,20 @@ The vorticity hyperviscosity coefficient scales with the mean nodal distance ``h
 The scalar hyperdiffusivity is ``\nu_4 / \mathrm{Pr}`` and the divergence damping applies the `divergence_damping_factor` to ``\nu_4``.
 
 When the hyperdiffusion tendency is integrated explicitly, its forward-Euler stability limit is
+
 ```math
 \Delta t_\mathrm{limit} = \frac{2 h}{F \, \beta^4 \, c_4},
 ```
+
 where ``F = \max(\text{divergence damping factor}, 1/\mathrm{Pr})`` is the strongest of the divergent and scalar coefficients and ``\beta = 4`` is a maximum-wavenumber prefactor calibrated for degree-3 spectral elements from the measured limit ``\Delta t_\mathrm{limit} \approx 0.95`` s at ``h = 113`` m.
 
 The `hyperdiffusion_dt_limit_safety` option limits the coefficient by this limit.
 When set to a positive value ``S``, the vorticity coefficient is reduced to
+
 ```math
 \nu_4 = \min\!\left(c_4 h^3, \; \frac{2 h^4}{F \, \beta^4 \, S \, \Delta t}\right),
 ```
+
 so the hyperdiffusion is explicitly stable for ``S \, \Delta t``; the divergent and scalar coefficients scale with it.
-This is required when the tendency is integrated once per step, for example under `acoustic_substeps`.
-With ``\sim`` (the default) the coefficient is unchanged and a warning is emitted when ``\Delta t`` exceeds ``\Delta t_\mathrm{limit}``.
+This is required when the tendency is integrated once per step at a long timestep.
+With `~` (the default) the coefficient is unchanged and a warning is emitted when ``\Delta t`` exceeds ``\Delta t_\mathrm{limit}``.

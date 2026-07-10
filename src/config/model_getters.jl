@@ -205,9 +205,7 @@ function get_insolation_form(parsed_args; setup_type = nothing)
     end
 end
 
-# Resolve the hyperdiffusion dt-limit safety factor. `~` (nothing) applies no
-# limit (field value `0`); any set value must be positive.
-function hyperdiffusion_dt_limit_safety(parsed_args, ::Type{FT}) where {FT}
+function get_hyperdiffusion_dt_limit_safety(parsed_args, ::Type{FT}) where {FT}
     safety = parsed_args["hyperdiffusion_dt_limit_safety"]
     isnothing(safety) && return FT(0)
     safety > 0 || error(
@@ -218,7 +216,7 @@ end
 
 function get_hyperdiffusion_model(parsed_args, ::Type{FT}) where {FT}
     hyperdiff_name = parsed_args["hyperdiff"]
-    dt_limit_safety = hyperdiffusion_dt_limit_safety(parsed_args, FT)
+    dt_limit_safety = get_hyperdiffusion_dt_limit_safety(parsed_args, FT)
     if hyperdiff_name == "Hyperdiffusion"
         return Hyperdiffusion{FT}(;
             ν₄_vorticity_coeff = parsed_args["vorticity_hyperdiffusion_coefficient"],

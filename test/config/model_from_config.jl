@@ -68,7 +68,7 @@ end
     # `~` (default): the field is 0 (no limit).
     @test getter(Dict{String, Any}()).dt_limit_safety == 0
 
-    # A set value passes through the nothing-default bypass as int or float.
+    # A set value is converted to `FT`, whether given as an Int or a Float.
     @test getter(
         Dict{String, Any}("hyperdiffusion_dt_limit_safety" => 2),
     ).dt_limit_safety == 2

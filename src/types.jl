@@ -216,9 +216,8 @@ struct PrescribedCloudInRadiation <: AbstractCloudInRadiation end
     divergence_damping_factor::FT
     prandtl_number::FT
     # Safety factor limiting the vorticity coefficient by its explicit stability
-    # limit. `0` is the no-limit endpoint of the clamp (limit coefficient → ∞ as
-    # the factor → 0); a positive value reduces the coefficient so the
-    # hyperdiffusion is stable for `dt_limit_safety` timesteps.
+    # limit; a positive value reduces the coefficient so the hyperdiffusion is
+    # stable for `dt_limit_safety` timesteps, and `0` applies no limit.
     dt_limit_safety::FT = 0
 end
 
