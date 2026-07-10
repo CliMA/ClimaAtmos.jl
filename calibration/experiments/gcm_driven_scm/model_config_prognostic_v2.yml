@@ -1,0 +1,42 @@
+initial_condition: "GCM"
+external_forcing_file: "/resnick/groups/esm/zhaoyi/GCMForcedLES/forcing/corrected/HadGEM2-A_amip.2004-2008.07.nc"
+cfsite_number: "site23"
+turbconv: "prognostic_edmfx"
+ode_algo: "ARS222"
+implicit_diffusion: true
+approximate_linear_solve_iters: 2
+max_newton_iters_ode_subproblem: 2
+max_newton_iters_ode: 3
+rayleigh_sponge: true
+edmfx_entr_model: "PiGroups"
+# edmfx_detr_model: "Generalized"
+edmfx_detr_model: "SmoothArea"
+# cloud_model: "grid_scale"
+microphysics_model: "0M"
+# microphysics_model: "1M"
+edmfx_sgs_mass_flux: true
+edmfx_sgs_diffusive_flux: true
+edmfx_nh_pressure: true
+edmfx_vertical_diffusion: true
+edmfx_filter: true
+prognostic_tke: true
+config: "column"
+z_max: 40e3
+z_elem: 60
+z_stretch: true
+dz_bottom: 30
+rad: allskywithclear
+perturb_initstate: false
+dt: "100secs"
+dt_rad: "180mins"
+# t_end: "72hours"
+t_end: "144hours"
+dt_save_state_to_disk: "Inf"
+toml: [scm_tomls/prognostic_edmfx_dev.toml]
+netcdf_output_at_levels: true
+netcdf_interpolation_num_points: [2, 2, 60]
+diagnostics:
+- short_name: [thetaa, hus, cl, clw, cli, pr]
+  period: 10mins
+- short_name: [entr, detr, lmix, turbentr, tke, arup, waup, edt]
+  period: 10mins

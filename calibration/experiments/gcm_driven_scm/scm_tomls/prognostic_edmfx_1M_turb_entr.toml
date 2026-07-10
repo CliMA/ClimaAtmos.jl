@@ -1,0 +1,100 @@
+[zd_rayleigh]
+value = 25000.0
+
+[zd_viscous]
+value = 25000.0
+
+[alpha_rayleigh_tracer]
+value = 0.001
+
+[EDMF_max_surface_area]
+value = 0.1
+
+[EDMF_min_area]
+value = 1.0e-5
+
+[EDMF_max_area]
+value = 0.7
+
+[turb_entr_param_vec]
+value = [0.0001, 20.0, 0.0]
+
+[entr_coeff]
+value = 0.1
+
+[min_area_limiter_scale]
+value = 0.0001
+
+[min_area_limiter_power]
+value = 1
+
+[detr_buoy_coeff]
+value = 1
+
+[detr_massflux_vertdiv_coeff]
+value = 0.1
+
+[max_area_limiter_scale]
+value = 0.001
+
+[max_area_limiter_power]
+value = 1
+
+[pressure_normalmode_drag_coeff]
+value = 10.0
+
+[pressure_normalmode_buoy_coeff1]
+value = 0.12
+
+[mixing_length_eddy_viscosity_coefficient]
+value = 0.56
+
+[mixing_length_tke_surf_flux_coeff]
+value = 5.0
+
+[mixing_length_diss_coeff]
+value = 0.22
+
+[tracer_vertical_diffusion_factor]
+value = 0
+
+[Tq_correlation_coefficient]
+value = 0.6
+
+[diagnostic_covariance_coeff]
+value = 2.1
+
+[cloud_fraction_steepness_scale]
+value = 1.0
+
+[threshold_smooth_transition_steepness]
+value = 10.0
+
+[condensation_evaporation_timescale]
+value = 100
+
+[sublimation_deposition_timescale]
+value = 100
+
+[fixed_cloud_liquid_terminal_velocity]
+value = 0.01
+
+[fixed_cloud_ice_terminal_velocity]
+value = 0.01
+
+[rain_autoconversion_timescale]
+value = 1800
+
+[fixed_rain_terminal_velocity]
+value = 7.5
+type = "float"
+
+[fixed_snow_terminal_velocity]
+value = 2.0
+type = "float"
+
+[rain_cross_section_size_relation_coefficient_chia]
+value = 1.0
+
+[snow_cross_section_size_relation_coefficient_chia]
+value = 3.0

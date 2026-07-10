@@ -1,0 +1,48 @@
+initial_condition: "GCM"
+external_forcing_file: "/resnick/groups/esm/zhaoyi/GCMForcedLES/forcing/corrected/HadGEM2-A_amip.2004-2008.07.nc"
+cfsite_number: "site23"
+turbconv: "prognostic_edmfx"
+rayleigh_sponge: true
+viscous_sponge: true
+ode_algo: "ARS222"
+implicit_diffusion: true
+approximate_linear_solve_iters: 2
+max_newton_iters_ode_subproblem: 2
+max_newton_iters_ode: 2
+edmfx_entr_model: "Generalized"
+edmfx_detr_model: "Generalized"
+microphysics_model: "1M"
+cloud_model: "quadrature"
+edmfx_vertical_diffusion: true
+edmfx_sgs_mass_flux: true
+edmfx_sgs_diffusive_flux: true
+edmfx_nh_pressure: true
+edmfx_filter: true
+prognostic_tke: true
+config: "column"
+hyperdiff: ~
+z_max: 40e3
+z_elem: 60
+z_stretch: true
+dz_bottom: 30
+rad: allskywithclear
+perturb_initstate: false
+dt: "100secs"
+dt_rad: "180mins"
+t_end: "72hours"
+# t_end: "144hours"
+# toml: [scm_tomls/prognostic_edmfx.toml]
+# toml: [scm_tomls/prognostic_edmfx_1M.toml]
+toml: [scm_tomls/prognostic_edmfx_1M_turb_entr.toml]
+netcdf_output_at_levels: true
+netcdf_interpolation_num_points: [2, 2, 60]
+dt_save_state_to_disk: "Inf"
+diagnostics:
+- short_name: [thetaa, hus, hur, cl, clw, cli, husra, hussn, pr, prra, prsn, evspsbl]
+  period: 10mins
+- short_name: [lwp, clivi, rwp, swp, clwvi, prw]
+  period: 10mins
+- short_name: [entr, detr, lmix, turbentr, tke, arup, waup, edt]
+  period: 10mins
+- short_name: [env_q_tot_variance, env_temperature_variance, env_q_tot_temperature_covariance, env_q_tot_temperature_correlation]
+  period: 10mins

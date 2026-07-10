@@ -10,6 +10,7 @@ using Logging
 using TOML
 using Flux
 using JLD2
+import YAML
 
 include("nn_helpers.jl")
 
@@ -22,6 +23,31 @@ function suppress_logs(f, args...; kwargs...)
     Logging.with_logger(Logging.SimpleLogger(stderr, Logging.Error)) do
         f(args...; kwargs...)
     end
+end
+
+"""
+    load_output_config_yml(simulation_dir)
+
+Load the AtmosConfig YAML snapshot written into a simulation output directory.
+
+Older ClimaAtmos dumps used an empty `job_id`, producing a file literally named
+`.yml`. Current versions default `job_id` to `default_config`, producing
+`default_config.yml`. Prefer the new name, then fall back to the old one. Only
+these two explicit names are accepted to avoid silently loading an unrelated
+YAML file.
+"""
+function load_output_config_yml(simulation_dir)
+    candidates = [
+        joinpath(simulation_dir, "default_config.yml"),
+        joinpath(simulation_dir, ".yml"),
+    ]
+    for path in candidates
+        isfile(path) && return YAML.load_file(path)
+    end
+    error(
+        "No AtmosConfig YAML dump found in $simulation_dir " *
+        "(expected default_config.yml or .yml)",
+    )
 end
 
 """
@@ -912,7 +938,7 @@ function ensemble_data(
             simulation_dir =
                 joinpath(member_path, "config_$config_i", "output_active")
 
-            model_config_dict = YAML.load_file(joinpath(simulation_dir, ".yml"))
+            model_config_dict = load_output_config_yml(simulation_dir)
             # suppress logs when creating model config, z grids to avoid cluttering output
             model_config = suppress_logs(
                 CA.AtmosConfig,
