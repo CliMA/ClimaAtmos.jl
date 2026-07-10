@@ -16,6 +16,7 @@ function box_config(;
     vertical = "implicit",
     order = 2,
     substeps = "3",
+    dt = "0.5secs",
 )
     return Dict{String, Any}(
         "initial_condition" => "DryDensityCurrentProfile",
@@ -30,7 +31,7 @@ function box_config(;
         "y_elem" => 2,
         "z_elem" => 8,
         "z_stretch" => false,
-        "dt" => "0.5secs",
+        "dt" => dt,
         "t_end" => "60secs",
         "disable_surface_flux_tendency" => true,
         "output_default_diagnostics" => false,
@@ -149,4 +150,59 @@ end
     diff = zero(Y.c.uₕ)
     @. diff = Y3.c.uₕ - Yh.c.uₕ
     @test parent(diff) ≈ parent(vert)
+end
+
+function run_steps!(integ, n_steps)
+    for _ in 1:n_steps
+        CTS.step!(integ)
+    end
+    return integ
+end
+
+@testset "state update" begin
+    integ = box_integrator()
+    u_before = deepcopy(integ.u)
+    CTS.step!(integ)
+    Δρ = maximum(abs, parent(integ.u.c.ρ) .- parent(u_before.c.ρ))
+    Δu₃ = maximum(abs, parent(integ.u.f.u₃) .- parent(u_before.f.u₃))
+    @test Δρ > 0
+    @test Δu₃ > 0
+    @test all(isfinite, parent(integ.u.c.ρ))
+end
+
+@testset "mass and energy conservation" begin
+    integ = box_integrator(damping = 0.0)
+    mass_0 = sum(integ.u.c.ρ)
+    energy_0 = sum(integ.u.c.ρe_tot)
+    run_steps!(integ, 20)
+    mass_error = abs(sum(integ.u.c.ρ) - mass_0) / abs(mass_0)
+    energy_error = abs(sum(integ.u.c.ρe_tot) - energy_0) / abs(energy_0)
+    @test mass_error < 1e-8
+    @test energy_error < 1e-4
+end
+
+@testset "small-timestep agreement with the plain scheme" begin
+    n_steps = 5
+    plain = box_integrator(substeps = "0", dt = "0.2secs", order = 1)
+    substepped = box_integrator(substeps = "3", dt = "0.2secs", order = 1)
+    run_steps!(plain, n_steps)
+    run_steps!(substepped, n_steps)
+    for name in (:ρ, :ρe_tot)
+        reference = parent(getproperty(plain.u.c, name))
+        candidate = parent(getproperty(substepped.u.c, name))
+        relative_difference =
+            maximum(abs, reference .- candidate) / maximum(abs, reference)
+        @test relative_difference < 5e-2
+    end
+end
+
+@testset "timestep sweep" begin
+    for dt in ("0.5secs", "1secs", "2secs")
+        integ = box_integrator(substeps = "auto", dt = dt, order = 1)
+        t_start = integ.t
+        run_steps!(integ, 5)
+        @test integ.t > t_start
+        @test all(isfinite, parent(integ.u.c.ρ))
+        @test all(isfinite, parent(integ.u.f.u₃))
+    end
 end
