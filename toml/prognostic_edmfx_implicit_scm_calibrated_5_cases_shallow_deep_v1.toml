@@ -10,9 +10,6 @@ value = 0
 [mixing_length_tke_surf_scale]
 value = 1.1402470659472088
 
-[mixing_length_diss_coeff]
-value = 0.12492989143864316
-
 [detr_buoy_coeff]
 value = 0
 
@@ -39,9 +36,6 @@ value = 0
 
 [EDMF_max_surface_area]
 value = 0.07485284402727316
-
-[mixing_length_eddy_viscosity_coefficient]
-value = 0.1202718388572739
 
 [EDMF_min_area]
 value = 1.0e-5

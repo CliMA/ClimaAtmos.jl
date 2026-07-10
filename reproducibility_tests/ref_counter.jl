@@ -1,4 +1,4 @@
-379
+380
 
 # **README**
 #
@@ -32,6 +32,12 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+380
+- Reparameterize the TKE dissipation coefficient: c_d = c_m c_b / Ri_c with
+  Ri_c = mixing_length_Ri_crit (default 0.25). Configurations using the
+  repository TOMLs are preserved to within 1 ulp; at ClimaParams defaults
+  the derived c_d is 0.224 instead of 0.22.
+
 379
 - By default update the cache once per step and not stage
 

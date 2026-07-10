@@ -313,7 +313,7 @@ function mixing_length_lopez_gomez_2020(
     eps_FT = eps(FT)
 
     c_m = CAP.tke_ed_coeff(turbconv_params)
-    c_d = CAP.tke_diss_coeff(turbconv_params)
+    c_d = tke_dissipation_coefficient(turbconv_params)
     c_b = CAP.static_stab_coeff(turbconv_params)
 
     # l_z: Geometric distance from the surface
@@ -517,6 +517,10 @@ Parameters used are Pr_n = Prandtl_number_0 (neutral Prandtl number) and
 ω_pr = Prandtl_number_scale (Prandtl number scale coefficient).
 This formula applies in both stable (Ri > 0) and unstable (Ri < 0) conditions.
 The returned turbulent Prandtl number is limited to be between eps(FT) and Pr_max.
+
+The strong-stability limit of this closure (`Pr(Ri) → ∞`) is what closes the
+TKE dissipation coefficient; see [`tke_dissipation_coefficient`](@ref) for that
+derivation.
 """
 function turbulent_prandtl_number(params, ᶜN²_eff, ᶜstrain_rate_norm)
     FT = eltype(params)
@@ -550,6 +554,53 @@ function turbulent_prandtl_number(params, ᶜN²_eff, ᶜstrain_rate_norm)
     # Also ensure that it's not larger than the Pr_max parameter.
     return min(max(prandtl_nvec, eps_FT), Pr_max)
 end
+
+"""
+    tke_dissipation_coefficient(turbconv_params)
+
+The TKE dissipation coefficient `c_d = c_m c_b / Ri_c`, a derived closure
+coefficient combining the eddy-viscosity coefficient `c_m` (`tke_ed_coeff`),
+the static-stability coefficient `c_b` (`static_stab_coeff`), and the critical
+gradient Richardson number `Ri_c` (`Ri_crit`). Used by [`tke_dissipation`](@ref).
+
+# Derivation of `c_d = c_m c_b / Ri_c`
+
+Consider the local TKE balance (production = buoyancy destruction +
+dissipation, no transport) in stably stratified air, where the mixing length is
+buoyancy-limited, `l = l_N = √(c_b e)/N`, with `e` the TKE and `N` the buoyancy
+frequency:
+
+    2 K_u S² - K_h N² = c_d e^{3/2} / l,
+    K_u = c_m l √e,   K_h = K_u / Pr,
+
+with `S² = SᵢⱼSᵢⱼ` the squared strain-rate norm. Substituting `l = l_N` makes
+every term linear in `e`,
+
+    c_m √c_b (2S² - N²/Pr) e / N = c_d e N / √c_b,
+
+so the TKE amplitude cancels: there is no local equilibrium level, only a sharp
+threshold — TKE grows or decays exponentially according to the sign of the
+balance. Dividing by `N²` and using the gradient Richardson number
+`Ri = N²/(2S²)` gives the marginal condition
+
+    1/Ri = 1/Pr + c_d/(c_m c_b).
+
+In strong stability `Pr(Ri)` grows without bound (see
+[`turbulent_prandtl_number`](@ref)), so `1/Pr → 0` and turbulence is maintained
+for `Ri < Ri_c` with
+
+    Ri_c = c_m c_b / c_d.
+
+This combination of the three coefficients controls the stable-regime cutoff, so
+`(c_m, c_b, Ri_c)` are calibrated and `c_d` follows. The basis is nearly
+orthogonal: `c_m/c_d = Ri_c/c_b`, so the neutral-limit equilibrium TKE
+(`e = 2 (c_m/c_d) l² S²`) is independent of `c_m`, which acts as a
+flux-magnitude scaling, while `c_b` partitions TKE amplitude against the
+buoyancy length and `Ri_c` sets the stability cutoff.
+"""
+tke_dissipation_coefficient(turbconv_params) =
+    CAP.tke_ed_coeff(turbconv_params) * CAP.static_stab_coeff(turbconv_params) /
+    CAP.Ri_crit(turbconv_params)
 
 """
     blend_scales(

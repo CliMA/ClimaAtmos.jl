@@ -3,6 +3,10 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- [#4678](https://github.com/CliMA/ClimaAtmos.jl/pull/4678) ![][badge-🔥behavioralΔ] Reparameterize the TKE dissipation coefficient in terms of a critical Richardson number: `c_d = c_m·c_b/Ri_c`, with `Ri_c` read from the ClimaParams parameter `mixing_length_Ri_crit` (default 0.25). In the buoyancy-limited branch of the mixing-length closure, local TKE balance reduces to the threshold `Ri_c = c_m·c_b/c_d`, so `(c_m, c_b, Ri_c)` form a nearly orthogonal calibration basis (flux magnitude, buoyancy-length/TKE partition, stability cutoff) and `c_d` is derived. TOML overrides of `mixing_length_diss_coeff` no longer have any effect — set `mixing_length_Ri_crit` instead. At ClimaParams defaults the derived `c_d` is 0.224 instead of 0.22.
+
+0.41.3
+-------
 
 0.41.2
 -------
