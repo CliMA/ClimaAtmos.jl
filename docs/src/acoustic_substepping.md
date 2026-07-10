@@ -108,6 +108,27 @@ The first-order outer combination performs one outer solve per step; the second-
 The split is additive: the full implicit tendency and its Jacobian are unchanged, and the restricted operator duplicates the acoustic subset rather than extracting it, so the mode-off and unsplit paths are unchanged.
 The split requires `acoustic_substep_vertical: implicit`.
 
+## Forward-backward inner sub-step
+
+By default each sub-step is an IMEX-ARK inner sub-cycle (`acoustic_substep_scheme: imex`).
+The forward-backward scheme (`acoustic_substep_scheme: forward_backward`) replaces it with a cheaper split-explicit advance, following the practice of split-explicit dynamical cores (Klemp, Skamarock, and Dudhia 2007).
+Each sub-step of size ``\Delta\tau``
+
+1. advances the horizontal momentum forward with the horizontal pressure gradient, the horizontal kinetic-energy gradient, and the frozen slow momentum forcing;
+2. advances the scalars and the vertical kinetic-energy gradient against the updated horizontal momentum (backward), together with the frozen slow forcing;
+3. performs one off-centered vertically-implicit Newton iteration for the vertical grid-mean acoustic block, reusing the restricted block-arrowhead Jacobian at ``\Delta t_\gamma = \theta \Delta\tau``;
+4. applies a time-adjusted divergence filter on ``u_h`` at the post-solve state.
+
+The off-centering weight is ``\theta = (1 + \beta_\mathrm{off}) / 2``, set by `acoustic_substep_off_centering` (default ``\beta_\mathrm{off} = 0.1``, ``\theta = 0.55``); ``\theta = 1`` is backward Euler.
+Off-centering is required, not a margin: the divergence filter damps only ``u_h``, so the vertical ``\rho'``-``u_3`` acoustic oscillator is damped only by ``\theta > 1/2``.
+
+The scheme is a cost feature at matched stability: it reuses the same fast tendency, off-centered solve, and divergence-damping coefficient as the IMEX inner, replacing three implicit solves, three Jacobian factorizations, and roughly ten direct-stiffness summations per sub-step with one, one, and two.
+The divergence filter is applied as a post-solve forward-Euler increment ``\Delta\tau \, \nu_d \, \mathrm{wgrad}_h(\delta)`` rather than integrated by the ERK, so it is somewhat more dissipative at the grid scale and stable only for ``\beta_d \, \mathrm{CFL}_h^2 \le 2``.
+
+The forward-backward scheme requires `acoustic_substep_vertical: implicit`.
+With prognostic EDMF it requires `acoustic_substep_implicit_split: true`, so the SGS implicit terms are carried by the outer half-step rather than the sub-cycle.
+Horizontal SEM limiters are not supported inside the forward-backward sub-cycle.
+
 ## Configuration
 
 | Option | Meaning |
@@ -118,6 +139,8 @@ The split requires `acoustic_substep_vertical: implicit`.
 | `acoustic_substep_damping_form` | Divergence used by the divergence damping: `3d` (default) or `horizontal`. |
 | `acoustic_substep_damping` | Divergence-damping coefficient ``\beta_d`` (``\nu_d = \beta_d c_\mathrm{ref}^2 \Delta t_\mathrm{sub}``). `auto` (default) resolves to `0.4`; a number keeps its direct value. |
 | `acoustic_substep_implicit_split` | Restrict the sub-cycle implicit solve to the vertical grid-mean acoustic block and solve the remaining implicit terms once per outer step (default `false`). Requires `acoustic_substep_vertical: implicit`. |
+| `acoustic_substep_scheme` | Inner sub-step scheme: `imex` (default) or `forward_backward`. `forward_backward` requires `acoustic_substep_vertical: implicit`. |
+| `acoustic_substep_off_centering` | Off-centering weight ``\beta_\mathrm{off}`` for the forward-backward vertically-implicit solve, ``\theta = (1 + \beta_\mathrm{off}) / 2`` (default `0.1`). Only used by `acoustic_substep_scheme: forward_backward`. |
 
 With `auto`, the sub-step count is
 
@@ -160,6 +183,7 @@ On configurations with inexpensive physics the sub-step count needed for stabili
 - The sub-cycle refreshes only the acoustic precomputed quantities; diagnostics that read the full cache should refresh it after a step.
   `update_cache_every` has no effect inside the sub-cycle: the full cache is refreshed only at whole-step states (when the slow forcing is frozen, at the restart of the second sub-cycle in the second-order combination, before the second outer implicit solve, and at the end of the outer step).
 - The state constraint `constrain_state!` is applied once per outer step, to the combined end-of-step state, matching the plain scheme's end-of-step cadence.
+  The forward-backward inner additionally applies it after every sub-step, as part of its advance.
   The `stage` and `dss` settings of `update_constrain_state_every` are not honored inside the sub-cycle.
 - The divergence-damping coefficient must lie within its stable range; the automatic default targets it.
 - The stable outer step and the coefficient defaults are established on a flat, dry box.

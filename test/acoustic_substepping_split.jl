@@ -14,7 +14,7 @@ import LinearAlgebra: I
 # the covariant-vector DSS). Both outer orders are covered; order 1 also exercises
 # the first-order `outer_half!` timestep path.
 
-function acoustic_box_config(; order, implicit_split)
+function acoustic_box_config(; order, implicit_split, scheme = "imex")
     return Dict{String, Any}(
         "initial_condition" => "DryDensityCurrentProfile",
         "config" => "box",
@@ -39,14 +39,15 @@ function acoustic_box_config(; order, implicit_split)
         "acoustic_substep_order" => order,
         "acoustic_substep_damping" => 1.5,
         "acoustic_substep_implicit_split" => implicit_split,
+        "acoustic_substep_scheme" => scheme,
     )
 end
 
 # Step a fresh simulation and snapshot the state at the requested step counts.
-function stepped_states(; order, implicit_split, checkpoints)
-    config = acoustic_box_config(; order, implicit_split)
+function stepped_states(; order, implicit_split, checkpoints, scheme = "imex")
+    config = acoustic_box_config(; order, implicit_split, scheme)
     config["output_dir"] = mktempdir()
-    job_id = "acoustic_o$(order)_$(implicit_split ? "split" : "unsplit")"
+    job_id = "acoustic_$(scheme)_o$(order)_$(implicit_split ? "split" : "unsplit")"
     integrator = CA.get_simulation(CA.AtmosConfig(config; job_id)).integrator
     states = Dict{Int, Any}()
     for step in 1:maximum(checkpoints)
@@ -59,10 +60,12 @@ end
 @testset "Acoustic substepping: implicit split reproduces the unsplit sub-cycle" begin
     checkpoints = (2, 4)
     uₕ_relative_tolerance = 1e-12
-    for order in (1, 2)
-        @testset "outer order $order" begin
-            unsplit = stepped_states(; order, implicit_split = false, checkpoints)
-            split = stepped_states(; order, implicit_split = true, checkpoints)
+    for scheme in ("imex", "forward_backward"), order in (1, 2)
+        @testset "$scheme outer order $order" begin
+            unsplit =
+                stepped_states(; order, implicit_split = false, checkpoints, scheme)
+            split =
+                stepped_states(; order, implicit_split = true, checkpoints, scheme)
             for n in checkpoints
                 u_unsplit, u_split = unsplit[n], split[n]
                 # ρ, ρe_tot, u₃ are bitwise identical.

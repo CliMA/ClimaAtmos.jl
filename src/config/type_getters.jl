@@ -293,6 +293,7 @@ function ode_configuration(::Type{FT}, args) where {FT}
     n_sub = substeps == "auto" ? 0 : parse(Int, substeps)
     damping_form = acoustic_damping_form(args["acoustic_substep_damping_form"])
     β_d = acoustic_damping_coefficient(args["acoustic_substep_damping"])
+    inner_scheme = acoustic_inner_scheme(FT, args)
     return AcousticMultirate(
         inner_algo,
         n_sub,
@@ -301,7 +302,36 @@ function ode_configuration(::Type{FT}, args) where {FT}
         β_d,
         args["acoustic_substep_implicit_split"],
         damping_form,
+        inner_scheme,
     )
+end
+
+# Resolve the acoustic-substepping inner sub-step scheme and validate its
+# configuration. `imex` returns `nothing` (the IMEX-ARK inner sub-cycle);
+# `forward_backward` returns an `AcousticForwardBackward` with θ = (1 + β_off) / 2.
+function acoustic_inner_scheme(::Type{FT}, args) where {FT}
+    scheme = args["acoustic_substep_scheme"]
+    scheme == "imex" && return nothing
+    scheme == "forward_backward" || error(
+        "Unknown acoustic_substep_scheme: $scheme; expected `imex` or `forward_backward`",
+    )
+    args["acoustic_substep_vertical"] == "implicit" || error(
+        "acoustic_substep_scheme: forward_backward requires \
+         acoustic_substep_vertical: implicit",
+    )
+    if args["turbconv"] == "prognostic_edmfx" &&
+       !args["acoustic_substep_implicit_split"]
+        error(
+            "acoustic_substep_scheme: forward_backward with turbconv: \
+             prognostic_edmfx requires acoustic_substep_implicit_split: true",
+        )
+    end
+    args["apply_sem_quasimonotone_limiter"] && error(
+        "acoustic_substep_scheme: forward_backward does not support \
+         apply_sem_quasimonotone_limiter",
+    )
+    β_off = FT(args["acoustic_substep_off_centering"])
+    return AcousticForwardBackward((1 + β_off) / 2)
 end
 
 # Resolve the acoustic-substepping divergence-damping form from its config value.

@@ -89,6 +89,12 @@ acoustic_substep_damping:
 acoustic_substep_implicit_split:
   help: "Solve the non-acoustic implicit terms once per outer step instead of every acoustic sub-step (inner/outer implicit split). Requires `acoustic_substep_vertical: implicit`."
   value: false
+acoustic_substep_scheme:
+  help: "Inner sub-step scheme for acoustic substepping [`imex` (default): the IMEX-ARK inner sub-step; `forward_backward`: a forward-backward inner sub-step with an off-centered vertically-implicit solve and an end-of-sub-step divergence filter, roughly three times cheaper per sub-step]. `forward_backward` requires `acoustic_substep_vertical: implicit`."
+  value: "imex"
+acoustic_substep_off_centering:
+  help: "Off-centering weight beta_off in [0, 1] for the forward-backward vertically-implicit solve, theta = (1 + beta_off) / 2. Only used by `acoustic_substep_scheme: forward_backward` [`0.1` (default)]."
+  value: 0.1
 krylov_rtol:
   help: "Relative tolerance of the Krylov method (only for ClimaTimeSteppers.jl; only used if `use_krylov_method` is `true`)"
   value: 0.1

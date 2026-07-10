@@ -144,7 +144,8 @@ end
 
 """
     AcousticMultirate(inner_alg, n_sub, vertical, outer_stages = 2, β_d = 0.0,
-        implicit_split = false, damping_form = FullDivergenceDamping())
+        implicit_split = false, damping_form = FullDivergenceDamping(),
+        inner_scheme = nothing)
 
 A multirate `TimeSteppingAlgorithm` that sub-cycles the acoustic modes. See
 `docs/src/acoustic_substepping.md`.
@@ -152,7 +153,8 @@ A multirate `TimeSteppingAlgorithm` that sub-cycles the acoustic modes. See
 # Fields
 
   - `inner_alg`: algorithm used for the acoustic sub-cycle (an `IMEXAlgorithm` for
-    `ImplicitVertical`, an explicit algorithm for `ExplicitVertical`).
+    `ImplicitVertical`, an explicit algorithm for `ExplicitVertical`). Also used
+    for the outer implicit half-step of the inner/outer split.
   - `n_sub`: sub-steps per outer step; `0` selects it from the acoustic CFL.
   - `vertical`: vertical-acoustic treatment.
   - `outer_stages`: order of the outer combination, `1` or `2`.
@@ -164,8 +166,10 @@ A multirate `TimeSteppingAlgorithm` that sub-cycles the acoustic modes. See
     step. When `false`, the inner solve uses the full `implicit_tendency!`.
   - `damping_form`: divergence-damping form, `HorizontalDivergenceDamping` or
     `FullDivergenceDamping`.
+  - `inner_scheme`: inner sub-step scheme. `nothing` uses the IMEX-ARK `inner_alg`;
+    an [`AcousticForwardBackward`](@ref) uses the forward-backward inner sub-step.
 """
-struct AcousticMultirate{A, V, D} <: CTS.TimeSteppingAlgorithm
+struct AcousticMultirate{A, V, D, S} <: CTS.TimeSteppingAlgorithm
     inner_alg::A
     n_sub::Int
     vertical::V
@@ -173,6 +177,7 @@ struct AcousticMultirate{A, V, D} <: CTS.TimeSteppingAlgorithm
     β_d::Float64
     implicit_split::Bool
     damping_form::D
+    inner_scheme::S
 end
 AcousticMultirate(
     inner_alg,
@@ -189,6 +194,7 @@ AcousticMultirate(
     β_d,
     implicit_split,
     FullDivergenceDamping(),
+    nothing,
 )
 
 """
@@ -352,14 +358,22 @@ function CTS.init_cache(prob, alg::AcousticMultirate; dt, kwargs...)
         else
             nothing
         end
+    # The forward-backward inner nulls `initialize_imp!` inside the sub-cycle so its
+    # analytic EDMF stage solve is carried by the outer half-step; the IMEX inner
+    # keeps `f.initialize_imp!`.
+    is_forward_backward = alg.inner_scheme isa AcousticForwardBackward
+    inner_initialize_imp! =
+        is_forward_backward ? Returns(nothing) : f.initialize_imp!
     # The fast sub-cycle is a full `ClimaODEFunction`: the acoustic fast tendency
     # (with the frozen forcing added by the outer step), the restricted or full
     # implicit operator, and the reused implicit cache, limiter, DSS, and state
-    # constraint. `constrain_state!` is applied once per outer step, to the
-    # combined end-of-step state; constraint application inside the sub-cycle
-    # is not supported. Under the implicit split the sub-cycle keeps a no-op
-    # `initialize_imp!`: the restricted inner operator excludes the SGS block,
-    # so the analytic SGS initialization pairs with the outer complement below.
+    # constraint. `constrain_state!` and `update_constrain_state` drive the
+    # end-of-outer-step constraint applied by the step-exchange outer method; the
+    # forward-backward inner also applies the constraint every sub-step, from its
+    # own captured copy. Constraint cadences finer than end-of-step are not applied
+    # inside the sub-cycle. Under the implicit split the sub-cycle keeps a no-op
+    # `initialize_imp!`: the restricted inner operator excludes the SGS block, so
+    # the analytic SGS initialization pairs with the outer complement below.
     f_fast = CTS.ClimaODEFunction(;
         T_exp_T_lim! = fast!,
         T_imp! = inner_T_imp!,
@@ -370,7 +384,7 @@ function CTS.init_cache(prob, alg::AcousticMultirate; dt, kwargs...)
         constrain_state! = f.constrain_state!,
         update_constrain_state = f.update_constrain_state,
         initialize_imp! = implicit_split ? Returns(nothing) :
-                          f.initialize_imp!,
+                          inner_initialize_imp!,
     )
     # The outer implicit half-step solves the full implicit tendency minus the
     # inner subset, once per outer step, pairing that residual with the matching
@@ -414,10 +428,19 @@ function CTS.init_cache(prob, alg::AcousticMultirate; dt, kwargs...)
     outer =
         alg.outer_stages == 1 ? CTS.LieSplitOuter(outer_complement) :
         CTS.TrapezoidalSplitOuter(outer_complement)
+    # The inner sub-cycle uses the forward-backward stepper when configured,
+    # otherwise the IMEX-ARK `inner_alg`. The outer implicit half-step always uses
+    # `inner_alg`. The step-exchange inner function does not forward
+    # `constrain_state!`, so the forward-backward stepper carries the model
+    # `constrain_state!` on its algorithm for its per-sub-step application.
+    inner_alg =
+        is_forward_backward ?
+        AcousticForwardBackward(alg.inner_scheme.θ, f.constrain_state!) :
+        alg.inner_alg
     split_prob = CTS.SplitODEProblem(f_fast, freeze!, u0, prob.tspan, p)
     cts_cache = CTS.init_cache(
         split_prob,
-        CTS.Multirate(alg.inner_alg, outer);
+        CTS.Multirate(inner_alg, outer);
         dt,
         fast_dt,
     )

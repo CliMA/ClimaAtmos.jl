@@ -162,6 +162,7 @@ include(joinpath("simulation", "grids.jl"))
 include(joinpath("simulation", "restart.jl"))
 include(joinpath("simulation", "integrator.jl"))
 include(joinpath("simulation", "acoustic_multirate.jl"))
+include(joinpath("simulation", "acoustic_forward_backward.jl"))
 include(joinpath("simulation", "AtmosSimulations.jl"))
 include(joinpath("simulation", "solve.jl"))
 

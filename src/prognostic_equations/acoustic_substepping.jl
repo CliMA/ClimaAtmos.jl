@@ -3,24 +3,31 @@
 #####
 
 """
-    horizontal_acoustic_tendency!(Yₜ, Y, p, t)
+    horizontal_acoustic_scalar_tendency!(Yₜ, Y, p, t)
 
-Compute the horizontal acoustic (sound-wave) contributions to the grid-mean
-prognostic tendencies: the horizontal mass-flux divergence on `ρ`, the
-horizontal total-enthalpy-flux divergence on `ρe_tot`, and the horizontal
-pressure-gradient (split θᵥ-Exner form) on `uₕ`.
+Compute the horizontal acoustic mass-flux divergence on `ρ` and the horizontal
+total-enthalpy-flux divergence on `ρe_tot`.
 
-The horizontal acoustic subset of `horizontal_dynamics_tendency!`, sub-cycled by
-the acoustic-substepping timestepper.
+The scalar subset of [`horizontal_acoustic_tendency!`](@ref).
 """
-NVTX.@annotate function horizontal_acoustic_tendency!(Yₜ, Y, p, t)
-    (; ᶜu, ᶜp, ᶜT, ᶜh_tot, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice) = p.precomputed
-    (; params) = p
-    thermo_params = CAP.thermodynamics_params(params)
-    cp_d = thermo_params.cp_d
-
+NVTX.@annotate function horizontal_acoustic_scalar_tendency!(Yₜ, Y, p, t)
+    (; ᶜu, ᶜh_tot) = p.precomputed
     @. Yₜ.c.ρ -= split_divₕ(Y.c.ρ * ᶜu, 1)
     @. Yₜ.c.ρe_tot -= split_divₕ(Y.c.ρ * ᶜu, ᶜh_tot)
+    return nothing
+end
+
+"""
+    horizontal_acoustic_momentum_tendency!(Yₜ, Y, p, t)
+
+Compute the horizontal pressure-gradient (split θᵥ-Exner form) on `uₕ`.
+
+The `uₕ` subset of [`horizontal_acoustic_tendency!`](@ref).
+"""
+NVTX.@annotate function horizontal_acoustic_momentum_tendency!(Yₜ, Y, p, t)
+    (; ᶜp, ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice) = p.precomputed
+    thermo_params = CAP.thermodynamics_params(p.params)
+    cp_d = thermo_params.cp_d
 
     ᶜθ_v = p.scratch.ᶜtemp_scalar
     @. ᶜθ_v = theta_v(thermo_params, ᶜT, ᶜp, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice)
@@ -39,6 +46,57 @@ NVTX.@annotate function horizontal_acoustic_tendency!(Yₜ, Y, p, t)
 end
 
 """
+    horizontal_acoustic_tendency!(Yₜ, Y, p, t)
+
+Compute the horizontal acoustic (sound-wave) contributions to the grid-mean
+prognostic tendencies: the horizontal mass-flux divergence on `ρ`, the
+horizontal total-enthalpy-flux divergence on `ρe_tot`, and the horizontal
+pressure-gradient (split θᵥ-Exner form) on `uₕ`.
+
+The horizontal acoustic subset of `horizontal_dynamics_tendency!`, sub-cycled by
+the acoustic-substepping timestepper. Its scalar and momentum parts,
+[`horizontal_acoustic_scalar_tendency!`](@ref) and
+[`horizontal_acoustic_momentum_tendency!`](@ref), are advanced separately by the
+forward-backward inner sub-stepper.
+"""
+function horizontal_acoustic_tendency!(Yₜ, Y, p, t)
+    horizontal_acoustic_scalar_tendency!(Yₜ, Y, p, t)
+    horizontal_acoustic_momentum_tendency!(Yₜ, Y, p, t)
+    return nothing
+end
+
+"""
+    kinetic_energy_gradient_uₕ_tendency!(Yₜ, Y, p, t)
+
+Compute the horizontal gradient of `K + Φ − Φ_r` on `uₕ`.
+
+The `uₕ` subset of [`kinetic_energy_gradient_tendency!`](@ref); matches
+`horizontal_dynamics_tendency!`.
+"""
+NVTX.@annotate function kinetic_energy_gradient_uₕ_tendency!(Yₜ, Y, p, t)
+    (; ᶜK, ᶜp) = p.precomputed
+    (; ᶜΦ) = p.core
+    thermo_params = CAP.thermodynamics_params(p.params)
+    ᶜΦ_r = @. lazy(phi_r(thermo_params, ᶜp))
+    @. Yₜ.c.uₕ -= C12(gradₕ(ᶜK + ᶜΦ - ᶜΦ_r))
+    return nothing
+end
+
+"""
+    kinetic_energy_gradient_u₃_tendency!(Yₜ, Y, p, t)
+
+Compute the vertical gradient of `K` on `u₃`.
+
+The `u₃` subset of [`kinetic_energy_gradient_tendency!`](@ref); matches
+`explicit_vertical_advection_tendency!`.
+"""
+NVTX.@annotate function kinetic_energy_gradient_u₃_tendency!(Yₜ, Y, p, t)
+    (; ᶜK) = p.precomputed
+    @. Yₜ.f.u₃ -= ᶠgradᵥ(ᶜK)
+    return nothing
+end
+
+"""
     kinetic_energy_gradient_tendency!(Yₜ, Y, p, t)
 
 Compute the kinetic-energy-gradient contributions to the grid-mean momentum
@@ -48,17 +106,14 @@ gradient of `K` on `u₃`.
 The gradient-form subset of the grid-mean momentum advection, re-evaluated inside
 the acoustic sub-cycle rather than held in the frozen slow forcing. Its
 energy-conserving partner, the rotational momentum flux, is sub-cycled alongside
-it by `rotational_momentum_flux_tendency!`. The `uₕ` term matches
-`horizontal_dynamics_tendency!` and the `u₃` term matches
-`explicit_vertical_advection_tendency!`.
+it by [`rotational_momentum_flux_tendency!`](@ref). Its `uₕ` and `u₃` parts,
+[`kinetic_energy_gradient_uₕ_tendency!`](@ref) and
+[`kinetic_energy_gradient_u₃_tendency!`](@ref), are advanced separately by the
+forward-backward inner sub-stepper.
 """
-NVTX.@annotate function kinetic_energy_gradient_tendency!(Yₜ, Y, p, t)
-    (; ᶜK, ᶜp) = p.precomputed
-    (; ᶜΦ) = p.core
-    thermo_params = CAP.thermodynamics_params(p.params)
-    ᶜΦ_r = @. lazy(phi_r(thermo_params, ᶜp))
-    @. Yₜ.c.uₕ -= C12(gradₕ(ᶜK + ᶜΦ - ᶜΦ_r))
-    @. Yₜ.f.u₃ -= ᶠgradᵥ(ᶜK)
+function kinetic_energy_gradient_tendency!(Yₜ, Y, p, t)
+    kinetic_energy_gradient_uₕ_tendency!(Yₜ, Y, p, t)
+    kinetic_energy_gradient_u₃_tendency!(Yₜ, Y, p, t)
     return nothing
 end
 
