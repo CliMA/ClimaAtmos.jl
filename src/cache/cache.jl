@@ -197,6 +197,7 @@ function build_cache(
             atmos.insolation,
         ) : ()
     hyperdiff = hyperdiffusion_cache(Y, atmos)
+    warn_if_hyperdiffusion_over_dt_limit(atmos.hyperdiff, Y, dt)
     non_orographic_gravity_wave = non_orographic_gravity_wave_cache(Y, atmos)
     orographic_gravity_wave = orographic_gravity_wave_cache(Y, atmos)
     radiation = radiation_model_cache(Y, atmos, radiation_args...)

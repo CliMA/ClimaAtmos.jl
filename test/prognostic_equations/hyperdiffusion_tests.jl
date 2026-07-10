@@ -1,8 +1,9 @@
 using Test
+import Logging
 import ClimaComms
 ClimaComms.@import_required_backends
 import ClimaAtmos as CA
-using ClimaCore: Spaces, Fields
+using ClimaCore: Spaces
 using ClimaCore.CommonSpaces
 
 @testset "Hyperdiffusion" begin
@@ -34,10 +35,28 @@ using ClimaCore.CommonSpaces
     )
     limit = CA.hyperdiffusion_dt_limit(make(), h)
 
-    @testset "no-limit identity" begin
+    @testset "coefficients with no limit set" begin
         out = CA.ν₄(make(), Y, limit / 10)
         @test out.ν₄_vorticity == coeff * h^3
         @test out.ν₄_scalar == coeff * h^3 / prandtl
+    end
+
+    @testset "warns above the limit when no safety is set" begin
+        @test_logs (:warn, r"stability limit") CA.warn_if_hyperdiffusion_over_dt_limit(
+            make(),
+            Y,
+            10 * limit,
+        )
+        @test_logs min_level = Logging.Warn CA.warn_if_hyperdiffusion_over_dt_limit(
+            make(),
+            Y,
+            limit / 10,
+        )
+        @test_logs min_level = Logging.Warn CA.warn_if_hyperdiffusion_over_dt_limit(
+            make(; dt_limit_safety = 2),
+            Y,
+            10 * limit,
+        )
     end
 
     @testset "clamp inert below the limit" begin

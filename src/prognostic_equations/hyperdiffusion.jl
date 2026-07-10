@@ -7,16 +7,18 @@ import ClimaCore.Fields as Fields
 import ClimaCore.Spaces as Spaces
 
 # Maximum-wavenumber prefactor in the explicit stability limit of the vorticity
-# hyperdiffusion, calibrated for degree-3 spectral elements. See
+# hyperdiffusion, calibrated for degree-3 (4-point GLL) spectral elements. See
 # `docs/src/equations.md` for the calibration.
+# TODO (#4673): recalibrate or derive this factor for other quadrature degrees;
+# the limit holds only for degree-3 elements.
 const HYPERDIFFUSION_MAX_WAVENUMBER_FACTOR = 4
 
 """
     hyperdiffusion_dt_limit(hyperdiff, h)
 
-Compute the explicit (forward-Euler) stability limit [s] of the vorticity
-hyperdiffusion coefficient at mean nodal distance `h`, using the strongest of the
-divergent and scalar coefficients `F = max(divergence_damping_factor, 1 / prandtl_number)`.
+Compute the forward-Euler stability limit, in seconds, of the explicit
+hyperdiffusion at mean nodal distance `h`, using the largest of the divergent and
+scalar coefficient factors `F = max(divergence_damping_factor, 1 / prandtl_number)`.
 """
 function hyperdiffusion_dt_limit(hyperdiff, h)
     β = HYPERDIFFUSION_MAX_WAVENUMBER_FACTOR
@@ -42,15 +44,30 @@ function ν₄(hyperdiff, Y, dt)
     ν₄_vorticity = hyperdiff.ν₄_vorticity_coeff * h^3
     S = hyperdiff.dt_limit_safety
     if S > 0
-        β = HYPERDIFFUSION_MAX_WAVENUMBER_FACTOR
-        F = max(hyperdiff.divergence_damping_factor, inv(hyperdiff.prandtl_number))
-        ν₄_vorticity = min(ν₄_vorticity, 2 * h^4 / (F * β^4 * S * float(dt)))
-    elseif float(dt) > hyperdiffusion_dt_limit(hyperdiff, h)
-        @warn "dt = $(float(dt)) s exceeds the explicit stability limit ($(hyperdiffusion_dt_limit(hyperdiff, h)) s) of the vorticity hyperdiffusion coefficient. Set hyperdiffusion_dt_limit_safety (recommended 2) or reduce vorticity_hyperdiffusion_coefficient." maxlog =
-            1
+        limit = hyperdiffusion_dt_limit(hyperdiff, h)
+        ν₄_vorticity = min(ν₄_vorticity, ν₄_vorticity * limit / (S * float(dt)))
     end
     ν₄_scalar = ν₄_vorticity / hyperdiff.prandtl_number
     return (; ν₄_scalar, ν₄_vorticity)
+end
+
+"""
+    warn_if_hyperdiffusion_over_dt_limit(hyperdiff, Y, dt)
+
+Warn when the hyperdiffusion tendency is integrated at a `dt` above its explicit
+stability limit while no limit is applied (`dt_limit_safety == 0`). See
+[`hyperdiffusion_dt_limit`](@ref).
+"""
+function warn_if_hyperdiffusion_over_dt_limit(hyperdiff, Y, dt)
+    hyperdiff isa Hyperdiffusion || return nothing
+    hyperdiff.dt_limit_safety > 0 && return nothing
+    h = Spaces.node_horizontal_length_scale(Spaces.horizontal_space(axes(Y.c)))
+    limit = hyperdiffusion_dt_limit(hyperdiff, h)
+    float(dt) > limit && @warn "dt = $(float(dt)) s exceeds the explicit \
+        stability limit ($limit s) of the vorticity hyperdiffusion coefficient. \
+        Set hyperdiffusion_dt_limit_safety (recommended 2) or reduce \
+        vorticity_hyperdiffusion_coefficient."
+    return nothing
 end
 
 function hyperdiffusion_cache(Y, atmos)
