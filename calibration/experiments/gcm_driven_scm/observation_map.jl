@@ -108,7 +108,12 @@ function process_member_data(
     g = Float64[]
     for i in forcing_file_indices
         simulation_dir = joinpath(member_path, "config_$i", "output_active")
-        model_config_dict = YAML.load_file(joinpath(simulation_dir, ".yml"))
+        # Read cfsite_number from the AtmosConfig YAML dump written by the run.
+        # Only the filename changed across ClimaAtmos versions (empty job_id
+        # produced `.yml`; newer versions default to `default_config.yml`);
+        # `load_output_config_yml` resolves either. Logic is otherwise identical
+        # to the original.
+        model_config_dict = load_output_config_yml(simulation_dir)
 
         cfsite_number = model_config_dict["cfsite_number"]
         site_num = parse(Int, replace(cfsite_number, r"[^0-9]" => ""))
@@ -177,7 +182,13 @@ function process_profile_variable(
     # take time-mean
     var_i_ave =
         average_time(window(var_i, "time", left = t_start, right = sim_t_end))
-    y_var_i = slice(var_i_ave, x = 1, y = 1).data
+    # Reduce any horizontal dimensions to obtain a z-profile. Box/SGS configs
+    # carry `x`/`y` dims; a true single-column run has only `z`, so slice each
+    # horizontal dim only if it is present.
+    var_i_col = var_i_ave
+    haskey(var_i_col.dims, "x") && (var_i_col = slice(var_i_col, x = 1))
+    haskey(var_i_col.dims, "y") && (var_i_col = slice(var_i_col, y = 1))
+    y_var_i = var_i_col.data
 
     # interpolate to calibration grid
     if !isnothing(z_interp)
