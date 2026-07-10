@@ -3,7 +3,6 @@ implicit_diffusion: false
 approximate_linear_solve_iters: 1
 rad: "allskywithclear"
 dt_save_state_to_disk: "1days"
-ode_algo: "SSPKnoth"
 orographic_gravity_wave: "raw_topo"
 dt: "400secs"
 surface_setup: "DefaultMoninObukhov"
