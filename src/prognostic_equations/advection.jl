@@ -307,6 +307,12 @@ This function handles:
   - Vertical advection of other updraft moisture species (`q_lclʲ`, `q_iclʲ`, `q_raiʲ`, `q_snoʲ`)
     if using a `NonEquilibriumMicrophysics1M` or `NonEquilibriumMicrophysics2M` microphysics
     model. If the `NonEquilibriumMicrophysics2M` model is used, `n_liqʲ` and `n_raiʲ` are also advected.
+  - Sedimentation of the updraft condensate species (and number concentrations
+    for 2M microphysics), including the cross-subdomain transfer of condensate
+    falling through tilted subdomain boundaries: each updraft receives a share
+    of the grid-mean sedimentation flux divergence (mass fraction for gains,
+    holdings fraction for losses; see the inline comment for the derivation
+    and the positivity clip).
   - Buoyancy source term in the updraft `mseʲ` equation (geopotential work done against
     the density anomaly).
 
@@ -340,8 +346,6 @@ function edmfx_sgs_vertical_advection_tendency!(
     ᶠJ = Fields.local_geometry_field(axes(Y.f)).J
 
     for j in 1:n
-        ᶜa = (@. lazy(draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j))))
-
         # buoyancy term in mse equation
         @. Yₜ.c.sgsʲs.:($$j).mse +=
             adjoint(CT3(ᶜinterp(Y.f.sgsʲs.:($$j).u₃))) *
@@ -392,140 +396,105 @@ function edmfx_sgs_vertical_advection_tendency!(
                 ᶜρʲs.:($$j),
                 turbconv_model,
             )
-            # Sedimentation
-            # TODO - lazify ᶜwₗʲs computation. No need to cache it.
-            sgs_microphysics_tracers = (
-                (@name(c.sgsʲs.:(1).q_lcl), @name(q_lcl), @name(ᶜwₗʲs.:(1))),
-                (@name(c.sgsʲs.:(1).q_icl), @name(q_icl), @name(ᶜwᵢʲs.:(1))),
-                (@name(c.sgsʲs.:(1).q_rai), @name(q_rai), @name(ᶜwᵣʲs.:(1))),
-                (@name(c.sgsʲs.:(1).q_sno), @name(q_sno), @name(ᶜwₛʲs.:(1))),
-            )
+            ᶜJ = Fields.local_geometry_field(axes(Y.c)).J
 
+            # Updraft sedimentation with cross-subdomain (updraft <->
+            # environment) transfer.
+            #
+            # When subdomain area fractions vary with height, condensate
+            # falling through the tilted subdomain side boundaries is
+            # transferred between subdomains. With the antisymmetric
+            # cross-boundary transfer of the PROPHET formulation
+            # ("Sedimentation across Subdomain Boundaries"),
+            #
+            #   𝒥⁽ᵐⁿ⁾ = (1/ρ) [ρaⁿ ∂z(ρaᵐ χᵐ wᵐ) − ρaᵐ ∂z(ρaⁿ χⁿ wⁿ)],
+            #
+            # the sum of a subdomain's own sedimentation flux divergence and
+            # its cross-boundary transfers telescopes to a share of the
+            # grid-mean sedimentation flux divergence:
+            #
+            #   ∂t(ρaʲ χʲ)|sed = ωʲ ∂z(ρ χ w),   ωʲ = ρaʲ/ρ.
+            #
+            # Physically: condensate crossing a level is redistributed among
+            # the subdomains below in proportion to their masses (random
+            # horizontal overlap), so every subdomain feels the same
+            # per-unit-mass sedimentation tendency. The grid-mean flux
+            # divergence is computed with the same stencil as the grid-mean
+            # sedimentation tendency (implicit_vertical_advection_tendency!
+            # and vertical_advection_of_water_tendency!), so the subdomain
+            # shares sum to the grid-mean tendency discretely, with the
+            # environment as the residual.
+            #
+            # Caveat — how negative values can arise, and the clip applied
+            # here: with the pure mass-fraction weight ωʲ = ρaʲ/ρ, a net
+            # *loss* at a level (∂z(ρχw) < 0: condensate leaving downward
+            # faster than it arrives from above) is also charged to each
+            # subdomain by its mass fraction, including subdomains that hold
+            # none of the species. For example, grid-mean rain falling
+            # through the levels below the updraft's condensate base would
+            # drive q_raiʲ negative there. Since condensate can only fall
+            # out of a subdomain that actually holds it, net losses are
+            # instead apportioned by holdings,
+            #
+            #   ωʲ = clamp(ρaʲ χʲ / (ρ χ), 0, 1)   where ∂z(ρ χ w) < 0.
+            #
+            # Holdings shares also sum to one across subdomains, so
+            # conservation with the environment-as-residual is preserved;
+            # the loss is proportional to χʲ, so it cannot create negative
+            # values; and the two weights coincide when the subdomains are
+            # materially identical, recovering the formula above. Gains keep
+            # the mass-fraction weight.
+            #
+            # Bookkeeping approximations (deliberate, to keep this change
+            # small): the transferred condensate also moves moist-air mass
+            # and energy between subdomains, but ρaʲ is stepped by the
+            # analytic implicit stage solve
+            # (solve_sgs_ρa_implicit_stage_analytic!), which we do not
+            # modify here — so the ρaʲ source, the paired (1 − q_totʲ)
+            # dilution factor on the q_totʲ source, and the mseʲ source are
+            # all omitted. As in the previous formulation, sedimentation
+            # changes the updraft water content at fixed ρaʲ.
             MatrixFields.unrolled_foreach(
-                sgs_microphysics_tracers,
-            ) do (qʲ_name, name, wʲ_name)
-                MatrixFields.has_field(Y, qʲ_name) || return
-
-                ᶜqʲ = MatrixFields.get_field(Y, qʲ_name)
-                ᶜqʲₜ = MatrixFields.get_field(Yₜ, qʲ_name)
-                ᶜwʲ = MatrixFields.get_field(p.precomputed, wʲ_name)
-
-                # Flux form sedimentation of tracers
-                vtt = p.scratch.ᶜtemp_scalar_4
-                updraft_sedimentation!(
-                    vtt,
-                    p,
-                    ᶜρʲs.:($j),
-                    ᶜwʲ,
-                    ᶜa,
-                    ᶜqʲ,
-                    ᶠJ,
+                sedimenting_sgs_tracer_names(Y),
+            ) do χ_name
+                ᶜχʲ = MatrixFields.get_field(Y.c.sgsʲs.:(1), χ_name)
+                ᶜχʲₜ = MatrixFields.get_field(Yₜ.c.sgsʲs.:(1), χ_name)
+                ρχ_name = get_ρχ_name(χ_name)
+                ᶜρχ = MatrixFields.get_field(Y.c, ρχ_name)
+                ᶜw = MatrixFields.get_field(
+                    p.precomputed,
+                    sedimentation_velocity_name(ρχ_name),
                 )
-                @. ᶜqʲₜ += ᶜinv_ρ̂ * vtt
-                @. Yₜ.c.sgsʲs.:($$j).q_tot += ᶜinv_ρ̂ * vtt
-            end
-        end
 
-        # Sedimentation of number concentrations for 2M microphysics
-        if p.atmos.microphysics_model isa NonEquilibriumMicrophysics2M
-
-            # TODO - add precipitation and cloud sedimentation in implicit solver/tendency with if/else
-            # TODO - make it work for multiple updrafts
-            if j > 1
-                error("Below code doesn't work for multiple updrafts")
-            end
-
-            # Sedimentation velocities for microphysics number concentrations
-            # (or any tracers that does not directly participate in variations of q_tot and mse)
-            sgs_microphysics_tracers = (
-                (@name(c.sgsʲs.:(1).n_lcl), @name(ᶜwₙₗʲs.:(1))),
-                (@name(c.sgsʲs.:(1).n_rai), @name(ᶜwₙᵣʲs.:(1))),
-            )
-
-            MatrixFields.unrolled_foreach(
-                sgs_microphysics_tracers,
-            ) do (χʲ_name, wʲ_name)
-                MatrixFields.has_field(Y, χʲ_name) || return
-
-                ᶜχʲ = MatrixFields.get_field(Y, χʲ_name)
-                ᶜχʲₜ = MatrixFields.get_field(Yₜ, χʲ_name)
-                ᶜwʲ = MatrixFields.get_field(p.precomputed, wʲ_name)
-
-                # Flux form sedimentation of tracers
+                # Grid-mean sedimentation flux divergence ∂z(ρ χ w).
                 vtt = p.scratch.ᶜtemp_scalar_4
-                updraft_sedimentation!(
-                    vtt,
-                    p,
-                    ᶜρʲs.:($j),
-                    ᶜwʲ,
-                    ᶜa,
-                    ᶜχʲ,
-                    ᶠJ,
+                @. vtt = -(ᶜprecipdivᵥ(
+                    ᶠinterp(Y.c.ρ * ᶜJ) / ᶠJ * ᶠright_bias(
+                        Geometry.WVector(-(ᶜw)) * specific(ᶜρχ, Y.c.ρ),
+                    ),
+                ))
+                # Updraft share: mass fraction for gains, holdings fraction
+                # for losses (see comment above).
+                @. vtt *= ifelse(
+                    vtt < 0,
+                    ifelse(
+                        ᶜρχ > FT(0),
+                        clamp(
+                            Y.c.sgsʲs.:(1).ρa * ᶜχʲ / ᶜρχ,
+                            FT(0),
+                            FT(1),
+                        ),
+                        FT(0),
+                    ),
+                    Y.c.sgsʲs.:(1).ρa / Y.c.ρ,
                 )
                 @. ᶜχʲₜ += ᶜinv_ρ̂ * vtt
+                # Sedimenting condensate masses are part of the updraft
+                # total water; number concentrations are not.
+                if !isnothing(condensate_phase(χ_name))
+                    @. Yₜ.c.sgsʲs.:(1).q_tot += ᶜinv_ρ̂ * vtt
+                end
             end
         end
     end
-end
-
-"""
-    updraft_sedimentation!(vtt, p, ᶜρ, ᶜw, ᶜa, ᶜχ, ᶠJ)
-
-Compute the sedimentation tendency of tracer `χ` within an updraft, including lateral
-detrainment when the updraft area increases with height.
-
-# Description
-
-Sedimenting particles fall with velocity `w` through an updraft of fractional area `a(z)`.
-The vertical flux divergence gives a tendency of ``∂(ρ w a χ)/∂z``.
-When `∂a/∂z > 0`, some sedimenting mass exits laterally through the expanding sides,
-producing a detrainment tendency of ``-ρ w χ ∂a/∂z``.
-The resulting net tendency in this case is ``a * ∂(ρ w χ)/∂z``.
-
-# Equation
-
-The lateral flux through the updraft side surface `S` within one grid column is
-``F_side = ∫_S (ρ χ (w · n)) dS ≈ ρ χ (w · n) A_side,``
-where `n` is the outward unit normal and `A_side` the side area.
-For predominantly vertical sedimentation,
-``w·n A_side ≈ w A_grid [a(z+Δz) - a(z)] = w A_grid Δa.``
-Dividing by the grid column volume `A_grid·Δz` gives the flux divergence (tendency):
-``tendency ≈ ρ χ w ∂a/∂z.``
-A negative sign is applied to represent the loss (detrainment) from the updraft:
-``Dₛ = -ρ w χ ∂a/∂z.``
-
-# Arguments
-
-  - `vtt` : output field
-  - `p`: cache containing scratch spaces
-  - `ᶜρ`: air density
-  - `ᶜw`: sedimentation velocity (positive downward)
-  - `ᶜa`: updraft area fraction
-  - `ᶜχ`: tracer mixing ratio
-  - `ᶠJ`: face Jacobian (grid geometry)
-
-`vtt` gets filled with Tracer tendency due to sedimentation and lateral detrainment.
-"""
-function updraft_sedimentation!(
-    vtt,
-    p,
-    ᶜρ,
-    ᶜw,
-    ᶜa,
-    ᶜχ,
-    ᶠJ,
-)
-    ᶜJ = Fields.local_geometry_field(axes(ᶜρ)).J
-    # use output as a scratch field
-    ∂a∂z = vtt
-    @. ∂a∂z = ᶜprecipdivᵥ(ᶠinterp(ᶜJ) / ᶠJ * ᶠright_bias(Geometry.WVector(ᶜa)))
-    ᶠρ = @. p.scratch.ᶠtemp_scalar = ᶠinterp(ᶜρ * ᶜJ) / ᶠJ
-    ᶠwaχ = @. p.scratch.ᶠtemp_scalar_3 = ᶠright_bias(-(ᶜw) * ᶜa * ᶜχ)
-    ᶠwχ = @. p.scratch.ᶠtemp_scalar_2 = ᶠright_bias(-(ᶜw) * ᶜχ)
-    @. vtt = ifelse(
-        ∂a∂z < 0,
-        -(ᶜprecipdivᵥ(ᶠρ * Geometry.WVector(ᶠwaχ))),
-        -(ᶜa * ᶜprecipdivᵥ(ᶠρ * Geometry.WVector(ᶠwχ))),
-    )
-    return
 end

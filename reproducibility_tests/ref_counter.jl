@@ -1,4 +1,4 @@
-377
+378
 
 # **README**
 #
@@ -32,6 +32,12 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+378 (2026-07-09)
+- Updraft sedimentation with cross-subdomain transfer: each updraft tracer
+  receives a share of the grid-mean sedimentation flux divergence (mass
+  fraction for gains, holdings fraction for losses), replacing the one-sided
+  widening/narrowing treatment based on the sign of da/dz.
+
 377
 - Carry the energy of sedimenting water at each subdomain's own value under
   PrognosticEDMFX: the grid-mean sedimentation energy flux equals the sum of
