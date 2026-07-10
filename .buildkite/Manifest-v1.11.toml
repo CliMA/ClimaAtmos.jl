@@ -2,7 +2,7 @@
 
 julia_version = "1.11.9"
 manifest_format = "2.0"
-project_hash = "3953109fd5f7d0065fa9f0a532d07116d84aa504"
+project_hash = "6af48034d86de0825cf5f74fb92647a4c059c181"
 
 [[deps.ADTypes]]
 git-tree-sha1 = "d9aaef7c63466eee4de23b4d9dad03629df54bea"
@@ -383,7 +383,7 @@ version = "0.5.22"
 deps = ["Adapt", "ArgParse", "Artifacts", "AtmosphericProfilesLibrary", "ClimaComms", "ClimaCore", "ClimaDiagnostics", "ClimaInterpolations", "ClimaParams", "ClimaTimeSteppers", "ClimaUtilities", "CloudMicrophysics", "Dates", "Flux", "ForwardDiff", "Insolation", "Interpolations", "JLD2", "LazyArtifacts", "LazyBroadcast", "LinearAlgebra", "Logging", "NCDatasets", "NVTX", "NullBroadcasts", "RRTMGP", "Random", "SparseMatrixColorings", "StaticArrays", "Statistics", "SurfaceFluxes", "Thermodynamics", "UnrolledUtilities", "YAML"]
 path = ".."
 uuid = "b2c96348-7fb7-4fe0-8da9-78d88439e717"
-version = "0.41.1"
+version = "0.41.2"
 
     [deps.ClimaAtmos.extensions]
     ClimaAtmosMusica = "Musica"

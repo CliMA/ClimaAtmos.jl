@@ -4,6 +4,9 @@ ClimaAtmos.jl Release Notes
 main
 ----
 
+0.41.2
+-------
+
 - [#4648](https://github.com/CliMA/ClimaAtmos.jl/pull/4648) ![][badge-🔥behavioralΔ] Carry the energy of sedimenting water at each subdomain's own value under `PrognosticEDMFX`. Each sedimenting species transports its specific internal, potential, and kinetic energy `e_int(T) + Φ + Kin(w, u)`; the grid-mean sedimentation energy flux is set equal to the sum of the updraft and environment fluxes, each the subdomain sedimentation mass flux times its specific energy (with `Φ` common to all subdomains and the environment mass flux taken as the grid-mean residual `ρqw - ρaʲqʲwʲ`). The updraft kinetic energy uses the updraft velocities; the environment kinetic energy uses the grid-mean terminal velocity, since the environment terminal velocity is not stored separately.
 - [#4653](https://github.com/CliMA/ClimaAtmos.jl/pull/4653) ![][badge-🔥behavioralΔ] Improve the manual implicit Jacobian (the tendencies are unchanged; behavior changes only through the single-Newton-iteration implicit solve).
   - Document that the existing height-form pressure-gradient-force Jacobian blocks are the exact linearization of the Exner-form tendency `cp_d θ_v ∇Π` (stencils unchanged): the thermal-buoyancy and pressure-buoyancy terms cancel via the equation-of-state identity `δρ/ρ = (1-κ_d) δp/p - δθ_v/θ_v`, leaving the acoustic operator `∇δp/ρ` in every column perturbed at fixed density plus a single buoyancy term in the `ρ` column, so sound and gravity waves are both treated fully implicitly.
