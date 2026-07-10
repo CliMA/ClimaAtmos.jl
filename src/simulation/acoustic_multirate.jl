@@ -11,6 +11,7 @@
 #####
 
 import ClimaTimeSteppers as CTS
+import ClimaUtilities.TimeManager: ITime
 
 """
     ImplicitVertical()
@@ -221,6 +222,19 @@ function auto_n_sub(dt, Δx, c_ref)
     return max(1, ceil(Int, float(dt) / safe_dt))
 end
 
+# Smallest sub-step count ≥ `n_min` for which `CTS.sub_timestep(dt, ·)` is exact.
+# Any count divides a floating-point `dt`; an `ITime` requires a divisor of its
+# nanosecond count, so round up to the next such divisor.
+exact_n_sub(dt, n_min) = n_min
+function exact_n_sub(dt::ITime, n_min)
+    dt_ns = CTS.refine_time(dt).counter
+    n = n_min
+    while !iszero(rem(dt_ns, n))
+        n += 1
+    end
+    return n
+end
+
 # G = T_exp(u) - sub-cycled acoustic terms(u), evaluated and left in `G`/`G_lim`.
 # The sub-cycled terms are the horizontal acoustic tendency and the kinetic-energy
 # gradients, so `G` holds exactly the tendency not re-evaluated inside the
@@ -242,8 +256,8 @@ end
 # of the sub-step, so outer times are refined before assignment.
 function outer_half!(outer, u, p, t, halfdt)
     outer.u .= u
-    outer.t = CTS.refine_ns(t)
-    CTS.set_dt!(outer, CTS.refine_ns(halfdt))
+    outer.t = CTS.refine_time(t)
+    CTS.set_dt!(outer, CTS.refine_time(halfdt))
     empty!(outer.tstops)
     CTS.step!(outer)
     u .= outer.u
@@ -256,7 +270,8 @@ function CTS.init_cache(prob, alg::AcousticMultirate; dt, kwargs...)
     FT = eltype(u0)
     Δx = FT(Spaces.node_horizontal_length_scale(Spaces.horizontal_space(axes(u0.c))))
     c_ref = FT(reference_sound_speed(p))
-    n_sub = alg.n_sub == 0 ? auto_n_sub(dt, Δx, c_ref) : alg.n_sub
+    requested_n_sub = alg.n_sub == 0 ? auto_n_sub(dt, Δx, c_ref) : alg.n_sub
+    n_sub = exact_n_sub(dt, requested_n_sub)
     fast_dt = CTS.sub_timestep(dt, n_sub)
     # Divergence-damping viscosity ν_d = β_d c_ref² fast_dt.
     ν_d = FT(alg.β_d) * c_ref^2 * FT(float(fast_dt))

@@ -206,3 +206,17 @@ end
         @test all(isfinite, parent(integ.u.f.u₃))
     end
 end
+
+@testset "sub-step count is rounded up to divide dt exactly" begin
+    # See CliMA/ClimaTimeSteppers.jl#442: an ITime dt that the count does not
+    # divide at nanosecond resolution throws in CTS.sub_timestep rather than
+    # truncating, so exact_n_sub rounds the resolved count up to a divisor.
+    dt = CA.ITime(0.5)                       # 5e8 ns, not divisible by 3
+    @test_throws ArgumentError CTS.sub_timestep(dt, 3)
+    @test CA.exact_n_sub(dt, 3) == 4         # next count that divides 5e8 ns
+    @test CA.exact_n_sub(dt, 5) == 5         # already a divisor, left unchanged
+    @test CTS.sub_timestep(dt, CA.exact_n_sub(dt, 3)) isa CA.ITime
+    # The CFL-derived auto count is snapped through the same helper.
+    n_auto = CA.exact_n_sub(dt, CA.auto_n_sub(dt, 130.0, 340.0))
+    @test rem(CTS.refine_time(dt).counter, n_auto) == 0
+end
