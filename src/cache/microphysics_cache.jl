@@ -1371,7 +1371,7 @@ function set_precipitation_surface_fluxes!(
     sfc_space = axes(sfc_J)
 
     # Jacobian-weighted extrapolation from interior to surface, consistent with
-    # the reconstruction of density on cell faces, ᶠρ = ᶠinterp(Y.c.ρ * ᶜJ) / ᶠJ
+    # the reconstruction of density on cell faces in `ᶠface_density`
     sfc_lev(x) =
         Fields.Field(Fields.field_values(Fields.level(x, 1)), sfc_space)
     int_J = sfc_lev(ᶜJ)

@@ -384,8 +384,6 @@ function solve_sgs_ρa_implicit_stage_analytic!(Y, p, dtγ)
     FT = eltype(p.params)
 
     turbconv_params = CAP.turbconv_params(p.params)
-    ᶜJ = Fields.local_geometry_field(Y.c).J
-    ᶠJ = Fields.local_geometry_field(Y.f).J
     ᶜdz = Fields.Δz_field(axes(Y.c))
     ᶠdz = Fields.Δz_field(axes(Y.f))
     ᶠlg = Fields.local_geometry_field(Y.f)
@@ -415,6 +413,7 @@ function solve_sgs_ρa_implicit_stage_analytic!(Y, p, dtγ)
     n = n_mass_flux_subdomains(turbconv_model)
     for j in 1:n
         @. ᶠw = Y.f.sgsʲs.:($$j).u₃.components.data.:1 / ᶠdz
+        ᶠρʲ = ᶠface_density(ᶜρʲs.:($j))
 
         # entr and detr
         ᶜlower_limiter_factor = @. lazy(
@@ -471,14 +470,12 @@ function solve_sgs_ρa_implicit_stage_analytic!(Y, p, dtγ)
             max(
                 FT(0.1) / dtγ,
                 1 / dtγ - ᶜexplicit_entr_minus_detr +
-                ᶜone_minus_implicit_detr_prefactor * ᶜtop_bias(
-                    ᶠinterp(ᶜρʲs.:($$j) * ᶜJ) / ᶠJ * ᶠw,
-                ) / ᶜρʲs.:($$j) / ᶜdz,
+                ᶜone_minus_implicit_detr_prefactor * ᶜtop_bias(ᶠρʲ * ᶠw) /
+                ᶜρʲs.:($$j) / ᶜdz,
             )
         @. ᶜmass_flux_factor_bot =
-            ᶜone_minus_implicit_detr_prefactor * ᶜbottom_bias(
-                ᶠinterp(ᶜρʲs.:($$j) * ᶜJ) / ᶠJ * ᶠw / ᶠbottom_bias(ᶜρʲs.:($$j)),
-            ) / ᶜdz
+            ᶜone_minus_implicit_detr_prefactor *
+            ᶜbottom_bias(ᶠρʲ * ᶠw / ᶠbottom_bias(ᶜρʲs.:($$j))) / ᶜdz
         # Cell 1: overwrite α_bot[1] with 0 to bypass the NaN from
         # `ᶠbottom_bias(ᶜρʲ)` reading the undefined ghost cell below
         # (physical flux is zero there: u₃ = 0 at the surface).
