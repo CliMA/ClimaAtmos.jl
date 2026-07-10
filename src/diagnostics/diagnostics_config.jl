@@ -22,9 +22,11 @@ keyword argument.
         `diagnostics:` YAML key).
 
     Mixed lists are allowed.
+
   - `interpolation_num_points = nothing`: override the NetCDF remap grid (e.g.
     `(180, 90, 10)`). When `nothing`, falls back to the default chosen from the
     underlying space.
+
   - `output_at_levels::Bool = true`: write at model levels (no vertical
     interpolation). Set `false` to interpolate to pressure levels.
 

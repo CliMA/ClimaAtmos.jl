@@ -112,7 +112,7 @@ function print_jacobian_summary(integrator)
             (; manual, auto) = all_sparse_blocks
             rescaling = block_rescalings[block_key]
             haskey(manual, block_key) &&
-                !(manual[block_key] isa UniformScaling) ?
+            !(manual[block_key] isa UniformScaling) ?
             rms((manual[block_key] - auto[block_key]) .* rescaling) : FT(0)
         end
         @info "normalized manual sparse - auto sparse, RMS per block [s^-1]:"

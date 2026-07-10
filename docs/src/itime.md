@@ -19,6 +19,7 @@ when the simulation done just three time steps. This can easily accumulate into
 a larger error.
 
 Additionally, time can stop incrementing as seen below.
+
 ```@repl
 Float32(16777216) + Float32(1) == Float32(16777216)
 ```
@@ -71,6 +72,7 @@ and end time are converted to `ITime` when the simulation is built, regardless o
 whether they are provided as strings (e.g. `"30secs"`) or numbers.
 
 !!! note "Different results from rounding using `ITime`"
+
     If `a` is a floating point number and `t` is an `ITime`, then we round
     `a * t` to the nearest integer for the `counter`, while keeping the same
     `period` and `epoch` if it exists. As a result, the simulation will run at a
@@ -79,6 +81,7 @@ whether they are provided as strings (e.g. `"30secs"`) or numbers.
     tendencies that explicitly depend on time.
 
 !!! note "Different results from `float` on `ITime`"
+
     Using `float` on an `ITime` returns a `Float64`. As such, a simulation
     running Float32 and a simulation running `ITime` for time and `Float32` for
     everything else will return different results.
@@ -97,7 +100,7 @@ the two `ITime`s. For more information about developing with `ITime`, see the
 `ITime` [documentation](https://clima.github.io/ClimaUtilities.jl/dev/timemanager/)
 in ClimaUtilities.
 
-``` @repl example
+```@repl example
 float(x)
 date(x)
 promote(x, y)

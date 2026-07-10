@@ -142,11 +142,11 @@ const _FLUX_MAP = [
 # Cloud fraction: CLDRAD obs + model total cloud
 const _CLOUD_MAP = [
     (model = "clt", label = "Total Cloud Fraction", units = "%",
-        mfn = identity,
-        obs = [
-            (src = :cldrad, var = "tot_cld", ofn = x -> x .* 100, label = "CLDRAD ARSCL"),
-            (src = :cldrad, var = "tot_cld_tsi", ofn = x -> x .* 100, label = "CLDRAD TSI"),
-        ]),
+    mfn = identity,
+    obs = [
+        (src = :cldrad, var = "tot_cld", ofn = x -> x .* 100, label = "CLDRAD ARSCL"),
+        (src = :cldrad, var = "tot_cld_tsi", ofn = x -> x .* 100, label = "CLDRAD TSI"),
+    ]),
 ]
 
 # ────────────────────────────────────────────────────────────────────────────
@@ -744,7 +744,8 @@ function _make_arm_obs_comparison(output_path::AbstractString)
     obs_dirs = try
         _arm_varanal_obs_dirs()
     catch e
-        @warn "ARM VARANAL obs artifact unavailable; skipping obs comparison" exception = e
+        @warn "ARM VARANAL obs artifact unavailable; skipping obs comparison" exception =
+            e
         return
     end
     (; sonde, beatm, cldrad) = obs_dirs

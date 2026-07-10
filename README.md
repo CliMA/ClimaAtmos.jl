@@ -1,46 +1,24 @@
 <!-- Title -->
+
 <h1 align="center">
   <img src="logo.svg" width="180px"> <br>
 ClimaAtmos.jl
 </h1>
 
 <!-- description -->
+
 <p align="center">
   <strong>Atmosphere components of the CliMA software stack.</strong>
 </p>
 
-[![docsbuild][docs-bld-img]][docs-bld-url]
-[![dev][docs-dev-img]][docs-dev-url]
-[![ghaci][gha-ci-img]][gha-ci-url]
-[![buildkite][bk-ci-img]][bk-ci-url]
-[![codecov][codecov-img]][codecov-url]
-[![discussions][discussions-img]][discussions-url]
-[![col-prac][col-prac-img]][col-prac-url]
-[![downloads][downloads-img]][downloads-url]
-
-[docs-bld-img]: https://github.com/CliMA/ClimaAtmos.jl/workflows/Documentation/badge.svg
-[docs-bld-url]: https://github.com/CliMA/ClimaAtmos.jl/actions?query=workflow%3ADocumentation
-
-[docs-dev-img]: https://img.shields.io/badge/docs-dev-blue.svg
-[docs-dev-url]: https://CliMA.github.io/ClimaAtmos.jl/dev/
-
-[gha-ci-img]: https://github.com/CliMA/ClimaAtmos.jl/actions/workflows/ci.yml/badge.svg
-[gha-ci-url]: https://github.com/CliMA/ClimaAtmos.jl/actions/workflows/ci.yml
-
-[bk-ci-img]: https://badge.buildkite.com/2a31b42d67409c27660a0dcce65b49294cd9c6b9f14c12f21e.svg/?branch=main
-[bk-ci-url]: https://buildkite.com/clima/climaatmos-ci
-
-[codecov-img]: https://codecov.io/gh/CliMA/ClimaAtmos.jl/branch/main/graph/badge.svg
-[codecov-url]: https://codecov.io/gh/CliMA/ClimaAtmos.jl
-
-[col-prac-img]: https://img.shields.io/badge/ColPrac-Contributor's%20Guide-blueviolet?style=flat-square
-[col-prac-url]: https://github.com/SciML/ColPrac
-
-[discussions-img]: https://img.shields.io/badge/Ask%20us-anything-1abc9c.svg?style=flat-square
-[discussions-url]: https://github.com/CliMA/ClimaAtmos.jl/discussions
-
-[downloads-img]: https://img.shields.io/badge/dynamic/json?url=http%3A%2F%2Fjuliapkgstats.com%2Fapi%2Fv1%2Ftotal_downloads%2FClimaAtmos&query=total_requests&suffix=%2Ftotal&label=Downloads
-[downloads-url]: http://juliapkgstats.com/pkg/ClimaAtmos
+[![docsbuild](https://github.com/CliMA/ClimaAtmos.jl/workflows/Documentation/badge.svg)](https://github.com/CliMA/ClimaAtmos.jl/actions?query=workflow%3ADocumentation)
+[![dev](https://img.shields.io/badge/docs-dev-blue.svg)](https://CliMA.github.io/ClimaAtmos.jl/dev/)
+[![ghaci](https://github.com/CliMA/ClimaAtmos.jl/actions/workflows/ci.yml/badge.svg)](https://github.com/CliMA/ClimaAtmos.jl/actions/workflows/ci.yml)
+[![buildkite](https://badge.buildkite.com/2a31b42d67409c27660a0dcce65b49294cd9c6b9f14c12f21e.svg/?branch=main)](https://buildkite.com/clima/climaatmos-ci)
+[![codecov](https://codecov.io/gh/CliMA/ClimaAtmos.jl/branch/main/graph/badge.svg)](https://codecov.io/gh/CliMA/ClimaAtmos.jl)
+[![discussions](https://img.shields.io/badge/Ask%20us-anything-1abc9c.svg?style=flat-square)](https://github.com/CliMA/ClimaAtmos.jl/discussions)
+[![col-prac](https://img.shields.io/badge/ColPrac-Contributor's%20Guide-blueviolet?style=flat-square)](https://github.com/SciML/ColPrac)
+[![downloads](https://img.shields.io/badge/dynamic/json?url=http%3A%2F%2Fjuliapkgstats.com%2Fapi%2Fv1%2Ftotal_downloads%2FClimaAtmos&query=total_requests&suffix=%2Ftotal&label=Downloads)](http://juliapkgstats.com/pkg/ClimaAtmos)
 
 ClimaAtmos.jl is the atmosphere components of the CliMA software stack. We strive for a user interface that makes ClimaAtmos.jl as friendly and intuitive to use as possible, allowing users to focus on the science.
 
@@ -60,6 +38,7 @@ ClimaAtmos.jl is a [registered Julia package](https://julialang.org/packages/). 
 julia> using Pkg
 
 julia> Pkg.add("ClimaAtmos")
+
 ```
 
 Alternatively, download the `ClimaAtmos`

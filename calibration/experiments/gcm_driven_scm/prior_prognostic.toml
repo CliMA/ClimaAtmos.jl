@@ -50,5 +50,3 @@ type = "float"
 [EDMF_max_surface_area]
 prior = "constrained_gaussian(EDMF_max_surface_area, 0.1, 0.03, 0, Inf)"
 type = "float"
-
-

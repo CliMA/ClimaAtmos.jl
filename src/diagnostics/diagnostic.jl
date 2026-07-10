@@ -36,11 +36,15 @@ https://airtable.com/appYNLuWqAgzLbhSq/shrKcLEdssxb8Yvcp/tblL7dJkC3vl5zQLb
     We follow the Coupled Model Intercomparison Project conventions.
 
   - `long_name`: Name used to identify the variable in the output files.
+
   - `standard_name`: Standard name, as in
     http://cfconventions.org/Data/cf-standard-names/71/build/cf-standard-name-table.html
+
   - `units`: Physical units of the variable.
+
   - `comments`: More verbose explanation of what the variable is,
     or comments related to how it is defined or computed.
+
   - `compute`: Function that compute the diagnostic variable from the state.
     It has to take three arguments, `compute(state, cache, time)`:
 
