@@ -1000,8 +1000,12 @@ end
 end
 
 @testset "Reproducibility infrastructure: discover_pr_number" begin
+    # `branch` is pinned on every call so the CI environment's BUILDKITE_BRANCH
+    # (a gh-readonly-queue branch in the merge queue) can't leak in and win the
+    # branch-parse step ahead of the case under test.
     # 1. BUILDKITE_PULL_REQUEST (a real PR build)
-    @test discover_pr_number(; pull_request = "123", message = "") == 123
+    @test discover_pr_number(; pull_request = "123", branch = "", message = "") ==
+          123
     # 2. Parsed from a merge-queue branch (gh-readonly-queue/main/pr-<n>-<sha>)
     @test discover_pr_number(;
         pull_request = "false",
@@ -1027,15 +1031,18 @@ end
     # 3. Parsed from a squash or merge commit message
     @test discover_pr_number(;
         pull_request = "false",
+        branch = "",
         message = "Some squashed change (#456)",
     ) == 456
     @test discover_pr_number(;
         pull_request = "false",
+        branch = "",
         message = "Merge pull request #789 from foo/bar",
     ) == 789
     # A leading issue reference does NOT win over the trailing squash PR number
     @test discover_pr_number(;
         pull_request = "false",
+        branch = "",
         message = "Fix #100 regression (#4652)",
     ) == 4652
     # An ordinary PR-branch commit (no canonical merge/squash form) is NOT
@@ -1043,12 +1050,17 @@ end
     @test isnothing(
         discover_pr_number(;
             pull_request = "false",
+            branch = "",
             message = "address review from #123",
         ),
     )
     # No usable signal
     @test isnothing(
-        discover_pr_number(; pull_request = "false", message = "no pr number here"),
+        discover_pr_number(;
+            pull_request = "false",
+            branch = "",
+            message = "no pr number here",
+        ),
     )
 end
 
