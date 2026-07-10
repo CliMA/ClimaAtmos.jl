@@ -78,3 +78,23 @@ end
         end
     end
 end
+
+@testset "Acoustic substepping: implicit split completes a timestep sweep" begin
+    for dt in ("0.5secs", "1secs", "2secs")
+        config = acoustic_box_config(; order = 1, implicit_split = true)
+        config["dt"] = dt
+        config["acoustic_substeps"] = "auto"
+        config["output_dir"] = mktempdir()
+        integrator =
+            CA.get_simulation(
+                CA.AtmosConfig(config; job_id = "split_sweep_$dt"),
+            ).integrator
+        t_start = integrator.t
+        for _ in 1:5
+            CTS.step!(integrator)
+        end
+        @test integrator.t > t_start
+        @test all(isfinite, parent(integrator.u.c.ρ))
+        @test all(isfinite, parent(integrator.u.f.u₃))
+    end
+end
