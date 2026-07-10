@@ -7,9 +7,6 @@ microphysics_model: "0M"
 vert_diff: "VerticalDiffusion"
 dt_save_state_to_disk: "5days"
 check_conservation: true
-# Implicit vertical upwind advection of ρe_tot/ρq_tot with a central-only
-# Wfact needs ~3 Newton iterations to converge at large baroclinic-wave dt.
-max_newton_iters_ode: 3
 diagnostics:
   - short_name: [massa, energya, watera, energyo, watero]
     period: 1days
