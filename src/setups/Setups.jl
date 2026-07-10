@@ -1,5 +1,7 @@
 module Setups
 
+import StaticArrays as SA
+import ClimaInterpolations.Interpolation1D as CI1D
 import ClimaCore.Geometry as Geometry
 import ClimaCore: Fields
 import Thermodynamics as TD

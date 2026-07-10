@@ -131,29 +131,29 @@ const FunctionOrSpline =
 """
     ColumnInterpolatableField(::Fields.ColumnField)
 
-A column field object that can be interpolated
-in the z-coordinate. For example:
-
-!!! warn
-
-    This function allocates and is not GPU-compatible
-    so please avoid using this inside `step!` only use
-    this for initialization.
+Wrap a column field so it can be evaluated at any height `z` by linear
+interpolation between grid levels, with flat extrapolation outside the column
+bounds. Backed by `ClimaInterpolations.Interpolation1D.Interpolate1D` over
+`SVector` knots and values.
 """
-struct ColumnInterpolatableField{F, D}
-    f::F
-    data::D
-    function ColumnInterpolatableField(f::Fields.ColumnField)
-        zdata = vec(parent(Fields.Fields.coordinate_field(f).z))
-        fdata = vec(parent(f))
-        data = Intp.extrapolate(
-            Intp.interpolate((zdata,), fdata, Intp.Gridded(Intp.Linear())),
-            Intp.Flat(),
-        )
-        return new{typeof(f), typeof(data)}(f, data)
-    end
+struct ColumnInterpolatableField{I <: CI1D.Interpolate1D}
+    itp::I
 end
-(f::ColumnInterpolatableField)(z) = Spaces.undertype(axes(f.f))(f.data(z))
+function ColumnInterpolatableField(f::Fields.ColumnField)
+    zdata = vec(parent(Fields.coordinate_field(f).z))
+    fdata = vec(parent(f))
+    n = length(zdata)
+    z = SA.SVector{n}(zdata)
+    value = SA.SVector{n}(fdata)
+    itp = CI1D.Interpolate1D(
+        z,
+        value;
+        interpolationorder = CI1D.Linear(),
+        extrapolationorder = CI1D.Flat(),
+    )
+    return ColumnInterpolatableField(itp)
+end
+@inline (f::ColumnInterpolatableField)(z) = f.itp(convert(eltype(f.itp.xsource), z))
 
 """
     column_indefinite_integral(f, ϕ₀, zspan; nelems = 100)

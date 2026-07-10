@@ -4,6 +4,8 @@ ClimaAtmos.jl Release Notes
 main
 ----
 
+- ![][badge-🔥behavioralΔ] Switch `ColumnInterpolatableField` from `Interpolations` to `ClimaInterpolations`, backing it with `SVector` knots so the hydrostatic pressure profile used to build initial states (Bomex and the other single-column setups) can be evaluated on a GPU space. Results agree with the previous implementation to floating-point rounding. PR [#4664](https://github.com/CliMA/ClimaAtmos.jl/pull/4664)
+
 0.41.2
 -------
 

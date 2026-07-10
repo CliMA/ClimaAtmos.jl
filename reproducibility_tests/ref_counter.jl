@@ -1,4 +1,4 @@
-379
+380
 
 # **README**
 #
@@ -32,6 +32,12 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+380
+- Switch `ColumnInterpolatableField` from `Interpolations` to
+  `ClimaInterpolations`, so the hydrostatic pressure profile used to build
+  initial states can be evaluated on a GPU space. Results agree with the
+  previous implementation to floating-point rounding.
+
 379
 - By default update the cache once per step and not stage
 
