@@ -2,10 +2,12 @@
 ##### Acoustic substepping timestepper. See `docs/src/acoustic_substepping.md`.
 #####
 ##### The generic step-exchange multirate method (the frozen-forcing pass, the
-##### inner IMEX sub-cycle, and the outer combination) is in ClimaTimeSteppers, as
-##### the `LieSplitOuter`/`TrapezoidalSplitOuter` outer family. This file supplies
+##### inner IMEX sub-cycle, the outer combination, and the outer implicit
+##### complement sequencing) is in ClimaTimeSteppers, as the
+##### `LieSplitOuter`/`TrapezoidalSplitOuter` outer family. This file supplies
 ##### the acoustic fast tendency, the forcing-freeze operation, the sub-step
-##### count, the implicit operator, and the config wiring.
+##### count, the restricted implicit operator, the outer complement, and the
+##### config wiring.
 #####
 
 import ClimaTimeSteppers as CTS
@@ -101,8 +103,48 @@ function (f::AcousticSubstepTendency)(Yₜ, Yₜ_lim, Y, p, t)
 end
 
 """
+    GridMeanAcousticTendency()
+
+Inner implicit operator of the inner/outer implicit split of acoustic substepping.
+
+Zeroes `Yₜ`, then accumulates the vertical grid-mean acoustic subset with
+`grid_mean_acoustic_tendency!`, so fields outside that subset have a zero
+tendency, matching `implicit_tendency!`.
+"""
+struct GridMeanAcousticTendency end
+function (::GridMeanAcousticTendency)(Yₜ, Y, p, t)
+    Yₜ .= zero(eltype(Yₜ))
+    grid_mean_acoustic_tendency!(Yₜ, Y, p, t)
+    return nothing
+end
+
+"""
+    OuterImplicitTendency(T_imp_full, buf)
+
+Outer implicit tendency of the inner/outer implicit split of acoustic
+substepping: the full implicit tendency minus the inner (vertical grid-mean
+acoustic) subset, `T_imp_full − grid_mean_acoustic_tendency!`.
+
+# Fields
+
+  - `T_imp_full`: the full implicit tendency function (`implicit_tendency!`).
+  - `buf`: scratch `FieldVector` holding the inner subset.
+"""
+struct OuterImplicitTendency{T, B}
+    T_imp_full::T
+    buf::B
+end
+function (o::OuterImplicitTendency)(Yₜ, Y, p, t)
+    o.T_imp_full(Yₜ, Y, p, t)
+    o.buf .= zero(eltype(o.buf))
+    grid_mean_acoustic_tendency!(o.buf, Y, p, t)
+    Yₜ .-= o.buf
+    return nothing
+end
+
+"""
     AcousticMultirate(inner_alg, n_sub, vertical, outer_stages = 2, β_d = 0.0,
-        damping_form = FullDivergenceDamping())
+        implicit_split = false, damping_form = FullDivergenceDamping())
 
 A multirate `TimeSteppingAlgorithm` that sub-cycles the acoustic modes. See
 `docs/src/acoustic_substepping.md`.
@@ -115,6 +157,11 @@ A multirate `TimeSteppingAlgorithm` that sub-cycles the acoustic modes. See
   - `vertical`: vertical-acoustic treatment.
   - `outer_stages`: order of the outer combination, `1` or `2`.
   - `β_d`: divergence-damping coefficient (`ν_d = β_d c_ref² fast_dt`).
+  - `implicit_split`: when `true` (and `vertical isa ImplicitVertical`), use the
+    inner/outer implicit split: the inner implicit solve is restricted to the
+    vertical grid-mean acoustic block (`grid_mean_acoustic_tendency!`) and the
+    remaining implicit terms are solved by an outer implicit half-step per outer
+    step. When `false`, the inner solve uses the full `implicit_tendency!`.
   - `damping_form`: divergence-damping form, `HorizontalDivergenceDamping` or
     `FullDivergenceDamping`.
 """
@@ -124,6 +171,7 @@ struct AcousticMultirate{A, V, D} <: CTS.TimeSteppingAlgorithm
     vertical::V
     outer_stages::Int
     β_d::Float64
+    implicit_split::Bool
     damping_form::D
 end
 AcousticMultirate(
@@ -132,12 +180,14 @@ AcousticMultirate(
     vertical,
     outer_stages = 2,
     β_d = 0.0,
+    implicit_split = false,
 ) = AcousticMultirate(
     inner_alg,
     n_sub,
     vertical,
     outer_stages,
     β_d,
+    implicit_split,
     FullDivergenceDamping(),
 )
 
@@ -205,6 +255,19 @@ function acoustic_slow_forcing!(G, G_lim, A_buf, f, u, p, t)
     return nothing
 end
 
+# Advance the outer implicit complement by `halfdt` from the current `u`, in
+# place. `ITime` arithmetic self-refines, so the outer time and half-step are
+# assigned directly.
+function outer_half!(outer, u, p, t, halfdt)
+    outer.u .= u
+    outer.t = t
+    CTS.set_dt!(outer, halfdt)
+    empty!(outer.tstops)
+    CTS.step!(outer)
+    u .= outer.u
+    return nothing
+end
+
 function CTS.init_cache(prob, alg::AcousticMultirate; dt, kwargs...)
     (; u0, p) = prob
     f = prob.f
@@ -219,10 +282,26 @@ function CTS.init_cache(prob, alg::AcousticMultirate; dt, kwargs...)
     fast! = AcousticSubstepTendency(alg.vertical, ν_d, alg.damping_form)
     A_buf = zero(u0)
     freeze!(G, G_lim, U, p, t) = acoustic_slow_forcing!(G, G_lim, A_buf, f, U, p, t)
-    inner_T_imp! = alg.vertical isa ImplicitVertical ? f.T_imp! : nothing
+    implicit_split = alg.implicit_split && alg.vertical isa ImplicitVertical
+    # In the inner/outer implicit split the inner implicit solve is restricted to
+    # the vertical grid-mean acoustic block, so it factorizes the small
+    # acoustic-only `AcousticJacobian` rather than the full implicit Jacobian;
+    # otherwise the inner solve uses the full `implicit_tendency!` from `f.T_imp!`.
+    inner_T_imp! =
+        if implicit_split
+            CTS.ODEFunction(
+                GridMeanAcousticTendency();
+                jac_prototype = Jacobian(AcousticJacobian(), u0, p.atmos),
+                Wfact = update_jacobian!,
+            )
+        elseif alg.vertical isa ImplicitVertical
+            f.T_imp!
+        else
+            nothing
+        end
     # The fast sub-cycle is a full `ClimaODEFunction`: the acoustic fast tendency
-    # (with the frozen forcing added by the outer step), the implicit operator, and
-    # the reused implicit cache, limiter, and DSS.
+    # (with the frozen forcing added by the outer step), the restricted or full
+    # implicit operator, and the reused implicit cache, limiter, and DSS.
     f_fast = CTS.ClimaODEFunction(;
         T_exp_T_lim! = fast!,
         T_imp! = inner_T_imp!,
@@ -232,9 +311,37 @@ function CTS.init_cache(prob, alg::AcousticMultirate; dt, kwargs...)
         dss! = f.dss!,
         initialize_imp! = f.initialize_imp!,
     )
+    # The outer implicit half-step solves the full implicit tendency minus the
+    # inner subset, once per outer step. Its inner integrator and the sequencing
+    # are owned here; the outer method only calls the complement.
+    outer_complement =
+        if implicit_split
+            outer_f = CTS.ClimaODEFunction(;
+                T_imp! = CTS.ODEFunction(
+                    OuterImplicitTendency(f.T_imp!.f, zero(u0));
+                    jac_prototype = f.T_imp!.jac_prototype,
+                    Wfact = f.T_imp!.Wfact,
+                ),
+                cache! = f.cache_imp!,
+                cache_imp! = f.cache_imp!,
+                lim! = f.lim!,
+                dss! = f.dss!,
+                initialize_imp! = f.initialize_imp!,
+            )
+            outer_integ = CTS.init(
+                CTS.ODEProblem(outer_f, copy(u0), prob.tspan, p),
+                alg.inner_alg;
+                dt = fast_dt,
+                saveat = (),
+                save_everystep = false,
+            )
+            (u, p, t, halfdt) -> outer_half!(outer_integ, u, p, t, halfdt)
+        else
+            nothing
+        end
     outer =
-        alg.outer_stages == 1 ? CTS.LieSplitOuter(nothing) :
-        CTS.TrapezoidalSplitOuter(nothing)
+        alg.outer_stages == 1 ? CTS.LieSplitOuter(outer_complement) :
+        CTS.TrapezoidalSplitOuter(outer_complement)
     split_prob = CTS.SplitODEProblem(f_fast, freeze!, u0, prob.tspan, p)
     cts_cache = CTS.init_cache(
         split_prob,

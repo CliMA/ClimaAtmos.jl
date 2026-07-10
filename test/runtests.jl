@@ -65,6 +65,7 @@ if TEST_GROUP in ("dynamics", "all")
     @safetestset "Vertical water borrowing limiter" begin @time include("prognostic_equations/vertical_water_borrowing_tests.jl") end
     @safetestset "Enforce physical constraints" begin @time include("prognostic_equations/enforce_physical_constraints_tests.jl") end
     @safetestset "Acoustic substepping" begin @time include("acoustic_substepping.jl") end
+    @safetestset "Acoustic substepping implicit split" begin @time include("acoustic_substepping_split.jl") end
 
     # Conservation tests
     @safetestset "Mass conservation" begin @time include("conservation/mass_conservation.jl") end

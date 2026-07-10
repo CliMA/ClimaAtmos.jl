@@ -4,6 +4,8 @@ ClimaAtmos.jl Release Notes
 main
 ----
 
+- [#4661](https://github.com/CliMA/ClimaAtmos.jl/pull/4661) ![][badge-✨feature/enhancement] Add an inner/outer implicit split to the acoustic-substepping mode (`acoustic_substep_implicit_split`): restrict the sub-cycle implicit solve to the vertical grid-mean acoustic block and solve the remaining implicit terms once per outer step.
+  Disabled by default.
 - [#4660](https://github.com/CliMA/ClimaAtmos.jl/pull/4660) ![][badge-✨feature/enhancement] Add an optional horizontal acoustic-substepping timestepping mode (`AcousticMultirate`) that sub-cycles the fast horizontal acoustic terms and the kinetic-energy gradients at a small sub-step while the slow dynamics and physics advance with a larger outer step.
   Divergence damping (`acoustic_substep_damping_form`, `acoustic_substep_damping`) controls grid-scale acoustic noise.
   Disabled by default (`acoustic_substeps: 0`), so the default configuration is unchanged.
