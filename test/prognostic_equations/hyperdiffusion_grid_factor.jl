@@ -4,17 +4,13 @@ Generator for the per-degree hyperdiffusion grid-scale factor table in
 
 `β_op(p)` is the spectral radius of the assembled scalar horizontal biharmonic
 `(wdivₕ ∘ gradₕ)²` on a uniform, periodic, degree-`p` spectral-element grid,
-defined by `max eig(∇⁴) = (β_op / h)⁴` with `h` the mean nodal distance. The
+defined by `ρ(∇⁴) = (β_op / h)⁴` with `h` the mean nodal distance. The
 operator matrix is formed column by column and its spectral radius taken with
-`eigvals`; this is too heavy for the automated suite, so the values are tabulated
-and this script regenerates them. Run:
+`eigvals`; the higher degrees are too expensive for the test suite, so the values
+are tabulated and this script regenerates them. The tabulated values are converged
+in element count at the default `x_elem = 4`. Run:
 
     julia --project=.buildkite test/prognostic_equations/hyperdiffusion_grid_factor.jl
-
-Reference values (x_elem = 4, element-count converged): degree 2 → 3.4641,
-3 → 4.0637, 4 → 4.7873, 5 → 5.5997, 6 → 6.4531, 7 → 7.3250. Degree 3 is consistent
-with the 1D grid-scale phase κ h = 1.8257 (Von Neumann analysis of the HEVI
-integrator) through the 2D corner composition (√2) and the DSS-assembled operator.
 =#
 
 import ClimaCore: Spaces, Fields, Operators
@@ -23,8 +19,8 @@ import ClimaComms
 ClimaComms.@import_required_backends
 using LinearAlgebra, Printf
 
-const grad = Operators.Gradient()
-const wdiv = Operators.WeakDivergence()
+grad = Operators.Gradient()
+wdiv = Operators.WeakDivergence()
 
 function grid_scale_factor(degree; x_elem = 4)
     space = RectangleXYSpace(
@@ -53,6 +49,8 @@ function grid_scale_factor(degree; x_elem = 4)
     return biharmonic^(1 / 4) * Spaces.node_horizontal_length_scale(space)
 end
 
-for degree in 2:7
-    @printf("degree %d: β_op = %.4f\n", degree, grid_scale_factor(degree))
+if abspath(PROGRAM_FILE) == @__FILE__
+    for degree in 2:7
+        @printf("degree %d: β_op = %.4f\n", degree, grid_scale_factor(degree))
+    end
 end

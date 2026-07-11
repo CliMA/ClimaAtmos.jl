@@ -226,7 +226,7 @@ function get_hyperdiffusion_model(parsed_args, ::Type{FT}) where {FT}
         )
     elseif hyperdiff_name == "CAM_SE"
         # Ensure the user isn't trying to set the values manually from the config as CAM_SE defines a set of hyperdiffusion coefficients
-        cam_se_hyperdiff = cam_se_hyperdiffusion(FT)
+        cam_se_hyperdiff = cam_se_hyperdiffusion(FT; dt_safety_factor)
         coeff_pairs = [
             (cam_se_hyperdiff.ν₄_vorticity_coeff, "vorticity_hyperdiffusion_coefficient"),
             (cam_se_hyperdiff.divergence_damping_factor, "divergence_damping_factor"),
@@ -238,7 +238,7 @@ function get_hyperdiffusion_model(parsed_args, ::Type{FT}) where {FT}
             config_val = FT(parsed_args[config_coef])
             @assert isapprox(cam_coef, config_val, atol = 1e-8) "CAM_SE hyperdiffusion overwrites $config_coef, use `hyperdiff: Hyperdiffusion` to set this value manually in the config instead."
         end
-        return cam_se_hyperdiffusion(FT; dt_safety_factor)
+        return cam_se_hyperdiff
     elseif isnothing(hyperdiff_name)
         return nothing
     else
