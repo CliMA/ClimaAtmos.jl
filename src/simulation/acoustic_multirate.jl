@@ -224,12 +224,17 @@ function auto_n_sub(dt, Δx, c_ref)
     return max(1, ceil(Int, seconds(dt) / safe_dt))
 end
 
-# Smallest sub-step count ≥ `n_min` for which `dt / ·` is exact.
-# Any count divides a floating-point `dt`; an `ITime` requires a divisor of its
-# nanosecond count, so round up to the next such divisor.
+# Smallest sub-step count ≥ `n_min` for which `dt / n_sub` is exact. For an
+# `ITime`, a divisor of the counter at `dt`'s own period is preferred so
+# `fast_dt` keeps that period; when `n_min` exceeds the counter no such divisor
+# exists and the count is raised until the division is exact at a finer period.
 exact_n_sub(dt, n_min) = n_min
 function exact_n_sub(dt::ITime, n_min)
-    dt_ns = dt.counter * Dates.tons(dt.period)
+    counter = dt.counter
+    for n in n_min:counter
+        iszero(rem(counter, n)) && return n
+    end
+    dt_ns = counter * Dates.tons(dt.period)
     n = n_min
     while !iszero(rem(dt_ns, n))
         n += 1
@@ -256,12 +261,13 @@ function acoustic_slow_forcing!(G, G_lim, A_buf, f, u, p, t)
 end
 
 # Advance the outer implicit complement by `halfdt` from the current `u`, in
-# place. `ITime` arithmetic self-refines, so the outer time and half-step are
-# assigned directly.
+# place. The outer integrator's time and step fields carry the period chosen in
+# `init_cache`; `t` and `halfdt` are promoted to it before assignment, since a
+# coarser incoming period does not convert to a finer field period on its own.
 function outer_half!(outer, u, p, t, halfdt)
     outer.u .= u
-    outer.t = t
-    CTS.set_dt!(outer, halfdt)
+    outer.t = first(promote(t, outer.t))
+    CTS.set_dt!(outer, first(promote(halfdt, outer.dt)))
     empty!(outer.tstops)
     CTS.step!(outer)
     u .= outer.u
@@ -328,10 +334,15 @@ function CTS.init_cache(prob, alg::AcousticMultirate; dt, kwargs...)
                 dss! = f.dss!,
                 initialize_imp! = f.initialize_imp!,
             )
+            # The complement advances by the outer half-step: `dt` for a
+            # first-order outer combination, `dt / 2` for second order. Build the
+            # integrator at a period fine enough to represent that half-step.
+            outer_halfdt = alg.outer_stages == 1 ? dt : dt / 2
+            outer_dt = first(promote(fast_dt, outer_halfdt))
             outer_integ = CTS.init(
                 CTS.ODEProblem(outer_f, copy(u0), prob.tspan, p),
                 alg.inner_alg;
-                dt = fast_dt,
+                dt = outer_dt,
                 saveat = (),
                 save_everystep = false,
             )
