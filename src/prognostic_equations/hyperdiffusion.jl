@@ -8,8 +8,9 @@ import ClimaCore.Spaces as Spaces
 import ClimaCore.Quadratures as Quadratures
 
 # Real-axis stability bound `C` of the integrator on the explicit biharmonic, in
-# `dt * ρ(ν₄ ∇⁴) ≤ C`: forward Euler for the once-per-step coefficient reduction,
-# the default ARS343 explicit tableau for the warning. See `docs/src/equations.md`.
+# `dt * ρ(ν₄ ∇⁴) ≤ C`: the conservative forward-Euler bound for the coefficient
+# reduction, the default ARS343 explicit tableau for the warning.
+# See `docs/src/equations.md`.
 const HYPERDIFFUSION_FORWARD_EULER_STABILITY = 2
 const HYPERDIFFUSION_ARS343_STABILITY = 2.7853
 
@@ -20,7 +21,8 @@ Compute the grid-scale factor `β` of the horizontal biharmonic on a uniform,
 degree-`degree` spectral element, defined by `ρ(∇⁴) = (β / h)⁴` with `h` the mean
 nodal distance. Tabulated from the spectral radius of the assembled scalar
 operator `(wdivₕ ∘ gradₕ)²`; the generating code is in
-`test/prognostic_equations/hyperdiffusion_grid_factor.jl`.
+`test/prognostic_equations/hyperdiffusion_grid_factor.jl`. Return `nothing` for
+untabulated degrees.
 """
 function hyperdiffusion_grid_scale_factor(degree)
     degree == 2 && return 3.4641
@@ -29,8 +31,7 @@ function hyperdiffusion_grid_scale_factor(degree)
     degree == 5 && return 5.5997
     degree == 6 && return 6.4531
     degree == 7 && return 7.3250
-    error("hyperdiffusion stability limit is not tabulated for polynomial \
-        degree $degree.")
+    return nothing
 end
 
 """
@@ -38,19 +39,23 @@ end
 
 Compute the biharmonic grid factor `β` of the horizontal `space`, defined by
 `ρ(∇⁴) = (β / h)⁴` with `h` the mean nodal distance. It is the uniform-grid factor
-[`hyperdiffusion_grid_scale_factor`](@ref) for the quadrature degree, scaled by the
-grid metric non-uniformity; see `docs/src/equations.md`.
+[`hyperdiffusion_grid_scale_factor`](@ref) for the polynomial degree, scaled by the
+grid metric non-uniformity; see `docs/src/equations.md`. Return `nothing` unless
+`space` is a 2D spectral-element space with a tabulated degree.
 """
 function hyperdiffusion_grid_factor(space)
+    space isa Spaces.SpectralElementSpace2D || return nothing
     h = Spaces.node_horizontal_length_scale(space)
     degree = Quadratures.polynomial_degree(Spaces.quadrature_style(space))
+    scale_factor = hyperdiffusion_grid_scale_factor(degree)
+    isnothing(scale_factor) && return nothing
     # Horizontal contravariant-metric components g¹¹, g¹², g²² (padded 3×3
     # column-major indices 1, 4, 5).
     g = Fields.local_geometry_field(space).gⁱʲ.components.data
     corner = g.:1 .+ g.:5 .+ 2 .* abs.(g.:4)
     uniform = 2 * (2 / (degree * h))^2
     metric_factor = sqrt(maximum(corner) / uniform)
-    return oftype(h, hyperdiffusion_grid_scale_factor(degree) * metric_factor)
+    return oftype(h, scale_factor * metric_factor)
 end
 
 """
@@ -95,26 +100,27 @@ function ν₄(hyperdiff, Y, dt, grid_factor)
 end
 
 """
-    warn_if_hyperdiffusion_over_dt_limit(hyperdiff, Y, dt)
+    warn_if_hyperdiffusion_over_dt_limit(hyperdiff, Y, dt, grid_factor)
 
 Warn when the hyperdiffusion tendency is integrated at a `dt` above its explicit
 stability limit while no limit is applied (`dt_safety_factor == 0`). The limit uses
-the ARS343 explicit-tableau stability bound, since the plain scheme integrates the
-hyperdiffusion with the explicit IMEX tableau. See [`hyperdiffusion_dt_limit`](@ref).
+the ARS343 explicit-tableau stability bound, matching the default time integrator.
+See [`hyperdiffusion_dt_limit`](@ref). `grid_factor` is
+[`hyperdiffusion_grid_factor`](@ref) for the horizontal space; `nothing` (an
+unsupported space or an untabulated polynomial degree) skips the warning.
 """
-function warn_if_hyperdiffusion_over_dt_limit(hyperdiff, Y, dt)
+function warn_if_hyperdiffusion_over_dt_limit(hyperdiff, Y, dt, grid_factor)
     hyperdiff isa Hyperdiffusion || return nothing
     hyperdiff.dt_safety_factor > 0 && return nothing
-    space = Spaces.horizontal_space(axes(Y.c))
-    h = Spaces.node_horizontal_length_scale(space)
-    grid_factor = hyperdiffusion_grid_factor(space)
+    isnothing(grid_factor) && return nothing
+    h = Spaces.node_horizontal_length_scale(Spaces.horizontal_space(axes(Y.c)))
     limit = hyperdiffusion_dt_limit(
         hyperdiff, h, grid_factor, HYPERDIFFUSION_ARS343_STABILITY,
     )
     float(dt) > limit && @warn "dt = $(float(dt)) s exceeds the explicit \
-        stability limit ($limit s) of the hyperdiffusion coefficient. \
-        Set hyperdiffusion_dt_safety_factor (recommended 2) or reduce \
-        vorticity_hyperdiffusion_coefficient."
+        stability limit ($limit s) of the hyperdiffusion coefficient under \
+        the default ARS343 tableau. Set hyperdiffusion_dt_safety_factor \
+        (recommended 2) or reduce vorticity_hyperdiffusion_coefficient."
     return nothing
 end
 
@@ -125,8 +131,19 @@ function hyperdiffusion_cache(Y, atmos)
 end
 
 function hyperdiffusion_cache(
-    Y, ::Hyperdiffusion, turbconv_model, microphysics_model,
+    Y, hyperdiff::Hyperdiffusion, turbconv_model, microphysics_model,
 )
+    space = Spaces.horizontal_space(axes(Y.c))
+    grid_factor = hyperdiffusion_grid_factor(space)
+    if isnothing(grid_factor) && hyperdiff.dt_safety_factor > 0
+        space isa Spaces.SpectralElementSpace2D ||
+            error("hyperdiffusion_dt_safety_factor requires a 2D \
+                spectral-element horizontal space.")
+        degree = Quadratures.polynomial_degree(Spaces.quadrature_style(space))
+        error("hyperdiffusion stability limit is not tabulated for polynomial \
+            degree $degree; generate the entry with \
+            test/prognostic_equations/hyperdiffusion_grid_factor.jl.")
+    end
     FT = eltype(Y)
     n = n_mass_flux_subdomains(turbconv_model)
 
@@ -163,7 +180,6 @@ function hyperdiffusion_cache(
             hyperdiffusion_ghost_buffer = map(Spaces.create_dss_buffer, quantities),
         )
     end
-    grid_factor = hyperdiffusion_grid_factor(Spaces.horizontal_space(axes(Y.c)))
     return (; quantities..., ᶜ∇²u, ᶜ∇²uʲs, grid_factor)
 end
 

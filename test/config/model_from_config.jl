@@ -81,7 +81,7 @@ end
         CA.AtmosConfig(
             Dict(
                 "hyperdiff" => "CAM_SE",
-                "vorticity_hyperdiffusion_coefficient" => 0.1857,
+                "vorticity_hyperdiffusion_coefficient" => 0.1857,  # CAM_SE preset (0.150 * 1.238)
                 "hyperdiffusion_prandtl_number" => 0.2,
                 "divergence_damping_factor" => 5.0,
                 "hyperdiffusion_dt_safety_factor" => 2,

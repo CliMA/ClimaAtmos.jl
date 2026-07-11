@@ -217,7 +217,7 @@ struct PrescribedCloudInRadiation <: AbstractCloudInRadiation end
     prandtl_number::FT
     # Safety factor on the timestep in the explicit stability limit; a positive
     # value reduces the coefficient so the hyperdiffusion is stable for
-    # `dt_safety_factor` timesteps, and `0` applies no limit.
+    # `dt_safety_factor * dt`, and `0` applies no limit.
     dt_safety_factor::FT = 0
 end
 

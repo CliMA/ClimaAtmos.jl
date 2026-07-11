@@ -6,7 +6,7 @@ main
 
 - [#4673](https://github.com/CliMA/ClimaAtmos.jl/pull/4673) ![][badge-✨feature/enhancement] Add the `hyperdiffusion_dt_safety_factor` config option: when set, the vorticity hyperdiffusion coefficient is reduced so the hyperdiffusion is explicitly stable for `hyperdiffusion_dt_safety_factor * dt` (recommended `2`).
   `~` (default) applies no limit, so existing configurations are unchanged apart from a one-time warning when `dt` exceeds the stability limit.
-  The stability limit is derived from the horizontal biharmonic spectral radius on the actual grid: a per-degree spectral-element factor scaled by the grid metric non-uniformity, so it holds on the cubed sphere and for any quadrature degree, not only degree-3 boxes.
+  The stability limit is derived from the horizontal biharmonic spectral radius on the configured grid: a per-degree spectral-element factor (polynomial degrees 2 to 7) scaled by the grid metric non-uniformity, valid on both boxes and the cubed sphere.
   The divergent and scalar coefficients scale with the vorticity coefficient; the physical Smagorinsky and EDMF mixing coefficients are not affected.
 
 0.41.2

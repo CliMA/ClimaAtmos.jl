@@ -34,7 +34,7 @@ hyperdiffusion_prandtl_number:
   help: "Prandtl number for hyperdiffusion. Scalar hyperdiffusion coefficient = vorticity coefficient / Prandtl number."
   value: 0.2
 hyperdiffusion_dt_safety_factor:
-  help: "Safety factor on the timestep in the hyperdiffusion explicit stability limit: when set, the coefficient is reduced so the hyperdiffusion is stable for `hyperdiffusion_dt_safety_factor * dt` (recommended `2`). `~` (default) applies no limit. Required for stability when the hyperdiffusion tendency is integrated once per step at a long timestep."
+  help: "Safety factor on the timestep in the hyperdiffusion explicit stability limit: when set, the coefficient is reduced so the hyperdiffusion is stable for `hyperdiffusion_dt_safety_factor * dt` (recommended `2`). `~` (default) applies no limit. Required for stability when `dt` exceeds the hyperdiffusion explicit stability limit."
   value: ~
 # Topography
 topography:
