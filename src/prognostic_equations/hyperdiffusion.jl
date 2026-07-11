@@ -2,10 +2,11 @@
 ##### Hyperdiffusion
 #####
 
+import ClimaComms
 import ClimaCore.Geometry as Geometry
 import ClimaCore.Fields as Fields
 import ClimaCore.Spaces as Spaces
-import ClimaCore.Quadratures as Quadratures
+import LinearAlgebra
 
 # Real-axis stability bound `C` of the integrator on the explicit biharmonic, in
 # `dt * ρ(ν₄ ∇⁴) ≤ C`: the conservative forward-Euler bound for the coefficient
@@ -14,48 +15,128 @@ import ClimaCore.Quadratures as Quadratures
 const HYPERDIFFUSION_FORWARD_EULER_STABILITY = 2
 const HYPERDIFFUSION_ARS343_STABILITY = 2.7853
 
-"""
-    hyperdiffusion_grid_scale_factor(degree)
+# Iteration budget and certified-bracket width threshold of the biharmonic
+# spectral-radius measurement in `measured_grid_factor`, and the margin applied
+# to the measured radius in `hyperdiffusion_grid_factor`.
+const HYPERDIFFUSION_LANCZOS_ITERATIONS = 25
+const HYPERDIFFUSION_BRACKET_RTOL = 0.01
+const HYPERDIFFUSION_SPECTRAL_RADIUS_MARGIN = 0.01
 
-Compute the grid-scale factor `β` of the horizontal biharmonic on a uniform,
-degree-`degree` spectral element, defined by `ρ(∇⁴) = (β / h)⁴` with `h` the mean
-nodal distance. Tabulated from the spectral radius of the assembled scalar
-operator `(wdivₕ ∘ gradₕ)²`; the generating code is in
-`test/prognostic_equations/hyperdiffusion_grid_factor.jl`. Return `nothing` for
-untabulated degrees.
 """
-function hyperdiffusion_grid_scale_factor(degree)
-    degree == 2 && return 3.4641
-    degree == 3 && return 4.0637
-    degree == 4 && return 4.7873
-    degree == 5 && return 5.5997
-    degree == 6 && return 6.4531
-    degree == 7 && return 7.3250
-    return nothing
+    measured_grid_factor(
+        space;
+        iterations = HYPERDIFFUSION_LANCZOS_ITERATIONS,
+        strict = true,
+    )
+
+Measure the biharmonic grid factor `β` of the 2D spectral-element `space`,
+defined by `ρ(∇⁴) = (β / h)⁴` with `h` the mean nodal distance and `ρ(∇⁴)` the
+spectral radius of the DSS-assembled scalar biharmonic `(wdivₕ ∘ gradₕ)²`.
+
+A Lanczos iteration with full reorthogonalization in the mass inner product
+computes the Rayleigh quotient `θ` and residual norm `r` of the top Ritz
+vector; `θ ≤ ρ(∇⁴)` holds unconditionally, and `[θ, θ + r]` brackets `ρ(∇⁴)`
+once the iteration has resolved the dominant eigenpair; see
+`docs/src/equations.md`. Return `β = (θ + r)^(1/4) h` from the upper end, as a
+`Float64`. The operator is applied at the element type of `space`; the Lanczos
+basis and all inner products are held in `Float64` and reduced across ranks.
+When the bracket relative width `r / θ` exceeds `HYPERDIFFUSION_BRACKET_RTOL`
+after `iterations` iterations, error, or warn and return `nothing` when
+`strict = false`.
+"""
+function measured_grid_factor(
+    space::Spaces.SpectralElementSpace2D;
+    iterations = HYPERDIFFUSION_LANCZOS_ITERATIONS,
+    strict = true,
+)
+    FT = Spaces.undertype(space)
+    context = ClimaComms.context(space)
+    f = Fields.zeros(space)
+    Af = Fields.zeros(space)
+    buffer = Spaces.create_dss_buffer(f)
+    WJ = Float64.(vec(parent(Fields.local_geometry_field(space).WJ)))
+    dims = size(parent(f))
+    mass_dot(u, v) =
+        ClimaComms.allreduce(context, LinearAlgebra.dot(WJ .* u, v), +)
+    mass_norm(u) = sqrt(mass_dot(u, u))
+    function apply_biharmonic!(out, u)
+        parent(f) .= reshape(u, dims)
+        @. Af = wdivₕ(gradₕ(f))
+        Spaces.weighted_dss!(Af, buffer)
+        @. f = wdivₕ(gradₕ(Af))
+        Spaces.weighted_dss!(f, buffer)
+        out .= vec(parent(f))
+        return out
+    end
+    # Deterministic, DSS-consistent start vector.
+    q = similar(WJ)
+    q .= rem.((1:length(q)) .* Base.MathConstants.golden, 1)
+    parent(f) .= reshape(q, dims)
+    Spaces.weighted_dss!(f, buffer)
+    q .= vec(parent(f))
+    q ./= mass_norm(q)
+    # Lanczos with full reorthogonalization in the mass inner product.
+    Q = [q]
+    α = Float64[]
+    β = Float64[]
+    w = similar(q)
+    for j in 1:iterations
+        apply_biharmonic!(w, Q[j])
+        j > 1 && (w .-= β[j - 1] .* Q[j - 1])
+        push!(α, mass_dot(w, Q[j]))
+        w .-= α[j] .* Q[j]
+        for u in Q
+            w .-= mass_dot(w, u) .* u
+        end
+        push!(β, mass_norm(w))
+        # An invariant subspace terminates the iteration.
+        β[j] <= sqrt(eps(FT)) * maximum(abs, α) && break
+        j < iterations && push!(Q, w ./ β[j])
+    end
+    # Certificate: Rayleigh quotient and residual norm of the top Ritz vector.
+    m = length(α)
+    ritz = LinearAlgebra.eigen(LinearAlgebra.SymTridiagonal(α, β[1:(m - 1)]))
+    y = ritz.vectors[:, end]
+    v = zero(q)
+    for i in 1:m
+        v .+= y[i] .* Q[i]
+    end
+    apply_biharmonic!(w, v)
+    θ = mass_dot(w, v) / mass_dot(v, v)
+    r = mass_norm(w .- θ .* v) / mass_norm(v)
+    if r > HYPERDIFFUSION_BRACKET_RTOL * θ
+        msg = "the hyperdiffusion biharmonic spectral-radius measurement did \
+            not converge in $m Lanczos iterations: certified bracket width \
+            $(r / θ) exceeds $HYPERDIFFUSION_BRACKET_RTOL"
+        if !strict
+            ClimaComms.iamroot(context) &&
+                @warn "$msg; the hyperdiffusion stability-limit warning is skipped."
+            return nothing
+        end
+        error("$msg. Unset hyperdiffusion_dt_safety_factor and choose the \
+            coefficient manually.")
+    end
+    h = Spaces.node_horizontal_length_scale(space)
+    return (θ + r)^(1 / 4) * Float64(h)
 end
 
 """
-    hyperdiffusion_grid_factor(space)
+    hyperdiffusion_grid_factor(space; strict = true)
 
 Compute the biharmonic grid factor `β` of the horizontal `space`, defined by
-`ρ(∇⁴) = (β / h)⁴` with `h` the mean nodal distance. It is the uniform-grid factor
-[`hyperdiffusion_grid_scale_factor`](@ref) for the polynomial degree, scaled by the
-grid metric non-uniformity; see `docs/src/equations.md`. Return `nothing` unless
-`space` is a 2D spectral-element space with a tabulated degree.
+`ρ(∇⁴) = (β / h)⁴` with `h` the mean nodal distance: the certified measurement
+of [`measured_grid_factor`](@ref) with the spectral radius inflated by
+`HYPERDIFFUSION_SPECTRAL_RADIUS_MARGIN`. Return `nothing` unless `space` is a
+2D spectral-element space, or when the measurement does not converge and
+`strict = false`.
 """
-function hyperdiffusion_grid_factor(space)
+function hyperdiffusion_grid_factor(space; strict = true)
     space isa Spaces.SpectralElementSpace2D || return nothing
+    β = measured_grid_factor(space; strict)
+    isnothing(β) && return nothing
     h = Spaces.node_horizontal_length_scale(space)
-    degree = Quadratures.polynomial_degree(Spaces.quadrature_style(space))
-    scale_factor = hyperdiffusion_grid_scale_factor(degree)
-    isnothing(scale_factor) && return nothing
-    # Horizontal contravariant-metric components g¹¹, g¹², g²² (padded 3×3
-    # column-major indices 1, 4, 5).
-    g = Fields.local_geometry_field(space).gⁱʲ.components.data
-    corner = g.:1 .+ g.:5 .+ 2 .* abs.(g.:4)
-    uniform = 2 * (2 / (degree * h))^2
-    metric_factor = sqrt(maximum(corner) / uniform)
-    return oftype(h, scale_factor * metric_factor)
+    margin = HYPERDIFFUSION_SPECTRAL_RADIUS_MARGIN
+    return oftype(h, (1 + margin)^(1 / 4) * β)
 end
 
 """
@@ -108,20 +189,23 @@ stability limit while no limit is applied (`dt_safety_factor == 0`). The limit u
 the ARS343 explicit-tableau stability bound, matching the default time integrator.
 See [`hyperdiffusion_dt_limit`](@ref). `grid_factor` is
 [`hyperdiffusion_grid_factor`](@ref) for the horizontal space; `nothing` (an
-unsupported space or an untabulated polynomial degree) skips the warning.
+unsupported space or a non-converged measurement) skips the warning.
 """
 function warn_if_hyperdiffusion_over_dt_limit(hyperdiff, Y, dt, grid_factor)
     hyperdiff isa Hyperdiffusion || return nothing
     hyperdiff.dt_safety_factor > 0 && return nothing
     isnothing(grid_factor) && return nothing
-    h = Spaces.node_horizontal_length_scale(Spaces.horizontal_space(axes(Y.c)))
+    space = Spaces.horizontal_space(axes(Y.c))
+    h = Spaces.node_horizontal_length_scale(space)
     limit = hyperdiffusion_dt_limit(
         hyperdiff, h, grid_factor, HYPERDIFFUSION_ARS343_STABILITY,
     )
-    float(dt) > limit && @warn "dt = $(float(dt)) s exceeds the explicit \
-        stability limit ($limit s) of the hyperdiffusion coefficient under \
-        the default ARS343 tableau. Set hyperdiffusion_dt_safety_factor \
-        (recommended 2) or reduce vorticity_hyperdiffusion_coefficient."
+    float(dt) > limit &&
+        ClimaComms.iamroot(ClimaComms.context(space)) &&
+        @warn "dt = $(float(dt)) s exceeds the explicit \
+            stability limit ($limit s) of the hyperdiffusion coefficient under \
+            the default ARS343 tableau. Set hyperdiffusion_dt_safety_factor \
+            (recommended 2) or reduce vorticity_hyperdiffusion_coefficient."
     return nothing
 end
 
@@ -135,16 +219,12 @@ function hyperdiffusion_cache(
     Y, hyperdiff::Hyperdiffusion, turbconv_model, microphysics_model,
 )
     space = Spaces.horizontal_space(axes(Y.c))
-    grid_factor = hyperdiffusion_grid_factor(space)
-    if isnothing(grid_factor) && hyperdiff.dt_safety_factor > 0
-        space isa Spaces.SpectralElementSpace2D ||
-            error("hyperdiffusion_dt_safety_factor requires a 2D \
-                spectral-element horizontal space.")
-        degree = Quadratures.polynomial_degree(Spaces.quadrature_style(space))
-        error("hyperdiffusion stability limit is not tabulated for polynomial \
-            degree $degree; generate the entry with \
-            test/prognostic_equations/hyperdiffusion_grid_factor.jl.")
-    end
+    strict = hyperdiff.dt_safety_factor > 0
+    grid_factor = hyperdiffusion_grid_factor(space; strict)
+    isnothing(grid_factor) &&
+        strict &&
+        error("hyperdiffusion_dt_safety_factor requires a 2D \
+            spectral-element horizontal space.")
     FT = eltype(Y)
     n = n_mass_flux_subdomains(turbconv_model)
 
