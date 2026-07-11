@@ -9,7 +9,7 @@
 #####
 
 import ClimaTimeSteppers as CTS
-import ClimaUtilities.TimeManager: ITime
+import ClimaUtilities.TimeManager: ITime, seconds
 import Dates
 
 """
@@ -171,7 +171,7 @@ end
 function auto_n_sub(dt, Δx, c_ref)
     cfl_safety = oftype(c_ref, 0.5)
     safe_dt = cfl_safety * Δx / c_ref
-    return max(1, ceil(Int, float(dt) / safe_dt))
+    return max(1, ceil(Int, seconds(dt) / safe_dt))
 end
 
 # Smallest sub-step count ≥ `n_min` for which `dt / ·` is exact.
@@ -215,7 +215,7 @@ function CTS.init_cache(prob, alg::AcousticMultirate; dt, kwargs...)
     n_sub = exact_n_sub(dt, requested_n_sub)
     fast_dt = dt / n_sub
     # Divergence-damping viscosity ν_d = β_d c_ref² fast_dt.
-    ν_d = FT(alg.β_d) * c_ref^2 * FT(float(fast_dt))
+    ν_d = FT(alg.β_d) * c_ref^2 * FT(seconds(fast_dt))
     fast! = AcousticSubstepTendency(alg.vertical, ν_d, alg.damping_form)
     A_buf = zero(u0)
     freeze!(G, G_lim, U, p, t) = acoustic_slow_forcing!(G, G_lim, A_buf, f, U, p, t)
