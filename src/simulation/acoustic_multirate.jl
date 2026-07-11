@@ -144,7 +144,7 @@ end
 
 """
     AcousticMultirate(inner_alg, n_sub, vertical, outer_stages = 2, β_d = 0.0,
-        implicit_split = false, damping_form = FullDivergenceDamping(),
+        implicit_split = false, damping_form = FullDivergenceDamping();
         inner_scheme = nothing)
 
 A multirate `TimeSteppingAlgorithm` that sub-cycles the acoustic modes. See
@@ -186,6 +186,8 @@ AcousticMultirate(
     outer_stages = 2,
     β_d = 0.0,
     implicit_split = false,
+    damping_form = FullDivergenceDamping();
+    inner_scheme = nothing,
 ) = AcousticMultirate(
     inner_alg,
     n_sub,
@@ -193,8 +195,8 @@ AcousticMultirate(
     outer_stages,
     β_d,
     implicit_split,
-    FullDivergenceDamping(),
-    nothing,
+    damping_form,
+    inner_scheme,
 )
 
 """

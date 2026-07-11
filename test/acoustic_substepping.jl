@@ -71,6 +71,37 @@ box_integrator(; kwargs...) =
     @test !(resolved_alg(substeps = "0") isa CA.AcousticMultirate)
 end
 
+@testset "constructor argument defaults" begin
+    # The seven-argument form (through `damping_form`) predates `inner_scheme`.
+    # It constructs and selects the IMEX inner sub-cycle. See #4677.
+    seven_arg = CA.AcousticMultirate(
+        nothing,
+        3,
+        CA.ImplicitVertical(),
+        2,
+        0.0,
+        false,
+        CA.FullDivergenceDamping(),
+    )
+    @test seven_arg isa CA.AcousticMultirate
+    @test seven_arg.inner_scheme === nothing
+    @test seven_arg.damping_form isa CA.FullDivergenceDamping
+
+    # The forward-backward inner scheme is opt-in through the keyword.
+    fb = CA.AcousticForwardBackward(0.5)
+    eight_arg = CA.AcousticMultirate(
+        nothing,
+        3,
+        CA.ImplicitVertical(),
+        2,
+        0.0,
+        false,
+        CA.FullDivergenceDamping();
+        inner_scheme = fb,
+    )
+    @test eight_arg.inner_scheme === fb
+end
+
 @testset "kinetic-energy gradient discrete form" begin
     integ = box_integrator()
     Y, p, t, f = integ.u, integ.p, integ.t, integ.cache.f
