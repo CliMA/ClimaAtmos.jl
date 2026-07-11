@@ -17,6 +17,7 @@ function box_config(;
     order = 2,
     substeps = "3",
     dt = "0.5secs",
+    implicit_split = false,
 )
     return Dict{String, Any}(
         "initial_condition" => "DryDensityCurrentProfile",
@@ -40,6 +41,7 @@ function box_config(;
         "acoustic_substeps" => substeps,
         "acoustic_substep_vertical" => vertical,
         "acoustic_substep_order" => order,
+        "acoustic_substep_implicit_split" => implicit_split,
         "acoustic_substep_damping_form" => damping_form,
         "acoustic_substep_damping" => damping,
         "output_dir" => mktempdir(),
@@ -209,16 +211,56 @@ end
     end
 end
 
-@testset "sub-step count is rounded up to divide dt exactly" begin
+@testset "sub-step count keeps an exactly-representable fast_dt" begin
     # See CliMA/ClimaTimeSteppers.jl#442: an ITime dt that the count does not
     # divide exactly throws in `dt / n_sub` rather than truncating, so
-    # exact_n_sub rounds the resolved count up to a divisor.
-    dt = CA.ITime(0.5)                       # 5e8 ns, not divisible by 3
+    # exact_n_sub raises the resolved count until the division is exact.
+    dt = CA.ITime(0.5)                       # counter 500, Millisecond period
     @test_throws ErrorException dt / 3
-    @test CA.exact_n_sub(dt, 3) == 4         # next count that divides 5e8 ns
+    @test CA.exact_n_sub(dt, 3) == 4         # smallest divisor of 500 that is ≥ 3
     @test CA.exact_n_sub(dt, 5) == 5         # already a divisor, left unchanged
     @test dt / CA.exact_n_sub(dt, 3) isa CA.ITime
+
+    # A divisor of the counter at dt's own period is preferred, so fast_dt keeps
+    # that period. For dt = 10 s the count 4 divides the nanosecond count but not
+    # the second count, so it is raised to 5.
+    dt10 = CA.ITime(10)                      # counter 10, Second period
+    @test CA.exact_n_sub(dt10, 4) == 5
+    @test (dt10 / CA.exact_n_sub(dt10, 4)).period == dt10.period
+
+    # Odd counter: the count is raised to the counter itself.
+    dt5 = CA.ITime(5)                        # counter 5, Second period
+    @test CA.exact_n_sub(dt5, 3) == 5
+    @test (dt5 / CA.exact_n_sub(dt5, 3)).period == dt5.period
+
+    # No divisor of the counter reaches n_min; the count falls back to a finer
+    # period at which the division is still exact.
+    dt2 = CA.ITime(2)                        # counter 2, Second period
+    @test CA.exact_n_sub(dt2, 5) == 5
+    @test dt2 / CA.exact_n_sub(dt2, 5) isa CA.ITime
+    @test (dt2 / CA.exact_n_sub(dt2, 5)).period != dt2.period
+
     # The CFL-derived auto count is snapped through the same helper.
     n_auto = CA.exact_n_sub(dt, CA.auto_n_sub(dt, 130.0, 340.0))
     @test dt / n_auto isa CA.ITime
+end
+
+@testset "coarse-period dt runs with a sub-second fast_dt count" begin
+    # dt = 10 s with 4 sub-steps snaps to 5, keeping fast_dt at the second period;
+    # both the inner sub-cycle and the outer implicit complement must step.
+    for implicit_split in (false, true)
+        integ =
+            box_integrator(; dt = "10secs", substeps = "4", order = 1, implicit_split)
+        t_start = integ.t
+        run_steps!(integ, 3)
+        @test integ.t > t_start
+        @test all(isfinite, parent(integ.u.c.ρ))
+    end
+    # Odd counter, second-order outer combination: the half-step dt / 2 = 2.5 s is
+    # finer than dt, exercising the complement's period handling.
+    integ = box_integrator(; dt = "5secs", substeps = "5", order = 2, implicit_split = true)
+    t_start = integ.t
+    run_steps!(integ, 3)
+    @test integ.t > t_start
+    @test all(isfinite, parent(integ.u.c.ρ))
 end
