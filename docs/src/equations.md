@@ -371,10 +371,11 @@ The coefficient factor ``F = \max(\text{divergence damping factor}, 1/\mathrm{Pr
 
 The grid factor ``\beta`` is defined by ``\rho(\nabla^4) = (\beta/h)^4``, the largest eigenvalue of the discrete horizontal biharmonic, and is measured on the configured grid once at simulation construction.
 The DSS-assembled scalar Laplacian ``\hat{\mathcal{D}}_h \circ \mathcal{G}_h`` is self-adjoint and negative semi-definite in the mass inner product, so its square, the assembled scalar biharmonic, is symmetric positive semi-definite, and a Lanczos iteration with full reorthogonalization in that inner product brackets ``\rho(\nabla^4)`` in ``[\theta, \theta + r]`` once the iteration has resolved the dominant eigenpair, where ``\theta`` is the Rayleigh quotient of the top Ritz vector and ``r`` its residual norm.
-``\theta \le \rho(\nabla^4)`` holds unconditionally, and the residual bound certifies an eigenvalue within ``r`` of ``\theta``; the deterministic start vector has a generic component in the dominant eigenspace.
+``\theta \le \rho(\nabla^4)`` holds unconditionally, and the residual bound certifies an eigenvalue within ``r`` of ``\theta``; that certified eigenvalue is the spectral radius provided the deterministic start vector is not orthogonal to the dominant eigenspace, an assumption validated on the degenerate uniform box, whose repeated top eigenvalue the measurement recovers exactly.
 The limit uses the certified upper end with a margin ``\delta`` on the spectral radius, ``\beta = \left((1 + \delta)(\theta + r)\right)^{1/4} h`` with ``\delta = 0.01``.
 When the bracket relative width ``r/\theta`` exceeds 1% at the iteration budget (25), construction fails if `hyperdiffusion_dt_safety_factor` is set; with the default it emits a warning and skips the stability-limit warning.
-The measurement costs one hyperdiffusion tendency evaluation per iteration and applies to any polynomial degree and any 2D spectral-element grid, including warped meshes.
+The measurement costs one hyperdiffusion tendency evaluation per iteration and applies to any polynomial degree and any 2D spectral-element grid.
+Horizontally-warped meshes, such as the equiangular cubed sphere, are measured exactly; terrain-following vertical warping of the extruded grid is outside this horizontal measurement.
 
 An analytic upper bound ``\beta \le \beta_\mathrm{op}(p) \, M``, the uniform-grid operator factor composed with the peak metric factor, is retained here for intuition; it is exact on a uniform grid (``M = 1``) and conservative on an anisotropic grid, where it overestimates the assembled operator's spectral radius.
 The uniform-grid factor ``\beta_\mathrm{op}(p)`` is the measured factor of a uniform, periodic, degree-``p`` grid:

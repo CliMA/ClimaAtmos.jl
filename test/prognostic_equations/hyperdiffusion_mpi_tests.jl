@@ -30,10 +30,7 @@ ClimaComms.init(context)
         h_elem = 6,
         context,
     )
-    # Reference values from hyperdiffusion_tests.jl. The measured factor is
-    # identical on all ranks within a run; across rank counts it varies at
-    # roundoff level (the start vector and reduction order follow the local
-    # decomposition), well within the tolerance below.
+    # Reference values from hyperdiffusion_tests.jl; see #4673.
     for (space, reference) in ((box, 4.0637), (sphere, 5.19))
         β = CA.measured_grid_factor(space)
         @test β ≈ reference rtol = 1e-2

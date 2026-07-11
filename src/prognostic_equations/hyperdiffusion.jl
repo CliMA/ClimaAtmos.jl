@@ -31,7 +31,9 @@ const HYPERDIFFUSION_SPECTRAL_RADIUS_MARGIN = 0.01
 
 Measure the biharmonic grid factor `β` of the 2D spectral-element `space`,
 defined by `ρ(∇⁴) = (β / h)⁴` with `h` the mean nodal distance and `ρ(∇⁴)` the
-spectral radius of the DSS-assembled scalar biharmonic `(wdivₕ ∘ gradₕ)²`.
+spectral radius of the DSS-assembled scalar biharmonic `(wdivₕ ∘ gradₕ)²`. The
+measurement is horizontal; terrain-following vertical warping of an extruded grid
+is not reflected.
 
 A Lanczos iteration with full reorthogonalization in the mass inner product
 computes the Rayleigh quotient `θ` and residual norm `r` of the top Ritz
