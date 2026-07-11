@@ -56,48 +56,40 @@ import ClimaAtmos as CA
     )
 end
 
-@testset "Hyperdiffusion dt-limit safety factor" begin
+@testset "Hyperdiffusion dt safety factor" begin
     getter(overrides) = CA.get_hyperdiffusion_model(
         CA.AtmosConfig(
             merge(Dict{String, Any}("hyperdiff" => "Hyperdiffusion"), overrides),
-            job_id = "test_hyperdiff_dt_limit",
+            job_id = "test_hyperdiff_dt_safety",
         ).parsed_args,
         Float64,
     )
 
     # `~` (default): the field is 0 (no limit).
-    @test getter(Dict{String, Any}()).dt_limit_safety == 0
+    @test getter(Dict{String, Any}()).dt_safety_factor == 0
 
     # A set value is converted to `FT`, whether given as an Int or a Float.
-    @test getter(
-        Dict{String, Any}("hyperdiffusion_dt_limit_safety" => 2),
-    ).dt_limit_safety == 2
-    @test getter(
-        Dict{String, Any}("hyperdiffusion_dt_limit_safety" => 2.0),
-    ).dt_limit_safety == 2
+    @test getter(Dict("hyperdiffusion_dt_safety_factor" => 2)).dt_safety_factor == 2
+    @test getter(Dict("hyperdiffusion_dt_safety_factor" => 2.0)).dt_safety_factor == 2
 
     # Non-positive values are rejected.
-    @test_throws ErrorException getter(
-        Dict{String, Any}("hyperdiffusion_dt_limit_safety" => 0),
-    )
-    @test_throws ErrorException getter(
-        Dict{String, Any}("hyperdiffusion_dt_limit_safety" => -1),
-    )
+    @test_throws ErrorException getter(Dict("hyperdiffusion_dt_safety_factor" => 0))
+    @test_throws ErrorException getter(Dict("hyperdiffusion_dt_safety_factor" => -1))
 
     # The factor composes with the CAM_SE preset.
     cam_se = CA.get_hyperdiffusion_model(
         CA.AtmosConfig(
-            Dict{String, Any}(
+            Dict(
                 "hyperdiff" => "CAM_SE",
                 "vorticity_hyperdiffusion_coefficient" => 0.1857,
                 "hyperdiffusion_prandtl_number" => 0.2,
                 "divergence_damping_factor" => 5.0,
-                "hyperdiffusion_dt_limit_safety" => 2,
+                "hyperdiffusion_dt_safety_factor" => 2,
             ),
-            job_id = "test_hyperdiff_dt_limit_cam_se",
+            job_id = "test_hyperdiff_dt_safety_cam_se",
         ).parsed_args,
         Float64,
     )
-    @test cam_se.dt_limit_safety == 2
+    @test cam_se.dt_safety_factor == 2
     @test cam_se.ν₄_vorticity_coeff == Float64(0.150 * 1.238)
 end

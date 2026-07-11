@@ -5,29 +5,69 @@
 import ClimaCore.Geometry as Geometry
 import ClimaCore.Fields as Fields
 import ClimaCore.Spaces as Spaces
+import ClimaCore.Quadratures as Quadratures
 
-# Maximum-wavenumber prefactor in the explicit stability limit of the vorticity
-# hyperdiffusion, calibrated for degree-3 (4-point GLL) spectral elements. See
-# `docs/src/equations.md` for the calibration.
-# TODO (#4673): recalibrate or derive this factor for other quadrature degrees;
-# the limit holds only for degree-3 elements.
-const HYPERDIFFUSION_MAX_WAVENUMBER_FACTOR = 4
+# Real-axis stability bound `C` of the integrator on the explicit biharmonic, in
+# `dt * ρ(ν₄ ∇⁴) ≤ C`: forward Euler for the once-per-step coefficient reduction,
+# the default ARS343 explicit tableau for the warning. See `docs/src/equations.md`.
+const HYPERDIFFUSION_FORWARD_EULER_STABILITY = 2
+const HYPERDIFFUSION_ARS343_STABILITY = 2.7853
 
 """
-    hyperdiffusion_dt_limit(hyperdiff, h)
+    hyperdiffusion_grid_scale_factor(degree)
 
-Compute the forward-Euler stability limit, in seconds, of the explicit
-hyperdiffusion at mean nodal distance `h`, using the largest of the divergent and
-scalar coefficient factors `F = max(divergence_damping_factor, 1 / prandtl_number)`.
+Compute the grid-scale factor `β` of the horizontal biharmonic on a uniform,
+degree-`degree` spectral element, defined by `ρ(∇⁴) = (β / h)⁴` with `h` the mean
+nodal distance. Tabulated from the spectral radius of the assembled scalar
+operator `(wdivₕ ∘ gradₕ)²`; the generating code is in
+`test/prognostic_equations/hyperdiffusion_grid_factor.jl`.
 """
-function hyperdiffusion_dt_limit(hyperdiff, h)
-    β = HYPERDIFFUSION_MAX_WAVENUMBER_FACTOR
-    F = max(hyperdiff.divergence_damping_factor, inv(hyperdiff.prandtl_number))
-    return 2 * h / (F * β^4 * hyperdiff.ν₄_vorticity_coeff)
+function hyperdiffusion_grid_scale_factor(degree)
+    degree == 2 && return 3.4641
+    degree == 3 && return 4.0637
+    degree == 4 && return 4.7873
+    degree == 5 && return 5.5997
+    degree == 6 && return 6.4531
+    degree == 7 && return 7.3250
+    error("hyperdiffusion stability limit is not tabulated for polynomial \
+        degree $degree.")
 end
 
 """
-    ν₄(hyperdiff, Y, dt)
+    hyperdiffusion_grid_factor(space)
+
+Compute the biharmonic grid factor `β` of the horizontal `space`, defined by
+`ρ(∇⁴) = (β / h)⁴` with `h` the mean nodal distance. It is the uniform-grid factor
+[`hyperdiffusion_grid_scale_factor`](@ref) for the quadrature degree, scaled by the
+grid metric non-uniformity; see `docs/src/equations.md`.
+"""
+function hyperdiffusion_grid_factor(space)
+    h = Spaces.node_horizontal_length_scale(space)
+    degree = Quadratures.polynomial_degree(Spaces.quadrature_style(space))
+    # Horizontal contravariant-metric components g¹¹, g¹², g²² (padded 3×3
+    # column-major indices 1, 4, 5).
+    g = Fields.local_geometry_field(space).gⁱʲ.components.data
+    corner = g.:1 .+ g.:5 .+ 2 .* abs.(g.:4)
+    uniform = 2 * (2 / (degree * h))^2
+    metric_factor = sqrt(maximum(corner) / uniform)
+    return oftype(h, hyperdiffusion_grid_scale_factor(degree) * metric_factor)
+end
+
+"""
+    hyperdiffusion_dt_limit(hyperdiff, h, grid_factor, stability)
+
+Compute the explicit stability limit, in seconds, of the hyperdiffusion at mean
+nodal distance `h` and biharmonic `grid_factor`, using the largest of the divergent
+and scalar coefficient factors `F = max(divergence_damping_factor, 1 / prandtl_number)`
+and the integrator real-axis `stability` bound.
+"""
+function hyperdiffusion_dt_limit(hyperdiff, h, grid_factor, stability)
+    F = max(hyperdiff.divergence_damping_factor, inv(hyperdiff.prandtl_number))
+    return stability * h / (F * grid_factor^4 * hyperdiff.ν₄_vorticity_coeff)
+end
+
+"""
+    ν₄(hyperdiff, Y, dt, grid_factor)
 
 A `NamedTuple` of the hyperdiffusivity `ν₄_scalar` and the hyperviscosity
 `ν₄_vorticity`. These quantities are assumed to scale with `h^3`, where `h` is
@@ -35,16 +75,19 @@ the mean nodal distance, following the empirical results of Lauritzen et al.
 (2018, https://doi.org/10.1029/2017MS001257). The scalar coefficient is computed
 as `ν₄_scalar = ν₄_vorticity / prandtl_number`, where `ν₄_vorticity = ν₄_vorticity_coeff * h^3`.
 
-When `hyperdiff.dt_limit_safety > 0`, `ν₄_vorticity` is reduced so that the
-hyperdiffusion is explicitly stable for `dt_limit_safety * dt`; see
-[`hyperdiffusion_dt_limit`](@ref).
+When `hyperdiff.dt_safety_factor > 0`, `ν₄_vorticity` is reduced so that the
+hyperdiffusion is explicitly stable for `dt_safety_factor * dt`; see
+[`hyperdiffusion_dt_limit`](@ref). `grid_factor` is
+[`hyperdiffusion_grid_factor`](@ref) for the horizontal space.
 """
-function ν₄(hyperdiff, Y, dt)
+function ν₄(hyperdiff, Y, dt, grid_factor)
     h = Spaces.node_horizontal_length_scale(Spaces.horizontal_space(axes(Y.c)))
     ν₄_vorticity = hyperdiff.ν₄_vorticity_coeff * h^3
-    S = hyperdiff.dt_limit_safety
+    S = hyperdiff.dt_safety_factor
     if S > 0
-        limit = hyperdiffusion_dt_limit(hyperdiff, h)
+        limit = hyperdiffusion_dt_limit(
+            hyperdiff, h, grid_factor, HYPERDIFFUSION_FORWARD_EULER_STABILITY,
+        )
         ν₄_vorticity = min(ν₄_vorticity, ν₄_vorticity * limit / (S * float(dt)))
     end
     ν₄_scalar = ν₄_vorticity / hyperdiff.prandtl_number
@@ -55,17 +98,22 @@ end
     warn_if_hyperdiffusion_over_dt_limit(hyperdiff, Y, dt)
 
 Warn when the hyperdiffusion tendency is integrated at a `dt` above its explicit
-stability limit while no limit is applied (`dt_limit_safety == 0`). See
-[`hyperdiffusion_dt_limit`](@ref).
+stability limit while no limit is applied (`dt_safety_factor == 0`). The limit uses
+the ARS343 explicit-tableau stability bound, since the plain scheme integrates the
+hyperdiffusion with the explicit IMEX tableau. See [`hyperdiffusion_dt_limit`](@ref).
 """
 function warn_if_hyperdiffusion_over_dt_limit(hyperdiff, Y, dt)
     hyperdiff isa Hyperdiffusion || return nothing
-    hyperdiff.dt_limit_safety > 0 && return nothing
-    h = Spaces.node_horizontal_length_scale(Spaces.horizontal_space(axes(Y.c)))
-    limit = hyperdiffusion_dt_limit(hyperdiff, h)
+    hyperdiff.dt_safety_factor > 0 && return nothing
+    space = Spaces.horizontal_space(axes(Y.c))
+    h = Spaces.node_horizontal_length_scale(space)
+    grid_factor = hyperdiffusion_grid_factor(space)
+    limit = hyperdiffusion_dt_limit(
+        hyperdiff, h, grid_factor, HYPERDIFFUSION_ARS343_STABILITY,
+    )
     float(dt) > limit && @warn "dt = $(float(dt)) s exceeds the explicit \
-        stability limit ($limit s) of the vorticity hyperdiffusion coefficient. \
-        Set hyperdiffusion_dt_limit_safety (recommended 2) or reduce \
+        stability limit ($limit s) of the hyperdiffusion coefficient. \
+        Set hyperdiffusion_dt_safety_factor (recommended 2) or reduce \
         vorticity_hyperdiffusion_coefficient."
     return nothing
 end
@@ -115,7 +163,8 @@ function hyperdiffusion_cache(
             hyperdiffusion_ghost_buffer = map(Spaces.create_dss_buffer, quantities),
         )
     end
-    return (; quantities..., ᶜ∇²u, ᶜ∇²uʲs)
+    grid_factor = hyperdiffusion_grid_factor(Spaces.horizontal_space(axes(Y.c)))
+    return (; quantities..., ᶜ∇²u, ᶜ∇²uʲs, grid_factor)
 end
 
 # This should prep variables that we will dss in
@@ -169,7 +218,8 @@ NVTX.@annotate function apply_hyperdiffusion_tendency!(Yₜ, Y, p, t)
     isnothing(hyperdiff) && return nothing
 
     (; divergence_damping_factor) = hyperdiff
-    (; ν₄_scalar, ν₄_vorticity) = ν₄(hyperdiff, Y, p.dt)
+    (; ν₄_scalar, ν₄_vorticity) =
+        ν₄(hyperdiff, Y, p.dt, p.hyperdiff.grid_factor)
 
     n = n_mass_flux_subdomains(turbconv_model)
     diffuse_tke = use_prognostic_tke(turbconv_model)
@@ -286,7 +336,7 @@ NVTX.@annotate function apply_tracer_hyperdiffusion_tendency!(Yₜ, Y, p, t)
     isnothing(hyperdiff) && return nothing
 
     # Rescale the hyperdiffusivity for precipitating species.
-    (; ν₄_scalar) = ν₄(hyperdiff, Y, p.dt)
+    (; ν₄_scalar) = ν₄(hyperdiff, Y, p.dt, p.hyperdiff.grid_factor)
     ν₄_scalar_microphysics = CAP.α_hyperdiff_tracer(p.params) * ν₄_scalar
 
     n = n_mass_flux_subdomains(turbconv_model)
