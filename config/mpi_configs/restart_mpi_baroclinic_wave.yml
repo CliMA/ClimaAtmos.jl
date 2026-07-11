@@ -2,4 +2,3 @@ t_end: "20days"
 initial_condition: "DryBaroclinicWave"
 restart_file: "mpi_make_restart/output_active/day5.0.hdf5"
 disable_surface_flux_tendency: true
-max_newton_iters_ode: 3

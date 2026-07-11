@@ -205,13 +205,24 @@ function get_insolation_form(parsed_args; setup_type = nothing)
     end
 end
 
+function get_hyperdiffusion_dt_safety_factor(parsed_args, ::Type{FT}) where {FT}
+    safety = parsed_args["hyperdiffusion_dt_safety_factor"]
+    isnothing(safety) && return FT(0)
+    safety > 0 || error(
+        "hyperdiffusion_dt_safety_factor must be positive; got $safety. Use `~` to apply no limit.",
+    )
+    return FT(safety)
+end
+
 function get_hyperdiffusion_model(parsed_args, ::Type{FT}) where {FT}
     hyperdiff_name = parsed_args["hyperdiff"]
+    dt_safety_factor = get_hyperdiffusion_dt_safety_factor(parsed_args, FT)
     if hyperdiff_name == "Hyperdiffusion"
         return Hyperdiffusion{FT}(;
             ν₄_vorticity_coeff = parsed_args["vorticity_hyperdiffusion_coefficient"],
             divergence_damping_factor = parsed_args["divergence_damping_factor"],
             prandtl_number = parsed_args["hyperdiffusion_prandtl_number"],
+            dt_safety_factor,
         )
     elseif hyperdiff_name == "CAM_SE"
         # Ensure the user isn't trying to set the values manually from the config as CAM_SE defines a set of hyperdiffusion coefficients
@@ -227,7 +238,7 @@ function get_hyperdiffusion_model(parsed_args, ::Type{FT}) where {FT}
             config_val = FT(parsed_args[config_coef])
             @assert isapprox(cam_coef, config_val, atol = 1e-8) "CAM_SE hyperdiffusion overwrites $config_coef, use `hyperdiff: Hyperdiffusion` to set this value manually in the config instead."
         end
-        return cam_se_hyperdiff
+        return cam_se_hyperdiffusion(FT; dt_safety_factor)
     elseif isnothing(hyperdiff_name)
         return nothing
     else

@@ -163,7 +163,9 @@ If the flow is not prescribed, this has no effect.
       + If `flow` is `nothing`, this has no effect.
 
   - `thermo_params`: The thermodynamic parameters, needed to compute surface air density.
+
   - `t`: The current time.
+
   - `ᶠu³`: The vertical velocity field.
 
 # Returns

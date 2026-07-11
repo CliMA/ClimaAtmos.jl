@@ -7,16 +7,23 @@
 # `prek run --all-files` for a whole-repo sweep.
 #
 # Setup instructions live in docs/src/contributor_guide.md ("Pre-commit hooks").
-
+exclude: .*docs/dev-guides.*|\.github.*
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v5.0.0
     hooks:
-      # JuliaFormatter does not strip all trailing whitespace (e.g. in comments
-      # and non-.jl files), so trim it here. --markdown-linebreak-ext=md keeps
-      # the two-trailing-spaces hard line break in Markdown.
+      - id: check-added-large-files
+      - id: check-case-conflict
+      - id: check-merge-conflict
+      - id: check-symlinks
+      - id: check-toml
+      - id: check-yaml
+      - id: end-of-file-fixer
+      - id: mixed-line-ending
+      # JuliaFormatter does not strip all trailing whitespace (e.g., in non-.jl files),
+      # so trim it here. We ignore markdown files because trailing-whitespace disagrees
+      # with JuliaFormatter's markdown formatting
       - id: trailing-whitespace
-        args: [--markdown-linebreak-ext=md]
 
   - repo: local
     hooks:
@@ -28,6 +35,6 @@ repos:
         # Pkg.instantiate is a no-op once the environment is resolved.
         entry: julia --startup-file=no --project=.dev/format -e 'using Pkg; Pkg.instantiate(; io = devnull); using JuliaFormatter; format(ARGS)'
         language: system
-        types: [julia]
+        types_or: [julia, markdown]
         pass_filenames: true
         require_serial: true

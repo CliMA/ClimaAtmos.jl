@@ -33,6 +33,9 @@ vorticity_hyperdiffusion_coefficient:
 hyperdiffusion_prandtl_number:
   help: "Prandtl number for hyperdiffusion. Scalar hyperdiffusion coefficient = vorticity coefficient / Prandtl number."
   value: 0.2
+hyperdiffusion_dt_safety_factor:
+  help: "Safety factor on the timestep in the hyperdiffusion explicit stability limit: when set, the coefficient is reduced so the hyperdiffusion is stable for `hyperdiffusion_dt_safety_factor * dt` (recommended `2`). `~` (default) applies no limit. Required for stability when the hyperdiffusion tendency is integrated once per step at a long timestep."
+  value: ~
 # Topography
 topography:
   help: "Define the surface elevation profile [`NoWarp` (default), `Earth`, `DCMIP200`, `Hughes2023`, `Agnesi`, `Schar`, `Cosine2D`, `Cosine3D`]"
@@ -447,8 +450,7 @@ edmfx_filter:
   help: "If set to true, it switches on the relaxation of negative velocity in EDMFX.  [`true`, `false` (default)]"
   value: false
 edmfx_nh_pressure:
-  help: "If set to true, it switches on EDMFX pressure drag closure.  For prognostic EDMF, this only controls the drag term
-  in the pressure closure. The buoyancy term is always applied. [`true`, `false` (default)]"
+  help: "If set to true, it switches on EDMFX pressure drag closure.  For prognostic EDMF, this only controls the drag term in the pressure closure. The buoyancy term is always applied. [`true`, `false` (default)]"
   value: false
 edmfx_vertical_diffusion:
   help: "If set to true, it switches on vertical diffusion of prognostic EDMFX updrafts. [`true`, `false` (default)]"

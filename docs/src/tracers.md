@@ -1,4 +1,5 @@
 # Trace Gases
+
 `ClimaAtmos` implements two modes for each ozone and carbon dioxide: one time varying and one time invariant. These are only relevant for the radiation transfer, and only when RRTMGP is used. All other atmospheric gases are held fixed with default values from RRTMPG that can be changed in the toml file.
 
 ### Time Invariant Ozone Profile
@@ -9,11 +10,13 @@ This option is default.
 
 The `idealized_ozone` function returns the ozone concentration in volume mixing
 ratio (VMR) at a given altitude `z`.
+
 ```@docs
 ClimaAtmos.idealized_ozone
 ```
 
 This function looks like
+
 ```@example
 using CairoMakie
 import ClimaAtmos
@@ -24,8 +27,10 @@ ozone = ClimaAtmos.idealized_ozone.(z)
 fig = Figure()
 ax = Axis(fig[1, 1]; xlabel = "Ozone (VMR)", ylabel = "Altitude (m)")
 lines!(ax, ozone, z)
-save("idealized_ozone.png", fig); nothing # hide
+save("idealized_ozone.png", fig);
+nothing # hide
 ```
+
 ![Idealized ozone profile](idealized_ozone.png)
 
 ### Time Varying Ozone Profile

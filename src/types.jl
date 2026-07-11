@@ -215,10 +215,14 @@ struct PrescribedCloudInRadiation <: AbstractCloudInRadiation end
     ν₄_vorticity_coeff::FT
     divergence_damping_factor::FT
     prandtl_number::FT
+    # Safety factor on the timestep in the explicit stability limit; a positive
+    # value reduces the coefficient so the hyperdiffusion is stable for
+    # `dt_safety_factor` timesteps, and `0` applies no limit.
+    dt_safety_factor::FT = 0
 end
 
 """
-    cam_se_hyperdiffusion(FT)
+    cam_se_hyperdiffusion(FT; dt_safety_factor = 0)
 
 Create a Hyperdiffusion with CAM_SE preset coefficients.
 
@@ -226,11 +230,12 @@ These coefficients match hyperviscosity coefficients from:
 (Lauritzen et al. (2017))[https://doi.org/10.1029/2017MS001257]
 for equations A18 and A19, scaled by `(1.1e5 / (sqrt(4 * pi / 6) * 6.371e6 / (3*30)) )^3 ≈ 1.238`
 """
-cam_se_hyperdiffusion(::Type{FT}) where {FT} =
+cam_se_hyperdiffusion(::Type{FT}; dt_safety_factor = 0) where {FT} =
     Hyperdiffusion{FT}(;
         ν₄_vorticity_coeff = 0.150 * 1.238,
         divergence_damping_factor = 5,
         prandtl_number = 0.2,
+        dt_safety_factor,
     )
 
 ### ------------------------------------ ###
@@ -365,9 +370,9 @@ sponge = ViscousSponge(Float32; zd = 20_000, κ₂ = 1e6)
 ```
 """
 @kwdef struct ViscousSponge{FT} <: SpongeModel
-    "Lower damping height, in meters"
+    # Lower damping height, in meters
     zd::FT
-    "Damping coefficient, in m²/s²"
+    # Damping coefficient, in m²/s²
     κ₂::FT
 end
 
@@ -421,13 +426,13 @@ sponge = RayleighSponge(Float32; zd = 20_000)
 ```
 """
 @kwdef struct RayleighSponge{FT} <: SpongeModel
-    "Lower damping height, in meters"
+    # Lower damping height, in meters
     zd::FT
-    "Damping coefficient for horizontal velocity, by default 0 (no damping)"
+    # Damping coefficient for horizontal velocity, by default 0 (no damping)
     α_uₕ::FT = 0
-    "Damping coefficient for vertical velocity, by default 1 (full damping)"
+    # Damping coefficient for vertical velocity, by default 1 (full damping)
     α_w::FT = 1
-    "Damping coefficient for tracer variables, by default 0 (no damping)"
+    # Damping coefficient for tracer variables, by default 0 (no damping)
     α_tracer::FT = 0
 end
 
@@ -615,6 +620,7 @@ Create a PrognosticEDMFX model with the specified number of updrafts, TKE config
   - `n_updrafts::Int`: Number of updraft subdomains
 
   - `prognostic_tke::Bool`: Whether to use prognostic TKE (true) or diagnostic TKE (false)
+
   - `area_fraction`: "Small" area fraction threshold, is the `a_half` argument in `sgs_weight_function`
 
       + Note: Float type is inferred from this value
@@ -666,7 +672,7 @@ Base.broadcastable(x::AbstractSGSamplingType) = tuple(x)
 Base.broadcastable(x::AbstractTendencyModel) = tuple(x)
 
 @kwdef struct RadiationDYCOMS{FT}
-    "Large-scale divergence"
+    # Large-scale divergence
     divergence::FT = 3.75e-6
     alpha_z::FT = 1.0
     kappa::FT = 85.0
@@ -747,20 +753,20 @@ struct HardMinimumBlending <: AbstractScaleBlendingMethod end
 Base.broadcastable(x::AbstractScaleBlendingMethod) = tuple(x)
 
 struct AtmosNumerics{EN_UP, TR_UP, ED_UP, SG_UP, ED_TR_UP, TDC, RR, LIM, DM, HD}
-    """Enable specific upwinding schemes for specific equations"""
+    # Enable specific upwinding schemes for specific equations
     energy_q_tot_upwinding::EN_UP
     tracer_upwinding::TR_UP
     edmfx_mse_q_tot_upwinding::ED_UP
     edmfx_sgsflux_upwinding::SG_UP
     edmfx_tracer_upwinding::ED_TR_UP
-    """Add NaNs to certain equations to track down problems"""
+    # Add NaNs to certain equations to track down problems
     test_dycore_consistency::TDC
-    """Whether the simulation is reproducible when restarting from a restart file"""
+    # Whether the simulation is reproducible when restarting from a restart file
     reproducible_restart::RR
     limiter::LIM
-    """Timestepping mode for diffusion: Explicit() or Implicit()"""
+    # Timestepping mode for diffusion: Explicit() or Implicit()
     diff_mode::DM
-    """Hyperdiffusion model: nothing or Hyperdiffusion()"""
+    # Hyperdiffusion model: nothing or Hyperdiffusion()
     hyperdiff::HD
 end
 Base.broadcastable(x::AtmosNumerics) = tuple(x)
@@ -1006,7 +1012,7 @@ struct AtmosModel{W, SCM, R, TC, PF, GW, VD, SP, SU, NU, CM}
     numerics::NU
     chemistry::CM
 
-    """Whether to apply surface flux tendency (independent of surface conditions)"""
+    # Whether to apply surface flux tendency (independent of surface conditions)
     disable_surface_flux_tendency::Bool
 end
 

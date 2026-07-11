@@ -449,6 +449,8 @@ function default_diagnostics(
         "clien",
         "tke",
         "lmix",
+        "evu",
+        "edt",
     ]
 
     average_func = frequency_averages(duration)
@@ -461,7 +463,7 @@ end
 
 
 function default_diagnostics(::EDOnlyEDMFX, duration, start_date, t_start; output_writer)
-    edonly_edmfx_diagnostics = ["tke"]
+    edonly_edmfx_diagnostics = ["tke", "lmix", "evu", "edt"]
 
     average_func = frequency_averages(duration)
 

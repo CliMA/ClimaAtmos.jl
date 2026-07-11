@@ -12,6 +12,7 @@ hourly maxima when the timestep is 4 hours).
 
 Second, you can specify the diagnostics you want to output directly in the
 `diagnostics` section of your YAML file. For instance:
+
 ```
 diagnostics:
   - short_name: rhoa
@@ -25,6 +26,7 @@ diagnostics:
     writer: h5
     compute_every: 2steps
 ```
+
 This adds two diagnostics (both for `rhoa`). The `period` keyword
 identifies the period over which to compute the reduction and how often to save
 to disk. `output_name` is optional, and if provided, it identifies the name of the
@@ -33,6 +35,7 @@ be computed.
 
 For multiple diagnostics with the same specs, it is also possible to directly
 pass a vector of `short_names`, as in
+
 ```
 diagnostics:
   - short_name: [rhoa, ua, ta]
@@ -45,22 +48,25 @@ remapped non-conservatively on a Cartesian grid and saved to a NetCDF file.
 Currently, only 3D fields on cubed spheres are supported.
 
 !!! note "Did you know?"
+
     For the `period`, you can also specify `"monthly"`, `"weekly"`, and
     `"daily"`. These options align the reductions to start at the beginning of
     each month, week, and day, respectively.
 
     For example:
-    - If `period: monthly` and `reduction_time: average` are used, and the
-      simulation begins on `2010-01-15`, then the first time saved represents
-      the time average of the second half of January.
-    - The next time saved represents the time average of the data for February,
-      and so on.
+
+      - If `period: monthly` and `reduction_time: average` are used, and the
+        simulation begins on `2010-01-15`, then the first time saved represents
+        the time average of the second half of January.
+      - The next time saved represents the time average of the data for February,
+        and so on.
 
     This is useful to account for spinup.
 
 #### Writing in pressure coordinates
 
 !!! compat "Compatibility"
+
     This is only available in versions after ClimaAtmos v0.35.2.
 
 You can write diagnostics to NetCDF files in pressure coordinates by setting
@@ -86,7 +92,7 @@ list of diagnostics ready to be passed to the simulation. So, for example
 
 ```julia
 
-model = ClimaAtmos.AtmosModel(..., microphysics_model = ClimaAtmos.DryModel(), ...)
+model = ClimaAtmos.AtmosModel(_, microphysics_model = ClimaAtmos.DryModel(), _)
 
 diagnostics = ClimaAtmos.default_diagnostics(model)
 # => List of diagnostics that include the ones specified for the DryModel
@@ -153,21 +159,21 @@ provided by `ClimaAtmos` use this metadata.
 
 In `ClimaAtmos`, we follow the convention that:
 
-- `short_name` is the name used to identify the variable in the output files and
-                in the file names. It is short, but descriptive. We identify
-                diagnostics by their short name, so the diagnostics defined by
-                `ClimaAtmos` have to have unique `short_name`s.
+  - `short_name` is the name used to identify the variable in the output files and
+    in the file names. It is short, but descriptive. We identify
+    diagnostics by their short name, so the diagnostics defined by
+    `ClimaAtmos` have to have unique `short_name`s.
 
-- `long_name`: Name used to describe the variable in the output file as attribute.
+  - `long_name`: Name used to describe the variable in the output file as attribute.
 
-- `standard_name`: Standard name, as in
-  [CF
-  conventions](http://cfconventions.org/Data/cf-standard-names/71/build/cf-standard-name-table.html)
+  - `standard_name`: Standard name, as in
+    [CF
+    conventions](http://cfconventions.org/Data/cf-standard-names/71/build/cf-standard-name-table.html)
 
-- `units`: Physical units of the variable.
+  - `units`: Physical units of the variable.
 
-- `comments`: More verbose explanation of what the variable is, or comments related to how
-              it is defined or computed.
+  - `comments`: More verbose explanation of what the variable is, or comments related to how
+    it is defined or computed.
 
 In `ClimaAtmos`, we follow the [CMIP6 MIP table](https://airtable.com/appYNLuWqAgzLbhSq/shrKcLEdssxb8Yvcp/tblL7dJkC3vl5zQLb)
 for short names and long names where available. Standard names in the table are not used.
@@ -176,11 +182,13 @@ for short names and long names where available. Standard names in the table are 
 
 The other piece of information needed to specify a `DiagnosticVariable` is a
 function `compute`. Schematically, a `compute` has to look like
+
 ```julia
 function compute(state, cache, time)
-    return ... # Calculations with the state and the cache
+    return _ # Calculations with the state and the cache
 end
 ```
+
 The function takes the `state`, `cache`, and `time` from the integrator and returns
 the value of the diagnostic variable.
 
@@ -192,9 +200,9 @@ You can alternatively provide a `compute!` function.
 ```julia
 function compute!(out, state, cache, time)
     if isnothing(out)
-        return ... # Calculations with the state and the cache
+        return _ # Calculations with the state and the cache
     else
-        out .= ... # Calculations with the state and the cache
+        out .= _ # Calculations with the state and the cache
     end
 end
 ```
@@ -233,6 +241,7 @@ were computed differently for `EquilibriumMicrophysics0M` and `NonEquilibriumMic
 
 In `ClimaAtmos`, we define some helper functions to produce error messages, so
 the above code can be written as
+
 ```julia
 function compute_relative_humidity(
     state, cache, time, microphysics_model::MoistMicrophysics,

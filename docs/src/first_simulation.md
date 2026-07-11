@@ -69,7 +69,6 @@ nothing # hide
 See the [Setups](@ref) page for the full list of available setups and how to create
 your own.
 
-
 ## Presets
 
 Common configurations are available as one-line presets in `CA.Presets`:
@@ -82,7 +81,6 @@ nothing # hide
 See the [Presets](api.md#Presets) section of the API for the full list of
 simulation and model presets.
 
-
 ## Running the simulation
 
 Constructing an `AtmosSimulation` sets everything up but does not advance it in
@@ -93,7 +91,6 @@ CA.solve_atmos!(simulation)
 ```
 
 This advances the model to `t_end`.
-
 
 ## Inspecting results
 
@@ -112,12 +109,12 @@ propertynames(Y.f)  # e.g., (:u₃,)
 
 Output is written to `simulation.output_dir` in two formats, each with a distinct role:
 
-- **NetCDF** (`.nc`) files hold the **diagnostics** -- derived (and often interpolated)
-  output variables such as temperature or precipitation. See
-  [Computing and saving diagnostics](@ref) for how to configure them.
-- **HDF5** (`.h5`) files hold full-resolution **model-state checkpoints**, written when
-  `checkpoint_frequency` is set. These are the files a simulation reads to
-  [restart](@ref "Restarting Simulations in ClimaAtmos").
+  - **NetCDF** (`.nc`) files hold the **diagnostics** -- derived (and often interpolated)
+    output variables such as temperature or precipitation. See
+    [Computing and saving diagnostics](@ref) for how to configure them.
+  - **HDF5** (`.h5`) files hold full-resolution **model-state checkpoints**, written when
+    `checkpoint_frequency` is set. These are the files a simulation reads to
+    [restart](@ref "Restarting Simulations in ClimaAtmos").
 
 ## Terminology
 
@@ -130,6 +127,6 @@ The same simulation can be set up with a YAML file.
 
 ## Next steps
 
-- [Script vs Config Interface](@ref) -- detailed comparison of the two workflows
-- [Single Column Models](@ref) -- BOMEX, DYCOMS, RICO, and more
-- [Computing and saving diagnostics](@ref) -- configure output variables and formats
+  - [Script vs Config Interface](@ref) -- detailed comparison of the two workflows
+  - [Single Column Models](@ref) -- BOMEX, DYCOMS, RICO, and more
+  - [Computing and saving diagnostics](@ref) -- configure output variables and formats

@@ -6,18 +6,16 @@
 
 This describes the ClimaAtmos model equations and its discretizations. Where possible, we use a coordinate invariant form: the ClimaCore operators generally handle the conversions between bases internally.
 
-
-
 ## Prognostic variables
 
-* ``\rho``: _density_ in kg/m³. This is discretized at cell centers.
-* ``\boldsymbol{u}`` _velocity_, a vector in m/s. This is discretized via ``\boldsymbol{u} = \boldsymbol{u}_h + \boldsymbol{u}_v`` where
-  - ``\boldsymbol{u}_h = u_1 \boldsymbol{e}^1 + u_2 \boldsymbol{e}^2`` is the projection onto horizontal covariant components (covariance here means with respect to the reference element), stored at cell centers.
-  - ``\boldsymbol{u}_v = u_3 \boldsymbol{e}^3`` is the projection onto the vertical covariant components, stored at cell faces.
-* _energy_, stored at cell centers; can be either:
-  - ``\rho e``: _total energy_ in J/m³
-  - ``\rho e_\text{int}``: _internal energy_ in J/m³
-* ``\rho \chi``: _other conserved scalars_ (moisture, tracers, etc), again stored at cell centers.
+  - ``\rho``: _density_ in kg/m³. This is discretized at cell centers.
+  - ``\boldsymbol{u}`` _velocity_, a vector in m/s. This is discretized via ``\boldsymbol{u} = \boldsymbol{u}_h + \boldsymbol{u}_v`` where
+      + ``\boldsymbol{u}_h = u_1 \boldsymbol{e}^1 + u_2 \boldsymbol{e}^2`` is the projection onto horizontal covariant components (covariance here means with respect to the reference element), stored at cell centers.
+      + ``\boldsymbol{u}_v = u_3 \boldsymbol{e}^3`` is the projection onto the vertical covariant components, stored at cell faces.
+  - _energy_, stored at cell centers; can be either:
+      + ``\rho e``: _total energy_ in J/m³
+      + ``\rho e_\text{int}``: _internal energy_ in J/m³
+  - ``\rho \chi``: _other conserved scalars_ (moisture, tracers, etc), again stored at cell centers.
 
 ## Operators
 
@@ -25,168 +23,210 @@ We make use of the following operators
 
 ### Reconstruction
 
-* ``I^c`` is the [face-to-center reconstruction operator](https://clima.github.io/ClimaCore.jl/stable/operators/#ClimaCore.Operators.InterpolateF2C) (arithmetic mean)
-* ``I^f`` is the [center-to-face reconstruction operator](https://clima.github.io/ClimaCore.jl/stable/operators/#ClimaCore.Operators.InterpolateC2F) (arithmetic mean)
-* ``WI^f`` is the [center-to-face weighted reconstruction operator](https://clima.github.io/ClimaCore.jl/stable/operators/#ClimaCore.Operators.WeightedInterpolateC2F)
-  - ``WI^f(J, x) = I^f(J*x) / I^f(J)``, where ``J`` is the value of the Jacobian for use in the weighted interpolation operator
-* ``U^f`` is the [1st or 3rd-order center-to-face upwind product operator](https://clima.github.io/ClimaCore.jl/stable/operators/#ClimaCore.Operators.Upwind3rdOrderBiasedProductC2F) # fix link
+  - ``I^c`` is the [face-to-center reconstruction operator](https://clima.github.io/ClimaCore.jl/stable/operators/#ClimaCore.Operators.InterpolateF2C) (arithmetic mean)
+  - ``I^f`` is the [center-to-face reconstruction operator](https://clima.github.io/ClimaCore.jl/stable/operators/#ClimaCore.Operators.InterpolateC2F) (arithmetic mean)
+  - ``WI^f`` is the [center-to-face weighted reconstruction operator](https://clima.github.io/ClimaCore.jl/stable/operators/#ClimaCore.Operators.WeightedInterpolateC2F)
+      + ``WI^f(J, x) = I^f(J*x) / I^f(J)``, where ``J`` is the value of the Jacobian for use in the weighted interpolation operator
+  - ``U^f`` is the [1st or 3rd-order center-to-face upwind product operator](https://clima.github.io/ClimaCore.jl/stable/operators/#ClimaCore.Operators.Upwind3rdOrderBiasedProductC2F) # fix link
 
 ### Differential operators
 
-- ``\hat{\mathcal{D}}_h`` is the [discrete horizontal spectral weak divergence](https://clima.github.io/ClimaCore.jl/stable/operators/#ClimaCore.Operators.WeakDivergence).
-- ``\mathcal{D}^c_v`` is the [face-to-center vertical divergence](https://clima.github.io/ClimaCore.jl/stable/operators/#ClimaCore.Operators.DivergenceF2C).
+  - ``\hat{\mathcal{D}}_h`` is the [discrete horizontal spectral weak divergence](https://clima.github.io/ClimaCore.jl/stable/operators/#ClimaCore.Operators.WeakDivergence).
+  - ``\mathcal{D}^c_v`` is the [face-to-center vertical divergence](https://clima.github.io/ClimaCore.jl/stable/operators/#ClimaCore.Operators.DivergenceF2C).
+
 !!! todo
+
     Add vertical diffusive tendencies (including surface fluxes)
 
-- ``\mathcal{G}_h`` is the [discrete horizontal spectral gradient](https://clima.github.io/ClimaCore.jl/stable/operators/#ClimaCore.Operators.Gradient).
-- ``\mathcal{G}^f_v`` is the [center-to-face vertical gradient](https://clima.github.io/ClimaCore.jl/stable/operators/#ClimaCore.Operators.GradientC2F).
-  - the gradient is set to 0 at the top and bottom boundaries.
-- ``\mathcal{C}_h`` is the [curl components involving horizontal derivatives](https://clima.github.io/ClimaCore.jl/stable/operators/#ClimaCore.Operators.Curl)
-  - ``\mathcal{C}_h[\boldsymbol{u}_h]`` returns a vector with only vertical _contravariant_ components.
-  - ``\mathcal{C}_h[\boldsymbol{u}_v]`` returns a vector with only horizontal _contravariant_ components.
-- ``\hat{\mathcal{C}}_h`` is the [weak curl components involving horizontal derivatives](https://clima.github.io/ClimaCore.jl/stable/operators/#ClimaCore.Operators.WeakCurl)
-- ``\mathcal{C}^f_v`` is the [center-to-face curl involving vertical derivatives](https://clima.github.io/ClimaCore.jl/stable/operators/#ClimaCore.Operators.CurlC2F).
-  - ``\mathcal{C}^f_v[\boldsymbol{u}_h]`` returns a vector with only a horizontal _contravariant_ component.
-  - the curl is set to 0 at the top and bottom boundaries.
-    - We need to clarify how best to handle this.
+  - ``\mathcal{G}_h`` is the [discrete horizontal spectral gradient](https://clima.github.io/ClimaCore.jl/stable/operators/#ClimaCore.Operators.Gradient).
+  - ``\mathcal{G}^f_v`` is the [center-to-face vertical gradient](https://clima.github.io/ClimaCore.jl/stable/operators/#ClimaCore.Operators.GradientC2F).
+      + the gradient is set to 0 at the top and bottom boundaries.
+  - ``\mathcal{C}_h`` is the [curl components involving horizontal derivatives](https://clima.github.io/ClimaCore.jl/stable/operators/#ClimaCore.Operators.Curl)
+      + ``\mathcal{C}_h[\boldsymbol{u}_h]`` returns a vector with only vertical _contravariant_ components.
+      + ``\mathcal{C}_h[\boldsymbol{u}_v]`` returns a vector with only horizontal _contravariant_ components.
+  - ``\hat{\mathcal{C}}_h`` is the [weak curl components involving horizontal derivatives](https://clima.github.io/ClimaCore.jl/stable/operators/#ClimaCore.Operators.WeakCurl)
+  - ``\mathcal{C}^f_v`` is the [center-to-face curl involving vertical derivatives](https://clima.github.io/ClimaCore.jl/stable/operators/#ClimaCore.Operators.CurlC2F).
+      + ``\mathcal{C}^f_v[\boldsymbol{u}_h]`` returns a vector with only a horizontal _contravariant_ component.
+      + the curl is set to 0 at the top and bottom boundaries.
+          * We need to clarify how best to handle this.
 
 ### Projection
 
-- ``\mathcal{P}`` is the [direct stiffness summation (DSS) operation](https://clima.github.io/ClimaCore.jl/stable/operators/#DSS), which computes the projection onto the continuous spectral element basis.
+  - ``\mathcal{P}`` is the [direct stiffness summation (DSS) operation](https://clima.github.io/ClimaCore.jl/stable/operators/#DSS), which computes the projection onto the continuous spectral element basis.
 
 ## Auxiliary and derived quantities
 
-* ``\boldsymbol{\Omega}`` is the planetary angular velocity. We use either:
-  *  a _shallow atmosphere_ approximation, with
-     ```math
-     \boldsymbol{\Omega} = \Omega \sin(\phi) \boldsymbol{e}^v
-     ```
-      where ``\phi`` is latitude, and ``\Omega`` is the planetary rotation rate in rads/sec (for Earth, ``7.29212 \times 10^{-5} s^{-1}``) and ``\boldsymbol{e}^v`` is the unit radial basis vector. This implies that the horizontal contravariant component ``\boldsymbol{\Omega}^h`` is zero.
+  - ``\boldsymbol{\Omega}`` is the planetary angular velocity. We use either:
 
-  *  a _deep atmosphere_, with
-     ```math
-     \boldsymbol{\Omega} = (0, 0, \Omega)
-     ```
-     i.e. aligned with Earth's rotational axis.
-* ``\tilde{\boldsymbol{u}}`` is the mass-weighted reconstruction of velocity at the interfaces:
-  by interpolation of contravariant components
-  ```math
+      + a _shallow atmosphere_ approximation, with
 
-  ```
-* ``\bar{\boldsymbol{u}}`` is the reconstruction of velocity at cell-centers, carried out by linear interpolation of the covariant vertical component:
-  ```math
-  \bar{\boldsymbol{u}} = \boldsymbol{u}_h + I_{c}(\boldsymbol{u}_v)
-  ```
+        ```math
+        \boldsymbol{\Omega} = \Omega \sin(\phi) \boldsymbol{e}^v
+        ```
 
-* ``\Phi = g z`` is the geopotential, where ``g`` is the gravitational acceleration rate and ``z`` is altitude above the mean sea level.
-* ``K = \tfrac{1}{2} \|\boldsymbol{u}\|^2 `` is the specific kinetic energy (J/kg), reconstructed at cell centers by
-  ```math
-  K = \tfrac{1}{2} (\boldsymbol{u}_{h} \cdot \boldsymbol{u}_{h} + 2 \boldsymbol{u}_{h} \cdot I_{c} (\boldsymbol{u}_{v}) + I_{c}(\boldsymbol{u}_{v} \cdot \boldsymbol{u}_{v})),
-  ```
-  where ``\boldsymbol{u}_{h}`` is defined on cell-centers, ``\boldsymbol{u}_{v}`` is defined on cell-faces, and ``I_{c} (\boldsymbol{u}_{v})`` is interpolated using covariant components.
+        where ``\phi`` is latitude, and ``\Omega`` is the planetary rotation rate in rads/sec (for Earth, ``7.29212 \times 10^{-5} s^{-1}``) and ``\boldsymbol{e}^v`` is the unit radial basis vector. This implies that the horizontal contravariant component ``\boldsymbol{\Omega}^h`` is zero.
 
-* ``p`` is air pressure, derived from the thermodynamic state, reconstructed at cell centers.
-* ``\Pi = (\frac{p}{p_0})^{\frac{R_d}{c_{pd}}}`` is the Exner function evaluated with dry-air constants.
-* ``\boldsymbol{F}_R`` are the radiative fluxes: these are assumed to align vertically (i.e. the horizontal contravariant components are zero), and are constructed at cell faces from [RRTMGP.jl](https://github.com/CliMA/RRTMGP.jl).
+      + a _deep atmosphere_, with
 
-* ``\nu_u``, ``\nu_h``, and ``\nu_\chi`` are hyperdiffusion coefficients, and ``c`` is the divergence damping factor.
+        ```math
+        \boldsymbol{\Omega} = (0, 0, \Omega)
+        ```
 
-* No-flux boundary conditions are enforced by requiring the third contravariant component of the face-valued velocity at the boundary, ``\boldsymbol{\tilde{u}}^{v}``, to be zero. The vertical covariant velocity component is computed as
-  ```math
-  \tilde{u}_{v} = \tfrac{-(u_{1}g^{31} + u_{2}g^{32})}{g^{33}}.
-  ```
+        i.e. aligned with Earth's rotational axis.
+
+  - ``\tilde{\boldsymbol{u}}`` is the mass-weighted reconstruction of velocity at the interfaces:
+    by interpolation of contravariant components
+
+    ```math
+    ```
+
+  - ``\bar{\boldsymbol{u}}`` is the reconstruction of velocity at cell-centers, carried out by linear interpolation of the covariant vertical component:
+
+    ```math
+    \bar{\boldsymbol{u}} = \boldsymbol{u}_h + I_{c}(\boldsymbol{u}_v)
+    ```
+
+  - ``\Phi = g z`` is the geopotential, where ``g`` is the gravitational acceleration rate and ``z`` is altitude above the mean sea level.
+
+  - ``K = \tfrac{1}{2} \|\boldsymbol{u}\|^2`` is the specific kinetic energy (J/kg), reconstructed at cell centers by
+
+    ```math
+    K = \tfrac{1}{2} (\boldsymbol{u}_{h} \cdot \boldsymbol{u}_{h} + 2 \boldsymbol{u}_{h} \cdot I_{c} (\boldsymbol{u}_{v}) + I_{c}(\boldsymbol{u}_{v} \cdot \boldsymbol{u}_{v})),
+    ```
+
+    where ``\boldsymbol{u}_{h}`` is defined on cell-centers, ``\boldsymbol{u}_{v}`` is defined on cell-faces, and ``I_{c} (\boldsymbol{u}_{v})`` is interpolated using covariant components.
+
+  - ``p`` is air pressure, derived from the thermodynamic state, reconstructed at cell centers.
+
+  - ``\Pi = (\frac{p}{p_0})^{\frac{R_d}{c_{pd}}}`` is the Exner function evaluated with dry-air constants.
+
+  - ``\boldsymbol{F}_R`` are the radiative fluxes: these are assumed to align vertically (i.e. the horizontal contravariant components are zero), and are constructed at cell faces from [RRTMGP.jl](https://github.com/CliMA/RRTMGP.jl).
+
+  - ``\nu_u``, ``\nu_h``, and ``\nu_\chi`` are hyperdiffusion coefficients, and ``c`` is the divergence damping factor.
+
+  - No-flux boundary conditions are enforced by requiring the third contravariant component of the face-valued velocity at the boundary, ``\boldsymbol{\tilde{u}}^{v}``, to be zero. The vertical covariant velocity component is computed as
+
+    ```math
+    \tilde{u}_{v} = \tfrac{-(u_{1}g^{31} + u_{2}g^{32})}{g^{33}}.
+    ```
 
 ## Equations and discretizations
 
 ### Mass
 
 Follows the continuity equation
+
 ```math
 \frac{\partial}{\partial t} \rho = - \nabla \cdot(\rho \boldsymbol{u}) + \rho \mathcal{S}_{qt}.
 ```
 
 This is discretized using the following
+
 ```math
 \frac{\partial}{\partial t} \rho
 = - \hat{\mathcal{D}}_h[ \rho \bar{\boldsymbol{u}}] - \mathcal{D}^c_v \left[WI^f( J, \rho) \tilde{\boldsymbol{u}} \right] + \rho \mathcal{S}_{qt}
 ```
 
 with the
+
 ```math
 -\mathcal{D}^c_v[WI^f(J, \rho) \boldsymbol{u}_v]
 ```
-term treated implicitly (check this)
 
+term treated implicitly (check this)
 
 ### Momentum
 
 Uses the advective form equation
+
 ```math
 \frac{\partial}{\partial t} \boldsymbol{u}  = - (2 \boldsymbol{\Omega} + \nabla \times \boldsymbol{u}) \times \boldsymbol{u} - c_{pd} (\theta_v - \theta_{v, r}) \nabla_h \Pi  - \nabla_h [(\Phi - \Phi_r) + K].
 ```
+
 Here, we use the Exner function to compute pressure gradients and are subtracting a hydrostatic reference state
+
 ```math
 - \frac{1}{\rho} \nabla p = - c_{pd} \theta_v \Pi
 ```
+
 where ``\theta_v`` is the virtual potential temperature. ``\theta_{v,r} = T_r / \Pi`` is a reference virtual potential temperature (with reference temperature ``T_r``), and
+
 ```math
 \Phi_r = -c_{pd} \left[ T_\text{min} \log(\Pi) + \frac{(T_\text{sfc} - T_\text{min})}{n_s} (\Pi^{n_s} - 1) \right],
 ```
+
 is a reference geopotential, which satisfies the hydrostatic balance equation $c_{pd} \theta_{v,r} \nabla \Pi + \nabla \Phi_r = 0$ for any $\Pi$.
 We use the reference temperature profile ``T_r = T_\text{min} + (T_\text{sfc} - T_\text{min}) \Pi^{n_s}``, with constants ``T_\text{min} = 215\,K``, ``T_\text{sfc}= 288\,K``, and ``n_s = 7``.
 
 #### Horizontal momentum
 
-By breaking the curl and cross product terms into horizontal and vertical contributions, and removing zero terms (e.g. ``\nabla_v  \times \boldsymbol{u}_v = 0``), we obtain
+By breaking the curl and cross product terms into horizontal and vertical contributions, and removing zero terms (e.g. ``\nabla_v \times \boldsymbol{u}_v = 0``), we obtain
+
 ```math
 \frac{\partial}{\partial t} \boldsymbol{u}_h  =
   - (2 \boldsymbol{\Omega}^h + \nabla_v \times \boldsymbol{u}_h +  \nabla_h \times \boldsymbol{u}_v) \times \boldsymbol{u}^v
   - (2 \boldsymbol{\Omega}^v + \nabla_h \times \boldsymbol{u}_h) \times \boldsymbol{u}^h
   - c_{pd} (\theta_v - \theta_{v, r}) \nabla_h \Pi  - \nabla_h [(\Phi - \Phi_r) + K],
 ```
+
 where ``\boldsymbol{u}^h`` and ``\boldsymbol{u}^v`` are the horizontal and vertical _contravariant_ vectors.
 
 The effect of topography is accounted for through the computation of the contravariant velocity components (projections from the covariant velocity representation) prior to computing the cross-product contributions.
 
 This is stabilized with the addition of 4th-order vector hyperviscosity
+
 ```math
 -\nu_u \, \nabla_h^2 (\nabla_h^2(\boldsymbol{\overline{u}})),
 ```
+
 projected onto the first two contravariant directions, where ``\nabla_{h}^2(\boldsymbol{v})`` is the horizontal vector Laplacian. For grid scale hyperdiffusion, ``\boldsymbol{v}`` is identical to ``\boldsymbol{\overline{u}}``, the cell-center valued velocity vector.
+
 ```math
 \nabla_h^2(\boldsymbol{v}) = \nabla_h(\nabla_{h} \cdot \boldsymbol{v}) - \nabla_{h} \times (\nabla_{h} \times \boldsymbol{v}).
 ```
 
 The ``(2 \boldsymbol{\Omega}^h + \nabla_v \times \boldsymbol{u}_h + \nabla_h \times \boldsymbol{u}_v) \times \boldsymbol{u}^v`` term is discretized as:
+
 ```math
 \frac{I^c\{(2 \boldsymbol{\Omega}^h + \mathcal{C}^f_v[\boldsymbol{u}_h] + \mathcal{C}_h[\boldsymbol{u}_v]) \times (I^f(\rho J)\tilde{\boldsymbol{u}}^v)\}}{\rho J}
 ```
+
 where
+
 ```math
 \omega^{h} = (\nabla_v \times \boldsymbol{u}_h + \nabla_h \times \boldsymbol{u}_v)
 ```
 
 The ``(2 \boldsymbol{\Omega}^v + \nabla_h \times \boldsymbol{u}_h) \times \boldsymbol{u}^h`` term is discretized as
+
 ```math
 (2 \boldsymbol{\Omega}^v + \mathcal{C}_h[\boldsymbol{u}_h]) \times \boldsymbol{u}^h
 ```
+
 and the ``c_{pd} (\theta_v - \theta_{v,r}) \nabla_h \Pi + \nabla_h (\Phi - \Phi_r + K)`` term is discretized as
+
 ```math
 c_{pd} (\theta_v - \theta_{v,r}) \mathcal{G}_h[\Pi] + \mathcal{G}_h[\Phi - \Phi_r + K] ,
 ```
+
 where all these terms are treated explicitly.
 
 The hyperviscosity term is
+
 ```math
 - \nu_u \left\{ c \, \hat{\mathcal{G}}_h ( \mathcal{D}(\boldsymbol{\psi}_h) ) - \hat{\mathcal{C}}_h( \mathcal{C}_h( \boldsymbol{\psi}_h )) \right\}
 ```
+
 where
+
 ```math
 \boldsymbol{\psi}_h = \mathcal{P} \left[ \hat{\mathcal{G}}_h ( \mathcal{D}(\boldsymbol{u}_h) ) - \hat{\mathcal{C}}_h( \mathcal{C}_h( \boldsymbol{u}_h )) \right]
 ```
 
 #### Vertical momentum
+
 Similarly for vertical velocity
+
 ```math
 \frac{\partial}{\partial t} \boldsymbol{u}_v  =
   - (2 \boldsymbol{\Omega}^h + \nabla_v \times \boldsymbol{u}_h + \nabla_h \times \boldsymbol{u}_v) \times \boldsymbol{u}^h
@@ -194,23 +234,31 @@ Similarly for vertical velocity
 ```
 
 The ``(2 \boldsymbol{\Omega}^h + \nabla_v \times \boldsymbol{u}_h + \nabla_h \times \boldsymbol{u}_v) \times \boldsymbol{u}^h`` term is discretized as
+
 ```math
 (2 \boldsymbol{\Omega}^h + \mathcal{C}^f_v[\boldsymbol{u}_h] + \mathcal{C}_h[\boldsymbol{u}_v]) \times I^f(\boldsymbol{u}^h) ,
 ```
+
 The ``\nabla_v K`` term is discretized as
+
 ```math
 \mathcal{G}^f_v[K],
 ```
+
 The ``c_{pd} (\theta_v - \theta_{v,r}) \nabla_v \Pi + \nabla_v (\Phi - \Phi_r)`` term is discretized as
+
 ```math
 I^f[c_{pd} (\theta_v - \theta_{v, r} ) ] \mathcal{G}^f_v[\Pi] - \mathcal{G}^f_v[\Phi - \Phi_r],
 ```
+
 and is treated implicitly.
 
 This is stabilized with the addition of 4th-order vector hyperviscosity
+
 ```math
 -\nu_u \, \nabla_h^2 (\nabla_h^2(\boldsymbol{\overline{u}})),
 ```
+
 projected onto the third contravariant direction.
 
 ### Total energy
@@ -218,34 +266,44 @@ projected onto the third contravariant direction.
 ```math
 \frac{\partial}{\partial t} \rho e = - \nabla \cdot((\rho e + p) \boldsymbol{u} + \boldsymbol{F}_R) + \rho \mathcal{S}_{e},
 ```
+
 which is stabilized with the addition of a 4th-order hyperdiffusion term on total enthalpy:
+
 ```math
 - \nu_h \nabla \cdot \left( \rho \nabla^3 \left(\frac{ρe + p}{ρ} \right)\right)
 ```
 
 This is discretized using
+
 ```math
 \frac{\partial}{\partial t} \rho e \approx
 - \hat{\mathcal{D}}_h[ (\rho e + p) \bar{\boldsymbol{u}} ]
 - \mathcal{D}^c_v \left[ WI^f(J,\rho) \,  \tilde{\boldsymbol{u}} \, I^f \left(\frac{\rho e + p}{\rho} \right)
   + \boldsymbol{F}_R \right] - \nu_h \hat{\mathcal{D}}_h( \rho \mathcal{G}_h(\psi) ).
 ```
+
 where
+
 ```math
 \psi = \mathcal{P} \left[ \hat{\mathcal{D}}_h \left( \mathcal{G}_h \left(\frac{ρe + p}{ρ} \right)\right) \right]
 ```
 
 Currently the central reconstruction
+
 ```math
 - \mathcal{D}^c_v \left[ WI^f(J,\rho) \,  \tilde{\boldsymbol{u}} \, I^f \left(\frac{\rho e + p}{\rho} \right) \right]
 ```
+
 is treated implicitly.
 
 !!! todo
+
     The Jacobian computation should be updated so that the upwinded term
+
     ```math
     - \mathcal{D}^c_v\left[WI^f(J, \rho) U^f\left(\boldsymbol{u}_v, \frac{\rho e + p}{\rho} \right)\right]
     ```
+
     is treated implicitly.
 
 ### Scalars
@@ -255,32 +313,91 @@ For an arbitrary scalar ``\chi``, the density-weighted scalar ``\rho\chi`` follo
 ```math
 \frac{\partial}{\partial t} \rho \chi = - \nabla \cdot(\rho \chi \boldsymbol{u}) + \rho \mathcal{S}_{\chi}.
 ```
+
 This is stabilized with the addition of a 4th-order hyperdiffusion term
+
 ```math
 - \nu_\chi \nabla \cdot(\rho \nabla^3(\chi))
 ```
 
 This is discretized using
+
 ```math
 \frac{\partial}{\partial t} \rho \chi \approx
 - \hat{\mathcal{D}}_h[ \rho \chi \bar{\boldsymbol{u}}]
 - \mathcal{D}^c_v \left[ WI^f(J,\rho) \, U^f\left( \tilde{\boldsymbol{u}},  \frac{\rho \chi}{\rho} \right) \right]
 - \nu_\chi \hat{\mathcal{D}}_h ( \rho \, \mathcal{G}_h (\psi) )
 ```
+
 where
+
 ```math
 \psi = \mathcal{P} \left[ \hat{\mathcal{D}}_h \left( \mathcal{G}_h \left( \frac{\rho \chi}{\rho} \right)\right) \right]
 ```
 
 Currently the central reconstruction
+
 ```math
 - \mathcal{D}^c_v \left[ WI^f(J,\rho) \, \tilde{\boldsymbol{u}} \, I^f\left( \frac{\rho \chi}{\rho} \right) \right]
 ```
+
 is treated implicitly.
 
 !!! todo
+
     The Jacobian computation should be updated so that the upwinded term
+
     ```math
     - \mathcal{D}^c_v\left[WI^f(J, \rho) U^f\left(I^f(\boldsymbol{u}_h) + \boldsymbol{u}_v, \frac{\rho \chi}{\rho} \right) \right]
     ```
+
     is treated implicitly.
+
+### Hyperdiffusion coefficient and its stability limit
+
+The vorticity hyperviscosity coefficient scales with the mean nodal distance ``h`` as ``\nu_4 = c_4 \, h^3`` (Lauritzen et al. 2018), where ``c_4`` is `vorticity_hyperdiffusion_coefficient`.
+The scalar hyperdiffusivity is ``\nu_4 / \mathrm{Pr}`` and the divergence damping applies the `divergence_damping_factor` to ``\nu_4``.
+
+When the hyperdiffusion tendency is integrated explicitly, its stability limit is
+
+```math
+\Delta t_\mathrm{limit} = \frac{C \, h}{F \, \beta^4 \, c_4},
+```
+
+the largest timestep for which forward Euler on the biharmonic sink ``-\nu_4 \nabla^4`` stays inside the integrator stability region.
+The three factors are derived independently.
+
+The binding coefficient ``F = \max(\text{divergence damping factor}, 1/\mathrm{Pr})`` is the strongest of the divergent-momentum (``\times`` divergence damping factor), scalar (``\times 1/\mathrm{Pr}``), and rotational (``\times 1``) coefficient factors.
+
+The grid factor ``\beta`` is defined by ``\rho(\nabla^4) = (\beta/h)^4``, the largest eigenvalue of the discrete horizontal biharmonic, and factors as ``\beta = \beta_\mathrm{op}(p) \, M``.
+The uniform-grid factor ``\beta_\mathrm{op}(p)`` is the spectral radius of the assembled scalar operator ``(\hat{\mathcal{D}}_h \circ \mathcal{G}_h)^2`` on a degree-``p`` element (generated by `test/prognostic_equations/hyperdiffusion_grid_factor.jl`):
+
+| ``p``                 | 2     | 3     | 4     | 5     | 6     | 7     |
+|:--------------------- |:----- |:----- |:----- |:----- |:----- |:----- |
+| ``\beta_\mathrm{op}`` | 3.464 | 4.064 | 4.787 | 5.600 | 6.453 | 7.325 |
+
+At degree 3 this is consistent with the citable 1D grid-scale phase ``\kappa h = 1.8257`` of the spectral-element gradient (Von Neumann analysis of the ClimaAtmos HEVI integrator): the 2D biharmonic corner mode contributes ``(\lambda_x + \lambda_y)^2 = 4\,\lambda_{1D}^2``, a factor ``\sqrt2`` on ``\beta``, and the DSS-assembled discrete operator the remainder.
+The metric factor
+
+```math
+M = \sqrt{\max_\mathrm{grid}\left(g^{11} + g^{22} + 2|g^{12}|\right) \Big/ 2\left(\tfrac{2}{p\,h}\right)^2}
+```
+
+is the largest tensor-product corner mode of the contravariant metric relative to a uniform grid; it is ``1`` on a Cartesian box and ``\approx 1.5`` on the equiangular cubed sphere at ``h_\mathrm{elem} = 6``.
+
+The integrator constant ``C`` is the real-axis stability bound on the negative-real biharmonic spectrum.
+The coefficient reduction integrates the frozen hyperdiffusion once per step as forward Euler and uses ``C = 2``, the interval ``[-2, 0]`` shared by forward Euler and the trapezoidal (RK2) hold.
+The warning path integrates the hyperdiffusion with the explicit time-integrator tableau and uses ``C = 2.7853``, the real-axis interval of the default ARS343 explicit tableau, whose stability polynomial is RK4.
+
+The formula reproduces both measured stability anchors with no tuned constant: the forward-Euler limit is ``\approx 0.9`` s at ``h = 113`` m on a degree-3 box (measured stable at ``0.9`` s, unstable at ``1.2`` s), and ``\approx 780`` s on the ``h_\mathrm{elem} = 6`` cubed sphere (measured bracket ``[720, 1600]`` s).
+
+The `hyperdiffusion_dt_safety_factor` option limits the coefficient by the forward-Euler limit (``C = 2``).
+When set to a positive value ``S``, the vorticity coefficient is reduced to
+
+```math
+\nu_4 = \min\!\left(c_4 h^3, \; \frac{2 \, h^4}{F \, \beta^4 \, S \, \Delta t}\right),
+```
+
+so the hyperdiffusion is explicitly stable for ``S \, \Delta t``; the divergent and scalar coefficients scale with it.
+This is required when the tendency is integrated once per step at a long timestep.
+With `~` (the default) the coefficient is unchanged and a warning is emitted when ``\Delta t`` exceeds ``\Delta t_\mathrm{limit}``.
