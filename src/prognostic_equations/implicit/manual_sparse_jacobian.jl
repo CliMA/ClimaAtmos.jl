@@ -978,7 +978,7 @@ function update_diffusion_jacobian!(
 
     if MatrixFields.has_field(Y, @name(c.ρtke))
         turbconv_params = CAP.turbconv_params(params)
-        c_d = CAP.tke_diss_coeff(turbconv_params)
+        c_d = tke_dissipation_coefficient(turbconv_params)
         (; dt) = p
         ᶜtke = @. lazy(specific(Y.c.ρtke, Y.c.ρ))
         ᶜρtke = Y.c.ρtke

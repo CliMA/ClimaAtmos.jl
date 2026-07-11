@@ -93,7 +93,8 @@ per unit volume, ρ * ε_d [kg m^-1 s^-3].
 
 The physical dissipation is calculated as:
 ρ * ε_d = c_d * ρtke * sqrt(abs(tke)) / mixing_length
-where `c_d` is a parameter.
+where `c_d` is the TKE dissipation coefficient
+([`tke_dissipation_coefficient`](@ref)).
 
 Arguments:
 
@@ -104,7 +105,7 @@ Arguments:
 """
 function tke_dissipation(turbconv_params, ρtke, tke, mixing_length)
     FT = typeof(tke)
-    c_d = CAP.tke_diss_coeff(turbconv_params)
+    c_d = tke_dissipation_coefficient(turbconv_params)
     dissipation_rate_vol = c_d * ρtke * sqrt(abs(tke)) / mixing_length
     return dissipation_rate_vol
 end
