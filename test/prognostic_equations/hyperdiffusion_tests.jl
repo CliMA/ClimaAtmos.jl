@@ -17,27 +17,28 @@ import ClimaAtmos as CA
 using ClimaCore: Geometry, Spaces
 using ClimaCore.CommonSpaces
 
-# grid_scale_factor, for regenerating table entries in the suite.
-include(joinpath(@__DIR__, "hyperdiffusion_grid_factor.jl"))
-
 @testset "Hyperdiffusion" begin
     FT = Float64
 
     # Grids for the measured stability limits: a uniform box at Δx ≈ 113 m
     # (2720 m over 8 degree-3 elements) and a cubed sphere at h_elem 6. See #4673.
-    box = RectangleXYSpace(
-        FT;
-        x_min = 0,
-        x_max = 2720,
-        y_min = 0,
-        y_max = 2720,
-        periodic_x = true,
-        periodic_y = true,
-        n_quad_points = 4,
-        x_elem = 8,
-        y_elem = 8,
-    )
-    sphere = CubedSphereSpace(FT; radius = 6.371e6, n_quad_points = 4, h_elem = 6)
+    make_box(::Type{T}; n_quad_points = 4, x_elem = 8) where {T} =
+        RectangleXYSpace(
+            T;
+            x_min = 0,
+            x_max = 2720,
+            y_min = 0,
+            y_max = 2720,
+            periodic_x = true,
+            periodic_y = true,
+            n_quad_points,
+            x_elem,
+            y_elem = x_elem,
+        )
+    make_sphere(::Type{T}) where {T} =
+        CubedSphereSpace(T; radius = 6.371e6, n_quad_points = 4, h_elem = 6)
+    box = make_box(FT)
+    sphere = make_sphere(FT)
 
     coeff = 0.1857
     prandtl = 0.2
@@ -54,46 +55,34 @@ include(joinpath(@__DIR__, "hyperdiffusion_grid_factor.jl"))
         dt_safety_factor,
     )
 
-    @testset "grid factor per degree" begin
-        # Uniform-grid biharmonic factor; see docs/src/equations.md.
-        @test CA.hyperdiffusion_grid_scale_factor(3) ≈ 4.0637 atol = 1e-4
-        @test issorted(CA.hyperdiffusion_grid_scale_factor.(2:7))
-        # Regenerate the inexpensive degrees against the assembled operator;
-        # the standalone generator covers degrees 2 to 7.
-        for degree in 2:3
-            @test CA.hyperdiffusion_grid_scale_factor(degree) ≈
-                  grid_scale_factor(degree) atol = 1e-4
-        end
-
-        # Uniform box: metric factor 1, so β equals the degree-3 uniform factor.
+    @testset "measured grid factor" begin
+        # Uniform periodic degree-3 box: β = 4.0637, the regression anchor;
+        # see docs/src/equations.md.
+        @test CA.measured_grid_factor(box) ≈ 4.0637 atol = 2e-4
+        # The production factor inflates the measured spectral radius.
+        margin = (1 + CA.HYPERDIFFUSION_SPECTRAL_RADIUS_MARGIN)^(1 / 4)
         @test CA.hyperdiffusion_grid_factor(box) ≈
-              CA.hyperdiffusion_grid_scale_factor(3) rtol = 1e-3
-        # Cubed sphere: metric non-uniformity raises β above the uniform factor.
-        @test CA.hyperdiffusion_grid_factor(sphere) >
-              CA.hyperdiffusion_grid_scale_factor(3)
-    end
-
-    @testset "untabulated degree" begin
-        @test isnothing(CA.hyperdiffusion_grid_scale_factor(8))
-        box8 = RectangleXYSpace(
-            FT;
-            x_min = 0,
-            x_max = 2720,
-            y_min = 0,
-            y_max = 2720,
-            periodic_x = true,
-            periodic_y = true,
-            n_quad_points = 9,
-            x_elem = 2,
-            y_elem = 2,
+              margin * CA.measured_grid_factor(box) rtol = 1e-6
+        # Cubed sphere: certified, above the uniform factor, and below the
+        # factorized bound β_op(3) × M ≈ 6.14; see docs/src/equations.md.
+        β_sphere = CA.measured_grid_factor(sphere)
+        @test isfinite(β_sphere)
+        @test 4.0637 < β_sphere < 6.14
+        @test β_sphere ≈ 5.19 rtol = 1e-2
+        # Float32 spaces measure the same factors.
+        @test CA.measured_grid_factor(make_box(Float32)) ≈ 4.0637 rtol = 1e-4
+        @test CA.measured_grid_factor(make_sphere(Float32)) ≈ β_sphere rtol = 1e-4
+        # Degree 8, beyond the uniform-grid bound table in the docs.
+        box8 = make_box(FT; n_quad_points = 9, x_elem = 2)
+        @test CA.measured_grid_factor(box8) > CA.measured_grid_factor(box)
+        # The certificate errors on a too-small iteration budget; with
+        # strict = false (the path taken when no safety factor is set) it
+        # warns and returns nothing instead.
+        @test_throws "did not converge" CA.measured_grid_factor(
+            sphere; iterations = 1,
         )
-        @test isnothing(CA.hyperdiffusion_grid_factor(box8))
-        # No warning without a safety factor; construction errors with one.
-        @test_logs min_level = Logging.Warn CA.warn_if_hyperdiffusion_over_dt_limit(
-            make(), (; c = ones(box8)), 1.0e6, nothing,
-        )
-        @test_throws ErrorException CA.hyperdiffusion_cache(
-            (; c = ones(box8)), make(; dt_safety_factor = 2), nothing, nothing,
+        @test_logs (:warn, r"did not converge") @test isnothing(
+            CA.measured_grid_factor(sphere; iterations = 1, strict = false),
         )
     end
 

@@ -908,6 +908,17 @@ steps:
         #retry:
         #  automatic: true
 
+      - label: ":metro: MPI: Hyperdiffusion grid factor"
+        retry: *retry_policy
+        command: >
+          srun julia --color=yes --project=.buildkite
+          test/prognostic_equations/hyperdiffusion_mpi_tests.jl
+        env:
+          CLIMACOMMS_CONTEXT: "MPI"
+        agents:
+          slurm_ntasks: 2
+          slurm_mem: 16G
+
       - label: ":metro: MPI: Aquaplanet equilmoist clearsky radiation"
         retry: *retry_policy
         command: >
