@@ -62,12 +62,13 @@ end
     hyperdiffusion_dt_limit(hyperdiff, h, grid_factor, stability)
 
 Compute the explicit stability limit, in seconds, of the hyperdiffusion at mean
-nodal distance `h` and biharmonic `grid_factor`, using the largest of the divergent
-and scalar coefficient factors `F = max(divergence_damping_factor, 1 / prandtl_number)`
-and the integrator real-axis `stability` bound.
+nodal distance `h` and biharmonic `grid_factor`, using the largest of the divergent,
+scalar, and rotational coefficient factors
+`F = max(divergence_damping_factor, 1 / prandtl_number, 1)` and the integrator
+real-axis `stability` bound.
 """
 function hyperdiffusion_dt_limit(hyperdiff, h, grid_factor, stability)
-    F = max(hyperdiff.divergence_damping_factor, inv(hyperdiff.prandtl_number))
+    F = max(hyperdiff.divergence_damping_factor, inv(hyperdiff.prandtl_number), 1)
     return stability * h / (F * grid_factor^4 * hyperdiff.ν₄_vorticity_coeff)
 end
 

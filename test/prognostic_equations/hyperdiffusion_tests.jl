@@ -167,7 +167,7 @@ include(joinpath(@__DIR__, "hyperdiffusion_grid_factor.jl"))
         @test active.ν₄_vorticity < coeff * h^3
         @test active.ν₄_scalar ≈ active.ν₄_vorticity / prandtl
         # The reduced coefficient reaches its own limit exactly at S * dt.
-        F = max(div_factor, inv(prandtl))
+        F = max(div_factor, inv(prandtl), 1)
         @test F * active.ν₄_vorticity * (gf / h)^4 * S * dt ≈ C_reduce
         # Monotone non-increasing in dt and in the safety factor.
         @test CA.ν₄(make(; dt_safety_factor = S), Y, 2dt, gf).ν₄_vorticity <=
@@ -179,7 +179,7 @@ include(joinpath(@__DIR__, "hyperdiffusion_grid_factor.jl"))
     @testset "limit follows the largest coefficient factor" begin
         h = Spaces.node_horizontal_length_scale(box)
         gf = CA.hyperdiffusion_grid_factor(box)
-        # F = max(divergence_damping_factor, 1 / prandtl_number).
+        # F = max(divergence_damping_factor, 1 / prandtl_number, 1).
         # 1/Pr is the larger factor (Pr 0.2, div 1): F = 5.
         base = CA.hyperdiffusion_dt_limit(
             make(; prandtl_number = 0.2, divergence_damping_factor = 1.0), h, gf,
