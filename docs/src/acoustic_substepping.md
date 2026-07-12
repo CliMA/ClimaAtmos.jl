@@ -155,7 +155,10 @@ On configurations with inexpensive physics the sub-step count needed for stabili
   The mode is validated for configurations whose implicit tendency is the vertical-acoustic block; configurations that also place microphysics, turbulence, or vertical diffusion in the implicit tendency re-solve those processes every sub-step, unless `acoustic_substep_implicit_split` moves them to a per-outer-step solve.
   The conditioning of that outer solve at large outer steps is untested.
 - The mode advances the vertical acoustic terms implicitly inside each sub-step; the explicit-vertical variant is a reference path limited by the vertical acoustic CFL on anisotropic grids.
+  The explicit-vertical variant advances only the vertical-acoustic block, so configurations whose implicit tendency contains additional terms (prognostic EDMF, implicit microphysics, implicit vertical diffusion) are rejected at construction.
+- `advection_test` zeroes the velocity tendencies, which the sub-cycle does not preserve, so the combination is rejected at construction.
 - The sub-cycle refreshes only the acoustic precomputed quantities; diagnostics that read the full cache should refresh it after a step.
+  `update_cache_every` has no effect inside the sub-cycle: the full cache is refreshed only at whole-step states (when the slow forcing is frozen, at the restart of the second sub-cycle in the second-order combination, before the second outer implicit solve, and at the end of the outer step).
 - The state constraint `constrain_state!` is applied once per outer step, to the combined end-of-step state, matching the plain scheme's end-of-step cadence.
   The `stage` and `dss` settings of `update_constrain_state_every` are not honored inside the sub-cycle.
 - The divergence-damping coefficient must lie within its stable range; the automatic default targets it.

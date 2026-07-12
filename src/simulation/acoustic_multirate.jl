@@ -242,6 +242,51 @@ function exact_n_sub(dt::ITime, n_min)
     return n
 end
 
+"""
+    check_explicit_vertical_model(atmos)
+
+Error when `ExplicitVertical` acoustic substepping is combined with a model
+whose implicit tendency extends beyond the vertical-acoustic block. The
+`ExplicitVertical` sub-cycle advances only
+`implicit_vertical_advection_tendency!`, so prognostic EDMF, implicit
+microphysics, and implicit vertical diffusion would be dropped.
+"""
+function check_explicit_vertical_model(atmos)
+    offending = String[]
+    atmos.turbconv_model isa PrognosticEDMFX &&
+        push!(offending, "prognostic EDMF (turbconv: prognostic_edmfx)")
+    atmos.microphysics_tendency_timestepping == Implicit() &&
+        !(atmos.microphysics_model isa DryModel) &&
+        push!(offending, "implicit microphysics (implicit_microphysics: true)")
+    atmos.diff_mode == Implicit() &&
+        push!(offending, "implicit vertical diffusion (implicit_diffusion: true)")
+    isempty(offending) && return nothing
+    error(
+        "acoustic_substep_vertical: explicit advances only the vertical-acoustic \
+         block in the sub-cycle, but the configuration also places " *
+        join(offending, ", ", " and ") *
+        " in the implicit tendency, which would not be integrated. Use \
+         acoustic_substep_vertical: implicit with this configuration.",
+    )
+end
+
+"""
+    check_advection_test_model(atmos)
+
+Error when acoustic substepping is combined with `advection_test`. The
+sub-cycled acoustic tendency and the restricted implicit operators do not apply
+`zero_velocity_tendency!`, so the velocity fields would evolve during the
+sub-cycle.
+"""
+function check_advection_test_model(atmos)
+    atmos.advection_test || return nothing
+    error(
+        "advection_test zeroes the velocity tendencies, which the acoustic \
+         sub-cycle does not preserve. Disable acoustic substepping \
+         (acoustic_substeps: 0) with advection_test.",
+    )
+end
+
 # G = T_exp(u) - sub-cycled acoustic terms(u), evaluated and left in `G`/`G_lim`.
 # The sub-cycled terms are the horizontal acoustic tendency and the grid-mean
 # momentum advection (kinetic-energy gradients and rotational momentum flux), so
@@ -277,6 +322,8 @@ end
 function CTS.init_cache(prob, alg::AcousticMultirate; dt, kwargs...)
     (; u0, p) = prob
     f = prob.f
+    alg.vertical isa ExplicitVertical && check_explicit_vertical_model(p.atmos)
+    check_advection_test_model(p.atmos)
     FT = eltype(u0)
     Δx = FT(Spaces.node_horizontal_length_scale(Spaces.horizontal_space(axes(u0.c))))
     c_ref = FT(reference_sound_speed(p))
@@ -310,7 +357,9 @@ function CTS.init_cache(prob, alg::AcousticMultirate; dt, kwargs...)
     # implicit operator, and the reused implicit cache, limiter, DSS, and state
     # constraint. `constrain_state!` is applied once per outer step, to the
     # combined end-of-step state; constraint application inside the sub-cycle
-    # is not supported.
+    # is not supported. Under the implicit split the sub-cycle keeps a no-op
+    # `initialize_imp!`: the restricted inner operator excludes the SGS block,
+    # so the analytic SGS initialization pairs with the outer complement below.
     f_fast = CTS.ClimaODEFunction(;
         T_exp_T_lim! = fast!,
         T_imp! = inner_T_imp!,
@@ -320,7 +369,8 @@ function CTS.init_cache(prob, alg::AcousticMultirate; dt, kwargs...)
         dss! = f.dss!,
         constrain_state! = f.constrain_state!,
         update_constrain_state = f.update_constrain_state,
-        initialize_imp! = f.initialize_imp!,
+        initialize_imp! = implicit_split ? Returns(nothing) :
+                          f.initialize_imp!,
     )
     # The outer implicit half-step solves the full implicit tendency minus the
     # inner subset, once per outer step, pairing that residual with the matching

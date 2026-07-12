@@ -177,6 +177,60 @@ end
     @test inner_f.constrain_state! isa Returns
 end
 
+@testset "implicit-stage initialization threading" begin
+    # Under the implicit split the restricted inner operator excludes the SGS
+    # block, so the sub-cycle keeps a no-op `initialize_imp!` and the analytic
+    # SGS initialization fires in the outer complement.
+    split = box_integrator(implicit_split = true)
+    @test split.cache.cts_cache.outercache.fast_fn.initialize_imp! isa Returns
+    @test split.cache.cts_cache.innerinteg.sol.prob.f.initialize_imp! isa
+          Returns
+    complement = split.cache.cts_cache.outercache.outer.complement
+    @test complement.outer_integ.sol.prob.f.initialize_imp! ===
+          CA.initialize_implicit_stage_problem!
+
+    unsplit = box_integrator(implicit_split = false)
+    inner_f = unsplit.cache.cts_cache.innerinteg.sol.prob.f
+    @test inner_f.initialize_imp! === CA.initialize_implicit_stage_problem!
+end
+
+@testset "explicit-vertical implicit-tendency compatibility" begin
+    # `ExplicitVertical` advances only the vertical-acoustic block, so
+    # construction rejects models with additional implicit tendencies.
+    config = box_config(; vertical = "explicit")
+    config["vert_diff"] = "DecayWithHeightDiffusion"
+    config["implicit_diffusion"] = true
+    @test_throws "implicit vertical diffusion" CA.get_simulation(
+        CA.AtmosConfig(config; job_id = "explicit_vertical_reject"),
+    )
+
+    dry = (;
+        turbconv_model = nothing,
+        microphysics_model = CA.DryModel(),
+        microphysics_tendency_timestepping = CA.Implicit(),
+        diff_mode = CA.Explicit(),
+    )
+    @test isnothing(CA.check_explicit_vertical_model(dry))
+    edmf = (; dry..., turbconv_model = CA.PrognosticEDMFX(; area_fraction = 0.1))
+    @test_throws "prognostic EDMF" CA.check_explicit_vertical_model(edmf)
+    moist = (; dry..., microphysics_model = CA.EquilibriumMicrophysics0M())
+    @test_throws "implicit microphysics" CA.check_explicit_vertical_model(moist)
+    moist_explicit =
+        (; moist..., microphysics_tendency_timestepping = CA.Explicit())
+    @test isnothing(CA.check_explicit_vertical_model(moist_explicit))
+end
+
+@testset "advection-test compatibility" begin
+    # The sub-cycle does not apply the advection-test velocity-tendency
+    # zeroing, so construction rejects the combination.
+    config = box_config()
+    config["advection_test"] = true
+    @test_throws "advection_test" CA.get_simulation(
+        CA.AtmosConfig(config; job_id = "advection_test_reject"),
+    )
+    @test isnothing(CA.check_advection_test_model((; advection_test = false)))
+end
+
 @testset "state update" begin
     integ = box_integrator()
     u_before = deepcopy(integ.u)
