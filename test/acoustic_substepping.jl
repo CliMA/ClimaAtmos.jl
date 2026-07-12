@@ -163,6 +163,20 @@ function run_steps!(integ, n_steps)
     return integ
 end
 
+@testset "state-constraint threading" begin
+    # The substepped path applies the model `constrain_state!` (tracer
+    # nonnegativity and the EDMF updraft constraints) once per outer step,
+    # through the fast function; the inner sub-cycle keeps the no-op default.
+    integ = box_integrator()
+    f = integ.sol.prob.f
+    fast_fn = integ.cache.cts_cache.outercache.fast_fn
+    @test fast_fn.constrain_state! === CA.constrain_state!
+    @test fast_fn.constrain_state! === f.constrain_state!
+    @test fast_fn.update_constrain_state === f.update_constrain_state
+    inner_f = integ.cache.cts_cache.innerinteg.sol.prob.f
+    @test inner_f.constrain_state! isa Returns
+end
+
 @testset "state update" begin
     integ = box_integrator()
     u_before = deepcopy(integ.u)
