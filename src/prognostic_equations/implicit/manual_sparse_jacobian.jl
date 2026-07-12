@@ -793,37 +793,27 @@ function update_sedimentation_jacobian!(matrix, Y, p, dtγ)
     return nothing
 end
 
-# Eddy diffusivity and viscosity used by both grid-scale and SGS implicit
-# diffusion. May write to ᶜtemp_scalar_3, ᶜtemp_scalar_4, and ᶜtemp_scalar_6.
+# Center eddy diffusivity and viscosity for the non-EDMF implicit diffusion
+# Jacobians. May write to ᶜtemp_scalar_3. AbstractEDMF configurations return
+# nothing: their grid-mean and updraft diffusion Jacobians both use the
+# face-native ᶠK_h/ᶠK_u/ᶠK_entr from set_face_diffusivities! (see
+# update_diffusion_jacobian! and update_sgs_diffusion_jacobian!).
 function eddy_diffusivity_coefficients!(Y, p)
-    (; params) = p
-    (; turbconv_model, vertical_diffusion, smagorinsky_lilly) = p.atmos
-    turbconv_params = CAP.turbconv_params(params)
+    (; vertical_diffusion, smagorinsky_lilly) = p.atmos
     (; ᶜp) = p.precomputed
-    ᶜK_u = p.scratch.ᶜtemp_scalar_4
-    ᶜK_h = p.scratch.ᶜtemp_scalar_6
+    ᶜK_u = ᶜK_h = nothing
     if vertical_diffusion isa DecayWithHeightDiffusion
+        ᶜK_h = p.scratch.ᶜtemp_scalar_3
         ᶜK_h .= ᶜcompute_eddy_diffusivity_coefficient(Y.c.ρ, vertical_diffusion)
         ᶜK_u = ᶜK_h
     elseif vertical_diffusion isa VerticalDiffusion
+        ᶜK_h = p.scratch.ᶜtemp_scalar_3
         ᶜK_h .= ᶜcompute_eddy_diffusivity_coefficient(Y.c.uₕ, ᶜp, vertical_diffusion)
         ᶜK_u = ᶜK_h
     elseif is_smagorinsky_vertical(smagorinsky_lilly)
         set_smagorinsky_lilly_precomputed_quantities!(Y, p, smagorinsky_lilly)
         ᶜK_u = p.precomputed.ᶜνₜ_v
         ᶜK_h = p.precomputed.ᶜD_v
-    elseif turbconv_model isa AbstractEDMF
-        (; ᶜlinear_buoygrad, ᶜstrain_rate_norm) = p.precomputed
-        ᶜtke = @. lazy(specific(Y.c.ρtke, Y.c.ρ))
-        ᶜmixing_length_field = p.scratch.ᶜtemp_scalar_3
-        ᶜmixing_length_field .= ᶜmixing_length(Y, p)
-        ᶜK_u = p.scratch.ᶜtemp_scalar_4
-        @. ᶜK_u = eddy_viscosity(turbconv_params, ᶜtke, ᶜmixing_length_field)
-        ᶜprandtl_nvec = @. lazy(
-            turbulent_prandtl_number(params, ᶜlinear_buoygrad, ᶜstrain_rate_norm),
-        )
-        ᶜK_h = p.scratch.ᶜtemp_scalar_6
-        @. ᶜK_h = eddy_diffusivity(ᶜK_u, ᶜprandtl_nvec)
     end
     return (; ᶜK_u, ᶜK_h)
 end
@@ -867,16 +857,49 @@ function update_diffusion_jacobian!(
     end
 
     ∂ᶠρχ_dif_flux_∂ᶜχ = ᶠp_grad_matrix
-    @. ∂ᶠρχ_dif_flux_∂ᶜχ =
-        DiagonalMatrixRow(ᶠinterp(ᶜρ) * ᶠinterp(ᶜK_h)) ⋅ ᶠgradᵥ_matrix()
+    # Face diffusivities, consistent with the diffusive tendencies:
+    # - AbstractEDMF: the face-native ᶠK_h/ᶠK_u plus the interfacial
+    #   entrainment diffusivity ᶠK_entr (see set_face_diffusivities! and
+    #   edmfx_sgs_diffusive_flux_tendency!), treated as frozen
+    #   coefficients (no ∂K/∂state terms).
+    # - VerticalDiffusion/DecayWithHeightDiffusion: harmonic-mean face
+    #   interpolation of the center K (see
+    #   vertical_diffusion_boundary_layer_tendency!).
+    # - Smagorinsky: arithmetic interpolation, matching its tendency.
+    (; ᶠK_h, ᶠK_u, ᶠK_entr) = p.precomputed
+    turbconv_model = p.atmos.turbconv_model
+    ϵK = eps(FT)
+    if turbconv_model isa AbstractEDMF
+        @. ∂ᶠρχ_dif_flux_∂ᶜχ =
+            DiagonalMatrixRow(ᶠinterp(ᶜρ) * (ᶠK_h + ᶠK_entr)) ⋅
+            ᶠgradᵥ_matrix()
+    elseif is_smagorinsky_vertical(p.atmos.smagorinsky_lilly)
+        @. ∂ᶠρχ_dif_flux_∂ᶜχ =
+            DiagonalMatrixRow(ᶠinterp(ᶜρ) * ᶠinterp(ᶜK_h)) ⋅ ᶠgradᵥ_matrix()
+    else
+        @. ∂ᶠρχ_dif_flux_∂ᶜχ =
+            DiagonalMatrixRow(ᶠinterp(ᶜρ) / ᶠinterp(1 / max(ᶜK_h, ϵK))) ⋅
+            ᶠgradᵥ_matrix()
+    end
     @. ᶜdiffusion_h_matrix = ᶜadvdivᵥ_matrix() ⋅ ∂ᶠρχ_dif_flux_∂ᶜχ
     if (
         MatrixFields.has_field(Y, @name(c.ρtke)) ||
         !isnothing(p.atmos.turbconv_model) ||
         !disable_momentum_vertical_diffusion(p.atmos.vertical_diffusion)
     )
-        @. ∂ᶠρχ_dif_flux_∂ᶜχ =
-            DiagonalMatrixRow(ᶠinterp(ᶜρ) * ᶠinterp(ᶜK_u)) ⋅ ᶠgradᵥ_matrix()
+        if turbconv_model isa AbstractEDMF
+            @. ∂ᶠρχ_dif_flux_∂ᶜχ =
+                DiagonalMatrixRow(ᶠinterp(ᶜρ) * (ᶠK_u + ᶠK_entr)) ⋅
+                ᶠgradᵥ_matrix()
+        elseif is_smagorinsky_vertical(p.atmos.smagorinsky_lilly)
+            @. ∂ᶠρχ_dif_flux_∂ᶜχ =
+                DiagonalMatrixRow(ᶠinterp(ᶜρ) * ᶠinterp(ᶜK_u)) ⋅
+                ᶠgradᵥ_matrix()
+        else
+            @. ∂ᶠρχ_dif_flux_∂ᶜχ =
+                DiagonalMatrixRow(ᶠinterp(ᶜρ) / ᶠinterp(1 / max(ᶜK_u, ϵK))) ⋅
+                ᶠgradᵥ_matrix()
+        end
         @. ᶜdiffusion_u_matrix = ᶜadvdivᵥ_matrix() ⋅ ∂ᶠρχ_dif_flux_∂ᶜχ
     end
 
@@ -956,13 +979,38 @@ function update_diffusion_jacobian!(
 
     # The microphysics tracers carry no (·, ρ) blocks (see
     # `diffusion_jacobian_blocks`), so only their diagonals are updated here.
+    # Sedimenting microphysics tracers diffuse at α·K_h — the turbulent
+    # diffusivity scaled by α_vert_diff_tracer — but keep the interfacial-
+    # entrainment diffusivity K_entr at full weight, so their effective
+    # diffusivity is ρ(α·K_h + K_entr), matching
+    # edmfx_sgs_diffusive_flux_tendency!. ᶜdiffusion_h_matrix instead carries
+    # the full-weight ρ(K_h + K_entr) (used by the ρe_tot/ρq_tot diagonals and
+    # the passive tracers below), so under EDMFX a dedicated α-scaled tracer
+    # matrix is built here; the K_entr correction is nonzero only where the
+    # interface closure is active. For non-EDMFX vertical diffusion there is no
+    # K_entr and the diagonal keeps its original α·ᶜdiffusion_h_matrix form.
     α_vert_diff_microphysics = CAP.α_vert_diff_tracer(params)
-    MatrixFields.unrolled_foreach(sedimenting_tracer_names(Y)) do ρχ_name
-        ρχ_state_name = center_state_name(ρχ_name)
-        ∂ᶜρχ_err_∂ᶜρχ = matrix[ρχ_state_name, ρχ_state_name]
-        @. ∂ᶜρχ_err_∂ᶜρχ +=
-            dtγ * α_vert_diff_microphysics * ᶜdiffusion_h_matrix ⋅
-            DiagonalMatrixRow(1 / ᶜρ)
+    if turbconv_model isa AbstractEDMF
+        ᶜtracer_diffusion_matrix = p.scratch.ᶜtridiagonal_matrix_scalar
+        @. ∂ᶠρχ_dif_flux_∂ᶜχ =
+            DiagonalMatrixRow(
+                ᶠinterp(ᶜρ) * (α_vert_diff_microphysics * ᶠK_h + ᶠK_entr),
+            ) ⋅ ᶠgradᵥ_matrix()
+        @. ᶜtracer_diffusion_matrix = ᶜadvdivᵥ_matrix() ⋅ ∂ᶠρχ_dif_flux_∂ᶜχ
+        MatrixFields.unrolled_foreach(sedimenting_tracer_names(Y)) do ρχ_name
+            ρχ_state_name = center_state_name(ρχ_name)
+            ∂ᶜρχ_err_∂ᶜρχ = matrix[ρχ_state_name, ρχ_state_name]
+            @. ∂ᶜρχ_err_∂ᶜρχ +=
+                dtγ * ᶜtracer_diffusion_matrix ⋅ DiagonalMatrixRow(1 / ᶜρ)
+        end
+    else
+        MatrixFields.unrolled_foreach(sedimenting_tracer_names(Y)) do ρχ_name
+            ρχ_state_name = center_state_name(ρχ_name)
+            ∂ᶜρχ_err_∂ᶜρχ = matrix[ρχ_state_name, ρχ_state_name]
+            @. ∂ᶜρχ_err_∂ᶜρχ +=
+                dtγ * α_vert_diff_microphysics * ᶜdiffusion_h_matrix ⋅
+                DiagonalMatrixRow(1 / ᶜρ)
+        end
     end
 
     # Passive (non-water) grid-scale tracers are diffused with the unscaled
@@ -983,9 +1031,8 @@ function update_diffusion_jacobian!(
         ᶜtke = @. lazy(specific(Y.c.ρtke, Y.c.ρ))
         ᶜρtke = Y.c.ρtke
 
-        # scratch to prevent GPU Kernel parameter memory error
-        ᶜmixing_length_field = p.scratch.ᶜtemp_scalar_3
-        ᶜmixing_length_field .= ᶜmixing_length(Y, p)
+        # Precomputed master mixing length (see set_precomputed_quantities!)
+        ᶜmixing_length_field = p.precomputed.ᶜl_mix
 
         # The dissipation derivative below differentiates c_d √tke / l_mix
         # with respect to tke at frozen mixing length, although l_mix itself
@@ -1176,7 +1223,7 @@ function update_sgs_advection_jacobian!(matrix, Y, p, dtγ)
 end
 
 """
-    update_sgs_diffusion_jacobian!(matrix, Y, p, dtγ, diffusion_flag, eddy_diffusivities)
+    update_sgs_diffusion_jacobian!(matrix, Y, p, dtγ, diffusion_flag)
 
 Updates the Jacobian blocks for implicit vertical diffusion of the updraft
 scalars. No-op when diffusion is treated explicitly.
@@ -1184,14 +1231,7 @@ scalars. No-op when diffusion is treated explicitly.
 Reuses `ᶜdiffusion_h_matrix` as scratch space, so it must run after
 `update_diffusion_jacobian!`.
 """
-function update_sgs_diffusion_jacobian!(
-    matrix,
-    Y,
-    p,
-    dtγ,
-    diffusion_flag,
-    eddy_diffusivities,
-)
+function update_sgs_diffusion_jacobian!(matrix, Y, p, dtγ, diffusion_flag)
     p.atmos.turbconv_model isa PrognosticEDMFX || return nothing
     use_derivative(diffusion_flag) || return nothing
     # Mirror the gate of the tendency this linearizes
@@ -1201,12 +1241,14 @@ function update_sgs_diffusion_jacobian!(
     (; params) = p
     (; ᶜρʲs) = p.precomputed
     (; ᶜdiffusion_h_matrix) = p.scratch
-    (; ᶜK_h) = eddy_diffusivities
 
     α_vert_diff_microphysics = CAP.α_vert_diff_tracer(params)
+    # Face-native ᶠK_h, consistent with edmfx_vertical_diffusion_tendency!
+    # (ᶠK_entr is deliberately excluded there; see that function).
+    (; ᶠK_h) = p.precomputed
     @. ᶜdiffusion_h_matrix =
-        ᶜadvdivᵥ_matrix() ⋅
-        DiagonalMatrixRow(ᶠinterp(ᶜρʲs.:(1)) * ᶠinterp(ᶜK_h)) ⋅ ᶠgradᵥ_matrix()
+        ᶜadvdivᵥ_matrix() ⋅ DiagonalMatrixRow(ᶠinterp(ᶜρʲs.:(1)) * ᶠK_h) ⋅
+        ᶠgradᵥ_matrix()
 
     ∂ᶜmseʲ_err_∂ᶜmseʲ =
         matrix[@name(c.sgsʲs.:(1).mse), @name(c.sgsʲs.:(1).mse)]
@@ -1554,14 +1596,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
         eddy_diffusivities,
     )
     update_sgs_advection_jacobian!(matrix, Y, p, dtγ)
-    update_sgs_diffusion_jacobian!(
-        matrix,
-        Y,
-        p,
-        dtγ,
-        diffusion_flag,
-        eddy_diffusivities,
-    )
+    update_sgs_diffusion_jacobian!(matrix, Y, p, dtγ, diffusion_flag)
     update_sgs_entr_detr_jacobian!(matrix, Y, p, dtγ)
     update_sgs_boundary_condition_jacobian!(matrix, Y, p, dtγ)
     update_sgs_massflux_jacobian!(matrix, Y, p, dtγ, diffusion_flag)

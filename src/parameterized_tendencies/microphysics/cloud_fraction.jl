@@ -59,6 +59,14 @@ function set_covariance_cache_and_cloud_fraction!(Y, p)
         set_cloud_fraction!(Y, p, microphysics_model, GridScaleCloud())
     end
 
+    # Materialize the pointwise buoyancy-gradient chain-rule coefficients and
+    # the exact face gradients of (θ_li, q_tot) once: the coefficients carry
+    # all of the expensive saturation thermodynamics and are independent of
+    # cloud fraction, so within the Picard iteration every buoyancy-gradient
+    # stencil below reduces to a cheap `blended_N²` FMA broadcast.
+    set_buoyancy_gradient_inputs!(Y, p, thermo_params)
+    (; ᶜbg_coeffs) = p.precomputed
+
     # One Picard step: use the current cloud fraction to update buoyancy
     # gradient and covariance cache, then recompute cloud fraction.
     #
@@ -67,20 +75,17 @@ function set_covariance_cache_and_cloud_fraction!(Y, p)
     # materialization during Picard. CF, μ_S, and λ are all written once after
     # Picard converges, in the final `set_sgs_moments_and_cloud_fraction!` call.
     function picard_step!()
-        @. ᶜlinear_buoygrad = buoyancy_gradients(
-            BuoyGradMean(), # TODO: modify for NonEq + 1M tracers if needed
-            thermo_params,
-            ᶜT,
-            Y.c.ρ,
-            ᶜq_tot_nonneg,
-            ᶜq_liq,
-            ᶜq_ice,
+        @. ᶜlinear_buoygrad = blended_N²(
+            ᶜbg_coeffs,
             ᶜcloud_fraction,
-            C3,
-            ᶜgradᵥ_q_tot,
-            ᶜgradᵥ_θ_liq_ice,
-            ᶜlg,
+            projected_vector_data(C3, ᶜgradᵥ_θ_liq_ice, ᶜlg),
+            projected_vector_data(C3, ᶜgradᵥ_q_tot, ᶜlg),
         )
+
+        # Stability-biased buoyancy gradient for the mixing-length and
+        # Pr_t(Ri) closures (max of one-sided estimates; registers
+        # unresolved inversions that the centered gradient dilutes).
+        set_stability_buoyancy_gradient!(Y, p, thermo_params)
 
         # Cache SGS covariances (no-op for dry/0M/GridScaleCloud configs).
         # For EDMF: gradients are precomputed above.
@@ -112,20 +117,13 @@ function set_covariance_cache_and_cloud_fraction!(Y, p)
     @. ᶜcloud_fraction = _aitken_picard_helper(c0, c1, c2)
 
     # Recompute buoyancy gradient and covariance cache with the final cloud fraction.
-    @. ᶜlinear_buoygrad = buoyancy_gradients(
-        BuoyGradMean(), # TODO: modify for NonEq + 1M tracers if needed
-        thermo_params,
-        ᶜT,
-        Y.c.ρ,
-        ᶜq_tot_nonneg,
-        ᶜq_liq,
-        ᶜq_ice,
+    @. ᶜlinear_buoygrad = blended_N²(
+        ᶜbg_coeffs,
         ᶜcloud_fraction,
-        C3,
-        ᶜgradᵥ_q_tot,
-        ᶜgradᵥ_θ_liq_ice,
-        ᶜlg,
+        projected_vector_data(C3, ᶜgradᵥ_θ_liq_ice, ᶜlg),
+        projected_vector_data(C3, ᶜgradᵥ_q_tot, ᶜlg),
     )
+    set_stability_buoyancy_gradient!(Y, p, thermo_params)
     set_covariance_cache!(Y, p, thermo_params)
 
     # Final post-Aitken update: one quadrature pass refreshes both CF and the
@@ -222,8 +220,7 @@ function set_covariance_cache!(Y, p, thermo_params)
     # NOTE: gradients must be precomputed when using compute_gm_mixing_length
     # compute_gm_mixing_length materializes into p.scratch.ᶜtemp_scalar
     ᶜmixing_length_field =
-        turbconv_model isa PrognosticEDMFX ?
-        ᶜmixing_length(Y, p) :
+        turbconv_model isa AbstractEDMF ? ᶜmixing_length(Y, p) :
         compute_gm_mixing_length(Y, p)
 
     # Compute θ-based covariances from gradients and mixing length
@@ -978,8 +975,7 @@ function set_ml_cloud_fraction!(
 )
     # compute_gm_mixing_length materializes into p.scratch.ᶜtemp_scalar
     ᶜmixing_length_lazy =
-        turbconv_model isa PrognosticEDMFX ?
-        ᶜmixing_length(Y, p) :
+        turbconv_model isa AbstractEDMF ? ᶜmixing_length(Y, p) :
         compute_gm_mixing_length(Y, p)
 
     # Materialize mixing length into scratch field to break the lazy broadcast
