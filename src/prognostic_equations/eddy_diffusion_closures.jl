@@ -440,7 +440,7 @@ cost. The coefficients depend on `(T, ρ, q)` but not on `cf`, so they are
 fixed during the Picard iteration.
 """
 NVTX.@annotate function set_buoyancy_gradient_inputs!(Y, p, thermo_params)
-    (; ᶜbg_coeffs, ᶠ∂θli∂z, ᶠ∂qt∂z) = p.precomputed
+    (; ᶜbg_coeffs, ᶠ∂θli∂z, ᶠ∂qt∂z, ᶜgradᵥ_θ_liq_ice, ᶜgradᵥ_q_tot) = p.precomputed
     (; ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice) = p.precomputed
     ᶠlg = Fields.local_geometry_field(Y.f)
     @. ᶜbg_coeffs = buoyancy_gradient_coefficients(
@@ -452,7 +452,7 @@ NVTX.@annotate function set_buoyancy_gradient_inputs!(Y, p, thermo_params)
         ᶜq_ice,
     )
     # θ_li materialized once; the lazy form would re-evaluate the (pow-heavy)
-    # Exner function at every gradient stencil point.
+    # Exner function at every gradient stencil point across face and center gradients.
     ᶜθ_li = p.scratch.ᶜtemp_scalar
     @. ᶜθ_li = TD.liquid_ice_pottemp(
         thermo_params,
@@ -465,6 +465,9 @@ NVTX.@annotate function set_buoyancy_gradient_inputs!(Y, p, thermo_params)
     # Domain-boundary faces carry zero gradient (ᶠgradᵥ BCs).
     @. ᶠ∂θli∂z = projected_vector_data(C3, ᶠgradᵥ(ᶜθ_li), ᶠlg)
     @. ᶠ∂qt∂z = projected_vector_data(C3, ᶠgradᵥ(ᶜq_tot_nonneg), ᶠlg)
+
+    @. ᶜgradᵥ_θ_liq_ice = ᶜgradᵥ(ᶠinterp(ᶜθ_li))
+    @. ᶜgradᵥ_q_tot = ᶜgradᵥ(ᶠinterp(ᶜq_tot_nonneg))
     return nothing
 end
 
@@ -763,9 +766,10 @@ where the face jump is not stable (`Δb ≤ 0`) or turbulence is absent.
     Δb_pos = max(N²_face * Δz, FT(0))
     jt = Δb_pos^2 / (c_b * κ_safe)
     # Gate: fraction of the effective stability carried by the jump term.
-    # jt > 0 implies N²_face > 0, so the denominator is positive where the
-    # gate is active; the ε guard only covers the jt = 0 branch.
-    γ = jt / max(N²_face + jt, eps(FT))
+    # Branchless (avoids warp divergence). The division is guarded by the
+    # `jt > 0` branch: `jt > 0` implies `Δb_pos > 0`, hence `N²_face > 0`, so
+    # the denominator `N²_face + jt > 0` and no zero-guard is needed.
+    γ = ifelse(jt > zero(jt), jt / (N²_face + jt), zero(jt))
     Ri_b = ℓ_e * Δb_pos / κ_safe
     w_e = A * sqrt(κ_safe) / max(Ri_b, FT(1))
     return γ * w_e * Δz
@@ -779,11 +783,18 @@ end
 @inline get_mixing_length_field(ml::MixingLength, ::Val{:l_grid}) = ml.l_grid
 # Energy-containing eddy scale ℓ_e for the interfacial entrainment closure:
 # the scales of the eddies that scour an interface (wall and TKE-balance),
-# which — unlike l_N — are not suppressed by the interface itself. l_TKE = 0
-# marks absent turbulence (fall back to l_W); l_TKE is huge when net
-# production is non-positive, in which case the min picks l_W.
-@inline get_mixing_length_field(ml::MixingLength, ::Val{:energy_containing}) =
-    ml.tke > 0 ? min(ml.wall, ml.tke) : ml.wall
+# which — unlike l_N — are not suppressed by the interface itself. Also
+# bounded by the resolvability filter scale l_grid where the grid imposes a
+# finite one (l_grid = max(Δx_h, Δz); Inf for single columns, so the bound
+# is inert there and binds only in the gray zone / LES). Branchless ifelse
+# avoids GPU warp divergence.
+@inline function get_mixing_length_field(
+    ml::MixingLength,
+    ::Val{:energy_containing},
+)
+    ℓ_phys = ifelse(ml.tke > zero(ml.tke), min(ml.wall, ml.tke), ml.wall)
+    return min(ℓ_phys, ml.l_grid)
+end
 
 function ᶜmixing_length(Y, p, property::Val{P} = Val{:master}()) where {P}
     (; params) = p
@@ -797,7 +808,9 @@ function ᶜmixing_length(Y, p, property::Val{P} = Val{:master}()) where {P}
     z_sfc = Fields.level(Fields.coordinate_field(Y.f).z, Fields.half)
     ᶜΔ_f = resolvability_filter_scale(axes(Y.c))
 
-    ᶜtke = @. lazy(specific(Y.c.ρtke, Y.c.ρ))
+    ᶜtke =
+        MatrixFields.has_field(Y, @name(c.ρtke)) ?
+        (@. lazy(specific(Y.c.ρtke, Y.c.ρ))) : (@. lazy(zero(Y.c.ρ)))
     sfc_tke = Fields.level(ᶜtke, 1)
 
     ᶜprandtl_nvec = p.scratch.ᶜtemp_scalar_5

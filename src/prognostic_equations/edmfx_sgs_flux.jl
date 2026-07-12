@@ -225,9 +225,7 @@ function edmfx_sgs_diffusive_flux_tendency!(
     (; dt, params) = p
     turbconv_params = CAP.turbconv_params(params)
     (; ᶜu) = p.precomputed
-    (; ρtke_flux) = p.precomputed
     ᶠgradᵥ = Operators.GradientC2F()
-    ᶜtke = @. lazy(specific(Y.c.ρtke, Y.c.ρ))
 
     if p.atmos.edmfx_model.sgs_diffusive_flux isa Val{true}
 
@@ -289,6 +287,8 @@ function edmfx_sgs_diffusive_flux_tendency!(
         )
 
         if use_prognostic_tke(turbconv_model)
+            (; ρtke_flux) = p.precomputed
+            ᶜtke = @. lazy(specific(Y.c.ρtke, Y.c.ρ))
             # Turbulent TKE transport (diffusion)
             ᶜdivᵥ_ρtke = Operators.DivergenceF2C(
                 top = Operators.SetValue(C3(FT(0))),
