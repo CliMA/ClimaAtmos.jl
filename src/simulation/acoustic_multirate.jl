@@ -323,15 +323,21 @@ function CTS.init_cache(prob, alg::AcousticMultirate; dt, kwargs...)
         initialize_imp! = f.initialize_imp!,
     )
     # The outer implicit half-step solves the full implicit tendency minus the
-    # inner subset, once per outer step. Its inner integrator and the sequencing
-    # are owned here; the outer method only calls the complement.
+    # inner subset, once per outer step, pairing that residual with the matching
+    # `AcousticComplementJacobian` (the full Jacobian blocks with the vertical
+    # grid-mean acoustic derivatives zeroed). Its inner integrator and the
+    # sequencing are owned here; the outer method only calls the complement.
     outer_complement =
         if implicit_split
             outer_f = CTS.ClimaODEFunction(;
                 T_imp! = CTS.ODEFunction(
                     OuterImplicitTendency(f.T_imp!.f, zero(u0));
-                    jac_prototype = f.T_imp!.jac_prototype,
-                    Wfact = f.T_imp!.Wfact,
+                    jac_prototype = Jacobian(
+                        AcousticComplementJacobian(f.T_imp!.jac_prototype.alg),
+                        u0,
+                        p.atmos,
+                    ),
+                    Wfact = update_jacobian!,
                 ),
                 cache! = f.cache_imp!,
                 cache_imp! = f.cache_imp!,

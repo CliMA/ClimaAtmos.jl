@@ -102,6 +102,7 @@ The inner/outer implicit split restricts the implicit solve inside the sub-cycle
 The restricted system has a dedicated sparse Jacobian whose scalar block is diagonal, so it factorizes with the direct block-arrowhead solver instead of the iterative solver the full Jacobian requires.
 
 The remaining implicit terms (EDMF SGS, vertical diffusion, implicit microphysics, and sedimentation) are solved once per outer step by a separate outer implicit solve, rather than every sub-step.
+That outer solve pairs its residual (the full implicit tendency minus the acoustic subset) with a matching complement Jacobian, the full sparse Jacobian's blocks with the vertical grid-mean acoustic derivatives set to zero, so the Newton update for the remaining physics is not filtered through the acoustic blocks.
 The first-order outer combination performs one outer solve per step; the second-order symmetric combination performs two.
 
 The split is additive: the full implicit tendency and its Jacobian are unchanged, and the restricted operator duplicates the acoustic subset rather than extracting it, so the mode-off and unsplit paths are unchanged.
