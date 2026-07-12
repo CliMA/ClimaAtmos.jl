@@ -194,12 +194,12 @@ function precomputed_quantities(Y, atmos)
 
     # SGS covariances for hybrid cloud fraction and microphysics quadrature.
     # NonEquilibriumMicrophysics1M/2M always route through the quadrature API
-    # internally (with GridMeanSGS), so they also need covariance fields allocated.
-    uses_sgs_quadrature =
-        !isnothing(atmos.sgs_quadrature) ||
-        atmos.microphysics_model isa
-        Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M} ||
-        atmos.cloud_model isa Union{QuadratureCloud, MLCloud}
+    # internally (with GridMeanSGS), so they also need covariance fields
+    # allocated. This allocation guard must match the write guard in
+    # `set_covariance_cache!` and the ᶜl_mix-caching guard in
+    # `set_explicit_precomputed_quantities!`, so all three share the one
+    # `uses_covariances` predicate.
+    uses_sgs_quadrature = uses_covariances(atmos)
     uses_microphysics_quadrature_moments =
         atmos.microphysics_model isa
         Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M}
@@ -708,10 +708,15 @@ NVTX.@annotate function set_explicit_precomputed_quantities!(Y, p, t)
     # from the covariance/cloud-fraction update above.
     set_face_diffusivities!(Y, p)
 
-    # Master mixing length at centers, for consumers that live at centers
+    # Master mixing length at centers for consumers that live at centers
     # (TKE dissipation, covariance closure, updraft internal diffusion,
-    # diagnostics); the face diffusivities above are the flux-side pipeline.
-    if p.atmos.turbconv_model isa AbstractEDMF &&
+    # diagnostics). When the configuration uses (co)variances, ᶜl_mix is
+    # materialized inside the covariance/cloud-fraction iteration (see
+    # materialized_mixing_length!), so it would be redundant to recompute it
+    # here; `uses_covariances` is the shared predicate that keeps the two
+    # paths from disagreeing.
+    if !uses_covariances(p.atmos) &&
+       turbconv_model isa AbstractEDMF &&
        MatrixFields.has_field(Y, @name(c.ρtke))
         p.precomputed.ᶜl_mix .= ᶜmixing_length(Y, p)
     end
