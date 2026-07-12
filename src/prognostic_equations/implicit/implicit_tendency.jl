@@ -241,19 +241,33 @@ Newton solution (a real concern with `max_iters = 1`).
 """
 NVTX.@annotate function correct_implicit_advection_tendency!(Yₜ, Y, p, t)
     Yₜ .= zero(eltype(Yₜ))
+    implicit_advection_correction_tendency!(Yₜ, Y, p, t)
+    return nothing
+end
+
+"""
+    implicit_advection_correction_tendency!(Yₜ, Y, p, t)
+
+Add the upwind-minus-central vertical-transport correction for `ρe_tot` (and
+`ρq_tot` when available) to `Yₜ`. The additive form of
+[`correct_implicit_advection_tendency!`](@ref); a no-op when
+`energy_q_tot_upwinding` is `Val(:none)`.
+"""
+function implicit_advection_correction_tendency!(Yₜ, Y, p, t)
     (; microphysics_model) = p.atmos
     (; energy_q_tot_upwinding) = p.atmos.numerics
+    energy_q_tot_upwinding == Val(:none) && return nothing
     (; dt) = p
     (; ᶠu³, ᶜh_tot) = p.precomputed
 
     vtt_up = vertical_transport(Y.c.ρ, ᶠu³, ᶜh_tot, dt, energy_q_tot_upwinding)
     vtt_c = vertical_transport(Y.c.ρ, ᶠu³, ᶜh_tot, dt, Val(:none))
-    @. Yₜ.c.ρe_tot = vtt_up - vtt_c
+    @. Yₜ.c.ρe_tot += vtt_up - vtt_c
     if !(microphysics_model isa DryModel)
         ᶜq_tot = @. lazy(specific(Y.c.ρq_tot, Y.c.ρ))
         vtt_up = vertical_transport(Y.c.ρ, ᶠu³, ᶜq_tot, dt, energy_q_tot_upwinding)
         vtt_c = vertical_transport(Y.c.ρ, ᶠu³, ᶜq_tot, dt, Val(:none))
-        @. Yₜ.c.ρq_tot = vtt_up - vtt_c
+        @. Yₜ.c.ρq_tot += vtt_up - vtt_c
     end
     return nothing
 end

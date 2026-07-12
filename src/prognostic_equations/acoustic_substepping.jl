@@ -107,16 +107,17 @@ end
     grid_mean_acoustic_tendency!(Yₜ, Y, p, t)
 
 Compute the vertical grid-mean acoustic (sound-wave) and vertical-transport contributions to the grid-mean
-prognostic tendencies: the vertical mass-flux divergence on `ρ`, the vertical advection of total
+prognostic tendencies: the vertical mass-flux divergence on `ρ`, the central vertical advection of total
 enthalpy on `ρe_tot` and (when moist) total specific humidity on `ρq_tot`, the vertical pressure-gradient
 and gravity (split θᵥ-Exner form) on `u₃`, and the Rayleigh sponge on `u₃`.
 
 The vertical grid-mean acoustic subset of `implicit_vertical_advection_tendency!`, duplicated rather than
-extracted. The inner operator of the inner/outer implicit split of acoustic substepping.
+extracted. The inner operator of the inner/outer implicit split of acoustic substepping. Like
+`implicit_vertical_advection_tendency!`, the `ρe_tot` and `ρq_tot` transport is central; the upwind
+correction is applied post-Newton through `T_post_imp!`.
 """
 function grid_mean_acoustic_tendency!(Yₜ, Y, p, t)
     (; microphysics_model, rayleigh_sponge) = p.atmos
-    (; energy_q_tot_upwinding) = p.atmos.numerics
     (; params, dt) = p
     ᶜJ = Fields.local_geometry_field(axes(Y.c)).J
     ᶠJ = Fields.local_geometry_field(axes(Y.f)).J
@@ -127,11 +128,11 @@ function grid_mean_acoustic_tendency!(Yₜ, Y, p, t)
 
     @. Yₜ.c.ρ -= ᶜadvdivᵥ(ᶠinterp(Y.c.ρ * ᶜJ) / ᶠJ * ᶠu³)
 
-    vtt = vertical_transport(Y.c.ρ, ᶠu³, ᶜh_tot, dt, energy_q_tot_upwinding)
+    vtt = vertical_transport(Y.c.ρ, ᶠu³, ᶜh_tot, dt, Val(:none))
     @. Yₜ.c.ρe_tot += vtt
     if !(microphysics_model isa DryModel)
         ᶜq_tot = @. lazy(specific(Y.c.ρq_tot, Y.c.ρ))
-        vtt = vertical_transport(Y.c.ρ, ᶠu³, ᶜq_tot, dt, energy_q_tot_upwinding)
+        vtt = vertical_transport(Y.c.ρ, ᶠu³, ᶜq_tot, dt, Val(:none))
         @. Yₜ.c.ρq_tot += vtt
     end
 

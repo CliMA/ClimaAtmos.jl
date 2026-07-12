@@ -217,6 +217,31 @@ end
     end
 end
 
+# The post-Newton upwind correction (`T_post_imp!`) is applied at sub-step
+# cadence: the inner sub-cycle carries it for both the full and the restricted
+# inner operator (both evaluate central transport), and the outer complement,
+# central in both of its terms, carries none.
+@testset "Acoustic substepping: post-Newton correction placement" begin
+    correction = CA.correct_implicit_advection_tendency!
+    for implicit_split in (false, true)
+        config = acoustic_box_config(; order = 2, implicit_split)
+        config["output_dir"] = mktempdir()
+        job_id = "post_imp_$(implicit_split ? "split" : "unsplit")"
+        integrator =
+            CA.get_simulation(CA.AtmosConfig(config; job_id)).integrator
+        @test integrator.cache.f.T_post_imp! === correction
+        (; outercache, innerinteg) = integrator.cache.cts_cache
+        @test outercache.fast_fn.T_post_imp! === correction
+        @test innerinteg.sol.prob.f.T_post_imp! === correction
+        if implicit_split
+            outer_integ = outercache.outer.complement.outer_integ
+            @test isnothing(outer_integ.sol.prob.f.T_post_imp!)
+        else
+            @test isnothing(outercache.outer.complement)
+        end
+    end
+end
+
 @testset "Acoustic substepping: implicit split completes a timestep sweep" begin
     for dt in ("0.5secs", "1secs", "2secs")
         config = acoustic_box_config(; order = 1, implicit_split = true)

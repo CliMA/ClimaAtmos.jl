@@ -69,7 +69,8 @@ end
 
 Fast (sub-cycled) explicit tendency: the horizontal acoustic terms, the grid-mean
 momentum advection (kinetic-energy gradients and rotational momentum flux) (and,
-for `ExplicitVertical`, the vertical acoustic terms) and the divergence damping.
+for `ExplicitVertical`, the vertical acoustic terms with the upwind transport
+correction) and the divergence damping.
 
 # Fields
 
@@ -94,7 +95,10 @@ function (f::AcousticSubstepTendency)(Yₜ, Yₜ_lim, Y, p, t)
     kinetic_energy_gradient_tendency!(Yₜ, Y, p, t)
     rotational_momentum_flux_tendency!(Yₜ, Y, p, t)
     if f.vertical isa ExplicitVertical
+        # The explicit evaluation has no Newton solve, so the post-Newton
+        # upwind correction is added directly to the central transport.
         implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
+        implicit_advection_correction_tendency!(Yₜ, Y, p, t)
     end
     if f.ν_d > 0
         divergence_damping_tendency!(Yₜ, Y, p, f.damping_form, f.ν_d)
@@ -360,9 +364,17 @@ function CTS.init_cache(prob, alg::AcousticMultirate; dt, kwargs...)
     # is not supported. Under the implicit split the sub-cycle keeps a no-op
     # `initialize_imp!`: the restricted inner operator excludes the SGS block,
     # so the analytic SGS initialization pairs with the outer complement below.
+    # The post-Newton upwind correction is applied at sub-step cadence: the
+    # inner implicit solve (restricted or full) evaluates central transport
+    # and `T_post_imp!` supplies the correction after each Newton solve, so
+    # the upwind direction follows the sub-step velocity. Under
+    # `ExplicitVertical` the fast tendency adds the correction directly. The
+    # outer complement, central in both of its terms, carries no correction.
     f_fast = CTS.ClimaODEFunction(;
         T_exp_T_lim! = fast!,
         T_imp! = inner_T_imp!,
+        T_post_imp! = alg.vertical isa ImplicitVertical ? f.T_post_imp! :
+                      nothing,
         cache! = f.cache!,
         cache_imp! = f.cache_imp!,
         lim! = f.lim!,
