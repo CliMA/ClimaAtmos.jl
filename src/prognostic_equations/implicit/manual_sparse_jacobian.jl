@@ -1523,7 +1523,15 @@ function update_sgs_massflux_jacobian!(matrix, Y, p, dtγ, diffusion_flag)
     return nothing
 end
 
-function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
+update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t) =
+    update_jacobian_blocks!(cache, Y, p, dtγ, t, dtγ)
+
+# Shared block update for `ManualSparseJacobian` and
+# `AcousticComplementJacobian`. `advection_dtγ` scales the blocks filled by
+# `update_advection_jacobian!`; `AcousticComplementJacobian` passes zero, which
+# zeroes those blocks while keeping the `-I` term on the `(f.u₃, f.u₃)`
+# diagonal.
+function update_jacobian_blocks!(cache, Y, p, dtγ, t, advection_dtγ)
     (; topography_flag, diffusion_flag) = cache.derivative_flags
     (; matrix) = cache
 
@@ -1540,7 +1548,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
     #     diffusion, entrainment, and boundary condition updates.
     #   - The eddy diffusivities are computed once and shared between the
     #     grid-scale and SGS diffusion updates.
-    update_advection_jacobian!(matrix, Y, p, dtγ, topography_flag)
+    update_advection_jacobian!(matrix, Y, p, advection_dtγ, topography_flag)
     update_sedimentation_jacobian!(matrix, Y, p, dtγ)
     eddy_diffusivities =
         use_derivative(diffusion_flag) ? eddy_diffusivity_coefficients!(Y, p) :
@@ -1797,4 +1805,37 @@ function update_jacobian!(alg::AcousticJacobian, cache, Y, p, dtγ, t)
 end
 
 invert_jacobian!(::AcousticJacobian, cache, ΔY, R) =
+    LinearAlgebra.ldiv!(ΔY, cache.matrix, R)
+
+"""
+    AcousticComplementJacobian(; approximate_solve_iters = 1)
+    AcousticComplementJacobian(full_alg::JacobianAlgorithm)
+
+A [`JacobianAlgorithm`](@ref) for the outer implicit complement of the
+inner/outer implicit split of acoustic substepping (`OuterImplicitTendency`,
+the full implicit tendency minus `grid_mean_acoustic_tendency!`). The matrix
+has the block structure and solver of [`ManualSparseJacobian`](@ref), with the
+blocks filled by `update_advection_jacobian!` (the derivatives of the vertical
+grid-mean acoustic subset and the condensate-mass pressure-gradient couplings
+of the `f.u₃` row) set to zero, so the linearization matches the tendency the
+complement solve integrates. The second constructor carries
+`approximate_solve_iters` over from the full implicit Jacobian algorithm when
+it has one.
+"""
+struct AcousticComplementJacobian <: SparseJacobian
+    approximate_solve_iters::Int
+end
+AcousticComplementJacobian(; approximate_solve_iters::Int = 1) =
+    AcousticComplementJacobian(approximate_solve_iters)
+AcousticComplementJacobian(::JacobianAlgorithm) = AcousticComplementJacobian()
+AcousticComplementJacobian(full_alg::ManualSparseJacobian) =
+    AcousticComplementJacobian(full_alg.approximate_solve_iters)
+
+jacobian_cache(alg::AcousticComplementJacobian, Y, atmos) =
+    jacobian_cache(ManualSparseJacobian(alg.approximate_solve_iters), Y, atmos)
+
+update_jacobian!(alg::AcousticComplementJacobian, cache, Y, p, dtγ, t) =
+    update_jacobian_blocks!(cache, Y, p, dtγ, t, zero(dtγ))
+
+invert_jacobian!(::AcousticComplementJacobian, cache, ΔY, R) =
     LinearAlgebra.ldiv!(ΔY, cache.matrix, R)

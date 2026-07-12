@@ -21,9 +21,9 @@ The intended benefit is higher throughput in the convective gray zone (roughly o
 
 Per outer step the scheme:
 
-1. evaluates the slow forcing (the explicit tendency minus the horizontal acoustic terms and the grid-mean momentum advection) and freezes it,
-2. sub-cycles the acoustic system `n_sub` times.
-   Each sub-step advances the horizontal acoustic terms and the grid-mean momentum advection (the kinetic-energy gradients and the rotational momentum flux) explicitly and the vertical acoustic terms implicitly (reusing the existing implicit solver), with the frozen slow forcing added.
+ 1. evaluates the slow forcing (the explicit tendency minus the horizontal acoustic terms and the grid-mean momentum advection) and freezes it,
+ 2. sub-cycles the acoustic system `n_sub` times.
+    Each sub-step advances the horizontal acoustic terms and the grid-mean momentum advection (the kinetic-energy gradients and the rotational momentum flux) explicitly and the vertical acoustic terms implicitly (reusing the existing implicit solver), with the frozen slow forcing added.
 
 A first- or second-order outer combination of the sub-cycles is available.
 
@@ -45,10 +45,10 @@ The scheme therefore sub-cycles the rotational momentum flux alongside the kinet
 The remaining resonant terms (upwind corrections and frozen tracer/EDMF flux divergences) are weaker at the acoustic frequency and are held by divergence damping on the horizontal momentum.
 The damping adds ``\nu_d \, \nabla_h(\delta)`` to ``u_h``, with the damped divergence ``\delta`` selected by `acoustic_substep_damping_form`:
 
-| Form | Damped divergence ``\delta`` |
-|---|---|
+| Form           | Damped divergence ``\delta``                                                                  |
+|:-------------- |:--------------------------------------------------------------------------------------------- |
 | `3d` (default) | ``\nabla_h \cdot u + \partial_z u^3``, the three-dimensional divergence of the full velocity. |
-| `horizontal` | ``\nabla_h \cdot u_h``, the horizontal divergence of the horizontal velocity. |
+| `horizontal`   | ``\nabla_h \cdot u_h``, the horizontal divergence of the horizontal velocity.                 |
 
 Taking the horizontal divergence of the damped ``u_h`` equation gives a term ``-\nu_d k_h^2 \delta``, so horizontal and mixed acoustic modes are damped in proportion to ``k_h^2`` while purely vertical modes (``k_h = 0``), the rotational flow, and balanced flow are untouched.
 
@@ -57,10 +57,10 @@ Taking the horizontal divergence of the damped ``u_h`` equation gives a term ``-
 The viscosity is ``\nu_d = \beta_d \, c_\mathrm{ref}^2 \, \Delta t_\mathrm{sub}``, and the per-sub-step grid-mode damping is ``\varepsilon_\mathrm{grid} = 4 \beta_d C_s^2`` with the sub-step acoustic Courant number ``C_s = c_\mathrm{ref} \Delta t_\mathrm{sub}/\Delta x_\mathrm{node} \approx 0.5``.
 Published split-explicit schemes use two normalizations, both of which map into this ``\beta_d``:
 
-| Normalization | Definition | Operational ``\beta_d`` |
-|---|---|---|
-| Forward-weighted pressure filter (WRF `smdiv`) | ``\nu = \gamma_d \, c^2 \Delta\tau`` | ``\gamma_d \approx 0.1`` |
-| Time-adjusted filter (MPAS / Klemp 2018) | ``\nu = a_d \, \Delta x^2/\Delta\tau`` | ``a_d/C_s^2 \approx 0.4`` at ``C_s = 0.5`` |
+| Normalization                                  | Definition                             | Operational ``\beta_d``                    |
+|:---------------------------------------------- |:-------------------------------------- |:------------------------------------------ |
+| Forward-weighted pressure filter (WRF `smdiv`) | ``\nu = \gamma_d \, c^2 \Delta\tau``   | ``\gamma_d \approx 0.1``                   |
+| Time-adjusted filter (MPAS / Klemp 2018)       | ``\nu = a_d \, \Delta x^2/\Delta\tau`` | ``a_d/C_s^2 \approx 0.4`` at ``C_s = 0.5`` |
 
 The two describe different filters, so both are correct in their own convention; expressed in the ``\nu_d = \beta_d c_\mathrm{ref}^2 \Delta t_\mathrm{sub}`` normalization used here they give a canonical band ``\beta_d \in [0.1, 0.6]`` (COSMO operational practice is near ``0.3``).
 With `acoustic_substep_damping: auto` the coefficient resolves to ``0.4``.
@@ -78,11 +78,11 @@ Any explicit horizontal mixing tendency is in the frozen slow forcing ``G``, so 
 The frozen form has no damping benefit inside the sub-cycle: each scheme's own explicit stability limit applies at the outer step.
 Which scheme is limiting depends on the configuration:
 
-| Scheme | Diffusivity | Explicit limit | Outer-step multiple |
-|---|---|---|---|
-| Hyperdiffusion (4th order) | ``\nu_4 = c_4 h^3`` | ``\Delta t \lesssim C_4/(\nu_4 k_\mathrm{max}^4) \propto h/c_4`` | resolution-independent; ``\approx 3\times`` measured on the dry box |
-| Smagorinsky | ``\nu = (C_s \Delta x)^2 |S|`` | ``\Delta t \le 1/(4 C_s^2 |S|)`` | strain timescale ``1/|S|`` (resolution-independent); ``O(50\text{–}1000)\times``, compressing where ``|S|`` is large |
-| EDMF horizontal | ``\nu \sim \ell \sqrt{\mathrm{TKE}},\ \ell \propto \Delta x`` | ``\Delta t \le \Delta x/(4 c_\ell \sqrt{\mathrm{TKE}})`` | ``\approx c/(4 c_\ell \sqrt{\mathrm{TKE}}\,\mathrm{CFL})``, ``O(50\text{–}100)\times`` |
+| Scheme                     | Diffusivity                                                   | Explicit limit                                                   | Outer-step multiple                                                                                                  |
+|:-------------------------- |:------------------------------------------------------------- |:---------------------------------------------------------------- |:-------------------------------------------------------------------------------------------------------------------- |
+| Hyperdiffusion (4th order) | ``\nu_4 = c_4 h^3``                                           | ``\Delta t \lesssim C_4/(\nu_4 k_\mathrm{max}^4) \propto h/c_4`` | resolution-independent; ``\approx 3\times`` measured on the dry box                                                  |
+| Smagorinsky                | ``\nu = (C_s \Delta x)^2 |S|``                                | ``\Delta t \le 1/(4 C_s^2 |S|)``                                 | strain timescale ``1/|S|`` (resolution-independent); ``O(50\text{–}1000)\times``, compressing where ``|S|`` is large |
+| EDMF horizontal            | ``\nu \sim \ell \sqrt{\mathrm{TKE}},\ \ell \propto \Delta x`` | ``\Delta t \le \Delta x/(4 c_\ell \sqrt{\mathrm{TKE}})``         | ``\approx c/(4 c_\ell \sqrt{\mathrm{TKE}}\,\mathrm{CFL})``, ``O(50\text{–}100)\times``                               |
 
 The hyperdiffusivity scales as ``h^3`` while the baseline acoustic step scales as ``h/c``, so the hyperdiffusion limit expressed as an outer-step multiple is resolution-independent (at fixed polynomial order and the ``\nu_4 \propto h^3`` convention), and the same small multiple applies on production gray-zone grids.
 On hyperdiffusion-on configurations the frozen hyperdiffusion is therefore the limiting term: it is stable at ``\approx 3\times`` and unstable at ``\approx 4\times`` on the dry box.
@@ -102,6 +102,7 @@ The inner/outer implicit split restricts the implicit solve inside the sub-cycle
 The restricted system has a dedicated sparse Jacobian whose scalar block is diagonal, so it factorizes with the direct block-arrowhead solver instead of the iterative solver the full Jacobian requires.
 
 The remaining implicit terms (EDMF SGS, vertical diffusion, implicit microphysics, and sedimentation) are solved once per outer step by a separate outer implicit solve, rather than every sub-step.
+That outer solve pairs its residual (the full implicit tendency minus the acoustic subset) with a matching complement Jacobian, the full sparse Jacobian's blocks with the vertical grid-mean acoustic derivatives set to zero, so the Newton update for the remaining physics is not filtered through the acoustic blocks.
 The first-order outer combination performs one outer solve per step; the second-order symmetric combination performs two.
 
 The split is additive: the full implicit tendency and its Jacobian are unchanged, and the restricted operator duplicates the acoustic subset rather than extracting it, so the mode-off and unsplit paths are unchanged.
@@ -109,13 +110,13 @@ The split requires `acoustic_substep_vertical: implicit`.
 
 ## Configuration
 
-| Option | Meaning |
-|---|---|
-| `acoustic_substeps` | `0` disables the mode; a positive integer fixes the sub-step count; `auto` selects it from the horizontal acoustic CFL. |
-| `acoustic_substep_order` | Order of the outer combination (`1` or `2`). |
-| `acoustic_substep_vertical` | `implicit` (default) keeps the vertically-implicit acoustic solve; `explicit` advances it in the sub-cycle. |
-| `acoustic_substep_damping_form` | Divergence used by the divergence damping: `3d` (default) or `horizontal`. |
-| `acoustic_substep_damping` | Divergence-damping coefficient ``\beta_d`` (``\nu_d = \beta_d c_\mathrm{ref}^2 \Delta t_\mathrm{sub}``). `auto` (default) resolves to `0.4`; a number keeps its direct value. |
+| Option                            | Meaning                                                                                                                                                                                                      |
+|:--------------------------------- |:------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `acoustic_substeps`               | `0` disables the mode; a positive integer fixes the sub-step count; `auto` selects it from the horizontal acoustic CFL.                                                                                      |
+| `acoustic_substep_order`          | Order of the outer combination (`1` or `2`).                                                                                                                                                                 |
+| `acoustic_substep_vertical`       | `implicit` (default) keeps the vertically-implicit acoustic solve; `explicit` advances it in the sub-cycle.                                                                                                  |
+| `acoustic_substep_damping_form`   | Divergence used by the divergence damping: `3d` (default) or `horizontal`.                                                                                                                                   |
+| `acoustic_substep_damping`        | Divergence-damping coefficient ``\beta_d`` (``\nu_d = \beta_d c_\mathrm{ref}^2 \Delta t_\mathrm{sub}``). `auto` (default) resolves to `0.4`; a number keeps its direct value.                                |
 | `acoustic_substep_implicit_split` | Restrict the sub-cycle implicit solve to the vertical grid-mean acoustic block and solve the remaining implicit terms once per outer step (default `false`). Requires `acoustic_substep_vertical: implicit`. |
 
 With `auto`, the sub-step count is
@@ -150,14 +151,17 @@ On configurations with inexpensive physics the sub-step count needed for stabili
 
 ## Limitations
 
-- The sub-cycle treats the whole implicit tendency implicitly at the sub-step size.
-  The mode is validated for configurations whose implicit tendency is the vertical-acoustic block; configurations that also place microphysics, turbulence, or vertical diffusion in the implicit tendency re-solve those processes every sub-step, unless `acoustic_substep_implicit_split` moves them to a per-outer-step solve.
-  The conditioning of that outer solve at large outer steps is untested.
-- The mode advances the vertical acoustic terms implicitly inside each sub-step; the explicit-vertical variant is a reference path limited by the vertical acoustic CFL on anisotropic grids.
-- The sub-cycle refreshes only the acoustic precomputed quantities; diagnostics that read the full cache should refresh it after a step.
-- The state constraint `constrain_state!` is applied once per outer step, to the combined end-of-step state, matching the plain scheme's end-of-step cadence.
-  The `stage` and `dss` settings of `update_constrain_state_every` are not honored inside the sub-cycle.
-- The divergence-damping coefficient must lie within its stable range; the automatic default targets it.
-- The stable outer step and the coefficient defaults are established on a flat, dry box.
-  Terrain and moist convection are not yet exercised at large outer steps: the kinetic-energy gradient is evaluated in metric-aware form, but the reference-relative pressure-gradient cancellation over terrain is sensitive in `Float32`, and the moist stable outer step may be set by limits other than the resonance.
-  The `horizontal` damping form is the documented fallback if the vertical divergence term destabilizes on strongly anisotropic grids.
+  - The sub-cycle treats the whole implicit tendency implicitly at the sub-step size.
+    The mode is validated for configurations whose implicit tendency is the vertical-acoustic block; configurations that also place microphysics, turbulence, or vertical diffusion in the implicit tendency re-solve those processes every sub-step, unless `acoustic_substep_implicit_split` moves them to a per-outer-step solve.
+    The conditioning of that outer solve at large outer steps is untested.
+  - The mode advances the vertical acoustic terms implicitly inside each sub-step; the explicit-vertical variant is a reference path limited by the vertical acoustic CFL on anisotropic grids.
+    The explicit-vertical variant advances only the vertical-acoustic block, so configurations whose implicit tendency contains additional terms (prognostic EDMF, implicit microphysics, implicit vertical diffusion) are rejected at construction.
+  - `advection_test` zeroes the velocity tendencies, which the sub-cycle does not preserve, so the combination is rejected at construction.
+  - The sub-cycle refreshes only the acoustic precomputed quantities; diagnostics that read the full cache should refresh it after a step.
+    `update_cache_every` has no effect inside the sub-cycle: the full cache is refreshed only at whole-step states (when the slow forcing is frozen, at the restart of the second sub-cycle in the second-order combination, before the second outer implicit solve, and at the end of the outer step).
+  - The state constraint `constrain_state!` is applied once per outer step, to the combined end-of-step state, matching the plain scheme's end-of-step cadence.
+    The `stage` and `dss` settings of `update_constrain_state_every` are not honored inside the sub-cycle.
+  - The divergence-damping coefficient must lie within its stable range; the automatic default targets it.
+  - The stable outer step and the coefficient defaults are established on a flat, dry box.
+    Terrain and moist convection are not yet exercised at large outer steps: the kinetic-energy gradient is evaluated in metric-aware form, but the reference-relative pressure-gradient cancellation over terrain is sensitive in `Float32`, and the moist stable outer step may be set by limits other than the resonance.
+    The `horizontal` damping form is the documented fallback if the vertical divergence term destabilizes on strongly anisotropic grids.

@@ -494,3 +494,6 @@ end
 
 invert_jacobian!(alg::AutoSparseJacobian, cache, ΔY, R) =
     invert_jacobian!(alg.sparse_jacobian_alg, cache, ΔY, R)
+
+AcousticComplementJacobian(full_alg::AutoSparseJacobian) =
+    AcousticComplementJacobian(full_alg.sparse_jacobian_alg)
