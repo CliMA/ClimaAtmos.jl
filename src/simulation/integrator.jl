@@ -124,12 +124,71 @@ function update_constrain_state_signal_handler(freq_str)
     end
 end
 
+"""
+    imex_weights_Timp_at_uninitialized_stage(tableau)
+
+Return `true` if the IMEX `tableau` weights the implicit tendency `T_imp` at a
+stage whose implicit diagonal coefficient is zero.
+
+At such a stage the IMEX ARK solver evaluates `T_imp` explicitly without first
+calling `initialize_imp!`, so a tendency cached by `initialize_imp!` and
+replayed through `T_imp!` is read from an earlier stage.
+"""
+function imex_weights_Timp_at_uninitialized_stage(tableau)
+    a_imp = tableau.a_imp.coeffs
+    b_imp = tableau.b_imp.coeffs
+    n_stages = size(a_imp, 1)
+    for i in 1:n_stages
+        iszero(a_imp[i, i]) || continue
+        (any(!iszero, a_imp[:, i]) || !iszero(b_imp[i])) && return true
+    end
+    return false
+end
+
+"""
+    assert_prognostic_edmf_stage_solver_supported(ode_algo, atmos, prescribed_flow)
+
+Error if the time-stepping configuration cannot support the `PrognosticEDMFX`
+updraft stage solve. No-op for other turbulence-convection models.
+
+`PrognosticEDMFX` advances the updraft `u₃` and `ρa` (including the microphysics
+mass source) with an analytic implicit-stage solve set up in
+[`initialize_implicit_stage_problem!`](@ref) and replayed through `T_imp!`. The
+replayed tendency is stage-consistent only when `initialize_imp!` runs before
+each `T_imp` evaluation, which excludes `prescribed_flow` (fully explicit) and
+IMEX tableaux that weight `T_imp` at a stage with a zero implicit diagonal (see
+[`imex_weights_Timp_at_uninitialized_stage`](@ref)).
+"""
+function assert_prognostic_edmf_stage_solver_supported(
+    ode_algo,
+    atmos,
+    prescribed_flow,
+)
+    atmos.turbconv_model isa PrognosticEDMFX || return nothing
+    isnothing(prescribed_flow) || error(
+        "PrognosticEDMFX requires the implicit solver for its updraft stage \
+         solve, but `prescribed_flow` advances the state fully explicitly, so \
+         `initialize_imp!` never runs.",
+    )
+    if ode_algo isa CTS.IMEXAlgorithm &&
+       imex_weights_Timp_at_uninitialized_stage(ode_algo.tableau)
+        error(
+            "PrognosticEDMFX is incompatible with the selected IMEX algorithm: \
+             it weights the implicit tendency at a stage with a zero implicit \
+             diagonal, where the cached updraft stage solve is not refreshed. \
+             Use an ARS-type scheme such as ARS343 or ARS222.",
+        )
+    end
+    return nothing
+end
+
 function args_integrator(Y, p, tspan, ode_algo, callback,
     jacobian, debug_jacobian, prescribed_flow, dt_integrator,
     update_cache_every, update_constrain_state_every;
     verbose = false,
 )
     (; atmos) = p
+    assert_prognostic_edmf_stage_solver_supported(ode_algo, atmos, prescribed_flow)
     @timed_log verbose "Built tendency function" begin
         if isnothing(prescribed_flow)
 

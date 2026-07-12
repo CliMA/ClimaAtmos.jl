@@ -12,6 +12,7 @@ using Test
 import ClimaComms
 ClimaComms.@import_required_backends
 import ClimaAtmos as CA
+import ClimaTimeSteppers as CTS
 
 include("../test_helpers.jl")
 
@@ -145,4 +146,50 @@ end
         @test parent(Y.c.sgsʲs.:($j).ρa) ≈
               parent(ρa_old.:($j).ρa) ./ (1 - dtγ * rate)
     end
+end
+
+# The cached updraft stage solve is replayed through `T_imp!`, so it is only
+# stage-consistent when `initialize_imp!` runs before each `T_imp` evaluation.
+# See #4683.
+@testset "Implicit-stage solver compatibility guard" begin
+    newton = CTS.NewtonsMethod()
+    ars343 = CTS.IMEXAlgorithm(CTS.ARS343(), newton)
+    ars222 = CTS.IMEXAlgorithm(CTS.ARS222(), newton)
+    ssp333 = CTS.IMEXAlgorithm(CTS.SSP333(), newton)
+
+    # ARS schemes never weight `T_imp` at their explicit first stage; SSP333 does.
+    @test !CA.imex_weights_Timp_at_uninitialized_stage(ars343.tableau)
+    @test !CA.imex_weights_Timp_at_uninitialized_stage(ars222.tableau)
+    @test CA.imex_weights_Timp_at_uninitialized_stage(ssp333.tableau)
+
+    config = create_sgs_ρa_config("sgs_rhoa_guard"; implicit_microphysics = true)
+    (; Y, p) = generate_test_simulation(config)
+    FT = eltype(Y)
+    edmf_atmos = p.atmos # PrognosticEDMFX
+    non_edmf_atmos = (; turbconv_model = nothing)
+
+    # Supported: an ARS scheme with the implicit solver.
+    @test CA.assert_prognostic_edmf_stage_solver_supported(
+        ars343,
+        edmf_atmos,
+        nothing,
+    ) === nothing
+    # Unsupported: a `T_imp`-weighted explicit stage.
+    @test_throws ErrorException CA.assert_prognostic_edmf_stage_solver_supported(
+        ssp333,
+        edmf_atmos,
+        nothing,
+    )
+    # Unsupported: `prescribed_flow` advances the state fully explicitly.
+    @test_throws ErrorException CA.assert_prognostic_edmf_stage_solver_supported(
+        ars343,
+        edmf_atmos,
+        CA.ShipwayHill2012VelocityProfile{FT}(),
+    )
+    # No-op for non-`PrognosticEDMFX` turbulence-convection models.
+    @test CA.assert_prognostic_edmf_stage_solver_supported(
+        ssp333,
+        non_edmf_atmos,
+        nothing,
+    ) === nothing
 end
