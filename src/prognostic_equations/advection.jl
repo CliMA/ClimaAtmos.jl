@@ -304,13 +304,16 @@ Computes tendencies due to vertical advection and buoyancy for EDMFX subgrid-sca
 
 This function handles:
 
-  - Vertical advection of updraft density-area product (`ρaʲ`).
   - Vertical advection of updraft moist static energy (`mseʲ`) and total specific humidity (`q_totʲ`).
   - Vertical advection of other updraft moisture species (`q_lclʲ`, `q_iclʲ`, `q_raiʲ`, `q_snoʲ`)
     if using a `NonEquilibriumMicrophysics1M` or `NonEquilibriumMicrophysics2M` microphysics
     model. If the `NonEquilibriumMicrophysics2M` model is used, `n_liqʲ` and `n_raiʲ` are also advected.
   - Buoyancy source term in the updraft `mseʲ` equation (geopotential work done against
     the density anomaly).
+
+Vertical transport of the updraft density-area product (`ρaʲ`) is not handled
+here; it is solved analytically at the implicit stage by
+[`solve_sgs_ρa_implicit_stage_analytic!`](@ref).
 
 Arguments:
 
