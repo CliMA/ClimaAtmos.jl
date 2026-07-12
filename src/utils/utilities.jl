@@ -298,6 +298,55 @@ function g³³_field(space)
 end
 
 """
+    horizontal_filter_scale(space)
+
+Horizontal filter length scale `Δx_h` [m] of `space`'s horizontal
+discretization: the per-node spectral-element length scale
+(`Spaces.node_horizontal_length_scale`) for extruded 2D/3D spaces, and `Inf`
+for single columns, which have no horizontal discretization (a column's
+filter scale is set by the forcing or the ensemble it represents, not by a
+grid length).
+"""
+horizontal_filter_scale(space::Spaces.ExtrudedFiniteDifferenceSpace) =
+    Spaces.undertype(space)(
+        Spaces.node_horizontal_length_scale(Spaces.horizontal_space(space)),
+    )
+# Do not route single columns through node_horizontal_length_scale: its
+# PointSpace method returns the placeholder 1 [m].
+horizontal_filter_scale(space::Spaces.FiniteDifferenceSpace) =
+    Spaces.undertype(space)(Inf)
+
+"""
+    resolvability_filter_scale(Δx_h, Δz)
+    resolvability_filter_scale(space)
+
+Resolvability filter scale [m] of the dynamical solution,
+
+    Δ_f = max(Δx_h, Δz),
+
+the smallest length scale resolvable in *every* direction of the grid: an
+eddy can be handed over to the resolved dynamics only if the coarsest grid
+direction resolves it, so `Δ_f` is the correct grid-scale cap for SGS mixing
+lengths. In a GCM (`Δx_h` ≫ boundary-layer depth) and in a single column
+(`Δx_h = Inf`, see [`horizontal_filter_scale`](@ref)) the cap is inert and
+the mixing length is purely physical (convergent under vertical refinement);
+in the gray zone the cap binds at `Δx_h`, shrinking the SGS eddies as the
+horizontal resolution starts to resolve them; in the isotropic LES limit
+`Δ_f = Δ` recovers a Deardorff-type grid-scale bound. (In the near-isotropic
+regime, a volumetric scale `(Δx Δy Δz)^{1/3}` is a possible refinement —
+change it here, in one place.)
+
+The `space` method returns `Δ_f` as a lazy field over `space`, combining
+[`horizontal_filter_scale`](@ref) with the local layer thickness.
+"""
+resolvability_filter_scale(Δx_h, Δz) = max(Δx_h, Δz)
+function resolvability_filter_scale(space::Spaces.AbstractSpace)
+    Δx_h = horizontal_filter_scale(space)
+    Δz = Fields.Δz_field(space)
+    return @. lazy(resolvability_filter_scale(Δx_h, Δz))
+end
+
+"""
     g³³(gⁱʲ)
 
 Extracts the `g³³` sub-tensor from the `gⁱʲ` tensor.
@@ -358,14 +407,6 @@ The type should correspond to a vector with only one component, i.e., a basis ve
 """
 projected_vector_data(::Type{V}, vector, local_geometry) where {V} =
     V(vector, local_geometry)[1] / unit_basis_vector_data(V, local_geometry)
-
-function projected_vector_buoy_grad_vars(::Type{V}, v1, v2, lg) where {V}
-    ubvd = unit_basis_vector_data(V, lg)
-    return (;
-        ∂qt∂z = V(v1, lg)[1] / ubvd,
-        ∂θli∂z = V(v2, lg)[1] / ubvd,
-    )
-end
 
 """
     get_physical_w(u, local_geometry)
