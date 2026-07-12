@@ -307,7 +307,10 @@ function CTS.init_cache(prob, alg::AcousticMultirate; dt, kwargs...)
         end
     # The fast sub-cycle is a full `ClimaODEFunction`: the acoustic fast tendency
     # (with the frozen forcing added by the outer step), the restricted or full
-    # implicit operator, and the reused implicit cache, limiter, and DSS.
+    # implicit operator, and the reused implicit cache, limiter, DSS, and state
+    # constraint. `constrain_state!` is applied once per outer step, to the
+    # combined end-of-step state; constraint application inside the sub-cycle
+    # is not supported.
     f_fast = CTS.ClimaODEFunction(;
         T_exp_T_lim! = fast!,
         T_imp! = inner_T_imp!,
@@ -315,6 +318,8 @@ function CTS.init_cache(prob, alg::AcousticMultirate; dt, kwargs...)
         cache_imp! = f.cache_imp!,
         lim! = f.lim!,
         dss! = f.dss!,
+        constrain_state! = f.constrain_state!,
+        update_constrain_state = f.update_constrain_state,
         initialize_imp! = f.initialize_imp!,
     )
     # The outer implicit half-step solves the full implicit tendency minus the

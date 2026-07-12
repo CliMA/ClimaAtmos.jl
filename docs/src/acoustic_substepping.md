@@ -155,6 +155,8 @@ On configurations with inexpensive physics the sub-step count needed for stabili
   The conditioning of that outer solve at large outer steps is untested.
 - The mode advances the vertical acoustic terms implicitly inside each sub-step; the explicit-vertical variant is a reference path limited by the vertical acoustic CFL on anisotropic grids.
 - The sub-cycle refreshes only the acoustic precomputed quantities; diagnostics that read the full cache should refresh it after a step.
+- The state constraint `constrain_state!` is applied once per outer step, to the combined end-of-step state, matching the plain scheme's end-of-step cadence.
+  The `stage` and `dss` settings of `update_constrain_state_every` are not honored inside the sub-cycle.
 - The divergence-damping coefficient must lie within its stable range; the automatic default targets it.
 - The stable outer step and the coefficient defaults are established on a flat, dry box.
   Terrain and moist convection are not yet exercised at large outer steps: the kinetic-energy gradient is evaluated in metric-aware form, but the reference-relative pressure-gradient cancellation over terrain is sensitive in `Float32`, and the moist stable outer step may be set by limits other than the resonance.
