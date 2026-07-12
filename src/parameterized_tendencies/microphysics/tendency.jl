@@ -91,8 +91,8 @@ function microphysics_tendency!(Yₜ, Y, p, t,
         @. Yₜ.c.ρe_tot +=
             Y.c.sgsʲs.:($$j).ρa * ᶜmp_tendencyʲs.:($$j).dq_tot_dt *
             ᶜmp_tendencyʲs.:($$j).e_tot_hlpr
-        # ... and updraft tendency
-        @. Yₜ.c.sgsʲs.:($$j).ρa += Y.c.sgsʲs.:($$j).ρa * ᶜmp_tendencyʲs.:($$j).dq_tot_dt
+        # ... and updraft tendency. The updraft `ρa` mass source is applied
+        # implicitly by `solve_sgs_ρa_implicit_stage_analytic!`.
         @. Yₜ.c.sgsʲs.:($$j).q_tot +=
             ᶜmp_tendencyʲs.:($$j).dq_tot_dt *
             (1 - Y.c.sgsʲs.:($$j).q_tot)

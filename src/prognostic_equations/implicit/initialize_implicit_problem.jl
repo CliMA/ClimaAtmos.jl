@@ -249,21 +249,38 @@ function sgs_ρa_implicit_tendency!(
 end
 
 """
+    microphysics_ρa_source_rate(p, microphysics_model, j)
+
+Fractional microphysics mass-source rate `S_mp = (∂ₜρaʲ)/ρaʲ` for mass-flux
+subdomain `j`. Nonzero only for microphysics models with an updraft mass
+source. The term is linear in `ρaʲ` and is treated implicitly in
+[`solve_sgs_ρa_implicit_stage_analytic!`](@ref), which applies it under both
+explicit and implicit microphysics timestepping.
+"""
+microphysics_ρa_source_rate(p, microphysics_model, j) = zero(eltype(p.params))
+microphysics_ρa_source_rate(p, ::EquilibriumMicrophysics0M, j) =
+    p.precomputed.ᶜmp_tendencyʲs.:($j).dq_tot_dt
+
+"""
     solve_sgs_ρa_implicit_stage_analytic!(Y, p, dtγ)
 
 Analytic IMEX/ARK implicit-stage solve for the updraft area-weighted
 density `ρa` in each EDMFX mass-flux subdomain.
 
-The flux-form stage equation `∂ρa/∂t + ∂(ρa·w)/∂z = (ε − δ)·ρa` reduces
-under first-order upwinding (for upward `ᶠu₃ʲ`) to the forward recurrence
+The flux-form stage equation
+`∂ρa/∂t + ∂(ρa·w)/∂z = (ε − δ)·ρa + S_mp·ρa` reduces under first-order
+upwinding (for upward `ᶠu₃ʲ`) to the forward recurrence
 
     ρa_new[i] = (ρa_old[i]/dtγ + α_bot · ρa_new[i−1]) / denominator[i],
-    denominator[i] = 1/dtγ + α_top − (ε − δ)[i],
+    denominator[i] = 1/dtγ + α_top − (ε − δ + S_mp)[i],
     α_face = (ᶠinterp(ρʲ·J)/ᶠJ · ᶠu₃ʲ/Δz_face) / (ρʲ_upwind · Δz[i]),
 
 `(ε − δ)` is assembled inline from area-bounding, velocity-scale, and
-buoyancy-driven pieces (see [`detr_buoy_inv_time_scale`](@ref)). The
-mass-flux-divergence component of detrainment is folded into a
+buoyancy-driven pieces (see [`detr_buoy_inv_time_scale`](@ref)), and
+`S_mp` is the microphysics mass-source rate (see
+[`microphysics_ρa_source_rate`](@ref)); a sink (`S_mp < 0`) increases the
+denominator, so the implicit treatment preserves `ρa ≥ 0` for any `dtγ`.
+The mass-flux-divergence component of detrainment is folded into a
 multiplicative prefactor on the implicit advection term instead of
 `(ε − δ)`, so it is treated implicitly together with the flux divergence.
 
@@ -300,19 +317,21 @@ function solve_sgs_ρa_implicit_stage_analytic!(Y, p, dtγ)
 
     # Cell-centred coefficients of the recurrence:
     #   ᶜnumerator            = ρa_old[i] / dtγ
-    #   ᶜdenominator          = 1/dtγ + α_top · (1 − implicit_detr_prefactor) − (ε − δ)
+    #   ᶜdenominator          = 1/dtγ + α_top · (1 − implicit_detr_prefactor)
+    #                           − (ε − δ + S_mp)
     #   ᶜmass_flux_factor_bot = α_bot · (1 − implicit_detr_prefactor)
     # where α_face = (ᶠinterp(ρʲ·J)/ᶠJ · ᶠu₃ʲ/Δz_face) / (ρʲ_upwind · Δz).
     # For upward flow the upwind density at the bottom face is ρʲ[i−1], which we
     # extract via `ᶠleft_bias(ᶜρʲs)`. The mass-flux-divergence component of the
     # detrainment is folded into `ᶜone_minus_implicit_detr_prefactor` (a
     # multiplicative correction on the implicit advection term), leaving the
-    # `(ε − δ)` term to carry only the area-bounding, velocity-scale
-    # entrainment, and buoyancy-based detrainment pieces.
+    # `(ε − δ + S_mp)` term to carry the area-bounding, velocity-scale
+    # entrainment, buoyancy-based detrainment, and microphysics mass-source
+    # pieces, with coefficients evaluated at the previous iterate.
     ᶜnumerator = p.scratch.ᶜtemp_scalar
     ᶜdenominator = p.scratch.ᶜtemp_scalar_2
     ᶜmass_flux_factor_bot = p.scratch.ᶜtemp_scalar_3
-    ᶜexplicit_entr_minus_detr = p.scratch.ᶜtemp_scalar_4
+    ᶜexplicit_linear_rate = p.scratch.ᶜtemp_scalar_4
     ᶠw = p.scratch.ᶠtemp_scalar
 
     n = n_mass_flux_subdomains(turbconv_model)
@@ -362,17 +381,20 @@ function solve_sgs_ρa_implicit_stage_analytic!(Y, p, dtγ)
                 ),
             ),
         )
-        @. ᶜexplicit_entr_minus_detr =
+        ᶜmicrophysics_rate =
+            microphysics_ρa_source_rate(p, p.atmos.microphysics_model, j)
+        @. ᶜexplicit_linear_rate =
             ᶜarea_bounding_entr_detrʲs.:($$j) +
             ᶜentr_vel_scaleʲs.:($$j) * ᶜinterp(ᶠw) -
-            ᶜlower_limiter_factor * detr_buoy_coeff * ᶜbuoy_inv_time_scale
+            ᶜlower_limiter_factor * detr_buoy_coeff * ᶜbuoy_inv_time_scale +
+            ᶜmicrophysics_rate
 
         @. ᶜnumerator = Y.c.sgsʲs.:($$j).ρa / dtγ
-        # Floor at 0.1/dtγ ⇒ (ε − δ) ≤ 0.9/dtγ (≈10× per-step growth cap).
+        # Floor at 0.1/dtγ ⇒ (ε − δ + S_mp) ≤ 0.9/dtγ (≈10× per-step growth bound).
         @. ᶜdenominator =
             max(
                 FT(0.1) / dtγ,
-                1 / dtγ - ᶜexplicit_entr_minus_detr +
+                1 / dtγ - ᶜexplicit_linear_rate +
                 ᶜone_minus_implicit_detr_prefactor * ᶜright_bias(
                     ᶠinterp(ᶜρʲs.:($$j) * ᶜJ) / ᶠJ * ᶠw,
                 ) / ᶜρʲs.:($$j) / ᶜdz,
