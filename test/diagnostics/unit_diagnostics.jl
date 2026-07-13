@@ -243,8 +243,11 @@ model_1m_pedmfx = CA.AtmosModel(; microphysics_model = CA.NonEquilibriumMicrophy
 model_chem_pedmfx = CA.AtmosModel(;
     microphysics_model = CA.EquilibriumMicrophysics0M(),
     turbconv_model = pedmfx, edmfx_model,
-    chemistry_model = CA.GasPhaseChem(),
+    chemistry_model = CA.GasPhaseChem(; species = (:q_gas_A,)),
 )
+# Chemistry diagnostics are registered per mechanism species at simulation-build
+# time; do the same here so `q_gas_A` / `q_gas_Aup` resolve in the tests below.
+CA.Diagnostics.register_chemistry_diagnostics!(model_chem_pedmfx)
 (Y_chem_pedmfx, p_chem_pedmfx) = build_state_cache(FT, model_chem_pedmfx; grid = column);
 
 ## VerticalDiffusion and DecayWithHeightDiffusion (no EDMF)

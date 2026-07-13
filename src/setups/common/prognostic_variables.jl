@@ -102,18 +102,41 @@ end
 # ============================================================================
 
 """
-Grid-scale chemistry tracers, gated on chemistry model.
+Grid-scale chemistry tracers
+Obin Sturm July 2026
+
+The tracer set is defined by the chemistry mechanism: one `ρq_gas_<species>`
+prognostic field is created per species named in `GasPhaseChem{N, names}`.
+`names` lives in the type parameters so the field names are known at compile time!
 """
 chemistry_variables(ρ, physical_state, ::Nothing) = (;)
-chemistry_variables(ρ, physical_state, ::AbstractChemistryModel) =
-    (; ρq_gas_A = ρ * physical_state.q_gas_A)
+function chemistry_variables(ρ, physical_state, ::GasPhaseChem{N, names}) where {N, names}
+    field_names = ntuple(i -> Symbol(:ρ, names[i]), Val(N))
+    field_values = ntuple(i -> ρ * gas_tracer_ic(physical_state, names[i]), Val(N))
+    return NamedTuple{field_names}(field_values)
+end
 
 """
-SGS chemistry tracers to include in the updraft NamedTuple.
+SGS chemistry tracers to include in the updraft NamedTuple. Mirrors the
+grid-scale species set defined by [`chemistry_variables`](@ref).
 """
 chemistry_sgs_variables(physical_state, ::Nothing) = (;)
-chemistry_sgs_variables(physical_state, ::AbstractChemistryModel) =
-    (; q_gas_A = physical_state.q_gas_A)
+function chemistry_sgs_variables(physical_state, ::GasPhaseChem{N, names}) where {N, names}
+    field_values = ntuple(i -> gas_tracer_ic(physical_state, names[i]), Val(N))
+    return NamedTuple{names}(field_values)
+end
+
+"""
+    gas_tracer_ic(physical_state, name)
+
+This is a helper function for the tracer definition functions above.
+It puts in concentration for gas species `name`, looked up in the
+`physical_state.gas_tracers` NamedTuple (keyed by species symbol) and defaulting
+to zero for species that are not listed.
+"""
+gas_tracer_ic(physical_state, name::Symbol) =
+    hasproperty(physical_state.gas_tracers, name) ?
+    getproperty(physical_state.gas_tracers, name) : zero(physical_state.T)
 
 # ============================================================================
 # Turbconv center dispatch
@@ -194,6 +217,7 @@ function turbconv_center_variables(
     local_geometry,
     params,
     turbconv_model::EDOnlyEDMFX,
+    _,
     _,
     _,
 )

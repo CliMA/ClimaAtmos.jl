@@ -851,24 +851,5 @@ add_diagnostic_variable!(short_name = "evu", units = "m^2 s^-1",
     compute = compute_evu,
 )
 
-###
-# Updraft passive gas tracer A (3d)
-###
-compute_q_gas_Aup(state, cache, time) =
-    compute_q_gas_Aup(
-        state, cache, time,
-        cache.atmos.turbconv_model, cache.atmos.chemistry_model,
-    )
-compute_q_gas_Aup(_, _, _, turbconv_model, chemistry_model) =
-    error_diagnostic_variable("q_gas_Aup", (turbconv_model, chemistry_model))
-
-compute_q_gas_Aup(state, _, _, ::PrognosticEDMFX, ::GasPhaseChem) =
-    (state.c.sgsʲs.:1).q_gas_A
-
-add_diagnostic_variable!(
-    short_name = "q_gas_Aup",
-    units = "kg kg^-1",
-    long_name = "Updraft Passive Gas Tracer A Concentration",
-    comments = "Concentration of passive gas tracer A in the first updraft",
-    compute = compute_q_gas_Aup,
-)
+# Updraft passive gas tracer diagnostics (`q_gas_<species>up`) are registered
+# per mechanism species by `register_chemistry_diagnostics!` in core_diagnostics.jl.
