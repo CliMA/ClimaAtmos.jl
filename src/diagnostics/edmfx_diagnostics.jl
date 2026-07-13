@@ -794,23 +794,20 @@ compute_edt(state, _, _, model::DecayWithHeightDiffusion, ::Nothing) =
 function compute_edt(state, cache, _,
     ::Nothing, ::Union{PrognosticEDMFX, EDOnlyEDMFX},
 )
-    turbconv_params = CAP.turbconv_params(cache.params)
-    (; ᶜlinear_buoygrad, ᶜstrain_rate_norm) = cache.precomputed
-    (; params) = cache
-
-    ᶜtke = @. lazy(specific(state.c.ρtke, state.c.ρ))
-    ᶜmixing_length_field = ᶜmixing_length(state, cache)
-    ᶜK_u = @. lazy(eddy_viscosity(turbconv_params, ᶜtke, ᶜmixing_length_field))
-    ᶜprandtl_nvec =
-        @. lazy(turbulent_prandtl_number(params, ᶜlinear_buoygrad, ᶜstrain_rate_norm))
-    ᶜK_h = @. lazy(eddy_diffusivity(ᶜK_u, ᶜprandtl_nvec))
-    return ᶜK_h
+    # The effective scalar diffusivity the model applies to the grid-mean
+    # fluxes: the face-native ᶠK_h plus the interfacial entrainment
+    # diffusivity ᶠK_entr (see set_face_diffusivities! and
+    # edmfx_sgs_diffusive_flux_tendency!), interpolated to centers for
+    # output. The interfacial contribution alone is output as `kentr`, so
+    # the turbulent-mixing part is recoverable as edt − kentr.
+    (; ᶠK_h, ᶠK_entr) = cache.precomputed
+    return @. lazy(ᶜinterp(ᶠK_h + ᶠK_entr))
 end
 
 add_diagnostic_variable!(short_name = "edt", units = "m^2 s^-1",
     long_name = "Eddy Diffusivity Coefficient for Temperature",
     standard_name = "atmosphere_heat_diffusivity",
-    comments = "Vertical diffusion coefficient for temperature due to parameterized eddies",
+    comments = "Effective vertical diffusion coefficient for scalars due to parameterized eddies (for EDMFX, the face-native coefficient applied to the grid-mean fluxes, including the interfacial entrainment contribution `kentr`, interpolated to cell centers)",
     compute = compute_edt,
 )
 
@@ -837,18 +834,44 @@ function compute_evu(
     ::Nothing,
     ::Union{PrognosticEDMFX, EDOnlyEDMFX},
 )
-    turbconv_params = CAP.turbconv_params(cache.params)
-    ᶜtke = @. lazy(specific(state.c.ρtke, state.c.ρ))
-    ᶜmixing_length_field = ᶜmixing_length(state, cache)
-    ᶜK_u = @. lazy(eddy_viscosity(turbconv_params, ᶜtke, ᶜmixing_length_field))
-    return ᶜK_u
+    # The effective viscosity the model applies to the grid-mean momentum
+    # flux: the face-native ᶠK_u plus the interfacial entrainment
+    # diffusivity ᶠK_entr, interpolated to centers for output (see
+    # compute_edt).
+    (; ᶠK_u, ᶠK_entr) = cache.precomputed
+    return @. lazy(ᶜinterp(ᶠK_u + ᶠK_entr))
 end
 
 add_diagnostic_variable!(short_name = "evu", units = "m^2 s^-1",
     long_name = "Eddy Viscosity Coefficient for Momentum",
     standard_name = "atmosphere_momentum_diffusivity",
-    comments = "Vertical diffusion coefficient for momentum due to parameterized eddies",
+    comments = "Effective vertical diffusion coefficient for momentum due to parameterized eddies (for EDMFX, the face-native coefficient applied to the grid-mean momentum flux, including the interfacial entrainment contribution `kentr`, interpolated to cell centers)",
     compute = compute_evu,
+)
+
+###
+# Interfacial entrainment diffusivity (3d)
+###
+compute_kentr(state, cache, time) =
+    compute_kentr(state, cache, time, cache.atmos.turbconv_model)
+compute_kentr(_, _, _, _) =
+    error_diagnostic_variable("Can only compute the interfacial entrainment \
+                               diffusivity with EDMFX")
+
+function compute_kentr(state, cache, _, ::Union{PrognosticEDMFX, EDOnlyEDMFX})
+    # Interfacial entrainment diffusivity K_e = γ w_e Δz of the
+    # interface-aware stability closure (see set_face_diffusivities!),
+    # interpolated to centers for output. Included in `edt`/`evu`; zero
+    # where no unresolved stable jump is detected or when
+    # EDMF_interface_entr_efficiency = 0.
+    (; ᶠK_entr) = cache.precomputed
+    return @. lazy(ᶜinterp(ᶠK_entr))
+end
+
+add_diagnostic_variable!(short_name = "kentr", units = "m^2 s^-1",
+    long_name = "Interfacial Entrainment Eddy Diffusivity",
+    comments = "Interfacial entrainment diffusivity K_e = γ w_e Δz of the EDMFX interface-aware stability closure, applied to all grid-mean fluxes (included in edt and evu), interpolated to cell centers",
+    compute = compute_kentr,
 )
 
 ###

@@ -356,6 +356,7 @@ function TurbulenceConvectionParameters(
         :cloud_fraction_steepness_scale => :cloud_fraction_steepness_scale,
         :cloud_fraction_eps_rel => :cloud_fraction_eps_rel,
         :cloud_fraction_sigma_abs => :cloud_fraction_sigma_abs,
+        :EDMF_interface_entr_efficiency => :interface_entr_efficiency,
         :EDMF_sfc_mass_flux_ustar_coeff => :sfc_mass_flux_ustar_coeff,
         :EDMF_convective_zi => :convective_zi,
         :EDMF_sfc_mass_flux_cap_fraction => :sfc_mass_flux_cap_fraction,

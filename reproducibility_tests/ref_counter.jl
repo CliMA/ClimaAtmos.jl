@@ -1,4 +1,4 @@
-380
+381
 
 # **README**
 #
@@ -32,6 +32,13 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+381
+- EDMFX inversion reconstruction: harmonic-mean face interpolation of eddy
+  diffusivities, stability-biased N², interface-aware effective stability
+  with interfacial entrainment diffusivity, a face-native
+  stability/diffusivity pipeline (also used for updraft internal diffusion),
+  and the resolvability filter-scale cap max(Δx_h, Δz) on the mixing length.
+
 380
 - Reparameterize the TKE dissipation coefficient: c_d = c_m c_b / Ri_c with
   Ri_c = mixing_length_Ri_crit (default 0.25). Configurations using the

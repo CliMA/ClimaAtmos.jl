@@ -225,32 +225,22 @@ function edmfx_sgs_diffusive_flux_tendency!(
     (; dt, params) = p
     turbconv_params = CAP.turbconv_params(params)
     (; ᶜu) = p.precomputed
-    (; ρtke_flux) = p.precomputed
     ᶠgradᵥ = Operators.GradientC2F()
-    ᶜtke = @. lazy(specific(Y.c.ρtke, Y.c.ρ))
 
     if p.atmos.edmfx_model.sgs_diffusive_flux isa Val{true}
 
-        (; ᶜlinear_buoygrad, ᶜstrain_rate_norm) = p.precomputed
-        # scratch to prevent GPU Kernel parameter memory error
-        ᶜmixing_length_field = p.scratch.ᶜtemp_scalar_2
-        ᶜmixing_length_field .= ᶜmixing_length(Y, p)
-        ᶜK_u = @. lazy(
-            eddy_viscosity(turbconv_params, ᶜtke, ᶜmixing_length_field),
-        )
-        ᶜprandtl_nvec = @. lazy(
-            turbulent_prandtl_number(
-                params,
-                ᶜlinear_buoygrad,
-                ᶜstrain_rate_norm,
-            ),
-        )
-        ᶜK_h = @. lazy(eddy_diffusivity(ᶜK_u, ᶜprandtl_nvec))
-
+        # Face-native eddy diffusivity/viscosity and interfacial entrainment
+        # diffusivity, evaluated at the faces where the fluxes live (see
+        # `set_face_diffusivities!`): the stability closure collapses K at an
+        # unresolved inversion at exactly (and only) the jump face, and K_e
+        # restores the finite-velocity entrainment flux there. K_e is added
+        # uniformly to all scalar and momentum face diffusivities, keeping
+        # energy, water, and momentum transport mutually consistent.
+        (; ᶠK_h, ᶠK_u, ᶠK_entr, ᶜl_mix) = p.precomputed
         ᶠρaK_h = p.scratch.ᶠtemp_scalar
-        @. ᶠρaK_h = ᶠinterp(Y.c.ρ) * ᶠinterp(ᶜK_h)
+        @. ᶠρaK_h = ᶠinterp(Y.c.ρ) * (ᶠK_h + ᶠK_entr)
         ᶠρaK_u = p.scratch.ᶠtemp_scalar_2
-        @. ᶠρaK_u = ᶠinterp(Y.c.ρ) * ᶠinterp(ᶜK_u)
+        @. ᶠρaK_u = ᶠinterp(Y.c.ρ) * (ᶠK_u + ᶠK_entr)
 
         # Total enthalpy diffusion, using the dry-static-energy + water-
         # enthalpy decomposition
@@ -297,6 +287,8 @@ function edmfx_sgs_diffusive_flux_tendency!(
         )
 
         if use_prognostic_tke(turbconv_model)
+            (; ρtke_flux) = p.precomputed
+            ᶜtke = @. lazy(specific(Y.c.ρtke, Y.c.ρ))
             # Turbulent TKE transport (diffusion)
             ᶜdivᵥ_ρtke = Operators.DivergenceF2C(
                 top = Operators.SetValue(C3(FT(0))),
@@ -311,7 +303,7 @@ function edmfx_sgs_diffusive_flux_tendency!(
                         turbconv_params,
                         Y.c.ρtke,
                         ᶜtke,
-                        ᶜmixing_length_field,
+                        ᶜl_mix,
                     ),
                     Y.c.ρtke / dt,
                 )
@@ -350,7 +342,19 @@ function edmfx_sgs_diffusive_flux_tendency!(
                 ρχ_name in gs_sedimenting_tracer_candidates ?
                 α_vert_diff_microphysics : one(α_vert_diff_microphysics)
             ᶜχ = (@. lazy(specific(ᶜρχ, Y.c.ρ)))
-            @. ᶜρχₜ_diffusion = ᶜdivᵥ_ρq(-(ᶠρaK_h * α * ᶠgradᵥ(ᶜχ)))
+            # α scales only the turbulent-mixing part; interfacial entrainment
+            # (K_e, inside ᶠρaK_h with weight α) crosses the interface at the
+            # same velocity for every scalar, so its full weight is restored:
+            # α ρ (K_h + K_e) + (1 - α) ρ K_e = ρ (α K_h + K_e).
+            # For passive tracers α = 1, giving the full ρ (K_h + K_e).
+            @. ᶜρχₜ_diffusion = ᶜdivᵥ_ρq(
+                -(
+                    (
+                        α * ᶠρaK_h +
+                        (1 - α) * ᶠinterp(Y.c.ρ) * ᶠK_entr
+                    ) * ᶠgradᵥ(ᶜχ)
+                ),
+            )
             @. ᶜρχₜ -= ᶜρχₜ_diffusion
         end
 
