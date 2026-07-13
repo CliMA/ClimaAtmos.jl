@@ -1,0 +1,52 @@
+# Bootstrap pipeline. This is the file the Buildkite UI uploads:
+#     buildkite-agent pipeline upload .buildkite/pipeline.yml
+#
+#   - On `main`: publish the merged PR's staged reproducibility reference.
+#   - Otherwise (PR or merge-queue build): a decider step runs
+#     .buildkite/decide_pipeline.sh, which either
+#       * reuses an already-tested PR's results and skips the build
+#         (merge-queue fast path, see .buildkite/should_skip_merge_queue.sh), or
+#       * uploads the full CI pipeline (.buildkite/full_pipeline.yml).
+#
+# Keeping the full pipeline out of the initially-loaded steps is what lets the
+# decider suppress it: a merge-queue build must still report success for the
+# queue to merge, but it does not have to re-run work the PR already did.
+
+agents:
+  queue: central
+  slurm_mem: 8G
+  modules: climacommon/2025_03_18
+
+env:
+  JULIA_LOAD_PATH: "${JULIA_LOAD_PATH}:${BUILDKITE_BUILD_CHECKOUT_PATH}/.buildkite"
+  OPENBLAS_NUM_THREADS: 1
+  SLURM_KILL_BAD_EXIT: 1
+  JULIA_NVTX_CALLBACKS: gc
+  JULIA_MAX_NUM_PRECOMPILE_FILES: 100
+  JULIA_DEPOT_PATH: "${BUILDKITE_BUILD_PATH}/${BUILDKITE_PIPELINE_SLUG}/${BUILDKITE_BUILD_NUMBER}/depot:${BUILDKITE_BUILD_PATH}/${BUILDKITE_PIPELINE_SLUG}/depot/shared"
+  COMMON_CONFIG_PATH: "config/common_configs"
+  CONFIG_PATH: "config/model_configs"
+  GPU_CONFIG_PATH: "config/gpu_configs"
+  PERF_CONFIG_PATH: "config/perf_configs"
+  MPI_CONFIG_PATH: "config/mpi_configs"
+
+steps:
+  - label: ":robot_face: Move reproducibility results to reference store"
+    if: 'build.branch == "main"'
+    retry: &retry_policy
+      automatic:
+        - exit_status: -1  # Retry on agent lost
+          limit: 1
+    concurrency: 1
+    concurrency_group: "depot/climaatmos-ci"
+    command:
+      # update_registry=false: the registry lives in the read-only depot/shared;
+      # skip the git-pull that would fail against it (see .buildkite/build_depot.sh).
+      - "julia --project=.buildkite -e 'using Pkg; Pkg.instantiate(; update_registry=false)'"
+      - "julia --color=yes --project=.buildkite reproducibility_tests/publish_reference.jl"
+
+  - label: ":arrows_counterclockwise: Decide pipeline"
+    if: 'build.branch != "main"'
+    retry: *retry_policy
+    command:
+      - ".buildkite/decide_pipeline.sh"
