@@ -106,10 +106,15 @@ function vertical_diffusion_boundary_layer_tendency!(
         )
     end
 
+    # Face diffusivities use a harmonic mean (reciprocal of interpolated
+    # reciprocal), so the diffusive flux collapses at faces separating a
+    # turbulent layer from quiescent, strongly stratified air (e.g., a
+    # capping inversion), where arithmetic averaging would assign ≈ K/2.
+    ϵK = eps(FT)
     if !disable_momentum_vertical_diffusion(p.atmos.vertical_diffusion)
         ᶠstrain_rate = compute_strain_rate_face_vertical(ᶜu)
         @. Yₜ.c.uₕ -= C12(
-            ᶜdivᵥ(-2 * ᶠinterp(Y.c.ρ) * ᶠinterp(ᶜK_h) * ᶠstrain_rate) / Y.c.ρ,
+            ᶜdivᵥ(-2 * ᶠinterp(Y.c.ρ) / ᶠinterp(1 / max(ᶜK_h, ϵK)) * ᶠstrain_rate) / Y.c.ρ,
         ) # assumes ᶜK_u = ᶜK_h
     end
 
@@ -129,7 +134,7 @@ function vertical_diffusion_boundary_layer_tendency!(
     ᶜq_vap = @. lazy(TD.vapor_specific_humidity(ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice))
     @. Yₜ.c.ρe_tot -= ᶜdivᵥ_ρe_tot(
         -(
-            ᶠinterp(Y.c.ρ) * ᶠinterp(ᶜK_h) *
+            ᶠinterp(Y.c.ρ) / ᶠinterp(1 / max(ᶜK_h, ϵK)) *
             (
                 ᶠgradᵥ(TD.dry_static_energy(thermo_params, ᶜT, ᶜΦ)) +
                 ᶠinterp(TD.enthalpy_vapor(thermo_params, ᶜT) + ᶜΦ) *
@@ -160,8 +165,8 @@ function vertical_diffusion_boundary_layer_tendency!(
         )
         @. ᶜρχₜ_diffusion = ᶜdivᵥ_ρχ(
             -(
-                ᶠinterp(Y.c.ρ) *
-                ᶠinterp(ᶜK_h_scaled) *
+                ᶠinterp(Y.c.ρ) /
+                ᶠinterp(1 / max(ᶜK_h_scaled, ϵK)) *
                 ᶠgradᵥ(specific(ᶜρχ, Y.c.ρ))
             ),
         )

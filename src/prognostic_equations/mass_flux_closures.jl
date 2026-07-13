@@ -175,7 +175,6 @@ function edmfx_vertical_diffusion_tendency!(
         (; params) = p
         (; ᶜρʲs) = p.precomputed
         FT = eltype(p.params)
-        turbconv_params = CAP.turbconv_params(params)
         n = n_mass_flux_subdomains(turbconv_model)
         ᶜdivᵥ_mse = Operators.DivergenceF2C(
             top = Operators.SetValue(C3(0)),
@@ -186,17 +185,17 @@ function edmfx_vertical_diffusion_tendency!(
             bottom = Operators.SetValue(C3(0)),
         )
 
-        (; ᶜlinear_buoygrad, ᶜstrain_rate_norm) = p.precomputed
-        ᶜtke = @. lazy(specific(Y.c.ρtke, Y.c.ρ))
-        # scratch to prevent GPU Kernel parameter memory error
-        ᶜmixing_length_field = p.scratch.ᶜtemp_scalar
-        ᶜmixing_length_field .= ᶜmixing_length(Y, p)
-        ᶜK_u = @. lazy(eddy_viscosity(turbconv_params, ᶜtke, ᶜmixing_length_field))
-        ᶜprandtl_nvec = @. lazy(
-            turbulent_prandtl_number(params, ᶜlinear_buoygrad, ᶜstrain_rate_norm),
-        )
-        ᶜK_h = @. lazy(eddy_diffusivity(ᶜK_u, ᶜprandtl_nvec))
-
+        # Updraft internal diffusion uses the same face-native environment
+        # diffusivity ᶠK_h as the grid-mean diffusion (see
+        # set_face_diffusivities! and edmfx_sgs_diffusive_flux_tendency!):
+        # the SGS turbulence that stirs updraft interiors is the same
+        # environment turbulence, and the face-native, interface-aware
+        # evaluation collapses the flux at faces bordering quiescent,
+        # strongly stratified air without interpolation. ᶠK_entr is
+        # deliberately not added here: it represents grid-mean interfacial
+        # entrainment, which for the updrafts is carried by the
+        # entrainment/detrainment closures.
+        (; ᶠK_h) = p.precomputed
         for j in 1:n
             ᶜρʲ = ᶜρʲs.:($j)
             ᶜmseʲ = Y.c.sgsʲs.:($j).mse
@@ -204,9 +203,9 @@ function edmfx_vertical_diffusion_tendency!(
             # Note: For this and other diffusive tendencies, we should use ρaʲ instead of ρʲ,
             # but it causes stability issues when ρaʲ is small
             @. Yₜ.c.sgsʲs.:($$j).mse -=
-                ᶜdivᵥ_mse(-(ᶠinterp(ᶜρʲ) * ᶠinterp(ᶜK_h) * ᶠgradᵥ(ᶜmseʲ))) / ᶜρʲ
+                ᶜdivᵥ_mse(-(ᶠinterp(ᶜρʲ) * ᶠK_h * ᶠgradᵥ(ᶜmseʲ))) / ᶜρʲ
             @. Yₜ.c.sgsʲs.:($$j).q_tot -=
-                ᶜdivᵥ_q_tot(-(ᶠinterp(ᶜρʲ) * ᶠinterp(ᶜK_h) * ᶠgradᵥ(ᶜq_totʲ))) / ᶜρʲ
+                ᶜdivᵥ_q_tot(-(ᶠinterp(ᶜρʲ) * ᶠK_h * ᶠgradᵥ(ᶜq_totʲ))) / ᶜρʲ
         end
 
         if !isempty(sgs_tracer_names(Y))
@@ -228,9 +227,7 @@ function edmfx_vertical_diffusion_tendency!(
                 ᶜχʲ = MatrixFields.get_field(Y.c.sgsʲs.:(1), χ_name)
                 ᶜχʲₜ = MatrixFields.get_field(Yₜ.c.sgsʲs.:(1), χ_name)
                 @. ᶜχʲₜ -=
-                    ᶜdivᵥ_q(
-                        -(ᶠinterp(ᶜρʲ) * ᶠinterp(ᶜK_h) * α * ᶠgradᵥ(ᶜχʲ)),
-                    ) / ᶜρʲ
+                    ᶜdivᵥ_q(-(ᶠinterp(ᶜρʲ) * ᶠK_h * α * ᶠgradᵥ(ᶜχʲ))) / ᶜρʲ
             end
         end
     end

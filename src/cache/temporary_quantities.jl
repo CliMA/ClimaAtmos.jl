@@ -41,9 +41,10 @@ function temporary_quantities(Y, atmos)
     FT = Spaces.undertype(center_space)
     uvw_vec = UVW(FT(0), FT(0), FT(0))
     return (;
-        ᶠtemp_scalar = Fields.Field(FT, face_space), # ᶠp, ᶠρK_h
-        ᶠtemp_scalar_2 = Fields.Field(FT, face_space), # ᶠρK_u
-        ᶠtemp_scalar_3 = Fields.Field(FT, face_space),
+        ᶠtemp_scalar = Fields.Field(FT, face_space), # ᶠp, ᶠρK_h; ᶠκ in set_face_diffusivities!
+        ᶠtemp_scalar_2 = Fields.Field(FT, face_space), # ᶠρK_u; ᶠN²_eff in set_face_diffusivities!
+        ᶠtemp_scalar_3 = Fields.Field(FT, face_space), # ᶠstrain in set_face_diffusivities!
+        ᶠtemp_scalar_4 = Fields.Field(FT, face_space), # ᶠPr in set_face_diffusivities!
         ᶜtemp_scalar = Fields.Field(FT, center_space), # ᶜ1
         ᶜtemp_scalar_2 = Fields.Field(FT, center_space), # ᶜtke_exch
         ᶜtemp_scalar_3 = Fields.Field(FT, center_space),

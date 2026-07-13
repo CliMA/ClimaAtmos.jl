@@ -86,10 +86,17 @@ function implicit_precomputed_quantities(Y, atmos)
             ᶜq_iceʲs = similar(Y.c, NTuple{n, FT}),
             ᶜρʲs = similar(Y.c, NTuple{n, FT}),
         ) : (;)
-    # Microphysics quantities that are written during set_implicit_precomputed_quantities!
-    # and depend on Y (through ρa⁰), so they need Dual-typed copies for autodiff.
-    # TODO - are they not needed?
-    implicit_mp_quantities = (;)
+    # Density-weighted 0M microphysics sources: rewritten from the current
+    # Newton iterate (through ρ, or ρaʲ/ρa⁰ under EDMF) by
+    # update_implicit_microphysics_cache!, so autodiff needs Dual-typed
+    # copies. (The 1M/2M implicit refresh writes only to scratch and to the
+    # surface-flux fields below.)
+    implicit_mp_quantities =
+        microphysics_model isa EquilibriumMicrophysics0M ?
+        (;
+            ᶜρ_dq_tot_dt = similar(Y.c, FT),
+            ᶜρ_de_tot_dt = similar(Y.c, FT),
+        ) : (;)
 
     # Surface precipitation fluxes need Dual-typed copies so that
     # set_precipitation_surface_fluxes! can be called during the implicit
@@ -148,7 +155,50 @@ function precomputed_quantities(Y, atmos)
     gs_quantities = (;
         ᶜwₜqₜ = similar(Y.c, Geometry.WVector{FT}),
         ᶜwₕhₜ = similar(Y.c, Geometry.WVector{FT}),
-        ᶜlinear_buoygrad = similar(Y.c, FT),
+        # Moist buoyancy gradient N² at centers; same physical quantity as the
+        # face-native `ᶠK`-pipeline `ᶠbuoygrad`, built from the centered
+        # (cloud-fraction-blended) vertical gradient instead of the two-point
+        # face gradient.
+        ᶜbuoygrad = similar(Y.c, FT),
+        # Interface-aware effective stability N²_eff at centers; the center
+        # counterpart of `ᶠN²_eff` in `set_face_diffusivities!`, formed as the
+        # max over adjacent faces of the face-local N²_eff (including the
+        # unresolved-jump term). Feeds the mixing-length and Pr_t(Ri) closures
+        # near sharp inversions.
+        ᶜN²_eff = similar(Y.c, FT),
+        # Pointwise chain-rule coefficients of the moist buoyancy gradient
+        # and exact two-point face gradients of (θ_li, q_tot); filled once
+        # per update by `set_buoyancy_gradient_inputs!` and shared by the
+        # centered, one-sided, and face-native buoyancy-gradient stencils.
+        ᶜbg_coeffs = similar(
+            Y.c,
+            @NamedTuple{Cθ_unsat::FT, ΔCθ::FT, Cq_unsat::FT, ΔCq::FT}
+        ),
+        ᶠ∂θli∂z = similar(Y.f, FT),
+        ᶠ∂qt∂z = similar(Y.f, FT),
+        # Face-native moist buoyancy gradient, face-native eddy diffusivity/
+        # viscosity, interfacial entrainment diffusivity K_e = γ w_e Δz, and
+        # the master mixing length at centers. Every consumer is an
+        # AbstractEDMF path, so they are allocated only for AbstractEDMF;
+        # other closures use the center ᶜK_h/ᶜK_u instead.
+        # Evaluating the stability closure at the faces, where the fluxes
+        # live, keeps the collapse of K at an unresolved inversion from
+        # leaking to the adjacent interior face.
+        #
+        # All four face fields are written by `set_face_diffusivities!` on
+        # every explicit update (ᶠK_entr is zeroed there when the interface
+        # entrainment closure is off), and ᶜl_mix by `materialized_mixing_length!`,
+        # before any read, so `similar` is safe.
+        (
+            atmos.turbconv_model isa AbstractEDMF ?
+            (;
+                ᶠbuoygrad = similar(Y.f, FT),
+                ᶠK_h = similar(Y.f, FT),
+                ᶠK_u = similar(Y.f, FT),
+                ᶠK_entr = similar(Y.f, FT),
+                ᶜl_mix = similar(Y.c, FT),
+            ) : (;)
+        )...,
         ᶜstrain_rate_norm = similar(Y.c, FT),
         sfc_conditions = similar(Spaces.level(Y.f, half), SCT),
     )
@@ -158,12 +208,12 @@ function precomputed_quantities(Y, atmos)
 
     # SGS covariances for hybrid cloud fraction and microphysics quadrature.
     # NonEquilibriumMicrophysics1M/2M always route through the quadrature API
-    # internally (with GridMeanSGS), so they also need covariance fields allocated.
-    uses_sgs_quadrature =
-        !isnothing(atmos.sgs_quadrature) ||
-        atmos.microphysics_model isa
-        Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M} ||
-        atmos.cloud_model isa Union{QuadratureCloud, MLCloud}
+    # internally (with GridMeanSGS), so they also need covariance fields
+    # allocated. This allocation guard must match the write guard in
+    # `set_covariance_cache!` and the ᶜl_mix-caching guard in
+    # `set_explicit_precomputed_quantities!`, so all three share the one
+    # `uses_covariances` predicate.
+    uses_sgs_quadrature = uses_covariances(atmos)
     uses_microphysics_quadrature_moments =
         atmos.microphysics_model isa
         Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M}
@@ -204,11 +254,11 @@ function precomputed_quantities(Y, atmos)
     }
 
     if atmos.microphysics_model isa EquilibriumMicrophysics0M
-        precipitation_quantities = (;
-            ᶜmp_tendency = similar(Y.c, MP0_NT),
-            ᶜρ_dq_tot_dt = similar(Y.c, FT), # Used in implicit tendency and surface fluxes
-            ᶜρ_de_tot_dt = similar(Y.c, FT),
-        )
+        # ᶜρ_dq_tot_dt / ᶜρ_de_tot_dt (used in the implicit tendency and the
+        # surface fluxes) live in implicit_precomputed_quantities: the
+        # implicit microphysics refresh rewrites them from the Newton
+        # iterate, so autodiff needs Dual-typed copies of them.
+        precipitation_quantities = (; ᶜmp_tendency = similar(Y.c, MP0_NT))
     elseif atmos.microphysics_model isa NonEquilibriumMicrophysics1M
         precipitation_quantities = (;
             ᶜwₗ = similar(Y.c, FT),
@@ -666,6 +716,22 @@ NVTX.@annotate function set_explicit_precomputed_quantities!(Y, p, t)
     end
 
     set_covariance_cache_and_cloud_fraction!(Y, p)
+
+    # Interfacial entrainment diffusivity K_e at faces (interface-aware
+    # stability closure). Needs the final cloud fraction and ᶜN²_eff
+    # from the covariance/cloud-fraction update above.
+    set_face_diffusivities!(Y, p)
+
+    # Master mixing length at centers for consumers that live at centers
+    # (TKE dissipation, covariance closure, updraft internal diffusion,
+    # diagnostics). When the configuration uses (co)variances, ᶜl_mix is
+    # materialized inside the covariance/cloud-fraction iteration (see
+    # materialized_mixing_length!), so it would be redundant to recompute it
+    # here; `uses_covariances` is the shared predicate that keeps the two
+    # paths from disagreeing.
+    if !uses_covariances(p.atmos) && turbconv_model isa AbstractEDMF
+        p.precomputed.ᶜl_mix .= ᶜmixing_length(Y, p)
+    end
 
     # Cache precipitation terminal velocities for grid mean and prognostic EDMF updrafts.
     set_precipitation_velocities!(
