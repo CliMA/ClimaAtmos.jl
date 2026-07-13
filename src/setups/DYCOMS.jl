@@ -52,16 +52,16 @@ function dycoms_profiles(thermo_params; θ, q_tot, u, v)
     return (; θ, q_tot, u, v, p, tke)
 end
 
-function center_initial_condition(setup::DYCOMS, local_geometry, params)
+function center_initial_condition(setup::DYCOMS, local_geometry, params; p_at_point = nothing)
     FT = eltype(params)
     thermo_params = CAP.thermodynamics_params(params)
     (; z) = local_geometry.coordinates
     (; prognostic_tke, profiles) = setup
     q_tot = profiles.q_tot(z)
+    p = evaluate_pressure(profiles.p, z; p_at_point)
     return physical_state(;
-        T = TD.air_temperature(thermo_params, TD.pθ_li(),
-            profiles.p(z), profiles.θ(z), q_tot),
-        p = profiles.p(z),
+        T = TD.air_temperature(thermo_params, TD.pθ_li(), p, profiles.θ(z), q_tot),
+        p,
         q_tot,
         u = profiles.u(z), v = profiles.v(z),
         tke = prognostic_tke ? FT(0) : profiles.tke(z),

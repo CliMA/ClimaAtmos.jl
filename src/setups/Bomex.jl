@@ -49,7 +49,7 @@ function bomex_profiles(thermo_params)
     return (; θ, q_tot, p, u, tke)
 end
 
-function center_initial_condition(setup::Bomex, local_geometry, params)
+function center_initial_condition(setup::Bomex, local_geometry, params; p_at_point = nothing)
     FT = eltype(params)
     thermo_params = CAP.thermodynamics_params(params)
     (; z) = local_geometry.coordinates
@@ -58,7 +58,7 @@ function center_initial_condition(setup::Bomex, local_geometry, params)
     # Evaluate profiles at z
     θ = profiles.θ(z)
     q_tot = profiles.q_tot(z)
-    p = profiles.p(z)
+    p = evaluate_pressure(profiles.p, z; p_at_point)
     T = TD.air_temperature(thermo_params, TD.pθ_li(), p, θ, q_tot)
 
     tke = prognostic_tke ? FT(0) : profiles.tke(z)

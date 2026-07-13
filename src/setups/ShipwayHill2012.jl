@@ -32,15 +32,16 @@ function ShipwayHill2012(; thermo_params)
     return (; θ, q_tot, p)
 end
 
-function center_initial_condition(setup::ShipwayHill2012, local_geometry, params)
+function center_initial_condition(setup::ShipwayHill2012, local_geometry, params; p_at_point = nothing)
     thermo_params = CAP.thermodynamics_params(params)
     (; θ, q_tot, p) = setup.profiles
     (; z) = local_geometry.coordinates
 
     q_tot_z = q_tot(z)
-    T = TD.air_temperature(thermo_params, TD.pθ_li(), p(z), θ(z), q_tot_z)
+    p_z = evaluate_pressure(p, z; p_at_point)
+    T = TD.air_temperature(thermo_params, TD.pθ_li(), p_z, θ(z), q_tot_z)
 
-    return physical_state(; T, p = p(z), q_tot = q_tot_z)
+    return physical_state(; T, p = p_z, q_tot = q_tot_z)
 end
 
 function surface_condition(::ShipwayHill2012, params)

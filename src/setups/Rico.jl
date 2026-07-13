@@ -43,7 +43,7 @@ function rico_profiles(thermo_params)
     return (; θ, q_tot, p, u, v, tke)
 end
 
-function center_initial_condition(setup::Rico, local_geometry, params)
+function center_initial_condition(setup::Rico, local_geometry, params; p_at_point = nothing)
     FT = eltype(params)
     thermo_params = CAP.thermodynamics_params(params)
     (; z) = local_geometry.coordinates
@@ -52,7 +52,7 @@ function center_initial_condition(setup::Rico, local_geometry, params)
     # Evaluate profiles at z
     θ_val = profiles.θ(z)
     q_tot_val = profiles.q_tot(z)
-    p_val = profiles.p(z)
+    p_val = evaluate_pressure(profiles.p, z; p_at_point)
     T = TD.air_temperature(thermo_params, TD.pθ_li(), p_val, θ_val, q_tot_val)
 
     tke_val = prognostic_tke ? FT(0) : profiles.tke(z)

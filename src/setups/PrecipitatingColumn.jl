@@ -34,7 +34,7 @@ function precipitating_column_profiles(thermo_params)
     return (; θ, q_tot, p, qR, qS, qL, qI, nL, nR)
 end
 
-function center_initial_condition(setup::PrecipitatingColumn, local_geometry, params)
+function center_initial_condition(setup::PrecipitatingColumn, local_geometry, params; p_at_point = nothing)
     thermo_params = CAP.thermodynamics_params(params)
     (; θ, q_tot, p, qR, qS, qL, qI, nL, nR) = setup.profiles
     (; z) = local_geometry.coordinates
@@ -42,14 +42,15 @@ function center_initial_condition(setup::PrecipitatingColumn, local_geometry, pa
     q_tot_z = q_tot(z)
     q_liq_z = qL(z) + qR(z)
     q_ice_z = qI(z) + qS(z)
+    p_z = evaluate_pressure(p, z; p_at_point)
 
     T = TD.air_temperature(
-        thermo_params, TD.pθ_li(), p(z), θ(z), q_tot_z, q_liq_z, q_ice_z,
+        thermo_params, TD.pθ_li(), p_z, θ(z), q_tot_z, q_liq_z, q_ice_z,
     )
 
     return physical_state(;
         T,
-        p = p(z),
+        p = p_z,
         q_tot = q_tot_z,
         q_liq = q_liq_z,
         q_ice = q_ice_z,

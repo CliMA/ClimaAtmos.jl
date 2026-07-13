@@ -235,16 +235,28 @@ function initial_state(
     center_space,
     face_space,
 )
-    center_ic(lg) = center_prognostic_variables(
-        center_initial_condition(setup, lg, params), lg, params, atmos_model,
-    )
+    ᶜlg = Fields.local_geometry_field(center_space)
+    ᶜp = preinterpolated_hydrostatic_pressure(setup, center_space)
+    center_c = if isnothing(ᶜp)
+        center_ic(lg) = center_prognostic_variables(
+            center_initial_condition(setup, lg, params), lg, params, atmos_model,
+        )
+        center_ic.(ᶜlg)
+    else
+        @. center_prognostic_variables(
+            center_initial_condition(setup, ᶜlg, params; p_at_point = ᶜp),
+            ᶜlg,
+            params,
+            atmos_model,
+        )
+    end
     face_ic(lg) = face_prognostic_variables(
         face_initial_condition(setup, lg, params), lg, atmos_model,
     )
     surface_space = Fields.level(face_space, Fields.half)
 
     return Fields.FieldVector(;
-        c = center_ic.(Fields.local_geometry_field(center_space)),
+        c = center_c,
         f = face_ic.(Fields.local_geometry_field(face_space)),
         surface_kwargs(surface_space, atmos_model.surface.temperature)...,
     )

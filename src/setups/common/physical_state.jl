@@ -133,8 +133,12 @@ const FunctionOrSpline =
 
 Wrap a column field so it can be evaluated at any height `z` by linear
 interpolation between grid levels, with flat extrapolation outside the column
-bounds. Backed by `ClimaInterpolations.Interpolation1D.Interpolate1D` over
-`SVector` knots and values.
+bounds. Backed by `ClimaInterpolations.Interpolation1D.Interpolate1D` over the
+column knot and value arrays on the field device.
+
+For IC generation on a GPU space, call [`interpolate_column_profile_to_space`](@ref)
+once and pass the result through `center_initial_condition(...; p_at_point=...)` rather
+than calling the profile directly inside a device broadcast.
 """
 struct ColumnInterpolatableField{I <: CI1D.Interpolate1D}
     itp::I
@@ -142,18 +146,63 @@ end
 function ColumnInterpolatableField(f::Fields.ColumnField)
     zdata = vec(parent(Fields.coordinate_field(f).z))
     fdata = vec(parent(f))
-    n = length(zdata)
-    z = SA.SVector{n}(zdata)
-    value = SA.SVector{n}(fdata)
     itp = CI1D.Interpolate1D(
-        z,
-        value;
+        zdata,
+        fdata;
         interpolationorder = CI1D.Linear(),
         extrapolationorder = CI1D.Flat(),
     )
     return ColumnInterpolatableField(itp)
 end
 @inline (f::ColumnInterpolatableField)(z) = f.itp(convert(eltype(f.itp.xsource), z))
+
+"""
+    evaluate_pressure(p_profile, z; p_at_point = nothing)
+
+Return a pre-interpolated pressure `p_at_point` when provided, otherwise evaluate
+`p_profile` at height `z`.
+"""
+@inline evaluate_pressure(p_profile, z; p_at_point = nothing) =
+    isnothing(p_at_point) ? p_profile(z) : p_at_point
+
+"""
+    interpolate_column_profile_to_space(cif::ColumnInterpolatableField, space)
+
+Interpolate a column profile onto `space` using `ClimaInterpolations.interpolate1d!`.
+Runs as a device-native column operation (no scalar indexing of GPU arrays).
+"""
+function interpolate_column_profile_to_space(
+    cif::ColumnInterpolatableField,
+    space::Spaces.AbstractSpace,
+)
+    ᶜz = Fields.coordinate_field(space).z
+    FT = Spaces.undertype(space)
+    ᶜout = Fields.Field(FT, space)
+    CI1D.interpolate1d!(
+        vec(parent(ᶜout)),
+        vec(cif.itp.xsource),
+        vec(parent(ᶜz)),
+        vec(cif.itp.fsource),
+        CI1D.Linear(),
+        CI1D.Flat(),
+    )
+    return ᶜout
+end
+
+"""
+    preinterpolated_hydrostatic_pressure(setup, center_space)
+
+If `setup` carries a hydrostatic [`ColumnInterpolatableField`](@ref) pressure
+profile, interpolate it onto `center_space` for use in `initial_state`.
+"""
+function preinterpolated_hydrostatic_pressure(setup, center_space)
+    hasproperty(setup, :profiles) || return nothing
+    profiles = getproperty(setup, :profiles)
+    hasproperty(profiles, :p) || return nothing
+    p = getproperty(profiles, :p)
+    p isa ColumnInterpolatableField || return nothing
+    return interpolate_column_profile_to_space(p, center_space)
+end
 
 """
     column_indefinite_integral(f, ϕ₀, zspan; nelems = 100)

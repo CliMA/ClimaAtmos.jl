@@ -65,14 +65,14 @@ function larcform1_profiles(thermo_params)
     return (; T = T_prof, q_tot = q_tot_prof, p = p_prof, u, v)
 end
 
-function center_initial_condition(setup::Larcform1, local_geometry, params)
+function center_initial_condition(setup::Larcform1, local_geometry, params; p_at_point = nothing)
     FT = eltype(params)
     (; z) = local_geometry.coordinates
     (; profiles) = setup
     tke = FT(0)
     return physical_state(;
         T = profiles.T(z),
-        p = profiles.p(z),
+        p = evaluate_pressure(profiles.p, z; p_at_point),
         q_tot = profiles.q_tot(z),
         u = profiles.u(z),
         v = profiles.v(z),

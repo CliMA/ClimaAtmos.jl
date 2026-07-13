@@ -29,7 +29,7 @@ function gate_iii_profiles(thermo_params)
     return (; T, q_tot, p, u, tke)
 end
 
-function center_initial_condition(setup::GATE_III, local_geometry, params)
+function center_initial_condition(setup::GATE_III, local_geometry, params; p_at_point = nothing)
     FT = eltype(params)
     (; z) = local_geometry.coordinates
     (; prognostic_tke, profiles) = setup
@@ -38,7 +38,7 @@ function center_initial_condition(setup::GATE_III, local_geometry, params)
 
     return physical_state(;
         T = profiles.T(z),
-        p = profiles.p(z),
+        p = evaluate_pressure(profiles.p, z; p_at_point),
         q_tot = profiles.q_tot(z),
         u = profiles.u(z),
         tke,
