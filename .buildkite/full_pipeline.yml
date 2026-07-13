@@ -16,24 +16,14 @@ env:
   PERF_CONFIG_PATH: "config/perf_configs"
   MPI_CONFIG_PATH: "config/mpi_configs"
 
+# NOTE: this pipeline is uploaded by .buildkite/decide_pipeline.sh, which only
+# runs on non-`main` builds.
 steps:
-  - label: ":robot_face: Move reproducibility results to reference store"
-    if: 'build.branch == "main"'
+  - label: "Initialize"
     retry: &retry_policy
       automatic:
         - exit_status: -1  # Retry on agent lost
           limit: 1
-    concurrency: 1
-    concurrency_group: "depot/climaatmos-ci"
-    command:
-      # update_registry=false: the registry lives in the read-only depot/shared;
-      # skip the git-pull that would fail against it (see .buildkite/build_depot.sh).
-      - "julia --project=.buildkite -e 'using Pkg; Pkg.instantiate(; update_registry=false)'"
-      - "julia --color=yes --project=.buildkite reproducibility_tests/publish_reference.jl"
-
-  - label: "Initialize"
-    if: 'build.branch != "main"'
-    retry: *retry_policy
     key: "init_cpu_env"
     command:
       - echo $$JULIA_DEPOT_PATH
@@ -49,14 +39,12 @@ steps:
   - wait
 
   - group: "Reproducibility"
-    if: 'build.branch != "main"'
     steps:
       - label: ":green_book: Reproducibility: Test infrastructure"
         retry: *retry_policy
         command: "julia --color=yes --project=.buildkite test/unit_reproducibility_infra.jl"
 
   - group: "Radiation"
-    if: 'build.branch != "main"'
     steps:
       - label: ":sun_with_face: Radiation: Gray"
         retry: *retry_policy
@@ -95,7 +83,6 @@ steps:
         artifact_paths: "single_column_radiative_equilibrium_allsky_idealized_clouds/output_active/*"
 
   - group: "Microphysics"
-    if: 'build.branch != "main"'
     steps:
       - label: ":umbrella: Microphysics: 1-moment sanity check"
         retry: *retry_policy
@@ -114,7 +101,6 @@ steps:
       #   artifact_paths: "single_column_precipitation_2M_test/output_active/*"
 
   - group: "Gravity wave"
-    if: 'build.branch != "main"'
     steps:
       - label: ":wavy_dash: Non-orograpic gravity wave: 3D unit test"
         retry: *retry_policy
@@ -156,7 +142,6 @@ steps:
         artifact_paths: "orographic_gravity_wave_test_garner2005/*"
 
   - group: "Prognostic EDMF"
-    if: 'build.branch != "main"'
     steps:
       - label: ":genie: Prognostic EDMF: Vertical advection test"
         retry: *retry_policy
@@ -414,7 +399,6 @@ steps:
           slurm_mem: 12GB
 
   - group: "Analytic Tests"
-    if: 'build.branch != "main"'
     steps:
       - label: ":crown: Analytic tests: No topography, 2D, Float64, GPU"
         retry: *retry_policy
@@ -465,7 +449,6 @@ steps:
           slurm_gpus: 1
 
   - group: "Conservation Tests"
-    if: 'build.branch != "main"'
     steps:
       - label: ":computer: Conservation tests: Dry baroclinic wave, no sources"
         retry: *retry_policy
@@ -493,7 +476,6 @@ steps:
       #  soft_fail: true
 
   - group: "Non-spherical Examples"
-    if: 'build.branch != "main"'
     steps:
       - label: ":package: Non-spherical: Reproducibility test for single column hydrostatic balance, Float64"
         retry: *retry_policy
@@ -553,7 +535,6 @@ steps:
         artifact_paths: "rcemipii_box_CRM_1M/output_active/*"
 
   - group: "Dry Spherical Examples"
-    if: 'build.branch != "main"'
     steps:
       - label: ":cyclone: Dycore: Global hydrostatic balance, Float64"
         retry: *retry_policy
@@ -616,7 +597,6 @@ steps:
         artifact_paths: "held_suarez/output_active/*"
 
   - group: "Spherical Examples"
-    if: 'build.branch != "main"'
     steps:
       - label: ":large_blue_circle: Sphere: Reproducibility test for moist baroclinic wave, 0M"
         retry: *retry_policy
@@ -722,7 +702,6 @@ steps:
           slurm_mem: 20GB
 
   - group: "Topography"
-    if: 'build.branch != "main"'
     steps:
       - label: ":mount_fuji: Topography: Idealized mountain (dcmip)"
         retry: *retry_policy
@@ -752,7 +731,6 @@ steps:
         artifact_paths: "baroclinic_wave_hughes2023/output_active/*"
 
   - group: "Restarting"
-    if: 'build.branch != "main"'
     steps:
       - label: ":computer: Restart: Basic correctness"
         retry: *retry_policy
@@ -855,7 +833,6 @@ steps:
       #  soft_fail: true
 
   - group: "MPI"
-    if: 'build.branch != "main"'
     steps:
       - label: ":metro: MPI: Prepare files for baroclininc wave restart test"
         retry: *retry_policy
@@ -956,7 +933,6 @@ steps:
           slurm_mem: 16GB
 
   - group: "Autodiff"
-    if: 'build.branch != "main"'
     steps:
       #- label: "Autodiff: Moist baroclinic wave, check conservation, sparse autodiff, Float64"
       #  command: >
@@ -1033,7 +1009,6 @@ steps:
       #     slurm_mem: 20GB
 
   - group: "Timestep cost"
-    if: 'build.branch != "main"'
     steps:
       - label: ":alarm_clock: Timestep cost: Moist baroclinic wave"
         retry: *retry_policy
@@ -1098,7 +1073,6 @@ steps:
           slurm_gpus: 1
 
   - group: "Allocations budget"
-    if: 'build.branch != "main"'
     steps:
       - label: ":fire: Allocations budget: Moist baroclininc wave, GPU"
         retry: *retry_policy
@@ -1225,7 +1199,6 @@ steps:
           slurm_mem: 24GB
 
   - group: "Checkbounds/Invalidations"
-    if: 'build.branch != "main"'
     steps:
       # TODO: we should somehow decouple this unit test from the perf env / scripts
       # Checkbounds
@@ -1255,17 +1228,14 @@ steps:
     continue_on_failure: true
 
   - label: ":robot_face: Print new rms tables"
-    if: 'build.branch != "main"'
     retry: *retry_policy
     command: "julia --color=yes --project=.buildkite reproducibility_tests/rms_summary.jl"
 
   - label: ":robot_face: Print new reference counter"
-    if: 'build.branch != "main"'
     retry: *retry_policy
     command: "julia --color=yes --project=.buildkite reproducibility_tests/print_new_ref_counter.jl"
 
   - label: ":bar_chart: Tabulate performance summary"
-    if: 'build.branch != "main"'
     retry: *retry_policy
     command: "julia --color=yes --project=.buildkite perf/tabulate_perf_summary.jl"
 
@@ -1278,6 +1248,5 @@ steps:
   - wait
 
   - label: ":robot_face: Stage reproducibility results"
-    if: 'build.branch != "main"'
     retry: *retry_policy
     command: "julia --color=yes --project=.buildkite reproducibility_tests/stage_output.jl"
