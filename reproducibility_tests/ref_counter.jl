@@ -1,4 +1,4 @@
-383
+384
 
 # **README**
 #
@@ -32,6 +32,12 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+384
+- Unify SGS hyperdiffusion with grid mean: each PrognosticEDMFX subdomain
+  inherits the grid-mean specific tendency (uniform hyperdiff in the grid
+  box). Split the total-enthalpy flux into dry-static-energy + water-species
+  contributions to avoid diffusing dry-air enthalpy along with water enthalpy.
+
 383
 - Add precipitation entrainment from environment into a widening updraft
 
