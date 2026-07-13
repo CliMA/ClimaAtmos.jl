@@ -143,9 +143,24 @@ than calling the profile directly inside a device broadcast.
 struct ColumnInterpolatableField{I <: CI1D.Interpolate1D}
     itp::I
 end
-function ColumnInterpolatableField(f::Fields.ColumnField)
+
+"""Materialize matching 1D knot/value arrays on the field device for `Interpolate1D`."""
+function _device_column_vectors(f::Fields.ColumnField)
     zdata = vec(parent(Fields.coordinate_field(f).z))
     fdata = vec(parent(f))
+    @assert length(zdata) == length(fdata)
+    typeof(zdata) === typeof(fdata) && return zdata, fdata
+    DA = ClimaComms.array_type(ClimaComms.device(parent(f)))
+    FT = eltype(fdata)
+    zout = DA{FT}(undef, length(zdata))
+    fout = DA{FT}(undef, length(fdata))
+    copyto!(zout, zdata)
+    copyto!(fout, fdata)
+    return zout, fout
+end
+
+function ColumnInterpolatableField(f::Fields.ColumnField)
+    zdata, fdata = _device_column_vectors(f)
     itp = CI1D.Interpolate1D(
         zdata,
         fdata;
