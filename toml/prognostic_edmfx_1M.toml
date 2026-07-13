@@ -16,38 +16,94 @@ value = 1.0e-5
 [EDMF_max_area]
 value = 0.7
 
-[turb_entr_param_vec]
-value = [0.0001, 50.0, 0.0]
-
-[entr_coeff]
-value = 0.1
+[cloud_fraction_steepness_scale]
+value = 2.2524790207094734
+type = "float"
 
 [min_area_limiter_scale]
 value = 0.0001
 
-[min_area_limiter_power]
-value = 1
+[mixing_length_tke_surf_flux_coeff]
+value = 3.006221957053079
+type = "float"
 
-[detr_buoy_coeff]
-value = 1
-
-[detr_massflux_vertdiv_coeff]
-value = 0.1
+[tracer_vertical_diffusion_factor]
+value = 0
 
 [max_area_limiter_scale]
-value = 0.001
+value = 0.0017259183824867878
+type = "float"
+
+[rain_autoconversion_timescale]
+value = 919.5957180116443
+type = "float"
+
+[EDMF_interface_entr_efficiency]
+value = 0.4110239403466879
+type = "float"
+
+[detr_buoy_coeff]
+value = 1.03883549894178
+type = "float"
+
+[rain_cross_section_size_relation_coefficient_chia]
+value = 2.744363218996045
+type = "float"
+
+[detr_massflux_vertdiv_coeff]
+value = 0.22294524093706336
+type = "float"
+
+[entr_coeff]
+value = 0.03163484120052101
+type = "float"
+
+[diagnostic_covariance_coeff]
+value = 1.5509719685802654
+type = "float"
+
+[mixing_length_Ri_crit]
+value = 0.5504199936604905
+type = "float"
+
+[mixing_length_eddy_viscosity_coefficient]
+value = 1.123106001375341
+type = "float"
+
+[condensation_evaporation_timescale]
+value = 100
+
+[turb_entr_param_vec]
+value = [0.00014879740592738957, 23.627531870790623]
+type = "float"
+
+[Tq_correlation_coefficient]
+value = 0.04010761439156241
+type = "float"
+
+[snow_cross_section_size_relation_coefficient_chia]
+value = 3.0
+
+[fixed_rain_terminal_velocity]
+value = 4.3265983393837875
+type = "float"
 
 [max_area_limiter_power]
+value = 0.8695029122076363
+type = "float"
+
+[min_area_limiter_power]
 value = 1
 
 [pressure_normalmode_drag_coeff]
 value = 8.0
 
-[tracer_vertical_diffusion_factor]
-value = 0
-
-[condensation_evaporation_timescale]
-value = 100
+[fixed_snow_terminal_velocity]
+value = 2.0
 
 [sublimation_deposition_timescale]
 value = 100
+
+[cloud_fraction_eps_rel]
+value = 0.015707779545857004
+type = "float"
