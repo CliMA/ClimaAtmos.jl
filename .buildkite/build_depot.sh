@@ -17,6 +17,15 @@ fi
 echo "--- Instantiate + precompile"
 julia --project=.buildkite -e 'using Pkg; Pkg.instantiate(); Pkg.precompile(strict=true)'
 
+# Also bake --check-bounds=yes caches. The CI "Checkbounds" step runs
+# perf/benchmark.jl under --check-bounds=yes, Julia folds the check-bounds mode
+# into the precompile cache slug, so the default (auto) caches above are stale
+# for that step and it would otherwise recompile the whole tree into its
+# per-build depot. These caches use a distinct slug and coexist with the ones
+# above, letting that step read the shared depot instead of rebuilding it.
+echo "--- Precompile (--check-bounds=yes)"
+julia --check-bounds=yes --project=.buildkite -e 'using Pkg; Pkg.precompile(strict=true)'
+
 echo "--- Lock and publish (atomic symlink swap)"
 chmod -R a-w "$STAGING"
 cd "$SHARED_DEPOT_ROOT"
