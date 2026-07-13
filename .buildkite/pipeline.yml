@@ -542,6 +542,14 @@ steps:
           --job_id box_density_current_test
         artifact_paths: "box_density_current_test/output_active/*"
 
+      - label: ":package: Non-spherical: 3D box, dry density current, acoustic substepping, conservation"
+        retry: *retry_policy
+        command: >
+          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+          --config_file $CONFIG_PATH/box_acoustic_substep_conservation.yml
+          --job_id box_acoustic_substep_conservation
+        artifact_paths: "box_acoustic_substep_conservation/output_active/*"
+
       - label: ":package: Non-spherical: Reproducibility test for radiative convective equilibrium in a 3D box"
         retry: *retry_policy
         command: >

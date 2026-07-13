@@ -272,7 +272,7 @@ function jacobian_from_parsed_args(parsed_args)
 end
 
 function ode_configuration(::Type{FT}, args) where {FT}
-    return ode_configuration(
+    inner_algo = ode_configuration(
         FT,
         args["ode_algo"],
         args["update_jacobian_every"],
@@ -285,6 +285,37 @@ function ode_configuration(::Type{FT}, args) where {FT}
         args["newton_rtol"],
         args["jvp_step_adjustment"],
     )
+    substeps = string(args["acoustic_substeps"])
+    substeps == "0" && return inner_algo
+    vertical =
+        args["acoustic_substep_vertical"] == "explicit" ? ExplicitVertical() :
+        ImplicitVertical()
+    n_sub = substeps == "auto" ? 0 : parse(Int, substeps)
+    damping_form = acoustic_damping_form(args["acoustic_substep_damping_form"])
+    β_d = acoustic_damping_coefficient(args["acoustic_substep_damping"])
+    return AcousticMultirate(
+        inner_algo,
+        n_sub,
+        vertical,
+        args["acoustic_substep_order"],
+        β_d,
+        damping_form,
+    )
+end
+
+# Resolve the acoustic-substepping divergence-damping form from its config value.
+function acoustic_damping_form(form)
+    form == "3d" && return FullDivergenceDamping()
+    form == "horizontal" && return HorizontalDivergenceDamping()
+    error("Unknown acoustic_substep_damping_form: $form")
+end
+
+# Resolve the divergence-damping coefficient β_d. "auto" resolves to 0.4; a
+# number or a numeric string keeps its direct value.
+acoustic_damping_coefficient(β_d::Real) = Float64(β_d)
+function acoustic_damping_coefficient(β_d::AbstractString)
+    β_d == "auto" || return parse(Float64, β_d)
+    return 0.4
 end
 
 function get_comms_context(parsed_args)
