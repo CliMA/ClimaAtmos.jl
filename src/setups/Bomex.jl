@@ -63,7 +63,10 @@ function center_initial_condition(setup::Bomex, local_geometry, params)
 
     tke = prognostic_tke ? FT(0) : profiles.tke(z)
 
-    return physical_state(; T, p, q_tot, u = profiles.u(z), tke, q_gas_A = FT(1))
+    return physical_state(;
+        T, p, q_tot, u = profiles.u(z), tke,
+        gas_tracers = (; q_gas_A = FT(1), q_gas_B = FT(1), q_gas_AB = FT(1)),
+    )
 end
 
 function surface_condition(::Bomex, params)

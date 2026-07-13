@@ -32,6 +32,10 @@ function setup_diagnostics_and_writers(
     (; default, additional, interpolation_num_points, output_at_levels) =
         diagnostics_config
 
+    # Register mechanism-driven chemistry diagnostics (q_gas_<species>[up]) so
+    # that requested/default names resolve for any mechanism, not just ABBA.
+    CAD.register_chemistry_diagnostics!(model)
+
     all_diagnostics = []
 
     num_points = if isnothing(interpolation_num_points)

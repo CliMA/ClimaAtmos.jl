@@ -1293,7 +1293,6 @@ EDMFColumnPlotsWithPrecip = Union{
     Val{:prognostic_edmfx_rico_column},
     Val{:prognostic_edmfx_rico_column_2M},
     Val{:prognostic_edmfx_trmm_column},
-    Val{:prognostic_edmfx_bomex_tracerA_column},
 }
 
 """
@@ -1431,7 +1430,6 @@ function make_plots(
         "wa", "waup", "ta", "taup", "hus", "husup", "arup", "tke", "ua",
         "thetaa", "thetaaup", "hur", "hurup", "lmix",
         "cl", "clw", "clwup", "cli", "cliup",
-        "q_gas_A", "q_gas_Aup",
         precip_names...,
     ]
     short_names = filter(
@@ -1461,6 +1459,10 @@ function make_plots(
     period_inst =
         available_periods_inst[argmin(CA.time_to_seconds.(available_periods_inst))]
 
+    short_names = filter(
+        n -> n in ClimaAnalysis.available_vars(simdirs[1]),
+        short_names,
+    )
     short_name_tuples = pair_edmf_names(short_names)
     var_groups_zt =
         map_comparison(simdirs, short_name_tuples) do simdir, name_tuple

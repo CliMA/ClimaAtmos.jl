@@ -226,7 +226,6 @@ _sgs_tracer_names(::Val{true}, Y) =
         MatrixFields.top_level_names(Y.c.sgsʲs.:(1)),
     )
 
-
 """
     sgs_weight_function(a, a_half)
 
@@ -479,7 +478,6 @@ Arguments:
   - `ᶜρʲs`: Iterable of draft densities.
 
       + Typically `p.precomputed.ᶜρʲs`
-
   - `turbconv_model`: The turbulence convection model (e.g., `PrognosticEDMFX`, or others).
 
 Returns:

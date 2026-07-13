@@ -48,5 +48,8 @@ function center_initial_condition(setup::DecayingProfile, local_geometry, params
         T += _temperature_perturbation(local_geometry.coordinates)
     end
 
-    return physical_state(; T, p)
+    # q_gas_AB (ABBA) and q_gas_ED (EDDE) are the parent molecules of the two
+    # test mechanisms; each setup only creates the tracers its mechanism defines,
+    # so listing both here is harmless and lets either mechanism start identically.
+    return physical_state(; T, p, gas_tracers = (; q_gas_AB = FT(0.6), q_gas_ED = FT(0.6)))
 end

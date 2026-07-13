@@ -615,7 +615,6 @@ Create a PrognosticEDMFX model with the specified number of updrafts, TKE config
   - `n_updrafts::Int`: Number of updraft subdomains
 
   - `prognostic_tke::Bool`: Whether to use prognostic TKE (true) or diagnostic TKE (false)
-
   - `area_fraction`: "Small" area fraction threshold, is the `a_half` argument in `sgs_weight_function`
 
       + Note: Float type is inferred from this value
@@ -873,7 +872,28 @@ end
 
 
 abstract type AbstractChemistryModel end
-struct GasPhaseChem <: AbstractChemistryModel end
+
+"""
+    GasPhaseChem{N, names}
+
+Gas-phase chemistry model with tracers specified by a chemistry mechanism.
+The `N` species `names` (a `Tuple` of `Symbol`s, e.g. `(:q_gas_A, :q_gas_B)`) are
+a type parameters! This way it's mechanism agnostic and the fields
+are figured out at compile time
+"""
+struct GasPhaseChem{N, names} <: AbstractChemistryModel
+    config_path::Union{String, Nothing}
+end
+
+# Build from a MICM config file, reading the species list from the mechanism.
+GasPhaseChem(config_path::Union{String, Nothing}) =
+    GasPhaseChem(; species = chemistry_species_names(config_path), config_path)
+
+# Build directly from an explicit species tuple (species baked into the type).
+GasPhaseChem(;
+    species::Tuple{Vararg{Symbol}} = (),
+    config_path::Union{String, Nothing} = nothing,
+) = GasPhaseChem{length(species), species}(config_path)
 
 """
     AtmosChem

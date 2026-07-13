@@ -147,6 +147,25 @@ NVTX.@annotate function ogw_model_callback!(integrator)
     return nothing
 end
 
+NVTX.@annotate function enforce_physical_constraints_callback!(integrator)
+    Y = integrator.u
+    p = integrator.p
+    t = integrator.t
+
+    enforce_physical_constraints!(Y, p, t, p.atmos)
+    return nothing
+end
+
+# Callback wrapper for chemistry update
+function update_chemistry_callback!(integrator)
+    Y = integrator.u
+    p = integrator.p
+    t = integrator.t
+
+    update_chemistry!(Y, p, t, p.atmos.chemistry_model)
+    return nothing
+end
+
 #Uniform insolation, magnitudes from Wing et al. (2018)
 #Note that the TOA downward shortwave fluxes won't be the same as the values in the paper if add_isothermal_boundary_layer is true
 function set_insolation_variables!(Y, p, t, ::RCEMIPIIInsolation)

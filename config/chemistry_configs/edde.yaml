@@ -1,0 +1,58 @@
+version: "1.0.0"
+name: EDDE
+# Structurally identical to abba.yaml (ED <-> E + D), only the species and
+# reaction names differ. Used to verify that the chemistry code is mechanism
+# agnostic: an EDDE run should behave exactly like an ABBA run.
+species:
+  - name: q_gas_E
+    __absolute tolerance: 1e-4
+    __long name: atom_E
+    __do advect: true
+    __initial concentration: 0.0
+    molecular weight [kg mol-1]: 0.029
+  - name: q_gas_D
+    __absolute tolerance: 1e-4
+    __long name: atom_D
+    __do advect: true
+    __initial concentration: 0.0
+    molecular weight [kg mol-1]: 0.029
+  - name: q_gas_ED
+    __absolute tolerance: 1e-4
+    __long name: molecule_ED
+    __do advect: true
+    __initial concentration: 1.0
+    molecular weight [kg mol-1]: 0.058
+
+phases:
+  - name: gas
+    species:
+      - q_gas_E
+      - q_gas_D
+      - q_gas_ED
+
+reactions:
+  - type: USER_DEFINED
+    gas phase: gas
+    reactants:
+      - species name: q_gas_ED
+        coefficient: 1
+    products:
+      - species name: q_gas_E
+        coefficient: 1
+      - species name: q_gas_D
+        coefficient: 1
+    scaling factor: 2.0e-3
+    name: forward_ED_to_E_D
+
+  - type: USER_DEFINED
+    gas phase: gas
+    reactants:
+      - species name: q_gas_E
+        coefficient: 1
+      - species name: q_gas_D
+        coefficient: 1
+    products:
+      - species name: q_gas_ED
+        coefficient: 1
+    scaling factor: 1.0e-3
+    name: reverse_E_D_to_ED

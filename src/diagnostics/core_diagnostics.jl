@@ -1146,20 +1146,65 @@ add_diagnostic_variable!(
 )
 
 ###
-# Passive gas tracer A (3d)
+# Gas tracer diagnostics (mechanism agnostic)
 ###
-compute_q_gas_A(state, cache, time) =
-    compute_q_gas_A(state, cache, time, cache.atmos.chemistry_model)
-compute_q_gas_A(_, _, _, chemistry_model) =
-    error_diagnostic_variable("q_gas_A", chemistry_model)
+# Chemistry diagnostics cannot be registered at load time because the species
+# are only known once a mechanism config is read. Instead,
+# `register_chemistry_diagnostics!` registers a grid-mean `q_gas_<species>` (and,
+# under prognostic EDMFX, an updraft `q_gas_<species>up`) diagnostic for each
+# species in the model's chemistry mechanism. It is called once when the
+# simulation is built (before diagnostics are resolved) and is idempotent, so it
+# is safe to call across multiple simulations in one session.
+"""
+    register_chemistry_diagnostics!(model)
 
-compute_q_gas_A(state, _, _, ::GasPhaseChem) =
-    @. lazy(specific(state.c.ρq_gas_A, state.c.ρ))
+Register a grid-mean `q_gas_<species>` diagnostic (and an updraft `...up`
+variant under prognostic EDMFX) for every species in the model's chemistry
+mechanism. No-op without a chemistry model; idempotent for names already in
+`ALL_DIAGNOSTICS`.
+"""
+register_chemistry_diagnostics!(model) =
+    register_chemistry_diagnostics!(model.chemistry_model, model.turbconv_model)
+register_chemistry_diagnostics!(::Nothing, _) = nothing
+function register_chemistry_diagnostics!(
+    ::GasPhaseChem{N, names},
+    turbconv_model,
+) where {N, names}
+    for name in names
+        _register_gas_tracer_diagnostic!(name)
+        turbconv_model isa PrognosticEDMFX &&
+            _register_gas_tracer_up_diagnostic!(name)
+    end
+    return nothing
+end
 
-add_diagnostic_variable!(
-    short_name = "q_gas_A",
-    units = "kg kg^-1",
-    long_name = "Passive Gas Tracer A Concentration",
-    comments = "Grid-mean specific concentration of passive gas tracer A",
-    compute = compute_q_gas_A,
-)
+function _register_gas_tracer_diagnostic!(name::Symbol)
+    short = String(name)
+    haskey(ALL_DIAGNOSTICS, short) && return nothing
+    ρname = Symbol(:ρ, name)
+    add_diagnostic_variable!(
+        short_name = short,
+        units = "kg kg^-1",
+        long_name = "Gas Tracer $short Concentration",
+        comments = "Grid-mean specific concentration of gas tracer $short",
+        compute = (state, _, _) -> begin
+            ρχ = getproperty(state.c, ρname)
+            @. lazy(specific(ρχ, state.c.ρ))
+        end,
+    )
+    return nothing
+end
+
+function _register_gas_tracer_up_diagnostic!(name::Symbol)
+    short = String(name) * "up"
+    haskey(ALL_DIAGNOSTICS, short) && return nothing
+    long = String(name)
+    add_diagnostic_variable!(
+        short_name = short,
+        units = "kg kg^-1",
+        long_name = "Updraft Gas Tracer $long Concentration",
+        comments = "Draft specific concentration of gas tracer $long",
+        compute = (state, _, _) -> getproperty(state.c.sgsʲs.:(1), name),
+    )
+    return nothing
+end
