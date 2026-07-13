@@ -866,10 +866,13 @@ function update_diffusion_jacobian!(
     #   interpolation of the center K (see
     #   vertical_diffusion_boundary_layer_tendency!).
     # - Smagorinsky: arithmetic interpolation, matching its tendency.
-    (; ᶠK_h, ᶠK_u, ᶠK_entr) = p.precomputed
+    # ᶠK_h/ᶠK_u/ᶠK_entr exist only for AbstractEDMF (see precomputed_quantities);
+    # the other closures use the center ᶜK_h/ᶜK_u, so the face fields are
+    # destructured inside the AbstractEDMF branches only.
     turbconv_model = p.atmos.turbconv_model
     ϵK = eps(FT)
     if turbconv_model isa AbstractEDMF
+        (; ᶠK_h, ᶠK_entr) = p.precomputed
         @. ∂ᶠρχ_dif_flux_∂ᶜχ =
             DiagonalMatrixRow(ᶠinterp(ᶜρ) * (ᶠK_h + ᶠK_entr)) ⋅
             ᶠgradᵥ_matrix()
@@ -888,6 +891,7 @@ function update_diffusion_jacobian!(
         !disable_momentum_vertical_diffusion(p.atmos.vertical_diffusion)
     )
         if turbconv_model isa AbstractEDMF
+            (; ᶠK_u, ᶠK_entr) = p.precomputed
             @. ∂ᶠρχ_dif_flux_∂ᶜχ =
                 DiagonalMatrixRow(ᶠinterp(ᶜρ) * (ᶠK_u + ᶠK_entr)) ⋅
                 ᶠgradᵥ_matrix()

@@ -474,7 +474,7 @@ end
 """
     set_stability_buoyancy_gradient!(Y, p, thermo_params)
 
-Fills `p.precomputed.ᶜbuoygrad_stab` with an interface-aware effective
+Fills `p.precomputed.ᶜN²_eff` with an interface-aware effective
 stability: at each cell center, the buoyancy gradient is evaluated twice, with
 upward- and downward-biased one-sided vertical gradients of `θ_li` and `q_tot`
 (i.e., the exact two-point gradients of the two adjacent faces), each is
@@ -494,12 +494,12 @@ Away from sharp interfaces both one-sided gradients agree with the centered
 one and the jump term is `O((Δz/l_N)²)`, so the correction is inactive.
 
 This field feeds the mixing-length and `Pr_t(Ri)` closures only; the TKE
-buoyancy production keeps the centered `ᶜlinear_buoygrad`, so convective
+buoyancy production keeps the centered `ᶜbuoygrad`, so convective
 production in unstable layers is unaffected. Without prognostic TKE the jump
 term is unavailable and the pure one-sided max is used.
 """
 NVTX.@annotate function set_stability_buoyancy_gradient!(Y, p, thermo_params)
-    (; ᶜbuoygrad_stab, ᶜcloud_fraction) = p.precomputed
+    (; ᶜN²_eff, ᶜcloud_fraction) = p.precomputed
     (; ᶜbg_coeffs, ᶠ∂θli∂z, ᶠ∂qt∂z) = p.precomputed
     # One-sided center gradients: the exact face gradients (see
     # `set_buoyancy_gradient_inputs!`) brought to centers from the upper
@@ -532,12 +532,12 @@ NVTX.@annotate function set_stability_buoyancy_gradient!(Y, p, thermo_params)
         c_b = CAP.static_stab_coeff(turbconv_params)
         ᶜtke_pos = @. lazy(max(specific(Y.c.ρtke, Y.c.ρ), 0))
         ᶠΔz = Fields.Δz_field(axes(Y.f))
-        @. ᶜbuoygrad_stab = max(
+        @. ᶜN²_eff = max(
             interface_effective_N²(ᶜN²_up, ᶜright_bias(ᶠΔz), ᶜtke_pos, c_b),
             interface_effective_N²(ᶜN²_dn, ᶜleft_bias(ᶠΔz), ᶜtke_pos, c_b),
         )
     else
-        @. ᶜbuoygrad_stab = max(ᶜN²_up, ᶜN²_dn)
+        @. ᶜN²_eff = max(ᶜN²_up, ᶜN²_dn)
     end
     return nothing
 end
@@ -653,10 +653,7 @@ No-op (fields remain zero) for non-EDMF configurations or without prognostic
 TKE.
 """
 NVTX.@annotate function set_face_diffusivities!(Y, p)
-    (
-        p.atmos.turbconv_model isa AbstractEDMF &&
-        MatrixFields.has_field(Y, @name(c.ρtke))
-    ) || return nothing
+    p.atmos.turbconv_model isa AbstractEDMF || return nothing
     (; ᶠbuoygrad, ᶠK_h, ᶠK_u, ᶠK_entr) = p.precomputed
     (; ᶜbg_coeffs, ᶠ∂θli∂z, ᶠ∂qt∂z) = p.precomputed
     (; ᶜcloud_fraction, ᶜstrain_rate_norm) = p.precomputed
@@ -730,9 +727,11 @@ NVTX.@annotate function set_face_diffusivities!(Y, p)
     )
     @. ᶠK_h = eddy_diffusivity(ᶠK_u, ᶠPr)
 
-    # Interfacial entrainment diffusivity; `A` is constant over a run, and
-    # the fields are zero-initialized, so the closure can be skipped entirely
-    # when interfacial entrainment is disabled.
+    # Interfacial entrainment diffusivity; `A` is constant over a run, so the
+    # (comparatively expensive) closure is skipped when interfacial entrainment
+    # is disabled. ᶠK_entr is still zeroed on every update in that case, so
+    # downstream reads (SGS fluxes, TKE budget, diffusion Jacobian) always see
+    # a defined value regardless of how the field was allocated.
     if !iszero(A_entr)
         val_energy_containing = Val{:energy_containing}()
         @. ᶠK_entr = interface_entrainment_diffusivity(
@@ -743,6 +742,8 @@ NVTX.@annotate function set_face_diffusivities!(Y, p)
             c_b,
             A_entr,
         )
+    else
+        @. ᶠK_entr = 0
     end
     return nothing
 end
@@ -803,19 +804,19 @@ function ᶜmixing_length(Y, p, property::Val{P} = Val{:master}()) where {P}
     # (see set_stability_buoyancy_gradient!); feeds l_N and Pr_t(Ri). The
     # centered gradient feeds the TKE production-dissipation balance for
     # l_TKE, consistent with the actual TKE budget.
-    (; ᶜbuoygrad_stab, ᶜlinear_buoygrad, ᶜstrain_rate_norm) = p.precomputed
+    (; ᶜN²_eff, ᶜbuoygrad, ᶜstrain_rate_norm) = p.precomputed
     ᶜz = Fields.coordinate_field(Y.c).z
     z_sfc = Fields.level(Fields.coordinate_field(Y.f).z, Fields.half)
     ᶜΔ_f = resolvability_filter_scale(axes(Y.c))
 
-    ᶜtke =
-        MatrixFields.has_field(Y, @name(c.ρtke)) ?
-        (@. lazy(specific(Y.c.ρtke, Y.c.ρ))) : (@. lazy(zero(Y.c.ρ)))
+    # ᶜmixing_length is only evaluated for AbstractEDMF, which always carries
+    # Y.c.ρtke.
+    ᶜtke = @. lazy(specific(Y.c.ρtke, Y.c.ρ))
     sfc_tke = Fields.level(ᶜtke, 1)
 
     ᶜprandtl_nvec = p.scratch.ᶜtemp_scalar_5
     @. ᶜprandtl_nvec =
-        turbulent_prandtl_number(params, ᶜbuoygrad_stab, ᶜstrain_rate_norm)
+        turbulent_prandtl_number(params, ᶜN²_eff, ᶜstrain_rate_norm)
 
     # Extract sub-parameters before the lazy broadcast to avoid capturing
     # the full ClimaAtmosParameters struct (~4 KiB) in GPU kernel parameters.
@@ -833,8 +834,8 @@ function ᶜmixing_length(Y, p, property::Val{P} = Val{:master}()) where {P}
             z_sfc,
             ᶜΔ_f,
             sfc_tke,
-            ᶜbuoygrad_stab,
-            ᶜlinear_buoygrad,
+            ᶜN²_eff,
+            ᶜbuoygrad,
             ᶜtke,
             obukhov_length,
             ᶜstrain_rate_norm,

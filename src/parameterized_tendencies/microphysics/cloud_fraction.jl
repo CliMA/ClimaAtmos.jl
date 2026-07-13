@@ -33,7 +33,7 @@ environment, but this is a current approximation.
 function set_covariance_cache_and_cloud_fraction!(Y, p)
     (; cloud_model, microphysics_model) = p.atmos
     (; ᶜgradᵥ_q_tot, ᶜgradᵥ_θ_liq_ice, ᶜcloud_fraction) = p.precomputed
-    (; ᶜlinear_buoygrad, ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice) = p.precomputed
+    (; ᶜbuoygrad, ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice) = p.precomputed
     thermo_params = CAP.thermodynamics_params(p.params)
     ᶜlg = Fields.local_geometry_field(Y.c)
 
@@ -61,7 +61,7 @@ function set_covariance_cache_and_cloud_fraction!(Y, p)
     # materialization during Picard. CF, μ_S, and λ are all written once after
     # Picard converges, in the final `set_sgs_moments_and_cloud_fraction!` call.
     function picard_step!()
-        @. ᶜlinear_buoygrad = blended_N²(
+        @. ᶜbuoygrad = blended_N²(
             ᶜbg_coeffs,
             ᶜcloud_fraction,
             projected_vector_data(C3, ᶜgradᵥ_θ_liq_ice, ᶜlg),
@@ -103,7 +103,7 @@ function set_covariance_cache_and_cloud_fraction!(Y, p)
     @. ᶜcloud_fraction = _aitken_picard_helper(c0, c1, c2)
 
     # Recompute buoyancy gradient and covariance cache with the final cloud fraction.
-    @. ᶜlinear_buoygrad = blended_N²(
+    @. ᶜbuoygrad = blended_N²(
         ᶜbg_coeffs,
         ᶜcloud_fraction,
         projected_vector_data(C3, ᶜgradᵥ_θ_liq_ice, ᶜlg),
@@ -209,14 +209,12 @@ under the size limit.
 """
 function materialized_mixing_length!(Y, p)
     turbconv_model = p.atmos.turbconv_model
-    if turbconv_model isa AbstractEDMF && MatrixFields.has_field(Y, @name(c.ρtke))
+    if turbconv_model isa AbstractEDMF
+        # Every AbstractEDMF carries Y.c.ρtke, so ᶜmixing_length is well
+        # defined; materialize it into the persistent ᶜl_mix cache.
         ᶜl_mix = p.precomputed.ᶜl_mix
         ᶜl_mix .= ᶜmixing_length(Y, p)
         return ᶜl_mix
-    elseif turbconv_model isa AbstractEDMF
-        ᶜscratch = p.scratch.ᶜtemp_scalar_6
-        ᶜscratch .= ᶜmixing_length(Y, p)
-        return ᶜscratch
     else
         # compute_gm_mixing_length materializes into p.scratch.ᶜtemp_scalar
         return compute_gm_mixing_length(Y, p)

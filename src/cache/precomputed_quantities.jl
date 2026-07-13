@@ -155,11 +155,17 @@ function precomputed_quantities(Y, atmos)
     gs_quantities = (;
         ᶜwₜqₜ = similar(Y.c, Geometry.WVector{FT}),
         ᶜwₕhₜ = similar(Y.c, Geometry.WVector{FT}),
-        ᶜlinear_buoygrad = similar(Y.c, FT),
-        # Interface-aware effective stability (max over adjacent faces of the
-        # face-local N²_eff, including the unresolved-jump term); feeds the
-        # mixing-length and Pr_t(Ri) closures near sharp inversions.
-        ᶜbuoygrad_stab = similar(Y.c, FT),
+        # Moist buoyancy gradient N² at centers; same physical quantity as the
+        # face-native `ᶠK`-pipeline `ᶠbuoygrad`, built from the centered
+        # (cloud-fraction-blended) vertical gradient instead of the two-point
+        # face gradient.
+        ᶜbuoygrad = similar(Y.c, FT),
+        # Interface-aware effective stability N²_eff at centers; the center
+        # counterpart of `ᶠN²_eff` in `set_face_diffusivities!`, formed as the
+        # max over adjacent faces of the face-local N²_eff (including the
+        # unresolved-jump term). Feeds the mixing-length and Pr_t(Ri) closures
+        # near sharp inversions.
+        ᶜN²_eff = similar(Y.c, FT),
         # Pointwise chain-rule coefficients of the moist buoyancy gradient
         # and exact two-point face gradients of (θ_li, q_tot); filled once
         # per update by `set_buoyancy_gradient_inputs!` and shared by the
@@ -171,20 +177,28 @@ function precomputed_quantities(Y, atmos)
         ᶠ∂θli∂z = similar(Y.f, FT),
         ᶠ∂qt∂z = similar(Y.f, FT),
         # Face-native moist buoyancy gradient, face-native eddy diffusivity/
-        # viscosity, and interfacial entrainment diffusivity K_e = γ w_e Δz;
-        # filled by `set_face_diffusivities!` for EDMF runs with prognostic
-        # TKE, zero otherwise. Evaluating the stability closure at the faces,
-        # where the fluxes live, keeps the collapse of K at an unresolved
-        # inversion from leaking to the adjacent interior face (which a
-        # center-based evaluation with interpolation cannot avoid).
-        ᶠbuoygrad = zeros(axes(Y.f)),
-        ᶠK_h = zeros(axes(Y.f)),
-        ᶠK_u = zeros(axes(Y.f)),
-        ᶠK_entr = zeros(axes(Y.f)),
-        # Master mixing length at centers (dissipation, covariance closure,
-        # updraft internal diffusion, diagnostics); filled once per update
-        # after the cloud-fraction Picard iteration.
-        ᶜl_mix = similar(Y.c, FT),
+        # viscosity, interfacial entrainment diffusivity K_e = γ w_e Δz, and
+        # the master mixing length at centers. Every consumer is an
+        # AbstractEDMF path, so they are allocated only for AbstractEDMF;
+        # other closures use the center ᶜK_h/ᶜK_u instead.
+        # Evaluating the stability closure at the faces, where the fluxes
+        # live, keeps the collapse of K at an unresolved inversion from
+        # leaking to the adjacent interior face.
+        #
+        # All four face fields are written by `set_face_diffusivities!` on
+        # every explicit update (ᶠK_entr is zeroed there when the interface
+        # entrainment closure is off), and ᶜl_mix by `materialized_mixing_length!`,
+        # before any read, so `similar` is safe.
+        (
+            atmos.turbconv_model isa AbstractEDMF ?
+            (;
+                ᶠbuoygrad = similar(Y.f, FT),
+                ᶠK_h = similar(Y.f, FT),
+                ᶠK_u = similar(Y.f, FT),
+                ᶠK_entr = similar(Y.f, FT),
+                ᶜl_mix = similar(Y.c, FT),
+            ) : (;)
+        )...,
         ᶜstrain_rate_norm = similar(Y.c, FT),
         sfc_conditions = similar(Spaces.level(Y.f, half), SCT),
     )
@@ -704,7 +718,7 @@ NVTX.@annotate function set_explicit_precomputed_quantities!(Y, p, t)
     set_covariance_cache_and_cloud_fraction!(Y, p)
 
     # Interfacial entrainment diffusivity K_e at faces (interface-aware
-    # stability closure). Needs the final cloud fraction and ᶜbuoygrad_stab
+    # stability closure). Needs the final cloud fraction and ᶜN²_eff
     # from the covariance/cloud-fraction update above.
     set_face_diffusivities!(Y, p)
 
@@ -715,9 +729,7 @@ NVTX.@annotate function set_explicit_precomputed_quantities!(Y, p, t)
     # materialized_mixing_length!), so it would be redundant to recompute it
     # here; `uses_covariances` is the shared predicate that keeps the two
     # paths from disagreeing.
-    if !uses_covariances(p.atmos) &&
-       turbconv_model isa AbstractEDMF &&
-       MatrixFields.has_field(Y, @name(c.ρtke))
+    if !uses_covariances(p.atmos) && turbconv_model isa AbstractEDMF
         p.precomputed.ᶜl_mix .= ᶜmixing_length(Y, p)
     end
 

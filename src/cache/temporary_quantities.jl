@@ -14,11 +14,6 @@ function implicit_temporary_quantities(Y, atmos)
     FT = Spaces.undertype(center_space)
     uvw_vec = UVW(FT(0), FT(0), FT(0))
     return (;
-        # set_face_diffusivities! runs only in the explicit precomputed
-        # update, with the (larger) scratch set of temporary_quantities;
-        # the implicit tendency consumes its outputs (ᶠK_h, ᶠK_u, ᶠK_entr)
-        # from p.precomputed as frozen coefficients, so its face scratch is
-        # not needed here.
         ᶠtemp_scalar = Fields.Field(FT, face_space), # ᶠρaK_h
         ᶠtemp_scalar_2 = Fields.Field(FT, face_space), # ᶠρaK_u
         ᶠtemp_scalar_3 = Fields.Field(FT, face_space), # ᶠwaχ in advection

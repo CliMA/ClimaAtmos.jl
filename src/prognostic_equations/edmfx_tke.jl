@@ -25,17 +25,12 @@
 
 edmfx_tke_tendency!(Yₜ, Y, p, t, turbconv_model) = nothing
 
-function edmfx_tke_tendency!(Yₜ, Y, p, t, turbconv_model::EDOnlyEDMFX)
-    edmfx_tke_sources!(Yₜ, Y, p)
-    return nothing
-end
-
 function edmfx_tke_tendency!(
     Yₜ,
     Y,
     p,
     t,
-    turbconv_model::PrognosticEDMFX,
+    turbconv_model::Union{EDOnlyEDMFX, PrognosticEDMFX},
 )
     use_prognostic_tke(turbconv_model) || return nothing
     edmfx_tke_sources!(Yₜ, Y, p)
