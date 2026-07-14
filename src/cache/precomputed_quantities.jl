@@ -159,18 +159,6 @@ function precomputed_quantities(Y, atmos)
             q_rai = ntuple(_ -> similar(Y.c, FT), n_cosp_subcolumns),
             q_sno = ntuple(_ -> similar(Y.c, FT), n_cosp_subcolumns),
         )
-        ᶜsubcolumn_reff = (;
-            Reff_lcl = ntuple(_ -> similar(Y.c, FT), n_cosp_subcolumns),
-            Reff_icl = ntuple(_ -> similar(Y.c, FT), n_cosp_subcolumns),
-            Reff_rai = ntuple(_ -> similar(Y.c, FT), n_cosp_subcolumns),
-            Reff_sno = ntuple(_ -> similar(Y.c, FT), n_cosp_subcolumns),
-        )
-        ᶜsubcolumn_Np = (;
-            Np_lcl = ntuple(_ -> similar(Y.c, FT), n_cosp_subcolumns),
-            Np_icl = ntuple(_ -> similar(Y.c, FT), n_cosp_subcolumns),
-            Np_rai = ntuple(_ -> similar(Y.c, FT), n_cosp_subcolumns),
-            Np_sno = ntuple(_ -> similar(Y.c, FT), n_cosp_subcolumns),
-        )
         z_vol_cloudsat = ntuple(_ -> similar(Y.c, FT), n_cosp_subcolumns)
         kr_vol_cloudsat = ntuple(_ -> similar(Y.c, FT), n_cosp_subcolumns)
         g_vol_cloudsat = similar(Y.c, FT)
@@ -186,8 +174,6 @@ function precomputed_quantities(Y, atmos)
             ᶜsubcolumn_threshold,
             ᶜsubcolumn_precip,
             ᶜsubcolumn_hydrometeors,
-            ᶜsubcolumn_reff,
-            ᶜsubcolumn_Np,
             z_vol_cloudsat,
             kr_vol_cloudsat,
             g_vol_cloudsat,

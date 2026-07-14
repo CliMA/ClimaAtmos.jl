@@ -150,7 +150,6 @@ NVTX.@annotate function subcol_model_callback!(integrator)
     )
 
     set_cosp_hydrometeor_subcolumns!(Y, p, p.atmos.microphysics_model)
-    set_cosp_reff_np_subcolumns!(Y, p, p.atmos.microphysics_model)
     set_cosp_cloudsat_optics!(Y, p, p.atmos.microphysics_model)
 
     @debug "subcol callback" t = integrator.t
@@ -227,42 +226,6 @@ function set_cosp_hydrometeor_subcolumns!(Y, p, _)
     for hydrometeor_fields in values(ᶜsubcolumn_hydrometeors)
         for hydrometeor_field in hydrometeor_fields
             @. hydrometeor_field = FT(0)
-        end
-    end
-
-    return nothing
-end
-
-function set_cosp_reff_np_subcolumns!(
-    Y,
-    p,
-    ::NonEquilibriumMicrophysics1M,
-)
-    (;
-        ᶜsubcolumn_reff,
-        ᶜsubcolumn_Np,
-        ᶜsubcolumn_hydrometeors,
-    ) = p.precomputed
-
-    COSP.COSP1MReffNpDiagnostics.set_1M_reff_np_subcolumns!(
-        ᶜsubcolumn_reff,
-        ᶜsubcolumn_Np,
-        ᶜsubcolumn_hydrometeors,
-        Y.c.ρ,
-    )
-
-    return nothing
-end
-
-function set_cosp_reff_np_subcolumns!(Y, p, _)
-    (; ᶜsubcolumn_reff, ᶜsubcolumn_Np) = p.precomputed
-    FT = eltype(Y)
-
-    for diagnostic_container in (ᶜsubcolumn_reff, ᶜsubcolumn_Np)
-        for diagnostic_fields in values(diagnostic_container)
-            for diagnostic_field in diagnostic_fields
-                @. diagnostic_field = FT(0)
-            end
         end
     end
 

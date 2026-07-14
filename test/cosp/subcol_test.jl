@@ -183,8 +183,6 @@ end
         nsubcolumns = length(frac_out)
         threshold = p.precomputed.ᶜsubcolumn_threshold
         prec_frac = p.precomputed.ᶜsubcolumn_precip
-        subcolumn_reff = p.precomputed.ᶜsubcolumn_reff
-        subcolumn_Np = p.precomputed.ᶜsubcolumn_Np
         large_scale_precipitation_flux =
             p.precomputed.ᶜlarge_scale_precipitation_flux
 
@@ -199,10 +197,6 @@ end
         @test isnothing(result)
         @test length(prec_frac) == nsubcolumns
         @test all(axes(prec) == axes(cloud_fraction) for prec in prec_frac)
-        @test length(subcolumn_reff.Reff_lcl) == nsubcolumns
-        @test length(subcolumn_Np.Np_lcl) == nsubcolumns
-        @test axes(subcolumn_reff.Reff_lcl[1]) == axes(cloud_fraction)
-        @test axes(subcolumn_Np.Np_lcl[1]) == axes(cloud_fraction)
         @test axes(large_scale_precipitation_flux) == axes(cloud_fraction)
 
         for isubcolumn in 1:nsubcolumns
@@ -240,12 +234,6 @@ end
 
         for frac in p.precomputed.ᶜsubcolumn_cloud
             @test all(==(FT(1)), parent(frac))
-        end
-        for field_group in values(p.precomputed.ᶜsubcolumn_reff), field in field_group
-            @test all(iszero, parent(field))
-        end
-        for field_group in values(p.precomputed.ᶜsubcolumn_Np), field in field_group
-            @test all(iszero, parent(field))
         end
     end
 
@@ -614,54 +602,4 @@ end
         @test center_profile(subcolumns.q_rai[1]) == FT[20, 0]
         @test center_profile(subcolumns.q_sno[2]) == FT[0, 30]
     end
-
-    @testset "reff/np callback helper uses subcolumn hydrometeors" begin
-        ρ = make_center_profile_field(FT, [2, 2])
-        Y = (; c = (; ρ))
-        subcolumns = (;
-            q_lcl = (
-                make_center_profile_field(FT, [1, 0]),
-                make_center_profile_field(FT, [0, 2]),
-            ),
-            q_icl = (
-                make_center_profile_field(FT, [0, 1]),
-                make_center_profile_field(FT, [2, 0]),
-            ),
-            q_rai = (
-                make_center_profile_field(FT, [3, 0]),
-                make_center_profile_field(FT, [0, 4]),
-            ),
-            q_sno = (
-                make_center_profile_field(FT, [0, 5]),
-                make_center_profile_field(FT, [6, 0]),
-            ),
-        )
-        reff = make_reff_subcolumns(ρ, length(subcolumns.q_lcl))
-        np = make_number_subcolumns(ρ, length(subcolumns.q_lcl))
-        p = (;
-            precomputed = (;
-                ᶜsubcolumn_hydrometeors = subcolumns,
-                ᶜsubcolumn_reff = reff,
-                ᶜsubcolumn_Np = np,
-            ),
-        )
-
-        result = CA.set_cosp_reff_np_subcolumns!(
-            Y,
-            p,
-            CA.NonEquilibriumMicrophysics1M(),
-        )
-
-        @test isnothing(result)
-        N_lcl =
-            CA.COSP.COSP1MReffNpDiagnostics.DEFAULT_REFF_NP_1M_PARAMETERS.n_lcl
-        @test center_profile(np.Np_lcl[1]) == FT[N_lcl, 0]
-        @test center_profile(reff.Reff_lcl[1])[1] > FT(0)
-        @test center_profile(reff.Reff_lcl[1])[2] == FT(0)
-        @test center_profile(reff.Reff_rai[1])[1] > FT(0)
-        @test center_profile(np.Np_rai[1])[1] > FT(0)
-        @test center_profile(reff.Reff_sno[2])[1] > FT(0)
-        @test center_profile(np.Np_sno[2])[1] > FT(0)
-    end
-
 end
