@@ -322,9 +322,6 @@ Applies tendencies from GCM or reanalysis-driven external forcings. This include
 The sum of horizontal advection, nudging, and vertical fluctuation tendencies for
 temperature and moisture are converted into tendencies for total energy (`ρe_tot`)
 and total specific humidity (`ρq_tot`).
-
-A top boundary condition is applied by zeroing out the `ρe_tot` and `ρq_tot`
-tendencies at the highest model level.
 """
 function external_forcing_tendency!(
     Yₜ,
@@ -407,13 +404,6 @@ function external_forcing_tendency!(
         Val{:first_order}(),
     )
 
-    # Hard set tendencies of ρe_tot and ρq_tot at the top to 0. Otherwise upper
-    # portion of domain is anomalously cold
-    ρe_tot_top = Fields.level(Yₜ.c.ρe_tot, Spaces.nlevels(axes(Y.c)))
-    @. ρe_tot_top = 0.0
-
-    ρq_tot_top = Fields.level(Yₜ.c.ρq_tot, Spaces.nlevels(axes(Y.c)))
-    @. ρq_tot_top = 0.0
     # <-- subsidence
 
     return nothing
@@ -1070,12 +1060,6 @@ function external_forcing_tendency!(Yₜ, Y, p, t, ::ARMVARANALForcing)
         ᶜq_tot,
         Val{:first_order}(),
     )
-
-    ρe_tot_top = Fields.level(Yₜ.c.ρe_tot, Spaces.nlevels(axes(Y.c)))
-    @. ρe_tot_top = 0.0
-
-    ρq_tot_top = Fields.level(Yₜ.c.ρq_tot, Spaces.nlevels(axes(Y.c)))
-    @. ρq_tot_top = 0.0
 
     return nothing
 end

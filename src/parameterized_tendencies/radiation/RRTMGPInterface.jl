@@ -342,6 +342,7 @@ array.
       + `lookup_tables/cloudysky_sw.nc`
 
   - `FT`: floating-point number type (performance with `Float32` is questionable)
+
   - `DA`: array type (defaults to `CuArray` when a compatible GPU is available)
 
 # Keyword Arguments
@@ -349,6 +350,7 @@ array.
   - `ncol`: number of vertical columns in the domain/extension
 
   - `domain_nlay`: number of cells (layers) in the domain
+
   - `radiation_mode`: overall mode for running `RRTMGP`; available options are
 
       + `GrayRadiation`: uniform absorption across all frequencies
@@ -356,35 +358,49 @@ array.
       + `AllSkyRadiation`: full RRTMGP model
       + `AllSkyRadiationWithClearSkyDiagnostics`: computes the fluxes for both
         `AllSkyRadiation` and `ClearSkyRadiation`
+
   - `interpolation`: method for determining implied values (if there are any);
     see documentation for `AbstractInterpolation` for available options
+
   - `bottom_extrapolation`: method for determining implied values at the bottom
     cell face (only used when the cell face values are implied); see documentation
     for `AbstractInterpolation` for available options
+
   - `use_global_means_for_well_mixed_gases`: whether to use a scalar value to
     represent the volume mixing ratio of each well-mixed gas (i.e., a gas that is
     not water vapor or ozone), instead of using an array that represents a
     spatially varying volume mixing ratio
+
   - `center_pressure` and/or `face_pressure`: air pressure in Pa on cell centers
     and on cell faces (either one or both of these must be specified)
+
   - `center_temperature` and/or `face_temperature`: air temperature in K on cell
     centers and on cell faces (if `center_pressure` is specified, then
     `center_temperature` must also be specified, and, if `face_pressure` is
     specified, then `face_temperature` must also be specified)
+
   - `surface_temperature`: temperature of the surface in K (required)
+
   - `surface_emissivity`: longwave emissivity of the surface (required)
+
   - `top_of_atmosphere_lw_flux_dn`: incoming longwave radiation in W/m^2
     (assumed to be 0 by default)
+
   - `direct_sw_surface_albedo`: direct shortwave albedo of the surface
     (required)
+
   - `diffuse_sw_surface_albedo`: diffuse shortwave albedo of the surface
     (required)
+
   - `cos_zenith`: cosine of the zenith angle of sun in radians (required)
+
   - `toa_flux`: irradiance of sun in W/m^2 (required); the incoming
     direct shortwave radiation is given by
     `model.toa_flux .* model.cos_zenith`
+
   - `top_of_atmosphere_diffuse_sw_flux_dn`: incoming diffuse shortwave
     radiation in W/m^2 (assumed to be 0 by default)
+
   - arguments only available when `radiation_mode isa GrayRadiation`:
 
       + `lapse_rate`: a scalar value that specifies the lapse rate throughout the
@@ -392,6 +408,7 @@ array.
         model is constructed
       + `optical_thickness_parameter`: the longwave optical depth at the surface
         (required)
+
   - arguments only available when `!(radiation_mode isa GrayRadiation)`:
 
       + `center_volume_mixing_ratio_h2o`: volume mixing ratio of water vapor on
@@ -399,6 +416,7 @@ array.
 
       + `center_volume_mixing_ratio_o3`: volume mixing ratio of ozone on cell
         centers (required)
+
       + arguments only available when `use_global_means_for_well_mixed_gases`:
 
           * `volume_mixing_ratio_<gas_name>` for `gas_name` in `co2`, `n2o`, `co`,
@@ -406,12 +424,14 @@ array.
             `hfc125`, `hfc23`, `hfc32`, `hfc134a`, `cf4`, `no2`: a scalar value
             that specifies the volume mixing ratio of each well-mixed gas
             throughout the atmosphere (required)
+
       + arguments only available when `!use_global_means_for_well_mixed_gases`:
 
           * `center_volume_mixing_ratio_<gas_name>` for `gas_name` in `co2`,
             `n2o`, `co`,`ch4`, `o2`, `n2`, `ccl4`, `cfc11`, `cfc12`, `cfc22`,
             `hfc143a`, `hfc125`, `hfc23`, `hfc32`, `hfc134a`, `cf4`, `no2`: volume
             mixing ratio of each well-mixed gas on cell centers (required)
+
       + arguments only available when `!(radiation_mode isa ClearSkyRadiation)`:
 
           * `center_cloud_liquid_effective_radius`: effective radius of cloud
@@ -426,8 +446,10 @@ array.
           * `ice_roughness`: either 1, 2, or 3, with 3 corresponding to the
             roughest ice (required); this is a constant that can't be modified after
             the model is constructed
+
       + `latitude`: latitude in degrees (assumed to be 45 by default); used for
         computing the concentration of air in molecules/cm^2
+
   - arguments only available when
     `requires_z(interpolation) || requires_z(bottom_extrapolation)`:
 

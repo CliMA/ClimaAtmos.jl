@@ -56,13 +56,13 @@ The `states` dict maps symbol keys to (Y, p) tuples. Available keys:
   :ssv            — DryModel + steady-state velocity, plane grid
   :m0             — EquilibriumMicrophysics0M, column
   :m1             — NonEquilibriumMicrophysics1M, column
-  :m2             — NonEquilibriumMicrophysics2M, column
+  :m2             — DISABLED  NonEquilibriumMicrophysics2M, column
   :nogw           — 0M + NonOrographicGravityWave, column
   :m0_slab_sphere — 0M + SlabOceanSST, sphere (watero)
   :smag           — SmagorinskyLilly, sphere
   :m0_pedmfx      — 0M + PrognosticEDMFX, column
   :m1_pedmfx      — 1M + PrognosticEDMFX, column
-  :m2_pedmfx      — 2M + PrognosticEDMFX, column
+  :m2_pedmfx      — DISABLED 2M + PrognosticEDMFX, column
   :vd             — VerticalDiffusion, column
   :dwh            — DecayWithHeightDiffusion, column
   :allsky         — AllSkyRadiationWithClearSkyDiagnostics + aerosol_radiation=true, column
@@ -176,10 +176,10 @@ plane = CA.PlaneGrid(FT; x_elem = 4, z_elem = 5, z_stretch = false)
 ## Microphysics-specific models
 model_0m = CA.AtmosModel(; microphysics_model = CA.EquilibriumMicrophysics0M())
 model_1m = CA.AtmosModel(; microphysics_model = CA.NonEquilibriumMicrophysics1M())
-model_2m = CA.AtmosModel(; microphysics_model = CA.NonEquilibriumMicrophysics2M())
+# model_2m = CA.AtmosModel(; microphysics_model = CA.NonEquilibriumMicrophysics2M())
 (Y_0m, p_0m) = build_state_cache(FT, model_0m; grid = column);
 (Y_1m, p_1m) = build_state_cache(FT, model_1m; grid = column);
-(Y_2m, p_2m) = build_state_cache(FT, model_2m; grid = column);
+# (Y_2m, p_2m) = build_state_cache(FT, model_2m; grid = column);
 
 ## Non-orographic gravity wave
 nogw_params = CA.NonOrographicGravityWaveParameters(FT)
@@ -233,11 +233,11 @@ model_0m_pedmfx = CA.AtmosModel(; microphysics_model = CA.EquilibriumMicrophysic
     turbconv_model = pedmfx, edmfx_model)
 model_1m_pedmfx = CA.AtmosModel(; microphysics_model = CA.NonEquilibriumMicrophysics1M(),
     turbconv_model = pedmfx, edmfx_model)
-model_2m_pedmfx = CA.AtmosModel(; microphysics_model = CA.NonEquilibriumMicrophysics2M(),
-    turbconv_model = pedmfx, edmfx_model)
+# model_2m_pedmfx = CA.AtmosModel(; microphysics_model = CA.NonEquilibriumMicrophysics2M(),
+#     turbconv_model = pedmfx, edmfx_model)
 (Y_0m_pedmfx, p_0m_pedmfx) = build_state_cache(FT, model_0m_pedmfx; grid = column);
 (Y_1m_pedmfx, p_1m_pedmfx) = build_state_cache(FT, model_1m_pedmfx; grid = column);
-(Y_2m_pedmfx, p_2m_pedmfx) = build_state_cache(FT, model_2m_pedmfx; grid = column);
+# (Y_2m_pedmfx, p_2m_pedmfx) = build_state_cache(FT, model_2m_pedmfx; grid = column);
 
 ## Chemistry (passive tracer A) + PrognosticEDMFX
 model_chem_pedmfx = CA.AtmosModel(;
@@ -270,13 +270,19 @@ states = Dict(
     :ssv            => (Y_ssv,            p_ssv),
     :m0             => (Y_0m,             p_0m),
     :m1             => (Y_1m,             p_1m),
-    :m2             => (Y_2m,             p_2m),
+    # :m2 and :m2_pedmfx DISABLED (CloudMicrophysics 0.37 compat): 2-moment
+    # microphysics is temporarily blocked by an `@assert` in
+    # `precomputed_quantities` (src/cache/precomputed_quantities.jl), so
+    # `model_2m`/`model_2m_pedmfx` (and their `build_state_cache` calls) are
+    # commented out above. Re-enable once 2M/2M+P3 compatibility with
+    # CloudMicrophysics 0.37 is restored.
+    # :m2             => (Y_2m,             p_2m),
     :nogw           => (Y_nogw,           p_nogw),
     :m0_slab_sphere => (Y_0m_slab_sphere, p_0m_slab_sphere),
     :smag           => (Y_smag,           p_smag),
     :m0_pedmfx      => (Y_0m_pedmfx,      p_0m_pedmfx),
     :m1_pedmfx      => (Y_1m_pedmfx,      p_1m_pedmfx),
-    :m2_pedmfx      => (Y_2m_pedmfx,      p_2m_pedmfx),
+    # :m2_pedmfx      => (Y_2m_pedmfx,      p_2m_pedmfx),
     :chem_pedmfx    => (Y_chem_pedmfx,    p_chem_pedmfx),
     :vd             => (Y_vd,             p_vd),
     :dwh            => (Y_dwh,            p_dwh),
@@ -333,7 +339,9 @@ VALID_CASES = [
     case("lmix",  (:dry, :m0_pedmfx)),
     # 1M / 2M microphysics
     cases(("husra", "hussn", "rwp", "swp"), :m1)...,  # Union{1M, 2M}, single method
-    cases(("cdnc", "ncra"), :m2)...,  # 2M only
+    # "cdnc", "ncra" (2M only) DISABLED (CloudMicrophysics 0.37 compat) and
+    # moved to SKIP_CASES below - see the `:m2` note near `states` above.
+    # cases(("cdnc", "ncra"), :m2)...,  # 2M only
     # Smagorinsky-Lilly
     cases(("Dh_smag", "Dv_smag", "strainh_smag", "strainv_smag"), :smag)...,
     # steady-state velocity
@@ -372,10 +380,13 @@ VALID_CASES = [
     cases(("clwen", "clien"), (:m0_pedmfx, :m1_pedmfx))...,
     # 1M+PrognosticEDMFX
     cases(("husraen", "hussnen"), :m1_pedmfx)...,
-    # 2M + PrognosticEDMFX
-    cases(("cdncup", "cdncen", "ncraup", "ncraen"), :m2_pedmfx)...,
+    # "cdncup", "cdncen", "ncraup", "ncraen" (2M + PrognosticEDMFX) DISABLED
+    # (CloudMicrophysics 0.37 compat) and moved to SKIP_CASES below.
+    # cases(("cdncup", "cdncen", "ncraup", "ncraen"), :m2_pedmfx)...,
     # VerticalDiffusion, DecayWithHeightDiffusion, EDMF
     cases(("edt", "evu"), (:vd, :dwh, :m0_pedmfx))...,
+    # Interfacial entrainment diffusivity (EDMFX only)
+    case("kentr", :m0_pedmfx),
     # GasPhaseChem + PrognosticEDMFX
     case("q_gas_A",   :chem_pedmfx),
     case("q_gas_Aup", :chem_pedmfx),
@@ -395,10 +406,19 @@ VALID_CASES = [
 #   - negative_scalars_diagnostics.jl : budget monitoring (hus_neg_sum, etc.)
 # These are skipped here; their own test files should cover them.
 #
+# Also temporarily includes 2M-only diagnostics ("cdnc", "ncra", "cdncup",
+# "cdncen", "ncraup", "ncraen") - DISABLED (CloudMicrophysics 0.37 compat):
+# 2-moment microphysics is blocked by an `@assert` in `precomputed_quantities`
+# (src/cache/precomputed_quantities.jl), so their `:m2`/`:m2_pedmfx` fixtures
+# are unavailable. Move these back to VALID_CASES once 2M/2M+P3 compatibility
+# with CloudMicrophysics 0.37 is restored.
+#
 SKIP_CASES = Set([
     # tracer_diagnostics.jl
     "loadss", "mmrbcpi", "mmrbcpo", "mmrdust", "mmrocpi", "mmrocpo",
     "mmrso4", "mmrss", "o3",
+    # 2M-only (temporarily disabled, see note above)
+    "cdnc", "ncra", "cdncup", "cdncen", "ncraup", "ncraen",
     # negative_scalars_diagnostics.jl
     "cli_max", "cli_min", "cli_neg_frac", "cli_neg_mean", "cli_neg_sum",
     "cli_pos_frac", "cli_pos_mean", "cli_pos_sum",

@@ -379,10 +379,6 @@ function nogw_callback(
     )
 end
 
-function enforce_physical_constraints_callback(dt)
-    return call_every_dt(enforce_physical_constraints_callback!, dt)
-end
-
 function ogw_callback(
     orographic_gravity_wave,
     dt_ogw,
@@ -425,15 +421,6 @@ Creates the tuple of model callbacks for any AtmosModel by calling
 """
 function default_model_callbacks(model::AtmosModel; kwargs...)
     callbacks = ()
-    # Physical constraints callback is registered here rather than at the component
-    # level because the decision depends on both the microphysics model AND the
-    # turbconv model simultaneously — registering from each component independently
-    # would cause double-registration for EDMF + 1M/2M configurations.
-    # Placed before the component callbacks so it fires before any other component
-    # callback that reads cache fields (e.g. radiation)
-    if needs_enforce_physical_constraints(model)
-        callbacks = (callbacks..., enforce_physical_constraints_callback(kwargs[:dt]))
-    end
     model_component_names =
         filter(x -> x !== :disable_surface_flux_tendency, propertynames(model))
     for property in model_component_names
@@ -443,12 +430,6 @@ function default_model_callbacks(model::AtmosModel; kwargs...)
     end
     return callbacks
 end
-
-needs_enforce_physical_constraints(model::AtmosModel) =
-    model.microphysics_model isa
-    Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M} ||
-    model.turbconv_model isa AbstractEDMF
-
 
 default_model_callbacks(component; kwargs...) = ()
 

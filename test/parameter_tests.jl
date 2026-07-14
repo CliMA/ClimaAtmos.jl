@@ -26,6 +26,39 @@ import Thermodynamics as TD
     end
 end
 
+@testset "TKE dissipation coefficient derived from Ri_crit" begin
+    for FT in (Float32, Float64)
+        params = CA.ClimaAtmosParameters(FT)
+        tc = params.turbconv_params
+        # ClimaParams default: Ri_c = 0.25 (mixing_length_Ri_crit)
+        @test CAP.Ri_crit(tc) == FT(0.25)
+        # c_d is derived, not independent: c_d = c_m c_b / Ri_c
+        @test CA.tke_dissipation_coefficient(tc) ==
+              CAP.tke_ed_coeff(tc) * CAP.static_stab_coeff(tc) /
+              CAP.Ri_crit(tc)
+    end
+
+    # A TOML override of mixing_length_Ri_crit propagates into the derived c_d
+    mktemp() do path, io
+        write(
+            io,
+            """
+  [mixing_length_Ri_crit]
+  value = 0.5
+  type = "float"
+  """,
+        )
+        flush(io)
+        config_dict = Dict("toml" => [path])
+        config = CA.AtmosConfig(config_dict, job_id = "parameter_test_ri_crit")
+        params = CA.ClimaAtmosParameters(config)
+        tc = params.turbconv_params
+        @test CAP.Ri_crit(tc) == 0.5
+        @test CA.tke_dissipation_coefficient(tc) ==
+              CAP.tke_ed_coeff(tc) * CAP.static_stab_coeff(tc) / 0.5
+    end
+end
+
 @testset "AtmosConfig Parameter Overrides" begin
     # Test overriding a parameter via configuration logic
     # CA.AtmosConfig merges dicts into the parameters

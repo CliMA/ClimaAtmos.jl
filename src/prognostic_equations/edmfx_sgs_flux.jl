@@ -16,6 +16,10 @@ deviation of a conserved variable `ϕ` (such as total enthalpy or specific humid
 from its grid-mean value. These terms represent the redistribution of energy and tracers
 by the resolved SGS circulations relative to the grid mean flow.
 
+The SGS flux of `q_tot` redistributes water mass, so `Yₜ.c.ρ` receives the
+same tendency as `Yₜ.c.ρq_tot` (mirroring the diffusive-flux treatment of
+moist air mass).
+
 The specific implementation depends on the `turbconv_model` (e.g., `PrognosticEDMFX`).
 A generic fallback doing nothing is also provided.
 The function modifies `Yₜ.c` (grid-mean tendencies) in place.
@@ -40,7 +44,7 @@ function edmfx_sgs_mass_flux_tendency!(
 )
 
     n = n_mass_flux_subdomains(turbconv_model)
-    (; edmfx_sgsflux_upwinding, edmfx_tracer_upwinding) = p.atmos.numerics
+    (; edmfx_sgsflux_upwinding) = p.atmos.numerics
     (; ᶜp, ᶠu³) = p.precomputed
     (; ᶠu³ʲs, ᶜKʲs, ᶜρʲs) = p.precomputed
     (; ᶠu³⁰, ᶜK⁰, ᶜT⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰) = p.precomputed
@@ -110,6 +114,7 @@ function edmfx_sgs_mass_flux_tendency!(
                     edmfx_sgsflux_upwinding,
                 )
                 @. Yₜ.c.ρq_tot += vtt
+                @. Yₜ.c.ρ += vtt  # Effect of SGS water flux on (moist) air mass
             end
             # Add the environment fluxes
             ᶜq_tot⁰ = ᶜspecific_env_value(@name(q_tot), Y, p)
@@ -124,40 +129,52 @@ function edmfx_sgs_mass_flux_tendency!(
                 edmfx_sgsflux_upwinding,
             )
             @. Yₜ.c.ρq_tot += vtt
+            @. Yₜ.c.ρ += vtt  # Effect of SGS water flux on (moist) air mass
         end
 
         # Auto-discovered SGS tracer fluxes (microphysics species and any
-        # user-defined passive tracers)
+        # user-defined passive tracers). Like the mse and q_tot fluxes above,
+        # these are difference-form fluxes ρᵏaᵏ(u³ᵏ - u³)(χᵏ - χ), which
+        # vanish identically for uniform χ, reconstructed with the same
+        # upwinding as the mse and q_tot fluxes so that the water-species
+        # fluxes stay consistent with the q_tot flux (the implied vapor flux
+        # is their difference). The grid-mean advection -∇·(ρ u³ χ) of each
+        # tracer is applied in explicit_vertical_advection_tendency!.
         # Draft fluxes
         for χ_name in sgs_tracer_names(Y)
             ρχ_name = get_ρχ_name(χ_name)
+            ᶜρχ = MatrixFields.get_field(Y.c, ρχ_name)
             for j in 1:n
                 ᶜχʲ = MatrixFields.get_field(Y.c.sgsʲs.:($j), χ_name)
+                @. ᶠu³_diff = ᶠu³ʲs.:($$j) - ᶠu³
                 @. ᶜa_scalar =
-                    ᶜχʲ *
+                    (ᶜχʲ - specific(ᶜρχ, Y.c.ρ)) *
                     draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j))
                 vtt = vertical_transport(
                     ᶜρʲs.:($j),
-                    ᶠu³ʲs.:($j),
+                    ᶠu³_diff,
                     ᶜa_scalar,
                     dt,
-                    edmfx_tracer_upwinding,
+                    edmfx_sgsflux_upwinding,
                 )
                 ᶜρχₜ = MatrixFields.get_field(Yₜ.c, ρχ_name)
                 @. ᶜρχₜ += vtt
             end
         end
         # Environment fluxes
+        @. ᶠu³_diff = ᶠu³⁰ - ᶠu³
         for χ_name in sgs_tracer_names(Y)
             ρχ_name = get_ρχ_name(χ_name)
+            ᶜρχ = MatrixFields.get_field(Y.c, ρχ_name)
             ᶜχ⁰ = ᶜspecific_env_value(χ_name, Y, p)
-            @. ᶜa_scalar = ᶜχ⁰ * draft_area(ᶜρa⁰, ᶜρ⁰)
+            @. ᶜa_scalar =
+                (ᶜχ⁰ - specific(ᶜρχ, Y.c.ρ)) * draft_area(ᶜρa⁰, ᶜρ⁰)
             vtt = vertical_transport(
                 ᶜρ⁰,
-                ᶠu³⁰,
+                ᶠu³_diff,
                 ᶜa_scalar,
                 dt,
-                edmfx_tracer_upwinding,
+                edmfx_sgsflux_upwinding,
             )
             ᶜρχₜ = MatrixFields.get_field(Yₜ.c, ρχ_name)
             @. ᶜρχₜ += vtt
@@ -208,42 +225,70 @@ function edmfx_sgs_diffusive_flux_tendency!(
     (; dt, params) = p
     turbconv_params = CAP.turbconv_params(params)
     (; ᶜu) = p.precomputed
-    (; ρtke_flux) = p.precomputed
     ᶠgradᵥ = Operators.GradientC2F()
-    ᶜtke = @. lazy(specific(Y.c.ρtke, Y.c.ρ))
 
     if p.atmos.edmfx_model.sgs_diffusive_flux isa Val{true}
 
-        (; ᶜlinear_buoygrad, ᶜstrain_rate_norm) = p.precomputed
-        # scratch to prevent GPU Kernel parameter memory error
-        ᶜmixing_length_field = p.scratch.ᶜtemp_scalar_2
-        ᶜmixing_length_field .= ᶜmixing_length(Y, p)
-        ᶜK_u = @. lazy(
-            eddy_viscosity(turbconv_params, ᶜtke, ᶜmixing_length_field),
-        )
-        ᶜprandtl_nvec = @. lazy(
-            turbulent_prandtl_number(
-                params,
-                ᶜlinear_buoygrad,
-                ᶜstrain_rate_norm,
-            ),
-        )
-        ᶜK_h = @. lazy(eddy_diffusivity(ᶜK_u, ᶜprandtl_nvec))
-
+        # Face-native eddy diffusivity/viscosity and interfacial entrainment
+        # diffusivity, evaluated at the faces where the fluxes live (see
+        # `set_face_diffusivities!`): the stability closure collapses K at an
+        # unresolved inversion at exactly (and only) the jump face, and K_e
+        # restores the finite-velocity entrainment flux there. K_e is added
+        # uniformly to all scalar and momentum face diffusivities, keeping
+        # energy, water, and momentum transport mutually consistent.
+        (; ᶠK_h, ᶠK_u, ᶠK_entr, ᶜl_mix) = p.precomputed
         ᶠρaK_h = p.scratch.ᶠtemp_scalar
-        @. ᶠρaK_h = ᶠinterp(Y.c.ρ) * ᶠinterp(ᶜK_h)
+        @. ᶠρaK_h = ᶠinterp(Y.c.ρ) * (ᶠK_h + ᶠK_entr)
         ᶠρaK_u = p.scratch.ᶠtemp_scalar_2
-        @. ᶠρaK_u = ᶠinterp(Y.c.ρ) * ᶠinterp(ᶜK_u)
+        @. ᶠρaK_u = ᶠinterp(Y.c.ρ) * (ᶠK_u + ᶠK_entr)
 
-        # Total enthalpy diffusion
+        # Total enthalpy diffusion, using the dry-static-energy + water-
+        # enthalpy decomposition
+        #   F_h = -K_h ∇s_d + Σ_μ h_tot,μ F_qμ,   F_qμ = -K_h ∇q_μ,
+        # with s_d = h_d + Φ, h_tot,μ = h_μ(T) + Φ for μ ∈ {vap, liq, ice},
+        # and unit turbulent Lewis number (K_qμ = K_h). Diffusing h_tot
+        # directly would imply a spurious enthalpy flux carried by dry-air
+        # diffusion (h_tot depends on 1 - q_t through the dry-air mass
+        # fraction), systematically warming entrained air at inversions where
+        # h_tot jumps up while q_t jumps down. The thermal piece diffuses dry
+        # static energy (constant under dry-adiabatic displacement), and each
+        # water constituent carries its own enthalpy with its diffusive mass
+        # flux, consistent with the ρq_tot and ρ updates below.
+        #
+        # Note: F_qμ for liquid and ice uses unscaled K_h (omitting the tracer
+        # vertical diffusion factor α_vert_diff_tracer). While microphysics
+        # tracers are diffused with α * K_h to prevent unphysical upward
+        # transport of precipitation, omitting α here maintains exact energetic
+        # consistency with the unscaled ρq_tot diffusion equation, preserves
+        # total water invariance under moist-adiabatic processes, and aligns
+        # with the implicit solver's Jacobian formulation.
         ᶜdivᵥ_ρe_tot = Operators.DivergenceF2C(
             top = Operators.SetValue(C3(FT(0))),
             bottom = Operators.SetValue(C3(FT(0))),
         )
-        (; ᶜh_tot) = p.precomputed
-        @. Yₜ.c.ρe_tot -= ᶜdivᵥ_ρe_tot(-(ᶠρaK_h * ᶠgradᵥ(ᶜh_tot)))
+        thermo_params = CAP.thermodynamics_params(params)
+        (; ᶜΦ) = p.core
+        (; ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice) = p.precomputed
+        ᶜq_vap = @. lazy(
+            TD.vapor_specific_humidity(ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice),
+        )
+        @. Yₜ.c.ρe_tot -= ᶜdivᵥ_ρe_tot(
+            -(
+                ᶠρaK_h * (
+                    ᶠgradᵥ(TD.dry_static_energy(thermo_params, ᶜT, ᶜΦ)) +
+                    ᶠinterp(TD.enthalpy_vapor(thermo_params, ᶜT) + ᶜΦ) *
+                    ᶠgradᵥ(ᶜq_vap) +
+                    ᶠinterp(TD.enthalpy_liquid(thermo_params, ᶜT) + ᶜΦ) *
+                    ᶠgradᵥ(ᶜq_liq) +
+                    ᶠinterp(TD.enthalpy_ice(thermo_params, ᶜT) + ᶜΦ) *
+                    ᶠgradᵥ(ᶜq_ice)
+                )
+            ),
+        )
 
         if use_prognostic_tke(turbconv_model)
+            (; ρtke_flux) = p.precomputed
+            ᶜtke = @. lazy(specific(Y.c.ρtke, Y.c.ρ))
             # Turbulent TKE transport (diffusion)
             ᶜdivᵥ_ρtke = Operators.DivergenceF2C(
                 top = Operators.SetValue(C3(FT(0))),
@@ -258,7 +303,7 @@ function edmfx_sgs_diffusive_flux_tendency!(
                         turbconv_params,
                         Y.c.ρtke,
                         ᶜtke,
-                        ᶜmixing_length_field,
+                        ᶜl_mix,
                     ),
                     Y.c.ρtke / dt,
                 )
@@ -283,15 +328,33 @@ function edmfx_sgs_diffusive_flux_tendency!(
             top = Operators.SetValue(C3(FT(0))),
             bottom = Operators.SetValue(C3(FT(0))),
         )
-        # Auto-discovered grid-scale tracers (microphysics species and any
-        # user-defined passive tracers)
-        for χ_name in sgs_tracer_names(Y)
-            ρχ_name = get_ρχ_name(χ_name)
-            MatrixFields.has_field(Y.c, ρχ_name) || continue
-            ᶜρχ = MatrixFields.get_field(Y.c, ρχ_name)
-            ᶜρχₜ = MatrixFields.get_field(Yₜ.c, ρχ_name)
+        # Auto-discovered grid-scale tracers: sedimenting microphysics species
+        # are diffused with α_vert_diff_tracer * K_h, all other tracers (e.g.
+        # passive chemistry) with the unscaled K_h, matching
+        # vertical_diffusion_boundary_layer_tendency! and the implicit
+        # Jacobian (update_diffusion_jacobian!). The tracers are enumerated
+        # from the grid-mean state — not from the updraft state, which is
+        # empty for EDOnlyEDMFX and need not carry every grid-mean tracer.
+        # ρq_tot is handled above, with its moist-air mass counterpart.
+        foreach_gs_tracer(Yₜ, Y) do ᶜρχₜ, ᶜρχ, ρχ_name
+            ρχ_name == @name(ρq_tot) && return
+            α =
+                ρχ_name in gs_sedimenting_tracer_candidates ?
+                α_vert_diff_microphysics : one(α_vert_diff_microphysics)
             ᶜχ = (@. lazy(specific(ᶜρχ, Y.c.ρ)))
-            @. ᶜρχₜ_diffusion = ᶜdivᵥ_ρq(-(ᶠρaK_h * α_vert_diff_microphysics * ᶠgradᵥ(ᶜχ)))
+            # α scales only the turbulent-mixing part; interfacial entrainment
+            # (K_e, inside ᶠρaK_h with weight α) crosses the interface at the
+            # same velocity for every scalar, so its full weight is restored:
+            # α ρ (K_h + K_e) + (1 - α) ρ K_e = ρ (α K_h + K_e).
+            # For passive tracers α = 1, giving the full ρ (K_h + K_e).
+            @. ᶜρχₜ_diffusion = ᶜdivᵥ_ρq(
+                -(
+                    (
+                        α * ᶠρaK_h +
+                        (1 - α) * ᶠinterp(Y.c.ρ) * ᶠK_entr
+                    ) * ᶠgradᵥ(ᶜχ)
+                ),
+            )
             @. ᶜρχₜ -= ᶜρχₜ_diffusion
         end
 

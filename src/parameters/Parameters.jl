@@ -27,7 +27,7 @@ Base.@kwdef struct TurbulenceConvectionParameters{FT, VFT1, VFT2, VTF3} <: ATCP
     max_area::FT
     min_area::FT
     tke_ed_coeff::FT
-    tke_diss_coeff::FT
+    Ri_crit::FT
     tke_surf_scale::FT
     tke_surf_flux_coeff::FT
     diagnostic_covariance_coeff::FT
@@ -60,9 +60,16 @@ Base.@kwdef struct TurbulenceConvectionParameters{FT, VFT1, VFT2, VTF3} <: ATCP
     cloud_fraction_steepness_scale::FT
     cloud_fraction_param_vec::VTF3
     # Augmented-σ floor for `_compute_cloud_fraction`:
-    # σ_S_floor² = (cloud_fraction_eps_rel · q_sat)² + cloud_fraction_sigma_abs².
+    # σ_S_floor² = (D · cloud_fraction_eps_rel · q_sat)² + cloud_fraction_sigma_abs²,
+    # with D ∈ [0, 1] damping the relative floor as the subdomain mean
+    # saturates (see `_compute_cloud_fraction`).
     cloud_fraction_eps_rel::FT
     cloud_fraction_sigma_abs::FT
+    # Interfacial entrainment efficiency A in the interface-aware stability
+    # closure (`set_face_diffusivities!`): w_e = A √κ_iso /
+    # max(Ri_b, 1). A = 0 disables interfacial entrainment (pure effective-
+    # stability closure).
+    interface_entr_efficiency::FT
     # Surface mass flux closure (`set_edmfx_surface_conditions!`).
     sfc_mass_flux_ustar_coeff::FT
     convective_zi::FT

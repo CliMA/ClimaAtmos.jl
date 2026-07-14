@@ -13,21 +13,23 @@ using ClimaCore.Utilities: half
 """
     constrain_state!(Y, p, t)
 
-Apply constraints to the state `Y`.
+Apply physical constraints to the state `Y` in-place.
 
-This function contains constraints that may be applied to the state `Y`,
-in order to ensure that the state satisfies certain physical properties.
+Composes all state-only corrective updates that keep prognostic variables in a
+physically admissible range. The `dss!` call and `set_precomputed_quantities!`
+call are NOT part of this — they are handled separately by `ClimaTimeSteppers`
+via its `dss!` and `cache!` hooks.
 
-Currently, these include
+Currently, this includes
 
   - `prescribe_flow!`: used for 'kinematic driver'-like simulations
   - `tracer_nonnegativity_constraint!`: used to ensure that tracer fields are non-negative
-  - `dss!`: used to ensure that fields are continuous at element boundaries
+  - `enforce_physical_constraints!`: grid-mean microphysics + EDMF updraft corrections
 """
 NVTX.@annotate function constrain_state!(Y, p, t)
     prescribe_flow!(Y, p, t, p.atmos.prescribed_flow)
     tracer_nonnegativity_constraint!(Y, p, t, p.atmos.water.tracer_nonnegativity_method)
-    dss!(Y, p, t)
+    enforce_physical_constraints!(Y, p, t, p.atmos)
     return nothing
 end
 

@@ -175,7 +175,6 @@ function edmfx_vertical_diffusion_tendency!(
         (; params) = p
         (; ᶜρʲs) = p.precomputed
         FT = eltype(p.params)
-        turbconv_params = CAP.turbconv_params(params)
         n = n_mass_flux_subdomains(turbconv_model)
         ᶜdivᵥ_mse = Operators.DivergenceF2C(
             top = Operators.SetValue(C3(0)),
@@ -186,17 +185,17 @@ function edmfx_vertical_diffusion_tendency!(
             bottom = Operators.SetValue(C3(0)),
         )
 
-        (; ᶜlinear_buoygrad, ᶜstrain_rate_norm) = p.precomputed
-        ᶜtke = @. lazy(specific(Y.c.ρtke, Y.c.ρ))
-        # scratch to prevent GPU Kernel parameter memory error
-        ᶜmixing_length_field = p.scratch.ᶜtemp_scalar
-        ᶜmixing_length_field .= ᶜmixing_length(Y, p)
-        ᶜK_u = @. lazy(eddy_viscosity(turbconv_params, ᶜtke, ᶜmixing_length_field))
-        ᶜprandtl_nvec = @. lazy(
-            turbulent_prandtl_number(params, ᶜlinear_buoygrad, ᶜstrain_rate_norm),
-        )
-        ᶜK_h = @. lazy(eddy_diffusivity(ᶜK_u, ᶜprandtl_nvec))
-
+        # Updraft internal diffusion uses the same face-native environment
+        # diffusivity ᶠK_h as the grid-mean diffusion (see
+        # set_face_diffusivities! and edmfx_sgs_diffusive_flux_tendency!):
+        # the SGS turbulence that stirs updraft interiors is the same
+        # environment turbulence, and the face-native, interface-aware
+        # evaluation collapses the flux at faces bordering quiescent,
+        # strongly stratified air without interpolation. ᶠK_entr is
+        # deliberately not added here: it represents grid-mean interfacial
+        # entrainment, which for the updrafts is carried by the
+        # entrainment/detrainment closures.
+        (; ᶠK_h) = p.precomputed
         for j in 1:n
             ᶜρʲ = ᶜρʲs.:($j)
             ᶜmseʲ = Y.c.sgsʲs.:($j).mse
@@ -204,9 +203,9 @@ function edmfx_vertical_diffusion_tendency!(
             # Note: For this and other diffusive tendencies, we should use ρaʲ instead of ρʲ,
             # but it causes stability issues when ρaʲ is small
             @. Yₜ.c.sgsʲs.:($$j).mse -=
-                ᶜdivᵥ_mse(-(ᶠinterp(ᶜρʲ) * ᶠinterp(ᶜK_h) * ᶠgradᵥ(ᶜmseʲ))) / ᶜρʲ
+                ᶜdivᵥ_mse(-(ᶠinterp(ᶜρʲ) * ᶠK_h * ᶠgradᵥ(ᶜmseʲ))) / ᶜρʲ
             @. Yₜ.c.sgsʲs.:($$j).q_tot -=
-                ᶜdivᵥ_q_tot(-(ᶠinterp(ᶜρʲ) * ᶠinterp(ᶜK_h) * ᶠgradᵥ(ᶜq_totʲ))) / ᶜρʲ
+                ᶜdivᵥ_q_tot(-(ᶠinterp(ᶜρʲ) * ᶠK_h * ᶠgradᵥ(ᶜq_totʲ))) / ᶜρʲ
         end
 
         if !isempty(sgs_tracer_names(Y))
@@ -216,43 +215,23 @@ function edmfx_vertical_diffusion_tendency!(
                 top = Operators.SetValue(C3(FT(0))),
                 bottom = Operators.SetValue(C3(FT(0))),
             )
+            # Sedimenting microphysics species are diffused with
+            # α_vert_diff_tracer * K_h, passive tracers with the unscaled K_h,
+            # matching the grid-mean tracer diffusion and the implicit
+            # Jacobian (update_sgs_diffusion_jacobian!).
             for χ_name in sgs_tracer_names(Y)
+                α =
+                    χ_name in sgs_sedimenting_tracer_candidates ?
+                    α_vert_diff_microphysics :
+                    one(α_vert_diff_microphysics)
                 ᶜχʲ = MatrixFields.get_field(Y.c.sgsʲs.:(1), χ_name)
                 ᶜχʲₜ = MatrixFields.get_field(Yₜ.c.sgsʲs.:(1), χ_name)
                 @. ᶜχʲₜ -=
-                    ᶜdivᵥ_q(
-                        -(
-                            ᶠinterp(ᶜρʲ) * ᶠinterp(ᶜK_h) * α_vert_diff_microphysics *
-                            ᶠgradᵥ(ᶜχʲ)
-                        ),
-                    ) / ᶜρʲ
+                    ᶜdivᵥ_q(-(ᶠinterp(ᶜρʲ) * ᶠK_h * α * ᶠgradᵥ(ᶜχʲ))) / ᶜρʲ
             end
         end
     end
 end
-
-"""
-    enforce_physical_constraints!(Y, p, t, turbconv_model)
-
-Enforce physical constraints on the model state `Y` in-place.
-
-This function is used as a callback and is not a tendency evaluation. It applies
-local corrective updates to keep prognostic variables in a physically admissible
-range.
-
-Currently, this includes:
-- For prognostic EDMF, handling non-positive updraft area fractions by
-  immediately mixing the affected updraft state with the environment.
-- For one- and two-moment microphysics, enforcing non-negative condensate
-  masses.
-- When total moisture is positive, rescaling condensate masses so that their
-  sum does not exceed total moisture.
-
-These corrections are intended to prevent nonphysical states such as negative
-area fractions, negative condensate masses, or condensate mass exceeding the
-available total moisture. Ideally, the need for this correction is minimized
-by the numerical scheme.
-"""
 
 # Private helper: clips grid-mean condensate tracers to non-negative values and
 # rescales the condensate sum so it cannot exceed the available total moisture.
@@ -341,7 +320,7 @@ end
 
 Enforce physical consistency of the model state by calling the appropriate
 constraint helpers based on the active microphysics and turbulence-convection
-models. `set_precomputed_quantities!` is called exactly once at the end.
+models.
 """
 function enforce_physical_constraints!(Y, p, t, atmos::AtmosModel)
     # Grid-mean microphysics: non-negativity + condensate ≤ total moisture.
@@ -357,6 +336,5 @@ function enforce_physical_constraints!(Y, p, t, atmos::AtmosModel)
         enforce_edmf_updraft_constraints!(Y, p, t, atmos.turbconv_model)
     end
 
-    set_precomputed_quantities!(Y, p, t)
     return nothing
 end

@@ -242,7 +242,7 @@ end
 
 function get_steady_state_velocity(params, Y, topo, initial_condition, mesh_warp_type)
     initial_condition == "ConstantBuoyancyFrequencyProfile" &&
-        mesh_warp_type == "Linear" ||
+    mesh_warp_type == "Linear" ||
         error("The steady-state velocity can currently be computed only for a \
                ConstantBuoyancyFrequencyProfile with Linear mesh warping")
     top_level = Spaces.nlevels(axes(Y.c)) + Fields.half
@@ -532,6 +532,8 @@ function get_simulation(config::AtmosConfig)
         ode_config = ode_configuration(FT, pa),
         jacobian = jacobian_from_parsed_args(pa),
         debug_jacobian = pa["debug_jacobian"],
+        update_cache_every = pa["update_cache_every"],
+        update_constrain_state_every = pa["update_constrain_state_every"],
         aerosol_names = Tuple(pa["prescribed_aerosols"]),
         time_varying_trace_gases = Tuple(pa["time_varying_trace_gases"]),
         vertical_water_borrowing_species =

@@ -1,0 +1,35 @@
+# Seeds the shared, read-only Julia depot that climaatmos-ci reads as the base of
+# its layered JULIA_DEPOT_PATH. Builds into a fresh versioned dir, locks it, and
+# atomically swaps the `shared` symlink -- so consumers never read a depot that is
+# being written (the overwrite/rebuild race this removes). Consumers point their
+# read-only base at $SHARED_DEPOT_ROOT/shared. Run nightly and after dep bumps.
+
+agents:
+  queue: central
+  slurm_mem: 8G
+  modules: climacommon/2025_03_18
+
+env:
+  OPENBLAS_NUM_THREADS: 1
+  JULIA_NVTX_CALLBACKS: gc
+  JULIA_MAX_NUM_PRECOMPILE_FILES: 100
+  # Shared location, hard-coded to climaatmos-ci so the seed writes exactly where
+  # the consumer reads (both run on the same agents, same ${BUILDKITE_BUILD_PATH}).
+  SHARED_DEPOT_ROOT: "${BUILDKITE_BUILD_PATH}/climaatmos-ci/depot"
+  JULIA_DEPOT_PATH: "${BUILDKITE_BUILD_PATH}/climaatmos-ci/depot/versions/${BUILDKITE_BUILD_NUMBER}"
+
+steps:
+  - label: ":package: Build & publish shared depot"
+    key: "build_depot"
+    concurrency: 1
+    concurrency_group: "depot-seed/climaatmos-ci"
+    retry:
+      automatic:
+        - exit_status: -1  # agent lost
+          limit: 1
+    agents:
+      slurm_cpus_per_task: 8
+    env:
+      JULIA_NUM_PRECOMPILE_TASKS: 8
+    command:
+      - ".buildkite/build_depot.sh"

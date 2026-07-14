@@ -1,6 +1,7 @@
 import Dates
 import JSON
 import OrderedCollections
+import BenchmarkTools
 include(joinpath(@__DIR__, "..", "src", "config", "yaml_helper.jl"))
 
 function sorted_dataset_folder(; dir = pwd())
@@ -84,9 +85,14 @@ summaries["This PR"] = combine_PRs_performance_benchmarks(ca_dir)
 get_metric(summaries, commit, job_id, func, metric, has_func) =
     has_func[func * commit] ? summaries[commit][job_id][func][metric] : "NA"
 
+pretty_metric(x::AbstractString, _) = x
+pretty_metric(x, metric) =
+    metric == "memory" ? BenchmarkTools.prettymemory(x) :
+    metric == "time_median" ? BenchmarkTools.prettytime(x) : string(x)
+
 function metric_name(metric)
     metric_name_map =
-        Dict("t_mean_val" => "Time (ave)", "mem_val" => "Allocations")
+        Dict("time_median" => "Time (median)", "memory" => "Allocations")
     return metric_name_map[metric]
 end
 
@@ -115,7 +121,10 @@ function tabulate_summaries(summaries, job_id, metric_tup, funcs, has_func)
 
     data_history = map(commits) do commit
         map(funcs) do func
-            get_metric(summaries, commit, job_id, func, metric, has_func)
+            pretty_metric(
+                get_metric(summaries, commit, job_id, func, metric, has_func),
+                metric,
+            )
         end
     end
 
@@ -176,9 +185,9 @@ function tabulate_summaries(summaries, job_id, metric_tup, funcs, has_func)
 end
 
 metric_tups = [
-    ("mem", "mem_val"),
+    ("memory", "memory"),
     # ("nalloc", "nalloc"),
-    ("t_mean", "t_mean_val"),
+    ("time_median", "time_median"),
 ]
 
 # These functions should match with those in

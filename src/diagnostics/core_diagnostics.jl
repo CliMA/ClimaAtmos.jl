@@ -200,18 +200,19 @@ function compute_lmix(state, cache, _)
     # (smagorinsky_lilly, dz) into a single function
     if isa(turbconv_model, PrognosticEDMFX) ||
        isa(turbconv_model, EDOnlyEDMFX)
-        return ᶜmixing_length(state, cache)
+        # Already materialized into the cache during the explicit update.
+        return cache.precomputed.ᶜl_mix
     end
     (; params) = cache
-    (; ᶜlinear_buoygrad, ᶜstrain_rate_norm) = cache.precomputed
+    (; ᶜN²_eff, ᶜstrain_rate_norm) = cache.precomputed
     ᶜdz = Fields.Δz_field(axes(state.c))
     ᶜprandtl_nvec = @. lazy(turbulent_prandtl_number(
-        params, ᶜlinear_buoygrad, ᶜstrain_rate_norm,
+        params, ᶜN²_eff, ᶜstrain_rate_norm,
     ))
     return @. lazy(
         smagorinsky_lilly_length(
             CAP.c_smag(params),
-            sqrt(max(ᶜlinear_buoygrad, 0)),   # N_eff
+            sqrt(max(ᶜN²_eff, 0)),   # N_eff
             ᶜdz, ᶜprandtl_nvec, ᶜstrain_rate_norm,
         ),
     )
@@ -231,8 +232,8 @@ add_diagnostic_variable!(short_name = "lmix", units = "m",
 # Buoyancy gradient (3d)
 ###
 add_diagnostic_variable!(short_name = "bgrad", units = "s^-2",
-    long_name = "Linearized Buoyancy Gradient",
-    compute = (_, cache, _) -> cache.precomputed.ᶜlinear_buoygrad,
+    long_name = "Vertical Moist Buoyancy Gradient",
+    compute = (_, cache, _) -> cache.precomputed.ᶜbuoygrad,
 )
 
 ###

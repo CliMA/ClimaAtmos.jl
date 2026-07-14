@@ -1,5 +1,5 @@
-
 # Creating custom configurations
+
 To create a custom configuration, first make a .yml file.
 In the file, you can set configuration arguments as `key: value` pairs to override the default config.
 YAML parsing is fairly forgiving -- values will generally be parsed to the correct type.
@@ -12,7 +12,9 @@ julia --project=.buildkite .buildkite/ci_driver.jl --config_file path/to/config.
 ```
 
 ### Example
+
 Below is the default Bomex configuration:
+
 ```
 initial_condition: "Bomex"
 turbconv: "prognostic_edmfx"
@@ -43,19 +45,23 @@ toml: [toml/prognostic_edmfx.toml]
 Keys can also point to artifacts. As artifacts are folders, we specify both the artifact name, as we would from the REPL, and file to read from, separated by a `/`. For example, to drive a single
 column model with an external forcing file from GCM output, we include the following lines in the
 configuration:
+
 ```
 insolation: "gcmdriven"
 external_forcing_file: artifact"cfsite_gcm_forcing"/HadGEM2-A_amip.2004-2008.07.nc
 ```
+
 To learn more about artifacts and how they're used in CliMA, visit [ClimaArtifacts.jl](https://github.com/CliMA/ClimaArtifacts).
 
 To add a new configuration argument/key, open `.buildkite/default_config.yml`.
 Add an entry with the following format:
+
 ```
 <argument_name>:
     value: <argument_value>
     help: <help string>
 ```
+
 The `help` field is optional if you don't plan on making a permanent change to the configuration argument.
 
 See below for the full list of configuration arguments.
@@ -65,15 +71,15 @@ See below for the full list of configuration arguments.
 A few behaviors are controlled by environment variables rather than the
 configuration file:
 
-- **`CI`**: when set (as it is on our continuous-integration tests), the
-  default output directory is `<job_id>` instead of `output/<job_id>`. Set by
-  the CI system; you normally do not need to set it yourself. (See
-  `setup_output_dir` in `src/simulation/restart.jl`.)
+  - **`CI`**: when set (as it is on our continuous-integration tests), the
+    default output directory is `<job_id>` instead of `output/<job_id>`. Set by
+    the CI system; you normally do not need to set it yourself. (See
+    `setup_output_dir` in `src/simulation/restart.jl`.)
 
-- **`CLIMAATMOS_GC_NSTEPS`**: number of steps between manual garbage-collection
-  calls for distributed (MPI) runs. Defaults to `1000`. Only has an effect when
-  running with more than one process. (See `gc_callback` in
-  `src/callbacks/get_callbacks.jl`.)
+  - **`CLIMAATMOS_GC_NSTEPS`**: number of steps between manual garbage-collection
+    calls for distributed (MPI) runs. Defaults to `1000`. Only has an effect when
+    running with more than one process. (See `gc_callback` in
+    `src/callbacks/get_callbacks.jl`.)
 
 # Common Configurations
 
@@ -82,26 +88,28 @@ ClimaAtmos provides a set of common numerical configurations that can be used as
 ## Available Common Configurations
 
 ### Column Configurations
-- **`numerics_column_ze63.yml`**: Single column configuration with 63 vertical levels
+
+  - **`numerics_column_ze63.yml`**: Single column configuration with 63 vertical levels
 
 ### Sphere Configurations
-- **`numerics_sphere_he6ze10.yml`**: Spherical configuration with 6 horizontal elements (550km), 10 vertical levels, 30km domain top, no sponge, explicit vertical diffusion
 
-- **`numerics_sphere_he6ze31.yml`**: Spherical configuration with 6 horizontal elements (550km), 31 vertical levels, 60km domain top, rayleigh and viscous sponges, implicit vertical diffusion
+  - **`numerics_sphere_he6ze10.yml`**: Spherical configuration with 6 horizontal elements (550km), 10 vertical levels, 30km domain top, no sponge, explicit vertical diffusion
 
-- **`numerics_sphere_he16ze63.yml`**: Spherical configuration with 16 horizontal elements (206km), 63 vertical levels, 60km domain top, rayleigh and viscous sponges, implicit vertical diffusion
+  - **`numerics_sphere_he6ze31.yml`**: Spherical configuration with 6 horizontal elements (550km), 31 vertical levels, 60km domain top, rayleigh and viscous sponges, implicit vertical diffusion
 
-- **`numerics_sphere_he30ze43.yml`**: Spherical configuration with 30 horizontal elements (110km), 43 vertical levels, 30km domain top, no sponge, explicit vertical diffusion
+  - **`numerics_sphere_he16ze63.yml`**: Spherical configuration with 16 horizontal elements (206km), 63 vertical levels, 60km domain top, rayleigh and viscous sponges, implicit vertical diffusion
 
-- **`numerics_sphere_he30ze63.yml`**: Spherical configuration with 30 horizontal elements (110km), 63 vertical levels, 60km domain top, rayleigh and viscous sponges, implicit vertical diffusion
+  - **`numerics_sphere_he30ze43.yml`**: Spherical configuration with 30 horizontal elements (110km), 43 vertical levels, 30km domain top, no sponge, explicit vertical diffusion
+
+  - **`numerics_sphere_he30ze63.yml`**: Spherical configuration with 30 horizontal elements (110km), 63 vertical levels, 60km domain top, rayleigh and viscous sponges, implicit vertical diffusion
 
 ### Diagnostics Configurations for Prognostic EDMF Columns
 
 Common diagnostics sets for prognostic EDMF single-column runs. Each file defines a `diagnostics:` block mostly at 10-minute output frequency; individual model configs can add case-specific diagnostics on top.
 
-- **`diagnostics_column_progedmf_0M.yml`**: Standard diagnostics for prognostic EDMF columns with 0-moment microphysics (`microphysics_model: "0M"`). Includes atmospheric state, surface fluxes and precipitation, updraft/environment profiles, and entrainment/detrainment variables.
+  - **`diagnostics_column_progedmf_0M.yml`**: Standard diagnostics for prognostic EDMF columns with 0-moment microphysics (`microphysics_model: "0M"`). Includes atmospheric state, surface fluxes and precipitation, updraft/environment profiles, and entrainment/detrainment variables.
 
-- **`diagnostics_column_progedmf_1M.yml`**: Standard diagnostics for prognostic EDMF columns with 1-moment microphysics (`microphysics_model: "1M"`). Extends the 0M set with rain/snow specific humidities, updraft/environment precipitation variables, and the full suite of 1M bulk microphysics process rates for the environment, updraft, and environment (`mp1m_*`, `mp1mup_*`, `mp1men_*`).
+  - **`diagnostics_column_progedmf_1M.yml`**: Standard diagnostics for prognostic EDMF columns with 1-moment microphysics (`microphysics_model: "1M"`). Extends the 0M set with rain/snow specific humidities, updraft/environment precipitation variables, and the full suite of 1M bulk microphysics process rates for the environment, updraft, and environment (`mp1m_*`, `mp1mup_*`, `mp1men_*`).
 
 ## Using Common Configurations
 
