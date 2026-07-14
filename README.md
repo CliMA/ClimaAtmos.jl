@@ -45,7 +45,7 @@ ClimaAtmos.jl solves the compressible equations of atmospheric motion on cubed-s
   <img src="https://github.com/user-attachments/assets/778b0c14-a5d7-4907-82db-6d1f8a0c5b07" alt="Condensed water path from a global ClimaAtmos simulation">
 </p>
 
-Condensed water path from a global simulation using diagnostic EDMF and 0M microphysics, initialized with ERA5 on 8-31-25 00Z. Output every 30 minutes; ran for ~4 days.
+Condensed water path from a global simulation initialized with ERA5 on 8-31-25 00Z. Output every 30 minutes; ran for ~4 days.
 
 ## Features
 
