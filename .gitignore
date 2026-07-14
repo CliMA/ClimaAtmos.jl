@@ -25,7 +25,8 @@ docs/site/
 docs/src/config.md
 
 /Manifest*.toml
-*/Manifest*.toml  # docs, test
+# docs, test, .buildkite
+*/Manifest*.toml
 .buildkite/PrecompileCI/Manifest*.toml
 calibration/test/Manifest*.toml
 
