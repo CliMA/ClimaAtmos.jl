@@ -22,7 +22,7 @@ function center_prognostic_variables(physical_state, local_geometry, params, atm
     sgs = turbconv_center_variables(
         physical_state, local_geometry, params,
         atmos_model.turbconv_model, atmos_model.microphysics_model,
-        atmos_model.chemistry_model,
+        atmos_model.chemistry_model, atmos_model.interactive_aerosols,
     )
     return (; gs..., sgs...)
 end
@@ -54,6 +54,13 @@ function grid_scale_center_variables(physical_state, local_geometry, params, atm
     )
 end
 
+"""
+SGS (updraft) aerosol tracers to include in the updraft `sgsʲs` NamedTuple,
+mirroring the grid-scale `interactive_aerosol_variables`. These are specific
+(mass-fraction) quantities, initialized to zero consistent with the zero
+grid-scale initial condition; once present they are transported by EDMF (mass
+flux, entrainment/detrainment, diffusion) via `sgs_tracer_names(Y)`.
+"""
 @generated function interactive_aerosol_variables(ρ, ::Val{names}) where {names}
     N = length(names)
     ρ_names = ntuple(i -> Symbol(:ρ, names[i]), N)
@@ -63,6 +70,15 @@ end
     end
 end
 interactive_aerosol_variables(ρ, ::Val{()}) = (;)
+
+@generated function interactive_aerosol_sgs_variables(ρ, ::Val{names}) where {names}
+    N = length(names)
+    vals = ntuple(_ -> :(zero(ρ)), N)
+    return quote
+        NamedTuple{$names}(($(vals...),))
+    end
+end
+interactive_aerosol_sgs_variables(ρ, ::Val{()}) = (;)
 
 # ============================================================================
 # Moisture dispatch
@@ -139,7 +155,8 @@ mass-flux subdomains in `turbconv_model`.
 uniform_subdomains(nt, turbconv_model) =
     ntuple(Returns(nt), Val(n_mass_flux_subdomains(turbconv_model)))
 
-turbconv_center_variables(physical_state, local_geometry, params, ::Nothing, _, _) = (;)
+turbconv_center_variables(physical_state, local_geometry, params, ::Nothing, _, _, _) =
+    (;)
 
 function turbconv_center_variables(
     physical_state,
@@ -148,6 +165,7 @@ function turbconv_center_variables(
     turbconv_model::PrognosticEDMFX,
     microphysics_model,
     chemistry_model,
+    interactive_aerosols,
 )
     ρ = air_density(physical_state, params)
     (; tke, draft_area, T, q_tot, q_liq, q_ice) = physical_state
@@ -158,7 +176,9 @@ function turbconv_center_variables(
     e_pot = geopotential(CAP.grav(params), local_geometry.coordinates.z)
     mse = TD.moist_static_energy(thermo_params, T, e_pot, q_tot, q_liq, q_ice)
     sgsʲs = uniform_subdomains(
-        (; ρa, mse, q_tot, chemistry_sgs_variables(physical_state, chemistry_model)...),
+        (; ρa, mse, q_tot,
+            chemistry_sgs_variables(physical_state, chemistry_model)...,
+            interactive_aerosol_sgs_variables(ρ, interactive_aerosols)...),
         turbconv_model,
     )
     return (; ρtke, sgsʲs)
@@ -171,6 +191,7 @@ function turbconv_center_variables(
     turbconv_model::PrognosticEDMFX,
     microphysics_model::NonEquilibriumMicrophysics,
     chemistry_model,
+    interactive_aerosols,
 )
     (; T, q_tot, q_liq, q_ice, q_rai, q_sno, n_liq, n_rai, tke, draft_area) = physical_state
     ρ = air_density(physical_state, params)
@@ -181,10 +202,11 @@ function turbconv_center_variables(
     e_pot = geopotential(CAP.grav(params), local_geometry.coordinates.z)
     mse = TD.moist_static_energy(thermo_params, T, e_pot, q_tot, q_liq, q_ice)
     chem_sgs = chemistry_sgs_variables(physical_state, chemistry_model)
+    aero_sgs = interactive_aerosol_sgs_variables(ρ, interactive_aerosols)
     if microphysics_model isa NonEquilibriumMicrophysics1M
         sgsʲs = uniform_subdomains(
             (; ρa, mse, q_tot, q_lcl = q_liq, q_icl = q_ice, q_rai, q_sno,
-                chem_sgs...),
+                chem_sgs..., aero_sgs...),
             turbconv_model,
         )
     else  # NonEquilibriumMicrophysics2M
@@ -192,7 +214,7 @@ function turbconv_center_variables(
             (; ρa, mse, q_tot,
                 q_lcl = q_liq, q_icl = q_ice, q_rai, q_sno,
                 n_lcl = n_liq, n_rai,
-                chem_sgs...,
+                chem_sgs..., aero_sgs...,
             ),
             turbconv_model,
         )
@@ -205,6 +227,7 @@ function turbconv_center_variables(
     local_geometry,
     params,
     turbconv_model::EDOnlyEDMFX,
+    _,
     _,
     _,
 )
