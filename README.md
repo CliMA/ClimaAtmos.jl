@@ -1,32 +1,72 @@
-<!-- Title -->
+<div align="center">
+  <img src="docs/src/assets/logo.svg" alt="ClimaAtmos.jl Logo" width="128" height="128">
 
-<h1 align="center">
-  <img src="logo.svg" width="180px"> <br>
-ClimaAtmos.jl
-</h1>
+# ClimaAtmos.jl
 
-<!-- description -->
+</div>
 
 <p align="center">
   <strong>Atmosphere components of the CliMA software stack.</strong>
 </p>
 
-[![docsbuild](https://github.com/CliMA/ClimaAtmos.jl/workflows/Documentation/badge.svg)](https://github.com/CliMA/ClimaAtmos.jl/actions?query=workflow%3ADocumentation)
-[![dev](https://img.shields.io/badge/docs-dev-blue.svg)](https://CliMA.github.io/ClimaAtmos.jl/dev/)
-[![ghaci](https://github.com/CliMA/ClimaAtmos.jl/actions/workflows/ci.yml/badge.svg)](https://github.com/CliMA/ClimaAtmos.jl/actions/workflows/ci.yml)
-[![buildkite](https://badge.buildkite.com/2a31b42d67409c27660a0dcce65b49294cd9c6b9f14c12f21e.svg/?branch=main)](https://buildkite.com/clima/climaatmos-ci)
-[![codecov](https://codecov.io/gh/CliMA/ClimaAtmos.jl/branch/main/graph/badge.svg)](https://codecov.io/gh/CliMA/ClimaAtmos.jl)
-[![discussions](https://img.shields.io/badge/Ask%20us-anything-1abc9c.svg?style=flat-square)](https://github.com/CliMA/ClimaAtmos.jl/discussions)
-[![col-prac](https://img.shields.io/badge/ColPrac-Contributor's%20Guide-blueviolet?style=flat-square)](https://github.com/SciML/ColPrac)
-[![downloads](https://img.shields.io/badge/dynamic/json?url=http%3A%2F%2Fjuliapkgstats.com%2Fapi%2Fv1%2Ftotal_downloads%2FClimaAtmos&query=total_requests&suffix=%2Ftotal&label=Downloads)](http://juliapkgstats.com/pkg/ClimaAtmos)
+|||
+|------------------:|:------------------------------------------------------------|
+| **Documentation** | [![stable][docs-stable-img]][docs-stable-url] [![dev][docs-dev-img]][docs-dev-url] |
+| **Tests**         | [![gha ci][gha-ci-img]][gha-ci-url] [![buildkite][bk-ci-img]][bk-ci-url] |
+| **Code Coverage** | [![codecov][codecov-img]][codecov-url]                      |
+| **Downloads**     | [![Downloads][dlt-img]][dlt-url]                            |
+| **Contributing**  | [![colprac][colprac-img]][colprac-url]                      |
 
-ClimaAtmos.jl is the atmosphere components of the CliMA software stack. We strive for a user interface that makes ClimaAtmos.jl as friendly and intuitive to use as possible, allowing users to focus on the science.
+[docs-stable-img]: https://img.shields.io/badge/docs-stable-blue.svg
+[docs-stable-url]: https://CliMA.github.io/ClimaAtmos.jl/stable/
+
+[docs-dev-img]: https://img.shields.io/badge/docs-dev-blue.svg
+[docs-dev-url]: https://CliMA.github.io/ClimaAtmos.jl/dev/
+
+[gha-ci-img]: https://github.com/CliMA/ClimaAtmos.jl/actions/workflows/ci.yml/badge.svg
+[gha-ci-url]: https://github.com/CliMA/ClimaAtmos.jl/actions/workflows/ci.yml
+
+[bk-ci-img]: https://badge.buildkite.com/2a31b42d67409c27660a0dcce65b49294cd9c6b9f14c12f21e.svg?branch=main
+[bk-ci-url]: https://buildkite.com/clima/climaatmos-ci
+
+[codecov-img]: https://codecov.io/gh/CliMA/ClimaAtmos.jl/branch/main/graph/badge.svg
+[codecov-url]: https://codecov.io/gh/CliMA/ClimaAtmos.jl
+
+[dlt-img]: https://img.shields.io/badge/dynamic/json?url=http%3A%2F%2Fjuliapkgstats.com%2Fapi%2Fv1%2Ftotal_downloads%2FClimaAtmos&query=total_requests&suffix=%2Ftotal&label=Downloads
+[dlt-url]: http://juliapkgstats.com/pkg/ClimaAtmos
+
+[colprac-img]: https://img.shields.io/badge/ColPrac-Contributor's%20Guide-blueviolet?style=flat-square
+[colprac-url]: https://github.com/SciML/ColPrac
+
+ClimaAtmos.jl is the atmosphere components of the CliMA software stack. We strive for a user interface that makes ClimaAtmos.jl as friendly and intuitive to use as possible, allowing users to focus on the science. It runs on CPUs and GPUs and is designed to work with data assimilation and machine learning tools.
 
 <p align="center">
   <img src="https://github.com/user-attachments/assets/778b0c14-a5d7-4907-82db-6d1f8a0c5b07" alt="animation (1)">
 </p>
 
 Condensed water path from a global simulation using diagnostic EDMF and 0M microphysics, initialized with ERA5 on 8-31-25 00Z. Output every 30 minutes; ran for ~4 days.
+
+## Features
+
+- **Global simulations** on cubed-sphere grids with topography
+- **Single-column models** for BOMEX, DYCOMS, RICO, and other standard cases
+- **GPU acceleration** via CUDA
+- **ERA5 and GCM-driven** initial conditions and forcing
+- **Turbulence and convection** (TKE-based diffusion and prognostic EDMF)
+- **Microphysics** (0-moment, 1-moment, 2-moment)
+- **Configurable diagnostics** with NetCDF and HDF5 output
+- **Restarts and checkpointing** for long simulations
+
+## Quick Example
+
+```julia
+import ClimaAtmos as CA
+
+simulation = CA.AtmosSimulation{Float32}(; t_end = "1days")
+CA.solve_atmos!(simulation)
+```
+
+This runs a 1-day global simulation with default settings (cubed-sphere grid, decaying temperature profile, IMEX timestepping). See the [documentation](https://CliMA.github.io/ClimaAtmos.jl/dev/) for how to customize a simulation, including the script vs. config interfaces.
 
 ## Installation instructions
 
@@ -92,6 +132,6 @@ If you're interested in contributing to the development of ClimaAtmos we want yo
 
 Let us know by [opening an issue](https://github.com/CliMA/ClimaAtmos.jl/issues/new) if you'd like to work on a new feature.
 
-Here is the rule of thumb [coding style](https://clima.github.io/ClimateMachine.jl/latest/DevDocs/CodeStyle/) and [unicode usage restrictions](https://clima.github.io/ClimateMachine.jl/latest/DevDocs/AcceptableUnicode/).
+Contributors should follow the shared CliMA engineering standards in [`docs/dev-guides/`](docs/dev-guides/), which cover architecture, performance, code quality, documentation, and workflows. These are vendored from [CliMA/DeveloperGuides](https://github.com/CliMA/DeveloperGuides). The repo's [`AGENTS.md`](AGENTS.md) is a starting point for AI agents with repo-specific guidance.
 
-For more information, check out our [contributor's guide](https://clima.github.io/ClimaAtmos.jl/dev/contributor_guide/).
+For more information, check out our [contributor's guide](https://CliMA.github.io/ClimaAtmos.jl/dev/contributor_guide/).

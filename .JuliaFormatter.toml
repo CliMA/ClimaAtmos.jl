@@ -6,4 +6,4 @@ whitespace_ops_in_indices = true
 join_lines_based_on_source = true  # https://domluna.github.io/JuliaFormatter.jl/dev/#join_lines_based_on_source
 format_docstrings = true
 format_markdown = true
-ignore = ["docs/dev-guides", ".github", "**/README.md", "NEWS.md", "AGENTS.md"]
+ignore = ["docs/dev-guides", ".github", "**/README.md", "README.md", "NEWS.md", "AGENTS.md"]
