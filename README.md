@@ -8,38 +8,14 @@ The atmosphere model of the CliMA Earth System Model: a GPU-capable global atmos
 
 ClimaAtmos.jl solves the compressible equations of atmospheric motion on cubed-sphere and column grids, with physics parameterizations for turbulence and convection (EDMF), cloud microphysics, and radiation. It is built on [ClimaCore.jl](https://github.com/CliMA/ClimaCore.jl) and runs on CPUs and GPUs from a single codebase.
 
-|||
-|------------------:|:------------------------------------------------------------|
-| **Documentation** | [![stable][docs-stable-img]][docs-stable-url] [![dev][docs-dev-img]][docs-dev-url] |
-| **Version**       | [![version][version-img]][version-url]                      |
-| **License**       | [![license][license-img]][license-url]                      |
-| **Tests**         | [![gha ci][gha-ci-img]][gha-ci-url] [![buildkite][bk-ci-img]][bk-ci-url] |
-| **Code Coverage** | [![codecov][codecov-img]][codecov-url]                      |
-| **Downloads**     | [![Downloads][dlt-img]][dlt-url]                            |
-
-[docs-stable-img]: https://img.shields.io/badge/docs-stable-blue.svg
-[docs-stable-url]: https://CliMA.github.io/ClimaAtmos.jl/stable/
-
-[docs-dev-img]: https://img.shields.io/badge/docs-dev-blue.svg
-[docs-dev-url]: https://CliMA.github.io/ClimaAtmos.jl/dev/
-
-[version-img]: https://juliahub.com/docs/ClimaAtmos/version.svg
-[version-url]: https://juliahub.com/ui/Packages/General/ClimaAtmos
-
-[license-img]: https://img.shields.io/badge/license-Apache%202.0-blue.svg
-[license-url]: https://github.com/CliMA/ClimaAtmos.jl/blob/main/LICENSE
-
-[gha-ci-img]: https://github.com/CliMA/ClimaAtmos.jl/actions/workflows/ci.yml/badge.svg
-[gha-ci-url]: https://github.com/CliMA/ClimaAtmos.jl/actions/workflows/ci.yml
-
-[bk-ci-img]: https://badge.buildkite.com/2a31b42d67409c27660a0dcce65b49294cd9c6b9f14c12f21e.svg?branch=main
-[bk-ci-url]: https://buildkite.com/clima/climaatmos-ci/builds?branch=main
-
-[codecov-img]: https://codecov.io/gh/CliMA/ClimaAtmos.jl/branch/main/graph/badge.svg
-[codecov-url]: https://codecov.io/gh/CliMA/ClimaAtmos.jl
-
-[dlt-img]: https://img.shields.io/badge/dynamic/json?url=http%3A%2F%2Fjuliapkgstats.com%2Fapi%2Fv1%2Ftotal_downloads%2FClimaAtmos&query=total_requests&label=Downloads
-[dlt-url]: https://juliapkgstats.com/pkg/ClimaAtmos
+|                   |                                                                                                                                                                                                                                                                                                                                      |
+| -----------------:|:------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Documentation** | [![stable](https://img.shields.io/badge/docs-stable-blue.svg)](https://CliMA.github.io/ClimaAtmos.jl/stable/) [![dev](https://img.shields.io/badge/docs-dev-blue.svg)](https://CliMA.github.io/ClimaAtmos.jl/dev/)                                                                                                                   |
+| **Version**       | [![version](https://juliahub.com/docs/ClimaAtmos/version.svg)](https://juliahub.com/ui/Packages/General/ClimaAtmos)                                                                                                                                                                                                                  |
+| **License**       | [![license](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](https://github.com/CliMA/ClimaAtmos.jl/blob/main/LICENSE)                                                                                                                                                                                                   |
+| **Tests**         | [![gha ci](https://github.com/CliMA/ClimaAtmos.jl/actions/workflows/ci.yml/badge.svg)](https://github.com/CliMA/ClimaAtmos.jl/actions/workflows/ci.yml) [![buildkite](https://badge.buildkite.com/2a31b42d67409c27660a0dcce65b49294cd9c6b9f14c12f21e.svg?branch=main)](https://buildkite.com/clima/climaatmos-ci/builds?branch=main) |
+| **Code Coverage** | [![codecov](https://codecov.io/gh/CliMA/ClimaAtmos.jl/branch/main/graph/badge.svg)](https://codecov.io/gh/CliMA/ClimaAtmos.jl)                                                                                                                                                                                                       |
+| **Downloads**     | [![Downloads](https://img.shields.io/badge/dynamic/json?url=http%3A%2F%2Fjuliapkgstats.com%2Fapi%2Fv1%2Ftotal_downloads%2FClimaAtmos&query=total_requests&label=Downloads)](https://juliapkgstats.com/pkg/ClimaAtmos)                                                                                                                |
 
 <p align="center">
   <img src="https://github.com/user-attachments/assets/778b0c14-a5d7-4907-82db-6d1f8a0c5b07" alt="Condensed water path from a global ClimaAtmos simulation">
@@ -49,12 +25,12 @@ Condensed water path from a global simulation initialized with ERA5 on 8-31-25 0
 
 ## Features
 
-- **Global and single-column configurations**: cubed-sphere grids for global simulations, column grids for parameterization development and testing
-- **Turbulence and convection**: eddy-diffusivity mass-flux (EDMF) schemes, designed for calibration with data assimilation and machine learning
-- **Cloud microphysics**: 0-moment to 2-moment bulk schemes via [CloudMicrophysics.jl](https://github.com/CliMA/CloudMicrophysics.jl)
-- **Radiation**: RRTMGP radiative transfer
-- **GPU support**: runs on CPUs and NVIDIA GPUs from the same codebase
-- **Composable configuration**: script and YAML-config interfaces for every aspect of a simulation
+  - **Global and single-column configurations**: cubed-sphere grids for global simulations, column grids for parameterization development and testing
+  - **Turbulence and convection**: eddy-diffusivity mass-flux (EDMF) schemes, designed for calibration with data assimilation and machine learning
+  - **Cloud microphysics**: 0-moment to 2-moment bulk schemes via [CloudMicrophysics.jl](https://github.com/CliMA/CloudMicrophysics.jl)
+  - **Radiation**: RRTMGP radiative transfer
+  - **GPU support**: runs on CPUs and NVIDIA GPUs from the same codebase
+  - **Composable configuration**: script and YAML-config interfaces for every aspect of a simulation
 
 ## Installation
 
@@ -87,18 +63,18 @@ See [Your First Simulation](https://CliMA.github.io/ClimaAtmos.jl/dev/first_simu
 
 ## Documentation
 
-- **[Stable docs](https://CliMA.github.io/ClimaAtmos.jl/stable/)** — equations, parameterizations, configuration reference, and API
-- **[Dev docs](https://CliMA.github.io/ClimaAtmos.jl/dev/)** — latest development version
-- **[Available diagnostics](https://CliMA.github.io/ClimaAtmos.jl/dev/available_diagnostics/)** — output variables
+  - **[Stable docs](https://CliMA.github.io/ClimaAtmos.jl/stable/)** — equations, parameterizations, configuration reference, and API
+  - **[Dev docs](https://CliMA.github.io/ClimaAtmos.jl/dev/)** — latest development version
+  - **[Available diagnostics](https://CliMA.github.io/ClimaAtmos.jl/dev/available_diagnostics/)** — output variables
 
 ## Integration with CliMA models
 
 ClimaAtmos.jl is a component of the [CliMA](https://github.com/CliMA) Earth System Model:
 
-- [ClimaCore.jl](https://github.com/CliMA/ClimaCore.jl) — dynamical core and discretization tools
-- [ClimaCoupler.jl](https://github.com/CliMA/ClimaCoupler.jl) — coupling to ocean, land, and sea ice components
-- [Thermodynamics.jl](https://github.com/CliMA/Thermodynamics.jl) — moist thermodynamics
-- [ClimaParams.jl](https://github.com/CliMA/ClimaParams.jl) — centralized, calibratable model parameters
+  - [ClimaCore.jl](https://github.com/CliMA/ClimaCore.jl) — dynamical core and discretization tools
+  - [ClimaCoupler.jl](https://github.com/CliMA/ClimaCoupler.jl) — coupling to ocean, land, and sea ice components
+  - [Thermodynamics.jl](https://github.com/CliMA/Thermodynamics.jl) — moist thermodynamics
+  - [ClimaParams.jl](https://github.com/CliMA/ClimaParams.jl) — centralized, calibratable model parameters
 
 ## Contributing
 
