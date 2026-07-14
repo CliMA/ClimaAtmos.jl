@@ -21,6 +21,10 @@ import .Parameters as CAP
 
 include(joinpath("utils", "abbreviations.jl"))
 include(joinpath("utils", "gpu_compat.jl"))
+include(joinpath("column_datasets", "ColumnDatasets.jl"))
+import .ColumnDatasets
+import .ColumnDatasets: ClimaColumnFiles
+include(joinpath("prognostic_equations", "forcing", "forcing_terms.jl"))
 include("types.jl")
 include(joinpath("config", "atmos_config.jl"))
 include(joinpath("config", "cli_options.jl"))
