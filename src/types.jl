@@ -994,7 +994,7 @@ Base.broadcastable(x::AtmosSurface) = tuple(x)
 # struct definition (later in this file) so the type is in scope when those
 # methods are parsed.
 
-struct AtmosModel{W, SCM, R, TC, PF, GW, VD, SP, SU, NU, CM}
+struct AtmosModel{W, SCM, R, TC, PF, GW, VD, SP, SU, NU, CM, PA}
     water::W
     scm_setup::SCM
     radiation::R
@@ -1006,6 +1006,7 @@ struct AtmosModel{W, SCM, R, TC, PF, GW, VD, SP, SU, NU, CM}
     surface::SU
     numerics::NU
     chemistry::CM
+    interactive_aerosols::PA
 
     # Whether to apply surface flux tendency (independent of surface conditions)
     disable_surface_flux_tendency::Bool
@@ -1223,6 +1224,8 @@ function AtmosModel(; kwargs...)
     vertical_diffusion = get(atmos_model_kwargs, :vertical_diffusion, nothing)
     disable_surface_flux_tendency =
         get(atmos_model_kwargs, :disable_surface_flux_tendency, false)
+    interactive_aerosols =
+        get(atmos_model_kwargs, :interactive_aerosols, Val(()))
 
     prescribed_flow = get(atmos_model_kwargs, :prescribed_flow, nothing)
 
@@ -1238,6 +1241,7 @@ function AtmosModel(; kwargs...)
         typeof(surface),
         typeof(numerics),
         typeof(chemistry),
+        typeof(interactive_aerosols),
     }(
         water,
         scm_setup,
@@ -1250,9 +1254,14 @@ function AtmosModel(; kwargs...)
         surface,
         numerics,
         chemistry,
+        interactive_aerosols,
         disable_surface_flux_tendency,
     )
 end
+
+# Unwrap the `Val{names}` stored in `AtmosModel.interactive_aerosols` into the
+# bare tuple of bin-name symbols.
+_aerosol_names(::Val{names}) where {names} = names
 
 """
     _create_grouped_struct(StructType, atmos_model_kwargs, group_kwargs)

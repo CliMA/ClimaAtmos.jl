@@ -37,7 +37,7 @@ function amip_target(context, output_dir)
     diff_mode = CA.Implicit()
     hyperdiff = CA.cam_se_hyperdiffusion(FT)
 
-    aerosol_names = (
+    prescribed_aerosol_names = (
         "CB1", "CB2",
         "DST01", "DST02", "DST03", "DST04", "DST05",
         "OC1", "OC2",
@@ -119,7 +119,7 @@ function amip_target(context, output_dir)
 
     args = (; model,
         grid,
-        aerosol_names,
+        prescribed_aerosol_names,
         dt = 1secs,
         t_end = 3secs,
         checkpoint_frequency = 1secs,

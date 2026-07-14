@@ -55,7 +55,13 @@ function co2_cache(Y, start_date)
     return (; co2, prescribed_co2_timevaryinginput)
 end
 
-function tracer_cache(Y, prescribed_aerosol_names, time_varying_trace_gases, start_date)
+function tracer_cache(
+    Y,
+    prescribed_aerosol_names,
+    time_varying_trace_gases,
+    start_date,
+    interactive_aerosol_names = (),
+)
     if !isempty(prescribed_aerosol_names)
         target_space = axes(Y.c)
 
@@ -68,7 +74,6 @@ function tracer_cache(Y, prescribed_aerosol_names, time_varying_trace_gases, sta
         # configuration. The file also has to be defined on the globe and provide
         # time series of lon-lat-z data.
         prescribed_aerosol_names_as_symbols = Symbol.(Tuple(prescribed_aerosol_names))
-        target_space = axes(Y.c)
         extrapolation_bc = (Intp.Periodic(), Intp.Flat(), Intp.Flat())
         timevaryinginputs = [
             TimeVaryingInput(
@@ -97,11 +102,36 @@ function tracer_cache(Y, prescribed_aerosol_names, time_varying_trace_gases, sta
         )
         prescribed_aerosol_timevaryinginputs =
             (; zip(prescribed_aerosol_names_as_symbols, timevaryinginputs)...)
-        aerosol_cache =
+        prescribed_aerosol_cache =
             (; prescribed_aerosols_field, prescribed_aerosol_timevaryinginputs)
     else
-        aerosol_cache = (;)
+        prescribed_aerosol_cache = (;)
     end
+
+    if !isempty(interactive_aerosol_names)
+        # sfc_space = axes(Fields.level(Y.f, Fields.half))
+        interactive_aerosols_field = similar(
+            Fields.level(Y.f, Fields.half),
+            NamedTuple{
+                interactive_aerosol_names,
+                NTuple{length(interactive_aerosol_names), eltype(Y.c.ρ)},
+            },
+        )
+        for name in interactive_aerosol_names
+            getproperty(interactive_aerosols_field, name) .= zero(eltype(Y.c.ρ))
+        end
+        interactive_aerosol_cache = (;
+            interactive_aerosols_field,
+            # TODO: add to separate diagnostic_cache
+            # u10 = zeros(sfc_space),
+            # uz1_ext = zeros(sfc_space),
+            # uz1_true = zeros(sfc_space),
+        )
+    else
+        interactive_aerosol_cache = (;)
+    end
+
+    aerosol_cache = (; prescribed_aerosol_cache..., interactive_aerosol_cache...)
 
     if :O3 in Symbol.(time_varying_trace_gases)
         o3_cache = ozone_cache(Y, start_date)
