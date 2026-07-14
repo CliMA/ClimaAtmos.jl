@@ -139,7 +139,7 @@ Fill first-stage CloudSat optical-volume quantities from existing subcolumn cach
 
 `z_vol` and `kr_vol` are one field per subcolumn, matching COSPv2
 `quickbeam_optics` output shape. The four available 1M hydrometeor classes are
-summed into those totals. 
+summed into those totals.
 
 Hydrometeor particle distributions use hard-coded ClimaMicrophysics 1M PSD
 and mass-size assumptions, then a QuickBeam Mie scattering kernel
@@ -440,12 +440,6 @@ end
     return cbrt(FT(3) * lwc / (FT(4) * FT(pi) * _rho_water(FT) * _n_lcl(FT)))
 end
 
-@inline function _clima_liquid_cloud_mass(q, rho_air)
-    FT = typeof(q + rho_air)
-    r = _clima_liquid_cloud_radius(q, rho_air)
-    return _n_lcl(FT) * FT(4) / FT(3) * FT(pi) * _rho_water(FT) * r^3
-end
-
 @inline function _clima_liquid_cloud_psd_optics(q, rho_air, T, radar_cfg)
     FT = typeof(q + rho_air + T)
     r = _clima_liquid_cloud_radius(q, rho_air)
@@ -486,17 +480,6 @@ end
         gamma_me1 * params.m0 * n0 /
         (q_pos * rho_pos * params.r0^params.me)
     )^(one(FT) / (params.me + one(FT)))
-end
-
-@inline function _marshall_palmer_mass_integral(q, rho_air, params)
-    FT = typeof(q + rho_air)
-    n0 = _psd_intercept(q, rho_air, params)
-    lambda = _marshall_palmer_lambda(q, rho_air, params)
-    lambda > zero(FT) || return zero(FT)
-    return params.m0 / params.r0^params.me *
-           n0 *
-           _gamma_integer(params.me + one(FT)) /
-           lambda^(params.me + one(FT))
 end
 
 @inline function _clima_marshall_palmer_psd_optics(q, rho_air, T, radar_cfg, params)

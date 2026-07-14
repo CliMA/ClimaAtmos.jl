@@ -16,7 +16,7 @@ export cloudsat_reflectivity!
 Compute CloudSat nonattenuated and attenuated radar reflectivity from
 optical quantities.
 
-This follows the COSPv2 `quickbeam_subcolumn` convention for a spaceborne radar, 
+This follows the COSPv2 `quickbeam_subcolumn` convention for a spaceborne radar,
 where attenuation is accumulated from the top model level toward the surface, using
 center-level heights in kilometers.
 """

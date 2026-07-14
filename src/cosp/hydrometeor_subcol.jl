@@ -1,130 +1,46 @@
 module COSPHydrometeorSubcolumns
 
-export sampled_cloud_fraction!,
-    sampled_precip_fraction!,
-    slice_hydrometeor_subcolumns!
+export accumulate_sampled_cloud_fraction!,
+    accumulate_sampled_precip_fraction!,
+    slice_hydrometeor_subcolumn!
 
 const CLOUD_HYDROMETEORS = (:q_lcl, :q_icl)
 const PRECIP_HYDROMETEORS = (:q_rai, :q_sno)
 
-function sampled_cloud_fraction!(sampled_fraction, cloud_mask::NTuple{N}) where {N}
-    N > 0 || throw(ArgumentError("cloud_mask must contain at least one subcolumn"))
-    _check_field_axes(cloud_mask, sampled_fraction, "cloud_mask")
-
-    zero_value = zero(eltype(sampled_fraction))
-    @. sampled_fraction = zero_value
-    for mask in cloud_mask
-        @. sampled_fraction += _cloud_indicator(mask)
-    end
-    @. sampled_fraction = sampled_fraction / N
-
+function accumulate_sampled_cloud_fraction!(sampled_fraction, cloud_mask, nsubcolumns)
+    FT = eltype(sampled_fraction)
+    @. sampled_fraction += _cloud_indicator(cloud_mask) / FT(nsubcolumns)
     return nothing
 end
 
-function sampled_precip_fraction!(sampled_fraction, precip_mask::NTuple{N}) where {N}
-    N > 0 || throw(ArgumentError("precip_mask must contain at least one subcolumn"))
-    _check_field_axes(precip_mask, sampled_fraction, "precip_mask")
-
-    zero_value = zero(eltype(sampled_fraction))
-    @. sampled_fraction = zero_value
-    for mask in precip_mask
-        @. sampled_fraction += _precip_indicator(mask)
-    end
-    @. sampled_fraction = sampled_fraction / N
-
+function accumulate_sampled_precip_fraction!(sampled_fraction, precip_mask, nsubcolumns)
+    FT = eltype(sampled_fraction)
+    @. sampled_fraction += _precip_indicator(precip_mask) / FT(nsubcolumns)
     return nothing
 end
 
 """
-    slice_hydrometeor_subcolumns!(
-        subcolumns,
-        cloud_mask,
-        precip_mask,
-        grid_mean,
-        sampled_cloud_fraction,
-        sampled_precip_fraction,
-    )
-
-Populate diagnostic hydrometeor subcolumns from grid-mean hydrometeor fields and
-precomputed COSP cloud and precipitation masks.
-
-Cloud hydrometeors are placed only where the cloud mask is non-clear (`1` or
-`2`). Precipitating hydrometeors are placed only where the precipitation mask is
-non-zero (`1`, `2`, or `3`). In each grid cell, the grid-mean value is divided by
-the sampled mask fraction so that the mean over subcolumns recovers the original
-grid-mean value when the sampled fraction is non-zero. When the sampled fraction
-is zero but the grid-mean hydrometeor is positive, the grid-mean value is copied
-to every subcolumn as a conservative fallback. The sampled-fraction fields are
-scratch storage and are overwritten.
+Populate one stored hydrometeor subcolumn from streamed mask fields.
 """
-function slice_hydrometeor_subcolumns!(
-    subcolumns::NamedTuple,
-    cloud_mask::NTuple{N},
-    precip_mask::NTuple{N},
+function slice_hydrometeor_subcolumn!(
+    subcolumn::NamedTuple,
+    cloud_mask,
+    precip_mask,
     grid_mean::NamedTuple,
     sampled_cloud_fraction,
     sampled_precip_fraction,
-) where {N}
-    N > 0 || throw(ArgumentError("masks must contain at least one subcolumn"))
-    keys(subcolumns) == keys(grid_mean) ||
-        throw(ArgumentError("subcolumns and grid_mean must have matching keys"))
-
-    reference = first(Base.values(grid_mean))
-    _check_field_axes(cloud_mask, reference, "cloud_mask")
-    _check_field_axes(precip_mask, reference, "precip_mask")
-    axes(sampled_cloud_fraction) == axes(reference) ||
-        throw(DimensionMismatch("sampled_cloud_fraction must have matching axes"))
-    axes(sampled_precip_fraction) == axes(reference) ||
-        throw(DimensionMismatch("sampled_precip_fraction must have matching axes"))
-    _check_subcolumn_output_axes(subcolumns, grid_mean, N)
-
-    sampled_cloud_fraction!(sampled_cloud_fraction, cloud_mask)
-    sampled_precip_fraction!(sampled_precip_fraction, precip_mask)
-
+)
+    keys(subcolumn) == keys(grid_mean) ||
+        throw(ArgumentError("subcolumn and grid_mean must have matching keys"))
     for name in keys(grid_mean)
-        name in CLOUD_HYDROMETEORS && _slice_cloud_field!(
-            getproperty(subcolumns, name),
-            getproperty(grid_mean, name),
-            cloud_mask,
-            sampled_cloud_fraction,
-        )
-        name in PRECIP_HYDROMETEORS && _slice_precip_field!(
-            getproperty(subcolumns, name),
-            getproperty(grid_mean, name),
-            precip_mask,
-            sampled_precip_fraction,
-        )
+        output = getproperty(subcolumn, name)
+        input = getproperty(grid_mean, name)
+        name in CLOUD_HYDROMETEORS &&
+            (@. output = _sliced_cloud_value(input, sampled_cloud_fraction, cloud_mask))
+        name in PRECIP_HYDROMETEORS &&
+            (@. output = _sliced_precip_value(input, sampled_precip_fraction, precip_mask))
         name in CLOUD_HYDROMETEORS || name in PRECIP_HYDROMETEORS ||
             throw(ArgumentError("unknown hydrometeor field name: $name"))
-    end
-
-    return nothing
-end
-
-function _slice_cloud_field!(
-    subcolumns::NTuple{N},
-    grid_mean,
-    cloud_mask,
-    fraction,
-) where {N}
-    for isubcolumn in 1:N
-        subcolumn = subcolumns[isubcolumn]
-        mask = cloud_mask[isubcolumn]
-        @. subcolumn = _sliced_cloud_value(grid_mean, fraction, mask)
-    end
-    return nothing
-end
-
-function _slice_precip_field!(
-    subcolumns::NTuple{N},
-    grid_mean,
-    precip_mask,
-    fraction,
-) where {N}
-    for isubcolumn in 1:N
-        subcolumn = subcolumns[isubcolumn]
-        mask = precip_mask[isubcolumn]
-        @. subcolumn = _sliced_precip_value(grid_mean, fraction, mask)
     end
     return nothing
 end
@@ -155,23 +71,6 @@ end
         return is_selected ? q / fraction : zero(q)
     else
         return q > zero(q) ? q : zero(q)
-    end
-end
-
-function _check_subcolumn_output_axes(subcolumns, grid_mean, nsubcolumns)
-    for name in keys(grid_mean)
-        output = getproperty(subcolumns, name)
-        input = getproperty(grid_mean, name)
-        length(output) == nsubcolumns ||
-            throw(DimensionMismatch("$name must contain $nsubcolumns subcolumns"))
-        _check_field_axes(output, input, "$name subcolumns")
-    end
-end
-
-function _check_field_axes(fields, reference, name)
-    for field in fields
-        axes(field) == axes(reference) ||
-            throw(DimensionMismatch("$name field must have matching axes"))
     end
 end
 

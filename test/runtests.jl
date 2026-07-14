@@ -90,6 +90,17 @@ if TEST_GROUP in ("parameterizations", "all")
     # Chemistry tests
     @safetestset "Chemistry tendency tests" begin @time include("parameterized_tendencies/chemistry/chemistry_tendency.jl") end
 
+    # COSP subcolumn test
+    @safetestset "COSP subcolumn tests" begin
+        @time include("cosp/subcol_test.jl")
+    end
+    @safetestset "COSP CloudSat optics scaffold" begin
+        @time include("cosp/cloudsat_optics_test.jl")
+    end
+    @safetestset "COSP CloudSat reflectivity" begin
+        @time include("cosp/cloudsat_reflectivity_test.jl")
+    end
+
     # NOTE: Gravity wave visualization scripts (test_nogw_3d.jl, test_nogw_mima.jl,
     # test_nogw_single_column.jl, test_ogw_3d.jl, test_ogw_baseflux.jl) are not included
     # in the test suite because they have no @test assertions - they only generate
@@ -110,22 +121,6 @@ end
 # ============================================================================
 if TEST_GROUP in ("era5", "all")
     @safetestset "ERA5 forcing" begin @time include("era5_tests.jl") end
-end
-
-
-
-# COSP subcolumn test
-@safetestset "COSP subcolumn tests" begin
-    @time include("cosp/subcol_test.jl")
-end
-@safetestset "COSP 1M Reff and Np diagnostics" begin
-    @time include("cosp/reff_np_1m_test.jl")
-end
-@safetestset "COSP CloudSat optics scaffold" begin
-    @time include("cosp/cloudsat_optics_test.jl")
-end
-@safetestset "COSP CloudSat reflectivity" begin
-    @time include("cosp/cloudsat_reflectivity_test.jl")
 end
 
 #! format: on

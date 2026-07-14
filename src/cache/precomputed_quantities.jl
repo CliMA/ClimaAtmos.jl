@@ -150,38 +150,51 @@ function precomputed_quantities(Y, atmos)
 
     cosp_quantities = if !isnothing(atmos.cosp)
         n_cosp_subcolumns = atmos.cosp.n_subcolumns
-        ᶜsubcolumn_cloud = ntuple(_ -> similar(Y.c, FT), n_cosp_subcolumns)
-        ᶜsubcolumn_threshold = ntuple(_ -> similar(Y.c, FT), n_cosp_subcolumns)
-        ᶜsubcolumn_precip = ntuple(_ -> similar(Y.c, FT), n_cosp_subcolumns)
+        ᶜsubcolumn_cloud = similar(Y.c, FT)
+        ᶜsubcolumn_threshold = similar(Y.c, FT)
+        ᶜsubcolumn_precip = similar(Y.c, FT)
+        ᶜscops_selectors = (;
+            has_cloud = similar(Y.c, FT),
+            has_cloud_below = similar(Y.c, FT),
+            has_cloud_anywhere = similar(Y.c, FT),
+        )
+        ᶜprecip_subcolumn_scratch = (;
+            cloud = similar(Y.c, FT),
+            cloud_below = similar(Y.c, FT),
+            any_cloud = similar(Y.c, FT),
+            column_any = similar(Y.c, FT),
+        )
         ᶜsubcolumn_hydrometeors = (;
             q_lcl = ntuple(_ -> similar(Y.c, FT), n_cosp_subcolumns),
             q_icl = ntuple(_ -> similar(Y.c, FT), n_cosp_subcolumns),
             q_rai = ntuple(_ -> similar(Y.c, FT), n_cosp_subcolumns),
             q_sno = ntuple(_ -> similar(Y.c, FT), n_cosp_subcolumns),
         )
-        z_vol_cloudsat = ntuple(_ -> similar(Y.c, FT), n_cosp_subcolumns)
-        kr_vol_cloudsat = ntuple(_ -> similar(Y.c, FT), n_cosp_subcolumns)
-        g_vol_cloudsat = similar(Y.c, FT)
-        Ze_non_cloudsat = ntuple(_ -> similar(Y.c, FT), n_cosp_subcolumns)
-        DBZe_cloudsat = ntuple(_ -> similar(Y.c, FT), n_cosp_subcolumns)
         ᶜsampled_cloud_fraction = similar(Y.c, FT)
         ᶜsampled_precip_fraction = similar(Y.c, FT)
         @. ᶜsampled_cloud_fraction = FT(0)
         @. ᶜsampled_precip_fraction = FT(0)
         ᶜlarge_scale_precipitation_flux = similar(Y.c, FT)
+        z_vol_cloudsat = ntuple(_ -> similar(Y.c, FT), n_cosp_subcolumns)
+        kr_vol_cloudsat = ntuple(_ -> similar(Y.c, FT), n_cosp_subcolumns)
+        g_vol_cloudsat = similar(Y.c, FT)
+        Ze_non_cloudsat = ntuple(_ -> similar(Y.c, FT), n_cosp_subcolumns)
+        DBZe_cloudsat = ntuple(_ -> similar(Y.c, FT), n_cosp_subcolumns)
         (;
             ᶜsubcolumn_cloud,
             ᶜsubcolumn_threshold,
             ᶜsubcolumn_precip,
+            ᶜscops_selectors,
+            ᶜprecip_subcolumn_scratch,
             ᶜsubcolumn_hydrometeors,
+            ᶜsampled_cloud_fraction,
+            ᶜsampled_precip_fraction,
+            ᶜlarge_scale_precipitation_flux,
             z_vol_cloudsat,
             kr_vol_cloudsat,
             g_vol_cloudsat,
             Ze_non_cloudsat,
             DBZe_cloudsat,
-            ᶜsampled_cloud_fraction,
-            ᶜsampled_precip_fraction,
-            ᶜlarge_scale_precipitation_flux,
         )
     else
         (;)

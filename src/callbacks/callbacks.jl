@@ -131,23 +131,59 @@ NVTX.@annotate function subcol_model_callback!(integrator)
         ᶜsubcolumn_cloud,
         ᶜsubcolumn_threshold,
         ᶜsubcolumn_precip,
+        ᶜscops_selectors,
+        ᶜprecip_subcolumn_scratch,
+        ᶜsampled_cloud_fraction,
+        ᶜsampled_precip_fraction,
         ᶜlarge_scale_precipitation_flux,
     ) = p.precomputed
+    cosp = p.atmos.cosp
+    nsubcolumns = _cosp_nsubcolumns(cosp.n_subcolumns)
 
-    COSP.COSPSubcolumns.scops!(
+    COSP.COSPSubcolumns.set_scops_selectors!(
+        ᶜscops_selectors,
         ᶜsubcolumn_cloud,
         ᶜsubcolumn_threshold,
         ᶜcloud_fraction,
-        p.atmos.cosp.random_seed;
-        overlap = p.atmos.cosp.overlap,
+        nsubcolumns,
+        cosp.random_seed,
+        cosp.overlap,
+        ᶜprecip_subcolumn_scratch.column_any,
     )
 
     set_cosp_large_scale_precipitation_flux!(Y, p, p.atmos.microphysics_model)
-    COSP.COSPPrecipSubcolumns.prec_scops!(
-        ᶜsubcolumn_precip,
-        ᶜlarge_scale_precipitation_flux,
-        ᶜsubcolumn_cloud,
-    )
+
+    FT = eltype(ᶜcloud_fraction)
+    @. ᶜsampled_cloud_fraction = zero(FT)
+    @. ᶜsampled_precip_fraction = zero(FT)
+    for isubcolumn in 1:nsubcolumns
+        COSP.COSPSubcolumns.scops_subcolumn!(
+            ᶜsubcolumn_cloud,
+            ᶜsubcolumn_threshold,
+            ᶜcloud_fraction,
+            isubcolumn,
+            nsubcolumns,
+            cosp.random_seed;
+            overlap = cosp.overlap,
+        )
+        COSP.COSPPrecipSubcolumns.scops_subcolumn_precip!(
+            ᶜsubcolumn_precip,
+            ᶜsubcolumn_cloud,
+            ᶜlarge_scale_precipitation_flux,
+            ᶜscops_selectors,
+            ᶜprecip_subcolumn_scratch,
+        )
+        COSP.COSPHydrometeorSubcolumns.accumulate_sampled_cloud_fraction!(
+            ᶜsampled_cloud_fraction,
+            ᶜsubcolumn_cloud,
+            nsubcolumns,
+        )
+        COSP.COSPHydrometeorSubcolumns.accumulate_sampled_precip_fraction!(
+            ᶜsampled_precip_fraction,
+            ᶜsubcolumn_precip,
+            nsubcolumns,
+        )
+    end
 
     set_cosp_hydrometeor_subcolumns!(Y, p, p.atmos.microphysics_model)
     set_cosp_cloudsat_optics!(Y, p, p.atmos.microphysics_model)
@@ -186,8 +222,13 @@ function set_cosp_hydrometeor_subcolumns!(
     ::NonEquilibriumMicrophysics1M,
 )
     (;
+        ᶜcloud_fraction,
         ᶜsubcolumn_cloud,
+        ᶜsubcolumn_threshold,
         ᶜsubcolumn_precip,
+        ᶜscops_selectors,
+        ᶜprecip_subcolumn_scratch,
+        ᶜlarge_scale_precipitation_flux,
         ᶜsubcolumn_hydrometeors,
         ᶜsampled_cloud_fraction,
         ᶜsampled_precip_fraction,
@@ -201,28 +242,47 @@ function set_cosp_hydrometeor_subcolumns!(
     grid_mean_hydrometeors =
         (; q_lcl = ᶜq_lcl, q_icl = ᶜq_icl, q_rai = ᶜq_rai, q_sno = ᶜq_sno)
 
-    COSP.COSPHydrometeorSubcolumns.slice_hydrometeor_subcolumns!(
-        ᶜsubcolumn_hydrometeors,
-        ᶜsubcolumn_cloud,
-        ᶜsubcolumn_precip,
-        grid_mean_hydrometeors,
-        ᶜsampled_cloud_fraction,
-        ᶜsampled_precip_fraction,
-    )
+    cosp = p.atmos.cosp
+    nsubcolumns = _cosp_nsubcolumns(cosp.n_subcolumns)
+    for isubcolumn in 1:nsubcolumns
+        COSP.COSPSubcolumns.scops_subcolumn!(
+            ᶜsubcolumn_cloud,
+            ᶜsubcolumn_threshold,
+            ᶜcloud_fraction,
+            isubcolumn,
+            nsubcolumns,
+            cosp.random_seed;
+            overlap = cosp.overlap,
+        )
+        COSP.COSPPrecipSubcolumns.scops_subcolumn_precip!(
+            ᶜsubcolumn_precip,
+            ᶜsubcolumn_cloud,
+            ᶜlarge_scale_precipitation_flux,
+            ᶜscops_selectors,
+            ᶜprecip_subcolumn_scratch,
+        )
+        output = map(fields -> fields[isubcolumn], ᶜsubcolumn_hydrometeors)
+        COSP.COSPHydrometeorSubcolumns.slice_hydrometeor_subcolumn!(
+            output,
+            ᶜsubcolumn_cloud,
+            ᶜsubcolumn_precip,
+            grid_mean_hydrometeors,
+            ᶜsampled_cloud_fraction,
+            ᶜsampled_precip_fraction,
+        )
+    end
 
     return nothing
 end
 
+@inline _cosp_nsubcolumns(::Val{N}) where {N} = N
+
 function set_cosp_hydrometeor_subcolumns!(Y, p, _)
     (;
         ᶜsubcolumn_hydrometeors,
-        ᶜsampled_cloud_fraction,
-        ᶜsampled_precip_fraction,
     ) = p.precomputed
     FT = eltype(Y)
 
-    @. ᶜsampled_cloud_fraction = FT(0)
-    @. ᶜsampled_precip_fraction = FT(0)
     for hydrometeor_fields in values(ᶜsubcolumn_hydrometeors)
         for hydrometeor_field in hydrometeor_fields
             @. hydrometeor_field = FT(0)

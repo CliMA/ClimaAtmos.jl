@@ -51,9 +51,11 @@ end
         # allocating the Fortran recurrence array inside broadcasted kernels.
         log_derivative = _mie_log_derivative(n, nmx, y)
 
-        a = ((log_derivative * ir + rnx) * apsi - apsi1) /
+        a =
+            ((log_derivative * ir + rnx) * apsi - apsi1) /
             ((log_derivative * ir + rnx) * xi - xi1)
-        b = ((log_derivative * cm + rnx) * apsi - apsi1) /
+        b =
+            ((log_derivative * cm + rnx) * apsi - apsi1) /
             ((log_derivative * cm + rnx) * xi - xi1)
 
         qext_sum += FT(tnp1) * real(a + b)
