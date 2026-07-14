@@ -841,10 +841,13 @@ function AtmosSurface(
         )
     end
 
-    flux_scheme = if !isnothing(setup_pieces.flux_scheme)
-        setup_pieces.flux_scheme
-    elseif pa["surface_setup"] == "PrescribedSurface"
+    # PrescribedSurface means an external component (the coupler) owns the
+    # surface fluxes, so it must override any setup-provided flux scheme;
+    # `update_surface_conditions!` only hands off when `flux_scheme === nothing`.
+    flux_scheme = if pa["surface_setup"] == "PrescribedSurface"
         nothing
+    elseif !isnothing(setup_pieces.flux_scheme)
+        setup_pieces.flux_scheme
     else
         getproperty(SurfaceConditions, Symbol(pa["surface_setup"]))()(params)
     end

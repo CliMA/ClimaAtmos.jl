@@ -27,7 +27,7 @@ dt_rad: 30mins  # 5mins→30mins validated 2026-07-04 (lf1e-scm-speedtest-1 s2/s
 config: "column"
 z_max: 9000.0
 z_elem: 90
-z_stretch: false # clw and z-banding both appear very sensitive to this
+z_stretch: false
 dz_bottom: 10.0
 
 # Solver #
