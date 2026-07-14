@@ -76,4 +76,3 @@ diagnostics:
   - short_name: [ts, rlds, rlus, rlut, pr, prsn, hfss, hfls]
     period: 1hours
     reduction_time: average
-
