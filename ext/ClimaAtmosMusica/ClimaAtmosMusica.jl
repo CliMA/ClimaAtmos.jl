@@ -55,13 +55,9 @@ function ClimaAtmos.update_chemistry!(
     isnothing(chemistry_model.config_path) && return nothing
 
     (; micm, state) = p.chemistry
-    Musica.set_conditions!(state; temperatures = 298.15, pressures = 101325)
 
-    # Activate every user-defined reaction rate parameter. Setting each to 1 makes a 
-    # USER_DEFINED reaction's
-    # config `scaling factor` its effective rate. This targets only the runtime-
-    # rate reactions (USER_DEFINED, photolysis, emission); Arrhenius-type rates
-    # are computed internally by MICM and never appear here.
+    # Activate every user-defined reaction rate parameter. Setting each to 1 makes a
+    # USER_DEFINED reaction's config `scaling factor` its effective rate
     rate_param_names = keys(Musica.get_user_defined_rate_parameters_ordering(state))
     Musica.set_user_defined_rate_parameters!(
         state,
@@ -78,9 +74,11 @@ function ClimaAtmos.update_chemistry!(
         ),
         names,
     )
-
+    ᶜT = parent(p.precomputed.ᶜT)
+    ᶜp = parent(p.precomputed.ᶜp)
     n_cells = length(parent(Y.c.ρ))
     for i in 1:n_cells
+        Musica.set_conditions!(state; temperatures = ᶜT[i], pressures = ᶜp[i])
         concs = Dict(
             String(names[j]) =>
                 Float64(parent(getproperty(Y.c, Symbol(:ρ, names[j])))[i]) /
