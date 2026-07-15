@@ -293,10 +293,18 @@ end
 
 function prognostic_aerosol_parameters(toml_dict)
     name_map = (;
-        :day => :day,
+        # shared physical constants
+        :boltzmann_constant => :k_B,
+        :density_liquid_water => :ρ_water,
+        :air_viscosity_sutherland_reference => :μ_air_ref,
+        :air_viscosity_sutherland_temperature => :T_μ_ref,
+        :air_viscosity_sutherland_constant => :S_μ,
+        :cunningham_slip_coefficients => :cunningham_C,
         # SEA SALT AEROSOL
+        # emission (Gong 2003 in the r80 basis, Jaegle 2011 SST correction)
         :ssa_size_bin_divisions => :ssa_bin_edges,
         :ssa_r_ref => :ssa_r_ref,
+        :ssa_r80_per_dry => :r80_per_dry,
         :ssa_gong_theta => :gong_theta,
         :ssa_gong_params_A => :gong_A,
         :ssa_gong_param_B => :gong_B,
@@ -304,7 +312,14 @@ function prognostic_aerosol_parameters(toml_dict)
         :ssa_gong_dim_factor => :gong_dim_factor,
         :ssa_gong_wind_exponent => :gong_wind_exp,
         :ssa_jaegle_params => :jaegle_C,
-        :ssa_residence => :τ_ssa,
+        # hygroscopic growth and explicit settling
+        :ssa_rh_cap => :rh_cap,
+        :ssa_settling_courant_max => :settling_courant_max,
+        # turbulent dry deposition (Zhang 2001, water/ocean category)
+        :zhang_collection_prefactor => :zhang_ε0,
+        :zhang_impaction_exponent => :zhang_β,
+        :zhang_impaction_alpha_water => :zhang_α_water,
+        :zhang_brownian_gamma_water => :zhang_γ_water,
     )
     parameters = CP.get_parameter_values(toml_dict, name_map, "ClimaAtmos")
     return to_svec(parameters)

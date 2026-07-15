@@ -146,6 +146,9 @@ function precomputed_quantities(Y, atmos)
             !(atmos.turbconv_model isa PrognosticEDMFX)
     @assert isnothing(atmos.turbconv_model) ||
             isnothing(atmos.vertical_diffusion)
+    # Prognostic sea salt needs relative humidity for hygroscopic growth.
+    @assert !(atmos.seasalt isa PrognosticSeaSalt) ||
+            !(atmos.microphysics_model isa DryModel) "prognostic sea salt requires a moist microphysics model (RH-dependent growth)"
     sa_result_type = @NamedTuple{T::FT, q_liq::FT, q_ice::FT}
     SCT = SurfaceConditions.surface_conditions_type(atmos, FT)
     cspace = axes(Y.c)
@@ -439,6 +442,15 @@ function precomputed_quantities(Y, atmos)
             (;)
         end
 
+    # Sea salt κ-Köhler growth factor GF = r_wet/r_dry, filled by
+    # `set_sea_salt_growth_factor!`. GF is bin-independent, so one cached field
+    # serves every consumer (settling, dry deposition, and — later — activation
+    # and optics), each scaling its own dry moment radius. Allocated only for
+    # prognostic sea salt, so default runs allocate nothing.
+    seasalt_quantities =
+        atmos.seasalt isa PrognosticSeaSalt ? (; ᶜsslt_GF = similar(Y.c, FT)) :
+        (;)
+
     return (;
         implicit_precomputed_quantities(Y, atmos)...,
         gs_quantities...,
@@ -452,7 +464,8 @@ function precomputed_quantities(Y, atmos)
         cosp_quantities...,
         covariance_quantities...,
         smagorinsky_lilly_quantities...,
-        amd_les_quantities...)
+        amd_les_quantities...,
+        seasalt_quantities...)
 end
 
 # Interpolates the third contravariant component of Y.c.uₕ to cell faces.
@@ -741,6 +754,8 @@ NVTX.@annotate function set_explicit_precomputed_quantities!(Y, p, t)
     if !isnothing(p.sfc_setup)
         SurfaceConditions.update_surface_conditions!(Y, p, FT(t))
     end
+
+    set_sea_salt_growth_factor!(Y, p)
 
     if turbconv_model isa PrognosticEDMFX
         set_prognostic_edmf_precomputed_quantities_explicit_closures!(Y, p, t)

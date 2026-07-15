@@ -171,8 +171,10 @@ function build_cache(
     scratch = temporary_quantities(Y, atmos)
 
     precomputed = precomputed_quantities(Y, atmos)
-    tracers =
-        tracer_cache(Y, atmos.aerosol_model, time_varying_trace_gas_names, start_date)
+    tracers = (;
+        tracer_cache(Y, atmos.aerosol_model, time_varying_trace_gas_names, start_date)...,
+        sea_salt_moment_cache(atmos.seasalt, params, FT)...,
+    )
     precomputing_arguments = (;
         atmos,
         core,
