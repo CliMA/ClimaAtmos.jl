@@ -208,21 +208,6 @@ function vertical_amd_tendency!(Yₜ, Y, p, t, les::AnisotropicMinimumDissipatio
 
     c_amd = les.c_amd
 
-    # Define operators
-    ᶠgradᵥ = Operators.GradientC2F() # apply BCs to ᶜdivᵥ, which wraps ᶠgradᵥ
-    ᶜdivᵥ_uₕ = Operators.DivergenceF2C(
-        top = Operators.SetValue(C3(FT(0)) ⊗ C12(FT(0), FT(0))),
-        bottom = Operators.SetValue(C3(FT(0)) ⊗ C12(FT(0), FT(0))),
-    )
-    ᶠdivᵥ = Operators.DivergenceC2F(
-        bottom = Operators.SetDivergence(FT(0)),
-        top = Operators.SetDivergence(FT(0)),
-    )
-    ᶜdivᵥ_ρe_tot = Operators.DivergenceF2C(;
-        top = Operators.SetValue(C3(FT(0))),
-        bottom = Operators.SetValue(C3(FT(0))),
-    )
-
     ### AMD ###
 
     (; ᶜu, ᶠu³) = p.precomputed
@@ -296,10 +281,8 @@ function vertical_amd_tendency!(Yₜ, Y, p, t, les::AnisotropicMinimumDissipatio
     ## Horizontal momentum tendency
     ᶠρ = @. lazy(ᶠinterp(Y.c.ρ))
     @. Yₜ.c.uₕ -= C12(ᶜdivᵥ(ᶠρ * ᶠτ_amd) / Y.c.ρ)
-    ## Apply boundary condition for momentum flux
-    @. Yₜ.c.uₕ -= ᶜdivᵥ_uₕ(-(FT(0) * ᶠgradᵥ(Y.c.uₕ))) / Y.c.ρ
     ## Vertical momentum tendency
-    @. Yₜ.f.u₃ -= C3(ᶠdivᵥ(Y.c.ρ * ᶜτ_amd) / ᶠρ)
+    @. Yₜ.f.u₃ -= C3(ᶠdiffdivᵥ_u₃(Y.c.ρ * ᶜτ_amd) / ᶠρ)
 
     ## Total energy tendency
     (; ᶜh_tot) = p.precomputed
@@ -316,14 +299,11 @@ function vertical_amd_tendency!(Yₜ, Y, p, t, les::AnisotropicMinimumDissipatio
         ) /
         max(eps(FT), norm_sqr(∇h_tot)),
     )
-    @. Yₜ.c.ρe_tot -= ᶜdivᵥ_ρe_tot(-(ᶠρ * ᶠD_amd * ᶠgradᵥ(ᶜh_tot)))
+    ᶠρD = @. lazy(ᶠρ * ᶠD_amd)
+    ᶜ∇ᵥρD∇h_totₜ = ᶜdiffusive_flux_divergenceᵥ(ᶠρD, ᶜh_tot)
+    @. Yₜ.c.ρe_tot -= ᶜ∇ᵥρD∇h_totₜ
 
     ## Tracer diffusion and associated mass changes
-    ᶜdivᵥ_ρχ = Operators.DivergenceF2C(;
-        top = Operators.SetValue(C3(FT(0))),
-        bottom = Operators.SetValue(C3(FT(0))),
-    )
-
     foreach_gs_tracer(Yₜ, Y) do ᶜρχₜ, ᶜρχ, ρχ_name
         ᶜχ = @. lazy(specific(ᶜρχ, Y.c.ρ))
         ∇ᶜχ = @. lazy(Geometry.project(axis_uvw, ᶠgradᵥ_scalar(ᶜχ)))
@@ -338,8 +318,8 @@ function vertical_amd_tendency!(Yₜ, Y, p, t, les::AnisotropicMinimumDissipatio
             ) /
             max(eps(FT), norm_sqr(∇ᶜχ)),
         )
-        ᶜ∇ᵥρD∇χₜ =
-            @. lazy(ᶜdivᵥ_ρχ(-(ᶠρ * ᶠD_amd * ᶠgradᵥ(specific(ᶜρχ, Y.c.ρ)))))
+        ᶠρD_tracer = @. lazy(ᶠρ * ᶠD_amd)
+        ᶜ∇ᵥρD∇χₜ = ᶜdiffusive_flux_divergenceᵥ(ᶠρD_tracer, ᶜχ)
         @. ᶜρχₜ -= ᶜ∇ᵥρD∇χₜ
         # Rain and snow does not affect the mass
         if ρχ_name == @name(ρq_tot)
