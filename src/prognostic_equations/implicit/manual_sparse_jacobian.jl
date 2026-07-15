@@ -1199,17 +1199,23 @@ function update_sgs_advection_jacobian!(matrix, Y, p, dtγ)
                 ) - (I,)
 
             # sedimentation
-            # (pull out common subexpression for performance)
+            # Base: a·∂_z(ρwχ) — always the same regardless of ∂a/∂z sign
+            # Correction: min(∂a/∂z, 0)·(ρ¹w¹χ¹ − ρ⁰w⁰χ⁰)
+            #   ρ⁰w⁰χ⁰ = (w_GS·ρχ_GS − ρa¹·w¹·χ¹)/(1−a), so
+            #   ∂(ρ⁰w⁰χ⁰)/∂χʲ = −ρa¹·w¹/(1−a) and
+            #   ∂/∂χʲ of correction = min(∂a/∂z, 0)·ρ¹w¹/(1−a)
             @. ᶠsed_tracer_advection =
                 DiagonalMatrixRow(ᶠinterp(ᶜρʲs.:(1) * ᶜJ) / ᶠJ) ⋅
                 ᶠright_bias_matrix() ⋅
                 DiagonalMatrixRow(-Geometry.WVector(ᶜwʲ))
             @. ᶜtridiagonal_matrix_scalar =
-                dtγ * ifelse(ᶜ∂a∂z < 0,
-                    -(ᶜprecipdivᵥ_matrix()) ⋅ ᶠsed_tracer_advection *
-                    DiagonalMatrixRow(ᶜa),
+                dtγ * (
                     -DiagonalMatrixRow(ᶜa) ⋅ ᶜprecipdivᵥ_matrix() ⋅
-                    ᶠsed_tracer_advection,
+                    ᶠsed_tracer_advection +
+                    DiagonalMatrixRow(
+                        min(ᶜ∂a∂z, zero(ᶜ∂a∂z)) * ᶜρʲs.:(1) * ᶜwʲ /
+                        max(1 - ᶜa, eps(eltype(ᶜa))),
+                    )
                 )
 
             @. ∂ᶜχʲ_err_∂ᶜχʲ +=
