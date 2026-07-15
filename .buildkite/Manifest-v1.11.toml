@@ -2,7 +2,7 @@
 
 julia_version = "1.11.9"
 manifest_format = "2.0"
-project_hash = "6af48034d86de0825cf5f74fb92647a4c059c181"
+project_hash = "92afeb269f720bd72e7f1c47105e3bdf8059cc1e"
 
 [[deps.ADTypes]]
 git-tree-sha1 = "d9aaef7c63466eee4de23b4d9dad03629df54bea"
@@ -2113,10 +2113,10 @@ uuid = "3fa0cd96-eef1-5676-8a61-b3b8758bbffb"
 version = "1.11.0"
 
 [[deps.RRTMGP]]
-deps = ["Adapt", "Artifacts", "ClimaComms", "DocStringExtensions", "Random"]
-git-tree-sha1 = "15dadb8385d653fa661a3269b3c6262ddedea01d"
+deps = ["Adapt", "Artifacts", "ClimaComms", "Random", "Serialization"]
+git-tree-sha1 = "3d9478c07e05aba9f1b97a5b94f3655f4d2e006c"
 uuid = "a01a1ee8-cea4-48fc-987c-fc7878d79da1"
-version = "0.21.9"
+version = "0.22.2"
 weakdeps = ["CUDA", "ClimaParams", "NCDatasets"]
 
     [deps.RRTMGP.extensions]

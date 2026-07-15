@@ -351,7 +351,7 @@ function radiation_callback(
     # `remaining_tendency!` and applied every stage; `dt_rad` is ignored.
     radiation_mode isa RRTMGPI.AbstractRRTMGPMode || return ()
     return scheduled_callback(
-        rrtmgp_model_callback!,
+        rrtmgp_solver_callback!,
         dt_rad,
         dt,
         t_start,

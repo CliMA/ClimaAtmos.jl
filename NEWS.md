@@ -3,6 +3,12 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- [#4624](https://github.com/CliMA/ClimaAtmos.jl/pull/4624) ![][badge-💥breaking] Migrated the radiation interface to RRTMGP 0.22's redesigned API.
+  The radiation cache now holds an `RRTMGP.RRTMGPSolver` (read/written through getters such as `RRTMGP.layer_temperature(solver)`)
+  instead of the removed `RRTMGPModel` wrapper; host aerosol tracers are mapped to RRTMGP's canonical names, and the
+  deep-atmosphere scaling is passed as `deep_atmosphere_inverse_scaling`. Radiation diagnostics now wrap the RRTMGP flux getters
+  with `array2field` directly instead of `copy(getter(solver))`.
+
 - [#4647](https://github.com/CliMA/ClimaAtmos.jl/pull/4647) ![][badge-🔥behavioralΔ] Make the EDMFX (PROPHET) boundary-layer representation less sensitive to vertical resolution by reconstructing subgrid inversion structure.
   - Interpolate center-based eddy diffusivities to faces with a harmonic mean, `1/interp(1/max(K, ϵ))`, instead of an arithmetic mean, at the diffusion sites that use cell-center diffusivities: the boundary-layer `VerticalDiffusion`/`DecayWithHeightDiffusion` path and EDMFX updraft-internal diffusion (Smagorinsky keeps arithmetic interpolation to match its tendency; the EDMFX grid-mean diffusivities are evaluated natively at faces instead — see below). At a face separating a turbulent layer from quiescent stratified air — a stratocumulus-capping inversion — the arithmetic mean assigns `~K_bl/2` to exactly the face with the largest gradients, producing systematic spurious entrainment; the harmonic mean is controlled by the smaller adjacent value.
   - Use a stability-biased buoyancy gradient (the more stable of the two one-sided gradients, `N²_stab = max(N²₋, N²₊)`) for the mixing length and turbulent Prandtl number, so a resolved inversion suppresses mixing from both sides.
