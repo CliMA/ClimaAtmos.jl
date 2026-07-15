@@ -9,14 +9,11 @@
   <strong>Atmosphere components of the CliMA software stack.</strong>
 </p>
 
-|||
-|------------------:|:------------------------------------------------------------|
-| **Documentation** | [![stable][docs-stable-img]][docs-stable-url] [![dev][docs-dev-img]][docs-dev-url] |
-| **Version**       | [![version][version-img]][version-url]                      |
-| **Tests**         | [![gha ci][gha-ci-img]][gha-ci-url] [![buildkite][bk-ci-img]][bk-ci-url] |
-| **Code Coverage** | [![codecov][codecov-img]][codecov-url]                      |
-| **Downloads**     | [![Downloads][dlt-img]][dlt-url]                            |
-| **Contributing**  | [![colprac][colprac-img]][colprac-url]                      |
+|                    |                                                                                    |                    |                                         |
+|-------------------:|:-----------------------------------------------------------------------------------|-------------------:|:----------------------------------------|
+| **Documentation** | [![stable][docs-stable-img]][docs-stable-url] [![dev][docs-dev-img]][docs-dev-url] | **Version** | [![version][version-img]][version-url] |
+| **Tests** | [![gha ci][gha-ci-img]][gha-ci-url] [![buildkite][bk-ci-img]][bk-ci-url] | **Code Coverage** | [![codecov][codecov-img]][codecov-url] |
+| **Downloads** | [![Downloads][dlt-img]][dlt-url] | **Contributing** | [![colprac][colprac-img]][colprac-url] |
 
 [docs-stable-img]: https://img.shields.io/badge/docs-stable-blue.svg
 [docs-stable-url]: https://CliMA.github.io/ClimaAtmos.jl/stable/
