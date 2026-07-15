@@ -3,6 +3,9 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+
+0.42.0
+-------
 - [#4624](https://github.com/CliMA/ClimaAtmos.jl/pull/4624) ![][badge-💥breaking] Migrated the radiation interface to RRTMGP 0.22's redesigned API.
   The radiation cache now holds an `RRTMGP.RRTMGPSolver` (read/written through getters such as `RRTMGP.layer_temperature(solver)`)
   instead of the removed `RRTMGPModel` wrapper; host aerosol tracers are mapped to RRTMGP's canonical names, and the
