@@ -153,4 +153,5 @@ function surface_flux_tendency!(Yₜ, Y, p, t)
     end
 
     sea_salt_emission_tendency!(Yₜ, Y, p, t)
+    sea_salt_dry_deposition_tendency!(Yₜ, Y, p, t)
 end

@@ -146,6 +146,9 @@ function precomputed_quantities(Y, atmos)
             !(atmos.turbconv_model isa PrognosticEDMFX)
     @assert isnothing(atmos.turbconv_model) ||
             isnothing(atmos.vertical_diffusion)
+    # Interactive sea salt needs relative humidity for hygroscopic growth.
+    @assert isempty(_aerosol_names(atmos.interactive_aerosols)) ||
+            !(atmos.microphysics_model isa DryModel) "interactive_aerosols require a moist microphysics model (RH-dependent growth)"
     sa_result_type = @NamedTuple{T::FT, q_liq::FT, q_ice::FT}
     SCT = SurfaceConditions.surface_conditions_type(atmos, FT)
     cspace = axes(Y.c)
@@ -405,6 +408,24 @@ function precomputed_quantities(Y, atmos)
             (;)
         end
 
+    # Per-bin interactive sea-salt wet radius, filled by
+    # `set_sea_salt_wet_radius!`. This is the only wet-size quantity cached (it
+    # has several read-only consumers: settling, dry deposition, and — later —
+    # activation and optics); wet density and settling speed are cheap functions
+    # of it and are computed where used. Allocated only when interactive bins
+    # are configured, so default runs allocate none.
+    interactive_aerosol_names = _aerosol_names(atmos.interactive_aerosols)
+    interactive_aerosol_quantities =
+        if isempty(interactive_aerosol_names)
+            (;)
+        else
+            SSLT_NT = NamedTuple{
+                interactive_aerosol_names,
+                NTuple{length(interactive_aerosol_names), FT},
+            }
+            (; ᶜsslt_r_wet = similar(Y.c, SSLT_NT))
+        end
+
     return (;
         implicit_precomputed_quantities(Y, atmos)...,
         gs_quantities...,
@@ -417,7 +438,8 @@ function precomputed_quantities(Y, atmos)
         ᶜcloud_fraction,
         covariance_quantities...,
         smagorinsky_lilly_quantities...,
-        amd_les_quantities...)
+        amd_les_quantities...,
+        interactive_aerosol_quantities...)
 end
 
 # Interpolates the third contravariant component of Y.c.uₕ to cell faces.
@@ -708,6 +730,10 @@ NVTX.@annotate function set_explicit_precomputed_quantities!(Y, p, t)
     end
 
     set_sea_salt_emission_flux!(Y, p)
+    # Wet (deliquesced) radius of the interactive sea-salt bins (no-op unless
+    # bins are configured); uses the grid-mean ᶜT/ᶜp/moisture from the implicit
+    # precompute.
+    set_sea_salt_wet_radius!(Y, p)
 
     if turbconv_model isa PrognosticEDMFX
         set_prognostic_edmf_precomputed_quantities_explicit_closures!(Y, p, t)

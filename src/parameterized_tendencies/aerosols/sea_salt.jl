@@ -62,6 +62,18 @@ const SEA_SALT_BIN_R_INTEGRALS = ntuple(
 )
 
 """
+    sea_salt_mean_particle_volume(r_dry, σ)
+
+Number-weighted mean particle volume of a lognormal mode with number-median
+dry radius `r_dry` and geometric standard deviation `σ` (its third radial
+moment)
+"""
+function sea_salt_mean_particle_volume(r_dry, σ)
+    FT = typeof(r_dry)
+    return FT(4 / 3) * FT(π) * r_dry^3 * exp(FT(9 / 2) * log(σ)^2)
+end
+
+"""
     sea_salt_emission_flux(u_10, T_sfc, bin_index)
 
 Compute the upward sea salt number flux (particles m⁻² s⁻¹) for the bin
@@ -125,8 +137,15 @@ function set_sea_salt_emission_flux!(Y, p)
         aero_params.SSLT04_radius,
         aero_params.SSLT05_radius,
     )
+    # Mass per particle for the number→mass conversion. Treats each bin as a
+    # lognormal mode (median radius `SSLTxx_radius`, width `seasalt_std`), so it
+    # uses the lognormal mean particle volume — the SAME convention as the
+    # number↔mass bridge in `bins_to_aerosol_distribution`, keeping emitted mass
+    # and activated number consistent.
+    σ = FT(aero_params.seasalt_std)
+    ρ_s = FT(aero_params.seasalt_density)
     mass_per_particle = ntuple(
-        i -> FT(4 / 3 * π * bin_radii[i]^3 * aero_params.seasalt_density),
+        i -> sea_salt_mean_particle_volume(FT(bin_radii[i]), σ) * ρ_s,
         Val(5),
     )
 
@@ -168,40 +187,186 @@ function sea_salt_emission_tendency!(Yₜ, Y, p, t)
 end
 
 """
-    sea_salt_deposition_tendency!(Yₜ, Y, p, t)
+    sea_salt_settling_tendency!(Yₜ, Y, p, t)
 
-Apply deposition tendencies to all prognostic sea salt bins.
+Apply gravitational settling to all prognostic sea-salt bins as an explicit
+downward vertical advection with the per-bin, slip-corrected terminal velocity:
 
-Currently implemented as a simple exponential decay representing net
-deposition (dry + wet) without resolving individual processes:
+    ∂(ρSSLTxx)/∂t -= ∇·(ρ · w_settle · χ)  (downward, free outflow at surface)
 
-    d(ρSSLTxx)/dt = -λ * ρSSLTxx
+The settling speed is derived from the cached wet radius `p.precomputed.ᶜsslt_r_wet`
+(wet density is a cheap inline function of it) and materialized into a scratch
+field — Courant-capped for explicit stability — before being used in the
+`ᶠright_bias`/`ᶜprecipdivᵥ` stencil, so the stencil kernel stays small (as precip
+does with its precomputed terminal velocity). The free-outflow bottom boundary
+means this term also **deposits** the gravitational flux `V_g · ρSSLTxx` at the
+surface — the gravitational contribution to dry deposition — so no separate
+`V_g` surface flux is added (see `sea_salt_dry_deposition_tendency!`, which
+carries only the turbulent part).
 
-where `λ = log(2) / half_life`.
-
-TODO: replace with explicit dry deposition (function of near-surface wind
-speed, particle size, and surface layer stability) and wet deposition
-(function of precipitation and cloud liquid water from p.precomputed).
-TODO: add size-dependent gravitational (Stokes) settling as an explicit
-downward tendency for coarse bins (SSLT04–SSLT05, r > 1.5 μm), whose
-settling velocities (mm s⁻¹ to cm s⁻¹) dominate over turbulent diffusion.
-Fine bins (SSLT01–SSLT02) are genuinely passive and do not need settling.
-TODO: make half-lives bin-specific and load from ClimaParams.
+Applied in the explicit tendency, consistent with the grid-mean vertical
+advection of passive tracers (also explicit). Grid-mean only: updraft (`sgsʲs`)
+sea-salt copies are not settled here (deferred; see the subdomain-sedimentation
+TODO).
 """
-function sea_salt_deposition_tendency!(Yₜ, Y, p, t)
+function sea_salt_settling_tendency!(Yₜ, Y, p, t)
     interactive_aerosol_names = _aerosol_names(p.atmos.interactive_aerosols)
     isempty(interactive_aerosol_names) && return
 
     FT = eltype(Y)
+    (; ᶜT, ᶜsslt_r_wet) = p.precomputed
+    thermo_params = CAP.thermodynamics_params(p.params)
+    aero_params = p.params.prescribed_aerosol_params
+    grav = FT(CAP.grav(p.params))
+    R_d = FT(TD.Parameters.R_d(thermo_params))
+    ρ_s = FT(aero_params.seasalt_density)
+    ρ_w = FT(SEA_SALT_WATER_DENSITY)
+    σ = FT(aero_params.seasalt_std)
+    mass_weight = exp(2 * log(σ)^2)
+    bin_radii = (
+        aero_params.SSLT01_radius,
+        aero_params.SSLT02_radius,
+        aero_params.SSLT03_radius,
+        aero_params.SSLT04_radius,
+        aero_params.SSLT05_radius,
+    )
+    ᶜJ = Fields.local_geometry_field(axes(Y.c)).J
+    ᶠJ = Fields.local_geometry_field(axes(Y.f)).J
+    ᶜΔz = Fields.Δz_field(axes(Y.c))
+    dt = FT(p.dt)
+    courant_max = FT(SEA_SALT_SETTLING_COURANT_MAX)
 
-    # TODO: make bin-specific and load from ClimaParams
-    half_life = FT(0.55 * 86400)  # 1 day placeholder, in seconds
-    λ = FT(log(2)) / half_life
-
-    for name in interactive_aerosol_names
+    for (bin_index, name) in enumerate(interactive_aerosol_names)
         ρχ_name = Symbol(:ρ, name)
         ᶜρχ = getproperty(Y.c, ρχ_name)
         ᶜρχₜ = getproperty(Yₜ.c, ρχ_name)
-        @. ᶜρχₜ -= λ * ᶜρχ
+        r_dry = FT(bin_radii[bin_index])
+        r_wet = getproperty(ᶜsslt_r_wet, name)
+
+        # Materialize the Courant-capped settling speed into scratch (wet density
+        # is a cheap inline function of r_wet; the growth factor is r_wet/r_dry).
+        # ᶜtemp_scalar is written and consumed within this iteration.
+        ᶜw = p.scratch.ᶜtemp_scalar
+        @. ᶜw = min(
+            sea_salt_settling_velocity(
+                r_wet,
+                sea_salt_wet_density(ρ_s, ρ_w, r_wet / r_dry),
+                Y.c.ρ, ᶜT, R_d, grav, mass_weight,
+            ),
+            courant_max * ᶜΔz / dt,
+        )
+        @. ᶜρχₜ -= ᶜprecipdivᵥ(
+            ᶠinterp(Y.c.ρ * ᶜJ) / ᶠJ * ᶠright_bias(
+                Geometry.WVector(-(ᶜw)) * specific(ᶜρχ, Y.c.ρ),
+            ),
+        )
     end
+    return nothing
+end
+
+"""
+    sea_salt_dry_deposition_tendency!(Yₜ, Y, p, t)
+
+Apply the **turbulent** part of dry deposition of prognostic sea salt as a
+surface-flux sink:
+
+    ρ_flux_SSLTxx|_surface = − V_{d,turb} · ρSSLTxx|_{level 1}
+
+with `V_{d,turb} = 1 / (R_a + R_s)` from
+[`sea_salt_dry_deposition_velocity`](@ref) (MOST aerodynamic resistance `R_a`
+
+  - Zhang et al. 2001 surface resistance `R_s`). The gravitational settling
+    contribution is deposited separately by `sea_salt_settling_tendency!`'s
+    free-outflow bottom boundary, so the two do not double count (their sum is
+    `V_g + 1/(R_a+R_s)` times the surface concentration, i.e. the full deposition
+    velocity).
+
+Applied everywhere like `sea_salt_emission_tendency!` but as a sink. Every
+surface currently uses the ocean/water land-use category (TODO: per-land-use
+parameters from the coupler). The deposition velocity is Courant-capped at the
+lowest cell so the explicit surface sink cannot over-deplete it in one step.
+"""
+function sea_salt_dry_deposition_tendency!(Yₜ, Y, p, t)
+    interactive_aerosol_names = _aerosol_names(p.atmos.interactive_aerosols)
+    isempty(interactive_aerosol_names) && return
+
+    FT = eltype(Y)
+    (; sfc_conditions, ᶜT, ᶜsslt_r_wet) = p.precomputed
+    thermo_params = CAP.thermodynamics_params(p.params)
+    aero_params = p.params.prescribed_aerosol_params
+    R_d = FT(TD.Parameters.R_d(thermo_params))
+    grav = FT(CAP.grav(p.params))
+    ρ_s = FT(aero_params.seasalt_density)
+    ρ_w = FT(SEA_SALT_WATER_DENSITY)
+    σ = FT(aero_params.seasalt_std)
+    mass_weight = exp(2 * log(σ)^2)
+    bin_radii = (
+        aero_params.SSLT01_radius,
+        aero_params.SSLT02_radius,
+        aero_params.SSLT03_radius,
+        aero_params.SSLT04_radius,
+        aero_params.SSLT05_radius,
+    )
+    surface_fluxes_params = CAP.surface_fluxes_params(p.params)
+    uf_params = SFP.uf_params(surface_fluxes_params)
+    κ = SFP.von_karman_const(surface_fluxes_params)
+    roughness_spec = SF.COARE3RoughnessParams{FT}()
+    dt = FT(p.dt)
+    courant_max = FT(SEA_SALT_SETTLING_COURANT_MAX)
+
+    # Surface-level parent arrays (bridge the center-level-1 vs face-half
+    # spaces, as in set_sea_salt_emission_flux!).
+    z1_p = parent(Fields.level(Fields.coordinate_field(axes(Y.c)).z, 1))
+    ρ1_p = parent(Fields.level(Y.c.ρ, 1))
+    T1_p = parent(Fields.level(ᶜT, 1))
+    Δz1_p = parent(Fields.level(Fields.Δz_field(axes(Y.c)), 1))
+    ustar_p = parent(sfc_conditions.ustar)
+    L_p = parent(sfc_conditions.obukhov_length)
+    z₀ = p.scratch.temp_field_level
+    z₀_p = parent(z₀)
+    z₀_p .= SF.momentum_roughness.(roughness_spec, ustar_p, surface_fluxes_params, nothing)
+
+    for (bin_index, name) in enumerate(interactive_aerosol_names)
+        ρχ_name = Symbol(:ρ, name)
+        ᶜρχ = getproperty(Y.c, ρχ_name)
+        ᶜρχₜ = getproperty(Yₜ.c, ρχ_name)
+        r_dry = FT(bin_radii[bin_index])
+        r_wet1_p = parent(Fields.level(getproperty(ᶜsslt_r_wet, name), 1))
+        ρχ1_p = parent(Fields.level(ᶜρχ, 1))
+
+        # Surface settling velocity for the Zhang Stokes number, computed inline
+        # from the cached surface wet radius (uncapped — the Courant cap is a
+        # numerical device for the explicit settling advection and must not
+        # enter the deposition physics).
+        vg1 = p.scratch.temp_field_level_2
+        parent(vg1) .=
+            sea_salt_settling_velocity.(
+                r_wet1_p,
+                sea_salt_wet_density.(ρ_s, ρ_w, r_wet1_p ./ r_dry),
+                ρ1_p, T1_p, R_d, grav, mass_weight,
+            )
+        vg1_p = parent(vg1)
+
+        # V_{d,turb} · ρSSLTxx|₁, computed on parent arrays into a face-half
+        # scalar scratch, then wrapped as a downward (sink) C3 surface flux.
+        # V_{d,turb} is Courant-capped (≤ courant_max·Δz₁/dt) so the explicit
+        # surface sink cannot remove more than the lowest cell holds in a step.
+        dep_flux = p.scratch.ᶠtemp_field_level
+        parent(dep_flux) .=
+            min.(
+                sea_salt_dry_deposition_velocity.(
+                    vg1_p, r_wet1_p, ρ1_p, T1_p, z1_p, L_p, z₀_p, ustar_p,
+                    Ref(uf_params), FT(κ), R_d,
+                ),
+                courant_max .* Δz1_p ./ dt,
+            ) .* ρχ1_p
+
+        sfc_flux = p.scratch.sfc_temp_C3
+        @. sfc_flux = C3(-(dep_flux))
+
+        ᶜχ = @. lazy(specific(ᶜρχ, Y.c.ρ))
+        btt = boundary_tendency_scalar(ᶜχ, sfc_flux)
+        @. ᶜρχₜ -= btt
+    end
+    return nothing
 end
