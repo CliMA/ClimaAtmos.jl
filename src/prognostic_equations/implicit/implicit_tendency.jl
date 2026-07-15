@@ -75,28 +75,22 @@ end
 # the implicit tendency function. Since dt >= dtγ, we can safely use dt for now.
 
 function vertical_transport(ᶜρ, ᶠu³, ᶜχ, dt, ::Val{:none})
-    ᶜJ = Fields.local_geometry_field(axes(ᶜρ)).J
-    ᶠJ = Fields.local_geometry_field(axes(ᶠu³)).J
-    return @. lazy(-(ᶜadvdivᵥ(ᶠinterp(ᶜρ * ᶜJ) / ᶠJ * ᶠu³ * ᶠinterp(ᶜχ))))
+    ᶠρ = ᶠface_density(ᶜρ)
+    return @. lazy(-(ᶜadvdivᵥ(ᶠρ * ᶠu³ * ᶠinterp(ᶜχ))))
 end
 function vertical_transport(ᶜρ, ᶠu³, ᶜχ, dt, ::Val{:first_order})
-    ᶜJ = Fields.local_geometry_field(axes(ᶜρ)).J
-    ᶠJ = Fields.local_geometry_field(axes(ᶠu³)).J
-    return @. lazy(-(ᶜadvdivᵥ(ᶠinterp(ᶜρ * ᶜJ) / ᶠJ * ᶠupwind1(ᶠu³, ᶜχ))))
+    ᶠρ = ᶠface_density(ᶜρ)
+    return @. lazy(-(ᶜadvdivᵥ(ᶠρ * ᶠupwind1(ᶠu³, ᶜχ))))
 end
 @static if pkgversion(ClimaCore) ≥ v"0.14.22"
     function vertical_transport(ᶜρ, ᶠu³, ᶜχ, dt, ::Val{:vanleer_limiter})
-        ᶜJ = Fields.local_geometry_field(axes(ᶜρ)).J
-        ᶠJ = Fields.local_geometry_field(axes(ᶠu³)).J
-        return @. lazy(
-            -(ᶜadvdivᵥ(ᶠinterp(ᶜρ * ᶜJ) / ᶠJ * ᶠlin_vanleer(ᶠu³, ᶜχ, dt))),
-        )
+        ᶠρ = ᶠface_density(ᶜρ)
+        return @. lazy(-(ᶜadvdivᵥ(ᶠρ * ᶠlin_vanleer(ᶠu³, ᶜχ, dt))))
     end
 end
 function vertical_transport(ᶜρ, ᶠu³, ᶜχ, dt, ::Val{:third_order})
-    ᶜJ = Fields.local_geometry_field(axes(ᶜρ)).J
-    ᶠJ = Fields.local_geometry_field(axes(ᶠu³)).J
-    return @. lazy(-(ᶜadvdivᵥ(ᶠinterp(ᶜρ * ᶜJ) / ᶠJ * ᶠupwind3(ᶠu³, ᶜχ))))
+    ᶠρ = ᶠface_density(ᶜρ)
+    return @. lazy(-(ᶜadvdivᵥ(ᶠρ * ᶠupwind3(ᶠu³, ᶜχ))))
 end
 
 vertical_advection(ᶠu³, ᶜχ, ::Val{:none}) =
@@ -110,8 +104,7 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     (; microphysics_model, turbconv_model, rayleigh_sponge) = p.atmos
     (; params, dt) = p
     n = n_mass_flux_subdomains(turbconv_model)
-    ᶜJ = Fields.local_geometry_field(axes(Y.c)).J
-    ᶠJ = Fields.local_geometry_field(axes(Y.f)).J
+    ᶜρ, ᶠρ = Y.c.ρ, ᶠface_density(Y.c.ρ)
     (; ᶠgradᵥ_ᶜΦ) = p.core
     (; ᶠu³, ᶜp, ᶜh_tot, ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice) = p.precomputed
     thermo_params = CAP.thermodynamics_params(params)
@@ -123,18 +116,18 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     # boundaries, and the ρ row of the manual Jacobian is built from
     # ᶜadvdivᵥ_matrix(), so using ᶜadvdivᵥ here keeps the residual, the
     # boundary conditions, and the Jacobian consistent.
-    @. Yₜ.c.ρ -= ᶜadvdivᵥ(ᶠinterp(Y.c.ρ * ᶜJ) / ᶠJ * ᶠu³)
+    @. Yₜ.c.ρ -= ᶜadvdivᵥ(ᶠρ * ᶠu³)
 
     # Central vertical advection of active tracers (ρe_tot and ρq_tot).
     # The upwind correction is applied post-Newton via `T_post_imp!`
     # (see `correct_implicit_advection_tendency!`), so that the upwind
     # direction is taken with respect to the Newton-solved velocity rather
     # than the initial guess.
-    vtt = vertical_transport(Y.c.ρ, ᶠu³, ᶜh_tot, dt, Val(:none))
+    vtt = vertical_transport(ᶜρ, ᶠu³, ᶜh_tot, dt, Val(:none))
     @. Yₜ.c.ρe_tot += vtt
     if !(microphysics_model isa DryModel)
-        ᶜq_tot = @. lazy(specific(Y.c.ρq_tot, Y.c.ρ))
-        vtt = vertical_transport(Y.c.ρ, ᶠu³, ᶜq_tot, dt, Val(:none))
+        ᶜq_tot = @. lazy(specific(Y.c.ρq_tot, ᶜρ))
+        vtt = vertical_transport(ᶜρ, ᶠu³, ᶜq_tot, dt, Val(:none))
         @. Yₜ.c.ρq_tot += vtt
     end
 
@@ -144,65 +137,40 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     # using downward biasing and free outflow bottom boundary condition
     if microphysics_model isa NonEquilibriumMicrophysics
         (; ᶜwₗ, ᶜwᵢ) = p.precomputed
-        @. Yₜ.c.ρq_lcl -= ᶜprecipdivᵥ(
-            ᶠinterp(Y.c.ρ * ᶜJ) / ᶠJ * ᶠright_bias(
-                Geometry.WVector(-(ᶜwₗ)) * specific(Y.c.ρq_lcl, Y.c.ρ),
-            ),
-        )
-        @. Yₜ.c.ρq_icl -= ᶜprecipdivᵥ(
-            ᶠinterp(Y.c.ρ * ᶜJ) / ᶠJ * ᶠright_bias(
-                Geometry.WVector(-(ᶜwᵢ)) * specific(Y.c.ρq_icl, Y.c.ρ),
-            ),
-        )
+        @. Yₜ.c.ρq_lcl -=
+            ᶜprecipdivᵥ(ᶠρ * ᶠright_bias(WVec(-(ᶜwₗ)) * specific(Y.c.ρq_lcl, ᶜρ)))
+        @. Yₜ.c.ρq_icl -=
+            ᶜprecipdivᵥ(ᶠρ * ᶠright_bias(WVec(-(ᶜwᵢ)) * specific(Y.c.ρq_icl, ᶜρ)))
     end
     if microphysics_model isa
        NonEquilibriumMicrophysics1M
         (; ᶜwᵣ, ᶜwₛ) = p.precomputed
-        @. Yₜ.c.ρq_rai -= ᶜprecipdivᵥ(
-            ᶠinterp(Y.c.ρ * ᶜJ) / ᶠJ * ᶠright_bias(
-                Geometry.WVector(-(ᶜwᵣ)) * specific(Y.c.ρq_rai, Y.c.ρ),
-            ),
-        )
-        @. Yₜ.c.ρq_sno -= ᶜprecipdivᵥ(
-            ᶠinterp(Y.c.ρ * ᶜJ) / ᶠJ * ᶠright_bias(
-                Geometry.WVector(-(ᶜwₛ)) * specific(Y.c.ρq_sno, Y.c.ρ),
-            ),
-        )
+        @. Yₜ.c.ρq_rai -=
+            ᶜprecipdivᵥ(ᶠρ * ᶠright_bias(WVec(-(ᶜwᵣ)) * specific(Y.c.ρq_rai, ᶜρ)))
+        @. Yₜ.c.ρq_sno -=
+            ᶜprecipdivᵥ(ᶠρ * ᶠright_bias(WVec(-(ᶜwₛ)) * specific(Y.c.ρq_sno, ᶜρ)))
     end
     if microphysics_model isa
        NonEquilibriumMicrophysics2M
         (; ᶜwₙₗ, ᶜwₙᵣ, ᶜwᵣ, ᶜwₛ) = p.precomputed
-        @. Yₜ.c.ρn_lcl -= ᶜprecipdivᵥ(
-            ᶠinterp(Y.c.ρ * ᶜJ) / ᶠJ * ᶠright_bias(
-                Geometry.WVector(-(ᶜwₙₗ)) * specific(Y.c.ρn_lcl, Y.c.ρ),
-            ),
-        )
-        @. Yₜ.c.ρn_rai -= ᶜprecipdivᵥ(
-            ᶠinterp(Y.c.ρ * ᶜJ) / ᶠJ * ᶠright_bias(
-                Geometry.WVector(-(ᶜwₙᵣ)) * specific(Y.c.ρn_rai, Y.c.ρ),
-            ),
-        )
-        @. Yₜ.c.ρq_rai -= ᶜprecipdivᵥ(
-            ᶠinterp(Y.c.ρ * ᶜJ) / ᶠJ * ᶠright_bias(
-                Geometry.WVector(-(ᶜwᵣ)) * specific(Y.c.ρq_rai, Y.c.ρ),
-            ),
-        )
-        @. Yₜ.c.ρq_sno -= ᶜprecipdivᵥ(
-            ᶠinterp(Y.c.ρ * ᶜJ) / ᶠJ * ᶠright_bias(
-                Geometry.WVector(-(ᶜwₛ)) * specific(Y.c.ρq_sno, Y.c.ρ),
-            ),
-        )
+        @. Yₜ.c.ρn_lcl -=
+            ᶜprecipdivᵥ(ᶠρ * ᶠright_bias(WVec(-(ᶜwₙₗ)) * specific(Y.c.ρn_lcl, ᶜρ)))
+        @. Yₜ.c.ρn_rai -=
+            ᶜprecipdivᵥ(ᶠρ * ᶠright_bias(WVec(-(ᶜwₙᵣ)) * specific(Y.c.ρn_rai, ᶜρ)))
+        @. Yₜ.c.ρq_rai -=
+            ᶜprecipdivᵥ(ᶠρ * ᶠright_bias(WVec(-(ᶜwᵣ)) * specific(Y.c.ρq_rai, ᶜρ)))
+        @. Yₜ.c.ρq_sno -=
+            ᶜprecipdivᵥ(ᶠρ * ᶠright_bias(WVec(-(ᶜwₛ)) * specific(Y.c.ρq_sno, ᶜρ)))
     end
     if microphysics_model isa NonEquilibriumMicrophysics2MP3
-        (; ρ, ρn_ice, ρq_rim, ρb_rim) = Y.c
-        ᶜwnᵢ = @. lazy(Geometry.WVector(p.precomputed.ᶜwnᵢ))
-        ᶜwᵢ = @. lazy(Geometry.WVector(p.precomputed.ᶜwᵢ))
-        ᶠρ = @. lazy(ᶠinterp(ρ * ᶜJ) / ᶠJ)
+        (; ρn_ice, ρq_rim, ρb_rim) = Y.c
+        ᶜwnᵢ = @. lazy(WVec(p.precomputed.ᶜwnᵢ))
+        ᶜwᵢ = @. lazy(WVec(p.precomputed.ᶜwᵢ))
 
         # Note: `ρq_icl` is handled above, in `microphysics_model isa NonEquilibriumMicrophysics`
-        @. Yₜ.c.ρn_ice -= ᶜprecipdivᵥ(ᶠρ * ᶠright_bias(- ᶜwnᵢ * specific(ρn_ice, ρ)))
-        @. Yₜ.c.ρq_rim -= ᶜprecipdivᵥ(ᶠρ * ᶠright_bias(- ᶜwᵢ * specific(ρq_rim, ρ)))
-        @. Yₜ.c.ρb_rim -= ᶜprecipdivᵥ(ᶠρ * ᶠright_bias(- ᶜwᵢ * specific(ρb_rim, ρ)))
+        @. Yₜ.c.ρn_ice -= ᶜprecipdivᵥ(ᶠρ * ᶠright_bias(- ᶜwnᵢ * specific(ρn_ice, ᶜρ)))
+        @. Yₜ.c.ρq_rim -= ᶜprecipdivᵥ(ᶠρ * ᶠright_bias(- ᶜwᵢ * specific(ρq_rim, ᶜρ)))
+        @. Yₜ.c.ρb_rim -= ᶜprecipdivᵥ(ᶠρ * ᶠright_bias(- ᶜwᵢ * specific(ρb_rim, ᶜρ)))
     end
 
     vertical_advection_of_water_tendency!(Yₜ, Y, p, t)

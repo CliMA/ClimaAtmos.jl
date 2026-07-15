@@ -569,7 +569,7 @@ function update_advection_jacobian!(matrix, Y, p, dtγ, topography_flag)
     e_int_v0 = FT(CAP.e_int_v0(params))
     thermo_params = CAP.thermodynamics_params(params)
 
-    ᶜρ = Y.c.ρ
+    ᶜρ, ᶠρ = Y.c.ρ, ᶠface_density(Y.c.ρ)
     ᶜuₕ = Y.c.uₕ
     ᶠu₃ = Y.f.u₃
     ᶜJ = Fields.local_geometry_field(Y.c).J
@@ -595,8 +595,7 @@ function update_advection_jacobian!(matrix, Y, p, dtγ, topography_flag)
 
     @. ᶠp_grad_matrix = DiagonalMatrixRow(-1 / ᶠinterp(ᶜρ)) ⋅ ᶠgradᵥ_matrix()
 
-    @. ᶜadvection_matrix =
-        -(ᶜadvdivᵥ_matrix()) ⋅ DiagonalMatrixRow(ᶠinterp(ᶜρ * ᶜJ) / ᶠJ)
+    @. ᶜadvection_matrix = -(ᶜadvdivᵥ_matrix()) ⋅ DiagonalMatrixRow(ᶠρ)
     @. p.scratch.ᶠbidiagonal_matrix_ct3xct12 =
         ᶠwinterp_matrix(ᶜJ * ᶜρ) ⋅ DiagonalMatrixRow(g³ʰ(ᶜgⁱʲ))
     if use_derivative(topography_flag)
