@@ -3,6 +3,7 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- [#4699](https://github.com/CliMA/ClimaAtmos.jl/pull/4699) ![][badge-🔥behavioralΔ] Select the tracers that receive the `α_vert_diff_tracer` eddy-diffusivity scaling in the boundary-layer vertical diffusion from the shared `gs_sedimenting_tracer_candidates` list instead of a hardcoded tuple of species. The tracer diffusivity scaling is now consistent across the boundary-layer diffusion, the EDMFX SGS flux, the EDMFX updraft vertical diffusion, and the implicit Jacobian.
 
 0.42.0
 -------

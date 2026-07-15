@@ -134,10 +134,7 @@ function vertical_diffusion_boundary_layer_tendency!(
     ᶜK_h_scaled = p.scratch.ᶜtemp_scalar_3
 
     foreach_gs_tracer(Yₜ, Y) do ᶜρχₜ, ᶜρχ, ρχ_name
-        if ρχ_name in (
-            @name(ρq_lcl), @name(ρq_icl), @name(ρq_rai),
-            @name(ρq_sno), @name(ρn_lcl), @name(ρn_rai)
-        )
+        if ρχ_name in gs_sedimenting_tracer_candidates
             @. ᶜK_h_scaled = α_vert_diff_microphysics * ᶜK_h
         else
             @. ᶜK_h_scaled = ᶜK_h
