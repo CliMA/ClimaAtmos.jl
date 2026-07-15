@@ -3,7 +3,6 @@
 #####
 
 import ClimaCore.Geometry: ⊗
-import ClimaCore.Operators as Operators
 
 """
     vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t)
@@ -94,7 +93,6 @@ function vertical_diffusion_boundary_layer_tendency!(
     α_vert_diff_microphysics = CAP.α_vert_diff_tracer(p.params)
     thermo_params = CAP.thermodynamics_params(p.params)
     (; ᶜu, ᶜp, ᶜT, ᶜq_liq, ᶜq_ice) = p.precomputed
-    ᶠgradᵥ = Operators.GradientC2F() # apply BCs to ᶜdivᵥ, which wraps ᶠgradᵥ
     ᶜK_h = p.scratch.ᶜtemp_scalar
     if vertical_diffusion isa DecayWithHeightDiffusion
         ᶜK_h .= ᶜcompute_eddy_diffusivity_coefficient(Y.c.ρ, vertical_diffusion)
@@ -125,27 +123,12 @@ function vertical_diffusion_boundary_layer_tendency!(
     # vertical diffusion factor α_vert_diff_tracer) to maintain exact energetic
     # consistency with the unscaled ρq_tot diffusion equation, preserve total
     # water invariance, and align with the implicit solver's Jacobian.
-    ᶜdivᵥ_ρe_tot = Operators.DivergenceF2C(
-        top = Operators.SetValue(C3(0)),
-        bottom = Operators.SetValue(C3(0)),
-    )
     (; ᶜΦ) = p.core
     (; ᶜq_tot_nonneg) = p.precomputed
     ᶜq_vap = @. lazy(TD.vapor_specific_humidity(ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice))
-    @. Yₜ.c.ρe_tot -= ᶜdivᵥ_ρe_tot(
-        -(
-            ᶠinterp(Y.c.ρ) / ᶠinterp(1 / max(ᶜK_h, ϵK)) *
-            (
-                ᶠgradᵥ(TD.dry_static_energy(thermo_params, ᶜT, ᶜΦ)) +
-                ᶠinterp(TD.enthalpy_vapor(thermo_params, ᶜT) + ᶜΦ) *
-                ᶠgradᵥ(ᶜq_vap) +
-                ᶠinterp(TD.enthalpy_liquid(thermo_params, ᶜT) + ᶜΦ) *
-                ᶠgradᵥ(ᶜq_liq) +
-                ᶠinterp(TD.enthalpy_ice(thermo_params, ᶜT) + ᶜΦ) *
-                ᶠgradᵥ(ᶜq_ice)
-            )
-        ),
-    )
+    ᶠgrad_h = ᶠtotal_enthalpy_gradientᵥ(thermo_params, ᶜT, ᶜΦ, ᶜq_vap, ᶜq_liq, ᶜq_ice)
+    @. Yₜ.c.ρe_tot -=
+        ᶜdiffdivᵥ(-(ᶠinterp(Y.c.ρ) / ᶠinterp(1 / max(ᶜK_h, ϵK)) * ᶠgrad_h))
 
     ᶜρχₜ_diffusion = p.scratch.ᶜtemp_scalar_2
     ᶜK_h_scaled = p.scratch.ᶜtemp_scalar_3
@@ -159,17 +142,10 @@ function vertical_diffusion_boundary_layer_tendency!(
         else
             @. ᶜK_h_scaled = ᶜK_h
         end
-        ᶜdivᵥ_ρχ = Operators.DivergenceF2C(
-            top = Operators.SetValue(C3(0)),
-            bottom = Operators.SetValue(C3(0)),
-        )
-        @. ᶜρχₜ_diffusion = ᶜdivᵥ_ρχ(
-            -(
-                ᶠinterp(Y.c.ρ) /
-                ᶠinterp(1 / max(ᶜK_h_scaled, ϵK)) *
-                ᶠgradᵥ(specific(ᶜρχ, Y.c.ρ))
-            ),
-        )
+        ᶠρK = @. lazy(ᶠinterp(Y.c.ρ) / ᶠinterp(1 / max(ᶜK_h_scaled, ϵK)))
+        ᶜχ = @. lazy(specific(ᶜρχ, Y.c.ρ))
+        ᶜ∇ᵥρD∇χₜ = ᶜdiffusive_flux_divergenceᵥ(ᶠρK, ᶜχ)
+        @. ᶜρχₜ_diffusion = ᶜ∇ᵥρD∇χₜ
         @. ᶜρχₜ -= ᶜρχₜ_diffusion
         # Only add contribution from total water diffusion to mass tendency
         # (exclude contributions from diffusion of condensate, precipitation)
