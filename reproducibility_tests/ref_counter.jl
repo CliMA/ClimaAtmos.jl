@@ -1,4 +1,4 @@
-391
+392
 
 # **README**
 #
@@ -32,6 +32,11 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+392
+- Diffuse total enthalpy in the Smagorinsky-Lilly and AMD tendencies,
+  vertical and horizontal, with the dry-static-energy + water-enthalpy
+  decomposition, matching the boundary-layer and EDMFX diffusion.
+
 391
 - Update SurfaceFluxes 1.0.1 → 1.1.0
 
