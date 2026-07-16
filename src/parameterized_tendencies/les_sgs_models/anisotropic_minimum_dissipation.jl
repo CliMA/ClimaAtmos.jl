@@ -142,7 +142,17 @@ function horizontal_amd_tendency!(Yₜ, Y, p, t, les::AnisotropicMinimumDissipat
         ) /
         max(eps(FT), norm_sqr(gradₕ(ᶜh_tot))),
     )
-    @. Yₜ.c.ρe_tot += wdivₕ(Y.c.ρ * ᶜD_amd * gradₕ(ᶜh_tot))
+    # ᶜD_amd is evaluated from the total-enthalpy gradient above;
+    # the flux applies it to the dry-static-energy + water-enthalpy decomposition;
+    # see `edmfx_sgs_diffusive_flux_tendency!` for the rationale.
+    thermo_params = CAP.thermodynamics_params(params)
+    (; ᶜΦ) = p.core
+    (; ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice) = precomputed
+    ᶜq_vap = @. lazy(TD.vapor_specific_humidity(ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice))
+    ᶜ∇h_tot = ᶜtotal_enthalpy_gradientₕ!(
+        scratch.ᶜtemp_C12, thermo_params, ᶜT, ᶜΦ, ᶜq_vap, ᶜq_liq, ᶜq_ice,
+    )
+    @. Yₜ.c.ρe_tot += wdivₕ(Y.c.ρ * ᶜD_amd * ᶜ∇h_tot)
 
     # Tracer diffusion and associated mass changes
     foreach_gs_tracer(Yₜ, Y) do ᶜρχₜ, ᶜρχ, ρχ_name
@@ -300,8 +310,16 @@ function vertical_amd_tendency!(Yₜ, Y, p, t, les::AnisotropicMinimumDissipatio
         max(eps(FT), norm_sqr(∇h_tot)),
     )
     ᶠρD = @. lazy(ᶠρ * ᶠD_amd)
-    ᶜ∇ᵥρD∇h_totₜ = ᶜdiffusive_flux_divergenceᵥ(ᶠρD, ᶜh_tot)
-    @. Yₜ.c.ρe_tot -= ᶜ∇ᵥρD∇h_totₜ
+    # ᶠD_amd is evaluated from the total-enthalpy gradient above;
+    # the flux applies it to the dry-static-energy + water-enthalpy decomposition;
+    # see `edmfx_sgs_diffusive_flux_tendency!` for the rationale.
+    thermo_params = CAP.thermodynamics_params(p.params)
+    (; ᶜΦ) = p.core
+    (; ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice) = p.precomputed
+    ᶜq_vap = @. lazy(TD.vapor_specific_humidity(ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice))
+    ᶠ∇ᵥh_tot =
+        ᶠtotal_enthalpy_gradientᵥ(thermo_params, ᶜT, ᶜΦ, ᶜq_vap, ᶜq_liq, ᶜq_ice)
+    @. Yₜ.c.ρe_tot -= ᶜdiffdivᵥ(-(ᶠρD * ᶠ∇ᵥh_tot))
 
     ## Tracer diffusion and associated mass changes
     foreach_gs_tracer(Yₜ, Y) do ᶜρχₜ, ᶜρχ, ρχ_name

@@ -1,4 +1,4 @@
-389
+390
 
 # **README**
 #
@@ -32,6 +32,12 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+<<<<<<< HEAD
+390
+- Diffuse total enthalpy in the vertical Smagorinsky-Lilly and AMD
+  tendencies with the dry-static-energy + water-enthalpy decomposition,
+  matching the boundary-layer and EDMFX vertical diffusion.
+
 389
 - Add a temporary parameter for lateral sedimentation mixing
 
@@ -56,6 +62,12 @@
   inherits the grid-mean specific tendency (uniform hyperdiff in the grid
   box). Split the total-enthalpy flux into dry-static-energy + water-species
   contributions to avoid diffusing dry-air enthalpy along with water enthalpy.
+=======
+384
+- Diffuse total enthalpy in the vertical Smagorinsky-Lilly and AMD
+  tendencies with the dry-static-energy + water-enthalpy decomposition,
+  matching the boundary-layer and EDMFX vertical diffusion.
+>>>>>>> 7d09e5f15 (fix(les): diffuse total enthalpy with the dry-static-energy decomposition)
 
 383
 - Add precipitation entrainment from environment into a widening updraft

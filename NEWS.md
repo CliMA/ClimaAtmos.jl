@@ -10,6 +10,7 @@ main
 
 
 - [#4657](https://github.com/CliMA/ClimaAtmos.jl/pull/4657) ![][badge-✨feature/enhancement] Add a horizontal component to the EDMFX SGS diffusive flux, enabled by the opt-in `edmfx_sgs_horizontal_diffusive_flux` config option (default `false`), for high-resolution configurations: scalar and TKE fluxes, the momentum stress `τ = -2 K_u S` with the full strain rate, the corresponding TKE shear production from horizontal gradients, and diagnostics `lmixh`, `edth`, and `evuh`. With prognostic updrafts and the separate opt-in `edmfx_horizontal_diffusion` config option (default `false`, requires `edmfx_sgs_horizontal_diffusive_flux`), the grid-mean horizontal specific tendencies are also applied to the updraft scalars (moist static energy, total specific humidity with its area-weighted density counterpart, and SGS tracers), so each subdomain inherits the grid-mean horizontal diffusion.
+- [#4704](https://github.com/CliMA/ClimaAtmos.jl/pull/4704) ![][badge-🔥behavioralΔ] Diffuse total enthalpy in the Smagorinsky-Lilly and AMD tendencies, vertical and horizontal, with the dry-static-energy + water-enthalpy decomposition used by the boundary-layer and EDMFX diffusion, instead of diffusing `h_tot` directly. The decomposition removes the spurious enthalpy flux carried by the dry-air mass gradient and the diffusive flux of kinetic energy. AMD keeps evaluating its energy diffusivities from the total-enthalpy gradient.
 
 0.42.1
 -------
