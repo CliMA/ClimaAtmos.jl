@@ -468,7 +468,7 @@ dependent logic.
 end
 
 """
-    _compute_cloud_fraction(q_c, mu_S, sigma_S, q_sat, α, ε_rel, σ_abs)
+    _compute_cloud_fraction(q_c, sigma_S, q_sat, α, ε_rel, σ_abs)
 
 Cloud fraction `CF = Φ(z)`, where `z` solves the truncated-Gaussian condensate
 relation `q_c/σ_aug = z·Φ(z) + φ(z)` (see [`_compute_z`](@ref)) with the
@@ -480,7 +480,7 @@ the quadrature (`σ_S`), and partly through non-equilibrium variations not
 captured by the equilibrium SGS PDF. `σ_S_floor` models the latter and is scaled
 with the saturation specific humidity,
 
-    σ_S_floor² = (D · ε_rel · q_sat)² + σ_abs².
+    σ_S_floor² = (ε_rel · q_sat)² + σ_abs².
 
 The q_sat-scaling implies saturation-excess fluctuations scale with q_sat.
 The parameter `ε_rel` is a condensate-patchiness scale: it indicates the
@@ -495,34 +495,12 @@ only; the inter-subdomain (convective) spread is carried explicitly by the
 drafts. The parameter `ε_rel` is a q_sat-scaling whose magnitude should grow
 with grid spacing.
 
-Saturation-dependent damping `D`. Non-equilibrium patchiness is a property of
-*partially* saturated air: in a subdomain whose mean state is saturated (an
-equilibrated overcast deck maintained by radiative cooling), the patchiness the
-floor parameterizes is near zero, and an undamped floor spuriously caps CF well
-below 1 whenever `q_c ≲ ε_rel·q_sat` — cutting cloud-top longwave cooling in
-exactly the stratocumulus regime. The relative floor is therefore damped as the
-mean saturation excess `μ_S = q_tot − q_sat` approaches zero from below:
-
-    x = max(−μ_S, 0) / (ε_rel · q_sat),    D = x / sqrt(1 + x²),
-
-so `D → 0` for a saturated mean (`μ_S ≥ 0`, overcast limit: CF is then
-controlled by the equilibrium `σ_S` and `σ_abs` alone, and `CF → 1` for
-`q_c ≫ σ_aug`), while `D → 1` once the mean is subsaturated by a few floor
-scales (cumulus regime: floor fully active). The transition width is the
-patchiness scale `ε_rel·q_sat` itself, so no new parameter is introduced.
-
 The floor enters *only* the CF computation; the Lagrange multiplier `λ` (in
 `_compute_sgs_moments`) uses the equilibrium `σ_S`, so mass conservation
 `E[max(0, λ + α·S′)] = q_c` is exactly preserved for the microphysics tendencies.
 """
-@inline function _compute_cloud_fraction(q_c, mu_S, sigma_S, q_sat, α, ε_rel, σ_abs)
-    FT = typeof(q_c)
-    # Damp the relative floor as the subdomain mean saturates (μ_S → 0⁻):
-    # patchiness vanishes in an equilibrated overcast deck. The denominator
-    # guard keeps x finite (and D well-defined) when ε_rel·q_sat → 0.
-    x = max(-mu_S, zero(FT)) / max(ε_rel * q_sat, ϵ_numerics(FT))
-    D = x / sqrt(1 + x^2)
-    σ_S_floor_sq = (D * ε_rel * q_sat)^2 + σ_abs^2
+@inline function _compute_cloud_fraction(q_c, sigma_S, q_sat, α, ε_rel, σ_abs)
+    σ_S_floor_sq = (ε_rel * q_sat)^2 + σ_abs^2
     σ_aug = α * sqrt(sigma_S^2 + σ_S_floor_sq)
     C = q_c / σ_aug
     z = _compute_z(C)
@@ -561,7 +539,7 @@ materialized to a Field.
     )
     q_sat = TD.q_vap_saturation(thermo_params, T, ρ, q_liq, q_ice)
     return _compute_cloud_fraction(
-        q_liq + q_ice, moments.mu_S, moments.sigma_S, q_sat, α, ε_rel, σ_abs,
+        q_liq + q_ice, moments.sigma_S, q_sat, α, ε_rel, σ_abs,
     )
 end
 
@@ -633,9 +611,6 @@ NVTX.@annotate function set_sgs_moments_and_cloud_fraction!(Y, p)
     # applied it during Picard.
     @. p.precomputed.ᶜcloud_fraction = _compute_cloud_fraction(
         ᶜq_lcl + ᶜq_icl,
-        # μ_S recomputed analytically, matching `_sgs_saturation_moments`
-        # (condensate-free q_sat, consistent with the linear excess S).
-        ᶜq_mean - TD.q_vap_saturation(thermo_params, ᶜT_mean, ᶜρ_env),
         p.precomputed.ᶜsgs_moments.sigma_S,
         TD.q_vap_saturation(thermo_params, ᶜT_mean, ᶜρ_env, ᶜq_lcl, ᶜq_icl),
         FT(α),
