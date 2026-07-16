@@ -1,4 +1,4 @@
-382
+383
 
 # **README**
 #
@@ -32,6 +32,9 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+383
+- Add precipitation entrainment from environment into a widening updraft
+
 382
 - Update RRTMGP.jl
 
