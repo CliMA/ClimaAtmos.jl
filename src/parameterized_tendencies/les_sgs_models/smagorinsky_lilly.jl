@@ -163,8 +163,27 @@ function horizontal_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, model::Smagorinsk
     @. Yₜ.f.u₃ -= C3(wdivₕ(ᶠρ * ᶠτ_smag) / ᶠρ)
 
     ## Total energy tendency
-    (; ᶜh_tot) = p.precomputed
-    @. Yₜ.c.ρe_tot += wdivₕ(ᶜρ * ᶜD_h * gradₕ(ᶜh_tot))
+    # The single-gradient decomposition of `edmfx_sgs_diffusive_flux_tendency!`,
+    # `F_h = -ρ D_h [∇s_d + (h_eff + Φ) ∇q_tot_eff]`, rather than `∇h_tot`.
+    (; ᶜΦ) = p.core
+    (; ᶜT) = p.precomputed
+    @. Yₜ.c.ρe_tot +=
+        wdivₕ(ᶜρ * ᶜD_h * gradₕ(TD.dry_static_energy(thermo_params, ᶜT, ᶜΦ)))
+    if !(p.atmos.microphysics_model isa DryModel)
+        ᶜq_vap, ᶜq_lcl, ᶜq_icl = ᶜsuspended_water(Y, p)
+        ᶜh_eff_plus_Φ = ᶜh_eff_plus_Φ!(
+            p.scratch.ᶜtemp_scalar_6,
+            thermo_params,
+            ᶜT,
+            ᶜΦ,
+            ᶜq_vap,
+            ᶜq_lcl,
+            ᶜq_icl,
+        )
+        ᶜq_tot_eff = ᶜdiffusing_water(Y, p)
+        @. Yₜ.c.ρe_tot +=
+            wdivₕ(ᶜρ * ᶜD_h * ᶜh_eff_plus_Φ * gradₕ(ᶜq_tot_eff))
+    end
 
     ## Tracer diffusion and associated mass changes
     foreach_gs_tracer(Yₜ, Y) do ᶜρχₜ, ᶜρχ, ρχ_name
@@ -219,9 +238,29 @@ function vertical_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, model::SmagorinskyL
     @. Yₜ.f.u₃ -= C3(ᶠdiffdivᵥ_u₃(ᶜρ * ᶜτ_smag) / ᶠρ)
 
     ## Total energy tendency
-    (; ᶜh_tot) = p.precomputed
-    ᶜ∇ᵥρD∇h_totₜ = ᶜdiffusive_flux_divergenceᵥ(ᶠρD, ᶜh_tot)
-    @. Yₜ.c.ρe_tot -= ᶜ∇ᵥρD∇h_totₜ
+    # The single-gradient decomposition of `edmfx_sgs_diffusive_flux_tendency!`,
+    # `F_h = -ρ D [∇s_d + (h_eff + Φ) ∇q_tot_eff]`, rather than `∇h_tot`.
+    thermo_params = CAP.thermodynamics_params(p.params)
+    (; ᶜΦ) = p.core
+    (; ᶜT) = p.precomputed
+    ᶜs_d = @. lazy(TD.dry_static_energy(thermo_params, ᶜT, ᶜΦ))
+    ᶜ∇ᵥρD∇s_d = ᶜdiffusive_flux_divergenceᵥ(ᶠρD, ᶜs_d)
+    @. Yₜ.c.ρe_tot -= ᶜ∇ᵥρD∇s_d
+    if !(p.atmos.microphysics_model isa DryModel)
+        ᶜq_vap, ᶜq_lcl, ᶜq_icl = ᶜsuspended_water(Y, p)
+        ᶜh_eff_plus_Φ = ᶜh_eff_plus_Φ!(
+            p.scratch.ᶜtemp_scalar_6,
+            thermo_params,
+            ᶜT,
+            ᶜΦ,
+            ᶜq_vap,
+            ᶜq_lcl,
+            ᶜq_icl,
+        )
+        ᶜq_tot_eff = ᶜdiffusing_water(Y, p)
+        @. Yₜ.c.ρe_tot -=
+            ᶜdiffdivᵥ(-(ᶠρD * ᶠinterp(ᶜh_eff_plus_Φ) * ᶠgradᵥ(ᶜq_tot_eff)))
+    end
 
     ## Tracer diffusion and associated mass changes
     foreach_gs_tracer(Yₜ, Y) do ᶜρχₜ, ᶜρχ, ρχ_name

@@ -129,7 +129,29 @@ function horizontal_amd_tendency!(Yₜ, Y, p, t, les::AnisotropicMinimumDissipat
         ) /
         max(eps(FT), norm_sqr(gradₕ(ᶜh_tot))),
     )
-    @. Yₜ.c.ρe_tot += wdivₕ(Y.c.ρ * ᶜD_amd * gradₕ(ᶜh_tot))
+    # ᶜD_amd is evaluated from the total-enthalpy gradient above; the flux
+    # applies it to the single-gradient decomposition of
+    # `edmfx_sgs_diffusive_flux_tendency!` rather than to `∇h_tot`.
+    thermo_params = CAP.thermodynamics_params(params)
+    (; ᶜΦ) = p.core
+    (; ᶜT) = precomputed
+    @. Yₜ.c.ρe_tot +=
+        wdivₕ(Y.c.ρ * ᶜD_amd * gradₕ(TD.dry_static_energy(thermo_params, ᶜT, ᶜΦ)))
+    if !(p.atmos.microphysics_model isa DryModel)
+        ᶜq_vap, ᶜq_lcl, ᶜq_icl = ᶜsuspended_water(Y, p)
+        ᶜh_eff_plus_Φ = ᶜh_eff_plus_Φ!(
+            scratch.ᶜtemp_scalar_6,
+            thermo_params,
+            ᶜT,
+            ᶜΦ,
+            ᶜq_vap,
+            ᶜq_lcl,
+            ᶜq_icl,
+        )
+        ᶜq_tot_eff = ᶜdiffusing_water(Y, p)
+        @. Yₜ.c.ρe_tot +=
+            wdivₕ(Y.c.ρ * ᶜD_amd * ᶜh_eff_plus_Φ * gradₕ(ᶜq_tot_eff))
+    end
 
     # Tracer diffusion and associated mass changes
     foreach_gs_tracer(Yₜ, Y) do ᶜρχₜ, ᶜρχ, ρχ_name
@@ -275,8 +297,30 @@ function vertical_amd_tendency!(Yₜ, Y, p, t, les::AnisotropicMinimumDissipatio
         max(eps(FT), norm_sqr(∇h_tot)),
     )
     ᶠρD = @. lazy(ᶠρ * ᶠD_amd)
-    ᶜ∇ᵥρD∇h_totₜ = ᶜdiffusive_flux_divergenceᵥ(ᶠρD, ᶜh_tot)
-    @. Yₜ.c.ρe_tot -= ᶜ∇ᵥρD∇h_totₜ
+    # ᶠD_amd is evaluated from the total-enthalpy gradient above; the flux
+    # applies it to the single-gradient decomposition of
+    # `edmfx_sgs_diffusive_flux_tendency!` rather than to `∇h_tot`.
+    thermo_params = CAP.thermodynamics_params(p.params)
+    (; ᶜΦ) = p.core
+    (; ᶜT) = p.precomputed
+    ᶜs_d = @. lazy(TD.dry_static_energy(thermo_params, ᶜT, ᶜΦ))
+    ᶜ∇ᵥρD∇s_d = ᶜdiffusive_flux_divergenceᵥ(ᶠρD, ᶜs_d)
+    @. Yₜ.c.ρe_tot -= ᶜ∇ᵥρD∇s_d
+    if !(p.atmos.microphysics_model isa DryModel)
+        ᶜq_vap, ᶜq_lcl, ᶜq_icl = ᶜsuspended_water(Y, p)
+        ᶜh_eff_plus_Φ = ᶜh_eff_plus_Φ!(
+            p.scratch.ᶜtemp_scalar_6,
+            thermo_params,
+            ᶜT,
+            ᶜΦ,
+            ᶜq_vap,
+            ᶜq_lcl,
+            ᶜq_icl,
+        )
+        ᶜq_tot_eff = ᶜdiffusing_water(Y, p)
+        @. Yₜ.c.ρe_tot -=
+            ᶜdiffdivᵥ(-(ᶠρD * ᶠinterp(ᶜh_eff_plus_Φ) * ᶠgradᵥ(ᶜq_tot_eff)))
+    end
 
     ## Tracer diffusion and associated mass changes
     foreach_gs_tracer(Yₜ, Y) do ᶜρχₜ, ᶜρχ, ρχ_name
