@@ -29,7 +29,7 @@ function ShipwayHill2012(; thermo_params)
 
     p_0 = FT(100_700)
     p = hydrostatic_pressure_profile(; thermo_params, p_0, θ, q_tot)
-    return (; θ, q_tot, p)
+    return ShipwayHill2012((; θ, q_tot, p))
 end
 
 function center_initial_condition(setup::ShipwayHill2012, local_geometry, params)
