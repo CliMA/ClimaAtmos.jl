@@ -794,10 +794,10 @@ function update_sedimentation_jacobian!(matrix, Y, p, dtγ)
 end
 
 # Center eddy diffusivity and viscosity for the non-EDMF implicit diffusion
-# Jacobians. May write to ᶜtemp_scalar_3. AbstractEDMF configurations return
-# nothing: their grid-mean and updraft diffusion Jacobians both use the
-# face-native ᶠK_h/ᶠK_u/ᶠK_entr from set_face_diffusivities! (see
-# update_diffusion_jacobian! and update_sgs_diffusion_jacobian!).
+# Jacobian. May write to ᶜtemp_scalar_3. AbstractEDMF configurations return
+# nothing: their grid-mean diffusion Jacobian uses the face-native
+# ᶠK_h/ᶠK_u/ᶠK_entr from set_face_diffusivities! (see
+# update_diffusion_jacobian!).
 function eddy_diffusivity_coefficients!(Y, p)
     (; vertical_diffusion, smagorinsky_lilly) = p.atmos
     (; ᶜp) = p.precomputed
@@ -1233,71 +1233,6 @@ function update_sgs_advection_jacobian!(matrix, Y, p, dtγ)
 end
 
 """
-    update_sgs_diffusion_jacobian!(matrix, Y, p, dtγ, diffusion_flag)
-
-Updates the Jacobian blocks for implicit vertical diffusion of the updraft
-scalars. No-op when diffusion is treated explicitly.
-
-Reuses `ᶜdiffusion_h_matrix` as scratch space, so it must run after
-`update_diffusion_jacobian!`.
-"""
-function update_sgs_diffusion_jacobian!(matrix, Y, p, dtγ, diffusion_flag)
-    p.atmos.turbconv_model isa PrognosticEDMFX || return nothing
-    use_derivative(diffusion_flag) || return nothing
-    # Mirror the gate of the tendency this linearizes
-    # (edmfx_vertical_diffusion_tendency!): without it, the updraft scalar
-    # diagonals would carry diffusion terms that have no tendency counterpart.
-    p.atmos.edmfx_model.vertical_diffusion isa Val{true} || return nothing
-    (; params) = p
-    (; ᶜρʲs) = p.precomputed
-    (; ᶜdiffusion_h_matrix) = p.scratch
-
-    α_vert_diff_microphysics = CAP.α_vert_diff_tracer(params)
-    # Face-native ᶠK_h, consistent with edmfx_vertical_diffusion_tendency!
-    # (ᶠK_entr is deliberately excluded there; see that function).
-    (; ᶠK_h) = p.precomputed
-    @. ᶜdiffusion_h_matrix =
-        ᶜadvdivᵥ_matrix() ⋅ DiagonalMatrixRow(ᶠinterp(ᶜρʲs.:(1)) * ᶠK_h) ⋅
-        ᶠgradᵥ_matrix()
-
-    ∂ᶜmseʲ_err_∂ᶜmseʲ =
-        matrix[@name(c.sgsʲs.:(1).mse), @name(c.sgsʲs.:(1).mse)]
-    ∂ᶜq_totʲ_err_∂ᶜq_totʲ =
-        matrix[@name(c.sgsʲs.:(1).q_tot), @name(c.sgsʲs.:(1).q_tot)]
-    @. ∂ᶜmseʲ_err_∂ᶜmseʲ +=
-        dtγ * DiagonalMatrixRow(1 / ᶜρʲs.:(1)) ⋅ ᶜdiffusion_h_matrix
-    @. ∂ᶜq_totʲ_err_∂ᶜq_totʲ +=
-        dtγ * DiagonalMatrixRow(1 / ᶜρʲs.:(1)) ⋅ ᶜdiffusion_h_matrix
-
-    if p.atmos.microphysics_model isa Union{
-        NonEquilibriumMicrophysics1M,
-        NonEquilibriumMicrophysics2M,
-    }
-        MatrixFields.unrolled_foreach(
-            sedimenting_sgs_tracer_names(Y),
-        ) do χ_name
-            χ_state_name = sgs_state_name(χ_name)
-            ∂ᶜχʲ_err_∂ᶜχʲ = matrix[χ_state_name, χ_state_name]
-            @. ∂ᶜχʲ_err_∂ᶜχʲ +=
-                dtγ * α_vert_diff_microphysics *
-                DiagonalMatrixRow(1 / ᶜρʲs.:(1)) ⋅
-                ᶜdiffusion_h_matrix
-        end
-    end
-
-    # Passive SGS tracers are diffused with the unscaled K_h (see
-    # edmfx_vertical_diffusion_tendency!); their diagonals are initialized by
-    # update_sgs_advection_jacobian!, so the diffusion term is accumulated.
-    MatrixFields.unrolled_foreach(passive_sgs_tracer_names(Y)) do χ_name
-        χ_state_name = sgs_state_name(χ_name)
-        ∂ᶜχʲ_err_∂ᶜχʲ = matrix[χ_state_name, χ_state_name]
-        @. ∂ᶜχʲ_err_∂ᶜχʲ +=
-            dtγ * DiagonalMatrixRow(1 / ᶜρʲs.:(1)) ⋅ ᶜdiffusion_h_matrix
-    end
-    return nothing
-end
-
-"""
     update_sgs_entr_detr_jacobian!(matrix, Y, p, dtγ)
 
 Updates the Jacobian blocks for implicit entrainment of the updraft scalars
@@ -1606,7 +1541,6 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
         eddy_diffusivities,
     )
     update_sgs_advection_jacobian!(matrix, Y, p, dtγ)
-    update_sgs_diffusion_jacobian!(matrix, Y, p, dtγ, diffusion_flag)
     update_sgs_entr_detr_jacobian!(matrix, Y, p, dtγ)
     update_sgs_boundary_condition_jacobian!(matrix, Y, p, dtγ)
     update_sgs_massflux_jacobian!(matrix, Y, p, dtγ, diffusion_flag)
