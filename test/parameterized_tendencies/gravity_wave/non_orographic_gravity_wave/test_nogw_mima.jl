@@ -203,6 +203,7 @@ for j in 1:length(lat)
         non_orographic_gravity_wave_param(lat[j], FT)...,
         u_waveforcing_top = similar(Fields.level(ᶜz, 1), FT),
         v_waveforcing_top = similar(Fields.level(ᶜz, 1), FT),
+        gw_temp_surface = similar(Fields.level(ᶜz, 1), FT),
         gw_beres_active = fill!(similar(Fields.level(ᶜz, 1), FT), FT(0)),
         gw_Q0 = fill!(similar(Fields.level(ᶜz, 1), FT), FT(0)),
         gw_h_heat = fill!(similar(Fields.level(ᶜz, 1), FT), FT(0)),
