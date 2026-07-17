@@ -18,6 +18,9 @@ import ClimaUtilities.TimeVaryingInputs:
     LinearInterpolation
 
 import Interpolations as Intp
+import StaticArrays as SA
+import ClimaInterpolations.Interpolation1D as CI1D
+import AtmosphericProfilesLibrary as APL
 using Statistics: mean
 
 radiation_model_cache(Y, atmos::AtmosModel, args...) =
@@ -521,26 +524,58 @@ end
 ##### TRMM_LBA radiation
 #####
 
+# Height grid of the AtmosphericProfilesLibrary TRMM_LBA radiative-cooling
+# table, read from the underlying interpolant.
+function trmm_lba_radiation_z_knots(rad_profile)
+    z_grid = getfield(getfield(getfield(rad_profile, :prof), :itp), :knots)[2]
+    return SA.SVector{length(z_grid)}(z_grid)
+end
+
 function radiation_model_cache(Y, radiation_mode::RadiationTRMM_LBA)
     FT = Spaces.undertype(axes(Y.c))
+    rad_profile = APL.TRMM_LBA_radiation(FT)
     return (;
         ᶜdTdt_rad = similar(Y.c, FT),
+        rad_profile,
+        z_knots = trmm_lba_radiation_z_knots(rad_profile),
         net_energy_flux_toa = [Geometry.WVector(FT(0))],
         net_energy_flux_sfc = [Geometry.WVector(FT(0))],
     )
 end
 
-function radiation_tendency!(Yₜ, Y, p, t, radiation_mode::RadiationTRMM_LBA)
+"""
+    set_trmm_lba_dTdt_rad!(ᶜdTdt_rad, rad_profile, z_knots, t)
+
+Set `ᶜdTdt_rad` to the TRMM_LBA radiative cooling `rad_profile(t, z)`.
+`rad_profile` interpolates in time and height and is host-resident. On a host
+space it is broadcast directly. On a device space its time coordinate is
+resolved on the host into the `SVector` height profile at `t`, which is then
+interpolated in height on the device.
+"""
+function set_trmm_lba_dTdt_rad!(ᶜdTdt_rad, rad_profile, z_knots, t)
+    ᶜz = Fields.coordinate_field(axes(ᶜdTdt_rad)).z
+    if ClimaComms.device(ᶜdTdt_rad) isa ClimaComms.AbstractCPUDevice
+        @. ᶜdTdt_rad = rad_profile(t, ᶜz)
+    else
+        dTdt_at_t = map(z -> rad_profile(t, z), z_knots)
+        z_profile = CI1D.Interpolate1D(
+            z_knots, dTdt_at_t;
+            interpolationorder = CI1D.Linear(),
+            extrapolationorder = CI1D.Flat(),
+        )
+        @. ᶜdTdt_rad = z_profile(ᶜz)
+    end
+    return nothing
+end
+
+function radiation_tendency!(Yₜ, Y, p, t, ::RadiationTRMM_LBA)
     FT = Spaces.undertype(axes(Y.c))
     (; params) = p
-    # TODO: get working (need to add cache / function)
-    rad = radiation_mode.rad_profile
     thermo_params = CAP.thermodynamics_params(params)
-    ᶜdTdt_rad = p.radiation.ᶜdTdt_rad
+    (; ᶜdTdt_rad, rad_profile, z_knots) = p.radiation
     ᶜρ = Y.c.ρ
     (; ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice) = p.precomputed
-    zc = Fields.coordinate_field(axes(ᶜρ)).z
-    @. ᶜdTdt_rad = rad(FT(t), zc)
+    set_trmm_lba_dTdt_rad!(ᶜdTdt_rad, rad_profile, z_knots, FT(t))
     @. Yₜ.c.ρe_tot +=
         ᶜρ * TD.cv_m(thermo_params, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice) * ᶜdTdt_rad
     return nothing

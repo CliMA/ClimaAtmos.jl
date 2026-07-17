@@ -88,4 +88,4 @@ function surface_condition(::TRMM_LBA, params)
     )
 end
 
-radiation_model(::TRMM_LBA, ::Type{FT}) where {FT} = RadiationTRMM_LBA(FT)
+radiation_model(::TRMM_LBA, ::Type{FT}) where {FT} = RadiationTRMM_LBA()

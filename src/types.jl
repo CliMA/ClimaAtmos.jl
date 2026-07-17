@@ -739,15 +739,7 @@ end
     κ::FT = 170  # m²/kg
 end
 
-import AtmosphericProfilesLibrary as APL
-
-struct RadiationTRMM_LBA{R}
-    rad_profile::R
-    function RadiationTRMM_LBA(::Type{FT}) where {FT}
-        rad_profile = APL.TRMM_LBA_radiation(FT)
-        return new{typeof(rad_profile)}(rad_profile)
-    end
-end
+struct RadiationTRMM_LBA end
 
 abstract type PrescribedFlow{FT} end
 
