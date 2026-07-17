@@ -27,6 +27,11 @@ Per outer step the scheme:
 
 A first- or second-order outer combination of the sub-cycles is available.
 
+The vertical acoustic terms stay inside the sub-cycle even though they are implicit.
+Implicit treatment removes the vertical acoustic CFL bound, but the terms remain fast: the three-dimensional acoustic response does not separate into independent horizontal and vertical waves, and a vertical response held fixed over the outer step while the horizontal terms sub-cycle would act as a frozen fast term, the same class of parametric source as the frozen kinetic-energy gradient below.
+Each sub-step is therefore a HEVI step for the acoustic system at the sub-step size, as in the split-explicit tradition, where the small acoustic steps contain the vertically implicit solve.
+The added cost is small: the vertical solve is columnwise and needs no horizontal communication.
+
 ## Resonance source and divergence damping
 
 Freezing the slow forcing over an outer step and sub-cycling the acoustic system excites a parametric resonance with the grid-scale acoustic modes.
@@ -139,6 +144,7 @@ On configurations with inexpensive physics the sub-step count needed for stabili
 
 - The sub-cycle treats the whole implicit tendency implicitly at the sub-step size.
   The mode is validated for configurations whose implicit tendency is the vertical-acoustic block; configurations that also place microphysics, turbulence, or vertical diffusion in the implicit tendency re-solve those processes every sub-step.
+  Restricting the sub-cycle implicit solve to the acoustic block, with the remaining implicit terms advanced once per outer step, is follow-up work.
 - The mode advances the vertical acoustic terms implicitly inside each sub-step; the explicit-vertical variant is a reference path limited by the vertical acoustic CFL on anisotropic grids.
 - The sub-cycle refreshes only the acoustic precomputed quantities; diagnostics that read the full cache should refresh it after a step.
 - The divergence-damping coefficient must lie within its stable range; the automatic default targets it.
