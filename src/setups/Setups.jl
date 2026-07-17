@@ -1,5 +1,9 @@
 module Setups
 
+import Adapt
+
+import StaticArrays as SA
+import ClimaInterpolations.Interpolation1D as CI1D
 import ClimaCore.Geometry as Geometry
 import ClimaCore: Fields
 import Thermodynamics as TD
@@ -210,6 +214,31 @@ include("common/prognostic_variables.jl")
 # ============================================================================
 
 """
+    initial_condition_field(f, space)
+
+Evaluate the pointwise initial-condition closure `f` over the local geometry of
+`space`. When the closure can be broadcast on `space`'s device it is; otherwise
+it is broadcast on the host and the result is copied to the device.
+
+A closure is broadcast on the device when it is isbits after adapting to the
+device array type. Closures that capture host-resident data - such as the
+interpolant profiles of the AtmosphericProfilesLibrary setups - are not, so
+they are evaluated on the host.
+"""
+function initial_condition_field(f, space)
+    local_geometry = Fields.local_geometry_field(space)
+    device = ClimaComms.device(space)
+    if device isa ClimaComms.AbstractCPUDevice ||
+       isbits(Adapt.adapt(ClimaComms.array_type(device), f))
+        return f.(local_geometry)
+    end
+    field_host = f.(Adapt.adapt(Array, local_geometry))
+    field = Fields.Field(eltype(field_host), space)
+    copyto!(parent(field), parent(field_host))
+    return field
+end
+
+"""
     initial_state(setup, params, atmos_model, center_space, face_space)
 
 Construct the full prognostic state vector `Y` (a `Fields.FieldVector`) for the
@@ -244,8 +273,8 @@ function initial_state(
     surface_space = Fields.level(face_space, Fields.half)
 
     return Fields.FieldVector(;
-        c = center_ic.(Fields.local_geometry_field(center_space)),
-        f = face_ic.(Fields.local_geometry_field(face_space)),
+        c = initial_condition_field(center_ic, center_space),
+        f = initial_condition_field(face_ic, face_space),
         surface_kwargs(surface_space, atmos_model.surface.temperature)...,
     )
 end

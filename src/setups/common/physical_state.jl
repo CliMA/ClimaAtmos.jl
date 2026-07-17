@@ -126,68 +126,81 @@ import ClimaCore.Topologies as Topologies
 import ClimaCore.Spaces as Spaces
 
 const FunctionOrSpline =
-    Union{Function, APL.AbstractProfile, Intp.Extrapolation}
+    Union{Function, APL.AbstractProfile, Intp.Extrapolation, CI1D.Interpolate1D}
 
 """
-    ColumnInterpolatableField(::Fields.ColumnField)
+    column_indefinite_integral(f, ϕ₀, zspan; nelems = 1000)
 
-A column field object that can be interpolated
-in the z-coordinate. For example:
-
-!!! warn
-
-    This function allocates and is not GPU-compatible
-    so please avoid using this inside `step!` only use
-    this for initialization.
-"""
-struct ColumnInterpolatableField{F, D}
-    f::F
-    data::D
-    function ColumnInterpolatableField(f::Fields.ColumnField)
-        zdata = vec(parent(Fields.Fields.coordinate_field(f).z))
-        fdata = vec(parent(f))
-        data = Intp.extrapolate(
-            Intp.interpolate((zdata,), fdata, Intp.Gridded(Intp.Linear())),
-            Intp.Flat(),
-        )
-        return new{typeof(f), typeof(data)}(f, data)
-    end
-end
-(f::ColumnInterpolatableField)(z) = Spaces.undertype(axes(f.f))(f.data(z))
-
-"""
-    column_indefinite_integral(f, ϕ₀, zspan; nelems = 100)
-
-The column integral, returned as an interpolate-able field.
+The column integral of `ϕ' = f(ϕ, z)` from `ϕ(first(zspan)) = ϕ₀`, computed
+with `Operators.column_integral_indefinite!` on a dedicated column of `nelems`
+elements, returned as a callable
+`ClimaInterpolations.Interpolation1D.Interpolate1D` in height, with linear
+interpolation and flat extrapolation. The column is built on the host, so the
+interpolant holds host arrays and is evaluated on the host.
 """
 function column_indefinite_integral(
     f::Function,
     ϕ₀::FT,
     zspan::Tuple{FT, FT};
-    nelems = 100, # sets resolution for integration
+    nelems = 1000,
 ) where {FT <: Real}
-    # --- Make a space for integration:
     z_domain = Domains.IntervalDomain(
         Geometry.ZPoint(first(zspan)),
         Geometry.ZPoint(last(zspan));
         boundary_names = (:bottom, :top),
     )
     z_mesh = Meshes.IntervalMesh(z_domain; nelems)
-    context = ClimaComms.SingletonCommsContext()
+    context = ClimaComms.SingletonCommsContext(ClimaComms.CPUSingleThreaded())
     z_topology = Topologies.IntervalTopology(context, z_mesh)
-    cspace = Spaces.CenterFiniteDifferenceSpace(z_topology)
     fspace = Spaces.FaceFiniteDifferenceSpace(z_topology)
-    # ---
-    zc = Fields.coordinate_field(cspace)
     ᶠintegral = Fields.Field(FT, fspace)
     Operators.column_integral_indefinite!(f, ᶠintegral, ϕ₀)
-    return ColumnInterpolatableField(ᶠintegral)
+    zdata = copy(vec(parent(Fields.coordinate_field(fspace).z)))
+    fdata = copy(vec(parent(ᶠintegral)))
+    return CI1D.Interpolate1D(
+        zdata, fdata;
+        interpolationorder = CI1D.Linear(),
+        extrapolationorder = CI1D.Flat(),
+    )
+end
+
+"""
+    ρ_from_profile(thermo_params, p, z, T, θ, q_tot)
+
+Compute air density at pressure `p` and height `z`,
+given either temperature `T(z)` or potential temperature `θ(z)`
+and, optionally, total specific humidity `q_tot(z)`.
+
+Exactly one of `T` or `θ` must be provided.
+"""
+ρ_from_profile(_, _, _, ::Nothing, ::Nothing, _) = error("Either T or θ must be specified")
+ρ_from_profile(_, _, _, _::FunctionOrSpline, _::FunctionOrSpline, _) =
+    error("Only one of T and θ can be specified")
+ρ_from_profile(thermo_params, p, z, T::FunctionOrSpline, ::Nothing, ::Nothing) =
+    TD.air_density(thermo_params, oftype(p, T(z)), p)
+function ρ_from_profile(thermo_params, p, z, ::Nothing, θ::FunctionOrSpline, ::Nothing)
+    T_val = TD.air_temperature(thermo_params, TD.pθ_li(), p, oftype(p, θ(z)))
+    return TD.air_density(thermo_params, T_val, p)
+end
+function ρ_from_profile(
+    thermo_params, p, z, T::FunctionOrSpline, ::Nothing, q_tot::FunctionOrSpline,
+)
+    FT = eltype(thermo_params)
+    return TD.air_density(thermo_params, FT(T(z)), p, FT(q_tot(z)), FT(0), FT(0))
+end
+function ρ_from_profile(
+    thermo_params, p, z, ::Nothing, θ::FunctionOrSpline, q_tot::FunctionOrSpline,
+)
+    FT = eltype(thermo_params)
+    q = FT(q_tot(z))
+    T_val = TD.air_temperature(thermo_params, TD.pθ_li(), p, FT(θ(z)), q)
+    return TD.air_density(thermo_params, T_val, p, q, FT(0), FT(0))
 end
 
 """
     hydrostatic_pressure_profile(; thermo_params, p_0, [T, θ, q_tot, z_max])
 
-Solves the initial value problem `p'(z) = -g * ρ(z)` for all `z ∈ [0, z_max]`,
+Solve the initial value problem `p'(z) = -g * ρ(z)` for all `z ∈ [0, z_max]`,
 given `p(0)`, either `T(z)` or `θ(z)`, and optionally also `q_tot(z)`. If
 `q_tot(z)` is not given, it is assumed to be 0. If `z_max` is not given, it is
 assumed to be 30 km. Note that `z_max` should be the maximum elevation to which
@@ -204,29 +217,7 @@ function hydrostatic_pressure_profile(;
     FT = eltype(thermo_params)
     grav = TD.Parameters.grav(thermo_params)
 
-    # Compute air density from (p, z) using either T(z) or θ(z), with optional q_tot(z)
-    function ρ_from_profile(p, z, ::Nothing, ::Nothing, _)
-        error("Either T or θ must be specified")
-    end
-    function ρ_from_profile(p, z, T::FunctionOrSpline, θ::FunctionOrSpline, _)
-        error("Only one of T and θ can be specified")
-    end
-    function ρ_from_profile(p, z, T::FunctionOrSpline, ::Nothing, ::Nothing)
-        TD.air_density(thermo_params, oftype(p, T(z)), p)
-    end
-    function ρ_from_profile(p, z, ::Nothing, θ::FunctionOrSpline, ::Nothing)
-        T_val = TD.air_temperature(thermo_params, TD.pθ_li(), p, oftype(p, θ(z)))
-        TD.air_density(thermo_params, T_val, p)
-    end
-    function ρ_from_profile(p, z, T::FunctionOrSpline, ::Nothing, q_tot::FunctionOrSpline)
-        TD.air_density(thermo_params, oftype(p, T(z)), p, oftype(p, q_tot(z)), FT(0), FT(0))
-    end
-    function ρ_from_profile(p, z, ::Nothing, θ::FunctionOrSpline, q_tot::FunctionOrSpline)
-        q = oftype(p, q_tot(z))
-        T_val = TD.air_temperature(thermo_params, TD.pθ_li(), p, oftype(p, θ(z)), q)
-        TD.air_density(thermo_params, T_val, p, q, FT(0), FT(0))
-    end
-    dp_dz(p, z) = -grav * ρ_from_profile(p, z, T, θ, q_tot)
+    dp_dz(p, z) = -grav * ρ_from_profile(thermo_params, p, z, T, θ, q_tot)
 
-    return column_indefinite_integral(dp_dz, p_0, (FT(0), FT(z_max)))
+    return column_indefinite_integral(dp_dz, FT(p_0), (FT(0), FT(z_max)))
 end

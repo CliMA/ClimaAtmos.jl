@@ -19,7 +19,7 @@ import Thermodynamics as TD
     )
     simulation = CA.get_simulation(config)
     thermo_params = CAP.thermodynamics_params(simulation.integrator.p.params)
-    FT = Float64
+    FT = eltype(thermo_params)
     LC = APL.Larcform1_constants
 
     setup = Setups.Larcform1(; prognostic_tke = true, thermo_params)
@@ -30,7 +30,7 @@ import Thermodynamics as TD
     @test profs.T(FT(LC.z_tropopause)) ≈ FT(LC.T_tropopause) atol = 0.5
 
     # Pressure: surface and tropopause match Pithan 2016 Table 1
-    @test profs.p(0) ≈ FT(LC.P_0) atol = 10
+    @test profs.p(FT(0)) ≈ FT(LC.P_0) atol = 10
     @test profs.p(FT(LC.z_tropopause)) ≈ FT(LC.P_tropopause) rtol = 0.01
 
     # Humidity: moist at surface, fixed q_top above tropopause

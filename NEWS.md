@@ -3,11 +3,11 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- [#4664](https://github.com/CliMA/ClimaAtmos.jl/pull/4664) ![][badge-🔥behavioralΔ] Initialize the AtmosphericProfilesLibrary single-column setups (Bomex, DYCOMS, GABLS, GATE_III, ISDAC, Larcform1, PrecipitatingColumn, Rico, Soares, ShipwayHill2012, TRMM_LBA) on GPU spaces. `hydrostatic_pressure_profile` integrates the hydrostatic initial value problem on a dedicated 1000-element column (previously 100) and returns a `ClimaInterpolations` interpolant over host arrays. Because the setup profiles are host-resident interpolants, the initial condition of these setups is evaluated on the host and copied to the device rather than broadcast on the device. Initial center pressures change by about `2e-4` to `4e-4` relative, dominated by the removed interpolation error of the coarser grid; the new profiles are within about `4e-6` relative of a reference solution on a 16 times finer grid. The `ShipwayHill2012` constructor now returns the setup type (its interface methods were previously unreachable).
 - [#4705](https://github.com/CliMA/ClimaAtmos.jl/pull/4705) ![][badge-✨feature/enhancement] Add a generic interface for driving single-column simulations from netCDF forcing files.
   - Add `ColumnDatasets` for reading column forcing files.
   - Compose external forcing from per-process terms (`HorizontalAdvection`, `VerticalFluctuation`, `Nudging`, `Subsidence`) assembled into `ExternalDrivenTVForcing`.
   - Rename the old large-scale-subsidence forcing to `LargeScaleSubsidence`, freeing the name `Subsidence` for the new per-process forcing term.
-
 
 0.42.1
 -------
