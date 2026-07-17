@@ -555,10 +555,20 @@ function updraft_sedimentation!(
     @. ∂a∂z = ᶜprecipdivᵥ(ᶠinterp(ᶜJ) / ᶠJ * ᶠright_bias(Geometry.WVector(ᶜa)))
     ᶠρ = @. p.scratch.ᶠtemp_scalar = ᶠinterp(ᶜρ * ᶜJ) / ᶠJ
     ᶠwχ = @. p.scratch.ᶠtemp_scalar_2 = ᶠright_bias(-(ᶜw) * ᶜχ)
+
+    # TODO - testing if stable with older version
+    ᶠwaχ = @. p.scratch.ᶠtemp_scalar_3 = ᶠright_bias(-(ᶜw) * ᶜa * ᶜχ)
+    @. vtt = ifelse(
+        ∂a∂z < 0,
+        -(ᶜprecipdivᵥ(ᶠρ * Geometry.WVector(ᶠwaχ))),
+        -(ᶜa * ᶜprecipdivᵥ(ᶠρ * Geometry.WVector(ᶠwχ))),
+    )
+#=
     # Base: within-updraft flux convergence a · ∂_z(ρ w χ)
     # Entrainment correction: min(∂a/∂z, 0) · (ρ¹w¹χ¹ − ρ⁰w⁰χ⁰)
     @. vtt =
         -(ᶜa * ᶜprecipdivᵥ(ᶠρ * Geometry.WVector(ᶠwχ))) +
         min(∂a∂z, 0) * (ᶜρ * ᶜw * ᶜχ - ᶜρ⁰w⁰χ⁰)
+=#
     return
 end

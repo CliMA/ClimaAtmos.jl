@@ -1208,6 +1208,18 @@ function update_sgs_advection_jacobian!(matrix, Y, p, dtγ)
                 DiagonalMatrixRow(ᶠinterp(ᶜρʲs.:(1) * ᶜJ) / ᶠJ) ⋅
                 ᶠright_bias_matrix() ⋅
                 DiagonalMatrixRow(-Geometry.WVector(ᶜwʲ))
+
+
+            # TODO - testing old version
+            @. ᶜtridiagonal_matrix_scalar =
+                dtγ * ifelse(ᶜ∂a∂z < 0,
+                    -(ᶜprecipdivᵥ_matrix()) ⋅ ᶠsed_tracer_advection *
+                    DiagonalMatrixRow(ᶜa),
+                    -DiagonalMatrixRow(ᶜa) ⋅ ᶜprecipdivᵥ_matrix() ⋅
+                    ᶠsed_tracer_advection,
+                )
+
+#=
             @. ᶜtridiagonal_matrix_scalar =
                 dtγ * (
                     -DiagonalMatrixRow(ᶜa) ⋅ ᶜprecipdivᵥ_matrix() ⋅
@@ -1217,6 +1229,7 @@ function update_sgs_advection_jacobian!(matrix, Y, p, dtγ)
                         max(1 - ᶜa, eps(eltype(ᶜa))),
                     )
                 )
+=#
 
             @. ∂ᶜχʲ_err_∂ᶜχʲ +=
                 DiagonalMatrixRow(ᶜinv_ρ̂) ⋅ ᶜtridiagonal_matrix_scalar
