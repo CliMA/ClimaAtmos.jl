@@ -394,33 +394,25 @@ function edmfx_sgs_vertical_advection_tendency!(
                 ᶜρʲs.:($$j),
                 turbconv_model,
             )
-            # Sedimentation
+            # Sedimentation (base term only: a·∂_z(ρwχ)).
+            # The cross-boundary correction min(∂a/∂z, 0)·(ρ¹w¹χ¹ − ρ⁰w⁰χ⁰)
+            # is applied post-Newton in correct_implicit_advection_tendency!.
             # TODO - lazify ᶜwₗʲs computation. No need to cache it.
-            # Tuples: (updraft Y-path, species name, updraft vel, GS vel)
             sgs_microphysics_tracers = (
-                (@name(c.sgsʲs.:(1).q_lcl), @name(q_lcl), @name(ᶜwₗʲs.:(1)), @name(ᶜwₗ)),
-                (@name(c.sgsʲs.:(1).q_icl), @name(q_icl), @name(ᶜwᵢʲs.:(1)), @name(ᶜwᵢ)),
-                (@name(c.sgsʲs.:(1).q_rai), @name(q_rai), @name(ᶜwᵣʲs.:(1)), @name(ᶜwᵣ)),
-                (@name(c.sgsʲs.:(1).q_sno), @name(q_sno), @name(ᶜwₛʲs.:(1)), @name(ᶜwₛ)),
+                (@name(c.sgsʲs.:(1).q_lcl), @name(q_lcl), @name(ᶜwₗʲs.:(1))),
+                (@name(c.sgsʲs.:(1).q_icl), @name(q_icl), @name(ᶜwᵢʲs.:(1))),
+                (@name(c.sgsʲs.:(1).q_rai), @name(q_rai), @name(ᶜwᵣʲs.:(1))),
+                (@name(c.sgsʲs.:(1).q_sno), @name(q_sno), @name(ᶜwₛʲs.:(1))),
             )
 
             MatrixFields.unrolled_foreach(
                 sgs_microphysics_tracers,
-            ) do (qʲ_name, name, wʲ_name, w_gs_name)
+            ) do (qʲ_name, name, wʲ_name)
                 MatrixFields.has_field(Y, qʲ_name) || return
 
                 ᶜqʲ = MatrixFields.get_field(Y, qʲ_name)
                 ᶜqʲₜ = MatrixFields.get_field(Yₜ, qʲ_name)
                 ᶜwʲ = MatrixFields.get_field(p.precomputed, wʲ_name)
-                # Environment sedimentation flux density: ρ⁰w⁰q⁰
-                # Reconstructed from grid-mean: ρ̂⁰w⁰q⁰ = w_GS·ρq_GS − ρ̂¹w¹q¹
-                # Then ρ⁰w⁰q⁰ = ρ̂⁰w⁰q⁰ / a⁰ = ρ̂⁰w⁰q⁰ / (1 − a)
-                ᶜw_gs = MatrixFields.get_field(p.precomputed, w_gs_name)
-                ᶜρq_gs = MatrixFields.get_field(Y.c, get_ρχ_name(name))
-                ᶜρ⁰w⁰χ⁰ = @. lazy(
-                    (ᶜw_gs * ᶜρq_gs - Y.c.sgsʲs.:($$j).ρa * ᶜwʲ * ᶜqʲ) /
-                    max(1 - ᶜa, eps(FT)),
-                )
 
                 # Flux form sedimentation of tracers
                 vtt = p.scratch.ᶜtemp_scalar_4
@@ -432,7 +424,6 @@ function edmfx_sgs_vertical_advection_tendency!(
                     ᶜa,
                     ᶜqʲ,
                     ᶠJ,
-                    ᶜρ⁰w⁰χ⁰,
                 )
                 @. ᶜqʲₜ += ᶜinv_ρ̂ * vtt
                 @. Yₜ.c.sgsʲs.:($$j).q_tot += ᶜinv_ρ̂ * vtt
@@ -450,29 +441,19 @@ function edmfx_sgs_vertical_advection_tendency!(
 
             # Sedimentation velocities for microphysics number concentrations
             # (or any tracers that does not directly participate in variations of q_tot and mse)
-            # Tuples: (updraft Y-path, species name, updraft vel, GS vel)
             sgs_microphysics_tracers = (
-                (@name(c.sgsʲs.:(1).n_lcl), @name(n_lcl), @name(ᶜwₙₗʲs.:(1)), @name(ᶜwₙₗ)),
-                (@name(c.sgsʲs.:(1).n_rai), @name(n_rai), @name(ᶜwₙᵣʲs.:(1)), @name(ᶜwₙᵣ)),
+                (@name(c.sgsʲs.:(1).n_lcl), @name(ᶜwₙₗʲs.:(1))),
+                (@name(c.sgsʲs.:(1).n_rai), @name(ᶜwₙᵣʲs.:(1))),
             )
 
             MatrixFields.unrolled_foreach(
                 sgs_microphysics_tracers,
-            ) do (χʲ_name, name, wʲ_name, w_gs_name)
+            ) do (χʲ_name, wʲ_name)
                 MatrixFields.has_field(Y, χʲ_name) || return
 
                 ᶜχʲ = MatrixFields.get_field(Y, χʲ_name)
                 ᶜχʲₜ = MatrixFields.get_field(Yₜ, χʲ_name)
                 ᶜwʲ = MatrixFields.get_field(p.precomputed, wʲ_name)
-                # Environment sedimentation flux density: ρ⁰w⁰χ⁰
-                # Reconstructed from grid-mean: ρ̂⁰w⁰χ⁰ = w_GS·ρχ_GS − ρ̂¹w¹χ¹
-                # Then ρ⁰w⁰χ⁰ = ρ̂⁰w⁰χ⁰ / a⁰ = ρ̂⁰w⁰χ⁰ / (1 − a)
-                ᶜw_gs = MatrixFields.get_field(p.precomputed, w_gs_name)
-                ᶜρχ_gs = MatrixFields.get_field(Y.c, get_ρχ_name(name))
-                ᶜρ⁰w⁰χ⁰ = @. lazy(
-                    (ᶜw_gs * ᶜρχ_gs - Y.c.sgsʲs.:($$j).ρa * ᶜwʲ * ᶜχʲ) /
-                    max(1 - ᶜa, eps(FT)),
-                )
 
                 # Flux form sedimentation of tracers
                 vtt = p.scratch.ᶜtemp_scalar_4
@@ -484,7 +465,6 @@ function edmfx_sgs_vertical_advection_tendency!(
                     ᶜa,
                     ᶜχʲ,
                     ᶠJ,
-                    ᶜρ⁰w⁰χ⁰,
                 )
                 @. ᶜχʲₜ += ᶜinv_ρ̂ * vtt
             end
@@ -493,51 +473,28 @@ function edmfx_sgs_vertical_advection_tendency!(
 end
 
 """
-    updraft_sedimentation!(vtt, p, ᶜρ, ᶜw, ᶜa, ᶜχ, ᶠJ, ᶜρ⁰w⁰χ⁰)
+    updraft_sedimentation!(vtt, p, ᶜρ, ᶜw, ᶜa, ᶜχ, ᶠJ)
 
-Compute the sedimentation tendency of tracer `χ` within an updraft, including
-lateral transfer (detrainment and entrainment) across tilted updraft boundaries.
+Compute the base within-updraft sedimentation tendency `a · ∂_z(ρ w χ)`.
 
-# Description
+Sedimenting particles fall with velocity `w` through an updraft of fractional
+area `a(z)`. This function evaluates only the vertical flux convergence through
+the updraft cross-section, with no lateral (entrainment/detrainment) effects.
 
-Sedimenting particles fall with velocity `w` through an updraft of fractional area `a(z)`.
-The base within-updraft tendency is `a · ∂_z(ρ w χ)`, which captures the vertical flux
-convergence through the updraft cross-section with no lateral effects.
-
-When `∂a/∂z > 0` (updraft narrows downward), sedimenting mass exits laterally through
-the tilted boundary (detrainment). This is already excluded from `a · ∂_z(ρ w χ)` and
-is captured by the grid-scale residual.
-
-When `∂a/∂z < 0` (updraft widens downward), environment condensate enters through the
-tilted boundary (entrainment). The correction term uses the upwind (donor-cell) principle:
-the entrained sedimentation flux has **environment** properties, not updraft properties.
-
-# Equation
-
-The combined tendency is:
-
-```math
-\\text{tend} = a \\cdot \\partial_z(\\rho^{(1)} w^{(1)} \\chi^{(1)})
-            + \\min(\\partial_z a,\\, 0) \\cdot
-              (\\rho^{(1)} w^{(1)} \\chi^{(1)} - \\rho^{(0)} w^{(0)} \\chi^{(0)})
-```
-
-The second term is zero when `∂a/∂z ≥ 0` and adds the net lateral transfer
-when the updraft widens. If updraft and environment have the same sedimentation
-flux, no lateral mixing occurs.
+The cross-boundary correction `min(∂a/∂z, 0) · (ρ¹w¹χ¹ − ρ⁰w⁰χ⁰)` is
+applied separately in [`correct_implicit_advection_tendency!`](@ref) as a
+post-Newton step, since the environment sedimentation flux `ρ⁰w⁰χ⁰` depends
+on the updraft tracer and is more naturally evaluated after Newton convergence.
 
 # Arguments
 
-  - `vtt` : output field
+  - `vtt` : output field (filled with the tendency)
   - `p`: cache containing scratch spaces
   - `ᶜρ`: updraft air density
   - `ᶜw`: updraft sedimentation velocity (positive downward)
   - `ᶜa`: updraft area fraction
   - `ᶜχ`: updraft tracer mixing ratio
   - `ᶠJ`: face Jacobian (grid geometry)
-  - `ᶜρ⁰w⁰χ⁰`: environment sedimentation flux density (ρ⁰ · w⁰ · χ⁰)
-
-`vtt` gets filled with tracer tendency due to sedimentation and lateral transfer.
 """
 function updraft_sedimentation!(
     vtt,
@@ -547,18 +504,11 @@ function updraft_sedimentation!(
     ᶜa,
     ᶜχ,
     ᶠJ,
-    ᶜρ⁰w⁰χ⁰,
 )
     ᶜJ = Fields.local_geometry_field(axes(ᶜρ)).J
-    # use output as a scratch field
-    ∂a∂z = vtt
-    @. ∂a∂z = ᶜprecipdivᵥ(ᶠinterp(ᶜJ) / ᶠJ * ᶠright_bias(Geometry.WVector(ᶜa)))
     ᶠρ = @. p.scratch.ᶠtemp_scalar = ᶠinterp(ᶜρ * ᶜJ) / ᶠJ
     ᶠwχ = @. p.scratch.ᶠtemp_scalar_2 = ᶠright_bias(-(ᶜw) * ᶜχ)
     # Base: within-updraft flux convergence a · ∂_z(ρ w χ)
-    # Entrainment correction: min(∂a/∂z, 0) · (ρ¹w¹χ¹ − ρ⁰w⁰χ⁰)
-    @. vtt =
-        -(ᶜa * ᶜprecipdivᵥ(ᶠρ * Geometry.WVector(ᶠwχ))) +
-        min(∂a∂z, 0) * (ᶜρ * ᶜw * ᶜχ - ᶜρ⁰w⁰χ⁰)
+    @. vtt = -(ᶜa * ᶜprecipdivᵥ(ᶠρ * Geometry.WVector(ᶠwχ)))
     return
 end

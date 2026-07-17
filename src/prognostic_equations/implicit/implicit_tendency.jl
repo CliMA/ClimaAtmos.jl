@@ -224,28 +224,30 @@ end
 """
     correct_implicit_advection_tendency!(Yₜ, Y, p, t)
 
-Post-Newton upwind correction to the central-differenced implicit vertical
-advection of `ρe_tot` and `ρq_tot` in
-[`implicit_vertical_advection_tendency!`](@ref). Called by ClimaTimeSteppers
-as the `T_post_imp!` hook on `ClimaODEFunction`: evaluated at the
-Newton-solved stage state `U*` and applied as `U ← U* + dtγ · Yₜ`.
+Post-Newton corrections applied after implicit Newton iterations. Called by
+ClimaTimeSteppers as the `T_post_imp!` hook on `ClimaODEFunction`: evaluated
+at the Newton-solved stage state `U*` and applied as `U ← U* + dtγ · Yₜ`.
 
-Writes `vtt_upwind - vtt_central` for `ρe_tot` (and `ρq_tot` when
-available). All other fields of `Yₜ` are zero.
+Contains two corrections:
 
-Evaluating the correction *after* Newton — rather than folding it into
-the implicit tendency — means the upwind direction is taken with respect
-to the Newton-solved velocity, avoiding the "wrong-cell" upwinding that
-occurs when the sign of `ᶠu³` flips between the initial guess and the
-Newton solution (a real concern with `max_iters = 1`).
+ 1. **Upwind advection correction**: writes `vtt_upwind - vtt_central` for
+    `ρe_tot` (and `ρq_tot` when available). Evaluating this after Newton means
+    the upwind direction is taken w.r.t. the converged velocity.
+
+ 2. **SGS sedimentation cross-boundary correction**: applies the lateral
+    transfer term `min(∂a/∂z, 0) · (ρ¹w¹χ¹ − ρ⁰w⁰χ⁰)` for each sedimenting
+    SGS tracer. This is deferred from the implicit tendency because `ρ⁰w⁰χ⁰`
+    depends on the updraft tracer (through the grid-mean reconstruction) and
+    its Jacobian is complex. Post-Newton evaluation avoids Jacobian issues.
 """
 NVTX.@annotate function correct_implicit_advection_tendency!(Yₜ, Y, p, t)
     Yₜ .= zero(eltype(Yₜ))
-    (; microphysics_model) = p.atmos
+    (; microphysics_model, turbconv_model) = p.atmos
     (; energy_q_tot_upwinding) = p.atmos.numerics
     (; dt) = p
     (; ᶠu³, ᶜh_tot) = p.precomputed
 
+    # 1. Upwind advection correction for ρe_tot and ρq_tot
     vtt_up = vertical_transport(Y.c.ρ, ᶠu³, ᶜh_tot, dt, energy_q_tot_upwinding)
     vtt_c = vertical_transport(Y.c.ρ, ᶠu³, ᶜh_tot, dt, Val(:none))
     @. Yₜ.c.ρe_tot = vtt_up - vtt_c
@@ -255,5 +257,100 @@ NVTX.@annotate function correct_implicit_advection_tendency!(Yₜ, Y, p, t)
         vtt_c = vertical_transport(Y.c.ρ, ᶠu³, ᶜq_tot, dt, Val(:none))
         @. Yₜ.c.ρq_tot = vtt_up - vtt_c
     end
+
+    # 2. SGS sedimentation cross-boundary correction
+    #    tend_correction = min(∂a/∂z, 0) · (ρ¹w¹χ¹ − ρ⁰w⁰χ⁰)
+    sgs_sedimentation_cross_boundary_tendency!(Yₜ, Y, p, turbconv_model)
+
+    return nothing
+end
+
+"""
+    sgs_sedimentation_cross_boundary_tendency!(Yₜ, Y, p, ::PrognosticEDMFX)
+
+Cross-boundary sedimentation correction for SGS updraft tracers, applied
+as part of the post-Newton `T_post_imp!` hook.
+
+When the updraft area fraction `a` changes with height, sedimenting condensate
+crosses the tilted updraft boundary. The correction term is:
+
+    min(∂a/∂z, 0) · (ρ¹w¹χ¹ − ρ⁰w⁰χ⁰)
+
+where `ρ⁰w⁰χ⁰` is the environment sedimentation flux density, reconstructed
+from the grid-mean: `ρ⁰w⁰χ⁰ = (w_GS·ρχ_GS − ρ̂¹w¹χ¹) / (1 − a)`.
+
+The correction is zero when `∂a/∂z ≥ 0` (narrowing updraft: detrainment is
+handled by the grid-scale residual). When `∂a/∂z < 0` (widening updraft),
+environment condensate is entrained using the upwind (donor-cell) principle.
+"""
+sgs_sedimentation_cross_boundary_tendency!(Yₜ, Y, p, turbconv_model) = nothing
+
+function sgs_sedimentation_cross_boundary_tendency!(
+    Yₜ,
+    Y,
+    p,
+    turbconv_model::PrognosticEDMFX,
+)
+    microphysics_model = p.atmos.microphysics_model
+    microphysics_model isa Union{
+        NonEquilibriumMicrophysics1M,
+        NonEquilibriumMicrophysics2M,
+    } || return nothing
+
+    (; ᶜρʲs) = p.precomputed
+    FT = Spaces.undertype(axes(Y.c))
+    ᶜJ = Fields.local_geometry_field(Y.c).J
+    ᶠJ = Fields.local_geometry_field(Y.f).J
+
+    ᶜa = (@. lazy(draft_area(Y.c.sgsʲs.:(1).ρa, ᶜρʲs.:(1))))
+    ᶜ∂a∂z = p.scratch.ᶜtemp_scalar_4
+    @. ᶜ∂a∂z = ᶜprecipdivᵥ(ᶠinterp(ᶜJ) / ᶠJ * ᶠright_bias(Geometry.WVector(ᶜa)))
+
+    ᶜinv_ρ̂ = @. lazy(
+        specific(
+            FT(1),
+            Y.c.sgsʲs.:(1).ρa,
+            FT(0),
+            ᶜρʲs.:(1),
+            turbconv_model,
+        ),
+    )
+
+    # Loop over all sedimenting SGS tracers
+    MatrixFields.unrolled_foreach(
+        sedimenting_sgs_tracer_names(Y),
+    ) do χ_name
+        wʲ_name = sgs_sedimentation_velocity_name(χ_name)
+        ᶜwʲ = MatrixFields.get_field(p.precomputed, wʲ_name)
+        ᶜχʲ = MatrixFields.get_field(Y.c.sgsʲs.:(1), χ_name)
+        ᶜχʲₜ = MatrixFields.get_field(Yₜ.c.sgsʲs.:(1), χ_name)
+
+        # Reconstruct environment sedimentation flux density:
+        #   ρ̂⁰w⁰χ⁰ = w_GS·ρχ_GS − ρ̂¹·w¹·χ¹
+        #   ρ⁰w⁰χ⁰ = ρ̂⁰w⁰χ⁰ / (1 − a)
+        ρχ_name = get_ρχ_name(χ_name)
+        w_gs_name = sedimentation_velocity_name(ρχ_name)
+        ᶜw_gs = MatrixFields.get_field(p.precomputed, w_gs_name)
+        ᶜρχ_gs = MatrixFields.get_field(Y.c, ρχ_name)
+        ᶜρ⁰w⁰χ⁰ = @. lazy(
+            (ᶜw_gs * ᶜρχ_gs - Y.c.sgsʲs.:(1).ρa * ᶜwʲ * ᶜχʲ) /
+            max(1 - ᶜa, eps(FT)),
+        )
+
+        # Correction: min(∂a/∂z, 0) · (ρ¹w¹χ¹ − ρ⁰w⁰χ⁰)
+        @. ᶜχʲₜ +=
+            ᶜinv_ρ̂ *
+            min(ᶜ∂a∂z, zero(ᶜ∂a∂z)) *
+            (ᶜρʲs.:(1) * ᶜwʲ * ᶜχʲ - ᶜρ⁰w⁰χ⁰)
+
+        # Condensate species also contribute to q_tot tendency
+        if !isnothing(condensate_phase(χ_name))
+            @. Yₜ.c.sgsʲs.:(1).q_tot +=
+                ᶜinv_ρ̂ *
+                min(ᶜ∂a∂z, zero(ᶜ∂a∂z)) *
+                (ᶜρʲs.:(1) * ᶜwʲ * ᶜχʲ - ᶜρ⁰w⁰χ⁰)
+        end
+    end
+
     return nothing
 end

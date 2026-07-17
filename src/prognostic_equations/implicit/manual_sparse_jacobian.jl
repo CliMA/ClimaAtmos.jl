@@ -1169,8 +1169,6 @@ function update_sgs_advection_jacobian!(matrix, Y, p, dtγ)
         NonEquilibriumMicrophysics2M,
     }
         ᶜa = (@. lazy(draft_area(Y.c.sgsʲs.:(1).ρa, ᶜρʲs.:(1))))
-        ᶜ∂a∂z = p.scratch.ᶜtemp_scalar_7
-        @. ᶜ∂a∂z = ᶜprecipdivᵥ(ᶠinterp(ᶜJ) / ᶠJ * ᶠright_bias(Geometry.WVector(ᶜa)))
         ᶜinv_ρ̂ = (@. lazy(
             specific(
                 FT(1),
@@ -1198,12 +1196,9 @@ function update_sgs_advection_jacobian!(matrix, Y, p, dtγ)
                     )
                 ) - (I,)
 
-            # sedimentation
-            # Base: a·∂_z(ρwχ) — always the same regardless of ∂a/∂z sign
-            # Correction: min(∂a/∂z, 0)·(ρ¹w¹χ¹ − ρ⁰w⁰χ⁰)
-            #   ρ⁰w⁰χ⁰ = (w_GS·ρχ_GS − ρa¹·w¹·χ¹)/(1−a), so
-            #   ∂(ρ⁰w⁰χ⁰)/∂χʲ = −ρa¹·w¹/(1−a) and
-            #   ∂/∂χʲ of correction = min(∂a/∂z, 0)·ρ¹w¹/(1−a)
+            # sedimentation (base term only: a·∂_z(ρwχ))
+            # The cross-boundary correction is applied post-Newton
+            # in correct_implicit_advection_tendency!.
             @. ᶠsed_tracer_advection =
                 DiagonalMatrixRow(ᶠinterp(ᶜρʲs.:(1) * ᶜJ) / ᶠJ) ⋅
                 ᶠright_bias_matrix() ⋅
@@ -1211,13 +1206,8 @@ function update_sgs_advection_jacobian!(matrix, Y, p, dtγ)
             @. ᶜtridiagonal_matrix_scalar =
                 dtγ * (
                     -DiagonalMatrixRow(ᶜa) ⋅ ᶜprecipdivᵥ_matrix() ⋅
-                    ᶠsed_tracer_advection +
-                    DiagonalMatrixRow(
-                        min(ᶜ∂a∂z, zero(ᶜ∂a∂z)) * ᶜρʲs.:(1) * ᶜwʲ /
-                        max(1 - ᶜa, eps(eltype(ᶜa))),
-                    )
+                    ᶠsed_tracer_advection
                 )
-
             @. ∂ᶜχʲ_err_∂ᶜχʲ +=
                 DiagonalMatrixRow(ᶜinv_ρ̂) ⋅ ᶜtridiagonal_matrix_scalar
 

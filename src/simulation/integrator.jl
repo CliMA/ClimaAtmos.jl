@@ -150,12 +150,19 @@ function args_integrator(Y, p, tspan, ode_algo, callback,
             T_imp! = nothing
             cache_imp! = nothing
         end
-        # Only wire `T_post_imp!` when the upwind correction is nontrivial;
-        # otherwise `nothing` so CTS skips the post-Newton path (including
-        # its `cache_imp!` refresh) at every implicit stage.
+        # Wire `T_post_imp!` when any post-Newton correction is needed:
+        # (a) upwind advection correction for ρe_tot/ρq_tot, or
+        # (b) SGS sedimentation cross-boundary correction for EDMFX.
+        needs_post_imp =
+            !isnothing(T_imp!) && (
+                atmos.numerics.energy_q_tot_upwinding != Val(:none) ||
+                (
+                    atmos.turbconv_model isa PrognosticEDMFX &&
+                    atmos.microphysics_model isa NonEquilibriumMicrophysics
+                )
+            )
         T_post_imp! =
-            (isnothing(T_imp!) || atmos.numerics.energy_q_tot_upwinding == Val(:none)) ?
-            nothing : correct_implicit_advection_tendency!
+            needs_post_imp ? correct_implicit_advection_tendency! : nothing
         tendency_function = CTS.ClimaODEFunction(;
             T_exp_T_lim!, T_imp!, T_post_imp!,
             cache! = set_precomputed_quantities!, cache_imp!,
