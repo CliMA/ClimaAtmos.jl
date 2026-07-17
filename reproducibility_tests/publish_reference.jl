@@ -14,11 +14,14 @@ isempty(merge_commit) &&
 
 # Fail loudly rather than silently skipping: on `main` the merged PR must be
 # identifiable, else no reference is ever published and the failure is invisible.
+# `discover_pr_number` already tries the `gh search prs` fallback, so `nothing`
+# here means even GitHub has no PR for this commit.
 pr_number = discover_pr_number()
 isnothing(pr_number) && error(
     "Repro: could not determine the merged PR for $merge_commit; no reference " *
-    "published. Expected BUILDKITE_PULL_REQUEST, a gh-readonly-queue branch, or " *
-    "a GitHub merge/squash commit message.",
+    "published. Tried BUILDKITE_PULL_REQUEST, a gh-readonly-queue branch, the " *
+    "commit message, and a `gh search prs` lookup (needs an authenticated `gh` " *
+    "on the agent).",
 )
 
 commit = get_commit_sha(; commit = merge_commit)
