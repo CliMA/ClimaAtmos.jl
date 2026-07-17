@@ -1,4 +1,4 @@
-384
+385
 
 # **README**
 #
@@ -32,6 +32,9 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+385
+- Change cloud fraction formulation
+
 384
 - Unify SGS hyperdiffusion with grid mean: each PrognosticEDMFX subdomain
   inherits the grid-mean specific tendency (uniform hyperdiff in the grid

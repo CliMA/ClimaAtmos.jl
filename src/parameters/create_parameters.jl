@@ -368,12 +368,37 @@ function TurbulenceConvectionParameters(
         :EDMF_sfc_mass_flux_cap_fraction => :sfc_mass_flux_cap_fraction,
     )
     parameters = CP.get_parameter_values(toml_dict, name_map, "ClimaAtmos")
-    parameters = merge(parameters, overrides)
+    FT = CP.float_type(toml_dict)
+    # Cloud-fraction shape parameters (see `_compute_cloud_fraction`).
+    # Not yet in ClimaParams' default toml, so they are fetched only when a
+    # run/calibration toml defines them and otherwise fall back to the
+    # defaults below (margin = abs_margin = sharpness = 1, residual = 0),
+    # which release the floor on a one-width saturation margin guarded by an
+    # absolute margin of one floor width.
+    # TODO: promote to ClimaParams (and the name_map above) once the
+    # release shape has been calibrated.
+    release_defaults = (;
+        cloud_fraction_floor_release_margin = FT(1),
+        cloud_fraction_floor_release_abs_margin = FT(1),
+        cloud_fraction_floor_release_sharpness = FT(1),
+        cloud_fraction_floor_residual = FT(0),
+    )
+    release_present = filter(collect(keys(release_defaults))) do name
+        haskey(toml_dict.data, string(name))
+    end
+    release_params =
+        isempty(release_present) ? (;) :
+        CP.get_parameter_values(
+            toml_dict,
+            String.(release_present),
+            "ClimaAtmos",
+        )
+    parameters =
+        merge(parameters, release_defaults, release_params, overrides)
     parameters = to_svec(parameters)
     VFT1 = typeof(parameters.entr_param_vec)
     VFT2 = typeof(parameters.turb_entr_param_vec)
     VTF3 = typeof(parameters.cloud_fraction_param_vec)
-    FT = CP.float_type(toml_dict)
     CAP.TurbulenceConvectionParameters{FT, VFT1, VFT2, VTF3}(; parameters...)
 end
 

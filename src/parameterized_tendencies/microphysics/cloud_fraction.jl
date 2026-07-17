@@ -468,11 +468,13 @@ dependent logic.
 end
 
 """
-    _compute_cloud_fraction(q_c, mu_S, sigma_S, q_sat, α, ε_rel, σ_abs)
+    _compute_cloud_fraction(q_c, mu_S, sigma_S, q_sat, α, floor)
 
 Cloud fraction `CF = Φ(z)`, where `z` solves the truncated-Gaussian condensate
 relation `q_c/σ_aug = z·Φ(z) + φ(z)` (see [`_compute_z`](@ref)) with the
-augmented standard deviation `σ_aug = α · sqrt(σ_S² + σ_S_floor²)`.
+augmented standard deviation `σ_aug = α · sqrt(σ_S² + σ_S_floor²)`. The
+`floor` NamedTuple bundles the floor magnitude and release-shape parameters
+(see [`cloud_fraction_floor_params`](@ref)).
 
 Scale-aware non-equilibrium floor. We assume the local condensate `q_c`
 fluctuates partly through the equilibrium variations of (T, q_tot) captured by
@@ -495,33 +497,69 @@ only; the inter-subdomain (convective) spread is carried explicitly by the
 drafts. The parameter `ε_rel` is a q_sat-scaling whose magnitude should grow
 with grid spacing.
 
-Saturation-dependent damping `D`. Non-equilibrium patchiness is a property of
-*partially* saturated air: in a subdomain whose mean state is saturated (an
-equilibrated overcast deck maintained by radiative cooling), the patchiness the
-floor parameterizes is near zero, and an undamped floor spuriously caps CF well
-below 1 whenever `q_c ≲ ε_rel·q_sat` — cutting cloud-top longwave cooling in
-exactly the stratocumulus regime. The relative floor is therefore damped as the
-mean saturation excess `μ_S = q_tot − q_sat` approaches zero from below:
+Saturation-margin release `D`. Non-equilibrium patchiness is a property of
+*partially* saturated air: in a subdomain whose equilibrium PDF sits
+inside saturation (an equilibrated overcast deck maintained by radiative
+cooling), the patchiness the floor parameterizes is near zero, and an
+undamped floor spuriously caps CF well below 1 whenever `q_c ≲ ε_rel·q_sat`.
+(This would cut cloud-top longwave cooling in the stratocumulus regime.)
+The relative floor is therefore released only where the mean saturation
+excess `μ_S = q_tot − q_sat` is positive by a margin relative to the
+release width `w`:
 
-    x = max(−μ_S, 0) / (ε_rel · q_sat),    D = x / sqrt(1 + x²),
+    w  = sqrt((c_w·α)²·(σ_S² + σ_abs²) + (c_a·ε_rel·q_sat)²),
+    x  = max(μ_S, 0) / w,
+    D  = D_min + (1 − D_min) · (1 + x²)^(−s/2),
 
-so `D → 0` for a saturated mean (`μ_S ≥ 0`, overcast limit: CF is then
-controlled by the equilibrium `σ_S` and `σ_abs` alone, and `CF → 1` for
-`q_c ≫ σ_aug`), while `D → 1` once the mean is subsaturated by a few floor
-scales (cumulus regime: floor fully active). The transition width is the
-patchiness scale `ε_rel·q_sat` itself, so no new parameter is introduced.
+with four calibratable shape parameters (see
+[`cloud_fraction_floor_params`](@ref)):
+
+  - `margin` `c_w`: saturation margin in equilibrium PDF widths at which
+    the release transitions. With `abs_margin = 0`, `w` is the equilibrium
+    width itself, so the floor is released exactly where the unfloored
+    closure already predicts overcast (under saturation adjustment
+    `μ_S = q_c`, so `x` is the unfloored normalized condensate `C`).
+  - `abs_margin` `c_a`: absolute margin in floor units, added in
+    quadrature. Guards against release driven by a spuriously small
+    quadrature `σ_S`: for `c_a > 0` (the default), release additionally
+    requires `μ_S ≳ c_a·ε_rel·q_sat` regardless of how small the equilibrium
+    width is.
+  - `sharpness` `s`: transition exponent; larger `s` approaches a switch
+    at `x ≈ 1`, smaller `s` gives a gentler algebraic release.
+  - `residual` `D_min`: fraction of the relative floor retained deep
+    inside a saturated deck, bounding CF below 1 even at full release.
+
+For any parameter values, the floor is fully active (`D = 1`) for a
+subsaturated or marginally saturated mean (cumulus, cloud edges — `μ_S ≤ 0`
+retains the constant-floor behavior exactly).
 
 The floor enters *only* the CF computation; the Lagrange multiplier `λ` (in
 `_compute_sgs_moments`) uses the equilibrium `σ_S`, so mass conservation
 `E[max(0, λ + α·S′)] = q_c` is exactly preserved for the microphysics tendencies.
 """
-@inline function _compute_cloud_fraction(q_c, mu_S, sigma_S, q_sat, α, ε_rel, σ_abs)
+@inline function _compute_cloud_fraction(q_c, mu_S, sigma_S, q_sat, α, floor)
     FT = typeof(q_c)
-    # Damp the relative floor as the subdomain mean saturates (μ_S → 0⁻):
-    # patchiness vanishes in an equilibrated overcast deck. The denominator
-    # guard keeps x finite (and D well-defined) when ε_rel·q_sat → 0.
-    x = max(-mu_S, zero(FT)) / max(ε_rel * q_sat, ϵ_numerics(FT))
-    D = x / sqrt(1 + x^2)
+    (; ε_rel, σ_abs, margin, abs_margin, sharpness, residual) = floor
+    # Release the relative floor only where the mean is saturated by a
+    # margin relative to the release width `w` — by default the
+    # *equilibrium* PDF width, so the floor is released where the unfloored
+    # closure already predicts overcast (x is then the unfloored normalized
+    # condensate when μ_S ≈ q_c). Subsaturated or marginally saturated means
+    # (μ_S ≤ 0: cumulus, cloud edges) keep the full floor for any parameter
+    # values. The denominator guard covers only the w → 0 limit: the
+    # smallness of the equilibrium width relative to ε_rel·q_sat is exactly
+    # what drives the release in a quiescent deck, so it must not be floored
+    # away.
+    w = sqrt(
+        (margin * α)^2 * (sigma_S^2 + σ_abs^2) +
+        (abs_margin * ε_rel * q_sat)^2,
+    )
+    x = max(mu_S, zero(FT)) / max(w, ϵ_numerics(FT))
+    # `sharpness == 1` is the default release profile; the fast path keeps
+    # it identical to the plain saturation-margin release.
+    D_shape =
+        sharpness == one(FT) ? 1 / sqrt(1 + x^2) : (1 + x^2)^(-sharpness / 2)
+    D = residual + (1 - residual) * D_shape
     σ_S_floor_sq = (D * ε_rel * q_sat)^2 + σ_abs^2
     σ_aug = α * sqrt(sigma_S^2 + σ_S_floor_sq)
     C = q_c / σ_aug
@@ -532,7 +570,7 @@ end
 """
     _compute_cloud_fraction(
         thermo_params, T, ρ, q_tot, q_liq, q_ice,
-        sgs_quad, T′T′, q′q′, corr_Tq, α, ε_rel, σ_abs,
+        sgs_quad, T′T′, q′q′, corr_Tq, α, floor,
     )
 
 Fused production overload: compute the hybrid cloud fraction in a single
@@ -553,17 +591,52 @@ materialized to a Field.
     q′q′,
     corr_Tq,
     α,
-    ε_rel,
-    σ_abs,
+    floor,
 )
     moments = _sgs_saturation_moments(
         thermo_params, ρ, T, q_tot, sgs_quad, T′T′, q′q′, corr_Tq,
     )
     q_sat = TD.q_vap_saturation(thermo_params, T, ρ, q_liq, q_ice)
     return _compute_cloud_fraction(
-        q_liq + q_ice, moments.mu_S, moments.sigma_S, q_sat, α, ε_rel, σ_abs,
+        q_liq + q_ice, moments.mu_S, moments.sigma_S, q_sat, α, floor,
     )
 end
+
+"""
+    CloudFractionFloorParams{FT}
+
+Augmented-σ floor magnitude and release-shape parameters for
+[`_compute_cloud_fraction`](@ref), bundled into one isbits broadcast scalar
+(a struct rather than a NamedTuple, which Base reserves from broadcasting):
+
+  - `ε_rel`, `σ_abs`: relative and absolute floor magnitudes,
+  - `margin`, `abs_margin`, `sharpness`, `residual`: release shape (see the
+    saturation-margin release section of [`_compute_cloud_fraction`](@ref)).
+"""
+Base.@kwdef struct CloudFractionFloorParams{FT}
+    ε_rel::FT
+    σ_abs::FT
+    margin::FT
+    abs_margin::FT
+    sharpness::FT
+    residual::FT
+end
+Base.broadcastable(x::CloudFractionFloorParams) = tuple(x)
+
+"""
+    cloud_fraction_floor_params(params)
+
+Build the [`CloudFractionFloorParams`](@ref) bundle from the model
+parameter set.
+"""
+cloud_fraction_floor_params(params) = CloudFractionFloorParams(;
+    ε_rel = CAP.cloud_fraction_eps_rel(params),
+    σ_abs = CAP.cloud_fraction_sigma_abs(params),
+    margin = CAP.cloud_fraction_floor_release_margin(params),
+    abs_margin = CAP.cloud_fraction_floor_release_abs_margin(params),
+    sharpness = CAP.cloud_fraction_floor_release_sharpness(params),
+    residual = CAP.cloud_fraction_floor_residual(params),
+)
 
 """
     _compute_sgs_moments(thp, ρ, T, q_tot, q_c, sgs_quad, T′T′, q′q′, corr_Tq, α)
@@ -615,8 +688,7 @@ NVTX.@annotate function set_sgs_moments_and_cloud_fraction!(Y, p)
     corr_Tq = correlation_Tq(p.params)
     FT = eltype(p.params)
     α = sgs_variance_fidelity(CAP.cloud_fraction_steepness_scale(p.params))
-    ε_rel = CAP.cloud_fraction_eps_rel(p.params)
-    σ_abs = CAP.cloud_fraction_sigma_abs(p.params)
+    floor = cloud_fraction_floor_params(p.params)
     (; ᶜT′T′, ᶜq′q′) = p.precomputed
 
     # ONE quadrature pass → (sigma_S, λ_lagrange).
@@ -639,8 +711,7 @@ NVTX.@annotate function set_sgs_moments_and_cloud_fraction!(Y, p)
         p.precomputed.ᶜsgs_moments.sigma_S,
         TD.q_vap_saturation(thermo_params, ᶜT_mean, ᶜρ_env, ᶜq_lcl, ᶜq_icl),
         FT(α),
-        ε_rel,
-        σ_abs,
+        $(floor),
     )
     _apply_edmf_cloud_weighting!(Y, p, turbconv_model, thermo_params)
 end
@@ -705,8 +776,7 @@ NVTX.@annotate function set_cloud_fraction!(
     corr_Tq = correlation_Tq(p.params)
     FT = eltype(p.params)
     α = sgs_variance_fidelity(CAP.cloud_fraction_steepness_scale(p.params))
-    ε_rel = CAP.cloud_fraction_eps_rel(p.params)
-    σ_abs = CAP.cloud_fraction_sigma_abs(p.params)
+    floor = cloud_fraction_floor_params(p.params)
 
     (; ᶜT′T′, ᶜq′q′) = p.precomputed
 
@@ -725,8 +795,7 @@ NVTX.@annotate function set_cloud_fraction!(
         ᶜq′q′,
         corr_Tq,
         FT(α),
-        ε_rel,
-        σ_abs,
+        $(floor),
     )
 
     _apply_edmf_cloud_weighting!(Y, p, turbconv_model, thermo_params)
