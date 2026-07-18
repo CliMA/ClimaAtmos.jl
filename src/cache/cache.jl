@@ -14,6 +14,7 @@ struct AtmosCache{
     ORGW,
     RAD,
     TRAC,
+    OFRAC,
     NETFLUXTOA,
     NETFLUXSFC,
     SSV,
@@ -59,6 +60,9 @@ struct AtmosCache{
     radiation::RAD
     tracers::TRAC
 
+    # Ocean fraction from coupler intialization
+    ocean_fraction::OFRAC
+
     # Net energy flux coming through top of atmosphere and surface
     net_energy_flux_toa::NETFLUXTOA
     net_energy_flux_sfc::NETFLUXSFC
@@ -91,7 +95,7 @@ function build_cache(
     params,
     dt,
     start_date,
-    aerosol_names,
+    prescribed_aerosol_names,
     time_varying_trace_gas_names,
     steady_state_velocity,
     vwb_species = nothing,
@@ -168,6 +172,14 @@ function build_cache(
     scratch = temporary_quantities(Y, atmos)
 
     precomputed = precomputed_quantities(Y, atmos)
+    tracers = tracer_cache(
+        Y,
+        prescribed_aerosol_names,
+        time_varying_trace_gas_names,
+        start_date,
+        _interactive_aerosol_names(atmos.interactive_aerosols),
+    )
+    ocean_fraction = ones(axes(Fields.level(Y.f, Fields.half))) # Populated via Interfacer.update_field! before first timestep
     precomputing_arguments = (;
         atmos,
         core,
@@ -178,6 +190,8 @@ function build_cache(
         dt,
         conservation_check,
         external_forcing,
+        tracers,
+        ocean_fraction,
     )
 
     # When flux_scheme is nothing, the surface conditions are entirely
@@ -187,12 +201,16 @@ function build_cache(
 
     set_precomputed_quantities!(Y, precomputing_arguments, FT(0))
 
+    radiation_aerosol_names = (
+        prescribed_aerosol_names...,
+        string.(_interactive_aerosol_names(atmos.interactive_aerosols))...,
+    )
     radiation_args =
         atmos.radiation_mode isa RRTMGPI.AbstractRRTMGPMode ?
         (
             start_date,
             params,
-            aerosol_names,
+            radiation_aerosol_names,
             time_varying_trace_gas_names,
             atmos.insolation,
         ) : ()
@@ -200,7 +218,6 @@ function build_cache(
     non_orographic_gravity_wave = non_orographic_gravity_wave_cache(Y, atmos)
     orographic_gravity_wave = orographic_gravity_wave_cache(Y, atmos)
     radiation = radiation_model_cache(Y, atmos, radiation_args...)
-    tracers = tracer_cache(Y, aerosol_names, time_varying_trace_gas_names, start_date)
 
     args = (
         dt,
@@ -218,6 +235,7 @@ function build_cache(
         orographic_gravity_wave,
         radiation,
         tracers,
+        ocean_fraction,
         net_energy_flux_toa,
         net_energy_flux_sfc,
         steady_state_velocity,

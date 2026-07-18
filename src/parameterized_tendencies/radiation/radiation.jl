@@ -57,7 +57,6 @@ where:
     `p = P_0 exp(-z / H_{Earth})`, where `P_0` is the surface pressure and
     `H_{Earth}` is the scale height of the Earth's atmosphere (assumed to be 7000
     meters).
-
   - `g_1`, `g_2`, and `g_3` are empirical constants.
 
 **References**
@@ -229,21 +228,26 @@ function rrtmgp_solver_kwargs(
     end
 
     if aerosol_radiation
+        # Sea-salt bin radii come from ClimaParams
+        # (MERRA2_seasalt_aerosol_bin0X_radius, in m); RRTMGP expects μm.
+        # TODO: dust bin radii have no ClimaParams entries yet — move these
+        # literals there alongside the sea-salt ones.
+        aero_params = CAP.prescribed_aerosol_params(params)
         kwargs = (;
             kwargs...,
             aod_sw_extinction = NaN,
             aod_sw_scattering = NaN,
             # assuming fixed aerosol radius
-            center_dust1_radius = 0.55,
+            center_dust1_radius = 0.73,
             center_dust2_radius = 1.4,
             center_dust3_radius = 2.4,
             center_dust4_radius = 4.5,
             center_dust5_radius = 8,
-            center_ss1_radius = 0.55,
-            center_ss2_radius = 1.4,
-            center_ss3_radius = 2.4,
-            center_ss4_radius = 4.5,
-            center_ss5_radius = 8,
+            center_ss1_radius = aero_params.SSLT01_radius * FT(1e6),
+            center_ss2_radius = aero_params.SSLT02_radius * FT(1e6),
+            center_ss3_radius = aero_params.SSLT03_radius * FT(1e6),
+            center_ss4_radius = aero_params.SSLT04_radius * FT(1e6),
+            center_ss5_radius = aero_params.SSLT05_radius * FT(1e6),
             center_dust1_column_mass_density = NaN, # initialized in callback
             center_dust2_column_mass_density = NaN, # initialized in callback
             center_dust3_column_mass_density = NaN, # initialized in callback
@@ -297,26 +301,10 @@ function radiation_model_cache(
     device = context.device
     if !(radiation_mode isa RRTMGPI.GrayRadiation)
         (; aerosol_radiation) = radiation_mode
-        if aerosol_radiation && !(any(
-            x -> x in aerosol_names,
-            [
-                "DST01",
-                "DST02",
-                "DST03",
-                "DST04",
-                "DST05",
-                "SSLT01",
-                "SSLT02",
-                "SSLT03",
-                "SSLT04",
-                "SSLT05",
-                "SO4",
-                "CB1",
-                "CB2",
-                "OC1",
-                "OC2",
-            ],
-        ))
+        supported_aerosol_names =
+            string.(last.(RRTMGPI.RRTMGP_AEROSOL_NAMES_PAIR))
+        if aerosol_radiation &&
+           !any(x -> x in aerosol_names, supported_aerosol_names)
             error(
                 "Need at least one aerosol type when aerosol radiation is turned on",
             )
