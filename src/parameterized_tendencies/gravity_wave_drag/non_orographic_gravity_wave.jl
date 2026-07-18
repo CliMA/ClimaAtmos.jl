@@ -456,7 +456,7 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
     #   ρ·Q₁ ≈ -∂/∂z [Mᶜ·(s_c − s̄)]  where s = cp_d·T + g·z
     # Note 1: Beres activation is always determined by Q₁, regardless of whether we use 0M or 1M microphysics. Only latent heating computation differs between microphysics schemes.
     # Note 2: MSE (h = cp·T + gz + Lv·q) is conserved under condensation, so its mass-flux divergence gives Q₁−Q₂, masking the latent-heating signal. DSE works because Tʲ is saturation-adjusted: the warming from condensation along the parcel trajectory is already encoded in Tʲ, so cp_d·(Tʲ − T̄) weighs the cumulative latent heat release.
-    # 
+    #
     # The g·z terms cancel in (sʲ − s̄), leaving cp_d·(Tʲ − T̄).
     ᶜQ_conv = p.scratch.ᶜtemp_scalar_2
     ᶜQ_conv .= FT(0)
@@ -546,7 +546,7 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
 
     # When enabled, replace the in-cloud DSE flux-divergence Q₁
     # just computed in gw_Q_conv_ic with Q_lat = (1/cp⁽ʲ⁾) Σ_p L_p R_p⁽ʲ⁾, the
-    # ρaʲ-weighted in-cloud mean of the per-draft latent heating. 
+    # ρaʲ-weighted in-cloud mean of the per-draft latent heating.
     # The grid-mean gw_Q_conv (Q₁) above is left untouched, as it still drives activation criteria and the z_bot threshold, which are calibrated to grid-mean Q₁ magnitudes.
     # The heating_latent flag requires 1M + PrognosticEDMFX at construction.
     if gw_beres_source.heating_latent
@@ -783,7 +783,7 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
     end
     @. gw_Q0 = ifelse(isnan(gw_Q0) | isinf(gw_Q0), FT(0), gw_Q0)
 
-    # Set beres_active flag: GRID-MEAN amplitude above threshold AND heating depth above minimum. 
+    # Set beres_active flag: GRID-MEAN amplitude above threshold AND heating depth above minimum.
     # Activation trigger always uses grid-mean Q₁ (slot 1) to ensure the same activation criteria between 0M and 1M microphysics.
     Q0_threshold = gw_beres_source.Q0_threshold
     h_heat_min = gw_beres_source.h_heat_min
@@ -913,7 +913,7 @@ function non_orographic_gravity_wave_forcing(
         beres_source_ρ_z_u_v_level,
     ) = p.non_orographic_gravity_wave
 
-    # Beres launch-level state (per-column). Always extracted. 
+    # Beres launch-level state (per-column). Always extracted.
     # MODE == :ad99 branch ignores them.
     beres_ρ_source = beres_source_ρ_z_u_v_level.:1
     beres_u_source = beres_source_ρ_z_u_v_level.:3
@@ -1667,8 +1667,8 @@ function wave_source(
 
     # Steady (ν=0) contribution: a ground-stationary wave that lands in the c≈0 bin (kept empty by the transient spectrum, so no double-counting).
 
-    # It deposits only when 
-    #    (a) the steady source is enabled — true by default, and 
+    # It deposits only when
+    #    (a) the steady source is enabled — true by default, and
     #    (b) an exact c=0 bin exists. Without a c=0 bin, `clamp` would corrupt a nonzero bin, so we zero the steady flux instead.
     dc = c[2] - c[1]
     cmax = -c[1]

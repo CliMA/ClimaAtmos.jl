@@ -146,16 +146,34 @@ zbot_last = has_zbot_ztop ? get_snapshot(zbot_var, mode; snap_kw...) : nothing
 ztop_last = has_zbot_ztop ? get_snapshot(ztop_var, mode; snap_kw...) : nothing
 a_cover_last = get_snapshot(a_cover_var, mode; snap_kw...)
 
-# Beres gating parameters (default_config.yml defaults). The script cannot read
-# the run's config; update these if a run overrides the gates.
+# Beres gating parameters: read from the run's archived parameters.toml when
+# present (the authoritative values the run actually used), else fall back to
+# the ClimaParams defaults below.
 #   Activation gates (applied to the GRID-MEAN Q₀ and the heating depth):
-Q0_threshold = 1.0e-5      # beres_Q0_threshold (K/s)
-h_heat_min = 1000.0        # beres_h_heat_min (m)
-#   Envelope-bottom (lower-boundary) detection thresholds:
-z_bot_Q_threshold = 1.157e-5  # beres_z_bot_Q_threshold (K/s)
-z_bot_floor = 2000.0          # beres_z_bot_floor (m)
-#   Envelope-top updraft-area gate:
-a_thresh = 1.0e-3          # updraft area fraction gate for z_top
+Q0_threshold = 1.0e-5      # nogw_beres_Q0_threshold (K/s)
+h_heat_min = 1000.0        # nogw_beres_h_heat_min (m)
+#   Envelope-bottom (lower-boundary) floor:
+z_bot_floor = 2000.0       # nogw_beres_z_bot_floor (m)
+import TOML
+let tomls = filter(f -> endswith(f, "_parameters.toml"), readdir(output_dir))
+    if length(tomls) == 1
+        td = TOML.parsefile(joinpath(output_dir, tomls[1]))
+        pv(key, fallback) =
+            haskey(td, key) ? Float64(td[key]["value"]) : fallback
+        global Q0_threshold = pv("nogw_beres_Q0_threshold", Q0_threshold)
+        global h_heat_min = pv("nogw_beres_h_heat_min", h_heat_min)
+        global z_bot_floor = pv("nogw_beres_z_bot_floor", z_bot_floor)
+        println(
+            "Gate values from archived $(tomls[1]): Q0_threshold = " *
+            "$Q0_threshold, h_heat_min = $h_heat_min, z_bot_floor = $z_bot_floor",
+        )
+    else
+        println(
+            "No unique *_parameters.toml in $output_dir " *
+            "($(length(tomls)) found) — using default gate values.",
+        )
+    end
+end
 lat_max = 89.0
 println(
     "Max Q0: ",
@@ -440,3 +458,7 @@ _base =
 outfile = output_filename(output_dir, _base, mode)
 CairoMakie.save(outfile, fig)
 println("Saved figure to: $outfile")
+# vector copy for LaTeX inclusion
+outpdf = output_filename(output_dir, _base, mode; suffix = ".pdf")
+CairoMakie.save(outpdf, fig)
+println("Saved figure to: $outpdf")
