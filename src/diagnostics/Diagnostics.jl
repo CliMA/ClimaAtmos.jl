@@ -47,6 +47,7 @@ import ..PrognosticEDMFX
 
 # gravitywave_models
 import ..NonOrographicGravityWave
+import ..BeresSourceParams
 import ..OrographicGravityWave
 
 # chemistry_model

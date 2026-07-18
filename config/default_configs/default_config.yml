@@ -312,6 +312,15 @@ orographic_gravity_wave:
 non_orographic_gravity_wave:
   help: "Apply parameterization for convective gravity wave forcing on horizontal mean flow [`false` (default), `true`]"
   value: false
+nogw_beres_source:
+  help: "Use Beres (2004) convective source spectrum for tropical NOGW (requires EDMF) [`false` (default), `true`]"
+  value: false
+nogw_beres_heating_latent:
+  help: "Source the Beres in-cloud heating from the canonical transport-free latent-heat sum instead of the DSE flux-divergence Q1. Requires microphysics_model=1M and turbconv=prognostic_edmfx. [`false` (default), `true`]"
+  value: false
+nogw_beres_detailed_diagnostics:
+  help: "Enable Beres convective-source verification diagnostics (the `nogw_*` source-internal fields: Q0, h_heat, z_bot/z_top, a_cover, Q_conv, Q_conv_ic, half-sine, launched-spectrum summaries) and the extra per-callback computations they require. Off by default: a GCM run only needs the net drag (utendnogw/vtendnogw). [`false` (default), `true`]"
+  value: false
 dt_nogw:
   help: "Time between calling non-orographic gravity wave update"
   value: "1800secs"
