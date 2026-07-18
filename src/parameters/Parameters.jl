@@ -129,7 +129,6 @@ Base.@kwdef struct BeresSourceParameters{FT} <: AGWP
     h_heat_min::FT           # m, minimum heating depth to activate (filters shallow convection)
     n_h_avg::Int             # number of h values to average over (1 = no averaging)
     Δh_frac::FT              # fractional half-range for h averaging: h ± Δh_frac·h
-    z_bot_Q_threshold::FT    # K/s, min Q_conv to count as envelope bottom (≈ 1 K/day)
     z_bot_floor::FT          # m, minimum allowed z_bot (excludes PBL turbulence in Q_conv)
     steady_dc_frac::FT       # steady DC heating weight: Q_t(0)² = steady_dc_frac·ν_min
     L_system::FT             # m, largest convective-system scale; sets k_min=2π/L for the steady source

@@ -474,10 +474,6 @@ Base.@kwdef struct BeresSourceParams{FT}
     n_h_avg::Int = 1      # number of h values to average over (1 = no averaging)
     Δh_frac::FT = FT(0.1) # fractional half-range for averaging: h ± Δh_frac·h
 
-    # --- Marked for deletion (dead once the area_threshold envelope path is removed) ---
-    z_bot_Q_threshold::FT = FT(1.157e-5) # K/s, min Q_conv for area-mode z_bot (≈1 K/day); area path only
-    moment_envelope::Bool = true         # envelope-mode select; only `true` reachable (legacy area_threshold gated `false`)
-
     function BeresSourceParams{FT}(args...) where {FT}
         obj = new{FT}(args...)
         if (obj.n_ν - 1) % 4 != 0

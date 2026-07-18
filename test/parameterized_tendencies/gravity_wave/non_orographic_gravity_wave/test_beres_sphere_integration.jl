@@ -23,8 +23,8 @@
 # Does NOT re-test spectral shape (test_beres_unit.jl) or single-column drag
 # structure (test_beres_single_column.jl).
 #
-# Beres (2004) §4 squall-line reference: σ_x = 2500 m (from
-# beres_squall_integration_test.yml).
+# Beres (2004) §4 squall-line reference: σ_x = 2500 m (set via the inline
+# toml_override below, from toml/nogw_beres_test.toml).
 # ============================================================================
 
 using Test
@@ -38,18 +38,25 @@ import ClimaCore.Geometry as Geometry
 
 @testset "Beres convective GW forcing -- sphere full integration" begin
     comms_ctx = ClimaComms.SingletonCommsContext()
-    config_files = [
-        joinpath(
-            @__DIR__,
-            "../../../../config/longrun_configs/longrun_aquaplanet_allsky_progedmf_0M.yml",
-        ),
-        joinpath(
-            @__DIR__,
-            "../../../../config/model_configs/beres_squall_integration_test.yml",
-        ),
-    ]
-    config =
-        CA.AtmosConfig(config_files; job_id = "beres_sphere", comms_ctx)
+    longrun_config = joinpath(
+        @__DIR__,
+        "../../../../config/longrun_configs/longrun_aquaplanet_allsky_progedmf_0M.yml",
+    )
+    # Squall-line test overrides: coarse phase-speed grid (nc=51) for fast
+    # compilation plus the Beres (2004) §4 squall-line cell half-width
+    # σ_x = 2500 m (both in toml/nogw_beres_test.toml).
+    toml_override = Dict(
+        "toml" => [
+            joinpath(@__DIR__, "../../../../toml/longrun_aquaplanet_progedmf.toml"),
+            joinpath(@__DIR__, "../../../../toml/nogw_beres_test.toml"),
+        ],
+    )
+    config = CA.AtmosConfig(
+        (CA.load_yaml_file(longrun_config), toml_override);
+        job_id = "beres_sphere",
+        comms_ctx,
+        config_files = [longrun_config],
+    )
 
     # Minimal grid for fast compilation / testing.
     # h_elem=4 gives a coarse cubed-sphere; z_elem=30 up to 45 km is enough

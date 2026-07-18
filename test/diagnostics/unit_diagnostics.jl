@@ -214,6 +214,7 @@ let c = p_nogw_beres.non_orographic_gravity_wave
     c.gw_zbot .= 0
     c.gw_ztop .= 0
     c.gw_Q_conv .= 0
+    c.gw_Q_conv_ic .= 0
 end
 
 ## Sphere with moist model + slab ocean (watero needs MoistMicrophysics + SpectralElementSpace2D)

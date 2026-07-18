@@ -17,7 +17,7 @@ Beres' canonical transport-free latent heating for one updraft:
 
     Q_lat = (1/cp^{(j)}) Σ_p L_p R_p^{(j)}   [K/s]
 
-where `p` runs over the microphysical phase-change processes (e.g., condenstation, evaporation). `L_p` is the latent heat released or absorbed by process `p` [J/kg] and `R_p^{(j)}` is the mass-mixing-ratio tendency [kg/kg/s]. These rates can be built from CloudMicrophysics 1-moment aggregated phase-change tendencies `dq_{lcl,icl,rai,sno}_dt`. `cp^{(j)}` is the subdomain moist heat capacity `TD.cp_m(thp, q_tot, q_lcl, q_icl)`
+where `p` runs over the microphysical phase-change processes (e.g., condensation, evaporation). `L_p` is the latent heat released or absorbed by process `p` [J/kg] and `R_p^{(j)}` is the mass-mixing-ratio tendency [kg/kg/s]. These rates can be built from CloudMicrophysics 1-moment aggregated phase-change tendencies `dq_{lcl,icl,rai,sno}_dt`. `cp^{(j)}` is the subdomain moist heat capacity `TD.cp_m(thp, q_tot, q_lcl, q_icl)`
 
 Relative to a vapor reference, the liquid reservoir (`lcl + rai`) is weighted by `L_v` and the ice reservoir (`icl + sno`) by `L_s`. Within the reservoir sums, the same-phase mass transfers cancel, and liquid↔ice transfers become `L_f = L_s − L_v`. So
 
@@ -63,6 +63,37 @@ non_orographic_gravity_wave_cache(Y, atmos::AtmosModel) =
 
 non_orographic_gravity_wave_cache(Y, ::Nothing) = (;)
 
+# Beres source-property cache fields, allocated only when the convective source
+# is configured. An AD99-only NOGW run gets `(;)` here instead.
+_beres_cache_fields(Y, ::Nothing) = (;)
+function _beres_cache_fields(Y, ::BeresSourceParams)
+    FT = Spaces.undertype(axes(Y.c))
+    return (;
+        gw_Q0 = similar(Fields.level(Y.c.ρ, 1)),
+        gw_h_heat = similar(Fields.level(Y.c.ρ, 1)),
+        gw_u_heat = similar(Fields.level(Y.c.ρ, 1)),
+        gw_v_heat = similar(Fields.level(Y.c.ρ, 1)),
+        gw_N_source = similar(Fields.level(Y.c.ρ, 1)),
+        gw_beres_active = similar(Fields.level(Y.c.ρ, 1)),
+        gw_zbot = similar(Fields.level(Y.c.ρ, 1)),
+        gw_ztop = similar(Fields.level(Y.c.ρ, 1)),
+        gw_Q_conv = similar(Y.c.ρ),
+        gw_Q_conv_ic = similar(Y.c.ρ),
+        # Containers for diagnostics
+        gw_halfsine = zero(Y.c.ρ),
+        gw_launch_flux = zero(Fields.level(Y.c.ρ, 1)),
+        gw_c_centroid = zero(Fields.level(Y.c.ρ, 1)),
+        gw_a_cover = similar(Fields.level(Y.c.ρ, 1)),
+        gw_reduce_result = similar(
+            Fields.level(Y.c.ρ, 1),
+            Tuple{FT, FT, FT, FT, FT, FT, FT},
+        ),
+        # Beres launch-level state
+        beres_source_ρ_z_u_v_level =
+        similar(Fields.level(Y.c.ρ, 1), Tuple{FT, FT, FT, FT, FT}),
+    )
+end
+
 function non_orographic_gravity_wave_cache(Y, gw::NonOrographicGravityWave)
     if iscolumn(axes(Y.c))
         FT = Spaces.undertype(axes(Y.c))
@@ -93,7 +124,6 @@ function non_orographic_gravity_wave_cache(Y, gw::NonOrographicGravityWave)
             ᶜbuoyancy_frequency = similar(Y.c.ρ),
             ᶜdTdz = similar(Y.c.ρ),
             source_ρ_z_u_v_level,
-            source_level = similar(Fields.level(Y.c.ρ, 1)),
             damp_level = similar(Fields.level(Y.c.ρ, 1)),
             ᶜlevel,
             u_waveforcing = similar(Y.c.ρ),
@@ -103,30 +133,9 @@ function non_orographic_gravity_wave_cache(Y, gw::NonOrographicGravityWave)
             uforcing = zero(Y.c.ρ),
             vforcing = zero(Y.c.ρ),
             gw_ncval = Val(nc),
-            # Beres fields (always allocated)
-            gw_Q0 = similar(Fields.level(Y.c.ρ, 1)),
-            gw_h_heat = similar(Fields.level(Y.c.ρ, 1)),
-            gw_u_heat = similar(Fields.level(Y.c.ρ, 1)),
-            gw_v_heat = similar(Fields.level(Y.c.ρ, 1)),
-            gw_N_source = similar(Fields.level(Y.c.ρ, 1)),
-            gw_beres_active = similar(Fields.level(Y.c.ρ, 1)),
+            # The source-property fields are allocated only when the source is configured (see `_beres_cache_fields`).
             gw_beres_source = gw.beres_source,
-            gw_zbot = similar(Fields.level(Y.c.ρ, 1)),
-            gw_ztop = similar(Fields.level(Y.c.ρ, 1)),
-            gw_Q_conv = similar(Y.c.ρ),
-            gw_Q_conv_ic = similar(Y.c.ρ),
-            # Containers for diagnostics
-            gw_halfsine = similar(Y.c.ρ),
-            gw_launch_flux = similar(Fields.level(Y.c.ρ, 1)),
-            gw_c_centroid = similar(Fields.level(Y.c.ρ, 1)),
-            gw_a_cover = similar(Fields.level(Y.c.ρ, 1)),
-            gw_reduce_result = similar(
-                Fields.level(Y.c.ρ, 1),
-                Tuple{FT, FT, FT, FT, FT, FT, FT},
-            ),
-            # Beres launch-level state
-            beres_source_ρ_z_u_v_level =
-            similar(Fields.level(Y.c.ρ, 1), Tuple{FT, FT, FT, FT, FT}),
+            _beres_cache_fields(Y, gw.beres_source)...,
         )
     elseif issphere(axes(Y.c))
 
@@ -192,7 +201,6 @@ function non_orographic_gravity_wave_cache(Y, gw::NonOrographicGravityWave)
             ᶜbuoyancy_frequency = similar(Y.c.ρ),
             ᶜdTdz = similar(Y.c.ρ),
             source_p_ρ_z_u_v_level,
-            source_level = similar(Fields.level(Y.c.ρ, 1)),
             damp_level = similar(Fields.level(Y.c.ρ, 1)),
             ᶜlevel,
             u_waveforcing = similar(Y.c.ρ),
@@ -202,30 +210,9 @@ function non_orographic_gravity_wave_cache(Y, gw::NonOrographicGravityWave)
             uforcing = zero(Y.c.ρ),
             vforcing = zero(Y.c.ρ),
             gw_ncval = Val(nc),
-            # Beres fields (always allocated; gw_beres_source is nothing or BeresSourceParams)
-            gw_Q0 = similar(Fields.level(Y.c.ρ, 1)),
-            gw_h_heat = similar(Fields.level(Y.c.ρ, 1)),
-            gw_u_heat = similar(Fields.level(Y.c.ρ, 1)),
-            gw_v_heat = similar(Fields.level(Y.c.ρ, 1)),
-            gw_N_source = similar(Fields.level(Y.c.ρ, 1)),
-            gw_beres_active = similar(Fields.level(Y.c.ρ, 1)),
+            # The source-property fields are allocated only when the source is configured (see `_beres_cache_fields`).
             gw_beres_source = gw.beres_source,
-            gw_zbot = similar(Fields.level(Y.c.ρ, 1)),
-            gw_ztop = similar(Fields.level(Y.c.ρ, 1)),
-            gw_Q_conv = similar(Y.c.ρ),
-            gw_Q_conv_ic = similar(Y.c.ρ),
-            # Containers for diagnostics
-            gw_halfsine = similar(Y.c.ρ),
-            gw_launch_flux = similar(Fields.level(Y.c.ρ, 1)),
-            gw_c_centroid = similar(Fields.level(Y.c.ρ, 1)),
-            gw_a_cover = similar(Fields.level(Y.c.ρ, 1)),
-            gw_reduce_result = similar(
-                Fields.level(Y.c.ρ, 1),
-                Tuple{FT, FT, FT, FT, FT, FT, FT},
-            ),
-            # Beres launch-level state
-            beres_source_ρ_z_u_v_level =
-            similar(Fields.level(Y.c.ρ, 1), Tuple{FT, FT, FT, FT, FT}),
+            _beres_cache_fields(Y, gw.beres_source)...,
         )
     else
         error("Only sphere and columns are supported")
@@ -245,7 +232,6 @@ function non_orographic_gravity_wave_compute_tendency!(
     (;
         ᶜdTdz,
         ᶜbuoyancy_frequency,
-        source_level,
         damp_level,
         u_waveforcing,
         v_waveforcing,
@@ -412,18 +398,8 @@ Envelope `[z_bot, z_top]`: moment-matched, fits a half-sine to the in-cloud heat
 """
 function compute_beres_convective_heating!(Y, p, ᶜN)
     (; turbconv_model) = p.atmos
+    # `n_updrafts ≥ 1` is guaranteed here
     n_updrafts = n_mass_flux_subdomains(turbconv_model)
-
-    if n_updrafts == 0
-        # No EDMF — Beres inactive everywhere
-        p.non_orographic_gravity_wave.gw_beres_active .= 0
-        p.non_orographic_gravity_wave.gw_a_cover .= 0
-        p.non_orographic_gravity_wave.gw_Q_conv_ic .= 0
-        p.non_orographic_gravity_wave.gw_halfsine .= 0
-        p.non_orographic_gravity_wave.gw_launch_flux .= 0
-        p.non_orographic_gravity_wave.gw_c_centroid .= 0
-        return
-    end
 
     (; ᶠu³ʲs, ᶜρʲs, ᶜuʲs, ᶜTʲs, ᶜT) = p.precomputed
     (; ᶠu³) = p.precomputed
@@ -469,14 +445,6 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
     ᶜa_scalar_ic = p.scratch.ᶜtemp_scalar_5
     ᶜρa_sum = p.scratch.ᶜtemp_scalar_6
 
-    # For DiagnosticEDMFX, ρa is in p.precomputed
-    # For PrognosticEDMFX, ρa is in Y.c.sgsʲs.:($j)
-    has_prognostic_sgs =
-        hasproperty(Y.c, :sgsʲs) && n_updrafts > 0
-    if !has_prognostic_sgs && haskey(p.precomputed, :ᶜρaʲs)
-        ᶜρaʲs_all = p.precomputed.ᶜρaʲs
-    end
-
     # Compute Q_conv (grid-mean), Q_conv_ic (in-cloud) and total area fraction
     # in one pass.
     ᶜa_up = p.scratch.ᶜtemp_scalar_4
@@ -487,13 +455,13 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
         # Velocity anomaly at faces (contravariant)
         @. ᶠu³_diff = ᶠu³ʲs.:($$j) - ᶠu³
 
-        ᶜρaʲ = if has_prognostic_sgs
-            Y.c.sgsʲs.:($j).ρa
-        else
-            ᶜρaʲs_all.:($j)
-        end
+        ᶜρaʲ = Y.c.sgsʲs.:($j).ρa
 
         # In-cloud DSE anomaly: cp_d·(Tʲ − T̄), no area factor
+        # ᶜρʲs is a physical air density (~1 kg/m³), so this guard almost never
+        # fires -- except at the domain top, where in Float32 ρʲ = p/(R·T) can
+        # approach eps(FT). Kept for consistency with the `/ ᶜρʲs` divisions below
+        # (which genuinely need it there) so all draft terms zero out together.
         @. ᶜa_scalar_ic =
             ifelse(ᶜρʲs.:($$j) > eps(FT), cp_d * (ᶜTʲs.:($$j) - ᶜT), FT(0))
 
@@ -593,105 +561,68 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
 
     # Pass 1: set the convective envelope [z_bot, z_top] and depth h, reusing the scratch with
     # gw_u_heat = z_bot, gw_v_heat = z_top, gw_h_heat = h for Pass 2.
-    # Currently, we construct the convective envelope via two methods:
-    #   (a) moment_matched (the only active mode; moment_envelope is hardwired true):
-    #     fit a half-sine to the in-cloud heating Q_conv_ic by its centroid z_c and
-    #     spread σ. A half-sine of depth h has variance h²·(π²−8)/(4π²), so
-    #     h = σ/√(variance), z_bot = z_c − h/2, z_top = z_c + h/2, and the amplitude
-    #     Q0 = (π/2)·∫max(Q_ic,0)dz / h. Sits the envelope on the actual heating.
-    #   (b) area_threshold (DEPRECATED, gated `false`): z_top from updraft-area top,
-    #     z_bot from a grid-mean Q_conv threshold. Often narrow and misplaced
-    #     relative to the in-cloud heating peak.
+    # We construct the envelope by moment matching: fit a half-sine to the in-cloud
+    # heating Q_conv_ic by its centroid z_c and spread σ. A half-sine of depth h has
+    # variance h²·(π²−8)/(4π²), so h = σ/√(variance), z_bot = z_c − h/2,
+    # z_top = z_c + h/2, and the amplitude Q0 = (π/2)·∫max(Q_ic,0)dz / h. This sits the
+    # envelope on the actual heating.
     result_field = gw_reduce_result
-    if gw_beres_source.moment_envelope
-        ᶜΔz_m = Fields.Δz_field(axes(Y.c))
-        input1 = Base.Broadcast.broadcasted(tuple, ᶜz, gw_Q_conv_ic, ᶜΔz_m)
-        reduce_init = (FT(0), FT(0), FT(0), FT(0), FT(0), FT(0), FT(0))
-        let _z_floor = gw_beres_source.z_bot_floor, _zero = FT(0)
-            # Accumulate (∫Q⁺dz, ∫z·Q⁺dz, ∫z²·Q⁺dz) over z ≥ z_bot_floor.
-            Operators.column_reduce!(
-                result_field,
-                input1;
-                init = reduce_init,
-            ) do (I0p, I1p, I2p, _4, _5, _6, _7), (z, Q_ic, dz)
-                qpdz = ifelse(z >= _z_floor, max(Q_ic, _zero) * dz, _zero)
-                return (
-                    I0p + qpdz,
-                    I1p + z * qpdz,
-                    I2p + z * z * qpdz,
-                    _4,
-                    _5,
-                    _6,
-                    _7,
-                )
-            end
+    ᶜΔz_m = Fields.Δz_field(axes(Y.c))
+    input1 = Base.Broadcast.broadcasted(tuple, ᶜz, gw_Q_conv_ic, ᶜΔz_m)
+    # `result_field` (gw_reduce_result) is a single 7-slot tuple field reused for
+    # both passes. Pass 1 fills only slots 1-3 with the heating moments
+    # (∫Q⁺dz, ∫z·Q⁺dz, ∫z²·Q⁺dz) and carries slots 4-7 through untouched, i.e., the
+    # `_4..._7` placeholders in the reducer below. Pass 2 then reuses all 7 slots as
+    # (Q_integral, u_sum, v_sum, N_sum, mass_sum, Qic_integral, a_sum); see the
+    # `reduce_init2` accumulator there.
+    reduce_init = (FT(0), FT(0), FT(0), FT(0), FT(0), FT(0), FT(0))
+    let _z_floor = gw_beres_source.z_bot_floor, _zero = FT(0)
+        # Accumulate (∫Q⁺dz, ∫z·Q⁺dz, ∫z²·Q⁺dz) over z ≥ z_bot_floor into slots 1-3.
+        Operators.column_reduce!(
+            result_field,
+            input1;
+            init = reduce_init,
+        ) do (I0p, I1p, I2p, _4, _5, _6, _7), (z, Q_ic, dz)
+            qpdz = ifelse(z >= _z_floor, max(Q_ic, _zero) * dz, _zero)
+            return (
+                I0p + qpdz,
+                I1p + z * qpdz,
+                I2p + z * z * qpdz,
+                _4,
+                _5,
+                _6,
+                _7,
+            )
         end
-        h_coef = FT(1) / sqrt((FT(π)^2 - FT(8)) / (FT(4) * FT(π)^2))  # ≈ 4.595
-        # z_c (held temporarily in gw_zbot)
-        @. gw_zbot = ifelse(
-            result_field.:1 > eps(FT),
-            result_field.:2 / result_field.:1,
-            FT(0),
-        )
-        # h = h_coef · σ,   σ² = ∫z²Q⁺/∫Q⁺ − z_c²
-        @. gw_h_heat = ifelse(
-            result_field.:1 > eps(FT),
-            h_coef *
-            sqrt(max(result_field.:3 / result_field.:1 - gw_zbot^2, FT(0))),
-            FT(0),
-        )
-        @. gw_ztop = gw_zbot + gw_h_heat / 2              # z_top = z_c + h/2
-        @. gw_zbot = max(gw_zbot - gw_h_heat / 2, FT(0))  # z_bot = z_c − h/2
-        # Clamp z_top to the domain top.
-        # Keep z_bot ≤ z_top.
-        z_dom_top = maximum(ᶜz)
-        @. gw_ztop = min(gw_ztop, z_dom_top)
-        @. gw_zbot = min(gw_zbot, gw_ztop)
-        # Matched-half-sine amplitude Q0 = (π/2)·∫max(Q_ic,0)dz / h
-        @. gw_Q0 = ifelse(
-            (gw_h_heat > eps(FT)) & (result_field.:1 > FT(0)),
-            max(FT(π) / FT(2) * result_field.:1 / gw_h_heat, FT(0)),
-            FT(0),
-        )
-        @. gw_u_heat = gw_zbot
-        @. gw_v_heat = gw_ztop
-    else
-        # DEPRECATED: area_threshold envelope path. moment_matched (above) is the
-        # only mode reachable from config (moment_envelope is hardwired true). This
-        # branch is retained for reference / direct struct construction in tests and
-        # is no longer exercised by any production run.
-        input1 = Base.Broadcast.broadcasted(tuple, ᶜz, ᶜa_up, ᶜQ_conv)
-        reduce_init = (FT(-Inf), FT(Inf), FT(0), FT(0), FT(0), FT(0), FT(0))
-        let _a_thresh = FT(1e-3), _Q_thresh = gw_beres_source.z_bot_Q_threshold,
-            _z_floor = gw_beres_source.z_bot_floor
-
-            Operators.column_reduce!(
-                result_field,
-                input1;
-                init = reduce_init,
-            ) do (z_top_prev, z_bot_prev, _3, _4, _5, _6, _7), (z, a, Q)
-                z_top = ifelse(a > _a_thresh, max(z_top_prev, z), z_top_prev)
-                z_bot = ifelse(
-                    (z >= _z_floor) & (Q > _Q_thresh),
-                    min(z_bot_prev, z),
-                    z_bot_prev,
-                )
-                return (z_top, z_bot, _3, _4, _5, _6, _7)
-            end
-        end
-
-        @. gw_v_heat = ifelse(
-            isfinite(result_field.:1) & isfinite(result_field.:2),
-            result_field.:1,
-            FT(0),
-        )
-        @. gw_u_heat = ifelse(
-            isfinite(result_field.:1) & isfinite(result_field.:2),
-            result_field.:2,
-            FT(0),
-        )
-        @. gw_h_heat = max(gw_v_heat - gw_u_heat, FT(0))
     end
+    h_coef = FT(1) / sqrt((FT(π)^2 - FT(8)) / (FT(4) * FT(π)^2))  # ≈ 4.595
+    # z_c (held temporarily in gw_zbot)
+    @. gw_zbot = ifelse(
+        result_field.:1 > eps(FT),
+        result_field.:2 / result_field.:1,
+        FT(0),
+    )
+    # h = h_coef · σ,   σ² = ∫z²Q⁺/∫Q⁺ − z_c²
+    @. gw_h_heat = ifelse(
+        result_field.:1 > eps(FT),
+        h_coef * sqrt(max(result_field.:3 / result_field.:1 - gw_zbot^2, FT(0))),
+        FT(0),
+    )
+    @. gw_ztop = gw_zbot + gw_h_heat / 2              # z_top = z_c + h/2
+    @. gw_zbot = max(gw_zbot - gw_h_heat / 2, FT(0))  # z_bot = z_c − h/2
+    # Clamp z_top to the domain top.
+    # Keep z_bot ≤ z_top.
+    z_dom_top = maximum(ᶜz)
+    @. gw_ztop = min(gw_ztop, z_dom_top)
+    @. gw_zbot = min(gw_zbot, gw_ztop)
+    # Matched-half-sine amplitude Q0 = (π/2)·∫max(Q_ic,0)dz / h
+    @. gw_Q0 = ifelse(
+        (gw_h_heat > eps(FT)) & (result_field.:1 > FT(0)),
+        max(FT(π) / FT(2) * result_field.:1 / gw_h_heat, FT(0)),
+        FT(0),
+    )
+    @. gw_u_heat = gw_zbot
+    @. gw_v_heat = gw_ztop
     @. gw_h_heat = ifelse(isnan(gw_h_heat) | isinf(gw_h_heat), FT(0), gw_h_heat)
 
     # Persist zbot/ztop before gw_u_heat/gw_v_heat get overwritten by mean winds
@@ -723,7 +654,9 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
         gw_Q_conv_ic,
         ᶜa_up,
     )
-    # Accumulator: (Q_integral, u_sum, v_sum, N_sum, mass_sum, Qic_integral, a_sum)
+    # Accumulator: (Q_integral, u_sum, v_sum, N_sum, mass_sum, Qic_integral, a_sum).
+    # Same 7-slot `result_field` as Pass 1, now with all slots used (Pass 1 used
+    # only slots 1-3 for the heating moments).
     _zero = FT(0)
     _half = FT(0.5)
     reduce_init2 = (_zero, _zero, _zero, _zero, _zero, _zero, _zero)
@@ -768,19 +701,7 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
         FT(0),
     )
 
-    # Spectrum amplitude. In moment_matched mode, gw_Q0 was already set from the
-    # column moments in Pass 1; in area_threshold mode, set it here from the
-    # IN-CLOUD heating integral over [z_bot, z_top]: Q₀ = (π/2)·Σ(Q_ic·Δz)/h.
-    # DEPRECATED: this block belongs to the area_threshold path (see above) and is
-    # never taken in production (moment_envelope is hardwired true).
-    if !gw_beres_source.moment_envelope
-        @. gw_Q0 = result_field.:6
-        @. gw_Q0 = ifelse(
-            gw_h_heat > FT(0),
-            max(FT(π) / FT(2) * gw_Q0 / gw_h_heat, FT(0)),
-            FT(0),
-        )
-    end
+    # Spectrum amplitude: gw_Q0 was already set from the column moments in Pass 1.
     @. gw_Q0 = ifelse(isnan(gw_Q0) | isinf(gw_Q0), FT(0), gw_Q0)
 
     # Set beres_active flag: GRID-MEAN amplitude above threshold AND heating depth above minimum.
@@ -902,23 +823,8 @@ function non_orographic_gravity_wave_forcing(
         gw_flag,
         gw_c0,
         gw_nk,
-        gw_beres_active,
-        gw_Q0,
-        gw_h_heat,
-        gw_u_heat,
-        gw_v_heat,
-        gw_N_source,
-        gw_a_cover,
         gw_beres_source,
-        beres_source_ρ_z_u_v_level,
     ) = p.non_orographic_gravity_wave
-
-    # Beres launch-level state (per-column). Always extracted.
-    # MODE == :ad99 branch ignores them.
-    beres_ρ_source = beres_source_ρ_z_u_v_level.:1
-    beres_u_source = beres_source_ρ_z_u_v_level.:3
-    beres_v_source = beres_source_ρ_z_u_v_level.:4
-    beres_source_level = beres_source_ρ_z_u_v_level.:5
 
     # Temporary scratch fields for shifting levels up
     ᶜρ_p1 = p.scratch.ᶜtemp_scalar
@@ -1026,46 +932,67 @@ function non_orographic_gravity_wave_forcing(
             gw_source_ampl,
         ),
     )
-    input_u_beres = @. lazy(
-        tuple(
-            ᶜu_p1,
-            ᶜbf_p1,
-            ᶜρ,
-            ᶜρ_p1,
-            ᶜz_p1,
-            ᶜz,
-            ᶜlevel,
+    # Beres per-column inputs are built only when the convective source is
+    # configured
+    input_u_beres = nothing
+    input_v_beres = nothing
+    if !isnothing(gw_beres_source)
+        (;
             gw_beres_active,
             gw_Q0,
             gw_h_heat,
             gw_u_heat,
-            gw_N_source,
-            beres_source_level,
-            beres_ρ_source,
-            beres_u_source,
-            gw_a_cover,
-        ),
-    )
-    input_v_beres = @. lazy(
-        tuple(
-            ᶜv_p1,
-            ᶜbf_p1,
-            ᶜρ,
-            ᶜρ_p1,
-            ᶜz_p1,
-            ᶜz,
-            ᶜlevel,
-            gw_beres_active,
-            gw_Q0,
-            gw_h_heat,
             gw_v_heat,
             gw_N_source,
-            beres_source_level,
-            beres_ρ_source,
-            beres_v_source,
             gw_a_cover,
-        ),
-    )
+            beres_source_ρ_z_u_v_level,
+        ) = p.non_orographic_gravity_wave
+        # Beres launch-level state (per-column).
+        beres_ρ_source = beres_source_ρ_z_u_v_level.:1
+        beres_u_source = beres_source_ρ_z_u_v_level.:3
+        beres_v_source = beres_source_ρ_z_u_v_level.:4
+        beres_source_level = beres_source_ρ_z_u_v_level.:5
+        input_u_beres = @. lazy(
+            tuple(
+                ᶜu_p1,
+                ᶜbf_p1,
+                ᶜρ,
+                ᶜρ_p1,
+                ᶜz_p1,
+                ᶜz,
+                ᶜlevel,
+                gw_beres_active,
+                gw_Q0,
+                gw_h_heat,
+                gw_u_heat,
+                gw_N_source,
+                beres_source_level,
+                beres_ρ_source,
+                beres_u_source,
+                gw_a_cover,
+            ),
+        )
+        input_v_beres = @. lazy(
+            tuple(
+                ᶜv_p1,
+                ᶜbf_p1,
+                ᶜρ,
+                ᶜρ_p1,
+                ᶜz_p1,
+                ᶜz,
+                ᶜlevel,
+                gw_beres_active,
+                gw_Q0,
+                gw_h_heat,
+                gw_v_heat,
+                gw_N_source,
+                beres_source_level,
+                beres_ρ_source,
+                beres_v_source,
+                gw_a_cover,
+            ),
+        )
+    end
 
     u_waveforcing_top = p.non_orographic_gravity_wave.u_waveforcing_top
     v_waveforcing_top = p.non_orographic_gravity_wave.v_waveforcing_top

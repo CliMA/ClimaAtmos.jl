@@ -1,13 +1,5 @@
-# Beres convective NOGW verification (per-PR regression guard).
-#
-# A coarse GPU sphere spin-up that exercises the Beres (2004) convective source
-# end to end; the 9-panel verification plotter then renders it as a CI artifact.
-# Purpose: catch a broken source or deposition, NOT reproduce a climatology.
-# Physics mirror the prognostic-EDMF GPU aquaplanet job, with the Beres source
-# and its detailed verification diagnostics turned on.
-#
-# t_end is the tunable knob: the source fires within ~1 day, so this can be cut
-# to reduce CI cost, or raised for a more spun-up instantaneous state.
+# Beres convective NOGW verification (per-PR regression guard): a coarse GPU
+# sphere spin-up rendered by the 9-panel plotter as a CI artifact.
 z_max: 30000.0
 z_elem: 10
 dz_bottom: 500.0
@@ -34,12 +26,10 @@ non_orographic_gravity_wave: true
 nogw_beres_source: true
 nogw_beres_detailed_diagnostics: true
 dt_nogw: "400secs"
-t_end: "10days"
-dt_save_state_to_disk: "10days"
-toml: [toml/prognostic_edmfx.toml]
+t_end: "7days"
+dt_save_state_to_disk: "Inf"
+toml: [toml/prognostic_edmfx.toml, toml/nogw_verification_grid.toml]
 output_default_diagnostics: false
-# Instantaneous (no reduction_time) source + response fields the 9-panel plotter
-# needs; it picks a peak-active snapshot from these in --inst mode.
 diagnostics:
   - short_name: [pr, nogw_Q0, nogw_h_heat, nogw_a_cover, nogw_zbot, nogw_ztop]
     period: 6hours

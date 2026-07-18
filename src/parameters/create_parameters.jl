@@ -483,7 +483,6 @@ function BeresSourceParameters(toml_dict::CP.ParamDict, overrides = NamedTuple()
         :nogw_beres_h_heat_min => :h_heat_min,
         :nogw_beres_n_h_avg => :n_h_avg,
         :nogw_beres_delta_h_frac => :Δh_frac,
-        :nogw_beres_z_bot_Q_threshold => :z_bot_Q_threshold,
         :nogw_beres_z_bot_floor => :z_bot_floor,
         :nogw_beres_steady_dc_frac => :steady_dc_frac,
         :nogw_beres_L_system => :L_system,
