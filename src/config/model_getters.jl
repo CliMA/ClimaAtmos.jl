@@ -269,6 +269,33 @@ function get_non_orographic_gravity_wave_model(
     ::Type{FT},
 ) where {FT}
     nogw_name = parsed_args["non_orographic_gravity_wave"]
+    @assert nogw_name in (true, false)
+    if nogw_name == false && get(parsed_args, "nogw_beres_source", false)
+        @warn "nogw_beres_source is true but non_orographic_gravity_wave is false; ignoring Beres source"
+    end
+    if get(parsed_args, "nogw_beres_source", false) && nogw_name == true
+        turbconv = get(parsed_args, "turbconv", nothing)
+        if turbconv === nothing || turbconv == "edonly_edmfx"
+            error(
+                "nogw_beres_source requires turbconv to be " *
+                "'prognostic_edmfx' " *
+                "(got: $turbconv)",
+            )
+        end
+        # Canonical latent heating (Q_lat = Σ_p L_p R_p) needs explicit per-phase
+        # conversion rates (1-moment microphysics) AND per-draft in-cloud state
+        # (PrognosticEDMFX).
+        if get(parsed_args, "nogw_beres_heating_latent", false)
+            mp_model = get(parsed_args, "microphysics_model", "dry")
+            if mp_model != "1M" || turbconv != "prognostic_edmfx"
+                error(
+                    "nogw_beres_heating_latent requires microphysics_model=\"1M\" " *
+                    "and turbconv=\"prognostic_edmfx\" (got microphysics_model=" *
+                    "\"$mp_model\", turbconv=\"$turbconv\")",
+                )
+            end
+        end
+    end
     return if nogw_name == true
         (;
             source_pressure,
@@ -292,7 +319,59 @@ function get_non_orographic_gravity_wave_model(
             dϕ_n,
             dϕ_s,
         ) = params.non_orographic_gravity_wave_params
-        NonOrographicGravityWave{FT}(;
+
+        # Construct Beres (2004) convective source parameters.
+        beres_source = if get(parsed_args, "nogw_beres_source", false)
+            bsp = params.beres_source_params
+            BeresSourceParams{FT}(;
+                Q0_threshold = FT(bsp.Q0_threshold),
+                beres_scale_factor = FT(bsp.scale_factor),
+                σ_x = FT(bsp.σ_x),
+                ν_min = FT(bsp.ν_min),
+                ν_max = FT(bsp.ν_max),
+                n_ν = Int(bsp.n_ν),
+                h_heat_min = FT(bsp.h_heat_min),
+                n_h_avg = Int(bsp.n_h_avg),
+                Δh_frac = FT(bsp.Δh_frac),
+                z_bot_floor = FT(bsp.z_bot_floor),
+                beres_steady_dc_frac = FT(bsp.steady_dc_frac),
+                beres_L_system = FT(bsp.L_system),
+                # beres_steady_source defaults true on the struct (no YAML switch); it
+                # is toggled implicitly by the phase-speed grid (deposits only with a c=0
+                # bin, see the warning below).
+                heating_latent = get(
+                    parsed_args,
+                    "nogw_beres_heating_latent",
+                    false,
+                ),
+                detailed_diagnostics = get(
+                    parsed_args,
+                    "nogw_beres_detailed_diagnostics",
+                    false,
+                ),
+            )
+        else
+            nothing
+        end
+
+        # The steady (ν=0) Beres component is always computed; it deposits into the
+        # c=0 phase-speed bin only when one exists (cmax/dc integer, so it lands in a
+        # bin the transient spectrum leaves at zero, no double-counting). Without a
+        # c=0 bin it gracefully no-ops in the kernel — warn once here so the silent
+        # skip is not a surprise. The default grid (cmax=100, dc=0.8 → 125) has one.
+        if !isnothing(beres_source)
+            ratio = cmax / dc
+            if abs(ratio - round(ratio)) > sqrt(eps(FT))
+                @warn(
+                    "Beres steady (ν=0) source has no exact c=0 phase-speed bin " *
+                    "(cmax/dc = $ratio is not an integer for cmax=$cmax, dc=$dc); " *
+                    "the steady component will be skipped. Set cmax/dc to an integer " *
+                    "(e.g. nogw_cmax/nogw_dc) to enable it."
+                )
+            end
+        end
+
+        NonOrographicGravityWave(;
             source_pressure,
             damp_pressure,
             source_height,
@@ -313,6 +392,7 @@ function get_non_orographic_gravity_wave_model(
             ϕ0_s,
             dϕ_n,
             dϕ_s,
+            beres_source,
         )
     else
         nothing

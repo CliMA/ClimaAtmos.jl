@@ -444,7 +444,50 @@ RayleighSponge(params) = RayleighSponge(;
 ### ------------------- ###
 
 abstract type AbstractGravityWave end
-Base.@kwdef struct NonOrographicGravityWave{FT} <: AbstractGravityWave
+
+"""
+    BeresSourceParams{FT}
+
+Parameters for the Beres (2004) convective gravity wave source spectrum.
+When used as the `beres_source` field in `NonOrographicGravityWave`, the
+Beres convective spectrum is launched in addition to the AD background
+spectrum in every column whose EDMF convective heating exceeds `Q0_threshold` and whose heating layer is deeper than `h_heat_min`.
+There is no latitude gate, and it is set by where the EDMF scheme produces deep convective heating.
+"""
+Base.@kwdef struct BeresSourceParams{FT}
+    # --- Main parameters ---
+    Q0_threshold::FT             # K/s, min heating rate to activate Beres
+    beres_scale_factor::FT       # dimensionless efficiency ℰ; knobs for ρ₀/(Lτ) normalization, the |Q_t(ν)|² weight, and tuning
+    σ_x::FT                      # m, convective cell horizontal half-width
+    ν_min::FT                    # 1/s, min wave frequency (period ~120 min)
+    ν_max::FT                    # 1/s, max wave frequency (period ~10 min)
+    n_ν::Int                     # frequency quadrature points (must be 4k+1: 5, 9, 13...)
+    h_heat_min::FT = FT(1000.0)  # m, min heating depth to activate (filters shallow convection)
+    z_bot_floor::FT = FT(2000.0) # m, min allowed z_bot (excludes PBL signal in Q_conv)
+    beres_steady_source::Bool = true # boolean flag for steady (ν=0) stationary component: deposits only if a c≈0 bin exits
+    beres_steady_dc_frac::FT = FT(1.0) # artificial steady DC weight: Q_t(0)² = dc_frac·ν_min
+    beres_L_system::FT = FT(1.0e6)     # m, largest system scale; sets k_min=2π/L in even-folded H; for the steady-state source
+    heating_latent::Bool = false       # source in-cloud heating from latent Q_lat=Σ L_p R_p (1M+PrognosticEDMFX) vs DSE-Q₁
+    detailed_diagnostics::Bool = false # expose nogw_* source-internal extended diagnostics
+
+    # --- h-averaging (resonance smoothing; default off) ---
+    n_h_avg::Int = 1      # number of h values to average over (1 = no averaging)
+    Δh_frac::FT = FT(0.1) # fractional half-range for averaging: h ± Δh_frac·h
+
+    function BeresSourceParams{FT}(args...) where {FT}
+        obj = new{FT}(args...)
+        if (obj.n_ν - 1) % 4 != 0
+            error(
+                "BeresSourceParams: n_ν must satisfy (n_ν - 1) % 4 == 0 " *
+                "(i.e. n_ν ∈ {5, 9, 13, ...}) for composite Boole's rule, " *
+                "got n_ν = $(obj.n_ν)",
+            )
+        end
+        return obj
+    end
+end
+
+Base.@kwdef struct NonOrographicGravityWave{FT, BS} <: AbstractGravityWave
     source_pressure::FT
     damp_pressure::FT
     source_height::FT
@@ -465,6 +508,7 @@ Base.@kwdef struct NonOrographicGravityWave{FT} <: AbstractGravityWave
     ϕ0_s::FT
     dϕ_n::FT
     dϕ_s::FT
+    beres_source::BS = nothing  # nothing → AD background only; BeresSourceParams → adds the Beres convective source on top of AD wherever EDMF convects
 end
 
 abstract type OrographicGravityWave <: AbstractGravityWave end

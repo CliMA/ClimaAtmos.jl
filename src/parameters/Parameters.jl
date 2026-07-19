@@ -118,6 +118,22 @@ Base.@kwdef struct OrographicGravityWaveParameters{FT} <: AGWP
     Fr_crit::FT              # critical_froude_number: Fr_crit = 0.7, critical Froude number h̃_c = Fr_crit
 end
 
+# Physical/tuning parameters for the Beres (2004) convective gravity-wave source.
+Base.@kwdef struct BeresSourceParameters{FT} <: AGWP
+    Q0_threshold::FT         # K/s, minimum heating rate to activate Beres
+    scale_factor::FT         # dimensionless amplitude scaling (folds ρ₀/(Lτ), |Q_t|² weight, tuning)
+    σ_x::FT                  # m, convective cell horizontal half-width
+    ν_min::FT                # 1/s, min frequency (period ~120 min)
+    ν_max::FT                # 1/s, max frequency (period ~10 min)
+    n_ν::Int                 # quadrature points (must be 4k+1: 5, 9, 13...)
+    h_heat_min::FT           # m, minimum heating depth to activate (filters shallow convection)
+    n_h_avg::Int             # number of h values to average over (1 = no averaging)
+    Δh_frac::FT              # fractional half-range for h averaging: h ± Δh_frac·h
+    z_bot_floor::FT          # m, minimum allowed z_bot (excludes PBL turbulence in Q_conv)
+    steady_dc_frac::FT       # steady DC heating weight: Q_t(0)² = steady_dc_frac·ν_min
+    L_system::FT             # m, largest convective-system scale; sets k_min=2π/L for the steady source
+end
+
 Base.@kwdef struct ClimaAtmosParameters{
     FT,
     TP,
@@ -137,6 +153,7 @@ Base.@kwdef struct ClimaAtmosParameters{
     PAP,
     NOGWP,
     OGWP,
+    BSP,
 } <: ACAP
     thermodynamics_params::TP
     rrtmgp_params::RP
@@ -155,6 +172,7 @@ Base.@kwdef struct ClimaAtmosParameters{
     prescribed_aerosol_params::PAP
     non_orographic_gravity_wave_params::NOGWP
     orographic_gravity_wave_params::OGWP
+    beres_source_params::BSP
     Omega::FT
     f_plane_coriolis_frequency::FT
     planet_radius::FT

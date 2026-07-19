@@ -141,6 +141,41 @@ steps:
         command: "julia --color=yes --project=.buildkite test/parameterized_tendencies/gravity_wave/orographic_gravity_wave/test_garner2005_reproduction.jl"
         artifact_paths: "orographic_gravity_wave_test_garner2005/*"
 
+      # NOTE: the Beres source-spectrum + heating unit tests are pure-function,
+      # CPU-only, and already run via the `parameterizations` TEST_GROUP
+      # (test/runtests.jl, `Pkg.test()`), where their direct deps
+      # (Thermodynamics, CloudMicrophysics) are available. They are deliberately
+      # NOT duplicated as a standalone `--project=.buildkite` job, which lacks
+      # those deps.
+
+      - label: ":wavy_dash: Beres NOGW: single-column heating + drag"
+        retry: *retry_policy
+        command: "julia --color=yes --project=.buildkite test/parameterized_tendencies/gravity_wave/non_orographic_gravity_wave/test_beres_single_column.jl"
+        agents:
+          slurm_mem: 20GB
+
+      - label: ":wavy_dash: Beres NOGW: sphere full integration"
+        retry: *retry_policy
+        command: "julia --color=yes --project=.buildkite test/parameterized_tendencies/gravity_wave/non_orographic_gravity_wave/test_beres_sphere_integration.jl"
+        agents:
+          slurm_mem: 20GB
+
+      - label: ":wavy_dash: Beres NOGW: convective source verification plot (GPU)"
+        retry: *retry_policy
+        command: >
+          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+          --config_file $COMMON_CONFIG_PATH/numerics_sphere_he6ze31.yml
+          --config_file $CONFIG_PATH/sphere_beres_verification.yml
+          --job_id sphere_beres_verification
+
+          julia --color=yes --project=.buildkite test/parameterized_tendencies/gravity_wave/non_orographic_gravity_wave/plotter_beres_verification_9panel.jl --inst sphere_beres_verification/output_active
+        artifact_paths: "sphere_beres_verification/output_active/*"
+        env:
+          CLIMACOMMS_DEVICE: "CUDA"
+        agents:
+          slurm_gpus: 1
+          slurm_mem: 20GB
+
   - group: "Prognostic EDMF"
     steps:
       - label: ":genie: Prognostic EDMF: Vertical advection test"

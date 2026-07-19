@@ -1040,8 +1040,12 @@ function compute_ogw_drag(
     ∇ₕχ = @. Geometry.UVVector(gradₕ(χ))
     ∇ₕhmax = @. Geometry.UVVector(gradₕ(hmax))
 
-    dχdx = ∇ₕχ.components.data.:1
-    dχdy = ∇ₕχ.components.data.:2
+    # Negate the velocity-potential gradient so the drag opposes the low-level
+    # flow, matching the offline pipeline (calc_orographic_tensor uses
+    # `.-calc_∇A(χ, …)`) and Garner (2005) Eq. 6/8. Without this the analytical
+    # topography tensor would carry the wrong sign and accelerate the flow.
+    dχdx = @. -∇ₕχ.components.data.:1
+    dχdy = @. -∇ₕχ.components.data.:2
 
     dhdx = ∇ₕhmax.components.data.:1
     dhdy = ∇ₕhmax.components.data.:2

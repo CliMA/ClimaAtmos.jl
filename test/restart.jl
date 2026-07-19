@@ -293,6 +293,7 @@ else
             "log_progress" => false,
             "dt" => "1secs",
             "dt_rad" => "1secs", "t_end" => "3secs",
+            "dt_nogw" => "1secs",
             "dt_save_state_to_disk" => "1secs",
             "output_dir" => joinpath(amip_output_loc, amip_job_id),
             "rad" => "allskywithclear",
@@ -300,6 +301,7 @@ else
             "microphysics_model" => "0M", # Using 0M because 1M doesn't work on P100 GPUs
             "toml" => [
                 joinpath(@__DIR__, "../toml/longrun_aquaplanet_progedmf.toml"),
+                joinpath(@__DIR__, "../toml/nogw_beres_test.toml"),
             ],
         ),
     )
