@@ -79,9 +79,11 @@ ClimaAtmos.Setups.overwrite_initial_state!
 
 ## SCM Forcing Methods
 
-Single-column setups can provide forcing profiles that replace the
-corresponding YAML config keys. When a method returns `nothing` (the
-default), the config key is used instead.
+Single-column setups can provide forcing profiles. These are applied wherever
+the model is built from the setup: `AtmosModel(grid; setup, ...)` on the
+script path (explicit model kwargs win), and the `initial_condition` key on
+the YAML path. When a method returns `nothing` (the default), the config key
+or model default is used instead.
 
 ```@docs
 ClimaAtmos.Setups.subsidence_forcing
@@ -91,10 +93,12 @@ ClimaAtmos.Setups.coriolis_forcing
 
 ## Model Methods
 
-Setups can return model objects directly. When a method returns `nothing`
-(the default), the model construction layer falls through to config-based
-dispatch. The exception is `surface_temperature_model`, whose default is an
-`AnalyticTemperature` using `zonally_symmetric_temperature`.
+Setups can return model objects directly. Like the SCM forcing methods, these
+are applied by `AtmosModel(grid; setup, ...)` and by the YAML path; when a
+method returns `nothing` (the default), construction falls through to the
+explicit kwarg / config key / default. The exception is
+`surface_temperature_model`, whose default is an `AnalyticTemperature` using
+`zonally_symmetric_temperature`.
 
 ```@docs
 ClimaAtmos.Setups.external_forcing
@@ -102,6 +106,13 @@ ClimaAtmos.Setups.insolation_model
 ClimaAtmos.Setups.surface_temperature_model
 ClimaAtmos.Setups.prescribed_flow_model
 ClimaAtmos.Setups.radiation_model
+```
+
+All of these hooks are evaluated together by
+[`Setups.setup_model_traits`](@ref ClimaAtmos.Setups.setup_model_traits):
+
+```@docs
+ClimaAtmos.Setups.setup_model_traits
 ```
 
 ## Defining a case in a runscript

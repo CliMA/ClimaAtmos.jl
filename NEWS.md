@@ -4,6 +4,15 @@ ClimaAtmos.jl Release Notes
 main
 ----
 
+- [#4737](https://github.com/CliMA/ClimaAtmos.jl/pull/4737) ![][badge-💥breaking] `AtmosModel` is now built on a grid and owns the
+  parameters and case setup. `AtmosSimulation` wraps a model and carries only
+  run control:
+
+  ```julia
+  model = AtmosModel(grid; params, setup, microphysics_model = ..., ...)
+  sim   = AtmosSimulation(model; dt, t_end, ...)
+  ```
+
 0.42.9
 -------
 - Update to ClimaCore.jl v0.16 (support for v0.15 is dropped). The biased

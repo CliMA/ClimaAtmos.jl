@@ -8,22 +8,24 @@ or in notebooks, and customization beyond what the YAML schema exposes. For a
 side-by-side comparison of the two interfaces, see
 [Script vs Config Interface](interfaces.md).
 
-## The `AtmosSimulation` object
+## The `AtmosModel` and `AtmosSimulation` objects
 
-A `simulation` is an [`AtmosSimulation`](@ref ClimaAtmos.AtmosSimulation) value.
-Its keyword arguments set the grid, the physics, the initial state, and the
-run parameters:
+Construction has two steps. An
+[`AtmosModel`](@ref ClimaAtmos.AtmosModel) is built on a grid and owns the
+physics, the parameters, and the case setup; an
+[`AtmosSimulation`](@ref ClimaAtmos.AtmosSimulation) wraps that model and adds
+run control:
 
 ```julia
 import ClimaAtmos as CA
 
-simulation = CA.AtmosSimulation{Float64}(;
-    model = CA.AtmosModel(),
-    grid = CA.SphereGrid(Float64; z_elem = 45, h_elem = 6),
-    setup = CA.Setups.DecayingProfile(;
-        perturb = true,
-        params = CA.ClimaAtmosParameters(Float64),
-    ),
+model = CA.AtmosModel(
+    CA.SphereGrid(Float64; z_elem = 45, h_elem = 6);
+    params = CA.ClimaAtmosParameters(Float64),
+    setup = CA.Setups.DecayingProfile(; perturb = true),
+)
+
+simulation = CA.AtmosSimulation(model;
     dt = "10mins",
     t_end = "10days",
     job_id = "my_script_run",
@@ -35,9 +37,9 @@ number in seconds or a string with a unit (`secs`, `mins`, `hours`, `days`,
 `weeks`), the same syntax the YAML interface uses. The composite pieces are
 objects constructed separately and passed in, as the following sections show.
 
-The `grid`, `setup`, and `model` arguments are not independent: a setup
-supplies the initial state, the model supplies the physics, and a case only
-makes sense when they match. Running the BOMEX setup with the default dry
+The grid, the setup, and the physics are not independent: a setup supplies the
+initial state, the physics keywords supply the parameterizations, and a case
+only makes sense when they match. Running the BOMEX setup with the default dry
 model, for instance, leaves no moisture to convect. The presets below pair
 them correctly; when assembling the pieces yourself, choose them together.
 
@@ -46,7 +48,8 @@ them correctly; when assembling the pieces yourself, choose them together.
 Construct a [`ColumnGrid`](@ref ClimaAtmos.ColumnGrid),
 [`BoxGrid`](@ref ClimaAtmos.BoxGrid),
 [`PlaneGrid`](@ref ClimaAtmos.PlaneGrid), or
-[`SphereGrid`](@ref ClimaAtmos.SphereGrid) and pass it as `grid`:
+[`SphereGrid`](@ref ClimaAtmos.SphereGrid) and pass it as the first argument of
+`AtmosModel`:
 
 ```julia
 # A single column with 60 vertical levels up to 40 km
@@ -69,7 +72,7 @@ turbulence and convection, radiation, surface fluxes, and so on. Keyword
 arguments override the defaults one at a time:
 
 ```julia
-model = CA.AtmosModel(;
+model = CA.AtmosModel(grid;
     microphysics_model = CA.EquilibriumMicrophysics0M(),
     radiation_mode = CA.RRTMGPI.AllSkyRadiation(),
 )
@@ -78,27 +81,31 @@ model = CA.AtmosModel(;
 Preset constructors in `CA.Presets` assemble common combinations, so most
 scripts start from one of them instead of from bare `AtmosModel` keywords.
 The model presets are `dry`, `equil_moist_0m`, `nonequil_moist_1m`,
-`prognostic_edmf`, and `prognostic_edmf_1m`; the simulation presets
-`aquaplanet`, `baroclinic_wave`, and `bomex` return a ready-to-run
-`AtmosSimulation`. The simulation presets and the [PROPHET](prophet.md) model presets take
-the float type as their first argument; `dry`, `equil_moist_0m`, and
-`nonequil_moist_1m` take keyword arguments only. Each forwards keyword
-arguments for further overrides:
+`prognostic_edmf`, and `prognostic_edmf_1m`; each returns a NamedTuple of
+`AtmosModel` keyword arguments for its `defaults` slot, which the setup and
+your explicit keywords override. The one simulation preset, `aquaplanet`,
+returns a ready-to-run `AtmosSimulation`; for a specific case, pair a
+[setup](setups.md) with a model preset instead. `aquaplanet` and the PROPHET
+model presets take the float type as their first argument; `dry`,
+`equil_moist_0m`, and `nonequil_moist_1m` take keyword arguments only. Each
+forwards keyword arguments for further overrides:
 
 ```julia
 # PROPHET turbulence-convection with 0-moment microphysics, plus radiation
-model = CA.Presets.prognostic_edmf(
-    Float64;
+model = CA.AtmosModel(grid;
+    defaults = CA.Presets.prognostic_edmf(Float64),
     radiation_mode = CA.RRTMGPI.AllSkyRadiation(),
 )
 ```
 
 ## Setup (initial conditions)
 
-In the script interface, the `setup` argument sets the initial state. Case
-forcings and surface conditions that YAML configurations derive from
+The `setup` keyword of `AtmosModel` sets the initial state. The case forcings
+and surface conditions that YAML configurations derive from
 `initial_condition` (subsidence, large-scale advection, column Coriolis,
-surface fluxes) are chosen through `AtmosModel` keywords or a preset instead:
+surface fluxes) come from the setup too: `AtmosModel(grid; setup)` applies
+them, and an explicit keyword of the same name overrides the setup's value
+(with a warning):
 
 ```julia
 # The BOMEX shallow-cumulus case
@@ -109,6 +116,8 @@ setup = CA.Setups.DecayingProfile(;
     perturb = true,
     params = CA.ClimaAtmosParameters(Float64),
 )
+
+model = CA.AtmosModel(grid; setup)
 ```
 
 The [Setups](setups.md) reference page lists the available cases and the
@@ -126,8 +135,8 @@ diagnostics = CA.DiagnosticsConfig(;
     additional = ["ua" => (; period = "30mins", reduction = "average")],
 )
 
-simulation = CA.AtmosSimulation{Float64}(;
-    model, grid, setup, diagnostics,
+simulation = CA.AtmosSimulation(model;
+    diagnostics,
     output_dir = "my_output_directory",
 )
 ```
