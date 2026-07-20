@@ -1118,6 +1118,7 @@ condensate tracers (including their couplings to the updraft `q_tot`).
 function update_sgs_advection_jacobian!(matrix, Y, p, dtγ)
     p.atmos.turbconv_model isa PrognosticEDMFX || return nothing
     (; ᶜρʲs, ᶠu³ʲs) = p.precomputed
+    (; dt) = p
     FT = Spaces.undertype(axes(Y.c))
     ᶜJ = Fields.local_geometry_field(Y.c).J
     ᶠJ = Fields.local_geometry_field(Y.f).J
@@ -1199,23 +1200,36 @@ function update_sgs_advection_jacobian!(matrix, Y, p, dtγ)
                 ) - (I,)
 
             # sedimentation
-            # Base: a·∂_z(ρwχ) — always the same regardless of ∂a/∂z sign
-            # Correction: min(∂a/∂z, 0)·(ρ¹w¹χ¹ − ρ⁰w⁰χ⁰)
-            #   ρ⁰w⁰χ⁰ = (w_GS·ρχ_GS − ρa¹·w¹·χ¹)/(1−a), so
-            #   ∂(ρ⁰w⁰χ⁰)/∂χʲ = −ρa¹·w¹/(1−a) and
-            #   ∂/∂χʲ of correction = min(∂a/∂z, 0)·ρ¹w¹/(1−a)
+            # ∂a/∂z < 0 (widening down): ∂_z(ρwaχ) for detrainment/dilution
+            #   Jacobian: -(ᶜprecipdivᵥ_matrix()) ⋅ ᶠsed · DiagonalMatrixRow(ᶜa)
+            #   plus entrainment of env condensate (CFL-limited):
+            #     −α_CFL·min(∂a/∂z,0)·ρ⁰w⁰χ⁰
+            #     ρ⁰w⁰χ⁰ = (w_GS·ρχ_GS − ρa¹·w¹·χ¹)/(1−a)
+            #     ∂(ρ⁰w⁰χ⁰)/∂χ¹ = −ρa¹·w¹/(1−a)
+            #     ∂/∂χ¹ = α_CFL·min(∂a/∂z,0)·ρ¹·a·w¹/(1−a)
+            # ∂a/∂z ≥ 0 (narrowing down):
+            #   Jacobian: -DiagonalMatrixRow(ᶜa) ⋅ ᶜprecipdivᵥ_matrix() ⋅ ᶠsed
             @. ᶠsed_tracer_advection =
                 DiagonalMatrixRow(ᶠinterp(ᶜρʲs.:(1) * ᶜJ) / ᶠJ) ⋅
                 ᶠright_bias_matrix() ⋅
                 DiagonalMatrixRow(-Geometry.WVector(ᶜwʲ))
             @. ᶜtridiagonal_matrix_scalar =
-                dtγ * (
-                    -DiagonalMatrixRow(ᶜa) ⋅ ᶜprecipdivᵥ_matrix() ⋅
-                    ᶠsed_tracer_advection +
+                dtγ * ifelse(
+                    ᶜ∂a∂z < 0,
+                    -(ᶜprecipdivᵥ_matrix()) ⋅ ᶠsed_tracer_advection *
+                    DiagonalMatrixRow(ᶜa) +
                     DiagonalMatrixRow(
-                        min(ᶜ∂a∂z, zero(ᶜ∂a∂z)) * ᶜρʲs.:(1) * ᶜwʲ /
-                        max(1 - ᶜa, eps(eltype(ᶜa))),
-                    )
+                        min(
+                            FT(1),
+                            ᶜa / max(
+                                -min(ᶜ∂a∂z, zero(ᶜ∂a∂z)) * ᶜwʲ * dt,
+                                eps(FT),
+                            ),
+                        ) * min(ᶜ∂a∂z, zero(ᶜ∂a∂z)) * ᶜρʲs.:(1) * ᶜa *
+                        ᶜwʲ / max(1 - ᶜa, eps(FT)),
+                    ),
+                    -DiagonalMatrixRow(ᶜa) ⋅ ᶜprecipdivᵥ_matrix() ⋅
+                    ᶠsed_tracer_advection,
                 )
 
             @. ∂ᶜχʲ_err_∂ᶜχʲ +=

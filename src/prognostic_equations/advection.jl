@@ -339,6 +339,7 @@ function edmfx_sgs_vertical_advection_tendency!(
     (; ᶜgradᵥ_ᶠΦ) = p.core
 
     FT = eltype(p.params)
+    (; dt) = p
     ᶠJ = Fields.local_geometry_field(axes(Y.f)).J
 
     for j in 1:n
@@ -433,6 +434,7 @@ function edmfx_sgs_vertical_advection_tendency!(
                     ᶜqʲ,
                     ᶠJ,
                     ᶜρ⁰w⁰χ⁰,
+                    dt,
                 )
                 @. ᶜqʲₜ += ᶜinv_ρ̂ * vtt
                 @. Yₜ.c.sgsʲs.:($$j).q_tot += ᶜinv_ρ̂ * vtt
@@ -485,6 +487,7 @@ function edmfx_sgs_vertical_advection_tendency!(
                     ᶜχʲ,
                     ᶠJ,
                     ᶜρ⁰w⁰χ⁰,
+                    dt,
                 )
                 @. ᶜχʲₜ += ᶜinv_ρ̂ * vtt
             end
@@ -493,38 +496,38 @@ function edmfx_sgs_vertical_advection_tendency!(
 end
 
 """
-    updraft_sedimentation!(vtt, p, ᶜρ, ᶜw, ᶜa, ᶜχ, ᶠJ, ᶜρ⁰w⁰χ⁰)
+    updraft_sedimentation!(vtt, p, ᶜρ, ᶜw, ᶜa, ᶜχ, ᶠJ, ᶜρ⁰w⁰χ⁰, dt)
 
 Compute the sedimentation tendency of tracer `χ` within an updraft, including
-lateral transfer (detrainment and entrainment) across tilted updraft boundaries.
+lateral transfer across tilted updraft boundaries.
 
 # Description
 
 Sedimenting particles fall with velocity `w` through an updraft of fractional area `a(z)`.
-The base within-updraft tendency is `a · ∂_z(ρ w χ)`, which captures the vertical flux
-convergence through the updraft cross-section with no lateral effects.
 
-When `∂a/∂z > 0` (updraft narrows downward), sedimenting mass exits laterally through
-the tilted boundary (detrainment). This is already excluded from `a · ∂_z(ρ w χ)` and
-is captured by the grid-scale residual.
+When `∂a/∂z ≥ 0` (updraft narrows downward), the tendency is `a · ∂_z(ρ w χ)`.
+Sedimenting mass exits laterally (detrainment) and prevents artifical incease
+in precipitation specific humidity due to updraft area changes.
 
-When `∂a/∂z < 0` (updraft widens downward), environment condensate enters through the
-tilted boundary (entrainment). The correction term uses the upwind (donor-cell) principle:
-the entrained sedimentation flux has **environment** properties, not updraft properties.
+When `∂a/∂z < 0` (updraft widens downward), two effects occur:
+
+ 1. **Detrainment + dilution**: captured by `∂_z(ρ w a χ)`, which is fully implicit.
+ 2. **Entrainment of environment condensate**: environment rain enters through the
+    tilted boundary. This is an external source, CFL-limited:
+    `−α_CFL · min(∂a/∂z, 0) · ρ⁰w⁰χ⁰`
+    where `α_CFL = min(1, a / (|∂a/∂z| · w · dt))`.
 
 # Equation
 
-The combined tendency is:
-
 ```math
-\\text{tend} = a \\cdot \\partial_z(\\rho^{(1)} w^{(1)} \\chi^{(1)})
-            + \\min(\\partial_z a,\\, 0) \\cdot
-              (\\rho^{(1)} w^{(1)} \\chi^{(1)} - \\rho^{(0)} w^{(0)} \\chi^{(0)})
+\\text{tend} = \\begin{cases}
+  \\partial_z(\\rho w a \\chi) - \\alpha_{CFL} \\cdot
+    \\min(\\partial_z a, 0) \\cdot \\rho^{(0)} w^{(0)} \\chi^{(0)},
+    & \\text{if } \\partial_z a < 0 \\\\
+  a \\cdot \\partial_z(\\rho w \\chi),
+    & \\text{otherwise}
+\\end{cases}
 ```
-
-The second term is zero when `∂a/∂z ≥ 0` and adds the net lateral transfer
-when the updraft widens. If updraft and environment have the same sedimentation
-flux, no lateral mixing occurs.
 
 # Arguments
 
@@ -536,6 +539,7 @@ flux, no lateral mixing occurs.
   - `ᶜχ`: updraft tracer mixing ratio
   - `ᶠJ`: face Jacobian (grid geometry)
   - `ᶜρ⁰w⁰χ⁰`: environment sedimentation flux density (ρ⁰ · w⁰ · χ⁰)
+  - `dt`: timestep for the lateral CFL limiter
 
 `vtt` gets filled with tracer tendency due to sedimentation and lateral transfer.
 """
@@ -548,17 +552,21 @@ function updraft_sedimentation!(
     ᶜχ,
     ᶠJ,
     ᶜρ⁰w⁰χ⁰,
+    dt,
 )
     ᶜJ = Fields.local_geometry_field(axes(ᶜρ)).J
     # use output as a scratch field
     ∂a∂z = vtt
     @. ∂a∂z = ᶜprecipdivᵥ(ᶠinterp(ᶜJ) / ᶠJ * ᶠright_bias(Geometry.WVector(ᶜa)))
     ᶠρ = @. p.scratch.ᶠtemp_scalar = ᶠinterp(ᶜρ * ᶜJ) / ᶠJ
+    ᶠwaχ = @. p.scratch.ᶠtemp_scalar_3 = ᶠright_bias(-(ᶜw) * ᶜa * ᶜχ)
     ᶠwχ = @. p.scratch.ᶠtemp_scalar_2 = ᶠright_bias(-(ᶜw) * ᶜχ)
-    # Base: within-updraft flux convergence a · ∂_z(ρ w χ)
-    # Entrainment correction: min(∂a/∂z, 0) · (ρ¹w¹χ¹ − ρ⁰w⁰χ⁰)
-    @. vtt =
-        -(ᶜa * ᶜprecipdivᵥ(ᶠρ * Geometry.WVector(ᶠwχ))) +
-        min(∂a∂z, 0) * (ᶜρ * ᶜw * ᶜχ - ᶜρ⁰w⁰χ⁰)
+    @. vtt = ifelse(
+        ∂a∂z < 0,
+        -(ᶜprecipdivᵥ(ᶠρ * Geometry.WVector(ᶠwaχ))) -
+        min(1, ᶜa / max(-min(∂a∂z, 0) * ᶜw * dt, eps(dt))) *
+        min(∂a∂z, 0) * ᶜρ⁰w⁰χ⁰,
+        -(ᶜa * ᶜprecipdivᵥ(ᶠρ * Geometry.WVector(ᶠwχ))),
+    )
     return
 end
