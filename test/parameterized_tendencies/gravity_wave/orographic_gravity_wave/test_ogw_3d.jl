@@ -284,8 +284,9 @@ max_hmax_idx = argmax(hmax_arr)
 max_hmax_cartesian = CartesianIndices(hmax_arr)[max_hmax_idx]
 @info "Max hmax:" idx = max_hmax_cartesian value = hmax_arr[max_hmax_idx]
 
-# Extract column indices (surface fields have IJFH layout, no vertical dim)
-i_col, j_col, f_col, h_col = Tuple(max_hmax_cartesian)
+# Extract column indices (surface-field parents have a singleton V axis, so
+# their Cartesian indices are (v, i, j, f, h))
+_, i_col, j_col, f_col, h_col = Tuple(max_hmax_cartesian)
 
 # Get column data (3D fields have VIJFH layout)
 z_col = parent(ᶜz_field_cpu)[:, i_col, j_col, f_col, h_col]
@@ -310,7 +311,7 @@ for k in 1:(length(z_col) - 1)
 end
 
 # z_ref = z_pbl + hmax
-hmax_val = hmax_arr[i_col, j_col, f_col, h_col]
+hmax_val = hmax_arr[1, i_col, j_col, f_col, h_col]
 z_ref_est = z_pbl_est + hmax_val
 
 # Find p_ref by interpolating pressure at z_ref
@@ -330,7 +331,7 @@ weights_col = p_col .- p_ref_est
 mask_col = (z_col .> z_pbl_est) .& (z_col .< z_ref_est)
 
 @info "Column at max hmax:" hmax = hmax_val hmin =
-    parent(hmin_cpu)[i_col, j_col, f_col, h_col] z_pbl = z_pbl_est z_ref = z_ref_est p_ref =
+    parent(hmin_cpu)[1, i_col, j_col, f_col, h_col] z_pbl = z_pbl_est z_ref = z_ref_est p_ref =
     p_ref_est
 @info "  Mask: $(sum(mask_col)) cells, $(sum(mask_col .& (abs.(weights_col) .< 100))) with near-zero weight"
 
