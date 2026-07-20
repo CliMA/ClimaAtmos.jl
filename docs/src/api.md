@@ -12,8 +12,7 @@ Case definitions (initial conditions and forcing) live on the
 
 ```@docs
 ClimaAtmos.AtmosSimulation
-ClimaAtmos.AtmosSimulation{FT}()
-ClimaAtmos.AtmosSimulation()
+ClimaAtmos.AtmosSimulation(::ClimaAtmos.AtmosModel)
 ClimaAtmos.AtmosSimulation(::ClimaAtmos.AtmosConfig)
 ClimaAtmos.AtmosConfig
 ClimaAtmos.AtmosConfig(::String)
@@ -32,8 +31,6 @@ ClimaAtmos.Presets.nonequil_moist_1m
 ClimaAtmos.Presets.prognostic_edmf
 ClimaAtmos.Presets.prognostic_edmf_1m
 ClimaAtmos.Presets.aquaplanet
-ClimaAtmos.Presets.baroclinic_wave
-ClimaAtmos.Presets.bomex
 ```
 
 ## Grids
@@ -69,13 +66,14 @@ ClimaAtmos.SLEVEWarp
 
 ## The atmosphere model
 
-`AtmosModel` holds the physics configuration. Its components are grouped into
+`AtmosModel` holds the physics configuration, together with the grid it runs
+on, the parameters, and the case setup. Its physics components are grouped into
 the structs below; keyword arguments may be passed either to the group or
 directly to `AtmosModel`, which routes them to the right group.
 
 ```@docs
 ClimaAtmos.AtmosModel
-ClimaAtmos.AtmosModel()
+ClimaAtmos.initial_state
 ClimaAtmos.AtmosWater
 ClimaAtmos.AtmosTurbconv
 ClimaAtmos.AtmosRadiation

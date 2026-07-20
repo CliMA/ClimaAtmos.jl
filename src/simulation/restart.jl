@@ -69,8 +69,10 @@ function handle_restart(
         @warn "Non zero `t_start` passed with a restarting simulation. The provided `t_start` will be ignored."
     end
 
+    # Both sides of the model-hash comparison use hash_physics, which
+    # ignores `grid`, `params`, and `setup`.
     (Y, t_start) = get_state_restart(
-        restart_file, start_date, hash(model), context,
+        restart_file, start_date, hash_physics(model), context,
     )
 
     if verbose

@@ -38,9 +38,8 @@ CA.solve_atmos!(simulation)
 The forcing is a tuple of
 [`AbstractForcingTerm`](@ref ClimaAtmos.AbstractForcingTerm)s (`HorizontalAdvection()`, `VerticalFluctuation()`,
 `Nudging(variables...; timescale, mask)`, `Subsidence()`) passed to the setup's
-`forcing` slot. The `AtmosSimulation(; model, setup)` constructor uses
-`setup` only for the initial state, so the setup's forcing / insolation / surface
-models must be passed to the `AtmosModel` explicitly (tracked by [#4696](https://github.com/CliMA/ClimaAtmos.jl/issues/4696)).
+`forcing` slot. Passing the setup to `AtmosModel(grid; setup)` applies its
+forcing, insolation, and surface models to the model automatically.
 
 ```julia
 import ClimaAtmos as CA
@@ -56,17 +55,9 @@ setup = CA.Setups.ForcingFromFile(
     forcing = (CA.HorizontalAdvection(),),
 )
 
-surface = CA.Setups.surface_condition(setup, params)
-model = CA.AtmosModel(;
-    external_forcing = CA.Setups.external_forcing(setup, FT),
-    insolation = CA.Setups.insolation_model(setup),
-    temperature = CA.Setups.surface_temperature_model(setup),
-    flux_scheme = surface.flux_scheme,
-    # ...
-)
 grid = CA.ColumnGrid(FT; z_elem = 63, z_max = FT(60e3), z_stretch = true)
-simulation = CA.AtmosSimulation{FT}(;
-    model, setup, grid, params,
+model = CA.AtmosModel(grid; params, setup)  # setup's forcing/surface applied
+simulation = CA.AtmosSimulation(model;
     start_date = Dates.DateTime(2007, 7, 1), dt = 50, t_end = 30 * 3600,
 )
 CA.solve_atmos!(simulation)
@@ -113,8 +104,9 @@ function CA.Setups.center_initial_condition(
     return CA.Setups.physical_state(; T, p)
 end
 
-setup = MyCase()
-simulation = CA.AtmosSimulation{Float64}(; setup, model, grid)
+grid = CA.ColumnGrid(Float64; z_elem = 63, z_max = 60e3)
+model = CA.AtmosModel(grid; setup = MyCase())
+simulation = CA.AtmosSimulation(model)
 ```
 
 Optionally extend the other setup methods documented above in the same

@@ -54,40 +54,7 @@ params = CA.ClimaAtmosParameters(
     CA.CP.create_toml_dict(FT; override_file = "toml/rcemipii_box.toml"),
 )
 
-## RCEMIP-II model prescriptions
-insolation = CA.RCEMIPIIInsolation()
-setup = CA.Setups.RCEMIPIIProfile_300()
-# TODO: Clean this up, it's difficult to use a setup with the `AtmosModel` constructor
-temperature = CA.Setups.surface_temperature_model(setup)
-
-
-## Construct the model
-model = CA.AtmosModel(;
-    # AtmosWater - Moisture, Precipitation & Clouds
-    microphysics_model = CA.NonEquilibriumMicrophysics1M(),
-    cloud_model = CA.GridScaleCloud(),
-    microphysics_tendency_timestepping = CA.Explicit(),
-    tracer_nonnegativity_method = CA.TracerNonnegativityMethod("elementwise_constraint"),
-
-    # AtmosRadiation
-    radiation_mode = CA.RRTMGPInterface.AllSkyRadiationWithClearSkyDiagnostics(),
-    insolation,
-
-    # TODO: See if you need to set: `edmfx_model`
-    smagorinsky_lilly = CA.SmagorinskyLilly(; axes = :UV_W),
-    rayleigh_sponge = CA.RayleighSponge{FT}(; zd = 30_000),
-
-    # AtmosSurface
-    temperature,
-    flux_scheme = CA.SurfaceConditions.DefaultMoninObukhov()(params),
-    surface_albedo = CA.ConstantAlbedo{FT}(; α = 0.07),
-
-    # numerics
-    numerics = CA.AtmosNumerics(; hyperdiff = nothing),
-)
-# @info "AtmosModel: \n$(summary(atmos))"
-
-## Grid creation
+## Construct the grid
 function rcemipii_z_mesh(::Type{FT}) where {FT}
     z_max = 33_000
     z_elem = 74
@@ -103,6 +70,33 @@ function rcemipii_z_mesh(::Type{FT}) where {FT}
 end
 z_mesh = rcemipii_z_mesh(FT)
 grid = CA.BoxGrid(FT; context, x_elem, x_max, y_elem, y_max, z_mesh)
+
+## Construct the model
+model = CA.AtmosModel(
+    grid;
+    params,
+    setup = CA.Setups.RCEMIPIIProfile_300(),
+
+    # AtmosWater - Moisture, Precipitation & Clouds
+    microphysics_model = CA.NonEquilibriumMicrophysics1M(),
+    cloud_model = CA.GridScaleCloud(),
+    microphysics_tendency_timestepping = CA.Explicit(),
+    tracer_nonnegativity_method = CA.TracerNonnegativityMethod("elementwise_constraint"),
+
+    # AtmosRadiation
+    radiation_mode = CA.RRTMGPInterface.AllSkyRadiationWithClearSkyDiagnostics(),
+
+    # TODO: See if you need to set: `edmfx_model`
+    smagorinsky_lilly = CA.SmagorinskyLilly(; axes = :UV_W),
+    rayleigh_sponge = CA.RayleighSponge{FT}(; zd = 30_000),
+
+    # AtmosSurface
+    flux_scheme = CA.SurfaceConditions.DefaultMoninObukhov()(params),
+    surface_albedo = CA.ConstantAlbedo{FT}(; α = 0.07),
+
+    # numerics
+    numerics = CA.AtmosNumerics(; hyperdiff = nothing),
+)
 
 ## Discretization
 import ClimaTimeSteppers as CTS
@@ -136,9 +130,8 @@ if model.microphysics_model == CA.NonEquilibriumMicrophysics2M()
 end
 
 ## Assemble simulation
-simulation = CA.AtmosSimulation{FT}(; job_id,
-    model, params, context, grid,
-    setup,
+simulation = CA.AtmosSimulation(model;
+    job_id,
     dt, t_end,
     ode_config,
     output_dir,
