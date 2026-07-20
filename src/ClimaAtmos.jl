@@ -10,17 +10,20 @@ the sphere, for global weather and climate simulation. Energy, air mass, and
 water are conserved to floating-point precision, and the model runs on CPUs and
 GPUs from one code base.
 
-A simulation is described by an `AtmosSimulation`, which bundles a grid, an
-`AtmosModel`, a parameter set, and an integrator. Constructing one sets
-everything up; `solve_atmos!` advances it to `t_end`. Common configurations are
-available as one-line presets in the `Presets` submodule. See the Your First
-Simulation, Governing Equations, and API pages of the documentation.
+A simulation is described by an `AtmosSimulation`, which wraps an `AtmosModel` (the
+physics, together with the grid, the parameters, and the case setup) and adds run
+control and an integrator. Constructing one sets everything up; `solve_atmos!`
+advances it to `t_end`. A case (its initial state, boundary conditions, and
+forcing) comes from the `Setups` submodule; common bundles of physics options
+come from the `Presets` submodule. See the Your First Simulation, Governing
+Equations, and API pages of the documentation.
 
 # Examples
 
 ```julia
 import ClimaAtmos as CA
-simulation = CA.AtmosSimulation{Float32}(; t_end = "1days")
+model = CA.AtmosModel(CA.SphereGrid(Float32))
+simulation = CA.AtmosSimulation(model; t_end = "1days")
 CA.solve_atmos!(simulation)
 ```
 """
@@ -38,7 +41,7 @@ import ClimaCore
 import ClimaCore.MatrixFields: @name
 
 import ClimaUtilities
-import ClimaCore: Domains, Spaces, Topologies
+import ClimaCore: Domains, Grids, Spaces, Topologies
 import ClimaDiagnostics
 import RRTMGP
 
