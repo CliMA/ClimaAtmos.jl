@@ -51,7 +51,7 @@ function update_surface_conditions!(Y, p, t)
         thermo_params,
         surface_fluxes_params,
         surface_temp_params,
-        atmos,
+        atmos.microphysics_model,
         t,
     )
     return nothing
@@ -117,12 +117,16 @@ end
         surface_local_geometry,
         T_int, ρ_int, q_tot_int, q_liq_int, q_ice_int, u_int, v_int, z_int,
         thermo_params, surface_fluxes_params, surface_temp_params,
-        atmos,
+        microphysics_model,
     )
 
 Compute the surface conditions at one point. `T_sfc_in` is either a scalar,
 the resolved temperature field value, or an `AnalyticTemperature` to evaluate
 against the local `coordinates`.
+
+Takes `microphysics_model` instead of the whole `AtmosModel`, because this runs
+inside a broadcast: every argument reaches the GPU kernel and so must be a
+bitstype.
 """
 function surface_state_to_conditions(
     overrides::SurfaceBoundaryOverrides,
@@ -140,7 +144,7 @@ function surface_state_to_conditions(
     thermo_params,
     surface_fluxes_params,
     surface_temp_params,
-    atmos,
+    microphysics_model,
     t_time,
 )
     (; coordinates) = surface_local_geometry
@@ -148,7 +152,7 @@ function surface_state_to_conditions(
     Δz = z_int - coordinates.z
 
     FT = eltype(thermo_params)
-    (!isnothing(overrides.q_vap) && atmos.microphysics_model isa DryModel) &&
+    (!isnothing(overrides.q_vap) && microphysics_model isa DryModel) &&
         error("surface q_vap cannot be specified when using a DryModel")
 
     T_sfc = resolve_T_sfc(T_sfc_in, coordinates, surface_temp_params, t_time)
@@ -168,7 +172,7 @@ function surface_state_to_conditions(
         q_liq_int,
         q_ice_int,
     )
-    if atmos.microphysics_model isa DryModel
+    if microphysics_model isa DryModel
         q_vap = 0
     else
         # Assume that the surface is water with saturated air directly
@@ -195,7 +199,7 @@ function surface_state_to_conditions(
                 if isnothing(lhf)
                     lhf = FT(0)
                 else
-                    atmos.microphysics_model isa DryModel &&
+                    microphysics_model isa DryModel &&
                         error("lhf cannot be specified when using a DryModel")
                 end
             elseif parameterization.fluxes isa θAndQFluxes
@@ -203,7 +207,7 @@ function surface_state_to_conditions(
                 if isnothing(q_flux)
                     q_flux = FT(0)
                 else
-                    atmos.microphysics_model isa DryModel && error(
+                    microphysics_model isa DryModel && error(
                         "q_flux cannot be specified when using a DryModel",
                     )
                 end

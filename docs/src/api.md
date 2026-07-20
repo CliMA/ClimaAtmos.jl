@@ -6,6 +6,13 @@
 ClimaAtmos.AtmosSimulation
 ```
 
+## Model
+
+```@docs
+ClimaAtmos.AtmosModel
+ClimaAtmos.initial_state
+```
+
 ## Presets
 
 ```@docs

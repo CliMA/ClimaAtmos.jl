@@ -179,11 +179,8 @@ function get_sgs_quadrature(parsed_args, params = nothing)
     return SGSQuadrature(FT; quadrature_order, distribution, T_min, q_max)
 end
 
-function get_insolation_form(parsed_args; setup_type = nothing)
-    if !isnothing(setup_type)
-        model = Setups.insolation_model(setup_type)
-        !isnothing(model) && return model
-    end
+function get_insolation_form(parsed_args; setup_traits)
+    isnothing(setup_traits.insolation) || return setup_traits.insolation
     insolation = parsed_args["insolation"]
     return if insolation == "idealized"
         IdealizedInsolation()
@@ -428,12 +425,11 @@ function get_orographic_gravity_wave_model(parsed_args, params, ::Type{FT}) wher
     end
 end
 
-function get_radiation_mode(parsed_args, ::Type{FT}; setup_type = nothing) where {FT}
+function get_radiation_mode(parsed_args, ::Type{FT}; setup_traits) where {FT}
     radiation_name = parsed_args["rad"]
     # Use setup default only when config doesn't explicitly set rad
-    if isnothing(radiation_name) && !isnothing(setup_type)
-        model = Setups.radiation_model(setup_type, FT)
-        !isnothing(model) && return model
+    if isnothing(radiation_name) && !isnothing(setup_traits.radiation_mode)
+        return setup_traits.radiation_mode
     end
     idealized_h2o = parsed_args["idealized_h2o"]
     idealized_clouds = parsed_args["idealized_clouds"]
@@ -582,17 +578,13 @@ function get_cloud_in_radiation(parsed_args)
 end
 
 
-function get_subsidence_model(::Type{FT}; setup_type = nothing) where {FT}
-    isnothing(setup_type) && return nothing
-    profile = Setups.subsidence_forcing(setup_type, FT)
+function get_subsidence_model(setup_traits)
+    profile = setup_traits.subsidence
     return isnothing(profile) ? nothing : LargeScaleSubsidence(profile)
 end
 
-function get_large_scale_advection_model(
-    ::Type{FT}; setup_type = nothing,
-) where {FT}
-    isnothing(setup_type) && return nothing
-    data = Setups.large_scale_advection_forcing(setup_type, FT)
+function get_large_scale_advection_model(setup_traits)
+    data = setup_traits.ls_adv
     isnothing(data) && return nothing
     prof_dqtdt = (_, _, _, z) -> data.prof_dqtdt(z)
     prof_dTdt =
@@ -601,14 +593,9 @@ function get_large_scale_advection_model(
     return LargeScaleAdvection(prof_dTdt, prof_dqtdt)
 end
 
-function get_external_forcing_model(
-    parsed_args,
-    ::Type{FT};
-    setup_type = nothing,
-) where {FT}
+function get_external_forcing_model(parsed_args, ::Type{FT}; setup_traits) where {FT}
     # TODO: Clean this function up after migrating GCMDriven
     external_forcing = parsed_args["external_forcing"]
-
     if external_forcing in
        ("ReanalysisTimeVarying", "ReanalysisMonthlyAveragedDiurnal")
         @assert parsed_args["config"] == "column" "ReanalysisTimeVarying and ReanalysisMonthlyAveragedDiurnal are only supported in column mode."
@@ -622,8 +609,7 @@ function get_external_forcing_model(
     # or `nothing`. With no `external_forcing` key we use it directly, which is
     # the preferred route. The `ReanalysisTimeVarying` / `ForcingFromFile` string
     # values below only reuse this same forcing, so they are redundant with it.
-    setup_forcing =
-        isnothing(setup_type) ? nothing : Setups.external_forcing(setup_type, FT)
+    setup_forcing = setup_traits.external_forcing
 
     model = if isnothing(external_forcing)
         setup_forcing
@@ -706,11 +692,6 @@ function warn_if_run_exceeds_forcing(
                the file or shorten `t_end`."
     end
     return nothing
-end
-
-function get_scm_coriolis(::Type{FT}; setup_type = nothing) where {FT}
-    isnothing(setup_type) && return nothing
-    return Setups.coriolis_forcing(setup_type, FT)
 end
 
 function get_turbconv_model(FT, parsed_args, turbconv_params)
@@ -857,11 +838,13 @@ function AtmosWater(config::AtmosConfig, params, ::Type{FT}) where {FT}
     )
 end
 
-function AtmosRadiation(config::AtmosConfig, ::Type{FT}; setup_type = nothing) where {FT}
+function AtmosRadiation(config::AtmosConfig, ::Type{FT}; setup_traits) where {FT}
     pa = config.parsed_args
     return AtmosRadiation(;
-        radiation_mode = get_radiation_mode(pa, FT; setup_type),
-        insolation = get_insolation_form(pa; setup_type),
+        radiation_mode = get_radiation_mode(pa, FT; setup_traits),
+        insolation = get_insolation_form(pa; setup_traits),
+        aerosol_names = Tuple(pa["prescribed_aerosols"]),
+        time_varying_trace_gases = Tuple(pa["time_varying_trace_gases"]),
     )
 end
 
@@ -919,17 +902,23 @@ function AtmosTurbconv(config::AtmosConfig, params, ::Type{FT}) where {FT}
     )
 end
 
-AtmosNumerics(config::AtmosConfig, ::Type{FT}) where {FT} =
-    get_numerics(config.parsed_args, FT)
+AtmosNumerics(config::AtmosConfig, ::Type{FT}) where {FT} = get_numerics(
+    config.parsed_args,
+    FT;
+    vertical_water_borrowing_species = vertical_water_borrowing_species_from_config(
+        config,
+    ),
+)
 
-function SCMSetup(config::AtmosConfig, ::Type{FT};
-    setup_type = nothing) where {FT}
+function SCMSetup(config::AtmosConfig, ::Type{FT}; setup_traits) where {FT}
     return SCMSetup(;
-        subsidence = get_subsidence_model(FT; setup_type),
-        external_forcing = get_external_forcing_model(config.parsed_args, FT; setup_type),
-        ls_adv = get_large_scale_advection_model(FT; setup_type),
+        subsidence = get_subsidence_model(setup_traits),
+        external_forcing = get_external_forcing_model(
+            config.parsed_args, FT; setup_traits,
+        ),
+        ls_adv = get_large_scale_advection_model(setup_traits),
         advection_test = config.parsed_args["advection_test"],
-        scm_coriolis = get_scm_coriolis(FT; setup_type),
+        scm_coriolis = setup_traits.scm_coriolis,
     )
 end
 
@@ -943,20 +932,17 @@ function AtmosSponge(config::AtmosConfig, params)
 end
 
 function AtmosSurface(
-    config::AtmosConfig, params, ::Type{FT}; setup_type = nothing,
+    config::AtmosConfig, params, ::Type{FT}; setup_traits,
 ) where {FT}
     pa = config.parsed_args
 
-    # Resolve setup-provided surface pieces (flux_scheme, temperature, overrides)
-    setup_pieces =
-        isnothing(setup_type) ?
-        (; flux_scheme = nothing, temperature = nothing, overrides = nothing) :
-        Setups.surface_condition(setup_type, params)
+    # Setup-provided surface pieces (flux_scheme, temperature, overrides)
+    setup_pieces = setup_traits.surface
 
     temperature = if pa["prognostic_surface"] == "SlabOceanSST"
         SurfaceConditions.SlabOceanTemperature{FT}()
     elseif pa["prognostic_surface"] == "PrescribedSST"
-        @something(setup_pieces.temperature, Setups.surface_temperature_model(setup_type))
+        @something(setup_pieces.temperature, setup_traits.surface_temperature)
     else
         error(
             """Uncaught prognostic_surface `$(pa["prognostic_surface"])`. Expected: "PrescribedSST" | "SlabOceanSST".""",

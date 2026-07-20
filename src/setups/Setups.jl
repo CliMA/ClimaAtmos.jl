@@ -125,7 +125,8 @@ coriolis_forcing(setup, ::Type{FT}) where {FT} = nothing
 
 Return a NamedTuple `(; flux_scheme, temperature, overrides)` describing the
 surface for this setup. Any field can be `nothing` to fall through to the
-config/default. Used by `AtmosSurface(::AtmosConfig, params, FT; setup_type)`.
+config/default. Consumed via [`setup_model_traits`](@ref) by
+`AtmosSurface(::AtmosConfig, params, FT; setup_traits)`.
 """
 surface_condition(setup, params) =
     (; flux_scheme = nothing, temperature = nothing, overrides = nothing)
@@ -201,6 +202,30 @@ Return the radiation model for this setup, or `nothing`.
 Default: `nothing`.
 """
 radiation_model(setup, ::Type{FT}) where {FT} = nothing
+
+"""
+    setup_model_traits(setup, params, ::Type{FT})
+
+Evaluate every model-facing trait hook of `setup` once and return the raw
+results as a `NamedTuple`: `subsidence`, `ls_adv`, `scm_coriolis` (raw SCM
+profiles; consumers wrap them into model components), `external_forcing`,
+`insolation`, `radiation_mode`, `prescribed_flow` (model objects),
+`surface` (from [`surface_condition`](@ref)), and `surface_temperature`
+(from [`surface_temperature_model`](@ref)).
+"""
+function setup_model_traits(setup, params, ::Type{FT}) where {FT}
+    return (;
+        subsidence = subsidence_forcing(setup, FT),
+        ls_adv = large_scale_advection_forcing(setup, FT),
+        scm_coriolis = coriolis_forcing(setup, FT),
+        external_forcing = external_forcing(setup, FT),
+        insolation = insolation_model(setup),
+        radiation_mode = radiation_model(setup, FT),
+        prescribed_flow = prescribed_flow_model(setup, FT),
+        surface = surface_condition(setup, params),
+        surface_temperature = surface_temperature_model(setup),
+    )
+end
 
 # ============================================================================
 # Layer 2 and helpers — included files

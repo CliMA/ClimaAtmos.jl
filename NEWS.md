@@ -4,6 +4,15 @@ ClimaAtmos.jl Release Notes
 main
 ----
 
+- ![][badge-💥breaking] `AtmosModel` is now built on a grid and owns the
+  parameters and case setup. `AtmosSimulation` wraps a model and carries only
+  run control:
+
+  ```julia
+  model = AtmosModel(grid; params, setup, microphysics_model = ..., ...)
+  sim   = AtmosSimulation(model; dt, t_end, ...)
+  ```
+
 0.42.3
 -------
 - [#4735](https://github.com/CliMA/ClimaAtmos.jl/pull/4735) ![][badge-🐛bugfix] Make the `topography_damping_factor` config default a float (`5.0` instead of `5`).

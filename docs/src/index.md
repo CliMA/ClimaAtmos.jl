@@ -11,7 +11,8 @@ learning tools.
 ```julia
 import ClimaAtmos as CA
 
-simulation = CA.AtmosSimulation{Float32}(; t_end = "1days")
+model = CA.AtmosModel(CA.SphereGrid(Float32))
+simulation = CA.AtmosSimulation(model; t_end = "1days")
 CA.solve_atmos!(simulation)
 ```
 

@@ -11,16 +11,23 @@ using Logging # hide
 Logging.disable_logging(Logging.Info) # hide
 import ClimaAtmos as CA
 
-simulation = CA.AtmosSimulation{Float32}(; t_end = "1days")
+model = CA.AtmosModel(CA.SphereGrid(Float32))
+simulation = CA.AtmosSimulation(model; t_end = "1days")
 nothing # hide
 ```
 
 This builds the simulation but does not run it. [Running the simulation](@ref)
 advances it in time.
 
-`AtmosSimulation{FT}(...)` accepts keyword arguments for every aspect of
-the simulation. When omitted, defaults are used (see
-[Script vs Config Interface](@ref) for the full list).
+Construction has two steps:
+
+ 1. `AtmosModel(grid; ...)` defines the physical system. It holds the grid, the
+    parameters, and the case setup.
+ 2. `AtmosSimulation(model; ...)` defines how to run that system. It holds the
+    timestep, the duration, the callbacks, and the output.
+
+Each option that you do not give takes a default value. See
+[Script vs Config Interface](@ref) for the full list.
 
 ## Customizing the simulation
 
@@ -30,11 +37,13 @@ Run a single-column model instead of the default global cubed-sphere:
 
 ```@example first_sim
 grid = CA.ColumnGrid(Float32; z_elem = 30, z_max = 30000.0)
-simulation = CA.AtmosSimulation{Float32}(; grid, t_end = "6hours")
+model = CA.AtmosModel(grid)
+simulation = CA.AtmosSimulation(model; t_end = "6hours")
 nothing # hide
 ```
 
-See the [Grids](api.md#Grids) section of the API for all grid types and their options.
+The float type of the simulation follows the grid. See the
+[Grids](api.md#Grids) section of the API for all grid types and their options.
 
 ### Change the timestep and duration
 
@@ -43,7 +52,7 @@ of seconds, or a duration string with a unit (`secs`, `mins`, `hours`, `days`, `
 the same syntax used by the [config interface](@ref "Script vs Config Interface"):
 
 ```@example first_sim
-simulation = CA.AtmosSimulation{Float32}(;
+simulation = CA.AtmosSimulation(model;
     dt = "5mins",     # equivalently, dt = 300
     t_end = "10days", # equivalently, t_end = 86400 * 10
 )
@@ -52,19 +61,28 @@ nothing # hide
 
 ### Change the setup
 
-A *setup* defines the initial conditions, boundary conditions, and (optionally)
-forcing for a simulation case. For example, the BOMEX shallow cumulus case:
+A setup describes a simulation case. It gives the initial state, the boundary
+conditions, and optionally the forcing.
+
+A setup is passed to the model: `AtmosModel(grid; setup, ...)`. The model starts
+from that initial state and uses that case's physics, such as the surface
+conditions, the subsidence, and the large-scale forcing. For example, the BOMEX
+shallow cumulus case:
 
 ```@example first_sim
-simulation = CA.AtmosSimulation{Float32}(;
-    grid = CA.ColumnGrid(Float32; z_elem = 60, z_max = 3000.0, z_stretch = false),
+model = CA.AtmosModel(
+    CA.ColumnGrid(Float32; z_elem = 60, z_max = 3000.0, z_stretch = false);
     setup = CA.Setups.Bomex(),
-    dt = 5,
-    t_end = 3600,
-    job_id = "my_bomex",
 )
+simulation = CA.AtmosSimulation(model; dt = 5, t_end = 3600, job_id = "my_bomex")
 nothing # hide
 ```
+
+Each model field resolves as: your explicit kwargs, else the setup's, else
+the defaults. So `CA.AtmosModel(grid; setup = CA.Setups.Bomex(), flux_scheme = ...)` keeps Bomex's initial state and forcing but uses your
+surface flux scheme (with a warning that the setup's was overridden).
+Model presets contain their own default arguments:
+`CA.AtmosModel(grid; setup, defaults = CA.Presets.equil_moist_0m())`.
 
 See the [Setups](@ref) page for the full list of available setups and how to create
 your own.

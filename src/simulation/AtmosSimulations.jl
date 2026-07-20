@@ -145,34 +145,20 @@ end
     AtmosSimulation(config::AtmosConfig)
 
 Construct a simulation from a YAML-based configuration.
-Construct an atmospheric simulation with the default floating-point type `Float32`.
-Equivalent to `AtmosSimulation{Float32}(; kwargs...)`.
+Equivalent to `get_simulation(config)`.
 """
 AtmosSimulation(config::AtmosConfig) = get_simulation(config)
 
 """
-    AtmosSimulation(; kwargs...)
+    AtmosSimulation(model::AtmosModel; kwargs...)
 
-Construct an atmospheric simulation with the default floating-point type `Float32`.
-Equivalent to `AtmosSimulation{Float32}(; kwargs...)`.
-"""
-AtmosSimulation(; kwargs...) = AtmosSimulation{Float32}(; kwargs...)
+Construct an atmospheric simulation from an [`AtmosModel`](@ref).
 
-"""
-    AtmosSimulation{FT}(; kwargs...) where {FT}
-
-Construct an atmospheric simulation with floating-point type `FT` (default: Float32).
+The model carries the grid, parameters, and setup, while the simulation adds run
+control (timestepping, callbacks, diagnostics, output, restarts). The initial
+state, float type, and `ClimaComms` context all come from the model.
 
 ## Keyword Arguments
-
-### Model and domain
-
-  - `model::AtmosModel = AtmosModel()`: Physics and parameterization configuration.
-  - `params::ClimaAtmosParameters = ClimaAtmosParameters(FT)`: Physical parameters.
-  - `grid::AbstractGrid = SphereGrid(FT; ...)`: Computational grid.
-    Use [`ColumnGrid`](@ref), [`BoxGrid`](@ref), [`PlaneGrid`](@ref), or [`SphereGrid`](@ref).
-  - `setup = Setups.DecayingProfile(; perturb=true, params)`: Setup defining the
-    initial state. See [Setups](@ref "Setups") for available options.
 
 ### Time
 
@@ -183,38 +169,43 @@ Construct an atmospheric simulation with floating-point type `FT` (default: Floa
 
 ### Output
 
-  - `job_id::String = "atmos_sim"`: Run identifier, used in output directory naming.
-  - `output_dir = nothing`: Output directory path. Auto-generated from `job_id` if `nothing`.
+  - `job_id::String = "atmos_sim"`: Run identifier, used in output directory
+    naming.
+  - `output_dir = nothing`: Output directory path. Auto-generated from `job_id`
+    if `nothing`.
   - `output_dir_style = "activelink"`: Output directory organization style.
-  - `checkpoint_frequency = Inf`: How often to save restart checkpoints (seconds).
+  - `checkpoint_frequency = Inf`: How often to save restart checkpoints
+    (seconds).
   - `log_to_file::Bool = false`: Write log output to a file in `output_dir`.
 
 ### Diagnostics
 
-  - `diagnostics::DiagnosticsConfig = DiagnosticsConfig()`: Specification of which
-    diagnostics the simulation produces and how their NetCDF output is shaped.
-    See [`DiagnosticsConfig`](@ref).
+  - `diagnostics::DiagnosticsConfig = DiagnosticsConfig()`: Specification of
+    which diagnostics the simulation produces and how their NetCDF output is
+    shaped. See [`DiagnosticsConfig`](@ref).
 
 ### Callbacks
 
   - `default_callbacks::Bool = true`: Enable common simulation callbacks.
   - `callbacks = ()`: Additional user-provided callbacks.
-  - `callback_kwargs = ()`: Extra keyword arguments forwarded to default callbacks.
+  - `callback_kwargs = ()`: Extra keyword arguments forwarded to default
+    callbacks.
 
 ### Restarts
 
-  - `restart_file = nothing`: Path to a restart file to resume from.
-  - `detect_restart_file::Bool = false`: Automatically detect the latest restart file in
-    a structured output directory.
+  - `restart_file = nothing`: Path to a restart file to resume from. The grid of
+    `model` must match the grid in the file, because the state is not
+    interpolated. A mismatch is an error.
+  - `detect_restart_file::Bool = false`: Automatically detect the latest restart
+    file in a structured output directory.
 
 ### Numerics
 
   - `ode_config`: ODE solver algorithm. Default: `IMEXAlgorithm(ARS343(), NewtonsMethod(...))`.
-  - `jacobian::JacobianAlgorithm = ManualSparseJacobian(; approximate_solve_iters = 1)`:
-    Jacobian algorithm for the implicit solve. Use [`ManualSparseJacobian`](@ref),
-    [`AutoSparseJacobian`](@ref), or [`AutoDenseJacobian`](@ref).
+  - `jacobian::JacobianAlgorithm = ManualSparseJacobian(; approximate_solve_iters = 1)`: Jacobian algorithm for the implicit solve.
+    Use [`ManualSparseJacobian`](@ref), [`AutoSparseJacobian`](@ref), or
+    [`AutoDenseJacobian`](@ref).
   - `debug_jacobian::Bool = false`: Enable Jacobian debugging output.
-  - `tracers = []`: Additional tracer species.
 
 ## Example
 
@@ -222,24 +213,20 @@ Construct an atmospheric simulation with floating-point type `FT` (default: Floa
 import ClimaAtmos as CA
 
 # Minimal: 1-day global simulation with defaults
-simulation = CA.AtmosSimulation{Float64}(; t_end = 86400)
+model = CA.AtmosModel(CA.SphereGrid(Float64))
+simulation = CA.AtmosSimulation(model; t_end = 86400)
 CA.solve_atmos!(simulation)
 
-# Single-column BOMEX case
-simulation = CA.AtmosSimulation{Float64}(;
-    grid = CA.ColumnGrid(Float64; z_elem = 60, z_max = 3000.0),
-    setup = CA.Setups.Bomex(),
-    dt = 5,
-    t_end = 3600 * 6,
+# Single-column BOMEX case: the setup supplies the case physics
+model = CA.AtmosModel(
+    CA.ColumnGrid(Float64; z_elem = 60, z_max = 3000.0);
+    setup = CA.Setups.Bomex(Float64),
 )
+simulation = CA.AtmosSimulation(model; dt = 5, t_end = 3600 * 6)
 ```
 """
-function AtmosSimulation{FT}(;
-    model = AtmosModel(),
-    params::Parameters.ClimaAtmosParameters = ClimaAtmosParameters(FT),
-    context::ClimaComms.AbstractCommsContext = ClimaComms.context(),
-    grid::Grids.AbstractGrid = SphereGrid(FT; radius = CAP.planet_radius(params), context),
-    setup = Setups.DecayingProfile(; perturb = true, params),
+function AtmosSimulation(
+    model::AtmosModel;
     dt = 600,
     start_date = DateTime(2010, 1, 1),
     t_start = 0,
@@ -257,9 +244,6 @@ function AtmosSimulation{FT}(;
     output_dir_style = "activelink",  # TODO: Should this be an actual type?
     restart_file = nothing,
     detect_restart_file = false,
-    aerosol_names = [], # TODO: set from the model
-    time_varying_trace_gases = (),
-    vertical_water_borrowing_species = nothing,
     # Callbacks
     default_callbacks = true,   # Enable common simulation callbacks
     callbacks = (),             # User-provided additional callbacks
@@ -275,7 +259,10 @@ function AtmosSimulation{FT}(;
     checkpoint_frequency = Inf,
     log_to_file = false,
     verbose = false,
-) where {FT}
+)
+    params = model.params
+    context = ClimaComms.context(model.grid)
+
     # Log only on root process
     verbose = ClimaComms.iamroot(context) && verbose
 
@@ -290,6 +277,24 @@ function AtmosSimulation{FT}(;
         (Y, t_start, spaces) = @timed_log verbose "Loaded restart file" handle_restart(
             restart_file, t_start, start_date, model, context; verbose,
         )
+        # Ensure grids match on restart: compare center coordinate field rather than
+        # the grids
+        model_coords = Fields.coordinate_field(get_spaces(model.grid).center_space)
+        ckpt_coords = Fields.coordinate_field(spaces.center_space)
+        model_points, ckpt_points = parent(model_coords), parent(ckpt_coords)
+        if size(model_points) != size(ckpt_points) || !isapprox(model_points, ckpt_points)
+            model_z = extrema(parent(model_coords.z))
+            ckpt_z = extrema(parent(ckpt_coords.z))
+            error(
+                """
+                The restart file's grid does not match `model.grid`. Restarts do not \
+                interpolate the state, so build the model with a grid that matches the \
+                checkpoint, or restart from a checkpoint that matches the grid.
+                  restart_file: $restart_file
+                  model.grid:   $(size(model_points)) points, z extent $model_z
+                  checkpoint:   $(size(ckpt_points)) points, z extent $ckpt_z""",
+            )
+        end
         # t_start is already converted from restart file, but we still need to convert dt and t_end
         dt = ITime(time_to_seconds(dt))
         t_end = ITime(time_to_seconds(t_end), epoch = start_date)
@@ -297,17 +302,7 @@ function AtmosSimulation{FT}(;
         (dt, t_start, t_end, _) = promote(dt, t_start, t_end, ITime(0))
     else
         dt, t_start, t_end = convert_time_args(dt, t_start, t_end, start_date)
-        spaces = get_spaces(grid)
-        @timed_log verbose "Initialized state" begin
-            Y = Setups.initial_state(
-                setup, params, model,
-                spaces.center_space,
-                spaces.face_space,
-            )
-            Setups.overwrite_initial_state!(
-                setup, Y, params.thermodynamics_params,
-            )
-        end
+        Y = @timed_log verbose "Initialized state" initial_state(model)
     end
 
     # Resolve steady_state_velocity: accept nothing, a precomputed velocity field,
@@ -317,9 +312,7 @@ function AtmosSimulation{FT}(;
         steady_state_velocity
 
     p = @timed_log verbose "Built cache" build_cache(
-        Y, model, params, dt, start_date, aerosol_names,
-        time_varying_trace_gases, resolved_steady_state_velocity,
-        vertical_water_borrowing_species,
+        Y, model, params, dt, start_date, resolved_steady_state_velocity,
     )
 
     # Combine all callbacks

@@ -92,7 +92,7 @@ list of diagnostics ready to be passed to the simulation. So, for example
 
 ```julia
 
-model = ClimaAtmos.AtmosModel(_, microphysics_model = ClimaAtmos.DryModel(), _)
+model = ClimaAtmos.AtmosModel(grid; microphysics_model = ClimaAtmos.DryModel())
 
 diagnostics = ClimaAtmos.default_diagnostics(model)
 # => List of diagnostics that include the ones specified for the DryModel

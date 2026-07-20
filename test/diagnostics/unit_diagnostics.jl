@@ -85,33 +85,37 @@ import ClimaCore: Fields, Spaces
 # ---------------------------------------------------------------------------
 
 """
-    build_state_cache(FT, model; grid, kwargs...) -> (Y, p)
+    build_state_cache(FT, model_kwargs; grid, kwargs...) -> (Y, p)
 
-Construct a minimal state vector `Y` and cache `p` for `model` on `grid`.
-All keyword arguments have sensible defaults; override only what the diagnostic
-under test actually requires (e.g. `aerosol_names` for aerosol diagnostics,
+Build an `AtmosModel` on `grid` from the `model_kwargs` NamedTuple, then a
+minimal state vector `Y` and cache `p` for it. All keyword arguments have
+sensible defaults; override only what the diagnostic under test actually
+requires (e.g. `aerosol_names` for aerosol diagnostics,
 `set_steady_state_velocity = true` for steady-state error diagnostics).
 """
-function build_state_cache(FT, model; grid,
+function build_state_cache(FT, model_kwargs; grid,
     params = CA.ClimaAtmosParameters(FT),
     ic = CA.Setups.DecayingProfile(; params),
     dt = FT(1.0), start_date = DateTime(2010, 1, 1),
-    aerosol_names = [], time_varying_trace_gas_names = (),
+    aerosol_names = (), time_varying_trace_gas_names = (),
     set_steady_state_velocity = false,
-    vwb_species = nothing,
 )
-    spaces = CA.get_spaces(grid)
-    Y = CA.Setups.initial_state(ic, params, model, spaces.center_space, spaces.face_space)
+    model = CA.AtmosModel(
+        grid;
+        params,
+        setup = ic,
+        aerosol_names = Tuple(aerosol_names),
+        time_varying_trace_gases = Tuple(time_varying_trace_gas_names),
+        model_kwargs...,
+    )
+    Y = CA.initial_state(model)
     # steady state velocity is only needed for some diagnostics
     steady_state_velocity =
         set_steady_state_velocity ?
         CA.get_steady_state_velocity(
             params, Y, CA.NoTopography(), "ConstantBuoyancyFrequencyProfile", "Linear",
         ) : nothing
-    p = CA.build_cache(
-        Y, model, params, dt, start_date,
-        aerosol_names, time_varying_trace_gas_names, steady_state_velocity, vwb_species,
-    )
+    p = CA.build_cache(Y, model, params, dt, start_date, steady_state_velocity)
     return Y, p
 end
 
@@ -154,11 +158,10 @@ column = CA.ColumnGrid(FT)
 # Model configurations, state, cache
 
 ## Dry model, also tests slab ocean
-model_dry =
-    CA.AtmosModel(;
-        microphysics_model = CA.DryModel(),
-        temperature = CA.SurfaceConditions.SlabOceanTemperature{FT}(),
-    )
+model_dry = (;
+    microphysics_model = CA.DryModel(),
+    temperature = CA.SurfaceConditions.SlabOceanTemperature{FT}(),
+)
 (Y_dry, p_dry) = build_state_cache(FT, model_dry; grid = column);
 
 ## Sphere with dry model
@@ -175,9 +178,9 @@ plane = CA.PlaneGrid(FT; x_elem = 4, z_elem = 5, z_stretch = false)
 );
 
 ## Microphysics-specific models
-model_0m = CA.AtmosModel(; microphysics_model = CA.EquilibriumMicrophysics0M())
-model_1m = CA.AtmosModel(; microphysics_model = CA.NonEquilibriumMicrophysics1M())
-# model_2m = CA.AtmosModel(; microphysics_model = CA.NonEquilibriumMicrophysics2M())
+model_0m = (; microphysics_model = CA.EquilibriumMicrophysics0M())
+model_1m = (; microphysics_model = CA.NonEquilibriumMicrophysics1M())
+# model_2m = (; microphysics_model = CA.NonEquilibriumMicrophysics2M())
 (Y_0m, p_0m) = build_state_cache(FT, model_0m; grid = column);
 (Y_1m, p_1m) = build_state_cache(FT, model_1m; grid = column);
 # (Y_2m, p_2m) = build_state_cache(FT, model_2m; grid = column);
@@ -188,7 +191,7 @@ non_orographic_gravity_wave = CA.NonOrographicGravityWave(;
     (f => getfield(nogw_params, f) for f in fieldnames(typeof(nogw_params)))...,
 )
 microphysics_model = CA.EquilibriumMicrophysics0M()
-model_nogw = CA.AtmosModel(; microphysics_model, non_orographic_gravity_wave)
+model_nogw = (; microphysics_model, non_orographic_gravity_wave)
 (Y_nogw, p_nogw) = build_state_cache(FT, model_nogw; grid = column);
 
 ## Non-orographic gravity wave with Beres source
@@ -201,7 +204,7 @@ nogw_beres = CA.NonOrographicGravityWave(;
     (f => getfield(nogw_params, f) for f in fieldnames(typeof(nogw_params)))...,
     beres_source,
 )
-model_nogw_beres = CA.AtmosModel(;
+model_nogw_beres = (;
     microphysics_model = CA.EquilibriumMicrophysics0M(),
     non_orographic_gravity_wave = nogw_beres,
 )
@@ -218,21 +221,21 @@ let c = p_nogw_beres.non_orographic_gravity_wave
 end
 
 ## Sphere with moist model + slab ocean (watero needs MoistMicrophysics + SpectralElementSpace2D)
-model_0m_slab = CA.AtmosModel(;
+model_0m_slab = (;
     microphysics_model = CA.EquilibriumMicrophysics0M(),
     temperature = CA.SurfaceConditions.SlabOceanTemperature{FT}(),
 )
 (Y_0m_slab_sphere, p_0m_slab_sphere) = build_state_cache(FT, model_0m_slab; grid = sphere);
 
 ## Smagorinsky-Lilly LES model
-model_smag = CA.AtmosModel(smagorinsky_lilly = CA.SmagorinskyLilly(; axes = :UV_W))
+model_smag = (; smagorinsky_lilly = CA.SmagorinskyLilly(; axes = :UV_W))
 (Y_smag, p_smag) = build_state_cache(FT, model_smag; grid = sphere);
 
 ## Radiation models
 radiation_mode = CA.RRTMGPI.AllSkyRadiationWithClearSkyDiagnostics(;
     aerosol_radiation = true,
 )
-model_allsky = CA.AtmosModel(; radiation_mode)
+model_allsky = (; radiation_mode)
 (Y_allsky, p_allsky) = build_state_cache(FT, model_allsky; grid = column,
     aerosol_names = ("DST01",),
 );
@@ -284,18 +287,18 @@ edmfx_model = CA.EDMFXModel(;
 )
 pedmfx = CA.PrognosticEDMFX(; area_fraction = tcp.min_area)
 
-model_0m_pedmfx = CA.AtmosModel(; microphysics_model = CA.EquilibriumMicrophysics0M(),
+model_0m_pedmfx = (; microphysics_model = CA.EquilibriumMicrophysics0M(),
     turbconv_model = pedmfx, edmfx_model)
-model_1m_pedmfx = CA.AtmosModel(; microphysics_model = CA.NonEquilibriumMicrophysics1M(),
+model_1m_pedmfx = (; microphysics_model = CA.NonEquilibriumMicrophysics1M(),
     turbconv_model = pedmfx, edmfx_model)
-# model_2m_pedmfx = CA.AtmosModel(; microphysics_model = CA.NonEquilibriumMicrophysics2M(),
+# model_2m_pedmfx = (; microphysics_model = CA.NonEquilibriumMicrophysics2M(),
 #     turbconv_model = pedmfx, edmfx_model)
 (Y_0m_pedmfx, p_0m_pedmfx) = build_state_cache(FT, model_0m_pedmfx; grid = column);
 (Y_1m_pedmfx, p_1m_pedmfx) = build_state_cache(FT, model_1m_pedmfx; grid = column);
 # (Y_2m_pedmfx, p_2m_pedmfx) = build_state_cache(FT, model_2m_pedmfx; grid = column);
 
 ## Chemistry (passive tracer A) + PrognosticEDMFX
-model_chem_pedmfx = CA.AtmosModel(;
+model_chem_pedmfx = (;
     microphysics_model = CA.EquilibriumMicrophysics0M(),
     turbconv_model = pedmfx, edmfx_model,
     chemistry_model = CA.GasPhaseChem(),
@@ -304,10 +307,10 @@ model_chem_pedmfx = CA.AtmosModel(;
 
 ## VerticalDiffusion and DecayWithHeightDiffusion (no EDMF)
 vdp = CAP.vert_diff_params(params)
-model_vd = CA.AtmosModel(;
+model_vd = (;
     vertical_diffusion = CA.VerticalDiffusion{FT}(;
         disable_momentum_vertical_diffusion = false, C_E = vdp.C_E))
-model_dwh = CA.AtmosModel(;
+model_dwh = (;
     vertical_diffusion = CA.DecayWithHeightDiffusion{FT}(;
         disable_momentum_vertical_diffusion = false, H = vdp.H, D₀ = vdp.D₀))
 (Y_vd, p_vd) = build_state_cache(FT, model_vd; grid = column)

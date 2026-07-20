@@ -442,7 +442,7 @@ NVTX.@annotate function save_state_to_disk_func(integrator, output_dir)
     InputOutput.HDF5.write_attribute(
         hdfwriter.file,
         "atmos_model_hash",
-        hash(p.atmos),
+        hash_physics(p.atmos),
     )
     InputOutput.write!(hdfwriter, Y, "Y")
     Base.close(hdfwriter)
