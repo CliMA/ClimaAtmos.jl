@@ -1,0 +1,261 @@
+{
+  "version": "1.0.0",
+  "name": "JPM",
+  "__description": "13-reaction Julia Photochemical Mechanism (Sturm & Silva 2025, https://doi.org/10.1021/acsestair.4c00220). Species use the q_gas_ prefix for ClimaAtmos tracer discovery. O2 is omitted (rates kept as pure mass action). Thermal rate constants (R2,R5,R6,R7,R9,R10,R12,R13) are taken in SI units from the MOZART TS1 mechanism (configs/v1/ts1/ts1.json); photolysis scaling factors (R1,R3,R4,R8,R11) are the LA-surface j-values from the JPM, taken from GEOS-CF.",
+  "species": [
+    { "name": "q_gas_O3",   "molecular weight [kg mol-1]": 0.048 },
+    { "name": "q_gas_NO",    "molecular weight [kg mol-1]": 0.030 },
+    { "name": "q_gas_NO2",   "molecular weight [kg mol-1]": 0.046 },
+    { "name": "q_gas_HCHO",  "molecular weight [kg mol-1]": 0.030 },
+    { "name": "q_gas_HO2",   "molecular weight [kg mol-1]": 0.033 },
+    { "name": "q_gas_H2O2",  "molecular weight [kg mol-1]": 0.034 },
+    { "name": "q_gas_OH",    "molecular weight [kg mol-1]": 0.017 },
+    { "name": "q_gas_HNO3",  "molecular weight [kg mol-1]": 0.063 },
+    { "name": "q_gas_CO",    "molecular weight [kg mol-1]": 0.028 },
+    { "name": "q_gas_H2",    "molecular weight [kg mol-1]": 0.002 },
+    { "name": "q_gas_ALD2",  "molecular weight [kg mol-1]": 0.044 },
+    { "name": "q_gas_MGLY",  "molecular weight [kg mol-1]": 0.072 },
+    { "name": "q_gas_MCO3",  "molecular weight [kg mol-1]": 0.075 },
+    { "name": "q_gas_PAN",   "molecular weight [kg mol-1]": 0.121 },
+    { "name": "q_gas_H2O",   "molecular weight [kg mol-1]": 0.018 }
+  ],
+  "phases": [
+    {
+      "name": "gas",
+      "species": [
+        { "name": "q_gas_O3" },
+        { "name": "q_gas_NO" },
+        { "name": "q_gas_NO2" },
+        { "name": "q_gas_HCHO" },
+        { "name": "q_gas_HO2" },
+        { "name": "q_gas_H2O2" },
+        { "name": "q_gas_OH" },
+        { "name": "q_gas_HNO3" },
+        { "name": "q_gas_CO" },
+        { "name": "q_gas_H2" },
+        { "name": "q_gas_ALD2" },
+        { "name": "q_gas_MGLY" },
+        { "name": "q_gas_MCO3" },
+        { "name": "q_gas_PAN" },
+        { "name": "q_gas_H2O" }
+      ]
+    }
+  ],
+  "reactions": [
+    {
+      "type": "PHOTOLYSIS",
+      "gas phase": "gas",
+      "name": "R1_NO2_photolysis",
+      "scaling factor": 9.258186912960969e-3,
+      "reactants": [
+        { "species name": "q_gas_NO2", "coefficient": 1.0 }
+      ],
+      "products": [
+        { "species name": "q_gas_NO", "coefficient": 1.0 },
+        { "species name": "q_gas_O3", "coefficient": 1.0 }
+      ]
+    },
+    {
+      "type": "ARRHENIUS",
+      "gas phase": "gas",
+      "name": "R2_O3_NO",
+      "A": 1806642.2280000001,
+      "B": 0.0,
+      "C": -1500.0,
+      "D": 300.0,
+      "E": 0.0,
+      "reactants": [
+        { "species name": "q_gas_O3", "coefficient": 1.0 },
+        { "species name": "q_gas_NO", "coefficient": 1.0 }
+      ],
+      "products": [
+        { "species name": "q_gas_NO2", "coefficient": 1.0 }
+      ]
+    },
+    {
+      "type": "PHOTOLYSIS",
+      "gas phase": "gas",
+      "name": "R3_HCHO_photolysis_radical",
+      "scaling factor": 3.442262702424394e-5,
+      "reactants": [
+        { "species name": "q_gas_HCHO", "coefficient": 1.0 }
+      ],
+      "products": [
+        { "species name": "q_gas_HO2", "coefficient": 2.0 },
+        { "species name": "q_gas_CO", "coefficient": 1.0 }
+      ]
+    },
+    {
+      "type": "PHOTOLYSIS",
+      "gas phase": "gas",
+      "name": "R4_HCHO_photolysis_termination",
+      "scaling factor": 5.132233465281091e-5,
+      "reactants": [
+        { "species name": "q_gas_HCHO", "coefficient": 1.0 }
+      ],
+      "products": [
+        { "species name": "q_gas_H2", "coefficient": 1.0 },
+        { "species name": "q_gas_CO", "coefficient": 1.0 }
+      ]
+    },
+    {
+      "type": "ARRHENIUS",
+      "gas phase": "gas",
+      "name": "R5_HCHO_OH",
+      "A": 3312177.418,
+      "B": 0.0,
+      "C": 125.0,
+      "D": 300.0,
+      "E": 0.0,
+      "reactants": [
+        { "species name": "q_gas_HCHO", "coefficient": 1.0 },
+        { "species name": "q_gas_OH", "coefficient": 1.0 }
+      ],
+      "products": [
+        { "species name": "q_gas_HO2", "coefficient": 1.0 },
+        { "species name": "q_gas_CO", "coefficient": 1.0 },
+        { "species name": "q_gas_H2O", "coefficient": 1.0 }
+      ]
+    },
+    {
+      "type": "ARRHENIUS",
+      "gas phase": "gas",
+      "name": "R6_HO2_NO",
+      "A": 2071616.42144,
+      "B": 0.0,
+      "C": 260.0,
+      "D": 300.0,
+      "E": 0.0,
+      "reactants": [
+        { "species name": "q_gas_HO2", "coefficient": 1.0 },
+        { "species name": "q_gas_NO", "coefficient": 1.0 }
+      ],
+      "products": [
+        { "species name": "q_gas_OH", "coefficient": 1.0 },
+        { "species name": "q_gas_NO2", "coefficient": 1.0 }
+      ]
+    },
+    {
+      "type": "TROE",
+      "gas phase": "gas",
+      "name": "R7_OH_NO2",
+      "k0_A": 652791.2279985609,
+      "k0_B": -3.0,
+      "k0_C": 0.0,
+      "kinf_A": 16861994.128,
+      "kinf_B": 0.0,
+      "kinf_C": 0.0,
+      "Fc": 0.6,
+      "N": 1.0,
+      "reactants": [
+        { "species name": "q_gas_OH", "coefficient": 1.0 },
+        { "species name": "q_gas_NO2", "coefficient": 1.0 }
+      ],
+      "products": [
+        { "species name": "q_gas_HNO3", "coefficient": 1.0 }
+      ]
+    },
+    {
+      "type": "PHOTOLYSIS",
+      "gas phase": "gas",
+      "name": "R8_H2O2_photolysis",
+      "scaling factor": 7.373314014460711e-6,
+      "reactants": [
+        { "species name": "q_gas_H2O2", "coefficient": 1.0 }
+      ],
+      "products": [
+        { "species name": "q_gas_OH", "coefficient": 2.0 }
+      ]
+    },
+    {
+      "type": "ARRHENIUS",
+      "gas phase": "gas",
+      "name": "R9_H2O2_OH",
+      "A": 1083985.3368,
+      "B": 0.0,
+      "C": 0.0,
+      "D": 300.0,
+      "E": 0.0,
+      "reactants": [
+        { "species name": "q_gas_H2O2", "coefficient": 1.0 },
+        { "species name": "q_gas_OH", "coefficient": 1.0 }
+      ],
+      "products": [
+        { "species name": "q_gas_H2O", "coefficient": 1.0 },
+        { "species name": "q_gas_HO2", "coefficient": 1.0 }
+      ]
+    },
+    {
+      "type": "ARRHENIUS",
+      "gas phase": "gas",
+      "name": "R10_ALD2_OH",
+      "A": 2788251.1718800003,
+      "B": 0.0,
+      "C": 350.0,
+      "D": 300.0,
+      "E": 0.0,
+      "reactants": [
+        { "species name": "q_gas_ALD2", "coefficient": 1.0 },
+        { "species name": "q_gas_OH", "coefficient": 1.0 }
+      ],
+      "products": [
+        { "species name": "q_gas_MCO3", "coefficient": 1.0 },
+        { "species name": "q_gas_H2O", "coefficient": 1.0 }
+      ]
+    },
+    {
+      "type": "PHOTOLYSIS",
+      "gas phase": "gas",
+      "name": "R11_MGLY_photolysis",
+      "scaling factor": 1.863860764162095e-4,
+      "reactants": [
+        { "species name": "q_gas_MGLY", "coefficient": 1.0 }
+      ],
+      "products": [
+        { "species name": "q_gas_MCO3", "coefficient": 1.0 },
+        { "species name": "q_gas_CO", "coefficient": 1.0 },
+        { "species name": "q_gas_HO2", "coefficient": 1.0 }
+      ]
+    },
+    {
+      "type": "TROE",
+      "gas phase": "gas",
+      "name": "R12_MCO3_NO2",
+      "k0_A": 26474310.913274966,
+      "k0_B": -4.1,
+      "k0_C": 0.0,
+      "kinf_A": 5721033.722,
+      "kinf_B": -1.6,
+      "kinf_C": 0.0,
+      "Fc": 0.6,
+      "N": 1.0,
+      "reactants": [
+        { "species name": "q_gas_MCO3", "coefficient": 1.0 },
+        { "species name": "q_gas_NO2", "coefficient": 1.0 }
+      ],
+      "products": [
+        { "species name": "q_gas_PAN", "coefficient": 1.0 }
+      ]
+    },
+    {
+      "type": "TROE",
+      "gas phase": "gas",
+      "name": "R13_PAN_decomposition",
+      "k0_A": 4.8841368205828e17,
+      "k0_B": -4.1,
+      "k0_C": -14000.0,
+      "kinf_A": 1.05545e17,
+      "kinf_B": -1.6,
+      "kinf_C": -14000.0,
+      "Fc": 0.6,
+      "N": 1.0,
+      "reactants": [
+        { "species name": "q_gas_PAN", "coefficient": 1.0 }
+      ],
+      "products": [
+        { "species name": "q_gas_MCO3", "coefficient": 1.0 },
+        { "species name": "q_gas_NO2", "coefficient": 1.0 }
+      ]
+    }
+  ]
+}
