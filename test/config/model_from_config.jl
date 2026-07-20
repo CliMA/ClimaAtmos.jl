@@ -55,3 +55,24 @@ import ClimaAtmos as CA
         FT,
     )
 end
+
+@testset "Setup traits applied to the model via get_atmos" begin
+    config = CA.AtmosConfig(
+        Dict("config" => "column", "initial_condition" => "Bomex"),
+        job_id = "test_setup_traits_bomex",
+    )
+    params = CA.ClimaAtmosParameters(config)
+    setup = CA.get_setup_type(
+        config.parsed_args,
+        CA.Parameters.thermodynamics_params(params),
+    )
+    grid = CA.get_grid(config.parsed_args, params, config.comms_ctx)
+    atmos = CA.get_atmos(config, params, grid; setup_type = setup)
+
+    @test atmos.subsidence isa CA.LargeScaleSubsidence
+    @test atmos.ls_adv isa CA.LargeScaleAdvection
+    @test !isnothing(atmos.scm_coriolis)
+    @test atmos.surface.flux_scheme isa CA.SurfaceConditions.MoninObukhov
+    @test atmos.surface.temperature isa
+          CA.SurfaceConditions.AnalyticTemperature
+end
