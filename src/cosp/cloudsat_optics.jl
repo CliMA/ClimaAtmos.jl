@@ -1,7 +1,11 @@
 module COSPCloudSatOptics
 
 export CloudSatRadarConfig,
-    DEFAULT_CLOUDSAT_RADAR_CONFIG, quickbeam_optics!, cloudsat_optics!
+    DEFAULT_CLOUDSAT_RADAR_CONFIG,
+    quickbeam_optics!,
+    cloudsat_optics!,
+    cloudsat_gas_attenuation!,
+    cloudsat_optics_subcolumn!
 
 const HYDRO_CLASSES = (:lcl, :icl, :rai, :sno)
 const Q_KEYS = (; lcl = :q_lcl, icl = :q_icl, rai = :q_rai, sno = :q_sno)
@@ -137,6 +141,10 @@ const H2O_B3 = (
 
 Fill first-stage CloudSat optical-volume quantities from existing subcolumn caches.
 
+This tuple API is retained as a compatibility and test-reference wrapper. The
+production callback uses `cloudsat_gas_attenuation!` once and then calls
+`cloudsat_optics_subcolumn!` for each streamed subcolumn.
+
 `z_vol` and `kr_vol` are one field per subcolumn, matching COSPv2
 `quickbeam_optics` output shape. The four available 1M hydrometeor classes are
 summed into those totals.
@@ -217,37 +225,125 @@ function quickbeam_optics!(
     axes(specific_humidity) == axes(reference) ||
         throw(DimensionMismatch("thermo_state specific humidity must have matching axes"))
 
-    @. g_vol_cloudsat =
-        _gas_attenuation(pressure, temperature, specific_humidity, cfg)
+    cloudsat_gas_attenuation!(
+        g_vol_cloudsat,
+        temperature,
+        pressure,
+        specific_humidity,
+        cfg,
+    )
 
-    zero_value = zero(eltype(reference))
     for isubcolumn in 1:nsubcolumns
-        @. z_vol_cloudsat[isubcolumn] = zero_value
-        @. kr_vol_cloudsat[isubcolumn] = zero_value
+        hydrometeors = (;
+            q_lcl = q_subcol.q_lcl[isubcolumn],
+            q_icl = q_subcol.q_icl[isubcolumn],
+            q_rai = q_subcol.q_rai[isubcolumn],
+            q_sno = q_subcol.q_sno[isubcolumn],
+        )
+        cloudsat_optics_subcolumn!(
+            z_vol_cloudsat[isubcolumn],
+            kr_vol_cloudsat[isubcolumn],
+            hydrometeors,
+            temperature,
+            rho_air,
+            cfg,
+        )
     end
 
+    return nothing
+end
+"""
+    cloudsat_gas_attenuation!(
+        g_vol_cloudsat,
+        temperature,
+        pressure,
+        specific_humidity,
+        radar_cfg,
+    )
+
+Compute the CloudSat gas attenuation coefficient once for a model column.
+The scalar gas-absorption calculation is identical to the tuple pipeline.
+"""
+function cloudsat_gas_attenuation!(
+    g_vol_cloudsat,
+    temperature,
+    pressure,
+    specific_humidity,
+    radar_cfg::Union{Nothing, CloudSatRadarConfig} = nothing,
+)
+    reference = g_vol_cloudsat
+    cfg = _radar_config(radar_cfg, reference)
+    for (field, name) in (
+        (temperature, "temperature"),
+        (pressure, "pressure"),
+        (specific_humidity, "specific_humidity"),
+    )
+        axes(field) == axes(reference) ||
+            throw(DimensionMismatch("$name must have matching axes"))
+    end
+    @. g_vol_cloudsat =
+        _gas_attenuation(pressure, temperature, specific_humidity, cfg)
+    return nothing
+end
+# Single-subcolumn hydrometeor optics entry point.
+"""
+    cloudsat_optics_subcolumn!(
+        z_vol_cloudsat,
+        kr_vol_cloudsat,
+        hydrometeors,
+        temperature,
+        rho_air,
+        radar_cfg,
+    )
+
+Compute hydrometeor optical quantities for one streamed subcolumn. The output
+fields are working storage and are overwritten on every call.
+"""
+function cloudsat_optics_subcolumn!(
+    z_vol_cloudsat,
+    kr_vol_cloudsat,
+    hydrometeors::NamedTuple,
+    temperature,
+    rho_air,
+    radar_cfg::Union{Nothing, CloudSatRadarConfig} = nothing,
+)
+    _check_keys(hydrometeors, values(Q_KEYS), "hydrometeors")
+    reference = z_vol_cloudsat
+    cfg = _radar_config(radar_cfg, reference)
+    axes(kr_vol_cloudsat) == axes(reference) ||
+        throw(DimensionMismatch("kr_vol_cloudsat must have matching axes"))
+    axes(temperature) == axes(reference) ||
+        throw(DimensionMismatch("temperature must have matching axes"))
+    axes(rho_air) == axes(reference) ||
+        throw(DimensionMismatch("rho_air must have matching axes"))
+    for key in values(Q_KEYS)
+        axes(getproperty(hydrometeors, key)) == axes(reference) ||
+            throw(DimensionMismatch("hydrometeor fields must have matching axes"))
+    end
+
+    zero_value = zero(eltype(reference))
+    @. z_vol_cloudsat = zero_value
+    @. kr_vol_cloudsat = zero_value
+
     for class in HYDRO_CLASSES
-        q_fields = getproperty(q_subcol, getproperty(Q_KEYS, class))
+        q_hydro = getproperty(hydrometeors, getproperty(Q_KEYS, class))
         params = _clima_1m_psd_parameters(eltype(reference), Val(class))
-        for isubcolumn in 1:nsubcolumns
-            q_hydro = q_fields[isubcolumn]
-            # TODO: fuse these two broadcasts once there is a backend-safe way
-            # to return and accumulate both scalar optics values together.
-            @. z_vol_cloudsat[isubcolumn] += _clima_hydrometeor_z_volume(
-                q_hydro,
-                rho_air,
-                temperature,
-                cfg,
-                params,
-            )
-            @. kr_vol_cloudsat[isubcolumn] += _clima_hydrometeor_attenuation(
-                q_hydro,
-                rho_air,
-                temperature,
-                cfg,
-                params,
-            )
-        end
+        # TODO: fuse these two broadcasts once there is a backend-safe way to
+        # return and accumulate both scalar optics values together.
+        @. z_vol_cloudsat += _clima_hydrometeor_z_volume(
+            q_hydro,
+            rho_air,
+            temperature,
+            cfg,
+            params,
+        )
+        @. kr_vol_cloudsat += _clima_hydrometeor_attenuation(
+            q_hydro,
+            rho_air,
+            temperature,
+            cfg,
+            params,
+        )
     end
 
     return nothing

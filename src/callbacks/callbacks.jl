@@ -128,15 +128,138 @@ end
 NVTX.@annotate function subcol_model_callback!(integrator)
     Y = integrator.u
     p = integrator.p
-    foreach_cosp_subcolumn(consume_cosp_subcolumn!, Y, p)
+    run_cosp_cloudsat!(Y, p, p.atmos.microphysics_model)
 
     return nothing
 end
 
-"""
-Placeholder for a future COSP simulator consumer such as CloudSat.
-"""
-consume_cosp_subcolumn!(_, _) = nothing
+struct NoOpCOSPSubcolumnConsumer end
+(::NoOpCOSPSubcolumnConsumer)(_, _) = nothing
+
+struct CloudSatSubcolumnConsumer{Z, K, ZE, D, H, G, HT, T, R, C}
+    z_vol_work::Z
+    kr_vol_work::K
+    Ze_non_work::ZE
+    DBZe::D
+    hydro_path_attenuation_work::H
+    gas_path_attenuation::G
+    height_km::HT
+    temperature::T
+    rho_air::R
+    radar_config::C
+end
+
+function (consumer::CloudSatSubcolumnConsumer)(isubcolumn, hydrometeors)
+    return consume_cosp_subcolumn!(consumer, isubcolumn, hydrometeors)
+end
+
+function consume_cosp_subcolumn!(
+    consumer::CloudSatSubcolumnConsumer,
+    isubcolumn,
+    hydrometeors,
+)
+    COSP.COSPCloudSatOptics.cloudsat_optics_subcolumn!(
+        consumer.z_vol_work,
+        consumer.kr_vol_work,
+        hydrometeors,
+        consumer.temperature,
+        consumer.rho_air,
+        consumer.radar_config,
+    )
+    COSP.COSPCloudSatReflectivity.cloudsat_reflectivity_subcolumn!(
+        consumer.Ze_non_work,
+        consumer.DBZe[isubcolumn],
+        consumer.z_vol_work,
+        consumer.kr_vol_work,
+        consumer.hydro_path_attenuation_work,
+        consumer.gas_path_attenuation,
+        consumer.height_km,
+    )
+    return nothing
+end
+
+function run_cosp_cloudsat!(Y, p, ::NonEquilibriumMicrophysics1M)
+    (;
+        z_vol_cloudsat_work,
+        kr_vol_cloudsat_work,
+        g_vol_cloudsat,
+        Ze_non_cloudsat_work,
+        hydro_path_attenuation_cloudsat_work,
+        gas_path_attenuation_cloudsat,
+        height_km_cloudsat,
+        DBZe_cloudsat,
+        detected_column_cloudsat,
+        cloudsat_tcc,
+        ᶜp,
+        ᶜT,
+        ᶜq_tot_nonneg,
+        ᶜq_liq,
+        ᶜq_ice,
+    ) = p.precomputed
+
+    ᶜq_vap = @. lazy(ᶜq_tot_nonneg - ᶜq_liq - ᶜq_ice)
+    radar_config =
+        COSP.COSPCloudSatOptics.CloudSatRadarConfig(eltype(Y))
+    COSP.COSPCloudSatOptics.cloudsat_gas_attenuation!(
+        g_vol_cloudsat,
+        ᶜT,
+        ᶜp,
+        ᶜq_vap,
+        radar_config,
+    )
+    COSP.COSPCloudSatReflectivity.cloudsat_gas_path_attenuation!(
+        gas_path_attenuation_cloudsat,
+        g_vol_cloudsat,
+        height_km_cloudsat,
+    )
+
+    consumer = CloudSatSubcolumnConsumer(
+        z_vol_cloudsat_work,
+        kr_vol_cloudsat_work,
+        Ze_non_cloudsat_work,
+        DBZe_cloudsat,
+        hydro_path_attenuation_cloudsat_work,
+        gas_path_attenuation_cloudsat,
+        height_km_cloudsat,
+        ᶜT,
+        Y.c.ρ,
+        radar_config,
+    )
+    foreach_cosp_subcolumn(consumer, Y, p)
+    COSP.COSPCloudSatCloudFraction.cloudsat_cloud_fraction!(
+        cloudsat_tcc,
+        detected_column_cloudsat,
+        DBZe_cloudsat,
+    )
+    return nothing
+end
+
+function run_cosp_cloudsat!(
+    Y,
+    p,
+    ::NonEquilibriumMicrophysics2M,
+)
+    # The subcolumn generator supports 2M, but CloudSat hydrometeor optics do
+    # not. Preserve the sampled-fraction workflow while returning explicit
+    # unsupported simulator outputs.
+    foreach_cosp_subcolumn(NoOpCOSPSubcolumnConsumer(), Y, p)
+    fill_unsupported_cloudsat_outputs!(p.precomputed, eltype(Y))
+    return nothing
+end
+
+function run_cosp_cloudsat!(Y, p, _)
+    fill_unsupported_cloudsat_outputs!(p.precomputed, eltype(Y))
+    return nothing
+end
+
+function fill_unsupported_cloudsat_outputs!(precomputed, ::Type{FT}) where {FT}
+    (; DBZe_cloudsat, cloudsat_tcc) = precomputed
+    for DBZe_subcolumn in DBZe_cloudsat
+        @. DBZe_subcolumn = FT(-1e30)
+    end
+    cloudsat_tcc .= zero(FT)
+    return nothing
+end
 
 function prepare_cosp_subcolumns!(Y, p)
     (;
@@ -320,8 +443,6 @@ function foreach_prepared_cosp_subcolumn!(
 
     return nothing
 end
-
-@inline _cosp_nsubcolumns(::Val{N}) where {N} = N
 
 NVTX.@annotate function nogw_model_callback!(integrator)
     Y = integrator.u

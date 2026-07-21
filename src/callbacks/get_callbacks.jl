@@ -456,18 +456,6 @@ function default_model_callbacks(model::AtmosModel;
             )...,
         )
     end
-    if subcol_callback_enabled(model, dt_subcol)
-        callbacks = (
-            callbacks...,
-            subcol_callback(
-                dt_subcol,
-                kwargs[:dt],
-                kwargs[:t_start],
-                kwargs[:t_end],
-                kwargs[:checkpoint_frequency],
-            )...,
-        )
-    end
     model_component_names =
         filter(x -> x !== :disable_surface_flux_tendency, propertynames(model))
     for property in model_component_names

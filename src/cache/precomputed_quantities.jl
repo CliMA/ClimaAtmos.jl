@@ -226,29 +226,48 @@ function precomputed_quantities(Y, atmos)
         @. ᶜsampled_cloud_fraction = FT(0)
         @. ᶜsampled_precip_fraction = FT(0)
         ᶜlarge_scale_precipitation_flux = similar(Y.c, FT)
-        z_vol_cloudsat = ntuple(_ -> similar(Y.c, FT), n_cosp_subcolumns)
-        kr_vol_cloudsat = ntuple(_ -> similar(Y.c, FT), n_cosp_subcolumns)
+        nsubcolumns = _cosp_nsubcolumns(atmos.cosp.n_subcolumns)
+        z_vol_cloudsat_work = similar(Y.c, FT)
+        kr_vol_cloudsat_work = similar(Y.c, FT)
         g_vol_cloudsat = similar(Y.c, FT)
-        Ze_non_cloudsat = ntuple(_ -> similar(Y.c, FT), n_cosp_subcolumns)
-        DBZe_cloudsat = ntuple(_ -> similar(Y.c, FT), n_cosp_subcolumns)
+        Ze_non_cloudsat_work = similar(Y.c, FT)
+        hydro_path_attenuation_cloudsat_work = similar(Y.c, FT)
+        gas_path_attenuation_cloudsat = similar(Y.c, FT)
+        height_km_cloudsat = Fields.coordinate_field(axes(Y.c)).z ./ FT(1000)
+        DBZe_cloudsat = ntuple(_ -> similar(Y.c, FT), nsubcolumns)
+        detected_column_cloudsat = similar(Fields.level(Y.c.ρ, 1), Bool)
+        cloudsat_tcc = similar(Fields.level(Y.c.ρ, 1), FT)
+
+        @. z_vol_cloudsat_work = zero(FT)
+        @. kr_vol_cloudsat_work = zero(FT)
+        @. g_vol_cloudsat = zero(FT)
+        @. Ze_non_cloudsat_work = FT(-1e30)
+        @. hydro_path_attenuation_cloudsat_work = zero(FT)
+        @. gas_path_attenuation_cloudsat = zero(FT)
+        for DBZe_subcolumn in DBZe_cloudsat
+            @. DBZe_subcolumn = FT(-1e30)
+        end
+        detected_column_cloudsat .= false
+        cloudsat_tcc .= zero(FT)
         (;
             ᶜsubcolumn_cloud,
             ᶜsubcolumn_threshold,
             ᶜsubcolumn_precip,
             ᶜscops_selectors,
             ᶜprecip_subcolumn_scratch,
-            ᶜsubcolumn_hydrometeors,
             ᶜsampled_cloud_fraction,
             ᶜsampled_precip_fraction,
             ᶜlarge_scale_precipitation_flux,
-            z_vol_cloudsat,
-            kr_vol_cloudsat,
+            z_vol_cloudsat_work,
+            kr_vol_cloudsat_work,
             g_vol_cloudsat,
-            Ze_non_cloudsat,
+            Ze_non_cloudsat_work,
+            hydro_path_attenuation_cloudsat_work,
+            gas_path_attenuation_cloudsat,
+            height_km_cloudsat,
             DBZe_cloudsat,
-            ᶜsampled_cloud_fraction,
-            ᶜsampled_precip_fraction,
-            ᶜlarge_scale_precipitation_flux,
+            detected_column_cloudsat,
+            cloudsat_tcc,
         )
     else
         (;)

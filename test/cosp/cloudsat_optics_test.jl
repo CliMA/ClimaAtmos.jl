@@ -1,5 +1,4 @@
 using Test
-import ClimaAtmos as CA
 import ClimaAtmos.COSP.COSPCloudSatOptics as CCO
 using ClimaCore: Domains, Meshes, Spaces, Fields, Geometry
 
@@ -35,6 +34,15 @@ function make_hydrometeor_subcolumns(FT, nsubcolumns, nelems; value = 0)
         q_icl = make_subcolumn_fields(FT, nsubcolumns, nelems; value),
         q_rai = make_subcolumn_fields(FT, nsubcolumns, nelems; value),
         q_sno = make_subcolumn_fields(FT, nsubcolumns, nelems; value),
+    )
+end
+
+function make_hydrometeor_fields(FT, nelems; value = 0)
+    return (;
+        q_lcl = make_center_field(FT; value, nelems),
+        q_icl = make_center_field(FT; value, nelems),
+        q_rai = make_center_field(FT; value, nelems),
+        q_sno = make_center_field(FT; value, nelems),
     )
 end
 
@@ -242,44 +250,6 @@ end
         end
     end
 
-    @testset "hydrometeor optics stay isolated by subcolumn" begin
-        radar_cfg = CCO.CloudSatRadarConfig(FT; use_gas_abs = false)
-
-        for active_subcolumn in 1:nsubcolumns
-            hydrometeors =
-                make_hydrometeor_subcolumns(FT, nsubcolumns, nelems; value = 0)
-            @. hydrometeors.q_lcl[active_subcolumn] = FT(1e-4)
-            z_vol, kr_vol, g_vol =
-                make_cloudsat_outputs(FT, nsubcolumns, nelems)
-
-            result = CCO.cloudsat_optics!(
-                z_vol,
-                kr_vol,
-                g_vol,
-                hydrometeors,
-                thermo_state,
-                rho_air,
-                radar_cfg,
-            )
-
-            @test isnothing(result)
-            @test all(isfinite, parent(z_vol[active_subcolumn]))
-            @test all(isfinite, parent(kr_vol[active_subcolumn]))
-            @test any(>(0), parent(z_vol[active_subcolumn]))
-            @test any(>(0), parent(kr_vol[active_subcolumn]))
-            for isubcolumn in 1:nsubcolumns
-                if isubcolumn == active_subcolumn
-                    @test all(>=(0), parent(z_vol[isubcolumn]))
-                    @test all(>=(0), parent(kr_vol[isubcolumn]))
-                else
-                    @test all(iszero, parent(z_vol[isubcolumn]))
-                    @test all(iszero, parent(kr_vol[isubcolumn]))
-                end
-            end
-            @test all(iszero, parent(g_vol))
-        end
-    end
-
     @testset "gas absorption matches COSPv2 gases reference" begin
         thermo_state = (;
             p = make_center_profile_field(FT, [100000, 50000, 20000]),
@@ -337,74 +307,106 @@ end
     end
 end
 
-@testset "COSP CloudSat optics Float32 smoke" begin
-    FT = Float32
-    nsubcolumns = 2
-    nelems = 3
+@testset "COSP CloudSat streamed optics" begin
+    for FT in (Float32, Float64)
+        nelems = 3
+        thermo_state = make_thermo_state(FT)
+        rho_air = make_rho_air(FT)
+        radar_cfg = CCO.CloudSatRadarConfig(FT; use_gas_abs = true)
+        g_vol = make_center_field(FT; value = 999, nelems)
 
-    thermo_state = make_thermo_state(FT)
-    rho_air = make_rho_air(FT)
-
-    @testset "zero hydrometeors with gas absorption on and off" begin
-        for use_gas_abs in (false, true)
-            hydrometeors =
-                make_hydrometeor_subcolumns(FT, nsubcolumns, nelems; value = 0)
-            z_vol, kr_vol, g_vol =
-                make_cloudsat_outputs(FT, nsubcolumns, nelems)
-            radar_cfg = CCO.CloudSatRadarConfig(FT; use_gas_abs)
-
-            result = CCO.cloudsat_optics!(
-                z_vol,
-                kr_vol,
+        @test isnothing(
+            CCO.cloudsat_gas_attenuation!(
                 g_vol,
-                hydrometeors,
-                thermo_state,
-                rho_air,
+                thermo_state.T,
+                thermo_state.p,
+                thermo_state.qv,
                 radar_cfg,
+            ),
+        )
+        @test all(isfinite, parent(g_vol))
+        @test any(>(0), parent(g_vol))
+        z_vol = make_center_field(FT; value = 999, nelems)
+        kr_vol = make_center_field(FT; value = 999, nelems)
+        hydrometeors = make_hydrometeor_fields(FT, nelems; value = 0)
+        for q_name in keys(hydrometeors)
+            getproperty(hydrometeors, q_name) .= FT(1e-4)
+            @test isnothing(
+                CCO.cloudsat_optics_subcolumn!(
+                    z_vol,
+                    kr_vol,
+                    hydrometeors,
+                    thermo_state.T,
+                    rho_air,
+                    radar_cfg,
+                ),
             )
-
-            @test isnothing(result)
-            for field in z_vol
-                @test all(isfinite, parent(field))
-                @test all(iszero, parent(field))
-            end
-            for field in kr_vol
-                @test all(isfinite, parent(field))
-                @test all(iszero, parent(field))
-            end
-            @test all(isfinite, parent(g_vol))
-            if use_gas_abs
-                @test all(>=(0), parent(g_vol))
-                @test any(>(0), parent(g_vol))
-            else
-                @test all(iszero, parent(g_vol))
-            end
+            @test all(isfinite, parent(z_vol))
+            @test all(isfinite, parent(kr_vol))
+            @test any(>(0), parent(z_vol))
+            @test any(>(0), parent(kr_vol))
+            getproperty(hydrometeors, q_name) .= zero(FT)
         end
-    end
 
-    @testset "nonzero hydrometeors produce positive optics" begin
-        hydrometeors =
-            make_hydrometeor_subcolumns(FT, nsubcolumns, nelems; value = 0)
-        @. hydrometeors.q_lcl[1] = FT(1e-4)
-        z_vol, kr_vol, g_vol = make_cloudsat_outputs(FT, nsubcolumns, nelems)
-        radar_cfg = CCO.CloudSatRadarConfig(FT; use_gas_abs = false)
-
-        result = CCO.cloudsat_optics!(
+        # A clear subcolumn must overwrite the reusable work fields.
+        CCO.cloudsat_optics_subcolumn!(
             z_vol,
             kr_vol,
-            g_vol,
             hydrometeors,
+            thermo_state.T,
+            rho_air,
+            radar_cfg,
+        )
+        @test all(iszero, parent(z_vol))
+        @test all(iszero, parent(kr_vol))
+
+        nsubcolumns = 3
+        q_subcol =
+            make_hydrometeor_subcolumns(FT, nsubcolumns, nelems; value = 0)
+        q_subcol.q_lcl[1] .= FT(1e-4)
+        q_subcol.q_icl[2] .= FT(2e-4)
+        q_subcol.q_rai[2] .= FT(5e-5)
+        tuple_z, tuple_kr, tuple_g =
+            make_cloudsat_outputs(FT, nsubcolumns, nelems)
+        CCO.quickbeam_optics!(
+            tuple_z,
+            tuple_kr,
+            tuple_g,
+            q_subcol,
             thermo_state,
             rho_air,
             radar_cfg,
         )
 
-        @test isnothing(result)
-        @test all(isfinite, parent(z_vol[1]))
-        @test all(isfinite, parent(kr_vol[1]))
-        @test any(>(0), parent(z_vol[1]))
-        @test any(>(0), parent(kr_vol[1]))
-        @test all(isfinite, parent(g_vol))
-        @test all(iszero, parent(g_vol))
+        streamed_z, streamed_kr, streamed_g =
+            make_cloudsat_outputs(FT, nsubcolumns, nelems)
+        CCO.cloudsat_gas_attenuation!(
+            streamed_g,
+            thermo_state.T,
+            thermo_state.p,
+            thermo_state.qv,
+            radar_cfg,
+        )
+        for isubcolumn in 1:nsubcolumns
+            streamed_hydrometeors = (;
+                q_lcl = q_subcol.q_lcl[isubcolumn],
+                q_icl = q_subcol.q_icl[isubcolumn],
+                q_rai = q_subcol.q_rai[isubcolumn],
+                q_sno = q_subcol.q_sno[isubcolumn],
+            )
+            CCO.cloudsat_optics_subcolumn!(
+                streamed_z[isubcolumn],
+                streamed_kr[isubcolumn],
+                streamed_hydrometeors,
+                thermo_state.T,
+                rho_air,
+                radar_cfg,
+            )
+            @test parent(streamed_z[isubcolumn]) ==
+                  parent(tuple_z[isubcolumn])
+            @test parent(streamed_kr[isubcolumn]) ==
+                  parent(tuple_kr[isubcolumn])
+        end
+        @test parent(streamed_g) == parent(tuple_g)
     end
 end

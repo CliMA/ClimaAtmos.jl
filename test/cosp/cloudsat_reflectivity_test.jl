@@ -99,3 +99,52 @@ end
         atol = 1e-12,
     )
 end
+
+@testset "COSP CloudSat streamed reflectivity matches tuple wrapper" begin
+    for FT in (Float32, Float64)
+        nelems = 3
+        z_vol = (
+            make_center_profile_field(FT, [100, 10, 1]),
+            make_center_profile_field(FT, [0, -1, 10]),
+        )
+        kr_vol = (
+            make_center_profile_field(FT, [0.1, 0.2, 0.3]),
+            make_center_profile_field(FT, [0.05, 0.1, 0.15]),
+        )
+        g_vol = make_center_profile_field(FT, [0.01, 0.02, 0.03])
+
+        tuple_Ze = make_subcolumn_fields(FT, 2, nelems; value = 999)
+        tuple_DBZe = make_subcolumn_fields(FT, 2, nelems; value = 999)
+        CCR.cloudsat_reflectivity!(
+            tuple_Ze,
+            tuple_DBZe,
+            z_vol,
+            kr_vol,
+            g_vol,
+        )
+
+        streamed_Ze = make_subcolumn_fields(FT, 2, nelems; value = 999)
+        streamed_DBZe = make_subcolumn_fields(FT, 2, nelems; value = 999)
+        hydro_path = make_center_field(FT; value = 999, nelems)
+        gas_path = make_center_field(FT; value = 999, nelems)
+        height_km = Fields.coordinate_field(axes(g_vol)).z ./ FT(1000)
+        CCR.cloudsat_gas_path_attenuation!(gas_path, g_vol, height_km)
+
+        for isubcolumn in 1:2
+            CCR.cloudsat_reflectivity_subcolumn!(
+                streamed_Ze[isubcolumn],
+                streamed_DBZe[isubcolumn],
+                z_vol[isubcolumn],
+                kr_vol[isubcolumn],
+                hydro_path,
+                gas_path,
+                height_km,
+            )
+            @test parent(streamed_Ze[isubcolumn]) ==
+                  parent(tuple_Ze[isubcolumn])
+            @test parent(streamed_DBZe[isubcolumn]) ==
+                  parent(tuple_DBZe[isubcolumn])
+        end
+        @test parent(streamed_DBZe[2])[1:2] == FT[-1e30, -1e30]
+    end
+end

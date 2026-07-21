@@ -51,8 +51,10 @@ end
 if TEST_GROUP in ("diagnostics", "all")
     @safetestset "Diagnostics unit tests" begin @time include("diagnostics/unit_diagnostics.jl") end
     @safetestset "DiagnosticsConfig" begin @time include("diagnostics/diagnostics_config.jl") end
-    # COSP subcolumn tests
     @safetestset "COSP subcolumn tests" begin @time include("cosp/subcol_test.jl") end
+    @safetestset "COSP CloudSat optics tests" begin @time include("cosp/cloudsat_optics_test.jl") end
+    @safetestset "COSP CloudSat reflectivity tests" begin @time include("cosp/cloudsat_reflectivity_test.jl") end
+    @safetestset "COSP CloudSat cloud fraction tests" begin @time include("cosp/cloudsat_cloud_fraction_test.jl") end
 end
 
 # ============================================================================
