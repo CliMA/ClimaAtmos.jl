@@ -171,4 +171,7 @@ include(joinpath("config", "yaml_helper.jl"))
 
 include(joinpath("utils", "show.jl"))
 
+include(joinpath("cosp", "cosp.jl"))
+import .COSP
+
 end # module

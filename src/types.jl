@@ -1025,6 +1025,12 @@ Groups surface-related models and types.
     surface_albedo::AL = ConstantAlbedo{Float32}(; α = 0.07)
 end
 
+@kwdef struct COSPModel{N}
+    n_subcolumns::Val{N} = Val(256)
+    overlap::Symbol = :maximum_random
+    random_seed::UInt64 = UInt64(1)
+end
+
 # Add broadcastable for the new grouped types
 Base.broadcastable(x::SCMSetup) = tuple(x)
 Base.broadcastable(x::AtmosWater) = tuple(x)
@@ -1033,12 +1039,13 @@ Base.broadcastable(x::AtmosTurbconv) = tuple(x)
 Base.broadcastable(x::AtmosGravityWave) = tuple(x)
 Base.broadcastable(x::AtmosSponge) = tuple(x)
 Base.broadcastable(x::AtmosSurface) = tuple(x)
+Base.broadcastable(x::COSPModel) = tuple(x)
 
 # `AtmosX(config::AtmosConfig, ...)` constructors live below the `AtmosConfig`
 # struct definition (later in this file) so the type is in scope when those
 # methods are parsed.
 
-struct AtmosModel{W, SCM, R, TC, PF, GW, VD, SP, SU, NU, CM}
+struct AtmosModel{W, SCM, R, TC, PF, GW, VD, SP, SU, NU, CM, COSP}
     water::W
     scm_setup::SCM
     radiation::R
@@ -1050,6 +1057,7 @@ struct AtmosModel{W, SCM, R, TC, PF, GW, VD, SP, SU, NU, CM}
     surface::SU
     numerics::NU
     chemistry::CM
+    cosp::COSP
 
     # Whether to apply surface flux tendency (independent of surface conditions)
     disable_surface_flux_tendency::Bool
@@ -1265,6 +1273,7 @@ function AtmosModel(; kwargs...)
         _create_grouped_struct(AtmosChem, atmos_model_kwargs, group_kwargs)
 
     vertical_diffusion = get(atmos_model_kwargs, :vertical_diffusion, nothing)
+    cosp = get(atmos_model_kwargs, :cosp, nothing)
     disable_surface_flux_tendency =
         get(atmos_model_kwargs, :disable_surface_flux_tendency, false)
 
@@ -1282,6 +1291,7 @@ function AtmosModel(; kwargs...)
         typeof(surface),
         typeof(numerics),
         typeof(chemistry),
+        typeof(cosp),
     }(
         water,
         scm_setup,
@@ -1294,6 +1304,7 @@ function AtmosModel(; kwargs...)
         surface,
         numerics,
         chemistry,
+        cosp,
         disable_surface_flux_tendency,
     )
 end

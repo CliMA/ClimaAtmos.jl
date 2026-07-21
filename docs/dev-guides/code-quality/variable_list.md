@@ -59,7 +59,7 @@ Specific humidities of precipitation and cloud-condensate species:
 - `q_icl` = specific humidity, cloud ice [kg/kg]
 
 By convention, when all partitions of the phase of water are included, we use
-- `q_liq` = specific humidity, all liquid 
+- `q_liq` = specific humidity, all liquid
 - `q_ice` = specific humidity, all ice
 
 Terminal velocities are per-species:

@@ -965,3 +965,21 @@ function AtmosChem(config::AtmosConfig)
     end
     return AtmosChem(; chemistry_model)
 end
+
+function COSPModel(config::AtmosConfig)
+    time_to_seconds(config.parsed_args["dt_subcol"]) == Inf && return nothing
+    n_subcolumns = config.parsed_args["cosp_n_subcolumns"]
+    n_subcolumns isa Integer || error("cosp_n_subcolumns must be an integer")
+    n_subcolumns > 0 || error("cosp_n_subcolumns must be positive")
+
+    overlap = Symbol(config.parsed_args["cosp_overlap"])
+    overlap in (:maximum, :random, :maximum_random) || error(
+        "Unknown cosp_overlap `$(config.parsed_args["cosp_overlap"])`. " *
+        "Expected: maximum, random, or maximum_random.",
+    )
+
+    return COSPModel(;
+        n_subcolumns = Val(n_subcolumns),
+        overlap,
+    )
+end

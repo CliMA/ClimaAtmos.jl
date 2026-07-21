@@ -51,6 +51,8 @@ end
 if TEST_GROUP in ("diagnostics", "all")
     @safetestset "Diagnostics unit tests" begin @time include("diagnostics/unit_diagnostics.jl") end
     @safetestset "DiagnosticsConfig" begin @time include("diagnostics/diagnostics_config.jl") end
+    # COSP subcolumn tests
+    @safetestset "COSP subcolumn tests" begin @time include("cosp/subcol_test.jl") end
 end
 
 # ============================================================================
@@ -121,7 +123,6 @@ end
 if TEST_GROUP in ("era5", "all")
     @safetestset "ERA5 forcing" begin @time include("era5_tests.jl") end
 end
-
 #! format: on
 
 nothing

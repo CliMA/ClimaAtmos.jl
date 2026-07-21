@@ -206,6 +206,40 @@ function precomputed_quantities(Y, atmos)
     ᶜcloud_fraction = similar(Y.c, FT)
     @. ᶜcloud_fraction = FT(0)
 
+    cosp_quantities = if !isnothing(atmos.cosp)
+        ᶜsubcolumn_cloud = similar(Y.c, FT)
+        ᶜsubcolumn_threshold = similar(Y.c, FT)
+        ᶜsubcolumn_precip = similar(Y.c, FT)
+        ᶜscops_selectors = (;
+            has_cloud = similar(Y.c, FT),
+            has_cloud_below = similar(Y.c, FT),
+            has_cloud_anywhere = similar(Y.c, FT),
+        )
+        ᶜprecip_subcolumn_scratch = (;
+            cloud = similar(Y.c, FT),
+            cloud_below = similar(Y.c, FT),
+            any_cloud = similar(Y.c, FT),
+            column_any = similar(Y.c, FT),
+        )
+        ᶜsampled_cloud_fraction = similar(Y.c, FT)
+        ᶜsampled_precip_fraction = similar(Y.c, FT)
+        @. ᶜsampled_cloud_fraction = FT(0)
+        @. ᶜsampled_precip_fraction = FT(0)
+        ᶜlarge_scale_precipitation_flux = similar(Y.c, FT)
+        (;
+            ᶜsubcolumn_cloud,
+            ᶜsubcolumn_threshold,
+            ᶜsubcolumn_precip,
+            ᶜscops_selectors,
+            ᶜprecip_subcolumn_scratch,
+            ᶜsampled_cloud_fraction,
+            ᶜsampled_precip_fraction,
+            ᶜlarge_scale_precipitation_flux,
+        )
+    else
+        (;)
+    end
+
     # SGS covariances for hybrid cloud fraction and microphysics quadrature.
     # NonEquilibriumMicrophysics1M/2M always route through the quadrature API
     # internally (with GridMeanSGS), so they also need covariance fields
@@ -415,6 +449,7 @@ function precomputed_quantities(Y, atmos)
         precipitation_quantities...,
         surface_precip_fluxes...,
         ᶜcloud_fraction,
+        cosp_quantities...,
         covariance_quantities...,
         smagorinsky_lilly_quantities...,
         amd_les_quantities...)
