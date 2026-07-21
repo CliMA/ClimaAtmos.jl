@@ -257,7 +257,7 @@ function AtmosSimulation{FT}(;
     output_dir_style = "activelink",  # TODO: Should this be an actual type?
     restart_file = nothing,
     detect_restart_file = false,
-    aerosol_names = [], # TODO: set from the model
+    prescribed_aerosol_names = [],
     time_varying_trace_gases = (),
     vertical_water_borrowing_species = nothing,
     # Callbacks
@@ -317,7 +317,7 @@ function AtmosSimulation{FT}(;
         steady_state_velocity
 
     p = @timed_log verbose "Built cache" build_cache(
-        Y, model, params, dt, start_date, aerosol_names,
+        Y, model, params, dt, start_date, prescribed_aerosol_names,
         time_varying_trace_gases, resolved_steady_state_velocity,
         vertical_water_borrowing_species,
     )

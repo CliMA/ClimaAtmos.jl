@@ -1,4 +1,5 @@
 import Thermodynamics as TD
+import RRTMGP
 import ClimaUtilities
 import ClimaCore.Operators
 import ClimaUtilities.TimeVaryingInputs: evaluate!
@@ -6,6 +7,7 @@ import CloudMicrophysics as CM
 import ..Parameters as CAP
 import ..PrescribedCloudInRadiation
 import ..lazy
+import .._interactive_aerosol_names
 
 update_atmospheric_state!(integrator) =
     update_atmospheric_state!(integrator.p.atmos.radiation_mode, integrator)
@@ -24,7 +26,8 @@ function update_atmospheric_state!(radiation_mode::R, integrator) where {R}
     # update gas concentrations (volume mixing ratios)
     update_volume_mixing_ratios!(integrator)
     # update aerosol concentrations
-    update_aerosol_concentrations!(integrator)
+    update_prescribed_aerosol_concentrations!(integrator)
+    update_radiation_aerosol_concentrations!(integrator)
     # update cloud properties
     if radiation_mode isa AllSkyRadiation ||
        radiation_mode isa AllSkyRadiationWithClearSkyDiagnostics
@@ -33,7 +36,6 @@ function update_atmospheric_state!(radiation_mode::R, integrator) where {R}
     return nothing
 end
 
-import RRTMGP
 
 """
     update_temperature_pressure!((; u, p, t)::I) where {I}
@@ -155,67 +157,79 @@ function update_volume_mixing_ratios!((; u, p, t)::I) where {I}
 end
 
 """
-    update_aerosol_concentrations!((; u, p, t)::I) where {I}
+    update_prescribed_aerosol_concentrations!((; u, p, t)::I) where {I}
 
-Updates aerosol concentrations for supported aerosol names (dust (5 types),
-sea-salt (5 types), sulfates, black-carbon (2 types), organic-carbon (2 types))
+Updates prescribed (MERRA-2 climatology) aerosol concentrations for supported
+aerosol names (dust (5 types), sea-salt (5 types), sulfates, black-carbon
+(2 types), organic-carbon (2 types)) by evaluating their time-varying inputs
+at time `t`. Handing the result off to RRTMGP is done separately, in
+`update_radiation_aerosol_concentrations!`.
 """
-function update_aerosol_concentrations!((; u, p, t)::I) where {I}
-    (; radiation_mode) = p.atmos
-    (; rrtmgp_solver) = p.radiation
+function update_prescribed_aerosol_concentrations!((; u, p, t)::I) where {I}
     if :prescribed_aerosols_field in propertynames(p.tracers)
         for (key, tv) in pairs(p.tracers.prescribed_aerosol_timevaryinginputs)
             field = getproperty(p.tracers.prescribed_aerosols_field, key)
             evaluate!(field, tv, t)
         end
     end
+    return nothing
+end
 
-    # RRTMGP needs effective radius in microns
-    if radiation_mode.aerosol_radiation
-        ᶜΔz = Fields.Δz_field(u.c)
+const RRTMGP_AEROSOL_NAMES_PAIR = (
+    ("dust1", :DST01),
+    ("dust2", :DST02),
+    ("dust3", :DST03),
+    ("dust4", :DST04),
+    ("dust5", :DST05),
+    ("sea_salt1", :SSLT01),
+    ("sea_salt2", :SSLT02),
+    ("sea_salt3", :SSLT03),
+    ("sea_salt4", :SSLT04),
+    ("sea_salt5", :SSLT05),
+    ("sulfate", :SO4),
+    ("black_carbon_rh", :CB2),
+    ("black_carbon", :CB1),
+    ("organic_carbon_rh", :OC2),
+    ("organic_carbon", :OC1),
+)
 
-        more_dust_aerosols = (
-            ("dust1", :DST01),
-            ("dust2", :DST02),
-            ("dust3", :DST03),
-            ("dust4", :DST04),
-            ("dust5", :DST05),
+"""
+    update_radiation_aerosol_concentrations!((; u, p, t)::I) where {I}
+
+Packages aerosol mass into the per-layer column mass densities (kg m⁻²)
+that RRTMGP expects, when `aerosol_radiation` is enabled. For each supported
+species, the interactive (prognostic, `Y.c.ρ<name>`) mass is used if the
+species is interactive; otherwise the prescribed (climatology) concentration
+is used.
+"""
+function update_radiation_aerosol_concentrations!((; u, p, t)::I) where {I}
+    (; radiation_mode) = p.atmos
+    radiation_mode.aerosol_radiation || return nothing
+    (; rrtmgp_solver) = p.radiation
+
+    ᶜΔz = Fields.Δz_field(u.c)
+    interactive_aerosol_names = _interactive_aerosol_names(p.atmos.interactive_aerosols)
+    prescribed_aerosol_names =
+        :prescribed_aerosols_field in propertynames(p.tracers) ?
+        propertynames(p.tracers.prescribed_aerosols_field) : ()
+
+    for (rrtmgp_aerosol_name, aerosol_name) in RRTMGP_AEROSOL_NAMES_PAIR
+        ᶜaero_conc = Fields.array2field(
+            RRTMGP.aerosol_column_mass_density(rrtmgp_solver, rrtmgp_aerosol_name),
+            axes(u.c),
         )
-
-        more_ssl_aerosols = (
-            ("sea_salt1", :SSLT01),
-            ("sea_salt2", :SSLT02),
-            ("sea_salt3", :SSLT03),
-            ("sea_salt4", :SSLT04),
-            ("sea_salt5", :SSLT05),
-        )
-
-        aerosol_names_pair = [
-            more_dust_aerosols...,
-            more_ssl_aerosols...,
-            ("sulfate", :SO4),
-            ("black_carbon_rh", :CB2),
-            ("black_carbon", :CB1),
-            ("organic_carbon_rh", :OC2),
-            ("organic_carbon", :OC1),
-        ]
-
-        for (rrtmgp_aerosol_name, prescribed_aerosol_name) in aerosol_names_pair
-
-            ᶜaero_conc = Fields.array2field(
-                RRTMGP.aerosol_column_mass_density(rrtmgp_solver, rrtmgp_aerosol_name),
-                axes(u.c),
+        if aerosol_name in interactive_aerosol_names
+            ᶜρχ = getproperty(u.c, Symbol(:ρ, aerosol_name))
+            # clip negative masses that advection/diffusion may produce
+            @. ᶜaero_conc = max(ᶜρχ, 0) * ᶜΔz
+        elseif aerosol_name in prescribed_aerosol_names
+            prescribed_aerosol_field = getproperty(
+                p.tracers.prescribed_aerosols_field,
+                aerosol_name,
             )
-            if prescribed_aerosol_name in
-               propertynames(p.tracers.prescribed_aerosols_field)
-                aerosol_field = getproperty(
-                    p.tracers.prescribed_aerosols_field,
-                    prescribed_aerosol_name,
-                )
-                @. ᶜaero_conc = aerosol_field * u.c.ρ * ᶜΔz
-            else
-                @. ᶜaero_conc = 0
-            end
+            @. ᶜaero_conc = prescribed_aerosol_field * u.c.ρ * ᶜΔz
+        else
+            @. ᶜaero_conc = 0
         end
     end
 
@@ -303,16 +317,16 @@ function update_cloud_properties!((; u, p, t)::I) where {I}
         dust_names = [:DST01, :DST02, :DST03, :DST04, :DST05]
         SO4_names = [:SO4]
         if :prescribed_aerosols_field in propertynames(p.tracers)
-            aerosol_field = p.tracers.prescribed_aerosols_field
-            for aerosol_name in propertynames(aerosol_field)
-                if aerosol_name in seasalt_names
-                    data = getproperty(aerosol_field, aerosol_name)
+            prescribed_aerosol_field = p.tracers.prescribed_aerosols_field
+            for prescribed_aerosol_name in propertynames(prescribed_aerosol_field)
+                if prescribed_aerosol_name in seasalt_names
+                    data = getproperty(prescribed_aerosol_field, prescribed_aerosol_name)
                     @. seasalt_aero_conc += data
-                elseif aerosol_name in dust_names
-                    data = getproperty(aerosol_field, aerosol_name)
+                elseif prescribed_aerosol_name in dust_names
+                    data = getproperty(prescribed_aerosol_field, prescribed_aerosol_name)
                     @. dust_aero_conc += data
-                elseif aerosol_name in SO4_names
-                    data = getproperty(aerosol_field, aerosol_name)
+                elseif prescribed_aerosol_name in SO4_names
+                    data = getproperty(prescribed_aerosol_field, prescribed_aerosol_name)
                     @. SO4_aero_conc += data
                 end
             end

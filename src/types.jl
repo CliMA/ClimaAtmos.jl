@@ -659,7 +659,6 @@ Create a PrognosticEDMFX model with the specified number of updrafts, TKE config
   - `n_updrafts::Int`: Number of updraft subdomains
 
   - `prognostic_tke::Bool`: Whether to use prognostic TKE (true) or diagnostic TKE (false)
-
   - `area_fraction`: "Small" area fraction threshold, is the `a_half` argument in `sgs_weight_function`
 
       + Note: Float type is inferred from this value
@@ -1038,7 +1037,7 @@ Base.broadcastable(x::AtmosSurface) = tuple(x)
 # struct definition (later in this file) so the type is in scope when those
 # methods are parsed.
 
-struct AtmosModel{W, SCM, R, TC, PF, GW, VD, SP, SU, NU, CM}
+struct AtmosModel{W, SCM, R, TC, PF, GW, VD, SP, SU, NU, CM, IA}
     water::W
     scm_setup::SCM
     radiation::R
@@ -1050,10 +1049,13 @@ struct AtmosModel{W, SCM, R, TC, PF, GW, VD, SP, SU, NU, CM}
     surface::SU
     numerics::NU
     chemistry::CM
+    interactive_aerosols::IA
 
     # Whether to apply surface flux tendency (independent of surface conditions)
     disable_surface_flux_tendency::Bool
 end
+
+_interactive_aerosol_names(::Val{names}) where {names} = names
 
 # Map grouped struct types to their names in AtmosModel struct
 const ATMOS_MODEL_GROUPS = (
@@ -1267,6 +1269,8 @@ function AtmosModel(; kwargs...)
     vertical_diffusion = get(atmos_model_kwargs, :vertical_diffusion, nothing)
     disable_surface_flux_tendency =
         get(atmos_model_kwargs, :disable_surface_flux_tendency, false)
+    interactive_aerosols =
+        get(atmos_model_kwargs, :interactive_aerosols, Val(()))
 
     prescribed_flow = get(atmos_model_kwargs, :prescribed_flow, nothing)
 
@@ -1282,6 +1286,7 @@ function AtmosModel(; kwargs...)
         typeof(surface),
         typeof(numerics),
         typeof(chemistry),
+        typeof(interactive_aerosols),
     }(
         water,
         scm_setup,
@@ -1294,6 +1299,7 @@ function AtmosModel(; kwargs...)
         surface,
         numerics,
         chemistry,
+        interactive_aerosols,
         disable_surface_flux_tendency,
     )
 end

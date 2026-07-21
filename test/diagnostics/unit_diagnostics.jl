@@ -89,14 +89,14 @@ import ClimaCore: Fields, Spaces
 
 Construct a minimal state vector `Y` and cache `p` for `model` on `grid`.
 All keyword arguments have sensible defaults; override only what the diagnostic
-under test actually requires (e.g. `aerosol_names` for aerosol diagnostics,
+under test actually requires (e.g. `prescribed_aerosol_names` for aerosol diagnostics,
 `set_steady_state_velocity = true` for steady-state error diagnostics).
 """
 function build_state_cache(FT, model; grid,
     params = CA.ClimaAtmosParameters(FT),
     ic = CA.Setups.DecayingProfile(; params),
     dt = FT(1.0), start_date = DateTime(2010, 1, 1),
-    aerosol_names = [], time_varying_trace_gas_names = (),
+    prescribed_aerosol_names = [], time_varying_trace_gas_names = (),
     set_steady_state_velocity = false,
     vwb_species = nothing,
 )
@@ -110,7 +110,8 @@ function build_state_cache(FT, model; grid,
         ) : nothing
     p = CA.build_cache(
         Y, model, params, dt, start_date,
-        aerosol_names, time_varying_trace_gas_names, steady_state_velocity, vwb_species,
+        prescribed_aerosol_names, time_varying_trace_gas_names, steady_state_velocity,
+        vwb_species,
     )
     return Y, p
 end
@@ -234,7 +235,7 @@ radiation_mode = CA.RRTMGPI.AllSkyRadiationWithClearSkyDiagnostics(;
 )
 model_allsky = CA.AtmosModel(; radiation_mode)
 (Y_allsky, p_allsky) = build_state_cache(FT, model_allsky; grid = column,
-    aerosol_names = ("DST01",),
+    prescribed_aerosol_names = ("DST01",),
 );
 import RRTMGP
 # RRTMGP allocates its flux and cloud-cover buffers with `undef` and fills them only
@@ -477,6 +478,9 @@ SKIP_CASES = Set([
     # tracer_diagnostics.jl
     "loadss", "mmrbcpi", "mmrbcpo", "mmrdust", "mmrocpi", "mmrocpo",
     "mmrso4", "mmrss", "o3",
+    "mmrdst01", "mmrdst02", "mmrdst03", "mmrdst04", "mmrdst05",
+    "mmrsslt01", "mmrsslt02", "mmrsslt03", "mmrsslt04", "mmrsslt05",
+    "emiss", "emisslt01", "emisslt02", "emisslt03", "emisslt04", "emisslt05",
     # 2M-only (temporarily disabled, see note above)
     "cdnc", "ncra", "cdncup", "cdncen", "ncraup", "ncraen",
     # negative_scalars_diagnostics.jl
