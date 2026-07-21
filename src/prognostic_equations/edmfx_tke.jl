@@ -25,90 +25,59 @@
 
 edmfx_tke_tendency!(Yₜ, Y, p, t, turbconv_model) = nothing
 
-function edmfx_tke_tendency!(Yₜ, Y, p, t, turbconv_model::EDOnlyEDMFX)
-    (; params) = p
-    (; ᶜstrain_rate_norm, ᶜlinear_buoygrad) = p.precomputed
-    turbconv_params = CAP.turbconv_params(p.params)
-    ᶜtke = @. lazy(specific(Y.c.ρtke, Y.c.ρ))
-    ᶜmixing_length_field = p.scratch.ᶜtemp_scalar
-    ᶜmixing_length_field .= ᶜmixing_length(Y, p)
-    ᶜK_u = @. lazy(eddy_viscosity(turbconv_params, ᶜtke, ᶜmixing_length_field))
-    ᶜprandtl_nvec = @. lazy(
-        turbulent_prandtl_number(params, ᶜlinear_buoygrad, ᶜstrain_rate_norm),
-    )
-    ᶜK_h = @. lazy(eddy_diffusivity(ᶜK_u, ᶜprandtl_nvec))
-
-    # shear production
-    @. Yₜ.c.ρtke += 2 * Y.c.ρ * ᶜK_u * ᶜstrain_rate_norm
-    # buoyancy production
-    @. Yₜ.c.ρtke -= Y.c.ρ * ᶜK_h * ᶜlinear_buoygrad
-end
-
 function edmfx_tke_tendency!(
     Yₜ,
     Y,
     p,
     t,
-    turbconv_model::PrognosticEDMFX,
+    turbconv_model::Union{EDOnlyEDMFX, PrognosticEDMFX},
 )
-    n = n_mass_flux_subdomains(turbconv_model)
-    (; ᶠu³, ᶠu³ʲs, ᶠu³⁰, ᶜstrain_rate_norm, ᶜlinear_buoygrad) = p.precomputed
-    turbconv_params = CAP.turbconv_params(p.params)
-    FT = eltype(p.params)
-    thermo_params = CAP.thermodynamics_params(p.params)
+    use_prognostic_tke(turbconv_model) || return nothing
+    edmfx_tke_sources!(Yₜ, Y, p)
+    return nothing
+end
 
-    if use_prognostic_tke(turbconv_model)
-        (; ᶜρʲs) = p.precomputed
-        ᶠz = Fields.coordinate_field(Y.f).z
-        ᶜmixing_length_field = p.scratch.ᶜtemp_scalar_2
-        ᶜmixing_length_field .= ᶜmixing_length(Y, p)
-        ᶜtke = @. lazy(specific(Y.c.ρtke, Y.c.ρ))
-        ᶜK_u = @. lazy(
-            eddy_viscosity(turbconv_params, ᶜtke, ᶜmixing_length_field),
-        )
-        ᶜprandtl_nvec = @. lazy(
-            turbulent_prandtl_number(
-                p.params,
-                ᶜlinear_buoygrad,
-                ᶜstrain_rate_norm,
-            ),
-        )
-        ᶜK_h = @. lazy(eddy_diffusivity(ᶜK_u, ᶜprandtl_nvec))
+"""
+    edmfx_tke_sources!(Yₜ, Y, p)
 
-        # shear production
-        @. Yₜ.c.ρtke += 2 * Y.c.ρ * ᶜK_u * ᶜstrain_rate_norm
-        # buoyancy production
-        @. Yₜ.c.ρtke -= Y.c.ρ * ᶜK_h * ᶜlinear_buoygrad
-        grav = CAP.grav(p.params)
-        for j in 1:n
-            ᶜρaʲ =
-                turbconv_model isa PrognosticEDMFX ? Y.c.sgsʲs.:($j).ρa :
-                p.precomputed.ᶜρaʲs.:($j)
-            @. Yₜ.c.ρtke -=
-                ᶜρaʲ * adjoint(CT3(ᶜinterp(ᶠu³ʲs.:($$j) - ᶠu³))) *
-                (ᶜρʲs.:($$j) - Y.c.ρ) *
-                ᶜgradᵥ(grav * ᶠz) / ᶜρʲs.:($$j)
-        end
-        # Note: Adding the following tendency breaks bm_aquaplanet_progedmf_dense_autodiff
-        if turbconv_model isa PrognosticEDMFX
-            ᶜρa⁰ = @. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model))
-            (; ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰) = p.precomputed
-            ᶜρ⁰ = @. lazy(
-                TD.air_density(
-                    thermo_params,
-                    ᶜT⁰,
-                    ᶜp,
-                    ᶜq_tot_nonneg⁰,
-                    ᶜq_liq⁰,
-                    ᶜq_ice⁰,
-                ),
-            )
-            @. Yₜ.c.ρtke -=
-                ᶜρa⁰ * adjoint(CT3(ᶜinterp(ᶠu³⁰ - ᶠu³))) *
-                (ᶜρ⁰ - Y.c.ρ) *
-                ᶜgradᵥ(grav * ᶠz) / ᶜρ⁰
-        end
-    end
+Shear and buoyancy sources of the isotropic (intra-subdomain) TKE, evaluated
+with the same face diffusivities and face buoyancy gradient as the diffusive
+fluxes they parameterize (`set_face_diffusivities!`):
+
+  - Buoyancy production/destruction `−ρ interp((ᶠK_h + ᶠK_entr) ᶠbuoygrad)`
+    is stencil-exact: the product is formed at the faces from the same
+    factors as the scalar fluxes and only then interpolated, so it is
+    exactly the (interpolated) buoyancy content of those fluxes. In
+    unstable layers it is the usual convective production; at stable
+    unresolved jumps the `ᶠK_entr ᶠbuoygrad` part carries the interfacial-
+    entrainment sink `−γ w_e Δb` per face automatically (bounded by
+    `A κ^{3/2}/ℓ_e`, a fixed multiple of the dissipation).
+  - Shear production `+2 ρ interp(ᶠK_u + ᶠK_entr) ‖S‖²` corresponds to the
+    momentum flux `−2 ρ (ᶠK_u + ᶠK_entr) 𝔈` at the adjacent faces, but only
+    approximately at the stencil level: the viscosity is interpolated
+    separately and multiplied by the *center* strain-rate norm (the face
+    norm is not precomputed), rather than interpolating the face-local
+    product. The two agree to second order in smooth flow and differ by an
+    O(1) factor only where `K` or `‖S‖²` jumps between adjacent faces.
+
+Only the diffusive (intra-subdomain) piece of the Favre-averaged buoyancy
+flux enters this budget. The coherent (mass-flux) piece
+`Σ_m ρa^m (w^m - w) b^m` powers the inter-subdomain (coherent) kinetic energy
+through the buoyancy term of the subdomain momentum equations, which the
+prognostic subdomain velocities already carry; adding it here would
+double-count buoyancy production and spuriously inflate K near cloud tops
+with active drafts.
+"""
+function edmfx_tke_sources!(Yₜ, Y, p)
+    (; ᶜstrain_rate_norm) = p.precomputed
+    (; ᶠbuoygrad, ᶠK_h, ᶠK_u, ᶠK_entr) = p.precomputed
+
+    # shear production (face viscosities brought to centers)
+    @. Yₜ.c.ρtke +=
+        2 * Y.c.ρ * ᶜinterp(ᶠK_u + ᶠK_entr) * ᶜstrain_rate_norm
+    # buoyancy production/destruction (face-flux consistent; includes the
+    # interfacial-entrainment sink through ᶠK_entr)
+    @. Yₜ.c.ρtke -= Y.c.ρ * ᶜinterp((ᶠK_h + ᶠK_entr) * ᶠbuoygrad)
     return nothing
 end
 
@@ -120,7 +89,8 @@ per unit volume, ρ * ε_d [kg m^-1 s^-3].
 
 The physical dissipation is calculated as:
 ρ * ε_d = c_d * ρtke * sqrt(abs(tke)) / mixing_length
-where `c_d` is a parameter.
+where `c_d` is the TKE dissipation coefficient
+([`tke_dissipation_coefficient`](@ref)).
 
 Arguments:
 
@@ -131,7 +101,7 @@ Arguments:
 """
 function tke_dissipation(turbconv_params, ρtke, tke, mixing_length)
     FT = typeof(tke)
-    c_d = CAP.tke_diss_coeff(turbconv_params)
+    c_d = tke_dissipation_coefficient(turbconv_params)
     dissipation_rate_vol = c_d * ρtke * sqrt(abs(tke)) / mixing_length
     return dissipation_rate_vol
 end

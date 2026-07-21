@@ -322,6 +322,30 @@ end
     end
 end
 
+@testset "Reproducibility infrastructure: prune_reference_store" begin
+    # Deletes reference folders beyond the retention limits and returns them.
+    make_and_cd() do dir
+        d1 = make_ref_file_counter(1, dir, "01")
+        d2 = make_ref_file_counter(2, dir, "02")
+        d3 = make_ref_file_counter(3, dir, "03")
+        deleted = prune_reference_store(;
+            root_dir = dir,
+            keep_n_comparable_states = 1,
+            keep_n_bins_back = 1,
+        )
+        @test Set(deleted) == Set([d1, d2])
+        @test !ispath(d1)
+        @test !ispath(d2)
+        @test ispath(d3)  # newest bin kept
+    end
+    # Nothing to delete: returns empty and leaves the store intact.
+    make_and_cd() do dir
+        d1 = make_ref_file_counter(1, dir, "d1")
+        @test isempty(prune_reference_store(; root_dir = dir))
+        @test ispath(d1)
+    end
+end
+
 function make_file_with_contents(dir, filename, contents)
     mkpath(dir)
     f = joinpath(dir, filename)
@@ -865,6 +889,197 @@ end
         @test isfile(joinpath(repro_dir, "ref_counter.jl"))
     end
 end
+
+@testset "Reproducibility infrastructure: stage_pr_data" begin
+    mktempdir2_cd_computed() do (staging_root, computed_dir)
+        repro_folder = "repro_bundle"
+        ref_counter_file_PR = joinpath(computed_dir, "ref_counter.jl")
+        open(io -> println(io, 7), ref_counter_file_PR, "w")
+
+        # Each job dir holds output_active/<repro_folder>/prog_state.hdf5, as a
+        # PR build's working directory does.
+        job_ids = String[]
+        for job in ("job_id_1", "job_id_2")
+            bundle =
+                mkpath(joinpath(computed_dir, job, "output_active", repro_folder))
+            open(io -> println(io, 1), joinpath(bundle, "prog_state.hdf5"), "w")
+            push!(job_ids, joinpath(computed_dir, job))
+        end
+
+        dest = stage_pr_data(;
+            dirs_src = job_ids,
+            pr_number = 4242,
+            staging_root,
+            ref_counter_file_PR,
+            repro_folder,
+        )
+
+        staged = joinpath(staging_root, "pr-4242", repro_folder)
+        @test dest == staged
+        @test isfile(joinpath(staged, "job_id_1", "prog_state.hdf5"))
+        @test isfile(joinpath(staged, "job_id_2", "prog_state.hdf5"))
+        @test isfile(joinpath(staged, "ref_counter.jl"))
+
+        # A later push for the same PR overwrites: only the latest bundle is kept.
+        stage_pr_data(;
+            dirs_src = [joinpath(computed_dir, "job_id_1")],
+            pr_number = 4242,
+            staging_root,
+            ref_counter_file_PR,
+            repro_folder,
+        )
+        @test isfile(joinpath(staged, "job_id_1", "prog_state.hdf5"))
+        @test !ispath(joinpath(staged, "job_id_2"))
+    end
+end
+
+@testset "Reproducibility infrastructure: stage -> publish flow" begin
+    # End-to-end: what stage_output.jl does on a PR build (stage_pr_data), then
+    # what publish_reference.jl does on `main` (publish_staged_reference), plus
+    # idempotency and the no-staged-bundle path.
+    mktempdir() do root
+        staging = joinpath(root, "staging")
+        dest = joinpath(root, "reference")
+
+        # A PR build's working directory: two jobs, each with a bundle.
+        computed = mkpath(joinpath(root, "computed"))
+        ref_counter_file_PR = joinpath(computed, "ref_counter.jl")
+        open(io -> println(io, 42), ref_counter_file_PR, "w")
+        job_ids = String[]
+        for job in ("job_a", "job_b")
+            bundle = mkpath(
+                joinpath(computed, job, "output_active", "reproducibility_bundle"),
+            )
+            open(io -> println(io, 1), joinpath(bundle, "prog_state.hdf5"), "w")
+            push!(job_ids, joinpath(computed, job))
+        end
+
+        # STAGE
+        stage_pr_data(;
+            dirs_src = job_ids,
+            pr_number = "123",
+            staging_root = staging,
+            ref_counter_file_PR,
+        )
+        @test isdir(joinpath(staging, "pr-123", "reproducibility_bundle"))
+        @test !isdir(dest)  # nothing published yet
+
+        commit = get_commit_sha(; commit = "abc1234def")
+
+        # PUBLISH
+        @test publish_staged_reference(
+            "123",
+            commit;
+            dest_root = dest,
+            staging_root = staging,
+        ) == :published
+        dest_repro = destination_directory(; dest_root = dest, commit)
+        @test isfile(joinpath(dest_repro, "job_a", "prog_state.hdf5"))
+        @test isfile(joinpath(dest_repro, "ref_counter.jl"))
+        @test read_ref_counter(joinpath(dest_repro, "ref_counter.jl")) == 42
+        @test !ispath(joinpath(staging, "pr-123"))  # staging consumed
+        # A later PR discovers the published reference (by folder + ref_counter).
+        @test dest_repro in sorted_dirs_with_matched_files(; dir = dest)
+
+        # IDEMPOTENT: publishing the same commit again is a no-op.
+        @test publish_staged_reference(
+            "123",
+            commit;
+            dest_root = dest,
+            staging_root = staging,
+        ) == :already_published
+
+        # A PR with nothing staged: nothing to publish.
+        @test publish_staged_reference(
+            "999",
+            get_commit_sha(; commit = "beef5678");
+            dest_root = dest,
+            staging_root = staging,
+        ) == :no_staged_bundle
+    end
+end
+
+@testset "Reproducibility infrastructure: discover_pr_number" begin
+    # `branch` and `commit` are pinned on every call so the CI environment's
+    # BUILDKITE_BRANCH (a gh-readonly-queue branch in the merge queue) and
+    # BUILDKITE_COMMIT can't leak in: the former would win the branch-parse step
+    # ahead of the case under test, and the latter would reach the `gh search
+    # prs` fallback and hit the network.
+    # 1. BUILDKITE_PULL_REQUEST (a real PR build)
+    @test discover_pr_number(;
+        pull_request = "123",
+        branch = "",
+        message = "",
+        commit = "",
+    ) == 123
+    # 2. Parsed from a merge-queue branch (gh-readonly-queue/main/pr-<n>-<sha>)
+    @test discover_pr_number(;
+        pull_request = "false",
+        branch = "gh-readonly-queue/main/pr-42-0a1b2c3",
+        message = "",
+        commit = "",
+    ) == 42
+    # A non-merge-queue branch that merely contains "pr-<n>" is NOT matched
+    @test isnothing(
+        discover_pr_number(;
+            pull_request = "false",
+            branch = "fix-pr-9-bug",
+            message = "",
+            commit = "",
+        ),
+    )
+    # A gh-readonly-queue branch without a pr-<n> yields nothing (not `false`)
+    @test isnothing(
+        discover_pr_number(;
+            pull_request = "false",
+            branch = "gh-readonly-queue/main/deadbeef",
+            message = "",
+            commit = "",
+        ),
+    )
+    # 3. Parsed from a squash or merge commit message
+    @test discover_pr_number(;
+        pull_request = "false",
+        branch = "",
+        message = "Some squashed change (#456)",
+        commit = "",
+    ) == 456
+    @test discover_pr_number(;
+        pull_request = "false",
+        branch = "",
+        message = "Merge pull request #789 from foo/bar",
+        commit = "",
+    ) == 789
+    # A leading issue reference does NOT win over the trailing squash PR number
+    @test discover_pr_number(;
+        pull_request = "false",
+        branch = "",
+        message = "Fix #100 regression (#4652)",
+        commit = "",
+    ) == 4652
+    # An ordinary PR-branch commit (no canonical merge/squash form) is NOT
+    # matched, so staging can never be keyed to (and clobber) an unrelated PR
+    @test isnothing(
+        discover_pr_number(;
+            pull_request = "false",
+            branch = "",
+            message = "address review from #123",
+            commit = "",
+        ),
+    )
+    # No usable signal, and no commit, so the `gh` fallback is skipped
+    @test isnothing(
+        discover_pr_number(;
+            pull_request = "false",
+            branch = "",
+            message = "no pr number here",
+            commit = "",
+        ),
+    )
+    # The `gh` fallback is a no-op without a commit (guards before shelling out)
+    @test isnothing(github_pr_for_commit(""))
+end
+
 @testset "Reproducibility infrastructure: commit_sha_from_dir" begin
     @test commit_sha_from_dir(
         ["CH1", "CH2", "CH3"],

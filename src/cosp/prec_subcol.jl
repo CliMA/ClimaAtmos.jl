@@ -3,8 +3,6 @@ module COSPPrecipSubcolumns
 import ClimaCore: Operators
 import ..COSPSubcolumns
 
-export scops_subcolumn_precip!
-
 """
 Generate one large-scale precipitation subcolumn from shared selectors.
 """

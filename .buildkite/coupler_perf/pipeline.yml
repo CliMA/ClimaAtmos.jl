@@ -5,12 +5,12 @@ agents:
   modules: climacommon/2025_05_15
 
 env:
-  JULIA_DEPOT_PATH: "${BUILDKITE_BUILD_PATH}/${BUILDKITE_PIPELINE_SLUG}/depot/default"
+  JULIA_DEPOT_PATH: "${BUILDKITE_BUILD_PATH}/${BUILDKITE_PIPELINE_SLUG}/${BUILDKITE_BUILD_NUMBER}/depot:${BUILDKITE_BUILD_PATH}/${BUILDKITE_PIPELINE_SLUG}/depot/shared"
   JULIA_MAX_NUM_PRECOMPILE_FILES: 100
   GKSwstype: 100
   SLURM_KILL_BAD_EXIT: 1
   COUPLER_PATH: ".buildkite/perf/ClimaCoupler.jl"
-  COUPLER_COMMIT: "8f827b9118a6a0edfa2199c6b7340ae509168ac4"
+  COUPLER_COMMIT: "173e871b7e43c5838d9d7b45f3e1dfb671f45b49"
   CONFIG_PATH: "$COUPLER_PATH/config/nightly_configs"
   BENCHMARK_CONFIG_PATH: "$COUPLER_PATH/config/benchmark_configs"
 
@@ -49,7 +49,7 @@ steps:
     env:
       CLIMACOMMS_DEVICE: "CUDA"
       # Fallback used when no passing main build metadata is available yet.
-      BASELINE_SYPD: "0.175"
+      BASELINE_SYPD: "0.223"
       MIN_PERCENT_CHANGE: "-1"
     agents:
       slurm_gpus_per_task: 1

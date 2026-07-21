@@ -27,6 +27,7 @@ include(joinpath("config", "cli_options.jl"))
 include(joinpath("utils", "utilities.jl"))
 include(joinpath("utils", "debug_utils.jl"))
 include(joinpath("utils", "variable_manipulations.jl"))
+include(joinpath("utils", "tracer_processes.jl"))
 include(joinpath("utils", "read_gcm_driven_scm_data.jl"))
 include(joinpath("config", "era5_observations_to_forcing_file.jl"))
 include(joinpath("utils", "weather_model.jl"))
@@ -169,8 +170,6 @@ include(joinpath("config", "type_getters.jl"))
 include(joinpath("config", "yaml_helper.jl"))
 
 include(joinpath("utils", "show.jl"))
-
-
 
 include(joinpath("cosp", "cosp.jl"))
 import .COSP

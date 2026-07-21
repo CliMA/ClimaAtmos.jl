@@ -351,7 +351,7 @@ function radiation_callback(
     # `remaining_tendency!` and applied every stage; `dt_rad` is ignored.
     radiation_mode isa RRTMGPI.AbstractRRTMGPMode || return ()
     return scheduled_callback(
-        rrtmgp_model_callback!,
+        rrtmgp_solver_callback!,
         dt_rad,
         dt,
         t_start,
@@ -399,10 +399,6 @@ function nogw_callback(
     )
 end
 
-function enforce_physical_constraints_callback(dt)
-    return call_every_dt(enforce_physical_constraints_callback!, dt)
-end
-
 function ogw_callback(
     orographic_gravity_wave,
     dt_ogw,
@@ -448,14 +444,17 @@ function default_model_callbacks(model::AtmosModel;
     kwargs...,
 )
     callbacks = ()
-    # Physical constraints callback is registered here rather than at the component
-    # level because the decision depends on both the microphysics model AND the
-    # turbconv model simultaneously — registering from each component independently
-    # would cause double-registration for EDMF + 1M/2M configurations.
-    # Placed before the component callbacks so it fires before any other component
-    # callback that reads cache fields (e.g. radiation)
-    if needs_enforce_physical_constraints(model)
-        callbacks = (callbacks..., enforce_physical_constraints_callback(kwargs[:dt]))
+    if subcol_callback_enabled(model, dt_subcol)
+        callbacks = (
+            callbacks...,
+            subcol_callback(
+                dt_subcol,
+                kwargs[:dt],
+                kwargs[:t_start],
+                kwargs[:t_end],
+                kwargs[:checkpoint_frequency],
+            )...,
+        )
     end
     if subcol_callback_enabled(model, dt_subcol)
         callbacks = (
@@ -478,12 +477,6 @@ function default_model_callbacks(model::AtmosModel;
     end
     return callbacks
 end
-
-needs_enforce_physical_constraints(model::AtmosModel) =
-    model.microphysics_model isa
-    Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M} ||
-    model.turbconv_model isa AbstractEDMF
-
 
 default_model_callbacks(component; kwargs...) = ()
 

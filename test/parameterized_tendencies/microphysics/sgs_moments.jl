@@ -1,8 +1,9 @@
 #=
 Unit tests for the SGS quadrature infrastructure.
 
-Tests `SGSMomentsEvaluator` and `_sgs_saturation_moments`, verifying:
-  - S = q_tot − q_sat always, regardless of SGS distribution type
+Tests `SGSVarianceEvaluator` and `_sgs_saturation_moments`, verifying:
+  - μ_S equals the linearized analytic mean q_tot_mean − q_sat(T_mean, ρ)
+  - `SGSVarianceEvaluator` evaluated at the mean point gives zero
   - σ_S ≥ ϵ_numerics in the zero-variance limit (T′T′ = q′q′ = 0)
   - σ_S is monotonically increasing with σ_q
   - grid-mean fallback: nothing and GridMeanSGS give the same result
@@ -17,10 +18,9 @@ const CA = ClimaAtmos
 
 @testset "SGS Moments" begin
 
-    @testset "SGSMomentsEvaluator: S = q_tot − q_sat for all distribution types" begin
-        # The saturation variable is always the linear excess S = q_tot − q_sat.
-        # The SGS distribution type (Gaussian / lognormal) controls how quadrature
-        # points are sampled, not the definition of S.
+    @testset "SGSVarianceEvaluator: (S − μ_S)² with linearized μ_S" begin
+        # μ_S is set analytically to q_tot_mean − q_sat(T_mean, ρ).
+        # At the mean state, S = μ_S, so the evaluator returns 0.
         for FT in (Float32, Float64)
             @testset "FT = $FT" begin
                 toml_dict = CP.create_toml_dict(FT)
@@ -29,13 +29,21 @@ const CA = ClimaAtmos
                 T_mean = FT(280.0)
                 q_sat_mean = TD.q_vap_saturation(thp, T_mean, ρ)
                 q_tot_mean = q_sat_mean + FT(2e-3)
-                expected_S = q_tot_mean - q_sat_mean
+                mu_S = q_tot_mean - q_sat_mean
 
-                eval = CA.SGSMomentsEvaluator(thp, ρ)
-                out = eval(T_mean, q_tot_mean)
+                eval = CA.SGSVarianceEvaluator(thp, ρ, mu_S)
+                @test eval(T_mean, q_tot_mean) ≈ FT(0) atol = eps(FT)
 
-                @test out.mu_S ≈ expected_S rtol = FT(1e-5)
-                @test out.s_sq ≈ expected_S^2 rtol = FT(1e-5)
+                # Off-mean point gives (S − μ_S)² > 0.
+                δq = FT(1e-4)
+                out = eval(T_mean, q_tot_mean + δq)
+                @test out ≈ δq^2 rtol = FT(1e-5)
+
+                # `_sgs_saturation_moments` exposes μ_S = analytic value.
+                mom = CA._sgs_saturation_moments(
+                    thp, ρ, T_mean, q_tot_mean, nothing, FT(0), FT(0), FT(0),
+                )
+                @test mom.mu_S ≈ mu_S rtol = FT(1e-6)
             end
         end
     end

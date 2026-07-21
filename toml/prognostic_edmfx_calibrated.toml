@@ -2,10 +2,6 @@
 value = 0.5507468907407347
 type = "float"
 
-[mixing_length_diss_coeff]
-value = 0.13515021886991527
-type = "float"
-
 [diagnostic_covariance_coeff]
 value = 1.858712542728056
 type = "float"
@@ -20,10 +16,6 @@ type = "float"
 
 [EDMF_max_surface_area]
 value = 0.09964843547415161
-type = "float"
-
-[mixing_length_eddy_viscosity_coefficient]
-value = 0.12938179994984028
 type = "float"
 
 [turb_entr_param_vec]

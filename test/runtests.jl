@@ -27,6 +27,7 @@ if TEST_GROUP in ("infrastructure", "all")
     @safetestset "Grids" begin @time include("grids.jl") end
     @safetestset "Utilities" begin @time include("utilities.jl") end
     @safetestset "Variable manipulations" begin @time include("variable_manipulations_tests.jl") end
+    @safetestset "Tracer processes" begin @time include("tracer_processes_tests.jl") end
     @safetestset "Parameter tests" begin @time include("parameter_tests.jl") end
 
     @safetestset "Check TOML path" begin @time include("test_output_yaml_path.jl") end
@@ -50,6 +51,8 @@ end
 if TEST_GROUP in ("diagnostics", "all")
     @safetestset "Diagnostics unit tests" begin @time include("diagnostics/unit_diagnostics.jl") end
     @safetestset "DiagnosticsConfig" begin @time include("diagnostics/diagnostics_config.jl") end
+    # COSP subcolumn tests
+    @safetestset "COSP subcolumn tests" begin @time include("cosp/subcol_test.jl") end
 end
 
 # ============================================================================
@@ -60,8 +63,12 @@ if TEST_GROUP in ("dynamics", "all")
     @safetestset "Advection operators" begin @time include("prognostic_equations/advection_tests.jl") end
     @safetestset "Hyperdiffusion" begin @time include("prognostic_equations/hyperdiffusion_tests.jl") end
     @safetestset "Tendency computations" begin @time include("prognostic_equations/tendency_tests.jl") end
+    @safetestset "Tracer/mass transport consistency" begin @time include("prognostic_equations/tracer_mass_consistency_tests.jl") end
+    @safetestset "Post-Newton implicit-advection correction" begin @time include("prognostic_equations/correct_implicit_advection_tests.jl") end
+    @safetestset "Vertical diffusion tracer scaling" begin @time include("prognostic_equations/vertical_diffusion_tests.jl") end
     @safetestset "Vertical water borrowing limiter" begin @time include("prognostic_equations/vertical_water_borrowing_tests.jl") end
     @safetestset "Enforce physical constraints" begin @time include("prognostic_equations/enforce_physical_constraints_tests.jl") end
+    @safetestset "Eddy diffusion closures" begin @time include("prognostic_equations/eddy_diffusion_closures_tests.jl") end
 
     # Conservation tests
     @safetestset "Mass conservation" begin @time include("conservation/mass_conservation.jl") end
@@ -90,16 +97,10 @@ if TEST_GROUP in ("parameterizations", "all")
     # Chemistry tests
     @safetestset "Chemistry tendency tests" begin @time include("parameterized_tendencies/chemistry/chemistry_tendency.jl") end
 
-    # COSP subcolumn test
-    @safetestset "COSP subcolumn tests" begin
-        @time include("cosp/subcol_test.jl")
-    end
-    @safetestset "COSP CloudSat optics scaffold" begin
-        @time include("cosp/cloudsat_optics_test.jl")
-    end
-    @safetestset "COSP CloudSat reflectivity" begin
-        @time include("cosp/cloudsat_reflectivity_test.jl")
-    end
+    # Gravity wave: Beres convective NOGW pure-function unit tests (no simulation
+    # build). The simulation-based Beres tests (test_beres_single_column.jl,
+    # test_beres_sphere_integration.jl) run as standalone Buildkite steps.
+    @safetestset "Beres NOGW unit tests" begin @time include("parameterized_tendencies/gravity_wave/non_orographic_gravity_wave/test_beres_unit.jl") end
 
     # NOTE: Gravity wave visualization scripts (test_nogw_3d.jl, test_nogw_mima.jl,
     # test_nogw_single_column.jl, test_ogw_3d.jl, test_ogw_baseflux.jl) are not included
@@ -122,7 +123,6 @@ end
 if TEST_GROUP in ("era5", "all")
     @safetestset "ERA5 forcing" begin @time include("era5_tests.jl") end
 end
-
 #! format: on
 
 nothing

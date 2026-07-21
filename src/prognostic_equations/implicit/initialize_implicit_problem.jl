@@ -251,50 +251,30 @@ end
 """
     solve_sgs_ρa_implicit_stage_analytic!(Y, p, dtγ)
 
-Compute and set the IMEX/ARK implicit-stage solution for the updraft
-area-weighted density `ρa` in each EDMFX mass-flux subdomain.
+Analytic IMEX/ARK implicit-stage solve for the updraft area-weighted
+density `ρa` in each EDMFX mass-flux subdomain.
 
-The implicit stage equation for ρaʲ in flux form is
-
-    ∂ρa/∂t + ∂(ρa · w) / ∂z = (ε − δ) · ρa,
-
-With first-order upwinding for upward ᶠu₃ʲ, the stage equation reduces to
-the forward recurrence
+The flux-form stage equation `∂ρa/∂t + ∂(ρa·w)/∂z = (ε − δ)·ρa` reduces
+under first-order upwinding (for upward `ᶠu₃ʲ`) to the forward recurrence
 
     ρa_new[i] = (ρa_old[i]/dtγ + α_bot · ρa_new[i−1]) / denominator[i],
-
-with
-
     denominator[i] = 1/dtγ + α_top − (ε − δ)[i],
-    α_face         = (ρʲ_face · w_face) / (ρʲ_upwind · Δz[i])
-                   = (ᶠinterp(ρʲ·J)/ᶠJ · ᶠu₃ʲ/Δz_face) / (ρʲ_upwind · Δz[i]),
+    α_face = (ᶠinterp(ρʲ·J)/ᶠJ · ᶠu₃ʲ/Δz_face) / (ρʲ_upwind · Δz[i]),
 
-evaluated at the top (i + ½) and bottom (i − ½) faces. The upwind density
-`ρʲ_upwind` is taken from the cell below each face for upward flow: ρʲ[i]
-at the top face and ρʲ[i−1] at the bottom face.
-
-The `(ε − δ)` piece of the recurrence is assembled inline from
-`ᶜarea_bounding_entr_detrʲs`, `ᶜentr_vel_scaleʲs`, and the buoyancy
-detrainment expression (see [`detr_buoy_inv_time_scale`](@ref)) using the
-freshly solved `u₃` from the preceding analytic solve; the
+`(ε − δ)` is assembled inline from area-bounding, velocity-scale, and
+buoyancy-driven pieces (see [`detr_buoy_inv_time_scale`](@ref)). The
 mass-flux-divergence component of detrainment is folded into a
-multiplicative prefactor on the implicit advection term (so it is treated
-implicitly together with the flux divergence) rather than added to
-`(ε − δ)`.
+multiplicative prefactor on the implicit advection term instead of
+`(ε − δ)`, so it is treated implicitly together with the flux divergence.
 
-Surface boundary: at face ½, `u₃ = 0` (no-penetration), so the physical
-mass flux into cell 1 vanishes. To avoid NaN from `ᶠleft_bias(ᶜρʲ)`
-hitting the undefined ghost cell below the domain, `α_bot[1]` is explicitly
-overwritten to zero. The recurrence then reduces at cell 1 to
-`ρa_new[1] = ρa_old[1]/dtγ / denominator[1]`, i.e. the first cell evolves
-purely from its own forcing and from local entrainment/detrainment, with
-zero inflow from below.
-
-`denominator` is floored at `0.1/dtγ`, which is equivalent to bounding
-`(ε − δ) ≤ 0.9/dtγ` and has a similar effect as the protection previously
-provided by `limit_detrainment`. This caps the per-step growth at ≈ 10×.
-
-The sweep uses `Operators.column_accumulate!` for performance.
+The area limiters in `(ε − δ)` are evaluated at the previous-iterate area
+(explicit treatment), so they cannot guarantee `a ∈ [0, a_max]` at the
+implicit stage value. The sweep therefore clamps `ρa ∈ [0, ρ·a_max]`
+per-cell. Clipping from above is mass-conserving — the excess `ρa` is
+absorbed by the environment automatically, acting like instantaneous detrainment.
+Clipping from below at `ρ·a_min` would *not* be conservative because it
+would create updraft mass out of nothing, so the lower bound is set to
+zero instead.
 """
 function solve_sgs_ρa_implicit_stage_analytic!(Y, p, dtγ)
 
@@ -316,6 +296,7 @@ function solve_sgs_ρa_implicit_stage_analytic!(Y, p, dtγ)
     detr_buoy_inv_tau_max = CAP.detr_buoy_inv_tau_max(turbconv_params)
     detr_massflux_vertdiv_coeff =
         CAP.detr_massflux_vertdiv_coeff(turbconv_params)
+    a_max = CAP.max_area(turbconv_params)
 
     # Cell-centred coefficients of the recurrence:
     #   ᶜnumerator            = ρa_old[i] / dtγ
@@ -328,8 +309,6 @@ function solve_sgs_ρa_implicit_stage_analytic!(Y, p, dtγ)
     # multiplicative correction on the implicit advection term), leaving the
     # `(ε − δ)` term to carry only the area-bounding, velocity-scale
     # entrainment, and buoyancy-based detrainment pieces.
-    # `ᶠleft_bias`/`ᶠright_bias` (C2F) and `ᶜleft_bias`/`ᶜright_bias` (F2C) come
-    # from `abbreviations.jl`.
     ᶜnumerator = p.scratch.ᶜtemp_scalar
     ᶜdenominator = p.scratch.ᶜtemp_scalar_2
     ᶜmass_flux_factor_bot = p.scratch.ᶜtemp_scalar_3
@@ -341,22 +320,35 @@ function solve_sgs_ρa_implicit_stage_analytic!(Y, p, dtγ)
         @. ᶠw = Y.f.sgsʲs.:($$j).u₃.components.data.:1 / ᶠdz
 
         # entr and detr
-        ᶜarea_limiter_factor = @. lazy(
-            detr_lower_area_limiter_factor(
+        ᶜlower_limiter_factor = @. lazy(
+            lower_area_limiter_factor(
                 draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j)),
                 turbconv_params,
             ),
         )
+        ᶜupper_limiter_factor = @. lazy(
+            upper_area_limiter_factor(
+                draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j)),
+                turbconv_params,
+            ),
+        )
+        # Mass-flux-divergence detrainment fraction:
+        #   detr_coeff = 1 − U · (1 − L · C)
+        # with U = upper limiter (→ 0 as a → a_max), L = lower limiter
+        # (→ 0 as a → a_min), C = detr_massflux_vertdiv_coeff.
+        # At U = 0 (a → a_max): detr_coeff = 1 — all converging mass is
+        # detrained, capping area at a_max regardless of C.
+        # The recurrence uses `one_minus_prefactor = U · (1 − L · C)`.
         ᶜone_minus_implicit_detr_prefactor = @. lazy(
             ifelse(
                 ᶜdivᵥ(ᶠleft_bias(Y.c.sgsʲs.:($$j).ρa) * Y.f.sgsʲs.:($$j).u₃) < 0,
-                FT(1) - ᶜarea_limiter_factor * detr_massflux_vertdiv_coeff,
+                ᶜupper_limiter_factor *
+                (FT(1) - ᶜlower_limiter_factor * detr_massflux_vertdiv_coeff),
                 FT(1),
             ),
         )
-        # Evaluate the inverse buoyancy time scale at faces (where w
-        # lives naturally) and interpolate to centers for smoother
-        # behaviour in the (ε − δ) term.
+        # Inverse buoyancy time-scale on faces (where w lives), interpolated
+        # to centers for a smoother (ε − δ).
         ᶜbuoy_inv_time_scale = @. lazy(
             ᶜinterp(
                 detr_buoy_inv_time_scale(
@@ -373,12 +365,10 @@ function solve_sgs_ρa_implicit_stage_analytic!(Y, p, dtγ)
         @. ᶜexplicit_entr_minus_detr =
             ᶜarea_bounding_entr_detrʲs.:($$j) +
             ᶜentr_vel_scaleʲs.:($$j) * ᶜinterp(ᶠw) -
-            ᶜarea_limiter_factor * detr_buoy_coeff * ᶜbuoy_inv_time_scale
+            ᶜlower_limiter_factor * detr_buoy_coeff * ᶜbuoy_inv_time_scale
 
         @. ᶜnumerator = Y.c.sgsʲs.:($$j).ρa / dtγ
-        # Floor at 0.1 / dtγ so (ε − δ) is effectively bounded by 0.9/dtγ,
-        # mirroring the protection that the previous `limit_detrainment` call
-        # provided.
+        # Floor at 0.1/dtγ ⇒ (ε − δ) ≤ 0.9/dtγ (≈10× per-step growth cap).
         @. ᶜdenominator =
             max(
                 FT(0.1) / dtγ,
@@ -391,39 +381,41 @@ function solve_sgs_ρa_implicit_stage_analytic!(Y, p, dtγ)
             ᶜone_minus_implicit_detr_prefactor * ᶜleft_bias(
                 ᶠinterp(ᶜρʲs.:($$j) * ᶜJ) / ᶠJ * ᶠw / ᶠleft_bias(ᶜρʲs.:($$j)),
             ) / ᶜdz
-        # At cell 1, `ᶠleft_bias(ᶜρʲ)` evaluates at the surface face where
-        # the cell below the domain is undefined → NaN. Physically the mass
-        # flux is zero there (u₃ = 0 at the surface), so we overwrite
-        # α_bot[1] with FT(0) to keep the recurrence well-defined.
+        # Cell 1: overwrite α_bot[1] with 0 to bypass the NaN from
+        # `ᶠleft_bias(ᶜρʲ)` reading the undefined ghost cell below
+        # (physical flux is zero there: u₃ = 0 at the surface).
         ᶜmass_flux_factor_bot_first =
             Fields.field_values(Fields.level(ᶜmass_flux_factor_bot, 1))
         @. ᶜmass_flux_factor_bot_first = FT(0)
 
-        # Surface mass-flux boundary condition. The capped volumetric
-        # mass source rate (`F_sfc / dz`, equivalent to `div(F·ẑ)` at
-        # level 1) is precomputed and consumed here as a constant
-        # a-independent source in the first-cell numerator.
+        # Surface mass-flux BC: add the capped volumetric source `F_sfc/dz`
+        # (an a-independent constant, precomputed) to the cell-1 numerator.
         mass_flux_source_val = Fields.field_values(
             Fields.level(p.precomputed.sfc_mass_flux_sourceʲs.:($j), 1),
         )
         ᶜnumerator_first = Fields.field_values(Fields.level(ᶜnumerator, 1))
         @. ᶜnumerator_first += mass_flux_source_val
 
+        # ρ is in the input tuple so the per-cell cap `ρ·a_max` is available
+        # inside the closure.
         input = @. lazy(tuple(
             ᶜnumerator,
             ᶜdenominator,
             ᶜmass_flux_factor_bot,
+            ᶜρʲs.:($$j),
         ))
 
-        # Bottom-to-top sweep. The zero-flux boundary at the surface is
-        # imposed by `init = FT(0)` (zero ρa below the column), so the first
-        # cell sees no inflow from below and is free to evolve.
+        # Bottom-to-top sweep. `clamp` to `ρa ∈ [0, ρ·a_max]` per-cell.
         Operators.column_accumulate!(
             Y.c.sgsʲs.:($j).ρa,
             input;
             init = FT(0),
-        ) do ρa_prev, (num, den, mf_bot)
-            return (num + mf_bot * ρa_prev) / den
+        ) do ρa_prev, (num, den, mf_bot, ρ_cell)
+            return clamp(
+                (num + mf_bot * ρa_prev) / den,
+                zero(ρa_prev),
+                a_max * ρ_cell,
+            )
         end
     end
 end

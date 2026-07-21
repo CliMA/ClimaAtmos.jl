@@ -117,9 +117,19 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     thermo_params = CAP.thermodynamics_params(params)
     cp_d = CAP.cp_d(params)
 
-    @. Yₜ.c.ρ -= ᶜdivᵥ(ᶠinterp(Y.c.ρ * ᶜJ) / ᶠJ * ᶠu³)
+    # Mass advection with zero flux through the top and bottom
+    # boundaries (ᶜadvdivᵥ). The state filter in
+    # set_implicit_precomputed_quantities! also sets ᶠu³ to 0 at both
+    # boundaries, and the ρ row of the manual Jacobian is built from
+    # ᶜadvdivᵥ_matrix(), so using ᶜadvdivᵥ here keeps the residual, the
+    # boundary conditions, and the Jacobian consistent.
+    @. Yₜ.c.ρ -= ᶜadvdivᵥ(ᶠinterp(Y.c.ρ * ᶜJ) / ᶠJ * ᶠu³)
 
-    # Central vertical advection of active tracers (e_tot and q_tot)
+    # Central vertical advection of active tracers (ρe_tot and ρq_tot).
+    # The upwind correction is applied post-Newton via `T_post_imp!`
+    # (see `correct_implicit_advection_tendency!`), so that the upwind
+    # direction is taken with respect to the Newton-solved velocity rather
+    # than the initial guess.
     vtt = vertical_transport(Y.c.ρ, ᶠu³, ᶜh_tot, dt, Val(:none))
     @. Yₜ.c.ρe_tot += vtt
     if !(microphysics_model isa DryModel)
@@ -208,5 +218,42 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
 
     rst_u₃ = rayleigh_sponge_tendency_u₃(Y.f.u₃, rayleigh_sponge)
     @. Yₜ.f.u₃ += rst_u₃
+    return nothing
+end
+
+"""
+    correct_implicit_advection_tendency!(Yₜ, Y, p, t)
+
+Post-Newton upwind correction to the central-differenced implicit vertical
+advection of `ρe_tot` and `ρq_tot` in
+[`implicit_vertical_advection_tendency!`](@ref). Called by ClimaTimeSteppers
+as the `T_post_imp!` hook on `ClimaODEFunction`: evaluated at the
+Newton-solved stage state `U*` and applied as `U ← U* + dtγ · Yₜ`.
+
+Writes `vtt_upwind - vtt_central` for `ρe_tot` (and `ρq_tot` when
+available). All other fields of `Yₜ` are zero.
+
+Evaluating the correction *after* Newton — rather than folding it into
+the implicit tendency — means the upwind direction is taken with respect
+to the Newton-solved velocity, avoiding the "wrong-cell" upwinding that
+occurs when the sign of `ᶠu³` flips between the initial guess and the
+Newton solution (a real concern with `max_iters = 1`).
+"""
+NVTX.@annotate function correct_implicit_advection_tendency!(Yₜ, Y, p, t)
+    Yₜ .= zero(eltype(Yₜ))
+    (; microphysics_model) = p.atmos
+    (; energy_q_tot_upwinding) = p.atmos.numerics
+    (; dt) = p
+    (; ᶠu³, ᶜh_tot) = p.precomputed
+
+    vtt_up = vertical_transport(Y.c.ρ, ᶠu³, ᶜh_tot, dt, energy_q_tot_upwinding)
+    vtt_c = vertical_transport(Y.c.ρ, ᶠu³, ᶜh_tot, dt, Val(:none))
+    @. Yₜ.c.ρe_tot = vtt_up - vtt_c
+    if !(microphysics_model isa DryModel)
+        ᶜq_tot = @. lazy(specific(Y.c.ρq_tot, Y.c.ρ))
+        vtt_up = vertical_transport(Y.c.ρ, ᶠu³, ᶜq_tot, dt, energy_q_tot_upwinding)
+        vtt_c = vertical_transport(Y.c.ρ, ᶠu³, ᶜq_tot, dt, Val(:none))
+        @. Yₜ.c.ρq_tot = vtt_up - vtt_c
+    end
     return nothing
 end

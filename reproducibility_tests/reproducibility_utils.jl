@@ -81,6 +81,22 @@ debug_reproducibility() =
 import Dates
 import OrderedCollections
 
+# Central cluster locations
+const REFERENCE_STORE = "/resnick/scratch/esm/slurm-buildkite/climaatmos-main"
+# Per-PR staging area holding a PR build's bundle until the PR merges
+const STAGING_ROOT = "/resnick/scratch/esm/slurm-buildkite/climaatmos-main-staging"
+
+"""
+    pr_staging_dir(pr_number; staging_root = STAGING_ROOT)
+
+Directory under `staging_root` holding PR `pr_number`'s staged reproducibility
+bundle (`staging_root/pr-<pr_number>/`). Single source of truth for the per-PR
+staging path shared by `stage_pr_data`, `stage_output.jl`, and
+`publish_reference.jl`.
+"""
+pr_staging_dir(pr_number; staging_root = STAGING_ROOT) =
+    joinpath(staging_root, "pr-$(pr_number)")
+
 """
 Return a string listing all files (recursively) in `dir`.
 """
@@ -162,7 +178,7 @@ function sorted_dirs_with_matched_files(; dir = pwd())
     isempty(matched_dirs) && return String[]
     filter!(x -> isfile(joinpath(x, filename)), matched_dirs)
     isempty(matched_dirs) && return String[]
-    # sort by timestamp
+    # sort by reference counter
     sorted_dirs =
         sort(matched_dirs; by = f -> read_ref_counter(joinpath(f, filename)))
     return sorted_dirs
@@ -191,7 +207,7 @@ end
 """
     dirs = latest_comparable_dirs(;
         n = 5,
-        root_dir = "/resnick/scratch/esm/slurm-buildkite/climaatmos-main",
+        root_dir = REFERENCE_STORE,
         ref_counter_PR = read_ref_counter(joinpath(@__DIR__, "ref_counter.jl"))
         skip = get(ENV, "BUILDKITE_PIPELINE_SLUG", nothing) != "climaatmos-ci"
     )
@@ -219,7 +235,7 @@ comparable directory.
 """
 function latest_comparable_dirs(;
     n = 5,
-    root_dir = "/resnick/scratch/esm/slurm-buildkite/climaatmos-main",
+    root_dir = REFERENCE_STORE,
     ref_counter_PR = read_ref_counter(joinpath(@__DIR__, "ref_counter.jl")),
     skip = get(ENV, "BUILDKITE_PIPELINE_SLUG", nothing) != "climaatmos-ci",
 )
@@ -273,7 +289,7 @@ comparable states
 ```
 """
 function compute_bins(
-    root_dir::String = "/resnick/scratch/esm/slurm-buildkite/climaatmos-main",
+    root_dir::String = REFERENCE_STORE,
 )
     dirs = sorted_dirs_with_matched_files(; dir = root_dir)
     return compute_bins(reverse(dirs))
@@ -397,6 +413,32 @@ function get_reference_dirs_to_delete(;
 end
 
 """
+    prune_reference_store(; root_dir = REFERENCE_STORE)
+
+Delete reference folders beyond the retention limits (see
+[`get_reference_dirs_to_delete`](@ref)), logging what is removed. Returns the
+folders deleted.
+"""
+function prune_reference_store(;
+    root_dir = REFERENCE_STORE,
+    keep_n_comparable_states = 100,
+    keep_n_bins_back = 100,
+)
+    folders = get_reference_dirs_to_delete(;
+        root_dir,
+        keep_n_comparable_states,
+        keep_n_bins_back,
+    )
+    isempty(folders) && return folders
+    @warn "Repro: deleting reference folders:\n" * prod(f -> "    $f\n", folders)
+    @warn "Deleted folder bins:\n$(string_bins(compute_bins(folders)))"
+    for f in folders
+        rm(f; recursive = true, force = true)
+    end
+    return folders
+end
+
+"""
     strip_output_active_folder(folder)
 
 Return `""` if `folder` matches `"output_active"` or `"output_XXXX"` (where
@@ -440,11 +482,21 @@ end
         dirs_src,
         ref_counter_file_PR = joinpath(@__DIR__, "ref_counter.jl"),
         ref_counter_PR = read_ref_counter(ref_counter_file_PR),
-        skip = get(ENV, "BUILDKITE_PIPEL Data movement will occur when this function is called:
+        dest_root = REFERENCE_STORE,
+        commit = get_commit_sha(),
+        repro_folder = "reproducibility_bundle",
+        strip_folder = strip_output_active_path,
+    )
 
-  - on a job run in buildkite
-  - when in the merge queue
-  - when on the main branch
+Move freshly computed reproducibility data straight from the build's working
+directory into the reference store (`dest_root/<commit>/…`), when `in_merge_queue`
+or `branch == "main"`.
+
+In the current pipeline this is the merge-queue publish path only:
+`stage_output.jl` calls it on a `gh-readonly-queue/main/...` build, and it is
+dormant while a merge queue is off. The off-queue flow is `stage_pr_data`
+(PR build → staging) then `publish_reference.jl` (on merge). See
+reproducibility_tests/README.md.
 """
 function move_data_to_save_dir(;
     buildkite_ci = get(ENV, "BUILDKITE_PIPELINE_SLUG", nothing) ==
@@ -454,15 +506,12 @@ function move_data_to_save_dir(;
     dirs_src,
     ref_counter_file_PR = joinpath(@__DIR__, "ref_counter.jl"),
     ref_counter_PR = read_ref_counter(ref_counter_file_PR),
-    dest_root = "/resnick/scratch/esm/slurm-buildkite/climaatmos-main",
+    dest_root = REFERENCE_STORE,
     commit = get_commit_sha(),
     repro_folder = "reproducibility_bundle",
     strip_folder = strip_output_active_path,
 )
     buildkite_ci || return nothing
-
-    # if a contributor manually merged, we still want to move data from scratch
-    # to `dest_root`.
 
     @assert isfile(ref_counter_file_PR)
     if in_merge_queue || branch == "main"
@@ -495,6 +544,155 @@ function move_data_to_save_dir(;
             @show branch == "main"
         end
     end
+end
+
+"""
+    stage_pr_data(;
+        dirs_src,
+        pr_number,
+        staging_root = STAGING_ROOT,
+        ref_counter_file_PR = joinpath(@__DIR__, "ref_counter.jl"),
+        repro_folder = "reproducibility_bundle",
+    )
+
+Copy a PR build's reproducibility bundle into a per-PR staging directory,
+`staging_root/pr-<pr_number>/reproducibility_bundle/`, overwriting any previous
+staging for that PR (so at most one bundle is kept per open PR). Publishes
+nothing; `publish_reference.jl` moves it into the reference store on merge.
+
+Only the bundle is staged — `prog_state.hdf5` per job plus the job-independent
+`ref_counter.jl`, which is all reference comparisons read (see
+`reproducibility_results`). See reproducibility_tests/README.md.
+"""
+function stage_pr_data(;
+    dirs_src,
+    pr_number,
+    staging_root = STAGING_ROOT,
+    ref_counter_file_PR = joinpath(@__DIR__, "ref_counter.jl"),
+    repro_folder = "reproducibility_bundle",
+)
+    @assert isfile(ref_counter_file_PR)
+    pr_dir = pr_staging_dir(pr_number; staging_root)
+    dest_repro = joinpath(pr_dir, repro_folder)
+    # Overwrite any previous staging for this PR: keep only the latest push.
+    ispath(pr_dir) && rm(pr_dir; recursive = true, force = true)
+    for src_dir in dirs_src
+        job_id = basename(src_dir)
+        bundle_dir = joinpath(src_dir, "output_active", repro_folder)
+        isdir(bundle_dir) || continue
+        for src in all_files_in_dir(bundle_dir)
+            dest = joinpath(dest_repro, job_id, basename(src))
+            mkpath(dirname(dest))
+            cp(src, dest; force = true)
+        end
+    end
+    mkpath(dest_repro)
+    cp(ref_counter_file_PR, joinpath(dest_repro, "ref_counter.jl"); force = true)
+    return dest_repro
+end
+
+"""
+    publish_staged_reference(pr_number, commit;
+        dest_root = REFERENCE_STORE,
+        staging_root = STAGING_ROOT,
+        repro_folder = "reproducibility_bundle",
+    )
+
+Move PR `pr_number`'s staged bundle (`stage_pr_data`) into the reference store
+under `commit`, remove the staging, and prune old references. Idempotent, returning:
+
+  - `:already_published` — a reference for `commit` already exists (e.g. a
+    merge-queue build published it); nothing is moved or pruned.
+  - `:no_staged_bundle` — nothing is staged for `pr_number` (e.g. a PR with no
+    reproducibility jobs); nothing is moved.
+  - `:published` — the staged bundle was moved into the store and pruned.
+"""
+function publish_staged_reference(
+    pr_number,
+    commit;
+    dest_root = REFERENCE_STORE,
+    staging_root = STAGING_ROOT,
+    repro_folder = "reproducibility_bundle",
+)
+    dest_repro = destination_directory(; dest_root, commit, repro_folder)
+    ispath(dest_repro) && return :already_published
+    staged_repro = joinpath(pr_staging_dir(pr_number; staging_root), repro_folder)
+    isdir(staged_repro) || return :no_staged_bundle
+    mkpath(dirname(dest_repro))
+    mv(staged_repro, dest_repro; force = true)
+    rm(pr_staging_dir(pr_number; staging_root); recursive = true, force = true)
+    prune_reference_store(; root_dir = dest_root)
+    return :published
+end
+
+"""
+    github_pr_for_commit(commit)
+
+Ask GitHub, via the `gh` CLI, which pull request `commit` belongs to; return its
+number or `nothing`. Resolves commits that carry no PR marker in their message --
+e.g. a fast-forwarded or rebased PR merge, where `(#<n>)` is absent. Returns
+`nothing` if `gh` is missing, unauthenticated, offline, or no PR matches, so
+callers fall back cleanly.
+"""
+function github_pr_for_commit(commit)
+    isempty(commit) && return nothing
+    out = try
+        readchomp(`gh search prs $commit --json number --jq ".[0].number"`)
+    catch
+        return nothing
+    end
+    return tryparse(Int, out)
+end
+
+"""
+    discover_pr_number(;
+        pull_request = get(ENV, "BUILDKITE_PULL_REQUEST", "false"),
+        branch = get(ENV, "BUILDKITE_BRANCH", ""),
+        message = get(ENV, "BUILDKITE_MESSAGE", ""),
+        commit = get(ENV, "BUILDKITE_COMMIT", ""),
+    )
+
+Return the pull request number associated with the current build, or `nothing`
+if it cannot be determined. Used to key per-PR staging (`stage_pr_data`, on a PR
+build) and to find the staged bundle to move (`publish_reference.jl`, on the
+merge build) — see this file's `stage_pr_data`.
+
+Tries, in order:
+
+ 1. `pull_request` — Buildkite sets `BUILDKITE_PULL_REQUEST` to the PR number on
+    pull-request builds (`"false"` otherwise).
+ 2. `pr-<n>` from a merge-queue `branch` (`gh-readonly-queue/main/pr-<n>-…`).
+ 3. `message`, matching only GitHub's canonical merge/squash commit forms — the
+    `(#<n>)` a squash commit appends, or `Merge pull request #<n>` of a merge
+    commit. This is the only signal on a plain `main` merge build. Matching those
+    canonical forms (rather than any `#<n>`) means it identifies a real merge
+    commit but not an ordinary PR-branch commit, so it cannot mis-identify the PR
+    on a PR build (which would clobber another PR's staging) or pick up an issue
+    reference in the title.
+ 4. `commit` — last resort: ask GitHub which PR the commit belongs to, via
+    `github_pr_for_commit` (`gh search prs`). Catches merges that leave no PR
+    marker in the message (a fast-forwarded or rebased PR merge). Needs `gh`;
+    returns `nothing` if it is unavailable.
+"""
+function discover_pr_number(;
+    pull_request = get(ENV, "BUILDKITE_PULL_REQUEST", "false"),
+    branch = get(ENV, "BUILDKITE_BRANCH", ""),
+    message = get(ENV, "BUILDKITE_MESSAGE", ""),
+    commit = get(ENV, "BUILDKITE_COMMIT", ""),
+)
+    if !(pull_request in ("false", ""))
+        n = tryparse(Int, pull_request)
+        !isnothing(n) && return n
+    end
+    if startswith(branch, "gh-readonly-queue/")
+        m = match(r"pr-(\d+)", branch)
+        !isnothing(m) && return parse(Int, m.captures[1])
+    end
+    for re in (r"\(#(\d+)\)", r"Merge pull request #(\d+)")
+        m = match(re, message)
+        !isnothing(m) && return parse(Int, m.captures[1])
+    end
+    return github_pr_for_commit(commit)
 end
 
 """
@@ -535,7 +733,7 @@ end
     save_dir_transform(
         src;
         job_id,
-        dest_root = "/resnick/scratch/esm/slurm-buildkite/climaatmos-main",
+        dest_root = REFERENCE_STORE,
         commit = get_commit_sha(),
         repro_folder = "reproducibility_bundle",
         strip_folder = strip_output_active_path,
@@ -553,7 +751,7 @@ Returns the output file, to be saved, given:
 function save_dir_transform(
     src;
     job_id,
-    dest_root = "/resnick/scratch/esm/slurm-buildkite/climaatmos-main",
+    dest_root = REFERENCE_STORE,
     commit = get_commit_sha(),
     repro_folder = "reproducibility_bundle",
     strip_folder = strip_output_active_path,
@@ -566,7 +764,7 @@ end
 
 """
     destination_directory(;
-        dest_root = "/resnick/scratch/esm/slurm-buildkite/climaatmos-main",
+        dest_root = REFERENCE_STORE,
         commit = get_commit_sha(),
         repro_folder = "reproducibility_bundle",
     )
@@ -579,7 +777,7 @@ Return the reproducibility destination directory:
   - `repro_folder` reproducibility folder
 """
 function destination_directory(;
-    dest_root = "/resnick/scratch/esm/slurm-buildkite/climaatmos-main",
+    dest_root = REFERENCE_STORE,
     commit = get_commit_sha(),
     repro_folder = "reproducibility_bundle",
 )

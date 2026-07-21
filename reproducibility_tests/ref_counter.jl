@@ -1,4 +1,4 @@
-366
+385
 
 # **README**
 #
@@ -32,6 +32,96 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+385
+- Change cloud fraction formulation
+
+384
+- Unify SGS hyperdiffusion with grid mean: each PrognosticEDMFX subdomain
+  inherits the grid-mean specific tendency (uniform hyperdiff in the grid
+  box). Split the total-enthalpy flux into dry-static-energy + water-species
+  contributions to avoid diffusing dry-air enthalpy along with water enthalpy.
+
+383
+- Add precipitation entrainment from environment into a widening updraft
+
+382
+- Update RRTMGP.jl
+
+381
+- EDMFX inversion reconstruction: harmonic-mean face interpolation of eddy
+  diffusivities, stability-biased N², interface-aware effective stability
+  with interfacial entrainment diffusivity, a face-native
+  stability/diffusivity pipeline (also used for updraft internal diffusion),
+  and the resolvability filter-scale cap max(Δx_h, Δz) on the mixing length.
+
+380
+- Reparameterize the TKE dissipation coefficient: c_d = c_m c_b / Ri_c with
+  Ri_c = mixing_length_Ri_crit (default 0.25). Configurations using the
+  repository TOMLs are preserved to within 1 ulp; at ClimaParams defaults
+  the derived c_d is 0.224 instead of 0.22.
+
+379
+- By default update the cache once per step and not stage
+
+378
+- Apply ρe_tot/ρq_tot upwind correction as a post-Newton hook (`T_post_imp!`
+  on `ClimaODEFunction`, requires ClimaTimeSteppers 0.10.4). Implicit vertical
+  advection reverts to central-only; the upwind correction is evaluated on
+  the Newton-solved velocity, so a sign flip of `ᶠu³` during the Newton step
+  no longer produces a wrong-cell upwind flux.
+
+377
+- Carry the energy of sedimenting water at each subdomain's own value under
+  PrognosticEDMFX: the grid-mean sedimentation energy flux equals the sum of
+  the updraft and environment fluxes, each carrying its subdomain internal
+  and kinetic energy.
+
+376
+- Implicit Jacobian only (tendencies unchanged): add the environment
+  feedback to the entrainment-relaxation diagonal, and include the
+  sedimentation velocity in the continuity-equation row. (The PGF Jacobian
+  stencils are unchanged: the complete Exner-form linearization collapses
+  analytically to the existing height-form blocks.)
+
+375
+- Remove coherent buoyancy production from TKE; decompose diffusive enthalpy
+  flux into dry static energy + water enthalpy; damp the cloud-fraction floor
+  as the subdomain mean saturates.
+
+374
+- Fix subsidence top BC (zero-gradient inflow at the lid instead of Extrapolate);
+  remove the external-forcing top-cell tendency-zeroing workaround.
+
+373
+- Route enforce_physical_constraints! through ClimaTimeSteppers' new
+  `constrain_state!` hook (per-step by default) and drop the separate
+  callback. Frequencies are configurable via `update_cache_every` /
+  `update_constrain_state_every`.
+
+372
+- Fix top boundary condition so total contravariant flux vanishes at the lid;
+  add SGS mass flux of q_tot to continuity equation; transport SGS tracers in difference form.
+
+371
+- Update Insolation.jl to v1.2.0
+
+370
+- Move ρe_tot/ρq_tot upwind correction into implicit advection (Wfact unchanged)
+
+369
+- Clamp implicit ρa stage value to `[0, ρ·a_max]` per-cell in the column
+  sweep so updraft area cannot exceed a_max when the explicit area
+  limiters fail to prevent overshoot.
+
+368
+- Apply upper-area limiter to the implicit mass-flux-divergence detrainment
+  prefactor so updraft area cannot grow past a_max via advection.
+
+367
+- SGS saturation moments: use linearized analytic μ_S and accumulate σ_S²
+  as E[(S − μ_S)²] in one quadrature pass to avoid Float32 catastrophic
+  cancellation when Var[S] ≪ (E[S])².
+
 366
 - Update to ClimaParams v1.1 (changing threshold_smooth_transition_steepness default value)
 

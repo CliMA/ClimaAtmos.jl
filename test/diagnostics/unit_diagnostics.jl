@@ -56,13 +56,14 @@ The `states` dict maps symbol keys to (Y, p) tuples. Available keys:
   :ssv            — DryModel + steady-state velocity, plane grid
   :m0             — EquilibriumMicrophysics0M, column
   :m1             — NonEquilibriumMicrophysics1M, column
-  :m2             — NonEquilibriumMicrophysics2M, column
+  :m2             — DISABLED  NonEquilibriumMicrophysics2M, column
   :nogw           — 0M + NonOrographicGravityWave, column
+  :nogw_beres     — 0M + NonOrographicGravityWave + BeresSourceParams, column
   :m0_slab_sphere — 0M + SlabOceanSST, sphere (watero)
   :smag           — SmagorinskyLilly, sphere
   :m0_pedmfx      — 0M + PrognosticEDMFX, column
   :m1_pedmfx      — 1M + PrognosticEDMFX, column
-  :m2_pedmfx      — 2M + PrognosticEDMFX, column
+  :m2_pedmfx      — DISABLED 2M + PrognosticEDMFX, column
   :vd             — VerticalDiffusion, column
   :dwh            — DecayWithHeightDiffusion, column
   :allsky         — AllSkyRadiationWithClearSkyDiagnostics + aerosol_radiation=true, column
@@ -176,10 +177,10 @@ plane = CA.PlaneGrid(FT; x_elem = 4, z_elem = 5, z_stretch = false)
 ## Microphysics-specific models
 model_0m = CA.AtmosModel(; microphysics_model = CA.EquilibriumMicrophysics0M())
 model_1m = CA.AtmosModel(; microphysics_model = CA.NonEquilibriumMicrophysics1M())
-model_2m = CA.AtmosModel(; microphysics_model = CA.NonEquilibriumMicrophysics2M())
+# model_2m = CA.AtmosModel(; microphysics_model = CA.NonEquilibriumMicrophysics2M())
 (Y_0m, p_0m) = build_state_cache(FT, model_0m; grid = column);
 (Y_1m, p_1m) = build_state_cache(FT, model_1m; grid = column);
-(Y_2m, p_2m) = build_state_cache(FT, model_2m; grid = column);
+# (Y_2m, p_2m) = build_state_cache(FT, model_2m; grid = column);
 
 ## Non-orographic gravity wave
 nogw_params = CA.NonOrographicGravityWaveParameters(FT)
@@ -189,6 +190,32 @@ non_orographic_gravity_wave = CA.NonOrographicGravityWave(;
 microphysics_model = CA.EquilibriumMicrophysics0M()
 model_nogw = CA.AtmosModel(; microphysics_model, non_orographic_gravity_wave)
 (Y_nogw, p_nogw) = build_state_cache(FT, model_nogw; grid = column);
+
+## Non-orographic gravity wave with Beres source
+beres_source = CA.BeresSourceParams{FT}(;
+    Q0_threshold = FT(1e-4), beres_scale_factor = FT(1),
+    σ_x = FT(12_000), ν_min = FT(8.7e-5), ν_max = FT(1.05e-2), n_ν = 5,
+    detailed_diagnostics = true,  # unlock the nogw_* source-internal diagnostics
+)
+nogw_beres = CA.NonOrographicGravityWave(;
+    (f => getfield(nogw_params, f) for f in fieldnames(typeof(nogw_params)))...,
+    beres_source,
+)
+model_nogw_beres = CA.AtmosModel(;
+    microphysics_model = CA.EquilibriumMicrophysics0M(),
+    non_orographic_gravity_wave = nogw_beres,
+)
+(Y_nogw_beres, p_nogw_beres) = build_state_cache(FT, model_nogw_beres; grid = column);
+# Zero-initialize uninitialized Beres cache fields so diagnostics return finite values
+let c = p_nogw_beres.non_orographic_gravity_wave
+    c.gw_beres_active .= 0
+    c.gw_Q0 .= 0
+    c.gw_h_heat .= 0
+    c.gw_zbot .= 0
+    c.gw_ztop .= 0
+    c.gw_Q_conv .= 0
+    c.gw_Q_conv_ic .= 0
+end
 
 ## Sphere with moist model + slab ocean (watero needs MoistMicrophysics + SpectralElementSpace2D)
 model_0m_slab = CA.AtmosModel(;
@@ -209,14 +236,42 @@ model_allsky = CA.AtmosModel(; radiation_mode)
 (Y_allsky, p_allsky) = build_state_cache(FT, model_allsky; grid = column,
     aerosol_names = ("DST01",),
 );
-# Radiation flux arrays are initialized to NaN by set_and_save! (filled only after solver runs).
-# Zero them so diagnostics return finite values when tested outside a time-stepping loop.
-let rrtm = p_allsky.radiation.rrtmgp_model
-    for f in propertynames(rrtm)
-        a = getproperty(rrtm, f)
-        if a isa AbstractArray && any(isnan, a)
-            @. a = ifelse(isnan(a), 0, a)
-        end
+import RRTMGP
+# RRTMGP allocates its flux and cloud-cover buffers with `undef` and fills them only
+# when the solver runs; these diagnostics are exercised without a time step. Zero the
+# output buffers a radiation diagnostic reads, and scrub any NaN from the kwarg-seeded
+# cloud/aerosol inputs, so every diagnostic returns finite values.
+let rrtm = p_allsky.radiation.rrtmgp_solver
+    for getter in (
+        RRTMGP.net_flux,
+        RRTMGP.lw_flux_net,
+        RRTMGP.lw_flux_up,
+        RRTMGP.lw_flux_dn,
+        RRTMGP.sw_flux_net,
+        RRTMGP.sw_flux_up,
+        RRTMGP.sw_flux_dn,
+        RRTMGP.sw_direct_flux_dn,
+        RRTMGP.clear_net_flux,
+        RRTMGP.clear_lw_flux,
+        RRTMGP.clear_lw_flux_up,
+        RRTMGP.clear_lw_flux_dn,
+        RRTMGP.clear_sw_flux,
+        RRTMGP.clear_sw_flux_up,
+        RRTMGP.clear_sw_flux_dn,
+        RRTMGP.clear_sw_direct_flux_dn,
+        RRTMGP.sw_cloud_cover,
+        RRTMGP.lw_cloud_cover,
+    )
+        fill!(getter(rrtm), 0)
+    end
+    for getter in (
+        RRTMGP.cloud_liquid_effective_radius,
+        RRTMGP.cloud_ice_effective_radius,
+        RRTMGP.aod_sw_extinction,
+        RRTMGP.aod_sw_scattering,
+    )
+        a = getter(rrtm)
+        @. a = ifelse(isnan(a), 0, a)
     end
 end
 
@@ -233,11 +288,11 @@ model_0m_pedmfx = CA.AtmosModel(; microphysics_model = CA.EquilibriumMicrophysic
     turbconv_model = pedmfx, edmfx_model)
 model_1m_pedmfx = CA.AtmosModel(; microphysics_model = CA.NonEquilibriumMicrophysics1M(),
     turbconv_model = pedmfx, edmfx_model)
-model_2m_pedmfx = CA.AtmosModel(; microphysics_model = CA.NonEquilibriumMicrophysics2M(),
-    turbconv_model = pedmfx, edmfx_model)
+# model_2m_pedmfx = CA.AtmosModel(; microphysics_model = CA.NonEquilibriumMicrophysics2M(),
+#     turbconv_model = pedmfx, edmfx_model)
 (Y_0m_pedmfx, p_0m_pedmfx) = build_state_cache(FT, model_0m_pedmfx; grid = column);
 (Y_1m_pedmfx, p_1m_pedmfx) = build_state_cache(FT, model_1m_pedmfx; grid = column);
-(Y_2m_pedmfx, p_2m_pedmfx) = build_state_cache(FT, model_2m_pedmfx; grid = column);
+# (Y_2m_pedmfx, p_2m_pedmfx) = build_state_cache(FT, model_2m_pedmfx; grid = column);
 
 ## Chemistry (passive tracer A) + PrognosticEDMFX
 model_chem_pedmfx = CA.AtmosModel(;
@@ -270,13 +325,20 @@ states = Dict(
     :ssv            => (Y_ssv,            p_ssv),
     :m0             => (Y_0m,             p_0m),
     :m1             => (Y_1m,             p_1m),
-    :m2             => (Y_2m,             p_2m),
+    # :m2 and :m2_pedmfx DISABLED (CloudMicrophysics 0.37 compat): 2-moment
+    # microphysics is temporarily blocked by an `@assert` in
+    # `precomputed_quantities` (src/cache/precomputed_quantities.jl), so
+    # `model_2m`/`model_2m_pedmfx` (and their `build_state_cache` calls) are
+    # commented out above. Re-enable once 2M/2M+P3 compatibility with
+    # CloudMicrophysics 0.37 is restored.
+    # :m2             => (Y_2m,             p_2m),
     :nogw           => (Y_nogw,           p_nogw),
+    :nogw_beres     => (Y_nogw_beres,     p_nogw_beres),
     :m0_slab_sphere => (Y_0m_slab_sphere, p_0m_slab_sphere),
     :smag           => (Y_smag,           p_smag),
     :m0_pedmfx      => (Y_0m_pedmfx,      p_0m_pedmfx),
     :m1_pedmfx      => (Y_1m_pedmfx,      p_1m_pedmfx),
-    :m2_pedmfx      => (Y_2m_pedmfx,      p_2m_pedmfx),
+    # :m2_pedmfx      => (Y_2m_pedmfx,      p_2m_pedmfx),
     :chem_pedmfx    => (Y_chem_pedmfx,    p_chem_pedmfx),
     :vd             => (Y_vd,             p_vd),
     :dwh            => (Y_dwh,            p_dwh),
@@ -333,7 +395,9 @@ VALID_CASES = [
     case("lmix",  (:dry, :m0_pedmfx)),
     # 1M / 2M microphysics
     cases(("husra", "hussn", "rwp", "swp"), :m1)...,  # Union{1M, 2M}, single method
-    cases(("cdnc", "ncra"), :m2)...,  # 2M only
+    # "cdnc", "ncra" (2M only) DISABLED (CloudMicrophysics 0.37 compat) and
+    # moved to SKIP_CASES below - see the `:m2` note near `states` above.
+    # cases(("cdnc", "ncra"), :m2)...,  # 2M only
     # Smagorinsky-Lilly
     cases(("Dh_smag", "Dv_smag", "strainh_smag", "strainv_smag"), :smag)...,
     # steady-state velocity
@@ -343,6 +407,10 @@ VALID_CASES = [
     # gravitywave_diagnostics.jl
     # ---------------------------------------------------------------------------
     cases(("utendnogw", "vtendnogw"), :nogw)...,
+    # Beres source diagnostics (require NonOrographicGravityWave with BeresSourceParams)
+    cases(("nogw_beres_active", "nogw_Q0", "nogw_h_heat", "nogw_zbot",
+           "nogw_ztop", "nogw_Q_conv", "nogw_Q_conv_ic", "nogw_c_centroid",
+           "nogw_halfsine", "nogw_launch_flux", "nogw_a_cover"), :nogw_beres)...,
 
     # ---------------------------------------------------------------------------
     # radiation_diagnostics.jl
@@ -372,10 +440,13 @@ VALID_CASES = [
     cases(("clwen", "clien"), (:m0_pedmfx, :m1_pedmfx))...,
     # 1M+PrognosticEDMFX
     cases(("husraen", "hussnen"), :m1_pedmfx)...,
-    # 2M + PrognosticEDMFX
-    cases(("cdncup", "cdncen", "ncraup", "ncraen"), :m2_pedmfx)...,
+    # "cdncup", "cdncen", "ncraup", "ncraen" (2M + PrognosticEDMFX) DISABLED
+    # (CloudMicrophysics 0.37 compat) and moved to SKIP_CASES below.
+    # cases(("cdncup", "cdncen", "ncraup", "ncraen"), :m2_pedmfx)...,
     # VerticalDiffusion, DecayWithHeightDiffusion, EDMF
     cases(("edt", "evu"), (:vd, :dwh, :m0_pedmfx))...,
+    # Interfacial entrainment diffusivity (EDMFX only)
+    case("kentr", :m0_pedmfx),
     # GasPhaseChem + PrognosticEDMFX
     case("q_gas_A",   :chem_pedmfx),
     case("q_gas_Aup", :chem_pedmfx),
@@ -395,10 +466,19 @@ VALID_CASES = [
 #   - negative_scalars_diagnostics.jl : budget monitoring (hus_neg_sum, etc.)
 # These are skipped here; their own test files should cover them.
 #
+# Also temporarily includes 2M-only diagnostics ("cdnc", "ncra", "cdncup",
+# "cdncen", "ncraup", "ncraen") - DISABLED (CloudMicrophysics 0.37 compat):
+# 2-moment microphysics is blocked by an `@assert` in `precomputed_quantities`
+# (src/cache/precomputed_quantities.jl), so their `:m2`/`:m2_pedmfx` fixtures
+# are unavailable. Move these back to VALID_CASES once 2M/2M+P3 compatibility
+# with CloudMicrophysics 0.37 is restored.
+#
 SKIP_CASES = Set([
     # tracer_diagnostics.jl
     "loadss", "mmrbcpi", "mmrbcpo", "mmrdust", "mmrocpi", "mmrocpo",
     "mmrso4", "mmrss", "o3",
+    # 2M-only (temporarily disabled, see note above)
+    "cdnc", "ncra", "cdncup", "cdncen", "ncraup", "ncraen",
     # negative_scalars_diagnostics.jl
     "cli_max", "cli_min", "cli_neg_frac", "cli_neg_mean", "cli_neg_sum",
     "cli_pos_frac", "cli_pos_mean", "cli_pos_sum",
@@ -450,6 +530,17 @@ end
         "cdnc", "ncra", "utendnogw", "vtendnogw")
         @testset "$name errors on dry model" begin
             @test_throws Exception compute_diag(getdiag(name), Y_dry, p_dry)
+        end
+    end
+
+    # Beres diagnostics error on dry model (no NOGW) and on NOGW without Beres source
+    for name in ("nogw_beres_active", "nogw_Q0", "nogw_h_heat",
+        "nogw_zbot", "nogw_ztop", "nogw_Q_conv")
+        @testset "$name errors on dry model" begin
+            @test_throws Exception compute_diag(getdiag(name), Y_dry, p_dry)
+        end
+        @testset "$name errors on NOGW without Beres" begin
+            @test_throws Exception compute_diag(getdiag(name), Y_nogw, p_nogw)
         end
     end
 

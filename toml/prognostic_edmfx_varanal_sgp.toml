@@ -1,0 +1,83 @@
+[idealized_ocean_albedo]
+value = 0.20
+type = "float"
+
+[EDMF_max_surface_area]
+value = 0.1
+type = "float"
+
+[EDMF_min_area]
+value = 1.0e-5
+type = "float"
+
+[EDMF_max_area]
+value = 0.7
+type = "float"
+
+[max_area_limiter_scale]
+value = 0.001
+type = "float"
+
+[max_area_limiter_power]
+value = 1
+type = "float"
+
+[entr_coeff]
+value = 0.1
+type = "float"
+
+[turb_entr_param_vec]
+value = [0.0001, 50.0, 0.0]
+type = "float"
+
+[min_area_limiter_scale]
+value = 0.0001
+type = "float"
+
+[min_area_limiter_power]
+value = 1
+type = "float"
+
+[detr_buoy_coeff]
+value = 1
+type = "float"
+
+[detr_massflux_vertdiv_coeff]
+value = 0.1
+type = "float"
+
+[pressure_normalmode_drag_coeff]
+value = 8.0
+type = "float"
+
+[gcmdriven_momentum_relaxation_timescale]
+value = 21600.0
+type = "float"
+
+[gcmdriven_scalar_relaxation_timescale]
+value = 86400.0
+type = "float"
+
+[gcmdriven_relaxation_minimum_height]
+value = 5500.0
+type = "float"
+
+[gcmdriven_relaxation_maximum_height]
+value = 8000.0
+type = "float"
+
+[zd_rayleigh]
+value = 12500.0
+type = "float"
+
+[zd_viscous]
+value = 12500.0
+type = "float"
+
+[mixing_length_tke_surf_flux_coeff]
+value = 4.0
+type = "float"
+
+[precipitation_timescale]
+value = 3000
+type = "float"

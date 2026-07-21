@@ -3,7 +3,6 @@
 #####
 
 import ClimaCore.Fields as Fields
-import ClimaCore.Operators as Operators
 import ClimaCore: Geometry
 
 """
@@ -41,7 +40,7 @@ function lilly_stratification_correction(Y, p, ᶜS)
     ᶜS_norm = strain_rate_norm(ᶜS, Geometry.WAxis())
 
     ᶜRi = @. lazy(ᶜN² / (ᶜS_norm^2 + eps(FT)))  # Ri = N² / |S|²
-    ᶜfb = @. lazy(ifelse(ᶜRi ≤ 0, FT(1), max(0, 1 - ᶜRi / Pr_t)^(1 // 4)))
+    ᶜfb = @. lazy(ifelse(ᶜRi ≤ 0, FT(1), sqrt(sqrt(max(0, 1 - ᶜRi / Pr_t)))))
 end
 
 """
@@ -152,21 +151,11 @@ end
 
 function vertical_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, model::SmagorinskyLilly)
     is_smagorinsky_vertical(model) || return nothing
-    FT = eltype(Y)
     (; ᶜS, ᶠS, ᶜνₜ_v) = p.precomputed
     (; ᶜtemp_UVWxUVW, ᶠtemp_UVWxUVW, ᶠtemp_scalar, ᶠtemp_scalar_2) = p.scratch
     Pr_t = CAP.Prandtl_number_0(CAP.turbconv_params(p.params))
     ᶜρ = Y.c.ρ
     ᶠρ = @. ᶠtemp_scalar = ᶠinterp(ᶜρ)
-
-    # Define operators
-    ᶠgradᵥ = Operators.GradientC2F() # apply BCs to ᶜdivᵥ, which wraps ᶠgradᵥ
-    divᵥ_uₕ_bc = Operators.SetValue(C3(FT(0)) ⊗ C12(FT(0), FT(0)))
-    ᶜdivᵥ_uₕ = Operators.DivergenceF2C(; bottom = divᵥ_uₕ_bc, top = divᵥ_uₕ_bc)
-    divᵥ_bc = Operators.SetDivergence(FT(0))
-    ᶠdivᵥ = Operators.DivergenceC2F(; bottom = divᵥ_bc, top = divᵥ_bc)
-    divᵥ_ρχ_bc = Operators.SetValue(C3(FT(0)))
-    ᶜdivᵥ_ρχ = Operators.DivergenceF2C(; bottom = divᵥ_ρχ_bc, top = divᵥ_ρχ_bc)
 
     # Subgrid-scale momentum flux tensor, `τ = -2 νₜ ∘ S`
     ᶠνₜ_v = @. lazy(ᶠinterp(ᶜνₜ_v))
@@ -175,23 +164,23 @@ function vertical_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, model::SmagorinskyL
 
     # Turbulent diffusivity
     ᶠD_smag = @. lazy(ᶠνₜ_v / Pr_t)
+    ᶠρD = @. lazy(ᶠρ * ᶠD_smag)
 
     # Apply to tendencies
     ## Horizontal momentum tendency
     @. Yₜ.c.uₕ -= C12(ᶜdivᵥ(ᶠρ * ᶠτ_smag) / ᶜρ)
-    ## Apply boundary condition for momentum flux
-    @. Yₜ.c.uₕ -= ᶜdivᵥ_uₕ(-(FT(0) * ᶠgradᵥ(Y.c.uₕ))) / ᶜρ
     ## Vertical momentum tendency
-    @. Yₜ.f.u₃ -= C3(ᶠdivᵥ(ᶜρ * ᶜτ_smag) / ᶠρ)
+    @. Yₜ.f.u₃ -= C3(ᶠdiffdivᵥ_u₃(ᶜρ * ᶜτ_smag) / ᶠρ)
 
     ## Total energy tendency
     (; ᶜh_tot) = p.precomputed
-    @. Yₜ.c.ρe_tot -= ᶜdivᵥ_ρχ(-(ᶠρ * ᶠD_smag * ᶠgradᵥ(ᶜh_tot)))
+    ᶜ∇ᵥρD∇h_totₜ = ᶜdiffusive_flux_divergenceᵥ(ᶠρD, ᶜh_tot)
+    @. Yₜ.c.ρe_tot -= ᶜ∇ᵥρD∇h_totₜ
 
     ## Tracer diffusion and associated mass changes
     foreach_gs_tracer(Yₜ, Y) do ᶜρχₜ, ᶜρχ, ρχ_name
         ᶜχ = @. lazy(specific(ᶜρχ, ᶜρ))
-        ᶜ∇ᵥρD∇χₜ = @. lazy(ᶜdivᵥ_ρχ(-(ᶠρ * ᶠD_smag * ᶠgradᵥ(ᶜχ))))
+        ᶜ∇ᵥρD∇χₜ = ᶜdiffusive_flux_divergenceᵥ(ᶠρD, ᶜχ)
         @. ᶜρχₜ -= ᶜ∇ᵥρD∇χₜ
         # Rain and snow does not affect the mass
         if ρχ_name == @name(ρq_tot)

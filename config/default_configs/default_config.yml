@@ -92,6 +92,12 @@ auto_jacobian_padding_bands:
 update_jacobian_every:
   help: "Frequency at which the Jacobian matrix should be updated (once per timestep, once per timestepper stage, or once per linear solve) [`dt`, `stage`, `solve` (default)]"
   value: "solve"
+update_cache_every:
+  help: "Frequency at which `set_precomputed_quantities!` is called by ClimaTimeSteppers [`step` (default), `stage`]"
+  value: "step"
+update_constrain_state_every:
+  help: "Frequency at which `constrain_state!` is called by ClimaTimeSteppers [`step` (default), `stage`, `dss`]"
+  value: "step"
 debug_jacobian:
   help: "Whether to print summary information about the Jacobian matrix, including comparisons of different algorithms evaluated on the first column of the final state against the exact Jacobian [`true`, `false` (default)]"
   value: false
@@ -108,6 +114,12 @@ dt_rad:
 dt_subcol:
   help: "Time between calling the subcolumn cloud overlap. Set to `Inf` to disable."
   value: "Inf"
+cosp_n_subcolumns:
+  help: "Number of COSP subcolumns."
+  value: 256
+cosp_overlap:
+  help: "COSP cloud overlap assumption [`maximum`, `random`, `maximum_random` (default)]."
+  value: "maximum_random"
 idealized_clouds:
   help: "Use idealized clouds in radiation model [`false` (default), `true`]"
   value: false
@@ -216,7 +228,7 @@ surface_setup:
   help: "Surface flux scheme [`DefaultExchangeCoefficients` (default), `DefaultMoninObukhov`]"
   value: "DefaultExchangeCoefficients"
 initial_condition:
-  help: "Initial condition [`DryBaroclinicWave`, `MoistBaroclinicWave`, `ConstantBuoyancyFrequencyProfile`, `DecayingProfile` (default), `IsothermalProfile`, `Bomex`, `DryDensityCurrentProfile`, `RisingThermalBubbleProfile`, `ISDAC`, `GCM`, `Reanalysis`, `ReanalysisTimeVarying`], or a file path for a NetCDF file (read documentation about requirements)."
+  help: "Initial condition [`DryBaroclinicWave`, `MoistBaroclinicWave`, `ConstantBuoyancyFrequencyProfile`, `DecayingProfile` (default), `IsothermalProfile`, `Bomex`, `DryDensityCurrentProfile`, `RisingThermalBubbleProfile`, `ISDAC`, `GCM`, `ARMVARANAL`, `Reanalysis`, `ReanalysisTimeVarying`], or a file path for a NetCDF file (read documentation about requirements)."
   value: "DecayingProfile"
 perturb_initstate:
   help: "Add a perturbation to the initial condition [`false`, `true` (default)]"
@@ -309,6 +321,15 @@ orographic_gravity_wave:
 non_orographic_gravity_wave:
   help: "Apply parameterization for convective gravity wave forcing on horizontal mean flow [`false` (default), `true`]"
   value: false
+nogw_beres_source:
+  help: "Use Beres (2004) convective source spectrum for tropical NOGW (requires EDMF) [`false` (default), `true`]"
+  value: false
+nogw_beres_heating_latent:
+  help: "Source the Beres in-cloud heating from the canonical transport-free latent-heat sum instead of the DSE flux-divergence Q1. Requires microphysics_model=1M and turbconv=prognostic_edmfx. [`false` (default), `true`]"
+  value: false
+nogw_beres_detailed_diagnostics:
+  help: "Enable Beres convective-source verification diagnostics (the `nogw_*` source-internal fields: Q0, h_heat, z_bot/z_top, a_cover, Q_conv, Q_conv_ic, half-sine, launched-spectrum summaries) and the extra per-callback computations they require. Off by default: a GCM run only needs the net drag (utendnogw/vtendnogw). [`false` (default), `true`]"
+  value: false
 dt_nogw:
   help: "Time between calling non-orographic gravity wave update"
   value: "1800secs"
@@ -328,7 +349,7 @@ check_steady_state:
   help: "Compare steady-state velocity to analytic solution; only available for certain choices of `topography` [`false` (default), `true`]"
   value: false
 external_forcing:
-  help: "External forcing for single column experiments [`nothing` (default), `GCM`, `Reanalysis`, `ReanalysisTimeVarying`, `ReanalysisMonthlyAveragedDiurnal`]"
+  help: "External forcing for single column experiments [`nothing` (default), `GCM`, `ARMVARANAL`, `ISDAC`, `Reanalysis`, `ReanalysisTimeVarying`, `ReanalysisMonthlyAveragedDiurnal`]"
   value: ~
 external_forcing_file:
   help: "External forcing file containing large-scale forcings, initial conditions, and boundary conditions. Used for GCM-driven SCM and ISDAC setup [`nothing` (default), `path/to/file`]"
@@ -426,8 +447,7 @@ edmfx_filter:
   help: "If set to true, it switches on the relaxation of negative velocity in EDMFX.  [`true`, `false` (default)]"
   value: false
 edmfx_nh_pressure:
-  help: "If set to true, it switches on EDMFX pressure drag closure.  For prognostic EDMF, this only controls the drag term
-  in the pressure closure. The buoyancy term is always applied. [`true`, `false` (default)]"
+  help: "If set to true, it switches on EDMFX pressure drag closure.  For prognostic EDMF, this only controls the drag term in the pressure closure. The buoyancy term is always applied. [`true`, `false` (default)]"
   value: false
 edmfx_vertical_diffusion:
   help: "If set to true, it switches on vertical diffusion of prognostic EDMFX updrafts. [`true`, `false` (default)]"

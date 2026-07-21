@@ -1041,6 +1041,7 @@ AquaplanetPlots = Union{
     Val{:longrun_aquaplanet_allsky_0M},
     Val{:longrun_aquaplanet_allsky_diagedmf_0M},
     Val{:longrun_aquaplanet_allsky_progedmf_0M},
+    Val{:longrun_aquaplanet_allsky_progedmf_0M_conv_gw},
     Val{:longrun_aquaplanet_allsky_0M_earth},
     Val{:longrun_aquaplanet_dyamond},
     Val{:longrun_aquaplanet_allsky_tvinsol_0M_slabocean},
@@ -1089,10 +1090,10 @@ function make_plots(
         period = "1h"
     end
     vars_3D = map_comparison(simdirs, short_names_3D) do simdir, short_name
-        get(simdir; short_name, reduction) |> ClimaAnalysis.average_lon
+        get(simdir; short_name, reduction, period) |> ClimaAnalysis.average_lon
     end
     vars_2D = map_comparison(simdirs, short_names_2D) do simdir, short_name
-        get(simdir; short_name, reduction)
+        get(simdir; short_name, reduction, period)
     end
     short_names_spectra = ["ua", "wa", "ta", "hus"]
     vars_spectra =
@@ -1287,6 +1288,7 @@ EDMFColumnPlotsWithPrecip = Union{
     Val{:prognostic_edmfx_bomex_mlcloud_column},
     Val{:prognostic_edmfx_bomex_column_sparse_autodiff},
     Val{:prognostic_edmfx_dycoms_rf01_column},
+    Val{:prognostic_edmfx_armvaranal_column},
     Val{:prognostic_edmfx_dycoms_rf02_column},
     Val{:prognostic_edmfx_dycoms_rf02_column_sparse_autodiff},
     Val{:prognostic_edmfx_rico_column},
@@ -1737,17 +1739,12 @@ function make_plots(::Val{:kinematic_driver}, output_paths::Vector{<:AbstractStr
     make_plots_generic(output_paths, vars_lines; summary_files = [file_contour])
 end
 
-Larcform1Plots = Union{Val{:larcform1}, Val{:larcform1_1M}}
+Larcform1BasePlots = Union{Val{:larcform1}}
+Larcform1_1MPlots =
+    Union{Val{:larcform1_1M}, Val{:larcform1_1M_prognostic_edmfx}}
+Larcform1Plots = Union{Larcform1BasePlots, Larcform1_1MPlots}
 
-# Catch-all for any job whose name begins with "larcform1"
-function make_plots(val::Val{S}, output_paths::Vector{<:AbstractString}) where {S}
-    if startswith(String(S), "larcform1")
-        return make_plots(Val(:larcform1), output_paths)
-    end
-    @warn "No plot found for $val"
-end
-
-function make_plots(::Larcform1Plots, output_paths::Vector{<:AbstractString})
+function make_plots(sim_type::Larcform1Plots, output_paths::Vector{<:AbstractString})
     simdirs = SimDir.(output_paths)
 
     short_names_profile_requested = [
@@ -1880,4 +1877,81 @@ function make_plots(::Larcform1Plots, output_paths::Vector{<:AbstractString})
         )
     end
 
+    # Microphysics 1M process tendency plots — only for larcform1_1M
+    if sim_type isa Larcform1_1MPlots
+        mp1m_source_names = [
+            "S_phase_change_vap_lcl",
+            "S_phase_change_vap_icl",
+            "S_acnv_lcl_rai",
+            "S_acnv_icl_sno",
+            "S_accr_lcl_rai",
+            "S_accr_lcl_sno_cold",
+            "S_accr_lcl_sno_warm",
+            "S_accr_melt_lcl_sno",
+            "S_accr_icl_rai",
+            "S_accr_freeze_icl_rai",
+            "S_accr_icl_sno",
+            "S_accr_rai_sno_cold",
+            "S_accr_rai_sno_warm",
+            "S_accr_melt_rai_sno",
+            "S_phase_change_vap_rai",
+            "S_phase_change_vap_sno",
+            "S_melt_icl_lcl",
+            "S_melt_sno_rai",
+        ]
+        # Keep only source terms whose full (gm, updraft, env) triplet is available
+        mp1m_source_names_avail = filter(mp1m_source_names) do sn
+            all(p * sn in available_short_names for p in ("mp1m_", "mp1mup_", "mp1men_"))
+        end
+        mp1m_all_names = vec(
+            ["mp1m_", "mp1mup_", "mp1men_"] .* permutedims(mp1m_source_names_avail),
+        )
+
+        if !isempty(mp1m_all_names)
+            mp1m_simdirs = simdirs[1:1]
+            mp1m_output_paths = output_paths[1:1]
+            reduction_inst = "inst"
+            available_periods_inst = collect(
+                ClimaAnalysis.available_periods(
+                    mp1m_simdirs[1];
+                    short_name = mp1m_all_names[1],
+                    reduction = reduction_inst,
+                ),
+            )
+            period_inst =
+                available_periods_inst[argmin(CA.time_to_seconds.(available_periods_inst))]
+
+            mp1m_vars_zt =
+                map_comparison(mp1m_simdirs, mp1m_all_names) do simdir, sn
+                    var = get(
+                        simdir;
+                        short_name = sn,
+                        reduction = reduction_inst,
+                        period = period_inst,
+                    )
+                    return var
+                end
+
+            mp1m_row_groups = [
+                (
+                    mp1m_vars_zt[(i - 1) * 3 + 1],
+                    mp1m_vars_zt[(i - 1) * 3 + 2],
+                    mp1m_vars_zt[(i - 1) * 3 + 3],
+                ) for i in 1:length(mp1m_source_names_avail)
+            ]
+            make_plots_generic(
+                mp1m_output_paths,
+                mp1m_row_groups;
+                output_name = "mp1m_timeseries",
+                plot_fn = plot_mp1m_row!,
+                MAX_NUM_COLS = 1,
+                MAX_NUM_ROWS = 3,
+                fig_size = (1500, 900),
+            )
+        end
+    end
+
 end
+
+# ARM VARANAL single-column case (model output + sonde observation comparison)
+include(joinpath(@__DIR__, "plot_varanal.jl"))

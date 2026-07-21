@@ -1,11 +1,6 @@
 module COSPHydrometeorSubcolumns
 
-export accumulate_sampled_cloud_fraction!,
-    accumulate_sampled_precip_fraction!,
-    slice_hydrometeor_subcolumn!
-
-const CLOUD_HYDROMETEORS = (:q_lcl, :q_icl)
-const PRECIP_HYDROMETEORS = (:q_rai, :q_sno)
+import LazyBroadcast: lazy
 
 function accumulate_sampled_cloud_fraction!(sampled_fraction, cloud_mask, nsubcolumns)
     FT = eltype(sampled_fraction)
@@ -20,29 +15,46 @@ function accumulate_sampled_precip_fraction!(sampled_fraction, precip_mask, nsub
 end
 
 """
-Populate one stored hydrometeor subcolumn from streamed mask fields.
+The returned broadcasts must be consumed before either mask or the grid-mean
+scratch fields are overwritten.
 """
-function slice_hydrometeor_subcolumn!(
-    subcolumn::NamedTuple,
+function lazy_hydrometeor_subcolumn(
+    grid_mean,
     cloud_mask,
     precip_mask,
-    grid_mean::NamedTuple,
     sampled_cloud_fraction,
     sampled_precip_fraction,
 )
-    keys(subcolumn) == keys(grid_mean) ||
-        throw(ArgumentError("subcolumn and grid_mean must have matching keys"))
-    for name in keys(grid_mean)
-        output = getproperty(subcolumn, name)
-        input = getproperty(grid_mean, name)
-        name in CLOUD_HYDROMETEORS &&
-            (@. output = _sliced_cloud_value(input, sampled_cloud_fraction, cloud_mask))
-        name in PRECIP_HYDROMETEORS &&
-            (@. output = _sliced_precip_value(input, sampled_precip_fraction, precip_mask))
-        name in CLOUD_HYDROMETEORS || name in PRECIP_HYDROMETEORS ||
-            throw(ArgumentError("unknown hydrometeor field name: $name"))
-    end
-    return nothing
+    return (;
+        q_lcl = lazy.(
+            _sliced_cloud_value.(
+                grid_mean.q_lcl,
+                sampled_cloud_fraction,
+                cloud_mask,
+            ),
+        ),
+        q_icl = lazy.(
+            _sliced_cloud_value.(
+                grid_mean.q_icl,
+                sampled_cloud_fraction,
+                cloud_mask,
+            ),
+        ),
+        q_rai = lazy.(
+            _sliced_precip_value.(
+                grid_mean.q_rai,
+                sampled_precip_fraction,
+                precip_mask,
+            ),
+        ),
+        q_sno = lazy.(
+            _sliced_precip_value.(
+                grid_mean.q_sno,
+                sampled_precip_fraction,
+                precip_mask,
+            ),
+        ),
+    )
 end
 
 @inline _cloud_indicator(mask) =
@@ -70,7 +82,7 @@ end
     if fraction > zero(fraction)
         return is_selected ? q / fraction : zero(q)
     else
-        return q > zero(q) ? q : zero(q)
+        return zero(q)
     end
 end
 

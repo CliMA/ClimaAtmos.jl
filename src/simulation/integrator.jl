@@ -7,13 +7,14 @@ import ClimaUtilities.TimeManager: ITime
 #####
 
 function get_jacobian(
-    ode_algo, Y, atmos, jacobian::JacobianAlgorithm, debug_jacobian,
+    ode_algo, Y, atmos, jacobian::JacobianAlgorithm, debug_jacobian;
+    verbose = false,
 )
     ode_algo isa Union{CTS.IMEXAlgorithm, CTS.RosenbrockAlgorithm} ||
         return nothing
-    @info "Jacobian algorithm: $(summary_string(jacobian))"
+    verbose && @info "Jacobian algorithm: $(summary_string(jacobian))"
     jac = Jacobian(jacobian, Y, atmos; verbose = debug_jacobian)
-    if hasproperty(jac.cache, :derivative_flags)
+    if verbose && hasproperty(jac.cache, :derivative_flags)
         flags_str = join(
             ("$k = $(typeof(v).name.name)" for (k, v) in pairs(jac.cache.derivative_flags)),
             ", ",
@@ -82,11 +83,54 @@ function ode_configuration(::Type{FT}, ode_name, update_jacobian_every,
     end
 end
 
+"""
+    update_cache_signal_handler(freq_str)
+
+Map a YAML frequency string (`"stage"`, `"step"`) to the matching
+ClimaTimeSteppers `UpdateSignalHandler` for `ClimaODEFunction`'s
+`update_cache` field. `"dss"` is not a valid choice here because CTS never
+fires `cache!` with `WithDSSSignal` — only at state-ready
+(`EndOfStage`/`EndOfStep`) sites.
+"""
+function update_cache_signal_handler(freq_str)
+    if freq_str == "stage"
+        return CTS.UpdateEvery(CTS.EndOfStage)
+    elseif freq_str == "step"
+        return CTS.UpdateEvery(CTS.EndOfStep)
+    else
+        error("Unknown `update_cache_every = $(freq_str)`; expected `stage` or `step`")
+    end
+end
+
+"""
+    update_constrain_state_signal_handler(freq_str)
+
+Map a YAML frequency string (`"stage"`, `"step"`, `"dss"`) to the matching
+ClimaTimeSteppers `UpdateSignalHandler` for `ClimaODEFunction`'s
+`update_constrain_state` field. `"dss"` fires `constrain_state!` at every
+`dss!` site (including pre-implicit and post-`initialize_imp!` DSSes).
+"""
+function update_constrain_state_signal_handler(freq_str)
+    if freq_str == "stage"
+        return CTS.UpdateEvery(CTS.EndOfStage)
+    elseif freq_str == "step"
+        return CTS.UpdateEvery(CTS.EndOfStep)
+    elseif freq_str == "dss"
+        return CTS.UpdateEvery(CTS.WithDSS)
+    else
+        error(
+            "Unknown `update_constrain_state_every = $(freq_str)`; expected `stage`, `step`, or `dss`",
+        )
+    end
+end
+
 function args_integrator(Y, p, tspan, ode_algo, callback,
     jacobian, debug_jacobian, prescribed_flow, dt_integrator,
+    update_cache_every, update_constrain_state_every;
+    verbose = false,
 )
     (; atmos) = p
-    s = @timed_str begin
+    @timed_log verbose "Built tendency function" begin
         if isnothing(prescribed_flow)
 
             # This is the default case
@@ -94,7 +138,7 @@ function args_integrator(Y, p, tspan, ode_algo, callback,
             T_imp! = CTS.ODEFunction(
                 implicit_tendency!;
                 jac_prototype = get_jacobian(
-                    ode_algo, Y, atmos, jacobian, debug_jacobian,
+                    ode_algo, Y, atmos, jacobian, debug_jacobian; verbose,
                 ),
                 Wfact = update_jacobian!,
             )
@@ -106,10 +150,21 @@ function args_integrator(Y, p, tspan, ode_algo, callback,
             T_imp! = nothing
             cache_imp! = nothing
         end
+        # Only wire `T_post_imp!` when the upwind correction is nontrivial;
+        # otherwise `nothing` so CTS skips the post-Newton path (including
+        # its `cache_imp!` refresh) at every implicit stage.
+        T_post_imp! =
+            (isnothing(T_imp!) || atmos.numerics.energy_q_tot_upwinding == Val(:none)) ?
+            nothing : correct_implicit_advection_tendency!
         tendency_function = CTS.ClimaODEFunction(;
-            T_exp_T_lim!, T_imp!,
+            T_exp_T_lim!, T_imp!, T_post_imp!,
             cache! = set_precomputed_quantities!, cache_imp!,
-            lim! = limiters_func!, dss! = constrain_state!,  # TODO: Rename ClimaODEFunction kwarg to `constrain_state!`
+            lim! = limiters_func!,
+            dss!, constrain_state!,
+            update_cache = update_cache_signal_handler(update_cache_every),
+            update_constrain_state = update_constrain_state_signal_handler(
+                update_constrain_state_every,
+            ),
             initialize_imp! = initialize_implicit_stage_problem!,
         )
     end

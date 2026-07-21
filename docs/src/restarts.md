@@ -4,18 +4,18 @@
 allowing you to split simulations across multiple runs. This feature is
 particularly useful for
 
-* **Performing long simulations on clusters:** Most supercomputers do not allow
-  jobs to run for an unlimited amount of wall-time. So, instead of running
-  multi-year simulation in a single run, you can break it down into shorter
-  segments, restarting from the last saved state.
+  - **Performing long simulations on clusters:** Most supercomputers do not allow
+    jobs to run for an unlimited amount of wall-time. So, instead of running
+    multi-year simulation in a single run, you can break it down into shorter
+    segments, restarting from the last saved state.
 
-* **Recovery from interruptions:** If a simulation is unexpectedly interrupted
-  (e.g., due to a crash), you can resume it from the last saved checkpoint
-  instead of starting over.
+  - **Recovery from interruptions:** If a simulation is unexpectedly interrupted
+    (e.g., due to a crash), you can resume it from the last saved checkpoint
+    instead of starting over.
 
-* **Sensitivity experiments:** You can run a simulation to a certain point, then
-  branch it off into multiple simulations with modified parameters or initial
-  conditions, restarting from the common checkpoint.
+  - **Sensitivity experiments:** You can run a simulation to a certain point, then
+    branch it off into multiple simulations with modified parameters or initial
+    conditions, restarting from the common checkpoint.
 
 !!! note
 
@@ -31,7 +31,6 @@ particularly useful for
     When `reproducible_restart` is true, `ClimaAtmos` recalculates the grid_scale
     cloud fraction and uses it in the buoyancy gradient calculation to ensure deterministic
     behavior across restarts. We recommend disabling this option for production runs.
-
 
 ### How Restarts Work
 

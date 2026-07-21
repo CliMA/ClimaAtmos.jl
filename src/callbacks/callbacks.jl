@@ -104,13 +104,15 @@ function external_driven_single_column!(integrator)
     evaluate!(ᶜls_subsidence, wa, t)
 end
 
-NVTX.@annotate function rrtmgp_model_callback!(integrator)
+import RRTMGP
+
+NVTX.@annotate function rrtmgp_solver_callback!(integrator)
     Y = integrator.u
     p = integrator.p
     t = integrator.t
     FT = eltype(Y)
     (; params) = p
-    (; ᶠradiation_flux, rrtmgp_model) = p.radiation
+    (; ᶠradiation_flux, rrtmgp_solver) = p.radiation
     (; radiation_mode) = p.atmos
 
     RRTMGPI.update_atmospheric_state!(integrator)
@@ -118,14 +120,25 @@ NVTX.@annotate function rrtmgp_model_callback!(integrator)
     set_insolation_variables!(Y, p, t, p.atmos.insolation)
     set_surface_albedo!(Y, p, t, p.atmos.surface_albedo)
 
-    RRTMGPI.update_fluxes!(rrtmgp_model, UInt32(floor(FT(t) / integrator.p.dt)))
-    Fields.field2array(ᶠradiation_flux) .= rrtmgp_model.face_flux
+    RRTMGP.update_fluxes!(rrtmgp_solver, UInt32(floor(FT(t) / integrator.p.dt)))
+    Fields.field2array(ᶠradiation_flux) .= RRTMGP.net_flux(rrtmgp_solver)
     return nothing
 end
 
 NVTX.@annotate function subcol_model_callback!(integrator)
     Y = integrator.u
     p = integrator.p
+    foreach_cosp_subcolumn(consume_cosp_subcolumn!, Y, p)
+
+    return nothing
+end
+
+"""
+Placeholder for a future COSP simulator consumer such as CloudSat.
+"""
+consume_cosp_subcolumn!(_, _) = nothing
+
+function prepare_cosp_subcolumns!(Y, p)
     (;
         ᶜcloud_fraction,
         ᶜsubcolumn_cloud,
@@ -185,18 +198,13 @@ NVTX.@annotate function subcol_model_callback!(integrator)
         )
     end
 
-    set_cosp_hydrometeor_subcolumns!(Y, p, p.atmos.microphysics_model)
-    set_cosp_cloudsat_optics!(Y, p, p.atmos.microphysics_model)
-
-    @debug "subcol callback" t = integrator.t
-
     return nothing
 end
 
 function set_cosp_large_scale_precipitation_flux!(
     Y,
     p,
-    ::NonEquilibriumMicrophysics1M,
+    ::Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M},
 )
     (; ᶜlarge_scale_precipitation_flux, ᶜwᵣ, ᶜwₛ) = p.precomputed
     FT = eltype(ᶜlarge_scale_precipitation_flux)
@@ -207,20 +215,67 @@ function set_cosp_large_scale_precipitation_flux!(
     return nothing
 end
 
-function set_cosp_large_scale_precipitation_flux!(Y, p, _)
-    (; ᶜlarge_scale_precipitation_flux) = p.precomputed
-    FT = eltype(ᶜlarge_scale_precipitation_flux)
+set_cosp_large_scale_precipitation_flux!(_, _, microphysics_model) =
+    _check_cosp_microphysics(microphysics_model)
 
-    @. ᶜlarge_scale_precipitation_flux = FT(0)
+"""
+    foreach_cosp_subcolumn(consume!, Y, p)
 
-    return nothing
+Prepare the sampled cloud and precipitation fractions, then regenerate and
+stream one deterministic hydrometeor subcolumn at a time. `consume!` must use
+the lazy hydrometeor broadcasts immediately; they borrow working mask and
+scratch fields that are overwritten during subsequent iterations.
+"""
+function foreach_cosp_subcolumn(consume!::F, Y, p) where {F}
+    microphysics_model = p.atmos.microphysics_model
+    _check_cosp_microphysics(microphysics_model)
+    prepare_cosp_subcolumns!(Y, p)
+    return foreach_cosp_subcolumn(consume!, Y, p, microphysics_model)
 end
 
-function set_cosp_hydrometeor_subcolumns!(
+function foreach_cosp_subcolumn(
+    consume!::F,
     Y,
     p,
-    ::NonEquilibriumMicrophysics1M,
-)
+    ::Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M},
+) where {F}
+    ᶜq_lcl = p.scratch.ᶜtemp_scalar
+    ᶜq_icl = p.scratch.ᶜtemp_scalar_2
+    ᶜq_rai = p.scratch.ᶜtemp_scalar_3
+    ᶜq_sno = p.scratch.ᶜtemp_scalar_4
+
+    @. ᶜq_lcl = specific(Y.c.ρq_lcl, Y.c.ρ)
+    @. ᶜq_icl = specific(Y.c.ρq_icl, Y.c.ρ)
+    @. ᶜq_rai = specific(Y.c.ρq_rai, Y.c.ρ)
+    @. ᶜq_sno = specific(Y.c.ρq_sno, Y.c.ρ)
+
+    grid_mean_hydrometeors =
+        (; q_lcl = ᶜq_lcl, q_icl = ᶜq_icl, q_rai = ᶜq_rai, q_sno = ᶜq_sno)
+
+    return foreach_prepared_cosp_subcolumn!(consume!, grid_mean_hydrometeors, p)
+end
+
+foreach_cosp_subcolumn(::F, _, _, microphysics_model) where {F} =
+    _check_cosp_microphysics(microphysics_model)
+
+_check_cosp_microphysics(
+    ::Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M},
+) = nothing
+
+function _check_cosp_microphysics(microphysics_model)
+    throw(
+        ArgumentError(
+            "COSP supports only NonEquilibriumMicrophysics1M and " *
+            "NonEquilibriumMicrophysics2M; got $(nameof(typeof(microphysics_model)))",
+        ),
+    )
+end
+
+function foreach_prepared_cosp_subcolumn!(
+    consume!::F,
+    grid_mean_hydrometeors,
+    p,
+) where {F}
     (;
         ᶜcloud_fraction,
         ᶜsubcolumn_cloud,
@@ -229,18 +284,9 @@ function set_cosp_hydrometeor_subcolumns!(
         ᶜscops_selectors,
         ᶜprecip_subcolumn_scratch,
         ᶜlarge_scale_precipitation_flux,
-        ᶜsubcolumn_hydrometeors,
         ᶜsampled_cloud_fraction,
         ᶜsampled_precip_fraction,
     ) = p.precomputed
-
-    ᶜq_lcl = @. lazy(specific(Y.c.ρq_lcl, Y.c.ρ))
-    ᶜq_icl = @. lazy(specific(Y.c.ρq_icl, Y.c.ρ))
-    ᶜq_rai = @. lazy(specific(Y.c.ρq_rai, Y.c.ρ))
-    ᶜq_sno = @. lazy(specific(Y.c.ρq_sno, Y.c.ρ))
-
-    grid_mean_hydrometeors =
-        (; q_lcl = ᶜq_lcl, q_icl = ᶜq_icl, q_rai = ᶜq_rai, q_sno = ᶜq_sno)
 
     cosp = p.atmos.cosp
     nsubcolumns = _cosp_nsubcolumns(cosp.n_subcolumns)
@@ -261,102 +307,21 @@ function set_cosp_hydrometeor_subcolumns!(
             ᶜscops_selectors,
             ᶜprecip_subcolumn_scratch,
         )
-        output = map(fields -> fields[isubcolumn], ᶜsubcolumn_hydrometeors)
-        COSP.COSPHydrometeorSubcolumns.slice_hydrometeor_subcolumn!(
-            output,
-            ᶜsubcolumn_cloud,
-            ᶜsubcolumn_precip,
-            grid_mean_hydrometeors,
-            ᶜsampled_cloud_fraction,
-            ᶜsampled_precip_fraction,
-        )
+        hydrometeors =
+            COSP.COSPHydrometeorSubcolumns.lazy_hydrometeor_subcolumn(
+                grid_mean_hydrometeors,
+                ᶜsubcolumn_cloud,
+                ᶜsubcolumn_precip,
+                ᶜsampled_cloud_fraction,
+                ᶜsampled_precip_fraction,
+            )
+        consume!(isubcolumn, hydrometeors)
     end
 
     return nothing
 end
 
 @inline _cosp_nsubcolumns(::Val{N}) where {N} = N
-
-function set_cosp_hydrometeor_subcolumns!(Y, p, _)
-    (;
-        ᶜsubcolumn_hydrometeors,
-    ) = p.precomputed
-    FT = eltype(Y)
-
-    for hydrometeor_fields in values(ᶜsubcolumn_hydrometeors)
-        for hydrometeor_field in hydrometeor_fields
-            @. hydrometeor_field = FT(0)
-        end
-    end
-
-    return nothing
-end
-
-function set_cosp_cloudsat_optics!(
-    Y,
-    p,
-    ::NonEquilibriumMicrophysics1M,
-)
-    (;
-        z_vol_cloudsat,
-        kr_vol_cloudsat,
-        g_vol_cloudsat,
-        Ze_non_cloudsat,
-        DBZe_cloudsat,
-        ᶜsubcolumn_hydrometeors,
-        ᶜp,
-        ᶜT,
-        ᶜq_tot_nonneg,
-        ᶜq_liq,
-        ᶜq_ice,
-    ) = p.precomputed
-
-    ᶜq_vap = @. lazy(ᶜq_tot_nonneg - ᶜq_liq - ᶜq_ice)
-    thermo_state = (; ᶜp, ᶜT, ᶜq_vap)
-
-    COSP.COSPCloudSatOptics.cloudsat_optics!(
-        z_vol_cloudsat,
-        kr_vol_cloudsat,
-        g_vol_cloudsat,
-        ᶜsubcolumn_hydrometeors,
-        thermo_state,
-        Y.c.ρ,
-    )
-    COSP.COSPCloudSatReflectivity.cloudsat_reflectivity!(
-        Ze_non_cloudsat,
-        DBZe_cloudsat,
-        z_vol_cloudsat,
-        kr_vol_cloudsat,
-        g_vol_cloudsat,
-    )
-
-    return nothing
-end
-
-function set_cosp_cloudsat_optics!(Y, p, _)
-    (;
-        z_vol_cloudsat,
-        kr_vol_cloudsat,
-        g_vol_cloudsat,
-        Ze_non_cloudsat,
-        DBZe_cloudsat,
-    ) = p.precomputed
-    FT = eltype(Y)
-
-    @. g_vol_cloudsat = FT(0)
-    for cloudsat_fields in (z_vol_cloudsat, kr_vol_cloudsat)
-        for cloudsat_field in cloudsat_fields
-            @. cloudsat_field = FT(0)
-        end
-    end
-    for reflectivity_fields in (Ze_non_cloudsat, DBZe_cloudsat)
-        for reflectivity_field in reflectivity_fields
-            @. reflectivity_field = FT(-1e30)
-        end
-    end
-
-    return nothing
-end
 
 NVTX.@annotate function nogw_model_callback!(integrator)
     Y = integrator.u
@@ -382,34 +347,25 @@ NVTX.@annotate function ogw_model_callback!(integrator)
     return nothing
 end
 
-NVTX.@annotate function enforce_physical_constraints_callback!(integrator)
-    Y = integrator.u
-    p = integrator.p
-    t = integrator.t
-
-    enforce_physical_constraints!(Y, p, t, p.atmos)
-    return nothing
-end
-
 #Uniform insolation, magnitudes from Wing et al. (2018)
 #Note that the TOA downward shortwave fluxes won't be the same as the values in the paper if add_isothermal_boundary_layer is true
 function set_insolation_variables!(Y, p, t, ::RCEMIPIIInsolation)
     FT = Spaces.undertype(axes(Y.c))
-    (; rrtmgp_model) = p.radiation
-    rrtmgp_model.cos_zenith .= cosd(FT(42.05))
-    rrtmgp_model.toa_flux .= FT(551.58)
+    (; rrtmgp_solver) = p.radiation
+    RRTMGP.cos_zenith(rrtmgp_solver) .= cosd(FT(42.05))
+    RRTMGP.toa_flux(rrtmgp_solver) .= FT(551.58)
 end
 
 function set_insolation_variables!(Y, p, t, ::GCMDrivenInsolation)
-    (; rrtmgp_model) = p.radiation
-    rrtmgp_model.cos_zenith .= Fields.field2array(p.external_forcing.cos_zenith)
-    rrtmgp_model.toa_flux .=
+    (; rrtmgp_solver) = p.radiation
+    RRTMGP.cos_zenith(rrtmgp_solver) .= Fields.field2array(p.external_forcing.cos_zenith)
+    RRTMGP.toa_flux(rrtmgp_solver) .=
         Fields.field2array(p.external_forcing.toa_flux)
 end
 
 function set_insolation_variables!(Y, p, t, ::ExternalTVInsolation)
     # unpack objects with time varying data
-    (; rrtmgp_model) = p.radiation
+    (; rrtmgp_solver) = p.radiation
     (; coszen, rsdt) = p.external_forcing.surface_inputs
     coszen_tv = p.external_forcing.surface_timevaryinginputs.coszen
     rsdt_tv = p.external_forcing.surface_timevaryinginputs.rsdt
@@ -418,8 +374,8 @@ function set_insolation_variables!(Y, p, t, ::ExternalTVInsolation)
     evaluate!(rsdt, rsdt_tv, t)
 
     # set insolation variables from the values within the fields
-    rrtmgp_model.cos_zenith .= Fields.field2array(coszen)
-    rrtmgp_model.toa_flux .= Fields.field2array(rsdt ./ coszen)
+    RRTMGP.cos_zenith(rrtmgp_solver) .= Fields.field2array(coszen)
+    RRTMGP.toa_flux(rrtmgp_solver) .= Fields.field2array(rsdt ./ coszen)
 end
 
 function set_insolation_variables!(Y, p, t, ::IdealizedInsolation)
@@ -430,47 +386,62 @@ function set_insolation_variables!(Y, p, t, ::IdealizedInsolation)
     else
         latitude = Fields.field2array(zero(bottom_coords.z)) # flat space is on Equator
     end
-    (; rrtmgp_model) = p.radiation
+    (; rrtmgp_solver) = p.radiation
     # Approximate annual mean insolation without diurnal cycle
     # Reference: O'Gorman and Schneider (2008), J. Climate, 21, 3815-3832
-    rrtmgp_model.toa_flux .= 680
-    @. rrtmgp_model.cos_zenith = (1 + FT(0.3) * (1 - 3 * sind(latitude)^2)) * FT(0.5)
+    RRTMGP.toa_flux(rrtmgp_solver) .= 680
+    cos_zenith = RRTMGP.cos_zenith(rrtmgp_solver)
+    @. cos_zenith =
+        (1 + FT(0.3) * (1 - 3 * sind(latitude)^2)) * FT(0.5)
 end
 
 function set_insolation_variables!(Y, p, t, ::Larcform1Insolation)
     FT = Spaces.undertype(axes(Y.c))
-    (; rrtmgp_model) = p.radiation
-    rrtmgp_model.cos_zenith .= eps(FT) # polar night; keep μ>0 for RRTMGP
-    rrtmgp_model.toa_flux .= FT(0)
+    (; rrtmgp_solver) = p.radiation
+    RRTMGP.cos_zenith(rrtmgp_solver) .= eps(FT) # polar night; keep μ>0 for RRTMGP
+    RRTMGP.toa_flux(rrtmgp_solver) .= FT(0)
 end
 
 function set_insolation_variables!(Y, p, t, tvi::TimeVaryingInsolation)
     FT = Spaces.undertype(axes(Y.c))
     params = p.params
     insolation_params = CAP.insolation_params(params)
-    (; insolation_tuple, rrtmgp_model) = p.radiation
+    (; insolation_tuple, rrtmgp_solver) = p.radiation
 
-    current_datetime = ClimaUtilities.TimeManager.date(t)
+    current_datetime = if !(t isa ITime) && !isnothing(tvi.start_date)
+        tvi.start_date + Dates.Second(round(Int, t))
+    else
+        ClimaUtilities.TimeManager.date(t)
+    end
 
     bottom_coords = Fields.coordinate_field(Spaces.level(Y.c, 1))
     cos_zenith =
-        Fields.array2field(rrtmgp_model.cos_zenith, axes(bottom_coords))
+        Fields.array2field(RRTMGP.cos_zenith(rrtmgp_solver), axes(bottom_coords))
     toa_flux = Fields.array2field(
-        rrtmgp_model.toa_flux,
+        RRTMGP.toa_flux(rrtmgp_solver),
         axes(bottom_coords),
     )
 
     # Use Insolation API: insolate_tuple = insolation(datetime, lat, lon, params)
     # Note: μ is already clamped at 0 by Insolation.jl but rrtmgp needs a non-zero μ
-    if eltype(bottom_coords) <: Geometry.LatLongZPoint
-        # Calculate insolation for each grid point
+    if !isnothing(tvi.latitude) && !isnothing(tvi.longitude)
+        # Explicit lat/lon override (e.g. single-column setups whose coordinate
+        # system doesn't carry lat/lon).
+        insolation_tuple .= Ref(
+            Insolation.insolation(
+                current_datetime,
+                tvi.latitude,
+                tvi.longitude,
+                insolation_params,
+            ),
+        )
+    elseif eltype(bottom_coords) <: Geometry.LatLongZPoint
         @. insolation_tuple = Insolation.insolation(
             current_datetime,
             bottom_coords.lat,
             bottom_coords.long,
             insolation_params,
         )
-
     else
         # assume that the latitude and longitude are both 0 for flat space
         insolation_tuple .= Ref(Insolation.insolation(
@@ -571,6 +542,21 @@ function reset_graceful_exit(output_dir)
 end
 
 function check_nans(integrator)
-    any(isnan, parent(integrator.u)) && error("Found NaN")
+    if any(isnan, parent(integrator.u))
+        # Identify which field(s) have NaN
+        Y = integrator.u
+        for pn in propertynames(Y)
+            sub = getproperty(Y, pn)
+            for fn in propertynames(sub)
+                field = getproperty(sub, fn)
+                if any(isnan, parent(field))
+                    n_nan = count(isnan, parent(field))
+                    n_tot = length(parent(field))
+                    @info "NaN found in Y.$pn.$fn: $n_nan / $n_tot elements"
+                end
+            end
+        end
+        error("Found NaN")
+    end
     return nothing
 end

@@ -56,14 +56,14 @@ YAML options.
 
 ## Comparison
 
-|               | Script API                            | Config API                        |
-|---------------|---------------------------------------|-----------------------------------|
-| Entry point   | `AtmosSimulation{FT}(; kwargs...)`    | `AtmosConfig("file.yml")`         |
-| Model         | Pass `AtmosModel()` directly          | Built from YAML keys              |
-| Grid          | Pass grid object                      | `config` key + grid parameters    |
-| Setup         | Pass setup instance                   | `initial_condition` string        |
-| Timestep      | `dt = 600` (number)                   | `dt: "600secs"` (string)          |
-| Duration      | `t_end = 864000` (number)             | `t_end: "10days"` (string)        |
+|             | Script API                         | Config API                     |
+|:----------- |:---------------------------------- |:------------------------------ |
+| Entry point | `AtmosSimulation{FT}(; kwargs...)` | `AtmosConfig("file.yml")`      |
+| Model       | Pass `AtmosModel()` directly       | Built from YAML keys           |
+| Grid        | Pass grid object                   | `config` key + grid parameters |
+| Setup       | Pass setup instance                | `initial_condition` string     |
+| Timestep    | `dt = 600` (number)                | `dt: "600secs"` (string)       |
+| Duration    | `t_end = 864000` (number)          | `t_end: "10days"` (string)     |
 
 ## Common mappings
 
@@ -73,16 +73,16 @@ All script options are keyword arguments of
 instead take objects built by their own constructors (the grid constructors, `AtmosModel`,
 and `Setups.*`) before being handed to `AtmosSimulation`.
 
-| Script kwarg                              | YAML key                                  |
-|-------------------------------------------|-------------------------------------------|
-| `grid = ColumnGrid(...)`                  | `config: "column"` + `z_max`, `z_elem`    |
-| `grid = SphereGrid(...)`                  | `config: "sphere"` + `h_elem`, `z_elem`   |
-| `grid = BoxGrid(...)`                     | `config: "box"` + `x_max`, `y_max`, etc.  |
-| `setup = Setups.Bomex()`                  | `initial_condition: "Bomex"`              |
-| `dt = 5`                                  | `dt: "5secs"`                             |
-| `t_end = 21600`                           | `t_end: "6hours"`                         |
-| `diagnostics = DiagnosticsConfig(...)`    | `output_default_diagnostics: true`        |
-| `checkpoint_frequency = 3600`             | `dt_save_state_to_disk: "1hours"`         |
+| Script kwarg                           | YAML key                                 |
+|:-------------------------------------- |:---------------------------------------- |
+| `grid = ColumnGrid(...)`               | `config: "column"` + `z_max`, `z_elem`   |
+| `grid = SphereGrid(...)`               | `config: "sphere"` + `h_elem`, `z_elem`  |
+| `grid = BoxGrid(...)`                  | `config: "box"` + `x_max`, `y_max`, etc. |
+| `setup = Setups.Bomex()`               | `initial_condition: "Bomex"`             |
+| `dt = 5`                               | `dt: "5secs"`                            |
+| `t_end = 21600`                        | `t_end: "6hours"`                        |
+| `diagnostics = DiagnosticsConfig(...)` | `output_default_diagnostics: true`       |
+| `checkpoint_frequency = 3600`          | `dt_save_state_to_disk: "1hours"`        |
 
 `job_id` is not a YAML key: in the config workflow set it with the `--job_id` flag
 (or it defaults to the config file name); in the script workflow it is an

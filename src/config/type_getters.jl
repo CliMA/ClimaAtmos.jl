@@ -19,6 +19,7 @@ function ClimaAtmosParameters(config::AtmosConfig)
         has_non_orographic_gw = get(pa, "non_orographic_gravity_wave", false) != false,
         has_orographic_gw =
         !isnothing(get(pa, "orographic_gravity_wave", nothing)),
+        has_beres_source = get(pa, "nogw_beres_source", false) != false,
     )
 end
 
@@ -140,6 +141,12 @@ function get_setup_type(parsed_args, thermo_params)
             parsed_args["external_forcing_file"],
             parsed_args["cfsite_number"],
         )
+    elseif ic_name == "ARMVARANAL"
+        return Setups.ARMVARANAL(
+            parsed_args["external_forcing_file"];
+            thermo_params,
+            start_date = parsed_args["start_date"],
+        )
     elseif ic_name == "ReanalysisTimeVarying"
         FT = eltype(thermo_params)
         external_forcing_file =
@@ -237,14 +244,13 @@ end
 
 function get_steady_state_velocity(params, Y, topo, initial_condition, mesh_warp_type)
     initial_condition == "ConstantBuoyancyFrequencyProfile" &&
-        mesh_warp_type == "Linear" ||
+    mesh_warp_type == "Linear" ||
         error("The steady-state velocity can currently be computed only for a \
                ConstantBuoyancyFrequencyProfile with Linear mesh warping")
     top_level = Spaces.nlevels(axes(Y.c)) + Fields.half
     z_top = Fields.level(Fields.coordinate_field(Y.f).z, top_level)
 
-    @info "Approximating steady-state velocity"
-    s = @timed_str begin
+    @timed_log true "Approximating steady-state velocity" begin
         ᶜu = steady_state_velocity.(topo, params, Fields.coordinate_field(Y.c), z_top)
         ᶠu =
             steady_state_velocity.(topo, params, Fields.coordinate_field(Y.f), z_top)
@@ -529,6 +535,8 @@ function get_simulation(config::AtmosConfig)
         ode_config = ode_configuration(FT, pa),
         jacobian = jacobian_from_parsed_args(pa),
         debug_jacobian = pa["debug_jacobian"],
+        update_cache_every = pa["update_cache_every"],
+        update_constrain_state_every = pa["update_constrain_state_every"],
         aerosol_names = Tuple(pa["prescribed_aerosols"]),
         time_varying_trace_gases = Tuple(pa["time_varying_trace_gases"]),
         vertical_water_borrowing_species =
@@ -542,6 +550,7 @@ function get_simulation(config::AtmosConfig)
         diagnostics = diagnostics_config_from_config(config),
         checkpoint_frequency = pa["dt_save_state_to_disk"],
         log_to_file = pa["log_to_file"],
+        verbose = true,  # Config-based runs are always verbose
     )
 
     @info "Simulation info" job_id = sim.job_id output_dir = sim.output_dir

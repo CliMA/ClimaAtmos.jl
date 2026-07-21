@@ -33,24 +33,17 @@ environment, but this is a current approximation.
 function set_covariance_cache_and_cloud_fraction!(Y, p)
     (; cloud_model, microphysics_model) = p.atmos
     (; ᶜgradᵥ_q_tot, ᶜgradᵥ_θ_liq_ice, ᶜcloud_fraction) = p.precomputed
-    (; ᶜlinear_buoygrad, ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice) = p.precomputed
+    (; ᶜbuoygrad, ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice) = p.precomputed
     thermo_params = CAP.thermodynamics_params(p.params)
     ᶜlg = Fields.local_geometry_field(Y.c)
 
-    # Precompute gradients
-    @. ᶜgradᵥ_q_tot = ᶜgradᵥ(ᶠinterp(ᶜq_tot_nonneg))
-    @. ᶜgradᵥ_θ_liq_ice = ᶜgradᵥ(
-        ᶠinterp(
-            TD.liquid_ice_pottemp(
-                thermo_params,
-                ᶜT,
-                Y.c.ρ,
-                ᶜq_tot_nonneg,
-                ᶜq_liq,
-                ᶜq_ice,
-            ),
-        ),
-    )
+    # Materialize the pointwise buoyancy-gradient chain-rule coefficients,
+    # exact face gradients, and centered vertical gradients of (θ_li, q_tot) once:
+    # the coefficients and materialized θ_li carry all of the expensive saturation
+    # thermodynamics and are independent of cloud fraction, so within the Picard
+    # iteration every buoyancy-gradient stencil reduces to a cheap `blended_N²` FMA broadcast.
+    set_buoyancy_gradient_inputs!(Y, p, thermo_params)
+    (; ᶜbg_coeffs) = p.precomputed
 
     # The buoyancy gradient depends on cloud fraction, and cloud fraction depends
     # on the covariance cache through the mixing length. For reproducible restart,
@@ -58,6 +51,7 @@ function set_covariance_cache_and_cloud_fraction!(Y, p)
     if p.atmos.numerics.reproducible_restart isa ReproducibleRestart
         set_cloud_fraction!(Y, p, microphysics_model, GridScaleCloud())
     end
+
 
     # One Picard step: use the current cloud fraction to update buoyancy
     # gradient and covariance cache, then recompute cloud fraction.
@@ -67,20 +61,17 @@ function set_covariance_cache_and_cloud_fraction!(Y, p)
     # materialization during Picard. CF, μ_S, and λ are all written once after
     # Picard converges, in the final `set_sgs_moments_and_cloud_fraction!` call.
     function picard_step!()
-        @. ᶜlinear_buoygrad = buoyancy_gradients(
-            BuoyGradMean(), # TODO: modify for NonEq + 1M tracers if needed
-            thermo_params,
-            ᶜT,
-            Y.c.ρ,
-            ᶜq_tot_nonneg,
-            ᶜq_liq,
-            ᶜq_ice,
+        @. ᶜbuoygrad = blended_N²(
+            ᶜbg_coeffs,
             ᶜcloud_fraction,
-            C3,
-            ᶜgradᵥ_q_tot,
-            ᶜgradᵥ_θ_liq_ice,
-            ᶜlg,
+            projected_vector_data(C3, ᶜgradᵥ_θ_liq_ice, ᶜlg),
+            projected_vector_data(C3, ᶜgradᵥ_q_tot, ᶜlg),
         )
+
+        # Stability-biased buoyancy gradient for the mixing-length and
+        # Pr_t(Ri) closures (max of one-sided estimates; registers
+        # unresolved inversions that the centered gradient dilutes).
+        set_stability_buoyancy_gradient!(Y, p, thermo_params)
 
         # Cache SGS covariances (no-op for dry/0M/GridScaleCloud configs).
         # For EDMF: gradients are precomputed above.
@@ -112,24 +103,17 @@ function set_covariance_cache_and_cloud_fraction!(Y, p)
     @. ᶜcloud_fraction = _aitken_picard_helper(c0, c1, c2)
 
     # Recompute buoyancy gradient and covariance cache with the final cloud fraction.
-    @. ᶜlinear_buoygrad = buoyancy_gradients(
-        BuoyGradMean(), # TODO: modify for NonEq + 1M tracers if needed
-        thermo_params,
-        ᶜT,
-        Y.c.ρ,
-        ᶜq_tot_nonneg,
-        ᶜq_liq,
-        ᶜq_ice,
+    @. ᶜbuoygrad = blended_N²(
+        ᶜbg_coeffs,
         ᶜcloud_fraction,
-        C3,
-        ᶜgradᵥ_q_tot,
-        ᶜgradᵥ_θ_liq_ice,
-        ᶜlg,
+        projected_vector_data(C3, ᶜgradᵥ_θ_liq_ice, ᶜlg),
+        projected_vector_data(C3, ᶜgradᵥ_q_tot, ᶜlg),
     )
+    set_stability_buoyancy_gradient!(Y, p, thermo_params)
     set_covariance_cache!(Y, p, thermo_params)
 
     # Final post-Aitken update: one quadrature pass refreshes both CF and the
-    # microphysics SGS moments (μ_S, λ) using the final covariance.
+    # microphysics SGS moments (σ_S, λ_lagrange) using the final covariance.
     set_sgs_moments_and_cloud_fraction!(Y, p)
 
     return nothing
@@ -191,6 +175,53 @@ function compute_∂T_∂θ!(dest, Y, p, thermo_params)
 end
 
 """
+    uses_covariances(atmos)
+
+Whether SGS (co)variances of `(T, q_tot)` are needed by the configuration:
+either the microphysics quadrature API, 1M/2M non-equilibrium microphysics,
+or a `QuadratureCloud`/`MLCloud` model requires them. This is the single
+source of truth shared by the two places that must agree on it: the
+covariance-cache no-op guard ([`set_covariance_cache!`](@ref)) and the
+`ᶜl_mix` caching in `set_explicit_precomputed_quantities!`. When `true`,
+`ᶜl_mix` is materialized inside the covariance/cloud-fraction iteration and
+the explicit stage skips its redundant recompute; when `false`, only the
+explicit stage writes `ᶜl_mix`. The two must never disagree, or `ᶜl_mix`
+would go stale (wrong physics) or be computed twice (wasteful).
+"""
+uses_covariances(atmos) =
+    !isnothing(atmos.sgs_quadrature) ||
+    atmos.microphysics_model isa
+    Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M} ||
+    atmos.cloud_model isa Union{QuadratureCloud, MLCloud}
+
+"""
+    materialized_mixing_length!(Y, p)
+
+Materialize the SGS master mixing length into a center field and return it.
+For an `AbstractEDMF` with prognostic TKE this writes the `ᶜl_mix` cache
+(computed once, reused by TKE dissipation, the covariance closure, and
+diagnostics); for `AbstractEDMF` without prognostic TKE it uses scratch; for
+non-EDMF it falls back to the grid-mean Smagorinsky–Lilly length. Always
+materializing (rather than passing the lazy `ᶜmixing_length` broadcast, which
+carries `mixing_length_lopez_gomez_2020` with its parameter structs) avoids
+recomputing the closure for each covariance and keeps GPU kernel parameters
+under the size limit.
+"""
+function materialized_mixing_length!(Y, p)
+    turbconv_model = p.atmos.turbconv_model
+    if turbconv_model isa AbstractEDMF
+        # Every AbstractEDMF carries Y.c.ρtke, so ᶜmixing_length is well
+        # defined; materialize it into the persistent ᶜl_mix cache.
+        ᶜl_mix = p.precomputed.ᶜl_mix
+        ᶜl_mix .= ᶜmixing_length(Y, p)
+        return ᶜl_mix
+    else
+        # compute_gm_mixing_length materializes into p.scratch.ᶜtemp_scalar
+        return compute_gm_mixing_length(Y, p)
+    end
+end
+
+"""
     set_covariance_cache!(Y, p, thermo_params)
 
 Materializes T-based SGS covariances into cached fields for use by downstream
@@ -198,33 +229,23 @@ computations (SGS quadrature, cloud fraction). Populates `p.precomputed.(ᶜT′
 
 Pipeline:
 
- 1. Compute mixing length via `compute_gm_mixing_length` or `ᶜmixing_length`
+ 1. Compute mixing length via [`materialized_mixing_length!`](@ref)
  2. Materialize θ-based covariances from gradients
  3. Transform θ→T using `compute_∂T_∂θ!`
 """
 function set_covariance_cache!(Y, p, thermo_params)
-    # Covariance fields are only allocated when microphysics needs the
-    # quadrature API or QuadratureCloud/MLCloud is active.
+    # Covariance fields are only allocated when the configuration needs them.
     # No-op otherwise (e.g. EquilMoist + 0M + GridScaleCloud).
-    uses_covariances =
-        !isnothing(p.atmos.sgs_quadrature) ||
-        p.atmos.microphysics_model isa
-        Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M} ||
-        p.atmos.cloud_model isa Union{QuadratureCloud, MLCloud}
-    uses_covariances || return nothing
+    uses_covariances(p.atmos) || return nothing
 
     (; ᶜT′T′, ᶜq′q′) = p.precomputed
 
     coeff = CAP.diagnostic_covariance_coeff(p.params)
-    turbconv_model = p.atmos.turbconv_model
     (; ᶜgradᵥ_q_tot, ᶜgradᵥ_θ_liq_ice) = p.precomputed
 
-    # NOTE: gradients must be precomputed when using compute_gm_mixing_length
-    # compute_gm_mixing_length materializes into p.scratch.ᶜtemp_scalar
-    ᶜmixing_length_field =
-        turbconv_model isa PrognosticEDMFX ?
-        ᶜmixing_length(Y, p) :
-        compute_gm_mixing_length(Y, p)
+    # Materialize once (see materialized_mixing_length!) to avoid repeating
+    # the closure broadcast across the ᶜq′q′ and ᶜT′T′ calculations.
+    ᶜmixing_length_field = materialized_mixing_length!(Y, p)
 
     # Compute θ-based covariances from gradients and mixing length
     cov_from_grad(C, L, ∇Φ, ∇Ψ) = 2 * C * L^2 * dot(∇Φ, ∇Ψ)
@@ -273,21 +294,24 @@ end
 # inversion for the Lagrange multiplier, so the linear S is used universally.)
 
 """
-    SGSMomentsEvaluator(tps, ρ)
+    SGSVarianceEvaluator(tps, ρ, mu_S)
 
-GPU-safe functor returning `(mu_S = S(ξ), s_sq = S(ξ)²)` at each quadrature
-point, where S = q_tot_hat − q_sat_hat is the linear saturation excess.
-Used by `_sgs_saturation_moments` to compute μ_S = E[S] and σ_S² = Var[S].
+GPU-safe functor returning `(S(ξ) − μ_S)²` at each quadrature point, where
+S = q_tot_hat − q_sat_hat is the linear saturation excess and `μ_S` is the
+linearized SGS mean of S (see [`_sgs_saturation_moments`](@ref)). Used to
+accumulate σ_S² = E[(S − μ_S)²] in one quadrature pass; avoids catastrophic
+cancellation in `E[S²] − (E[S])²` in Float32 when Var[S] ≪ (E[S])².
 """
-struct SGSMomentsEvaluator{TPS, FT}
+struct SGSVarianceEvaluator{TPS, FT}
     tps::TPS
     ρ::FT
+    mu_S::FT
 end
 
-@inline function (eval::SGSMomentsEvaluator)(T_hat, q_tot_hat)
+@inline function (eval::SGSVarianceEvaluator)(T_hat, q_tot_hat)
     q_sat_hat = TD.q_vap_saturation(eval.tps, T_hat, eval.ρ)
     s = q_tot_hat - q_sat_hat
-    return (mu_S = s, s_sq = s^2)
+    return (s - eval.mu_S)^2
 end
 
 
@@ -295,12 +319,21 @@ end
     _sgs_saturation_moments(thp, ρ, T_mean, q_tot_mean,
                             sgs_quad, T′T′, q′q′, corr_Tq)
 
-Compute μ_S = E[S] and σ_S = sqrt(Var[S]) of the linear saturation excess
-S = q_tot − q_sat via a single Gauss-Hermite quadrature pass over the SGS PDF.
+Compute μ_S and σ_S of the linear saturation excess S = q_tot − q_sat over
+the SGS PDF.
 
-The variance is guarded against negative values from quadrature cancellation
-(clipped at zero) and the standard deviation is floored at `ϵ_numerics(FT)`
-so the normalised closure (`C = q_c / (α·σ_S)`) is well-conditioned.
+The mean is set analytically to the linearized value
+
+    μ_S = q_tot_mean − q_sat(T_mean, ρ),
+
+which is exact under the same linearization of `q_sat(T)` that makes S
+Gaussian to begin with: any difference from `E[S]` evaluated by quadrature
+is the q_sat-curvature term that is already discarded in the truncated-
+Gaussian closure. Using this analytic μ_S lets us accumulate σ_S² as
+`E[(S − μ_S)²]` in a single pass.
+
+`σ_S` is floored at `ϵ_numerics(FT)` so the normalised closure
+`C = q_c / (α·σ_S)` stays well-conditioned.
 
 Returns `(; mu_S, sigma_S)`.
 """
@@ -309,14 +342,14 @@ Returns `(; mu_S, sigma_S)`.
     sgs_quad, T′T′, q′q′, corr_Tq,
 )
     FT = typeof(ρ)
+    mu_S = q_tot_mean - TD.q_vap_saturation(thp, T_mean, ρ)
     sgs_quad_eff = isnothing(sgs_quad) ? GridMeanSGS() : sgs_quad
-    evaluator = SGSMomentsEvaluator(thp, ρ)
-    raw = integrate_over_sgs(
+    evaluator = SGSVarianceEvaluator(thp, ρ, mu_S)
+    sigma_S_sq = integrate_over_sgs(
         evaluator, sgs_quad_eff, q_tot_mean, T_mean, q′q′, T′T′, corr_Tq,
     )
-    sigma_S_sq = max(raw.s_sq - raw.mu_S * raw.mu_S, zero(FT))
     return (;
-        mu_S = raw.mu_S,
+        mu_S,
         sigma_S = max(sqrt(sigma_S_sq), ϵ_numerics(FT)),
     )
 end
@@ -326,9 +359,12 @@ end
 # ============================================================================
 #
 # **Physical model**: the subgrid saturation excess S = q_tot − q_sat is
-# assumed Gaussian: S ~ N(μ_S, σ_S²), with σ_S computed by the pre-pass
-# quadrature.  Working with the centred excess S′ = S − μ_S ~ N(0, σ_S²),
-# we seek a Lagrange multiplier λ that enforces mass conservation:
+# assumed Gaussian: S ~ N(μ_S, σ_S²), with μ_S set analytically to the
+# linearized mean μ_S = q_tot_mean − q_sat(T_mean, ρ) (exact under the
+# same linearization that justifies Gaussianity of S) and σ_S accumulated
+# in one pass as E[(S − μ_S)²] (see `_sgs_saturation_moments`).
+# Working with the centred excess S′ = S − μ_S ~ N(0, σ_S²), we seek a
+# Lagrange multiplier λ that enforces mass conservation:
 #
 #     E[max(0, λ + α·S′)] = q_c,                                     (*)
 #
@@ -432,11 +468,13 @@ dependent logic.
 end
 
 """
-    _compute_cloud_fraction(q_c, sigma_S, q_sat, α, ε_rel, σ_abs)
+    _compute_cloud_fraction(q_c, mu_S, sigma_S, q_sat, α, floor)
 
 Cloud fraction `CF = Φ(z)`, where `z` solves the truncated-Gaussian condensate
 relation `q_c/σ_aug = z·Φ(z) + φ(z)` (see [`_compute_z`](@ref)) with the
-augmented standard deviation `σ_aug = α · sqrt(σ_S² + σ_S_floor²)`.
+augmented standard deviation `σ_aug = α · sqrt(σ_S² + σ_S_floor²)`. The
+`floor` NamedTuple bundles the floor magnitude and release-shape parameters
+(see [`cloud_fraction_floor_params`](@ref)).
 
 Scale-aware non-equilibrium floor. We assume the local condensate `q_c`
 fluctuates partly through the equilibrium variations of (T, q_tot) captured by
@@ -444,7 +482,7 @@ the quadrature (`σ_S`), and partly through non-equilibrium variations not
 captured by the equilibrium SGS PDF. `σ_S_floor` models the latter and is scaled
 with the saturation specific humidity,
 
-    σ_S_floor² = (ε_rel · q_sat)² + σ_abs².
+    σ_S_floor² = (D · ε_rel · q_sat)² + σ_abs².
 
 The q_sat-scaling implies saturation-excess fluctuations scale with q_sat.
 The parameter `ε_rel` is a condensate-patchiness scale: it indicates the
@@ -459,12 +497,70 @@ only; the inter-subdomain (convective) spread is carried explicitly by the
 drafts. The parameter `ε_rel` is a q_sat-scaling whose magnitude should grow
 with grid spacing.
 
+Saturation-margin release `D`. Non-equilibrium patchiness is a property of
+*partially* saturated air: in a subdomain whose equilibrium PDF sits
+inside saturation (an equilibrated overcast deck maintained by radiative
+cooling), the patchiness the floor parameterizes is near zero, and an
+undamped floor spuriously caps CF well below 1 whenever `q_c ≲ ε_rel·q_sat`.
+(This would cut cloud-top longwave cooling in the stratocumulus regime.)
+The relative floor is therefore released only where the mean saturation
+excess `μ_S = q_tot − q_sat` is positive by a margin relative to the
+release width `w`:
+
+    w  = sqrt((c_w·α)²·(σ_S² + σ_abs²) + (c_a·ε_rel·q_sat)²),
+    x  = max(μ_S, 0) / w,
+    D  = D_min + (1 − D_min) · (1 + x²)^(−s/2),
+
+with four calibratable shape parameters (see
+[`cloud_fraction_floor_params`](@ref)):
+
+  - `margin` `c_w`: saturation margin in equilibrium PDF widths at which
+    the release transitions. With `abs_margin = 0`, `w` is the equilibrium
+    width itself, so the floor is released exactly where the unfloored
+    closure already predicts overcast (under saturation adjustment
+    `μ_S = q_c`, so `x` is the unfloored normalized condensate `C`).
+  - `abs_margin` `c_a`: absolute margin in floor units, added in
+    quadrature. Guards against release driven by a spuriously small
+    quadrature `σ_S`: for `c_a > 0` (the default), release additionally
+    requires `μ_S ≳ c_a·ε_rel·q_sat` regardless of how small the equilibrium
+    width is.
+  - `sharpness` `s`: transition exponent; larger `s` approaches a switch
+    at `x ≈ 1`, smaller `s` gives a gentler algebraic release.
+  - `residual` `D_min`: fraction of the relative floor retained deep
+    inside a saturated deck, bounding CF below 1 even at full release.
+
+For any parameter values, the floor is fully active (`D = 1`) for a
+subsaturated or marginally saturated mean (cumulus, cloud edges — `μ_S ≤ 0`
+retains the constant-floor behavior exactly).
+
 The floor enters *only* the CF computation; the Lagrange multiplier `λ` (in
 `_compute_sgs_moments`) uses the equilibrium `σ_S`, so mass conservation
 `E[max(0, λ + α·S′)] = q_c` is exactly preserved for the microphysics tendencies.
 """
-@inline function _compute_cloud_fraction(q_c, sigma_S, q_sat, α, ε_rel, σ_abs)
-    σ_S_floor_sq = (ε_rel * q_sat)^2 + σ_abs^2
+@inline function _compute_cloud_fraction(q_c, mu_S, sigma_S, q_sat, α, floor)
+    FT = typeof(q_c)
+    (; ε_rel, σ_abs, margin, abs_margin, sharpness, residual) = floor
+    # Release the relative floor only where the mean is saturated by a
+    # margin relative to the release width `w` — by default the
+    # *equilibrium* PDF width, so the floor is released where the unfloored
+    # closure already predicts overcast (x is then the unfloored normalized
+    # condensate when μ_S ≈ q_c). Subsaturated or marginally saturated means
+    # (μ_S ≤ 0: cumulus, cloud edges) keep the full floor for any parameter
+    # values. The denominator guard covers only the w → 0 limit: the
+    # smallness of the equilibrium width relative to ε_rel·q_sat is exactly
+    # what drives the release in a quiescent deck, so it must not be floored
+    # away.
+    w = sqrt(
+        (margin * α)^2 * (sigma_S^2 + σ_abs^2) +
+        (abs_margin * ε_rel * q_sat)^2,
+    )
+    x = max(mu_S, zero(FT)) / max(w, ϵ_numerics(FT))
+    # `sharpness == 1` is the default release profile; the fast path keeps
+    # it identical to the plain saturation-margin release.
+    D_shape =
+        sharpness == one(FT) ? 1 / sqrt(1 + x^2) : (1 + x^2)^(-sharpness / 2)
+    D = residual + (1 - residual) * D_shape
+    σ_S_floor_sq = (D * ε_rel * q_sat)^2 + σ_abs^2
     σ_aug = α * sqrt(sigma_S^2 + σ_S_floor_sq)
     C = q_c / σ_aug
     z = _compute_z(C)
@@ -474,7 +570,7 @@ end
 """
     _compute_cloud_fraction(
         thermo_params, T, ρ, q_tot, q_liq, q_ice,
-        sgs_quad, T′T′, q′q′, corr_Tq, α, ε_rel, σ_abs,
+        sgs_quad, T′T′, q′q′, corr_Tq, α, floor,
     )
 
 Fused production overload: compute the hybrid cloud fraction in a single
@@ -495,28 +591,66 @@ materialized to a Field.
     q′q′,
     corr_Tq,
     α,
-    ε_rel,
-    σ_abs,
+    floor,
 )
     moments = _sgs_saturation_moments(
         thermo_params, ρ, T, q_tot, sgs_quad, T′T′, q′q′, corr_Tq,
     )
     q_sat = TD.q_vap_saturation(thermo_params, T, ρ, q_liq, q_ice)
     return _compute_cloud_fraction(
-        q_liq + q_ice, moments.sigma_S, q_sat, α, ε_rel, σ_abs,
+        q_liq + q_ice, moments.mu_S, moments.sigma_S, q_sat, α, floor,
     )
 end
 
 """
+    CloudFractionFloorParams{FT}
+
+Augmented-σ floor magnitude and release-shape parameters for
+[`_compute_cloud_fraction`](@ref), bundled into one isbits broadcast scalar
+(a struct rather than a NamedTuple, which Base reserves from broadcasting):
+
+  - `ε_rel`, `σ_abs`: relative and absolute floor magnitudes,
+  - `margin`, `abs_margin`, `sharpness`, `residual`: release shape (see the
+    saturation-margin release section of [`_compute_cloud_fraction`](@ref)).
+"""
+Base.@kwdef struct CloudFractionFloorParams{FT}
+    ε_rel::FT
+    σ_abs::FT
+    margin::FT
+    abs_margin::FT
+    sharpness::FT
+    residual::FT
+end
+Base.broadcastable(x::CloudFractionFloorParams) = tuple(x)
+
+"""
+    cloud_fraction_floor_params(params)
+
+Build the [`CloudFractionFloorParams`](@ref) bundle from the model
+parameter set.
+"""
+cloud_fraction_floor_params(params) = CloudFractionFloorParams(;
+    ε_rel = CAP.cloud_fraction_eps_rel(params),
+    σ_abs = CAP.cloud_fraction_sigma_abs(params),
+    margin = CAP.cloud_fraction_floor_release_margin(params),
+    abs_margin = CAP.cloud_fraction_floor_release_abs_margin(params),
+    sharpness = CAP.cloud_fraction_floor_release_sharpness(params),
+    residual = CAP.cloud_fraction_floor_residual(params),
+)
+
+"""
     _compute_sgs_moments(thp, ρ, T, q_tot, q_c, sgs_quad, T′T′, q′q′, corr_Tq, α)
 
-Single quadrature pass returning `(mu_S, sigma_S, λ_lagrange)`:
+Single quadrature pass returning `(sigma_S, λ_lagrange)`:
 
-  - `mu_S       = E[S]`: SGS mean saturation variable.
-  - `sigma_S    = sqrt(Var[S])`: SGS standard deviation, clipped at
+  - `sigma_S    = sqrt(E[(S − μ_S)²])`: SGS standard deviation, clipped at
     `ϵ_numerics(FT)` (see [`_sgs_saturation_moments`](@ref)).
   - `λ_lagrange = z·α·σ_S`: Lagrange multiplier satisfying
     `E[max(0, λ + α·S′)] = q_c`.
+
+The SGS mean `μ_S = q_tot − q_sat(T, ρ)` is analytic under the closure's
+linearization (see [`_sgs_saturation_moments`](@ref)) and is recomputed
+on demand wherever it is needed downstream.
 """
 @inline function _compute_sgs_moments(
     thp, ρ, T, q_tot, q_c,
@@ -528,11 +662,7 @@ Single quadrature pass returning `(mu_S, sigma_S, λ_lagrange)`:
     C = q_c / σ_S_eff
     z = _compute_z(C)
     λ_lagrange = z * σ_S_eff
-    return (;
-        moments.mu_S,
-        moments.sigma_S,
-        λ_lagrange,
-    )
+    return (; moments.sigma_S, λ_lagrange)
 end
 
 """
@@ -541,7 +671,7 @@ end
 Final post-Aitken update. No-op when `ᶜsgs_moments` is not allocated (dry / 0M).
 
 Uses ONE quadrature pass via `_compute_sgs_moments` to fill
-`ᶜsgs_moments = (mu_S, sigma_S, λ_lagrange)`, then computes
+`ᶜsgs_moments = (sigma_S, λ_lagrange)`, then computes
 `ᶜcloud_fraction` consistently with the augmented `σ_aug` closure (see
 [`_compute_cloud_fraction`](@ref)) and applies EDMF updraft weighting.
 """
@@ -558,11 +688,10 @@ NVTX.@annotate function set_sgs_moments_and_cloud_fraction!(Y, p)
     corr_Tq = correlation_Tq(p.params)
     FT = eltype(p.params)
     α = sgs_variance_fidelity(CAP.cloud_fraction_steepness_scale(p.params))
-    ε_rel = CAP.cloud_fraction_eps_rel(p.params)
-    σ_abs = CAP.cloud_fraction_sigma_abs(p.params)
+    floor = cloud_fraction_floor_params(p.params)
     (; ᶜT′T′, ᶜq′q′) = p.precomputed
 
-    # ONE quadrature pass → (mu_S, sigma_S, λ_lagrange).
+    # ONE quadrature pass → (sigma_S, λ_lagrange).
     @. p.precomputed.ᶜsgs_moments = _compute_sgs_moments(
         thermo_params, ᶜρ_env, ᶜT_mean, ᶜq_mean, ᶜq_lcl + ᶜq_icl,
         $(sgs_quad), ᶜT′T′, ᶜq′q′, corr_Tq, FT(α),
@@ -576,11 +705,13 @@ NVTX.@annotate function set_sgs_moments_and_cloud_fraction!(Y, p)
     # applied it during Picard.
     @. p.precomputed.ᶜcloud_fraction = _compute_cloud_fraction(
         ᶜq_lcl + ᶜq_icl,
+        # μ_S recomputed analytically, matching `_sgs_saturation_moments`
+        # (condensate-free q_sat, consistent with the linear excess S).
+        ᶜq_mean - TD.q_vap_saturation(thermo_params, ᶜT_mean, ᶜρ_env),
         p.precomputed.ᶜsgs_moments.sigma_S,
         TD.q_vap_saturation(thermo_params, ᶜT_mean, ᶜρ_env, ᶜq_lcl, ᶜq_icl),
         FT(α),
-        ε_rel,
-        σ_abs,
+        $(floor),
     )
     _apply_edmf_cloud_weighting!(Y, p, turbconv_model, thermo_params)
 end
@@ -645,8 +776,7 @@ NVTX.@annotate function set_cloud_fraction!(
     corr_Tq = correlation_Tq(p.params)
     FT = eltype(p.params)
     α = sgs_variance_fidelity(CAP.cloud_fraction_steepness_scale(p.params))
-    ε_rel = CAP.cloud_fraction_eps_rel(p.params)
-    σ_abs = CAP.cloud_fraction_sigma_abs(p.params)
+    floor = cloud_fraction_floor_params(p.params)
 
     (; ᶜT′T′, ᶜq′q′) = p.precomputed
 
@@ -665,8 +795,7 @@ NVTX.@annotate function set_cloud_fraction!(
         ᶜq′q′,
         corr_Tq,
         FT(α),
-        ε_rel,
-        σ_abs,
+        $(floor),
     )
 
     _apply_edmf_cloud_weighting!(Y, p, turbconv_model, thermo_params)
@@ -937,18 +1066,7 @@ function set_ml_cloud_fraction!(
     ᶜq_mean,
     ᶜθ_mean,
 )
-    # compute_gm_mixing_length materializes into p.scratch.ᶜtemp_scalar
-    ᶜmixing_length_lazy =
-        turbconv_model isa PrognosticEDMFX ?
-        ᶜmixing_length(Y, p) :
-        compute_gm_mixing_length(Y, p)
-
-    # Materialize mixing length into scratch field to break the lazy broadcast
-    # chain. For PrognosticEDMFX, ᶜmixing_length returns a lazy broadcast
-    # carrying mixing_length_lopez_gomez_2020 with its parameter structs,
-    # which would exceed the 4 KiB GPU kernel parameter limit if nested.
-    ᶜmixing_length_field = p.scratch.ᶜtemp_scalar_6
-    ᶜmixing_length_field .= ᶜmixing_length_lazy
+    ᶜmixing_length_field = materialized_mixing_length!(Y, p)
 
     # Vertical gradients of q_tot and θ_liq_ice
     ᶜ∇q = p.scratch.ᶜtemp_scalar_2

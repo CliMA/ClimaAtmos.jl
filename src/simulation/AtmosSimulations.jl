@@ -26,7 +26,8 @@ function setup_diagnostics_and_writers(
     t_start,
     t_end,
     start_date,
-    output_dir,
+    output_dir;
+    verbose = false,
 )
     (; default, additional, interpolation_num_points, output_at_levels) =
         diagnostics_config
@@ -67,7 +68,8 @@ function setup_diagnostics_and_writers(
             topography = has_topography(axes(Y.c)),
         )
         append!(all_diagnostics, default_diag_list)
-        @info "Added $(length(default_diag_list)) default ClimaAtmos diagnostics"
+        verbose &&
+            @info "Added $(length(default_diag_list)) default ClimaAtmos diagnostics"
     end
 
     # Add user-provided diagnostics
@@ -78,7 +80,8 @@ function setup_diagnostics_and_writers(
 
         if !isempty(prebuilt)
             append!(all_diagnostics, prebuilt)
-            @info "Added $(length(prebuilt)) user-provided ScheduledDiagnostic objects"
+            verbose &&
+                @info "Added $(length(prebuilt)) user-provided ScheduledDiagnostic objects"
         end
 
         if !isempty(dict_specs)
@@ -108,7 +111,8 @@ function setup_diagnostics_and_writers(
                 dict_specs, Y, t_start, start_date, writers,
             )
             append!(all_diagnostics, user_scheduled_diagnostics)
-            @info "Added $(length(user_scheduled_diagnostics)) user-provided YAML-style diagnostics"
+            verbose &&
+                @info "Added $(length(user_scheduled_diagnostics)) user-provided YAML-style diagnostics"
         end
     end
 
@@ -116,7 +120,8 @@ function setup_diagnostics_and_writers(
     periods_reductions = CAD.extract_diagnostic_periods(all_diagnostics)
     if !isempty(periods_reductions)
         periods_str = join(promote_period.(periods_reductions), ", ")
-        @info "Saving accumulated diagnostics to disk with frequency: $(periods_str)"
+        verbose &&
+            @info "Saving accumulated diagnostics to disk with frequency: $(periods_str)"
     end
 
     return all_diagnostics, writers, periods_reductions
@@ -264,10 +269,16 @@ function AtmosSimulation{FT}(;
     # Numerics
     jacobian::JacobianAlgorithm = ManualSparseJacobian(approximate_solve_iters = 1),
     debug_jacobian = false,
+    update_cache_every = "stage",
+    update_constrain_state_every = "step",
     # Misc
     checkpoint_frequency = Inf,
     log_to_file = false,
+    verbose = false,
 ) where {FT}
+    # Log only on root process
+    verbose = ClimaComms.iamroot(context) && verbose
+
     # Set up output directory and restart file detection
     output_dir, restart_file = setup_output_dir(
         job_id, output_dir, output_dir_style,
@@ -276,8 +287,8 @@ function AtmosSimulation{FT}(;
 
     if !isnothing(restart_file)
         # Handle restart: validates t_start, loads state, logs info, extracts spaces
-        (Y, t_start, spaces) = handle_restart(
-            restart_file, t_start, start_date, model, context,
+        (Y, t_start, spaces) = @timed_log verbose "Loaded restart file" handle_restart(
+            restart_file, t_start, start_date, model, context; verbose,
         )
         # t_start is already converted from restart file, but we still need to convert dt and t_end
         dt = ITime(time_to_seconds(dt))
@@ -287,14 +298,16 @@ function AtmosSimulation{FT}(;
     else
         dt, t_start, t_end = convert_time_args(dt, t_start, t_end, start_date)
         spaces = get_spaces(grid)
-        Y = Setups.initial_state(
-            setup, params, model,
-            spaces.center_space,
-            spaces.face_space,
-        )
-        Setups.overwrite_initial_state!(
-            setup, Y, params.thermodynamics_params,
-        )
+        @timed_log verbose "Initialized state" begin
+            Y = Setups.initial_state(
+                setup, params, model,
+                spaces.center_space,
+                spaces.face_space,
+            )
+            Setups.overwrite_initial_state!(
+                setup, Y, params.thermodynamics_params,
+            )
+        end
     end
 
     # Resolve steady_state_velocity: accept nothing, a precomputed velocity field,
@@ -303,14 +316,14 @@ function AtmosSimulation{FT}(;
         steady_state_velocity isa Function ? steady_state_velocity(Y, params) :
         steady_state_velocity
 
-    p = build_cache(
+    p = @timed_log verbose "Built cache" build_cache(
         Y, model, params, dt, start_date, aerosol_names,
         time_varying_trace_gases, resolved_steady_state_velocity,
         vertical_water_borrowing_species,
     )
 
     # Combine all callbacks
-    discrete_callbacks = if default_callbacks
+    discrete_callbacks = @timed_log verbose "Assembled callbacks" if default_callbacks
         checkpoint_frequency = parse_checkpoint_frequency(checkpoint_frequency)
         (
             default_model_callbacks(
@@ -334,16 +347,24 @@ function AtmosSimulation{FT}(;
         jacobian, debug_jacobian,
         model.prescribed_flow,
         dt,
+        update_cache_every,
+        update_constrain_state_every;
+        verbose,
     )
 
-    integrator = CTS.init(integrator_args...; integrator_kwargs...)
-
-    all_diagnostics, writers, periods_reductions = setup_diagnostics_and_writers(
-        diagnostics, model,
-        Y, p, dt,
-        t_start, t_end, start_date,
-        output_dir,
+    integrator = @timed_log verbose "Initialized integrator" CTS.init(
+        integrator_args...;
+        integrator_kwargs...,
     )
+
+    all_diagnostics, writers, periods_reductions =
+        @timed_log verbose "Set up diagnostics" setup_diagnostics_and_writers(
+            diagnostics, model,
+            Y, p, dt,
+            t_start, t_end, start_date,
+            output_dir;
+            verbose,
+        )
 
     validate_checkpoint_diagnostics_consistency(
         checkpoint_frequency, periods_reductions,
@@ -355,7 +376,7 @@ function AtmosSimulation{FT}(;
             integrator,
             all_diagnostics,
         )
-        @info "Initialized $(length(all_diagnostics)) total diagnostics"
+        verbose && @info "Initialized $(length(all_diagnostics)) total diagnostics"
     end
 
     reset_graceful_exit(output_dir)

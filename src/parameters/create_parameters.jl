@@ -12,7 +12,8 @@ import StaticArrays as SA
     ClimaAtmosParameters(toml_dict; microphysics_model = nothing,
                                     microphysics_1m_options = (;),
                                     has_non_orographic_gw = false,
-                                    has_orographic_gw = false)
+                                    has_orographic_gw = false,
+                                    has_beres_source = false)
 
 Construct the parameter set for any ClimaAtmos configuration.
 
@@ -30,6 +31,7 @@ function ClimaAtmosParameters(
     microphysics_1m_options = (;),
     has_non_orographic_gw::Bool = false,
     has_orographic_gw::Bool = false,
+    has_beres_source::Bool = false,
 ) where {TD <: CP.ParamDict}
     FT = CP.float_type(toml_dict)
 
@@ -96,8 +98,12 @@ function ClimaAtmosParameters(
         has_non_orographic_gw ? NonOrographicGravityWaveParameters(toml_dict) : nothing
     orographic_gravity_wave_params =
         has_orographic_gw ? OrographicGravityWaveParameters(toml_dict) : nothing
+    # Beres convective source params load only when the Beres source is enabled
+    beres_source_params =
+        has_beres_source ? BeresSourceParameters(toml_dict) : nothing
     NOGWP = typeof(non_orographic_gravity_wave_params)
     OGWP = typeof(orographic_gravity_wave_params)
+    BSP = typeof(beres_source_params)
 
     parameters =
         CP.get_parameter_values(toml_dict, atmos_name_map, "ClimaAtmos")
@@ -120,6 +126,7 @@ function ClimaAtmosParameters(
         PAP,
         NOGWP,
         OGWP,
+        BSP,
     }(;
         parameters...,
         thermodynamics_params,
@@ -139,6 +146,7 @@ function ClimaAtmosParameters(
         prescribed_aerosol_params,
         non_orographic_gravity_wave_params,
         orographic_gravity_wave_params,
+        beres_source_params,
     )
 end
 
@@ -164,8 +172,6 @@ atmos_name_map = (;
     :held_suarez_minimum_temperature => :T_min_hs,
     :idealized_ocean_albedo => :idealized_ocean_albedo,
     :water_refractive_index => :water_refractive_index,
-    :optics_lookup_temperature_min => :optics_lookup_temperature_min,
-    :optics_lookup_temperature_max => :optics_lookup_temperature_max,
     :tracer_hyperdiffusion_factor => :α_hyperdiff_tracer,
     :tracer_vertical_diffusion_factor => :α_vert_diff_tracer,
     :D_horizontal_diffusion => :constant_horizontal_diffusion_D,
@@ -321,7 +327,7 @@ function TurbulenceConvectionParameters(
         :max_area_limiter_scale => :max_area_limiter_scale,
         :mixing_length_tke_surf_scale => :tke_surf_scale,
         :mixing_length_tke_surf_flux_coeff => :tke_surf_flux_coeff,
-        :mixing_length_diss_coeff => :tke_diss_coeff,
+        :mixing_length_Ri_crit => :Ri_crit,
         :diagnostic_covariance_coeff => :diagnostic_covariance_coeff,
         :Tq_correlation_coefficient => :Tq_correlation_coefficient,
         :detr_buoy_coeff => :detr_buoy_coeff,
@@ -356,17 +362,43 @@ function TurbulenceConvectionParameters(
         :cloud_fraction_steepness_scale => :cloud_fraction_steepness_scale,
         :cloud_fraction_eps_rel => :cloud_fraction_eps_rel,
         :cloud_fraction_sigma_abs => :cloud_fraction_sigma_abs,
+        :EDMF_interface_entr_efficiency => :interface_entr_efficiency,
         :EDMF_sfc_mass_flux_ustar_coeff => :sfc_mass_flux_ustar_coeff,
         :EDMF_convective_zi => :convective_zi,
         :EDMF_sfc_mass_flux_cap_fraction => :sfc_mass_flux_cap_fraction,
     )
     parameters = CP.get_parameter_values(toml_dict, name_map, "ClimaAtmos")
-    parameters = merge(parameters, overrides)
+    FT = CP.float_type(toml_dict)
+    # Cloud-fraction shape parameters (see `_compute_cloud_fraction`).
+    # Not yet in ClimaParams' default toml, so they are fetched only when a
+    # run/calibration toml defines them and otherwise fall back to the
+    # defaults below (margin = abs_margin = sharpness = 1, residual = 0),
+    # which release the floor on a one-width saturation margin guarded by an
+    # absolute margin of one floor width.
+    # TODO: promote to ClimaParams (and the name_map above) once the
+    # release shape has been calibrated.
+    release_defaults = (;
+        cloud_fraction_floor_release_margin = FT(1),
+        cloud_fraction_floor_release_abs_margin = FT(1),
+        cloud_fraction_floor_release_sharpness = FT(1),
+        cloud_fraction_floor_residual = FT(0),
+    )
+    release_present = filter(collect(keys(release_defaults))) do name
+        haskey(toml_dict.data, string(name))
+    end
+    release_params =
+        isempty(release_present) ? (;) :
+        CP.get_parameter_values(
+            toml_dict,
+            String.(release_present),
+            "ClimaAtmos",
+        )
+    parameters =
+        merge(parameters, release_defaults, release_params, overrides)
     parameters = to_svec(parameters)
     VFT1 = typeof(parameters.entr_param_vec)
     VFT2 = typeof(parameters.turb_entr_param_vec)
     VTF3 = typeof(parameters.cloud_fraction_param_vec)
-    FT = CP.float_type(toml_dict)
     CAP.TurbulenceConvectionParameters{FT, VFT1, VFT2, VTF3}(; parameters...)
 end
 
@@ -456,4 +488,32 @@ function OrographicGravityWaveParameters(
     parameters = merge(parameters, overrides)
     FT = CP.float_type(toml_dict)
     CAP.OrographicGravityWaveParameters{FT}(; parameters...)
+end
+
+
+BeresSourceParameters(
+    ::Type{FT},
+    overrides = NamedTuple(),
+) where {FT <: AbstractFloat} =
+    BeresSourceParameters(CP.create_toml_dict(FT), overrides)
+
+function BeresSourceParameters(toml_dict::CP.ParamDict, overrides = NamedTuple())
+    name_map = (;
+        :nogw_beres_Q0_threshold => :Q0_threshold,
+        :nogw_beres_scale_factor => :scale_factor,
+        :nogw_beres_sigma_x => :σ_x,
+        :nogw_beres_nu_min => :ν_min,
+        :nogw_beres_nu_max => :ν_max,
+        :nogw_beres_n_nu => :n_ν,
+        :nogw_beres_h_heat_min => :h_heat_min,
+        :nogw_beres_n_h_avg => :n_h_avg,
+        :nogw_beres_delta_h_frac => :Δh_frac,
+        :nogw_beres_z_bot_floor => :z_bot_floor,
+        :nogw_beres_steady_dc_frac => :steady_dc_frac,
+        :nogw_beres_L_system => :L_system,
+    )
+    parameters = CP.get_parameter_values(toml_dict, name_map, "ClimaAtmos")
+    parameters = merge(parameters, overrides)
+    FT = CP.float_type(toml_dict)
+    CAP.BeresSourceParameters{FT}(; parameters...)
 end

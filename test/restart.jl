@@ -68,16 +68,6 @@ function test_restart(test_dict; job_id, comms_ctx, more_ignore = Symbol[])
 
     simulation_restarted = CA.get_simulation(config_should_be_same)
 
-    if pkgversion(CA.RRTMGP) < v"0.22"
-        # Versions of RRTMGP older than 0.22 have a bug and do not set the
-        # flux_dn_dir, so that face_clear_sw_direct_flux_dn and
-        # face_sw_direct_flux_dn is uninitialized and not deterministic
-        rrtmgp_clear_fix =
-            (:face_clear_sw_direct_flux_dn, :face_sw_direct_flux_dn)
-    else
-        rrtmgp_clear_fix = ()
-    end
-
     local_success &= compare(
         simulation.integrator.u,
         simulation_restarted.integrator.u;
@@ -112,11 +102,19 @@ function test_restart(test_dict; job_id, comms_ctx, more_ignore = Symbol[])
             # Scratch fields for prognostic EDMF (uninitialized until tendencies run)
             :ᶠu₃_tendencyʲs,
             :ᶜρa_tendencyʲs,
-            # RRTMGP internal arrays may differ due to RNG state
-            rrtmgp_clear_fix...,
+            # The raw RRTMGP solver contains internal workspaces that are
+            # uninitialized or only partially written by design; its
+            # domain-masked outputs are compared through the public getters
+            # below (see compare_rrtmgp_solver)
+            :rrtmgp_solver,
             # Config-specific
             more_ignore...,
         ]),
+    )
+    local_success &= compare_rrtmgp_solver(
+        simulation.integrator.p,
+        simulation_restarted.integrator.p;
+        name = "integrator.p.radiation.rrtmgp_solver",
     )
 
     # Check re-importing from previous state and advancing one step
@@ -158,9 +156,17 @@ function test_restart(test_dict; job_id, comms_ctx, more_ignore = Symbol[])
             # Covariance fields depend on scratch state
             :ᶜT′T′,
             :ᶜq′q′,
-            # RRTMGP internal arrays are not deterministic through fill_with_nans!
-            rrtmgp_clear_fix...,
+            # The raw RRTMGP solver contains internal workspaces that are
+            # uninitialized or only partially written by design; its
+            # domain-masked outputs are compared through the public getters
+            # below (see compare_rrtmgp_solver)
+            :rrtmgp_solver,
         ]),
+    )
+    local_success &= compare_rrtmgp_solver(
+        simulation.integrator.p,
+        simulation_restarted2.integrator.p;
+        name = "integrator.p.radiation.rrtmgp_solver",
     )
 
     return (
@@ -287,6 +293,7 @@ else
             "log_progress" => false,
             "dt" => "1secs",
             "dt_rad" => "1secs", "t_end" => "3secs",
+            "dt_nogw" => "1secs",
             "dt_save_state_to_disk" => "1secs",
             "output_dir" => joinpath(amip_output_loc, amip_job_id),
             "rad" => "allskywithclear",
@@ -294,6 +301,7 @@ else
             "microphysics_model" => "0M", # Using 0M because 1M doesn't work on P100 GPUs
             "toml" => [
                 joinpath(@__DIR__, "../toml/longrun_aquaplanet_progedmf.toml"),
+                joinpath(@__DIR__, "../toml/nogw_beres_test.toml"),
             ],
         ),
     )

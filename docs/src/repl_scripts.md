@@ -1,6 +1,5 @@
 # REPL script (debugging workflow example)
 
-
 ```@example
 
 ca_dir = joinpath(@__DIR__, "..", "..")
@@ -28,7 +27,7 @@ config = CA.AtmosConfig(config_file)
 # Generate temporary directory for Documenter run-script, clear after
 # demo is completed.
 
-temp_output_dir = mktempdir(ca_dir, cleanup=true)
+temp_output_dir = mktempdir(ca_dir, cleanup = true)
 config.parsed_args["output_dir"]=temp_output_dir
 simulation = CA.AtmosSimulation(config)
 

@@ -56,6 +56,28 @@ function specific(ρaχ, ρa, ρχ, ρ, turbconv_model)
     return ρa < eps(typeof(ρ)) ? ρχ / ρ : weight * ρaχ / ρa + (1 - weight) * ρχ / ρ
 end
 
+"""
+    env_relaxation_feedback(ρaʲ, ρa⁰, ρ, turbconv_model)
+
+Magnitude of `-∂χ⁰/∂χʲ` for an environment value diagnosed by [`specific`](@ref)
+from the domain decomposition,
+
+    χ⁰ = w · (ρχ - Σⱼ ρaʲ χʲ) / ρa⁰ + (1 - w) · ρχ / ρ,
+
+differentiated at fixed grid-mean `ρχ` and fixed `ρaʲ`:
+
+    ∂χ⁰/∂χʲ = -w · ρaʲ / ρa⁰,
+
+with `w = sgs_weight_function(ρa⁰/ρ, a_half)` and the same `ρa⁰ < eps` fallback
+branch as `specific` (where the derivative is zero). This is the exact
+derivative of `specific`'s regularized quotient, so the gating keeps the
+result finite as `ρa⁰ → 0`. Used by the entrainment-relaxation diagonals of
+the implicit Jacobian in `manual_sparse_jacobian.jl`.
+"""
+@inline env_relaxation_feedback(ρaʲ, ρa⁰, ρ, turbconv_model) =
+    ρa⁰ < eps(typeof(ρ)) ? zero(ρ) :
+    sgs_weight_function(ρa⁰ / ρ, turbconv_model.a_half) * ρaʲ / ρa⁰
+
 # Internal method that checks if its input is @name(ρχ) for some variable χ.
 @generated is_ρ_weighted_name(
     ::MatrixFields.FieldName{name_chain},
@@ -457,6 +479,7 @@ Arguments:
   - `ᶜρʲs`: Iterable of draft densities.
 
       + Typically `p.precomputed.ᶜρʲs`
+
   - `turbconv_model`: The turbulence convection model (e.g., `PrognosticEDMFX`, or others).
 
 Returns:

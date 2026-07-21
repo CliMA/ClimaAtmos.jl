@@ -2,8 +2,6 @@ module COSPSubcolumns
 
 import ClimaCore: Fields, Operators
 
-export scops_subcolumn!, set_scops_selectors!, shift_up!, column_any!
-
 const _maximum = 1
 const _random = 2
 const _maximum_random = 3
@@ -110,7 +108,7 @@ function shift_up!(output, input)
 end
 
 """
-Set every level to one iff any input level in that column is nonzero.
+Set every level to one if any input level in that column is nonzero.
 """
 function column_any!(output, input, scratch)
     axes(output) == axes(input) == axes(scratch) ||
@@ -238,16 +236,15 @@ end
     if name in fieldnames(coords)
         return :(
             _mix_uint64(
-                _coord_bits(FT(getfield(coords, $(QuoteNode(name))))) * salt,
-            )
+            _coord_bits(FT(getfield(coords, $(QuoteNode(name))))) * salt,
+        )
         )
     else
         return :(zero(UInt64))
     end
 end
 
-# Use the number of random bits that each floating-point type can represent so
-# conversion cannot round the upper endpoint to one.
+# Use the number of random bits that each floating-point type can represent.
 @inline _uint64_to_unit_interval(::Type{Float64}, x::UInt64) =
     Float64(x >> 11) * 0x1.0p-53
 
@@ -256,8 +253,6 @@ end
 
 @inline function _rand_for_point(random_seed::UInt64, coords, isubcolumn)
     FT = typeof(coords.z)
-    # Distinct salts preserve coordinate identity when component hashes are
-    # combined, so swapping x/y or latitude/longitude does not create a collision.
     horizontal_key = _coord_hash(
         coords,
         Val(:x),

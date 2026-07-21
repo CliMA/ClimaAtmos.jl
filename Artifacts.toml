@@ -139,5 +139,30 @@ git-tree-sha1 = "d11b75df5be566eae42d6a3f2b3f60a381feacf8"
     sha256 = "6bcccb58ff3e3687deb8782234a2518a4b92ce00a1b0f830f4c84d19f9384585"
     url = "https://caltech.box.com/shared/static/0e5l0qvuf06zmj7gl625yb4vlt7phknz.gz"
 
+[arm_sgp_varanal_forcing]
+git-tree-sha1 = "b373f1887cff55850cbf76ec005f7d93726ae42e"
+
+    [[arm_sgp_varanal_forcing.download]]
+    sha256 = "4db6d0d9436b1b78f9f4147d9ba13dd9899fa3d177665963ed844cf39627f2ff"
+    url = "https://caltech.box.com/shared/static/emt9368kd24zhkorxcc3zm05eschv1hd.gz"
+
+[arm_sgp_varanal_obs]
+git-tree-sha1 = "35e497b0ab849341c347f6207ab8ec24fe878205"
+
+    [[arm_sgp_varanal_obs.download]]
+    sha256 = "19cb4737218eb963ead16c0b49db416c878b7bac5bf2d62e33074aa0a2176d7f"
+    url = "https://caltech.box.com/shared/static/0hdx8uxgh2c6y3qgpc6vxolqyzmyrbka.gz"
+
+[arm_sgp_varanal_obs_full]
+git-tree-sha1 = "054320c1747e1244d77f8dc6679d97a2f0de2aed"
+
 [wxquest_initial_conditions]
 git-tree-sha1 = "85b1e3654fb88f19a715ea6c235e1d66f254d2e6"
+
+[pycles_scm_les_data]
+git-tree-sha1 = "e69ae8066f1fa46324f1e3b7b81d600153f9b122"
+lazy = true
+
+    [[pycles_scm_les_data.download]]
+    sha256 = "659547eac2ed2f94bdecea7616187926bac3561eee9250d0a96b7df2fb06d503"
+    url = "https://caltech.box.com/shared/static/bhatumhupxxmeagwm7g96nontv50g2tv.gz"
