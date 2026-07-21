@@ -300,7 +300,7 @@ else
             "radiation_reset_rng_seed" => true,
             "microphysics_model" => "0M", # Using 0M because 1M doesn't work on P100 GPUs
             "toml" => [
-                joinpath(@__DIR__, "../toml/longrun_aquaplanet_progedmf.toml"),
+                joinpath(@__DIR__, "../toml/prognostic_edmfx.toml"),
                 joinpath(@__DIR__, "../toml/nogw_beres_test.toml"),
             ],
         ),
