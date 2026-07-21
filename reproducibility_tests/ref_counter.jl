@@ -1,4 +1,4 @@
-385
+386
 
 # **README**
 #
@@ -32,6 +32,11 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+386
+- Per-subdomain SGS hyperdiffusion with the dry-static-energy +
+  water-enthalpy split for mseʲ. Reverses the previous unification with
+  grid-mean tendencies.
+
 385
 - Change cloud fraction formulation
 
