@@ -125,6 +125,204 @@ NVTX.@annotate function rrtmgp_solver_callback!(integrator)
     return nothing
 end
 
+NVTX.@annotate function subcol_model_callback!(integrator)
+    Y = integrator.u
+    p = integrator.p
+    foreach_cosp_subcolumn(consume_cosp_subcolumn!, Y, p)
+
+    return nothing
+end
+
+"""
+Placeholder for a future COSP simulator consumer such as CloudSat.
+"""
+consume_cosp_subcolumn!(_, _) = nothing
+
+function prepare_cosp_subcolumns!(Y, p)
+    (;
+        ᶜcloud_fraction,
+        ᶜsubcolumn_cloud,
+        ᶜsubcolumn_threshold,
+        ᶜsubcolumn_precip,
+        ᶜscops_selectors,
+        ᶜprecip_subcolumn_scratch,
+        ᶜsampled_cloud_fraction,
+        ᶜsampled_precip_fraction,
+        ᶜlarge_scale_precipitation_flux,
+    ) = p.precomputed
+    cosp = p.atmos.cosp
+    nsubcolumns = _cosp_nsubcolumns(cosp.n_subcolumns)
+
+    COSP.COSPSubcolumns.set_scops_selectors!(
+        ᶜscops_selectors,
+        ᶜsubcolumn_cloud,
+        ᶜsubcolumn_threshold,
+        ᶜcloud_fraction,
+        nsubcolumns,
+        cosp.random_seed,
+        cosp.overlap,
+        ᶜprecip_subcolumn_scratch.column_any,
+    )
+
+    set_cosp_large_scale_precipitation_flux!(Y, p, p.atmos.microphysics_model)
+
+    FT = eltype(ᶜcloud_fraction)
+    @. ᶜsampled_cloud_fraction = zero(FT)
+    @. ᶜsampled_precip_fraction = zero(FT)
+    for isubcolumn in 1:nsubcolumns
+        COSP.COSPSubcolumns.scops_subcolumn!(
+            ᶜsubcolumn_cloud,
+            ᶜsubcolumn_threshold,
+            ᶜcloud_fraction,
+            isubcolumn,
+            nsubcolumns,
+            cosp.random_seed;
+            overlap = cosp.overlap,
+        )
+        COSP.COSPPrecipSubcolumns.scops_subcolumn_precip!(
+            ᶜsubcolumn_precip,
+            ᶜsubcolumn_cloud,
+            ᶜlarge_scale_precipitation_flux,
+            ᶜscops_selectors,
+            ᶜprecip_subcolumn_scratch,
+        )
+        COSP.COSPHydrometeorSubcolumns.accumulate_sampled_cloud_fraction!(
+            ᶜsampled_cloud_fraction,
+            ᶜsubcolumn_cloud,
+            nsubcolumns,
+        )
+        COSP.COSPHydrometeorSubcolumns.accumulate_sampled_precip_fraction!(
+            ᶜsampled_precip_fraction,
+            ᶜsubcolumn_precip,
+            nsubcolumns,
+        )
+    end
+
+    return nothing
+end
+
+function set_cosp_large_scale_precipitation_flux!(
+    Y,
+    p,
+    ::Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M},
+)
+    (; ᶜlarge_scale_precipitation_flux, ᶜwᵣ, ᶜwₛ) = p.precomputed
+    FT = eltype(ᶜlarge_scale_precipitation_flux)
+
+    @. ᶜlarge_scale_precipitation_flux =
+        max(FT(0), Y.c.ρq_rai * ᶜwᵣ + Y.c.ρq_sno * ᶜwₛ)
+
+    return nothing
+end
+
+set_cosp_large_scale_precipitation_flux!(_, _, microphysics_model) =
+    _check_cosp_microphysics(microphysics_model)
+
+"""
+    foreach_cosp_subcolumn(consume!, Y, p)
+
+Prepare the sampled cloud and precipitation fractions, then regenerate and
+stream one deterministic hydrometeor subcolumn at a time. `consume!` must use
+the lazy hydrometeor broadcasts immediately; they borrow working mask and
+scratch fields that are overwritten during subsequent iterations.
+"""
+function foreach_cosp_subcolumn(consume!::F, Y, p) where {F}
+    microphysics_model = p.atmos.microphysics_model
+    _check_cosp_microphysics(microphysics_model)
+    prepare_cosp_subcolumns!(Y, p)
+    return foreach_cosp_subcolumn(consume!, Y, p, microphysics_model)
+end
+
+function foreach_cosp_subcolumn(
+    consume!::F,
+    Y,
+    p,
+    ::Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M},
+) where {F}
+    ᶜq_lcl = p.scratch.ᶜtemp_scalar
+    ᶜq_icl = p.scratch.ᶜtemp_scalar_2
+    ᶜq_rai = p.scratch.ᶜtemp_scalar_3
+    ᶜq_sno = p.scratch.ᶜtemp_scalar_4
+
+    @. ᶜq_lcl = specific(Y.c.ρq_lcl, Y.c.ρ)
+    @. ᶜq_icl = specific(Y.c.ρq_icl, Y.c.ρ)
+    @. ᶜq_rai = specific(Y.c.ρq_rai, Y.c.ρ)
+    @. ᶜq_sno = specific(Y.c.ρq_sno, Y.c.ρ)
+
+    grid_mean_hydrometeors =
+        (; q_lcl = ᶜq_lcl, q_icl = ᶜq_icl, q_rai = ᶜq_rai, q_sno = ᶜq_sno)
+
+    return foreach_prepared_cosp_subcolumn!(consume!, grid_mean_hydrometeors, p)
+end
+
+foreach_cosp_subcolumn(::F, _, _, microphysics_model) where {F} =
+    _check_cosp_microphysics(microphysics_model)
+
+_check_cosp_microphysics(
+    ::Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M},
+) = nothing
+
+function _check_cosp_microphysics(microphysics_model)
+    throw(
+        ArgumentError(
+            "COSP supports only NonEquilibriumMicrophysics1M and " *
+            "NonEquilibriumMicrophysics2M; got $(nameof(typeof(microphysics_model)))",
+        ),
+    )
+end
+
+function foreach_prepared_cosp_subcolumn!(
+    consume!::F,
+    grid_mean_hydrometeors,
+    p,
+) where {F}
+    (;
+        ᶜcloud_fraction,
+        ᶜsubcolumn_cloud,
+        ᶜsubcolumn_threshold,
+        ᶜsubcolumn_precip,
+        ᶜscops_selectors,
+        ᶜprecip_subcolumn_scratch,
+        ᶜlarge_scale_precipitation_flux,
+        ᶜsampled_cloud_fraction,
+        ᶜsampled_precip_fraction,
+    ) = p.precomputed
+
+    cosp = p.atmos.cosp
+    nsubcolumns = _cosp_nsubcolumns(cosp.n_subcolumns)
+    for isubcolumn in 1:nsubcolumns
+        COSP.COSPSubcolumns.scops_subcolumn!(
+            ᶜsubcolumn_cloud,
+            ᶜsubcolumn_threshold,
+            ᶜcloud_fraction,
+            isubcolumn,
+            nsubcolumns,
+            cosp.random_seed;
+            overlap = cosp.overlap,
+        )
+        COSP.COSPPrecipSubcolumns.scops_subcolumn_precip!(
+            ᶜsubcolumn_precip,
+            ᶜsubcolumn_cloud,
+            ᶜlarge_scale_precipitation_flux,
+            ᶜscops_selectors,
+            ᶜprecip_subcolumn_scratch,
+        )
+        hydrometeors =
+            COSP.COSPHydrometeorSubcolumns.lazy_hydrometeor_subcolumn(
+                grid_mean_hydrometeors,
+                ᶜsubcolumn_cloud,
+                ᶜsubcolumn_precip,
+                ᶜsampled_cloud_fraction,
+                ᶜsampled_precip_fraction,
+            )
+        consume!(isubcolumn, hydrometeors)
+    end
+
+    return nothing
+end
+
+@inline _cosp_nsubcolumns(::Val{N}) where {N} = N
+
 NVTX.@annotate function nogw_model_callback!(integrator)
     Y = integrator.u
     p = integrator.p
