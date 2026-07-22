@@ -1,5 +1,3 @@
-include("cloudsat_ice_tables.jl")
-
 @inline function _mie_efficiencies(D_m, T, radar_cfg, phase)
     FT = typeof(D_m + T)
     wavelength = FT(0.299792458) / FT(radar_cfg.freq)

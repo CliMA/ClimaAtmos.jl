@@ -25,9 +25,6 @@ function make_center_profile_field(FT, profile; z_top = 3000)
     return field
 end
 
-make_subcolumn_fields(FT, nsubcolumns, nelems; value = 0) =
-    ntuple(_ -> make_center_field(FT; value, nelems), nsubcolumns)
-
 function level_values(field)
     return [
         Fields.level(field, ilev)[] for
@@ -37,114 +34,74 @@ end
 
 @testset "COSP CloudSat reflectivity" begin
     FT = Float64
-    nsubcolumns = 1
     nelems = 3
 
-    z_vol = (make_center_profile_field(FT, [100, 10, 1]),)
-    kr_vol = (make_center_profile_field(FT, [0.1, 0.2, 0.3]),)
+    z_vol = make_center_profile_field(FT, [100, 10, 1])
+    kr_vol = make_center_profile_field(FT, [0.1, 0.2, 0.3])
     g_vol = make_center_profile_field(FT, [0.01, 0.02, 0.03])
-    Ze_non = make_subcolumn_fields(FT, nsubcolumns, nelems; value = 999)
-    DBZe = make_subcolumn_fields(FT, nsubcolumns, nelems; value = 999)
+    Ze_non = make_center_field(FT; value = 999, nelems)
+    DBZe = make_center_field(FT; value = 999, nelems)
+    hydro_path = make_center_field(FT; value = 999, nelems)
+    gas_path = make_center_field(FT; value = 999, nelems)
+    height_km = Fields.coordinate_field(axes(g_vol)).z ./ FT(1000)
 
-    result = CCR.cloudsat_reflectivity!(Ze_non, DBZe, z_vol, kr_vol, g_vol)
+    @test isnothing(
+        CCR.cloudsat_gas_path_attenuation!(gas_path, g_vol, height_km),
+    )
+    result = CCR.cloudsat_reflectivity_subcolumn!(
+        Ze_non,
+        DBZe,
+        z_vol,
+        kr_vol,
+        hydro_path,
+        gas_path,
+        height_km,
+    )
 
-    @test level_values(Fields.coordinate_field(axes(z_vol[1])).z) ==
-          FT[500, 1500, 2500]
+    @test level_values(Fields.coordinate_field(axes(z_vol)).z) ==
+        FT[500, 1500, 2500]
     @test isnothing(result)
-    @test isapprox(parent(Ze_non[1]), FT[20, 10, 0]; atol = 1e-12)
+    @test isapprox(parent(Ze_non), FT[20, 10, 0]; atol = 1e-12)
     @test isapprox(
-        parent(DBZe[1]),
+        parent(DBZe),
         FT[18.845, 9.16, -0.315];
         rtol = 1e-12,
         atol = 1e-12,
     )
 
-    z_vol = (make_center_profile_field(FT, [0, -1, 1]),)
-    Ze_non = make_subcolumn_fields(FT, nsubcolumns, nelems; value = 999)
-    DBZe = make_subcolumn_fields(FT, nsubcolumns, nelems; value = 999)
-
-    CCR.cloudsat_reflectivity!(Ze_non, DBZe, z_vol, kr_vol, g_vol)
-
-    @test parent(Ze_non[1])[1:2] == FT[-1e30, -1e30]
-    @test parent(DBZe[1])[1:2] == FT[-1e30, -1e30]
-    @test isfinite(parent(Ze_non[1])[3])
-    @test isfinite(parent(DBZe[1])[3])
-
-    z_vol = (
-        make_center_profile_field(FT, [100, 10, 1]),
-        make_center_profile_field(FT, [1000, 100, 10]),
+    z_vol = make_center_profile_field(FT, [0, -1, 1])
+    CCR.cloudsat_reflectivity_subcolumn!(
+        Ze_non,
+        DBZe,
+        z_vol,
+        kr_vol,
+        hydro_path,
+        gas_path,
+        height_km,
     )
-    kr_vol = (
-        make_center_profile_field(FT, [0.1, 0.2, 0.3]),
-        make_center_profile_field(FT, [0.05, 0.1, 0.15]),
+
+    @test parent(Ze_non)[1:2] == FT[-1e30, -1e30]
+    @test parent(DBZe)[1:2] == FT[-1e30, -1e30]
+    @test isfinite(parent(Ze_non)[3])
+    @test isfinite(parent(DBZe)[3])
+
+    z_vol = make_center_profile_field(FT, [1000, 100, 10])
+    kr_vol = make_center_profile_field(FT, [0.05, 0.1, 0.15])
+    CCR.cloudsat_reflectivity_subcolumn!(
+        Ze_non,
+        DBZe,
+        z_vol,
+        kr_vol,
+        hydro_path,
+        gas_path,
+        height_km,
     )
-    g_vol = make_center_profile_field(FT, [0.01, 0.02, 0.03])
-    Ze_non = make_subcolumn_fields(FT, 2, nelems; value = 999)
-    DBZe = make_subcolumn_fields(FT, 2, nelems; value = 999)
 
-    CCR.cloudsat_reflectivity!(Ze_non, DBZe, z_vol, kr_vol, g_vol)
-
-    @test isapprox(parent(Ze_non[1]), FT[20, 10, 0]; atol = 1e-12)
-    @test isapprox(parent(Ze_non[2]), FT[30, 20, 10]; atol = 1e-12)
+    @test isapprox(parent(Ze_non), FT[30, 20, 10]; atol = 1e-12)
     @test isapprox(
-        parent(DBZe[1]),
-        FT[18.845, 9.16, -0.315];
-        rtol = 1e-12,
-        atol = 1e-12,
-    )
-    @test isapprox(
-        parent(DBZe[2]),
+        parent(DBZe),
         FT[29.395, 19.56, 9.835];
         rtol = 1e-12,
         atol = 1e-12,
     )
-end
-
-@testset "COSP CloudSat streamed reflectivity matches tuple wrapper" begin
-    for FT in (Float32, Float64)
-        nelems = 3
-        z_vol = (
-            make_center_profile_field(FT, [100, 10, 1]),
-            make_center_profile_field(FT, [0, -1, 10]),
-        )
-        kr_vol = (
-            make_center_profile_field(FT, [0.1, 0.2, 0.3]),
-            make_center_profile_field(FT, [0.05, 0.1, 0.15]),
-        )
-        g_vol = make_center_profile_field(FT, [0.01, 0.02, 0.03])
-
-        tuple_Ze = make_subcolumn_fields(FT, 2, nelems; value = 999)
-        tuple_DBZe = make_subcolumn_fields(FT, 2, nelems; value = 999)
-        CCR.cloudsat_reflectivity!(
-            tuple_Ze,
-            tuple_DBZe,
-            z_vol,
-            kr_vol,
-            g_vol,
-        )
-
-        streamed_Ze = make_subcolumn_fields(FT, 2, nelems; value = 999)
-        streamed_DBZe = make_subcolumn_fields(FT, 2, nelems; value = 999)
-        hydro_path = make_center_field(FT; value = 999, nelems)
-        gas_path = make_center_field(FT; value = 999, nelems)
-        height_km = Fields.coordinate_field(axes(g_vol)).z ./ FT(1000)
-        CCR.cloudsat_gas_path_attenuation!(gas_path, g_vol, height_km)
-
-        for isubcolumn in 1:2
-            CCR.cloudsat_reflectivity_subcolumn!(
-                streamed_Ze[isubcolumn],
-                streamed_DBZe[isubcolumn],
-                z_vol[isubcolumn],
-                kr_vol[isubcolumn],
-                hydro_path,
-                gas_path,
-                height_km,
-            )
-            @test parent(streamed_Ze[isubcolumn]) ==
-                  parent(tuple_Ze[isubcolumn])
-            @test parent(streamed_DBZe[isubcolumn]) ==
-                  parent(tuple_DBZe[isubcolumn])
-        end
-        @test parent(streamed_DBZe[2])[1:2] == FT[-1e30, -1e30]
-    end
 end
