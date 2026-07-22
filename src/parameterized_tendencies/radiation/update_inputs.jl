@@ -6,6 +6,8 @@ import CloudMicrophysics as CM
 import ..Parameters as CAP
 import ..PrescribedCloudInRadiation
 import ..lazy
+import ..specific
+import ..NonEquilibriumMicrophysics
 
 update_atmospheric_state!(integrator) =
     update_atmospheric_state!(integrator.p.atmos.radiation_mode, integrator)
@@ -223,6 +225,22 @@ function update_aerosol_concentrations!((; u, p, t)::I) where {I}
 end
 
 """
+    ᶜcloud_liquid_water_content(microphysics_model, u, ᶜq_liq)
+    ᶜcloud_ice_water_content(microphysics_model, u, ᶜq_ice)
+
+Cloud condensate specific contents seen by radiation. With non-equilibrium
+microphysics, the precomputed `ᶜq_liq` / `ᶜq_ice` include precipitation
+(`q_lcl + q_rai` / `q_icl + q_sno`), so use the prognostic cloud condensate
+only; otherwise fall back to the precomputed values.
+"""
+ᶜcloud_liquid_water_content(::NonEquilibriumMicrophysics, u, ᶜq_liq) =
+    @. lazy(max(0, specific(u.c.ρq_lcl, u.c.ρ)))
+ᶜcloud_liquid_water_content(microphysics_model, u, ᶜq_liq) = ᶜq_liq
+ᶜcloud_ice_water_content(::NonEquilibriumMicrophysics, u, ᶜq_ice) =
+    @. lazy(max(0, specific(u.c.ρq_icl, u.c.ρ)))
+ᶜcloud_ice_water_content(microphysics_model, u, ᶜq_ice) = ᶜq_ice
+
+"""
     update_cloud_properties((; u, p, t)::I) where {I}
 
 Updates cloud properties:
@@ -276,11 +294,11 @@ function update_cloud_properties!((; u, p, t)::I) where {I}
         cloud_liquid_water_content =
             radiation_mode.cloud isa PrescribedCloudInRadiation ?
             p.radiation.prescribed_clouds_field.clwc :
-            ᶜq_liq
+            ᶜcloud_liquid_water_content(p.atmos.microphysics_model, u, ᶜq_liq)
         cloud_ice_water_content =
             radiation_mode.cloud isa PrescribedCloudInRadiation ?
             p.radiation.prescribed_clouds_field.ciwc :
-            ᶜq_ice
+            ᶜcloud_ice_water_content(p.atmos.microphysics_model, u, ᶜq_ice)
         cloud_fraction =
             radiation_mode.cloud isa PrescribedCloudInRadiation ?
             p.radiation.prescribed_clouds_field.cc : ᶜcloud_fraction

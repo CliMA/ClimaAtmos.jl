@@ -743,19 +743,35 @@ end
 NVTX.@annotate function set_cloud_fraction!(
     Y,
     p,
-    ::MoistMicrophysics,
+    microphysics_model::MoistMicrophysics,
     ::GridScaleCloud,
 )
-    (; ᶜq_liq, ᶜq_ice) = p.precomputed
+    ᶜq_lcl, ᶜq_icl = _grid_mean_cloud_condensate(Y, p, microphysics_model)
     thermo_params = CAP.thermodynamics_params(p.params)
     FT = eltype(p.params)
     @. p.precomputed.ᶜcloud_fraction =
         ifelse(
-            TD.has_condensate(thermo_params, ᶜq_liq + ᶜq_ice),
+            TD.has_condensate(thermo_params, ᶜq_lcl + ᶜq_icl),
             FT(1),
             FT(0),
         )
 end
+
+"""
+    _grid_mean_cloud_condensate(Y, p, microphysics_model)
+
+Grid-mean cloud condensate `(ᶜq_lcl, ᶜq_icl)`, used by `GridScaleCloud` and,
+without EDMF, by [`_get_condensate_means`](@ref). With non-equilibrium
+microphysics, uses the prognostic cloud condensate only; the precomputed
+`ᶜq_liq` / `ᶜq_ice` include precipitation (`q_rai` / `q_sno`), which should
+not count as cloud.
+"""
+_grid_mean_cloud_condensate(Y, p, ::NonEquilibriumMicrophysics) = (
+    (@. lazy(max(0, specific(Y.c.ρq_lcl, Y.c.ρ)))),
+    (@. lazy(max(0, specific(Y.c.ρq_icl, Y.c.ρ)))),
+)
+_grid_mean_cloud_condensate(Y, p, microphysics_model) =
+    (p.precomputed.ᶜq_liq, p.precomputed.ᶜq_ice)
 NVTX.@annotate function set_cloud_fraction!(
     Y,
     p,
@@ -925,57 +941,31 @@ end
 """
     _get_condensate_means(Y, p, turbconv_model, microphysics_model)
 
-Dispatch condensate mean retrieval based on microphysics model.
+Mean cloud condensate `(ᶜq_lcl, ᶜq_icl)` of the domain that carries the SGS
+cloud closure: the environment for PrognosticEDMFX
+([`_env_cloud_condensate`](@ref)), the grid mean otherwise
+([`_grid_mean_cloud_condensate`](@ref)). Updraft contributions are added
+separately by [`_apply_edmf_cloud_weighting!`](@ref).
 """
-_get_condensate_means(Y, p, turbconv_model, ::EquilibriumMicrophysics0M) =
-    _get_condensate_means_equil(p, turbconv_model)
-_get_condensate_means(Y, p, turbconv_model, ::NonEquilibriumMicrophysics) =
-    _get_condensate_means_nonequil(Y, p, turbconv_model)
-
-"""
-    _get_condensate_means_equil(p, turbconv_model)
-
-Retrieve grid-mean cloud condensate for EquilibriumMicrophysics0M.
-
-For PrognosticEDMFX, uses environment condensate fields (ᶜq_liq⁰, ᶜq_ice⁰).
-Otherwise, uses grid-scale precomputed condensate.
-
-# Returns
-
-Tuple: `(ᶜq_lcl_mean, ᶜq_icl_mean)` as lazy field expressions.
-"""
-function _get_condensate_means_equil(p, turbconv_model)
-    if turbconv_model isa PrognosticEDMFX
-        (; ᶜq_liq⁰, ᶜq_ice⁰) = p.precomputed
-        return ᶜq_liq⁰, ᶜq_ice⁰
-    else
-        (; ᶜq_liq, ᶜq_ice) = p.precomputed
-        return ᶜq_liq, ᶜq_ice
-    end
-end
+_get_condensate_means(Y, p, turbconv_model, microphysics_model) =
+    turbconv_model isa PrognosticEDMFX ?
+    _env_cloud_condensate(Y, p, microphysics_model) :
+    _grid_mean_cloud_condensate(Y, p, microphysics_model)
 
 """
-    _get_condensate_means_nonequil(Y, p, turbconv_model)
+    _env_cloud_condensate(Y, p, microphysics_model)
 
-Retrieve grid-mean cloud condensate for NonEquilibriumMicrophysics.
-
-For PrognosticEDMFX, uses environment condensate fields (ᶜq_liq⁰, ᶜq_ice⁰).
-Otherwise, computes cloud-only condensate from prognostic variables.
-
-# Returns
-
-Tuple: `(ᶜq_lcl_mean, ᶜq_icl_mean)` as lazy field expressions.
+Environment cloud condensate `(ᶜq_lcl⁰, ᶜq_icl⁰)` for PrognosticEDMFX. With
+non-equilibrium microphysics, uses the environment cloud condensate only; the
+precomputed `ᶜq_liq⁰` / `ᶜq_ice⁰` include precipitation (`q_rai⁰` / `q_sno⁰`),
+which should not count as cloud.
 """
-function _get_condensate_means_nonequil(Y, p, turbconv_model)
-    if turbconv_model isa PrognosticEDMFX
-        (; ᶜq_liq⁰, ᶜq_ice⁰) = p.precomputed
-        return ᶜq_liq⁰, ᶜq_ice⁰
-    else
-        ᶜq_lcl_mean = @. lazy(specific(Y.c.ρq_lcl, Y.c.ρ))
-        ᶜq_icl_mean = @. lazy(specific(Y.c.ρq_icl, Y.c.ρ))
-        return ᶜq_lcl_mean, ᶜq_icl_mean
-    end
-end
+_env_cloud_condensate(Y, p, ::NonEquilibriumMicrophysics) = (
+    (@. lazy(max(0, $(ᶜspecific_env_value(@name(q_lcl), Y, p))))),
+    (@. lazy(max(0, $(ᶜspecific_env_value(@name(q_icl), Y, p))))),
+)
+_env_cloud_condensate(Y, p, microphysics_model) =
+    (p.precomputed.ᶜq_liq⁰, p.precomputed.ᶜq_ice⁰)
 
 """
     _apply_edmf_cloud_weighting!(Y, p, turbconv_model, thermo_params)
@@ -1012,15 +1002,18 @@ function _apply_edmf_cloud_weighting!(Y, p, turbconv_model, thermo_params)
     # Add contributions from the updrafts if using EDMF
     if turbconv_model isa PrognosticEDMFX
         n = n_mass_flux_subdomains(turbconv_model)
-        (; ᶜρʲs, ᶜq_liqʲs, ᶜq_iceʲs) = p.precomputed
+        (; ᶜρʲs) = p.precomputed
+        microphysics_model = p.atmos.microphysics_model
         for j in 1:n
             ᶜρaʲ = Y.c.sgsʲs.:($j).ρa
+            ᶜq_liqʲ, ᶜq_iceʲ =
+                _updraft_cloud_condensate(Y, p, j, microphysics_model)
 
             @. p.precomputed.ᶜcloud_fraction +=
                 ifelse(
                     TD.has_condensate(
                         thermo_params,
-                        ᶜq_liqʲs.:($$j) + ᶜq_iceʲs.:($$j),
+                        max(0, ᶜq_liqʲ + ᶜq_iceʲ),
                     ),
                     draft_area(ᶜρaʲ, ᶜρʲs.:($$j)),
                     0,
@@ -1028,6 +1021,19 @@ function _apply_edmf_cloud_weighting!(Y, p, turbconv_model, thermo_params)
         end
     end
 end
+
+"""
+    _updraft_cloud_condensate(Y, p, j, microphysics_model)
+
+Cloud condensate of updraft `j`, used for the binary updraft cloud check.
+With non-equilibrium microphysics, uses the prognostic cloud condensate
+(`q_lclʲ`, `q_iclʲ`) only; the precomputed `ᶜq_liqʲs` / `ᶜq_iceʲs` include
+precipitation (`q_raiʲ` / `q_snoʲ`), which should not count as cloud.
+"""
+_updraft_cloud_condensate(Y, p, j, ::NonEquilibriumMicrophysics) =
+    (Y.c.sgsʲs.:($j).q_lcl, Y.c.sgsʲs.:($j).q_icl)
+_updraft_cloud_condensate(Y, p, j, microphysics_model) =
+    (p.precomputed.ᶜq_liqʲs.:($j), p.precomputed.ᶜq_iceʲs.:($j))
 
 # ============================================================================
 # Machine Learning Cloud Fraction
