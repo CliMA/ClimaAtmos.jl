@@ -17,7 +17,7 @@ value = 1.0e-5
 value = 0.7
 
 [turb_entr_param_vec]
-value = [0.0001, 50.0, 0.0]
+value = [0.0001, 10000.0, 0.0]
 
 [entr_coeff]
 value = 0.1
@@ -28,11 +28,17 @@ value = 0.0001
 [min_area_limiter_power]
 value = 1
 
+[detr_coeff]
+value = 0
+
 [detr_buoy_coeff]
 value = 1
 
+[detr_vertdiv_coeff]
+value = 0
+
 [detr_massflux_vertdiv_coeff]
-value = 0.1
+value = 0.3
 
 [max_area_limiter_scale]
 value = 0.001
