@@ -537,28 +537,41 @@ The floor enters *only* the CF computation; the Lagrange multiplier `λ` (in
 `_compute_sgs_moments`) uses the equilibrium `σ_S`, so mass conservation
 `E[max(0, λ + α·S′)] = q_c` is exactly preserved for the microphysics tendencies.
 """
-@inline function _compute_cloud_fraction(q_c, mu_S, sigma_S, q_sat, α, floor)
+@inline function _compute_cloud_fraction(
+    q_c, mu_S, sigma_S, q_sat, α, floor, grad_qt = zero(typeof(q_c)),
+)
     FT = typeof(q_c)
-    (; ε_rel, σ_abs, margin, abs_margin, sharpness, residual) = floor
-    # Release the relative floor only where the mean is saturated by a
-    # margin relative to the release width `w` — by default the
-    # *equilibrium* PDF width, so the floor is released where the unfloored
-    # closure already predicts overcast (x is then the unfloored normalized
-    # condensate when μ_S ≈ q_c). Subsaturated or marginally saturated means
-    # (μ_S ≤ 0: cumulus, cloud edges) keep the full floor for any parameter
-    # values. The denominator guard covers only the w → 0 limit: the
-    # smallness of the equilibrium width relative to ε_rel·q_sat is exactly
-    # what drives the release in a quiescent deck, so it must not be floored
-    # away.
-    w = sqrt(
-        (margin * α)^2 * (sigma_S^2 + σ_abs^2) +
-        (abs_margin * ε_rel * q_sat)^2,
-    )
-    x = max(mu_S, zero(FT)) / max(w, ϵ_numerics(FT))
-    # `sharpness == 1` is the default release profile; the fast path keeps
-    # it identical to the plain saturation-margin release.
-    D_shape =
-        sharpness == one(FT) ? 1 / sqrt(1 + x^2) : (1 + x^2)^(-sharpness / 2)
+    (; ε_rel, σ_abs, margin, abs_margin, sharpness, residual, wellmixed_gref) =
+        floor
+    if wellmixed_gref > zero(FT)
+        # Well-mixedness release (opt-in via `wellmixed_gref > 0`): the
+        # patchiness floor is retained where a resolved vertical gradient of
+        # q_tot marks a convective (cumulus) layer, and released where the
+        # layer is well-mixed (stratiform / stratocumulus). Keyed on the LOCAL
+        # gradient `grad_qt = ∂q_tot/∂z` rather than μ_S, so a transient
+        # supersaturation cannot spuriously release it (the failure mode of the
+        # μ_S switch below in coarse-grid subtropical cumulus). `sharpness` is
+        # reused as the transition exponent; `x = |∂q_tot/∂z| / wellmixed_gref`.
+        x = abs(grad_qt) / wellmixed_gref
+        D_shape = x^sharpness / (1 + x^sharpness)  # 0 well-mixed → 1 convective
+    else
+        # Saturation-margin release keyed on μ_S (default). Released only where
+        # the mean is saturated by a margin relative to the release width `w` —
+        # by default the *equilibrium* PDF width, so the floor is released where
+        # the unfloored closure already predicts overcast (x is then the
+        # unfloored normalized condensate when μ_S ≈ q_c). Subsaturated or
+        # marginally saturated means (μ_S ≤ 0: cumulus, cloud edges) keep the
+        # full floor. The denominator guard covers only the w → 0 limit.
+        w = sqrt(
+            (margin * α)^2 * (sigma_S^2 + σ_abs^2) +
+            (abs_margin * ε_rel * q_sat)^2,
+        )
+        x = max(mu_S, zero(FT)) / max(w, ϵ_numerics(FT))
+        # `sharpness == 1` is the default release profile; the fast path keeps
+        # it identical to the plain saturation-margin release.
+        D_shape =
+            sharpness == one(FT) ? 1 / sqrt(1 + x^2) : (1 + x^2)^(-sharpness / 2)
+    end
     D = residual + (1 - residual) * D_shape
     σ_S_floor_sq = (D * ε_rel * q_sat)^2 + σ_abs^2
     σ_aug = α * sqrt(sigma_S^2 + σ_S_floor_sq)
@@ -592,13 +605,14 @@ materialized to a Field.
     corr_Tq,
     α,
     floor,
+    grad_qt = zero(typeof(T)),
 )
     moments = _sgs_saturation_moments(
         thermo_params, ρ, T, q_tot, sgs_quad, T′T′, q′q′, corr_Tq,
     )
     q_sat = TD.q_vap_saturation(thermo_params, T, ρ, q_liq, q_ice)
     return _compute_cloud_fraction(
-        q_liq + q_ice, moments.mu_S, moments.sigma_S, q_sat, α, floor,
+        q_liq + q_ice, moments.mu_S, moments.sigma_S, q_sat, α, floor, grad_qt,
     )
 end
 
@@ -620,6 +634,10 @@ Base.@kwdef struct CloudFractionFloorParams{FT}
     abs_margin::FT
     sharpness::FT
     residual::FT
+    # Well-mixedness release threshold gradient [kg/kg/m]. When > 0, the floor
+    # release keys on |∂q_tot/∂z| / wellmixed_gref instead of μ_S (see
+    # [`_compute_cloud_fraction`](@ref)); 0 (default) selects the μ_S release.
+    wellmixed_gref::FT
 end
 Base.broadcastable(x::CloudFractionFloorParams) = tuple(x)
 
@@ -636,6 +654,7 @@ cloud_fraction_floor_params(params) = CloudFractionFloorParams(;
     abs_margin = CAP.cloud_fraction_floor_release_abs_margin(params),
     sharpness = CAP.cloud_fraction_floor_release_sharpness(params),
     residual = CAP.cloud_fraction_floor_residual(params),
+    wellmixed_gref = CAP.cloud_fraction_wellmixed_gref(params),
 )
 
 """
@@ -689,7 +708,10 @@ NVTX.@annotate function set_sgs_moments_and_cloud_fraction!(Y, p)
     FT = eltype(p.params)
     α = sgs_variance_fidelity(CAP.cloud_fraction_steepness_scale(p.params))
     floor = cloud_fraction_floor_params(p.params)
-    (; ᶜT′T′, ᶜq′q′) = p.precomputed
+    (; ᶜT′T′, ᶜq′q′, ᶜgradᵥ_q_tot) = p.precomputed
+    # Scalar vertical gradient of grid-mean q_tot for the well-mixedness release
+    # (inert unless `wellmixed_gref > 0`); ᶜgradᵥ_q_tot is materialized upstream.
+    ᶜlg = Fields.local_geometry_field(Y.c)
 
     # ONE quadrature pass → (sigma_S, λ_lagrange).
     @. p.precomputed.ᶜsgs_moments = _compute_sgs_moments(
@@ -712,6 +734,7 @@ NVTX.@annotate function set_sgs_moments_and_cloud_fraction!(Y, p)
         TD.q_vap_saturation(thermo_params, ᶜT_mean, ᶜρ_env, ᶜq_lcl, ᶜq_icl),
         FT(α),
         $(floor),
+        projected_vector_data(C3, ᶜgradᵥ_q_tot, ᶜlg),  # grad_qt (well-mixedness)
     )
     _apply_edmf_cloud_weighting!(Y, p, turbconv_model, thermo_params)
 end
@@ -778,7 +801,10 @@ NVTX.@annotate function set_cloud_fraction!(
     α = sgs_variance_fidelity(CAP.cloud_fraction_steepness_scale(p.params))
     floor = cloud_fraction_floor_params(p.params)
 
-    (; ᶜT′T′, ᶜq′q′) = p.precomputed
+    (; ᶜT′T′, ᶜq′q′, ᶜgradᵥ_q_tot) = p.precomputed
+    # Scalar vertical gradient of grid-mean q_tot for the well-mixedness release
+    # (inert unless `wellmixed_gref > 0`); ᶜgradᵥ_q_tot is materialized upstream.
+    ᶜlg = Fields.local_geometry_field(Y.c)
 
     # Hybrid cloud fraction: the σ_S² quadrature pass is fused into this
     # broadcast kernel, so the moments stay in registers and are never written
@@ -796,6 +822,7 @@ NVTX.@annotate function set_cloud_fraction!(
         corr_Tq,
         FT(α),
         $(floor),
+        projected_vector_data(C3, ᶜgradᵥ_q_tot, ᶜlg),  # grad_qt (well-mixedness)
     )
 
     _apply_edmf_cloud_weighting!(Y, p, turbconv_model, thermo_params)
