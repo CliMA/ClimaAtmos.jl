@@ -27,7 +27,9 @@ floor_nt(
     abs_margin = FT(0),
     sharpness = FT(1),
     residual = FT(0),
-) where {FT} = (; ε_rel, σ_abs, margin, abs_margin, sharpness, residual)
+    wellmixed_gref = FT(0),
+) where {FT} =
+    (; ε_rel, σ_abs, margin, abs_margin, sharpness, residual, wellmixed_gref)
 
 @testset "Cloud Fraction" begin
 
@@ -231,6 +233,40 @@ floor_nt(
                         @test isfinite(cf)
                         @test FT(0) <= cf <= FT(1)
                     end
+                end
+
+                @testset "well-mixedness release (wellmixed_gref > 0)" begin
+                    fw = floor_nt(
+                        FT; ε_rel = FT(0.05), sharpness = FT(5.5),
+                        residual = FT(0.23), wellmixed_gref = FT(1.4e-6),
+                    )
+                    grad_conv = FT(5e-6)  # convective: resolved gradient present
+                    grad_mix = FT(5e-7)   # well-mixed (stratiform)
+                    cf_conv = CA._compute_cloud_fraction(
+                        q_c, μ_sub, σ_S, q_sat, α, fw, grad_conv,
+                    )
+                    cf_mix = CA._compute_cloud_fraction(
+                        q_c, μ_sub, σ_S, q_sat, α, fw, grad_mix,
+                    )
+                    # Floor retained in the convective layer, released when
+                    # well-mixed ⇒ higher CF in the (stratiform) well-mixed case.
+                    @test cf_mix > cf_conv
+
+                    # Keyed on the gradient, NOT μ_S: a spurious supersaturation
+                    # must not change CF (the μ_S-switch failure mode).
+                    cf_super = CA._compute_cloud_fraction(
+                        q_c, FT(5e-4), σ_S, q_sat, α, fw, grad_conv,
+                    )
+                    @test cf_super == cf_conv
+
+                    # wellmixed_gref = 0 ⇒ μ_S release; grad_qt is ignored.
+                    cf_a = CA._compute_cloud_fraction(
+                        q_c, μ_sub, σ_S, q_sat, α, floor_sc, grad_conv,
+                    )
+                    cf_b = CA._compute_cloud_fraction(
+                        q_c, μ_sub, σ_S, q_sat, α, floor_sc, grad_mix,
+                    )
+                    @test cf_a == cf_b
                 end
             end
         end

@@ -1,0 +1,28 @@
+# Well-mixedness cloud-fraction floor release (opt-in).
+#
+# Replaces the μ_S-keyed floor release with one keyed on the local resolved
+# gradient |∂q_tot/∂z|, which separates stratocumulus (well-mixed, floor
+# released → overcast) from shallow cumulus (a gradient present, floor retained
+# → CF suppressed) WITHOUT firing on a transient grid-mean supersaturation — the
+# failure mode of the μ_S switch over coarse-grid subtropical cumulus.
+#
+# Enabled by cloud_fraction_wellmixed_gref > 0. Values are the offline optimum
+# fit against 7 PyCLES cfSite LES across the Sc→Cu transition (α = 1 fixed):
+# profile RMSE 0.031 (≈ the μ_S fit) and immune to the supersaturation blowup.
+# See notes/cf_offline_calibration/ (well_mixed.py, README.md).
+
+[cloud_fraction_wellmixed_gref]
+value = 1.405e-6
+type = "float"
+
+[cloud_fraction_eps_rel]
+value = 0.0504
+type = "float"
+
+[cloud_fraction_floor_release_sharpness]
+value = 5.54
+type = "float"
+
+[cloud_fraction_floor_residual]
+value = 0.226
+type = "float"

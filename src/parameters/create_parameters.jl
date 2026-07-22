@@ -382,6 +382,9 @@ function TurbulenceConvectionParameters(
         cloud_fraction_floor_release_abs_margin = FT(1),
         cloud_fraction_floor_release_sharpness = FT(1),
         cloud_fraction_floor_residual = FT(0),
+        # Well-mixedness release threshold gradient [kg/kg/m]. 0 ⇒ disabled
+        # (μ_S-keyed release); > 0 ⇒ release keyed on |∂q_tot/∂z|/gref.
+        cloud_fraction_wellmixed_gref = FT(0),
     )
     release_present = filter(collect(keys(release_defaults))) do name
         haskey(toml_dict.data, string(name))
