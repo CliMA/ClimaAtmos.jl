@@ -7,20 +7,17 @@ value = 1.0e-5
 [EDMF_max_area]
 value = 0.7
 
-[entr_inv_tau]
-value = 0.0001
+[turb_entr_param_vec]
+value = [0.0001, 10000.0]
 
 [entr_coeff]
-value = 0
+value = 0.1
 
 [min_area_limiter_scale]
-value = 0
+value = 0.0001
 
 [min_area_limiter_power]
-value = 10
-
-[detr_inv_tau]
-value = 0
+value = 1
 
 [detr_coeff]
 value = 0
@@ -32,7 +29,7 @@ value = 1
 value = 0
 
 [detr_massflux_vertdiv_coeff]
-value = 0.1
+value = 0.3
 
 [max_area_limiter_scale]
 value = 0
