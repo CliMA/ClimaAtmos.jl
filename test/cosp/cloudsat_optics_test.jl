@@ -1,5 +1,6 @@
 using Test
 import ClimaAtmos.COSP.COSPCloudSatOptics as CCO
+import CloudMicrophysics.Parameters as CMP
 using ClimaCore: Domains, Meshes, Spaces, Fields, Geometry
 
 function make_center_field(FT; value, nelems = 3)
@@ -154,10 +155,45 @@ end
     end
 end
 
+@testset "COSP CloudSat Clima 1M PSD parameters" begin
+    for FT in (Float32, Float64)
+        microphysics_params = CMP.Microphysics1MParams(FT)
+        for (class, hydrometeor) in (
+            (:icl, microphysics_params.cloud.ice),
+            (:rai, microphysics_params.precip.rain),
+            (:sno, microphysics_params.precip.snow),
+        )
+            params = CCO._clima_1m_psd_parameters(
+                microphysics_params,
+                Val(class),
+            )
+            @test params.hydrometeor === hydrometeor
+        end
+
+        for class in (:icl, :sno)
+            params = CCO._clima_1m_psd_parameters(
+                microphysics_params,
+                Val(class),
+            )
+            mass_params = params.hydrometeor.mass
+            r = FT(1e-4)
+            mass =
+                mass_params.χm *
+                mass_params.m0 *
+                (r / mass_params.r0)^(mass_params.me + mass_params.Δm)
+            expected_diameter =
+                cbrt(FT(6) * mass / (FT(pi) * CCO._rho_solid_ice(FT)))
+
+            @test CCO._scattering_diameter(r, params) ≈ expected_diameter
+        end
+    end
+end
+
 @testset "COSP CloudSat optics scaffold" begin
     FT = Float64
     nsubcolumns = 2
     nelems = 3
+    microphysics_params = CMP.Microphysics1MParams(FT)
 
     hydrometeors =
         make_hydrometeor_subcolumns(FT, nsubcolumns, nelems; value = 0)
@@ -175,6 +211,7 @@ end
             hydrometeors,
             thermo_state,
             rho_air,
+            microphysics_params,
             radar_cfg,
         )
 
@@ -199,6 +236,7 @@ end
             hydrometeors,
             thermo_state,
             rho_air,
+            microphysics_params,
             radar_cfg,
         )
 
@@ -232,6 +270,7 @@ end
                 hydrometeors,
                 thermo_state,
                 rho_air,
+                microphysics_params,
                 radar_cfg,
             )
 
@@ -270,6 +309,7 @@ end
             hydrometeors,
             thermo_state,
             rho_air,
+            microphysics_params,
             radar_cfg,
         )
 
@@ -300,6 +340,7 @@ end
             hydrometeors,
             thermo_state,
             rho_air,
+            microphysics_params,
             radar_cfg,
         )
 
@@ -312,6 +353,7 @@ end
         nelems = 3
         thermo_state = make_thermo_state(FT)
         rho_air = make_rho_air(FT)
+        microphysics_params = CMP.Microphysics1MParams(FT)
         radar_cfg = CCO.CloudSatRadarConfig(FT; use_gas_abs = true)
         g_vol = make_center_field(FT; value = 999, nelems)
 
@@ -338,6 +380,7 @@ end
                     hydrometeors,
                     thermo_state.T,
                     rho_air,
+                    microphysics_params,
                     radar_cfg,
                 ),
             )
@@ -355,6 +398,7 @@ end
             hydrometeors,
             thermo_state.T,
             rho_air,
+            microphysics_params,
             radar_cfg,
         )
         @test all(iszero, parent(z_vol))
@@ -375,6 +419,7 @@ end
             q_subcol,
             thermo_state,
             rho_air,
+            microphysics_params,
             radar_cfg,
         )
 
@@ -400,6 +445,7 @@ end
                 streamed_hydrometeors,
                 thermo_state.T,
                 rho_air,
+                microphysics_params,
                 radar_cfg,
             )
             @test parent(streamed_z[isubcolumn]) ==

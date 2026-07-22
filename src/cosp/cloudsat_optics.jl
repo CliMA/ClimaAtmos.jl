@@ -1,5 +1,8 @@
 module COSPCloudSatOptics
 
+import CloudMicrophysics.Microphysics1M as CM1
+import CloudMicrophysics.Parameters as CMP
+
 export CloudSatRadarConfig,
     DEFAULT_CLOUDSAT_RADAR_CONFIG,
     quickbeam_optics!,
@@ -42,13 +45,9 @@ end
 
 const DEFAULT_CLOUDSAT_RADAR_CONFIG = CloudSatRadarConfig(Float64)
 
-struct Clima1MPSDParameters{FT}
-    class::Symbol
+struct Clima1MPSDParameters{P}
     phase::Symbol
-    r0::FT
-    m0::FT
-    me::FT
-    n0::FT
+    hydrometeor::P
 end
 
 Base.broadcastable(params::Clima1MPSDParameters) = Ref(params)
@@ -137,7 +136,16 @@ const H2O_B3 = (
 )
 
 """
-    cloudsat_optics!(z_vol, kr_vol, g_vol, q, thermo_state, rho_air, radar_cfg)
+    cloudsat_optics!(
+        z_vol,
+        kr_vol,
+        g_vol,
+        q,
+        thermo_state,
+        rho_air,
+        microphysics_params,
+        radar_cfg,
+    )
 
 Fill first-stage CloudSat optical-volume quantities from existing subcolumn caches.
 
@@ -149,9 +157,9 @@ production callback uses `cloudsat_gas_attenuation!` once and then calls
 `quickbeam_optics` output shape. The four available 1M hydrometeor classes are
 summed into those totals.
 
-Hydrometeor particle distributions use hard-coded ClimaMicrophysics 1M PSD
-and mass-size assumptions, then a QuickBeam Mie scattering kernel
-computes `z_vol` and `kr_vol`.
+Hydrometeor particle distributions use the supplied ClimaMicrophysics 1M PSD
+and mass-size parameters, then a QuickBeam Mie scattering kernel computes
+`z_vol` and `kr_vol`.
 Gas absorption uses the COSPv2 `gases` calculation.
 """
 function cloudsat_optics!(
@@ -163,6 +171,29 @@ function cloudsat_optics!(
     rho_air,
     radar_cfg::Union{Nothing, CloudSatRadarConfig} = nothing,
 ) where {N}
+    microphysics_params = CMP.Microphysics1MParams(eltype(rho_air))
+    return cloudsat_optics!(
+        z_vol_cloudsat,
+        kr_vol_cloudsat,
+        g_vol_cloudsat,
+        q_subcol,
+        thermo_state,
+        rho_air,
+        microphysics_params,
+        radar_cfg,
+    )
+end
+
+function cloudsat_optics!(
+    z_vol_cloudsat::NTuple{N},
+    kr_vol_cloudsat::NTuple{N},
+    g_vol_cloudsat,
+    q_subcol::NamedTuple,
+    thermo_state,
+    rho_air,
+    microphysics_params::CMP.Microphysics1MParams,
+    radar_cfg::Union{Nothing, CloudSatRadarConfig} = nothing,
+) where {N}
     return quickbeam_optics!(
         z_vol_cloudsat,
         kr_vol_cloudsat,
@@ -170,6 +201,7 @@ function cloudsat_optics!(
         q_subcol,
         thermo_state,
         rho_air,
+        microphysics_params,
         radar_cfg,
     )
 end
@@ -181,6 +213,29 @@ function quickbeam_optics!(
     q_subcol::NamedTuple,
     thermo_state,
     rho_air,
+    radar_cfg::Union{Nothing, CloudSatRadarConfig} = nothing,
+) where {N}
+    microphysics_params = CMP.Microphysics1MParams(eltype(rho_air))
+    return quickbeam_optics!(
+        z_vol_cloudsat,
+        kr_vol_cloudsat,
+        g_vol_cloudsat,
+        q_subcol,
+        thermo_state,
+        rho_air,
+        microphysics_params,
+        radar_cfg,
+    )
+end
+
+function quickbeam_optics!(
+    z_vol_cloudsat::NTuple{N},
+    kr_vol_cloudsat::NTuple{N},
+    g_vol_cloudsat,
+    q_subcol::NamedTuple,
+    thermo_state,
+    rho_air,
+    microphysics_params::CMP.Microphysics1MParams,
     radar_cfg::Union{Nothing, CloudSatRadarConfig} = nothing,
 ) where {N}
     _check_keys(q_subcol, values(Q_KEYS), "q_subcol")
@@ -246,6 +301,7 @@ function quickbeam_optics!(
             hydrometeors,
             temperature,
             rho_air,
+            microphysics_params,
             cfg,
         )
     end
@@ -293,6 +349,7 @@ end
         hydrometeors,
         temperature,
         rho_air,
+        microphysics_params,
         radar_cfg,
     )
 
@@ -305,6 +362,27 @@ function cloudsat_optics_subcolumn!(
     hydrometeors::NamedTuple,
     temperature,
     rho_air,
+    radar_cfg::Union{Nothing, CloudSatRadarConfig} = nothing,
+)
+    microphysics_params = CMP.Microphysics1MParams(eltype(rho_air))
+    return cloudsat_optics_subcolumn!(
+        z_vol_cloudsat,
+        kr_vol_cloudsat,
+        hydrometeors,
+        temperature,
+        rho_air,
+        microphysics_params,
+        radar_cfg,
+    )
+end
+
+function cloudsat_optics_subcolumn!(
+    z_vol_cloudsat,
+    kr_vol_cloudsat,
+    hydrometeors::NamedTuple,
+    temperature,
+    rho_air,
+    microphysics_params::CMP.Microphysics1MParams,
     radar_cfg::Union{Nothing, CloudSatRadarConfig} = nothing,
 )
     _check_keys(hydrometeors, values(Q_KEYS), "hydrometeors")
@@ -327,7 +405,7 @@ function cloudsat_optics_subcolumn!(
 
     for class in HYDRO_CLASSES
         q_hydro = getproperty(hydrometeors, getproperty(Q_KEYS, class))
-        params = _clima_1m_psd_parameters(eltype(reference), Val(class))
+        params = _clima_1m_psd_parameters(microphysics_params, Val(class))
         # TODO: fuse these two broadcasts once there is a backend-safe way to
         # return and accumulate both scalar optics values together.
         @. z_vol_cloudsat += _clima_hydrometeor_z_volume(
@@ -445,59 +523,23 @@ end
 # scattering to compute CloudSat optical properties for the four active Clima 1M
 # large-scale hydrometeor classes. This code intentionally avoids the original
 # COSPv2 hydro_class_init/calc_Re/dsd and LUT/cache paths.
-# TODO: replace hard-coded constants with values from ClimaParams once the
-# prototype is validated.
 @inline _rho_water(::Type{FT}) where {FT} = FT(1000)
-@inline _rho_ice(::Type{FT}) where {FT} = FT(917)
+# Pure-ice material density used only to convert particle mass to the diameter
+# of a volume-equivalent compact ice sphere for Mie scattering.
+@inline _rho_solid_ice(::Type{FT}) where {FT} = FT(917)
 @inline _n_lcl(::Type{FT}) where {FT} = FT(1e8)
 
-@inline function _clima_1m_psd_parameters(::Type{FT}, ::Val{:lcl}) where {FT}
-    r0 = FT(1e-5)
-    return Clima1MPSDParameters(
-        :lcl,
-        :liquid,
-        r0,
-        FT(4) / FT(3) * FT(pi) * _rho_water(FT) * r0^3,
-        FT(3),
-        _n_lcl(FT),
-    )
-end
+@inline _clima_1m_psd_parameters(params, ::Val{:lcl}) =
+    Clima1MPSDParameters(:liquid, params.cloud.liquid)
 
-@inline function _clima_1m_psd_parameters(::Type{FT}, ::Val{:icl}) where {FT}
-    r0 = FT(1e-5)
-    return Clima1MPSDParameters(
-        :icl,
-        :ice,
-        r0,
-        FT(4) / FT(3) * FT(pi) * _rho_ice(FT) * r0^3,
-        FT(3),
-        FT(2e7),
-    )
-end
+@inline _clima_1m_psd_parameters(params, ::Val{:icl}) =
+    Clima1MPSDParameters(:ice, params.cloud.ice)
 
-@inline function _clima_1m_psd_parameters(::Type{FT}, ::Val{:rai}) where {FT}
-    r0 = FT(1e-3)
-    return Clima1MPSDParameters(
-        :rai,
-        :liquid,
-        r0,
-        FT(4) / FT(3) * FT(pi) * _rho_water(FT) * r0^3,
-        FT(3),
-        FT(16e6),
-    )
-end
+@inline _clima_1m_psd_parameters(params, ::Val{:rai}) =
+    Clima1MPSDParameters(:liquid, params.precip.rain)
 
-@inline function _clima_1m_psd_parameters(::Type{FT}, ::Val{:sno}) where {FT}
-    r0 = FT(1e-3)
-    return Clima1MPSDParameters(
-        :sno,
-        :ice,
-        r0,
-        FT(0.1) * r0^2,
-        FT(2),
-        zero(FT),
-    )
-end
+@inline _clima_1m_psd_parameters(params, ::Val{:sno}) =
+    Clima1MPSDParameters(:ice, params.precip.snow)
 
 @inline function _clima_hydrometeor_z_volume(q, rho_air, T, radar_cfg, params)
     return _clima_hydrometeor_optics(q, rho_air, T, radar_cfg, params)[1]
@@ -507,24 +549,34 @@ end
     return _clima_hydrometeor_optics(q, rho_air, T, radar_cfg, params)[2]
 end
 
+@inline function _clima_hydrometeor_optics(
+    q,
+    rho_air,
+    T,
+    radar_cfg,
+    params::Clima1MPSDParameters{<:CMP.CloudLiquid},
+)
+    FT = typeof(q + rho_air + T)
+    q_pos = max(zero(FT), q)
+    rho_pos = max(zero(FT), rho_air)
+    (q_pos > FT(radar_cfg.min_mixing_ratio) && rho_pos > eps(FT)) ||
+        return zero(FT), zero(FT)
+    return _clima_liquid_cloud_psd_optics(q_pos, rho_pos, T, radar_cfg)
+end
+
 @inline function _clima_hydrometeor_optics(q, rho_air, T, radar_cfg, params)
     FT = typeof(q + rho_air + T)
     q_pos = max(zero(FT), q)
     rho_pos = max(zero(FT), rho_air)
     (q_pos > FT(radar_cfg.min_mixing_ratio) && rho_pos > eps(FT)) ||
         return zero(FT), zero(FT)
-
-    if params.class === :lcl
-        return _clima_liquid_cloud_psd_optics(q_pos, rho_pos, T, radar_cfg)
-    else
-        return _clima_marshall_palmer_psd_optics(
-            q_pos,
-            rho_pos,
-            T,
-            radar_cfg,
-            params,
-        )
-    end
+    return _clima_marshall_palmer_psd_optics(
+        q_pos,
+        rho_pos,
+        T,
+        radar_cfg,
+        params,
+    )
 end
 
 @inline function _clima_liquid_cloud_radius(q, rho_air)
@@ -551,38 +603,12 @@ end
     )
 end
 
-@inline function _snow_intercept(q, rho_air)
-    FT = typeof(q + rho_air)
-    rho0 = one(FT)
-    nu = FT(0.63)
-    n0_coeff = FT(4.36e9) * rho0^nu
-    return n0_coeff * max(zero(FT), rho_air / rho0 * q)^nu
-end
-
-@inline function _psd_intercept(q, rho_air, params)
-    params.class === :sno && return _snow_intercept(q, rho_air)
-    return params.n0
-end
-
-@inline function _marshall_palmer_lambda(q, rho_air, params)
-    FT = typeof(q + rho_air)
-    q_pos = max(zero(FT), q)
-    rho_pos = max(zero(FT), rho_air)
-    n0 = _psd_intercept(q_pos, rho_pos, params)
-    (q_pos > zero(FT) && rho_pos > zero(FT) && n0 > zero(FT)) ||
-        return zero(FT)
-    gamma_me1 = _gamma_integer(params.me + one(FT))
-    return (
-        gamma_me1 * params.m0 * n0 /
-        (q_pos * rho_pos * params.r0^params.me)
-    )^(one(FT) / (params.me + one(FT)))
-end
-
 @inline function _clima_marshall_palmer_psd_optics(q, rho_air, T, radar_cfg, params)
     FT = typeof(q + rho_air + T)
-    lambda = _marshall_palmer_lambda(q, rho_air, params)
-    lambda > zero(FT) || return zero(FT), zero(FT)
-    n0 = _psd_intercept(q, rho_air, params)
+    hydro = params.hydrometeor
+    n0 = CM1.get_n0(hydro.pdf, q, rho_air)
+    n0 > zero(FT) || return zero(FT), zero(FT)
+    lambda_inv = CM1.lambda_inverse(hydro.pdf, hydro.mass, q, rho_air)
     z_vol = zero(FT)
     kr_vol = zero(FT)
     r_prev = FT(1e-7)
@@ -591,7 +617,7 @@ end
         r_next = r_prev * log_step
         r_mid = sqrt(r_prev * r_next)
         dr = r_next - r_prev
-        number_density = n0 * exp(-lambda * r_mid) * dr
+        number_density = n0 * exp(-r_mid / lambda_inv) * dr
         D_m = _scattering_diameter(r_mid, params)
         z_i, kr_i = _zeff_particle_integral(
             D_m,
@@ -610,8 +636,9 @@ end
 @inline function _scattering_diameter(r, params)
     params.phase === :liquid && return 2 * r
     FT = typeof(r)
-    mass = params.m0 * (r / params.r0)^params.me
-    return cbrt(FT(6) * mass / (FT(pi) * _rho_ice(FT)))
+    (; r0, m0, me, Δm, χm) = params.hydrometeor.mass
+    mass = χm * m0 * (r / r0)^(me + Δm)
+    return cbrt(FT(6) * mass / (FT(pi) * _rho_solid_ice(FT)))
 end
 
 @inline function _zeff_particle_integral(D_m, number_m3, T, radar_cfg, phase)
@@ -630,38 +657,6 @@ end
     k_sum = qext * number_m3 * D_m^2
     kr_vol = FT(0.25) * FT(pi) * k_sum * (FT(1000) * FT(10) / log(FT(10)))
     return max(zero(FT), z_vol), max(zero(FT), kr_vol)
-end
-
-@inline function _gamma_integer(x)
-    FT = typeof(x)
-    if abs(x - FT(3)) < sqrt(eps(FT))
-        return FT(2)
-    elseif abs(x - FT(4)) < sqrt(eps(FT))
-        return FT(6)
-    else
-        return exp(_log_gamma_lanczos(x))
-    end
-end
-
-@inline function _log_gamma_lanczos(x)
-    FT = typeof(x)
-    coeffs = (
-        FT(676.5203681218851),
-        FT(-1259.1392167224028),
-        FT(771.32342877765313),
-        FT(-176.61502916214059),
-        FT(12.507343278686905),
-        FT(-0.13857109526572012),
-        FT(9.9843695780195716e-6),
-        FT(1.5056327351493116e-7),
-    )
-    y = FT(0.99999999999980993)
-    z = x - one(FT)
-    for i in eachindex(coeffs)
-        y += coeffs[i] / (z + FT(i))
-    end
-    t = z + FT(7.5)
-    return FT(0.9189385332046727) + (z + FT(0.5)) * log(t) - t + log(y)
 end
 
 @inline _pressure_hpa(p_pa) = p_pa / typeof(p_pa)(100)

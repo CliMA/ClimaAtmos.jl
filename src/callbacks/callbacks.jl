@@ -136,7 +136,7 @@ end
 struct NoOpCOSPSubcolumnConsumer end
 (::NoOpCOSPSubcolumnConsumer)(_, _) = nothing
 
-struct CloudSatSubcolumnConsumer{Z, K, ZE, D, H, G, HT, T, R, C}
+struct CloudSatSubcolumnConsumer{Z, K, ZE, D, H, G, HT, T, R, MP, C}
     z_vol_work::Z
     kr_vol_work::K
     Ze_non_work::ZE
@@ -146,7 +146,36 @@ struct CloudSatSubcolumnConsumer{Z, K, ZE, D, H, G, HT, T, R, C}
     height_km::HT
     temperature::T
     rho_air::R
+    microphysics_params::MP
     radar_config::C
+end
+
+function CloudSatSubcolumnConsumer(
+    z_vol_work,
+    kr_vol_work,
+    Ze_non_work,
+    DBZe,
+    hydro_path_attenuation_work,
+    gas_path_attenuation,
+    height_km,
+    temperature,
+    rho_air,
+    radar_config,
+)
+    microphysics_params = CM.Parameters.Microphysics1MParams(eltype(rho_air))
+    return CloudSatSubcolumnConsumer(
+        z_vol_work,
+        kr_vol_work,
+        Ze_non_work,
+        DBZe,
+        hydro_path_attenuation_work,
+        gas_path_attenuation,
+        height_km,
+        temperature,
+        rho_air,
+        microphysics_params,
+        radar_config,
+    )
 end
 
 function (consumer::CloudSatSubcolumnConsumer)(isubcolumn, hydrometeors)
@@ -164,6 +193,7 @@ function consume_cosp_subcolumn!(
         hydrometeors,
         consumer.temperature,
         consumer.rho_air,
+        consumer.microphysics_params,
         consumer.radar_config,
     )
     COSP.COSPCloudSatReflectivity.cloudsat_reflectivity_subcolumn!(
@@ -223,6 +253,7 @@ function run_cosp_cloudsat!(Y, p, ::NonEquilibriumMicrophysics1M)
         height_km_cloudsat,
         ᶜT,
         Y.c.ρ,
+        CAP.microphysics_1m_params(p.params),
         radar_config,
     )
     foreach_cosp_subcolumn(consumer, Y, p)
