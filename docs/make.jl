@@ -56,6 +56,7 @@ makedocs(;
             "Physics & Parameterizations" => [
                 "Microphysics" => "microphysics.md",
                 "EDMF: Prognostic Equations" => "edmf_equations.md",
+                "EDMF: Horizontal Diffusion" => "edmf_horizontal_diffusion.md",
                 "Gravity Wave Drag" => [
                     "Non-orographic Gravity Waves" => "non_orographic_gravity_wave.md",
                     "Orographic Gravity Waves" => "orographic_gravity_wave.md",

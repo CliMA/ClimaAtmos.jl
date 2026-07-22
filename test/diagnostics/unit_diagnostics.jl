@@ -62,6 +62,7 @@ The `states` dict maps symbol keys to (Y, p) tuples. Available keys:
   :m0_slab_sphere — 0M + SlabOceanSST, sphere (watero)
   :smag           — SmagorinskyLilly, sphere
   :m0_pedmfx      — 0M + PrognosticEDMFX, column
+  :m0_pedmfx_h    — 0M + PrognosticEDMFX + horizontal SGS diffusive flux, plane
   :m1_pedmfx      — 1M + PrognosticEDMFX, column
   :m2_pedmfx      — DISABLED 2M + PrognosticEDMFX, column
   :vd             — VerticalDiffusion, column
@@ -302,6 +303,19 @@ model_chem_pedmfx = CA.AtmosModel(;
 )
 (Y_chem_pedmfx, p_chem_pedmfx) = build_state_cache(FT, model_chem_pedmfx; grid = column);
 
+## PrognosticEDMFX with the horizontal SGS diffusive flux (plane, so a
+## horizontal discretization exists for the ᶜK_h_h/ᶜK_u_h cache)
+edmfx_model_h = CA.EDMFXModel(;
+    entr_model = CA.NoEntrainment(), detr_model = CA.NoDetrainment(),
+    scale_blending_method = CA.SmoothMinimumBlending(),
+    sgs_diffusive_flux_horizontal = true,
+)
+model_0m_pedmfx_h = CA.AtmosModel(;
+    microphysics_model = CA.EquilibriumMicrophysics0M(),
+    turbconv_model = pedmfx, edmfx_model = edmfx_model_h,
+)
+(Y_0m_pedmfx_h, p_0m_pedmfx_h) = build_state_cache(FT, model_0m_pedmfx_h; grid = plane);
+
 ## VerticalDiffusion and DecayWithHeightDiffusion (no EDMF)
 vdp = CAP.vert_diff_params(params)
 model_vd = CA.AtmosModel(;
@@ -337,6 +351,7 @@ states = Dict(
     :m0_slab_sphere => (Y_0m_slab_sphere, p_0m_slab_sphere),
     :smag           => (Y_smag,           p_smag),
     :m0_pedmfx      => (Y_0m_pedmfx,      p_0m_pedmfx),
+    :m0_pedmfx_h    => (Y_0m_pedmfx_h,    p_0m_pedmfx_h),
     :m1_pedmfx      => (Y_1m_pedmfx,      p_1m_pedmfx),
     # :m2_pedmfx      => (Y_2m_pedmfx,      p_2m_pedmfx),
     :chem_pedmfx    => (Y_chem_pedmfx,    p_chem_pedmfx),
@@ -447,6 +462,8 @@ VALID_CASES = [
     cases(("edt", "evu"), (:vd, :dwh, :m0_pedmfx))...,
     # Interfacial entrainment diffusivity (EDMFX only)
     case("kentr", :m0_pedmfx),
+    # Horizontal SGS-flux coefficients (EDMF only)
+    cases(("lmixh", "edth", "evuh"), :m0_pedmfx_h)...,
     # GasPhaseChem + PrognosticEDMFX
     case("q_gas_A",   :chem_pedmfx),
     case("q_gas_Aup", :chem_pedmfx),
@@ -546,6 +563,19 @@ end
 
     @testset "orog errors on column grid (no hypsography field)" begin
         @test_throws Exception compute_diag(getdiag("orog"), Y_dry, p_dry)
+    end
+
+    for name in ("lmixh", "edth", "evuh")
+        @testset "$name errors on dry model" begin
+            @test_throws Exception compute_diag(getdiag(name), Y_dry, p_dry)
+        end
+    end
+    for name in ("edth", "evuh")
+        @testset "$name errors without the horizontal-diffusivity cache" begin
+            @test_throws Exception compute_diag(
+                getdiag(name), Y_0m_pedmfx, p_0m_pedmfx,
+            )
+        end
     end
 end
 
