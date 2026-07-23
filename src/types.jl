@@ -155,7 +155,6 @@ end
 abstract type AbstractInsolation end
 struct IdealizedInsolation <: AbstractInsolation end
 struct RCEMIPIIInsolation <: AbstractInsolation end
-struct GCMDrivenInsolation <: AbstractInsolation end
 struct ExternalTVInsolation <: AbstractInsolation end
 struct Larcform1Insolation <: AbstractInsolation end
 
@@ -541,17 +540,12 @@ struct LargeScaleAdvection{PT, PQ}
     prof_dTdt::PT # Set large-scale cooling
     prof_dqtdt::PQ # Set large-scale drying
 end
-# maybe need to <: AbstractForcing
-struct GCMForcing{FT}
-    external_forcing_file::String
-    cfsite_number::String
-end
-
 """
     ExternalDrivenTVForcing
 
-Generic time-varying forcing read from a column forcing file through the
-`ColumnDatasets` interface (the native ClimaColumn schema). Its `forcing`
+Generic time-varying forcing read from column forcing data through the
+`ColumnDatasets` interface (an on-disk ClimaColumn file or an in-memory
+source). Its `forcing`
 is a tuple of composed [`AbstractForcingTerm`](@ref)s (horizontal advection,
 vertical fluctuation, nudging, subsidence). Only data required by the composed
 terms is loaded, and missing data for a composed term is a loud error.
@@ -567,17 +561,19 @@ Runscripts can construct this model as
 insolation requirements are derived from the resolved `AtmosModel` during
 cache construction rather than from the forcing terms.
 """
-struct ExternalDrivenTVForcing{CD <: ColumnDatasets.ColumnDataset, F <: Tuple, M}
+struct ExternalDrivenTVForcing{
+    CD <: ColumnDatasets.AbstractColumnData,
+    F <: Tuple,
+    M,
+}
     dataset::CD
     forcing::F
     time_interpolation_method::M
 end
 function ExternalDrivenTVForcing(
-    dataset::ColumnDatasets.ColumnDataset;
+    dataset::ColumnDatasets.AbstractColumnData;
     forcing = default_forcing_terms(),
-    time_interpolation_method = ColumnDatasets.time_interpolation_method(
-        dataset.format,
-    ),
+    time_interpolation_method = ColumnDatasets.time_interpolation_method(dataset),
 )
     forcing = Tuple(forcing)
     validate_forcing_terms(forcing)
@@ -1206,7 +1202,7 @@ The default AtmosModel provides:
 Internal testing and calibration components for single-column setups:
 
   - `subsidence`: nothing or Bomex_subsidence, Rico_subsidence, DYCOMS_subsidence, etc
-  - `external_forcing`: nothing or external forcing objects (GCMForcing, ExternalDrivenTVForcing, ISDACForcing)
+  - `external_forcing`: nothing or external forcing objects (ExternalDrivenTVForcing, ISDACForcing)
   - `ls_adv`: nothing or LargeScaleAdvection()
   - `advection_test`: Bool
   - `scm_coriolis`: nothing or NamedTuple `(; prof_ug, prof_vg, coriolis_param)`

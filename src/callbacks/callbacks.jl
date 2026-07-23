@@ -325,13 +325,6 @@ function set_insolation_variables!(Y, p, t, ::RCEMIPIIInsolation)
     RRTMGP.toa_flux(rrtmgp_solver) .= FT(551.58)
 end
 
-function set_insolation_variables!(Y, p, t, ::GCMDrivenInsolation)
-    (; rrtmgp_solver) = p.radiation
-    RRTMGP.cos_zenith(rrtmgp_solver) .= Fields.field2array(p.external_forcing.cos_zenith)
-    RRTMGP.toa_flux(rrtmgp_solver) .=
-        Fields.field2array(p.external_forcing.toa_flux)
-end
-
 function set_insolation_variables!(Y, p, t, ::ExternalTVInsolation)
     # unpack objects with time varying data
     (; rrtmgp_solver) = p.radiation
