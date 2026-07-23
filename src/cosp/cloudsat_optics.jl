@@ -6,10 +6,17 @@ import CloudMicrophysics.Parameters as CMP
 export CloudSatRadarConfig,
     DEFAULT_CLOUDSAT_RADAR_CONFIG,
     cloudsat_gas_attenuation!,
+    cloudsat_grid_mean_sizes!,
     cloudsat_optics_subcolumn!
 
 const HYDRO_CLASSES = (:lcl, :icl, :rai, :sno)
 const Q_KEYS = (; lcl = :q_lcl, icl = :q_icl, rai = :q_rai, sno = :q_sno)
+const SIZE_KEYS = (;
+    lcl = :r_lcl,
+    icl = :lambda_inv_icl,
+    rai = :lambda_inv_rai,
+    sno = :lambda_inv_sno,
+)
 
 struct CloudSatRadarConfig{FT}
     freq::FT
@@ -85,51 +92,96 @@ function cloudsat_gas_attenuation!(
         _gas_attenuation(pressure, temperature, specific_humidity, cfg)
     return nothing
 end
+"""
+    cloudsat_grid_mean_sizes!(
+        grid_mean_sizes,
+        grid_mean_hydrometeors,
+        rho_air,
+        microphysics_params,
+    )
+
+Diagnose one grid-mean particle-size field for each 1M hydrometeor before
+stochastic subcolumn sampling. Cloud liquid uses a monodisperse radius based on
+`microphysics_params.cloud.liquid.N_0`; cloud ice, rain, and snow use the
+inverse Marshall-Palmer slope returned by `CM1.lambda_inverse`.
+"""
+function cloudsat_grid_mean_sizes!(
+    grid_mean_sizes::NamedTuple,
+    grid_mean_hydrometeors::NamedTuple,
+    rho_air,
+    microphysics_params::CMP.Microphysics1MParams,
+)
+    _check_keys(
+        grid_mean_hydrometeors,
+        values(Q_KEYS),
+        "grid_mean_hydrometeors",
+    )
+    _check_keys(grid_mean_sizes, values(SIZE_KEYS), "grid_mean_sizes")
+    for field in values(grid_mean_hydrometeors)
+        axes(field) == axes(rho_air) ||
+            throw(DimensionMismatch("grid-mean hydrometeors must have matching axes"))
+    end
+    for field in values(grid_mean_sizes)
+        axes(field) == axes(rho_air) ||
+            throw(DimensionMismatch("grid-mean sizes must have matching axes"))
+    end
+
+    liquid = _clima_1m_psd_parameters(microphysics_params, Val(:lcl))
+    ice = _clima_1m_psd_parameters(microphysics_params, Val(:icl))
+    rain = _clima_1m_psd_parameters(microphysics_params, Val(:rai))
+    snow = _clima_1m_psd_parameters(microphysics_params, Val(:sno))
+    @. grid_mean_sizes.r_lcl = _clima_liquid_cloud_radius(
+        grid_mean_hydrometeors.q_lcl,
+        rho_air,
+        liquid,
+    )
+    @. grid_mean_sizes.lambda_inv_icl = _clima_grid_lambda_inverse(
+        grid_mean_hydrometeors.q_icl,
+        rho_air,
+        ice,
+    )
+    @. grid_mean_sizes.lambda_inv_rai = _clima_grid_lambda_inverse(
+        grid_mean_hydrometeors.q_rai,
+        rho_air,
+        rain,
+    )
+    @. grid_mean_sizes.lambda_inv_sno = _clima_grid_lambda_inverse(
+        grid_mean_hydrometeors.q_sno,
+        rho_air,
+        snow,
+    )
+    return nothing
+end
+
 # Single-subcolumn hydrometeor optics entry point.
 """
     cloudsat_optics_subcolumn!(
         z_vol_cloudsat,
         kr_vol_cloudsat,
         hydrometeors,
+        grid_mean_sizes,
         temperature,
         rho_air,
         microphysics_params,
         radar_cfg,
     )
 
-Compute hydrometeor optical quantities for one streamed subcolumn. The output
-fields are working storage and are overwritten on every call.
+Compute hydrometeor optical quantities for one streamed subcolumn using particle
+sizes diagnosed from the grid-mean state. The output fields are working storage
+and are overwritten on every call.
 """
 function cloudsat_optics_subcolumn!(
     z_vol_cloudsat,
     kr_vol_cloudsat,
     hydrometeors::NamedTuple,
-    temperature,
-    rho_air,
-    radar_cfg::Union{Nothing, CloudSatRadarConfig} = nothing,
-)
-    microphysics_params = CMP.Microphysics1MParams(eltype(rho_air))
-    return cloudsat_optics_subcolumn!(
-        z_vol_cloudsat,
-        kr_vol_cloudsat,
-        hydrometeors,
-        temperature,
-        rho_air,
-        microphysics_params,
-        radar_cfg,
-    )
-end
-
-function cloudsat_optics_subcolumn!(
-    z_vol_cloudsat,
-    kr_vol_cloudsat,
-    hydrometeors::NamedTuple,
+    grid_mean_sizes::NamedTuple,
     temperature,
     rho_air,
     microphysics_params::CMP.Microphysics1MParams,
     radar_cfg::Union{Nothing, CloudSatRadarConfig} = nothing,
 )
     _check_keys(hydrometeors, values(Q_KEYS), "hydrometeors")
+    _check_keys(grid_mean_sizes, values(SIZE_KEYS), "grid_mean_sizes")
     reference = z_vol_cloudsat
     cfg = _radar_config(radar_cfg, reference)
     axes(kr_vol_cloudsat) == axes(reference) ||
@@ -142,6 +194,10 @@ function cloudsat_optics_subcolumn!(
         axes(getproperty(hydrometeors, key)) == axes(reference) ||
             throw(DimensionMismatch("hydrometeor fields must have matching axes"))
     end
+    for key in values(SIZE_KEYS)
+        axes(getproperty(grid_mean_sizes, key)) == axes(reference) ||
+            throw(DimensionMismatch("grid-mean size fields must have matching axes"))
+    end
 
     zero_value = zero(eltype(reference))
     @. z_vol_cloudsat = zero_value
@@ -149,11 +205,13 @@ function cloudsat_optics_subcolumn!(
 
     for class in HYDRO_CLASSES
         q_hydro = getproperty(hydrometeors, getproperty(Q_KEYS, class))
+        grid_size = getproperty(grid_mean_sizes, getproperty(SIZE_KEYS, class))
         params = _clima_1m_psd_parameters(microphysics_params, Val(class))
         # TODO: fuse these two broadcasts once there is a backend-safe way to
         # return and accumulate both scalar optics values together.
         @. z_vol_cloudsat += _clima_hydrometeor_z_volume(
             q_hydro,
+            grid_size,
             rho_air,
             temperature,
             cfg,
@@ -161,6 +219,7 @@ function cloudsat_optics_subcolumn!(
         )
         @. kr_vol_cloudsat += _clima_hydrometeor_attenuation(
             q_hydro,
+            grid_size,
             rho_air,
             temperature,
             cfg,
@@ -267,11 +326,9 @@ end
 # scattering to compute CloudSat optical properties for the four active Clima 1M
 # large-scale hydrometeor classes. This code intentionally avoids the original
 # COSPv2 hydro_class_init/calc_Re/dsd and LUT/cache paths.
-@inline _rho_water(::Type{FT}) where {FT} = FT(1000)
 # Pure-ice material density used only to convert particle mass to the diameter
 # of a volume-equivalent compact ice sphere for Mie scattering.
 @inline _rho_solid_ice(::Type{FT}) where {FT} = FT(917)
-@inline _n_lcl(::Type{FT}) where {FT} = FT(1e8)
 
 @inline _clima_1m_psd_parameters(params, ::Val{:lcl}) =
     Clima1MPSDParameters(:liquid, params.cloud.liquid)
@@ -285,16 +342,45 @@ end
 @inline _clima_1m_psd_parameters(params, ::Val{:sno}) =
     Clima1MPSDParameters(:ice, params.precip.snow)
 
-@inline function _clima_hydrometeor_z_volume(q, rho_air, T, radar_cfg, params)
-    return _clima_hydrometeor_optics(q, rho_air, T, radar_cfg, params)[1]
+@inline function _clima_hydrometeor_z_volume(
+    q,
+    grid_size,
+    rho_air,
+    T,
+    radar_cfg,
+    params,
+)
+    return _clima_hydrometeor_optics(
+        q,
+        grid_size,
+        rho_air,
+        T,
+        radar_cfg,
+        params,
+    )[1]
 end
 
-@inline function _clima_hydrometeor_attenuation(q, rho_air, T, radar_cfg, params)
-    return _clima_hydrometeor_optics(q, rho_air, T, radar_cfg, params)[2]
+@inline function _clima_hydrometeor_attenuation(
+    q,
+    grid_size,
+    rho_air,
+    T,
+    radar_cfg,
+    params,
+)
+    return _clima_hydrometeor_optics(
+        q,
+        grid_size,
+        rho_air,
+        T,
+        radar_cfg,
+        params,
+    )[2]
 end
 
 @inline function _clima_hydrometeor_optics(
     q,
+    grid_radius,
     rho_air,
     T,
     radar_cfg,
@@ -305,17 +391,9 @@ end
     rho_pos = max(zero(FT), rho_air)
     (q_pos > FT(radar_cfg.min_mixing_ratio) && rho_pos > eps(FT)) ||
         return zero(FT), zero(FT)
-    return _clima_liquid_cloud_psd_optics(q_pos, rho_pos, T, radar_cfg)
-end
-
-@inline function _clima_hydrometeor_optics(q, rho_air, T, radar_cfg, params)
-    FT = typeof(q + rho_air + T)
-    q_pos = max(zero(FT), q)
-    rho_pos = max(zero(FT), rho_air)
-    (q_pos > FT(radar_cfg.min_mixing_ratio) && rho_pos > eps(FT)) ||
-        return zero(FT), zero(FT)
-    return _clima_marshall_palmer_psd_optics(
+    return _clima_liquid_cloud_psd_optics(
         q_pos,
+        grid_radius,
         rho_pos,
         T,
         radar_cfg,
@@ -323,36 +401,128 @@ end
     )
 end
 
-@inline function _clima_liquid_cloud_radius(q, rho_air)
-    FT = typeof(q + rho_air)
-    lwc = max(zero(FT), rho_air * q)
-    if lwc <= eps(FT)
-        return zero(FT)
-    end
-    return cbrt(FT(3) * lwc / (FT(4) * FT(pi) * _rho_water(FT) * _n_lcl(FT)))
+@inline function _clima_hydrometeor_optics(
+    q,
+    grid_lambda_inv,
+    rho_air,
+    T,
+    radar_cfg,
+    params,
+)
+    FT = typeof(q + rho_air + T)
+    q_pos = max(zero(FT), q)
+    rho_pos = max(zero(FT), rho_air)
+    (q_pos > FT(radar_cfg.min_mixing_ratio) && rho_pos > eps(FT)) ||
+        return zero(FT), zero(FT)
+    return _clima_marshall_palmer_psd_optics(
+        q_pos,
+        grid_lambda_inv,
+        rho_pos,
+        T,
+        radar_cfg,
+        params,
+    )
 end
 
-@inline function _clima_liquid_cloud_psd_optics(q, rho_air, T, radar_cfg)
+@inline function _clima_liquid_cloud_radius(q, rho_air, liquid)
+    FT = typeof(q + rho_air)
+    q_pos = max(zero(FT), q)
+    rho_pos = max(zero(FT), rho_air)
+    lwc = rho_pos * q_pos
+    if lwc <= zero(FT)
+        return zero(FT)
+    end
+    liquid_params = liquid.hydrometeor
+    return cbrt(
+        FT(3) * lwc /
+        (FT(4) * FT(pi) * liquid_params.ρw * liquid_params.N_0),
+    )
+end
+
+@inline function _clima_grid_lambda_inverse(q, rho_air, params)
+    FT = typeof(q + rho_air)
+    q_pos = max(zero(FT), q)
+    rho_pos = max(zero(FT), rho_air)
+    hydro = params.hydrometeor
+    return CM1.lambda_inverse(hydro.pdf, hydro.mass, q_pos, rho_pos)
+end
+
+@inline function _clima_liquid_cloud_number(q, grid_radius, rho_air, liquid)
+    FT = typeof(q + grid_radius + rho_air)
+    q_pos = max(zero(FT), q)
+    rho_pos = max(zero(FT), rho_air)
+    r = max(zero(FT), grid_radius)
+    particle_mass =
+        FT(4) / FT(3) * FT(pi) * liquid.ρw * r^3
+    return particle_mass > zero(FT) ?
+           rho_pos * q_pos / particle_mass :
+           zero(FT)
+end
+
+@inline function _clima_liquid_cloud_psd_optics(
+    q,
+    grid_radius,
+    rho_air,
+    T,
+    radar_cfg,
+    params,
+)
     FT = typeof(q + rho_air + T)
-    r = _clima_liquid_cloud_radius(q, rho_air)
+    r = max(zero(FT), grid_radius)
     r > zero(FT) || return zero(FT), zero(FT)
-    # Cloud liquid uses a monodisperse approximation at the radius that exactly
-    # matches total liquid mass for N_lcl = 1e8 m^-3.
+    number_m3 =
+        _clima_liquid_cloud_number(q, r, rho_air, params.hydrometeor)
     return _zeff_particle_integral(
         FT(2) * r,
-        _n_lcl(FT),
+        number_m3,
         T,
         radar_cfg,
         :liquid,
     )
 end
 
-@inline function _clima_marshall_palmer_psd_optics(q, rho_air, T, radar_cfg, params)
+@inline function _particle_mass(r, params)
+    (; r0, m0, me, Δm, χm) = params.hydrometeor.mass
+    return χm * m0 * (r / r0)^(me + Δm)
+end
+
+@inline function _discrete_psd_intercept(q, grid_lambda_inv, rho_air, params)
+    FT = typeof(q + grid_lambda_inv + rho_air)
+    q_pos = max(zero(FT), q)
+    rho_pos = max(zero(FT), rho_air)
+    lambda_inv = max(zero(FT), grid_lambda_inv)
+    lambda_inv > zero(FT) || return zero(FT)
+    mass_integral = zero(FT)
+    r_prev = FT(1e-7)
+    log_step = exp(log(FT(5e-3) / r_prev) / FT(40))
+    for _ in 1:40
+        r_next = r_prev * log_step
+        r_mid = sqrt(r_prev * r_next)
+        dr = r_next - r_prev
+        spectral_weight = exp(-r_mid / lambda_inv) * dr
+        mass_integral += _particle_mass(r_mid, params) * spectral_weight
+        r_prev = r_next
+    end
+    # `spectral_weight` has units of m, so this amplitude has units of m^-4.
+    # The resulting bin number `n0 * spectral_weight` is in m^-3 and its
+    # discrete mass sum is exactly `rho_air * q`.
+    return mass_integral > zero(FT) ?
+           rho_pos * q_pos / mass_integral :
+           zero(FT)
+end
+
+@inline function _clima_marshall_palmer_psd_optics(
+    q,
+    grid_lambda_inv,
+    rho_air,
+    T,
+    radar_cfg,
+    params,
+)
     FT = typeof(q + rho_air + T)
-    hydro = params.hydrometeor
-    n0 = CM1.get_n0(hydro.pdf, q, rho_air)
+    lambda_inv = max(zero(FT), grid_lambda_inv)
+    n0 = _discrete_psd_intercept(q, lambda_inv, rho_air, params)
     n0 > zero(FT) || return zero(FT), zero(FT)
-    lambda_inv = CM1.lambda_inverse(hydro.pdf, hydro.mass, q, rho_air)
     z_vol = zero(FT)
     kr_vol = zero(FT)
     r_prev = FT(1e-7)
@@ -361,11 +531,11 @@ end
         r_next = r_prev * log_step
         r_mid = sqrt(r_prev * r_next)
         dr = r_next - r_prev
-        number_density = n0 * exp(-r_mid / lambda_inv) * dr
+        bin_number = n0 * exp(-r_mid / lambda_inv) * dr
         D_m = _scattering_diameter(r_mid, params)
         z_i, kr_i = _zeff_particle_integral(
             D_m,
-            number_density,
+            bin_number,
             T,
             radar_cfg,
             params.phase,
@@ -380,8 +550,7 @@ end
 @inline function _scattering_diameter(r, params)
     params.phase === :liquid && return 2 * r
     FT = typeof(r)
-    (; r0, m0, me, Δm, χm) = params.hydrometeor.mass
-    mass = χm * m0 * (r / r0)^(me + Δm)
+    mass = _particle_mass(r, params)
     return cbrt(FT(6) * mass / (FT(pi) * _rho_solid_ice(FT)))
 end
 

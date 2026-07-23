@@ -456,6 +456,10 @@ end
                 p.precomputed.ᶜsubcolumn_precip,
             ),
         )
+        @test all(
+            field -> !(field isa Tuple),
+            values(p.precomputed.cloudsat_grid_mean_sizes),
+        )
         @test !hasproperty(p.precomputed, :ᶜsubcolumn_hydrometeors)
         @test length(p.precomputed.DBZe_cloudsat) == reference.nsubcolumns
         for removed_cache in (
@@ -501,6 +505,10 @@ end
             p.precomputed.DBZe_cloudsat,
         )
         @test any(>(zero(eltype(Y))), parent(p.precomputed.cloudsat_tcc))
+        @test all(
+            size -> all(>(zero(eltype(Y))), parent(size)),
+            values(p.precomputed.cloudsat_grid_mean_sizes),
+        )
 
         nsubcolumns = reference.nsubcolumns
         grid_mean_template = (;
@@ -591,6 +599,7 @@ end
             DBZe = p.precomputed.DBZe_cloudsat,
             detected = p.precomputed.detected_column_cloudsat,
             tcc = p.precomputed.cloudsat_tcc,
+            grid_mean_sizes = p.precomputed.cloudsat_grid_mean_sizes,
         )
 
         gas_before_refresh = copy(parent(p.precomputed.g_vol_cloudsat))
@@ -638,6 +647,8 @@ end
         @test p.precomputed.DBZe_cloudsat === cached_objects.DBZe
         @test p.precomputed.detected_column_cloudsat === cached_objects.detected
         @test p.precomputed.cloudsat_tcc === cached_objects.tcc
+        @test p.precomputed.cloudsat_grid_mean_sizes ===
+              cached_objects.grid_mean_sizes
     end
 
     @testset "unsupported CloudSat outputs" begin

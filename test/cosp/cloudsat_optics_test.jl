@@ -1,5 +1,6 @@
 using Test
 import ClimaAtmos.COSP.COSPCloudSatOptics as CCO
+import CloudMicrophysics.Microphysics1M as CM1
 import CloudMicrophysics.Parameters as CMP
 using ClimaCore: Domains, Meshes, Spaces, Fields, Geometry
 
@@ -32,6 +33,15 @@ function make_hydrometeor_fields(FT, nelems; value = 0)
         q_icl = make_center_field(FT; value, nelems),
         q_rai = make_center_field(FT; value, nelems),
         q_sno = make_center_field(FT; value, nelems),
+    )
+end
+
+function make_grid_size_fields(FT, nelems; value = 0)
+    return (;
+        r_lcl = make_center_field(FT; value, nelems),
+        lambda_inv_icl = make_center_field(FT; value, nelems),
+        lambda_inv_rai = make_center_field(FT; value, nelems),
+        lambda_inv_sno = make_center_field(FT; value, nelems),
     )
 end
 
@@ -140,6 +150,7 @@ end
     for FT in (Float32, Float64)
         microphysics_params = CMP.Microphysics1MParams(FT)
         for (class, hydrometeor) in (
+            (:lcl, microphysics_params.cloud.liquid),
             (:icl, microphysics_params.cloud.ice),
             (:rai, microphysics_params.precip.rain),
             (:sno, microphysics_params.precip.snow),
@@ -166,6 +177,98 @@ end
                 cbrt(FT(6) * mass / (FT(pi) * CCO._rho_solid_ice(FT)))
 
             @test CCO._scattering_diameter(r, params) ≈ expected_diameter
+        end
+    end
+end
+
+@testset "COSP CloudSat grid-mean 1M sizes and subcolumn mass" begin
+    for FT in (Float32, Float64)
+        nelems = 3
+        rho_air = make_rho_air(FT)
+        microphysics_params = CMP.Microphysics1MParams(FT)
+        grid_mean = make_hydrometeor_fields(FT, nelems; value = 1e-4)
+        grid_mean_sizes = make_grid_size_fields(FT, nelems)
+
+        @test isnothing(
+            CCO.cloudsat_grid_mean_sizes!(
+                grid_mean_sizes,
+                grid_mean,
+                rho_air,
+                microphysics_params,
+            ),
+        )
+
+        liquid = microphysics_params.cloud.liquid
+        for ilev in 1:nelems
+            rho = Fields.level(rho_air, ilev)[]
+            q_grid = Fields.level(grid_mean.q_lcl, ilev)[]
+            radius = Fields.level(grid_mean_sizes.r_lcl, ilev)[]
+            expected_radius = cbrt(
+                FT(3) * rho * q_grid /
+                (FT(4) * FT(pi) * liquid.ρw * liquid.N_0),
+            )
+            @test radius ≈ expected_radius
+
+            q_sub = FT(2) * q_grid
+            number_sub =
+                CCO._clima_liquid_cloud_number(q_sub, radius, rho, liquid)
+            particle_mass =
+                FT(4) / FT(3) * FT(pi) * liquid.ρw * radius^3
+            @test number_sub * particle_mass ≈ rho * q_sub
+            @test number_sub ≈ FT(2) * liquid.N_0
+        end
+
+        for (class, size_name, q_name) in (
+            (:icl, :lambda_inv_icl, :q_icl),
+            (:rai, :lambda_inv_rai, :q_rai),
+            (:sno, :lambda_inv_sno, :q_sno),
+        )
+            params =
+                CCO._clima_1m_psd_parameters(microphysics_params, Val(class))
+            q_grid = getproperty(grid_mean, q_name)
+            lambda_inv_grid = getproperty(grid_mean_sizes, size_name)
+            for ilev in 1:nelems
+                rho = Fields.level(rho_air, ilev)[]
+                q = Fields.level(q_grid, ilev)[]
+                lambda_inv = Fields.level(lambda_inv_grid, ilev)[]
+                expected_lambda_inv = CM1.lambda_inverse(
+                    params.hydrometeor.pdf,
+                    params.hydrometeor.mass,
+                    q,
+                    rho,
+                )
+                @test lambda_inv ≈ expected_lambda_inv
+
+                q_sub = FT(2) * q
+                n0_sub = CCO._discrete_psd_intercept(
+                    q_sub,
+                    lambda_inv,
+                    rho,
+                    params,
+                )
+                n0_grid = CCO._discrete_psd_intercept(
+                    q,
+                    lambda_inv,
+                    rho,
+                    params,
+                )
+                @test n0_sub ≈ FT(2) * n0_grid
+
+                binned_mass = zero(FT)
+                r_prev = FT(1e-7)
+                log_step = exp(log(FT(5e-3) / r_prev) / FT(40))
+                for _ in 1:40
+                    r_next = r_prev * log_step
+                    r_mid = sqrt(r_prev * r_next)
+                    dr = r_next - r_prev
+                    bin_number =
+                        n0_sub * exp(-r_mid / lambda_inv) * dr
+                    binned_mass +=
+                        CCO._particle_mass(r_mid, params) * bin_number
+                    r_prev = r_next
+                end
+                @test binned_mass ≈ rho * q_sub rtol = FT(2e-5)
+            end
         end
     end
 end
@@ -215,6 +318,14 @@ end
         thermo_state = make_thermo_state(FT)
         rho_air = make_rho_air(FT)
         microphysics_params = CMP.Microphysics1MParams(FT)
+        grid_mean = make_hydrometeor_fields(FT, nelems; value = 1e-4)
+        grid_mean_sizes = make_grid_size_fields(FT, nelems)
+        CCO.cloudsat_grid_mean_sizes!(
+            grid_mean_sizes,
+            grid_mean,
+            rho_air,
+            microphysics_params,
+        )
         radar_cfg = CCO.CloudSatRadarConfig(FT; use_gas_abs = true)
         g_vol = make_center_field(FT; value = 999, nelems)
 
@@ -239,6 +350,7 @@ end
                     z_vol,
                     kr_vol,
                     hydrometeors,
+                    grid_mean_sizes,
                     thermo_state.T,
                     rho_air,
                     microphysics_params,
@@ -257,6 +369,7 @@ end
             z_vol,
             kr_vol,
             hydrometeors,
+            grid_mean_sizes,
             thermo_state.T,
             rho_air,
             microphysics_params,

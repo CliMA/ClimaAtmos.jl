@@ -226,6 +226,12 @@ function precomputed_quantities(Y, atmos)
         @. ᶜsampled_cloud_fraction = FT(0)
         @. ᶜsampled_precip_fraction = FT(0)
         ᶜlarge_scale_precipitation_flux = similar(Y.c, FT)
+        cloudsat_grid_mean_sizes = (;
+            r_lcl = similar(Y.c, FT),
+            lambda_inv_icl = similar(Y.c, FT),
+            lambda_inv_rai = similar(Y.c, FT),
+            lambda_inv_sno = similar(Y.c, FT),
+        )
         nsubcolumns = _cosp_nsubcolumns(atmos.cosp.n_subcolumns)
         z_vol_cloudsat_work = similar(Y.c, FT)
         kr_vol_cloudsat_work = similar(Y.c, FT)
@@ -244,6 +250,9 @@ function precomputed_quantities(Y, atmos)
         @. Ze_non_cloudsat_work = FT(-1e30)
         @. hydro_path_attenuation_cloudsat_work = zero(FT)
         @. gas_path_attenuation_cloudsat = zero(FT)
+        for size in values(cloudsat_grid_mean_sizes)
+            @. size = zero(FT)
+        end
         for DBZe_subcolumn in DBZe_cloudsat
             @. DBZe_subcolumn = FT(-1e30)
         end
@@ -268,6 +277,7 @@ function precomputed_quantities(Y, atmos)
             DBZe_cloudsat,
             detected_column_cloudsat,
             cloudsat_tcc,
+            cloudsat_grid_mean_sizes,
         )
     else
         (;)
