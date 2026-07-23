@@ -265,8 +265,11 @@ drive the single column model.
 
 Note:
 
-  - Single column runs are treated as boxes, so the dimensions of the variables are expanded to
-    `2x2x(pressure levels)x(time)` to be able to interpolate to the model grid.
+  - The output follows the ClimaColumn schema: pure 1D `(z, time)` column
+    variables and `(time,)` surface variables with CMIP names and SI units,
+    made self-describing by the `site_latitude` and `site_longitude` global
+    attributes (written through `ClimaColumnFiles.write_column_forcing_file`,
+    checked by `ClimaColumnFiles.validate`).
   - The end time of the simulation is inferred from the start date and the simulation time, `t_end`.
 """
 function generate_external_forcing_file(
@@ -410,91 +413,23 @@ function generate_external_forcing_file(
         external_tv_params,
     )
 
-    # create the dataset to store the forcing data - it needs to have expanded dimensions because
-    # in ClimaAtmos all column simulations are actually boxes
-    ds = NCDataset(forcing_file_path, "c")
-
-    # Define the dimensions
-    defDim(ds, "time", length(sim_forcing["time"]))
-    defDim(ds, "z", length(sim_forcing["pressure_level"]))
-
-    # expand dimensions for box
-    defDim(ds, "x", 2)
-    defDim(ds, "y", 2)
-
-    # define variables for x and y at 0.5
-    defVar(ds, "x", FT, ("x",))
-    ds["x"][:] = [0.0, 1.0]
-
-    defVar(ds, "y", FT, ("y",))
-    ds["y"][:] = [0.0, 1.0]
-
-    defVar(ds, "z", FT, ("z",))
-    ds["z"][:] = mean(sim_forcing["z"], dims = 2)[:]
-
-    # Define time variable with attributes
-    defVar(
-        ds,
-        "time",
-        sim_forcing["time"][:],
-        ("time",),
-        attrib = tvforcing["valid_time"].attrib,
-    )
-
-    # Define other variables
-    defVar(ds, "pressure_level", FT, ("x", "y", "z"))
-    # again repeating dimensions because single column model is a box
-    for z_index in 1:ds.dim["z"]
-        ds["pressure_level"][:, :, z_index] .=
-            sim_forcing["pressure_level"][z_index]
-    end
-
-    # Define the variables and add them to the ds
-    for (name, data) in sim_forcing
-        if name in [
-            "tnhusha",
-            "tntha",
-            "hus",
-            "tntva",
-            "zg",
-            "wa",
-            "ua",
-            "va",
-            "ta",
-            "tnhusva",
-            "wap",
-            "rho",
-            "clw",
-            "cli",
-        ]
-            defVar(ds, name, FT, ("x", "y", "z", "time"))
-            for x_ind in 1:ds.dim["x"], y_ind in 1:ds.dim["y"]
-                ds[name][x_ind, y_ind, :, :] .= data
-            end
-        elseif name ∉ ["time", "pressure_level", "z"]
-            # surface vars
-            defVar(ds, name, FT, ("x", "y", "time"))
-            for x_ind in 1:ds.dim["x"], y_ind in 1:ds.dim["y"]
-                ds[name][x_ind, y_ind, :] .= data
-            end
-        end
-    end
-
-    # add coszen
-    # Compute coszen and solar flux using Insolation.jl
-    coszen_list = map(tvforcing["valid_time"][:]) do date
-        F, S, μ, ζ = Insolation.insolation(
+    # Cosine of the solar zenith angle (`coszen`) and TOA incoming shortwave
+    # (`rsdt`), from Insolation
+    times = tvforcing["valid_time"][:]
+    coszen = Vector{FT}(undef, length(times))
+    rsdt = Vector{FT}(undef, length(times))
+    for (i, date) in enumerate(times)
+        F, _, μ, _ = Insolation.insolation(
             DateTime(date),
             FT(lat),
             FT(lon),
             IP.InsolationParameters(FT),
         )
-        return (μ, F)  # return (coszen, TOA_flux)
+        coszen[i] = μ
+        rsdt[i] = F
     end
-    defVar(ds, "coszen", FT, ("x", "y", "z", "time"))
-    defVar(ds, "rsdt", FT, ("x", "y", "z", "time"))
 
-    # add latent and sensitble heat fluxes (currently we just set surface conditions based on temperature)
+    # latent and sensible heat fluxes
     lon_index_surf = findfirst(tv_accum["longitude"][:] .== lon)
     lat_index_surf = findfirst(tv_accum["latitude"][:] .== lat)
     @assert !isnothing(lon_index_surf) "Longitude $lon not found in hourly_accum_$(start_date).nc"
@@ -506,8 +441,6 @@ function generate_external_forcing_file(
             lat_index_surf <
             length(tv_accum["latitude"][:]) - smooth_amount "Latitude $lat is not covered by accumulated forcing file with smoothing amount $smooth_amount"
 
-    defVar(ds, "hfls", FT, ("x", "y", "z", "time"))
-    defVar(ds, "hfss", FT, ("x", "y", "z", "time"))
     # sensible and latent heat fluxes are defined upwards in CliMA, also need to divide by the aggregation
     slhf =
         -smooth_3D_era5(
@@ -539,7 +472,6 @@ function generate_external_forcing_file(
             lat_index_surf2 <
             length(tv_inst["latitude"][:]) - smooth_amount "Latitude $lat is not covered by accumulated forcing file with smoothing amount $smooth_amount"
 
-    defVar(ds, "ts", FT, ("x", "y", "z", "time"))
     skt = smooth_3D_era5(
         tv_inst,
         "skt",
@@ -553,16 +485,44 @@ function generate_external_forcing_file(
         skt .+= warming_amount
     end
 
-    for time_ind in 1:ds.dim["time"]
-        ds["coszen"][:, :, :, time_ind] .= coszen_list[time_ind][1]
-        ds["rsdt"][:, :, :, time_ind] .= coszen_list[time_ind][2]
-        ds["ts"][:, :, :, time_ind] .= skt[time_ind]
-        ds["hfls"][:, :, :, time_ind] .= slhf[time_ind]
-        ds["hfss"][:, :, :, time_ind] .= sshf[time_ind]
-    end
+    # sort levels by ascending height, as required by the ClimaColumn schema
+    z_column = vec(mean(sim_forcing["z"], dims = 2))
+    z_order = sortperm(z_column)
 
-    # Close the datasets
-    close(ds)
+    column_var_names = [
+        "ta",
+        "hus",
+        "ua",
+        "va",
+        "wa",
+        "rho",
+        "tntha",
+        "tnhusha",
+        "tntva",
+        "tnhusva",
+        "clw",
+        "cli",
+    ]
+    ClimaColumnFiles.write_column_forcing_file(
+        forcing_file_path,
+        FT;
+        z = z_column[z_order],
+        time = sim_forcing["time"][:],
+        time_attrib = tvforcing["valid_time"].attrib,
+        column_vars = Dict(
+            name => sim_forcing[name][z_order, :] for name in column_var_names
+        ),
+        surface_vars = Dict(
+            "coszen" => coszen,
+            "rsdt" => rsdt,
+            "ts" => skt,
+            "hfls" => slhf,
+            "hfss" => sshf,
+        ),
+        site_latitude = lat,
+        site_longitude = lon,
+    )
+
     close(tvforcing)
     close(tv_inst)
     close(tv_accum)
@@ -604,9 +564,7 @@ function generate_multiday_era5_external_forcing_file(
 
     start_dates = start_date:Day(1):end_time
 
-    file_list = String[]
-    for dd in start_dates
-        # get forcing file path
+    daily_specs = map(start_dates) do dd
         single_parsed_args = Dict(
             "start_date" => Dates.format(dd, "yyyymmdd"),
             "site_latitude" => parsed_args["site_latitude"],
@@ -617,18 +575,28 @@ function generate_multiday_era5_external_forcing_file(
             single_parsed_args;
             data_dir = output_data_dir,
         )
-        push!(file_list, single_file_path)
-        # generate the external forcing file for this day
-        if !isfile(single_file_path)
-            generate_external_forcing_file(
-                single_parsed_args,
-                single_file_path,
-                FT;
-                time_resolution = time_resolution,
-                input_data_dir = input_data_dir,
-                smooth_amount = smooth_amount,
-            )
-        end
+        (; parsed_args = single_parsed_args, path = single_file_path)
+    end
+    file_list = [spec.path for spec in daily_specs]
+
+    # A daily file is (re)generated when it is missing, or when an older run
+    # wrote it in the previous ERA5 box layout rather than the current
+    # ClimaColumn `(z, time)` schema, so the concatenation below sees one
+    # layout.
+    for spec in daily_specs
+        isfile(spec.path) &&
+            ClimaColumnFiles.is_conforming(spec.path) &&
+            continue
+        isfile(spec.path) &&
+            @info "Regenerating $(spec.path): not a conforming ClimaColumn file (stale layout or failed schema validation)"
+        generate_external_forcing_file(
+            spec.parsed_args,
+            spec.path,
+            FT;
+            time_resolution = time_resolution,
+            input_data_dir = input_data_dir,
+            smooth_amount = smooth_amount,
+        )
     end
     # concatenate data and save
     concat_ds = Dataset(file_list; aggdim = "time")

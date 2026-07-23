@@ -64,7 +64,7 @@ function physical_state(;
 end
 
 # ============================================================================
-# Column profiles (shared by GCMDriven, InterpolatedColumnProfile)
+# Column profiles (shared by GCMDriven, ForcingFromFile)
 # ============================================================================
 
 """
