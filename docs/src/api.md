@@ -219,7 +219,6 @@ ClimaAtmos.AbstractInsolation
 ClimaAtmos.IdealizedInsolation
 ClimaAtmos.TimeVaryingInsolation
 ClimaAtmos.RCEMIPIIInsolation
-ClimaAtmos.GCMDrivenInsolation
 ClimaAtmos.ExternalTVInsolation
 ClimaAtmos.Larcform1Insolation
 ```
@@ -291,7 +290,6 @@ ClimaAtmos.AbstractForcing
 ClimaAtmos.LargeScaleSubsidence
 ClimaAtmos.LargeScaleAdvection
 ClimaAtmos.HeldSuarezForcing
-ClimaAtmos.GCMForcing
 ClimaAtmos.ISDACForcing
 ClimaAtmos.PrescribedFlow
 ClimaAtmos.ShipwayHill2012VelocityProfile

@@ -198,10 +198,16 @@ function get_setup_type(parsed_args, thermo_params)
     elseif ic_name == "Rico"
         return Setups.Rico(; prognostic_tke = parsed_args["prognostic_tke"], thermo_params)
     elseif ic_name == "GCM"
-        return Setups.GCMDriven(
+        # Read the cfsite group into steady in-memory profiles, then drive it
+        # through the generic ForcingFromFile path. Defaults give an interactive
+        # Monin-Obukhov surface with the file's `ts` and the constant insolation
+        # carried in the data (matching the former GCMDrivenInsolation).
+        data = ColumnDatasets.GCMColumnData.read(
             parsed_args["external_forcing_file"],
-            parsed_args["cfsite_number"],
+            parsed_args["cfsite_number"];
+            thermo_params,
         )
+        return Setups.ForcingFromFile(data, parsed_args["start_date"])
     elseif ic_name == "ARMVARANAL"
         varanal_file = parsed_args["external_forcing_file"]
         isnothing(varanal_file) && error(

@@ -35,7 +35,7 @@ setup = ForcingFromFile(
 ```
 """
 struct ForcingFromFile{
-    CD <: ColumnDatasets.ColumnDataset,
+    CD <: ColumnDatasets.AbstractColumnData,
     F <: ExternalDrivenTVForcing,
     FS,
     ST,
@@ -52,7 +52,7 @@ struct ForcingFromFile{
 end
 
 function ForcingFromFile(
-    dataset::ColumnDatasets.ColumnDataset,
+    dataset::ColumnDatasets.AbstractColumnData,
     start_date::String;
     forcing = default_forcing_terms(),
     flux_scheme = nothing,
@@ -63,10 +63,9 @@ function ForcingFromFile(
     external_forcing =
         forcing isa ExternalDrivenTVForcing ? forcing :
         ExternalDrivenTVForcing(dataset; forcing)
-    profiles = ColumnDatasets.open_dataset(dataset) do ds
-        prof = ColumnDatasets.read_initial_profiles(dataset, ds, start_date_dt)
+    prof = ColumnDatasets.read_initial_profiles(dataset, start_date_dt)
+    profiles =
         ColumnProfiles(prof.z, prof.ta, prof.ua, prof.va, prof.hus, prof.rho)
-    end
     return ForcingFromFile(
         dataset,
         start_date_dt,

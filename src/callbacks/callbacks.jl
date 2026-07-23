@@ -167,8 +167,8 @@ Dispatches on `p.atmos.insolation`:
   - `TimeVaryingInsolation`: the full orbital calculation, via `Insolation.insolation` at
     the current date. Uses the explicit `latitude`/`longitude` override when set, otherwise
     the column coordinates, falling back to the equator on a flat space.
-  - `GCMDrivenInsolation` and `ExternalTVInsolation`: values read from the external forcing.
-    The latter reconstructs the TOA flux as `rsdt / coszen`.
+  - `ExternalTVInsolation`: values read from the external forcing, with the TOA flux
+    reconstructed as `rsdt / coszen`.
 
 !!! note
 
@@ -180,13 +180,6 @@ function set_insolation_variables!(Y, p, t, ::RCEMIPIIInsolation)
     (; rrtmgp_solver) = p.radiation
     RRTMGP.cos_zenith(rrtmgp_solver) .= cosd(FT(42.05))
     RRTMGP.toa_sw_flux_dn(rrtmgp_solver) .= FT(551.58)
-end
-
-function set_insolation_variables!(Y, p, t, ::GCMDrivenInsolation)
-    (; rrtmgp_solver) = p.radiation
-    RRTMGP.cos_zenith(rrtmgp_solver) .= Fields.field2array(p.external_forcing.cos_zenith)
-    RRTMGP.toa_sw_flux_dn(rrtmgp_solver) .=
-        Fields.field2array(p.external_forcing.toa_flux)
 end
 
 function set_insolation_variables!(Y, p, t, ::ExternalTVInsolation)

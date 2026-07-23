@@ -400,8 +400,6 @@ Subtypes:
   - `TimeVaryingInsolation`: orbital insolation evaluated at the current date
     (`"timevarying"`).
   - `RCEMIPIIInsolation`: the fixed RCEMIP-II values (`"rcemipii"`).
-  - `GCMDrivenInsolation`: values read from the GCM-driven external forcing
-    (`"gcmdriven"`).
   - `ExternalTVInsolation`: time-varying values read from a column forcing file
     (`"externaldriventv"`).
   - `Larcform1Insolation`: polar night, i.e. no incoming solar flux (`"larcform1"`).
@@ -426,14 +424,6 @@ Uniform, time-invariant insolation prescribed by the RCEMIP-II protocol
 42.05°.
 """
 struct RCEMIPIIInsolation <: AbstractInsolation end
-
-"""
-    GCMDrivenInsolation
-
-Take the cosine of the zenith angle and the TOA flux from the GCM-driven
-external forcing (`p.external_forcing.cos_zenith` and `.toa_flux`).
-"""
-struct GCMDrivenInsolation <: AbstractInsolation end
 
 """
     ExternalTVInsolation
@@ -1160,7 +1150,7 @@ end
 Prescribed large-scale forcing imposed on a column or limited-area domain.
 
 `LargeScaleSubsidence` is currently the only subtype; the other forcing objects
-in this file (`LargeScaleAdvection`, `GCMForcing`, `ExternalDrivenTVForcing`,
+in this file (`LargeScaleAdvection`, `ExternalDrivenTVForcing`,
 `ISDACForcing`, `HeldSuarezForcing`) are dispatched on directly and are not
 part of this hierarchy.
 """
@@ -1216,32 +1206,12 @@ struct LargeScaleAdvection{PT, PQ}
     prof_dTdt::PT # Set large-scale cooling
     prof_dqtdt::PQ # Set large-scale drying
 end
-# maybe need to <: AbstractForcing
-"""
-    GCMForcing{FT}(external_forcing_file, cfsite_number)
-
-Forcing and nudging profiles extracted from a GCM simulation at a single
-CFMIP (cfSite) location.
-
-`FT` is the float type of the fields built from the file. Selected by
-`external_forcing: "GCM"`, which reads `external_forcing_file` and
-`cfsite_number` from the config.
-
-# Fields
-
-  - `external_forcing_file`: Path to the NetCDF file holding the GCM profiles.
-  - `cfsite_number`: Identifier of the cfSite column within that file, e.g. `"07"`.
-"""
-struct GCMForcing{FT}
-    external_forcing_file::String
-    cfsite_number::String
-end
-
 """
     ExternalDrivenTVForcing{CD, F, M}
 
-Generic time-varying forcing read from a column forcing file through the
-`ColumnDatasets` interface (the native ClimaColumn schema). Its `forcing`
+Generic time-varying forcing read from column forcing data through the
+`ColumnDatasets` interface (an on-disk ClimaColumn file or an in-memory
+source). Its `forcing`
 is a tuple of composed [`AbstractForcingTerm`](@ref)s (horizontal advection,
 vertical fluctuation, nudging, subsidence). Only data required by the composed
 terms is loaded, and missing data for a composed term is a loud error.
@@ -1272,17 +1242,19 @@ arguments. `forcing` defaults to `default_forcing_terms()` and
 `time_interpolation_method` to the dataset format's own method. Runscripts
 typically call `ExternalDrivenTVForcing(path; forcing = (...,))`.
 """
-struct ExternalDrivenTVForcing{CD <: ColumnDatasets.ColumnDataset, F <: Tuple, M}
+struct ExternalDrivenTVForcing{
+    CD <: ColumnDatasets.AbstractColumnData,
+    F <: Tuple,
+    M,
+}
     dataset::CD
     forcing::F
     time_interpolation_method::M
 end
 function ExternalDrivenTVForcing(
-    dataset::ColumnDatasets.ColumnDataset;
+    dataset::ColumnDatasets.AbstractColumnData;
     forcing = default_forcing_terms(),
-    time_interpolation_method = ColumnDatasets.time_interpolation_method(
-        dataset.format,
-    ),
+    time_interpolation_method = ColumnDatasets.time_interpolation_method(dataset),
 )
     forcing = Tuple(forcing)
     validate_forcing_terms(forcing)
@@ -2137,8 +2109,8 @@ usually supplied by a `Setups` case rather than set by hand.
 # Fields
 
   - `subsidence`: `nothing`, or a `LargeScaleSubsidence`.
-  - `external_forcing`: `nothing`, or a forcing object (`GCMForcing`,
-    `ExternalDrivenTVForcing`, `ISDACForcing`).
+  - `external_forcing`: `nothing`, or a forcing object
+    (`ExternalDrivenTVForcing`, `ISDACForcing`).
   - `ls_adv`: `nothing`, or a `LargeScaleAdvection`.
   - `advection_test`: Whether to run in pure tracer-advection test mode, in which
     the dynamics are frozen.
@@ -2642,7 +2614,7 @@ The default AtmosModel provides:
 Internal testing and calibration components for single-column setups:
 
   - `subsidence`: nothing or Bomex_subsidence, Rico_subsidence, DYCOMS_subsidence, etc
-  - `external_forcing`: nothing or external forcing objects (GCMForcing, ExternalDrivenTVForcing, ISDACForcing)
+  - `external_forcing`: nothing or external forcing objects (ExternalDrivenTVForcing, ISDACForcing)
   - `ls_adv`: nothing or LargeScaleAdvection()
   - `advection_test`: Bool
   - `scm_coriolis`: nothing or NamedTuple `(; prof_ug, prof_vg, coriolis_param)`
