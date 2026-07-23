@@ -1,4 +1,4 @@
-388
+389
 
 # **README**
 #
@@ -32,6 +32,9 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+389
+- Add a temporary parameter for lateral sedimentation mixing
+
 388
 - Unify SGS vertical diffusion with grid mean. Each PrognosticEDMFX
   subdomain inherits the grid-mean specific tendency for mseⱼ, q_totⱼ,

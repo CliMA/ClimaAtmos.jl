@@ -1119,6 +1119,7 @@ function update_sgs_advection_jacobian!(matrix, Y, p, dtγ)
     p.atmos.turbconv_model isa PrognosticEDMFX || return nothing
     (; ᶜρʲs, ᶠu³ʲs) = p.precomputed
     FT = Spaces.undertype(axes(Y.c))
+    α_lat = CAP.sedimentation_lateral_coeff(p.params)
     ᶜJ = Fields.local_geometry_field(Y.c).J
     ᶠJ = Fields.local_geometry_field(Y.f).J
     (; ᶠsed_tracer_advection, ᶜtridiagonal_matrix_scalar) = p.scratch
@@ -1200,23 +1201,26 @@ function update_sgs_advection_jacobian!(matrix, Y, p, dtγ)
 
             # sedimentation
             # Base: a·∂_z(ρwχ) — always the same regardless of ∂a/∂z sign
-            # Correction: min(∂a/∂z, 0)·(ρ¹w¹χ¹ − ρ⁰w⁰χ⁰)
+            # Correction when ∂a/∂z < 0 :
+            #   α_lat · ∂a/∂z · (ρ¹w¹χ¹ − ρ⁰w⁰χ⁰)
             #   ρ⁰w⁰χ⁰ = (w_GS·ρχ_GS − ρa¹·w¹·χ¹)/(1−a), so
             #   ∂(ρ⁰w⁰χ⁰)/∂χʲ = −ρa¹·w¹/(1−a) and
-            #   ∂/∂χʲ of correction = min(∂a/∂z, 0)·ρ¹w¹/(1−a)
+            #   ∂/∂χʲ of correction = α_lat · ∂a/∂z · ρ¹w¹/(1−a)
             @. ᶠsed_tracer_advection =
                 DiagonalMatrixRow(ᶠinterp(ᶜρʲs.:(1) * ᶜJ) / ᶠJ) ⋅
                 ᶠright_bias_matrix() ⋅
                 DiagonalMatrixRow(-Geometry.WVector(ᶜwʲ))
             @. ᶜtridiagonal_matrix_scalar =
-                dtγ * (
-                    -DiagonalMatrixRow(ᶜa) ⋅ ᶜprecipdivᵥ_matrix() ⋅
-                    ᶠsed_tracer_advection +
+                dtγ * ifelse(ᶜ∂a∂z < 0,
+                    -(ᶜprecipdivᵥ_matrix()) ⋅ ᶠsed_tracer_advection *
+                    DiagonalMatrixRow(ᶜa) +
                     DiagonalMatrixRow(
-                        min(ᶜ∂a∂z, zero(ᶜ∂a∂z)) * ᶜρʲs.:(1) * ᶜwʲ /
-                        max(1 - ᶜa, eps(eltype(ᶜa))),
-                    )
+                        α_lat * ᶜ∂a∂z * ᶜρʲs.:(1) * ᶜwʲ / max(1 - ᶜa, eps(eltype(ᶜa))),
+                    ),
+                    -DiagonalMatrixRow(ᶜa) ⋅ ᶜprecipdivᵥ_matrix() ⋅ ᶠsed_tracer_advection,
                 )
+            # sedimentation
+            # (pull out common subexpression for performance)
 
             @. ∂ᶜχʲ_err_∂ᶜχʲ +=
                 DiagonalMatrixRow(ᶜinv_ρ̂) ⋅ ᶜtridiagonal_matrix_scalar
