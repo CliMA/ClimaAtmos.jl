@@ -494,6 +494,15 @@ steps:
         agents:
           slurm_gpus: 1
 
+      - label: ":crown: TRMM_LBA radiation is GPU-compatible"
+        retry: *retry_policy
+        command: >
+          julia --color=yes --project=.buildkite test/gpu_radiation.jl
+        env:
+          CLIMACOMMS_DEVICE: "CUDA"
+        agents:
+          slurm_gpus: 1
+
   - group: "Conservation Tests"
     steps:
       - label: ":computer: Conservation tests: Dry baroclinic wave, no sources"

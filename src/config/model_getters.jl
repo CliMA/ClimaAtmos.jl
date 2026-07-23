@@ -492,7 +492,7 @@ function get_radiation_mode(parsed_args, ::Type{FT}; setup_type = nothing) where
     elseif radiation_name == "DYCOMS"
         RadiationDYCOMS{FT}()
     elseif radiation_name == "TRMM_LBA"
-        RadiationTRMM_LBA(FT)
+        RadiationTRMM_LBA()
     elseif radiation_name == "ISDAC"
         RadiationISDAC{FT}()
     elseif isnothing(radiation_name)
