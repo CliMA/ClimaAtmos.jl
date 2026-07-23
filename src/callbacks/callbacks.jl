@@ -1,7 +1,6 @@
 import ClimaCore.DataLayouts as DL
 import .RRTMGPInterface as RRTMGPI
 import Thermodynamics as TD
-import CloudMicrophysics as CM
 import LinearAlgebra
 import ClimaCore.Fields
 import ClimaComms
@@ -97,15 +96,145 @@ end
 NVTX.@annotate function subcol_model_callback!(integrator)
     Y = integrator.u
     p = integrator.p
-    foreach_cosp_subcolumn(consume_cosp_subcolumn!, Y, p)
+    run_cosp_cloudsat!(Y, p, p.atmos.microphysics_model)
 
     return nothing
 end
 
-"""
-Placeholder for a future COSP simulator consumer such as CloudSat.
-"""
-consume_cosp_subcolumn!(_, _) = nothing
+struct NoOpCOSPSubcolumnConsumer end
+(::NoOpCOSPSubcolumnConsumer)(_, _) = nothing
+
+struct CloudSatSubcolumnConsumer{Z, K, ZE, D, H, G, HT, T, R, S, MP, C}
+    z_vol_work::Z
+    kr_vol_work::K
+    Ze_non_work::ZE
+    DBZe::D
+    hydro_path_attenuation_work::H
+    gas_path_attenuation::G
+    height_km::HT
+    temperature::T
+    rho_air::R
+    grid_mean_sizes::S
+    microphysics_params::MP
+    radar_config::C
+end
+
+function (consumer::CloudSatSubcolumnConsumer)(isubcolumn, hydrometeors)
+    return consume_cosp_subcolumn!(consumer, isubcolumn, hydrometeors)
+end
+
+function consume_cosp_subcolumn!(
+    consumer::CloudSatSubcolumnConsumer,
+    isubcolumn,
+    hydrometeors,
+)
+    COSP.COSPCloudSatOptics.cloudsat_optics_subcolumn!(
+        consumer.z_vol_work,
+        consumer.kr_vol_work,
+        hydrometeors,
+        consumer.grid_mean_sizes,
+        consumer.temperature,
+        consumer.rho_air,
+        consumer.microphysics_params,
+        consumer.radar_config,
+    )
+    COSP.COSPCloudSatReflectivity.cloudsat_reflectivity_subcolumn!(
+        consumer.Ze_non_work,
+        consumer.DBZe[isubcolumn],
+        consumer.z_vol_work,
+        consumer.kr_vol_work,
+        consumer.hydro_path_attenuation_work,
+        consumer.gas_path_attenuation,
+        consumer.height_km,
+    )
+    return nothing
+end
+
+function run_cosp_cloudsat!(Y, p, ::NonEquilibriumMicrophysics1M)
+    (;
+        z_vol_cloudsat_work,
+        kr_vol_cloudsat_work,
+        g_vol_cloudsat,
+        Ze_non_cloudsat_work,
+        hydro_path_attenuation_cloudsat_work,
+        gas_path_attenuation_cloudsat,
+        height_km_cloudsat,
+        DBZe_cloudsat,
+        detected_column_cloudsat,
+        cloudsat_tcc,
+        cloudsat_grid_mean_sizes,
+        ᶜp,
+        ᶜT,
+        ᶜq_tot_nonneg,
+        ᶜq_liq,
+        ᶜq_ice,
+    ) = p.precomputed
+
+    ᶜq_vap = @. lazy(ᶜq_tot_nonneg - ᶜq_liq - ᶜq_ice)
+    radar_config =
+        COSP.COSPCloudSatOptics.CloudSatRadarConfig(eltype(Y))
+    COSP.COSPCloudSatOptics.cloudsat_gas_attenuation!(
+        g_vol_cloudsat,
+        ᶜT,
+        ᶜp,
+        ᶜq_vap,
+        radar_config,
+    )
+    COSP.COSPCloudSatReflectivity.cloudsat_gas_path_attenuation!(
+        gas_path_attenuation_cloudsat,
+        g_vol_cloudsat,
+        height_km_cloudsat,
+    )
+
+    consumer = CloudSatSubcolumnConsumer(
+        z_vol_cloudsat_work,
+        kr_vol_cloudsat_work,
+        Ze_non_cloudsat_work,
+        DBZe_cloudsat,
+        hydro_path_attenuation_cloudsat_work,
+        gas_path_attenuation_cloudsat,
+        height_km_cloudsat,
+        ᶜT,
+        Y.c.ρ,
+        cloudsat_grid_mean_sizes,
+        CAP.microphysics_1m_params(p.params),
+        radar_config,
+    )
+    foreach_cosp_subcolumn(consumer, Y, p)
+    COSP.COSPCloudSatCloudFraction.cloudsat_cloud_fraction!(
+        cloudsat_tcc,
+        detected_column_cloudsat,
+        DBZe_cloudsat,
+    )
+    return nothing
+end
+
+function run_cosp_cloudsat!(
+    Y,
+    p,
+    ::NonEquilibriumMicrophysics2M,
+)
+    # The subcolumn generator supports 2M, but CloudSat hydrometeor optics do
+    # not. Preserve the sampled-fraction workflow while returning explicit
+    # unsupported simulator outputs.
+    foreach_cosp_subcolumn(NoOpCOSPSubcolumnConsumer(), Y, p)
+    fill_unsupported_cloudsat_outputs!(p.precomputed, eltype(Y))
+    return nothing
+end
+
+function run_cosp_cloudsat!(Y, p, _)
+    fill_unsupported_cloudsat_outputs!(p.precomputed, eltype(Y))
+    return nothing
+end
+
+function fill_unsupported_cloudsat_outputs!(precomputed, ::Type{FT}) where {FT}
+    (; DBZe_cloudsat, cloudsat_tcc) = precomputed
+    for DBZe_subcolumn in DBZe_cloudsat
+        @. DBZe_subcolumn = FT(-1e30)
+    end
+    cloudsat_tcc .= zero(FT)
+    return nothing
+end
 
 function prepare_cosp_subcolumns!(Y, p)
     (;
@@ -190,15 +319,15 @@ set_cosp_large_scale_precipitation_flux!(_, _, microphysics_model) =
 """
     foreach_cosp_subcolumn(consume!, Y, p)
 
-Prepare the sampled cloud and precipitation fractions, then regenerate and
-stream one deterministic hydrometeor subcolumn at a time. `consume!` must use
-the lazy hydrometeor broadcasts immediately; they borrow working mask and
-scratch fields that are overwritten during subsequent iterations.
+For 1M microphysics, diagnose grid-mean hydrometeor sizes before preparing the
+sampled cloud and precipitation fractions. Then regenerate and stream one
+deterministic hydrometeor subcolumn at a time. `consume!` must use the lazy
+hydrometeor broadcasts immediately; they borrow working mask and scratch fields
+that are overwritten during subsequent iterations.
 """
 function foreach_cosp_subcolumn(consume!::F, Y, p) where {F}
     microphysics_model = p.atmos.microphysics_model
     _check_cosp_microphysics(microphysics_model)
-    prepare_cosp_subcolumns!(Y, p)
     return foreach_cosp_subcolumn(consume!, Y, p, microphysics_model)
 end
 
@@ -206,7 +335,10 @@ function foreach_cosp_subcolumn(
     consume!::F,
     Y,
     p,
-    ::Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M},
+    microphysics_model::Union{
+        NonEquilibriumMicrophysics1M,
+        NonEquilibriumMicrophysics2M,
+    },
 ) where {F}
     ᶜq_lcl = p.scratch.ᶜtemp_scalar
     ᶜq_icl = p.scratch.ᶜtemp_scalar_2
@@ -221,6 +353,15 @@ function foreach_cosp_subcolumn(
     grid_mean_hydrometeors =
         (; q_lcl = ᶜq_lcl, q_icl = ᶜq_icl, q_rai = ᶜq_rai, q_sno = ᶜq_sno)
 
+    if microphysics_model isa NonEquilibriumMicrophysics1M
+        COSP.COSPCloudSatOptics.cloudsat_grid_mean_sizes!(
+            p.precomputed.cloudsat_grid_mean_sizes,
+            grid_mean_hydrometeors,
+            Y.c.ρ,
+            CAP.microphysics_1m_params(p.params),
+        )
+    end
+    prepare_cosp_subcolumns!(Y, p)
     return foreach_prepared_cosp_subcolumn!(consume!, grid_mean_hydrometeors, p)
 end
 
@@ -289,8 +430,6 @@ function foreach_prepared_cosp_subcolumn!(
 
     return nothing
 end
-
-@inline _cosp_nsubcolumns(::Val{N}) where {N} = N
 
 NVTX.@annotate function nogw_model_callback!(integrator)
     Y = integrator.u

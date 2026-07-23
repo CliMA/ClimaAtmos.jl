@@ -456,7 +456,29 @@ end
                 p.precomputed.ᶜsubcolumn_precip,
             ),
         )
+        @test all(
+            field -> !(field isa Tuple),
+            values(p.precomputed.cloudsat_grid_mean_sizes),
+        )
         @test !hasproperty(p.precomputed, :ᶜsubcolumn_hydrometeors)
+        @test length(p.precomputed.DBZe_cloudsat) == reference.nsubcolumns
+        for removed_cache in (
+            :z_vol_cloudsat,
+            :kr_vol_cloudsat,
+            :Ze_non_cloudsat,
+        )
+            @test !hasproperty(p.precomputed, removed_cache)
+        end
+        @test all(
+            field -> !(field isa Tuple),
+            (
+                p.precomputed.z_vol_cloudsat_work,
+                p.precomputed.kr_vol_cloudsat_work,
+                p.precomputed.Ze_non_cloudsat_work,
+                p.precomputed.hydro_path_attenuation_cloudsat_work,
+                p.precomputed.gas_path_attenuation_cloudsat,
+            ),
+        )
 
         # COSPv2 writes levels from model top to surface. ClimaAtmos center
         # fields use level 1 at the surface, so reverse every input profile.
@@ -478,6 +500,15 @@ end
             cosp_bottom_to_top(reference.w_snow),
         )
         @test isnothing(CA.subcol_model_callback!(simulation.integrator))
+        @test any(
+            DBZe -> any(>(eltype(Y)(-1e30)), parent(DBZe)),
+            p.precomputed.DBZe_cloudsat,
+        )
+        @test any(>(zero(eltype(Y))), parent(p.precomputed.cloudsat_tcc))
+        @test all(
+            size -> all(>(zero(eltype(Y))), parent(size)),
+            values(p.precomputed.cloudsat_grid_mean_sizes),
+        )
 
         nsubcolumns = reference.nsubcolumns
         grid_mean_template = (;
@@ -555,6 +586,89 @@ end
                 )
             end
         end
+
+        cached_objects = (;
+            z_vol = p.precomputed.z_vol_cloudsat_work,
+            kr_vol = p.precomputed.kr_vol_cloudsat_work,
+            g_vol = p.precomputed.g_vol_cloudsat,
+            Ze_non = p.precomputed.Ze_non_cloudsat_work,
+            hydro_path =
+                p.precomputed.hydro_path_attenuation_cloudsat_work,
+            gas_path = p.precomputed.gas_path_attenuation_cloudsat,
+            height_km = p.precomputed.height_km_cloudsat,
+            DBZe = p.precomputed.DBZe_cloudsat,
+            detected = p.precomputed.detected_column_cloudsat,
+            tcc = p.precomputed.cloudsat_tcc,
+            grid_mean_sizes = p.precomputed.cloudsat_grid_mean_sizes,
+        )
+
+        gas_before_refresh = copy(parent(p.precomputed.g_vol_cloudsat))
+        state_FT = eltype(Y)
+        energy_increment = state_FT(1000)
+        zero_state = zero(state_FT)
+        missing_reflectivity = state_FT(-1e30)
+        @. Y.c.ρe_tot += Y.c.ρ * energy_increment
+        CA.set_precomputed_quantities!(Y, p, simulation.integrator.t)
+        CA.subcol_model_callback!(simulation.integrator)
+        @test parent(p.precomputed.g_vol_cloudsat) != gas_before_refresh
+
+        @. Y.c.ρq_lcl = zero_state
+        @. Y.c.ρq_icl = zero_state
+        @. Y.c.ρq_rai = zero_state
+        @. Y.c.ρq_sno = zero_state
+        @. p.precomputed.ᶜcloud_fraction = zero_state
+        CA.subcol_model_callback!(simulation.integrator)
+
+        @test all(
+            DBZe -> all(==(missing_reflectivity), parent(DBZe)),
+            p.precomputed.DBZe_cloudsat,
+        )
+        @test all(iszero, parent(p.precomputed.cloudsat_tcc))
+        @test all(iszero, parent(p.precomputed.z_vol_cloudsat_work))
+        @test all(iszero, parent(p.precomputed.kr_vol_cloudsat_work))
+        @test all(
+            ==(missing_reflectivity),
+            parent(p.precomputed.Ze_non_cloudsat_work),
+        )
+        @test all(
+            iszero,
+            parent(p.precomputed.hydro_path_attenuation_cloudsat_work),
+        )
+        @test all(!, parent(p.precomputed.detected_column_cloudsat))
+        @test p.precomputed.z_vol_cloudsat_work === cached_objects.z_vol
+        @test p.precomputed.kr_vol_cloudsat_work === cached_objects.kr_vol
+        @test p.precomputed.g_vol_cloudsat === cached_objects.g_vol
+        @test p.precomputed.Ze_non_cloudsat_work === cached_objects.Ze_non
+        @test p.precomputed.hydro_path_attenuation_cloudsat_work ===
+              cached_objects.hydro_path
+        @test p.precomputed.gas_path_attenuation_cloudsat ===
+              cached_objects.gas_path
+        @test p.precomputed.height_km_cloudsat === cached_objects.height_km
+        @test p.precomputed.DBZe_cloudsat === cached_objects.DBZe
+        @test p.precomputed.detected_column_cloudsat === cached_objects.detected
+        @test p.precomputed.cloudsat_tcc === cached_objects.tcc
+        @test p.precomputed.cloudsat_grid_mean_sizes ===
+              cached_objects.grid_mean_sizes
+    end
+
+    @testset "unsupported CloudSat outputs" begin
+        DBZe_cloudsat = ntuple(
+            _ -> make_center_field(FT; value = 42, nelems = 2),
+            3,
+        )
+        cloudsat_tcc = similar(Fields.level(DBZe_cloudsat[1], 1), FT)
+        cloudsat_tcc .= FT(100)
+        untouched_gas = make_center_field(FT; value = 7, nelems = 2)
+        precomputed = (; DBZe_cloudsat, cloudsat_tcc, untouched_gas)
+
+        CA.fill_unsupported_cloudsat_outputs!(precomputed, FT)
+
+        @test all(
+            DBZe -> all(==(FT(-1e30)), parent(DBZe)),
+            DBZe_cloudsat,
+        )
+        @test all(iszero, parent(cloudsat_tcc))
+        @test all(==(FT(7)), parent(untouched_gas))
     end
 
     @testset "COSP microphysics support" begin

@@ -1045,6 +1045,8 @@ end
     random_seed::UInt64 = UInt64(1)
 end
 
+@inline _cosp_nsubcolumns(::Val{N}) where {N} = N
+
 # Add broadcastable for the new grouped types
 Base.broadcastable(x::SCMSetup) = tuple(x)
 Base.broadcastable(x::AtmosWater) = tuple(x)
