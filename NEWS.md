@@ -3,6 +3,8 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+
+- [#4722](https://github.com/CliMA/ClimaAtmos.jl/pull/4722) ![][badge-🔥behavioralΔ] Exclude precipitation in cloud fraction and radiation. Cloud fraction no longer counts precipitating but condensate-free air (e.g. below cloud base) as cloudy, and radiation no longer treats falling rain/snow as cloud droplets/ice.
 - [#4705](https://github.com/CliMA/ClimaAtmos.jl/pull/4705) ![][badge-✨feature/enhancement] Add a generic interface for driving single-column simulations from netCDF forcing files.
   - Add `ColumnDatasets` for reading column forcing files.
   - Compose external forcing from per-process terms (`HorizontalAdvection`, `VerticalFluctuation`, `Nudging`, `Subsidence`) assembled into `ExternalDrivenTVForcing`.

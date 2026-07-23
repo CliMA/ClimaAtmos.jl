@@ -1,4 +1,4 @@
-389
+390
 
 # **README**
 #
@@ -32,6 +32,9 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+390
+- Remove precipitation from cloud fraction and radiation
+
 389
 - Add a temporary parameter for lateral sedimentation mixing
 
