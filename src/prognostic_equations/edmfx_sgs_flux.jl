@@ -225,7 +225,6 @@ function edmfx_sgs_diffusive_flux_tendency!(
     (; dt, params) = p
     turbconv_params = CAP.turbconv_params(params)
     (; ᶜu) = p.precomputed
-    ᶠgradᵥ = Operators.GradientC2F()
     n = n_mass_flux_subdomains(turbconv_model)
     # The SGS-updraft branches below apply the same specific tendency the grid
     # mean receives to each subdomain scalar (uniform vertical diffusion across
@@ -270,10 +269,6 @@ function edmfx_sgs_diffusive_flux_tendency!(
         # consistency with the unscaled ρq_tot diffusion equation, preserves
         # total water invariance under moist-adiabatic processes, and aligns
         # with the implicit solver's Jacobian formulation.
-        ᶜdivᵥ_ρe_tot = Operators.DivergenceF2C(
-            top = Operators.SetValue(C3(FT(0))),
-            bottom = Operators.SetValue(C3(FT(0))),
-        )
         thermo_params = CAP.thermodynamics_params(params)
         (; ᶜΦ) = p.core
         (; ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice) = p.precomputed
@@ -286,19 +281,10 @@ function edmfx_sgs_diffusive_flux_tendency!(
         # Uniform vertical diffusion in the grid box: every subdomain feels
         # the grid-mean specific tendency.
         ᶜρe_totₜ_diffusion = p.scratch.ᶜtemp_scalar_2
-        @. ᶜρe_totₜ_diffusion = ᶜdivᵥ_ρe_tot(
-            -(
-                ᶠρaK_h * (
-                    ᶠgradᵥ(TD.dry_static_energy(thermo_params, ᶜT, ᶜΦ)) +
-                    ᶠinterp(TD.enthalpy_vapor(thermo_params, ᶜT) + ᶜΦ) *
-                    ᶠgradᵥ(ᶜq_vap) +
-                    ᶠinterp(TD.enthalpy_liquid(thermo_params, ᶜT) + ᶜΦ) *
-                    ᶠgradᵥ(ᶜq_liq) +
-                    ᶠinterp(TD.enthalpy_ice(thermo_params, ᶜT) + ᶜΦ) *
-                    ᶠgradᵥ(ᶜq_ice)
-                )
-            ),
+        ᶠgrad_h = ᶠtotal_enthalpy_gradientᵥ(
+            thermo_params, ᶜT, ᶜΦ, ᶜq_vap, ᶜq_liq, ᶜq_ice,
         )
+        @. ᶜρe_totₜ_diffusion = ᶜdiffdivᵥ(-(ᶠρaK_h * ᶠgrad_h))
         @. Yₜ.c.ρe_tot -= ᶜρe_totₜ_diffusion
         if apply_sgs_updraft
             for j in 1:n
@@ -332,12 +318,9 @@ function edmfx_sgs_diffusive_flux_tendency!(
         if !(p.atmos.microphysics_model isa DryModel)
             # Specific humidity diffusion
             ᶜρχₜ_diffusion = p.scratch.ᶜtemp_scalar
-            ᶜdivᵥ_ρq_tot = Operators.DivergenceF2C(
-                top = Operators.SetValue(C3(FT(0))),
-                bottom = Operators.SetValue(C3(FT(0))),
-            )
-            @. ᶜρχₜ_diffusion =
-                ᶜdivᵥ_ρq_tot(-(ᶠρaK_h * ᶠgradᵥ(specific(Y.c.ρq_tot, Y.c.ρ))))
+            ᶜq_tot = @. lazy(specific(Y.c.ρq_tot, Y.c.ρ))
+            ᶜ∇ᵥρK∇q_tot = ᶜdiffusive_flux_divergenceᵥ(ᶠρaK_h, ᶜq_tot)
+            @. ᶜρχₜ_diffusion = ᶜ∇ᵥρK∇q_tot
             @. Yₜ.c.ρq_tot -= ᶜρχₜ_diffusion
             @. Yₜ.c.ρ -= ᶜρχₜ_diffusion  # Effect of moisture diffusion on (moist) air mass
             if apply_sgs_updraft
@@ -350,10 +333,6 @@ function edmfx_sgs_diffusive_flux_tendency!(
 
         α_vert_diff_microphysics = CAP.α_vert_diff_tracer(params)
         ᶜρχₜ_diffusion = p.scratch.ᶜtemp_scalar
-        ᶜdivᵥ_ρq = Operators.DivergenceF2C(
-            top = Operators.SetValue(C3(FT(0))),
-            bottom = Operators.SetValue(C3(FT(0))),
-        )
         # Auto-discovered grid-scale tracers: sedimenting microphysics species
         # are diffused with α_vert_diff_tracer * K_h, all other tracers (e.g.
         # passive chemistry) with the unscaled K_h, matching
@@ -373,14 +352,9 @@ function edmfx_sgs_diffusive_flux_tendency!(
             # same velocity for every scalar, so its full weight is restored:
             # α ρ (K_h + K_e) + (1 - α) ρ K_e = ρ (α K_h + K_e).
             # For passive tracers α = 1, giving the full ρ (K_h + K_e).
-            @. ᶜρχₜ_diffusion = ᶜdivᵥ_ρq(
-                -(
-                    (
-                        α * ᶠρaK_h +
-                        (1 - α) * ᶠinterp(Y.c.ρ) * ᶠK_entr
-                    ) * ᶠgradᵥ(ᶜχ)
-                ),
-            )
+            ᶠρK = @. lazy(α * ᶠρaK_h + (1 - α) * ᶠinterp(Y.c.ρ) * ᶠK_entr)
+            ᶜ∇ᵥρK∇χ = ᶜdiffusive_flux_divergenceᵥ(ᶠρK, ᶜχ)
+            @. ᶜρχₜ_diffusion = ᶜ∇ᵥρK∇χ
             @. ᶜρχₜ -= ᶜρχₜ_diffusion
             # Uniform vertical diffusion: apply the same specific tendency to
             # the matching subdomain field (e.g. ρq_lcl → q_lcl in updrafts).
