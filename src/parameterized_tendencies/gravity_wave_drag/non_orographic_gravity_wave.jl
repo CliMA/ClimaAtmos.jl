@@ -123,6 +123,9 @@ function non_orographic_gravity_wave_cache(Y, gw::NonOrographicGravityWave)
             gw_nk = Int(nk),
             ᶜbuoyancy_frequency = similar(Y.c.ρ),
             ᶜdTdz = similar(Y.c.ρ),
+            ᶜuv_temp = similar(Y.c, Geometry.UVVector{FT}),
+            ᶜwvec_temp = similar(Y.c, Geometry.WVector{FT}),
+            gw_temp_surface = similar(Fields.level(Y.c.ρ, 1)),
             source_ρ_z_u_v_level,
             damp_level = similar(Fields.level(Y.c.ρ, 1)),
             ᶜlevel,
@@ -200,6 +203,9 @@ function non_orographic_gravity_wave_cache(Y, gw::NonOrographicGravityWave)
             gw_nk = Int(nk),
             ᶜbuoyancy_frequency = similar(Y.c.ρ),
             ᶜdTdz = similar(Y.c.ρ),
+            ᶜuv_temp = similar(Y.c, Geometry.UVVector{FT}),
+            ᶜwvec_temp = similar(Y.c, Geometry.WVector{FT}),
+            gw_temp_surface = similar(Fields.level(Y.c.ρ, 1)),
             source_p_ρ_z_u_v_level,
             damp_level = similar(Fields.level(Y.c.ρ, 1)),
             ᶜlevel,
@@ -232,6 +238,8 @@ function non_orographic_gravity_wave_compute_tendency!(
     (;
         ᶜdTdz,
         ᶜbuoyancy_frequency,
+        ᶜuv_temp,
+        ᶜwvec_temp,
         damp_level,
         u_waveforcing,
         v_waveforcing,
@@ -249,20 +257,23 @@ function non_orographic_gravity_wave_compute_tendency!(
     grav = CAP.grav(params)
 
     # compute buoyancy frequency
-    ᶜdTdz .= Geometry.WVector.(ᶜgradᵥ.(ᶠinterp.(ᶜT))).components.data.:1
+    # Materialize the WVector into a cache buffer first:
+    @. ᶜwvec_temp = Geometry.WVector(ᶜgradᵥ(ᶠinterp(ᶜT)))
+    ᶜdTdz .= ᶜwvec_temp.components.data.:1
     ᶜcp_m = @. lazy(TD.cp_m(thermo_params, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice))
 
     @. ᶜbuoyancy_frequency =
         (grav / ᶜT) * (ᶜdTdz + grav / ᶜcp_m)
-    ᶜbuoyancy_frequency = @. ifelse(
+    @. ᶜbuoyancy_frequency = ifelse(
         ᶜbuoyancy_frequency < FT(2.5e-5),
         FT(sqrt(2.5e-5)),
         sqrt(abs(ᶜbuoyancy_frequency)),
     ) # to avoid small numbers
 
     # prepare physical uv input variables for gravity_wave_forcing()
-    ᶜu = Geometry.UVVector.(Y.c.uₕ).components.data.:1
-    ᶜv = Geometry.UVVector.(Y.c.uₕ).components.data.:2
+    @. ᶜuv_temp = Geometry.UVVector(Y.c.uₕ)
+    ᶜu = ᶜuv_temp.components.data.:1
+    ᶜv = ᶜuv_temp.components.data.:2
 
     if iscolumn(axes(Y.c))
         # source level: the index of the level that is closest to the source height
@@ -330,9 +341,6 @@ function non_orographic_gravity_wave_compute_tendency!(
     else
         error("Only sphere and columns are supported")
     end
-
-    ᶜu = Geometry.UVVector.(Y.c.uₕ).components.data.:1
-    ᶜv = Geometry.UVVector.(Y.c.uₕ).components.data.:2
 
     # Compute Beres convective heating if enabled.
     if !isnothing(p.non_orographic_gravity_wave.gw_beres_source)
@@ -422,6 +430,7 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
         gw_halfsine,
         gw_launch_flux,
         gw_c_centroid,
+        ᶜuv_temp,
     ) = p.non_orographic_gravity_wave
 
     FT = Spaces.undertype(axes(Y.c))
@@ -556,8 +565,11 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
     # Persist Q_conv into cache before scratch field is reused
     @. gw_Q_conv = ᶜQ_conv
 
-    ᶜu = Geometry.UVVector.(Y.c.uₕ).components.data.:1
-    ᶜv = Geometry.UVVector.(Y.c.uₕ).components.data.:2
+    # Reuse the `ᶜuv_temp` cache buffer (already filled with UVVector(uₕ) in
+    # `non_orographic_gravity_wave_compute_tendency!` before this call).
+    @. ᶜuv_temp = Geometry.UVVector(Y.c.uₕ)
+    ᶜu = ᶜuv_temp.components.data.:1
+    ᶜv = ᶜuv_temp.components.data.:2
 
     # Pass 1: set the convective envelope [z_bot, z_top] and depth h, reusing the scratch with
     # gw_u_heat = z_bot, gw_v_heat = z_top, gw_h_heat = h for Pass 2.
@@ -823,6 +835,7 @@ function non_orographic_gravity_wave_forcing(
         gw_flag,
         gw_c0,
         gw_nk,
+        gw_temp_surface,
         gw_beres_source,
     ) = p.non_orographic_gravity_wave
 
@@ -835,45 +848,42 @@ function non_orographic_gravity_wave_forcing(
 
     FT = eltype(ᶜρ) # Define the floating point type
 
-    # Using interpolate operator, generate the field of ρ,u,v,z with on level shifted up
+    # Using interpolate operator, generate the field of ρ,u,v,z with on level shifted up.
+    # Fields.level with differing level indices do not share the same space and cannot be
+    # combined in broadcast operations.
     ρ_endlevel = Fields.level(ᶜρ, Spaces.nlevels(axes(ᶜρ)))
     ρ_endlevel_m1 = Fields.level(ᶜρ, Spaces.nlevels(axes(ᶜρ)) - 1)
-    Boundary_value = Fields.Field(
+    Fields.field_values(gw_temp_surface) .=
         Fields.field_values(ρ_endlevel) .* Fields.field_values(ρ_endlevel) ./
-        Fields.field_values(ρ_endlevel_m1),
-        axes(ρ_endlevel),
-    )
-    field_shiftlevel_up!(ᶜρ, ᶜρ_p1, Boundary_value)
+        Fields.field_values(ρ_endlevel_m1)
+    field_shiftlevel_up!(ᶜρ, ᶜρ_p1, gw_temp_surface)
 
     u_endlevel = Fields.level(ᶜu, Spaces.nlevels(axes(ᶜu)))
     u_endlevel_m1 = Fields.level(ᶜu, Spaces.nlevels(axes(ᶜu)) - 1)
-    Boundary_value = Fields.Field(
+    Fields.field_values(gw_temp_surface) .=
         FT(2) .* Fields.field_values(u_endlevel) .-
-        Fields.field_values(u_endlevel_m1),
-        axes(u_endlevel),
-    )
-    field_shiftlevel_up!(ᶜu, ᶜu_p1, Boundary_value)
+        Fields.field_values(u_endlevel_m1)
+    field_shiftlevel_up!(ᶜu, ᶜu_p1, gw_temp_surface)
 
     v_endlevel = Fields.level(ᶜv, Spaces.nlevels(axes(ᶜv)))
     v_endlevel_m1 = Fields.level(ᶜv, Spaces.nlevels(axes(ᶜv)) - 1)
-    Boundary_value = Fields.Field(
+    Fields.field_values(gw_temp_surface) .=
         FT(2) .* Fields.field_values(v_endlevel) .-
-        Fields.field_values(v_endlevel_m1),
-        axes(v_endlevel),
-    )
-    field_shiftlevel_up!(ᶜv, ᶜv_p1, Boundary_value)
+        Fields.field_values(v_endlevel_m1)
+    field_shiftlevel_up!(ᶜv, ᶜv_p1, gw_temp_surface)
 
-    Boundary_value = Fields.level(ᶜbf, Spaces.nlevels(axes(ᶜbf)))
-    field_shiftlevel_up!(ᶜbf, ᶜbf_p1, Boundary_value)
+    field_shiftlevel_up!(
+        ᶜbf,
+        ᶜbf_p1,
+        Fields.level(ᶜbf, Spaces.nlevels(axes(ᶜbf))),
+    )
 
     z_endlevel = Fields.level(ᶜz, Spaces.nlevels(axes(ᶜz)))
     z_endlevel_m1 = Fields.level(ᶜz, Spaces.nlevels(axes(ᶜz)) - 1)
-    Boundary_value = Fields.Field(
+    Fields.field_values(gw_temp_surface) .=
         FT(2) .* Fields.field_values(z_endlevel) .-
-        Fields.field_values(z_endlevel_m1),
-        axes(z_endlevel),
-    )
-    field_shiftlevel_up!(ᶜz, ᶜz_p1, Boundary_value)
+        Fields.field_values(z_endlevel_m1)
+    field_shiftlevel_up!(ᶜz, ᶜz_p1, gw_temp_surface)
 
     mask_u = StaticBitVector{nc}(_ -> true)
     mask_v = StaticBitVector{nc}(_ -> true)
