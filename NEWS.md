@@ -9,6 +9,8 @@ main
   - Rename the old large-scale-subsidence forcing to `LargeScaleSubsidence`, freeing the name `Subsidence` for the new per-process forcing term.
 
 
+- [#4657](https://github.com/CliMA/ClimaAtmos.jl/pull/4657) ![][badge-✨feature/enhancement] Add a horizontal component to the EDMFX SGS diffusive flux, enabled by the opt-in `edmfx_sgs_horizontal_diffusive_flux` config option (default `false`), for high-resolution configurations: scalar and TKE fluxes, the momentum stress `τ = -2 K_u S` with the full strain rate, the corresponding TKE shear production from horizontal gradients, and diagnostics `lmixh`, `edth`, and `evuh`. With prognostic updrafts and the separate opt-in `edmfx_horizontal_diffusion` config option (default `false`, requires `edmfx_sgs_horizontal_diffusive_flux`), the grid-mean horizontal specific tendencies are also applied to the updraft scalars (moist static energy, total specific humidity with its area-weighted density counterpart, and SGS tracers), so each subdomain inherits the grid-mean horizontal diffusion.
+
 0.42.1
 -------
 - [#4693](https://github.com/CliMA/ClimaAtmos.jl/pull/4693) ![][badge-🔥behavioralΔ] Mix the sedimentation flux across subdomains under `PrognosticEDMFX`. The lateral transfer of each sedimenting updraft tracer across tilted updraft boundaries now includes both detrainment (where the updraft narrows with height) and entrainment of the environment sedimentation flux (where it widens), with the environment flux density `ρ⁰w⁰χ⁰` reconstructed from the grid-mean flux minus the updraft contribution. Applied to the condensate/precipitation masses and their number concentrations, with matching implicit-Jacobian updates.
