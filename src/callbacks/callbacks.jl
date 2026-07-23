@@ -12,6 +12,7 @@ import ClimaCore: InputOutput
 using Dates
 
 import ClimaUtilities.TimeVaryingInputs: evaluate!
+import UnrolledUtilities: unrolled_foreach
 
 
 include("callback_helpers.jl")
@@ -57,51 +58,19 @@ updates the corresponding fields in the model state. It handles various forcing 
 
 # Notes
 
-The function extracts time-varying inputs from the `column_timevaryinginputs` structure
-and evaluates them at the current time using the `evaluate!` function, which updates
-the corresponding model fields in place.
+The function refreshes each composed forcing term from its time-varying
+inputs at the current time (`update_forcing_term!`), updating the term's
+working cache fields in place. The tendency is applied later in a
+`remaining_tendency!` call.
 """
 function external_driven_single_column!(integrator)
-    Y = integrator.u
     p = integrator.p
     t = integrator.t
-
-    @assert p.atmos.surface.temperature isa SurfaceConditions.ExternalTemperature (
-        "SCM reanalysis timevarying setup requires `initial_condition` " *
-        "and `external_forcing` to be set to `ReanalysisTimeVarying`"
-    )
-
-    FT = Spaces.undertype(axes(Y.c))
-    (; params) = p
-    thermo_params = CAP.thermodynamics_params(params)
-    # unpack external forcing objects that we can directly set.
-    (;
-        ᶜdTdt_fluc,
-        ᶜdqtdt_fluc,
-        ᶜdTdt_hadv,
-        ᶜdqtdt_hadv,
-        ᶜT_nudge,
-        ᶜqt_nudge,
-        ᶜu_nudge,
-        ᶜv_nudge,
-        ᶜls_subsidence,
-    ) = p.external_forcing
-    # unpack tv inputs
-    (; hus, rho, ta, tnhusha, tnhusva, tntha, tntva, ua, va, wa, wap) =
-        p.external_forcing.column_timevaryinginputs
-
-    # set the external forcing variables; external tendency is updated in a remaining_tendency! call
-    evaluate!(ᶜdTdt_fluc, tntva, t)
-    evaluate!(ᶜdqtdt_fluc, tnhusva, t)
-    evaluate!(ᶜdTdt_hadv, tntha, t)
-    evaluate!(ᶜdqtdt_hadv, tnhusha, t)
-    evaluate!(ᶜT_nudge, ta, t)
-    evaluate!(ᶜqt_nudge, hus, t)
-    evaluate!(ᶜu_nudge, ua, t)
-    evaluate!(ᶜv_nudge, va, t)
-
-    # subsidence
-    evaluate!(ᶜls_subsidence, wa, t)
+    (; forcing_terms, term_caches) = p.external_forcing
+    unrolled_foreach(forcing_terms, term_caches) do term, cache
+        update_forcing_term!(cache, term, t)
+    end
+    return nothing
 end
 
 import RRTMGP
@@ -366,7 +335,7 @@ end
 function set_insolation_variables!(Y, p, t, ::ExternalTVInsolation)
     # unpack objects with time varying data
     (; rrtmgp_solver) = p.radiation
-    (; coszen, rsdt) = p.external_forcing.surface_inputs
+    (; coszen, rsdt) = p.external_forcing.surface_fields
     coszen_tv = p.external_forcing.surface_timevaryinginputs.coszen
     rsdt_tv = p.external_forcing.surface_timevaryinginputs.rsdt
     # evaluate time varying data onto temporary fields

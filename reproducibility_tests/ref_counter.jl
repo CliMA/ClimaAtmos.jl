@@ -1,4 +1,4 @@
-386
+388
 
 # **README**
 #
@@ -32,6 +32,14 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+388
+- Unify SGS vertical diffusion with grid mean. Each PrognosticEDMFX
+  subdomain inherits the grid-mean specific tendency for mseⱼ, q_totⱼ,
+  and matching auto-discovered SGS tracers.
+
+387
+- Change some EDMF parameters
+
 386
 - Per-subdomain SGS hyperdiffusion with the dry-static-energy +
   water-enthalpy split for mseʲ. Reverses the previous unification with

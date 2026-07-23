@@ -12,7 +12,7 @@ import ..geopotential
 import ..C12, ..C3
 import ..background_p_and_T, ..background_u
 
-# File-based IC infrastructure (overwrite_from_file.jl, GCMDriven.jl, InterpolatedColumnProfile.jl)
+# File-based IC infrastructure (overwrite_from_file.jl, GCMDriven.jl, ForcingFromFile.jl)
 import Dates
 import ClimaUtilities.SpaceVaryingInputs
 import ClimaUtilities.ClimaArtifacts: @clima_artifact
@@ -42,7 +42,9 @@ import ..Parameters.ClimaAtmosParameters
 import Thermodynamics.Parameters.ThermodynamicsParameters
 
 # Model types returned by setup interface methods
-import ..GCMForcing, ..ISDACForcing, ..ARMVARANALForcing
+import ..GCMForcing, ..ISDACForcing
+import ..ExternalDrivenTVForcing, ..default_forcing_terms
+import ..ColumnDatasets
 import ..GCMDrivenInsolation, ..ExternalTVInsolation, ..TimeVaryingInsolation
 import ..RCEMIPIIInsolation
 import ..ShipwayHill2012VelocityProfile
@@ -92,7 +94,7 @@ overwrite_initial_state!(setup, Y, thermo_params) = nothing
     subsidence_forcing(setup, FT)
 
 Return a subsidence profile function `z -> w_subsidence`, or `nothing`.
-When non-nothing, the returned profile is wrapped in a `Subsidence` struct
+When non-nothing, the returned profile is wrapped in a `LargeScaleSubsidence` struct
 by the model construction layer, replacing the `subsidence` config key.
 """
 subsidence_forcing(setup, ::Type{FT}) where {FT} = nothing
@@ -277,8 +279,7 @@ include("ShipwayHill2012.jl")
 # File-based setups (depend on common/overwrite_from_file.jl)
 include("common/overwrite_from_file.jl")
 include("GCMDriven.jl")
-include("ARMVARANAL.jl")
-include("InterpolatedColumnProfile.jl")
+include("ForcingFromFile.jl")
 include("MoistFromFile.jl")
 include("WeatherModel.jl")
 include("AMIPFromERA5.jl")

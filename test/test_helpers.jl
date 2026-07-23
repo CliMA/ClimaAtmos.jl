@@ -497,16 +497,20 @@ function create_mock_era5_datasets(
     tvforcing["clwc"][:, :, :, :] .= zeros(FT, size(tvforcing["clwc"]))
     tvforcing["ciwc"][:, :, :, :] .= zeros(FT, size(tvforcing["ciwc"]))
 
-    tvforcing["z"] .= reshape(
-        tvforcing["pressure_level"] .* 100,
-        (1, 1, length(tvforcing["pressure_level"]), 1),
+    # Build full (lon, lat, level, time) arrays in memory, then write them.
+    # A broadcasting RHS (e.g. a (1, 1, level, 1) profile) is not reliably
+    # written through a CFVariable view: it silently leaves most columns
+    # unfilled, so the site column ends up with a constant/garbage profile.
+    geopotential_profile = geopotential_from_pressure(
+        tvforcing["pressure_level"][:] .* 100;
+        R_d = CA.Parameters.R_d(params),
     )
-    tvforcing["z"] .=
-        geopotential_from_pressure(tvforcing["z"]; R_d = CA.Parameters.R_d(params))
-    tvforcing["t"][:, :, :, :] .=
-        temperature_from_geopotential(tvforcing["z"]; g = CA.Parameters.grav(params))
-    tvforcing["q"][:, :, :, :] .=
-        shum_from_geopotential(tvforcing["z"]; g = CA.Parameters.grav(params))
+    g = CA.Parameters.grav(params)
+    z_full = zeros(FT, num_lon, num_lat, num_pressure, hours)
+    z_full .= reshape(geopotential_profile, 1, 1, num_pressure, 1)
+    tvforcing["z"][:, :, :, :] .= z_full
+    tvforcing["t"][:, :, :, :] .= temperature_from_geopotential(z_full; g)
+    tvforcing["q"][:, :, :, :] .= shum_from_geopotential(z_full; g)
     close(tvforcing)
 
     # Create accumulated dataset (3D: lon, lat, time)

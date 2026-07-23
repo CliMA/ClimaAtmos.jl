@@ -122,6 +122,7 @@ end
 # ============================================================================
 if TEST_GROUP in ("era5", "all")
     @safetestset "ERA5 forcing" begin @time include("era5_tests.jl") end
+    @safetestset "Column datasets" begin @time include("column_datasets_tests.jl") end
 end
 #! format: on
 
