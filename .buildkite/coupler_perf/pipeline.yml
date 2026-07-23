@@ -21,6 +21,8 @@ steps:
     key: "init_gpu_env"
     command:
       - git clone https://github.com/CliMA/ClimaCoupler.jl.git $COUPLER_PATH && bash -c "cd $COUPLER_PATH && git checkout $COUPLER_COMMIT"
+      # Strip compat so version bumps never break this pipeline
+      - julia -e 'using TOML; for f in [joinpath(ENV["COUPLER_PATH"],"Project.toml"), joinpath(ENV["COUPLER_PATH"],"experiments","AMIP","Project.toml")]; d=TOML.parsefile(f); delete!(d,"compat"); open(io->TOML.print(io,d), f, "w"); end'
       - "echo $$JULIA_DEPOT_PATH"
       # Update package registry, since dev installs do not do that with a manifest
       - "julia --project=$COUPLER_PATH/experiments/AMIP/ -e 'using Pkg; Pkg.Registry.update()'"
