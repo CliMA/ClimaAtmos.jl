@@ -19,17 +19,20 @@ function ShipwayHill2012(; thermo_params)
     rv_values = FT[0.015, 0.0138, 0.0024]
     θ_values = FT[297.9, 297.9, 312.66]
 
-    linear_profile(zs, vals) = Intp.extrapolate(
-        Intp.interpolate((zs,), vals, Intp.Gridded(Intp.Linear())),
-        Intp.Linear(),
+    linear_profile(zs, vals) = CI1D.Interpolate1D(
+        SA.SVector{length(zs)}(zs), SA.SVector{length(vals)}(vals);
+        interpolationorder = CI1D.Linear(),
+        extrapolationorder = CI1D.LinearExtrapolation(),
     )
-    rv(z) = max(linear_profile(z_values, rv_values)(z), zero(z))
+    rv_itp = linear_profile(z_values, rv_values)
+    θ_itp = linear_profile(z_values, θ_values)
+    rv(z) = max(rv_itp(z), zero(z))
     q_tot(z) = rv(z) / (1 + rv(z))
-    θ(z) = linear_profile(z_values, θ_values)(z)
+    θ(z) = θ_itp(z)
 
     p_0 = FT(100_700)
     p = hydrostatic_pressure_profile(; thermo_params, p_0, θ, q_tot)
-    return (; θ, q_tot, p)
+    return ShipwayHill2012((; θ, q_tot, p))
 end
 
 function center_initial_condition(setup::ShipwayHill2012, local_geometry, params)
