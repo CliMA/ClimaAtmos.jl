@@ -305,7 +305,6 @@ site_location(cd::ColumnDataset) =
 time_interpolation_method(cd::ColumnDataset) =
     time_interpolation_method(cd.format)
 
-# Human-readable label of a data source, for error messages.
 source_name(cd::ColumnDataset) = "$(cd.path) ($(format_name(cd.format)) format)"
 
 # ============================================================================
@@ -581,6 +580,8 @@ source_name(d::InMemoryColumnData) = d.source
 
 time_interpolation_method(::InMemoryColumnData) =
     TimeVaryingInputs.LinearInterpolation()
+
+file_time_span(::InMemoryColumnData, _) = Inf
 
 site_location(d::InMemoryColumnData) =
     isnothing(d.site_location) ?
