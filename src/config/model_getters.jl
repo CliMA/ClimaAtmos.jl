@@ -850,29 +850,9 @@ function get_external_forcing_model(
     elseif external_forcing == "ReanalysisMonthlyAveragedDiurnal"
         # The one forcing that differs from the initial condition: monthly-
         # averaged diurnal ERA5, paired with `initial_condition: ReanalysisTimeVarying`.
-        external_forcing_file = get_external_monthly_forcing_file_path(parsed_args)
-        # Generate the monthly file if it is missing or in a stale layout.
-        if !isfile(external_forcing_file) ||
-           !check_monthly_forcing_times(external_forcing_file, parsed_args) ||
-           !ClimaColumnFiles.is_conforming(external_forcing_file)
-            generate_external_forcing_file(
-                parsed_args,
-                external_forcing_file,
-                FT,
-                input_data_dir = joinpath(
-                    @clima_artifact("era5_hourly_atmos_raw"),
-                    "monthly",
-                ),
-                data_strs = [
-                    "monthly_diurnal_profiles",
-                    "monthly_diurnal_inst",
-                    "monthly_diurnal_accum",
-                ],
-            )
-        end
-        # The monthly-averaged-diurnal file stores one day; repeat it in time.
+        # The file stores one repeating day, so repeat it in time.
         ExternalDrivenTVForcing(
-            external_forcing_file;
+            era5_dataset(parsed_args, FT; monthly = true);
             time_interpolation_method = ColumnDatasets.periodic_calendar_method(),
         )
     else

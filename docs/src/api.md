@@ -403,15 +403,17 @@ ClimaAtmos.SurfaceConditions.atmos_surface_conditions
 
 Data access for single-column (SCM) forcing files: the generic
 [`ColumnDataset`](@ref ClimaAtmos.ColumnDatasets.ColumnDataset) handle and format
-interface, the native `ClimaColumn` reader/writer, and the ARM VARANAL
-converter. See the
+interface, the in-memory source, the native `ClimaColumn` reader/writer, and the
+ARM VARANAL and GCM cfsite converters. See the
 [Column Datasets](@ref "Column Datasets") page for usage and
 [Adding a Column Dataset](@ref) for the extension interface.
 
 ### Opening and reading
 
 ```@docs
+ClimaAtmos.ColumnDatasets.AbstractColumnData
 ClimaAtmos.ColumnDatasets.ColumnDataset
+ClimaAtmos.ColumnDatasets.InMemoryColumnData
 ClimaAtmos.ColumnDatasets.open_dataset
 ClimaAtmos.ColumnDatasets.has_variable
 ClimaAtmos.ColumnDatasets.read_profile
@@ -465,6 +467,7 @@ ClimaAtmos.ColumnDatasets.ClimaColumnFiles.CANONICAL_UNITS
 ClimaAtmos.ColumnDatasets.ClimaColumnFiles.is_conforming
 ClimaAtmos.ColumnDatasets.ClimaColumnFiles.write_column_forcing_file
 ClimaAtmos.ColumnDatasets.VaranalFiles.to_climacolumn
+ClimaAtmos.ColumnDatasets.GCMColumnData.read
 ```
 
 ## Modules
@@ -478,6 +481,7 @@ ClimaAtmos.AtmosArtifacts
 ClimaAtmos.ColumnDatasets
 ClimaAtmos.ColumnDatasets.ClimaColumnFiles
 ClimaAtmos.ColumnDatasets.VaranalFiles
+ClimaAtmos.ColumnDatasets.GCMColumnData
 ```
 
 ## Internals
