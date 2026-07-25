@@ -787,6 +787,25 @@ function check_case_consistency(parsed_args)
         "Unknown `config = $(repr(config))`. Valid options are: $(join(valid_configs, ", "))."
     )
 
+    if parsed_args["edmfx_sgs_horizontal_diffusive_flux"] && (
+        !isnothing(parsed_args["smagorinsky_lilly"]) || parsed_args["amd_les"]
+    )
+        error(
+            "`edmfx_sgs_horizontal_diffusive_flux` cannot be combined with \
+             `smagorinsky_lilly` or `amd_les`, which already apply horizontal \
+             SGS diffusion to the same fields",
+        )
+    end
+
+    if parsed_args["edmfx_horizontal_diffusion"] &&
+       !parsed_args["edmfx_sgs_horizontal_diffusive_flux"]
+        error(
+            "`edmfx_horizontal_diffusion` requires \
+             `edmfx_sgs_horizontal_diffusive_flux`: the updraft scalars \
+             inherit the grid-mean horizontal diffusion tendencies",
+        )
+    end
+
     # ISDAC consistency: when initial_condition is ISDAC, surface/rad/external
     # forcing must all be set to the matching ISDAC variants. Subsidence,
     # scm_coriolis, and ls_adv are owned by the setup, not the YAML schema.
@@ -892,8 +911,10 @@ function AtmosTurbconv(config::AtmosConfig, params, ::Type{FT}) where {FT}
         detr_model = get_detrainment_model(pa),
         sgs_mass_flux = pa["edmfx_sgs_mass_flux"],
         sgs_diffusive_flux = pa["edmfx_sgs_diffusive_flux"],
+        sgs_diffusive_flux_horizontal = pa["edmfx_sgs_horizontal_diffusive_flux"],
         nh_pressure = pa["edmfx_nh_pressure"],
         vertical_diffusion = pa["edmfx_vertical_diffusion"],
+        horizontal_diffusion = pa["edmfx_horizontal_diffusion"],
         filter = pa["edmfx_filter"],
         scale_blending_method,
     )
