@@ -83,6 +83,9 @@ if TEST_GROUP in ("parameterizations", "all")
     # Sponge layers (combined for shared space setup)
     @safetestset "Sponge layers" begin @time include("parameterized_tendencies/sponge.jl") end
 
+    # LES SGS closures
+    @safetestset "LES energy flux decomposition" begin @time include("parameterized_tendencies/les_sgs_models/smagorinsky_energy_flux_tests.jl") end
+
     # Microphysics tests
     @safetestset "Microphysics tendency tests" begin @time include("parameterized_tendencies/microphysics/tendency.jl") end
     @safetestset "Microphysics wrappers tests" begin @time include("parameterized_tendencies/microphysics/microphysics_wrappers.jl") end

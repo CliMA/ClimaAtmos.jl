@@ -134,8 +134,15 @@ function horizontal_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, model::Smagorinsk
     @. Yₜ.f.u₃ -= C3(wdivₕ(ᶠρ * ᶠτ_smag) / ᶠρ)
 
     ## Total energy tendency
-    (; ᶜh_tot) = p.precomputed
-    @. Yₜ.c.ρe_tot += wdivₕ(ᶜρ * ᶜD_h * gradₕ(ᶜh_tot))
+    # The flux uses the dry-static-energy + water-enthalpy decomposition;
+    # see `edmfx_sgs_diffusive_flux_tendency!` for the rationale.
+    (; ᶜΦ) = p.core
+    (; ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice) = p.precomputed
+    ᶜq_vap = @. lazy(TD.vapor_specific_humidity(ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice))
+    ᶜ∇h_tot = ᶜtotal_enthalpy_gradientₕ!(
+        p.scratch.ᶜtemp_C12, thermo_params, ᶜT, ᶜΦ, ᶜq_vap, ᶜq_liq, ᶜq_ice,
+    )
+    @. Yₜ.c.ρe_tot += wdivₕ(ᶜρ * ᶜD_h * ᶜ∇h_tot)
 
     ## Tracer diffusion and associated mass changes
     foreach_gs_tracer(Yₜ, Y) do ᶜρχₜ, ᶜρχ, ρχ_name
@@ -173,9 +180,15 @@ function vertical_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, model::SmagorinskyL
     @. Yₜ.f.u₃ -= C3(ᶠdiffdivᵥ_u₃(ᶜρ * ᶜτ_smag) / ᶠρ)
 
     ## Total energy tendency
-    (; ᶜh_tot) = p.precomputed
-    ᶜ∇ᵥρD∇h_totₜ = ᶜdiffusive_flux_divergenceᵥ(ᶠρD, ᶜh_tot)
-    @. Yₜ.c.ρe_tot -= ᶜ∇ᵥρD∇h_totₜ
+    # The flux uses the dry-static-energy + water-enthalpy decomposition;
+    # see `edmfx_sgs_diffusive_flux_tendency!` for the rationale.
+    thermo_params = CAP.thermodynamics_params(p.params)
+    (; ᶜΦ) = p.core
+    (; ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice) = p.precomputed
+    ᶜq_vap = @. lazy(TD.vapor_specific_humidity(ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice))
+    ᶠ∇ᵥh_tot =
+        ᶠtotal_enthalpy_gradientᵥ(thermo_params, ᶜT, ᶜΦ, ᶜq_vap, ᶜq_liq, ᶜq_ice)
+    @. Yₜ.c.ρe_tot -= ᶜdiffdivᵥ(-(ᶠρD * ᶠ∇ᵥh_tot))
 
     ## Tracer diffusion and associated mass changes
     foreach_gs_tracer(Yₜ, Y) do ᶜρχₜ, ᶜρχ, ρχ_name
