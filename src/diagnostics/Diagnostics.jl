@@ -53,6 +53,14 @@ import ..OrographicGravityWave
 # chemistry_model
 import ..GasPhaseChem
 
+# aerosol_model
+import ..AbstractPrescribedAerosol
+import ..AbstractPrognosticAerosol
+import ..PrognosticSeaSalt
+import ..bin_names
+import ..ᶜaerosol_bin_mmr
+import ..ᶜaerosol_species_mmr
+
 # surface temperature
 import ..SurfaceConditions
 import ..SurfaceConditions: SlabOceanTemperature

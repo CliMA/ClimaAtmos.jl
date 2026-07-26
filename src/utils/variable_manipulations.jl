@@ -479,7 +479,6 @@ Arguments:
   - `ᶜρʲs`: Iterable of draft densities.
 
       + Typically `p.precomputed.ᶜρʲs`
-
   - `turbconv_model`: The turbulence convection model (e.g., `PrognosticEDMFX`, or others).
 
 Returns:
@@ -627,3 +626,27 @@ end
     unrolled_dotproduct(s, Base.tail(a), Base.tail(b))
 @inline unrolled_dotproduct(s, a::Tuple{<:Any}, b::Tuple{<:Any}) =
     s ⊞ (first(a) ⊠ first(b))
+
+"""
+    ᶜaerosol_bin_mmr(u, p, bin_name, species_model)
+
+[DOCUMENT]
+"""
+ᶜaerosol_bin_mmr(u, p, bin_name, ::AbstractPrescribedAerosol) =
+    getproperty(p.tracers.prescribed_aerosols_field, bin_name)
+function ᶜaerosol_bin_mmr(u, p, bin_name, ::AbstractPrognosticAerosol)
+    ᶜρχ = getproperty(u.c, Symbol(:ρ, bin_name))
+    return @. lazy(specific(ᶜρχ, u.c.ρ))
+end
+
+"""
+    ᶜaerosol_species_mmr(u, p, species_model)
+"""
+ᶜaerosol_species_mmr(u, p, ::Nothing) = @. lazy(zero(u.c.ρ))
+function ᶜaerosol_species_mmr(u, p, species_model)
+    ᶜbin_mmrs = map(
+        bin_name -> ᶜaerosol_bin_mmr(u, p, bin_name, species_model),
+        bin_names(species_model),
+    )
+    return foldl((ᶜa, ᶜb) -> @.(lazy(ᶜa + ᶜb)), ᶜbin_mmrs)
+end

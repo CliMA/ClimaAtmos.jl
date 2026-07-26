@@ -234,6 +234,7 @@ function rrtmgp_solver_kwargs(
             aod_sw_extinction = NaN,
             aod_sw_scattering = NaN,
             # assuming fixed aerosol radius
+            # TODO: Set in ClimaParams
             center_dust1_radius = 0.55,
             center_dust2_radius = 1.4,
             center_dust3_radius = 2.4,
@@ -287,7 +288,7 @@ function radiation_model_cache(
     radiation_mode::RRTMGPI.AbstractRRTMGPMode,
     start_date,
     params,
-    aerosol_names,
+    aerosol_model,
     time_varying_trace_gas_names,
     insolation_mode;
     interpolation = RRTMGPI.BestFit(),
@@ -297,28 +298,9 @@ function radiation_model_cache(
     device = context.device
     if !(radiation_mode isa RRTMGPI.GrayRadiation)
         (; aerosol_radiation) = radiation_mode
-        if aerosol_radiation && !(any(
-            x -> x in aerosol_names,
-            [
-                "DST01",
-                "DST02",
-                "DST03",
-                "DST04",
-                "DST05",
-                "SSLT01",
-                "SSLT02",
-                "SSLT03",
-                "SSLT04",
-                "SSLT05",
-                "SO4",
-                "CB1",
-                "CB2",
-                "OC1",
-                "OC2",
-            ],
-        ))
+        if aerosol_radiation && all(isnothing, species_models(aerosol_model))
             error(
-                "Need at least one aerosol type when aerosol radiation is turned on",
+                "Need at least one aerosol species when aerosol radiation is turned on",
             )
         end
     end

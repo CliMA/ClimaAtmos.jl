@@ -89,14 +89,14 @@ import ClimaCore: Fields, Spaces
 
 Construct a minimal state vector `Y` and cache `p` for `model` on `grid`.
 All keyword arguments have sensible defaults; override only what the diagnostic
-under test actually requires (e.g. `aerosol_names` for aerosol diagnostics,
-`set_steady_state_velocity = true` for steady-state error diagnostics).
+under test actually requires (e.g. aerosol models on the `model` for aerosol
+diagnostics, `set_steady_state_velocity = true` for steady-state error diagnostics).
 """
 function build_state_cache(FT, model; grid,
     params = CA.ClimaAtmosParameters(FT),
     ic = CA.Setups.DecayingProfile(; params),
     dt = FT(1.0), start_date = DateTime(2010, 1, 1),
-    aerosol_names = [], time_varying_trace_gas_names = (),
+    time_varying_trace_gas_names = (),
     set_steady_state_velocity = false,
     vwb_species = nothing,
 )
@@ -110,7 +110,8 @@ function build_state_cache(FT, model; grid,
         ) : nothing
     p = CA.build_cache(
         Y, model, params, dt, start_date,
-        aerosol_names, time_varying_trace_gas_names, steady_state_velocity, vwb_species,
+        time_varying_trace_gas_names, steady_state_velocity,
+        vwb_species,
     )
     return Y, p
 end
@@ -232,10 +233,8 @@ model_smag = CA.AtmosModel(smagorinsky_lilly = CA.SmagorinskyLilly(; axes = :UV_
 radiation_mode = CA.RRTMGPI.AllSkyRadiationWithClearSkyDiagnostics(;
     aerosol_radiation = true,
 )
-model_allsky = CA.AtmosModel(; radiation_mode)
-(Y_allsky, p_allsky) = build_state_cache(FT, model_allsky; grid = column,
-    aerosol_names = ("DST01",),
-);
+model_allsky = CA.AtmosModel(; radiation_mode, dust = CA.PrescribedDust())
+(Y_allsky, p_allsky) = build_state_cache(FT, model_allsky; grid = column);
 import RRTMGP
 # RRTMGP allocates its flux and cloud-cover buffers with `undef` and fills them only
 # when the solver runs; these diagnostics are exercised without a time step. Zero the

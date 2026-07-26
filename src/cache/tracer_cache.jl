@@ -55,53 +55,56 @@ function co2_cache(Y, start_date)
     return (; co2, prescribed_co2_timevaryinginput)
 end
 
-function tracer_cache(Y, prescribed_aerosol_names, time_varying_trace_gases, start_date)
-    if !isempty(prescribed_aerosol_names)
-        target_space = axes(Y.c)
+prescribed_bin_names(::Union{Nothing, AbstractPrognosticAerosol}) = ()
+prescribed_bin_names(m::AbstractPrescribedAerosol) = bin_names(m)
+prescribed_bin_names(a::AtmosAerosols) = foldl(
+    (names, m) -> (names..., prescribed_bin_names(m)...),
+    values(species_models(a));
+    init = (),
+)
 
-        # Take the aerosol concentration file, read the keys with names matching
-        # the ones passed in the prescribed_aerosol_names option, and create a
-        # NamedTuple that uses the same keys and has as values the TimeVaryingInputs
-        # for those variables.
-        #
-        # The keys in the merra2_aerosols.nc file have to match the ones passed with the
-        # configuration. The file also has to be defined on the globe and provide
-        # time series of lon-lat-z data.
-        prescribed_aerosol_names_as_symbols = Symbol.(Tuple(prescribed_aerosol_names))
-        target_space = axes(Y.c)
-        extrapolation_bc = (Intp.Periodic(), Intp.Flat(), Intp.Flat())
-        timevaryinginputs = [
+"""
+    prescribed_aerosol_cache(Y, aerosol_model::AtmosAerosols, start_date)
+
+MERRA-2 inputs for prescribed aerosol species: a center Field of
+per-bin concentrations (updated in `update_aerosol_concentrations!`) and
+per bin `TimeVaryingInput`s. Returns (;) when no species is prescribed.
+"""
+function prescribed_aerosol_cache(Y, aerosol_model::AtmosAerosols, start_date)
+    prescribed_names = prescribed_bin_names(aerosol_model)
+    isempty(prescribed_names) && return (;)
+    # The keys in the merra2_aerosols.nc file have to match the species' bin
+    # names. The file also has to be defined on the globe and provide time
+    # series of lon-lat-z data.
+    extrapolation_bc = (Intp.Periodic(), Intp.Flat(), Intp.Flat())
+    prescribed_aerosol_timevaryinginputs = NamedTuple{prescribed_names}(
+        map(prescribed_names) do name
             TimeVaryingInput(
                 AA.aerosol_concentration_file_path(;
                     context = ClimaComms.context(Y.c),
                 ),
-                name,
-                target_space;
+                string(name),
+                axes(Y.c);
                 reference_date = start_date,
                 regridder_type = :InterpolationsRegridder,
                 regridder_kwargs = (; extrapolation_bc),
                 method = LinearInterpolation(),
-            ) for name in prescribed_aerosol_names
-        ]
-
-        # Field is updated in the radiation callback
-        prescribed_aerosols_field = similar(
+            )
+        end,
+    )
+    prescribed_aerosols_field =
+        similar(
             Y.c,
-            NamedTuple{
-                prescribed_aerosol_names_as_symbols,
-                NTuple{
-                    length(prescribed_aerosol_names_as_symbols),
-                    eltype(Y.c.ρ),
-                },
-            },
+            NamedTuple{prescribed_names, NTuple{length(prescribed_names), eltype(Y.c.ρ)}},
         )
-        prescribed_aerosol_timevaryinginputs =
-            (; zip(prescribed_aerosol_names_as_symbols, timevaryinginputs)...)
-        aerosol_cache =
-            (; prescribed_aerosols_field, prescribed_aerosol_timevaryinginputs)
-    else
-        aerosol_cache = (;)
-    end
+    return (;
+        prescribed_aerosols_field,
+        prescribed_aerosol_timevaryinginputs,
+    )
+end
+
+function tracer_cache(Y, aerosol_model::AtmosAerosols, time_varying_trace_gases, start_date)
+    aerosol_cache = prescribed_aerosol_cache(Y, aerosol_model, start_date)
 
     if :O3 in Symbol.(time_varying_trace_gases)
         o3_cache = ozone_cache(Y, start_date)

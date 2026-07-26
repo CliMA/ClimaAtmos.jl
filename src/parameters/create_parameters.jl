@@ -93,6 +93,10 @@ function ClimaAtmosParameters(
 
     prescribed_aerosol_params = prescribed_aerosol_parameters(toml_dict)
     PAP = typeof(prescribed_aerosol_params)
+
+    prognostic_aerosol_params = prognostic_aerosol_parameters(toml_dict)
+    PGAP = typeof(prognostic_aerosol_params)
+
     # Only load gravity-wave parameters if enabled
     non_orographic_gravity_wave_params =
         has_non_orographic_gw ? NonOrographicGravityWaveParameters(toml_dict) : nothing
@@ -124,6 +128,7 @@ function ClimaAtmosParameters(
         VDP,
         EFP,
         PAP,
+        PGAP,
         NOGWP,
         OGWP,
         BSP,
@@ -144,6 +149,7 @@ function ClimaAtmosParameters(
         vert_diff_params,
         external_forcing_params,
         prescribed_aerosol_params,
+        prognostic_aerosol_params,
         non_orographic_gravity_wave_params,
         orographic_gravity_wave_params,
         beres_source_params,
@@ -283,6 +289,25 @@ function prescribed_aerosol_parameters(toml_dict)
         :mam3_stdev_accum => :sulfate_std,
     )
     return CP.get_parameter_values(toml_dict, name_map, "ClimaAtmos")
+end
+
+function prognostic_aerosol_parameters(toml_dict)
+    name_map = (;
+        :day => :day,
+        # SEA SALT AEROSOL
+        :ssa_size_bin_divisions => :ssa_bin_edges,
+        :ssa_r_ref => :ssa_r_ref,
+        :ssa_gong_theta => :gong_theta,
+        :ssa_gong_params_A => :gong_A,
+        :ssa_gong_param_B => :gong_B,
+        :ssa_gong_params_F => :gong_F,
+        :ssa_gong_dim_factor => :gong_dim_factor,
+        :ssa_gong_wind_exponent => :gong_wind_exp,
+        :ssa_jaegle_params => :jaegle_C,
+        :ssa_residence => :τ_ssa,
+    )
+    parameters = CP.get_parameter_values(toml_dict, name_map, "ClimaAtmos")
+    return to_svec(parameters)
 end
 
 function trace_gas_parameters(toml_dict)

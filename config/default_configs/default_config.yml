@@ -425,7 +425,10 @@ reproducible_restart:
   help: "If true, the simulation is reproducible when restarting from a restart file. Disable this option when running production runs."
   value: false
 prescribed_aerosols:
-  help: "Which aerosols to add. List of keys from the data file (e.g., CB1, CB2)."
+  help: "Aerosols prescribed from the MERRA-2 climatology, (e.g., [\"SSLT\", \"DUST\", etc]). Size bins predetermined from MERRA."
+  value: []
+prognostic_aerosols:
+  help: "Aerosols treated as prognostic tracers (e.g., [\"SSLT\", \"DUST\", etc]). Overrides prescribed aerosols. Only supports sea salt."
   value: []
 time_varying_trace_gases:
   help: "Trace gases that vary in time, e.g. [\"CO2\", \"O3\"]. Currently, only \"CO2\" and \"O3\" are supported. All other trace gases set fixed to default values from ClimaParams."
