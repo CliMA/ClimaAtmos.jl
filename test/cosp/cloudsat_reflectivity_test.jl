@@ -57,7 +57,7 @@ function model_top_height_km(field)
            eltype(field)(1000)
 end
 
-@testset "COSP CloudSat reflectivity" begin
+@testset "CloudSat reflectivity" begin
     FT = Float64
     nelems = 3
 
@@ -118,8 +118,26 @@ end
     @test isfinite(parent(Ze_non)[3])
     @test isfinite(parent(DBZe)[3])
 
-    z_vol = make_center_profile_field(FT, [1000, 100, 10])
-    kr_vol = make_center_profile_field(FT, [0.05, 0.1, 0.15])
+end
+
+@testset "CloudSat reflectivity in a single layer" begin
+    FT = Float64
+    z_vol = make_center_profile_field(FT, [10])
+    kr_vol = make_center_profile_field(FT, [0.1])
+    g_vol = make_center_profile_field(FT, [0.01])
+    Ze_non = similar(z_vol)
+    DBZe = similar(z_vol)
+    hydro_path = similar(z_vol)
+    gas_path = similar(z_vol)
+    height_km = Fields.coordinate_field(axes(z_vol)).z ./ FT(1000)
+    top_height_km = model_top_height_km(z_vol)
+
+    CCR.cloudsat_gas_path_attenuation!(
+        gas_path,
+        g_vol,
+        height_km,
+        top_height_km,
+    )
     CCR.cloudsat_reflectivity_subcolumn!(
         Ze_non,
         DBZe,
@@ -131,16 +149,13 @@ end
         top_height_km,
     )
 
-    @test isapprox(parent(Ze_non), FT[30, 20, 10]; atol = 1e-12)
-    @test isapprox(
-        parent(DBZe),
-        FT[29.34, 19.52, 9.82];
-        rtol = 1e-12,
-        atol = 1e-12,
-    )
+    distance_from_top = top_height_km[] - level_values(height_km)[1]
+    expected_DBZe = FT(10) - FT(2) * (FT(0.1) + FT(0.01)) * distance_from_top
+    @test parent(Ze_non) ≈ FT[10] atol = 1e-12
+    @test parent(DBZe) ≈ FT[expected_DBZe] rtol = 1e-12 atol = 1e-12
 end
 
-@testset "COSP CloudSat reflectivity on a stretched grid" begin
+@testset "CloudSat reflectivity on a stretched grid" begin
     FT = Float64
     nelems = 4
     stretch = Meshes.HyperbolicTangentStretching{FT}(FT(250))

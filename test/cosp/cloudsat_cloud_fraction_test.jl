@@ -18,7 +18,7 @@ function make_center_profile_field(FT, profile)
     return field
 end
 
-@testset "COSP CloudSat total cloud cover" begin
+@testset "COSPv2 CloudSat total cloud cover semantics" begin
     for FT in (Float32, Float64)
         DBZe = (
             make_center_profile_field(FT, [-31, -40, -1e30]),

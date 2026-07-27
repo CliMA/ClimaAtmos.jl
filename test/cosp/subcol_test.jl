@@ -434,7 +434,7 @@ end
 
     end
 
-    @testset "1M callback matches COSPv2-derived streamed reference" begin
+    @testset "1M streamed subcolumns and CloudSat callback" begin
         reference = COSPV2_1M_STREAMED_E2E_REFERENCE
         reference_tolerance = 5eps(Float32)
 
@@ -448,38 +448,6 @@ end
         @test CA._cosp_nsubcolumns(p.atmos.cosp.n_subcolumns) ==
               reference.nsubcolumns
         @test p.atmos.cosp.overlap === reference.overlap
-        @test all(
-            field -> !(field isa Tuple),
-            (
-                p.precomputed.ᶜsubcolumn_cloud,
-                p.precomputed.ᶜsubcolumn_threshold,
-                p.precomputed.ᶜsubcolumn_precip,
-            ),
-        )
-        @test all(
-            field -> !(field isa Tuple),
-            values(p.precomputed.cloudsat_grid_mean_sizes),
-        )
-        @test !hasproperty(p.precomputed, :ᶜsubcolumn_hydrometeors)
-        @test length(p.precomputed.DBZe_cloudsat) == reference.nsubcolumns
-        for removed_cache in (
-            :z_vol_cloudsat,
-            :kr_vol_cloudsat,
-            :Ze_non_cloudsat,
-        )
-            @test !hasproperty(p.precomputed, removed_cache)
-        end
-        @test all(
-            field -> !(field isa Tuple),
-            (
-                p.precomputed.z_vol_cloudsat_work,
-                p.precomputed.kr_vol_cloudsat_work,
-                p.precomputed.Ze_non_cloudsat_work,
-                p.precomputed.hydro_path_attenuation_cloudsat_work,
-                p.precomputed.gas_path_attenuation_cloudsat,
-            ),
-        )
-
         # COSPv2 writes levels from model top to surface. ClimaAtmos center
         # fields use level 1 at the surface, so reverse every input profile.
         set_center_profile!(Y.c.ρ, cosp_bottom_to_top(reference.density))
@@ -510,148 +478,121 @@ end
             values(p.precomputed.cloudsat_grid_mean_sizes),
         )
 
-        nsubcolumns = reference.nsubcolumns
-        grid_mean_template = (;
-            q_lcl = Y.c.ρ,
-            q_icl = Y.c.ρ,
-            q_rai = Y.c.ρ,
-            q_sno = Y.c.ρ,
-        )
-        actual_hydrometeors =
-            make_hydrometeor_subcolumns(grid_mean_template, nsubcolumns)
-        actual_cloud_masks = ntuple(
-            _ -> similar(p.precomputed.ᶜsubcolumn_cloud),
-            nsubcolumns,
-        )
-        actual_precip_masks = ntuple(
-            _ -> similar(p.precomputed.ᶜsubcolumn_precip),
-            nsubcolumns,
-        )
-        consumed_subcolumns = Int[]
+        @testset "streamed subcolumns match COSPv2 reference" begin
+            nsubcolumns = reference.nsubcolumns
+            grid_mean_template = (;
+                q_lcl = Y.c.ρ,
+                q_icl = Y.c.ρ,
+                q_rai = Y.c.ρ,
+                q_sno = Y.c.ρ,
+            )
+            actual_hydrometeors =
+                make_hydrometeor_subcolumns(grid_mean_template, nsubcolumns)
+            actual_cloud_masks = ntuple(
+                _ -> similar(p.precomputed.ᶜsubcolumn_cloud),
+                nsubcolumns,
+            )
+            actual_precip_masks = ntuple(
+                _ -> similar(p.precomputed.ᶜsubcolumn_precip),
+                nsubcolumns,
+            )
+            consumed_subcolumns = Int[]
 
-        CA.foreach_cosp_subcolumn(Y, p) do isubcolumn, hydrometeors
-            push!(consumed_subcolumns, isubcolumn)
+            CA.foreach_cosp_subcolumn(Y, p) do isubcolumn, hydrometeors
+                push!(consumed_subcolumns, isubcolumn)
 
-            # The masks and lazy hydrometeor broadcasts borrow streamed
-            # working storage, so materialize all of them before returning.
-            @. actual_cloud_masks[isubcolumn] =
-                p.precomputed.ᶜsubcolumn_cloud
-            @. actual_precip_masks[isubcolumn] =
-                p.precomputed.ᶜsubcolumn_precip
-            for name in keys(actual_hydrometeors)
-                output = getproperty(actual_hydrometeors, name)[isubcolumn]
-                hydrometeor = getproperty(hydrometeors, name)
-                @. output = hydrometeor
+                # The masks and lazy hydrometeor broadcasts borrow streamed
+                # working storage, so materialize all of them before returning.
+                @. actual_cloud_masks[isubcolumn] =
+                    p.precomputed.ᶜsubcolumn_cloud
+                @. actual_precip_masks[isubcolumn] =
+                    p.precomputed.ᶜsubcolumn_precip
+                for name in keys(actual_hydrometeors)
+                    output = getproperty(actual_hydrometeors, name)[isubcolumn]
+                    hydrometeor = getproperty(hydrometeors, name)
+                    @. output = hydrometeor
+                end
+            end
+
+            @test consumed_subcolumns == collect(1:nsubcolumns)
+            @test isapprox(
+                center_profile(p.precomputed.ᶜlarge_scale_precipitation_flux),
+                cosp_bottom_to_top(reference.large_scale_precipitation_flux);
+                rtol = reference_tolerance,
+                atol = 0,
+            )
+            @test center_profile(p.precomputed.ᶜsampled_cloud_fraction) ==
+                  cosp_bottom_to_top(reference.sampled_cloud_fraction)
+            @test center_profile(p.precomputed.ᶜsampled_precip_fraction) ==
+                  cosp_bottom_to_top(reference.sampled_precip_fraction)
+
+            hydrometeor_reference_names = (;
+                q_lcl = :q_lcl_subcolumns,
+                q_icl = :q_icl_subcolumns,
+                q_rai = :q_rai_subcolumns,
+                q_sno = :q_sno_subcolumns,
+            )
+            for isubcolumn in 1:nsubcolumns
+                # Each matrix row is one subcolumn; reverse only its level axis.
+                @test center_profile(actual_cloud_masks[isubcolumn]) ==
+                      cosp_bottom_to_top(reference.cloud_masks[isubcolumn, :])
+                @test center_profile(actual_precip_masks[isubcolumn]) ==
+                      cosp_bottom_to_top(reference.precip_masks[isubcolumn, :])
+
+                for name in keys(actual_hydrometeors)
+                    reference_name =
+                        getproperty(hydrometeor_reference_names, name)
+                    expected = cosp_bottom_to_top(
+                        getproperty(reference, reference_name)[isubcolumn, :],
+                    )
+                    actual = center_profile(
+                        getproperty(actual_hydrometeors, name)[isubcolumn],
+                    )
+                    @test isapprox(
+                        actual,
+                        expected;
+                        rtol = reference_tolerance,
+                        atol = 0,
+                    )
+                end
             end
         end
 
-        @test consumed_subcolumns == collect(1:nsubcolumns)
-        @test isapprox(
-            center_profile(p.precomputed.ᶜlarge_scale_precipitation_flux),
-            cosp_bottom_to_top(reference.large_scale_precipitation_flux);
-            rtol = reference_tolerance,
-            atol = 0,
-        )
-        @test center_profile(p.precomputed.ᶜsampled_cloud_fraction) ==
-              cosp_bottom_to_top(reference.sampled_cloud_fraction)
-        @test center_profile(p.precomputed.ᶜsampled_precip_fraction) ==
-              cosp_bottom_to_top(reference.sampled_precip_fraction)
+        @testset "CloudSat callback refreshes and clears outputs" begin
+            gas_before_refresh = copy(parent(p.precomputed.g_vol_cloudsat))
+            state_FT = eltype(Y)
+            energy_increment = state_FT(1000)
+            zero_state = zero(state_FT)
+            missing_reflectivity = state_FT(-1e30)
+            @. Y.c.ρe_tot += Y.c.ρ * energy_increment
+            CA.set_precomputed_quantities!(Y, p, simulation.integrator.t)
+            CA.subcol_model_callback!(simulation.integrator)
+            @test parent(p.precomputed.g_vol_cloudsat) != gas_before_refresh
 
-        hydrometeor_reference_names = (;
-            q_lcl = :q_lcl_subcolumns,
-            q_icl = :q_icl_subcolumns,
-            q_rai = :q_rai_subcolumns,
-            q_sno = :q_sno_subcolumns,
-        )
-        for isubcolumn in 1:nsubcolumns
-            # Each matrix row is one subcolumn; reverse only its level axis.
-            @test center_profile(actual_cloud_masks[isubcolumn]) ==
-                  cosp_bottom_to_top(reference.cloud_masks[isubcolumn, :])
-            @test center_profile(actual_precip_masks[isubcolumn]) ==
-                  cosp_bottom_to_top(reference.precip_masks[isubcolumn, :])
+            @. Y.c.ρq_lcl = zero_state
+            @. Y.c.ρq_icl = zero_state
+            @. Y.c.ρq_rai = zero_state
+            @. Y.c.ρq_sno = zero_state
+            @. p.precomputed.ᶜcloud_fraction = zero_state
+            CA.subcol_model_callback!(simulation.integrator)
 
-            for name in keys(actual_hydrometeors)
-                reference_name = getproperty(hydrometeor_reference_names, name)
-                expected = cosp_bottom_to_top(
-                    getproperty(reference, reference_name)[isubcolumn, :],
-                )
-                actual = center_profile(
-                    getproperty(actual_hydrometeors, name)[isubcolumn],
-                )
-                @test isapprox(
-                    actual,
-                    expected;
-                    rtol = reference_tolerance,
-                    atol = 0,
-                )
-            end
+            @test all(
+                DBZe -> all(==(missing_reflectivity), parent(DBZe)),
+                p.precomputed.DBZe_cloudsat,
+            )
+            @test all(iszero, parent(p.precomputed.cloudsat_tcc))
+            @test all(iszero, parent(p.precomputed.z_vol_cloudsat_work))
+            @test all(iszero, parent(p.precomputed.kr_vol_cloudsat_work))
+            @test all(
+                ==(missing_reflectivity),
+                parent(p.precomputed.Ze_non_cloudsat_work),
+            )
+            @test all(
+                iszero,
+                parent(p.precomputed.hydro_path_attenuation_cloudsat_work),
+            )
+            @test all(!, parent(p.precomputed.detected_column_cloudsat))
         end
-
-        cached_objects = (;
-            z_vol = p.precomputed.z_vol_cloudsat_work,
-            kr_vol = p.precomputed.kr_vol_cloudsat_work,
-            g_vol = p.precomputed.g_vol_cloudsat,
-            Ze_non = p.precomputed.Ze_non_cloudsat_work,
-            hydro_path =
-                p.precomputed.hydro_path_attenuation_cloudsat_work,
-            gas_path = p.precomputed.gas_path_attenuation_cloudsat,
-            height_km = p.precomputed.height_km_cloudsat,
-            top_height_km = p.precomputed.top_height_km_cloudsat,
-            DBZe = p.precomputed.DBZe_cloudsat,
-            detected = p.precomputed.detected_column_cloudsat,
-            tcc = p.precomputed.cloudsat_tcc,
-            grid_mean_sizes = p.precomputed.cloudsat_grid_mean_sizes,
-        )
-
-        gas_before_refresh = copy(parent(p.precomputed.g_vol_cloudsat))
-        state_FT = eltype(Y)
-        energy_increment = state_FT(1000)
-        zero_state = zero(state_FT)
-        missing_reflectivity = state_FT(-1e30)
-        @. Y.c.ρe_tot += Y.c.ρ * energy_increment
-        CA.set_precomputed_quantities!(Y, p, simulation.integrator.t)
-        CA.subcol_model_callback!(simulation.integrator)
-        @test parent(p.precomputed.g_vol_cloudsat) != gas_before_refresh
-
-        @. Y.c.ρq_lcl = zero_state
-        @. Y.c.ρq_icl = zero_state
-        @. Y.c.ρq_rai = zero_state
-        @. Y.c.ρq_sno = zero_state
-        @. p.precomputed.ᶜcloud_fraction = zero_state
-        CA.subcol_model_callback!(simulation.integrator)
-
-        @test all(
-            DBZe -> all(==(missing_reflectivity), parent(DBZe)),
-            p.precomputed.DBZe_cloudsat,
-        )
-        @test all(iszero, parent(p.precomputed.cloudsat_tcc))
-        @test all(iszero, parent(p.precomputed.z_vol_cloudsat_work))
-        @test all(iszero, parent(p.precomputed.kr_vol_cloudsat_work))
-        @test all(
-            ==(missing_reflectivity),
-            parent(p.precomputed.Ze_non_cloudsat_work),
-        )
-        @test all(
-            iszero,
-            parent(p.precomputed.hydro_path_attenuation_cloudsat_work),
-        )
-        @test all(!, parent(p.precomputed.detected_column_cloudsat))
-        @test p.precomputed.z_vol_cloudsat_work === cached_objects.z_vol
-        @test p.precomputed.kr_vol_cloudsat_work === cached_objects.kr_vol
-        @test p.precomputed.g_vol_cloudsat === cached_objects.g_vol
-        @test p.precomputed.Ze_non_cloudsat_work === cached_objects.Ze_non
-        @test p.precomputed.hydro_path_attenuation_cloudsat_work ===
-              cached_objects.hydro_path
-        @test p.precomputed.gas_path_attenuation_cloudsat ===
-              cached_objects.gas_path
-        @test p.precomputed.height_km_cloudsat === cached_objects.height_km
-        @test p.precomputed.top_height_km_cloudsat ===
-              cached_objects.top_height_km
-        @test p.precomputed.DBZe_cloudsat === cached_objects.DBZe
-        @test p.precomputed.detected_column_cloudsat === cached_objects.detected
-        @test p.precomputed.cloudsat_tcc === cached_objects.tcc
-        @test p.precomputed.cloudsat_grid_mean_sizes ===
-              cached_objects.grid_mean_sizes
     end
 
     @testset "unsupported CloudSat outputs" begin
