@@ -596,6 +596,7 @@ end
                 p.precomputed.hydro_path_attenuation_cloudsat_work,
             gas_path = p.precomputed.gas_path_attenuation_cloudsat,
             height_km = p.precomputed.height_km_cloudsat,
+            top_height_km = p.precomputed.top_height_km_cloudsat,
             DBZe = p.precomputed.DBZe_cloudsat,
             detected = p.precomputed.detected_column_cloudsat,
             tcc = p.precomputed.cloudsat_tcc,
@@ -644,6 +645,8 @@ end
         @test p.precomputed.gas_path_attenuation_cloudsat ===
               cached_objects.gas_path
         @test p.precomputed.height_km_cloudsat === cached_objects.height_km
+        @test p.precomputed.top_height_km_cloudsat ===
+              cached_objects.top_height_km
         @test p.precomputed.DBZe_cloudsat === cached_objects.DBZe
         @test p.precomputed.detected_column_cloudsat === cached_objects.detected
         @test p.precomputed.cloudsat_tcc === cached_objects.tcc

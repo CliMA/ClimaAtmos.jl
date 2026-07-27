@@ -135,7 +135,7 @@ end
 struct NoOpCOSPSubcolumnConsumer end
 (::NoOpCOSPSubcolumnConsumer)(_, _) = nothing
 
-struct CloudSatSubcolumnConsumer{Z, K, ZE, D, H, G, HT, T, R, S, MP, C}
+struct CloudSatSubcolumnConsumer{Z, K, ZE, D, H, G, HT, HTT, T, R, S, MP, C}
     z_vol_work::Z
     kr_vol_work::K
     Ze_non_work::ZE
@@ -143,6 +143,7 @@ struct CloudSatSubcolumnConsumer{Z, K, ZE, D, H, G, HT, T, R, S, MP, C}
     hydro_path_attenuation_work::H
     gas_path_attenuation::G
     height_km::HT
+    top_height_km::HTT
     temperature::T
     rho_air::R
     grid_mean_sizes::S
@@ -177,6 +178,7 @@ function consume_cosp_subcolumn!(
         consumer.hydro_path_attenuation_work,
         consumer.gas_path_attenuation,
         consumer.height_km,
+        consumer.top_height_km,
     )
     return nothing
 end
@@ -190,6 +192,7 @@ function run_cosp_cloudsat!(Y, p, ::NonEquilibriumMicrophysics1M)
         hydro_path_attenuation_cloudsat_work,
         gas_path_attenuation_cloudsat,
         height_km_cloudsat,
+        top_height_km_cloudsat,
         DBZe_cloudsat,
         detected_column_cloudsat,
         cloudsat_tcc,
@@ -215,6 +218,7 @@ function run_cosp_cloudsat!(Y, p, ::NonEquilibriumMicrophysics1M)
         gas_path_attenuation_cloudsat,
         g_vol_cloudsat,
         height_km_cloudsat,
+        top_height_km_cloudsat,
     )
 
     consumer = CloudSatSubcolumnConsumer(
@@ -225,6 +229,7 @@ function run_cosp_cloudsat!(Y, p, ::NonEquilibriumMicrophysics1M)
         hydro_path_attenuation_cloudsat_work,
         gas_path_attenuation_cloudsat,
         height_km_cloudsat,
+        top_height_km_cloudsat,
         ᶜT,
         Y.c.ρ,
         cloudsat_grid_mean_sizes,

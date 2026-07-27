@@ -2,13 +2,19 @@ using Test
 import ClimaAtmos.COSP.COSPCloudSatReflectivity as CCR
 using ClimaCore: Domains, Meshes, Spaces, Fields, Geometry
 
-function make_center_field(FT; value, nelems = 3, z_top = 3000)
+function make_center_field(
+    FT;
+    value,
+    nelems = 3,
+    z_top = 3000,
+    stretch = Meshes.Uniform(),
+)
     z_domain = Domains.IntervalDomain(
         Geometry.ZPoint{FT}(0),
         Geometry.ZPoint{FT}(z_top);
         boundary_names = (:bottom, :top),
     )
-    z_mesh = Meshes.IntervalMesh(z_domain, nelems = nelems)
+    z_mesh = Meshes.IntervalMesh(z_domain, stretch; nelems)
     face_space = Spaces.FaceFiniteDifferenceSpace(z_mesh)
     center_space = Spaces.CenterFiniteDifferenceSpace(face_space)
 
@@ -17,8 +23,19 @@ function make_center_field(FT; value, nelems = 3, z_top = 3000)
     return field
 end
 
-function make_center_profile_field(FT, profile; z_top = 3000)
-    field = make_center_field(FT; value = 0, nelems = length(profile), z_top)
+function make_center_profile_field(
+    FT,
+    profile;
+    z_top = 3000,
+    stretch = Meshes.Uniform(),
+)
+    field = make_center_field(
+        FT;
+        value = 0,
+        nelems = length(profile),
+        z_top,
+        stretch,
+    )
     for (ilev, value) in enumerate(profile)
         Fields.level(field, ilev) .= FT(value)
     end
@@ -30,6 +47,14 @@ function level_values(field)
         Fields.level(field, ilev)[] for
         ilev in 1:Spaces.nlevels(axes(field))
     ]
+end
+
+function model_top_height_km(field)
+    nlevels = Spaces.nlevels(axes(field))
+    face_height =
+        Fields.coordinate_field(Spaces.face_space(axes(field))).z
+    return Fields.level(face_height, nlevels + Fields.half) ./
+           eltype(field)(1000)
 end
 
 @testset "COSP CloudSat reflectivity" begin
@@ -44,9 +69,15 @@ end
     hydro_path = make_center_field(FT; value = 999, nelems)
     gas_path = make_center_field(FT; value = 999, nelems)
     height_km = Fields.coordinate_field(axes(g_vol)).z ./ FT(1000)
+    top_height_km = model_top_height_km(g_vol)
 
     @test isnothing(
-        CCR.cloudsat_gas_path_attenuation!(gas_path, g_vol, height_km),
+        CCR.cloudsat_gas_path_attenuation!(
+            gas_path,
+            g_vol,
+            height_km,
+            top_height_km,
+        ),
     )
     result = CCR.cloudsat_reflectivity_subcolumn!(
         Ze_non,
@@ -56,6 +87,7 @@ end
         hydro_path,
         gas_path,
         height_km,
+        top_height_km,
     )
 
     @test level_values(Fields.coordinate_field(axes(z_vol)).z) ==
@@ -64,7 +96,7 @@ end
     @test isapprox(parent(Ze_non), FT[20, 10, 0]; atol = 1e-12)
     @test isapprox(
         parent(DBZe),
-        FT[18.845, 9.16, -0.315];
+        FT[18.79, 9.12, -0.33];
         rtol = 1e-12,
         atol = 1e-12,
     )
@@ -78,6 +110,7 @@ end
         hydro_path,
         gas_path,
         height_km,
+        top_height_km,
     )
 
     @test parent(Ze_non)[1:2] == FT[-1e30, -1e30]
@@ -95,12 +128,75 @@ end
         hydro_path,
         gas_path,
         height_km,
+        top_height_km,
     )
 
     @test isapprox(parent(Ze_non), FT[30, 20, 10]; atol = 1e-12)
     @test isapprox(
         parent(DBZe),
-        FT[29.395, 19.56, 9.835];
+        FT[29.34, 19.52, 9.82];
+        rtol = 1e-12,
+        atol = 1e-12,
+    )
+end
+
+@testset "COSP CloudSat reflectivity on a stretched grid" begin
+    FT = Float64
+    nelems = 4
+    stretch = Meshes.HyperbolicTangentStretching{FT}(FT(250))
+    z_vol = make_center_profile_field(
+        FT,
+        ones(FT, nelems);
+        z_top = 4000,
+        stretch,
+    )
+    kr_vol = make_center_profile_field(
+        FT,
+        fill(FT(0.1), nelems);
+        z_top = 4000,
+        stretch,
+    )
+    g_vol = make_center_profile_field(
+        FT,
+        fill(FT(0.01), nelems);
+        z_top = 4000,
+        stretch,
+    )
+    Ze_non = similar(z_vol)
+    DBZe = similar(z_vol)
+    hydro_path = similar(z_vol)
+    gas_path = similar(z_vol)
+    height_km = Fields.coordinate_field(axes(z_vol)).z ./ FT(1000)
+    top_height_km = model_top_height_km(z_vol)
+
+    CCR.cloudsat_gas_path_attenuation!(
+        gas_path,
+        g_vol,
+        height_km,
+        top_height_km,
+    )
+    CCR.cloudsat_reflectivity_subcolumn!(
+        Ze_non,
+        DBZe,
+        z_vol,
+        kr_vol,
+        hydro_path,
+        gas_path,
+        height_km,
+        top_height_km,
+    )
+
+    center_heights_km = level_values(height_km)
+    @test !isapprox(
+        center_heights_km[2] - center_heights_km[1],
+        center_heights_km[end] - center_heights_km[end - 1],
+    )
+    expected_DBZe =
+        -FT(2) * (FT(0.1) + FT(0.01)) *
+        (top_height_km[] .- center_heights_km)
+    @test isapprox(
+        parent(DBZe),
+        expected_DBZe;
         rtol = 1e-12,
         atol = 1e-12,
     )

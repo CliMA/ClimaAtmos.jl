@@ -4,7 +4,6 @@ import CloudMicrophysics.Microphysics1M as CM1
 import CloudMicrophysics.Parameters as CMP
 
 export CloudSatRadarConfig,
-    DEFAULT_CLOUDSAT_RADAR_CONFIG,
     cloudsat_gas_attenuation!,
     cloudsat_grid_mean_sizes!,
     cloudsat_optics_subcolumn!
@@ -36,10 +35,7 @@ function CloudSatRadarConfig{FT}(;
     k2 = -1,
     use_gas_abs = true,
     min_mixing_ratio = 1e-15,
-    hydrometeor_optics = :clima_1m_psd,
 ) where {FT}
-    hydrometeor_optics === :clima_1m_psd ||
-        throw(ArgumentError("only :clima_1m_psd hydrometeor optics is implemented"))
     return CloudSatRadarConfig{FT}(
         FT(freq),
         FT(k2),
@@ -47,8 +43,6 @@ function CloudSatRadarConfig{FT}(;
         FT(min_mixing_ratio),
     )
 end
-
-const DEFAULT_CLOUDSAT_RADAR_CONFIG = CloudSatRadarConfig(Float64)
 
 struct Clima1MPSDParameters{P}
     phase::Symbol
@@ -238,7 +232,6 @@ function _radar_config(cfg::CloudSatRadarConfig, reference)
         k2 = cfg.k2,
         use_gas_abs = cfg.use_gas_abs,
         min_mixing_ratio = cfg.min_mixing_ratio,
-        hydrometeor_optics = :clima_1m_psd,
     )
 end
 
@@ -277,10 +270,9 @@ end
         delt = a5 * p * th^a6
         x = aux3 * aux3 + gm2
         y = aux4 * aux4 + gm2
-        # COSPv2 quickbeam_optics.F90 uses `aux4 / x` here, not `aux4 / y`.
         fpp_o2 =
             ((one(FT) / x + one(FT) / y) * (gm * aux2)) -
-            (delt * aux2) * (aux3 / x - aux4 / x)
+            (delt * aux2) * (aux3 / x - aux4 / y)
         s_o2 = a1 * pth3 * exp(a2 * one_th)
         sumo += fpp_o2 * s_o2
     end
@@ -321,11 +313,6 @@ end
     return FT(0.182) * freq * (term1 + term2 + term3 + term4)
 end
 
-# This prototype uses ClimaMicrophysics 1M PSD and mass-size assumptions to
-# construct hydrometeor particle distributions, then uses QuickBeam-style
-# scattering to compute CloudSat optical properties for the four active Clima 1M
-# large-scale hydrometeor classes. This code intentionally avoids the original
-# COSPv2 hydro_class_init/calc_Re/dsd and LUT/cache paths.
 # Pure-ice material density used only to convert particle mass to the diameter
 # of a volume-equivalent compact ice sphere for Mie scattering.
 @inline _rho_solid_ice(::Type{FT}) where {FT} = FT(917)

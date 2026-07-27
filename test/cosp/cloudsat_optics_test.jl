@@ -273,7 +273,7 @@ end
     end
 end
 
-@testset "COSP CloudSat gas absorption matches COSPv2" begin
+@testset "COSP CloudSat gas absorption" begin
     FT = Float64
     thermo_state = (;
         p = make_center_profile_field(FT, [100000, 50000, 20000]),
@@ -291,11 +291,11 @@ end
         radar_cfg,
     )
 
-    # Reference values generated from COSPv2 quickbeam_optics.F90 `gases`.
+    # Reference values use the Liebe (1985) oxygen line shape (Eq. 9a).
     ref_g_vol = FT[
-        1.381359726862E-4,
-        2.007164393762E-5,
-        5.921524172503E-6,
+        1.123416396483E-4,
+        8.102267024589E-6,
+        1.830215814672E-6,
     ]
     @test all(isfinite, parent(g_vol))
     @test all(>=(0), parent(g_vol))

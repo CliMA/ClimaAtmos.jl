@@ -240,6 +240,11 @@ function precomputed_quantities(Y, atmos)
         hydro_path_attenuation_cloudsat_work = similar(Y.c, FT)
         gas_path_attenuation_cloudsat = similar(Y.c, FT)
         height_km_cloudsat = Fields.coordinate_field(axes(Y.c)).z ./ FT(1000)
+        top_height_km_cloudsat =
+            Fields.level(
+                Fields.coordinate_field(Spaces.face_space(axes(Y.c))).z,
+                Spaces.nlevels(axes(Y.c)) + Fields.half,
+            ) ./ FT(1000)
         DBZe_cloudsat = ntuple(_ -> similar(Y.c, FT), nsubcolumns)
         detected_column_cloudsat = similar(Fields.level(Y.c.ρ, 1), Bool)
         cloudsat_tcc = similar(Fields.level(Y.c.ρ, 1), FT)
@@ -274,6 +279,7 @@ function precomputed_quantities(Y, atmos)
             hydro_path_attenuation_cloudsat_work,
             gas_path_attenuation_cloudsat,
             height_km_cloudsat,
+            top_height_km_cloudsat,
             DBZe_cloudsat,
             detected_column_cloudsat,
             cloudsat_tcc,
