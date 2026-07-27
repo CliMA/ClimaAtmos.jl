@@ -971,6 +971,77 @@ bin_names(::Type{PrescribedBlackCarbon}) = (:CB1, :CB2)
 bin_names(::Type{PrescribedOrganicCarbon}) = (:OC1, :OC2)
 
 """
+    AbstractAerosolMoment
+
+Spectral moment of an aerosol size distribution carried by a prognostic
+tracer. Size-dependent processes (settling, dry deposition) are weighted by
+the moment their tracer transports, so each moment gets its own velocity —
+the aerosol analogue of CloudMicrophysics' number-/mass-weighted terminal
+velocity pairs (`CM2.rain_terminal_velocity`,
+`CMP3.ice_terminal_velocity_{number,mass}_weighted`), with the moment as the
+dispatch tag.
+"""
+abstract type AbstractAerosolMoment end
+
+"""
+Zeroth moment (particle number); weights velocities by ⟨·⟩/⟨1⟩.
+"""
+struct AerosolNumberMoment <: AbstractAerosolMoment end
+
+"""
+Third moment (particle mass/volume); weights velocities by ⟨·r³⟩/⟨r³⟩.
+"""
+struct AerosolMassMoment <: AbstractAerosolMoment end
+
+"""
+    moment_order(moment)
+
+The power `k` of radius in the spectral moment `Mₖ = ⟨rᵏ⟩` a tracer
+transports.
+"""
+moment_order(::AerosolNumberMoment) = 0
+moment_order(::AerosolMassMoment) = 3
+
+"""
+    moment_key(moment)
+
+Cache key for a moment's precomputed spectrum tables (see
+[`sea_salt_moment_cache`](@ref)).
+"""
+moment_key(::AerosolNumberMoment) = :number
+moment_key(::AerosolMassMoment) = :mass
+
+"""
+    prognostic_moments(aerosol_model)
+
+The spectral moments the model's prognostic bin tracers transport — the
+moment physics of the scheme, in the sense of the microphysics model's moment
+count. `PrognosticSeaSalt` is a one-moment (mass) scheme; a future two-moment
+scheme adds `AerosolNumberMoment()` here and every moment-dispatched process
+picks it up.
+"""
+prognostic_moments(::PrognosticSeaSalt) = (AerosolMassMoment(),)
+
+"""
+    moment_bin_tracer_names(moment, aerosol_model)
+
+Compile-time `MatrixFields.FieldName` tuple (relative to `Y.c`) of the
+prognostic tracers carrying `moment` of each size bin, in [`bin_names`](@ref)
+order. Hardcoded like the sedimenting-tracer candidate lists in
+`utils/tracer_processes.jl`, so the per-bin tendency loops unroll with
+type-stable field access (`MatrixFields.get_field`) instead of runtime
+`Symbol` lookups; consistency with `bin_names` is checked when the moment
+cache is built (see [`sea_salt_moment_cache`](@ref)).
+"""
+moment_bin_tracer_names(::AerosolMassMoment, ::PrognosticSeaSalt) = (
+    @name(ρSSLT01),
+    @name(ρSSLT02),
+    @name(ρSSLT03),
+    @name(ρSSLT04),
+    @name(ρSSLT05),
+)
+
+"""
     AtmosAerosols
 
 Groups per-species aerosol models. Each field is `nothing` (species off), an

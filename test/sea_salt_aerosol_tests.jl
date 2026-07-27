@@ -60,20 +60,47 @@ const NBINS = length(AP.ssa_bin_edges) - 1
 @testset "Gong spectrum moments" begin
     flux_scales = CA.sea_salt_bin_flux_scales(PARAMS, FT)
     masses = CA.sea_salt_particle_masses(PARAMS, FT)
-    radii = CA.sea_salt_bin_settling_radii(PARAMS, FT)
+    mass_tables =
+        CA.sea_salt_bin_moment_tables(CA.AerosolMassMoment(), PARAMS, FT)
+    number_tables =
+        CA.sea_salt_bin_moment_tables(CA.AerosolNumberMoment(), PARAMS, FT)
     fits = CA.sea_salt_bin_lognormal_fits(PARAMS, FT)
     @test length(flux_scales) == NBINS
+    @test CA.moment_order(CA.AerosolMassMoment()) == 3
+    @test CA.moment_order(CA.AerosolNumberMoment()) == 0
+
+    # the compile-time tracer-name lists stay consistent with `bin_names`
+    seasalt = CA.PrognosticSeaSalt()
+    for moment in CA.prognostic_moments(seasalt)
+        names = CA.moment_bin_tracer_names(moment, seasalt)
+        @test length(names) == length(CA.bin_names(seasalt))
+    end
+    mass_names = CA.moment_bin_tracer_names(CA.AerosolMassMoment(), seasalt)
+    @test map(CA.MatrixFields.extract_first, mass_names) ==
+          map(n -> Symbol(:ρ, n), CA.bin_names(seasalt))
 
     # total number flux at u10 = 9 m/s in the whitecap-derived range
     total = sum(flux_scales) * FT(9)^AP.gong_wind_exp
     @test 1e4 < total < 1e7
 
-    # per-particle mass and settling radius grow monotonically with bin size
-    @test issorted(masses) && issorted(radii)
+    # per-particle mass and moment radii grow monotonically with bin size
+    @test issorted(masses) && issorted(mass_tables.r_stokes)
     for i in 1:NBINS
         lo, hi = AP.ssa_bin_edges[i], AP.ssa_bin_edges[i + 1]
-        # moment radii of the sub-bin spectrum lie inside the dry bin bounds
-        @test lo < radii[i] < hi
+        for tables in (mass_tables, number_tables)
+            # moment radii of the sub-bin spectrum lie inside the dry bin
+            # bounds, with r_slip ≤ r_stokes (Cauchy–Schwarz on the moments)
+            @test lo < tables.r_stokes[i] < hi
+            @test lo < tables.r_slip[i] <= tables.r_stokes[i]
+            # the deposition quadrature is a convex moment average over the bin
+            @test sum(tables.dep_weights[i]) ≈ 1
+            @test all(>(0), tables.dep_weights[i])
+            @test issorted(tables.dep_nodes[i])
+            @test lo < first(tables.dep_nodes[i])
+            @test last(tables.dep_nodes[i]) < hi
+        end
+        # number weighting sits below mass weighting (spectrum falls with r)
+        @test number_tables.r_stokes[i] < mass_tables.r_stokes[i]
         r_g, σ_g = fits[i]
         @test lo < r_g < hi
         @test 1 < σ_g < 3
@@ -152,6 +179,65 @@ end
     # Brownian-regime (fine) particle: higher u★ ⇒ faster turbulent deposition
     @test Vd(FT(1e-5), FT(1e-7); u★ = FT(0.6)) >
           Vd(FT(1e-5), FT(1e-7); u★ = FT(0.2))
+end
+
+@testset "Moment-weighted velocities vs direct spectrum quadrature" begin
+    ρ_air, T, GF = FT(1.2), FT(288), FT(1.76)
+    ρ_wet = CA.sea_salt_wet_density(ρ_s, AP.ρ_water, GF)
+    r̂_edges = AP.r80_per_dry .* AP.ssa_bin_edges ./ AP.ssa_r_ref
+    r_dry_per_r̂ = AP.ssa_r_ref / AP.r80_per_dry
+    uf_params = UF.GryanikParams(CP.create_toml_dict(FT))
+    κ_vk = FT(0.4)
+    z_R, L, z₀, u★ = FT(30), FT(-50), FT(1e-4), FT(0.3)
+    # bin-independent, hoisted out of the kernels exactly as the tendency does
+    R_a = CA.sea_salt_aerodynamic_resistance(z_R, L, z₀, u★, uf_params, κ_vk)
+
+    for moment in (CA.AerosolMassMoment(), CA.AerosolNumberMoment())
+        k = CA.moment_order(moment)
+        tables = CA.sea_salt_bin_moment_tables(moment, PARAMS, FT)
+        for i in 1:NBINS
+            lo, hi = r̂_edges[i], r̂_edges[i + 1]
+            Mk = CA._gong_bin_moment(r̂ -> r̂^k, lo, hi, AP)
+            r_wet(r̂) = GF * r̂ * r_dry_per_r̂
+            v_g(r̂) = CA.sea_salt_settling_velocity(
+                r_wet(r̂), ρ_wet, ρ_air, T, R_D, G, AP,
+            )
+
+            # settling: the closed moment form matches ⟨v(r)·rᵏ⟩/⟨rᵏ⟩
+            v_ref = CA._gong_bin_moment(r̂ -> r̂^k * v_g(r̂), lo, hi, AP) / Mk
+            v_mom = CA.sea_salt_settling_velocity(
+                GF * tables.r_stokes[i], GF * tables.r_slip[i],
+                ρ_wet, ρ_air, T, R_D, G, AP,
+            )
+            @test v_mom ≈ v_ref rtol = 5e-3
+
+            # deposition: the node quadrature matches ⟨V_d(r)·rᵏ⟩/⟨rᵏ⟩
+            Vd_ref =
+                CA._gong_bin_moment(
+                    r̂ ->
+                        r̂^k * CA.sea_salt_dry_deposition_velocity(
+                            v_g(r̂), r_wet(r̂), ρ_air, T,
+                            z_R, L, z₀, u★, uf_params, κ_vk, R_D, AP,
+                        ), lo, hi, AP,
+                ) / Mk
+            Vd_mom = CA.sea_salt_moment_dry_deposition_velocity(
+                tables.dep_nodes[i], tables.dep_weights[i], GF, ρ_s,
+                ρ_air, T, R_a, u★, R_D, G, AP,
+            )
+            @test Vd_mom ≈ Vd_ref rtol = 0.1
+            @test Vd_mom > 0
+        end
+    end
+
+    # calm surface (u★ = 0) => zero, like the pointwise form, even though the
+    # hoisted R_a is infinite there
+    tables = CA.sea_salt_bin_moment_tables(CA.AerosolMassMoment(), PARAMS, FT)
+    R_a_calm =
+        CA.sea_salt_aerodynamic_resistance(z_R, L, z₀, FT(0), uf_params, κ_vk)
+    @test CA.sea_salt_moment_dry_deposition_velocity(
+        tables.dep_nodes[1], tables.dep_weights[1], GF, ρ_s,
+        ρ_air, T, R_a_calm, FT(0), R_D, G, AP,
+    ) == 0
 end
 
 @testset "Bins → aerosol distribution bridge" begin

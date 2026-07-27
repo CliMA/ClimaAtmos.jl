@@ -195,43 +195,130 @@ function sea_salt_particle_masses(params, ::Type{FT}) where {FT}
     end
 end
 
-"""
-    sea_salt_bin_settling_radii(params, FT)
+# n-node equal-weight composite quadrature of the k-th-moment-weighted Gong
+# integrand over a dimensionless-r80 bin: (nodes, weights) with Σwᵢ = 1 such
+# that ⟨f(r̂)·r̂ᵏ⟩/⟨r̂ᵏ⟩ ≈ Σᵢ wᵢ·f(r̂ᵢ) for smooth f. Each node is the
+# k-moment centroid of one of n equal-M̂ₖ segments of a midpoint-rule grid —
+# the moment-space analogue of the trapezoid rule in `_gong_bin_moment`.
+function _gong_bin_moment_quadrature(k, r̂_lo, r̂_hi, ap; n_nodes = 8, N = 512)
+    dr̂ = (r̂_hi - r̂_lo) / N
+    r̂s = [r̂_lo + (j - 1 / 2) * dr̂ for j in 1:N]
+    wts = [_gong2003_r_integrand(r̂, ap) * r̂^k for r̂ in r̂s]
+    total = sum(wts)
+    cum = cumsum(wts) ./ total
+    nodes = zeros(eltype(r̂s), n_nodes)
+    weights = zeros(eltype(r̂s), n_nodes)
+    j_prev = 0
+    for m in 1:n_nodes
+        j_hi =
+            m == n_nodes ? N :
+            max(something(findfirst(≥(m / n_nodes), cum), N), j_prev + 1)
+        seg = (j_prev + 1):j_hi
+        w_seg = sum(j -> wts[j], seg)
+        nodes[m] = sum(j -> wts[j] * r̂s[j], seg) / w_seg
+        weights[m] = w_seg / total
+        j_prev = j_hi
+    end
+    return ntuple(m -> nodes[m], Val(n_nodes)),
+    ntuple(m -> weights[m], Val(n_nodes))
+end
 
-Mass-flux-weighted dry radius `√(⟨r_dry⁵⟩/⟨r_dry³⟩)` (m) per bin: the single
-dry radius whose Stokes speed (∝ r²) carries the bin's settling **mass** flux
-(v ∝ r², mass ∝ r³). Settling and dry deposition scale it by the growth
-factor `GF(RH)` to get their wet working radius.
 """
-function sea_salt_bin_settling_radii(params, ::Type{FT}) where {FT}
+    sea_salt_bin_moment_tables(moment, params, FT)
+
+Per-bin tables of the emitted Gong sub-bin spectrum (dry basis) needed to
+transport the given [`AbstractAerosolMoment`](@ref) of order
+`k = moment_order(moment)`:
+
+  - `r_stokes = √(⟨r_dry^(k+2)⟩/⟨r_dryᵏ⟩)` (m): the radius whose Stokes speed
+    (∝ r²) carries the bin's k-th-moment settling flux.
+  - `r_slip = ⟨r_dry^(k+1)⟩/⟨r_dryᵏ⟩` (m): the radius weighting the
+    slip-correction part of the settling flux, one power of r lower
+    (v_slip ∝ r). Together these make the moment-weighted settling velocity
+    ⟨v(r)·rᵏ⟩/⟨rᵏ⟩ closed-form (see [`sea_salt_settling_velocity`](@ref)).
+  - `dep_nodes`/`dep_weights` (m / 1): a moment quadrature of the sub-bin
+    spectrum, ⟨V(r)·rᵏ⟩/⟨rᵏ⟩ ≈ Σᵢ wᵢ·V(rᵢ), for velocities with no closed
+    moment form (the Zhang dry-deposition velocity, whose Brownian, impaction
+    and rebound terms are all strongly nonlinear in r — a single
+    characteristic radius misestimates the bin-5 deposition velocity by up to
+    ~90%).
+
+Consumers scale the dry radii by the growth factor `GF(RH)` to get their wet
+working radii. This is the aerosol counterpart of the number-/mass-weighted
+terminal-velocity pairs of the two-moment microphysics, with the moment as
+the dispatch tag.
+"""
+function sea_salt_bin_moment_tables(moment, params, ::Type{FT}) where {FT}
+    k = moment_order(moment)
     ap = params.prognostic_aerosol_params
     r̂_edges = _r̂80_edges(ap)
-    r_dry_per_r̂ = ap.ssa_r_ref / ap.r80_per_dry
-    return ntuple(Val(length(r̂_edges) - 1)) do i
-        M̂5 = _gong_bin_moment(r̂ -> r̂^5, r̂_edges[i], r̂_edges[i + 1], ap)
-        M̂3 = _gong_bin_moment(r̂ -> r̂^3, r̂_edges[i], r̂_edges[i + 1], ap)
-        FT(r_dry_per_r̂ * sqrt(M̂5 / M̂3))
+    r_dry_per_r̂ = ap.ssa_r_ref / ap.r80_per_dry   # meters of r_dry per unit r̂80
+    n_bins = Val(length(r̂_edges) - 1)
+    moment_ratio(i, m) =
+        _gong_bin_moment(r̂ -> r̂^(k + m), r̂_edges[i], r̂_edges[i + 1], ap) /
+        _gong_bin_moment(r̂ -> r̂^k, r̂_edges[i], r̂_edges[i + 1], ap)
+    quads = ntuple(n_bins) do i
+        _gong_bin_moment_quadrature(k, r̂_edges[i], r̂_edges[i + 1], ap)
     end
+    return (;
+        r_stokes = ntuple(i -> FT(r_dry_per_r̂ * sqrt(moment_ratio(i, 2))), n_bins),
+        r_slip = ntuple(i -> FT(r_dry_per_r̂ * moment_ratio(i, 1)), n_bins),
+        dep_nodes = map(q -> map(r̂ -> FT(r_dry_per_r̂ * r̂), q[1]), quads),
+        dep_weights = map(q -> map(FT, q[2]), quads),
+    )
 end
 
 """
     sea_salt_moment_cache(seasalt_model, params, FT)
 
 Cache entry with the per-bin Gong-spectrum moments the sea salt tendencies
-consume every stage ([`sea_salt_bin_flux_scales`](@ref),
-[`sea_salt_particle_masses`](@ref), [`sea_salt_bin_settling_radii`](@ref)).
-They are pure functions of the (run-constant) parameters, so `build_cache`
-computes them once into `p.tracers.seasalt_moments` instead of re-running the
-quadratures in every tendency call. Empty unless sea salt is prognostic.
+consume every stage: [`sea_salt_bin_flux_scales`](@ref),
+[`sea_salt_particle_masses`](@ref), and one [`sea_salt_bin_moment_tables`](@ref)
+entry per prognostic moment of the scheme (keyed by `moment_key`; retrieved
+by dispatch via [`moment_tables`](@ref)). They are pure functions of the
+(run-constant) parameters, so `build_cache` computes them once into
+`p.tracers.seasalt_moments` instead of re-running the quadratures in every
+tendency call. Empty unless sea salt is prognostic.
 """
 sea_salt_moment_cache(seasalt_model, params, ::Type{FT}) where {FT} = (;)
-sea_salt_moment_cache(::PrognosticSeaSalt, params, ::Type{FT}) where {FT} = (;
-    seasalt_moments = (;
-        flux_scales = sea_salt_bin_flux_scales(params, FT),
-        particle_masses = sea_salt_particle_masses(params, FT),
-        settling_radii = sea_salt_bin_settling_radii(params, FT),
+function sea_salt_moment_cache(
+    seasalt::PrognosticSeaSalt,
+    params,
+    ::Type{FT},
+) where {FT}
+    moments = prognostic_moments(seasalt)
+    # `ssa_bin_edges` (ClimaParams) and the hardcoded tracer-name lists must
+    # agree on the bin count; every per-bin table below is zipped with
+    # `moment_bin_tracer_names` in the tendencies.
+    n_bins = length(_r̂80_edges(params.prognostic_aerosol_params)) - 1
+    foreach(moments) do moment
+        n_names = length(moment_bin_tracer_names(moment, seasalt))
+        n_names == n_bins || error(
+            "`ssa_bin_edges` defines $n_bins sea salt bins, but \
+             `moment_bin_tracer_names` lists $n_names tracers for the \
+             $(moment_key(moment)) moment",
+        )
+    end
+    moment_entries = NamedTuple{map(moment_key, moments)}(
+        map(m -> sea_salt_bin_moment_tables(m, params, FT), moments),
     )
-)
+    return (;
+        seasalt_moments = (;
+            flux_scales = sea_salt_bin_flux_scales(params, FT),
+            particle_masses = sea_salt_particle_masses(params, FT),
+            moment_entries...,
+        )
+    )
+end
+
+"""
+    moment_tables(seasalt_moments, moment)
+
+The cached [`sea_salt_bin_moment_tables`](@ref) for `moment`, selected by
+dispatch on the moment tag.
+"""
+moment_tables(seasalt_moments, moment) =
+    getproperty(seasalt_moments, moment_key(moment))
 
 """
     sea_salt_bin_lognormal_fits(params, FT)
@@ -287,6 +374,10 @@ Apply surface emission tendencies for prognostic sea salt bins (ρSSLT01 …).
 The per-bin mass flux (kg m⁻² s⁻¹) is [`sea_salt_emission_flux`](@ref) scaled
 by the particle mass and the ocean fraction, applied as a bottom boundary
 condition using [`boundary_tendency_scalar`](@ref), in lowest model layer.
+Emission is a dry-mass source, so it fills the mass-moment tracers; a future
+number moment needs its own number-flux source here. The bin loop is unrolled
+over the compile-time [`moment_bin_tracer_names`](@ref), like the
+sedimenting-tracer loops of the microphysics.
 """
 sea_salt_emission_tendency!(Yₜ, Y, p, t, ::Union{Nothing, PrescribedSeaSalt}) =
     nothing
@@ -306,20 +397,24 @@ function sea_salt_emission_tendency!(
     ocean_fraction = p.ocean_fraction
     sfc_flux = p.scratch.sfc_temp_C3
 
-    for (bin_index, name) in enumerate(bin_names(seasalt))
-        ᶜρχ = getproperty(Y.c, Symbol(:ρ, name))
-        ᶜρχₜ = getproperty(Yₜ.c, Symbol(:ρ, name))
+    ρχ_names = moment_bin_tracer_names(AerosolMassMoment(), seasalt)
+    bins = ntuple(Val(length(ρχ_names))) do i
+        (ρχ_names[i], flux_scales[i], particle_masses[i])
+    end
+    MatrixFields.unrolled_foreach(bins) do (ρχ_name, flux_scale, particle_mass)
+        ᶜρχ = MatrixFields.get_field(Y.c, ρχ_name)
+        ᶜρχₜ = MatrixFields.get_field(Yₜ.c, ρχ_name)
         ᶜχ = @. lazy(specific(ᶜρχ, Y.c.ρ))
 
         @. sfc_flux = C3(
             sea_salt_emission_flux(
                 u_10,
                 T_sfc - T_freeze,
-                flux_scales[bin_index],
+                flux_scale,
                 (ap,),
                 sst_adjustment,
             ) *
-            particle_masses[bin_index] *
+            particle_mass *
             ocean_fraction,
         )
 
@@ -328,7 +423,8 @@ function sea_salt_emission_tendency!(
 
         if p.atmos.turbconv_model isa PrognosticEDMFX
             # assuming one updraft
-            ᶜχʲₜ = getproperty(Yₜ.c.sgsʲs.:(1), name)
+            ᶜχʲₜ =
+                MatrixFields.get_field(Yₜ.c, get_χʲ_name_from_ρχ_name(ρχ_name))
             @. ᶜχʲₜ -= specific(btt, p.precomputed.ᶜρʲs.:(1))
         end
     end
@@ -338,20 +434,28 @@ end
     sea_salt_settling_tendency!(Yₜ, Y, p, t, seasalt_model)
 
 Explicit gravitational settling of the prognostic sea salt bins — a downward
-vertical advection at the per-bin, slip-corrected Stokes terminal velocity:
+vertical advection of each bin tracer at the terminal velocity of the
+spectral moment it transports:
 
-    ∂(ρSSLTxx)/∂t -= ∇·(ρ · w_settle · χ)   (free outflow at the surface)
+    ∂(ρχ)/∂t -= ∇·(ρ · w_settle · χ)   (free outflow at the surface)
 
-The velocity is evaluated at the bin's wet mass-flux-weighted radius
-(`sea_salt_bin_settling_radii` times the cached growth factor `ᶜsslt_GF`) and
-Courant-capped (`settling_courant_max`) for explicit stability; it is
-materialized into scratch so the `ᶠright_bias`/`ᶜprecipdivᵥ` stencil kernel
-stays small, as precipitation does. The free-outflow bottom boundary deposits
-the gravitational flux `V_g · ρSSLTxx` at the surface — the gravitational part
-of dry deposition — so [`sea_salt_dry_deposition_tendency!`](@ref) carries
-only the turbulent part and nothing is double counted. Grid-mean only:
-updraft (`sgsʲs`) bins are not settled (deferred with the
-subdomain-sedimentation TODO).
+The loop runs over `prognostic_moments(seasalt)` × bins (unrolled over the
+compile-time [`moment_bin_tracer_names`](@ref)), so each moment's tracers
+settle at their own moment-weighted velocity — the aerosol analogue of the
+two-moment microphysics' number-/mass-weighted sedimentation pair
+(`ᶜwₙᵣ`/`ᶜwᵣ`). The velocity is the closed-form moment average
+[`sea_salt_settling_velocity`](@ref) at the bin's wet moment radii
+([`sea_salt_bin_moment_tables`](@ref) times the cached growth factor
+`ᶜsslt_GF`), Courant-capped (`settling_courant_max`) for explicit stability.
+As in `vertical_advection_of_water_tendency!`, the bin-independent
+face-interpolated density is hoisted out of the loop, and the velocity and
+specific concentration are materialized into scratch so the
+`ᶠright_bias`/`ᶜprecipdivᵥ` stencil kernel stays small. The free-outflow
+bottom boundary deposits the gravitational flux `V_g · ρχ` at the surface —
+the gravitational part of dry deposition — so
+[`sea_salt_dry_deposition_tendency!`](@ref) carries only the turbulent part
+and nothing is double counted. Grid-mean only: updraft (`sgsʲs`) bins are not
+settled (deferred with the subdomain-sedimentation TODO).
 """
 sea_salt_settling_tendency!(Yₜ, Y, p, t, ::Union{Nothing, PrescribedSeaSalt}) =
     nothing
@@ -362,35 +466,44 @@ function sea_salt_settling_tendency!(Yₜ, Y, p, t, seasalt::PrognosticSeaSalt)
     grav = FT(CAP.grav(p.params))
     R_d = FT(CAP.R_d(p.params))
     ρ_s = p.params.prescribed_aerosol_params.seasalt_density
-    (; settling_radii) = p.tracers.seasalt_moments
     ᶜJ = Fields.local_geometry_field(Y.c).J
     ᶠJ = Fields.local_geometry_field(Y.f).J
     ᶜΔz = Fields.Δz_field(Y.c)
     dt = float(p.dt)
 
-    for (bin_index, name) in enumerate(bin_names(seasalt))
-        ᶜρχ = getproperty(Y.c, Symbol(:ρ, name))
-        ᶜρχₜ = getproperty(Yₜ.c, Symbol(:ρ, name))
-        r_settle = settling_radii[bin_index]
+    # Scratch is written and consumed within one bin iteration; ᶠρ is shared
+    # by every bin's divergence stencil.
+    ᶠρ = p.scratch.ᶠtemp_scalar
+    @. ᶠρ = ᶠinterp(Y.c.ρ * ᶜJ) / ᶠJ
+    ᶜw = p.scratch.ᶜtemp_scalar
+    ᶜχ = p.scratch.ᶜtemp_scalar_2
 
-        # ᶜtemp_scalar is written and consumed within this iteration.
-        ᶜw = p.scratch.ᶜtemp_scalar
-        @. ᶜw = min(
-            sea_salt_settling_velocity(
-                r_settle * ᶜsslt_GF,
-                sea_salt_wet_density(ρ_s, ap.ρ_water, ᶜsslt_GF),
-                Y.c.ρ,
-                ᶜT,
-                R_d,
-                grav,
-                (ap,),
-            ),
-            ap.settling_courant_max * ᶜΔz / dt,
-        )
-        @. ᶜρχₜ -= ᶜprecipdivᵥ(
-            ᶠinterp(Y.c.ρ * ᶜJ) / ᶠJ *
-            ᶠright_bias(Geometry.WVector(-(ᶜw)) * specific(ᶜρχ, Y.c.ρ)),
-        )
+    MatrixFields.unrolled_foreach(prognostic_moments(seasalt)) do moment
+        tables = moment_tables(p.tracers.seasalt_moments, moment)
+        ρχ_names = moment_bin_tracer_names(moment, seasalt)
+        bins = ntuple(Val(length(ρχ_names))) do i
+            (ρχ_names[i], tables.r_stokes[i], tables.r_slip[i])
+        end
+        MatrixFields.unrolled_foreach(bins) do (ρχ_name, r_stokes, r_slip)
+            ᶜρχ = MatrixFields.get_field(Y.c, ρχ_name)
+            ᶜρχₜ = MatrixFields.get_field(Yₜ.c, ρχ_name)
+            @. ᶜw = min(
+                sea_salt_settling_velocity(
+                    r_stokes * ᶜsslt_GF,
+                    r_slip * ᶜsslt_GF,
+                    sea_salt_wet_density(ρ_s, ap.ρ_water, ᶜsslt_GF),
+                    Y.c.ρ,
+                    ᶜT,
+                    R_d,
+                    grav,
+                    (ap,),
+                ),
+                ap.settling_courant_max * ᶜΔz / dt,
+            )
+            @. ᶜχ = specific(ᶜρχ, Y.c.ρ)
+            @. ᶜρχₜ -=
+                ᶜprecipdivᵥ(ᶠρ * ᶠright_bias(Geometry.WVector(-(ᶜw)) * ᶜχ))
+        end
     end
     return nothing
 end
@@ -399,15 +512,28 @@ end
     sea_salt_dry_deposition_tendency!(Yₜ, Y, p, t, seasalt_model)
 
 Turbulent dry deposition of the prognostic sea salt bins as a surface-flux
-sink, `ρ_flux|_sfc = -V_d,turb · ρSSLTxx|₁` with
-`V_d,turb = 1/(R_a + R_s)` from [`sea_salt_dry_deposition_velocity`](@ref)
-(MOST aerodynamic resistance + Zhang 2001 surface resistance, water/ocean
-category everywhere for now). The gravitational part is deposited by the
-settling term's free-outflow boundary, so the two sum to the full deposition
-velocity without double counting. `V_d,turb` is Courant-capped so the explicit
-sink cannot over-deplete the lowest cell in one step. Surface and level-1
-fields live on different spaces, so the flux is assembled in one fused
-broadcast over their data values, as in [`set_sea_salt_10m_wind!`](@ref).
+sink, `ρ_flux|_sfc = -V_d,turb · ρχ|₁`, looping over
+`prognostic_moments(seasalt)` × bins (unrolled over the compile-time
+[`moment_bin_tracer_names`](@ref)) so each tracer is removed at the
+deposition velocity of its own spectral moment. `V_d,turb` is the
+moment-weighted Zhang velocity
+[`sea_salt_moment_dry_deposition_velocity`](@ref) — the full
+`1/(R_a + R_s(r))` averaged over the bin's cached spectrum quadrature with
+the tracer's moment weights (MOST aerodynamic resistance + Zhang 2001 surface
+resistance, water/ocean category everywhere for now). The aerodynamic
+resistance and the roughness length are radius- and bin-independent, so they
+are computed once per call into scratch rather than once per bin kernel. The
+gravitational part is deposited by the settling term's free-outflow boundary,
+so the two sum to the full deposition velocity without double counting.
+`V_d,turb` is Courant-capped so the explicit sink cannot over-deplete the
+lowest cell in one step (a numerical device for the explicit sink, not part
+of the deposition physics — the quadrature's per-node settling speeds are
+uncapped). Surface and level-1 fields live on different spaces, so the flux
+is assembled in one fused broadcast over their data values, as in
+[`set_sea_salt_10m_wind!`](@ref). For `PrognosticEDMFX`, the updraft bins
+receive the same specific sink as the grid mean, mirroring the emission
+source and the generic surface-flux treatment of `q_tot`/`mse`, so updraft
+and grid-mean concentrations do not drift apart at the surface.
 """
 sea_salt_dry_deposition_tendency!(
     Yₜ,
@@ -434,7 +560,6 @@ function sea_salt_dry_deposition_tendency!(
     ρ_s = p.params.prescribed_aerosol_params.seasalt_density
     roughness_spec = SF.COARE3RoughnessParams{FT}()
     dt = float(p.dt)
-    (; settling_radii) = p.tracers.seasalt_moments
 
     ᶜz = Fields.coordinate_field(Y.c).z
     ᶠz = Fields.coordinate_field(Y.f).z
@@ -449,46 +574,66 @@ function sea_salt_dry_deposition_tendency!(
     sfc_flux = p.scratch.sfc_temp_C3
     sfc_flux_values = field_values(sfc_flux)
 
-    for (bin_index, name) in enumerate(bin_names(seasalt))
-        ᶜρχ = getproperty(Y.c, Symbol(:ρ, name))
-        ᶜρχₜ = getproperty(Yₜ.c, Symbol(:ρ, name))
-        r_settle = settling_radii[bin_index]
-        ρχ1_values = level_values(ᶜρχ, 1)
+    # The MOST aerodynamic resistance (and the roughness length inside it) is
+    # radius-independent, so every bin and moment shares it: one evaluation of
+    # the universal-function profile per call instead of one per bin kernel.
+    R_a_values = p.scratch.temp_data_face_level
+    @. R_a_values = sea_salt_aerodynamic_resistance(
+        z1_values - z_sfc_values,
+        L_values,
+        SF.momentum_roughness(roughness_spec, ustar_values, sfp, nothing),
+        ustar_values,
+        uf_params,
+        κ_vk,
+    )
 
-        # One fused kernel per bin: the surface settling speed feeds the Zhang
-        # Stokes number (uncapped — the Courant cap is a numerical device for
-        # the explicit sink, not part of the deposition physics).
-        @. sfc_flux_values = C3(
-            -min(
-                sea_salt_dry_deposition_velocity(
-                    sea_salt_settling_velocity(
-                        r_settle * GF1_values,
-                        sea_salt_wet_density(ρ_s, ap.ρ_water, GF1_values),
+    MatrixFields.unrolled_foreach(prognostic_moments(seasalt)) do moment
+        tables = moment_tables(p.tracers.seasalt_moments, moment)
+        ρχ_names = moment_bin_tracer_names(moment, seasalt)
+        bins = ntuple(Val(length(ρχ_names))) do i
+            (ρχ_names[i], tables.dep_nodes[i], tables.dep_weights[i])
+        end
+        MatrixFields.unrolled_foreach(
+            bins,
+        ) do (ρχ_name, dep_nodes, dep_weights)
+            ᶜρχ = MatrixFields.get_field(Y.c, ρχ_name)
+            ᶜρχₜ = MatrixFields.get_field(Yₜ.c, ρχ_name)
+            ρχ1_values = level_values(ᶜρχ, 1)
+
+            # One fused kernel per bin; the node tuples broadcast as scalars
+            # via the same 1-tuple idiom as `ap`.
+            @. sfc_flux_values = C3(
+                -min(
+                    sea_salt_moment_dry_deposition_velocity(
+                        (dep_nodes,),
+                        (dep_weights,),
+                        GF1_values,
+                        ρ_s,
                         ρ1_values,
                         T1_values,
+                        R_a_values,
+                        ustar_values,
                         R_d,
                         grav,
                         (ap,),
                     ),
-                    r_settle * GF1_values,
-                    ρ1_values,
-                    T1_values,
-                    z1_values - z_sfc_values,
-                    L_values,
-                    SF.momentum_roughness(roughness_spec, ustar_values, sfp, nothing),
-                    ustar_values,
-                    uf_params,
-                    κ_vk,
-                    R_d,
-                    (ap,),
-                ),
-                ap.settling_courant_max * Δz1_values / dt,
-            ) * ρχ1_values,
-        )
+                    ap.settling_courant_max * Δz1_values / dt,
+                ) * ρχ1_values,
+            )
 
-        ᶜχ = @. lazy(specific(ᶜρχ, Y.c.ρ))
-        btt = boundary_tendency_scalar(ᶜχ, sfc_flux)
-        @. ᶜρχₜ -= btt
+            ᶜχ = @. lazy(specific(ᶜρχ, Y.c.ρ))
+            btt = boundary_tendency_scalar(ᶜχ, sfc_flux)
+            @. ᶜρχₜ -= btt
+
+            if p.atmos.turbconv_model isa PrognosticEDMFX
+                # assuming one updraft
+                ᶜχʲₜ = MatrixFields.get_field(
+                    Yₜ.c,
+                    get_χʲ_name_from_ρχ_name(ρχ_name),
+                )
+                @. ᶜχʲₜ -= specific(btt, p.precomputed.ᶜρʲs.:(1))
+            end
+        end
     end
     return nothing
 end
