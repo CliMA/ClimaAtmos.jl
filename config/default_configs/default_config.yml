@@ -228,7 +228,7 @@ surface_setup:
   help: "Surface flux scheme [`DefaultExchangeCoefficients` (default), `DefaultMoninObukhov`]"
   value: "DefaultExchangeCoefficients"
 initial_condition:
-  help: "Initial condition [`DryBaroclinicWave`, `MoistBaroclinicWave`, `ConstantBuoyancyFrequencyProfile`, `DecayingProfile` (default), `IsothermalProfile`, `Bomex`, `DryDensityCurrentProfile`, `RisingThermalBubbleProfile`, `ISDAC`, `GCM`, `ARMVARANAL`, `Reanalysis`, `ReanalysisTimeVarying`], or a file path for a NetCDF file (read documentation about requirements)."
+  help: "Selects the simulation case/setup. Global/idealized options: `DryBaroclinicWave`, `MoistBaroclinicWave`, `ConstantBuoyancyFrequencyProfile`, `DecayingProfile` (default), `IsothermalProfile`, `Bomex`, `DryDensityCurrentProfile`, `RisingThermalBubbleProfile`, `ISDAC`, or a NetCDF file path (see docs). Externally-driven single-column cases: `GCM`, `ARMVARANAL`, `ColumnFromFile`, `ReanalysisTimeVarying`."
   value: "DecayingProfile"
 perturb_initstate:
   help: "Add a perturbation to the initial condition [`false`, `true` (default)]"
@@ -348,20 +348,21 @@ check_conservation:
 check_steady_state:
   help: "Compare steady-state velocity to analytic solution; only available for certain choices of `topography` [`false` (default), `true`]"
   value: false
+# Single-column model (SCM) forcing
 external_forcing:
-  help: "External forcing for single column experiments [`nothing` (default), `GCM`, `ARMVARANAL`, `ISDAC`, `Reanalysis`, `ReanalysisTimeVarying`, `ReanalysisMonthlyAveragedDiurnal`]"
+  help: "External forcing for single-column experiments. Leave `~` for almost every case: the forcing is then taken from the setup chosen by `initial_condition` (the preferred route). Set it only to apply forcing that differs from the initial condition — the intended use is `ReanalysisMonthlyAveragedDiurnal` (monthly-averaged diurnal ERA5 forcing, which has no `initial_condition` counterpart), paired with `initial_condition: ReanalysisTimeVarying`. The values `GCM`/`ISDAC`/`ForcingFromFile`/`ReanalysisTimeVarying` merely mirror `initial_condition` and are redundant with it. [`~` (default), `ReanalysisMonthlyAveragedDiurnal`, `GCM`, `ISDAC`, `ForcingFromFile`, `ReanalysisTimeVarying`]"
   value: ~
 external_forcing_file:
-  help: "External forcing file containing large-scale forcings, initial conditions, and boundary conditions. Used for GCM-driven SCM and ISDAC setup [`nothing` (default), `path/to/file`]"
+  help: "Path to a NetCDF forcing file you supply, read by the file-driven single-column cases `GCM`, `ARMVARANAL`, and `ForcingFromFile`. The `ReanalysisTimeVarying` / `ReanalysisMonthlyAveragedDiurnal` cases ignore this and instead generate/locate their file from `site_latitude`/`site_longitude`/`start_date`. [`nothing` (default), `path/to/file`]"
   value: ~
 cfsite_number:
-  help: "cfsite identifier for single column forcing from  `external_forcing_file`, specified as siteN. For site details see Shen et al. 2022 `https://doi.org/10.1029/2021MS002631`. [`site23` (default), `siteN`]"
+  help: "Used only by the `GCM` case: selects which cfsite column to read from `external_forcing_file`, specified as siteN. For site details see Shen et al. 2022 `https://doi.org/10.1029/2021MS002631`. [`site23` (default), `siteN`]"
   value: "site23"
 site_latitude:
-  help: "Site latitude for single column model. Used for externally driven time varying forcing model to generate the forcing file. Artifact support is currently for eastern Pacific region in July 2007 only. [`17.0` (default)]"
+  help: "Used only by the `ReanalysisTimeVarying` / `ReanalysisMonthlyAveragedDiurnal` cases, which use it (with `site_longitude` and `start_date`) to generate and locate the ERA5 forcing file; other cases take location from `external_forcing_file` or `cfsite_number`. Artifact support is currently for the eastern Pacific region in July 2007 only. [`17.0` (default)]"
   value: 17.0
 site_longitude:
-  help: "Site longitude for single column model. Used for externally driven time varying forcing model to generate the forcing file. Artifact support is currently for eastern Pacific region in July 2007 only. [`-149.0` (default)]"
+  help: "Used only by the `ReanalysisTimeVarying` / `ReanalysisMonthlyAveragedDiurnal` cases, which use it (with `site_latitude` and `start_date`) to generate and locate the ERA5 forcing file; other cases take location from `external_forcing_file` or `cfsite_number`. Artifact support is currently for the eastern Pacific region in July 2007 only. [`-149.0` (default)]"
   value: -149.0
 era5_diurnal_warming:
   help: Applies a warming scenario by adding a constant temperature offset (in Kelvin). Supported only by the `ReanalysisMonthlyAveragedDiurnal` forcing model. This affects the target surface temperature for the entire simulation, the initial atmospheric temperature profile, and the relaxation temperature profile above `gcmdriven_relaxation_minimum_height`. Specific humidity is increased to hold relative humidity constant in the initial and relaxation profiles.

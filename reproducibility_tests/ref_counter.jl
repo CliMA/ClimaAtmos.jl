@@ -1,4 +1,4 @@
-387
+392
 
 # **README**
 #
@@ -32,6 +32,25 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+392
+- Integrate the hydrostatic pressure of the single-column setups on a
+  1000-element column instead of a 100-element column. Initial center
+  pressures change by about 2e-4 to 4e-4 relative to the previous profile.
+
+391
+- Update SurfaceFluxes 1.0.1 → 1.1.0
+
+390
+- Remove precipitation from cloud fraction and radiation
+
+389
+- Add a temporary parameter for lateral sedimentation mixing
+
+388
+- Unify SGS vertical diffusion with grid mean. Each PrognosticEDMFX
+  subdomain inherits the grid-mean specific tendency for mseⱼ, q_totⱼ,
+  and matching auto-discovered SGS tracers.
+
 387
 - Change some EDMF parameters
 

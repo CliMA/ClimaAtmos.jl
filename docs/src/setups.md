@@ -91,55 +91,122 @@ ClimaAtmos.Setups.prescribed_flow_model
 ClimaAtmos.Setups.radiation_model
 ```
 
-## Adding a New Setup
+## Defining a Case in a Runscript
 
-To add a new setup (e.g. `MyCase`), you need three things:
+### A data-driven column case
 
-### 1. Create the setup file
+For an externally-driven single-column case, no new setup is needed:
+[`ClimaAtmos.Setups.ForcingFromFile`](@ref) builds the initial condition,
+external forcing, surface treatment, and insolation from a single forcing file
+in the native ClimaColumn format. See the "Column forcing datasets"
+section of the Single Column Models page for the file layout and how to add a
+new format as a small dataset module.
 
-Create `src/setups/MyCase.jl` with a struct and a `center_initial_condition`
-method:
+The cleanest runscript drives the case through a config dictionary. It merges
+over the defaults and wires the setup's forcing, insolation, and surface models
+into the `AtmosModel` for you:
 
 ```julia
-"""
-    MyCase
+import ClimaAtmos as CA
 
-Description of the case and citation.
-"""
+config = CA.AtmosConfig(
+    Dict(
+        "config" => "column",
+        "initial_condition" => "ForcingFromFile",
+        "external_forcing_file" => "path/to/forcing.nc",
+        "start_date" => "20070701",
+        "turbconv" => "prognostic_edmfx",
+        "dt" => "50secs",
+        "t_end" => "30hours",
+    ),
+)
+simulation = CA.AtmosSimulation(config)
+CA.solve_atmos!(simulation)
+```
+
+The forcing is a tuple of
+[`AbstractForcingTerm`](@ref ClimaAtmos.AbstractForcingTerm)s (`HorizontalAdvection()`, `VerticalFluctuation()`,
+`Nudging(variables...; timescale, mask)`, `Subsidence()`) passed to the setup's
+`forcing` slot. Note that the `AtmosSimulation(; model, setup)` constructor uses
+`setup` only for the initial state, so the setup's forcing / insolation / surface
+models must be threaded into the `AtmosModel` explicitly (this will be addressed, tracked by [#4696](https://github.com/CliMA/ClimaAtmos.jl/issues/4696)).
+
+```julia
+import ClimaAtmos as CA
+import Dates
+
+FT = Float64
+params = CA.ClimaAtmosParameters(FT)
+
+setup = CA.Setups.ForcingFromFile(
+    "path/to/forcing.nc",
+    "20070701";
+    # horizontal advection only (drop the other default terms)
+    forcing = (CA.HorizontalAdvection(),),
+)
+
+surface = CA.Setups.surface_condition(setup, params)
+model = CA.AtmosModel(;
+    external_forcing = CA.Setups.external_forcing(setup, FT),
+    insolation = CA.Setups.insolation_model(setup),
+    temperature = CA.Setups.surface_temperature_model(setup),
+    flux_scheme = surface.flux_scheme,
+    # ...
+)
+grid = CA.ColumnGrid(FT; z_elem = 63, z_max = FT(60e3), z_stretch = true)
+simulation = CA.AtmosSimulation{FT}(;
+    model, setup, grid, params,
+    start_date = Dates.DateTime(2007, 7, 1), dt = 50, t_end = 30 * 3600,
+)
+CA.solve_atmos!(simulation)
+```
+
+Per-variable relaxation timescales and height-dependent masks compose as
+multiple `Nudging` terms, e.g. relax temperature only above an inversion:
+
+```julia
+z_inv = 800.0
+forcing = (
+    CA.HorizontalAdvection(),
+    CA.Nudging(:ta; timescale = 3600.0, mask = z -> z < z_inv ? 0.0 : 1.0),
+    CA.Nudging(:ua, :va; timescale = 7200.0),
+    CA.Subsidence(),
+)
+```
+
+For nonstandard forcing (per-variable relaxation timescales, custom height or
+time masks, an in-memory data source), define a small forcing type in the
+runscript instead. See
+[Nonstandard forcing behavior from a runscript](@ref) on the Single Column
+Models page.
+
+### A custom analytic case
+
+Define a type and extend the setup interface directly:
+
+```julia
+import ClimaAtmos as CA
+
 struct MyCase end
 
-function center_initial_condition(::MyCase, local_geometry, params)
+function CA.Setups.center_initial_condition(
+    ::MyCase,
+    local_geometry,
+    params,
+)
     FT = eltype(params)
     (; z) = local_geometry.coordinates
     T = FT(300) - FT(0.01) * z
     p = FT(101500)
-    return physical_state(; T, p)
+    return CA.Setups.physical_state(; T, p)
 end
+
+setup = MyCase()
+simulation = CA.AtmosSimulation{Float64}(; setup, model, grid)
 ```
 
-Optionally implement any of the other interface methods detailed above.
-
-### 2. Include the file in `Setups.jl`
-
-Add an `include("MyCase.jl")` line in `src/setups/Setups.jl` under the
-setup implementations section.
-
-### 3. Wire the setup in `get_setup_type`
-
-Add a branch in `get_setup_type` in `src/config/type_getters.jl` that maps
-the `initial_condition` config string to your setup constructor:
-
-```julia
-if ic_name == "OtherCase1"
-    return Setups.OtherCase1()
-elseif ic_name == "OtherCase1"
-    return Setups.OtherCase1()
-elseif ic_name == "MyCase"
-    return Setups.MyCase()
-end
-```
-
-Then set `initial_condition: "MyCase"` in your YAML config file to use it.
+Optionally extend the other setup methods documented above in the same
+runscript.
 
 ## Available Setups
 
@@ -178,7 +245,7 @@ ClimaAtmos.Setups.MoistAdiabaticProfileEDMFX
 
 ```@docs
 ClimaAtmos.Setups.GCMDriven
-ClimaAtmos.Setups.InterpolatedColumnProfile
+ClimaAtmos.Setups.ForcingFromFile
 ClimaAtmos.Setups.MoistFromFile
 ClimaAtmos.Setups.WeatherModel
 ClimaAtmos.Setups.AMIPFromERA5

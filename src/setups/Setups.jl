@@ -1,5 +1,9 @@
 module Setups
 
+import Adapt
+
+import StaticArrays as SA
+import ClimaInterpolations.Interpolation1D as CI1D
 import ClimaCore.Geometry as Geometry
 import ClimaCore: Fields
 import Thermodynamics as TD
@@ -12,7 +16,7 @@ import ..geopotential
 import ..C12, ..C3
 import ..background_p_and_T, ..background_u
 
-# File-based IC infrastructure (overwrite_from_file.jl, GCMDriven.jl, InterpolatedColumnProfile.jl)
+# File-based IC infrastructure (overwrite_from_file.jl, GCMDriven.jl, ForcingFromFile.jl)
 import Dates
 import ClimaUtilities.SpaceVaryingInputs
 import ClimaUtilities.ClimaArtifacts: @clima_artifact
@@ -42,7 +46,9 @@ import ..Parameters.ClimaAtmosParameters
 import Thermodynamics.Parameters.ThermodynamicsParameters
 
 # Model types returned by setup interface methods
-import ..GCMForcing, ..ISDACForcing, ..ARMVARANALForcing
+import ..GCMForcing, ..ISDACForcing
+import ..ExternalDrivenTVForcing, ..default_forcing_terms
+import ..ColumnDatasets
 import ..GCMDrivenInsolation, ..ExternalTVInsolation, ..TimeVaryingInsolation
 import ..RCEMIPIIInsolation
 import ..ShipwayHill2012VelocityProfile
@@ -92,7 +98,7 @@ overwrite_initial_state!(setup, Y, thermo_params) = nothing
     subsidence_forcing(setup, FT)
 
 Return a subsidence profile function `z -> w_subsidence`, or `nothing`.
-When non-nothing, the returned profile is wrapped in a `Subsidence` struct
+When non-nothing, the returned profile is wrapped in a `LargeScaleSubsidence` struct
 by the model construction layer, replacing the `subsidence` config key.
 """
 subsidence_forcing(setup, ::Type{FT}) where {FT} = nothing
@@ -208,6 +214,31 @@ include("common/prognostic_variables.jl")
 # ============================================================================
 
 """
+    initial_condition_field(f, space)
+
+Evaluate the pointwise initial-condition closure `f` over the local geometry of
+`space`. When the closure can be broadcast on `space`'s device it is; otherwise
+it is broadcast on the host and the result is copied to the device.
+
+A closure is broadcast on the device when it is isbits after adapting to the
+device array type. Closures that capture host-resident data - such as the
+interpolant profiles of the AtmosphericProfilesLibrary setups - are not, so
+they are evaluated on the host.
+"""
+function initial_condition_field(f, space)
+    local_geometry = Fields.local_geometry_field(space)
+    device = ClimaComms.device(space)
+    if device isa ClimaComms.AbstractCPUDevice ||
+       isbits(Adapt.adapt(ClimaComms.array_type(device), f))
+        return f.(local_geometry)
+    end
+    field_host = f.(Adapt.adapt(Array, local_geometry))
+    field = Fields.Field(eltype(field_host), space)
+    copyto!(parent(field), parent(field_host))
+    return field
+end
+
+"""
     initial_state(setup, params, atmos_model, center_space, face_space)
 
 Construct the full prognostic state vector `Y` (a `Fields.FieldVector`) for the
@@ -242,8 +273,8 @@ function initial_state(
     surface_space = Fields.level(face_space, Fields.half)
 
     return Fields.FieldVector(;
-        c = center_ic.(Fields.local_geometry_field(center_space)),
-        f = face_ic.(Fields.local_geometry_field(face_space)),
+        c = initial_condition_field(center_ic, center_space),
+        f = initial_condition_field(face_ic, face_space),
         surface_kwargs(surface_space, atmos_model.surface.temperature)...,
     )
 end
@@ -277,8 +308,7 @@ include("ShipwayHill2012.jl")
 # File-based setups (depend on common/overwrite_from_file.jl)
 include("common/overwrite_from_file.jl")
 include("GCMDriven.jl")
-include("ARMVARANAL.jl")
-include("InterpolatedColumnProfile.jl")
+include("ForcingFromFile.jl")
 include("MoistFromFile.jl")
 include("WeatherModel.jl")
 include("AMIPFromERA5.jl")

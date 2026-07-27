@@ -2,7 +2,8 @@
 ERA5 forcing file generation tests for ClimaAtmos.jl
 
 These tests verify the generation and processing of ERA5 observational data
-for single column model runs.
+for single column model runs. Reading the generated files back is covered by
+the ColumnDatasets tests in column_datasets_tests.jl.
 =#
 
 using Test
@@ -12,6 +13,7 @@ import Dates
 using Random
 Random.seed!(1234)
 import ClimaAtmos as CA
+import ClimaAtmos.ColumnDatasets as CD
 using NCDatasets
 
 include("test_helpers.jl")
@@ -76,8 +78,36 @@ end
 
     processed_data = NCDataset(sim_forcing_daily, "r")
 
+    # the file carries the schema metadata and is self-describing
+    @test processed_data.attrib["site_latitude"] == 0.0
+    @test processed_data.attrib["site_longitude"] == 0.0
+
+    # column variables are pure 1D (z, time); surface variables are (time,)
+    @test dimnames(processed_data["ta"]) == ("z", "time")
+    @test dimnames(processed_data["ts"]) == ("time",)
+
+    # every data variable carries SI units
+    for var in
+        [
+        "ta",
+        "hus",
+        "ua",
+        "va",
+        "wa",
+        "rho",
+        "tntha",
+        "tnhusha",
+        "ts",
+        "hfls",
+        "hfss",
+        "coszen",
+        "rsdt",
+    ]
+        @test haskey(processed_data[var].attrib, "units")
+    end
+
     # Test fixed variables - this tests that the variables are copied correctly
-    for clima_var in ["ua", "va", "wap", "ts"]
+    for clima_var in ["ua", "va", "ts"]
         @test all(isapprox.(processed_data[clima_var][:], 1, atol = 1e-10))
     end
 
@@ -85,10 +115,11 @@ end
         @test all(isapprox.(processed_data[clima_var][:], 0, atol = 1e-10))
     end
 
-    # data is stored from top of atmosphere to surface
-    @test monotonic_decreasing(processed_data["zg"], 3)
-    @test monotonic_increasing(processed_data["ta"], 3)
-    @test monotonic_increasing(processed_data["hus"], 3)
+    # data is stored with a strictly ascending height coordinate, so
+    # temperature and humidity decrease along the z dimension
+    @test issorted(processed_data["z"][:]; lt = <=)
+    @test monotonic_decreasing(processed_data["ta"], 1)
+    @test monotonic_decreasing(processed_data["hus"], 1)
     @test all(processed_data["hus"] .>= 0)
     @test all(processed_data["ta"] .>= 200) # 200 K is the minimum temperature set in the helper function
 
@@ -121,6 +152,11 @@ end
     @test CA.check_monthly_forcing_times(sim_forcing_daily, parsed_args)
 
     close(processed_data)
+
+    # the generated file passes ClimaColumn schema validation (probing and
+    # reading it back is covered by the ColumnDatasets tests)
+    @test isnothing(CD.validate(CD.ClimaColumnFile(), sim_forcing_daily))
+    @test CD.ClimaColumnFiles.is_conforming(sim_forcing_daily)
 end
 
 @testset "ERA5 multiday forcing file generation" begin
@@ -179,7 +215,7 @@ end
     @test length(processed_data["time"][:]) == expected_time_steps
 
     # Test that data is consistent across time
-    @test monotonic_increasing(processed_data["ta"], 3)
+    @test monotonic_decreasing(processed_data["ta"], 1)
     @test all(
         x -> all(isapprox.(x, -1 / time_resolution, atol = 1e-10)),
         processed_data["hfls"][:],
@@ -188,14 +224,15 @@ end
     # Test time check
     @test CA.check_daily_forcing_times(sim_forcing, parsed_args)
 
+    # the concatenated multiday file still conforms to the schema
+    @test CD.ClimaColumnFiles.is_conforming(sim_forcing)
+
     # check the vertical tendency function - useful if we implement steady ERA5 forcing
     vert_partial_ds = Dict(
-        "ta" => processed_data["ta"][1, 1, :, :],
-        "wa" => processed_data["wa"][1, 1, :, :],
-        "hus" => processed_data["hus"][1, 1, :, :],
-        # need to set z to not be all zeros
-        "z" =>
-            collect(1:length(processed_data["z"][:])) .* processed_data["z"][:],
+        "ta" => processed_data["ta"][:, :],
+        "wa" => processed_data["wa"][:, :],
+        "hus" => processed_data["hus"][:, :],
+        "z" => processed_data["z"][:],
     )
     # compute the vertical temperature gradient
     vertical_temperature_gradient =
@@ -456,4 +493,72 @@ end
 
     close(processed_data_0K)
     close(processed_data_4K)
+end
+
+@testset "Multiday regeneration of non-conforming daily files" begin
+    FT = Float64
+    parsed_args = Dict(
+        "start_date" => "20000506",
+        "site_latitude" => 0.0,
+        "site_longitude" => 0.0,
+        "t_end" => "2days",
+        "era5_diurnal_warming" => Nothing,
+    )
+
+    input_dir = mktempdir()
+    output_dir = mktempdir()
+    multiday_file = CA.get_external_daily_forcing_file_path(
+        parsed_args,
+        data_dir = output_dir,
+    )
+
+    start_date = Dates.DateTime(parsed_args["start_date"], "yyyymmdd")
+    end_time =
+        start_date + Dates.Second(CA.time_to_seconds(parsed_args["t_end"]))
+    days_needed = Dates.value(Dates.Day(end_time - start_date)) + 1
+    for day_offset in 0:(days_needed - 1)
+        date_str =
+            Dates.format(start_date + Dates.Day(day_offset), "yyyymmdd")
+        create_mock_era5_datasets(
+            input_dir,
+            date_str,
+            FT;
+            base_date = "20000101",
+        )
+    end
+
+    # place a legacy-layout file at the first day's path, as if it were a
+    # cached daily file from an earlier ClimaAtmos version
+    day1_args = merge(parsed_args, Dict("t_end" => "23hours"))
+    day1_file = CA.get_external_daily_forcing_file_path(
+        day1_args,
+        data_dir = output_dir,
+    )
+    NCDataset(day1_file, "c") do ds
+        defDim(ds, "x", 2)
+        defDim(ds, "y", 2)
+        defDim(ds, "z", 3)
+        defDim(ds, "time", 2)
+        defVar(ds, "z", FT, ("z",))
+        defVar(
+            ds,
+            "time",
+            collect(0.0:1.0),
+            ("time",),
+            attrib = ["units" => "hours since 2000-05-06 00:00:00"],
+        )
+        defVar(ds, "ta", FT, ("x", "y", "z", "time"))
+    end
+    @test !CD.ClimaColumnFiles.is_conforming(day1_file)
+
+    # generating the remaining days regenerates the non-conforming one
+    CA.generate_multiday_era5_external_forcing_file(
+        parsed_args,
+        multiday_file,
+        FT,
+        input_data_dir = input_dir,
+        output_data_dir = output_dir,
+    )
+    @test CD.ClimaColumnFiles.is_conforming(day1_file)
+    @test CD.ClimaColumnFiles.is_conforming(multiday_file)
 end

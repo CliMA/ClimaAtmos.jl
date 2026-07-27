@@ -52,7 +52,7 @@ subsidence!(ᶜρχₜ, ᶜρ, ᶠu³, ᶜχ, ::Val{:third_order}) =
 
 
 """
-    subsidence_tendency!(Yₜ, Y, p, t, subsidence_model::Subsidence)
+    subsidence_tendency!(Yₜ, Y, p, t, subsidence_model::LargeScaleSubsidence)
 
 Applies subsidence tendencies to total energy (`ρe_tot`), total specific humidity
 (`ρq_tot`), and other moisture species (`ρq_lcl`, `ρq_icl`) if a `NonEquilibriumMicrophysics`
@@ -72,13 +72,13 @@ Arguments:
     atmospheric model configurations (`p.atmos.microphysics_model`, `p.atmos.subsidence`),
     and scratch space.
   - `t`: Current simulation time (unused by this specific tendency calculation).
-  - `subsidence_model`: A `Subsidence` object containing the subsidence profile function.
+  - `subsidence_model`: A `LargeScaleSubsidence` object containing the subsidence profile function.
 
 If `subsidence_model` is `Nothing`, no subsidence tendency is applied.
 """
 subsidence_tendency!(Yₜ, Y, p, t, ::Nothing) = nothing    # No subsidence
 
-function subsidence_tendency!(Yₜ, Y, p, t, subsidence::Subsidence)
+function subsidence_tendency!(Yₜ, Y, p, t, subsidence::LargeScaleSubsidence)
     (; microphysics_model) = p.atmos
     subsidence_profile = subsidence.prof
     (; ᶜh_tot) = p.precomputed

@@ -13,7 +13,7 @@ edmfx_filter: true
 prognostic_tke: true
 microphysics_model: "1M"
 config: "column"
-z_max: 4e3
+z_max: 6e3
 x_elem: 2
 y_elem: 2
 z_elem: 100

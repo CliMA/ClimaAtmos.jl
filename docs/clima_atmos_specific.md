@@ -57,10 +57,11 @@ A file under `src/parameterized_tendencies/` should not contain orchestration lo
 
 ### Running a single test group
 
+`test/runtests.jl` selects the group from the `TEST_GROUP` environment
+variable (default `all`). `Pkg.test` inherits the calling process's environment, so set it inline:
+
 ```bash
-julia +1.11 --project=test -e '
-  import Pkg; Pkg.test("ClimaAtmos"; test_args=["parameterizations"])
-'
+TEST_GROUP=parameterizations julia +1.11 --project -e 'import Pkg; Pkg.test()'
 ```
 
 ### Test layout

@@ -3,12 +3,23 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- [#4664](https://github.com/CliMA/ClimaAtmos.jl/pull/4664) ![][badge-🔥behavioralΔ] Initialize the AtmosphericProfilesLibrary single-column setups (Bomex, DYCOMS, GABLS, GATE_III, ISDAC, Larcform1, PrecipitatingColumn, Rico, Soares, ShipwayHill2012, TRMM_LBA) on GPU spaces. `hydrostatic_pressure_profile` integrates the hydrostatic initial value problem on a dedicated 1000-element column (previously 100) and returns a `ClimaInterpolations` interpolant over host arrays. Because the setup profiles are host-resident interpolants, the initial condition of these setups is evaluated on the host and copied to the device rather than broadcast on the device. Initial center pressures change by about `2e-4` to `4e-4` relative, dominated by the removed interpolation error of the coarser grid; the new profiles are within about `4e-6` relative of a reference solution on a 16 times finer grid. The `ShipwayHill2012` constructor now returns the setup type (its interface methods were previously unreachable).
+
+0.42.2
+-------
+- [#4722](https://github.com/CliMA/ClimaAtmos.jl/pull/4722) ![][badge-🔥behavioralΔ] Exclude precipitation in cloud fraction and radiation. Cloud fraction no longer counts precipitating but condensate-free air (e.g. below cloud base) as cloudy, and radiation no longer treats falling rain/snow as cloud droplets/ice.
+- [#4705](https://github.com/CliMA/ClimaAtmos.jl/pull/4705) ![][badge-✨feature/enhancement] Add a generic interface for driving single-column simulations from netCDF forcing files.
+  - Add `ColumnDatasets` for reading column forcing files.
+  - Compose external forcing from per-process terms (`HorizontalAdvection`, `VerticalFluctuation`, `Nudging`, `Subsidence`) assembled into `ExternalDrivenTVForcing`.
+  - Rename the old large-scale-subsidence forcing to `LargeScaleSubsidence`, freeing the name `Subsidence` for the new per-process forcing term.
+
 
 0.42.1
 -------
 - [#4693](https://github.com/CliMA/ClimaAtmos.jl/pull/4693) ![][badge-🔥behavioralΔ] Mix the sedimentation flux across subdomains under `PrognosticEDMFX`. The lateral transfer of each sedimenting updraft tracer across tilted updraft boundaries now includes both detrainment (where the updraft narrows with height) and entrainment of the environment sedimentation flux (where it widens), with the environment flux density `ρ⁰w⁰χ⁰` reconstructed from the grid-mean flux minus the updraft contribution. Applied to the condensate/precipitation masses and their number concentrations, with matching implicit-Jacobian updates.
 - [#4699](https://github.com/CliMA/ClimaAtmos.jl/pull/4699) ![][badge-🔥behavioralΔ] Select the tracers that receive the `α_vert_diff_tracer` eddy-diffusivity scaling in the boundary-layer vertical diffusion from the shared `gs_sedimenting_tracer_candidates` list instead of a hardcoded tuple of species. The tracer diffusivity scaling is now consistent across the boundary-layer diffusion, the EDMFX SGS flux, the EDMFX updraft vertical diffusion, and the implicit Jacobian.
 - [#4703](https://github.com/CliMA/ClimaAtmos.jl/pull/4703) ![][badge-🔥behavioralΔ] Unify SGS hyperdiffusion with the grid mean: each `PrognosticEDMFX` subdomain inherits the grid-mean specific tendency (uniform hyperdiffusion within the grid box). The total-enthalpy hyperdiffusive flux is split into dry-static-energy and water-species contributions so that dry-air enthalpy is no longer diffused along with water enthalpy.
+
 
 0.42.0
 -------

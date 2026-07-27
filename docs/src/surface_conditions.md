@@ -60,7 +60,7 @@ air–surface gradients:
     budget. The only type that adds a prognostic state.
   - **[`ExternalTemperature`](@ref ClimaAtmos.SurfaceConditions.ExternalTemperature)**:
     read from a time-varying external input; valid only when the setup populates
-    `external_forcing.surface_inputs`.
+    `external_forcing.surface_fields`.
   - **[`CoupledTemperature`](@ref ClimaAtmos.SurfaceConditions.CoupledTemperature)**:
     read from a `Field` the coupler writes into (see
     [Coupling](#Coupling-to-an-external-driver)).
@@ -164,6 +164,13 @@ directly to `AtmosModel` (`CA.AtmosModel(; flux_scheme = …, temperature = …)
 which assembles the `AtmosSurface` for you. To swap in an interactive slab
 ocean use `temperature = SC.SlabOceanTemperature{FT}()`; for prescribed heat
 fluxes, `flux_scheme = SC.MoninObukhov(; z0 = FT(1e-4), shf = …, lhf = …)`.
+
+#### File-driven surface
+
+`ForcingFromFile` assembles the existing independent `temperature` and
+`flux_scheme` components described above — `ExternalTemperature` (the file's
+`ts`) with an interactive `MoninObukhov` flux scheme — rather than introducing
+another surface-policy hierarchy.
 
 ### Configuring from YAML
 

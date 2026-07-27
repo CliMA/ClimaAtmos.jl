@@ -769,7 +769,7 @@ add_diagnostic_variable!(short_name = "clivi", units = "kg m^-2",
     long_name = "Ice Water Path",
     standard_name = "atmosphere_mass_content_of_cloud_ice",
     comments = "The total mass of ice in cloud per unit area. \
-                Does not include precipitating hydrometeors.",  # TODO: This comment is not correct for 2M
+                Includes snow for NonEquilibriumMicrophysics.",
     compute = compute_clivi,
 )
 

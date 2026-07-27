@@ -533,7 +533,7 @@ end
 
 abstract type AbstractForcing end
 struct HeldSuarezForcing end
-struct Subsidence{T} <: AbstractForcing
+struct LargeScaleSubsidence{T} <: AbstractForcing
     prof::T
 end
 # TODO: is this a forcing?
@@ -550,38 +550,52 @@ end
 """
     ExternalDrivenTVForcing
 
-Forcing specified by external forcing file.
+Generic time-varying forcing read from a column forcing file through the
+`ColumnDatasets` interface (the native ClimaColumn schema). Its `forcing`
+is a tuple of composed [`AbstractForcingTerm`](@ref)s (horizontal advection,
+vertical fluctuation, nudging, subsidence). Only data required by the composed
+terms is loaded, and missing data for a composed term is a loud error.
+
+`time_interpolation_method` sets how the file's `TimeVaryingInput`s behave in
+time; it defaults to the dataset format's method (plain `LinearInterpolation`,
+which errors out of range so a finite campaign cannot fabricate forcing). A
+case whose file stores one repeating period passes
+`ColumnDatasets.periodic_calendar_method()` instead.
+
+Runscripts can construct this model as
+`ExternalDrivenTVForcing(path; forcing = (...,))`. Surface-temperature and
+insolation requirements are derived from the resolved `AtmosModel` during
+cache construction rather than from the forcing terms.
 """
-struct ExternalDrivenTVForcing{FT}
-    external_forcing_file::String
+struct ExternalDrivenTVForcing{CD <: ColumnDatasets.ColumnDataset, F <: Tuple, M}
+    dataset::CD
+    forcing::F
+    time_interpolation_method::M
+end
+function ExternalDrivenTVForcing(
+    dataset::ColumnDatasets.ColumnDataset;
+    forcing = default_forcing_terms(),
+    time_interpolation_method = ColumnDatasets.time_interpolation_method(
+        dataset.format,
+    ),
+)
+    forcing = Tuple(forcing)
+    validate_forcing_terms(forcing)
+    return ExternalDrivenTVForcing{
+        typeof(dataset),
+        typeof(forcing),
+        typeof(time_interpolation_method),
+    }(
+        dataset,
+        forcing,
+        time_interpolation_method,
+    )
+end
+function ExternalDrivenTVForcing(path::String; kwargs...)
+    return ExternalDrivenTVForcing(ColumnDatasets.ColumnDataset(path); kwargs...)
 end
 
 struct ISDACForcing end
-
-
-"""
-    ARMVARANALForcing{FT}
-
-Forcing specified by ARM VARANAL format NetCDF file for semi-continuous forcing.
-
-The VARANAL (Variational Analysis) product from ARM provides time-varying
-atmospheric state and forcing tendencies on pressure levels (hPa). Applied
-tendencies include:
-
-  - Horizontal advection of temperature and moisture
-  - Large-scale subsidence (omega, converted to vertical velocity)
-  - Nudging toward observed profiles (T, q, u, v) above a configurable height
-
-Surface temperature is prescribed from the file; surface fluxes are computed
-interactively by the Monin-Obukhov scheme.
-
-Fields:
-
-  - `external_forcing_file`: Path to the ARM VARANAL NetCDF file.
-"""
-struct ARMVARANALForcing{FT}
-    external_forcing_file::String
-end
 
 abstract type AbstractEnvBuoyGradClosure end
 struct BuoyGradMean <: AbstractEnvBuoyGradClosure end
