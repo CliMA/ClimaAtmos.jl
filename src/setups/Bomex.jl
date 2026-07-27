@@ -65,7 +65,9 @@ function center_initial_condition(setup::Bomex, local_geometry, params)
 
     return physical_state(;
         T, p, q_tot, u = profiles.u(z), tke,
-        gas_tracers = (; q_gas_A = FT(1), q_gas_B = FT(1), q_gas_AB = FT(1)),
+        # Start only the parent molecule (A, B default to 0), mirroring the
+        # aquaplanet ABBA setup in `DecayingProfile`.
+        gas_tracers = (; q_gas_AB = FT(0.6)),
     )
 end
 

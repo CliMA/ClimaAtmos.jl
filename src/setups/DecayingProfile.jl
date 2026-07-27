@@ -73,9 +73,9 @@ in the JPM, so it is left at its zero default.
 """
 _jpm_urban_gas_tracers(::Type{FT}) where {FT} = (;
     q_gas_O3 = FT(50*1e-9*0.048/0.029),     # 50 ppb
-    q_gas_NO = FT(20*1e-9*0.030/0.029),     # 20 ppb
-    q_gas_NO2 = FT(15*1e-9*0.046/0.029),    # 15 ppb
-    q_gas_HCHO = FT(30*1e-9*0.030/0.029),   # 30 ppb
+    q_gas_NO = FT(30*1e-9*0.030/0.029),     # 30 ppb
+    q_gas_NO2 = FT(25*1e-9*0.046/0.029),    # 25 ppb
+    q_gas_HCHO = FT(50*1e-9*0.030/0.029),   # 50 ppb
     q_gas_HO2 = FT(0.001*1e-9*0.033/0.029),   # 0.001 ppb
     q_gas_H2O2 = FT(1*1e-9*0.034/0.029),   # 1 ppb
     q_gas_OH = FT(2e-4*1e-9*0.017/0.029),    # 2e-4 ppb

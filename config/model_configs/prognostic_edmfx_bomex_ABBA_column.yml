@@ -18,7 +18,7 @@ z_elem: 60
 z_stretch: false
 perturb_initstate: false
 dt: "1secs"
-t_end: "6hours"
+t_end: "1hours"
 dt_save_state_to_disk: "10mins"
 toml: [toml/prognostic_edmfx_bomex.toml]
 netcdf_interpolation_num_points: [2, 2, 60]
@@ -35,7 +35,7 @@ diagnostics:
   - short_name: [entr, detr, turbentr, bgrad, strain, edt, evu]
     period: 10mins
   - short_name: [q_gas_A, q_gas_Aup, q_gas_B, q_gas_Bup, q_gas_AB, q_gas_ABup]
-    period: 10mins
+    period: 1secs
   - short_name: [q_gas_A, q_gas_Aup, q_gas_B, q_gas_Bup, q_gas_AB, q_gas_ABup]
     period: 1hours
     reduction_time: average
