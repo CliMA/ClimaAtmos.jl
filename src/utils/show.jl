@@ -166,24 +166,6 @@ Base.show(io::IO, x::RRTMGPI.AbstractRRTMGPMode) =
 Base.show(io::IO, x::Setups.RCEMIPIIProfile) =
     parseable_show_with_fields_no_type_header(io, x)
 
-import ClimaCore: Fields, Spaces
-function Base.show(
-    io::IO, ::MIME"text/plain", x::Setups.ColumnInterpolatableField,
-)
-    # Extract z grid from the wrapped column field
-    z = Fields.coordinate_field(x.f).z
-    nz = Spaces.nlevels(z)
-    zmin, zmax = extrema(z)
-    val_eltype = eltype(x.f)
-    # These are fixed by the constructor
-    interp_str = "Linear"
-    extrap_str = "Flat"
-    print(io,
-        "ColumnInterpolatableField(Nz=$nz, z∈[$zmin, $zmax], value_eltype=$val_eltype, ",
-        "interpolation=$interp_str, extrapolation=$extrap_str)",
-    )
-end
-
 # src/simulation/AtmosSimulations.jl
 import ClimaComms
 function Base.show(io::IO, ::MIME"text/plain", sim::AtmosSimulation)
