@@ -347,6 +347,13 @@ function precomputed_quantities(Y, atmos)
             (;)
         end
 
+    wsode_cache = if atmos.wall_model isa WSODEWallModel
+        surface_space = axes(Fields.level(Y.f, half))
+        init_wsode_cache(surface_space, atmos.wall_model.params)
+    else
+        nothing
+    end
+
     return (;
         implicit_precomputed_quantities(Y, atmos)...,
         gs_quantities...,
@@ -359,7 +366,9 @@ function precomputed_quantities(Y, atmos)
         ᶜcloud_fraction,
         covariance_quantities...,
         smagorinsky_lilly_quantities...,
-        amd_les_quantities...)
+        amd_les_quantities...,
+        wsode_cache,
+    )
 end
 
 # Interpolates the third contravariant component of Y.c.uₕ to cell faces.

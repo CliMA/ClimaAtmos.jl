@@ -1294,6 +1294,7 @@ EDMFColumnPlotsWithPrecip = Union{
     Val{:prognostic_edmfx_rico_column_2M},
     Val{:prognostic_edmfx_trmm_column},
     Val{:prognostic_edmfx_bomex_tracerA_column},
+    Val{:prognostic_edmfx_isdac_column},
 }
 
 """
@@ -1404,16 +1405,16 @@ function pair_edmf_names(short_names)
     return grouped_vars
 end
 
-function make_plots(
-    sim_type::Union{
-        EDMFColumnPlots,
-        EDMFColumnPlotsWithPrecip,
-    },
+# Helper: build all intermediate EDMF column plot files and return the list of
+# paths to be merged into summary.pdf by the caller.  Does NOT produce the
+# final summary.pdf so that callers can append additional pages (e.g. WSODE
+# diagnostics) before the final pdfunite call.
+function _build_edmf_column_intermediate_plots(
+    sim_type::Union{EDMFColumnPlots, EDMFColumnPlotsWithPrecip},
     output_paths::Vector{<:AbstractString},
 )
     simdirs = SimDir.(output_paths)
 
-    # Determine precipitation names based on type
     if sim_type isa EDMFColumnPlotsWithPrecip
         if sim_type isa Val{:prognostic_edmfx_rico_column_2M}
             precip_names = (
@@ -1464,27 +1465,20 @@ function make_plots(
     short_name_tuples = pair_edmf_names(short_names)
     var_groups_zt =
         map_comparison(simdirs, short_name_tuples) do simdir, name_tuple
-            vars = map(
+            map(
                 short_name ->
-                    get(
-                        simdir;
-                        short_name,
-                        reduction = reduction_inst,
-                        period = period_inst,
-                    ),
+                    get(simdir; short_name, reduction = reduction_inst, period = period_inst),
                 name_tuple,
             )
-            return vars
         end
 
     var_groups_z_avg =
         map_comparison(simdirs, short_name_tuples) do simdir, name_tuple
-            vars = map(
+            map(
                 short_name ->
                     get(simdir; short_name, reduction = reduction_avg, period = period_avg),
                 name_tuple,
             )
-            return vars
         end
 
     var_groups_z = [
@@ -1500,10 +1494,8 @@ function make_plots(
         MAX_NUM_COLS = 2,
         MAX_NUM_ROWS = 4,
     )
-
     summary_files = [tmp_file]
 
-    # Time-height contour plots: existing EDMF variables (intermediate)
     zt_file = make_plots_generic(
         output_paths,
         collect(Iterators.flatten(var_groups_zt));
@@ -1514,8 +1506,6 @@ function make_plots(
     )
     push!(summary_files, zt_file)
 
-    # Microphysics 1M process tendency plots (grid-mean, updraft, environment)
-    mp1m_vars_zt = []  # time-z fields for contour plots
     if sim_type isa EDMFColumnPlotsWithPrecip &&
        !(sim_type isa Val{:prognostic_edmfx_rico_column_2M})
         mp1m_source_names = [
@@ -1541,21 +1531,11 @@ function make_plots(
             permutedims(mp1m_source_names),
         )
 
-        # Load the time-z fields for all mp1m variables
         mp1m_vars_zt =
             map_comparison(mp1m_simdirs, mp1m_all_names) do simdir, sn
-                var = get(
-                    simdir;
-                    short_name = sn,
-                    reduction = reduction_inst,
-                    period = period_inst,
-                )
-                return var
+                get(simdir; short_name = sn, reduction = reduction_inst, period = period_inst)
             end
 
-        # Time-height contour plots for mp1m: 3 columns (gm, up, en) per row
-        # with shared symmetric colorbar per row and divergent colormap.
-        # Group the flat vars into (gm, up, en) triplets per source term.
         mp1m_row_groups = [
             (
                 mp1m_vars_zt[(i - 1) * 3 + 1],
@@ -1575,29 +1555,111 @@ function make_plots(
         push!(summary_files, mp1m_zt_file)
     end
 
-    # Timeseries line plots for column-integrated variables (no z dimension)
-    # This is the final assembling call — merges all summary_files into summary.pdf
+    # Column-integrated timeseries (lwp, iwp, etc.) as an intermediate file so
+    # callers can append further pages before the final pdfunite.
     timeseries_names = ["lwp", "iwp", "rwp", "swp", "pr"]
-    timeseries_names_avail =
-        timeseries_names ∩ collect(keys(simdirs[1].vars))
-    vars_timeseries =
-        map_comparison(simdirs, timeseries_names_avail) do simdir, short_name
-            var = get(
+    timeseries_names_avail = timeseries_names ∩ collect(keys(simdirs[1].vars))
+    if !isempty(timeseries_names_avail)
+        vars_timeseries =
+            map_comparison(simdirs, timeseries_names_avail) do simdir, short_name
+                get(simdir; short_name, reduction = reduction_inst, period = period_inst)
+            end
+        ts_file = make_plots_generic(
+            output_paths,
+            vars_timeseries;
+            output_name = "ts_timeseries",
+            MAX_NUM_COLS = 2,
+            MAX_NUM_ROWS = 4,
+        )
+        push!(summary_files, ts_file)
+    end
+
+    return summary_files
+end
+
+# Helper: build the WSODE diagnostic timeseries file (wsode_utau, wsode_thetatau,
+# wsode_oblen) and return its path, or nothing if the diagnostics are absent.
+function _build_wsode_diagnostic_file(output_paths, simdirs)
+    wsode_names = ["wsode_utau", "wsode_thetatau", "wsode_oblen"]
+    wsode_names_avail = filter(
+        n -> n in ClimaAnalysis.available_vars(simdirs[1]),
+        wsode_names,
+    )
+    isempty(wsode_names_avail) && return nothing
+
+    wsode_vars = map_comparison(simdirs, wsode_names_avail) do simdir, sn
+        wsode_reduction =
+            first(ClimaAnalysis.available_reductions(simdir; short_name = sn))
+        wsode_periods = collect(
+            ClimaAnalysis.available_periods(
                 simdir;
-                short_name,
-                reduction = reduction_inst,
-                period = period_inst,
-            )
-            return var
+                short_name = sn,
+                reduction = wsode_reduction,
+            ),
+        )
+        wsode_period = wsode_periods[argmin(CA.time_to_seconds.(wsode_periods))]
+        var = get(simdir; short_name = sn, reduction = wsode_reduction, period = wsode_period)
+        # Squeeze singleton x, y dims present in column-run output
+        if haskey(var.dims, "x") && length(var.dims["x"]) == 1
+            var = slice(var; x = var.dims["x"][1])
         end
-    make_plots_generic(
+        if haskey(var.dims, "y") && length(var.dims["y"]) == 1
+            var = slice(var; y = var.dims["y"][1])
+        end
+        return var
+    end
+    return make_plots_generic(
         output_paths,
-        vars_timeseries;
-        output_name = "summary",
-        summary_files = summary_files,
+        wsode_vars;
+        output_name = "wsode_timeseries",
         MAX_NUM_COLS = 2,
         MAX_NUM_ROWS = 4,
     )
+end
+
+function make_plots(
+    sim_type::Union{EDMFColumnPlots, EDMFColumnPlotsWithPrecip},
+    output_paths::Vector{<:AbstractString},
+)
+    summary_files = _build_edmf_column_intermediate_plots(sim_type, output_paths)
+    make_plots_generic(output_paths, []; output_name = "summary", summary_files)
+end
+
+WSODEColumnPlots = Union{
+    Val{:prognostic_edmfx_soares_wsode_column},
+    Val{:prognostic_edmfx_gabls_wsode_column},
+    Val{:prognostic_edmfx_rico_wsode_column},
+    Val{:prognostic_edmfx_gcmdriven_wsode_column},
+    Val{:prognostic_edmfx_isdac_wsode_column},
+    Val{:prognostic_edmfx_tv_era5driven_wsode_column},
+}
+
+# Maps each WSODE variant to its base EDMFColumnPlotsWithPrecip equivalent so
+# the shared intermediate-plot helper gets the correct precipitation names and
+# mp1m flags without duplicating that logic.
+_wsode_base_type(::Val{:prognostic_edmfx_soares_wsode_column}) =
+    Val(:prognostic_edmfx_soares_column)
+_wsode_base_type(::Val{:prognostic_edmfx_gabls_wsode_column}) =
+    Val(:prognostic_edmfx_gabls_column)
+_wsode_base_type(::Val{:prognostic_edmfx_rico_wsode_column}) =
+    Val(:prognostic_edmfx_rico_column)
+_wsode_base_type(::Val{:prognostic_edmfx_gcmdriven_wsode_column}) =
+    Val(:prognostic_edmfx_gcmdriven_column)
+_wsode_base_type(::Val{:prognostic_edmfx_isdac_wsode_column}) =
+    Val(:prognostic_edmfx_isdac_column)
+_wsode_base_type(::Val{:prognostic_edmfx_tv_era5driven_wsode_column}) =
+    Val(:prognostic_edmfx_tv_era5driven_column)
+
+function make_plots(
+    wsode_type::WSODEColumnPlots,
+    output_paths::Vector{<:AbstractString},
+)
+    simdirs = SimDir.(output_paths)
+    base_type = _wsode_base_type(wsode_type)
+    summary_files = _build_edmf_column_intermediate_plots(base_type, output_paths)
+    wsode_file = _build_wsode_diagnostic_file(output_paths, simdirs)
+    isnothing(wsode_file) || push!(summary_files, wsode_file)
+    make_plots_generic(output_paths, []; output_name = "summary", summary_files)
 end
 
 function make_plots(
@@ -1739,6 +1801,18 @@ function make_plots(::Val{:kinematic_driver}, output_paths::Vector{<:AbstractStr
 end
 
 Larcform1Plots = Union{Val{:larcform1}, Val{:larcform1_1M}}
+
+function make_plots(
+    ::Val{:larcform1_1M_prognostic_edmfx_wsode},
+    output_paths::Vector{<:AbstractString},
+)
+    simdirs = SimDir.(output_paths)
+    make_plots(Val(:larcform1), output_paths)
+    wsode_file = _build_wsode_diagnostic_file(output_paths, simdirs)
+    isnothing(wsode_file) || make_plots_generic(
+        output_paths, []; output_name = "wsode", summary_files = [wsode_file],
+    )
+end
 
 # Catch-all for any job whose name begins with "larcform1"
 function make_plots(val::Val{S}, output_paths::Vector{<:AbstractString}) where {S}

@@ -1078,3 +1078,55 @@ function make_plots(
     # 2. ARM observation comparison → obs_comparison.pdf
     _make_arm_obs_comparison(first(output_paths))
 end
+
+function make_plots(
+    ::Val{:prognostic_edmfx_armvaranal_wsode_column},
+    output_paths::Vector{<:AbstractString},
+)
+    simdirs = SimDir.(output_paths)
+
+    short_names = [
+        "wa", "waup", "ta", "taup", "hus", "husup", "arup", "tke", "ua",
+        "thetaa", "thetaaup", "ha", "haup", "hur", "hurup", "lmix",
+        "cl", "clw", "clwup", "cli", "cliup",
+    ]
+    short_names = filter(
+        n -> n in ClimaAnalysis.available_vars(simdirs[1]),
+        short_names,
+    )
+    reduction = "inst"
+
+    available_periods = collect(ClimaAnalysis.available_periods(
+        simdirs[1]; short_name = short_names[1], reduction,
+    ))
+    period = available_periods[argmin(CA.time_to_seconds.(available_periods))]
+
+    short_name_tuples = pair_edmf_names(short_names)
+    var_groups_zt =
+        map_comparison(simdirs, short_name_tuples) do simdir, name_tuple
+            vars = map(
+                short_name -> get(simdir; short_name, reduction, period),
+                name_tuple,
+            )
+            map(_slice_column, vars)
+        end
+
+    var_groups_z = [
+        ([slice(v, time = LAST_SNAP) for v in group]...,)
+        for group in var_groups_zt
+    ]
+
+    tmp_file = make_plots_generic(
+        output_paths, output_name = "tmp", var_groups_z;
+        plot_fn = plot_edmf_vert_profile!, MAX_NUM_COLS = 2, MAX_NUM_ROWS = 4,
+    )
+    wsode_file = _build_wsode_diagnostic_file(output_paths, simdirs)
+    summary_files = isnothing(wsode_file) ? [tmp_file] : [tmp_file, wsode_file]
+    make_plots_generic(
+        output_paths, vcat((var_groups_zt...)...);
+        plot_fn = plot_parsed_attribute_title!, summary_files,
+        MAX_NUM_COLS = 2, MAX_NUM_ROWS = 4,
+    )
+
+    _make_arm_obs_comparison(first(output_paths))
+end

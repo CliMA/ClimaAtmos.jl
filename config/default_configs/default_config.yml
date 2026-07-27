@@ -212,6 +212,27 @@ disable_surface_flux_tendency:
 surface_setup:
   help: "Surface flux scheme [`DefaultExchangeCoefficients` (default), `DefaultMoninObukhov`]"
   value: "DefaultExchangeCoefficients"
+wall_model:
+  help: "Wall model type [~ (default, use MOST bulk BCs), `wsode_stratified`]. When `wsode_stratified`, the coupled (u_tau, theta_tau) WSODE replaces the MOST bulk BCs for momentum and energy."
+  value: ~
+wall_model_kappa:
+  help: "Von Kármán constant for momentum used by the WSODE wall model [default: 0.4]."
+  value: ~
+wall_model_kappa_theta:
+  help: "Von Kármán constant for heat used by the WSODE wall model [default: 0.4]."
+  value: ~
+wall_model_k_s:
+  help: "Roughness parameter k_s for the WSODE wall model [default: 0.05]."
+  value: ~
+wall_model_nu:
+  help: "Kinematic viscosity [m²/s] used by the WSODE wall model [default: 1.5e-5]."
+  value: ~
+wall_model_u_tau_init:
+  help: "Initial friction velocity u_tau [m/s] for the WSODE wall model [default: 0.4]."
+  value: ~
+wall_model_theta_tau_init:
+  help: "Initial friction temperature theta_tau [K] for the WSODE wall model [default: 0.05]."
+  value: ~
 initial_condition:
   help: "Initial condition [`DryBaroclinicWave`, `MoistBaroclinicWave`, `ConstantBuoyancyFrequencyProfile`, `DecayingProfile` (default), `IsothermalProfile`, `Bomex`, `DryDensityCurrentProfile`, `RisingThermalBubbleProfile`, `ISDAC`, `GCM`, `ARMVARANAL`, `Reanalysis`, `ReanalysisTimeVarying`], or a file path for a NetCDF file (read documentation about requirements)."
   value: "DecayingProfile"

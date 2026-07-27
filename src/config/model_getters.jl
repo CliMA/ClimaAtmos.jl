@@ -867,9 +867,30 @@ function AtmosSurface(
             error("Uncaught surface albedo model `$(pa["albedo_model"])`.")
         end
 
+    wall_model = _parse_wall_model(pa, FT)
+
     return AtmosSurface(;
-        flux_scheme, temperature, boundary_overrides, surface_albedo,
+        flux_scheme, temperature, boundary_overrides, surface_albedo, wall_model,
     )
+end
+
+function _parse_wall_model(pa, ::Type{FT}) where {FT}
+    wm = pa["wall_model"]
+    isnothing(wm) && return NoWallModel()
+    if wm == "wsode_stratified"
+        # `@something` handles keys present in default_config with value: ~ (nil → nothing)
+        params = WSODEParams{FT}(;
+            kappa = FT(@something(pa["wall_model_kappa"], 0.4)),
+            kappa_theta = FT(@something(pa["wall_model_kappa_theta"], 0.4)),
+            k_s = FT(@something(pa["wall_model_k_s"], 0.05)),
+            nu = FT(@something(pa["wall_model_nu"], 1.5e-5)),
+            u_tau_init = FT(@something(pa["wall_model_u_tau_init"], 0.4)),
+            theta_tau_init = FT(@something(pa["wall_model_theta_tau_init"], 0.05)),
+        )
+        return WSODEWallModel{FT, typeof(params)}(params)
+    else
+        error("""Unknown wall_model `$wm`. Expected: ~ | "wsode_stratified".""")
+    end
 end
 
 function AtmosChem(config::AtmosConfig)

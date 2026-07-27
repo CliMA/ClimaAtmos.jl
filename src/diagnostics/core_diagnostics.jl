@@ -445,6 +445,81 @@ add_diagnostic_variable!(short_name = "tauv", units = "Pa",
 )
 
 ###
+# Surface friction velocity (ustar) [2d]
+###
+add_diagnostic_variable!(short_name = "ustar", units = "m s^-1",
+    long_name = "Surface Friction Velocity",
+    standard_name = "friction_velocity",
+    comments = "Surface friction velocity u* from MOST or WSODE wall model. \
+                When wall_model is active this is the WSODE u_tau.",
+    compute = (_, cache, _) -> cache.precomputed.sfc_conditions.ustar,
+)
+
+###
+# Surface Obukhov length [2d]
+###
+add_diagnostic_variable!(short_name = "ob_len", units = "m",
+    long_name = "Obukhov Length",
+    standard_name = "obukhov_length",
+    comments = "Monin-Obukhov length L at the surface. Negative in unstable, \
+                positive in stable conditions. Updated by WSODE when active.",
+    compute = (_, cache, _) -> cache.precomputed.sfc_conditions.obukhov_length,
+)
+
+###
+# Surface buoyancy flux [2d]
+###
+add_diagnostic_variable!(short_name = "bflxsfc", units = "m^2 s^-3",
+    long_name = "Surface Buoyancy Flux",
+    standard_name = "surface_buoyancy_flux",
+    comments = "Turbulent buoyancy flux at the surface (g/θ)*(SHF/ρ/cp + 0.608*LHF/ρ/Lv). \
+                Drives EDMFX updraft initialization when active.",
+    compute = (_, cache, _) -> cache.precomputed.sfc_conditions.buoyancy_flux,
+)
+
+###
+# WSODE wall-model state [2d] — only populated when wall_model isa WSODEWallModel
+###
+function compute_wsode_u_tau(_, cache, _)
+    wc = cache.precomputed.wsode_cache
+    isnothing(wc) && error_diagnostic_variable("wsode_utau: no WSODE wall model active")
+    return wc.u_tau
+end
+
+function compute_wsode_theta_tau(_, cache, _)
+    wc = cache.precomputed.wsode_cache
+    isnothing(wc) && error_diagnostic_variable("wsode_thetatau: no WSODE wall model active")
+    return wc.theta_tau
+end
+
+function compute_wsode_obukhov_L(_, cache, _)
+    wc = cache.precomputed.wsode_cache
+    isnothing(wc) && error_diagnostic_variable("wsode_oblen: no WSODE wall model active")
+    return wc.obukhov_L
+end
+
+add_diagnostic_variable!(short_name = "wsode_utau", units = "m s^-1",
+    long_name = "WSODE Friction Velocity (ODE State)",
+    comments = "The u_tau ODE state variable from the WSODE wall model. \
+                Equals sfc_conditions.ustar when wall model is active.",
+    compute = compute_wsode_u_tau,
+)
+
+add_diagnostic_variable!(short_name = "wsode_thetatau", units = "K",
+    long_name = "WSODE Thermal Scale (ODE State)",
+    comments = "The theta_tau ODE state variable from the WSODE wall model. \
+                Proportional to the surface kinematic heat flux via SHF = u_tau * theta_tau.",
+    compute = compute_wsode_theta_tau,
+)
+
+add_diagnostic_variable!(short_name = "wsode_oblen", units = "m",
+    long_name = "WSODE Obukhov Length (ODE State)",
+    comments = "Obukhov length computed from the WSODE ODE state (u_tau, theta_tau). \
+                Should match sfc_conditions.obukhov_length when wall model is active.",
+    compute = compute_wsode_obukhov_L,
+)
+
+###
 # Surface energy flux (2d)
 # TODO: may need to split into sensible and latent heat
 ###

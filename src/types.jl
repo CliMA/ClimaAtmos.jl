@@ -967,8 +967,9 @@ Groups surface-related models and types.
     carrying per-cell defaults for surface pressure / humidity / winds / gustiness
     / beta.
   - `albedo`: surface albedo model.
+  - `wall_model`: NoWallModel() (default, uses MOST bulk BCs) or WSODEWallModel (dynamic WSODE wall model)
 """
-@kwdef struct AtmosSurface{FS, ST, BO, AL}
+@kwdef struct AtmosSurface{FS, ST, BO, AL, WM}
     flux_scheme::FS = SurfaceConditions.ExchangeCoefficients{Float32}(
         Cd = 0.0044, Ch = 0.0044,
     )
@@ -978,6 +979,7 @@ Groups surface-related models and types.
         )
     boundary_overrides::BO = SurfaceConditions.SurfaceBoundaryOverrides()
     surface_albedo::AL = ConstantAlbedo{Float32}(; α = 0.07)
+    wall_model::WM = NoWallModel()
 end
 
 # Add broadcastable for the new grouped types

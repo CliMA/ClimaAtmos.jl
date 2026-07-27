@@ -21,6 +21,8 @@ import .Parameters as CAP
 
 include(joinpath("utils", "abbreviations.jl"))
 include(joinpath("utils", "gpu_compat.jl"))
+# Wall model types must be defined before types.jl (AtmosSurface references NoWallModel)
+include(joinpath("parameterized_tendencies", "wall_model", "WSODEWallModel.jl"))
 include("types.jl")
 include(joinpath("config", "atmos_config.jl"))
 include(joinpath("config", "cli_options.jl"))

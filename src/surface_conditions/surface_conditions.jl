@@ -54,6 +54,13 @@ function update_surface_conditions!(Y, p, t)
         atmos,
         t,
     )
+
+    # WSODE wall model: advance the coupled (u_tau, theta_tau) ODE and overwrite
+    # the momentum and enthalpy flux slots set above by MOST.
+    if atmos.wall_model isa WSODEWallModel
+        advance_wsode!(Y, p, p.precomputed.wsode_cache, atmos.wall_model)
+    end
+
     return nothing
 end
 
