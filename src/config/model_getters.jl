@@ -41,7 +41,7 @@ function get_microphysics_1m_options(parsed_args, toml_dict)
         parsed_args["cloud_liquid_formation"],
         Dict(
             "CloudLiquidFormation" =>
-                CMP.CloudLiquidFormation(toml_dict),
+                CMP.CloudLiquidFormation(),
         ),
         "cloud_liquid_formation",
     )
@@ -49,9 +49,9 @@ function get_microphysics_1m_options(parsed_args, toml_dict)
         parsed_args["cloud_ice_formation"],
         Dict(
             "ConstantTimescale" =>
-                CMP.ConstantTimescale(toml_dict),
+                CMP.ConstantTimescale(),
             "TemperatureDependent" =>
-                CMP.TemperatureDependent(toml_dict),
+                CMP.TemperatureDependent(),
         ),
         "cloud_ice_formation",
     )
@@ -63,8 +63,8 @@ function get_microphysics_1m_options(parsed_args, toml_dict)
     rain_autoconversion = parse_option(
         parsed_args["rain_autoconversion"],
         Dict(
-            "Kessler1M" => CMP.Kessler1M(toml_dict),
-            "PrescribedNd" => CMP.PrescribedNd(toml_dict),
+            "Kessler1M" => CMP.Kessler1M(),
+            "PrescribedNd" => CMP.PrescribedNd(),
         ),
         "rain_autoconversion",
     )
@@ -72,9 +72,9 @@ function get_microphysics_1m_options(parsed_args, toml_dict)
         parsed_args["snow_autoconversion"],
         Dict(
             "NoSupersaturation" =>
-                CMP.NoSupersaturation(toml_dict),
+                CMP.NoSupersaturation(),
             "WithSupersaturation" =>
-                CMP.WithSupersaturation(toml_dict),
+                CMP.WithSupersaturation(),
         ),
         "snow_autoconversion",
     )
@@ -101,7 +101,7 @@ function get_microphysics_1m_options(parsed_args, toml_dict)
         parsed_args["cloud_liquid_rain_accretion"],
         Dict(
             "CloudLiquidRainAccretion" =>
-                CMP.CloudLiquidRainAccretion(toml_dict),
+                CMP.CloudLiquidRainAccretion(),
         ),
         "cloud_liquid_rain_accretion",
     )
@@ -109,7 +109,7 @@ function get_microphysics_1m_options(parsed_args, toml_dict)
         parsed_args["cloud_liquid_snow_accretion"],
         Dict(
             "CloudLiquidSnowAccretion" =>
-                CMP.CloudLiquidSnowAccretion(toml_dict),
+                CMP.CloudLiquidSnowAccretion(),
         ),
         "cloud_liquid_snow_accretion",
     )
@@ -117,7 +117,7 @@ function get_microphysics_1m_options(parsed_args, toml_dict)
         parsed_args["cloud_ice_rain_accretion"],
         Dict(
             "CloudIceRainAccretion" =>
-                CMP.CloudIceRainAccretion(toml_dict),
+                CMP.CloudIceRainAccretion(),
         ),
         "cloud_ice_rain_accretion",
     )
@@ -125,7 +125,7 @@ function get_microphysics_1m_options(parsed_args, toml_dict)
         parsed_args["cloud_ice_snow_accretion"],
         Dict(
             "CloudIceSnowAccretion" =>
-                CMP.CloudIceSnowAccretion(toml_dict),
+                CMP.CloudIceSnowAccretion(),
         ),
         "cloud_ice_snow_accretion",
     )
@@ -133,7 +133,7 @@ function get_microphysics_1m_options(parsed_args, toml_dict)
         parsed_args["rain_snow_accretion"],
         Dict(
             "RainSnowAccretion" =>
-                CMP.RainSnowAccretion(toml_dict),
+                CMP.RainSnowAccretion(),
         ),
         "rain_snow_accretion",
     )
