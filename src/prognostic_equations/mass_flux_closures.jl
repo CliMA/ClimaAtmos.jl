@@ -187,9 +187,12 @@ function enforce_grid_mean_microphysics_constraints!(Y, p, t)
 end
 
 # Private helper: clips prognostic updraft area fraction and vertical velocity,
-# relaxes updraft mse/q_tot toward the grid mean when ρa is negligible, and
+# relaxes updraft mse/q_tot toward the grid mean when ρa is negligible,
 # relaxes updraft microphysics tracers (q_lcl, q_icl, q_rai, q_sno, n_lcl, n_rai)
-# toward the grid mean while enforcing the subdomain mass conservation bound ρaχʲ < ρχ.
+# toward the grid mean while enforcing the subdomain mass conservation bound
+# ρaχʲ < ρχ, and finally rescales the subdomain condensate sum so
+# q_lclʲ+q_iclʲ+q_raiʲ+q_snoʲ ≤ q_totʲ (mirrors the grid-mean
+# `enforce_grid_mean_microphysics_constraints!`).
 # The microphysics tracer block is a no-op for 0M (has_field returns false).
 # No-op when n_prognostic_mass_flux_subdomains == 0 (EDOnlyEDMFX, etc.).
 function enforce_edmf_updraft_constraints!(Y, p, t, turbconv_model)
@@ -239,6 +242,29 @@ function enforce_edmf_updraft_constraints!(Y, p, t, turbconv_model)
                 # ensure mass conservation: ρaχʲ < ρχ
                 min(max(0, ᶜχʲ), max(0, ᶜρχ) / Y.c.sgsʲs.:($$j).ρa),
             )
+        end
+
+        # Within-subdomain condensate rescaling: ensure
+        # q_lclʲ+q_iclʲ+q_raiʲ+q_snoʲ ≤ q_totʲ. The GM ↔ SGS bound above
+        # already clipped each χʲ ≥ 0, so we only need the ratio rescale.
+        # Multiplying by ratio ≤ 1 preserves the ρaχʲ ≤ ρχ bound.
+        if p.atmos.microphysics_model isa Union{NonEquilibriumMicrophysics1M,
+            NonEquilibriumMicrophysics2M}
+            q_cond = p.scratch.ᶜtemp_scalar
+            ratio = p.scratch.ᶜtemp_scalar_2
+            @. q_cond =
+                Y.c.sgsʲs.:($$j).q_lcl + Y.c.sgsʲs.:($$j).q_icl +
+                Y.c.sgsʲs.:($$j).q_rai + Y.c.sgsʲs.:($$j).q_sno
+            @. ratio = ifelse(
+                (q_cond > ϵ_numerics(FT)) &
+                (Y.c.sgsʲs.:($$j).q_tot > ϵ_numerics(FT)),
+                min(FT(1), Y.c.sgsʲs.:($$j).q_tot / q_cond),
+                FT(0),
+            )
+            @. Y.c.sgsʲs.:($$j).q_lcl *= ratio
+            @. Y.c.sgsʲs.:($$j).q_icl *= ratio
+            @. Y.c.sgsʲs.:($$j).q_rai *= ratio
+            @. Y.c.sgsʲs.:($$j).q_sno *= ratio
         end
     end
     return nothing
