@@ -486,7 +486,7 @@ function calc_nonpropagating_forcing!(
     # - ᶜright_bias checks upper face > z_pbl (cell extends above z_pbl)
     # - ᶜleft_bias checks lower face < z_ref (cell starts below z_ref)
     # This ensures at least one cell is included when z_ref > z_pbl
-    @. ᶜmask = ᶜright_bias.((ᶠz .> ᶠz_pbl)) .&& ᶜleft_bias.((ᶠz .< ᶠz_ref))
+    @. ᶜmask = (ᶜright_bias.((ᶠz .> ᶠz_pbl)) == one(FT)) .&& (ᶜleft_bias.((ᶠz .< ᶠz_ref)) == one(FT))
     @. ᶜweights = ᶜinterp.(ᶠp .- ᶠp_ref)
     @. ᶜdiff = ᶜinterp.(ᶠp_m1 .- ᶠp)
 
