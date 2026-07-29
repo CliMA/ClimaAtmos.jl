@@ -29,6 +29,7 @@ steps:
       - echo $$JULIA_DEPOT_PATH
       - echo "--- Instantiate .buildkite"
       - julia --project=.buildkite -e 'using Pkg; Pkg.instantiate(;verbose=true, update_registry=false); Pkg.precompile(;strict=true); Pkg.status()'
+      - julia --project=.buildkite -e 'using Pkg; Pkg.add(name="ClimaCore", rev="tr/cart-inds")'
 
     agents:
       slurm_cpus_per_task: 8
