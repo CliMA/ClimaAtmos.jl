@@ -15,6 +15,8 @@ then overwrites the whole prognostic state with ERA5 data located by
     files. When `nothing`, the `wxquest_initial_conditions` ClimaArtifact is
     used. It is stashed in the module-level `_ERA5_IC_DIR` rather than stored on
     the struct, because a captured string cannot be adapted to the GPU.
+  - `use_full_pressure`: If `true`, attempt to read 3D pressure from the file
+    rather than computing it hydrostatically. Defaults to `true`.
 
 # Keyword Arguments
 
@@ -36,7 +38,7 @@ const _ERA5_IC_DIR = Ref{Any}(nothing)
 function WeatherModel(
     start_date::String,
     era5_initial_condition_dir = nothing;
-    use_full_pressure::Bool = false,
+    use_full_pressure::Bool = true,
 )
     _ERA5_IC_DIR[] = era5_initial_condition_dir
     return WeatherModel(
@@ -102,6 +104,7 @@ function overwrite_initial_state!(setup::WeatherModel, Y, thermo_params)
         haskey(ds, "p_3d")
     end
     ᶠp = if use_p3d
+        @info "Using full 3D pressure from file variable `p_3d` (use_full_pressure=true)"
         SpaceVaryingInputs.SpaceVaryingInput(
             file_path, "p_3d", face_space; svi_kwargs...,
         )
