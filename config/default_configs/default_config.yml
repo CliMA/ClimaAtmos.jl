@@ -206,6 +206,9 @@ start_date:
 era5_initial_condition_dir:
   help: "Directory containing ERA5 initial condition files. Filenames inferred from start_date [none (default)]. Generated with `https://github.com/CliMA/WeatherQuest`."
   value: ~
+era5_ic_full_pressure:
+  help: "For `WeatherModel` initial conditions, read 3D pressure (`p_3d`) from the ERA5 file instead of integrating hydrostatically from surface pressure [`false` (default), `true`]"
+  value: false
 test_dycore_consistency:
   help: "Test dycore consistency [`false` (default), `true`]"
   value: false

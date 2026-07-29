@@ -184,10 +184,11 @@ values map to same-named types in `Setups`:
     `"DYCOMS_RF02"`, `"TRMM_LBA"`, `"Larcform1"`, `"GABLS"`, `"ISDAC"`, which read
     `prognostic_tke` (and, for ISDAC, `perturb_initstate`).
   - RCEMIP II: `"RCEMIPIIProfile_295"`, `"RCEMIPIIProfile_300"`, `"RCEMIPIIProfile_305"`.
-  - File- and reanalysis-driven: `"GCM"` (`external_forcing_file` plus `cfsite_number`),
+  - File and reanalysis-driven: `"GCM"` (`external_forcing_file` plus `cfsite_number`),
     `"ARMVARANAL"` (an ARM VARANAL file, converted to the ClimaColumn schema),
     `"ForcingFromFile"` (a ClimaColumn file), `"ReanalysisTimeVarying"` (an ERA5 file for
-    the site, generated when missing or stale), `"WeatherModel"`, and `"AMIPFromERA5"`.
+    the site, generated when missing or stale), `"WeatherModel"` (reads
+    `era5_initial_condition_dir` and `era5_ic_full_pressure`), and `"AMIPFromERA5"`.
 
 A value that names an existing file is read as a `Setups.MoistFromFile` initial state.
 Anything else raises an error.
@@ -284,7 +285,8 @@ function get_setup_type(parsed_args, thermo_params)
     elseif ic_name == "WeatherModel"
         return Setups.WeatherModel(
             parsed_args["start_date"],
-            parsed_args["era5_initial_condition_dir"],
+            parsed_args["era5_initial_condition_dir"];
+            use_full_pressure = parsed_args["era5_ic_full_pressure"],
         )
     elseif ic_name == "AMIPFromERA5"
         return Setups.AMIPFromERA5(parsed_args["start_date"])
