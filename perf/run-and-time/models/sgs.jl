@@ -33,6 +33,9 @@ Random.seed!(1234)
 #   turbconv = prognostic_edmfx.
 # ---------------------------------------------------------------------------
 
+# Defines: get_base_atmos_config
+include("atmos_config.jl")
+
 """
     case_setup()
 
@@ -42,18 +45,7 @@ and return them as a `NamedTuple` with fields `Y`, `p`, `t`. Mirrors the
 integrator, Jacobian, callbacks, diagnostics, and output writers.
 """
 function case_setup()
-    config_path = "config"
-
-    config_file = [
-        joinpath(pkgdir(CA), config_path, "common_configs", "numerics_sphere_he16ze63.yml"),
-        joinpath(
-            pkgdir(CA),
-            config_path,
-            "longrun_configs",
-            "amip_target.yml",
-        ),
-    ]
-    config = CA.AtmosConfig(config_file; job_id = nothing)
+    config = get_base_atmos_config()
 
     # Stub out the components `set_sgs_moments_and_cloud_fraction!` does not read.
     # Mutating `parsed_args` here (before params/model/grid are built) means the
