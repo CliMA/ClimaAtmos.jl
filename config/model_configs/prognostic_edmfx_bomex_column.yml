@@ -12,7 +12,8 @@ edmfx_filter: true
 prognostic_tke: true
 microphysics_model: "1M"
 config: "column"
-z_max: 3e3
+# z_max is increased to prevent the updraft from reaching the top
+z_max: 4200
 z_elem: 60
 z_stretch: false
 perturb_initstate: false
