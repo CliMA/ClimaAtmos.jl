@@ -1,0 +1,20 @@
+[deps]
+ClimaAtmos = "b2c96348-7fb7-4fe0-8da9-78d88439e717"
+ClimaComms = "3a4d1b5c-c61d-41fd-a00a-5873ba7a1b0d"
+ClimaCore = "d414da3d-4745-48bb-8d80-42e94e092884"
+ClimaDiagnostics = "1ecacbb8-0713-4841-9a07-eb5aa8a2d53f"
+ClimaParams = "5c42b081-d73a-476f-9059-fd94b934656c"
+ClimaTimeSteppers = "595c0a79-7f3d-439a-bc5a-b232dc3bde79"
+ClimaUtilities = "b3f4f4ca-9299-4f7f-bd9b-81e1242a7513"
+LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
+Printf = "de0858da-6303-5e67-8744-51eddeeeb8d7"
+SciMLBase = "0bca4576-84f4-4d90-8ffe-ffa030f20462"
+StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
+Thermodynamics = "b60c26fb-14c3-4610-9d3e-2d17fe7ff00c"
+YAML = "ddb6d928-2868-570f-bddf-ab3f9cf99eb6"
+
+# Local-development sources (Phase A). Before committing/CI:
+#   ClimaCore -> {url = "https://github.com/CliMA/ClimaCore.jl", rev = "as/bickley-jet"}
+[sources]
+ClimaAtmos = {path = "../.."}
+ClimaCore = {path = "/Users/akshaysridhar/Research/Codes/ClimaCore.jl"}

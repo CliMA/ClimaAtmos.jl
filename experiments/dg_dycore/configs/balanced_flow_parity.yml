@@ -1,0 +1,16 @@
+# Stage-A1 parity check: 1-day unperturbed balanced flow, pure-KEP
+# (κ₄ = 0), HEVI dt = 60 — compare against the ClimaCore reference:
+#   run_problem(BaroclinicWaveFDDG(; perturb = false, dt = 60.0,
+#       t_end = 86400.0, κ₄ = 0.0, filter_Nc = 0, plots = false))
+# Acceptance: mass drift ≤ 1e-14; balanced-flow max|v| within 1% of the
+# reference log.
+helem: 4
+npoly: 4
+zelem: 10
+stepper: hevi
+dt: 60.0
+t_end: 86400.0
+perturb: false
+kappa4: 0.0
+constants_mode: parity
+ndiag: 60

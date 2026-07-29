@@ -1,0 +1,26 @@
+# Baroclinic wave (JW06, perturbed) over smoothed Earth topography.
+# Orography: ETOPO2022 60arcsec ClimaArtifacts dataset -> SpaceVaryingInput
+# onto the GLL nodes -> diffusion smoothing (damping factor 5) ->
+# LinearAdaption terrain-following warp.
+#
+# CAUTION (geometry plumbing only): the FDDG horizontal fluxes are evaluated
+# along the warped coordinate surfaces; terrain metric cross-terms are not
+# yet included. Valid for gentle smoothed slopes only — see README.
+helem: 8
+npoly: 4
+zelem: 20
+zmax: 30000.0
+zstretch: [300.0, 3000.0]
+stepper: hevi
+dt: 60.0
+t_end: 86400.0
+perturb: true
+topography: earth
+topography_damping_factor: 5.0
+interface_flux: roe
+# kappa4 left at the default (SIPG cap / 10): over topography the flow is
+# never exactly balanced, so run stabilized rather than pure-KEP (kappa4: 0).
+constants_mode: clima_params
+ic_source: setups
+held_suarez: false
+ndiag: 60

@@ -1,0 +1,14 @@
+# Held–Suarez on the flux-form FDDG core, ClimaAtmos-reused forcing.
+# Diagnostics: ClimaAtmos-standard set (ua va wa ta pfull rhoa ke rv),
+# daily. Canonical climatology needs ≳200-day spinup — this test-scale run
+# gives qualitative zonal means only (post/zonal_means.jl).
+helem: 4
+zelem: 10
+stepper: hevi
+dt: 60.0
+t_end: 864000.0         # 10 days (test scale)
+perturb: true           # breaks hemispheric symmetry, speeds eddy onset
+held_suarez: true
+output_dir: output/held_suarez_fddg
+diag_period: 86400.0
+ndiag: 60

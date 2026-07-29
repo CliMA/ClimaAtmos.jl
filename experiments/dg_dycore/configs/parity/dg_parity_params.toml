@@ -1,0 +1,26 @@
+# ClimaParams overrides reproducing the ClimaCore DG examples' literal
+# constants (sphere_dg_fd_model.jl), so ClimaAtmos-sourced components
+# (Setups IC values, Held-Suarez forcing) match the reference runs exactly.
+# ClimaParams defaults differ: grav 9.81, radius 6.371e6, Ω 7.2921159e-5,
+# MSLP 101325, molar mass 0.02897 (R_d ≈ 287.05), kappa_d 0.28571428571.
+
+[gravitational_acceleration]
+value = 9.80616
+
+[planet_radius]
+value = 6.371229e6
+
+[angular_velocity_planet_rotation]
+value = 7.29212e-5
+
+[mean_sea_level_pressure]
+value = 1.0e5
+
+# R_d = universal_gas_constant / molar_mass_dry_air = 287.0 exactly
+# (0.02897024320557491 = Float64(8.3144598 / 287.0); round-trips to 287.0)
+[molar_mass_dry_air]
+value = 0.02897024320557491
+
+# κ = 2/7 exactly (examples' κ_gas; cp_d = R_d/κ = 1004.5)
+[adiabatic_exponent_dry_air]
+value = 0.2857142857142857
