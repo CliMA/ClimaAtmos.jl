@@ -11,7 +11,7 @@ import ClimaCore.Operators as Operator
 import CloudMicrophysics.BulkMicrophysicsTendencies as BMT
 
 """
-    _beres_latent_heating(mp, thp, ρ, T, q_tot, q_lcl, q_icl, q_rai, q_sno)
+    _beres_latent_heating(mp, thp, ρ, T, w, q_tot, q_lcl, q_icl, q_rai, q_sno)
 
 Beres' canonical transport-free latent heating for one updraft:
 
@@ -30,6 +30,7 @@ Relative to a vapor reference, the liquid reservoir (`lcl + rai`) is weighted by
     thp,
     ρ,
     T,
+    w,
     q_tot,
     q_lcl,
     q_icl,
@@ -43,6 +44,7 @@ Relative to a vapor reference, the liquid reservoir (`lcl + rai`) is weighted by
         thp,
         ρ,
         T,
+        w,
         q_tot,
         q_lcl,
         q_icl,
@@ -536,6 +538,7 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
             ᶜρaʲ = Y.c.sgsʲs.:($j).ρa
             ᶜρʲ = ᶜρʲs.:($j)
             ᶜTʲ = ᶜTʲs.:($j)
+            ᶜwʲ = @. lazy(w_component(Geometry.WVector(ᶜuʲs.:($j))))
             ᶜq_totʲ = ᶜq_tot_nonnegʲs.:($j)
             ᶜq_lclʲ = Y.c.sgsʲs.:($j).q_lcl
             ᶜq_iclʲ = Y.c.sgsʲs.:($j).q_icl
@@ -548,6 +551,7 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
                     thp,
                     ᶜρʲ,
                     ᶜTʲ,
+                    ᶜwʲ,
                     ᶜq_totʲ,
                     ᶜq_lclʲ,
                     ᶜq_iclʲ,

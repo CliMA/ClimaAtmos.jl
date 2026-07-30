@@ -22,11 +22,11 @@ import CloudMicrophysics.BulkMicrophysicsTendencies as BMT
 # source terms inside the broadcast.
 # ---------------------------------------------------------------------------
 @inline function _mp1m_source_term(
-    ::Val{F}, mp, tps, ρ, T, q_tot, q_lcl, q_icl, q_rai, q_sno,
+    ::Val{F}, mp, tps, ρ, T, w, q_tot, q_lcl, q_icl, q_rai, q_sno,
 ) where {F}
     src = BMT.bulk_microphysics_tendencies(
         BMT.InstantaneousVerbose(), BMT.Microphysics1Moment(),
-        mp, tps, ρ, T, q_tot, q_lcl, q_icl, q_rai, q_sno,
+        mp, tps, ρ, T, w, q_tot, q_lcl, q_icl, q_rai, q_sno,
     )
     return getfield(src, F)
 end
@@ -64,6 +64,7 @@ function compute_mp1m_source(state, cache, ::Val{F}) where {F}
     thp = CAP.thermodynamics_params(cache.params)
     ᶜρ = state.c.ρ
     ᶜT = cache.precomputed.ᶜT
+    ᶜw = @. lazy(w_component(Geometry.WVector(cache.precomputed.ᶜu)))
     ᶜq_tot = @. lazy(specific(state.c.ρq_tot, ᶜρ))
     ᶜq_lcl = @. lazy(specific(state.c.ρq_lcl, ᶜρ))
     ᶜq_icl = @. lazy(specific(state.c.ρq_icl, ᶜρ))
@@ -71,7 +72,7 @@ function compute_mp1m_source(state, cache, ::Val{F}) where {F}
     ᶜq_sno = @. lazy(specific(state.c.ρq_sno, ᶜρ))
     return @. lazy(
         _mp1m_source_term(
-            Val(F), cmp, thp, ᶜρ, ᶜT, ᶜq_tot, ᶜq_lcl, ᶜq_icl, ᶜq_rai, ᶜq_sno,
+            Val(F), cmp, thp, ᶜρ, ᶜT, ᶜw, ᶜq_tot, ᶜq_lcl, ᶜq_icl, ᶜq_rai, ᶜq_sno,
         ),
     )
 end
@@ -92,6 +93,7 @@ function compute_mp1m_source_updraft(state, cache, ::Val{F}) where {F}
     thp = CAP.thermodynamics_params(cache.params)
     ᶜρʲ = cache.precomputed.ᶜρʲs.:1
     ᶜTʲ = cache.precomputed.ᶜTʲs.:1
+    ᶜwʲ = @. lazy(w_component(Geometry.WVector(cache.precomputed.ᶜuʲs.:1)))
     ᶜq_totʲ = cache.precomputed.ᶜq_tot_nonnegʲs.:1
     ᶜq_lclʲ = (state.c.sgsʲs.:1).q_lcl
     ᶜq_iclʲ = (state.c.sgsʲs.:1).q_icl
@@ -100,7 +102,7 @@ function compute_mp1m_source_updraft(state, cache, ::Val{F}) where {F}
     return @. lazy(
         _mp1m_source_term(
             Val(F), cmp, thp,
-            ᶜρʲ, ᶜTʲ, ᶜq_totʲ, ᶜq_lclʲ, ᶜq_iclʲ, ᶜq_raiʲ, ᶜq_snoʲ,
+            ᶜρʲ, ᶜTʲ, ᶜwʲ, ᶜq_totʲ, ᶜq_lclʲ, ᶜq_iclʲ, ᶜq_raiʲ, ᶜq_snoʲ,
         ),
     )
 end
@@ -128,6 +130,7 @@ function compute_mp1m_source_env(state, cache, ::Val{F}) where {F}
     ᶜρ⁰ = @. lazy(
         TD.air_density(thp, ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰),
     )
+    ᶜw⁰ = @. lazy(w_component(Geometry.WVector(cache.precomputed.ᶜu⁰)))
     ᶜq_lcl⁰ = ᶜspecific_env_value(@name(q_lcl), state, cache)
     ᶜq_icl⁰ = ᶜspecific_env_value(@name(q_icl), state, cache)
     ᶜq_rai⁰ = ᶜspecific_env_value(@name(q_rai), state, cache)
@@ -135,7 +138,7 @@ function compute_mp1m_source_env(state, cache, ::Val{F}) where {F}
     return @. lazy(
         _mp1m_source_term(
             Val(F), cmp, thp,
-            ᶜρ⁰, ᶜT⁰, ᶜq_tot_nonneg⁰, ᶜq_lcl⁰, ᶜq_icl⁰, ᶜq_rai⁰, ᶜq_sno⁰,
+            ᶜρ⁰, ᶜT⁰, ᶜw⁰, ᶜq_tot_nonneg⁰, ᶜq_lcl⁰, ᶜq_icl⁰, ᶜq_rai⁰, ᶜq_sno⁰,
         ),
     )
 end

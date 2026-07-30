@@ -842,7 +842,7 @@ function set_microphysics_tendency_cache!(
     Y, p, mp1m::NonEquilibriumMicrophysics1M, _,
 )
     (; dt) = p
-    (; ᶜT, ᶜq_tot_nonneg, ᶜmp_tendency) = p.precomputed
+    (; ᶜT, ᶜu, ᶜq_tot_nonneg, ᶜmp_tendency) = p.precomputed
 
     thp = CAP.thermodynamics_params(p.params)
     cmp = CAP.microphysics_1m_params(p.params)
@@ -853,6 +853,9 @@ function set_microphysics_tendency_cache!(
     ᶜq_rai = @. lazy(specific(Y.c.ρq_rai, Y.c.ρ))
     ᶜq_sno = @. lazy(specific(Y.c.ρq_sno, Y.c.ρ))
 
+    # Grid-mean vertical velocity for velocity-dependent autoconversion
+    ᶜw = @. lazy(w_component(Geometry.WVector(ᶜu)))
+
     # Grid mean or quadrature sum over the SGS fluctuations
     # (writes into pre-allocated ᶜmp_tendency to avoid NamedTuple allocation)
     sgs_quad = p.atmos.sgs_quadrature
@@ -860,7 +863,7 @@ function set_microphysics_tendency_cache!(
     nsubs_quad = mp1m.n_substeps_quad
     if not_quadrature(sgs_quad)
         @. ᶜmp_tendency = microphysics_tendencies_1m(
-            Y.c.ρ, ᶜq_tot_nonneg, ᶜq_lcl, ᶜq_icl, ᶜq_rai, ᶜq_sno,
+            Y.c.ρ, ᶜw, ᶜq_tot_nonneg, ᶜq_lcl, ᶜq_icl, ᶜq_rai, ᶜq_sno,
             ᶜT, cmp, thp, dt, nsubs,
         )
     else
@@ -868,7 +871,7 @@ function set_microphysics_tendency_cache!(
         corr_Tq = correlation_Tq(p.params)
         α = sgs_variance_fidelity(CAP.cloud_fraction_steepness_scale(p.params))
         @. ᶜmp_tendency = microphysics_tendencies_1m(
-            BMT.Microphysics1Moment(), sgs_quad, cmp, thp, Y.c.ρ, ᶜT,
+            BMT.Microphysics1Moment(), sgs_quad, cmp, thp, Y.c.ρ, ᶜw, ᶜT,
             ᶜq_tot_nonneg, ᶜq_lcl, ᶜq_icl, ᶜq_rai, ᶜq_sno,
             ᶜT′T′, ᶜq′q′, corr_Tq, ᶜsgs_moments.λ_lagrange, α,
             dt, nsubs_quad,
@@ -882,8 +885,8 @@ function set_microphysics_tendency_cache!(
     Y, p, mp1m::NonEquilibriumMicrophysics1M, tm::PrognosticEDMFX,
 )
     (; dt) = p
-    (; ᶜρʲs, ᶜTʲs, ᶜq_tot_nonnegʲs) = p.precomputed
-    (; ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰) = p.precomputed
+    (; ᶜρʲs, ᶜTʲs, ᶜuʲs, ᶜq_tot_nonnegʲs) = p.precomputed
+    (; ᶜu⁰, ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰) = p.precomputed
     (; ᶜmp_tendency⁰, ᶜmp_tendencyʲs) = p.precomputed
 
     thp = CAP.thermodynamics_params(p.params)
@@ -895,8 +898,9 @@ function set_microphysics_tendency_cache!(
 
     ### Updraft contribution
     for j in 1:n
+        ᶜwʲ = @. lazy(w_component(Geometry.WVector(ᶜuʲs.:($$j))))
         @. ᶜmp_tendencyʲs.:($$j) = microphysics_tendencies_1m(
-            ᶜρʲs.:($$j), ᶜq_tot_nonnegʲs.:($$j),
+            ᶜρʲs.:($$j), ᶜwʲ, ᶜq_tot_nonnegʲs.:($$j),
             Y.c.sgsʲs.:($$j).q_lcl, Y.c.sgsʲs.:($$j).q_icl,
             Y.c.sgsʲs.:($$j).q_rai, Y.c.sgsʲs.:($$j).q_sno,
             ᶜTʲs.:($$j), cmp, thp, dt, nsubs,
@@ -920,10 +924,12 @@ function set_microphysics_tendency_cache!(
     ᶜq_icl⁰ .= ᶜspecific_env_value(@name(q_icl), Y, p)
     ᶜq_rai⁰ .= ᶜspecific_env_value(@name(q_rai), Y, p)
     ᶜq_sno⁰ .= ᶜspecific_env_value(@name(q_sno), Y, p)
+    # Environment vertical velocity for velocity-dependent autoconversion
+    ᶜw⁰_air = @. lazy(w_component(Geometry.WVector(ᶜu⁰)))
     sgs_quad = p.atmos.sgs_quadrature
     if not_quadrature(sgs_quad)
         @. ᶜmp_tendency⁰ = microphysics_tendencies_1m(
-            ᶜρ⁰, ᶜq_tot_nonneg⁰, ᶜq_lcl⁰, ᶜq_icl⁰, ᶜq_rai⁰, ᶜq_sno⁰,
+            ᶜρ⁰, ᶜw⁰_air, ᶜq_tot_nonneg⁰, ᶜq_lcl⁰, ᶜq_icl⁰, ᶜq_rai⁰, ᶜq_sno⁰,
             ᶜT⁰, cmp, thp, dt, nsubs,
         )
     else
@@ -939,7 +945,7 @@ function set_microphysics_tendency_cache!(
         @. ᶜλ⁰ = TD.liquid_fraction(thp, ᶜT⁰, max(0, ᶜq_lcl⁰), max(0, ᶜq_icl⁰))
         @. ᶜmu_S⁰ = ᶜq_tot_nonneg⁰ - TD.q_vap_saturation(thp, ᶜT⁰, ᶜρ⁰)
         @. ᶜmp_tendency⁰ = microphysics_tendencies_1m(
-            BMT.Microphysics1Moment(), sgs_quad, cmp, thp, ᶜρ⁰, ᶜT⁰,
+            BMT.Microphysics1Moment(), sgs_quad, cmp, thp, ᶜρ⁰, ᶜw⁰_air, ᶜT⁰,
             ᶜq_tot_nonneg⁰, ᶜq_lcl⁰, ᶜq_icl⁰, ᶜq_rai⁰, ᶜq_sno⁰,
             ᶜT′T′, ᶜq′q′, corr_Tq, ᶜsgs_moments.λ_lagrange, α,
             dt, nsubs_quad, ᶜλ⁰, ᶜmu_S⁰,
