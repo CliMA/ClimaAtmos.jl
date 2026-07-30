@@ -1,7 +1,7 @@
 #=
-run with: julia  --project=.buildkite perf/run-and-time/timer_harness.jl <path-to-case-file>
+run with: julia  --project ./timer_harness.jl <path-to-case-file>
 
-from the root of the repository.
+from the script directory.
 =#
 
 # Always try using Revise if available
