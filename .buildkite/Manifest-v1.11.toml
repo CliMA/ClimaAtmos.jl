@@ -473,11 +473,11 @@ weakdeps = ["Adapt", "CUDA", "ClimaCore", "ClimaCoreTempestRemap", "Interpolatio
 
 [[deps.CloudMicrophysics]]
 deps = ["ClimaParams", "DocStringExtensions", "FastGaussQuadrature", "ForwardDiff", "InteractiveUtils", "LazyArtifacts", "LogExpFunctions", "RootSolvers", "SpecialFunctions", "StaticArrays", "Thermodynamics", "UnrolledUtilities"]
-git-tree-sha1 = "8415190a0300808eea82dfef201bbc228e9c8e60"
+git-tree-sha1 = "a42e1bd5bef598ac82daea4839c5c636500667aa"
 repo-rev = "aj/regime_rain_formation"
 repo-url = "https://github.com/CliMA/CloudMicrophysics.jl.git"
 uuid = "6a9e3e04-43cd-43ba-94b9-e8782df3c71b"
-version = "0.37.2"
+version = "0.38.0"
 
     [deps.CloudMicrophysics.extensions]
     EmulatorModelsExt = ["DataFrames", "MLJ"]
