@@ -65,6 +65,7 @@ function get_microphysics_1m_options(parsed_args, toml_dict)
         Dict(
             "Kessler1M" => CMP.Kessler1M(toml_dict),
             "PrescribedNd" => CMP.PrescribedNd(toml_dict),
+            "VelocityDependent" => CMP.VelocityDependent(),
         ),
         "rain_autoconversion",
     )
