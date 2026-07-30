@@ -2,7 +2,7 @@
 
 julia_version = "1.11.9"
 manifest_format = "2.0"
-project_hash = "1fef436af4877b7978ad5c640842ccbf9c65f883"
+project_hash = "92a7259108e9288d3c7e50e04443ef474ac185b0"
 
 [[deps.ADTypes]]
 git-tree-sha1 = "ec6be48a85c93d995563b84bff8a86bc98df45ce"
@@ -473,9 +473,11 @@ weakdeps = ["Adapt", "CUDA", "ClimaCore", "ClimaCoreTempestRemap", "Interpolatio
 
 [[deps.CloudMicrophysics]]
 deps = ["ClimaParams", "DocStringExtensions", "FastGaussQuadrature", "ForwardDiff", "InteractiveUtils", "LazyArtifacts", "LogExpFunctions", "RootSolvers", "SpecialFunctions", "StaticArrays", "Thermodynamics", "UnrolledUtilities"]
-git-tree-sha1 = "df0677f50e4ad62d521bea3ca35c72bbf92e3443"
+git-tree-sha1 = "8415190a0300808eea82dfef201bbc228e9c8e60"
+repo-rev = "aj/regime_rain_formation"
+repo-url = "https://github.com/CliMA/CloudMicrophysics.jl.git"
 uuid = "6a9e3e04-43cd-43ba-94b9-e8782df3c71b"
-version = "0.37.1"
+version = "0.37.2"
 
     [deps.CloudMicrophysics.extensions]
     EmulatorModelsExt = ["DataFrames", "MLJ"]

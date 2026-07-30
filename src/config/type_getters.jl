@@ -64,7 +64,7 @@ function get_atmos(config::AtmosConfig, params; setup_type = nothing)
     @info "AtmosModel: \n$(summary(atmos))"
     if !isnothing(params.microphysics_1m_params)
         microphysics_model = atmos.water.microphysics_model
-        options = params.microphysics_1m_params.options
+        options = params.microphysics_1m_params.processes
         @info "Microphysics settings: $(sprint(summary_microphysics, microphysics_model, options))"
     end
     return atmos
