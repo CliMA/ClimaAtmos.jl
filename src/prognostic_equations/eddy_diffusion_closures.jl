@@ -797,7 +797,22 @@ end
     return min(ℓ_phys, ml.l_grid)
 end
 
-function ᶜmixing_length(Y, p, property::Val{P} = Val{:master}()) where {P}
+"""
+    ᶜmixing_length(Y, p, property = Val(:master); grid_scale)
+
+Compute the center-space mixing length of the TKE-based closure, with
+`property` selecting a `MixingLength` component (see `get_mixing_length_field`).
+
+# Keyword Arguments
+
+  - `grid_scale`: upper bound on the mixing length. By default, the
+    resolvability filter scale `max(Δx_h, Δz)` (see
+    [`resolvability_filter_scale`](@ref)).
+"""
+function ᶜmixing_length(
+    Y, p, property::Val{P} = Val{:master}();
+    grid_scale = resolvability_filter_scale(axes(Y.c)),
+) where {P}
     (; params) = p
     (; ustar, obukhov_length) = p.precomputed.sfc_conditions
     # Stability-biased buoyancy gradient: registers unresolved inversions
@@ -807,7 +822,7 @@ function ᶜmixing_length(Y, p, property::Val{P} = Val{:master}()) where {P}
     (; ᶜN²_eff, ᶜbuoygrad, ᶜstrain_rate_norm) = p.precomputed
     ᶜz = Fields.coordinate_field(Y.c).z
     z_sfc = Fields.level(Fields.coordinate_field(Y.f).z, Fields.half)
-    ᶜΔ_f = resolvability_filter_scale(axes(Y.c))
+    ᶜΔ_f = grid_scale
 
     # ᶜmixing_length is only evaluated for AbstractEDMF, which always carries
     # Y.c.ρtke.
@@ -847,6 +862,27 @@ function ᶜmixing_length(Y, p, property::Val{P} = Val{:master}()) where {P}
 end
 
 """
+    set_horizontal_diffusivities!(Y, p)
+
+Compute and cache the horizontal eddy viscosity `ᶜK_u_h` and eddy diffusivity
+`ᶜK_h_h` of the TKE-based closure, with the mixing length limited by the
+horizontal node spacing, `l_h = min(l_phys, Δx_h)`.
+"""
+function set_horizontal_diffusivities!(Y, p)
+    (; params) = p
+    (; ᶜK_u_h, ᶜK_h_h, ᶜN²_eff, ᶜstrain_rate_norm) = p.precomputed
+    turbconv_params = CAP.turbconv_params(params)
+    Δx_h = horizontal_filter_scale(axes(Y.c))
+    ᶜl_h = ᶜmixing_length(Y, p; grid_scale = Δx_h)
+    ᶜtke = @. lazy(specific(Y.c.ρtke, Y.c.ρ))
+    @. ᶜK_u_h = eddy_viscosity(turbconv_params, ᶜtke, ᶜl_h)
+    ᶜprandtl_nvec =
+        @. lazy(turbulent_prandtl_number(params, ᶜN²_eff, ᶜstrain_rate_norm))
+    @. ᶜK_h_h = eddy_diffusivity(ᶜK_u_h, ᶜprandtl_nvec)
+    return nothing
+end
+
+"""
     ᶜdiffusive_flux_divergenceᵥ(ᶠcoef, ᶜχ)
 
 Lazy vertical divergence of the diffusive scalar flux `F = -ᶠcoef ∇χ`, with
@@ -871,6 +907,29 @@ Summands are combined in a fixed order: dry static energy, then vapor, liquid, i
     ᶠinterp(TD.enthalpy_liquid(thermo_params, ᶜT) + ᶜΦ) * ᶠgradᵥ(ᶜq_liq) +
     ᶠinterp(TD.enthalpy_ice(thermo_params, ᶜT) + ᶜΦ) * ᶠgradᵥ(ᶜq_ice),
 )
+
+"""
+    ᶜtotal_enthalpy_gradientₕ!(ᶜ∇h, thermo_params, ᶜT, ᶜΦ, ᶜq_vap, ᶜq_liq, ᶜq_ice)
+
+Write the horizontal gradient of total enthalpy in dry-static-energy +
+water-enthalpy form, `∇ₕs_d + Σ_μ (h_μ + Φ) ∇ₕq_μ` for `μ ∈ {vap, liq, ice}`,
+into the center field `ᶜ∇h` and return it.
+
+Summands are combined in a fixed order: dry static energy, then vapor, liquid,
+ice. The gradient is accumulated in two broadcasts; see the horizontal EDMF
+diffusion documentation page.
+"""
+function ᶜtotal_enthalpy_gradientₕ!(
+    ᶜ∇h, thermo_params, ᶜT, ᶜΦ, ᶜq_vap, ᶜq_liq, ᶜq_ice,
+)
+    @. ᶜ∇h =
+        gradₕ(TD.dry_static_energy(thermo_params, ᶜT, ᶜΦ)) +
+        (TD.enthalpy_vapor(thermo_params, ᶜT) + ᶜΦ) * gradₕ(ᶜq_vap)
+    @. ᶜ∇h +=
+        (TD.enthalpy_liquid(thermo_params, ᶜT) + ᶜΦ) * gradₕ(ᶜq_liq) +
+        (TD.enthalpy_ice(thermo_params, ᶜT) + ᶜΦ) * gradₕ(ᶜq_ice)
+    return ᶜ∇h
+end
 
 """
     gradient_richardson_number(params, ᶜN²_eff, ᶜstrain_rate_norm)

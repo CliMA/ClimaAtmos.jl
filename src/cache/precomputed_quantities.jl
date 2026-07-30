@@ -197,6 +197,18 @@ function precomputed_quantities(Y, atmos)
                 ᶠK_u = similar(Y.f, FT),
                 ᶠK_entr = similar(Y.f, FT),
                 ᶜl_mix = similar(Y.c, FT),
+                # Horizontal eddy viscosity/diffusivity of the TKE-based
+                # closure, with the mixing length limited by the horizontal
+                # node spacing; written by `set_horizontal_diffusivities!`.
+                (
+                    atmos.edmfx_model.sgs_diffusive_flux_horizontal isa
+                    Val{true} ||
+                    atmos.edmfx_model.horizontal_diffusion isa Val{true} ?
+                    (;
+                        ᶜK_u_h = similar(Y.c, FT),
+                        ᶜK_h_h = similar(Y.c, FT),
+                    ) : (;)
+                )...,
             ) : (;)
         )...,
         ᶜstrain_rate_norm = similar(Y.c, FT),
@@ -756,6 +768,13 @@ NVTX.@annotate function set_explicit_precomputed_quantities!(Y, p, t)
     # stability closure). Needs the final cloud fraction and ᶜN²_eff
     # from the covariance/cloud-fraction update above.
     set_face_diffusivities!(Y, p)
+
+    if turbconv_model isa AbstractEDMF && (
+        p.atmos.edmfx_model.sgs_diffusive_flux_horizontal isa Val{true} ||
+        p.atmos.edmfx_model.horizontal_diffusion isa Val{true}
+    )
+        set_horizontal_diffusivities!(Y, p)
+    end
 
     # Master mixing length at centers for consumers that live at centers
     # (TKE dissipation, covariance closure, updraft internal diffusion,

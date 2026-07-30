@@ -453,6 +453,9 @@ edmfx_nh_pressure:
 edmfx_vertical_diffusion:
   help: "If set to true, it switches on vertical diffusion of prognostic EDMFX updrafts. [`true`, `false` (default)]"
   value: false
+edmfx_horizontal_diffusion:
+  help: "If set to true, it applies the grid-mean horizontal diffusion tendencies to the prognostic EDMFX updrafts. Requires `edmfx_sgs_horizontal_diffusive_flux`. Intended for high-resolution runs.  [`true`, `false` (default)]"
+  value: false
 edmfx_entr_model:
   help: "EDMFX entrainment closure.  [`nothing` (default), `PiGroups`, `Generalized`]"
   value: ~
@@ -473,6 +476,9 @@ edmfx_sgs_mass_flux:
   value: false
 edmfx_sgs_diffusive_flux:
   help: "If set to true, it switches on EDMFX SGS diffusive flux.  [`true`, `false` (default)]"
+  value: false
+edmfx_sgs_horizontal_diffusive_flux:
+  help: "If set to true, it switches on the horizontal component of the EDMFX SGS diffusive flux. Intended for high-resolution runs.  [`true`, `false` (default)]"
   value: false
 updraft_number:
   help: "Sets the number of updrafts for the EDMF scheme"
