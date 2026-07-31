@@ -19,7 +19,11 @@
 core: vi
 face_set: kep
 momentum_adv: vector_invariant
-sponge_uh: true        # damp uₕ too in the top sponge (mountain waves)
+# sponge acts on w ONLY (the default): the uₕ sponge is a linear drag on
+# the upper-level jet, not a gravity-wave absorber — damp the vertically
+# propagating waves through the radial-velocity sponge alone
+kappa4: 4.0e11         # ≤ SIPG cap/10 at helem 8, dt 60; terrain-aware
+                       # (perturbation-from-base-state) form
 helem: 8
 npoly: 4
 zelem: 20

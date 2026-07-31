@@ -140,35 +140,43 @@ centers (momentum in global Cartesian components), `Y.f = (; ρw)` with
 # Ullrich et al. shallow-atmosphere expressions; :setups reuses ClimaAtmos's
 # implementation (constants from ClimaParams — identical under the parity
 # TOML), :formulas keeps the examples' own copy (literal constants).
-function jw_values(m::DGModel{FT}) where {FT}
-    (; ccoords) = m.fields
+# The DGModel-free method allows the model constructor to evaluate the
+# (unperturbed) base state as a diffusion reference before initial_state.
+function jw_values(
+    prob,
+    c::DGConstants{FT},
+    params,
+    ccoords;
+    perturb = prob.perturb,
+) where {FT}
     lat = ccoords.lat
     long = ccoords.long
     z = ccoords.z
-    if m.prob.ic_source == :setups
+    if prob.ic_source == :setups
         vals =
             CA.Setups.shallow_atmos_barowave_values.(
                 z,
                 lat,
                 long,
-                Ref(m.params),
-                m.prob.perturb,
+                Ref(params),
+                perturb,
             )
         return (; T = vals.T, p = vals.p, uE = vals.u, uN = vals.v)
     else # :formulas
-        c = m.c
         j = JWParams(c)
         T = @. jw_temp(j, lat, z)
         p = @. jw_pres(j, lat, z)
         uE = @. jw_u_base(j, lat, z)
         uN = @. 0 * z
-        if m.prob.perturb
+        if perturb
             @. uE += jw_δu(j, long, lat, z)
             @. uN += jw_δv(j, long, lat, z)
         end
         return (; T, p, uE, uN)
     end
 end
+
+jw_values(m::DGModel) = jw_values(m.prob, m.c, m.params, m.fields.ccoords)
 
 function initial_state_fddg(m::DGModel{FT}) where {FT}
     c = m.c

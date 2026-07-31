@@ -34,6 +34,7 @@ function problem_from_yaml(path)
         ("perturb", :perturb, Bool),
         ("kappa4", :κ₄, FT),
         ("sponge_tau", :sponge_τ, FT),
+        ("sponge_depth", :sponge_depth, FT),
         ("sponge_uh", :sponge_uh, Bool),
         ("topography", :topography, Symbol),
         ("topography_damping_factor", :topography_damping_factor, FT),

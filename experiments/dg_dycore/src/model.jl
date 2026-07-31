@@ -143,11 +143,13 @@ function dg_fields(prob, c::DGConstants{FT}, spaces) where {FT}
     E2 = @. Geometry.UVVector(eE2, eN2)
     E3 = @. Geometry.UVVector(eE3, eN3)
 
-    # Rayleigh sponge over the top z_sponge: absorbing layer for the rigid
-    # lid. β profile as in the CG examples, Δt-independent peak rate 1/τ.
-    # Applied to ρw always (τ = Inf disables); sponge_uh additionally damps
-    # Cartesian horizontal momentum (NOT canonical for the baroclinic wave).
-    z_sponge = FT(7.5e3)
+    # Rayleigh sponge over the top sponge_depth: absorbing layer for the
+    # rigid lid. β profile as in the CG examples, Δt-independent peak rate
+    # 1/τ. Applied to ρw/w always (τ = Inf disables) — the physically
+    # correct absorber for vertically propagating gravity waves; sponge_uh
+    # additionally damps horizontal momentum, which is a linear drag on
+    # the upper-level jet (NOT canonical — leave off).
+    z_sponge = FT(prob.sponge_depth)
     zmax = prob.zmax
     τs = prob.sponge_τ
     ᶠβ_sponge = @. ifelse(
@@ -245,6 +247,22 @@ function DGModel(prob::DGProblem)
     params = dg_params(FT, prob.constants_mode)
     spaces = dg_spaces(prob, c)
     fields = dg_fields(prob, c, spaces)
+    # Unperturbed JW06 base state as the terrain-aware diffusion reference
+    # (steady, analytic, evaluated at the warped node heights). Diffusing
+    # FULL fields along warped coordinate surfaces converts their
+    # O(Δz_warp) terrain signature (g·Δz + cp·Γ·Δz for h_tot, shear·Δz for
+    # velocity) into spurious dipoles at the mountains (docs
+    # vi_kep_face_terms.md §8); diffusing perturbations from this
+    # reference removes the signature. Identical to full-field diffusion
+    # on flat grids up to the (smooth, resolved) base-state structure.
+    fields = let
+        (; T, uE, uN) =
+            jw_values(prob, c, params, fields.ccoords; perturb = false)
+        ᶜK_ref = @. (uE^2 + uN^2) / 2
+        ᶜh_ref = @. (c.cv_d + c.R_d) * T + ᶜK_ref + fields.ᶜΦ -
+                    c.cv_d * c.T_tri
+        (; fields..., ᶜh_ref, ᶜu_ref = uE, ᶜv_ref = uN)
+    end
     ops = dg_operators(c)
     opmats = (;
         ᶜinterp_matrix = MatrixFields.operator_matrix(ops.Ic),

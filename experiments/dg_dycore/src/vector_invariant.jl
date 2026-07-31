@@ -321,29 +321,35 @@ function compute_tendency_vi!(
         @. duₕ -= ᶜβ_sponge * uₕ
     end
 
-    # --- κ₄ hyperdiffusion (geographic (u, v); h_tot on FLAT grids only) ---
-    # On terrain-warped grids h_tot varies along the coordinate surfaces by
-    # O(g·Δz_warp + cp·Γ·Δz_warp) through the base state — physical
-    # structure, not noise — and diffusing it injects O(100 J/m³/s)
-    # heating dipoles at the mountains (measured at κ₄ = 1e16 on
-    # Hughes2023; subtracting Φ removes only the geopotential half). Over
-    # terrain, κ₄ therefore acts on the velocity components only; the
-    # proper terrain-aware energy diffusion (perturbation from a warped
-    # reference profile) is a follow-up.
+    # --- κ₄ hyperdiffusion (h_tot and geographic (u, v); no ρ/w) ---
+    # Over terrain, diffuse PERTURBATIONS from the steady unperturbed
+    # base state (m.fields ᶜh_ref/ᶜu_ref/ᶜv_ref, evaluated at the warped
+    # node heights): full fields carry an O(Δz_warp) terrain signature
+    # along the coordinate surfaces (g·Δz + cp·Γ·Δz for h_tot, shear·Δz
+    # for velocity) that the along-surface biharmonic converts into
+    # spurious dipoles at the mountains (measured O(100 J/m³/s) at
+    # κ₄ = 1e16 on Hughes2023 for h_tot; the velocity version crashed
+    # even faster). Flat grids keep the validated full-field form.
     if κ₄ != 0
         τ_κ₄ = Operators.ldg_penalty_parameter(κ₄, m.spaces.hv_center_space)
-        if m.prob.topography == :none
-            χe = similar(h_tot)
-            @. χe = hwdiv(hgrad(h_tot))
-            de4 = Operators.ldg_laplacian_tendency(χe, ρ, κ₄, τ_κ₄)
-            @. dYc.ρe -= de4
-        end
+        terrain = m.prob.topography != :none
+        (; ᶜh_ref, ᶜu_ref, ᶜv_ref) = m.fields
+        χe = similar(h_tot)
         χu = similar(u_sc)
-        @. χu = hwdiv(hgrad(u_sc))
         χv = similar(v_sc)
-        @. χv = hwdiv(hgrad(v_sc))
+        if terrain
+            @. χe = hwdiv(hgrad(h_tot - ᶜh_ref))
+            @. χu = hwdiv(hgrad(u_sc - ᶜu_ref))
+            @. χv = hwdiv(hgrad(v_sc - ᶜv_ref))
+        else
+            @. χe = hwdiv(hgrad(h_tot))
+            @. χu = hwdiv(hgrad(u_sc))
+            @. χv = hwdiv(hgrad(v_sc))
+        end
+        de4 = Operators.ldg_laplacian_tendency(χe, ρ, κ₄, τ_κ₄)
         du4 = Operators.ldg_laplacian_tendency(χu, nothing, κ₄, τ_κ₄)
         dv4 = Operators.ldg_laplacian_tendency(χv, nothing, κ₄, τ_κ₄)
+        @. dYc.ρe -= de4
         @. duₕ -= Geometry.transform(
             Geometry.Covariant12Axis(),
             Geometry.UVVector(du4, dv4),

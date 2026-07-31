@@ -57,6 +57,7 @@ Base.@kwdef struct BaroclinicWaveFDDG{FT <: AbstractFloat}
     interface_flux::Symbol = :rusanov
     zstretch::Union{Nothing, Tuple{FT, FT}} = nothing
     sponge_τ::FT = 1200.0
+    sponge_depth::FT = 7.5e3
     sponge_uh::Bool = false
     topography::Symbol = :none
     topography_damping_factor::FT = 5.0
@@ -143,6 +144,7 @@ Base.@kwdef struct BaroclinicWaveDG{FT <: AbstractFloat}
     filter_Nc::Union{Nothing, Int} = nothing   # nothing → npoly
     zstretch::Union{Nothing, Tuple{FT, FT}} = nothing
     sponge_τ::FT = 1200.0
+    sponge_depth::FT = 7.5e3
     sponge_uh::Bool = false
     topography::Symbol = :none
     topography_damping_factor::FT = 5.0
