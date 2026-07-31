@@ -1,0 +1,38 @@
+# Baroclinic wave (JW06, perturbed) over the Hughes & Jablonowski (2023)
+# analytic double-mountain topography, run with the vector-invariant core
+# and the KEP-compatible face set (docs/vi_kep_face_terms.md):
+# {rho*u} mass flux, central interface mass flux (no density penalty),
+# rho-weighted velocity jump penalties, NO cutoff filter. The horizontal
+# advective KE budget closes to roundoff (test/test_vi_kep_budget.jl).
+#
+# Pure-KEP configuration (kappa4 = 0, no filter — the :kep defaults).
+# Integrates the mountain adjustment cleanly (KE budget closes to
+# roundoff; test/test_vi_kep_budget.jl); the KNOWN LIMIT for multi-day
+# integration at this resolution is mountain-wave breaking aloft, which
+# pure KEP deliberately does not dissipate (KEP ≠ entropy stability), and
+# naive along-surface κ₄ is WORSE than none over terrain (any field with
+# vertical structure has an O(Δz_warp) terrain signature along the warped
+# coordinate surfaces, so the biharmonic injects spurious dipoles at the
+# mountains — measured for both h_tot and (u, v)). Terrain-aware
+# dissipation (perturbation-from-warped-reference or constant-z) is the
+# documented follow-up in docs/vi_kep_face_terms.md §8.
+core: vi
+face_set: kep
+momentum_adv: vector_invariant
+sponge_uh: true        # damp uₕ too in the top sponge (mountain waves)
+helem: 8
+npoly: 4
+zelem: 20
+zmax: 30000.0
+zstretch: [300.0, 3000.0]
+stepper: hevi
+dt: 60.0
+t_end: 864000.0        # 10 days
+perturb: true
+topography: hughes2023
+constants_mode: clima_params
+ic_source: setups
+held_suarez: false
+output_dir: output_dg_bw_double_mountain_kep
+diag_period: 86400.0
+ndiag: 120

@@ -23,10 +23,23 @@ elements **without DSS** + FD vertical staggering, HEVI or explicit):
   the validated production form (10-day baroclinic wave, conservation
   ~1e-14, runs pure-KEP with the floored-Roe interface).
 - **Vector-invariant** (`src/vector_invariant.jl`) — state
-  `Y.c = (ρ, ρe, uₕ::Covariant12)`, `Y.f = (w)`; requires its κ₄/filter
-  stabilization (defaults: cap/10 + filter_Nc = npoly). `momentum_adv =
-  :fluctuation` is helem=4-only. Reuses BOTH ClimaAtmos HS functions
-  (the uₕ drag applies directly to this state).
+  `Y.c = (ρ, ρe, uₕ::Covariant12)`, `Y.f = (w)`. Two face sets
+  (`face_set` keyword; derivation in `docs/vi_kep_face_terms.md`):
+  - `:kg` (legacy): KG scalar fluxes + Rusanov + plain λ jump penalties —
+    NOT KE-compatible with the VI pairing; requires κ₄/filter stabilization
+    (defaults: cap/10 + filter_Nc = npoly).
+  - `:kep`: the VI-KEP-compatible set — `{ρũ}` mass flux (average of
+    nodal contravariant mass fluxes, volume + central interface, NO density
+    penalty), matching ρe flux, ρ-weighted velocity penalties (exact
+    sign-definite KE sinks). The horizontal advective KE production closes
+    to roundoff, on flat AND terrain-warped grids (metric-transparent
+    ledger), so κ₄ = 0 / filter_Nc = 0 are the defaults. Verified by
+    `test/test_vi_kep_budget.jl`.
+
+  `momentum_adv = :fluctuation` is helem=4-only. Reuses BOTH ClimaAtmos HS
+  functions (the uₕ drag applies directly to this state). Over topography
+  this core carries the covariant terrain terms (full-metric K, full
+  contravariant ᶠu³) — the CG-shared metric machinery.
 
 ## Layout
 
@@ -93,16 +106,29 @@ Both cores share the ClimaAtmos-standard NetCDF diagnostics
 - `topography: earth` (ETOPO2022 60arcsec artifact → `SpaceVaryingInput`
   onto the GLL nodes → diffusion smoothing → `Hypsography.LinearAdaption`,
   the ClimaAtmos `grids.jl` recipe; see
-  `configs/baroclinic_wave_earth_topo.yml`) warps the extruded space, and
-  the ICs / discrete-hydrostatic ρ correction / ᶜΦ / HS forcing all follow
-  the warped `z` automatically. **BUT the FDDG horizontal fluxes are
-  evaluated along the warped coordinate surfaces** — the terrain metric
-  cross-terms (uₕ transport through sloped ξ³ surfaces, the true-horizontal
-  pressure gradient) are not yet included, so this is geometry plumbing
-  valid for gentle smoothed slopes only; a curvilinear (contravariant-flux)
-  extension of the KG core is the follow-up. The smoothing preprocessing
-  (`diffuse_surface_elevation!`) runs a CG Laplacian with DSS inside —
-  grid generation, not part of the DG discretization.
+  `configs/baroclinic_wave_earth_topo.yml`) or `topography: hughes2023`
+  (the Hughes & Jablonowski 2023 analytic double mountain, evaluated
+  pointwise, no smoothing; see
+  `configs/baroclinic_wave_double_mountain_kep.yml`) warp the extruded
+  space; the ICs / discrete-hydrostatic ρ correction / ᶜΦ / HS forcing all
+  follow the warped `z` automatically.
+  - **Vector-invariant core**: carries the covariant terrain terms
+    (full-metric K, full contravariant ᶠu³ = CT3(uₕ) + CT3(w)); remaining
+    O(slope) approximations are the horizontal projection of DG face
+    normals and the w = 0 surface value (no CA-style surface-velocity
+    constraint). The `:kep` KE ledger is exact over terrain regardless
+    (`docs/vi_kep_face_terms.md` §6).
+  - **FDDG (Cartesian) core**: geometry plumbing only — the horizontal KG
+    fluxes run along the warped coordinate surfaces and the metric
+    cross-terms are absent; valid for gentle smoothed slopes, pending a
+    curvilinear (contravariant-flux) extension.
+
+  The Earth-topography smoothing (`diffuse_surface_elevation!`) runs a CG
+  Laplacian with DSS inside — grid generation, not part of the DG
+  discretization. NOTE: its per-step κ is scaled by the MINIMUM quadrature
+  node area (`min(WJ)`), not the average node spacing of the ClimaAtmos
+  recipe, which is measurably unstable at coarse helem (helem = 4 diverges
+  after ~12 iterations).
 - Stage A1 keeps the examples' per-call temporaries; preallocation into
   `DGModel` is a later perf pass.
 

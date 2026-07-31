@@ -63,6 +63,7 @@ const C12 = Geometry.Covariant12Vector
 const C123 = Geometry.Covariant123Vector
 const CT3 = Geometry.Contravariant3Vector
 const CT12 = Geometry.Contravariant12Vector
+const CT123 = Geometry.Contravariant123Vector
 
 export BaroclinicWaveFDDG, BaroclinicWaveDG, DGSimulation, run!
 

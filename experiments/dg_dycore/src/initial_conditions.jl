@@ -146,13 +146,14 @@ function jw_values(m::DGModel{FT}) where {FT}
     long = ccoords.long
     z = ccoords.z
     if m.prob.ic_source == :setups
-        vals = CA.Setups.shallow_atmos_barowave_values.(
-            z,
-            lat,
-            long,
-            Ref(m.params),
-            m.prob.perturb,
-        )
+        vals =
+            CA.Setups.shallow_atmos_barowave_values.(
+                z,
+                lat,
+                long,
+                Ref(m.params),
+                m.prob.perturb,
+            )
         return (; T = vals.T, p = vals.p, uE = vals.u, uN = vals.v)
     else # :formulas
         c = m.c
@@ -183,7 +184,7 @@ function initial_state_fddg(m::DGModel{FT}) where {FT}
     # ρe such that the diagnosed pressure is exactly the analytic p
     ᶜK = @. (uE^2 + uN^2) / 2
     ᶜρe = @. c.cv_d * ᶜp_ana / c.R_d +
-       ᶜρ * (ᶜK + c.grav * z - c.cv_d * c.T_tri)
+             ᶜρ * (ᶜK + c.grav * z - c.cv_d * c.T_tri)
 
     # u_c = uE (ê_E)_c + uN (ê_N)_c — Cartesian momentum components
     Yc = map(
@@ -227,7 +228,7 @@ function initial_state_vi(m::DGModel{FT}) where {FT}
     ᶜuₕ = @. C12(ᶜuₕ_local, lgeom_c)
     ᶜK = @. norm_sqr(ᶜuₕ_local) / 2
     ᶜρe = @. c.cv_d * ᶜp_ana / c.R_d +
-       ᶜρ * (ᶜK + c.grav * z - c.cv_d * c.T_tri)
+             ᶜρ * (ᶜK + c.grav * z - c.cv_d * c.T_tri)
 
     Yc = map(
         (ρi, ρei, uₕi) -> (; ρ = ρi, ρe = ρei, uₕ = uₕi),
@@ -235,7 +236,24 @@ function initial_state_vi(m::DGModel{FT}) where {FT}
         ᶜρe,
         ᶜuₕ,
     )
-    Yf = map(_ -> (; w = C3(FT(0))), fcoords)
+    # Terrain-consistent surface w (CA's surface-velocity constraint,
+    # applied statically): at the BOTTOM FACE ONLY, choose w₃ so
+    # u³ = g³ʰuₕ + g³³w₃ = 0 — the kinematic no-normal-flow BC; Bw then
+    # freezes this value. Without it the JW06 wind violates the BC over
+    # the mountains and the zero-flux operator BCs kick the first cell at
+    # O(u·slope·h_tot/Δz) (measured 0.19 s⁻¹ relative ρe tendency).
+    # INTERIOR w stays 0: adapting w everywhere (u³ ≡ 0, flow following
+    # all warped surfaces) is wrong — interior flow SHOULD cross the
+    # coordinate surfaces, and a structured interior w at t = 0 breaks
+    # the staggered ∇K/Lamb shear cancellation at O(u·w/Δz) (measured
+    # 1.7 m/s² dw on the Hughes2023 flanks — instant crash).
+    # (Identically w ≡ 0 on flat grids either way.)
+    lgeom_f = Fields.local_geometry_field(m.spaces.hv_face_space)
+    ᶠu³ₕ_sc = @. CT3(C123(m.ops.If(ᶜuₕ))).components.data.:1
+    ᶠg³³_sc = @. CT3(C3(FT(1)), lgeom_f).components.data.:1
+    w_sc = @. -(ᶠu³ₕ_sc) / ᶠg³³_sc
+    parent(w_sc)[2:end, :, :, :, :] .= FT(0)   # bottom face only (v-dim first)
+    Yf = map(ws -> (; w = C3(ws)), w_sc)
     return Fields.FieldVector(c = Yc, f = Yf)
 end
 

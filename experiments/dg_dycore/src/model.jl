@@ -77,6 +77,17 @@ warp needs a single-valued, continuous z_sfc anyway.
 =#
 function dg_hypsography(prob, horzspace, ::DGConstants{FT}) where {FT}
     prob.topography == :none && return Grids.Flat()
+    if prob.topography == :hughes2023
+        # Hughes & Jablonowski (2023) analytic double mountain (two
+        # zonally separated midlatitude peaks, h₀ = 2 km): pointwise
+        # evaluation on the GLL nodes, no smoothing (already smooth).
+        z_surface = SpaceVaryingInput(
+            CA.topography_function(CA.Hughes2023Topography()),
+            horzspace,
+        )
+        @info "Hughes2023 double-mountain orography" extrema(z_surface)
+        return Hypsography.LinearAdaption(Geometry.ZPoint.(z_surface))
+    end
     context = ClimaComms.context(horzspace)
     z_surface = SpaceVaryingInput(
         CA.AtmosArtifacts.earth_orography_file_path(; context),
@@ -177,9 +188,24 @@ function dg_operators(::DGConstants{FT}) where {FT}
         bottom = Operators.Extrapolate(),
         top = Operators.Extrapolate(),
     )
+    # ρJ-weighted C2F interpolation (CA's ᶠwinterp): REQUIRED for the
+    # terrain CT3(uₕ) vertical flux — the plain If version leaves an O(1)
+    # cross-discretization free-stream defect at resolved slopes (measured
+    # 0.19 s⁻¹ relative ρe tendency at the Hughes2023 mountain flank).
+    wIf = Operators.WeightedInterpolateC2F(
+        bottom = Operators.Extrapolate(),
+        top = Operators.Extrapolate(),
+    )
     vdivf2c = Operators.DivergenceF2C(
         bottom = Operators.SetValue(Geometry.WVector(FT(0))),
         top = Operators.SetValue(Geometry.WVector(FT(0))),
+    )
+    # CT3-valued flux variant (full contravariant vertical transport
+    # ᶠu³ = CT3(uₕ) + CT3(w) over terrain-warped grids); the zero-flux BCs
+    # are the terrain-following no-normal-flow condition u³ = 0.
+    vdivf2c3 = Operators.DivergenceF2C(
+        bottom = Operators.SetValue(Geometry.Contravariant3Vector(FT(0))),
+        top = Operators.SetValue(Geometry.Contravariant3Vector(FT(0))),
     )
     vvdivc2f = Operators.DivergenceC2F(
         bottom = Operators.SetDivergence(Geometry.WVector(FT(0))),
@@ -204,7 +230,7 @@ function dg_operators(::DGConstants{FT}) where {FT}
     )
     return (;
         hwdiv, hgrad, hcurl,
-        Ic, If, vdivf2c, vvdivc2f, VanLeer, ᶠgradᵥ, ᶠcurlᵥ, Bw,
+        Ic, If, wIf, vdivf2c, vdivf2c3, vvdivc2f, VanLeer, ᶠgradᵥ, ᶠcurlᵥ, Bw,
     )
 end
 
@@ -237,12 +263,22 @@ function DGModel(prob::DGProblem)
         Spaces.node_horizontal_length_scale(spaces.horzspace)^3 /
         ((2 * prob.npoly + 1)^2 * Δt),
     )
-    κ₄ = prob.κ₄ === nothing ? min(FT(2e17), κ₄_cap / 10) : prob.κ₄
+    kep_vi = prob isa BaroclinicWaveDG && prob.face_set == :kep
+    κ₄ = if prob.κ₄ !== nothing
+        prob.κ₄
+    elseif kep_vi
+        # KEP face set: the advective KE budget closes; run unstabilized
+        FT(0)
+    else
+        min(FT(2e17), κ₄_cap / 10)
+    end
     κ₄ > κ₄_cap && @warn "κ₄ exceeds the explicit SIPG stability cap" κ₄ κ₄_cap
-    # tendency cutoff filter: REQUIRED default for the vector-invariant
-    # core (npoly), NEVER for FDDG (voids KEP — not even exposed there)
+    # tendency cutoff filter: REQUIRED default for the legacy (:kg)
+    # vector-invariant core (npoly); 0 for the KEP face set; NEVER for
+    # FDDG (voids its KEP — not even exposed there)
     filter_Nc = if prob isa BaroclinicWaveDG
-        prob.filter_Nc === nothing ? prob.npoly : prob.filter_Nc
+        prob.filter_Nc === nothing ? (kep_vi ? 0 : prob.npoly) :
+        prob.filter_Nc
     else
         0
     end

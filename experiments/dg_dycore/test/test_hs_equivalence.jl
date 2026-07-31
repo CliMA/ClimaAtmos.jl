@@ -44,7 +44,7 @@
     dρu1_b = @. -k_f * hf * ρ * u1
 
     rel(a, b) = maximum(abs, parent(a) .- parent(b)) /
-        max(maximum(abs, parent(b)), 1e-30)
+                max(maximum(abs, parent(b)), 1e-30)
     @test rel(dY_a.c.ρe, dρe_b) ≤ 1e-11
     @test rel(dY_a.c.ρu1, dρu1_b) ≤ 1e-11
 end

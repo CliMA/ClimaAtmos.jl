@@ -11,5 +11,6 @@ const DG = DGDycore
     include("test_ic_parity.jl")
     include("test_hs_equivalence.jl")
     include("test_vi_core.jl")
+    include("test_vi_kep_budget.jl")
     include("test_no_dss.jl")
 end

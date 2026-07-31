@@ -21,8 +21,9 @@ import YAML
 function problem_from_yaml(path)
     cfg = YAML.load_file(path)
     FT = get(cfg, "float_type", "Float64") == "Float32" ? Float32 : Float64
-    kw = Dict{Symbol, Any}()
-    for (key, field, conv) in (
+    core = Symbol(get(cfg, "core", "fddg"))   # :fddg or :vi
+    core in (:fddg, :vi) || error("core must be fddg or vi")
+    shared = (
         ("helem", :helem, Int),
         ("npoly", :npoly, Int),
         ("zelem", :zelem, Int),
@@ -32,7 +33,6 @@ function problem_from_yaml(path)
         ("t_end", :t_end, FT),
         ("perturb", :perturb, Bool),
         ("kappa4", :κ₄, FT),
-        ("interface_flux", :interface_flux, Symbol),
         ("sponge_tau", :sponge_τ, FT),
         ("sponge_uh", :sponge_uh, Bool),
         ("topography", :topography, Symbol),
@@ -45,13 +45,23 @@ function problem_from_yaml(path)
         ("dt_save", :dt_save, FT),
         ("ndiag", :ndiag, Int),
     )
+    fddg_only = (("interface_flux", :interface_flux, Symbol),)
+    vi_only = (
+        ("momentum_adv", :momentum_adv, Symbol),
+        ("face_set", :face_set, Symbol),
+        ("filter_Nc", :filter_Nc, Int),
+    )
+    kw = Dict{Symbol, Any}()
+    for (key, field, conv) in
+        (shared..., (core == :fddg ? fddg_only : vi_only)...)
         haskey(cfg, key) && (kw[field] = conv(cfg[key]))
     end
     if haskey(cfg, "zstretch")
         zs = cfg["zstretch"]
         kw[:zstretch] = (FT(zs[1]), FT(zs[2]))
     end
-    return BaroclinicWaveFDDG{FT}(; kw...)
+    return core == :fddg ? BaroclinicWaveFDDG{FT}(; kw...) :
+           BaroclinicWaveDG{FT}(; kw...)
 end
 
 if abspath(PROGRAM_FILE) == @__FILE__

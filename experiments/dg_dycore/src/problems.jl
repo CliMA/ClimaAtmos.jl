@@ -86,8 +86,8 @@ function validate(p::BaroclinicWaveFDDG)
         error("interface_flux must be :rusanov or :roe")
     p.ic_source in (:setups, :formulas) ||
         error("ic_source must be :setups or :formulas")
-    p.topography in (:none, :earth) ||
-        error("topography must be :none or :earth")
+    p.topography in (:none, :earth, :hughes2023) ||
+        error("topography must be :none, :earth, or :hughes2023")
     # The tendency cutoff filter is a projection applied after the KEP
     # fluxes; the KE pairing is bilinear with the state outside the
     # projection, so filtering voids the KEP telescoping this scheme's
@@ -100,15 +100,29 @@ end
     BaroclinicWaveDG(; kwargs...)
 
 Vector-invariant DG-FD baroclinic wave: state (ρ, ρe, uₕ::Covariant12, w).
-Same resolution/time/IC/HS/output keywords as [`BaroclinicWaveFDDG`](@ref),
-plus:
+Same resolution/time/IC/HS/output keywords as [`BaroclinicWaveFDDG`](@ref).
+
+Topography: unlike the FDDG core, this core carries the covariant-form
+terrain terms (full-metric K via C123/CT123 cross terms; full contravariant
+vertical transport ᶠu³ = CT3(uₕ) + CT3(w)) — the CG-shared metric
+machinery. The face-normal horizontal projection and the w = 0 surface
+value remain O(slope) approximations (docs/vi_kep_face_terms.md §6).
+
+Additional keywords:
 
   - `momentum_adv` (`:vector_invariant`): `:vector_invariant` or
     `:fluctuation` (Route B; validated at helem = 4 ONLY — violently
     unstable at helem ≥ 16)
+  - `face_set` (`:kg`): `:kg` (legacy Kennedy–Gruber scalar fluxes +
+    Rusanov + plain λ jump penalties) or `:kep` (the vector-invariant
+    KEP-compatible set of docs/vi_kep_face_terms.md — `{ρũ}` mass flux,
+    central interface mass flux with ρe-only Rusanov, ρ-weighted velocity
+    penalties; the horizontal advective KE production closes to roundoff,
+    so κ₄ = 0 and filter_Nc = 0 become admissible)
   - `κ₄` (`nothing` → SIPG-cap/10) and `filter_Nc` (`nothing` → npoly):
-    this formulation NEEDS its stabilization (its momentum advection has no
-    KEP property); at zelem ≳ 20 also use `zstretch = (300.0, 3000.0)`.
+    with `face_set = :kg` this formulation NEEDS its stabilization (its
+    momentum advection has no KEP property); with `:kep` both may be 0.
+    At zelem ≳ 20 also use `zstretch = (300.0, 3000.0)`.
 """
 Base.@kwdef struct BaroclinicWaveDG{FT <: AbstractFloat}
     helem::Int = 4
@@ -120,6 +134,11 @@ Base.@kwdef struct BaroclinicWaveDG{FT <: AbstractFloat}
     t_end::FT = 86400.0
     perturb::Bool = true
     momentum_adv::Symbol = :vector_invariant
+    face_set::Symbol = :kg
+    # vertical transport velocity over terrain: :full (CT3(w) + CT3(uₕ),
+    # the CG-shared machinery; default) or :wonly (FDDG-style O(slope)
+    # transport approximation) — see vector_invariant.jl
+    terrain_u3::Symbol = :full
     κ₄::Union{Nothing, FT} = nothing
     filter_Nc::Union{Nothing, Int} = nothing   # nothing → npoly
     zstretch::Union{Nothing, Tuple{FT, FT}} = nothing
@@ -145,10 +164,17 @@ function validate(p::BaroclinicWaveDG)
         error("stepper must be :hevi or :explicit")
     p.momentum_adv in (:vector_invariant, :fluctuation) ||
         error("momentum_adv must be :vector_invariant or :fluctuation")
+    p.face_set in (:kg, :kep) || error("face_set must be :kg or :kep")
+    p.face_set == :kep &&
+        p.momentum_adv == :fluctuation &&
+        error("face_set = :kep pairs with :vector_invariant only \
+               (the fluctuation form is KE-compatible with the KG set)")
+    p.terrain_u3 in (:wonly, :full) ||
+        error("terrain_u3 must be :wonly or :full")
     p.ic_source in (:setups, :formulas) ||
         error("ic_source must be :setups or :formulas")
-    p.topography in (:none, :earth) ||
-        error("topography must be :none or :earth")
+    p.topography in (:none, :earth, :hughes2023) ||
+        error("topography must be :none, :earth, or :hughes2023")
     return p
 end
 
