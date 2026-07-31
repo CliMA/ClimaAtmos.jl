@@ -6,7 +6,7 @@
 
 The atmosphere model of the CliMA Earth System Model: a GPU-capable global atmosphere model designed for calibration with data assimilation and machine learning.
 
-ClimaAtmos.jl solves the compressible equations of atmospheric motion on cubed-sphere and column grids, with physics parameterizations for turbulence and convection (EDMF), cloud microphysics, and radiation. It is built on [ClimaCore.jl](https://github.com/CliMA/ClimaCore.jl) and runs on CPUs and GPUs from a single codebase.
+ClimaAtmos.jl solves the compressible equations of atmospheric motion on cubed-sphere and column grids, with physics parameterizations for turbulence and convection (PROPHET, an extended prognostic EDMF scheme), cloud microphysics, and radiation. It is built on [ClimaCore.jl](https://github.com/CliMA/ClimaCore.jl) and runs on CPUs and GPUs from a single codebase.
 
 |                   |                                                                                                                                                                                                                                                                                                                                                                      |
 | -----------------:|:-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -25,10 +25,13 @@ Condensed water path from a global simulation initialized with ERA5 on 8-31-25 0
 
 ## Features
 
-  - **Global and single-column configurations**: cubed-sphere grids for global simulations, column grids for parameterization development and testing
-  - **Turbulence and convection**: eddy-diffusivity mass-flux (EDMF) schemes, designed for calibration with data assimilation and machine learning
-  - **Cloud microphysics**: 0-moment to 2-moment bulk schemes via [CloudMicrophysics.jl](https://github.com/CliMA/CloudMicrophysics.jl)
+  - **Global and single-column configurations**: cubed-sphere grids with topography for global simulations; boxes, planes, and columns for process studies (BOMEX, DYCOMS, RICO, and other standard cases)
+  - **Turbulence and convection**: TKE-based eddy diffusion and the PROPHET scheme (an extended, prognostic eddy-diffusivity mass-flux (EDMF) scheme), designed for calibration with data assimilation and machine learning
+  - **Cloud microphysics**: 0-moment to 2-moment bulk schemes, plus the P3 ice scheme, via [CloudMicrophysics.jl](https://github.com/CliMA/CloudMicrophysics.jl)
   - **Radiation**: RRTMGP radiative transfer
+  - **ERA5 and GCM-driven** initial conditions and forcing
+  - **Configurable diagnostics** with NetCDF and HDF5 output
+  - **Restarts and checkpointing** for long simulations
   - **GPU support**: runs on CPUs and NVIDIA GPUs from the same codebase
   - **Composable configuration**: script and YAML-config interfaces for every aspect of a simulation
 
@@ -43,7 +46,7 @@ Pkg.add("ClimaAtmos")
 
 ## Quick Example
 
-The simplest simulation uses all defaults — it solves the dry compressible Euler equations on a global cubed-sphere grid from a hydrostatically balanced state:
+The simplest simulation uses all defaults: it solves the dry compressible equations on a global cubed-sphere grid from a hydrostatically balanced, slightly perturbed state:
 
 ```julia
 import ClimaAtmos as CA
@@ -63,18 +66,20 @@ See [Your First Simulation](https://CliMA.github.io/ClimaAtmos.jl/dev/first_simu
 
 ## Documentation
 
-  - **[Stable docs](https://CliMA.github.io/ClimaAtmos.jl/stable/)** — equations, parameterizations, configuration reference, and API
-  - **[Dev docs](https://CliMA.github.io/ClimaAtmos.jl/dev/)** — latest development version
-  - **[Available diagnostics](https://CliMA.github.io/ClimaAtmos.jl/dev/available_diagnostics/)** — output variables
+  - **[Stable docs](https://CliMA.github.io/ClimaAtmos.jl/stable/)**: equations, parameterizations, configuration reference, and API
+  - **[Dev docs](https://CliMA.github.io/ClimaAtmos.jl/dev/)**: latest development version
+  - **[Available diagnostics](https://CliMA.github.io/ClimaAtmos.jl/dev/available_diagnostics/)**: output variables
 
 ## Integration with CliMA models
 
 ClimaAtmos.jl is a component of the [CliMA](https://github.com/CliMA) Earth System Model:
 
-  - [ClimaCore.jl](https://github.com/CliMA/ClimaCore.jl) — dynamical core and discretization tools
-  - [ClimaCoupler.jl](https://github.com/CliMA/ClimaCoupler.jl) — coupling to ocean, land, and sea ice components
-  - [Thermodynamics.jl](https://github.com/CliMA/Thermodynamics.jl) — moist thermodynamics
-  - [ClimaParams.jl](https://github.com/CliMA/ClimaParams.jl) — centralized, calibratable model parameters
+  - [ClimaCore.jl](https://github.com/CliMA/ClimaCore.jl): dynamical core and discretization tools
+  - [ClimaCoupler.jl](https://github.com/CliMA/ClimaCoupler.jl): coupling to ocean, land, and sea ice components
+  - [Thermodynamics.jl](https://github.com/CliMA/Thermodynamics.jl): moist thermodynamics, shared across all CliMA components for energetic consistency
+  - [ClimaParams.jl](https://github.com/CliMA/ClimaParams.jl): the single source of truth for all model parameters
+
+See [The CliMA Ecosystem](https://CliMA.github.io/ClimaAtmos.jl/dev/ecosystem/) in the documentation for the full architectural overview, including [Insolation.jl](https://github.com/CliMA/Insolation.jl), [RRTMGP.jl](https://github.com/CliMA/RRTMGP.jl), [SurfaceFluxes.jl](https://github.com/CliMA/SurfaceFluxes.jl), and [CloudMicrophysics.jl](https://github.com/CliMA/CloudMicrophysics.jl).
 
 ## Contributing
 

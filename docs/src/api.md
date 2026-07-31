@@ -117,7 +117,7 @@ Data access for single-column (SCM) forcing files: the generic
 [`ColumnDataset`](@ref ClimaAtmos.ColumnDatasets.ColumnDataset) handle and format
 interface, the native `ClimaColumn` reader/writer, and the ARM VARANAL
 converter. See the
-[Single Column Models](@ref "Single Column Models") page for usage.
+[Column Datasets](@ref "Column Datasets") page for usage.
 
 ```@autodocs
 Modules = [

@@ -22,7 +22,7 @@ deps/src/
 # and running docs/make.jl
 docs/build/
 docs/site/
-docs/src/config.md
+docs/src/configuration_options.md
 
 /Manifest*.toml
 */Manifest*.toml  # docs, test

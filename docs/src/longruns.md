@@ -1,6 +1,8 @@
 # Buildkite longrun jobs
 
-Here is a brief description of the buildkite longrun jobs.
+Here is a brief description of the buildkite longrun jobs. The authoritative
+list is `.buildkite/longruns_gpu/pipeline.yml`, with configurations in
+`config/longrun_configs/`.
 
 ```
 longrun_hydrostatic_balance
@@ -33,52 +35,42 @@ Moist Held Suarez. Test the moist dycore with an equilibrium state with sources 
 ```
 
 ```
-longrun_aquaplanet_allsky_0M
-
-Aquaplanet with idealized insolation, all-sky radiation, and 0-moment microphysics.
-Use this job to test new physical components.
-```
-
-```
-longrun_aquaplanet_allsky_diagedmf_0M
-
-Aquaplanet with idealized insolation, all-sky radiation, diagnostic edmf
-and 0-moment microphysics.
-```
-
-```
 longrun_aquaplanet_allsky_progedmf_0M
 
-Aquaplanet with idealized insolation, all-sky radiation, prognostic edmf with 0-moment microphysics.
+Aquaplanet with idealized insolation, all-sky radiation, PROPHET, and 0-moment
+microphysics.
+```
+
+```
+longrun_aquaplanet_allsky_progedmf_1M
+
+Aquaplanet with idealized insolation, all-sky radiation, PROPHET, and 1-moment
+microphysics.
 ```
 
 ```
 longrun_aquaplanet_allsky_tvinsol_0M_slabocean
 
-Aquaplanet with slab ocean with time-varying insolation, clear-sky radiation,
-and 0-moment microphysics.
+Aquaplanet with slab ocean with time-varying insolation, all-sky radiation
+(with clear-sky diagnostics), and 0-moment microphysics.
 Test if the coupled system conserves energy and water.
 Test if the time-varying insolation yields reasonable results.
 ```
 
 ```
-longrun_aquaplanet_allsky_0M_earth
-
-Aquaplanet with idealized insolation, all-sky radiation, 0-moment microphysics, and
-Earth topography. Use this job to test topography related features.
-```
-
-```
 longrun_aquaplanet_allsky_1M
 
-Aquaplanet with idealized insolation, all-sky radiation, 1-moment microphysics.
+Aquaplanet with idealized insolation, all-sky radiation, ED-only EDMF, and
+1-moment microphysics.
 Use this job to test 1-moment microphysics related features.
 ```
 
 ```
 amip_target
 
-Aquaplanet setup for AMIP (atmosphere-land simulation). This job includes all the
-working atmosphere components required for AMIP. Currently it uses prognostic EDMF
-and 1M microphysics. It will be updated whenever new components are ready.
+Global setup targeting AMIP (atmosphere-land simulation), with Earth topography,
+prescribed aerosols, time-varying trace gases, non-orographic gravity-wave drag,
+PROPHET, and 1-moment microphysics. This job includes all the working atmosphere
+components required for AMIP and will be updated whenever new components are
+ready.
 ```

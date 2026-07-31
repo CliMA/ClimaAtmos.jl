@@ -1,6 +1,6 @@
 # Grids
 
-`ClimaAtmos.jl` provides several grid constructors to set up the domain layout for simulations. These grids handle the creation of the underlying `ClimaCore` meshes, topologies, and spaces, including optional topography.
+`ClimaAtmos.jl` provides several grid constructors to set up the domain layout for simulations. These grids create the underlying `ClimaCore` meshes, topologies, and spaces, including optional topography.
 
 ## Available Grids
 
