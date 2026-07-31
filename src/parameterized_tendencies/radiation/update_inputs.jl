@@ -292,12 +292,12 @@ function update_cloud_properties!((; u, p, t)::I) where {I}
         kg_to_g_factor = 1000
         m_to_um_factor = FT(1e6)
         cloud_liquid_water_content =
-            radiation_mode.cloud isa PrescribedCloudInRadiation ?
-            p.radiation.prescribed_clouds_field.clwc :
+            # radiation_mode.cloud isa PrescribedCloudInRadiation ?
+            # p.radiation.prescribed_clouds_field.clwc :
             ᶜcloud_liquid_water_content(p.atmos.microphysics_model, u, ᶜq_liq)
         cloud_ice_water_content =
-            radiation_mode.cloud isa PrescribedCloudInRadiation ?
-            p.radiation.prescribed_clouds_field.ciwc :
+            # radiation_mode.cloud isa PrescribedCloudInRadiation ?
+            # p.radiation.prescribed_clouds_field.ciwc :
             ᶜcloud_ice_water_content(p.atmos.microphysics_model, u, ᶜq_ice)
         cloud_fraction =
             radiation_mode.cloud isa PrescribedCloudInRadiation ?
