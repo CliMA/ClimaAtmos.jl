@@ -8,10 +8,8 @@ with the same k_f = 1/day, applied component-wise.
 
 Notes:
 - σ = p/(MSLP·exp(-g·z_sfc/(R_d·T_sfc))) with z_sfc from the (possibly
-  terrain-warped) face space, matching CA's compute_σ. On flat topography
-  z_sfc = 0 and this reduces to the ClimaCore examples' σ = p/p₀ under the
-  parity TOML (MSLP = 1e5); the ρe relaxation reads z_sfc from the field's
-  own space inside CA, so both terms stay consistent with `topography`.
+  warped) face space, matching CA's compute_σ; reduces to σ = p/p₀ on
+  flat topography under the parity TOML.
 - Pointwise additive forcing: the drag is a sign-definite KE sink, so the
   KEP advective core is untouched.
 - HS constants come from ClimaParams (ΔT_y_dry 60, T_equator_dry 315,

@@ -66,21 +66,14 @@ function dg_spaces(prob, c::DGConstants{FT}) where {FT}
     return (; horzspace, hv_center_space, hv_face_space)
 end
 
-#=
-Earth topography: ETOPO2022 60arcsec ClimaArtifacts orography regridded
-onto the GLL nodes with SpaceVaryingInput, then diffusion-smoothed with the
-same recipe as ClimaAtmos `hypsography_function_from_topography` (diffusion
-Courant number 0.05, iteration count from the damping factor) and warped
-with LinearAdaption. The smoothing runs the CG Laplacian (DSS inside) — a
-grid-generation preprocessing step, not part of the DG discretization; the
-warp needs a single-valued, continuous z_sfc anyway.
-=#
+# Terrain-following warp (LinearAdaption): :earth = ETOPO2022 artifact →
+# SpaceVaryingInput → diffusion smoothing (ClimaAtmos grids.jl recipe;
+# runs a CG Laplacian with DSS — grid-generation preprocessing, not part
+# of the DG discretization); :hughes2023 = analytic double mountain,
+# evaluated pointwise, no smoothing.
 function dg_hypsography(prob, horzspace, ::DGConstants{FT}) where {FT}
     prob.topography == :none && return Grids.Flat()
     if prob.topography == :hughes2023
-        # Hughes & Jablonowski (2023) analytic double mountain (two
-        # zonally separated midlatitude peaks, h₀ = 2 km): pointwise
-        # evaluation on the GLL nodes, no smoothing (already smooth).
         z_surface = SpaceVaryingInput(
             CA.topography_function(CA.Hughes2023Topography()),
             horzspace,
@@ -96,12 +89,9 @@ function dg_hypsography(prob, horzspace, ::DGConstants{FT}) where {FT}
     )
     diff_courant = FT(0.05)
     Δh_scale = Spaces.node_horizontal_length_scale(horzspace)
-    # Explicit-Euler stability is set by the SMALLEST node spacing, not the
-    # average: GLL endpoint clustering + cubed-sphere corner distortion make
-    # the ClimaAtmos average-based recipe (κ = 0.05·Δh²) unstable at coarse
-    # helem (measured: helem=4/npoly=4 diverges after ~12 iterations). Take
-    # the per-step κ·dt from the minimum quadrature node area and keep the
-    # total smoothing κ·dt·maxiter = log(damping_factor)·Δh² invariant.
+    # Per-step κ·dt from the MINIMUM node area (not the ClimaAtmos
+    # average-based recipe, which is explicit-Euler unstable at coarse
+    # helem); total smoothing κ·dt·maxiter = log(damping)·Δh² invariant.
     Δx²_min = minimum(Fields.local_geometry_field(horzspace).WJ)
     κ = FT(diff_courant * Δx²_min)
     maxiter = Int(
@@ -143,12 +133,9 @@ function dg_fields(prob, c::DGConstants{FT}, spaces) where {FT}
     E2 = @. Geometry.UVVector(eE2, eN2)
     E3 = @. Geometry.UVVector(eE3, eN3)
 
-    # Rayleigh sponge over the top sponge_depth: absorbing layer for the
-    # rigid lid. β profile as in the CG examples, Δt-independent peak rate
-    # 1/τ. Applied to ρw/w always (τ = Inf disables) — the physically
-    # correct absorber for vertically propagating gravity waves; sponge_uh
-    # additionally damps horizontal momentum, which is a linear drag on
-    # the upper-level jet (NOT canonical — leave off).
+    # Rayleigh sponge over the top sponge_depth (peak rate 1/τ; τ = Inf
+    # disables): applied to ρw/w — the correct gravity-wave absorber.
+    # sponge_uh additionally drags the upper-level jet (leave off).
     z_sponge = FT(prob.sponge_depth)
     zmax = prob.zmax
     τs = prob.sponge_τ
@@ -190,10 +177,8 @@ function dg_operators(::DGConstants{FT}) where {FT}
         bottom = Operators.Extrapolate(),
         top = Operators.Extrapolate(),
     )
-    # ρJ-weighted C2F interpolation (CA's ᶠwinterp): REQUIRED for the
-    # terrain CT3(uₕ) vertical flux — the plain If version leaves an O(1)
-    # cross-discretization free-stream defect at resolved slopes (measured
-    # 0.19 s⁻¹ relative ρe tendency at the Hughes2023 mountain flank).
+    # ρJ-weighted C2F interpolation (CA's ᶠwinterp) for the terrain
+    # CT3(uₕ) vertical flux.
     wIf = Operators.WeightedInterpolateC2F(
         bottom = Operators.Extrapolate(),
         top = Operators.Extrapolate(),
@@ -202,9 +187,8 @@ function dg_operators(::DGConstants{FT}) where {FT}
         bottom = Operators.SetValue(Geometry.WVector(FT(0))),
         top = Operators.SetValue(Geometry.WVector(FT(0))),
     )
-    # CT3-valued flux variant (full contravariant vertical transport
-    # ᶠu³ = CT3(uₕ) + CT3(w) over terrain-warped grids); the zero-flux BCs
-    # are the terrain-following no-normal-flow condition u³ = 0.
+    # CT3-flux variant for the full contravariant vertical transport;
+    # zero-flux BCs = the terrain-following no-normal-flow condition.
     vdivf2c3 = Operators.DivergenceF2C(
         bottom = Operators.SetValue(Geometry.Contravariant3Vector(FT(0))),
         top = Operators.SetValue(Geometry.Contravariant3Vector(FT(0))),
@@ -247,14 +231,9 @@ function DGModel(prob::DGProblem)
     params = dg_params(FT, prob.constants_mode)
     spaces = dg_spaces(prob, c)
     fields = dg_fields(prob, c, spaces)
-    # Unperturbed JW06 base state as the terrain-aware diffusion reference
-    # (steady, analytic, evaluated at the warped node heights). Diffusing
-    # FULL fields along warped coordinate surfaces converts their
-    # O(Δz_warp) terrain signature (g·Δz + cp·Γ·Δz for h_tot, shear·Δz for
-    # velocity) into spurious dipoles at the mountains (docs
-    # vi_kep_face_terms.md §8); diffusing perturbations from this
-    # reference removes the signature. Identical to full-field diffusion
-    # on flat grids up to the (smooth, resolved) base-state structure.
+    # Unperturbed JW06 base state at the warped node heights: the
+    # terrain-aware κ₄ diffusion reference (full fields carry an O(Δz_warp)
+    # terrain signature along coordinate surfaces — docs §8).
     fields = let
         (; T, uE, uN) =
             jw_values(prob, c, params, fields.ccoords; perturb = false)

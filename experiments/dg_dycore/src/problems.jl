@@ -25,20 +25,17 @@ Keywords (defaults in parentheses):
   - `interface_flux` (`:rusanov`): `:rusanov` or `:roe` (wave-selective,
     Harten-floored — the pure-KEP interface)
   - `zstretch` (`nothing`): `(dz_bottom, dz_top)` [m] stretched vertical grid
-  - `sponge_τ` (1200.0) [s]: w-sponge peak rate 1/τ over the top 7.5 km;
-    `Inf` disables the sponge entirely (fully canonical setup)
+  - `sponge_τ` (1200.0) [s], `sponge_depth` (7.5e3) [m]: w-sponge peak
+    rate 1/τ over the top `sponge_depth`; `τ = Inf` disables (canonical)
   - `sponge_uh` (false): additionally damp Cartesian horizontal momentum in
     the sponge (NOT part of the canonical baroclinic wave test — leave off)
-  - `topography` (`:none`): `:none` (flat) or `:earth` (ETOPO2022 60arcsec
-    ClimaArtifacts orography regridded onto the GLL nodes via
-    SpaceVaryingInput, diffusion-smoothed, LinearAdaption terrain-following
-    warp). CAUTION: the horizontal DG fluxes are evaluated along the warped
-    coordinate surfaces; the terrain metric cross-terms (uₕ·∇z_sfc transport
-    through sloped surfaces, true-horizontal pressure gradient) are not yet
-    included, so this is geometry plumbing — valid only for gentle smoothed
-    slopes, pending a curvilinear (contravariant-flux) extension of the core.
-  - `topography_damping_factor` (5.0): smallest-resolved-scale damping factor
-    for the pre-smoothing diffusion (ClimaAtmos recipe)
+  - `topography` (`:none`): `:none`, `:earth` (ETOPO2022 via
+    SpaceVaryingInput, smoothed, LinearAdaption warp), or `:hughes2023`
+    (analytic double mountain). CAUTION: for THIS (Cartesian flux-form)
+    core, terrain is geometry plumbing only — the metric cross-terms are
+    absent, so valid for gentle smoothed slopes only.
+  - `topography_damping_factor` (5.0): damping factor for the `:earth`
+    pre-smoothing diffusion
   - `constants_mode` (`:parity`): `:parity` (ClimaCore-example literals) or
     `:clima_params` (Stage A2)
   - `dt_save` (21600.0) [s]: solution snapshot interval
@@ -102,28 +99,24 @@ end
 
 Vector-invariant DG-FD baroclinic wave: state (ρ, ρe, uₕ::Covariant12, w).
 Same resolution/time/IC/HS/output keywords as [`BaroclinicWaveFDDG`](@ref).
-
-Topography: unlike the FDDG core, this core carries the covariant-form
-terrain terms (full-metric K via C123/CT123 cross terms; full contravariant
-vertical transport ᶠu³ = CT3(uₕ) + CT3(w)) — the CG-shared metric
-machinery. The face-normal horizontal projection and the w = 0 surface
-value remain O(slope) approximations (docs/vi_kep_face_terms.md §6).
+Unlike the FDDG core, terrain runs through the CG-shared covariant metric
+machinery (full-metric K, contravariant ᶠu³; remaining O(slope)
+approximations: docs/vi_kep_face_terms.md §6/§8).
 
 Additional keywords:
 
   - `momentum_adv` (`:vector_invariant`): `:vector_invariant` or
-    `:fluctuation` (Route B; validated at helem = 4 ONLY — violently
-    unstable at helem ≥ 16)
-  - `face_set` (`:kg`): `:kg` (legacy Kennedy–Gruber scalar fluxes +
-    Rusanov + plain λ jump penalties) or `:kep` (the vector-invariant
-    KEP-compatible set of docs/vi_kep_face_terms.md — `{ρũ}` mass flux,
-    central interface mass flux with ρe-only Rusanov, ρ-weighted velocity
-    penalties; the horizontal advective KE production closes to roundoff,
-    so κ₄ = 0 and filter_Nc = 0 become admissible)
-  - `κ₄` (`nothing` → SIPG-cap/10) and `filter_Nc` (`nothing` → npoly):
-    with `face_set = :kg` this formulation NEEDS its stabilization (its
-    momentum advection has no KEP property); with `:kep` both may be 0.
-    At zelem ≳ 20 also use `zstretch = (300.0, 3000.0)`.
+    `:fluctuation` (Route B; helem = 4 ONLY)
+  - `face_set` (`:kg`): `:kg` (legacy KG fluxes + Rusanov + plain
+    penalties) or `:kep` (the KEP-compatible set of
+    docs/vi_kep_face_terms.md — the horizontal advective KE budget closes
+    to roundoff, so κ₄ = 0 / filter_Nc = 0 become admissible)
+  - `terrain_u3` (`:full`): vertical transport velocity over terrain —
+    `:full` (CT3(w) + CT3(uₕ), CG machinery) or `:wonly` (FDDG-style
+    O(slope) approximation)
+  - `κ₄` (`nothing` → SIPG-cap/10 for `:kg`, 0 for `:kep`) and
+    `filter_Nc` (`nothing` → npoly for `:kg`, 0 for `:kep`): `:kg` NEEDS
+    its stabilization. At zelem ≳ 20 also use `zstretch`.
 """
 Base.@kwdef struct BaroclinicWaveDG{FT <: AbstractFloat}
     helem::Int = 4
@@ -136,9 +129,6 @@ Base.@kwdef struct BaroclinicWaveDG{FT <: AbstractFloat}
     perturb::Bool = true
     momentum_adv::Symbol = :vector_invariant
     face_set::Symbol = :kg
-    # vertical transport velocity over terrain: :full (CT3(w) + CT3(uₕ),
-    # the CG-shared machinery; default) or :wonly (FDDG-style O(slope)
-    # transport approximation) — see vector_invariant.jl
     terrain_u3::Symbol = :full
     κ₄::Union{Nothing, FT} = nothing
     filter_Nc::Union{Nothing, Int} = nothing   # nothing → npoly

@@ -12,25 +12,16 @@ Momentum: vector-invariant (ω×u + ∇K) or the Route-B mass-flux
 fluctuation form (momentum_adv = :fluctuation — validated at helem = 4
 ONLY; violently unstable at helem = 16).
 
-Face sets (docs/vi_kep_face_terms.md):
-- :kg (legacy): KG {ρ}{ũ} fluxes + Rusanov on (ρ, ρe) + plain λ jump
-  penalties. NOT KE-compatible with the vector-invariant pairing — needs
-  κ₄ = cap/10 and the tendency cutoff filter (filter_Nc = npoly).
-- :kep: {ρũ} mass flux (volume + central interface, no ρ penalty),
-  matching ρe flux, ρ-weighted velocity penalties. The horizontal
-  advective KE production closes to roundoff (metric-transparent: exact
-  over topography too), so κ₄ = 0 / filter_Nc = 0 are admissible.
+Face sets (derivation + measurements: docs/vi_kep_face_terms.md):
+- :kg (legacy): KG {ρ}{ũ} fluxes + Rusanov + plain λ jump penalties.
+  Not KE-compatible with the VI pairing — needs κ₄ and the cutoff filter.
+- :kep: {ρũ} mass flux, central interface (no ρ penalty), ρ-weighted
+  velocity penalties. Horizontal advective KE closes to roundoff, flat
+  and terrain-warped alike, so κ₄ = 0 / filter_Nc = 0 are admissible.
 
-Topography (hypsography-warped grids): K uses the full-metric CA form
-(cross terms via C123/CT123) and the vertical transport uses the full
-contravariant ᶠu³ = CT3(uₕ) + CT3(w) with CA's ρJ-weighted face
-interpolation. The initial w is terrain-adapted (u³ = 0 everywhere; see
-initial_conditions.jl) — starting from w = 0 violates the kinematic BC
-over the mountains and kicks the first cell at O(u·slope·h_tot/Δz)
-(measured 0.19 s⁻¹ relative ρe tendency → crash within 10 steps). Bw
-freezes the surface-face w at its terrain-consistent initial value; the
-per-stage CA surface-velocity constraint is not applied here (O(slope·Δuₕ)
-drift over long runs).
+Topography: full-metric K, ᶠu³ = CT3(w) + ρJ-weighted CT3(uₕ) (CA
+machinery), terrain-consistent surface w frozen by Bw (see
+initial_conditions.jl). Remaining O(slope) approximations: docs §6/§8.
 =#
 
 function compute_tendency_vi!(
@@ -76,9 +67,8 @@ function compute_tendency_vi!(
     uv = @. Geometry.UVVector(uₕ)          # geographic components
     u_sc = uv.components.data.:1
     v_sc = uv.components.data.:2
-    # Full-metric kinetic energy (CA compute_kinetic form): the C123/CT123
-    # dots carry the g¹³/g²³ cross terms on terrain-warped grids (zero on
-    # flat grids, where this reduces to (|uv|² + |Ic(w)|²)/2).
+    # Full-metric K (CA compute_kinetic form; g¹³/g²³ cross terms vanish
+    # on flat grids, reducing to (|uv|² + |Ic(w)|²)/2).
     K = @. (
         dot(C123(uₕ), CT123(uₕ)) +
         Ic(dot(C123(w), CT123(w))) +
@@ -120,14 +110,9 @@ function compute_tendency_vi!(
     @. dYc.ρe = dy_mw.ρe / lgeom_c.WJ
 
     # --- (ρ, ρe): vertical FD (w part implicit under HEVI) ---
-    # terrain_u3 = :full (default) adds the CT3(uₕ) transport through
-    # tilted ξ³ surfaces (zero on flat grids; ρJ-weighted CA ᶠwinterp
-    # machinery). With the terrain-consistent surface w its divergence is
-    # ~85-90% compensated by the horizontal along-surface flux (measured:
-    # −27.5 vs +31.0 at the Hughes2023 peak, residual ≈ benign 3e-5 s⁻¹
-    # relative); the remaining cross-discretization free-stream defect is
-    # the conservative-metric follow-up of docs/vi_kep_face_terms.md §5.
-    # :wonly omits the term (FDDG-style O(slope) transport approximation).
+    # :full adds the CT3(uₕ) transport through tilted ξ³ surfaces (zero on
+    # flat grids; CA's ρJ-weighted ᶠwinterp); :wonly omits it (FDDG-style
+    # O(slope) approximation). Residual free-stream defect: docs §8.
     w_vec = @. Geometry.WVector(w)
     ᶜJ = lgeom_c.J
     ᶠu³ = if m.prob.terrain_u3 == :full
@@ -255,10 +240,8 @@ function compute_tendency_vi!(
         Geometry.Covariant12Axis(),
         lift_p / ρ + lift_K,
     )
-    # λ-scaled jump penalties on the geographic velocity components.
-    # :kep uses the ρ-weighted form — contracted with ρu the face KE
-    # tendency is exactly −max(λ)/2·{ρ}|[[u]]|² ≤ 0 (see the derivation);
-    # the plain form is sign-definite only to O([[ρ]]).
+    # λ-scaled velocity jump penalties: :kep's ρ-weighted form is an
+    # exactly sign-definite KE sink (plain form only to O([[ρ]])).
     pen_u, pen_v = if kep
         Operators.lifting_correction(
             Operators.rho_weighted_jump_penalty_lift,
@@ -300,13 +283,8 @@ function compute_tendency_vi!(
     else
         @. dw = -(ᶠω¹² × ᶠu¹²)
     end
-    # Penalize the PROGNOSTIC covariant₃ dof directly (identical to the
-    # physical-w penalty on flat grids). Converting a physical (WVector)
-    # penalty into a covariant increment via C3(WVector(·), lg) is a
-    # flat-grid idiom: on warped grids the covariant representation of a
-    # vertical vector has O(∂z/∂ξʰ) ~ 10³ cross components, and the
-    # conversion amplifies the penalty by that factor (measured 0.0012 →
-    # 1.60 m/s² on the Hughes2023 flanks — instant crash).
+    # Penalize the prognostic covariant₃ dof directly: C3(WVector(·), lg)
+    # increments amplify by O(∂z/∂ξʰ) ~ 10³ on warped grids (docs §8).
     w_cov_sc = @. w.components.data.:1
     pen_w = Operators.lifting_correction(
         Operators.jump_penalty_lift,
@@ -322,14 +300,10 @@ function compute_tendency_vi!(
     end
 
     # --- κ₄ hyperdiffusion (h_tot and geographic (u, v); no ρ/w) ---
-    # Over terrain, diffuse PERTURBATIONS from the steady unperturbed
-    # base state (m.fields ᶜh_ref/ᶜu_ref/ᶜv_ref, evaluated at the warped
-    # node heights): full fields carry an O(Δz_warp) terrain signature
-    # along the coordinate surfaces (g·Δz + cp·Γ·Δz for h_tot, shear·Δz
-    # for velocity) that the along-surface biharmonic converts into
-    # spurious dipoles at the mountains (measured O(100 J/m³/s) at
-    # κ₄ = 1e16 on Hughes2023 for h_tot; the velocity version crashed
-    # even faster). Flat grids keep the validated full-field form.
+    # Over terrain, diffuse perturbations from the steady base state
+    # (ᶜh_ref/ᶜu_ref/ᶜv_ref): full fields carry an O(Δz_warp) terrain
+    # signature along the coordinate surfaces that the biharmonic turns
+    # into spurious dipoles (docs §8). Flat grids keep the full-field form.
     if κ₄ != 0
         τ_κ₄ = Operators.ldg_penalty_parameter(κ₄, m.spaces.hv_center_space)
         terrain = m.prob.topography != :none
@@ -403,21 +377,11 @@ remaining_tendency_vi!(dY, Y, m, t) = compute_tendency_vi!(dY, Y, m, t, false)
 """
     horizontal_ke_budget(Y, m::DGModel) -> (; P_adv, P_pen, KE)
 
-Discrete KE ledger of the horizontal terms (docs/vi_kep_face_terms.md §3-4),
-evaluated on the state `Y` with the model's `face_set`:
-
-  - `P_adv`: production of ⟨ρ(K+Φ)⟩ by the exact-ledger set — the ρ
-    flux-differencing volume + interface terms contracted with (K+Φ), plus
-    the momentum −∇(K+Φ) (element-local strong gradient + central K lifting)
-    and the (f + ω³) Lamb term, contracted with ρu. With `face_set = :kep`
-    this closes to machine roundoff (relative to `KE·λ/Δx` scale) on flat
-    AND terrain-warped grids; with `:kg` it is O(jump²)-finite.
-  - `P_pen`: velocity jump-penalty production — must be ≤ 0 (exactly for
-    the ρ-weighted `:kep` penalties, to O([[ρ]]) for `:kg`).
-  - `KE`: ⟨ρK⟩ with the full-metric K.
-
-The vertical/staggered cross terms (`Ic(ᶠω¹²×ᶠu³)` etc.) are deliberately
-excluded — they close only to interpolation truncation (§7).
+Discrete KE ledger of the horizontal terms (docs/vi_kep_face_terms.md
+§3-4) on the state `Y` with the model's `face_set`: `P_adv` is the
+advective production of ⟨ρ(K+Φ)⟩ (roundoff with `:kep`, finite with
+`:kg`), `P_pen` the velocity-penalty production (≤ 0), `KE` = ⟨ρK⟩.
+Vertical/staggered cross terms are excluded (truncation class, §7).
 """
 function horizontal_ke_budget(Y, m::DGModel{FT}) where {FT}
     c = m.c

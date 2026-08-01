@@ -1,23 +1,15 @@
 #=
 Baroclinic-wave-style lat–lon maps from the DG dycore's NetCDF output,
-sliced at a fixed altitude (default z = 2.5 km — above the Hughes &
-Jablonowski 2 km peaks, so fields are shown on a level that clears the
-terrain everywhere). One 2×2 panel figure per snapshot:
-
-    ta  (temperature)         va (meridional wind)
-    rv  (relative vorticity)  pfull (pressure)
-
-va and rv are the wave-train signature fields (Hughes & Jablonowski 2023);
-ta and pfull are the classic JW06 baroclinic-wave panels.
+sliced at a fixed altitude (default 2.5 km — clears the Hughes &
+Jablonowski 2 km peaks). One 2×2 panel per snapshot: ta, va, rv, pfull
+(va/rv are the H&J wave-train signature fields).
 
 Usage:
     julia --project=experiments/dg_dycore/post \
         experiments/dg_dycore/post/wave_train_maps.jl <output_dir> [z_km] [days]
 
-    z_km:  slice altitude in km (default 2.5)
-    days:  comma-separated list of days to plot (default: every snapshot)
-
-Writes wave_maps_z<z>km_day<d>.png into <output_dir>.
+`days` is a comma-separated list (default: every snapshot); writes
+wave_maps_z<z>km_day<d>.png into <output_dir>.
 =#
 
 import ClimaAnalysis

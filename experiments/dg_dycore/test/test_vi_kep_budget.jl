@@ -1,12 +1,10 @@
 #=
 KE-budget verification of the vector-invariant face sets
 (docs/vi_kep_face_terms.md): with face_set = :kep the horizontal advective
-KE production closes to roundoff — on the flat sphere AND on the
-terrain-warped Hughes & Jablonowski (2023) double-mountain grid (the ledger
-is metric-transparent) — the velocity penalties are sign-definite sinks,
-and the unstabilized core (κ₄ = 0, filter_Nc = 0, the :kep defaults)
-integrates stably. The legacy :kg set, evaluated on the SAME state,
-violates the ledger at a measurably larger level.
+KE production closes to roundoff on the flat sphere AND the terrain-warped
+Hughes2023 grid, the velocity penalties are sign-definite sinks, and the
+unstabilized core integrates stably; :kg violates the same ledger by
+orders of magnitude.
 =#
 import ClimaCore: Spaces
 

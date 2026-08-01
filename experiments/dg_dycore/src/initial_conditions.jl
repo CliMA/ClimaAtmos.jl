@@ -244,18 +244,12 @@ function initial_state_vi(m::DGModel{FT}) where {FT}
         ᶜρe,
         ᶜuₕ,
     )
-    # Terrain-consistent surface w (CA's surface-velocity constraint,
-    # applied statically): at the BOTTOM FACE ONLY, choose w₃ so
-    # u³ = g³ʰuₕ + g³³w₃ = 0 — the kinematic no-normal-flow BC; Bw then
-    # freezes this value. Without it the JW06 wind violates the BC over
-    # the mountains and the zero-flux operator BCs kick the first cell at
-    # O(u·slope·h_tot/Δz) (measured 0.19 s⁻¹ relative ρe tendency).
-    # INTERIOR w stays 0: adapting w everywhere (u³ ≡ 0, flow following
-    # all warped surfaces) is wrong — interior flow SHOULD cross the
-    # coordinate surfaces, and a structured interior w at t = 0 breaks
-    # the staggered ∇K/Lamb shear cancellation at O(u·w/Δz) (measured
-    # 1.7 m/s² dw on the Hughes2023 flanks — instant crash).
-    # (Identically w ≡ 0 on flat grids either way.)
+    # Terrain-consistent surface w at the BOTTOM FACE ONLY (w₃ such that
+    # u³ = 0 — the kinematic BC, frozen by Bw; CA's surface-velocity
+    # constraint applied statically). Interior w stays 0: interior flow
+    # SHOULD cross coordinate surfaces, and a structured interior w breaks
+    # the staggered ∇K/Lamb cancellation (docs/vi_kep_face_terms.md §8).
+    # Identically w ≡ 0 on flat grids.
     lgeom_f = Fields.local_geometry_field(m.spaces.hv_face_space)
     ᶠu³ₕ_sc = @. CT3(C123(m.ops.If(ᶜuₕ))).components.data.:1
     ᶠg³³_sc = @. CT3(C3(FT(1)), lgeom_f).components.data.:1
