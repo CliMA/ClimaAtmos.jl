@@ -15,6 +15,7 @@ intermediate allocations.
 =#
 
 import CloudMicrophysics.BulkMicrophysicsTendencies as BMT
+import CloudMicrophysics.Microphysics1M as CM1
 
 # ---------------------------------------------------------------------------
 # Helper: call InstantaneousVerbose and extract one field by name.
@@ -157,7 +158,7 @@ compute_mp1m_source_env(
 ) = compute_mp1m_source_env(state, cache, F)
 
 # ---------------------------------------------------------------------------
-# Register all diagnostics via loops
+# Register all source-term diagnostics via loops
 # ---------------------------------------------------------------------------
 
 for (prefix, label, location, compute_fn) in (
@@ -188,4 +189,107 @@ for (prefix, label, location, compute_fn) in (
             end,
         )
     end
+end
+
+# ---------------------------------------------------------------------------
+# Rain autoconversion effective timescale diagnostic (τ_acnv)
+#
+# Calls CM1.rain_autoconversion_timescale(option, mp, w) which returns the
+# velocity-dependent effective timescale [s].  Works for all RainAutoconversion
+# variants (Kessler1M, PrescribedNd, VelocityDependent); for variants that
+# do not depend on w, the returned value is constant.
+# ---------------------------------------------------------------------------
+
+# Grid-mean
+function compute_tau_acnv(state, cache)
+    cmp = CAP.microphysics_1m_params(cache.params)
+    ᶜw = @. lazy(w_component(Geometry.WVector(cache.precomputed.ᶜu)))
+    return @. lazy(
+        CM1.rain_autoconversion_timescale(
+            cmp.processes.rain_autoconversion, cmp, ᶜw,
+        ),
+    )
+end
+
+compute_tau_acnv(state, cache, time) =
+    compute_tau_acnv(state, cache, time, cache.atmos.microphysics_model)
+compute_tau_acnv(_, _, _, model) =
+    error_diagnostic_variable("mp1m_tau_acnv", model)
+compute_tau_acnv(state, cache, _, ::NonEquilibriumMicrophysics1M) =
+    compute_tau_acnv(state, cache)
+
+# Updraft (first subdomain)
+function compute_tau_acnv_updraft(state, cache)
+    cmp = CAP.microphysics_1m_params(cache.params)
+    ᶜwʲ = @. lazy(w_component(Geometry.WVector(cache.precomputed.ᶜuʲs.:1)))
+    return @. lazy(
+        CM1.rain_autoconversion_timescale(
+            cmp.processes.rain_autoconversion, cmp, ᶜwʲ,
+        ),
+    )
+end
+
+compute_tau_acnv_updraft(state, cache, time) =
+    compute_tau_acnv_updraft(
+        state, cache, time,
+        cache.atmos.microphysics_model, cache.atmos.turbconv_model,
+    )
+compute_tau_acnv_updraft(_, _, _, mp_model, tc_model) =
+    error_diagnostic_variable("mp1mup_tau_acnv", (mp_model, tc_model))
+compute_tau_acnv_updraft(
+    state, cache, _,
+    ::NonEquilibriumMicrophysics1M, ::PrognosticEDMFX,
+) = compute_tau_acnv_updraft(state, cache)
+
+# Environment
+function compute_tau_acnv_env(state, cache)
+    cmp = CAP.microphysics_1m_params(cache.params)
+    ᶜw⁰ = @. lazy(w_component(Geometry.WVector(cache.precomputed.ᶜu⁰)))
+    return @. lazy(
+        CM1.rain_autoconversion_timescale(
+            cmp.processes.rain_autoconversion, cmp, ᶜw⁰,
+        ),
+    )
+end
+
+compute_tau_acnv_env(state, cache, time) =
+    compute_tau_acnv_env(
+        state, cache, time,
+        cache.atmos.microphysics_model, cache.atmos.turbconv_model,
+    )
+compute_tau_acnv_env(_, _, _, mp_model, tc_model) =
+    error_diagnostic_variable("mp1men_tau_acnv", (mp_model, tc_model))
+compute_tau_acnv_env(
+    state, cache, _,
+    ::NonEquilibriumMicrophysics1M, ::PrognosticEDMFX,
+) = compute_tau_acnv_env(state, cache)
+
+# Register timescale diagnostics
+for (short_name, label, location, compute_fn) in (
+    ("mp1m_tau_acnv", "", "grid-mean state", compute_tau_acnv),
+    (
+        "mp1mup_tau_acnv",
+        " Updraft",
+        "updraft state (first subdomain)",
+        compute_tau_acnv_updraft,
+    ),
+    (
+        "mp1men_tau_acnv",
+        " Environment",
+        "environment state",
+        compute_tau_acnv_env,
+    ),
+)
+    add_diagnostic_variable!(;
+        short_name,
+        long_name = "1M Microphysics$(label): Rain autoconversion effective timescale",
+        units = "s",
+        comments = "Effective timescale for rain autoconversion from " *
+                   "CM1.rain_autoconversion_timescale. " *
+                   "For VelocityDependent, varies with vertical velocity; " *
+                   "for other variants, constant. Evaluated at $(location).",
+        compute = let f = compute_fn
+            (state, cache, time) -> f(state, cache, time)
+        end,
+    )
 end
