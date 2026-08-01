@@ -73,8 +73,16 @@ result.sol.u[end].c.ρ
 
 Both cores share the ClimaAtmos-standard NetCDF diagnostics
 (`pfull, ua, va, wa, ta, ke, rhoa` + DG-consistent `rv`): enable with
-`output_dir = ...`, `diag_period = ...`; zonal-mean panels via
-`post/zonal_means.jl` (ClimaAnalysis).
+`output_dir = ...`, `diag_period = ...`. Post-processing (ClimaAnalysis +
+CairoMakie, both write PNGs into the output dir):
+
+- `post/zonal_means.jl <output_dir> [spinup_days]` — time & zonal mean
+  u(φ, z), T(φ, z) (Held–Suarez climatology).
+- `post/wave_train_maps.jl <output_dir> [z_km] [days]` — 2×2
+  baroclinic-wave panels (ta, va, rv, pfull) on lat–lon maps at a fixed
+  altitude (default 2.5 km, above the Hughes2023 peaks), one figure per
+  snapshot or per requested day. Zonal means would average out the
+  mountain-forced wave train; these maps are the H&J signature figures.
 
 ## Porting notes (ClimaCore examples → this sandbox)
 
