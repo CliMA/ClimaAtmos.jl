@@ -4,9 +4,13 @@ using Glob
 """
 
 function get_les_calibration_library()
-    les_library = get_shallow_LES_library()
-    # AMIP4K data: July, NE Pacific
-    cfsite_numbers = (17, 23)
+    les_library = get_LES_library()
+    # July, HadGEM2-A AMIP: four shallow sites spanning the Sc-Cu transition
+    # plus four deep-convection sites, so each minibatch mixes regimes. The
+    # deep sites diversify the warm-phase constraint below z_max; the ice
+    # parameters additionally need z_max raised above the freezing level
+    # (and an ice variable in y_var_names) before they are well informed.
+    cfsite_numbers = (5, 11, 17, 23, 30, 66, 82, 99)
     les_kwargs = (forcing_model = "HadGEM2-A", month = 7, experiment = "amip")
     ref_paths = [
         get_stats_path(get_cfsite_les_dir(cfsite_number; les_kwargs...)) for
