@@ -29,6 +29,19 @@ repos:
 
   - repo: local
     hooks:
+      - id: markdown-link-ambiguity
+        name: Documenter link ambiguity ([units] followed by parentheses)
+        # Documenter parses `[text](target)` as a link, and its parser allows
+        # any whitespace -- including a newline -- between `]` and `(`. Units
+        # in brackets followed by a parenthetical therefore become links and
+        # break the docs build with a :cross_references error. Most docstrings
+        # are not rendered (checkdocs = :exports), so these stay latent until
+        # the symbol is added to a page; catch them at commit time instead.
+        entry: .dev/check_markdown_link_ambiguity.py
+        language: system
+        types_or: [julia, markdown]
+        pass_filenames: true
+
       - id: julia-formatter
         name: JuliaFormatter (matches CI)
         # Uses the pinned .dev/format environment so the formatting matches the
