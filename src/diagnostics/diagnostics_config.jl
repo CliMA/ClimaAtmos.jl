@@ -1,37 +1,49 @@
 """
-    DiagnosticsConfig(; default = true, additional = (), interpolation_num_points = nothing, output_at_levels = true)
+    DiagnosticsConfig(; default = true, additional = (),
+                      interpolation_num_points = nothing, output_at_levels = true)
 
-Specification of which diagnostics a simulation produces and how their NetCDF
-output is shaped. A single `DiagnosticsConfig` value is passed to
-[`AtmosSimulation`](@ref ClimaAtmos.AtmosSimulation) via the `diagnostics`
-keyword argument.
+Specify which diagnostics a simulation produces and how their NetCDF output is shaped.
+
+A single `DiagnosticsConfig` value is passed to
+[`AtmosSimulation`](@ref ClimaAtmos.AtmosSimulation) through its `diagnostics` keyword
+argument. A simulation produces no diagnostics when `default = false` and `additional` is
+empty. The type parameter `A` is the type of the `additional` collection.
 
 # Fields
 
-  - `default::Bool = true`: include the built-in ClimaAtmos diagnostic set for
-    the chosen `AtmosModel`.
+  - `default::Bool = true`: Whether to include the built-in ClimaAtmos diagnostic set for
+    the chosen `AtmosModel`, as returned by `default_diagnostics`.
+  - `additional::A = ()`: Extra user-supplied diagnostics. Mixed collections are allowed;
+    each entry is normalized by `normalize_diag_entry` and can be:
+      + a `ClimaDiagnostics.ScheduledDiagnostic`, used as-is for full control;
+      + a `Pair` of short name to options, e.g.
+        `"ua" => (; period = "30mins", reduction = "average")`;
+      + a `NamedTuple` with at least `short_name` and `period`, e.g.
+        `(; short_name = "ts", period = "1hours")`;
+      + a YAML-style `Dict{String, Any}`, the shape produced by the `diagnostics:` YAML key.
+  - `interpolation_num_points = nothing`: Override for the NetCDF remap grid, e.g.
+    `(180, 90, 10)`. When `nothing`, the default for the underlying space is used.
+  - `output_at_levels::Bool = true`: Whether to write on model levels, applying no vertical
+    interpolation. Set to `false` to interpolate to pressure levels instead.
 
-  - `additional = ()`: extra user-supplied diagnostics. Each entry can be:
+# Examples
 
-      + a `ClimaDiagnostics.ScheduledDiagnostic` (full control);
-      + a `Pair` like `"ua" => (; period = "30mins", reduction = "average")`
-        (short_name => options as a NamedTuple);
-      + a NamedTuple with at least `short_name` and `period`,
-        e.g. `(; short_name = "ts", period = "1hours")`;
-      + a YAML-style `Dict{String,Any}` (the same shape produced by the
-        `diagnostics:` YAML key).
+```julia
+import ClimaAtmos as CA
 
-    Mixed lists are allowed.
+# Defaults only.
+config = CA.DiagnosticsConfig()
 
-  - `interpolation_num_points = nothing`: override the NetCDF remap grid (e.g.
-    `(180, 90, 10)`). When `nothing`, falls back to the default chosen from the
-    underlying space.
+# Defaults plus half-hourly mean zonal wind and hourly instantaneous surface temperature.
+config = CA.DiagnosticsConfig(;
+    additional = (
+        "ua" => (; period = "30mins", reduction = "average"),
+        (; short_name = "ts", period = "1hours"),
+    ),
+)
 
-  - `output_at_levels::Bool = true`: write at model levels (no vertical
-    interpolation). Set `false` to interpolate to pressure levels.
-
-A simulation produces no diagnostics when `default = false` and `additional`
-is empty.
+simulation = CA.AtmosSimulation{Float64}(; diagnostics = config)
+```
 """
 @kwdef struct DiagnosticsConfig{A}
     default::Bool = true
@@ -46,11 +58,15 @@ _diag_key(k::Symbol) = k === :reduction ? "reduction_time" : String(k)
 """
     normalize_diag_entry(entry)
 
-Convert a user-supplied diagnostic spec into either a
-`ClimaDiagnostics.ScheduledDiagnostic` (passed through unchanged) or a
-`Dict{String,Any}` matching the YAML diagnostic schema. Used internally by
-`setup_diagnostics_and_writers` so callers can write diagnostics in several
-convenient forms — see [`DiagnosticsConfig`](@ref).
+Normalize one user-supplied diagnostic spec to a form the simulation setup understands.
+
+A `ScheduledDiagnostic` is passed through unchanged; everything else becomes a
+`Dict{String, Any}` matching the YAML diagnostic schema, with the friendlier `reduction`
+key renamed to the schema's `reduction_time`. Throws on an unrecognized type, and on a
+bare `"short_name" => "period"` pair, whose reduction would be ambiguous.
+
+Called from `setup_diagnostics_and_writers`, so that the `additional` field of
+[`DiagnosticsConfig`](@ref) can be written in several convenient forms.
 """
 normalize_diag_entry(sd::ClimaDiagnostics.ScheduledDiagnostic) = sd
 normalize_diag_entry(d::AbstractDict) = Dict{String, Any}(String(k) => v for (k, v) in d)
@@ -77,8 +93,16 @@ normalize_diag_entry(x) = error(
 """
     extract_diagnostic_periods(diagnostics)
 
-Extract accumulation periods from diagnostics that have reduction functions.
-Returns a Set of Period objects.
+Collect the accumulation periods of the diagnostics that perform a time reduction.
+
+Diagnostics without a `reduction_time_func`, and those whose output schedule has no fixed
+period (such as `EveryStepSchedule` and `DivisorSchedule`), contribute nothing. The result
+is checked against the checkpointing frequency by
+`validate_checkpoint_diagnostics_consistency`.
+
+# Returns
+
+A `Set` of `Dates.Period`.
 """
 function extract_diagnostic_periods(diagnostics)
     schedule_period(s::EveryDtSchedule) = Dates.Second(s.dt)

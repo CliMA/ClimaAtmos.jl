@@ -23,23 +23,33 @@ include(
         h_elem
     )
 
-Writes the precomputed orographic gravity wave drag data and its associated configuration attributes to an HDF5 file.
+Write the preprocessed orographic gravity wave drag and its configuration to an HDF5 file.
+
+The file is created in the working directory as `<output_filename>.hdf5`, with the
+topography configuration stored as file attributes so a later reader can confirm the drag
+matches its run. `output_filename` comes from `generate_drag_filename`, and
+`load_preprocessed_topography` reads the result back.
+
+This is the last step of the offline preprocessing pipeline; the files it produces are what
+the `ogw_computed_drag_h*` ClimaArtifacts distribute.
 
 # Arguments
 
-  - `computed_drag`: The computed drag data field to be saved.
-  - `comms_ctx`: The communication context used to initialize the HDF5 writer.
+  - `computed_drag`: Drag field to save, as returned by `compute_OGW_info`.
+  - `comms_ctx`: Communications context used to initialize the HDF5 writer.
 
 # Keyword Arguments
 
-  - `topography`: The name or type of the topography used.
-  - `topo_smoothing`: Boolean flag indicating whether topography smoothing was applied.
+  - `topography`: Topography name.
+  - `topo_smoothing`: Whether topography smoothing was applied.
   - `topography_damping_factor`: Damping factor applied to the topography.
-  - `h_elem`: The number of horizontal elements in the grid.
+  - `h_elem`: Number of horizontal elements per panel direction [-].
 
 # Returns
 
-  - `String`: The base output filename of the written HDF5 file.
+The extensionless base filename of the file written, as a `String`.
+
+See the *Orographic Gravity Waves* page for the pipeline diagram.
 """
 function write_computed_drag!(
     computed_drag,
@@ -76,6 +86,20 @@ function write_computed_drag!(
 end
 
 
+"""
+    save_nc_data(output_filename, topo_cg, spaces) -> (datafile_cg, weightfile)
+
+Write the drag fields to a spectral-element NetCDF file and build remapping weights.
+
+Returns the paths of the NetCDF file holding the six drag variables on the CGLL grid and of
+a TempestRemap weight file targeting a 180×90 lat-lon grid. Both are written next to this
+source file. `topo_cg` and the spaces are moved to the CPU first, since the writers are
+CPU-only.
+
+Diagnostics-only: this is the first step of the offline plotting path
+`save_nc_data` → `remap_nc_data` → `diagnostics` → `plot_diagnostics`, and is not part of
+the drag the model consumes.
+"""
 function save_nc_data(output_filename, topo_cg, spaces)
     topo_cg = to_cpu(topo_cg)
     FT = eltype(topo_cg.hmax)
@@ -111,6 +135,20 @@ function save_nc_data(output_filename, topo_cg, spaces)
     return datafile_cg, weightfile
 end
 
+"""
+    remap_nc_data(output_filename)
+
+Remap the six drag variables from the spectral-element grid to a lat-lon grid.
+
+Returns the path of the remapped NetCDF file, written next to this source file. Second step
+of the diagnostics-only path started by `save_nc_data`.
+
+!!! warning
+
+    `datafile_cg` and `weightfile` are not arguments: they are taken from the enclosing
+    scope, so this must be called where `save_nc_data`'s two return values are bound under
+    those names.
+"""
 function remap_nc_data(output_filename)
     # remap from clima grid to lat/lon grid
     datafile_rll = joinpath(@__DIR__, "data_rll_$(output_filename).nc")
@@ -124,6 +162,14 @@ function remap_nc_data(output_filename)
     return datafile_rll
 end
 
+"""
+    diagnostics(datafile_rll)
+
+Read the remapped drag variables back from a lat-lon NetCDF file.
+
+Returns `(; lon, lat, hmax, hmin, t11, t12, t21, t22)` as plain arrays, ready to hand to
+`plot_diagnostics`. Third step of the diagnostics-only path started by `save_nc_data`.
+"""
 function diagnostics(datafile_rll)
     nt = NCDataset(datafile_rll) do ds
         lon = Array(ds["lon"])
@@ -140,6 +186,17 @@ function diagnostics(datafile_rll)
     return nt
 end
 
+"""
+    plot_diagnostics(lon, lat, hmax, hmin, t11, t12, t21, t22)
+
+Plot the six orographic drag fields as a 3×2 panel of lat-lon maps.
+
+Saves `preprocess_topography/diagnostics.png` next to this source file. Mutates `hmax` and
+`hmin` in place, clipping them at zero. The tensor panels use a fixed `[-50, 30]` contour
+range so runs can be compared directly; the height panels autoscale.
+
+Last step of the diagnostics-only path started by `save_nc_data`.
+"""
 function plot_diagnostics(lon, lat, hmax, hmin, t11, t12, t21, t22)
     @. hmax = max(0, hmax)
     @. hmin = max(0, hmin)

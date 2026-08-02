@@ -48,8 +48,16 @@ add_diagnostic_variable!(short_name = "vtendnogw", units = "m s^-2",
 # (config `nogw_beres_detailed_diagnostics`).
 ###
 
-# Error unless Beres detailed (verification) diagnostics are enabled.
-# Reached only from the BeresSourceParams methods, so `beres_source` is non-nothing.
+"""
+    _require_beres_detailed(short_name, cache)
+
+Error unless the Beres source-internal diagnostics are enabled.
+
+These fields are verification and debug output, gated behind the Beres `detailed_diagnostics`
+flag (config key `nogw_beres_detailed_diagnostics`), because the cache arrays backing them
+are only filled when it is set. Called only from the `BeresSourceParams` methods, so
+`beres_source` is known to be non-`nothing`.
+"""
 function _require_beres_detailed(short_name, cache)
     cache.atmos.non_orographic_gravity_wave.beres_source.detailed_diagnostics ||
         error_diagnostic_variable(
@@ -59,7 +67,16 @@ function _require_beres_detailed(short_name, cache)
     return nothing
 end
 
-# Helper: apply beres_active gate to a 2D field
+"""
+    _gated_copy!(out, field, active)
+
+Copy `field`, zeroing the columns in which `active` is not positive.
+
+The 2D Beres source summaries hold stale values in columns where the convective source did
+not fire this step, so they are masked by the activation flag before being written. Mutates
+and returns `out`; when `out` is `nothing`, a copy of `field` is allocated and returned
+instead.
+"""
 function _gated_copy!(out, field, active)
     if isnothing(out)
         result = copy(field)

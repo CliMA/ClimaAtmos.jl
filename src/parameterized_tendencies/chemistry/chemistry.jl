@@ -7,15 +7,16 @@
 # this file defines only the fallback for when no chemistry is loaded.
 
 """
-    chemistry_tendency!(Yₜ, Y, p, t, ::Nothing)
+    chemistry_tendency!(Yₜ, Y, p, t, chemistry_model)
 
-No chemistry model is active.
+Add gas-phase chemistry source terms to `Yₜ` in place; return `nothing`.
+
+Dispatches on the chemistry model in `p.atmos`:
+
+  - `::Nothing`: no chemistry is active; the tendency is a no-op.
+  - `::GasPhaseChem`: gas-phase chemistry. The fallback defined here is a no-op; the
+    MUSICA-backed method is provided by the `ClimaAtmosMusica` extension, which is loaded
+    automatically when `Musica` is imported alongside `ClimaAtmos`.
 """
 chemistry_tendency!(Yₜ, Y, p, t, ::Nothing) = nothing
-
-"""
-    chemistry_tendency!(Yₜ, Y, p, t, ::GasPhaseChem)
-
-Source terms are provided by Musica extension.
-"""
 function chemistry_tendency!(Yₜ, Y, p, t, ::GasPhaseChem) end

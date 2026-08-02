@@ -11,22 +11,37 @@ import SurfaceFluxes.UniversalFunctions as UF
 """
     buoyancy_gradient_coefficients(thermo_params, T, ρ, q_tot, q_liq, q_ice)
 
-Pointwise thermodynamic coefficients of the moist buoyancy-gradient chain
-rule. The buoyancy gradient is *linear* in the vertical gradients of the
+Return the pointwise thermodynamic coefficients of the moist buoyancy-gradient
+chain rule.
+
+The buoyancy gradient is *linear* in the vertical gradients of the
 prognostic state,
 
     ∂b/∂z = C_θ(state, cf) ∂θli/∂z + C_q(state, cf) ∂qt/∂z,
 
 with the cloud-fraction blend also linear:
-`C_θ = Cθ_unsat + cf ΔCθ`, `C_q = Cq_unsat + cf ΔCq`. This function returns
-the four cf-independent coefficients as a `NamedTuple`
-`(; Cθ_unsat, ΔCθ, Cq_unsat, ΔCq)`.
+`C_θ = Cθ_unsat + cf ΔCθ`, `C_q = Cq_unsat + cf ΔCq`.
 
 The coefficients contain all of the expensive pointwise thermodynamics
 (saturation vapor pressure, latent heat, potential temperatures); evaluating
 them once per state update and reusing them for the centered, one-sided, and
 face-native gradient stencils — via [`blended_N²`](@ref) — avoids recomputing
 that thermodynamics for every stencil.
+
+# Arguments
+
+  - `thermo_params`: Thermodynamic parameters.
+  - `T`: Air temperature [K].
+  - `ρ`: Air density [kg/m³].
+  - `q_tot`, `q_liq`, `q_ice`: Total, liquid, and ice specific humidities
+    [kg/kg].
+
+# Returns
+
+The `NamedTuple` `(; Cθ_unsat, ΔCθ, Cq_unsat, ΔCq)` of cloud-fraction-
+independent coefficients: `∂b/∂θ_li` in unsaturated air [m/s²/K] with its
+saturated increment `ΔCθ`, and `∂b/∂q_tot` in unsaturated air [m/s²] with its
+saturated increment `ΔCq`.
 """
 @inline function buoyancy_gradient_coefficients(
     thermo_params,
@@ -66,9 +81,10 @@ end
 """
     blended_N²(coeffs, cf, ∂θli∂z, ∂qt∂z)
 
-Moist buoyancy gradient from precomputed chain-rule coefficients
-(see [`buoyancy_gradient_coefficients`](@ref)), the local cloud fraction, and
-projected vertical gradients of `θ_li` and `q_tot` (physical scalars):
+Return the moist buoyancy gradient `N² = ∂b/∂z` [1/s²] from precomputed
+chain-rule coefficients ([`buoyancy_gradient_coefficients`](@ref)), the local
+cloud fraction `cf` [-], and the projected vertical gradients of `θ_li` [K/m]
+and `q_tot` [1/m], for physical scalars:
 
     ∂b/∂z = (Cθ_unsat + cf ΔCθ) ∂θli/∂z + (Cq_unsat + cf ΔCq) ∂qt/∂z.
 """
@@ -77,35 +93,35 @@ projected vertical gradients of `θ_li` and `q_tot` (physical scalars):
     (coeffs.Cq_unsat + cf * coeffs.ΔCq) * ∂qt∂z
 
 """
-    buoyancy_gradients(closure, thermo_params, bg_model::EnvBuoyGradVars)
+    buoyancy_gradients(ebgc::AbstractEnvBuoyGradClosure, thermo_params,
+                       bg_model::EnvBuoyGradVars)
 
-Calculates the mean vertical buoyancy gradient (`∂b/∂z`) in the environment,
-from the state and the prognostic vertical gradients (`∂θₗᵢ/∂z`, `∂qₜ/∂z`)
-bundled in `bg_model`.
+Compute the mean vertical buoyancy gradient `∂b/∂z` [1/s²] in the environment
+from the state and the vertical gradients `∂θₗᵢ/∂z`, `∂qₜ/∂z` bundled in
+`bg_model`.
 
-This gradient is determined by considering contributions from both the unsaturated
-and saturated portions of the environment, weighted by the environmental cloud
-fraction. The calculation involves:
+The gradient blends the unsaturated and saturated responses with the
+environmental cloud fraction: [`buoyancy_gradient_coefficients`](@ref) supplies
+the partial derivatives of buoyancy, and
+[`buoyancy_gradient_chain_rule`](@ref) applies them to the gradients and
+blends.
 
- 1. Determining partial derivatives of buoyancy with respect to virtual potential
-    temperature (`θᵥ`) for the unsaturated part, and with respect to liquid-ice
-    potential temperature (`θₗᵢ`) and total specific humidity (`qₜ`) for the
-    saturated part ([`buoyancy_gradient_coefficients`](@ref)).
- 2. Applying the chain rule using the provided vertical gradients of these
-    thermodynamic variables ([`buoyancy_gradient_chain_rule`](@ref)).
- 3. Blending the resulting unsaturated and saturated buoyancy gradients based on
-    the environmental cloud fraction.
+# Arguments
 
-Arguments:
+  - `ebgc`: Environmental buoyancy-gradient closure (e.g. `BuoyGradMean`).
+  - `thermo_params`: Thermodynamic parameters.
+  - `bg_model`: `EnvBuoyGradVars` bundling `T`, `ρ`, `q_tot`, `q_liq`, `q_ice`,
+    `cf`, `∂qt∂z`, and `∂θli∂z`.
 
-  - `closure`: The environmental buoyancy gradient closure type (e.g., `BuoyGradMean`).
-  - `thermo_params`: Thermodynamic parameters from `CLIMAParameters`.
-  - `bg_model`: An `EnvBuoyGradVars` bundling `T`, `ρ`, `q_tot`, `q_liq`,
-    `q_ice`, `cf`, `∂qt∂z`, and `∂θli∂z`.
+# Returns
 
-Returns:
+The mean vertical buoyancy gradient [1/s²].
 
-  - `∂b∂z`: The mean vertical buoyancy gradient [s⁻²].
+# Notes
+
+The production pipeline evaluates the same quantity through the fused
+[`blended_N²`](@ref) broadcast; this bundled form is retained as the reference
+path exercised by the unit tests.
 """
 function buoyancy_gradients(
     ebgc::AbstractEnvBuoyGradClosure,
@@ -138,38 +154,34 @@ end
         closure::AbstractEnvBuoyGradClosure,
         bg_model::EnvBuoyGradVars,
         thermo_params,
-        ∂b∂θli_sat::FT,
-        ∂b∂qt_sat::FT,
-    ) where {FT}
+        ∂b∂θli_unsat,
+        ∂b∂qt_unsat,
+        ∂b∂θli_sat,
+        ∂b∂qt_sat,
+    )
 
-Calculates the mean vertical buoyancy gradient (`∂b∂z`) by applying the chain rule
-to the partial derivatives of buoyancy and then blending based on cloud fraction.
+Apply the buoyancy chain rule to the vertical gradients in `bg_model` and blend
+the unsaturated and saturated results with the environmental cloud fraction.
 
-This function takes the partial derivatives of buoyancy with respect to:
+Each pair of partial derivatives is contracted with `∂θli∂z` and `∂qt∂z` to give
+`∂b∂z_unsat` and `∂b∂z_sat`, which are combined as
+`(1 - cf) ∂b∂z_unsat + cf ∂b∂z_sat`.
 
-  - virtual potential temperature (`∂b/∂θᵥ`) for the unsaturated part,
-  - liquid-ice potential temperature (`∂b/∂θₗᵢ,sat`) for the saturated part,
-  - total specific humidity (`∂b/∂qₜ,sat`) for the saturated part.
+# Arguments
 
-It then multiplies these by the respective vertical gradients of `θᵥ`, `θₗᵢ`, and `qₜ`
-(obtained from `bg_model`)
-to get the buoyancy gradients for the unsaturated (`∂b∂z_unsat`) and saturated
-(`∂b∂z_sat`) parts of the environment.
-Finally, it returns a single mean buoyancy gradient by linearly combining
-`∂b∂z_unsat` and `∂b∂z_sat` weighted by the environmental cloud fraction
-(also obtained from `bg_model`).
+  - `closure`: Environmental buoyancy-gradient closure.
+  - `bg_model`: `EnvBuoyGradVars` supplying `∂θli∂z`, `∂qt∂z`, and `cf`.
+  - `thermo_params`: Thermodynamic parameters (unused by the current method,
+    retained for closures that need them).
+  - `∂b∂θli_unsat`, `∂b∂θli_sat`: Partial derivatives of buoyancy with respect to
+    liquid-ice potential temperature, unsaturated and saturated [m/s²/K].
+  - `∂b∂qt_unsat`, `∂b∂qt_sat`: Partial derivatives of buoyancy with respect to
+    total specific humidity, unsaturated and saturated [m/s²].
 
-Arguments:
+# Returns
 
-  - `closure`: The environmental buoyancy gradient closure type.
-  - `bg_model`: Precomputed environmental buoyancy gradient variables (`EnvBuoyGradVars`).
-  - `thermo_params`: Thermodynamic parameters from `CLIMAParameters`.
-  - `∂b∂θli_sat`: Partial derivative of buoyancy w.r.t. liquid-ice potential temperature (saturated part).
-  - `∂b∂qt_sat`: Partial derivative of buoyancy w.r.t. total specific humidity (saturated part).
-
-Returns:
-
-  - `∂b∂z`: The mean vertical buoyancy gradient [s⁻²].
+The mean vertical buoyancy gradient [1/s²]. Called from
+[`buoyancy_gradients`](@ref).
 """
 function buoyancy_gradient_chain_rule(
     ::AbstractEnvBuoyGradClosure,
@@ -193,39 +205,28 @@ function buoyancy_gradient_chain_rule(
 end
 
 """
-    surface_flux_tke(
-        turbconv_params,
-        ρa_sfc,
-        ustar,
-        surface_local_geometry,
-    )
+    surface_flux_tke(turbconv_params, ρ_sfc, ustar, surface_local_geometry)
 
-Calculates the surface flux of TKE, a C3 vector used by
-ClimaAtmos operator boundary conditions.
+Return the surface flux of TKE as a `C3` vector for use in operator boundary
+conditions.
 
-The flux magnitude is modeled as
-c_k * ρa_sfc * ustar^3`,
-directed along the surface upward normal.
+The magnitude is `c_k ρ_sfc ustar³`, directed along the surface upward normal,
+where `c_k` (`tke_surf_flux_coeff`) is a dimensionless coefficient. The `ustar³`
+scaling makes the flux a shear-production input: the TKE generated at the
+surface by unresolved roughness elements.
 
-Details:
+# Arguments
 
-  - `c_k`: A dimensionless coefficient (`tke_surface_flux_coeff`) scaling the surface flux of TKE.
-  - The formulation `ustar^3` implies that the TKE flux is primarily driven by
-    shear production at the surface.
-
-This flux represents the net input of TKE into the atmosphere from the surface,
-arising from turbulent generation processes by unresolved roughness elements.
-
-Arguments:
-
-  - `turbconv_params`: Set of turbulence and convection model parameters.
-  - `ρa_sfc`: Area-fraction weighted air density at the surface [kg/m^3].
+  - `turbconv_params`: Turbulence-convection parameters.
+  - `ρ_sfc`: Air density at the surface [kg/m³]; currently the first
+    cell-center density.
   - `ustar`: Friction velocity [m/s].
-  - `surface_local_geometry`: The `LocalGeometry` object at the surface.
+  - `surface_local_geometry`: `ClimaCore.Geometry.LocalGeometry` at the surface.
 
-Returns:
+# Returns
 
-  - A `ClimaCore.Geometry.C3` vector representing the TKE flux normal to the surface.
+A `ClimaCore.Geometry.C3` vector, the TKE flux normal to the surface
+[kg/s³].
 """
 function surface_flux_tke(
     turbconv_params,
@@ -243,59 +244,63 @@ end
 
 """
     mixing_length_lopez_gomez_2020(
-    turbconv_params,
-    sf_params,
-    vkc,
-    ustar,
-    ᶜz,
-    z_sfc,
-    ᶜΔ_f,
-    sfc_tke,
-    ᶜN²_eff,
-    ᶜN²_prod,
-    ᶜtke,
-    obukhov_length,
-    ᶜstrain_rate_norm,
-    ᶜPr,
-    scale_blending_method,
-)
+        turbconv_params, sf_params, vkc, ustar, ᶜz, z_sfc, ᶜΔ_f, sfc_tke,
+        ᶜN²_eff, ᶜN²_prod, ᶜtke, obukhov_length, ᶜstrain_rate_norm, ᶜPr,
+        scale_blending_method,
+    ) -> MixingLength
 
-where:
-- `turbconv_params`: Turbulence-convection parameter set.
-- `sf_params`: Surface flux parameter set (Businger parameters).
-- `vkc`: Von Kármán constant.
-- `ustar`: Friction velocity [m/s].
-- `ᶜz`: Cell center height [m].
-- `z_sfc`: Surface elevation [m].
-- `ᶜΔ_f`: Resolvability filter scale [m] that caps the mixing length (see
-  [`resolvability_filter_scale`](@ref); `Inf` where the grid imposes no
-  scale, as in single columns).
-- `sfc_tke`: TKE near the surface (e.g., first cell center) [m^2/s^2].
-- `ᶜN²_eff`: Effective squared Brunt-Väisälä frequency [1/s^2], used for the
-  buoyancy-limited scale `l_N` (may include the unresolved-jump augmentation
-  of `interface_effective_N²`).
-- `ᶜN²_prod`: Squared Brunt-Väisälä frequency entering the TKE
-  production-dissipation balance for `l_TKE` [1/s^2]. Passed separately so
-  the balance uses the same (centered) stability as the actual TKE buoyancy
-  production, keeping `l_TKE` stencil-consistent with the budget it
-  parameterizes even when `ᶜN²_eff` carries the interface augmentation.
-- `ᶜtke`: Turbulent kinetic energy at cell center [m^2/s^2].
-- `obukhov_length`: Surface Monin-Obukhov length [m].
-- `ᶜstrain_rate_norm`: Frobenius norm of strain rate tensor [1/s].
-- `ᶜPr`: Turbulent Prandtl number [-].
-- `scale_blending_method`: The method to use for blending physical scales.
+Compute the turbulent mixing length pointwise from the generalized closure of
+[Lopez2020](@cite).
 
-Point-wise calculation of the turbulent mixing length, limited by physical constraints (wall distance,
-TKE balance, stability) and by the resolvability filter scale
-(see [`resolvability_filter_scale`](@ref)). Based on
-Lopez‐Gomez, I., Cohen, Y., He, J., Jaruga, A., & Schneider, T. (2020).
-A generalized mixing length closure for eddy‐diffusivity mass‐flux schemes of turbulence and convection.
-Journal of Advances in Modeling Earth Systems, 12, e2020MS002161. https://doi.org/ 10.1029/2020MS002161
+Three physical scales are formed and blended by `blend_scales`:
 
-Returns a `MixingLength{FT}` struct containing the final blended mixing length (`master`)
-and its constituent physical scales.
+  - `l_W`: wall scale `κ (z - z_sfc) ustar / (c_m √e_sfc φ_m(ζ))`, matching
+    Monin-Obukhov similarity in the surface layer.
+  - `l_TKE`: TKE production-dissipation balance scale `√(c_d e^{3/2} / a_pd)`
+    with `a_pd = c_m (2 |S|² - N²_prod / Pr) √e`; dropped from the blend where
+    the net production `a_pd` is non-positive.
+  - `l_N`: buoyancy-limited scale `√(c_b e) / N_eff`, capped by the wall
+    distance and used only where `ᶜN²_eff > 0`.
+
+The blend is then limited by the wall distance and by the resolvability filter
+scale `ᶜΔ_f`, and floored at 1 m.
+
+The same closure is evaluated at cell centers (`ᶜmixing_length`) and at faces
+(`set_face_diffusivities!`), with the corresponding inputs.
+
+# Arguments
+
+  - `turbconv_params`: Turbulence-convection parameters (`c_m`, `c_b`, `c_d`).
+  - `sf_params`: Surface-flux parameters (Businger universal functions).
+  - `vkc`: Von Kármán constant [-].
+  - `ustar`: Friction velocity [m/s].
+  - `ᶜz`: Height of the evaluation point [m].
+  - `z_sfc`: Surface elevation [m].
+  - `ᶜΔ_f`: Resolvability filter scale [m] that caps the mixing length (see
+    [`resolvability_filter_scale`](@ref); `Inf` where the grid imposes no scale,
+    as in single columns).
+  - `sfc_tke`: TKE near the surface (first cell center) [m²/s²].
+  - `ᶜN²_eff`: Effective squared buoyancy frequency [1/s²], used for `l_N`; may
+    include the unresolved-jump augmentation of
+    [`interface_effective_N²`](@ref).
+  - `ᶜN²_prod`: Squared buoyancy frequency entering the production-dissipation
+    balance for `l_TKE` [1/s²]. Passed separately so the balance uses the same
+    stability as the actual TKE buoyancy production, keeping `l_TKE`
+    stencil-consistent with the budget it parameterizes even when `ᶜN²_eff`
+    carries the interface augmentation.
+  - `ᶜtke`: Turbulent kinetic energy at the evaluation point [m²/s²].
+  - `obukhov_length`: Surface Monin-Obukhov length [m].
+  - `ᶜstrain_rate_norm`: Squared Frobenius norm of the strain-rate tensor,
+    `SᵢⱼSᵢⱼ` [1/s²].
+  - `ᶜPr`: Turbulent Prandtl number [-].
+  - `scale_blending_method`: Blending method for the physical scales
+    ([`blend_scales`](@ref)).
+
+# Returns
+
+A `MixingLength{FT}` holding the blended mixing length (`master`) and the
+constituent scales `wall`, `tke`, `buoy`, and `l_grid`, all [m].
 """
-
 function mixing_length_lopez_gomez_2020(
     turbconv_params,
     sf_params,
@@ -423,14 +428,17 @@ end
 """
     set_buoyancy_gradient_inputs!(Y, p, thermo_params)
 
-Materializes, once per state update, everything the buoyancy-gradient
-stencils share:
+Materialize, once per state update, everything the buoyancy-gradient stencils
+share:
 
   - `p.precomputed.ᶜbg_coeffs`: the pointwise chain-rule coefficients of
     [`buoyancy_gradient_coefficients`](@ref) (all of the expensive
     saturation thermodynamics lives here);
   - `p.precomputed.ᶠ∂θli∂z`, `p.precomputed.ᶠ∂qt∂z`: exact two-point face
-    gradients of `θ_li` and `q_tot`, projected to physical scalars.
+    gradients of `θ_li` and `q_tot`, projected to physical scalars;
+  - `p.precomputed.ᶜgradᵥ_θ_liq_ice`, `p.precomputed.ᶜgradᵥ_q_tot`: the
+    corresponding centered (interpolate-then-difference) gradients, still as
+    `Covariant3Vector`s.
 
 The centered, one-sided (`set_stability_buoyancy_gradient!`), and face-native
 (`set_face_diffusivities!`) buoyancy gradients then reduce to
@@ -438,6 +446,8 @@ The centered, one-sided (`set_stability_buoyancy_gradient!`), and face-native
 per cloud-fraction Picard iteration, where only `cf` changes) at negligible
 cost. The coefficients depend on `(T, ρ, q)` but not on `cf`, so they are
 fixed during the Picard iteration.
+
+Mutates `p.precomputed` and uses `p.scratch.ᶜtemp_scalar`; returns `nothing`.
 """
 NVTX.@annotate function set_buoyancy_gradient_inputs!(Y, p, thermo_params)
     (; ᶜbg_coeffs, ᶠ∂θli∂z, ᶠ∂qt∂z, ᶜgradᵥ_θ_liq_ice, ᶜgradᵥ_q_tot) = p.precomputed
@@ -474,8 +484,9 @@ end
 """
     set_stability_buoyancy_gradient!(Y, p, thermo_params)
 
-Fills `p.precomputed.ᶜN²_eff` with an interface-aware effective
-stability: at each cell center, the buoyancy gradient is evaluated twice, with
+Fill `p.precomputed.ᶜN²_eff` with an interface-aware effective stability.
+
+At each cell center the buoyancy gradient is evaluated twice, with
 upward- and downward-biased one-sided vertical gradients of `θ_li` and `q_tot`
 (i.e., the exact two-point gradients of the two adjacent faces), each is
 augmented by the unresolved-jump term of [`interface_effective_N²`](@ref)
@@ -495,8 +506,13 @@ one and the jump term is `O((Δz/l_N)²)`, so the correction is inactive.
 
 This field feeds the mixing-length and `Pr_t(Ri)` closures only; the TKE
 buoyancy production keeps the centered `ᶜbuoygrad`, so convective
-production in unstable layers is unaffected. Without prognostic TKE the jump
-term is unavailable and the pure one-sided max is used.
+production in unstable layers is unaffected. Without prognostic TKE
+(`Y.c.ρtke` absent) the jump term is unavailable and the pure one-sided max is
+used.
+
+Reads `ᶜbg_coeffs`, `ᶠ∂θli∂z`, `ᶠ∂qt∂z` (from
+[`set_buoyancy_gradient_inputs!`](@ref)) and `ᶜcloud_fraction`; mutates
+`p.precomputed.ᶜN²_eff` and returns `nothing`.
 """
 NVTX.@annotate function set_stability_buoyancy_gradient!(Y, p, thermo_params)
     (; ᶜN²_eff, ᶜcloud_fraction) = p.precomputed
@@ -545,13 +561,14 @@ end
 """
     interface_effective_N²(N², Δz, κ_iso, c_b)
 
-Interface-aware effective squared buoyancy frequency at a face,
+Return the interface-aware effective squared buoyancy frequency [1/s²],
 
     N²_eff = N² + [(Δb)₊]² / (c_b κ_iso),    Δb = N² Δz,
 
-where `N²` is the two-point face buoyancy gradient, `Δz` the face-adjacent
-grid spacing, `κ_iso` the isotropic TKE, and `c_b` the static-stability
-mixing-length coefficient (`mixing_length_static_stab_coeff`).
+where `N²` is the two-point buoyancy gradient [1/s²], `Δz` the adjacent grid
+spacing [m], `κ_iso` the isotropic TKE [m²/s²], and `c_b` the
+static-stability mixing-length coefficient
+(`mixing_length_static_stab_coeff`) [-].
 
 The face jump `Δb` is compatible with any subgrid profile between a uniform
 gradient over `Δz` (which centered differencing assumes) and a sheet interface
@@ -574,8 +591,8 @@ end
 """
     set_face_diffusivities!(Y, p)
 
-Face-native turbulence pipeline: fills, at cell faces where the diffusive
-fluxes live,
+Fill the face-native turbulence pipeline: at the cell faces where the
+diffusive fluxes live, this sets
 
   - `p.precomputed.ᶠbuoygrad`: the moist buoyancy gradient from the *exact*
     two-point face differences of `(θ_li, q_tot)` with the pointwise
@@ -618,12 +635,6 @@ two faces, each face carries its partial jump and the summed entrainment flux
 under-recovers; the full sub-cell reconstruction that would remove this
 residual `Δz`-sensitivity is left to future work.)
 
-Pointwise face inputs (`κ = ᶠinterp(tke)`, strain, coefficients) use
-arithmetic interpolation: it is the second-order-accurate choice in the
-resolved limit, and the O(1) factor it introduces at sheet interfaces (the
-face `κ` mixes the turbulent and quiescent sides) is absorbed by the
-calibration of `c_b` and `A`.
-
 `K_e` is added to the face diffusivities for all scalars and momentum in
 `edmfx_sgs_diffusive_flux_tendency!` (and its Jacobian), keeping energy,
 water, and momentum transport conservative and mutually consistent. The TKE
@@ -632,6 +643,22 @@ and the same `ᶠbuoygrad` (see `edmfx_tke_tendency!`), so the interfacial
 sink `−γ w_e Δb` per face — bounded by `A κ^{3/2}/ℓ_e`, a fixed multiple of
 the dissipation — is carried automatically and the discrete energy
 conversions mirror the fluxes term by term.
+
+No-op (fields remain at their previous values) unless
+`p.atmos.turbconv_model isa AbstractEDMF`, which is also the condition under
+which `Y.c.ρtke` is available. `ᶠK_entr` is zeroed whenever
+`EDMF_interface_entr_efficiency` is zero, so downstream reads always see a
+defined value. Mutates
+`p.precomputed.ᶠbuoygrad`, `ᶠK_h`, `ᶠK_u`, `ᶠK_entr` and uses four `p.scratch`
+face scalars; returns `nothing`.
+
+# Extended help
+
+Pointwise face inputs (`κ = ᶠinterp(tke)`, strain, coefficients) use
+arithmetic interpolation: it is the second-order-accurate choice in the
+resolved limit, and the O(1) factor it introduces at sheet interfaces (the
+face `κ` mixes the turbulent and quiescent sides) is absorbed by the
+calibration of `c_b` and `A`.
 
 Validity domain: the closure targets strong, mixed-layer-capping inversions
 (large stable buoyancy jump `Δb`), where the restored diffusive exchange
@@ -648,9 +675,6 @@ belongs to the entrainment/detrainment closures, not to `K_e`. Consequently,
 calibrate `A` against equilibrium (≳ 24 h) targets — spin-up snapshots
 reward values that fail at equilibrium — and treat coarse-grid
 weak-inversion cloud cover as outside this closure's convergence guarantee.
-
-No-op (fields remain zero) for non-EDMF configurations or without prognostic
-TKE.
 """
 NVTX.@annotate function set_face_diffusivities!(Y, p)
     p.atmos.turbconv_model isa AbstractEDMF || return nothing
@@ -750,9 +774,22 @@ end
 """
     interface_entrainment_diffusivity(N²_face, Δz, κ_iso, ℓ_e, c_b, A)
 
-Pointwise interfacial entrainment diffusivity `K_e = γ w_e Δz`; see
-[`set_face_diffusivities!`](@ref) for the closure. Returns zero
-where the face jump is not stable (`Δb ≤ 0`) or turbulence is absent.
+Return the pointwise interfacial entrainment diffusivity `K_e = γ w_e Δz`
+[m²/s]; see [`set_face_diffusivities!`](@ref) for the closure.
+
+# Arguments
+
+  - `N²_face`: Face buoyancy gradient [1/s²].
+  - `Δz`: Face-adjacent grid spacing [m].
+  - `κ_iso`: Isotropic TKE at the face [m²/s²].
+  - `ℓ_e`: Energy-containing eddy scale [m].
+  - `c_b`: Static-stability mixing-length coefficient [-].
+  - `A`: Interface entrainment efficiency [-].
+
+# Returns
+
+The entrainment diffusivity [m²/s]; zero where the face jump is not stable
+(`Δb ≤ 0`).
 """
 @inline function interface_entrainment_diffusivity(
     N²_face,
@@ -776,7 +813,15 @@ where the face jump is not stable (`Δb ≤ 0`) or turbulence is absent.
     return γ * w_e * Δz
 end
 
-# GPU-safe field access using Val dispatch
+"""
+    get_mixing_length_field(ml::MixingLength, ::Val{P})
+
+Extract one length scale [m] from a `MixingLength`, selected by the `Val`
+property tag `P` (GPU-safe field access without runtime symbol lookup).
+
+Tags: `:master` (the blended scale), `:wall`, `:tke`, `:buoy`, `:l_grid`, and
+`:energy_containing` (a derived scale, see the comment below).
+"""
 @inline get_mixing_length_field(ml::MixingLength, ::Val{:master}) = ml.master
 @inline get_mixing_length_field(ml::MixingLength, ::Val{:wall}) = ml.wall
 @inline get_mixing_length_field(ml::MixingLength, ::Val{:tke}) = ml.tke
@@ -797,6 +842,21 @@ end
     return min(ℓ_phys, ml.l_grid)
 end
 
+"""
+    ᶜmixing_length(Y, p, property::Val{P} = Val{:master}())
+
+Return a lazy cell-center field of the PROPHET (`EDMFX` in code) mixing length,
+selected by `property` ([`get_mixing_length_field`](@ref)).
+
+Evaluates [`mixing_length_lopez_gomez_2020`](@ref) with center inputs: the
+stability-biased `ᶜN²_eff` (which registers unresolved inversions; see
+[`set_stability_buoyancy_gradient!`](@ref)) limits `l_N` and sets the turbulent
+Prandtl number, while the centered `ᶜbuoygrad` enters the
+production-dissipation balance for `l_TKE`, consistent with the TKE budget.
+
+Only valid for `AbstractEDMF` configurations, which always carry `Y.c.ρtke`.
+Writes `p.scratch.ᶜtemp_scalar_5` (the Prandtl number) as a side effect.
+"""
 function ᶜmixing_length(Y, p, property::Val{P} = Val{:master}()) where {P}
     (; params) = p
     (; ustar, obukhov_length) = p.precomputed.sfc_conditions
@@ -849,8 +909,8 @@ end
 """
     ᶜdiffusive_flux_divergenceᵥ(ᶠcoef, ᶜχ)
 
-Lazy vertical divergence of the diffusive scalar flux `F = -ᶠcoef ∇χ`, with
-zero-flux top and bottom boundaries.
+Return the lazy vertical divergence of the diffusive scalar flux
+`F = -ᶠcoef ∇χ`, with zero-flux top and bottom boundaries.
 
 `ᶠcoef` must be a face field or a `lazy` broadcast, not a bare `Field * Field`
 product. Fold `ρ`, `K`, and any scaling factor into `ᶠcoef` in left-to-right order.
@@ -860,8 +920,8 @@ product. Fold `ρ`, `K`, and any scaling factor into `ᶠcoef` in left-to-right 
 """
     ᶠtotal_enthalpy_gradientᵥ(thermo_params, ᶜT, ᶜΦ, ᶜq_vap, ᶜq_liq, ᶜq_ice)
 
-Lazy face gradient of total enthalpy in dry-static-energy + water-enthalpy form,
-`∇s_d + Σ_μ (h_μ + Φ) ∇q_μ` for `μ ∈ {vap, liq, ice}`.
+Return the lazy face gradient of total enthalpy in dry-static-energy +
+water-enthalpy form, `∇s_d + Σ_μ (h_μ + Φ) ∇q_μ` for `μ ∈ {vap, liq, ice}`.
 
 Summands are combined in a fixed order: dry static energy, then vapor, liquid, ice.
 """
@@ -875,23 +935,21 @@ Summands are combined in a fixed order: dry static energy, then vapor, liquid, i
 """
     gradient_richardson_number(params, ᶜN²_eff, ᶜstrain_rate_norm)
 
-Calculates the gradient Richardson number (Ri).
+Compute the gradient Richardson number, the ratio of the buoyancy to the shear
+term in the TKE budget:
 
-The gradient Richardson number is a dimensionless parameter that represents the ratio
-of buoyancy term to the shear term in the TKE equation. It is calculated as:
+    Ri = ᶜN²_eff / max(2 SᵢⱼSᵢⱼ, eps).
 
-    Ri = ᶜN²_eff / max(2 * |S|, ε)
+# Arguments
 
-where:
+  - `params`: Parameter set; used only for the floating-point type.
+  - `ᶜN²_eff`: Effective squared buoyancy frequency [1/s²].
+  - `ᶜstrain_rate_norm`: Squared Frobenius norm of the strain-rate tensor,
+    `SᵢⱼSᵢⱼ` [1/s²].
 
-  - `params`: Parameter set (e.g., CLIMAParameters.AbstractParameterSet), used to determine floating point type.
-  - `ᶜN²_eff`: Effective squared Brunt-Väisälä frequency [1/s²].
-  - `ᶜstrain_rate_norm`: Frobenius norm of the strain rate tensor, |S| [1/s].
-  - `ε` is a small machine epsilon value to prevent division by zero.
+# Returns
 
-Returns:
-
-  - The gradient Richardson number (dimensionless scalar).
+The gradient Richardson number [-].
 """
 function gradient_richardson_number(params, ᶜN²_eff, ᶜstrain_rate_norm)
     FT = eltype(params)
@@ -908,24 +966,30 @@ end
 """
     turbulent_prandtl_number(params, ᶜN²_eff, ᶜstrain_rate_norm)
 
-where:
+Compute the turbulent Prandtl number as a function of the gradient Richardson
+number ([`gradient_richardson_number`](@ref)).
 
-  - `params`: Parameters set
-  - `ᶜN²_eff`: Effective squared Brunt-Väisälä frequency [1/s^2].
-  - `ᶜstrain_rate_norm`: Frobenius norm of strain rate tensor, |S| [1/s].
+The formula is from Li et al. (JAS 2015, DOI: 10.1175/JAS-D-14-0335.1, their
+Eq. 39), reformulated and with an algebraic error in their expression
+corrected:
 
-Returns the turbulent Prandtl number based on the gradient Richardson number.
+    Pr_t(Ri) = (X + sqrt(max(X² - 4 Pr_n Ri, 0))) / 2,
 
-The formula implemented is from Li et al. (JAS 2015, DOI: 10.1175/JAS-D-14-0335.1, their Eq. 39),
-with a reformulation and correction of an algebraic error in their expression:
+with `X = Pr_n + ω_pr Ri`, the neutral Prandtl number `Pr_n`
+(`Prandtl_number_0`), and the scale coefficient `ω_pr`
+(`Prandtl_number_scale`). It applies in both stable (`Ri > 0`) and unstable
+(`Ri < 0`) conditions; the result is limited to `[eps(FT), Pr_max]`.
 
-    Pr_t(Ri) = (X + sqrt(max(X^2 - 4*Pr_n*Ri, 0))) / 2
+# Arguments
 
-where X = Pr_n + ω_pr * Ri and Ri = N^2 / max(2*|S|, eps).
-Parameters used are Pr_n = Prandtl_number_0 (neutral Prandtl number) and
-ω_pr = Prandtl_number_scale (Prandtl number scale coefficient).
-This formula applies in both stable (Ri > 0) and unstable (Ri < 0) conditions.
-The returned turbulent Prandtl number is limited to be between eps(FT) and Pr_max.
+  - `params`: Parameter set.
+  - `ᶜN²_eff`: Effective squared buoyancy frequency [1/s²].
+  - `ᶜstrain_rate_norm`: Squared Frobenius norm of the strain-rate tensor,
+    `SᵢⱼSᵢⱼ` [1/s²].
+
+# Returns
+
+The turbulent Prandtl number [-].
 
 The strong-stability limit of this closure (`Pr(Ri) → ∞`) is what closes the
 TKE dissipation coefficient; see [`tke_dissipation_coefficient`](@ref) for that
@@ -967,17 +1031,19 @@ end
 """
     tke_dissipation_coefficient(turbconv_params)
 
-The TKE dissipation coefficient `c_d = c_m c_b / Ri_c`, a derived closure
-coefficient combining the eddy-viscosity coefficient `c_m` (`tke_ed_coeff`),
-the static-stability coefficient `c_b` (`static_stab_coeff`), and the critical
-gradient Richardson number `Ri_c` (`Ri_crit`). Used by [`tke_dissipation`](@ref).
+Return the TKE dissipation coefficient `c_d = c_m c_b / Ri_c`.
 
-# Derivation of `c_d = c_m c_b / Ri_c`
+This derived closure coefficient combines the eddy-viscosity coefficient `c_m`
+(`tke_ed_coeff`), the static-stability coefficient `c_b`
+(`static_stab_coeff`), and the critical gradient Richardson number `Ri_c`
+(`Ri_crit`), all dimensionless. Used by [`tke_dissipation`](@ref).
 
-Consider the local TKE balance (production = buoyancy destruction +
-dissipation, no transport) in stably stratified air, where the mixing length is
-buoyancy-limited, `l = l_N = √(c_b e)/N`, with `e` the TKE and `N` the buoyancy
-frequency:
+# Extended help
+
+Derivation of `c_d = c_m c_b / Ri_c`. Consider the local TKE balance
+(production = buoyancy destruction + dissipation, no transport) in stably
+stratified air, where the mixing length is buoyancy-limited,
+`l = l_N = √(c_b e)/N`, with `e` the TKE and `N` the buoyancy frequency:
 
     2 K_u S² - K_h N² = c_d e^{3/2} / l,
     K_u = c_m l √e,   K_h = K_u / Pr,
@@ -1018,14 +1084,24 @@ tke_dissipation_coefficient(turbconv_params) =
         turbconv_params,
     )
 
-Calculates the blended mixing length scale based on the specified blending method.
+Combine the physical mixing-length scales in `l` (wall, TKE balance,
+stability) into a single non-negative scale [m].
 
-This function dispatches to specific implementations based on the type of
-`method`, which can be `SmoothMinimumBlending` or `HardMinimumBlending`. Each
-method combines the physical scales (wall, TKE, stability) in a different way
-to produce a single representative mixing length scale.
+Dispatches on `method`:
 
-See also: `SmoothMinimumBlending`, `HardMinimumBlending`, `lamb_smooth_minimum`
+  - `SmoothMinimumBlending`: differentiable smooth minimum
+    ([`lamb_smooth_minimum`](@ref)) with the parameters `smin_ub` and `smin_rm`.
+  - `HardMinimumBlending`: plain `minimum(l)`.
+
+# Arguments
+
+  - `method`: Blending method.
+  - `l`: `SVector` of candidate length scales [m].
+  - `turbconv_params`: Turbulence-convection parameters.
+
+# Returns
+
+The blended mixing length [m], floored at zero.
 """
 function blend_scales(
     method::SmoothMinimumBlending,
@@ -1049,42 +1125,29 @@ function blend_scales(
 end
 
 """
-    lamb_smooth_minimum(l::SA.SVector{N, FT}, smoothness_param::FT, λ_floor::FT) where {N, FT}
+    lamb_smooth_minimum(l, smoothness_param, λ_floor)
 
-Calculates a smooth minimum of the elements in the StaticVector `l`.
+Compute a differentiable approximation to `minimum(l)` as an exponentially
+weighted average,
 
-This function provides a differentiable approximation to the `minimum` function,
-yielding a value slightly larger than the true minimum, weighted towards the
-smallest elements. The degree of smoothness is controlled by an internally
-calculated parameter `λ₀`, which depends on the input parameters
-`smoothness_param` and `λ_floor`. A larger `λ₀` results in a smoother
-(less sharp) minimum approximation.
+    smin = Σᵢ lᵢ exp(-(lᵢ - x_min)/λ₀) / Σᵢ exp(-(lᵢ - x_min)/λ₀),
 
-This implementation is based on an exponentially weighted average, with `λ₀`
-determined involving the minimum element `x_min` and a factor related to the
-Lambert W function evaluated at 2/e.
+with `x_min = minimum(l)` and the smoothness scale
+`λ₀ = max(x_min * smoothness_param / W(2/e), λ_floor)`, where `W(2/e) ≈ 0.463`
+is the Lambert W function (hard-coded for type stability). The result is
+slightly larger than the true minimum; larger `λ₀` gives a smoother
+approximation.
 
-Arguments:
+# Arguments
 
-  - `l`: An `SVector{N, FT}` of N numbers for which to find the smooth minimum.
-  - `smoothness_param`: A parameter (`FT`) influencing the scaling of the smoothness
-    parameter `λ₀`. A larger value generally leads to a larger `λ₀`
-    and a smoother minimum.
-  - `λ_floor`: The minimum value (`FT`) allowed for the smoothness parameter `λ₀`.
-    Ensures a minimum level of smoothing and prevents `λ₀` from
-    becoming zero or negative. Must be positive.
-    Returns:
-  - The smooth minimum value (`FT`).
+  - `l`: `SVector` of values to minimize over, here length scales [m].
+  - `smoothness_param`: Scaling of the smoothness parameter `λ₀`; larger values
+    give a smoother minimum [-].
+  - `λ_floor`: Lower bound on `λ₀`, in the units of `l`. Must be positive.
 
-Algorithm:
+# Returns
 
- 1. Find the hard minimum `x_min = minimum(l)`.
- 2. Calculate the smoothness scale:
-    `λ₀ = max(x_min * smoothness_param / W(2/e), λ_floor)`,
-    where `W(2/e)` is the Lambert W function evaluated at 2/e.
- 3. Ensure `λ₀` is positive (`>= eps(FT)`).
- 4. Compute the exponentially weighted average:
-    `smin = Σᵢ(lᵢ * exp(-(lᵢ - x_min) / λ₀)) / Σᵢ(exp(-(lᵢ - x_min) / λ₀))`
+The smooth minimum, in the units of `l`.
 """
 function lamb_smooth_minimum(l, smoothness_param, λ_floor)
     FT = typeof(smoothness_param)
@@ -1122,10 +1185,17 @@ end
 """
     eddy_viscosity(params, tke, mixing_length)
 
-Calculates the eddy viscosity (K_u) for momentum based on the turbulent
-kinetic energy (TKE) and the mixing length.
+Compute the eddy viscosity for momentum, `K_u = c_m l √max(tke, 0)`.
 
-Returns K_u in units of [m^2/s].
+# Arguments
+
+  - `params`: Turbulence-convection parameters (`c_m` is `tke_ed_coeff`).
+  - `tke`: Turbulent kinetic energy [m²/s²].
+  - `mixing_length`: Turbulent mixing length [m].
+
+# Returns
+
+The eddy viscosity `K_u` [m²/s].
 """
 function eddy_viscosity(params, tke, mixing_length)
     c_m = CAP.tke_ed_coeff(params)
@@ -1135,10 +1205,11 @@ end
 """
     eddy_diffusivity(K_u, prandtl_number)
 
-Calculates the eddy diffusivity (K_h) for scalars given the eddy viscosity (K_u)
-and the turbulent Prandtl number.
+Compute the eddy diffusivity for scalars, `K_h = K_u / Pr_t` [m²/s], from the
+eddy viscosity `K_u` [m²/s] and the turbulent Prandtl number `Pr_t` [-].
 
-Returns K_h in units of [m^2/s].
+`Pr_t` from [`turbulent_prandtl_number`](@ref) is already bounded away from
+zero, so no guard is needed here.
 """
 function eddy_diffusivity(K_u, prandtl_number)
     return K_u / prandtl_number # prandtl_nvec is already bounded by eps_FT and Pr_max

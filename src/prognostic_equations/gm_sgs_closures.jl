@@ -11,23 +11,25 @@ import ClimaCore.Fields as Fields
 
 Compute the Smagorinsky-Lilly length scale.
 
-This scale is used for the subgrid mixing length in turbulent flows when no EDMFX
-model (with prognostic TKE) is available. It starts with the Smagorinsky scale
-(proportional to the grid size `dz`) and incorporates the Lilly modification
-to account for the effects of stable stratification (buoyancy).
+This scale is used for the subgrid mixing length in turbulent flows when no
+EDMFX model (with prognostic TKE) is available. It starts with the Smagorinsky
+scale `c_smag * dz` and applies the Lilly reduction factor
+`max(0, 1 - N_eff² / (2 Pr ϵ_st))^(1/4)` under stable stratification
+(`N_eff > 0`), which drives the length to zero once stratification suppresses
+the shear production.
 
-Arguments:
+# Arguments
 
-  - `c_smag`: The Smagorinsky coefficient (dimensionless).
-  - `N_eff`: Effective buoyancy frequency [s⁻¹] (`N_eff = sqrt(max(ᶜN²_eff, 0))`,
+  - `c_smag`: The Smagorinsky coefficient [-].
+  - `N_eff`: Effective buoyancy frequency [s⁻¹], equal to `sqrt(max(ᶜN²_eff, 0))`,
     with `ᶜN²_eff` the interface-aware effective stability).
   - `dz`: Vertical grid scale [m].
-  - `Pr`: Turbulent Prandtl number (dimensionless).
-  - `ϵ_st`: Squared Frobenius norm of the strain rate tensor, `S_{ij}S_{ij}` [s⁻²].
+  - `Pr`: Turbulent Prandtl number [-].
+  - `ϵ_st`: Squared Frobenius norm of the strain-rate tensor, `SᵢⱼSᵢⱼ` [s⁻²].
 
-Returns:
+# Returns
 
-  - The Smagorinsky-Lilly length scale [m].
+The Smagorinsky-Lilly length scale [m].
 """
 function smagorinsky_lilly_length(c_smag, N_eff, dz, Pr, ϵ_st)
     FT = eltype(c_smag)
@@ -41,30 +43,25 @@ end
 """
     compute_gm_mixing_length(Y, p)
 
-Computes the grid-mean subgrid-scale (SGS) mixing length using the
-Smagorinsky-Lilly formulation and stores it in `ᶜmixing_length`.
+Compute the grid-mean subgrid-scale (SGS) mixing length from the
+Smagorinsky-Lilly closure and return it as a cell-center field (materialized
+in `p.scratch.ᶜtemp_scalar`).
 
-This function performs several steps:
+Used when no EDMFX model with prognostic TKE is active. Steps:
 
- 1. Calculates the linear buoyancy gradient (`ᶜbuoygrad`).
- 2. Calculates the squared Frobenius norm of the strain rate tensor (`ᶜstrain_rate_norm`)
-    from the resolved velocity fields.
- 3. Calculates the turbulent Prandtl number (`ᶜprandtl_nvec`) based on the buoyancy
-    gradient and strain rate norm.
- 4. Uses these quantities, along with the Smagorinsky coefficient (`c_smag`) and
-    vertical grid scale (`ᶜdz`), to compute the Smagorinsky-Lilly length scale,
-    which is then assigned to the output field `ᶜmixing_length`.
+ 1. Fill `p.precomputed.ᶜbuoygrad` with the cloud-fraction-blended moist
+    buoyancy gradient ([`blended_N²`](@ref), using the chain-rule coefficients
+    and face gradients materialized by `set_buoyancy_gradient_inputs!`).
+ 2. Fill `p.precomputed.ᶜN²_eff` with the stability-biased buoyancy gradient
+    (`set_stability_buoyancy_gradient!`).
+ 3. Fill `p.precomputed.ᶜstrain_rate_norm` with the squared strain-rate norm
+    of the resolved velocity.
+ 4. Evaluate the turbulent Prandtl number and
+    [`smagorinsky_lilly_length`](@ref) with the vertical grid scale `ᶜdz`.
 
-Arguments:
-
-  - `ᶜmixing_length`: Output `ClimaCore.Field` where the computed mixing length will be stored.
-  - `Y`: The current state vector (containing `Y.c.uₕ`).
-  - `p`: Cache containing parameters (`p.params`), precomputed fields (e.g., `ᶜT`,
-    `ᶠu³`, vertical gradients of thermodynamic variables), and scratch space.
-
-Modifies `ᶜmixing_length` in place. Also modifies fields in `p.precomputed`
-(like `ᶜbuoygrad`, `ᶜstrain_rate_norm`) and uses `p.scratch` for
-intermediate calculations.
+Mutates `ᶜbuoygrad`, `ᶜN²_eff`, and `ᶜstrain_rate_norm` in `p.precomputed`,
+and uses `p.scratch` fields (including the returned `ᶜtemp_scalar`) for
+intermediates.
 """
 NVTX.@annotate function compute_gm_mixing_length(Y, p)
     (; params) = p

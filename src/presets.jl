@@ -24,7 +24,18 @@ import ..SmoothMinimumBlending
     dry(; kwargs...)
 
 Dry atmosphere preset (`microphysics_model = DryModel()`).
-Keyword arguments are forwarded to `AtmosModel`.
+Keyword arguments are forwarded to `AtmosModel`, and override the preset.
+
+# Returns
+
+An `AtmosModel`.
+
+# Examples
+
+```julia
+import ClimaAtmos as CA
+model = CA.Presets.dry(; disable_surface_flux_tendency = true)
+```
 """
 function dry(; kwargs...)
     defaults = (; microphysics_model = DryModel())
@@ -36,7 +47,18 @@ end
 
 Equilibrium-moisture preset with 0-moment microphysics, grid-scale cloud,
 prescribed zonally-symmetric SST, and idealized insolation.
-Keyword arguments are forwarded to `AtmosModel`.
+Keyword arguments are forwarded to `AtmosModel`, and override the preset.
+
+# Returns
+
+An `AtmosModel`.
+
+# Examples
+
+```julia
+import ClimaAtmos as CA
+model = CA.Presets.equil_moist_0m()
+```
 """
 function equil_moist_0m(; kwargs...)
     defaults = (;
@@ -57,7 +79,18 @@ Non-equilibrium-moisture preset with 1-moment microphysics, explicit
 microphysics tendency timestepping, grid-scale cloud, prescribed
 zonally-symmetric SST, and idealized insolation. Mirrors [`equil_moist_0m`](@ref)
 but with 1-moment non-equilibrium microphysics in place of 0-moment equilibrium.
-Keyword arguments are forwarded to `AtmosModel`.
+Keyword arguments are forwarded to `AtmosModel`, and override the preset.
+
+# Returns
+
+An `AtmosModel`.
+
+# Examples
+
+```julia
+import ClimaAtmos as CA
+model = CA.Presets.nonequil_moist_1m()
+```
 """
 function nonequil_moist_1m(; kwargs...)
     defaults = (;
@@ -73,15 +106,39 @@ function nonequil_moist_1m(; kwargs...)
 end
 
 """
-    prognostic_edmf([FT = Float32]; area_fraction, n_updrafts, prognostic_tke, kwargs...)
+    prognostic_edmf([FT = Float32]; area_fraction = FT(1e-5), n_updrafts = 1,
+                    prognostic_tke = true, kwargs...)
 
 Equilibrium-moist model with the `PrognosticEDMFX` turbulence-convection
 scheme. This uses `Generalized` entrainment/detrainment, SGS mass & diffusive
 fluxes, and non-hydrostatic pressure drag. Also enables prognostic updraft vertical
 diffusion and the relaxation filter on negative updraft velocities
-(matches the canonical `prognostic_edmfx_*` configs).
+(matches the canonical `prognostic_edmfx_*` configs). Mixing-length scales are
+blended with `SmoothMinimumBlending`, and the microphysics is 0-moment
+equilibrium with grid-scale cloud.
 
-All remaining keyword arguments are forwarded to `AtmosModel`.
+# Arguments
+
+  - `FT = Float32`: Float type of the scheme's parameters.
+
+# Keyword Arguments
+
+  - `area_fraction = FT(1e-5)`: "Small" updraft area threshold passed to
+    `PrognosticEDMFX` [-].
+  - `n_updrafts = 1`: Number of updraft subdomains [-].
+  - `prognostic_tke = true`: Whether TKE is prognostic.
+  - `kwargs...`: Forwarded to `AtmosModel`, overriding the preset.
+
+# Returns
+
+An `AtmosModel`.
+
+# Examples
+
+```julia
+import ClimaAtmos as CA
+model = CA.Presets.prognostic_edmf(Float64; n_updrafts = 2)
+```
 """
 function prognostic_edmf(
     ::Type{FT} = Float32;
@@ -117,6 +174,17 @@ end
 microphysics tendency timestepping (matches the canonical `prognostic_edmfx_*`
 configs that use `microphysics_model: "1M"`). All keyword arguments are
 forwarded to [`prognostic_edmf`](@ref) and on to `AtmosModel`.
+
+# Returns
+
+An `AtmosModel`.
+
+# Examples
+
+```julia
+import ClimaAtmos as CA
+model = CA.Presets.prognostic_edmf_1m(Float32)
+```
 """
 function prognostic_edmf_1m(::Type{FT} = Float32; kwargs...) where {FT}
     defaults = (;
@@ -136,8 +204,21 @@ end
 Aquaplanet simulation preset: global [`SphereGrid`](@ref) with
 [`equil_moist_0m`](@ref) physics (0M microphysics, prescribed zonally-symmetric
 SST, idealized insolation). Uses the default `DecayingProfile` initial
-condition from [`AtmosSimulation`](@ref).
-Keyword arguments are forwarded to [`AtmosSimulation`](@ref).
+condition from [`AtmosSimulation`](@ref), which also sets `dt = 600 s` and
+`t_end = 10 days`.
+Keyword arguments are forwarded to [`AtmosSimulation`](@ref), and override the
+preset.
+
+# Returns
+
+An [`AtmosSimulation`](@ref).
+
+# Examples
+
+```julia
+import ClimaAtmos as CA
+simulation = CA.Presets.aquaplanet(Float32; t_end = "1days")
+```
 """
 function aquaplanet(::Type{FT} = Float32; kwargs...) where {FT}
     defaults = (; model = equil_moist_0m())
@@ -152,7 +233,19 @@ Dry baroclinic-wave simulation preset: global [`SphereGrid`](@ref),
 `disable_surface_flux_tendency = true`. For the moist variant, pass
 `setup = Setups.MoistBaroclinicWave()` and
 `model = Presets.equil_moist_0m(; disable_surface_flux_tendency = true)`.
-Keyword arguments are forwarded to [`AtmosSimulation`](@ref).
+Keyword arguments are forwarded to [`AtmosSimulation`](@ref), and override the
+preset.
+
+# Returns
+
+An [`AtmosSimulation`](@ref).
+
+# Examples
+
+```julia
+import ClimaAtmos as CA
+simulation = CA.Presets.baroclinic_wave(Float32; t_end = "2days")
+```
 """
 function baroclinic_wave(::Type{FT} = Float32; kwargs...) where {FT}
     defaults = (;
@@ -171,7 +264,20 @@ BOMEX shallow-cumulus single-column simulation preset: [`ColumnGrid`](@ref)
 
 No EDMF turbulence-convection scheme is enabled by default; pass
 `model = Presets.prognostic_edmf(FT)` to add one.
-Keyword arguments are forwarded to [`AtmosSimulation`](@ref).
+Keyword arguments are forwarded to [`AtmosSimulation`](@ref), and override the
+preset. `params` is resolved up front, because [`Setups.Bomex`](@ref) needs
+thermodynamic parameters at construction time.
+
+# Returns
+
+An [`AtmosSimulation`](@ref).
+
+# Examples
+
+```julia
+import ClimaAtmos as CA
+simulation = CA.Presets.bomex(Float32; t_end = "10mins")
+```
 """
 function bomex(::Type{FT} = Float32; kwargs...) where {FT}
     # Bomex setup needs thermo_params at construction time, so resolve params up front.

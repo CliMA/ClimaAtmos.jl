@@ -35,8 +35,11 @@ import ClimaUtilities.Utils: period_to_seconds_float
 # ============================================================================
 
 """
-Canonical column `(z, time)` forcing variables. The file-driven forcing
-requires the subset needed by its composed terms.
+    CANONICAL_COLUMN_VARS
+
+The canonical column `(z, time)` forcing variables, named after their CMIP
+short names and stored in SI units. A file-driven forcing requires only the
+subset needed by the terms it composes.
 """
 const CANONICAL_COLUMN_VARS = (
     :tntha,    # temperature horizontal-advection tendency [K s-1]
@@ -51,7 +54,10 @@ const CANONICAL_COLUMN_VARS = (
 )
 
 """
-Canonical surface `(time,)` forcing variables.
+    CANONICAL_SURFACE_VARS
+
+The canonical surface `(time,)` forcing variables, named after their CMIP short
+names and stored in SI units.
 """
 const CANONICAL_SURFACE_VARS = (
     :ts,      # surface (skin) temperature [K]
@@ -62,7 +68,11 @@ const CANONICAL_SURFACE_VARS = (
 )
 
 """
-Canonical variables required to build a column initial condition.
+    CANONICAL_IC_VARS
+
+The canonical variables a file must carry for
+[`read_initial_profiles`](@ref) to build a column initial condition:
+temperature, both wind components, specific humidity, and density.
 """
 const CANONICAL_IC_VARS = (:ta, :ua, :va, :hus, :rho)
 
@@ -102,8 +112,10 @@ function format_variable_name end
 """
     height_profile(format, ds, options)
 
-The heights [m] of the file's column levels, in the file's storage order.
-Absorbs per-format vertical conventions (geopotential/g, pressure-to-height).
+The heights of the file's column levels, in the file's storage order [m].
+
+This is where a format absorbs its vertical convention, e.g. dividing a
+geopotential by `g` or converting pressure levels to height.
 """
 function height_profile end
 
@@ -113,9 +125,9 @@ function height_profile end
     open_dataset(f, format, path, options)
     open_dataset(f, cd::ColumnDataset)
 
-Open the file and apply `f` to the (format-resolved) `NCDataset`. Formats
-whose data lives in a subgroup (e.g. cfsite files) override this to pass the
-group to `f`.
+Open the file and apply `f` to the format-resolved `NCDataset`, closing it
+afterwards. A format whose data lives in a subgroup rather than at the root
+overrides this to pass the group to `f` instead.
 """
 open_dataset(f, ::AbstractColumnFormat, path, options) =
     NC.NCDataset(f, path, "r")
@@ -240,11 +252,21 @@ validate(::AbstractColumnFormat, path) = nothing
 """
     ColumnDataset(path; format = nothing, options...)
 
-Handle to one column forcing file: the format (the native
-[`ClimaColumnFile`](@ref) by default), the path, format-specific `options`
-(e.g. `cfsite_number`), and the availability/metadata probed once at
-construction. The format's [`validate`](@ref) method runs before the metadata
-probe, so a non-conforming file errors loudly here.
+Handle to one column forcing file.
+
+Construction runs the format's [`validate`](@ref) method and then probes, once,
+which canonical variables the file carries, so that a non-conforming or
+incomplete file errors here rather than mid-simulation.
+
+# Fields
+
+  - `format`: The [`AbstractColumnFormat`](@ref) of the file; the native
+    [`ClimaColumnFile`](@ref) unless the `format` keyword says otherwise.
+  - `path`: Path to the file.
+  - `options`: Format-specific options passed through as keywords at
+    construction.
+  - `column_vars`, `surface_vars`: The canonical column and surface variables the
+    file actually carries.
 """
 struct ColumnDataset{F <: AbstractColumnFormat, O <: NamedTuple}
     format::F
@@ -384,10 +406,14 @@ wraps_periodically(method) =
 """
     read_initial_profiles(cd, ds, start_date)
 
-The initial-condition profiles ([`CANONICAL_IC_VARS`](@ref)) at the file time
-closest to `start_date`, together with the height coordinate, sorted
-ascending in `z`. Errors, naming what is absent, when the file cannot build
-an initial condition.
+The initial-condition profiles at the file time closest to `start_date`.
+
+# Returns
+
+`(; z, ta, ua, va, hus, rho)`: the height coordinate [m] and the
+[`CANONICAL_IC_VARS`](@ref) profiles, all sorted ascending in `z`. Errors,
+naming what is absent, when the file lacks a variable needed to build an
+initial condition.
 """
 function read_initial_profiles(cd::ColumnDataset, ds, start_date)
     d = cd.format
@@ -415,11 +441,13 @@ end
     column_timevaryinginputs(cd, names, target_space, start_date; method)
 
 A `NamedTuple` of `TimeVaryingInput`s, one per requested column variable,
-targeting `target_space` (the model's center column space). The default
-builds file-backed inputs with the format's `extrapolation_bc` and
-`preprocess` hooks; formats whose layout the file readers cannot consume
-directly (grouped files, non-height vertical coordinates) override this to
-build in-memory inputs instead.
+targeting `target_space`, the model's center column space.
+
+The default builds file-backed inputs, applying the format's
+[`extrapolation_bc`](@ref) and [`preprocess`](@ref) hooks. A format whose
+on-disk layout the file readers cannot consume directly — a grouped file, or a
+non-height vertical coordinate — overrides this to build in-memory inputs
+instead.
 """
 function column_timevaryinginputs(
     cd::ColumnDataset,
@@ -450,11 +478,16 @@ end
 """
     read_surface_series(cd, names, start_date)
 
-Read the surface variables `names` from a single file open as
-`(; times, name₁ = series₁, ...)`, where `times` is the simulation time axis
-(seconds, `t = 0` at `start_date`) and each series has `preprocess` applied.
-The data layer that both `surface_timevaryinginputs` and data-backed surface components
-(e.g. a prescribed-flux scheme) build on.
+Read the surface variables `names` in a single file open.
+
+The data layer that both [`surface_timevaryinginputs`](@ref) and data-backed
+surface components, such as a prescribed-flux scheme, build on.
+
+# Returns
+
+`(; times, name₁ = series₁, ...)`, where `times` is the simulation time axis in
+seconds with `t = 0` at `start_date`, and each series has [`preprocess`](@ref)
+applied.
 """
 function read_surface_series(cd::ColumnDataset, names, start_date)
     names = Tuple(names)

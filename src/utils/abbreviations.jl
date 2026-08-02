@@ -1,7 +1,43 @@
+#####
+##### Shorthands for ClimaCore vector types and operators
+#####
+##### These abbreviations are used throughout ClimaAtmos, so the naming
+##### convention is worth learning once:
+#####
+##### - `C<i>` is a `Covariant<i>Vector` and `CT<i>` a `Contravariant<i>Vector`;
+#####   the digits list the components carried, e.g. `C12` is horizontal and
+#####   `C3` vertical. `UVec`, `VVec`, `WVec`, `UV`, and `UVW` are the
+#####   corresponding local (physical) vectors.
+##### - A `ᶜ` prefix means the operator *outputs* cell centers, a `ᶠ` prefix
+#####   cell faces. An operator therefore reads the opposite staggering:
+#####   `ᶜdivᵥ` is face-to-center, `ᶠgradᵥ` center-to-face.
+##### - A `ᵥ` suffix marks a vertical finite-difference operator and a `ₕ`
+#####   suffix a horizontal spectral-element operator; a leading `w` on a
+#####   horizontal operator selects its weak form.
+##### - A `_matrix` suffix is the `MatrixFields.operator_matrix` of the
+#####   operator, i.e. its linearization, used to assemble Jacobian blocks.
+#####
+##### The vertical operators differ mainly in their boundary conditions, which
+##### is what the individual docstrings below record.
+#####
+
 using ClimaCore: Geometry, Operators, MatrixFields
 import ClimaCore
 
 # Alternatively, we could use Vec₁₂₃, Vec³, etc., if that is more readable.
+"""
+    C1, C2, C12, C3, C123
+    CT1, CT2, CT12, CT3, CT123
+    UVec, VVec, WVec, UV, UVW
+
+Shorthands for the `ClimaCore.Geometry` vector types.
+
+`C<i>` and `CT<i>` are covariant and contravariant vectors whose digits list the
+components carried, so `C12` is horizontal and `C3` vertical. The `U`/`V`/`W`
+names are the local physical vectors, with components in [m/s] for velocities.
+Each name is also the constructor of its vector type, so it doubles as a
+conversion, e.g. `C12(u)`.
+"""
 const C1 = Geometry.Covariant1Vector
 const C2 = Geometry.Covariant2Vector
 const C12 = Geometry.Covariant12Vector
@@ -18,6 +54,21 @@ const WVec = Geometry.WVector
 const UV = Geometry.UVVector
 const UVW = Geometry.UVWVector
 
+"""
+    divₕ
+    wdivₕ
+    split_divₕ
+    gradₕ
+    wgradₕ
+    curlₕ
+    wcurlₕ
+
+Horizontal spectral-element operators: divergence, gradient, and curl, each in a
+strong form and (with the `w` prefix) a weak form.
+
+`split_divₕ(ρu, χ)` is the entropy-stable split-form discretization of
+`∇ₕ·(ρu χ)`, used for the horizontal advection of scalars.
+"""
 const divₕ = Operators.Divergence()
 const wdivₕ = Operators.WeakDivergence()
 const split_divₕ = Operators.SplitDivergence()
@@ -26,32 +77,86 @@ const wgradₕ = Operators.WeakGradient()
 const curlₕ = Operators.Curl()
 const wcurlₕ = Operators.WeakCurl()
 
+"""
+    ᶜinterp
+    ᶜdivᵥ
+    ᶜgradᵥ
+
+Face-to-center vertical interpolation, divergence, and gradient, without
+boundary conditions.
+
+The boundary values of the operand are used as they are, so these operators are
+appropriate only where the operand is already defined on the boundary faces;
+see `ᶜadvdivᵥ`, `ᶜprecipdivᵥ`, and `ᶜdiffdivᵥ` for the constrained divergences.
+"""
 const ᶜinterp = Operators.InterpolateF2C()
 const ᶜdivᵥ = Operators.DivergenceF2C()
 const ᶜgradᵥ = Operators.GradientF2C()
 
-# Mass and tracers do not have advective fluxes through the top and bottom
-# cell faces.
+"""
+    ᶜadvdivᵥ
+
+Face-to-center vertical divergence of an advective flux, with zero flux imposed
+at the top and bottom faces.
+
+Mass and tracers are not advected through the model top or through the surface,
+so their advective flux divergence uses this operator rather than the
+unconstrained `ᶜdivᵥ`.
+"""
 const ᶜadvdivᵥ = Operators.DivergenceF2C(
     bottom = Operators.SetValue(CT3(0)),
     top = Operators.SetValue(CT3(0)),
 )
 
-# Precipitation has no flux at the top, but it has free outflow at the bottom.
+"""
+    ᶜprecipdivᵥ
+
+Face-to-center vertical divergence of a precipitation flux, with zero flux at
+the top and free outflow at the bottom.
+
+Leaving the bottom boundary unconstrained lets the extrapolated interior flux
+carry precipitation out of the domain; `ᶠright_bias` supplies that
+reconstruction.
+"""
 const ᶜprecipdivᵥ = Operators.DivergenceF2C(top = Operators.SetValue(CT3(0)))
 
-# Diffusive scalar fluxes vanish through the top and bottom cell faces.
+"""
+    ᶜdiffdivᵥ
+
+Face-to-center vertical divergence of a diffusive scalar flux, with zero flux at
+the top and bottom faces.
+
+Surface fluxes are added as explicit tendencies rather than through this
+boundary condition.
+"""
 const ᶜdiffdivᵥ = Operators.DivergenceF2C(
     bottom = Operators.SetValue(C3(0)),
     top = Operators.SetValue(C3(0)),
 )
 
-# Vertical-momentum (u₃) diffusive flux vanishes through the top and bottom faces.
+"""
+    ᶠdiffdivᵥ_u₃
+
+Center-to-face vertical divergence of the diffusive flux of vertical momentum
+`u₃`, with zero divergence imposed at the top and bottom faces.
+"""
 const ᶠdiffdivᵥ_u₃ = Operators.DivergenceC2F(
     bottom = Operators.SetDivergence(0),
     top = Operators.SetDivergence(0),
 )
 
+"""
+    ᶠleft_bias
+    ᶠright_bias
+    ᶜleft_bias
+    ᶜright_bias
+
+One-sided reconstructions that take the value from the neighbor below (`left`)
+or above (`right`) the target point.
+
+`ᶠright_bias` also supplies the free-outflow boundary reconstruction used with
+`ᶜprecipdivᵥ`.
+"""
 const ᶠleft_bias = Operators.LeftBiasedC2F()
 const ᶠright_bias = Operators.RightBiasedC2F() # for free outflow in ᶜprecipdivᵥ
 const ᶜleft_bias = Operators.LeftBiasedF2C()
@@ -59,10 +164,23 @@ const ᶜright_bias = Operators.RightBiasedF2C()
 
 # TODO: Implement proper extrapolation instead of simply reusing the first
 # interior value at the surface.
+"""
+    ᶠinterp
+
+Center-to-face interpolation, extrapolating to the top and bottom boundary
+faces by reusing the nearest interior value.
+"""
 const ᶠinterp = Operators.InterpolateC2F(
     bottom = Operators.Extrapolate(),
     top = Operators.Extrapolate(),
 )
+
+"""
+    ᶠwinterp
+
+Center-to-face interpolation weighted by a first argument (typically a volume or
+mass weight), with the same boundary extrapolation as `ᶠinterp`.
+"""
 const ᶠwinterp = Operators.WeightedInterpolateC2F(
     bottom = Operators.Extrapolate(),
     top = Operators.Extrapolate(),
@@ -76,20 +194,67 @@ const ᶠwinterp = Operators.WeightedInterpolateC2F(
 # immediately after adding the tendency to it. However, this is not currently
 # possible because our implicit solver is unable to handle filtering, which is
 # why these boundary conditions are 0's rather than NaN's.
+"""
+    ᶠgradᵥ
+
+Center-to-face vertical gradient, with zero gradient at the top and bottom
+faces.
+
+The boundary values are placeholders needed only so that broadcasts can be
+materialized; see the comment above this definition.
+"""
 const ᶠgradᵥ = Operators.GradientC2F(
     bottom = Operators.SetGradient(C3(0)),
     top = Operators.SetGradient(C3(0)),
 )
+
+"""
+    ᶠcurlᵥ
+
+Center-to-face vertical curl, with zero curl at the top and bottom faces.
+"""
 const ᶠcurlᵥ = Operators.CurlC2F(
     bottom = Operators.SetCurl(CT12(0, 0)),
     top = Operators.SetCurl(CT12(0, 0)),
 )
+
+"""
+    upwind_biased_grad
+
+Gradient `upwind_biased_grad(v, θ)` of a field `θ`, upwinded according to the
+sign of the third contravariant component of the velocity `v`.
+"""
 const upwind_biased_grad = Operators.UpwindBiasedGradient()
+
+"""
+    ᶠupwind1
+
+First-order upwind reconstruction of the product of a center scalar with a face
+velocity.
+"""
 const ᶠupwind1 = Operators.UpwindBiasedProductC2F()
+
+"""
+    ᶠupwind3
+
+Third-order upwind-biased reconstruction of the product of a center scalar with
+a face velocity, degrading to a third-order one-sided stencil at the top and
+bottom boundaries.
+"""
 const ᶠupwind3 = Operators.Upwind3rdOrderBiasedProductC2F(
     bottom = Operators.ThirdOrderOneSided(),
     top = Operators.ThirdOrderOneSided(),
 )
+
+"""
+    ᶠlin_vanleer
+
+Linear van Leer reconstruction of the product of a center scalar with a face
+velocity, with the `MonotoneLocalExtrema` (Mono5) slope constraint and
+first-order one-sided stencils at the boundaries.
+
+Defined only when ClimaCore is at least v0.14.22.
+"""
 @static if pkgversion(ClimaCore) ≥ v"0.14.22"
     const ᶠlin_vanleer = Operators.LinVanLeerC2F(
         bottom = Operators.FirstOrderOneSided(),
@@ -98,6 +263,27 @@ const ᶠupwind3 = Operators.Upwind3rdOrderBiasedProductC2F(
     )
 end
 
+"""
+    ᶜinterp_matrix
+    ᶜleft_bias_matrix
+    ᶜright_bias_matrix
+    ᶜdivᵥ_matrix
+    ᶜadvdivᵥ_matrix
+    ᶜprecipdivᵥ_matrix
+    ᶠright_bias_matrix
+    ᶠinterp_matrix
+    ᶠwinterp_matrix
+    ᶠgradᵥ_matrix
+    ᶠupwind1_matrix
+    ᶠupwind3_matrix
+
+Operator matrices of the correspondingly named vertical operators, produced by
+`MatrixFields.operator_matrix`.
+
+Applying one of these to a field yields the banded matrix that represents the
+linear action of the operator, including its boundary conditions. They are the
+building blocks of the implicit Jacobian in `manual_sparse_jacobian.jl`.
+"""
 const ᶜinterp_matrix = MatrixFields.operator_matrix(ᶜinterp)
 const ᶜleft_bias_matrix = MatrixFields.operator_matrix(ᶜleft_bias)
 const ᶜright_bias_matrix = MatrixFields.operator_matrix(ᶜright_bias)
@@ -111,7 +297,14 @@ const ᶠgradᵥ_matrix = MatrixFields.operator_matrix(ᶠgradᵥ)
 const ᶠupwind1_matrix = MatrixFields.operator_matrix(ᶠupwind1)
 const ᶠupwind3_matrix = MatrixFields.operator_matrix(ᶠupwind3)
 
-# Helper functions to extract components of vectors
+"""
+    u_component(u::Geometry.LocalVector)
+    v_component(u::Geometry.LocalVector)
+    w_component(u::Geometry.LocalVector)
+
+Extract the zonal, meridional, or vertical physical component of a local
+velocity vector [m/s].
+"""
 u_component(u::Geometry.LocalVector) = u.u
 v_component(u::Geometry.LocalVector) = u.v
 w_component(u::Geometry.LocalVector) = u.w

@@ -7,7 +7,7 @@ is capped by an isothermal layer to avoid unreasonable values at high altitudes.
 
 Used for topography test cases.
 
-## Example
+# Examples
 
 ```julia
 setup = ConstantBuoyancyFrequencyProfile()

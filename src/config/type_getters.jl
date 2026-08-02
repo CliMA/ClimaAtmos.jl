@@ -5,10 +5,11 @@ import Logging, NVTX
 """
     ClimaAtmosParameters(config::AtmosConfig)
 
-Translate the YAML config into a typed `ClimaAtmosParameters`. Pre-computes
-the microphysics model and gravity-wave toggles from `parsed_args` so the
-underlying constructor only loads the parameter sets that will actually be
-used.
+Translate a configuration into a typed `ClimaAtmosParameters`.
+
+The microphysics model, the 1-moment process options, and the gravity-wave toggles are
+resolved from the config first, so the underlying constructor only loads the parameter
+sets that the run will actually use.
 """
 function ClimaAtmosParameters(config::AtmosConfig)
     pa = config.parsed_args
@@ -23,6 +24,20 @@ function ClimaAtmosParameters(config::AtmosConfig)
     )
 end
 
+"""
+    get_atmos(config::AtmosConfig, params; setup_type = nothing)
+
+Build the `AtmosModel` described by a configuration.
+
+Validates the configuration with `check_case_consistency`, then assembles the model
+groups (`AtmosWater`, `SCMSetup`, `AtmosRadiation`, `AtmosTurbconv`,
+`AtmosGravityWave`, `AtmosSponge`, `AtmosSurface`, `AtmosNumerics`, `AtmosChem`,
+`COSPModel`) plus the vertical diffusion model and the prescribed flow, which comes
+either from the setup or from `prescribed_flow = "ShipwayHill2012"`. Momentum vertical
+diffusion is disabled for Held-Suarez runs (`rad = "held_suarez"`). `setup_type` is the
+setup object built by `get_setup_type`; the setup supplies model pieces (forcings,
+surface conditions, insolation, prescribed flow) that have no config key.
+"""
 function get_atmos(config::AtmosConfig, params; setup_type = nothing)
     pa = config.parsed_args
     FT = eltype(config)
@@ -70,6 +85,19 @@ function get_atmos(config::AtmosConfig, params; setup_type = nothing)
     return atmos
 end
 
+"""
+    get_numerics(parsed_args, FT)
+
+Build the `AtmosNumerics` group from the numerics config keys.
+
+Reads the upwinding schemes (`energy_q_tot_upwinding`, `tracer_upwinding`,
+`edmfx_mse_q_tot_upwinding`, `edmfx_sgsflux_upwinding`, `edmfx_tracer_upwinding`, each
+converted to a `Symbol`), the `apply_sem_quasimonotone_limiter`,
+`test_dycore_consistency`, and `reproducible_restart` switches, `implicit_diffusion`
+(which selects `Implicit` or `Explicit` diffusion), and the hyperdiffusion model from
+`get_hyperdiffusion_model`. `vanleer_limiter` upwinding falls back to `:none` with a
+warning on ClimaCore versions older than 0.14.22.
+"""
 function get_numerics(parsed_args, FT)
     test_dycore_consistency =
         parsed_args["test_dycore_consistency"] ? TestDycoreConsistency() :
@@ -121,6 +149,13 @@ function get_numerics(parsed_args, FT)
     return numerics
 end
 
+"""
+    get_state_restart(config::AtmosConfig, restart_file, atmos_model_hash)
+
+Read the state `Y` and start time from `restart_file`, using the start date and
+communications context of `config`. Thin wrapper around the typed
+`get_state_restart` method in `simulation/restart.jl`.
+"""
 function get_state_restart(config::AtmosConfig, restart_file, atmos_model_hash)
     return get_state_restart(
         restart_file,
@@ -130,6 +165,33 @@ function get_state_restart(config::AtmosConfig, restart_file, atmos_model_hash)
     )
 end
 
+"""
+    get_setup_type(parsed_args, thermo_params)
+
+Build the setup object named by the `initial_condition` config key.
+
+The setup determines the initial state and, for single-column cases, the forcings,
+surface conditions, and insolation that have no config key of their own. Accepted
+values map to same-named types in `Setups`:
+
+  - Idealized profiles: `"DecayingProfile"`, `"IsothermalProfile"`,
+    `"ConstantBuoyancyFrequencyProfile"`, `"DryDensityCurrentProfile"`,
+    `"RisingThermalBubbleProfile"`, `"MoistAdiabaticProfileEDMFX"`, `"SimplePlume"`,
+    `"PrecipitatingColumn"`, `"ShipwayHill2012"`.
+  - Baroclinic waves: `"DryBaroclinicWave"`, `"MoistBaroclinicWave"`,
+    `"MoistBaroclinicWaveWithEDMF"`, which read `perturb_initstate` and `deep_atmosphere`.
+  - LES/SCM cases: `"Bomex"`, `"Rico"`, `"Soares"`, `"GATE_III"`, `"DYCOMS_RF01"`,
+    `"DYCOMS_RF02"`, `"TRMM_LBA"`, `"Larcform1"`, `"GABLS"`, `"ISDAC"`, which read
+    `prognostic_tke` (and, for ISDAC, `perturb_initstate`).
+  - RCEMIP II: `"RCEMIPIIProfile_295"`, `"RCEMIPIIProfile_300"`, `"RCEMIPIIProfile_305"`.
+  - File- and reanalysis-driven: `"GCM"` (`external_forcing_file` plus `cfsite_number`),
+    `"ARMVARANAL"` (an ARM VARANAL file, converted to the ClimaColumn schema),
+    `"ForcingFromFile"` (a ClimaColumn file), `"ReanalysisTimeVarying"` (an ERA5 file for
+    the site, generated when missing or stale), `"WeatherModel"`, and `"AMIPFromERA5"`.
+
+A value that names an existing file is read as a `Setups.MoistFromFile` initial state.
+Anything else raises an error.
+"""
 function get_setup_type(parsed_args, thermo_params)
     ic_name = parsed_args["initial_condition"]
     if ic_name == "Bomex"
@@ -277,6 +339,13 @@ function get_setup_type(parsed_args, thermo_params)
     error("Unknown initial_condition: $ic_name")
 end
 
+"""
+    get_topography(FT, parsed_args)
+
+Build the surface elevation profile named by the `topography` config key: `"NoWarp"`
+(flat), `"Cosine2D"`, `"Cosine3D"`, `"Agnesi"`, `"Schar"`, `"Earth"`, `"Hughes2023"`,
+or `"DCMIP200"`. Any other value trips an assertion.
+"""
 function get_topography(FT, parsed_args)
     topo_str = parsed_args["topography"]
     topo_types = Dict("NoWarp" => NoTopography(),
@@ -293,6 +362,17 @@ function get_topography(FT, parsed_args)
     return topo_types[topo_str]
 end
 
+"""
+    get_steady_state_velocity(params, Y, topo, initial_condition, mesh_warp_type)
+
+Compute the analytic steady-state velocity over topography on the center and face
+spaces of `Y`, returned as `(; ᶜu, ᶠu)` [m/s], for comparison against the simulated
+flow.
+
+Only defined for a `ConstantBuoyancyFrequencyProfile` initial condition with `"Linear"`
+mesh warping; any other combination raises an error. Called through
+`steady_state_velocity_from_config`.
+"""
 function get_steady_state_velocity(params, Y, topo, initial_condition, mesh_warp_type)
     initial_condition == "ConstantBuoyancyFrequencyProfile" &&
     mesh_warp_type == "Linear" ||
@@ -309,7 +389,15 @@ function get_steady_state_velocity(params, Y, topo, initial_condition, mesh_warp
     return (; ᶜu, ᶠu)
 end
 
-# Translate YAML config keys into a user-facing JacobianAlgorithm stub.
+"""
+    jacobian_from_parsed_args(parsed_args)
+
+Build the `JacobianAlgorithm` selected by the config keys `use_dense_jacobian`
+(`AutoDenseJacobian`) and `use_auto_jacobian` (`AutoSparseJacobian`, with
+`padding_bands_per_block` from `auto_jacobian_padding_bands`), falling back to
+`ManualSparseJacobian`. The sparse algorithms take `approximate_solve_iters` from
+`approximate_linear_solve_iters`.
+"""
 function jacobian_from_parsed_args(parsed_args)
     approximate_solve_iters = parsed_args["approximate_linear_solve_iters"]
     if parsed_args["use_dense_jacobian"]
@@ -324,6 +412,16 @@ function jacobian_from_parsed_args(parsed_args)
     end
 end
 
+"""
+    ode_configuration(::Type{FT}, args) where {FT}
+
+Build the ODE algorithm from the config keys in `args`, forwarding `ode_algo`,
+`update_jacobian_every`, `max_newton_iters_ode`, the Krylov settings
+(`use_krylov_method`, `use_dynamic_krylov_rtol`, `eisenstat_walker_forcing_alpha`,
+`krylov_rtol`, `jvp_step_adjustment`), and the Newton tolerance settings
+(`use_newton_rtol`, `newton_rtol`) to the typed `ode_configuration` method in
+`simulation/integrator.jl`.
+"""
 function ode_configuration(::Type{FT}, args) where {FT}
     return ode_configuration(
         FT,
@@ -340,6 +438,18 @@ function ode_configuration(::Type{FT}, args) where {FT}
     )
 end
 
+"""
+    get_comms_context(parsed_args)
+
+Create and initialize the `ClimaComms` context for the device named by the `device`
+config key.
+
+  - `"auto"` (or no `device` key): the device `ClimaComms` detects.
+  - `"CUDADevice"`: a CUDA GPU.
+  - `"CPUMultiThreaded"`: a multithreaded CPU. Note that any other value also gives a
+    multithreaded CPU when Julia is started with more than one thread.
+  - anything else: a single-threaded CPU.
+"""
 function get_comms_context(parsed_args)
     device =
         if !haskey(parsed_args, "device") || parsed_args["device"] === "auto"
@@ -367,6 +477,13 @@ function get_comms_context(parsed_args)
     return comms_ctx
 end
 
+"""
+    get_mesh_warp_type(FT, parsed_args)
+
+Build the interior mesh warping selected by the `mesh_warp_type` config key: `"SLEVE"`
+gives a `SLEVEWarp` with decay parameters `sleve_eta` and `sleve_s`, and `"Linear"`
+gives a `LinearWarp`. Any other value raises an error.
+"""
 function get_mesh_warp_type(FT, parsed_args)
     warp_type_str = parsed_args["mesh_warp_type"]
     if warp_type_str == "SLEVE"
@@ -383,6 +500,21 @@ function get_mesh_warp_type(FT, parsed_args)
     end
 end
 
+"""
+    get_grid(config::AtmosConfig, params)
+    get_grid(parsed_args, params, context)
+
+Build the computational grid selected by the `config` key: `"sphere"` gives a
+`SphereGrid`, `"column"` a `ColumnGrid`, `"box"` a `BoxGrid`, and `"plane"` a
+`PlaneGrid`.
+
+All grids read the vertical discretization keys `z_elem`, `z_max`, `z_stretch`, and
+`dz_bottom`. Every grid except the column also reads the topography keys `topography`,
+`topography_damping_factor`, `mesh_warp_type`, and `topo_smoothing`. The sphere reads
+`h_elem`, `nh_poly`, `bubble`, and `deep_atmosphere`, with the planet radius taken from
+`params`; the box and plane read `x_elem`/`x_max` (and, for the box, `y_elem`/`y_max`)
+and are periodic in the horizontal.
+"""
 get_grid(config::AtmosConfig, params) =
     get_grid(config.parsed_args, params, config.comms_ctx)
 
@@ -453,8 +585,9 @@ end
 """
     steady_state_velocity_from_config(config::AtmosConfig, params)
 
-Return a callable `(Y, params) -> velocity` when `check_steady_state` is set,
-else `nothing`. `AtmosSimulation{FT}` invokes the callable after building `Y`.
+Return a callable `(Y, params) -> velocity` when the `check_steady_state` config key is
+set, and `nothing` otherwise. `AtmosSimulation{FT}` invokes the callable once `Y` has
+been built; it forwards to `get_steady_state_velocity`.
 """
 function steady_state_velocity_from_config(config::AtmosConfig, params)
     config.parsed_args["check_steady_state"] || return nothing
@@ -470,8 +603,12 @@ end
 """
     vertical_water_borrowing_species_from_config(config::AtmosConfig)
 
-Returns the parsed VWB-species tuple, or `nothing` if not configured.
-Mirrors the legacy YAML driver's parsing logic.
+Return the tuple of species `Symbol`s that vertical water borrowing may draw from, or
+`nothing` when `tracer_nonnegativity_method` is not a vertical-water-borrowing variant
+or `vertical_water_borrowing_species` is unset.
+
+The config value may be a single string or a list of strings; anything else raises an
+error.
 """
 function vertical_water_borrowing_species_from_config(config::AtmosConfig)
     pa = config.parsed_args
@@ -498,8 +635,9 @@ end
 """
     callback_kwargs_from_config(config::AtmosConfig)
 
-Bundle YAML callback knobs into the NamedTuple expected by
-`AtmosSimulation{FT}`'s `callback_kwargs` slot.
+Bundle the callback config keys (`dt_subcol`, `dt_rad`, `dt_nogw`, `dt_ogw`,
+`log_progress`, `check_nan_every`, `check_conservation`) into the `NamedTuple` expected
+by the `callback_kwargs` keyword of `AtmosSimulation{FT}`.
 """
 function callback_kwargs_from_config(config::AtmosConfig)
     pa = config.parsed_args
@@ -517,10 +655,13 @@ end
 """
     diagnostics_config_from_config(config::AtmosConfig)
 
-Translate the YAML diagnostic toggles into a `DiagnosticsConfig`. Collapses
-`enable_diagnostics` (master switch) and `output_default_diagnostics` (add
-built-ins) into `DiagnosticsConfig.default`. The user-specified diagnostic
-list passes through to `DiagnosticsConfig.additional`.
+Translate the diagnostic config keys into a [`DiagnosticsConfig`](@ref).
+
+`enable_diagnostics` (master switch) and `output_default_diagnostics` (add the built-in
+diagnostics) are collapsed into the `default` field, and the user-specified
+`diagnostics` list passes through to `additional`; both are empty when diagnostics are
+disabled. The NetCDF output shape comes from `netcdf_interpolation_num_points` and
+`netcdf_output_at_levels`.
 """
 function diagnostics_config_from_config(config::AtmosConfig)
     pa = config.parsed_args
@@ -536,9 +677,12 @@ end
 """
     log_yaml_and_toml_manifests(config::AtmosConfig, output_dir, job_id)
 
-Side-effect: write the run's TOML parameter manifest and a YAML snapshot of
-the merged config into `output_dir`. YAML-driver-only — programmatic users
-don't get these manifests.
+Write the run's TOML parameter manifest (`<job_id>_parameters.toml`) and a YAML
+snapshot of the merged configuration (`<job_id>.yml`) into `output_dir`.
+
+Returns `nothing`. Config-driven runs only: simulations built directly from
+`AtmosSimulation{FT}` do not get these manifests. `strict_params` controls whether
+unused parameters are an error.
 """
 function log_yaml_and_toml_manifests(config::AtmosConfig, output_dir, job_id)
     output_toml_file = joinpath(output_dir, "$(job_id)_parameters.toml")
@@ -556,10 +700,22 @@ end
 """
     get_simulation(config::AtmosConfig)
 
-Build an `AtmosSimulation` from a YAML-driven `AtmosConfig`. Translates the
-parsed YAML into the kwargs that `AtmosSimulation{FT}(; ...)` accepts and
-forwards. After the simulation is built, writes the YAML-driver-only TOML
-parameter manifest and YAML config snapshot into the resolved `output_dir`.
+Build an [`AtmosSimulation`](@ref) from a configuration.
+
+Resolves the parameters, setup, model, and grid from `config` and forwards them, along
+with the time, output, restart, numerics, callback, and diagnostics keys, to the
+`AtmosSimulation{FT}` keyword constructor. Config-driven runs are always verbose, and
+their parameter manifest and config snapshot are written into the resolved output
+directory by `log_yaml_and_toml_manifests`.
+
+# Examples
+
+```julia
+import ClimaAtmos as CA
+config = CA.AtmosConfig("config/model_configs/baroclinic_wave.yml")
+simulation = CA.get_simulation(config)
+CA.solve_atmos!(simulation)
+```
 """
 function get_simulation(config::AtmosConfig)
     pa = config.parsed_args

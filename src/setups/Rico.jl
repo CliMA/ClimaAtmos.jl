@@ -7,7 +7,7 @@ hydrostatically balanced pressure profile. Profiles are sourced from Atmospheric
 The `profiles` field stores precomputed atmospheric profile functions (computed
 at construction time before broadcasting).
 
-## Example
+# Examples
 
 ```julia
 import Thermodynamics as TD

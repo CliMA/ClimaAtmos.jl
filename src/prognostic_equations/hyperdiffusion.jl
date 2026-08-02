@@ -9,11 +9,14 @@ import ClimaCore.Spaces as Spaces
 """
     ν₄(hyperdiff, Y)
 
-A `NamedTuple` of the hyperdiffusivity `ν₄_scalar` and the hyperviscosity
-`ν₄_vorticity`. These quantities are assumed to scale with `h^3`, where `h` is
-the mean nodal distance, following the empirical results of Lauritzen et al.
-(2018, https://doi.org/10.1029/2017MS001257). The scalar coefficient is computed
-as `ν₄_scalar = ν₄_vorticity / prandtl_number`, where `ν₄_vorticity = ν₄_vorticity_coeff * h^3`.
+Return a `NamedTuple` with the scalar hyperdiffusivity `ν₄_scalar` and the
+hyperviscosity `ν₄_vorticity` [m⁴/s].
+
+Both coefficients scale with `h^3`, where `h` is the mean nodal distance of the
+horizontal grid, following the empirical results of Lauritzen et al. (2018,
+https://doi.org/10.1029/2017MS001257): `ν₄_vorticity = ν₄_vorticity_coeff * h^3`
+and `ν₄_scalar = ν₄_vorticity / prandtl_number`, with both parameters taken from
+`hyperdiff` (a `Hyperdiffusion` model).
 """
 function ν₄(hyperdiff, Y)
     h = Spaces.node_horizontal_length_scale(Spaces.horizontal_space(axes(Y.c)))
@@ -24,6 +27,22 @@ function ν₄(hyperdiff, Y)
     return (; ν₄_scalar, ν₄_vorticity)
 end
 
+"""
+    hyperdiffusion_cache(Y, atmos)
+    hyperdiffusion_cache(Y, hyperdiff::Hyperdiffusion, turbconv_model)
+
+Allocate the cache fields that hold the DSSed Laplacians (`∇²`) used by the
+hyperdiffusion tendencies.
+
+Returns an empty `NamedTuple` when `atmos.hyperdiff` is `nothing`. Otherwise
+allocates `ᶜ∇²u`, the energy-split fields `ᶜ∇²s_d` and `ᶜ∇²q_tot_eff` (energy
+hyperdiffusion acts on dry static energy plus an enthalpy-weighted effective
+total water, never on a lumped `h_tot`), `ᶜ∇²specific_tracers`, the corresponding
+per-updraft fields for `PrognosticEDMFX` (`ᶜ∇²uʲs`, `ᶜ∇²s_dʲs`, and
+`ᶜ∇²q_tot_effʲs`, plus `ᶜ∇²sgs_tracerʲs` when the state carries SGS tracers),
+`ᶜ∇²tke` when the turbulence-convection model carries prognostic TKE, and DSS
+ghost buffers when the space requires DSS.
+"""
 function hyperdiffusion_cache(Y, atmos)
     (; hyperdiff, turbconv_model) = atmos
     isnothing(hyperdiff) && return (;)  # No hyperdiffiusion
@@ -75,8 +94,25 @@ function hyperdiffusion_cache(Y, ::Hyperdiffusion, turbconv_model)
     return quantities
 end
 
-# This should prep variables that we will dss in
-# dss_hyperdiffusion_tendency_pairs
+"""
+    prep_hyperdiffusion_tendency!(Yₜ, Y, p, t)
+
+Compute the horizontal Laplacians that feed the dynamics/energy hyperdiffusion and
+store them in `p.hyperdiff`, ready to be DSSed.
+
+Fills `ᶜ∇²u` (grad-div minus curl-curl vector Laplacian), the energy-split fields
+`ᶜ∇²s_d` and `ᶜ∇²q_tot_eff`, `ᶜ∇²tke` when prognostic TKE is active, and the
+analogous per-updraft fields for `PrognosticEDMFX`. The dry static energy and the
+effective total water are diffused separately (rather than a lumped `h_tot`) so
+the `∇⁴` operator never mixes dry-air enthalpy with water enthalpy;
+`apply_hyperdiffusion_tendency!` reassembles the pieces into a total enthalpy
+flux.
+
+Does nothing when `p.atmos.hyperdiff` is `nothing`. `Yₜ` and `t` are unused. The
+fields written here must be DSSed (see `dss_hyperdiffusion_tendency_pairs`) before
+`apply_hyperdiffusion_tendency!` is called. Called from `hyperdiffusion_tendency!`.
+Returns `nothing`.
+"""
 NVTX.@annotate function prep_hyperdiffusion_tendency!(Yₜ, Y, p, t)
     (; hyperdiff, turbconv_model) = p.atmos
     (; params) = p
@@ -149,8 +185,36 @@ NVTX.@annotate function prep_hyperdiffusion_tendency!(Yₜ, Y, p, t)
     end
 end
 
-# This requires dss to have been called on
-# variables in dss_hyperdiffusion_tendency_pairs
+"""
+    apply_hyperdiffusion_tendency!(Yₜ, Y, p, t)
+
+Add the fourth-order (`∇⁴`) hyperdiffusion tendencies for momentum, energy, and
+TKE, built from the DSSed Laplacians in `p.hyperdiff`.
+
+Increments (each term enters with a minus sign, so hyperdiffusion damps
+grid-scale noise):
+
+  - `Yₜ.c.uₕ` and `Yₜ.f.u₃`: `ν₄_vorticity` times the vector `∇⁴u`, with the grad-div
+    part scaled by `hyperdiff.divergence_damping_factor`.
+  - `Yₜ.c.ρe_tot`: `ν₄_scalar` times the divergence of the total enthalpy
+    hyperdiffusion flux, `∇⋅(ρ ∇∇²s_d) + ∇⋅(ρ (h_eff + Φ) ∇∇²q_tot_eff)`. The
+    second term is applied only when `ρq_tot` is prognostic. Here `q_tot_eff` is
+    the water that actually hyperdiffuses, vapor plus cloud liquid plus cloud ice
+    with rain and snow excluded, and `h_eff = (h_v q_v + h_l q_lcl + h_i q_icl) / q_tot_eff` is its aggregate specific enthalpy; because the phase shares sum
+    to one, the geopotential collapses into the single `+ Φ`. This mirrors the
+    vertical boundary-layer flux in
+    `vertical_diffusion_boundary_layer_tendency!`.
+  - `Yₜ.c.ρtke`: `ν₄_vorticity` times `∇⋅(ρ ∇∇²tke)`, when prognostic TKE is active.
+  - For `PrognosticEDMFX`, `Yₜ.f.sgsʲs.:(j).u₃` (curl-curl part only) and
+    `Yₜ.c.sgsʲs.:(j).mse` (same energy split, with subdomain thermodynamics and no
+    density weighting).
+
+The two coefficients come from `ν₄`: `ν₄_vorticity` for momentum and TKE, and
+`ν₄_scalar = ν₄_vorticity / prandtl_number` for scalars. Requires DSS to have been
+applied to the pairs from `dss_hyperdiffusion_tendency_pairs`; does nothing when
+`p.atmos.hyperdiff` is `nothing`. Called from `hyperdiffusion_tendency!`. Returns
+`nothing`.
+"""
 NVTX.@annotate function apply_hyperdiffusion_tendency!(Yₜ, Y, p, t)
     (; hyperdiff, turbconv_model) = p.atmos
     isnothing(hyperdiff) && return nothing
@@ -290,6 +354,19 @@ NVTX.@annotate function apply_hyperdiffusion_tendency!(Yₜ, Y, p, t)
     end
 end
 
+"""
+    dss_hyperdiffusion_tendency_pairs(p)
+
+Return the tuple of `field => ghost_buffer` pairs that must be DSSed between the
+`prep_*` and `apply_*` stages of the hyperdiffusion tendencies.
+
+Covers the dynamics fields (`ᶜ∇²u`, the energy-split `ᶜ∇²s_d` and
+`ᶜ∇²q_tot_eff`, `ᶜ∇²tke` when active, and the per-updraft counterparts `ᶜ∇²uʲs`,
+`ᶜ∇²s_dʲs`, and `ᶜ∇²q_tot_effʲs` for `PrognosticEDMFX`) and the grid-scale tracer
+field `ᶜ∇²specific_tracers`.
+Called from `hyperdiffusion_tendency!`, which passes the pairs to
+`ClimaCore.Spaces.weighted_dss!`.
+"""
 function dss_hyperdiffusion_tendency_pairs(p)
     (; turbconv_model) = p.atmos
     buffer = p.hyperdiff.hyperdiffusion_ghost_buffer
@@ -325,8 +402,18 @@ function dss_hyperdiffusion_tendency_pairs(p)
     return (dynamics_pairs..., tracer_pairs...)
 end
 
-# This should prep variables that we will dss in
-# dss_hyperdiffusion_tendency_pairs
+"""
+    prep_tracer_hyperdiffusion_tendency!(Yₜ, Y, p, t)
+
+Compute the horizontal Laplacians of the specific grid-scale tracers and store
+them in `p.hyperdiff`, ready to be DSSed.
+
+Fills `ᶜ∇²specific_tracers` with `∇²(ρχ/ρ)` for every grid-scale tracer. Updraft
+tracers are handled separately, through the shared `ᶜ∇²sgs_tracerʲs` scratch
+field. Does nothing when `p.atmos.hyperdiff` is `nothing`. `Yₜ` and `t` are unused. The fields written here must be DSSed (see
+`dss_hyperdiffusion_tendency_pairs`) before `apply_tracer_hyperdiffusion_tendency!`
+is called. Called from `hyperdiffusion_tendency!`. Returns `nothing`.
+"""
 NVTX.@annotate function prep_tracer_hyperdiffusion_tendency!(Yₜ, Y, p, t)
     (; hyperdiff, turbconv_model) = p.atmos
     isnothing(hyperdiff) && return nothing
@@ -341,8 +428,31 @@ NVTX.@annotate function prep_tracer_hyperdiffusion_tendency!(Yₜ, Y, p, t)
     return nothing
 end
 
-# This requires dss to have been called on
-# variables in dss_hyperdiffusion_tendency_pairs
+"""
+    apply_tracer_hyperdiffusion_tendency!(Yₜ, Y, p, t)
+
+Add the fourth-order (`∇⁴`) hyperdiffusion tendencies for tracers, built from the
+DSSed Laplacians in `p.hyperdiff`.
+
+Increments (each with a minus sign):
+
+  - Every grid-mean tracer `Yₜ.c.ρχ`: `ν * ∇⋅(ρ ∇∇²χ)`, where `ν` is `ν₄_scalar` for
+    most tracers but `α_hyperdiff_tracer * ν₄_scalar` for the microphysics species
+    (`ρq_lcl`, `ρq_icl`, `ρq_rai`, `ρq_sno`, `ρn_lcl`, `ρn_rai`); the parameter
+    `α_hyperdiff_tracer` defaults to 0, disabling hyperdiffusion of sedimenting
+    species.
+  - `Yₜ.c.ρ`: the `ρq_tot` term is also added to the density tendency so total water
+    diffusion moves mass consistently.
+  - For `PrognosticEDMFX`, `Yₜ.c.sgsʲs.:(j).q_tot` and the compensating
+    `Yₜ.c.sgsʲs.:(j).ρa` term, plus every auto-discovered SGS tracer (with its own
+    prep → DSS → apply cycle through the shared scratch field `ᶜ∇²sgs_tracerʲs`,
+    applying the microphysics rescaling to microphysics species).
+
+Requires DSS to have been applied to the pairs from
+`dss_hyperdiffusion_tendency_pairs`; does nothing when `p.atmos.hyperdiff` is
+`nothing`. Called from `hyperdiffusion_tendency!` with the limited tendency vector
+`Yₜ_lim`. Returns `nothing`.
+"""
 NVTX.@annotate function apply_tracer_hyperdiffusion_tendency!(Yₜ, Y, p, t)
     (; hyperdiff, turbconv_model) = p.atmos
     isnothing(hyperdiff) && return nothing

@@ -13,24 +13,21 @@ import Thermodynamics as TD
 # ============================================================================
 
 """
-    SaturationAdjustmentEvaluator
+    SaturationAdjustmentEvaluator{TPS, T1}
 
-GPU-safe functor for computing saturation-adjusted state at individual
-quadrature points (T_hat, q_hat). Used by `integrate_over_sgs` for both
-saturation adjustment and 0-moment microphysics.
+GPU-safe functor diagnosing the saturation-adjusted state at an SGS quadrature
+point, for use with [`integrate_over_sgs`](@ref).
 
-Given (T_hat, q_hat) at a quadrature point, computes:
-
- 1. Saturation specific humidity q_sat from Clausius-Clapeyron
- 2. Condensate as saturation excess: q_cond = max(0, q_hat - q_sat)
- 3. Liquid/ice partition using a grid-mean liquid fraction `λ_mean`,
-    held fixed across all quadrature points
+Used both by [`compute_sgs_saturation_adjustment`](@ref) and, as a component, by
+[`Microphysics0MEvaluator`](@ref).
 
 # Fields
 
-  - `thermo_params`: Thermodynamics parameters
-  - `ρ`: Air density [kg/m³]
-  - `λ_mean`: Grid-mean liquid fraction, fixed across quadrature points
+  - `thermo_params`: Thermodynamics parameters.
+  - `ρ`: Air density [kg/m³], the grid-cell value, held fixed across quadrature
+    points.
+  - `λ_mean`: Liquid fraction [-], evaluated once at the grid mean and held fixed
+    across quadrature points.
 """
 struct SaturationAdjustmentEvaluator{TPS, T1}
     thermo_params::TPS
@@ -41,21 +38,27 @@ end
 """
     (eval::SaturationAdjustmentEvaluator)(T_hat, q_hat)
 
-Compute saturation-adjusted state at a single quadrature point.
+Diagnose the saturation-adjusted state at a single quadrature point.
+
+The condensate is the saturation excess `max(0, q_hat - q_sat(T_hat, ρ))`, split
+into liquid and ice by the fixed `λ_mean`. The saturation humidity is the
+condensate-free value, consistent with diagnosing equilibrium condensate from
+scratch at each point.
 
 # Arguments
 
-  - `T_hat`: Temperature at quadrature point [K]
-  - `q_hat`: Total specific humidity at quadrature point [kg/kg]
+  - `T_hat`: Temperature at the quadrature point [K].
+  - `q_hat`: Total specific humidity at the quadrature point [kg/kg].
 
 # Returns
 
 NamedTuple with:
 
-  - `T`: Temperature at quadrature point [K]
-  - `q_liq`: Liquid condensate [kg/kg]
-  - `q_ice`: Ice condensate [kg/kg]
-  - `q_tot_quad`: Total specific humidity at quadrature point [kg/kg]
+  - `T`: Temperature, passed through unchanged [K].
+  - `q_liq`: Liquid condensate [kg/kg].
+  - `q_ice`: Ice condensate [kg/kg].
+  - `q_tot_quad`: `q_hat` itself, so the caller can integrate the mean of the
+    possibly truncated `q_tot` distribution [kg/kg].
 """
 @inline function (eval::SaturationAdjustmentEvaluator)(T_hat, q_hat)
     FT = typeof(q_hat)
@@ -90,41 +93,42 @@ end
         thermo_params, SG_quad, ρ, T_mean, q_mean, T′T′, q′q′, corr_Tq,
     )
 
-Compute SGS-averaged saturation adjustment by integrating over the joint PDF
-of (T, q_tot). At each quadrature point, condensate is diagnosed from
-saturation excess, providing a sub-grid-aware estimate of cloud condensate.
+Compute SGS-averaged saturation adjustment by integrating over the joint PDF of
+`(T, q_tot)`.
 
-This function replaces the grid-mean saturation adjustment when using
-`QuadratureCloud` or `MLCloud` with `EquilibriumMicrophysics0M`, ensuring that cloud condensate
-is computed consistently with cloud fraction.
+Condensate is diagnosed from the saturation excess at each quadrature point (see
+[`SaturationAdjustmentEvaluator`](@ref)), giving a subgrid-aware cloud condensate.
+Called from `set_precomputed_quantities!` as a second pass that overwrites the
+grid-mean saturation-adjustment condensate `ᶜq_liq`, `ᶜq_ice` whenever an
+equilibrium moisture model is run with an SGS quadrature configured, so that
+condensate and cloud fraction follow the same distribution.
 
-# Weight Adjustment for Truncated Distribution
+Quadrature points whose sampled `q_tot` falls in the negative tail are clamped to
+zero, which makes the integrated mean `q̃_mean` exceed `q_mean`. Reweighting the
+surviving points by `ratio = q_mean / q̃_mean` restores `q_mean`, and because
+condensate vanishes wherever `q_hat = 0`, that reweighting is equivalent to scaling
+the integrated condensate by `ratio`. The ratio is clamped at 1 so only downward
+correction is applied, and it is a no-op for a lognormal `q` distribution.
 
-When quadrature points for `q_tot` are clamped to zero (because they sample
-the negative tail of the distribution), the integrated mean `q̃_mean` exceeds
-`q_mean`. To preserve `q_mean`, we conceptually adjust the weights of the
-valid (non-truncated) quadrature points by `ratio = q_mean / q̃_mean`. Since
-condensate is zero whenever `q_hat = 0`, this is equivalent to scaling the
-integrated condensate by `ratio`.
+The returned temperature is `T_mean` unchanged. Recomputing `T` from
+`(e_int, q_tot, q_liq, q_ice)` with the SGS condensate would give a temperature
+inconsistent with saturation equilibrium and degrade the Jacobian approximations.
 
 # Arguments
 
-  - `thermo_params`: Thermodynamics parameters
-  - `SG_quad`: `SGSQuadrature` configuration
-  - `ρ`: Air density [kg/m³]
-  - `T_mean`: Grid-mean temperature [K]
-  - `q_mean`: Grid-mean total specific humidity [kg/kg]
-  - `T′T′`: Temperature variance [K²]
-  - `q′q′`: Moisture variance [(kg/kg)²]
-  - `corr_Tq`: Correlation coefficient corr(T', q')
+  - `thermo_params`: Thermodynamics parameters.
+  - `SG_quad`: `SGSQuadrature` configuration.
+  - `ρ`: Air density [kg/m³].
+  - `T_mean`: Grid-mean temperature [K].
+  - `q_mean`: Grid-mean total specific humidity [kg/kg].
+  - `T′T′`: Temperature variance [K²].
+  - `q′q′`: Total-water variance [(kg/kg)²].
+  - `corr_Tq`: Correlation coefficient corr(T′, q′) [-].
 
 # Returns
 
-NamedTuple with SGS-averaged:
-
-  - `T`: Grid-mean temperature [K] (unchanged from saturation adjustment)
-  - `q_liq`: Liquid condensate [kg/kg]
-  - `q_ice`: Ice condensate [kg/kg]
+NamedTuple with `T` [K] and the SGS-averaged condensate `q_liq` and `q_ice`
+[kg/kg].
 """
 @inline function compute_sgs_saturation_adjustment(
     thermo_params,

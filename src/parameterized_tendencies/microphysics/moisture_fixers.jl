@@ -9,30 +9,23 @@ import ClimaCore.MatrixFields as MF
 """
     tracer_nonnegativity_vapor_tendency(q, q_vap, dt)
 
-Compute a tendency to restore negative tracer values by borrowing from vapor.
+Compute the tendency that restores a negative tracer to zero by borrowing from vapor.
 
-When a tracer `q` becomes negative (due to numerical errors), this function
-returns a positive tendency to restore it toward zero, limited by available
-vapor `q_vap`.
+A tracer driven negative by numerical error is restored over one timestep, at rate
+`-q/dt`, but never faster than the vapor can supply. The vapor budget is shared by
+passing `n = 5` to [`limit`](@ref), so each of the four mass tracers plus a margin
+can draw at most a fifth of the available vapor per timestep even when all are
+corrected simultaneously.
 
 # Arguments
 
-  - `q`: Tracer specific humidity (may be negative) [kg/kg]
-  - `q_vap`: Vapor specific humidity (source for correction) [kg/kg]
-  - `dt`: Model timestep [s]
+  - `q`: Tracer specific humidity, possibly negative [kg/kg].
+  - `q_vap`: Vapor specific humidity available as the source [kg/kg].
+  - `dt`: Model timestep [s].
 
 # Returns
 
-Tendency [kg/kg/s] to add to tracer:
-
-  - If `q >= 0`: Returns `0` (no correction needed)
-  - If `q < 0`: Returns positive tendency limited by available vapor
-
-# Notes
-
-    # -min(0, q/dt) gives positive tendency when q < 0
-
-Uses `n=5` in `limit()` to share vapor among multiple tracers that may need correction.
+A non-negative tendency [kg/kg/s]: zero when `q ≥ 0`, otherwise `min(-q/dt, limit(q_vap, dt, 5))`.
 """
 @inline function tracer_nonnegativity_vapor_tendency(q, q_vap, dt)
     # -min(0, q/dt) gives positive tendency when q < 0
@@ -45,28 +38,35 @@ tracer_nonnegativity_vapor_tendency!(Yₜ, Y, p, t, _) = nothing
 """
     tracer_nonnegativity_vapor_tendency!(Yₜ, Y, p, t, microphysics_model)
 
-Apply tracer nonnegativity corrections by borrowing mass from vapor.
+Add tendencies that restore negative water mass tracers, borrowing from vapor.
 
-For `NonEquilibriumMicrophysics` (1M/2M): if any cloud/precipitation
-tracer (q_liq, q_ice, q_rai, q_sno) is negative, adds a positive tendency
-sourced from grid-mean vapor.
+Each of the four mass tracers `ρq_lcl`, `ρq_icl`, `ρq_rai`, `ρq_sno` that has gone
+negative receives a positive tendency restoring it to zero over `p.dt`, capped by
+the vapor available for sharing (see
+[`tracer_nonnegativity_vapor_tendency`](@ref)). Grid-mean vapor is diagnosed as
+`q_tot - q_lcl - q_icl - q_rai - q_sno`. Number concentrations and the P3 tracers
+are not corrected here.
+
+Only the `NonEquilibriumMicrophysics1M` and `NonEquilibriumMicrophysics2M` methods
+do work; all other microphysics models fall back to a no-op. Even for 1M/2M the
+function returns immediately unless `p.atmos.water.tracer_nonnegativity_method` is
+a `TracerNonnegativityVaporTendency`.
+
+`ρq_tot` is deliberately left untouched: vapor is diagnostic, so raising a tracer
+at fixed total water removes exactly the same mass from vapor and total water is
+conserved. The `limit` cap is what keeps the implied vapor sink from driving vapor
+negative in turn.
 
 # Arguments
 
-  - `Yₜ`: Tendency state vector (modified in place)
-  - `Y`: State vector
-  - `p`: Cache containing `atmos`, `dt`, etc.
-  - `t`: Current time
-  - `microphysics_model`: Microphysics model (dispatched on `NonEquilibriumMicrophysics1M`
-    or `NonEquilibriumMicrophysics2M`)
+  - `Yₜ`: Tendency state vector, mutated in place.
+  - `Y`: Current state vector.
+  - `p`: Cache; reads `p.atmos.water.tracer_nonnegativity_method` and `p.dt`.
+  - `t`: Current simulation time [s].
+  - `microphysics_model`: Microphysics model, dispatched on.
 
-# Modifies
-
-  - `Yₜ.c.ρq_lcl`, `Yₜ.c.ρq_icl`, `Yₜ.c.ρq_rai`, `Yₜ.c.ρq_sno`
-
-# Notes
-
-Only active when `p.atmos.water.tracer_nonnegativity_method` is `TracerNonnegativityVaporTendency`.
+Mutates `Yₜ.c.ρq_lcl`, `Yₜ.c.ρq_icl`, `Yₜ.c.ρq_rai`, and `Yₜ.c.ρq_sno`; the return
+value is unused.
 """
 function tracer_nonnegativity_vapor_tendency!(Yₜ, Y, p, t,
     ::Union{

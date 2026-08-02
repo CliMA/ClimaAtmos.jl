@@ -13,10 +13,10 @@ Often, it is possible to compute certain diagnostics only for specific models
 
 1. Define a function for the case we know how to handle:
 
-function compute_hur(state, cache, time, ::MoistMicrophysics)
+function compute_hur(_, cache, _, ::MoistMicrophysics)
     tps = CAP.thermodynamics_params(cache.params)
-    (; ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice) = cache.precomputed
-    @. lazy(TD.relative_humidity(tps, ᶜT, state.c.ρ, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice))
+    (; ᶜT, ᶜp, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice) = cache.precomputed
+    return @. lazy(TD.relative_humidity(tps, ᶜT, ᶜp, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice))
 end
 
 2. Define a dispatch function with the correct signature:
@@ -30,7 +30,15 @@ compute_hur(state, cache, time, model) = error_diagnostic_variable("hur", model)
 
 =#
 
-# General helper functions for undefined diagnostics
+"""
+    error_diagnostic_variable(message = "Cannot compute variable")
+    error_diagnostic_variable(variable, model)
+
+Throw an error reporting that a diagnostic cannot be computed.
+
+The two-argument form is the fallback method of the `compute_*` dispatch chains: it names
+the `variable` that was requested and the type of the `model` that does not support it.
+"""
 error_diagnostic_variable(message = "Cannot compute variable") = error(message)
 error_diagnostic_variable(variable, ::T) where {T} =
     error_diagnostic_variable("Cannot compute $variable with model = $T")
@@ -194,6 +202,17 @@ add_diagnostic_variable!(short_name = "ke", units = "m^2 s^-2",
 ###
 # Mixing length (3d)
 ###
+"""
+    compute_lmix(state, cache, _)
+
+Compute the environment mixing length, `lmix`.
+
+Unlike most diagnostics here, this branches on `cache.atmos.turbconv_model` inside the
+function rather than by dispatch. With either EDMFX model the mixing-length closure has
+already been materialized into `cache.precomputed.ᶜl_mix` during the explicit update and
+is returned directly; without EDMFX the Smagorinsky-Lilly length is rebuilt lazily from
+the effective buoyancy frequency and strain rate.
+"""
 function compute_lmix(state, cache, _)
     turbconv_model = cache.atmos.turbconv_model
     # TODO: consolidate remaining mixing length types

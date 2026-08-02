@@ -97,7 +97,7 @@ matches yours:
 
   - **Reference**: look-up material.
 
-      + [API](api.md), [Configuration options](configuration_options.md), [Setups](setups.md), [Column Datasets](column_datasets_reference.md), [Grids](grids.md), [Surface conditions](surface_conditions.md), [Passive tracers](passive_tracers.md), [Trace gases](trace_gases.md), [Available diagnostics](available_diagnostics.md), [Glossary](glossary.md), [Bibliography](references.md)
+      + [API](api.md), [Configuration options](configuration_options.md), [Setups](setups.md), [Column Datasets](column_datasets_reference.md), [Grids](grids.md), [Surface conditions](surface_conditions.md), [Passive tracers](passive_tracers.md), [Trace gases](trace_gases.md), [Available diagnostics](available_diagnostics.md), [Notation](notation.md), [Glossary](glossary.md), [Bibliography](references.md)
 
   - **Developer Guide**: [contributing](contributor_guide.md), extending the model ([setups](extending_setups.md), [diagnostics](extending_diagnostics.md), [tracers](extending_tracers.md), [column datasets](extending_column_datasets.md), [surface internals](surface_conditions_internals.md)), and the [Buildkite longrun jobs](longruns.md)
 

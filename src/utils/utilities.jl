@@ -12,14 +12,24 @@ import Thermodynamics.Parameters as TDP
 """
     enforce_mass_energy_consistency!(Y, p, ᶜΔρq_tot)
 
-Updates density (ρ) and total energy (ρe_tot) to maintain mass and energy consistency
-when ρq_tot changes by ᶜΔρq_tot due to limiter application.
+Restore mass and energy consistency after the limiter has changed `ρq_tot` by
+`ᶜΔρq_tot`, mutating `Y`.
 
-Arguments:
+Water added to (or removed from) the total-water budget must also appear in the
+air-mass and energy budgets. The added water is treated as vapor, so `Y.c.ρ` is
+incremented by `ᶜΔρq_tot` and `Y.c.ρe_tot` by
+`ᶜΔρq_tot (e_int_vapor(T) + Φ)`.
 
-  - `Y`: The state vector, modified in place.
-  - `p`: Cache containing parameters and precomputed fields.
-  - `ᶜΔρq_tot`: The change in total water density due to limiter application.
+# Arguments
+
+  - `Y`: State; `Y.c.ρ` and `Y.c.ρe_tot` are mutated.
+  - `p`: Cache; supplies the parameters, the precomputed temperature `ᶜT`, and
+    the geopotential `ᶜΦ` from `p.core`.
+  - `ᶜΔρq_tot`: Change in total-water density applied by the limiter [kg/m³].
+
+# Returns
+
+`nothing`.
 """
 function enforce_mass_energy_consistency!(Y, p, ᶜΔρq_tot)
     thp = CAP.thermodynamics_params(p.params)
@@ -30,6 +40,18 @@ function enforce_mass_energy_consistency!(Y, p, ᶜΔρq_tot)
     return nothing
 end
 
+"""
+    is_energy_var(symbol)
+    is_momentum_var(symbol)
+    is_sgs_var(symbol)
+    is_tracer_var(symbol)
+
+Classify a top-level field name of `Y.c` or `Y.f` by the role it plays in the
+state.
+
+`is_tracer_var` is the complement: every name that is not `ρ`, `ρtke`, an energy,
+a momentum, or an SGS variable.
+"""
 is_energy_var(symbol) = symbol in (:ρe_tot,)
 is_momentum_var(symbol) = symbol in (:uₕ, :u₃)
 is_sgs_var(symbol) = symbol in (:sgsʲs,)
@@ -43,37 +65,47 @@ is_tracer_var(symbol) = !(
 
 # we may be hitting a slow path:
 # https://stackoverflow.com/questions/14687665/very-slow-stdpow-for-bases-very-close-to-1
+"""
+    fast_pow(x, y)
+
+Compute `x^y` as `exp(y log(x))`, trading a little accuracy for speed.
+
+`^` takes a slow path for bases very close to 1. Requires `x > 0`. Called from
+`held_suarez_forcing_tendency!`.
+"""
 fast_pow(x, y) = exp(y * log(x))
 
 """
     geopotential(grav, z)
 
-Compute the geopotential (Φ) at height `z` using gravitational acceleration `grav`.
-
-Φ = g * z
-
-where:
-
-  - `grav` is the gravitational acceleration
-  - `z` is the height
+Compute the geopotential `Φ = g z` [m²/s²] at height `z` [m] with gravitational
+acceleration `grav` [m/s²].
 """
 geopotential(grav, z) = grav * z
 
 """
     pressure_to_height(p, T, q, thermo_params)
 
-Convert pressure levels to approximate geometric height using the hypsometric equation.
+Convert pressure levels to approximate geometric heights with the hypsometric
+equation.
 
-Arguments:
+The inputs are sorted from the surface upward, the layer-mean virtual
+temperature `Tv = T (1 + (R_v/R_d - 1) q)` is formed, and
+`Δz = R_d Tv / g · ln(p_below / p_above)` is accumulated from the surface. The
+computation is done in `Float64` regardless of the input element type, and the
+result is returned in the order of the input `p`.
 
-  - `p`: Pressure levels in Pa
-  - `T`: Temperature profile in K
-  - `q`: Specific humidity in kg/kg
-  - `thermo_params`: Thermodynamics parameters (for physical constants g, R_d, R_v)
+# Arguments
 
-Returns heights in meters above the surface (z[surface] = 0).
+  - `p`: Pressure levels, in any order [Pa].
+  - `T`: Temperature at those levels [K].
+  - `q`: Specific humidity at those levels [kg/kg].
+  - `thermo_params`: `Thermodynamics` parameter set, supplying `g`, `R_d`, `R_v`.
 
-Uses virtual temperature: Tv = T * (1 + (R_v/R_d - 1) * q)
+# Returns
+
+`Vector{Float64}` of heights above the surface, with `z = 0` at the
+highest-pressure level [m].
 """
 function pressure_to_height(p, T, q, thermo_params)
     g = TDP.grav(thermo_params)
@@ -111,12 +143,15 @@ end
 """
     time_from_filename(file)
 
-Returns the time (Float64) from a given filename
+Parse the simulation time in seconds from a `dayD.S.hdf5` output filename.
 
-## Example
+The basename is split on `.`: the first field is the day count, the second the
+seconds within that day.
 
-```
-time_from_filename("day4.46906.hdf5")
+# Examples
+
+```julia
+julia> time_from_filename("day4.46906.hdf5")
 392506.0
 ```
 """
@@ -130,22 +165,31 @@ end
 """
     sort_files_by_time(files)
 
-Sorts an array of files by the time,
-determined by the filename.
+Sort `files` in place by the time parsed from each filename with
+`time_from_filename`, and return the permuted array.
 """
 sort_files_by_time(files) =
     permute!(files, sortperm(time_from_filename.(files)))
 
 """
-    κ .= compute_kinetic(uₕ::Field, uᵥ::Field)
+    compute_kinetic(uₕ, uᵥ)
 
-Compute the specific kinetic energy at cell centers, resulting in `κ` from
-individual velocity components:
+Compute the specific kinetic energy at cell centers from the horizontal and
+vertical velocity components,
 
-  - `κ = 1/2 (uₕ⋅uʰ + 2uʰ⋅ᶜI(uᵥ) + ᶜI(uᵥ⋅uᵛ))`
-  - `uₕ` should be a `Covariant1Vector` or `Covariant12Vector`-valued field at
-    cell centers, and
-  - `uᵥ` should be a `Covariant3Vector`-valued field at cell faces.
+    κ = 1/2 (uₕ⋅uʰ + 2 uʰ⋅ᶜI(uᵥ) + ᶜI(uᵥ⋅uᵛ)),
+
+where `ᶜI` interpolates from faces to centers.
+
+# Arguments
+
+  - `uₕ`: `Covariant1Vector`- or `Covariant12Vector`-valued center `Field`.
+  - `uᵥ`: `Covariant3Vector`-valued face `Field`.
+
+# Returns
+
+A lazy center `Field` with the specific kinetic energy [m²/s²]; materialize it
+with `κ .= compute_kinetic(uₕ, uᵥ)`.
 """
 function compute_kinetic(uₕ, uᵥ)
     @assert eltype(uₕ) <: Union{C1, C2, C12}
@@ -162,19 +206,23 @@ function compute_kinetic(uₕ, uᵥ)
 end
 
 """
-    compute_kinetic(Y::FieldVector)
+    compute_kinetic(Y::Fields.FieldVector)
 
-Compute the specific kinetic energy at cell centers, where `Y` is the model
-state.
+Compute the specific kinetic energy at cell centers from the model state `Y`,
+i.e. from `Y.c.uₕ` and `Y.f.u₃`.
 """
 compute_kinetic(Y::Fields.FieldVector) = compute_kinetic(Y.c.uₕ, Y.f.u₃)
 
 """
-    ϵ .= compute_strain_rate_center_vertical(ᶠu)
+    compute_strain_rate_center_vertical(ᶠu)
 
-Compute the strain rate at cell centers from velocity at cell faces, with vertical gradients only.
+Compute the strain rate at cell centers from the face velocity `ᶠu`, keeping
+vertical gradients only.
 
-Returns a lazy representation of the strain rate tensor.
+# Returns
+
+A lazy center `Field` with the symmetric `UVW × UVW` strain-rate tensor
+`(∇ᵥu + (∇ᵥu)ᵀ) / 2` [1/s].
 """
 function compute_strain_rate_center_vertical(ᶠu)
     axis_uvw = Geometry.UVWAxis()
@@ -187,11 +235,18 @@ function compute_strain_rate_center_vertical(ᶠu)
 end
 
 """
-    ϵ .= compute_strain_rate_face_vertical(ᶜu::Field)
+    compute_strain_rate_face_vertical(ᶜu)
 
-Compute the strain rate at cell faces from velocity at cell centers, with vertical gradients only.
+Compute the strain rate at cell faces from the center velocity `ᶜu`, keeping
+vertical gradients only.
 
-Returns a lazy representation of the strain rate tensor.
+Zero vertical-gradient boundary conditions are imposed at the top and bottom
+faces.
+
+# Returns
+
+A lazy face `Field` with the symmetric `UVW × UVW` strain-rate tensor
+`(∇ᵥu + (∇ᵥu)ᵀ) / 2` [1/s].
 """
 function compute_strain_rate_face_vertical(ᶜu)
     ∇ᵥuvw_boundary = Geometry.outer(Geometry.WVector(0), Geometry.UVWVector(0, 0, 0))
@@ -209,22 +264,31 @@ end
 """
     compute_strain_rate_center_full!(ᶜε, ᶜu, ᶠu)
 
-Compute the full strain rate tensor at cell centers from velocity
+Compute the full strain rate tensor at cell centers, mutating `ᶜε`.
+
+The vertical part is the face-to-center gradient of `ᶠu`, the horizontal part the
+spectral gradient of `ᶜu`; their sum is then symmetrized.
 
 # Arguments
 
-  - `ᶜε`: Preallocated `UVW x UVW` tensor field for the strain rate at cell centers
-  - `ᶜu, ᶠu`: Velocity field at cell centers and faces, respectively.
-    Both reconstructions are needed to compute the full strain rate tensor.
+  - `ᶜε`: Preallocated `UVW × UVW` tensor center `Field`, overwritten with the
+    strain rate [1/s].
+  - `ᶜu`: Velocity at cell centers.
+  - `ᶠu`: Velocity at cell faces. Both reconstructions are needed for the full
+    tensor.
 
-See also [`compute_strain_rate_face_full!`](@ref) for the analogous calculation on cell faces.
+# Returns
 
-# Notes:
+`ᶜε`.
 
-  - it is recommended to use `ᶠu` and `ᶜu` as computed by
-    [`set_velocity_quantities!`](@ref) and [`set_implicit_precomputed_quantities_part1!`](@ref)
-  - Because the computation involves both vertical and horizontal gradients, this
-    calculation cannot be lazified (for now). It requires a pre-allocated output field.
+# Notes
+
+  - Use the `ᶜu` and `ᶠu` produced by `set_velocity_quantities!` and
+    `set_implicit_precomputed_quantities_part1!`.
+  - Because both vertical and horizontal gradients are involved, the computation
+    cannot (yet) be made lazy, hence the preallocated output field.
+
+See also `compute_strain_rate_face_full!` for the face-centered version.
 """
 function compute_strain_rate_center_full!(ᶜε, ᶜu, ᶠu)
     axis_uvw = (Geometry.UVWAxis(),)
@@ -237,23 +301,33 @@ end
 """
     compute_strain_rate_face_full!(ᶠε, ᶜu, ᶠu)
 
-Compute the full strain rate tensor at cell faces from velocity
+Compute the full strain rate tensor at cell faces, mutating `ᶠε`.
+
+The vertical part is the center-to-face gradient of `ᶜu`, the horizontal part the
+spectral gradient of `ᶠu`; their sum is then symmetrized.
 
 # Arguments
 
-  - `ᶠε`: Preallocated `UVW x UVW` tensor field for the strain rate at cell centers
-  - `ᶜu, ᶠu`: Velocity field at cell centers and faces, respectively.
-    Both reconstructions are needed to compute the full strain rate tensor.
+  - `ᶠε`: Preallocated `UVW × UVW` tensor face `Field`, overwritten with the
+    strain rate [1/s].
+  - `ᶜu`: Velocity at cell centers.
+  - `ᶠu`: Velocity at cell faces. Both reconstructions are needed for the full
+    tensor.
 
-See also [`compute_strain_rate_center_full!`](@ref) for the analogous calculation on cell centers.
+# Returns
 
-# Notes:
+`ᶠε`.
 
-  - it is recommended to use `ᶠu` and `ᶜu` as computed by
-    [`set_velocity_quantities!`](@ref) and [`set_implicit_precomputed_quantities_part1!`](@ref)
-  - Because the computation involves both vertical and horizontal gradients, this
-    calculation cannot be lazified (for now). It requires a pre-allocated output field.
-  - The calculation assumes zero vertical gradient boundary conditions
+# Notes
+
+  - Use the `ᶜu` and `ᶠu` produced by `set_velocity_quantities!` and
+    `set_implicit_precomputed_quantities_part1!`.
+  - Because both vertical and horizontal gradients are involved, the computation
+    cannot (yet) be made lazy, hence the preallocated output field.
+  - Zero vertical-gradient boundary conditions are imposed at the top and bottom
+    faces.
+
+See also `compute_strain_rate_center_full!` for the center version.
 """
 function compute_strain_rate_face_full!(ᶠε, ᶜu, ᶠu)
     ∇ᵥuvw_boundary = Geometry.outer(Geometry.WVector(0), UVW(0, 0, 0))
@@ -269,15 +343,17 @@ end
 """
     strain_rate_norm(S, axis = Geometry.UVWAxis())
 
-Return a lazy representation of the strain rate norm `|S| = √(2 ∘ S : S)`
+Return a lazy representation of the strain rate norm `|S| = √(2 S:S)` [1/s].
 
-If `axis` is provided, project the strain rate tensor `S` onto the specified axis
-before computing the norm.
+The tensor `S` is first projected onto `axis`, so that
 
-For example,
+  - `axis = Geometry.UVAxis()` gives the horizontal strain rate norm, and
+  - `axis = Geometry.WAxis()` gives the vertical strain rate norm.
 
-  - `axis = Geometry.UVAxis()` computes the horizontal strain rate norm, while
-  - `axis = Geometry.WAxis()` computes the vertical strain rate norm.
+# Arguments
+
+  - `S`: Strain-rate tensor field [1/s].
+  - `axis = Geometry.UVWAxis()`: Axis to project onto before taking the norm.
 """
 function strain_rate_norm(S, axis = Geometry.UVWAxis())
     S_proj = @. lazy(Geometry.project((axis,), S, (axis,)))
@@ -288,8 +364,15 @@ end
 """
     g³³_field(space)
 
-Extracts the value of `g³³`, the 3rd component of the metric terms that convert
-Covariant AxisTensors to Contravariant AxisTensors, from the given space.
+Extract `g³³` from `space`, the `(3, 3)` component of the metric tensor `gⁱʲ`
+that converts covariant to contravariant `AxisTensor`s.
+
+The component is the last one of `gⁱʲ` in both 2D (4 components) and 3D (9
+components) spaces.
+
+# Returns
+
+A `Field` over `space` with the scalar component `g³³`.
 """
 function g³³_field(space)
     g_field = Fields.local_geometry_field(space).gⁱʲ.components.data
@@ -298,14 +381,15 @@ function g³³_field(space)
 end
 
 """
-    horizontal_filter_scale(space)
+    horizontal_filter_scale(space::Spaces.ExtrudedFiniteDifferenceSpace)
+    horizontal_filter_scale(space::Spaces.FiniteDifferenceSpace)
 
-Horizontal filter length scale `Δx_h` [m] of `space`'s horizontal
-discretization: the per-node spectral-element length scale
-(`Spaces.node_horizontal_length_scale`) for extruded 2D/3D spaces, and `Inf`
-for single columns, which have no horizontal discretization (a column's
-filter scale is set by the forcing or the ensemble it represents, not by a
-grid length).
+Return the horizontal filter length scale `Δx_h` of `space` [m].
+
+For extruded 2D/3D spaces this is the per-node spectral-element length scale
+`Spaces.node_horizontal_length_scale`. For single columns it is `Inf`: a column
+has no horizontal discretization, and its filter scale is set by the forcing or
+the ensemble it represents, not by a grid length.
 """
 horizontal_filter_scale(space::Spaces.ExtrudedFiniteDifferenceSpace) =
     Spaces.undertype(space)(
@@ -320,7 +404,7 @@ horizontal_filter_scale(space::Spaces.FiniteDifferenceSpace) =
     resolvability_filter_scale(Δx_h, Δz)
     resolvability_filter_scale(space)
 
-Resolvability filter scale [m] of the dynamical solution,
+Compute the resolvability filter scale of the dynamical solution [m],
 
     Δ_f = max(Δx_h, Δz),
 
@@ -328,7 +412,7 @@ the smallest length scale resolvable in *every* direction of the grid: an
 eddy can be handed over to the resolved dynamics only if the coarsest grid
 direction resolves it, so `Δ_f` is the correct grid-scale cap for SGS mixing
 lengths. In a GCM (`Δx_h` ≫ boundary-layer depth) and in a single column
-(`Δx_h = Inf`, see [`horizontal_filter_scale`](@ref)) the cap is inert and
+(`Δx_h = Inf`, see `horizontal_filter_scale`) the cap is inert and
 the mixing length is purely physical (convergent under vertical refinement);
 in the gray zone the cap binds at `Δx_h`, shrinking the SGS eddies as the
 horizontal resolution starts to resolve them; in the isotropic LES limit
@@ -337,7 +421,7 @@ regime, a volumetric scale `(Δx Δy Δz)^{1/3}` is a possible refinement —
 change it here, in one place.)
 
 The `space` method returns `Δ_f` as a lazy field over `space`, combining
-[`horizontal_filter_scale`](@ref) with the local layer thickness.
+`horizontal_filter_scale` with the local layer thickness `Fields.Δz_field`.
 """
 resolvability_filter_scale(Δx_h, Δz) = max(Δx_h, Δz)
 function resolvability_filter_scale(space::Spaces.AbstractSpace)
@@ -349,7 +433,8 @@ end
 """
     g³³(gⁱʲ)
 
-Extracts the `g³³` sub-tensor from the `gⁱʲ` tensor.
+Extract the `g³³` sub-tensor of the metric tensor `gⁱʲ`, reshaped as a
+`Contravariant3Axis × Contravariant3Axis` `AxisTensor`.
 """
 g³³(gⁱʲ) = reshape(
     gⁱʲ,
@@ -360,7 +445,13 @@ g³³(gⁱʲ) = reshape(
 """
     g³ʰ(gⁱʲ)
 
-Extracts the `g³ʰ` sub-tensor from the `gⁱʲ` tensor.
+Extract the `g³ʰ` sub-tensor of the metric tensor `gⁱʲ`, the coupling between
+the vertical and horizontal contravariant directions that is non-zero over
+sloped terrain.
+
+The result is always a `Contravariant3Axis × Contravariant12Axis` `AxisTensor`;
+in 2D spaces the missing horizontal component is filled with zero. Throws if
+`gⁱʲ` has no vertical or no horizontal sub-axis.
 """
 function g³ʰ(gⁱʲ)
     full_CT_axis = axes(gⁱʲ)[1]
@@ -385,14 +476,23 @@ function g³ʰ(gⁱʲ)
     return Geometry.AxisTensor(axes_tuple, g³ʰ_components)
 end
 
+"""
+    has_topography(space)
+
+Return `true` if `space` has a non-flat hypsography, i.e. if the model has
+terrain. Single columns never do.
+"""
 has_topography(space::Spaces.FiniteDifferenceSpace) = false
 has_topography(space) = Spaces.grid(space).hypsography != Grids.Flat()
 
 """
     unit_basis_vector_data(type, local_geometry)
 
-The component of the vector of the specified type with length 1 in physical units.
-The type should correspond to a vector with only one component, i.e., a basis vector.
+Return the component of a vector of type `V` whose physical length is 1.
+
+`V` must be a single-component vector type, i.e. a basis-vector type such as
+`CT3`. Multiplying by this factor converts a physical magnitude into the
+component of `V`.
 """
 function unit_basis_vector_data(::Type{V}, local_geometry) where {V}
     FT = Geometry.undertype(typeof(local_geometry))
@@ -402,8 +502,11 @@ end
 """
     projected_vector_data(::Type{V}, vector, local_geometry)
 
-Projects the given vector onto the axis of V, then extracts the component data and rescales it to physical units.
-The type should correspond to a vector with only one component, i.e., a basis vector.
+Project `vector` onto the axis of `V`, then return its single component rescaled
+to physical units.
+
+`V` must be a single-component vector type, i.e. a basis-vector type such as
+`CT1`. Inverse of the scaling applied by `unit_basis_vector_data`.
 """
 projected_vector_data(::Type{V}, vector, local_geometry) where {V} =
     V(vector, local_geometry)[1] / unit_basis_vector_data(V, local_geometry)
@@ -411,23 +514,26 @@ projected_vector_data(::Type{V}, vector, local_geometry) where {V} =
 """
     get_physical_w(u, local_geometry)
 
-Return physical vertical velocity - a projection of full velocity vector
-onto the vertical axis.
+Return the physical vertical velocity [m/s], the projection of the full velocity
+vector `u` onto the local vertical axis.
 """
 get_physical_w(u, local_geometry) = Geometry.WVector(u, local_geometry)[1]
 
 """
-    time_to_seconds(t)
+    time_to_seconds(t::Number)
+    time_to_seconds(t::ITime)
+    time_to_seconds(s::String)
 
-Normalize a time specification to a number of seconds (`Float64`).
+Normalize a time specification to a number of seconds, as a `Float64`.
 
-This is the single entry point for the three time representations that flow in
+This is the single entry point for the three time representations that arrive
 through the script and YAML interfaces:
 
-  - `Number`: already in seconds, returned as a `Float64` (handles `Inf`).
+  - `Number`: already in seconds, converted to `Float64` (`Inf` included).
   - `ITime`: converted to seconds.
-  - `String`: parsed. Supported units: seconds, minutes, hours, days, weeks as
-    `s`, `secs`, `m`, `mins`, `h`, `hours`, `d`, `days`, `weeks`.
+  - `String`: a non-negative number immediately followed by one of the units `s`,
+    `secs`, `m`, `mins`, `h`, `hours`, `d`, `days`, `weeks`, e.g. `"20mins"`. The
+    literal `"Inf"` is also accepted. Anything else throws.
 """
 time_to_seconds(t::Number) = Float64(t)
 time_to_seconds(t::ITime) = float(t)
@@ -452,11 +558,22 @@ function time_to_seconds(s::String)
     return value * factors[unit]
 end
 
+"""
+    error_if_crashed(ret_code)
+
+Throw if `ret_code` is `:simulation_crashed`, and do nothing otherwise.
+"""
 function error_if_crashed(ret_code)
     ret_code == :simulation_crashed &&
         error("The ClimaAtmos simulation has crashed. See the stack trace for details.")
 end
 
+"""
+    verify_callbacks(t)
+
+Throw if the saved times `t` contain duplicates, which would mean the callbacks
+saved the solution twice at the same timestep.
+"""
 function verify_callbacks(t)
     if length(t) ≠ length(unique(t))
         @show length(t)
@@ -475,7 +592,10 @@ end
 """
     do_dss(space)
 
-Return whether the underlying horizontal space required DSS or not.
+Return whether the horizontal space of `space` requires direct stiffness
+summation, i.e. whether its quadrature is Gauss-Lobatto-Legendre.
+
+Single columns have no horizontal space and always return `false`.
 """
 function do_dss(space::Spaces.AbstractSpace)
     return Spaces.quadrature_style(Spaces.horizontal_space(space)) isa
@@ -487,14 +607,23 @@ function do_dss(::Spaces.FiniteDifferenceSpace)
 end
 
 using ClimaComms
+"""
+    is_distributed(context)
+
+Return whether `context` is an MPI communications context, i.e. whether the run
+spans more than one process.
+"""
 is_distributed(::ClimaComms.SingletonCommsContext) = false
 is_distributed(::ClimaComms.MPICommsContext) = true
 
 """
     summary_string(x)
 
-Returns a string that is similar to the output of `dump(x)`, but without any
-type parameters.
+Return a string similar to the output of `dump(x)`, but without type parameters.
+
+Recurses through the fields of `x`, indenting one level per nesting depth, and
+falls back to `repr` for values without fields. Used to log model and algorithm
+configurations whose types are too parameter-heavy to print directly.
 """
 summary_string(x) = summary_string(x, 0)
 summary_string(x, depth) =
@@ -509,6 +638,12 @@ summary_string(x, depth) =
     ('\n' * "  "^depth * ')')
 
 # From BenchmarkTools
+"""
+    prettytime(t)
+
+Format a duration `t` [ns] as a string with the largest unit that keeps the
+value above 1, e.g. `"1.234 ms"`.
+"""
 function prettytime(t)
     if t < 1e3
         value, units = t, "ns"
@@ -527,8 +662,8 @@ import Dates
 """
     time_and_units_str(x::Real)
 
-Returns a truncated string of time and units,
-given a time `x` in Seconds.
+Format a time `x` [s] as a human-readable string, truncated to its two largest
+non-zero units, e.g. `"1 day, 3 hours"`.
 """
 time_and_units_str(x::Real) =
     trunc_time(string(compound_period(x, Dates.Second)))
@@ -536,8 +671,11 @@ time_and_units_str(x::Real) =
 """
     compound_period(x::Real, ::Type{T}) where {T <: Dates.Period}
 
-A canonicalized `Dates.CompoundPeriod` given a real value
-`x`, and its units via the period type `T`.
+Build a canonicalized `Dates.CompoundPeriod` from the real value `x`, whose
+units are given by the period type `T`.
+
+The value is converted to whole nanoseconds, rounding up, before
+canonicalization.
 """
 function compound_period(x::Real, ::Type{T}) where {T <: Dates.Period}
     nf = Dates.value(convert(Dates.Nanosecond, T(1)))
@@ -545,9 +683,21 @@ function compound_period(x::Real, ::Type{T}) where {T <: Dates.Period}
     return Dates.canonicalize(Dates.CompoundPeriod(ns))
 end
 
+"""
+    trunc_time(s::String)
+
+Keep only the first two comma-separated components of a canonicalized period
+string, e.g. `"1 day, 3 hours, 4 minutes"` becomes `"1 day, 3 hours"`.
+"""
 trunc_time(s::String) = count(',', s) > 1 ? join(split(s, ",")[1:2], ",") : s
 
 
+"""
+    prettymemory(b)
+
+Format a memory size `b` [bytes] as a string with the largest binary unit that
+keeps the value above 1, e.g. `"340.0 MiB"`.
+"""
 function prettymemory(b)
     if b < 1024
         return string(b, " bytes")
@@ -591,15 +741,30 @@ macro timed_log(verbose, message, ex)
     end
 end
 
+"""
+    AllNothing
+
+Singleton whose every property is `nothing`.
+
+The instance `all_nothing` stands in for a cache or configuration section that
+is absent, so that a destructuring assignment such as
+`(; ᶜuʲs) = n > 0 ? p.precomputed : all_nothing` stays type-stable and binds
+`nothing` when the section does not exist.
+"""
 struct AllNothing end
 const all_nothing = AllNothing()
 Base.getproperty(::AllNothing, ::Symbol) = nothing
 
 """
     horizontal_integral_at_boundary(f::Fields.Field, lev)
+    horizontal_integral_at_boundary(f::Fields.Field)
 
-Compute the horizontal integral of a 2d or 3d `Fields.Field` `f` at a given vertical level
-index `lev`. The underlying vertical space of the 2d field is required to be `FaceFiniteDifferenceSpace`.
+Compute the horizontal integral of `f` at the vertical level `lev`.
+
+The two-argument form takes a face extruded field and first extracts level
+`lev`; the one-argument form takes the resulting 2D spectral-element field. The
+2D space carries no vertical metric, so the integral is reconstructed from the
+level's `Δz` field.
 """
 function horizontal_integral_at_boundary(f::Fields.Field, lev)
     @assert axes(f) isa Spaces.FaceExtrudedFiniteDifferenceSpace
@@ -622,7 +787,7 @@ one month is a variable number of days.
 
 # Examples
 
-```
+```julia
 julia> isdivisible(Dates.Year(1), Dates.Month(1))
 true
 
@@ -633,10 +798,10 @@ julia> isdivisible(Dates.Month(1), Dates.Week(1))
 false
 ```
 
-## Notes
+# Notes
 
-Not all the combinations are fully implemented. If something is missing, please
-consider adding it.
+Not all combinations are implemented. The fallback method warns and returns
+`false`; if a combination you need is missing, please add a method.
 """
 function isdivisible(dt_large::Dates.Period, dt_small::Dates.Period)
     @warn "The combination $(typeof(dt_large)) and $(dt_small) was not covered. Please add a method to handle this case."
@@ -668,13 +833,14 @@ end
 
 Promote a period to the largest possible period type.
 
-This function attempts to represent a given `Period` using the largest possible
-unit of time. For example, a period of 24 hours will be promoted to 1 day. If
-a clean promotion is not possible, return the input as it is.
+A period is re-expressed in the largest unit that divides it exactly: 24 hours
+becomes 1 day, 14 days becomes 2 weeks. Millisecond always divides, so a fixed
+period is always representable. Variable-length periods (`Month`, `Year`) are
+returned unchanged.
 
 # Examples
 
-```julia-repl
+```julia
 julia> promote_period(Hour(24))
 1 day
 
@@ -714,12 +880,15 @@ function promote_period(period::Dates.OtherPeriod)
 end
 
 """
-    parse_date(date_str)
+    parse_date(date_str::AbstractString)
+    parse_date(dt::DateTime)
 
-Parse a date string into a `DateTime` object. Currently, only the following formats are supported:
+Parse a date string into a `DateTime`, or pass a `DateTime` through unchanged.
 
-  - yyyymmdd
-  - yyyymmdd-HHMM
+Only two formats are supported, and anything else throws:
+
+  - `yyyymmdd`, e.g. `"20100901"`.
+  - `yyyymmdd-HHMM`, e.g. `"20100901-0600"`.
 """
 function parse_date(date_str::AbstractString)
     # Define a mapping between allowed formats and corresponding date format
@@ -737,9 +906,19 @@ function parse_date(date_str::AbstractString)
 end
 parse_date(dt::DateTime) = dt
 
+"""
+    iscolumn(space)
+
+Return whether `space` is a single column, i.e. a `FiniteDifferenceSpace`.
+"""
 iscolumn(space::Spaces.FiniteDifferenceSpace) = true
 iscolumn(space) = false
 
+"""
+    issphere(space)
+
+Return whether the horizontal domain of `space` is a sphere.
+"""
 function issphere(space)
     return Meshes.domain(Spaces.topology(Spaces.horizontal_space(space))) isa
            Domains.SphereDomain
@@ -748,7 +927,11 @@ end
 """
     clima_to_era5_name_dict()
 
-Returns a dictionary mapping ClimaAtmos variable names to ERA5 variable names.
+Return a `Dict` mapping ClimaAtmos (CMIP-style) variable names to the
+corresponding ERA5 short names.
+
+Two of the ERA5 names are misleading: `w` is a pressure velocity [Pa/s], and
+`z` is a geopotential [m²/s²], not a height.
 """
 function clima_to_era5_name_dict()
     Dict(
@@ -766,6 +949,12 @@ function clima_to_era5_name_dict()
     )
 end
 
+"""
+    log_context(context)
+
+Log the device and, for distributed runs, the number of processes of the
+communications `context`.
+"""
 function log_context(context)
     device = nameof(typeof(ClimaComms.device(context)))
     if context isa ClimaComms.SingletonCommsContext
@@ -778,11 +967,13 @@ end
 """
     normal_cdf_inv(p)
 
-Approximation of the standard normal quantile function Φ⁻¹(p) using the
-rational approximation of Abramowitz & Stegun (Eq. 26.2.22).
+Compute the standard normal quantile function Φ⁻¹(p) [-] with the rational
+approximation of Abramowitz & Stegun (Eq. 26.2.22).
 
-Maximum absolute error ≈ 4.5 × 10⁻⁴ for p ∈ (0, 1).  Uses only `log`,
-`sqrt`, and polynomial arithmetic — no `SpecialFunctions` dependency.
+Maximum absolute error ≈ 4.5 × 10⁻⁴ for p ∈ (0, 1). Uses only `log`,
+`sqrt`, and polynomial arithmetic — no `SpecialFunctions` dependency. The input
+is clamped away from 0 and 1 by `ϵ_numerics(FT)`, so the result is finite for
+any `p`.
 
 For 0 < p ≤ ½ the approximation is
 
@@ -809,8 +1000,8 @@ end
 """
     normal_cdf(z)
 
-Accurate approximation of the standard normal CDF Φ(z) using the rational
-approximation of Abramowitz & Stegun (Eq. 26.2.17).
+Compute the standard normal CDF Φ(z) [-] with the rational approximation of
+Abramowitz & Stegun (Eq. 26.2.17).
 
 Maximum absolute error ≈ 7.5 × 10⁻⁸ over the full real line.  Uses only
 `exp` and basic arithmetic — no `SpecialFunctions` dependency.

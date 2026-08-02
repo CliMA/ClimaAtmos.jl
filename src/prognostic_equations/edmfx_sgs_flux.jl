@@ -6,32 +6,22 @@
 """
     edmfx_sgs_mass_flux_tendency!(Yₜ, Y, p, t, turbconv_model)
 
-Computes and applies tendencies to the grid-mean prognostic variables due to the
-divergence of subgrid-scale (SGS) mass fluxes from EDMFX updrafts and the environment.
+Apply the divergence of the vertical SGS mass fluxes of the PROPHET scheme
+(`EDMFX` in code) to the grid-mean prognostic variables.
 
-This involves terms of the form `- ∂(ρₖ aₖ w′ₖ ϕ′ₖ)/∂z`, where `k` denotes
-an SGS component (updraft `j` or environment `0`), `aₖ` is the area fraction,
-`w′ₖ` is the vertical velocity deviation from the grid mean, and `ϕ′ₖ` is the
-deviation of a conserved variable `ϕ` (such as total enthalpy or specific humidity)
-from its grid-mean value. These terms represent the redistribution of energy and tracers
-by the resolved SGS circulations relative to the grid mean flow.
+For each subdomain `k` (updrafts `j` and environment `0`), the flux is the
+difference-form vertical transport `ρᵏaᵏ (u³ᵏ - u³)(χᵏ - χ)` of a specific
+scalar `χ` relative to the grid mean, reconstructed with the
+`edmfx_sgsflux_upwinding` scheme; it vanishes identically when `χᵏ = χ`.
+Tendencies are applied to `Yₜ.c.ρe_tot` (with `χʲ = mseʲ + Kʲ` for the
+updrafts), `Yₜ.c.ρq_tot`, and every auto-discovered SGS tracer (microphysics
+species and passive tracers). The `q_tot` flux also increments `Yₜ.c.ρ`,
+since SGS moisture transport moves (moist) air mass, mirroring the
+diffusive-flux treatment. Vertical SGS momentum fluxes are not yet included.
 
-The SGS flux of `q_tot` redistributes water mass, so `Yₜ.c.ρ` receives the
-same tendency as `Yₜ.c.ρq_tot` (mirroring the diffusive-flux treatment of
-moist air mass).
-
-The specific implementation depends on the `turbconv_model` (e.g., `PrognosticEDMFX`).
-A generic fallback doing nothing is also provided.
-The function modifies `Yₜ.c` (grid-mean tendencies) in place.
-
-Arguments:
-
-  - `Yₜ`: The tendency state vector for grid-mean variables.
-  - `Y`: The current state vector (used for grid-mean and SGS properties).
-  - `p`: Cache containing parameters, precomputed fields, atmospheric model settings,
-    and scratch space.
-  - `t`: Current simulation time.
-  - `turbconv_model`: The turbulence convection model instance.
+The `PrognosticEDMFX` method is gated on `p.atmos.edmfx_model.sgs_mass_flux`;
+the generic method is a no-op. Mutates `Yₜ.c`; returns `nothing`. See the
+"PROPHET Sub-Grid Scale Equations" page (`docs/src/edmf_equations.md`).
 """
 edmfx_sgs_mass_flux_tendency!(Yₜ, Y, p, t, turbconv_model) = nothing
 
@@ -187,29 +177,33 @@ end
 """
     edmfx_sgs_diffusive_flux_tendency!(Yₜ, Y, p, t, turbconv_model)
 
-Computes and applies the tendency to the grid-mean state `Y` due to SGS
-diffusive fluxes from the EDMFX environment. This involves calculating the
-divergence of turbulent fluxes, which are parameterized using eddy diffusivity
-and viscosity closures.
+Apply the divergence of the SGS diffusive (K-theory) fluxes of the PROPHET
+scheme (`EDMFX` in code) to the grid-mean state.
 
-This function parameterizes these fluxes using an eddy-diffusivity/viscosity
-approach (K-theory) for the grid-mean. Tendencies are calculated for
-total energy, moisture species, momentum, and optionally TKE.
-The form is typically `- ∂/∂z(-D ∂ϕ/∂z)`, where `D` is an effective SGS eddy
-diffusivity for the quantity `ϕ`.
+All fluxes use the face-native eddy diffusivity/viscosity `ᶠK_h`/`ᶠK_u` plus
+the interfacial entrainment diffusivity `ᶠK_entr` from
+`set_face_diffusivities!`:
 
-The specific implementation depends on the `turbconv_model`. A generic fallback
-doing nothing is also provided. The function modifies `Yₜ.c` (grid-mean tendencies)
-in place.
+  - Total enthalpy: dry-static-energy + water-enthalpy decomposition
+    `F_h = -K ∇s_d + Σ_μ h_tot,μ F_qμ` (see the inline comments for the
+    rationale), applied to `Yₜ.c.ρe_tot`.
+  - Total water: down-gradient `q_tot` flux applied to `Yₜ.c.ρq_tot` and
+    mirrored to `Yₜ.c.ρ` (moisture diffusion moves moist air mass).
+  - Other grid-scale tracers: sedimenting microphysics species are diffused
+    with `α_vert_diff_tracer * K_h`, passive tracers with unscaled `K_h`;
+    `K_entr` always enters at full weight.
+  - Momentum: `-2 ρ K_u 𝔈` with the vertical strain rate, applied to `Yₜ.c.uₕ`.
+  - TKE (when prognostic): turbulent transport plus dissipation
+    (`tke_dissipation`), applied to `Yₜ.c.ρtke`; negative TKE is relaxed to
+    zero within one time step.
 
-Arguments:
+When `p.atmos.edmfx_model.vertical_diffusion` is enabled for
+`PrognosticEDMFX`, the same specific tendencies are additionally applied to
+each updraft's `mse`, `q_tot`, and tracers (uniform vertical diffusion across
+the grid box).
 
-  - `Yₜ`: The tendency state vector for grid-mean variables.
-  - `Y`: The current state vector (used for grid-mean and SGS properties).
-  - `p`: Cache containing parameters, precomputed fields, atmospheric model settings,
-    and scratch space.
-  - `t`: Current simulation time.
-  - `turbconv_model`: The turbulence convection model instance.
+Methods: generic no-op, and `Union{EDOnlyEDMFX, PrognosticEDMFX}` gated on
+`p.atmos.edmfx_model.sgs_diffusive_flux`. Mutates `Yₜ.c`; returns `nothing`.
 """
 edmfx_sgs_diffusive_flux_tendency!(Yₜ, Y, p, t, turbconv_model) = nothing
 

@@ -6,12 +6,30 @@
 """
     set_edmfx_surface_conditions!(Y, p)
 
-Populate the per-updraft level-1 caches `sfc_mse_buoyantʲs`,
-`sfc_q_tot_buoyantʲs`, and `sfc_mass_flux_sourceʲs` for each EDMF
-updraft. Three separate scalar fields rather than a single NamedTuple-
-typed field, because broadcasting a NamedTuple into a DataLayout at a
-single level hits a GPU-incompatible `convert` path inside
-`knl_copyto!`. No-op unless `turbconv_model isa PrognosticEDMFX`.
+Populate the per-updraft surface boundary-condition payload at model level 1
+for the PROPHET scheme (`EDMFX` in code).
+
+For each updraft `j`, writes the level-1 caches
+
+  - `p.precomputed.sfc_mse_buoyantʲs`, `sfc_q_tot_buoyantʲs`: the high-tail
+    (buoyant-air) surface values of `mse` and `q_tot`
+    ([`edmfx_sfc_buoyant`](@ref)) [J/kg] and [kg/kg];
+  - `p.precomputed.sfc_mass_flux_sourceʲs`: the capped volumetric mass source
+    rate ([`edmfx_sfc_mass_flux_source`](@ref)) [kg/m³/s].
+
+The buoyant values are computed first so the mass-flux cap can consume them.
+Surface `C3` flux vectors are projected onto the surface normal through
+`p.scratch.ᶜtemp_scalar` and `ᶜtemp_scalar_2` at level 1.
+
+These are three separate scalar fields rather than one `NamedTuple`-valued
+field because broadcasting a `NamedTuple` into a `DataLayout` at a single level
+hits a GPU-incompatible `convert` path inside `knl_copyto!`.
+
+No-op unless `p.atmos.turbconv_model isa PrognosticEDMFX`. Mutates
+`p.precomputed` and `p.scratch`; returns `nothing`. Called from
+`set_prognostic_edmf_precomputed_quantities_explicit_closures!`; the payload is
+consumed by [`edmfx_boundary_condition_tendency!`](@ref) and by the implicit
+`ρa` solve.
 """
 function set_edmfx_surface_conditions!(Y, p)
     p.atmos.turbconv_model isa PrognosticEDMFX || return nothing
@@ -126,11 +144,33 @@ end
         z_int, scalar_grid, sfc_ρ_flux_scalar, turbconv_params,
     )
 
-High-tail buoyant-air surface value of a scalar (mse or q_tot) for an
-EDMF updraft, evaluated from [`sgs_scalar_first_interior_bc`](@ref) with
-the percentile fraction set to
-`a_s = surface_mass_flux_coefficient(...)` — the same `a_s` that sets
-the surface mass flux magnitude.
+Return the high-tail (buoyant-air) surface value of a scalar (`mse` or
+`q_tot`) for a PROPHET updraft.
+
+Evaluates [`sgs_scalar_first_interior_bc`](@ref) at the first interior cell
+center with the sampled percentile fraction set to
+`a_s = surface_mass_flux_coefficient(...)` — the same `a_s` that sets the
+surface mass-flux magnitude in [`surface_mass_flux`](@ref).
+
+# Arguments
+
+  - `sfc_buoyancy_flux`: Surface buoyancy flux [m²/s³]; the buoyant value equals
+    the grid mean when it is non-positive.
+  - `ρ_int`: Grid-mean density at the first interior cell center [kg/m³].
+  - `ustar`: Friction velocity [m/s].
+  - `obukhov_length`: Obukhov length [m].
+  - `sfc_local_geometry`: `ClimaCore.Geometry.LocalGeometry` at the surface.
+  - `z_int`: Height of the first interior cell center above the surface [m].
+  - `scalar_grid`: Grid-mean value of the scalar at that level, `mse` [J/kg] or
+    `q_tot` [kg/kg].
+  - `sfc_ρ_flux_scalar`: Surface density-weighted flux of the same scalar,
+    projected onto the surface normal.
+  - `turbconv_params`: Turbulence-convection parameters (supply `convective_zi`,
+    `max_surface_area`, and `sfc_mass_flux_ustar_coeff`).
+
+# Returns
+
+The buoyant-air surface value of the scalar, in the units of `scalar_grid`.
 """
 @inline function edmfx_sfc_buoyant(
     sfc_buoyancy_flux,
@@ -173,25 +213,46 @@ end
         sfc_ρ_flux_h_tot, sfc_ρ_flux_q_tot, turbconv_params,
     )
 
-Volumetric mass source rate `F_sfc / dz_int` [kg/m³/s] at the first
-cell for one EDMF updraft, equivalent to `div(F·ẑ)` at level 1.
-`F_sfc` is the capped surface mass flux with the
-`upper_area_limiter_factor(a)` baked in:
+Return the volumetric mass source rate `F_sfc / dz_int` [kg/m³/s] at the first
+cell for one PROPHET updraft, equivalent to `div(F·ẑ)` at level 1.
+
+`F_sfc` is the capped surface mass flux ([`surface_mass_flux`](@ref)) with the
+[`upper_area_limiter_factor`](@ref) baked in:
 
     F_pre   = surface_mass_flux(...) · upper_area_limiter_factor(a),
     F_max_χ = α · sfc_ρ_flux_χ / max(ϵ, χ_buoyant − χ_env)
                                               for χ ∈ {mse, q_tot},
     F_sfc   = max(0, min(F_pre, F_max_mse, F_max_q_tot)).
 
-`α < 1` guarantees the env retains at least `(1−α)` of every surface
-scalar flux. The denominator floor `ϵ = ϵ_numerics(FT)` keeps `F_max`
-finite when the eddy contrast `χ_buoyant − χ_env` vanishes or goes
-negative — in that case `F_max` is huge and effectively non-binding
-through the subsequent `min`.
+`α = sfc_mass_flux_cap_fraction < 1` guarantees the environment retains at
+least `(1−α)` of every surface scalar flux. The denominator floor
+`ϵ = ϵ_numerics(FT)` keeps `F_max` finite when the eddy contrast
+`χ_buoyant − χ_env` vanishes or goes negative — in that case `F_max` is huge
+and effectively non-binding through the subsequent `min`.
 
 The buoyant values are passed in (precomputed by
-[`edmfx_sfc_buoyant`](@ref)) so they can be cached separately and
-consumed elsewhere by the mse/q_tot tendency.
+[`edmfx_sfc_buoyant`](@ref)) so they can be cached separately and consumed
+elsewhere by the `mse`/`q_tot` tendency.
+
+# Arguments
+
+  - `sfc_buoyancy_flux`: Surface buoyancy flux [m²/s³].
+  - `ρʲ_int`, `ρaʲ_int`: Updraft density [kg/m³] and area-weighted density
+    [kg/m³] at the first interior cell center.
+  - `ustar`: Friction velocity [m/s].
+  - `dz_int`: Depth of the first model cell [m].
+  - `mse_buoyant`, `mse_env`: Buoyant-air and environment moist static energy
+    [J/kg].
+  - `q_tot_buoyant`, `q_tot_env`: Buoyant-air and environment total specific
+    humidity [kg/kg].
+  - `sfc_ρ_flux_h_tot`, `sfc_ρ_flux_q_tot`: Surface density-weighted total
+    enthalpy [W/m²] and total water [kg/m²/s] fluxes, projected onto the
+    surface normal.
+  - `turbconv_params`: Turbulence-convection parameters.
+
+# Returns
+
+The non-negative volumetric mass source rate [kg/m³/s].
 """
 @inline function edmfx_sfc_mass_flux_source(
     sfc_buoyancy_flux,
@@ -237,8 +298,13 @@ end
 """
     edmfx_boundary_condition_tendency!(Yₜ, Y, p, t, turbconv_model)
 
-Apply the surface mass-flux boundary condition to the EDMFX updraft
-scalar prognostic variables (`mse`, `q_tot`) in the first model cell.
+Apply the surface mass-flux boundary condition to the PROPHET (`EDMFX` in
+code) updraft scalar prognostic variables (`mse`, `q_tot`) in the first model
+cell.
+
+The generic method is a no-op; the `turbconv_model::PrognosticEDMFX` method
+increments `Yₜ.c.sgsʲs.:(j).mse` and `.q_tot` at level 1 for every updraft and
+returns `nothing`.
 
 The cached `mass_flux_source` (see [`edmfx_sfc_mass_flux_source`](@ref))
 is the volumetric mass source rate `F_sfc / dz` at the first cell,
@@ -257,9 +323,11 @@ keeps the divisor finite when the updraft is small.
 The corresponding `ρa` source is injected in the implicit ρa solve
 (`solve_sgs_ρa_implicit_stage_analytic!`).
 
-Note: at the first cell the updraft scalar tendencies receive *two*
-contributions — this surface mass-flux BC and the standard lateral
-entrainment from [`edmfx_entr_detr_tendency!`](@ref). These represent
+# Notes
+
+At the first cell the updraft scalar tendencies receive *two* contributions —
+this surface mass-flux BC and the standard lateral entrainment from
+[`edmfx_entr_detr_tendency!`](@ref). These represent
 distinct physical processes (surface mass injection from the buoyant
 sub-cell tail vs. lateral entrainment from the environment at level 1)
 and are intentionally both retained. The two relaxation targets differ
@@ -328,44 +396,43 @@ end
         sfc_local_geometry,
     ) where {FT}
 
-Calculates a boundary condition for a subgrid-scale (SGS) scalar within an
-EDMFX updraft `j` at the first interior cell center (`ᶜz_int`).
+Return the boundary value of a subgrid-scale (SGS) scalar for an updraft
+sampling the top `ᶜaʲ_int` fraction of the distribution at the first interior
+cell center.
 
-The method sets the updraft scalar value as the sum of the grid-mean scalar at
-that level (`ᶜscalar_int`) and an SGS fluctuation term. This fluctuation is
-proportional to the square root of the estimated SGS scalar variance (σ), i.e.,
-`SGS_scalar = Mean_scalar + C * σ`.
+The value is the grid-mean scalar plus an SGS fluctuation proportional to the
+standard deviation of the SGS scalar distribution,
 
-The SGS variance is computed using Monin-Obukhov Similarity Theory via
-`get_first_interior_variance`. The coefficient `C` (here, `surface_scalar_coeff`)
-is determined by `percentile_bounds_mean_norm`, assuming the updraft samples
-from the upper tail (from percentile `1 - ᶜaʲ_int` to 1) of a Gaussian distribution
-of SGS fluctuations.
+    scalar_sgs = ᶜscalar_int + C √σ²,
 
-This boundary condition is applied only when the surface buoyancy flux
-is positive (unstable conditions), indicating surface-driven updrafts.
-When the surface buoyancy flux is non-positive, the updraft scalar
-value is set to the grid-mean scalar.
+with `σ²` from [`get_first_interior_variance`](@ref) (Monin-Obukhov similarity
+theory) and `C = percentile_bounds_mean_norm(1 - ᶜaʲ_int, 1)` the mean of a
+standard normal truncated to its upper `ᶜaʲ_int` tail.
 
-Arguments:
+The adjustment is applied only when the surface buoyancy flux is positive
+(unstable, surface-driven updrafts); otherwise the grid-mean value is
+returned unchanged.
 
-  - `ᶜz_int`: Height of the first interior cell center [m].
+# Arguments
+
+  - `ᶜz_int`: Height of the first interior cell center above the surface [m].
   - `ᶜρ_int`: Grid-mean air density at `ᶜz_int` [kg/m³].
-  - `ᶜaʲ_int`: Area fraction of the specific updraft `j` at `ᶜz_int` (dimensionless).
+  - `ᶜaʲ_int`: Fraction of the distribution sampled by the updraft [-]; the
+    surface mass-flux area coefficient `a_s` in [`edmfx_sfc_buoyant`](@ref).
   - `ᶜscalar_int`: Grid-mean value of the scalar at `ᶜz_int`.
-  - `sfc_buoyancy_flux`: Surface buoyancy flux (e.g., w'b'_sfc) [m²/s³ or K⋅m/s].
-    Positive for unstable conditions.
-  - `sfc_ρ_flux_scalar`: Density-weighted surface flux of the scalar (e.g., ρ⋅w'c'_sfc)
-    [e.g., (kg/m³)⋅K⋅m/s or (kg/m³)⋅(kg/kg)⋅m/s].
+  - `sfc_buoyancy_flux`: Surface buoyancy flux `⟨w'b'⟩_s` [m²/s³]. Positive for
+    unstable conditions.
+  - `sfc_ρ_flux_scalar`: Density-weighted surface flux of the scalar
+    `⟨ρ w'c'⟩_s`, in the units of `ᶜscalar_int` times [kg/m²/s].
   - `ustar`: Friction velocity [m/s].
   - `obukhov_length`: Obukhov length [m].
-  - `sfc_local_geometry`: `ClimaCore.Geometry.LocalGeometry` at the surface, passed to
-    variance calculation.
+  - `sfc_local_geometry`: `ClimaCore.Geometry.LocalGeometry` at the surface,
+    passed to the variance calculation.
 
-Returns:
+# Returns
 
-  - The prescribed scalar value for the SGS updraft at the first interior level.
-    Returns `ᶜscalar_int` if `sfc_buoyancy_flux <= 0`.
+The SGS updraft value of the scalar at the first interior level, in the units
+of `ᶜscalar_int`; `ᶜscalar_int` itself when `sfc_buoyancy_flux ≤ 0`.
 """
 function sgs_scalar_first_interior_bc(
     ᶜz_int::FT,
@@ -411,29 +478,31 @@ end
         local_geometry,
     ) where {FT}
 
-Calculates the variance of a scalar quantity (σ²) at height `z` within the
-surface layer using Monin-Obukhov Similarity Theory (MOST).
+Return the surface-layer variance `σ²` of a scalar at height `z` from
+Monin-Obukhov similarity theory.
 
-The calculation depends on stability:
+With the scalar flux scale `c∗ = -kinematic_scalar_flux / max(ustar, eps)` and
+empirical constants `C₁ = 4`, `C₂ = 8.3`:
 
-  - For unstable conditions (Obukhov length `L < 0`):
-    σ² = C₁ * c²∗ * (1 - C₂ * z / L)^(-2/3)
-  - For stable/neutral conditions (Obukhov length `L >= 0`):
-    σ² = C₁ * c²∗
-    where `c∗ = -kinematic_scalar_flux / ustar` is the scalar flux scale.
-    The constants C₁ and C₂ are empirical (here, C₁=4, C₂=8.3).
+  - unstable conditions (Obukhov length `L < 0`):
+    `σ² = C₁ c∗² (1 - C₂ z / L)^(-2/3)`;
+  - stable or neutral conditions (`L ≥ 0`): `σ² = C₁ c∗²`.
 
-Arguments:
+Empirical forms follow, e.g., Wyngaard et al. (1971) and Garratt (1994).
 
-  - `kinematic_scalar_flux`: Kinematic surface flux of the scalar (e.g., w'c'_sfc) [K⋅m/s or (kg/kg)⋅m/s].
+# Arguments
+
+  - `kinematic_scalar_flux`: Kinematic surface flux of the scalar `⟨w'c'⟩_s`,
+    in the units of the scalar times [m/s].
   - `ustar`: Friction velocity [m/s].
   - `z`: Height above the surface [m].
   - `obukhov_length`: Obukhov length [m].
-  - `local_geometry`: `ClimaCore.Geometry.LocalGeometry` object, used for `_norm_sqr`
+  - `local_geometry`: `ClimaCore.Geometry.LocalGeometry`, used by `_norm_sqr`.
 
-Returns:
+# Returns
 
-  - The estimated variance of the scalar quantity [K² or (kg/kg)²].
+The scalar variance, in the units of the scalar squared. Called from
+[`sgs_scalar_first_interior_bc`](@ref).
 """
 function get_first_interior_variance(
     kinematic_scalar_flux,
@@ -456,26 +525,24 @@ end
 """
     approximate_inverf(x::FT) where {FT}
 
-Approximates the inverse error function, erf⁻¹(x).
+Approximate the inverse error function `erf⁻¹(x)` for `x ∈ (-1, 1)`.
 
-The approximation formula involves logarithmic and square root operations and is
-based on a Pade approximation (Sergei Winitzki)
-(https://drive.google.com/file/d/0B2Mt7luZYBrwZlctV3A3eF82VGM/view?resourcekey=0-UQpPhwZgzP0sF4LHBDlLtgi).
-It is valid for `x` in the interval `(-1, 1)`.
+Uses Winitzki's closed-form approximation with shape parameter `a = 0.147`.
+Called from [`gauss_quantile`](@ref).
 
-Arguments:
+# Arguments
 
-  - `x`: The value (scalar or array element) for which to compute erf⁻¹(x).
-    Must be between -1 and 1, exclusive.
+  - `x`: Argument of `erf⁻¹`, strictly between -1 and 1 [-].
 
-Returns:
+# Returns
 
-  - An approximation of erf⁻¹(x).
+An approximation of `erf⁻¹(x)` [-].
 
-Note: Numerical precision issues or invalid results may occur if `x` is too
-close to -1 or 1, due to `log(1 - x^2)`. The conditions for the terms under
-square roots (`term1^2 - term2 >= 0` and `term3 - term1 >= 0`) must also hold
-for the approximation to be valid.
+# Notes
+
+Accuracy degrades and the result may become invalid as `|x| → 1`, because of
+`log(1 - x²)`; the terms under the square roots (`term1² - term2 ≥ 0` and
+`term3 - term1 ≥ 0`) must remain non-negative.    # From Sergei Winitzki
 """
 function approximate_inverf(x::FT) where {FT}
     # From Sergei Winitzki
@@ -490,48 +557,47 @@ end
 """
     gauss_quantile(p::FT) where {FT}
 
-Computes the quantile (inverse of the cumulative distribution function, CDF)
-for a standard normal distribution N(0,1) at probability `p`.
+Compute the standard-normal quantile `Φ⁻¹(p) = √2 erf⁻¹(2p - 1)`, with `erf⁻¹`
+approximated by [`approximate_inverf`](@ref).
 
-It uses the relationship Φ⁻¹(p) = √2 * erf⁻¹(2p - 1), where Φ⁻¹ is the
-normal quantile function and erf⁻¹ is the inverse error function, approximated
-by `approximate_inverf`.
+# Arguments
 
-Arguments:
+  - `p`: Probability, in `(0, 1)` [-].
 
-  - `p`: The probability (scalar or array element), ranging from 0 to 1.
+# Returns
 
-Returns:
-
-  - The standard normal quantile corresponding to `p`.
+The standard normal quantile corresponding to `p` [-]. Called from
+[`percentile_bounds_mean_norm`](@ref).
 """
 function gauss_quantile(p::FT) where {FT}
     return sqrt(FT(2)) * approximate_inverf(2p - 1)
 end
 
 """
-    percentile_bounds_mean_norm(low_percentile::FT, high_percentile::FT) where {FT}
+    percentile_bounds_mean_norm(low_percentile, high_percentile::FT) where {FT}
 
-Calculates the mean value of a standard normal variable X ~ N(0,1) that is
-truncated to the interval `[xp_low, xp_high]`, where `xp_low` and `xp_high`
-are the quantiles corresponding to `low_percentile` and `high_percentile`
-respectively.
+Compute the mean of a standard normal variable `X ~ N(0,1)` truncated to the
+quantile interval of `[low_percentile, high_percentile]`:
 
-The formula used is: E[X | xp_low ≤ X ≤ xp_high] = (ϕ(xp_low) - ϕ(xp_high)) / (P_high - P_low),
-where ϕ is the PDF of N(0,1), and P_high/P_low are the high/low percentiles.
+    E[X | x_low ≤ X ≤ x_high] = (ϕ(x_low) - ϕ(x_high)) / (P_high - P_low),
 
-This gives a coefficient representing the expected value of a fluctuation
-drawn from a specific segment of a Gaussian distribution.
+where `ϕ` is the standard normal PDF and `x_low`, `x_high` are the quantiles
+([`gauss_quantile`](@ref)) of the two percentiles. The denominator is floored
+at `eps(FT)`.
 
-Arguments:
+The result is the coefficient multiplying the SGS standard deviation for a
+subdomain that samples that segment of the distribution.
 
-  - `low_percentile`: The lower percentile bound (e.g., 0.8 for the 80th percentile).
-  - `high_percentile`: The upper percentile bound (e.g., 0.9 for the 90th percentile).
+# Arguments
 
-Returns:
+  - `low_percentile`: Lower percentile bound, e.g. `0.8` for the 80th
+    percentile [-].
+  - `high_percentile`: Upper percentile bound [-].
 
-  - The mean of the standard normal distribution truncated between the quantiles
-    of `low_percentile` and `high_percentile`.
+# Returns
+
+The truncated-normal mean [-]. Called from
+[`sgs_scalar_first_interior_bc`](@ref).
 """
 function percentile_bounds_mean_norm(
     low_percentile,

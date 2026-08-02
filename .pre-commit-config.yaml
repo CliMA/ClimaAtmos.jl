@@ -20,9 +20,11 @@ repos:
       - id: check-yaml
       - id: end-of-file-fixer
       - id: mixed-line-ending
-      # JuliaFormatter does not strip all trailing whitespace (e.g., in non-.jl files),
-      # so trim it here. We ignore markdown files because trailing-whitespace disagrees
-      # with JuliaFormatter's markdown formatting
+      # JuliaFormatter does not strip all trailing whitespace (e.g., in non-.jl
+      # files), so trim it here. This includes markdown: the pinned
+      # JuliaFormatter (=2.10.1) leaves no trailing whitespace of its own, so
+      # the two hooks agree. JuliaFormatter 1.x did not, and the two would undo
+      # each other on every run -- see the `julia-formatter` hook below.
       - id: trailing-whitespace
 
   - repo: local
@@ -32,8 +34,15 @@ repos:
         # Uses the pinned .dev/format environment so the formatting matches the
         # julia-actions/julia-format CI check regardless of the JuliaFormatter
         # version in your base environment. Requires `julia` on your PATH.
-        # Pkg.instantiate is a no-op once the environment is resolved.
-        entry: julia --startup-file=no --project=.dev/format -e 'using Pkg; Pkg.instantiate(; io = devnull); using JuliaFormatter; format(ARGS)'
+        # `Pkg.resolve()` runs first because .dev/format/Manifest.toml is
+        # gitignored: a manifest resolved before the compat bound in
+        # .dev/format/Project.toml was last bumped still pins the old version,
+        # and `Pkg.instantiate` honors it instead of re-resolving, silently
+        # formatting with the wrong major version. `resolve` errors rather than
+        # re-resolving in that case, so fall back to `Pkg.update()`, which
+        # re-resolves against the bound. Both are near no-ops once the
+        # environment matches.
+        entry: julia --startup-file=no --project=.dev/format -e 'using Pkg; try Pkg.resolve(; io = devnull) catch; Pkg.update(; io = devnull) end; Pkg.instantiate(; io = devnull); using JuliaFormatter; format(ARGS)'
         language: system
         types_or: [julia, markdown]
         pass_filenames: true
