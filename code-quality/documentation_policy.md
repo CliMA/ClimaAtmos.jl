@@ -108,7 +108,7 @@ Each bullet starts with the backticked identifier. For complex options, list val
 
 ### 3.4 Units, math, references
 
-**Units.** Atmospheric and physics code is dimensional; units carry meaning. Use SI unless the underlying library exposes another unit (then match it and say so). Put units in square brackets at the end of the description: `[K]`, `[kg/m³]`, `[m/s²]`, `[W/m²]`, `[kg/kg]` for specific humidities. Dimensionless quantities: `[-]`. Be consistent within a docstring. Do **not** put `(...)` immediately after `[...]`; Documenter parses `[text](text)` as a markdown link and will error (see §4).
+**Units.** Atmospheric and physics code is dimensional; units carry meaning. Use SI unless the underlying library exposes another unit (then match it and say so). Put units in square brackets at the end of the description: `[K]`, `[kg/m³]`, `[m/s²]`, `[W/m²]`, `[kg/kg]` for specific humidities. Dimensionless quantities: `[-]`. Be consistent within a docstring. Do **not** follow `[...]` with `(...)`; Documenter parses `[text](text)` as a markdown link and will error. This applies even when whitespace separates them — Documenter's parser accepts a space, several spaces, or a line break between `]` and `(` — so `Density [kg/m³] (at cloud base)` fails just as `Density [kg/m³](at cloud base)` does. Separate them with punctuation (`[kg/m³], at cloud base`) or wrap the units in backticks (`` `[kg/m³]` (at cloud base) ``). See §4.
 
 **Math.** Documenter renders math with [KaTeX](https://katex.org/).
 
@@ -158,7 +158,7 @@ Viscous sponge model; damps variables in proportion to the value of their Laplac
 
 # Fields
 - `zd`: Lower damping height [m].
-- `κ₂`: Damping coefficient [m²/s²].
+- `κ₂`: Damping coefficient [m²/s].
 """
 @kwdef struct ViscousSponge{FT} <: SpongeModel
     zd::FT
@@ -331,7 +331,31 @@ abstract type Foo end
 
 ## 4. Documenter.jl pitfalls
 
-**Markdown link ambiguity.** `[kg/m^3](description)` is parsed as a markdown link and produces `:cross_references` errors if the parenthetical text is not a URL. Fix: use parentheses for units (`(kg/m^3)`), or separate brackets and parentheses with punctuation. Do not attempt to escape brackets with backslashes in Julia string literals; that causes invalid-escape-sequence errors during precompilation.
+**Markdown link ambiguity.** `[kg/m^3](description)` is parsed as a markdown link and produces `:cross_references` errors if the parenthetical text is not a URL.
+
+Documenter's parser is more permissive than CommonMark here: **any** whitespace between the closing bracket and the opening parenthesis still forms a link, including a line break. All of these fail:
+
+~~~text
+Density [kg/m³](at cloud base).
+Density [kg/m³] (at cloud base).
+Density [kg/m³]  (at cloud base).
+Density [kg/m³]
+(at cloud base).
+~~~
+
+The last case matters for wrapped docstrings, where the units end one line and the parenthetical begins the next.
+
+Fix by separating the two with punctuation, or by wrapping the units in backticks. Both keep the bracketed-units convention of §3.4:
+
+~~~text
+Density [kg/m³], at cloud base.
+Density [kg/m³]. (At cloud base.)
+Density `[kg/m³]` (at cloud base).
+~~~
+
+Because `checkdocs = :exports` leaves most docstrings unrendered, a broken link can sit latent until its symbol is added to a docs page, at which point an unrelated PR fails. A syntactic pre-commit check is worthwhile; ClimaAtmos.jl uses `.dev/check_markdown_link_ambiguity.py` for this.
+
+Do not attempt to escape brackets with backslashes in Julia string literals; that causes invalid-escape-sequence errors during precompilation.
 
 **Missing docstrings.** If `makedocs` fails with "Missing docstrings", ensure every exported symbol with a docstring is included on a documentation page via `@docs` or `@autodocs`.
 
