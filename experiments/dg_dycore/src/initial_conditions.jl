@@ -248,7 +248,7 @@ function initial_state_vi(m::DGModel{FT}) where {FT}
     # u³ = 0 — the kinematic BC, frozen by Bw; CA's surface-velocity
     # constraint applied statically). Interior w stays 0: interior flow
     # SHOULD cross coordinate surfaces, and a structured interior w breaks
-    # the staggered ∇K/Lamb cancellation (docs/vi_kep_face_terms.md §8).
+    # the staggered ∇K/Lamb shear cancellation.
     # Identically w ≡ 0 on flat grids.
     lgeom_f = Fields.local_geometry_field(m.spaces.hv_face_space)
     ᶠu³ₕ_sc = @. CT3(C123(m.ops.If(ᶜuₕ))).components.data.:1

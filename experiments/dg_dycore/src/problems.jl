@@ -109,38 +109,29 @@ Vector-invariant DG-FD baroclinic wave: state (ρ, ρe, uₕ::Covariant12, w).
 Same resolution/time/IC/HS/output keywords as [`BaroclinicWaveFDDG`](@ref).
 Unlike the FDDG core, terrain runs through the CG-shared covariant metric
 machinery (full-metric K, contravariant ᶠu³, exact face normals under
-LinearAdaption; remaining approximations: docs/vi_kep_face_terms.md §6/§8).
+LinearAdaption).
 
 Additional keywords:
 
   - `momentum_adv` (`:vector_invariant`): `:vector_invariant` or
     `:fluctuation` (Route B; helem = 4 ONLY)
-  - `face_set` (`:kg`): `:kg` (legacy KG fluxes + Rusanov + plain
-    penalties), `:kep` (the KEP-compatible set of
-    docs/vi_kep_face_terms.md — the horizontal advective KE budget closes
-    to roundoff, so κ₄ = 0 / filter_Nc = 0 become admissible), or `:es`
-    (:kep with the ρe Rusanov replaced by entropy-variable dissipation on
-    [[−ρ/p]] — provably entropy-dissipative AND still exactly KEP; docs
-    §9)
+  - `face_set` (`:kg`): `:kg` (legacy KG + Rusanov + plain penalties),
+    `:kep` (exact-KEP set; κ₄ = 0 / filter_Nc = 0 admissible), or `:es`
+    (:kep with entropy-variable ρe dissipation — entropy-dissipative AND
+    still exactly KEP).
   - `terrain_u3` (`:full`): vertical transport velocity over terrain —
     `:full` (CT3(w) + CT3(uₕ), CG machinery) or `:wonly` (FDDG-style
     O(slope) approximation)
-  - `ν_vert` (0.0) [m²/s]: peak vertical diffusivity on uₕ, weighted by
-    the sponge sin² profile — breaking-wave momentum deposition aloft
-    (sign-definite KE sink; the VI core otherwise has no vertical
-    momentum dissipation channel)
-  - `ν_div_frac` (0.0): horizontal divergence damping ν∇ₕ(∇ₕ·uₕ), CAM-SE
-    style, as a fraction of the explicit cap Δh²/((2npoly+1)²Δt).
-    Selectively damps the divergent/acoustic modes (impulsive-start and
-    mountain-wave transients); terrain-safe without a reference state
-    since the balanced flow is nearly non-divergent.
-  - `pgf_form` (`:direct`): horizontal pressure-gradient form — `:direct`
-    (−∇ₕp/ρ) or `:exner` (the ClimaAtmos/Yatunin-et-al split
-    reference-subtracted Exner form, ∇ₕ(K+Φ−Φ_r) +
-    (cₚ/2)[θ′∇Π + ∇(θ′Π) − Π∇θ′] with θ′ = θ − θ_r(p): the reference
-    hydrostatic part cancels pointwise-algebraically, so the discrete
-    terrain PGF residual scales with the θ-perturbation — the
-    well-balancedness fix of docs §8 item 3)
+  - `ν_vert` (0.0) [m²/s]: peak vertical diffusivity on uₕ over the
+    sponge sin² profile — breaking-wave momentum deposition aloft
+    (sign-definite KE sink)
+  - `ν_div_frac` (0.0): CAM-style divergence damping ν∇ₕ(∇ₕ·uₕ) as a
+    fraction of the cap Δh²/((2npoly+1)²Δt) — scale-selective on
+    divergent/acoustic transients; terrain-safe (balanced δ ≈ 0)
+  - `pgf_form` (`:direct`): horizontal PGF — `:direct` (−∇ₕp/ρ) or
+    `:exner` (CA/Yatunin-et-al split reference-subtracted Exner form;
+    well-balanced over terrain — 11× smaller t = 0 residual on
+    Hughes2023)
   - `κ₄` (`nothing` → SIPG-cap/10 for `:kg`, 0 for `:kep`) and
     `filter_Nc` (`nothing` → npoly for `:kg`, 0 for `:kep`): `:kg` NEEDS
     its stabilization. At zelem ≳ 20 also use `zstretch`.

@@ -12,7 +12,7 @@ Momentum: vector-invariant (ω×u + ∇K) or the Route-B mass-flux
 fluctuation form (momentum_adv = :fluctuation — validated at helem = 4
 ONLY; violently unstable at helem = 16).
 
-Face sets (derivation + measurements: docs/vi_kep_face_terms.md):
+Face sets:
 - :kg (legacy): KG {ρ}{ũ} fluxes + Rusanov + plain λ jump penalties.
   Not KE-compatible with the VI pairing — needs κ₄ and the cutoff filter.
 - :kep: {ρũ} mass flux, central interface (no ρ penalty), ρ-weighted
@@ -21,7 +21,7 @@ Face sets (derivation + measurements: docs/vi_kep_face_terms.md):
 
 Topography: full-metric K, ᶠu³ = CT3(w) + ρJ-weighted CT3(uₕ) (CA
 machinery), terrain-consistent surface w frozen by Bw (see
-initial_conditions.jl). Remaining O(slope) approximations: docs §6/§8.
+initial_conditions.jl).
 =#
 
 # central lifting completing the strong-form DG divergence of (u, v):
@@ -127,7 +127,7 @@ function compute_tendency_vi!(
     # --- (ρ, ρe): vertical FD (w part implicit under HEVI) ---
     # :full adds the CT3(uₕ) transport through tilted ξ³ surfaces (zero on
     # flat grids; CA's ρJ-weighted ᶠwinterp); :wonly omits it (FDDG-style
-    # O(slope) approximation). Residual free-stream defect: docs §8.
+    # O(slope) approximation).
     w_vec = @. Geometry.WVector(w)
     ᶜJ = lgeom_c.J
     ᶠu³ = if m.prob.terrain_u3 == :full
@@ -252,13 +252,11 @@ function compute_tendency_vi!(
         ω³ = @. CT3(Geometry.WVector(ω³_sc))
         @. duₕ = -(Ic(ᶠω¹² × ᶠu³) + (ᶜf_cor + ω³) × CT12(uₕ))
         if m.prob.pgf_form == :exner
-            # ClimaAtmos/Yatunin-et-al split reference-subtracted Exner
-            # PGF: the (θ_r(p), Φ_r(p)) reference hydrostatic pair cancels
-            # pointwise-algebraically (both p-composed), so the discrete
-            # terrain residual scales with the θ-PERTURBATION — the
-            # well-balancedness fix (docs §8 item 3). Reference profile
-            # and split form as in CA advection.jl/refstate_thermodynamics
-            # (T_r = T_min + (T_sfc − T_min)Π^s, s = 7).
+            # CA/Yatunin split reference-subtracted Exner PGF: the
+            # p-composed (θ_r, Φ_r) hydrostatic pair cancels pointwise,
+            # so the terrain residual scales with the θ-perturbation
+            # (CA advection.jl / refstate_thermodynamics; T_r =
+            # T_min + (T_sfc − T_min)Π⁷).
             cp = c.cv_d + c.R_d
             Π = @. (p / c.p_0)^(c.R_d / (c.cv_d + c.R_d))
             θv = @. p / (ρ * c.R_d * Π)
@@ -347,7 +345,7 @@ function compute_tendency_vi!(
         @. dw = -(ᶠω¹² × ᶠu¹²)
     end
     # Penalize the prognostic covariant₃ dof directly: C3(WVector(·), lg)
-    # increments amplify by O(∂z/∂ξʰ) ~ 10³ on warped grids (docs §8).
+    # increments amplify by O(∂z/∂ξʰ) ~ 10³ on warped grids.
     w_cov_sc = @. w.components.data.:1
     pen_w = Operators.lifting_correction(
         Operators.jump_penalty_lift,
@@ -396,7 +394,7 @@ function compute_tendency_vi!(
     # Over terrain, diffuse perturbations from the steady base state
     # (ᶜh_ref/ᶜu_ref/ᶜv_ref): full fields carry an O(Δz_warp) terrain
     # signature along the coordinate surfaces that the biharmonic turns
-    # into spurious dipoles (docs §8). Flat grids keep the full-field form.
+    # into spurious dipoles. Flat grids keep the full-field form.
     if κ₄ != 0
         τ_κ₄ = Operators.ldg_penalty_parameter(κ₄, m.spaces.hv_center_space)
         terrain = m.prob.topography != :none
@@ -470,11 +468,11 @@ remaining_tendency_vi!(dY, Y, m, t) = compute_tendency_vi!(dY, Y, m, t, false)
 """
     horizontal_ke_budget(Y, m::DGModel) -> (; P_adv, P_pen, KE)
 
-Discrete KE ledger of the horizontal terms (docs/vi_kep_face_terms.md
-§3-4) on the state `Y` with the model's `face_set`: `P_adv` is the
-advective production of ⟨ρ(K+Φ)⟩ (roundoff with `:kep`, finite with
-`:kg`), `P_pen` the velocity-penalty production (≤ 0), `KE` = ⟨ρK⟩.
-Vertical/staggered cross terms are excluded (truncation class, §7).
+Discrete KE ledger of the horizontal terms on the state `Y` with the
+model's `face_set`: `P_adv` is the advective production of ⟨ρ(K+Φ)⟩
+(roundoff with `:kep`/`:es`, finite with `:kg`), `P_pen` the
+velocity-penalty production (≤ 0), `KE` = ⟨ρK⟩. Vertical/staggered cross
+terms are excluded (truncation class).
 """
 function horizontal_ke_budget(Y, m::DGModel{FT}) where {FT}
     c = m.c

@@ -245,7 +245,7 @@ function DGModel(prob::DGProblem)
     fields = dg_fields(prob, c, spaces)
     # Unperturbed JW06 base state at the warped node heights: the
     # terrain-aware κ₄ diffusion reference (full fields carry an O(Δz_warp)
-    # terrain signature along coordinate surfaces — docs §8).
+    # terrain signature along coordinate surfaces).
     fields = let
         (; T, uE, uN) =
             jw_values(prob, c, params, fields.ccoords; perturb = false)
