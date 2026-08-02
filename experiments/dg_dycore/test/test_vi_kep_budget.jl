@@ -6,7 +6,9 @@ Hughes2023 grid, the velocity penalties are sign-definite sinks, and the
 unstabilized core integrates stably; :kg violates the same ledger by
 orders of magnitude.
 =#
-import ClimaCore: Spaces
+import ClimaCore: Spaces, Fields, Geometry
+import ClimaCore.Operators as _O
+import LinearAlgebra
 
 # Short spin-up with the unstabilized KEP core, then evaluate both ledgers
 # on the same final state (the :kg model is rebuilt on an identical grid and
@@ -50,6 +52,75 @@ end
     @test abs(b_kg.P_adv) > 10 * abs(b_kep.P_adv)
     # unstabilized stability sanity: KE bounded over the spin-up
     @test b_kep.KE < 1.05 * KE0
+end
+
+# Isolate the :es interface dissipation as (full :es) − (central-only)
+# and contract with the entropy variable v = ∂S/∂ρe|ρ = −ρ/p.
+central_only_scalars(normal, (y⁻,), (y⁺,)) =
+    _O.vi_kep_scalars_flux(normal, normal, y⁻, y⁺)
+function es_entropy_ledger(Y, m)
+    c = m.c
+    (; Ic) = m.ops
+    ρ = Y.c.ρ
+    ρe = Y.c.ρe
+    uₕ = Y.c.uₕ
+    w = Y.f.w
+    lg = Fields.local_geometry_field(m.spaces.hv_center_space)
+    uv = Geometry.UVVector.(uₕ)
+    Kf = @. (
+        LinearAlgebra.dot(DG.C123(uₕ), DG.CT123(uₕ)) +
+        Ic(LinearAlgebra.dot(DG.C123(w), DG.CT123(w))) +
+        2 * LinearAlgebra.dot(DG.CT123(uₕ), Ic(DG.C123(w)))
+    ) / 2
+    p = @. DG.pres_ρe(c, ρe, Kf, m.fields.ᶜΦ, ρ)
+    λ_c = @. sqrt(LinearAlgebra.norm_sqr(uv)) + sqrt(c.γ * p / ρ)
+    y = map(
+        (a, b, cc, d, ee, f) ->
+            (; ρ = a, ρe = b, p = cc, λ = d, uv = ee, e = f),
+        ρ,
+        ρe,
+        p,
+        λ_c,
+        uv,
+        ρe ./ ρ,
+    )
+    dy_es = map(_ -> (ρ = 0.0, ρe = 0.0), ρ)
+    dy_c = map(_ -> (ρ = 0.0, ρe = 0.0), ρ)
+    _O.add_numerical_flux_internal!(
+        _O.VIESInterfaceScalars(c.γ - 1),
+        dy_es,
+        y,
+    )
+    _O.add_numerical_flux_internal!(central_only_scalars, dy_c, y)
+    dρe_diss = @. (dy_es.ρe - dy_c.ρe) / lg.WJ
+    mass_diff = maximum(abs, parent(@. dy_es.ρ - dy_c.ρ))
+    P_S = sum(@. -(ρ / p) * dρe_diss)
+    return (; P_S, mass_diff)
+end
+
+@testset "VI ES interface: entropy dissipation (docs §9)" begin
+    prob = DG.BaroclinicWaveDG(;
+        helem = 4,
+        zelem = 10,
+        dt = 60.0,
+        t_end = 120 * 60.0,
+        face_set = :es,
+        sponge_τ = Inf,
+    )
+    sim = DG.DGSimulation(prob)
+    Y = DG.run!(sim).sol.u[end]
+    m = sim.model
+    @test !any(isnan, parent(Y.c))
+    (; P_S, mass_diff) = es_entropy_ledger(Y, m)
+    K = DG.horizontal_ke_budget(Y, m)
+    @info "ES entropy ledger" P_S K.P_adv
+    @test mass_diff == 0                 # mass flux stays central
+    @test P_S < 0                        # provable entropy dissipation
+    # KE ledger unchanged for :es (dissipation is KE-inert)
+    P_ref =
+        K.KE * 350 /
+        Spaces.node_horizontal_length_scale(m.spaces.horzspace)
+    @test abs(K.P_adv) < 1e-10 * P_ref
 end
 
 @testset "VI KEP budget: Hughes2023 double mountain (warped grid)" begin

@@ -35,6 +35,11 @@ elements **without DSS** + FD vertical staggering, HEVI or explicit):
     to roundoff, on flat AND terrain-warped grids (metric-transparent
     ledger), so κ₄ = 0 / filter_Nc = 0 are the defaults. Verified by
     `test/test_vi_kep_budget.jl`.
+  - `:es`: `:kep` with the ρe Rusanov replaced by entropy-variable
+    dissipation on `[[−ρ/p]]` (`Operators.VIESInterfaceScalars`) —
+    provably entropy-dissipative at the interfaces AND still exactly KEP
+    (mass stays central; the dissipation is KE-inert). Targets the
+    thermodynamic blow-up channel over terrain (docs §9).
 
   `momentum_adv = :fluctuation` is helem=4-only. Reuses BOTH ClimaAtmos HS
   functions (the uₕ drag applies directly to this state). Over topography
@@ -120,12 +125,14 @@ CairoMakie, both write PNGs into the output dir):
   `configs/baroclinic_wave_double_mountain_kep.yml`) warp the extruded
   space; the ICs / discrete-hydrostatic ρ correction / ᶜΦ / HS forcing all
   follow the warped `z` automatically.
-  - **Vector-invariant core**: carries the covariant terrain terms
-    (full-metric K, full contravariant ᶠu³ = CT3(uₕ) + CT3(w)); remaining
-    O(slope) approximations are the horizontal projection of DG face
-    normals and the w = 0 surface value (no CA-style surface-velocity
-    constraint). The `:kep` KE ledger is exact over terrain regardless
-    (`docs/vi_kep_face_terms.md` §6).
+  - **Vector-invariant core**: metric-consistent under LinearAdaption —
+    full-metric K, full contravariant ᶠu³ = CT3(uₕ) + CT3(w), and the DG
+    face normals are exact (∂ξʰ/∂z ≡ 0, so ∇ξʰ is exactly horizontal;
+    docs §6). Remaining approximations: the surface-velocity constraint
+    is static (set at t = 0, frozen by Bw) and the discrete metric
+    identity (free-stream/GCL) holds to truncation, not exactly
+    (conservative-metric construction = follow-up, docs §8). The `:kep`
+    KE ledger is exact over terrain regardless.
   - **FDDG (Cartesian) core**: geometry plumbing only — the horizontal KG
     fluxes run along the warped coordinate surfaces and the metric
     cross-terms are absent; valid for gentle smoothed slopes, pending a

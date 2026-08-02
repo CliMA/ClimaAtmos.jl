@@ -24,6 +24,14 @@ machinery), terrain-consistent surface w frozen by Bw (see
 initial_conditions.jl). Remaining O(slope) approximations: docs §6/§8.
 =#
 
+# central lifting completing the strong-form DG divergence of (u, v):
+# ((Δu)·n̂₁ + (Δv)·n̂₂)/2 per side
+central_div_lift(normal, (u⁻, v⁻), (u⁺, v⁺)) =
+    (
+        (u⁺ - u⁻) * normal.components.data.:1 +
+        (v⁺ - v⁻) * normal.components.data.:2
+    ) / 2
+
 function compute_tendency_vi!(
     dY,
     Y,
@@ -37,6 +45,7 @@ function compute_tendency_vi!(
         If,
         wIf,
         vdivf2c,
+        vdivf2c0,
         vdivf2c3,
         VanLeer,
         ᶠgradᵥ,
@@ -50,7 +59,9 @@ function compute_tendency_vi!(
     (; eE1, eE2, eE3, eN1, eN2, eN3) = m.fields
     Δt = m.Δt
     κ₄ = m.κ₄
-    kep = m.prob.face_set == :kep
+    # :kep and :es share the KEP-compatible centrals and penalties; they
+    # differ only in the (ρ, ρe) interface dissipation
+    kep = m.prob.face_set in (:kep, :es)
 
     ρ = Y.c.ρ
     ρe = Y.c.ρe
@@ -101,8 +112,12 @@ function compute_tendency_vi!(
         y,
     )
     Operators.add_numerical_flux_internal!(
-        kep ? Operators.vi_kep_interface_scalars :
-        Operators.kennedy_gruber_rusanov_scalars,
+        m.prob.face_set == :es ?
+        Operators.VIESInterfaceScalars(c.γ - 1) :
+        (
+            kep ? Operators.vi_kep_interface_scalars :
+            Operators.kennedy_gruber_rusanov_scalars
+        ),
         dy_mw,
         y,
     )
@@ -160,7 +175,21 @@ function compute_tendency_vi!(
         Kᵥ = @. norm_sqr(w_c) / 2
         @. duₕ = -(Ic(ᶠω¹² × ᶠu³) + ᶜf_cor × CT12(uₕ))
         @. duₕ -= hgrad(p) / ρ + hgrad(Kᵥ + ᶜΦ)
-        K_lift = Kᵥ
+        # central liftings for the strong gradients (Φ is continuous)
+        lift_p = Operators.lifting_correction(
+            Operators.central_gradient_lift,
+            Geometry.UVVector{FT},
+            p,
+        )
+        lift_Kᵥ = Operators.lifting_correction(
+            Operators.central_gradient_lift,
+            Geometry.UVVector{FT},
+            Kᵥ,
+        )
+        @. duₕ -= Geometry.transform(
+            Geometry.Covariant12Axis(),
+            lift_p / ρ + lift_Kᵥ,
+        )
 
         u1 = @. u_sc * eE1 + v_sc * eN1
         u2 = @. u_sc * eE2 + v_sc * eN2
@@ -222,24 +251,58 @@ function compute_tendency_vi!(
         )
         ω³ = @. CT3(Geometry.WVector(ω³_sc))
         @. duₕ = -(Ic(ᶠω¹² × ᶠu³) + (ᶜf_cor + ω³) × CT12(uₕ))
-        @. duₕ -= hgrad(p) / ρ + hgrad(K + ᶜΦ)
-        K_lift = K
+        if m.prob.pgf_form == :exner
+            # ClimaAtmos/Yatunin-et-al split reference-subtracted Exner
+            # PGF: the (θ_r(p), Φ_r(p)) reference hydrostatic pair cancels
+            # pointwise-algebraically (both p-composed), so the discrete
+            # terrain residual scales with the θ-PERTURBATION — the
+            # well-balancedness fix (docs §8 item 3). Reference profile
+            # and split form as in CA advection.jl/refstate_thermodynamics
+            # (T_r = T_min + (T_sfc − T_min)Π^s, s = 7).
+            cp = c.cv_d + c.R_d
+            Π = @. (p / c.p_0)^(c.R_d / (c.cv_d + c.R_d))
+            θv = @. p / (ρ * c.R_d * Π)
+            θvr = @. (FT(220) + FT(70) * Π^7) / Π
+            Φ_r = @. -(c.cv_d + c.R_d) *
+                     (FT(220) * log(Π) + FT(10) * (Π^7 - 1))
+            θd = @. θv - θvr
+            θdΠ = @. θd * Π
+            q1 = @. K + ᶜΦ - Φ_r
+            @. duₕ -=
+                hgrad(q1) +
+                cp / 2 * (θd * hgrad(Π) + hgrad(θdΠ) - Π * hgrad(θd))
+            # central liftings completing each strong gradient
+            lifted(q) = Operators.lifting_correction(
+                Operators.central_gradient_lift,
+                Geometry.UVVector{FT},
+                q,
+            )
+            l_q1 = lifted(q1)
+            l_Π = lifted(Π)
+            l_θdΠ = lifted(θdΠ)
+            l_θd = lifted(θd)
+            @. duₕ -= Geometry.transform(
+                Geometry.Covariant12Axis(),
+                l_q1 + cp / 2 * (θd * l_Π + l_θdΠ - Π * l_θd),
+            )
+        else
+            @. duₕ -= hgrad(p) / ρ + hgrad(K + ᶜΦ)
+            lift_p = Operators.lifting_correction(
+                Operators.central_gradient_lift,
+                Geometry.UVVector{FT},
+                p,
+            )
+            lift_K = Operators.lifting_correction(
+                Operators.central_gradient_lift,
+                Geometry.UVVector{FT},
+                K,
+            )
+            @. duₕ -= Geometry.transform(
+                Geometry.Covariant12Axis(),
+                lift_p / ρ + lift_K,
+            )
+        end
     end
-    # DG lifting corrections for the strong gradients (Φ is continuous)
-    lift_p = Operators.lifting_correction(
-        Operators.central_gradient_lift,
-        Geometry.UVVector{FT},
-        p,
-    )
-    lift_K = Operators.lifting_correction(
-        Operators.central_gradient_lift,
-        Geometry.UVVector{FT},
-        K_lift,
-    )
-    @. duₕ -= Geometry.transform(
-        Geometry.Covariant12Axis(),
-        lift_p / ρ + lift_K,
-    )
     # λ-scaled velocity jump penalties: :kep's ρ-weighted form is an
     # exactly sign-definite KE sink (plain form only to O([[ρ]])).
     pen_u, pen_v = if kep
@@ -297,6 +360,36 @@ function compute_tendency_vi!(
     @. dw = Bw(dw)
     if m.prob.sponge_uh
         @. duₕ -= ᶜβ_sponge * uₕ
+    end
+    # ν_div: horizontal grad-div damping (CAM-SE style) — selectively
+    # damps divergent/acoustic modes; terrain-safe (δ of the balanced
+    # state is ≈ 0, so no reference is needed).
+    if m.fields.ν_div > 0
+        hdivs = Operators.Divergence()
+        δ = @. hdivs(uv)
+        δ .+= Operators.lifting_correction(central_div_lift, FT, u_sc, v_sc)
+        gδ = Operators.lifting_correction(
+            Operators.central_gradient_lift,
+            Geometry.UVVector{FT},
+            δ,
+        )
+        @. duₕ +=
+            m.fields.ν_div * (
+                hgrad(δ) +
+                Geometry.transform(Geometry.Covariant12Axis(), gδ)
+            )
+    end
+    # ν_vert: sponge-profile-weighted vertical diffusion of uₕ — the
+    # breaking-wave momentum deposition aloft (sign-definite KE sink;
+    # zero-flux via ᶠgradᵥ's SetGradient(0) BCs).
+    if m.prob.ν_vert > 0
+        ᶠν = @. FT(m.prob.ν_vert) * m.fields.ᶠsponge_shape
+        du_v = @. vdivf2c0(ᶠν * ᶠgradᵥ(u_sc))
+        dv_v = @. vdivf2c0(ᶠν * ᶠgradᵥ(v_sc))
+        @. duₕ += Geometry.transform(
+            Geometry.Covariant12Axis(),
+            Geometry.UVVector(du_v, dv_v),
+        )
     end
 
     # --- κ₄ hyperdiffusion (h_tot and geographic (u, v); no ρ/w) ---
@@ -387,7 +480,9 @@ function horizontal_ke_budget(Y, m::DGModel{FT}) where {FT}
     c = m.c
     (; Ic, If, hgrad, hcurl) = m.ops
     (; ᶜΦ, ᶜf_cor) = m.fields
-    kep = m.prob.face_set == :kep
+    # :es shares the KEP centrals and its ρe dissipation is KE-inert, so
+    # the KE ledger is evaluated identically to :kep
+    kep = m.prob.face_set in (:kep, :es)
 
     ρ = Y.c.ρ
     ρe = Y.c.ρe

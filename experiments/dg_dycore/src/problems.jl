@@ -20,8 +20,11 @@ Keywords (defaults in parentheses):
   - `dt` (60.0 for `:hevi`, 4.0 for `:explicit`) [s]
   - `t_end` (86400.0) [s]
   - `perturb` (true): JW perturbation on/off (off = balanced-flow test)
-  - `κ₄` (`nothing` → SIPG-cap/10): biharmonic coefficient; `0.0` for the
-    pure-KEP configuration
+  - `κ₄` (`nothing` → SIPG-cap/10): absolute biharmonic coefficient
+    [m⁴/s]; `0.0` for the pure-KEP configuration. Prefer `κ₄_frac`
+    (fraction of the resolution/Δt-aware SIPG cap Δh³/((2npoly+1)²Δt),
+    the CA-style ν₄ ∝ h³ scaling) — absolute values silently go unstable
+    when helem or dt change.
   - `interface_flux` (`:rusanov`): `:rusanov` or `:roe` (wave-selective,
     Harten-floored — the pure-KEP interface)
   - `zstretch` (`nothing`): `(dz_bottom, dz_top)` [m] stretched vertical grid
@@ -51,6 +54,7 @@ Base.@kwdef struct BaroclinicWaveFDDG{FT <: AbstractFloat}
     t_end::FT = 86400.0
     perturb::Bool = true
     κ₄::Union{Nothing, FT} = nothing
+    κ₄_frac::Union{Nothing, FT} = nothing
     interface_flux::Symbol = :rusanov
     zstretch::Union{Nothing, Tuple{FT, FT}} = nothing
     sponge_τ::FT = 1200.0
@@ -80,6 +84,10 @@ float_type(::BaroclinicWaveFDDG{FT}) where {FT} = FT
 function validate(p::BaroclinicWaveFDDG)
     p.stepper in (:hevi, :explicit) ||
         error("stepper must be :hevi or :explicit")
+    p.κ₄ !== nothing &&
+        p.κ₄_frac !== nothing &&
+        error("set κ₄ (absolute) or κ₄_frac (fraction of the SIPG cap), \
+               not both")
     p.interface_flux in (:rusanov, :roe) ||
         error("interface_flux must be :rusanov or :roe")
     p.ic_source in (:setups, :formulas) ||
@@ -100,20 +108,39 @@ end
 Vector-invariant DG-FD baroclinic wave: state (ρ, ρe, uₕ::Covariant12, w).
 Same resolution/time/IC/HS/output keywords as [`BaroclinicWaveFDDG`](@ref).
 Unlike the FDDG core, terrain runs through the CG-shared covariant metric
-machinery (full-metric K, contravariant ᶠu³; remaining O(slope)
-approximations: docs/vi_kep_face_terms.md §6/§8).
+machinery (full-metric K, contravariant ᶠu³, exact face normals under
+LinearAdaption; remaining approximations: docs/vi_kep_face_terms.md §6/§8).
 
 Additional keywords:
 
   - `momentum_adv` (`:vector_invariant`): `:vector_invariant` or
     `:fluctuation` (Route B; helem = 4 ONLY)
   - `face_set` (`:kg`): `:kg` (legacy KG fluxes + Rusanov + plain
-    penalties) or `:kep` (the KEP-compatible set of
+    penalties), `:kep` (the KEP-compatible set of
     docs/vi_kep_face_terms.md — the horizontal advective KE budget closes
-    to roundoff, so κ₄ = 0 / filter_Nc = 0 become admissible)
+    to roundoff, so κ₄ = 0 / filter_Nc = 0 become admissible), or `:es`
+    (:kep with the ρe Rusanov replaced by entropy-variable dissipation on
+    [[−ρ/p]] — provably entropy-dissipative AND still exactly KEP; docs
+    §9)
   - `terrain_u3` (`:full`): vertical transport velocity over terrain —
     `:full` (CT3(w) + CT3(uₕ), CG machinery) or `:wonly` (FDDG-style
     O(slope) approximation)
+  - `ν_vert` (0.0) [m²/s]: peak vertical diffusivity on uₕ, weighted by
+    the sponge sin² profile — breaking-wave momentum deposition aloft
+    (sign-definite KE sink; the VI core otherwise has no vertical
+    momentum dissipation channel)
+  - `ν_div_frac` (0.0): horizontal divergence damping ν∇ₕ(∇ₕ·uₕ), CAM-SE
+    style, as a fraction of the explicit cap Δh²/((2npoly+1)²Δt).
+    Selectively damps the divergent/acoustic modes (impulsive-start and
+    mountain-wave transients); terrain-safe without a reference state
+    since the balanced flow is nearly non-divergent.
+  - `pgf_form` (`:direct`): horizontal pressure-gradient form — `:direct`
+    (−∇ₕp/ρ) or `:exner` (the ClimaAtmos/Yatunin-et-al split
+    reference-subtracted Exner form, ∇ₕ(K+Φ−Φ_r) +
+    (cₚ/2)[θ′∇Π + ∇(θ′Π) − Π∇θ′] with θ′ = θ − θ_r(p): the reference
+    hydrostatic part cancels pointwise-algebraically, so the discrete
+    terrain PGF residual scales with the θ-perturbation — the
+    well-balancedness fix of docs §8 item 3)
   - `κ₄` (`nothing` → SIPG-cap/10 for `:kg`, 0 for `:kep`) and
     `filter_Nc` (`nothing` → npoly for `:kg`, 0 for `:kep`): `:kg` NEEDS
     its stabilization. At zelem ≳ 20 also use `zstretch`.
@@ -130,7 +157,11 @@ Base.@kwdef struct BaroclinicWaveDG{FT <: AbstractFloat}
     momentum_adv::Symbol = :vector_invariant
     face_set::Symbol = :kg
     terrain_u3::Symbol = :full
+    pgf_form::Symbol = :direct
     κ₄::Union{Nothing, FT} = nothing
+    κ₄_frac::Union{Nothing, FT} = nothing
+    ν_vert::FT = 0.0
+    ν_div_frac::FT = 0.0
     filter_Nc::Union{Nothing, Int} = nothing   # nothing → npoly
     zstretch::Union{Nothing, Tuple{FT, FT}} = nothing
     sponge_τ::FT = 1200.0
@@ -156,13 +187,23 @@ function validate(p::BaroclinicWaveDG)
         error("stepper must be :hevi or :explicit")
     p.momentum_adv in (:vector_invariant, :fluctuation) ||
         error("momentum_adv must be :vector_invariant or :fluctuation")
-    p.face_set in (:kg, :kep) || error("face_set must be :kg or :kep")
-    p.face_set == :kep &&
+    p.κ₄ !== nothing &&
+        p.κ₄_frac !== nothing &&
+        error("set κ₄ (absolute) or κ₄_frac (fraction of the SIPG cap), \
+               not both")
+    p.face_set in (:kg, :kep, :es) ||
+        error("face_set must be :kg, :kep, or :es")
+    p.face_set in (:kep, :es) &&
         p.momentum_adv == :fluctuation &&
-        error("face_set = :kep pairs with :vector_invariant only \
+        error("face_set = :kep/:es pair with :vector_invariant only \
                (the fluctuation form is KE-compatible with the KG set)")
     p.terrain_u3 in (:wonly, :full) ||
         error("terrain_u3 must be :wonly or :full")
+    p.pgf_form in (:direct, :exner) ||
+        error("pgf_form must be :direct or :exner")
+    p.pgf_form == :exner &&
+        p.momentum_adv == :fluctuation &&
+        error("pgf_form = :exner pairs with :vector_invariant only")
     p.ic_source in (:setups, :formulas) ||
         error("ic_source must be :setups or :formulas")
     p.topography in (:none, :earth, :hughes2023) ||

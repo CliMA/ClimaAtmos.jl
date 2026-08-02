@@ -149,6 +149,13 @@ function dg_fields(prob, c::DGConstants{FT}, spaces) where {FT}
         1 / τs * sin(FT(π) / 2 * (ccoords.z - (zmax - z_sponge)) / z_sponge)^2,
         FT(0),
     )
+    # τ-independent sin² sponge shape (0 → 1) at faces: the ν_vert
+    # vertical-diffusion profile
+    ᶠsponge_shape = @. ifelse(
+        fcoords.z > zmax - z_sponge,
+        sin(FT(π) / 2 * (fcoords.z - (zmax - z_sponge)) / z_sponge)^2,
+        FT(0),
+    )
 
     # Constant surface-temperature level field for the HS forcing's σ
     # computation: on flat topography z_sfc = 0, so σ = p/MSLP and the
@@ -165,6 +172,7 @@ function dg_fields(prob, c::DGConstants{FT}, spaces) where {FT}
         E1, E2, E3,
         ᶠβ_sponge,
         ᶜβ_sponge,
+        ᶠsponge_shape,
     )
 end
 
@@ -187,6 +195,9 @@ function dg_operators(::DGConstants{FT}) where {FT}
         bottom = Operators.SetValue(Geometry.WVector(FT(0))),
         top = Operators.SetValue(Geometry.WVector(FT(0))),
     )
+    # BC-less F2C divergence for the ν_vert diffusion flux (ᶠgradᵥ's
+    # SetGradient(0) BCs already make it a zero-flux at the boundaries)
+    vdivf2c0 = Operators.DivergenceF2C()
     # CT3-flux variant for the full contravariant vertical transport;
     # zero-flux BCs = the terrain-following no-normal-flow condition.
     vdivf2c3 = Operators.DivergenceF2C(
@@ -216,7 +227,8 @@ function dg_operators(::DGConstants{FT}) where {FT}
     )
     return (;
         hwdiv, hgrad, hcurl,
-        Ic, If, wIf, vdivf2c, vdivf2c3, vvdivc2f, VanLeer, ᶠgradᵥ, ᶠcurlᵥ, Bw,
+        Ic, If, wIf, vdivf2c, vdivf2c0, vdivf2c3, vvdivc2f, VanLeer,
+        ᶠgradᵥ, ᶠcurlᵥ, Bw,
     )
 end
 
@@ -256,13 +268,22 @@ function DGModel(prob::DGProblem)
     # first-pass Laplacian continuous). Default κ₄ = cap/10: the SIPG
     # penalty acts on O(truncation) face jumps of the element-local first
     # pass, so cap-level κ₄ measurably forces smooth balanced states.
-    κ₄_cap = FT(
-        Spaces.node_horizontal_length_scale(spaces.horzspace)^3 /
-        ((2 * prob.npoly + 1)^2 * Δt),
-    )
-    kep_vi = prob isa BaroclinicWaveDG && prob.face_set == :kep
+    hls = Spaces.node_horizontal_length_scale(spaces.horzspace)
+    κ₄_cap = FT(hls^3 / ((2 * prob.npoly + 1)^2 * Δt))
+    # Laplacian-scale divergence damping ν∇ₕ(∇ₕ·uₕ), fraction of the
+    # explicit cap Δh²/((2n+1)²Δt) (0 disables).
+    ν_div = if prob isa BaroclinicWaveDG
+        FT(prob.ν_div_frac * hls^2 / ((2 * prob.npoly + 1)^2 * Δt))
+    else
+        FT(0)
+    end
+    fields = (; fields..., ν_div)
+    kep_vi = prob isa BaroclinicWaveDG && prob.face_set in (:kep, :es)
     κ₄ = if prob.κ₄ !== nothing
         prob.κ₄
+    elseif prob.κ₄_frac !== nothing
+        # resolution/Δt-aware specification (CA-style ν₄ ∝ h³ scaling)
+        FT(prob.κ₄_frac) * κ₄_cap
     elseif kep_vi
         # KEP face set: the advective KE budget closes; run unstabilized
         FT(0)

@@ -8,9 +8,10 @@
 # (docs §8); helem 16 resolves the forcing. Sponge acts on w ONLY (a uₕ
 # sponge drags the jet, not the waves).
 core: vi
-face_set: kep
+face_set: es
 momentum_adv: vector_invariant
-kappa4: 4.0e11         # ≤ SIPG cap at helem 8/dt 60; terrain-aware
+kappa4_frac: 0.1       # fraction of the SIPG cap Δh³/((2n+1)²Δt) —
+                       # resolution/Δt-safe at any helem; terrain-aware
                        # (perturbation-from-base-state) form
 helem: 8
 npoly: 4

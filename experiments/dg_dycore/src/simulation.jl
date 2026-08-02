@@ -118,7 +118,11 @@ function run!(sim::DGSimulation)
     # CTS-native callback (ClimaTimeSteppers ≥ 0.9 has its own callback
     # machinery; SciMLBase.DiscreteCallback is not accepted)
     monitor = CTS.Callbacks.EveryXSimulationSteps(
-        integrator -> println(diag_str(integrator.u, m, integrator.t)),
+        # flush: julia fully buffers stdout when redirected to a file, so
+        # without it the monitor lines appear only at process exit — AFTER
+        # any crash's stderr, making a late crash look like an early one
+        integrator -> (println(diag_str(integrator.u, m, integrator.t));
+        flush(stdout)),
         prob_cfg.ndiag,
     )
 

@@ -33,6 +33,7 @@ function problem_from_yaml(path)
         ("t_end", :t_end, FT),
         ("perturb", :perturb, Bool),
         ("kappa4", :κ₄, FT),
+        ("kappa4_frac", :κ₄_frac, FT),
         ("sponge_tau", :sponge_τ, FT),
         ("sponge_depth", :sponge_depth, FT),
         ("sponge_uh", :sponge_uh, Bool),
@@ -50,6 +51,10 @@ function problem_from_yaml(path)
     vi_only = (
         ("momentum_adv", :momentum_adv, Symbol),
         ("face_set", :face_set, Symbol),
+        ("terrain_u3", :terrain_u3, Symbol),
+        ("pgf_form", :pgf_form, Symbol),
+        ("nu_vert", :ν_vert, FT),
+        ("nu_div_frac", :ν_div_frac, FT),
         ("filter_Nc", :filter_Nc, Int),
     )
     kw = Dict{Symbol, Any}()

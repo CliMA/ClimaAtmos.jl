@@ -221,16 +221,20 @@ Every condition above is a *matching* condition between contractions that
 share one surface geometry (`sWJ`, `n̂`) and one set of nodal metric
 vectors. Nothing requires the metric to be unwarped, and nothing requires
 discrete metric identities. Consequently **the KEP property holds exactly
-on terrain-following (hypsography-warped) grids** — even with the current
-kernels' horizontal projection of face normals, which is a (O(slope))
-modeling error in the resolved physics but *not* a KE-production error,
-because volume lifts, interface fluxes, and gradient liftings all use the
-same projected geometry. The missing-tilt physics (contravariant vertical
-transport `CT3(uₕ)`, cross-metric terms in `K`) is reinstated separately
-at the equation level via the CG machinery (`ᶠu³ = CT3(C123(uₕ)) +
-CT3(C123(w))`, `K = ½‖C123(uₕ) + C123(Ic(w))‖²`), which the ledger — being
-metric-transparent — accommodates without change: those terms alter `G`
-and `K` *values*, not the compatibility conditions.
+on terrain-following (hypsography-warped) grids**.
+
+Moreover, the kernels' horizontal (UVAxis) projection of face normals is
+**lossless under LinearAdaption**, not an approximation: the horizontal
+coordinates are unwarped (`∂ξʰ/∂z ≡ 0`), so `∇ξ¹`, `∇ξ²` — the exact
+normals of the (physically tilted) ξʰ-faces — are exactly horizontal, and
+`w` carries no flux through them in the contravariant sense. The
+horizontal DG divergence along coordinate surfaces is therefore exactly
+curvilinear; ALL tilt transport belongs to `u³ = u·∇ξ³`, which the core
+carries at the equation level via the CG machinery
+(`ᶠu³ = CT3(C123(w)) + ᶠwinterp(ρJ, CT3(uₕ))`,
+`K = ½‖C123(uₕ) + C123(Ic(w))‖²`). The ledger — being metric-transparent —
+accommodates these terms without change: they alter `G` and `K` *values*,
+not the compatibility conditions.
 
 ## 7. What remains truncation-level
 
@@ -289,3 +293,43 @@ cleanly and, at this deliberately marginal resolution (2.3° ridges on
 2.8° nodes), eventually meets mountain-wave breaking aloft with no
 dissipation channel — the expected "KEP ≠ entropy stability" boundary.
 The KE-budget verification (the point of the test case) is unconditional.
+
+## 9. Entropy-dissipative extension (`face_set = :es`)
+
+The `:kep` set controls the advective KE channel exactly but leaves the
+thermodynamic (pressure-work/entropy) channel uncontrolled — the observed
+failure mode over terrain (§8 item 2 timeline; blow-up as p → 0 aloft).
+The `:es` set closes it with a single-slot construction that keeps the
+KE ledger exact:
+
+- **Centrals unchanged** (`{ρũ}` mass, matching ρe flux): mass stays
+  central, so §§3–4 apply verbatim — `:es` is exactly KEP.
+- **ρe interface dissipation in the entropy variable**: with
+  `S = −ρs/(γ−1)` and `v = ∂S/∂ρe|_ρ = −ρ/p`,
+
+      F*_ρe = F_central − (λ/2) w̄ (v⁺ − v⁻),   w̄ = p̄²/((γ−1)ρ̄) > 0.
+
+  Because only the ρe slot is dissipated and ρ is untouched, the exact
+  chain rule at fixed ρ gives the total interface entropy production
+  `−(λ/2) w̄ [[v]]² ≤ 0` — provable with no matrix theory, no coupling to
+  K or Φ. Near constant states it reduces to Rusanov on the
+  internal-energy part of `[[ρe]]` (the plain `[[ρe]]` Rusanov it
+  replaces is entropy-indefinite: its production `∝ [[v]][[ρe]]` has no
+  sign). KE-inert since K is diagnostic.
+- **Velocity penalties (ρ-weighted) are already entropy-consistent**:
+  they convert KE → (nothing) at fixed ρe, i.e. raise e_int, which is a
+  physical-entropy increase.
+- **Status/limits**: this is entropy-dissipative interface dissipation
+  for the scalar subsystem, not a full entropy-stability proof for the
+  staggered VI system (the central advective terms produce entropy at
+  O(jump³), as all KEP-but-not-EC centrals do; an entropy-conservative
+  volume flux à la Chandrashekar/Ranocha would break the exact VI-KEP
+  volume ledger of §3 — the two exactness properties compete at the
+  volume level and `:es` chooses KEP there).
+
+Verified by the third testset of `test/test_vi_kep_budget.jl`: on a
+spun-up jumpy state the isolated `:es` dissipation gives `P_S < 0`, mass
+fluxes are bit-identical to central, and the KE ledger stays at the
+`:kep` roundoff level. Implementation:
+`Operators.VIESInterfaceScalars(γ−1)` (callable, ClimaCore
+`numericalflux.jl`).
