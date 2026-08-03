@@ -57,7 +57,7 @@ Allocation tests typically use the warm-up + `@allocated == 0` pattern (see [all
 The `Documentation` workflow runs `docs/make.jl`. Two recurring failures:
 
 - **Missing docstrings**: an exported symbol with no docstring (or with one not referenced from a docs page) triggers `Documenter`'s "missing docstring" error. Add an `@docs` block or use `@autodocs` over the module.
-- **Cross-reference errors**: `[text](text)` in a docstring is parsed as a link. Use parentheses for units (`(kg/m^3)`), not brackets. See [documentation_policy.md](../code-quality/documentation_policy.md).
+- **Cross-reference errors**: `[text](text)` in a docstring is parsed as a link, and Documenter allows whitespace — even a line break — between `]` and `(`. Keep bracketed units (§3.4) but never let a parenthetical follow them directly: write `[kg/m^3], at cloud base` or `` `[kg/m^3]` (at cloud base) ``. See [documentation_policy.md](../code-quality/documentation_policy.md).
 
 ## 10. Formatter
 
