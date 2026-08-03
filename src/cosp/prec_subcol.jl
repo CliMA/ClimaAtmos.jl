@@ -39,25 +39,34 @@ function scops_subcolumn_precip!(precip_subcol, cloud_s, flux, selectors, scratc
         scratch.any_cloud,
     )
     Operators.column_accumulate!(
+        _precipitation_state,
         precip_subcol,
         input;
-        init = (; precip = zero(FT), flux_above = zero(FT)),
-        transform = state -> state.precip,
+        init = (; precip = output_zero, flux_above = output_zero),
+        transform = _precipitation_mask,
         reverse = true,
-    ) do state, (c, c_below, hc, hc_below, hc_any, fx, any_s)
-        if !(fx > zero(FT))
-            return (; precip = zero(FT), flux_above = fx)
-        end
-        primary_rule_active = (hc > zero(FT)) | (state.flux_above > zero(FT))
-        use_cloud_below = (!primary_rule_active) & (hc_below > zero(FT))
-        precip =
-            primary_rule_active ? max(c, state.precip) :
-            use_cloud_below ? c_below :
-            (hc_any > zero(FT)) ? any_s : one(FT)
-        return (; precip, flux_above = fx)
-    end
+    )
     return nothing
 end
+
+@inline function _precipitation_state(
+    state,
+    (c, c_below, hc, hc_below, hc_any, fx, any_s),
+)
+    zero_value = zero(fx)
+    if !(fx > zero_value)
+        return (; precip = zero_value, flux_above = fx)
+    end
+    primary_rule_active = (hc > zero_value) | (state.flux_above > zero_value)
+    use_cloud_below = (!primary_rule_active) & (hc_below > zero_value)
+    precip =
+        primary_rule_active ? max(c, state.precip) :
+        use_cloud_below ? c_below :
+        (hc_any > zero_value) ? any_s : one(fx)
+    return (; precip, flux_above = fx)
+end
+
+@inline _precipitation_mask(state) = state.precip
 
 function _check_axes(reference, field, name)
     axes(field) == axes(reference) ||

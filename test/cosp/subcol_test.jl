@@ -447,7 +447,8 @@ end
         p = simulation.integrator.p
         @test CA._cosp_nsubcolumns(p.atmos.cosp.n_subcolumns) ==
               reference.nsubcolumns
-        @test p.atmos.cosp.overlap === reference.overlap
+        @test CA._cosp_overlap(p.atmos.cosp.overlap) === reference.overlap
+        @test isbitstype(typeof(p.atmos.cosp))
         # COSPv2 writes levels from model top to surface. ClimaAtmos center
         # fields use level 1 at the surface, so reverse every input profile.
         set_center_profile!(Y.c.ρ, cosp_bottom_to_top(reference.density))
@@ -637,7 +638,7 @@ end
             atmos = (;
                 cosp = CA.COSPModel(;
                     n_subcolumns = Val(4),
-                    overlap = :maximum,
+                    overlap = Val(:maximum),
                     random_seed = UInt64(1),
                 ),
                 microphysics_model = CA.NonEquilibriumMicrophysics1M(),

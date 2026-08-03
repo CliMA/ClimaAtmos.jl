@@ -154,6 +154,7 @@ function prepare_cosp_subcolumns!(Y, p)
     ) = p.precomputed
     cosp = p.atmos.cosp
     nsubcolumns = _cosp_nsubcolumns(cosp.n_subcolumns)
+    overlap = _cosp_overlap(cosp.overlap)
 
     COSP.COSPSubcolumns.set_scops_selectors!(
         ᶜscops_selectors,
@@ -162,7 +163,7 @@ function prepare_cosp_subcolumns!(Y, p)
         ᶜcloud_fraction,
         nsubcolumns,
         cosp.random_seed,
-        cosp.overlap,
+        overlap,
         ᶜprecip_subcolumn_scratch.column_any,
     )
 
@@ -179,7 +180,7 @@ function prepare_cosp_subcolumns!(Y, p)
             isubcolumn,
             nsubcolumns,
             cosp.random_seed;
-            overlap = cosp.overlap,
+            overlap,
         )
         COSP.COSPPrecipSubcolumns.scops_subcolumn_precip!(
             ᶜsubcolumn_precip,
@@ -304,6 +305,7 @@ function foreach_prepared_cosp_subcolumn!(
 
     cosp = p.atmos.cosp
     nsubcolumns = _cosp_nsubcolumns(cosp.n_subcolumns)
+    overlap = _cosp_overlap(cosp.overlap)
     for isubcolumn in 1:nsubcolumns
         COSP.COSPSubcolumns.scops_subcolumn!(
             ᶜsubcolumn_cloud,
@@ -312,7 +314,7 @@ function foreach_prepared_cosp_subcolumn!(
             isubcolumn,
             nsubcolumns,
             cosp.random_seed;
-            overlap = cosp.overlap,
+            overlap,
         )
         COSP.COSPPrecipSubcolumns.scops_subcolumn_precip!(
             ᶜsubcolumn_precip,
