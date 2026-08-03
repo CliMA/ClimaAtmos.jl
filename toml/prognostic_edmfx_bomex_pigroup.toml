@@ -2,7 +2,7 @@
 value = 0.7
 
 [min_area_limiter_scale]
-value = 0.0001
+value = 0.001
 
 [detr_coeff]
 value = 0
@@ -42,7 +42,7 @@ value = 0.0723478159897135
 type = "float"
 
 [turb_entr_param_vec]
-value = [0.08116105272535512, 6497.824633456959]
+value = [0.001, 1e5]
 type = "float"
 
 [pressure_normalmode_drag_coeff]

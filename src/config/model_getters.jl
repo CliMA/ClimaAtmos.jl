@@ -24,17 +24,16 @@ function get_microphysics_model(parsed_args, params = nothing)
 end
 
 """
-    get_microphysics_1m_options(parsed_args, toml_dict)
+    get_microphysics_1m_options(parsed_args)
 
 Parse the YAML config keys for 1-moment microphysics process options and
 return a `NamedTuple` of keyword arguments for `CMP.Microphysics1MParams`.
 
 Each YAML key maps to one field of `get_microphysics_1m_options`, selecting the
 process option type that controls dispatch inside `bulk_microphysics_tendencies`.
-Option types that carry parameters are constructed from `toml_dict`.
 Setting a YAML value to `~` (null) disables the process (`nothing`).
 """
-function get_microphysics_1m_options(parsed_args, toml_dict)
+function get_microphysics_1m_options(parsed_args)
     CMP = CM.Parameters
 
     cloud_liquid_formation = parse_option(

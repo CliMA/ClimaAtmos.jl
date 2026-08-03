@@ -3,6 +3,13 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+
+0.42.3
+-------
+- [#4735](https://github.com/CliMA/ClimaAtmos.jl/pull/4735) ![][badge-🐛bugfix] Make the `topography_damping_factor` config default a float (`5.0` instead of `5`).
+- [#4734](https://github.com/CliMA/ClimaAtmos.jl/pull/4734) ![][badge-🔥behavioralΔ] Update to CloudMicrophysics v0.38.
+- [#4733](https://github.com/CliMA/ClimaAtmos.jl/pull/4733) ![][badge-🔥behavioralΔ] Change the min area limiter and turbulent entrainment parameters in the EDMFX TOML configs.
+- [#4731](https://github.com/CliMA/ClimaAtmos.jl/pull/4731) ![][badge-🔥behavioralΔ] Remove the Rayleigh sponge from grid-mean microphysics tracers.
 - [#4664](https://github.com/CliMA/ClimaAtmos.jl/pull/4664) ![][badge-🔥behavioralΔ] Initialize the AtmosphericProfilesLibrary single-column setups (Bomex, DYCOMS, GABLS, GATE_III, ISDAC, Larcform1, PrecipitatingColumn, Rico, Soares, ShipwayHill2012, TRMM_LBA) on GPU spaces. `hydrostatic_pressure_profile` integrates the hydrostatic initial value problem on a dedicated 1000-element column (previously 100) and returns a `ClimaInterpolations` interpolant over host arrays. Because the setup profiles are host-resident interpolants, the initial condition of these setups is evaluated on the host and copied to the device rather than broadcast on the device. Initial center pressures change by about `2e-4` to `4e-4` relative, dominated by the removed interpolation error of the coarser grid; the new profiles are within about `4e-6` relative of a reference solution on a 16 times finer grid. The `ShipwayHill2012` constructor now returns the setup type (its interface methods were previously unreachable).
 
 0.42.2

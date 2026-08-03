@@ -14,13 +14,13 @@ value = 1.0e-5
 value = 0.7
 
 [turb_entr_param_vec]
-value = [0.0001, 10000.0]
+value = [0.001, 1e5]
 
 [entr_coeff]
 value = 0.1
 
 [min_area_limiter_scale]
-value = 0.0001
+value = 0.001
 
 [min_area_limiter_power]
 value = 1
