@@ -116,7 +116,7 @@ dt_subcol:
   value: "Inf"
 cosp_n_subcolumns:
   help: "Number of COSP subcolumns."
-  value: 256
+  value: 20
 cosp_overlap:
   help: "COSP cloud overlap assumption [`maximum`, `random`, `maximum_random` (default)]."
   value: "maximum_random"
