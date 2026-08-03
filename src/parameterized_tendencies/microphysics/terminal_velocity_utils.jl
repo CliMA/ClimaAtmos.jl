@@ -27,22 +27,29 @@ idealized tests where the sedimentation rate is to be controlled directly.
 
 Sign convention: the stored values are downward fall speeds and must be
 non-negative.
-
-# Fields
-
-  - `liquid`: Cloud liquid fall speed [m/s].
-  - `ice`: Cloud ice fall speed [m/s].
-  - `rain`: Rain fall speed [m/s].
-  - `snow`: Snow fall speed [m/s].
 """
-struct FixedTerminalVelocity{FT} <: AbstractTerminalVelocityMode
-    liquid::FT
-    ice::FT
-    rain::FT
-    snow::FT
-    #TODO fixed-velocity sedimentation of 2M/P3 tracers not implemented
-end
+struct FixedTerminalVelocity <: AbstractTerminalVelocityMode end
+#TODO fixed-velocity sedimentation of 2M/P3 tracers not implemented
 Base.broadcastable(x::AbstractTerminalVelocityMode) = tuple(x)
+
+"""
+    velocity_mode(atmos, name)
+
+Select the per-species terminal velocity mode from `atmos` based on the tracer
+`name` (a `MatrixFields.FieldName`).
+
+Each hydrometeor species has its own toggle in `AtmosWater`, so e.g. rain can
+use `DiagnosticTerminalVelocity` while the others remain
+`FixedTerminalVelocity`.
+"""
+velocity_mode(atmos, ::MatrixFields.FieldName{(:q_lcl,)}) =
+    atmos.terminal_velocity_liquid
+velocity_mode(atmos, ::MatrixFields.FieldName{(:q_icl,)}) =
+    atmos.terminal_velocity_ice
+velocity_mode(atmos, ::MatrixFields.FieldName{(:q_rai,)}) =
+    atmos.terminal_velocity_rain
+velocity_mode(atmos, ::MatrixFields.FieldName{(:q_sno,)}) =
+    atmos.terminal_velocity_snow
 
 # Liquid, 1M
 """
@@ -73,15 +80,17 @@ Terminal velocity [m/s], positive downward.
 """
 terminal_velocity(
     ::NonEquilibriumMicrophysics1M,
-    mode::FixedTerminalVelocity,
+    ::FixedTerminalVelocity,
     ::MatrixFields.FieldName{(:q_lcl,)},
+    params,
     args...,
-) = mode.liquid
+) = CAP.fixed_cloud_liquid_terminal_velocity(params)
 
 terminal_velocity(
     ::NonEquilibriumMicrophysics1M,
     ::DiagnosticTerminalVelocity,
     ::MatrixFields.FieldName{(:q_lcl,)},
+    params,
     cmc,
     cmp,
     ρ,
@@ -91,15 +100,17 @@ terminal_velocity(
 # Ice, 1M
 terminal_velocity(
     ::NonEquilibriumMicrophysics1M,
-    mode::FixedTerminalVelocity,
+    ::FixedTerminalVelocity,
     ::MatrixFields.FieldName{(:q_icl,)},
+    params,
     args...,
-) = mode.ice
+) = CAP.fixed_cloud_ice_terminal_velocity(params)
 
 terminal_velocity(
     ::NonEquilibriumMicrophysics1M,
     ::DiagnosticTerminalVelocity,
     ::MatrixFields.FieldName{(:q_icl,)},
+    params,
     cmc,
     cmp,
     ρ,
@@ -109,33 +120,46 @@ terminal_velocity(
 # Rain, 1M
 terminal_velocity(
     ::NonEquilibriumMicrophysics1M,
-    mode::FixedTerminalVelocity,
+    ::FixedTerminalVelocity,
     ::MatrixFields.FieldName{(:q_rai,)},
+    params,
     args...,
-) = mode.rain
+) = CAP.fixed_rain_terminal_velocity(params)
 
+# The 1M terminal velocity varies as q^(1/8), so ∂w/∂q ∝ q^(-7/8).
+# As q goes to 0, it creates a large error.
+# Evaluating w at max(q, RAIN_Q_FLOOR) makes ∂w/∂q zero, and removes the issue.
+# 1e-8 corresponds to a minimum fall speed of ~0.8 m/s.
 terminal_velocity(
     ::NonEquilibriumMicrophysics1M,
     ::DiagnosticTerminalVelocity,
     ::MatrixFields.FieldName{(:q_rai,)},
+    params,
     cmc,
     cmp,
     ρ,
-    q,
-) = CM1.terminal_velocity(cmp.precip.rain, cmp.terminal_velocity.rain, ρ, q)
+    q::FT,
+) where {FT} = CM1.terminal_velocity(
+    cmp.precip.rain,
+    cmp.terminal_velocity.rain,
+    ρ,
+    max(q, FT(1e-8)),
+)
 
 # Snow, 1M
 terminal_velocity(
     ::NonEquilibriumMicrophysics1M,
-    mode::FixedTerminalVelocity,
+    ::FixedTerminalVelocity,
     ::MatrixFields.FieldName{(:q_sno,)},
+    params,
     args...,
-) = mode.snow
+) = CAP.fixed_snow_terminal_velocity(params)
 
 terminal_velocity(
     ::NonEquilibriumMicrophysics1M,
     ::DiagnosticTerminalVelocity,
     ::MatrixFields.FieldName{(:q_sno,)},
+    params,
     cmc,
     cmp,
     ρ,
@@ -144,7 +168,7 @@ terminal_velocity(
 
 """
     gs_terminal_velocity(
-        ::NonEquilibriumMicrophysics1M, tv_mode, var_name, ρwχ, ρχ,
+        ::NonEquilibriumMicrophysics1M, tv_mode, var_name, params, ρwχ, ρχ,
     )
 
 Return the grid-scale terminal velocity of a 1-moment species from subdomain fluxes.
@@ -160,6 +184,7 @@ zero, keeping the grid-scale value bracketed by the subdomain velocities.
 
   - `tv_mode`: Terminal velocity mode, dispatched on.
   - `var_name`: `MatrixFields.FieldName` naming the species.
+  - `params`: Cloud microphysics parameters
   - `ρwχ`: Area-weighted sum of subdomain sedimentation fluxes [kg/m²/s].
   - `ρχ`: Area-weighted sum of subdomain species masses [kg/m³].
 
@@ -173,13 +198,15 @@ gs_terminal_velocity(
     cm_1m::NonEquilibriumMicrophysics1M,
     tv_mode::FixedTerminalVelocity,
     var_name,
+    params,
     args...,
-) = terminal_velocity(cm_1m, tv_mode, var_name, args...)
+) = terminal_velocity(cm_1m, tv_mode, var_name, params)
 
 gs_terminal_velocity(
     ::NonEquilibriumMicrophysics1M,
     ::DiagnosticTerminalVelocity,
     var_name,
+    params,
     ρwχ,
     ρχ::FT,
 ) where {FT} = ifelse(ρχ > ϵ_numerics(FT), max(ρwχ / ρχ, zero(ρχ)), zero(ρχ))

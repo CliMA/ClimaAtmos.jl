@@ -537,7 +537,7 @@ function TurbulenceConvectionParameters(
         cloud_fraction_floor_residual = FT(0),
         # Lateral correction scaling for updraft sedimentation
         # (see `updraft_sedimentation!`). 1.0 = full correction, 0.0 = disabled.
-        sedimentation_lateral_coeff = FT(0),
+        sedimentation_lateral_coeff = FT(1), # Testing if stable now. To be removed, if yes.
     )
     release_present = filter(collect(keys(release_defaults))) do name
         haskey(toml_dict.data, string(name))

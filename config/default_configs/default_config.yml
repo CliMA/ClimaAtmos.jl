@@ -263,8 +263,17 @@ microphysics_n_substeps:
 microphysics_n_substeps_quadrature:
   help: "Number of susbteps for time averaging bulk microphysics tendencies with subgrid-scale quadrature. Default: 2"
   value: 2
-fixed_terminal_velocity:
-  help: "Use fixed terminal velocities for microphysics tracers [`true` (default), `false`]"
+fixed_terminal_velocity_liquid:
+  help: "Use fixed terminal velocity for cloud liquid sedimentation [`true` (default), `false`]"
+  value: true
+fixed_terminal_velocity_ice:
+  help: "Use fixed terminal velocity for cloud ice sedimentation [`true` (default), `false`]"
+  value: true
+fixed_terminal_velocity_rain:
+  help: "Use fixed terminal velocity for rain sedimentation [`true`, `false` (default)]"
+  value: false
+fixed_terminal_velocity_snow:
+  help: "Use fixed terminal velocity for snow sedimentation [`true` (default), `false`]"
   value: true
 cloud_liquid_formation:
   help: "Cloud liquid formation option for 1M microphysics [`CloudLiquidFormation` (default), ~]"

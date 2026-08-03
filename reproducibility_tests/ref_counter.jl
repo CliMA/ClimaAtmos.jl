@@ -1,4 +1,4 @@
-397
+398
 
 # **README**
 #
@@ -32,6 +32,9 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+398
+- Make rain sediment with non-constant velocity
+
 397
 - Change default ice formation to temperature dependent
 
