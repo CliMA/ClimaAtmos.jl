@@ -471,3 +471,138 @@ add_diagnostic_variable!(
     comments = "Mass-weighted envelope-mean updraft area fraction; dilutes the deposited Beres NOGW momentum flux (intermittency analog, zero when inactive)",
     compute! = compute_nogw_a_cover!,
 )
+
+# Mechanical (Beres-G Extension 3) c≈0 launched flux β_mech (2D, gated by
+# beres_active). The obstacle/mechanical steady source deposited in the c≈0
+# (low-`c`) phase-speed bin; its sign carries the E/W deceleration direction
+# (opposes U). Zero unless nogw_beres_mechanical_source is enabled.
+compute_nogw_beres_mech_flux!(out, state, cache, time) =
+    compute_nogw_beres_mech_flux!(
+        out,
+        state,
+        cache,
+        time,
+        cache.atmos.non_orographic_gravity_wave,
+    )
+compute_nogw_beres_mech_flux!(_, _, _, _, non_orographic_gravity_wave) =
+    error_diagnostic_variable(
+        "nogw_beres_mech_flux",
+        non_orographic_gravity_wave,
+    )
+compute_nogw_beres_mech_flux!(
+    _,
+    _,
+    _,
+    _,
+    ::NonOrographicGravityWave{FT, Nothing},
+) where {FT} = error_diagnostic_variable(
+    "nogw_beres_mech_flux requires Beres source enabled",
+)
+
+function compute_nogw_beres_mech_flux!(
+    out,
+    state,
+    cache,
+    time,
+    ::NonOrographicGravityWave{FT, <:BeresSourceParams},
+) where {FT}
+    _require_beres_detailed("nogw_beres_mech_flux", cache)
+    (; gw_beres_mech_flux, gw_beres_active) = cache.non_orographic_gravity_wave
+    return _gated_copy!(out, gw_beres_mech_flux, gw_beres_active)
+end
+
+add_diagnostic_variable!(
+    short_name = "nogw_beres_mech_flux",
+    long_name = "NOGW Beres-G Mechanical (Obstacle) Steady Flux",
+    units = "Pa",
+    comments = "Mechanical/obstacle steady (nu=0) launched momentum flux beta_mech (Extension 3, tau_mech ~ rho0*U*w_b^2/N) deposited in the c~0 low-c bin; signed to oppose U (E/W direction). Zero unless nogw_beres_mechanical_source and active.",
+    compute! = compute_nogw_beres_mech_flux!,
+)
+
+# Source-level buoyancy frequency N (gated by beres_active)
+compute_nogw_N_source!(out, state, cache, time) = compute_nogw_N_source!(
+    out,
+    state,
+    cache,
+    time,
+    cache.atmos.non_orographic_gravity_wave,
+)
+compute_nogw_N_source!(_, _, _, _, non_orographic_gravity_wave) =
+    error_diagnostic_variable("nogw_N_source", non_orographic_gravity_wave)
+compute_nogw_N_source!(_, _, _, _, ::NonOrographicGravityWave{FT, Nothing}) where {FT} =
+    error_diagnostic_variable("nogw_N_source requires Beres source enabled")
+
+function compute_nogw_N_source!(
+    out,
+    state,
+    cache,
+    time,
+    ::NonOrographicGravityWave{FT, <:BeresSourceParams},
+) where {FT}
+    _require_beres_detailed("nogw_N_source", cache)
+    (; gw_N_source, gw_beres_active) = cache.non_orographic_gravity_wave
+    return _gated_copy!(out, gw_N_source, gw_beres_active)
+end
+
+add_diagnostic_variable!(
+    short_name = "nogw_N_source",
+    long_name = "NOGW Beres Source-Level Buoyancy Frequency",
+    units = "s-1",
+    comments = "Brunt-Vaisala frequency N at the Beres convective source level, the exact value entering the launched source spectrum; archived so the offline Beres-c/Beres-G launch-spectrum comparison uses the online N bit-for-bit (zero when inactive)",
+    compute! = compute_nogw_N_source!,
+)
+
+###
+# Five-way native Beres band fluxes (2D; gated by nogw_beres_detailed_diagnostics)
+###
+# Fifty 2D maps: five source variants (base / ext1 / ext3 / ext13 / hs0) x
+# {four phase-speed bands (lowE / lowW / highE / highW, |c| <= 15 m/s is "low")
+# + the stationary c = 0 bin (c0, a subset of lowW)} x
+# {signed, |B0|}. All variants share the SAME per-column inputs from the cache
+# and are computed on the CPU at diagnostic time (_compute_beres_fiveway!,
+# memoized per time). Per-column scalars remap linearly, so these are safe
+# against the profile/envelope remap inconsistency that affects offline
+# recomputation. Units are internal launch-spectrum units (calibration-relative).
+import .._compute_beres_fiveway!
+
+# ONE callable-struct type for all 40 compute functions: distinct anonymous
+# closures would put 40 distinct function TYPES into the diagnostics handler's
+# tuple and blow up init compile time (observed: hours-scale LLVM SLP grind).
+struct _B5DiagCompute <: Function
+    sname::String
+end
+function (f::_B5DiagCompute)(out, state, cache, time)
+    hasproperty(cache.non_orographic_gravity_wave, :gw_beres_source) ||
+        error_diagnostic_variable(
+            "$(f.sname) requires the Beres NOGW source to be enabled",
+        )
+    _require_beres_detailed(f.sname, cache)
+    maps = _compute_beres_fiveway!(cache, time)
+    src = maps[f.sname]
+    if isnothing(out)
+        out_field = similar(cache.non_orographic_gravity_wave.gw_Q0)
+        copyto!(parent(out_field), src)
+        return out_field
+    else
+        copyto!(parent(out), src)
+        return nothing
+    end
+end
+
+for _b5_vname in ("base", "ext1", "ext3", "ext13", "hs0"),
+    _b5_bname in ("lowE", "lowW", "highE", "highW", "c0"),
+    _b5_abs in (false, true)
+
+    _b5_sname = "nogw_b5_$(_b5_vname)_$(_b5_bname)" * (_b5_abs ? "_abs" : "")
+    _b5_bdesc =
+        _b5_bname == "c0" ?
+        "the stationary c = 0 bin only (steady/standing-wave deposit, also counted in lowW; subtract from lowW for the transient slow-westward flux)" :
+        "band $(_b5_bname) (low is |c| <= 15 m/s, E is c > 0; c = 0 counts as lowW)"
+    add_diagnostic_variable!(
+        short_name = _b5_sname,
+        long_name = "NOGW Beres five-way $(_b5_abs ? "|B0|" : "signed") band flux, $(_b5_vname) variant, $(_b5_bname)",
+        units = "1",
+        comments = "Per-column launched band flux (internal spectrum units); variant $(_b5_vname), $(_b5_bdesc). Zero when the Beres source is inactive in the column.",
+        compute! = _B5DiagCompute(_b5_sname),
+    )
+end

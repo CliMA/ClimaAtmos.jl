@@ -1,0 +1,89 @@
+# Beres-c, present-day, SOURCE ARCHIVE window 3 of 3 (Group A) -- checkpoint replay.
+#
+# Restarts from the day-1350 checkpoint of aquaplanet_beres_c_present_11yr
+# and continues the SAME trajectory for 120 days, emitting the heavy 6-hourly 3D
+# Beres source fields needed for the offline baseline / Ext-1 / Ext-3 comparison.
+# Physics is identical to Sim 1: params come from Sim 1's own archived
+# parameters.toml (NOT the working-tree tomls, which have drifted).
+#
+# Windows: win3 day 1350-570, win2 day 900-1020, win3 day 1350-1470.
+# Supersedes aquaplanet_beres_c_present_archive1yr.yml (single 1-yr window).
+#
+# Run (compute node):
+#   julia --project=.buildkite .buildkite/ci_driver.jl \
+#     --config_file config/model_configs/aquaplanet_beres_c_src_win3.yml \
+#     --job_id aquaplanet_beres_c_src_win3
+
+# --- Grid / numerics (identical to Sim 1) ---
+config: sphere
+h_elem: 16
+nh_poly: 3
+z_elem: 63
+z_max: 60000.0
+dz_bottom: 30.0
+hyperdiff: "Hyperdiffusion"
+rayleigh_sponge: true
+viscous_sponge: true
+implicit_diffusion: true
+approximate_linear_solve_iters: 2
+max_newton_iters_ode: 1
+
+# --- Time stepping / restart ---
+ode_algo: "ARS222"
+dt: "120secs"
+t_end: "1470days"            # 1350 (seed) + 120-day archive window
+dt_save_state_to_disk: "30days"
+# Restart is via detect_restart_file ONLY: the Sim-1 seed checkpoint (day1350.0.hdf5)
+# is pre-copied into <output_dir>/output_0000/, so the first launch restarts from it
+# and resubmissions pick up the window's own newer checkpoints. Do NOT set
+# restart_file here -- an explicit restart_file always beats auto-detection
+# (src/simulation/restart.jl), so a resubmit would re-seed from day 1350.
+detect_restart_file: true
+output_dir: "/scratch/chew/aquaplanet_beres_c_src_win3"
+
+# --- Physics (identical to Sim 1) ---
+rad: "allskywithclear"
+dt_rad: "1hours"
+surface_setup: "DefaultMoninObukhov"
+turbconv: "prognostic_edmfx"
+prognostic_tke: true
+edmfx_entr_model: "Generalized"
+edmfx_detr_model: "Generalized"
+edmfx_nh_pressure: true
+edmfx_vertical_diffusion: true
+edmfx_filter: true
+edmfx_sgs_mass_flux: true
+edmfx_sgs_diffusive_flux: true
+microphysics_model: "0M"
+
+# --- Gravity waves (identical to Sim 1) ---
+non_orographic_gravity_wave: true
+dt_nogw: "400secs"
+nogw_beres_source: true
+nogw_beres_detailed_diagnostics: true   # required for the nogw_* source-internal fields
+# Sim 1's fully resolved parameter dump -- guarantees identical physics even though
+# toml/longrun_aquaplanet_progedmf.toml has uncommitted local edits.
+toml: ["/scratch/chew/aquaplanet_beres_c_present_11yr/output_0005/aquaplanet_beres_c_present_11yr_parameters.toml"]
+
+# === Group A -- source archive for the offline baseline/Ext1/Ext3 comparison ===
+# inst (NOT average): the offline operators are quadratic in Q, so time-mean
+# profiles are wrong by construction. 6-hourly samples convective intermittency.
+diagnostics:
+  # 3D inst: master heating input (Q_conv_ic), native half-sine reconstruction,
+  # background state (U, N via ta, rho), updraft w/area (Ext-3 w_b and a_up
+  # weighting), and the online AD99+Beres tendency for cross-checks.
+  - short_name: [nogw_Q_conv_ic, nogw_Q_conv, nogw_halfsine, ua, va, ta, rhoa, waup, arup, utendnogw, vtendnogw]
+    period: 6hours
+    reduction: inst
+  # 2D inst: source geometry / amplitude / gating / launch summary (cheap).
+  - short_name: [nogw_zbot, nogw_ztop, nogw_Q0, nogw_h_heat, nogw_a_cover, nogw_beres_active, nogw_N_source, nogw_launch_flux, nogw_c_centroid]
+    period: 6hours
+    reduction: inst
+  # Daily means: context fields bridging to Sim 1's monthly Group B archive.
+  - short_name: [ua, va, ta, hus, utendnogw, vtendnogw, pr]
+    period: 1days
+    reduction: average
+  # Grid geometry (quasi-static).
+  - short_name: [zg]
+    period: 30days
+    reduction: average

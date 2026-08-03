@@ -997,6 +997,14 @@ Base.@kwdef struct BeresSourceParams{FT}
     beres_steady_source::Bool = true # boolean flag for steady (ν=0) stationary component: deposits only if a c≈0 bin exits
     beres_steady_dc_frac::FT = FT(1.0) # artificial steady DC weight: Q_t(0)² = dc_frac·ν_min
     beres_L_system::FT = FT(1.0e6)     # m, largest system scale; sets k_min=2π/L in even-folded H; for the steady-state source
+
+    # --- Extension 1: generalized vertical shape (Beres-G) ---
+    beres_shape_general::Bool = false  # false → half-sine V_hs (Beres 2004); true → V_G = sine transform of the EDMF heating profile (Ext 1)
+
+    # --- Extension 3: mechanical / obstacle steady (ν=0) source ---
+    beres_mechanical_source::Bool = false # add β_mech (Garner obstacle base flux, U→0 vanishing) to the steady c≈0 bin
+    beres_obstacle_frac::FT = FT(1.0)     # obstacle level = z_bot + frac·h within the convective envelope (1.0 = z_top); sensitivity study deferred
+    beres_mech_weight::FT = FT(1.0)       # mechanical ν=0 weight (analogue of thermal Q_t²(0)); sets β_mech relative to β_therm
     heating_latent::Bool = false       # source in-cloud heating from latent Q_lat=Σ L_p R_p (1M+PrognosticEDMFX) vs DSE-Q₁
     detailed_diagnostics::Bool = false # expose nogw_* source-internal extended diagnostics
 

@@ -1,0 +1,80 @@
+# Beres-c, present-day, ~11 yr coupled free run -- 1M MICROPHYSICS variant.
+#
+# Twin of aquaplanet_beres_c_present_11yr (the 0M run). Same grid, time stepping,
+# radiation, EDMF-on, gravity waves, diagnostics, and the SAME calibrated Beres
+# convective GW source (alpha = 2e-6). The one intended science change is the
+# microphysics: 0-moment -> 1-moment.
+#
+# Following how CliMA runs 1M elsewhere (longrun_aquaplanet_allsky_progedmf_1M),
+# the parameter stack is swapped from the 0M longrun toml to the canonical 1M toml
+# toml/prognostic_edmfx_1M.toml. That file retunes EDMF (turbulent entrainment /
+# tracer vertical diffusion) and adds the 1M condensation/sublimation timescales,
+# but drops the Beres scale factor -- so nogw_beres_scale.toml re-adds alpha = 2e-6.
+# The Rayleigh/viscous sponge depths (zd = 40 km) and tracer damping match the 0M
+# run, so the QBO band is treated identically.
+#
+# Self-contained launch config for the scratch run dir. Run (from ClimaAtmos-sim1):
+#   julia --project=.buildkite .buildkite/ci_driver.jl \
+#     --config_file /scratch/chew/aquaplanet_beres_c_present_1M_11yr/aquaplanet_beres_c_present_1M_11yr.yml \
+#     --job_id aquaplanet_beres_c_present_1M_11yr
+
+# --- Output ---
+output_dir: "/scratch/chew/aquaplanet_beres_c_present_1M_11yr"
+output_dir_style: "ActiveLink"
+
+# --- Grid / numerics (from numerics_sphere_he16ze63.yml) ---
+config: sphere
+h_elem: 16          # ~206 km horizontal
+nh_poly: 3
+z_elem: 63
+z_max: 60000.0      # 60 km model top (~0.2 hPa)
+dz_bottom: 30.0
+hyperdiff: "Hyperdiffusion"
+rayleigh_sponge: true   # zd = 40 km (toml below), above the QBO band
+viscous_sponge: true    # zd = 40 km
+implicit_diffusion: true
+approximate_linear_solve_iters: 2
+max_newton_iters_ode: 1
+
+# --- Time stepping (longrun overrides the numerics ode_algo) ---
+ode_algo: "ARS222"
+dt: "120secs"
+t_end: "4015days"           # ~11 years (11 * 365)
+dt_save_state_to_disk: "30days"
+detect_restart_file: true   # auto-resume from the latest checkpoint on resubmit
+
+# --- Physics: aquaplanet equilibrated-moist + allsky radiation + prognostic EDMF + 1M ---
+rad: "allskywithclear"
+dt_rad: "1hours"
+surface_setup: "DefaultMoninObukhov"
+turbconv: "prognostic_edmfx"
+prognostic_tke: true
+edmfx_entr_model: "Generalized"
+edmfx_detr_model: "Generalized"
+edmfx_nh_pressure: true
+edmfx_vertical_diffusion: true
+edmfx_filter: true
+edmfx_sgs_mass_flux: true
+edmfx_sgs_diffusive_flux: true
+microphysics_model: "1M"
+
+# --- Gravity waves: AD99 background propagator + Beres convective source (additive) ---
+non_orographic_gravity_wave: true
+dt_nogw: "400secs"
+nogw_beres_source: true
+# prognostic_edmfx_1M.toml carries the 1M-tuned EDMF + microphysics timescales +
+# sponge depths; nogw_steady_grid.toml gives the exact c=0 phase-speed bin for the
+# steady (nu=0) Beres component; nogw_beres_scale.toml re-adds the calibrated
+# Beres scale factor (alpha = 2e-6) that the 1M toml does not carry.
+toml:
+  - toml/prognostic_edmfx_1M.toml
+  - toml/nogw_steady_grid.toml
+  - /scratch/chew/aquaplanet_beres_c_present_1M_11yr/nogw_beres_scale.toml
+
+# === Group B -- QBO archive (zonal-mean computed offline from these lat-lon-z fields) ===
+# Monthly means over the full 11 yr; small. ua is the QBO; utendnogw is the GW
+# forcing near the zero-wind line; ta closes the thermal structure.
+diagnostics:
+  - short_name: [ua, utendnogw, ta]
+    period: 1months
+    reduction: average

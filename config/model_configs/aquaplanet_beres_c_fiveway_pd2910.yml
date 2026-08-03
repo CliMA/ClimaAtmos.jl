@@ -1,0 +1,96 @@
+# Beres-c, present-day, LATE-PD paired window (day 2910) -- checkpoint replay.
+#
+# One of three late-PD windows (days 2910 / 3360 / 3810) forming the PD half of
+# the paired PD-vs-+4K comparison: the +4K twin (branched from PD day 2550) is
+# replayed at the SAME anchor days, so both climates are sampled at the same
+# run-age and slow common-mode drift cancels in the difference. These windows
+# also serve as the stationarity check against the early Table-1 windows
+# (days 450/900/1350, configs aquaplanet_beres_c_fiveway_win{1,2,3}.yml).
+#
+# Adds the c0-bin split diagnostics (nogw_b5_*_c0[_abs]) absent from the early
+# windows: the stationary c = 0 bin is reported separately so the slow-westward
+# band can be quoted with and without the standing wave.
+#
+# Run (compute node, main checkout at the c0-split commit):
+#   see /scratch/chew/aquaplanet_beres_c_fiveway_pd2910/submit_window.sbatch
+
+# --- Grid / numerics (identical to Sim 1) ---
+config: sphere
+h_elem: 16
+nh_poly: 3
+z_elem: 63
+z_max: 60000.0
+dz_bottom: 30.0
+hyperdiff: "Hyperdiffusion"
+rayleigh_sponge: true
+viscous_sponge: true
+implicit_diffusion: true
+approximate_linear_solve_iters: 2
+max_newton_iters_ode: 1
+
+# --- Time stepping / restart ---
+ode_algo: "ARS222"
+dt: "120secs"
+t_end: "3030days"           # 2910 (seed) + 120-day window
+dt_save_state_to_disk: "30days"
+# Restart is via detect_restart_file ONLY: the PD seed checkpoint (day2910.0.hdf5)
+# is pre-copied into <output_dir>/output_0000/, so the first launch restarts from it
+# and resubmissions pick up the window's own newer checkpoints. Do NOT set
+# restart_file here -- an explicit restart_file always beats auto-detection
+# (src/simulation/restart.jl), so a resubmit would re-seed from day 2910.
+detect_restart_file: true
+output_dir: "/scratch/chew/aquaplanet_beres_c_fiveway_pd2910"
+
+# --- Physics (identical to Sim 1) ---
+rad: "allskywithclear"
+dt_rad: "1hours"
+surface_setup: "DefaultMoninObukhov"
+turbconv: "prognostic_edmfx"
+prognostic_tke: true
+edmfx_entr_model: "Generalized"
+edmfx_detr_model: "Generalized"
+edmfx_nh_pressure: true
+edmfx_vertical_diffusion: true
+edmfx_filter: true
+edmfx_sgs_mass_flux: true
+edmfx_sgs_diffusive_flux: true
+microphysics_model: "0M"
+
+# --- Gravity waves (identical to Sim 1) ---
+non_orographic_gravity_wave: true
+dt_nogw: "400secs"
+nogw_beres_source: true
+nogw_beres_detailed_diagnostics: true   # required for the nogw_* source-internal fields
+# The PD run's frozen parameter dump (alpha = 2e-6) -- guarantees identical
+# physics even though toml/longrun_aquaplanet_progedmf.toml has local edits.
+toml: ["/scratch/chew/aquaplanet_beres_c_present_11yr/frozen_run_parameters.toml"]
+
+# === Source archive + native band-flux maps ===
+# inst (NOT average): the source operators are quadratic in Q, so time-mean
+# profiles are wrong by construction. 6-hourly samples convective intermittency.
+diagnostics:
+  # 3D inst: master heating input (Q_conv_ic), native half-sine reconstruction,
+  # background state (U, N via ta, rho), updraft w/area, and the online
+  # AD99+Beres tendency for cross-checks (top-heaviness premise check archive).
+  - short_name: [nogw_Q_conv_ic, nogw_Q_conv, nogw_halfsine, ua, va, ta, rhoa, waup, arup, utendnogw, vtendnogw]
+    period: 6hours
+    reduction: inst
+  # 2D inst: source geometry / amplitude / gating / launch summary (cheap).
+  - short_name: [nogw_zbot, nogw_ztop, nogw_Q0, nogw_h_heat, nogw_a_cover, nogw_beres_active, nogw_N_source, nogw_launch_flux, nogw_c_centroid]
+    period: 6hours
+    reduction: inst
+  # Daily means: context fields bridging to the monthly Group B archive.
+  - short_name: [ua, va, ta, hus, utendnogw, vtendnogw, pr]
+    period: 1days
+    reduction: average
+  # Grid geometry (quasi-static).
+  - short_name: [zg]
+    period: 30days
+    reduction: average
+  # Five-way native band-flux maps (2D per-column scalars — remap-safe; computed
+  # on CPU at diagnostic time from the model's own cache, all variants on
+  # identical inputs), INCLUDING the c0-bin split maps. See
+  # gravitywave_diagnostics.jl "Five-way native".
+  - short_name: [nogw_b5_base_lowE, nogw_b5_base_lowE_abs, nogw_b5_base_lowW, nogw_b5_base_lowW_abs, nogw_b5_base_highE, nogw_b5_base_highE_abs, nogw_b5_base_highW, nogw_b5_base_highW_abs, nogw_b5_base_c0, nogw_b5_base_c0_abs, nogw_b5_ext1_lowE, nogw_b5_ext1_lowE_abs, nogw_b5_ext1_lowW, nogw_b5_ext1_lowW_abs, nogw_b5_ext1_highE, nogw_b5_ext1_highE_abs, nogw_b5_ext1_highW, nogw_b5_ext1_highW_abs, nogw_b5_ext1_c0, nogw_b5_ext1_c0_abs, nogw_b5_ext3_lowE, nogw_b5_ext3_lowE_abs, nogw_b5_ext3_lowW, nogw_b5_ext3_lowW_abs, nogw_b5_ext3_highE, nogw_b5_ext3_highE_abs, nogw_b5_ext3_highW, nogw_b5_ext3_highW_abs, nogw_b5_ext3_c0, nogw_b5_ext3_c0_abs, nogw_b5_ext13_lowE, nogw_b5_ext13_lowE_abs, nogw_b5_ext13_lowW, nogw_b5_ext13_lowW_abs, nogw_b5_ext13_highE, nogw_b5_ext13_highE_abs, nogw_b5_ext13_highW, nogw_b5_ext13_highW_abs, nogw_b5_ext13_c0, nogw_b5_ext13_c0_abs, nogw_b5_hs0_lowE, nogw_b5_hs0_lowE_abs, nogw_b5_hs0_lowW, nogw_b5_hs0_lowW_abs, nogw_b5_hs0_highE, nogw_b5_hs0_highE_abs, nogw_b5_hs0_highW, nogw_b5_hs0_highW_abs, nogw_b5_hs0_c0, nogw_b5_hs0_c0_abs]
+    period: 6hours
+    reduction: inst

@@ -1,0 +1,66 @@
+# Beres-c, present-day, ~11 yr coupled free run (Sim 1 of the Beres-G comparison).
+#
+# Purpose: quasi-QBO reference. Group B (monthly zonal-mean inputs) only -- it is
+# cheap over the full run. The heavy 6-hourly 3D source archive (Group A) lives in
+# the restart sibling aquaplanet_beres_c_present_archive1yr.yml, because ClimaAtmos
+# diagnostics cannot be time-windowed in YAML and archiving 3D fields for all 11 yr
+# would cost ~400 GB.
+#
+# Self-contained: bundles the CI he16ze63 numerics (config/common_configs/
+# numerics_sphere_he16ze63.yml) + the longrun_aquaplanet_allsky_progedmf_0M physics
+# so it runs with a single --config_file. Run:
+#   julia --project=.buildkite .buildkite/ci_driver.jl \
+#     --config_file config/model_configs/aquaplanet_beres_c_present_11yr.yml \
+#     --job_id aquaplanet_beres_c_present_11yr
+
+# --- Grid / numerics (from numerics_sphere_he16ze63.yml) ---
+config: sphere
+h_elem: 16          # ~206 km horizontal
+nh_poly: 3
+z_elem: 63
+z_max: 60000.0      # 60 km model top (~0.2 hPa)
+dz_bottom: 30.0
+hyperdiff: "Hyperdiffusion"
+rayleigh_sponge: true   # zd = 40 km (toml below), above the QBO band
+viscous_sponge: true    # zd = 40 km
+implicit_diffusion: true
+approximate_linear_solve_iters: 2
+max_newton_iters_ode: 1
+
+# --- Time stepping (longrun overrides the numerics ode_algo) ---
+ode_algo: "ARS222"
+dt: "120secs"
+t_end: "4015days"           # ~11 years (11 * 365)
+dt_save_state_to_disk: "30days"
+detect_restart_file: true   # auto-resume from the latest checkpoint on resubmit
+
+# --- Physics: aquaplanet equilibrated-moist + allsky radiation + prognostic EDMF + 0M ---
+rad: "allskywithclear"
+dt_rad: "1hours"
+surface_setup: "DefaultMoninObukhov"
+turbconv: "prognostic_edmfx"
+prognostic_tke: true
+edmfx_entr_model: "Generalized"
+edmfx_detr_model: "Generalized"
+edmfx_nh_pressure: true
+edmfx_vertical_diffusion: true
+edmfx_filter: true
+edmfx_sgs_mass_flux: true
+edmfx_sgs_diffusive_flux: true
+microphysics_model: "0M"
+
+# --- Gravity waves: AD99 background propagator + Beres convective source (additive) ---
+non_orographic_gravity_wave: true
+dt_nogw: "400secs"
+nogw_beres_source: true
+# nogw_steady_grid.toml gives an exact c=0 phase-speed bin for the steady (nu=0)
+# Beres component; longrun_aquaplanet_progedmf.toml carries EDMF + sponge params.
+toml: [toml/longrun_aquaplanet_progedmf.toml, toml/nogw_steady_grid.toml]
+
+# === Group B -- QBO archive (zonal-mean computed offline from these lat-lon-z fields) ===
+# Monthly means over the full 11 yr; small. ua is the QBO; utendnogw is the GW
+# forcing near the zero-wind line; ta closes the thermal structure.
+diagnostics:
+  - short_name: [ua, utendnogw, ta]
+    period: 1months
+    reduction: average

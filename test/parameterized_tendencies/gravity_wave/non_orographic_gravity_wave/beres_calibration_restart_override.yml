@@ -1,0 +1,35 @@
+# Restart-based override for calibrate_beres_alpha.jl: runs the frozen-state
+# alpha ladder on an EQUILIBRATED, PRODUCTION-RESOLUTION state from the 11-yr
+# Beres-c run, instead of the 10-day h_elem=4 spin-up. Stacks LAST on top of:
+#   config/common_configs/numerics_sphere_he16ze63.yml
+#   config/longrun_configs/longrun_aquaplanet_allsky_progedmf_0M.yml
+# Grid/numerics are inherited unchanged — they MUST match the restart file.
+#
+# Restart date: day 1020 (~2.8 yr; year 1 discarded as spin-up). Chosen for QBO
+# phase: the tropical profile then has westerlies (+8..+12 m/s) below 24 km, an
+# easterly jet (-14..-20 m/s) at 26-28 km, and westerlies above 30 km — two
+# critical-level shear zones inside the 15-45 km calibration band, so the ladder
+# samples breaking of both eastward- and westward-propagating waves.
+restart_file: /scratch/chew/aquaplanet_beres_c_present_11yr/output_0005/day1020.0.hdf5
+# 1-day continuation from the checkpoint to re-establish tendencies and the GW
+# cache before freezing the state (t_end is absolute simulation time).
+t_end: "1021days"
+dt_save_state_to_disk: "Inf"
+output_default_diagnostics: false
+# The Beres source-internal diagnostics (nogw_beres_active, nogw_Q0, ...) are
+# gated behind this flag.
+nogw_beres_detailed_diagnostics: true
+# Production toml chain, IDENTICAL to aquaplanet_beres_c_present_11yr.yml, so the
+# spectrum and phase-speed grid (exact c=0 bin) match the long run. NOTE: the
+# 11-yr trajectory that produced the checkpoint ran with alpha = 2.0e-6; the
+# 1-day continuation steps with the current toml alpha. This barely perturbs the
+# frozen state, and the ladder rebuilds BeresSourceParams per alpha exactly.
+toml: [toml/longrun_aquaplanet_progedmf.toml, toml/nogw_steady_grid.toml]
+diagnostics:
+  # Time-averaged NOGW forcing over the 1-day continuation.
+  - short_name: [utendnogw, vtendnogw]
+    reduction_time: average
+    period: 12hours
+  # Instantaneous Beres source state (2D), for activation/coverage statistics.
+  - short_name: [nogw_beres_active, nogw_Q0, nogw_a_cover, nogw_h_heat, nogw_ztop]
+    period: 12hours
