@@ -2,9 +2,12 @@
     FT = typeof(D_m + T)
     wavelength = FT(0.299792458) / FT(radar_cfg.freq)
     x = FT(pi) * D_m / wavelength
-    m = phase === :liquid ? _m_wat(radar_cfg.freq, T) : _m_ice(radar_cfg.freq, T)
+    m = _refractive_index(radar_cfg.freq, T, phase)
     return _mie_int(x, m)
 end
+
+@inline _refractive_index(freq, T, ::LiquidPhase) = _m_wat(freq, T)
+@inline _refractive_index(freq, T, ::IcePhase) = _m_ice(freq, T)
 
 # Port of QuickBeam MieInt for Inp == 1.
 @inline function _mie_int(x, m)

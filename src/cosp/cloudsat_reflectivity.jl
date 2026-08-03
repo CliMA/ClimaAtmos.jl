@@ -1,6 +1,6 @@
 module COSPCloudSatReflectivity
 
-import ClimaCore: Fields, Spaces
+import ClimaCore: Operators, Spaces
 
 export cloudsat_gas_path_attenuation!, cloudsat_reflectivity_subcolumn!
 
@@ -88,30 +88,45 @@ function _two_way_path_attenuation_from_top!(
     top_height_km,
     nlevels,
 )
-    FT = eltype(path_attenuation)
-
-    for ilev in nlevels:-1:1
-        path_level = Fields.level(path_attenuation, ilev)
-        coefficient_level = Fields.level(attenuation_coefficient, ilev)
-        z_level = Fields.level(height_km, ilev)
-
-        if ilev == nlevels
-            @. path_level =
-                FT(2) * coefficient_level * (top_height_km - z_level)
-        else
-            path_above = Fields.level(path_attenuation, ilev + 1)
-            coefficient_above =
-                Fields.level(attenuation_coefficient, ilev + 1)
-            z_above = Fields.level(height_km, ilev + 1)
-            @. path_level =
-                path_above +
-                (coefficient_above + coefficient_level) *
-                (z_above - z_level)
-        end
-    end
+    nlevels == Spaces.nlevels(axes(attenuation_coefficient)) ||
+        throw(ArgumentError("column accumulation requires all vertical levels"))
+    input = Base.broadcasted(
+        _initial_attenuation_state,
+        attenuation_coefficient,
+        height_km,
+        top_height_km,
+    )
+    Operators.column_accumulate!(
+        _accumulate_attenuation,
+        path_attenuation,
+        input;
+        transform = _attenuation_path,
+        reverse = true,
+    )
 
     return nothing
 end
+
+@inline function _initial_attenuation_state(coefficient, z, z_top)
+    FT = typeof(coefficient)
+    return (;
+        path = FT(2) * coefficient * (z_top - z),
+        coefficient,
+        z,
+    )
+end
+
+@inline function _accumulate_attenuation(state, level)
+    return (;
+        path =
+            state.path +
+            (state.coefficient + level.coefficient) * (state.z - level.z),
+        coefficient = level.coefficient,
+        z = level.z,
+    )
+end
+
+@inline _attenuation_path(state) = state.path
 
 function _reflectivity_from_path_attenuation!(
     Ze_non,

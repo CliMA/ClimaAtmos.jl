@@ -44,8 +44,11 @@ function CloudSatRadarConfig{FT}(;
     )
 end
 
-struct Clima1MPSDParameters{P}
-    phase::Symbol
+struct LiquidPhase end
+struct IcePhase end
+
+struct Clima1MPSDParameters{Phase, P}
+    phase::Phase
     hydrometeor::P
 end
 
@@ -318,16 +321,16 @@ end
 @inline _rho_solid_ice(::Type{FT}) where {FT} = FT(917)
 
 @inline _clima_1m_psd_parameters(params, ::Val{:lcl}) =
-    Clima1MPSDParameters(:liquid, params.cloud.liquid)
+    Clima1MPSDParameters(LiquidPhase(), params.cloud.liquid)
 
 @inline _clima_1m_psd_parameters(params, ::Val{:icl}) =
-    Clima1MPSDParameters(:ice, params.cloud.ice)
+    Clima1MPSDParameters(IcePhase(), params.cloud.ice)
 
 @inline _clima_1m_psd_parameters(params, ::Val{:rai}) =
-    Clima1MPSDParameters(:liquid, params.precip.rain)
+    Clima1MPSDParameters(LiquidPhase(), params.precip.rain)
 
 @inline _clima_1m_psd_parameters(params, ::Val{:sno}) =
-    Clima1MPSDParameters(:ice, params.precip.snow)
+    Clima1MPSDParameters(IcePhase(), params.precip.snow)
 
 @inline function _clima_hydrometeor_z_volume(
     q,
@@ -371,7 +374,7 @@ end
     rho_air,
     T,
     radar_cfg,
-    params::Clima1MPSDParameters{<:CMP.CloudLiquid},
+    params::Clima1MPSDParameters{LiquidPhase, <:CMP.CloudLiquid},
 )
     FT = typeof(q + rho_air + T)
     q_pos = max(zero(FT), q)
@@ -464,7 +467,7 @@ end
         number_m3,
         T,
         radar_cfg,
-        :liquid,
+        LiquidPhase(),
     )
 end
 
@@ -534,8 +537,12 @@ end
     return max(zero(FT), z_vol), max(zero(FT), kr_vol)
 end
 
-@inline function _scattering_diameter(r, params)
-    params.phase === :liquid && return 2 * r
+@inline _scattering_diameter(r, ::Clima1MPSDParameters{LiquidPhase}) = 2 * r
+
+@inline function _scattering_diameter(
+    r,
+    params::Clima1MPSDParameters{IcePhase},
+)
     FT = typeof(r)
     mass = _particle_mass(r, params)
     return cbrt(FT(6) * mass / (FT(pi) * _rho_solid_ice(FT)))

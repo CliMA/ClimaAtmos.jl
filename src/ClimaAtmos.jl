@@ -177,5 +177,6 @@ include(joinpath("utils", "show.jl"))
 
 include(joinpath("cosp", "cosp.jl"))
 import .COSP
+include(joinpath("cosp", "cloudsat.jl"))
 
 end # module

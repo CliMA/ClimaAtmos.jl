@@ -59,7 +59,7 @@ make_rho_air(FT) = make_center_profile_field(FT, [1.2, 1.0, 0.8])
 # They do not prescribe the corrected vertical path-attenuation integration.
 const COSP_MIE_REFERENCES = (;
     water_small = (;
-        phase = :liquid,
+        phase = CCO.LiquidPhase(),
         D_m = 1.9999999494757503E-005,
         T = 2.7314999389648438E+002,
         qext = 1.4807554893195629E-002,
@@ -68,7 +68,7 @@ const COSP_MIE_REFERENCES = (;
         kr_vol = 2.0203076545044496E-008,
     ),
     water_medium = (;
-        phase = :liquid,
+        phase = CCO.LiquidPhase(),
         D_m = 1.0000000474974513E-003,
         T = 2.7314999389648438E+002,
         qext = 3.2664134502410889E+000,
@@ -77,7 +77,7 @@ const COSP_MIE_REFERENCES = (;
         kr_vol = 1.1141545139253139E-002,
     ),
     ice_small = (;
-        phase = :ice,
+        phase = CCO.IcePhase(),
         D_m = 1.9999999494757503E-005,
         T = 2.5314999389648438E+002,
         qext = 9.0639849076978862E-005,
@@ -86,7 +86,7 @@ const COSP_MIE_REFERENCES = (;
         kr_vol = 1.2366685453457649E-010,
     ),
     ice_medium = (;
-        phase = :ice,
+        phase = CCO.IcePhase(),
         D_m = 1.0000000474974513E-003,
         T = 2.5314999389648438E+002,
         qext = 4.8764702677726746E-001,
@@ -125,17 +125,19 @@ end
 @testset "CloudSat Clima 1M PSD parameters" begin
     for FT in (Float32, Float64)
         microphysics_params = CMP.Microphysics1MParams(FT)
-        for (class, hydrometeor) in (
-            (:lcl, microphysics_params.cloud.liquid),
-            (:icl, microphysics_params.cloud.ice),
-            (:rai, microphysics_params.precip.rain),
-            (:sno, microphysics_params.precip.snow),
+        for (class, hydrometeor, phase_type) in (
+            (:lcl, microphysics_params.cloud.liquid, CCO.LiquidPhase),
+            (:icl, microphysics_params.cloud.ice, CCO.IcePhase),
+            (:rai, microphysics_params.precip.rain, CCO.LiquidPhase),
+            (:sno, microphysics_params.precip.snow, CCO.IcePhase),
         )
             params = CCO._clima_1m_psd_parameters(
                 microphysics_params,
                 Val(class),
             )
             @test params.hydrometeor === hydrometeor
+            @test params.phase isa phase_type
+            @test isbitstype(typeof(params.phase))
         end
 
         for class in (:icl, :sno)

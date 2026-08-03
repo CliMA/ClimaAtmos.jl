@@ -475,7 +475,7 @@ end
         @test any(>(zero(eltype(Y))), parent(p.precomputed.cloudsat_tcc))
         @test all(
             size -> all(>(zero(eltype(Y))), parent(size)),
-            values(p.precomputed.cloudsat_grid_mean_sizes),
+            values(p.scratch.cloudsat_grid_mean_sizes),
         )
 
         @testset "streamed subcolumns match COSPv2 reference" begin
@@ -559,7 +559,7 @@ end
         end
 
         @testset "CloudSat callback refreshes and clears outputs" begin
-            gas_before_refresh = copy(parent(p.precomputed.g_vol_cloudsat))
+            gas_before_refresh = copy(parent(p.scratch.g_vol_cloudsat))
             state_FT = eltype(Y)
             energy_increment = state_FT(1000)
             zero_state = zero(state_FT)
@@ -567,7 +567,7 @@ end
             @. Y.c.ρe_tot += Y.c.ρ * energy_increment
             CA.set_precomputed_quantities!(Y, p, simulation.integrator.t)
             CA.subcol_model_callback!(simulation.integrator)
-            @test parent(p.precomputed.g_vol_cloudsat) != gas_before_refresh
+            @test parent(p.scratch.g_vol_cloudsat) != gas_before_refresh
 
             @. Y.c.ρq_lcl = zero_state
             @. Y.c.ρq_icl = zero_state
@@ -581,17 +581,17 @@ end
                 p.precomputed.DBZe_cloudsat,
             )
             @test all(iszero, parent(p.precomputed.cloudsat_tcc))
-            @test all(iszero, parent(p.precomputed.z_vol_cloudsat_work))
-            @test all(iszero, parent(p.precomputed.kr_vol_cloudsat_work))
+            @test all(iszero, parent(p.scratch.z_vol_cloudsat_work))
+            @test all(iszero, parent(p.scratch.kr_vol_cloudsat_work))
             @test all(
                 ==(missing_reflectivity),
-                parent(p.precomputed.Ze_non_cloudsat_work),
+                parent(p.scratch.Ze_non_cloudsat_work),
             )
             @test all(
                 iszero,
-                parent(p.precomputed.hydro_path_attenuation_cloudsat_work),
+                parent(p.scratch.hydro_path_attenuation_cloudsat_work),
             )
-            @test all(!, parent(p.precomputed.detected_column_cloudsat))
+            @test all(!, parent(p.scratch.detected_column_cloudsat))
         end
     end
 
