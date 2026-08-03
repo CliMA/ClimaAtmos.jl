@@ -1,6 +1,15 @@
-# CloudSat lookup tables ported from COSPv2.
-# Gas-absorption line tables come from quickbeam_optics.F90::gases.
-# Ice refractive-index tables come from optics_lib.F90::m_ice.
+# Lookup tables ported from:
+# CFMIP/COSPv2.0
+#
+# Gas absorption:
+#   COSPv2 quickbeam_optics.F90::gases
+#   Liebe, H. J. (1985), Radio Science, 20, 1069–1089.
+#   doi:10.1029/RS020i005p01069
+#
+# Ice refractive index:
+#   COSPv2 optics_lib.F90::m_ice, a Fortran port of Warren's REFICE.
+#   Warren, S. G. (1984), Applied Optics, 23, 1206–1225.
+#   doi:10.1364/AO.23.001206
 
 const O2_V0 = (
     49.4523790, 49.9622570, 50.4742380, 50.9877480, 51.5033500, 52.0214090,
