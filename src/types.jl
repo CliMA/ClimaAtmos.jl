@@ -947,13 +947,16 @@ end
 
 Groups moisture and microphysics-related models and types.
 """
-@kwdef struct AtmosWater{MM, CM, MTTS, TNM, SQ, TVM}
+@kwdef struct AtmosWater{MM, CM, MTTS, TNM, SQ, TVL, TVI, TVR, TVS}
     microphysics_model::MM = DryModel()
     cloud_model::CM = QuadratureCloud()
     microphysics_tendency_timestepping::MTTS = nothing
     tracer_nonnegativity_method::TNM = nothing
     sgs_quadrature::SQ = nothing
-    terminal_velocity_mode::TVM = DiagnosticTerminalVelocity()
+    terminal_velocity_liquid::TVL = FixedTerminalVelocity()
+    terminal_velocity_ice::TVI = FixedTerminalVelocity()
+    terminal_velocity_rain::TVR = FixedTerminalVelocity()
+    terminal_velocity_snow::TVS = FixedTerminalVelocity()
 end
 
 """
@@ -1199,7 +1202,10 @@ The default AtmosModel provides:
   - `cloud_model`: GridScaleCloud(), QuadratureCloud()
   - `microphysics_tendency_timestepping`: Explicit(), Implicit()
   - `sgs_quadrature`: nothing or SGSQuadrature (subgrid-scale quadrature for microphysics tendencies)
-  - `terminal_velocity_mode`: FixedTerminalVelocity or DiagnosticTerminalVelocity
+  - `terminal_velocity_liquid`: FixedTerminalVelocity (default) or DiagnosticTerminalVelocity
+  - `terminal_velocity_ice`: FixedTerminalVelocity (default) or DiagnosticTerminalVelocity
+  - `terminal_velocity_rain`: FixedTerminalVelocity (default) or DiagnosticTerminalVelocity
+  - `terminal_velocity_snow`: FixedTerminalVelocity (default) or DiagnosticTerminalVelocity
 
 ## SCMSetup (Single-Column Model & LES specific - accessed via model.subsidence, model.external_forcing, etc.)
 
