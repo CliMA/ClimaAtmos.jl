@@ -10,17 +10,20 @@ export cloudsat_cloud_fraction!
         detected_column_scratch,
         DBZe_cloudsat;
         detection_limit = -30.0,
+        maximum_detection_limit = 10.0,
     )
 
 Compute CloudSat total cloud cover in percent from attenuated radar
 reflectivity. A subcolumn contributes once when at least one of its levels has
-reflectivity greater than or equal to `detection_limit`.
+reflectivity between `detection_limit` and `maximum_detection_limit`,
+inclusive.
 """
 function cloudsat_cloud_fraction!(
     cloudsat_tcc,
     detected_column_scratch,
     DBZe_cloudsat::NTuple{N};
     detection_limit = -30.0,
+    maximum_detection_limit = 10.0,
 ) where {N}
     N > 0 ||
         throw(
@@ -31,6 +34,7 @@ function cloudsat_cloud_fraction!(
 
     FT = eltype(DBZe_cloudsat[1])
     typed_detection_limit = FT(detection_limit)
+    typed_maximum_detection_limit = FT(maximum_detection_limit)
     contribution = FT(100) / FT(N)
 
     cloudsat_tcc .= zero(eltype(cloudsat_tcc))
@@ -39,7 +43,8 @@ function cloudsat_cloud_fraction!(
         Operators.column_reduce!(
             max,
             detected_column_scratch,
-            DBZe_subcolumn .>= typed_detection_limit;
+            (DBZe_subcolumn .>= typed_detection_limit) .&
+            (DBZe_subcolumn .<= typed_maximum_detection_limit);
             init = false,
         )
         @. cloudsat_tcc += contribution * detected_column_scratch

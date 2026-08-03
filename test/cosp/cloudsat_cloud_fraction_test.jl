@@ -24,6 +24,8 @@ end
             make_center_profile_field(FT, [-31, -40, -1e30]),
             make_center_profile_field(FT, [-30, -40, -1e30]),
             make_center_profile_field(FT, [-29, -20, -1e30]),
+            make_center_profile_field(FT, [10, -40, -1e30]),
+            make_center_profile_field(FT, [11, 20, -1e30]),
             make_center_profile_field(FT, [-1e30, -1e30, -1e30]),
         )
         cloudsat_tcc = similar(Fields.level(DBZe[1], 1), FT)
@@ -36,12 +38,16 @@ end
                 DBZe,
             ),
         )
-        # The exact -30 dBZ boundary is detectable, and a subcolumn with
-        # several detectable levels contributes only once.
+        # The exact -30 and 10 dBZ boundaries are detectable, reflectivities
+        # above 10 dBZ are excluded, and a subcolumn with several detectable
+        # levels contributes only once.
         @test all(==(FT(50)), parent(cloudsat_tcc))
 
         all_clear = ntuple(
-            _ -> make_center_profile_field(FT, [-31, -40, -1e30]),
+            i -> make_center_profile_field(
+                FT,
+                isodd(i) ? [-31, -40, -1e30] : [11, 20, -1e30],
+            ),
             4,
         )
         CCF.cloudsat_cloud_fraction!(
