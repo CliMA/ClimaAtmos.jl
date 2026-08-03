@@ -19,6 +19,10 @@ jobs:
   test:
     name: Downgrade ${{ matrix.version }} - ubuntu-latest
     runs-on: ubuntu-latest
+    # julia-downgrade-compat rewrites Project.toml (test extras are promoted to
+    # deps), which makes Aqua's stale-dependency check meaningless here.
+    env:
+      CLIMAATMOS_DOWNGRADE_CI: 'true'
     strategy:
       matrix:
         version: ['1.10', '1.11']
@@ -31,6 +35,7 @@ jobs:
       - uses: julia-actions/julia-downgrade-compat@v2
         with:
           skip: Artifacts, Dates, Downloads, LazyArtifacts, LinearAlgebra, Logging, Printf, Test, Statistics, Random, Pkg, Glib_jll, Musica
+          mode: 'forcedeps'
 
       - uses: julia-actions/julia-buildpkg@latest
       - name: Run infrastructure tests
