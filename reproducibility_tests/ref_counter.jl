@@ -1,4 +1,4 @@
-393
+394
 
 # **README**
 #
@@ -32,6 +32,10 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+394
+- Species-consistent hyperdiffusion.
+- Apply sgs microphyiscs constraints.
+
 393
 - Change min_area_limiter_scale and turb_entr_param_vec in EDMF TOMLs
 
