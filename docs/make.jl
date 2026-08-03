@@ -60,7 +60,6 @@ makedocs(;
             "Configuration & Parameters" => [
                 "Scripting Simulations" => "scripting_simulations.md",
                 "Creating Custom Configurations" => "configuration.md",
-                "Parameters" => "parameters.md",
             ],
             "Computing and Saving Diagnostics" => "diagnostics.md",
             "Loading and Visualizing Output" => "visualizing_output.md",
@@ -106,7 +105,6 @@ makedocs(;
                 "Surface Conditions Internals" => "surface_conditions_internals.md",
                 "Adding a Column Dataset" => "extending_column_datasets.md",
             ],
-            "Buildkite Longrun Jobs" => "longruns.md",
         ],
     ],
 )

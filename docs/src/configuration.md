@@ -73,6 +73,33 @@ The `help` field is optional if you don't plan on making a permanent change to t
 The full list of configuration arguments is in
 [Configuration options](configuration_options.md).
 
+## Overriding parameters
+
+Physical constants and calibratable parameters are managed by
+[ClimaParams.jl](https://github.com/CliMA/ClimaParams.jl), which stores the
+default values and lets you override them without touching source code. To
+override a parameter, create a TOML file with one block per parameter:
+
+```toml
+[gravitational_acceleration]
+value = 9.81
+type = "float"
+```
+
+The `type` field (`bool`, `float`, `integer`, `string`, or `datetime`) is
+optional; the
+[ClimaParams TOML documentation](https://clima.github.io/ClimaParams.jl/dev/toml/)
+describes the full format. Then list the file under the `toml` key of your
+configuration:
+
+```yaml
+toml: [parameters.toml]
+```
+
+and run as usual. The `toml` key accepts several files; later files override
+earlier ones, and many shipped model configurations already carry one (e.g.
+`toml/prognostic_edmfx_1M.toml` in the BOMEX example above).
+
 ## Environment variables
 
 A few behaviors are controlled by environment variables rather than the

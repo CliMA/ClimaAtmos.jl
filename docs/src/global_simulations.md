@@ -55,7 +55,6 @@ configurations that do not fix those keys themselves; later files override
 earlier ones key by key.
 
 Output lands in `output/<job_id>` (see
-[Loading and Visualizing Output](visualizing_output.md)). The
-[Buildkite longrun jobs](longruns.md) page describes the tested global
-configurations. For GPU runs, see
+[Loading and Visualizing Output](visualizing_output.md)). The tested global
+production configurations can be found in `config/longrun_configs/`. For GPU runs, see
 [Running on GPUs and MPI](gpu_and_mpi.md).
