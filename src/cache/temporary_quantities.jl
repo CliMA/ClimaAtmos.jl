@@ -57,6 +57,7 @@ function temporary_quantities(Y, atmos)
             kr_vol_cloudsat_work = similar(Y.c, FT),
             g_vol_cloudsat = similar(Y.c, FT),
             Ze_non_cloudsat_work = similar(Y.c, FT),
+            DBZe_cloudsat_work = similar(Y.c, FT),
             hydro_path_attenuation_cloudsat_work = similar(Y.c, FT),
             gas_path_attenuation_cloudsat = similar(Y.c, FT),
             cloudsat_grid_mean_sizes = (;

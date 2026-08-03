@@ -6,5 +6,6 @@ include("hydrometeor_subcol.jl")
 include("cloudsat_optics.jl")
 include("cloudsat_reflectivity.jl")
 include("cloudsat_cloud_fraction.jl")
+include("cloudsat_cfad.jl")
 
 end

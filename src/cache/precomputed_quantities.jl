@@ -226,20 +226,30 @@ function precomputed_quantities(Y, atmos)
         @. ᶜsampled_cloud_fraction = FT(0)
         @. ᶜsampled_precip_fraction = FT(0)
         ᶜlarge_scale_precipitation_flux = similar(Y.c, FT)
-        nsubcolumns = _cosp_nsubcolumns(atmos.cosp.n_subcolumns)
         height_km_cloudsat = Fields.coordinate_field(axes(Y.c)).z ./ FT(1000)
+        surface_height_km_cloudsat =
+            Fields.level(
+                Fields.coordinate_field(Spaces.face_space(axes(Y.c))).z,
+                Fields.half,
+            ) ./ FT(1000)
         top_height_km_cloudsat =
             Fields.level(
                 Fields.coordinate_field(Spaces.face_space(axes(Y.c))).z,
                 Spaces.nlevels(axes(Y.c)) + Fields.half,
             ) ./ FT(1000)
-        DBZe_cloudsat = ntuple(_ -> similar(Y.c, FT), nsubcolumns)
+        cloudsat_dbze_bin_edges =
+            COSP.COSPCloudSatCFAD.cloudsat_cfad_bin_edges(FT)
+        cloudsat_dbze_bin_centers =
+            COSP.COSPCloudSatCFAD.cloudsat_cfad_bin_centers(FT)
+        cfadDbze94 =
+            ntuple(_ -> similar(Y.c, FT), length(cloudsat_dbze_bin_centers))
         cloudsat_tcc = similar(Fields.level(Y.c.ρ, 1), FT)
 
-        for DBZe_subcolumn in DBZe_cloudsat
-            @. DBZe_subcolumn = FT(-1e30)
-        end
+        cloudsat_tcc2 = similar(cloudsat_tcc)
+
+        COSP.COSPCloudSatCFAD.initialize_cloudsat_cfad!(cfadDbze94)
         cloudsat_tcc .= zero(FT)
+        cloudsat_tcc2 .= zero(FT)
         (;
             ᶜsubcolumn_cloud,
             ᶜsubcolumn_threshold,
@@ -250,9 +260,13 @@ function precomputed_quantities(Y, atmos)
             ᶜsampled_precip_fraction,
             ᶜlarge_scale_precipitation_flux,
             height_km_cloudsat,
+            surface_height_km_cloudsat,
             top_height_km_cloudsat,
-            DBZe_cloudsat,
+            cloudsat_dbze_bin_edges,
+            cloudsat_dbze_bin_centers,
+            cfadDbze94,
             cloudsat_tcc,
+            cloudsat_tcc2,
         )
     else
         (;)

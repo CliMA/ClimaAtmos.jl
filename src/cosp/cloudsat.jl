@@ -1,50 +1,49 @@
 struct NoOpCOSPSubcolumnConsumer end
 (::NoOpCOSPSubcolumnConsumer)(_, _) = nothing
 
-struct CloudSatSubcolumnConsumer{Z, K, ZE, D, H, G, HT, HTT, T, R, S, MP, C}
-    z_vol_work::Z
-    kr_vol_work::K
-    Ze_non_work::ZE
-    DBZe::D
-    hydro_path_attenuation_work::H
-    gas_path_attenuation::G
-    height_km::HT
-    top_height_km::HTT
-    temperature::T
-    rho_air::R
-    grid_mean_sizes::S
-    microphysics_params::MP
-    radar_config::C
+struct CloudSatSubcolumnConsumer{W, A, O, S}
+    work::W
+    atmosphere::A
+    optics::O
+    statistics::S
 end
 
-function (consumer::CloudSatSubcolumnConsumer)(isubcolumn, hydrometeors)
-    return consume_cosp_subcolumn!(consumer, isubcolumn, hydrometeors)
-end
-
-function consume_cosp_subcolumn!(
-    consumer::CloudSatSubcolumnConsumer,
-    isubcolumn,
-    hydrometeors,
-)
+function (consumer::CloudSatSubcolumnConsumer)(_, hydrometeors)
+    (; work, atmosphere, optics, statistics) = consumer
     COSP.COSPCloudSatOptics.cloudsat_optics_subcolumn!(
-        consumer.z_vol_work,
-        consumer.kr_vol_work,
+        work.z_vol,
+        work.kr_vol,
         hydrometeors,
-        consumer.grid_mean_sizes,
-        consumer.temperature,
-        consumer.rho_air,
-        consumer.microphysics_params,
-        consumer.radar_config,
+        optics.grid_mean_sizes,
+        atmosphere.temperature,
+        atmosphere.rho_air,
+        optics.microphysics_params,
+        optics.radar_config,
     )
     COSP.COSPCloudSatReflectivity.cloudsat_reflectivity_subcolumn!(
-        consumer.Ze_non_work,
-        consumer.DBZe[isubcolumn],
-        consumer.z_vol_work,
-        consumer.kr_vol_work,
-        consumer.hydro_path_attenuation_work,
-        consumer.gas_path_attenuation,
-        consumer.height_km,
-        consumer.top_height_km,
+        work.Ze_non,
+        work.DBZe,
+        work.z_vol,
+        work.kr_vol,
+        work.hydro_path_attenuation,
+        atmosphere.gas_path_attenuation,
+        atmosphere.height_km,
+        atmosphere.top_height_km,
+    )
+    COSP.COSPCloudSatCloudFraction.accumulate_cloudsat_cloud_fraction!(
+        statistics.cloudsat_tcc,
+        statistics.cloudsat_tcc2,
+        statistics.detected_column,
+        work.DBZe,
+        atmosphere.height_km,
+        statistics.surface_height_km,
+        statistics.percent_contribution,
+    )
+    COSP.COSPCloudSatCFAD.accumulate_cloudsat_cfad!(
+        statistics.cfadDbze94,
+        work.DBZe,
+        statistics.dbze_bin_edges,
+        statistics.fraction_contribution,
     )
     return nothing
 end
@@ -52,9 +51,12 @@ end
 function run_cosp_cloudsat!(Y, p, ::NonEquilibriumMicrophysics1M)
     (;
         height_km_cloudsat,
+        surface_height_km_cloudsat,
         top_height_km_cloudsat,
-        DBZe_cloudsat,
+        cloudsat_dbze_bin_edges,
+        cfadDbze94,
         cloudsat_tcc,
+        cloudsat_tcc2,
         ᶜp,
         ᶜT,
         ᶜq_tot_nonneg,
@@ -66,6 +68,7 @@ function run_cosp_cloudsat!(Y, p, ::NonEquilibriumMicrophysics1M)
         kr_vol_cloudsat_work,
         g_vol_cloudsat,
         Ze_non_cloudsat_work,
+        DBZe_cloudsat_work,
         hydro_path_attenuation_cloudsat_work,
         gas_path_attenuation_cloudsat,
         cloudsat_grid_mean_sizes,
@@ -89,27 +92,43 @@ function run_cosp_cloudsat!(Y, p, ::NonEquilibriumMicrophysics1M)
         top_height_km_cloudsat,
     )
 
-    consumer = CloudSatSubcolumnConsumer(
-        z_vol_cloudsat_work,
-        kr_vol_cloudsat_work,
-        Ze_non_cloudsat_work,
-        DBZe_cloudsat,
-        hydro_path_attenuation_cloudsat_work,
-        gas_path_attenuation_cloudsat,
-        height_km_cloudsat,
-        top_height_km_cloudsat,
-        ᶜT,
-        Y.c.ρ,
-        cloudsat_grid_mean_sizes,
-        CAP.microphysics_1m_params(p.params),
+    FT = eltype(Y)
+    nsubcolumns = _cosp_nsubcolumns(p.atmos.cosp.n_subcolumns)
+    fraction_contribution = FT(1) / FT(nsubcolumns)
+    percent_contribution = FT(100) * fraction_contribution
+    reset_cloudsat_statistics!(cfadDbze94, cloudsat_tcc, cloudsat_tcc2)
+    statistics = (;
+        cloudsat_tcc,
+        cloudsat_tcc2,
+        detected_column = detected_column_cloudsat,
+        surface_height_km = surface_height_km_cloudsat,
+        cfadDbze94,
+        dbze_bin_edges = cloudsat_dbze_bin_edges,
+        fraction_contribution,
+        percent_contribution,
+    )
+
+    work = (;
+        z_vol = z_vol_cloudsat_work,
+        kr_vol = kr_vol_cloudsat_work,
+        Ze_non = Ze_non_cloudsat_work,
+        DBZe = DBZe_cloudsat_work,
+        hydro_path_attenuation = hydro_path_attenuation_cloudsat_work,
+    )
+    atmosphere = (;
+        gas_path_attenuation = gas_path_attenuation_cloudsat,
+        height_km = height_km_cloudsat,
+        top_height_km = top_height_km_cloudsat,
+        temperature = ᶜT,
+        rho_air = Y.c.ρ,
+    )
+    optics = (;
+        grid_mean_sizes = cloudsat_grid_mean_sizes,
+        microphysics_params = CAP.microphysics_1m_params(p.params),
         radar_config,
     )
+    consumer = CloudSatSubcolumnConsumer(work, atmosphere, optics, statistics)
     foreach_cosp_subcolumn(consumer, Y, p)
-    COSP.COSPCloudSatCloudFraction.cloudsat_cloud_fraction!(
-        cloudsat_tcc,
-        detected_column_cloudsat,
-        DBZe_cloudsat,
-    )
     return nothing
 end
 
@@ -122,21 +141,28 @@ function run_cosp_cloudsat!(
     # not. Preserve the sampled-fraction workflow while returning explicit
     # unsupported simulator outputs.
     foreach_cosp_subcolumn(NoOpCOSPSubcolumnConsumer(), Y, p)
-    fill_unsupported_cloudsat_outputs!(p.precomputed, eltype(Y))
+    reset_cloudsat_statistics!(p.precomputed)
     return nothing
 end
 
 function run_cosp_cloudsat!(Y, p, _)
-    fill_unsupported_cloudsat_outputs!(p.precomputed, eltype(Y))
+    reset_cloudsat_statistics!(p.precomputed)
     return nothing
 end
 
-function fill_unsupported_cloudsat_outputs!(precomputed, ::Type{FT}) where {FT}
-    (; DBZe_cloudsat, cloudsat_tcc) = precomputed
-    for DBZe_subcolumn in DBZe_cloudsat
-        @. DBZe_subcolumn = FT(-1e30)
-    end
-    cloudsat_tcc .= zero(FT)
+function reset_cloudsat_statistics!(precomputed)
+    (; cfadDbze94, cloudsat_tcc, cloudsat_tcc2) = precomputed
+    return reset_cloudsat_statistics!(cfadDbze94, cloudsat_tcc, cloudsat_tcc2)
+end
+
+function reset_cloudsat_statistics!(cfadDbze94, cloudsat_tcc, cloudsat_tcc2)
+    COSP.COSPCloudSatCFAD.initialize_cloudsat_cfad!(cfadDbze94)
+    COSP.COSPCloudSatCloudFraction.initialize_cloudsat_cloud_fraction!(
+        cloudsat_tcc,
+    )
+    COSP.COSPCloudSatCloudFraction.initialize_cloudsat_cloud_fraction!(
+        cloudsat_tcc2,
+    )
     return nothing
 end
 

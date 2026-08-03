@@ -470,13 +470,13 @@ end
         )
         @test isnothing(CA.subcol_model_callback!(simulation.integrator))
         @test any(
-            DBZe -> any(>(eltype(Y)(-1e30)), parent(DBZe)),
-            p.precomputed.DBZe_cloudsat,
+            cfad_bin -> any(>(zero(eltype(Y))), parent(cfad_bin)),
+            p.precomputed.cfadDbze94,
         )
         @test any(>(zero(eltype(Y))), parent(p.precomputed.cloudsat_tcc))
         @test all(
-            size -> all(>(zero(eltype(Y))), parent(size)),
-            values(p.scratch.cloudsat_grid_mean_sizes),
+            parent(p.precomputed.cloudsat_tcc2) .<=
+            parent(p.precomputed.cloudsat_tcc),
         )
 
         @testset "streamed subcolumns match COSPv2 reference" begin
@@ -564,7 +564,6 @@ end
             state_FT = eltype(Y)
             energy_increment = state_FT(1000)
             zero_state = zero(state_FT)
-            missing_reflectivity = state_FT(-1e30)
             @. Y.c.ρe_tot += Y.c.ρ * energy_increment
             CA.set_precomputed_quantities!(Y, p, simulation.integrator.t)
             CA.subcol_model_callback!(simulation.integrator)
@@ -578,41 +577,35 @@ end
             CA.subcol_model_callback!(simulation.integrator)
 
             @test all(
-                DBZe -> all(==(missing_reflectivity), parent(DBZe)),
-                p.precomputed.DBZe_cloudsat,
+                cfad_bin -> all(iszero, parent(cfad_bin)),
+                p.precomputed.cfadDbze94,
             )
             @test all(iszero, parent(p.precomputed.cloudsat_tcc))
-            @test all(iszero, parent(p.scratch.z_vol_cloudsat_work))
-            @test all(iszero, parent(p.scratch.kr_vol_cloudsat_work))
-            @test all(
-                ==(missing_reflectivity),
-                parent(p.scratch.Ze_non_cloudsat_work),
-            )
-            @test all(
-                iszero,
-                parent(p.scratch.hydro_path_attenuation_cloudsat_work),
-            )
-            @test all(!, parent(p.scratch.detected_column_cloudsat))
+            @test all(iszero, parent(p.precomputed.cloudsat_tcc2))
         end
     end
 
     @testset "unsupported CloudSat outputs" begin
-        DBZe_cloudsat = ntuple(
+        cfadDbze94 = ntuple(
             _ -> make_center_field(FT; value = 42, nelems = 2),
-            3,
+            15,
         )
-        cloudsat_tcc = similar(Fields.level(DBZe_cloudsat[1], 1), FT)
+        cloudsat_tcc = similar(Fields.level(cfadDbze94[1], 1), FT)
+        cloudsat_tcc2 = similar(cloudsat_tcc)
         cloudsat_tcc .= FT(100)
+        cloudsat_tcc2 .= FT(100)
         untouched_gas = make_center_field(FT; value = 7, nelems = 2)
-        precomputed = (; DBZe_cloudsat, cloudsat_tcc, untouched_gas)
+        precomputed =
+            (; cfadDbze94, cloudsat_tcc, cloudsat_tcc2, untouched_gas)
 
-        CA.fill_unsupported_cloudsat_outputs!(precomputed, FT)
+        CA.reset_cloudsat_statistics!(precomputed)
 
         @test all(
-            DBZe -> all(==(FT(-1e30)), parent(DBZe)),
-            DBZe_cloudsat,
+            cfad_bin -> all(iszero, parent(cfad_bin)),
+            cfadDbze94,
         )
         @test all(iszero, parent(cloudsat_tcc))
+        @test all(iszero, parent(cloudsat_tcc2))
         @test all(==(FT(7)), parent(untouched_gas))
     end
 

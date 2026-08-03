@@ -7,14 +7,21 @@ import ..COSPSubcolumns
 Generate one large-scale precipitation subcolumn from shared selectors.
 """
 function scops_subcolumn_precip!(precip_subcol, cloud_s, flux, selectors, scratch)
-    _check_axes(precip_subcol, cloud_s, "cloud_s")
-    _check_axes(precip_subcol, flux, "flux")
-    for field in values(selectors)
-        _check_axes(precip_subcol, field, "selector")
-    end
-    for field in values(scratch)
-        _check_axes(precip_subcol, field, "scratch")
-    end
+    COSPSubcolumns._check_field_axes(
+        (cloud_s, flux),
+        precip_subcol,
+        "input",
+    )
+    COSPSubcolumns._check_field_axes(
+        values(selectors),
+        precip_subcol,
+        "selector",
+    )
+    COSPSubcolumns._check_field_axes(
+        values(scratch),
+        precip_subcol,
+        "scratch",
+    )
     FT = eltype(precip_subcol)
     cloud_one = one(eltype(cloud_s))
     output_one = one(FT)
@@ -67,10 +74,5 @@ end
 end
 
 @inline _precipitation_mask(state) = state.precip
-
-function _check_axes(reference, field, name)
-    axes(field) == axes(reference) ||
-        throw(DimensionMismatch("$name must have matching axes"))
-end
 
 end

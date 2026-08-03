@@ -18,6 +18,41 @@ function make_center_profile_field(FT, profile)
     return field
 end
 
+@testset "streamed CloudSat total cloud cover above 1 km" begin
+    for FT in (Float32, Float64)
+        DBZe = (
+            make_center_profile_field(FT, [-20, -20, -40]),
+            make_center_profile_field(FT, [-40, -40, -20]),
+        )
+        height_km = make_center_profile_field(FT, [0.5, 1, 1.5])
+        cloudsat_tcc = similar(Fields.level(DBZe[1], 1), FT)
+        cloudsat_tcc2 = similar(cloudsat_tcc)
+        surface_height_km = similar(cloudsat_tcc)
+        detected_column = similar(cloudsat_tcc, Bool)
+        surface_height_km .= zero(FT)
+
+        CCF.initialize_cloudsat_cloud_fraction!(cloudsat_tcc)
+        CCF.initialize_cloudsat_cloud_fraction!(cloudsat_tcc2)
+        contribution = FT(100) / FT(length(DBZe))
+        for DBZe_subcolumn in DBZe
+            CCF.accumulate_cloudsat_cloud_fraction!(
+                cloudsat_tcc,
+                cloudsat_tcc2,
+                detected_column,
+                DBZe_subcolumn,
+                height_km,
+                surface_height_km,
+                contribution,
+            )
+        end
+
+        # Both subcolumns contain detectable reflectivity, but only the second
+        # contains it strictly more than 1 km above the local surface.
+        @test all(==(FT(100)), parent(cloudsat_tcc))
+        @test all(==(FT(50)), parent(cloudsat_tcc2))
+    end
+end
+
 @testset "COSPv2 CloudSat total cloud cover semantics" begin
     for FT in (Float32, Float64)
         DBZe = (
