@@ -2,7 +2,7 @@
 ##### Precomputed quantities
 #####
 import Thermodynamics as TD
-import ClimaCore: Spaces, Fields
+import ClimaCore: Spaces, Fields, DataLayouts
 
 """
     implicit_precomputed_quantities(Y, atmos)
@@ -669,13 +669,29 @@ NVTX.@annotate function set_implicit_precomputed_quantities!(Y, p, t)
             @. ᶜq_liq = zero(eltype(ᶜT))
             @. ᶜq_ice = zero(eltype(ᶜT))
         else  # NonEquilibriumMicrophysics
-            @. ᶜq_liq =
-                max(0, specific(Y.c.ρq_lcl, Y.c.ρ) + specific(Y.c.ρq_rai, Y.c.ρ))
-            @. ᶜq_ice =
-                max(0, specific(Y.c.ρq_icl, Y.c.ρ) + specific(Y.c.ρq_sno, Y.c.ρ))
+            q_liq_dl = Fields.field_values(ᶜq_liq)
+            ρq_lcl_dl = Fields.field_values(Y.c.ρq_lcl)
+            ρq_rai_dl = Fields.field_values(Y.c.ρq_rai)
+            ρq_ice_dl = Fields.field_values(Y.c.ρq_icl)
+            q_ice_dl = Fields.field_values(ᶜq_ice)
+            ρq_sno_dl = Fields.field_values(Y.c.ρq_sno)
+            ᶜq_tot_nonneg_dl = Fields.field_values(ᶜq_tot_nonneg)
+            ρq_tot_dl = Fields.field_values(Y.c.ρq_tot)
+            ρ_dl = Fields.field_values(Y.c.ρ)
+
+            DataLayouts.foreach_point(q_liq_dl, ρq_lcl_dl, ρ_dl, ρq_rai_dl, q_ice_dl, ρq_ice_dl, ρq_sno_dl, ρq_tot_dl, ᶜq_tot_nonneg_dl) do q_liq, ρq_lcl, ρ, ρq_rai, ᶜq_ice, ρq_icl, ρq_sno, ρq_tot, q_tot_nonneg
+                @. q_liq = max(0, specific(ρq_lcl, ρ) + specific(ρq_rai, ρ))
+                @. ᶜq_ice = max(0, specific(ρq_icl, ρ) + specific(ρq_sno, ρ))
+                # # Clamp q_tot ≥ q_cond to ensure non-negative vapor (q_vap = q_tot - q_cond)
+                @. q_tot_nonneg = max(q_liq + ᶜq_ice, specific(ρq_tot, ρ))
+            end
+            # @. ᶜq_liq =
+            #     max(0, specific(Y.c.ρq_lcl, Y.c.ρ) + specific(Y.c.ρq_rai, Y.c.ρ))
+            # @. ᶜq_ice =
+            #     max(0, specific(Y.c.ρq_icl, Y.c.ρ) + specific(Y.c.ρq_sno, Y.c.ρ))
             # Clamp q_tot ≥ q_cond to ensure non-negative vapor (q_vap = q_tot - q_cond)
-            @. ᶜq_tot_nonneg =
-                max(ᶜq_liq + ᶜq_ice, specific(Y.c.ρq_tot, Y.c.ρ))
+            # @. ᶜq_tot_nonneg =
+            #     max(ᶜq_liq + ᶜq_ice, specific(Y.c.ρq_tot, Y.c.ρ))
         end
         # Floor T to prevent negative pressure during implicit Newton iterations
         T_min_sgs = CAP.T_min_sgs(p.params)

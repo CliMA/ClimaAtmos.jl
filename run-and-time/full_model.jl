@@ -24,32 +24,37 @@ simulation = CA.get_simulation(config)
 
 
 
-
-
-# step to compile
-for i in 1:10
-    ClimaTimeSteppers.step!(integrator)
-end
-
-function step_three_times(integrator)
-    for i in 1:3
-        ClimaTimeSteppers.step!(integrator)
-    end
-    return
-end
-
-step_three_times(integrator)
 Y = integrator.u;
 p = integrator.p;
-t = integrator.t;
-Yₜ = similar(Y);
-Yₜ_lim = similar(Y);
+t = 0.0f0
 
-CA.remaining_tendency!(Yₜ, Yₜ_lim, Y, p, t)
-BenchmarkTools.@benchmark CUDA.@sync CA.remaining_tendency!(
-           $Yₜ,
-           $Yₜ_lim,
-           $Y,
-           $p,
-           $t,
-       )
+BenchmarkTools.@benchmark CUDA.@sync CA.set_implicit_precomputed_quantities!($Y, $p, $t);
+# results before foreach_point: median 4.3 ms, min:2.14
+# results after: median 4.2, min 2.09
+# step to compile
+# for i in 1:10
+#     ClimaTimeSteppers.step!(integrator)
+# end
+
+# function step_three_times(integrator)
+#     for i in 1:3
+#         ClimaTimeSteppers.step!(integrator)
+#     end
+#     return
+# end
+
+# step_three_times(integrator)
+# Y = integrator.u;
+# p = integrator.p;
+# t = integrator.t;
+# Yₜ = similar(Y);
+# Yₜ_lim = similar(Y);
+
+# CA.remaining_tendency!(Yₜ, Yₜ_lim, Y, p, t)
+# BenchmarkTools.@benchmark CUDA.@sync CA.remaining_tendency!(
+#            $Yₜ,
+#            $Yₜ_lim,
+#            $Y,
+#            $p,
+#            $t,
+#        )
