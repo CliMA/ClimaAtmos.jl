@@ -64,9 +64,7 @@ end
     z_vol = make_center_profile_field(FT, [100, 10, 1])
     kr_vol = make_center_profile_field(FT, [0.1, 0.2, 0.3])
     g_vol = make_center_profile_field(FT, [0.01, 0.02, 0.03])
-    Ze_non = make_center_field(FT; value = 999, nelems)
     DBZe = make_center_field(FT; value = 999, nelems)
-    hydro_path = make_center_field(FT; value = 999, nelems)
     gas_path = make_center_field(FT; value = 999, nelems)
     height_km = Fields.coordinate_field(axes(g_vol)).z ./ FT(1000)
     top_height_km = model_top_height_km(g_vol)
@@ -80,11 +78,9 @@ end
         ),
     )
     result = CCR.cloudsat_reflectivity_subcolumn!(
-        Ze_non,
         DBZe,
         z_vol,
         kr_vol,
-        hydro_path,
         gas_path,
         height_km,
         top_height_km,
@@ -93,7 +89,6 @@ end
     @test level_values(Fields.coordinate_field(axes(z_vol)).z) ==
         FT[500, 1500, 2500]
     @test isnothing(result)
-    @test isapprox(parent(Ze_non), FT[20, 10, 0]; atol = 1e-12)
     @test isapprox(
         parent(DBZe),
         FT[18.79, 9.12, -0.33];
@@ -103,19 +98,15 @@ end
 
     z_vol = make_center_profile_field(FT, [0, -1, 1])
     CCR.cloudsat_reflectivity_subcolumn!(
-        Ze_non,
         DBZe,
         z_vol,
         kr_vol,
-        hydro_path,
         gas_path,
         height_km,
         top_height_km,
     )
 
-    @test parent(Ze_non)[1:2] == FT[-1e30, -1e30]
     @test parent(DBZe)[1:2] == FT[-1e30, -1e30]
-    @test isfinite(parent(Ze_non)[3])
     @test isfinite(parent(DBZe)[3])
 
 end
@@ -125,9 +116,7 @@ end
     z_vol = make_center_profile_field(FT, [10])
     kr_vol = make_center_profile_field(FT, [0.1])
     g_vol = make_center_profile_field(FT, [0.01])
-    Ze_non = similar(z_vol)
     DBZe = similar(z_vol)
-    hydro_path = similar(z_vol)
     gas_path = similar(z_vol)
     height_km = Fields.coordinate_field(axes(z_vol)).z ./ FT(1000)
     top_height_km = model_top_height_km(z_vol)
@@ -139,11 +128,9 @@ end
         top_height_km,
     )
     CCR.cloudsat_reflectivity_subcolumn!(
-        Ze_non,
         DBZe,
         z_vol,
         kr_vol,
-        hydro_path,
         gas_path,
         height_km,
         top_height_km,
@@ -151,7 +138,6 @@ end
 
     distance_from_top = top_height_km[] - level_values(height_km)[1]
     expected_DBZe = FT(10) - FT(2) * (FT(0.1) + FT(0.01)) * distance_from_top
-    @test parent(Ze_non) ≈ FT[10] atol = 1e-12
     @test parent(DBZe) ≈ FT[expected_DBZe] rtol = 1e-12 atol = 1e-12
 end
 
@@ -177,9 +163,7 @@ end
         z_top = 4000,
         stretch,
     )
-    Ze_non = similar(z_vol)
     DBZe = similar(z_vol)
-    hydro_path = similar(z_vol)
     gas_path = similar(z_vol)
     height_km = Fields.coordinate_field(axes(z_vol)).z ./ FT(1000)
     top_height_km = model_top_height_km(z_vol)
@@ -191,11 +175,9 @@ end
         top_height_km,
     )
     CCR.cloudsat_reflectivity_subcolumn!(
-        Ze_non,
         DBZe,
         z_vol,
         kr_vol,
-        hydro_path,
         gas_path,
         height_km,
         top_height_km,

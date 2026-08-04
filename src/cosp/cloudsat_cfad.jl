@@ -1,5 +1,7 @@
 module COSPCloudSatCFAD
 
+import ClimaCore: Fields
+
 export cloudsat_cfad_bin_edges,
     cloudsat_cfad_bin_centers,
     initialize_cloudsat_cfad!,
@@ -19,11 +21,33 @@ function cloudsat_cfad_bin_centers(::Type{FT}) where {FT}
     )
 end
 
-function initialize_cloudsat_cfad!(cfad)
-    for cfad_bin in cfad
-        cfad_bin .= zero(eltype(cfad_bin))
-    end
+@inline _zero_cfad(::NTuple{N, FT}) where {N, FT} =
+    ntuple(_ -> zero(FT), Val(N))
+
+function initialize_cloudsat_cfad!(cfad::Fields.Field)
+    @. cfad = _zero_cfad(cfad)
     return nothing
+end
+
+struct CFADAccumulator{E, C}
+    bin_edges::E
+    contribution::C
+end
+
+@inline function (accumulator::CFADAccumulator)(
+    current::NTuple{N, FT},
+    dbze,
+) where {N, FT}
+    return ntuple(Val(N)) do index
+        lower_edge = accumulator.bin_edges[index]
+        upper_edge = accumulator.bin_edges[index + 1]
+        increment = ifelse(
+            (dbze >= lower_edge) & (dbze < upper_edge),
+            accumulator.contribution,
+            zero(accumulator.contribution),
+        )
+        current[index] + increment
+    end
 end
 
 """
@@ -35,26 +59,17 @@ upper edges are exclusive, and each populated bin is normalized by the total
 number of subcolumns through `contribution`.
 """
 function accumulate_cloudsat_cfad!(
-    cfad::NTuple{N},
+    cfad::Fields.Field,
     DBZe,
     bin_edges::NTuple{NPlusOne},
     contribution,
-) where {N, NPlusOne}
-    NPlusOne == N + 1 ||
+) where {NPlusOne}
+    n_bins = fieldcount(eltype(cfad))
+    NPlusOne == n_bins + 1 ||
         throw(ArgumentError("CloudSat CFAD needs one more edge than bins"))
 
-    no_contribution = zero(contribution)
-    for index in 1:N
-        cfad_bin = cfad[index]
-        lower_edge = bin_edges[index]
-        upper_edge = bin_edges[index + 1]
-        @. cfad_bin +=
-            ifelse(
-                (DBZe >= lower_edge) & (DBZe < upper_edge),
-                contribution,
-                no_contribution,
-            )
-    end
+    accumulator = CFADAccumulator(bin_edges, contribution)
+    @. cfad = accumulator(cfad, DBZe)
     return nothing
 end
 

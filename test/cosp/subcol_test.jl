@@ -449,6 +449,38 @@ end
               reference.nsubcolumns
         @test CA._cosp_overlap(p.atmos.cosp.overlap) === reference.overlap
         @test isbitstype(typeof(p.atmos.cosp))
+        persistent_cosp_quantities = (
+            :height_km_cloudsat,
+            :surface_height_km_cloudsat,
+            :top_height_km_cloudsat,
+            :cloudsat_dbze_bin_edges,
+            :cloudsat_dbze_bin_centers,
+            :cfadDbze94,
+            :cloudsat_tcc,
+            :cloudsat_tcc2,
+        )
+        temporary_cosp_quantities = (
+            :ᶜsubcolumn_cloud,
+            :ᶜsubcolumn_threshold,
+            :ᶜsubcolumn_precip,
+            :ᶜscops_selectors,
+            :ᶜprecip_subcolumn_scratch,
+            :ᶜsampled_cloud_fraction,
+            :ᶜsampled_precip_fraction,
+            :ᶜlarge_scale_precipitation_flux,
+        )
+        @test all(
+            name -> hasproperty(p.precomputed, name),
+            persistent_cosp_quantities,
+        )
+        @test all(
+            name -> hasproperty(p.scratch, name),
+            temporary_cosp_quantities,
+        )
+        @test all(
+            name -> !hasproperty(p.precomputed, name),
+            temporary_cosp_quantities,
+        )
         # COSPv2 writes levels from model top to surface. ClimaAtmos center
         # fields use level 1 at the surface, so reverse every input profile.
         set_center_profile!(Y.c.ρ, cosp_bottom_to_top(reference.density))
@@ -470,8 +502,11 @@ end
         )
         @test isnothing(CA.subcol_model_callback!(simulation.integrator))
         @test any(
-            cfad_bin -> any(>(zero(eltype(Y))), parent(cfad_bin)),
-            p.precomputed.cfadDbze94,
+            index -> any(
+                >(zero(eltype(Y))),
+                parent(getproperty(p.precomputed.cfadDbze94, index)),
+            ),
+            eachindex(p.precomputed.cloudsat_dbze_bin_centers),
         )
         @test any(>(zero(eltype(Y))), parent(p.precomputed.cloudsat_tcc))
         @test all(
@@ -490,11 +525,11 @@ end
             actual_hydrometeors =
                 make_hydrometeor_subcolumns(grid_mean_template, nsubcolumns)
             actual_cloud_masks = ntuple(
-                _ -> similar(p.precomputed.ᶜsubcolumn_cloud),
+                _ -> similar(p.scratch.ᶜsubcolumn_cloud),
                 nsubcolumns,
             )
             actual_precip_masks = ntuple(
-                _ -> similar(p.precomputed.ᶜsubcolumn_precip),
+                _ -> similar(p.scratch.ᶜsubcolumn_precip),
                 nsubcolumns,
             )
             consumed_subcolumns = Int[]
@@ -505,9 +540,9 @@ end
                 # The masks and lazy hydrometeor broadcasts borrow streamed
                 # working storage, so materialize all of them before returning.
                 @. actual_cloud_masks[isubcolumn] =
-                    p.precomputed.ᶜsubcolumn_cloud
+                    p.scratch.ᶜsubcolumn_cloud
                 @. actual_precip_masks[isubcolumn] =
-                    p.precomputed.ᶜsubcolumn_precip
+                    p.scratch.ᶜsubcolumn_precip
                 for name in keys(actual_hydrometeors)
                     output = getproperty(actual_hydrometeors, name)[isubcolumn]
                     hydrometeor = getproperty(hydrometeors, name)
@@ -517,14 +552,14 @@ end
 
             @test consumed_subcolumns == collect(1:nsubcolumns)
             @test isapprox(
-                center_profile(p.precomputed.ᶜlarge_scale_precipitation_flux),
+                center_profile(p.scratch.ᶜlarge_scale_precipitation_flux),
                 cosp_bottom_to_top(reference.large_scale_precipitation_flux);
                 rtol = reference_tolerance,
                 atol = 0,
             )
-            @test center_profile(p.precomputed.ᶜsampled_cloud_fraction) ==
+            @test center_profile(p.scratch.ᶜsampled_cloud_fraction) ==
                   cosp_bottom_to_top(reference.sampled_cloud_fraction)
-            @test center_profile(p.precomputed.ᶜsampled_precip_fraction) ==
+            @test center_profile(p.scratch.ᶜsampled_precip_fraction) ==
                   cosp_bottom_to_top(reference.sampled_precip_fraction)
 
             hydrometeor_reference_names = (;
@@ -577,8 +612,11 @@ end
             CA.subcol_model_callback!(simulation.integrator)
 
             @test all(
-                cfad_bin -> all(iszero, parent(cfad_bin)),
-                p.precomputed.cfadDbze94,
+                index -> all(
+                    iszero,
+                    parent(getproperty(p.precomputed.cfadDbze94, index)),
+                ),
+                eachindex(p.precomputed.cloudsat_dbze_bin_centers),
             )
             @test all(iszero, parent(p.precomputed.cloudsat_tcc))
             @test all(iszero, parent(p.precomputed.cloudsat_tcc2))
@@ -586,11 +624,15 @@ end
     end
 
     @testset "unsupported CloudSat outputs" begin
-        cfadDbze94 = ntuple(
-            _ -> make_center_field(FT; value = 42, nelems = 2),
-            15,
+        cfadDbze94 = similar(
+            make_center_field(FT; value = 42, nelems = 2),
+            NTuple{15, FT},
         )
-        cloudsat_tcc = similar(Fields.level(cfadDbze94[1], 1), FT)
+        for index in 1:15
+            getproperty(cfadDbze94, index) .= FT(42)
+        end
+        cloudsat_tcc =
+            similar(Fields.level(getproperty(cfadDbze94, 1), 1), FT)
         cloudsat_tcc2 = similar(cloudsat_tcc)
         cloudsat_tcc .= FT(100)
         cloudsat_tcc2 .= FT(100)
@@ -601,8 +643,8 @@ end
         CA.reset_cloudsat_statistics!(precomputed)
 
         @test all(
-            cfad_bin -> all(iszero, parent(cfad_bin)),
-            cfadDbze94,
+            index -> all(iszero, parent(getproperty(cfadDbze94, index))),
+            1:15,
         )
         @test all(iszero, parent(cloudsat_tcc))
         @test all(iszero, parent(cloudsat_tcc2))
@@ -638,6 +680,10 @@ end
             ),
             precomputed = (;
                 ᶜcloud_fraction = cloud_fraction,
+                ᶜwᵣ = profile_field(FT[1, -1]),
+                ᶜwₛ = profile_field(FT[0.5, -2]),
+            ),
+            scratch = (;
                 ᶜsubcolumn_cloud = similar_center_field(),
                 ᶜsubcolumn_threshold = similar_center_field(),
                 ᶜsubcolumn_precip = similar_center_field(),
@@ -655,10 +701,6 @@ end
                 ᶜsampled_cloud_fraction = similar_center_field(),
                 ᶜsampled_precip_fraction = similar_center_field(),
                 ᶜlarge_scale_precipitation_flux = similar_center_field(),
-                ᶜwᵣ = profile_field(FT[1, -1]),
-                ᶜwₛ = profile_field(FT[0.5, -2]),
-            ),
-            scratch = (;
                 ᶜtemp_scalar = similar_center_field(),
                 ᶜtemp_scalar_2 = similar_center_field(),
                 ᶜtemp_scalar_3 = similar_center_field(),
@@ -681,7 +723,7 @@ end
                 CA.foreach_cosp_subcolumn((_, _) -> nothing, Y, p_case)
                 # ClimaAtmos center profiles are ordered from bottom to top.
                 @test center_profile(
-                    p.precomputed.ᶜlarge_scale_precipitation_flux,
+                    p.scratch.ᶜlarge_scale_precipitation_flux,
                 ) ≈ FT[0.2, 0]
             else
                 @test_throws ArgumentError CA.foreach_cosp_subcolumn(

@@ -1040,7 +1040,7 @@ Groups surface-related models and types.
 end
 
 @kwdef struct COSPModel{N, O}
-    n_subcolumns::Val{N} = Val(256)
+    n_subcolumns::Val{N} = Val(100)
     overlap::Val{O} = Val(:maximum_random)
     random_seed::UInt64 = UInt64(1)
 end

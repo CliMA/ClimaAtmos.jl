@@ -318,15 +318,19 @@ end
         )
         @test all(isfinite, parent(g_vol))
         @test any(>(0), parent(g_vol))
-        z_vol = make_center_field(FT; value = 999, nelems)
-        kr_vol = make_center_field(FT; value = 999, nelems)
+        hydrometeor_optics_type = @NamedTuple{z_vol::FT, kr_vol::FT}
+        hydrometeor_optics = similar(thermo_state.T, hydrometeor_optics_type)
+        z_vol = hydrometeor_optics.z_vol
+        kr_vol = hydrometeor_optics.kr_vol
+        z_vol .= FT(999)
+        kr_vol .= FT(999)
+        @test eltype(hydrometeor_optics) == hydrometeor_optics_type
         hydrometeors = make_hydrometeor_fields(FT, nelems; value = 0)
         for q_name in keys(hydrometeors)
             getproperty(hydrometeors, q_name) .= FT(1e-4)
             @test isnothing(
                 CCO.cloudsat_optics_subcolumn!(
-                    z_vol,
-                    kr_vol,
+                    hydrometeor_optics,
                     hydrometeors,
                     grid_mean_sizes,
                     thermo_state.T,
@@ -344,8 +348,7 @@ end
 
         # A clear subcolumn must overwrite the reusable work fields.
         CCO.cloudsat_optics_subcolumn!(
-            z_vol,
-            kr_vol,
+            hydrometeor_optics,
             hydrometeors,
             grid_mean_sizes,
             thermo_state.T,

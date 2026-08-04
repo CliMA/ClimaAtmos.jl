@@ -3,9 +3,7 @@ module COSPCloudSatCloudFraction
 import ClimaCore: Operators
 import LazyBroadcast: lazy
 
-export cloudsat_cloud_fraction!,
-    initialize_cloudsat_cloud_fraction!,
-    accumulate_cloudsat_cloud_fraction!
+export initialize_cloudsat_cloud_fraction!, accumulate_cloudsat_cloud_fraction!
 
 initialize_cloudsat_cloud_fraction!(cloudsat_tcc) =
     (cloudsat_tcc .= zero(eltype(cloudsat_tcc)); nothing)
@@ -88,55 +86,6 @@ function _accumulate_cloudsat_tcc!(
         init = false,
     )
     @. cloudsat_tcc += contribution * detected_column_scratch
-    return nothing
-end
-
-"""
-    cloudsat_cloud_fraction!(
-        cloudsat_tcc,
-        detected_column_scratch,
-        DBZe_cloudsat;
-        detection_limit = -30.0,
-        maximum_detection_limit = 10.0,
-    )
-
-Compute CloudSat total cloud cover in percent from attenuated radar
-reflectivity. A subcolumn contributes once when at least one of its levels has
-reflectivity between `detection_limit` and `maximum_detection_limit`,
-inclusive.
-"""
-function cloudsat_cloud_fraction!(
-    cloudsat_tcc,
-    detected_column_scratch,
-    DBZe_cloudsat::NTuple{N};
-    detection_limit = -30.0,
-    maximum_detection_limit = 10.0,
-) where {N}
-    N > 0 ||
-        throw(
-            ArgumentError(
-                "CloudSat cloud fraction needs at least one subcolumn",
-            ),
-        )
-
-    FT = eltype(DBZe_cloudsat[1])
-    typed_detection_limit = FT(detection_limit)
-    typed_maximum_detection_limit = FT(maximum_detection_limit)
-    contribution = FT(100) / FT(N)
-
-    initialize_cloudsat_cloud_fraction!(cloudsat_tcc)
-
-    for DBZe_subcolumn in DBZe_cloudsat
-        accumulate_cloudsat_cloud_fraction!(
-            cloudsat_tcc,
-            detected_column_scratch,
-            DBZe_subcolumn,
-            contribution;
-            detection_limit = typed_detection_limit,
-            maximum_detection_limit = typed_maximum_detection_limit,
-        )
-    end
-
     return nothing
 end
 

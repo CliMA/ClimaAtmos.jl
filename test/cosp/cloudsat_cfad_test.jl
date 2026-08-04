@@ -52,7 +52,8 @@ end
             FT,
             [-99, -44, -29, 11, 21, -1e30, 80, -1e30],
         )
-        cfad = ntuple(_ -> similar(first_subcolumn), length(centers))
+        cfad = similar(first_subcolumn, typeof(centers))
+        @test eltype(cfad) == typeof(centers)
         CCFAD.initialize_cloudsat_cfad!(cfad)
 
         contribution = FT(0.5)
@@ -71,13 +72,20 @@ end
 
         # Lower edges are inclusive and upper edges are exclusive. Values at
         # 80 dBZ and the missing-value sentinel are outside every bin.
-        @test vec(parent(cfad[1])) == FT[1, 0, 0, 0, 0, 0, 0, 0]
-        @test vec(parent(cfad[2])) == FT[0, 1, 0, 0, 0, 0, 0, 0]
-        @test vec(parent(cfad[5])) == FT[0, 0, 1, 0, 0, 0, 0, 0]
-        @test vec(parent(cfad[13])) == FT[0, 0, 0, 1, 0, 0, 0, 0]
-        @test vec(parent(cfad[15])) == FT[0, 0, 0, 0, 1, 0.5, 0, 0]
+        cfad_bin = index -> vec(parent(getproperty(cfad, index)))
+        @test cfad_bin(1) == FT[1, 0, 0, 0, 0, 0, 0, 0]
+        @test cfad_bin(2) == FT[0, 1, 0, 0, 0, 0, 0, 0]
+        @test cfad_bin(5) == FT[0, 0, 1, 0, 0, 0, 0, 0]
+        @test cfad_bin(13) == FT[0, 0, 0, 1, 0, 0, 0, 0]
+        @test cfad_bin(15) == FT[0, 0, 0, 0, 1, 0.5, 0, 0]
         for level in (7, 8)
-            @test all(iszero, map(bin -> parent(bin)[level], cfad))
+            @test all(
+                iszero,
+                ntuple(
+                    index -> parent(getproperty(cfad, index))[level],
+                    length(centers),
+                ),
+            )
         end
     end
 end

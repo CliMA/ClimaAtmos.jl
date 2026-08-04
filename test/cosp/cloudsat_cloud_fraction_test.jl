@@ -53,7 +53,7 @@ end
     end
 end
 
-@testset "COSPv2 CloudSat total cloud cover semantics" begin
+@testset "CloudSat detection-range semantics" begin
     for FT in (Float32, Float64)
         DBZe = (
             make_center_profile_field(FT, [-31, -40, -1e30]),
@@ -66,13 +66,18 @@ end
         cloudsat_tcc = similar(Fields.level(DBZe[1], 1), FT)
         detected_column = similar(cloudsat_tcc, Bool)
 
-        @test isnothing(
-            CCF.cloudsat_cloud_fraction!(
-                cloudsat_tcc,
-                detected_column,
-                DBZe,
-            ),
-        )
+        CCF.initialize_cloudsat_cloud_fraction!(cloudsat_tcc)
+        contribution = FT(100) / FT(length(DBZe))
+        for DBZe_subcolumn in DBZe
+            @test isnothing(
+                CCF.accumulate_cloudsat_cloud_fraction!(
+                    cloudsat_tcc,
+                    detected_column,
+                    DBZe_subcolumn,
+                    contribution,
+                ),
+            )
+        end
         # The exact -30 and 10 dBZ boundaries are detectable, reflectivities
         # above 10 dBZ are excluded, and a subcolumn with several detectable
         # levels contributes only once.
@@ -85,11 +90,16 @@ end
             ),
             4,
         )
-        CCF.cloudsat_cloud_fraction!(
-            cloudsat_tcc,
-            detected_column,
-            all_clear,
-        )
+        CCF.initialize_cloudsat_cloud_fraction!(cloudsat_tcc)
+        contribution = FT(100) / FT(length(all_clear))
+        for DBZe_subcolumn in all_clear
+            CCF.accumulate_cloudsat_cloud_fraction!(
+                cloudsat_tcc,
+                detected_column,
+                DBZe_subcolumn,
+                contribution,
+            )
+        end
         @test all(iszero, parent(cloudsat_tcc))
         @test all(!, parent(detected_column))
     end

@@ -1,3 +1,5 @@
+import ClimaCore.Fields: @fused_direct
+
 struct NoOpCOSPSubcolumnConsumer end
 (::NoOpCOSPSubcolumnConsumer)(_, _) = nothing
 
@@ -10,9 +12,9 @@ end
 
 function (consumer::CloudSatSubcolumnConsumer)(_, hydrometeors)
     (; work, atmosphere, optics, statistics) = consumer
+    hydrometeor_optics = work.hydrometeor_optics
     COSP.COSPCloudSatOptics.cloudsat_optics_subcolumn!(
-        work.z_vol,
-        work.kr_vol,
+        hydrometeor_optics,
         hydrometeors,
         optics.grid_mean_sizes,
         atmosphere.temperature,
@@ -21,11 +23,9 @@ function (consumer::CloudSatSubcolumnConsumer)(_, hydrometeors)
         optics.radar_config,
     )
     COSP.COSPCloudSatReflectivity.cloudsat_reflectivity_subcolumn!(
-        work.Ze_non,
         work.DBZe,
-        work.z_vol,
-        work.kr_vol,
-        work.hydro_path_attenuation,
+        hydrometeor_optics.z_vol,
+        hydrometeor_optics.kr_vol,
         atmosphere.gas_path_attenuation,
         atmosphere.height_km,
         atmosphere.top_height_km,
@@ -64,12 +64,9 @@ function run_cosp_cloudsat!(Y, p, ::NonEquilibriumMicrophysics1M)
         ᶜq_ice,
     ) = p.precomputed
     (;
-        z_vol_cloudsat_work,
-        kr_vol_cloudsat_work,
+        cloudsat_hydrometeor_optics_work,
         g_vol_cloudsat,
-        Ze_non_cloudsat_work,
         DBZe_cloudsat_work,
-        hydro_path_attenuation_cloudsat_work,
         gas_path_attenuation_cloudsat,
         cloudsat_grid_mean_sizes,
         detected_column_cloudsat,
@@ -109,11 +106,8 @@ function run_cosp_cloudsat!(Y, p, ::NonEquilibriumMicrophysics1M)
     )
 
     work = (;
-        z_vol = z_vol_cloudsat_work,
-        kr_vol = kr_vol_cloudsat_work,
-        Ze_non = Ze_non_cloudsat_work,
+        hydrometeor_optics = cloudsat_hydrometeor_optics_work,
         DBZe = DBZe_cloudsat_work,
-        hydro_path_attenuation = hydro_path_attenuation_cloudsat_work,
     )
     atmosphere = (;
         gas_path_attenuation = gas_path_attenuation_cloudsat,
@@ -167,8 +161,8 @@ function reset_cloudsat_statistics!(cfadDbze94, cloudsat_tcc, cloudsat_tcc2)
 end
 
 function prepare_cosp_subcolumns!(Y, p)
+    (; ᶜcloud_fraction) = p.precomputed
     (;
-        ᶜcloud_fraction,
         ᶜsubcolumn_cloud,
         ᶜsubcolumn_threshold,
         ᶜsubcolumn_precip,
@@ -177,7 +171,7 @@ function prepare_cosp_subcolumns!(Y, p)
         ᶜsampled_cloud_fraction,
         ᶜsampled_precip_fraction,
         ᶜlarge_scale_precipitation_flux,
-    ) = p.precomputed
+    ) = p.scratch
     cosp = p.atmos.cosp
     nsubcolumns = _cosp_nsubcolumns(cosp.n_subcolumns)
     overlap = _cosp_overlap(cosp.overlap)
@@ -196,8 +190,10 @@ function prepare_cosp_subcolumns!(Y, p)
     set_cosp_large_scale_precipitation_flux!(Y, p, p.atmos.microphysics_model)
 
     FT = eltype(ᶜcloud_fraction)
-    @. ᶜsampled_cloud_fraction = zero(FT)
-    @. ᶜsampled_precip_fraction = zero(FT)
+    @fused_direct begin
+        @. ᶜsampled_cloud_fraction = zero(FT)
+        @. ᶜsampled_precip_fraction = zero(FT)
+    end
     for isubcolumn in 1:nsubcolumns
         COSP.COSPSubcolumns.scops_subcolumn!(
             ᶜsubcolumn_cloud,
@@ -215,13 +211,10 @@ function prepare_cosp_subcolumns!(Y, p)
             ᶜscops_selectors,
             ᶜprecip_subcolumn_scratch,
         )
-        COSP.COSPHydrometeorSubcolumns.accumulate_sampled_cloud_fraction!(
+        COSP.COSPHydrometeorSubcolumns.accumulate_sampled_fractions!(
             ᶜsampled_cloud_fraction,
-            ᶜsubcolumn_cloud,
-            nsubcolumns,
-        )
-        COSP.COSPHydrometeorSubcolumns.accumulate_sampled_precip_fraction!(
             ᶜsampled_precip_fraction,
+            ᶜsubcolumn_cloud,
             ᶜsubcolumn_precip,
             nsubcolumns,
         )
@@ -235,7 +228,8 @@ function set_cosp_large_scale_precipitation_flux!(
     p,
     ::Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M},
 )
-    (; ᶜlarge_scale_precipitation_flux, ᶜwᵣ, ᶜwₛ) = p.precomputed
+    (; ᶜwᵣ, ᶜwₛ) = p.precomputed
+    (; ᶜlarge_scale_precipitation_flux) = p.scratch
     FT = eltype(ᶜlarge_scale_precipitation_flux)
 
     @. ᶜlarge_scale_precipitation_flux =
@@ -276,10 +270,12 @@ function foreach_cosp_subcolumn(
     ᶜq_rai = p.scratch.ᶜtemp_scalar_3
     ᶜq_sno = p.scratch.ᶜtemp_scalar_4
 
-    @. ᶜq_lcl = specific(Y.c.ρq_lcl, Y.c.ρ)
-    @. ᶜq_icl = specific(Y.c.ρq_icl, Y.c.ρ)
-    @. ᶜq_rai = specific(Y.c.ρq_rai, Y.c.ρ)
-    @. ᶜq_sno = specific(Y.c.ρq_sno, Y.c.ρ)
+    @fused_direct begin
+        @. ᶜq_lcl = specific(Y.c.ρq_lcl, Y.c.ρ)
+        @. ᶜq_icl = specific(Y.c.ρq_icl, Y.c.ρ)
+        @. ᶜq_rai = specific(Y.c.ρq_rai, Y.c.ρ)
+        @. ᶜq_sno = specific(Y.c.ρq_sno, Y.c.ρ)
+    end
 
     grid_mean_hydrometeors =
         (; q_lcl = ᶜq_lcl, q_icl = ᶜq_icl, q_rai = ᶜq_rai, q_sno = ᶜq_sno)
@@ -317,8 +313,8 @@ function foreach_prepared_cosp_subcolumn!(
     grid_mean_hydrometeors,
     p,
 ) where {F}
+    (; ᶜcloud_fraction) = p.precomputed
     (;
-        ᶜcloud_fraction,
         ᶜsubcolumn_cloud,
         ᶜsubcolumn_threshold,
         ᶜsubcolumn_precip,
@@ -327,7 +323,7 @@ function foreach_prepared_cosp_subcolumn!(
         ᶜlarge_scale_precipitation_flux,
         ᶜsampled_cloud_fraction,
         ᶜsampled_precip_fraction,
-    ) = p.precomputed
+    ) = p.scratch
 
     cosp = p.atmos.cosp
     nsubcolumns = _cosp_nsubcolumns(cosp.n_subcolumns)

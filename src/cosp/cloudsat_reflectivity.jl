@@ -34,11 +34,9 @@ end
 
 """
     cloudsat_reflectivity_subcolumn!(
-        Ze_non,
         DBZe,
         z_vol,
         kr_vol,
-        hydro_attenuation,
         gas_attenuation,
         height_km,
         top_height_km,
@@ -46,15 +44,13 @@ end
         R_UNDEF,
     )
 
-Compute hydrometeor path attenuation and reflectivity for one streamed
-subcolumn. All intermediate fields are overwritten on every call.
+Compute reflectivity for one streamed subcolumn. Hydrometeor path attenuation
+is accumulated from the model top and transformed directly into `DBZe`.
 """
 function cloudsat_reflectivity_subcolumn!(
-    Ze_non,
     DBZe,
     z_vol,
     kr_vol,
-    hydro_attenuation,
     gas_attenuation,
     height_km,
     top_height_km,
@@ -63,20 +59,22 @@ function cloudsat_reflectivity_subcolumn!(
 )
     FT = eltype(z_vol)
     missing_value = isnothing(R_UNDEF) ? FT(-1e30) : FT(R_UNDEF)
-    _two_way_path_attenuation_from_top!(
-        hydro_attenuation,
+    nlevels == Spaces.nlevels(axes(kr_vol)) ||
+        throw(ArgumentError("column accumulation requires all vertical levels"))
+    input = Base.broadcasted(
+        _initial_reflectivity_state,
+        z_vol,
         kr_vol,
+        gas_attenuation,
         height_km,
         top_height_km,
-        nlevels,
     )
-    _reflectivity_from_path_attenuation!(
-        Ze_non,
+    Operators.column_accumulate!(
+        _accumulate_reflectivity,
         DBZe,
-        z_vol,
-        hydro_attenuation,
-        gas_attenuation,
-        missing_value,
+        input;
+        transform = _DBZeTransform(missing_value),
+        reverse = true,
     )
     return nothing
 end
@@ -118,9 +116,7 @@ end
 
 @inline function _accumulate_attenuation(state, level)
     return (;
-        path =
-            state.path +
-            (state.coefficient + level.coefficient) * (state.z - level.z),
+        path = _next_attenuation_path(state, level),
         coefficient = level.coefficient,
         z = level.z,
     )
@@ -128,23 +124,49 @@ end
 
 @inline _attenuation_path(state) = state.path
 
-function _reflectivity_from_path_attenuation!(
-    Ze_non,
-    DBZe,
+@inline _next_attenuation_path(state, level) =
+    state.path +
+    (state.coefficient + level.coefficient) * (state.z - level.z)
+
+@inline function _initial_reflectivity_state(
     z_vol,
-    hydro_attenuation,
-    gas_attenuation,
-    missing_value,
+    coefficient,
+    gas_path,
+    z,
+    z_top,
 )
-    FT = eltype(z_vol)
-    @. Ze_non = _nonattenuated_reflectivity(z_vol, missing_value)
-    @. DBZe =
-        ifelse(
-            z_vol > zero(FT),
-            Ze_non - hydro_attenuation - gas_attenuation,
-            missing_value,
-        )
-    return nothing
+    FT = typeof(coefficient)
+    return (;
+        path = FT(2) * coefficient * (z_top - z),
+        coefficient,
+        z,
+        z_vol,
+        gas_path,
+    )
+end
+
+@inline function _accumulate_reflectivity(state, level)
+    return (;
+        path = _next_attenuation_path(state, level),
+        coefficient = level.coefficient,
+        z = level.z,
+        z_vol = level.z_vol,
+        gas_path = level.gas_path,
+    )
+end
+
+struct _DBZeTransform{FT}
+    missing_value::FT
+end
+
+@inline function (transform::_DBZeTransform)(state)
+    ze_non =
+        _nonattenuated_reflectivity(state.z_vol, transform.missing_value)
+    return ifelse(
+        state.z_vol > zero(state.z_vol),
+        ze_non - state.path - state.gas_path,
+        transform.missing_value,
+    )
 end
 
 @inline function _nonattenuated_reflectivity(z_vol, missing_value)

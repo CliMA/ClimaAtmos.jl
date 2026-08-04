@@ -4,25 +4,6 @@ cosp_precomputed_quantities(_, ::Nothing) = (;)
 
 function cosp_precomputed_quantities(Y, ::COSPModel)
     FT = eltype(Y)
-    ᶜsubcolumn_cloud = similar(Y.c, FT)
-    ᶜsubcolumn_threshold = similar(Y.c, FT)
-    ᶜsubcolumn_precip = similar(Y.c, FT)
-    ᶜscops_selectors = (;
-        has_cloud = similar(Y.c, FT),
-        has_cloud_below = similar(Y.c, FT),
-        has_cloud_anywhere = similar(Y.c, FT),
-    )
-    ᶜprecip_subcolumn_scratch = (;
-        cloud = similar(Y.c, FT),
-        cloud_below = similar(Y.c, FT),
-        any_cloud = similar(Y.c, FT),
-        column_any = similar(Y.c, FT),
-    )
-    ᶜsampled_cloud_fraction = similar(Y.c, FT)
-    ᶜsampled_precip_fraction = similar(Y.c, FT)
-    @. ᶜsampled_cloud_fraction = FT(0)
-    @. ᶜsampled_precip_fraction = FT(0)
-    ᶜlarge_scale_precipitation_flux = similar(Y.c, FT)
     height_km_cloudsat = Fields.coordinate_field(axes(Y.c)).z ./ FT(1000)
     surface_height_km_cloudsat =
         Fields.level(
@@ -38,8 +19,7 @@ function cosp_precomputed_quantities(Y, ::COSPModel)
         COSP.COSPCloudSatCFAD.cloudsat_cfad_bin_edges(FT)
     cloudsat_dbze_bin_centers =
         COSP.COSPCloudSatCFAD.cloudsat_cfad_bin_centers(FT)
-    cfadDbze94 =
-        ntuple(_ -> similar(Y.c, FT), length(cloudsat_dbze_bin_centers))
+    cfadDbze94 = similar(Y.c, typeof(cloudsat_dbze_bin_centers))
     cloudsat_tcc = similar(Fields.level(Y.c.ρ, 1), FT)
     cloudsat_tcc2 = similar(cloudsat_tcc)
 
@@ -47,14 +27,6 @@ function cosp_precomputed_quantities(Y, ::COSPModel)
     cloudsat_tcc .= zero(FT)
     cloudsat_tcc2 .= zero(FT)
     return (;
-        ᶜsubcolumn_cloud,
-        ᶜsubcolumn_threshold,
-        ᶜsubcolumn_precip,
-        ᶜscops_selectors,
-        ᶜprecip_subcolumn_scratch,
-        ᶜsampled_cloud_fraction,
-        ᶜsampled_precip_fraction,
-        ᶜlarge_scale_precipitation_flux,
         height_km_cloudsat,
         surface_height_km_cloudsat,
         top_height_km_cloudsat,
@@ -70,13 +42,32 @@ cosp_temporary_quantities(_, ::Nothing) = (;)
 
 function cosp_temporary_quantities(Y, ::COSPModel)
     FT = Spaces.undertype(axes(Y.c))
+    ᶜsampled_cloud_fraction = similar(Y.c, FT)
+    ᶜsampled_precip_fraction = similar(Y.c, FT)
+    @. ᶜsampled_cloud_fraction = zero(FT)
+    @. ᶜsampled_precip_fraction = zero(FT)
     return (;
-        z_vol_cloudsat_work = similar(Y.c, FT),
-        kr_vol_cloudsat_work = similar(Y.c, FT),
+        ᶜsubcolumn_cloud = similar(Y.c, FT),
+        ᶜsubcolumn_threshold = similar(Y.c, FT),
+        ᶜsubcolumn_precip = similar(Y.c, FT),
+        ᶜscops_selectors = (;
+            has_cloud = similar(Y.c, FT),
+            has_cloud_below = similar(Y.c, FT),
+            has_cloud_anywhere = similar(Y.c, FT),
+        ),
+        ᶜprecip_subcolumn_scratch = (;
+            cloud = similar(Y.c, FT),
+            cloud_below = similar(Y.c, FT),
+            any_cloud = similar(Y.c, FT),
+            column_any = similar(Y.c, FT),
+        ),
+        ᶜsampled_cloud_fraction,
+        ᶜsampled_precip_fraction,
+        ᶜlarge_scale_precipitation_flux = similar(Y.c, FT),
+        cloudsat_hydrometeor_optics_work =
+            similar(Y.c, @NamedTuple{z_vol::FT, kr_vol::FT}),
         g_vol_cloudsat = similar(Y.c, FT),
-        Ze_non_cloudsat_work = similar(Y.c, FT),
         DBZe_cloudsat_work = similar(Y.c, FT),
-        hydro_path_attenuation_cloudsat_work = similar(Y.c, FT),
         gas_path_attenuation_cloudsat = similar(Y.c, FT),
         cloudsat_grid_mean_sizes = (;
             r_lcl = similar(Y.c, FT),

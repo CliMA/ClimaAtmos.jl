@@ -2,6 +2,7 @@ module COSPCloudSatOptics
 
 import CloudMicrophysics.Microphysics1M as CM1
 import CloudMicrophysics.Parameters as CMP
+import ClimaCore.Fields: @fused_direct
 
 export CloudSatRadarConfig,
     cloudsat_gas_attenuation!,
@@ -9,6 +10,7 @@ export CloudSatRadarConfig,
     cloudsat_optics_subcolumn!
 
 const HYDRO_CLASSES = (:lcl, :icl, :rai, :sno)
+const HYDROMETEOR_OPTICS_KEYS = (:z_vol, :kr_vol)
 const Q_KEYS = (; lcl = :q_lcl, icl = :q_icl, rai = :q_rai, sno = :q_sno)
 const SIZE_KEYS = (;
     lcl = :r_lcl,
@@ -127,34 +129,35 @@ function cloudsat_grid_mean_sizes!(
     ice = _clima_1m_psd_parameters(microphysics_params, Val(:icl))
     rain = _clima_1m_psd_parameters(microphysics_params, Val(:rai))
     snow = _clima_1m_psd_parameters(microphysics_params, Val(:sno))
-    @. grid_mean_sizes.r_lcl = _clima_liquid_cloud_radius(
-        grid_mean_hydrometeors.q_lcl,
-        rho_air,
-        liquid,
-    )
-    @. grid_mean_sizes.lambda_inv_icl = _clima_grid_lambda_inverse(
-        grid_mean_hydrometeors.q_icl,
-        rho_air,
-        ice,
-    )
-    @. grid_mean_sizes.lambda_inv_rai = _clima_grid_lambda_inverse(
-        grid_mean_hydrometeors.q_rai,
-        rho_air,
-        rain,
-    )
-    @. grid_mean_sizes.lambda_inv_sno = _clima_grid_lambda_inverse(
-        grid_mean_hydrometeors.q_sno,
-        rho_air,
-        snow,
-    )
+    @fused_direct begin
+        @. grid_mean_sizes.r_lcl = _clima_liquid_cloud_radius(
+            grid_mean_hydrometeors.q_lcl,
+            rho_air,
+            liquid,
+        )
+        @. grid_mean_sizes.lambda_inv_icl = _clima_grid_lambda_inverse(
+            grid_mean_hydrometeors.q_icl,
+            rho_air,
+            ice,
+        )
+        @. grid_mean_sizes.lambda_inv_rai = _clima_grid_lambda_inverse(
+            grid_mean_hydrometeors.q_rai,
+            rho_air,
+            rain,
+        )
+        @. grid_mean_sizes.lambda_inv_sno = _clima_grid_lambda_inverse(
+            grid_mean_hydrometeors.q_sno,
+            rho_air,
+            snow,
+        )
+    end
     return nothing
 end
 
 # Single-subcolumn hydrometeor optics entry point.
 """
     cloudsat_optics_subcolumn!(
-        z_vol_cloudsat,
-        kr_vol_cloudsat,
+        hydrometeor_optics,
         hydrometeors,
         grid_mean_sizes,
         temperature,
@@ -164,12 +167,11 @@ end
     )
 
 Compute hydrometeor optical quantities for one streamed subcolumn using particle
-sizes diagnosed from the grid-mean state. The output fields are working storage
-and are overwritten on every call.
+sizes diagnosed from the grid-mean state. The composite output field is working
+storage and is overwritten on every call.
 """
 function cloudsat_optics_subcolumn!(
-    z_vol_cloudsat,
-    kr_vol_cloudsat,
+    hydrometeor_optics,
     hydrometeors::NamedTuple,
     grid_mean_sizes::NamedTuple,
     temperature,
@@ -179,10 +181,11 @@ function cloudsat_optics_subcolumn!(
 )
     _check_keys(hydrometeors, values(Q_KEYS), "hydrometeors")
     _check_keys(grid_mean_sizes, values(SIZE_KEYS), "grid_mean_sizes")
+    fieldnames(eltype(hydrometeor_optics)) == HYDROMETEOR_OPTICS_KEYS ||
+        throw(ArgumentError("hydrometeor optics must contain z_vol and kr_vol"))
+    z_vol_cloudsat = hydrometeor_optics.z_vol
     reference = z_vol_cloudsat
     cfg = _radar_config(radar_cfg, reference)
-    axes(kr_vol_cloudsat) == axes(reference) ||
-        throw(DimensionMismatch("kr_vol_cloudsat must have matching axes"))
     axes(temperature) == axes(reference) ||
         throw(DimensionMismatch("temperature must have matching axes"))
     axes(rho_air) == axes(reference) ||
@@ -196,25 +199,15 @@ function cloudsat_optics_subcolumn!(
             throw(DimensionMismatch("grid-mean size fields must have matching axes"))
     end
 
-    zero_value = zero(eltype(reference))
-    @. z_vol_cloudsat = zero_value
-    @. kr_vol_cloudsat = zero_value
+    @. hydrometeor_optics =
+        _zero_hydrometeor_optics(hydrometeor_optics)
 
     for class in HYDRO_CLASSES
         q_hydro = getproperty(hydrometeors, getproperty(Q_KEYS, class))
         grid_size = getproperty(grid_mean_sizes, getproperty(SIZE_KEYS, class))
         params = _clima_1m_psd_parameters(microphysics_params, Val(class))
-        # TODO: fuse these two broadcasts once there is a backend-safe way to
-        # return and accumulate both scalar optics values together.
-        @. z_vol_cloudsat += _clima_hydrometeor_z_volume(
-            q_hydro,
-            grid_size,
-            rho_air,
-            temperature,
-            cfg,
-            params,
-        )
-        @. kr_vol_cloudsat += _clima_hydrometeor_attenuation(
+        @. hydrometeor_optics = _accumulate_hydrometeor_optics(
+            hydrometeor_optics,
             q_hydro,
             grid_size,
             rho_air,
@@ -332,25 +325,13 @@ end
 @inline _clima_1m_psd_parameters(params, ::Val{:sno}) =
     Clima1MPSDParameters(IcePhase(), params.precip.snow)
 
-@inline function _clima_hydrometeor_z_volume(
-    q,
-    grid_size,
-    rho_air,
-    T,
-    radar_cfg,
-    params,
+@inline _zero_hydrometeor_optics(current) = (;
+    z_vol = zero(current.z_vol),
+    kr_vol = zero(current.kr_vol),
 )
-    return _clima_hydrometeor_optics(
-        q,
-        grid_size,
-        rho_air,
-        T,
-        radar_cfg,
-        params,
-    )[1]
-end
 
-@inline function _clima_hydrometeor_attenuation(
+@inline function _accumulate_hydrometeor_optics(
+    current,
     q,
     grid_size,
     rho_air,
@@ -358,14 +339,18 @@ end
     radar_cfg,
     params,
 )
-    return _clima_hydrometeor_optics(
+    z_increment, kr_increment = _clima_hydrometeor_optics(
         q,
         grid_size,
         rho_air,
         T,
         radar_cfg,
         params,
-    )[2]
+    )
+    return (;
+        z_vol = current.z_vol + z_increment,
+        kr_vol = current.kr_vol + kr_increment,
+    )
 end
 
 @inline function _clima_hydrometeor_optics(
