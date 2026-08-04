@@ -178,6 +178,61 @@ end
 
 jw_values(m::DGModel) = jw_values(m.prob, m.c, m.params, m.fields.ccoords)
 
+# Isothermal hydrostatic base state + uniform zonal wind (mountain wave):
+# p(z) = p₀ exp(−gz/(R_d T₀)), N² = g²/(cₚT₀).
+function mw_values(prob::MountainWaveDG, c::DGConstants{FT}, ccoords) where {FT}
+    z = ccoords.z
+    T = @. FT(prob.T₀) + 0 * z
+    p = @. c.p_0 * exp(-c.grav * z / (c.R_d * FT(prob.T₀)))
+    uE = @. FT(prob.U₀) + 0 * z
+    uN = @. 0 * z
+    return (; T, p, uE, uN)
+end
+
+# Unperturbed base state: the terrain-aware diffusion reference (and, for
+# the mountain wave, also the initial condition source)
+reference_values(prob::MountainWaveDG, c, params, ccoords) =
+    mw_values(prob, c, ccoords)
+reference_values(prob, c, params, ccoords) =
+    jw_values(prob, c, params, ccoords; perturb = false)
+
+base_values(m::DGModel) = base_values(m.prob, m)
+base_values(prob::MountainWaveDG, m) = mw_values(prob, m.c, m.fields.ccoords)
+base_values(prob, m) = jw_values(m)
+
+
+"""
+    isothermal_discrete_hydrostatic!(ᶜp, ᶜρ, T₀, R_d, grav, ᶜz)
+
+EXACT discrete hydrostatic state for isothermal columns: with ρ = p/(R_d T₀)
+the centered face balance (p[v+1]−p[v])/Δz = −g(ρ[v]+ρ[v+1])/2 has the
+per-interval geometric solution p[v+1] = p[v](1%E2%88%92%CE%B2)/(1+β), β = gΔz/(2R_d T₀).
+Both p and ρ are smooth (no checkerboard mode, no cumulative drift), so the
+vertical balance closes to roundoff WITHOUT poisoning the horizontal PGF
+over terrain — the alternatives both fail there (ρ-correction: eigenvalue
+−1 checkerboard δρ, 64-covariant residual; p-integration: cumulative O(Δz²)
+error amplified 1/ρ aloft, 827). Valid on stretched/warped grids (the
+relation is exact per interval).
+"""
+function isothermal_discrete_hydrostatic!(ᶜp, ᶜρ, T₀, R_d, grav, ᶜz)
+    p_par = parent(ᶜp)
+    z_par = parent(ᶜz)
+    for v in 1:(size(p_par, 1) - 1)
+        @views @. p_par[v + 1, :, :, :, :] =
+            p_par[v, :, :, :, :] * (
+                1 -
+                grav * (z_par[v + 1, :, :, :, :] - z_par[v, :, :, :, :]) /
+                (2 * R_d * T₀)
+            ) / (
+                1 +
+                grav * (z_par[v + 1, :, :, :, :] - z_par[v, :, :, :, :]) /
+                (2 * R_d * T₀)
+            )
+    end
+    @. ᶜρ = ᶜp / (R_d * T₀)
+    return ᶜp
+end
+
 function initial_state_fddg(m::DGModel{FT}) where {FT}
     c = m.c
     (; ccoords, fcoords, eE1, eE2, eE3, eN1, eN2, eN3) = m.fields
@@ -226,11 +281,23 @@ function initial_state_vi(m::DGModel{FT}) where {FT}
     z = ccoords.z
     lgeom_c = Fields.local_geometry_field(m.spaces.hv_center_space)
 
-    (; T, p, uE, uN) = jw_values(m)
+    (; T, p, uE, uN) = base_values(m)
     ᶜp_ana = p
     ᶜρ = @. ᶜp_ana / c.R_d / T
 
-    discrete_hydrostatic_ρ!(ᶜρ, ᶜp_ana, z, c.grav)
+    if m.prob isa MountainWaveDG
+        # exact smooth discrete hydrostatics for the isothermal column
+        isothermal_discrete_hydrostatic!(
+            ᶜp_ana,
+            ᶜρ,
+            FT(m.prob.T₀),
+            c.R_d,
+            c.grav,
+            z,
+        )
+    else
+        discrete_hydrostatic_ρ!(ᶜρ, ᶜp_ana, z, c.grav)
+    end
 
     ᶜuₕ_local = @. Geometry.UVVector(uE, uN)
     ᶜuₕ = @. C12(ᶜuₕ_local, lgeom_c)
@@ -261,5 +328,4 @@ end
 
 initial_state(m::DGModel{FT, <:BaroclinicWaveFDDG}) where {FT} =
     initial_state_fddg(m)
-initial_state(m::DGModel{FT, <:BaroclinicWaveDG}) where {FT} =
-    initial_state_vi(m)
+initial_state(m::DGModel{FT, <:VIProblem}) where {FT} = initial_state_vi(m)

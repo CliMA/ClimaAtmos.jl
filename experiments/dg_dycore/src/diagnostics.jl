@@ -29,7 +29,7 @@ function dg_velocities(state, m::DGModel{FT, <:BaroclinicWaveFDDG}) where {FT}
     return uE, uN, w_c
 end
 
-function dg_velocities(state, m::DGModel{FT, <:BaroclinicWaveDG}) where {FT}
+function dg_velocities(state, m::DGModel{FT, <:VIProblem}) where {FT}
     uv = @. Geometry.UVVector(state.c.uₕ)
     w_c = @. m.ops.Ic(Geometry.WVector(state.f.w)).components.data.:1
     return uv.components.data.:1, uv.components.data.:2, w_c

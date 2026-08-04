@@ -128,10 +128,6 @@ Additional keywords:
   - `ν_div_frac` (0.0): CAM-style divergence damping ν∇ₕ(∇ₕ·uₕ) as a
     fraction of the cap Δh²/((2npoly+1)²Δt) — scale-selective on
     divergent/acoustic transients; terrain-safe (balanced δ ≈ 0)
-  - `pgf_form` (`:direct`): horizontal PGF — `:direct` (−∇ₕp/ρ) or
-    `:exner` (CA/Yatunin-et-al split reference-subtracted Exner form;
-    well-balanced over terrain — 11× smaller t = 0 residual on
-    Hughes2023)
   - `κ₄` (`nothing` → SIPG-cap/10 for `:kg`, 0 for `:kep`) and
     `filter_Nc` (`nothing` → npoly for `:kg`, 0 for `:kep`): `:kg` NEEDS
     its stabilization. At zelem ≳ 20 also use `zstretch`.
@@ -148,7 +144,6 @@ Base.@kwdef struct BaroclinicWaveDG{FT <: AbstractFloat}
     momentum_adv::Symbol = :vector_invariant
     face_set::Symbol = :kg
     terrain_u3::Symbol = :full
-    pgf_form::Symbol = :direct
     κ₄::Union{Nothing, FT} = nothing
     κ₄_frac::Union{Nothing, FT} = nothing
     ν_vert::FT = 0.0
@@ -190,11 +185,6 @@ function validate(p::BaroclinicWaveDG)
                (the fluctuation form is KE-compatible with the KG set)")
     p.terrain_u3 in (:wonly, :full) ||
         error("terrain_u3 must be :wonly or :full")
-    p.pgf_form in (:direct, :exner) ||
-        error("pgf_form must be :direct or :exner")
-    p.pgf_form == :exner &&
-        p.momentum_adv == :fluctuation &&
-        error("pgf_form = :exner pairs with :vector_invariant only")
     p.ic_source in (:setups, :formulas) ||
         error("ic_source must be :setups or :formulas")
     p.topography in (:none, :earth, :hughes2023) ||
@@ -202,4 +192,86 @@ function validate(p::BaroclinicWaveDG)
     return p
 end
 
-const DGProblem = Union{BaroclinicWaveFDDG, BaroclinicWaveDG}
+"""
+    MountainWaveDG(; kwargs...)
+
+Agnesi mountain wave on an x-periodic quasi-2D slab (one y element),
+vector-invariant DG-FD core: isothermal base state `T₀` + uniform wind
+`U₀` over `h(x) = h₀/(1 + (x/a)²)` (LinearAdaption warp). The CPU-cheap
+terrain testbed for the face sets and the Exner PGF — with `U₀ = 0` any
+motion is spurious, so max|w| directly measures the discrete PGF
+residual; with `U₀ > 0` the classic linear wave (λ_z = 2πU₀/N).
+
+Shares `face_set`/`terrain_u3`/κ₄/ν/sponge/stepper keywords
+with [`BaroclinicWaveDG`](@ref). Plane-specific: `xmax` (domain length),
+`h₀`, `a`, `U₀`, `T₀`. Defaults run 10 simulated hours in minutes.
+"""
+Base.@kwdef struct MountainWaveDG{FT <: AbstractFloat}
+    helem::Int = 40
+    npoly::Int = 4
+    zelem::Int = 40
+    zmax::FT = 30e3
+    xmax::FT = 600e3
+    h₀::FT = 250.0
+    a::FT = 25e3
+    U₀::FT = 20.0
+    T₀::FT = 250.0
+    stepper::Symbol = :hevi
+    # horizontal acoustic CFL ≈ 0.3: c_s·dt·(2npoly+1)/Δx_elem
+    dt::FT = 0.3 * (xmax / helem) / (310 * (2 * npoly + 1))
+    t_end::FT = 36000.0
+    momentum_adv::Symbol = :vector_invariant
+    face_set::Symbol = :kep
+    terrain_u3::Symbol = :full
+    κ₄::Union{Nothing, FT} = nothing
+    κ₄_frac::Union{Nothing, FT} = nothing
+    ν_vert::FT = 0.0
+    ν_div_frac::FT = 0.0
+    filter_Nc::Union{Nothing, Int} = nothing
+    zstretch::Union{Nothing, Tuple{FT, FT}} = nothing
+    sponge_τ::FT = 300.0
+    sponge_depth::FT = 12e3
+    sponge_uh::Bool = false
+    # perturb=false additionally logs the drift metrics at the end (for
+    # the U₀ = 0 well-balance test); the IC itself never has a perturbation
+    perturb::Bool = true
+    constants_mode::Symbol = :clima_params
+    held_suarez::Bool = false
+    output_dir::Union{Nothing, String} = nothing
+    diag_period::FT = 3600.0
+    dt_save::FT = 3600.0
+    ndiag::Int = 120
+end
+
+MountainWaveDG(; kwargs...) = MountainWaveDG{Float64}(; kwargs...)
+
+float_type(::MountainWaveDG{FT}) where {FT} = FT
+
+function validate(p::MountainWaveDG)
+    p.stepper in (:hevi, :explicit) ||
+        error("stepper must be :hevi or :explicit")
+    p.momentum_adv == :vector_invariant ||
+        error("MountainWaveDG supports :vector_invariant only")
+    p.face_set in (:kg, :kep, :es) ||
+        error("face_set must be :kg, :kep, or :es")
+    p.terrain_u3 in (:wonly, :full) ||
+        error("terrain_u3 must be :wonly or :full")
+    p.κ₄ !== nothing &&
+        p.κ₄_frac !== nothing &&
+        error("set κ₄ (absolute) or κ₄_frac (fraction of the SIPG cap), \
+               not both")
+    p.held_suarez && error("held_suarez does not apply to the plane case")
+    return p
+end
+
+# vector-invariant-core problems (share tendency/Jacobian/face-set logic)
+const VIProblem = Union{BaroclinicWaveDG, MountainWaveDG}
+const DGProblem = Union{BaroclinicWaveFDDG, BaroclinicWaveDG, MountainWaveDG}
+
+has_terrain(p::MountainWaveDG) = p.h₀ != 0
+has_terrain(p) = p.topography != :none
+
+# (T_min, T_sfc) of the Exner-PGF reference T_r = T_min + (T_sfc−T_min)Π⁷;
+# isothermal cases match exactly with T_r ≡ T₀ (then Φ_r = −cₚT₀lnΠ = gz)
+exner_reference(p::MountainWaveDG) = (p.T₀, p.T₀)
+exner_reference(p) = (220.0, 290.0)

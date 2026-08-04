@@ -251,55 +251,44 @@ function compute_tendency_vi!(
         )
         ω³ = @. CT3(Geometry.WVector(ω³_sc))
         @. duₕ = -(Ic(ᶠω¹² × ᶠu³) + (ᶜf_cor + ω³) × CT12(uₕ))
-        if m.prob.pgf_form == :exner
-            # CA/Yatunin split reference-subtracted Exner PGF: the
-            # p-composed (θ_r, Φ_r) hydrostatic pair cancels pointwise,
-            # so the terrain residual scales with the θ-perturbation
-            # (CA advection.jl / refstate_thermodynamics; T_r =
-            # T_min + (T_sfc − T_min)Π⁷).
-            cp = c.cv_d + c.R_d
-            Π = @. (p / c.p_0)^(c.R_d / (c.cv_d + c.R_d))
-            θv = @. p / (ρ * c.R_d * Π)
-            θvr = @. (FT(220) + FT(70) * Π^7) / Π
-            Φ_r = @. -(c.cv_d + c.R_d) *
-                     (FT(220) * log(Π) + FT(10) * (Π^7 - 1))
-            θd = @. θv - θvr
-            θdΠ = @. θd * Π
-            q1 = @. K + ᶜΦ - Φ_r
-            @. duₕ -=
-                hgrad(q1) +
-                cp / 2 * (θd * hgrad(Π) + hgrad(θdΠ) - Π * hgrad(θd))
-            # central liftings completing each strong gradient
-            lifted(q) = Operators.lifting_correction(
-                Operators.central_gradient_lift,
-                Geometry.UVVector{FT},
-                q,
-            )
-            l_q1 = lifted(q1)
-            l_Π = lifted(Π)
-            l_θdΠ = lifted(θdΠ)
-            l_θd = lifted(θd)
-            @. duₕ -= Geometry.transform(
-                Geometry.Covariant12Axis(),
-                l_q1 + cp / 2 * (θd * l_Π + l_θdΠ - Π * l_θd),
-            )
-        else
-            @. duₕ -= hgrad(p) / ρ + hgrad(K + ᶜΦ)
-            lift_p = Operators.lifting_correction(
-                Operators.central_gradient_lift,
-                Geometry.UVVector{FT},
-                p,
-            )
-            lift_K = Operators.lifting_correction(
-                Operators.central_gradient_lift,
-                Geometry.UVVector{FT},
-                K,
-            )
-            @. duₕ -= Geometry.transform(
-                Geometry.Covariant12Axis(),
-                lift_p / ρ + lift_K,
-            )
-        end
+        # Horizontal PGF (the sole supported form): CA/Yatunin split
+        # reference-subtracted Exner form. The p-composed (θ_r, Φ_r)
+        # hydrostatic pair cancels pointwise, so the terrain residual
+        # scales with the θ-PERTURBATION from the reference
+        # T_r = T_min + (T_sfc − T_min)Π⁷ — which must be
+        # problem-matched (exner_reference; the CA defaults are 40 K off
+        # an isothermal plane state, voiding the cancellation there).
+        # The plain −∇ₕp/ρ form was removed: measurably worse balanced
+        # (11× on Hughes2023) and never better anywhere.
+        cp = c.cv_d + c.R_d
+        Tmin, Tsfc = exner_reference(m.prob)
+        ΔT = FT(Tsfc) - FT(Tmin)
+        Π = @. (p / c.p_0)^(c.R_d / (c.cv_d + c.R_d))
+        θv = @. p / (ρ * c.R_d * Π)
+        θvr = @. (FT(Tmin) + ΔT * Π^7) / Π
+        Φ_r = @. -(c.cv_d + c.R_d) *
+                 (FT(Tmin) * log(Π) + ΔT / 7 * (Π^7 - 1))
+        θd = @. θv - θvr
+        θdΠ = @. θd * Π
+        q1 = @. K + ᶜΦ - Φ_r
+        @. duₕ -=
+            hgrad(q1) +
+            cp / 2 * (θd * hgrad(Π) + hgrad(θdΠ) - Π * hgrad(θd))
+        # central liftings completing each strong gradient
+        lifted(q) = Operators.lifting_correction(
+            Operators.central_gradient_lift,
+            Geometry.UVVector{FT},
+            q,
+        )
+        l_q1 = lifted(q1)
+        l_Π = lifted(Π)
+        l_θdΠ = lifted(θdΠ)
+        l_θd = lifted(θd)
+        @. duₕ -= Geometry.transform(
+            Geometry.Covariant12Axis(),
+            l_q1 + cp / 2 * (θd * l_Π + l_θdΠ - Π * l_θd),
+        )
+
     end
     # λ-scaled velocity jump penalties: :kep's ρ-weighted form is an
     # exactly sign-definite KE sink (plain form only to O([[ρ]])).
@@ -397,7 +386,7 @@ function compute_tendency_vi!(
     # into spurious dipoles. Flat grids keep the full-field form.
     if κ₄ != 0
         τ_κ₄ = Operators.ldg_penalty_parameter(κ₄, m.spaces.hv_center_space)
-        terrain = m.prob.topography != :none
+        terrain = has_terrain(m.prob)
         (; ᶜh_ref, ᶜu_ref, ᶜv_ref) = m.fields
         χe = similar(h_tot)
         χu = similar(u_sc)

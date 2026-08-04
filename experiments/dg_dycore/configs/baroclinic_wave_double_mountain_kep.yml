@@ -1,7 +1,6 @@
 # Baroclinic wave (JW06) over the Hughes & Jablonowski (2023) analytic
 # double mountain — the validated terrain stack:
 #   face_set: es      exact-KEP centrals + entropy-variable ρe dissipation
-#   pgf_form: exner   CA/Yatunin well-balanced PGF (11x smaller residual)
 #   kappa4_frac       resolution/dt-safe hyperdiffusion (terrain-aware form)
 #   nu_div_frac       divergence damping for impulsive-start transients
 #   nu_vert           breaking-wave momentum deposition in the sponge layer
@@ -10,7 +9,6 @@
 # docs/vi_kep_face_terms.md. 8 days at helem 16 is ~13 h wall single-core.
 core: vi
 face_set: es
-pgf_form: exner
 momentum_adv: vector_invariant
 kappa4_frac: 0.1
 nu_div_frac: 0.3

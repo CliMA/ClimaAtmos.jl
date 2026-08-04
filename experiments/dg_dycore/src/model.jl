@@ -51,8 +51,27 @@ function dg_spaces(prob, c::DGConstants{FT}) where {FT}
     end
     vert_center_space = Spaces.CenterFiniteDifferenceSpace(device, vertmesh)
 
-    horzdomain = Domains.SphereDomain(c.R)
-    horzmesh = Meshes.EquiangularCubedSphere(horzdomain, prob.helem)
+    horzmesh = if prob isa MountainWaveDG
+        # x-periodic quasi-2D slab: one y element of one-element width
+        # (the DG face kernels need a genuine 2D horizontal space)
+        Δy = prob.xmax / prob.helem
+        horzdomain = Domains.RectangleDomain(
+            Domains.IntervalDomain(
+                Geometry.XPoint{FT}(-prob.xmax / 2),
+                Geometry.XPoint{FT}(prob.xmax / 2);
+                periodic = true,
+            ),
+            Domains.IntervalDomain(
+                Geometry.YPoint{FT}(-Δy / 2),
+                Geometry.YPoint{FT}(Δy / 2);
+                periodic = true,
+            ),
+        )
+        Meshes.RectilinearMesh(horzdomain, prob.helem, 1)
+    else
+        horzdomain = Domains.SphereDomain(c.R)
+        Meshes.EquiangularCubedSphere(horzdomain, prob.helem)
+    end
     horztopology = Topologies.Topology2D(context, horzmesh)
     quad = Quadratures.GLL{prob.npoly + 1}()
     horzspace = Spaces.SpectralElementSpace2D(horztopology, quad)
@@ -71,6 +90,17 @@ end
 # runs a CG Laplacian with DSS — grid-generation preprocessing, not part
 # of the DG discretization); :hughes2023 = analytic double mountain,
 # evaluated pointwise, no smoothing.
+function dg_hypsography(
+    prob::MountainWaveDG,
+    horzspace,
+    ::DGConstants{FT},
+) where {FT}
+    x = Fields.coordinate_field(horzspace).x
+    z_surface = @. prob.h₀ / (1 + (x / prob.a)^2)
+    @info "Agnesi orography" prob.h₀ prob.a extrema(z_surface)
+    return Hypsography.LinearAdaption(Geometry.ZPoint.(z_surface))
+end
+
 function dg_hypsography(prob, horzspace, ::DGConstants{FT}) where {FT}
     prob.topography == :none && return Grids.Flat()
     if prob.topography == :hughes2023
@@ -106,6 +136,55 @@ function dg_hypsography(prob, horzspace, ::DGConstants{FT}) where {FT}
         z_surface,
     )
     return Hypsography.LinearAdaption(Geometry.ZPoint.(z_surface))
+end
+
+# w-only Rayleigh sponge profiles over the top sponge_depth (peak rate
+# 1/τ; τ = Inf disables) + the τ-independent sin² shape for ν_vert
+function sponge_fields(prob, ::Type{FT}, ccoords, fcoords) where {FT}
+    z_sponge = FT(prob.sponge_depth)
+    zmax = prob.zmax
+    τs = prob.sponge_τ
+    shape(z) = ifelse(
+        z > zmax - z_sponge,
+        sin(FT(π) / 2 * (z - (zmax - z_sponge)) / z_sponge)^2,
+        FT(0),
+    )
+    ᶠβ_sponge = @. shape(fcoords.z) / τs
+    ᶜβ_sponge = @. shape(ccoords.z) / τs
+    ᶠsponge_shape = @. shape(fcoords.z)
+    return (; ᶠβ_sponge, ᶜβ_sponge, ᶠsponge_shape)
+end
+
+function dg_fields(prob::MountainWaveDG, c::DGConstants{FT}, spaces) where {FT}
+    ccoords = Fields.coordinate_field(spaces.hv_center_space)
+    fcoords = Fields.coordinate_field(spaces.hv_face_space)
+
+    ᶜΦ = @. c.grav * ccoords.z
+    # f-plane at f = 0 (non-rotating mountain wave)
+    ᶜf_cor = @. CT3(Geometry.WVector(0 * ccoords.z))
+
+    # Cartesian basis on the plane: ê_E = x̂, ê_N = ŷ, r̂ = ẑ
+    o = @. 0 * ccoords.z + 1
+    zf = @. 0 * ccoords.z
+    eE1, eE2, eE3 = o, zf, zf
+    eN1, eN2, eN3 = zf, o, zf
+    eR1, eR2, eR3 = zf, zf, o
+    E1 = @. Geometry.UVVector(o, zf)
+    E2 = @. Geometry.UVVector(zf, o)
+    E3 = @. Geometry.UVVector(zf, zf)
+
+    T_sfc = Fields.level(fcoords.z, Fields.half) .* FT(0) .+ prob.T₀
+
+    return (;
+        ccoords,
+        fcoords,
+        T_sfc,
+        ᶜΦ,
+        ᶜf_cor,
+        eE1, eE2, eE3, eN1, eN2, eN3, eR1, eR2, eR3,
+        E1, E2, E3,
+        sponge_fields(prob, FT, ccoords, fcoords)...,
+    )
 end
 
 function dg_fields(prob, c::DGConstants{FT}, spaces) where {FT}
@@ -243,12 +322,11 @@ function DGModel(prob::DGProblem)
     params = dg_params(FT, prob.constants_mode)
     spaces = dg_spaces(prob, c)
     fields = dg_fields(prob, c, spaces)
-    # Unperturbed JW06 base state at the warped node heights: the
-    # terrain-aware κ₄ diffusion reference (full fields carry an O(Δz_warp)
-    # terrain signature along coordinate surfaces).
+    # Unperturbed base state at the warped node heights: the terrain-aware
+    # κ₄ diffusion reference (full fields carry an O(Δz_warp) terrain
+    # signature along coordinate surfaces).
     fields = let
-        (; T, uE, uN) =
-            jw_values(prob, c, params, fields.ccoords; perturb = false)
+        (; T, uE, uN) = reference_values(prob, c, params, fields.ccoords)
         ᶜK_ref = @. (uE^2 + uN^2) / 2
         ᶜh_ref = @. (c.cv_d + c.R_d) * T + ᶜK_ref + fields.ᶜΦ -
                     c.cv_d * c.T_tri
@@ -272,13 +350,13 @@ function DGModel(prob::DGProblem)
     κ₄_cap = FT(hls^3 / ((2 * prob.npoly + 1)^2 * Δt))
     # Laplacian-scale divergence damping ν∇ₕ(∇ₕ·uₕ), fraction of the
     # explicit cap Δh²/((2n+1)²Δt) (0 disables).
-    ν_div = if prob isa BaroclinicWaveDG
+    ν_div = if prob isa VIProblem
         FT(prob.ν_div_frac * hls^2 / ((2 * prob.npoly + 1)^2 * Δt))
     else
         FT(0)
     end
     fields = (; fields..., ν_div)
-    kep_vi = prob isa BaroclinicWaveDG && prob.face_set in (:kep, :es)
+    kep_vi = prob isa VIProblem && prob.face_set in (:kep, :es)
     κ₄ = if prob.κ₄ !== nothing
         prob.κ₄
     elseif prob.κ₄_frac !== nothing
@@ -294,7 +372,7 @@ function DGModel(prob::DGProblem)
     # tendency cutoff filter: REQUIRED default for the legacy (:kg)
     # vector-invariant core (npoly); 0 for the KEP face set; NEVER for
     # FDDG (voids its KEP — not even exposed there)
-    filter_Nc = if prob isa BaroclinicWaveDG
+    filter_Nc = if prob isa VIProblem
         prob.filter_Nc === nothing ? (kep_vi ? 0 : prob.npoly) :
         prob.filter_Nc
     else

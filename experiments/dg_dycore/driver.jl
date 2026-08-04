@@ -52,7 +52,6 @@ function problem_from_yaml(path)
         ("momentum_adv", :momentum_adv, Symbol),
         ("face_set", :face_set, Symbol),
         ("terrain_u3", :terrain_u3, Symbol),
-        ("pgf_form", :pgf_form, Symbol),
         ("nu_vert", :ν_vert, FT),
         ("nu_div_frac", :ν_div_frac, FT),
         ("filter_Nc", :filter_Nc, Int),

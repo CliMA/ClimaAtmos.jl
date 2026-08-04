@@ -33,7 +33,7 @@ core_fns(::DGModel{FT, <:BaroclinicWaveFDDG}) where {FT} = (;
     jac = FDDGImplicitEquationJacobian,
     wfact! = fddg_implicit_equation_jacobian!,
 )
-core_fns(::DGModel{FT, <:BaroclinicWaveDG}) where {FT} = (;
+core_fns(::DGModel{FT, <:VIProblem}) where {FT} = (;
     rhs! = rhs_vi!,
     rem! = remaining_tendency_vi!,
     imp! = implicit_tendency_vi!,
