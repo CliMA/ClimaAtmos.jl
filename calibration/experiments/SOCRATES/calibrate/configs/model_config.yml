@@ -1,0 +1,53 @@
+initial_condition: ReanalysisTimeVarying
+external_forcing: ReanalysisTimeVarying
+surface_setup: ReanalysisTimeVarying
+surface_temperature: ReanalysisTimeVarying
+
+turbconv: diagnostic_edmfx
+edmfx_entr_model: PiGroups
+edmfx_detr_model: PiGroups
+prognostic_tke: true
+microphysics_model: 1M
+cloud_model: quadrature
+
+config: column
+z_max: 40e3
+z_elem: 60
+z_stretch: true
+dz_bottom: 30
+
+implicit_diffusion: true
+implicit_sgs_advection: false
+approximate_linear_solve_iters: 2
+max_newton_iters_ode: 1
+rayleigh_sponge: true
+
+edmfx_sgs_mass_flux: true
+edmfx_sgs_diffusive_flux: true
+edmfx_nh_pressure: true
+edmfx_vertical_diffusion: true
+edmfx_filter: false
+
+rad: nothing
+insolation: idealized
+perturb_initstate: false
+
+dt: 10secs
+dt_rad: 30mins
+t_end: 14hours
+log_progress: false
+
+toml: [scm_tomls/prognostic_edmfx.toml]
+
+netcdf_output_at_levels: true
+netcdf_interpolation_num_points: [2, 2, 60]
+
+diagnostics:
+  # Profile diagnostics — match TC.jl io_dictionary_aux_calibrate() variables:
+  # thetaa ≈ thetal_mean, hus = qt_mean, clw = ql_mean, ta = temperature_mean,
+  # cli = qi_mean, husra = qr_mean, hussn = qs_mean/qip_mean, arup = updraft_area
+  - short_name: [thetaa, hus, clw, ta, cli, husra, hussn, arup]
+    period: 10mins
+  # Column integrals (2D, no z-dimension) — for offline analysis of LWP/IWP/RWP
+  - short_name: [lwp, clivi, rwp]
+    period: 10mins
