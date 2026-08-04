@@ -54,13 +54,11 @@ In the config the following settings are particularly important:
 
 ```YAML
 initial_condition: "GCM"
-external_forcing: "GCM"
 external_forcing_file: artifact"cfsite_gcm_forcing"/HadGEM2-A_amip.2004-2008.07.nc
 cfsite_number : "site23"
-surface_setup: "GCM"
 ```
 
-Here we must set all of `initial_condition`, `external_forcing` and `surface_setup` to be `GCM` as each component requires information from the external file. The `external_forcing_file` and `cfsite_number` together determine the temperature, specific humidity, and wind as well as horizontal and vertical advection profiles that drive the simulation, and can be set to a local file path as opposed to using the artifact. Radiation and surface temperature are also specified. Here the forcing file, an example of which is stored in the artifact, contains groups for each `cfsite` to drive the simulation. See [Shen et al. 2022](https://agupubs.onlinelibrary.wiley.com/doi/full/10.1029/2021MS002631) for more information.
+`initial_condition: "GCM"` drives the whole case: the `ForcingFromFile` setup reads the time-mean profiles for the chosen `cfsite_number` from `external_forcing_file` and supplies the forcing, the surface (interactive Monin-Obukhov over the file's skin temperature), and insolation. `external_forcing_file` can be a local path instead of the artifact. The file contains a group per `cfsite`. See [Shen et al. 2022](https://agupubs.onlinelibrary.wiley.com/doi/full/10.1029/2021MS002631) for more information.
 
 ### ARM VARANAL Case (SGP)
 
@@ -138,8 +136,7 @@ the requested site and dates (regridded from the global ERA5 archive, schema
 below) and hands it to the generic `ForcingFromFile` setup, which takes the
 initial condition, external forcing, surface skin temperature, and insolation
 from that one file (surface fluxes are computed interactively by Monin–Obukhov).
-Setting `external_forcing: "ReanalysisTimeVarying"` as well is still accepted but
-no longer needed. You give the site and dates directly rather than a file path
+You give the site and dates directly rather than a file path
 because the file is generated on demand from the version-pinned ERA5 archive
 (stored through `ClimaArtifacts` for reproducibility): start_date is YYYYMMDD,
 site_latitude in degrees (-90...90) and site_longitude in (-180...180). Note that
@@ -212,9 +209,6 @@ external_forcing_file: /path/to/my_case_forcing.nc
 start_date: "20200101"
 config: "column"
 ```
-
-To use a forcing file with a different (analytic) initial condition, set
-`external_forcing: "ForcingFromFile"` instead and keep your `initial_condition`.
 
 The reader consumes one format: the native `ClimaColumn` schema (below),
 written by the ERA5 generator and the target for hand-made case files. A file

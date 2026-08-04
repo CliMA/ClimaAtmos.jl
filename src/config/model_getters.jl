@@ -191,15 +191,13 @@ function get_insolation_form(parsed_args; setup_type = nothing)
         TimeVaryingInsolation()
     elseif insolation == "rcemipii"
         RCEMIPIIInsolation()
-    elseif insolation == "gcmdriven"
-        GCMDrivenInsolation()
     elseif insolation == "externaldriventv"
         ExternalTVInsolation()
     elseif insolation == "larcform1"
         Larcform1Insolation()
     else
         error(
-            """Unknown insolation `$insolation`. Expected: "idealized", "timevarying", "rcemipii", "gcmdriven", "externaldriventv", or "larcform1".""",
+            """Unknown insolation `$insolation`. Expected: "idealized", "timevarying", "rcemipii", "externaldriventv", or "larcform1".""",
         )
     end
 end
@@ -606,74 +604,33 @@ function get_external_forcing_model(
     ::Type{FT};
     setup_type = nothing,
 ) where {FT}
-    # TODO: Clean this function up after migrating GCMDriven
     external_forcing = parsed_args["external_forcing"]
 
-    if external_forcing in
-       ("ReanalysisTimeVarying", "ReanalysisMonthlyAveragedDiurnal")
-        @assert parsed_args["config"] == "column" "ReanalysisTimeVarying and ReanalysisMonthlyAveragedDiurnal are only supported in column mode."
+    if external_forcing == "ReanalysisMonthlyAveragedDiurnal"
+        @assert parsed_args["config"] == "column" "ReanalysisMonthlyAveragedDiurnal is only supported in column mode."
     end
     if !isnothing(parsed_args["era5_diurnal_warming"])
         @assert external_forcing == "ReanalysisMonthlyAveragedDiurnal" "era5_diurnal_warming is only supported for ReanalysisMonthlyAveragedDiurnal."
         @assert parsed_args["era5_diurnal_warming"] isa Number "era5_diurnal_warming is expected to be a number, but was supplied as a $(typeof(parsed_args["era5_diurnal_warming"]))"
     end
 
-    # The forcing that the chosen setup (`initial_condition`) already supplies,
-    # or `nothing`. With no `external_forcing` key we use it directly, which is
-    # the preferred route. The `ReanalysisTimeVarying` / `ForcingFromFile` string
-    # values below only reuse this same forcing, so they are redundant with it.
-    setup_forcing =
-        isnothing(setup_type) ? nothing : Setups.external_forcing(setup_type, FT)
-
     model = if isnothing(external_forcing)
-        setup_forcing
-    elseif external_forcing == "GCM"
-        GCMForcing{FT}(
-            parsed_args["external_forcing_file"],
-            parsed_args["cfsite_number"],
-        )
-    elseif external_forcing == "ReanalysisTimeVarying"
-        isnothing(setup_forcing) && error(
-            """external_forcing "ReanalysisTimeVarying" requires initial_condition "ReanalysisTimeVarying" (which supplies the same forcing automatically, so the key can simply be omitted).""",
-        )
-        setup_forcing
+        # Preferred (and only) route for setup-driven forcing: with no
+        # `external_forcing` key, the forcing comes from the setup chosen by
+        # `initial_condition` (GCM, ARMVARANAL, ReanalysisTimeVarying, ISDAC, and
+        # ForcingFromFile all supply their own).
+        isnothing(setup_type) ? nothing : Setups.external_forcing(setup_type, FT)
     elseif external_forcing == "ReanalysisMonthlyAveragedDiurnal"
-        external_forcing_file = get_external_monthly_forcing_file_path(parsed_args)
-        # Generate the monthly file if it is missing or in a stale layout.
-        if !isfile(external_forcing_file) ||
-           !check_monthly_forcing_times(external_forcing_file, parsed_args) ||
-           !ClimaColumnFiles.is_conforming(external_forcing_file)
-            generate_external_forcing_file(
-                parsed_args,
-                external_forcing_file,
-                FT,
-                input_data_dir = joinpath(
-                    @clima_artifact("era5_hourly_atmos_raw"),
-                    "monthly",
-                ),
-                data_strs = [
-                    "monthly_diurnal_profiles",
-                    "monthly_diurnal_inst",
-                    "monthly_diurnal_accum",
-                ],
-            )
-        end
-        # The monthly-averaged-diurnal file stores one day; repeat it in time.
+        # The one forcing that differs from the initial condition: monthly-
+        # averaged diurnal ERA5, paired with `initial_condition: ReanalysisTimeVarying`.
+        # The file stores one repeating day, so repeat it in time.
         ExternalDrivenTVForcing(
-            external_forcing_file;
+            era5_dataset(parsed_args, FT; monthly = true);
             time_interpolation_method = ColumnDatasets.periodic_calendar_method(),
         )
-    elseif external_forcing == "ISDAC"
-        ISDACForcing()
-    elseif external_forcing == "ForcingFromFile"
-        # Reuse the setup's forcing when initial_condition is also ForcingFromFile;
-        # otherwise build it from the file (forcing only, no ForcingFromFile IC).
-        isnothing(setup_forcing) ?
-        ExternalDrivenTVForcing(parsed_args["external_forcing_file"]) :
-        setup_forcing
     else
         error(
-            """Unknown external_forcing `$external_forcing`. Expected: ~, "ForcingFromFile", "GCM", "ISDAC", "ReanalysisTimeVarying", or "ReanalysisMonthlyAveragedDiurnal".""",
+            """`external_forcing` accepts only `~` (default; the forcing then comes from the `initial_condition` setup) or "ReanalysisMonthlyAveragedDiurnal", but got `$external_forcing`. The `GCM`/`ISDAC`/`ForcingFromFile`/`ReanalysisTimeVarying` values are supplied automatically by their `initial_condition` setup and are no longer accepted here.""",
         )
     end
 
@@ -767,10 +724,7 @@ end
 
 function check_case_consistency(parsed_args)
     ic = parsed_args["initial_condition"]
-    surf = parsed_args["surface_setup"]
-    rad = parsed_args["rad"]
     microphysics = parsed_args["microphysics_model"]
-    extf = parsed_args["external_forcing"]
     imp_vert_diff = parsed_args["implicit_diffusion"]
     vert_diff = parsed_args["vert_diff"]
     turbconv = parsed_args["turbconv"]
@@ -786,15 +740,13 @@ function check_case_consistency(parsed_args)
         "Unknown `config = $(repr(config))`. Valid options are: $(join(valid_configs, ", "))."
     )
 
-    # ISDAC consistency: when initial_condition is ISDAC, surface/rad/external
-    # forcing must all be set to the matching ISDAC variants. Subsidence,
-    # scm_coriolis, and ls_adv are owned by the setup, not the YAML schema.
-    ISDAC_mandatory = (ic, surf, rad, extf)
-    if "ISDAC" in ISDAC_mandatory
+    # ISDAC consistency: the case is selected by `initial_condition: ISDAC`
+    # alone; the setup owns the surface, radiation, forcing, subsidence,
+    # scm_coriolis, and ls_adv. It only requires a moist microphysics model.
+    if ic == "ISDAC"
         @assert(
-            allequal(ISDAC_mandatory) &&
             microphysics != "dry",
-            "ISDAC setup not consistent"
+            "ISDAC requires a moist microphysics model (got `microphysics_model = \"dry\"`)",
         )
     elseif imp_vert_diff
         # Implicit vertical diffusion is only supported for specific models:

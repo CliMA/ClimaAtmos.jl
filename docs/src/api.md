@@ -124,6 +124,7 @@ Modules = [
     ClimaAtmos.ColumnDatasets,
     ClimaAtmos.ColumnDatasets.ClimaColumnFiles,
     ClimaAtmos.ColumnDatasets.VaranalFiles,
+    ClimaAtmos.ColumnDatasets.GCMColumnData,
 ]
 ```
 
