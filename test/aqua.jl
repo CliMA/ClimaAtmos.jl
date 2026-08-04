@@ -24,9 +24,16 @@ using Aqua
 end
 
 @testset "Aqua tests (all)" begin
+    # julia-downgrade-compat (v2.7.0+) promotes the test-only [extras] into [deps] so
+    # that Pkg.test cannot re-resolve away the minimized versions. ClimaAtmos
+    # itself does not load those packages, so the stale-dependency check reports
+    # all of them as stale in the downgrade job. Skip it there; the regular CI
+    # jobs still run it against an unmodified Project.toml.
+    in_downgrade_ci = get(ENV, "CLIMAATMOS_DOWNGRADE_CI", "false") == "true"
     Aqua.test_all(
         ClimaAtmos;
         persistent_tasks = true,
+        stale_deps = !in_downgrade_ci,
     )
 end
 
