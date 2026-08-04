@@ -49,6 +49,7 @@ include(joinpath("parameterized_tendencies", "radiation", "radiation.jl"))
 include(joinpath("cache", "prognostic_edmf_precomputed_quantities.jl"))
 include(joinpath("cache", "edonly_precomputed_quantities.jl"))
 include(joinpath("cache", "microphysics_cache.jl"))
+include(joinpath("cosp", "cosp_quantities.jl"))
 include(joinpath("cache", "precomputed_quantities.jl"))
 include(joinpath("cache", "surface_albedo.jl"))
 
@@ -151,6 +152,7 @@ include(joinpath("cache", "eddy_diffusivity_coefficient.jl"))
 include(joinpath("prognostic_equations", "constrain_state.jl"))
 include(joinpath("prognostic_equations", "limited_tendencies.jl"))
 
+include(joinpath("cosp", "callbacks.jl"))
 include(joinpath("callbacks", "callbacks.jl"))
 
 include(joinpath("diagnostics", "Diagnostics.jl"))

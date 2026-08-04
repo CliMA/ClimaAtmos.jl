@@ -93,14 +93,6 @@ NVTX.@annotate function rrtmgp_solver_callback!(integrator)
     return nothing
 end
 
-NVTX.@annotate function subcol_model_callback!(integrator)
-    Y = integrator.u
-    p = integrator.p
-    run_cosp_cloudsat!(Y, p, p.atmos.microphysics_model)
-
-    return nothing
-end
-
 NVTX.@annotate function nogw_model_callback!(integrator)
     Y = integrator.u
     p = integrator.p
