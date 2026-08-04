@@ -12,7 +12,7 @@ import ClimaCore
 import ClimaCore.MatrixFields: @name
 
 import ClimaUtilities
-import ClimaCore: Domains, Spaces, Topologies
+import ClimaCore: Domains, Grids, Spaces, Topologies
 import ClimaDiagnostics
 import RRTMGP
 

@@ -91,13 +91,13 @@ function build_cache(
     params,
     dt,
     start_date,
-    aerosol_names,
-    time_varying_trace_gas_names,
     steady_state_velocity,
-    vwb_species = nothing,
 )
     FT = eltype(params)
     dt = FT(dt)
+
+    aerosol_names = atmos.radiation.aerosol_names
+    time_varying_trace_gas_names = atmos.radiation.time_varying_trace_gases
 
     ᶜcoord = Fields.local_geometry_field(Y.c).coordinates
     ᶠcoord = Fields.local_geometry_field(Y.f).coordinates
@@ -136,7 +136,8 @@ function build_cache(
     end
 
     vertical_water_borrowing_limiter = nothing
-    vertical_water_borrowing_species = vwb_species
+    vertical_water_borrowing_species =
+        atmos.numerics.vertical_water_borrowing_species
 
     if atmos.water.tracer_nonnegativity_method isa TracerNonnegativityVerticalWaterBorrowing
         vertical_water_borrowing_limiter = Limiters.VerticalMassBorrowingLimiter((FT(0.0),))

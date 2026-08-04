@@ -67,9 +67,11 @@ ClimaAtmos.Setups.overwrite_initial_state!
 
 ## SCM Forcing Methods
 
-Single-column setups can provide forcing profiles that replace the
-corresponding YAML config keys. When a method returns `nothing` (the
-default), the config key is used instead.
+Single-column setups can provide forcing profiles. These are applied wherever
+the model is built from the setup: `AtmosModel(grid; setup, ...)` on the
+script path (explicit model kwargs win), and the `initial_condition` key on
+the YAML path. When a method returns `nothing` (the default), the config key
+or model default is used instead.
 
 ```@docs
 ClimaAtmos.Setups.subsidence_forcing
@@ -79,9 +81,10 @@ ClimaAtmos.Setups.coriolis_forcing
 
 ## Model Methods
 
-Setups can return model objects directly. When a method returns `nothing`
-(the default), the model construction layer falls through to config-based
-dispatch.
+Setups can return model objects directly. Like the SCM forcing methods, these
+are applied by `AtmosModel(grid; setup, ...)` and by the YAML path; when a
+method returns `nothing` (the default), construction falls through to the
+explicit kwarg / config key / default.
 
 ```@docs
 ClimaAtmos.Setups.external_forcing
@@ -89,6 +92,13 @@ ClimaAtmos.Setups.insolation_model
 ClimaAtmos.Setups.surface_temperature_model
 ClimaAtmos.Setups.prescribed_flow_model
 ClimaAtmos.Setups.radiation_model
+```
+
+All of these hooks are evaluated together by
+[`Setups.setup_model_traits`](@ref ClimaAtmos.Setups.setup_model_traits):
+
+```@docs
+ClimaAtmos.Setups.setup_model_traits
 ```
 
 ## Defining a Case in a Runscript
@@ -127,9 +137,8 @@ CA.solve_atmos!(simulation)
 The forcing is a tuple of
 [`AbstractForcingTerm`](@ref ClimaAtmos.AbstractForcingTerm)s (`HorizontalAdvection()`, `VerticalFluctuation()`,
 `Nudging(variables...; timescale, mask)`, `Subsidence()`) passed to the setup's
-`forcing` slot. Note that the `AtmosSimulation(; model, setup)` constructor uses
-`setup` only for the initial state, so the setup's forcing / insolation / surface
-models must be threaded into the `AtmosModel` explicitly (this will be addressed, tracked by [#4696](https://github.com/CliMA/ClimaAtmos.jl/issues/4696)).
+`forcing` slot. Passing the setup to `AtmosModel(grid; setup)` applies its
+forcing, insolation, and surface models to the model automatically.
 
 ```julia
 import ClimaAtmos as CA
@@ -145,17 +154,9 @@ setup = CA.Setups.ForcingFromFile(
     forcing = (CA.HorizontalAdvection(),),
 )
 
-surface = CA.Setups.surface_condition(setup, params)
-model = CA.AtmosModel(;
-    external_forcing = CA.Setups.external_forcing(setup, FT),
-    insolation = CA.Setups.insolation_model(setup),
-    temperature = CA.Setups.surface_temperature_model(setup),
-    flux_scheme = surface.flux_scheme,
-    # ...
-)
 grid = CA.ColumnGrid(FT; z_elem = 63, z_max = FT(60e3), z_stretch = true)
-simulation = CA.AtmosSimulation{FT}(;
-    model, setup, grid, params,
+model = CA.AtmosModel(grid; params, setup)  # setup's forcing/surface applied
+simulation = CA.AtmosSimulation(model;
     start_date = Dates.DateTime(2007, 7, 1), dt = 50, t_end = 30 * 3600,
 )
 CA.solve_atmos!(simulation)
@@ -201,8 +202,9 @@ function CA.Setups.center_initial_condition(
     return CA.Setups.physical_state(; T, p)
 end
 
-setup = MyCase()
-simulation = CA.AtmosSimulation{Float64}(; setup, model, grid)
+grid = CA.ColumnGrid(Float64; z_elem = 63, z_max = 60e3)
+model = CA.AtmosModel(grid; setup = MyCase())
+simulation = CA.AtmosSimulation(model)
 ```
 
 Optionally extend the other setup methods documented above in the same

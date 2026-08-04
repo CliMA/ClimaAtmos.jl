@@ -23,7 +23,7 @@ function ClimaAtmosParameters(config::AtmosConfig)
     )
 end
 
-function get_atmos(config::AtmosConfig, params; setup_type = nothing)
+function get_atmos(config::AtmosConfig, params, grid; setup_type)
     pa = config.parsed_args
     FT = eltype(config)
     check_case_consistency(pa)
@@ -34,24 +34,25 @@ function get_atmos(config::AtmosConfig, params; setup_type = nothing)
         disable_momentum_vertical_diffusion, pa, params, FT,
     )
 
-    prescribed_flow = if !isnothing(setup_type)
-        Setups.prescribed_flow_model(setup_type, FT)
-    else
-        nothing
-    end
+    setup_traits = Setups.setup_model_traits(setup_type, params, FT)
+
+    prescribed_flow = setup_traits.prescribed_flow
     if isnothing(prescribed_flow) && pa["prescribed_flow"] == "ShipwayHill2012"
         prescribed_flow = ShipwayHill2012VelocityProfile{FT}()
     end
 
-    atmos = AtmosModel(;
+    atmos = _atmos_model(;
+        grid,
+        params,
+        setup = setup_type,
         water = AtmosWater(config, params, FT),
-        scm_setup = SCMSetup(config, FT; setup_type),
+        scm_setup = SCMSetup(config, FT; setup_traits),
         prescribed_flow,
-        radiation = AtmosRadiation(config, FT; setup_type),
+        radiation = AtmosRadiation(config, FT; setup_traits),
         turbconv = AtmosTurbconv(config, params, FT),
         gravity_wave = AtmosGravityWave(config, params, FT),
         sponge = AtmosSponge(config, params),
-        surface = AtmosSurface(config, params, FT; setup_type),
+        surface = AtmosSurface(config, params, FT; setup_traits),
         numerics = AtmosNumerics(config, FT),
         chemistry = AtmosChem(config),
         cosp = COSPModel(config),
@@ -59,7 +60,7 @@ function get_atmos(config::AtmosConfig, params; setup_type = nothing)
         disable_surface_flux_tendency = pa["disable_surface_flux_tendency"],
     )
     # TODO: Should this go in the AtmosModel constructor?
-    @assert !@any_reltype(atmos, (UnionAll, DataType))
+    @assert !@any_reltype(_physics_fields(atmos), (UnionAll, DataType))
 
     @info "AtmosModel: \n$(summary(atmos))"
     if !isnothing(params.microphysics_1m_params)
@@ -70,7 +71,7 @@ function get_atmos(config::AtmosConfig, params; setup_type = nothing)
     return atmos
 end
 
-function get_numerics(parsed_args, FT)
+function get_numerics(parsed_args, FT; vertical_water_borrowing_species = nothing)
     test_dycore_consistency =
         parsed_args["test_dycore_consistency"] ? TestDycoreConsistency() :
         nothing
@@ -115,6 +116,7 @@ function get_numerics(parsed_args, FT)
         reproducible_restart,
         diff_mode,
         hyperdiff,
+        vertical_water_borrowing_species,
     )
     @info "numerics $(summary(numerics))"
 
@@ -454,7 +456,7 @@ end
     steady_state_velocity_from_config(config::AtmosConfig, params)
 
 Return a callable `(Y, params) -> velocity` when `check_steady_state` is set,
-else `nothing`. `AtmosSimulation{FT}` invokes the callable after building `Y`.
+else `nothing`. `AtmosSimulation(model; ...)` invokes the callable after building `Y`.
 """
 function steady_state_velocity_from_config(config::AtmosConfig, params)
     config.parsed_args["check_steady_state"] || return nothing
@@ -499,7 +501,7 @@ end
     callback_kwargs_from_config(config::AtmosConfig)
 
 Bundle YAML callback knobs into the NamedTuple expected by
-`AtmosSimulation{FT}`'s `callback_kwargs` slot.
+`AtmosSimulation(model; ...)`'s `callback_kwargs` slot.
 """
 function callback_kwargs_from_config(config::AtmosConfig)
     pa = config.parsed_args
@@ -556,10 +558,11 @@ end
 """
     get_simulation(config::AtmosConfig)
 
-Build an `AtmosSimulation` from a YAML-driven `AtmosConfig`. Translates the
-parsed YAML into the kwargs that `AtmosSimulation{FT}(; ...)` accepts and
-forwards. After the simulation is built, writes the YAML-driver-only TOML
-parameter manifest and YAML config snapshot into the resolved `output_dir`.
+Build an `AtmosSimulation` from a YAML-driven `AtmosConfig`. Builds the
+`AtmosModel` (params → setup → grid → model) and translates the
+parsed YAML into the kwargs that `AtmosSimulation(model; ...)` accepts.
+After the simulation is built, writes the YAML-driver-only TOML parameter
+manifest and YAML config snapshot into the resolved `output_dir`.
 """
 function get_simulation(config::AtmosConfig)
     pa = config.parsed_args
@@ -567,17 +570,13 @@ function get_simulation(config::AtmosConfig)
     job_id = config.job_id
     params = ClimaAtmosParameters(config)
     setup = get_setup_type(pa, CAP.thermodynamics_params(params))
-    model = get_atmos(config, params; setup_type = setup)
     grid = get_grid(pa, params, config.comms_ctx)
+    model = get_atmos(config, params, grid; setup_type = setup)
 
     log_context(config.comms_ctx)
 
-    sim = AtmosSimulation{FT}(;
-        model,
-        params,
-        context = config.comms_ctx,
-        grid,
-        setup,
+    sim = AtmosSimulation(
+        model;
         steady_state_velocity = steady_state_velocity_from_config(config, params),
         dt = pa["dt"],
         start_date = parse_date(pa["start_date"]),
@@ -588,10 +587,6 @@ function get_simulation(config::AtmosConfig)
         debug_jacobian = pa["debug_jacobian"],
         update_cache_every = pa["update_cache_every"],
         update_constrain_state_every = pa["update_constrain_state_every"],
-        aerosol_names = Tuple(pa["prescribed_aerosols"]),
-        time_varying_trace_gases = Tuple(pa["time_varying_trace_gases"]),
-        vertical_water_borrowing_species =
-        vertical_water_borrowing_species_from_config(config),
         job_id,
         output_dir = pa["output_dir"],
         output_dir_style = pa["output_dir_style"],
