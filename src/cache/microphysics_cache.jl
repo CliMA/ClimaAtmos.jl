@@ -710,11 +710,15 @@ function update_implicit_microphysics_cache!(
     if p.atmos.terminal_velocity_rain isa DiagnosticTerminalVelocity
         (; ᶜwᵣ) = p.precomputed
         cmp = CAP.microphysics_1m_params(p.params)
-        @. ᶜwᵣ = CM1.terminal_velocity(
-            cmp.precip.rain,
-            cmp.terminal_velocity.rain,
-            Y.c.ρ,
-            max(zero(Y.c.ρ), specific(Y.c.ρq_rai, Y.c.ρ)),
+        @. ᶜwᵣ = clamp(
+            CM1.terminal_velocity(
+                cmp.precip.rain,
+                cmp.terminal_velocity.rain,
+                Y.c.ρ,
+                max(zero(Y.c.ρ), specific(Y.c.ρq_rai, Y.c.ρ)),
+            ),
+            typeof(Y.c.ρ)(1e-3),
+            typeof(Y.c.ρ)(3),
         )
     end
     set_precipitation_surface_fluxes!(Y, p, mm)
