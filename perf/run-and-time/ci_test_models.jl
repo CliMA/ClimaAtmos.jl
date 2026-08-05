@@ -11,7 +11,7 @@ case_files = Set([
     "models/set_cloud_frac.jl",
     "models/set_CM_cache.jl",
     "models/sgs.jl",
-    ])
+])
 
 has_faliures = false
 
