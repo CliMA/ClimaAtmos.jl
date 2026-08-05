@@ -65,7 +65,9 @@ if mode == MODE_INST
         inst_time = T_END_DAYS * DAY_S
     else
         _ref_var = load_var_inst(simdir, "arup"; prefer_period = PREFER_PERIOD)
-        _ref_times = haskey(_ref_var.dims, "time") ? _ref_var.dims["time"] : nothing
+        _ref_times =
+            ClimaAnalysis.has_time(_ref_var) ? ClimaAnalysis.times(_ref_var) :
+            nothing
         inst_time, _ = find_peak_active_time(simdir; candidate_times = _ref_times)
     end
     snap_kw[:inst_time] = inst_time
@@ -189,18 +191,28 @@ println(
     h_heat_min,
     ")",
 )
-lats_2d = [lat for _ in Q0_last.dims["lon"], lat in Q0_last.dims["lat"]]
+lats_2d = [
+    lat for _ in ClimaAnalysis.longitudes(Q0_last),
+    lat in ClimaAnalysis.latitudes(Q0_last)
+]
 tropical_mask = abs.(lats_2d) .< lat_max
 active_mask =
     (Q0_last.data .> Q0_threshold) .& (h_heat_last.data .> h_heat_min) .& tropical_mask
 println("Active columns: ", count(active_mask), " / ", length(active_mask))
-Q0_masked = deepcopy(Q0_last)
-Q0_masked.data .= ifelse.(active_mask, Q0_masked.data, NaN)
-h_heat_masked = deepcopy(h_heat_last)
-h_heat_masked.data .= ifelse.(active_mask, h_heat_masked.data, NaN)
+Q0_masked = ClimaAnalysis.remake(
+    Q0_last;
+    data = ifelse.(active_mask, Q0_last.data, NaN),
+)
+h_heat_masked = ClimaAnalysis.remake(
+    h_heat_last;
+    data = ifelse.(active_mask, h_heat_last.data, NaN),
+)
 
-pr_pos = deepcopy(pr_last)
-pr_pos.data .= .-pr_pos.data .* DAY_S
+pr_pos = ClimaAnalysis.convert_units(
+    pr_last,
+    "mm/day";
+    conversion_function = pr -> -pr * DAY_S,
+)
 
 # Find hotspot columns — rank by Q0 itself so every hotspot is guaranteed
 # Beres-active (positive Q0 and h_heat) for the sine-reference / scatter panels.
