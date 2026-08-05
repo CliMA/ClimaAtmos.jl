@@ -146,6 +146,7 @@ ClimaAtmos.Setups.MoistAdiabaticProfileEDMFX
 
 ```@docs
 ClimaAtmos.Setups.GCMDriven
+ClimaAtmos.Setups.GCMDriven(::String, ::String)
 ClimaAtmos.Setups.ForcingFromFile
 ClimaAtmos.Setups.MoistFromFile
 ClimaAtmos.Setups.WeatherModel

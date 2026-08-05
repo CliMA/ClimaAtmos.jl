@@ -12,7 +12,12 @@ Case definitions (initial conditions and forcing) live on the
 
 ```@docs
 ClimaAtmos.AtmosSimulation
+ClimaAtmos.AtmosSimulation{FT}()
+ClimaAtmos.AtmosSimulation()
+ClimaAtmos.AtmosSimulation(::ClimaAtmos.AtmosConfig)
 ClimaAtmos.AtmosConfig
+ClimaAtmos.AtmosConfig(::String)
+ClimaAtmos.AtmosConfig(::AbstractDict)
 ClimaAtmos.solve_atmos!
 ClimaAtmos.get_simulation
 ClimaAtmos.AtmosSolveResults
@@ -70,6 +75,7 @@ directly to `AtmosModel`, which routes them to the right group.
 
 ```@docs
 ClimaAtmos.AtmosModel
+ClimaAtmos.AtmosModel()
 ClimaAtmos.AtmosWater
 ClimaAtmos.AtmosTurbconv
 ClimaAtmos.AtmosRadiation
@@ -78,6 +84,7 @@ ClimaAtmos.AtmosSponge
 ClimaAtmos.AtmosGravityWave
 ClimaAtmos.AtmosChem
 ClimaAtmos.AtmosNumerics
+ClimaAtmos.AtmosNumerics()
 ```
 
 ### Water and microphysics
@@ -135,7 +142,9 @@ The turbulence and convection scheme, called EDMFX in the code; see the
 ClimaAtmos.AbstractEDMF
 ClimaAtmos.EDOnlyEDMFX
 ClimaAtmos.PrognosticEDMFX
+ClimaAtmos.PrognosticEDMFX{FT}()
 ClimaAtmos.EDMFXModel
+ClimaAtmos.EDMFXModel()
 ```
 
 Entrainment and detrainment closures:
@@ -233,7 +242,9 @@ ClimaAtmos.AnisotropicMinimumDissipation
 ClimaAtmos.ConstantHorizontalDiffusion
 ClimaAtmos.SpongeModel
 ClimaAtmos.RayleighSponge
+ClimaAtmos.RayleighSponge(::Any)
 ClimaAtmos.ViscousSponge
+ClimaAtmos.ViscousSponge(::Any)
 ```
 
 ### Gravity-wave drag
@@ -289,6 +300,8 @@ ClimaAtmos.JacobianAlgorithm
 ClimaAtmos.ManualSparseJacobian
 ClimaAtmos.AutoDenseJacobian
 ClimaAtmos.AutoSparseJacobian
+ClimaAtmos.AutoSparseJacobian()
+ClimaAtmos.AutoSparseJacobian(::Any)
 ```
 
 ## Diagnostics
