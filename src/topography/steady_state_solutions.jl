@@ -255,7 +255,7 @@ wavelengths `λ_x`, `λ_y` and amplitude `h_max`.
 
 Because the elevation is a single Fourier mode, the inverse transform collapses
 to one evaluation of `∂FΔU_∂Fh_approximation` at `(k_x, k_y)`. Called from
-[`steady_state_velocity`](@ref) for [`CosineTopography`](@ref); a 2D case passes
+`steady_state_velocity` for [`CosineTopography`](@ref); a 2D case passes
 `λ_y = Inf`.
 """
 function steady_state_velocity_cosine(params, x, y, z, λ_x, λ_y, z_top, h_max)
@@ -306,7 +306,7 @@ mountain, by integrating the wave response over wavenumbers up to `k_x_max`.
 The transform of the elevation *centered* at the origin is used, rather than
 that of the actual elevation, to avoid propagating the rapidly oscillating
 factor `exp(-i k_x x_center)` through the approximation. Called from
-[`steady_state_velocity`](@ref) for the Agnesi and Schär mountains, which supply
+`steady_state_velocity` for the Agnesi and Schär mountains, which supply
 their own analytic transforms and a `k_x_max` beyond which `Fh` is below
 `eps(FT)`.
 """

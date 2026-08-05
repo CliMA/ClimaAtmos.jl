@@ -13,9 +13,9 @@ For each updraft `j`, writes the level-1 caches
 
   - `p.precomputed.sfc_mse_buoyantʲs`, `sfc_q_tot_buoyantʲs`: the high-tail
     (buoyant-air) surface values of `mse` and `q_tot`
-    ([`edmfx_sfc_buoyant`](@ref)) [J/kg] and [kg/kg];
+    (`edmfx_sfc_buoyant`) [J/kg] and [kg/kg];
   - `p.precomputed.sfc_mass_flux_sourceʲs`: the capped volumetric mass source
-    rate ([`edmfx_sfc_mass_flux_source`](@ref)) [kg/m³/s].
+    rate (`edmfx_sfc_mass_flux_source`) [kg/m³/s].
 
 The buoyant values are computed first so the mass-flux cap can consume them.
 Surface `C3` flux vectors are projected onto the surface normal through
@@ -28,7 +28,7 @@ hits a GPU-incompatible `convert` path inside `knl_copyto!`.
 No-op unless `p.atmos.turbconv_model isa PrognosticEDMFX`. Mutates
 `p.precomputed` and `p.scratch`; returns `nothing`. Called from
 `set_prognostic_edmf_precomputed_quantities_explicit_closures!`; the payload is
-consumed by [`edmfx_boundary_condition_tendency!`](@ref) and by the implicit
+consumed by `edmfx_boundary_condition_tendency!` and by the implicit
 `ρa` solve.
 """
 function set_edmfx_surface_conditions!(Y, p)
@@ -147,10 +147,10 @@ end
 Return the high-tail (buoyant-air) surface value of a scalar (`mse` or
 `q_tot`) for a PROPHET updraft.
 
-Evaluates [`sgs_scalar_first_interior_bc`](@ref) at the first interior cell
+Evaluates `sgs_scalar_first_interior_bc` at the first interior cell
 center with the sampled percentile fraction set to
 `a_s = surface_mass_flux_coefficient(...)` — the same `a_s` that sets the
-surface mass-flux magnitude in [`surface_mass_flux`](@ref).
+surface mass-flux magnitude in `surface_mass_flux`.
 
 # Arguments
 
@@ -216,8 +216,8 @@ end
 Return the volumetric mass source rate `F_sfc / dz_int` [kg/m³/s] at the first
 cell for one PROPHET updraft, equivalent to `div(F·ẑ)` at level 1.
 
-`F_sfc` is the capped surface mass flux ([`surface_mass_flux`](@ref)) with the
-[`upper_area_limiter_factor`](@ref) baked in:
+`F_sfc` is the capped surface mass flux (`surface_mass_flux`) with the
+`upper_area_limiter_factor` baked in:
 
     F_pre   = surface_mass_flux(...) · upper_area_limiter_factor(a),
     F_max_χ = α · sfc_ρ_flux_χ / max(ϵ, χ_buoyant − χ_env)
@@ -231,7 +231,7 @@ least `(1−α)` of every surface scalar flux. The denominator floor
 and effectively non-binding through the subsequent `min`.
 
 The buoyant values are passed in (precomputed by
-[`edmfx_sfc_buoyant`](@ref)) so they can be cached separately and consumed
+`edmfx_sfc_buoyant`) so they can be cached separately and consumed
 elsewhere by the `mse`/`q_tot` tendency.
 
 # Arguments
@@ -306,11 +306,11 @@ The generic method is a no-op; the `turbconv_model::PrognosticEDMFX` method
 increments `Yₜ.c.sgsʲs.:(j).mse` and `.q_tot` at level 1 for every updraft and
 returns `nothing`.
 
-The cached `mass_flux_source` (see [`edmfx_sfc_mass_flux_source`](@ref))
+The cached `mass_flux_source` (see `edmfx_sfc_mass_flux_source`)
 is the volumetric mass source rate `F_sfc / dz` at the first cell,
 equivalent to `div(F·ẑ)` evaluated at level 1. That mass carries the
 high-tail (buoyant) values `mse_buoyant`, `q_tot_buoyant` from
-[`sgs_scalar_first_interior_bc`](@ref). For the specific (intensive)
+`sgs_scalar_first_interior_bc`. For the specific (intensive)
 updraft variables this gives a flux-form tendency at the first cell:
 
     d(val)/dt += mass_flux_source · (val_buoyant − val) / max(ρa, ρ·a_min),
@@ -327,7 +327,7 @@ The corresponding `ρa` source is injected in the implicit ρa solve
 
 At the first cell the updraft scalar tendencies receive *two* contributions —
 this surface mass-flux BC and the standard lateral entrainment from
-[`edmfx_entr_detr_tendency!`](@ref). These represent
+`edmfx_entr_detr_tendency!`. These represent
 distinct physical processes (surface mass injection from the buoyant
 sub-cell tail vs. lateral entrainment from the environment at level 1)
 and are intentionally both retained. The two relaxation targets differ
@@ -405,7 +405,7 @@ standard deviation of the SGS scalar distribution,
 
     scalar_sgs = ᶜscalar_int + C √σ²,
 
-with `σ²` from [`get_first_interior_variance`](@ref) (Monin-Obukhov similarity
+with `σ²` from `get_first_interior_variance` (Monin-Obukhov similarity
 theory) and `C = percentile_bounds_mean_norm(1 - ᶜaʲ_int, 1)` the mean of a
 standard normal truncated to its upper `ᶜaʲ_int` tail.
 
@@ -418,7 +418,7 @@ returned unchanged.
   - `ᶜz_int`: Height of the first interior cell center above the surface [m].
   - `ᶜρ_int`: Grid-mean air density at `ᶜz_int` [kg/m³].
   - `ᶜaʲ_int`: Fraction of the distribution sampled by the updraft [-]; the
-    surface mass-flux area coefficient `a_s` in [`edmfx_sfc_buoyant`](@ref).
+    surface mass-flux area coefficient `a_s` in `edmfx_sfc_buoyant`.
   - `ᶜscalar_int`: Grid-mean value of the scalar at `ᶜz_int`.
   - `sfc_buoyancy_flux`: Surface buoyancy flux `⟨w'b'⟩_s` [m²/s³]. Positive for
     unstable conditions.
@@ -502,7 +502,7 @@ Empirical forms follow, e.g., Wyngaard et al. (1971) and Garratt (1994).
 # Returns
 
 The scalar variance, in the units of the scalar squared. Called from
-[`sgs_scalar_first_interior_bc`](@ref).
+`sgs_scalar_first_interior_bc`.
 """
 function get_first_interior_variance(
     kinematic_scalar_flux,
@@ -528,7 +528,7 @@ end
 Approximate the inverse error function `erf⁻¹(x)` for `x ∈ (-1, 1)`.
 
 Uses Winitzki's closed-form approximation with shape parameter `a = 0.147`.
-Called from [`gauss_quantile`](@ref).
+Called from `gauss_quantile`.
 
 # Arguments
 
@@ -558,7 +558,7 @@ end
     gauss_quantile(p::FT) where {FT}
 
 Compute the standard-normal quantile `Φ⁻¹(p) = √2 erf⁻¹(2p - 1)`, with `erf⁻¹`
-approximated by [`approximate_inverf`](@ref).
+approximated by `approximate_inverf`.
 
 # Arguments
 
@@ -567,7 +567,7 @@ approximated by [`approximate_inverf`](@ref).
 # Returns
 
 The standard normal quantile corresponding to `p` [-]. Called from
-[`percentile_bounds_mean_norm`](@ref).
+`percentile_bounds_mean_norm`.
 """
 function gauss_quantile(p::FT) where {FT}
     return sqrt(FT(2)) * approximate_inverf(2p - 1)
@@ -582,7 +582,7 @@ quantile interval of `[low_percentile, high_percentile]`:
     E[X | x_low ≤ X ≤ x_high] = (ϕ(x_low) - ϕ(x_high)) / (P_high - P_low),
 
 where `ϕ` is the standard normal PDF and `x_low`, `x_high` are the quantiles
-([`gauss_quantile`](@ref)) of the two percentiles. The denominator is floored
+(`gauss_quantile`) of the two percentiles. The denominator is floored
 at `eps(FT)`.
 
 The result is the coefficient multiplying the SGS standard deviation for a
@@ -597,7 +597,7 @@ subdomain that samples that segment of the distribution.
 # Returns
 
 The truncated-normal mean [-]. Called from
-[`sgs_scalar_first_interior_bc`](@ref).
+`sgs_scalar_first_interior_bc`.
 """
 function percentile_bounds_mean_norm(
     low_percentile,

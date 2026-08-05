@@ -36,7 +36,7 @@ end
 Compute the signed vertical component of the buoyancy acceleration in
 physical units.
 
-Form the buoyancy acceleration vector due to a density anomaly ([`buoyancy`](@ref)
+Form the buoyancy acceleration vector due to a density anomaly (`buoyancy`
 in the first method, `-ρ_diff * gradᵥ_Φ` in the second) and project it onto the
 local vertical direction.
 
@@ -159,7 +159,7 @@ buoyancy production in the blend (TOML key:
 interpolates smoothly between free convection (`a_s → a_s_max`) and
 shear-only conditions (`a_s → 0`). `a_s_max` is the asymptotic plume
 area fraction in the free-convection limit. Used both to set the
-surface mass flux magnitude (via [`surface_mass_flux`](@ref)) and to
+surface mass flux magnitude (via `surface_mass_flux`) and to
 specify the percentile range from which the high-tail buoyant scalar
 values are sampled at the surface.
 """
@@ -182,7 +182,7 @@ Surface EDMF updraft mass flux [kg/m²/s] entering the first cell:
 
     F_surf = a_s · ρ · w*,
 
-with `a_s` given by [`surface_mass_flux_coefficient`](@ref) and
+with `a_s` given by `surface_mass_flux_coefficient` and
 `w* = cbrt(max(z_i · ⟨w'b'⟩_s, 0))`. Returns zero in stable boundary
 layers (`⟨w'b'⟩_s ≤ 0`).
 """
@@ -205,7 +205,7 @@ where either the condensate sum or `ρq_tot` is below `ϵ_numerics`, which
 removes condensate in cells with no (or negative) total water.
 
 Mutates `Y.c` and uses `p.scratch`; returns `nothing`. Called from
-[`enforce_physical_constraints!`](@ref) for the 1M and 2M non-equilibrium
+`enforce_physical_constraints!` for the 1M and 2M non-equilibrium
 microphysics models.
 """
 function enforce_grid_mean_microphysics_constraints!(Y, p, t)
@@ -253,11 +253,11 @@ For each of the `n_prognostic_mass_flux_subdomains(turbconv_model)` updrafts:
     microphysics model, where the grid-mean `ρχ` fields do not exist.
   - The subdomain condensate species are finally rescaled by a common
     factor so that `q_lclʲ + q_iclʲ + q_raiʲ + q_snoʲ ≤ q_totʲ`, mirroring
-    the grid-mean [`enforce_grid_mean_microphysics_constraints!`](@ref).
+    the grid-mean `enforce_grid_mean_microphysics_constraints!`.
 
 No-op when `n_prognostic_mass_flux_subdomains(turbconv_model) == 0` (e.g.
 `EDOnlyEDMFX`). Mutates `Y.c.sgsʲs` and `Y.f.sgsʲs`; returns `nothing`. Called
-from [`enforce_physical_constraints!`](@ref).
+from `enforce_physical_constraints!`.
 
 # Notes
 
@@ -345,9 +345,9 @@ end
 Enforce physical consistency of the state `Y` by dispatching to the constraint
 helpers selected by the active microphysics and turbulence-convection models.
 
-  - [`enforce_grid_mean_microphysics_constraints!`](@ref) runs for
+  - `enforce_grid_mean_microphysics_constraints!` runs for
     `NonEquilibriumMicrophysics1M` and `NonEquilibriumMicrophysics2M`.
-  - [`enforce_edmf_updraft_constraints!`](@ref) runs for `AbstractEDMF` when
+  - `enforce_edmf_updraft_constraints!` runs for `AbstractEDMF` when
     the `edmfx_filter` configuration flag is enabled
     (`atmos.edmfx_model.filter isa Val{true}`); it is itself a no-op for models
     without prognostic mass-flux subdomains, such as `EDOnlyEDMFX`.

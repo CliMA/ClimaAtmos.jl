@@ -81,7 +81,7 @@ bound `a_max` (preventing the area from being driven above `a_max`):
 The upper bound `a_max` is obtained from `turbconv_params` through
 `CAP.max_area`, and `max_area_limiter_power` from `CAP.max_area_limiter_power`.
 
-This is the entrainment counterpart of [`lower_area_limiter_factor`](@ref),
+This is the entrainment counterpart of `lower_area_limiter_factor`,
 which damps detrainment near the lower bound `a_min`. Together they keep
 `a ∈ [a_min, a_max]` without requiring a comparison between `entr` and `detr`.
 """
@@ -106,7 +106,7 @@ The factor smoothly damps detrainment as the area approaches the lower bound
 The lower bound `a_min` is obtained from `turbconv_params` through
 `CAP.min_area`, and `min_area_limiter_power` from `CAP.min_area_limiter_power`.
 
-This is the detrainment counterpart of [`upper_area_limiter_factor`](@ref),
+This is the detrainment counterpart of `upper_area_limiter_factor`,
 which damps entrainment near the upper bound `a_max`. Together they keep
 `a ∈ [a_min, a_max]` without requiring a comparison between `entr` and `detr`.
 """
@@ -152,7 +152,7 @@ and the positive part of the signed area-bounding rate:
 
 `entr_vel_scale` [1/m] is precomputed by `entrainment_velocity_scale`, and
 `area_bounding_entr_detr` [1/s] is the signed rate produced by
-[`area_bounding_entr_detr`](@ref) (positive ⇒ this entrainment branch,
+`area_bounding_entr_detr` (positive ⇒ this entrainment branch,
 negative ⇒ the detrainment branch in `compute_detrainment`).
 `ᶜwʲ` is the physical updraft vertical velocity [m/s].
 """
@@ -176,16 +176,16 @@ The total entrainment rate [1/s] is assembled by `compute_entrainment` as
 
     entr = entr_vel_scale * abs(wʲ) + max(0, area_bounding_entr_detr)
 
-where the second term comes from [`area_bounding_entr_detr`](@ref) (its
+where the second term comes from `area_bounding_entr_detr` (its
 positive branch). `model_option` selects the entrainment model:
 
   - `NoEntrainment`: returns zero.
   - `PiGroupsEntrainment`: `Π`-group closure
-    ([`calculate_pi_groups`](@ref)), `entr_vel_scale = limiter · max(0, Σᵢ cᵢ|Πᵢ| + c₆) / (ᶜz - z_sfc)` with the coefficients
+    (`calculate_pi_groups`), `entr_vel_scale = limiter · max(0, Σᵢ cᵢ|Πᵢ| + c₆) / (ᶜz - z_sfc)` with the coefficients
     `entr_param_vec`.
   - `InvZEntrainment`: `entr_vel_scale = limiter · entr_coeff / (ᶜz - z_sfc)`.
 
-Both non-trivial models multiply by [`upper_area_limiter_factor`](@ref) and
+Both non-trivial models multiply by `upper_area_limiter_factor` and
 return zero at or below the surface, where `1/(ᶜz - z_sfc)` is singular.
 
 # Arguments
@@ -340,9 +340,9 @@ The two ranges (`a < a_min` and `a > a_max`) are mutually exclusive, so
 exactly one term is non-zero outside `[a_min, a_max]` and both are zero
 inside it.
 
-The positive part is consumed by [`compute_entrainment`](@ref) via
+The positive part is consumed by `compute_entrainment` via
 `max(0, area_bounding_entr_detr)`; the negative part is consumed by
-[`compute_detrainment`](@ref) via `max(0, -area_bounding_entr_detr)`.
+`compute_detrainment` via `max(0, -area_bounding_entr_detr)`.
 """
 @inline function area_bounding_entr_detr(turbconv_params, a)
     FT = typeof(a)
@@ -367,13 +367,13 @@ end
 
 Total detrainment rate [1/s] as the sum of the model-specific rate from
 `detrainment_rate` (which internally applies
-[`lower_area_limiter_factor`](@ref) so that detrainment is damped as
+`lower_area_limiter_factor` so that detrainment is damped as
 `a → a_min`) with the negative part of the signed area-bounding rate:
 
     detr = detrainment_rate(...) + max(0, -area_bounding_entr_detr)
 
-`area_bounding_entr_detr` is produced by [`area_bounding_entr_detr`](@ref);
-its positive branch feeds [`compute_entrainment`](@ref) while the
+`area_bounding_entr_detr` is produced by `area_bounding_entr_detr`;
+its positive branch feeds `compute_entrainment` while the
 negative branch (the only one that contributes here) drives the area back
 below `a_max`.
 
@@ -383,11 +383,11 @@ Arguments:
   - `aʲ`: Updraft area fraction [-].
   - `ρaʲ`: Updraft density-area product [kg/m³].
   - `buoy_inv_time_scale`: Clipped inverse buoyancy time scale [1/s] from
-    [`detr_buoy_inv_time_scale`](@ref). The caller chooses where to evaluate
+    `detr_buoy_inv_time_scale`. The caller chooses where to evaluate
     it (centers, or faces with subsequent `ᶜinterp`) to control smoothness.
   - `massflux_vert_div`: Vertical divergence of the updraft mass flux [kg/(m³ s)].
   - `area_bounding_entr_detr`: Signed area-bounding rate [1/s] from
-    [`area_bounding_entr_detr`](@ref).
+    `area_bounding_entr_detr`.
   - `detr_model`: Object specifying the detrainment model.
 
 Returns the total detrainment rate [1/s].
@@ -430,7 +430,7 @@ The `AbstractDetrainmentModel` fallback returns zero. For
 
 with `c_buoy = detr_buoy_coeff` and `c_div = detr_massflux_vertdiv_coeff`. Only
 a converging (negative) mass-flux divergence detrains, and
-[`lower_area_limiter_factor`](@ref) damps the rate as `a → a_min`.
+`lower_area_limiter_factor` damps the rate as `a → a_min`.
 
 # Arguments
 
@@ -438,7 +438,7 @@ a converging (negative) mass-flux divergence detrains, and
   - `ᶜaʲ`: Updraft area fraction [-].
   - `ᶜρaʲ`: Updraft area-weighted density `ρ a` [kg/m³].
   - `ᶜbuoy_inv_time_scale`: Clipped inverse buoyancy time scale [1/s] from
-    [`detr_buoy_inv_time_scale`](@ref).
+    `detr_buoy_inv_time_scale`.
   - `ᶜmassflux_vert_div`: Vertical divergence of the updraft mass flux
     [kg/(m³ s)].
   - `detr_model`: Detrainment model dispatch tag.
@@ -492,10 +492,10 @@ Turbulent (diffusive) entrainment rate [1/s] of an updraft of area fraction
     turb_entr = max(0, c₁ exp(-c₂ aʲ)),
 
 with `(c₁, c₂) = turb_entr_param_vec`. Unlike the dynamical entrainment of
-[`compute_entrainment`](@ref), it does not scale with the updraft velocity, and
+`compute_entrainment`, it does not scale with the updraft velocity, and
 it decays as the updraft fills the grid box. Precomputed into
 `p.precomputed.ᶜturb_entrʲs` and added to the dynamical rate in
-[`edmfx_entr_detr_tendency!`](@ref).
+`edmfx_entr_detr_tendency!`.
 """
 function turbulent_entrainment(turbconv_params, ᶜaʲ)
     turb_entr_param_vec = CAP.turb_entr_param_vec(turbconv_params)
@@ -510,13 +510,13 @@ Add the entrainment contribution to the EDMF scalar tendencies (`mse`,
 
 Detrainment is **not** applied here because it is absorbed into the
 analytic implicit ρa solve (see
-[`solve_sgs_ρa_implicit_stage_analytic!`](@ref)); scalars are detrained
+`solve_sgs_ρa_implicit_stage_analytic!`); scalars are detrained
 implicitly through the area divergence of the mass flux.
 
 The entrainment rate is assembled lazily from the precomputed
 `ᶜentr_vel_scaleʲs`, `ᶜarea_bounding_entr_detrʲs`, and the updraft physical
-velocity via [`compute_entrainment`](@ref), and the turbulent entrainment
-`ᶜturb_entrʲs` ([`turbulent_entrainment`](@ref)) is added to it. Each updraft
+velocity via `compute_entrainment`, and the turbulent entrainment
+`ᶜturb_entrʲs` (`turbulent_entrainment`) is added to it. Each updraft
 scalar `χʲ` is relaxed toward its **environment** value,
 
     ∂χʲ/∂t += (entr + turb_entr) (χ⁰ - χʲ).

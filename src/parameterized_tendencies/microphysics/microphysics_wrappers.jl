@@ -54,7 +54,7 @@ points, for use with [`integrate_over_sgs`](@ref).
 # Fields
 
   - `cm_params`: 0M microphysics parameters.
-  - `sat_eval`: [`SaturationAdjustmentEvaluator`](@ref) used to diagnose the local
+  - `sat_eval`: `SaturationAdjustmentEvaluator` used to diagnose the local
     condensate.
   - `Φ`: Geopotential [J/kg], constant within a grid cell.
 
@@ -125,7 +125,7 @@ Compute 0-moment microphysics tendencies.
 
 The quadrature form integrates over the joint SGS PDF of `(T, q_tot)`: at each
 quadrature point, condensate is diagnosed from saturation excess (see
-[`Microphysics0MEvaluator`](@ref)), then the 0M precipitation-removal tendency is
+`Microphysics0MEvaluator`), then the 0M precipitation-removal tendency is
 computed and SGS-averaged.
 
 The form without `SG_quad` is used in EDMF updrafts, or to compute the grid-mean
@@ -198,7 +198,7 @@ GPU-safe functor evaluating 1-moment microphysics tendencies at SGS quadrature
 points, for use with [`integrate_over_sgs`](@ref).
 
 The local condensate at each point follows the truncated-Gaussian
-Lagrange-multiplier closure described in [`microphysics_tendencies_1m`](@ref).
+Lagrange-multiplier closure described in `microphysics_tendencies_1m`.
 Precipitation (`q_rai`, `q_sno`), the liquid fraction `λ`, and the closure
 quantities (`λ_lagrange`, `mu_S`, `α`) are grid-cell constants held fixed across
 quadrature points.
@@ -308,7 +308,7 @@ in EDMF updrafts, or wherever a grid-mean state is to be evaluated directly: a
 single CloudMicrophysics call with no SGS averaging.
 
 The quadrature form integrates over the SGS PDF using the truncated-Gaussian
-Lagrange-multiplier closure; see [`Microphysics1MEvaluator`](@ref) for the
+Lagrange-multiplier closure; see `Microphysics1MEvaluator` for the
 point-wise condensate diagnosis. Rain and snow are clamped non-negative before the
 integration. Subsaturated quadrature points contribute below-cloud rain
 evaporation and snow sublimation; saturated points drive autoconversion and

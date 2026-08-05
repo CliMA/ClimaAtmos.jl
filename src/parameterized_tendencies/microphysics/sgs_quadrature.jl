@@ -264,7 +264,7 @@ Return the quadrature nodes and weights appropriate to the SGS distribution `dis
     later, in the transform functor built by [`create_physical_transform`](@ref).
   - `GridMeanSGS`: the single node at the origin with weight ``\\sqrt{\\pi}``,
     which cancels the ``1/\\pi`` normalization in
-    [`sum_over_quadrature_points`](@ref).
+    `sum_over_quadrature_points`.
 
 Called from the [`SGSQuadrature`](@ref) constructor.
 """

@@ -71,7 +71,7 @@ const CANONICAL_SURFACE_VARS = (
     CANONICAL_IC_VARS
 
 The canonical variables a file must carry for
-[`read_initial_profiles`](@ref) to build a column initial condition:
+`read_initial_profiles` to build a column initial condition:
 temperature, both wind components, specific humidity, and density.
 """
 const CANONICAL_IC_VARS = (:ta, :ua, :va, :hus, :rho)
@@ -207,7 +207,7 @@ plain `LinearInterpolation()`: it interpolates linearly within the file's time
 span and errors out of range, so a finite campaign cannot fabricate forcing by
 wrapping around. A case whose file stores one repeating period (e.g. the
 monthly-averaged-diurnal ERA5 file, one day) overrides this with
-[`periodic_calendar_method`](@ref).
+`periodic_calendar_method`.
 """
 time_interpolation_method(::AbstractColumnFormat) =
     TimeVaryingInputs.LinearInterpolation()
@@ -411,7 +411,7 @@ The initial-condition profiles at the file time closest to `start_date`.
 # Returns
 
 `(; z, ta, ua, va, hus, rho)`: the height coordinate [m] and the
-[`CANONICAL_IC_VARS`](@ref) profiles, all sorted ascending in `z`. Errors,
+`CANONICAL_IC_VARS` profiles, all sorted ascending in `z`. Errors,
 naming what is absent, when the file lacks a variable needed to build an
 initial condition.
 """
@@ -444,7 +444,7 @@ A `NamedTuple` of `TimeVaryingInput`s, one per requested column variable,
 targeting `target_space`, the model's center column space.
 
 The default builds file-backed inputs, applying the format's
-[`extrapolation_bc`](@ref) and [`preprocess`](@ref) hooks. A format whose
+`extrapolation_bc` and `preprocess` hooks. A format whose
 on-disk layout the file readers cannot consume directly — a grouped file, or a
 non-height vertical coordinate — overrides this to build in-memory inputs
 instead.
@@ -480,13 +480,13 @@ end
 
 Read the surface variables `names` in a single file open.
 
-The data layer that both [`surface_timevaryinginputs`](@ref) and data-backed
+The data layer that both `surface_timevaryinginputs` and data-backed
 surface components, such as a prescribed-flux scheme, build on.
 
 # Returns
 
 `(; times, name₁ = series₁, ...)`, where `times` is the simulation time axis in
-seconds with `t = 0` at `start_date`, and each series has [`preprocess`](@ref)
+seconds with `t = 0` at `start_date`, and each series has `preprocess`
 applied.
 """
 function read_surface_series(cd::ColumnDataset, names, start_date)

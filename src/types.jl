@@ -664,7 +664,7 @@ is_smagorinsky_UVW_coupled(::Nothing) = false
 
 Check if the Smagorinsky model is applied along the vertical axis.
 
-See also [`is_smagorinsky_horizontal`](@ref).
+See also `is_smagorinsky_horizontal`.
 """
 is_smagorinsky_vertical(::SmagorinskyLilly{AXES}) where {AXES} =
     AXES == :UVW || AXES == :W || AXES == :UV_W
@@ -675,7 +675,7 @@ is_smagorinsky_vertical(::Nothing) = false
 
 Check if the Smagorinsky model is applied along the horizontal axes.
 
-See also [`is_smagorinsky_vertical`](@ref).
+See also `is_smagorinsky_vertical`.
 """
 is_smagorinsky_horizontal(::SmagorinskyLilly{AXES}) where {AXES} =
     AXES == :UVW || AXES == :UV || AXES == :UV_W
@@ -2548,7 +2548,7 @@ for the full list of admissible values.
   - [`AtmosWater`](@ref): `microphysics_model`, `cloud_model`,
     `microphysics_tendency_timestepping`, `tracer_nonnegativity_method`,
     `sgs_quadrature`, `terminal_velocity_mode`.
-  - [`SCMSetup`](@ref): `subsidence`, `external_forcing`, `ls_adv`,
+  - `SCMSetup`: `subsidence`, `external_forcing`, `ls_adv`,
     `advection_test`, `scm_coriolis`. Normally supplied by a `Setups` case.
   - [`AtmosRadiation`](@ref): `radiation_mode`, `insolation`.
   - [`AtmosTurbconv`](@ref): `edmfx_model`, `turbconv_model`,

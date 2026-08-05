@@ -50,14 +50,14 @@ in `p.scratch.ᶜtemp_scalar`).
 Used when no EDMFX model with prognostic TKE is active. Steps:
 
  1. Fill `p.precomputed.ᶜbuoygrad` with the cloud-fraction-blended moist
-    buoyancy gradient ([`blended_N²`](@ref), using the chain-rule coefficients
+    buoyancy gradient (`blended_N²`, using the chain-rule coefficients
     and face gradients materialized by `set_buoyancy_gradient_inputs!`).
  2. Fill `p.precomputed.ᶜN²_eff` with the stability-biased buoyancy gradient
     (`set_stability_buoyancy_gradient!`).
  3. Fill `p.precomputed.ᶜstrain_rate_norm` with the squared strain-rate norm
     of the resolved velocity.
  4. Evaluate the turbulent Prandtl number and
-    [`smagorinsky_lilly_length`](@ref) with the vertical grid scale `ᶜdz`.
+    `smagorinsky_lilly_length` with the vertical grid scale `ᶜdz`.
 
 Mutates `ᶜbuoygrad`, `ᶜN²_eff`, and `ᶜstrain_rate_norm` in `p.precomputed`,
 and uses `p.scratch` fields (including the returned `ᶜtemp_scalar`) for

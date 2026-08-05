@@ -27,7 +27,7 @@ import ..ColumnDatasets:
     CANONICAL_UNITS
 
 SI units of the canonical variables, written as each variable's `units`
-attribute by [`write_column_forcing_file`](@ref) and required exactly by
+attribute by `write_column_forcing_file` and required exactly by
 [`validate`](@ref).
 """
 const CANONICAL_UNITS = Dict(
@@ -188,7 +188,7 @@ Write a ClimaColumn schema file at `path` with element type `FT`, and return
 
 The single producer implementation, shared by the ERA5 generator and every
 converter. Each variable name must have its units registered in
-[`CANONICAL_UNITS`](@ref); an unregistered name is an error rather than a file
+`CANONICAL_UNITS`; an unregistered name is an error rather than a file
 that later fails [`validate`](@ref).
 
 # Keyword Arguments

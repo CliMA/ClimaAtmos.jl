@@ -41,7 +41,7 @@ end
 Clip a sink tendency so it cannot deplete more than its share of `q`.
 
 Sign convention: `S < 0` is a sink and is clipped in magnitude at
-[`limit`](@ref)`(q, dt, n)`; `S ≥ 0` is a source and passes through unchanged.
+```limit``(q, dt, n)```; `S ≥ 0` is a source and passes through unchanged.
 
 # Arguments
 
@@ -125,7 +125,7 @@ limit, contributes a factor of one.
 
 # Returns
 
-A factor `f ∈ (0, 1]` [-] such that `|Sᵢ · f| ≤` [`limit`](@ref)`(qᵢ, dt, n)` for
+A factor `f ∈ (0, 1]` [-] such that `|Sᵢ · f| ≤` ```limit``(qᵢ, dt, n)``` for
 every component that is a sink.
 
 # Examples
@@ -157,8 +157,8 @@ end
 
 Limit the 0-moment total-water sink to the available `q_tot`.
 
-Thin wrapper over [`limit_sink`](@ref) with the default three competing sinks.
-Called from [`microphysics_tendencies_0m`](@ref).
+Thin wrapper over `limit_sink` with the default three competing sinks.
+Called from `microphysics_tendencies_0m`.
 """
 @inline function apply_0m_tendency_limit(dq_tot_dt, q_tot, dt)
     return limit_sink(dq_tot_dt, q_tot, dt)
@@ -185,7 +185,7 @@ Dispatches on `timestepping`:
 
   - `Explicit`: scales the coupled liquid pair (`dq_lcl_dt`, `dn_lcl_dt`) and the
     coupled rain pair (`dq_rai_dt`, `dn_rai_dt`) by their respective
-    [`coupled_sink_limit_factor`](@ref); the ice entries `dq_ice_dt`, `dq_rim_dt`,
+    `coupled_sink_limit_factor`; the ice entries `dq_ice_dt`, `dq_rim_dt`,
     `db_rim_dt` pass through unchanged.
   - `Implicit`: no-op, since the Jacobian provides the stability.
   - `nothing`: no-op.

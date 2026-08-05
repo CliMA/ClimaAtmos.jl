@@ -18,8 +18,8 @@ import Thermodynamics as TD
 GPU-safe functor diagnosing the saturation-adjusted state at an SGS quadrature
 point, for use with [`integrate_over_sgs`](@ref).
 
-Used both by [`compute_sgs_saturation_adjustment`](@ref) and, as a component, by
-[`Microphysics0MEvaluator`](@ref).
+Used both by `compute_sgs_saturation_adjustment` and, as a component, by
+`Microphysics0MEvaluator`.
 
 # Fields
 
@@ -97,7 +97,7 @@ Compute SGS-averaged saturation adjustment by integrating over the joint PDF of
 `(T, q_tot)`.
 
 Condensate is diagnosed from the saturation excess at each quadrature point (see
-[`SaturationAdjustmentEvaluator`](@ref)), giving a subgrid-aware cloud condensate.
+`SaturationAdjustmentEvaluator`), giving a subgrid-aware cloud condensate.
 Called from `set_precomputed_quantities!` as a second pass that overwrites the
 grid-mean saturation-adjustment condensate `ᶜq_liq`, `ᶜq_ice` whenever an
 equilibrium moisture model is run with an SGS quadrature configured, so that

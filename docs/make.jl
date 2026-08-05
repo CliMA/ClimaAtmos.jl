@@ -28,6 +28,12 @@ links = InterLinks(
     # ClimaUtilities, ClimaParams, and SurfaceFluxes do not publish inventories
     # (objects.inv); pages link to them with plain URLs checked by linkcheck.
 )
+# Fail fast if a docstring cross-references a symbol that no page renders; such
+# a reference is invisible until its own docstring is added to a page, and then
+# breaks the build in an unrelated pull request.
+include(joinpath(@__DIR__, "check_docstring_refs.jl"))
+check_docstring_refs(ClimaAtmos, joinpath(@__DIR__, "src"))
+
 include(joinpath(@__DIR__, "src", "config_table.jl"))
 doctest(ClimaAtmos; plugins = [bib, links])
 disable_logging(Base.CoreLogging.BelowMinLevel) # Re-enable all logging

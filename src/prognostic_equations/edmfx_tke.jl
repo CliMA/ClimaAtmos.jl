@@ -10,7 +10,7 @@ Add the PROPHET (`EDMFX` in code) shear and buoyancy TKE production terms to
 
 The generic method is a no-op. The method for
 `turbconv_model::Union{EDOnlyEDMFX, PrognosticEDMFX}` forwards to
-[`edmfx_tke_sources!`](@ref) when `use_prognostic_tke(turbconv_model)` holds.
+`edmfx_tke_sources!` when `use_prognostic_tke(turbconv_model)` holds.
 Turbulent TKE transport and dissipation are applied separately, in
 `edmfx_sgs_diffusive_flux_tendency!`.
 
@@ -88,7 +88,7 @@ Return the TKE dissipation rate per unit volume, `ρ ε_d` [kg m⁻¹ s⁻³]:
     ρ ε_d = c_d * ρtke * sqrt(abs(tke)) / mixing_length,
 
 where `c_d` is the TKE dissipation coefficient
-([`tke_dissipation_coefficient`](@ref)).
+(`tke_dissipation_coefficient`).
 
 # Arguments
 

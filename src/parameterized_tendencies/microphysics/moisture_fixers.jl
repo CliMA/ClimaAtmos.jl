@@ -13,7 +13,7 @@ Compute the tendency that restores a negative tracer to zero by borrowing from v
 
 A tracer driven negative by numerical error is restored over one timestep, at rate
 `-q/dt`, but never faster than the vapor can supply. The vapor budget is shared by
-passing `n = 5` to [`limit`](@ref), so each of the four mass tracers plus a margin
+passing `n = 5` to `limit`, so each of the four mass tracers plus a margin
 can draw at most a fifth of the available vapor per timestep even when all are
 corrected simultaneously.
 
@@ -43,7 +43,7 @@ Add tendencies that restore negative water mass tracers, borrowing from vapor.
 Each of the four mass tracers `ρq_lcl`, `ρq_icl`, `ρq_rai`, `ρq_sno` that has gone
 negative receives a positive tendency restoring it to zero over `p.dt`, capped by
 the vapor available for sharing (see
-[`tracer_nonnegativity_vapor_tendency`](@ref)). Grid-mean vapor is diagnosed as
+`tracer_nonnegativity_vapor_tendency`). Grid-mean vapor is diagnosed as
 `q_tot - q_lcl - q_icl - q_rai - q_sno`. Number concentrations and the P3 tracers
 are not corrected here.
 
