@@ -21,6 +21,10 @@ import .Parameters as CAP
 
 include(joinpath("utils", "abbreviations.jl"))
 include(joinpath("utils", "gpu_compat.jl"))
+include(joinpath("column_datasets", "ColumnDatasets.jl"))
+import .ColumnDatasets
+import .ColumnDatasets: ClimaColumnFiles
+include(joinpath("prognostic_equations", "forcing", "forcing_terms.jl"))
 include("types.jl")
 include(joinpath("config", "atmos_config.jl"))
 include(joinpath("config", "cli_options.jl"))
@@ -170,5 +174,8 @@ include(joinpath("config", "type_getters.jl"))
 include(joinpath("config", "yaml_helper.jl"))
 
 include(joinpath("utils", "show.jl"))
+
+include(joinpath("cosp", "cosp.jl"))
+import .COSP
 
 end # module

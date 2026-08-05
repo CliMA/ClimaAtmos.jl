@@ -24,24 +24,23 @@ function get_microphysics_model(parsed_args, params = nothing)
 end
 
 """
-    get_microphysics_1m_options(parsed_args, toml_dict)
+    get_microphysics_1m_options(parsed_args)
 
 Parse the YAML config keys for 1-moment microphysics process options and
 return a `NamedTuple` of keyword arguments for `CMP.Microphysics1MParams`.
 
 Each YAML key maps to one field of `get_microphysics_1m_options`, selecting the
 process option type that controls dispatch inside `bulk_microphysics_tendencies`.
-Option types that carry parameters are constructed from `toml_dict`.
 Setting a YAML value to `~` (null) disables the process (`nothing`).
 """
-function get_microphysics_1m_options(parsed_args, toml_dict)
+function get_microphysics_1m_options(parsed_args)
     CMP = CM.Parameters
 
     cloud_liquid_formation = parse_option(
         parsed_args["cloud_liquid_formation"],
         Dict(
             "CloudLiquidFormation" =>
-                CMP.CloudLiquidFormation(toml_dict),
+                CMP.CloudLiquidFormation(),
         ),
         "cloud_liquid_formation",
     )
@@ -49,9 +48,9 @@ function get_microphysics_1m_options(parsed_args, toml_dict)
         parsed_args["cloud_ice_formation"],
         Dict(
             "ConstantTimescale" =>
-                CMP.ConstantTimescale(toml_dict),
+                CMP.ConstantTimescale(),
             "TemperatureDependent" =>
-                CMP.TemperatureDependent(toml_dict),
+                CMP.TemperatureDependent(),
         ),
         "cloud_ice_formation",
     )
@@ -63,8 +62,8 @@ function get_microphysics_1m_options(parsed_args, toml_dict)
     rain_autoconversion = parse_option(
         parsed_args["rain_autoconversion"],
         Dict(
-            "Kessler1M" => CMP.Kessler1M(toml_dict),
-            "PrescribedNd" => CMP.PrescribedNd(toml_dict),
+            "Kessler1M" => CMP.Kessler1M(),
+            "PrescribedNd" => CMP.PrescribedNd(),
         ),
         "rain_autoconversion",
     )
@@ -72,9 +71,9 @@ function get_microphysics_1m_options(parsed_args, toml_dict)
         parsed_args["snow_autoconversion"],
         Dict(
             "NoSupersaturation" =>
-                CMP.NoSupersaturation(toml_dict),
+                CMP.NoSupersaturation(),
             "WithSupersaturation" =>
-                CMP.WithSupersaturation(toml_dict),
+                CMP.WithSupersaturation(),
         ),
         "snow_autoconversion",
     )
@@ -101,7 +100,7 @@ function get_microphysics_1m_options(parsed_args, toml_dict)
         parsed_args["cloud_liquid_rain_accretion"],
         Dict(
             "CloudLiquidRainAccretion" =>
-                CMP.CloudLiquidRainAccretion(toml_dict),
+                CMP.CloudLiquidRainAccretion(),
         ),
         "cloud_liquid_rain_accretion",
     )
@@ -109,7 +108,7 @@ function get_microphysics_1m_options(parsed_args, toml_dict)
         parsed_args["cloud_liquid_snow_accretion"],
         Dict(
             "CloudLiquidSnowAccretion" =>
-                CMP.CloudLiquidSnowAccretion(toml_dict),
+                CMP.CloudLiquidSnowAccretion(),
         ),
         "cloud_liquid_snow_accretion",
     )
@@ -117,7 +116,7 @@ function get_microphysics_1m_options(parsed_args, toml_dict)
         parsed_args["cloud_ice_rain_accretion"],
         Dict(
             "CloudIceRainAccretion" =>
-                CMP.CloudIceRainAccretion(toml_dict),
+                CMP.CloudIceRainAccretion(),
         ),
         "cloud_ice_rain_accretion",
     )
@@ -125,7 +124,7 @@ function get_microphysics_1m_options(parsed_args, toml_dict)
         parsed_args["cloud_ice_snow_accretion"],
         Dict(
             "CloudIceSnowAccretion" =>
-                CMP.CloudIceSnowAccretion(toml_dict),
+                CMP.CloudIceSnowAccretion(),
         ),
         "cloud_ice_snow_accretion",
     )
@@ -133,7 +132,7 @@ function get_microphysics_1m_options(parsed_args, toml_dict)
         parsed_args["rain_snow_accretion"],
         Dict(
             "RainSnowAccretion" =>
-                CMP.RainSnowAccretion(toml_dict),
+                CMP.RainSnowAccretion(),
         ),
         "rain_snow_accretion",
     )
@@ -269,6 +268,33 @@ function get_non_orographic_gravity_wave_model(
     ::Type{FT},
 ) where {FT}
     nogw_name = parsed_args["non_orographic_gravity_wave"]
+    @assert nogw_name in (true, false)
+    if nogw_name == false && get(parsed_args, "nogw_beres_source", false)
+        @warn "nogw_beres_source is true but non_orographic_gravity_wave is false; ignoring Beres source"
+    end
+    if get(parsed_args, "nogw_beres_source", false) && nogw_name == true
+        turbconv = get(parsed_args, "turbconv", nothing)
+        if turbconv === nothing || turbconv == "edonly_edmfx"
+            error(
+                "nogw_beres_source requires turbconv to be " *
+                "'prognostic_edmfx' " *
+                "(got: $turbconv)",
+            )
+        end
+        # Canonical latent heating (Q_lat = Σ_p L_p R_p) needs explicit per-phase
+        # conversion rates (1-moment microphysics) AND per-draft in-cloud state
+        # (PrognosticEDMFX).
+        if get(parsed_args, "nogw_beres_heating_latent", false)
+            mp_model = get(parsed_args, "microphysics_model", "dry")
+            if mp_model != "1M" || turbconv != "prognostic_edmfx"
+                error(
+                    "nogw_beres_heating_latent requires microphysics_model=\"1M\" " *
+                    "and turbconv=\"prognostic_edmfx\" (got microphysics_model=" *
+                    "\"$mp_model\", turbconv=\"$turbconv\")",
+                )
+            end
+        end
+    end
     return if nogw_name == true
         (;
             source_pressure,
@@ -292,7 +318,59 @@ function get_non_orographic_gravity_wave_model(
             dϕ_n,
             dϕ_s,
         ) = params.non_orographic_gravity_wave_params
-        NonOrographicGravityWave{FT}(;
+
+        # Construct Beres (2004) convective source parameters.
+        beres_source = if get(parsed_args, "nogw_beres_source", false)
+            bsp = params.beres_source_params
+            BeresSourceParams{FT}(;
+                Q0_threshold = FT(bsp.Q0_threshold),
+                beres_scale_factor = FT(bsp.scale_factor),
+                σ_x = FT(bsp.σ_x),
+                ν_min = FT(bsp.ν_min),
+                ν_max = FT(bsp.ν_max),
+                n_ν = Int(bsp.n_ν),
+                h_heat_min = FT(bsp.h_heat_min),
+                n_h_avg = Int(bsp.n_h_avg),
+                Δh_frac = FT(bsp.Δh_frac),
+                z_bot_floor = FT(bsp.z_bot_floor),
+                beres_steady_dc_frac = FT(bsp.steady_dc_frac),
+                beres_L_system = FT(bsp.L_system),
+                # beres_steady_source defaults true on the struct (no YAML switch); it
+                # is toggled implicitly by the phase-speed grid (deposits only with a c=0
+                # bin, see the warning below).
+                heating_latent = get(
+                    parsed_args,
+                    "nogw_beres_heating_latent",
+                    false,
+                ),
+                detailed_diagnostics = get(
+                    parsed_args,
+                    "nogw_beres_detailed_diagnostics",
+                    false,
+                ),
+            )
+        else
+            nothing
+        end
+
+        # The steady (ν=0) Beres component is always computed; it deposits into the
+        # c=0 phase-speed bin only when one exists (cmax/dc integer, so it lands in a
+        # bin the transient spectrum leaves at zero, no double-counting). Without a
+        # c=0 bin it gracefully no-ops in the kernel — warn once here so the silent
+        # skip is not a surprise. The default grid (cmax=100, dc=0.8 → 125) has one.
+        if !isnothing(beres_source)
+            ratio = cmax / dc
+            if abs(ratio - round(ratio)) > sqrt(eps(FT))
+                @warn(
+                    "Beres steady (ν=0) source has no exact c=0 phase-speed bin " *
+                    "(cmax/dc = $ratio is not an integer for cmax=$cmax, dc=$dc); " *
+                    "the steady component will be skipped. Set cmax/dc to an integer " *
+                    "(e.g. nogw_cmax/nogw_dc) to enable it."
+                )
+            end
+        end
+
+        NonOrographicGravityWave(;
             source_pressure,
             damp_pressure,
             source_height,
@@ -313,6 +391,7 @@ function get_non_orographic_gravity_wave_model(
             ϕ0_s,
             dϕ_n,
             dϕ_s,
+            beres_source,
         )
     else
         nothing
@@ -506,7 +585,7 @@ end
 function get_subsidence_model(::Type{FT}; setup_type = nothing) where {FT}
     isnothing(setup_type) && return nothing
     profile = Setups.subsidence_forcing(setup_type, FT)
-    return isnothing(profile) ? nothing : Subsidence(profile)
+    return isnothing(profile) ? nothing : LargeScaleSubsidence(profile)
 end
 
 function get_large_scale_advection_model(
@@ -527,11 +606,9 @@ function get_external_forcing_model(
     ::Type{FT};
     setup_type = nothing,
 ) where {FT}
+    # TODO: Clean this function up after migrating GCMDriven
     external_forcing = parsed_args["external_forcing"]
-    if isnothing(external_forcing) && !isnothing(setup_type)
-        model = Setups.external_forcing(setup_type, FT)
-        !isnothing(model) && return model
-    end
+
     if external_forcing in
        ("ReanalysisTimeVarying", "ReanalysisMonthlyAveragedDiurnal")
         @assert parsed_args["config"] == "column" "ReanalysisTimeVarying and ReanalysisMonthlyAveragedDiurnal are only supported in column mode."
@@ -540,24 +617,32 @@ function get_external_forcing_model(
         @assert external_forcing == "ReanalysisMonthlyAveragedDiurnal" "era5_diurnal_warming is only supported for ReanalysisMonthlyAveragedDiurnal."
         @assert parsed_args["era5_diurnal_warming"] isa Number "era5_diurnal_warming is expected to be a number, but was supplied as a $(typeof(parsed_args["era5_diurnal_warming"]))"
     end
-    return if isnothing(external_forcing)
-        nothing
+
+    # The forcing that the chosen setup (`initial_condition`) already supplies,
+    # or `nothing`. With no `external_forcing` key we use it directly, which is
+    # the preferred route. The `ReanalysisTimeVarying` / `ForcingFromFile` string
+    # values below only reuse this same forcing, so they are redundant with it.
+    setup_forcing =
+        isnothing(setup_type) ? nothing : Setups.external_forcing(setup_type, FT)
+
+    model = if isnothing(external_forcing)
+        setup_forcing
     elseif external_forcing == "GCM"
-        cfsite_number_str = parsed_args["cfsite_number"]
-
-        GCMForcing{FT}(parsed_args["external_forcing_file"], cfsite_number_str)
-
+        GCMForcing{FT}(
+            parsed_args["external_forcing_file"],
+            parsed_args["cfsite_number"],
+        )
     elseif external_forcing == "ReanalysisTimeVarying"
-        # File is already generated by get_setup_type; reuse its path.
-        external_forcing_file = setup_type.external_forcing_file
-        ExternalDrivenTVForcing{FT}(external_forcing_file)
+        isnothing(setup_forcing) && error(
+            """external_forcing "ReanalysisTimeVarying" requires initial_condition "ReanalysisTimeVarying" (which supplies the same forcing automatically, so the key can simply be omitted).""",
+        )
+        setup_forcing
     elseif external_forcing == "ReanalysisMonthlyAveragedDiurnal"
-        external_forcing_file =
-            get_external_monthly_forcing_file_path(parsed_args)
-        # generate single file from monthly averaged diurnal data if it doesn't exist
-        # we'll use ClimaUtilities.TimeVaryingInputs downstream to repeat the data.
+        external_forcing_file = get_external_monthly_forcing_file_path(parsed_args)
+        # Generate the monthly file if it is missing or in a stale layout.
         if !isfile(external_forcing_file) ||
-           !check_monthly_forcing_times(external_forcing_file, parsed_args)
+           !check_monthly_forcing_times(external_forcing_file, parsed_args) ||
+           !ClimaColumnFiles.is_conforming(external_forcing_file)
             generate_external_forcing_file(
                 parsed_args,
                 external_forcing_file,
@@ -573,17 +658,54 @@ function get_external_forcing_model(
                 ],
             )
         end
-        ExternalDrivenTVForcing{FT}(external_forcing_file)
-
+        # The monthly-averaged-diurnal file stores one day; repeat it in time.
+        ExternalDrivenTVForcing(
+            external_forcing_file;
+            time_interpolation_method = ColumnDatasets.periodic_calendar_method(),
+        )
     elseif external_forcing == "ISDAC"
         ISDACForcing()
-    elseif external_forcing == "ARMVARANAL"
-        ARMVARANALForcing{FT}(parsed_args["external_forcing_file"])
+    elseif external_forcing == "ForcingFromFile"
+        # Reuse the setup's forcing when initial_condition is also ForcingFromFile;
+        # otherwise build it from the file (forcing only, no ForcingFromFile IC).
+        isnothing(setup_forcing) ?
+        ExternalDrivenTVForcing(parsed_args["external_forcing_file"]) :
+        setup_forcing
     else
         error(
-            """Unknown external_forcing `$external_forcing`. Expected: ~, "GCM", "ARMVARANAL", "ISDAC", "ReanalysisTimeVarying", or "ReanalysisMonthlyAveragedDiurnal".""",
+            """Unknown external_forcing `$external_forcing`. Expected: ~, "ForcingFromFile", "GCM", "ISDAC", "ReanalysisTimeVarying", or "ReanalysisMonthlyAveragedDiurnal".""",
         )
     end
+
+    warn_if_run_exceeds_forcing(model, parsed_args)
+    return model
+end
+
+warn_if_run_exceeds_forcing(_, _) = nothing
+function warn_if_run_exceeds_forcing(
+    forcing::ExternalDrivenTVForcing,
+    parsed_args,
+)
+    haskey(parsed_args, "t_end") && !isnothing(parsed_args["t_end"]) ||
+        return nothing
+    start_date = Dates.DateTime(parsed_args["start_date"], "yyyymmdd")
+    run_seconds = time_to_seconds(parsed_args["t_end"])
+    file_seconds =
+        ColumnDatasets.file_time_span(forcing.dataset, start_date)
+    run_seconds <= file_seconds && return nothing
+
+    days(x) = round(x / 86400; digits = 2)
+    if ColumnDatasets.wraps_periodically(forcing.time_interpolation_method)
+        @info "External forcing file covers $(days(file_seconds)) days, the \
+               run is $(days(run_seconds)) days. The forcing repeats \
+               periodically past the file."
+    else
+        @warn "External forcing file covers $(days(file_seconds)) days but the \
+               run is $(days(run_seconds)) days. This forcing does not wrap, so \
+               the run will error when it passes the file's last time. Extend \
+               the file or shorten `t_end`."
+    end
+    return nothing
 end
 
 function get_scm_coriolis(::Type{FT}; setup_type = nothing) where {FT}
@@ -887,4 +1009,22 @@ function AtmosChem(config::AtmosConfig)
         )
     end
     return AtmosChem(; chemistry_model)
+end
+
+function COSPModel(config::AtmosConfig)
+    time_to_seconds(config.parsed_args["dt_subcol"]) == Inf && return nothing
+    n_subcolumns = config.parsed_args["cosp_n_subcolumns"]
+    n_subcolumns isa Integer || error("cosp_n_subcolumns must be an integer")
+    n_subcolumns > 0 || error("cosp_n_subcolumns must be positive")
+
+    overlap = Symbol(config.parsed_args["cosp_overlap"])
+    overlap in (:maximum, :random, :maximum_random) || error(
+        "Unknown cosp_overlap `$(config.parsed_args["cosp_overlap"])`. " *
+        "Expected: maximum, random, or maximum_random.",
+    )
+
+    return COSPModel(;
+        n_subcolumns = Val(n_subcolumns),
+        overlap,
+    )
 end

@@ -29,6 +29,13 @@ atmos_uuid = Pkg.project().dependencies["ClimaAtmos"]
 direct_dependencies =
     keys(Pkg.dependencies(identity, atmos_uuid).dependencies) |> Set
 
+# julia-downgrade-compat (v2.7.0+) promotes the test-only [extras] into [deps] so
+# that Pkg.test cannot re-resolve away the minimized versions, which makes them
+# show up as direct dependencies of ClimaAtmos. This test cannot say anything
+# useful about such a rewritten Project.toml, so skip it in the downgrade job.
+# Regular CI still runs it against an unmodified Project.toml.
+skip_test = get(ENV, "CLIMAATMOS_DOWNGRADE_CI", "false") == "true"
+
 known_dependencies = Set([
     # Adapt is used to move the AtmosCache to CPU for checkpointing
     "Adapt",
@@ -75,7 +82,7 @@ known_dependencies = Set([
 
 diff = setdiff(direct_dependencies, known_dependencies)
 
-if !isempty(diff)
+if !skip_test && !isempty(diff)
     println("Detected new dependencies: $diff")
     println("Please, double check if you really need the new dependencies")
     println(
@@ -84,9 +91,9 @@ if !isempty(diff)
 end
 
 otherdiff = setdiff(known_dependencies, direct_dependencies)
-if !isempty(otherdiff)
+if !skip_test && !isempty(otherdiff)
     println("Detected stale dependencies: $otherdiff")
     println("Please, edit the dependencies.jl file")
 end
 
-Test.@test direct_dependencies == known_dependencies
+Test.@test direct_dependencies == known_dependencies skip = skip_test

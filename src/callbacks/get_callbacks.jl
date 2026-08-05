@@ -351,7 +351,7 @@ function radiation_callback(
     # `remaining_tendency!` and applied every stage; `dt_rad` is ignored.
     radiation_mode isa RRTMGPI.AbstractRRTMGPMode || return ()
     return scheduled_callback(
-        rrtmgp_model_callback!,
+        rrtmgp_solver_callback!,
         dt_rad,
         dt,
         t_start,
@@ -359,6 +359,26 @@ function radiation_callback(
         checkpoint_frequency,
     )
 end
+
+function subcol_callback(
+    dt_subcol,
+    dt,
+    t_start,
+    t_end,
+    checkpoint_frequency,
+)
+    return scheduled_callback(
+        subcol_model_callback!,
+        dt_subcol,
+        dt,
+        t_start,
+        t_end,
+        checkpoint_frequency,
+    )
+end
+
+subcol_callback_enabled(model::AtmosModel, dt_subcol) =
+    !isnothing(model.cosp) && time_to_seconds(dt_subcol) != Inf
 
 function nogw_callback(
     non_orographic_gravity_wave,
@@ -417,10 +437,25 @@ Creates the tuple of model callbacks for any AtmosModel by calling
   - `t_end`: End time
   - `output_dir`: Output directory
   - `checkpoint_frequency`: Checkpoint frequency
-  - Component-specific frequency overrides (dt_rad, dt_nogw, etc.)
+  - Component-specific frequency overrides (dt_subcol, dt_rad, dt_nogw, etc.)
 """
-function default_model_callbacks(model::AtmosModel; kwargs...)
+function default_model_callbacks(model::AtmosModel;
+    dt_subcol = "Inf",
+    kwargs...,
+)
     callbacks = ()
+    if subcol_callback_enabled(model, dt_subcol)
+        callbacks = (
+            callbacks...,
+            subcol_callback(
+                dt_subcol,
+                kwargs[:dt],
+                kwargs[:t_start],
+                kwargs[:t_end],
+                kwargs[:checkpoint_frequency],
+            )...,
+        )
+    end
     model_component_names =
         filter(x -> x !== :disable_surface_flux_tendency, propertynames(model))
     for property in model_component_names

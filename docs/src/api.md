@@ -111,6 +111,23 @@ ClimaAtmos.SurfaceConditions.surface_state_to_conditions
 ClimaAtmos.SurfaceConditions.atmos_surface_conditions
 ```
 
+## Single-column forcing datasets
+
+Data access for single-column (SCM) forcing files: the generic
+[`ColumnDataset`](@ref ClimaAtmos.ColumnDatasets.ColumnDataset) handle and format
+interface, the native `ClimaColumn` reader/writer, and the ARM VARANAL
+converter. See the
+[Column Datasets](@ref "Column Datasets") page for usage and
+[Adding a Column Dataset](@ref) for the extension interface.
+
+```@autodocs
+Modules = [
+    ClimaAtmos.ColumnDatasets,
+    ClimaAtmos.ColumnDatasets.ClimaColumnFiles,
+    ClimaAtmos.ColumnDatasets.VaranalFiles,
+]
+```
+
 ## Internals
 
 ```@docs

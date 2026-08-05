@@ -59,16 +59,14 @@ Base.@kwdef struct TurbulenceConvectionParameters{FT, VFT1, VFT2, VTF3} <: ATCP
     max_area_limiter_power::FT
     cloud_fraction_steepness_scale::FT
     cloud_fraction_param_vec::VTF3
-    # Augmented-σ floor for `_compute_cloud_fraction`:
-    # σ_S_floor² = (D · cloud_fraction_eps_rel · q_sat)² + cloud_fraction_sigma_abs²,
-    # with D ∈ [0, 1] damping the relative floor as the subdomain mean
-    # saturates (see `_compute_cloud_fraction`).
     cloud_fraction_eps_rel::FT
     cloud_fraction_sigma_abs::FT
-    # Interfacial entrainment efficiency A in the interface-aware stability
-    # closure (`set_face_diffusivities!`): w_e = A √κ_iso /
-    # max(Ri_b, 1). A = 0 disables interfacial entrainment (pure effective-
-    # stability closure).
+    cloud_fraction_floor_release_margin::FT
+    cloud_fraction_floor_release_abs_margin::FT
+    cloud_fraction_floor_release_sharpness::FT
+    cloud_fraction_floor_residual::FT
+    # Scaling coefficient for the lateral correction in updraft sedimentation
+    sedimentation_lateral_coeff::FT
     interface_entr_efficiency::FT
     # Surface mass flux closure (`set_edmfx_surface_conditions!`).
     sfc_mass_flux_ustar_coeff::FT
@@ -118,6 +116,22 @@ Base.@kwdef struct OrographicGravityWaveParameters{FT} <: AGWP
     Fr_crit::FT              # critical_froude_number: Fr_crit = 0.7, critical Froude number h̃_c = Fr_crit
 end
 
+# Physical/tuning parameters for the Beres (2004) convective gravity-wave source.
+Base.@kwdef struct BeresSourceParameters{FT} <: AGWP
+    Q0_threshold::FT         # K/s, minimum heating rate to activate Beres
+    scale_factor::FT         # dimensionless amplitude scaling (folds ρ₀/(Lτ), |Q_t|² weight, tuning)
+    σ_x::FT                  # m, convective cell horizontal half-width
+    ν_min::FT                # 1/s, min frequency (period ~120 min)
+    ν_max::FT                # 1/s, max frequency (period ~10 min)
+    n_ν::Int                 # quadrature points (must be 4k+1: 5, 9, 13...)
+    h_heat_min::FT           # m, minimum heating depth to activate (filters shallow convection)
+    n_h_avg::Int             # number of h values to average over (1 = no averaging)
+    Δh_frac::FT              # fractional half-range for h averaging: h ± Δh_frac·h
+    z_bot_floor::FT          # m, minimum allowed z_bot (excludes PBL turbulence in Q_conv)
+    steady_dc_frac::FT       # steady DC heating weight: Q_t(0)² = steady_dc_frac·ν_min
+    L_system::FT             # m, largest convective-system scale; sets k_min=2π/L for the steady source
+end
+
 Base.@kwdef struct ClimaAtmosParameters{
     FT,
     TP,
@@ -137,6 +151,7 @@ Base.@kwdef struct ClimaAtmosParameters{
     PAP,
     NOGWP,
     OGWP,
+    BSP,
 } <: ACAP
     thermodynamics_params::TP
     rrtmgp_params::RP
@@ -155,6 +170,7 @@ Base.@kwdef struct ClimaAtmosParameters{
     prescribed_aerosol_params::PAP
     non_orographic_gravity_wave_params::NOGWP
     orographic_gravity_wave_params::OGWP
+    beres_source_params::BSP
     Omega::FT
     f_plane_coriolis_frequency::FT
     planet_radius::FT
@@ -179,8 +195,6 @@ Base.@kwdef struct ClimaAtmosParameters{
     # Radiation
     idealized_ocean_albedo::FT
     water_refractive_index::FT
-    optics_lookup_temperature_min::FT
-    optics_lookup_temperature_max::FT
     # Hyperdiffusion
     α_hyperdiff_tracer::FT
     # Vertical diffusion

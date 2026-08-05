@@ -847,6 +847,32 @@ function ᶜmixing_length(Y, p, property::Val{P} = Val{:master}()) where {P}
 end
 
 """
+    ᶜdiffusive_flux_divergenceᵥ(ᶠcoef, ᶜχ)
+
+Lazy vertical divergence of the diffusive scalar flux `F = -ᶠcoef ∇χ`, with
+zero-flux top and bottom boundaries.
+
+`ᶠcoef` must be a face field or a `lazy` broadcast, not a bare `Field * Field`
+product. Fold `ρ`, `K`, and any scaling factor into `ᶠcoef` in left-to-right order.
+"""
+ᶜdiffusive_flux_divergenceᵥ(ᶠcoef, ᶜχ) = @. lazy(ᶜdiffdivᵥ(-(ᶠcoef * ᶠgradᵥ(ᶜχ))))
+
+"""
+    ᶠtotal_enthalpy_gradientᵥ(thermo_params, ᶜT, ᶜΦ, ᶜq_vap, ᶜq_liq, ᶜq_ice)
+
+Lazy face gradient of total enthalpy in dry-static-energy + water-enthalpy form,
+`∇s_d + Σ_μ (h_μ + Φ) ∇q_μ` for `μ ∈ {vap, liq, ice}`.
+
+Summands are combined in a fixed order: dry static energy, then vapor, liquid, ice.
+"""
+ᶠtotal_enthalpy_gradientᵥ(thermo_params, ᶜT, ᶜΦ, ᶜq_vap, ᶜq_liq, ᶜq_ice) = @. lazy(
+    ᶠgradᵥ(TD.dry_static_energy(thermo_params, ᶜT, ᶜΦ)) +
+    ᶠinterp(TD.enthalpy_vapor(thermo_params, ᶜT) + ᶜΦ) * ᶠgradᵥ(ᶜq_vap) +
+    ᶠinterp(TD.enthalpy_liquid(thermo_params, ᶜT) + ᶜΦ) * ᶠgradᵥ(ᶜq_liq) +
+    ᶠinterp(TD.enthalpy_ice(thermo_params, ᶜT) + ᶜΦ) * ᶠgradᵥ(ᶜq_ice),
+)
+
+"""
     gradient_richardson_number(params, ᶜN²_eff, ᶜstrain_rate_norm)
 
 Calculates the gradient Richardson number (Ri).

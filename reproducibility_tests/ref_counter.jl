@@ -1,4 +1,4 @@
-381
+394
 
 # **README**
 #
@@ -32,6 +32,55 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+394
+- Species-consistent hyperdiffusion.
+- Apply sgs microphyiscs constraints.
+
+393
+- Change min_area_limiter_scale and turb_entr_param_vec in EDMF TOMLs
+
+392
+- Integrate the hydrostatic pressure of the single-column setups on a
+  1000-element column instead of a 100-element column. Initial center
+  pressures change by about 2e-4 to 4e-4 relative to the previous profile.
+
+391
+- Update SurfaceFluxes 1.0.1 → 1.1.0
+
+390
+- Remove precipitation from cloud fraction and radiation
+
+389
+- Add a temporary parameter for lateral sedimentation mixing
+
+388
+- Unify SGS vertical diffusion with grid mean. Each PrognosticEDMFX
+  subdomain inherits the grid-mean specific tendency for mseⱼ, q_totⱼ,
+  and matching auto-discovered SGS tracers.
+
+387
+- Change some EDMF parameters
+
+386
+- Per-subdomain SGS hyperdiffusion with the dry-static-energy +
+  water-enthalpy split for mseʲ. Reverses the previous unification with
+  grid-mean tendencies.
+
+385
+- Change cloud fraction formulation
+
+384
+- Unify SGS hyperdiffusion with grid mean: each PrognosticEDMFX subdomain
+  inherits the grid-mean specific tendency (uniform hyperdiff in the grid
+  box). Split the total-enthalpy flux into dry-static-energy + water-species
+  contributions to avoid diffusing dry-air enthalpy along with water enthalpy.
+
+383
+- Add precipitation entrainment from environment into a widening updraft
+
+382
+- Update RRTMGP.jl
+
 381
 - EDMFX inversion reconstruction: harmonic-mean face interpolation of eddy
   diffusivities, stability-biased N², interface-aware effective stability

@@ -2,7 +2,7 @@
 
 This guide covers patterns for writing code that runs on CPU and GPU, and on single-process and MPI-distributed configurations. All CliMA model packages use `ClimaComms.jl` to abstract over device and parallelism.
 
-> To set up a machine and **run** a model on GPU (install Julia, add `CUDA.jl`, runtime compatibility, `CLIMACOMMS_DEVICE`), see [running_on_gpu.md](../workflow/running_on_gpu.md). 
+> To set up a machine and **run** a model on GPU (install Julia, add `CUDA.jl`, runtime compatibility, `CLIMACOMMS_DEVICE`), see [running_on_gpu.md](../workflow/running_on_gpu.md).
 
 ## 1. Acquiring the device and context
 

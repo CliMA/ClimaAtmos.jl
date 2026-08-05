@@ -162,77 +162,6 @@ layers (`⟨w'b'⟩_s ≤ 0`).
     return a_s * ρ * w_star
 end
 
-edmfx_vertical_diffusion_tendency!(Yₜ, Y, p, t, turbconv_model) = nothing
-
-function edmfx_vertical_diffusion_tendency!(
-    Yₜ,
-    Y,
-    p,
-    t,
-    turbconv_model::PrognosticEDMFX,
-)
-    if p.atmos.edmfx_model.vertical_diffusion isa Val{true}
-        (; params) = p
-        (; ᶜρʲs) = p.precomputed
-        FT = eltype(p.params)
-        n = n_mass_flux_subdomains(turbconv_model)
-        ᶜdivᵥ_mse = Operators.DivergenceF2C(
-            top = Operators.SetValue(C3(0)),
-            bottom = Operators.SetValue(C3(0)),
-        )
-        ᶜdivᵥ_q_tot = Operators.DivergenceF2C(
-            top = Operators.SetValue(C3(0)),
-            bottom = Operators.SetValue(C3(0)),
-        )
-
-        # Updraft internal diffusion uses the same face-native environment
-        # diffusivity ᶠK_h as the grid-mean diffusion (see
-        # set_face_diffusivities! and edmfx_sgs_diffusive_flux_tendency!):
-        # the SGS turbulence that stirs updraft interiors is the same
-        # environment turbulence, and the face-native, interface-aware
-        # evaluation collapses the flux at faces bordering quiescent,
-        # strongly stratified air without interpolation. ᶠK_entr is
-        # deliberately not added here: it represents grid-mean interfacial
-        # entrainment, which for the updrafts is carried by the
-        # entrainment/detrainment closures.
-        (; ᶠK_h) = p.precomputed
-        for j in 1:n
-            ᶜρʲ = ᶜρʲs.:($j)
-            ᶜmseʲ = Y.c.sgsʲs.:($j).mse
-            ᶜq_totʲ = Y.c.sgsʲs.:($j).q_tot
-            # Note: For this and other diffusive tendencies, we should use ρaʲ instead of ρʲ,
-            # but it causes stability issues when ρaʲ is small
-            @. Yₜ.c.sgsʲs.:($$j).mse -=
-                ᶜdivᵥ_mse(-(ᶠinterp(ᶜρʲ) * ᶠK_h * ᶠgradᵥ(ᶜmseʲ))) / ᶜρʲ
-            @. Yₜ.c.sgsʲs.:($$j).q_tot -=
-                ᶜdivᵥ_q_tot(-(ᶠinterp(ᶜρʲ) * ᶠK_h * ᶠgradᵥ(ᶜq_totʲ))) / ᶜρʲ
-        end
-
-        if !isempty(sgs_tracer_names(Y))
-            α_vert_diff_microphysics = CAP.α_vert_diff_tracer(params)
-            ᶜρʲ = ᶜρʲs.:(1)
-            ᶜdivᵥ_q = Operators.DivergenceF2C(
-                top = Operators.SetValue(C3(FT(0))),
-                bottom = Operators.SetValue(C3(FT(0))),
-            )
-            # Sedimenting microphysics species are diffused with
-            # α_vert_diff_tracer * K_h, passive tracers with the unscaled K_h,
-            # matching the grid-mean tracer diffusion and the implicit
-            # Jacobian (update_sgs_diffusion_jacobian!).
-            for χ_name in sgs_tracer_names(Y)
-                α =
-                    χ_name in sgs_sedimenting_tracer_candidates ?
-                    α_vert_diff_microphysics :
-                    one(α_vert_diff_microphysics)
-                ᶜχʲ = MatrixFields.get_field(Y.c.sgsʲs.:(1), χ_name)
-                ᶜχʲₜ = MatrixFields.get_field(Yₜ.c.sgsʲs.:(1), χ_name)
-                @. ᶜχʲₜ -=
-                    ᶜdivᵥ_q(-(ᶠinterp(ᶜρʲ) * ᶠK_h * α * ᶠgradᵥ(ᶜχʲ))) / ᶜρʲ
-            end
-        end
-    end
-end
-
 # Private helper: clips grid-mean condensate tracers to non-negative values and
 # rescales the condensate sum so it cannot exceed the available total moisture.
 function enforce_grid_mean_microphysics_constraints!(Y, p, t)
@@ -258,9 +187,12 @@ function enforce_grid_mean_microphysics_constraints!(Y, p, t)
 end
 
 # Private helper: clips prognostic updraft area fraction and vertical velocity,
-# relaxes updraft mse/q_tot toward the grid mean when ρa is negligible, and
+# relaxes updraft mse/q_tot toward the grid mean when ρa is negligible,
 # relaxes updraft microphysics tracers (q_lcl, q_icl, q_rai, q_sno, n_lcl, n_rai)
-# toward the grid mean while enforcing the subdomain mass conservation bound ρaχʲ < ρχ.
+# toward the grid mean while enforcing the subdomain mass conservation bound
+# ρaχʲ < ρχ, and finally rescales the subdomain condensate sum so
+# q_lclʲ+q_iclʲ+q_raiʲ+q_snoʲ ≤ q_totʲ (mirrors the grid-mean
+# `enforce_grid_mean_microphysics_constraints!`).
 # The microphysics tracer block is a no-op for 0M (has_field returns false).
 # No-op when n_prognostic_mass_flux_subdomains == 0 (EDOnlyEDMFX, etc.).
 function enforce_edmf_updraft_constraints!(Y, p, t, turbconv_model)
@@ -310,6 +242,29 @@ function enforce_edmf_updraft_constraints!(Y, p, t, turbconv_model)
                 # ensure mass conservation: ρaχʲ < ρχ
                 min(max(0, ᶜχʲ), max(0, ᶜρχ) / Y.c.sgsʲs.:($$j).ρa),
             )
+        end
+
+        # Within-subdomain condensate rescaling: ensure
+        # q_lclʲ+q_iclʲ+q_raiʲ+q_snoʲ ≤ q_totʲ. The GM ↔ SGS bound above
+        # already clipped each χʲ ≥ 0, so we only need the ratio rescale.
+        # Multiplying by ratio ≤ 1 preserves the ρaχʲ ≤ ρχ bound.
+        if p.atmos.microphysics_model isa Union{NonEquilibriumMicrophysics1M,
+            NonEquilibriumMicrophysics2M}
+            q_cond = p.scratch.ᶜtemp_scalar
+            ratio = p.scratch.ᶜtemp_scalar_2
+            @. q_cond =
+                Y.c.sgsʲs.:($$j).q_lcl + Y.c.sgsʲs.:($$j).q_icl +
+                Y.c.sgsʲs.:($$j).q_rai + Y.c.sgsʲs.:($$j).q_sno
+            @. ratio = ifelse(
+                (q_cond > ϵ_numerics(FT)) &
+                (Y.c.sgsʲs.:($$j).q_tot > ϵ_numerics(FT)),
+                min(FT(1), Y.c.sgsʲs.:($$j).q_tot / q_cond),
+                FT(0),
+            )
+            @. Y.c.sgsʲs.:($$j).q_lcl *= ratio
+            @. Y.c.sgsʲs.:($$j).q_icl *= ratio
+            @. Y.c.sgsʲs.:($$j).q_rai *= ratio
+            @. Y.c.sgsʲs.:($$j).q_sno *= ratio
         end
     end
     return nothing

@@ -84,12 +84,20 @@ end
 
 # --- Function barrier helpers ---
 
+_test_floor_params(::Type{FT}) where {FT} = (;
+    ε_rel = FT(0.02),
+    σ_abs = FT(1e-7),
+    margin = FT(1),
+    abs_margin = FT(1),
+    sharpness = FT(1),
+    residual = FT(0),
+)
+
 function _allocs_cloud_fraction_simple()
     FT = Float64
-    ε_rel = FT(0.02)
-    σ_abs = FT(1e-7)
+    floor = _test_floor_params(FT)
     CA._compute_cloud_fraction(
-        FT(1e-3), FT(-1e-4), FT(3.16e-4), FT(5e-5), FT(1), ε_rel, σ_abs,
+        FT(1e-3), FT(-1e-4), FT(3.16e-4), FT(5e-5), FT(1), floor,
     )
     return @allocated CA._compute_cloud_fraction(
         FT(1e-3),
@@ -97,8 +105,7 @@ function _allocs_cloud_fraction_simple()
         FT(3.16e-4),
         FT(5e-5),
         FT(1),
-        ε_rel,
-        σ_abs,
+        floor,
     )
 end
 
@@ -113,8 +120,7 @@ function _allocs_cloud_fraction_fused(thp, sgs_quad)
     q′q′ = FT(1e-6)
     corr_Tq = FT(0)
     α = FT(1)
-    ε_rel = FT(0.02)
-    σ_abs = FT(1e-7)
+    floor = _test_floor_params(FT)
     CA._compute_cloud_fraction(
         thp,
         T,
@@ -127,8 +133,7 @@ function _allocs_cloud_fraction_fused(thp, sgs_quad)
         q′q′,
         corr_Tq,
         α,
-        ε_rel,
-        σ_abs,
+        floor,
     )
     return @allocated CA._compute_cloud_fraction(
         thp,
@@ -142,8 +147,7 @@ function _allocs_cloud_fraction_fused(thp, sgs_quad)
         q′q′,
         corr_Tq,
         α,
-        ε_rel,
-        σ_abs,
+        floor,
     )
 end
 

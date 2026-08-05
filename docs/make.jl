@@ -10,6 +10,14 @@ bib = CitationBibliography(joinpath(@__DIR__, "bibliography.bib"))
 links = InterLinks(
     "Julia" => "https://docs.julialang.org/en/v1/objects.inv",
     "ClimaComms" => "https://clima.github.io/ClimaComms.jl/stable/objects.inv",
+    "ClimaCore" => "https://clima.github.io/ClimaCore.jl/stable/objects.inv",
+    "ClimaDiagnostics" => "https://clima.github.io/ClimaDiagnostics.jl/stable/objects.inv",
+    "ClimaTimeSteppers" => "https://clima.github.io/ClimaTimeSteppers.jl/stable/objects.inv",
+    "CloudMicrophysics" => "https://clima.github.io/CloudMicrophysics.jl/stable/objects.inv",
+    "RRTMGP" => "https://clima.github.io/RRTMGP.jl/stable/objects.inv",
+    "Thermodynamics" => "https://clima.github.io/Thermodynamics.jl/stable/objects.inv",
+    # ClimaUtilities, ClimaParams, and SurfaceFluxes do not publish inventories
+    # (objects.inv); pages link to them with plain URLs checked by linkcheck.
 )
 include(joinpath(@__DIR__, "src", "config_table.jl"))
 doctest(ClimaAtmos; plugins = [bib, links])
@@ -21,11 +29,19 @@ makedocs(;
     sitename = "ClimaAtmos.jl",
     authors = "Clima",
     checkdocs = :exports,
+    # Validate external links on every build, but do not fail PR builds on
+    # them: external sites can be transiently unreachable, which should not
+    # block unrelated PRs. Broken links surface as warnings in local builds
+    # and the CI log; set LINKCHECK_STRICT=1 (e.g. in a manual or scheduled
+    # run) to turn them into build failures. The check costs seconds.
+    linkcheck = true,
+    warnonly = isempty(get(ENV, "LINKCHECK_STRICT", "")) ? [:linkcheck] :
+               Symbol[],
     format = Documenter.HTML(
         prettyurls = !isempty(get(ENV, "CI", "")),
         collapselevel = 1,
         mathengine = MathJax3(),
-        size_threshold_ignore = ["repl_scripts.md", "available_diagnostics.md"],
+        size_threshold_ignore = ["available_diagnostics.md"],
     ),
     pages = [
         "Home" => "index.md",
@@ -36,44 +52,60 @@ makedocs(;
         ],
         "How-to Guides" => [
             "Running Simulations" => [
-                "Single Column Models" => "single_column_prospect.md",
-                "Radiative Equilibrium Example" => "radiative_equilibrium.md",
+                "Single Column Models" => "single_column.md",
+                "Global Simulations" => "global_simulations.md",
                 "Restarts and Checkpoints" => "restarts.md",
-                "REPL Debugging Workflow" => "repl_scripts.md",
+                "Running on GPUs and MPI" => "gpu_and_mpi.md",
             ],
             "Configuration & Parameters" => [
-                "Custom Configurations" => "config.md",
+                "Scripting Simulations" => "scripting_simulations.md",
+                "Creating Custom Configurations" => "configuration.md",
                 "Parameters" => "parameters.md",
             ],
             "Computing and Saving Diagnostics" => "diagnostics.md",
+            "Loading and Visualizing Output" => "visualizing_output.md",
         ],
         "Explanation" => [
+            "The CliMA Ecosystem" => "ecosystem.md",
             "Dynamics & Numerics" => [
                 "Governing Equations" => "equations.md",
                 "Implicit Solver" => "implicit_solver.md",
                 "Integer Time (ITime)" => "itime.md",
             ],
             "Physics & Parameterizations" => [
+                "PROPHET: Prognostic Equations" => "edmf_equations.md",
                 "Microphysics" => "microphysics.md",
-                "EDMF: Prognostic Equations" => "edmf_equations.md",
-                "Gravity Wave Drag" => "gravity_wave.md",
+                "Radiation" => "radiation.md",
+                "Gravity Wave Drag" => [
+                    "Non-orographic Gravity Waves" => "non_orographic_gravity_wave.md",
+                    "Orographic Gravity Waves" => "orographic_gravity_wave.md",
+                ],
                 "Ocean Surface Albedo" => "surface_albedo.md",
                 "Topography Representation" => "topography.md",
             ],
         ],
         "Reference" => [
             "API" => "api.md",
-            "Glossary" => "glossary.md",
+            "Configuration Options" => "configuration_options.md",
+            "Setups (Initial Conditions & Cases)" => "setups.md",
+            "Column Datasets" => "column_datasets_reference.md",
             "Grids" => "grids.md",
-            "Setups" => "setups.md",
             "Surface Conditions" => "surface_conditions.md",
             "Passive Tracers" => "passive_tracers.md",
-            "Trace Gases (Radiation)" => "tracers.md",
+            "Trace Gases (Radiation)" => "trace_gases.md",
             "Available Diagnostics" => "available_diagnostics.md",
+            "Glossary" => "glossary.md",
             "Bibliography" => "references.md",
         ],
         "Developer Guide" => [
             "Contributing" => "contributor_guide.md",
+            "Extending ClimaAtmos" => [
+                "Adding a Setup" => "extending_setups.md",
+                "Adding a Diagnostic Variable" => "extending_diagnostics.md",
+                "Adding a Passive Tracer" => "extending_tracers.md",
+                "Surface Conditions Internals" => "surface_conditions_internals.md",
+                "Adding a Column Dataset" => "extending_column_datasets.md",
+            ],
             "Buildkite Longrun Jobs" => "longruns.md",
         ],
     ],

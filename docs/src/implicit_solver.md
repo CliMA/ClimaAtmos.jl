@@ -69,29 +69,31 @@ steps is repeated, i.e., ``\Delta Y[1]`` is computed and ``Y`` is updated to
 updated to ``Y[3] = Y[2] - \Delta Y[2]``, and so on until the maximum number of
 iterations is reached.
 
-# Jacobian Algorithms
+## Jacobian Algorithms
 
 The derivative ``\partial R/\partial Y`` is represented as a
 [`ClimaAtmos.Jacobian`](@ref), and the method for computing it and solving its
 linear equation is given by a [`ClimaAtmos.JacobianAlgorithm`](@ref).
 
-## Manual Differentiation
+### Manual Differentiation
 
 By making certain assumptions about the physical significance of each block in
-the Jacobian (see Yatunin et al., Appendix F), we can obtain a sparse matrix
+the Jacobian (see [Yatunin2026](@cite), Appendix F), we can obtain a sparse matrix
 structure that allows for an efficient linear solver. Specifically, the time and
 memory required to compute the sparse matrix and the time required to run the
-linear solver all scale linearly with respect to the number of values in each
-column's state vector.
+linear solver all scale linearly with the number of values in each column's
+state vector.
 
 To populate the nonzero entries of this sparse matrix, the
 [`ClimaAtmos.ManualSparseJacobian`](@ref) specifies approximate derivatives for
 all possible configurations of the atmosphere model, which are analytically
 derived from expressions used to compute the implicit tendency. This algorithm
-also provides flags for zeroing out blocks of the sparse matrix, where each flag
-corresponds to the implicit treatment of some particular physical process.
+zeroes out blocks corresponding to processes that are not treated implicitly;
+which blocks are nonzero is derived automatically from the `AtmosModel`
+(topography and the diffusion mode) when the cache is built, rather than being
+configured by the user.
 
-## Automatic Differentiation
+### Automatic Differentiation
 
 Another way to compute the Jacobian is through automatic differentiation. This
 involves replacing all real numbers in the prognostic state with dual numbers of
@@ -171,8 +173,8 @@ by ``\Delta t`` and subtraction of ``I`` gives the full Jacobian matrix
 ``\partial R(Y)/\partial Y``.
 
 To be more precise, the implicit tendency is evaluated in two function calls.
-The first function, ``p_{imp}(Y)``, computes cached values that are treated
-implicitly, and the second function, ``T_{imp}(Y, p_{imp})``, computes the
+The first function ``p_{imp}(Y)`` computes cached values that are treated
+implicitly, and the second function ``T_{imp}(Y, p_{imp})`` computes the
 tendency itself. Further generalizing the property of
 ``\varepsilon_i * \varepsilon_j = 0`` to functions of two vectors, passing
 ``A + \hat{A} * \mathcal{E}`` and ``B + \hat{B} * \mathcal{E}`` to any function
@@ -208,7 +210,7 @@ T_{imp}(Y, p_{imp}(Y)) +
 ```
 
 In other words, the single-argument tendency derivative
-``\partial T_{imp}(Y)/\partial Y`` is really a shorthand for
+``\partial T_{imp}(Y)/\partial Y`` is shorthand for
 
 ```math
 \frac{\partial T_{imp}(Y)}{\partial Y} =
@@ -217,12 +219,12 @@ In other words, the single-argument tendency derivative
 \frac{\partial p_{imp}(Y)}{\partial Y}.
 ```
 
-### Dense Automatic Differentiation
+#### Dense Automatic Differentiation
 
 The simplest form of automatic differentiation uses a dense representation of
-the tendency matrix. When the number of ``\varepsilon`` components, ``n``, is
-equal to the number of values in each column's state vector, ``N``, this
-involves setting ``P`` to the ``N \times N`` identity matrix, so that the dual
+the tendency matrix. When the number of ``\varepsilon`` components ``n`` equals
+the number ``N`` of values in each column's state vector, this involves
+setting ``P`` to the ``N \times N`` identity matrix, so that the dual
 counterpart of each column's state vector is
 
 ```math
@@ -274,7 +276,7 @@ equation ``R'(Y) * \Delta Y = R(Y)`` is solved by
 time required to compute the L and U factors scales as ``N^3``. After the
 factors are computed, the time required to invert them scales as ``N^2``.
 
-### Sparse Automatic Differentiation
+#### Sparse Automatic Differentiation
 
 The `AutoDenseJacobian` can be sped up by copying its entries into the
 `ManualSparseJacobian`. This allows the matrix to be inverted using an efficient
@@ -285,14 +287,14 @@ This is especially the case on GPUs, where performance is primarily determined
 by memory requirements. Introducing sparsity only to avoid the factorization
 does not reduce the memory requirements that scale as ``N^2``.
 
-To make the memory requirements of automatic differentiation scale linearly with
-respect to ``N``, ``P`` can be set to an ``N \times c`` column coloring matrix
+To make the memory requirements of automatic differentiation scale linearly
+with ``N``, ``P`` can be set to an ``N \times c`` column coloring matrix
 for the tendency derivative, so that ``c`` is the smallest value for which
 ``\partial T_{imp}(Y)/\partial Y * P`` is a lossless representation of the
 nonzero entries in ``\partial T_{imp}(Y)/\partial Y``. Specifically, ``P`` is a
 binary matrix, where a 1 in row ``i`` and column ``j`` means that the tendency
 derivative column corresponding to ``Y_i`` is assigned color ``j``. Ideally,
-``P`` should be chosen so that no two values ``Y_a`` and``Y_b`` can be assigned
+``P`` should be chosen so that no two values ``Y_a`` and ``Y_b`` can be assigned
 the same color if ``\partial T_{imp, i}(Y)/\partial Y_a`` and
 ``\partial T_{imp, i}(Y)/\partial Y_b`` are both nonzero in any row ``i``. For
 any such matrix ``P``, ``\partial T_{imp}(Y)/\partial Y * P`` uniquely
@@ -312,12 +314,12 @@ When the derivatives with respect to ``Y_a`` and ``Y_b`` have comparable
 magnitudes, though, the sum can no longer be used to approximate either of them,
 and the only workaround is to assign them distinct colors.
 
-Most of the derivatives that are ignored by the`ManualSparseJacobian` are
+Most of the derivatives that are ignored by the `ManualSparseJacobian` are
 negligibly small, so they can safely be excluded from the sparsity pattern used
 to assign column colors. However, some of the derivatives can be ignored based
 on the inputs to the linear equation in which they are used, but they do not
 have small magnitudes. For example, derivatives with respect to `ρ` tend to be
-much larger than derivatives with respect to `ρe_tot`, since a adding one
+much larger than derivatives with respect to `ρe_tot`, since adding one
 kilogram of air to a cubic meter will typically have a more significant effect
 than adding one Joule of energy. In physical simulations, though, changes of
 `δρ = 1 kg/m^3` tend to be much less common than changes of `δρe_tot = 1 J/m^3`.
@@ -329,8 +331,8 @@ solving the linear equation.
 To avoid introducing errors to ``\partial T_{imp}(Y)/\partial Y``, the locations
 of all non-negligible derivatives must be included in the sparsity pattern for
 assigning column colors, even if those derivatives can be ignored when solving
-the linear equation. In many cases, this requires the introduction of additional
-colors, but sometimes the coloring can be extended to include these derivatives
+the linear equation. In many cases, this requires additional colors, but
+sometimes the coloring can be extended to include these derivatives
 without using more colors.
 
 The memory requirements of this algorithm scale as ``N * c``, which can limit
@@ -345,8 +347,8 @@ value for which the sparse representation fits in GPU memory (using a limit of
 twice the memory that is currently free); on CPUs, it is assumed that the sparse
 representation will always fit in memory, so only a single partition is used.
 
-When running the `AutoSparseJacobian`, care should be taken to ensure that its
-entries are not polluted by non-negligible derivatives from ignored blocks (or
+When running the `AutoSparseJacobian`, ensure that its entries are not
+polluted by non-negligible derivatives from ignored blocks (or
 from ignored bands within nonzero blocks). Whenever debugging reveals a
 difference between the nonzero values generated by sparse and dense automatic
 differentiation, ignored derivatives are almost always at fault. The default
@@ -357,11 +359,13 @@ For cases where the new padding bands that need to be added are not known in
 advance, the `AutoSparseJacobian` also has an option to add a fixed number of
 padding bands to every Jacobian block.
 
-#### Debugging Sparse Automatic Differentiation Errors
+##### Debugging Sparse Automatic Differentiation Errors
 
 If setting `use_auto_jacobian = true` makes a simulation unstable or leads to
 inaccurate results, set `debug_jacobian = true` and compare the different
-approximations of each Jacobian block:
+approximations of each Jacobian block (the block-by-block summary tables are
+printed by `print_jacobian_summary` when running a simulation,
+and are skipped when `use_dense_jacobian = true`):
 
   - When a block differs between two algorithms, check whether the difference
     is significant (i.e., whether its normalized magnitude exceeds `1/dt`).
@@ -398,5 +402,5 @@ approximations of each Jacobian block:
 
 ## See also
 
-  - [Yatunin, D, et al., "The CliMA atmosphere dynamical core: Concepts, numerics, and scaling"](https://doi.org/10.22541/essoar.173940262.23304403/v1), Section 5 and Appendix F
+  - [Yatunin2026](@cite), Section 5 and Appendix F
   - [Documentation for ClimaTimeSteppers.jl](https://clima.github.io/ClimaTimeSteppers.jl/dev/algorithm_formulations/ode_solvers/)

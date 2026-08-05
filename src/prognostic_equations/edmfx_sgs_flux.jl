@@ -226,6 +226,14 @@ function edmfx_sgs_diffusive_flux_tendency!(
     turbconv_params = CAP.turbconv_params(params)
     (; ᶜu) = p.precomputed
     ᶠgradᵥ = Operators.GradientC2F()
+    n = n_mass_flux_subdomains(turbconv_model)
+    # The SGS-updraft branches below apply the same specific tendency the grid
+    # mean receives to each subdomain scalar (uniform vertical diffusion across
+    # the grid box). Gated on `edmfx_model.vertical_diffusion` so configs can
+    # opt in/out just like the old subdomain-native diffusion did.
+    apply_sgs_updraft =
+        turbconv_model isa PrognosticEDMFX &&
+        p.atmos.edmfx_model.vertical_diffusion isa Val{true}
 
     if p.atmos.edmfx_model.sgs_diffusive_flux isa Val{true}
 
@@ -272,7 +280,13 @@ function edmfx_sgs_diffusive_flux_tendency!(
         ᶜq_vap = @. lazy(
             TD.vapor_specific_humidity(ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice),
         )
-        @. Yₜ.c.ρe_tot -= ᶜdivᵥ_ρe_tot(
+        # Materialize the total-enthalpy flux divergence once so it can be
+        # applied to the grid-mean ρe_tot and to each subdomain mse using
+        # the same specific-enthalpy tendency dh_gm/dt = dρe_tot/dt / ρ.
+        # Uniform vertical diffusion in the grid box: every subdomain feels
+        # the grid-mean specific tendency.
+        ᶜρe_totₜ_diffusion = p.scratch.ᶜtemp_scalar_2
+        @. ᶜρe_totₜ_diffusion = ᶜdivᵥ_ρe_tot(
             -(
                 ᶠρaK_h * (
                     ᶠgradᵥ(TD.dry_static_energy(thermo_params, ᶜT, ᶜΦ)) +
@@ -285,6 +299,12 @@ function edmfx_sgs_diffusive_flux_tendency!(
                 )
             ),
         )
+        @. Yₜ.c.ρe_tot -= ᶜρe_totₜ_diffusion
+        if apply_sgs_updraft
+            for j in 1:n
+                @. Yₜ.c.sgsʲs.:($$j).mse -= ᶜρe_totₜ_diffusion / Y.c.ρ
+            end
+        end
 
         if use_prognostic_tke(turbconv_model)
             (; ρtke_flux) = p.precomputed
@@ -320,6 +340,12 @@ function edmfx_sgs_diffusive_flux_tendency!(
                 ᶜdivᵥ_ρq_tot(-(ᶠρaK_h * ᶠgradᵥ(specific(Y.c.ρq_tot, Y.c.ρ))))
             @. Yₜ.c.ρq_tot -= ᶜρχₜ_diffusion
             @. Yₜ.c.ρ -= ᶜρχₜ_diffusion  # Effect of moisture diffusion on (moist) air mass
+            if apply_sgs_updraft
+                for j in 1:n
+                    @. Yₜ.c.sgsʲs.:($$j).q_tot -= ᶜρχₜ_diffusion / Y.c.ρ
+                end
+                # The corresponding ρaⱼ dry-mass correction is deliberately neglected.
+            end
         end
 
         α_vert_diff_microphysics = CAP.α_vert_diff_tracer(params)
@@ -356,6 +382,18 @@ function edmfx_sgs_diffusive_flux_tendency!(
                 ),
             )
             @. ᶜρχₜ -= ᶜρχₜ_diffusion
+            # Uniform vertical diffusion: apply the same specific tendency to
+            # the matching subdomain field (e.g. ρq_lcl → q_lcl in updrafts).
+            if apply_sgs_updraft
+                χ_name = specific_tracer_name(ρχ_name)
+                for j in 1:n
+                    if MatrixFields.has_field(Y.c.sgsʲs.:($j), χ_name)
+                        ᶜχⱼₜ =
+                            MatrixFields.get_field(Yₜ.c.sgsʲs.:($j), χ_name)
+                        @. ᶜχⱼₜ -= ᶜρχₜ_diffusion / Y.c.ρ
+                    end
+                end
+            end
         end
 
         # Momentum diffusion

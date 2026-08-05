@@ -36,10 +36,9 @@ end
 
 A surface temperature read from a time-varying external input.
 `surface_temperature(::ExternalTemperature, Y, p, t)` evaluates the field
-from `p.external_forcing.surface_inputs.ts` (driven by
+from `p.external_forcing.surface_fields.ts` (driven by
 `surface_timevaryinginputs.ts`), so this temperature is only valid when the
-setup populates `external_forcing.surface_inputs` (e.g. `InterpolatedColumnProfile`,
-`ARMVARANAL`).
+setup populates `external_forcing.surface_fields` (e.g. `ForcingFromFile`).
 """
 struct ExternalTemperature <: SurfaceTemperature end
 
@@ -81,9 +80,9 @@ end
 surface_temperature(t::AnalyticTemperature, Y, p, _) = t
 
 function surface_temperature(::ExternalTemperature, Y, p, t_time)
-    (; surface_inputs, surface_timevaryinginputs) = p.external_forcing
-    evaluate!(surface_inputs.ts, surface_timevaryinginputs.ts, t_time)
-    return Fields.field_values(surface_inputs.ts)
+    (; surface_fields, surface_timevaryinginputs) = p.external_forcing
+    evaluate!(surface_fields.ts, surface_timevaryinginputs.ts, t_time)
+    return Fields.field_values(surface_fields.ts)
 end
 
 surface_temperature(::SlabOceanTemperature, Y, p, _) =

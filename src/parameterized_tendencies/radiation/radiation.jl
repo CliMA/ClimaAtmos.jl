@@ -77,7 +77,7 @@ function idealized_ozone(z::FT) where {FT}
     return g1 * p^g2 * exp(-p / g3) * PPMV_TO_VMR
 end
 
-function rrtmgp_model_kwargs(
+function rrtmgp_solver_kwargs(
     space,
     include_z::Bool,
 )
@@ -114,7 +114,7 @@ function rrtmgp_model_kwargs(
     return include_z ? (; kwargs..., zkwargs...) : kwargs
 end
 
-function rrtmgp_model_kwargs(
+function rrtmgp_solver_kwargs(
     space,
     params,
     time_varying_trace_gases,
@@ -331,13 +331,13 @@ function radiation_model_cache(
 
     if radiation_mode isa RRTMGPI.GrayRadiation
         kwargs =
-            rrtmgp_model_kwargs(
+            rrtmgp_solver_kwargs(
                 axes(Y.c),
                 include_z,
             )
     else
         kwargs =
-            rrtmgp_model_kwargs(
+            rrtmgp_solver_kwargs(
                 axes(Y.c),
                 params,
                 time_varying_trace_gas_names,
@@ -348,12 +348,12 @@ function radiation_model_cache(
 
     cos_zenith = toa_flux = NaN # initialized in callback
 
-    rrtmgp_model = RRTMGPI.RRTMGPModel(
+    rrtmgp_solver = RRTMGPI.rrtmgp_solver(
         rrtmgp_params,
-        context;
+        context,
+        radiation_mode;
         ncol = length(Spaces.all_nodes(axes(Spaces.level(Y.c, 1)))),
         domain_nlay = Spaces.nlevels(axes(Y.c)),
-        radiation_mode,
         interpolation,
         bottom_extrapolation,
         center_pressure = NaN, # initialized in callback
@@ -372,7 +372,7 @@ function radiation_model_cache(
         cloud_cache = get_cloud_cache(radiation_mode.cloud, Y, start_date)
     end
     return merge(
-        (; rrtmgp_model, ᶠradiation_flux = similar(Y.f, Geometry.WVector{FT})),
+        (; rrtmgp_solver, ᶠradiation_flux = similar(Y.f, Geometry.WVector{FT})),
         insolation_cache(insolation_mode, Y),
         cloud_cache,
     )

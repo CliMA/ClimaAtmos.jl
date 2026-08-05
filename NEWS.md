@@ -3,6 +3,39 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+
+0.42.3
+-------
+- [#4735](https://github.com/CliMA/ClimaAtmos.jl/pull/4735) ![][badge-🐛bugfix] Make the `topography_damping_factor` config default a float (`5.0` instead of `5`).
+- [#4734](https://github.com/CliMA/ClimaAtmos.jl/pull/4734) ![][badge-🔥behavioralΔ] Update to CloudMicrophysics v0.38.
+- [#4733](https://github.com/CliMA/ClimaAtmos.jl/pull/4733) ![][badge-🔥behavioralΔ] Change the min area limiter and turbulent entrainment parameters in the EDMFX TOML configs.
+- [#4731](https://github.com/CliMA/ClimaAtmos.jl/pull/4731) ![][badge-🔥behavioralΔ] Remove the Rayleigh sponge from grid-mean microphysics tracers.
+- [#4664](https://github.com/CliMA/ClimaAtmos.jl/pull/4664) ![][badge-🔥behavioralΔ] Initialize the AtmosphericProfilesLibrary single-column setups (Bomex, DYCOMS, GABLS, GATE_III, ISDAC, Larcform1, PrecipitatingColumn, Rico, Soares, ShipwayHill2012, TRMM_LBA) on GPU spaces. `hydrostatic_pressure_profile` integrates the hydrostatic initial value problem on a dedicated 1000-element column (previously 100) and returns a `ClimaInterpolations` interpolant over host arrays. Because the setup profiles are host-resident interpolants, the initial condition of these setups is evaluated on the host and copied to the device rather than broadcast on the device. Initial center pressures change by about `2e-4` to `4e-4` relative, dominated by the removed interpolation error of the coarser grid; the new profiles are within about `4e-6` relative of a reference solution on a 16 times finer grid. The `ShipwayHill2012` constructor now returns the setup type (its interface methods were previously unreachable).
+
+0.42.2
+-------
+- [#4722](https://github.com/CliMA/ClimaAtmos.jl/pull/4722) ![][badge-🔥behavioralΔ] Exclude precipitation in cloud fraction and radiation. Cloud fraction no longer counts precipitating but condensate-free air (e.g. below cloud base) as cloudy, and radiation no longer treats falling rain/snow as cloud droplets/ice.
+- [#4705](https://github.com/CliMA/ClimaAtmos.jl/pull/4705) ![][badge-✨feature/enhancement] Add a generic interface for driving single-column simulations from netCDF forcing files.
+  - Add `ColumnDatasets` for reading column forcing files.
+  - Compose external forcing from per-process terms (`HorizontalAdvection`, `VerticalFluctuation`, `Nudging`, `Subsidence`) assembled into `ExternalDrivenTVForcing`.
+  - Rename the old large-scale-subsidence forcing to `LargeScaleSubsidence`, freeing the name `Subsidence` for the new per-process forcing term.
+
+
+0.42.1
+-------
+- [#4693](https://github.com/CliMA/ClimaAtmos.jl/pull/4693) ![][badge-🔥behavioralΔ] Mix the sedimentation flux across subdomains under `PrognosticEDMFX`. The lateral transfer of each sedimenting updraft tracer across tilted updraft boundaries now includes both detrainment (where the updraft narrows with height) and entrainment of the environment sedimentation flux (where it widens), with the environment flux density `ρ⁰w⁰χ⁰` reconstructed from the grid-mean flux minus the updraft contribution. Applied to the condensate/precipitation masses and their number concentrations, with matching implicit-Jacobian updates.
+- [#4699](https://github.com/CliMA/ClimaAtmos.jl/pull/4699) ![][badge-🔥behavioralΔ] Select the tracers that receive the `α_vert_diff_tracer` eddy-diffusivity scaling in the boundary-layer vertical diffusion from the shared `gs_sedimenting_tracer_candidates` list instead of a hardcoded tuple of species. The tracer diffusivity scaling is now consistent across the boundary-layer diffusion, the EDMFX SGS flux, the EDMFX updraft vertical diffusion, and the implicit Jacobian.
+- [#4703](https://github.com/CliMA/ClimaAtmos.jl/pull/4703) ![][badge-🔥behavioralΔ] Unify SGS hyperdiffusion with the grid mean: each `PrognosticEDMFX` subdomain inherits the grid-mean specific tendency (uniform hyperdiffusion within the grid box). The total-enthalpy hyperdiffusive flux is split into dry-static-energy and water-species contributions so that dry-air enthalpy is no longer diffused along with water enthalpy.
+
+
+0.42.0
+-------
+- [#4624](https://github.com/CliMA/ClimaAtmos.jl/pull/4624) ![][badge-💥breaking] Migrated the radiation interface to RRTMGP 0.22's redesigned API.
+  The radiation cache now holds an `RRTMGP.RRTMGPSolver` (read/written through getters such as `RRTMGP.layer_temperature(solver)`)
+  instead of the removed `RRTMGPModel` wrapper; host aerosol tracers are mapped to RRTMGP's canonical names, and the
+  deep-atmosphere scaling is passed as `deep_atmosphere_inverse_scaling`. Radiation diagnostics now wrap the RRTMGP flux getters
+  with `array2field` directly instead of `copy(getter(solver))`.
+
 - [#4647](https://github.com/CliMA/ClimaAtmos.jl/pull/4647) ![][badge-🔥behavioralΔ] Make the EDMFX (PROPHET) boundary-layer representation less sensitive to vertical resolution by reconstructing subgrid inversion structure.
   - Interpolate center-based eddy diffusivities to faces with a harmonic mean, `1/interp(1/max(K, ϵ))`, instead of an arithmetic mean, at the diffusion sites that use cell-center diffusivities: the boundary-layer `VerticalDiffusion`/`DecayWithHeightDiffusion` path and EDMFX updraft-internal diffusion (Smagorinsky keeps arithmetic interpolation to match its tendency; the EDMFX grid-mean diffusivities are evaluated natively at faces instead — see below). At a face separating a turbulent layer from quiescent stratified air — a stratocumulus-capping inversion — the arithmetic mean assigns `~K_bl/2` to exactly the face with the largest gradients, producing systematic spurious entrainment; the harmonic mean is controlled by the smaller adjacent value.
   - Use a stability-biased buoyancy gradient (the more stable of the two one-sided gradients, `N²_stab = max(N²₋, N²₊)`) for the mixing length and turbulent Prandtl number, so a resolved inversion suppresses mixing from both sides.

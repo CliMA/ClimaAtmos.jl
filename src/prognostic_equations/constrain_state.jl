@@ -155,17 +155,17 @@ function prescribe_flow!(Y, p, t, flow::PrescribedFlow)
     z = Fields.coordinate_field(Y.f).z
     @. Y.f.u₃ = C3(Geometry.WVector(flow(z, t)), ᶠlg)
 
-    ᶜlg = Fields.local_geometry_field(Y.c)
-    thermo_params = CAP.thermodynamics_params(p.params)
+    params = p.params
+    thermo_params = CAP.thermodynamics_params(params)
     setup = Setups.ShipwayHill2012(; thermo_params)
     function _shipway_ρ_dry(lg)
-        ps = Setups.center_initial_condition(setup, lg, p.params)
-        ρ = Setups.air_density(ps, p.params)
+        ps = Setups.center_initial_condition(setup, lg, params)
+        ρ = Setups.air_density(ps, params)
         return ρ * (1 - ps.q_tot)
     end
-    _shipway_T(lg) = Setups.center_initial_condition(setup, lg, p.params).T
-    ᶜρ_init_dry = @. lazy(_shipway_ρ_dry(ᶜlg))
-    ᶜT_init = @. lazy(_shipway_T(ᶜlg))
+    _shipway_T(lg) = Setups.center_initial_condition(setup, lg, params).T
+    ᶜρ_init_dry = Setups.initial_condition_field(_shipway_ρ_dry, axes(Y.c))
+    ᶜT_init = Setups.initial_condition_field(_shipway_T, axes(Y.c))
 
     # Clamp ρq_tot to non-negative to prevent the feedback loop:
     # negative ρq_tot → lower ρ → more negative q_tot → blowup

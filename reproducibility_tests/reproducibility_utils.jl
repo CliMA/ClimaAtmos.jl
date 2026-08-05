@@ -626,10 +626,30 @@ function publish_staged_reference(
 end
 
 """
+    github_pr_for_commit(commit)
+
+Ask GitHub, via the `gh` CLI, which pull request `commit` belongs to; return its
+number or `nothing`. Resolves commits that carry no PR marker in their message --
+e.g. a fast-forwarded or rebased PR merge, where `(#<n>)` is absent. Returns
+`nothing` if `gh` is missing, unauthenticated, offline, or no PR matches, so
+callers fall back cleanly.
+"""
+function github_pr_for_commit(commit)
+    isempty(commit) && return nothing
+    out = try
+        readchomp(`gh search prs $commit --json number --jq ".[0].number"`)
+    catch
+        return nothing
+    end
+    return tryparse(Int, out)
+end
+
+"""
     discover_pr_number(;
         pull_request = get(ENV, "BUILDKITE_PULL_REQUEST", "false"),
         branch = get(ENV, "BUILDKITE_BRANCH", ""),
         message = get(ENV, "BUILDKITE_MESSAGE", ""),
+        commit = get(ENV, "BUILDKITE_COMMIT", ""),
     )
 
 Return the pull request number associated with the current build, or `nothing`
@@ -649,11 +669,16 @@ Tries, in order:
     commit but not an ordinary PR-branch commit, so it cannot mis-identify the PR
     on a PR build (which would clobber another PR's staging) or pick up an issue
     reference in the title.
+ 4. `commit` — last resort: ask GitHub which PR the commit belongs to, via
+    `github_pr_for_commit` (`gh search prs`). Catches merges that leave no PR
+    marker in the message (a fast-forwarded or rebased PR merge). Needs `gh`;
+    returns `nothing` if it is unavailable.
 """
 function discover_pr_number(;
     pull_request = get(ENV, "BUILDKITE_PULL_REQUEST", "false"),
     branch = get(ENV, "BUILDKITE_BRANCH", ""),
     message = get(ENV, "BUILDKITE_MESSAGE", ""),
+    commit = get(ENV, "BUILDKITE_COMMIT", ""),
 )
     if !(pull_request in ("false", ""))
         n = tryparse(Int, pull_request)
@@ -667,7 +692,7 @@ function discover_pr_number(;
         m = match(re, message)
         !isnothing(m) && return parse(Int, m.captures[1])
     end
-    return nothing
+    return github_pr_for_commit(commit)
 end
 
 """

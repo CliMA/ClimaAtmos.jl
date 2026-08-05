@@ -15,10 +15,11 @@ function ClimaAtmosParameters(config::AtmosConfig)
     return ClimaAtmosParameters(
         config.toml_dict;
         microphysics_model = get_microphysics_model(pa),
-        microphysics_1m_options = get_microphysics_1m_options(pa, config.toml_dict),
+        microphysics_1m_options = get_microphysics_1m_options(pa),
         has_non_orographic_gw = get(pa, "non_orographic_gravity_wave", false) != false,
         has_orographic_gw =
         !isnothing(get(pa, "orographic_gravity_wave", nothing)),
+        has_beres_source = get(pa, "nogw_beres_source", false) != false,
     )
 end
 
@@ -53,6 +54,7 @@ function get_atmos(config::AtmosConfig, params; setup_type = nothing)
         surface = AtmosSurface(config, params, FT; setup_type),
         numerics = AtmosNumerics(config, FT),
         chemistry = AtmosChem(config),
+        cosp = COSPModel(config),
         vertical_diffusion,
         disable_surface_flux_tendency = pa["disable_surface_flux_tendency"],
     )
@@ -62,7 +64,7 @@ function get_atmos(config::AtmosConfig, params; setup_type = nothing)
     @info "AtmosModel: \n$(summary(atmos))"
     if !isnothing(params.microphysics_1m_params)
         microphysics_model = atmos.water.microphysics_model
-        options = params.microphysics_1m_params.options
+        options = params.microphysics_1m_params.processes
         @info "Microphysics settings: $(sprint(summary_microphysics, microphysics_model, options))"
     end
     return atmos
@@ -140,17 +142,58 @@ function get_setup_type(parsed_args, thermo_params)
             parsed_args["cfsite_number"],
         )
     elseif ic_name == "ARMVARANAL"
-        return Setups.ARMVARANAL(
-            parsed_args["external_forcing_file"];
+        varanal_file = parsed_args["external_forcing_file"]
+        isnothing(varanal_file) && error(
+            "initial_condition `ARMVARANAL` requires `external_forcing_file` \
+             to point at an ARM VARANAL file",
+        )
+        start_date = parsed_args["start_date"]
+        FT = eltype(thermo_params)
+        # Convert the pressure-level VARANAL file to the ClimaColumn schema, then
+        # drive it through the generic ForcingFromFile path with the VARANAL
+        # forcing composition (no vertical fluctuation, subsidence from `wa`).
+        varanal_dir =
+            get(ENV, "BUILDKITE", "") == "true" ? mktempdir() :
+            dirname(varanal_file)
+        canonical = ColumnDatasets.VaranalFiles.to_climacolumn(
+            varanal_file;
             thermo_params,
-            start_date = parsed_args["start_date"],
+            dir = varanal_dir,
+        )
+        data = ColumnDatasets.ColumnDataset(canonical)
+        (; latitude, longitude) = ColumnDatasets.site_location(data)
+        flux_scheme = if issubset((:hfls, :hfss), data.surface_vars)
+            SurfaceConditions.MoninObukhov(;
+                z0 = FT(0.05),
+                ustar = FT(0.28),
+                fluxes = SurfaceConditions.FileHeatFluxes(data, start_date),
+            )
+        else
+            SurfaceConditions.MoninObukhov(; z0 = FT(0.05), ustar = FT(0.28))
+        end
+        return Setups.ForcingFromFile(
+            data,
+            start_date;
+            forcing = (
+                HorizontalAdvection(),
+                Nudging(:ta, :hus),
+                Nudging(:ua, :va),
+                Subsidence(),
+            ),
+            flux_scheme,
+            insolation = TimeVaryingInsolation(;
+                start_date = parse_date(start_date),
+                latitude,
+                longitude,
+            ),
         )
     elseif ic_name == "ReanalysisTimeVarying"
         FT = eltype(thermo_params)
         external_forcing_file =
             get_external_daily_forcing_file_path(parsed_args)
         if !isfile(external_forcing_file) ||
-           !check_daily_forcing_times(external_forcing_file, parsed_args)
+           !check_daily_forcing_times(external_forcing_file, parsed_args) ||
+           !ClimaColumnFiles.is_conforming(external_forcing_file)
             @info "External forcing file $(external_forcing_file) does not exist or does not cover the expected time range. Generating it now."
             generate_multiday_era5_external_forcing_file(
                 parsed_args,
@@ -162,8 +205,18 @@ function get_setup_type(parsed_args, thermo_params)
                 ),
             )
         end
-        return Setups.InterpolatedColumnProfile(
-            external_forcing_file,
+        return Setups.ForcingFromFile(
+            ColumnDatasets.ColumnDataset(external_forcing_file),
+            parsed_args["start_date"],
+        )
+    elseif ic_name == "ForcingFromFile"
+        external_forcing_file = parsed_args["external_forcing_file"]
+        isnothing(external_forcing_file) && error(
+            "initial_condition `ForcingFromFile` requires `external_forcing_file` \
+             to point at a column forcing file",
+        )
+        return Setups.ForcingFromFile(
+            ColumnDatasets.ColumnDataset(external_forcing_file),
             parsed_args["start_date"],
         )
     elseif ic_name == "WeatherModel"
@@ -451,6 +504,7 @@ Bundle YAML callback knobs into the NamedTuple expected by
 function callback_kwargs_from_config(config::AtmosConfig)
     pa = config.parsed_args
     return (;
+        dt_subcol = pa["dt_subcol"],
         dt_rad = pa["dt_rad"],
         dt_nogw = pa["dt_nogw"],
         dt_ogw = pa["dt_ogw"],

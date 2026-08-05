@@ -34,7 +34,7 @@ ode_algo: ARS222
 #==========================================================================================#
 
 # Parameters #
-toml: [toml/larcform1_1M_prognostic_edmfx.toml]
+toml: [toml/prognostic_edmfx_1M.toml]
 
 # Radiation #
 rad: allskywithclear

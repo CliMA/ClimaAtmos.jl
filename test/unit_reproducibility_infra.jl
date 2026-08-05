@@ -1000,17 +1000,24 @@ end
 end
 
 @testset "Reproducibility infrastructure: discover_pr_number" begin
-    # `branch` is pinned on every call so the CI environment's BUILDKITE_BRANCH
-    # (a gh-readonly-queue branch in the merge queue) can't leak in and win the
-    # branch-parse step ahead of the case under test.
+    # `branch` and `commit` are pinned on every call so the CI environment's
+    # BUILDKITE_BRANCH (a gh-readonly-queue branch in the merge queue) and
+    # BUILDKITE_COMMIT can't leak in: the former would win the branch-parse step
+    # ahead of the case under test, and the latter would reach the `gh search
+    # prs` fallback and hit the network.
     # 1. BUILDKITE_PULL_REQUEST (a real PR build)
-    @test discover_pr_number(; pull_request = "123", branch = "", message = "") ==
-          123
+    @test discover_pr_number(;
+        pull_request = "123",
+        branch = "",
+        message = "",
+        commit = "",
+    ) == 123
     # 2. Parsed from a merge-queue branch (gh-readonly-queue/main/pr-<n>-<sha>)
     @test discover_pr_number(;
         pull_request = "false",
         branch = "gh-readonly-queue/main/pr-42-0a1b2c3",
         message = "",
+        commit = "",
     ) == 42
     # A non-merge-queue branch that merely contains "pr-<n>" is NOT matched
     @test isnothing(
@@ -1018,6 +1025,7 @@ end
             pull_request = "false",
             branch = "fix-pr-9-bug",
             message = "",
+            commit = "",
         ),
     )
     # A gh-readonly-queue branch without a pr-<n> yields nothing (not `false`)
@@ -1026,6 +1034,7 @@ end
             pull_request = "false",
             branch = "gh-readonly-queue/main/deadbeef",
             message = "",
+            commit = "",
         ),
     )
     # 3. Parsed from a squash or merge commit message
@@ -1033,17 +1042,20 @@ end
         pull_request = "false",
         branch = "",
         message = "Some squashed change (#456)",
+        commit = "",
     ) == 456
     @test discover_pr_number(;
         pull_request = "false",
         branch = "",
         message = "Merge pull request #789 from foo/bar",
+        commit = "",
     ) == 789
     # A leading issue reference does NOT win over the trailing squash PR number
     @test discover_pr_number(;
         pull_request = "false",
         branch = "",
         message = "Fix #100 regression (#4652)",
+        commit = "",
     ) == 4652
     # An ordinary PR-branch commit (no canonical merge/squash form) is NOT
     # matched, so staging can never be keyed to (and clobber) an unrelated PR
@@ -1052,16 +1064,20 @@ end
             pull_request = "false",
             branch = "",
             message = "address review from #123",
+            commit = "",
         ),
     )
-    # No usable signal
+    # No usable signal, and no commit, so the `gh` fallback is skipped
     @test isnothing(
         discover_pr_number(;
             pull_request = "false",
             branch = "",
             message = "no pr number here",
+            commit = "",
         ),
     )
+    # The `gh` fallback is a no-op without a commit (guards before shelling out)
+    @test isnothing(github_pr_for_commit(""))
 end
 
 @testset "Reproducibility infrastructure: commit_sha_from_dir" begin

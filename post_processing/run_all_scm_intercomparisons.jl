@@ -141,6 +141,11 @@ let n_ok = 0, n_err = 0, page_pdfs = String[]
     println("  Joint PDF: $(abspath(joint_pdf))")
     println("═══════════════════════════════════════════")
 
-    n_err > 0 && exit(1)
+    # Don't exit(1) on plotting failures: the joint PDF should always be
+    # produced from whatever cases succeeded.  CI reproducibility tests
+    # flag changed results separately; this script is for visual inspection.
+    if n_err > 0
+        @warn "$n_err case(s) failed to plot; see warnings above."
+    end
 
 end # let

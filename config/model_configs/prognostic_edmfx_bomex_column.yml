@@ -12,13 +12,14 @@ edmfx_filter: true
 prognostic_tke: true
 microphysics_model: "1M"
 config: "column"
-z_max: 3e3
+# z_max is increased to prevent the updraft from reaching the top
+z_max: 4200
 z_elem: 60
 z_stretch: false
 perturb_initstate: false
 dt: "120secs"
 t_end: "6hours"
 dt_save_state_to_disk: "10mins"
-toml: [toml/prognostic_edmfx_bomex.toml]
+toml: [toml/prognostic_edmfx_1M.toml]
 netcdf_interpolation_num_points: [2, 2, 60]
 ode_algo: "ARS222"

@@ -164,27 +164,7 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
         rst_ρtke = rayleigh_sponge_tendency_tracer(Y.c.ρtke, rayleigh_sponge)
         @. Yₜ.c.ρtke += rst_ρtke
     end
-    # TODO: This damps ρq_lcl/ρq_icl/ρq_rai/ρq_sno toward zero with no
-    # counterpart in ρq_tot, ρ, or ρe_tot, so it implicitly converts
-    # condensate to vapor without accounting for the associated latent
-    # heat, which can generate spurious heating/cooling and supersaturation
-    # in the sponge layer. Either remove this once it's confirmed unneeded
-    # (e.g. after the top-boundary flux fixes), or make it mass- and
-    # energy-consistent by applying the same sink to ρq_tot, ρ, and ρe_tot.
-    if microphysics_model isa NonEquilibriumMicrophysics1M
-        grid_mean_micro_species = (
-            @name(c.ρq_lcl),
-            @name(c.ρq_icl),
-            @name(c.ρq_rai),
-            @name(c.ρq_sno),
-        )
-        MatrixFields.unrolled_foreach(grid_mean_micro_species) do ρq_name
-            ᶜρq = MatrixFields.get_field(Y, ρq_name)
-            ᶜρqₜ = MatrixFields.get_field(Yₜ, ρq_name)
-            rst_ρq = rayleigh_sponge_tendency_tracer(ᶜρq, rayleigh_sponge)
-            @. ᶜρqₜ += rst_ρq
-        end
-    end
+
     if turbconv_model isa PrognosticEDMFX
         ᶜmse = @. lazy(ᶜh_tot - ᶜK)
         ᶜq_tot = @. lazy(specific(Y.c.ρq_tot, Y.c.ρ))

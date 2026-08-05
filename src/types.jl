@@ -444,7 +444,50 @@ RayleighSponge(params) = RayleighSponge(;
 ### ------------------- ###
 
 abstract type AbstractGravityWave end
-Base.@kwdef struct NonOrographicGravityWave{FT} <: AbstractGravityWave
+
+"""
+    BeresSourceParams{FT}
+
+Parameters for the Beres (2004) convective gravity wave source spectrum.
+When used as the `beres_source` field in `NonOrographicGravityWave`, the
+Beres convective spectrum is launched in addition to the AD background
+spectrum in every column whose EDMF convective heating exceeds `Q0_threshold` and whose heating layer is deeper than `h_heat_min`.
+There is no latitude gate, and it is set by where the EDMF scheme produces deep convective heating.
+"""
+Base.@kwdef struct BeresSourceParams{FT}
+    # --- Main parameters ---
+    Q0_threshold::FT             # K/s, min heating rate to activate Beres
+    beres_scale_factor::FT       # dimensionless efficiency ℰ; knobs for ρ₀/(Lτ) normalization, the |Q_t(ν)|² weight, and tuning
+    σ_x::FT                      # m, convective cell horizontal half-width
+    ν_min::FT                    # 1/s, min wave frequency (period ~120 min)
+    ν_max::FT                    # 1/s, max wave frequency (period ~10 min)
+    n_ν::Int                     # frequency quadrature points (must be 4k+1: 5, 9, 13...)
+    h_heat_min::FT = FT(1000.0)  # m, min heating depth to activate (filters shallow convection)
+    z_bot_floor::FT = FT(2000.0) # m, min allowed z_bot (excludes PBL signal in Q_conv)
+    beres_steady_source::Bool = true # boolean flag for steady (ν=0) stationary component: deposits only if a c≈0 bin exits
+    beres_steady_dc_frac::FT = FT(1.0) # artificial steady DC weight: Q_t(0)² = dc_frac·ν_min
+    beres_L_system::FT = FT(1.0e6)     # m, largest system scale; sets k_min=2π/L in even-folded H; for the steady-state source
+    heating_latent::Bool = false       # source in-cloud heating from latent Q_lat=Σ L_p R_p (1M+PrognosticEDMFX) vs DSE-Q₁
+    detailed_diagnostics::Bool = false # expose nogw_* source-internal extended diagnostics
+
+    # --- h-averaging (resonance smoothing; default off) ---
+    n_h_avg::Int = 1      # number of h values to average over (1 = no averaging)
+    Δh_frac::FT = FT(0.1) # fractional half-range for averaging: h ± Δh_frac·h
+
+    function BeresSourceParams{FT}(args...) where {FT}
+        obj = new{FT}(args...)
+        if (obj.n_ν - 1) % 4 != 0
+            error(
+                "BeresSourceParams: n_ν must satisfy (n_ν - 1) % 4 == 0 " *
+                "(i.e. n_ν ∈ {5, 9, 13, ...}) for composite Boole's rule, " *
+                "got n_ν = $(obj.n_ν)",
+            )
+        end
+        return obj
+    end
+end
+
+Base.@kwdef struct NonOrographicGravityWave{FT, BS} <: AbstractGravityWave
     source_pressure::FT
     damp_pressure::FT
     source_height::FT
@@ -465,6 +508,7 @@ Base.@kwdef struct NonOrographicGravityWave{FT} <: AbstractGravityWave
     ϕ0_s::FT
     dϕ_n::FT
     dϕ_s::FT
+    beres_source::BS = nothing  # nothing → AD background only; BeresSourceParams → adds the Beres convective source on top of AD wherever EDMF convects
 end
 
 abstract type OrographicGravityWave <: AbstractGravityWave end
@@ -489,7 +533,7 @@ end
 
 abstract type AbstractForcing end
 struct HeldSuarezForcing end
-struct Subsidence{T} <: AbstractForcing
+struct LargeScaleSubsidence{T} <: AbstractForcing
     prof::T
 end
 # TODO: is this a forcing?
@@ -506,38 +550,52 @@ end
 """
     ExternalDrivenTVForcing
 
-Forcing specified by external forcing file.
+Generic time-varying forcing read from a column forcing file through the
+`ColumnDatasets` interface (the native ClimaColumn schema). Its `forcing`
+is a tuple of composed [`AbstractForcingTerm`](@ref)s (horizontal advection,
+vertical fluctuation, nudging, subsidence). Only data required by the composed
+terms is loaded, and missing data for a composed term is a loud error.
+
+`time_interpolation_method` sets how the file's `TimeVaryingInput`s behave in
+time; it defaults to the dataset format's method (plain `LinearInterpolation`,
+which errors out of range so a finite campaign cannot fabricate forcing). A
+case whose file stores one repeating period passes
+`ColumnDatasets.periodic_calendar_method()` instead.
+
+Runscripts can construct this model as
+`ExternalDrivenTVForcing(path; forcing = (...,))`. Surface-temperature and
+insolation requirements are derived from the resolved `AtmosModel` during
+cache construction rather than from the forcing terms.
 """
-struct ExternalDrivenTVForcing{FT}
-    external_forcing_file::String
+struct ExternalDrivenTVForcing{CD <: ColumnDatasets.ColumnDataset, F <: Tuple, M}
+    dataset::CD
+    forcing::F
+    time_interpolation_method::M
+end
+function ExternalDrivenTVForcing(
+    dataset::ColumnDatasets.ColumnDataset;
+    forcing = default_forcing_terms(),
+    time_interpolation_method = ColumnDatasets.time_interpolation_method(
+        dataset.format,
+    ),
+)
+    forcing = Tuple(forcing)
+    validate_forcing_terms(forcing)
+    return ExternalDrivenTVForcing{
+        typeof(dataset),
+        typeof(forcing),
+        typeof(time_interpolation_method),
+    }(
+        dataset,
+        forcing,
+        time_interpolation_method,
+    )
+end
+function ExternalDrivenTVForcing(path::String; kwargs...)
+    return ExternalDrivenTVForcing(ColumnDatasets.ColumnDataset(path); kwargs...)
 end
 
 struct ISDACForcing end
-
-
-"""
-    ARMVARANALForcing{FT}
-
-Forcing specified by ARM VARANAL format NetCDF file for semi-continuous forcing.
-
-The VARANAL (Variational Analysis) product from ARM provides time-varying
-atmospheric state and forcing tendencies on pressure levels (hPa). Applied
-tendencies include:
-
-  - Horizontal advection of temperature and moisture
-  - Large-scale subsidence (omega, converted to vertical velocity)
-  - Nudging toward observed profiles (T, q, u, v) above a configurable height
-
-Surface temperature is prescribed from the file; surface fluxes are computed
-interactively by the Monin-Obukhov scheme.
-
-Fields:
-
-  - `external_forcing_file`: Path to the ARM VARANAL NetCDF file.
-"""
-struct ARMVARANALForcing{FT}
-    external_forcing_file::String
-end
 
 abstract type AbstractEnvBuoyGradClosure end
 struct BuoyGradMean <: AbstractEnvBuoyGradClosure end
@@ -981,6 +1039,12 @@ Groups surface-related models and types.
     surface_albedo::AL = ConstantAlbedo{Float32}(; α = 0.07)
 end
 
+@kwdef struct COSPModel{N}
+    n_subcolumns::Val{N} = Val(256)
+    overlap::Symbol = :maximum_random
+    random_seed::UInt64 = UInt64(1)
+end
+
 # Add broadcastable for the new grouped types
 Base.broadcastable(x::SCMSetup) = tuple(x)
 Base.broadcastable(x::AtmosWater) = tuple(x)
@@ -989,12 +1053,13 @@ Base.broadcastable(x::AtmosTurbconv) = tuple(x)
 Base.broadcastable(x::AtmosGravityWave) = tuple(x)
 Base.broadcastable(x::AtmosSponge) = tuple(x)
 Base.broadcastable(x::AtmosSurface) = tuple(x)
+Base.broadcastable(x::COSPModel) = tuple(x)
 
 # `AtmosX(config::AtmosConfig, ...)` constructors live below the `AtmosConfig`
 # struct definition (later in this file) so the type is in scope when those
 # methods are parsed.
 
-struct AtmosModel{W, SCM, R, TC, PF, GW, VD, SP, SU, NU, CM}
+struct AtmosModel{W, SCM, R, TC, PF, GW, VD, SP, SU, NU, CM, COSP}
     water::W
     scm_setup::SCM
     radiation::R
@@ -1006,6 +1071,7 @@ struct AtmosModel{W, SCM, R, TC, PF, GW, VD, SP, SU, NU, CM}
     surface::SU
     numerics::NU
     chemistry::CM
+    cosp::COSP
 
     # Whether to apply surface flux tendency (independent of surface conditions)
     disable_surface_flux_tendency::Bool
@@ -1221,6 +1287,7 @@ function AtmosModel(; kwargs...)
         _create_grouped_struct(AtmosChem, atmos_model_kwargs, group_kwargs)
 
     vertical_diffusion = get(atmos_model_kwargs, :vertical_diffusion, nothing)
+    cosp = get(atmos_model_kwargs, :cosp, nothing)
     disable_surface_flux_tendency =
         get(atmos_model_kwargs, :disable_surface_flux_tendency, false)
 
@@ -1238,6 +1305,7 @@ function AtmosModel(; kwargs...)
         typeof(surface),
         typeof(numerics),
         typeof(chemistry),
+        typeof(cosp),
     }(
         water,
         scm_setup,
@@ -1250,6 +1318,7 @@ function AtmosModel(; kwargs...)
         surface,
         numerics,
         chemistry,
+        cosp,
         disable_surface_flux_tendency,
     )
 end
