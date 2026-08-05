@@ -1,14 +1,14 @@
 # Orographic Gravity Wave Parameterization
 
-Gravity waves have a great impact on the atmospheric circulation. They are usually generated from topography or convection, propagate upward and alter temperature and winds in the middle atmosphere, and influence tropospheric circulation through 'downward control' of the residual circulation by stratospheric wave forcing. The horizontal wavelength for gravity waves ranges from tens to thousands of kilometers, and the shorter end of this range up to a few hundred kilometers is unresolved at typical GCM resolution and must be parameterized.
+Gravity waves shape the atmospheric circulation. They are usually generated from topography or convection, propagate upward and alter temperature and winds in the middle atmosphere, and influence tropospheric circulation through 'downward control' of the residual circulation by stratospheric wave forcing. The horizontal wavelength for gravity waves ranges from tens to thousands of kilometers, and the shorter end of this range up to a few hundred kilometers is unresolved at typical GCM resolution and must be parameterized.
 
-The gravity wave drag on the wind velocities ($\overline{\vec{v}}=(u,v)$) are
+The gravity wave drag on the wind velocities ($\overline{\vec{v}}=(u,v)$) is
 
 ```math
 \frac{\partial \overline{\vec{v}}}{ \partial t} = ... + \underbrace{\left(-\frac{\partial \overline{\vec{v}'w'}}{\partial z}\Big|_{GW}\right)}_{\vec{X}}
 ```
 
-with $\vec{X} = (X_\lambda, X_\phi)$ representing the subgrid-scale zonal and meridional components of the gravity wave drag and is calculated with the parameterization.
+where $\vec{X} = (X_\lambda, X_\phi)$ contains the subgrid-scale zonal and meridional components of the gravity wave drag, computed by the parameterization.
 
 Throughout this document, an overbar (e.g. $\overline{\vec{v}}$, $\overline{\rho}$) denotes a grid-mean, resolved-scale variable in the sense of a Reynolds decomposition, and primes denote the corresponding subgrid fluctuations. $\epsilon_0$ denotes a small floating-point regularizer (`eps(FT)` in the code) used to prevent division-by-zero and degenerate clamps. It has no physical meaning.
 
@@ -18,7 +18,7 @@ The orographic gravity wave drag parameterization follows the methods described 
 
 ### Planetary Boundary Layer (PBL) top
 
-There are many ways to determine the PBL top. We implement the following simple criteria to find the PBL top level $k$ as the highest level that satisfies
+We implement the following simple criteria to find the PBL top level $k$ as the highest level that satisfies
 
 ```math
 {}^cp[k] \ge 0.5 ∗ {}^cp[1]
@@ -30,13 +30,13 @@ and
 {}^cT[1] + T_{\mathrm{boost}} - {}^cT[k] > g/c_{pd} * ( {}^cz[k] - {}^cz[1] )
 ```
 
-where the superscript $c$ represents cell centers in the vertical stencils, and $[1]$ denotes the first (lowest) cell center level. $T_{\mathrm{boost}} = 1.5\,\mathrm{K}$ is the surface temperature boost to improve PBL height estimate.
+where the superscript $c$ represents cell centers in the vertical stencils, and $[1]$ denotes the first (lowest) cell center level. $T_{\mathrm{boost}} = 1.5\,\mathrm{K}$ is the surface temperature boost to improve the PBL height estimate.
 
 The first condition restricts the search to the lower atmosphere (below roughly 500 hPa). The second condition compares the observed temperature decrease with height against the dry adiabatic lapse rate $g/c_{pd}$: within the well-mixed boundary layer, turbulent mixing keeps the temperature profile close to (or steeper than) the dry adiabat, so the inequality holds. Above the PBL top, the free atmosphere is stably stratified (temperature decreases more slowly than the dry adiabat) and the inequality fails, marking the transition from the convectively mixed layer to the stable free atmosphere above.
 
 ### Orographic information
 
-The orographic information is what is required in generating the base momentum flux for low-level flow encountering the subgrid-scale mountains. We compute the tensor $\textbf{T}$ and the scalar $h_{\mathrm{max}}$ from the Earth elevation data (GFDL code [here](https://github.com/NOAA-GFDL/atmos_phys/blob/main/atmos_param/topo_drag/topo_drag.F90), which requires [Caltech Box access](https://caltech.box.com/s/w4szffattzofarpwyv9rmm5s77jgo3o4)).
+Generating the base momentum flux for low-level flow encountering the subgrid-scale mountains requires orographic information. We compute the tensor $\textbf{T}$ and the scalar $h_{\mathrm{max}}$ from the Earth elevation data (ETOPO 2022 60-arcsecond, obtained through the `earth_orography_60arcseconds` ClimaArtifact; GFDL reference code [here](https://github.com/NOAA-GFDL/atmos_phys/blob/main/atmos_param/topo_drag/topo_drag.F90)). The preprocessed drag fields are distributed as the `ogw_computed_drag_h*` ClimaArtifacts.
 
 #### Velocity potential $\chi$
 
@@ -48,9 +48,9 @@ The velocity potential $\chi$ captures the far-field influence of surrounding to
 
 where $h$ is the surface elevation, $d(\mathbf{x}, \mathbf{x}')$ is the great-circle arc distance, $\phi'$ is latitude, and $W(d)$ is a Blackman window taper that goes to zero at the smoothing scale. The $1/d$ kernel means nearby terrain dominates, while the window prevents spurious contributions from the far field. A singularity correction is added for the grid cell containing $\mathbf{x}$ itself. This follows the GFDL Fortran implementation (`get_velpot.f90`).
 
-#### Ororgraphic tensor $\textbf{T}$
+#### Orographic tensor $\textbf{T}$
 
-The tensor $\textbf{T}$, which contains all relevant information including amplitude, variance, orientation, and anisotropy about topography, is computed as
+The tensor $\textbf{T}$, which encodes the topographic amplitude, variance, orientation, and anisotropy, is computed as
 
 ```math
 \textbf{T} = -\nabla \chi (\nabla h)^T,
@@ -80,7 +80,7 @@ h_0 = \left( \frac{\sum_i w_i (h_i - \bar{h})^4}{\sum_i w_i} \right)^{1/4},
 
 where $\bar{h}$ is the distance-weighted local mean elevation, and the weights use a Lorentzian kernel $w_i = 1/(1 + d_i^2/s^2)$ with $d_i$ the angular arc distance and $s$ a latitude-dependent smoothing scale.
 
-Second, $h_0$ is rescaled using the shape parameter $\gamma$ and the height fraction $h_{\mathrm{frac}}$ to obtain the final $h_{\mathrm{max}}$ and $h_{\mathrm{min}}$:
+Second, $h_0$ is rescaled using the mountain height–width exponent $\gamma$ and the height fraction $h_{\mathrm{frac}}$ to obtain the final $h_{\mathrm{max}}$ and $h_{\mathrm{min}}$:
 
 ```math
 h_{\mathrm{max}} = \left( h_0^{2-\gamma} \cdot \frac{\gamma+2}{2\gamma} \cdot \frac{1 - h_{\mathrm{frac}}^{2\gamma}}{1 - h_{\mathrm{frac}}^{\gamma+2}} \right)^{1/(2-\gamma)}, \quad h_{\mathrm{min}} = h_{\mathrm{frac}} \cdot h_{\mathrm{max}}.
@@ -90,7 +90,7 @@ This rescaling adjusts the raw statistic to account for the assumed power-law di
 
 ### Base flux
 
-The base momentum flux generated is computed and divided into the propagating and non-propagating components.
+The base momentum flux is computed and divided into the propagating and non-propagating components.
 
 Let the subscript $(\cdot)_{\text{pbl}}$ denote a property of the low-level flow evaluated at the source level: in the code, this is the value at the highest cell center whose height satisfies ${}^c z[k] \le z_{\text{pbl}}$ (i.e., the cell center at or just below the PBL top). Let $V_{\text{pbl}} = (u_{\text{pbl}}, v_{\text{pbl}})$, $N_{\text{pbl}}$, and $\rho_{\text{pbl}}$ denote the horizontal wind, buoyancy frequency, and density at this source level. $N$ is computed pointwise at every cell center as
 
@@ -116,7 +116,7 @@ where $\langle \textbf{T} \rangle = [t_{11}, t_{12}; t_{21}, t_{22}]$ is the ten
 \tau_y = \rho_{\text{pbl}}\, N_{\text{pbl}}\, (t_{12}\, u_{\text{pbl}} + t_{22}\, v_{\text{pbl}}).
 ```
 
-The base flux is then corrected using Froude number and saturation velocity. Let
+The base flux is then corrected using the Froude number and saturation velocity. Let
 
 ```math
 V_{\tau} = \max\!\left(\epsilon_0, \; - V_{\text{pbl}} \cdot \frac{\tau}{\max(\epsilon_0, |\tau|)}\right),
@@ -144,7 +144,7 @@ where $\rho_0 = 1.2\,\mathrm{kg/m^3}$ is the arbitrary density scale, and $L_0 =
 
 $U_{\mathrm{sat}}$ roughly measures the biggest wave the flow can carry before it breaks. A stronger wind ($V_\tau$) makes much bigger waves (note the cube), while stronger stratification ($N$) or a wider mountain ($L_0$) makes them break sooner and shrinks it.
 
-The following set of intermediate variables ($\mathrm{Fr}U$'s) are computed to correct the linear base flux:
+The following intermediate variables ($\mathrm{Fr}U$'s) are computed to correct the linear base flux:
 
 ```math
 \mathrm{Fr}U_{\mathrm{sat}} = \mathrm{Fr}_{\mathrm{crit}} * U_{\mathrm{sat}},
@@ -162,7 +162,7 @@ The following set of intermediate variables ($\mathrm{Fr}U$'s) are computed to c
 \mathrm{Fr}U_{\mathrm{clp}} = \min(\mathrm{Fr}U_{\mathrm{max}}, \max(\mathrm{Fr}U_{\mathrm{min}}, \mathrm{Fr}U_{\mathrm{sat}})).
 ```
 
-Now the correct linear drag is computed as
+The corrected linear drag is computed as
 
 ```math
 \tau_l = \frac{\mathrm{Fr}U_{\mathrm{max}}^{2+\gamma-\epsilon} - \mathrm{Fr}U_{\mathrm{min}}^{2+\gamma-\epsilon}}{2+\gamma-\epsilon},
@@ -186,15 +186,15 @@ The non-propagating drag is then scaled by the Froude number:
 \tau_{np} = \frac{\tau_{np}}{\max(\mathrm{Fr}_{\mathrm{crit}}, \mathrm{Fr}_{\mathrm{max}})}.
 ```
 
-Taller mountains (larger $\mathrm{Fr}_{\mathrm{max}}$) block a deeper layer of air, so the same blocking drag is spread over more depth: dividing by $\mathrm{Fr}_{\mathrm{max}}$ gives the drag per unit depth. The $\mathrm{Fr}_{\mathrm{crit}}$ floor just stops the division from blowing up for short mountains, which do no blocking anyway ($\tau_{np}=0$ there).
+Taller mountains (larger $\mathrm{Fr}_{\mathrm{max}}$) block a deeper layer of air, so the same blocking drag is spread over more depth: dividing by $\mathrm{Fr}_{\mathrm{max}}$ gives the drag per unit depth. The $\mathrm{Fr}_{\mathrm{crit}}$ floor stops the division from blowing up for short mountains, which do no blocking anyway ($\tau_{np}=0$ there).
 
-Here, $(\gamma, \epsilon, \beta) = (0.4, 0.0, 0.5)$ are empirical shape parameters constrained by observations [garner2005](@cite), set by the ClimaParams keys `ogw_mountain_height_width_exponent`, `ogw_number_density_exponent`, and `ogw_mountain_shape_parameter` respectively. Specifically, $\gamma=0.4$ is derived from the observed scaling of mountain width versus height. The parameters $a_0=0.9$ and $a_1=3.0$ by default and are ClimaParams `ogw_linear_drag_coefficient` and `ogw_nonlinear_drag_coefficient` respectively.
+Here, $(\gamma, \epsilon, \beta) = (0.4, 0.0, 0.5)$ are empirical shape parameters constrained by observations [garner2005](@cite), set by the ClimaParams keys `ogw_mountain_height_width_exponent`, `ogw_number_density_exponent`, and `ogw_mountain_shape_parameter` respectively. Specifically, $\gamma=0.4$ is derived from the observed scaling of mountain width versus height. By default, $a_0=0.9$ and $a_1=3.0$; they are set by the ClimaParams parameters `ogw_linear_drag_coefficient` and `ogw_nonlinear_drag_coefficient`, respectively.
 
 ### Saturation profiles for the propagating component
 
 Only the propagating component requires a saturation profile, as it carries a vertically propagating wave whose flux can saturate aloft. The non-propagating component remains the scalar $\tau_{np}$ from the base-flux calculation and is distributed in $z$ by pressure weighting across the blocking layer $[z_{\text{pbl}}, z_{\mathrm{ref}})$ (see [Non-propagating component](#non-propagating-component) below).
 
-The vertical profiles of saturated momentum flux $\tau_{\mathrm{sat}}$ is computed such that momentum forcing can be obtained for $d\overline{V}/dt = -\overline{\rho}^{-1}d\tau_{\mathrm{sat}}/dz$. This only applies to the propagating part.
+The vertical profile of saturated momentum flux $\tau_{\mathrm{sat}}$ is computed such that the momentum forcing follows from $d\overline{V}/dt = -\overline{\rho}^{-1}d\tau_{\mathrm{sat}}/dz$.
 
 Similar to the base flux calculation but for the 3D fields, we compute $V_\tau$ at cell centers as
 
@@ -216,7 +216,7 @@ U_{\mathrm{sat}}[k] = \min\!\left(U_{\mathrm{sat}}[k-1], \; \sqrt{\frac{{}^c \rh
 
 so $U_{\mathrm{sat}}$ is monotonically non-increasing with height.
 
-Intuitively, these three equations build up the saturation ceiling level by level. First, $V_\tau$ is the wind component that actually pushes against the wave (the flow projected onto the drag direction), so it measures how hard the flow drives the wave at each height. Second, $L_1$ is an effective mountain width: the local flow curvature ($d^2 V_\tau$) stretches or shrinks it, which tunes how readily the wave saturates. Third, $U_{\mathrm{sat}}$ is the largest wave amplitude the background flow can hold before the wave gets too steep and breaks: the local conditions ($\rho$, $V_\tau$, $N$, $L_1$) set a ceiling at each level, and the $\min$ with the level below enforces that once the wave has been clipped, it stays clipped going up (a wave can lose flux to breaking but never regain it).
+Intuitively, these three equations build up the saturation ceiling level by level. First, $V_\tau$ is the wind component that pushes against the wave (the flow projected onto the drag direction), so it measures how hard the flow drives the wave at each height. Second, $L_1$ is an effective mountain width: the local flow curvature ($d^2 V_\tau$) stretches or shrinks it, which tunes how readily the wave saturates. Third, $U_{\mathrm{sat}}$ is the largest wave amplitude the background flow can hold before the wave gets too steep and breaks: the local conditions ($\rho$, $V_\tau$, $N$, $L_1$) set a ceiling at each level, and the $\min$ with the level below enforces that once the wave has been clipped, it stays clipped going up (a wave can lose flux to breaking but never regain it).
 
 The $\mathrm{Fr}U_{\mathrm{min}}$ and $\mathrm{Fr}U_{\mathrm{max}}$ are inherited from the base flux calculation. The source level $\mathrm{Fr}U_{\mathrm{sat}}$ and $\mathrm{Fr}U_{\mathrm{clp}}$ are then
 
@@ -238,7 +238,7 @@ and they may be updated as
 \mathrm{Fr}U_{\mathrm{clp}} = \min(\mathrm{Fr}U_{\mathrm{max}}, \max(\mathrm{Fr}U_{\mathrm{min}}, \mathrm{Fr}U_{\mathrm{sat}})).
 ```
 
-$\mathrm{Fr}U_{\mathrm{sat}}$ is the "breaking line" at the current level: any part of the wave above it is too steep and gets shaved off. Because $U_{\mathrm{sat}}$ only decreases with height, this line decreases as the wave climbs, so more of the wave is removed the higher it goes. $\mathrm{Fr}U_{\mathrm{clp}}$ is just that breaking line clamped to stay within the obstacle range $[\mathrm{Fr}U_{\mathrm{min}}, \mathrm{Fr}U_{\mathrm{max}}]$, and the $(\cdot)_0$ versions remember these values at the launch level.
+$\mathrm{Fr}U_{\mathrm{sat}}$ is the "breaking line" at the current level: any part of the wave above it is too steep and gets shaved off. Because $U_{\mathrm{sat}}$ only decreases with height, this line decreases as the wave climbs, so more of the wave is removed the higher it goes. $\mathrm{Fr}U_{\mathrm{clp}}$ is that breaking line clamped to stay within the obstacle range $[\mathrm{Fr}U_{\mathrm{min}}, \mathrm{Fr}U_{\mathrm{max}}]$, and the $(\cdot)_0$ versions remember these values at the launch level.
 
 Then, the saturated profile of propagating component of the momentum flux **above the source level** is
 
@@ -284,9 +284,9 @@ The non-propagating drag is confined to a finite layer above the PBL top, bounde
 
 setting $z_{\mathrm{ref}} = {}^fz[k]$ at the first face where $\mathrm{phase} > \pi$. Here $N_{\mathrm{min}} = 0.7 \times 10^{-2}\,\mathrm{s^{-1}}$, $N_{\mathrm{max}} = 1.7 \times 10^{-2}\,\mathrm{s^{-1}}$, $vvmin = 1.0\,\mathrm{m/s}$, and $({}^fN, {}^fV_{\tau})$ are obtained from the saturation-profile calculation. If $\mathrm{phase}$ never exceeds $\pi$ in the column, $z_{\mathrm{ref}}$ falls back to the model top. Note that the pressure weighting below still concentrates most of the drag near the surface.
 
-Here, $N / V_\tau$ is the vertical wavenumber of a stationary hydrostatic gravity wave, so summing it over height accumulates the wave's vertical phase. Reaching $\pi$ means the flow has turned through half a vertical wavelength. This marks the top of the blocked/deflected low-level layer, which sets $z_{\mathrm{ref}}$. Half a wavelength is the natural cutoff because the wave wiggles up and down as $\sin(mz)$: over the first half-wavelength it makes one single bump, which is the air piling up and overturning right against the mountain. Past that point the wave flips to the other sign and starts behaving like the free wave traveling upward, not the air trapped and blocked near the surface, so that is where the blocked layer ends. The clamps on $N$ and $V_\tau$ just keep the wavenumber physical so the layer depth stays sensible.
+Here, $N / V_\tau$ is the vertical wavenumber of a stationary hydrostatic gravity wave, so summing it over height accumulates the wave's vertical phase. Reaching $\pi$ means the flow has turned through half a vertical wavelength. This marks the top of the blocked/deflected low-level layer, which sets $z_{\mathrm{ref}}$. Half a wavelength is the natural cutoff because the wave wiggles up and down as $\sin(mz)$: over the first half-wavelength it makes a single bump, which is the air piling up and overturning right against the mountain. Past that point the wave flips to the other sign and starts behaving like the free wave traveling upward, not the air trapped and blocked near the surface, so that is where the blocked layer ends. The clamps on $N$ and $V_\tau$ keep the wavenumber physical so the layer depth stays sensible.
 
-The drag forcing due to non-propagating component is confined within the PBL top to $z_{\mathrm{ref}}$ and is weighted by pressure. The weights at each cell center are computed by interpolating face-level pressure differences:
+The drag forcing due to the non-propagating component is confined between the PBL top and $z_{\mathrm{ref}}$ and is weighted by pressure. The weights at each cell center are computed by interpolating face-level pressure differences:
 
 ```math
 \mathrm{weight}[k] = \overline{{}^f p - {}^f p_{\mathrm{ref}}}^c,
@@ -306,7 +306,7 @@ wtsum = \sum_{k \in \mathrm{mask}} \frac{\mathrm{diff}[k]}{\mathrm{weight}[k]}.
 
 The mask selects cells that overlap with the interval $[z_{\text{pbl}}, z_{\mathrm{ref}})$ and have nonzero weights.
 
-For masked levels, the forcing due to non-propagating component is
+For masked levels, the forcing due to the non-propagating component is
 
 ```math
 {}^c \left( \frac{du}{dt} [k] \right)_{np} = g \frac{\tau_{np}}{\tau_l} \frac{\mathrm{weight}[k]}{wtsum} \tau_x,
@@ -320,7 +320,7 @@ where $(\tau_x, \tau_y, \tau_l, \tau_{np})$ is computed in the base flux calcula
 
 ### Constrain the forcings
 
-Total drag from both components are
+The total drag from both components is
 
 ```math
 {}^c \left( \frac{du}{dt} [k] \right)_{\tau} = {}^c \left( \frac{du}{dt} [k] \right)_{p} + {}^c \left( \frac{du}{dt} [k] \right)_{np},
@@ -351,8 +351,8 @@ Offline (Earth topography only):
   compute_OGW_info
     ├─ calc_hpoz_latlon         → h₀ (raw 4th-moment statistic; rescaled to hmax, hmin in compute_OGW_info)
     ├─ calc_velocity_potential  → χ  (2D Hilbert transform)
-    └─ calc_orographic_tensor   → t11, t12, t21, t22
-  regrid_OGW_info → SpaceVaryingInput to spectral element
+    ├─ calc_orographic_tensor   → t11, t12, t21, t22
+    └─ regrid_OGW_info          → SpaceVaryingInput to spectral element
   write_computed_drag! → HDF5 artifact (common configs loadable via ClimaArtifacts)
 
 Every dt_ogw seconds:

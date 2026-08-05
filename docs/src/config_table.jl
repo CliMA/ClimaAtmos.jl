@@ -1,6 +1,5 @@
 const ca_dir = joinpath(@__DIR__, "..", "..")
-const output_file = joinpath(@__DIR__, "config.md")
-const input_file = joinpath(@__DIR__, "config_no_table.md")
+const output_file = joinpath(@__DIR__, "configuration_options.md")
 import YAML
 # Use OrderedCollections to preserve YAML order for docs
 import OrderedCollections: OrderedDict
@@ -29,13 +28,18 @@ end
 default_configs = joinpath(ca_dir, "config", "default_configs")
 default_config_file = joinpath(default_configs, "default_config.yml")
 open(output_file, "w") do config_md
-    open(input_file) do f
-        while !eof(f)
-            s = readline(f)
-            write(config_md, s)
-            write(config_md, "\n")
-        end
-    end
+    write(
+        config_md,
+        """
+        # Configuration options
+
+        Every configuration argument accepted in YAML configuration files, with
+        its type and default behavior, generated from
+        `config/default_configs/default_config.yml`. See
+        [Creating custom configurations](configuration.md) for how to use them.
+
+        """,
+    )
     table = make_table_from_config_file(
         default_config_file,
         "Default Configuration",

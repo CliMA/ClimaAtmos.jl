@@ -14,9 +14,8 @@ Due to floating point errors, time can easily be inaccurate or stop incrementing
 0.1 + 0.1 + 0.1 == 0.3
 ```
 
-If `t = 0` and `dt = 0.1`, then the time of the simulation is already wrong
-when the simulation done just three time steps. This can easily accumulate into
-a larger error.
+If `t = 0` and `dt = 0.1`, then the simulation time is already wrong after
+three time steps. This error can accumulate over the course of a simulation.
 
 Additionally, time can stop incrementing as seen below.
 
@@ -27,12 +26,12 @@ Float32(16777216) + Float32(1) == Float32(16777216)
 In the expression above, if the number represents seconds, then time stops
 incrementing after about 194 days.
 
-These issues propagate and lead to problems as we cannot reliably depend on the
-simulation time to be accurate. For instance, dates will always be wrong when
+These issues propagate and lead to problems, as we cannot rely on the
+simulation time being accurate. For instance, dates will always be wrong when
 converting from simulation time to date. Since dates are wrong, the diagnostics
-are saved after one timestep than they should be.
+are saved one timestep later than they should be.
 
-These are the issues that `ITime` aims to solve.
+`ITime` addresses these issues.
 
 ## Introduction to ITime
 
@@ -48,9 +47,9 @@ period(x)
 epoch(x)
 ```
 
-`ITime`s can be thought of as a number with units. Hence, addition and
-subtraction is what we expected, but multiplication between `ITime`s is not
-defined and division results in a number rather than an `ITime`. For more
+An `ITime` behaves like a number with units. Addition and subtraction work as
+expected, but multiplication between `ITime`s is not defined, and division
+results in a number rather than an `ITime`. For more
 information about what functions are available for `ITime`, see the
 [API](https://clima.github.io/ClimaUtilities.jl/dev/timemanager/#TimeManager-API)
 at ClimaUtilities.
@@ -76,7 +75,7 @@ whether they are provided as strings (e.g. `"30secs"`) or numbers.
     If `a` is a floating point number and `t` is an `ITime`, then we round
     `a * t` to the nearest integer for the `counter`, while keeping the same
     `period` and `epoch` if it exists. As a result, the simulation will run at a
-    resolution of the period used for `ITime`. This could leads to slight
+    resolution of the period used for `ITime`. This can lead to slight
     differences in the surface conditions and the time dependent forcing and
     tendencies that explicitly depend on time.
 
@@ -91,12 +90,11 @@ whether they are provided as strings (e.g. `"30secs"`) or numbers.
 Some helpful functions when working with `ITime`s are `float`, `date`, and
 `promote`.
 
-When working with `ITime`, you might need `t`, an `ITime`, to be the number of
-seconds. This can be done by using the function `float` on `t`. For other cases,
-you might need the current date which you can get by using the function `date`
-on `t`. Finally, when working with `ITime`s, the types of the `ITime`s might not
-match (e.g. the periods are different). To handle this, you can use `promote` on
-the two `ITime`s. For more information about developing with `ITime`, see the
+To convert an `ITime` `t` to a number of seconds, use the function `float` on
+`t`. To get the current date, use the function `date` on `t`. Finally, the
+types of two `ITime`s might not match (e.g. the periods are different). To
+handle this, use `promote` on the two `ITime`s. For more information about
+developing with `ITime`, see the
 `ITime` [documentation](https://clima.github.io/ClimaUtilities.jl/dev/timemanager/)
 in ClimaUtilities.
 
