@@ -700,27 +700,18 @@ function update_implicit_microphysics_cache!(
     Y,
     p,
     mm::NonEquilibriumMicrophysics1M,
-    _,
+    tm,
 )
-    # Recompute rain terminal velocity from the current Newton iterate when
-    # using diagnostic (state-dependent) rain sedimentation velocity.  The
-    # Jacobian still treats wᵣ as locally constant (lagged-coefficient
-    # approximation), but using the current value rather than the stale
-    # explicit-stage value improves implicit-solve accuracy.
-    if p.atmos.terminal_velocity_rain isa DiagnosticTerminalVelocity
-        (; ᶜwᵣ) = p.precomputed
-        cmp = CAP.microphysics_1m_params(p.params)
-        FT = eltype(Y.c.ρ)
-        @. ᶜwᵣ = clamp(
-            CM1.terminal_velocity(
-                cmp.precip.rain,
-                cmp.terminal_velocity.rain,
-                Y.c.ρ,
-                max(zero(Y.c.ρ), specific(Y.c.ρq_rai, Y.c.ρ)),
-            ),
-            FT(1e-3),
-            FT(3),
-        )
+    # Recompute the sedimentation velocities from the current implicit-solver state.
+    # This is expecially important for PrognosticEDMFX `ᶜwᵣʲs`.
+    # Leaving updraft velocities at their explicit-stage values treats the
+    # nonlinear part of the sedimentation flux explicitly.
+    # No number of Newton iterations can correct a field that nothing updates.
+    if p.atmos.terminal_velocity_liquid isa DiagnosticTerminalVelocity ||
+       p.atmos.terminal_velocity_ice isa DiagnosticTerminalVelocity ||
+       p.atmos.terminal_velocity_rain isa DiagnosticTerminalVelocity ||
+       p.atmos.terminal_velocity_snow isa DiagnosticTerminalVelocity
+        set_precipitation_velocities!(Y, p, mm, tm)
     end
     set_precipitation_surface_fluxes!(Y, p, mm)
     return nothing
