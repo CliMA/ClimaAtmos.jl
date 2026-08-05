@@ -25,7 +25,7 @@ microphysics_model: "0M"
 non_orographic_gravity_wave: true
 nogw_beres_source: true
 nogw_beres_detailed_diagnostics: true
-dt_nogw: "400secs"
+dt_nogw: "350secs"
 t_end: "7days"
 dt_save_state_to_disk: "Inf"
 toml: [toml/prognostic_edmfx.toml, toml/nogw_verification_grid.toml]
