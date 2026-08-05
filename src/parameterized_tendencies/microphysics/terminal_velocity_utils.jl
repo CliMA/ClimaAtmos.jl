@@ -81,11 +81,7 @@ terminal_velocity(
     cmp,
     ρ,
     q,
-) = clamp(
-    CM1.terminal_velocity(cmp.precip.rain, cmp.terminal_velocity.rain, ρ, q),
-    typeof(q)(1e-3),
-    typeof(q)(3),
-)
+) = CM1.terminal_velocity(cmp.precip.rain, cmp.terminal_velocity.rain, ρ, q)
 
 # Snow, 1M
 terminal_velocity(

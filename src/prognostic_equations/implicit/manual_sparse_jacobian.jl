@@ -709,6 +709,8 @@ function update_advection_jacobian!(matrix, Y, p, dtγ, topography_flag)
     return nothing
 end
 
+#=
+TODO - remove if not needed
 """
     jacobian_sedimentation_velocity(p, wₚ_name, ρχₚ_name)
 
@@ -735,6 +737,7 @@ precomputed velocity field unchanged.
     end
     return MatrixFields.get_field(p.precomputed, wₚ_name)
 end
+=#
 
 """
     update_sedimentation_jacobian!(matrix, Y, p, dtγ)
@@ -775,7 +778,10 @@ function update_sedimentation_jacobian!(matrix, Y, p, dtγ)
         ρχₚ_state_name = center_state_name(ρχₚ_name)
 
         ∂ᶜρχₚ_err_∂ᶜρχₚ = matrix[ρχₚ_state_name, ρχₚ_state_name]
-        ᶜwₚ = jacobian_sedimentation_velocity(p, wₚ_name, ρχₚ_name)
+        # TODO - remove if not needed
+        #ᶜwₚ = jacobian_sedimentation_velocity(p, wₚ_name, ρχₚ_name)
+        ᶜwₚ = MatrixFields.get_field(p.precomputed, wₚ_name)
+
         # TODO: come up with read-able names for the intermediate computations...
         @. p.scratch.ᶠband_matrix_wvec =
             ᶠright_bias_matrix() ⋅

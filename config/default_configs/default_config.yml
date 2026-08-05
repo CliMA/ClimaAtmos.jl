@@ -67,7 +67,7 @@ use_dynamic_krylov_rtol:
   value: false
 max_newton_iters_ode:
   help: "Maximum number of Newton's method iterations (only for ODE algorithms that use Newton's method)."
-  value: 3
+  value: 1
 ode_algo:
   help: "ODE algorithm [`ARS343` (default), `SSP333`, `IMKG343a`, etc.]"
   value: "ARS343"
