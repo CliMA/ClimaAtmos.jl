@@ -29,10 +29,14 @@ makedocs(;
     sitename = "ClimaAtmos.jl",
     authors = "Clima",
     checkdocs = :exports,
-    # Validate external links but do not fail the build on them: external sites
-    # can be transiently unreachable, which should not block unrelated PRs.
+    # Validate external links on every build, but do not fail PR builds on
+    # them: external sites can be transiently unreachable, which should not
+    # block unrelated PRs. Broken links surface as warnings in local builds
+    # and the CI log; set LINKCHECK_STRICT=1 (e.g. in a manual or scheduled
+    # run) to turn them into build failures. The check costs seconds.
     linkcheck = true,
-    warnonly = [:linkcheck],
+    warnonly = isempty(get(ENV, "LINKCHECK_STRICT", "")) ? [:linkcheck] :
+               Symbol[],
     format = Documenter.HTML(
         prettyurls = !isempty(get(ENV, "CI", "")),
         collapselevel = 1,
@@ -100,6 +104,7 @@ makedocs(;
                 "Adding a Diagnostic Variable" => "extending_diagnostics.md",
                 "Adding a Passive Tracer" => "extending_tracers.md",
                 "Surface Conditions Internals" => "surface_conditions_internals.md",
+                "Adding a Column Dataset" => "extending_column_datasets.md",
             ],
             "Buildkite Longrun Jobs" => "longruns.md",
         ],

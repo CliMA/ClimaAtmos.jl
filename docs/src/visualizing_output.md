@@ -36,7 +36,7 @@ ta = get(simdir, "ta")   # air temperature
 # Time average over the simulation, then zonal mean
 ta_avg = average_lon(average_time(ta))
 
-# Profile at a given latitude and longitude
+# Vertical profile of the zonal mean at the equator
 ta_profile = slice(ta_avg, lat = 0.0)
 ```
 

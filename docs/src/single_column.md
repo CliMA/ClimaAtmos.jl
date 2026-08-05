@@ -6,7 +6,7 @@
 
 | Abbreviation | Long Name                                            | Cloud Regime          | Reference                                                                                                                   |
 |:------------ |:---------------------------------------------------- |:--------------------- |:--------------------------------------------------------------------------------------------------------------------------- |
-| BOMEX        | Barbados Oceanographic and Meteorological Experiment | Marine Cumulus        | [Siebesma et al. (2003)](https://doi.org/10.1175/1520-0469(2003)60%3C1201:ALESIS%3E2.0.CO;2)                                |
+| BOMEX        | Barbados Oceanographic and Meteorological Experiment | Marine Cumulus        | [Siebesma et al. (2003)](https://doi.org/10.1175/1520-0469(2003)60%3C1201:ALESIS%3E2.0.CO%3B2)                              |
 | DYCOMS       | Dynamics and Chemistry of Marine Stratocumulus       | Marine Stratocumulus  | [Stevens et al. (2005)](https://doi.org/10.1175/MWR2930.1), [Ackerman et al. (2009)](https://doi.org/10.1175/2008MWR2582.1) |
 | RICO         | Rain in Cumulus over the Ocean                       | Rainy Cumulus         | [Rauber et al. (2007)](https://doi.org/10.1175/BAMS-88-12-1912)                                                             |
 | SOARES       | Shallow Cumulus Convection                           | Shallow Cumulus       | [Soares et al. (2004)](https://doi.org/10.1256/qj.03.223)                                                                   |
@@ -111,7 +111,7 @@ available only for the tropical Pacific in the first 5 days of July 2007,
 and only on the `clima` and Caltech HPC servers.
 
 !!! note
-
+    
     Depending on the amount of smoothing and data resolution, points near the boundaries can throw index errors. With default settings, users should stay at least 5 points away from the poles (1° for ERA5 data) for smoothing (4 points) and gradients (one extra point).
 
 #### Monthly Averaged Forcing
@@ -131,10 +131,13 @@ The corresponding configuration file is
 
 Running the reanalysis-driven cases at other times and locations requires
 downloading and naming the raw ERA5 files for the processing script; see
-[Generating ERA5 forcing data](@ref) on the Column Datasets reference page.
+[Generating ERA5 forcing data](@ref) in the Developer Guide.
 
 ### Column forcing datasets
 
-To drive a case from a custom forcing file, define nonstandard forcing
-behavior in a runscript, or write your own `ClimaColumn` datasets, see the
-[Column Datasets](column_datasets_reference.md) reference page.
+To drive a case from a custom forcing file, see the
+[Column Datasets](column_datasets_reference.md) reference page. To define
+nonstandard forcing in a runscript, generate ERA5 forcing files, or write
+your own datasets, see
+[Adding a Column Dataset](extending_column_datasets.md) in the Developer
+Guide.

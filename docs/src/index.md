@@ -77,21 +77,25 @@ Each section of these docs answers a different need; head for the one that
 matches yours:
 
   - **Getting Started**: new to ClimaAtmos? Start here.
+    
       + [Installation](installation.md) -- install the package, or run from a clone
       + [Your First Simulation](first_simulation.md) -- run and customize a simulation
       + [Script vs Config Interface](interfaces.md) -- the two ways to configure a run
   - **How-to Guides**: task recipes for running and configuring simulations.
+    
       + Running simulations: [single-column cases](single_column.md), [global simulations](global_simulations.md), [restarts](restarts.md), [running on GPUs and MPI](gpu_and_mpi.md)
       + Configuration: [scripting simulations](scripting_simulations.md), [custom configurations](configuration.md), [parameters](parameters.md)
       + [Computing and saving diagnostics](diagnostics.md)
       + [Loading and visualizing output](visualizing_output.md)
   - **Explanation**: the science and numerics behind the model.
+    
       + [The CliMA ecosystem](ecosystem.md) -- how ClimaAtmos composes the CliMA packages
       + Dynamics & numerics: [governing equations](equations.md), [implicit solver](implicit_solver.md), [integer time (ITime)](itime.md)
       + Physics & parameterizations: [PROPHET](edmf_equations.md), [microphysics](microphysics.md), [radiation](radiation.md), [non-orographic gravity-wave drag](non_orographic_gravity_wave.md), [orographic gravity-wave drag](orographic_gravity_wave.md), [ocean surface albedo](surface_albedo.md), [topography](topography.md)
   - **Reference**: look-up material.
+    
       + [API](api.md), [Configuration options](configuration_options.md), [Setups](setups.md), [Column Datasets](column_datasets_reference.md), [Grids](grids.md), [Surface conditions](surface_conditions.md), [Passive tracers](passive_tracers.md), [Trace gases](trace_gases.md), [Available diagnostics](available_diagnostics.md), [Glossary](glossary.md), [Bibliography](references.md)
-  - **Developer Guide**: [contributing](contributor_guide.md), extending the model ([setups](extending_setups.md), [diagnostics](extending_diagnostics.md), [tracers](extending_tracers.md), [surface internals](surface_conditions_internals.md)), and the [Buildkite longrun jobs](longruns.md)
+  - **Developer Guide**: [contributing](contributor_guide.md), extending the model ([setups](extending_setups.md), [diagnostics](extending_diagnostics.md), [tracers](extending_tracers.md), [column datasets](extending_column_datasets.md), [surface internals](surface_conditions_internals.md)), and the [Buildkite longrun jobs](longruns.md)
 
 New here? Start with [Installation](@ref) and [Your First Simulation](@ref), then pick
 the workflow that suits you in [Script vs Config Interface](@ref). For column experiments,

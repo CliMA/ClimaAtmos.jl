@@ -33,11 +33,17 @@ In the config file, enter:
 toml: [parameters.toml]
 ```
 
-To run the model, type:
+To run the model:
 
-```bash
-julia --project=.buildkite .buildkite/ci_driver.jl --config_file config.yaml --job_id my_job
+```julia
+import ClimaAtmos as CA
+
+config = CA.AtmosConfig("config.yaml"; job_id = "my_job")
+simulation = CA.AtmosSimulation(config)
+CA.solve_atmos!(simulation)
 ```
 
-Note that the `--config_file` argument can take several config files, so if you have a separate config file you would like to use,
-you can add it to the end of the command line arguments. Alternatively, you can add your TOML config to the existing config file.
+`AtmosConfig` also accepts a vector of configuration files (later files
+override earlier ones), so the `toml` entry can live in its own file alongside
+an existing configuration. Alternatively, add the `toml` key to the existing
+configuration file.

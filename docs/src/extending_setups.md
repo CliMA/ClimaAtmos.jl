@@ -10,7 +10,8 @@ For an externally-driven single-column case, no new setup is needed:
 external forcing, surface treatment, and insolation from a single forcing file
 in the native ClimaColumn format. See the
 [Column Datasets](column_datasets_reference.md) reference page for the file
-layout and how to add a new format as a small dataset module.
+layout, and [Adding a Column Dataset](extending_column_datasets.md) for
+adding a new format as a small dataset module.
 
 The cleanest runscript drives the case through a config dictionary. It merges
 over the defaults and wires the setup's forcing, insolation, and surface models
@@ -88,7 +89,7 @@ For nonstandard forcing (per-variable relaxation timescales, custom height or
 time masks, an in-memory data source), define a small forcing type in the
 runscript instead. See
 [Nonstandard forcing behavior from a runscript](@ref) on the
-[Column Datasets](column_datasets_reference.md) reference page.
+[Adding a Column Dataset](extending_column_datasets.md) page.
 
 ## A custom analytic case
 
