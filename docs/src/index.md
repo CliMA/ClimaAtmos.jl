@@ -79,7 +79,7 @@ matches yours:
   - **Getting Started**: new to ClimaAtmos? Start here.
 
       + [Installation](installation.md) -- install the package, or run from a clone
-      + [Your First Simulation](first_simulation.md) -- run and customize a simulation
+      + [Your First Simulation](first_simulation.md) -- build, run, and inspect one simulation
       + [Script vs Config Interface](interfaces.md) -- the two ways to configure a run
 
   - **How-to Guides**: task recipes for running and configuring simulations.
@@ -103,7 +103,7 @@ matches yours:
 
 New here? Start with [Installation](@ref) and [Your First Simulation](@ref), then pick
 the workflow that suits you in [Script vs Config Interface](@ref). For column experiments,
-see [Single Column Models](@ref).
+see [Running Single-Column Cases](@ref).
 
 ClimaAtmos is open source under the Apache 2.0 license. Questions and bug
 reports are welcome on the

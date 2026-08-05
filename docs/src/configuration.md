@@ -110,10 +110,9 @@ configuration file:
     the CI system; you normally do not need to set it yourself. (See
     `setup_output_dir` in `src/simulation/restart.jl`.)
 
-  - **`CLIMAATMOS_GC_NSTEPS`**: number of steps between manual garbage-collection
-    calls for distributed (MPI) runs. Defaults to `1000`. Only has an effect when
-    running with more than one process. (See `gc_callback` in
-    `src/callbacks/get_callbacks.jl`.)
+  - **`CLIMAATMOS_GC_NSTEPS`**: the garbage-collection interval for distributed
+    runs, described under
+    [Running on GPUs and MPI](gpu_and_mpi.md).
 
 ## Common Configurations
 

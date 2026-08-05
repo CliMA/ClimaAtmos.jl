@@ -52,9 +52,9 @@ makedocs(;
         ],
         "How-to Guides" => [
             "Running Simulations" => [
-                "Single Column Models" => "single_column.md",
-                "Global Simulations" => "global_simulations.md",
-                "Restarts and Checkpoints" => "restarts.md",
+                "Running Single-Column Cases" => "single_column.md",
+                "Running Global Simulations" => "global_simulations.md",
+                "Restarting and Checkpointing" => "restarts.md",
                 "Running on GPUs and MPI" => "gpu_and_mpi.md",
             ],
             "Configuration & Parameters" => [

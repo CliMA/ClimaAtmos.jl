@@ -1,4 +1,4 @@
-# Global Simulations
+# Running Global Simulations
 
 How to run global simulations (aquaplanets and AMIP-style configurations)
 on the cubed sphere.

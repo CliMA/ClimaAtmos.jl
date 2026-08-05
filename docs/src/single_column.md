@@ -1,4 +1,4 @@
-# Single Column Models
+# Running Single-Column Cases
 
 ## Idealized cases
 
