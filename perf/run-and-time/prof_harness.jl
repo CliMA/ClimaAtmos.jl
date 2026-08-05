@@ -1,5 +1,5 @@
 #=
-To run under NSightCompute: 
+To run under NSightCompute:
 ````
 ncu \
   -o output.ncu-rep \
@@ -21,7 +21,7 @@ nsys profile \
     julia --project ./prof_harness.jl <path-to-case-file>
 ```
 
-We also need to make sure that nsys/ncu is useing the same CUDA version as 
+We also need to make sure that nsys/ncu is useing the same CUDA version as
 Julia.
 
 To change the version used by julia run, e.g.:
