@@ -111,7 +111,7 @@ available only for the tropical Pacific in the first 5 days of July 2007,
 and only on the `clima` and Caltech HPC servers.
 
 !!! note
-    
+
     Depending on the amount of smoothing and data resolution, points near the boundaries can throw index errors. With default settings, users should stay at least 5 points away from the poles (1° for ERA5 data) for smoothing (4 points) and gradients (one extra point).
 
 #### Monthly Averaged Forcing
