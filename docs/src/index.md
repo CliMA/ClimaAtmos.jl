@@ -79,13 +79,13 @@ matches yours:
   - **Getting Started**: new to ClimaAtmos? Start here.
 
       + [Installation](installation.md) -- install the package, or run from a clone
-      + [Your First Simulation](first_simulation.md) -- run and customize a simulation
+      + [Your First Simulation](first_simulation.md) -- build, run, and inspect one simulation
       + [Script vs Config Interface](interfaces.md) -- the two ways to configure a run
 
   - **How-to Guides**: task recipes for running and configuring simulations.
 
       + Running simulations: [single-column cases](single_column.md), [global simulations](global_simulations.md), [restarts](restarts.md), [running on GPUs and MPI](gpu_and_mpi.md)
-      + Configuration: [scripting simulations](scripting_simulations.md), [custom configurations](configuration.md), [parameters](parameters.md)
+      + Configuration: [scripting simulations](scripting_simulations.md), [custom configurations](configuration.md)
       + [Computing and saving diagnostics](diagnostics.md)
       + [Loading and visualizing output](visualizing_output.md)
 
@@ -99,11 +99,11 @@ matches yours:
 
       + [API](api.md), [Configuration options](configuration_options.md), [Setups](setups.md), [Column Datasets](column_datasets_reference.md), [Grids](grids.md), [Surface conditions](surface_conditions.md), [Passive tracers](passive_tracers.md), [Trace gases](trace_gases.md), [Available diagnostics](available_diagnostics.md), [Glossary](glossary.md), [Bibliography](references.md)
 
-  - **Developer Guide**: [contributing](contributor_guide.md), extending the model ([setups](extending_setups.md), [diagnostics](extending_diagnostics.md), [tracers](extending_tracers.md), [column datasets](extending_column_datasets.md), [surface internals](surface_conditions_internals.md)), and the [Buildkite longrun jobs](longruns.md)
+  - **Developer Guide**: [contributing](contributor_guide.md) and extending the model ([setups](extending_setups.md), [diagnostics](extending_diagnostics.md), [tracers](extending_tracers.md), [column datasets](extending_column_datasets.md), [surface internals](surface_conditions_internals.md))
 
 New here? Start with [Installation](@ref) and [Your First Simulation](@ref), then pick
 the workflow that suits you in [Script vs Config Interface](@ref). For column experiments,
-see [Single Column Models](@ref).
+see [Running Single-Column Cases](@ref).
 
 ClimaAtmos is open source under the Apache 2.0 license. Questions and bug
 reports are welcome on the

@@ -1,4 +1,4 @@
-# Restarting Simulations in ClimaAtmos
+# Restarting and Checkpointing
 
 `ClimaAtmos` supports restarting simulations from previously saved checkpoints,
 allowing you to split simulations across multiple runs. This feature is

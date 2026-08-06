@@ -31,9 +31,15 @@ simulation = CA.AtmosSimulation{Float64}(;
 ```
 
 Scalar options such as the timestep `dt` and the run length `t_end` accept a
-number in seconds or a string with units (`"10mins"`, `"1days"`). The
-composite pieces are objects constructed separately and passed in, as the
-following sections show.
+number in seconds or a string with a unit (`secs`, `mins`, `hours`, `days`,
+`weeks`), the same syntax the YAML interface uses. The composite pieces are
+objects constructed separately and passed in, as the following sections show.
+
+The `grid`, `setup`, and `model` arguments are not independent: a setup
+supplies the initial state, the model supplies the physics, and a case only
+makes sense when they match. Running the BOMEX setup with the default dry
+model, for instance, leaves no moisture to convect. The presets below pair
+them correctly; when assembling the pieces yourself, choose them together.
 
 ## Grid
 
@@ -45,6 +51,9 @@ Construct a [`ColumnGrid`](@ref ClimaAtmos.ColumnGrid),
 ```julia
 # A single column with 60 vertical levels up to 40 km
 grid = CA.ColumnGrid(Float64; z_elem = 60, z_max = 40000.0)
+
+# The same, with uniform spacing instead of the default stretching
+grid = CA.ColumnGrid(Float64; z_elem = 60, z_max = 3000.0, z_stretch = false)
 
 # A global cubed-sphere grid
 grid = CA.SphereGrid(Float64; z_elem = 45, h_elem = 6)

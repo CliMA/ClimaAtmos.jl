@@ -52,15 +52,14 @@ makedocs(;
         ],
         "How-to Guides" => [
             "Running Simulations" => [
-                "Single Column Models" => "single_column.md",
-                "Global Simulations" => "global_simulations.md",
-                "Restarts and Checkpoints" => "restarts.md",
+                "Running Single-Column Cases" => "single_column.md",
+                "Running Global Simulations" => "global_simulations.md",
+                "Restarting and Checkpointing" => "restarts.md",
                 "Running on GPUs and MPI" => "gpu_and_mpi.md",
             ],
             "Configuration & Parameters" => [
                 "Scripting Simulations" => "scripting_simulations.md",
                 "Creating Custom Configurations" => "configuration.md",
-                "Parameters" => "parameters.md",
             ],
             "Computing and Saving Diagnostics" => "diagnostics.md",
             "Loading and Visualizing Output" => "visualizing_output.md",
@@ -106,7 +105,6 @@ makedocs(;
                 "Surface Conditions Internals" => "surface_conditions_internals.md",
                 "Adding a Column Dataset" => "extending_column_datasets.md",
             ],
-            "Buildkite Longrun Jobs" => "longruns.md",
         ],
     ],
 )

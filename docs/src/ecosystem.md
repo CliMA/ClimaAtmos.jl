@@ -72,7 +72,8 @@ Because packages never hard-code parameter values, the model can be adapted to
 past climates or other planetary configurations just by changing parameters
 (e.g., a different solar constant, rotation rate, gravity, or CO2
 concentration), and calibration frameworks can override any parameter through
-the same [TOML interface](parameters.md) used for manual experimentation.
+the same [TOML interface](@ref "Overriding parameters") used for manual
+experimentation.
 
 *Where it enters ClimaAtmos:* `src/parameters/create_parameters.jl` assembles
 the `ClimaAtmosParameters` struct from the ClimaParams TOML database, including
