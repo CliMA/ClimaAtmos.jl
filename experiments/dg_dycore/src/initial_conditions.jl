@@ -214,18 +214,22 @@ over terrain — the alternatives both fail there (ρ-correction: eigenvalue
 error amplified 1/ρ aloft, 827). Valid on stretched/warped grids (the
 relation is exact per interval).
 """
-function isothermal_discrete_hydrostatic!(ᶜp, ᶜρ, T₀, R_d, grav, ᶜz)
+function isothermal_discrete_hydrostatic!(ᶜp, ᶜρ, T₀, R_d, ᶜΦK)
+    # ᶜΦK = Φ + K: the w-equation balances ∇p/ρ against ∇(Φ+K), so K
+    # (large near steep surfaces through the kinematic w) must enter the
+    # effective geopotential or the start is impulsively unbalanced
+    # (measured max_df 28 covariant at slope 0.65 with Φ alone)
     p_par = parent(ᶜp)
-    z_par = parent(ᶜz)
+    ϕ_par = parent(ᶜΦK)
     for v in 1:(size(p_par, 1) - 1)
         @views @. p_par[v + 1, :, :, :, :] =
             p_par[v, :, :, :, :] * (
                 1 -
-                grav * (z_par[v + 1, :, :, :, :] - z_par[v, :, :, :, :]) /
+                (ϕ_par[v + 1, :, :, :, :] - ϕ_par[v, :, :, :, :]) /
                 (2 * R_d * T₀)
             ) / (
                 1 +
-                grav * (z_par[v + 1, :, :, :, :] - z_par[v, :, :, :, :]) /
+                (ϕ_par[v + 1, :, :, :, :] - ϕ_par[v, :, :, :, :]) /
                 (2 * R_d * T₀)
             )
     end
@@ -246,6 +250,14 @@ function initial_state_fddg(m::DGModel{FT}) where {FT}
 
     # ρe such that the diagnosed pressure is exactly the analytic p
     ᶜK = @. (uE^2 + uN^2) / 2
+    if m.prob isa MountainWaveDG
+        # exact smooth discrete hydrostatics for the isothermal column,
+        # balanced against the effective geopotential Φ + K
+        ᶜΦK = @. c.grav * z + ᶜK
+        isothermal_discrete_hydrostatic!(ᶜp_ana, ᶜρ, FT(m.prob.T₀), c.R_d, ᶜΦK)
+    else
+        discrete_hydrostatic_ρ!(ᶜρ, ᶜp_ana, z, c.grav)
+    end
     ᶜρe = @. c.cv_d * ᶜp_ana / c.R_d +
              ᶜρ * (ᶜK + c.grav * z - c.cv_d * c.T_tri)
 
@@ -285,32 +297,9 @@ function initial_state_vi(m::DGModel{FT}) where {FT}
     ᶜp_ana = p
     ᶜρ = @. ᶜp_ana / c.R_d / T
 
-    if m.prob isa MountainWaveDG
-        # exact smooth discrete hydrostatics for the isothermal column
-        isothermal_discrete_hydrostatic!(
-            ᶜp_ana,
-            ᶜρ,
-            FT(m.prob.T₀),
-            c.R_d,
-            c.grav,
-            z,
-        )
-    else
-        discrete_hydrostatic_ρ!(ᶜρ, ᶜp_ana, z, c.grav)
-    end
-
     ᶜuₕ_local = @. Geometry.UVVector(uE, uN)
     ᶜuₕ = @. C12(ᶜuₕ_local, lgeom_c)
-    ᶜK = @. norm_sqr(ᶜuₕ_local) / 2
-    ᶜρe = @. c.cv_d * ᶜp_ana / c.R_d +
-             ᶜρ * (ᶜK + c.grav * z - c.cv_d * c.T_tri)
 
-    Yc = map(
-        (ρi, ρei, uₕi) -> (; ρ = ρi, ρe = ρei, uₕ = uₕi),
-        ᶜρ,
-        ᶜρe,
-        ᶜuₕ,
-    )
     # Terrain-consistent surface w at the BOTTOM FACE ONLY (w₃ such that
     # u³ = 0 — the kinematic BC, frozen by Bw; CA's surface-velocity
     # constraint applied statically). Interior w stays 0: interior flow
@@ -322,7 +311,35 @@ function initial_state_vi(m::DGModel{FT}) where {FT}
     ᶠg³³_sc = @. CT3(C3(FT(1)), lgeom_f).components.data.:1
     w_sc = @. -(ᶠu³ₕ_sc) / ᶠg³³_sc
     parent(w_sc)[2:end, :, :, :, :] .= FT(0)   # bottom face only (v-dim first)
-    Yf = map(ws -> (; w = C3(ws)), w_sc)
+    ᶠw = @. C3(w_sc)
+
+    # ρe from the SAME full-metric K the tendency diagnoses p with
+    # (including the surface-w contribution — at steep slopes the
+    # |uₕ|²/2-only form leaves an O(w_sfc²) p-inconsistency that
+    # detonates at t = 0; measured max_df 16.9 covariant at slope 0.65)
+    ᶜK = @. (
+        dot(C123(ᶜuₕ), CT123(ᶜuₕ)) +
+        m.ops.Ic(dot(C123(ᶠw), CT123(ᶠw))) +
+        2 * dot(CT123(ᶜuₕ), m.ops.Ic(C123(ᶠw)))
+    ) / 2
+    if m.prob isa MountainWaveDG
+        # exact smooth discrete hydrostatics for the isothermal column,
+        # balanced against the effective geopotential Φ + K
+        ᶜΦK = @. c.grav * z + ᶜK
+        isothermal_discrete_hydrostatic!(ᶜp_ana, ᶜρ, FT(m.prob.T₀), c.R_d, ᶜΦK)
+    else
+        discrete_hydrostatic_ρ!(ᶜρ, ᶜp_ana, z, c.grav)
+    end
+    ᶜρe = @. c.cv_d * ᶜp_ana / c.R_d +
+             ᶜρ * (ᶜK + c.grav * z - c.cv_d * c.T_tri)
+
+    Yc = map(
+        (ρi, ρei, uₕi) -> (; ρ = ρi, ρe = ρei, uₕ = uₕi),
+        ᶜρ,
+        ᶜρe,
+        ᶜuₕ,
+    )
+    Yf = map(w3 -> (; w = w3), ᶠw)
     return Fields.FieldVector(c = Yc, f = Yf)
 end
 

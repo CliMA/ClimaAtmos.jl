@@ -177,7 +177,7 @@ function vi_implicit_equation_jacobian!(
     (; Ic, If, ᶠgradᵥ) = m.ops
     (; ᶜdivᵥ_matrix, ᶠgradᵥ_matrix, ᶠinterp_matrix, ᶜinterp_matrix) =
         m.opmats
-    (; ᶜΦ) = m.fields
+    (; ᶜΦ, ᶠβ_sponge) = m.fields
     (; ∂Yₜ∂Y, ∂R∂Y) = j
     ρ = Y.c.ρ
     ρe = Y.c.ρe
@@ -189,6 +189,7 @@ function vi_implicit_equation_jacobian!(
     ∂ᶠ𝕄ₜ∂ᶜρ = ∂Yₜ∂Y[ᶠ𝕄V_name, ᶜρ_name]
     ∂ᶠ𝕄ₜ∂ᶜ𝔼 = ∂Yₜ∂Y[ᶠ𝕄V_name, ᶜ𝔼_name]
     ∂ᶠ𝕄ₜ∂ᶠ𝕄 = ∂Yₜ∂Y[ᶠ𝕄V_name, ᶠ𝕄V_name]
+    I_C3xACT3 = C3(FT(1)) * CT3(FT(1))'
 
     uv = @. Geometry.UVVector(uₕ)
     w_c = @. Ic(Geometry.WVector(w))
@@ -223,7 +224,7 @@ function vi_implicit_equation_jacobian!(
             DiagonalMatrixRow(1 / If(ρ)) *
             ᶠgradᵥ_matrix() *
             DiagonalMatrixRow(-(ρ * c.R_d / c.cv_d)) + ᶠgradᵥ_matrix()
-        ) * ∂ᶜK∂ᶠw
+        ) * ∂ᶜK∂ᶠw - DiagonalMatrixRow(ᶠβ_sponge * (I_C3xACT3,))
 
     I = one(∂R∂Y)
     @. ∂R∂Y = FT(δtγ) * ∂Yₜ∂Y - I

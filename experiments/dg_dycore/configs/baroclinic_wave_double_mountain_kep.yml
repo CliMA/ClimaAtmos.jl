@@ -18,8 +18,8 @@ npoly: 4
 zelem: 20
 zmax: 30000.0
 zstretch: [300.0, 3000.0]
-sponge_depth: 10000.0
-sponge_tau: 600.0
+sponge_depth: 15000.0
+sponge_tau: 1.0        # CA alpha_rayleigh_w strength; implicit under HEVI
 stepper: hevi
 dt: 60.0
 t_end: 691200.0        # 8 days

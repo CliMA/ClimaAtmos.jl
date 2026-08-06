@@ -343,7 +343,10 @@ function compute_tendency_vi!(
         λ_f,
     )
     @. dw += C3(pen_w)
-    @. dw -= ᶠβ_sponge * w
+    # w-only Rayleigh sponge: implicit under HEVI (CA-style; allows the
+    # CA strength alpha_w = 1 s^-1 at any dt), explicit only in
+    # :explicit-stepper mode (vertical_transport = full rhs)
+    vertical_transport && (@. dw -= ᶠβ_sponge * w)
     @. dw = Bw(dw)
     if m.prob.sponge_uh
         @. duₕ -= ᶜβ_sponge * uₕ
@@ -578,7 +581,7 @@ end
 function implicit_tendency_vi!(dY, Y, m::DGModel{FT}, t) where {FT}
     c = m.c
     (; Ic, If, vdivf2c, ᶠgradᵥ) = m.ops
-    (; ᶜΦ) = m.fields
+    (; ᶜΦ, ᶠβ_sponge) = m.fields
     ρ = Y.c.ρ
     ρe = Y.c.ρe
     uₕ = Y.c.uₕ
@@ -597,5 +600,6 @@ function implicit_tendency_vi!(dY, Y, m::DGModel{FT}, t) where {FT}
     @. dY.c.ρe = -vdivf2c(If(ρ) * w_vec * If(h_tot))
     dY.c.uₕ .= (zero(eltype(dY.c.uₕ)),)
     @. dY.f.w = -(ᶠgradᵥ(p_thermo) / If(ρ) + ᶠgradᵥ(K + ᶜΦ))
+    @. dY.f.w -= ᶠβ_sponge * w   # implicit w-sponge (linear, diagonal)
     return dY
 end
