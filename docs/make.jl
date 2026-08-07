@@ -75,6 +75,7 @@ makedocs(;
                 "PROPHET: Prognostic Equations" => "edmf_equations.md",
                 "Microphysics" => "microphysics.md",
                 "Radiation" => "radiation.md",
+                "Aerosols" => "aerosols.md",
                 "Gravity Wave Drag" => [
                     "Non-orographic Gravity Waves" => "non_orographic_gravity_wave.md",
                     "Orographic Gravity Waves" => "orographic_gravity_wave.md",

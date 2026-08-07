@@ -257,7 +257,6 @@ function AtmosSimulation{FT}(;
     output_dir_style = "activelink",  # TODO: Should this be an actual type?
     restart_file = nothing,
     detect_restart_file = false,
-    aerosol_names = [], # TODO: set from the model
     time_varying_trace_gases = (),
     vertical_water_borrowing_species = nothing,
     # Callbacks
@@ -278,6 +277,8 @@ function AtmosSimulation{FT}(;
 ) where {FT}
     # Log only on root process
     verbose = ClimaComms.iamroot(context) && verbose
+
+    check_ocean_mask_availability(model, setup)
 
     # Set up output directory and restart file detection
     output_dir, restart_file = setup_output_dir(
@@ -317,7 +318,7 @@ function AtmosSimulation{FT}(;
         steady_state_velocity
 
     p = @timed_log verbose "Built cache" build_cache(
-        Y, model, params, dt, start_date, aerosol_names,
+        Y, model, params, dt, start_date,
         time_varying_trace_gases, resolved_steady_state_velocity,
         vertical_water_borrowing_species,
     )
