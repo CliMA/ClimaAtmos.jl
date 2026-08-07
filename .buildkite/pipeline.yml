@@ -40,9 +40,7 @@ steps:
     concurrency: 1
     concurrency_group: "depot/climaatmos-ci"
     command:
-      # update_registry=false: the registry lives in the read-only depot/shared;
-      # skip the git-pull that would fail against it (see .buildkite/build_depot.sh).
-      - "julia --project=.buildkite -e 'using Pkg; Pkg.instantiate(; update_registry=false)'"
+      - "julia --project=.buildkite -e 'using Pkg; Pkg.instantiate()'"
       - "julia --color=yes --project=.buildkite reproducibility_tests/publish_reference.jl"
 
   - label: ":arrows_counterclockwise: Decide pipeline"
