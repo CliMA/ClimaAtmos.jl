@@ -72,7 +72,7 @@ function run_cosp_cloudsat!(Y, p, ::NonEquilibriumMicrophysics1M)
         detected_column_cloudsat,
     ) = p.scratch
 
-    ᶜq_vap = @. lazy(ᶜq_tot_nonneg - ᶜq_liq - ᶜq_ice)
+    ᶜq_vap = @. lazy(TD.vapor_specific_humidity(ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice))
     radar_config =
         COSP.COSPCloudSatOptics.CloudSatRadarConfig(eltype(Y))
     COSP.COSPCloudSatOptics.cloudsat_gas_attenuation!(
