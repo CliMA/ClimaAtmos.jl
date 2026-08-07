@@ -513,10 +513,6 @@ end
 
 abstract type OrographicGravityWave <: AbstractGravityWave end
 
-Base.@kwdef struct LinearOrographicGravityWave{S} <: OrographicGravityWave
-    topo_info::S = Val(:linear)
-end
-
 Base.@kwdef struct FullOrographicGravityWave{FT, S, T} <: OrographicGravityWave
     γ::FT
     ϵ::FT

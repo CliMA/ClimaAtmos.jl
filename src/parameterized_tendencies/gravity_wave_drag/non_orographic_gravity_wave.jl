@@ -893,6 +893,22 @@ function non_orographic_gravity_wave_forcing(
     # for up to 256 gravity wave break data.
     level_end = Spaces.nlevels(axes(ᶜρ))
 
+    # Per-column rescaling for the escaped-flux redistribution
+    gw_deposit_scale = p.scratch.temp_field_level_2
+    ᶜmasked_ρ = p.scratch.ᶜtemp_scalar_7
+    @. ᶜmasked_ρ = ifelse(ᶜlevel >= damp_level, ᶜρ, FT(0))
+    Operators.column_integral_definite!(gw_deposit_scale, ᶜmasked_ρ)
+    Fields.field_values(gw_deposit_scale) .=
+        Fields.field_values(ρ_endlevel) .*
+        sqrt.(
+            Fields.field_values(ρ_endlevel) ./
+            Fields.field_values(ρ_endlevel_m1),
+        ) .*
+        (
+            Fields.field_values(z_endlevel) .-
+            Fields.field_values(z_endlevel_m1)
+        ) ./ Fields.field_values(gw_deposit_scale)
+
     # Collect the per-column fields each source mode needs into a broadcasted
     # tuple. Both modes share the same 7 fields in slots 1–7; slots 8–16 hold the
     # 9 fields specific to that mode (AD99 source vs. Beres convective source).
@@ -1025,7 +1041,7 @@ function non_orographic_gravity_wave_forcing(
             u_waveforcing, v_waveforcing,
             u_waveforcing_top, v_waveforcing_top,
             uforcing, vforcing,
-            damp_level, ᶜlevel, level_end, gw_avg_scratch,
+            damp_level, ᶜlevel, gw_deposit_scale, gw_avg_scratch,
         )
 
         # --- Beres convective source (when configured) ---
@@ -1044,7 +1060,7 @@ function non_orographic_gravity_wave_forcing(
                 u_waveforcing, v_waveforcing,
                 u_waveforcing_top, v_waveforcing_top,
                 uforcing, vforcing,
-                damp_level, ᶜlevel, level_end, gw_avg_scratch,
+                damp_level, ᶜlevel, gw_deposit_scale, gw_avg_scratch,
             )
         end
     end
@@ -1058,7 +1074,7 @@ function postprocess_and_accumulate!(
     u_waveforcing, v_waveforcing,
     u_waveforcing_top, v_waveforcing_top,
     uforcing, vforcing,
-    damp_level, ᶜlevel, level_end, scratch,
+    damp_level, ᶜlevel, deposit_scale, scratch,
 )
     # Extract momentum flux at model top
     copyto!(
@@ -1083,10 +1099,10 @@ function postprocess_and_accumulate!(
 
     # Deposit escaped momentum flux above damp level
     @. u_waveforcing = gw_deposit(
-        u_waveforcing_top, u_waveforcing, damp_level, ᶜlevel, level_end,
+        u_waveforcing_top, u_waveforcing, damp_level, ᶜlevel, deposit_scale,
     )
     @. v_waveforcing = gw_deposit(
-        v_waveforcing_top, v_waveforcing, damp_level, ᶜlevel, level_end,
+        v_waveforcing_top, v_waveforcing, damp_level, ᶜlevel, deposit_scale,
     )
 
     # Accumulate into forcing
@@ -1240,7 +1256,7 @@ function waveforcing_column_accumulate!(
             B0_or_NaNs, Bsum_or_NaN
         end
 
-        if level >= source_level_eff - 1
+        if level >= source_level_eff
             # check break condition for each gravity waves and calculate momentum flux of breaking gravity waves at each level
             # We use the unrolled_reduce function here because it performs better for parallel execution on the GPU, avoiding type instabilities.
             # However, we need to prevent it from being inlined on the CPU to avoid large compilation times for several test cases in CI.
@@ -1268,9 +1284,7 @@ function waveforcing_column_accumulate!(
                                 # is deposited to the extra level being added so that
                                 # momentum flux is conserved
                                 mask = Base.setindex(mask, false, n)
-                                if level >= source_level_eff
-                                    fm = fm + B0[n]
-                                end
+                                fm = fm + B0[n]
                             else
                                 # if wave is not reflected at this level, determine if it is
                                 # breaking at this level (Foc >= 0), or if wave speed relative to
@@ -1283,9 +1297,7 @@ function waveforcing_column_accumulate!(
                                 Foc = B0[n] / (c_hat)^3 - fac
                                 if Foc >= 0.0 || (c_hat0 * c_hat <= 0.0)
                                     mask = Base.setindex(mask, false, n)
-                                    if level >= source_level_eff
-                                        fm = fm + B0[n]
-                                    end
+                                    fm = fm + B0[n]
                                 end
                             end
                         end # (test >= 0.0)
@@ -1302,13 +1314,11 @@ function waveforcing_column_accumulate!(
             else # MODE == :beres
                 beres_a_cover / (ρ_source_eff * FT1(nk))
             end
-            if level >= source_level_eff
-                rbh = sqrt(ρ_k * ρ_kp1)
-                wave_forcing = (ρ_source_eff / rbh) * FT1(fm) * eps / (z_kp1 - z_k)
-            else
-                wave_forcing = FT1(0.0)
-            end
+            rbh = sqrt(ρ_k * ρ_kp1)
+            wave_forcing = (ρ_source_eff / rbh) * FT1(fm) * eps / (z_kp1 - z_k)
         end
+        # Below the launch level the block is skipped, leaving `wave_forcing` at
+        # the `FT(0)` from `init`.
         return (wave_forcing, mask, Bsum, B0)
 
     end
@@ -1327,10 +1337,18 @@ function gw_average!(wave_forcing, wave_forcing_m1)
     @. wave_forcing = FT(0.5) * (wave_forcing + wave_forcing_m1)
 end
 
-function gw_deposit(wave_forcing_top, wave_forcing, damp_level, level, height)
+function gw_deposit(
+    wave_forcing_top,
+    wave_forcing,
+    damp_level,
+    level,
+    deposit_scale,
+)
+    # A heavier level needs more flux for the same acceleration, so `deposit_scale`
+    # rescales `wave_forcing_top` to the acceleration that the receiving levels'
+    # combined mass can support.
     if level >= damp_level
-        wave_forcing =
-            wave_forcing + wave_forcing_top / (height + 2 - damp_level)
+        wave_forcing = wave_forcing + wave_forcing_top * deposit_scale
     end
     return wave_forcing
 end
