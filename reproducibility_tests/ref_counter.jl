@@ -1,4 +1,4 @@
-397
+398
 
 # **README**
 #
@@ -32,6 +32,13 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+398
+- `prescribed_aerosols` and `prognostic_aerosols` now take species names
+  ("SSLT", "DST", "SO4", "CB", "OC") instead of bin names e.g. "SSLT01"; 
+  configs that previously listed only a subset of a species'
+  bins gain the omitted bins, changing radiation:
+  `aquaplanet_equil_allsky_gw_raw` gains DST05.
+
 397
 - Change default ice formation to temperature dependent
 
@@ -45,9 +52,11 @@
 395
 - Update to CloudMicrophysics 0.38.1
 
+
 394
 - Species-consistent hyperdiffusion.
 - Apply sgs microphyiscs constraints.
+
 
 393
 - Change min_area_limiter_scale and turb_entr_param_vec in EDMF TOMLs

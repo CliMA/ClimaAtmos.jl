@@ -759,12 +759,6 @@ function get_detrainment_model(parsed_args)
     end
 end
 
-function get_tracers(parsed_args)
-    aerosol_names = Tuple(parsed_args["prescribed_aerosols"])
-    time_varying_trace_gas_names = Tuple(parsed_args["time_varying_trace_gases"])
-    return (; aerosol_names, time_varying_trace_gas_names)
-end
-
 function check_case_consistency(parsed_args)
     ic = parsed_args["initial_condition"]
     surf = parsed_args["surface_setup"]
@@ -1023,5 +1017,14 @@ function COSPModel(config::AtmosConfig)
     return COSPModel(;
         n_subcolumns = Val(n_subcolumns),
         overlap,
+    )
+end
+
+function AtmosAerosols(config::AtmosConfig, params)
+    pa = config.parsed_args
+    return AtmosAerosols(
+        Tuple(pa["prescribed_aerosols"]),
+        Tuple(pa["prognostic_aerosols"]);
+        params.prognostic_aerosol_params,
     )
 end
