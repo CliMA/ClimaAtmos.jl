@@ -4,21 +4,36 @@ using ClimaAtmos
 using Base.CoreLogging
 using DocumenterCitations
 using DocumenterInterLinks
+import DocInventories
 
 disable_logging(Base.CoreLogging.Info) # Hide doctest's `@info` printing
 bib = CitationBibliography(joinpath(@__DIR__, "bibliography.bib"))
+# The default inventory-download timeout (1 s) fails on slow networks; allow
+# more time and retries so the build does not depend on network latency.
+inventory(url) = DocInventories.Inventory(url; timeout = 30.0, retries = 5)
 links = InterLinks(
-    "Julia" => "https://docs.julialang.org/en/v1/objects.inv",
-    "ClimaComms" => "https://clima.github.io/ClimaComms.jl/stable/objects.inv",
-    "ClimaCore" => "https://clima.github.io/ClimaCore.jl/stable/objects.inv",
-    "ClimaDiagnostics" => "https://clima.github.io/ClimaDiagnostics.jl/stable/objects.inv",
-    "ClimaTimeSteppers" => "https://clima.github.io/ClimaTimeSteppers.jl/stable/objects.inv",
-    "CloudMicrophysics" => "https://clima.github.io/CloudMicrophysics.jl/stable/objects.inv",
-    "RRTMGP" => "https://clima.github.io/RRTMGP.jl/stable/objects.inv",
-    "Thermodynamics" => "https://clima.github.io/Thermodynamics.jl/stable/objects.inv",
+    "Julia" => inventory("https://docs.julialang.org/en/v1/objects.inv"),
+    "ClimaComms" =>
+        inventory("https://clima.github.io/ClimaComms.jl/stable/objects.inv"),
+    "ClimaCore" => inventory("https://clima.github.io/ClimaCore.jl/stable/objects.inv"),
+    "ClimaDiagnostics" =>
+        inventory("https://clima.github.io/ClimaDiagnostics.jl/stable/objects.inv"),
+    "ClimaTimeSteppers" =>
+        inventory("https://clima.github.io/ClimaTimeSteppers.jl/stable/objects.inv"),
+    "CloudMicrophysics" =>
+        inventory("https://clima.github.io/CloudMicrophysics.jl/stable/objects.inv"),
+    "RRTMGP" => inventory("https://clima.github.io/RRTMGP.jl/stable/objects.inv"),
+    "Thermodynamics" =>
+        inventory("https://clima.github.io/Thermodynamics.jl/stable/objects.inv"),
     # ClimaUtilities, ClimaParams, and SurfaceFluxes do not publish inventories
     # (objects.inv); pages link to them with plain URLs checked by linkcheck.
 )
+# Fail fast if a docstring cross-references a symbol that no page renders; such
+# a reference is invisible until its own docstring is added to a page, and then
+# breaks the build in an unrelated pull request.
+include(joinpath(@__DIR__, "check_docstring_refs.jl"))
+check_docstring_refs(ClimaAtmos, joinpath(@__DIR__, "src"))
+
 include(joinpath(@__DIR__, "src", "config_table.jl"))
 doctest(ClimaAtmos; plugins = [bib, links])
 disable_logging(Base.CoreLogging.BelowMinLevel) # Re-enable all logging
@@ -41,7 +56,7 @@ makedocs(;
         prettyurls = !isempty(get(ENV, "CI", "")),
         collapselevel = 1,
         mathengine = MathJax3(),
-        size_threshold_ignore = ["available_diagnostics.md"],
+        size_threshold_ignore = ["available_diagnostics.md", "api.md"],
     ),
     pages = [
         "Home" => "index.md",
@@ -93,6 +108,7 @@ makedocs(;
             "Passive Tracers" => "passive_tracers.md",
             "Trace Gases (Radiation)" => "trace_gases.md",
             "Available Diagnostics" => "available_diagnostics.md",
+            "Notation and Symbols" => "notation.md",
             "Glossary" => "glossary.md",
             "Bibliography" => "references.md",
         ],

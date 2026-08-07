@@ -21,7 +21,7 @@ slots, each defaulting to the ERA5-case behavior:
     Pass `TimeVaryingInsolation(; latitude, longitude, start_date)` for
     astronomically-computed insolation.
 
-## Example
+# Examples
 
 ```julia
 setup = ForcingFromFile("path/to/era5_forcing.nc", "20070701")

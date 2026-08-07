@@ -8,14 +8,23 @@ import ClimaCore: Geometry
 """
     lilly_stratification_correction(Y, p, ᶜS)
 
-Return a lazy representation of the Lilly stratification correction factor
-based on the local Richardson number.
+Return a lazy broadcast of the Lilly stratification correction factor
+`fb = (1 - Ri/Pr_t)^(1/4)` for `0 < Ri < Pr_t`, and `fb = 1` for `Ri ≤ 0`, where
+`Ri = N²/|S|²` is the local gradient Richardson number [-].
+
+The buoyancy frequency `N²` is computed from the virtual potential temperature, and `|S|`
+is the vertical (`WAxis`) strain rate norm. The vertical gradient of `θ_v` is materialized
+into `p.scratch.ᶜtemp_scalar`, so the returned broadcast must be consumed before that
+scratch field is reused.
 
 # Arguments
 
   - `Y`: The model state.
-  - `p`: The model parameters, e.g. `AtmosCache`.
-  - `ᶜS`: The cell-centered strain rate tensor.
+  - `p`: The simulation cache (`AtmosCache`); reads `ᶜT`, `ᶜq_tot_nonneg`, `ᶜq_liq`, and
+    `ᶜq_ice` from `p.precomputed`.
+  - `ᶜS`: The cell-center strain rate tensor [1/s].
+
+Called from `set_smagorinsky_lilly_precomputed_quantities!`.
 """
 function lilly_stratification_correction(Y, p, ᶜS)
     (; ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice) = p.precomputed
@@ -44,30 +53,34 @@ function lilly_stratification_correction(Y, p, ᶜS)
 end
 
 """
-    set_smagorinsky_lilly_precomputed_quantities!(Y, p)
+    set_smagorinsky_lilly_precomputed_quantities!(Y, p, model)
 
-Compute the Smagorinsky-Lilly horizontal and vertical quantities needed for
-subgrid-scale diffusive tendencies
+Compute the Smagorinsky-Lilly quantities needed by the subgrid-scale diffusive tendencies
+and store them in `p.precomputed`; return `nothing`.
 
-The subgrid-scale momentum flux tensor is defined by `τ = -2 νₜ ∘ S`,
-where `νₜ` is the Smagorinsky-Lilly eddy viscosity and `S` is the strain rate tensor.
+The eddy viscosity is `νₜ = L² |S|` and the turbulent diffusivity is `D = νₜ / Pr_t`,
+where `Pr_t` is the turbulent Prandtl number at neutral stratification. For `axes = :UVW`
+a single isotropic mixing length `L = c_smag ∛(Δx Δy Δz) fb` is used; otherwise the
+horizontal length is `c_smag Δx` and the vertical length is `c_smag Δz fb`, with `fb` the
+Lilly stratification correction from `lilly_stratification_correction`.
 
-The turbulent diffusivity is defined as `D = νₜ / Pr_t`,
-where `Pr_t` is the turbulent Prandtl number for neutral stratification.
+Mutates the following fields of `p.precomputed`:
 
-This method precomputes and stores in `p.precomputed` the following quantities:
+  - `ᶜS`, `ᶠS`: strain rate tensor on centers and faces [1/s].
+  - `ᶜS_norm_h`, `ᶜS_norm_v`: horizontal and vertical strain rate norms on centers [1/s].
+  - `ᶜνₜ_h`, `ᶜνₜ_v`: horizontal and vertical eddy viscosities on centers [m²/s].
+  - `ᶜD_h`, `ᶜD_v`: horizontal and vertical eddy diffusivities on centers [m²/s].
 
-  - strain on centers and faces: `ᶜS`, `ᶠS`
-
-  - horizontal and vertical strain rate norm, eddy viscosities, and diffusivities, on centers:
-
-      + `ᶜS_norm_h`, `ᶜS_norm_v`, `ᶜνₜ_h`, `ᶜνₜ_v`, `ᶜD_h`, `ᶜD_v`
+The `::Nothing` method is a no-op for runs without a Smagorinsky-Lilly model.
 
 # Arguments
 
   - `Y`: The model state.
-  - `p`: The model parameters, e.g. `AtmosCache`.
-  - `model`: The Smagorinsky model type
+  - `p`: The simulation cache (`AtmosCache`).
+  - `model`: The `SmagorinskyLilly` model instance (or `nothing`).
+
+See also `horizontal_smagorinsky_lilly_tendency!` and
+`vertical_smagorinsky_lilly_tendency!`, which consume these quantities.
 """
 function set_smagorinsky_lilly_precomputed_quantities!(Y, p, model)
     (; ᶜu, ᶠu, ᶜS, ᶠS, ᶜL_h, ᶜL_v, ᶜS_norm_h, ᶜS_norm_v, ᶜνₜ_h, ᶜνₜ_v, ᶜD_h, ᶜD_v) =
@@ -114,6 +127,22 @@ set_smagorinsky_lilly_precomputed_quantities!(Y, p, ::Nothing) = nothing
 horizontal_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, ::Nothing) = nothing
 vertical_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, ::Nothing) = nothing
 
+"""
+    horizontal_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, model)
+
+Add the horizontal Smagorinsky-Lilly subgrid-scale flux divergences to `Yₜ` in place;
+return `nothing`.
+
+Momentum receives `-∇ₕ·(ρ τ)/ρ` with the SGS momentum flux tensor `τ = -2 νₜ_h S`; total
+energy receives `+∇ₕ·(ρ D_h ∇ₕh_tot)`; each grid-scale tracer `χ` receives
+`+∇ₕ·(ρ D_h ∇ₕχ)`, and the `ρq_tot` diffusion is also added to `Yₜ.c.ρ` so that moisture
+diffusion conserves mass. Reads `ᶜS`, `ᶠS`, `ᶜνₜ_h`, `ᶜD_h`, and `ᶜh_tot` from
+`p.precomputed` (set by `set_smagorinsky_lilly_precomputed_quantities!`).
+
+This tendency is always applied explicitly. It is a no-op unless the model's axes include
+the horizontal directions (`is_smagorinsky_horizontal`); the `::Nothing` method is a
+no-op. See also `vertical_smagorinsky_lilly_tendency!`.
+"""
 function horizontal_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, model::SmagorinskyLilly)
     is_smagorinsky_horizontal(model) || return nothing
     (; ᶜS, ᶠS, ᶜνₜ_h, ᶜD_h) = p.precomputed
@@ -149,6 +178,23 @@ function horizontal_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, model::Smagorinsk
     end
 end
 
+"""
+    vertical_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, model)
+
+Add the vertical Smagorinsky-Lilly subgrid-scale flux divergences to `Yₜ` in place;
+return `nothing`.
+
+Momentum receives `-∇ᵥ·(ρ τ)/ρ` with the SGS momentum flux tensor `τ = -2 νₜ_v S`; total
+energy and each grid-scale tracer receive the vertical diffusive-flux divergence
+`ᶜdiffusive_flux_divergenceᵥ` with face diffusivity `ᶠρ D_v` (subtracted, since it is a
+flux divergence), and the `ρq_tot` diffusion is also applied to `Yₜ.c.ρ` so that moisture
+diffusion conserves mass. Reads `ᶜS`, `ᶠS`, `ᶜνₜ_v`, and `ᶜh_tot` from `p.precomputed`.
+
+This tendency is always applied explicitly, including the vertical diffusion; it is not
+part of the implicit solver. It is a no-op unless the model's axes include the vertical
+direction (`is_smagorinsky_vertical`); the `::Nothing` method is a no-op. See also
+`horizontal_smagorinsky_lilly_tendency!`.
+"""
 function vertical_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, model::SmagorinskyLilly)
     is_smagorinsky_vertical(model) || return nothing
     (; ᶜS, ᶠS, ᶜνₜ_v) = p.precomputed

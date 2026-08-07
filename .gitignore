@@ -58,3 +58,7 @@ MEMORY.md
 .agents
 # Claude Code worktrees
 .claude/worktrees/
+
+# Python bytecode from the .dev/ helper scripts
+__pycache__/
+*.pyc

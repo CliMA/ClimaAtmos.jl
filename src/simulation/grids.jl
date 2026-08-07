@@ -220,7 +220,7 @@ Create a SliceXZGrid with topography support.
   - `x_max = 300000.0`: the domain maximum along the x-direction
   - `z_elem = 10`: the number of z-points
   - `z_max = 30000.0`: the domain maximum along the z-direction
-  - `z_mesh = DefaultZMesh(FT; z_min = 0, z_max, z_elem, z_stretch)`: the vertical mesh
+  - `z_mesh`: Optionally provide a custom z-mesh, instead of `z_elem`, `z_max`, `z_stretch`
   - `nh_poly = 3`: the polynomial order. Note: The number of quadrature points in
     1D within each horizontal element is then `n_quad_points = nh_poly + 1`
   - `z_stretch = true`: whether to use vertical stretching
@@ -276,7 +276,16 @@ end
     hypsography_function_from_topography(
         FT, topography, topography_damping_factor, mesh_warp_type, topo_smoothing)
 
-Create a hypsography function that handles topography integration.
+Create the `(h_grid, z_grid) -> hypsography` function that a ClimaCore extruded grid uses
+to warp its levels onto the surface elevation.
+
+The returned closure gives `Grids.Flat()` for `NoTopography`. Otherwise it evaluates the
+surface elevation on the horizontal space — read from the orography artifact for
+`EarthTopography`, and from the analytic profile of the topography type otherwise — and
+smooths it: Earth topography is always diffused, with the number of iterations set by
+`topography_damping_factor`, and analytic topography only when `topo_smoothing` is set.
+The elevation is then turned into a `SLEVEAdaption` or a `LinearAdaption` according to
+`mesh_warp_type`.
 """
 function hypsography_function_from_topography(
     ::Type{FT},
@@ -350,7 +359,11 @@ get_stretching(::Type{FT}, z_stretch, dz_bottom) where {FT} =
 """
     get_spaces(grid)
 
-Create center and face spaces from a ClimaCore grid.
+Create the center and face spaces of a ClimaCore grid, returned as
+`(; center_space, face_space)`.
+
+Supports extruded grids (sphere, box, plane) and single-column finite difference grids;
+any other grid type raises an error.
 """
 function get_spaces(grid)
     if grid isa Grids.ExtrudedFiniteDifferenceGrid

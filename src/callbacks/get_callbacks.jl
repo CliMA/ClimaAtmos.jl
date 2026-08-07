@@ -12,15 +12,32 @@ const _DIAG_ALLOWED_REDUCTIONS = Dict(
 """
     scheduled_diagnostics_from_specs(specs, Y, t_start, start_date, writers)
 
-Convert a list of YAML-style diagnostic spec dicts into a flat
-`Vector{ScheduledDiagnostic}`. Each spec must contain at least `short_name`
-and `period`; supports optional `reduction_time`, `writer`, `output_name`,
-`pressure_coordinates`, and `compute_every`.
+Convert YAML-style diagnostic specs into a flat `Vector{ScheduledDiagnostic}`.
 
-`writers` is a tuple `(dict, hdf5, netcdf [, pressure_netcdf])` whose
-instances are bound to the resulting diagnostics' `output_writer` fields.
-Errors if any spec requests pressure coordinates but the writers tuple does
-not include a pressure NetCDFWriter.
+A spec's `short_name` may be a list, in which case it expands to one diagnostic per name;
+the result is flattened. Errors on an unknown reduction or writer, on a missing `period`,
+on combining a list of short names with an `output_name`, and on requesting pressure
+coordinates without a pressure writer or with a non-NetCDF writer.
+
+# Arguments
+
+  - `specs`: Iterable of `Dict{String, Any}` diagnostic specs. Each must have `short_name`
+    and `period`; `reduction_time`, `writer`, `output_name`, `pressure_coordinates`, and
+    `compute_every` are optional. Reduction and writer keys are matched case-insensitively.
+  - `Y`: The model state, used only for its float type.
+  - `t_start`: Start time of the simulation [s], or an `ITime`. Anchors the schedules.
+  - `start_date`: `Dates.DateTime` assigned to the start of the simulation.
+  - `writers`: Tuple `(dict, hdf5, netcdf)`, optionally extended with a fourth pressure
+    `NetCDFWriter`. The instances are bound to the diagnostics' `output_writer` fields.
+
+# Returns
+
+A `Vector` of `ClimaDiagnostics.ScheduledDiagnostic`.
+
+# Notes
+
+Without an explicit `compute_every`, a reduced diagnostic is computed every step, so the
+reduction sees every timestep; an unreduced one is computed only when it is written.
 """
 function scheduled_diagnostics_from_specs(
     specs,
@@ -134,8 +151,20 @@ end
         t_start,
     )
 
-Parse a frequency (e.g. "3months", "2steps", "10mins") into a schedule for
-diagnostics.
+Parse a frequency string into a diagnostics schedule.
+
+Recognizes `"<N>steps"`, which becomes a `DivisorSchedule` firing every `N` steps;
+`"<N>months"`; the calendar-aligned aliases `"monthly"`, `"weekly"`, and `"daily"`, which
+snap the anchor back to the start of the containing month, week, or day; and anything else
+`time_to_seconds` understands, such as `"10mins"` or `"6hours"`. Everything but the step
+form yields an `EveryCalendarDtSchedule` anchored at the date of `t_start`.
+
+# Arguments
+
+  - `FT`: Float type used to parse a duration in seconds.
+  - `frequency_str`: The frequency, as a string.
+  - `start_date`: `Dates.DateTime` assigned to the start of the simulation.
+  - `t_start`: Start time of the simulation [s], or an `ITime`.
 """
 function parse_frequency_to_schedule(
     ::Type{FT},
@@ -184,6 +213,21 @@ function parse_frequency_to_schedule(
     )
 end
 
+"""
+    parse_checkpoint_frequency(period::Number)
+    parse_checkpoint_frequency(period_str::AbstractString)
+
+Normalize a user-supplied checkpointing frequency.
+
+A number is read as seconds; a string is either `"<N>months"` or anything
+`time_to_seconds` understands, such as `"10days"`. `Inf` passes through unchanged and
+means no checkpointing, which is how `checkpoint_callback` and
+`validate_checkpoint_diagnostics_consistency` detect that they have nothing to do.
+
+# Returns
+
+A `Dates.Second`, a `Dates.Month`, or `Inf`.
+"""
 function parse_checkpoint_frequency(period::Number)
     period == Inf && return Inf
     # Treat number as seconds
@@ -205,9 +249,22 @@ end
 """
     validate_checkpoint_diagnostics_consistency(checkpoint_frequency, periods_reductions)
 
-Validate that checkpoint frequency is an integer multiple of all diagnostics accumulation periods.
+Warn if the checkpointing frequency is not a multiple of every diagnostic accumulation
+period.
 
-Warns if inconsistent, which could prevent safe restarts from checkpoints.
+A checkpoint taken mid-accumulation cannot restore the partially accumulated diagnostic,
+so restarting from it silently changes the affected time means. Making the checkpoint
+frequency an integer multiple of all accumulation periods guarantees that every checkpoint
+falls on a window boundary. Does nothing when `checkpoint_frequency` is `Inf`.
+
+# Arguments
+
+  - `checkpoint_frequency`: Normalized frequency from `parse_checkpoint_frequency`.
+  - `periods_reductions`: Accumulation periods, as returned by `extract_diagnostic_periods`.
+
+# Returns
+
+`nothing`. Inconsistencies are reported with `@warn`, not raised.
 """
 function validate_checkpoint_diagnostics_consistency(
     checkpoint_frequency,
@@ -228,7 +285,24 @@ end
 #####
 ##### Reusable callback builder functions
 #####
+#
+# Every builder below returns a *tuple* of callbacks, empty when the feature is switched
+# off, so that callers can splat them together unconditionally. The model-specific ones are
+# assembled by `default_model_callbacks` and the rest by `common_callbacks`.
 
+"""
+    progress_logging_callback(dt, t_start, t_end)
+
+Build the walltime-reporting callback.
+
+Reports on a `CappedGeometricSeriesSchedule` capped at 5% of the total steps: frequently at
+the start of a run, when a user is still checking that it is healthy, then at most twenty
+times over the remainder.
+
+# Returns
+
+A one-element tuple holding a `DiscreteCallback`.
+"""
 function progress_logging_callback(dt, t_start, t_end)
     walltime_info = WallTimeInfo()
     tot_steps = ceil(Int, (t_end - t_start) / dt)
@@ -239,6 +313,14 @@ function progress_logging_callback(dt, t_start, t_end)
     return (CTS.DiscreteCallback(cond, affect!),)
 end
 
+"""
+    nan_checking_callback(check_nan_every::Int)
+
+Build the callback that scans the prognostic state for `NaN`.
+
+Returns an empty tuple when `check_nan_every` is zero or negative, disabling the check.
+See `check_nans`.
+"""
 function nan_checking_callback(check_nan_every::Int)
     if check_nan_every > 0
         return (
@@ -248,6 +330,18 @@ function nan_checking_callback(check_nan_every::Int)
     return ()
 end
 
+"""
+    graceful_exit_callback(output_dir)
+
+Build the callback that lets a user stop a running simulation from the filesystem.
+
+Polls `maybe_graceful_exit` every step and calls `terminate!` when a stop has been
+requested, so the run ends through the integrator with its output intact.
+
+# Returns
+
+A one-element tuple holding a `DiscreteCallback`.
+"""
 function graceful_exit_callback(output_dir)
     return (
         call_every_n_steps(
@@ -259,6 +353,15 @@ function graceful_exit_callback(output_dir)
     )
 end
 
+"""
+    checkpoint_callback(checkpoint_frequency, output_dir, start_date, t_start)
+
+Build the callback that writes state checkpoints to `output_dir`.
+
+Fires on a calendar schedule anchored at the date of `t_start`. Returns an empty tuple
+when `checkpoint_frequency` is `Inf`, disabling checkpointing. See
+`save_state_to_disk_func` for the file naming and contents.
+"""
 function checkpoint_callback(
     checkpoint_frequency,
     output_dir,
@@ -278,6 +381,25 @@ function checkpoint_callback(
     return ()
 end
 
+"""
+    gc_callback(comms_ctx)
+
+Build the callback that forces periodic garbage collection on distributed runs.
+
+Returns an empty tuple on a non-distributed context, leaving Julia's automatic collection
+alone. On a distributed context, ranks that collect at different times stall each other at
+the next communication, so GC is instead forced on a common step cadence: every
+`CLIMAATMOS_GC_NSTEPS` steps, default `1000`, skipping the call at initialization.
+
+# Examples
+
+```shell
+# Collect every 200 steps instead of the default 1000.
+CLIMAATMOS_GC_NSTEPS=200 mpiexec julia --project=.buildkite .buildkite/ci_driver.jl
+```
+
+See `gc_func` for what each collection logs.
+"""
 function gc_callback(comms_ctx)
     if is_distributed(comms_ctx)
         return (
@@ -291,6 +413,14 @@ function gc_callback(comms_ctx)
     return ()
 end
 
+"""
+    conservation_checking_callback()
+
+Build the callback that accumulates boundary energy fluxes for the conservation check.
+
+Runs every step, skipping initialization and including the final step, so the accumulated
+flux spans exactly the integrated interval. See `flux_accumulation!`.
+"""
 function conservation_checking_callback()
     return (
         call_every_n_steps(
@@ -301,6 +431,14 @@ function conservation_checking_callback()
     )
 end
 
+"""
+    scm_external_forcing_callback()
+
+Build the callback that refreshes single-column external forcing every step.
+
+See `external_driven_single_column!`. Installed by the `default_model_callbacks` method for
+`ExternalDrivenTVForcing`.
+"""
 function scm_external_forcing_callback()
     return (
         call_every_n_steps(
@@ -313,8 +451,24 @@ end
 """
     scheduled_callback(affect!, dt_str, dt, t_start, t_end[, checkpoint_frequency])
 
-Build a `call_every_dt` callback from a frequency string (e.g. "6hours"),
-handling ITime/FT conversion, promotion, and checkpoint validation.
+Build a `call_every_dt` callback from a frequency string.
+
+Shared backend of the physics-component callbacks. Converts `dt_str` (e.g. `"6hours"`) to
+seconds, wraps it in an `ITime`, and promotes it against the simulation's time
+quantities so the arithmetic stays exact.
+
+# Arguments
+
+  - `affect!`: Step function called as `affect!(integrator)`.
+  - `dt_str`: Interval between calls, as a frequency string.
+  - `dt`, `t_start`, `t_end`: Simulation timestep, start, and end, used for promotion.
+  - `checkpoint_frequency = nothing`: When given and finite, warns if the callback period is
+    not an even divisor of it. A callback that fires at a different phase after a restart
+    makes the run non-reproducible, since its effect persists between calls.
+
+# Returns
+
+A one-element tuple holding a `DiscreteCallback`.
 """
 function scheduled_callback(
     affect!,
@@ -338,6 +492,13 @@ function scheduled_callback(
     return (call_every_dt(affect!, dt_seconds),)
 end
 
+"""
+    radiation_callback(radiation_mode, dt_rad, dt, t_start, t_end, checkpoint_frequency)
+
+Build the callback that runs the RRTMGP radiation solve every `dt_rad`.
+
+Returns an empty tuple for any non-RRTMGP mode. See `rrtmgp_solver_callback!`.
+"""
 function radiation_callback(
     radiation_mode,
     dt_rad,
@@ -360,6 +521,14 @@ function radiation_callback(
     )
 end
 
+"""
+    subcol_callback(dt_subcol, dt, t_start, t_end, checkpoint_frequency)
+
+Build the callback that generates the COSP subcolumns every `dt_subcol`.
+
+Unconditional: whether COSP runs at all is decided by `subcol_callback_enabled`. See
+`subcol_model_callback!`.
+"""
 function subcol_callback(
     dt_subcol,
     dt,
@@ -377,9 +546,25 @@ function subcol_callback(
     )
 end
 
+"""
+    subcol_callback_enabled(model::AtmosModel, dt_subcol)
+
+Return whether the COSP subcolumn callback should be installed.
+
+True only when the model configures COSP *and* `dt_subcol` is finite, so `dt_subcol = "Inf"` switches COSP off without changing the model.
+"""
 subcol_callback_enabled(model::AtmosModel, dt_subcol) =
     !isnothing(model.cosp) && time_to_seconds(dt_subcol) != Inf
 
+"""
+    nogw_callback(non_orographic_gravity_wave, dt_nogw, dt, t_start, t_end,
+                  checkpoint_frequency)
+
+Build the callback that recomputes non-orographic gravity-wave drag every `dt_nogw`.
+
+Returns an empty tuple when the component is not a `NonOrographicGravityWave`. See
+`nogw_model_callback!`.
+"""
 function nogw_callback(
     non_orographic_gravity_wave,
     dt_nogw,
@@ -399,6 +584,15 @@ function nogw_callback(
     )
 end
 
+"""
+    ogw_callback(orographic_gravity_wave, dt_ogw, dt, t_start, t_end,
+                 checkpoint_frequency)
+
+Build the callback that recomputes orographic gravity-wave drag every `dt_ogw`.
+
+Returns an empty tuple when the component is not an `OrographicGravityWave`. See
+`ogw_model_callback!`.
+"""
 function ogw_callback(
     orographic_gravity_wave,
     dt_ogw,
@@ -420,24 +614,60 @@ end
 
 
 """
-    default_model_callbacks(model::AtmosModel; kwargs...)
+    default_model_callbacks(model::AtmosModel; dt_subcol = "Inf", kwargs...)
+    default_model_callbacks(component; kwargs...)
 
-Creates the tuple of model callbacks for any AtmosModel by calling
-`default_model_callbacks` on each physics component.
+Assemble the physics callbacks a model needs, by asking each of its components.
+
+The `AtmosModel` method handles COSP itself, then walks every field of the model — all but
+`disable_surface_flux_tendency`, which is a flag rather than a component — and
+concatenates what each returns. The fallback method returns `()`, so a component
+contributes callbacks only if it defines a method. Each component method also decides
+whether it is active at all: radiation returns `()` for non-RRTMGP modes, gravity waves
+for absent wave models, and so on.
+
+Every callback here exists because its parameterization is too expensive to evaluate each
+step. Each is recomputed on its own `dt_*` cadence and held fixed in the cache in between,
+so a longer cadence buys speed at the cost of resolving the parameterization in time.
 
 # Arguments
 
-  - `model::AtmosModel`: The atmospheric model configuration
+  - `model`: The `AtmosModel`, or one of its components.
 
 # Keyword Arguments
 
-  - `start_date`: Simulation start date
-  - `dt`: Simulation time step
-  - `t_start`: Start time
-  - `t_end`: End time
-  - `output_dir`: Output directory
-  - `checkpoint_frequency`: Checkpoint frequency
-  - Component-specific frequency overrides (dt_subcol, dt_rad, dt_nogw, etc.)
+  - `start_date`: `Dates.DateTime` assigned to the start of the simulation.
+  - `dt`: Simulation timestep [s].
+  - `t_start`, `t_end`: Start and end times of the simulation [s].
+  - `output_dir`: Output directory.
+  - `checkpoint_frequency`: Normalized checkpointing frequency, used to warn about cadences
+    that would break restart reproducibility. See `scheduled_callback`.
+  - `dt_subcol = "Inf"`: COSP subcolumn cadence. Consumed by the `AtmosModel` method and not
+    forwarded; the default disables COSP.
+  - `dt_rad = "6hours"`: RRTMGP radiation cadence, on the `AtmosRadiation` method.
+  - `dt_nogw = "3hours"`, `dt_ogw = "3hours"`: Gravity-wave cadences, on the
+    `AtmosGravityWave` method.
+
+# Returns
+
+A tuple of `DiscreteCallback`, possibly empty.
+
+# Examples
+
+Adding a callback for a new component is a matter of defining one method. Cadences reach
+it through `callback_kwargs`:
+
+```julia
+import ClimaAtmos as CA
+
+CA.default_model_callbacks(forcing::MyCaseForcing; dt = nothing, t_start, t_end,
+    checkpoint_frequency, kwargs...) =
+    CA.scheduled_callback(
+        my_forcing_callback!, "1hours", dt, t_start, t_end, checkpoint_frequency,
+    )
+
+simulation = CA.AtmosSimulation{Float64}(; callback_kwargs = (; dt_rad = "3hours"))
+```
 """
 function default_model_callbacks(model::AtmosModel;
     dt_subcol = "Inf",
@@ -515,17 +745,46 @@ default_model_callbacks(::ExternalDrivenTVForcing; kwargs...) =
     scm_external_forcing_callback()
 
 """
-    common_callbacks(model, dt, output_dir, start_date, t_start, t_end, comms_ctx, checkpoint_frequency; kwargs...)
+    common_callbacks(model, dt, output_dir, start_date, t_start, t_end, comms_ctx,
+                     checkpoint_frequency; kwargs...)
 
-Get commonly used callbacks like progress logging, NaN checking, conservation, etc.
-These are not model-specific but are frequently needed across simulations.
+Assemble the infrastructure callbacks that are not tied to any physics component.
+
+In order: progress logging, NaN detection, graceful exit, checkpointing, garbage
+collection, and conservation checking. Graceful exit is always installed; the rest are
+conditional on their keyword arguments, on `checkpoint_frequency` being finite, or on the
+context being distributed.
+
+Together with `default_model_callbacks`, this is what `AtmosSimulation` installs when its
+`default_callbacks` keyword is `true`, which is the default. Setting `default_callbacks = false` *replaces* both sets with the user's `callbacks` tuple rather than adding to them,
+so a simulation configured that way has no checkpointing, NaN checks, or progress logging
+unless the user supplies them.
+
+# Arguments
+
+  - `model`: The `AtmosModel`. Currently unused; accepted for signature stability.
+  - `dt`: Simulation timestep [s].
+  - `output_dir`: Directory for checkpoints and the graceful-exit file.
+  - `start_date`: `Dates.DateTime` assigned to the start of the simulation.
+  - `t_start`, `t_end`: Start and end times of the simulation [s].
+  - `comms_ctx`: `ClimaComms` context; garbage collection is forced only if it is
+    distributed.
+  - `checkpoint_frequency`: Normalized checkpointing frequency, or `Inf` for none.
 
 # Keyword Arguments
 
-  - `log_progress::Bool = true`: Emit periodic progress logging callback.
-  - `check_nan_every::Int = 1024`: Step cadence for the NaN-detection callback.
-    Set to `0` to disable.
-  - `check_conservation::Bool = false`: Enable the conservation-check callback.
+  - `log_progress::Bool = true`: Whether to emit periodic walltime reports.
+  - `check_nan_every::Int = 1024`: Step cadence of the NaN-detection callback. Set to `0` to
+    disable. Scanning the whole state is not free, hence the cadence.
+  - `check_conservation::Bool = false`: Whether to accumulate boundary energy fluxes for the
+    conservation diagnostics.
+
+Unrecognized keyword arguments are ignored, so the same `callback_kwargs` can be passed to
+both this and `default_model_callbacks`.
+
+# Returns
+
+A tuple of `DiscreteCallback`.
 """
 function common_callbacks(
     model, dt, output_dir, start_date, t_start, t_end, comms_ctx, checkpoint_frequency;

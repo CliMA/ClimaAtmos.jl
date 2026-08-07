@@ -7,29 +7,44 @@ import ClimaCore: Spaces, Fields
 """
     implicit_precomputed_quantities(Y, atmos)
 
-Allocates precomputed quantities that are treated implicitly (i.e., updated
-on each iteration of the implicit solver). This includes all quantities related
-to velocity and thermodynamics that are used in the implicit tendency.
+Allocate the precomputed quantities that are treated implicitly, i.e., updated
+on each iteration of the implicit solver. This includes all velocity and
+thermodynamic quantities used in the implicit tendency.
 
-The following grid-scale quantities are treated implicitly and are precomputed:
+# Returns
 
-  - `ᶜu`: covariant velocity on cell centers
-  - `ᶠu`: contravariant velocity on cell faces
-  - `ᶜK`: kinetic energy on cell centers
-  - `ᶜT`: air temperature on cell centers
-  - `ᶜq_tot_nonneg`: total water specific humidity, clipped to ≥ 0
-  - `ᶜq_liq`: total liquid water (cloud liquid + rain), clipped to ≥ 0
-  - `ᶜq_ice`: total ice water (cloud ice + snow), clipped to ≥ 0
-  - `ᶜp`: air pressure on cell centers
-    If the `turbconv_model` is `PrognosticEDMFX`, there also two SGS versions of
-    every quantity except for `ᶜp` (which is shared across all subdomains):
-  - `_⁰`: value for the environment
-  - `_ʲs`: a tuple of values for the mass-flux subdomains
-    In addition, there are several other SGS quantities for `PrognosticEDMFX`:
-  - `ᶜρʲs`: a tuple of the air densities of the mass-flux subdomains on cell
-    centers
+A `NamedTuple` of fields containing, on the grid scale:
 
-TODO: Rename `ᶜK` to `ᶜκ`.
+  - `ᶜu`: Velocity on cell centers, in the local covariant basis
+    (`Covariant123Vector`).
+  - `ᶠu³`: Third contravariant component of the velocity on cell faces [1/s].
+  - `ᶠu`: Velocity on cell faces, in the local contravariant basis
+    (`Contravariant123Vector`).
+  - `ᶜK`: Specific kinetic energy on cell centers [m²/s²].
+  - `ᶜT`: Air temperature on cell centers [K].
+  - `ᶜh_tot`: Total specific enthalpy on cell centers [J/kg].
+  - `ᶜp`: Air pressure on cell centers [Pa].
+  - `ᶜq_tot_nonneg`: Total water specific humidity, clipped to ≥ 0 [kg/kg].
+  - `ᶜq_liq`: Liquid water specific humidity (cloud liquid + rain), clipped to
+    ≥ 0 [kg/kg].
+  - `ᶜq_ice`: Ice water specific humidity (cloud ice + snow), clipped to ≥ 0 [kg/kg].
+  - `ᶜsa_result`: Saturation-adjustment result `(; T, q_liq, q_ice)`; only for
+    `EquilibriumMicrophysics0M`.
+
+If the `turbconv_model` is `PrognosticEDMFX`, there are also SGS versions of the
+velocity and thermodynamic quantities (`ᶜp` is shared across all subdomains):
+
+  - `_⁰` suffix: value for the environment (`ᶠu₃⁰`, `ᶜu⁰`, `ᶠu³⁰`, `ᶜK⁰`, `ᶜT⁰`,
+    `ᶜq_tot_nonneg⁰`, `ᶜq_liq⁰`, `ᶜq_ice⁰`).
+  - `ʲs` suffix: tuples of values for the mass-flux subdomains (`ᶜuʲs`, `ᶠu³ʲs`,
+    `ᶜKʲs`, `ᶠKᵥʲs`, `ᶜTʲs`, `ᶜq_tot_nonnegʲs`, `ᶜq_liqʲs`, `ᶜq_iceʲs`), plus the
+    subdomain air densities `ᶜρʲs` [kg/m³].
+
+For implicit microphysics, Dual-compatible copies are also allocated: the
+density-weighted 0M sources `ᶜρ_dq_tot_dt` and `ᶜρ_de_tot_dt`, and (for all
+non-dry models) `surface_rain_flux`, `surface_snow_flux`, and
+`col_integrated_precip_energy_tendency`, which are rewritten from the current
+Newton iterate during the implicit solve.
 """
 function implicit_precomputed_quantities(Y, atmos)
     (; microphysics_model, turbconv_model) = atmos
@@ -126,9 +141,17 @@ end
 """
     precomputed_quantities(Y, atmos)
 
-Allocates all precomputed quantities. This includes the quantities treated
-implicitly (updated before each tendency evaluation), and also the quantities
-treated explicitly (updated only before explicit tendency evaluations).
+Allocate all precomputed quantities, i.e., the contents of `p.precomputed`.
+
+This includes the quantities treated implicitly (updated before each tendency
+evaluation; see `implicit_precomputed_quantities`) and the quantities treated
+explicitly (updated only before explicit tendency evaluations). Which fields
+are allocated depends on the model configuration: microphysics scheme,
+turbulence-convection model, SGS quadrature, COSP, and LES closures.
+
+# Returns
+
+A `NamedTuple` of fields keyed by quantity name.
 
 TODO: Reduce the number of cached values by computing them on the fly.
 """
@@ -455,7 +478,17 @@ function precomputed_quantities(Y, atmos)
         amd_les_quantities...)
 end
 
-# Interpolates the third contravariant component of Y.c.uₕ to cell faces.
+"""
+    compute_ᶠuₕ³(ᶜuₕ, ᶜρ)
+
+Return a lazy broadcast of the third contravariant component of the horizontal
+velocity `ᶜuₕ`, interpolated from centers to faces with the mass-weighted
+interpolation `ᶠwinterp(ρ J, ·)` [1/s].
+
+This component is nonzero wherever the coordinate surfaces are sloped, and so
+enters the impenetrability conditions applied by `set_velocity_at_surface!` and
+`set_velocity_at_top!`.
+"""
 function compute_ᶠuₕ³(ᶜuₕ, ᶜρ)
     ᶜJ = Fields.local_geometry_field(ᶜρ).J
     return @. lazy(ᶠwinterp(ᶜρ * ᶜJ, CT3(ᶜuₕ)))
@@ -464,10 +497,10 @@ end
 """
     set_velocity_at_surface!(Y, ᶠuₕ³, turbconv_model)
 
-Modifies `Y.f.u₃` so that `ᶠu³` is 0 at the surface. Specifically, since
+Modify `Y.f.u₃` so that `ᶠu³` is 0 at the surface. Specifically, since
 `u³ = uₕ³ + u³ = uₕ³ + u₃ * g³³`, setting `u³` to 0 gives `u₃ = -uₕ³ / g³³`. If
-the `turbconv_model` is EDMFX, the `Y.f.sgsʲs` are also modified so that each
-`u₃ʲ` is equal to `u₃` at the surface.
+the `turbconv_model` is `PrognosticEDMFX`, the `Y.f.sgsʲs` are also modified so
+that each `u₃ʲ` is equal to `u₃` at the surface. Returns `nothing`.
 """
 function set_velocity_at_surface!(Y, ᶠuₕ³, turbconv_model)
     sfc_u₃ = Fields.level(Y.f.u₃.components.data.:1, half)
@@ -481,6 +514,13 @@ function set_velocity_at_surface!(Y, ᶠuₕ³, turbconv_model)
     return nothing
 end
 
+"""
+    surface_velocity(ᶠu₃, ᶠuₕ³)
+
+Return a lazy broadcast of the covariant vertical velocity component at the
+surface that makes the contravariant vertical velocity vanish there,
+`u₃ = -uₕ³ / g³³`. Called from `set_velocity_at_surface!`.
+"""
 function surface_velocity(ᶠu₃, ᶠuₕ³)
     sfc_u₃ = Fields.level(ᶠu₃.components.data.:1, half)
     sfc_uₕ³ = Fields.level(ᶠuₕ³.components.data.:1, half)
@@ -488,6 +528,13 @@ function surface_velocity(ᶠu₃, ᶠuₕ³)
     return @. lazy(-sfc_uₕ³ / sfc_g³³) # u³ = uₕ³ + w³ = uₕ³ + w₃ * g³³
 end
 
+"""
+    top_velocity(ᶠu₃, ᶠuₕ³)
+
+Return a lazy broadcast of the covariant vertical velocity component at the model
+top that makes the contravariant vertical velocity vanish there,
+`u₃ = -uₕ³ / g³³`. Called from `set_velocity_at_top!`.
+"""
 function top_velocity(ᶠu₃, ᶠuₕ³)
     top_level = Spaces.nlevels(axes(ᶠu₃)) - half
     top_u₃ = Fields.level(ᶠu₃.components.data.:1, top_level)
@@ -499,12 +546,13 @@ end
 """
     set_velocity_at_top!(Y, ᶠuₕ³, turbconv_model)
 
-Modifies `Y.f.u₃` so that `ᶠu³` is 0 at the model top. As at the surface,
+Modify `Y.f.u₃` so that `ᶠu³` is 0 at the model top. As at the surface,
 since `u³ = uₕ³ + u₃ * g³³`, setting `u³` to 0 gives `u₃ = -uₕ³ / g³³`. This
 makes the total contravariant flux through the top boundary vanish even where
 terrain-following coordinate surfaces are still sloped at the model top
-(`g³ʰ ≠ 0`, so `uₕ³ ≠ 0`). If the `turbconv_model` is EDMFX, the `Y.f.sgsʲs`
-are also modified so that each `u₃ʲ` is equal to `u₃` at the model top.
+(`g³ʰ ≠ 0`, so `uₕ³ ≠ 0`). If the `turbconv_model` is `PrognosticEDMFX`, the
+`Y.f.sgsʲs` are also modified so that each `u₃ʲ` is equal to `u₃` at the model
+top. Returns `nothing`.
 """
 function set_velocity_at_top!(Y, ᶠuₕ³, turbconv_model)
     top_u₃ = Fields.level(
@@ -524,8 +572,17 @@ function set_velocity_at_top!(Y, ᶠuₕ³, turbconv_model)
     return nothing
 end
 
-# This is used to set the grid-scale velocity quantities ᶜu, ᶠu³, ᶜK based on
-# ᶠu₃, and it is also used to set the SGS quantities based on ᶠu₃⁰ and ᶠu₃ʲ.
+"""
+    set_velocity_quantities!(ᶜu, ᶠu³, ᶜK, ᶠu₃, ᶜuₕ, ᶠuₕ³)
+
+Set the velocity `ᶜu` at centers, the contravariant vertical velocity `ᶠu³` at
+faces, and the specific kinetic energy `ᶜK` at centers, from the vertical
+velocity `ᶠu₃` and the horizontal velocity `ᶜuₕ`. Mutates its first three
+arguments and returns `nothing`.
+
+Used both for the grid-scale quantities (from `Y.f.u₃`) and for the EDMFX
+subdomain quantities (from `ᶠu₃⁰` and each `ᶠu₃ʲ`).
+"""
 function set_velocity_quantities!(ᶜu, ᶠu³, ᶜK, ᶠu₃, ᶜuₕ, ᶠuₕ³)
     @. ᶜu = C123(ᶜuₕ) + ᶜinterp(C123(ᶠu₃))
     @. ᶠu³ = ᶠuₕ³ + CT3(ᶠu₃)
@@ -533,6 +590,17 @@ function set_velocity_quantities!(ᶜu, ᶠu³, ᶜK, ᶠu₃, ᶜuₕ, ᶠuₕ�
     return nothing
 end
 
+"""
+    set_sgs_ᶠu₃!(w_function, ᶠu₃, Y, turbconv_model)
+
+Set the SGS vertical velocity `ᶠu₃` at faces by applying `w_function` to the
+face-interpolated subdomain area-weighted densities, the subdomain vertical
+velocities, the face-interpolated grid-mean density, and the grid-mean vertical
+velocity. Mutates `ᶠu₃` and returns `nothing`.
+
+Passing `u₃⁰` as `w_function` recovers the environment vertical velocity from the
+grid mean and the drafts.
+"""
 function set_sgs_ᶠu₃!(w_function, ᶠu₃, Y, turbconv_model)
     ρaʲs(sgsʲs) = map(sgsʲ -> sgsʲ.ρa, sgsʲs)
     u₃ʲs(sgsʲs) = map(sgsʲ -> sgsʲ.u₃, sgsʲs)
@@ -546,6 +614,19 @@ function set_sgs_ᶠu₃!(w_function, ᶠu₃, Y, turbconv_model)
     return nothing
 end
 
+"""
+    add_sgs_ᶜK!(ᶜK, Y, ᶜρa⁰, ᶠu₃⁰, turbconv_model)
+
+Add the SGS contributions to the grid-mean specific kinetic energy `ᶜK`, i.e. the
+area-weighted variance of the environment and draft vertical velocities about the
+grid mean. Mutates `ᶜK` and returns `nothing`.
+
+!!! note
+
+    Currently unused: the call in `set_implicit_precomputed_quantities!` is
+    commented out because the exact increment depends circularly on `ᶜK` itself
+    through the subdomain densities. See the comment at that call site.
+"""
 function add_sgs_ᶜK!(ᶜK, Y, ᶜρa⁰, ᶠu₃⁰, turbconv_model)
     @. ᶜK += ᶜρa⁰ * ᶜinterp(dot(ᶠu₃⁰ - Y.f.u₃, CT3(ᶠu₃⁰ - Y.f.u₃))) / 2 / Y.c.ρ
     for j in 1:n_mass_flux_subdomains(turbconv_model)
@@ -557,17 +638,55 @@ function add_sgs_ᶜK!(ᶜK, Y, ᶜρa⁰, ᶠu₃⁰, turbconv_model)
     return nothing
 end
 
-# Combined getter function for thermodynamic state variables from saturation adjustment.
-# Returns a NamedTuple with T, q_liq, q_ice.
-# This avoids redundant saturation_adjustment calls for EquilibriumMicrophysics0M.
+"""
+    saturation_adjustment_tuple(thermo_params, ::TD.ρe, ρ, e_int, q_tot)
+
+Return `(; T, q_liq, q_ice)` from a density-internal-energy saturation
+adjustment.
+
+Bundling the three outputs into one `NamedTuple` keeps `EquilibriumMicrophysics0M`
+to a single `TD.saturation_adjustment` call per grid point. The `TD.ph`
+counterpart used for the EDMFX subdomains lives in
+`prognostic_edmf_precomputed_quantities.jl`.
+
+# Arguments
+
+  - `ρ`: Air density [kg/m³].
+  - `e_int`: Specific internal energy [J/kg].
+  - `q_tot`: Total water specific humidity [kg/kg].
+"""
 function saturation_adjustment_tuple(thermo_params, ::TD.ρe, ρ, e_int, q_tot)
     sa_result = TD.saturation_adjustment(thermo_params, TD.ρe(), ρ, e_int, q_tot)
     return (; T = sa_result.T, q_liq = sa_result.q_liq, q_ice = sa_result.q_ice)
 end
 
+"""
+    eddy_diffusivity_coefficient_H(D₀, H, z_sfc, z)
+
+Return the eddy diffusivity `D₀ exp(-(z - z_sfc) / H)` [m²/s], decaying
+exponentially with height above the surface. Called from
+`ᶜcompute_eddy_diffusivity_coefficient`.
+"""
 function eddy_diffusivity_coefficient_H(D₀, H, z_sfc, z)
     return D₀ * exp(-(z - z_sfc) / H)
 end
+
+"""
+    eddy_diffusivity_coefficient(C_E, norm_v_a, z_a, p)
+
+Return the eddy diffusivity `K_E = C_E |v_a| z_a` [m²/s] inside the planetary
+boundary layer, tapered by a Gaussian in pressure above it.
+
+The boundary layer top is fixed at 850 hPa and the taper scale is 100 hPa.
+Called from `ᶜcompute_eddy_diffusivity_coefficient`.
+
+# Arguments
+
+  - `C_E`: Bulk transfer coefficient for the vertical diffusion scheme [-].
+  - `norm_v_a`: Wind speed at the lowest model level [m/s].
+  - `z_a`: Height scale of the lowest model level [m].
+  - `p`: Air pressure [Pa].
+"""
 function eddy_diffusivity_coefficient(C_E, norm_v_a, z_a, p)
     p_pbl = 85000
     p_strato = 10000
@@ -578,17 +697,22 @@ end
 """
     set_implicit_precomputed_quantities!(Y, p, t)
 
-Updates the precomputed quantities that are handled implicitly based on the
+Update the precomputed quantities that are handled implicitly based on the
 current state `Y`. This is called before each evaluation of either
 `implicit_tendency!` or `remaining_tendency!`, and it includes quantities used
-in both tedencies.
+in both tendencies: the velocity fields (`ᶜu`, `ᶠu³`, `ᶠu`, `ᶜK`) and the
+thermodynamic fields (`ᶜT`, `ᶜq_tot_nonneg`, `ᶜq_liq`, `ᶜq_ice`, `ᶜh_tot`,
+`ᶜp`), plus their EDMFX subdomain versions when the `turbconv_model` is
+`PrognosticEDMFX`. When microphysics is timestepped implicitly, it also
+refreshes the density-weighted microphysics sources and surface precipitation
+fluxes via `update_implicit_microphysics_cache!`.
 
 This function also applies a "filter" to `Y` in order to ensure that `ᶠu³` is 0
-at the surface (i.e., to enforce the impenetrable boundary condition). If the
-`turbconv_model` is EDMFX, the filter also ensures that `ᶠu³⁰` and `ᶠu³ʲs` are 0
-at the surface. In the future, we will probably want to move this filtering
-elsewhere, but doing it here ensures that it occurs whenever the precomputed
-quantities are updated.
+at the surface and at the model top (i.e., to enforce the impenetrable boundary
+conditions). If the `turbconv_model` is `PrognosticEDMFX`, the filter does the
+same for each `ᶠu³ʲ`. In the future, we will probably want to move this
+filtering elsewhere, but doing it here ensures that it occurs whenever the
+precomputed quantities are updated.
 """
 NVTX.@annotate function set_implicit_precomputed_quantities!(Y, p, t)
     (; turbconv_model, microphysics_model) = p.atmos
@@ -716,7 +840,7 @@ NVTX.@annotate function set_implicit_precomputed_quantities!(Y, p, t)
         # Do nothing for other turbconv models for now
     end
 
-    # When microphysics is implicit, refresh ᶜS_ρq_tot / ᶜS_ρe_tot and the
+    # When microphysics is implicit, refresh ᶜρ_dq_tot_dt / ᶜρ_de_tot_dt and the
     # surface precipitation fluxes so that they reflect the current Y.
     # The surface flux fields have Dual-typed copies in
     # implicit_precomputed_quantities, so AD can write into them safely.
@@ -728,10 +852,16 @@ end
 """
     set_explicit_precomputed_quantities!(Y, p, t)
 
-Updates the precomputed quantities that are handled explicitly based on the
+Update the precomputed quantities that are handled explicitly based on the
 current state `Y`. This is only called before each evaluation of
 `remaining_tendency!`, though it includes quantities used in both
 `implicit_tendency!` and `remaining_tendency!`.
+
+Updates, in order: surface conditions, EDMFX explicit closures, SGS covariances
+and cloud fraction, face diffusivities, the master mixing length `ᶜl_mix`,
+precipitation terminal velocities, the microphysics tendency cache, surface
+precipitation fluxes, and the Smagorinsky-Lilly and AMD LES quantities (each
+step only when the corresponding model component is active). Returns `nothing`.
 """
 NVTX.@annotate function set_explicit_precomputed_quantities!(Y, p, t)
     (; turbconv_model) = p.atmos
@@ -776,10 +906,11 @@ NVTX.@annotate function set_explicit_precomputed_quantities!(Y, p, t)
         p.atmos.turbconv_model,
     )
     # Compute microphysics sources from grid mean and sub-domains.
-    # Always compute ᶜmp_tendency and ᶜS_ρq_tot here so both are fresh.
-    # When microphysics is implicit, the implicit stage will additionally
-    # refresh ᶜS_ρq_tot / ᶜS_ρe_tot from the (now-fresh) ᶜmp_tendency
-    # using the current Newton-iterate Y, avoiding the allocating BMT broadcast.
+    # Always compute ᶜmp_tendency (and, for 0M, ᶜρ_dq_tot_dt / ᶜρ_de_tot_dt)
+    # here so both are fresh. When microphysics is implicit, the implicit stage
+    # will additionally refresh ᶜρ_dq_tot_dt / ᶜρ_de_tot_dt from the (now-fresh)
+    # ᶜmp_tendency using the current Newton-iterate Y, avoiding the allocating
+    # BMT broadcast.
     set_microphysics_tendency_cache!(
         Y,
         p,
@@ -802,7 +933,9 @@ end
 """
     set_precomputed_quantities!(Y, p, t)
 
-Updates all precomputed quantities based on the current state `Y`.
+Update all precomputed quantities in `p.precomputed` based on the current
+state `Y`, by calling `set_implicit_precomputed_quantities!` and then
+`set_explicit_precomputed_quantities!`.
 """
 function set_precomputed_quantities!(Y, p, t)
     set_implicit_precomputed_quantities!(Y, p, t)

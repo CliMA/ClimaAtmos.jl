@@ -9,42 +9,34 @@ import ClimaCore: Fields
 """
     vertical_advection_of_water_tendency!(Yₜ, Y, p, t)
 
-Computes and applies tendencies to grid-mean density (`ρ`), total energy (`ρe_tot`),
-and total specific humidity (`ρq_tot`) due to sedimentation/precipitation of total water
-and its associated energy.
+Add the grid-mean tendencies from sedimentation of the water species and the
+energy they carry.
 
-This function is active only if the atmospheric model includes moisture (i.e.,
-is not a `DryModel`). The tendencies are calculated in a conservative form,
-`-∇ ⋅ F`, where `F` represents the vertical fluxes.
+Increments `Yₜ.c.ρ`, `Yₜ.c.ρq_tot`, and `Yₜ.c.ρe_tot`. For each sedimenting
+species present in `Y.c` (`ρq_lcl`, `ρq_icl`, `ρq_rai`, `ρq_sno`), the mass
+tendency is the conservative flux convergence `-∇⋅F` of the downward flux
+`ρ w q`, added to both density and total water, and the energy tendency carries
+the specific energy `e_int(T) + Φ + Kin(w, u)`, with `e_int` the liquid or ice
+internal energy, `w` the species terminal velocity, and `u` the air velocity.
+Face fluxes are reconstructed with a first-order (right-biased) upwind scheme and
+diverged with `ᶜprecipdivᵥ`. Species not carried by the state are skipped, so the
+function is inactive for a `DryModel`.
 
-Fluxes at cell faces are reconstructed using a first-order upwind scheme.
-Specifically, face-valued density (`ᶠρ`) is multiplied by a right-biased,
-negated cell-centered specific flux term. The resulting face flux
-is then diverged using the `ᶜprecipdivᵥ` operator.
+For `PrognosticEDMFX`, the grid-mean energy flux is corrected so it equals the sum
+of the subdomain (updraft and environment) fluxes: each correction is the
+subdomain sedimentation mass flux times the difference between its specific energy
+and the grid-mean one (`Φ` cancels, being identical across subdomains). The
+environment mass flux is taken as the residual `ρqw - ρaʲqʲwʲ`, so the subdomain
+mass fluxes sum to the grid-mean flux by construction. This path currently assumes
+one updraft, and approximates the environment kinetic term with the grid-mean
+terminal velocity.
 
-Each sedimenting water species carries its specific internal, potential, and
-kinetic energy, `e_int(T) + Φ + Kin(w, u)`, where `w` is the species terminal
-velocity and `u` the air velocity. For `PrognosticEDMFX`, the grid-mean flux
-computed with grid-mean quantities is corrected so the grid-mean energy flux
-equals the sum of the subdomain (updraft and environment) fluxes: each
-subdomain correction is its sedimentation mass flux times the difference
-between its specific energy and the grid-mean one (`Φ` cancels). The
-environment mass flux is taken as the residual `ρqw - ρaʲqʲwʲ`, so the
-subdomain mass fluxes sum to the grid-mean flux by construction.
-
-Arguments:
-
-  - `Yₜ`: The tendency state vector, modified in place.
-  - `Y`: The current state vector.
-  - `p`: Cache containing parameters, precomputed fields (species terminal
-    velocities `ᶜwₗ`/`ᶜwᵢ`/`ᶜwᵣ`/`ᶜwₛ` and, for EDMFX, their updraft
-    counterparts and the subdomain temperatures and velocities),
-    and atmospheric model configurations.
-  - `t`: Current simulation time (not directly used in these calculations).
-
-Modifies:
-
-  - `Yₜ.c.ρ`, `Yₜ.c.ρe_tot`, and `Yₜ.c.ρq_tot` (always when moisture is present)
+Reads the precomputed terminal velocities `ᶜwₗ`, `ᶜwᵢ`, `ᶜwᵣ`, `ᶜwₛ` (and their
+updraft counterparts plus subdomain temperatures, densities, and velocities for
+EDMFX), the temperature `ᶜT`, the geopotential `ᶜΦ` from `p.core`, and scratch
+space; `t` is unused. Called from `implicit_tendency!`, so these terms are part of
+the implicitly treated vertical transport. See the "Microphysics" page of the docs
+(`docs/src/microphysics.md`). Returns `nothing`.
 """
 function vertical_advection_of_water_tendency!(Yₜ, Y, p, t)
 

@@ -8,34 +8,34 @@ import ClimaCore.Spaces as Spaces
 import ClimaCore.Fields as Fields
 
 """
-    large_scale_advection_tendency_ρq_tot(ᶜρ, thermo_params, ᶜp, t, ls_adv)
+    large_scale_advection_tendency_ρq_tot(ᶜρ, thermo_params, ᶜT, ᶜp, q_tot, q_liq, q_ice, t, ls_adv)
 
-Computes the tendency of the total water content (`ρq_tot`) due to prescribed
-large-scale advection of total specific humidity (`q_tot`).
+Return the `ρq_tot` tendency from prescribed large-scale advection of total
+specific humidity.
 
-If `ls_adv` is not a `LargeScaleAdvection` object (i.e., large-scale advection
-is not active), it returns `NullBroadcasted()`, resulting in no tendency.
+The profile function `ls_adv.prof_dqtdt(thermo_params, ᶜp, t, ᶜz)` supplies the
+prescribed advective tendency of `q_tot` [1/s], which is multiplied by the density
+to give the `ρq_tot` tendency.
 
-Otherwise, it retrieves a profile function `prof_dqtdt` from `ls_adv`. This
-function provides the prescribed advective tendency of `q_tot` (i.e.,
-``(\\partial q_{tot}/\\partial t)_{LS_adv}``) as a function of pressure (`ᶜp`),
-time (`t`), and height (`ᶜz`). The final tendency for `ρq_tot`
-is then computed as ``ᶜρ * (\\partial q_{tot}/\\partial t)_{LS_adv}``.
+# Arguments
 
-Arguments:
+  - `ᶜρ`: Cell-center air density [kg/m³].
+  - `thermo_params`: Thermodynamic parameters, passed to the profile function.
+  - `ᶜT`: Cell-center temperature; unused by this tendency [K].
+  - `ᶜp`: Cell-center pressure [Pa].
+  - `q_tot`, `q_liq`, `q_ice`: Specific humidities; unused by this tendency [kg/kg].
+  - `t`: Current simulation time [s].
+  - `ls_adv`: A `LargeScaleAdvection` object holding the profile functions, or any
+    other value when large-scale advection is inactive.
 
-  - `ᶜρ`: Cell-center air density field.
-  - `thermo_params`: Thermodynamic parameters.
-  - `ᶜp`: Cell-center pressure field.
-  - `t`: Current simulation time.
-  - `ls_adv`: `LargeScaleAdvection` object containing profile functions for tendencies,
-    or another type if large-scale advection is inactive.
+# Returns
 
-Returns:
+A lazy broadcast with `∂(ρq_tot)/∂t` [kg/m³/s], or a `NullBroadcasted()` when
+`ls_adv` is not a `LargeScaleAdvection`. The caller (`additional_tendency!`) adds
+it to `Yₜ.c.ρq_tot`.
 
-  - A `ClimaCore.Fields.Field`, or a lazy broadcast over ClimaCore Fields,
-    representing the tendency `∂(ρq_tot)/∂t` due to
-    large-scale advection of `q_tot`, or `NullBroadcasted` if inactive.
+The signature is shared with `large_scale_advection_tendency_ρe_tot` so both can be
+called with one argument tuple.
 """
 function large_scale_advection_tendency_ρq_tot(
     ᶜρ,
@@ -58,38 +58,38 @@ end
 """
     large_scale_advection_tendency_ρe_tot(ᶜρ, thermo_params, ᶜT, ᶜp, q_tot, q_liq, q_ice, t, ls_adv)
 
-Computes the tendency of total energy (`ρe_tot`) due to prescribed large-scale
-advection of temperature (`T`) and total specific humidity (`q_tot`).
+Return the `ρe_tot` tendency from prescribed large-scale advection of temperature
+and total specific humidity.
 
-If `ls_adv` is not a `LargeScaleAdvection` object, it returns `NullBroadcasted()`.
+The profile functions `ls_adv.prof_dTdt` and `ls_adv.prof_dqtdt`, both evaluated
+as `prof(thermo_params, ᶜp, t, z)`, supply the prescribed advective tendencies of
+`T` [K/s] and `q_tot` [1/s]. They are converted to an energy tendency with
 
-Otherwise, it retrieves profile functions `prof_dTdt` and `prof_dqtdt` from `ls_adv`,
-which provide the prescribed advective tendencies ``(\\partial T/\\partial t)_{LS_adv}``
-and ``(\\partial q_{tot}/\\partial t)_{LS_adv}``, respectively.
-The tendency for `ρe_tot` is then computed based on these, using the formula:
-`ρ * (cv_m * (∂T/∂t)_{LS_adv} + e_int_vapor(T) * (∂q_{tot}/∂t)_{LS_adv})`
-where `cv_m` is the specific heat at constant volume for the moist air mixture,
-and `e_int_vapor(T)` is the specific internal energy of water vapor at temperature `T`.
-This conversion accounts for the change in internal energy due to changes in
-temperature and the phase composition (assuming changes in `q_tot` primarily affect
-vapor for this energy calculation).
+```math
+ρ \\left( c_{v,m} \\, \\partial_t T + e_{int,vap}(T) \\, \\partial_t q_{tot} \\right)
+```
 
-Arguments:
+where `c_{v,m}` is the isochoric specific heat of the moist mixture and
+`e_{int,vap}` the specific internal energy of water vapor. No potential-energy
+term appears, because this represents horizontal advection at constant height.
 
-  - `ᶜρ`: Cell-center air density field.
+# Arguments
+
+  - `ᶜρ`: Cell-center air density [kg/m³].
   - `thermo_params`: Thermodynamic parameters.
-  - `ᶜT`: Cell-center temperature field.
-  - `ᶜp`: Cell-center pressure field.
-  - `q_tot`, `q_liq`, `q_ice`: Specific humidity fields.
-  - `t`: Current simulation time.
-  - `ls_adv`: `LargeScaleAdvection` object containing profile functions for tendencies,
-    or another type if large-scale advection is inactive.
+  - `ᶜT`: Cell-center temperature [K].
+  - `ᶜp`: Cell-center pressure [Pa].
+  - `q_tot`, `q_liq`, `q_ice`: Specific humidities of total water, cloud liquid, and
+    cloud ice [kg/kg].
+  - `t`: Current simulation time [s].
+  - `ls_adv`: A `LargeScaleAdvection` object holding the profile functions, or any
+    other value when large-scale advection is inactive.
 
-Returns:
+# Returns
 
-  - A `ClimaCore.Fields.Field`, or a lazy broadcast over ClimaCore Fields,
-    representing the tendency `∂(ρe_tot)/∂t` due to
-    large-scale advection of `T` and `q_tot`, or `NullBroadcasted` if inactive.
+A lazy broadcast with `∂(ρe_tot)/∂t` [W/m³], or a `NullBroadcasted()` when
+`ls_adv` is not a `LargeScaleAdvection`. The caller (`additional_tendency!`) adds
+it to `Yₜ.c.ρe_tot`.
 """
 function large_scale_advection_tendency_ρe_tot(
     ᶜρ,

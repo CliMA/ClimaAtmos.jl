@@ -5,10 +5,10 @@ The ISDAC (Indirect and Semi-Direct Aerosol Campaign) setup, with a
 hydrostatically balanced pressure profile. Profiles are sourced from
 AtmosphericProfilesLibrary.
 
-When `perturb` is true, applies pseudorandom temperature perturbations
-of amplitude 0.1 K below 825 m.
+When `perturb` is true, Gaussian perturbations with a standard deviation of
+0.1 K are added to the liquid-ice potential temperature below 825 m.
 
-## Example
+# Examples
 
 ```julia
 setup = ISDAC(; prognostic_tke = true, perturb = false, thermo_params)

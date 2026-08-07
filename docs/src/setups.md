@@ -7,6 +7,16 @@ thermodynamic and kinematic state through temperature, pressure or density,
 moisture, and velocity, and is converted into prognostic variables
 automatically based on the model configuration.
 
+## `initial_state`
+
+The entry point that builds the full prognostic state from a setup, calling
+`center_initial_condition` and `face_initial_condition` pointwise and assembling
+the prognostic variables selected by the model configuration.
+
+```@docs
+ClimaAtmos.Setups.initial_state
+```
+
 ## `center_initial_condition`
 
 Every setup must implement this method. It is called pointwise over the grid
@@ -136,6 +146,7 @@ ClimaAtmos.Setups.MoistAdiabaticProfileEDMFX
 
 ```@docs
 ClimaAtmos.Setups.GCMDriven
+ClimaAtmos.Setups.GCMDriven(::String, ::String)
 ClimaAtmos.Setups.ForcingFromFile
 ClimaAtmos.Setups.MoistFromFile
 ClimaAtmos.Setups.WeatherModel

@@ -5,9 +5,11 @@ import Statistics: mean
 """
     gcm_driven_profile_tmean(ds, varname)
 
-Extract time-averaged data for `varname` from the "profile" group in the GCM-driven dataset `ds`
+Extract `varname` from the GCM-driven dataset `ds` and average it over time.
 
-Returns a 1D ("z",) `Vector{FT}` of the time-averaged data.
+# Returns
+
+A 1D `Vector` over `z`.
 
 !!! note
 
@@ -21,9 +23,11 @@ end
 """
     gcm_driven_profile(ds, varname)
 
-Extract `varname` from the "profile" group in the GCM-driven dataset `ds`
+Extract the profile variable `varname` from the GCM-driven dataset `ds`.
 
-Returns a 2D ("z", "t") `Matrix` object.
+# Returns
+
+A 2D `Matrix` indexed by `("z", "t")`.
 
 !!! note
 
@@ -35,11 +39,14 @@ function gcm_driven_profile(ds, varname)
 end
 
 """
-    gcm_driven_reference(ds, varname)
+    gcm_height(ds)
 
-Extract `height` from the GCM-driven dataset `ds`
+Extract the geopotential height `zg` from the GCM-driven dataset `ds` and
+average it over time.
 
-Returns a 1D ("z",) `vec` object.
+# Returns
+
+A 1D `Vector` over `z` [m].
 
 !!! note
 
@@ -50,9 +57,10 @@ function gcm_height(ds)
     vec(mean(ds["zg"][:, :], dims = 2))
 end
 """
-# gcm_driven_timeseries(ds, varname)
+    gcm_driven_timeseries(ds, varname)
 
-# Get `varname` from the dataset `ds` and return values
+Extract the time series `varname` from the GCM-driven dataset `ds` as a 1D
+`Vector` over time.
 
 !!! note
 

@@ -7,12 +7,21 @@ using .SurfaceConditions: SurfaceTemperature, SlabOceanTemperature
 """
     surface_precipitation_tendency!(Yₜ, Y, p, t, temperature, microphysics_model)
 
-Applies the surface water and energy deposition from precipitation.
+Add the surface water and energy deposition from precipitation.
 
-Called from both `implicit_tendency!` (when microphysics is implicit) and
-`remaining_tendency!` (when microphysics is explicit), so that the surface
-deposition always uses the same cached `ᶜS_ρq_tot` as the atmospheric water
-removal, preserving conservation across IMEX stages.
+Only a `SlabOceanTemperature` surface with a moist microphysics model does
+anything; the other methods are no-ops. Decrements `Yₜ.sfc.T` by the
+column-integrated precipitation energy tendency divided by the slab heat capacity
+per unit area `ρ_ocean cp_ocean depth_ocean`, and decrements `Yₜ.sfc.water` by the
+sum of the surface rain and snow fluxes, so precipitation warms or cools the slab
+and adds water to it with the sign convention that fluxes are positive upward.
+
+Reads the precomputed `col_integrated_precip_energy_tendency`,
+`surface_rain_flux`, and `surface_snow_flux`; `t` is unused. Called from both
+`implicit_tendency!` (when microphysics is implicit) and `remaining_tendency!`
+(when it is explicit), so the surface deposition always uses the same cached
+microphysics sources as the atmospheric water removal, preserving conservation
+across IMEX stages.
 """
 surface_precipitation_tendency!(Yₜ, Y, p, t, _, _) = nothing
 
@@ -38,27 +47,31 @@ function surface_precipitation_tendency!(
 end
 
 """
-    surface_temp_tendency!(Yₜ, Y, p, t, temperature)
+    surface_temp_tendency!(Yₜ, Y, p, t, temperature::SurfaceTemperature)
+    surface_temp_tendency!(Yₜ, Y, p, t, temperature::SlabOceanTemperature)
 
-Computes the tendency for the prognostic surface temperature (`Y.sfc.T`) and,
-if applicable, prognostic surface water content (`Y.sfc.water`), based on
-surface energy and water fluxes. All fluxes are defined as positive when directed
-from the surface to the atmosphere (upward).
+Add the tendencies of the prognostic surface temperature `Y.sfc.T` and, when
+moisture is active, the surface water content `Y.sfc.water`.
 
-Dispatched on the surface temperature type:
+All fluxes are positive when directed upward, from the surface to the atmosphere,
+and are subtracted from the tendencies, so an upward flux cools and dries the
+surface. The first method is a no-op: for any `SurfaceTemperature` other than a
+slab ocean, `T` is prescribed or diagnosed. For `SlabOceanTemperature`:
 
-  - Anything other than `SlabOceanTemperature`: no tendency (T is fixed/diagnosed).
+  - `Yₜ.sfc.T` is decremented by the sum of the net upward radiative flux at the
+    surface, the upward turbulent energy flux (sensible plus latent heat), and the
+    idealized ocean heat-flux divergence `Q` (Q-flux, active only when
+    `slab.q_flux`), divided by the slab heat capacity per unit area
+    `ρ_ocean cp_ocean depth_ocean`. The Q-flux profile follows Merlis et al. (2013),
+    J. Climate 26, https://doi.org/10.1175/JCLI-D-12-00149.1.
+  - `Yₜ.sfc.water` is decremented by the upward turbulent water flux (evaporation).
 
-  - `SlabOceanTemperature` (slab model): calculates tendencies due to:
-
-      + Net upward radiative flux at the surface.
-      + Net upward turbulent surface energy flux (sensible + latent heat).
-      + Net ocean heat flux divergence in the slab (Q-flux), if enabled.
-      + For surface water: net upward turbulent surface water flux (evaporation).
-
-Precipitation surface deposition (energy and water) is handled separately by
-`surface_precipitation_tendency!`, which is called from both the implicit and
-explicit tendency paths.
+Both turbulent terms are dropped when `p.atmos.disable_surface_flux_tendency` is
+`true`, and the radiative term when there is no radiation model. Precipitation
+deposition of energy and water is handled separately by
+`surface_precipitation_tendency!`. Reads `p.radiation.ᶠradiation_flux` and
+`p.precomputed.sfc_conditions`; `t` is unused. Called from
+`additional_tendency!`, after the microphysics tendencies.
 """
 surface_temp_tendency!(Yₜ, Y, p, t, ::SurfaceTemperature) = nothing
 

@@ -1,31 +1,16 @@
 """
     hyperdiffusion_tendency!(Yₜ, Yₜ_lim, Y, p, t)
 
-Orchestrates the calculation and application of hyperdiffusion tendencies to the
-state vector `Y`.
+Orchestrate the prep → DSS → apply sequence of the hyperdiffusion tendencies.
 
-This function follows a sequence:
+Calls `prep_tracer_hyperdiffusion_tendency!` and `prep_hyperdiffusion_tendency!`
+to fill the `∇²` cache fields, DSSes them (via `dss_hyperdiffusion_tendency_pairs`)
+when the space requires DSS and hyperdiffusion is active, and then calls
+`apply_tracer_hyperdiffusion_tendency!` and `apply_hyperdiffusion_tendency!`.
 
- 1. Prepares hyperdiffusion tendencies for tracers (stored in `Yₜ_lim`).
- 2. Prepares hyperdiffusion tendencies for other state variables (e.g., momentum, energy, stored in `Yₜ`).
- 3. If Direct Stiffness Summation (DSS) is required and hyperdiffusion is active, performs DSS on the
-    prepared hyperdiffusion tendencies.
- 4. Applies the (potentially DSSed) hyperdiffusion tendencies to `Yₜ_lim` and `Yₜ`.
-
-The distinction between `Yₜ` and `Yₜ_lim` allows for separate handling, often
-because tracers might be subject to limiters applied via `Yₜ_lim`.
-
-Arguments:
-
-  - `Yₜ`: The main tendency state vector, modified in place.
-  - `Yₜ_lim`: The tendency state vector for tracers (often subject to limiters), modified in place.
-  - `Y`: The current state vector.
-  - `p`: Cache containing parameters, atmospheric model configuration (e.g., `p.atmos.hyperdiff`),
-    and data for DSS.
-  - `t`: Current simulation time.
-
-Helper functions `prep_..._tendency!`, `dss_hyperdiffusion_tendency_pairs`,
-and `apply_..._tendency!` implement the specific details of hyperdiffusion.
+Tracer tendencies accumulate into `Yₜ_lim`, which is subject to the tracer
+limiters, while momentum, energy, and TKE tendencies accumulate into `Yₜ`. Called
+from `remaining_tendency!`.
 """
 NVTX.@annotate function hyperdiffusion_tendency!(Yₜ, Yₜ_lim, Y, p, t)
     prep_tracer_hyperdiffusion_tendency!(Yₜ_lim, Y, p, t)
@@ -41,30 +26,24 @@ end
 """
     remaining_tendency!(Yₜ, Yₜ_lim, Y, p, t)
 
-Computes a set of explicit tendencies for the atmospheric model.
+Compute the explicit ("remaining") tendencies of the IMEX splitting.
 
-This function acts as a high-level orchestrator, zeroing out the tendency vectors
-`Yₜ` (for main model variables) and `Yₜ_lim` (for tracers) and then sequentially
-calling various component tendency functions to accumulate contributions from:
+Zeroes `Yₜ` and `Yₜ_lim`, then accumulates, in order:
 
-  - Horizontal advection (tracers and dynamics).
-  - Hyperdiffusion.
-  - Explicit vertical advection.
-  - Other specialized vertical advection (e.g., for water).
-  - A wide range of "additional" tendencies including sponge layers, physical
-    parameterizations, forcings, and EDMFX subgrid-scale processes.
+ 1. `horizontal_tracer_advection_tendency!` (into `Yₜ_lim`).
+ 2. `horizontal_dynamics_tendency!`.
+ 3. `hyperdiffusion_tendency!` (tracer part into `Yₜ_lim`).
+ 4. `explicit_vertical_advection_tendency!`.
+ 5. `additional_tendency!` (sponges, forcings, parameterizations, EDMFX SGS terms).
 
-Arguments:
+`Yₜ_lim` collects the tracer tendencies that are subject to the horizontal
+limiters (see `limiters_func!`); everything else accumulates into `Yₜ`. The
+implicitly treated counterparts (vertical acoustic/advective terms, diffusion when
+`p.atmos.diff_mode == Implicit()`) live in `implicit_tendency!`.
 
-  - `Yₜ`: The main tendency state vector, modified in place.
-  - `Yₜ_lim`: The tendency state vector for tracers, modified in place.
-  - `Y`: The current state vector.
-  - `p`: Cache containing parameters, precomputed fields, and model configurations.
-  - `t`: Current simulation time.
+# Returns
 
-Returns:
-
-  - `Yₜ`: The populated main tendency state vector.
+`Yₜ`, the populated main tendency vector.
 """
 NVTX.@annotate function remaining_tendency!(Yₜ, Yₜ_lim, Y, p, t)
     Yₜ_lim .= zero(eltype(Yₜ_lim))
@@ -85,16 +64,8 @@ import ClimaCore.Spaces as Spaces
 """
     z_coordinate_fields(space::Spaces.AbstractSpace)
 
-Extracts the `z` (vertical) coordinate fields from the cell centers (`ᶜz`)
-and cell faces (`ᶠz`) of a given `ClimaCore.Spaces.AbstractSpace`.
-
-Arguments:
-
-  - `space`: An `AbstractSpace` from which to derive center and face spaces.
-
-Returns:
-
-  - A `NamedTuple` with fields `ᶜz` and `ᶠz`, containing the vertical coordinate fields.
+Return a `NamedTuple` `(; ᶜz, ᶠz)` with the vertical coordinate fields [m] at the
+cell centers and cell faces of `space`.
 """
 function z_coordinate_fields(space::Spaces.AbstractSpace)
     ᶜz = Fields.coordinate_field(Spaces.center_space(space)).z
@@ -105,42 +76,32 @@ end
 """
     additional_tendency!(Yₜ, Y, p, t)
 
-Aggregates various "additional" physical parameterization, forcing, and
-subgrid-scale (SGS) tendency contributions into the main tendency vector `Yₜ`
-and tracer tendency vector `Yₜ_lim` (implicitly via calls to functions that might use it,
-though this function primarily modifies `Yₜ`).
+Aggregate the explicit physical-parameterization, forcing, and subgrid-scale
+tendencies into `Yₜ`.
 
-This function is a central hub for incorporating tendencies from:
+Accumulates contributions from:
 
-  - Sponge layers (viscous and Rayleigh).
-  - Idealized forcings (e.g., Held-Suarez).
-  - Single Column Model (SCM) specific terms (e.g., SCM Coriolis).
-  - Large-scale advection (often prescribed for test cases).
-  - Subsidence (prescribed in single-column configurations).
-  - External forcings.
-  - Explicitly handled components of the EDMFX SGS scheme (vertical advection,
-    diffusive fluxes, entrainment/detrainment, mass fluxes, non-hydrostatic pressure).
-  - EDMFX filter and TKE tendencies.
-  - Surface fluxes.
-  - Radiation.
-  - Cloud microphysics (condensation/evaporation).
-  - Precipitation processes (grid-scale and EDMFX).
-  - Surface temperature evolution.
-  - Pressure work terms.
-  - Smagorinsky-Lilly SGS turbulence.
-  - Gravity wave drag (orographic and non-orographic).
-  - Optional zeroing of velocity tendencies for specific tests.
+  - Sponge layers (viscous and Rayleigh), including grid-scale tracers, TKE, and
+    EDMFX updraft fields.
+  - Idealized Held-Suarez forcing (when `radiation_mode isa HeldSuarezForcing`).
+  - Single-column Coriolis forcing, prescribed large-scale advection, subsidence,
+    and external forcings (see `external_forcing_tendency!`).
+  - Vertical diffusion and EDMFX SGS diffusive fluxes, only when
+    `p.atmos.diff_mode == Explicit()` (implicit diffusion is applied in
+    `implicit_tendency!`).
+  - Surface fluxes, radiation, EDMFX TKE, and chemistry.
+  - Microphysics (condensation, precipitation) and surface precipitation, only when
+    `p.atmos.microphysics_tendency_timestepping == Explicit()`.
+  - Non-orographic and orographic gravity-wave drag.
+  - Surface temperature evolution, pressure work, Smagorinsky-Lilly, AMD LES, and
+    constant horizontal diffusion.
+  - Tracer nonnegativity restoration at the cost of water vapor, and finally
+    `zero_velocity_tendency!` for advection tests (which must remain last so no
+    later call reintroduces velocity tendencies).
 
-Arguments:
-
-  - `Yₜ`: The main tendency state vector, modified in place.
-  - `Y`: The current state vector.
-  - `p`: Cache containing parameters, precomputed fields, and extensive model configurations.
-  - `t`: Current simulation time.
-
-This function relies on numerous specialized sub-functions to calculate each
-distinct tendency component. The order of calls can be important due to
-dependencies or operator splitting assumptions.
+The order of calls matters: microphysics must precede `surface_temp_tendency!`
+(which reads the precipitation cache), and all `ρa` tendencies must precede
+`pressure_work_tendency!`. Called from `remaining_tendency!`. Returns `nothing`.
 """
 NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
 
@@ -329,9 +290,12 @@ end
 """
     fully_explicit_tendency!(Yₜ, Yₜ_lim, Y, p, t)
 
-Experimental timestepping mode where all implicit tendencies are treated
-explicitly. Used by `args_integrator` when `prescribed_flow` is set, to
-avoid implicit treatment of sound waves.
+Compute the full tendency explicitly, by evaluating `implicit_tendency!` into
+scratch space and adding it to `remaining_tendency!`.
+
+Experimental timestepping mode used by `args_integrator` when `prescribed_flow` is
+set, where the flow is imposed and implicit treatment of sound waves is
+unnecessary. Mutates `Yₜ`, `Yₜ_lim`, and `p.scratch.temp_Yₜ_imp`.
 """
 function fully_explicit_tendency!(Yₜ, Yₜ_lim, Y, p, t)
     (; temp_Yₜ_imp) = p.scratch

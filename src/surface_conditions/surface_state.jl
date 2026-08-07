@@ -2,6 +2,17 @@
 # sfc_<value> is a field of values at the surface, and likewise for
 # interior_<value> and int_<value>.
 
+"""
+    PrescribedFluxes
+
+Abstract supertype for prescribed surface turbulent fluxes, used as the
+`fluxes` field of a [`MoninObukhov`](@ref) closure.
+
+Subtypes:
+
+  - [`HeatFluxes`](@ref): sensible/latent heat fluxes, prescribed directly.
+  - [`θAndQFluxes`](@ref): kinematic θ and q fluxes, converted to heat fluxes per point.
+"""
 abstract type PrescribedFluxes{FT} end
 
 """
@@ -21,17 +32,24 @@ float_type(::Type{<:SurfaceParameterization{FT}}) where {FT} = FT
 """
     SurfaceBoundaryOverrides(; p, q_vap, u, v, gustiness, beta)
 
-Per-point overrides for surface boundary values used by `SurfaceFluxes`. Fields
-default to `nothing`, in which case sensible defaults are used:
+Per-point overrides for surface boundary values consumed by
+[`surface_state_to_conditions`](@ref). Fields default to `nothing`, in which
+case a default is used.
 
-  - `p`: surface pressure (default: hydrostatic from interior)
-  - `q_vap`: surface specific humidity (default: `q_vap_sat` at `T_sfc`)
-  - `u`, `v`: surface horizontal winds (default: 0)
-  - `gustiness`: turbulent gustiness (default: 1)
-  - `beta`: moisture availability (default: 1)
+# Fields
+
+  - `q_vap`: Surface specific humidity [kg/kg]. Default: saturation specific
+    humidity over liquid water at `T_sfc` and the surface density.
+  - `u`, `v`: Surface horizontal wind components [m/s]. Default: 0.
+  - `gustiness`: Additional gustiness wind speed [m/s]. Default: 1.
+  - `p`, `beta`: Stored but currently *not applied*: `surface_state_to_conditions`
+    only reads `q_vap`, `u`, `v`, and `gustiness`. The surface pressure/density
+    always come from `SurfaceFluxes.surface_density`, and no moisture-availability
+    factor is applied. These fields exist for interface compatibility.
 
 For the coupler use case, a `Fields.Field{<:SurfaceBoundaryOverrides}` may be
-stored on the cache so that the coupler can override per-cell values.
+stored on the cache (`p.sfc_setup`) so that an external driver can set
+per-cell values; see [`update_surface_conditions!`](@ref).
 """
 Base.@kwdef struct SurfaceBoundaryOverrides{PN, QN, UN, VN, GN, BN}
     p::PN = nothing
@@ -49,10 +67,12 @@ Prescribed surface turbulent energy fluxes, used as the `fluxes` field of a
 [`MoninObukhov`](@ref) closure. Both use the sign convention that positive is
 *upward* (directed from the surface into the atmosphere).
 
-  - `shf`: sensible heat flux (W/m²).
-  - `lhf`: latent heat flux (W/m²). Optional — `nothing` is treated as zero, and
-    `lhf` must be left unset for a `DryModel` (specifying it with a dry model is an
-    error).
+# Fields
+
+  - `shf`: Sensible heat flux [W/m²].
+  - `lhf`: Latent heat flux [W/m²]. Optional — `nothing` is treated as zero, and
+    `lhf` must be left unset for a `DryModel` (specifying it with a dry model is
+    an error).
 """
 Base.@kwdef struct HeatFluxes{FT, FTN <: Union{FT, Nothing}} <: PrescribedFluxes{FT}
     shf::FT
@@ -68,8 +88,10 @@ closure. They are converted per surface point into the sensible/latent heat
 fluxes actually applied, via `shf = θ_flux * ρ_sfc * cp_m` and
 `lhf = q_flux * ρ_sfc * Lᵥ`. Positive is *upward* (surface into atmosphere).
 
-  - `θ_flux`: potential-temperature flux (K·m/s).
-  - `q_flux`: total-specific-humidity flux (kg/kg·m/s). Optional — `nothing` is
+# Fields
+
+  - `θ_flux`: Potential-temperature flux [K m/s].
+  - `q_flux`: Total-specific-humidity flux [kg/kg m/s]. Optional — `nothing` is
     treated as zero, and `q_flux` must be left unset for a `DryModel`.
 """
 Base.@kwdef struct θAndQFluxes{FT, FTN <: Union{FT, Nothing}} <: PrescribedFluxes{FT}
@@ -87,8 +109,10 @@ coefficients — a [`SurfaceParameterization`](@ref) alternative to
 near-surface wind speed and the air–surface differences (rather than being
 derived from Monin–Obukhov stability).
 
-  - `Cd`: momentum (drag) exchange coefficient.
-  - `Ch`: thermal/scalar (heat and moisture) exchange coefficient.
+# Fields
+
+  - `Cd`: Momentum (drag) exchange coefficient [-].
+  - `Ch`: Thermal/scalar (heat and moisture) exchange coefficient [-].
 
 The single-argument form `ExchangeCoefficients(C)` sets `Cd = Ch = C`.
 """
@@ -101,34 +125,34 @@ ExchangeCoefficients(C) = ExchangeCoefficients(Cd = C, Ch = C)
 """
     MoninObukhov(; z0, z0m, z0b, fluxes, shf, lhf, θ_flux, q_flux, ustar)
 
-Container for storing values used to calculate surface conditions using
-Monin-Obukhov Similarity Theory. See the
+Monin–Obukhov similarity theory (MOST) surface flux closure, the default
+[`SurfaceParameterization`](@ref). See the
 [SurfaceFluxes.jl MOST documentation](https://clima.github.io/SurfaceFluxes.jl/dev/SurfaceFluxes/#Monin-Obukhov-Similarity-Theory-(MOST))
-for more information.
+for the theory.
 
-## Roughness (required)
+# Keyword Arguments
 
-  - `z0`: Roughness (sets both `z0m` and `z0b`)
-  - `z0m`, `z0b`: Roughness for momentum and scalars (specify both, or use `z0`)
+Roughness (required):
 
-## Prescribed fluxes (optional) — specify via one of:
+  - `z0`: Roughness length, sets both `z0m` and `z0b` [m].
+  - `z0m`, `z0b`: Roughness lengths for momentum and scalars [m]. Specify both,
+    or use `z0`.
+
+Prescribed fluxes (optional) — specify via one of:
 
   - `fluxes`: A [`HeatFluxes`](@ref)/[`θAndQFluxes`](@ref) struct, or a callable
-    `(t, FT) -> HeatFluxes/θAndQFluxes` for time-varying fluxes (resolved once per
-    surface update by `resolve_flux_scheme`, before the per-cell broadcast)
-  - `shf`, `lhf`: Sensible/latent heat fluxes (W/m²) — constructs `HeatFluxes`
-  - `θ_flux`, `q_flux`: θ and q fluxes (K·m/s, kg/kg·m/s) — constructs `θAndQFluxes`
+    `(t, FT) -> HeatFluxes/θAndQFluxes` for time-varying fluxes (resolved once
+    per surface update by `resolve_flux_scheme`, before the per-cell broadcast).
+  - `shf`, `lhf`: Sensible/latent heat fluxes [W/m²] — constructs `HeatFluxes`.
+  - `θ_flux`, `q_flux`: θ and q kinematic fluxes [K m/s], [kg/kg m/s] —
+    constructs `θAndQFluxes`.
 
-## Other (optional)
+Other (optional):
 
-  - `ustar`: Friction velocity (m/s)
+  - `ustar`: Friction velocity [m/s].
 
-Valid combinations:
-
-  - roughness
-  - roughness and fluxes
-  - roughness and ustar
-  - roughness and fluxes and ustar
+Valid combinations: roughness alone, or roughness with any of fluxes, `ustar`,
+or both.
 """
 struct MoninObukhov{
     FT,

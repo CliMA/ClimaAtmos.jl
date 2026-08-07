@@ -1,3 +1,48 @@
+"""
+    AtmosCache
+
+Cache of preallocated fields and model settings passed as `p` to every tendency
+function, callback, and diagnostic.
+
+The cache is built once by `build_cache` and mutated in place thereafter: no
+`Field` may be allocated inside a tendency or cache setter (use `p.scratch` or
+lazy broadcasting instead). Entries of `p.precomputed` are refreshed from the
+current state `Y` by the `set_*_precomputed_quantities!` family of functions
+(see `set_precomputed_quantities!`); entries of `p.scratch` hold no persistent
+state and may be overwritten by any function.
+
+# Fields
+
+  - `dt`: Simulation timestep, also used by callbacks and tendencies [s].
+  - `atmos`: The `AtmosModel` configuration.
+  - `numerics`: Limiters (quasi-monotone, tracer-nonnegativity, vertical water borrowing).
+  - `params`: The `ClimaAtmosParameters` used by the model.
+  - `core`: Generally used quantities, such as the geopotential `ᶜΦ`, its gradients,
+    the Coriolis fields `ᶜf³`/`ᶠf¹²`, and the surface unit basis vector.
+  - `sfc_setup`: Surface boundary overrides, used by `update_surface_conditions!`
+    and the coupler.
+  - `ghost_buffer`: Center and face ghost buffers used by DSS.
+  - `precomputed`: Quantities updated by `set_precomputed_quantities!`.
+  - `scratch`: Preallocated temporary fields with no persistent state.
+  - `hyperdiff`: Hyperdiffusion quantities for grid-scale and subgrid-scale
+    variables, potentially with ghost buffers for DSS.
+  - `external_forcing`: Parameters used by external-forcing tendencies.
+  - `non_orographic_gravity_wave`: Parameters used by the non-orographic gravity
+    wave tendency.
+  - `orographic_gravity_wave`: Parameters used by the orographic gravity wave tendency.
+  - `radiation`: Radiation model cache (e.g. the RRTMGP solver).
+  - `tracers`: Prescribed aerosol and trace-gas inputs.
+  - `net_energy_flux_toa`: Net radiative energy that has entered through the top of
+    the atmosphere, accumulated over the domain area and over time by the
+    `flux_accumulation!` callback. A one-element vector, so that it can be mutated
+    in place [J].
+  - `net_energy_flux_sfc`: The same accumulated energy at the surface; not
+    accumulated when the surface temperature is a `SlabOceanTemperature` [J].
+  - `steady_state_velocity`: Predicted steady-state velocity, if `check_steady_state`
+    is `true`; otherwise `nothing`.
+  - `conservation_check`: Column-integrated precipitation energy tendency, used for
+    the conservation check with a prognostic surface temperature.
+"""
 struct AtmosCache{
     FT,
     AM,
@@ -19,9 +64,7 @@ struct AtmosCache{
     SSV,
     CONSCHECK,
 }
-    """
-    Timestep of the simulation (in seconds). This is also used by callbacks and tendencies
-    """
+    # Timestep of the simulation (in seconds); also used by callbacks and tendencies
     dt::FT
 
     # AtmosModel
@@ -85,6 +128,40 @@ Adapt.@adapt_structure AtmosCache
 
 # The model also depends on f_plane_coriolis_frequency(params)
 # This is a constant Coriolis frequency that is only used if space is flat
+
+"""
+    build_cache(Y, atmos, params, dt, start_date, aerosol_names,
+                time_varying_trace_gas_names, steady_state_velocity,
+                vwb_species = nothing)
+
+Allocate and initialize the `AtmosCache` `p` for the initial state `Y` and model
+configuration `atmos`.
+
+All fields needed during time stepping are allocated here; subsequent code only
+mutates them in place. After allocating the precomputed quantities, this calls
+`set_precomputed_quantities!(Y, ..., 0)` once so that the cache is consistent
+with the initial state, and then builds the component caches (hyperdiffusion,
+gravity waves, radiation, tracers).
+
+# Arguments
+
+  - `Y`: Initial prognostic state, used for its spaces and element type.
+  - `atmos`: The `AtmosModel` configuration.
+  - `params`: The `ClimaAtmosParameters`.
+  - `dt`: Simulation timestep [s].
+  - `start_date`: Simulation start date, used for time-varying inputs and radiation.
+  - `aerosol_names`: Names of prescribed aerosol species to read from file.
+  - `time_varying_trace_gas_names`: Names of time-varying trace gases (e.g. `"CO2"`,
+    `"O3"`).
+  - `steady_state_velocity`: Predicted steady-state velocity for the
+    `check_steady_state` diagnostic, or `nothing`.
+  - `vwb_species`: Species tuple for the vertical-water-borrowing limiter, or
+    `nothing`.
+
+# Returns
+
+A fully initialized `AtmosCache`.
+"""
 function build_cache(
     Y,
     atmos,
@@ -228,6 +305,16 @@ function build_cache(
 end
 
 
+"""
+    compute_coriolis(ᶜcoord, ᶠcoord, params) -> (; ᶜf³, ᶠf¹²)
+
+Compute the Coriolis parameter fields for the given coordinate fields.
+
+On a sphere, `ᶜf³` is the vertical Coriolis component `2Ω sin(lat)`; with deep
+spherical geometry, the horizontal component `ᶠf¹²` is also nonzero. On a plane,
+`ᶜf³` is the constant `f_plane_coriolis_frequency(params)` and `ᶠf¹²` is
+`nothing`. Called from `build_cache`.
+"""
 function compute_coriolis(ᶜcoord, ᶠcoord, params)
     if eltype(ᶜcoord) <: Geometry.LatLongZPoint
         Ω = CAP.Omega(params)

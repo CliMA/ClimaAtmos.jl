@@ -3,9 +3,21 @@
 """
     geometric_scaling(z, planet_radius)
 
-Compute geometric scaling factor for radiative fluxes at radial height `z`.
+Compute the deep-atmosphere area scaling factor `((z + a) / a)^2` for radiative fluxes.
 
-Helper function for scaling radiation diagnostics.
+RRTMGP solves in a shallow-atmosphere column geometry, in which the area of a level does
+not grow with height. Multiplying a flux by this factor converts it to the value on the
+spherical shell of radius `z + a`, conserving the integrated energy flux. Applied only
+when the radiation mode sets `deep_atmosphere`.
+
+# Arguments
+
+  - `z`: Height above the surface [m].
+  - `planet_radius`: Planetary radius `a` [m].
+
+# Returns
+
+The dimensionless scaling factor [-].
 """
 geometric_scaling(z, planet_radius) = ((z + planet_radius) / planet_radius)^2
 
@@ -16,14 +28,25 @@ import RRTMGP
     ᶠradiation_field_toa(state, cache, radiation_mode, getter::Function)
     ᶠradiation_field_sfc(state, cache, getter::Function)
 
-Compute radiative fluxes as a diagnostic field in 3d, at TOA, or at the surface.
+Expose an RRTMGP face-level flux as a diagnostic field: full 3d, at TOA, or at the surface.
+
+The two `radiation_mode` methods apply `geometric_scaling` when the mode sets
+`deep_atmosphere`; the surface method needs no scaling and so takes no mode. All three
+wrap the solver buffer without copying, so the result is only valid until the next
+radiation update.
 
 # Arguments
 
-  - `state, cache`: The model state and cache
-  - `radiation_mode`: The RRTMGP radiation mode
-  - `getter`: Function getting the flux field on `cache.radiation.rrtmgp_solver`,
-    e.g. `RRTMGP.sw_flux_dn`
+  - `state`: The model state, `Y`, used for its face space.
+  - `cache`: The model cache, `p`, holding `radiation.rrtmgp_solver` and the parameters.
+  - `radiation_mode`: The RRTMGP radiation mode, an `RRTMGPI.AbstractRRTMGPMode`.
+  - `getter`: Accessor for a flux buffer on `cache.radiation.rrtmgp_solver`, for example
+    `RRTMGP.sw_flux_dn`.
+
+# Returns
+
+A face-level `Field`, or a level of one, in [W/m²]. Lazy when the deep-atmosphere scaling
+applies, otherwise a view.
 """
 function ᶠradiation_field_3d(state, cache, radiation_mode, getter::Function)
     (; deep_atmosphere) = radiation_mode
@@ -436,7 +459,14 @@ add_diagnostic_variable!(short_name = "rlutcs", units = "W m^-2",
 # Effective radius for liquid/ice clouds (3d)
 ###
 
-# RRTMGP stores effective radii in microns; convert to SI metres.
+"""
+    ᶜreff_field(state, cache, getter::Function)
+
+Expose an RRTMGP cell-center effective radius as a diagnostic field, converted to [m].
+
+RRTMGP stores effective radii in microns; the returned lazy broadcast divides by 10⁶.
+`getter` is an accessor such as `RRTMGP.cloud_liquid_effective_radius`.
+"""
 function ᶜreff_field(state, cache, getter::Function)
     field = getter(cache.radiation.rrtmgp_solver)
     reff = Fields.array2field(field, axes(state.c))
@@ -484,7 +514,16 @@ add_diagnostic_variable!(short_name = "reffcli", units = "m",
 # Aerosol optical depth diagnostics (2d)
 ###
 
-# Requires aerosol_radiation = true; field is defined on the surface face level.
+"""
+    ᶠaod_field(state, cache, getter::Function)
+
+Expose an RRTMGP column aerosol optical depth as a diagnostic field.
+
+Aerosol optical depth is a column quantity, so the `(ncol,)` solver buffer is wrapped on
+the surface face level. Asserts that the radiation mode has `aerosol_radiation` enabled,
+without which the buffer is not filled. `getter` is an accessor such as
+`RRTMGP.aod_sw_extinction`.
+"""
 function ᶠaod_field(state, cache, getter::Function)
     @assert cache.atmos.radiation_mode.aerosol_radiation "aerosol_radiation must be true to enable aerosol optical depth diagnostics"
     field = getter(cache.radiation.rrtmgp_solver)
@@ -533,7 +572,15 @@ add_diagnostic_variable!(short_name = "odsc550aer", units = "",
 # SW and LW McICA cloud cover (2d)
 ###
 
-# Maps a (ncol,) array stored in the rrtmgp_solver to a surface-level ClimaCore field.
+"""
+    ᶜcloud_cover_field(state, cache, getter::Function)
+
+Expose an RRTMGP McICA total cloud cover as a diagnostic field, converted to percent.
+
+Cloud cover is a column quantity, so the `(ncol,)` solver buffer is wrapped on the surface
+face level; the returned lazy broadcast multiplies the fraction by 100. `getter` is an
+accessor such as `RRTMGP.sw_cloud_cover`.
+"""
 function ᶜcloud_cover_field(state, cache, getter::Function)
     field = getter(cache.radiation.rrtmgp_solver)
     cloud_cover = Fields.array2field(field, axes(Fields.level(state.f, half)))

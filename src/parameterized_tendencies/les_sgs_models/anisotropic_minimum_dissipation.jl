@@ -10,8 +10,8 @@ import LinearAlgebra: norm_sqr
 """
     set_amd_precomputed_quantities!(Y, p)
 
-Placeholder for precomputed quantities in the Anisotropic-Minimum-Dissipation method.
-Returns `nothing`. This function is included for simple extensions in debugging workflows.
+Do nothing; placeholder for precomputed quantities in the Anisotropic Minimum Dissipation
+model, kept as an extension point for debugging workflows. Return `nothing`.
 """
 function set_amd_precomputed_quantities!(Y, p)
     nothing
@@ -21,42 +21,29 @@ horizontal_amd_tendency!(Yₜ, Y, p, t, ::Nothing) = nothing
 vertical_amd_tendency!(Yₜ, Y, p, t, ::Nothing) = nothing
 
 """
-    horizontal_amd_tendency!(Yₜ,Y, p, t, ::AnisotropicMinimumDissipation)
+    horizontal_amd_tendency!(Yₜ, Y, p, t, les::AnisotropicMinimumDissipation)
 
-Anisotropic Minimum Dissipation (AMD) Subgrid-Scale Model
+Add the horizontal Anisotropic Minimum Dissipation (AMD) subgrid-scale flux divergences to
+`Yₜ` in place; return `nothing`.
 
-This module implements the Anisotropic Minimum Dissipation (AMD) subgrid-scale (SGS) model
-for Large-Eddy Simulation (LES) as described by Abkar et al. (2016). The AMD model provides
-the minimal eddy dissipation necessary to dissipate the energy of sub-filter scales, ensuring
-numerical stability and physical accuracy in LES.
+The AMD closure of [Akbar2016](@cite) builds the eddy viscosity and diffusivity from
+gradients scaled by the anisotropic filter widths, `∂̂ᵢ = Δᵢ ∂ᵢ` with `Δᵢ` the filter width
+in direction `i` (horizontal node spacing and vertical layer thickness here):
 
-### Mathematical Formulation
-
-The AMD model computes anisotropic eddy viscosity νₜ and eddy diffusivity Dₜ using scaled
-gradient operators that account for anisotropic filter scales:
-
-**Scaled Gradient Operator:**
-
-```
-∂̂ᵢ = Δᵢ ∂ᵢ
+```math
+νₜ = \\max(0, -c \\, (∂̂ₖuᵢ)(∂̂ₖuⱼ) Sᵢⱼ / (∂ₗuₘ)(∂ₗuₘ)), \\quad
+Dₜ = \\max(0, -c \\, (∂̂ₖuᵢ)(∂̂ₖχ) ∂ᵢχ / (∂ₗχ)(∂ₗχ)),
 ```
 
-where Δᵢ is the filter width in the i-th direction, accounting for anisotropic grid spacing.
+with `c = les.c_amd` [-] and a separate `Dₜ` for each diffused scalar. Momentum receives
+`-∇ₕ·(ρ τ)/ρ` with the SGS momentum flux tensor `τ = -2 νₜ S`; total energy receives
+`+∇ₕ·(ρ Dₜ ∇ₕh_tot)`; each grid-scale tracer `χ` receives `+∇ₕ·(ρ Dₜ ∇ₕχ)`, and the
+`ρq_tot` diffusion is also added to `Yₜ.c.ρ` so that moisture diffusion conserves mass.
+Reads `ᶜu`, `ᶠu³`, and `ᶜh_tot` from `p.precomputed` and uses several `p.scratch` fields.
 
-**Eddy Viscosity:**
-
-```
-νₜ = max(0, -(∂̂ₖũᵢ)(∂̂ₖũⱼ)S̃ᵢⱼ / (∂ₗũₘ)(∂ₗũₘ))
-```
-
-**Eddy Diffusivity:**
-
-```
-Dₜ = max(0, -(∂̂ₖũᵢ)(∂̂ₖθ̃)∂ᵢθ̃ / (∂ₗθ̃)(∂ₗθ̃))
-```
-
-To remove this tendency in debugging workflows, comment (or delete) the call to this function
-in `remaining_tendencies.jl`
+This tendency is always applied explicitly, from `remaining_tendency!`. To remove it in
+debugging workflows, comment out the call in `remaining_tendency.jl`. See also
+`vertical_amd_tendency!`.
 """
 function horizontal_amd_tendency!(Yₜ, Y, p, t, les::AnisotropicMinimumDissipation)
     (; atmos, precomputed, scratch, params) = p
@@ -172,36 +159,24 @@ import UnrolledUtilities as UU
 
 
 """
-    vertical_amd_tendency!(Yₜ,Y,p,t, ::AnisotropicMinimumDissipation)
+    vertical_amd_tendency!(Yₜ, Y, p, t, les::AnisotropicMinimumDissipation)
 
-This function implements the vertical component of the AMD subgrid-scale model as specified
-by Abkar et al. (2016). It computes eddy viscosity and diffusivity based on the minimum
-dissipation principle and applies them to vertical momentum, energy, and tracer transport.
+Add the vertical Anisotropic Minimum Dissipation (AMD) subgrid-scale flux divergences to
+`Yₜ` in place; return `nothing`.
 
-**Scaled Gradient Operator:**
+Computes the same [Akbar2016](@cite) eddy viscosity `νₜ` and scalar diffusivities `Dₜ` as
+`horizontal_amd_tendency!` (see that docstring for the formulas), with the scalar
+diffusivities evaluated on cell faces from vertical gradients. Momentum receives
+`-∇ᵥ·(ρ τ)/ρ` with the SGS momentum flux tensor `τ = -2 νₜ S`; total energy and each
+grid-scale tracer receive the vertical diffusive-flux divergence
+`ᶜdiffusive_flux_divergenceᵥ` with face diffusivity `ᶠρ Dₜ` (subtracted, since it is a
+flux divergence), and the `ρq_tot` diffusion is also applied to `Yₜ.c.ρ` so that moisture
+diffusion conserves mass. Reads `ᶜu`, `ᶠu³`, and `ᶜh_tot` from `p.precomputed` and uses
+several `p.scratch` fields.
 
-```
-∂̂ᵢ = Δᵢ ∂ᵢ
-```
-
-where Δᵢ is the filter width in direction i.
-
-**Eddy Viscosity:**
-
-```
-νₜ = max(0, -(∂̂ₖũᵢ)(∂̂ₖũⱼ)S̃ᵢⱼ / (∂ₗũₘ)(∂ₗũₘ))
-```
-
-**Eddy Diffusivity:**
-
-```
-Dₜ = max(0, -(∂̂ₖũᵢ)(∂̂ₖθ̃)∂ᵢθ̃ / (∂ₗθ̃)(∂ₗθ̃))
-```
-
-The scaled gradients ∂̂∇u account for anisotropic filter scales in the vertical direction.
-
-To remove this tendency in debugging workflows, comment (or delete) the call to this function
-in `remaining_tendencies.jl`
+This tendency is always applied explicitly, from `remaining_tendency!`; it is not part of
+the implicit solver. To remove it in debugging workflows, comment out the call in
+`remaining_tendency.jl`.
 """
 function vertical_amd_tendency!(Yₜ, Y, p, t, les::AnisotropicMinimumDissipation)
     FT = eltype(Y)

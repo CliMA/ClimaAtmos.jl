@@ -1,72 +1,209 @@
 # API
 
+This page documents the types and functions a user constructs to define and run
+a simulation, organized the way a model is assembled: first the simulation and
+grid, then the `AtmosModel` component by component, then the numerics.
+
+Case definitions (initial conditions and forcing) live on the
+[Setups](setups.md) page; the YAML equivalents of these options are listed in
+[Configuration options](configuration_options.md).
+
 ## Simulation
 
 ```@docs
 ClimaAtmos.AtmosSimulation
+ClimaAtmos.AtmosSimulation{FT}()
+ClimaAtmos.AtmosSimulation()
+ClimaAtmos.AtmosSimulation(::ClimaAtmos.AtmosConfig)
+ClimaAtmos.AtmosConfig
+ClimaAtmos.AtmosConfig(::String)
+ClimaAtmos.AtmosConfig(::AbstractDict)
+ClimaAtmos.solve_atmos!
+ClimaAtmos.get_simulation
+ClimaAtmos.AtmosSolveResults
 ```
 
 ## Presets
 
 ```@docs
-ClimaAtmos.Presets.aquaplanet
-ClimaAtmos.Presets.baroclinic_wave
-ClimaAtmos.Presets.bomex
 ClimaAtmos.Presets.dry
 ClimaAtmos.Presets.equil_moist_0m
 ClimaAtmos.Presets.nonequil_moist_1m
 ClimaAtmos.Presets.prognostic_edmf
 ClimaAtmos.Presets.prognostic_edmf_1m
+ClimaAtmos.Presets.aquaplanet
+ClimaAtmos.Presets.baroclinic_wave
+ClimaAtmos.Presets.bomex
 ```
 
 ## Grids
 
 ```@docs
-ClimaAtmos.ColumnGrid
 ClimaAtmos.SphereGrid
-ClimaAtmos.PlaneGrid
+ClimaAtmos.ColumnGrid
 ClimaAtmos.BoxGrid
-```
-
-## Jacobian
-
-```@docs
-ClimaAtmos.Jacobian
-ClimaAtmos.JacobianAlgorithm
-ClimaAtmos.ManualSparseJacobian
-ClimaAtmos.AutoDenseJacobian
-ClimaAtmos.AutoSparseJacobian
-```
-
-## Diagnostics
-
-```@docs
-ClimaAtmos.DiagnosticsConfig
+ClimaAtmos.PlaneGrid
 ```
 
 ## Topography
 
 ```@docs
+ClimaAtmos.AbstractTopography
+ClimaAtmos.NoTopography
+ClimaAtmos.EarthTopography
 ClimaAtmos.CosineTopography
 ClimaAtmos.AgnesiTopography
 ClimaAtmos.ScharTopography
-ClimaAtmos.EarthTopography
 ClimaAtmos.DCMIP200Topography
 ClimaAtmos.Hughes2023Topography
-ClimaAtmos.SLEVEWarp
-ClimaAtmos.LinearWarp
 ```
 
-## Surface
-
-See the [Surface Conditions](@ref "Surface Conditions") page for a guide to
-these types and how to choose among them.
+Mesh warping determines how the vertical coordinate is deformed to follow the
+terrain:
 
 ```@docs
-ClimaAtmos.AtmosSurface
+ClimaAtmos.MeshWarpType
+ClimaAtmos.LinearWarp
+ClimaAtmos.SLEVEWarp
 ```
 
-### Flux schemes
+## The atmosphere model
+
+`AtmosModel` holds the physics configuration. Its components are grouped into
+the structs below; keyword arguments may be passed either to the group or
+directly to `AtmosModel`, which routes them to the right group.
+
+```@docs
+ClimaAtmos.AtmosModel
+ClimaAtmos.AtmosModel()
+ClimaAtmos.AtmosWater
+ClimaAtmos.AtmosTurbconv
+ClimaAtmos.AtmosRadiation
+ClimaAtmos.AtmosSurface
+ClimaAtmos.AtmosSponge
+ClimaAtmos.AtmosGravityWave
+ClimaAtmos.AtmosChem
+ClimaAtmos.AtmosNumerics
+ClimaAtmos.AtmosNumerics()
+```
+
+### Water and microphysics
+
+```@docs
+ClimaAtmos.AbstractMicrophysicsModel
+ClimaAtmos.DryModel
+ClimaAtmos.EquilibriumMicrophysics0M
+ClimaAtmos.NonEquilibriumMicrophysics1M
+ClimaAtmos.NonEquilibriumMicrophysics2M
+ClimaAtmos.NonEquilibriumMicrophysics2MP3
+```
+
+Sedimentation and tracer positivity:
+
+```@docs
+ClimaAtmos.AbstractTerminalVelocityMode
+ClimaAtmos.DiagnosticTerminalVelocity
+ClimaAtmos.FixedTerminalVelocity
+ClimaAtmos.TracerNonnegativityMethod
+ClimaAtmos.TracerNonnegativityElementConstraint
+ClimaAtmos.TracerNonnegativityVaporConstraint
+ClimaAtmos.TracerNonnegativityVaporTendency
+ClimaAtmos.TracerNonnegativityVerticalWaterBorrowing
+```
+
+### Cloud fraction
+
+```@docs
+ClimaAtmos.AbstractCloudModel
+ClimaAtmos.GridScaleCloud
+ClimaAtmos.QuadratureCloud
+ClimaAtmos.MLCloud
+ClimaAtmos.AbstractSGSamplingType
+ClimaAtmos.SGSMean
+ClimaAtmos.SGSQuadrature
+ClimaAtmos.AbstractSGSDistribution
+ClimaAtmos.GridMeanSGS
+ClimaAtmos.GaussianSGS
+ClimaAtmos.LogNormalSGS
+ClimaAtmos.AbstractPhysicalPointTransform
+ClimaAtmos.GridMeanPhysicalPointTransform
+ClimaAtmos.GaussianPhysicalPointTransform
+ClimaAtmos.LogNormalPhysicalPointTransform
+ClimaAtmos.create_physical_transform
+ClimaAtmos.integrate_over_sgs
+```
+
+### Turbulence and convection (PROPHET)
+
+The turbulence and convection scheme, called EDMFX in the code; see the
+[PROPHET equations](edmf_equations.md).
+
+```@docs
+ClimaAtmos.AbstractEDMF
+ClimaAtmos.EDOnlyEDMFX
+ClimaAtmos.PrognosticEDMFX
+ClimaAtmos.PrognosticEDMFX{FT}()
+ClimaAtmos.EDMFXModel
+ClimaAtmos.EDMFXModel()
+```
+
+Entrainment and detrainment closures:
+
+```@docs
+ClimaAtmos.AbstractEntrainmentModel
+ClimaAtmos.NoEntrainment
+ClimaAtmos.PiGroupsEntrainment
+ClimaAtmos.InvZEntrainment
+ClimaAtmos.AbstractDetrainmentModel
+ClimaAtmos.NoDetrainment
+ClimaAtmos.BuoyancyVelocityDetrainment
+ClimaAtmos.PiGroupsDetrainment
+ClimaAtmos.SmoothAreaDetrainment
+```
+
+Buoyancy gradients, mixing-length blending, and tendency selection:
+
+```@docs
+ClimaAtmos.AbstractEnvBuoyGradClosure
+ClimaAtmos.BuoyGradMean
+ClimaAtmos.AbstractScaleBlendingMethod
+ClimaAtmos.SmoothMinimumBlending
+ClimaAtmos.HardMinimumBlending
+ClimaAtmos.AbstractTendencyModel
+ClimaAtmos.UseAllTendency
+ClimaAtmos.NoGridScaleTendency
+ClimaAtmos.NoSubgridScaleTendency
+```
+
+### Radiation
+
+See the [Radiation](radiation.md) page for an overview of the RRTMGP coupling.
+
+```@docs
+ClimaAtmos.AbstractCloudInRadiation
+ClimaAtmos.InteractiveCloudInRadiation
+ClimaAtmos.PrescribedCloudInRadiation
+ClimaAtmos.RadiationDYCOMS
+ClimaAtmos.RadiationISDAC
+ClimaAtmos.RadiationTRMM_LBA
+```
+
+Insolation at the top of the atmosphere:
+
+```@docs
+ClimaAtmos.AbstractInsolation
+ClimaAtmos.IdealizedInsolation
+ClimaAtmos.TimeVaryingInsolation
+ClimaAtmos.RCEMIPIIInsolation
+ClimaAtmos.GCMDrivenInsolation
+ClimaAtmos.ExternalTVInsolation
+ClimaAtmos.Larcform1Insolation
+```
+
+### Surface
+
+See the [Surface Conditions](surface_conditions.md) page for a guide to
+choosing these.
 
 ```@docs
 ClimaAtmos.SurfaceConditions.SurfaceParameterization
@@ -76,25 +213,15 @@ ClimaAtmos.SurfaceConditions.HeatFluxes
 ClimaAtmos.SurfaceConditions.θAndQFluxes
 ClimaAtmos.SurfaceConditions.DefaultMoninObukhov
 ClimaAtmos.SurfaceConditions.DefaultExchangeCoefficients
-```
-
-### Surface temperature
-
-```@docs
 ClimaAtmos.SurfaceConditions.SurfaceTemperature
 ClimaAtmos.SurfaceConditions.AnalyticTemperature
 ClimaAtmos.SurfaceConditions.SlabOceanTemperature
 ClimaAtmos.SurfaceConditions.ExternalTemperature
 ClimaAtmos.SurfaceConditions.CoupledTemperature
-```
-
-### Boundary overrides
-
-```@docs
 ClimaAtmos.SurfaceConditions.SurfaceBoundaryOverrides
 ```
 
-### Surface albedo
+Surface albedo:
 
 ```@docs
 ClimaAtmos.SurfaceAlbedoModel
@@ -103,7 +230,87 @@ ClimaAtmos.RegressionFunctionAlbedo
 ClimaAtmos.CouplerAlbedo
 ```
 
-### Core functions
+### Diffusion and sponges
+
+```@docs
+ClimaAtmos.AbstractVerticalDiffusion
+ClimaAtmos.VerticalDiffusion
+ClimaAtmos.DecayWithHeightDiffusion
+ClimaAtmos.EddyViscosityModel
+ClimaAtmos.SmagorinskyLilly
+ClimaAtmos.AnisotropicMinimumDissipation
+ClimaAtmos.ConstantHorizontalDiffusion
+ClimaAtmos.SpongeModel
+ClimaAtmos.RayleighSponge
+ClimaAtmos.RayleighSponge(::Any)
+ClimaAtmos.ViscousSponge
+ClimaAtmos.ViscousSponge(::Any)
+```
+
+### Gravity-wave drag
+
+```@docs
+ClimaAtmos.AbstractGravityWave
+ClimaAtmos.NonOrographicGravityWave
+ClimaAtmos.OrographicGravityWave
+ClimaAtmos.FullOrographicGravityWave
+ClimaAtmos.LinearOrographicGravityWave
+```
+
+### Forcings
+
+Forcing terms for externally driven single-column cases are documented on the
+[Single Column Models](single_column.md) page.
+
+```@docs
+ClimaAtmos.AbstractForcing
+ClimaAtmos.LargeScaleSubsidence
+ClimaAtmos.LargeScaleAdvection
+ClimaAtmos.HeldSuarezForcing
+ClimaAtmos.GCMForcing
+ClimaAtmos.ISDACForcing
+ClimaAtmos.PrescribedFlow
+ClimaAtmos.ShipwayHill2012VelocityProfile
+```
+
+### Chemistry
+
+```@docs
+ClimaAtmos.AbstractChemistryModel
+ClimaAtmos.GasPhaseChem
+```
+
+## Numerics
+
+```@docs
+ClimaAtmos.AbstractTimesteppingMode
+ClimaAtmos.Explicit
+ClimaAtmos.Implicit
+ClimaAtmos.Hyperdiffusion
+ClimaAtmos.QuasiMonotoneLimiter
+```
+
+### Jacobian and the implicit solver
+
+See the [Implicit Solver](implicit_solver.md) page for the algorithms.
+
+```@docs
+ClimaAtmos.Jacobian
+ClimaAtmos.JacobianAlgorithm
+ClimaAtmos.ManualSparseJacobian
+ClimaAtmos.AutoDenseJacobian
+ClimaAtmos.AutoSparseJacobian
+ClimaAtmos.AutoSparseJacobian()
+ClimaAtmos.AutoSparseJacobian(::Any)
+```
+
+## Diagnostics
+
+```@docs
+ClimaAtmos.DiagnosticsConfig
+```
+
+## Surface-condition internals
 
 ```@docs
 ClimaAtmos.SurfaceConditions.update_surface_conditions!
@@ -111,7 +318,7 @@ ClimaAtmos.SurfaceConditions.surface_state_to_conditions
 ClimaAtmos.SurfaceConditions.atmos_surface_conditions
 ```
 
-## Single-column forcing datasets
+## Column dataset formats
 
 Data access for single-column (SCM) forcing files: the generic
 [`ColumnDataset`](@ref ClimaAtmos.ColumnDatasets.ColumnDataset) handle and format
@@ -120,12 +327,28 @@ converter. See the
 [Column Datasets](@ref "Column Datasets") page for usage and
 [Adding a Column Dataset](@ref) for the extension interface.
 
-```@autodocs
-Modules = [
-    ClimaAtmos.ColumnDatasets,
-    ClimaAtmos.ColumnDatasets.ClimaColumnFiles,
-    ClimaAtmos.ColumnDatasets.VaranalFiles,
-]
+```@docs
+ClimaAtmos.ColumnDatasets.ColumnDataset
+ClimaAtmos.ColumnDatasets.AbstractColumnFormat
+ClimaAtmos.ColumnDatasets.format_name
+ClimaAtmos.ColumnDatasets.format_variable_name
+ClimaAtmos.ColumnDatasets.height_profile
+ClimaAtmos.ColumnDatasets.validate
+ClimaAtmos.ColumnDatasets.ClimaColumnFiles.ClimaColumnFile
+ClimaAtmos.ColumnDatasets.VaranalFiles.to_climacolumn
+```
+
+## Modules
+
+```@docs
+ClimaAtmos.ClimaAtmos
+ClimaAtmos.Parameters
+ClimaAtmos.Diagnostics
+ClimaAtmos.RRTMGPInterface
+ClimaAtmos.AtmosArtifacts
+ClimaAtmos.ColumnDatasets
+ClimaAtmos.ColumnDatasets.ClimaColumnFiles
+ClimaAtmos.ColumnDatasets.VaranalFiles
 ```
 
 ## Internals
