@@ -15,7 +15,6 @@ function ClimaAtmosParameters(config::AtmosConfig)
     return ClimaAtmosParameters(
         config.toml_dict;
         microphysics_model = get_microphysics_model(pa),
-        microphysics_1m_options = get_microphysics_1m_options(pa),
         has_non_orographic_gw = get(pa, "non_orographic_gravity_wave", false) != false,
         has_orographic_gw =
         !isnothing(get(pa, "orographic_gravity_wave", nothing)),
@@ -62,10 +61,9 @@ function get_atmos(config::AtmosConfig, params; setup_type = nothing)
     @assert !@any_reltype(atmos, (UnionAll, DataType))
 
     @info "AtmosModel: \n$(summary(atmos))"
-    if !isnothing(params.microphysics_1m_params)
-        microphysics_model = atmos.water.microphysics_model
-        options = params.microphysics_1m_params.processes
-        @info "Microphysics settings: $(sprint(summary_microphysics, microphysics_model, options))"
+    microphysics_model = atmos.water.microphysics_model
+    if microphysics_model isa NonEquilibriumMicrophysics1M
+        @info "Microphysics settings: $(sprint(summary_microphysics, microphysics_model))"
     end
     return atmos
 end

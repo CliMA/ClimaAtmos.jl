@@ -6,16 +6,49 @@ import Dates
 import ClimaParams as CP
 import ClimaUtilities.ClimaArtifacts: @clima_artifact
 import LazyArtifacts
+import CloudMicrophysics.Parameters as CMP
 
 abstract type AbstractMicrophysicsModel end
 
 struct DryModel <: AbstractMicrophysicsModel end
 struct EquilibriumMicrophysics0M <: AbstractMicrophysicsModel end
-struct NonEquilibriumMicrophysics1M <: AbstractMicrophysicsModel
+
+"""
+    NonEquilibriumMicrophysics1M(; n_substeps = 1, n_substeps_quad = 1,
+                                   process_options...)
+
+1-moment bulk microphysics with prognostic cloud liquid, cloud ice, rain, and
+snow.
+
+`n_substeps` and `n_substeps_quad` set how many substeps the bulk tendencies are
+time-averaged over, without and with SGS quadrature respectively.
+
+```julia
+import ClimaAtmos as CA
+import CloudMicrophysics.Parameters as CMP
+
+microphysics_model = CA.NonEquilibriumMicrophysics1M(;
+    n_substeps = 3,
+    rain_autoconversion = CMP.PrescribedNd(),
+    cloud_ice_formation = CMP.TemperatureDependent(),
+    rain_snow_accretion = nothing,
+)
+```
+
+See `CMP.Microphysics1MOptions` for the full list of processes and their
+available variants.
+"""
+struct NonEquilibriumMicrophysics1M{OPT} <: AbstractMicrophysicsModel
     n_substeps::Int  # number of microphysics substeps
     n_substeps_quad::Int  # number of microphysics substeps with sgs quadrature
-    function NonEquilibriumMicrophysics1M(; n_substeps = 1, n_substeps_quad = 1)
-        return new(n_substeps, n_substeps_quad)
+    processes::OPT  # per-process variant selection (CMP.Microphysics1MOptions)
+    function NonEquilibriumMicrophysics1M(;
+        n_substeps = 1,
+        n_substeps_quad = 1,
+        process_options...,
+    )
+        processes = CMP.Microphysics1MOptions(; process_options...)
+        return new{typeof(processes)}(n_substeps, n_substeps_quad, processes)
     end
 end
 struct NonEquilibriumMicrophysics2M <: AbstractMicrophysicsModel end
