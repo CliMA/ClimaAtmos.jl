@@ -168,7 +168,9 @@ Construct an atmospheric simulation with floating-point type `FT` (default: Floa
 ### Model and domain
 
   - `model::AtmosModel = AtmosModel()`: Physics and parameterization configuration.
-  - `params::ClimaAtmosParameters = ClimaAtmosParameters(FT)`: Physical parameters.
+  - `params::ClimaAtmosParameters`: Physical parameters. By default, built from
+    `model`, so only the parameters the model needs are loaded and the
+    microphysics process options set on the model take effect.
   - `grid::AbstractGrid = SphereGrid(FT; ...)`: Computational grid.
     Use [`ColumnGrid`](@ref), [`BoxGrid`](@ref), [`PlaneGrid`](@ref), or [`SphereGrid`](@ref).
   - `setup = Setups.DecayingProfile(; perturb=true, params)`: Setup defining the
@@ -236,7 +238,10 @@ simulation = CA.AtmosSimulation{Float64}(;
 """
 function AtmosSimulation{FT}(;
     model = AtmosModel(),
-    params::Parameters.ClimaAtmosParameters = ClimaAtmosParameters(FT),
+    params::Parameters.ClimaAtmosParameters = ClimaAtmosParameters(
+        FT;
+        microphysics_model = model.microphysics_model,
+    ),
     context::ClimaComms.AbstractCommsContext = ClimaComms.context(),
     grid::Grids.AbstractGrid = SphereGrid(FT; radius = CAP.planet_radius(params), context),
     setup = Setups.DecayingProfile(; perturb = true, params),

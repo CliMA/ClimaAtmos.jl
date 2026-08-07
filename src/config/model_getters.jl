@@ -11,7 +11,11 @@ function get_microphysics_model(parsed_args, params = nothing)
     elseif model_name == "1M"
         n_substeps = parsed_args["microphysics_n_substeps"]
         n_substeps_quad = parsed_args["microphysics_n_substeps_quadrature"]
-        NonEquilibriumMicrophysics1M(; n_substeps, n_substeps_quad)
+        NonEquilibriumMicrophysics1M(;
+            n_substeps,
+            n_substeps_quad,
+            get_microphysics_1m_options(parsed_args)...,
+        )
     elseif model_name == "2M"
         NonEquilibriumMicrophysics2M()
     elseif model_name == "2MP3"
@@ -27,11 +31,12 @@ end
     get_microphysics_1m_options(parsed_args)
 
 Parse the YAML config keys for 1-moment microphysics process options and
-return a `NamedTuple` of keyword arguments for `CMP.Microphysics1MParams`.
+return a `NamedTuple` of keyword arguments for
+[`NonEquilibriumMicrophysics1M`](@ref).
 
-Each YAML key maps to one field of `get_microphysics_1m_options`, selecting the
-process option type that controls dispatch inside `bulk_microphysics_tendencies`.
-Setting a YAML value to `~` (null) disables the process (`nothing`).
+Each YAML key maps to one process, selecting the option type that controls
+dispatch inside `bulk_microphysics_tendencies`. Setting a YAML value to `~`
+(null) disables the process (`nothing`).
 """
 function get_microphysics_1m_options(parsed_args)
     CMP = CM.Parameters

@@ -26,6 +26,47 @@ import Thermodynamics as TD
     end
 end
 
+@testset "1-moment microphysics process options" begin
+    CMP = CAP.CM.Parameters
+
+    # Defaults come from CloudMicrophysics
+    defaults = CA.NonEquilibriumMicrophysics1M()
+    @test defaults.processes.rain_autoconversion isa CMP.Kessler1M
+    # Unknown process names are rejected where they are written
+    @test_throws Exception CA.NonEquilibriumMicrophysics1M(; not_a_process = 1)
+
+    # Options set on the model select the parameters loaded for it
+    model = CA.NonEquilibriumMicrophysics1M(;
+        n_substeps = 3,
+        rain_autoconversion = CMP.PrescribedNd(),
+        cloud_ice_formation = CMP.TemperatureDependent(),
+        rain_snow_accretion = nothing,
+    )
+    @test model.n_substeps == 3
+    params = CA.ClimaAtmosParameters(Float64; microphysics_model = model)
+    processes = params.microphysics_1m_params.processes
+    @test processes.rain_autoconversion isa CMP.PrescribedNd
+    @test processes.cloud_ice_formation isa CMP.TemperatureDependent
+    @test isnothing(processes.rain_snow_accretion)
+    @test isnothing(
+        params.microphysics_1m_params.process_params.rain_snow_accretion,
+    )
+
+    # The YAML keys reach the same place
+    config = CA.AtmosConfig(
+        Dict(
+            "microphysics_model" => "1M",
+            "rain_autoconversion" => "PrescribedNd",
+            "rain_snow_accretion" => nothing,
+        ),
+        job_id = "parameter_test_1m_options",
+    )
+    yaml_processes =
+        CA.ClimaAtmosParameters(config).microphysics_1m_params.processes
+    @test yaml_processes.rain_autoconversion isa CMP.PrescribedNd
+    @test isnothing(yaml_processes.rain_snow_accretion)
+end
+
 @testset "TKE dissipation coefficient derived from Ri_crit" begin
     for FT in (Float32, Float64)
         params = CA.ClimaAtmosParameters(FT)

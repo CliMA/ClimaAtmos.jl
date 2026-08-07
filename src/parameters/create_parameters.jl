@@ -8,9 +8,8 @@ import CloudMicrophysics as CM
 import StaticArrays as SA
 
 """
-    ClimaAtmosParameters(FT::AbstractFloat)
+    ClimaAtmosParameters(FT::AbstractFloat; kwargs...)
     ClimaAtmosParameters(toml_dict; microphysics_model = nothing,
-                                    microphysics_1m_options = (;),
                                     has_non_orographic_gw = false,
                                     has_orographic_gw = false,
                                     has_beres_source = false)
@@ -22,13 +21,12 @@ relevant to that model are loaded; the rest are stored as `nothing` to save
 memory. Likewise the gravity-wave parameter sets are loaded only when their
 corresponding flag is `true`.
 """
-ClimaAtmosParameters(::Type{FT}) where {FT <: AbstractFloat} =
-    ClimaAtmosParameters(CP.create_toml_dict(FT))
+ClimaAtmosParameters(::Type{FT}; kwargs...) where {FT <: AbstractFloat} =
+    ClimaAtmosParameters(CP.create_toml_dict(FT); kwargs...)
 
 function ClimaAtmosParameters(
     toml_dict::TD;
     microphysics_model = nothing,
-    microphysics_1m_options = (;),
     has_non_orographic_gw::Bool = false,
     has_orographic_gw::Bool = false,
     has_beres_source::Bool = false,
@@ -61,8 +59,10 @@ function ClimaAtmosParameters(
     MPC = typeof(microphysics_cloud_params)
 
     microphysics_0m_params = CM.Parameters.Microphysics0MParams(toml_dict)
-    microphysics_1m_params =
-        microphys_1m_parameters(toml_dict; microphysics_1m_options...)
+    microphysics_1m_params = microphys_1m_parameters(
+        toml_dict;
+        microphysics_1m_options(microphysics_model)...,
+    )
     microphysics_2m_params = microphys_2m_parameters(toml_dict)
     microphysics_2mp3_params = get_microphysics_2m_p3_parameters(toml_dict)
 
@@ -199,6 +199,22 @@ cloud_parameters(toml_dict::CP.ParamDict) = (;
     aml = aerosol_ml_parameters(toml_dict),
     activation = CM.Parameters.AerosolActivationParameters(toml_dict),
 )
+
+"""
+    microphysics_1m_options(microphysics_model)
+
+The per-process option selections to build `CMP.Microphysics1MParams` with, as
+keyword arguments.
+"""
+microphysics_1m_options(_) = (;)
+function microphysics_1m_options(
+    microphysics_model::NonEquilibriumMicrophysics1M,
+)
+    processes = microphysics_model.processes
+    return (;
+        (pn => getproperty(processes, pn) for pn in propertynames(processes))...
+    )
+end
 
 microphys_1m_parameters(
     ::Type{FT};
