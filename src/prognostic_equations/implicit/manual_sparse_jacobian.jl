@@ -709,6 +709,36 @@ function update_advection_jacobian!(matrix, Y, p, dtγ, topography_flag)
     return nothing
 end
 
+#=
+TODO - remove if not needed
+"""
+    jacobian_sedimentation_velocity(p, wₚ_name, ρχₚ_name)
+
+Return the sedimentation velocity to use in the Jacobian for tracer `ρχₚ_name`.
+
+For rain with `DiagnosticTerminalVelocity`, returns the fixed constant velocity
+from the parameter set instead of the state-dependent precomputed field.  This
+stabilises the implicit solve by giving the preconditioner a smooth, constant
+advection speed while the tendency still sees the correct diagnostic velocity.
+
+For all other tracers (or when rain uses `FixedTerminalVelocity`), returns the
+precomputed velocity field unchanged.
+"""
+@inline jacobian_sedimentation_velocity(p, wₚ_name, _ρχₚ_name) =
+    MatrixFields.get_field(p.precomputed, wₚ_name)
+
+@inline function jacobian_sedimentation_velocity(
+    p,
+    wₚ_name,
+    ::MatrixFields.FieldName{(:ρq_rai,)},
+)
+    if p.atmos.terminal_velocity_rain isa DiagnosticTerminalVelocity
+        return CAP.fixed_rain_terminal_velocity(p.params)
+    end
+    return MatrixFields.get_field(p.precomputed, wₚ_name)
+end
+=#
+
 """
     update_sedimentation_jacobian!(matrix, Y, p, dtγ)
 
@@ -748,7 +778,10 @@ function update_sedimentation_jacobian!(matrix, Y, p, dtγ)
         ρχₚ_state_name = center_state_name(ρχₚ_name)
 
         ∂ᶜρχₚ_err_∂ᶜρχₚ = matrix[ρχₚ_state_name, ρχₚ_state_name]
+        # TODO - remove if not needed
+        #ᶜwₚ = jacobian_sedimentation_velocity(p, wₚ_name, ρχₚ_name)
         ᶜwₚ = MatrixFields.get_field(p.precomputed, wₚ_name)
+
         # TODO: come up with read-able names for the intermediate computations...
         @. p.scratch.ᶠband_matrix_wvec =
             ᶠright_bias_matrix() ⋅

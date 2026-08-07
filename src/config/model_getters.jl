@@ -835,14 +835,18 @@ function AtmosWater(config::AtmosConfig, params, ::Type{FT}) where {FT}
 
     cloud_model = get_cloud_model(pa, params)
 
-    terminal_velocity_mode =
-        pa["fixed_terminal_velocity"] ?
-        FixedTerminalVelocity{FT}(
-            CAP.fixed_cloud_liquid_terminal_velocity(params),
-            CAP.fixed_cloud_ice_terminal_velocity(params),
-            CAP.fixed_rain_terminal_velocity(params),
-            CAP.fixed_snow_terminal_velocity(params),
-        ) : DiagnosticTerminalVelocity()
+    terminal_velocity_liquid =
+        pa["fixed_terminal_velocity_liquid"] ?
+        FixedTerminalVelocity() : DiagnosticTerminalVelocity()
+    terminal_velocity_ice =
+        pa["fixed_terminal_velocity_ice"] ?
+        FixedTerminalVelocity() : DiagnosticTerminalVelocity()
+    terminal_velocity_rain =
+        pa["fixed_terminal_velocity_rain"] ?
+        FixedTerminalVelocity() : DiagnosticTerminalVelocity()
+    terminal_velocity_snow =
+        pa["fixed_terminal_velocity_snow"] ?
+        FixedTerminalVelocity() : DiagnosticTerminalVelocity()
 
     implicit_microphysics = pa["implicit_microphysics"]
 
@@ -853,7 +857,10 @@ function AtmosWater(config::AtmosConfig, params, ::Type{FT}) where {FT}
                                              Explicit(),
         tracer_nonnegativity_method = get_tracer_nonnegativity_method(pa),
         sgs_quadrature,
-        terminal_velocity_mode,
+        terminal_velocity_liquid,
+        terminal_velocity_ice,
+        terminal_velocity_rain,
+        terminal_velocity_snow,
     )
 end
 

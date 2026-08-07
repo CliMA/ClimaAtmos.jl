@@ -84,10 +84,11 @@ function set_precipitation_velocities!(
 )
     (; ᶜwₗ, ᶜwᵢ, ᶜwᵣ, ᶜwₛ, ᶜwₜqₜ, ᶜwₕhₜ, ᶜT, ᶜu) = p.precomputed
     (; ᶜΦ) = p.core
-    (; terminal_velocity_mode) = p.atmos
-    cmc = CAP.microphysics_cloud_params(p.params)
-    cmp = CAP.microphysics_1m_params(p.params)
-    thp = CAP.thermodynamics_params(p.params)
+    atmos = p.atmos
+    params = p.params
+    cmc = CAP.microphysics_cloud_params(params)
+    cmp = CAP.microphysics_1m_params(params)
+    thp = CAP.thermodynamics_params(params)
 
     # scratch for adding energy fluxes over subdomains
     ᶜρwₕhₜ = p.scratch.ᶜtemp_scalar
@@ -95,8 +96,9 @@ function set_precipitation_velocities!(
 
     terminal_velocity_function(name, ρ, q) = terminal_velocity(
         microphysics_model,
-        terminal_velocity_mode,
+        velocity_mode(atmos, name),
         name,
+        params,
         cmc,
         cmp,
         ρ,
@@ -143,11 +145,12 @@ function set_precipitation_velocities!(
     (; ᶜwₗ, ᶜwᵢ, ᶜwᵣ, ᶜwₛ, ᶜwₜqₜ, ᶜwₕhₜ) = p.precomputed
     (; ᶜwₗʲs, ᶜwᵢʲs, ᶜwᵣʲs, ᶜwₛʲs, ᶜTʲs, ᶜρʲs) = p.precomputed
     (; ᶜT⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰) = p.precomputed
-    (; terminal_velocity_mode) = p.atmos
+    atmos = p.atmos
+    params = p.params
 
-    cmc = CAP.microphysics_cloud_params(p.params)
-    cmp = CAP.microphysics_1m_params(p.params)
-    thp = CAP.thermodynamics_params(p.params)
+    cmc = CAP.microphysics_cloud_params(params)
+    cmp = CAP.microphysics_1m_params(params)
+    thp = CAP.thermodynamics_params(params)
 
     ᶜρ⁰ = @. lazy(
         TD.air_density(thp, ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰),
@@ -172,8 +175,9 @@ function set_precipitation_velocities!(
 
     terminal_velocity_function(name, ρ, q) = terminal_velocity(
         microphysics_model,
-        terminal_velocity_mode,
+        velocity_mode(atmos, name),
         name,
+        params,
         cmc,
         cmp,
         ρ,
@@ -219,8 +223,9 @@ function set_precipitation_velocities!(
         # average
         @. ᶜw = gs_terminal_velocity(
             microphysics_model,
-            terminal_velocity_mode,
+            velocity_mode(atmos, χ_name),
             χ_name,
+            params,
             ᶜw,
             ᶜρχ,
         )
@@ -686,6 +691,27 @@ function update_implicit_microphysics_cache!(
         ρdq_tot_dtʲ = @. lazy(Y.c.sgsʲs.:($$j).ρa * ᶜmp_tendencyʲs.:($$j).dq_tot_dt)
         @. ᶜρ_dq_tot_dt += ρdq_tot_dtʲ
         @. ᶜρ_de_tot_dt += ρdq_tot_dtʲ * ᶜmp_tendencyʲs.:($$j).e_tot_hlpr
+    end
+    set_precipitation_surface_fluxes!(Y, p, mm)
+    return nothing
+end
+
+function update_implicit_microphysics_cache!(
+    Y,
+    p,
+    mm::NonEquilibriumMicrophysics1M,
+    tm,
+)
+    # Recompute the sedimentation velocities from the current implicit-solver state.
+    # This is expecially important for PrognosticEDMFX `ᶜwᵣʲs`.
+    # Leaving updraft velocities at their explicit-stage values treats the
+    # nonlinear part of the sedimentation flux explicitly.
+    # No number of Newton iterations can correct a field that nothing updates.
+    if p.atmos.terminal_velocity_liquid isa DiagnosticTerminalVelocity ||
+       p.atmos.terminal_velocity_ice isa DiagnosticTerminalVelocity ||
+       p.atmos.terminal_velocity_rain isa DiagnosticTerminalVelocity ||
+       p.atmos.terminal_velocity_snow isa DiagnosticTerminalVelocity
+        set_precipitation_velocities!(Y, p, mm, tm)
     end
     set_precipitation_surface_fluxes!(Y, p, mm)
     return nothing
