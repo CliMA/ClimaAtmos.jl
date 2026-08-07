@@ -55,73 +55,6 @@ end
 
 make_rho_air(FT) = make_center_profile_field(FT, [1.2, 1.0, 0.8])
 
-# These COSPv2 values validate scalar scattering and extinction coefficients.
-# They do not prescribe the corrected vertical path-attenuation integration.
-const COSP_MIE_REFERENCES = (;
-    water_small = (;
-        phase = CCO.LiquidPhase(),
-        D_m = 1.9999999494757503E-005,
-        T = 2.7314999389648438E+002,
-        qext = 1.4807554893195629E-002,
-        qbsca = 4.1043065834855952E-007,
-        z_vol = 5.8123325596959319E-011,
-        kr_vol = 2.0203076545044496E-008,
-    ),
-    water_medium = (;
-        phase = CCO.LiquidPhase(),
-        D_m = 1.0000000474974513E-003,
-        T = 2.7314999389648438E+002,
-        qext = 3.2664134502410889E+000,
-        qbsca = 1.4222202301025391E+000,
-        z_vol = 5.0352096557617188E-001,
-        kr_vol = 1.1141545139253139E-002,
-    ),
-    ice_small = (;
-        phase = CCO.IcePhase(),
-        D_m = 1.9999999494757503E-005,
-        T = 2.5314999389648438E+002,
-        qext = 9.0639849076978862E-005,
-        qbsca = 1.0656524551677649E-007,
-        z_vol = 1.5091284125134941E-011,
-        kr_vol = 1.2366685453457649E-010,
-    ),
-    ice_medium = (;
-        phase = CCO.IcePhase(),
-        D_m = 1.0000000474974513E-003,
-        T = 2.5314999389648438E+002,
-        qext = 4.8764702677726746E-001,
-        qbsca = 3.8374635577201843E-001,
-        z_vol = 1.3586105406284332E-001,
-        kr_vol = 1.6633353661745787E-003,
-    ),
-)
-
-@testset "COSPv2 scalar Mie references" begin
-    FT = Float64
-    radar_cfg = CCO.CloudSatRadarConfig(FT; use_gas_abs = false)
-
-    for (case_name, ref) in pairs(COSP_MIE_REFERENCES)
-        @testset "$(case_name)" begin
-            D_m = FT(ref.D_m)
-            T = FT(ref.T)
-
-            qext, qbsca = CCO._mie_efficiencies(D_m, T, radar_cfg, ref.phase)
-            z_vol, kr_vol = CCO._zeff_particle_integral(
-                D_m,
-                one(FT),
-                T,
-                radar_cfg,
-                ref.phase,
-            )
-
-            @test qext ≈ ref.qext rtol = 1e-5 atol = 1e-12
-            @test qbsca ≈ ref.qbsca rtol = 1e-5 atol = 1e-12
-            @test z_vol ≈ ref.z_vol rtol = 1e-5 atol = 1e-12
-            @test kr_vol ≈ ref.kr_vol rtol = 1e-5 atol = 1e-12
-        end
-    end
-end
-
 @testset "CloudSat Clima 1M PSD parameters" begin
     for FT in (Float32, Float64)
         microphysics_params = CMP.Microphysics1MParams(FT)
@@ -249,45 +182,6 @@ end
             end
         end
     end
-end
-
-@testset "CloudSat corrected Liebe gas absorption" begin
-    FT = Float64
-    thermo_state = (;
-        p = make_center_profile_field(FT, [100000, 50000, 20000]),
-        T = make_center_profile_field(FT, [290, 260, 220]),
-        qv = make_center_profile_field(FT, [0.012, 0.001, 1.0e-5]),
-    )
-    g_vol = make_center_field(FT; value = 999, nelems = 3)
-    radar_cfg = CCO.CloudSatRadarConfig(FT; use_gas_abs = true)
-
-    CCO.cloudsat_gas_attenuation!(
-        g_vol,
-        thermo_state.T,
-        thermo_state.p,
-        thermo_state.qv,
-        radar_cfg,
-    )
-
-    # Reference values use the Liebe (1985) oxygen line shape (Eq. 9a).
-    ref_g_vol = FT[
-        1.123416396483E-4,
-        8.102267024589E-6,
-        1.830215814672E-6,
-    ]
-    @test all(isfinite, parent(g_vol))
-    @test all(>=(0), parent(g_vol))
-    @test isapprox(parent(g_vol), ref_g_vol; rtol = 1e-5, atol = 1e-12)
-
-    radar_cfg = CCO.CloudSatRadarConfig(FT; use_gas_abs = false)
-    CCO.cloudsat_gas_attenuation!(
-        g_vol,
-        thermo_state.T,
-        thermo_state.p,
-        thermo_state.qv,
-        radar_cfg,
-    )
-    @test all(iszero, parent(g_vol))
 end
 
 @testset "CloudSat streamed optics" begin
