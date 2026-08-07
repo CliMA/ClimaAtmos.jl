@@ -1,4 +1,4 @@
-394
+395
 
 # **README**
 #
@@ -32,9 +32,18 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+395
+- `prescribed_aerosols` and `prognostic_aerosols` now take species keys
+  ("SSLT", "DST", "SO4", "CB", "OC") instead of bin names e.g. "SSLT01"; 
+  configs that previously listed only a subset of a species'
+  bins gain the omitted bins, changing radiation:
+  `aquaplanet_equil_allsky_gw_raw` gains DST05, and
+  `aquaplanet_nonequil_allsky_gw_res_2M` (inactive) gains CB2, OC2, and DST02-DST05.
+
 394
 - Species-consistent hyperdiffusion.
 - Apply sgs microphyiscs constraints.
+
 
 393
 - Change min_area_limiter_scale and turb_entr_param_vec in EDMF TOMLs

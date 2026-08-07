@@ -759,12 +759,6 @@ function get_detrainment_model(parsed_args)
     end
 end
 
-function get_tracers(parsed_args)
-    aerosol_names = Tuple(parsed_args["prescribed_aerosols"])
-    time_varying_trace_gas_names = Tuple(parsed_args["time_varying_trace_gases"])
-    return (; aerosol_names, time_varying_trace_gas_names)
-end
-
 function check_case_consistency(parsed_args)
     ic = parsed_args["initial_condition"]
     surf = parsed_args["surface_setup"]
@@ -1024,4 +1018,52 @@ function COSPModel(config::AtmosConfig)
         n_subcolumns = Val(n_subcolumns),
         overlap,
     )
+end
+
+function AtmosAerosols(config::AtmosConfig, params)
+    pa = config.parsed_args
+    ap = params.prognostic_aerosol_params
+    seasalt_bins = isnothing(ap) ? 0 : length(ap.ssa_bin_edges) - 1
+    return AtmosAerosols(
+        Tuple(pa["prescribed_aerosols"]),
+        Tuple(pa["prognostic_aerosols"]);
+        seasalt_bins,
+    )
+end
+
+# Not a module-level `const`: the sea salt bin count comes from ClimaParams.
+aerosol_species_models(seasalt_bins) = (
+    ("SSLT", PrescribedSeaSalt(), PrognosticSeaSalt(seasalt_bins)),
+    ("DST", PrescribedDust(), nothing),
+    ("SO4", PrescribedSulfate(), nothing),
+    ("CB", PrescribedBlackCarbon(), nothing),
+    ("OC", PrescribedOrganicCarbon(), nothing),
+)
+
+function AtmosAerosols(
+    prescribed_names::Tuple,
+    prognostic_names::Tuple;
+    seasalt_bins::Int,
+)
+    species_table = aerosol_species_models(seasalt_bins)
+    known_names = map(first, species_table)
+    unknown = setdiff((prescribed_names..., prognostic_names...), known_names)
+    isempty(unknown) || error(
+        "Unknown aerosol name(s) $(Tuple(unknown)) in `prescribed_aerosols` / \
+         `prognostic_aerosols`. Known names: $known_names.",
+    )
+    models = map(species_table) do (species, prescribed, prognostic)
+        if species in prognostic_names
+            isnothing(prognostic) && error(
+                "`$species` is listed in `prognostic_aerosols`, but has no \
+                 prognostic implementation",
+            )
+            prognostic
+        elseif species in prescribed_names
+            prescribed
+        else
+            nothing
+        end
+    end
+    return AtmosAerosols(models...)
 end

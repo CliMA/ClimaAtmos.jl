@@ -943,6 +943,104 @@ Groups chemistry models and types.
 end
 
 """
+    AbstractAerosolModel
+
+Treatment of one aerosol species. Each species slot of
+[`AtmosAerosols`](@ref) holds `nothing` or one concrete subtype.
+"""
+abstract type AbstractAerosolModel end
+
+"""
+    AbstractPrescribedAerosol <: AbstractAerosolModel
+
+Bin mass mixing ratios read from the MERRA-2 climatology in
+`p.tracers.prescribed_aerosols_field`.
+"""
+abstract type AbstractPrescribedAerosol <: AbstractAerosolModel end
+
+"""
+    AbstractPrognosticAerosol <: AbstractAerosolModel
+
+Bin mass mixing ratios diagnosed from the prognostic densities `Y.c.ρ<bin>`.
+"""
+abstract type AbstractPrognosticAerosol <: AbstractAerosolModel end
+
+struct PrescribedSeaSalt <: AbstractPrescribedAerosol end
+struct PrescribedDust <: AbstractPrescribedAerosol end
+struct PrescribedSulfate <: AbstractPrescribedAerosol end
+struct PrescribedBlackCarbon <: AbstractPrescribedAerosol end
+struct PrescribedOrganicCarbon <: AbstractPrescribedAerosol end
+
+struct PrognosticSeaSalt{names} <: AbstractPrognosticAerosol end
+PrognosticSeaSalt(n_bins::Integer) =
+    PrognosticSeaSalt{ntuple(i -> Symbol(:SSLT, lpad(i, 2, '0')), n_bins)}()
+
+Base.broadcastable(x::AbstractAerosolModel) = tuple(x)
+
+"""
+    bin_names(aerosol_model)
+
+Size-bin `Symbol`s of one species, ordered smallest to largest dry radius.
+The names double as the MERRA-2 file variables and, `ρ`-prefixed, as the
+prognostic state names. Callable on instances and concrete types.
+"""
+bin_names(m::AbstractAerosolModel) = bin_names(typeof(m))
+bin_names(::Type{PrescribedSeaSalt}) = (:SSLT01, :SSLT02, :SSLT03, :SSLT04, :SSLT05)
+bin_names(::Type{PrescribedDust}) = (:DST01, :DST02, :DST03, :DST04, :DST05)
+bin_names(::Type{PrescribedSulfate}) = (:SO4,)
+bin_names(::Type{PrescribedBlackCarbon}) = (:CB1, :CB2)
+bin_names(::Type{PrescribedOrganicCarbon}) = (:OC1, :OC2)
+
+bin_names(::Type{PrognosticSeaSalt{names}}) where {names} = names
+
+"""
+    AtmosAerosols
+
+Struct containing all per-species aerosol treatments: each field is `nothing` (off),
+an [`AbstractPrescribedAerosol`](@ref), or an [`AbstractPrognosticAerosol`](@ref).
+Build with `AtmosAerosols(config::AtmosConfig, params)` (see
+`model_getters.jl`) from the
+`prescribed_aerosols`/`prognostic_aerosols` config.
+"""
+@kwdef struct AtmosAerosols{SS, DU, SU, BC, OC}
+    seasalt::SS = nothing
+    dust::DU = nothing
+    sulfate::SU = nothing
+    black_carbon::BC = nothing
+    organic_carbon::OC = nothing
+end
+
+"""
+    species_models(aerosols::AtmosAerosols)
+
+The species models as a `NamedTuple`, so consumers can fold or dispatch
+over the whole group without naming species.
+"""
+species_models(a::AtmosAerosols) =
+    (; a.seasalt, a.dust, a.sulfate, a.black_carbon, a.organic_carbon)
+
+"""
+    requires_ocean_mask(aerosol_model)
+
+Whether the model emits sea salt and therefore needs `p.ocean_fraction` to
+distinguish ocean from land.
+"""
+requires_ocean_mask(::Any) = false
+requires_ocean_mask(::PrognosticSeaSalt) = true
+requires_ocean_mask(a::AtmosAerosols) = any(requires_ocean_mask, species_models(a))
+
+function check_ocean_mask_availability(model, setup)
+    requires_ocean_mask(model.aerosols) || return nothing
+    Setups.is_aquaplanet(setup) && return nothing
+    isnothing(model.surface.flux_scheme) && return nothing
+    error(
+        "Prognostic sea salt needs all ocean or an ocean mask,  \
+        but `$(nameof(typeof(setup)))` is not an aquaplanet and this \
+        run is not coupled with `surface_setup: \"PrescribedSurface\"`.",
+    )
+end
+
+"""
     AtmosWater
 
 Groups moisture and microphysics-related models and types.
@@ -1046,6 +1144,7 @@ end
 end
 
 # Add broadcastable for the new grouped types
+Base.broadcastable(x::AtmosAerosols) = tuple(x)
 Base.broadcastable(x::SCMSetup) = tuple(x)
 Base.broadcastable(x::AtmosWater) = tuple(x)
 Base.broadcastable(x::AtmosRadiation) = tuple(x)
@@ -1059,7 +1158,7 @@ Base.broadcastable(x::COSPModel) = tuple(x)
 # struct definition (later in this file) so the type is in scope when those
 # methods are parsed.
 
-struct AtmosModel{W, SCM, R, TC, PF, GW, VD, SP, SU, NU, CM, COSP}
+struct AtmosModel{W, SCM, R, TC, PF, GW, VD, SP, SU, NU, CM, COSP, AE}
     water::W
     scm_setup::SCM
     radiation::R
@@ -1072,6 +1171,7 @@ struct AtmosModel{W, SCM, R, TC, PF, GW, VD, SP, SU, NU, CM, COSP}
     numerics::NU
     chemistry::CM
     cosp::COSP
+    aerosols::AE
 
     # Whether to apply surface flux tendency (independent of surface conditions)
     disable_surface_flux_tendency::Bool
@@ -1089,6 +1189,7 @@ const ATMOS_MODEL_GROUPS = (
     (AtmosNumerics, :numerics),
     (SCMSetup, :scm_setup),
     (AtmosChem, :chemistry),
+    (AtmosAerosols, :aerosols),
 )
 
 # Auto-generate map from property_name to group_field
@@ -1285,6 +1386,8 @@ function AtmosModel(; kwargs...)
         _create_grouped_struct(AtmosNumerics, atmos_model_kwargs, group_kwargs)
     chemistry =
         _create_grouped_struct(AtmosChem, atmos_model_kwargs, group_kwargs)
+    aerosols =
+        _create_grouped_struct(AtmosAerosols, atmos_model_kwargs, group_kwargs)
 
     vertical_diffusion = get(atmos_model_kwargs, :vertical_diffusion, nothing)
     cosp = get(atmos_model_kwargs, :cosp, nothing)
@@ -1306,6 +1409,7 @@ function AtmosModel(; kwargs...)
         typeof(numerics),
         typeof(chemistry),
         typeof(cosp),
+        typeof(aerosols),
     }(
         water,
         scm_setup,
@@ -1319,6 +1423,7 @@ function AtmosModel(; kwargs...)
         numerics,
         chemistry,
         cosp,
+        aerosols,
         disable_surface_flux_tendency,
     )
 end
