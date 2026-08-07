@@ -907,17 +907,19 @@ function update_diffusion_jacobian!(
         @. ᶜdiffusion_u_matrix = ᶜadvdivᵥ_matrix() ⋅ ∂ᶠρχ_dif_flux_∂ᶜχ
     end
 
-    # Jacobian of the decomposed diffusive enthalpy flux
-    #   F_h = -K_h ∇s_d + Σ_μ h_tot,μ (-K_h ∇q_μ)
+    # Jacobian of the diffusive enthalpy flux
+    #   K_h piece: F_h = -K_h [∇s_d + (h_eff + Φ) ∇q_tot_eff]  (spurious-safe)
+    #   K_e piece: F_h = -K_e ρ ∇h_tot                          (bodily, SGS only)
     # (see edmfx_sgs_diffusive_flux_tendency! and
-    # vertical_diffusion_boundary_layer_tendency!). The derivatives below hold
-    # the h_tot,μ prefactors and the equilibrium condensate partition fixed
-    # (consistent with the other approximations in this Jacobian): each block
-    # is ∂(flux argument)/∂(prognostic variable), with ∂s_d/∂e_tot = cp_d/cv_m
-    # through T, plus the constituent enthalpy carried by the corresponding
-    # water-gradient term. The SGS mass-flux enthalpy Jacobian
-    # (update_sgs_massflux_jacobian!) is not decomposed: it transports whole
-    # parcels at h_tot and so does not incur the dry-air-diffusion artifact.
+    # vertical_diffusion_boundary_layer_tendency!). The Jacobian uses the
+    # frozen-coefficient approximation `F_h ≈ (h_eff + Φ) ᶜdiffusion_h_matrix`
+    # for the (ρe_tot, ρq_tot) cross-term — this captures the dominant K_h
+    # water-enthalpy transport; the additional K_e·∇h_tot piece has the same
+    # ∂s_d/∂e_tot = cp_d/cv_m dependence and is folded into the diagonal
+    # (ρe_tot, ρe_tot) block through ᶜdiffusion_h_matrix. h_eff and
+    # q_tot_eff's rain/snow terms are treated as frozen. The SGS mass-flux
+    # enthalpy Jacobian (update_sgs_massflux_jacobian!) is separate and
+    # transports whole parcels at h_tot without decomposition.
     thermo_params = CAP.thermodynamics_params(params)
     (; ᶜΦ) = p.core
     (; ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice) = p.precomputed
@@ -942,11 +944,27 @@ function update_diffusion_jacobian!(
         ∂ᶜρq_tot_err_∂ᶜρ = matrix[@name(c.ρq_tot), @name(c.ρ)]
         ∂ᶜρq_tot_err_∂ᶜρq_tot = matrix[@name(c.ρq_tot), @name(c.ρq_tot)]
         # ∂F/∂q_tot: T changes at fixed e_tot (through cv_m and e_int_v0),
-        # and the vapor-gradient term carries h_tot,v = h_v + Φ.
+        # and the q_tot_eff-gradient term carries h_tot,eff = h_eff + Φ.
+        # Materialize h_eff (clipped-input form matching the tendency) to
+        # avoid deep lazy nesting inside DiagonalMatrixRow.
+        ᶜq_vap = @. lazy(TD.vapor_specific_humidity(ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice))
+        ᶜq_lcl, ᶜq_icl =
+            p.atmos.microphysics_model isa
+            Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M} ?
+            ((@. lazy(specific(Y.c.ρq_lcl, ᶜρ))), (@. lazy(specific(Y.c.ρq_icl, ᶜρ)))) :
+            (ᶜq_liq, ᶜq_ice)
+        ᶜh_eff = p.scratch.ᶜtemp_scalar_4
+        @. ᶜh_eff =
+            (
+                TD.enthalpy_vapor(thermo_params, ᶜT) * max(FT(0), ᶜq_vap) +
+                TD.enthalpy_liquid(thermo_params, ᶜT) * max(FT(0), ᶜq_lcl) +
+                TD.enthalpy_ice(thermo_params, ᶜT) * max(FT(0), ᶜq_icl)
+            ) /
+            max(max(FT(0), ᶜq_vap) + max(FT(0), ᶜq_lcl) + max(FT(0), ᶜq_icl), eps(FT))
         @. ∂ᶜρe_tot_err_∂ᶜρq_tot +=
             dtγ * ᶜdiffusion_h_matrix ⋅ DiagonalMatrixRow(
                 (
-                    TD.enthalpy_vapor(thermo_params, ᶜT) + ᶜΦ -
+                    ᶜh_eff + ᶜΦ -
                     cp_d * (e_int_v0 + Δcv_v * (ᶜT - T_0)) / ᶜcv_m
                 ) / ᶜρ,
             )
@@ -955,51 +973,16 @@ function update_diffusion_jacobian!(
             dtγ * ᶜdiffusion_h_matrix ⋅ DiagonalMatrixRow(1 / ᶜρ)
     end
 
-    if p.atmos.microphysics_model isa Union{
-        NonEquilibriumMicrophysics1M,
-        NonEquilibriumMicrophysics2M,
-    }
-        for ρq_name in sedimenting_mass_names(Y)
-            phase = condensate_phase(ρq_name)
-            e_int_q = condensate_e_int_offset(phase, params)
-            ∂cv∂q = condensate_cv_difference(phase, params)
-            h_cond_func = enthalpy_function(phase)
-            ∂ᶜρe_tot_err_∂ᶜρq =
-                matrix[@name(c.ρe_tot), center_state_name(ρq_name)]
-            # ∂F/∂q_cond at fixed q_tot: vapor→condensate conversion changes T
-            # (latent heating enters s_d) and moves water-gradient enthalpy
-            # from h_tot,v to h_tot,cond (the Φ parts cancel).
-            @. ∂ᶜρe_tot_err_∂ᶜρq +=
-                dtγ * ᶜdiffusion_h_matrix ⋅
-                DiagonalMatrixRow(
-                    (
-                        cp_d * (e_int_q - ∂cv∂q * (ᶜT - T_0)) / ᶜcv_m +
-                        h_cond_func(thermo_params, ᶜT) -
-                        TD.enthalpy_vapor(thermo_params, ᶜT)
-                    ) / ᶜρ,
-                )
-        end
-    end
-
-    # The microphysics tracers carry no (·, ρ) blocks (see
-    # `diffusion_jacobian_blocks`), so only their diagonals are updated here.
-    # Sedimenting microphysics tracers diffuse at α·K_h — the turbulent
-    # diffusivity scaled by α_vert_diff_tracer — but keep the interfacial-
-    # entrainment diffusivity K_entr at full weight, so their effective
-    # diffusivity is ρ(α·K_h + K_entr), matching
-    # edmfx_sgs_diffusive_flux_tendency!. ᶜdiffusion_h_matrix instead carries
-    # the full-weight ρ(K_h + K_entr) (used by the ρe_tot/ρq_tot diagonals and
-    # the passive tracers below), so under EDMFX a dedicated α-scaled tracer
-    # matrix is built here; the K_entr correction is nonzero only where the
-    # interface closure is active. For non-EDMFX vertical diffusion there is no
-    # K_entr and the diagonal keeps its original α·ᶜdiffusion_h_matrix form.
-    α_vert_diff_microphysics = CAP.α_vert_diff_tracer(params)
+    # Sedimenting mass and number tracers (cloud + precip): K_h diffusion is
+    # applied via q_tot_eff distribution with a frozen ratio (zero self-
+    # contribution), but per-species K_e (entrainment) transport gives a
+    # real self-diagonal. Under EDMF the diagonal receives the K_e-only
+    # diffusion matrix ρ·K_e; for non-EDMF vertical diffusion there is no
+    # K_e and no contribution is added.
     if turbconv_model isa AbstractEDMF
         ᶜtracer_diffusion_matrix = p.scratch.ᶜtridiagonal_matrix_scalar
         @. ∂ᶠρχ_dif_flux_∂ᶜχ =
-            DiagonalMatrixRow(
-                ᶠinterp(ᶜρ) * (α_vert_diff_microphysics * ᶠK_h + ᶠK_entr),
-            ) ⋅ ᶠgradᵥ_matrix()
+            DiagonalMatrixRow(ᶠinterp(ᶜρ) * ᶠK_entr) ⋅ ᶠgradᵥ_matrix()
         @. ᶜtracer_diffusion_matrix = ᶜadvdivᵥ_matrix() ⋅ ∂ᶠρχ_dif_flux_∂ᶜχ
         MatrixFields.unrolled_foreach(sedimenting_tracer_names(Y)) do ρχ_name
             ρχ_state_name = center_state_name(ρχ_name)
@@ -1007,20 +990,14 @@ function update_diffusion_jacobian!(
             @. ∂ᶜρχ_err_∂ᶜρχ +=
                 dtγ * ᶜtracer_diffusion_matrix ⋅ DiagonalMatrixRow(1 / ᶜρ)
         end
-    else
-        MatrixFields.unrolled_foreach(sedimenting_tracer_names(Y)) do ρχ_name
-            ρχ_state_name = center_state_name(ρχ_name)
-            ∂ᶜρχ_err_∂ᶜρχ = matrix[ρχ_state_name, ρχ_state_name]
-            @. ∂ᶜρχ_err_∂ᶜρχ +=
-                dtγ * α_vert_diff_microphysics * ᶜdiffusion_h_matrix ⋅
-                DiagonalMatrixRow(1 / ᶜρ)
-        end
     end
 
-    # Passive (non-water) grid-scale tracers are diffused with the unscaled
-    # K_h (see edmfx_sgs_diffusive_flux_tendency! and
-    # vertical_diffusion_boundary_layer_tendency!). Their diagonals receive
-    # no other implicit contributions, so they are initialized here.
+    # Passive (non-water) grid-scale tracers are diffused with the full
+    # scalar diffusivity: ρ·(K_h + K_e) under EDMF, ρ·K_h under non-EDMF
+    # vertical diffusion (see edmfx_sgs_diffusive_flux_tendency! and
+    # vertical_diffusion_boundary_layer_tendency!) — both captured by
+    # `ᶜdiffusion_h_matrix` above. Their diagonals receive no other
+    # implicit contributions, so they are initialized here.
     MatrixFields.unrolled_foreach(passive_gs_tracer_names(Y)) do ρχ_name
         ρχ_state_name = center_state_name(ρχ_name)
         ∂ᶜρχ_err_∂ᶜρχ = matrix[ρχ_state_name, ρχ_state_name]
@@ -1276,22 +1253,18 @@ function update_sgs_diffusion_jacobian!(matrix, Y, p, dtγ, diffusion_flag)
     @. ∂ᶜq_totʲ_err_∂ᶜq_totʲ +=
         dtγ * DiagonalMatrixRow(1 / ᶜρ) ⋅ ᶜdiffusion_h_matrix
 
-    # Auto-discovered SGS tracers. Sedimenting microphysics species are
-    # diffused with `α·K_h + K_entr` (matching the tendency); passive
-    # tracers keep the full `K_h + K_entr` — so the passive branch reuses
-    # `ᶜdiffusion_h_matrix` directly and the sedimenting branch rebuilds the
-    # α-scaled matrix in scratch.
+    # Sedimenting SGS tracers: K_h piece contributes 0 to the self-diagonal
+    # (lagged ratio distribution). K_e piece (per-species entrainment)
+    # contributes a ρ·K_e self-diagonal via the SGS updraft's own gradient.
     if p.atmos.microphysics_model isa Union{
         NonEquilibriumMicrophysics1M,
         NonEquilibriumMicrophysics2M,
     }
-        α_vert_diff_microphysics = CAP.α_vert_diff_tracer(params)
-        (; ᶠK_h, ᶠK_entr) = p.precomputed
+        (; ᶠK_entr) = p.precomputed
         ᶜsgs_tracer_diffusion_matrix = p.scratch.ᶜtridiagonal_matrix_scalar
         @. ᶜsgs_tracer_diffusion_matrix =
-            ᶜadvdivᵥ_matrix() ⋅ DiagonalMatrixRow(
-                ᶠinterp(ᶜρ) * (α_vert_diff_microphysics * ᶠK_h + ᶠK_entr),
-            ) ⋅ ᶠgradᵥ_matrix()
+            ᶜadvdivᵥ_matrix() ⋅
+            DiagonalMatrixRow(ᶠinterp(ᶜρ) * ᶠK_entr) ⋅ ᶠgradᵥ_matrix()
         MatrixFields.unrolled_foreach(
             sedimenting_sgs_tracer_names(Y),
         ) do χ_name

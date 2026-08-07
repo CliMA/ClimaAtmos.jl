@@ -34,22 +34,21 @@ This function is dispatched based on the type of the vertical diffusion model
       `1/ρ ∇ ⋅ τ`. Default zero-flux boundary
       conditions are assumed for this diffusive term, as surface stresses
       are often handled by `surface_flux_tendency!`.
-    - **Total Energy (`ρe_tot`)**: Based on the divergence of an enthalpy flux
-      in dry-static-energy + water-enthalpy form,
-      `F_E = - ρ K_h (∇_v s_d + Σ_μ h_tot,μ ∇_v q_μ)`, where `K_h` is the eddy
-      diffusivity for heat, `s_d = h_d + Φ` is the dry static energy, and
-      `h_tot,μ = h_μ + Φ` is the total enthalpy carried by water constituent
-      `μ ∈ {vap, liq, ice}`. Zero-flux boundary conditions are explicitly
-      applied at the top and bottom for this term.
-    - **Tracers (e.g., `ρq_tot`, `ρq_lcl`)**: Based on the divergence of tracer fluxes,
-      `F_χ = - ρ K_{h,scaled} ∇_v χ`, where `χ` is the specific
-      tracer quantity and `K_{h,scaled}` is the (potentially scaled for certain
-      tracers like rain and snow using `α_vert_diff_tracer`) eddy diffusivity
-      for scalars. Zero-flux boundary conditions are explicitly applied.
-    - **Note on mass conservation for `q_tot` diffusion**: The current implementation
-      also modifies the tendency of total moist air density `Yₜ.c.ρ` based on the
-      diffusion tendency of total specific humidity `ρq_tot`:
-      `Yₜ.c.ρ -= ᶜρχₜ_diffusion_for_q_tot`.
+    - **Total Energy (`ρe_tot`)**: Divergence of a single-gradient enthalpy flux
+      `F_E = - ρ K_h [∇_v s_d + (h_eff + Φ) ∇_v q_tot_eff]`, where
+      `s_d = h_d + Φ` is the dry static energy, `q_tot_eff = q_tot - q_rai - q_sno`
+      is the aggregate water that diffuses (rain/snow excluded), and
+      `h_eff = (h_v q_v + h_l q_lcl + h_i q_icl) / max(q_water_nonneg, ε)` is the
+      clipped-input mass-weighted enthalpy of the diffusing water. Zero-flux
+      boundary conditions.
+    - **Tracers**: Total water diffuses on `q_tot_eff` with flux
+      `F = - ρ K_h ∇_v q_tot_eff`, applied to `ρq_tot` and (with the same sign)
+      to `ρ` for moist-air mass conservation. Cloud mass species (`ρq_lcl`,
+      `ρq_icl`) inherit their share by pure tendency scaling with the clipped
+      ratio `min(q_μ / q_tot_eff, 1)`; their corresponding number densities
+      scale proportionally to preserve mean particle mass. Rain, snow, and
+      rain number density (`ρq_rai`, `ρq_sno`, `ρn_rai`) receive no diffusion.
+      Passive (non-microphysics) tracers diffuse independently with full `K_h`.
 
 This function is acting as a wrapper around the specific implementations
 for different turbulence and convection models.
@@ -61,8 +60,9 @@ the model-specific cache `p`.
 Arguments:
 - `Yₜ`: The tendency state vector.
 - `Y`: The current state vector.
-- `p`: Cache containing parameters (e.g., `p.params` for `CAP.α_vert_diff_tracer`),
-       atmospheric model configurations (like `p.atmos.vertical_diffusion`), and scratch space.
+- `p`: Cache containing parameters, atmospheric model configurations
+       (like `p.atmos.vertical_diffusion`), precomputed thermodynamic
+       quantities, and scratch space.
 - `t`: Current simulation time (not directly used in diffusion calculations).
 - `vert_diff_model` (for dispatched methods): The specific vertical diffusion model instance.
 
@@ -90,9 +90,8 @@ function vertical_diffusion_boundary_layer_tendency!(
 )
     FT = eltype(Y)
     (; vertical_diffusion) = p.atmos
-    α_vert_diff_microphysics = CAP.α_vert_diff_tracer(p.params)
     thermo_params = CAP.thermodynamics_params(p.params)
-    (; ᶜu, ᶜp, ᶜT, ᶜq_liq, ᶜq_ice) = p.precomputed
+    (; ᶜu, ᶜp, ᶜT, ᶜq_liq, ᶜq_ice, ᶜq_tot_nonneg) = p.precomputed
     ᶜK_h = p.scratch.ᶜtemp_scalar
     if vertical_diffusion isa DecayWithHeightDiffusion
         ᶜK_h .= ᶜcompute_eddy_diffusivity_coefficient(Y.c.ρ, vertical_diffusion)
@@ -116,38 +115,75 @@ function vertical_diffusion_boundary_layer_tendency!(
         ) # assumes ᶜK_u = ᶜK_h
     end
 
-    # Total enthalpy diffusion, using the dry-static-energy + water-enthalpy
-    # decomposition F_h = -K_h ∇s_d + Σ_μ h_tot,μ (-K_h ∇q_μ); see the
-    # matching term in `edmfx_sgs_diffusive_flux_tendency!` for details.
-    # Note: F_qμ for liquid and ice uses unscaled K_h (omitting the tracer
-    # vertical diffusion factor α_vert_diff_tracer) to maintain exact energetic
-    # consistency with the unscaled ρq_tot diffusion equation, preserve total
-    # water invariance, and align with the implicit solver's Jacobian.
+    # Enthalpy diffusion. Dry static energy piece applies in all
+    # configurations (including dry); the water enthalpy piece is added
+    # below when ρq_tot is prognostic.
     (; ᶜΦ) = p.core
-    (; ᶜq_tot_nonneg) = p.precomputed
-    ᶜq_vap = @. lazy(TD.vapor_specific_humidity(ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice))
-    ᶠgrad_h = ᶠtotal_enthalpy_gradientᵥ(thermo_params, ᶜT, ᶜΦ, ᶜq_vap, ᶜq_liq, ᶜq_ice)
+    ᶠρK = @. lazy(ᶠinterp(Y.c.ρ) / ᶠinterp(1 / max(ᶜK_h, ϵK)))
     @. Yₜ.c.ρe_tot -=
-        ᶜdiffdivᵥ(-(ᶠinterp(Y.c.ρ) / ᶠinterp(1 / max(ᶜK_h, ϵK)) * ᶠgrad_h))
+        ᶜdiffdivᵥ(-(ᶠρK * ᶠgradᵥ(TD.dry_static_energy(thermo_params, ᶜT, ᶜΦ))))
 
-    ᶜρχₜ_diffusion = p.scratch.ᶜtemp_scalar_2
-    ᶜK_h_scaled = p.scratch.ᶜtemp_scalar_3
+    # Water diffusion on q_tot_eff = q_tot - q_rai - q_sno (rain/snow
+    # excluded). Cloud species (lcl, icl) inherit their share of the
+    # aggregate q_tot diffusion via clipped ratio; rain, snow, and n_rai
+    # do not diffuse. Enthalpy water contribution uses h_eff-weighted
+    # single-gradient form.
+    if !(p.atmos.microphysics_model isa DryModel)
+        ᶜq_tot_eff =
+            p.atmos.microphysics_model isa
+            Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M} ?
+            (@. lazy(specific(Y.c.ρq_tot - Y.c.ρq_rai - Y.c.ρq_sno, Y.c.ρ))) :
+            (@. lazy(specific(Y.c.ρq_tot, Y.c.ρ)))
+        ᶜρq_tot_diff = p.scratch.ᶜtemp_scalar_2
+        @. ᶜρq_tot_diff = ᶜdiffdivᵥ(-(ᶠρK * ᶠgradᵥ(ᶜq_tot_eff)))
+        @. Yₜ.c.ρq_tot -= ᶜρq_tot_diff
+        @. Yₜ.c.ρ -= ᶜρq_tot_diff
 
+        # Water enthalpy contribution: -ρK·(h_eff+Φ)·∇q_tot_eff.
+        ᶜq_vap = @. lazy(TD.vapor_specific_humidity(ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice))
+        ᶜq_lcl, ᶜq_icl =
+            p.atmos.microphysics_model isa
+            Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M} ?
+            (
+                (@. lazy(specific(Y.c.ρq_lcl, Y.c.ρ))),
+                (@. lazy(specific(Y.c.ρq_icl, Y.c.ρ))),
+            ) :
+            (ᶜq_liq, ᶜq_ice)
+        ᶜh_eff_plus_Φ = p.scratch.ᶜtemp_scalar_3
+        @. ᶜh_eff_plus_Φ =
+            (
+                TD.enthalpy_vapor(thermo_params, ᶜT) * max(FT(0), ᶜq_vap) +
+                TD.enthalpy_liquid(thermo_params, ᶜT) * max(FT(0), ᶜq_lcl) +
+                TD.enthalpy_ice(thermo_params, ᶜT) * max(FT(0), ᶜq_icl)
+            ) /
+            max(max(FT(0), ᶜq_vap) + max(FT(0), ᶜq_lcl) + max(FT(0), ᶜq_icl), eps(FT)) + ᶜΦ
+        @. Yₜ.c.ρe_tot -=
+            ᶜdiffdivᵥ(-(ᶠρK * ᶠinterp(ᶜh_eff_plus_Φ) * ᶠgradᵥ(ᶜq_tot_eff)))
+
+        # Distribute ρq_tot_diff to cloud mass (and number) species.
+        ᶜratio = p.scratch.ᶜtemp_scalar_4
+        for (ρq_name, ρn_name) in
+            ((@name(c.ρq_lcl), @name(c.ρn_lcl)), (@name(c.ρq_icl), @name(c.ρn_icl)))
+            MatrixFields.has_field(Y, ρq_name) || continue
+            ᶜρq = MatrixFields.get_field(Y, ρq_name)
+            ᶜρqₜ = MatrixFields.get_field(Yₜ, ρq_name)
+            @. ᶜratio =
+                max(FT(0), min(FT(1), specific(ᶜρq, Y.c.ρ) / max(ᶜq_tot_eff, eps(FT))))
+            @. ᶜρqₜ -= ᶜratio * ᶜρq_tot_diff
+            if MatrixFields.has_field(Y, ρn_name)
+                ᶜρn = MatrixFields.get_field(Y, ρn_name)
+                ᶜρnₜ = MatrixFields.get_field(Yₜ, ρn_name)
+                @. ᶜρnₜ -= ᶜratio * max(FT(0), ᶜρn) / max(ᶜρq, eps(FT)) * ᶜρq_tot_diff
+            end
+        end
+    end
+
+    # Passive (non-microphysics) grid-scale tracers: independent diffusion at
+    # full K_h. Skip microphysics species (handled above or no diffusion).
     foreach_gs_tracer(Yₜ, Y) do ᶜρχₜ, ᶜρχ, ρχ_name
-        if ρχ_name in gs_sedimenting_tracer_candidates
-            @. ᶜK_h_scaled = α_vert_diff_microphysics * ᶜK_h
-        else
-            @. ᶜK_h_scaled = ᶜK_h
-        end
-        ᶠρK = @. lazy(ᶠinterp(Y.c.ρ) / ᶠinterp(1 / max(ᶜK_h_scaled, ϵK)))
-        ᶜχ = @. lazy(specific(ᶜρχ, Y.c.ρ))
-        ᶜ∇ᵥρD∇χₜ = ᶜdiffusive_flux_divergenceᵥ(ᶠρK, ᶜχ)
-        @. ᶜρχₜ_diffusion = ᶜ∇ᵥρD∇χₜ
-        @. ᶜρχₜ -= ᶜρχₜ_diffusion
-        # Only add contribution from total water diffusion to mass tendency
-        # (exclude contributions from diffusion of condensate, precipitation)
-        if ρχ_name == @name(ρq_tot)
-            @. Yₜ.c.ρ -= ᶜρχₜ_diffusion
-        end
+        ρχ_name in microphysics_tracer_names(Y) && return
+        @. ᶜρχₜ -= ᶜdiffdivᵥ(
+            -(ᶠinterp(Y.c.ρ) / ᶠinterp(1 / max(ᶜK_h, ϵK)) * ᶠgradᵥ(specific(ᶜρχ, Y.c.ρ))),
+        )
     end
 end

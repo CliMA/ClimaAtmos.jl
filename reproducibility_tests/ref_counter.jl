@@ -1,4 +1,4 @@
-395
+396
 
 # **README**
 #
@@ -31,10 +31,16 @@
 # 2) Note the date alongside a brief description of the PR in question.
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 #=
+396
+- Make vertical water diffusion consistent: diffuse q_tot on q_tot_eff
+  (excluding rain/snow), distribute the aggregate q_tot diffusion to
+  suspended microphysics species (ρq_lcl, ρq_icl) via clipped ratio, and
+  scale their number densities proportionally. Enthalpy uses a single-
+  gradient h_eff-weighted form.
+
 395
 - Update to CloudMicrophysics 0.38.1
 
-#=
 394
 - Species-consistent hyperdiffusion.
 - Apply sgs microphyiscs constraints.
