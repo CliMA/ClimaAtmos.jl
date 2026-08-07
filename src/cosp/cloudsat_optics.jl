@@ -241,8 +241,8 @@ end
     FT = typeof(pres_hpa + T + qv + freq)
     T_safe = max(T, FT(1))
     th = FT(300) / T_safe
-    e = qv * pres_hpa / (qv + FT(0.622)) / FT(1000)
-    p = pres_hpa / FT(1000) - e
+    e = qv * pres_hpa / (qv + FT(0.622)) / FT(10)
+    p = pres_hpa / FT(10) - e
     e_th = e * th
     one_th = one(FT) - th
     pth3 = p * th^3
@@ -285,8 +285,8 @@ end
 
     sumo = zero(FT)
     aux1 = FT(4.8) * e_th
-    for i in eachindex(H2O_V1)
-        v1 = FT(H2O_V1[i])
+    for i in eachindex(H2O_V0)
+        v1 = FT(H2O_V0[i])
         b1 = FT(H2O_B1[i])
         b2 = FT(H2O_B2[i])
         b3 = FT(H2O_B3[i])
