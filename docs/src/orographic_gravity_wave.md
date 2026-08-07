@@ -478,8 +478,7 @@ The scheme and its topographic-information source are selected with the
 `topo_drag.res.nc` artifact, `raw_topo` loads a preprocessed HDF5 artifact built
 by the pipeline below, `raw_topo_online` runs that pipeline at initialization so
 the drag input matches the run's resolution and the `γ`, `h_frac`, and
-`α_smoothing` (`ogw_smoothing_scale_fraction`) parameters, and a `linear` test
-path accepts user-supplied analytic drag coefficients.
+`α_smoothing` (`ogw_smoothing_scale_fraction`) parameters.
 
 !!! note "raw_topo artifacts are tied to their generation parameters"
 

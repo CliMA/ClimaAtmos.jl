@@ -559,7 +559,6 @@ key.
     `params.orographic_gravity_wave_params`. `"raw_topo"` loads a preprocessed
     HDF5 artifact, `"raw_topo_online"` runs the preprocessing pipeline at
     initialization, and `"gfdl_restart"` regrids the GFDL restart file.
-  - `"linear"`: `LinearOrographicGravityWave`.
 
 Any other value raises an error.
 """
@@ -590,7 +589,7 @@ function get_orographic_gravity_wave_model(parsed_args, params, ::Type{FT}) wher
         )
     else
         error(
-            """Unknown orographic_gravity_wave `$ogw_name`. Expected: ~, "gfdl_restart", "raw_topo", "raw_topo_online", or "linear".""",
+            """Unknown orographic_gravity_wave `$ogw_name`. Expected: ~, "gfdl_restart", "raw_topo", or "raw_topo_online".""",
         )
     end
 end
