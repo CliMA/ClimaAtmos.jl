@@ -53,7 +53,7 @@ function basic_timers()
     @info """Basic run statistics:
         • Setup time: $setup_time [s]
         • Warmup (compilation) time: $compile_time [s]
-        • Mean GPU time: $(mean(benchmark.times * 1e-6)) [μs]
+        • Mean GPU time: $(mean(benchmark.times * 1e-3)) [ms]
     """
     return benchmark
 end
