@@ -4,7 +4,6 @@ reduced component models run correctly.
 =#
 using Logging
 
-# List of files to skipe
 case_files = Set([
     "models/hyperdiff_tendency.jl",
     "models/implicit_tendency.jl",
@@ -30,7 +29,7 @@ for model in case_files
         catch e
             printstyled("$model : ERROR\n"; color = :red, bold = true)
             print(" - $e\n")
-            has_faliures = true
+            global has_faliures = true
         end
     end
 end
