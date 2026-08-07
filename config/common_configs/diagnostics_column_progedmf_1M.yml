@@ -1,5 +1,5 @@
 diagnostics:
-  - short_name: [ta, thetaa, pfull, rhoa, ua, va, wa, hur, hus, cl, clw, cli, husra, hussn]
+  - short_name: [ta, thetaa, pfull, rhoa, ua, va, wa, hur, hus, cl, clw, cli, husra, hussn, ssatl, ssati]
     period: 10mins
   - short_name: [ts, hfss, hfls, pr, lwp, iwp, rwp, swp]
     period: 10mins

@@ -286,6 +286,57 @@ add_diagnostic_variable!(short_name = "hur", units = "",
 )
 
 ###
+# Supersaturation over liquid and over ice (3d)
+###
+compute_ssatl(state, cache, time) =
+    compute_ssatl(state, cache, time, cache.atmos.microphysics_model)
+compute_ssatl(_, _, _, model) = error_diagnostic_variable("ssatl", model)
+
+function compute_ssatl(state, cache, _, ::MoistMicrophysics)
+    tps = CAP.thermodynamics_params(cache.params)
+    (; ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice) = cache.precomputed
+    return @. lazy(
+        TD.supersaturation(
+            tps,
+            ᶜq_tot_nonneg - ᶜq_liq - ᶜq_ice,
+            state.c.ρ,
+            ᶜT,
+            TD.Liquid(),
+        ),
+    )
+end
+
+add_diagnostic_variable!(short_name = "ssatl", units = "",
+    long_name = "Supersaturation over liquid water",
+    comments = "Water-vapor supersaturation with respect to liquid.",
+    compute = compute_ssatl,
+)
+
+compute_ssati(state, cache, time) =
+    compute_ssati(state, cache, time, cache.atmos.microphysics_model)
+compute_ssati(_, _, _, model) = error_diagnostic_variable("ssati", model)
+
+function compute_ssati(state, cache, _, ::MoistMicrophysics)
+    tps = CAP.thermodynamics_params(cache.params)
+    (; ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice) = cache.precomputed
+    return @. lazy(
+        TD.supersaturation(
+            tps,
+            ᶜq_tot_nonneg - ᶜq_liq - ᶜq_ice,
+            state.c.ρ,
+            ᶜT,
+            TD.Ice(),
+        ),
+    )
+end
+
+add_diagnostic_variable!(short_name = "ssati", units = "",
+    long_name = "Supersaturation over ice",
+    comments = "Water-vapor supersaturation with respect to ice.",
+    compute = compute_ssati,
+)
+
+###
 # Total specific humidity (3d)
 ###
 compute_hus(state, cache, time) =

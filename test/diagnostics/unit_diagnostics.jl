@@ -388,7 +388,7 @@ VALID_CASES = [
     # Union{DryModel, MoistMicrophysics}: single method
     cases(("pr", "prra", "prsn"), :dry)...,
     # EquilibriumMicrophysics0M (precomputed cache), NonEquilibriumMicrophysics (state)
-    cases(("clw", "cli", "lwp", "iwp"), (:m0, :m1))...,
+    cases(("clw", "cli", "lwp", "iwp", "ssatl", "ssati"), (:m0, :m1))...,
     # DryModel, MoistMicrophysics (different flux computation)
     case("hfss",  (:dry, :m0)),
     # Non-EDMF (Smagorinsky formula), EDMF (mixing-length closure)
