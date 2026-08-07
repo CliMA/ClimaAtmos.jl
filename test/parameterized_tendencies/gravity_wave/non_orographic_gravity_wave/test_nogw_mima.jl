@@ -196,6 +196,7 @@ scratch = (;
     ᶜtemp_scalar_5 = similar(ᶜz, FT),
     ᶜtemp_scalar_6 = similar(ᶜz, FT),
     temp_field_level = similar(Fields.level(ᶜz, 1), FT),
+    temp_field_level_2 = similar(Fields.level(ᶜz, 1), FT),
 )
 
 for j in 1:length(lat)
@@ -276,6 +277,20 @@ ENV["GKSwstype"] = "nul"
 output_dir = "nonorographic_gravity_wave_test_mima"
 mkpath(output_dir)
 
+function percent_difference(clima, mima; floor_fraction = FT(1e-3))
+    # NCDatasets hands back `Union{Missing, Float32}` arrays. Converting to `FT`
+    # first keeps the arithmetic below in one type, and it throws loudly if the
+    # MiMA file ever does carry masked points, rather than quietly turning them
+    # into more non-finite plot input.
+    reference = convert(Array{FT}, mima)
+    # `floatmin` only matters for an all-zero MiMA slice, which would otherwise
+    # put a zero floor back in place.
+    denominator_floor =
+        max(floor_fraction * maximum(abs, reference), floatmin(FT))
+    return (clima .- reference) ./ max.(abs.(reference), denominator_floor) .*
+           100
+end
+
 for it in 1:length(time)
     # Generate empty figure
     local fig = generate_empty_figure()
@@ -320,8 +335,10 @@ for it in 1:length(time)
         fig;
         X = lat,
         Y = pfull,
-        Z = (uforcing_zonalave[:, end:-1:1, it] .- gwfu_zonalave[:, :, it]) ./
-            gwfu_zonalave[:, :, it] .* 100,
+        Z = percent_difference(
+            uforcing_zonalave[:, end:-1:1, it],
+            gwfu_zonalave[:, :, it],
+        ),
         levels = range(-100, 100; length = 20),
         title,
         p_loc = (1, 3),
@@ -354,8 +371,10 @@ for it in 1:length(time)
         fig;
         X = lat,
         Y = pfull,
-        Z = (vforcing_zonalave[:, end:-1:1, it] .- gwfv_zonalave[:, :, it]) ./
-            gwfv_zonalave[:, :, it] .* 100,
+        Z = percent_difference(
+            vforcing_zonalave[:, end:-1:1, it],
+            gwfv_zonalave[:, :, it],
+        ),
         levels = range(-100, 100; length = 20),
         title,
         p_loc = (2, 3),
