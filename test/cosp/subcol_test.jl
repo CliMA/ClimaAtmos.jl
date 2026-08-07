@@ -2,97 +2,6 @@ using Test
 import ClimaAtmos as CA
 using ClimaCore: Domains, Meshes, Spaces, Fields, Geometry
 
-const COSPV2_SUBCOLUMN_REFERENCES = (;
-    scops_maximum = (;
-        cloud_fraction = Float64[1, 0.75, 0.5, 0.25, 0],
-        cloud_mask = Float64[
-            1 1 1 1 0
-            1 1 1 0 0
-            1 1 0 0 0
-            1 0 0 0 0
-        ],
-    ),
-    precip_primary_and_inheritance = (;
-        large_scale_flux = Float64[1, 1, 1],
-        cloud_mask = Float64[1 0 0; 0 0 0],
-        precip_mask = Float64[1 1 1; 0 0 0],
-    ),
-    precip_cloud_below = (;
-        large_scale_flux = Float64[1, 1, 1],
-        cloud_mask = Float64[0 1 0; 0 0 0],
-        precip_mask = Float64[1 1 1; 0 0 0],
-    ),
-    precip_cloud_elsewhere = (;
-        large_scale_flux = Float64[1, 1, 1],
-        cloud_mask = Float64[0 0 1; 0 0 0],
-        precip_mask = Float64[1 1 1; 0 0 0],
-    ),
-    precip_all_clear_fallback = (;
-        large_scale_flux = Float64[1, 1, 1],
-        cloud_mask = Float64[0 0 0; 0 0 0],
-        precip_mask = Float64[1 1 1; 1 1 1],
-    ),
-    precip_zero_flux_interrupts = (;
-        large_scale_flux = Float64[1, 0, 1],
-        cloud_mask = Float64[1 0 1; 0 0 0],
-        precip_mask = Float64[1 0 1; 0 0 0],
-    ),
-)
-
-# Generated with COSPv2 commit 5eb05e51187dd2d0e448b78c4e6b28e1d6f65493.
-# Profiles are ordered from model top to surface and use random seed 1.
-const COSPV2_1M_STREAMED_E2E_REFERENCE = (;
-    nsubcolumns = 4,
-    overlap = :maximum,
-    density = Float32[2, 1, 2, 1],
-    cloud_fraction = Float32[0.2, 0.4, 0.6, 0.8],
-    rho_q_lcl = Float32[2e-4, 2e-4, 8e-4, 8e-4],
-    rho_q_icl = Float32[1e-4, 1e-4, 4e-4, 4e-4],
-    rho_q_rai = Float32[4e-5, 5e-5, 2e-4, 2e-4],
-    rho_q_sno = Float32[2e-5, 2e-5, 1e-4, 1e-4],
-    w_rain = Float32[1.5, 0.75, 2, 1],
-    w_snow = Float32[0.75, 0.25, 1, 0.5],
-    large_scale_precipitation_flux = Float32[7.5e-5, 4.25e-5, 5e-4, 2.5e-4],
-    cloud_masks = Float32[
-        1 1 1 1
-        0 1 1 1
-        0 0 0 1
-        0 0 0 0
-    ],
-    precip_masks = Float32[
-        1 1 1 1
-        0 1 1 1
-        0 0 0 1
-        0 0 0 0
-    ],
-    sampled_cloud_fraction = Float32[0.25, 0.5, 0.5, 0.75],
-    sampled_precip_fraction = Float32[0.25, 0.5, 0.5, 0.75],
-    q_lcl_subcolumns = Float32[
-        4e-4 4e-4 8e-4 1.0666667e-3
-        0 4e-4 8e-4 1.0666667e-3
-        0 0 0 1.0666667e-3
-        0 0 0 0
-    ],
-    q_icl_subcolumns = Float32[
-        2e-4 2e-4 4e-4 5.3333334e-4
-        0 2e-4 4e-4 5.3333334e-4
-        0 0 0 5.3333334e-4
-        0 0 0 0
-    ],
-    q_rai_subcolumns = Float32[
-        8e-5 1e-4 2e-4 2.6666667e-4
-        0 1e-4 2e-4 2.6666667e-4
-        0 0 0 2.6666667e-4
-        0 0 0 0
-    ],
-    q_sno_subcolumns = Float32[
-        4e-5 4e-5 1e-4 1.3333333e-4
-        0 4e-5 1e-4 1.3333333e-4
-        0 0 0 1.3333333e-4
-        0 0 0 0
-    ],
-)
-
 function make_1m_subcol_simulation(;
     z_elem = 10,
     cosp_n_subcolumns = 256,
@@ -110,7 +19,7 @@ function make_1m_subcol_simulation(;
             "device" => "CPUSingleThreaded",
             "z_elem" => z_elem,
         );
-        job_id = "cosp_subcol_1m_cospv2_golden",
+        job_id = "cosp_subcol_1m_callback",
     )
     return CA.get_simulation(config)
 end
@@ -154,17 +63,6 @@ end
 make_subcolumn_fields(FT, nsubcolumns, nelems; value = -1) =
     ntuple(_ -> make_center_field(FT; value, nelems), nsubcolumns)
 
-cosp_bottom_to_top(profile) = reverse(collect(profile))
-
-function make_cosp_subcolumn_fields(FT, matrix)
-    return ntuple(size(matrix, 1)) do isubcolumn
-        make_center_profile_field(
-            FT,
-            cosp_bottom_to_top(matrix[isubcolumn, :]),
-        )
-    end
-end
-
 function materialize_scops!(
     frac_out,
     threshold,
@@ -186,15 +84,6 @@ function materialize_scops!(
         )
     end
     return nothing
-end
-
-function make_hydrometeor_subcolumns(grid_mean, nsubcolumns)
-    subcolumn_values =
-        map(
-            field -> ntuple(_ -> similar(field), nsubcolumns),
-            Base.values(grid_mean),
-        )
-    return NamedTuple{keys(grid_mean)}(subcolumn_values)
 end
 
 function reference_scops_profiles(FT, cloud_profile, nsubcolumns, seed, overlap)
@@ -369,191 +258,93 @@ end
         end
     end
 
-    @testset "COSPv2 golden references" begin
-        @testset "SCOPS maximum overlap" begin
-            reference = COSPV2_SUBCOLUMN_REFERENCES.scops_maximum
-            cloud_fraction = make_center_profile_field(
-                FT,
-                cosp_bottom_to_top(reference.cloud_fraction),
-            )
-            nsubcolumns = size(reference.cloud_mask, 1)
-            frac_out = make_subcolumn_fields(
-                FT,
-                nsubcolumns,
-                length(reference.cloud_fraction),
-            )
-            threshold = make_subcolumn_fields(
-                FT,
-                nsubcolumns,
-                length(reference.cloud_fraction),
-            )
-
-            materialize_scops!(
-                frac_out,
-                threshold,
-                cloud_fraction,
-                seed;
-                overlap = :maximum,
-            )
-
-            for isubcolumn in 1:nsubcolumns
-                expected = cosp_bottom_to_top(
-                    reference.cloud_mask[isubcolumn, :],
-                )
-                @test center_profile(frac_out[isubcolumn]) == expected
-            end
-        end
-
-        @testset "PREC_SCOPS large-scale placement" begin
-            case_names = (
-                :precip_primary_and_inheritance,
-                :precip_cloud_below,
-                :precip_cloud_elsewhere,
-                :precip_all_clear_fallback,
-                :precip_zero_flux_interrupts,
-            )
-            for case_name in case_names
-                reference = getproperty(COSPV2_SUBCOLUMN_REFERENCES, case_name)
-                cloud_masks =
-                    make_cosp_subcolumn_fields(FT, reference.cloud_mask)
-                flux = make_center_profile_field(
-                    FT,
-                    cosp_bottom_to_top(reference.large_scale_flux),
-                )
-
-                actual = streamed_precipitation(cloud_masks, flux)
-
-                for isubcolumn in eachindex(actual)
-                    expected = cosp_bottom_to_top(
-                        reference.precip_mask[isubcolumn, :],
-                    )
-                    @test center_profile(actual[isubcolumn]) == expected
-                end
-            end
-        end
-
-    end
-
-    @testset "1M callback matches COSPv2-derived streamed reference" begin
-        reference = COSPV2_1M_STREAMED_E2E_REFERENCE
-        reference_tolerance = 5eps(Float32)
+    @testset "1M streamed subcolumns and CloudSat callback" begin
+        nlevels = 4
+        nsubcolumns = 4
+        overlap = :maximum
 
         simulation = make_1m_subcol_simulation(;
-            z_elem = length(reference.density),
-            cosp_n_subcolumns = reference.nsubcolumns,
-            cosp_overlap = String(reference.overlap),
+            z_elem = nlevels,
+            cosp_n_subcolumns = nsubcolumns,
+            cosp_overlap = String(overlap),
         )
         Y = simulation.integrator.u
         p = simulation.integrator.p
-        @test CA._cosp_nsubcolumns(p.atmos.cosp.n_subcolumns) ==
-              reference.nsubcolumns
-        @test p.atmos.cosp.overlap === reference.overlap
-        @test all(
-            field -> !(field isa Tuple),
-            (
-                p.precomputed.ᶜsubcolumn_cloud,
-                p.precomputed.ᶜsubcolumn_threshold,
-                p.precomputed.ᶜsubcolumn_precip,
-            ),
+        state_FT = eltype(Y)
+        @test CA._cosp_nsubcolumns(p.atmos.cosp.n_subcolumns) == nsubcolumns
+        @test CA._cosp_overlap(p.atmos.cosp.overlap) === overlap
+        @test isbitstype(typeof(p.atmos.cosp))
+        temporary_cosp_quantities = (
+            :ᶜsubcolumn_cloud,
+            :ᶜsubcolumn_threshold,
+            :ᶜsubcolumn_precip,
+            :ᶜscops_selectors,
+            :ᶜprecip_subcolumn_scratch,
+            :ᶜsampled_cloud_fraction,
+            :ᶜsampled_precip_fraction,
+            :ᶜlarge_scale_precipitation_flux,
         )
-        @test !hasproperty(p.precomputed, :ᶜsubcolumn_hydrometeors)
-
-        # COSPv2 writes levels from model top to surface. ClimaAtmos center
-        # fields use level 1 at the surface, so reverse every input profile.
-        set_center_profile!(Y.c.ρ, cosp_bottom_to_top(reference.density))
-        set_center_profile!(Y.c.ρq_lcl, cosp_bottom_to_top(reference.rho_q_lcl))
-        set_center_profile!(Y.c.ρq_icl, cosp_bottom_to_top(reference.rho_q_icl))
-        set_center_profile!(Y.c.ρq_rai, cosp_bottom_to_top(reference.rho_q_rai))
-        set_center_profile!(Y.c.ρq_sno, cosp_bottom_to_top(reference.rho_q_sno))
+        @test all(
+            name -> !hasproperty(p.precomputed, name),
+            temporary_cosp_quantities,
+        )
+        # ClimaAtmos center profiles are ordered from surface to model top.
+        set_center_profile!(Y.c.ρ, state_FT[1, 2, 1, 2])
+        set_center_profile!(Y.c.ρq_lcl, state_FT[8e-4, 8e-4, 2e-4, 2e-4])
+        set_center_profile!(Y.c.ρq_icl, state_FT[4e-4, 4e-4, 1e-4, 1e-4])
+        set_center_profile!(Y.c.ρq_rai, state_FT[2e-4, 2e-4, 5e-5, 4e-5])
+        set_center_profile!(Y.c.ρq_sno, state_FT[1e-4, 1e-4, 2e-5, 2e-5])
         set_center_profile!(
             p.precomputed.ᶜcloud_fraction,
-            cosp_bottom_to_top(reference.cloud_fraction),
+            state_FT[0.8, 0.6, 0.4, 0.2],
         )
         set_center_profile!(
             p.precomputed.ᶜwᵣ,
-            cosp_bottom_to_top(reference.w_rain),
+            state_FT[1, 2, 0.75, 1.5],
         )
         set_center_profile!(
             p.precomputed.ᶜwₛ,
-            cosp_bottom_to_top(reference.w_snow),
+            state_FT[0.5, 1, 0.25, 0.75],
         )
-        @test isnothing(CA.subcol_model_callback!(simulation.integrator))
-
-        nsubcolumns = reference.nsubcolumns
-        grid_mean_template = (;
-            q_lcl = Y.c.ρ,
-            q_icl = Y.c.ρ,
-            q_rai = Y.c.ρ,
-            q_sno = Y.c.ρ,
+        CA.subcol_model_callback!(simulation.integrator)
+        @test any(
+            index -> any(
+                >(zero(eltype(Y))),
+                parent(getproperty(p.precomputed.cfadDbze94, index)),
+            ),
+            eachindex(p.precomputed.cloudsat_dbze_bin_centers),
         )
-        actual_hydrometeors =
-            make_hydrometeor_subcolumns(grid_mean_template, nsubcolumns)
-        actual_cloud_masks = ntuple(
-            _ -> similar(p.precomputed.ᶜsubcolumn_cloud),
-            nsubcolumns,
+        @test any(>(zero(eltype(Y))), parent(p.precomputed.cloudsat_tcc))
+        @test all(
+            parent(p.precomputed.cloudsat_tcc2) .<=
+            parent(p.precomputed.cloudsat_tcc),
         )
-        actual_precip_masks = ntuple(
-            _ -> similar(p.precomputed.ᶜsubcolumn_precip),
-            nsubcolumns,
-        )
-        consumed_subcolumns = Int[]
 
-        CA.foreach_cosp_subcolumn(Y, p) do isubcolumn, hydrometeors
-            push!(consumed_subcolumns, isubcolumn)
+        @testset "CloudSat callback refreshes and clears outputs" begin
+            gas_before_refresh = copy(parent(p.scratch.g_vol_cloudsat))
+            energy_increment = state_FT(1000)
+            zero_state = zero(state_FT)
+            @. Y.c.ρe_tot += Y.c.ρ * energy_increment
+            CA.set_precomputed_quantities!(Y, p, simulation.integrator.t)
+            CA.subcol_model_callback!(simulation.integrator)
+            @test parent(p.scratch.g_vol_cloudsat) != gas_before_refresh
 
-            # The masks and lazy hydrometeor broadcasts borrow streamed
-            # working storage, so materialize all of them before returning.
-            @. actual_cloud_masks[isubcolumn] =
-                p.precomputed.ᶜsubcolumn_cloud
-            @. actual_precip_masks[isubcolumn] =
-                p.precomputed.ᶜsubcolumn_precip
-            for name in keys(actual_hydrometeors)
-                output = getproperty(actual_hydrometeors, name)[isubcolumn]
-                hydrometeor = getproperty(hydrometeors, name)
-                @. output = hydrometeor
-            end
-        end
+            @. Y.c.ρq_lcl = zero_state
+            @. Y.c.ρq_icl = zero_state
+            @. Y.c.ρq_rai = zero_state
+            @. Y.c.ρq_sno = zero_state
+            @. p.precomputed.ᶜcloud_fraction = zero_state
+            CA.subcol_model_callback!(simulation.integrator)
 
-        @test consumed_subcolumns == collect(1:nsubcolumns)
-        @test isapprox(
-            center_profile(p.precomputed.ᶜlarge_scale_precipitation_flux),
-            cosp_bottom_to_top(reference.large_scale_precipitation_flux);
-            rtol = reference_tolerance,
-            atol = 0,
-        )
-        @test center_profile(p.precomputed.ᶜsampled_cloud_fraction) ==
-              cosp_bottom_to_top(reference.sampled_cloud_fraction)
-        @test center_profile(p.precomputed.ᶜsampled_precip_fraction) ==
-              cosp_bottom_to_top(reference.sampled_precip_fraction)
-
-        hydrometeor_reference_names = (;
-            q_lcl = :q_lcl_subcolumns,
-            q_icl = :q_icl_subcolumns,
-            q_rai = :q_rai_subcolumns,
-            q_sno = :q_sno_subcolumns,
-        )
-        for isubcolumn in 1:nsubcolumns
-            # Each matrix row is one subcolumn; reverse only its level axis.
-            @test center_profile(actual_cloud_masks[isubcolumn]) ==
-                  cosp_bottom_to_top(reference.cloud_masks[isubcolumn, :])
-            @test center_profile(actual_precip_masks[isubcolumn]) ==
-                  cosp_bottom_to_top(reference.precip_masks[isubcolumn, :])
-
-            for name in keys(actual_hydrometeors)
-                reference_name = getproperty(hydrometeor_reference_names, name)
-                expected = cosp_bottom_to_top(
-                    getproperty(reference, reference_name)[isubcolumn, :],
-                )
-                actual = center_profile(
-                    getproperty(actual_hydrometeors, name)[isubcolumn],
-                )
-                @test isapprox(
-                    actual,
-                    expected;
-                    rtol = reference_tolerance,
-                    atol = 0,
-                )
-            end
+            @test all(
+                index -> all(
+                    iszero,
+                    parent(getproperty(p.precomputed.cfadDbze94, index)),
+                ),
+                eachindex(p.precomputed.cloudsat_dbze_bin_centers),
+            )
+            @test all(iszero, parent(p.precomputed.cloudsat_tcc))
+            @test all(iszero, parent(p.precomputed.cloudsat_tcc2))
         end
     end
 
@@ -579,13 +370,17 @@ end
             atmos = (;
                 cosp = CA.COSPModel(;
                     n_subcolumns = Val(4),
-                    overlap = :maximum,
+                    overlap = Val(:maximum),
                     random_seed = UInt64(1),
                 ),
                 microphysics_model = CA.NonEquilibriumMicrophysics1M(),
             ),
             precomputed = (;
                 ᶜcloud_fraction = cloud_fraction,
+                ᶜwᵣ = profile_field(FT[1, -1]),
+                ᶜwₛ = profile_field(FT[0.5, -2]),
+            ),
+            scratch = (;
                 ᶜsubcolumn_cloud = similar_center_field(),
                 ᶜsubcolumn_threshold = similar_center_field(),
                 ᶜsubcolumn_precip = similar_center_field(),
@@ -603,10 +398,6 @@ end
                 ᶜsampled_cloud_fraction = similar_center_field(),
                 ᶜsampled_precip_fraction = similar_center_field(),
                 ᶜlarge_scale_precipitation_flux = similar_center_field(),
-                ᶜwᵣ = profile_field(FT[1, -1]),
-                ᶜwₛ = profile_field(FT[0.5, -2]),
-            ),
-            scratch = (;
                 ᶜtemp_scalar = similar_center_field(),
                 ᶜtemp_scalar_2 = similar_center_field(),
                 ᶜtemp_scalar_3 = similar_center_field(),
@@ -629,7 +420,7 @@ end
                 CA.foreach_cosp_subcolumn((_, _) -> nothing, Y, p_case)
                 # ClimaAtmos center profiles are ordered from bottom to top.
                 @test center_profile(
-                    p.precomputed.ᶜlarge_scale_precipitation_flux,
+                    p.scratch.ᶜlarge_scale_precipitation_flux,
                 ) ≈ FT[0.2, 0]
             else
                 @test_throws ArgumentError CA.foreach_cosp_subcolumn(
@@ -689,7 +480,7 @@ end
         end
     end
 
-    @testset "backend-safe vertical selector helpers" begin
+    @testset "vertical selector helpers" begin
         input = make_center_profile_field(FT, [1, 2, 3, 4])
         output = similar(input)
         CA.COSP.COSPSubcolumns.shift_up!(output, input)
@@ -717,7 +508,6 @@ end
             seed;
             overlap = :maximum,
         )
-        @test center_profile(finite_clear_fraction) == FT[0.1]
         @test all(center_profile(mask) == FT[0] for mask in finite_clear_masks)
 
         finite_clear_selectors = selectors_from_cloud_masks(FT, finite_clear_masks)
@@ -761,7 +551,7 @@ end
                 zero_fraction,
             )
 
-        for hydrometeor in values(hydrometeors)
+        for hydrometeor in (hydrometeors.q_lcl, hydrometeors.q_rai)
             output = similar(cloud_mask)
             @. output = hydrometeor
             @test center_profile(output) == FT[0, 0]

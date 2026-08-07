@@ -1039,11 +1039,14 @@ Groups surface-related models and types.
     surface_albedo::AL = ConstantAlbedo{Float32}(; α = 0.07)
 end
 
-@kwdef struct COSPModel{N}
-    n_subcolumns::Val{N} = Val(256)
-    overlap::Symbol = :maximum_random
+@kwdef struct COSPModel{N, O}
+    n_subcolumns::Val{N} = Val(100)
+    overlap::Val{O} = Val(:maximum_random)
     random_seed::UInt64 = UInt64(1)
 end
+
+@inline _cosp_nsubcolumns(::Val{N}) where {N} = N
+@inline _cosp_overlap(::Val{O}) where {O} = O
 
 # Add broadcastable for the new grouped types
 Base.broadcastable(x::SCMSetup) = tuple(x)

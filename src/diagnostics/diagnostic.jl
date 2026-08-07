@@ -100,6 +100,7 @@ include("gravitywave_diagnostics.jl")
 include("conservation_diagnostics.jl")
 include("negative_scalars_diagnostics.jl")
 include("microphysics_diagnostics.jl")
+include("cosp_diagnostics.jl")
 
 # Default diagnostics and higher level interfaces
 include("default_diagnostics.jl")
