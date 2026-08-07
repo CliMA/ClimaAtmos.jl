@@ -4,6 +4,7 @@ ClimaAtmos.jl Release Notes
 main
 ----
 - [#4744](https://github.com/CliMA/ClimaAtmos.jl/pull/4744) ![][badge-🔥behavioralΔ] Make rain sediment with non-constant velocity
+- [#4754](https://github.com/CliMA/ClimaAtmos.jl/pull/4754) ![][badge-🐛bugfix] Remove the `linear` orographic gravity wave option and the `LinearOrographicGravityWave` type. Fix the non-orographic gravity wave momentum budget, so that the column deposits exactly the momentum the scheme launches.
 
 0.42.4
 -------

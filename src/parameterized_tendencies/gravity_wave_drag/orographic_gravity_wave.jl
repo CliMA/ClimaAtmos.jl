@@ -76,11 +76,8 @@ function get_topo_info(Y, ogw::OrographicGravityWave)
             ogw.topography,
             ogw.h_frac,
         )
-    elseif ogw.topo_info == Val(:linear)
-        # For user-defined analytical tests
-        topo_info = initialize_drag_input_as_fields(Y, ogw.drag_input)
     else
-        error("topo_info must be a symbol of type gfdl_restart, raw_topo, or linear")
+        error("topo_info must be a symbol of type gfdl_restart or raw_topo")
     end
 
     return topo_info

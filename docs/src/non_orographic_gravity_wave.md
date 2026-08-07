@@ -35,7 +35,7 @@ Because the background winds and convective sources differ between the tropics a
 
 ### Upward propagation and wave breaking
 
-Reflected waves are removed from the spectrum. A wave that breaks at any level above the source deposits all its momentum flux into that level and is removed from the spectrum.
+Reflected waves are removed from the spectrum without depositing anything. A wave that breaks at any level at or above the source deposits all its momentum flux into that level and is removed from the spectrum.
 
 The reflection frequency is defined as
 
@@ -53,15 +53,12 @@ Q(z,c) = \frac{\rho_0}{\rho(z)} \frac{2N(z)B_0(c)}{k[c-u(z)]^3}
 
 $Q(z,c)$ determines whether the monochromatic wave of phase speed $c$ becomes unstable at height $z$.
 
-At the source level:
+The test is applied to every layer from the launch level upward, i.e., at levels $z_n \geq z_0$, starting with the layer between the launch level and the level above it. Within each layer the surviving waves are tested in order:
 
-  - if $|\omega|=k|c-u_0| \geq \omega_r$, this wave would have undergone internal reflection somewhere below and is removed from the spectrum.
-  - if $Q(z_0, c) \geq 1$, it is also removed because it is not stable at the source level.
+  - **Reflection:** waves with $|\omega(z_n)| = k|c - u(z_n)| \geq \omega_r(z_n)$ would have undergone total internal reflection and are removed from the spectrum. So are waves whose intrinsic phase speed $c - u(z_n)$ is exactly zero. Neither case deposits momentum, so these are the only two cases by which the scheme discards flux.
+  - **Breaking:** among the remaining waves, those that become convectively unstable, i.e., $Q(z_n, c) \geq 1$, or encounter a critical level, i.e., where the intrinsic phase speed has changed sign relative to the source $(c - u_0)(c - u(z_n)) \leq 0$, break between levels $z_n$ and $z_{n+1}$, and their momentum flux is deposited entirely into that layer.
 
-At each level above the source $(z_n > z_0)$, waves are tested in order:
-
-  - **Reflection:** waves with $|\omega(z_n)| = k|c - u(z_n)| \geq \omega_r(z_n)$ are removed from the spectrum.
-  - **Breaking:** among the remaining waves, those that become convectively unstable, i.e., $Q(z_n, c) \geq 1$ or encounter a critical level, i.e., where the intrinsic phase speed has changed sign relative to the source $(c - u_0)(c - u(z_n)) \leq 0$, break between levels $z_{n-1}$ and $z_n$, and their momentum flux is deposited entirely into that layer.
+The breaking criteria starts at the launch level, so a wave that is already unstable at its own launch level deposits into the first layer rather than being discarded.
 
 The gravity wave drag at half-levels is then
 
@@ -71,13 +68,27 @@ X(z_{n-1/2}) = \frac{\epsilon \rho_0}{\rho(z_{n-1/2})\Delta z} \sum_j (B_0)_j
 
 where the sum is over the breaking waves and $\epsilon = F_{S0} / (\rho_0\, n_k \sum |B_0|)$ is the wave intermittency ($n_k$ is the number of horizontal wavenumber bands, one by default). Here $F_{S0}$ is the prescribed time-averaged total momentum flux, specified as a latitude-dependent quantity.
 
-Any momentum flux that propagates to the model top without breaking is re-deposited by averaging it across all levels above the damping level (defined by `nogw_damp_pressure`) to ensure momentum conservation.
-
 The drag at full levels is obtained by averaging adjacent half-levels:
 
 ```math
 X(z_{n}) = \frac{1}{2} \left[ X(z_{n-1/2}) + X(z_{n+1/2}) \right].
 ```
+
+This averaging is what makes the deposition conservative: the kernel divides each layer's flux by the mass of the layer between two cell centres, and the average then gives half of that layer's drag to the cell below and half to the cell above.
+
+Any momentum flux that reaches the model top without breaking is force-broken there and redistributed as a uniform acceleration over the levels at and above the damping level (defined by `nogw_damp_pressure`). The redistribution is mass-weighted, so it deposits exactly the momentum that escaped:
+
+```math
+X_{\mathrm{redist}} = X_{\mathrm{top}} \, \frac{m_{\mathrm{top}}}{M_R},
+\qquad
+m_{\mathrm{top}} = \sqrt{\rho(z_{n_t})\,\rho_{\mathrm{ghost}}}\,\left(z_{n_t} - z_{n_t-1}\right),
+\qquad
+M_R = \int_{z_{\mathrm{damp}}}^{z_{n_t}} \rho \, \mathrm{d}z .
+```
+
+Here $n_t$ is the topmost value of the level index $n$ used above, and $z_{n_t}$ the corresponding top cell centre. $X_{\mathrm{top}}$ is the acceleration the kernel computed at that level, and $m_{\mathrm{top}}$ is the mass of the ghost layer it divided by, with $\rho_{\mathrm{ghost}} = \rho(z_{n_t})^2 / \rho(z_{n_t-1})$ the density extrapolated above the top cell centre. $M_R$ is the mass of the receiving levels. The product $X_{\mathrm{top}}\, m_{\mathrm{top}}$ is the escaped momentum flux, so $\int \rho \, X_{\mathrm{redist}} \, \mathrm{d}z = X_{\mathrm{top}}\, m_{\mathrm{top}}$ exactly. This redistribution is applied after the half-level averaging above, so it is not smoothed.
+
+Note that the assembled forcing is clipped to $\pm 3\times 10^{-3}\ \mathrm{m\,s^{-2}}$ per component when it is added to the momentum tendency. Therefore, where the clip is active, the deposited momentum is smaller than the launched momentum by construction.
 
 ## Beres (2004) Convective Source Spectrum
 
