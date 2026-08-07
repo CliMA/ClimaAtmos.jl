@@ -742,6 +742,8 @@ NVTX.@annotate function set_explicit_precomputed_quantities!(Y, p, t)
         SurfaceConditions.update_surface_conditions!(Y, p, FT(t))
     end
 
+    set_sea_salt_surface_fluxes!(Y, p, p.atmos.seasalt)
+
     if turbconv_model isa PrognosticEDMFX
         set_prognostic_edmf_precomputed_quantities_explicit_closures!(Y, p, t)
     end

@@ -42,6 +42,8 @@ import .AtmosArtifacts as AA
 include(joinpath("topography", "topography.jl"))
 include(joinpath("topography", "steady_state_solutions.jl"))
 
+include(joinpath("parameterized_tendencies", "aerosols", "aerosols.jl"))
+
 include(joinpath("parameterized_tendencies", "radiation", "RRTMGPInterface.jl"))
 import .RRTMGPInterface as RRTMGPI
 include(joinpath("parameterized_tendencies", "radiation", "radiation.jl"))

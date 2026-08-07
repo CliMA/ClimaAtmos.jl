@@ -16,5 +16,5 @@ cloud_model: "grid_scale"
 albedo_model: "RegressionFunctionAlbedo"
 reproducibility_test: true
 aerosol_radiation: true
-prescribed_aerosols: ["CB1", "CB2", "DST01", "DST02", "DST03", "DST04", "OC1", "OC2", "SO4"]
+prescribed_aerosols: ["CB", "DST", "OC", "SO4"]
 toml: [toml/sphere_aquaplanet.toml]

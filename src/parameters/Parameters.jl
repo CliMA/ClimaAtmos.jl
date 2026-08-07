@@ -149,6 +149,7 @@ Base.@kwdef struct ClimaAtmosParameters{
     VDP,
     EFP,
     PAP,
+    PGAP,
     NOGWP,
     OGWP,
     BSP,
@@ -168,6 +169,7 @@ Base.@kwdef struct ClimaAtmosParameters{
     vert_diff_params::VDP
     external_forcing_params::EFP
     prescribed_aerosol_params::PAP
+    prognostic_aerosol_params::PGAP
     non_orographic_gravity_wave_params::NOGWP
     orographic_gravity_wave_params::OGWP
     beres_source_params::BSP
