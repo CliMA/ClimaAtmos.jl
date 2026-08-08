@@ -81,6 +81,26 @@ vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t) =
 
 vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t, ::Nothing) = nothing
 
+# Aggregate water specific humidity that diffuses. Rain/snow are excluded only
+# when they are prognostic (NonEq 1M/2M); otherwise q_tot itself is the whole
+# diffusing water field. Dispatching on microphysics_model type ensures the
+# caller sees a concrete return type (avoids type-unstable ternary).
+_q_tot_eff_lazy(::Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M}, Y) =
+    @. lazy(specific(Y.c.ρq_tot - Y.c.ρq_rai - Y.c.ρq_sno, Y.c.ρ))
+_q_tot_eff_lazy(_, Y) = @. lazy(specific(Y.c.ρq_tot, Y.c.ρ))
+
+# Cloud liquid and ice specific humidities used for the h_eff-weighted enthalpy
+# flux. NonEq 1M/2M carries ρq_lcl / ρq_icl as prognostic variables; other moist
+# models use the precomputed equilibrium ᶜq_liq / ᶜq_ice.
+_q_cloud_lazy(
+    ::Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M},
+    Y,
+    ᶜq_liq,
+    ᶜq_ice,
+) =
+    ((@. lazy(specific(Y.c.ρq_lcl, Y.c.ρ))), (@. lazy(specific(Y.c.ρq_icl, Y.c.ρ))))
+_q_cloud_lazy(_, Y, ᶜq_liq, ᶜq_ice) = (ᶜq_liq, ᶜq_ice)
+
 function vertical_diffusion_boundary_layer_tendency!(
     Yₜ,
     Y,
@@ -129,11 +149,7 @@ function vertical_diffusion_boundary_layer_tendency!(
     # do not diffuse. Enthalpy water contribution uses h_eff-weighted
     # single-gradient form.
     if !(p.atmos.microphysics_model isa DryModel)
-        ᶜq_tot_eff =
-            p.atmos.microphysics_model isa
-            Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M} ?
-            (@. lazy(specific(Y.c.ρq_tot - Y.c.ρq_rai - Y.c.ρq_sno, Y.c.ρ))) :
-            (@. lazy(specific(Y.c.ρq_tot, Y.c.ρ)))
+        ᶜq_tot_eff = _q_tot_eff_lazy(p.atmos.microphysics_model, Y)
         ᶜρq_tot_diff = p.scratch.ᶜtemp_scalar_2
         @. ᶜρq_tot_diff = ᶜdiffdivᵥ(-(ᶠρK * ᶠgradᵥ(ᶜq_tot_eff)))
         @. Yₜ.c.ρq_tot -= ᶜρq_tot_diff
@@ -142,13 +158,7 @@ function vertical_diffusion_boundary_layer_tendency!(
         # Water enthalpy contribution: -ρK·(h_eff+Φ)·∇q_tot_eff.
         ᶜq_vap = @. lazy(TD.vapor_specific_humidity(ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice))
         ᶜq_lcl, ᶜq_icl =
-            p.atmos.microphysics_model isa
-            Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M} ?
-            (
-                (@. lazy(specific(Y.c.ρq_lcl, Y.c.ρ))),
-                (@. lazy(specific(Y.c.ρq_icl, Y.c.ρ))),
-            ) :
-            (ᶜq_liq, ᶜq_ice)
+            _q_cloud_lazy(p.atmos.microphysics_model, Y, ᶜq_liq, ᶜq_ice)
         ᶜh_eff_plus_Φ = p.scratch.ᶜtemp_scalar_3
         @. ᶜh_eff_plus_Φ =
             (
