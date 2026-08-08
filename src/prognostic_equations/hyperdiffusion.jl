@@ -167,6 +167,7 @@ NVTX.@annotate function apply_hyperdiffusion_tendency!(Yₜ, Y, p, t)
     ᶜJ = Fields.local_geometry_field(Y.c).J
     point_type = eltype(Fields.coordinate_field(Y.c))
     FT = eltype(params)
+    ϵ_FT = eps(FT)
     (; ᶜT, ᶜq_liq, ᶜq_ice, ᶜq_tot_nonneg) = p.precomputed
     (; ᶜ∇²u, ᶜ∇²s_d, ᶜ∇²q_tot_eff) = p.hyperdiff
     if turbconv_model isa PrognosticEDMFX
@@ -226,7 +227,7 @@ NVTX.@annotate function apply_hyperdiffusion_tendency!(Yₜ, Y, p, t)
                 TD.enthalpy_vapor(thermo_params, ᶜT) * max(FT(0), ᶜq_vap) +
                 TD.enthalpy_liquid(thermo_params, ᶜT) * max(FT(0), ᶜq_lcl) +
                 TD.enthalpy_ice(thermo_params, ᶜT) * max(FT(0), ᶜq_icl)
-            ) / max(ᶜq_water_nonneg, eps(FT)) + ᶜΦ
+            ) / max(ᶜq_water_nonneg, ϵ_FT) + ᶜΦ
         @. ᶜh_flux_div += wdivₕ(ᶜρ * ᶜh_eff_plus_Φ * gradₕ(ᶜ∇²q_tot_eff))
     end
     @. Yₜ.c.ρe_tot -= ν₄_scalar * ᶜh_flux_div
@@ -281,7 +282,7 @@ NVTX.@annotate function apply_hyperdiffusion_tendency!(Yₜ, Y, p, t)
                     max(FT(0), ᶜq_lclʲ) +
                     TD.enthalpy_ice(thermo_params, ᶜTʲs.:($$j)) *
                     max(FT(0), ᶜq_iclʲ)
-                ) / max(ᶜq_waterʲ_nonneg, eps(FT)) + ᶜΦ
+                ) / max(ᶜq_waterʲ_nonneg, ϵ_FT) + ᶜΦ
             @. ᶜh_flux_div = wdivₕ(gradₕ(ᶜ∇²s_dʲs.:($$j)))
             @. ᶜh_flux_div +=
                 wdivₕ(ᶜh_effⱼ_plus_Φ * gradₕ(ᶜ∇²q_tot_effʲs.:($$j)))
@@ -349,6 +350,7 @@ NVTX.@annotate function apply_tracer_hyperdiffusion_tendency!(Yₜ, Y, p, t)
 
     (; ν₄_scalar) = ν₄(hyperdiff, Y)
     FT = eltype(p.params)
+    ϵ_FT = eps(FT)
     n = n_mass_flux_subdomains(turbconv_model)
     (; ᶜ∇²specific_tracers) = p.hyperdiff
 
@@ -388,13 +390,13 @@ NVTX.@annotate function apply_tracer_hyperdiffusion_tendency!(Yₜ, Y, p, t)
             ᶜρq = MatrixFields.get_field(Y, ρq_name)
             ᶜρqₜ = MatrixFields.get_field(Yₜ, ρq_name)
             @. ᶜratio =
-                max(FT(0), min(FT(1), ᶜρq / max(ᶜρq_tot_eff, eps(FT))))
+                max(FT(0), min(FT(1), ᶜρq / max(ᶜρq_tot_eff, ϵ_FT)))
             @. ᶜρqₜ -= ᶜratio * ᶜρq_tot_hyperdiff
             if MatrixFields.has_field(Y, ρn_name)
                 ᶜρn = MatrixFields.get_field(Y, ρn_name)
                 ᶜρnₜ = MatrixFields.get_field(Yₜ, ρn_name)
                 @. ᶜρnₜ -=
-                    ᶜratio * max(FT(0), ᶜρn) / max(ᶜρq, eps(FT)) * ᶜρq_tot_hyperdiff
+                    ᶜratio * max(FT(0), ᶜρn) / max(ᶜρq, ϵ_FT) * ᶜρq_tot_hyperdiff
             end
         end
     end
@@ -445,13 +447,13 @@ NVTX.@annotate function apply_tracer_hyperdiffusion_tendency!(Yₜ, Y, p, t)
                 ᶜχⱼ = MatrixFields.get_field(Y.c.sgsʲs.:($j), χⱼ_name)
                 ᶜχⱼₜ = MatrixFields.get_field(Yₜ.c.sgsʲs.:($j), χⱼ_name)
                 @. ᶜratioⱼ =
-                    max(FT(0), min(FT(1), ᶜχⱼ / max(ᶜq_tot_effⱼ, eps(FT))))
+                    max(FT(0), min(FT(1), ᶜχⱼ / max(ᶜq_tot_effⱼ, ϵ_FT)))
                 @. ᶜχⱼₜ -= ᶜratioⱼ * ᶜq_totʲ_hyperdiff
                 if MatrixFields.has_field(Y.c.sgsʲs.:($j), nⱼ_name)
                     ᶜnⱼ = MatrixFields.get_field(Y.c.sgsʲs.:($j), nⱼ_name)
                     ᶜnⱼₜ = MatrixFields.get_field(Yₜ.c.sgsʲs.:($j), nⱼ_name)
                     @. ᶜnⱼₜ -=
-                        ᶜratioⱼ * max(FT(0), ᶜnⱼ) / max(ᶜχⱼ, eps(FT)) *
+                        ᶜratioⱼ * max(FT(0), ᶜnⱼ) / max(ᶜχⱼ, ϵ_FT) *
                         ᶜq_totʲ_hyperdiff
                 end
             end

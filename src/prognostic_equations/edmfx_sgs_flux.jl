@@ -222,6 +222,7 @@ function edmfx_sgs_diffusive_flux_tendency!(
 )
 
     FT = Spaces.undertype(axes(Y.c))
+    ϵ_FT = eps(FT)
     (; dt, params) = p
     turbconv_params = CAP.turbconv_params(params)
     (; ᶜu) = p.precomputed
@@ -239,72 +240,48 @@ function edmfx_sgs_diffusive_flux_tendency!(
 
         # Face-native eddy diffusivity/viscosity and interfacial entrainment
         # diffusivity, evaluated at the faces where the fluxes live (see
-        # `set_face_diffusivities!`): the stability closure collapses K at an
-        # unresolved inversion at exactly (and only) the jump face, and K_e
-        # restores the finite-velocity entrainment flux there. K_e is added
-        # uniformly to all scalar and momentum face diffusivities, keeping
-        # energy, water, and momentum transport mutually consistent.
+        # `set_face_diffusivities!`): the stability closure collapses K_h at
+        # an unresolved inversion at exactly (and only) the jump face, and
+        # K_e restores the finite-velocity entrainment flux there. K_h and
+        # K_e are held separately so they can be applied with different
+        # structures: K_h is the "turbulent mixing" component, applied to
+        # `q_tot_eff` (and distributed to cloud species) for water and to
+        # `∇s_d + h_eff·∇q_tot_eff` for enthalpy; K_e is the "entrainment"
+        # component, applied per-species with each species's own gradient
+        # (bodily parcel transport). Passive tracers and dry static energy
+        # transport at the combined (K_h + K_e); momentum uses (K_u + K_e).
         (; ᶠK_h, ᶠK_u, ᶠK_entr, ᶜl_mix) = p.precomputed
-        ᶠρaK_h = p.scratch.ᶠtemp_scalar
-        @. ᶠρaK_h = ᶠinterp(Y.c.ρ) * (ᶠK_h + ᶠK_entr)
+        ᶠρK_h = p.scratch.ᶠtemp_scalar
+        @. ᶠρK_h = ᶠinterp(Y.c.ρ) * ᶠK_h
+        ᶠρK_e = p.scratch.ᶠtemp_scalar_3
+        @. ᶠρK_e = ᶠinterp(Y.c.ρ) * ᶠK_entr
         ᶠρaK_u = p.scratch.ᶠtemp_scalar_2
         @. ᶠρaK_u = ᶠinterp(Y.c.ρ) * (ᶠK_u + ᶠK_entr)
 
-        # Total enthalpy diffusion, using the dry-static-energy + water-
-        # enthalpy decomposition
-        #   F_h = -K_h ∇s_d + Σ_μ h_tot,μ F_qμ,   F_qμ = -K_h ∇q_μ,
-        # with s_d = h_d + Φ, h_tot,μ = h_μ(T) + Φ for μ ∈ {vap, liq, ice},
-        # and unit turbulent Lewis number (K_qμ = K_h). Diffusing h_tot
-        # directly would imply a spurious enthalpy flux carried by dry-air
-        # diffusion (h_tot depends on 1 - q_t through the dry-air mass
-        # fraction), systematically warming entrained air at inversions where
-        # h_tot jumps up while q_t jumps down. The thermal piece diffuses dry
-        # static energy (constant under dry-adiabatic displacement), and each
-        # water constituent carries its own enthalpy with its diffusive mass
-        # flux, consistent with the ρq_tot and ρ updates below.
-        #
-        # Note: F_qμ for liquid and ice uses unscaled K_h (omitting the tracer
-        # vertical diffusion factor α_vert_diff_tracer). While microphysics
-        # tracers are diffused with α * K_h to prevent unphysical upward
-        # transport of precipitation, omitting α here maintains exact energetic
-        # consistency with the unscaled ρq_tot diffusion equation, preserves
-        # total water invariance under moist-adiabatic processes, and aligns
-        # with the implicit solver's Jacobian formulation.
+        # Total enthalpy diffusion. K_h piece uses the spurious-transport-safe
+        # decomposition (∇s_d + h_eff·∇q_tot_eff, moisture part added below
+        # when non-dry). K_e piece uses bodily-parcel form (∇h_tot directly),
+        # since interfacial entrainment transports every constituent —
+        # including dry air — with the parcel.
+        #   q_tot_eff = q_tot - q_rai - q_sno,
+        #   h_eff = (h_v·q_v + h_l·q_lcl + h_i·q_icl) / max(q_water_nonneg, ε)
+        # See `hyperdiffusion.jl` for the clipped-input protection.
         ᶜdivᵥ_ρe_tot = Operators.DivergenceF2C(
             top = Operators.SetValue(C3(FT(0))),
             bottom = Operators.SetValue(C3(FT(0))),
         )
         thermo_params = CAP.thermodynamics_params(params)
         (; ᶜΦ) = p.core
-        (; ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice) = p.precomputed
-        ᶜq_vap = @. lazy(
-            TD.vapor_specific_humidity(ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice),
-        )
-        # Materialize the total-enthalpy flux divergence once so it can be
-        # applied to the grid-mean ρe_tot and to each subdomain mse using
-        # the same specific-enthalpy tendency dh_gm/dt = dρe_tot/dt / ρ.
-        # Uniform vertical diffusion in the grid box: every subdomain feels
-        # the grid-mean specific tendency.
+        (; ᶜT) = p.precomputed
+        (; ᶜh_tot) = p.precomputed
         ᶜρe_totₜ_diffusion = p.scratch.ᶜtemp_scalar_2
-        @. ᶜρe_totₜ_diffusion = ᶜdivᵥ_ρe_tot(
-            -(
-                ᶠρaK_h * (
-                    ᶠgradᵥ(TD.dry_static_energy(thermo_params, ᶜT, ᶜΦ)) +
-                    ᶠinterp(TD.enthalpy_vapor(thermo_params, ᶜT) + ᶜΦ) *
-                    ᶠgradᵥ(ᶜq_vap) +
-                    ᶠinterp(TD.enthalpy_liquid(thermo_params, ᶜT) + ᶜΦ) *
-                    ᶠgradᵥ(ᶜq_liq) +
-                    ᶠinterp(TD.enthalpy_ice(thermo_params, ᶜT) + ᶜΦ) *
-                    ᶠgradᵥ(ᶜq_ice)
-                )
-            ),
-        )
-        @. Yₜ.c.ρe_tot -= ᶜρe_totₜ_diffusion
-        if apply_sgs_updraft
-            for j in 1:n
-                @. Yₜ.c.sgsʲs.:($$j).mse -= ᶜρe_totₜ_diffusion / Y.c.ρ
-            end
-        end
+        @. ᶜρe_totₜ_diffusion =
+            ᶜdivᵥ_ρe_tot(
+                -(
+                    ᶠρK_h * ᶠgradᵥ(TD.dry_static_energy(thermo_params, ᶜT, ᶜΦ)) +
+                    ᶠρK_e * ᶠgradᵥ(ᶜh_tot)
+                ),
+            )
 
         if use_prognostic_tke(turbconv_model)
             (; ρtke_flux) = p.precomputed
@@ -330,14 +307,46 @@ function edmfx_sgs_diffusive_flux_tendency!(
         end
 
         if !(p.atmos.microphysics_model isa DryModel)
-            # Specific humidity diffusion
+            # Moisture contribution to the enthalpy K_h flux: adds
+            # -ρK_h · (h_eff+Φ) · ∇q_tot_eff to the dry-part tendency
+            # computed above.
+            (; ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice) = p.precomputed
+            ᶜq_vap = @. lazy(TD.vapor_specific_humidity(ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice))
+            ᶜq_lcl, ᶜq_icl =
+                p.atmos.microphysics_model isa
+                Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M} ?
+                (
+                    (@. lazy(specific(Y.c.ρq_lcl, Y.c.ρ))),
+                    (@. lazy(specific(Y.c.ρq_icl, Y.c.ρ))),
+                ) :
+                (ᶜq_liq, ᶜq_ice)
+            ᶜh_eff_plus_Φ = p.scratch.ᶜtemp_scalar_3
+            @. ᶜh_eff_plus_Φ =
+                (
+                    TD.enthalpy_vapor(thermo_params, ᶜT) * max(FT(0), ᶜq_vap) +
+                    TD.enthalpy_liquid(thermo_params, ᶜT) * max(FT(0), ᶜq_lcl) +
+                    TD.enthalpy_ice(thermo_params, ᶜT) * max(FT(0), ᶜq_icl)
+                ) /
+                max(max(FT(0), ᶜq_vap) + max(FT(0), ᶜq_lcl) + max(FT(0), ᶜq_icl), ϵ_FT) +
+                ᶜΦ
+            ᶜq_tot_eff =
+                p.atmos.microphysics_model isa
+                Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M} ?
+                (@. lazy(specific(Y.c.ρq_tot - Y.c.ρq_rai - Y.c.ρq_sno, Y.c.ρ))) :
+                (@. lazy(specific(Y.c.ρq_tot, Y.c.ρ)))
+            @. ᶜρe_totₜ_diffusion +=
+                ᶜdivᵥ_ρe_tot(-(ᶠρK_h * ᶠinterp(ᶜh_eff_plus_Φ) * ᶠgradᵥ(ᶜq_tot_eff)))
+
+            # K_h water diffusion on q_tot_eff. Cloud species inherit via
+            # clipped ratio; rain/snow/n_rai get no K_h transport. K_e
+            # transport for all water species is handled in the unified
+            # tracer loop below.
             ᶜρχₜ_diffusion = p.scratch.ᶜtemp_scalar
             ᶜdivᵥ_ρq_tot = Operators.DivergenceF2C(
                 top = Operators.SetValue(C3(FT(0))),
                 bottom = Operators.SetValue(C3(FT(0))),
             )
-            @. ᶜρχₜ_diffusion =
-                ᶜdivᵥ_ρq_tot(-(ᶠρaK_h * ᶠgradᵥ(specific(Y.c.ρq_tot, Y.c.ρ))))
+            @. ᶜρχₜ_diffusion = ᶜdivᵥ_ρq_tot(-(ᶠρK_h * ᶠgradᵥ(ᶜq_tot_eff)))
             @. Yₜ.c.ρq_tot -= ᶜρχₜ_diffusion
             @. Yₜ.c.ρ -= ᶜρχₜ_diffusion  # Effect of moisture diffusion on (moist) air mass
             if apply_sgs_updraft
@@ -346,52 +355,82 @@ function edmfx_sgs_diffusive_flux_tendency!(
                 end
                 # The corresponding ρaⱼ dry-mass correction is deliberately neglected.
             end
+
+            # Distribute K_h q_tot diffusion to cloud mass and number species.
+            ᶜratio = p.scratch.ᶜtemp_scalar_4
+            for (q_name, n_name) in (
+                (@name(q_lcl), @name(n_lcl)),
+                (@name(q_icl), @name(n_icl)),
+            )
+                ρq_name = get_ρχ_name(q_name)
+                ρn_name = get_ρχ_name(n_name)
+                MatrixFields.has_field(Y, ρq_name) || continue
+                ᶜρq = MatrixFields.get_field(Y, ρq_name)
+                ᶜρqₜ = MatrixFields.get_field(Yₜ, ρq_name)
+                @. ᶜratio =
+                    max(FT(0), min(FT(1), specific(ᶜρq, Y.c.ρ) / max(ᶜq_tot_eff, ϵ_FT)))
+                @. ᶜρqₜ -= ᶜratio * ᶜρχₜ_diffusion
+                if apply_sgs_updraft
+                    for j in 1:n
+                        if MatrixFields.has_field(Y.c.sgsʲs.:($j), q_name)
+                            ᶜqⱼₜ = MatrixFields.get_field(Yₜ.c.sgsʲs.:($j), q_name)
+                            @. ᶜqⱼₜ -= ᶜratio * ᶜρχₜ_diffusion / Y.c.ρ
+                        end
+                    end
+                end
+                if MatrixFields.has_field(Y, ρn_name)
+                    ᶜρn = MatrixFields.get_field(Y, ρn_name)
+                    ᶜρnₜ = MatrixFields.get_field(Yₜ, ρn_name)
+                    @. ᶜρnₜ -= ᶜratio * max(FT(0), ᶜρn) / max(ᶜρq, ϵ_FT) * ᶜρχₜ_diffusion
+                    if apply_sgs_updraft
+                        for j in 1:n
+                            ᶜnⱼₜ = MatrixFields.get_field(Yₜ.c.sgsʲs.:($j), n_name)
+                            @. ᶜnⱼₜ -=
+                                ᶜratio * max(FT(0), ᶜρn) / max(ᶜρq, ϵ_FT) *
+                                ᶜρχₜ_diffusion / Y.c.ρ
+                        end
+                    end
+                end
+            end
         end
 
-        α_vert_diff_microphysics = CAP.α_vert_diff_tracer(params)
+        # Apply the accumulated enthalpy tendency (dry parts + moisture
+        # contribution added above in the moist branch). Every subdomain
+        # sees the grid-mean specific-enthalpy tendency.
+        @. Yₜ.c.ρe_tot -= ᶜρe_totₜ_diffusion
+        if apply_sgs_updraft
+            for j in 1:n
+                @. Yₜ.c.sgsʲs.:($$j).mse -= ᶜρe_totₜ_diffusion / Y.c.ρ
+            end
+        end
+
+        # Unified tracer diffusion loop covering both microphysics and
+        # passive species. The `α` flag encodes the K_h contribution:
+        # microphysics species (`α = 0`) receive only K_e transport (K_h
+        # transport is applied above via q_tot_eff distribution to cloud
+        # species; precip has no K_h transport), while passive tracers
+        # (`α = 1`) receive the full ρ·(K_h + K_e) diffusion.
         ᶜρχₜ_diffusion = p.scratch.ᶜtemp_scalar
         ᶜdivᵥ_ρq = Operators.DivergenceF2C(
             top = Operators.SetValue(C3(FT(0))),
             bottom = Operators.SetValue(C3(FT(0))),
         )
-        # Auto-discovered grid-scale tracers: sedimenting microphysics species
-        # are diffused with α_vert_diff_tracer * K_h, all other tracers (e.g.
-        # passive chemistry) with the unscaled K_h, matching
-        # vertical_diffusion_boundary_layer_tendency! and the implicit
-        # Jacobian (update_diffusion_jacobian!). The tracers are enumerated
-        # from the grid-mean state — not from the updraft state, which is
-        # empty for EDOnlyEDMFX and need not carry every grid-mean tracer.
-        # ρq_tot is handled above, with its moist-air mass counterpart.
         foreach_gs_tracer(Yₜ, Y) do ᶜρχₜ, ᶜρχ, ρχ_name
-            ρχ_name == @name(ρq_tot) && return
-            α =
-                ρχ_name in gs_sedimenting_tracer_candidates ?
-                α_vert_diff_microphysics : one(α_vert_diff_microphysics)
+            α = ρχ_name in microphysics_tracer_names(Y) ? FT(0) : FT(1)
             ᶜχ = (@. lazy(specific(ᶜρχ, Y.c.ρ)))
-            # α scales only the turbulent-mixing part; interfacial entrainment
-            # (K_e, inside ᶠρaK_h with weight α) crosses the interface at the
-            # same velocity for every scalar, so its full weight is restored:
-            # α ρ (K_h + K_e) + (1 - α) ρ K_e = ρ (α K_h + K_e).
-            # For passive tracers α = 1, giving the full ρ (K_h + K_e).
-            @. ᶜρχₜ_diffusion = ᶜdivᵥ_ρq(
-                -(
-                    (
-                        α * ᶠρaK_h +
-                        (1 - α) * ᶠinterp(Y.c.ρ) * ᶠK_entr
-                    ) * ᶠgradᵥ(ᶜχ)
-                ),
-            )
+            @. ᶜρχₜ_diffusion = ᶜdivᵥ_ρq(-((α * ᶠρK_h + ᶠρK_e) * ᶠgradᵥ(ᶜχ)))
             @. ᶜρχₜ -= ᶜρχₜ_diffusion
-            # Uniform vertical diffusion: apply the same specific tendency to
-            # the matching subdomain field (e.g. ρq_lcl → q_lcl in updrafts).
+            # K_e bodily transport of ρq_tot also moves moist-air mass.
+            if ρχ_name == @name(ρq_tot)
+                @. Yₜ.c.ρ -= ᶜρχₜ_diffusion
+            end
+            # Uniform vertical diffusion: apply the same grid-mean specific
+            # tendency to the matching subdomain field in each updraft.
             if apply_sgs_updraft
                 χ_name = specific_tracer_name(ρχ_name)
                 for j in 1:n
-                    if MatrixFields.has_field(Y.c.sgsʲs.:($j), χ_name)
-                        ᶜχⱼₜ =
-                            MatrixFields.get_field(Yₜ.c.sgsʲs.:($j), χ_name)
-                        @. ᶜχⱼₜ -= ᶜρχₜ_diffusion / Y.c.ρ
-                    end
+                    ᶜχⱼₜ = MatrixFields.get_field(Yₜ.c.sgsʲs.:($j), χ_name)
+                    @. ᶜχⱼₜ -= ᶜρχₜ_diffusion / Y.c.ρ
                 end
             end
         end
