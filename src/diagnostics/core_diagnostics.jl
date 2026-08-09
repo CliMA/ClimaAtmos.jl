@@ -432,11 +432,33 @@ add_diagnostic_variable!(short_name = "ts", units = "K",
 ###
 # Near-surface air temperature (2d)
 ###
+# 2 m air temperature (CMIP `tas`). Diagnosed with Monin-Obukhov similarity
+# theory by interpolating between the surface temperature and the lowest model
+# level. This is used both for a `MoninObukhov` surface flux scheme and for the
+# coupled case (`flux_scheme === nothing`), where the coupler supplies the
+# surface temperature, Monin-Obukhov length, and roughness. For flux schemes
+# that do not provide a roughness length (e.g. `ExchangeCoefficients`), this
+# falls back to the lowest model level temperature.
+# See `SurfaceConditions.diagnostic_temperature_at_height`.
+const TAS_DIAGNOSTIC_HEIGHT = 2 # [m] above the surface
+
+compute_tas(state, cache, _) =
+    SurfaceConditions.diagnostic_temperature_at_height(
+        state,
+        cache,
+        TAS_DIAGNOSTIC_HEIGHT,
+    )
+
 add_diagnostic_variable!(short_name = "tas", units = "K",
     long_name = "Near-Surface Air Temperature",
     standard_name = "air_temperature",
-    comments = "Temperature at the bottom cell center of the atmosphere",
-    compute = (_, cache, _) -> Fields.level(cache.precomputed.ᶜT, 1),
+    comments = "Air temperature at 2 m above the surface, diagnosed with \
+                Monin-Obukhov similarity theory by interpolating between the \
+                surface temperature and the lowest model level (used both for a \
+                Monin-Obukhov surface scheme and the coupled case; falls back to \
+                the lowest model level for schemes without a roughness length, \
+                e.g. ExchangeCoefficients)",
+    compute = compute_tas,
 )
 
 ###

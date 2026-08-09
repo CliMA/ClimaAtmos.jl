@@ -3,6 +3,9 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- ![][badge-🔥behavioralΔ] The `tas` diagnostic (near-surface / 2 m air temperature, CMIP `tas`) is now diagnosed at 2 m above the surface using Monin-Obukhov similarity theory, interpolating the dry static energy between the surface temperature and the lowest model level with the heat similarity profile. Previously `tas` returned the temperature at the bottom cell center. The MOST interpolation is used both when the surface flux scheme is `MoninObukhov` and in the coupler-handoff case (`flux_scheme === nothing`), where the coupler supplies the surface temperature and Monin-Obukhov length. The thermal roughness length `z0b` is now stored in `sfc_conditions` (defaulted in the coupler case, overwritable by the coupler). Only schemes without a roughness length (e.g. `ExchangeCoefficients`) still fall back to the lowest model level temperature. See `SurfaceConditions.diagnostic_temperature_at_height`.
+
+
 0.42.4
 -------
 - [#4750](https://github.com/CliMA/ClimaAtmos.jl/pull/4750) ![][badge-✨feature/enhancement] Add the diagnostics `ssatl` and `ssati` (water-vapor supersaturation with respect to liquid and to ice), available for any moist microphysics model.
