@@ -1,4 +1,4 @@
-396
+397
 
 # **README**
 #
@@ -30,7 +30,11 @@
 # 1) Increment the number on the first line of this file.
 # 2) Note the date alongside a brief description of the PR in question.
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
+
 #=
+397
+- Change default ice formation to temperature dependent
+
 396
 - Make vertical water diffusion consistent: diffuse q_tot on q_tot_eff
   (excluding rain/snow), distribute the aggregate q_tot diffusion to
