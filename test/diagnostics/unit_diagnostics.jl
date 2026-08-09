@@ -164,6 +164,17 @@ model_dry =
     )
 (Y_dry, p_dry) = build_state_cache(FT, model_dry; grid = column);
 
+## Dry model with a Monin-Obukhov surface flux scheme. Exercises the MOST-based
+## 2 m temperature diagnostic (`tas`); the default `model_dry` uses
+## `ExchangeCoefficients`, which hits the lowest-model-level fallback instead.
+model_dry_mo =
+    CA.AtmosModel(;
+        microphysics_model = CA.DryModel(),
+        temperature = CA.SurfaceConditions.SlabOceanTemperature{FT}(),
+        flux_scheme = CA.SurfaceConditions.MoninObukhov(; z0 = FT(0.05)),
+    )
+(Y_dry_mo, p_dry_mo) = build_state_cache(FT, model_dry_mo; grid = column);
+
 ## Sphere with dry model
 (Y_sphere, p_sphere) = build_state_cache(FT, model_dry; grid = sphere);
 
@@ -348,6 +359,7 @@ model_dwh = CA.AtmosModel(;
 #! format: off
 states = Dict(
     :dry            => (Y_dry,            p_dry),
+    :dry_mo         => (Y_dry_mo,         p_dry_mo),
     :sphere         => (Y_sphere,         p_sphere),
     :ssv            => (Y_ssv,            p_ssv),
     :m0             => (Y_0m,             p_0m),
@@ -407,6 +419,9 @@ VALID_CASES = [
         "hfes", "dsevi", "env_q_tot_variance", "env_temperature_variance",
         "env_q_tot_temperature_covariance", "env_q_tot_temperature_correlation",
     ), :dry)...,
+    # tas: MOST-based 2 m temperature path (MoninObukhov surface flux scheme).
+    # The `:dry` fixture above uses ExchangeCoefficients (lowest-level fallback).
+    case("tas", :dry_mo),
     # sphere-only (DSS / hypsography)
     cases(("rv", "orog"), :sphere)...,
     # MoistMicrophysics, single path

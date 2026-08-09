@@ -142,6 +142,12 @@ function init_sfc_conditions_zero!(p)
     @. sfc_conditions.ustar = FT(0.2)
     @. sfc_conditions.obukhov_length = FT(1e-4)
     @. sfc_conditions.buoyancy_flux = FT(0)
+    # Default thermal roughness for the 2 m temperature diagnostic (`tas`) in the
+    # coupler handoff case. The coupler owns the surface exchange and overwrites
+    # `T_sfc`, `ustar`, and `obukhov_length` each step; it may also overwrite
+    # `z0b`. The near-surface heat profile depends only weakly (logarithmically)
+    # on this value, so a small constant is a reasonable default.
+    @. sfc_conditions.z0b = FT(1e-4)
     if !(atmos.microphysics_model isa DryModel)
         @. sfc_conditions.ρ_flux_q_tot = C3(FT(0))
     end
@@ -289,6 +295,12 @@ function surface_state_to_conditions(
         end
     end
 
+    # Thermal roughness length, stored so the 2 m temperature diagnostic
+    # (`tas`) can reconstruct the near-surface profile. Only `MoninObukhov`
+    # defines a roughness length; other schemes store zero (their `tas` path
+    # falls back to the lowest model level).
+    z0b = parameterization isa MoninObukhov ? parameterization.z0b : zero(FT)
+
     return atmos_surface_conditions(
         surface_fluxes_params,
         SF.surface_fluxes(surface_fluxes_params, T_int, q_tot_int, q_liq_int, q_ice_int,
@@ -296,6 +308,7 @@ function surface_state_to_conditions(
             UF.PointValueScheme(), nothing, flux_specs),
         ρ_sfc,
         surface_local_geometry,
+        z0b,
     )
 end
 
@@ -325,6 +338,7 @@ function atmos_surface_conditions(
     surface_conditions,
     ρ_sfc,
     surface_local_geometry,
+    z0b,
 )
     (; ustar, L_MO, ρτxz, ρτyz, shf, lhf, evaporation, T_sfc, q_vap_sfc) =
         surface_conditions
@@ -345,6 +359,7 @@ function atmos_surface_conditions(
         ustar,
         obukhov_length = L_MO,
         buoyancy_flux = buoy_flux,
+        z0b,
         # This drops the C3 component of ρ_flux_u, need to add ρ_flux_u₃
         ρ_flux_uₕ = tensor_from_components(ρτxz, ρτyz, surface_local_geometry, z),
         energy_flux...,
@@ -373,6 +388,123 @@ function tensor_from_components(f₁₃, f₂₃, L, n₃ = surface_normal(L))
 end
 
 """
+    diagnostic_temperature_at_height(Y, p, z_diag)
+
+Diagnose the air temperature at height `z_diag` [m] above the surface (e.g.
+`z_diag = 2` for the 2 m temperature / CMIP `tas`), returned as a surface-space
+field.
+
+The temperature is obtained with Monin-Obukhov similarity theory by
+interpolating the dry static energy `s = cp_d (T - T_0) + Φ` (which follows the
+surface-layer log profile) between the surface and the lowest model level:
+
+    s(z_diag) = s_sfc + (s_int - s_sfc) * F_h(z_diag) / F_h(Δz_int)
+
+where `F_h` is the integrated dimensionless heat profile, evaluated with the
+thermal roughness length `z0b`, the Monin-Obukhov length, and the surface
+temperature stored in `p.precomputed.sfc_conditions`. This recovers `T_sfc` at
+the surface and `T_int` at the lowest model level exactly.
+
+Used both for a `MoninObukhov` surface flux scheme and for the coupler handoff
+case (`flux_scheme === nothing`), where an external driver supplies `T_sfc`,
+`obukhov_length`, and `z0b` in `sfc_conditions`. For a `MoninObukhov` scheme the
+roughness comes from the scheme (via `surface_state_to_conditions`); in the
+coupler case it defaults to a small constant (see `init_sfc_conditions_zero!`)
+and may be overwritten by the coupler. For any other flux scheme (e.g.
+`ExchangeCoefficients`), which provides no roughness length, we fall back to the
+lowest model level temperature.
+"""
+function diagnostic_temperature_at_height(Y, p, z_diag)
+    (; params, atmos, precomputed) = p
+    (; ᶜT, sfc_conditions) = precomputed
+    flux_scheme = atmos.surface.flux_scheme
+    # Run the Monin-Obukhov interpolation when the atmosphere owns a
+    # `MoninObukhov` scheme, or when the surface conditions are supplied by an
+    # external driver (the coupler handoff case, `flux_scheme === nothing`). In
+    # both cases `sfc_conditions` holds a valid `T_sfc`, `obukhov_length`, and
+    # `z0b`. Other schemes (e.g. `ExchangeCoefficients`) provide no roughness
+    # length, so fall back to the lowest model level.
+    if !(flux_scheme isa MoninObukhov || isnothing(flux_scheme))
+        @warn "tas: surface flux scheme $(typeof(flux_scheme)) provides no \
+               roughness length; reporting the lowest model level temperature \
+               instead of the $(z_diag) m Monin-Obukhov value." maxlog = 1
+        return Fields.level(ᶜT, 1)
+    end
+    scheme_source =
+        isnothing(flux_scheme) ? "nothing (coupled/prescribed surface)" :
+        "MoninObukhov"
+    @info "tas: diagnosing air temperature at $(z_diag) m with Monin-Obukhov \
+           similarity theory (flux_scheme = $(scheme_source))." maxlog = 1
+
+    FT = eltype(params)
+    thermo_params = CAP.thermodynamics_params(params)
+    sf_params = CAP.surface_fluxes_params(params)
+
+    # Combine surface and lowest-interior-level fields (on different spaces) with
+    # a DataLayout broadcast, following `update_surface_conditions!`.
+    fv = Fields.field_values
+    T_sfc = fv(sfc_conditions.T_sfc)
+    L_MO = fv(sfc_conditions.obukhov_length)
+    z0b = fv(sfc_conditions.z0b)
+    z_sfc = fv(Fields.coordinate_field(sfc_conditions.T_sfc).z)
+    T_int = fv(Fields.level(ᶜT, 1))
+    z_int = fv(Fields.level(Fields.coordinate_field(Y.c).z, 1))
+
+    out = similar(sfc_conditions.T_sfc)
+    out_values = fv(out)
+    @. out_values = most_temperature_at_height(
+        FT(z_diag),
+        z0b,
+        T_sfc,
+        L_MO,
+        z_sfc,
+        T_int,
+        z_int,
+        thermo_params,
+        sf_params,
+    )
+    return out
+end
+
+# Per-point MOST interpolation used by `diagnostic_temperature_at_height`:
+# interpolate the dry static energy between the surface and the lowest model
+# level with the heat similarity profile, and convert back to temperature.
+function most_temperature_at_height(
+    z_diag,
+    z0b,
+    T_sfc,
+    L_MO,
+    z_sfc,
+    T_int,
+    z_int,
+    thermo_params,
+    sf_params,
+)
+    grav = SFP.grav(sf_params)
+    uf_params = SFP.uf_params(sf_params)
+    scheme = UF.PointValueScheme()
+
+    Δz_int = z_int - z_sfc
+    # Do not extrapolate above the lowest model level (e.g. on very fine grids).
+    Δz_eff = min(z_diag, Δz_int)
+    F(Δz) = UF.dimensionless_profile(
+        uf_params,
+        Δz,
+        Δz / L_MO,
+        z0b,
+        UF.HeatTransport(),
+        scheme,
+    )
+    α = F(Δz_eff) / F(Δz_int)
+
+    DSE_sfc = TD.dry_static_energy(thermo_params, T_sfc, geopotential(grav, z_sfc))
+    DSE_int = TD.dry_static_energy(thermo_params, T_int, geopotential(grav, z_int))
+    DSE_diag = DSE_sfc + (DSE_int - DSE_sfc) * α
+    return (DSE_diag - geopotential(grav, z_sfc + Δz_eff)) /
+           TD.Parameters.cp_d(thermo_params) + TD.Parameters.T_0(thermo_params)
+end
+
+"""
     surface_conditions_type(atmos, ::Type{FT})
 
 Return the `NamedTuple` type produced by [`atmos_surface_conditions`](@ref),
@@ -387,11 +519,15 @@ function surface_conditions_type(atmos, ::Type{FT}) where {FT}
     # NOTE: Technically ρ_flux_q_tot is not really needed for a dry model, but
     # SF always has evaporation
     moisture_flux_names = (:ρ_flux_q_tot,)
-    names = (:T_sfc, :q_vap_sfc, :ustar, :obukhov_length, :buoyancy_flux, :ρ_flux_uₕ,
-        energy_flux_names..., moisture_flux_names...,
+    # `z0b` is the thermal roughness length. It is stored so the 2 m temperature
+    # diagnostic (`tas`) can reconstruct the near-surface Monin-Obukhov profile
+    # in the coupler handoff case, where `atmos.surface.flux_scheme` is `nothing`
+    # and the roughness is not otherwise available on the atmosphere side.
+    names = (:T_sfc, :q_vap_sfc, :ustar, :obukhov_length, :buoyancy_flux, :z0b,
+        :ρ_flux_uₕ, energy_flux_names..., moisture_flux_names...,
     )
     type_tuple = Tuple{
-        FT, FT, FT, FT, FT,
+        FT, FT, FT, FT, FT, FT,
         typeof(C3(FT(0)) ⊗ C12(FT(0), FT(0))),
         ntuple(_ -> C3{FT}, Val(length(energy_flux_names)))...,
         ntuple(_ -> C3{FT}, Val(length(moisture_flux_names)))...,
