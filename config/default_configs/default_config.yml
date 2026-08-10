@@ -271,7 +271,7 @@ cloud_liquid_formation:
   value: "CloudLiquidFormation"
 cloud_ice_formation:
   help: "Cloud ice formation option for 1M microphysics [`ConstantTimescale` (default), `TemperatureDependent`, ~]"
-  value: "ConstantTimescale"
+  value: "TemperatureDependent"
 cloud_ice_melt:
   help: "Cloud ice melting option for 1M microphysics [`CloudIceMelt` (default), ~]"
   value: "CloudIceMelt"

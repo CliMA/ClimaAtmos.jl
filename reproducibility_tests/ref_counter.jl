@@ -1,4 +1,4 @@
-395
+398
 
 # **README**
 #
@@ -32,13 +32,26 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
-395
-- `prescribed_aerosols` and `prognostic_aerosols` now take species keys
+398
+- `prescribed_aerosols` and `prognostic_aerosols` now take species names
   ("SSLT", "DST", "SO4", "CB", "OC") instead of bin names e.g. "SSLT01"; 
   configs that previously listed only a subset of a species'
   bins gain the omitted bins, changing radiation:
   `aquaplanet_equil_allsky_gw_raw` gains DST05, and
   `aquaplanet_nonequil_allsky_gw_res_2M` (inactive) gains CB2, OC2, and DST02-DST05.
+
+397
+- Change default ice formation to temperature dependent
+
+396
+- Make vertical water diffusion consistent: diffuse q_tot on q_tot_eff
+  (excluding rain/snow), distribute the aggregate q_tot diffusion to
+  suspended microphysics species (ρq_lcl, ρq_icl) via clipped ratio, and
+  scale their number densities proportionally. Enthalpy uses a single-
+  gradient h_eff-weighted form.
+
+395
+- Update to CloudMicrophysics 0.38.1
 
 394
 - Species-consistent hyperdiffusion.

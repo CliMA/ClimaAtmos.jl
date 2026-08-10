@@ -3,6 +3,10 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+0.42.4
+-------
+- [#4750](https://github.com/CliMA/ClimaAtmos.jl/pull/4750) ![][badge-✨feature/enhancement] Add the diagnostics `ssatl` and `ssati` (water-vapor supersaturation with respect to liquid and to ice), available for any moist microphysics model.
+- [#4732](https://github.com/CliMA/ClimaAtmos.jl/pull/4732) ![][badge-🔥behavioralΔ] Make water hyperdiffusion species-consistent and enforce the SGS microphysics constraints.
 
 0.42.3
 -------
