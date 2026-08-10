@@ -1,4 +1,8 @@
-forcing/climacolumn/*.nc
-socrates_calibration/*
-run/output/*
+# Model output, calibration output, and the Atlas LES reference data are all local artifacts.
+runs/
+calibrations/
+reference/
 !.gitkeep
+
+# Stray worker logs if a driver is launched from the repo root.
+worker_*.log

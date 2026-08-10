@@ -24,6 +24,11 @@ A perfect single column model calibration experiment in set up in
 `experiments/perfect_scm`. For more information, see the `README.md` in
 `experiments/perfect_scm`.
 
+## SOCRATES
+
+SOCRATES Atlas LES column calibration (prognostic EDMFX + ClimaCalibrate 0.3)
+lives in `experiments/SOCRATES`. See that directory's `README.md`.
+
 ## New Experiments
 
 To set up your own experiment, please follow the [setup guide](https://clima.github.io/ClimaCalibrate.jl/dev/atmos_setup_guide/).
