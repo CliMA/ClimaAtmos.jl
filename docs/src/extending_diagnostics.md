@@ -99,9 +99,10 @@ compute_relative_humidity(state, cache, time) =
 ```
 
 This will return the correct relative humidity and throw informative errors when
-it cannot be computed. We could specialize
-`compute_relative_humidity` further if the relative humidity
-were computed differently for `EquilibriumMicrophysics0M` and `NonEquilibriumMicrophysics`.
+it cannot be computed. We could specialize `compute_relative_humidity` further
+if the relative humidity were computed differently for
+[`EquilibriumMicrophysics0M`](@ref ClimaAtmos.EquilibriumMicrophysics0M) and
+`NonEquilibriumMicrophysics`.
 
 In `ClimaAtmos`, we define some helper functions to produce error messages, so
 the error fallback can be written as

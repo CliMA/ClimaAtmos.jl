@@ -14,10 +14,48 @@ export CosineTopography,
 # The parameters of these profiles should be defined separately so that they
 # can also be used to compute analytic solutions.
 
+"""
+    AbstractTopography
+
+Surface elevation profile used to warp the vertical grid.
+
+Subtypes:
+
+  - `NoTopography`: flat surface; the grid is not warped.
+  - [`CosineTopography`](@ref): periodic cosine hills, in 2D or 3D.
+  - [`AgnesiTopography`](@ref): a single witch-of-Agnesi mountain, 2D.
+  - [`ScharTopography`](@ref): a Gaussian envelope of cosine ridges, 2D.
+  - [`EarthTopography`](@ref): Earth orography from the ETOPO2022 dataset.
+  - [`DCMIP200Topography`](@ref): the DCMIP-2-0-0 mountain, on the sphere.
+  - [`Hughes2023Topography`](@ref): the two-ridge mountain of Hughes and
+    Jablonowski (2023), on the sphere.
+
+Every analytic subtype extends `topography_function(topography, coord)`, which
+returns the surface elevation [m] at `coord`. `EarthTopography` has no analytic
+form and is instead read from a file when the grid is built; `NoTopography`
+short-circuits grid warping entirely. The parameters live on the type rather
+than inside the elevation function so that the analytic steady-state solutions
+in `steady_state_solutions.jl` can reuse them.
+"""
 abstract type AbstractTopography end
 Base.broadcastable(t::AbstractTopography) = tuple(t)
+
+"""
+    topography_function(topography)
+    topography_function(topography, coord)
+
+Return the surface elevation [m] of `topography` at `coord`, or, given only
+`topography`, the callable `coord -> elevation` that a `SpaceVaryingInput` uses
+to fill the surface elevation field.
+"""
 topography_function(topo) = Base.Fix1(topography_function, topo)
 
+"""
+    NoTopography()
+
+Flat lower boundary: the vertical grid is built without hypsography, so the
+mesh-warping choice has no effect.
+"""
 struct NoTopography <: AbstractTopography end
 
 # Analytical topography types for idealized test cases
@@ -25,12 +63,22 @@ struct NoTopography <: AbstractTopography end
 """
     CosineTopography{D, FT}(; h_max = 25, λ = 25e3)
 
-Cosine hill topography in 2D or 3D.
+Periodic cosine hills in a 2D (`D = 2`) or 3D (`D = 3`) box.
 
-# Arguments
+The elevation is `h_max cos(2πx/λ)` in 2D and `h_max cos(2πx/λ) cos(2πy/λ)` in
+3D, so the same wavelength is used along both horizontal directions. Steady-state
+solutions for this profile are available from `steady_state_velocity`.
 
-  - `h_max::FT`: Maximum elevation (m)
-  - `λ::FT`: Wavelength of the cosine hills (m)
+# Fields
+
+  - `h_max = 25`: Amplitude of the hills, the maximum elevation [m].
+  - `λ = 25e3`: Wavelength of the hills [m].
+
+# Examples
+
+```julia
+topography = CosineTopography{2, Float64}(; h_max = 100, λ = 20e3)
+```
 """
 Base.@kwdef struct CosineTopography{D, FT} <: AbstractTopography
     h_max::FT = 25.0
@@ -49,13 +97,23 @@ topography_cosine(x, y, λ_x, λ_y, h_max) =
 """
     AgnesiTopography{FT}(; h_max = 25, x_center = 50e3, a = 5e3)
 
-Witch of Agnesi mountain topography for 2D simulations.
+Witch-of-Agnesi mountain for 2D simulations.
 
-# Arguments
+The elevation is ``h_{max} / (1 + ((x - x_c)/a)^2)``, the standard profile for
+mountain-wave tests. Steady-state solutions for this profile are available from
+`steady_state_velocity`.
 
-  - `h_max`: Maximum elevation (m)
-  - `x_center`: Center position (m)
-  - `a`: Mountain width parameter (m)
+# Fields
+
+  - `h_max = 25`: Peak elevation [m].
+  - `x_center = 50e3`: Horizontal position of the peak [m].
+  - `a = 5e3`: Half-width of the mountain [m].
+
+# Examples
+
+```julia
+topography = AgnesiTopography{Float64}(; h_max = 400, a = 10e3)
+```
 """
 Base.@kwdef struct AgnesiTopography{FT} <: AbstractTopography
     h_max::FT = 25.0
@@ -69,14 +127,26 @@ topography_function((; h_max, x_center, a)::AgnesiTopography, (; x)) =
 """
     ScharTopography{FT}(; h_max = 25, x_center = 50e3, λ = 4e3, a = 5e3)
 
-Schar mountain topography for 2D simulations.
+Schär mountain for 2D simulations: cosine ridges of wavelength `λ` under a
+Gaussian envelope of half-width `a`.
 
-# Arguments
+The elevation is ``h_{max} \\exp(-((x - x_c)/a)^2) \\cos^2(π (x - x_c)/λ)``, so
+the profile carries both a resolved-scale and a small-scale response.
+Steady-state solutions for this profile are available from
+`steady_state_velocity`.
 
-  - `h_max`: Maximum elevation (m)
-  - `x_center`: Center position (m)
-  - `λ`: Wavelength parameter (m)
-  - `a`: Mountain width parameter (m)
+# Fields
+
+  - `h_max = 25`: Peak elevation [m].
+  - `x_center = 50e3`: Horizontal position of the central peak [m].
+  - `λ = 4e3`: Wavelength of the ridges [m].
+  - `a = 5e3`: Half-width of the Gaussian envelope [m].
+
+# Examples
+
+```julia
+topography = ScharTopography{Float64}(; h_max = 250, λ = 4e3, a = 5e3)
+```
 """
 Base.@kwdef struct ScharTopography{FT} <: AbstractTopography
     h_max::FT = 25.0
@@ -93,14 +163,25 @@ topography_function((; h_max, x_center, λ, a)::ScharTopography, (; x)) =
 """
     EarthTopography()
 
-Earth topography from ETOPO2022 data files.
+Earth orography, regridded from the ETOPO2022 ice-surface elevation dataset.
+
+Unlike the analytic profiles, this one has no `topography_function`: the
+elevation is read from the `earth_orography` artifact onto the horizontal space
+when the grid is built, then smoothed by horizontal diffusion (the number of
+iterations follows the `topography_damping_factor` configuration) and clipped
+at zero. See the [Topography in ClimaAtmos](@ref "Topography in ClimaAtmos")
+page.
 """
 struct EarthTopography <: AbstractTopography end
 
 """
     DCMIP200Topography()
 
-Surface elevation for the DCMIP-2-0-0 test problem.
+Surface elevation for the DCMIP-2-0-0 test problem: a 2 km circular mountain
+centered on the equator at 270° longitude, on the sphere.
+
+Inside a great-circle radius of 3π/4, the elevation is a cosine bell modulated
+by cosine ridges of half-width π/16; outside it is zero.
 """
 struct DCMIP200Topography <: AbstractTopography end
 
@@ -126,7 +207,19 @@ end
 """
     Hughes2023Topography()
 
-Surface elevation for baroclinic wave test from Hughes and Jablonowski (2023).
+Surface elevation for the baroclinic-wave test of Hughes and Jablonowski
+(2023): two 2 km ridges centered at 45°N, at 72° and 140° longitude, on the
+sphere.
+
+Each ridge is a super-Gaussian in latitude and a Gaussian in longitude, with
+widths set so that the elevation falls to a tenth of its peak at 20° in latitude
+and 3.5° in longitude.
+
+# References
+
+Hughes, O. K. and Jablonowski, C. (2023), "A Mountain-Induced Moist Baroclinic
+Wave Test Case for the Dynamical Cores of Atmospheric General Circulation
+Models", Mon. Wea. Rev.
 """
 struct Hughes2023Topography <: AbstractTopography end
 
@@ -162,13 +255,27 @@ end
 ## Mesh warping types for topography
 ##
 
+"""
+    MeshWarpType
+
+Strategy for warping the vertical grid to follow the surface elevation.
+
+Subtypes:
+
+  - [`LinearWarp`](@ref): terrain following at the surface, decaying linearly to
+    flat at the model top.
+  - [`SLEVEWarp`](@ref): smooth-level vertical coordinate, decaying the
+    small-scale terrain faster than the large-scale terrain.
+
+Has no effect when the topography is `NoTopography`.
+"""
 abstract type MeshWarpType end
 
 """
     LinearWarp()
 
-Linear mesh warping that uniformly distributes vertical levels between the
-surface and top of the domain.
+Terrain-following warping in which the terrain influence decays linearly with
+height, vanishing at the top of the domain.
 """
 struct LinearWarp <: MeshWarpType end
 
@@ -177,10 +284,17 @@ struct LinearWarp <: MeshWarpType end
 
 Smooth Level Vertical (SLEVE) coordinate warping for terrain-following meshes.
 
-# Arguments
+The terrain influence decays like `sinh((ηₕ - η) / (s ηₕ)) / sinh(1 / s)` in the
+normalized height `η = z / z_top`, so levels relax to flat faster than the
+linear decay of [`LinearWarp`](@ref).
 
-  - `eta`: Threshold parameter (if z/z_top > eta, no warping is applied). Default: 0.7
-  - `s`: Decay scale parameter controlling how quickly the warping decays with height. Default: 10.0
+# Fields
+
+  - `eta = 0.7`: Normalized height `ηₕ` above which no warping is applied, i.e.
+    levels with `z / z_top > eta` are flat [-].
+  - `s = 10.0`: Decay scale as a fraction of the domain height; smaller values
+    confine the terrain influence closer to the surface [-]. Grid construction
+    errors unless `s * z_top` exceeds the maximum surface elevation.
 
 # References
 

@@ -3,31 +3,49 @@
 # ============================================================================
 
 """
-    physical_state(; T, p=NaN, ρ=NaN, kwargs...)
+    physical_state(;
+        T, p = NaN, ρ = NaN, u = 0, v = 0, q_tot = 0, q_liq = 0, q_ice = 0,
+        tke = 0, draft_area = 0, q_rai = 0, q_sno = 0, n_liq = 0, n_rai = 0,
+        n_ice = 0, q_rim = 0, b_rim = 0, q_gas_A = 0,
+    )
 
-Construct a NamedTuple representing the physical state at a grid point.
-This is the return type of `center_initial_condition` — it describes the
-thermodynamic and kinematic state without any knowledge of the atmos model.
+Construct the physical state at one grid point.
 
-The assembly layer (`prognostic_variables.jl`) converts this into model-specific
-prognostic variables.
+The return value of every setup's `center_initial_condition`: the
+thermodynamic and kinematic state, with no knowledge of the model
+configuration. The assembly layer in `prognostic_variables.jl` selects from it
+the prognostic variables a given `AtmosModel` needs, so a setup may set fields
+that the model ignores. The keyword list is closed — an unrecognized name is a
+method error rather than a silently dropped field.
 
-## Required arguments
+`p` and `ρ` default to `NaN` sentinels rather than `nothing` so that every field
+has the same concrete float type; `air_density` fills in whichever was left
+unset. Placeholder states with `T = NaN` (used by setups that overwrite the
+state from a file) skip validation.
 
-  - `T`: Temperature (K)
-  - At least one of `p` (pressure, Pa) or `ρ` (density, kg/m³). If only one is
-    provided, the assembly layer computes the other via `Thermodynamics`.
+# Keyword Arguments
 
-## Optional arguments (default to zero)
+  - `T`: Temperature, required [K].
+  - `p = NaN`: Pressure [Pa]. At least one of `p` and `ρ` is required.
+  - `ρ = NaN`: Density [kg/m³].
+  - `u`, `v`: Zonal and meridional velocity [m/s].
+  - `q_tot`, `q_liq`, `q_ice`: Total, cloud liquid, and cloud ice specific
+    humidities [kg/kg].
+  - `tke`: Specific turbulent kinetic energy [m²/s²].
+  - `draft_area`: Total EDMF draft area fraction, split evenly across the
+    subdomains [-].
+  - `q_rai`, `q_sno`: Rain and snow specific humidities [kg/kg].
+  - `n_liq`, `n_rai`: Cloud droplet and raindrop number concentrations, for
+    two-moment microphysics [1/kg].
+  - `n_ice`, `q_rim`, `b_rim`: Ice number concentration [1/kg], rime specific
+    content [kg/kg], and rime specific volume [m³/kg], for P3 microphysics.
+  - `q_gas_A`: Passive gas tracer specific concentration [kg/kg].
 
-  - `u`, `v`: Zonal and meridional velocity (m/s)
-  - `q_tot`, `q_liq`, `q_ice`: Specific humidities
-  - `tke`: Turbulent kinetic energy (specific)
-  - `draft_area`: EDMF draft area fraction
-  - `q_rai`, `q_sno`: Precipitation specific humidities
-  - `n_liq`, `n_rai`: Number densities (2-moment microphysics)
-  - `n_ice`, `q_rim`, `b_rim`: P3 microphysics fields
-  - `q_gas_A`: Passive gas tracer concentration (default 0)
+# Examples
+
+```julia
+state = physical_state(; T = 300.0, p = 101500.0, q_tot = 0.017)
+```
 """
 function physical_state(;
     T,
@@ -70,9 +88,15 @@ end
 """
     ColumnProfiles{F}
 
-A set of 1D vertical interpolators for the five standard atmospheric
-variables: temperature, winds, specific humidity, and density. Shared by
-setups that initialize from externally-read vertical profiles.
+Vertical interpolators of the five variables needed to initialize a column,
+shared by the setups that read their initial profiles from a file.
+
+# Fields
+
+  - `T`: Temperature profile `z -> T` [K].
+  - `u`, `v`: Zonal and meridional velocity profiles [m/s].
+  - `q_tot`: Total specific humidity profile [kg/kg].
+  - `ρ`: Density profile [kg/m³].
 """
 struct ColumnProfiles{F}
     T::F
@@ -85,8 +109,9 @@ end
 """
     ColumnProfiles(z, T, u, v, q_tot, ρ)
 
-Build `ColumnProfiles` from height vector `z` and corresponding value vectors.
-Uses linear interpolation with flat extrapolation.
+Build `ColumnProfiles` from the height vector `z` [m] and the
+corresponding value vectors, interpolating linearly in height and extrapolating
+flat beyond the data.
 """
 function ColumnProfiles(z, T, u, v, q_tot, ρ)
     interp(vals) = Intp.extrapolate(
@@ -97,9 +122,13 @@ function ColumnProfiles(z, T, u, v, q_tot, ρ)
 end
 
 """
-    center_initial_condition(profiles::ColumnProfiles, local_geometry)
+    column_profiles_ic(profiles::ColumnProfiles, local_geometry)
 
-Evaluate column profiles at the grid point height and return a `physical_state`.
+Evaluate `profiles` at the height of `local_geometry` and return the resulting
+[`physical_state`](@ref).
+
+The shared `center_initial_condition` body of the file-initialized column
+setups.
 """
 function column_profiles_ic(profiles::ColumnProfiles, local_geometry)
     (; z) = local_geometry.coordinates
@@ -131,12 +160,14 @@ const FunctionOrSpline =
 """
     column_indefinite_integral(f, ϕ₀, zspan; nelems = 1000)
 
-The column integral of `ϕ' = f(ϕ, z)` from `ϕ(first(zspan)) = ϕ₀`, computed
-with `Operators.column_integral_indefinite!` on a dedicated column of `nelems`
-elements, returned as a callable
-`ClimaInterpolations.Interpolation1D.Interpolate1D` in height, with linear
-interpolation and flat extrapolation. The column is built on the host, so the
-interpolant holds host arrays and is evaluated on the host.
+Integrate `ϕ' = f(ϕ, z)` upward from `ϕ(first(zspan)) = ϕ₀`, and return the
+solution as a callable profile of height.
+
+The integral is computed with `Operators.column_integral_indefinite!` on a
+dedicated column of `nelems` elements, then wrapped in a
+`ClimaInterpolations.Interpolation1D.Interpolate1D` with linear interpolation
+and flat extrapolation. The column is built on the host, so the returned
+profile holds host arrays and must be evaluated on the host.
 """
 function column_indefinite_integral(
     f::Function,
@@ -167,11 +198,14 @@ end
 """
     ρ_from_profile(thermo_params, p, z, T, θ, q_tot)
 
-Compute air density at pressure `p` and height `z`,
-given either temperature `T(z)` or potential temperature `θ(z)`
-and, optionally, total specific humidity `q_tot(z)`.
+Compute the air density [kg/m³] at pressure `p` [Pa] and height `z` [m], given
+either the temperature profile `T(z)` [K] or the liquid-ice potential
+temperature profile `θ(z)` [K], and optionally the total specific humidity
+profile `q_tot(z)` [kg/kg].
 
-Exactly one of `T` or `θ` must be provided.
+Exactly one of `T` and `θ` must be given; the other must be `nothing`. Passing
+neither or both is an error. Any condensate is assumed absent, so the moist
+density uses `q_tot` alone.
 """
 ρ_from_profile(_, _, _, ::Nothing, ::Nothing, _) = error("Either T or θ must be specified")
 ρ_from_profile(_, _, _, _::FunctionOrSpline, _::FunctionOrSpline, _) =
@@ -200,11 +234,21 @@ end
 """
     hydrostatic_pressure_profile(; thermo_params, p_0, [T, θ, q_tot, z_max])
 
-Solve the initial value problem `p'(z) = -g * ρ(z)` for all `z ∈ [0, z_max]`,
-given `p(0)`, either `T(z)` or `θ(z)`, and optionally also `q_tot(z)`. If
-`q_tot(z)` is not given, it is assumed to be 0. If `z_max` is not given, it is
-assumed to be 30 km. Note that `z_max` should be the maximum elevation to which
-the specified profiles T(z), θ(z), and/or q_tot(z) are valid.
+Solve the hydrostatic balance `p'(z) = -g ρ(z)` on `z ∈ [0, z_max]` from the
+surface pressure `p_0`, and return the pressure as a callable profile of height
+[Pa].
+
+# Keyword Arguments
+
+  - `thermo_params`: Thermodynamics parameter set.
+  - `p_0`: Pressure at `z = 0` [Pa].
+  - `T`, `θ`: Temperature or liquid-ice potential temperature profile [K].
+    Exactly one is required.
+  - `q_tot = nothing`: Total specific humidity profile [kg/kg]. Taken as zero
+    when omitted.
+  - `z_max = 30000`: Top of the integration [m]. It should be the highest
+    elevation at which the given profiles are valid, since the result is
+    extrapolated flat above it.
 """
 function hydrostatic_pressure_profile(;
     thermo_params,

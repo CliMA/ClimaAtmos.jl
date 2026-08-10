@@ -1,10 +1,24 @@
 """
-    DecayingProfile(; perturb = true, params)
+    DecayingProfile(; perturb = true, thermo_params = nothing, params = nothing)
 
-A setup with a decaying temperature profile (from Thermodynamics.jl), with an
-optional perturbation to the temperature field.
+A setup with a decaying temperature profile, optionally perturbed.
 
-Uses `DecayingTemperatureProfile` with T_surface=290K, T_min=220K, z_scale=8km.
+Uses the `DecayingTemperatureProfile` of Thermodynamics.jl, with a surface
+temperature of 290 K, a minimum temperature of 220 K, and a scale height of
+8 km.
+
+# Keyword Arguments
+
+  - `perturb = true`: Whether to add a temperature perturbation.
+  - `thermo_params = nothing`: Thermodynamics parameter set.
+  - `params = nothing`: A full `ClimaAtmosParameters` set, from which the
+    thermodynamics parameters are taken; takes precedence over `thermo_params`.
+
+# Examples
+
+```julia
+setup = DecayingProfile(; perturb = false, thermo_params)
+```
 """
 struct DecayingProfile{TP}
     perturb::Bool

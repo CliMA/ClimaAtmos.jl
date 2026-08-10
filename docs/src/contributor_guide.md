@@ -183,6 +183,17 @@ and then open `docs/build/index.html` in your favorite browser. Setting the envi
 `JULIA_DEBUG=Documenter` will provide more information on the documentation build process and
 thus help figure out a potential bug.
 
+One docs-build failure is common enough to warrant a pre-commit hook of its own.
+Documenter reads `[text](target)` as a link, and its parser accepts any
+whitespace between the bracket and the parenthesis, including a line break, so
+bracketed units followed by a parenthetical become a link with an unresolvable
+target. Since `checkdocs = :exports` leaves most docstrings unrendered, such a
+link stays latent until someone adds that symbol to a page, and the build then
+fails in an unrelated pull request. `.dev/check_markdown_link_ambiguity.py`
+catches these at commit time. Separate the bracket and the parenthesis with
+punctuation, or wrap the units in backticks; both are spelled out in the shared
+[documentation policy, §4](https://github.com/CliMA/ClimaAtmos.jl/blob/main/docs/dev-guides/code-quality/documentation_policy.md).
+
 ## Formatting
 
 One of the CI checks verifies that the code is uniformly formatted with

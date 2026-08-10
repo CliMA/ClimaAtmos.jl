@@ -8,68 +8,47 @@ import ClimaCore.Geometry: ⊗
     vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t)
     vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t, vert_diff_model)
 
-Computes and applies tendencies due to vertical turbulent diffusion,
-representing mixing processes within the planetary boundary layer and free atmosphere.
+Add the K-theory vertical turbulent diffusion tendencies, representing mixing in
+the boundary layer and free atmosphere.
 
-This function is dispatched based on the type of the vertical diffusion model
-(`vert_diff_model`), which is accessed via `p.atmos.vertical_diffusion`.
+The three-argument method dispatches on `p.atmos.vertical_diffusion`; the method
+for `::Nothing` is a no-op. For a `VerticalDiffusion` or
+`DecayWithHeightDiffusion` model, the eddy diffusivity `ᶜK_h` comes from
+`ᶜcompute_eddy_diffusivity_coefficient`, and the same value is used as the eddy
+viscosity `K_u`. Face diffusivities are formed as a harmonic mean (the reciprocal
+of the interpolated reciprocal), so the flux collapses at a face separating a
+turbulent layer from quiescent, strongly stratified air, where an arithmetic mean
+would leave about `K/2`.
 
-**Dispatch details:**
+Increments:
 
-1.  **`vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t)`**:
-    This is the main entry point, which internally calls the more specific method
-    using `p.atmos.vertical_diffusion` to determine the diffusion model.
+  - `Yₜ.c.uₕ`: `∇⋅τ / ρ` with the stress `τ = 2 ρ K_u S`, `S` the vertical strain
+    rate. Skipped when momentum vertical diffusion is disabled. The default
+    (zero-flux) boundary conditions apply, because the surface stress is added by
+    `surface_flux_tendency!`.
+  - `Yₜ.c.ρe_tot`: divergence of the single-gradient enthalpy flux
+    `F_E = -ρ K_h [∇ᵥs_d + (h_eff + Φ) ∇ᵥq_tot_eff]`, where `s_d = h_d + Φ` is the
+    dry static energy, `q_tot_eff = q_tot - q_rai - q_sno` is the water that
+    actually diffuses, and `h_eff = (h_v q_v + h_l q_lcl + h_i q_icl) / max(q_water_nonneg, ε)` is the mass-weighted enthalpy of that water. The dry
+    term is added for every configuration; the water term only when `ρq_tot` is
+    prognostic.
+  - `Yₜ.c.ρq_tot` and `Yₜ.c.ρ`: the total-water flux `F = -ρ K_h ∇ᵥq_tot_eff`,
+    applied to both with the same sign, so that diffusing water carries the
+    corresponding moist-air mass.
+  - `Yₜ.c.ρq_lcl` and `Yₜ.c.ρq_icl`: no flux of their own. Each takes a share of
+    the aggregate water tendency, scaled by the clipped ratio
+    `min(q_μ / q_tot_eff, 1)`, and the matching number densities `ρn_lcl` and
+    `ρn_icl` scale with it too, which preserves the mean particle mass.
+  - Rain, snow, and rain number density (`ρq_rai`, `ρq_sno`, `ρn_rai`) are not
+    diffused, since they sediment rather than mix.
+  - Passive (non-microphysics) grid-mean tracers: divergence of
+    `F_χ = -ρ K_h ∇ᵥχ`, diffused independently with the full `K_h`.
 
-2.  **`vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t, ::Nothing)`**:
-    If the `vert_diff_model` is `Nothing` (i.e., vertical diffusion is turned off
-    in the simulation configuration), this method is called and performs no operations.
-
-3.  **`vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t, ::Union{VerticalDiffusion, DecayWithHeightDiffusion})`**:
-    This method implements the core logic for K-theory based vertical diffusion when
-    a `VerticalDiffusion` or `DecayWithHeightDiffusion` model is active.
-    It calculates tendencies for:
-    - **Momentum (`uₕ`)**: Based on the divergence of a stress tensor,
-      `τ = 2 ρ K_u S`, where `K_u` is the eddy viscosity
-      and `S` is the strain rate tensor. The tendency is applied as
-      `1/ρ ∇ ⋅ τ`. Default zero-flux boundary
-      conditions are assumed for this diffusive term, as surface stresses
-      are often handled by `surface_flux_tendency!`.
-    - **Total Energy (`ρe_tot`)**: Divergence of a single-gradient enthalpy flux
-      `F_E = - ρ K_h [∇_v s_d + (h_eff + Φ) ∇_v q_tot_eff]`, where
-      `s_d = h_d + Φ` is the dry static energy, `q_tot_eff = q_tot - q_rai - q_sno`
-      is the aggregate water that diffuses (rain/snow excluded), and
-      `h_eff = (h_v q_v + h_l q_lcl + h_i q_icl) / max(q_water_nonneg, ε)` is the
-      clipped-input mass-weighted enthalpy of the diffusing water. Zero-flux
-      boundary conditions.
-    - **Tracers**: Total water diffuses on `q_tot_eff` with flux
-      `F = - ρ K_h ∇_v q_tot_eff`, applied to `ρq_tot` and (with the same sign)
-      to `ρ` for moist-air mass conservation. Cloud mass species (`ρq_lcl`,
-      `ρq_icl`) inherit their share by pure tendency scaling with the clipped
-      ratio `min(q_μ / q_tot_eff, 1)`; their corresponding number densities
-      scale proportionally to preserve mean particle mass. Rain, snow, and
-      rain number density (`ρq_rai`, `ρq_sno`, `ρn_rai`) receive no diffusion.
-      Passive (non-microphysics) tracers diffuse independently with full `K_h`.
-
-This function is acting as a wrapper around the specific implementations
-for different turbulence and convection models.
-
-The primary role of this function is to dispatch to the correct turbulence model's
-tendency function. It operates on the state `Y` and its tendency `Yₜ`, using
-the model-specific cache `p`.
-
-Arguments:
-- `Yₜ`: The tendency state vector.
-- `Y`: The current state vector.
-- `p`: Cache containing parameters, atmospheric model configurations
-       (like `p.atmos.vertical_diffusion`), precomputed thermodynamic
-       quantities, and scratch space.
-- `t`: Current simulation time (not directly used in diffusion calculations).
-- `vert_diff_model` (for dispatched methods): The specific vertical diffusion model instance.
-
-Modifies components of tendency vector `Yₜ.c` (e.g., `Yₜ.c.uₕ`, `Yₜ.c.ρe_tot`, `Yₜ.c.ρ`, and
-various tracer fields such as `Yₜ.c.ρq_tot`).
+Reads the precomputed `ᶜu`, `ᶜp`, `ᶜT`, `ᶜq_liq`, `ᶜq_ice`, `ᶜq_tot_nonneg`, the
+geopotential `ᶜΦ` from `p.core`, and scratch space; `t` is unused. Called from
+`additional_tendency!` when `p.atmos.diff_mode == Explicit()`, and from
+`implicit_tendency!` otherwise. Returns `nothing`.
 """
-
 vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, t) =
     vertical_diffusion_boundary_layer_tendency!(
         Yₜ,

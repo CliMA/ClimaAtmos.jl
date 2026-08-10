@@ -20,6 +20,27 @@ import ClimaUtilities.TimeVaryingInputs:
 import Interpolations as Intp
 using Statistics: mean
 
+"""
+    radiation_model_cache(Y, atmos::AtmosModel, args...)
+    radiation_model_cache(Y, radiation_mode, args...; kwargs...)
+
+Allocate the cache (`p.radiation`) required by the configured radiation mode.
+
+The first method forwards to `atmos.radiation_mode`, so the cache contents depend on which
+mode is selected by the `rad` configuration argument:
+
+  - `Nothing` and `HeldSuarezForcing`: empty cache; neither performs radiative transfer.
+  - `RRTMGPI.AbstractRRTMGPMode` (`gray`, `clearsky`, `allsky`, `allskywithclear`): the
+    `RRTMGP` solver, the face radiation flux, and any insolation and cloud caches.
+  - `RadiationDYCOMS`, `RadiationTRMM_LBA`, `RadiationISDAC`: the working fields of the
+    corresponding idealized single-column radiation profile.
+
+# Returns
+
+A `NamedTuple` that is merged into the simulation cache as `p.radiation`.
+
+See also `radiation_tendency!` and the radiation docs page, docs/src/radiation.md.
+"""
 radiation_model_cache(Y, atmos::AtmosModel, args...) =
     radiation_model_cache(Y, atmos.radiation_mode, args...)
 
@@ -32,6 +53,26 @@ radiation_model_cache(
     radiation_mode::Union{Nothing, HeldSuarezForcing};
     args...,
 ) = (;)
+
+"""
+    radiation_tendency!(Yₜ, Y, p, t, radiation_mode)
+
+Add the radiative heating rate to `Yₜ` in place; return `nothing`.
+
+Every mode that computes a flux applies the flux divergence explicitly as
+`Yₜ.c.ρe_tot -= ᶜdivᵥ(ᶠradiation_flux)`, with `ᶠradiation_flux` the net *upward* radiative
+flux on cell faces [W/m²], so that flux convergence heats the layer. Dispatch:
+
+  - `Nothing` and `HeldSuarezForcing`: no-op. Held-Suarez applies its temperature relaxation
+    from `remaining_tendency!` instead (see `held_suarez_forcing_tendency_ρe_tot`).
+  - `RRTMGPI.AbstractRRTMGPMode`: uses the flux computed by the radiation callback at the
+    `dt_rad` cadence, and also heats the `PrognosticEDMFX` updrafts.
+  - `RadiationDYCOMS`, `RadiationISDAC`: build `ᶠradiation_flux` from a liquid-water-path
+    parameterization of longwave cooling before taking the divergence.
+  - `RadiationTRMM_LBA`: prescribes a heating rate directly, with no flux.
+
+See also `radiation_model_cache` and the radiation docs page, docs/src/radiation.md.
+"""
 radiation_tendency!(Yₜ, Y, p, t, ::Union{Nothing, HeldSuarezForcing}) = nothing
 
 #####
@@ -39,31 +80,22 @@ radiation_tendency!(Yₜ, Y, p, t, ::Union{Nothing, HeldSuarezForcing}) = nothin
 #####
 
 """
-    idealized_ozone(z::FT)
+    idealized_ozone(z)
 
-Returns idealized ozone volume mixing ratio (VMR) from Wing et al. 2018.
+Return the idealized ozone volume mixing ratio at altitude `z` [mol/mol], following the
+RCEMIP protocol of [Wing2018](@cite).
 
-The ozone profile is calculated as a function of altitude `z` using the following formula:
+The profile is analytic in pressure,
 
 ```math
-O_3(z) = g_1 p^{g_2} e^{(-p / g_3)}
+O_3(p) = g_1 \\, p^{g_2} \\, e^{-p / g_3},
 ```
 
-where:
+with `p = P₀ exp(-z / H)` in hPa (`P₀ = 1000 hPa`, scale height `H = 7 km`) and empirical
+constants `g₁ = 3.6478`, `g₂ = 0.83209`, `g₃ = 11.3515` that yield ppmv, converted here to
+a volume mixing ratio.
 
-  - `O_3(z)` is the ozone concentration in volume mixing ratio (VMR) at altitude `z`.
-
-  - `p` is the pressure at altitude `z` calculated using the hydrostatic equation:
-    `p = P_0 exp(-z / H_{Earth})`, where `P_0` is the surface pressure and
-    `H_{Earth}` is the scale height of the Earth's atmosphere (assumed to be 7000
-    meters).
-
-  - `g_1`, `g_2`, and `g_3` are empirical constants.
-
-**References**
-
-  - Wing, A. A., et al. (2018). Radiative-convective equilibrium model intercomparison
-    project. Geoscientific Model Development, 11(2), 663-690.
+Used as the ozone input to RRTMGP whenever ozone is not read from a time-varying dataset.
 """
 function idealized_ozone(z::FT) where {FT}
     H_EARTH = FT(7000.0)
@@ -77,6 +109,35 @@ function idealized_ozone(z::FT) where {FT}
     return g1 * p^g2 * exp(-p / g3) * PPMV_TO_VMR
 end
 
+"""
+    rrtmgp_solver_kwargs(space, include_z)
+    rrtmgp_solver_kwargs(space, params, time_varying_trace_gases, radiation_mode,
+                         include_z)
+
+Assemble the mode-dependent keyword arguments passed to `RRTMGPInterface.rrtmgp_solver`.
+
+The two-argument method builds the `GrayRadiation` inputs: `lapse_rate`, the
+latitude-dependent longwave optical thickness
+`optical_thickness_parameter = 7.2 + (1.8 - 7.2) sin²(lat)` [-], and the column latitudes.
+Both of the former are required by `RRTMGPInterface.rrtmgp_solver` but are currently
+discarded by it, because RRTMGP builds the gray optical depth from its own
+`GrayOpticalThicknessOGorman2008` defaults (whose equatorial and polar optical thicknesses,
+7.2 and 1.8, are the endpoints reproduced above).
+The five-argument method builds the inputs for the RRTMGP band models: the well-mixed
+trace-gas volume mixing ratios (fixed values from `params`, or `NaN` placeholders for
+gases listed in `time_varying_trace_gases`), the ozone profile from `idealized_ozone`,
+cloud inputs when the mode is not `ClearSkyRadiation`, and aerosol radii and column mass
+densities when `radiation_mode.aerosol_radiation` is true.
+
+Inputs that are refreshed by the radiation callback are seeded with `NaN` here so that a
+missing update shows up immediately rather than as a plausible-looking flux. With
+`idealized_clouds`, fixed liquid and ice cloud layers are prescribed instead and are never
+updated. When `include_z` is true, the cell-center and cell-face heights are added, along
+with `planet_radius` on spherical grids (used for the deep-atmosphere metric scaling).
+
+Latitude falls back to zero (equator) on flat-space grids, whose coordinates carry no
+latitude.
+"""
 function rrtmgp_solver_kwargs(
     space,
     include_z::Bool,
@@ -282,6 +343,32 @@ function rrtmgp_solver_kwargs(
     return kwargs
 end
 
+"""
+    radiation_model_cache(Y, radiation_mode::RRTMGPI.AbstractRRTMGPMode, start_date,
+                          params, aerosol_names, time_varying_trace_gas_names,
+                          insolation_mode; interpolation, bottom_extrapolation)
+
+Build the cache for an RRTMGP radiation mode.
+
+Constructs the `RRTMGP` solver with one column per horizontal node and `Spaces.nlevels`
+domain layers, using the mode-specific inputs from `rrtmgp_solver_kwargs`, and allocates
+`ᶠradiation_flux`, the net upward radiative flux on cell faces [W/m²] that the radiation
+callback fills and `radiation_tendency!` differentiates.
+
+Errors if `aerosol_radiation` is enabled without any of the supported aerosol species in
+`aerosol_names`.
+
+# Keyword Arguments
+
+  - `interpolation = RRTMGPI.BestFit()`: Scheme for interpolating the center pressures and
+    temperatures to cell faces.
+  - `bottom_extrapolation = RRTMGPI.SameAsInterpolation()`: Scheme for the bottom face.
+
+# Returns
+
+A `NamedTuple` with `rrtmgp_solver` and `ᶠradiation_flux`, merged with the insolation cache
+(`insolation_cache`) and, for the all-sky modes, the cloud cache (`get_cloud_cache`).
+"""
 function radiation_model_cache(
     Y,
     radiation_mode::RRTMGPI.AbstractRRTMGPMode,
@@ -378,6 +465,17 @@ function radiation_model_cache(
     )
 end
 
+"""
+    get_cloud_cache(cloud, Y, start_date)
+
+Return the cache needed to supply cloud properties to radiation.
+
+For `InteractiveCloudInRadiation` (and any other setting) the cache is empty, since cloud
+properties are diagnosed from the model state. For `PrescribedCloudInRadiation` it holds
+the `prescribed_clouds_field` (cloud fraction `cc`, and liquid and ice water contents
+`clwc` and `ciwc`) together with the `TimeVaryingInput`s that read them from the ERA5
+monthly climatology, interpolated linearly in time on a one-year periodic calendar.
+"""
 get_cloud_cache(_, _, _) = (;)
 function get_cloud_cache(::PrescribedCloudInRadiation, Y, start_date)
     target_space = axes(Y.c)
@@ -408,6 +506,16 @@ function get_cloud_cache(::PrescribedCloudInRadiation, Y, start_date)
     return (; prescribed_clouds_field, prescribed_cloud_timevaryinginputs)
 end
 
+"""
+    insolation_cache(insolation_mode, Y)
+
+Return the cache needed by the insolation model.
+
+Only `TimeVaryingInsolation` needs storage: a surface-level field of the `Insolation.jl`
+output tuple `(F, S, μ, ζ)`, from which the radiation callback takes the top-of-atmosphere
+irradiance `S` [W/m²] and the cosine of the solar zenith angle `μ` [-]. Idealized
+insolation modes prescribe both directly and get an empty cache.
+"""
 insolation_cache(_, _) = (;)
 function insolation_cache(::TimeVaryingInsolation, Y)
     FT = Spaces.undertype(axes(Y.c))
@@ -419,6 +527,20 @@ function insolation_cache(::TimeVaryingInsolation, Y)
     )
 end
 
+"""
+    radiation_tendency!(Yₜ, Y, p, t, ::RRTMGPI.AbstractRRTMGPMode)
+
+Apply the RRTMGP radiative heating to `Yₜ.c.ρe_tot` in place; return `nothing`.
+
+Subtracts the vertical divergence of the net upward flux, `ᶜdivᵥ(ᶠradiation_flux)`, so that
+flux convergence heats the layer. The flux itself is not recomputed here: it is refreshed
+by the radiation callback every `dt_rad` and held fixed in between, while this tendency is
+evaluated explicitly at every timestepper stage.
+
+With `PrognosticEDMFX`, the same grid-mean heating is also applied to each updraft's `mse`
+(divided by the updraft density). The grid mean is used as an approximation for updraft
+radiation; updrafts are typically absent in the stratosphere, where radiation matters most.
+"""
 function radiation_tendency!(Yₜ, Y, p, t, ::RRTMGPI.AbstractRRTMGPMode)
     (; ᶠradiation_flux) = p.radiation
     (; turbconv_model) = p.atmos
@@ -441,6 +563,18 @@ end
 ##### DYCOMS_RF01 and DYCOMS_RF02 radiation
 #####
 
+"""
+    radiation_model_cache(Y, radiation_mode::RadiationDYCOMS)
+
+Allocate the working fields of the DYCOMS RF01/RF02 idealized radiation profile.
+
+# Returns
+
+A `NamedTuple` holding the extinction field `ᶜκρq`, its definite and indefinite column
+integrals `∫_0_∞_κρq` and `ᶠ∫_0_z_κρq`, the inversion-level state `isoline_z_ρ_ρq`, the
+face flux `ᶠradiation_flux` [W/m²], and the top-of-atmosphere and surface net energy flux
+accumulators used by the diagnostics.
+"""
 function radiation_model_cache(Y, radiation_mode::RadiationDYCOMS)
     FT = Spaces.undertype(axes(Y.c))
     # The NT type is needed for the `column_reduce!` call below because
@@ -458,6 +592,32 @@ function radiation_model_cache(Y, radiation_mode::RadiationDYCOMS)
         net_energy_flux_sfc = [Geometry.WVector(FT(0))],
     )
 end
+"""
+    radiation_tendency!(Yₜ, Y, p, t, radiation_mode::RadiationDYCOMS)
+
+Apply the DYCOMS RF01/RF02 idealized longwave radiation to `Yₜ.c.ρe_tot` in place; return
+`nothing`.
+
+The net upward flux of [Stevens2005](@cite) combines cloud-top cooling, cloud-base warming,
+and free-tropospheric warming above the inversion:
+
+```math
+F(z) = F_0 e^{-Q(z, ∞)} + F_1 e^{-Q(0, z)} +
+       ρ_i \\, c_{p,d} \\, D \\, α_z
+       \\left[\\tfrac{1}{4}(z - z_i)^{4/3} + z_i (z - z_i)^{1/3}\\right],
+```
+
+where `Q(z₁, z₂) = ∫ κ ρ q_liq dz` is the liquid-water optical path, `D` is the large-scale
+divergence [1/s], and the last term applies only above the inversion height `z_i`, taken as
+the level whose `q_tot` is closest to 0.008 kg/kg. The tendency is
+`-ᶜdivᵥ(ᶠradiation_flux)`, applied explicitly at every stage. Requires a moist
+microphysics model.
+
+Two documented departures from the reference remain (see the TODO comments): the extinction
+uses the specific content `q_liq` rather than the mixing ratio, and the third term uses the
+dry `cp_d` and is clipped to zero below `z_i`, matching the original TurbulenceConvection
+implementation.
+"""
 function radiation_tendency!(Yₜ, Y, p, t, radiation_mode::RadiationDYCOMS)
     @assert !(p.atmos.microphysics_model isa DryModel)
 
@@ -521,6 +681,16 @@ end
 ##### TRMM_LBA radiation
 #####
 
+"""
+    radiation_model_cache(Y, radiation_mode::RadiationTRMM_LBA)
+
+Allocate the working fields of the TRMM_LBA prescribed radiative heating profile.
+
+# Returns
+
+A `NamedTuple` holding the heating-rate field `ᶜdTdt_rad` [K/s] and the top-of-atmosphere
+and surface net energy flux accumulators used by the diagnostics.
+"""
 function radiation_model_cache(Y, radiation_mode::RadiationTRMM_LBA)
     FT = Spaces.undertype(axes(Y.c))
     return (;
@@ -530,6 +700,17 @@ function radiation_model_cache(Y, radiation_mode::RadiationTRMM_LBA)
     )
 end
 
+"""
+    radiation_tendency!(Yₜ, Y, p, t, radiation_mode::RadiationTRMM_LBA)
+
+Apply the TRMM_LBA prescribed radiative heating to `Yₜ.c.ρe_tot` in place; return
+`nothing`.
+
+Unlike the other modes, no flux is computed: the heating rate `ᶜdTdt_rad(t, z)` [K/s] is
+read from the `AtmosphericProfilesLibrary` observational profile, which varies with both
+height and time of day, and converted to an energy tendency with the moist isochoric heat
+capacity, `Yₜ.c.ρe_tot += ρ cv_m dT/dt`. Applied explicitly at every stage.
+"""
 function radiation_tendency!(Yₜ, Y, p, t, radiation_mode::RadiationTRMM_LBA)
     FT = Spaces.undertype(axes(Y.c))
     (; params) = p
@@ -551,6 +732,23 @@ end
 #####
 
 radiation_model_cache(Y, radiation_mode::RadiationISDAC; args...) = (;)  # Don't need a cache for ISDAC
+
+"""
+    radiation_tendency!(Yₜ, Y, p, t, radiation_mode::RadiationISDAC)
+
+Apply the ISDAC idealized longwave radiation to `Yₜ.c.ρe_tot` in place; return `nothing`.
+
+The net upward flux is the two-stream, liquid-water-path form
+
+```math
+F(z) = F₀ e^{-κ (LWP_{z_t} - LWP_z)} + F₁ e^{-κ LWP_z},
+```
+
+with `LWP_z` the liquid water path from the surface to `z` [kg/m²], `LWP_{z_t}` its value at
+the domain top, and `κ` the mass extinction coefficient [m²/kg]. The first term is cloud-top
+cooling, the second cloud-base warming. The tendency is `-ᶜdivᵥ(ᶠradiation_flux)`, applied
+explicitly at every stage. No cache is allocated; the flux is built in `p.scratch`.
+"""
 function radiation_tendency!(Yₜ, Y, p, t, radiation_mode::RadiationISDAC)
     (; F₀, F₁, κ) = radiation_mode
     (; params, precomputed) = p

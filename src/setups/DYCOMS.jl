@@ -8,7 +8,7 @@ sourced from AtmosphericProfilesLibrary.
 The two variants differ only in APL profiles, surface heat fluxes, and
 geostrophic wind. Construct via `DYCOMS_RF01(; ...)` or `DYCOMS_RF02(; ...)`.
 
-## Example
+# Examples
 
 ```julia
 setup = DYCOMS_RF01(; prognostic_tke = true, thermo_params)
@@ -23,6 +23,13 @@ struct DYCOMS{P, FT}
     ug::FT
 end
 
+"""
+    DYCOMS_RF01(; prognostic_tke, thermo_params)
+
+Build the [`DYCOMS`](@ref) setup for research flight 1 of [Stevens2005](@cite):
+the nonprecipitating nocturnal stratocumulus case, with surface fluxes
+`shf = 15` W/m², `lhf = 115` W/m², and a geostrophic wind of 7 m/s.
+"""
 function DYCOMS_RF01(; prognostic_tke::Bool, thermo_params)
     FT = eltype(thermo_params)
     DYCOMS(prognostic_tke,
@@ -34,6 +41,13 @@ function DYCOMS_RF01(; prognostic_tke::Bool, thermo_params)
         ), FT(15), FT(115), FT(7))
 end
 
+"""
+    DYCOMS_RF02(; prognostic_tke, thermo_params)
+
+Build the [`DYCOMS`](@ref) setup for research flight 2 of [Ackerman2009](@cite):
+the drizzling nocturnal stratocumulus case, with surface fluxes `shf = 16` W/m²,
+`lhf = 93` W/m², and a geostrophic wind of 5 m/s.
+"""
 function DYCOMS_RF02(; prognostic_tke::Bool, thermo_params)
     FT = eltype(thermo_params)
     DYCOMS(prognostic_tke,

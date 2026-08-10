@@ -66,14 +66,16 @@ import ..SurfaceConditions:
 """
     face_initial_condition(setup, local_geometry, params)
 
-Return a NamedTuple of face state variables:
+Return the face (vertical interface) state of `setup` at one grid point.
 
-  - `w`: Vertical velocity (m/s)
-  - `w_draft`: EDMF draft vertical velocity (m/s)
+Called pointwise by [`initial_state`](@ref), which converts the result into
+face prognostic variables. The default is a state at rest.
 
-## Default
+# Returns
 
-Returns `(; w = 0, w_draft = 0)`.
+`(; w, w_draft)`, the grid-mean vertical velocity and the EDMF draft vertical
+velocity [m/s]. The default is `(; w = 0, w_draft = 0)`; `w_draft` is used only
+by a prognostic-EDMF configuration.
 """
 function face_initial_condition(setup, local_geometry, params)
     FT = eltype(params)
@@ -83,10 +85,12 @@ end
 """
     overwrite_initial_state!(setup, Y, thermo_params)
 
-Optionally overwrite the initial state `Y` after construction. Used by
-file-based setups that operate at the field level rather than pointwise.
+Overwrite the initial state `Y` in place after it has been constructed, and
+return `nothing`.
 
-Default: no-op.
+The extension point for file-based setups (e.g. `GCMDriven`, `WeatherModel`),
+which regrid whole fields rather than working pointwise. Called by the
+simulation setup after [`initial_state`](@ref). The default is a no-op.
 """
 overwrite_initial_state!(setup, Y, thermo_params) = nothing
 
@@ -95,37 +99,66 @@ overwrite_initial_state!(setup, Y, thermo_params) = nothing
 # ============================================================================
 
 """
-    subsidence_forcing(setup, FT)
+    subsidence_forcing(setup, ::Type{FT})
 
-Return a subsidence profile function `z -> w_subsidence`, or `nothing`.
-When non-nothing, the returned profile is wrapped in a `LargeScaleSubsidence` struct
-by the model construction layer, replacing the `subsidence` config key.
+Return the large-scale subsidence profile `z -> w_subsidence` [m/s] prescribed
+by `setup`, or `nothing` for no subsidence (the default).
+
+The model construction layer wraps a non-`nothing` profile in a
+`LargeScaleSubsidence` and stores it as `atmos.subsidence`. There is no config
+key for subsidence: it is owned by the setup.
 """
 subsidence_forcing(setup, ::Type{FT}) where {FT} = nothing
 
 """
-    large_scale_advection_forcing(setup, FT)
+    large_scale_advection_forcing(setup, ::Type{FT})
 
-Return `(; prof_dTdt, prof_dqtdt)` as raw APL profile functions, or `nothing`.
-The model construction layer wraps these into a `LargeScaleAdvection` struct,
-replacing the `ls_adv` config key.
+Return the prescribed large-scale advective tendencies of `setup`, or `nothing`
+for none (the default).
+
+# Returns
+
+`(; prof_dTdt, prof_dqtdt)`, the raw profile functions of the
+AtmosphericProfilesLibrary form `(exner, z) -> dTdt` [K/s] and `z -> dqtdt`
+[kg/kg/s]. The model construction layer adapts their argument lists and wraps
+them in a `LargeScaleAdvection` stored as `atmos.ls_adv`; there is no config
+key for them.
 """
 large_scale_advection_forcing(setup, ::Type{FT}) where {FT} = nothing
 
 """
-    coriolis_forcing(setup, FT)
+    coriolis_forcing(setup, ::Type{FT})
 
-Return `(; prof_ug, prof_vg, coriolis_param)`, or `nothing`.
-Replaces the `scm_coriolis` config key.
+Return the single-column Coriolis forcing of `setup`, or `nothing` for none
+(the default).
+
+# Returns
+
+`(; prof_ug, prof_vg, coriolis_param)`, the geostrophic-wind profiles
+`z -> u_g`, `z -> v_g` [m/s] and the Coriolis parameter [1/s]. Stored as
+`atmos.scm_coriolis` by the model construction layer; there is no config key
+for it.
 """
 coriolis_forcing(setup, ::Type{FT}) where {FT} = nothing
 
 """
     surface_condition(setup, params)
 
-Return a NamedTuple `(; flux_scheme, temperature, overrides)` describing the
-surface for this setup. Any field can be `nothing` to fall through to the
-config/default. Used by `AtmosSurface(::AtmosConfig, params, FT; setup_type)`.
+Return the surface pieces prescribed by `setup`.
+
+Consumed by `AtmosSurface(::AtmosConfig, params, FT; setup_type)`, where a
+non-`nothing` field takes precedence over the corresponding config key. Only
+setups with case-specific surface properties (roughness, prescribed fluxes, a
+case SST) need to extend this.
+
+# Returns
+
+`(; flux_scheme, temperature, overrides)`: a
+`SurfaceConditions.SurfaceParameterization`, a
+`SurfaceConditions.SurfaceTemperature`, and a
+`SurfaceConditions.SurfaceBoundaryOverrides`. Each defaults to `nothing`,
+falling through to the configuration. Note that `temperature` is used only when
+`prognostic_surface` is `"PrescribedSST"`.
 """
 surface_condition(setup, params) =
     (; flux_scheme = nothing, temperature = nothing, overrides = nothing)
@@ -137,27 +170,37 @@ surface_condition(setup, params) =
 """
     external_forcing(setup, ::Type{FT})
 
-Return the external forcing model for this setup, or `nothing`.
+Return the external (large-scale) forcing model of `setup`, e.g. a
+`GCMForcing`, `ISDACForcing`, or `ExternalDrivenTVForcing`.
 
-Default: `nothing`.
+Defaults to `nothing`, in which case the model construction layer falls back to
+the `external_forcing` config key.
 """
 external_forcing(setup, ::Type{FT}) where {FT} = nothing
 
 """
     insolation_model(setup)
 
-Return the insolation model for this setup, or `nothing`.
+Return the insolation model of `setup`, e.g. a `GCMDrivenInsolation`,
+`ExternalTVInsolation`, or `RCEMIPIIInsolation`.
 
-Default: `nothing`.
+Defaults to `nothing`, in which case the `insolation` config key is used.
 """
 insolation_model(setup) = nothing
 
 """
     zonally_symmetric_temperature(coordinates, surface_temp_params, t)
 
-Default analytic surface-temperature formula. For LatLongZPoint coordinates,
-returns the canonical aquaplanet profile from Neale and Hoskins (2000); for
-other geometries it returns a constant 300 K (assume latitude-0 box).
+Return the default analytic surface temperature [K]: a steady, zonally
+symmetric aquaplanet SST.
+
+On the sphere (`LatLongZPoint` coordinates) the profile is a Gaussian in
+latitude, `271 + 29 exp(-φ² / (2 · 26²))` with `φ` in degrees, reduced by a
+6.5 K/km lapse rate over the surface elevation. Every other geometry gets a
+constant 300 K, the tropical value. Both are independent of `t`.
+
+Used as the default of [`surface_temperature_model`](@ref), wrapped in an
+`AnalyticTemperature`.
 """
 function zonally_symmetric_temperature(coordinates, surface_temp_params, _)
     (; z) = coordinates
@@ -175,11 +218,12 @@ end
 """
     surface_temperature_model(setup)
 
-Return the default `SurfaceConditions.SurfaceTemperature` for this setup,
-used when `prognostic_surface == "PrescribedSST"` and the setup itself does
-not provide a `temperature` via `surface_condition`.
+Return the default `SurfaceConditions.SurfaceTemperature` of `setup`.
 
-Default: an `AnalyticTemperature` using `zonally_symmetric_temperature`.
+Used when `prognostic_surface == "PrescribedSST"` and
+[`surface_condition`](@ref) supplies no `temperature`. Unlike the other model
+methods, the default is not `nothing` but an `AnalyticTemperature` wrapping
+`zonally_symmetric_temperature`.
 """
 surface_temperature_model(setup) =
     AnalyticTemperature(zonally_symmetric_temperature)
@@ -187,18 +231,21 @@ surface_temperature_model(setup) =
 """
     prescribed_flow_model(setup, ::Type{FT})
 
-Return the prescribed flow model for this setup, or `nothing`.
+Return the prescribed velocity profile of `setup`, which replaces the
+prognostic momentum solution (e.g. `ShipwayHill2012VelocityProfile`).
 
-Default: `nothing`.
+Defaults to `nothing`, in which case the `prescribed_flow` config key is used.
 """
 prescribed_flow_model(setup, ::Type{FT}) where {FT} = nothing
 
 """
     radiation_model(setup, ::Type{FT})
 
-Return the radiation model for this setup, or `nothing`.
+Return the case-specific radiation model of `setup`, e.g. `RadiationDYCOMS`,
+`RadiationTRMM_LBA`, or `RadiationISDAC`.
 
-Default: `nothing`.
+Defaults to `nothing`. It is also ignored when the `rad` config key is set
+explicitly, so a configuration can always override the setup's radiation.
 """
 radiation_model(setup, ::Type{FT}) where {FT} = nothing
 
@@ -217,13 +264,12 @@ include("common/prognostic_variables.jl")
     initial_condition_field(f, space)
 
 Evaluate the pointwise initial-condition closure `f` over the local geometry of
-`space`. When the closure can be broadcast on `space`'s device it is; otherwise
-it is broadcast on the host and the result is copied to the device.
+`space`, returning the resulting `Field`.
 
-A closure is broadcast on the device when it is isbits after adapting to the
-device array type. Closures that capture host-resident data - such as the
-interpolant profiles of the AtmosphericProfilesLibrary setups - are not, so
-they are evaluated on the host.
+The closure is broadcast on the device when it is `isbits` after adapting to
+the device array type; otherwise it is broadcast on the host and copied over.
+Closures that capture host-resident data — such as the interpolant profiles of
+the AtmosphericProfilesLibrary setups — take the host path.
 """
 function initial_condition_field(f, space)
     local_geometry = Fields.local_geometry_field(space)
@@ -241,21 +287,28 @@ end
 """
     initial_state(setup, params, atmos_model, center_space, face_space)
 
-Construct the full prognostic state vector `Y` (a `Fields.FieldVector`) for the
-given setup. Uses the two-layer design:
+Construct the prognostic state vector `Y` (a `Fields.FieldVector`) for `setup`.
 
- 1. Call `center_initial_condition` / `face_initial_condition` to get
-    the physical state at each grid point.
- 2. Call `center_prognostic_variables` / `face_prognostic_variables`
-    to convert the physical state into model-specific prognostic variables.
+Two layers, applied pointwise at every grid point:
 
-## Arguments
+ 1. `center_initial_condition` and [`face_initial_condition`](@ref) give the
+    physical state — thermodynamic and kinematic variables, with no knowledge
+    of the model configuration.
+ 2. `center_prognostic_variables` and `face_prognostic_variables` convert it
+    into the prognostic variables that `atmos_model` requires.
 
-  - `setup`: A setup instance (e.g. `Bomex`, `Rico`, `GCMDriven`)
-  - `params`: ClimaAtmos parameter set
-  - `atmos_model`: The atmosphere model (provides model types for dispatch)
-  - `center_space`: The center finite-difference space
-  - `face_space`: The face finite-difference space
+Surface prognostic variables are added only for a `SlabOceanTemperature`
+surface. File-based setups then overwrite fields through
+[`overwrite_initial_state!`](@ref), which the caller invokes separately.
+
+# Arguments
+
+  - `setup`: A setup instance, e.g. `Bomex`, `Rico`, or `GCMDriven`.
+  - `params`: The ClimaAtmos parameter set.
+  - `atmos_model`: The `AtmosModel`, whose component models select the prognostic
+    variables.
+  - `center_space`: The center extruded finite-difference space.
+  - `face_space`: The face extruded finite-difference space.
 """
 function initial_state(
     setup,

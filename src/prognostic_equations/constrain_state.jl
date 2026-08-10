@@ -13,18 +13,23 @@ using ClimaCore.Utilities: half
 """
     constrain_state!(Y, p, t)
 
-Apply physical constraints to the state `Y` in-place.
+Apply physical constraints to the state `Y` in place.
 
 Composes all state-only corrective updates that keep prognostic variables in a
-physically admissible range. The `dss!` call and `set_precomputed_quantities!`
-call are NOT part of this — they are handled separately by `ClimaTimeSteppers`
-via its `dss!` and `cache!` hooks.
+physically admissible range:
 
-Currently, this includes
+  - `prescribe_flow!(Y, p, t, p.atmos.prescribed_flow)`: imposes the velocity,
+    density, and energy of a 'kinematic driver'-like simulation.
+  - `tracer_nonnegativity_constraint!(Y, p, t, p.atmos.water.tracer_nonnegativity_method)`:
+    removes negative tracer masses.
+  - `enforce_physical_constraints!(Y, p, t, p.atmos)`: grid-mean microphysics and
+    EDMF updraft corrections.
 
-  - `prescribe_flow!`: used for 'kinematic driver'-like simulations
-  - `tracer_nonnegativity_constraint!`: used to ensure that tracer fields are non-negative
-  - `enforce_physical_constraints!`: grid-mean microphysics + EDMF updraft corrections
+Registered with `ClimaTimeSteppers` as the `update_constrain_state` hook and fired
+at the cadence set by the `update_constrain_state_every` configuration option
+(`"stage"`, `"step"`, or `"dss"`; see `update_constrain_state_signal_handler`).
+The `dss!` and `set_precomputed_quantities!` calls are not part of this — the
+timestepper runs them through its own `dss!` and `cache!` hooks. Returns `nothing`.
 """
 NVTX.@annotate function constrain_state!(Y, p, t)
     prescribe_flow!(Y, p, t, p.atmos.prescribed_flow)
@@ -36,70 +41,20 @@ end
 """
     dss!(Y, p, t)
 
-Perform a weighted Direct Stiffness Summation (DSS) on components of the state `Y`.
+Perform a weighted Direct Stiffness Summation (DSS) on the center (`Y.c`) and face
+(`Y.f`) components of the state, in place.
 
-This function applies DSS to `ClimaCore.Field`s (or structures of `Field`s)
-typically named `.c` (center-located) and `.f` (face-located) within the state
-object `Y`. The DSS operation is essential in `ClimaCore` for ensuring that
-fields are C0 continuous across element boundaries. It correctly sums contributions
-to degrees of freedom that are shared between different processes (MPI ranks).
+DSS makes fields continuous across spectral-element boundaries by summing the
+contributions to degrees of freedom shared between elements, exchanging data
+between MPI ranks where needed. The ghost buffers `p.ghost_buffer.c` and
+`p.ghost_buffer.f`, created with `ClimaCore.Spaces.create_dss_buffer`, hold the
+communicated data. Nothing is done when `do_dss(axes(Y.c))` is `false`, as for a
+single-column or finite-difference-only space.
 
-The operation is performed in-place, modifying the fields within `Y` (e.g., `Y.c`, `Y.f`).
-Ghost buffers (e.g., `p.ghost_buffer.c`, `p.ghost_buffer.f`), which are themselves
-`ClimaCore.Field`s or structures of `Field`s created using
-`ClimaCore.Spaces.create_dss_buffer`, are used as temporary storage during
-the communication and summation process.
+`t` is unused; it is present because `ClimaTimeSteppers` calls this as its `dss!`
+hook. Returns `nothing`.
 
-DSS is conditionally performed if `do_dss(axes(Y.c))` returns `true`. This check
-typically inspects the `ClimaCore.Spaces.AbstractSpace` of `Y.c` to determine
-if its `ClimaComms.context` signifies a distributed parallel environment
-requiring inter-process communication.
-
-Arguments:
-
-  - `Y`: The state object (e.g., a `NamedTuple` or `ClimaCore.Fields.FieldVector`)
-    containing components like `.c` and `.f`. These components are expected to be
-    `ClimaCore.Field`s or (possibly nested) `NamedTuple`s of `ClimaCore.Field`s,
-    which are modified in-place by this function.
-  - `p`: A parameter object or cache, expected to contain `p.ghost_buffer`.
-    The ghost buffer should mirror the structure of the fields in `Y`
-    that undergo DSS and must be compatible with them (typically created via
-    `ClimaCore.Spaces.create_dss_buffer(Y)` or by creating buffers for
-    individual components like `Y.c` and `Y.f`).
-  - `t`: The current simulation time. This argument is part of a standard
-    function signature in time-stepping loops (common in `ClimaAtmos` and other
-    models using `ClimaCore`) but is not be directly used by this function
-    if the DSS operation itself is time-independent.
-
-Returns:
-
-  - `nothing` (the function modifies fields within `Y` in-place).
-
-See also:
-
-  - `ClimaCore.Spaces.weighted_dss!`: The underlying `ClimaCore` function that performs the DSS.
-  - `ClimaCore.Spaces.create_dss_buffer`: The `ClimaCore` function for creating compatible ghost buffers.
-  - `ClimaCore.Fields.Field`: The fundamental data type for spatial fields in `ClimaCore`.
-  - `ClimaCore.Spaces.AbstractSpace`: The type representing the spatial discretization in `ClimaCore`.
-  - `ClimaComms.context`: Used to determine if the computation is distributed.
-
-# Example (Conceptual within ClimaCore/ClimaAtmos context)
-
-```julia
-# Assume Y_state is a FieldVector (or NamedTuple) from an ODE solver state,
-# where Y_state.c and Y_state.f are ClimaCore.Field objects or NamedTuples of Fields.
-# Assume params.ghost_buffer contains appropriately structured DSS buffers
-# created using ClimaCore.Spaces.create_dss_buffer.
-# Assume t_current is the current simulation time.
-
-# Example structure for Y and p.ghost_buffer:
-# Y_state = (c = center_fields, f = face_fields)
-# params = (ghost_buffer = (c = center_dss_buffer, f = face_dss_buffer), ...)
-
-dss!(Y_state, params, t_current)
-# The ClimaCore.Field objects within Y_state.c and Y_state.f are now updated
-# with DSS applied, ensuring continuity across distributed elements.
-```
+See also `ClimaCore.Spaces.weighted_dss!`, the underlying `ClimaCore` function.
 """
 NVTX.@annotate function dss!(Y, p, t)
     if do_dss(axes(Y.c))
@@ -108,6 +63,26 @@ NVTX.@annotate function dss!(Y, p, t)
     return nothing
 end
 
+"""
+    tracer_nonnegativity_constraint!(Y, p, t, tracer_nonnegativity)
+
+Remove negative water tracer masses from the state `Y` in place.
+
+The fallback method is a no-op; the work is done for a
+`TracerNonnegativityConstraint{constrain_qtot}`, which loops over `ρq_lcl`,
+`ρq_rai`, `ρq_icl`, `ρq_sno`, and, only when the type parameter `constrain_qtot`
+is `true`, `ρq_tot`. Two variants:
+
+  - `TracerNonnegativityElementConstraint`: clips `ρq` to `[0, max(ρq)]` within each
+    spectral element, using `p.numerics.tracer_nonnegativity_limiter` to redistribute
+    the mass horizontally rather than create it.
+  - `TracerNonnegativityVaporConstraint`: sets negative `ρq` to zero pointwise
+    wherever `ρq_tot > 0`, i.e., takes the deficit out of the vapor.
+
+When `ρq_tot` itself is clipped, the induced increment is passed to
+`enforce_mass_energy_consistency!` so density and total energy stay consistent.
+Reads `p.numerics` and `p.scratch`; `t` is unused. Called from `constrain_state!`.
+"""
 tracer_nonnegativity_constraint!(Y, p, t, _) = nothing
 function tracer_nonnegativity_constraint!(Y, p, t,
     tracer_nonnegativity::TracerNonnegativityConstraint{constrain_qtot},
@@ -148,6 +123,20 @@ function tracer_nonnegativity_constraint!(Y, p, t,
 
 end
 
+"""
+    prescribe_flow!(Y, p, t, flow)
+
+Overwrite the velocity, density, and total energy of the state `Y` with the
+prescribed 'kinematic driver' flow, in place.
+
+The fallback method is a no-op when `flow` is `nothing`. For a `PrescribedFlow`,
+sets `Y.f.u₃` from `flow(z, t)`, clips `Y.c.ρq_tot` to be nonnegative (a negative
+value would feed the loop negative `ρq_tot` → smaller `ρ` → more negative `q_tot`),
+sets `Y.c.ρ` to the initial dry density plus `ρq_tot`, and resets `Y.c.ρe_tot` to
+the total energy of the initial temperature profile at the current kinetic energy.
+Both initial profiles come from the Shipway and Hill (2012) setup. Called from
+`constrain_state!`. Returns `nothing`.
+"""
 prescribe_flow!(_, _, _, ::Nothing) = nothing
 function prescribe_flow!(Y, p, t, flow::PrescribedFlow)
     (; ᶜΦ) = p.core

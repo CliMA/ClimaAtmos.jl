@@ -15,7 +15,7 @@ adding a new format as a small dataset module.
 
 The cleanest runscript drives the case through a config dictionary. It merges
 over the defaults and wires the setup's forcing, insolation, and surface models
-into the `AtmosModel` for you:
+into the [`AtmosModel`](@ref ClimaAtmos.AtmosModel) for you:
 
 ```julia
 import ClimaAtmos as CA
@@ -73,7 +73,8 @@ CA.solve_atmos!(simulation)
 ```
 
 Per-variable relaxation timescales and height-dependent masks compose as
-multiple `Nudging` terms, e.g. relax temperature only above an inversion:
+multiple [`Nudging`](@ref ClimaAtmos.Nudging) terms, e.g. relax temperature only
+above an inversion:
 
 ```julia
 z_inv = 800.0

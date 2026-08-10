@@ -7,21 +7,37 @@ const config_path = joinpath(dirname(@__FILE__), "..", "..", "config")
 const default_config_file =
     joinpath(config_path, "default_configs", "default_config.yml")
 
+"""
+    strip_help_message(v)
+    strip_help_messages(d)
+
+Reduce schema-style config entries to their bare values.
+
+Entries in `default_config.yml` are `Dict`s of the form `(help = ..., value = ...)`;
+`strip_help_message` returns the `"value"` field of such an entry and passes anything
+else through unchanged. `strip_help_messages` applies this to every entry of the config
+`Dict` `d`.
+"""
 strip_help_message(v::Dict) = v["value"]
 strip_help_message(v) = v
 strip_help_messages(d) =
     Dict(map(k -> Pair(k, strip_help_message(d[k])), collect(keys(d)))...)
 
+"""
+    load_yaml_file(f)
+
+Parse the YAML file `f` into a `Dict`, erroring if the file is empty or missing.
+"""
 function load_yaml_file(f)
     filesize(f) == 0 && error("File $f is empty or missing.")
     return YAML.load_file(f)
 end
 
 """
-    default_config_dict()
-    default_config_dict(config_path)
+    default_config_dict(config_file = default_config_file)
 
-Loads the default configuration from files into a Dict for use in AtmosConfig().
+Load the default configuration into a `Dict` of `key => value` pairs, with the schema's
+help messages stripped out.
 """
 function default_config_dict(config_file = default_config_file)
     config = load_yaml_file(config_file)
@@ -31,10 +47,19 @@ end
 ContainerType(T) = Union{Tuple{<:T, Vararg{T}}, Vector{<:T}}
 
 """
-    override_default_config(override_config)
+    override_default_config(config_dict::AbstractDict)
+    override_default_config(config_file::AbstractString)
+    override_default_config(config_files)
+    override_default_config(config_dicts)
+    override_default_config(::Nothing)
 
-Takes in a Dict, vector of Dicts or filepaths and returns a Dict with the
-default configuration overridden by the given dicts or parsed YAML files.
+Return the default configuration with the given overrides applied.
+
+The argument may be a `Dict`, a YAML file path, or a tuple/vector of either (merged in
+order, later entries winning); `nothing` returns the defaults unchanged. Only keys that
+exist in `default_config.yml` are overridden, and each value is coerced to the type of
+the corresponding default via `coerce_to_default`. Keys absent from the schema (other
+than `job_id`) are reported: an error if `strict_config` is `true`, a warning otherwise.
 """
 override_default_config(config_files::AbstractString) =
     override_default_config(load_yaml_file(config_files))
@@ -61,7 +86,7 @@ const EXCEPTED_KEYS = Set([
     coerce_to_default(::Type{T}, v) -> T
 
 Coerce a user-supplied YAML value `v` to the type `T` of the corresponding
-default in `default_config.yml`. Used by [`override_default_config`](@ref) to
+default in `default_config.yml`. Used by `override_default_config` to
 enforce a single canonical type per key.
 
 Dispatch order, most specific first:
@@ -81,28 +106,19 @@ Dispatch order, most specific first:
 
 # Examples
 
-```julia-repl
-julia> coerce_to_default(Bool, "true")       # 2
-true
-
-julia> coerce_to_default(Int, "42")          # 3
-42
-
-julia> coerce_to_default(Float64, "3.14")    # 4
-3.14
-
-julia> coerce_to_default(Float64, 1)         # 5 (Int → Float)
-1.0
-
-julia> coerce_to_default(Bool, true)         # 1 (identity)
-true
-
-julia> coerce_to_default(Bool, "yes")        # 2, throws
-ERROR: ArgumentError: invalid value for Bool: "yes"
+```julia
+coerce_to_default(Bool, "true")       # 2 → true
+coerce_to_default(Int, "42")          # 3 → 42
+coerce_to_default(Float64, "3.14")    # 4 → 3.14
+coerce_to_default(Float64, 1)         # 5 → 1.0 (Int → Float)
+coerce_to_default(Bool, true)         # 1 → true (identity)
+coerce_to_default(Bool, "yes")        # 2 → throws ArgumentError
 ```
 
-Keys whose schema default is `nothing` or that appear in [`EXCEPTED_KEYS`]
-bypass coercion entirely and pass through unchanged.
+# Notes
+
+Keys whose schema default is `nothing` or that appear in `EXCEPTED_KEYS` bypass
+coercion entirely and pass through unchanged.
 """
 coerce_to_default(::Type{T}, v::T) where {T} = v
 coerce_to_default(::Type{Bool}, v::AbstractString) = parse(Bool, v)
@@ -151,9 +167,9 @@ function override_default_config(config_dict::AbstractDict;)
 end
 
 """
-    non_default_config_entries(config)
+    non_default_config_entries(config, defaults = default_config_dict())
 
-Given a configuration Dict, returns a Dict of the non-default values.
+Return a `Dict` with the entries of `config` whose values differ from `defaults`.
 """
 function non_default_config_entries(config, defaults = default_config_dict())
     non_defaults = Dict()
@@ -165,11 +181,13 @@ function non_default_config_entries(config, defaults = default_config_dict())
 end
 
 """
-    load_all_configs([with_pair])
+    load_all_configs(with_pair = nothing)
 
-Loads all available configs, excluding the default config, and stores them in a
-Dict that maps each one to a unique string. A key/value pair can also be used to
-filter out all configs which do not associate that key with the specified value.
+Load every `.yml` file under `config/` except the default config, keyed by job id.
+
+Files are located by walking `config_path`; keys come from `job_id_from_config_file`.
+When `with_pair` is a `key => value` pair, only configs that set `key` to `value` are
+kept.
 """
 function load_all_configs(with_pair = nothing)
     configs = Dict()
@@ -188,6 +206,17 @@ function load_all_configs(with_pair = nothing)
     return configs
 end
 
+"""
+    is_unique_basename(file, bname = first(splitext(basename(file))))
+
+Return `true` if no other configuration file under `config/` shares the base name
+`bname`. Called from `job_id_from_config_file`.
+
+# Notes
+
+`bname` has its extension stripped while the file names it is compared against do not,
+so the comparison currently never matches and the result is always `true`.
+"""
 function is_unique_basename(file, bname = first(splitext(basename(file))))
     is_unique = true
     for (root, _, files) in walkdir(config_path)
@@ -201,6 +230,16 @@ function is_unique_basename(file, bname = first(splitext(basename(file))))
     return is_unique
 end
 
+"""
+    job_id_from_config_file(config_file::String)
+    job_id_from_config_files(config_files)
+
+Derive a job id from configuration file names.
+
+For a single file the id is its base name without extension, or, if that base name is
+not unique within `config/`, the full path with the path separator replaced by `_`.
+For several files the individual ids are joined with `_`.
+"""
 function job_id_from_config_file(config_file::String)
     @assert isfile(config_file)
     bname = first(splitext(basename(config_file)))
@@ -216,11 +255,14 @@ job_id_from_config_files(config_files::Union{Tuple, Vector}) =
 
 """
     maybe_resolve_and_acquire_artifacts(input_str::AbstractString, context)
+    maybe_resolve_and_acquire_artifacts(input, context)
 
-When given a string of the form `artifact"name"/something/else`, resolve the
-artifact path and download it (if not already available).
+Resolve a string of the form `artifact"name"/something/else` to a local path,
+downloading the artifact if it is not already available.
 
-In all the other cases, return the input unchanged.
+Inputs that are not strings, or strings that do not match the artifact pattern, are
+returned unchanged. `context` is the `ClimaComms` context used to download the artifact
+on one rank only.
 """
 function maybe_resolve_and_acquire_artifacts(
     input_str::AbstractString,
@@ -246,10 +288,13 @@ function maybe_resolve_and_acquire_artifacts(
 end
 
 """
-    config_with_resolved_and_acquired_artifacts(input_str::AbstractString, context)
+    config_with_resolved_and_acquired_artifacts(config::AbstractDict, context)
 
-Substitute strings of the form `artifact"name"/something/else` with the actual
-artifact path.
+Return a copy of `config` in which every value of the form `artifact"name"/some/path`
+has been replaced by the resolved (and, if needed, downloaded) artifact path.
+
+Values that are not artifact strings pass through unchanged; see
+`maybe_resolve_and_acquire_artifacts`.
 """
 function config_with_resolved_and_acquired_artifacts(
     config::AbstractDict,
@@ -261,6 +306,12 @@ function config_with_resolved_and_acquired_artifacts(
     )
 end
 
+"""
+    config_summary(io::IO, config_files)
+
+Print one configuration file name per line to `io`, for logging by the `AtmosConfig`
+constructor.
+"""
 function config_summary(io::IO, config_files)
     print(io, '\n')
     for x in config_files

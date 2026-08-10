@@ -40,3 +40,7 @@ These are accessed through the integrator after a run, e.g.
   - **Diagnostics**: derived output variables, as opposed to the prognostic state
     `Y`. See [Computing and saving diagnostics](@ref) and the catalog of
     [available diagnostic variables](@ref "Available diagnostic variables").
+
+For the mapping between the symbols used in the equations pages and the
+names used in the code (the `ᶜ`/`ᶠ` prefixes, subdomain superscripts, and
+prognostic-variable names), see [Notation and Symbols](notation.md).

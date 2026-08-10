@@ -32,22 +32,31 @@ to_pm180(lon) = mod(lon + 180.0, 360.0) - 180.0
 """
     to_climacolumn(path; thermo_params, dir = dirname(path), overwrite = false)
 
-Read the ARM VARANAL file `path` and write an equivalent ClimaColumn file into
-`dir`, returning the written path. `dir` defaults to the source file's
-directory, so the converted file persists next to the source and is reused
-across runs; a conforming file already at the target path is reused unless
-`overwrite = true`. Pass a writable `dir` if the source directory is read-only.
+Read the ARM VARANAL file `path`, write an equivalent ClimaColumn file into
+`dir`, and return the written path.
 
-`thermo_params` supplies the physical constants (g, R_d, R_v) used to map
-pressure levels to geometric height, convert `omega` to a subsidence velocity,
-and derive density. The written file carries the canonical `(z, time)` column
-variables (`ta`, `hus`, `ua`, `va`, `wa`, `rho`, `tntha`, `tnhusha`), the
-`(time,)` surface variables (`ts`, plus `hfls`/`hfss` when present), and the
-`site_latitude`/`site_longitude` global attributes.
-
-VARANAL's vertical-advection tendencies (`T_adv_v`, `q_adv_v`) are not carried
-over. Vertical transport comes from the `Subsidence` term acting on the model's
+The written file carries the canonical `(z, time)` column variables `ta`,
+`hus`, `ua`, `va`, `wa`, `rho`, `tntha`, and `tnhusha`, the `(time,)` surface
+variables `ts` plus `hfls`/`hfss` when the source has them, and the
+`site_latitude`/`site_longitude` global attributes. VARANAL's
+vertical-advection tendencies (`T_adv_v`, `q_adv_v`) are deliberately dropped:
+vertical transport instead comes from the subsidence term acting on the model's
 evolving profiles.
+
+# Arguments
+
+  - `path`: Path to the source ARM VARANAL file.
+
+# Keyword Arguments
+
+  - `thermo_params`: Thermodynamics parameter set, supplying the `g`, `R_d`, and
+    `R_v` used to map pressure levels to geometric height, convert `omega` to a
+    subsidence velocity, and derive density.
+  - `dir = dirname(path)`: Output directory. The default keeps the converted file
+    next to the source so that it is reused across runs; pass a writable `dir`
+    when the source directory is read-only.
+  - `overwrite = false`: Whether to rewrite the file even when a conforming one
+    already sits at the target path.
 """
 function to_climacolumn(path; thermo_params, dir = dirname(path), overwrite = false)
     out = joinpath(dir, canonical_name(path))

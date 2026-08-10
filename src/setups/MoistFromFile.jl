@@ -8,18 +8,21 @@ Assigns NaN placeholders during pointwise construction, then overwrites
 the full prognostic state with data regridded from the given file via
 `overwrite_from_file!`.
 
-## Fields
+# Fields
 
-  - `file_path`: Path to the NetCDF file containing initial condition data.
+  - `file_path`: Path to the NetCDF file holding the initial condition.
 
-## Expected variables in the file
+# Notes
 
-  - `p`: pressure (2D surface, broadcast in z)
-  - `t`: temperature (3D)
-  - `q`: specific humidity (3D)
-  - `u, v, w`: velocity (3D)
-  - `cswc, crwc`: snow and rain water content (optional)
-  - `z_sfc`: surface altitude (optional, for topographic pressure correction)
+The file is expected to carry:
+
+  - `p`: Surface pressure, 2D and broadcast in `z` [Pa].
+  - `t`: Temperature, 3D [K].
+  - `q`: Specific humidity, 3D [kg/kg].
+  - `u`, `v`, `w`: Velocity components, 3D [m/s].
+  - `cswc`, `crwc`: Snow and rain water contents, optional [kg/kg].
+  - `z_sfc`: Surface altitude, optional; enables the topographic pressure
+    correction [m].
 """
 struct MoistFromFile
     file_path::String
