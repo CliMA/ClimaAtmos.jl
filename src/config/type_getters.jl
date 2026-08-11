@@ -671,6 +671,7 @@ function diagnostics_config_from_config(config::AtmosConfig)
         additional = enabled ? get(pa, "diagnostics", ()) : (),
         interpolation_num_points = pa["netcdf_interpolation_num_points"],
         output_at_levels = pa["netcdf_output_at_levels"],
+        debug_tendency = enabled && get(pa, "debug_tendency_diagnostics", false),
     )
 end
 

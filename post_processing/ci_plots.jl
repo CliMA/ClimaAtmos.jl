@@ -184,6 +184,7 @@ function make_plots_generic(
     plot_fn = nothing,
     output_name = "summary",
     summary_files = String[],
+    trailing_files = String[],
     MAX_NUM_COLS = 1,
     MAX_NUM_ROWS = min(4, length(vars)),
     fig_size = nothing,
@@ -268,7 +269,8 @@ function make_plots_generic(
     end
 
     output_file = joinpath(save_path, "$(output_name).pdf")
-    pdfunite_args = Cmd([summary_files..., output_file])
+    all_input_files = [summary_files..., trailing_files...]
+    pdfunite_args = Cmd([all_input_files..., output_file])
     run(`$(pdfunite()) $pdfunite_args`)
 
     if save_jpeg_copy
@@ -277,7 +279,7 @@ function make_plots_generic(
     end
 
     # Cleanup
-    Filesystem.rm.(summary_files, force = true)
+    Filesystem.rm.(all_input_files, force = true)
     return output_file
 end
 
@@ -577,6 +579,43 @@ function plot_contours!(place, var; n_contours = 22, kwargs...)
     CairoMakie.Colorbar(place[1, 2], plot; label)
 end
 
+"""
+    plot_tendency_debug_summary(output_paths, simdirs; output_name = "tendency_debug")
+
+Build a PDF with one panel per registered tendency-debug diagnostic
+(short-name form `tn_<field>_<process>`), each panel a time-height
+contour of the 3D tendency field. Laid out 4 rows × 3 cols per page in a
+1500 × 1200 figure (same page geometry as the microphysics-tendency
+contour page).
+
+Returns the path of the assembled PDF, or `nothing` if no tendency debug
+diagnostics were saved in `simdirs[1]`.
+"""
+function plot_tendency_debug_summary(
+    output_paths::Vector{<:AbstractString},
+    simdirs;
+    output_name = "tendency_debug",
+)
+    simdir = simdirs[1]
+    short_names = CA.Diagnostics.tendency_debug_short_names()
+    # Keep only diagnostics actually saved in this simdir.
+    avail = Set(ClimaAnalysis.available_vars(simdir))
+    short_names = filter(in(avail), short_names)
+    isempty(short_names) && return nothing
+
+    vars = [get(simdir; short_name = sn, reduction = "average") for sn in short_names]
+
+    return make_plots_generic(
+        output_paths[1:1],  # single-sim view; skip comparison here
+        vars;
+        output_name,
+        plot_fn = plot_parsed_attribute_title!,
+        MAX_NUM_COLS = 3,
+        MAX_NUM_ROWS = 4,
+        fig_size = (1500, 1200),
+    )
+end
+
 ColumnPlots = Union{
     Val{:single_column_hydrostatic_balance_ft64},
     Val{:single_column_radiative_equilibrium_gray},
@@ -601,12 +640,16 @@ function make_plots(::ColumnPlots, output_paths::Vector{<:AbstractString})
         return var
     end
 
+    tendency_pdf = plot_tendency_debug_summary(output_paths, simdirs)
+    trailing_files = tendency_pdf === nothing ? String[] : [tendency_pdf]
+
     make_plots_generic(
         output_paths,
         vars,
         time = LAST_SNAP,
         MAX_NUM_COLS = length(simdirs),
         more_kwargs = YLINEARSCALE,
+        trailing_files = trailing_files,
     )
 end
 
@@ -1514,6 +1557,12 @@ function make_plots(
 
     summary_files = [tmp_file]
 
+    # Per-process time-height tendency debug page (appended at the end of
+    # summary.pdf) if `debug_tendency_diagnostics` was enabled at run
+    # time. Empty when the diagnostics were not saved.
+    tendency_pdf = plot_tendency_debug_summary(output_paths, simdirs)
+    tendency_pdfs = tendency_pdf === nothing ? String[] : [tendency_pdf]
+
     # Time-height contour plots: existing EDMF variables (intermediate)
     zt_file = make_plots_generic(
         output_paths,
@@ -1606,6 +1655,7 @@ function make_plots(
         vars_timeseries;
         output_name = "summary",
         summary_files = summary_files,
+        trailing_files = tendency_pdfs,
         MAX_NUM_COLS = 2,
         MAX_NUM_ROWS = 4,
     )

@@ -25,3 +25,4 @@ dt_save_state_to_disk: 60mins
 toml: [toml/prognostic_edmfx_1M.toml]
 netcdf_interpolation_num_points: [2, 2, 82]
 ode_algo: "ARS222"
+debug_tendency_diagnostics: true

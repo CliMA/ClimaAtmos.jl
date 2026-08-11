@@ -490,6 +490,10 @@ SKIP_CASES = Set([
     "husra_pos_frac", "husra_pos_mean", "husra_pos_sum",
     "hussn_max", "hussn_min", "hussn_neg_frac", "hussn_neg_mean", "hussn_neg_sum",
     "hussn_pos_frac", "hussn_pos_mean", "hussn_pos_sum",
+    # tendency_diagnostics.jl — debug-only, expensive per-sample (each runs a
+    # full tendency evaluation). Exercised in single-column runs when the
+    # `debug_tendency_diagnostics` config flag is enabled.
+    CA.Diagnostics.tendency_debug_short_names()...,
 ])
 
 # ---------------------------------------------------------------------------
