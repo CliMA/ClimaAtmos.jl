@@ -1544,12 +1544,18 @@ returns `nothing`.
 """
 function update_sgs_entr_detr_jacobian!(matrix, Y, p, dtγ)
     p.atmos.turbconv_model isa PrognosticEDMFX || return nothing
-    (; ᶜturb_entrʲs, ᶜentr_vel_scaleʲs, ᶜarea_bounding_entr_detrʲs, ᶜuʲs) =
-        p.precomputed
+    (;
+        ᶜturb_entrʲs,
+        ᶜentr_vel_scaleʲs,
+        ᶜentr_nonvel_rateʲs,
+        ᶜarea_bounding_entr_detrʲs,
+        ᶜuʲs,
+    ) = p.precomputed
     ᶜlg = Fields.local_geometry_field(Y.c)
     ᶜentrʲ = @. lazy(
         compute_entrainment(
             ᶜentr_vel_scaleʲs.:(1),
+            ᶜentr_nonvel_rateʲs.:(1),
             ᶜarea_bounding_entr_detrʲs.:(1),
             get_physical_w(ᶜuʲs.:(1), ᶜlg),
         ),

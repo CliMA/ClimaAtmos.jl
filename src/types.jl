@@ -1479,7 +1479,6 @@ updraft. Selected by the YAML key `edmfx_entr_model`.
 
 Subtypes:
 
-  - `NoEntrainment`: zero dynamical entrainment (`~`).
   - `PiGroupsEntrainment`: rate built from the nondimensional Π groups (`"PiGroups"`).
   - `InvZEntrainment`: rate proportional to `1/z` above the surface (`"Generalized"`).
 
@@ -1487,14 +1486,6 @@ Subtypes dispatch `entrainment_velocity_scale`; the area-bounding relaxation in
 `area_bounding_entr_detr` is applied on top and does not dispatch on the model.
 """
 abstract type AbstractEntrainmentModel end
-
-"""
-    NoEntrainment
-
-Switch off dynamical entrainment: the entrainment velocity scale is zero.
-Turbulent entrainment and the area-bounding relaxation still apply.
-"""
-struct NoEntrainment <: AbstractEntrainmentModel end
 
 """
     PiGroupsEntrainment
@@ -1522,11 +1513,8 @@ Selected by the YAML key `edmfx_detr_model`.
 
 Subtypes:
 
-  - `NoDetrainment`: zero dynamical detrainment (`~`).
-  - `PiGroupsDetrainment`: Π-groups closure (`"PiGroups"`).
   - `BuoyancyVelocityDetrainment`: rate from the inverse buoyancy time scale and
     the mass-flux divergence (`"Generalized"`).
-  - `SmoothAreaDetrainment`: area-relaxation closure (`"SmoothArea"`).
 
 Subtypes dispatch `detrainment_rate`, whose fallback for the abstract type
 returns zero. Only `BuoyancyVelocityDetrainment` currently defines a method, so
@@ -1536,27 +1524,6 @@ in `area_bounding_entr_detr` is applied regardless of the model.
 abstract type AbstractDetrainmentModel end
 
 """
-    NoDetrainment
-
-Switch off dynamical detrainment: the detrainment rate is zero. The
-area-bounding relaxation still applies. Selected by `edmfx_detr_model: ~`.
-"""
-struct NoDetrainment <: AbstractDetrainmentModel end
-
-"""
-    PiGroupsDetrainment
-
-Marker for the Π-groups detrainment closure of [Cohen2020](@cite), selected by
-`edmfx_detr_model: "PiGroups"`.
-
-!!! warning
-
-    No `detrainment_rate` method is defined for this type, so it currently
-    falls through to the zero-rate fallback.
-"""
-struct PiGroupsDetrainment <: AbstractDetrainmentModel end
-
-"""
     BuoyancyVelocityDetrainment
 
 Detrainment rate combining the clipped inverse buoyancy time scale with the
@@ -1564,19 +1531,6 @@ convergence of the updraft mass flux, multiplied by the lower-area limiter and
 clipped at zero. Selected by `edmfx_detr_model: "Generalized"`.
 """
 struct BuoyancyVelocityDetrainment <: AbstractDetrainmentModel end
-
-"""
-    SmoothAreaDetrainment
-
-Marker for a detrainment closure that relaxes the updraft area smoothly,
-selected by `edmfx_detr_model: "SmoothArea"`.
-
-!!! warning
-
-    No `detrainment_rate` method is defined for this type, so it currently
-    falls through to the zero-rate fallback.
-"""
-struct SmoothAreaDetrainment <: AbstractDetrainmentModel end
 
 """
     AbstractTendencyModel

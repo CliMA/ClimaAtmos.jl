@@ -990,7 +990,6 @@ end
 
 Build the EDMFX entrainment closure selected by the `edmfx_entr_model` config key.
 
-  - `~` (null) or `"nothing"`: `NoEntrainment`.
   - `"PiGroups"`: `PiGroupsEntrainment`.
   - `"Generalized"`: `InvZEntrainment`.
 
@@ -998,14 +997,12 @@ Any other value raises an error.
 """
 function get_entrainment_model(parsed_args)
     entr_model = parsed_args["edmfx_entr_model"]
-    return if entr_model == nothing || entr_model == "nothing"
-        NoEntrainment()
-    elseif entr_model == "PiGroups"
+    return if entr_model == "PiGroups"
         PiGroupsEntrainment()
     elseif entr_model == "Generalized"
         InvZEntrainment()
     else
-        error("Invalid entr_model $(entr_model)")
+        error("Invalid entr_model $(entr_model): expected \"Generalized\" or \"PiGroups\"")
     end
 end
 
@@ -1014,25 +1011,16 @@ end
 
 Build the EDMFX detrainment closure selected by the `edmfx_detr_model` config key.
 
-  - `~` (null) or `"nothing"`: `NoDetrainment`.
-  - `"PiGroups"`: `PiGroupsDetrainment`.
   - `"Generalized"`: `BuoyancyVelocityDetrainment`.
-  - `"SmoothArea"`: `SmoothAreaDetrainment`.
 
 Any other value raises an error.
 """
 function get_detrainment_model(parsed_args)
     detr_model = parsed_args["edmfx_detr_model"]
-    return if detr_model == nothing || detr_model == "nothing"
-        NoDetrainment()
-    elseif detr_model == "PiGroups"
-        PiGroupsDetrainment()
-    elseif detr_model == "Generalized"
+    return if detr_model == "Generalized"
         BuoyancyVelocityDetrainment()
-    elseif detr_model == "SmoothArea"
-        SmoothAreaDetrainment()
     else
-        error("Invalid detr_model $(detr_model)")
+        error("Invalid detr_model $(detr_model): expected \"Generalized\"")
     end
 end
 

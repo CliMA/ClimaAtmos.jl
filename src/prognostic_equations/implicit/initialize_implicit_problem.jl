@@ -143,7 +143,12 @@ function solve_sgs_u₃_implicit_stage_analytic!(Y, p, dtγ)
     (; turbconv_model, rayleigh_sponge) = p.atmos
     (; ᶜρ_diffʲs, ᶜρʲs) = p.precomputed
     (; ᶠgradᵥ_ᶜΦ) = p.core
-    (; ᶜturb_entrʲs, ᶜentr_vel_scaleʲs, ᶜarea_bounding_entr_detrʲs) = p.precomputed
+    (;
+        ᶜturb_entrʲs,
+        ᶜentr_vel_scaleʲs,
+        ᶜentr_nonvel_rateʲs,
+        ᶜarea_bounding_entr_detrʲs,
+    ) = p.precomputed
     FT = eltype(p.params)
 
     turbconv_params = CAP.turbconv_params(params)
@@ -178,11 +183,16 @@ function solve_sgs_u₃_implicit_stage_analytic!(Y, p, dtγ)
         # a linear sink (∝ w), after applying the approximation w₀ - w ≈ -(ρ/ρa⁰) w.
         # The positive part of `area_bounding_entr_detr` is the entrainment branch
         # of the signed area-bounding rate (see `area_bounding_entr_detr`).
+        # `entr_nonvel_rate` is included in the linear sink, with the assumption
+        # that the change in b/w is slow.
         @. ᶠa += ᶠinterp(ᶜentr_vel_scaleʲs.:($$j) * ᶜρ_over_ρa⁰ * ᶜρ_over_ρa⁰) / ᶠdz
         @. ᶠb +=
             ᶠinterp(
-                (max(FT(0), ᶜarea_bounding_entr_detrʲs.:($$j)) + ᶜturb_entrʲs.:($$j)) *
-                ᶜρ_over_ρa⁰,
+                (
+                    max(FT(0), ᶜarea_bounding_entr_detrʲs.:($$j)) +
+                    ᶜentr_nonvel_rateʲs.:($$j) +
+                    ᶜturb_entrʲs.:($$j)
+                ) * ᶜρ_over_ρa⁰,
             )
 
         # Implicit NH pressure drag contributes a quadratic sink in w².
@@ -316,7 +326,8 @@ function solve_sgs_ρa_implicit_stage_analytic!(Y, p, dtγ)
     (; turbconv_model) = p.atmos
     (; ᶜρ_diffʲs, ᶜρʲs) = p.precomputed
     (; ᶠgradᵥ_ᶜΦ) = p.core
-    (; ᶜentr_vel_scaleʲs, ᶜarea_bounding_entr_detrʲs) = p.precomputed
+    (; ᶜentr_vel_scaleʲs, ᶜentr_nonvel_rateʲs, ᶜarea_bounding_entr_detrʲs) =
+        p.precomputed
     FT = eltype(p.params)
 
     turbconv_params = CAP.turbconv_params(p.params)
@@ -326,7 +337,7 @@ function solve_sgs_ρa_implicit_stage_analytic!(Y, p, dtγ)
     ᶠdz = Fields.Δz_field(axes(Y.f))
     ᶠlg = Fields.local_geometry_field(Y.f)
     detr_buoy_coeff = CAP.detr_buoy_coeff(turbconv_params)
-    detr_buoy_inv_tau_max = CAP.detr_buoy_inv_tau_max(turbconv_params)
+    entr_detr_buoy_inv_tau_max = CAP.entr_detr_buoy_inv_tau_max(turbconv_params)
     detr_massflux_vertdiv_coeff =
         CAP.detr_massflux_vertdiv_coeff(turbconv_params)
     a_max = CAP.max_area(turbconv_params)
@@ -391,13 +402,14 @@ function solve_sgs_ρa_implicit_stage_analytic!(Y, p, dtγ)
                         ᶠgradᵥ_ᶜΦ,
                         ᶠlg,
                     ),
-                    detr_buoy_inv_tau_max,
+                    entr_detr_buoy_inv_tau_max,
                 ),
             ),
         )
         @. ᶜexplicit_entr_minus_detr =
             ᶜarea_bounding_entr_detrʲs.:($$j) +
-            ᶜentr_vel_scaleʲs.:($$j) * ᶜinterp(ᶠw) -
+            ᶜentr_vel_scaleʲs.:($$j) * ᶜinterp(ᶠw) +
+            ᶜentr_nonvel_rateʲs.:($$j) -
             ᶜlower_limiter_factor * detr_buoy_coeff * ᶜbuoy_inv_time_scale
 
         @. ᶜnumerator = Y.c.sgsʲs.:($$j).ρa / dtγ

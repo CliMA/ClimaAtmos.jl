@@ -290,6 +290,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
         ᶜq_iceʲs,
         ᶜρʲs,
         ᶜentr_vel_scaleʲs,
+        ᶜentr_nonvel_rateʲs,
         ᶜarea_bounding_entr_detrʲs,
         ᶜturb_entrʲs,
         ᶜρ_diffʲs,
@@ -303,14 +304,17 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
     ᶜtke = @. lazy(specific(Y.c.ρtke, Y.c.ρ))
 
     for j in 1:n
-        # Compute the entrainment velocity scale and the signed area-bounding rate.
+        # Compute the entrainment velocity scale, non-velocity entrainment rate,
+        # and the signed area-bounding rate.
         # The environment velocity is passed as w⁰ = 0 to the coefficient model;
         # using the true (ᶜwʲ - ᶜw⁰) difference would introduce residual forcing
         # when ᶜwʲ ≈ 0, which can spuriously grow the area fraction and destabilize
-        # otherwise trivial updrafts. The total entrainment rate is then assembled
+        # otherwise trivial updrafts. The environment buoyancy is passed as b⁰ = 0.
+        # The total entrainment rate is then assembled
         # at every tendency call site (`edmfx_entr_detr_tendency!` and the
         # implicit ρa solve) via `compute_entrainment` using the
-        # (then-updated) updraft velocity |wʲ|.
+        # (then-updated) updraft velocity |wʲ|, together with the
+        # non-velocity-proportional rate computed just below.
         @. ᶜentr_vel_scaleʲs.:($$j) = entrainment_velocity_scale(
             thermo_params,
             turbconv_params,
@@ -340,6 +344,15 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
             ),
             FT(0),
             max(ᶜtke, 0),
+            p.atmos.edmfx_model.entr_model,
+        )
+        @. ᶜentr_nonvel_rateʲs.:($$j) = entrainment_nonvel_rate(
+            turbconv_params,
+            draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j)),
+            get_physical_w(ᶜuʲs.:($$j), ᶜlg),
+            vertical_buoyancy_acceleration(Y.c.ρ, ᶜρʲs.:($$j), ᶜgradᵥ_ᶠΦ, ᶜlg),
+            FT(0),
+            FT(0),
             p.atmos.edmfx_model.entr_model,
         )
         @. ᶜturb_entrʲs.:($$j) = turbulent_entrainment(

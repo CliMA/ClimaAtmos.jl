@@ -276,10 +276,11 @@ let rrtm = p_allsky.radiation.rrtmgp_solver
 end
 
 ## EDMFX models
-# Shared EDMF configuration — minimal (no entr/detr, no SGS fluxes)
+# Shared EDMF configuration — minimal (no SGS fluxes)
 tcp = CAP.turbconv_params(params)
 edmfx_model = CA.EDMFXModel(;
-    entr_model = CA.NoEntrainment(), detr_model = CA.NoDetrainment(),
+    entr_model = CA.InvZEntrainment(),
+    detr_model = CA.BuoyancyVelocityDetrainment(),
     scale_blending_method = CA.SmoothMinimumBlending(),
 )
 pedmfx = CA.PrognosticEDMFX(; area_fraction = tcp.min_area)

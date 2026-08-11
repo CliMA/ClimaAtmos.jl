@@ -128,15 +128,20 @@ not yet define. `FT` is the float type; `VFT1`, `VFT2`, and `VTF3` are the
   - `pressure_normalmode_drag_coeff`: Drag coefficient of the perturbation
     pressure closure [-].
   - `entr_inv_tau`: Inverse timescale of entrainment [1/s].
+  - `entr_inv_length`: Coefficient of the `w` term in the entrainment closure,
+    an inverse length scale [1/m].
   - `entr_coeff`: Coefficient of the `w/z` term in the entrainment closure [-].
+  - `entr_buoy_coeff`: Coefficient of the `b/w²` term in the entrainment closure
+    [-].
+  - `entr_detr_buoy_inv_tau_max`: Cap on the inverse buoyancy timescale,
+    limiting buoyancy-driven entrainment and detrainment when velocity
+    differences become small [1/s].
   - `entr_detr_limit_inv_tau`: Inverse timescale of entrainment and detrainment
     at negligible area fraction [1/s].
   - `detr_inv_tau`: Inverse timescale of detrainment [1/s].
   - `detr_coeff`: Coefficient of the `w` term in the detrainment closure [-].
   - `detr_buoy_coeff`: Coefficient of the `b/w²` term in the detrainment closure
     [-].
-  - `detr_buoy_inv_tau_max`: Cap on the inverse buoyancy timescale, limiting
-    detrainment when velocity differences become small [1/s].
   - `detr_vertdiv_coeff`: Coefficient of the vertical-divergence term in the
     detrainment closure [-].
   - `entr_param_vec`: Data-driven entrainment parameter vector [-].
@@ -199,12 +204,14 @@ Base.@kwdef struct TurbulenceConvectionParameters{FT, VFT1, VFT2, VTF3} <: ATCP
     pressure_normalmode_buoy_coeff1::FT
     pressure_normalmode_drag_coeff::FT
     entr_inv_tau::FT
+    entr_inv_length::FT
     entr_coeff::FT
+    entr_buoy_coeff::FT
+    entr_detr_buoy_inv_tau_max::FT
     entr_detr_limit_inv_tau::FT
     detr_inv_tau::FT
     detr_coeff::FT
     detr_buoy_coeff::FT
-    detr_buoy_inv_tau_max::FT
     detr_vertdiv_coeff::FT
     entr_param_vec::VFT1
     turb_entr_param_vec::VFT2
