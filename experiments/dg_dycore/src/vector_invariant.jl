@@ -460,7 +460,7 @@ remaining_tendency_vi!(dY, Y, m, t) = compute_tendency_vi!(dY, Y, m, t, false)
 """
     horizontal_ke_budget(Y, m::DGModel) -> (; P_adv, P_pen, KE)
 
-Discrete KE ledger of the horizontal terms on the state `Y` with the
+Discrete kinetic-energy budget of the horizontal terms on the state `Y` with the
 model's `face_set`: `P_adv` is the advective production of ⟨ρ(K+Φ)⟩
 (roundoff with `:kep`/`:es`, finite with `:kg`), `P_pen` the
 velocity-penalty production (≤ 0), `KE` = ⟨ρK⟩. Vertical/staggered cross
@@ -471,7 +471,7 @@ function horizontal_ke_budget(Y, m::DGModel{FT}) where {FT}
     (; Ic, If, hgrad, hcurl) = m.ops
     (; ᶜΦ, ᶜf_cor) = m.fields
     # :es shares the KEP centrals and its ρe dissipation is KE-inert, so
-    # the KE ledger is evaluated identically to :kep
+    # the kinetic-energy budget is evaluated identically to :kep
     kep = m.prob.face_set in (:kep, :es)
 
     ρ = Y.c.ρ

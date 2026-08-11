@@ -3,14 +3,14 @@ KE-budget verification of the vector-invariant face sets
 (docs/vi_kep_face_terms.md): with face_set = :kep the horizontal advective
 KE production closes to roundoff on the flat sphere AND the terrain-warped
 Hughes2023 grid, the velocity penalties are sign-definite sinks, and the
-unstabilized core integrates stably; :kg violates the same ledger by
+unstabilized core integrates stably; :kg violates the same budget by
 orders of magnitude.
 =#
 import ClimaCore: Spaces, Fields, Geometry
 import ClimaCore.Operators as _O
 import LinearAlgebra
 
-# Short spin-up with the unstabilized KEP core, then evaluate both ledgers
+# Short spin-up with the unstabilized KEP core, then evaluate both budgets
 # on the same final state (the :kg model is rebuilt on an identical grid and
 # the state copied across at the parent-array level).
 function budget_pair(; topography, nsteps)
@@ -35,7 +35,7 @@ function budget_pair(; topography, nsteps)
     b_kep = DG.horizontal_ke_budget(Y, m_kep)
     b_kg = DG.horizontal_ke_budget(Y_kg, m_kg)
     Δh = Spaces.node_horizontal_length_scale(m_kep.spaces.horzspace)
-    # roundoff anchor: KE × the fastest ledger rate (acoustic crossing)
+    # roundoff anchor: KE × the fastest budget rate (acoustic crossing)
     P_ref = b_kep.KE * 350 / Δh
     KE0 = DG.horizontal_ke_budget(sim.Y₀, m_kep).KE
     return (; b_kep, b_kg, P_ref, KE0)
@@ -44,11 +44,11 @@ end
 @testset "VI KEP budget: flat sphere" begin
     (; b_kep, b_kg, P_ref, KE0) = budget_pair(topography = :none, nsteps = 120)
     @info "flat" b_kep b_kg P_ref
-    # exact ledger: roundoff-level closure
+    # exact budget: roundoff-level closure
     @test abs(b_kep.P_adv) < 1e-10 * P_ref
     # exact sign-definite dissipation
     @test b_kep.P_pen <= 0
-    # the legacy set measurably violates the ledger on the same state
+    # the legacy set measurably violates the budget on the same state
     @test abs(b_kg.P_adv) > 10 * abs(b_kep.P_adv)
     # unstabilized stability sanity: KE bounded over the spin-up
     @test b_kep.KE < 1.05 * KE0
@@ -58,7 +58,7 @@ end
 # and contract with the entropy variable v = ∂S/∂ρe|ρ = −ρ/p.
 central_only_scalars(normal, (y⁻,), (y⁺,)) =
     _O.vi_kep_scalars_flux(normal, normal, y⁻, y⁺)
-function es_entropy_ledger(Y, m)
+function es_entropy_budget(Y, m)
     c = m.c
     (; Ic) = m.ops
     ρ = Y.c.ρ
@@ -111,12 +111,12 @@ end
     Y = DG.run!(sim).sol.u[end]
     m = sim.model
     @test !any(isnan, parent(Y.c))
-    (; P_S, mass_diff) = es_entropy_ledger(Y, m)
+    (; P_S, mass_diff) = es_entropy_budget(Y, m)
     K = DG.horizontal_ke_budget(Y, m)
-    @info "ES entropy ledger" P_S K.P_adv
+    @info "ES entropy production" P_S K.P_adv
     @test mass_diff == 0                 # mass flux stays central
     @test P_S < 0                        # provable entropy dissipation
-    # KE ledger unchanged for :es (dissipation is KE-inert)
+    # kinetic-energy budget unchanged for :es (dissipation is KE-inert)
     P_ref =
         K.KE * 350 /
         Spaces.node_horizontal_length_scale(m.spaces.horzspace)
@@ -124,11 +124,11 @@ end
 end
 
 @testset "VI KEP budget: Hughes2023 double mountain (warped grid)" begin
-    # The ledger is a STATE FUNCTIONAL identity — it must close for any
+    # The budget is a STATE FUNCTIONAL identity — it must close for any
     # state on the warped grid. Spin up on the flat sphere (stable
     # unstabilized) to develop element-boundary jumps, then transplant the
     # state onto the double-mountain grid (identical layout) and evaluate
-    # both ledgers there. (Coarse time-stepping over the barely-resolved
+    # both budgets there. (Coarse time-stepping over the barely-resolved
     # analytic mountains crashes on the separate well-balancedness
     # residual — docs/vi_kep_face_terms.md distinguishes the two — so the
     # transplant is also the cleaner metric-transparency test.)

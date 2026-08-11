@@ -334,3 +334,32 @@ fluxes are bit-identical to central, and the KE ledger stays at the
 `:kep` roundoff level. Implementation:
 `Operators.VIESInterfaceScalars(γ−1)` (callable, ClimaCore
 `numericalflux.jl`).
+
+## 10. Agnesi mountain-wave verification (MountainWaveDG)
+
+Quasi-2D x-periodic slab (one y element), isothermal T₀ = 250 K + uniform
+U₀ = 20 m/s over h(x) = h₀/(1+(x/a)²), a = 25 km, helem 40 × zelem 40
+(2 km elements over 600 km, uniform 750 m levels), `:es` faces, Exner PGF,
+κ₄_frac = 0.1, ν_vert = 100, implicit w-Rayleigh sponge at the ClimaAtmos
+strength (α_w = 1 s⁻¹ above 15 km), 4 simulated hours.
+
+![linear Agnesi wave](mw_agnesi_linear_xz.png)
+
+**h₀ = 25 m (linear verification)**: upstream-tilted phase lines,
+λ_z = 2πU/N = 6.4 km reproduced, amplitude at the linear scale
+U₀h₀/a = 0.02 m/s with √(ρ₀/ρ) growth; 2D symmetry preserved to 10⁻¹⁰.
+
+![h0 = 250 m Agnesi wave](mw_agnesi_h250m_xz.png)
+
+**h₀ = 250 m (10× forcing, same grid, no retuning)**: identical wave
+structure, amplitude scales exactly linearly (0.34 ≈ 10 × 0.033 below
+15 km), laminar throughout (Nh₀/U = 0.125; the √ρ-amplified steepness
+stays subcritical below the sponge base and the sponge absorbs the wave
+before overturning aloft — with the old 300×-weaker explicit sponge this
+same case broke and went fully turbulent by t ≈ 3 h).
+
+Steep-terrain boundary: at h₀ = a = 2 km (Nh₀/U ≈ 2, 33° slopes) the
+Φ+K-balanced hydrostatics hold the t = 0 vertical residual at roundoff,
+but the IMPULSIVE START itself is the blocker (≈ 4 m/s² horizontal
+adjustment shock) — that regime needs a wind ramp-up, not further IC or
+scheme work.

@@ -1,0 +1,611 @@
+\documentclass[11pt]{article}
+\usepackage[margin=1.1in]{geometry}
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage[colorlinks=true,linkcolor=blue]{hyperref}
+
+\newcommand{\uu}{\boldsymbol{u}}
+\newcommand{\uh}{\uu_h}
+\newcommand{\om}{\boldsymbol{\omega}}
+\newcommand{\jump}[1]{[\![#1]\!]}
+\newcommand{\avg}[1]{\{\!\!\{#1\}\!\!\}}
+\newcommand{\dd}{\mathrm{d}}
+\newcommand{\Rd}{R_d}
+\newcommand{\cv}{c_v}
+\newcommand{\cp}{c_p}
+\newcommand{\Ja}[1]{(J\boldsymbol{a}^{#1})}
+\newcommand{\Fs}{F^\sharp}
+
+\newtheorem{prop}{Proposition}
+\newtheorem{rem}{Remark}
+
+\title{Mathematics of the Vector-Invariant DG--FD Dry Dynamical Core\\
+{\large \texttt{experiments/dg\_dycore} --- kinetic-energy-preserving face
+terms, entropy-dissipative interfaces, well-balanced Exner pressure
+gradients, and terrain verification}}
+\author{ClimaAtmos DG sandbox}
+\date{August 2026}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+This note collects the continuous equations, the discrete operators, and
+the main structure-preservation results implemented and verified in the
+\texttt{dg\_dycore} sandbox: a horizontally discontinuous-Galerkin (DG),
+vertically staggered finite-difference (FD) dry compressible core in
+vector-invariant (VI) form, sharing its metric machinery with the
+continuous-Galerkin ClimaAtmos dycore. Every discrete operator is written
+out at the nodal level, in the constructive style of flux-differencing DG
+expositions. The central results are (i) the unique two-point face-flux
+set for which the discrete horizontal advective kinetic-energy budget
+closes exactly (KEP), on flat and terrain-warped grids alike; (ii) a
+single-slot entropy-dissipative interface modification that retains exact
+KEP; (iii) the reference-subtracted Exner pressure-gradient formulation
+and its problem-matched reference states; and (iv) exact
+discrete-hydrostatic initial states, including the effective-geopotential
+generalization required over steep terrain. Verification spans
+operator-level discrete budget identities (closure to $10^{-15}$
+relative), a baroclinic wave over analytic double-mountain orography
+(machine-precision mass and energy conservation over one day), and linear
+Agnesi mountain waves reproducing $\lambda_z = 2\pi U/N$ and linear
+amplitude scaling.
+\end{abstract}
+
+\section{Governing equations}
+\label{sec:continuous}
+
+The core solves the dry compressible Euler equations in a rotating frame.
+The prognostic state is
+\begin{equation}
+Y = \big(\rho,\; \rho e,\; \uh,\; w\big),
+\end{equation}
+density and total energy density at cell centers, the two horizontal
+covariant momentum components $\uh = (u_1, u_2)$ at cell centers, and the
+vertical covariant velocity $w = u_3$ at cell faces (Lorenz-type
+staggering). The continuous system is
+\begin{align}
+\partial_t \rho &= -\nabla\!\cdot(\rho\uu),
+\label{eq:mass}\\
+\partial_t (\rho e) &= -\nabla\!\cdot\big[(\rho e + p)\,\uu\big],
+\label{eq:energy}\\
+\partial_t \uu &= -(2\boldsymbol{\Omega} + \om)\times\uu
+  \;-\; \nabla K \;-\; \frac{1}{\rho}\nabla p \;-\; \nabla\Phi,
+\label{eq:vi}
+\end{align}
+with relative vorticity $\om = \nabla\times\uu$, kinetic energy
+$K = \tfrac12|\uu|^2$, and geopotential $\Phi = gz$; the vector-invariant
+identity $(\uu\cdot\nabla)\uu = \om\times\uu + \nabla K$ has been applied
+in \eqref{eq:vi}. The specific total energy and the equation of state are
+\begin{equation}
+e = \cv (T - T_{\mathrm{tri}}) + K + \Phi,
+\qquad
+p = \frac{\Rd}{\cv}\Big(\rho e - \rho K - \rho\Phi
+ + \rho \cv T_{\mathrm{tri}}\Big),
+\label{eq:eos}
+\end{equation}
+an ideal gas offset by the triple-point temperature $T_{\mathrm{tri}}$,
+matching the ClimaAtmos thermodynamics convention.
+
+\subsection{Terrain-following coordinates}
+\label{sec:terrain}
+
+Orography $h(x,y)$ enters through the linear-decay warp
+\begin{equation}
+z(\xi^3) = \xi^3 + \Big(1 - \frac{\xi^3}{z_{\mathrm{top}}}\Big)\,h,
+\end{equation}
+(\texttt{Hypsography.LinearAdaption}), which defines the reference-to-physical
+map $\boldsymbol{x}(\boldsymbol{\xi})$, its Jacobian determinant $J$, and
+the contravariant basis $\boldsymbol{a}^d = \nabla\xi^d$. Horizontal
+momentum is carried in covariant components on the warped grid. Two
+metric constructions are shared verbatim with the CG ClimaAtmos core.
+First, the contravariant vertical velocity at faces carries the terrain
+cross-term,
+\begin{equation}
+\tilde u^3\big|_f
+ = \underbrace{\big(C^{123}(w)\big)^3}_{\text{vertical part}}
+ + \underbrace{\mathcal{I}^{\rho J}_{c\to f}
+   \big[(C^{123}(\uh))^3\big]}_{\text{terrain cross-term}},
+\label{eq:u3}
+\end{equation}
+where $\mathcal{I}^{\rho J}_{c\to f}$ is $\rho J$-weighted center-to-face
+interpolation. Second, the kinetic energy uses the full metric, including
+the $g^{13}, g^{23}$ cross terms that vanish on flat grids:
+\begin{equation}
+K = \tfrac12\Big( u_i u^i \big|_{\uh}
+ + \mathcal{I}_{f\to c}\big[w_3 w^3\big]
+ + 2\, u^i \,\mathcal{I}_{f\to c}[w_i] \Big).
+\label{eq:fullK}
+\end{equation}
+Under the linear warp, $\partial \xi^h/\partial z \equiv 0$: horizontal
+face normals are exactly horizontal, so the horizontal face machinery is
+metric-exact and all tilt transport passes through \eqref{eq:u3}.
+
+The kinematic lower boundary condition is imposed statically at the
+bottom face only: $w_3$ is set so that $u^3 = 0$ there and is frozen by
+the boundary operator. Interior $w$ is \emph{not} terrain-adapted:
+interior flow legitimately crosses coordinate surfaces, and a structured
+interior $w$ breaks the staggered $\nabla K$/Lamb cancellation
+(Section~\ref{sec:kep}).
+
+\section{Notation and discrete operators}
+\label{sec:notation}
+
+\subsection{Elements, nodes, and metric terms}
+
+The horizontal mesh consists of quadrilateral elements (equiangular cubed
+sphere, or a doubly periodic plane) each mapped to the reference square
+$[-1,1]^2$. Within an element, fields are represented on the tensor
+product of $N_q = N+1$ Gauss--Lobatto--Legendre (GLL) nodes
+$\{\xi_i\}_{i=1}^{N_q}$ with quadrature weights $\{w_i\}$; the default
+polynomial degree is $N = 4$. Let $D_{ik} = \ell_k'(\xi_i)$ denote the
+one-dimensional differentiation matrix of the GLL Lagrange basis. Every
+horizontal node carries the metric quantities
+\begin{equation}
+J_{ij},\qquad
+\Ja{1}_{ij} = J_{ij}\,\nabla\xi^1\big|_{ij},\qquad
+\Ja{2}_{ij} = J_{ij}\,\nabla\xi^2\big|_{ij},
+\qquad
+(WJ)_{ij} = w_i w_j J_{ij},
+\end{equation}
+i.e.\ the metric-weighted contravariant basis vectors and the
+mass-matrix entry. The discretization is collocation-based: no
+over-integration is used, and there is no continuity projection
+(\texttt{dss}); elements communicate only through faces.
+
+\subsection{Traces, jumps, averages}
+
+On an interior face shared by elements $-$ (owner) and $+$ (neighbor),
+with outward unit normal $\hat n$ of the owner, define for any nodal
+quantity $q$
+\begin{equation}
+\jump{q} = q^- - q^+,
+\qquad
+\avg{q} = \tfrac12\big(q^- + q^+\big).
+\end{equation}
+The surface mass is obtained from the volume metric: along a constant-$\xi^1$
+face, $s\!W\!J = \big| w_j \Ja{1} \big|$ and
+$\hat n = \pm \Ja{1}/|\Ja{1}|$ (sign by outward orientation), and
+analogously with $\Ja{2}, w_i$ on constant-$\xi^2$ faces. On extruded
+grids the same construction is applied level-by-level with the product
+local geometry, so $s\!W\!J$ carries the vertical measure and is
+consistent with the three-dimensional $WJ$.
+
+\subsection{The flux-differencing volume operator}
+\label{sec:fd}
+
+Let $\Fs(\boldsymbol{n}_a, \boldsymbol{n}_b;\, y_a, y_b)$ be a two-point
+flux, symmetric under simultaneous exchange of its argument pairs, and
+consistent: $\Fs(\boldsymbol{n},\boldsymbol{n}; y, y) =
+\boldsymbol{F}(y)\cdot\boldsymbol{n}$ for the physical flux
+$\boldsymbol{F}$. Note the signature: the two-point flux receives the
+metric-weighted direction vectors of \emph{both} nodes --- this node-pair
+metric convention is what makes the operator well-defined on curved and
+warped grids. The mass-weighted volume tendency at node $(i,j)$ is the
+nodal sum
+\begin{equation}
+\big(WJ\,\partial_t y\big)_{ij} \;+\!\!=\;
+-2\,w_i w_j \sum_{k=1}^{N_q}\Big[
+ D_{ik}\, \Fs\!\big(\Ja{1}_{ij}, \Ja{1}_{kj};\, y_{ij}, y_{kj}\big)
++ D_{jk}\, \Fs\!\big(\Ja{2}_{ij}, \Ja{2}_{ik};\, y_{ij}, y_{ik}\big)
+\Big]
+\;+\; B_{ij},
+\label{eq:fdsum}
+\end{equation}
+followed by division by $(WJ)_{ij}$. The boundary contribution $B_{ij}$
+is nonzero only on element-boundary nodes and consists of the
+\emph{own-node consistent flux},
+\begin{equation}
+B_{ij} =
+\begin{cases}
+\mp\, w_j\, \Fs\big(\Ja{1}_{ij}, \Ja{1}_{ij};\, y_{ij}, y_{ij}\big),
+& i = 1 \;(\,-\,)\ \text{or}\ i = N_q\ (\,+\,\text{sign flipped}),\\[2pt]
+\mp\, w_i\, \Fs\big(\Ja{2}_{ij}, \Ja{2}_{ij};\, y_{ij}, y_{ij}\big),
+& j = 1 \ \text{or}\ j = N_q,
+\end{cases}
+\end{equation}
+which converts the strong-form sum into the weak-equivalent form: for
+$\Fs$ consistent and constant fields, \eqref{eq:fdsum} vanishes to the
+accuracy of the discrete metric identities (free-stream preservation to
+truncation on curved meshes).
+
+\subsection{Interface flux and lifting operators}
+
+Interior faces are coupled by a simultaneous-approximation-term (SAT)
+exchange. For a numerical flux $F^*(\hat n^-; y^-, y^+)$ evaluated once
+per face node with the owner's normal,
+\begin{equation}
+\big(WJ\,\partial_t y\big)^-\; -\!\!=\; s\!W\!J \; F^*,
+\qquad
+\big(WJ\,\partial_t y\big)^+\; +\!\!=\; s\!W\!J\; F^*,
+\label{eq:sat}
+\end{equation}
+an antisymmetric update that conserves $\sum WJ\, y$ identically for the
+flux-form variables. Together with $B_{ij}$ of \eqref{eq:fdsum}, the pair
+$(B, F^*)$ reproduces the standard weak-form surface term
+$\oint \hat n \cdot (\boldsymbol{F}^* - \boldsymbol{F}^-)$.
+
+Non-conservative (gradient, curl, penalty) terms use element-local strong
+derivatives completed by \emph{lifting corrections}: for a face function
+$g(\hat n;\,\cdot^-,\cdot^+)$ the correction adds, symmetrically per
+side,
+\begin{equation}
+\big(\partial_t y\big)^\pm \;+\!\!=\;
+\frac{s\!W\!J}{WJ}\; g\big(\hat n^\pm;\; \cdot\big).
+\label{eq:lift}
+\end{equation}
+The central gradient lift $g = \tfrac12(q^+ - q^-)\,\hat n$ completes the
+strong gradient of a discontinuous scalar $q$; the analogous central
+curl and divergence lifts complete $\nabla\times$ and $\nabla\cdot$.
+$\lambda$-scaled jump penalties use the same mechanism.
+
+\subsection{Vertical operators and time integration}
+
+The vertical direction is a staggered FD column: centers carry
+$(\rho, \rho e, \uh)$, faces carry $w$. The operators used below are the
+two-point interpolants and divergences
+$\mathcal{I}_{c\to f}, \mathcal{I}_{f\to c},
+\partial^{c\leftarrow f}_3, \partial^{f\leftarrow c}_3$ with the
+boundary conditions stated in the source; vertical advection of scalars
+uses a monotone Lin--van Leer limiter in the explicit part.
+
+Time stepping is IMEX ARK (ARS343) in a HEVI split. The implicit residual
+contains the vertical acoustic system and the Rayleigh sponge,
+\begin{equation}
+\partial_t \rho \supset -\partial_3(\rho w^3),\qquad
+\partial_t \rho e \supset -\partial_3\big[\rho h_{\mathrm{tot}} w^3\big],\qquad
+\partial_t w \supset -\frac{\partial_3 p}{\rho_f}
+ - \partial_3(K+\Phi) - \beta(z)\,w,
+\label{eq:implicit}
+\end{equation}
+solved with a fixed two-iteration Newton method (no convergence loop) and
+an analytic column-block Jacobian. The sponge profile
+$\beta(z) = \alpha_w \sin^2\!\big[\tfrac{\pi}{2}(z -
+z_d)/(z_{\mathrm{top}}-z_d)\big]$ for $z > z_d$ (zero below; acting on
+$w$ only) contributes its exact Jacobian entry $-\beta$ on the $w$--$w$
+diagonal, so the ClimaAtmos damping strength $\alpha_w =
+1\,\mathrm{s}^{-1}$ is unconditionally stable at any $\Delta t$.
+
+\section{Kinetic-energy analysis and the KEP face set}
+\label{sec:kep}
+
+We analyze the semi-discrete production of the advected energy
+$E = \sum_{\mathrm{nodes}} WJ\,\rho\,(K + \Phi)$ by the horizontal
+advective terms: the flux-differencing mass and energy updates contracted
+with $(K+\Phi)$, plus the momentum advection terms (Lamb term, $\nabla K$
+and its lifting) contracted with $\rho\uu$. Call this residual
+$P_{\mathrm{adv}}$; for the continuous equations $P_{\mathrm{adv}} = 0$
+identically (advection neither creates nor destroys kinetic energy), and
+the question is which discrete flux choices preserve the identity.
+
+\subsection{Volume condition}
+
+Insert \eqref{eq:fdsum} for the mass equation into
+$\sum_{ij} (K+\Phi)_{ij} (WJ\,\partial_t\rho)_{ij}$ and split each
+node-pair term into its symmetric and antisymmetric parts under
+$(ij)\leftrightarrow(kj)$. The GLL SBP property
+$w_i D_{ik} + w_k D_{ki} = \delta_{iN_q}\delta_{kN_q} -
+\delta_{i1}\delta_{k1}$ reduces the symmetric part to pure boundary
+terms (which cancel against the interface analysis below); the
+antisymmetric part telescopes over the element if and only if the paired
+contribution is a difference form $c_i - c_m$.
+
+\begin{prop}[KEP volume flux]
+With the vector-invariant momentum pairing (pointwise $\nabla K$ plus
+central $K$ lifting), the antisymmetric part is a difference form --- and
+$P_{\mathrm{adv}}$ receives no volume contribution --- if and only if the
+two-point mass flux is the average of the nodal contravariant mass
+fluxes,
+\begin{equation}
+M^\sharp\big(\boldsymbol{n}_a, \boldsymbol{n}_b;\, y_a, y_b\big)
+= \tfrac12\big(\rho_a\, \uu_a\!\cdot\!\boldsymbol{n}_a
+             + \rho_b\, \uu_b\!\cdot\!\boldsymbol{n}_b\big)
+\;=\; \avg{\rho \tilde u}.
+\end{equation}
+The Kennedy--Gruber product form $\avg{\rho}\avg{\tilde u}$ is
+\emph{not} kinetic-energy-compatible with this pairing.
+\end{prop}
+
+\subsection{Interface conditions}
+
+Let $G = \rho\,\uu\cdot\hat n$ denote the nodal normal mass flux on a
+face. Collecting the boundary terms of the volume analysis with the SAT
+updates \eqref{eq:sat} and the $K$-lifting \eqref{eq:lift}, the
+per-face-node production reduces to the compact form
+\begin{equation}
+P_{\mathrm{face}}
+= s\!W\!J\;\jump{K}\,\big(\avg{G} - F^*_\rho\big)
+\;+\; P_{\mathrm{pen}},
+\label{eq:faceprod}
+\end{equation}
+where $P_{\mathrm{pen}}$ is the work of the velocity jump penalties.
+Equation \eqref{eq:faceprod} dictates the interface set:
+
+\begin{prop}[KEP interface set]
+The interface production vanishes ($P_{\mathrm{face}} =
+P_{\mathrm{pen}} \le 0$) with:
+\begin{enumerate}
+\item central interface mass flux $F^*_\rho = \avg{\rho\,\uu\cdot\hat n}
+ = \avg{G}$, with \emph{no density penalty}: any added
+ $-\alpha\jump{\rho}$ term inserts
+ $+\,\alpha\,s\!W\!J\,\jump{\rho}\jump{K}$ into \eqref{eq:faceprod},
+ which has no sign;
+\item energy flux riding the same mass flux,
+ $F^*_{\rho e} = \avg{e}\,F^*_\rho + \avg{p}\avg{\tilde u}$
+ (the pressure-work part is the physical exchange channel and is
+ excluded from $P_{\mathrm{adv}}$ by construction);
+\item central traces for $K$ and $p$ in all lifting terms;
+\item $\rho$-weighted velocity jump penalties applied to the owned
+ covariant components,
+ $g_{\mathrm{pen}}^\pm = \frac{\bar\lambda}{2}
+ \frac{\avg{\rho}}{\rho^\pm}\,( u^\mp - u^\pm)$,
+ whose total production is exactly
+ $P_{\mathrm{pen}} = -\tfrac{\bar\lambda}{2}\, s\!W\!J\,
+ \avg{\rho}\,\big|\jump{\uu}\big|^2 \;\le\; 0$.
+\end{enumerate}
+The Lamb term $\om\times\uu$ is kinetic-energy-inert pointwise for any
+discrete $\om$. The resulting budget identity is metric-independent: it
+closes identically on flat and hypsography-warped grids, with no discrete
+geometric conservation law required.
+\end{prop}
+
+Numerically (operator-level verification on deterministic discontinuous
+states, flat and Hughes--Jablonowski warped grids):
+$|P_{\mathrm{adv}}| \lesssim 3\times10^{-15}\,P_{\mathrm{ref}}$ for the
+KEP set, while the Kennedy--Gruber set violates the identity by 9--10
+orders of magnitude, growing a further $10^3\times$ over terrain.
+
+\section{Entropy-dissipative interfaces (\texttt{face\_set = :es})}
+\label{sec:es}
+
+Exact KEP does not control the thermodynamic (pressure-work) channel.
+Introduce the mathematical entropy
+$S = -\rho s/(\gamma - 1)$, $s = \ln(p\,\rho^{-\gamma})$. Holding $\rho$
+(and the diagnostic $K$, $\Phi$) fixed, the entropy variable conjugate to
+$\rho e$ follows from \eqref{eq:eos} by the chain rule:
+\begin{equation}
+v \;\equiv\; \frac{\partial S}{\partial(\rho e)}\bigg|_{\rho}
+= -\frac{\rho}{\gamma-1}\,\frac{\partial s}{\partial (\rho e)}
+= -\frac{\rho}{\gamma-1}\cdot\frac{\gamma-1}{p}
+= -\frac{\rho}{p}.
+\end{equation}
+The \texttt{:es} interface set keeps every KEP central flux --- in
+particular the mass flux stays central, so the kinetic-energy budget of
+Section~\ref{sec:kep} is untouched --- and replaces the
+entropy-indefinite Rusanov term on $\rho e$ by dissipation in $v$:
+\begin{equation}
+F^*_{\rho e} = F^{\mathrm{central}}_{\rho e}
+ \;-\; \frac{\lambda}{2}\,\bar w\,\big(v^+ - v^-\big),
+\qquad
+\bar w = \frac{\bar p^{\,2}}{(\gamma - 1)\,\bar\rho} \;>\; 0,
+\label{eq:esflux}
+\end{equation}
+with $\lambda$ the local maximum wave speed and overbars denoting face
+arithmetic means.
+
+\begin{prop}[Single-slot entropy dissipation]
+Because \eqref{eq:esflux} modifies only the $\rho e$ slot and the SAT
+update \eqref{eq:sat} is antisymmetric, the total entropy production of
+the dissipative part is, exactly,
+\begin{equation}
+\Delta \dot S
+= s\!W\!J\,\big(v^- - v^+\big)\cdot
+  \Big(-\tfrac{\lambda}{2}\bar w\big(v^+ - v^-\big)\Big)\cdot(-1)
+= -\frac{\lambda}{2}\,s\!W\!J\;\bar w\,\jump{v}^2 \;\le\; 0 .
+\end{equation}
+No matrix dissipation theory and no coupling to $K$ or $\Phi$ is
+required. Near constant states, $\jump{v} \approx \bar\rho\,\jump{p}/
+\bar p^{\,2}$, so \eqref{eq:esflux} reduces to Rusanov acting on the
+internal-energy part of $\jump{\rho e}$; and the term is
+kinetic-energy-inert since $K$ is diagnostic.
+\end{prop}
+
+\begin{rem}
+This provides interface entropy \emph{dissipation}, not a full
+entropy-stability proof: the KEP central fluxes produce entropy at
+$O(\jump{\cdot}^3)$, and an entropy-\emph{conservative} volume flux
+(Chandrashekar/Ranocha log-mean type) would break the exact VI-KEP
+volume budget identity --- the two exactness properties compete at the
+volume level. Empirically the modification is decisive: the
+double-mountain baroclinic wave went from sub-hour top-of-atmosphere
+pressure collapse to a full stable day with $\min p$ constant.
+\end{rem}
+
+\section{Well-balanced Exner pressure gradient}
+\label{sec:exner}
+
+The horizontal pressure-gradient force is discretized exclusively in a
+reference-subtracted split Exner form (the plain $-\nabla_h p/\rho$ form
+was removed after measuring it strictly worse in every configuration).
+With Exner pressure $\Pi = (p/p_0)^{\Rd/\cp}$ and virtual potential
+temperature $\theta = p/(\rho \Rd \Pi)$, the identity
+$\dd p/\rho = \cp\,\theta\,\dd\Pi$ converts the PGF to
+$-\cp\theta\nabla_h\Pi$. Choose a reference profile as a function of
+pressure alone,
+\begin{equation}
+T_r(\Pi) = T_{\min} + \big(T_{\mathrm{sfc}} - T_{\min}\big)\,\Pi^{s},
+\qquad
+\theta_r = \frac{T_r}{\Pi},
+\qquad
+\Phi_r(\Pi) \;\text{with}\;
+\frac{\dd \Phi_r}{\dd \Pi} = -\cp\,\theta_r,
+\label{eq:ref}
+\end{equation}
+($s = 7$; $\Phi_r$ closed-form). By construction the reference is in
+exact hydrostatic balance, $\cp\theta_r\nabla\Pi + \nabla\Phi_r = 0$,
+\emph{pointwise as an algebraic identity in $p$} --- not as a competition
+between two large discrete gradients. Splitting
+$\theta = \theta_r + \theta'$ and symmetrizing the perturbation term
+yields the discretized form
+\begin{equation}
+-\frac{1}{\rho}\nabla_h p - \nabla_h(K+\Phi)
+\;\longrightarrow\;
+-\nabla_h\big(K + \Phi - \Phi_r\big)
+\;-\;\frac{\cp}{2}\Big[\theta'\,\nabla_h\Pi
+ + \nabla_h\big(\theta'\Pi\big) - \Pi\,\nabla_h\theta'\Big],
+\label{eq:exner}
+\end{equation}
+each strong gradient completed by a central lifting \eqref{eq:lift}. The
+discrete terrain residual then scales with the $\theta$-perturbation
+rather than with the full hydrostatic pressure variation along warped
+coordinate surfaces.
+
+\begin{rem}[Problem-matched reference]
+The construction only helps if $T_r$ is close to the actual state. For
+isothermal states $T \equiv T_0$, the matching choice is $T_r \equiv
+T_0$, for which \eqref{eq:ref} integrates to $\Phi_r = -\cp T_0 \ln\Pi =
+gz$ exactly and $\theta' \equiv 0$. The ClimaAtmos default $(T_{\min},
+T_{\mathrm{sfc}}) = (220, 290)\,$K is $40\,$K off such states and voids
+the cancellation entirely (measured: no reduction relative to the direct
+form). The implementation therefore dispatches the reference per problem.
+On the Hughes--Jablonowski double mountain, the matched form reduces the
+$t=0$ momentum residual $11\times$ and removes a spurious
+$5\,\mathrm{m\,s^{-1}\,h^{-1}}$ linear spin-up of the velocity field.
+\end{rem}
+
+\section{Discrete hydrostatic initialization}
+\label{sec:hydro}
+
+The staggered vertical balance seen by the $w$ equation
+\eqref{eq:implicit} is the centered face relation
+\begin{equation}
+\frac{p_{v+1} - p_v}{\Delta z}
+= -\,\frac{\rho_v + \rho_{v+1}}{2}\;
+  \frac{\Delta(\Phi + K)}{\Delta z},
+\label{eq:facebal}
+\end{equation}
+per interval $v \to v{+}1$ of each column. Analytic hydrostatic profiles
+satisfy \eqref{eq:facebal} only to $O(\Delta z^2)$, which projects
+$O(10\,\mathrm{m\,s^{-1}})$ spurious gravity-mode transients at
+initialization if left uncorrected. Two exact discrete constructions are
+used.
+
+\paragraph{General profiles (sphere).}
+Keeping $p$ analytic and solving \eqref{eq:facebal} for density gives the
+recursion $\rho_{v+1} = -\rho_v - 2\,\Delta p/(g \Delta z)$, whose
+homogeneous solution is $(-1)^v$: it deposits a level-alternating
+(checkerboard) $\delta\rho$ of relative size $O\big((\Delta z/2H)^2\big)$.
+Over terrain the checkerboard amplitude varies along coordinate surfaces
+and acts as a horizontal PGF error $\nabla_h p \cdot \delta(1/\rho)$ ---
+measured to be the dominant, discretization-form-independent terrain
+imbalance. A smooth alternative for arbitrary $T(z)$ is the product
+recursion
+\begin{equation}
+p_{v+1} = p_v\,\frac{1 - \beta_v}{1 + \beta_{v+1}},
+\qquad
+\beta_v = \frac{g\,\Delta z}{2 \Rd T_v},
+\end{equation}
+whose homogeneous solution is constant in $v$ (eigenvalue $+1$, no
+checkerboard); it is recommended as the default and is exact per
+interval on stretched grids.
+
+\paragraph{Isothermal profiles (mountain-wave slab).}
+With $\rho = p/(\Rd T_0)$, relation \eqref{eq:facebal} admits the exact
+per-interval geometric solution
+\begin{equation}
+p_{v+1} = p_v\;\frac{1 - \delta_v/2}{1 + \delta_v/2},
+\qquad
+\delta_v = \frac{\Delta(\Phi + K)}{\Rd T_0}.
+\label{eq:geom}
+\end{equation}
+The \emph{effective geopotential} $\Phi + K$ in \eqref{eq:geom} is
+essential over steep terrain: the kinematic surface $w$ enters $K$
+through \eqref{eq:fullK} (e.g.\ $\pm 13\,\mathrm{m\,s^{-1}}$ at slope
+$0.65$), and balancing against $\Phi$ alone leaves an $O(\Delta K)$
+vertical impulse. With $\Phi + K$, the $t=0$ vertical residual is machine
+roundoff ($5\times10^{-11}$) even at $33^\circ$ slopes.
+
+\section{Dissipation and damping inventory}
+\label{sec:diss}
+
+\begin{center}
+\begin{tabular}{@{}lll@{}}
+\toprule
+Mechanism & Form & Notes\\
+\midrule
+$\kappa_4$ biharmonic & SIPG/LDG $\nabla_h^4$ on perturbations & terrain-aware:
+acts on $(h_{\mathrm{tot}}, u, v)$ minus base state;\\
+ & $\kappa_4 = f\cdot \Delta h^3/[(2N{+}1)^2\Delta t]$ & fraction $f$ of the
+explicit stability cap\\
+Velocity penalties & $\frac{\bar\lambda}{2}\frac{\avg{\rho}}{\rho}\jump{u}$ &
+exact kinetic-energy sink (part of the KEP set)\\
+\texttt{:es} interface & $-\frac{\lambda}{2}\bar w\jump{v}$ on $\rho e$ &
+entropy-dissipative, kinetic-energy-inert\\
+Divergence damping & $\nu_\delta \nabla_h(\nabla_h\!\cdot\uh)$ &
+scale-selective on acoustic/divergent modes\\
+$\nu_{\mathrm{vert}}$ & $\partial_z(\nu(z)\partial_z \uh)$ &
+sponge-profile-weighted momentum deposition aloft\\
+Rayleigh sponge & $-\beta(z)\,w$ (implicit) & $w$-only; ClimaAtmos strength
+$\alpha_w = 1\,\mathrm{s^{-1}}$ admissible\\
+Vertical transport & Lin--van Leer limiter & monotone explicit part of
+HEVI advection\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\section{Results}
+\label{sec:results}
+
+\subsection{Operator-level verification}
+
+On deterministic discontinuous states (spectral gradients of $C^0$
+fields), flat and Hughes--Jablonowski-warped grids alike, the discrete
+kinetic-energy budget closes to $3\times10^{-15}$ relative for the
+\texttt{:kep} and \texttt{:es} sets, with sign-definite penalty
+production; the isolated \texttt{:es} dissipation yields entropy
+production $P_S = -1.6\times10^{9} < 0$ with mass fluxes bit-identical to
+central.
+
+\subsection{Baroclinic wave over double-mountain orography}
+
+The Ullrich et al.\ baroclinic wave over the Hughes--Jablonowski analytic
+double mountain (cubed sphere, \texttt{helem} 8, $30\,$km lid,
+\texttt{:es} faces, matched Exner PGF) completes a stable simulated day:
+mass conserved to $0.0$ and total energy to $-4.9\times10^{-16}$
+relative over 1440 steps, $\min p$ constant throughout, with orographic
+wave trains developing at $z = 2.5\,$km.
+
+\subsection{Agnesi mountain waves}
+
+The quasi-two-dimensional slab configuration
+(Section~\ref{sec:terrain}; isothermal $T_0 = 250\,$K, $U_0 =
+20\,\mathrm{m\,s^{-1}}$, ridge half-width $a = 25\,$km, 600~km periodic
+domain, $2$~km elements, 750~m levels, implicit sponge above 15~km)
+provides quantitative validation against linear mountain-wave theory.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.85\textwidth]{mw_agnesi_linear_xz.png}
+\caption{Steady vertical velocity $w(x,z)$ at $t = 4\,$h for the linear
+Agnesi case, $h_0 = 25\,$m. Upstream-tilted phase lines (upward energy
+propagation) with vertical wavelength $\lambda_z = 2\pi U_0/N =
+6.4\,$km and amplitude at the linear scale $U_0 h_0/a =
+0.02\,\mathrm{m\,s^{-1}}$ with the expected $\sqrt{\rho_0/\rho}$
+amplification; two-dimensionality is preserved to $10^{-10}$.}
+\label{fig:agnesi-linear}
+\end{figure}
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.85\textwidth]{mw_agnesi_h250m_xz.png}
+\caption{As Fig.~\ref{fig:agnesi-linear} but with $h_0 = 250\,$m
+($10\times$ forcing) on the identical grid with no parameter retuning.
+The wave structure is unchanged and the amplitude scales exactly
+linearly ($0.34 \approx 10\times0.033\,\mathrm{m\,s^{-1}}$ below
+15~km); the solution remains laminar ($N h_0/U_0 = 0.125$), whereas with
+a $300\times$ weaker explicit sponge the same case breaks aloft through
+$\sqrt{\rho_0/\rho}$ amplification and is fully turbulent by
+$t \approx 3\,$h.}
+\label{fig:agnesi-h250}
+\end{figure}
+
+At the steep limit $h_0 = a = 2\,$km ($N h_0/U_0 \approx 2$, $33^\circ$
+slopes) the $\Phi+K$-balanced initialization of
+Section~\ref{sec:hydro} holds the $t=0$ vertical residual at roundoff;
+the remaining obstacle is the impulsive uniform-wind start itself
+($\approx 4\,\mathrm{m\,s^{-2}}$ horizontal adjustment shock), which
+requires a ramped wind-forcing initialization rather than further
+discretization work.
+
+\end{document}
