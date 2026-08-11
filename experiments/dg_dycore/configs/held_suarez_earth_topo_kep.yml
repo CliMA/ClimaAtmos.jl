@@ -1,0 +1,64 @@
+# Held–Suarez general circulation over smoothed real Earth topography
+# (ETOPO2022), on the vector-invariant KEP DG core.
+#
+# MINIMAL-DISSIPATION setup — by request, the ONLY sub-grid closure is the
+# w-only Rayleigh sponge near the model top. Every artificial-viscosity knob
+# is explicitly off:
+#   face_set: kep     exact kinetic-energy-preserving fluxes — no ρe interface
+#                     dissipation; the advective KE budget closes on its own
+#   kappa4: 0.0       no biharmonic hyperdiffusion
+#   filter_Nc: 0      no modal cutoff filter
+#   nu_vert: 0.0      no viscous sponge on uₕ  (the ClimaAtmos ViscousSponge)
+#   nu_div_frac: 0.0  no divergence damping
+#   sponge_uh: false  the Rayleigh sponge acts on w only, never on uₕ
+#
+# The VI/KEP core carries the terrain metric cross-terms in full (unlike the
+# FDDG core, whose earth-topo config is geometry-only plumbing), so real
+# orography is handled correctly here.
+#
+# CAUTION: zero added dissipation over real (even smoothed) orography is the
+# aggressive end of the envelope — KEP bounds the KE budget so it will not
+# blow up energetically, but grid-scale enstrophy can look noisy. Minimal
+# escalation, in order: face_set: es (entropy-variable ρe dissipation lives on
+# the element INTERFACES — intrinsic DG upwinding, still exactly KEP, NOT a
+# tunable bulk viscosity), then a small kappa4_frac. See
+# docs/vi_kep_face_terms.md.
+#
+# Wall time: helem 16 / zelem 20 is ~13 h for 8 days single-core; drop to
+# helem 8 for a quick smoke test. Held–Suarez climatology needs ≳200-day
+# spinup — t_end below is test scale for qualitative zonal means only
+# (post/zonal_means.jl).
+core: vi
+momentum_adv: vector_invariant
+face_set: kep
+held_suarez: true
+topography: earth
+topography_damping_factor: 5.0
+
+# --- no artificial viscosity (explicit; KEP defaults would also give 0) ---
+kappa4: 0.0
+filter_Nc: 0
+nu_vert: 0.0
+nu_div_frac: 0.0
+
+# --- grid (matches the validated VI terrain stack) ---
+helem: 16
+npoly: 4
+zelem: 20
+zmax: 30000.0
+zstretch: [300.0, 3000.0]
+
+# --- the sole closure: w-only Rayleigh sponge in the top 15 km ---
+sponge_depth: 15000.0
+sponge_tau: 20.0
+sponge_uh: false
+
+stepper: hevi
+dt: 60.0
+t_end: 864000.0        # 10 days (test scale; ≳200 d for HS climatology)
+perturb: true          # break hemispheric symmetry, speed eddy onset
+constants_mode: clima_params
+ic_source: setups
+output_dir: output/held_suarez_earth_topo_kep
+diag_period: 86400.0   # daily snapshots
+ndiag: 60
