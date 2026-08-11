@@ -918,21 +918,6 @@ product. Fold `ρ`, `K`, and any scaling factor into `ᶠcoef` in left-to-right 
 ᶜdiffusive_flux_divergenceᵥ(ᶠcoef, ᶜχ) = @. lazy(ᶜdiffdivᵥ(-(ᶠcoef * ᶠgradᵥ(ᶜχ))))
 
 """
-    ᶠtotal_enthalpy_gradientᵥ(thermo_params, ᶜT, ᶜΦ, ᶜq_vap, ᶜq_liq, ᶜq_ice)
-
-Return the lazy face gradient of total enthalpy in dry-static-energy +
-water-enthalpy form, `∇s_d + Σ_μ (h_μ + Φ) ∇q_μ` for `μ ∈ {vap, liq, ice}`.
-
-Summands are combined in a fixed order: dry static energy, then vapor, liquid, ice.
-"""
-ᶠtotal_enthalpy_gradientᵥ(thermo_params, ᶜT, ᶜΦ, ᶜq_vap, ᶜq_liq, ᶜq_ice) = @. lazy(
-    ᶠgradᵥ(TD.dry_static_energy(thermo_params, ᶜT, ᶜΦ)) +
-    ᶠinterp(TD.enthalpy_vapor(thermo_params, ᶜT) + ᶜΦ) * ᶠgradᵥ(ᶜq_vap) +
-    ᶠinterp(TD.enthalpy_liquid(thermo_params, ᶜT) + ᶜΦ) * ᶠgradᵥ(ᶜq_liq) +
-    ᶠinterp(TD.enthalpy_ice(thermo_params, ᶜT) + ᶜΦ) * ᶠgradᵥ(ᶜq_ice),
-)
-
-"""
     gradient_richardson_number(params, ᶜN²_eff, ᶜstrain_rate_norm)
 
 Compute the gradient Richardson number, the ratio of the buoyancy to the shear

@@ -135,11 +135,11 @@ at the smallest scales of the simulation without degrading the sharp features
 of the modeled tracers.
 
 Hyperdiffusion is a higher order derivative operator, and as a result does not guarantee positivity.
-Hyperdiffusion is applied at full strength to total water and to passive tracers.
-All microphysics tracers (cloud liquid and ice, rain, snow, and the number
-concentrations) share a single scaled hyperdiffusivity set by the free parameter
-`tracer_hyperdiffusion_factor`; its default value is 0, so by default the
-microphysics tracers receive no hyperdiffusion.
+Total water (`q_tot_eff = q_tot - q_rai - q_sno`) and passive tracers are
+hyperdiffused at full strength; the resulting `ρq_tot` mass tendency is
+distributed proportionally to the cloud species (`ρq_lcl`, `ρq_icl`, and their
+number densities). Rain, snow, and rain number density receive no
+hyperdiffusion.
 
 ### Diffusion
 
@@ -155,11 +155,10 @@ or computed as a function that decays with height and is capped at some value ab
 Vertical diffusion can be applied implicitly when using `VerticalDiffusion`,
 `DecayWithHeightDiffusion`, or the PROPHET diffusive flux; the Smagorinsky-Lilly
 and AMD vertical tendencies are always explicit.
-With `VerticalDiffusion` or `DecayWithHeightDiffusion`, every grid-scale tracer
-is diffused; the sedimenting microphysics species are scaled by the free
-parameter `tracer_vertical_diffusion_factor` (default 1, set to 0 in several
-configurations).
-There is no such scaling applied when using the Smagorinsky-Lilly or AMD models.
+With `VerticalDiffusion` or `DecayWithHeightDiffusion`, `q_tot_eff = q_tot - q_rai - q_sno` is diffused directly and the resulting mass tendency is
+distributed proportionally to the cloud species; precipitating species
+(`q_rai`, `q_sno`, `n_rai`) receive no diffusion. The Smagorinsky-Lilly and
+AMD models apply the full eddy diffusivity to every grid-scale tracer.
 
 ### Non-negativity constraints
 

@@ -475,13 +475,6 @@ accessors generated at the bottom of this module, e.g.
   - `idealized_ocean_albedo`: Ocean surface albedo for idealized simulations [-].
   - `water_refractive_index`: Refractive index of water relative to air, for the
     broadband ocean-albedo model [-].
-  - `α_hyperdiff_tracer`: Scaling of the hyperdiffusivity for tracers with strong
-    gradients, e.g. precipitation [-].
-  - `α_vert_diff_tracer`: Scaling of the vertical diffusivity for tracers with
-    strong gradients, e.g. precipitation [-]. Currently inert: since vertical
-    diffusion moved to diffusing `q_tot_eff` and distributing it to the cloud
-    species proportionally, no tendency applies this factor, so setting
-    `tracer_vertical_diffusion_factor` in a TOML file has no effect.
   - `constant_horizontal_diffusion_D`: Constant horizontal diffusivity [m²/s].
   - `T_min_sgs`: Lower temperature bound of the SGS quadrature [K].
   - `q_max_sgs`: Upper specific-humidity bound of the SGS quadrature [kg/kg].
@@ -562,10 +555,6 @@ Base.@kwdef struct ClimaAtmosParameters{
     # Radiation
     idealized_ocean_albedo::FT
     water_refractive_index::FT
-    # Hyperdiffusion
-    α_hyperdiff_tracer::FT
-    # Vertical diffusion
-    α_vert_diff_tracer::FT
     # Constant horizontal diffusion
     constant_horizontal_diffusion_D::FT
     # SGS quadrature bounds
