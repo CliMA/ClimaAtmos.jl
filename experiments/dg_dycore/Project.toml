@@ -14,7 +14,6 @@ Thermodynamics = "b60c26fb-14c3-4610-9d3e-2d17fe7ff00c"
 YAML = "ddb6d928-2868-570f-bddf-ab3f9cf99eb6"
 
 # Local-development sources (Phase A). Before committing/CI:
-#   ClimaCore -> {url = "https://github.com/CliMA/ClimaCore.jl", rev = "as/bickley-jet"}
 [sources]
 ClimaAtmos = {path = "../.."}
-ClimaCore = {path = "/Users/akshaysridhar/Research/Codes/ClimaCore.jl"}
+ClimaCore = {url = "https://github.com/CliMA/ClimaCore.jl", rev = "as/bickley-jet"}
