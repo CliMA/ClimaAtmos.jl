@@ -6,9 +6,9 @@ import Logging, NVTX
     ClimaAtmosParameters(config::AtmosConfig)
 
 Translate the YAML config into a typed `ClimaAtmosParameters`. Pre-computes
-the microphysics model and gravity-wave toggles from `parsed_args` so the
-underlying constructor only loads the parameter sets that will actually be
-used.
+the microphysics model and the gravity-wave and prognostic-aerosol toggles
+from `parsed_args` so the underlying constructor only loads the parameter sets
+that will actually be used.
 """
 function ClimaAtmosParameters(config::AtmosConfig)
     pa = config.parsed_args
@@ -20,6 +20,7 @@ function ClimaAtmosParameters(config::AtmosConfig)
         has_orographic_gw =
         !isnothing(get(pa, "orographic_gravity_wave", nothing)),
         has_beres_source = get(pa, "nogw_beres_source", false) != false,
+        has_prognostic_aerosols = !isempty(get(pa, "prognostic_aerosols", ())),
     )
 end
 
@@ -55,6 +56,7 @@ function get_atmos(config::AtmosConfig, params; setup_type = nothing)
         numerics = AtmosNumerics(config, FT),
         chemistry = AtmosChem(config),
         cosp = COSPModel(config),
+        aerosols = AtmosAerosols(config, params),
         vertical_diffusion,
         disable_surface_flux_tendency = pa["disable_surface_flux_tendency"],
     )
@@ -588,7 +590,6 @@ function get_simulation(config::AtmosConfig)
         debug_jacobian = pa["debug_jacobian"],
         update_cache_every = pa["update_cache_every"],
         update_constrain_state_every = pa["update_constrain_state_every"],
-        aerosol_names = Tuple(pa["prescribed_aerosols"]),
         time_varying_trace_gases = Tuple(pa["time_varying_trace_gases"]),
         vertical_water_borrowing_species =
         vertical_water_borrowing_species_from_config(config),

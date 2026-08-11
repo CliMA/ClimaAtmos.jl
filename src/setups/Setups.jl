@@ -42,6 +42,10 @@ import ..PrognosticEDMFX
 import ..EDOnlyEDMFX
 import ..n_mass_flux_subdomains
 import ..AbstractChemistryModel
+import ..AtmosAerosols
+import ..PrescribedSeaSalt, ..PrognosticSeaSalt
+import ..AbstractPrescribedAerosol, ..AbstractPrognosticAerosol
+import ..species_models, ..bin_names
 import ..Parameters.ClimaAtmosParameters
 import Thermodynamics.Parameters.ThermodynamicsParameters
 
@@ -183,6 +187,17 @@ Default: an `AnalyticTemperature` using `zonally_symmetric_temperature`.
 """
 surface_temperature_model(setup) =
     AnalyticTemperature(zonally_symmetric_temperature)
+
+"""
+    is_aquaplanet(setup)
+
+Whether the setup describes an all-ocean planet, in which case the default
+`p.ocean_fraction` of one is correct and prognostic sea salt can run without
+a coupler-supplied ocean mask (see `check_ocean_mask_availability`).
+
+Default: `false`.
+"""
+is_aquaplanet(setup) = false
 
 """
     prescribed_flow_model(setup, ::Type{FT})
