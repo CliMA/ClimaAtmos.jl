@@ -3,6 +3,8 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- [#4744](https://github.com/CliMA/ClimaAtmos.jl/pull/4744) ![][badge-🔥behavioralΔ] Make rain sediment with non-constant velocity
+
 0.42.4
 -------
 - [#4750](https://github.com/CliMA/ClimaAtmos.jl/pull/4750) ![][badge-✨feature/enhancement] Add the diagnostics `ssatl` and `ssati` (water-vapor supersaturation with respect to liquid and to ice), available for any moist microphysics model.

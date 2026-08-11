@@ -2193,13 +2193,16 @@ water = ClimaAtmos.AtmosWater(;
 )
 ```
 """
-@kwdef struct AtmosWater{MM, CM, MTTS, TNM, SQ, TVM}
+@kwdef struct AtmosWater{MM, CM, MTTS, TNM, SQ, TVL, TVI, TVR, TVS}
     microphysics_model::MM = DryModel()
     cloud_model::CM = QuadratureCloud()
     microphysics_tendency_timestepping::MTTS = nothing
     tracer_nonnegativity_method::TNM = nothing
     sgs_quadrature::SQ = nothing
-    terminal_velocity_mode::TVM = DiagnosticTerminalVelocity()
+    terminal_velocity_liquid::TVL = FixedTerminalVelocity()
+    terminal_velocity_ice::TVI = FixedTerminalVelocity()
+    terminal_velocity_rain::TVR = DiagnosticTerminalVelocity()
+    terminal_velocity_snow::TVS = FixedTerminalVelocity()
 end
 
 """
@@ -2587,6 +2590,90 @@ model = AtmosModel(;
     radiation_mode = RRTMGPI.AllSkyRadiation(),
 )
 ```
+
+# Default Configuration
+
+The default AtmosModel provides:
+
+  - **Dry atmosphere**: DryModel()
+  - **Basic surface**: AnalyticTemperature (zonally-symmetric SST) with default exchange coefficients
+  - **Cloud model**: QuadratureCloud() with SGS quadrature
+  - **Idealized insolation**: IdealizedInsolation()
+  - **Conservative numerics**: First-order upwinding with Explicit() timestepping
+  - **No advanced physics**: No radiation, turbulence, or forcing by default
+
+# Available Structs
+
+## AtmosWater
+
+  - `microphysics_model`: DryModel(), EquilibriumMicrophysics0M(), NonEquilibriumMicrophysics1M(), NonEquilibriumMicrophysics2M(), NonEquilibriumMicrophysics2MP3()
+  - `cloud_model`: GridScaleCloud(), QuadratureCloud()
+  - `microphysics_tendency_timestepping`: Explicit(), Implicit()
+  - `sgs_quadrature`: nothing or SGSQuadrature (subgrid-scale quadrature for microphysics tendencies)
+  - `terminal_velocity_liquid`: FixedTerminalVelocity (default) or DiagnosticTerminalVelocity
+  - `terminal_velocity_ice`: FixedTerminalVelocity (default) or DiagnosticTerminalVelocity
+  - `terminal_velocity_rain`: FixedTerminalVelocity or DiagnosticTerminalVelocity (default)
+  - `terminal_velocity_snow`: FixedTerminalVelocity (default) or DiagnosticTerminalVelocity
+
+## SCMSetup (Single-Column Model & LES specific - accessed via model.subsidence, model.external_forcing, etc.)
+
+Internal testing and calibration components for single-column setups:
+
+  - `subsidence`: nothing or Bomex_subsidence, Rico_subsidence, DYCOMS_subsidence, etc
+  - `external_forcing`: nothing or external forcing objects (GCMForcing, ExternalDrivenTVForcing, ISDACForcing)
+  - `ls_adv`: nothing or LargeScaleAdvection()
+  - `advection_test`: Bool
+  - `scm_coriolis`: nothing or NamedTuple `(; prof_ug, prof_vg, coriolis_param)`
+
+## AtmosRadiation
+
+  - `radiation_mode`: Radiation and atmospheric forcing modes
+
+      + Global radiation: RRTMGPI.ClearSkyRadiation(), RRTMGPI.AllSkyRadiation()
+      + Atmospheric forcing: HeldSuarezForcing() (for idealized dynamics)
+      + SCM-specific: RadiationDYCOMS(), RadiationISDAC(), RadiationTRMM_LBA()
+
+  - `insolation`: IdealizedInsolation(), TimeVaryingInsolation(), etc.
+
+## AtmosTurbconv
+
+  - `edmfx_model`: EDMFXModel()
+  - `turbconv_model`: nothing, PrognosticEDMFX(), EDOnlyEDMFX()
+  - `smagorinsky_lilly`: nothing or SmagorinskyLilly()
+  - `amd_les`: nothing or AnisotropicMinimumDissipation()
+  - `constant_horizontal_diffusion`: nothing or ConstantHorizontalDiffusion()
+
+## AtmosGravityWave
+
+  - `non_orographic_gravity_wave`: nothing or NonOrographicGravityWave()
+  - `orographic_gravity_wave`: nothing or OrographicGravityWave()
+
+## AtmosSponge
+
+  - `viscous_sponge`: nothing or ViscousSponge()
+  - `rayleigh_sponge`: nothing or RayleighSponge()
+
+## AtmosSurface
+
+  - `flux_scheme`: SurfaceConditions.MoninObukhov, SurfaceConditions.ExchangeCoefficients, or a default marker (DefaultMoninObukhov/DefaultExchangeCoefficients), or `nothing` to disable.
+  - `temperature`: SurfaceConditions.AnalyticTemperature, ExternalTemperature, SlabOceanTemperature, or CoupledTemperature.
+  - `boundary_overrides`: SurfaceConditions.SurfaceBoundaryOverrides
+  - `surface_albedo`: ConstantAlbedo(), RegressionFunctionAlbedo(), CouplerAlbedo()
+
+## AtmosNumerics    # Create grouped structs - use provided complete objects or create from individual fields
+
+  - `energy_q_tot_upwinding`, `tracer_upwinding`, `edmfx_mse_q_tot_upwinding`, `edmfx_sgsflux_upwinding`, `edmfx_tracer_upwinding`: Val() upwinding schemes
+  - `test_dycore_consistency`: nothing or TestDycoreConsistency() for debugging
+  - `limiter`: nothing or QuasiMonotoneLimiter()
+  - `vertical_water_borrowing_species`: internal value `nothing` (apply to all tracers; config default is `~`), empty tuple (apply to none; config `[]`), or Tuple{Symbol, ...} from config string/list (e.g. `["ρq_tot"]`) to apply only to those tracers. See config `vertical_water_borrowing_species` in default_config.yml for YAML options.
+    (Note: The vertical water borrowing limiter is created in the cache based on `AtmosWaterModel.tracer_nonnegativity_method`)
+  - `diff_mode`: Explicit(), Implicit() timestepping mode for diffusion
+  - `hyperdiff`: nothing or Hyperdiffusion()
+
+## Top-level Options
+
+  - `vertical_diffusion`: nothing, VerticalDiffusion(), DecayWithHeightDiffusion()
+  - `disable_surface_flux_tendency`: Bool
 """
 function AtmosModel(; kwargs...)
     group_kwargs, atmos_model_kwargs = _partition_atmos_model_kwargs(kwargs)

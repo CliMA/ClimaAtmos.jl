@@ -343,13 +343,20 @@ steps:
       - label: ":chart_with_upwards_trend: SCM intercomparison plots"
         retry: *retry_policy
         depends_on:
-          - prognostic_edmfx_soares_column
-          - prognostic_edmfx_gabls_column
-          - prognostic_edmfx_bomex_column
-          - prognostic_edmfx_dycoms_rf01_column
-          - prognostic_edmfx_dycoms_rf02_column
-          - prognostic_edmfx_rico_column
-          - prognostic_edmfx_trmm_column
+          - step: prognostic_edmfx_soares_column
+            allow_failure: true
+          - step: prognostic_edmfx_gabls_column
+            allow_failure: true
+          - step: prognostic_edmfx_bomex_column
+            allow_failure: true
+          - step: prognostic_edmfx_dycoms_rf01_column
+            allow_failure: true
+          - step: prognostic_edmfx_dycoms_rf02_column
+            allow_failure: true
+          - step: prognostic_edmfx_rico_column
+            allow_failure: true
+          - step: prognostic_edmfx_trmm_column
+            allow_failure: true
         command: |
           for JOB in \
             prognostic_edmfx_soares_column \
