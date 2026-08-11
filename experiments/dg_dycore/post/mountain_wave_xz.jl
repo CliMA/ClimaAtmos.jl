@@ -64,13 +64,15 @@ function mountain_wave_xz(
     for (row, p) in enumerate(panels)
         var = ClimaAnalysis.get(simdir; short_name = p.short_name)
         t_h = round(ClimaAnalysis.times(var)[end] / 3600.0; digits = 2)
+        # terrain-following runs name the vertical dim "z_reference" (ci_plots.jl)
+        zname = haskey(var.dims, "z_reference") ? "z_reference" : "z"
         # slab is quasi-2D (one y element) — collapse y, take the last time
         haskey(var.dims, "y") && (var = ClimaAnalysis.slice(var; y = 0.0))
         var = ClimaAnalysis.slice(var; time = Inf)
-        var = ClimaAnalysis.window(var, "z"; right = 1e3 * z_top_km)
+        var = ClimaAnalysis.window(var, zname; right = 1e3 * z_top_km)
 
         x = var.dims["x"]          # [m], full domain (no x-window)
-        z = var.dims["z"]          # [m]
+        z = var.dims[zname]        # [m]
         d = var.data               # (nx, nz)
         amp = max(maximum(abs, d), eps())
 
