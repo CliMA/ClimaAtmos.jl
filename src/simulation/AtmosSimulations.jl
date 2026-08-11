@@ -4,6 +4,26 @@ import ClimaUtilities.TimeManager: ITime
 import ClimaAtmos.Diagnostics as CAD
 import .Setups
 
+"""
+    AtmosSimulation
+
+A configured atmospheric simulation: an initialized time-stepping integrator together
+with the output bookkeeping needed to run it and write its diagnostics.
+
+Build one with the keyword constructor `AtmosSimulation{FT}(; ...)` (or
+`AtmosSimulation(; ...)` for `Float32`), or from a configuration with
+`AtmosSimulation(config)`. Run it with `solve_atmos!`.
+
+# Fields
+
+  - `job_id`: Run identifier, also used to name the output directory.
+  - `output_dir`: Directory that receives diagnostics, checkpoints, and logs.
+  - `start_date`: Calendar date corresponding to the simulation start.
+  - `t_end`: End time of the simulation [s].
+  - `output_writers`: Diagnostic writers, closed by `solve_atmos!` when the run
+    finishes.
+  - `integrator`: The ClimaTimeSteppers integrator holding the state, cache, and callbacks.
+"""
 struct AtmosSimulation{TT, S1 <: AbstractString, S2 <: AbstractString, OW, OD}
     job_id::S1
     output_dir::S2
@@ -17,6 +37,25 @@ ClimaComms.context(sim::AtmosSimulation) =
     ClimaComms.context(sim.integrator.u.c)
 ClimaComms.device(sim::AtmosSimulation) = ClimaComms.device(sim.integrator.u.c)
 
+"""
+    setup_diagnostics_and_writers(diagnostics_config, model, Y, p, dt, t_start, t_end,
+                                  start_date, output_dir; verbose = false)
+
+Build the scheduled diagnostics and the writers they output to.
+
+The default diagnostics of `model` are added when `diagnostics_config.default` is set,
+and the entries of `diagnostics_config.additional` are added as well: those are either
+prebuilt `ScheduledDiagnostic`s or dictionary specifications, the latter translated by
+`scheduled_diagnostics_from_specs`. A NetCDF, an HDF5, and an in-memory dictionary
+writer are always created; a second NetCDF writer on pressure levels is added when a
+specification requests pressure coordinates.
+
+# Returns
+
+`(all_diagnostics, writers, periods_reductions)`: the scheduled diagnostics, the writers
+they bind to, and the accumulation periods used by
+`validate_checkpoint_diagnostics_consistency`.
+"""
 function setup_diagnostics_and_writers(
     diagnostics_config::CAD.DiagnosticsConfig,
     model,
@@ -130,7 +169,11 @@ end
 """
     convert_time_args(dt, t_start, t_end, start_date)
 
-Convert dt, t_start, and t_end to ITime.
+Convert `dt`, `t_start`, and `t_end` to `ITime`s of a common type, with `start_date` as
+the epoch of the two times.
+
+Each input may be a number of seconds or a time string such as `"1hours"` (see
+`time_to_seconds`).
 """
 function convert_time_args(dt, t_start, t_end, start_date)
     dt = ITime(time_to_seconds(dt))
@@ -144,16 +187,18 @@ end
 """
     AtmosSimulation(config::AtmosConfig)
 
-Construct a simulation from a YAML-based configuration.
-Construct an atmospheric simulation with the default floating-point type `Float32`.
-Equivalent to `AtmosSimulation{Float32}(; kwargs...)`.
+Construct a simulation from a configuration, with the float type taken from `config`.
+
+Equivalent to `get_simulation(config)`, which also writes the parameter manifest and
+config snapshot into the output directory.
 """
 AtmosSimulation(config::AtmosConfig) = get_simulation(config)
 
 """
     AtmosSimulation(; kwargs...)
 
-Construct an atmospheric simulation with the default floating-point type `Float32`.
+Construct an atmospheric simulation with the default float type `Float32`.
+
 Equivalent to `AtmosSimulation{Float32}(; kwargs...)`.
 """
 AtmosSimulation(; kwargs...) = AtmosSimulation{Float32}(; kwargs...)
@@ -161,62 +206,68 @@ AtmosSimulation(; kwargs...) = AtmosSimulation{Float32}(; kwargs...)
 """
     AtmosSimulation{FT}(; kwargs...) where {FT}
 
-Construct an atmospheric simulation with floating-point type `FT` (default: Float32).
+Construct an atmospheric simulation with float type `FT`.
 
-## Keyword Arguments
+Builds (or restarts) the state, the cache, the callbacks, the diagnostics, and the
+time-stepping integrator, and resolves the output directory. This is the primary
+entry point for simulations written as scripts; configuration-driven runs go through
+`get_simulation` instead.
 
-### Model and domain
+# Keyword Arguments
 
-  - `model::AtmosModel = AtmosModel()`: Physics and parameterization configuration.
-  - `params::ClimaAtmosParameters = ClimaAtmosParameters(FT)`: Physical parameters.
-  - `grid::AbstractGrid = SphereGrid(FT; ...)`: Computational grid.
-    Use [`ColumnGrid`](@ref), [`BoxGrid`](@ref), [`PlaneGrid`](@ref), or [`SphereGrid`](@ref).
-  - `setup = Setups.DecayingProfile(; perturb=true, params)`: Setup defining the
-    initial state. See [Setups](@ref "Setups") for available options.
-
-### Time
-
-  - `dt = 600`: Timestep in seconds.
-  - `t_start = 0`: Start time in seconds.
-  - `t_end = 864000`: End time in seconds (default: 10 days).
-  - `start_date = DateTime(2010, 1, 1)`: Calendar reference date.
-
-### Output
-
-  - `job_id::String = "atmos_sim"`: Run identifier, used in output directory naming.
-  - `output_dir = nothing`: Output directory path. Auto-generated from `job_id` if `nothing`.
-  - `output_dir_style = "activelink"`: Output directory organization style.
-  - `checkpoint_frequency = Inf`: How often to save restart checkpoints (seconds).
-  - `log_to_file::Bool = false`: Write log output to a file in `output_dir`.
-
-### Diagnostics
-
-  - `diagnostics::DiagnosticsConfig = DiagnosticsConfig()`: Specification of which
-    diagnostics the simulation produces and how their NetCDF output is shaped.
-    See [`DiagnosticsConfig`](@ref).
-
-### Callbacks
-
-  - `default_callbacks::Bool = true`: Enable common simulation callbacks.
-  - `callbacks = ()`: Additional user-provided callbacks.
-  - `callback_kwargs = ()`: Extra keyword arguments forwarded to default callbacks.
-
-### Restarts
-
-  - `restart_file = nothing`: Path to a restart file to resume from.
-  - `detect_restart_file::Bool = false`: Automatically detect the latest restart file in
-    a structured output directory.
-
-### Numerics
-
-  - `ode_config`: ODE solver algorithm. Default: `IMEXAlgorithm(ARS343(), NewtonsMethod(...))`.
-  - `jacobian::JacobianAlgorithm = ManualSparseJacobian(; approximate_solve_iters = 1)`:
-    Jacobian algorithm for the implicit solve. Use [`ManualSparseJacobian`](@ref),
+  - `model = AtmosModel()`: Physics and parameterization configuration.
+  - `params = ClimaAtmosParameters(FT)`: Physical parameters.
+  - `context = ClimaComms.context()`: Communications context (device and MPI).
+  - `grid = SphereGrid(FT; radius = CAP.planet_radius(params), context)`: Computational
+    grid. Use [`ColumnGrid`](@ref), [`BoxGrid`](@ref), [`PlaneGrid`](@ref), or
+    [`SphereGrid`](@ref).
+  - `setup = Setups.DecayingProfile(; perturb = true, params)`: Setup defining the initial
+    state, and, for single-column cases, the forcings. See [Setups](@ref "Setups").
+  - `dt = 600`: Timestep [s], or a string such as `"10mins"`.
+  - `start_date = DateTime(2010, 1, 1)`: Calendar date of the simulation start.
+  - `t_start = 0`: Start time [s]. Ignored, with a warning, when restarting.
+  - `t_end = 86400 * 10`: End time [s], 10 days by default.
+  - `ode_config`: Time-stepping algorithm. Defaults to `IMEXAlgorithm(ARS343(), NewtonsMethod(; max_iters = 1, update_j = UpdateEvery(NewNewtonIteration)))`.
+  - `steady_state_velocity = nothing`: Analytic steady-state velocity used by diagnostics,
+    either a precomputed field or a callable `(Y, params) -> velocity` evaluated once `Y`
+    exists.
+  - `job_id = "atmos_sim"`: Run identifier, used in output directory naming.
+  - `output_dir = nothing`: Output directory. Defaults to `output/<job_id>`, or `<job_id>`
+    when the `CI` environment variable is set.
+  - `output_dir_style = "activelink"`: How the output directory is managed;
+    `"activelink"` keeps numbered directories with a symlink to the active one,
+    `"removepreexisting"` deletes previous output.
+  - `restart_file = nothing`: Restart file to resume from.
+  - `detect_restart_file = false`: Pick up the most recent restart file in the output
+    directory structure; only available with `output_dir_style = "activelink"`.
+  - `aerosol_names = []`: Prescribed aerosol species to read from file.
+  - `time_varying_trace_gases = ()`: Trace gases read from a time-varying file.
+  - `vertical_water_borrowing_species = nothing`: Species the vertical water borrowing
+    constraint may draw from.
+  - `default_callbacks = true`: Add the default model and common callbacks. When `false`,
+    only `callbacks` is used.
+  - `callbacks = ()`: User-provided callbacks, used only when `default_callbacks` is
+    `false`.
+  - `callback_kwargs = ()`: Extra keyword arguments forwarded to the default callbacks.
+  - `diagnostics = DiagnosticsConfig()`: Which diagnostics to produce and how to write
+    them. See [`DiagnosticsConfig`](@ref).
+  - `jacobian = ManualSparseJacobian(; approximate_solve_iters = 1)`: Jacobian algorithm
+    for the implicit solve. Use [`ManualSparseJacobian`](@ref),
     [`AutoSparseJacobian`](@ref), or [`AutoDenseJacobian`](@ref).
-  - `debug_jacobian::Bool = false`: Enable Jacobian debugging output.
-  - `tracers = []`: Additional tracer species.
+  - `debug_jacobian = false`: Print Jacobian diagnostics while solving.
+  - `update_cache_every = "stage"`: When the cache is refreshed, `"stage"` or `"step"`.
+  - `update_constrain_state_every = "step"`: When state constraints are applied,
+    `"stage"`, `"step"`, or `"dss"`.
+  - `checkpoint_frequency = Inf`: How often to write restart checkpoints; a number of
+    seconds, a time string, or `"<N>months"`. `Inf` disables checkpointing.
+  - `log_to_file = false`: Send log output to a file in the output directory.
+  - `verbose = false`: Log progress while building the simulation (root process only).
 
-## Example
+# Returns
+
+An [`AtmosSimulation`](@ref), ready to be passed to `solve_atmos!`.
+
+# Examples
 
 ```julia
 import ClimaAtmos as CA

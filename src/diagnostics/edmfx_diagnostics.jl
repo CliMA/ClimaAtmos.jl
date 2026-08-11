@@ -779,6 +779,16 @@ add_diagnostic_variable!(short_name = "lmixb", units = "m",
 ###
 # Diffusivity of heat (3d)
 ###
+"""
+    compute_edt(state, cache, time)
+
+Compute the effective vertical eddy diffusivity for scalars, `edt`.
+
+Dispatches on the pair `(cache.atmos.vertical_diffusion, cache.atmos.turbconv_model)`,
+because the two are mutually exclusive: the standalone `VerticalDiffusion` and
+`DecayWithHeightDiffusion` schemes require `turbconv_model === nothing`, whereas the EDMFX
+methods require `vertical_diffusion === nothing`. Any other combination errors.
+"""
 compute_edt(state, cache, time) = compute_edt(
     state, cache, time, cache.atmos.vertical_diffusion, cache.atmos.turbconv_model,
 )
@@ -814,6 +824,15 @@ add_diagnostic_variable!(short_name = "edt", units = "m^2 s^-1",
 ###
 # Diffusivity of momentum (3d)
 ###
+"""
+    compute_evu(state, cache, time)
+
+Compute the effective vertical eddy viscosity for momentum, `evu`.
+
+Dispatches on the pair `(cache.atmos.vertical_diffusion, cache.atmos.turbconv_model)` in
+the same mutually exclusive way as `compute_edt`. The standalone vertical-diffusion
+schemes assume `K_u = K_h`, so those methods return the same coefficient as `edt`.
+"""
 compute_evu(state, cache, time) = compute_evu(
     state, cache, time, cache.atmos.vertical_diffusion, cache.atmos.turbconv_model,
 )
@@ -852,6 +871,15 @@ add_diagnostic_variable!(short_name = "evu", units = "m^2 s^-1",
 ###
 # Interfacial entrainment diffusivity (3d)
 ###
+"""
+    compute_kentr(state, cache, time)
+
+Compute the interfacial entrainment eddy diffusivity, `kentr`.
+
+Defined for both EDMFX turbulence-convection models and errors otherwise. This is the
+contribution that `edt` and `evu` add on top of the turbulent-mixing coefficients, so the
+turbulent part alone is recoverable as `edt - kentr`.
+"""
 compute_kentr(state, cache, time) =
     compute_kentr(state, cache, time, cache.atmos.turbconv_model)
 compute_kentr(_, _, _, _) =

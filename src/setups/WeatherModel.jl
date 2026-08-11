@@ -1,21 +1,30 @@
 """
-    WeatherModel
+    WeatherModel(start_date, era5_initial_condition_dir = nothing;
+                 use_full_pressure = false)
 
-ERA5-derived initial condition for weather/forecast simulations.
+ERA5-derived initial condition for weather and forecast simulations.
 
-Assigns NaN placeholders during pointwise construction, then overwrites the
-full prognostic state with ERA5 data obtained via `weather_model_data_path`.
+The pointwise construction assigns NaN placeholders; `overwrite_initial_state!`
+then overwrites the whole prognostic state with ERA5 data located by
+`weather_model_data_path`.
 
-## Fields
+# Arguments
 
-  - `start_date`: DateTime parsed from a date string in format "yyyymmdd" or "yyyymmdd-HHMM".
-  - `era5_initial_condition_dir`: Optional directory with pre-processed ERA5 files.
-    When `nothing`, uses the `wxquest_initial_conditions` ClimaArtifact.
-  - `use_full_pressure`: If `true`, attempt to read 3D pressure from the file
-    rather than computing it hydrostatically. Defaults to `false`.
+  - `start_date`: Date string in the format `"yyyymmdd"` or `"yyyymmdd-HHMM"`.
+  - `era5_initial_condition_dir = nothing`: Directory of pre-processed ERA5
+    files. When `nothing`, the `wxquest_initial_conditions` ClimaArtifact is
+    used. It is stashed in the module-level `_ERA5_IC_DIR` rather than stored on
+    the struct, because a captured string cannot be adapted to the GPU.
 
-The optional ERA5 initial condition directory is stored in `_ERA5_IC_DIR` to avoid GPU
-allocation issues with strings. When `nothing`, uses the `weather_model_ic` ClimaArtifact.
+# Keyword Arguments
+
+  - `use_full_pressure = false`: Whether to read the 3D pressure from the file
+    instead of integrating it hydrostatically.
+
+# Fields
+
+  - `start_date`: The parsed `DateTime`.
+  - `use_full_pressure`: As above [-].
 """
 struct WeatherModel
     start_date::Dates.DateTime

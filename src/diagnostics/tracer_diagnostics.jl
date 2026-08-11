@@ -2,6 +2,14 @@
 
 # Tracers
 
+"""
+    compute_tracer!(out, state, cache, time, tracer_name)
+
+Read a prescribed tracer field out of `cache.tracers` by name.
+
+Mutates and returns `out`; when `out` is `nothing`, returns a copy of the cached field.
+Errors if the model carries no tracer called `tracer_name`.
+"""
 function compute_tracer!(out, state, cache, time, tracer_name)
     tracer_name in propertynames(cache.tracers) ||
         error("$tracer_name does not exist in the model")
@@ -12,6 +20,14 @@ function compute_tracer!(out, state, cache, time, tracer_name)
     end
 end
 
+"""
+    compute_aerosol!(out, state, cache, time, aerosol_name)
+
+Read one prescribed aerosol species out of `cache.tracers.prescribed_aerosols_field`.
+
+Mutates and returns `out`; when `out` is `nothing`, returns a copy of the cached field.
+Errors if the model prescribes no aerosols, or none called `aerosol_name`.
+"""
 function compute_aerosol!(out, state, cache, time, aerosol_name)
     :prescribed_aerosols_field in propertynames(cache.tracers) ||
         error("Aerosols do not exist in the model")
@@ -27,6 +43,21 @@ function compute_aerosol!(out, state, cache, time, aerosol_name)
     end
 end
 
+"""
+    compute_dust!(out, state, cache, time)
+
+Sum the prescribed dust size bins `DST01` through `DST05` into a total mass mixing ratio.
+
+Bins absent from `cache.tracers.prescribed_aerosols_field` are skipped, so a model
+carrying only some of them still gives their sum. Mutates and returns `out`; when `out` is
+`nothing`, returns the scratch field holding the sum. Errors if the model prescribes no
+aerosols, or no dust bins at all.
+
+!!! warning
+
+    The result aliases `cache.scratch.ᶜtemp_scalar` in both branches, so it must be
+    consumed before the next use of that scratch field.
+"""
 function compute_dust!(out, state, cache, time)
     :prescribed_aerosols_field in propertynames(cache.tracers) ||
         error("Aerosols do not exist in the model")
@@ -65,6 +96,21 @@ function compute_dust!(out, state, cache, time)
     end
 end
 
+"""
+    compute_sea_salt!(out, state, cache, time)
+
+Sum the prescribed sea-salt size bins `SSLT01` through `SSLT05` into a total mass mixing
+ratio.
+
+Bins absent from `cache.tracers.prescribed_aerosols_field` are skipped. Mutates and
+returns `out`; when `out` is `nothing`, returns the scratch field holding the sum. Errors
+if the model prescribes no aerosols, or no sea-salt bins at all.
+
+!!! warning
+
+    The result aliases `cache.scratch.ᶜtemp_scalar` in both branches, so it must be
+    consumed before the next use of that scratch field.
+"""
 function compute_sea_salt!(out, state, cache, time)
     :prescribed_aerosols_field in propertynames(cache.tracers) ||
         error("Aerosols do not exist in the model")
@@ -105,6 +151,16 @@ function compute_sea_salt!(out, state, cache, time)
     end
 end
 
+"""
+    compute_sea_salt_column!(out, state, cache, time)
+
+Column-integrate the prescribed sea-salt burden, `∑ᵢ qᵢ ρ`, to a surface-level field.
+
+Sums the `SSLT01` through `SSLT05` mass mixing ratios present in the model, weights by air
+density, and integrates over the column, giving [kg/m²]. Mutates and returns `out`; when
+`out` is `nothing`, a surface-level field is allocated and returned instead. Errors if the
+model prescribes no aerosols, or no sea-salt bins at all.
+"""
 function compute_sea_salt_column!(out, state, cache, time)
     :prescribed_aerosols_field in propertynames(cache.tracers) ||
         error("Aerosols do not exist in the model")

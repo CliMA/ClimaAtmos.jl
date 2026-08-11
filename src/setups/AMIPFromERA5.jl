@@ -1,19 +1,19 @@
 """
     AMIPFromERA5(start_date)
 
-AMIP initial condition using ERA5 monthly reanalysis data.
+AMIP initial condition from an instantaneous ERA5 reanalysis snapshot.
 
-Assigns NaN placeholders during pointwise construction, then overwrites
-the full prognostic state with ERA5 data from the `era5_inst_model_levels`
-ClimaArtifact, delegating to `overwrite_from_file!`.
+The pointwise construction assigns NaN placeholders; `overwrite_initial_state!`
+then overwrites the whole prognostic state through `overwrite_from_file!`,
+reading the 00:00 UTC snapshot of `start_date` from the
+`era5_inst_model_levels` ClimaArtifact, at
+`era5_init_processed_internal_YYYYMMDD_0000.nc`. Only the date part of
+`start_date` selects the file, so any time of day other than 00:00 is ignored.
 
-## Fields
+# Fields
 
-  - `start_date`: DateTime parsed from a date string in format "yyyymmdd" or "yyyymmdd-HHMM".
-
-## Expected artifact structure
-
-`era5_inst_model_levels/era5_init_processed_internal_YYYYMMDD_0000.nc`
+  - `start_date`: `DateTime` parsed from a `"yyyymmdd"` or `"yyyymmdd-HHMM"`
+    string.
 """
 struct AMIPFromERA5
     start_date::Dates.DateTime

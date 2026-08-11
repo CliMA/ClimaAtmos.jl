@@ -24,8 +24,11 @@ import ..ColumnDatasets:
     CANONICAL_SURFACE_VARS
 
 """
+    CANONICAL_UNITS
+
 SI units of the canonical variables, written as each variable's `units`
-attribute by [`write_column_forcing_file`](@ref).
+attribute by `write_column_forcing_file` and required exactly by
+[`validate`](@ref).
 """
 const CANONICAL_UNITS = Dict(
     "ta" => "K",
@@ -48,9 +51,14 @@ const CANONICAL_UNITS = Dict(
 )
 
 """
-    ClimaColumnFile
+    ClimaColumnFile()
 
-Dataset-format singleton for files following the ClimaColumn schema.
+Format singleton for files following the ClimaColumn schema, and the default
+format of a `ColumnDataset`.
+
+Canonical variable names are used verbatim as file variable names, the height
+coordinate is read directly from `z`, and the site location comes from the
+`site_latitude`/`site_longitude` global attributes.
 """
 struct ClimaColumnFile <: AbstractColumnFormat end
 
@@ -175,19 +183,23 @@ end
         z, time, time_attrib, column_vars, surface_vars,
         site_latitude, site_longitude)
 
-Write a ClimaColumn schema file: the one producer implementation shared by
-the ERA5 generator and any future converter.
+Write a ClimaColumn schema file at `path` with element type `FT`, and return
+`path`.
 
-Arguments:
+The single producer implementation, shared by the ERA5 generator and every
+converter. Each variable name must have its units registered in
+`CANONICAL_UNITS`; an unregistered name is an error rather than a file
+that later fails [`validate`](@ref).
 
-  - `z`: Strictly ascending heights [m] of the column levels.
-  - `time`: Vector of `DateTime`s; written with `time_attrib` (CF units and
-    calendar).
-  - `column_vars`: `name => (z × time) matrix` for the column variables.
-  - `surface_vars`: `name => (time,) vector` for the surface variables.
+# Keyword Arguments
+
+  - `z`: Strictly ascending heights of the column levels [m].
+  - `time`: Vector of `DateTime`s, written with `time_attrib`.
+  - `time_attrib`: Attributes of the time variable, giving the CF units and
+    calendar.
+  - `column_vars`: Pairs `name => matrix`, each matrix of shape `(z, time)`.
+  - `surface_vars`: Pairs `name => vector`, each vector over `time`.
   - `site_latitude`, `site_longitude`: Site coordinates [degrees].
-
-Variable names must have units registered in `CANONICAL_UNITS`.
 """
 function write_column_forcing_file(
     path,

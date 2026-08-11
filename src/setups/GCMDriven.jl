@@ -1,26 +1,21 @@
 """
-    GCMDriven — pointwise column IC from GCM forcing files.
+    GCMDriven{P, FT}
 
-Reads time-averaged vertical profiles from a GCM forcing NetCDF file and
-builds 1D interpolators via `ColumnProfiles`. The
-`center_initial_condition` evaluates these profiles at each grid height.
+Single-column setup driven by GCM forcing data.
 
-Surface conditions are read from the same file (mean surface temperature).
-"""
+Time-averaged vertical profiles are read once from a GCM forcing NetCDF file
+and turned into 1D interpolators, which `center_initial_condition` evaluates at
+each grid height. The surface temperature comes from the same file.
 
-"""
-    GCMDriven{FT}
-
-Pointwise column IC driven by GCM forcing NetCDF data.
-
-## Fields
+# Fields
 
   - `external_forcing_file`: Path to the GCM forcing NetCDF file.
-  - `cfsite_number`: Site identifier within the NetCDF file (e.g., `"site23"`).
-  - `profiles`: `ColumnProfiles` of 1D interpolators `(T, u, v, q_tot, ρ)`.
-  - `T_sfc`: Mean surface temperature from the forcing file.
+  - `cfsite_number`: Site identifier within the file, e.g. `"site23"`.
+  - `profiles`: `ColumnProfiles` of interpolators in `T`, `u`, `v`, `q_tot`,
+    and `ρ`.
+  - `T_sfc`: Time-mean surface temperature from the file [K].
 
-## Example
+# Examples
 
 ```julia
 setup = GCMDriven("path/to/HadGEM2-A_amip.2004-2008.07.nc", "site23")

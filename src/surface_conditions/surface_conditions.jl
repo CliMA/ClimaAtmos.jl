@@ -1,9 +1,23 @@
 """
     update_surface_conditions!(Y, p, t)
 
-Updates `p.precomputed.sfc_conditions` based on the current state `Y` and time
-`t`. Skips work if the surface model has no flux parameterization
-(`isnothing(atmos.surface.flux_scheme)`), which is the coupler-handoff case.
+Fill `p.precomputed.sfc_conditions` from the current state `Y` and time `t`.
+
+Called once per explicit precomputed-quantity update, from
+`set_explicit_precomputed_quantities!`. Returns `nothing` early, leaving
+`sfc_conditions` untouched, when `atmos.surface.flux_scheme` is `nothing` (the
+coupler-handoff case, in which an external driver writes the surface fields).
+
+The surface temperature and the flux scheme are resolved once here — not per
+cell — and the boundary overrides are wrapped so that both a scalar
+[`SurfaceBoundaryOverrides`](@ref) and a coupler-provided
+`Fields.Field{<:SurfaceBoundaryOverrides}` broadcast correctly. The per-point
+work is done by [`surface_state_to_conditions`](@ref), broadcast over
+`DataLayout`s (rather than `Field`s) because it mixes surface and first-interior
+values.
+
+See the [Surface Conditions](@ref "Surface Conditions") page for the user-facing
+guide and the Surface Conditions Internals page for the data flow.
 """
 function update_surface_conditions!(Y, p, t)
     atmos = p.atmos
@@ -57,26 +71,48 @@ function update_surface_conditions!(Y, p, t)
     return nothing
 end
 
-# Resolve time-varying prescribed fluxes once per update (not per-cell): a
-# `MoninObukhov` whose `fluxes` is a callable `(t, FT) -> PrescribedFluxes` is
-# evaluated here, before the per-cell broadcast. Everything else passes through.
+"""
+    resolve_flux_scheme(flux_scheme, t, ::Type{FT})
+
+Evaluate a time-varying prescribed-flux closure at time `t`.
+
+A [`MoninObukhov`](@ref) whose `fluxes` field is a callable
+`(t, FT) -> PrescribedFluxes` is replaced by one holding the evaluated fluxes;
+every other flux scheme passes through unchanged. Called once per surface
+update from [`update_surface_conditions!`](@ref), before the per-cell
+broadcast, so the callable is never invoked inside the broadcast kernel.
+"""
 function resolve_flux_scheme(p::MoninObukhov, t, ::Type{FT}) where {FT}
     p.fluxes isa Function || return p
     return MoninObukhov(p.z0m, p.z0b, p.fluxes(t, FT), p.ustar)
 end
 resolve_flux_scheme(p, t, ::Type{FT}) where {FT} = p
 
-# Allow the cache `sfc_setup` to be either a scalar `SurfaceBoundaryOverrides`
-# or a `Fields.Field{<:SurfaceBoundaryOverrides}` (coupler case). Both broadcast
-# correctly inside `update_surface_conditions!`.
+"""
+    boundary_overrides_wrapper(overrides)
+
+Wrap `p.sfc_setup` so that it broadcasts as a single value per surface point.
+
+A scalar [`SurfaceBoundaryOverrides`](@ref) is wrapped in a tuple; a
+`Fields.Field{<:SurfaceBoundaryOverrides}` (the coupler case, one override per
+cell) is unwrapped to its `DataLayout`. Called from
+[`update_surface_conditions!`](@ref).
+"""
 boundary_overrides_wrapper(o::SurfaceBoundaryOverrides) = tuple(o)
 function boundary_overrides_wrapper(o::Fields.Field)
     @assert eltype(o) <: SurfaceBoundaryOverrides
     return Fields.field_values(o)
 end
 
-# Resolve an AnalyticTemperature to a scalar at the broadcast point. Scalars
-# and Field values pass through unchanged.
+"""
+    resolve_T_sfc(T_sfc_in, coords, surface_temp_params, t_time)
+
+Return the surface temperature at one point [K].
+
+An [`AnalyticTemperature`](@ref) is evaluated at `coords` and `t_time`; a scalar
+or an already-resolved per-cell value passes through unchanged. Called from
+[`surface_state_to_conditions`](@ref), inside the per-cell broadcast.
+"""
 resolve_T_sfc(t::AnalyticTemperature, coords, surface_temp_params, t_time) =
     t.f(coords, surface_temp_params, t_time)
 resolve_T_sfc(t, coords, surface_temp_params, t_time) = t
@@ -87,10 +123,15 @@ ifelsenothing(::Nothing, default) = default
 """
     init_sfc_conditions_zero!(p)
 
-Zero-initialize `p.precomputed.sfc_conditions` with safe defaults. Used when
-the surface flux scheme is nothing (the atmos side does not compute surface
-conditions) so that the first `set_precomputed_quantities!` call does not see
-uninitialized memory in downstream consumers like RRTMGP and diagnostic EDMF.
+Fill `p.precomputed.sfc_conditions` with placeholder values and return
+`nothing`.
+
+All fluxes are set to zero, with nonzero placeholders for the quantities that
+downstream consumers divide by or take logs of (`T_sfc = 300` K,
+`ustar = 0.2` m/s, `obukhov_length = 1e-4` m). Used when the flux scheme is
+`nothing`, so that the first `set_precomputed_quantities!` call does not expose
+uninitialized memory to consumers such as RRTMGP and diagnostic EDMF before the
+external driver writes the real surface fields.
 """
 function init_sfc_conditions_zero!(p)
     (; params, atmos) = p
@@ -113,16 +154,49 @@ end
 
 """
     surface_state_to_conditions(
-        overrides, flux_scheme, T_sfc_in,
-        surface_local_geometry,
+        overrides, parameterization, T_sfc_in, surface_local_geometry,
         T_int, ρ_int, q_tot_int, q_liq_int, q_ice_int, u_int, v_int, z_int,
-        thermo_params, surface_fluxes_params, surface_temp_params,
-        atmos,
+        thermo_params, surface_fluxes_params, surface_temp_params, atmos, t_time,
     )
 
-Compute the surface conditions at one point. `T_sfc_in` is either a scalar,
-the resolved temperature field value, or an `AnalyticTemperature` to evaluate
-against the local `coordinates`.
+Compute the surface conditions at one surface point.
+
+Broadcast over the surface by [`update_surface_conditions!`](@ref). The surface
+density comes from `SurfaceFluxes.surface_density` (extrapolated from the first
+interior level), and, for a moist model, the surface air is assumed saturated
+over liquid water unless `overrides.q_vap` says otherwise. The
+`parameterization` selects how `SurfaceFluxes.surface_fluxes` is configured:
+[`ExchangeCoefficients`](@ref) supplies fixed `Cd`/`Ch`, while
+[`MoninObukhov`](@ref) supplies roughness lengths (and gustiness) when no fluxes
+are prescribed, or the prescribed `shf`/`lhf` and `ustar` when they are. A
+[`θAndQFluxes`](@ref) closure is converted here to `shf`/`lhf` using the local
+`ρ_sfc`, `cp_m`, and latent heat of vaporization.
+
+# Arguments
+
+  - `overrides`: Per-point [`SurfaceBoundaryOverrides`](@ref); only `q_vap`, `u`,
+    `v`, and `gustiness` are consumed.
+  - `parameterization`: The [`SurfaceParameterization`](@ref) flux closure, with
+    any time-varying fluxes already resolved by `resolve_flux_scheme`.
+  - `T_sfc_in`: A scalar or per-cell surface temperature [K], or an
+    [`AnalyticTemperature`](@ref) to evaluate at this point (see `resolve_T_sfc`).
+  - `surface_local_geometry`: Local geometry at the surface, supplying the
+    coordinates and the surface normal.
+  - `T_int`, `ρ_int`, `q_tot_int`, `q_liq_int`, `q_ice_int`, `u_int`, `v_int`,
+    `z_int`: First-interior-level temperature [K], density [kg/m³], specific
+    humidities [kg/kg], horizontal velocity components [m/s], and height [m].
+  - `thermo_params`, `surface_fluxes_params`, `surface_temp_params`: Parameter
+    sets for thermodynamics, `SurfaceFluxes`, and the analytic surface
+    temperature.
+  - `atmos`: The `AtmosModel`, used here to detect a `DryModel`.
+  - `t_time`: Simulation time, passed to an `AnalyticTemperature` [s].
+
+# Returns
+
+The NamedTuple built by [`atmos_surface_conditions`](@ref), whose type is given
+by `surface_conditions_type`.
+
+Errors when `overrides.q_vap`, `lhf`, or `q_flux` is specified for a `DryModel`.
 """
 function surface_state_to_conditions(
     overrides::SurfaceBoundaryOverrides,
@@ -226,10 +300,25 @@ function surface_state_to_conditions(
 end
 
 """
-    atmos_surface_conditions(surface_conditions, ρ_sfc, surface_local_geometry)
+    atmos_surface_conditions(
+        surface_fluxes_params, surface_conditions, ρ_sfc, surface_local_geometry,
+    )
 
-Adds local geometry information to the `SurfaceFluxes.SurfaceFluxConditions` struct.
-The resulting values are the ones actually used by ClimaAtmos operator boundary conditions.
+Convert a `SurfaceFluxes.SurfaceFluxConditions` struct into the NamedTuple of
+surface values and covariant flux vectors used by ClimaAtmos.
+
+The scalar fluxes returned by `SurfaceFluxes` are given a direction here: the
+energy and moisture fluxes are projected onto the surface normal, and the
+momentum fluxes `ρτxz`, `ρτyz` are assembled into a tensor. Only the horizontal
+part of the momentum flux is kept (`ρ_flux_uₕ`). The buoyancy flux is computed
+from `shf`, `lhf`, and `ρ_sfc`.
+
+# Returns
+
+`(; T_sfc, q_vap_sfc, ustar, obukhov_length, buoyancy_flux, ρ_flux_uₕ, ρ_flux_h_tot, ρ_flux_q_tot)`, with temperature [K], specific humidity [kg/kg],
+friction velocity [m/s], Obukhov length [m], buoyancy flux [m²/s³], and
+the energy [W/m²] and moisture [kg/m²/s] fluxes as `C3` vectors, positive
+upward. `ρ_flux_q_tot` is always present, even for a `DryModel`.
 """
 function atmos_surface_conditions(
     surface_fluxes_params,
@@ -269,6 +358,13 @@ vector_from_component(f₁, n₁) = f₁ * n₁
 vector_from_component(f₁, L::Geometry.LocalGeometry) =
     vector_from_component(f₁, surface_normal(L))
 
+"""
+    tensor_from_components(f₁₃, f₂₃, L, n₃ = surface_normal(L))
+
+Assemble the vertical fluxes `f₁₃`, `f₂₃` of the two horizontal momentum
+components into the surface momentum-flux tensor `n₃ ⊗ f` at local geometry
+`L`.
+"""
 function tensor_from_components(f₁₃, f₂₃, L, n₃ = surface_normal(L))
     xz = CT12(CT1(unit_basis_vector_data(CT1, L)), L)
     yz = CT12(CT2(unit_basis_vector_data(CT2, L)), L)
@@ -277,9 +373,14 @@ function tensor_from_components(f₁₃, f₂₃, L, n₃ = surface_normal(L))
 end
 
 """
-    surface_conditions_type(atmos_model, FT)
+    surface_conditions_type(atmos, ::Type{FT})
 
-Gets the return type of `surface_conditions` without evaluating the function.
+Return the `NamedTuple` type produced by [`atmos_surface_conditions`](@ref),
+without evaluating it.
+
+Used to allocate `p.precomputed.sfc_conditions` before any surface update has
+run. `ρ_flux_q_tot` is included even for a `DryModel`, because `SurfaceFluxes`
+always returns an evaporation rate.
 """
 function surface_conditions_type(atmos, ::Type{FT}) where {FT}
     energy_flux_names = (:ρ_flux_h_tot,)

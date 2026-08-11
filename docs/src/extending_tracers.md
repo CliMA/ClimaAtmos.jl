@@ -6,10 +6,10 @@ that are handled automatically, see [Passive Tracers](passive_tracers.md).
 
 A working, config-selectable passive tracer already ships with the model:
 setting `chemistry_model: "passive"` enables the tracer `q_gas_A`, threaded
-through `physical_state` and the prognostic-variable construction, with
-`q_gas_A`/`q_gas_Aup` diagnostics. It is exercised by
-`config/model_configs/prognostic_edmfx_bomex_tracerA_column.yml` and is the
-best reference implementation for the steps below.
+through [`physical_state`](@ref ClimaAtmos.Setups.physical_state) and the
+prognostic-variable construction, with `q_gas_A`/`q_gas_Aup` diagnostics. It is
+exercised by `config/model_configs/prognostic_edmfx_bomex_tracerA_column.yml`
+and is the best reference implementation for the steps below.
 
 To add a new passive tracer `A` that is transported through the full
 grid-scale + SGS system, the changes needed are:

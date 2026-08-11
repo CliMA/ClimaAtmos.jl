@@ -9,6 +9,28 @@ import ..lazy
 import ..specific
 import ..NonEquilibriumMicrophysics
 
+"""
+    update_atmospheric_state!(integrator)
+    update_atmospheric_state!(radiation_mode, integrator)
+
+Copy the current model state into the RRTMGP solver's input arrays; return `nothing`.
+
+Called once per radiation callback, i.e. every `dt_rad`, before `RRTMGP.update_fluxes!`.
+The one-argument method dispatches on `integrator.p.atmos.radiation_mode`. Which inputs are
+refreshed depends on the mode:
+
+  - `GrayRadiation`: temperature and pressure only.
+  - All other modes: temperature and pressure, relative humidity and the water vapor volume
+    mixing ratio, the prescribed trace gases, and the aerosol column mass densities.
+  - `AllSkyRadiation` and `AllSkyRadiationWithClearSkyDiagnostics`: additionally the cloud
+    water paths, cloud fraction, and effective radii.
+
+Surface albedo and insolation are *not* set here; the callback sets them separately with
+`set_surface_albedo!` and `set_insolation_variables!` after this function returns.
+
+All updates write into arrays owned by `p.radiation.rrtmgp_solver`, accessed through the
+`RRTMGP` getters. See the radiation docs page, docs/src/radiation.md.
+"""
 update_atmospheric_state!(integrator) =
     update_atmospheric_state!(integrator.p.atmos.radiation_mode, integrator)
 
@@ -38,11 +60,15 @@ end
 import RRTMGP
 
 """
-    update_temperature_pressure!((; u, p, t)::I) where {I}
+    update_temperature_pressure!(integrator)
 
-Update temperature and pressure, given solution `u`, cache `p`
-and simulation time `t`. Updates the surface temperature, layer temperature, and layer
-pressure inputs of `p.radiation.rrtmgp_solver` (via the `RRTMGP` getters).
+Copy the surface temperature, layer temperature, and layer pressure into the RRTMGP solver
+inputs; return `nothing`.
+
+Reads `ᶜp`, `ᶜT`, and `sfc_conditions.T_sfc` from `p.precomputed` and writes them through
+the `RRTMGP.surface_temperature`, `RRTMGP.layer_pressure`, and `RRTMGP.layer_temperature`
+getters. Temperatures outside the lookup-table bounds are clipped by RRTMGP itself, in its
+own input preparation, so no clamping is applied here.
 """
 function update_temperature_pressure!((; u, p, t)::I) where {I}
     (; ᶜp, ᶜT, sfc_conditions) = p.precomputed
@@ -61,7 +87,17 @@ end
 """
     update_relative_humidity!(integrator)
 
-Update relative humidity `ᶜrh`.
+Update the layer relative humidity and the water vapor volume mixing ratio in the RRTMGP
+solver inputs; return `nothing`.
+
+By default both are diagnosed from the model state, with relative humidity clipped to
+`[0, 1]`. When `radiation_mode.idealized_h2o` is set, the relative humidity is instead
+prescribed as a uniform value that ramps linearly from 0 to 0.6 over the first 30 days (to
+absorb the shock of an unrealistic initial condition), and the corresponding `q_tot` is
+filtered to be monotonically decreasing with height before being converted to a vapor
+volume mixing ratio, assuming `q_vap = q_tot`.
+
+Reads `ᶜT`, `ᶜp`, `ᶜq_tot_nonneg`, `ᶜq_liq`, and `ᶜq_ice` from `p.precomputed`.
 """
 function update_relative_humidity!((; u, p, t)::I) where {I}
     (; radiation_mode) = p.atmos
@@ -127,9 +163,16 @@ function update_relative_humidity!((; u, p, t)::I) where {I}
 end
 
 """
-    update_volume_mixing_ratios!((; p, t)::I) where {I}
+    update_volume_mixing_ratios!(integrator)
 
-Update volume mixing ratios.
+Update the prescribed trace-gas volume mixing ratios in the RRTMGP solver inputs; return
+`nothing`.
+
+Only gases configured as time-varying are touched: ozone is evaluated from its
+`TimeVaryingInput` into `p.tracers.o3` and copied into the solver's `"o3"` profile, and
+carbon dioxide is evaluated and set as a single global mean value. Gases held fixed keep
+the values seeded at solver construction. Water vapor is handled by
+`update_relative_humidity!`.
 """
 function update_volume_mixing_ratios!((; u, p, t)::I) where {I}
     (; rrtmgp_solver) = p.radiation
@@ -157,10 +200,18 @@ function update_volume_mixing_ratios!((; u, p, t)::I) where {I}
 end
 
 """
-    update_aerosol_concentrations!((; u, p, t)::I) where {I}
+    update_aerosol_concentrations!(integrator)
 
-Updates aerosol concentrations for supported aerosol names (dust (5 types),
-sea-salt (5 types), sulfates, black-carbon (2 types), organic-carbon (2 types))
+Update the prescribed aerosol fields and the RRTMGP aerosol column mass densities; return
+`nothing`.
+
+Each prescribed aerosol field is first evaluated from its `TimeVaryingInput` at the current
+time. Then, if `radiation_mode.aerosol_radiation` is enabled, the specific mass of each
+supported species is converted to a layer column mass density, `ρ q_aero Δz` [kg/m²], and
+written into the solver; species absent from the configuration are set to zero.
+
+The supported species are dust (5 size bins), sea salt (5 size bins), sulfate, hydrophilic
+and hydrophobic black carbon, and hydrophilic and hydrophobic organic carbon.
 """
 function update_aerosol_concentrations!((; u, p, t)::I) where {I}
     (; radiation_mode) = p.atmos
@@ -228,10 +279,15 @@ end
     ᶜcloud_liquid_water_content(microphysics_model, u, ᶜq_liq)
     ᶜcloud_ice_water_content(microphysics_model, u, ᶜq_ice)
 
-Cloud condensate specific contents seen by radiation. With non-equilibrium
-microphysics, the precomputed `ᶜq_liq` / `ᶜq_ice` include precipitation
-(`q_lcl + q_rai` / `q_icl + q_sno`), so use the prognostic cloud condensate
-only; otherwise fall back to the precomputed values.
+Return the cloud condensate specific contents seen by radiation [kg/kg].
+
+With `NonEquilibriumMicrophysics` the precomputed `ᶜq_liq` and `ᶜq_ice` also include
+precipitation (`q_lcl + q_rai` and `q_icl + q_sno`), which must not contribute to cloud
+optics, so these methods return a lazy broadcast of the prognostic cloud condensate alone,
+floored at zero. For every other microphysics model the precomputed values already exclude
+precipitation and are passed through unchanged.
+
+Called from `update_cloud_properties!`.
 """
 ᶜcloud_liquid_water_content(::NonEquilibriumMicrophysics, u, ᶜq_liq) =
     @. lazy(max(0, specific(u.c.ρq_lcl, u.c.ρ)))
@@ -241,18 +297,28 @@ only; otherwise fall back to the precomputed values.
 ᶜcloud_ice_water_content(microphysics_model, u, ᶜq_ice) = ᶜq_ice
 
 """
-    update_cloud_properties((; u, p, t)::I) where {I}
+    update_cloud_properties!(integrator)
 
-Updates cloud properties:
-Updates `cloud_liquid_water_content (ᶜlwp)`, `cloud_ice_water_content (ᶜiwp)`,
-`cloud_fraction (ᶜfrac)`, `ᶜliquid_water_mass_concentration`, `ᶜreliq`, `ᶜreice`.
-Updates aerosol properties for the following supported symbols:
-seasalt_names = [:SSLT01, :SSLT02, :SSLT03, :SSLT04, :SSLT05]
-dust_names = [:DST01, :DST02, :DST03, :DST04, :DST05]
-SO4_names = [:SO4]
-When prescribed cloud fields are used, time-varying interpolation is applied using
-`ClimaUtilities` functions.
-No updates are applied when `radiation_mode.idealized_clouds` is true.
+Update the cloud inputs of the RRTMGP solver; return `nothing`.
+
+Writes the in-cloud liquid and ice water paths, the cloud fraction, and the liquid and ice
+effective radii through the `RRTMGP.cloud_liquid_water_path`, `RRTMGP.cloud_ice_water_path`,
+`RRTMGP.cloud_fraction`, `RRTMGP.cloud_liquid_effective_radius`, and
+`RRTMGP.cloud_ice_effective_radius` getters. Water paths are grid-mean `ρ q Δz` divided by
+the cloud fraction (floored at `eps`) to make them in-cloud values, and are converted to
+the units RRTMGP expects: g/m² for the paths and microns for the radii.
+
+The liquid effective radius follows the Liu and Hallett (1997) parameterization, evaluated
+with a droplet number concentration diagnosed by `ml_N_cloud_liquid_droplets` from the
+prescribed sea-salt, dust, and sulfate mass concentrations and the column liquid water
+path; the ice effective radius is a constant. Cloud condensate and cloud fraction come from
+the model state, or from the ERA5 fields in `p.radiation.prescribed_clouds_field` when
+`radiation_mode.cloud isa PrescribedCloudInRadiation`; those prescribed fields are
+re-evaluated from their `TimeVaryingInput`s first, regardless of the branch below.
+
+Nothing is written when `radiation_mode.idealized_clouds` is true, since those cloud layers
+are prescribed once at solver construction. Uses `p.scratch.ᶜtemp_scalar`,
+`ᶜtemp_scalar_2`, `ᶜtemp_scalar_3`, and `temp_field_level`.
 """
 function update_cloud_properties!((; u, p, t)::I) where {I}
     (; radiation_mode) = p.atmos
@@ -377,12 +443,31 @@ end
 """
     ml_N_cloud_liquid_droplets(cmc, c_dust, c_seasalt, c_SO4, q_liq)
 
-  - cmc - a struct with cloud and aerosol parameters
-  - c_dust, c_seasalt, c_SO4 - dust, seasalt and ammonium sulfate mass concentrations [kg/kg]
-  - q_liq - liquid water specific humidity
+Return the cloud droplet number concentration diagnosed from the aerosol loading and the
+cloud liquid water [1/m³].
 
-Returns the liquid cloud droplet number concentration diagnosed based on the
-aerosol loading and cloud liquid water.
+The data-driven closure is log-linear about a reference state,
+
+```math
+N = N₀ \\left[1 + Σ_i α_i \\, \\log(c_i / c_{0,i}) + α_{q_l} \\log(q_l / q_{0,l})\\right],
+```
+
+summed over dust, sea salt, and ammonium sulfate. Each argument is floored at `eps` before
+the logarithm, and the calibration coefficients `α` and reference values `c₀`, `q₀` come
+from `cmc.aml`.
+
+# Arguments
+
+  - `cmc`: Cloud and aerosol parameter set (`CAP.microphysics_cloud_params`), providing
+    `cmc.aml` and the reference concentration `cmc.N_cloud_liquid_droplets` [1/m³].
+  - `c_dust`, `c_seasalt`, `c_SO4`: Dust, sea-salt, and ammonium sulfate mass concentrations
+    [kg/kg].
+  - `q_liq`: Cloud liquid water content, compared against the reference `q₀_liq`.
+
+!!! note
+
+    `q₀_liq` is calibrated as a specific humidity [kg/kg], but `update_cloud_properties!`
+    passes the column-integrated liquid water path [kg/m²] for `q_liq`.
 """
 function ml_N_cloud_liquid_droplets(cmc, c_dust, c_seasalt, c_SO4, q_liq)
     # We can also add w, T, RH, w' ...
