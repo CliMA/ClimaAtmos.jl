@@ -1067,7 +1067,7 @@ steps:
         retry: *retry_policy
         command: >
           cd perf/run-and-time &&
-          julia --project -e 'using Pkg; Pkg.instantiate(;verbose=true)' &&
+          julia --project -e 'using Pkg; Pkg.Registry.update(); Pkg.Pkg.instantiate(;verbose=true)' &&
           julia --color=yes --project ci_test_models.jl
         agents:
           slurm_mem: 20GB
