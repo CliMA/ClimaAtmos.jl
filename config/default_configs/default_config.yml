@@ -403,6 +403,9 @@ approximate_linear_solve_iters:
 output_default_diagnostics:
   help: "Output the default diagnostics associated to the selected atmospheric model"
   value: true
+debug_tendency_diagnostics:
+  help: "Include ~96 per-process tendency-field diagnostics for debugging (3D center-space fields; short names of the form `tn_<field>_<process>`, plus the aggregate updraft ρa tendency `tn_sgsrhoa_aggregate`). Each sample runs one extra tendency evaluation into a persistent scratch FieldVector; enable only for debugging and use a coarse output cadence."
+  value: false
 enable_diagnostics:
   help: "Set to false to fully disable the diagnostics"
   value: true

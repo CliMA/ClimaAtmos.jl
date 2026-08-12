@@ -68,8 +68,13 @@ function setup_diagnostics_and_writers(
     output_dir;
     verbose = false,
 )
-    (; default, additional, interpolation_num_points, output_at_levels) =
-        diagnostics_config
+    (;
+        default,
+        additional,
+        interpolation_num_points,
+        output_at_levels,
+        debug_tendency,
+    ) = diagnostics_config
 
     all_diagnostics = []
 
@@ -109,6 +114,20 @@ function setup_diagnostics_and_writers(
         append!(all_diagnostics, default_diag_list)
         verbose &&
             @info "Added $(length(default_diag_list)) default ClimaAtmos diagnostics"
+    end
+
+    # Add debug tendency diagnostics if enabled
+    if debug_tendency
+        sim_duration = t_end - dt
+        tendency_diag_list = CAD.tendency_debug_default_diagnostics(
+            netcdf_writer,
+            sim_duration,
+            start_date,
+            t_start,
+        )
+        append!(all_diagnostics, tendency_diag_list)
+        verbose &&
+            @info "Added $(length(tendency_diag_list)) debug tendency diagnostics"
     end
 
     # Add user-provided diagnostics

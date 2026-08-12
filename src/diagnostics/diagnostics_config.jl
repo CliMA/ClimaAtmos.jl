@@ -6,8 +6,8 @@ Specify which diagnostics a simulation produces and how their NetCDF output is s
 
 A single `DiagnosticsConfig` value is passed to
 [`AtmosSimulation`](@ref ClimaAtmos.AtmosSimulation) through its `diagnostics` keyword
-argument. A simulation produces no diagnostics when `default = false` and `additional` is
-empty. The type parameter `A` is the type of the `additional` collection.
+argument. A simulation produces no diagnostics when `default = false`, `debug_tendency = false`,
+and `additional` is empty. The type parameter `A` is the type of the `additional` collection.
 
 # Fields
 
@@ -25,6 +25,13 @@ empty. The type parameter `A` is the type of the `additional` collection.
     `(180, 90, 10)`. When `nothing`, the default for the underlying space is used.
   - `output_at_levels::Bool = true`: Whether to write on model levels, applying no vertical
     interpolation. Set to `false` to interpolate to pressure levels instead.
+  - `debug_tendency::Bool = false`: include the column-integrated per-process
+    tendency diagnostics (short names of the form `<field>_tend_<process>_colint`).
+    Debug-only; each sample allocates a full `Y`-sized `FieldVector` and runs
+    one extra tendency evaluation.
+
+A simulation produces no diagnostics when `default = false`, `debug_tendency = false`,
+and `additional` is empty.
 
 # Examples
 
@@ -50,6 +57,7 @@ simulation = CA.AtmosSimulation{Float64}(; diagnostics = config)
     additional::A = ()
     interpolation_num_points::Union{Nothing, Tuple, AbstractVector} = nothing
     output_at_levels::Bool = true
+    debug_tendency::Bool = false
 end
 
 # `reduction` is a friendlier alias for the YAML schema's `reduction_time` key.
