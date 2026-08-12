@@ -28,6 +28,7 @@ steps:
     command:
       - echo $$JULIA_DEPOT_PATH
       - echo "--- Instantiate .buildkite"
+      - julia --project=.buildkite -e 'using Pkg; Pkg.add(Pkg.PackageSpec(;name="ClimaCore", rev="dy/field_fusion"))'
       - julia --project=.buildkite -e 'using Pkg; Pkg.instantiate(;verbose=true, update_registry=false); Pkg.precompile(;strict=true); Pkg.status()'
 
     agents:
