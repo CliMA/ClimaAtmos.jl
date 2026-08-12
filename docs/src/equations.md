@@ -108,7 +108,7 @@ We make use of the following operators.
 
   - ``\boldsymbol{F}_R`` are the radiative fluxes: these are assumed to align vertically (i.e. the horizontal contravariant components are zero), and are constructed at cell faces from [RRTMGP.jl](https://github.com/CliMA/RRTMGP.jl).
 
-  - ``\nu_u``, ``\nu_h``, and ``\nu_\chi`` are hyperdiffusion coefficients, and ``c`` is the divergence damping factor. In the code there are two coefficients: ``\nu_u`` (scaled with the cube of the element width) and ``\nu_h = \nu_\chi = \nu_u/\mathrm{Pr}``; precipitating tracers are additionally rescaled by `tracer_hyperdiffusion_factor`.
+  - ``\nu_u``, ``\nu_h``, and ``\nu_\chi`` are hyperdiffusion coefficients, and ``c`` is the divergence damping factor. In the code there are two coefficients: ``\nu_u`` (scaled with the cube of the element width) and ``\nu_h = \nu_\chi = \nu_u/\mathrm{Pr}``. Rain, snow, and rain number density receive no hyperdiffusion; the remaining sedimenting cloud species inherit their share of the ``\rho q_{\text{tot}}`` tendency by proportional distribution.
 
   - No-flux boundary conditions are enforced by requiring the third contravariant component ``\boldsymbol{\tilde{u}}^{v}`` of the face-valued velocity at the boundary to be zero. The vertical covariant velocity component is computed as
 

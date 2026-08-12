@@ -437,17 +437,18 @@ DSSed Laplacians in `p.hyperdiff`.
 
 Increments (each with a minus sign):
 
-  - Every grid-mean tracer `Yₜ.c.ρχ`: `ν * ∇⋅(ρ ∇∇²χ)`, where `ν` is `ν₄_scalar` for
-    most tracers but `α_hyperdiff_tracer * ν₄_scalar` for the microphysics species
-    (`ρq_lcl`, `ρq_icl`, `ρq_rai`, `ρq_sno`, `ρn_lcl`, `ρn_rai`); the parameter
-    `α_hyperdiff_tracer` defaults to 0, disabling hyperdiffusion of sedimenting
-    species.
-  - `Yₜ.c.ρ`: the `ρq_tot` term is also added to the density tendency so total water
-    diffusion moves mass consistently.
+  - `ρq_tot` is hyperdiffused on `q_tot_eff = q_tot - q_rai - q_sno` and the
+    resulting mass tendency is applied to `Yₜ.c.ρq_tot` and `Yₜ.c.ρ` (so water
+    hyperdiffusion moves mass consistently). Cloud mass species (`ρq_lcl`,
+    `ρq_icl`) receive their share by pure scaling of that tendency with the
+    clipped ratio `min(q_μ/q_tot_eff, 1)`; their number densities scale
+    proportionally. Rain, snow, and rain number density (`ρq_rai`, `ρq_sno`,
+    `ρn_rai`) receive no hyperdiffusion.
+  - Every passive (non-microphysics) grid-mean tracer `Yₜ.c.ρχ`:
+    `ν₄_scalar * ∇⋅(ρ ∇∇²χ)`.
   - For `PrognosticEDMFX`, `Yₜ.c.sgsʲs.:(j).q_tot` and the compensating
     `Yₜ.c.sgsʲs.:(j).ρa` term, plus every auto-discovered SGS tracer (with its own
-    prep → DSS → apply cycle through the shared scratch field `ᶜ∇²sgs_tracerʲs`,
-    applying the microphysics rescaling to microphysics species).
+    prep → DSS → apply cycle through the shared scratch field `ᶜ∇²sgs_tracerʲs`).
 
 Requires DSS to have been applied to the pairs from
 `dss_hyperdiffusion_tendency_pairs`; does nothing when `p.atmos.hyperdiff` is
