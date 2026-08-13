@@ -202,38 +202,59 @@ base_values(prob, m) = jw_values(m)
 
 
 """
-    isothermal_discrete_hydrostatic!(ᶜp, ᶜρ, T₀, R_d, grav, ᶜz)
+    discrete_hydrostatic_p!(ᶜp, ᶜρ, ᶜT, R_d, ᶜΦ_eff)
 
-EXACT discrete hydrostatic state for isothermal columns: with ρ = p/(R_d T₀)
-the centered face balance (p[v+1]−p[v])/Δz = −g(ρ[v]+ρ[v+1])/2 has the
-per-interval geometric solution p[v+1] = p[v](1%E2%88%92%CE%B2)/(1+β), β = gΔz/(2R_d T₀).
-Both p and ρ are smooth (no checkerboard mode, no cumulative drift), so the
-vertical balance closes to roundoff WITHOUT poisoning the horizontal PGF
-over terrain — the alternatives both fail there (ρ-correction: eigenvalue
-−1 checkerboard δρ, 64-covariant residual; p-integration: cumulative O(Δz²)
-error amplified 1/ρ aloft, 827). Valid on stretched/warped grids (the
-relation is exact per interval).
+EXACT discrete hydrostatic state for a prescribed center temperature
+profile: keep the analytic T, recompose p above the bottom center so the
+centered face balance ᶠgradᵥ(p) = −If(ρ)·ᶠgradᵥ(Φ_eff) holds to roundoff
+with ρ = p/(R_d T). With the arithmetic-mean If, the balance per interval
+
+    p[v+1] − p[v] = −(ΔΦ/2)(p[v]/(R_d T[v]) + p[v+1]/(R_d T[v+1]))
+
+has the generalized product solution
+
+    p[v+1] = p[v] (1 − β_v)/(1 + β_{v+1}),   β_v = ΔΦ/(2 R_d T[v]),
+
+(ΔΦ = Φ_eff[v+1] − Φ_eff[v] of the same interval in both factors; for
+T ≡ T₀ this reduces bitwise to the isothermal geometric solution). Both p
+and ρ are smooth — the deviation from the analytic p is O(Δz²) and
+COLUMN-SMOOTH, so the vertical balance closes to roundoff WITHOUT poisoning
+the horizontal PGF over terrain. The alternatives both fail there
+(ρ-correction: eigenvalue −1 checkerboard δρ, 64-covariant residual;
+p-integration: cumulative O(Δz²) error amplified 1/ρ aloft, 827). Valid on
+stretched/warped grids (the relation is exact per interval).
+
+Choice of Φ_eff (measured, docs/vi_kep_face_terms.md §8):
+
+  - Shear-free slab (MountainWaveDG): Φ + K. The w-equation balances ∇p/ρ
+    against ∇(Φ+K), and near steep surfaces K varies through the kinematic
+    surface w, so it must enter the effective geopotential or the start is
+    impulsively unbalanced (measured max_df 28 covariant at slope 0.65
+    with Φ alone).
+  - Sheared jet (sphere problems): Φ ONLY. The analytic JW06 state is
+    columnwise hydrostatic (∂p/∂z = −ρg exactly); its ᶠgradᵥ(K) is
+    compensated by the Lamb shear term to O(Δz²) (the staggered ∇K/Lamb
+    cancellation), so folding K into Φ_eff would UNBALANCE the start by the
+    full shear term u·∂u/∂z. The JW06 jet vanishes at z = 0, so the
+    surface-w K contribution that forced Φ+K on the slab is negligible.
 """
-function isothermal_discrete_hydrostatic!(ᶜp, ᶜρ, T₀, R_d, ᶜΦK)
-    # ᶜΦK = Φ + K: the w-equation balances ∇p/ρ against ∇(Φ+K), so K
-    # (large near steep surfaces through the kinematic w) must enter the
-    # effective geopotential or the start is impulsively unbalanced
-    # (measured max_df 28 covariant at slope 0.65 with Φ alone)
+function discrete_hydrostatic_p!(ᶜp, ᶜρ, ᶜT, R_d, ᶜΦ_eff)
     p_par = parent(ᶜp)
-    ϕ_par = parent(ᶜΦK)
+    T_par = parent(ᶜT)
+    ϕ_par = parent(ᶜΦ_eff)
     for v in 1:(size(p_par, 1) - 1)
         @views @. p_par[v + 1, :, :, :, :] =
             p_par[v, :, :, :, :] * (
                 1 -
                 (ϕ_par[v + 1, :, :, :, :] - ϕ_par[v, :, :, :, :]) /
-                (2 * R_d * T₀)
+                (2 * R_d * T_par[v, :, :, :, :])
             ) / (
                 1 +
                 (ϕ_par[v + 1, :, :, :, :] - ϕ_par[v, :, :, :, :]) /
-                (2 * R_d * T₀)
+                (2 * R_d * T_par[v + 1, :, :, :, :])
             )
     end
-    @. ᶜρ = ᶜp / (R_d * T₀)
+    @. ᶜρ = ᶜp / (R_d * ᶜT)
     return ᶜp
 end
 
@@ -250,14 +271,6 @@ function initial_state_fddg(m::DGModel{FT}) where {FT}
 
     # ρe such that the diagnosed pressure is exactly the analytic p
     ᶜK = @. (uE^2 + uN^2) / 2
-    if m.prob isa MountainWaveDG
-        # exact smooth discrete hydrostatics for the isothermal column,
-        # balanced against the effective geopotential Φ + K
-        ᶜΦK = @. c.grav * z + ᶜK
-        isothermal_discrete_hydrostatic!(ᶜp_ana, ᶜρ, FT(m.prob.T₀), c.R_d, ᶜΦK)
-    else
-        discrete_hydrostatic_ρ!(ᶜρ, ᶜp_ana, z, c.grav)
-    end
     ᶜρe = @. c.cv_d * ᶜp_ana / c.R_d +
              ᶜρ * (ᶜK + c.grav * z - c.cv_d * c.T_tri)
 
@@ -322,14 +335,13 @@ function initial_state_vi(m::DGModel{FT}) where {FT}
         m.ops.Ic(dot(C123(ᶠw), CT123(ᶠw))) +
         2 * dot(CT123(ᶜuₕ), m.ops.Ic(C123(ᶠw)))
     ) / 2
-    if m.prob isa MountainWaveDG
-        # exact smooth discrete hydrostatics for the isothermal column,
-        # balanced against the effective geopotential Φ + K
-        ᶜΦK = @. c.grav * z + ᶜK
-        isothermal_discrete_hydrostatic!(ᶜp_ana, ᶜρ, FT(m.prob.T₀), c.R_d, ᶜΦK)
-    else
-        discrete_hydrostatic_ρ!(ᶜρ, ᶜp_ana, z, c.grav)
-    end
+    # Exact smooth discrete hydrostatics (generalized product recursion);
+    # Φ_eff per problem class — see the discrete_hydrostatic_p! docstring:
+    # Φ + K on the shear-free slab (surface-w K structure), Φ ONLY under
+    # the sheared jet (ᶠgradᵥ(K) pairs with the Lamb term, not the PGF).
+    ᶜΦ_eff =
+        m.prob isa MountainWaveDG ? (@. c.grav * z + ᶜK) : (@. c.grav * z)
+    discrete_hydrostatic_p!(ᶜp_ana, ᶜρ, T, c.R_d, ᶜΦ_eff)
     ᶜρe = @. c.cv_d * ᶜp_ana / c.R_d +
              ᶜρ * (ᶜK + c.grav * z - c.cv_d * c.T_tri)
 

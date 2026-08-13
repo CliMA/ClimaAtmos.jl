@@ -70,22 +70,26 @@ function compute_tendency_fddg!(
 
     # --- Horizontal: FDDG volume + KG interfaces, full system ---
     y = map(
-        (ρi, ρei, ei, pi, uvi, u1i, u2i, u3i, E1i, E2i, E3i, λi) -> (;
+        (ρi, ρei, ei, pi, uvi, u1i, u2i, u3i, E1i, E2i, E3i, λi, Φi) -> (;
             ρ = ρi, ρe = ρei, e = ei, p = pi, uv = uvi,
             u1 = u1i, u2 = u2i, u3 = u3i,
-            E1 = E1i, E2 = E2i, E3 = E3i, λ = λi,
+            E1 = E1i, E2 = E2i, E3 = E3i, λ = λi, Φ = Φi,
         ),
-        ρ, ρe, e, p, uv, u1, u2, u3, E1, E2, E3, λ,
+        ρ, ρe, e, p, uv, u1, u2, u3, E1, E2, E3, λ, ᶜΦ,
     )
     dy_mw = map(
         _ -> (ρ = FT(0), ρe = FT(0), ρu1 = FT(0), ρu2 = FT(0), ρu3 = FT(0)),
         ρ,
     )
-    Operators.add_flux_differencing_divergence!(
-        Operators.kennedy_gruber_cartesian_flux,
-        dy_mw,
-        y,
-    )
+    # wb_gravity: KG plus the well-balanced two-point geopotential
+    # fluctuation (Waruszewski et al. 2022 Eq. 76) — the along-surface
+    # ρ∇Φ term the Cartesian core otherwise omits over terrain. Identical
+    # on flat grids ([[Φ]] ≡ 0 along levels); interfaces unchanged
+    # (Φ single-valued at faces).
+    volume_flux =
+        m.prob.wb_gravity ? Operators.kennedy_gruber_gravity_cartesian_flux :
+        Operators.kennedy_gruber_cartesian_flux
+    Operators.add_flux_differencing_divergence!(volume_flux, dy_mw, y)
     Operators.add_numerical_flux_internal!(m.interface_flux_fn, dy_mw, y)
     @. dYc.ρ = dy_mw.ρ / lgeom_c.WJ
     @. dYc.ρe = dy_mw.ρe / lgeom_c.WJ

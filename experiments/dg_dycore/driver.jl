@@ -47,7 +47,10 @@ function problem_from_yaml(path)
         ("dt_save", :dt_save, FT),
         ("ndiag", :ndiag, Int),
     )
-    fddg_only = (("interface_flux", :interface_flux, Symbol),)
+    fddg_only = (
+        ("interface_flux", :interface_flux, Symbol),
+        ("wb_gravity", :wb_gravity, Bool),
+    )
     vi_only = (
         ("momentum_adv", :momentum_adv, Symbol),
         ("face_set", :face_set, Symbol),

@@ -28,7 +28,7 @@ import ClimaCore: Geometry
         sim = DG.DGSimulation(prob)
         dY = similar(sim.Y₀)
         DG.rhs_vi!(dY, sim.Y₀, sim.model, 0.0)
-        # vertical balance at roundoff (isothermal_discrete_hydrostatic!)
+        # vertical balance at roundoff (discrete_hydrostatic_p!, Φ + K)
         @test maximum(abs, parent(dY.f.w)) < 1e-8
         r = maximum(abs, parent(Geometry.UVVector.(dY.c.uₕ)))
         if ze == 20

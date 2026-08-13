@@ -27,6 +27,13 @@ Keywords (defaults in parentheses):
     when helem or dt change.
   - `interface_flux` (`:rusanov`): `:rusanov` or `:roe` (wave-selective,
     Harten-floored — the pure-KEP interface)
+  - `wb_gravity` (`false`): well-balanced two-point geopotential
+    fluctuation in the horizontal volume kernel (Waruszewski et al. 2022,
+    Eq. 76) — supplies the along-surface ``ρ∇Φ`` term the Cartesian core
+    otherwise omits over terrain, in a form that cancels the along-surface
+    PGF pairwise on isothermal hydrostatic states. Interface fluxes are
+    unchanged (Φ is single-valued at faces). Flat grids: identical
+    tendencies (the fluctuation is exactly zero)
   - `zstretch` (`nothing`): `(dz_bottom, dz_top)` [m] stretched vertical grid
   - `sponge_τ` (1200.0) [s], `sponge_depth` (7.5e3) [m]: w-sponge peak
     rate 1/τ over the top `sponge_depth`; `τ = Inf` disables (canonical)
@@ -56,6 +63,7 @@ Base.@kwdef struct BaroclinicWaveFDDG{FT <: AbstractFloat}
     κ₄::Union{Nothing, FT} = nothing
     κ₄_frac::Union{Nothing, FT} = nothing
     interface_flux::Symbol = :rusanov
+    wb_gravity::Bool = false
     zstretch::Union{Nothing, Tuple{FT, FT}} = nothing
     sponge_τ::FT = 1200.0
     sponge_depth::FT = 7.5e3
