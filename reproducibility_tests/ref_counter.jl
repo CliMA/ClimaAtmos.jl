@@ -1,4 +1,4 @@
-398
+399
 
 # **README**
 #
@@ -32,6 +32,10 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+399
+- Change entrainment formula, which results in floating point differences due to
+  changes in order of operations.
+
 398
 - Make rain sediment with non-constant velocity
 

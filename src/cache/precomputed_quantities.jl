@@ -404,6 +404,7 @@ function precomputed_quantities(Y, atmos)
         (;
             ρtke_flux = similar(Fields.level(Y.f, half), C3{FT}),
             ᶜentr_vel_scaleʲs = similar(Y.c, NTuple{n, FT}),
+            ᶜentr_nonvel_rateʲs = similar(Y.c, NTuple{n, FT}),
             ᶜturb_entrʲs = similar(Y.c, NTuple{n, FT}),
             ᶜarea_bounding_entr_detrʲs = similar(Y.c, NTuple{n, FT}),
             ᶜρ_diffʲs = similar(Y.c, NTuple{n, FT}),

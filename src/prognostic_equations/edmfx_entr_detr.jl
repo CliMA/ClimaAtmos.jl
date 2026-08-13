@@ -118,39 +118,63 @@ which damps entrainment near the upper bound `a_max`. Together they keep
 end
 
 """
-    detr_buoy_inv_time_scale(Δwʲ, Δbuoyʲ, detr_buoy_inv_tau_max)
+    entr_buoy_inv_time_scale(Δwʲ, Δbuoyʲ, entr_detr_buoy_inv_tau_max)
+
+Clipped inverse buoyancy time-scale [1/s] used by the buoyancy-driven
+entrainment branch:
+
+    τ⁻¹_buoy = min(entr_detr_buoy_inv_tau_max,
+                   max(Δbuoyʲ, 0) / max(eps, |Δwʲ|))
+
+Only positive buoyancy contributes (a negatively buoyant plume detrains rather
+than entrains), and the rate is capped at `entr_detr_buoy_inv_tau_max` so a
+vanishing `Δwʲ` doesn't produce an unbounded rate.
+"""
+@inline function entr_buoy_inv_time_scale(Δwʲ, Δbuoyʲ, entr_detr_buoy_inv_tau_max)
+    FT = typeof(Δwʲ)
+    return min(
+        entr_detr_buoy_inv_tau_max,
+        max(Δbuoyʲ, FT(0)) / max(eps(FT), abs(Δwʲ)),
+    )
+end
+
+"""
+    detr_buoy_inv_time_scale(Δwʲ, Δbuoyʲ, entr_detr_buoy_inv_tau_max)
 
 Clipped inverse buoyancy time-scale [1/s] used by the buoyancy-driven
 detrainment branch:
 
-    τ⁻¹_buoy = min(detr_buoy_inv_tau_max,
+    τ⁻¹_buoy = min(entr_detr_buoy_inv_tau_max,
                    |min(Δbuoyʲ, 0)| / max(eps, |Δwʲ|))
 
 Only negative buoyancy contributes (positive buoyancy doesn't detrain), and
-the rate is capped at `detr_buoy_inv_tau_max` so a vanishing `Δwʲ` doesn't
+the rate is capped at `entr_detr_buoy_inv_tau_max` so a vanishing `Δwʲ` doesn't
 produce an unbounded rate.
 
 Extracted as a helper so it can be reused by `detrainment_rate` (the
 explicit detrainment closure) and the implicit ρa solve (where the same
 buoyancy-detrainment piece appears in the `(ε − δ)` denominator).
 """
-@inline function detr_buoy_inv_time_scale(Δwʲ, Δbuoyʲ, detr_buoy_inv_tau_max)
+@inline function detr_buoy_inv_time_scale(Δwʲ, Δbuoyʲ, entr_detr_buoy_inv_tau_max)
     FT = typeof(Δwʲ)
     return min(
-        detr_buoy_inv_tau_max,
+        entr_detr_buoy_inv_tau_max,
         abs(min(Δbuoyʲ, FT(0))) / max(eps(FT), abs(Δwʲ)),
     )
 end
 
 """
-    compute_entrainment(ᶜentr_vel_scale, ᶜarea_bounding_entr_detr, ᶜwʲ)
+    compute_entrainment(ᶜentr_vel_scale, ᶜentr_nonvel_rate,
+                        ᶜarea_bounding_entr_detr, ᶜwʲ)
 
-Total entrainment rate [1/s] as the sum of a velocity-proportional term
-and the positive part of the signed area-bounding rate:
+Total entrainment rate [1/s], assembled from the three precomputed pieces:
 
-    entr = entr_vel_scale * |wʲ| + max(0, area_bounding_entr_detr)
+    entr = entr_vel_scale * |wʲ|           # velocity-proportional  [1/m] * [m/s]
+         + entr_nonvel_rate                # buoyancy-driven + constant [1/s]
+         + max(0, area_bounding_entr_detr)  # area-bounding          [1/s]
 
-`entr_vel_scale` [1/m] is precomputed by `entrainment_velocity_scale`, and
+`entr_vel_scale` [1/m] is precomputed by `entrainment_velocity_scale`,
+`entr_nonvel_rate` [1/s] by `entrainment_nonvel_rate`, and
 `area_bounding_entr_detr` [1/s] is the signed rate produced by
 `area_bounding_entr_detr` (positive ⇒ this entrainment branch,
 negative ⇒ the detrainment branch in `compute_detrainment`).
@@ -158,10 +182,12 @@ negative ⇒ the detrainment branch in `compute_detrainment`).
 """
 compute_entrainment(
     ᶜentr_vel_scale,
+    ᶜentr_nonvel_rate,
     ᶜarea_bounding_entr_detr,
     ᶜwʲ,
 ) =
     ᶜentr_vel_scale * abs(ᶜwʲ) +
+    ᶜentr_nonvel_rate +
     max(zero(ᶜarea_bounding_entr_detr), ᶜarea_bounding_entr_detr)
 
 """
@@ -174,12 +200,13 @@ compute_entrainment(
 Velocity-scaling prefactor [1/m] for the model-specific entrainment rate.
 The total entrainment rate [1/s] is assembled by `compute_entrainment` as
 
-    entr = entr_vel_scale * abs(wʲ) + max(0, area_bounding_entr_detr)
+    entr = entr_vel_scale * abs(wʲ) + entr_nonvel_rate
+         + max(0, area_bounding_entr_detr)
 
-where the second term comes from `area_bounding_entr_detr` (its
-positive branch). `model_option` selects the entrainment model:
+where the second term comes from `entrainment_nonvel_rate` and the
+third from `area_bounding_entr_detr` (its positive branch).
+`model_option` selects the entrainment model:
 
-  - `NoEntrainment`: returns zero.
   - `PiGroupsEntrainment`: `Π`-group closure
     (`calculate_pi_groups`), `entr_vel_scale = limiter · max(0, Σᵢ cᵢ|Πᵢ| + c₆) / (ᶜz - z_sfc)` with the coefficients
     `entr_param_vec`.
@@ -212,26 +239,6 @@ All state arguments are cell-centered.
 
 The non-negative velocity-scaling prefactor [1/m].
 """
-function entrainment_velocity_scale(
-    thermo_params,
-    turbconv_params,
-    ᶜz,
-    z_sfc,
-    ᶜp,
-    ᶜρ,
-    ᶜaʲ,
-    ᶜwʲ,
-    ᶜRHʲ,
-    ᶜbuoyʲ,
-    ᶜw⁰,
-    ᶜRH⁰,
-    ᶜbuoy⁰,
-    ᶜtke,
-    ::NoEntrainment,
-)
-    return zero(eltype(thermo_params))
-end
-
 function entrainment_velocity_scale(
     thermo_params,
     turbconv_params,
@@ -306,7 +313,8 @@ function entrainment_velocity_scale(
     ::InvZEntrainment,
 )
     FT = eltype(thermo_params)
-    entr_vel_scale_param = CAP.entr_coeff(turbconv_params)
+    entr_inv_length = CAP.entr_inv_length(turbconv_params)
+    entr_coeff = CAP.entr_coeff(turbconv_params)
 
     elev_above_sfc = ᶜz - z_sfc
     # If elevation above surface is not positive, terms like 1/elev_above_sfc
@@ -316,8 +324,52 @@ function entrainment_velocity_scale(
     end
 
     area_limiter_factor = upper_area_limiter_factor(ᶜaʲ, turbconv_params)
-    entr_vel_scale = area_limiter_factor * entr_vel_scale_param / elev_above_sfc
+    entr_vel_scale =
+        area_limiter_factor * (entr_inv_length + entr_coeff / elev_above_sfc)
     return max(0, entr_vel_scale)
+end
+
+"""
+    entrainment_nonvel_rate(turbconv_params, ᶜaʲ, ᶜwʲ, ᶜbuoyʲ, ᶜw⁰, ᶜbuoy⁰,
+                            model_option::AbstractEntrainmentModel)
+
+The entrainment rate [1/s] carried by the terms that are not proportional to
+`|wʲ|`.
+"""
+function entrainment_nonvel_rate(
+    turbconv_params,
+    ᶜaʲ,
+    ᶜwʲ,
+    ᶜbuoyʲ,
+    ᶜw⁰,
+    ᶜbuoy⁰,
+    ::AbstractEntrainmentModel,
+)
+    return zero(ᶜaʲ)
+end
+
+function entrainment_nonvel_rate(
+    turbconv_params,
+    ᶜaʲ,
+    ᶜwʲ,
+    ᶜbuoyʲ,
+    ᶜw⁰,
+    ᶜbuoy⁰,
+    ::InvZEntrainment,
+)
+    entr_buoy_coeff = CAP.entr_buoy_coeff(turbconv_params)
+    entr_detr_buoy_inv_tau_max = CAP.entr_detr_buoy_inv_tau_max(turbconv_params)
+    entr_inv_tau = CAP.entr_inv_tau(turbconv_params)
+
+    buoy_rate =
+        entr_buoy_coeff * entr_buoy_inv_time_scale(
+            ᶜwʲ - ᶜw⁰,
+            ᶜbuoyʲ - ᶜbuoy⁰,
+            entr_detr_buoy_inv_tau_max,
+        )
+
+    area_limiter_factor = upper_area_limiter_factor(ᶜaʲ, turbconv_params)
+    return area_limiter_factor * (buoy_rate + entr_inv_tau)
 end
 
 """
@@ -514,7 +566,7 @@ analytic implicit ρa solve (see
 implicitly through the area divergence of the mass flux.
 
 The entrainment rate is assembled lazily from the precomputed
-`ᶜentr_vel_scaleʲs`, `ᶜarea_bounding_entr_detrʲs`, and the updraft physical
+`ᶜentr_vel_scaleʲs`, `ᶜentr_nonvel_rateʲs`, `ᶜarea_bounding_entr_detrʲs`, and the updraft physical
 velocity via `compute_entrainment`, and the turbulent entrainment
 `ᶜturb_entrʲs` (`turbulent_entrainment`) is added to it. Each updraft
 scalar `χʲ` is relaxed toward its **environment** value,
@@ -535,7 +587,13 @@ edmfx_entr_detr_tendency!(Yₜ, Y, p, t, turbconv_model) = nothing
 function edmfx_entr_detr_tendency!(Yₜ, Y, p, t, turbconv_model::PrognosticEDMFX)
 
     n = n_mass_flux_subdomains(turbconv_model)
-    (; ᶜturb_entrʲs, ᶜentr_vel_scaleʲs, ᶜarea_bounding_entr_detrʲs, ᶜuʲs) = p.precomputed
+    (;
+        ᶜturb_entrʲs,
+        ᶜentr_vel_scaleʲs,
+        ᶜentr_nonvel_rateʲs,
+        ᶜarea_bounding_entr_detrʲs,
+        ᶜuʲs,
+    ) = p.precomputed
 
     ᶜmse⁰ = ᶜspecific_env_mse(Y, p)
     ᶜq_tot⁰ = ᶜspecific_env_value(@name(q_tot), Y, p)
@@ -545,6 +603,7 @@ function edmfx_entr_detr_tendency!(Yₜ, Y, p, t, turbconv_model::PrognosticEDMF
         ᶜentrʲ = @. lazy(
             compute_entrainment(
                 ᶜentr_vel_scaleʲs.:($$j),
+                ᶜentr_nonvel_rateʲs.:($$j),
                 ᶜarea_bounding_entr_detrʲs.:($$j),
                 get_physical_w(ᶜuʲs.:($$j), ᶜlg),
             ),
