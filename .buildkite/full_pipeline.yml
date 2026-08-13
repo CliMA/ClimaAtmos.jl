@@ -1061,6 +1061,17 @@ steps:
       #     slurm_gpus: 1
       #     slurm_mem: 20GB
 
+  - group: "Performance scripts"
+    steps:
+      - label: ":test_tube: Component models: Smoke test"
+        retry: *retry_policy
+        command: >
+          cd perf/run-and-time &&
+          julia --project -e 'using Pkg; Pkg.Registry.update(); Pkg.Pkg.instantiate(;verbose=true)' &&
+          julia --color=yes --project ci_test_models.jl
+        agents:
+          slurm_mem: 20GB
+
   - group: "Timestep cost"
     steps:
       - label: ":alarm_clock: Timestep cost: Moist baroclinic wave"
