@@ -1031,28 +1031,11 @@ Subtypes:
   - `FullOrographicGravityWave`: the propagating plus blocked drag of
     [garner2005](@cite), selected by `orographic_gravity_wave: "raw_topo"` or
     `"gfdl_restart"`.
-  - `LinearOrographicGravityWave`: idealized variant with a user-supplied drag
-    input, selected by `orographic_gravity_wave: "linear"`.
 
 Every subtype carries a `topo_info` field, a `Val` that selects how the
 subgrid orographic drag tensor is obtained (see `get_topo_info`).
 """
 abstract type OrographicGravityWave <: AbstractGravityWave end
-
-"""
-    LinearOrographicGravityWave{S}(; topo_info = Val(:linear))
-
-Orographic gravity-wave drag driven by an analytical drag input, for idealized
-tests. Selected by `orographic_gravity_wave: "linear"`.
-
-# Fields
-
-  - `topo_info`: `Val(:linear)`, selecting the analytical drag input in
-    `get_topo_info`.
-"""
-Base.@kwdef struct LinearOrographicGravityWave{S} <: OrographicGravityWave
-    topo_info::S = Val(:linear)
-end
 
 """
     FullOrographicGravityWave{FT, S, T}(; γ, ϵ, β, h_frac, ρscale, L0, a0, a1, Fr_crit, topo_info, topography)
@@ -2256,7 +2239,7 @@ Group of gravity-wave drag parameterizations inside an `AtmosModel`.
 
   - `non_orographic_gravity_wave`: `nothing`, or a `NonOrographicGravityWave`.
   - `orographic_gravity_wave`: `nothing`, or an `OrographicGravityWave`
-    (`FullOrographicGravityWave` or `LinearOrographicGravityWave`).
+    (`FullOrographicGravityWave`).
 """
 @kwdef struct AtmosGravityWave{NOGW, OGW}
     non_orographic_gravity_wave::NOGW = nothing

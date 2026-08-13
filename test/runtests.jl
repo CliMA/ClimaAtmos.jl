@@ -97,10 +97,9 @@ if TEST_GROUP in ("parameterizations", "all")
     # Chemistry tests
     @safetestset "Chemistry tendency tests" begin @time include("parameterized_tendencies/chemistry/chemistry_tendency.jl") end
 
-    # Gravity wave: Beres convective NOGW pure-function unit tests (no simulation
-    # build). The simulation-based Beres tests (test_beres_single_column.jl,
-    # test_beres_sphere_integration.jl) run as standalone Buildkite steps.
+    # Gravity wave.
     @safetestset "Beres NOGW unit tests" begin @time include("parameterized_tendencies/gravity_wave/non_orographic_gravity_wave/test_beres_unit.jl") end
+    @safetestset "AD99 NOGW momentum budget" begin @time include("parameterized_tendencies/gravity_wave/non_orographic_gravity_wave/test_ad99_momentum_budget.jl") end
 
     # NOTE: Gravity wave visualization scripts (test_nogw_3d.jl, test_nogw_mima.jl,
     # test_nogw_single_column.jl, test_ogw_3d.jl, test_ogw_baseflux.jl) are not included
