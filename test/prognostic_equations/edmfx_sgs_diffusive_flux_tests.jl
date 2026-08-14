@@ -4,8 +4,14 @@ Tests the water budget of the EDMFX vertical SGS diffusive flux
 `q_tot_eff = q_tot - q_rai - q_sno`; the suspended cloud species have no flux of
 their own and instead take a share of the aggregate tendency scaled by the
 clipped ratio `min(q_μ / q_tot_eff, 1)`, while rain and snow get no `K_h`
-transport. The distribution is asserted directly, because a guard that never
-passes leaves it silently absent. See #4770.
+transport. The distribution is asserted directly, because a check that never
+passes leaves it silently absent.
+
+The interfacial entrainment diffusivity is zeroed, so the tendency here is the
+`K_h` flux alone. Without that, `ρq_tot` and each species would also receive the
+`K_e` transport applied by the unified tracer loop, which the share does not
+distribute, and the identity below would hold only where `K_e` happens to
+vanish. See #4770.
 =#
 using Test
 import ClimaComms
@@ -55,6 +61,11 @@ include("../test_helpers.jl")
         Y.c.ρ * FT(8e-3) * (1 + FT(0.2) * sin(FT(2π) * ᶜz / FT(3000) + FT(0.5))) +
         Y.c.ρq_rai + Y.c.ρq_sno
     CA.set_precomputed_quantities!(Y, p, t)
+    # The species share is taken from the K_h flux on q_tot_eff alone. Zero the
+    # interfacial entrainment diffusivity so the K_e transport that the unified
+    # tracer loop adds to ρq_tot and to each species separately does not enter
+    # the identity below, and so rain receives no transport at all.
+    @. p.precomputed.ᶠK_entr = 0
 
     Yₜ = similar(Y)
     Yₜ .= zero(eltype(Yₜ))
@@ -84,7 +95,8 @@ include("../test_helpers.jl")
         @test parent(getproperty(Yₜ.c, name)) ≈ parent(ᶜexpected) rtol = FT(1e-10)
     end
 
-    # Rain and snow are excluded from the aggregate and get no K_h transport of
-    # their own, so their only tendency here is the K_e entrainment term.
+    # Rain is excluded from the aggregate and has no K_h flux of its own, so
+    # with K_e zeroed above it receives no tendency at all.
     @test maximum(abs, parent(Y.c.ρq_rai)) > 0
+    @test maximum(abs, parent(Yₜ.c.ρq_rai)) == 0
 end
