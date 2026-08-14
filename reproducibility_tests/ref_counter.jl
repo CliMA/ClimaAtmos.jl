@@ -1,4 +1,4 @@
-400
+401
 
 # **README**
 #
@@ -32,6 +32,12 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+401
+- Distribute the aggregate q_tot_eff diffusion of
+  `edmfx_sgs_diffusive_flux_tendency!` to the suspended cloud mass and
+  number species. The block was present but unreachable, so the species
+  received no share of the vertical water diffusion.
+
 400
 - Update to ClimaCore 0.15.1 and Thermodynamics 1.3.0
 

@@ -4,6 +4,7 @@ ClimaAtmos.jl Release Notes
 main
 ----
 
+- [#4770](https://github.com/CliMA/ClimaAtmos.jl/pull/4770) ![][badge-🐛bugfix] ![][badge-🔥behavioralΔ] Distribute the aggregate `q_tot_eff` diffusion of `edmfx_sgs_diffusive_flux_tendency!` to the suspended cloud mass and number species. The distribution added in [#4753](https://github.com/CliMA/ClimaAtmos.jl/pull/4753) resolved its field names against `Y` rather than `Y.c`, so its guard was never satisfied and the block never ran: `ρq_tot` and `ρ` were tendencied while `ρq_lcl`, `ρq_icl` and their number densities were not. The hyperdiffusion and vertical-diffusion-boundary-layer paths already distributed correctly, so this removes an inconsistency between them.
 0.42.5
 -------
 - [#4762](https://github.com/CliMA/ClimaAtmos.jl/pull/4762) Include more terms in the `InvZEntrainment` closure.
