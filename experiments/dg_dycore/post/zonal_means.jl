@@ -27,12 +27,12 @@ function zonal_mean_panels(output_dir; spinup_days = nothing)
         zm = ClimaAnalysis.average_time(ClimaAnalysis.average_lon(var))
         # remaining dims: (lat, z)
         lats = zm.dims["lat"]
-        zs = zm.dims["z"] ./ 1e3
+        zs = zm.dims["z_reference"] ./ 1e3
         fig = CairoMakie.Figure()
         ax = CairoMakie.Axis(
             fig[1, 1];
             xlabel = "latitude [deg]",
-            ylabel = "z [km]",
+            ylabel = "z_reference [km]",
             title = "$label, mean over t ≥ $(round(t0 / 86400; digits = 1)) d",
         )
         plt = CairoMakie.contourf!(
