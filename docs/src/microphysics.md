@@ -21,10 +21,12 @@ The cloud condensate and phase partitioning are diagnosed using saturation adjus
 and the 0-moment microphysics provides a sink on total water due to precipitation.
 Precipitation is immediately removed from the computational domain.
 The nonequilibrium 1-moment option expands the state vector by four microphysics tracers:
-cloud liquid water, cloud ice, rain and snow ``(q_{liq}, q_{ice}, q_{rai}, q_{sno})``.
+cloud liquid water, cloud ice, rain and snow ``(q_{liq}, q_{ice}, q_{rai}, q_{sno})``;
+in the state vector these are `ρq_lcl`, `ρq_icl`, `ρq_rai`, and `ρq_sno`.
 The nonequilibrium 2-moment option expands the state vector by six microphysics tracers:
 cloud liquid and cloud ice mass, rain and snow mass, and cloud droplet and rain drop
-number concentrations ``(q_{liq}, q_{ice}, q_{rai}, q_{sno}, N_{liq}, N_{rai})``.
+number concentrations ``(q_{liq}, q_{ice}, q_{rai}, q_{sno}, N_{liq}, N_{rai})``,
+the last two carried as `ρn_lcl` and `ρn_rai`.
 Ice and snow are carried but their 2-moment microphysical sources are currently zero;
 only warm-rain processes are active.
 
@@ -94,7 +96,8 @@ The most common causes of these errors are:
   - spurious oscillations caused by the high order horizontal transport scheme,
   - time integration of microphysics sources at a time step longer than the stability limit,
   - use of hyperdiffusion.
-    Our strategy is to minimize the untoward effects of those errors.
+
+Our strategy is to minimize the effects of those errors.
 
 ### Implicit treatment of microphysics sinks
 
@@ -102,14 +105,14 @@ Microphysical processes can produce large negative tendencies (sinks) for tracer
 
 ### Enforcing physical constraints
 
-An additional correction is applied through the state-constraint hook
+Additional corrections are applied through the state-constraint hook
+`constrain_state!`, which runs at the cadence set by
+`update_constrain_state_every` (every step by default). Its microphysics and
+updraft part is
 
-```
+```julia
 enforce_physical_constraints!(Y, p, t, atmos)
 ```
-
-which runs at the cadence set by `update_constrain_state_every` (every step by
-default).
 
 This function applies local corrective updates to keep prognostic variables
 in a physically admissible range.
@@ -118,9 +121,9 @@ Currently, this includes:
 
   - enforcing non-negative condensate masses,
   - rescaling condensate when the total condensate exceeds total moisture,
-  - clipping non-positive updraft area fractions and negative updraft vertical
-    velocities, and relaxing the affected updraft state toward the grid mean
-    (the `edmfx_filter` option),
+  - clamping the updraft area fraction to ``[0, 1]``, clipping negative updraft
+    vertical velocities, and resetting the updraft scalars to the grid mean
+    where the updraft area is negligible (the `edmfx_filter` option),
   - ensuring subdomain consistency ``\rho a^j \chi^j \le \rho \chi``.
 
 These corrections are intended to prevent nonphysical states such as negative
@@ -135,7 +138,8 @@ at the smallest scales of the simulation without degrading the sharp features
 of the modeled tracers.
 
 Hyperdiffusion is a higher order derivative operator, and as a result does not guarantee positivity.
-Total water (`q_tot_eff = q_tot - q_rai - q_sno`) and passive tracers are
+Total water (`q_tot_eff = q_tot - q_rai - q_sno` for the 1M and 2M schemes;
+the full `q_tot` for 0M and 2MP3) and passive tracers are
 hyperdiffused at full strength; the resulting `ρq_tot` mass tendency is
 distributed proportionally to the cloud species (`ρq_lcl`, `ρq_icl`, and their
 number densities). Rain, snow, and rain number density receive no
@@ -155,7 +159,8 @@ or computed as a function that decays with height and is capped at some value ab
 Vertical diffusion can be applied implicitly when using `VerticalDiffusion`,
 `DecayWithHeightDiffusion`, or the PROPHET diffusive flux; the Smagorinsky-Lilly
 and AMD vertical tendencies are always explicit.
-With `VerticalDiffusion` or `DecayWithHeightDiffusion`, `q_tot_eff = q_tot - q_rai - q_sno` is diffused directly and the resulting mass tendency is
+With `VerticalDiffusion` or `DecayWithHeightDiffusion`, `q_tot_eff` (defined as
+for hyperdiffusion above) is diffused directly and the resulting mass tendency is
 distributed proportionally to the cloud species; precipitating species
 (`q_rai`, `q_sno`, `n_rai`) receive no diffusion. The Smagorinsky-Lilly and
 AMD models apply the full eddy diffusivity to every grid-scale tracer.
@@ -165,13 +170,16 @@ AMD models apply the full eddy diffusivity to every grid-scale tracer.
 Often, the diffusion and limiters described above are not enough to ensure positivity of the microphysics tracers.
 ClimaAtmos supports four additional constraints that can be used to enforce non-negativity of the microphysics tracers.
 This is controlled by the `tracer_nonnegativity_method` in the `AtmosWater` struct.
+Each method (except `vertical_water_borrowing`) also comes in a `_qtot` variant,
+which additionally constrains `ρq_tot` itself and then restores mass–energy
+consistency.
 The available options are:
 
   - `TracerNonnegativityElementConstraint`:
     This option enforces non-negativity while conserving the tracer mass within the element.
     It uses the `Limiters.compute_bounds!` and `Limiters.apply_limiter!` functions to redistribute the mass of the tracer within the element
     such that the tracer concentration is non-negative and bounded by the maximum value in the element.
-    Effectively, this method borrows mass from the neighboring nodes within the element to fill the negative holes.
+    This method borrows mass from the neighboring nodes within the element to fill the negative holes.
     This method is conservative and does not introduce any source/sink of total water mass.
 
   - `TracerNonnegativityVaporConstraint`:
@@ -208,11 +216,13 @@ The available options are:
     vertical mass-borrowing limiter, filling negative values from levels above
     or below. The species it applies to are set by the
     `vertical_water_borrowing_species` configuration argument; when total water
-    is limited, density and total energy are corrected for consistency.
+    is limited, density and total energy are corrected for consistency. Unlike
+    the other three options, this one acts in the timestepper's limiter stage
+    rather than in the state-constraint hook.
 
 ## Aerosol Activation for 2-Moment Microphysics
 
-Aerosol activation uses functions from the [CloudMicrophysics.jl](https://github.com/CliMA/CloudMicrophysics.jl) library, based on the Abdul-Razzak and Ghan (ARG) parameterization. ARG predicts the number of activated cloud droplets assuming a parcel of clear air rising adiabatically. This formulation is traditionally applied only at cloud base, where the maximum supersaturation typically occurs.
+Aerosol activation uses functions from the [CloudMicrophysics.jl](https://github.com/CliMA/CloudMicrophysics.jl) library, based on the Abdul-Razzak and Ghan (ARG) parameterization [AbdulRazzakGhan2000](@cite). ARG predicts the number of activated cloud droplets assuming a parcel of clear air rising adiabatically. This formulation is traditionally applied only at cloud base, where the maximum supersaturation typically occurs.
 
 To enable ARG to be used locally (i.e., without explicitly identifying cloud base), CloudMicrophysics.jl implements a modified equation for the maximum supersaturation that accounts for the presence of pre-existing liquid and ice particles. This allows activation to be applied inside clouds. To ensure that activation occurs only where physically appropriate, we apply additional clipping logic:
 

@@ -1,7 +1,7 @@
 # Scripting Simulations
 
 YAML configurations (see
-[Creating custom configurations](configuration.md)) suit reproducible,
+[Creating custom configurations](configuration.md)) allow reproducible,
 batch-style runs. The scripting interface builds the same simulations from
 Julia code, which fits parameter sweeps, interactive exploration in the REPL
 or in notebooks, and customization beyond what the YAML schema exposes. For a
@@ -10,7 +10,7 @@ side-by-side comparison of the two interfaces, see
 
 ## The `AtmosSimulation` object
 
-A simulation is an [`AtmosSimulation`](@ref ClimaAtmos.AtmosSimulation) value.
+A `simulation` is an [`AtmosSimulation`](@ref ClimaAtmos.AtmosSimulation) value.
 Its keyword arguments set the grid, the physics, the initial state, and the
 run parameters:
 
@@ -80,7 +80,10 @@ scripts start from one of them instead of from bare `AtmosModel` keywords.
 The model presets are `dry`, `equil_moist_0m`, `nonequil_moist_1m`,
 `prognostic_edmf`, and `prognostic_edmf_1m`; the simulation presets
 `aquaplanet`, `baroclinic_wave`, and `bomex` return a ready-to-run
-`AtmosSimulation`. Each forwards keyword arguments for further overrides:
+`AtmosSimulation`. The simulation presets and the PROPHET model presets take
+the float type as their first argument; `dry`, `equil_moist_0m`, and
+`nonequil_moist_1m` take keyword arguments only. Each forwards keyword
+arguments for further overrides:
 
 ```julia
 # PROPHET turbulence-convection with 0-moment microphysics, plus radiation
@@ -92,7 +95,10 @@ model = CA.Presets.prognostic_edmf(
 
 ## Setup (initial conditions)
 
-A setup defines the initial state and, for column cases, the case forcing:
+In the script interface, the `setup` argument sets the initial state. Case
+forcings and surface conditions that YAML configurations derive from
+`initial_condition` (subsidence, large-scale advection, column Coriolis,
+surface fluxes) are chosen through `AtmosModel` keywords or a preset instead:
 
 ```julia
 # The BOMEX shallow-cumulus case

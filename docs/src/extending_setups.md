@@ -38,9 +38,9 @@ CA.solve_atmos!(simulation)
 The forcing is a tuple of
 [`AbstractForcingTerm`](@ref ClimaAtmos.AbstractForcingTerm)s (`HorizontalAdvection()`, `VerticalFluctuation()`,
 `Nudging(variables...; timescale, mask)`, `Subsidence()`) passed to the setup's
-`forcing` slot. Note that the `AtmosSimulation(; model, setup)` constructor uses
+`forcing` slot. The `AtmosSimulation(; model, setup)` constructor uses
 `setup` only for the initial state, so the setup's forcing / insolation / surface
-models must be threaded into the `AtmosModel` explicitly (tracked by [#4696](https://github.com/CliMA/ClimaAtmos.jl/issues/4696)).
+models must be passed to the `AtmosModel` explicitly (tracked by [#4696](https://github.com/CliMA/ClimaAtmos.jl/issues/4696)).
 
 ```julia
 import ClimaAtmos as CA

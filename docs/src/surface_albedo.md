@@ -2,11 +2,14 @@
 
 The ocean surface albedo is the fraction of solar radiation reflected by the ocean surface. It is a function of the solar zenith angle, the sea surface roughness (which depends on wind speed), and the wavelength of the incoming radiation.
 
-Three methods are available to specify the ocean albedo:
+Three methods are available to specify the ocean albedo, selected by the
+`albedo_model` configuration argument:
 
 ## 1) `ConstantAlbedo`
 
-The default value is 0.38 (following [OGorman2008](@cite)) and is used for idealized experiments.
+A constant albedo, used for idealized experiments. In YAML configurations the
+value comes from the ClimaParams key `idealized_ocean_albedo`, default 0.38
+(following [OGorman2008](@cite)); the `AtmosModel` script-API default is 0.07.
 
 ## 2) `RegressionFunctionAlbedo`
 
@@ -21,7 +24,7 @@ where:
   - $λ$ is the wavelength (currently unused).
   - $μ$ is the cosine of the solar zenith angle.
   - $u$ is the surface wind speed.
-  - $σ(u)$ is the mean wave slope distribution width following Cox and Munk (1954), with $\sigma^2 = 0.003 + 0.00512u$.
+  - $σ(u)$ is the mean wave slope distribution width following [CoxMunk1954](@cite), with $\sigma^2 = 0.003 + 0.00512u$.
   - $r_{f}(n, μ)$ is the Fresnel reflectance (e.g., see [Warren2019](@cite)):
 
 ```math
@@ -71,6 +74,10 @@ for clear sky, and
 ```
 
 for cloudy sky. In the current implementation we assume clear skies everywhere.
+
+In the code, both the direct and the diffuse albedo are clamped to the
+interval ``[0, 1]``, since the diffuse regression can otherwise go negative,
+and both return zero at night (``μ \le 0``).
 
 ## 3) `CouplerAlbedo`
 

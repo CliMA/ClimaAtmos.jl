@@ -2,9 +2,12 @@
 
 To create a custom configuration, first make a .yml file.
 In the file, you can set configuration arguments as `key: value` pairs to override the default config.
-YAML parsing is forgiving -- values generally parse to the correct type.
-One caveat: unquoted `true`/`false` are parsed to `Bool`s; if a configuration argument
-expects the literal string `"true"` or `"false"`, put quotes around it.
+Each value is coerced to the type of the corresponding default in
+[`config/default_configs/default_config.yml`](https://github.com/CliMA/ClimaAtmos.jl/blob/main/config/default_configs/default_config.yml), so quoting does not
+matter (a quoted `"true"` still becomes a `Bool`); a value that cannot be coerced
+raises an error naming the key and the expected type. Keys that are not in the
+default configuration produce a warning, or an error when `strict_config: true`
+is set.
 
 To start the model with a custom configuration, run:
 
@@ -19,9 +22,9 @@ CA.solve_atmos!(simulation)
 ## Example
 
 Below is the default BOMEX configuration
-(`config/model_configs/prognostic_edmfx_bomex_column.yml`):
+([`config/model_configs/prognostic_edmfx_bomex_column.yml`](https://github.com/CliMA/ClimaAtmos.jl/blob/main/config/model_configs/prognostic_edmfx_bomex_column.yml)):
 
-```
+```yaml
 initial_condition: "Bomex"
 turbconv: "prognostic_edmfx"
 implicit_diffusion: true
@@ -52,20 +55,20 @@ Keys can also point to artifacts. As artifacts are folders, we specify both the 
 column model with an external forcing file from GCM output, we include the following lines in the
 configuration:
 
-```
+```yaml
 initial_condition: "GCM"
 external_forcing_file: artifact"cfsite_gcm_forcing"/HadGEM2-A_amip.2004-2008.07.nc
 ```
 
 To learn more about artifacts and how they're used in CliMA, visit [ClimaArtifacts.jl](https://github.com/CliMA/ClimaArtifacts).
 
-To add a new configuration argument/key, open `config/default_configs/default_config.yml`.
+To add a new configuration argument/key, open [`config/default_configs/default_config.yml`](https://github.com/CliMA/ClimaAtmos.jl/blob/main/config/default_configs/default_config.yml).
 Add an entry with the following format:
 
-```
+```yaml
 <argument_name>:
-    value: <argument_value>
-    help: <help string>
+  help: <help string>
+  value: <argument_value>
 ```
 
 The `help` field is optional if you don't plan on making a permanent change to the configuration argument.
@@ -96,9 +99,19 @@ configuration:
 toml: [parameters.toml]
 ```
 
-and run as usual. The `toml` key accepts several files; later files override
-earlier ones, and many shipped model configurations already carry one (e.g.
-`toml/prognostic_edmfx_1M.toml` in the BOMEX example above).
+and run as usual. Three behaviors to know about:
+
+  - The `toml` key accepts several files, but a given parameter may appear in
+    only one of them; a duplicate entry across files raises a
+    `Duplicate TOML entry` error.
+  - A `toml:` key in a later configuration file *replaces* the earlier list
+    rather than appending to it. Many shipped model configurations already
+    carry one (e.g.
+    [`toml/prognostic_edmfx_1M.toml`](https://github.com/CliMA/ClimaAtmos.jl/blob/main/toml/prognostic_edmfx_1M.toml)
+    in the BOMEX example above), so to combine your overrides with such a
+    configuration, list both files.
+  - Overriding a parameter that no component of the current model uses raises
+    an error; set `strict_params: false` to allow unused overrides.
 
 ## Environment variables
 
@@ -122,27 +135,27 @@ ClimaAtmos provides a set of common numerical configurations that can be used as
 
 #### Column Configurations
 
-  - **`numerics_column_ze63.yml`**: Single column configuration with 63 vertical levels
+  - **[`numerics_column_ze63.yml`](https://github.com/CliMA/ClimaAtmos.jl/blob/main/config/common_configs/numerics_column_ze63.yml)**: Single column configuration with 63 vertical levels
 
 #### Sphere Configurations
 
-  - **`numerics_sphere_he6ze10.yml`**: Spherical configuration with 6 horizontal elements (550km), 10 vertical levels, 30km domain top, no sponge, explicit vertical diffusion
+  - **[`numerics_sphere_he6ze10.yml`](https://github.com/CliMA/ClimaAtmos.jl/blob/main/config/common_configs/numerics_sphere_he6ze10.yml)**: Spherical configuration with 6 horizontal elements (550km), 10 vertical levels, 30km domain top, no sponge, explicit vertical diffusion
 
-  - **`numerics_sphere_he6ze31.yml`**: Spherical configuration with 6 horizontal elements (550km), 31 vertical levels, 60km domain top, rayleigh and viscous sponges, implicit vertical diffusion
+  - **[`numerics_sphere_he6ze31.yml`](https://github.com/CliMA/ClimaAtmos.jl/blob/main/config/common_configs/numerics_sphere_he6ze31.yml)**: Spherical configuration with 6 horizontal elements (550km), 31 vertical levels, 60km domain top, rayleigh and viscous sponges, implicit vertical diffusion
 
-  - **`numerics_sphere_he16ze63.yml`**: Spherical configuration with 16 horizontal elements (206km), 63 vertical levels, 60km domain top, rayleigh and viscous sponges, implicit vertical diffusion
+  - **[`numerics_sphere_he16ze63.yml`](https://github.com/CliMA/ClimaAtmos.jl/blob/main/config/common_configs/numerics_sphere_he16ze63.yml)**: Spherical configuration with 16 horizontal elements (206km), 63 vertical levels, 60km domain top, rayleigh and viscous sponges, implicit vertical diffusion
 
-  - **`numerics_sphere_he30ze43.yml`**: Spherical configuration with 30 horizontal elements (110km), 43 vertical levels, 30km domain top, no sponge, explicit vertical diffusion
+  - **[`numerics_sphere_he30ze43.yml`](https://github.com/CliMA/ClimaAtmos.jl/blob/main/config/common_configs/numerics_sphere_he30ze43.yml)**: Spherical configuration with 30 horizontal elements (110km), 43 vertical levels, 30km domain top, no sponge, explicit vertical diffusion
 
-  - **`numerics_sphere_he30ze63.yml`**: Spherical configuration with 30 horizontal elements (110km), 63 vertical levels, 60km domain top, rayleigh and viscous sponges, implicit vertical diffusion
+  - **[`numerics_sphere_he30ze63.yml`](https://github.com/CliMA/ClimaAtmos.jl/blob/main/config/common_configs/numerics_sphere_he30ze63.yml)**: Spherical configuration with 30 horizontal elements (110km), 63 vertical levels, 60km domain top, rayleigh and viscous sponges, implicit vertical diffusion
 
 #### Diagnostics Configurations for PROPHET Columns
 
-Common diagnostics sets for PROPHET (prognostic EDMF) single-column runs. Each file defines a `diagnostics:` block mostly at 10-minute output frequency; individual model configs can add case-specific diagnostics on top.
+Common diagnostics sets for PROPHET single-column runs. Each file defines a `diagnostics:` block mostly at 10-minute output frequency; individual model configs can add case-specific diagnostics on top.
 
-  - **`diagnostics_column_progedmf_0M.yml`**: Standard diagnostics for PROPHET columns with 0-moment microphysics (`microphysics_model: "0M"`). Includes atmospheric state, surface fluxes and precipitation, updraft/environment profiles, and entrainment/detrainment variables.
+  - **[`diagnostics_column_progedmf_0M.yml`](https://github.com/CliMA/ClimaAtmos.jl/blob/main/config/common_configs/diagnostics_column_progedmf_0M.yml)**: Standard diagnostics for PROPHET columns with 0-moment microphysics (`microphysics_model: "0M"`). Includes atmospheric state, surface fluxes and precipitation, updraft/environment profiles, and entrainment/detrainment variables.
 
-  - **`diagnostics_column_progedmf_1M.yml`**: Standard diagnostics for PROPHET columns with 1-moment microphysics (`microphysics_model: "1M"`). Extends the 0M set with rain/snow specific humidities, updraft/environment precipitation variables, and the full suite of 1M bulk microphysics process rates for the grid mean, updraft, and environment (`mp1m_*`, `mp1mup_*`, `mp1men_*`).
+  - **[`diagnostics_column_progedmf_1M.yml`](https://github.com/CliMA/ClimaAtmos.jl/blob/main/config/common_configs/diagnostics_column_progedmf_1M.yml)**: Standard diagnostics for PROPHET columns with 1-moment microphysics (`microphysics_model: "1M"`). Mirrors the 0M set (without the static-energy variables `ha`/`haup`/`haen`) and adds rain/snow specific humidities, supersaturations, updraft/environment precipitation variables, and the full suite of 1M bulk microphysics process rates for the grid mean, updraft, and environment (`mp1m_*`, `mp1mup_*`, `mp1men_*`).
 
 ### Using Common Configurations
 

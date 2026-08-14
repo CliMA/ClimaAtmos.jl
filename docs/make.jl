@@ -82,7 +82,12 @@ makedocs(;
         "Explanation" => [
             "The CliMA Ecosystem" => "ecosystem.md",
             "Dynamics & Numerics" => [
+                "Thermodynamics and the Working Fluid" => "thermodynamics.md",
                 "Governing Equations" => "equations.md",
+                "Discretization and Operators" => "discretization.md",
+                "Conservation Properties" => "conservation.md",
+                "Hyperdiffusion" => "hyperdiffusion.md",
+                "Model Top and Sponge Layer" => "sponge.md",
                 "Implicit Solver" => "implicit_solver.md",
                 "Integer Time (ITime)" => "itime.md",
             ],
