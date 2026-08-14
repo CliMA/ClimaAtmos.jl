@@ -948,6 +948,79 @@ product. Fold `ρ`, `K`, and any scaling factor into `ᶠcoef` in left-to-right 
 ᶜdiffusive_flux_divergenceᵥ(ᶠcoef, ᶜχ) = @. lazy(ᶜdiffdivᵥ(-(ᶠcoef * ᶠgradᵥ(ᶜχ))))
 
 """
+    ᶜh_eff_plus_Φ!(ᶜout, thermo_params, ᶜT, ᶜΦ, ᶜq_vap, ᶜq_liq, ᶜq_ice)
+
+Write `h_eff + Φ` into the center field `ᶜout` and return it, where
+
+    h_eff = (h_v q_v + h_l q_l + h_i q_i) / max(q_v + q_l + q_i, ε)
+
+is the mass-weighted specific enthalpy of the suspended water. Every specific
+humidity is clipped at zero, so a limiter undershoot cannot change the sign of
+the weights or of the denominator.
+
+`h_eff + Φ` is the coefficient of the aggregate water gradient in the
+single-gradient enthalpy flux `F_h = -K [∇s_d + (h_eff + Φ) ∇q_tot_eff]` shared
+by vertical diffusion, horizontal diffusion and hyperdiffusion, and it is the
+same coefficient the implicit Jacobian holds frozen.
+
+The result is written into a field rather than returned lazily because every
+caller passes it to a divergence operator or a `DiagonalMatrixRow`, where the
+nested expression exceeds GPU kernel parameter limits.
+"""
+function ᶜh_eff_plus_Φ!(ᶜout, thermo_params, ᶜT, ᶜΦ, ᶜq_vap, ᶜq_liq, ᶜq_ice)
+    FT = eltype(ᶜout)
+    ϵ_FT = eps(FT)
+    @. ᶜout =
+        (
+            TD.enthalpy_vapor(thermo_params, ᶜT) * max(FT(0), ᶜq_vap) +
+            TD.enthalpy_liquid(thermo_params, ᶜT) * max(FT(0), ᶜq_liq) +
+            TD.enthalpy_ice(thermo_params, ᶜT) * max(FT(0), ᶜq_ice)
+        ) / max(
+            max(FT(0), ᶜq_vap) + max(FT(0), ᶜq_liq) + max(FT(0), ᶜq_ice),
+            ϵ_FT,
+        ) + ᶜΦ
+    return ᶜout
+end
+
+"""
+    ᶜsuspended_water(Y, p)
+
+Return the lazy specific humidities `(q_vap, q_lcl, q_icl)` of the suspended
+water: vapor, cloud liquid and cloud ice. With a non-equilibrium scheme the
+cloud species are prognostic and are read from `Y`; otherwise they are the
+diagnostic `ᶜq_liq` and `ᶜq_ice` of the equilibrium partition.
+
+These are the weights of `ᶜh_eff_plus_Φ!` and, together with
+`ᶜdiffusing_water`, define which water the diffusive and hyperdiffusive
+fluxes act on.
+"""
+function ᶜsuspended_water(Y, p)
+    (; ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice) = p.precomputed
+    ᶜq_vap = @. lazy(TD.vapor_specific_humidity(ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice))
+    return p.atmos.microphysics_model isa
+           Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M} ?
+           (
+        ᶜq_vap,
+        (@. lazy(specific(Y.c.ρq_lcl, Y.c.ρ))),
+        (@. lazy(specific(Y.c.ρq_icl, Y.c.ρ))),
+    ) : (ᶜq_vap, ᶜq_liq, ᶜq_ice)
+end
+
+"""
+    ᶜdiffusing_water(Y, p)
+
+Return the lazy specific humidity of the water that diffuses,
+`q_tot_eff = q_tot - q_rai - q_sno`. Rain and snow are excluded because they
+sediment rather than follow the turbulent flow; with an equilibrium scheme
+there is no separate precipitation mass and this is `q_tot`.
+"""
+ᶜdiffusing_water(Y, p) =
+    p.atmos.microphysics_model isa
+    Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M} ?
+    (@. lazy(specific(Y.c.ρq_tot - Y.c.ρq_rai - Y.c.ρq_sno, Y.c.ρ))) :
+    (@. lazy(specific(Y.c.ρq_tot, Y.c.ρ)))
+
+"""
     gradient_richardson_number(params, ᶜN²_eff, ᶜstrain_rate_norm)
 
 Compute the gradient Richardson number, the ratio of the buoyancy to the shear

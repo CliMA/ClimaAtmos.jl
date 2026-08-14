@@ -1145,26 +1145,20 @@ function update_diffusion_jacobian!(
         ∂ᶜρq_tot_err_∂ᶜρq_tot = matrix[@name(c.ρq_tot), @name(c.ρq_tot)]
         # ∂F/∂q_tot: T changes at fixed e_tot (through cv_m and e_int_v0),
         # and the q_tot_eff-gradient term carries h_tot,eff = h_eff + Φ.
-        # Materialize h_eff (clipped-input form matching the tendency) to
-        # avoid deep lazy nesting inside DiagonalMatrixRow.
-        ᶜq_vap = @. lazy(TD.vapor_specific_humidity(ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice))
-        ᶜq_lcl, ᶜq_icl =
-            p.atmos.microphysics_model isa
-            Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M} ?
-            ((@. lazy(specific(Y.c.ρq_lcl, ᶜρ))), (@. lazy(specific(Y.c.ρq_icl, ᶜρ)))) :
-            (ᶜq_liq, ᶜq_ice)
-        ᶜh_eff = p.scratch.ᶜtemp_scalar_4
-        @. ᶜh_eff =
-            (
-                TD.enthalpy_vapor(thermo_params, ᶜT) * max(FT(0), ᶜq_vap) +
-                TD.enthalpy_liquid(thermo_params, ᶜT) * max(FT(0), ᶜq_lcl) +
-                TD.enthalpy_ice(thermo_params, ᶜT) * max(FT(0), ᶜq_icl)
-            ) /
-            max(max(FT(0), ᶜq_vap) + max(FT(0), ᶜq_lcl) + max(FT(0), ᶜq_icl), eps(FT))
+        ᶜq_vap, ᶜq_lcl, ᶜq_icl = ᶜsuspended_water(Y, p)
+        ᶜh_eff_plus_Φ = ᶜh_eff_plus_Φ!(
+            p.scratch.ᶜtemp_scalar_4,
+            thermo_params,
+            ᶜT,
+            ᶜΦ,
+            ᶜq_vap,
+            ᶜq_lcl,
+            ᶜq_icl,
+        )
         @. ∂ᶜρe_tot_err_∂ᶜρq_tot +=
             dtγ * ᶜdiffusion_h_matrix ⋅ DiagonalMatrixRow(
                 (
-                    ᶜh_eff + ᶜΦ -
+                    ᶜh_eff_plus_Φ -
                     cp_d * (e_int_v0 + Δcv_v * (ᶜT - T_0)) / ᶜcv_m
                 ) / ᶜρ,
             )

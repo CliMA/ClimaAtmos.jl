@@ -223,7 +223,6 @@ function edmfx_sgs_diffusive_flux_tendency!(
     (; dt, params) = p
     turbconv_params = CAP.turbconv_params(params)
     (; ᶜu) = p.precomputed
-    ᶠgradᵥ = Operators.GradientC2F()
     n = n_mass_flux_subdomains(turbconv_model)
     # The SGS-updraft branches below apply the same specific tendency the grid
     # mean receives to each subdomain scalar (uniform vertical diffusion across
@@ -263,17 +262,13 @@ function edmfx_sgs_diffusive_flux_tendency!(
         #   q_tot_eff = q_tot - q_rai - q_sno,
         #   h_eff = (h_v·q_v + h_l·q_lcl + h_i·q_icl) / max(q_water_nonneg, ε)
         # See `hyperdiffusion.jl` for the clipped-input protection.
-        ᶜdivᵥ_ρe_tot = Operators.DivergenceF2C(
-            top = Operators.SetValue(C3(FT(0))),
-            bottom = Operators.SetValue(C3(FT(0))),
-        )
         thermo_params = CAP.thermodynamics_params(params)
         (; ᶜΦ) = p.core
         (; ᶜT) = p.precomputed
         (; ᶜh_tot) = p.precomputed
         ᶜρe_totₜ_diffusion = p.scratch.ᶜtemp_scalar_2
         @. ᶜρe_totₜ_diffusion =
-            ᶜdivᵥ_ρe_tot(
+            ᶜdiffdivᵥ(
                 -(
                     ᶠρK_h * ᶠgradᵥ(TD.dry_static_energy(thermo_params, ᶜT, ᶜΦ)) +
                     ᶠρK_e * ᶠgradᵥ(ᶜh_tot)
@@ -307,43 +302,27 @@ function edmfx_sgs_diffusive_flux_tendency!(
             # Moisture contribution to the enthalpy K_h flux: adds
             # -ρK_h · (h_eff+Φ) · ∇q_tot_eff to the dry-part tendency
             # computed above.
-            (; ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice) = p.precomputed
-            ᶜq_vap = @. lazy(TD.vapor_specific_humidity(ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice))
-            ᶜq_lcl, ᶜq_icl =
-                p.atmos.microphysics_model isa
-                Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M} ?
-                (
-                    (@. lazy(specific(Y.c.ρq_lcl, Y.c.ρ))),
-                    (@. lazy(specific(Y.c.ρq_icl, Y.c.ρ))),
-                ) :
-                (ᶜq_liq, ᶜq_ice)
-            ᶜh_eff_plus_Φ = p.scratch.ᶜtemp_scalar_3
-            @. ᶜh_eff_plus_Φ =
-                (
-                    TD.enthalpy_vapor(thermo_params, ᶜT) * max(FT(0), ᶜq_vap) +
-                    TD.enthalpy_liquid(thermo_params, ᶜT) * max(FT(0), ᶜq_lcl) +
-                    TD.enthalpy_ice(thermo_params, ᶜT) * max(FT(0), ᶜq_icl)
-                ) /
-                max(max(FT(0), ᶜq_vap) + max(FT(0), ᶜq_lcl) + max(FT(0), ᶜq_icl), ϵ_FT) +
-                ᶜΦ
-            ᶜq_tot_eff =
-                p.atmos.microphysics_model isa
-                Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M} ?
-                (@. lazy(specific(Y.c.ρq_tot - Y.c.ρq_rai - Y.c.ρq_sno, Y.c.ρ))) :
-                (@. lazy(specific(Y.c.ρq_tot, Y.c.ρ)))
+            ᶜq_vap, ᶜq_lcl, ᶜq_icl = ᶜsuspended_water(Y, p)
+            ᶜh_eff_plus_Φ = ᶜh_eff_plus_Φ!(
+                p.scratch.ᶜtemp_scalar_3,
+                thermo_params,
+                ᶜT,
+                ᶜΦ,
+                ᶜq_vap,
+                ᶜq_lcl,
+                ᶜq_icl,
+            )
+            ᶜq_tot_eff = ᶜdiffusing_water(Y, p)
             @. ᶜρe_totₜ_diffusion +=
-                ᶜdivᵥ_ρe_tot(-(ᶠρK_h * ᶠinterp(ᶜh_eff_plus_Φ) * ᶠgradᵥ(ᶜq_tot_eff)))
+                ᶜdiffdivᵥ(-(ᶠρK_h * ᶠinterp(ᶜh_eff_plus_Φ) * ᶠgradᵥ(ᶜq_tot_eff)))
 
             # K_h water diffusion on q_tot_eff. Cloud species inherit via
             # clipped ratio; rain/snow/n_rai get no K_h transport. K_e
             # transport for all water species is handled in the unified
             # tracer loop below.
             ᶜρχₜ_diffusion = p.scratch.ᶜtemp_scalar
-            ᶜdivᵥ_ρq_tot = Operators.DivergenceF2C(
-                top = Operators.SetValue(C3(FT(0))),
-                bottom = Operators.SetValue(C3(FT(0))),
-            )
-            @. ᶜρχₜ_diffusion = ᶜdivᵥ_ρq_tot(-(ᶠρK_h * ᶠgradᵥ(ᶜq_tot_eff)))
+            ᶜ∇ᵥρK∇q_tot = ᶜdiffusive_flux_divergenceᵥ(ᶠρK_h, ᶜq_tot_eff)
+            @. ᶜρχₜ_diffusion = ᶜ∇ᵥρK∇q_tot
             @. Yₜ.c.ρq_tot -= ᶜρχₜ_diffusion
             @. Yₜ.c.ρ -= ᶜρχₜ_diffusion  # Effect of moisture diffusion on (moist) air mass
             if apply_sgs_updraft
@@ -408,14 +387,12 @@ function edmfx_sgs_diffusive_flux_tendency!(
         # species; precip has no K_h transport), while passive tracers
         # (`α = 1`) receive the full ρ·(K_h + K_e) diffusion.
         ᶜρχₜ_diffusion = p.scratch.ᶜtemp_scalar
-        ᶜdivᵥ_ρq = Operators.DivergenceF2C(
-            top = Operators.SetValue(C3(FT(0))),
-            bottom = Operators.SetValue(C3(FT(0))),
-        )
         foreach_gs_tracer(Yₜ, Y) do ᶜρχₜ, ᶜρχ, ρχ_name
             α = ρχ_name in microphysics_tracer_names(Y) ? FT(0) : FT(1)
             ᶜχ = (@. lazy(specific(ᶜρχ, Y.c.ρ)))
-            @. ᶜρχₜ_diffusion = ᶜdivᵥ_ρq(-((α * ᶠρK_h + ᶠρK_e) * ᶠgradᵥ(ᶜχ)))
+            ᶠρK = @. lazy(α * ᶠρK_h + ᶠρK_e)
+            ᶜ∇ᵥρK∇χ = ᶜdiffusive_flux_divergenceᵥ(ᶠρK, ᶜχ)
+            @. ᶜρχₜ_diffusion = ᶜ∇ᵥρK∇χ
             @. ᶜρχₜ -= ᶜρχₜ_diffusion
             # K_e bodily transport of ρq_tot also moves moist-air mass.
             if ρχ_name == @name(ρq_tot)
@@ -489,34 +466,17 @@ function edmfx_sgs_horizontal_diffusive_flux_tendency!(
         wdivₕ(ᶜρ * ᶜK_h_h * gradₕ(TD.dry_static_energy(thermo_params, ᶜT, ᶜΦ)))
 
     if !(p.atmos.microphysics_model isa DryModel)
-        (; ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice) = p.precomputed
-        ᶜq_vap =
-            @. lazy(TD.vapor_specific_humidity(ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice))
-        ᶜq_lcl, ᶜq_icl =
-            p.atmos.microphysics_model isa
-            Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M} ?
-            (
-                (@. lazy(specific(Y.c.ρq_lcl, ᶜρ))),
-                (@. lazy(specific(Y.c.ρq_icl, ᶜρ))),
-            ) : (ᶜq_liq, ᶜq_ice)
-        # Materialize `h_eff + Φ` before the weak divergence: feeding the
-        # nested lazy expression straight into `wdivₕ` exceeds GPU kernel
-        # parameter limits on topography-warped extruded spaces.
-        ᶜh_eff_plus_Φ = p.scratch.ᶜtemp_scalar_6
-        @. ᶜh_eff_plus_Φ =
-            (
-                TD.enthalpy_vapor(thermo_params, ᶜT) * max(FT(0), ᶜq_vap) +
-                TD.enthalpy_liquid(thermo_params, ᶜT) * max(FT(0), ᶜq_lcl) +
-                TD.enthalpy_ice(thermo_params, ᶜT) * max(FT(0), ᶜq_icl)
-            ) / max(
-                max(FT(0), ᶜq_vap) + max(FT(0), ᶜq_lcl) + max(FT(0), ᶜq_icl),
-                ϵ_FT,
-            ) + ᶜΦ
-        ᶜq_tot_eff =
-            p.atmos.microphysics_model isa
-            Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M} ?
-            (@. lazy(specific(Y.c.ρq_tot - Y.c.ρq_rai - Y.c.ρq_sno, ᶜρ))) :
-            (@. lazy(specific(Y.c.ρq_tot, ᶜρ)))
+        ᶜq_vap, ᶜq_lcl, ᶜq_icl = ᶜsuspended_water(Y, p)
+        ᶜh_eff_plus_Φ = ᶜh_eff_plus_Φ!(
+            p.scratch.ᶜtemp_scalar_6,
+            thermo_params,
+            ᶜT,
+            ᶜΦ,
+            ᶜq_vap,
+            ᶜq_lcl,
+            ᶜq_icl,
+        )
+        ᶜq_tot_eff = ᶜdiffusing_water(Y, p)
         @. ᶜρe_totₜ_diffusion +=
             wdivₕ(ᶜρ * ᶜK_h_h * ᶜh_eff_plus_Φ * gradₕ(ᶜq_tot_eff))
 
