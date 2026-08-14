@@ -1,4 +1,4 @@
-399
+400
 
 # **README**
 #
@@ -32,6 +32,9 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+400
+- Update to ClimaCore 0.15.1 and Thermodynamics 1.3.0
+
 399
 - Change entrainment formula, which results in floating point differences due to
   changes in order of operations.
