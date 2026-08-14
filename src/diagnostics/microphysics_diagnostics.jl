@@ -100,7 +100,7 @@ function compute_mp1m_source(state, cache, ::Val{F}) where {F}
     ᶜq_sno = @. lazy(specific(state.c.ρq_sno, ᶜρ))
     return @. lazy(
         _mp1m_source_term(
-            Val(F), cmp, thp, ᶜρ, ᶜT, ᶜq_tot, ᶜq_lcl, ᶜq_icl, ᶜq_rai, ᶜq_sno,
+            $Val(F), cmp, thp, ᶜρ, ᶜT, ᶜq_tot, ᶜq_lcl, ᶜq_icl, ᶜq_rai, ᶜq_sno,
         ),
     )
 end
@@ -139,7 +139,7 @@ function compute_mp1m_source_updraft(state, cache, ::Val{F}) where {F}
     ᶜq_snoʲ = (state.c.sgsʲs.:1).q_sno
     return @. lazy(
         _mp1m_source_term(
-            Val(F), cmp, thp,
+            $Val(F), cmp, thp,
             ᶜρʲ, ᶜTʲ, ᶜq_totʲ, ᶜq_lclʲ, ᶜq_iclʲ, ᶜq_raiʲ, ᶜq_snoʲ,
         ),
     )
@@ -186,7 +186,7 @@ function compute_mp1m_source_env(state, cache, ::Val{F}) where {F}
     ᶜq_sno⁰ = ᶜspecific_env_value(@name(q_sno), state, cache)
     return @. lazy(
         _mp1m_source_term(
-            Val(F), cmp, thp,
+            $Val(F), cmp, thp,
             ᶜρ⁰, ᶜT⁰, ᶜq_tot_nonneg⁰, ᶜq_lcl⁰, ᶜq_icl⁰, ᶜq_rai⁰, ᶜq_sno⁰,
         ),
     )
