@@ -1,44 +1,9 @@
-# Held–Suarez general circulation over smoothed real Earth topography
-# (ETOPO2022), vector-invariant core — the MINIMUM-ADDED-VISCOSITY frontier.
-#
-# Session findings this config encodes (replaces held_suarez_earth_topo_kep.yml):
-#   - pure :kep + w-sponge only:            crashed in the first steps
-#   - :kep + nu_div_frac 0.3:               survived to ~2.9 d, then thermodynamic
-#     noise (min p / min ρ drifting down) collapsed a column — :kep has no
-#     entropy/thermal sink and ν_div is blind to rotational + thermal noise
-#
-# Stabilization here, in order of principle:
-#   face_set: es      sign-definite ρe entropy dissipation at element interfaces
-#                     (intrinsic DG upwinding, no tunable length scale, still
-#                     exactly KEP) — targets the observed thermodynamic collapse
-#   nu_div_frac: 0.3  CAM-style ν∇ₕ(∇ₕ·uₕ): divergent/acoustic modes only,
-#                     invisible to the balanced (δ ≈ 0) circulation; terrain-safe
-#   NON-VISCOUS levers (attack the noise source, add nothing to the interior):
-#   topography_damping_factor: 10  stronger orography smoothing (was 5) — the
-#                     grid-scale noise is pumped at the steepest resolved slopes
-#   dt: 30            halves the per-step transient the 2-iteration Newton
-#                     solve must absorb (HEVI, max_iters = 2)
-#
-# Everything else is OFF — no biharmonic, no filter, no viscous sponge, and the
-# Rayleigh sponge acts on w only:
-#   kappa4: 0.0  filter_Nc: 0  nu_vert: 0.0  sponge_uh: false
-#
-# Unguarded channel: rotational enstrophy. If this config still collapses, that
-# is the diagnosis, and the remedies are kappa4_frac: 0.1 (the validated terrain
-# stack, see baroclinic_wave_double_mountain_kep.yml) or an entropy-conservative
-# volume flux (not implemented; requires ClimaCore changes — docs/vi_kep_face_terms.md §9).
-#
-# Cost: helem 16 / zelem 20 at dt 30 is ~2x the double-mountain benchmark
-# (~13 h single-core for 8 d at dt 60). For a cheap soundness check first, run
-# helem: 8 — also smooths the resolved orography, so it is the more forgiving
-# test of the configuration itself. HS climatology needs ≳200-day spinup;
-# t_end below is test scale for qualitative zonal means (post/zonal_means.jl).
 core: vi
 momentum_adv: vector_invariant
 face_set: es
 held_suarez: true
 topography: earth
-topography_damping_factor: 10.0
+topography_damping_factor: 2.0
 
 # --- minimal interior dissipation: :es interfaces + divergence damping only ---
 kappa4: 0.0
@@ -64,6 +29,6 @@ t_end: 864000.0        # 10 days (test scale; ≳200 d for HS climatology)
 perturb: true
 constants_mode: clima_params
 ic_source: setups
-output_dir: output/held_suarez_earth_topo_es_minimal
+output_dir: output/held_suarez_earth_topo_es
 diag_period: 86400.0   # daily snapshots
 ndiag: 120             # monitor line hourly (ndiag steps × dt 30 = 3600 s)
