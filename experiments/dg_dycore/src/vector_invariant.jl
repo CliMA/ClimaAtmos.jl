@@ -59,9 +59,9 @@ function compute_tendency_vi!(
     (; eE1, eE2, eE3, eN1, eN2, eN3) = m.fields
     Δt = m.Δt
     κ₄ = m.κ₄
-    # :kep and :es share the KEP-compatible centrals and penalties; they
+    # :kep/:es/:es2 share the KEP-compatible centrals and penalties; they
     # differ only in the (ρ, ρe) interface dissipation
-    kep = m.prob.face_set in (:kep, :es)
+    kep = m.prob.face_set in (:kep, :es, :es2)
 
     ρ = Y.c.ρ
     ρe = Y.c.ρe
@@ -94,15 +94,19 @@ function compute_tendency_vi!(
     w_sc = @. Geometry.WVector(w).components.data.:1
 
     # --- (ρ, ρe): horizontal flux-form DG (flux differencing) ---
+    # p′ = p − p_ref feeds the :es2 acoustic channel (other face sets
+    # ignore the extra field)
+    p′ = @. p - m.fields.ᶜp_ref
     y = map(
-        (ρi, ρei, pi, λi, uvi, ei) ->
-            (; ρ = ρi, ρe = ρei, p = pi, λ = λi, uv = uvi, e = ei),
+        (ρi, ρei, pi, λi, uvi, ei, ppi) ->
+            (; ρ = ρi, ρe = ρei, p = pi, λ = λi, uv = uvi, e = ei, p′ = ppi),
         ρ,
         ρe,
         p,
         λ_c,
         uv,
         ρe ./ ρ,
+        p′,
     )
     dy_mw = map(_ -> (ρ = FT(0), ρe = FT(0)), ρ)
     Operators.add_flux_differencing_divergence!(
@@ -112,8 +116,8 @@ function compute_tendency_vi!(
         y,
     )
     Operators.add_numerical_flux_internal!(
-        m.prob.face_set == :es ?
-        Operators.VIESInterfaceScalars(c.γ - 1) :
+        m.prob.face_set == :es ? Operators.VIESInterfaceScalars(c.γ - 1) :
+        m.prob.face_set == :es2 ? Operators.VIES2InterfaceScalars(c.γ - 1) :
         (
             kep ? Operators.vi_kep_interface_scalars :
             Operators.kennedy_gruber_rusanov_scalars
@@ -472,7 +476,7 @@ function horizontal_ke_budget(Y, m::DGModel{FT}) where {FT}
     (; ᶜΦ, ᶜf_cor) = m.fields
     # :es shares the KEP centrals and its ρe dissipation is KE-inert, so
     # the kinetic-energy budget is evaluated identically to :kep
-    kep = m.prob.face_set in (:kep, :es)
+    kep = m.prob.face_set in (:kep, :es, :es2)
 
     ρ = Y.c.ρ
     ρe = Y.c.ρe

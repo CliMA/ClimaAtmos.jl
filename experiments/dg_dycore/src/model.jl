@@ -326,11 +326,19 @@ function DGModel(prob::DGProblem)
     # κ₄ diffusion reference (full fields carry an O(Δz_warp) terrain
     # signature along coordinate surfaces).
     fields = let
-        (; T, uE, uN) = reference_values(prob, c, params, fields.ccoords)
+        (; T, p, uE, uN) = reference_values(prob, c, params, fields.ccoords)
         ᶜK_ref = @. (uE^2 + uN^2) / 2
         ᶜh_ref = @. (c.cv_d + c.R_d) * T + ᶜK_ref + fields.ᶜΦ -
                     c.cv_d * c.T_tri
-        (; fields..., ᶜh_ref, ᶜu_ref = uE, ᶜv_ref = uN)
+        # Hydrostatically composed reference pressure: the :es2 acoustic
+        # channel penalizes [[p′]] = [[p − p_ref]], because along
+        # terrain-following faces the raw [[p]] carries an O(1)
+        # HYDROSTATIC jump (neighbors at different true altitude) that is
+        # not acoustic. Φ-only composition (see discrete_hydrostatic_p!).
+        ᶜp_ref = copy(p)
+        ᶜρ_ref = @. p / (c.R_d * T)
+        discrete_hydrostatic_p!(ᶜp_ref, ᶜρ_ref, T, c.R_d, fields.ᶜΦ)
+        (; fields..., ᶜh_ref, ᶜu_ref = uE, ᶜv_ref = uN, ᶜp_ref)
     end
     ops = dg_operators(c)
     opmats = (;
@@ -356,7 +364,7 @@ function DGModel(prob::DGProblem)
         FT(0)
     end
     fields = (; fields..., ν_div)
-    kep_vi = prob isa VIProblem && prob.face_set in (:kep, :es)
+    kep_vi = prob isa VIProblem && prob.face_set in (:kep, :es, :es2)
     κ₄ = if prob.κ₄ !== nothing
         prob.κ₄
     elseif prob.κ₄_frac !== nothing

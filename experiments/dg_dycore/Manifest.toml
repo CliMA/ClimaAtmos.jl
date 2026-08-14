@@ -281,9 +281,7 @@ version = "0.6.11"
 
 [[deps.ClimaCore]]
 deps = ["Adapt", "BandedMatrices", "BlockArrays", "ClimaComms", "ClimaInterpolations", "CubedSphere", "DataStructures", "ForwardDiff", "GaussQuadrature", "GilbertCurves", "HDF5", "InteractiveUtils", "IntervalSets", "KrylovKit", "LLVM", "LazyBroadcast", "LinearAlgebra", "MultiBroadcastFusion", "NVTX", "PkgVersion", "Random", "RecursiveArrayTools", "RootSolvers", "SparseArrays", "StaticArrays", "Statistics", "UnrolledUtilities"]
-git-tree-sha1 = "861d7ec73e8bf67bcef19a4d9a960204aa1b26d0"
-repo-rev = "as/bickley-jet"
-repo-url = "https://github.com/CliMA/ClimaCore.jl"
+path = "/Users/akshaysridhar/Research/Codes/ClimaCore.jl"
 uuid = "d414da3d-4745-48bb-8d80-42e94e092884"
 version = "0.14.55"
 

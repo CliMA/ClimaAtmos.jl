@@ -129,9 +129,14 @@ Additional keywords:
   - `momentum_adv` (`:vector_invariant`): `:vector_invariant` or
     `:fluctuation` (Route B; helem = 4 ONLY)
   - `face_set` (`:kg`): `:kg` (legacy KG + Rusanov + plain penalties),
-    `:kep` (exact-KEP set; κ₄ = 0 / filter_Nc = 0 admissible), or `:es`
+    `:kep` (exact-KEP set; κ₄ = 0 / filter_Nc = 0 admissible), `:es`
     (:kep with entropy-variable ρe dissipation — entropy-dissipative AND
-    still exactly KEP).
+    still exactly KEP), or `:es2` (:es plus acoustic-selective Roe
+    dissipation on ([[p′]], [[uₙ]]) with the contact wave kept central —
+    damps the CFL-limiting acoustic modes; exact KEP relaxed to
+    O(acoustic-jump²); p′ = p − p_ref via the composed hydrostatic
+    reference, so terrain-following hydrostatic [[p]] jumps are not
+    damped).
   - `terrain_u3` (`:full`): vertical transport velocity over terrain —
     `:full` (CT3(w) + CT3(uₕ), CG machinery) or `:wonly` (FDDG-style
     O(slope) approximation)
@@ -191,9 +196,9 @@ function validate(p::BaroclinicWaveDG)
         p.κ₄_frac !== nothing &&
         error("set κ₄ (absolute) or κ₄_frac (fraction of the SIPG cap), \
                not both")
-    p.face_set in (:kg, :kep, :es) ||
-        error("face_set must be :kg, :kep, or :es")
-    p.face_set in (:kep, :es) &&
+    p.face_set in (:kg, :kep, :es, :es2) ||
+        error("face_set must be :kg, :kep, :es, or :es2")
+    p.face_set in (:kep, :es, :es2) &&
         p.momentum_adv == :fluctuation &&
         error("face_set = :kep/:es pair with :vector_invariant only \
                (the fluctuation form is KE-compatible with the KG set)")
@@ -267,8 +272,8 @@ function validate(p::MountainWaveDG)
         error("stepper must be :hevi or :explicit")
     p.momentum_adv == :vector_invariant ||
         error("MountainWaveDG supports :vector_invariant only")
-    p.face_set in (:kg, :kep, :es) ||
-        error("face_set must be :kg, :kep, or :es")
+    p.face_set in (:kg, :kep, :es, :es2) ||
+        error("face_set must be :kg, :kep, :es, or :es2")
     p.terrain_u3 in (:wonly, :full) ||
         error("terrain_u3 must be :wonly or :full")
     p.κ₄ !== nothing &&

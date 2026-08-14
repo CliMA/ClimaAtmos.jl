@@ -12,6 +12,7 @@ const DG = DGDycore
     include("test_hs_equivalence.jl")
     include("test_vi_core.jl")
     include("test_vi_kep_budget.jl")
+    include("test_es2.jl")
     include("test_hydrostatic_composition.jl")
     include("test_wb_gravity_fddg.jl")
     include("test_mountain_wave.jl")

@@ -16,4 +16,7 @@ YAML = "ddb6d928-2868-570f-bddf-ab3f9cf99eb6"
 # Local-development sources (Phase A). Before committing/CI:
 [sources]
 ClimaAtmos = {path = "../.."}
-ClimaCore = {url = "https://github.com/CliMA/ClimaCore.jl", rev = "as/bickley-jet"}
+# local checkout (as/bickley-jet); switch back to the url+rev form when the
+# branch state is pushed:
+# ClimaCore = {url = "https://github.com/CliMA/ClimaCore.jl", rev = "as/bickley-jet"}
+ClimaCore = {path = "../../../ClimaCore.jl"}

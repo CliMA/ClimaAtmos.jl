@@ -1,0 +1,42 @@
+# Held-Suarez over Earth topography, VI core, ZERO tunable dissipation:
+# face_set :es interfaces + w-only sponge ONLY (kappa4 0, filter 0, nu_div 0).
+# Enabled by the discrete_hydrostatic_p! composition (2026-08-13): the A/B on
+# the double mountain showed the legacy checkerboard delta-rho was the runaway
+# drift source (max|v| 66 vs 8.7 m/s at 2 h) -- the nu_div_frac 0.3 crutch in
+# held_suarez_earth_topo_es_minimal.yml predates that fix. If THIS config
+# collapses, compare against the _minimal config to separate the divergence-
+# damping contribution from the composition's.
+core: vi
+momentum_adv: vector_invariant
+face_set: es
+held_suarez: true
+topography: earth
+topography_damping_factor: 10.0
+
+# --- minimal interior dissipation: :es interfaces + divergence damping only ---
+kappa4: 0.0
+filter_Nc: 0
+nu_vert: 0.0
+nu_div_frac: 0.0
+
+# --- grid (matches the validated VI terrain stack) ---
+helem: 16
+npoly: 4
+zelem: 20
+zmax: 30000.0
+zstretch: [300.0, 3000.0]
+
+# --- w-only Rayleigh sponge in the top 15 km ---
+sponge_depth: 15000.0
+sponge_tau: 20.0
+sponge_uh: false
+
+stepper: hevi
+dt: 30.0
+t_end: 864000.0        # 10 days (test scale; ≳200 d for HS climatology)
+perturb: true
+constants_mode: clima_params
+ic_source: setups
+output_dir: output/held_suarez_earth_topo_es_pure
+diag_period: 86400.0   # daily snapshots
+ndiag: 120             # monitor line hourly (ndiag steps × dt 30 = 3600 s)
