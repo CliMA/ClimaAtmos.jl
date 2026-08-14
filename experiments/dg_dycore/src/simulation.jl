@@ -155,7 +155,10 @@ function run!(sim::DGSimulation)
             m,
         )
         ode_prob,
-        CTS.IMEXAlgorithm(CTS.ARS343(), CTS.NewtonsMethod(; max_iters = 2))
+        CTS.IMEXAlgorithm(
+            CTS.ARS343(),
+            CTS.NewtonsMethod(; max_iters = m.prob.newton_max_iters),
+        )
     else # :explicit — SSP-RK3 through CTS
         ode_prob = CTS.ODEProblem(
             CTS.ClimaODEFunction(;

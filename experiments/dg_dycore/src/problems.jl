@@ -17,6 +17,10 @@ Keywords (defaults in parentheses):
 
   - `helem` (4), `npoly` (4), `zelem` (10), `zmax` (30e3): resolution
   - `stepper` (`:hevi`): `:hevi` or `:explicit`
+  - `newton_max_iters` (2): Newton iterations per HEVI implicit stage.
+    The per-stage transient the implicit solve must absorb grows with dt
+    (vertical acoustic CFL ≫ 1 under zstretch), so larger dt needs more
+    iterations — e.g. dt 60 at helem 16 needs 4 where dt 30 runs at 2
   - `dt` (60.0 for `:hevi`, 4.0 for `:explicit`) [s]
   - `t_end` (86400.0) [s]
   - `perturb` (true): JW perturbation on/off (off = balanced-flow test)
@@ -57,6 +61,7 @@ Base.@kwdef struct BaroclinicWaveFDDG{FT <: AbstractFloat}
     zelem::Int = 10
     zmax::FT = 30e3
     stepper::Symbol = :hevi
+    newton_max_iters::Int = 2
     dt::FT = stepper == :hevi ? 60.0 : 4.0
     t_end::FT = 86400.0
     perturb::Bool = true
@@ -146,6 +151,7 @@ Base.@kwdef struct BaroclinicWaveDG{FT <: AbstractFloat}
     zelem::Int = 10
     zmax::FT = 30e3
     stepper::Symbol = :hevi
+    newton_max_iters::Int = 2
     dt::FT = stepper == :hevi ? 60.0 : 4.0
     t_end::FT = 86400.0
     perturb::Bool = true
@@ -225,6 +231,7 @@ Base.@kwdef struct MountainWaveDG{FT <: AbstractFloat}
     U₀::FT = 20.0
     T₀::FT = 250.0
     stepper::Symbol = :hevi
+    newton_max_iters::Int = 2
     # horizontal acoustic CFL ≈ 0.3: c_s·dt·(2npoly+1)/Δx_elem
     dt::FT = 0.3 * (xmax / helem) / (310 * (2 * npoly + 1))
     t_end::FT = 36000.0

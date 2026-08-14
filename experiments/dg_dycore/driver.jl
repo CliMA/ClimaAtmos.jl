@@ -29,6 +29,7 @@ function problem_from_yaml(path)
         ("zelem", :zelem, Int),
         ("zmax", :zmax, FT),
         ("stepper", :stepper, Symbol),
+        ("newton_max_iters", :newton_max_iters, Int),
         ("dt", :dt, FT),
         ("t_end", :t_end, FT),
         ("perturb", :perturb, Bool),
