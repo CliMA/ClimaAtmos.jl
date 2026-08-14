@@ -361,9 +361,9 @@ function edmfx_sgs_diffusive_flux_tendency!(
             )
                 ρq_name = get_ρχ_name(q_name)
                 ρn_name = get_ρχ_name(n_name)
-                MatrixFields.has_field(Y, ρq_name) || continue
-                ᶜρq = MatrixFields.get_field(Y, ρq_name)
-                ᶜρqₜ = MatrixFields.get_field(Yₜ, ρq_name)
+                MatrixFields.has_field(Y.c, ρq_name) || continue
+                ᶜρq = MatrixFields.get_field(Y.c, ρq_name)
+                ᶜρqₜ = MatrixFields.get_field(Yₜ.c, ρq_name)
                 @. ᶜratio =
                     max(FT(0), min(FT(1), specific(ᶜρq, Y.c.ρ) / max(ᶜq_tot_eff, ϵ_FT)))
                 @. ᶜρqₜ -= ᶜratio * ᶜρχₜ_diffusion
@@ -375,9 +375,9 @@ function edmfx_sgs_diffusive_flux_tendency!(
                         end
                     end
                 end
-                if MatrixFields.has_field(Y, ρn_name)
-                    ᶜρn = MatrixFields.get_field(Y, ρn_name)
-                    ᶜρnₜ = MatrixFields.get_field(Yₜ, ρn_name)
+                if MatrixFields.has_field(Y.c, ρn_name)
+                    ᶜρn = MatrixFields.get_field(Y.c, ρn_name)
+                    ᶜρnₜ = MatrixFields.get_field(Yₜ.c, ρn_name)
                     @. ᶜρnₜ -= ᶜratio * max(FT(0), ᶜρn) / max(ᶜρq, ϵ_FT) * ᶜρχₜ_diffusion
                     if apply_sgs_updraft
                         for j in 1:n
