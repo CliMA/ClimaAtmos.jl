@@ -13,7 +13,7 @@ If you are new to Julia's package manager, the official guides on
 ClimaAtmos is a registered Julia package. To install it, open the REPL, type `]` to enter
 the package manager, and add it:
 
-```Julia-repl
+```julia-repl
 pkg> add ClimaAtmos
 ```
 
@@ -55,8 +55,12 @@ stays unchanged:
 
 ```julia
 import Pkg
-Pkg.add("CUDA")
+Pkg.add("CUDA")   # run in the default environment (plain `julia`, no --project)
+```
 
+Then, in the session that runs the model:
+
+```julia
 import ClimaComms
 ENV["CLIMACOMMS_DEVICE"] = "CUDA"
 ClimaComms.@import_required_backends   # loads CUDA.jl when CLIMACOMMS_DEVICE="CUDA"

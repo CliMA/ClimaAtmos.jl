@@ -35,7 +35,7 @@ open(output_file, "w") do config_md
 
         Every configuration argument accepted in YAML configuration files, with
         its type and default behavior, generated from
-        `config/default_configs/default_config.yml`. See
+        [`config/default_configs/default_config.yml`](https://github.com/CliMA/ClimaAtmos.jl/blob/main/config/default_configs/default_config.yml). See
         [Creating custom configurations](configuration.md) for how to use them.
 
         """,

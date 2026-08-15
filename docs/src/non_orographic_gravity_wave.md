@@ -24,14 +24,20 @@ The non-orographic gravity wave drag parameterization follows the spectra method
 The source spectrum with respect to phase speed is prescribed in Eq. (17) in [alexander1999](@cite). We adapt the equation so that the spectrum combines a wide and a narrow band:
 
 ```math
-B_0(c) = \frac{F_{S0}(c)}{\rho_0} = sgn(c-u_0) \left( Bm\_w \exp\left[ -\left( \frac{c-c_0}{c_{w\_w}} \right)^2 \ln{2} \right] + Bm\_n \exp\left[ -\left( \frac{c-c_0}{c_{w\_n}} \right)^2 \ln{2} \right] \right)
+B_0(c) = \frac{F_{S0}(c)}{\rho_0} = sgn(c-u_0) \left( B_w \exp\left[ -\left( \frac{\tilde{c}-c_0}{c_{w,w}} \right)^2 \ln{2} \right] + B_n \exp\left[ -\left( \frac{\tilde{c}-c_0}{c_{w,n}} \right)^2 \ln{2} \right] \right)
 ```
 
-where the subscript $0$ denotes values at the source level. $c_0$ is the phase speed with the maximum flux magnitude $Bm$, and $c_w$ is the half-width at half-maximum of the Gaussian.  $\_w$ and $\_n$ represent the wide and narrow bands of the spectra.
+where the subscript $0$ denotes values at the source level, and $\tilde{c} = c$
+in the extra-tropics (ground-relative frame) while $\tilde{c} = c - u_0$ in the
+tropics (wind-relative frame; see the frame discussion below). $c_0$ is the
+phase speed with the maximum flux magnitude; $B_w$ and $B_n$ are the amplitudes
+of the wide and narrow bands of the spectrum (the parameters `nogw_Bw` and
+`nogw_Bn`), and $c_{w,w}$ and $c_{w,n}$ are the corresponding half-widths at
+half-maximum.
 
 Intuitively, $B_0(c)$ is a recipe for how much momentum the wave field carries, sorted by how fast each wave travels. The two Gaussians say most waves move near a favored speed $c_0$, with waves much faster or slower being rare (a wide hump for the broad spread plus a narrow hump for the extra pile-up at the peak), and $c_w$ measures how quickly that falls off (one step of $c_w$ from the peak halves the flux). The $sgn(c-u_0)$ factor flips the sign so waves moving with the source-level wind push one way and waves moving against it push the other. The launch spectrum is therefore symmetric about the peak and carries no net momentum in the tropical (wind-relative) frame; in the extra-tropical ground-relative frame the sign flip at $c = u_0$ leaves a small net flux at launch. The atmosphere filters one side out higher up (see below).
 
-Because the background winds and convective sources differ between the tropics and the extra-tropics, the parameterization changes a few of its settings at the edge of the tropical band. The most important is the reference frame in which the phase-speed spectrum is defined: in the extra-tropics, phase speeds are measured relative to the ground, while in the tropics they are measured relative to the zonal wind at the source level. This frame, together with the narrow-band amplitude $Bm\_n$ and the wide-band width $c_w$, changes abruptly at the band edge. The overall source strength $F_{S0}$, by contrast, is blended smoothly across the transition, so the total wave drag varies continuously with latitude rather than jumping. (With the default parameters $Bm\_n$ and $c_w$ are the same inside and outside the tropics, so in practice only the reference-frame switch and the smooth amplitude blend have any effect.)
+Because the background winds and convective sources differ between the tropics and the extra-tropics, the parameterization changes a few of its settings at the edge of the tropical band. The most important is the reference frame in which the phase-speed spectrum is defined: in the extra-tropics, phase speeds are measured relative to the ground, while in the tropics they are measured relative to the zonal wind at the source level. This frame, together with the narrow-band amplitude $B_n$ and the wide-band width $c_w$, changes abruptly at the band edge. The overall source strength $F_{S0}$, by contrast, is blended smoothly across the transition, so the total wave drag varies continuously with latitude rather than jumping. (With the default parameters $B_n$ and $c_w$ are the same inside and outside the tropics, so in practice only the reference-frame switch and the smooth amplitude blend have any effect.)
 
 ### Upward propagation and wave breaking
 
@@ -71,7 +77,7 @@ X(z_{n-1/2}) = \frac{\epsilon \rho_0}{\rho(z_{n-1/2})\Delta z} \sum_j (B_0)_j
 
 where the sum is over the breaking waves and $\epsilon = F_{S0} / (\rho_0\, n_k \sum |B_0|)$ is the wave intermittency ($n_k$ is the number of horizontal wavenumber bands, one by default). Here $F_{S0}$ is the prescribed time-averaged total momentum flux, specified as a latitude-dependent quantity.
 
-Any momentum flux that propagates to the model top without breaking is re-deposited by averaging it across all levels above the damping level (defined by `nogw_damp_pressure`) to ensure momentum conservation.
+Any momentum flux that propagates to the model top without breaking is re-deposited by spreading it uniformly over the levels at and above the damping level (defined by `nogw_damp_pressure`). The divisor in the code is one larger than the number of those levels, so this recovers the escaped momentum only approximately.
 
 The drag at full levels is obtained by averaging adjacent half-levels:
 
@@ -145,7 +151,7 @@ The Beres source activates in a column only when both conditions are met:
 
 This filters out shallow or weak convection. In columns where the criteria are not met, the Beres contribution is zero and only the AD99 background source acts. Where they are met, the Beres flux is added on top of the AD99 background.
 
-**Note:** The Beres physical parameters `nogw_beres_Q0_threshold`, `nogw_beres_h_heat_min`, and the spectrum and steady-component parameters used below are ClimaParams parameters. Their defaults are in the ClimaParams `[nogw_beres_*]` / `[nogw_*]` entries. Only the toggle switches are in `default_config.yml`.
+**Note:** The Beres physical parameters `nogw_beres_Q0_threshold`, `nogw_beres_h_heat_min`, and the spectrum and steady-component parameters used below are ClimaParams parameters. Their defaults are in the ClimaParams `[nogw_beres_*]` / `[nogw_*]` entries. Only the toggle switches are in [`default_config.yml`](https://github.com/CliMA/ClimaAtmos.jl/blob/main/config/default_configs/default_config.yml).
 
 ### Source spectrum $B_0(c)$
 
@@ -206,7 +212,7 @@ Optionally, the spectrum may be computed and averaged at $n_{h,\text{avg}}$ valu
 
 ### Steady ($\nu = 0$) component
 
-The transient spectrum above starts the frequency integral at $\nu_{\min} > 0$ and therefore omits the steady ($\nu = 0$) part of the heating. This steady part is always added as a single ground-stationary wave: the time-mean convective heating acts like a fixed obstacle in the mean wind $\bar{u}_{\text{heat}}$ and radiates one mountain-wave-like mode with vertical wavenumber $m_0 = N / |\bar{u}_{\text{heat}}|$ (Beres Eq. 31, the resulting steady flux is Beres Eqs. 32–34), signed to oppose $\bar{u}_{\text{heat}}$. It is deposited entirely into the $c \approx 0$ phase-speed bin, which the transient spectrum leaves empty, so there is no double-counting. The steady source has no config switch. It is controlled implicitly by the phase-speed grid. It deposits only when an exact $c = 0$ bin exists, i.e. when `cmax`/`dc` is an integer ($c[n] = (n-1)\,dc - cmax$). On a grid without one, it silently no-ops (a warning is emitted at construction). The default grid (`nogw_cmax` $= 100$, `nogw_dc` $= 0.8 \Rightarrow 125$) has a $c = 0$ bin, so the steady source is on by default. Its amplitude carries the same half-sine response factor and the same scale factor $\alpha$ as the transient spectrum, so the two are not independently tunable. Its only additional inputs are a zero-frequency temporal weight $|Q_t(0)|^2$ set by a DC-weight knob (`nogw_beres_steady_dc_frac`) and a largest convective-system scale (`nogw_beres_L_system`) that fixes the horizontal projection.
+The transient spectrum above starts the frequency integral at $\nu_{\min} > 0$ and therefore omits the steady ($\nu = 0$) part of the heating. This steady part is always added as a single ground-stationary wave: the time-mean convective heating acts like a fixed obstacle in the mean wind $\bar{u}_{\text{heat}}$ and radiates one mountain-wave-like mode with vertical wavenumber $m_0 = N / |\bar{u}_{\text{heat}}|$ (Beres Eq. 31, the resulting steady flux is Beres Eqs. 32–34), signed to oppose $\bar{u}_{\text{heat}}$. It is deposited entirely into the $c \approx 0$ phase-speed bin, which the transient spectrum leaves empty, so there is no double-counting. The steady source has no YAML switch (the `BeresSourceParams` field `beres_steady_source` defaults to `true`); in practice it is controlled by the phase-speed grid. It deposits only when an exact $c = 0$ bin exists, i.e. when `cmax`/`dc` is an integer ($c[n] = (n-1)\,dc - cmax$). On a grid without one, it deposits nothing (a warning is emitted at construction). The default grid (`nogw_cmax` $= 100$, `nogw_dc` $= 0.8 \Rightarrow 125$) has a $c = 0$ bin, so the steady source is on by default. Its amplitude carries the same half-sine response factor and the same scale factor $\alpha$ as the transient spectrum, so the two are not independently tunable. Its only additional inputs are a zero-frequency temporal weight $|Q_t(0)|^2$ set by `nogw_beres_steady_dc_frac` and a largest convective-system scale (`nogw_beres_L_system`) that fixes the horizontal projection.
 
 ### Propagation and breaking
 

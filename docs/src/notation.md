@@ -3,7 +3,7 @@
 The [governing equations](equations.md) and the
 [PROPHET equations](edmf_equations.md) use the notation of the papers they
 follow ([Yatunin2026](@cite) for the dynamical core). The source code uses
-ASCII- and Unicode-flavored names that encode where a field lives and which
+ASCII- and Unicode-flavored names that encode where a field is defined and which
 subdomain it belongs to. This page is the bridge between the two.
 
 ## Staggered-grid prefixes
@@ -81,7 +81,7 @@ precipitation variables are added by the microphysics model, and `ρtke` by the
 turbulence-convection model. Note the code writes cloud condensate as `lcl`/
 `icl` (liquid-cloud, ice-cloud) to distinguish it from precipitating species.
 
-Draft variables live in `Y.c.sgsʲs.:(j)` and are **specific** (not
+Draft variables are stored in `Y.c.sgsʲs.:(j)` and are **specific** (not
 density-weighted), except for the effective density itself:
 
 | Paper symbol     | Code name | Description                                                 |

@@ -135,7 +135,8 @@ ClimaAtmos.integrate_over_sgs
 
 ### Turbulence and convection (PROPHET)
 
-The turbulence and convection scheme, called EDMFX in the code; see the
+The turbulence and convection scheme: an eddy-diffusivity mass-flux scheme,
+named `EDMFX` in the code. See the
 [PROPHET equations](edmf_equations.md).
 
 ```@docs
@@ -284,6 +285,55 @@ ClimaAtmos.Explicit
 ClimaAtmos.Implicit
 ClimaAtmos.Hyperdiffusion
 ClimaAtmos.QuasiMonotoneLimiter
+```
+
+### Discrete operators
+
+Short names for the ClimaCore operators used throughout the tendencies. Several
+docstrings cover a group of related operators. See
+[Discretization and Operators](discretization.md) for the symbols these
+correspond to in the equations, and for the reasoning behind the strong-, weak-,
+and split-form choices.
+
+Horizontal spectral-element operators:
+
+```@docs
+ClimaAtmos.divₕ
+```
+
+Vertical operators from faces to centers:
+
+```@docs
+ClimaAtmos.ᶜinterp
+ClimaAtmos.ᶜadvdivᵥ
+ClimaAtmos.ᶜprecipdivᵥ
+ClimaAtmos.ᶜdiffdivᵥ
+```
+
+Vertical operators from centers to faces:
+
+```@docs
+ClimaAtmos.ᶠinterp
+ClimaAtmos.ᶠwinterp
+ClimaAtmos.ᶠgradᵥ
+ClimaAtmos.ᶠcurlᵥ
+ClimaAtmos.ᶠdiffdivᵥ_u₃
+```
+
+Biased and upwinded reconstructions:
+
+```@docs
+ClimaAtmos.ᶠleft_bias
+ClimaAtmos.upwind_biased_grad
+ClimaAtmos.ᶠupwind1
+ClimaAtmos.ᶠupwind3
+ClimaAtmos.ᶠlin_vanleer
+```
+
+Matrix forms, used to assemble the Jacobian:
+
+```@docs
+ClimaAtmos.ᶜinterp_matrix
 ```
 
 ### Jacobian and the implicit solver

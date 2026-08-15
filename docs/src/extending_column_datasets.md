@@ -84,7 +84,7 @@ expects three files in one directory, following the ERA5 variable naming:
 
 On the `clima` and Caltech HPC servers, sites already covered by the
 `era5_hourly_atmos_raw` artifact (the tropical Pacific, first 5 days of July
-2007) work out of the box. To run elsewhere, download the raw data from
+2007) need no further setup. To run elsewhere, download the raw data from
 ECMWF, place the three files in one directory, and point the artifact at it
 in `~/.julia/artifacts/Overrides.toml`:
 

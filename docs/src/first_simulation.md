@@ -2,8 +2,9 @@
 
 This page walks through building, running, and inspecting one simulation. To
 configure each component in turn, see
-[Scripting Simulations](scripting_simulations.md); to do the same from a YAML
-file, see [Script vs Config Interface](interfaces.md).
+[Scripting Simulations](scripting_simulations.md); to run from a YAML file
+instead, see [Creating Custom Configurations](configuration.md), and for how
+the two interfaces relate, [Script vs Config Interface](interfaces.md).
 
 ## Minimal example
 
@@ -54,32 +55,40 @@ propertynames(Y.f)  # e.g., (:u₃,)
 
 ## Running a case end to end
 
-The default simulation is deliberately plain, and a global run is slow to
+The default simulation is plain, and a global run is slow to
 integrate. Presets bundle a grid, a setup, and matching physics into one call,
-which is the quickest way to a real case, here the BOMEX shallow-cumulus
-column. `solve_atmos!` integrates it forward to `t_end`:
+which is the quickest way to a running case, here a column with the BOMEX
+shallow-cumulus initial state and moist physics. `solve_atmos!` integrates it
+forward to `t_end`, and the integrator time confirms where the run stopped:
 
 ```@example first_sim
 simulation = CA.Presets.bomex(Float32; t_end = "10mins", output_dir = mktempdir())
 CA.solve_atmos!(simulation)
-nothing # hide
+simulation.integrator.t
 ```
 
 (This page runs during the documentation build, so it writes to a temporary
 directory; drop `output_dir` to get the default location described below.)
 
-Presets matter beyond brevity: a setup supplies the initial state only, and the
-physics comes from the model, so the two have to be chosen together. BOMEX with
-the default dry model would have no moisture to convect. Each preset pairs them
-correctly. See the [Presets](api.md#Presets) section of the API for the full
-list.
+Presets matter beyond brevity: the `setup` argument sets the initial state,
+while the physics comes from the model, so the two have to be chosen together.
+BOMEX with the default dry model would have no moisture to convect. Each preset
+pairs a setup with a matching grid and model. The pairing is minimal rather
+than complete: `Presets.bomex` enables moist physics but no
+turbulence-convection scheme or case forcings; pass
+`model = CA.Presets.prognostic_edmf(Float32)` to add convective transport, or
+run the corresponding YAML case config for the full published setup. See the
+[Presets](api.md#Presets) section of the API for the full list.
 
 ## Where output goes
 
-Output is written to `simulation.output_dir`, which defaults to
-`output/<job_id>` under the directory Julia was started in; with the default
-`job_id` of `atmos_sim`, that is `output/atmos_sim`. Each run writes to a
-numbered subdirectory, and `output_active` links to the most recent one. Two
+Output is written to `simulation.output_dir`. The base directory defaults to
+`output/<job_id>` under the directory Julia was started in (just `<job_id>`
+when the `CI` environment variable is set); with the default `job_id` of
+`atmos_sim`, that is `output/atmos_sim`. Each run writes to a numbered
+subdirectory of the base directory — `simulation.output_dir` is that
+subdirectory, such as `output/atmos_sim/output_0000` — and
+`output/atmos_sim/output_active` links to the most recent one. Two
 formats appear there, each with a distinct role:
 
   - **NetCDF** (`.nc`) files hold the **diagnostics** -- derived (and often interpolated)

@@ -8,12 +8,16 @@ Diagnostic variables are represented in `ClimaAtmos` with a `DiagnosticVariable`
 `struct`. A `DiagnosticVariable` contains metadata about the variable and a
 function that computes it from the state.
 
+New variables are defined in files under `src/diagnostics/`, so the code on this
+page is written as it appears there: unqualified, with `CAP`
+(`ClimaAtmos.Parameters`), `TD` (`Thermodynamics`), and `lazy` already in scope.
+
 ## Metadata
 
 The metadata we currently support is `short_name`, `long_name`,
 `standard_name`, `units`, and `comments`. This metadata is relevant mainly to how the variable is output.
 Therefore, it is the responsibility of the `output_writer` (see
-`ScheduledDiagnostic`) to handle the metadata properly. The `output_writer`s
+`ScheduledDiagnostic`) to handle the metadata. The `output_writer`s
 provided by `ClimaAtmos` use this metadata.
 
 In `ClimaAtmos`, we follow the convention that:

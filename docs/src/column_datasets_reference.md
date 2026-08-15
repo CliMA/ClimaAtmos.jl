@@ -6,7 +6,7 @@ source code: point the config at the file and the
 case (initial condition, external forcing, surface temperature, and insolation)
 from it.
 
-```YAML
+```yaml
 initial_condition: "ForcingFromFile"
 external_forcing_file: /path/to/my_case_forcing.nc
 start_date: "20200101"

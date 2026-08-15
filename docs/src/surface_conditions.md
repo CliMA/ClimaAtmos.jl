@@ -13,7 +13,7 @@ extend or debug it.
 
 ## User Guide
 
-### The four knobs
+### The four fields
 
 [`AtmosSurface`](@ref ClimaAtmos.AtmosSurface) has four fields, each with one
 purpose:
@@ -128,14 +128,14 @@ either/or:
 | Prescribed heat fluxes (constant or time-varying) | [`MoninObukhov(; z0, shf, lhf)`](@ref ClimaAtmos.SurfaceConditions.MoninObukhov) or [`MoninObukhov(; z0, fluxes = (t,FT)->…)`](@ref ClimaAtmos.SurfaceConditions.MoninObukhov) | [`AnalyticTemperature(…)`](@ref ClimaAtmos.SurfaceConditions.AnalyticTemperature)   |
 | An interactive slab ocean surface                 | [`MoninObukhov(…)`](@ref ClimaAtmos.SurfaceConditions.MoninObukhov)                                                                                                            | [`SlabOceanTemperature(…)`](@ref ClimaAtmos.SurfaceConditions.SlabOceanTemperature) |
 | Surface temperature from data                     | [`MoninObukhov(…)`](@ref ClimaAtmos.SurfaceConditions.MoninObukhov)                                                                                                            | [`ExternalTemperature(…)`](@ref ClimaAtmos.SurfaceConditions.ExternalTemperature)   |
-| Coupler owns the surface (atmos skips fluxes)     | `nothing`                                                                                                                                                                      | unused; coupler writes `sfc_conditions`                                             |
+| Coupler provides the surface (atmos skips fluxes) | `nothing`                                                                                                                                                                      | unused; coupler writes `sfc_conditions`                                             |
 | Coupler sets SST; atmos computes fluxes           | [`MoninObukhov(…)`](@ref ClimaAtmos.SurfaceConditions.MoninObukhov)                                                                                                            | [`CoupledTemperature(field)`](@ref ClimaAtmos.SurfaceConditions.CoupledTemperature) |
 
 !!! note "Prescribed fluxes do not use MOST"
 
     When you set `shf`/`lhf` (or `θ_flux`/`q_flux`), those fluxes are used **as
     prescribed**: MOST does not compute them. They appear under `MoninObukhov`
-    only because the prescribed-flux path currently lives inside that type (a
+    only because the prescribed-flux path is defined inside that type (a
     historical conflation; see the Developer Guide). The required `z0` is used
     solely for the *momentum* closure, and only when `ustar` is not also
     prescribed: when both fluxes and `ustar` are given (as in every idealized
@@ -220,7 +220,7 @@ the two patterns differ only in the `flux_scheme`/`temperature` pair:
     `"PrescribedSurface"`). `update_surface_conditions!` early-returns, so
     `temperature` is never read (leave it at its default).
     `init_sfc_conditions_zero!` pre-fills safe defaults at cache-build so RRTMGP /
-    diagnostic EDMF never see uninitialized memory, and the coupler overwrites
+    the diagnostic eddy-diffusivity mass-flux scheme never see uninitialized memory, and the coupler overwrites
     `sfc_conditions` directly.
  2. **Atmosphere computes fluxes from a coupler-supplied SST**: a real
     `flux_scheme` (e.g. `MoninObukhov(…)`) *together with*

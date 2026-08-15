@@ -767,7 +767,9 @@ with `zmax` the domain top height, so that damping ramps up smoothly from `zd`.
 
 # Fields
 
-  - `zd`: Lower damping height; the sponge is inactive below it [m].
+  - `zd`: Lower damping height; the sponge is inactive below it [m]. This is an
+    absolute altitude, so it does not follow the domain and must be set
+    explicitly for domains whose top is not near 30 km.
   - `κ₂`: Damping coefficient [m²/s].
 
 # Examples
@@ -824,7 +826,9 @@ By default only the vertical velocity is damped (`α_uₕ = 0`, `α_w = 1`,
 
 # Fields
 
-  - `zd`: Lower damping height; the sponge is inactive below it [m].
+  - `zd`: Lower damping height; the sponge is inactive below it [m]. This is an
+    absolute altitude, so it does not follow the domain and must be set
+    explicitly for domains whose top is not near 30 km.
   - `α_uₕ`: Damping rate for the horizontal velocity, `0` by default [1/s].
   - `α_w`: Damping rate for the vertical velocity, `1` by default [1/s].
   - `α_tracer`: Damping rate for `ρtke` and the subdomain scalars, `0` by

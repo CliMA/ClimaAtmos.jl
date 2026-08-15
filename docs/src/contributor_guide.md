@@ -34,7 +34,7 @@ The most useful bug reports:
 
 Discussions are recommended for asking questions about (for example) the user interface, implementation details, science, and life in general.
 
-## But I want to _code_!
+## But I want to _code_
 
   - New users help write ClimaAtmos code and documentation by [forking the ClimaAtmos repository](https://docs.github.com/en/github/collaborating-with-pull-requests/working-with-forks), [using git](https://guides.github.com/introduction/git-handbook/) to edit code and docs, and then creating a [pull request](https://docs.github.com/en/github/collaborating-with-pull-requests/proposing-changes-to-your-work-with-pull-requests/creating-a-pull-request-from-a-fork). Pull requests are reviewed by ClimaAtmos collaborators.
 
@@ -161,8 +161,8 @@ and [submit a pull request](https://github.com/CLiMA/ClimaAtmos.jl/compare/).
 ## Documentation
 
 Now that you've made your awesome contribution, it's time to tell the world how to use it.
-Writing documentation strings is important to make sure others use your functionality
-properly. Didn't write new functions? That's fine, but be sure that the documentation for
+Writing documentation strings is important to make sure others can use your
+functionality. Didn't write new functions? That's fine, but be sure that the documentation for
 the code you touched is still in great shape. It is not uncommon to find some strange wording
 or clarification that you can take care of while you are here.
 
@@ -174,7 +174,7 @@ follow it for every docstring and documentation page you touch.
 You can preview how the documentation will look after merging by building the documentation
 locally. From the main directory of your local repository call
 
-```
+```bash
 julia --project=docs -e 'using Pkg; Pkg.develop(Pkg.PackageSpec(path = ".")); Pkg.instantiate()'
 JULIA_DEBUG=Documenter julia --project=docs docs/make.jl
 ```
@@ -198,21 +198,13 @@ punctuation, or wrap the units in backticks; both are spelled out in the shared
 
 One of the CI checks verifies that the code is uniformly formatted with
 [JuliaFormatter.jl](https://github.com/JuliaEditorSupport/JuliaFormatter.jl);
-the rules are defined in the root `.JuliaFormatter.toml`. Usage, the
+the rules are defined in the root [`.JuliaFormatter.toml`](https://github.com/CliMA/ClimaAtmos.jl/blob/main/.JuliaFormatter.toml). Usage, the
 version-consistency requirement, and the recommended `prek` pre-commit hooks
-(defined in `.pre-commit-config.yaml`, running the formatter from the
+(defined in [`.pre-commit-config.yaml`](https://github.com/CliMA/ClimaAtmos.jl/blob/main/.pre-commit-config.yaml), running the formatter from the
 version-pinned `.dev/format/` environment so results match the
 [Prek CI check](https://github.com/CliMA/ClimaAtmos.jl/blob/main/.github/workflows/run-prek.yml))
 are all documented in the shared
 [code style guide, §1](https://github.com/CliMA/ClimaAtmos.jl/blob/main/docs/dev-guides/code-quality/code_style.md).
-
-!!! note
-
-    In the past, `ClimaAtmos` used to have a `.dev/climaformat.jl` script. We moved
-    away from it to reduce complexity in our repository and to align with the
-    general tools used by the Julia community. If you are still using
-    `climaformat.jl`, migrate to `JuliaFormatter` (`climaformat.jl` was just a
-    wrapper around `JuliaFormatter`).
 
 ## Updating environments
 
@@ -222,12 +214,6 @@ is to help with reproducing results.
 convenient system to quickly update all the `Manifests.toml`: add it to your
 base environment with `Pkg.add("PkgDevTools")`, then run
 `using PkgDevTools; PkgDevTools.update_deps(".")` from the repository root.
-
-!!! note
-
-    In the past, `ClimaAtmos` used to have a `.dev/up_deps.jl` script. We moved away
-    from it because `PkgDevTools` provides a simpler and more efficient way to
-    accomplish the same result.
 
 ## Credits
 

@@ -2,12 +2,12 @@
 
 Design rationale, data flow, dispatch chains, extension points, and
 debugging for the surface-conditions subsystem. For the user-facing guide —
-the four configuration knobs and how to set them, see
+the four configuration fields and how to set them, see
 [Surface Conditions](surface_conditions.md).
 
 ## Design: one source of truth
 
-Surface behavior lives entirely on `atmos.surface`. Principles:
+Surface behavior is determined entirely by `atmos.surface`. Principles:
 
   - **Orthogonality**: `flux_scheme`, `temperature`, `boundary_overrides`, and
     `surface_albedo` are independent axes. Adding an option on one shouldn't touch
@@ -179,7 +179,7 @@ ClimaAtmos.SurfaceConditions.init_sfc_conditions_zero!
   - **`sfc_conditions` NaN/uninitialized under the coupler**: `init_sfc_conditions_zero!`
     only fires when `isnothing(flux_scheme)`.
   - **`T_sfc` uniform when it should vary**: the temperature must return per-cell
-    values, or be an `AnalyticTemperature` whose `f` actually reads `coordinates`.
+    values, or be an `AnalyticTemperature` whose `f` reads `coordinates`.
   - **Space-mismatch error in `update_surface_conditions!`**: something returned a
     `Field` instead of a `DataLayout`/scalar, or a type is missing `broadcastable`.
   - **`Y.sfc` not found**: not a `SlabOceanTemperature` run; guard slab-only code.
