@@ -22,6 +22,23 @@ Exponent of the Exner function in the reference temperature profile
 const s_ref = 7
 
 """
+    RH_ref
+
+Reference relative humidity used to build a smooth `q_tot_r(p)` profile for the
+scalar hyperdiffusion split (`q_tot_r(p) = RH_ref · q_sat(T_r(p), ρ_r(p))`.
+"""
+const RH_ref = 0.5
+
+"""
+    p_q_tot_r_cutoff
+
+Pressure cutoff above which `q_tot_r(p)` is clipped to zero [Pa]. Set at
+250 hPa to keep the reference profile confined to the troposphere, avoiding
+the unphysical stratospheric growth of `RH_ref · q_sat(T_r, ρ_r)`.
+"""
+const p_q_tot_r_cutoff = 25000  # Pa (250 hPa)
+
+"""
     theta_v(thermo_params, T, p, q_tot, q_liq, q_ice)
 
 Compute the virtual potential temperature `θ_v = T_v / Π` [K].
@@ -113,16 +130,37 @@ function phi_r(thermo_params, p)
 end
 
 """
-    h_dr(thermo_params, p, Φ)
+    q_tot_r(thermo_params, p)
 
-Compute the dry static energy of the reference state, `cp_d (T_r - T_0) + Φ`
-[J/kg], where `T_r` is the reference temperature at pressure `p` and `T_0` is
-the thermodynamic reference temperature.
+Compute the reference-state total specific humidity
+`q_tot_r(p) = RH_ref · q_sat(T_r, ρ_r)` for `p ≥ p_q_tot_r_cutoff` and zero
+above [kg/kg], with the dry reference-state density `ρ_r = p / (R_d T_r)` and
+saturation over liquid.
 """
-function h_dr(thermo_params, p, Φ)
+function q_tot_r(thermo_params, p)
+    R_d = TD.TP.R_d(thermo_params)
+    T_r = air_temperature_reference(thermo_params, p)
+    ρ_r = p / (R_d * T_r)
+    return ifelse(
+        p < oftype(p, p_q_tot_r_cutoff),
+        zero(p),
+        oftype(p, RH_ref) *
+        TD.q_vap_saturation(thermo_params, T_r, ρ_r, TD.Liquid()),
+    )
+end
+
+"""
+    sd_r(thermo_params, p)
+
+Compute the dry static energy of the reference state at pressure `p`,
+`s_{d,r}(p) = cp_d (T_r(p) - T_0) + Φ_r(p)` [J/kg], where `T_r(p)` is the
+reference temperature and `Φ_r(p)` is the reference geopotential (both pure
+functions of `p`; see `air_temperature_reference` and `phi_r`).
+"""
+function sd_r(thermo_params, p)
     T_0 = TD.TP.T_0(thermo_params)
     cp_d = TD.TP.cp_d(thermo_params)
 
     T_r = air_temperature_reference(thermo_params, p)
-    return cp_d * (T_r - T_0) + Φ
+    return cp_d * (T_r - T_0) + phi_r(thermo_params, p)
 end

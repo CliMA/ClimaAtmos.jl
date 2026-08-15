@@ -1,4 +1,4 @@
-401
+402
 
 # **README**
 #
@@ -32,6 +32,11 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+402
+- Hyperdiffusion: subtract a hydrostatic reference state from the diffused
+  scalars (dry-static-energy `sd_r(p)` and total-water `q_tot_r(p)`. Removes
+  spurious mixing across topography from the coordinate-tilt part of `gradₕ`.
+
 401
 - Distribute the aggregate q_tot_eff diffusion of
   `edmfx_sgs_diffusive_flux_tendency!` to the suspended cloud mass and

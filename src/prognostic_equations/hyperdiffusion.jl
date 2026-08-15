@@ -123,26 +123,44 @@ NVTX.@annotate function prep_hyperdiffusion_tendency!(Yₜ, Y, p, t)
 
     n = n_mass_flux_subdomains(turbconv_model)
     diffuse_tke = use_prognostic_tke(turbconv_model)
-    (; ᶜu, ᶜT) = p.precomputed
+    (; ᶜu, ᶜT, ᶜp) = p.precomputed
     (; ᶜ∇²u, ᶜ∇²s_d, ᶜ∇²q_tot_eff) = p.hyperdiff
     if turbconv_model isa PrognosticEDMFX
         (; ᶜ∇²uʲs, ᶜ∇²s_dʲs, ᶜ∇²q_tot_effʲs) = p.hyperdiff
         (; ᶜuʲs, ᶜTʲs) = p.precomputed
     end
 
-    # Grid scale hyperdiffusion
+    # Grid scale hyperdiffusion. Scalars are hyperdiffused as perturbations
+    # from a smooth hydrostatic reference profile: on tilted terrain-following
+    # surfaces, `gradₕ` of a horizontally uniform `s_d(z)` or `q_tot(z)` is
+    # nonzero purely from the coordinate tilt (dominated by `Φ` for `s_d`), so
+    # `∇⁴` on the raw field would spuriously mix scalars across topography.
+    # The reference-state pair `(sd_r, q_tot_r)` cancels this leading-order
+    # geometric term, matching the split-form pressure-gradient treatment in
+    # `advection.jl`.
     @. ᶜ∇²u = C123(wgradₕ(divₕ(ᶜu))) - C123(wcurlₕ(C123(curlₕ(ᶜu))))
-    @. ᶜ∇²s_d = wdivₕ(gradₕ(TD.dry_static_energy(thermo_params, ᶜT, ᶜΦ)))
+    @. ᶜ∇²s_d = wdivₕ(
+        gradₕ(
+            TD.dry_static_energy(thermo_params, ᶜT, ᶜΦ) -
+            sd_r(thermo_params, ᶜp),
+        ),
+    )
     if MatrixFields.has_field(Y, @name(c.ρq_tot))
         if p.atmos.microphysics_model isa Union{NonEquilibriumMicrophysics1M,
             NonEquilibriumMicrophysics2M}
             @. ᶜ∇²q_tot_eff = wdivₕ(
                 gradₕ(
-                    specific(Y.c.ρq_tot - Y.c.ρq_rai - Y.c.ρq_sno, Y.c.ρ),
+                    specific(Y.c.ρq_tot - Y.c.ρq_rai - Y.c.ρq_sno, Y.c.ρ) -
+                    q_tot_r(thermo_params, ᶜp),
                 ),
             )
         else
-            @. ᶜ∇²q_tot_eff = wdivₕ(gradₕ(specific(Y.c.ρq_tot, Y.c.ρ)))
+            @. ᶜ∇²q_tot_eff = wdivₕ(
+                gradₕ(
+                    specific(Y.c.ρq_tot, Y.c.ρ) -
+                    q_tot_r(thermo_params, ᶜp),
+                ),
+            )
         end
     end
 
@@ -166,20 +184,31 @@ NVTX.@annotate function prep_hyperdiffusion_tendency!(Yₜ, Y, p, t)
             @. ᶜ∇²uʲs.:($$j) =
                 C123(wgradₕ(divₕ(ᶜuʲs.:($$j)))) -
                 C123(wcurlₕ(C123(curlₕ(ᶜuʲs.:($$j)))))
-            @. ᶜ∇²s_dʲs.:($$j) =
-                wdivₕ(gradₕ(TD.dry_static_energy(thermo_params, ᶜTʲs.:($$j), ᶜΦ)))
+            # Same reference-state subtraction as grid mean. Updrafts share
+            # the grid-mean pressure, so `sd_r(ᶜp)` and `q_tot_r(ᶜp)` reuse the
+            # same profiles.
+            @. ᶜ∇²s_dʲs.:($$j) = wdivₕ(
+                gradₕ(
+                    TD.dry_static_energy(thermo_params, ᶜTʲs.:($$j), ᶜΦ) -
+                    sd_r(thermo_params, ᶜp),
+                ),
+            )
             if p.atmos.microphysics_model isa Union{NonEquilibriumMicrophysics1M,
                 NonEquilibriumMicrophysics2M}
                 @. ᶜ∇²q_tot_effʲs.:($$j) = wdivₕ(
                     gradₕ(
                         Y.c.sgsʲs.:($$j).q_tot -
                         Y.c.sgsʲs.:($$j).q_rai -
-                        Y.c.sgsʲs.:($$j).q_sno,
+                        Y.c.sgsʲs.:($$j).q_sno -
+                        q_tot_r(thermo_params, ᶜp),
                     ),
                 )
             else
-                @. ᶜ∇²q_tot_effʲs.:($$j) =
-                    wdivₕ(gradₕ(Y.c.sgsʲs.:($$j).q_tot))
+                @. ᶜ∇²q_tot_effʲs.:($$j) = wdivₕ(
+                    gradₕ(
+                        Y.c.sgsʲs.:($$j).q_tot - q_tot_r(thermo_params, ᶜp),
+                    ),
+                )
             end
         end
     end
