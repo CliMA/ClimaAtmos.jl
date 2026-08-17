@@ -114,8 +114,10 @@ tendency `-∂ᵥ(ρ u³ χ)`, with zero-flux boundary conditions imposed by
   - `ᶜχ`: Center-space specific (per-mass) transported quantity.
   - `dt`: Timestep, used only by the van Leer limiter [s].
   - `upwinding`: Reconstruction of `χ` on faces; one of `Val(:none)` (central
-    interpolation), `Val(:first_order)`, `Val(:third_order)`, or
-    `Val(:vanleer_limiter)`.
+    interpolation), `Val(:first_order)`, `Val(:third_order)`,
+    `Val(:vanleer_limiter)` (`MonotoneLocalExtrema` constraint), or
+    `Val(:vanleer_limiter_posd)` (`PositiveDefinite` constraint, for
+    non-negative moisture tracers).
 """
 function vertical_transport(ᶜρ, ᶠu³, ᶜχ, dt, ::Val{:none})
     ᶜJ = Fields.local_geometry_field(axes(ᶜρ)).J
@@ -135,7 +137,27 @@ end
             -(ᶜadvdivᵥ(ᶠinterp(ᶜρ * ᶜJ) / ᶠJ * ᶠlin_vanleer(ᶠu³, ᶜχ, dt))),
         )
     end
+    function vertical_transport(ᶜρ, ᶠu³, ᶜχ, dt, ::Val{:vanleer_limiter_posd})
+        ᶜJ = Fields.local_geometry_field(axes(ᶜρ)).J
+        ᶠJ = Fields.local_geometry_field(axes(ᶠu³)).J
+        return @. lazy(
+            -(ᶜadvdivᵥ(ᶠinterp(ᶜρ * ᶜJ) / ᶠJ * ᶠlin_vanleer_posd(ᶠu³, ᶜχ, dt))),
+        )
+    end
 end
+
+"""
+    moisture_upwinding(upwinding)
+
+Return the upwinding scheme to use for the vertical transport of non-negative
+moisture tracers, given the configured `upwinding` scheme. `Val(:vanleer_limiter)`
+is mapped to `Val(:vanleer_limiter_posd)`, replacing the `MonotoneLocalExtrema`
+slope constraint with the less diffusive `PositiveDefinite` constraint
+(𝜙_min = 0), which prevents undershoots below zero without clipping local
+extrema. All other schemes are returned unchanged.
+"""
+moisture_upwinding(::Val{:vanleer_limiter}) = Val(:vanleer_limiter_posd)
+moisture_upwinding(upwinding) = upwinding
 function vertical_transport(ᶜρ, ᶠu³, ᶜχ, dt, ::Val{:third_order})
     ᶜJ = Fields.local_geometry_field(axes(ᶜρ)).J
     ᶠJ = Fields.local_geometry_field(axes(ᶠu³)).J
@@ -310,8 +332,10 @@ identically zero.
 
 Overwrites `Yₜ` with `vtt_upwind - vtt_central` for `ρe_tot` (and `ρq_tot`
 when available), where the upwind scheme is given by the
-`energy_q_tot_upwinding` numerics option. All other fields of `Yₜ` are zero.
-Returns `nothing`.
+`energy_q_tot_upwinding` numerics option; for `ρq_tot` the scheme is first
+passed through [`moisture_upwinding`](@ref), so `:vanleer_limiter` uses the
+`PositiveDefinite` slope constraint instead of `MonotoneLocalExtrema`. All
+other fields of `Yₜ` are zero. Returns `nothing`.
 
 Evaluating the correction *after* Newton — rather than folding it into
 the implicit tendency — means the upwind direction is taken with respect
@@ -331,7 +355,8 @@ NVTX.@annotate function correct_implicit_advection_tendency!(Yₜ, Y, p, t)
     @. Yₜ.c.ρe_tot = vtt_up - vtt_c
     if !(microphysics_model isa DryModel)
         ᶜq_tot = @. lazy(specific(Y.c.ρq_tot, Y.c.ρ))
-        vtt_up = vertical_transport(Y.c.ρ, ᶠu³, ᶜq_tot, dt, energy_q_tot_upwinding)
+        q_tot_upwinding = moisture_upwinding(energy_q_tot_upwinding)
+        vtt_up = vertical_transport(Y.c.ρ, ᶠu³, ᶜq_tot, dt, q_tot_upwinding)
         vtt_c = vertical_transport(Y.c.ρ, ᶠu³, ᶜq_tot, dt, Val(:none))
         @. Yₜ.c.ρq_tot = vtt_up - vtt_c
     end

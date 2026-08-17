@@ -1880,10 +1880,14 @@ types for compile-time dispatch.
 
   - `energy_q_tot_upwinding = :vanleer_limiter`: Upwinding for `ρe_tot` and
     `ρq_tot` vertical advection. Valid values are `:none`, `:first_order`,
-    `:third_order`, and `:vanleer_limiter`, given as a `Symbol`, a `String`, or
-    an already-wrapped `Val`.
+    `:third_order`, `:vanleer_limiter` (`MonotoneLocalExtrema` constraint), and
+    `:vanleer_limiter_posd` (`PositiveDefinite` constraint), given as a
+    `Symbol`, a `String`, or an already-wrapped `Val`. With `:vanleer_limiter`,
+    `ρq_tot` automatically uses the `PositiveDefinite` constraint (see
+    `moisture_upwinding`).
   - `tracer_upwinding = :vanleer_limiter`: Upwinding for the other grid-scale
-    tracers, same valid values.
+    tracers, same valid values. With `:vanleer_limiter`, water-species tracers
+    (`ρq_χ`) automatically use the `PositiveDefinite` constraint.
   - `edmfx_mse_q_tot_upwinding = :first_order`: Upwinding for the EDMF subdomain
     `mse`, `q_tot`, and TKE.
   - `edmfx_sgsflux_upwinding = :none`: Upwinding for the EDMF subgrid-scale mass

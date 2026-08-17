@@ -264,6 +264,27 @@ Defined only when ClimaCore is at least v0.14.22.
 end
 
 """
+    ᶠlin_vanleer_posd
+
+Linear van Leer reconstruction of the product of a center scalar with a face
+velocity, with the `PositiveDefinite` (posd) slope constraint and first-order
+one-sided stencils at the boundaries. On ClimaCore ≥ v0.15.1 the constraint
+enforces the physical lower bound 𝜙_min = 0 from Lin et al. (1994, eq 3)
+without clipping local extrema, so it is less diffusive than
+`MonotoneLocalExtrema` but guarantees non-negativity only for fields that are
+non-negative to begin with (e.g. specific humidities).
+
+Defined only when ClimaCore is at least v0.14.22.
+"""
+@static if pkgversion(ClimaCore) ≥ v"0.14.22"
+    const ᶠlin_vanleer_posd = Operators.LinVanLeerC2F(
+        bottom = Operators.FirstOrderOneSided(),
+        top = Operators.FirstOrderOneSided(),
+        constraint = Operators.PositiveDefinite(), # (posd)
+    )
+end
+
+"""
     ᶜinterp_matrix
     ᶜleft_bias_matrix
     ᶜright_bias_matrix

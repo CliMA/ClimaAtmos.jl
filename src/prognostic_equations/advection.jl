@@ -183,7 +183,10 @@ Increments:
 
   - Every grid-mean tracer `Yₜ.c.ρχ` except `ρe_tot` and `ρq_tot` (those are advected
     implicitly): flux-form `vertical_transport` with the grid-mean flow `ᶠu³` and the
-    `p.atmos.numerics.tracer_upwinding` scheme. When EDMFX SGS mass flux is active,
+    `p.atmos.numerics.tracer_upwinding` scheme; water-species tracers (`ρq_χ`) pass
+    the scheme through [`moisture_upwinding`](@ref) first, so `:vanleer_limiter`
+    uses the `PositiveDefinite` slope constraint instead of
+    `MonotoneLocalExtrema`. When EDMFX SGS mass flux is active,
     difference-form SGS corrections are added on top of this in
     `edmfx_sgs_mass_flux_tendency!`.
   - `Yₜ.c.ρq_tot`: the prescribed-flow surface flux from
@@ -249,7 +252,12 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     foreach_gs_tracer(Yₜ, Y) do ᶜρχₜ, ᶜρχ, ρχ_name
         if !(ρχ_name in (@name(ρe_tot), @name(ρq_tot)))
             ᶜχ = @. lazy(specific(ᶜρχ, Y.c.ρ))
-            vtt = vertical_transport(ᶜρ, ᶠu³, ᶜχ, dt, tracer_upwinding)
+            # Non-negative water species use the positive-definite variant of
+            # the van Leer limiter; other tracers keep the monotone constraint.
+            upwinding =
+                is_moisture_tracer_name(ρχ_name) ?
+                moisture_upwinding(tracer_upwinding) : tracer_upwinding
+            vtt = vertical_transport(ᶜρ, ᶠu³, ᶜχ, dt, upwinding)
             @. ᶜρχₜ += vtt
         end
     end

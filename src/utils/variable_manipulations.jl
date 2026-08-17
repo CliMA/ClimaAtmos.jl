@@ -90,6 +90,20 @@ start with `ρ`. This is the auto-discovery predicate behind
     length(name_chain) == 1 && startswith(string(name_chain[1]), "ρ")
 
 """
+    is_moisture_tracer_name(name)
+
+Return `true` if `name` is a top-level density-weighted water-species mass
+name `@name(ρq_χ)`, e.g. `@name(ρq_tot)` or `@name(ρq_rai)`. Like
+`is_ρ_weighted_name`, the test is purely lexical. Used to select the
+positive-definite variant of the van Leer limiter for moisture transport
+(see `moisture_upwinding`).
+"""
+@generated is_moisture_tracer_name(
+    ::MatrixFields.FieldName{name_chain},
+) where {name_chain} =
+    length(name_chain) == 1 && startswith(string(name_chain[1]), "ρq_")
+
+"""
     specific_tracer_name(ρχ_name)
 
 Convert the density-weighted name `@name(ρχ)` to the specific name `@name(χ)`
