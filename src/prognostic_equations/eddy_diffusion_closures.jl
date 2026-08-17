@@ -843,7 +843,7 @@ Tags: `:master` (the blended scale), `:wall`, `:tke`, `:buoy`, `:l_grid`, and
 end
 
 """
-    ᶜmixing_length(Y, p, property::Val{P} = Val{:master}())
+    ᶜmixing_length(Y, p, property::Val{P} = Val{:master}(); grid_scale)
 
 Return a lazy cell-center field of the PROPHET (`EDMFX` in code) mixing length,
 selected by `property` (`get_mixing_length_field`).
@@ -856,8 +856,17 @@ production-dissipation balance for `l_TKE`, consistent with the TKE budget.
 
 Only valid for `AbstractEDMF` configurations, which always carry `Y.c.ρtke`.
 Writes `p.scratch.ᶜtemp_scalar_5` (the Prandtl number) as a side effect.
+
+# Keyword Arguments
+
+  - `grid_scale`: upper bound on the mixing length. By default, the
+    resolvability filter scale `max(Δx_h, Δz)` (see
+    `resolvability_filter_scale`).
 """
-function ᶜmixing_length(Y, p, property::Val{P} = Val{:master}()) where {P}
+function ᶜmixing_length(
+    Y, p, property::Val{P} = Val{:master}();
+    grid_scale = resolvability_filter_scale(axes(Y.c)),
+) where {P}
     (; params) = p
     (; ustar, obukhov_length) = p.precomputed.sfc_conditions
     # Stability-biased buoyancy gradient: registers unresolved inversions
@@ -867,7 +876,7 @@ function ᶜmixing_length(Y, p, property::Val{P} = Val{:master}()) where {P}
     (; ᶜN²_eff, ᶜbuoygrad, ᶜstrain_rate_norm) = p.precomputed
     ᶜz = Fields.coordinate_field(Y.c).z
     z_sfc = Fields.level(Fields.coordinate_field(Y.f).z, Fields.half)
-    ᶜΔ_f = resolvability_filter_scale(axes(Y.c))
+    ᶜΔ_f = grid_scale
 
     # ᶜmixing_length is only evaluated for AbstractEDMF, which always carries
     # Y.c.ρtke.
@@ -904,6 +913,27 @@ function ᶜmixing_length(Y, p, property::Val{P} = Val{:master}()) where {P}
         ),
     )
     return @. lazy(get_mixing_length_field(ᶜmixing_length_tuple, property))
+end
+
+"""
+    set_horizontal_diffusivities!(Y, p)
+
+Compute and cache the horizontal eddy viscosity `ᶜK_u_h` and eddy diffusivity
+`ᶜK_h_h` of the TKE-based closure, with the mixing length limited by the
+horizontal node spacing, `l_h = min(l_phys, Δx_h)`.
+"""
+function set_horizontal_diffusivities!(Y, p)
+    (; params) = p
+    (; ᶜK_u_h, ᶜK_h_h, ᶜN²_eff, ᶜstrain_rate_norm) = p.precomputed
+    turbconv_params = CAP.turbconv_params(params)
+    Δx_h = horizontal_filter_scale(axes(Y.c))
+    ᶜl_h = ᶜmixing_length(Y, p; grid_scale = Δx_h)
+    ᶜtke = @. lazy(specific(Y.c.ρtke, Y.c.ρ))
+    @. ᶜK_u_h = eddy_viscosity(turbconv_params, ᶜtke, ᶜl_h)
+    ᶜprandtl_nvec =
+        @. lazy(turbulent_prandtl_number(params, ᶜN²_eff, ᶜstrain_rate_norm))
+    @. ᶜK_h_h = eddy_diffusivity(ᶜK_u_h, ᶜprandtl_nvec)
+    return nothing
 end
 
 """

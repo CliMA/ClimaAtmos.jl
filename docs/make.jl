@@ -93,6 +93,7 @@ makedocs(;
             ],
             "Physics & Parameterizations" => [
                 "PROPHET: Prognostic Equations" => "edmf_equations.md",
+                "PROPHET: Horizontal Diffusion" => "edmf_horizontal_diffusion.md",
                 "Microphysics" => "microphysics.md",
                 "Radiation" => "radiation.md",
                 "Gravity Wave Drag" => [
