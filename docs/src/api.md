@@ -324,7 +324,6 @@ Biased and upwinded reconstructions:
 
 ```@docs
 ClimaAtmos.ᶠleft_bias
-ClimaAtmos.upwind_biased_grad
 ClimaAtmos.ᶠupwind1
 ClimaAtmos.ᶠupwind3
 ClimaAtmos.ᶠlin_vanleer
