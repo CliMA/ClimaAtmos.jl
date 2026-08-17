@@ -1,4 +1,4 @@
-402
+403
 
 # **README**
 #
@@ -32,6 +32,12 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+403
+- Diffuse total enthalpy in the Smagorinsky-Lilly and AMD tendencies,
+  vertical and horizontal, with the single-gradient decomposition
+  `∇s_d + (h_eff + Φ) ∇q_tot_eff`, matching the boundary-layer and
+  EDMFX diffusion, instead of diffusing `h_tot` directly.
+
 402
 - Hyperdiffusion: subtract a hydrostatic reference state from the diffused
   scalars (dry-static-energy `sd_r(p)` and total-water `q_tot_r(p)`. Removes
