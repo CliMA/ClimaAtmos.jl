@@ -597,6 +597,55 @@ end
 
 struct ISDACForcing end
 
+"""
+    ERA5Nudging
+
+Pre-forecast analysis nudging toward ERA5 for global (non-column) runs.
+
+Relaxes the resolved large-scale meteorological state of a global simulation
+toward a sequence of ERA5 snapshots over a short window preceding the "official"
+forecast start, so that fast/model-specific state (clouds, turbulence, EDMF,
+land coupling, vertical motion) can equilibrate while the synoptic environment
+is held near ERA5. This is standard analysis nudging (cf. MPAS-A/WRF), applied
+as
+
+    ∂X/∂t |_nudge = W(z) * (X_ERA5(t) - X_model) / τ_X
+
+added to the ordinary model tendency, for `X ∈ {u, v, T, qₜ}` only. Momentum is
+relaxed as a velocity tendency on `Y.c.uₕ` and temperature/humidity are
+converted to `ρe_tot`/`ρq_tot` tendencies, so density and surface pressure are
+never nudged (no arbitrary mass forcing).
+
+The ERA5 targets are the same per-time, model-`z`-level files used for
+`WeatherModel` initial conditions (`era5_init_processed_internal_YYYYMMDD_HHMM.nc`),
+located in `file_dir`. Snapshots are discovered at `interval` spacing from the
+simulation `start_date` up to `start_date + window`, regridded once onto the
+model grid, and linearly interpolated in time each step. Nudging turns off once
+the model time passes the last available snapshot (the forecast start); the
+state is preserved, only the forcing tendency stops.
+
+## Fields
+
+  - `file_dir`: directory containing the processed ERA5 snapshot files.
+  - `window`: nudging window length [s] (e.g. `12 * 3600`).
+  - `interval`: spacing between ERA5 snapshots [s] (e.g. `3 * 3600`).
+  - `τ_uvT`: relaxation timescale for `u`, `v`, and `T` [s].
+  - `τ_q`: relaxation timescale for total specific humidity `qₜ` [s].
+  - `surface_weight`: vertical weight `W` at/below `ramp_bottom` (0–1).
+  - `ramp_bottom`: height [m] below which `W = surface_weight`.
+  - `ramp_top`: height [m] above which `W = 1` (before any sponge taper).
+"""
+struct ERA5Nudging{FT} <: AbstractForcing
+    file_dir::String
+    window::FT
+    interval::FT
+    τ_uvT::FT
+    τ_q::FT
+    surface_weight::FT
+    ramp_bottom::FT
+    ramp_top::FT
+end
+
 abstract type AbstractEnvBuoyGradClosure end
 struct BuoyGradMean <: AbstractEnvBuoyGradClosure end
 

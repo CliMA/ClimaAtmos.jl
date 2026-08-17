@@ -350,8 +350,29 @@ check_steady_state:
   value: false
 # Single-column model (SCM) forcing
 external_forcing:
-  help: "External forcing for single-column experiments. Leave `~` for almost every case: the forcing is then taken from the setup chosen by `initial_condition` (the preferred route). Set it only to apply forcing that differs from the initial condition — the intended use is `ReanalysisMonthlyAveragedDiurnal` (monthly-averaged diurnal ERA5 forcing, which has no `initial_condition` counterpart), paired with `initial_condition: ReanalysisTimeVarying`. The values `GCM`/`ISDAC`/`ForcingFromFile`/`ReanalysisTimeVarying` merely mirror `initial_condition` and are redundant with it. [`~` (default), `ReanalysisMonthlyAveragedDiurnal`, `GCM`, `ISDAC`, `ForcingFromFile`, `ReanalysisTimeVarying`]"
+  help: "External forcing. For single-column experiments leave `~` for almost every case: the forcing is then taken from the setup chosen by `initial_condition` (the preferred route). Set it only to apply forcing that differs from the initial condition — the intended single-column use is `ReanalysisMonthlyAveragedDiurnal` (monthly-averaged diurnal ERA5 forcing, which has no `initial_condition` counterpart), paired with `initial_condition: ReanalysisTimeVarying`. The values `GCM`/`ISDAC`/`ForcingFromFile`/`ReanalysisTimeVarying` merely mirror `initial_condition` and are redundant with it. For global (e.g. `WeatherModel`) runs, `ERA5Nudging` relaxes u/v/T/qₜ toward ERA5 snapshots over a pre-forecast spin-up window (see the `era5_nudging_*` keys and `era5_initial_condition_dir`). [`~` (default), `ERA5Nudging`, `ReanalysisMonthlyAveragedDiurnal`, `GCM`, `ISDAC`, `ForcingFromFile`, `ReanalysisTimeVarying`]"
   value: ~
+era5_nudging_window_hours:
+  help: "ERA5Nudging: length of the pre-forecast nudging window [hours]. ERA5 snapshots are used from `start_date` up to `start_date + window`, after which nudging turns off. [`12` (default)]"
+  value: 12
+era5_nudging_interval_hours:
+  help: "ERA5Nudging: spacing between the processed ERA5 snapshot files [hours]. [`3` (default)]"
+  value: 3
+era5_nudging_timescale_uvT:
+  help: "ERA5Nudging: relaxation timescale for horizontal winds (u, v) and temperature (T) [seconds]. [`10800` (3 h, default)]"
+  value: 10800.0
+era5_nudging_timescale_q:
+  help: "ERA5Nudging: relaxation timescale for total specific humidity qₜ [seconds]; typically weaker than `era5_nudging_timescale_uvT` so cloud/moisture physics keeps freedom. [`21600` (6 h, default)]"
+  value: 21600.0
+era5_nudging_surface_weight:
+  help: "ERA5Nudging: vertical nudging weight at/below `era5_nudging_ramp_bottom` (0–1); weaker near the surface so the land model and surface layer can equilibrate. [`0.3` (default)]"
+  value: 0.3
+era5_nudging_ramp_bottom:
+  help: "ERA5Nudging: height [m] below which the vertical nudging weight equals `era5_nudging_surface_weight`. [`500.0` (default)]"
+  value: 500.0
+era5_nudging_ramp_top:
+  help: "ERA5Nudging: height [m] above which the vertical nudging weight is 1 (before any model-top sponge taper). [`1500.0` (default)]"
+  value: 1500.0
 external_forcing_file:
   help: "Path to a NetCDF forcing file you supply, read by the file-driven single-column cases `GCM`, `ARMVARANAL`, and `ForcingFromFile`. The `ReanalysisTimeVarying` / `ReanalysisMonthlyAveragedDiurnal` cases ignore this and instead generate/locate their file from `site_latitude`/`site_longitude`/`start_date`. [`nothing` (default), `path/to/file`]"
   value: ~

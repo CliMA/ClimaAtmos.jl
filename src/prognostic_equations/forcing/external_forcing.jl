@@ -157,6 +157,23 @@ Returns:
 """
 function external_forcing_cache(Y, atmos::AtmosModel, params, start_date)
     external_forcing = atmos.external_forcing
+    if external_forcing isa ERA5Nudging
+        # Taper nudging to zero approaching the model-top sponge so the two do
+        # not fight. Derive the taper start from whichever sponge is active
+        # (lowest `zd`); otherwise disable the upper taper (`z_top`).
+        z_top = maximum(Fields.coordinate_field(Y.f).z)
+        sponge_zds = filter(
+            !isnothing,
+            (
+                isnothing(atmos.rayleigh_sponge) ? nothing :
+                atmos.rayleigh_sponge.zd,
+                isnothing(atmos.viscous_sponge) ? nothing :
+                atmos.viscous_sponge.zd,
+            ),
+        )
+        z_taper_start = isempty(sponge_zds) ? z_top : minimum(sponge_zds)
+        return era5_nudging_cache(Y, external_forcing, start_date, z_taper_start)
+    end
     if external_forcing isa ExternalDrivenTVForcing
         # Surface variables are required by the resolved model components that
         # consume them, not by the forcing terms: `ts` by an `ExternalTemperature`

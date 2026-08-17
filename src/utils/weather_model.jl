@@ -47,7 +47,7 @@ function weather_model_data_path(
         # User-provided directory
         ic_data_path = joinpath(
             era5_initial_condition_dir,
-            "era5_init_processed_internal_$(start_date_str)_0000.nc", # TODO: generalize for all times once Coupler supports HHMM specification
+            "era5_init_processed_internal_$(start_date_str)_$(start_time).nc",
         )
         if isfile(ic_data_path)
             @info "Using existing interpolated IC file: $ic_data_path"
@@ -55,7 +55,7 @@ function weather_model_data_path(
         end
         raw_data_path = joinpath(
             era5_initial_condition_dir,
-            "era5_raw_$(start_date_str)_0000.nc",
+            "era5_raw_$(start_date_str)_$(start_time).nc",
         )
         if !isfile(raw_data_path)
             error(
@@ -75,7 +75,7 @@ function weather_model_data_path(
     # Fallback: generate a 1D-interpolated IC file when processed_internal file absent
     ic_data_path_1d = joinpath(
         era5_initial_condition_dir,
-        "era5_init_$(start_date_str)_0000.nc",
+        "era5_init_$(start_date_str)_$(start_time).nc",
     )
     @info "Processed 3D IC not found; falling back to 1D interpolation" (
         raw = raw_data_path,

@@ -665,6 +665,21 @@ function get_external_forcing_model(
         )
     elseif external_forcing == "ISDAC"
         ISDACForcing()
+    elseif external_forcing == "ERA5Nudging"
+        file_dir = parsed_args["era5_initial_condition_dir"]
+        isnothing(file_dir) && error(
+            """external_forcing "ERA5Nudging" requires `era5_initial_condition_dir` to point at the folder holding the processed ERA5 snapshot files (the same folder used for the `WeatherModel` initial condition).""",
+        )
+        ERA5Nudging{FT}(
+            file_dir,
+            FT(parsed_args["era5_nudging_window_hours"] * 3600),
+            FT(parsed_args["era5_nudging_interval_hours"] * 3600),
+            FT(parsed_args["era5_nudging_timescale_uvT"]),
+            FT(parsed_args["era5_nudging_timescale_q"]),
+            FT(parsed_args["era5_nudging_surface_weight"]),
+            FT(parsed_args["era5_nudging_ramp_bottom"]),
+            FT(parsed_args["era5_nudging_ramp_top"]),
+        )
     elseif external_forcing == "ForcingFromFile"
         # Reuse the setup's forcing when initial_condition is also ForcingFromFile;
         # otherwise build it from the file (forcing only, no ForcingFromFile IC).
@@ -673,7 +688,7 @@ function get_external_forcing_model(
         setup_forcing
     else
         error(
-            """Unknown external_forcing `$external_forcing`. Expected: ~, "ForcingFromFile", "GCM", "ISDAC", "ReanalysisTimeVarying", or "ReanalysisMonthlyAveragedDiurnal".""",
+            """Unknown external_forcing `$external_forcing`. Expected: ~, "ForcingFromFile", "GCM", "ISDAC", "ERA5Nudging", "ReanalysisTimeVarying", or "ReanalysisMonthlyAveragedDiurnal".""",
         )
     end
 
