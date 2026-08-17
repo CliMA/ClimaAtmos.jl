@@ -1,4 +1,4 @@
-402
+403
 
 # **README**
 #
@@ -32,6 +32,13 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+403
+- Viscous sponge: match hyperdiffusion and vertical diffusion. Energy is
+  diffused as a dry-static-energy + h_eff-weighted q_tot_eff split rather
+  than as total enthalpy. Water mass diffuses on q_tot_eff (rain and snow
+  excluded); the aggregate tendency is distributed to the suspended cloud
+  mass species (ρq_lcl, ρq_icl).
+
 402
 - Hyperdiffusion: subtract a hydrostatic reference state from the diffused
   scalars (dry-static-energy `sd_r(p)` and total-water `q_tot_r(p)`. Removes

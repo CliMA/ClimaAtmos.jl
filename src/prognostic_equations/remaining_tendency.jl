@@ -116,9 +116,6 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
     (; ᶜp, ᶜK, ᶜT, ᶜh_tot, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice) = p.precomputed
     (; sfc_conditions) = p.precomputed
 
-    vst_uₕ = viscous_sponge_tendency_uₕ(ᶜuₕ, viscous_sponge)
-    vst_u₃ = viscous_sponge_tendency_u₃(ᶠu₃, viscous_sponge)
-    vst_ρe_tot = viscous_sponge_tendency_ρe_tot(ᶜρ, ᶜh_tot, viscous_sponge)
     rst_uₕ = rayleigh_sponge_tendency_uₕ(ᶜuₕ, rayleigh_sponge)
 
     if use_prognostic_tke(turbconv_model)
@@ -166,28 +163,8 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
 
     # TODO: fuse, once we fix
     #       https://github.com/CliMA/ClimaCore.jl/issues/2165
-    @. Yₜ.c.uₕ += vst_uₕ
     @. Yₜ.c.uₕ += rst_uₕ
-    @. Yₜ.f.u₃.components.data.:1 += vst_u₃
-    @. Yₜ.c.ρe_tot += vst_ρe_tot
-
-    foreach_gs_tracer(Yₜ, Y) do ᶜρχₜ, ᶜρχ, ρχ_name
-        ᶜχ = @. lazy(specific(ᶜρχ, Y.c.ρ))
-        vst_tracer = viscous_sponge_tendency_tracer(ᶜρ, ᶜχ, viscous_sponge)
-        @. ᶜρχₜ += vst_tracer
-        if ρχ_name == @name(ρq_tot)
-            @. Yₜ.c.ρ += vst_tracer
-        end
-    end
-
-    if turbconv_model isa PrognosticEDMFX
-        n = n_mass_flux_subdomains(turbconv_model)
-        for j in 1:n
-            ᶠu₃ʲ = Y.f.sgsʲs.:($j).u₃
-            vst_u₃ʲ = viscous_sponge_tendency_u₃(ᶠu₃ʲ, viscous_sponge)
-            @. Yₜ.f.sgsʲs.:($$j).u₃.components.data.:1 += vst_u₃ʲ
-        end
-    end
+    viscous_sponge_tendency!(Yₜ, Y, p)
 
     # Held Suarez tendencies
     @. Yₜ.c.uₕ += hs_tendency_uₕ
