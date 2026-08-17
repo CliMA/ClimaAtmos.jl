@@ -277,6 +277,17 @@ ClimaAtmos.AbstractChemistryModel
 ClimaAtmos.GasPhaseChem
 ```
 
+### COSP and CloudSat
+
+```@docs
+ClimaAtmos.COSP.COSPCloudSatOptics.cloudsat_gas_attenuation!
+ClimaAtmos.COSP.COSPCloudSatOptics.cloudsat_grid_mean_sizes!
+ClimaAtmos.COSP.COSPCloudSatOptics.cloudsat_optics_subcolumn!
+ClimaAtmos.COSP.COSPCloudSatReflectivity.cloudsat_gas_path_attenuation!
+ClimaAtmos.COSP.COSPCloudSatReflectivity.cloudsat_reflectivity_subcolumn!
+ClimaAtmos.COSP.COSPCloudSatCFAD.accumulate_cloudsat_cfad!
+```
+
 ## Numerics
 
 ```@docs
