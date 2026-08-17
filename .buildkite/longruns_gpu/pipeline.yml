@@ -23,7 +23,7 @@ steps:
     command:
       - echo "--- Instantiate examples"
       - julia --project=.buildkite -e 'using Pkg; Pkg.instantiate(;verbose=true)'
-      - julia --project=.buildkite -e 'using Pkg; Pkg.add(Pkg.PackageSpec(;name="ClimaCore", rev="tr/mapreduce"))'
+      - julia --project=.buildkite -e 'using Pkg; Pkg.add(Pkg.PackageSpec(;name="ClimaCore", rev="ts/reduction-recursion"))'
       - julia --project=.buildkite -e 'using Pkg; Pkg.resolve()'
       - julia --project=.buildkite -e 'using Pkg; Pkg.precompile()'
       - julia --project=.buildkite -e 'using CUDA; CUDA.precompile_runtime()'
