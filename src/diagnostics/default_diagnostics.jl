@@ -5,27 +5,58 @@
 # level interfaces, add them here. Feel free to include extra files.
 
 """
-    default_diagnostics(model, duration, start_date, t_start; output_writer)
+    default_diagnostics(model::AtmosModel, duration, start_date, t_start;
+                        output_writer, topography)
+    default_diagnostics(submodel, duration, start_date, t_start; output_writer)
 
-Return a list of `ScheduledDiagnostic`s associated with the given `model` that use
-`output_write` to write to disk. `duration` is the expected duration of the simulation and
-it is used to choose the most reasonable output frequency.
+Return the default `ScheduledDiagnostic`s for `model`, written through `output_writer`.
 
-`start_date` is the date that we assign at the start of the simulation.
-We convert time to date as
+The `AtmosModel` method returns the core diagnostics (see `core_default_diagnostics`)
+together with the defaults of every submodel field of `AtmosModel` that defines them.
+Submodels dispatch on their own type; the fallback method returns `[]`, so submodels
+without defaults contribute nothing. Note that `topography` is consumed by the
+`AtmosModel` method only and is not forwarded to the submodel methods.
+
+Dates are assigned to simulation times as
 
 ```julia
 current_date = start_date + integrator.t
 ```
 
-`t_start` is the start time of the simulation and `t_start` is not necessarily zero.
+# Arguments
 
-The logic is as follows:
+  - `model`: The `AtmosModel`, or one of its submodels (e.g. `EquilibriumMicrophysics0M`).
+  - `duration`: Expected duration of the simulation [s]. Sets the output frequency, via
+    `frequency_averages`.
+  - `start_date`: `Dates.DateTime` assigned to the start of the simulation.
+  - `t_start`: Start time of the simulation, not necessarily zero [s].
 
-If `duration < 1 day` take hourly means,
-if `duration < 30 days` take daily means,
-if `duration < 90 days` take means over ten days,
-If `duration >= 90 year` take monthly means.
+# Keyword Arguments
+
+  - `output_writer`: `ClimaDiagnostics` writer bound to every returned diagnostic.
+  - `topography`: Whether the grid has topography. When `true`, the `AtmosModel` method
+    prepends a single instantaneous `orog` diagnostic. Required by the `AtmosModel` method
+    and not accepted by the submodel methods.
+
+# Returns
+
+A `Vector` of `ClimaDiagnostics.ScheduledDiagnostic`, possibly empty.
+
+# Examples
+
+```julia
+import ClimaAtmos as CA
+import Dates
+
+diagnostics = CA.Diagnostics.default_diagnostics(
+    CA.AtmosModel(),
+    86400 * 10,                    # 10-day simulation
+    Dates.DateTime(2010, 1, 1),
+    0;
+    output_writer = writer,
+    topography = false,
+)
+```
 """
 function default_diagnostics(
     model::AtmosModel,
@@ -74,9 +105,34 @@ end
 default_diagnostics(submodel, duration, start_date, t_start; output_writer) = []
 
 """
-    produce_common_diagnostic_function(period, reduction)
+    common_diagnostics(period, reduction, output_writer, start_date, t_start,
+                       short_names...; pre_output_hook! = nothing)
 
-Helper function to define functions like `daily_max`.
+Build one `ScheduledDiagnostic` per short name, reduced over `period`.
+
+Shared backend of the standard frequency helpers such as `daily_max` and
+`monthly_averages`. The output schedule fires every `period`; the compute schedule comes
+from `make_compute_schedule`, which computes every step for short periods and less often
+for long ones. The reduction is seeded from `t_start` so that restarted runs accumulate
+over the same calendar windows.
+
+# Arguments
+
+  - `period`: `Dates.Period` over which the reduction accumulates (e.g. `Dates.Day(1)`).
+  - `reduction`: Binary reduction applied in time, e.g. `max`, `min`, or `(+)`.
+  - `output_writer`: `ClimaDiagnostics` writer bound to every returned diagnostic.
+  - `start_date`: `Dates.DateTime` assigned to the start of the simulation.
+  - `t_start`: Start time of the simulation [s], or an `ITime`.
+  - `short_names...`: Short names of registered diagnostics, e.g. `"rhoa"`, `"ta"`.
+
+# Keyword Arguments
+
+  - `pre_output_hook! = nothing`: Hook applied to the accumulator before writing. Averages
+    pass `average_pre_output_hook!` to normalize the accumulated sum by the sample count.
+
+# Returns
+
+A `Vector` of `ClimaDiagnostics.ScheduledDiagnostic`, one per short name.
 """
 function common_diagnostics(
     period,
@@ -114,9 +170,13 @@ end
 
 #! format: off
 """
-    A list of short names of diagnostic that are computed every hour for longer
-    simulations. The diagnostics conist of precipitation and radiation
-    variables. This is used in `make_compute_schedule`.
+    HOURLY_DIAGS
+
+Short names computed hourly, rather than six-hourly, on long output periods.
+
+These are the precipitation and radiation variables, whose sub-daily variability would
+otherwise be aliased by a six-hourly sampling of a monthly or multi-day mean. Consulted by
+`make_compute_schedule`.
 """
 const HOURLY_DIAGS = Set([
     "pr", "prra", "prsn", "prw", "rsd", "rsdt", "rsds", "rsu", "rsut", "rsus", "rld",
@@ -129,12 +189,22 @@ const HOURLY_DIAGS = Set([
 """
     make_compute_schedule(variable, period, start_date, date_last)
 
-Return an appropriate compute schedule for the given `variable` and output
-`period`.
+Return the compute schedule to pair with an output `period` for `variable`.
 
-For shorter output periods (e.g., hourly), diagnostics are computed every
-timestep. For longer output periods (e.g., monthly and daily), diagnostics are
-computed less frequently.
+Short output periods — anything other than a month, a week, or several days, so including
+hourly and daily — are computed every timestep. Longer output periods subsample: variables
+in `HOURLY_DIAGS` are computed hourly, all others six-hourly.
+
+# Arguments
+
+  - `variable`: The `ClimaDiagnostics.DiagnosticVariable` being scheduled.
+  - `period`: `Dates.Period` of the output schedule.
+  - `start_date`: `Dates.DateTime` assigned to the start of the simulation.
+  - `date_last`: Date from which the schedule counts, i.e. the date of `t_start`.
+
+# Returns
+
+An `EveryStepSchedule`, or an `EveryCalendarDtSchedule` of one or six hours.
 """
 function make_compute_schedule(variable, period, start_date, date_last)
     if !(
@@ -155,15 +225,22 @@ end
 include("standard_diagnostic_frequencies.jl")
 
 """
-    frequency_averages(duration::Real)
+    frequency_averages(duration)
 
-Return the correct averaging function depending on the total simulation time.
+Return the time-averaging helper appropriate to the total simulation length.
 
-If `duration < 1 hour` do nothing,
-If `duration < 1 day` take hourly means,
-if `duration < 30 days` take daily means,
-if `duration < 90 days` take means over ten days,
-If `duration >= 3 months` take monthly means.
+The returned closure has the signature `(short_names...; kwargs...)`, forwarding to one of
+the `*_averages` helpers with `FT = eltype(duration)` already applied:
+
+  - `duration < 1 hour`: returns an empty tuple, i.e. no averaged diagnostics.
+  - `1 hour ≤ duration < 1 day`: `hourly_averages`.
+  - `1 day ≤ duration < 30 days`: `daily_averages`.
+  - `30 days ≤ duration < 90 days`: `tendaily_averages`.
+  - `duration ≥ 90 days`: `monthly_averages`.
+
+# Arguments
+
+  - `duration`: Expected duration of the simulation [s].
 """
 function frequency_averages(duration)
     FT = eltype(duration)
@@ -186,6 +263,19 @@ end
 ########
 # Core #
 ########
+"""
+    core_default_diagnostics(output_writer, duration, start_date, t_start, topography)
+
+Return the model-independent default diagnostics.
+
+These are time averages of the core dynamical and surface-flux variables, plus the minimum
+and maximum of the surface temperature `ts`, all at the frequency chosen by
+`frequency_averages` for `duration`. When `topography` is `true`, a single instantaneous
+surface-altitude diagnostic (`orog`, written as `orog_inst`) is prepended; its schedules
+never fire again, so it is written once at initialization.
+
+Called from `default_diagnostics`.
+"""
 function core_default_diagnostics(output_writer, duration, start_date, t_start, topography)
     core_diagnostics = [
         "ts",
@@ -249,6 +339,13 @@ end
 # Microphysics model #
 ######################
 
+"""
+    _moist_default_diagnostics(duration, start_date, t_start; output_writer)
+
+Return the time-averaged moisture, cloud, and precipitation diagnostics common to every
+microphysics model. Called from the `default_diagnostics` microphysics methods, which
+append their own scheme-specific variables.
+"""
 function _moist_default_diagnostics(duration, start_date, t_start; output_writer)
     moist_diagnostics = [
         "hur",
@@ -345,6 +442,13 @@ end
 ##################
 # Radiation mode #
 ##################
+"""
+    _radiation_default_diagnostics(duration, start_date, t_start; output_writer)
+
+Return the time-averaged all-sky TOA and surface radiative fluxes common to every RRTMGP
+radiation mode. Called from the `default_diagnostics` radiation methods, which append
+cloud cover and, for `AllSkyRadiationWithClearSkyDiagnostics`, the clear-sky fluxes.
+"""
 function _radiation_default_diagnostics(duration, start_date, t_start; output_writer)
     rad_diagnostics = [
         "rsdt",

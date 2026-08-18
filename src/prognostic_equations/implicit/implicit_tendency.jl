@@ -5,6 +5,34 @@
 import ClimaCore
 import ClimaCore: Fields, Geometry
 
+"""
+    implicit_tendency!(Yₜ, Y, p, t)
+
+Compute the implicitly treated tendency of the state `Y` at time `t`,
+overwriting `Yₜ`.
+
+This is the stiff part of the IMEX splitting, containing the terms that are
+fast relative to the timestep: vertical advection and the vertical momentum
+equation (`implicit_vertical_advection_tendency!`), EDMFX subdomain vertical
+advection, entrainment/detrainment, mass flux, boundary conditions, pressure
+work, and the cached updraft `u₃`/`ρa` stage tendencies. Vertical diffusion is
+included only when `p.atmos.diff_mode == Implicit()`, and microphysics sources
+(plus surface precipitation deposition) only when
+`p.atmos.microphysics_tendency_timestepping == Implicit()`. All non-EDMFX
+configurations dispatch the SGS tendencies to no-ops.
+
+The linearization of this tendency is the Jacobian ``∂Yₜ/∂Y`` computed by the
+[`JacobianAlgorithm`](@ref) subtypes; the residual it enters contains only the
+central (`Val(:none)`) vertical transport of `ρe_tot` and `ρq_tot` — the
+upwind–central difference is applied after the Newton solve by
+`correct_implicit_advection_tendency!`.
+
+Reads the precomputed quantities set by `set_implicit_precomputed_quantities!`
+(`ᶠu³`, `ᶜh_tot`, sedimentation and precipitation terminal velocities, and the
+EDMFX subdomain states). Returns `nothing`.
+
+See [Implicit Solver](@ref) for the IMEX formulation.
+"""
 NVTX.@annotate function implicit_tendency!(Yₜ, Y, p, t)
     fill_with_nans!(p)
     Yₜ .= zero(eltype(Yₜ))
@@ -72,6 +100,23 @@ end
 # TODO: All of these should use dtγ instead of dt, but dtγ is not available in
 # the implicit tendency function. Since dt >= dtγ, we can safely use dt for now.
 
+"""
+    vertical_transport(ᶜρ, ᶠu³, ᶜχ, dt, upwinding)
+
+Return a lazy center-space broadcast of the flux-form vertical transport
+tendency `-∂ᵥ(ρ u³ χ)`, with zero-flux boundary conditions imposed by
+`ᶜadvdivᵥ`.
+
+# Arguments
+
+  - `ᶜρ`: Center-space density [kg/m³].
+  - `ᶠu³`: Face-space contravariant vertical velocity [1/s].
+  - `ᶜχ`: Center-space specific (per-mass) transported quantity.
+  - `dt`: Timestep, used only by the van Leer limiter [s].
+  - `upwinding`: Reconstruction of `χ` on faces; one of `Val(:none)` (central
+    interpolation), `Val(:first_order)`, `Val(:third_order)`, or
+    `Val(:vanleer_limiter)`.
+"""
 function vertical_transport(ᶜρ, ᶠu³, ᶜχ, dt, ::Val{:none})
     ᶜJ = Fields.local_geometry_field(axes(ᶜρ)).J
     ᶠJ = Fields.local_geometry_field(axes(ᶠu³)).J
@@ -97,6 +142,15 @@ function vertical_transport(ᶜρ, ᶠu³, ᶜχ, dt, ::Val{:third_order})
     return @. lazy(-(ᶜadvdivᵥ(ᶠinterp(ᶜρ * ᶜJ) / ᶠJ * ᶠupwind3(ᶠu³, ᶜχ))))
 end
 
+"""
+    vertical_advection(ᶠu³, ᶜχ, upwinding)
+
+Return a lazy center-space broadcast of the advective-form vertical advection
+tendency `-u³ ∂ᵥχ`, computed as the difference `-(∂ᵥ(u³ χ) - χ ∂ᵥu³)` so that
+the same divergence operator (and reconstruction) is used as in
+`vertical_transport`. `upwinding` is `Val(:none)`, `Val(:first_order)`,
+or `Val(:third_order)`.
+"""
 vertical_advection(ᶠu³, ᶜχ, ::Val{:none}) =
     @. lazy(-(ᶜadvdivᵥ(ᶠu³ * ᶠinterp(ᶜχ)) - ᶜχ * ᶜadvdivᵥ(ᶠu³)))
 vertical_advection(ᶠu³, ᶜχ, ::Val{:first_order}) =
@@ -104,6 +158,30 @@ vertical_advection(ᶠu³, ᶜχ, ::Val{:first_order}) =
 vertical_advection(ᶠu³, ᶜχ, ::Val{:third_order}) =
     @. lazy(-(ᶜadvdivᵥ(ᶠupwind3(ᶠu³, ᶜχ)) - ᶜχ * ᶜadvdivᵥ(ᶠu³)))
 
+"""
+    implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
+
+Add the implicit vertical-advection and vertical-momentum tendencies to `Yₜ`.
+
+Adds, in order:
+
+  - The mass flux divergence `-∂ᵥ(ρ u³)` to `Yₜ.c.ρ`, with zero flux through the
+    top and bottom boundaries (consistent with the state filter that zeroes `ᶠu³`
+    there and with the `ᶜadvdivᵥ_matrix()` used in the manual Jacobian).
+  - Central (`Val(:none)`) vertical transport of `h_tot` and `q_tot` to
+    `Yₜ.c.ρe_tot` and `Yₜ.c.ρq_tot`; the upwind correction is applied post-Newton
+    by `correct_implicit_advection_tendency!`.
+  - Vertical transport of the non-equilibrium microphysics tracers with their
+    terminal velocities, using downward (`ᶠright_bias`) biasing and a free-outflow
+    bottom boundary (`ᶜprecipdivᵥ`), plus the water sedimentation contributions to
+    `ρ`, `ρe_tot`, and `ρq_tot` from `vertical_advection_of_water_tendency!`.
+  - The Exner-form pressure gradient and buoyancy tendency
+    `-(∂ᵥΦ - ∂ᵥΦ_r + cp_d (θ_v - θ_vr) ∂ᵥΠ)` and the Rayleigh sponge tendency to
+    `Yₜ.f.u₃`.
+
+Vertical advection of passive tracers by the mean flow is treated explicitly.
+Returns `nothing`.
+"""
 function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     (; microphysics_model, turbconv_model, rayleigh_sponge) = p.atmos
     (; params, dt) = p
@@ -222,14 +300,18 @@ end
 """
     correct_implicit_advection_tendency!(Yₜ, Y, p, t)
 
-Post-Newton upwind correction to the central-differenced implicit vertical
-advection of `ρe_tot` and `ρq_tot` in
-[`implicit_vertical_advection_tendency!`](@ref). Called by ClimaTimeSteppers
-as the `T_post_imp!` hook on `ClimaODEFunction`: evaluated at the
-Newton-solved stage state `U*` and applied as `U ← U* + dtγ · Yₜ`.
+Apply the post-Newton upwind correction to the central-differenced implicit
+vertical advection of `ρe_tot` and `ρq_tot` in
+`implicit_vertical_advection_tendency!`. Called by ClimaTimeSteppers as the
+`T_post_imp!` hook on `ClimaODEFunction`: evaluated at the Newton-solved stage
+state `U*` and applied as `U ← U* + dtγ · Yₜ`. The hook is wired only when
+`energy_q_tot_upwinding` is not `Val(:none)`, since the correction is then
+identically zero.
 
-Writes `vtt_upwind - vtt_central` for `ρe_tot` (and `ρq_tot` when
-available). All other fields of `Yₜ` are zero.
+Overwrites `Yₜ` with `vtt_upwind - vtt_central` for `ρe_tot` (and `ρq_tot`
+when available), where the upwind scheme is given by the
+`energy_q_tot_upwinding` numerics option. All other fields of `Yₜ` are zero.
+Returns `nothing`.
 
 Evaluating the correction *after* Newton — rather than folding it into
 the implicit tendency — means the upwind direction is taken with respect

@@ -13,11 +13,12 @@ import Thermodynamics.Parameters as TDP
         ᶜw⁰, ᶜRH⁰, ᶜbuoy⁰, ᶜtke
     )
 
-Calculates non-dimensional Π-groups used in EDMF entrainment/detrainment models.
+Compute the non-dimensional Π-groups of the PROPHET (`EDMFX` in code)
+entrainment closure.
 
-Arguments:
+# Arguments
 
-  - `elev_above_sfc`: Difference between cell-center height and surface elevation (ᶜz - z_sfc) [m].
+  - `elev_above_sfc`: Cell-center height above the surface, `ᶜz - z_sfc` [m].
   - `ref_H`: Reference pressure scale height [m].
   - `ᶜaʲ`: Updraft area fraction [-].
   - `ᶜwʲ`: Updraft physical vertical velocity [m/s].
@@ -28,14 +29,18 @@ Arguments:
   - `ᶜbuoy⁰`: Environment buoyancy [m/s²].
   - `ᶜtke`: Turbulent kinetic energy [m²/s²].
 
-Returns a tuple of five Π-groups: (Π₁, Π₂, Π₃, Π₄, Π₅).
-Π₁: Related to buoyancy difference and velocity difference.
-Π₂: Related to TKE and velocity difference.
-Π₃: Related to updraft area.
-Π₄: Related to relative humidity difference.
-Π₅: Related to normalized elevation above surface.
-Π₁ and Π₂ are scaled by empirical factors (100 and 2 respectively) to
-become O(1) and then clipped to the range [-1, 1].
+# Returns
+
+The tuple `(Π₁, Π₂, Π₃, Π₄, Π₅)`, all dimensionless:
+
+  - `Π₁ = z Δbuoy / Δw²`, buoyancy contrast against the velocity contrast.
+  - `Π₂ = tke / Δw²`, environment turbulence against the velocity contrast.
+  - `Π₃ = √a`, updraft area.
+  - `Π₄ = ΔRH`, relative-humidity contrast.
+  - `Π₅ = z / ref_H`, elevation normalized by the scale height.
+
+`Π₁` and `Π₂` are divided by the empirical factors 100 and 2 to make them
+`O(1)` and are then clipped to `[-1, 1]`; `Δw²` carries an `eps` floor.
 """
 function calculate_pi_groups(
     elev_above_sfc,
@@ -76,7 +81,7 @@ bound `a_max` (preventing the area from being driven above `a_max`):
 The upper bound `a_max` is obtained from `turbconv_params` through
 `CAP.max_area`, and `max_area_limiter_power` from `CAP.max_area_limiter_power`.
 
-This is the entrainment counterpart of [`lower_area_limiter_factor`](@ref),
+This is the entrainment counterpart of `lower_area_limiter_factor`,
 which damps detrainment near the lower bound `a_min`. Together they keep
 `a ∈ [a_min, a_max]` without requiring a comparison between `entr` and `detr`.
 """
@@ -101,7 +106,7 @@ The factor smoothly damps detrainment as the area approaches the lower bound
 The lower bound `a_min` is obtained from `turbconv_params` through
 `CAP.min_area`, and `min_area_limiter_power` from `CAP.min_area_limiter_power`.
 
-This is the detrainment counterpart of [`upper_area_limiter_factor`](@ref),
+This is the detrainment counterpart of `upper_area_limiter_factor`,
 which damps entrainment near the upper bound `a_max`. Together they keep
 `a ∈ [a_min, a_max]` without requiring a comparison between `entr` and `detr`.
 """
@@ -113,50 +118,76 @@ which damps entrainment near the upper bound `a_max`. Together they keep
 end
 
 """
-    detr_buoy_inv_time_scale(Δwʲ, Δbuoyʲ, detr_buoy_inv_tau_max)
+    entr_buoy_inv_time_scale(Δwʲ, Δbuoyʲ, entr_detr_buoy_inv_tau_max)
+
+Clipped inverse buoyancy time-scale [1/s] used by the buoyancy-driven
+entrainment branch:
+
+    τ⁻¹_buoy = min(entr_detr_buoy_inv_tau_max,
+                   max(Δbuoyʲ, 0) / max(eps, |Δwʲ|))
+
+Only positive buoyancy contributes (a negatively buoyant plume detrains rather
+than entrains), and the rate is capped at `entr_detr_buoy_inv_tau_max` so a
+vanishing `Δwʲ` doesn't produce an unbounded rate.
+"""
+@inline function entr_buoy_inv_time_scale(Δwʲ, Δbuoyʲ, entr_detr_buoy_inv_tau_max)
+    FT = typeof(Δwʲ)
+    return min(
+        entr_detr_buoy_inv_tau_max,
+        max(Δbuoyʲ, FT(0)) / max(eps(FT), abs(Δwʲ)),
+    )
+end
+
+"""
+    detr_buoy_inv_time_scale(Δwʲ, Δbuoyʲ, entr_detr_buoy_inv_tau_max)
 
 Clipped inverse buoyancy time-scale [1/s] used by the buoyancy-driven
 detrainment branch:
 
-    τ⁻¹_buoy = min(detr_buoy_inv_tau_max,
+    τ⁻¹_buoy = min(entr_detr_buoy_inv_tau_max,
                    |min(Δbuoyʲ, 0)| / max(eps, |Δwʲ|))
 
 Only negative buoyancy contributes (positive buoyancy doesn't detrain), and
-the rate is capped at `detr_buoy_inv_tau_max` so a vanishing `Δwʲ` doesn't
+the rate is capped at `entr_detr_buoy_inv_tau_max` so a vanishing `Δwʲ` doesn't
 produce an unbounded rate.
 
 Extracted as a helper so it can be reused by `detrainment_rate` (the
 explicit detrainment closure) and the implicit ρa solve (where the same
 buoyancy-detrainment piece appears in the `(ε − δ)` denominator).
 """
-@inline function detr_buoy_inv_time_scale(Δwʲ, Δbuoyʲ, detr_buoy_inv_tau_max)
+@inline function detr_buoy_inv_time_scale(Δwʲ, Δbuoyʲ, entr_detr_buoy_inv_tau_max)
     FT = typeof(Δwʲ)
     return min(
-        detr_buoy_inv_tau_max,
+        entr_detr_buoy_inv_tau_max,
         abs(min(Δbuoyʲ, FT(0))) / max(eps(FT), abs(Δwʲ)),
     )
 end
 
 """
-    compute_entrainment(ᶜentr_vel_scale, ᶜarea_bounding_entr_detr, ᶜwʲ)
+    compute_entrainment(ᶜentr_vel_scale, ᶜentr_nonvel_rate,
+                        ᶜarea_bounding_entr_detr, ᶜwʲ)
 
-Total entrainment rate [1/s] as the sum of a velocity-proportional term
-and the positive part of the signed area-bounding rate:
+Total entrainment rate [1/s], assembled from the three precomputed pieces:
 
-    entr = entr_vel_scale * |wʲ| + max(0, area_bounding_entr_detr)
+    entr = entr_vel_scale * |wʲ|           # velocity-proportional  [1/m] * [m/s]
+         + entr_nonvel_rate                # buoyancy-driven + constant [1/s]
+         + max(0, area_bounding_entr_detr)  # area-bounding          [1/s]
 
-`entr_vel_scale` [1/m] is precomputed by `entrainment_velocity_scale`, and
+`entr_vel_scale` [1/m] is precomputed by `entrainment_velocity_scale`,
+`entr_nonvel_rate` [1/s] by `entrainment_nonvel_rate`, and
 `area_bounding_entr_detr` [1/s] is the signed rate produced by
-[`area_bounding_entr_detr`](@ref) (positive ⇒ this entrainment branch,
+`area_bounding_entr_detr` (positive ⇒ this entrainment branch,
 negative ⇒ the detrainment branch in `compute_detrainment`).
 `ᶜwʲ` is the physical updraft vertical velocity [m/s].
 """
 compute_entrainment(
     ᶜentr_vel_scale,
+    ᶜentr_nonvel_rate,
     ᶜarea_bounding_entr_detr,
     ᶜwʲ,
 ) =
     ᶜentr_vel_scale * abs(ᶜwʲ) +
+    ᶜentr_nonvel_rate +
     max(zero(ᶜarea_bounding_entr_detr), ᶜarea_bounding_entr_detr)
 
 """
@@ -169,16 +200,27 @@ compute_entrainment(
 Velocity-scaling prefactor [1/m] for the model-specific entrainment rate.
 The total entrainment rate [1/s] is assembled by `compute_entrainment` as
 
-    entr = entr_vel_scale * abs(wʲ) + max(0, area_bounding_entr_detr)
+    entr = entr_vel_scale * abs(wʲ) + entr_nonvel_rate
+         + max(0, area_bounding_entr_detr)
 
-where the second term comes from [`area_bounding_entr_detr`](@ref) (its
-positive branch). `model_option` dispatches to different entrainment models,
-such as `NoEntrainment`, `PiGroupsEntrainment`, or `InvZEntrainment`.
+where the second term comes from `entrainment_nonvel_rate` and the
+third from `area_bounding_entr_detr` (its positive branch).
+`model_option` selects the entrainment model:
 
-Arguments (all cell-centered):
+  - `PiGroupsEntrainment`: `Π`-group closure
+    (`calculate_pi_groups`), `entr_vel_scale = limiter · max(0, Σᵢ cᵢ|Πᵢ| + c₆) / (ᶜz - z_sfc)` with the coefficients
+    `entr_param_vec`.
+  - `InvZEntrainment`: `entr_vel_scale = limiter · entr_coeff / (ᶜz - z_sfc)`.
+
+Both non-trivial models multiply by `upper_area_limiter_factor` and
+return zero at or below the surface, where `1/(ᶜz - z_sfc)` is singular.
+
+# Arguments
+
+All state arguments are cell-centered.
 
   - `thermo_params`: Thermodynamic parameters.
-  - `turbconv_params`: Turbulence convection parameters.
+  - `turbconv_params`: Turbulence-convection parameters.
   - `ᶜz`: Height [m].
   - `z_sfc`: Surface elevation [m].
   - `ᶜp`: Pressure [Pa].
@@ -191,30 +233,12 @@ Arguments (all cell-centered):
   - `ᶜRH⁰`: Environment relative humidity [-].
   - `ᶜbuoy⁰`: Environment buoyancy [m/s²].
   - `ᶜtke`: Turbulent kinetic energy [m²/s²].
-  - `model_option`: Object specifying the entrainment model.
+  - `model_option`: Entrainment model dispatch tag.
 
-Returns the velocity-scaling prefactor [1/m].
+# Returns
+
+The non-negative velocity-scaling prefactor [1/m].
 """
-function entrainment_velocity_scale(
-    thermo_params,
-    turbconv_params,
-    ᶜz,
-    z_sfc,
-    ᶜp,
-    ᶜρ,
-    ᶜaʲ,
-    ᶜwʲ,
-    ᶜRHʲ,
-    ᶜbuoyʲ,
-    ᶜw⁰,
-    ᶜRH⁰,
-    ᶜbuoy⁰,
-    ᶜtke,
-    ::NoEntrainment,
-)
-    return zero(eltype(thermo_params))
-end
-
 function entrainment_velocity_scale(
     thermo_params,
     turbconv_params,
@@ -289,7 +313,8 @@ function entrainment_velocity_scale(
     ::InvZEntrainment,
 )
     FT = eltype(thermo_params)
-    entr_vel_scale_param = CAP.entr_coeff(turbconv_params)
+    entr_inv_length = CAP.entr_inv_length(turbconv_params)
+    entr_coeff = CAP.entr_coeff(turbconv_params)
 
     elev_above_sfc = ᶜz - z_sfc
     # If elevation above surface is not positive, terms like 1/elev_above_sfc
@@ -299,8 +324,52 @@ function entrainment_velocity_scale(
     end
 
     area_limiter_factor = upper_area_limiter_factor(ᶜaʲ, turbconv_params)
-    entr_vel_scale = area_limiter_factor * entr_vel_scale_param / elev_above_sfc
+    entr_vel_scale =
+        area_limiter_factor * (entr_inv_length + entr_coeff / elev_above_sfc)
     return max(0, entr_vel_scale)
+end
+
+"""
+    entrainment_nonvel_rate(turbconv_params, ᶜaʲ, ᶜwʲ, ᶜbuoyʲ, ᶜw⁰, ᶜbuoy⁰,
+                            model_option::AbstractEntrainmentModel)
+
+The entrainment rate [1/s] carried by the terms that are not proportional to
+`|wʲ|`.
+"""
+function entrainment_nonvel_rate(
+    turbconv_params,
+    ᶜaʲ,
+    ᶜwʲ,
+    ᶜbuoyʲ,
+    ᶜw⁰,
+    ᶜbuoy⁰,
+    ::AbstractEntrainmentModel,
+)
+    return zero(ᶜaʲ)
+end
+
+function entrainment_nonvel_rate(
+    turbconv_params,
+    ᶜaʲ,
+    ᶜwʲ,
+    ᶜbuoyʲ,
+    ᶜw⁰,
+    ᶜbuoy⁰,
+    ::InvZEntrainment,
+)
+    entr_buoy_coeff = CAP.entr_buoy_coeff(turbconv_params)
+    entr_detr_buoy_inv_tau_max = CAP.entr_detr_buoy_inv_tau_max(turbconv_params)
+    entr_inv_tau = CAP.entr_inv_tau(turbconv_params)
+
+    buoy_rate =
+        entr_buoy_coeff * entr_buoy_inv_time_scale(
+            ᶜwʲ - ᶜw⁰,
+            ᶜbuoyʲ - ᶜbuoy⁰,
+            entr_detr_buoy_inv_tau_max,
+        )
+
+    area_limiter_factor = upper_area_limiter_factor(ᶜaʲ, turbconv_params)
+    return area_limiter_factor * (buoy_rate + entr_inv_tau)
 end
 
 """
@@ -323,9 +392,9 @@ The two ranges (`a < a_min` and `a > a_max`) are mutually exclusive, so
 exactly one term is non-zero outside `[a_min, a_max]` and both are zero
 inside it.
 
-The positive part is consumed by [`compute_entrainment`](@ref) via
+The positive part is consumed by `compute_entrainment` via
 `max(0, area_bounding_entr_detr)`; the negative part is consumed by
-[`compute_detrainment`](@ref) via `max(0, -area_bounding_entr_detr)`.
+`compute_detrainment` via `max(0, -area_bounding_entr_detr)`.
 """
 @inline function area_bounding_entr_detr(turbconv_params, a)
     FT = typeof(a)
@@ -350,13 +419,13 @@ end
 
 Total detrainment rate [1/s] as the sum of the model-specific rate from
 `detrainment_rate` (which internally applies
-[`lower_area_limiter_factor`](@ref) so that detrainment is damped as
+`lower_area_limiter_factor` so that detrainment is damped as
 `a → a_min`) with the negative part of the signed area-bounding rate:
 
     detr = detrainment_rate(...) + max(0, -area_bounding_entr_detr)
 
-`area_bounding_entr_detr` is produced by [`area_bounding_entr_detr`](@ref);
-its positive branch feeds [`compute_entrainment`](@ref) while the
+`area_bounding_entr_detr` is produced by `area_bounding_entr_detr`;
+its positive branch feeds `compute_entrainment` while the
 negative branch (the only one that contributes here) drives the area back
 below `a_max`.
 
@@ -366,11 +435,11 @@ Arguments:
   - `aʲ`: Updraft area fraction [-].
   - `ρaʲ`: Updraft density-area product [kg/m³].
   - `buoy_inv_time_scale`: Clipped inverse buoyancy time scale [1/s] from
-    [`detr_buoy_inv_time_scale`](@ref). The caller chooses where to evaluate
+    `detr_buoy_inv_time_scale`. The caller chooses where to evaluate
     it (centers, or faces with subsequent `ᶜinterp`) to control smoothness.
   - `massflux_vert_div`: Vertical divergence of the updraft mass flux [kg/(m³ s)].
   - `area_bounding_entr_detr`: Signed area-bounding rate [1/s] from
-    [`area_bounding_entr_detr`](@ref).
+    `area_bounding_entr_detr`.
   - `detr_model`: Object specifying the detrainment model.
 
 Returns the total detrainment rate [1/s].
@@ -400,24 +469,36 @@ end
 """
     detrainment_rate(turbconv_params, ᶜaʲ, ᶜρaʲ, ᶜbuoy_inv_time_scale,
                      ᶜmassflux_vert_div, detr_model::AbstractDetrainmentModel)
+    detrainment_rate(turbconv_params, ᶜaʲ, ᶜρaʲ, ᶜbuoy_inv_time_scale,
+                     ᶜmassflux_vert_div, detr_model::BuoyancyVelocityDetrainment)
 
 Model-specific detrainment rate [1/s] for a given detrainment model.
 
-This abstract fallback returns zero; concrete subtypes of
-`AbstractDetrainmentModel` should override this method to provide a
-non-trivial rate.
+The `AbstractDetrainmentModel` fallback returns zero. For
+`BuoyancyVelocityDetrainment` the rate is
 
-Arguments:
+    detr = max(0, lower_area_limiter_factor(aʲ) ·
+                  (c_buoy τ⁻¹_buoy − c_div min(massflux_vert_div, 0) / ρaʲ)),
 
-  - `turbconv_params`: Turbulence convection parameters.
+with `c_buoy = detr_buoy_coeff` and `c_div = detr_massflux_vertdiv_coeff`. Only
+a converging (negative) mass-flux divergence detrains, and
+`lower_area_limiter_factor` damps the rate as `a → a_min`.
+
+# Arguments
+
+  - `turbconv_params`: Turbulence-convection parameters.
   - `ᶜaʲ`: Updraft area fraction [-].
-  - `ᶜρaʲ`: Updraft density-area product [kg/m³].
+  - `ᶜρaʲ`: Updraft area-weighted density `ρ a` [kg/m³].
   - `ᶜbuoy_inv_time_scale`: Clipped inverse buoyancy time scale [1/s] from
-    [`detr_buoy_inv_time_scale`](@ref).
-  - `ᶜmassflux_vert_div`: Vertical divergence of the updraft mass flux [kg/(m³ s)].
+    `detr_buoy_inv_time_scale`.
+  - `ᶜmassflux_vert_div`: Vertical divergence of the updraft mass flux
+    [kg/(m³ s)].
   - `detr_model`: Detrainment model dispatch tag.
 
-Returns the model-specific detrainment rate [1/s] (zero for the abstract fallback).
+# Returns
+
+The non-negative model-specific detrainment rate [1/s]; zero for the abstract
+fallback.
 """
 function detrainment_rate(
     turbconv_params,
@@ -454,6 +535,20 @@ function detrainment_rate(
     return max(0, detr)
 end
 
+"""
+    turbulent_entrainment(turbconv_params, ᶜaʲ)
+
+Turbulent (diffusive) entrainment rate [1/s] of an updraft of area fraction
+`ᶜaʲ`:
+
+    turb_entr = max(0, c₁ exp(-c₂ aʲ)),
+
+with `(c₁, c₂) = turb_entr_param_vec`. Unlike the dynamical entrainment of
+`compute_entrainment`, it does not scale with the updraft velocity, and
+it decays as the updraft fills the grid box. Precomputed into
+`p.precomputed.ᶜturb_entrʲs` and added to the dynamical rate in
+`edmfx_entr_detr_tendency!`.
+"""
 function turbulent_entrainment(turbconv_params, ᶜaʲ)
     turb_entr_param_vec = CAP.turb_entr_param_vec(turbconv_params)
     return max(turb_entr_param_vec[1] * exp(-turb_entr_param_vec[2] * ᶜaʲ), 0)
@@ -467,19 +562,38 @@ Add the entrainment contribution to the EDMF scalar tendencies (`mse`,
 
 Detrainment is **not** applied here because it is absorbed into the
 analytic implicit ρa solve (see
-[`solve_sgs_ρa_implicit_stage_analytic!`](@ref)); scalars are detrained
+`solve_sgs_ρa_implicit_stage_analytic!`); scalars are detrained
 implicitly through the area divergence of the mass flux.
 
 The entrainment rate is assembled lazily from the precomputed
-`ᶜentr_vel_scaleʲs`, `ᶜarea_bounding_entr_detrʲs`, and the updraft physical
-velocity via [`compute_entrainment`](@ref).
+`ᶜentr_vel_scaleʲs`, `ᶜentr_nonvel_rateʲs`, `ᶜarea_bounding_entr_detrʲs`, and the updraft physical
+velocity via `compute_entrainment`, and the turbulent entrainment
+`ᶜturb_entrʲs` (`turbulent_entrainment`) is added to it. Each updraft
+scalar `χʲ` is relaxed toward its **environment** value,
+
+    ∂χʲ/∂t += (entr + turb_entr) (χ⁰ - χʲ).
+
+The generic method is a no-op; the `PrognosticEDMFX` method mutates
+`Yₜ.c.sgsʲs` and returns `nothing`. See the "PROPHET Sub-Grid Scale Equations"
+page (`docs/src/edmf_equations.md`).
+
+# Notes
+
+The SGS-tracer loop reads and writes `Y.c.sgsʲs.:(1)` rather than subdomain
+`j`, so with more than one updraft only the first receives tracer entrainment.
 """
 edmfx_entr_detr_tendency!(Yₜ, Y, p, t, turbconv_model) = nothing
 
 function edmfx_entr_detr_tendency!(Yₜ, Y, p, t, turbconv_model::PrognosticEDMFX)
 
     n = n_mass_flux_subdomains(turbconv_model)
-    (; ᶜturb_entrʲs, ᶜentr_vel_scaleʲs, ᶜarea_bounding_entr_detrʲs, ᶜuʲs) = p.precomputed
+    (;
+        ᶜturb_entrʲs,
+        ᶜentr_vel_scaleʲs,
+        ᶜentr_nonvel_rateʲs,
+        ᶜarea_bounding_entr_detrʲs,
+        ᶜuʲs,
+    ) = p.precomputed
 
     ᶜmse⁰ = ᶜspecific_env_mse(Y, p)
     ᶜq_tot⁰ = ᶜspecific_env_value(@name(q_tot), Y, p)
@@ -489,6 +603,7 @@ function edmfx_entr_detr_tendency!(Yₜ, Y, p, t, turbconv_model::PrognosticEDMF
         ᶜentrʲ = @. lazy(
             compute_entrainment(
                 ᶜentr_vel_scaleʲs.:($$j),
+                ᶜentr_nonvel_rateʲs.:($$j),
                 ᶜarea_bounding_entr_detrʲs.:($$j),
                 get_physical_w(ᶜuʲs.:($$j), ᶜlg),
             ),
@@ -514,8 +629,9 @@ function edmfx_entr_detr_tendency!(Yₜ, Y, p, t, turbconv_model::PrognosticEDMF
     return nothing
 end
 
-# limit entrainment and detrainment rates for diagnostic EDMF
-# limit rates approximately below the inverse timescale w/dz
+# Stability limiters that cap entrainment and detrainment rates below the
+# inverse timescales w/dz and 1/dt. Written for the (since removed) diagnostic
+# EDMF; currently unused.
 limit_entrainment(entr::FT, a, dt) where {FT} = max(
     min(
         entr,

@@ -1,10 +1,17 @@
 # Your First Simulation
 
+This page walks through building, running, and inspecting one simulation. To
+configure each component in turn, see
+[Scripting Simulations](scripting_simulations.md); to run from a YAML file
+instead, see [Creating Custom Configurations](configuration.md), and for how
+the two interfaces relate, [Script vs Config Interface](interfaces.md).
+
 ## Minimal example
 
-The simplest ClimaAtmos simulation uses all defaults -- it solves the dry
-compressible Euler equations on a global cubed-sphere grid, starting from a
-hydrostatically balanced state with a vertically decaying temperature profile:
+The simplest ClimaAtmos simulation uses all defaults. It solves the dry
+compressible equations (with hyperdiffusion and surface fluxes) on a global
+cubed-sphere grid, starting from a hydrostatically balanced, slightly perturbed
+state with a vertically decaying temperature profile:
 
 ```@example first_sim
 using Logging # hide
@@ -15,118 +22,90 @@ simulation = CA.AtmosSimulation{Float32}(; t_end = "1days")
 nothing # hide
 ```
 
-This builds the simulation but does not run it. [Running the simulation](@ref)
-advances it in time.
+`t_end` accepts a number of seconds or a duration string (`secs`, `mins`,
+`hours`, `days`, `weeks`), as does the timestep `dt`. Every other aspect of the
+simulation has a keyword argument too; omitted ones take their defaults.
 
-`AtmosSimulation{FT}(...)` accepts keyword arguments for every aspect of
-the simulation. When omitted, defaults are used (see
-[Script vs Config Interface](@ref) for the full list).
+The first construction and solve in a session compile a large amount of code
+and can take several minutes; later calls are fast.
 
-## Customizing the simulation
-
-### Change the grid
-
-Run a single-column model instead of the default global cubed-sphere:
-
-```@example first_sim
-grid = CA.ColumnGrid(Float32; z_elem = 30, z_max = 30000.0)
-simulation = CA.AtmosSimulation{Float32}(; grid, t_end = "6hours")
-nothing # hide
-```
-
-See the [Grids](api.md#Grids) section of the API for all grid types and their options.
-
-### Change the timestep and duration
-
-`dt` is the timestep and `t_end` the total simulation time. Each accepts either a number
-of seconds, or a duration string with a unit (`secs`, `mins`, `hours`, `days`, `weeks`) --
-the same syntax used by the [config interface](@ref "Script vs Config Interface"):
-
-```@example first_sim
-simulation = CA.AtmosSimulation{Float32}(;
-    dt = "5mins",     # equivalently, dt = 300
-    t_end = "10days", # equivalently, t_end = 86400 * 10
-)
-nothing # hide
-```
-
-### Change the setup
-
-A *setup* defines the initial conditions, boundary conditions, and (optionally)
-forcing for a simulation case. For example, the BOMEX shallow cumulus case:
-
-```@example first_sim
-simulation = CA.AtmosSimulation{Float32}(;
-    grid = CA.ColumnGrid(Float32; z_elem = 60, z_max = 3000.0, z_stretch = false),
-    setup = CA.Setups.Bomex(),
-    dt = 5,
-    t_end = 3600,
-    job_id = "my_bomex",
-)
-nothing # hide
-```
-
-See the [Setups](@ref) page for the full list of available setups and how to create
-your own.
-
-## Presets
-
-Common configurations are available as one-line presets in `CA.Presets`:
-
-```@example first_sim
-simulation = CA.Presets.bomex(Float32; t_end = "10mins")
-nothing # hide
-```
-
-See the [Presets](api.md#Presets) section of the API for the full list of
-simulation and model presets.
-
-## Running the simulation
+## Inspecting the state
 
 Constructing an `AtmosSimulation` sets everything up but does not advance it in
-time. Call `solve_atmos!` to integrate the simulation forward to `t_end`:
-
-```julia
-CA.solve_atmos!(simulation)
-```
-
-This advances the model to `t_end`.
-
-## Inspecting results
-
-After a simulation completes, access the prognostic state through the
+time. Even before running, the initial state is available through the
 integrator:
+
+!!! note
+
+    `Y` is the state vector: `Y.c` holds the cell-center variables (such as
+    the density `ρ` and the total energy `ρe_tot`) and `Y.f` the cell-face
+    variables (such as the vertical velocity `u₃`). The `integrator` is the
+    ODE integrator, from ClimaTimeSteppers, that advances the state in time.
+    See the [Glossary](@ref) for these and other recurring names.
 
 ```@example first_sim
 Y = simulation.integrator.u
 
 # Center (cell-center) variables
-propertynames(Y.c)  # e.g., (:ρ, :uₕ, :ρe_tot, :ρq_tot)
+propertynames(Y.c)  # (:ρ, :uₕ, :ρe_tot) for this dry default
 
 # Face (cell-interface) variables
 propertynames(Y.f)  # e.g., (:u₃,)
 ```
 
-Output is written to `simulation.output_dir` in two formats, each with a distinct role:
+## Running a case end to end
+
+The default simulation is plain, and a global run is slow to
+integrate. Presets bundle a grid, a setup, and matching physics into one call,
+which is the quickest way to a running case, here a column with the BOMEX
+shallow-cumulus initial state and moist physics. `solve_atmos!` integrates it
+forward to `t_end`, and the integrator time confirms where the run stopped:
+
+```@example first_sim
+simulation = CA.Presets.bomex(Float32; t_end = "10mins", output_dir = mktempdir())
+CA.solve_atmos!(simulation)
+simulation.integrator.t
+```
+
+(This page runs during the documentation build, so it writes to a temporary
+directory; drop `output_dir` to get the default location described below.)
+
+Presets matter beyond brevity: the `setup` argument sets the initial state,
+while the physics comes from the model, so the two have to be chosen together.
+BOMEX with the default dry model would have no moisture to convect. Each preset
+pairs a setup with a matching grid and model. The pairing is minimal rather
+than complete: `Presets.bomex` enables moist physics but no
+turbulence-convection scheme or case forcings; pass
+`model = CA.Presets.prognostic_edmf(Float32)` to add convective transport, or
+run the corresponding YAML case config for the full published setup. See the
+[Presets](api.md#Presets) section of the API for the full list.
+
+## Where output goes
+
+Output is written to `simulation.output_dir`. The base directory defaults to
+`output/<job_id>` under the directory Julia was started in (just `<job_id>`
+when the `CI` environment variable is set); with the default `job_id` of
+`atmos_sim`, that is `output/atmos_sim`. Each run writes to a numbered
+subdirectory of the base directory — `simulation.output_dir` is that
+subdirectory, such as `output/atmos_sim/output_0000` — and
+`output/atmos_sim/output_active` links to the most recent one. Two
+formats appear there, each with a distinct role:
 
   - **NetCDF** (`.nc`) files hold the **diagnostics** -- derived (and often interpolated)
     output variables such as temperature or precipitation. See
     [Computing and saving diagnostics](@ref) for how to configure them.
-  - **HDF5** (`.h5`) files hold full-resolution **model-state checkpoints**, written when
+  - **HDF5** (`.hdf5`) files hold full-resolution **model-state checkpoints**, written when
     `checkpoint_frequency` is set. These are the files a simulation reads to
-    [restart](@ref "Restarting Simulations in ClimaAtmos").
+    [restart](@ref "Restarting and Checkpointing").
 
-## Terminology
-
-The state vector `Y`, the cache `p`, the simulation time `t`, and other recurring
-symbols and terms are defined in the [Glossary](@ref).
-
-## Using the config-based interface
-
-The same simulation can be set up with a YAML file.
+[Loading and Visualizing Output](visualizing_output.md) covers reading the
+NetCDF files with ClimaAnalysis.
 
 ## Next steps
 
-  - [Script vs Config Interface](@ref) -- detailed comparison of the two workflows
-  - [Single Column Models](@ref) -- BOMEX, DYCOMS, RICO, and more
+  - [Scripting Simulations](@ref) -- configure the grid, model, setup, and
+    diagnostics from a script, and step the integrator interactively
+  - [Script vs Config Interface](@ref) -- the same runs from YAML files
+  - [Running Single-Column Cases](@ref) -- BOMEX, DYCOMS, RICO, and more
   - [Computing and saving diagnostics](@ref) -- configure output variables and formats
+  - [Glossary](@ref) -- the state vector `Y`, the cache `p`, and other recurring symbols

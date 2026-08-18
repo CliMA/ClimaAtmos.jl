@@ -1,8 +1,12 @@
 """
     DefaultMoninObukhov()
 
-Monin-Obukhov surface with a default roughness length
-(see https://clima.github.io/SurfaceFluxes.jl/dev/SurfaceFluxes/#Monin-Obukhov-Similarity-Theory-(MOST)).
+Callable that builds a [`MoninObukhov`](@ref) closure with roughness length
+`z0 = 1e-5` m and no prescribed fluxes.
+
+Calling `DefaultMoninObukhov()(params)` returns the closure at the float type
+of `params`; the indirection lets the configuration name a flux scheme before
+the parameter set exists.
 """
 struct DefaultMoninObukhov end
 function (::DefaultMoninObukhov)(params)
@@ -13,7 +17,8 @@ end
 """
     DefaultExchangeCoefficients()
 
-Bulk surface, parameterized only by a default exchange coefficient.
+Callable that builds an [`ExchangeCoefficients`](@ref) closure with
+`Cd = Ch = params.C_H`, the exchange coefficient from the parameter set.
 """
 struct DefaultExchangeCoefficients end
 (::DefaultExchangeCoefficients)(params) = ExchangeCoefficients(params.C_H)
@@ -21,11 +26,28 @@ struct DefaultExchangeCoefficients end
 """
     FileHeatFluxes(data::ColumnDatasets.ColumnDataset, start_date; nan_to_zero = true)
 
-A prescribed surface-heat-flux closure `(t, FT) -> HeatFluxes`, for use as the
-`fluxes` of a [`MoninObukhov`](@ref) scheme. It reads the `hfls`/`hfss` series
-from `data` at construction and interpolates linearly in time (flat beyond the
-file range). Errors loudly at construction if the file lacks `hfls`/`hfss`.
-With `nan_to_zero`, masked/fill-value gaps (NaN) evaluate to zero flux.
+Prescribed surface heat fluxes read from a column forcing file, callable as
+`(t, FT) -> HeatFluxes`.
+
+Used as the `fluxes` field of a [`MoninObukhov`](@ref) scheme, where
+`resolve_flux_scheme` calls it once per surface update. The `hfls`/`hfss`
+series are read from `data` at construction and interpolated linearly in time,
+held flat beyond the file's range; `t = 0` is `start_date`. The file's
+convention (upward-positive latent and sensible heat fluxes) matches
+[`HeatFluxes`](@ref). Construction errors if the file lacks `hfls`/`hfss`.
+
+# Keyword Arguments
+
+  - `nan_to_zero = true`: Whether masked or fill-value gaps (NaN) evaluate to
+    zero flux rather than propagating NaN.
+
+# Fields
+
+  - `lhf_interp`, `shf_interp`: Time interpolants of the latent and sensible heat
+    flux series [W/m²], in seconds since `start_date`.
+  - `nan_to_zero`: As above [-].
+
+# Examples
 
 ```julia
 flux_scheme = MoninObukhov(; z0 = 0.05, ustar = 0.28,
@@ -59,6 +81,12 @@ function FileHeatFluxes(
     )
 end
 
+"""
+    (f::FileHeatFluxes)(t, ::Type{FT})
+
+Return the [`HeatFluxes`](@ref) interpolated to simulation time `t` [s], with
+components converted to `FT` [W/m²].
+"""
 function (f::FileHeatFluxes)(t, ::Type{FT}) where {FT}
     t_sec = Float64(t isa Number ? t : float(t))
     lhf = f.lhf_interp(t_sec)

@@ -1,11 +1,8 @@
-"""
-    Shared infrastructure for file-based initial conditions.
-
-These utilities support setups that initialize prognostic state from NetCDF files
-(e.g., MoistFromFile, WeatherModel, AMIPFromERA5). The main entry point is
-`overwrite_from_file!`, which regrids file data onto the model grid and populates
-all prognostic variables.
-"""
+# Shared infrastructure for file-based initial conditions, used by the setups
+# that initialize the prognostic state from NetCDF files (MoistFromFile,
+# WeatherModel, AMIPFromERA5). The entry point is `overwrite_from_file!`, which
+# regrids file data onto the model grid and populates every prognostic
+# variable.
 
 # ============================================================================
 # Topographic pressure correction
@@ -18,14 +15,18 @@ all prognostic variables.
         surface_altitude_var = "z_sfc",
     )
 
-Adjust the surface pressure field `p_sfc` to account for mismatches between
-ERA5 (file) surface altitude and the model orography:
+Adjust the surface pressure field `p_sfc` in place for the mismatch between the
+file's surface altitude and the model orography, and return `true`.
 
-    Δz = z_model_surface - z_sfc
-    p_sfc .= p_sfc .* exp.(-Δz * g ./ (R_m_sfc .* T_sfc))
+The correction is hydrostatic over the altitude difference
+`Δz = z_model_surface - z_sfc`:
 
-Returns `true` if the correction is applied; `false` if the surface altitude
-field cannot be loaded.
+```math
+p_{sfc} ← p_{sfc} \\exp(-Δz \\, g / (R_m T_{sfc}))
+```
+
+The caller is responsible for checking that the file carries
+`surface_altitude_var`; reading a variable the file lacks throws.
 """
 function correct_surface_pressure_for_topography!(
     p_sfc,

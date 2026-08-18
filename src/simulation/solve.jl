@@ -1,17 +1,42 @@
 import ClimaTimeSteppers as CTS
 import Base.Sys: maxrss
 
-# Empty integrator.tstops to stop time-marching.
+"""
+    terminate!(integrator::CTS.TimeStepperIntegrator)
+
+Stop time-marching gracefully by emptying `integrator.tstops`.
+
+Returns `nothing`. Called by the graceful-exit callback.
+"""
 function terminate!(integrator::CTS.TimeStepperIntegrator)
     @info "Gracefully exiting simulation."
     empty!(integrator.tstops)
 end
 
+"""
+    EfficiencyStats
+
+Timing record for a completed solve, used to report throughput.
+
+# Fields
+
+  - `tspan`: Simulated time span `(t_start, t_end)` [s].
+  - `walltime`: Wall-clock duration of the solve [s].
+"""
 struct EfficiencyStats{TS <: Tuple, WT}
     tspan::TS
     walltime::WT
 end
 
+"""
+    simulated_years_per_day(es::EfficiencyStats)
+    simulated_years(es::EfficiencyStats)
+    walltime_in_days(es::EfficiencyStats)
+
+Report model throughput from an `EfficiencyStats` record: simulated years per wall-clock
+day (SYPD), simulated years [yr], and wall-clock time [d]. A year is taken to be 365
+days.
+"""
 simulated_years_per_day(es::EfficiencyStats) =
     simulated_years(es) / walltime_in_days(es)
 
@@ -19,6 +44,16 @@ simulated_years(es::EfficiencyStats) =
     Float64(es.tspan[2] - es.tspan[1]) * (1 / (365 * 24 * 3600)) #=seconds * years per second=#
 walltime_in_days(es::EfficiencyStats) = es.walltime * (1 / (24 * 3600)) #=seconds * days per second=#
 
+"""
+    timed_solve!(integrator)
+
+Run the integrator to completion, timing it on the compute device, and log the walltime,
+the throughput in simulated years per day, and the walltime per timestep.
+
+# Returns
+
+`(sol, walltime)`: the solution object and the elapsed wall-clock time [s].
+"""
 function timed_solve!(integrator)
     device = ClimaComms.device(integrator.u.c)
     comms_ctx = ClimaComms.context(device)
@@ -44,6 +79,17 @@ function timed_solve!(integrator)
     return (sol, walltime)
 end
 
+"""
+    AtmosSolveResults
+
+Outcome of `solve_atmos!`.
+
+# Fields
+
+  - `sol`: Solution object, or `nothing` if the simulation crashed.
+  - `ret_code`: `:success` or `:simulation_crashed`.
+  - `walltime`: Wall-clock duration of the solve [s], or `nothing` if it crashed.
+"""
 struct AtmosSolveResults{S, RT, WT}
     sol::S
     ret_code::RT
@@ -51,19 +97,24 @@ struct AtmosSolveResults{S, RT, WT}
 end
 
 """
-    solve_atmos!(integrator)
+    solve_atmos!(simulation)
 
-Call the ClimaTimeSteppers solve on the integrator.
-Returns a `AtmosSolveResults`, containing the
-solution, walltime, and a return code `Symbol`
-indicating one of:
+Run `simulation` to its end time and return an `AtmosSolveResults` with the solution,
+the return code (`:success` or `:simulation_crashed`), and the walltime [s].
 
-  - `:success`
-  - `:success`
-  - `:simulation_crashed`
+The first step is taken outside the timed solve so that compilation is not counted, and
+the callbacks are precompiled. Failures are caught rather than rethrown, so that partial
+results can still be inspected: in a serial run the crashed state is written to the
+output directory first. The diagnostic writers are closed on every path.
 
-`try-catch` is used to allow plotting
-results for simulations that have crashed.
+# Examples
+
+```julia
+import ClimaAtmos as CA
+simulation = CA.AtmosSimulation{Float64}(; t_end = 86400)
+results = CA.solve_atmos!(simulation)
+results.ret_code == :success
+```
 """
 function solve_atmos!(simulation)
     (; integrator, output_writers) = simulation
@@ -106,6 +157,12 @@ function solve_atmos!(simulation)
     end
 end
 
+"""
+    call_all_callbacks!(integrator)
+
+Invoke every ClimaAtmos callback attached to `integrator`, in order. Returns `nothing`.
+Used to precompile the callbacks before the timed solve.
+"""
 function call_all_callbacks!(integrator)
     for cb! in atmos_callbacks(integrator.callback)
         cb!(integrator)
@@ -113,6 +170,12 @@ function call_all_callbacks!(integrator)
     return nothing
 end
 
+"""
+    precompile_callbacks(integrator)
+
+Precompile `call_all_callbacks!` for this integrator type, so that callback compilation
+does not pollute the timing of the first steps. Returns `nothing`.
+"""
 function precompile_callbacks(integrator)
     B = Base.precompile(call_all_callbacks!, (typeof(integrator),))
     @assert B
@@ -131,11 +194,24 @@ check_conservation(atmos_sol::AtmosSolveResults) =
     check_conservation(simulation)
     check_conservation(integrator)
 
-Return:
+Measure how well total energy, mass, and water are conserved between the first and last
+saved states.
 
-  - `energy_conservation = energy_net / energy_total`
-  - `mass_conservation = (mass(t_end) - mass(t_0)) / mass(t_0)`
-  - `water_conservation = (water_atmos + water_surface) / water_total`
+Only meaningful when the run saved both endpoints, and only exact for setups whose
+boundary fluxes are all accounted for below.
+
+# Returns
+
+A `NamedTuple` of dimensionless relative errors:
+
+  - `energy_conservation`: |Δ(atmosphere energy) + Δ(surface energy) − net radiative
+    input at the top| divided by the initial total energy. Surface energy change is the
+    slab ocean heat content change when a slab ocean is used, and the accumulated net
+    surface energy flux otherwise.
+  - `mass_conservation`: change in total dry-plus-moist mass, including water taken from
+    or given to a slab ocean surface, divided by the initial mass.
+  - `water_conservation`: |Δ(atmospheric water) + Δ(surface water)| divided by the final
+    total atmospheric water. Zero for dry runs.
 """
 function check_conservation(sol)
     # energy
@@ -197,12 +273,16 @@ function write_diagnostics_as_txt(simulation::AtmosSimulation)
 end
 
 """
-    write_diagnostics_as_txt(writer, output_dir)
+    write_diagnostics_as_txt(simulation::AtmosSimulation)
+    write_diagnostics_as_txt(writer::ClimaDiagnostics.Writers.DictWriter, output_dir)
 
-Write diagnostics in DictWriter to text files. This function is
-added because currently we do not support writing scalars to netcdf.
-It only supports diagnostics that are 1-element vectors.
-Related issue: https://github.com/CliMA/ClimaDiagnostics.jl/issues/100
+Write the diagnostics held in memory by a `DictWriter` to one text file per diagnostic
+in `output_dir`, each line a time and a value.
+
+The simulation method applies this to every `DictWriter` among the simulation's writers.
+Only diagnostics that are 1-element vectors are supported; this exists because scalars
+cannot yet be written to NetCDF (see
+https://github.com/CliMA/ClimaDiagnostics.jl/issues/100).
 """
 function write_diagnostics_as_txt(
     writer::ClimaDiagnostics.Writers.DictWriter,

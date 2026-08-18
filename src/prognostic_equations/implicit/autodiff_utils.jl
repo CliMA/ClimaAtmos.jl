@@ -12,13 +12,27 @@ map_components(f::F, x) where {F} =
 contains_data_layout(::DataLayouts.AbstractData) = true
 contains_data_layout(x) = unrolled_any(contains_data_layout, components(x))
 
-# Adds up the memory required to allocate all DataLayouts within an object.
+"""
+    parent_memory(x)
+
+Return the total memory required to allocate all `DataLayout`s within `x`
+[bytes], or `0` if it contains none. Used to size the automatic differentiation
+partitions in `jacobian_cache`.
+"""
 parent_memory(x::DataLayouts.AbstractData) = sizeof(parent(x))
 parent_memory(x) =
     contains_data_layout(x) ? unrolled_sum(parent_memory, components(x)) : 0
 
-# Extracts a view of the first column from every DataLayout within an object,
-# except for DataLayouts in DSSBuffers, which are not needed in a single column.
+"""
+    first_column_view(x)
+
+Return a view of the first column of every `DataLayout` within `x`, leaving
+non-field components unchanged.
+
+`DataLayout`s in `DSSBuffer`s are replaced by `nothing`, since they are not
+needed in a single column. Used to build single-column states and caches for
+the Jacobian debugging utilities.
+"""
 first_column_view(x::DataLayouts.AbstractData) = Fields.column(x, 1, 1, 1)
 first_column_view(x::Fields.Field) = Fields.column(x, 1, 1, 1)
 first_column_view(x::Fields.FieldVector) = Fields.column(x, 1, 1, 1)
@@ -26,7 +40,13 @@ first_column_view(x::Topologies.DSSBuffer) = nothing
 first_column_view(x) =
     contains_data_layout(x) ? map_components(first_column_view, x) : x
 
-# Makes T the parent array element type of every DataLayout within an object.
+"""
+    replace_parent_eltype(x, ::Type{T})
+
+Return a copy of `x` in which `T` is the parent array element type of every
+`DataLayout`, leaving non-field components unchanged. Used to create the
+dual-number copies of `Y`, `p.precomputed`, and `p.scratch`.
+"""
 replace_parent_eltype(x::DataLayouts.AbstractData, ::Type{T}) where {T} =
     DataLayouts.replace_basetype(x, T)
 replace_parent_eltype(x::Fields.Field, ::Type{T}) where {T} =
@@ -37,7 +57,13 @@ replace_parent_eltype(x, ::Type{T}) where {T} =
     contains_data_layout(x) ?
     map_components(Base.Fix2(replace_parent_eltype, T), x) : x
 
-# Appends values to the precomputed and scratch components of an AtmosCache.
+"""
+    append_to_atmos_cache(atmos_cache, precomputed, scratch)
+
+Return a copy of `atmos_cache` whose `precomputed` and `scratch` components
+have the given values appended to them. Used to give `implicit_tendency!` a
+cache that also holds the dual-number fields.
+"""
 append_to_atmos_cache(atmos_cache, precomputed, scratch) = AtmosCache(
     unrolled_map(fieldnames(typeof(atmos_cache))) do cache_component_name
         if cache_component_name == :precomputed
@@ -58,7 +84,13 @@ function horizontal_space(field_vector)
            Spaces.horizontal_space(space)
 end
 
-# An iterator over the column indices of all fields in a FieldVector.
+"""
+    column_index_iterator(field_vector)
+
+Return an iterator over the column indices `(i, j, h)` of all fields in
+`field_vector`, or `((1, 1, 1),)` when there is no horizontal space. For a
+`SpectralElementSpace1D` the indices are pairs `(i, h)`.
+"""
 function column_index_iterator(field_vector)
     horz_space = horizontal_space(field_vector)
     isnothing(horz_space) && return ((1, 1, 1),)
@@ -68,15 +100,30 @@ function column_index_iterator(field_vector)
            Iterators.product(qs, hs) : Iterators.product(qs, qs, hs)
 end
 
-# An iterator over the FieldNames of all scalar fields in a FieldVector.
+"""
+    scalar_field_names(field_vector)
+
+Return an iterator over the `FieldName`s of all scalar fields in
+`field_vector`, i.e. of the fields whose element type is the floating-point
+type of the `FieldVector`. Vector-valued fields are split into their scalar
+components.
+"""
 scalar_field_names(field_vector) =
     MatrixFields.filtered_names(field_vector) do x
         x isa Fields.Field && eltype(x) == eltype(field_vector)
     end
 
-# An iterator with tuples of the form (scalar_index, level_index)), where
-# scalar_index is an index into scalar_field_names(field_vector) and level_index
-# is a vertical index into the scalar field with this name.
+"""
+    field_vector_index_iterator(field_vector)
+
+Return an iterator over tuples `(scalar_index, level_index)`, where
+`scalar_index` indexes into `scalar_field_names(field_vector)` and
+`level_index` is a vertical index into the scalar field with that name.
+
+The iteration order defines the row and column order of the dense per-column
+Jacobian matrices. Single-level fields (`PointField`s and
+`SpectralElementField`s) contribute exactly one index.
+"""
 function field_vector_index_iterator(field_vector)
     scalar_names = scalar_field_names(field_vector)
     scalar_index_and_level_pairs =
@@ -92,7 +139,13 @@ function field_vector_index_iterator(field_vector)
     return Iterators.flatten(scalar_index_and_level_pairs)
 end
 
-# A view of one point in a Field or DataLayout, which can be used like a Ref.
+"""
+    point(value, level_index, column_index...)
+
+Return a view of one point in a `Field` or `DataLayout`, which can be indexed
+and assigned to like a `Ref`. `level_index` counts from the first interior
+level, and is shifted internally to account for the space's left index.
+"""
 Base.@propagate_inbounds function point(value, level_index, column_index...)
     column_value = Fields.column(value, column_index...)
     column_value isa Union{Fields.PointField, DataLayouts.DataF} &&

@@ -1,4 +1,4 @@
-392
+403
 
 # **README**
 #
@@ -32,6 +32,54 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+403
+- Viscous sponge: match hyperdiffusion and vertical diffusion. Energy is
+  diffused as a dry-static-energy + h_eff-weighted q_tot_eff split rather
+  than as total enthalpy. Water mass diffuses on q_tot_eff (rain and snow
+  excluded); the aggregate tendency is distributed to the suspended cloud
+  mass species (ρq_lcl, ρq_icl).
+
+402
+- Hyperdiffusion: subtract a hydrostatic reference state from the diffused
+  scalars (dry-static-energy `sd_r(p)` and total-water `q_tot_r(p)`. Removes
+  spurious mixing across topography from the coordinate-tilt part of `gradₕ`.
+
+401
+- Distribute the aggregate q_tot_eff diffusion of
+  `edmfx_sgs_diffusive_flux_tendency!` to the suspended cloud mass and
+  number species. The block was present but unreachable, so the species
+  received no share of the vertical water diffusion.
+
+400
+- Update to ClimaCore 0.15.1 and Thermodynamics 1.3.0
+
+399
+- Change entrainment formula, which results in floating point differences due to
+  changes in order of operations.
+
+398
+- Make rain sediment with non-constant velocity
+
+397
+- Change default ice formation to temperature dependent
+
+396
+- Make vertical water diffusion consistent: diffuse q_tot on q_tot_eff
+  (excluding rain/snow), distribute the aggregate q_tot diffusion to
+  suspended microphysics species (ρq_lcl, ρq_icl) via clipped ratio, and
+  scale their number densities proportionally. Enthalpy uses a single-
+  gradient h_eff-weighted form.
+
+395
+- Update to CloudMicrophysics 0.38.1
+
+394
+- Species-consistent hyperdiffusion.
+- Apply sgs microphyiscs constraints.
+
+393
+- Change min_area_limiter_scale and turb_entr_param_vec in EDMF TOMLs
+
 392
 - Integrate the hydrostatic pressure of the single-column setups on a
   1000-element column instead of a 100-element column. Initial center

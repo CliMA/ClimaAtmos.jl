@@ -13,6 +13,16 @@ import ClimaCore.Fields as Fields
 
 const Iₗ = TD.internal_energy_liquid
 const Iᵢ = TD.internal_energy_ice
+
+"""
+    internal_energy_func(name::MatrixFields.FieldName)
+
+Return the internal-energy function appropriate to the phase of the tracer
+`name`: `TD.internal_energy_liquid` for cloud liquid and rain, and
+`TD.internal_energy_ice` for cloud ice and snow. Accepts the specific,
+density-weighted, and `Y.c`-qualified spellings of each tracer name. Called from
+`set_precipitation_velocities!`.
+"""
 internal_energy_func(
     ::Union{
         MatrixFields.FieldName{(:q_lcl,)},
@@ -35,13 +45,16 @@ internal_energy_func(
 ) = TD.internal_energy_ice
 
 """
-Kin(ᶜw_precip, ᶜu_air)
+    Kin(ᶜw_precip, ᶜu_air)
 
-    - ᶜw_precip - teminal velocity of cloud consensate or precipitation
-    - ᶜu_air - air velocity
+Return a lazy broadcast of the specific kinetic energy of falling cloud
+condensate or precipitation, combining the (downward) terminal velocity with
+the air velocity.
 
-Helper function to compute the kinetic energy of cloud condensate and
-precipitation.
+# Arguments
+
+  - `ᶜw_precip`: Terminal velocity of cloud condensate or precipitation [m/s].
+  - `ᶜu_air`: Air velocity [m/s].
 """
 function Kin(ᶜw_precip, ᶜu_air)
     return @. lazy(
@@ -55,20 +68,31 @@ end
 """
     ϵ_numerics(FT)
 
-Generic numerical-zero threshold.  Used for variance floors, σ guards,
-and density-weighted mass checks — anywhere the exact value does not
-matter as long as it is small but safely above underflow.
+Return a generic numerical-zero threshold. Used for variance floors, σ guards,
+and density-weighted mass checks, anywhere the exact value does not matter as
+long as it is small but safely above underflow.
 """
 ϵ_numerics(FT) = cbrt(floatmin(FT))
 
 """
     set_precipitation_velocities!(Y, p, microphysics_model, turbconv_model)
 
-Updates the grid mean precipitation terminal velocity, cloud sedimentation velocity,
-and their contribution to total water and energy advection.
+Update the grid-mean precipitation terminal velocities and cloud sedimentation
+velocities, and their contributions to total water and energy advection.
 
-For prognostic EDMF it also computes the sedimentation velocities in sub-domains
-and ensures that the grid-scale flux is equal to the sum of sub-grid-scale fluxes.
+Dispatches on `microphysics_model` (`NonEquilibriumMicrophysics1M`,
+`NonEquilibriumMicrophysics2M`, `NonEquilibriumMicrophysics2MP3`) and, for the
+1M and 2M schemes, on `turbconv_model::PrognosticEDMFX`; the default method
+zeroes the advection contributions. Returns `nothing`.
+
+Mutates in `p.precomputed`: the velocity fields available for the scheme (`ᶜwₗ`,
+`ᶜwᵢ`, `ᶜwᵣ`, `ᶜwₛ`, plus number-weighted `ᶜwₙₗ`/`ᶜwₙᵣ` for 2M and `ᶜwnᵢ`/`ᶜlogλ`
+for P3 ice) and the advection contributions `ᶜwₜqₜ` and `ᶜwₕhₜ`.
+
+For `PrognosticEDMFX`, the per-subdomain velocities (`ᶜwₗʲs`, `ᶜwᵢʲs`, `ᶜwᵣʲs`,
+`ᶜwₛʲs`, ...) are also computed, and the grid-mean velocities are mass-weighted
+averages over the subdomains, so that the grid-scale flux equals the sum of the
+sub-grid-scale fluxes.
 """
 function set_precipitation_velocities!(Y, p, _, _)
     (; ᶜwₜqₜ, ᶜwₕhₜ) = p.precomputed
@@ -84,10 +108,11 @@ function set_precipitation_velocities!(
 )
     (; ᶜwₗ, ᶜwᵢ, ᶜwᵣ, ᶜwₛ, ᶜwₜqₜ, ᶜwₕhₜ, ᶜT, ᶜu) = p.precomputed
     (; ᶜΦ) = p.core
-    (; terminal_velocity_mode) = p.atmos
-    cmc = CAP.microphysics_cloud_params(p.params)
-    cmp = CAP.microphysics_1m_params(p.params)
-    thp = CAP.thermodynamics_params(p.params)
+    atmos = p.atmos
+    params = p.params
+    cmc = CAP.microphysics_cloud_params(params)
+    cmp = CAP.microphysics_1m_params(params)
+    thp = CAP.thermodynamics_params(params)
 
     # scratch for adding energy fluxes over subdomains
     ᶜρwₕhₜ = p.scratch.ᶜtemp_scalar
@@ -95,8 +120,9 @@ function set_precipitation_velocities!(
 
     terminal_velocity_function(name, ρ, q) = terminal_velocity(
         microphysics_model,
-        terminal_velocity_mode,
+        velocity_mode(atmos, name),
         name,
+        params,
         cmc,
         cmp,
         ρ,
@@ -143,11 +169,12 @@ function set_precipitation_velocities!(
     (; ᶜwₗ, ᶜwᵢ, ᶜwᵣ, ᶜwₛ, ᶜwₜqₜ, ᶜwₕhₜ) = p.precomputed
     (; ᶜwₗʲs, ᶜwᵢʲs, ᶜwᵣʲs, ᶜwₛʲs, ᶜTʲs, ᶜρʲs) = p.precomputed
     (; ᶜT⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰) = p.precomputed
-    (; terminal_velocity_mode) = p.atmos
+    atmos = p.atmos
+    params = p.params
 
-    cmc = CAP.microphysics_cloud_params(p.params)
-    cmp = CAP.microphysics_1m_params(p.params)
-    thp = CAP.thermodynamics_params(p.params)
+    cmc = CAP.microphysics_cloud_params(params)
+    cmp = CAP.microphysics_1m_params(params)
+    thp = CAP.thermodynamics_params(params)
 
     ᶜρ⁰ = @. lazy(
         TD.air_density(thp, ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰),
@@ -172,8 +199,9 @@ function set_precipitation_velocities!(
 
     terminal_velocity_function(name, ρ, q) = terminal_velocity(
         microphysics_model,
-        terminal_velocity_mode,
+        velocity_mode(atmos, name),
         name,
+        params,
         cmc,
         cmp,
         ρ,
@@ -219,8 +247,9 @@ function set_precipitation_velocities!(
         # average
         @. ᶜw = gs_terminal_velocity(
             microphysics_model,
-            terminal_velocity_mode,
+            velocity_mode(atmos, χ_name),
             χ_name,
+            params,
             ᶜw,
             ᶜρχ,
         )
@@ -644,21 +673,29 @@ end
 """
     update_implicit_microphysics_cache!(Y, p, microphysics_model, turbconv_model)
 
-Refresh microphysics precomputed quantities that depend on the current Newton
-iterate `Y`.  Called from `set_implicit_precomputed_quantities!` at every
-Newton iteration of the implicit solve.
+Refresh the microphysics precomputed quantities that depend on the current Newton
+iterate `Y`. Called from `set_implicit_precomputed_quantities!` at every Newton
+iteration of the implicit solve, and only when
+`p.atmos.microphysics_tendency_timestepping == Implicit()`. Returns `nothing`.
 
-All schemes freeze the specific microphysics tendencies computed in the
-explicit stage; only density-weighted source terms and surface fluxes are
-refreshed here.
+All schemes freeze the specific microphysics tendencies (`ᶜmp_tendency` and its
+subdomain counterparts) computed in the explicit stage; only density-weighted
+source terms and surface fluxes are refreshed here. The refreshed fields have
+Dual-typed copies in `implicit_precomputed_quantities`, so autodiff can write
+into them safely.
 
-  - **0M**: recomputes `ρ × mp_tendency.dq_tot_dt` from the frozen
-    `ᶜmp_tendency` (ρ × tendency).  For EDMF variants, the per-subdomain
-    specific tendencies are re-aggregated with the current ρ / ρa.
-  - **1M/2M**: refreshes only `set_precipitation_surface_fluxes!`.  The
-    specific tendencies (mp_tendency) are frozen; density weighting is
-    applied at tendency-evaluation time in `tendency.jl`.
-  - **default**: no-op (microphysics not active or not implicit).
+Dispatch on `microphysics_model` and `turbconv_model`:
+
+  - `EquilibriumMicrophysics0M`: rewrites `ᶜρ_dq_tot_dt = ρ * ᶜmp_tendency.dq_tot_dt`
+    and `ᶜρ_de_tot_dt = ᶜρ_dq_tot_dt * ᶜmp_tendency.e_tot_hlpr`, then updates the
+    surface fluxes.
+  - `EquilibriumMicrophysics0M` with `PrognosticEDMFX`: re-aggregates the frozen
+    per-subdomain specific tendencies `ᶜmp_tendency⁰` and `ᶜmp_tendencyʲs` with the
+    current `ρa⁰` and `Y.c.sgsʲs.:(j).ρa`, then updates the surface fluxes.
+  - `NonEquilibriumMicrophysics` (1M, 2M, 2M+P3): calls
+    `set_precipitation_surface_fluxes!` only. Density weighting of the specific
+    tendencies is applied at tendency-evaluation time in `tendency.jl`.
+  - Default: no-op (microphysics not active).
 """
 update_implicit_microphysics_cache!(Y, p, _, _) = nothing
 
@@ -692,6 +729,27 @@ function update_implicit_microphysics_cache!(
 end
 
 function update_implicit_microphysics_cache!(
+    Y,
+    p,
+    mm::NonEquilibriumMicrophysics1M,
+    tm,
+)
+    # Recompute the sedimentation velocities from the current implicit-solver state.
+    # This is expecially important for PrognosticEDMFX `ᶜwᵣʲs`.
+    # Leaving updraft velocities at their explicit-stage values treats the
+    # nonlinear part of the sedimentation flux explicitly.
+    # No number of Newton iterations can correct a field that nothing updates.
+    if p.atmos.terminal_velocity_liquid isa DiagnosticTerminalVelocity ||
+       p.atmos.terminal_velocity_ice isa DiagnosticTerminalVelocity ||
+       p.atmos.terminal_velocity_rain isa DiagnosticTerminalVelocity ||
+       p.atmos.terminal_velocity_snow isa DiagnosticTerminalVelocity
+        set_precipitation_velocities!(Y, p, mm, tm)
+    end
+    set_precipitation_surface_fluxes!(Y, p, mm)
+    return nothing
+end
+
+function update_implicit_microphysics_cache!(
     Y, p, mm::NonEquilibriumMicrophysics, _,
 )
     set_precipitation_surface_fluxes!(Y, p, mm)
@@ -701,10 +759,17 @@ end
 """
     set_microphysics_tendency_cache!(Y, p, microphysics_model, turbconv_model)
 
-Compute and cache the microphysics source terms (`ᶜmp_tendency`, Jacobian
-coefficients, etc.) for the current state `Y`.
+Compute and cache the specific microphysics tendencies for the current state `Y`.
+Returns `nothing`.
 
-**Dispatch table** (microphysics_model × turbconv_model):
+Writes `p.precomputed.ᶜmp_tendency` on the non-EDMF path, and
+`p.precomputed.ᶜmp_tendency⁰` together with `p.precomputed.ᶜmp_tendencyʲs` on the
+`PrognosticEDMFX` path. For `EquilibriumMicrophysics0M`, the density-weighted
+sources `ᶜρ_dq_tot_dt` and `ᶜρ_de_tot_dt` are also written here; for the other
+schemes the density weighting is applied at tendency-evaluation time in
+`tendency.jl`. The 2M+P3 method additionally writes `ᶜScoll`.
+
+**Dispatch table** (`microphysics_model` × `turbconv_model`):
 
 | Model    | Nothing / default      | PrognosticEDMFX  |
 |:-------- |:---------------------- |:---------------- |
@@ -721,7 +786,7 @@ SGS quadrature points (controlled by `p.atmos.sgs_quadrature`) to sample subgrid
 
 *Updrafts* use direct BMT evaluation (no SGS quadrature) because:
 
- 1. Updrafts are coherent turbulent structures with more homogeneous thermodynamic properties
+ 1. Updrafts are coherent turbulent structures with more homogeneous thermodynamic properties.
  2. Updraft area fraction is usually small (~1-10%), so SGS variance within updrafts has limited
     impact on the grid-mean tendency.
 
@@ -730,8 +795,15 @@ the environment dominates the grid-mean variance. The quadrature captures subgri
 fluctuations in temperature and moisture, which is important for threshold processes like
 condensation/evaporation at cloud edges.
 
-The grid-mean source is then the area-weighted sum:
-`ᶜS_ρq_tot = ᶜSqₜᵐ⁰ * ᶜρa⁰ + Σⱼ ᶜSqₜᵐʲ * ᶜρaʲ`
+For `EquilibriumMicrophysics0M` under EDMF, the grid-mean source is the
+area-weighted sum
+`ᶜρ_dq_tot_dt = ᶜmp_tendency⁰.dq_tot_dt * ρa⁰ + Σⱼ ᶜmp_tendencyʲs.:(j).dq_tot_dt * ρaʲ`.
+
+Reads the subdomain thermodynamic state (`ᶜρʲs`, `ᶜTʲs`, `ᶜq_tot_nonnegʲs`,
+`ᶜT⁰`, ...) and, when quadrature is active, the SGS (co)variances `ᶜT′T′`,
+`ᶜq′q′`, and `ᶜsgs_moments`. Uses `p.scratch` fields for the environment inputs.
+
+See also `set_precipitation_velocities!` and `set_precipitation_surface_fluxes!`.
 """
 set_microphysics_tendency_cache!(Y, p, _, _) = nothing
 
@@ -1166,11 +1238,32 @@ function set_microphysics_tendency_cache!(
 end
 
 """
-    set_precipitation_surface_fluxes!(Y, p, precipitation model)
+    set_precipitation_surface_fluxes!(Y, p, microphysics_model)
 
-Computes the flux of rain and snow at the surface. For the 0-moment microphysics
-it is an integral of the source terms in the column. For 1-moment microphysics
-it is the flux through the bottom cell face.
+Compute the surface fluxes of rain and snow and the column-integrated
+precipitation energy tendency. Returns `nothing`.
+
+Mutates `p.precomputed.surface_rain_flux` and `p.precomputed.surface_snow_flux`
+[kg/m²/s], and `p.precomputed.col_integrated_precip_energy_tendency` [W/m²]. The
+sign convention is upward-positive, so all three are negative when precipitation
+reaches the surface.
+
+Dispatch on `microphysics_model`:
+
+  - `EquilibriumMicrophysics0M`: the fluxes are column integrals of the
+    density-weighted `q_tot` sink `ᶜρ_dq_tot_dt`, partitioned into rain and snow by
+    the freezing temperature.
+  - `NonEquilibriumMicrophysics1M` and `NonEquilibriumMicrophysics2M`: the fluxes
+    are evaluated at the bottom cell face from the level-1 specific humidities and
+    terminal velocities (`ᶜwᵣ`, `ᶜwₛ`, `ᶜwₗ`, `ᶜwᵢ`), with a Jacobian-weighted
+    extrapolation of density to the surface. Uses `p.scratch` scalars.
+  - `NonEquilibriumMicrophysics2MP3`: delegates to the 2M method; `ρn_ice`,
+    `ρq_rim`, and `ρb_rim` are not yet accounted for.
+  - Default: no-op.
+
+Must be called after `set_microphysics_tendency_cache!` (0M needs the column
+`q_tot` sink) and after `set_precipitation_velocities!` (1M/2M need the terminal
+velocities).
 """
 set_precipitation_surface_fluxes!(Y, p, _) = nothing
 function set_precipitation_surface_fluxes!(

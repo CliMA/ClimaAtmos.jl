@@ -74,137 +74,206 @@ if isempty(ref_nc_path)
         adir = ensure_artifact_installed(artifact_name, meta, toml_path)
         global ref_nc_path = joinpath(adir, "$(case_name).nc")
     catch e
-        error(
-            "No --ref_nc supplied and artifact lookup for '$artifact_name' failed: $e\n" *
-            "Either pass --ref_nc or ensure the root Artifacts.toml is populated.",
-        )
+        @warn "No --ref_nc supplied and artifact lookup for '$artifact_name' failed: $e\n" *
+              "Plotting without PyCLES reference data."
     end
 end
 
 # ── Reference data ────────────────────────────────────────────────────────────
-println("Loading reference: $ref_nc_path")
-ref_ds = NCDataset(ref_nc_path)
-prof = ref_ds.group["profiles"]
-ts_grp = ref_ds.group["timeseries"]
+has_ref = !isempty(ref_nc_path) && isfile(ref_nc_path)
 
-# Auto-detect PyCLES export format:
-#   Old format: t and z_half are top-level; density is prof["rho"].
-#   New format (Stats.*.nc): t and z_half live inside the profiles group;
-#   density is in the reference group as rho0; water paths are direct
-#   timeseries variables (lwp, rwp, iwp, swp).
-ref_fmt_new = !haskey(ref_ds, "t")
-ref_t = (ref_fmt_new ? prof["t"] : ref_ds["t"])[:]           # seconds
-ref_z = (ref_fmt_new ? prof["z_half"] : ref_ds["z_half"])[:]  # metres
-ref_rho = ref_fmt_new ? ref_ds.group["reference"]["rho0"][:] : prof["rho"][:]
+# Initialise ref variables to nothing so downstream code can check has_ref
+ref_t = nothing
+ref_z = nothing
+ref_rho = nothing
+ref_thetali = nothing;
+ref_thetali_s = nothing
+ref_qt = nothing;
+ref_qt_s = nothing
+ref_ql = nothing;
+ref_ql_s = nothing
+ref_aup = nothing;
+ref_aup_s = nothing
+ref_wup = nothing;
+ref_wup_s = nothing
+ref_tke = nothing;
+ref_tke_s = nothing
+ref_cf = nothing;
+ref_cf_s = nothing
+ref_qr = nothing;
+ref_qr_s = nothing
+ref_qi = nothing;
+ref_qi_s = nothing
+ref_qs = nothing;
+ref_qs_s = nothing
+ref_umean = nothing;
+ref_umean_s = nothing
+ref_vmean = nothing;
+ref_vmean_s = nothing
+ref_lwp = nothing
+ref_rwp = nothing
+ref_iwp_ts = nothing
+ref_swp_ts = nothing
+ref_t_h = nothing
+ref_t_avg_end = nothing
+ref_t_start_avg = nothing
 
-# Averaging window: last LAST_N_HOURS of the run, anchored at the ClimaAtmos
-# t_end when sim data is available.  This ensures both sides average the same
-# absolute time period even when PyCLES ran longer than ClimaAtmos.
 LAST_N_HOURS = 3.0
 
-# Sniff ClimaAtmos t_end from any available profile file (before opening ref).
-function _sim_t_end(sim_dir)
-    isempty(sim_dir) && return nothing
-    !isdir(sim_dir) && return nothing
-    # Try a handful of common profile names to find the first available file.
+if has_ref
+    println("Loading reference: $ref_nc_path")
+    ref_ds = NCDataset(ref_nc_path)
+    prof = ref_ds.group["profiles"]
+    ts_grp = ref_ds.group["timeseries"]
+
+    # Auto-detect PyCLES export format:
+    #   Old format: t and z_half are top-level; density is prof["rho"].
+    #   New format (Stats.*.nc): t and z_half live inside the profiles group;
+    #   density is in the reference group as rho0; water paths are direct
+    #   timeseries variables (lwp, rwp, iwp, swp).
+    ref_fmt_new = !haskey(ref_ds, "t")
+    ref_t = (ref_fmt_new ? prof["t"] : ref_ds["t"])[:]           # seconds
+    ref_z = (ref_fmt_new ? prof["z_half"] : ref_ds["z_half"])[:]  # metres
+    ref_rho = ref_fmt_new ? ref_ds.group["reference"]["rho0"][:] : prof["rho"][:]
+
+    # Averaging window: last LAST_N_HOURS of the run, anchored at the ClimaAtmos
+    # t_end when sim data is available.  This ensures both sides average the same
+    # absolute time period even when PyCLES ran longer than ClimaAtmos.
+
+    # Sniff ClimaAtmos t_end from any available profile file (before opening ref).
+    function _sim_t_end(sim_dir)
+        isempty(sim_dir) && return nothing
+        !isdir(sim_dir) && return nothing
+        # Try a handful of common profile names to find the first available file.
+        for sn in ("thetaa", "hus", "ta", "wa", "ua")
+            p = joinpath(sim_dir, "$(sn)_10m_inst.nc")
+            if isfile(p)
+                try
+                    ds = NCDataset(p)
+                    t = ds["time"][end]
+                    close(ds)
+                    return Float64(t)
+                catch
+                end
+            end
+        end
+        return nothing
+    end
+
+    _atmos_t_end = _sim_t_end(sim_dir_path)
+
+    # Anchor the PyCLES window at the ClimaAtmos t_end (if known and earlier than
+    # the PyCLES run end), so profiles are time-matched between the two models.
+    ref_t_end = ref_t[end]
+    ref_t_avg_end = isnothing(_atmos_t_end) ? ref_t_end : min(ref_t_end, _atmos_t_end)
+    ref_t_start_avg = ref_t_avg_end - LAST_N_HOURS * 3600.0
+    ref_mask = (ref_t .>= ref_t_start_avg) .& (ref_t .<= ref_t_avg_end)
+    if sum(ref_mask) == 0
+        ref_mask = ref_t .>= ref_t[end] / 2
+        @warn "Last-$(LAST_N_HOURS)h window empty; using last half of run."
+    end
+    println("Reference: averaging last $(LAST_N_HOURS)h (",
+        round(ref_t_start_avg / 3600, digits = 1), "–",
+        round(ref_t_avg_end / 3600, digits = 1), "h)")
+
+    # NCDatasets returns (z, t) for profile groups → transpose to (t, z)
+    function load_prof(varname)
+        return permutedims(prof[varname][:, :])
+    end
+
+    function ref_stats(field_tz; scale = 1.0)
+        w = field_tz[ref_mask, :]
+        mu = mean(w, dims = 1)[1, :] .* scale
+        sig = std(w, dims = 1)[1, :] .* scale
+        return mu, sig
+    end
+
+    # Graceful loader: returns (nothing, nothing) when variable absent
+    function try_ref_stats(varname; scale = 1.0)
+        haskey(prof, varname) || return nothing, nothing
+        return ref_stats(load_prof(varname); scale)
+    end
+
+    # Core profiles (always present in PyCLES output)
+    ref_thetali, ref_thetali_s = ref_stats(load_prof("thetali_mean"))
+    ref_qt, ref_qt_s = ref_stats(load_prof("qt_mean"); scale = 1e3)
+    ref_ql, ref_ql_s = ref_stats(load_prof("ql_mean"); scale = 1e3)
+    ref_aup, ref_aup_s = ref_stats(load_prof("updraft_fraction"))
+    ref_wup, ref_wup_s = ref_stats(load_prof("updraft_w"))
+    ref_tke, ref_tke_s = ref_stats(load_prof("tke_mean"))
+
+    # Optional profiles (case dependent; GABLS has no cloud_fraction etc.)
+    ref_cf, ref_cf_s = try_ref_stats("cloud_fraction")
+    ref_qr, ref_qr_s = try_ref_stats("qr_mean"; scale = 1e3)
+    ref_qi, ref_qi_s = try_ref_stats("qi_mean"; scale = 1e3)
+    ref_qs, ref_qs_s = try_ref_stats("qs_mean"; scale = 1e3)
+    # u_translational_mean / v_translational_mean are the absolute-frame horizontal
+    # velocities (same frame as ClimaAtmos ua/va), available in all PyCLES cases.
+    ref_umean, ref_umean_s = try_ref_stats("u_translational_mean")
+    ref_vmean, ref_vmean_s = try_ref_stats("v_translational_mean")
+
+    # Reference timeseries
+    ref_t_h = ref_t ./ 3600.0
+
+    # LWP: old format uses 'lwp_mean', new format uses 'lwp'
+    ref_lwp = if haskey(ts_grp, "lwp_mean")
+        ts_grp["lwp_mean"][:] .* 1e3   # g/m²
+    elseif haskey(ts_grp, "lwp")
+        ts_grp["lwp"][:] .* 1e3        # g/m²
+    else
+        zeros(length(ref_t))
+    end
+
+    # Rain water path: read directly from new-format timeseries, or integrate profile
+    ref_rwp = if haskey(ts_grp, "rwp")
+        ts_grp["rwp"][:] .* 1e3        # g/m² (new format)
+    elseif !isnothing(ref_qr)
+        dz = diff(ref_z)
+        dz = vcat(dz[1:1], (dz[1:(end - 1)] .+ dz[2:end]) ./ 2, dz[end:end])
+        clamp.(load_prof("qr_mean") * (ref_rho .* dz), 0.0, Inf) .* 1e3   # g/m²
+    else
+        nothing
+    end
+
+    # Ice and snow water paths (available in new-format timeseries)
+    ref_iwp_ts = haskey(ts_grp, "iwp") ? ts_grp["iwp"][:] .* 1e3 : nothing  # g/m²
+    ref_swp_ts = haskey(ts_grp, "swp") ? ts_grp["swp"][:] .* 1e3 : nothing  # g/m²
+
+    close(ref_ds)
+else
+    @warn "No reference data available; plotting ClimaAtmos data only."
+end
+
+# ── ClimaAtmos simulation ─────────────────────────────────────────────────────
+has_sim = !isempty(sim_dir_path) && isdir(sim_dir_path)
+
+if !has_sim && !has_ref
+    error(
+        "Neither simulation data nor reference data available for $case_name — nothing to plot.",
+    )
+end
+
+# When only sim data is available and ref didn't set the averaging window,
+# derive t_end from the sim data so load_and_avg has a valid anchor.
+if !has_ref && has_sim
+    # Sniff ClimaAtmos t_end from any available profile file.
     for sn in ("thetaa", "hus", "ta", "wa", "ua")
-        p = joinpath(sim_dir, "$(sn)_10m_inst.nc")
+        p = joinpath(sim_dir_path, "$(sn)_10m_inst.nc")
         if isfile(p)
             try
                 ds = NCDataset(p)
-                t = ds["time"][end]
+                global ref_t_avg_end = Float64(ds["time"][end])
+                global ref_t_start_avg = ref_t_avg_end - LAST_N_HOURS * 3600.0
                 close(ds)
-                return Float64(t)
+                break
             catch
             end
         end
     end
-    return nothing
+    if isnothing(ref_t_avg_end)
+        error("Cannot determine simulation time range for $case_name.")
+    end
 end
-
-_atmos_t_end = _sim_t_end(sim_dir_path)
-
-# Anchor the PyCLES window at the ClimaAtmos t_end (if known and earlier than
-# the PyCLES run end), so profiles are time-matched between the two models.
-ref_t_end = ref_t[end]
-ref_t_avg_end = isnothing(_atmos_t_end) ? ref_t_end : min(ref_t_end, _atmos_t_end)
-ref_t_start_avg = ref_t_avg_end - LAST_N_HOURS * 3600.0
-ref_mask = (ref_t .>= ref_t_start_avg) .& (ref_t .<= ref_t_avg_end)
-if sum(ref_mask) == 0
-    ref_mask = ref_t .>= ref_t[end] / 2
-    @warn "Last-$(LAST_N_HOURS)h window empty; using last half of run."
-end
-println("Reference: averaging last $(LAST_N_HOURS)h (",
-    round(ref_t_start_avg / 3600, digits = 1), "–",
-    round(ref_t_avg_end / 3600, digits = 1), "h)")
-
-# NCDatasets returns (z, t) for profile groups → transpose to (t, z)
-function load_prof(varname)
-    return permutedims(prof[varname][:, :])
-end
-
-function ref_stats(field_tz; scale = 1.0)
-    w = field_tz[ref_mask, :]
-    mu = mean(w, dims = 1)[1, :] .* scale
-    sig = std(w, dims = 1)[1, :] .* scale
-    return mu, sig
-end
-
-# Graceful loader: returns (nothing, nothing) when variable absent
-function try_ref_stats(varname; scale = 1.0)
-    haskey(prof, varname) || return nothing, nothing
-    return ref_stats(load_prof(varname); scale)
-end
-
-# Core profiles (always present in PyCLES output)
-ref_thetali, ref_thetali_s = ref_stats(load_prof("thetali_mean"))
-ref_qt, ref_qt_s = ref_stats(load_prof("qt_mean"); scale = 1e3)
-ref_ql, ref_ql_s = ref_stats(load_prof("ql_mean"); scale = 1e3)
-ref_aup, ref_aup_s = ref_stats(load_prof("updraft_fraction"))
-ref_wup, ref_wup_s = ref_stats(load_prof("updraft_w"))
-ref_tke, ref_tke_s = ref_stats(load_prof("tke_mean"))
-
-# Optional profiles (case dependent; GABLS has no cloud_fraction etc.)
-ref_cf, ref_cf_s = try_ref_stats("cloud_fraction")
-ref_qr, ref_qr_s = try_ref_stats("qr_mean"; scale = 1e3)
-ref_qi, ref_qi_s = try_ref_stats("qi_mean"; scale = 1e3)
-ref_qs, ref_qs_s = try_ref_stats("qs_mean"; scale = 1e3)
-# u_translational_mean / v_translational_mean are the absolute-frame horizontal
-# velocities (same frame as ClimaAtmos ua/va), available in all PyCLES cases.
-ref_umean, ref_umean_s = try_ref_stats("u_translational_mean")
-ref_vmean, ref_vmean_s = try_ref_stats("v_translational_mean")
-
-# Reference timeseries
-ref_t_h = ref_t ./ 3600.0
-
-# LWP: old format uses 'lwp_mean', new format uses 'lwp'
-ref_lwp = if haskey(ts_grp, "lwp_mean")
-    ts_grp["lwp_mean"][:] .* 1e3   # g/m²
-elseif haskey(ts_grp, "lwp")
-    ts_grp["lwp"][:] .* 1e3        # g/m²
-else
-    zeros(length(ref_t))
-end
-
-# Rain water path: read directly from new-format timeseries, or integrate profile
-ref_rwp = if haskey(ts_grp, "rwp")
-    ts_grp["rwp"][:] .* 1e3        # g/m² (new format)
-elseif !isnothing(ref_qr)
-    dz = diff(ref_z)
-    dz = vcat(dz[1:1], (dz[1:(end - 1)] .+ dz[2:end]) ./ 2, dz[end:end])
-    clamp.(load_prof("qr_mean") * (ref_rho .* dz), 0.0, Inf) .* 1e3   # g/m²
-else
-    nothing
-end
-
-# Ice and snow water paths (available in new-format timeseries)
-ref_iwp_ts = haskey(ts_grp, "iwp") ? ts_grp["iwp"][:] .* 1e3 : nothing  # g/m²
-ref_swp_ts = haskey(ts_grp, "swp") ? ts_grp["swp"][:] .* 1e3 : nothing  # g/m²
-
-close(ref_ds)
-
-# ── ClimaAtmos simulation ─────────────────────────────────────────────────────
-has_sim = !isempty(sim_dir_path) && isdir(sim_dir_path)
 
 function sim_nc_path(short_name; reduction = "inst", period = "10m")
     joinpath(sim_dir_path, "$(short_name)_$(period)_$(reduction).nc")
@@ -277,15 +346,41 @@ const SIM_COLOR = "#2e6da4"   # blue   – ClimaAtmos
 const V_SIM_COLOR = "#27ae60"   # green  – ClimaAtmos v
 const LWIDTH = 2.5
 
+# Determine subtitle for the figure header
+_subtitle = if has_sim && has_ref
+    "ClimaAtmos (blue) vs PyCLES (orange)"
+elseif has_sim
+    "ClimaAtmos only (no PyCLES reference)"
+else
+    "PyCLES reference only"
+end
+
 fig = CairoMakie.Figure(size = (1900, 1050))
 fig[0, 1:12] = CairoMakie.Label(
     fig,
-    "$case_name intercomparison  ·  last $(Int(LAST_N_HOURS))h average  ·  " *
-    (has_sim ? "ClimaAtmos (blue) vs PyCLES (orange)" : "PyCLES reference only"),
+    "$case_name intercomparison  ·  last $(Int(LAST_N_HOURS))h average  ·  " * _subtitle,
     fontsize = 14, tellwidth = false,
 )
 
-z_km = ref_z ./ 1e3
+# Determine z range for profile ylims: prefer ref, fall back to sim
+z_km = if has_ref
+    ref_z ./ 1e3
+else
+    # Get z from the first available sim variable
+    _z_ax = nothing
+    for sn in ("thetaa", "hus", "clw")
+        path = sim_nc_path(sn)
+        isfile(path) || continue
+        try
+            ds = NCDataset(path)
+            _z_ax = ds["z"][:] ./ 1e3
+            close(ds)
+            break
+        catch
+        end
+    end
+    isnothing(_z_ax) ? [0.0, 3.0] : _z_ax  # fallback range
+end
 
 function make_profile_ax(pos, xlabel, title)
     ax = CairoMakie.Axis(pos;
@@ -358,56 +453,58 @@ function sim_ts_line!(ax, t, y; label = "ClimaAtmos")
 end
 
 # ── PyCLES profiles ───────────────────────────────────────────────────────────
-# Core (always present across all cases)
-for (ax, mu, sig) in [
-    (ax1, ref_thetali, ref_thetali_s),
-    (ax2, ref_qt, ref_qt_s),
-    (ax3, ref_ql, ref_ql_s),
-    (ax7, ref_aup, ref_aup_s),
-    (ax8, ref_wup, ref_wup_s),
-    (ax9, ref_tke, ref_tke_s),
-]
-    profile_band!(ax, mu, sig, z_km, REF_COLOR)
-    ref_line!(ax, mu, z_km)
-end
+if has_ref
+    # Core (always present across all cases)
+    for (ax, mu, sig) in [
+        (ax1, ref_thetali, ref_thetali_s),
+        (ax2, ref_qt, ref_qt_s),
+        (ax3, ref_ql, ref_ql_s),
+        (ax7, ref_aup, ref_aup_s),
+        (ax8, ref_wup, ref_wup_s),
+        (ax9, ref_tke, ref_tke_s),
+    ]
+        profile_band!(ax, mu, sig, z_km, REF_COLOR)
+        ref_line!(ax, mu, z_km)
+    end
 
-# Optional (may be absent — silently skip)
-for (ax, mu, sig) in [
-    (ax10, ref_cf, ref_cf_s),
-    (ax4, ref_qr, ref_qr_s),
-    (ax5, ref_qi, ref_qi_s),
-    (ax6, ref_qs, ref_qs_s),
-]
-    isnothing(mu) && continue
-    profile_band!(ax, mu, sig, z_km, REF_COLOR)
-    ref_line!(ax, mu, z_km)
-end
+    # Optional (may be absent — silently skip)
+    for (ax, mu, sig) in [
+        (ax10, ref_cf, ref_cf_s),
+        (ax4, ref_qr, ref_qr_s),
+        (ax5, ref_qi, ref_qi_s),
+        (ax6, ref_qs, ref_qs_s),
+    ]
+        isnothing(mu) && continue
+        profile_band!(ax, mu, sig, z_km, REF_COLOR)
+        ref_line!(ax, mu, z_km)
+    end
 
-# u & v: separate solid lines with distinct colors per component
-if !isnothing(ref_umean)
-    profile_band!(ax12, ref_umean, ref_umean_s, z_km, REF_COLOR)
-    ref_line!(ax12, ref_umean, z_km; label = "u  PyCLES")
-end
-if !isnothing(ref_vmean)
-    profile_band!(ax12, ref_vmean, ref_vmean_s, z_km, V_REF_COLOR)
-    ref_line!(ax12, ref_vmean, z_km; label = "v  PyCLES", color = V_REF_COLOR)
-end
+    # u & v: separate solid lines with distinct colors per component
+    if !isnothing(ref_umean)
+        profile_band!(ax12, ref_umean, ref_umean_s, z_km, REF_COLOR)
+        ref_line!(ax12, ref_umean, z_km; label = "u  PyCLES")
+    end
+    if !isnothing(ref_vmean)
+        profile_band!(ax12, ref_vmean, ref_vmean_s, z_km, V_REF_COLOR)
+        ref_line!(ax12, ref_vmean, z_km; label = "v  PyCLES", color = V_REF_COLOR)
+    end
 
-# PyCLES timeseries — clipped to the shared run-end anchor (raw, no smoothing)
-ref_ts_mask = ref_t .<= ref_t_avg_end
-ref_t_h_plot = ref_t_h[ref_ts_mask]
-ref_ts_line!(ax13, ref_t_h_plot, ref_lwp[ref_ts_mask])
+    # PyCLES timeseries — clipped to the shared run-end anchor (raw, no smoothing)
+    ref_ts_mask = ref_t .<= ref_t_avg_end
+    ref_t_h_plot = ref_t_h[ref_ts_mask]
+    ref_ts_line!(ax13, ref_t_h_plot, ref_lwp[ref_ts_mask])
 
-if !isnothing(ref_rwp)
-    ref_ts_line!(ax14, ref_t_h_plot, ref_rwp[ref_ts_mask])
-end
+    if !isnothing(ref_rwp)
+        ref_ts_line!(ax14, ref_t_h_plot, ref_rwp[ref_ts_mask])
+    end
 
-if !isnothing(ref_iwp_ts)
-    ref_ts_line!(ax15, ref_t_h_plot, ref_iwp_ts[ref_ts_mask])
-end
+    if !isnothing(ref_iwp_ts)
+        ref_ts_line!(ax15, ref_t_h_plot, ref_iwp_ts[ref_ts_mask])
+    end
 
-if !isnothing(ref_swp_ts)
-    ref_ts_line!(ax16, ref_t_h_plot, ref_swp_ts[ref_ts_mask])
+    if !isnothing(ref_swp_ts)
+        ref_ts_line!(ax16, ref_t_h_plot, ref_swp_ts[ref_ts_mask])
+    end
 end
 
 # ── ClimaAtmos profiles ───────────────────────────────────────────────────────
@@ -472,21 +569,23 @@ function set_xlims_from!(ax, mu, sig; nsigma = 2, margin_frac = 0.05)
     CairoMakie.xlims!(ax, lo - m, hi + m)
 end
 
-# Core axes: always PyCLES-limited
-for (ax, mu, sig) in [
-    (ax1, ref_thetali, ref_thetali_s),
-    (ax2, ref_qt, ref_qt_s),
-    (ax3, ref_ql, ref_ql_s),
-    (ax7, ref_aup, ref_aup_s),
-    (ax8, ref_wup, ref_wup_s),
-    (ax9, ref_tke, ref_tke_s),
-]
-    set_xlims_from!(ax, mu, sig)
-end
+# Core axes: PyCLES-limited when available
+if has_ref
+    for (ax, mu, sig) in [
+        (ax1, ref_thetali, ref_thetali_s),
+        (ax2, ref_qt, ref_qt_s),
+        (ax3, ref_ql, ref_ql_s),
+        (ax7, ref_aup, ref_aup_s),
+        (ax8, ref_wup, ref_wup_s),
+        (ax9, ref_tke, ref_tke_s),
+    ]
+        set_xlims_from!(ax, mu, sig)
+    end
 
-# Cloud fraction: PyCLES-limited when present, else ClimaAtmos
-if !isnothing(ref_cf)
-    set_xlims_from!(ax10, ref_cf, ref_cf_s)
+    # Cloud fraction: PyCLES-limited when present, else ClimaAtmos
+    if !isnothing(ref_cf)
+        set_xlims_from!(ax10, ref_cf, ref_cf_s)
+    end
 end
 
 # Optional axes (rain/ice/snow): xlims from ClimaAtmos data, which is more
@@ -521,8 +620,15 @@ let uv_data = Tuple{Vector{Float64}, Vector{Float64}}[]
 end
 
 # ── Legend ────────────────────────────────────────────────────────────────────
-CairoMakie.axislegend(ax1; position = :rt, labelsize = 9)
-CairoMakie.axislegend(ax12; position = :lt, labelsize = 8)
+# Only add legends to axes that have labelled content
+try
+    CairoMakie.axislegend(ax1; position = :rt, labelsize = 9)
+catch
+end
+try
+    CairoMakie.axislegend(ax12; position = :lt, labelsize = 8)
+catch
+end
 
 CairoMakie.save(out_path, fig)
 println("Saved → $out_path")

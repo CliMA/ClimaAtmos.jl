@@ -4,10 +4,24 @@ using ClimaCore.MatrixFields
 using ClimaCore
 import StaticArrays: SMatrix
 
-# Fields used to store variables that only need to be used in a single function
-# but cannot be computed on the fly. Unlike the precomputed quantities, these
-# can be modified at any point, so they should never be assumed to be unchanged
-# between function calls.
+"""
+    implicit_temporary_quantities(Y, atmos)
+
+Allocate the subset of scratch fields that the implicit tendency needs.
+
+Called by `jacobian_cache` for the autodiff Jacobian algorithms, which convert
+the result to a `ForwardDiff.Dual` element type; the plain-`FT` scratch in
+`p.scratch` from `temporary_quantities` cannot be written to under automatic
+differentiation. Like all scratch, the returned fields hold no persistent state
+and may be overwritten by any function, so they must never be assumed unchanged
+between calls.
+
+# Returns
+
+A `NamedTuple` of scratch fields keyed by name and type (`ᶜtemp_scalar`,
+`ᶠtemp_CT3`, `temp_data_level`, ...). The trailing comment on each entry records
+a representative use.
+"""
 function implicit_temporary_quantities(Y, atmos)
     center_space, face_space = axes(Y.c), axes(Y.f)
 
@@ -35,6 +49,27 @@ function implicit_temporary_quantities(Y, atmos)
         ),
     )
 end
+"""
+    temporary_quantities(Y, atmos)
+
+Allocate the scratch fields stored in `p.scratch`.
+
+These hold values that are used within a single function but cannot be computed
+on the fly. Unlike the precomputed quantities, they carry no persistent state:
+any function may overwrite any scratch field, so a caller must never assume a
+scratch field is unchanged across a call. Using scratch (or lazy broadcasting)
+is how tendencies and cache setters avoid allocating `Field`s in the hot path.
+
+Fields are named by location and type: a `ᶜ`/`ᶠ` prefix for cell centers/faces,
+then the element type (`scalar`, `C3`, `CT3`, `UVWxUVW`, matrix rows for the
+implicit solver). Entries whose names end in `_data` or `_level` are
+`Fields.field_values` or single levels rather than full fields. The trailing
+comment on each entry records a representative use.
+
+# Returns
+
+A `NamedTuple` of scratch fields keyed by name.
+"""
 function temporary_quantities(Y, atmos)
     center_space, face_space = axes(Y.c), axes(Y.f)
 

@@ -6,6 +6,19 @@ import ClimaUtilities.TimeManager: ITime
 ##### Restart file loading + output directory resolution.
 #####
 
+"""
+    get_state_restart(restart_file, start_date, atmos_model_hash, comms_ctx)
+
+Read the state and start time from an HDF5 restart file.
+
+Warns when the file records a different `AtmosModel` hash than `atmos_model_hash`, since
+the restart is then not guaranteed to be compatible.
+
+# Returns
+
+`(Y, t_start)`: the state vector and the restart time as an `ITime` with epoch
+`start_date`.
+"""
 function get_state_restart(
     restart_file,
     start_date,
@@ -31,16 +44,16 @@ end
 """
     handle_restart(restart_file, t_start_original, start_date, model, context; verbose = false)
 
-Handle restart file loading with validation and logging.
+Load a restart file, warning when a nonzero `t_start_original` is passed, since the
+restart time from the file takes precedence.
 
-Validates that t_start is zero when restarting, loads state from restart file,
-logs restart information, and returns the state, t_start, and spaces.
+# Returns
 
-Returns:
+`(Y, t_start, spaces)`:
 
-  - `Y`: State loaded from restart file
-  - `t_start`: Time from restart file (ITime)
-  - `spaces`: Named tuple with center_space and face_space extracted from Y
+  - `Y`: State loaded from the restart file.
+  - `t_start`: Restart time as an `ITime` with epoch `start_date` [s].
+  - `spaces`: `(; center_space, face_space)` taken from `Y`.
 """
 function handle_restart(
     restart_file,
@@ -70,6 +83,12 @@ function handle_restart(
     return Y, t_start, spaces
 end
 
+"""
+    auto_detect_restart_file(::OutputPathGenerator.OutputPathGeneratorStyle, base_output_dir)
+
+Fallback method that errors: automatic restart detection requires the active-link output
+directory style.
+"""
 auto_detect_restart_file(::OutputPathGenerator.OutputPathGeneratorStyle, _) =
     error("auto_detect_restart_file works only with ActiveLink")
 
@@ -127,13 +146,21 @@ end
 """
     setup_output_dir(job_id, output_dir, output_dir_style, detect_restart_file, restart_file, comms_ctx)
 
-Unified function for setting up output directories and detecting restart files.
-Used by both AtmosSimulation constructor and get_simulation.
+Create the output directory for a run and resolve which restart file, if any, to use.
 
-Returns a named tuple with:
+The base directory is `output_dir` when given, and otherwise `output/<job_id>`, or just
+`<job_id>` when the `CI` environment variable is set (as it is in our
+continuous-integration system). `output_dir_style` is matched case-insensitively and must
+be `"activelink"` (numbered `output_NNNN` directories with a symlink to the active one) or
+`"removepreexisting"` (previous output is deleted); anything else raises an error. When
+`detect_restart_file` is set and no `restart_file` was given, the most recent restart file
+under the base directory is picked up by `auto_detect_restart_file`, which only works with
+the active-link style.
 
-  - `output_dir`: The final output directory path
-  - `restart_file`: The restart file path (if any)
+# Returns
+
+`(output_dir, restart_file)`: the generated output directory and the resolved restart
+file, or `nothing` if there is none.
 """
 function setup_output_dir(
     job_id,

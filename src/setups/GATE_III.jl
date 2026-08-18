@@ -5,7 +5,7 @@ The GATE_III setup described in [Khairoutdinov2009](@cite), with a
 hydrostatically balanced pressure profile. Uses T (not θ) for hydrostatic
 integration. Profiles are sourced from AtmosphericProfilesLibrary.
 
-## Example
+# Examples
 
 ```julia
 setup = GATE_III(; prognostic_tke = true, thermo_params)

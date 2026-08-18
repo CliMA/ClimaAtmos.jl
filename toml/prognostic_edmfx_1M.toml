@@ -17,13 +17,16 @@ value = 1.0e-5
 value = 0.7
 
 [turb_entr_param_vec]
-value = [0.0001, 10000.0, 0.0]
+value = [0.001, 1e5]
+
+[entr_inv_tau]
+value = 0
 
 [entr_coeff]
 value = 0.1
 
 [min_area_limiter_scale]
-value = 0.0001
+value = 0.001
 
 [min_area_limiter_power]
 value = 1
@@ -48,9 +51,6 @@ value = 1
 
 [pressure_normalmode_drag_coeff]
 value = 8.0
-
-[tracer_vertical_diffusion_factor]
-value = 0
 
 [condensation_evaporation_timescale]
 value = 100

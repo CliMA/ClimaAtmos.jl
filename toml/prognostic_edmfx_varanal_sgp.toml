@@ -27,11 +27,11 @@ value = 0.1
 type = "float"
 
 [turb_entr_param_vec]
-value = [0.0001, 10000]
+value = [0.001, 1e5]
 type = "float"
 
 [min_area_limiter_scale]
-value = 0.0001
+value = 0.001
 type = "float"
 
 [min_area_limiter_power]

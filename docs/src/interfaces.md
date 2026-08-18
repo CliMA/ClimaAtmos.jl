@@ -1,89 +1,63 @@
 # Script vs Config Interface
 
-ClimaAtmos provides two ways to set up and run simulations. Both produce
-an `AtmosSimulation` that is run with `solve_atmos!`.
+ClimaAtmos provides two ways to set up and run simulations. Both produce an
+`AtmosSimulation` that is run with `solve_atmos!`; they differ in where the
+configuration is written.
 
-## Script API
+The **script API** builds a simulation from Julia keyword arguments:
+`AtmosSimulation{FT}(; grid, model, setup, dt, t_end, ...)`. It is best for
+interactive exploration, notebooks, and programmatic parameter sweeps.
+[Your First Simulation](first_simulation.md) walks through it, and
+[Scripting Simulations](scripting_simulations.md) covers each component.
 
-Build a simulation directly from Julia keyword arguments:
+The **config API** reads the simulation from a YAML file:
+`AtmosSimulation(AtmosConfig("config.yml"))`. Every key overrides a default
+from [`config/default_configs/default_config.yml`](https://github.com/CliMA/ClimaAtmos.jl/blob/main/config/default_configs/default_config.yml), which makes runs
+reproducible and shareable; it is what the CI pipelines use. See
+[Creating custom configurations](configuration.md) for writing configuration
+files and [Configuration options](configuration_options.md) for the complete
+key list.
 
-```julia
-import ClimaAtmos as CA
-
-simulation = CA.AtmosSimulation{Float64}(;
-    model = CA.AtmosModel(),
-    grid = CA.SphereGrid(Float64; z_elem = 45, h_elem = 6),
-    setup = CA.Setups.DecayingProfile(; perturb = true),
-    dt = "10mins",
-    t_end = "10days",
-    job_id = "my_run",
-)
-CA.solve_atmos!(simulation)
-```
-
-**Best for:** interactive exploration, notebooks, custom scripts, programmatic
-parameter sweeps.
-
-See [`AtmosSimulation`](@ref ClimaAtmos.AtmosSimulation) for more information on how to customize your simulation.
-
-## Config API
-
-Define the simulation in a YAML file, then load it:
-
-```yaml
-# config.yml
-initial_condition: "DecayingProfile"
-perturb_initstate: true
-config: "sphere"
-z_elem: 45
-h_elem: 6
-dt: "600secs"
-t_end: "10days"
-```
-
-```julia
-import ClimaAtmos as CA
-
-config = CA.AtmosConfig("config.yml"; job_id = "my_run")
-simulation = CA.get_simulation(config)
-CA.solve_atmos!(simulation)
-```
-
-**Best for:** reproducible runs, CI pipelines, and sharing configurations.
-
-See the [Creating custom configurations](config.md) reference for the complete list of
-YAML options.
-
-## Comparison
-
-|             | Script API                         | Config API                     |
-|:----------- |:---------------------------------- |:------------------------------ |
-| Entry point | `AtmosSimulation{FT}(; kwargs...)` | `AtmosConfig("file.yml")`      |
-| Model       | Pass `AtmosModel()` directly       | Built from YAML keys           |
-| Grid        | Pass grid object                   | `config` key + grid parameters |
-| Setup       | Pass setup instance                | `initial_condition` string     |
-| Timestep    | `dt = 600` (number)                | `dt: "600secs"` (string)       |
-| Duration    | `t_end = 864000` (number)          | `t_end: "10days"` (string)     |
-
-## Common mappings
+## How the options map
 
 All script options are keyword arguments of
-[`AtmosSimulation`](@ref ClimaAtmos.AtmosSimulation). Most are passed directly (`dt`,
-`t_end`, `job_id`, `checkpoint_frequency`, `diagnostics`); `grid`, `model`, and `setup`
-instead take objects built by their own constructors (the grid constructors, `AtmosModel`,
-and `Setups.*`) before being handed to `AtmosSimulation`.
+[`AtmosSimulation`](@ref ClimaAtmos.AtmosSimulation). Most are passed directly
+(`dt`, `t_end`, `job_id`, `checkpoint_frequency`, `diagnostics`); `grid`,
+`model`, and `setup` instead take objects built by their own constructors (the
+grid constructors, `AtmosModel`, and `Setups.*`) before being handed to
+`AtmosSimulation`.
 
-| Script kwarg                           | YAML key                                 |
-|:-------------------------------------- |:---------------------------------------- |
-| `grid = ColumnGrid(...)`               | `config: "column"` + `z_max`, `z_elem`   |
-| `grid = SphereGrid(...)`               | `config: "sphere"` + `h_elem`, `z_elem`  |
-| `grid = BoxGrid(...)`                  | `config: "box"` + `x_max`, `y_max`, etc. |
-| `setup = Setups.Bomex()`               | `initial_condition: "Bomex"`             |
-| `dt = 5`                               | `dt: "5secs"`                            |
-| `t_end = 21600`                        | `t_end: "6hours"`                        |
-| `diagnostics = DiagnosticsConfig(...)` | `output_default_diagnostics: true`       |
-| `checkpoint_frequency = 3600`          | `dt_save_state_to_disk: "1hours"`        |
+|             | Script API                              | YAML key                                 |
+|:----------- |:--------------------------------------- |:---------------------------------------- |
+| Entry point | `AtmosSimulation{FT}(; kwargs...)`      | `AtmosSimulation(AtmosConfig("f.yml"))`  |
+| Grid        | `grid = ColumnGrid(...)`                | `config: "column"` + `z_max`, `z_elem`   |
+|             | `grid = SphereGrid(...)`                | `config: "sphere"` + `h_elem`, `z_elem`  |
+|             | `grid = BoxGrid(...)`                   | `config: "box"` + `x_max`, `y_max`, etc. |
+| Model       | `model = AtmosModel(...)`               | physics keys (`turbconv`, `rad`, ...)    |
+| Setup       | `setup = Setups.Bomex()`                | `initial_condition: "Bomex"`             |
+| Timestep    | `dt = 5` or `dt = "5secs"`              | `dt: "5secs"`                            |
+| Duration    | `t_end = 21600` or `"6hours"`           | `t_end: "6hours"`                        |
+| Diagnostics | `DiagnosticsConfig(; default = ...)`    | `output_default_diagnostics:`            |
+|             | `DiagnosticsConfig(; additional = ...)` | `diagnostics:` block                     |
+| Checkpoints | `checkpoint_frequency = 3600`           | `dt_save_state_to_disk: "1hours"`        |
 
-`job_id` is not a YAML key: in the config workflow set it with the `--job_id` flag
-(or it defaults to the config file name); in the script workflow it is an
-`AtmosSimulation` keyword argument.
+`job_id` is not in [`default_config.yml`](https://github.com/CliMA/ClimaAtmos.jl/blob/main/config/default_configs/default_config.yml). In a script it is an
+`AtmosSimulation` keyword argument; with a configuration file, pass it to
+`AtmosConfig` (`AtmosConfig("f.yml"; job_id = "my_run")`) or set a `job_id:`
+key in the file itself. Given neither, it is derived from the configuration
+file names.
+
+Three caveats. First, the mapping covers each option in isolation: the shipped
+YAML case configurations also set model physics keys (`turbconv`,
+`microphysics_model`, `rad`, ...), the grid and timestep, and sometimes
+parameter overrides (`toml`), so `setup = Setups.Bomex()` alone is not
+equivalent to running [`prognostic_edmfx_bomex_column.yml`](https://github.com/CliMA/ClimaAtmos.jl/blob/main/config/model_configs/prognostic_edmfx_bomex_column.yml); in a script, the
+corresponding physics is chosen through `AtmosModel` (or a `CA.Presets`
+constructor). Second, the two entry points do not share every default: script
+defaults are the keyword defaults of
+[`AtmosSimulation`](@ref ClimaAtmos.AtmosSimulation), YAML defaults come from
+`default_config.yml`, and the two can differ (for example,
+`update_cache_every` defaults to `"stage"` in the script API and `"step"` in
+YAML). Third, `CA.AtmosSimulation(config)` and
+`CA.get_simulation(config)` are the same operation, the former being an alias
+for the latter; the documentation uses `AtmosSimulation(config)` throughout.

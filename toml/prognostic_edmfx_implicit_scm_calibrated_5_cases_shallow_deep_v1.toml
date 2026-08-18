@@ -2,7 +2,7 @@
 value = 20000.0
 
 [min_area_limiter_scale]
-value = 0
+value = 0.001
 
 [max_area_limiter_scale]
 value = 0
@@ -41,7 +41,7 @@ value = 0.07485284402727316
 value = 1.0e-5
 
 [turb_entr_param_vec]
-value = [0.027824111769192167, 2294.9318189901137]
+value = [0.001, 1e5]
 
 [detr_vertdiv_coeff]
 value = 0

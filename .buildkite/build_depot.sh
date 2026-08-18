@@ -15,7 +15,7 @@ if [ -e "$SHARED_DEPOT_ROOT/shared" ]; then
 fi
 
 echo "--- Instantiate + precompile"
-julia --project=.buildkite -e 'using Pkg; Pkg.instantiate(); Pkg.precompile(strict=true)'
+julia --project=.buildkite -e 'using Pkg; Pkg.Registry.update(); Pkg.instantiate(); Pkg.precompile(strict=true)'
 
 # Also bake --check-bounds=yes caches. The CI "Checkbounds" step runs
 # perf/benchmark.jl under --check-bounds=yes, Julia folds the check-bounds mode
