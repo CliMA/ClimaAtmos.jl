@@ -85,11 +85,44 @@ function dg_spaces(prob, c::DGConstants{FT}) where {FT}
     return (; horzspace, hv_center_space, hv_face_space)
 end
 
-# Terrain-following warp (LinearAdaption): :earth = ETOPO2022 artifact →
-# SpaceVaryingInput → diffusion smoothing (ClimaAtmos grids.jl recipe;
-# runs a CG Laplacian with DSS — grid-generation preprocessing, not part
-# of the DG discretization); :hughes2023 = analytic double mountain,
-# evaluated pointwise, no smoothing.
+# Build the terrain adaption object (LinearAdaption or SLEVEAdaption).
+# Called after the surface elevation field has been smoothed.
+function terrain_adaption(prob, z_surface, ::DGConstants{FT}) where {FT}
+    if prob.terrain_warp == :sleve
+        return Hypsography.SLEVEAdaption(
+            Geometry.ZPoint.(z_surface),
+            FT(prob.sleve_eta_h),
+            FT(prob.sleve_s),
+        )
+    end
+    return Hypsography.LinearAdaption(Geometry.ZPoint.(z_surface))
+end
+
+# ETOPO2022 pre-smoothing: Laplacian diffusion on the horizontal CG space
+# (grid-generation preprocessing; not part of the DG discretization).
+# κ is set from the MINIMUM node area (GLL endpoint + cubed-sphere corner
+# clustering) to keep the explicit-Euler step stable at coarse helem.
+# Total smoothing κ·dt·maxiter = log(topography_damping_factor)·Δh²_avg.
+function smooth_earth_orography!(z_surface, prob, horzspace, ::DGConstants{FT}) where {FT}
+    diff_courant = FT(0.05)
+    Δh_scale = Spaces.node_horizontal_length_scale(horzspace)
+    Δx²_min = minimum(Fields.local_geometry_field(horzspace).WJ)
+    κ = FT(diff_courant * Δx²_min)
+    maxiter = Int(
+        round(
+            log(prob.topography_damping_factor) * Δh_scale^2 /
+            (diff_courant * Δx²_min),
+        ),
+    )
+    Hypsography.diffuse_surface_elevation!(z_surface; κ, dt = FT(1), maxiter)
+    @. z_surface = max(z_surface, FT(0))
+    return maxiter
+end
+
+# :earth = ETOPO2022 artifact → SpaceVaryingInput → diffusion smoothing →
+# LinearAdaption or SLEVEAdaption; :hughes2023 = analytic double mountain,
+# evaluated pointwise, no smoothing. MountainWaveDG always uses LinearAdaption
+# (Agnesi ridge is analytic and not excessively steep).
 function dg_hypsography(
     prob::MountainWaveDG,
     horzspace,
@@ -101,7 +134,7 @@ function dg_hypsography(
     return Hypsography.LinearAdaption(Geometry.ZPoint.(z_surface))
 end
 
-function dg_hypsography(prob, horzspace, ::DGConstants{FT}) where {FT}
+function dg_hypsography(prob, horzspace, c::DGConstants{FT}) where {FT}
     prob.topography == :none && return Grids.Flat()
     if prob.topography == :hughes2023
         z_surface = SpaceVaryingInput(
@@ -109,6 +142,7 @@ function dg_hypsography(prob, horzspace, ::DGConstants{FT}) where {FT}
             horzspace,
         )
         @info "Hughes2023 double-mountain orography" extrema(z_surface)
+        # analytic mountain — always LinearAdaption (smooth, not steep; validated here)
         return Hypsography.LinearAdaption(Geometry.ZPoint.(z_surface))
     end
     context = ClimaComms.context(horzspace)
@@ -117,25 +151,11 @@ function dg_hypsography(prob, horzspace, ::DGConstants{FT}) where {FT}
         "z",
         horzspace,
     )
-    diff_courant = FT(0.05)
-    Δh_scale = Spaces.node_horizontal_length_scale(horzspace)
-    # Per-step κ·dt from the MINIMUM node area (not the ClimaAtmos
-    # average-based recipe, which is explicit-Euler unstable at coarse
-    # helem); total smoothing κ·dt·maxiter = log(damping)·Δh² invariant.
-    Δx²_min = minimum(Fields.local_geometry_field(horzspace).WJ)
-    κ = FT(diff_courant * Δx²_min)
-    maxiter = Int(
-        round(
-            log(prob.topography_damping_factor) * Δh_scale^2 /
-            (diff_courant * Δx²_min),
-        ),
-    )
-    Hypsography.diffuse_surface_elevation!(z_surface; κ, dt = FT(1), maxiter)
-    @. z_surface = max(z_surface, 0)
-    @info "Earth orography (ETOPO2022 60arcsec)" Δh_scale maxiter extrema(
+    maxiter = smooth_earth_orography!(z_surface, prob, horzspace, c)
+    @info "Earth orography (ETOPO2022 60arcsec)" prob.terrain_warp maxiter extrema(
         z_surface,
     )
-    return Hypsography.LinearAdaption(Geometry.ZPoint.(z_surface))
+    return terrain_adaption(prob, z_surface, c)
 end
 
 # w-only Rayleigh sponge profiles over the top sponge_depth (peak rate

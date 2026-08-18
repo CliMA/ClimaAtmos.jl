@@ -49,7 +49,19 @@ Keywords (defaults in parentheses):
     core, terrain is geometry plumbing only — the metric cross-terms are
     absent, so valid for gentle smoothed slopes only.
   - `topography_damping_factor` (5.0): damping factor for the `:earth`
-    pre-smoothing diffusion
+    pre-smoothing diffusion (total smoothing ∝ log(factor)·Δh²)
+  - `terrain_warp` (`:linear`): vertical coordinate adaption — `:linear`
+    (`LinearAdaption`, terrain tilt decays linearly to zero at z = zmax) or
+    `:sleve` (`SLEVEAdaption`, sinh-based exponential decay following Schär
+    2002; coordinate surfaces flatten rapidly above the surface even with steep
+    terrain, so the full terrain amplitude is retained at the surface while
+    metric cross-terms in the mid-to-upper troposphere are greatly reduced —
+    preferable over heavy horizontal smoothing when orographic detail matters).
+  - `sleve_eta_h` (0.5): SLEVE — terrain warping applied only below
+    `ηₕ × zmax`; grid is flat above. Ignored for `:linear`.
+  - `sleve_s` (0.5): SLEVE decay rate (`s` in Schär 2002); larger = slower
+    decay = terrain influence extends higher. Constraint: `s × zmax > max(z_sfc)`.
+    Ignored for `:linear`.
   - `constants_mode` (`:parity`): `:parity` (ClimaCore-example literals) or
     `:clima_params` (Stage A2)
   - `dt_save` (21600.0) [s]: solution snapshot interval
@@ -75,6 +87,9 @@ Base.@kwdef struct BaroclinicWaveFDDG{FT <: AbstractFloat}
     sponge_uh::Bool = false
     topography::Symbol = :none
     topography_damping_factor::FT = 5.0
+    terrain_warp::Symbol = :linear
+    sleve_eta_h::FT = 0.5
+    sleve_s::FT = 0.5
     constants_mode::Symbol = :parity
     # IC values: :setups (ClimaAtmos Setups.shallow_atmos_barowave_values,
     # verified formula-identical) or :formulas (the examples' own JW06
@@ -107,6 +122,8 @@ function validate(p::BaroclinicWaveFDDG)
         error("ic_source must be :setups or :formulas")
     p.topography in (:none, :earth, :hughes2023) ||
         error("topography must be :none, :earth, or :hughes2023")
+    p.terrain_warp in (:linear, :sleve) ||
+        error("terrain_warp must be :linear or :sleve")
     # The tendency cutoff filter is a projection applied after the KEP
     # fluxes; the KE pairing is bilinear with the state outside the
     # projection, so filtering voids the KEP telescoping this scheme's
@@ -149,6 +166,8 @@ Additional keywords:
   - `κ₄` (`nothing` → SIPG-cap/10 for `:kg`, 0 for `:kep`) and
     `filter_Nc` (`nothing` → npoly for `:kg`, 0 for `:kep`): `:kg` NEEDS
     its stabilization. At zelem ≳ 20 also use `zstretch`.
+  - `terrain_warp` (`:linear`), `sleve_eta_h`, `sleve_s`:
+    see [`BaroclinicWaveFDDG`](@ref) — same semantics.
 """
 Base.@kwdef struct BaroclinicWaveDG{FT <: AbstractFloat}
     helem::Int = 4
@@ -174,6 +193,9 @@ Base.@kwdef struct BaroclinicWaveDG{FT <: AbstractFloat}
     sponge_uh::Bool = false
     topography::Symbol = :none
     topography_damping_factor::FT = 5.0
+    terrain_warp::Symbol = :linear
+    sleve_eta_h::FT = 0.5
+    sleve_s::FT = 0.5
     constants_mode::Symbol = :parity
     ic_source::Symbol = :setups
     held_suarez::Bool = false
@@ -208,6 +230,8 @@ function validate(p::BaroclinicWaveDG)
         error("ic_source must be :setups or :formulas")
     p.topography in (:none, :earth, :hughes2023) ||
         error("topography must be :none, :earth, or :hughes2023")
+    p.terrain_warp in (:linear, :sleve) ||
+        error("terrain_warp must be :linear or :sleve")
     return p
 end
 
