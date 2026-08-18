@@ -99,7 +99,7 @@ consistently with the water sink that carries it.
     # Diagnose condensate via saturation adjustment
     sa = eval.sat_eval(T_hat, q_hat)
 
-    # Compute saturation specific humidity for supersaturation threshold
+    # Compute saturation specific humidity for the relative humidity threshold
     q_vap_sat = TD.q_vap_saturation(
         eval.sat_eval.thermo_params, T_hat, eval.sat_eval.ρ,
     )
@@ -107,7 +107,7 @@ consistently with the water sink that carries it.
     # Compute 0M dq_tot_dt at this quadrature point
     dq_tot_dt = BMT.bulk_microphysics_tendencies(
         BMT.Microphysics0Moment(), eval.cm_params, eval.sat_eval.thermo_params,
-        T_hat, sa.q_liq, sa.q_ice, q_vap_sat,
+        T_hat, sa.q_liq, sa.q_ice, q_hat, q_vap_sat,
     )
     # Compute energy helper at this quadrature point using the
     # locally-diagnosed condensate, so both fields are SGS-averaged.
@@ -177,7 +177,8 @@ end
     # Does not take into account SGS fluctuations.
     q_vap_sat = TD.q_vap_saturation(thp, T, ρ)
     dq_tot_dt = BMT.bulk_microphysics_tendencies(
-        BMT.Microphysics0Moment(), cmp, thp, T, q_liq, q_ice, q_vap_sat,
+        BMT.Microphysics0Moment(), cmp, thp, T, q_liq, q_ice,
+        q_tot_nonneg, q_vap_sat,
     )
     e_tot_hlpr = e_tot_0M_precipitation_sources_helper(thp, T, q_liq, q_ice, Φ)
 
