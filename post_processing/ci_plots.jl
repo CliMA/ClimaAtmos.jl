@@ -42,7 +42,8 @@ import CairoMakie
 import CairoMakie.Makie
 import ClimaAnalysis
 import ClimaAnalysis: Visualize as viz
-import ClimaAnalysis: SimDir, slice, average_xy, window, average_time
+import ClimaAnalysis:
+    SimDir, slice, average_xy, window, average_time, short_name, long_name
 import ClimaAnalysis.Utils: kwargs as ca_kwargs
 
 import ClimaCoreSpectra: power_spectrum_2d
@@ -104,9 +105,6 @@ YLINEARSCALE = Dict(
         ca_kwargs(dim_on_y = true, yticks = 10, ytickformat = "{:.3e}"),
 )
 
-long_name(var) = var.attributes["long_name"]
-short_name(var) = var.attributes["short_name"]
-z_dim_name(var) = haskey(var.dims, "z_reference") ? "z_reference" : "z"
 
 """
     parse_var_attributes(var)
@@ -186,6 +184,7 @@ function make_plots_generic(
     plot_fn = nothing,
     output_name = "summary",
     summary_files = String[],
+    trailing_files = String[],
     MAX_NUM_COLS = 1,
     MAX_NUM_ROWS = min(4, length(vars)),
     fig_size = nothing,
@@ -270,7 +269,8 @@ function make_plots_generic(
     end
 
     output_file = joinpath(save_path, "$(output_name).pdf")
-    pdfunite_args = Cmd([summary_files..., output_file])
+    all_input_files = [summary_files..., trailing_files...]
+    pdfunite_args = Cmd([all_input_files..., output_file])
     run(`$(pdfunite()) $pdfunite_args`)
 
     if save_jpeg_copy
@@ -279,7 +279,7 @@ function make_plots_generic(
     end
 
     # Cleanup
-    Filesystem.rm.(summary_files, force = true)
+    Filesystem.rm.(all_input_files, force = true)
     return output_file
 end
 
@@ -295,8 +295,7 @@ function horizontal_average(var)
         reduced_var = ClimaAnalysis.Var._reduce_over(rms, "y", reduced_var)
     end
     if haskey(var.attributes, "long_name")
-        long_name = reduced_var.attributes["long_name"]
-        reduced_var.attributes["long_name"] = long_name * ", Horizontal Average"
+        reduced_var.attributes["long_name"] *= ", Horizontal Average"
     end
     return reduced_var
 end
@@ -308,10 +307,10 @@ A `ClimaAnalysis.OutputVar` with a vertical RMS average of the data in `var`.
 """
 function vertical_average(var)
     rms(var; dims) = sqrt.(mean(var .^ 2; dims))
-    reduced_var = ClimaAnalysis.Var._reduce_over(rms, z_dim_name(var), var)
+    reduced_var =
+        ClimaAnalysis.Var._reduce_over(rms, ClimaAnalysis.altitude_name(var), var)
     if haskey(var.attributes, "long_name")
-        long_name = reduced_var.attributes["long_name"]
-        reduced_var.attributes["long_name"] = long_name * ", Vertical Average"
+        reduced_var.attributes["long_name"] *= ", Vertical Average"
     end
     return reduced_var
 end
@@ -396,8 +395,8 @@ function compute_spectrum(var::ClimaAnalysis.OutputVar; mass_weight = nothing)
     dim_attributes[dim3] = var.dim_attributes[dim3]
 
     attributes = Dict(
-        "short_name" => "log_spectrum_" * var.attributes["short_name"],
-        "long_name" => "Spectrum of " * var.attributes["long_name"],
+        "short_name" => "log_spectrum_" * short_name(var),
+        "long_name" => "Spectrum of " * long_name(var),
         "units" => "",
     )
 
@@ -519,17 +518,17 @@ additional keyword arguments are passed to the `CairoMakie` plotting function.
 function plot_contours!(place, var; n_contours = 22, kwargs...)
     length(var.dims) == 2 || error("Can only plot 2D variables")
 
-    var_name = var.attributes["short_name"]
-    var_units = var.attributes["units"]
+    var_name = short_name(var)
+    var_units = ClimaAnalysis.units(var)
     dim1_name, dim2_name = var.index2dim
-    dim1_units = var.dim_attributes[dim1_name]["units"]
-    dim2_units = var.dim_attributes[dim2_name]["units"]
+    dim1_units = ClimaAnalysis.dim_units(var, dim1_name)
+    dim2_units = ClimaAnalysis.dim_units(var, dim2_name)
     dim1 = var.dims[dim1_name]
     dim2 = var.dims[dim2_name]
 
     CairoMakie.Axis(
         place[1, 1];
-        title = var.attributes["long_name"],
+        title = long_name(var),
         xlabel = "$dim1_name [$dim1_units]",
         ylabel = "$dim2_name [$dim2_units]",
         limits = (extrema(dim1), extrema(dim2)),
@@ -580,6 +579,43 @@ function plot_contours!(place, var; n_contours = 22, kwargs...)
     CairoMakie.Colorbar(place[1, 2], plot; label)
 end
 
+"""
+    plot_tendency_debug_summary(output_paths, simdirs; output_name = "tendency_debug")
+
+Build a PDF with one panel per registered tendency-debug diagnostic
+(short-name form `tn_<field>_<process>`), each panel a time-height
+contour of the 3D tendency field. Laid out 4 rows × 3 cols per page in a
+1500 × 1200 figure (same page geometry as the microphysics-tendency
+contour page).
+
+Returns the path of the assembled PDF, or `nothing` if no tendency debug
+diagnostics were saved in `simdirs[1]`.
+"""
+function plot_tendency_debug_summary(
+    output_paths::Vector{<:AbstractString},
+    simdirs;
+    output_name = "tendency_debug",
+)
+    simdir = simdirs[1]
+    short_names = CA.Diagnostics.tendency_debug_short_names()
+    # Keep only diagnostics actually saved in this simdir.
+    avail = Set(ClimaAnalysis.available_vars(simdir))
+    short_names = filter(in(avail), short_names)
+    isempty(short_names) && return nothing
+
+    vars = [get(simdir; short_name = sn, reduction = "average") for sn in short_names]
+
+    return make_plots_generic(
+        output_paths[1:1],  # single-sim view; skip comparison here
+        vars;
+        output_name,
+        plot_fn = plot_parsed_attribute_title!,
+        MAX_NUM_COLS = 3,
+        MAX_NUM_ROWS = 4,
+        fig_size = (1500, 1200),
+    )
+end
+
 ColumnPlots = Union{
     Val{:single_column_hydrostatic_balance_ft64},
     Val{:single_column_radiative_equilibrium_gray},
@@ -596,13 +632,16 @@ function make_plots(::ColumnPlots, output_paths::Vector{<:AbstractString})
         # For vertical-only (FiniteDifferenceGrid) spaces, the data may have
         # extra singleton dimensions. Check and squeeze if needed.
         if haskey(var.dims, "x") && length(var.dims["x"]) == 1
-            var = slice(var; x = var.dims["x"][1])
+            var = slice(var; x = 1, by = ClimaAnalysis.Index())
         end
         if haskey(var.dims, "y") && length(var.dims["y"]) == 1
-            var = slice(var; y = var.dims["y"][1])
+            var = slice(var; y = 1, by = ClimaAnalysis.Index())
         end
         return var
     end
+
+    tendency_pdf = plot_tendency_debug_summary(output_paths, simdirs)
+    trailing_files = tendency_pdf === nothing ? String[] : [tendency_pdf]
 
     make_plots_generic(
         output_paths,
@@ -610,6 +649,7 @@ function make_plots(::ColumnPlots, output_paths::Vector{<:AbstractString})
         time = LAST_SNAP,
         MAX_NUM_COLS = length(simdirs),
         more_kwargs = YLINEARSCALE,
+        trailing_files = trailing_files,
     )
 end
 
@@ -690,7 +730,7 @@ function make_plots(
             CairoMakie.lines!(
                 axes[i],
                 slice(var; time).data,
-                var.dims["z"],
+                ClimaAnalysis.altitudes(var),
                 color = color,
             )
         end
@@ -753,7 +793,11 @@ function make_plots(
             Iterators.flatmap(("uaerror", "waerror")) do short_name
                 Iterators.map(simdirs) do simdir
                     var = get(simdir; short_name)
-                    var = window(var, z_dim_name(var); right = zd_rayleigh)
+                    var = window(
+                        var,
+                        ClimaAnalysis.altitude_name(var);
+                        right = zd_rayleigh,
+                    )
                     var = slice(var; time = Inf)
                     average(var)
                 end
@@ -790,20 +834,28 @@ function make_plots(
                         endswith(short_name, "error") ? (1e3, zd_rayleigh) :
                         (zd_rayleigh,) # Add closeup view of errors below 1 km.
                     Iterators.map(z_max_values) do z_max
-                        window(var, z_dim_name(var); right = z_max)
+                        window(
+                            var,
+                            ClimaAnalysis.altitude_name(var);
+                            right = z_max,
+                        )
                     end
                 end
             end
         make_contour_plots(short_names, time_series_output_name) do short_name
             Iterators.flatmap(simdirs) do simdir
                 var = get(simdir; short_name)
-                var = window(var, z_dim_name(var); right = zd_rayleigh)
+                var = window(
+                    var,
+                    ClimaAnalysis.altitude_name(var);
+                    right = zd_rayleigh,
+                )
                 var = is_3d ? slice(var; y = 0) : var
                 time_values = if endswith(short_name, "predicted")
                     (Inf,) # Predicted values are constant and only need 1 plot.
-                elseif var.dims["time"][end] > 24 * 3600
+                elseif last(ClimaAnalysis.times(var)) > 24 * 3600
                     (1, 2, 24, Inf) .* 3600
-                elseif var.dims["time"][end] > 3 * 3600
+                elseif last(ClimaAnalysis.times(var)) > 3 * 3600
                     (1, 2, 4, Inf) .* 3600
                 else
                     (5, 10, 20, Inf) .* 60
@@ -1196,11 +1248,12 @@ Helper function for `make_plots_generic`. Takes a list of variables and plots
 them on the same axis.
 """
 function plot_les_vert_profile!(grid_loc, var_group)
-    z = var_group[1].dims["z"]
-    units = var_group[1].attributes["units"]
+    z = ClimaAnalysis.altitudes(var_group[1])
+    units = ClimaAnalysis.units(var_group[1])
+    z_units = ClimaAnalysis.dim_units(var_group[1], "z")
     ax = CairoMakie.Axis(
         grid_loc[1, 1],
-        ylabel = "z [$(var_group[1].dim_attributes["z"]["units"])]",
+        ylabel = "z [$z_units]",
         xlabel = "$(short_name(var_group[1])) [$units]",
         title = parse_var_attributes(var_group[1]),
     )
@@ -1225,7 +1278,7 @@ function make_plots(
         "Dv_smag", "strainv_smag",  # smag vertical
         "edt",  # DecayWithHeight vertical diffusivity
     ]
-    short_names = short_names ∩ collect(keys(simdirs[1].vars))
+    short_names = short_names ∩ ClimaAnalysis.available_vars(simdirs[1])
 
     # Window average from instantaneous snapshots?
     function horizontal_average(var)
@@ -1233,7 +1286,7 @@ function make_plots(
     end
     function windowed_reduction(var)
         hours = 3600.0
-        window_end = last(var.dims["time"])
+        window_end = last(ClimaAnalysis.times(var))
         window_start = window_end - 2hours
         var_window = ClimaAnalysis.window(
             var, "time"; left = window_start, right = window_end,
@@ -1504,6 +1557,12 @@ function make_plots(
 
     summary_files = [tmp_file]
 
+    # Per-process time-height tendency debug page (appended at the end of
+    # summary.pdf) if `debug_tendency_diagnostics` was enabled at run
+    # time. Empty when the diagnostics were not saved.
+    tendency_pdf = plot_tendency_debug_summary(output_paths, simdirs)
+    tendency_pdfs = tendency_pdf === nothing ? String[] : [tendency_pdf]
+
     # Time-height contour plots: existing EDMF variables (intermediate)
     zt_file = make_plots_generic(
         output_paths,
@@ -1580,7 +1639,7 @@ function make_plots(
     # This is the final assembling call — merges all summary_files into summary.pdf
     timeseries_names = ["lwp", "iwp", "rwp", "swp", "pr"]
     timeseries_names_avail =
-        timeseries_names ∩ collect(keys(simdirs[1].vars))
+        timeseries_names ∩ ClimaAnalysis.available_vars(simdirs[1])
     vars_timeseries =
         map_comparison(simdirs, timeseries_names_avail) do simdir, short_name
             var = get(
@@ -1596,6 +1655,7 @@ function make_plots(
         vars_timeseries;
         output_name = "summary",
         summary_files = summary_files,
+        trailing_files = tendency_pdfs,
         MAX_NUM_COLS = 2,
         MAX_NUM_ROWS = 4,
     )
@@ -1704,11 +1764,12 @@ end
 
 function make_plots(::Val{:kinematic_driver}, output_paths::Vector{<:AbstractString})
     function rescale_time_to_min(var)
-        if haskey(var.dims, "time")
-            var.dims["time"] .= var.dims["time"] ./ 60
-            var.dim_attributes["time"]["units"] = "min"
-        end
-        return var
+        ClimaAnalysis.has_time(var) || return var
+        isempty(ClimaAnalysis.dim_units(var, "time")) &&
+            ClimaAnalysis.set_dim_units!(var, "time", "s")
+        return ClimaAnalysis.convert_dim_units(
+            var, "time", "min"; conversion_function = t -> t / 60,
+        )
     end
     simdirs = SimDir.(output_paths)
     short_names = [
@@ -1717,12 +1778,13 @@ function make_plots(::Val{:kinematic_driver}, output_paths::Vector{<:AbstractStr
         # "cli", "hussn",
         # "ke",
     ]
-    short_names = short_names ∩ collect(keys(simdirs[1].vars))
+    short_names = short_names ∩ ClimaAnalysis.available_vars(simdirs[1])
     vars = map_comparison(simdirs, short_names) do simdir, short_name
         var = average_xy(get(simdir; short_name))
         if short_name in ["hus", "clw", "husra", "cli", "hussn"]
-            var.data .= var.data .* 1000
-            var.attributes["units"] = "g/kg"
+            var = ClimaAnalysis.convert_units(
+                var, "g/kg"; conversion_function = q -> 1000q,
+            )
         end
         return rescale_time_to_min(var)
     end
@@ -1731,7 +1793,7 @@ function make_plots(::Val{:kinematic_driver}, output_paths::Vector{<:AbstractStr
     )
 
     short_names_lines = ["lwp", "rwp", "pr"]
-    short_names_lines = short_names_lines ∩ collect(keys(simdirs[1].vars))
+    short_names_lines = short_names_lines ∩ ClimaAnalysis.available_vars(simdirs[1])
     vars_lines = map_comparison(simdirs, short_names_lines) do simdir, short_name
         var = average_xy(get(simdir; short_name))
         return rescale_time_to_min(var)
@@ -1761,7 +1823,7 @@ function make_plots(sim_type::Larcform1Plots, output_paths::Vector{<:AbstractStr
         "rldscs", "pr", "prsn", "hfss", "hfls", "ts", "tas",
     ] # "sithick"
 
-    available_short_names = Set(String.(keys(simdirs[1].vars)))
+    available_short_names = ClimaAnalysis.available_vars(simdirs[1])
     short_names_2D =
         filter(sn -> sn in available_short_names, short_names_profile_requested)
     short_names_1D =
@@ -1771,22 +1833,19 @@ function make_plots(sim_type::Larcform1Plots, output_paths::Vector{<:AbstractStr
     function seconds_to_hours(var)
         ClimaAnalysis.has_time(var) || return var
         t_name = ClimaAnalysis.time_name(var)
-        if !haskey(var.dim_attributes, t_name) ||
-           !haskey(var.dim_attributes[t_name], "units")
-            ClimaAnalysis.Var.set_dim_units!(var, t_name, "s")
-        end
-        return ClimaAnalysis.Var.convert_dim_units(
+        isempty(ClimaAnalysis.dim_units(var, t_name)) &&
+            ClimaAnalysis.set_dim_units!(var, t_name, "s")
+        return ClimaAnalysis.convert_dim_units(
             var, t_name, "hr"; conversion_function = t -> t / 3600,
         )
     end
 
     function meters_to_km(var)
-        zn = z_dim_name(var)
-        haskey(var.dims, zn) || return var
-        if !haskey(var.dim_attributes, zn) || !haskey(var.dim_attributes[zn], "units")
-            ClimaAnalysis.Var.set_dim_units!(var, zn, "m")
-        end
-        return ClimaAnalysis.Var.convert_dim_units(
+        ClimaAnalysis.has_altitude(var) || return var
+        zn = ClimaAnalysis.altitude_name(var)
+        isempty(ClimaAnalysis.dim_units(var, zn)) &&
+            ClimaAnalysis.set_dim_units!(var, zn, "m")
+        return ClimaAnalysis.convert_dim_units(
             var, zn, "km"; conversion_function = z -> z / 1000,
         )
     end
@@ -1799,10 +1858,10 @@ function make_plots(sim_type::Larcform1Plots, output_paths::Vector{<:AbstractStr
             map_comparison(simdirs, short_names_2D) do simdir, short_name
                 var = get(simdir; short_name, reduction)
                 if haskey(var.dims, "x")
-                    var = slice(var; x = var.dims["x"][1])
+                    var = slice(var; x = 1, by = ClimaAnalysis.Index())
                 end
                 if haskey(var.dims, "y")
-                    var = slice(var; y = var.dims["y"][1])
+                    var = slice(var; y = 1, by = ClimaAnalysis.Index())
                 end
                 return var
             end,
@@ -1817,10 +1876,10 @@ function make_plots(sim_type::Larcform1Plots, output_paths::Vector{<:AbstractStr
             map_comparison(simdirs, short_names_1D) do simdir, short_name
                 var = get(simdir; short_name, reduction)
                 if haskey(var.dims, "x")
-                    var = slice(var; x = var.dims["x"][1])
+                    var = slice(var; x = 1, by = ClimaAnalysis.Index())
                 end
                 if haskey(var.dims, "y")
-                    var = slice(var; y = var.dims["y"][1])
+                    var = slice(var; y = 1, by = ClimaAnalysis.Index())
                 end
                 return var
             end,

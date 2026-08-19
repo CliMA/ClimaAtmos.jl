@@ -8,19 +8,57 @@ import CloudMicrophysics as CM
 import StaticArrays as SA
 
 """
-    ClimaAtmosParameters(FT::AbstractFloat)
-    ClimaAtmosParameters(toml_dict; microphysics_model = nothing,
-                                    microphysics_1m_options = (;),
-                                    has_non_orographic_gw = false,
-                                    has_orographic_gw = false,
-                                    has_beres_source = false)
+    ClimaAtmosParameters(::Type{FT})
+    ClimaAtmosParameters(
+        toml_dict;
+        microphysics_model = nothing,
+        microphysics_1m_options = (;),
+        has_non_orographic_gw = false,
+        has_orographic_gw = false,
+        has_beres_source = false,
+    )
 
-Construct the parameter set for any ClimaAtmos configuration.
+Construct the parameter set for a ClimaAtmos configuration.
 
-When `microphysics_model` is supplied, only the microphysics-parameter sets
-relevant to that model are loaded; the rest are stored as `nothing` to save
-memory. Likewise the gravity-wave parameter sets are loaded only when their
-corresponding flag is `true`.
+Every value is read from a ClimaParams TOML dictionary. The `FT` method builds
+the default dictionary for that float type; the `toml_dict` method takes a
+dictionary that may already carry overrides, e.g. one created with
+`CP.create_toml_dict(FT; override_file)` from a run or calibration TOML. An
+override therefore reaches every parameter set through the same dictionary, and
+the sub-parameter sets of Thermodynamics, CloudMicrophysics, SurfaceFluxes,
+RRTMGP, and Insolation are constructed from it here.
+
+Sub-parameter sets that the configuration does not need are stored as `nothing`,
+which keeps them out of the GPU kernels that capture the parameter set: the
+microphysics sets are filtered by `microphysics_model`, and each gravity-wave
+set is loaded only when its flag is `true`. Passing `microphysics_model = nothing` keeps all of them.
+
+# Arguments
+
+  - `FT`: Float type of the parameters, `Float32` or `Float64`.
+  - `toml_dict`: `ClimaParams` parameter dictionary, including any overrides.
+
+# Keyword Arguments
+
+  - `microphysics_model = nothing`: Microphysics model; selects which
+    microphysics parameter sets to keep. `nothing` keeps all of them.
+  - `microphysics_1m_options = (;)`: Extra keyword arguments forwarded to
+    `CloudMicrophysics.Parameters.Microphysics1MParams`.
+  - `has_non_orographic_gw = false`: Load the non-orographic gravity-wave
+    parameters.
+  - `has_orographic_gw = false`: Load the orographic gravity-wave parameters.
+  - `has_beres_source = false`: Load the Beres convective-source parameters.
+
+# Returns
+
+A `CAP.ClimaAtmosParameters`.
+
+# Examples
+
+```julia
+import ClimaAtmos as CA
+params = CA.ClimaAtmosParameters(Float64)
+```
 """
 ClimaAtmosParameters(::Type{FT}) where {FT <: AbstractFloat} =
     ClimaAtmosParameters(CP.create_toml_dict(FT))
@@ -150,6 +188,16 @@ function ClimaAtmosParameters(
     )
 end
 
+"""
+    atmos_name_map
+
+Map from ClimaParams parameter names to the field names of
+`CAP.ClimaAtmosParameters`.
+
+Only the scalar parameters that ClimaAtmos owns appear here; the sub-parameter
+sets are built by their own constructors. A new scalar parameter needs an entry
+in this map, a field in the struct, and a definition in ClimaParams.
+"""
 atmos_name_map = (;
     :f_plane_coriolis_frequency => :f_plane_coriolis_frequency,
     :equator_pole_temperature_gradient_wet => :ΔT_y_wet,
@@ -172,8 +220,6 @@ atmos_name_map = (;
     :held_suarez_minimum_temperature => :T_min_hs,
     :idealized_ocean_albedo => :idealized_ocean_albedo,
     :water_refractive_index => :water_refractive_index,
-    :tracer_hyperdiffusion_factor => :α_hyperdiff_tracer,
-    :tracer_vertical_diffusion_factor => :α_vert_diff_tracer,
     :D_horizontal_diffusion => :constant_horizontal_diffusion_D,
     :temperature_minimum => :T_min_sgs,
     :specific_humidity_maximum => :q_max_sgs,
@@ -183,6 +229,24 @@ atmos_name_map = (;
     :fixed_snow_terminal_velocity => :fixed_snow_terminal_velocity,
 )
 
+"""
+    cloud_parameters(FT)
+    cloud_parameters(toml_dict)
+
+Assemble the cloud-microphysics parameters shared by all microphysics models.
+
+# Returns
+
+A `NamedTuple` with:
+
+  - `liquid`, `ice`: `CloudMicrophysics` cloud liquid and ice properties.
+  - `stokes`, `Ch2022`: Stokes-regime and Chen (2022) terminal-velocity
+    parameters.
+  - `N_cloud_liquid_droplets`: Prescribed cloud droplet number concentration
+    [1/m³].
+  - `aml`: Aerosol-ML coefficients, see `aerosol_ml_parameters`.
+  - `activation`: `CloudMicrophysics` aerosol-activation parameters.
+"""
 cloud_parameters(::Type{FT}) where {FT <: AbstractFloat} =
     cloud_parameters(CP.create_toml_dict(FT))
 
@@ -200,6 +264,15 @@ cloud_parameters(toml_dict::CP.ParamDict) = (;
     activation = CM.Parameters.AerosolActivationParameters(toml_dict),
 )
 
+"""
+    microphys_1m_parameters(FT; options_kwargs...)
+    microphys_1m_parameters(toml_dict; options_kwargs...)
+
+Build the `CloudMicrophysics` 1-moment parameter set.
+
+`options_kwargs` selects the per-process schemes (autoconversion, accretion,
+and so on) and is forwarded to `Microphysics1MParams`.
+"""
 microphys_1m_parameters(
     ::Type{FT};
     options_kwargs...,
@@ -212,6 +285,14 @@ microphys_1m_parameters(
 ) =
     CM.Parameters.Microphysics1MParams(toml_dict; options_kwargs...)
 
+"""
+    microphys_2m_parameters(FT)
+    microphys_2m_parameters(toml_dict)
+
+Build the `CloudMicrophysics` 2-moment warm-rain parameter set, without ice.
+
+See `get_microphysics_2m_p3_parameters` for the variant that includes P3 ice.
+"""
 microphys_2m_parameters(::Type{FT}) where {FT <: AbstractFloat} =
     microphys_2m_parameters(CP.create_toml_dict(FT))
 
@@ -219,29 +300,45 @@ function microphys_2m_parameters(toml_dict::CP.ParamDict)
     CM.Parameters.Microphysics2MParams(toml_dict; with_ice = false)
 end
 
-get_microphysics_2m_p3_parameters(::Type{FT}) where {FT <: AbstractFloat} =
-    get_microphysics_2m_p3_parameters(CP.create_toml_dict(FT))
-
 """
     get_microphysics_2m_p3_parameters(FT)
     get_microphysics_2m_p3_parameters(toml_dict)
 
-Get the parameters for the 2-moment warm rain + P3 ice microphysics scheme.
+Build the parameter set for the 2-moment warm-rain plus P3 ice microphysics
+scheme.
 
 # Arguments
 
-  - `FT`: The floating point type to use for the parameters, `Float32` or `Float64`.
-  - `toml_dict`: A TOML dictionary containing the parameters, see [`CP.create_toml_dict()`](@ref).
+  - `FT`: Float type of the parameters, `Float32` or `Float64`.
+  - `toml_dict`: `ClimaParams` parameter dictionary, as returned by
+    `ClimaParams.create_toml_dict`.
 """
+get_microphysics_2m_p3_parameters(::Type{FT}) where {FT <: AbstractFloat} =
+    get_microphysics_2m_p3_parameters(CP.create_toml_dict(FT))
+
 function get_microphysics_2m_p3_parameters(toml_dict::CP.ParamDict)
     CM.Parameters.Microphysics2MParams(toml_dict; with_ice = true)
 end
 
+"""
+    vert_diff_parameters(toml_dict)
+
+Return the parameters of the simple vertical-diffusion schemes as a
+`NamedTuple`: `C_E` [-], and the height scale `H` [m] and coefficient `D₀`
+[m²/s] of `DecayWithHeightDiffusion`.
+"""
 function vert_diff_parameters(toml_dict)
     name_map = (; :C_E => :C_E, :H_diffusion => :H, :D_0_diffusion => :D₀)
     return CP.get_parameter_values(toml_dict, name_map, "ClimaAtmos")
 end
 
+"""
+    external_forcing_parameters(toml_dict)
+
+Return the GCM-driven external-forcing parameters as a `NamedTuple`: the
+momentum and scalar relaxation timescales [s], and the minimum and maximum
+heights over which the relaxation is applied [m].
+"""
 function external_forcing_parameters(toml_dict)
     efp_fields = [
         "gcmdriven_momentum_relaxation_timescale",
@@ -252,6 +349,15 @@ function external_forcing_parameters(toml_dict)
     return CP.get_parameter_values(toml_dict, efp_fields, "ClimaAtmos")
 end
 
+"""
+    aerosol_ml_parameters(toml_dict)
+
+Return the coefficients of the ML-based aerosol-activation correction as a
+`NamedTuple`: the reference droplet number `N₀` [1/m³], the calibration
+coefficients `α_dust`, `α_seasalt`, `α_SO4`, and `α_q_liq` [-], and the
+reference concentrations `c₀_dust`, `c₀_seasalt`, `c₀_SO4` [kg/m³] and `q₀_liq`
+[kg/kg].
+"""
 function aerosol_ml_parameters(toml_dict)
     name_map = (;
         :prescribed_cloud_droplet_number_concentration => :N₀,
@@ -267,6 +373,14 @@ function aerosol_ml_parameters(toml_dict)
     return CP.get_parameter_values(toml_dict, name_map, "ClimaAtmos")
 end
 
+"""
+    prescribed_aerosol_parameters(toml_dict)
+
+Return the optical and hygroscopic properties of the prescribed MERRA-2 aerosol
+modes as a `NamedTuple`: the radii of the five sea-salt bins and of the sulfate
+mode [m], their hygroscopicity parameters [-], their densities [kg/m³], and the
+lognormal widths of the MAM3 coarse and accumulation modes [-].
+"""
 function prescribed_aerosol_parameters(toml_dict)
     name_map = (;
         :MERRA2_seasalt_aerosol_bin01_radius => :SSLT01_radius,
@@ -285,6 +399,15 @@ function prescribed_aerosol_parameters(toml_dict)
     return CP.get_parameter_values(toml_dict, name_map, "ClimaAtmos")
 end
 
+"""
+    trace_gas_parameters(toml_dict)
+
+Return the fixed volume mixing ratios of the radiatively active trace gases as a
+`NamedTuple` [mol/mol].
+
+These are the values used wherever a gas is not read from a dataset; see the
+Trace Gases page of the documentation.
+"""
 function trace_gas_parameters(toml_dict)
     name_map = (;
         :CO2_fixed_value => :CO2_fixed_value,
@@ -308,10 +431,38 @@ function trace_gas_parameters(toml_dict)
     return CP.get_parameter_values(toml_dict, name_map, "ClimaAtmos")
 end
 
+"""
+    to_svec(x)
+
+Convert arrays to `SVector`s, recursively through `NamedTuple`s, and leave
+everything else unchanged.
+
+Parameter vectors arrive from ClimaParams as `Vector`s, which are not `isbits`
+and so cannot be captured by GPU kernels.
+"""
 to_svec(x::AbstractArray) = SA.SVector{length(x)}(x)
 to_svec(x) = x
 to_svec(x::NamedTuple) = map(x -> to_svec(x), x)
 
+"""
+    TurbulenceConvectionParameters(FT, overrides = NamedTuple())
+    TurbulenceConvectionParameters(toml_dict, overrides = NamedTuple())
+
+Build the PROPHET (prognostic EDMF) parameter set.
+
+Most values come from ClimaParams through an explicit name map. A few
+cloud-fraction release-shape parameters and the updraft sedimentation
+coefficient are not yet in ClimaParams' default TOML: they fall back to the
+defaults set here, and are read from `toml_dict` only when a run or calibration
+TOML defines them. The defaults `margin = abs_margin = sharpness = 1` and
+`residual = 0` release the cloud-fraction floor on a one-width saturation
+margin guarded by an absolute margin of one floor width, and
+`sedimentation_lateral_coeff = 0` disables the lateral sedimentation
+correction.
+
+`overrides` is merged last, so it wins over both the TOML values and the
+defaults above.
+"""
 TurbulenceConvectionParameters(
     ::Type{FT},
     overrides = NamedTuple(),
@@ -331,10 +482,12 @@ function TurbulenceConvectionParameters(
         :diagnostic_covariance_coeff => :diagnostic_covariance_coeff,
         :Tq_correlation_coefficient => :Tq_correlation_coefficient,
         :detr_buoy_coeff => :detr_buoy_coeff,
-        :detr_buoy_inv_tau_max => :detr_buoy_inv_tau_max,
         :EDMF_max_area => :max_area,
         :mixing_length_smin_rm => :smin_rm,
         :entr_coeff => :entr_coeff,
+        :entr_inv_length => :entr_inv_length,
+        :entr_buoy_coeff => :entr_buoy_coeff,
+        :entr_detr_buoy_inv_tau_max => :entr_detr_buoy_inv_tau_max,
         :detr_coeff => :detr_coeff,
         :EDMF_max_surface_area => :max_surface_area,
         :entr_param_vec => :entr_param_vec,
@@ -384,7 +537,7 @@ function TurbulenceConvectionParameters(
         cloud_fraction_floor_residual = FT(0),
         # Lateral correction scaling for updraft sedimentation
         # (see `updraft_sedimentation!`). 1.0 = full correction, 0.0 = disabled.
-        sedimentation_lateral_coeff = FT(0),
+        sedimentation_lateral_coeff = FT(1), # Testing if stable now. To be removed, if yes.
     )
     release_present = filter(collect(keys(release_defaults))) do name
         haskey(toml_dict.data, string(name))
@@ -405,6 +558,13 @@ function TurbulenceConvectionParameters(
     CAP.TurbulenceConvectionParameters{FT, VFT1, VFT2, VTF3}(; parameters...)
 end
 
+"""
+    SurfaceTemperatureParameters(FT, overrides = NamedTuple())
+    SurfaceTemperatureParameters(toml_dict, overrides = NamedTuple())
+
+Build the prescribed analytic sea-surface-temperature parameter set, with
+`overrides` merged over the ClimaParams values.
+"""
 SurfaceTemperatureParameters(
     ::Type{FT},
     overrides = NamedTuple(),
@@ -427,6 +587,13 @@ function SurfaceTemperatureParameters(
     CAP.SurfaceTemperatureParameters{FT}(; parameters...)
 end
 
+"""
+    NonOrographicGravityWaveParameters(FT, overrides = NamedTuple())
+    NonOrographicGravityWaveParameters(toml_dict, overrides = NamedTuple())
+
+Build the Alexander-Dunkerton non-orographic gravity-wave parameter set, with
+`overrides` merged over the ClimaParams values.
+"""
 NonOrographicGravityWaveParameters(
     ::Type{FT},
     overrides = NamedTuple(),
@@ -466,6 +633,13 @@ function NonOrographicGravityWaveParameters(
 end
 
 
+"""
+    OrographicGravityWaveParameters(FT, overrides = NamedTuple())
+    OrographicGravityWaveParameters(toml_dict, overrides = NamedTuple())
+
+Build the Garner orographic gravity-wave parameter set, with `overrides` merged
+over the ClimaParams values.
+"""
 OrographicGravityWaveParameters(
     ::Type{FT},
     overrides = NamedTuple(),
@@ -494,6 +668,13 @@ function OrographicGravityWaveParameters(
 end
 
 
+"""
+    BeresSourceParameters(FT, overrides = NamedTuple())
+    BeresSourceParameters(toml_dict, overrides = NamedTuple())
+
+Build the Beres convective-source parameter set, with `overrides` merged over
+the ClimaParams values.
+"""
 BeresSourceParameters(
     ::Type{FT},
     overrides = NamedTuple(),

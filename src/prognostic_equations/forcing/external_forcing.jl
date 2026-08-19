@@ -18,20 +18,23 @@ import UnrolledUtilities: unrolled_map, unrolled_foreach
 """
     interp_vertical_prof(x, xp, fp)
 
-Interpolates a 1D vertical profile `fp` defined at points `xp` to new query points `x`.
+Interpolate the vertical profile `fp`, defined at the points `xp`, to the query
+points `x`.
 
-Uses linear interpolation between points in `xp` and flat extrapolation (using the
-value at the nearest boundary) for points `x` outside the range of `xp`.
+Linear between the points of `xp`, flat (nearest-boundary value) outside their
+range.
 
-Arguments:
+# Arguments
 
-  - `x`: Vector of query points (e.g., heights) at which to interpolate.
-  - `xp`: Vector of points at which the profile `fp` is defined.
-  - `fp`: Vector of profile values corresponding to `xp`.
+  - `x`: Query points, an array or a `ClimaCore` `Field` (e.g. the model heights
+    [m]); the result keeps its shape.
+  - `xp`: Vector of points at which `fp` is defined, in the same units as `x`.
+  - `fp`: Vector of profile values at `xp`.
 
-Returns:
+# Returns
 
-  - A vector of interpolated values at points `x`.
+An array of interpolated values shaped like `x` (like `parent(x)` when `x` is a
+`Field`).
 """
 function interp_vertical_prof(x, xp, fp)
     spl = Intp.extrapolate(
@@ -47,23 +50,19 @@ end
 """
     gcm_vert_advection!(ᶜχₜ, ᶜχ, ᶜls_subsidence)
 
-Computes the vertical advection tendency term for a scalar quantity `χ` given the
-large-scale subsidence velocity This term arises from the decomposition of vertical
-eddy advection in GCM forcings, as described in Shen et al. (2022, e.g., Equations 9-10).
+Add the mean vertical advection `⟨w̃⟩ ∂⟨χ̃⟩/∂z` to `ᶜχₜ`, converting a total
+vertical advection tendency into its eddy part.
 
-The term calculated and added to `ᶜχₜ` is of the form:
-`tendency += <w̃> * ∂<χ̃>/∂z`
-where `<w̃>` is the large-scale mean subsidence velocity (`ᶜls_subsidence`) and
-`∂<χ̃>/∂z` is the vertical gradient of the GCM's time-mean profile of the scalar `χ`.
+Used when building the GCM-driven forcing cache: `ᶜχₜ` is initialized with the
+GCM's total vertical advection tendency `-⟨w̃ ∂χ̃/∂z⟩`, and adding the mean
+advection back leaves the eddy fluctuation term, following the decomposition of
+Shen et al. (2022), Eqs. 9–10.
 
-This function assumes that `ᶜχₜ` already contains the total vertical eddy advection
-term (`-<w̃ ∂χ̃/∂z>`), and it subtracts the mean advection to obtain the eddy part.
+# Arguments
 
-Arguments:
-
-  - `ᶜχₜ`: Field of tendencies for `χ`, modified in place.
-  - `ᶜχ`: Field representing the GCM's time-mean profile of the specific scalar `χ`.
-  - `ᶜls_subsidence`: Field of the GCM's large-scale mean subsidence velocity `<w̃>`.
+  - `ᶜχₜ`: Tendency field of `χ`, modified in place.
+  - `ᶜχ`: The GCM's time-mean profile of the specific scalar `χ`.
+  - `ᶜls_subsidence`: The GCM's large-scale mean subsidence velocity `⟨w̃⟩` [m/s].
 """
 function gcm_vert_advection!(ᶜχₜ, ᶜχ, ᶜls_subsidence)
     @. ᶜχₜ +=
@@ -74,25 +73,27 @@ end
 """
     compute_gcm_driven_scalar_inv_τ(z::FT, params) where {FT}
 
-Calculates the height-dependent inverse relaxation timescale (Γᵣ(z)) for nudging
-scalar quantities (such as temperature and humidity) towards GCM profiles.
+Return the height-dependent inverse relaxation timescale `Γᵣ(z)` [1/s] for nudging
+scalars (temperature, humidity) toward target profiles.
 
-The formulation follows Shen et al. (2022, Equation 11):
+Follows Shen et al. (2022), Eq. 11: no relaxation below `zᵢ`, a raised-cosine ramp
+between `zᵢ` and `zᵣ`, and the full rate `1/τᵣ` above `zᵣ`,
 
-  - Γᵣ(z) = 0 for z < zᵢ (no relaxation below minimum height zᵢ)
-  - Γᵣ(z) = (0.5 / τᵣ) * (1 - cos(π * (z - zᵢ) / (zᵣ - zᵢ))) for zᵢ ≤ z ≤ zᵣ (smooth transition)
-  - Γᵣ(z) = 1 / τᵣ for z > zᵣ (full relaxation timescale τᵣ)
+```math
+Γ_r(z) = \\begin{cases}
+0, & z < z_i \\\\
+\\frac{1}{2τ_r}\\left[1 - \\cos\\!\\left(π \\frac{z - z_i}{z_r - z_i}\\right)\\right],
+  & z_i \\le z \\le z_r \\\\
+1/τ_r, & z > z_r
+\\end{cases}
+```
 
-Arguments:
+# Arguments
 
   - `z`: Height [m].
-  - `params`: Parameter set containing `CAP.gcmdriven_scalar_relaxation_timescale` (τᵣ),
-    `CAP.gcmdriven_relaxation_minimum_height` (zᵢ), and
-    `CAP.gcmdriven_relaxation_maximum_height` (zᵣ).
-
-Returns:
-
-  - The inverse relaxation timescale [s⁻¹] at height `z`.
+  - `params`: Parameter set supplying `gcmdriven_scalar_relaxation_timescale` (`τᵣ`)
+    [s], `gcmdriven_relaxation_minimum_height` (`zᵢ`) [m], and
+    `gcmdriven_relaxation_maximum_height` (`zᵣ`) [m].
 """
 function compute_gcm_driven_scalar_inv_τ(z::FT, params) where {FT}
     τᵣ = CAP.gcmdriven_scalar_relaxation_timescale(params)
@@ -112,19 +113,17 @@ end
 """
     compute_gcm_driven_momentum_inv_τ(z::FT, params) where {FT}
 
-Calculates the inverse relaxation timescale for nudging horizontal momentum
-toward GCM profiles.
+Return the inverse relaxation timescale [1/s] for nudging horizontal momentum
+toward target profiles.
 
-Following Shen et al. (2022), this is a constant timescale.
+Following Shen et al. (2022), this is height-independent: `1/τᵣ` with `τᵣ` the
+parameter `gcmdriven_momentum_relaxation_timescale`.
 
-Arguments:
+# Arguments
 
-  - `z`: Height [m] (often unused if timescale is constant).
-  - `params`: Parameter set containing `CAP.gcmdriven_momentum_relaxation_timescale`.
-
-Returns:
-
-  - The constant inverse relaxation timescale [s⁻¹].
+  - `z`: Height [m]; unused, present so this can be broadcast over a height field
+    like `compute_gcm_driven_scalar_inv_τ`.
+  - `params`: Parameter set supplying `gcmdriven_momentum_relaxation_timescale` [s].
 """
 function compute_gcm_driven_momentum_inv_τ(z::FT, params) where {FT}
     τᵣ = CAP.gcmdriven_momentum_relaxation_timescale(params)
@@ -133,27 +132,34 @@ end
 
 """
     external_forcing_cache(Y, atmos::AtmosModel, params, start_date)
-    external_forcing_cache(Y, external_forcing_type, params, start_date)
+    external_forcing_cache(Y, external_forcing, params, start_date)
 
-Sets up and returns a cache for external forcing data based on the specified
-`external_forcing_type`. This cache typically holds pre-interpolated GCM profiles,
-tendencies, and nudging parameters.
+Build the cache that `external_forcing_tendency!` reads as `p.external_forcing`,
+dispatching on the external forcing type.
 
-Dispatches to specific methods based on `atmos.external_forcing` or the explicit
-`external_forcing_type`.
+Together with `external_forcing_tendency!`, this is the complete extension
+interface for a custom single-column forcing: define a forcing type and add one
+method of each, as shown on the "Single Column Models" page of the docs
+(`docs/src/single_column.md`). The cache typically holds interpolated profiles,
+`TimeVaryingInput`s, working fields, and nudging timescales.
 
-Arguments:
+The `AtmosModel` method resolves which surface variables the rest of the model
+needs (`ts` for an `ExternalTemperature` surface, `coszen` and `rsdt` for
+`ExternalTVInsolation` under RRTMGP) and forwards them to the
+`ExternalDrivenTVForcing` method; for any other forcing it simply forwards
+`atmos.external_forcing`.
 
-  - `Y`: The initial state vector (used for defining field structures and coordinates).
-  - `atmos::AtmosModel` or `external_forcing_type`: The atmospheric model or specific
-    external forcing configuration object.
+# Arguments
+
+  - `Y`: Initial state vector, used for the field structure and coordinates.
+  - `atmos` or `external_forcing`: The model, or the external forcing object to
+    dispatch on.
   - `params`: Parameter set.
-  - `start_date`: Simulation start date, used for time-varying inputs.
+  - `start_date`: Simulation start date, used to anchor time-varying inputs.
 
-Returns:
+# Returns
 
-  - A `NamedTuple` containing cached fields for external forcing, or an empty
-    `NamedTuple` if `external_forcing_type` is `Nothing`.
+A `NamedTuple` of cached data, empty when `external_forcing` is `nothing`.
 """
 function external_forcing_cache(Y, atmos::AtmosModel, params, start_date)
     external_forcing = atmos.external_forcing
@@ -184,28 +190,26 @@ external_forcing_cache(Y, external_forcing::Nothing, params, _) = (;)
 """
     external_forcing_cache(Y, external_forcing::GCMForcing, params, _)
 
-Prepares cached fields for GCM-driven single-column model experiments by reading
-forcing data from a NetCDF file specified in `external_forcing.external_forcing_file`.
+Build the cache for a GCM-driven single-column experiment, from the NetCDF file
+`external_forcing.external_forcing_file` and the group `external_forcing.cfsite_number`.
 
-This involves:
+Reads the time-mean vertical profiles of the GCM horizontal-advection tendencies
+(`tntha`, `tnhusha`), the vertical-advection tendencies (`tntva`, `tnhusva`), the
+GCM state used as the nudging target (`ta`, `hus`, `ua`, `va`), and the pressure
+velocity `wap`, from which the subsidence velocity follows by the hydrostatic
+approximation `w ≈ -ω α / g`. All profiles are interpolated to the model grid with
+`interp_vertical_prof`. The vertical-advection tendencies are converted into eddy
+fluctuation terms with `gcm_vert_advection!`, and the nudging inverse timescales
+are evaluated with `compute_gcm_driven_scalar_inv_τ` and
+`compute_gcm_driven_momentum_inv_τ`. The insolation entries store the TOA flux,
+recovered as `rsdt / coszen`, and the cosine of the solar zenith angle. The
+methodology is that of Shen et al. (2022).
 
-  - Reading time-mean vertical profiles of GCM tendencies (horizontal advection of
-    temperature and moisture, radiative heating, vertical eddy advection components)
-    and GCM state variables (temperature, moisture, winds) for a specified `cfsite_number`.
-  - Reading large-scale subsidence (`wap`).
-  - Reading TOA flux and cosine of solar zenith angle.
-  - Interpolating these profiles to the model's vertical grid using `interp_vertical_prof`.
-  - Computing inverse relaxation timescales for nudging.
-  - Calculating the full vertical eddy fluctuation term for temperature and moisture by
-    combining GCM-diagnosed terms with `gcm_vert_advection!`.
+# Returns
 
-The methodology is that described by Shen et al. (2022) for forcing LES or SCMs with
-GCM output.
-
-Returns:
-
-  - A `NamedTuple` of `ClimaCore.Fields.Field`s containing the interpolated and
-    processed GCM forcing data.
+A `NamedTuple` of `ClimaCore` `Field`s: `ᶜdTdt_fluc`, `ᶜdqtdt_fluc`, `ᶜdTdt_hadv`,
+`ᶜdqtdt_hadv`, `ᶜT_nudge`, `ᶜqt_nudge`, `ᶜu_nudge`, `ᶜv_nudge`, `ᶜinv_τ_wind`,
+`ᶜinv_τ_scalar`, `ᶜls_subsidence`, `toa_flux`, and `cos_zenith`.
 """
 function external_forcing_cache(Y, external_forcing::GCMForcing, params, _)
     FT = Spaces.undertype(axes(Y.c))
@@ -308,21 +312,30 @@ function external_forcing_cache(Y, external_forcing::GCMForcing, params, _)
 end
 
 """
-    external_forcing_tendency!(Yₜ, Y, p, t, external_forcing_type)
+    external_forcing_tendency!(Yₜ, Y, p, t, external_forcing)
 
-Applies pre-processed external forcings (e.g., from GCM data, reanalysis, or
-idealized case specifications like ISDAC) to the model tendencies.
+Add the tendencies of an external forcing (GCM data, reanalysis, or an idealized
+case such as ISDAC), dispatching on the forcing type.
 
-Dispatches to specific methods based on `external_forcing_type`.
+Together with `external_forcing_cache`, this is the complete extension interface
+for a custom single-column forcing: define a forcing type and add one method of
+each, as shown on the "Single Column Models" page of the docs
+(`docs/src/single_column.md`). The method for `nothing` is a no-op.
 
-Arguments:
+Methods typically increment `Yₜ.c.uₕ` (momentum nudging), `Yₜ.c.ρe_tot`, and
+`Yₜ.c.ρq_tot`, the last two obtained from temperature and specific-humidity
+tendencies by `apply_Tq_forcing!`.
 
-  - `Yₜ`: The tendency state vector, modified in place.
-  - `Y`: The current state vector.
-  - `p`: Cache containing parameters, precomputed fields, and the external forcing cache
-    (`p.external_forcing`).
-  - `t`: Current simulation time (used by time-varying forcings).
-  - `external_forcing_type`: The specific external forcing configuration object.
+# Arguments
+
+  - `Yₜ`: Tendency state vector, modified in place.
+  - `Y`: Current state vector.
+  - `p`: Cache; the forcing data is in `p.external_forcing`, and the thermodynamic
+    state in `p.precomputed`.
+  - `t`: Current simulation time, at which time-varying inputs are evaluated.
+  - `external_forcing`: The external forcing object to dispatch on.
+
+Called from `additional_tendency!`, i.e., treated explicitly. Returns `nothing`.
 """
 external_forcing_tendency!(Yₜ, Y, p, t, ::Nothing) = nothing
 
@@ -339,7 +352,11 @@ external_forcing_tendency!(Yₜ, Y, p, t, ::Nothing) = nothing
     nudge_uv!(Yₜ, Y, p, ᶜu_nudge, ᶜv_nudge, ᶜinv_τ_wind)
 
 Relax the horizontal momentum `Y.c.uₕ` toward the target `(ᶜu_nudge, ᶜv_nudge)`
-with inverse timescale `ᶜinv_τ_wind`, adding the tendency to `Yₜ.c.uₕ`.
+[m/s] with inverse timescale `ᶜinv_τ_wind` [1/s], adding the tendency
+`-(uₕ - uₕ_nudge) / τ` to `Yₜ.c.uₕ`.
+
+Uses the scratch field `p.scratch.ᶜtemp_C12` to hold the target vector. Shared by
+the GCM, file-driven, and per-term `Nudging` forcings. Returns `nothing`.
 """
 function nudge_uv!(Yₜ, Y, p, ᶜu_nudge, ᶜv_nudge, ᶜinv_τ_wind)
     ᶜlg = Fields.local_geometry_field(Y.c)
@@ -353,7 +370,10 @@ end
     nudge_Tq!(ᶜdTdt, ᶜdqtdt, Y, p, ᶜT_nudge, ᶜqt_nudge, ᶜinv_τ_scalar)
 
 Write the temperature and total-specific-humidity nudging tendencies
-`-(ψ - ψ_nudge) * ᶜinv_τ_scalar` into `ᶜdTdt` and `ᶜdqtdt`.
+`-(ψ - ψ_nudge) * ᶜinv_τ_scalar` into `ᶜdTdt` [K/s] and `ᶜdqtdt` [1/s].
+
+Both outputs are overwritten, not accumulated. Reads the temperature from
+`p.precomputed.ᶜT` and the specific humidity from `Y`. Returns `nothing`.
 """
 function nudge_Tq!(ᶜdTdt, ᶜdqtdt, Y, p, ᶜT_nudge, ᶜqt_nudge, ᶜinv_τ_scalar)
     (; ᶜT) = p.precomputed
@@ -365,9 +385,15 @@ end
 """
     apply_Tq_forcing!(Yₜ, Y, p, ᶜdTdt, ᶜdqtdt)
 
-Convert temperature (`ᶜdTdt`) and total-specific-humidity (`ᶜdqtdt`)
-tendencies into total-energy (`ρe_tot`) and total-specific-humidity (`ρq_tot`)
-tendencies, adding them to `Yₜ`.
+Convert temperature (`ᶜdTdt` [K/s]) and total-specific-humidity (`ᶜdqtdt` [1/s])
+tendencies into total-energy and total-water tendencies, adding them to
+`Yₜ.c.ρe_tot` and `Yₜ.c.ρq_tot`.
+
+The energy conversion is `ρ [c_{v,m} dT/dt + (c_{v,v}(T - T₀) + L_{v,0} - R_v T₀) dq_tot/dt]`, i.e., the moist-mixture heat capacity times the temperature tendency
+plus the internal energy of the added vapor; no potential-energy term, since the
+water is added at constant height. Reads the thermodynamic state from
+`p.precomputed`. Shared by the GCM, file-driven, and ISDAC forcings. Returns
+`nothing`.
 """
 function apply_Tq_forcing!(Yₜ, Y, p, ᶜdTdt, ᶜdqtdt)
     (; params) = p
@@ -389,8 +415,12 @@ end
 """
     apply_subsidence_forcing!(Yₜ, Y, p, ᶜls_subsidence)
 
-Apply first-order large-scale subsidence `ᶜls_subsidence` to total energy and
-total specific humidity.
+Apply the large-scale subsidence velocity `ᶜls_subsidence` [m/s] to total energy
+and total water, adding the tendencies to `Yₜ.c.ρe_tot` and `Yₜ.c.ρq_tot`.
+
+Interpolates the velocity to faces and calls `subsidence!` with the first-order
+upwind scheme, advecting the total enthalpy `p.precomputed.ᶜh_tot` and the total
+specific humidity. Uses the scratch field `p.scratch.ᶠtemp_CT3`. Returns `nothing`.
 """
 function apply_subsidence_forcing!(Yₜ, Y, p, ᶜls_subsidence)
     (; ᶜh_tot) = p.precomputed
@@ -420,10 +450,14 @@ end
     external_forcing_tendency!(Yₜ, Y, p, t, ::GCMForcing)
 
 Apply GCM-driven forcing from the always-populated cache: horizontal advection,
-vertical eddy fluctuation, nudging of winds/temperature/humidity toward the GCM
-profiles, and subsidence. Temperature and moisture tendencies are converted to
-`ρe_tot`/`ρq_tot`, composing the same shared kernels `ExternalDrivenTVForcing`
-uses.
+vertical eddy fluctuation, nudging of winds, temperature, and humidity toward the
+GCM profiles, and subsidence.
+
+The three temperature and humidity contributions are summed into two scratch
+fields and converted once to `ρe_tot` and `ρq_tot` tendencies, composing the same
+shared kernels (`nudge_uv!`, `nudge_Tq!`, `apply_Tq_forcing!`,
+`apply_subsidence_forcing!`) that the file-driven `ExternalDrivenTVForcing` uses.
+Returns `nothing`.
 """
 function external_forcing_tendency!(Yₜ, Y, p, t, ::GCMForcing)
     (;
@@ -469,12 +503,34 @@ end
 #     subsidence
 # ============================================================================
 
+"""
+    required_surface_variables(model_component)
+
+Return the tuple of surface file variables a resolved model component needs from a
+file-driven forcing dataset.
+
+Dispatches on the model component rather than on the forcing terms: an
+`ExternalTemperature` surface needs `(:ts,)` and an `ExternalTVInsolation` needs
+`(:coszen, :rsdt)`; anything else needs nothing. `external_forcing_cache` takes
+the union and requires the dataset to provide it.
+"""
 required_surface_variables(_) = ()
 required_surface_variables(::SurfaceConditions.ExternalTemperature) = (:ts,)
 required_surface_variables(::ExternalTVInsolation) = (:coszen, :rsdt)
 
-# The nudging inverse timescale (rate × mask), materialized once at cache build
-# into a Field.
+"""
+    materialize_inv_τ(term::Nudging, ᶜz, params)
+
+Return the inverse relaxation timescale field [1/s] of a [`Nudging`](@ref) term,
+evaluated once at cache build.
+
+The rate follows `term.timescale`: `DefaultTimescale()` uses the Shen et al.
+(2022) profiles (`compute_gcm_driven_scalar_inv_τ` for `(:ta, :hus)`,
+`compute_gcm_driven_momentum_inv_τ` for `(:ua, :va)`), a `Number` is a constant
+relaxation timescale `τ` [s], and anything else is called as `z -> τ(z)`. The
+result is then multiplied by `term.mask`, which may be `nothing`, a `Number`, a
+`Field`, or a function of height.
+"""
 function materialize_inv_τ(term::Nudging, ᶜz, params)
     FT = Spaces.undertype(axes(ᶜz))
     ᶜinv_τ = similar(ᶜz, FT)
@@ -518,11 +574,47 @@ function _tendency_pair_cache(Y, cd, start_date, method, dT_var, dq_var)
         ᶜdq = similar(Y.c, FT),
     )
 end
+"""
+    forcing_term_cache(term, Y, cd, start_date, method, params, ᶜz)
+
+Build the per-term cache of a file-driven forcing term: its `TimeVaryingInput`s,
+the fields they are evaluated into, and any quantity materialized once at build
+time.
+
+One method per concrete [`AbstractForcingTerm`](@ref):
+[`HorizontalAdvection`](@ref) and [`VerticalFluctuation`](@ref) each hold a
+`(dT, dq)` input pair, [`Subsidence`](@ref) holds the vertical velocity `wa`, and
+[`Nudging`](@ref) holds one target field per nudged variable (`nothing` for the
+others) plus the inverse timescale from `materialize_inv_τ`.
+
+# Arguments
+
+  - `term`: The forcing term to dispatch on.
+  - `Y`: Initial state vector, used for the field structure.
+  - `cd`: The `ColumnDataset` holding the forcing file.
+  - `start_date`: Simulation start date, anchoring the time axis.
+  - `method`: Time interpolation method for the `TimeVaryingInput`s.
+  - `params`: Parameter set.
+  - `ᶜz`: Cell-center height field [m].
+
+# Returns
+
+A `NamedTuple`, stored in `p.external_forcing.term_caches` alongside its term.
+"""
 forcing_term_cache(::HorizontalAdvection, Y, cd, start_date, method, params, ᶜz) =
     _tendency_pair_cache(Y, cd, start_date, method, :tntha, :tnhusha)
 forcing_term_cache(::VerticalFluctuation, Y, cd, start_date, method, params, ᶜz) =
     _tendency_pair_cache(Y, cd, start_date, method, :tntva, :tnhusva)
 
+"""
+    update_forcing_term!(cache, term, t)
+
+Refresh a forcing term's working fields from its `TimeVaryingInput`s at time `t`,
+in place.
+
+One method per concrete [`AbstractForcingTerm`](@ref). Called once per cache
+update, before the tendency hooks read the fields. Returns `nothing`.
+"""
 function update_forcing_term!(
     cache,
     ::Union{HorizontalAdvection, VerticalFluctuation},
@@ -532,6 +624,20 @@ function update_forcing_term!(
     evaluate!(cache.ᶜdq, cache.input_dq, t)
     return nothing
 end
+"""
+    accumulate_Tq_tendency!(ᶜdTdt, ᶜdqtdt, term, cache, Y, p)
+
+Add a forcing term's temperature [K/s] and total-specific-humidity [1/s]
+tendencies into the shared buffers `ᶜdTdt` and `ᶜdqtdt`.
+
+The buffers are accumulated across all terms of a composed forcing and converted
+once to `ρe_tot` and `ρq_tot` tendencies by `apply_Tq_forcing!`, so a term must
+never overwrite them. [`HorizontalAdvection`](@ref) and
+[`VerticalFluctuation`](@ref) add their prescribed tendencies directly, and
+[`Nudging`](@ref) adds `-(ψ - ψ_nudge) / τ` for whichever of `ta` and `hus` it
+nudges. Terms with no scalar contribution fall through to the no-op method for
+`::AbstractForcingTerm`. Returns `nothing`.
+"""
 function accumulate_Tq_tendency!(
     ᶜdTdt,
     ᶜdqtdt,
@@ -554,6 +660,17 @@ function forcing_term_cache(::Subsidence, Y, cd, start_date, method, params, ᶜ
 end
 update_forcing_term!(cache, ::Subsidence, t) =
     (evaluate!(cache.ᶜls_subsidence, cache.input_wa, t); nothing)
+"""
+    apply_direct_forcing!(Yₜ, Y, p, term, cache)
+
+Add a forcing term's contributions that do not go through the shared temperature
+and humidity buffers directly to `Yₜ`.
+
+Used for [`Subsidence`](@ref), which advects total energy and total water with
+`apply_subsidence_forcing!`, and for [`Nudging`](@ref) of `(:ua, :va)`, which
+relaxes `Yₜ.c.uₕ` with `nudge_uv!`. Terms with no direct contribution fall through
+to the no-op method for `::AbstractForcingTerm`. Returns `nothing`.
+"""
 apply_direct_forcing!(Yₜ, Y, p, ::Subsidence, cache) =
     apply_subsidence_forcing!(Yₜ, Y, p, cache.ᶜls_subsidence)
 
@@ -607,12 +724,19 @@ apply_direct_forcing!(Yₜ, Y, p, ::AbstractForcingTerm, cache) = nothing
 """
     external_forcing_cache(Y, external_forcing::ExternalDrivenTVForcing, params, start_date; surface_vars)
 
-Build the cache for the file-driven forcing. It consumes only the column
-variables its composed `forcing` terms require, plus `surface_vars`. Missing
-data for any is a loud error. The cache holds the `forcing` terms, a per-term
-cache (`TimeVaryingInput`s, working fields, and materialized nudging
-timescales), and the surface inputs used by the
-`ExternalTemperature`/`ExternalTVInsolation` paths.
+Build the cache for the file-driven forcing.
+
+Consumes only the column variables its composed `forcing` terms require (the union
+over `required_column_variables`) plus the `surface_vars` the resolved model
+components need; missing data for any of them is a loud error.
+
+# Returns
+
+A `NamedTuple` with `forcing_terms` (the terms themselves), `term_caches` (one
+`forcing_term_cache` per term, holding `TimeVaryingInput`s, working
+fields, and materialized nudging timescales), and `surface_fields` and
+`surface_timevaryinginputs` for the `ExternalTemperature` and
+`ExternalTVInsolation` paths.
 """
 function external_forcing_cache(
     Y,
@@ -668,10 +792,12 @@ end
 """
     external_forcing_tendency!(Yₜ, Y, p, t, ::ExternalDrivenTVForcing)
 
-Apply the composed file-driven forcing. Each term's `(dT, dq)` contribution is
-accumulated into shared buffers and converted once to `ρe_tot`/`ρq_tot`
-tendencies. Each term's direct contributions (momentum nudging, subsidence) are
-then applied to the state.
+Apply the composed file-driven forcing.
+
+Each term's `(dT, dq)` contribution is accumulated into two zeroed scratch buffers
+by `accumulate_Tq_tendency!` and converted once to `ρe_tot` and `ρq_tot`
+tendencies by `apply_Tq_forcing!`. Each term's direct contributions (momentum
+nudging, subsidence) are then added by `apply_direct_forcing!`. Returns `nothing`.
 """
 function external_forcing_tendency!(Yₜ, Y, p, t, ::ExternalDrivenTVForcing)
     (; forcing_terms, term_caches) = p.external_forcing
@@ -694,25 +820,27 @@ end
 """
     external_forcing_cache(Y, external_forcing::ISDACForcing, params, _)
 
-Returns an empty cache for ISDAC (Indirect and Semi-Direct Aerosol Campaign)
-forcing. ISDAC forcing profiles are analytical functions of height, not requiring
-pre-loading from files into cached fields.
+Return an empty cache for ISDAC (Indirect and Semi-Direct Aerosol Campaign)
+forcing.
+
+The ISDAC profiles are analytic functions of height, evaluated directly in
+`external_forcing_tendency!`, so nothing needs to be pre-loaded.
 """
 external_forcing_cache(Y, external_forcing::ISDACForcing, params, _) = (;)  # Don't need to cache anything
 
 """
     external_forcing_tendency!(Yₜ, Y, p, t, ::ISDACForcing)
 
-Applies tendencies based on the ISDAC (Indirect and Semi-Direct Aerosol Campaign)
-case specifications. This involves nudging (relaxation) of horizontal winds,
-temperature, and total specific humidity towards idealized profiles defined by the
-`APL.ISDAC_...` functions.
+Apply the ISDAC (Indirect and Semi-Direct Aerosol Campaign) forcing: relaxation of
+the horizontal winds, temperature, and total specific humidity toward the analytic
+`APL.ISDAC_*` profiles.
 
-The nudging target temperature profile is derived from prescribed potential
-temperature (`θ`) and total specific humidity (`q_tot`) profiles, using the
-current model pressure. Tendencies for temperature and `q_tot` from nudging are
-then converted into tendencies for total energy (`ρe_tot`) and total specific
-humidity (`ρq_tot`).
+Increments `Yₜ.c.uₕ` directly and, through `apply_Tq_forcing!`, `Yₜ.c.ρe_tot` and
+`Yₜ.c.ρq_tot`. The target temperature is obtained by saturation adjustment of the
+prescribed liquid-ice potential temperature and total specific humidity at the
+current model pressure, and the two relaxation rates are the height-dependent
+`ISDAC_inv_τ_scalar` and `ISDAC_inv_τ_wind` [1/s]. `t` is unused, the profiles
+being steady.
 """
 function external_forcing_tendency!(Yₜ, Y, p, t, ::ISDACForcing)
     FT = Spaces.undertype(axes(Y.c))

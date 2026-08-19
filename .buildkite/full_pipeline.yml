@@ -9,7 +9,8 @@ env:
   SLURM_KILL_BAD_EXIT: 1
   JULIA_NVTX_CALLBACKS: gc
   JULIA_MAX_NUM_PRECOMPILE_FILES: 100
-  JULIA_DEPOT_PATH: "${BUILDKITE_BUILD_PATH}/${BUILDKITE_PIPELINE_SLUG}/${BUILDKITE_BUILD_NUMBER}/depot:${BUILDKITE_BUILD_PATH}/${BUILDKITE_PIPELINE_SLUG}/depot/shared"
+  # Shared layer hard-coded to climaatmos-ci: see the note in pipeline.yml.
+  JULIA_DEPOT_PATH: "${BUILDKITE_BUILD_PATH}/${BUILDKITE_PIPELINE_SLUG}/${BUILDKITE_BUILD_NUMBER}/depot:${BUILDKITE_BUILD_PATH}/climaatmos-ci/depot/shared"
   COMMON_CONFIG_PATH: "config/common_configs"
   CONFIG_PATH: "config/model_configs"
   GPU_CONFIG_PATH: "config/gpu_configs"
@@ -29,6 +30,52 @@ steps:
       - echo $$JULIA_DEPOT_PATH
       - echo "--- Instantiate .buildkite"
       - julia --project=.buildkite -e 'using Pkg; Pkg.instantiate(;verbose=true, update_registry=false); Pkg.precompile(;strict=true); Pkg.status()'
+      # Downstream test hook: upstream packages (e.g. ClimaCore) trigger this
+      # pipeline with UPSTREAM_PACKAGES set to test themselves against
+      # ClimaAtmos CI. Space-separated entries, one per package
+      # (same convention as ClimaCoupler's nightly pipeline, see
+      # https://github.com/CliMA/ClimaCoupler.jl/blob/d8b5434/.buildkite/nightly/pipeline.yml#L12-L19):
+      #     Package        -> use the main branch
+      #     Package@1.2.3  -> use a registered version
+      #     Package#rev    -> use a branch or commit
+      # The tested packages are dropped from [compat] in both the base and the
+      # .buildkite projects, so unreleased upstream version bumps still
+      # resolve. Compat bounds from other registered dependencies still apply;
+      # the resolver enforces those regardless. For example, a breaking
+      # ClimaCore release fails to resolve until ClimaDiagnostics is compatible with it.
+      # The modified projects, manifest, and depot persist for all later steps.
+      - |
+        if [ -n "$${UPSTREAM_PACKAGES:-}" ]; then
+          echo "--- Downstream test: using $${UPSTREAM_PACKAGES}"
+          julia --project=.buildkite -e '
+            using Pkg
+            entries = split(ENV["UPSTREAM_PACKAGES"])
+            upstream = String[first(split(entry, r"[@#]")) for entry in entries]
+            for project in (".", ".buildkite")
+                Pkg.activate(project)
+                deps = Pkg.project().dependencies
+                # Pkg.compat throws for packages that are not deps of the
+                # active project (the upstream sets differ per project).
+                for name in filter(name -> haskey(deps, name), upstream)
+                    @info "Downstream test: removing [compat] entry" project name
+                    Pkg.compat(name, nothing)
+                end
+            end
+            Pkg.activate(".buildkite")
+            Pkg.add(map(entries) do entry
+                if occursin("@", entry)
+                    name, version = String.(split(entry, "@"))
+                    Pkg.PackageSpec(; name, version)
+                elseif occursin("#", entry)
+                    name, rev = String.(split(entry, "#"))
+                    Pkg.PackageSpec(; name, rev)
+                else
+                    Pkg.PackageSpec(; name = entry, rev = "main")
+                end
+            end)
+            Pkg.precompile(; strict = true)
+            Pkg.status()'
+        fi
 
     agents:
       slurm_cpus_per_task: 8
@@ -343,13 +390,20 @@ steps:
       - label: ":chart_with_upwards_trend: SCM intercomparison plots"
         retry: *retry_policy
         depends_on:
-          - prognostic_edmfx_soares_column
-          - prognostic_edmfx_gabls_column
-          - prognostic_edmfx_bomex_column
-          - prognostic_edmfx_dycoms_rf01_column
-          - prognostic_edmfx_dycoms_rf02_column
-          - prognostic_edmfx_rico_column
-          - prognostic_edmfx_trmm_column
+          - step: prognostic_edmfx_soares_column
+            allow_failure: true
+          - step: prognostic_edmfx_gabls_column
+            allow_failure: true
+          - step: prognostic_edmfx_bomex_column
+            allow_failure: true
+          - step: prognostic_edmfx_dycoms_rf01_column
+            allow_failure: true
+          - step: prognostic_edmfx_dycoms_rf02_column
+            allow_failure: true
+          - step: prognostic_edmfx_rico_column
+            allow_failure: true
+          - step: prognostic_edmfx_trmm_column
+            allow_failure: true
         command: |
           for JOB in \
             prognostic_edmfx_soares_column \
@@ -431,7 +485,7 @@ steps:
           --job_id larcform1_1M_prognostic_edmfx
         artifact_paths: "larcform1_1M_prognostic_edmfx/output_active/*"
         agents:
-          slurm_mem: 12GB
+          slurm_mem: 20GB
 
   - group: "Analytic Tests"
     steps:
@@ -1054,6 +1108,17 @@ steps:
       #     slurm_gpus: 1
       #     slurm_mem: 20GB
 
+  - group: "Performance scripts"
+    steps:
+      - label: ":test_tube: Component models: Smoke test"
+        retry: *retry_policy
+        command: >
+          cd perf/run-and-time &&
+          julia --project -e 'using Pkg; Pkg.Registry.update(); Pkg.Pkg.instantiate(;verbose=true)' &&
+          julia --color=yes --project ci_test_models.jl
+        agents:
+          slurm_mem: 20GB
+
   - group: "Timestep cost"
     steps:
       - label: ":alarm_clock: Timestep cost: Moist baroclinic wave"
@@ -1294,5 +1359,8 @@ steps:
   - wait
 
   - label: ":robot_face: Stage reproducibility results"
+    # Downstream (UPSTREAM_PACKAGES) builds test an upstream branch, not a
+    # ClimaAtmos PR: never stage their results for publishing.
+    if: 'build.env("UPSTREAM_PACKAGES") == null'
     retry: *retry_policy
     command: "julia --color=yes --project=.buildkite reproducibility_tests/stage_output.jl"

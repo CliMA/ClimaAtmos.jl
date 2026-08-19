@@ -1,3 +1,17 @@
+"""
+    ClimaAtmos.Diagnostics
+
+Definitions of the diagnostic variables ClimaAtmos knows how to compute.
+
+Each variable is registered with `add_diagnostic_variable!`, which records its metadata
+and a `compute` function of `(state, cache, time)`, and is looked up by short name with
+`get_diagnostic_variable`. `default_diagnostics` assembles the per-model defaults, the
+helpers in `standard_diagnostic_frequencies.jl` wrap them in reductions over calendar
+periods, and [`DiagnosticsConfig`](@ref ClimaAtmos.DiagnosticsConfig) is the user-facing
+entry point that selects them for a simulation.
+
+Scheduling, accumulation, and output are handled by `ClimaDiagnostics`.
+"""
 module Diagnostics
 
 import Dates: Month, Day, Hour, DateTime, Period
@@ -67,6 +81,7 @@ import ..get_physical_w
 import ..compute_gm_mixing_length
 
 import ..horizontal_integral_at_boundary
+import ..horizontal_filter_scale
 import ..ᶜmixing_length
 import ..eddy_diffusivity
 import ..eddy_viscosity

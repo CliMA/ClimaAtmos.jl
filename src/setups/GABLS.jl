@@ -1,12 +1,12 @@
 """
     GABLS
 
-The GABLS setup described in [Kosovic2000](@cite), with a hydrostatically
+The GABLS setup described in [Beare2006](@cite), with a hydrostatically
 balanced pressure profile. Profiles are sourced from AtmosphericProfilesLibrary.
 
 Surface temperature is time-varying: `T = 265 - 0.25t/3600`.
 
-## Example
+# Examples
 
 ```julia
 setup = GABLS(; prognostic_tke = true, thermo_params)

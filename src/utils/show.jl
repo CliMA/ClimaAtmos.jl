@@ -1,14 +1,18 @@
-"""
-This file contains helper methods for adopting show methods for model structs.
-
-The main helper methods follow:
-- `verbose_show_type_and_fields(io::IO, ::MIME"text/plain", x)`
-- `parseable_show_with_fields_no_type_header(io::IO, x; with_kwargs = true)`
-
-Below these, there are implementations of `Base.show` and `Base.summary` for model structs.
-
-More reading: https://discourse.julialang.org/t/print-vs-two-argument-show-repr-vs-three-argument-show-repr-with-mime-text-plain/117790
-"""
+#####
+##### Show methods for model structs
+#####
+##### Two helpers do the work:
+##### - `verbose_show_type_and_fields(io, MIME"text/plain"(), x)` prints a
+#####   human-readable tree of the type and its fields.
+##### - `parseable_show_with_fields_no_type_header(io, x; ...)` prints a form
+#####   that can be pasted back into the REPL to recreate `x`.
+#####
+##### Below them are the `Base.show` and `Base.summary` implementations that
+##### dispatch the model structs onto one or the other.
+#####
+##### More reading:
+##### https://discourse.julialang.org/t/print-vs-two-argument-show-repr-vs-three-argument-show-repr-with-mime-text-plain/117790
+#####
 
 
 ### ----------------------- ###
@@ -18,11 +22,15 @@ More reading: https://discourse.julialang.org/t/print-vs-two-argument-show-repr-
 """
     verbose_show_type_and_fields(io::IO, ::MIME"text/plain", x)
 
-Print a verbose representation of the type and fields of `x` to `io`.
+Print the type name of `x` to `io`, followed by one line per field.
+
+The field list is drawn as a tree, unless `io` carries `:compact => true`, in
+which case the fields are printed inline in parentheses. Only the type name is
+printed, without its module prefix or type parameters.
 
 # Examples
 
-```julia-repl
+```julia
 julia> import ClimaAtmos as CA
 
 julia> CA.RRTMGPInterface.AllSkyRadiation()
@@ -58,25 +66,30 @@ function verbose_show_type_and_fields(io::IO, ::MIME"text/plain", x)
 end
 
 """
-    parseable_show_with_fields_no_type_header(io::IO, x; with_kwargs = ())
+    parseable_show_with_fields_no_type_header(
+        io::IO,
+        x;
+        with_kwargs = true,
+        skip_fields_by_value = (),
+    )
 
-Print a parseable representation of the type that allows reconstruction of `x`.
+Print a representation of `x` to `io` that can be pasted back into the REPL to
+reconstruct it.
 
-# Arguments
+The type is printed with its module prefix and without type parameters, followed
+by its fields in parentheses.
 
-  - `with_kwargs`: If true, print the fields as keyword arguments.
+# Keyword Arguments
 
-      + This is relevant for structs definitions prefixed with `@kwdef`
-
-  - `skip_fields_by_value`: A tuple of values that are not printed for any fields with those values.
-
-      + Note: Because the printed representation should reconstruct an equivalent instance,
-        the values provided here should be the default values for the fields.
-      + By default, no fields are skipped.
+  - `with_kwargs = true`: Print the fields as keyword arguments, as required by
+    structs defined with `@kwdef`.
+  - `skip_fields_by_value = ()`: Values whose fields are omitted. Because the
+    output must still reconstruct an equivalent instance, list only values that
+    are the corresponding fields' defaults.
 
 # Examples
 
-```julia-repl
+```julia
 julia> show(stdout, CA.AtmosRadiation())
 ClimaAtmos.AtmosRadiation(insolation = ClimaAtmos.IdealizedInsolation())
 ```
@@ -263,11 +276,21 @@ end
 """
     summary_microphysics(io::IO, microphysics_model, options)
 
-Print the microphysics settings that `summary(::AtmosModel)` does not surface:
-the substep counts of `NonEquilibriumMicrophysics1M` (struct fields, hidden by
-`typeof`) and the per-process option selections (e.g. which autoconversion or
-accretion scheme is active, or `disabled` when the option is `nothing`). The
-process options live in the parameter set, not in the `AtmosModel`.
+Print to `io` the microphysics settings that `summary(::AtmosModel)` does not
+surface.
+
+Two kinds of setting are hidden from the type-based summary: the substep counts
+of `NonEquilibriumMicrophysics1M`, which are struct fields rather than type
+parameters, and the per-process option selections, which live in the parameter
+set rather than in the `AtmosModel`.
+
+# Arguments
+
+  - `io`: Stream to print to.
+  - `microphysics_model`: Microphysics model; substep counts are printed only for
+    `NonEquilibriumMicrophysics1M`.
+  - `options`: Per-process microphysics options; each is printed as the name of
+    its type, or as `disabled` when it is `nothing`.
 """
 function summary_microphysics(io::IO, microphysics_model, options)
     keys = collect(string.(propertynames(options)))

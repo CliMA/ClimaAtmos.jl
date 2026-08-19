@@ -8,23 +8,40 @@ import ..parse_date
     weather_model_data_path(
         start_date,
         target_levels,
-        era5_initial_condition_dir=nothing;
-        kwargs...
+        era5_initial_condition_dir = nothing;
+        interp_w = false,
     )
 
-Get the path to the weather model data for a given start date and time.
-If the data is not found, will attempt to generate it from raw data. If
-the raw data is not found, throw an error.
+Return the path to the ERA5-derived initial-condition file for `start_date`.
 
-Args:
-- `start_date`: Start date as string yyyymmdd or yyyymmdd-HHMM
-- `target_levels`: Vector of target altitude levels (in meters)
-- `era5_initial_condition_dir`: Optional directory containing preprocessed ERA5
+Without `era5_initial_condition_dir`, the path is taken from the
+`wxquest_initial_conditions` artifact and returned without checking that the
+file exists.
 
-Keywords:
-- `interp_w::Bool=false`: If false, write w=0; if true, interpolate w (1D path)
+With `era5_initial_condition_dir`, a preprocessed 3D file in that directory is
+used if present. Otherwise the raw ERA5 file is interpolated to `target_levels`
+by `to_z_levels_1d` and the generated 1D file is returned. If neither
+the preprocessed nor the raw file exists, an error is thrown pointing at the
+WeatherQuest download script.
+
+# Arguments
+
+  - `start_date`: Start date, as a string `yyyymmdd` or `yyyymmdd-HHMM`, or a
+    `DateTime`; parsed by `parse_date`.
+  - `target_levels`: Target altitude levels for the 1D fallback [m].
+  - `era5_initial_condition_dir = nothing`: Directory holding preprocessed or raw
+    ERA5 files; `nothing` selects the artifact path.
+
+# Keyword Arguments
+
+  - `interp_w = false`: On the 1D fallback path, write `w = 0` when `false` and
+    interpolate the ERA5 `w` when `true`.
+
+# Notes
+
+Only `HHMM = 0000` is supported on the user-directory path, because the coupler
+cannot yet specify a time of day.
 """
-
 function weather_model_data_path(
     start_date,
     target_levels,
@@ -99,21 +116,36 @@ end
         target_file,
         target_levels,
         FT;
-        interp_w=false,
+        interp_w = false,
     )
 
-Interpolate ERA5 data from native model levels to specified 1D z-levels, column-wise in z.
+Interpolate ERA5 pressure-level data onto a common set of altitude levels,
+column by column, and write the result to a new NetCDF file.
 
-Args:
+The source file must provide the dimensions `pressure_level`, `latitude`,
+`longitude`, and `valid_time`, and the variables `u`, `v`, `w`, `t`, `q`, `skt`,
+and `sp`; the cloud-water variables `crwc`, `cswc`, `clwc`, and `ciwc` are
+interpolated if present. Source heights come from the geopotential `z` divided
+by `g`. Pressure is interpolated in `log(p)` and written as the 3D field `p_3d`.
+Specific humidity is clipped at zero. Surface fields are broadcast over all
+levels, because the model reader does not yet accept 2D variables.
 
-  - source_file::String: Input ERA5 NetCDF path
-  - target_file::String: Output NetCDF path
-  - target_levels::AbstractVector: Target 1D z-levels
-  - FT::Type{<:AbstractFloat}: Floating-point element type
+# Arguments
 
-Keywords:
+  - `source_file`: Path of the input ERA5 NetCDF file.
+  - `target_file`: Path of the NetCDF file to create, overwriting any existing
+    one.
+  - `target_levels`: Target altitude levels [m].
+  - `FT`: Floating-point element type of the output.
 
-  - interp_w::Bool=false: If false, write w=0 everywhere; if true, interpolate w
+# Keyword Arguments
+
+  - `interp_w = false`: Write `w = 0` everywhere when `false`; interpolate the
+    ERA5 `w` when `true`. ERA5 `w` comes from a hydrostatic model and is not
+    meaningful for ClimaAtmos, hence the default.
+
+The return value is unused; the result of the call is the file written to
+`target_file`.
 """
 function to_z_levels_1d(
     source_file,
@@ -272,7 +304,12 @@ end
 """
     interpz_3d(ztarget, zsource, fsource)
 
-Interpolate 3D field `fsource` from 3D source levels `zsource` to 1D target levels `ztarget`.
+Interpolate the 3D field `fsource`, given on the 3D source heights `zsource`,
+onto the 1D target heights `ztarget`.
+
+Interpolation is linear in `z`, column by column, with flat extrapolation beyond
+the source range. All three arrays are indexed `(lon, lat, level)`, and the
+result has the same layout with `length(ztarget)` levels.
 """
 function interpz_3d(ztarget, zsource, fsource)
 

@@ -3,26 +3,20 @@
 #####
 
 """
- edmfx_tke_tendency!(Yₜ, Y, p, t, turbconv_model)
+    edmfx_tke_tendency!(Yₜ, Y, p, t, turbconv_model)
 
- Applies the tendency from the EDMFX subgrid scale turbulent kinetic energy (TKE)
- to the prognostic variables.
+Add the PROPHET (`EDMFX` in code) shear and buoyancy TKE production terms to
+`Yₜ.c.ρtke`.
 
- This function calculates and applies the changes in the environment TKE
- (`Yₜ.c.ρtke`) due to various processes within the EDMFX framework,
- including shear production, buoyancy production, entrainment, detrainment,
- turbulent entrainment, pressure work, and dissipation.
+The generic method is a no-op. The method for
+`turbconv_model::Union{EDOnlyEDMFX, PrognosticEDMFX}` forwards to
+`edmfx_tke_sources!` when `use_prognostic_tke(turbconv_model)` holds.
+Turbulent TKE transport and dissipation are applied separately, in
+`edmfx_sgs_diffusive_flux_tendency!`.
 
- Arguments:
- - `Yₜ`: The tendency state vector.
- - `Y`: The current state vector.
- - `p`: The cache, containing precomputed quantities and parameters.
- - `t`: The current simulation time.
- - `turbconv_model`: The turbulence convection model (e.g., `EDOnlyEDMFX`, `PrognosticEDMFX`).
-
- Returns: `nothing`, modifies `Yₜ` in place.
+Mutates `Yₜ.c.ρtke`; returns `nothing`. See the "PROPHET Sub-Grid Scale
+Equations" page (`docs/src/edmf_equations.md`) for the TKE budget.
 """
-
 edmfx_tke_tendency!(Yₜ, Y, p, t, turbconv_model) = nothing
 
 function edmfx_tke_tendency!(
@@ -40,9 +34,11 @@ end
 """
     edmfx_tke_sources!(Yₜ, Y, p)
 
-Shear and buoyancy sources of the isotropic (intra-subdomain) TKE, evaluated
-with the same face diffusivities and face buoyancy gradient as the diffusive
-fluxes they parameterize (`set_face_diffusivities!`):
+Add the shear and buoyancy sources of the isotropic (intra-subdomain) TKE to
+`Yₜ.c.ρtke`.
+
+Both terms use the same face diffusivities and face buoyancy gradient as the
+diffusive fluxes they parameterize (`set_face_diffusivities!`):
 
   - Buoyancy production/destruction `−ρ interp((ᶠK_h + ᶠK_entr) ᶠbuoygrad)`
     is stencil-exact: the product is formed at the faces from the same
@@ -67,6 +63,9 @@ through the buoyancy term of the subdomain momentum equations, which the
 prognostic subdomain velocities already carry; adding it here would
 double-count buoyancy production and spuriously inflate K near cloud tops
 with active drafts.
+
+Reads `ᶜstrain_rate_norm`, `ᶠbuoygrad`, `ᶠK_h`, `ᶠK_u`, and `ᶠK_entr` from
+`p.precomputed`; mutates `Yₜ.c.ρtke` and returns `nothing`.
 """
 function edmfx_tke_sources!(Yₜ, Y, p)
     (; ᶜstrain_rate_norm) = p.precomputed
@@ -84,19 +83,18 @@ end
 """
     tke_dissipation(turbconv_params, ρtke, tke, mixing_length)
 
-Returns a scalar value representing the TKE dissipation rate
-per unit volume, ρ * ε_d [kg m^-1 s^-3].
+Return the TKE dissipation rate per unit volume, `ρ ε_d` [kg m⁻¹ s⁻³]:
 
-The physical dissipation is calculated as:
-ρ * ε_d = c_d * ρtke * sqrt(abs(tke)) / mixing_length
+    ρ ε_d = c_d * ρtke * sqrt(abs(tke)) / mixing_length,
+
 where `c_d` is the TKE dissipation coefficient
-([`tke_dissipation_coefficient`](@ref)).
+(`tke_dissipation_coefficient`).
 
-Arguments:
+# Arguments
 
   - `turbconv_params`: Turbulence and convection model parameters.
-  - `ρtke`: ρ_area_weighted * tke [kg m^-2 s^-2].
-  - `tke`: Turbulent kinetic energy [m^2 s^-2].
+  - `ρtke`: TKE density `ρ * tke` [kg m⁻¹ s⁻²].
+  - `tke`: Specific turbulent kinetic energy [m² s⁻²].
   - `mixing_length`: Turbulent mixing length [m].
 """
 function tke_dissipation(turbconv_params, ρtke, tke, mixing_length)

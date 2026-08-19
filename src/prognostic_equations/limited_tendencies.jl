@@ -3,17 +3,18 @@ import ClimaCore: Limiters
 """
     _should_apply_limiter_to_tracer(ρχ_name, species) -> Bool
 
-Determine if a limiter should be applied to a specific tracer.
+Return whether the vertical mass borrowing limiter applies to the tracer
+`ρχ_name`.
 
 # Arguments
 
-  - `ρχ_name::Symbol`: Tracer variable name (e.g., `:ρq_tot`)
-  - `species`: Configuration — `nothing`: apply to all; `()`: apply to none;
-    `Tuple{Symbol,...}`: apply only if `ρχ_name ∈ species`
+  - `ρχ_name`: Tracer variable name, either a `Symbol` (e.g. `:ρq_tot`) or a
+    `MatrixFields.FieldName`; it is only tested for membership in `species`.
+  - `species`: Species selection. `nothing` selects all tracers; a `Tuple` selects
+    only the tracers it lists, so the empty tuple selects none. Any other type is an
+    error.
 
-# Returns
-
-`true` if the limiter should be applied, `false` otherwise.
+Called from `limiters_func!`.
 """
 function _should_apply_limiter_to_tracer(ρχ_name, species)
     if isnothing(species)
@@ -28,38 +29,37 @@ end
 """
     limiters_func!(Y, p, t, ref_Y)
 
-Apply tracer limiters to the prognostic state `Y` in place.
+Apply the configured tracer limiters to the prognostic state `Y` in place.
 
-Supports two limiter types configured via `p.numerics`:
+Two limiters may be active, in this order, each skipped when its entry in
+`p.numerics` is `nothing`:
 
-For the VerticalMassBorrowingLimiter, if `p.numerics.vertical_water_borrowing_limiter`
-is configured, it uses that limiter with `p.numerics.vertical_water_borrowing_species` for species selection.
-The limiter enforces strict nonnegativity using a single threshold value (0.0) that applies uniformly
-to all tracers for which the limiter is used. The limiter instance is created as
-`Limiters.VerticalMassBorrowingLimiter((0.0,))` in the cache. The species configuration is used to
-filter which tracers the limiter is applied to before calling `apply_limiter!` (since `apply_limiter!`
-doesn't support a species keyword argument). If species is `nothing` (default), the limiter is applied
-to all tracers. Otherwise, only tracers matching the specified tuple of names will have the limiter
-applied.
+ 1. **SEM quasimonotone limiter** (`sem_quasimonotone_limiter`): computes bounds
+    from the reference state `ref_Y` and applies spectral-element limiting to every
+    grid-mean tracer.
+ 2. **Vertical mass borrowing limiter** (`vertical_water_borrowing_limiter`):
+    enforces nonnegativity by borrowing mass from vertical neighbours. It is
+    constructed in the cache as `Limiters.VerticalMassBorrowingLimiter((FT(0),))`,
+    so the threshold is zero for every tracer it touches. Because `apply_limiter!`
+    takes no species argument, the selection in
+    `p.numerics.vertical_water_borrowing_species` is applied here, by filtering the
+    loop over tracers (see `_should_apply_limiter_to_tracer`). It operates on the
+    specific tracer `χ = ρχ/ρ` held in scratch, then writes `ρχ` back.
 
-When the limiter is applied to total water (ρq_tot), the effective tendency Δ(ρq_tot) is
-deduced from the pre- and post-limited states. To keep mass and energy consistent
-(https://clima.github.io/ClimaAtmos.jl/dev/microphysics/), density
-and total energy are updated.
-
- 1. **SEM Quasimonotone Limiter** (`sem_quasimonotone_limiter`):
-    Computes bounds from `ref_Y` and applies spectral element limiting.
-
- 2. **Vertical Mass Borrowing Limiter** (`vertical_water_borrowing_limiter`):
-    Enforces strict nonnegativity by borrowing mass vertically.
-    Species filtering via `vertical_water_borrowing_species`.
+Whenever a limiter changes `ρq_tot`, the induced increment `Δ(ρq_tot)` is measured
+from the pre- and post-limited states and passed to
+`enforce_mass_energy_consistency!`, which updates density and total energy; see the
+"Microphysics" page of the docs (`docs/src/microphysics.md`).
 
 # Arguments
 
-  - `Y`: Current state vector (modified in place)
-  - `p`: Cache containing `p.numerics` limiter configuration
-  - `t`: Current simulation time
-  - `ref_Y`: Reference state for bounds computation
+  - `Y`: Current state vector, modified in place.
+  - `p`: Cache; the limiter configuration is read from `p.numerics` and working
+    fields from `p.scratch`.
+  - `t`: Current simulation time; unused.
+  - `ref_Y`: Reference state used to compute the quasimonotone bounds.
+
+Returns `nothing`.
 """
 NVTX.@annotate function limiters_func!(Y, p, t, ref_Y)
     (;

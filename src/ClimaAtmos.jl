@@ -1,3 +1,29 @@
+"""
+    ClimaAtmos
+
+The atmosphere model of the CliMA Earth system model.
+
+ClimaAtmos solves the fully compressible equations of motion for a deep
+atmosphere in a coordinate-independent formulation, with the same equation set
+in Cartesian geometries, for large-eddy and cloud-resolving simulation, and on
+the sphere, for global weather and climate simulation. Energy, air mass, and
+water are conserved to floating-point precision, and the model runs on CPUs and
+GPUs from one code base.
+
+A simulation is described by an `AtmosSimulation`, which bundles a grid, an
+`AtmosModel`, a parameter set, and an integrator. Constructing one sets
+everything up; `solve_atmos!` advances it to `t_end`. Common configurations are
+available as one-line presets in the `Presets` submodule. See the Your First
+Simulation, Governing Equations, and API pages of the documentation.
+
+# Examples
+
+```julia
+import ClimaAtmos as CA
+simulation = CA.AtmosSimulation{Float32}(; t_end = "1days")
+CA.solve_atmos!(simulation)
+```
+"""
 module ClimaAtmos
 
 using NVTX

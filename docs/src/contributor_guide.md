@@ -8,13 +8,23 @@ by:
 
   - [Opening a GitHub issue](https://github.com/CliMA/ClimaAtmos.jl/issues/new)
 
+!!! note "Shared CliMA engineering standards"
+
+    The authoritative CliMA-wide engineering guides (code style, documentation
+    policy, software design patterns, performance, testing, and workflows) are
+    vendored into this repository under
+    [`docs/dev-guides/`](https://github.com/CliMA/ClimaAtmos.jl/blob/main/docs/dev-guides/README.md)
+    (from [CliMA/DeveloperGuides](https://github.com/CliMA/DeveloperGuides)).
+    This page covers the ClimaAtmos-specific and community aspects of
+    contributing and defers to those guides for everything else.
+
 ## Creating issues
 
 The simplest way to contribute to ClimaAtmos is to create or comment on issues.
 
 The most useful bug reports:
 
-  - Provide an explicit code snippet --- not just a link --- that reproduces the bug in the latest tagged version of ClimaAtmos. This is sometimes called the ["minimal working example"](https://en.wikipedia.org/wiki/Minimal_working_example). Reducing bug-producing code to a minimal example can dramatically decrease the time it takes to resolve an issue.
+  - Provide an explicit code snippet --- not just a link --- that reproduces the bug in the latest tagged version of ClimaAtmos. This is sometimes called the ["minimal working example"](https://en.wikipedia.org/wiki/Minimal_working_example). Reducing bug-producing code to a minimal example can decrease the time it takes to resolve an issue.
 
   - Paste the _entire_ error received when running the code snippet, even if it's unbelievably long.
 
@@ -24,7 +34,7 @@ The most useful bug reports:
 
 Discussions are recommended for asking questions about (for example) the user interface, implementation details, science, and life in general.
 
-## But I want to _code_!
+## But I want to _code_
 
   - New users help write ClimaAtmos code and documentation by [forking the ClimaAtmos repository](https://docs.github.com/en/github/collaborating-with-pull-requests/working-with-forks), [using git](https://guides.github.com/introduction/git-handbook/) to edit code and docs, and then creating a [pull request](https://docs.github.com/en/github/collaborating-with-pull-requests/proposing-changes-to-your-work-with-pull-requests/creating-a-pull-request-from-a-fork). Pull requests are reviewed by ClimaAtmos collaborators.
 
@@ -32,24 +42,19 @@ Discussions are recommended for asking questions about (for example) the user in
 
   - Note: for small or minor changes (such as fixing a typo in documentation), the [GitHub editor](https://docs.github.com/en/github/managing-files-in-a-repository/managing-files-on-github/editing-files-in-your-repository) is super useful for forking and opening a pull request with a single click.
 
-  - Write your code with love and care. In particular, conform to existing ClimaAtmos style and formatting conventions. For example, we love verbose and explicit variable names, use `TitleCase` for types, `snake_case` for objects, and always.put.spaces.after.commas. For formatting decisions we loosely follow the [YASGuide](https://github.com/jrevels/YASGuide). It's worth few extra minutes of our time to leave future generations with well-written, readable code.
+  - Write your code with love and care. In particular, conform to existing ClimaAtmos style and formatting conventions. It's worth a few extra minutes of our time to leave future generations with well-written, readable code.
 
 ### General coding guidelines
 
- 1. Keep the number of members of Julia structs small if possible (less than 8 members).
- 2. Code should reflect "human intuition" if possible. This means abstraction should reflect how humans reason about the problem under consideration.
- 3. Code with small blast radius. If your code needs to be modified or extended, the resulting required changes should be as small and as localized as possible.
- 4. When you write code, write it with testing and debugging in mind.
- 5. Ideally, the lowest level structs have no defaults for their member fields. Nobody can remember all the defaults, so it is better to introduce them at the high-level API only.
- 6. Make sure that module imports are specific so that it is easy to trace back where functions that are used inside a module are coming from.
- 7. Consider naming abstract Julia types "AbstractMyType" in order to avoid confusion for the reader of your code.
- 8. Comments in your code should explain why the code exists and clarify if necessary, not just restate the line of code in words.
- 9. Be mindful of namespace issues when writing functional code, especially when writing function code that represents mathematical or physical concepts.
-10. Consider using keywords in your structs to allow readers to more effectively reason about your code.
+Naming, formatting, and structural conventions are defined in the shared
+[code style guide](https://github.com/CliMA/ClimaAtmos.jl/blob/main/docs/dev-guides/code-quality/code_style.md);
+design principles (composability, dispatch patterns, cache discipline) are in the
+[software design patterns guide](https://github.com/CliMA/ClimaAtmos.jl/blob/main/docs/dev-guides/code-quality/software_design_patterns.md).
+Please skim both before writing new code.
 
 ## What is a "collaborator" and how can I become one?
 
-  - Collaborators have permissions to review pull requests and status allows a contributor to review pull requests in addition to opening them. Collaborators can also create branches in the main ClimaAtmos repository.
+  - Collaborator status allows a contributor to review pull requests in addition to opening them. Collaborators can also create branches in the main ClimaAtmos repository.
 
   - We ask that new contributors try their hand at forking ClimaAtmos, and opening and merging a pull request before requesting collaborator status.
 
@@ -93,7 +98,7 @@ we can help and guide you in case there is anything you need to know beforehand.
 ## Reporting a bug
 
 The easiest way to get involved is to report issues you encounter when using
-ClimaAtmos or by requesting something you think is missing.
+ClimaAtmos or to request something you think is missing.
 
   - Head over to the [issues](https://github.com/CLiMA/ClimaAtmos.jl/issues) page.
 
@@ -131,14 +136,11 @@ ClimaAtmos or by requesting something you think is missing.
     git remote add ClimaAtmos https://github.com/CLiMA/ClimaAtmos.jl.git
     ```
 
-  - Create the development environment by opening Julia via `julia --project` then
-    typing in `] instantiate`. This will install all the dependencies in the Project.toml
-    file.
-
-  - You can test to make sure ClimaAtmos works by typing in `] test`. Doing so will run all
-    the tests (and this can take a while).
-
-Your development environment is now ready!
+For instantiating the Julia environments, day-to-day REPL workflow, running
+tests, and resolving stuck environments, follow the shared
+[onboarding guide](https://github.com/CliMA/ClimaAtmos.jl/blob/main/docs/dev-guides/workflow/onboarding.md);
+the layout of this repository's environments is described in the
+[dependency management guide](https://github.com/CliMA/ClimaAtmos.jl/blob/main/docs/dev-guides/architecture/dependency_management.md).
 
 ## Pull Requests
 
@@ -158,146 +160,61 @@ and [submit a pull request](https://github.com/CLiMA/ClimaAtmos.jl/compare/).
 
 ## Documentation
 
-Generally, we follow the Julia conventions for documentation https://docs.julialang.org/en/v1/manual/documentation/.
-
 Now that you've made your awesome contribution, it's time to tell the world how to use it.
-Writing documentation strings is really important to make sure others use your functionality
-properly. Didn't write new functions? That's fine, but be sure that the documentation for
+Writing documentation strings is important to make sure others can use your
+functionality. Didn't write new functions? That's fine, but be sure that the documentation for
 the code you touched is still in great shape. It is not uncommon to find some strange wording
 or clarification that you can take care of while you are here.
 
-Here is an example of a docstring:
+Docstring anatomy, section headings, units, math, citations, and worked examples
+are all specified in the shared
+[documentation policy](https://github.com/CliMA/ClimaAtmos.jl/blob/main/docs/dev-guides/code-quality/documentation_policy.md);
+follow it for every docstring and documentation page you touch.
 
-TODO: add example
-
-You can preview how the Documentation will look like after merging by building the documentation
+You can preview how the documentation will look after merging by building the documentation
 locally. From the main directory of your local repository call
 
-```
-julia --project -e 'using Pkg; Pkg.instantiate()'
-julia --project=docs/ -e 'using Pkg; Pkg.instantiate(); develop(PackageSpec(path=pwd()))'
-JULIA_DEBUG=Documenter julia --project=docs/ docs/make.jl
+```bash
+julia --project=docs -e 'using Pkg; Pkg.develop(Pkg.PackageSpec(path = ".")); Pkg.instantiate()'
+JULIA_DEBUG=Documenter julia --project=docs docs/make.jl
 ```
 
-and then open `docs/build/index.html` in your favorite browser. Providing the environment variable
-`JULIA_DEBUG=Documenter` will provide with more information in the documentation build process and
-thus help figuring out a potential bug.
+and then open `docs/build/index.html` in your favorite browser. Setting the environment variable
+`JULIA_DEBUG=Documenter` will provide more information on the documentation build process and
+thus help figure out a potential bug.
+
+One docs-build failure is common enough to warrant a pre-commit hook of its own.
+Documenter reads `[text](target)` as a link, and its parser accepts any
+whitespace between the bracket and the parenthesis, including a line break, so
+bracketed units followed by a parenthetical become a link with an unresolvable
+target. Since `checkdocs = :exports` leaves most docstrings unrendered, such a
+link stays latent until someone adds that symbol to a page, and the build then
+fails in an unrelated pull request. `.dev/check_markdown_link_ambiguity.py`
+catches these at commit time. Separate the bracket and the parenthesis with
+punctuation, or wrap the units in backticks; both are spelled out in the shared
+[documentation policy, §4](https://github.com/CliMA/ClimaAtmos.jl/blob/main/docs/dev-guides/code-quality/documentation_policy.md).
 
 ## Formatting
 
-One of the tests consists in checking that the code is uniformly formatted. We
-use [JuliaFormatter.jl](https://github.com/domluna/JuliaFormatter.jl) to achieve
-consistent formatting. Here's how to use it:
-
-You can install in your base environment with
-
-```sh
-julia -e 'using Pkg; Pkg.add("JuliaFormatter")'
-```
-
-alongside your other development tools.
-
-Then, you can format the package running:
-
-```julia
-using JuliaFormatter;
-format(".")
-```
-
-or just with `format(".")` if the package is already imported.
-
-The rules for formatting are defined in the `.JuliaFormatter.toml`.
-
-If you are used to formatting from the command line instead of the REPL, you can
-install `JuliaFormatter` in your base environment and call
-
-```sh
-julia -e 'using JuliaFormatter; format(".")'
-```
-
-You could also define a shell alias
-
-```sh
-alias julia_format_here="julia -e 'using JuliaFormatter; format(\".\")'"
-```
-
-!!! note
-
-    In the past, `ClimaAtmos` used to have a `.dev/climaformat.jl` script. We moved
-    away from it to reduce complexity in our repository and to align with the
-    general tools used by the Julia community. If you are still using
-    `climaformat.jl`, migrate to `JuliaFormatter` (`climaformat.jl` was just a
-    wrapper around `JuliaFormatter`).
-
-### Pre-commit hooks (recommended)
-
-To avoid ever seeing a formatter-only CI failure, set up the git pre-commit
-hooks defined in `.pre-commit-config.yaml`. They run on each `git commit`
-against your staged files and:
-
-  - run `JuliaFormatter` from a dedicated, version-pinned environment
-    (`.dev/format/`) so the result matches the version used in the
-    [Prek CI check](https://github.com/CliMA/ClimaAtmos.jl/blob/main/.github/workflows/run-prek.yml)
-    regardless of which `JuliaFormatter` version is in your base environment, and
-  - trim trailing whitespace that `JuliaFormatter` leaves behind (for example in
-    comments).
-
-The hooks are managed with [`prek`](https://prek.j178.dev), a fast drop-in
-replacement for `pre-commit`. `prek` is a Python tool; the easiest way to get it
-without touching your Julia setup is via [`uv`](https://docs.astral.sh/uv/):
-
-```sh
-# Install uv (see https://docs.astral.sh/uv/getting-started/installation/)
-curl -LsSf https://astral.sh/uv/install.sh | sh
-
-# Install prek as a standalone tool
-uv tool install prek
-```
-
-Then, from the repository root, install the git hooks once:
-
-```sh
-prek install
-```
-
-That's it — the hooks now run automatically on every commit. `julia` must be on
-your `PATH`; the first run instantiates and precompiles `.dev/format/`, which
-takes a minute, and is fast thereafter.
-
-For manual runs:
-
-  - `prek run` checks the files selected by normal hook matching.
-  - `prek run --all-files` checks the whole repository.
-
-To run a full-repo sweep (handy after a large change):
-
-```sh
-prek run --all-files
-```
-
-The original `pre-commit` works too if you already have it (`pip install pre-commit` / `uv tool install pre-commit`, then `pre-commit install`); the
-config file is shared.
-
-!!! note
-
-    When a hook reformats a staged file, the commit is aborted and the file is
-    left changed on disk — this is expected. Review the changes, `git add` them,
-    and commit again.
+One of the CI checks verifies that the code is uniformly formatted with
+[JuliaFormatter.jl](https://github.com/JuliaEditorSupport/JuliaFormatter.jl);
+the rules are defined in the root [`.JuliaFormatter.toml`](https://github.com/CliMA/ClimaAtmos.jl/blob/main/.JuliaFormatter.toml). Usage, the
+version-consistency requirement, and the recommended `prek` pre-commit hooks
+(defined in [`.pre-commit-config.yaml`](https://github.com/CliMA/ClimaAtmos.jl/blob/main/.pre-commit-config.yaml), running the formatter from the
+version-pinned `.dev/format/` environment so results match the
+[Prek CI check](https://github.com/CliMA/ClimaAtmos.jl/blob/main/.github/workflows/run-prek.yml))
+are all documented in the shared
+[code style guide, §1](https://github.com/CliMA/ClimaAtmos.jl/blob/main/docs/dev-guides/code-quality/code_style.md).
 
 ## Updating environments
 
 The repository for `ClimaAtmos` includes several checked `Manifests.toml`. This
 is to help with reproducing results.
-[PkgDevTools](https://github.com/CliMA/PkgDevTools.jl) provides a convenient
-system to quickly update all the `Manifests.toml`. Please, refer to the
-documentation for more information.
-
-!!! note
-
-    In the past, `ClimaAtmos` used to have a `.dev/up_deps.jl` script. We moved away
-    from it because `PkgDevTools` provides a much simpler and more efficient way to
-    accomplish the same result.
+[PkgDevTools](https://juliahub.com/ui/Packages/General/PkgDevTools) provides a
+convenient system to quickly update all the `Manifests.toml`: add it to your
+base environment with `Pkg.add("PkgDevTools")`, then run
+`using PkgDevTools; PkgDevTools.update_deps(".")` from the repository root.
 
 ## Credits
 
-This contributor's guide is heavily based on the excellent [Oceananigans.jl contributor's guide](https://clima.github.io/OceananigansDocumentation/stable/contributing/) which is heavily based on the excellent [MetPy contributor's guide](https://github.com/Unidata/MetPy/blob/master/CONTRIBUTING.md).
+This contributor's guide is based on the excellent [Oceananigans.jl contributor's guide](https://github.com/CliMA/Oceananigans.jl/blob/main/CONTRIBUTING.md), which is in turn based on the [MetPy contributor's guide](https://github.com/Unidata/MetPy/blob/main/CONTRIBUTING.md).

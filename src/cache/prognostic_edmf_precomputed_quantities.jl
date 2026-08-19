@@ -5,9 +5,23 @@ import NVTX
 import Thermodynamics as TD
 import ClimaCore: Spaces, Fields
 
-# Helper function for thermodynamic state from saturation adjustment.
-# Returns a NamedTuple with T, q_liq, q_ice.
-# Uses TD.ph() dispatch
+"""
+    saturation_adjustment_tuple(thermo_params, ::TD.ph, p, h, q_tot)
+
+Return `(; T, q_liq, q_ice)` from a pressure-enthalpy saturation adjustment.
+
+This wrapper keeps the SGS subdomain thermodynamics to a single
+`TD.saturation_adjustment` call per grid point, and caps the Newton iteration at
+`maxiter = 4`. The `TD.ρe` counterpart used for the grid mean lives in
+`precomputed_quantities.jl`.
+
+# Arguments
+
+  - `thermo_params`: Thermodynamics parameter set.
+  - `p`: Air pressure [Pa].
+  - `h`: Specific enthalpy [J/kg].
+  - `q_tot`: Total water specific humidity [kg/kg].
+"""
 function saturation_adjustment_tuple(thermo_params, ::TD.ph, p, h, q_tot)
     FT = eltype(thermo_params)
     sa_result = TD.saturation_adjustment(
@@ -22,9 +36,28 @@ function saturation_adjustment_tuple(thermo_params, ::TD.ph, p, h, q_tot)
 end
 
 """
-    set_prognostic_edmf_precomputed_quantities!(Y, p, ᶠuₕ³, t)
+    set_prognostic_edmf_precomputed_quantities_environment!(Y, p, ᶠuₕ³, t)
 
-Updates the edmf environment precomputed quantities stored in `p` for prognostic edmfx.
+Update the EDMFX environment precomputed quantities in `p` for `PrognosticEDMFX`.
+Returns `nothing`.
+
+Mutates in `p.precomputed`: the environment velocities and kinetic energy
+(`ᶠu₃⁰`, `ᶜu⁰`, `ᶠu³⁰`, `ᶜK⁰`) and the environment thermodynamic state (`ᶜT⁰`,
+`ᶜq_tot_nonneg⁰`, `ᶜq_liq⁰`, `ᶜq_ice⁰`); for `EquilibriumMicrophysics0M` it also
+reuses the shared `ᶜsa_result` field as a saturation-adjustment workspace.
+
+The environment values are reconstructed as the grid mean minus the updrafts
+(`ᶜspecific_env_value`, `ᶜspecific_env_mse`). For
+`NonEquilibriumMicrophysics1M`/`2M`, the condensate is taken directly from the
+prognostic tracers and `ᶜT⁰` is obtained from the enthalpy, floored at
+`T_min_sgs`; for `EquilibriumMicrophysics0M`, `ᶜT⁰` and the phase partition come
+from a pressure-enthalpy saturation adjustment. Reads `ᶜΦ` from `p.core` and
+`ᶜp` from `p.precomputed`.
+
+# Arguments
+
+  - `ᶠuₕ³`: Third contravariant component of the horizontal velocity, interpolated
+    to faces [1/s].
 """
 NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_environment!(
     Y,
@@ -89,7 +122,25 @@ end
 """
     set_prognostic_edmf_precomputed_quantities_draft!(Y, p, ᶠuₕ³, t)
 
-Updates velocity and thermodynamics quantities in each SGS draft.
+Update the velocity and thermodynamic quantities of each SGS draft (updraft) for
+`PrognosticEDMFX`. Returns `nothing`.
+
+Mutates in `p.precomputed`, for every mass-flux subdomain `j`: `ᶜuʲs`, `ᶠu³ʲs`,
+`ᶜKʲs`, `ᶠKᵥʲs`, `ᶜTʲs`, `ᶜq_tot_nonnegʲs`, `ᶜq_liqʲs`, `ᶜq_iceʲs`, and `ᶜρʲs`;
+for `EquilibriumMicrophysics0M` it also reuses the shared `ᶜsa_result` field as
+a saturation-adjustment workspace.
+
+For `NonEquilibriumMicrophysics1M`/`2M`, the draft condensate is taken from the
+prognostic subdomain tracers and `ᶜTʲ` follows from the enthalpy `mse - Φ`,
+floored at `T_min_sgs`; for `EquilibriumMicrophysics0M`, `ᶜTʲ` and the phase
+partition come from a pressure-enthalpy saturation adjustment. The draft density
+`ᶜρʲ` is diagnosed at the grid-mean pressure `ᶜp`, which is shared across all
+subdomains.
+
+# Arguments
+
+  - `ᶠuₕ³`: Third contravariant component of the horizontal velocity, interpolated
+    to faces [1/s].
 """
 NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_draft!(
     Y,
@@ -190,7 +241,27 @@ end
 """
     set_prognostic_edmf_precomputed_quantities_explicit_closures!(Y, p, t)
 
-Updates the precomputed quantities stored in `p` for edmfx explicit closures.
+Update the precomputed quantities of the `PrognosticEDMFX` explicit closures.
+Returns `nothing`.
+
+Mutates in `p.precomputed`, per mass-flux subdomain `j`: the entrainment velocity
+scale `ᶜentr_vel_scaleʲs` [m/s], the turbulent entrainment rate `ᶜturb_entrʲs`
+[1/s], the signed area-bounding entrainment/detrainment rate
+`ᶜarea_bounding_entr_detrʲs` [1/s], and the relative density excess `ᶜρ_diffʲs`
+[-]. It also writes the squared strain-rate norm `ᶜstrain_rate_norm` [1/s²], the
+surface TKE flux `ρtke_flux`, and (via `set_edmfx_surface_conditions!`) the
+per-updraft surface payload at level 1.
+
+The total entrainment rate is not stored: it is assembled at each tendency call
+site by `compute_entrainment` from `ᶜentr_vel_scaleʲs` and the then-current
+updraft velocity. The environment velocity is passed to the coefficient model as
+`w⁰ = 0`; see the comment at the call site for why.
+
+Reads `ᶜp`, `ᶠu³`, the environment state (`ᶜT⁰`, `ᶜq_tot_nonneg⁰`, `ᶜq_liq⁰`,
+`ᶜq_ice⁰`), the draft state (`ᶜuʲs`, `ᶜTʲs`, `ᶜq_*ʲs`, `ᶜρʲs`), and `ustar` from
+`p.precomputed.sfc_conditions`, so it must run after
+`set_prognostic_edmf_precomputed_quantities_draft!` and
+`..._environment!`. Uses `p.scratch.ᶠtemp_C123`.
 """
 NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_closures!(
     Y,
@@ -219,6 +290,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
         ᶜq_iceʲs,
         ᶜρʲs,
         ᶜentr_vel_scaleʲs,
+        ᶜentr_nonvel_rateʲs,
         ᶜarea_bounding_entr_detrʲs,
         ᶜturb_entrʲs,
         ᶜρ_diffʲs,
@@ -232,14 +304,17 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
     ᶜtke = @. lazy(specific(Y.c.ρtke, Y.c.ρ))
 
     for j in 1:n
-        # Compute the entrainment velocity scale and the signed area-bounding rate.
+        # Compute the entrainment velocity scale, non-velocity entrainment rate,
+        # and the signed area-bounding rate.
         # The environment velocity is passed as w⁰ = 0 to the coefficient model;
         # using the true (ᶜwʲ - ᶜw⁰) difference would introduce residual forcing
         # when ᶜwʲ ≈ 0, which can spuriously grow the area fraction and destabilize
-        # otherwise trivial updrafts. The total entrainment rate is then assembled
+        # otherwise trivial updrafts. The environment buoyancy is passed as b⁰ = 0.
+        # The total entrainment rate is then assembled
         # at every tendency call site (`edmfx_entr_detr_tendency!` and the
         # implicit ρa solve) via `compute_entrainment` using the
-        # (then-updated) updraft velocity |wʲ|.
+        # (then-updated) updraft velocity |wʲ|, together with the
+        # non-velocity-proportional rate computed just below.
         @. ᶜentr_vel_scaleʲs.:($$j) = entrainment_velocity_scale(
             thermo_params,
             turbconv_params,
@@ -269,6 +344,15 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
             ),
             FT(0),
             max(ᶜtke, 0),
+            p.atmos.edmfx_model.entr_model,
+        )
+        @. ᶜentr_nonvel_rateʲs.:($$j) = entrainment_nonvel_rate(
+            turbconv_params,
+            draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j)),
+            get_physical_w(ᶜuʲs.:($$j), ᶜlg),
+            vertical_buoyancy_acceleration(Y.c.ρ, ᶜρʲs.:($$j), ᶜgradᵥ_ᶠΦ, ᶜlg),
+            FT(0),
+            FT(0),
             p.atmos.edmfx_model.entr_model,
         )
         @. ᶜturb_entrʲs.:($$j) = turbulent_entrainment(

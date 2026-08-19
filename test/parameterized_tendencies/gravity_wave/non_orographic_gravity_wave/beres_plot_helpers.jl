@@ -4,7 +4,6 @@
 
 import ClimaAnalysis
 import ClimaAnalysis: slice
-using Statistics
 
 const DAY_S = 86400.0
 
@@ -69,9 +68,10 @@ function _load_var(
     var =
         isnothing(period) ? get(simdir; short_name, reduction = red) :
         get(simdir; short_name, reduction = red, period)
-    ntimes = haskey(var.dims, "time") ? length(var.dims["time"]) : 0
+    ntimes = ClimaAnalysis.has_time(var) ? length(ClimaAnalysis.times(var)) : 0
     trange =
-        ntimes > 0 ? "($(var.dims["time"][1])s – $(var.dims["time"][end])s)" :
+        ntimes > 0 ?
+        "($(first(ClimaAnalysis.times(var)))s – $(last(ClimaAnalysis.times(var)))s)" :
         "(no time dim)"
     println(
         "  Loaded $short_name: reduction=$red, period=$period, $ntimes snapshots $trange",
@@ -118,27 +118,32 @@ end
 Average over the last `avg_window_days` ending at `t_end_days`.
 """
 function last_snapshot(var; t_end_days = Inf, avg_window_days = 10.0)
-    haskey(var.dims, "time") || return var
-    times = var.dims["time"]
-    t_end = t_end_days == Inf ? times[end] : t_end_days * DAY_S
+    ClimaAnalysis.has_time(var) || return var
+    times = ClimaAnalysis.times(var)
+    t_end = t_end_days == Inf ? last(times) : t_end_days * DAY_S
     t_start = t_end - avg_window_days * DAY_S
     idx = findall(t -> t >= t_start && t <= t_end, times)
     if length(idx) <= 1
         return slice(var; time = t_end)
     end
-    slices = [slice(var; time = times[i]) for i in idx]
-    avg = deepcopy(slices[1])
-    avg.data .= mean([s.data for s in slices])
-    return avg
+    return ClimaAnalysis.average_time(
+        ClimaAnalysis.window(
+            var,
+            "time";
+            left = times[first(idx)],
+            right = times[last(idx)],
+        );
+        ignore_nan = false,
+    )
 end
 
 """
 Single snapshot at (or nearest to) `t_end_days`.
 """
 function single_snapshot(var; t_end_days = Inf)
-    haskey(var.dims, "time") || return var
-    times = var.dims["time"]
-    t_end = t_end_days == Inf ? times[end] : t_end_days * DAY_S
+    ClimaAnalysis.has_time(var) || return var
+    t_end =
+        t_end_days == Inf ? last(ClimaAnalysis.times(var)) : t_end_days * DAY_S
     return slice(var; time = t_end)
 end
 
@@ -146,8 +151,8 @@ end
 Snap to the nearest available time to `target_time` (seconds).
 """
 function snapshot_at_time(var, target_time)
-    haskey(var.dims, "time") || return var
-    times = var.dims["time"]
+    ClimaAnalysis.has_time(var) || return var
+    times = ClimaAnalysis.times(var)
     _, idx = findmin(abs.(times .- target_time))
     return slice(var; time = times[idx])
 end
@@ -184,7 +189,7 @@ Mode-aware vertical profile at (lon, lat).
 function profile_at(var, lon, lat, mode::PlotMode; kwargs...)
     s = get_snapshot(var, mode; kwargs...)
     col = slice(s; lon = lon, lat = lat)
-    return col.dims["z"], col.data
+    return ClimaAnalysis.altitudes(col), col.data
 end
 
 # --- Peak active timestep finder ---
@@ -207,9 +212,9 @@ function find_peak_active_time(
     candidate_times = nothing,
 )
     Q0_inst = load_var_inst(simdir, "nogw_Q0")
-    haskey(Q0_inst.dims, "time") || error("No time dimension in inst nogw_Q0")
-    Q0_times = Q0_inst.dims["time"]
-    lats = Q0_inst.dims["lat"]
+    ClimaAnalysis.has_time(Q0_inst) || error("No time dimension in inst nogw_Q0")
+    Q0_times = ClimaAnalysis.times(Q0_inst)
+    lats = ClimaAnalysis.latitudes(Q0_inst)
 
     # Determine which times to search
     if isnothing(candidate_times)
@@ -255,8 +260,8 @@ restricted to `|lat| < lat_max`.
 """
 function find_at_percentiles(field_2d, percentiles; lat_max = 30.0)
     data = field_2d.data
-    lats = field_2d.dims["lat"]
-    lons = field_2d.dims["lon"]
+    lats = ClimaAnalysis.latitudes(field_2d)
+    lons = ClimaAnalysis.longitudes(field_2d)
 
     vals = Float64[]
     coords = Tuple{Float64, Float64}[]

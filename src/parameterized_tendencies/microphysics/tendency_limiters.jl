@@ -7,26 +7,27 @@
 """
     limit(q, dt, n::Int)
 
-Compute the maximum safe tendency for depleting a quantity `q` over `n` timesteps.
+Compute the largest depletion rate of `q` that one of `n` competing sinks may apply.
 
-Used to determine the maximum rate at which a source category can be depleted
-without going negative, accounting for multiple simultaneous sinks.
+Each sink is allowed at most a fraction `1/n` of the available quantity per
+timestep, so that `n` simultaneous sinks cannot together drive `q` negative in one
+step. Negative `q` is treated as zero.
 
 # Arguments
 
-  - `q`: Available quantity (e.g., specific humidity) [kg/kg]
-  - `dt`: Model timestep [s]
-  - `n::Int`: Number of sinks splitting the available quantity
+  - `q`: Available quantity, e.g. a specific humidity [kg/kg].
+  - `dt`: Model timestep [s].
+  - `n::Int`: Number of sinks splitting the available quantity [-].
 
 # Returns
 
-`q / (dt × n)` — the maximum tendency [kg/kg/s] that can be applied.
+`max(0, q) / (dt · n)`, a non-negative rate [kg/kg/s].
 
-# Example
+# Examples
 
 ```julia
-# Rain has 3 sinks (evaporation, accretion, self-collection)
-# Each sink can at most consume 1/3 of available rain per timestep
+# Rain has three sinks (evaporation, accretion, self-collection), so each may
+# consume at most a third of the available rain per timestep.
 max_rate = limit(q_rai, dt, 3)
 ```
 """
@@ -35,30 +36,29 @@ max_rate = limit(q_rai, dt, 3)
 end
 
 """
-    limit_sink(S, q, dt, n=3)
+    limit_sink(S, q, dt, n = 3)
 
-Limit a sink tendency to prevent species depletion.
-Only applies limiting when `S < 0` (sink), sources (`S ≥ 0`) pass unchanged.
+Clip a sink tendency so it cannot deplete more than its share of `q`.
+
+Sign convention: `S < 0` is a sink and is clipped in magnitude at
+```limit``(q, dt, n)```; `S ≥ 0` is a source and passes through unchanged.
 
 # Arguments
 
-  - `S`: Raw tendency (source or sink) [kg/kg/s]
-  - `q`: Available quantity [kg/kg]
-  - `dt`: Timestep [s]
-  - `n`: Number of competing sinks (default: 3)
+  - `S`: Raw tendency, source or sink [kg/kg/s].
+  - `q`: Available quantity [kg/kg].
+  - `dt`: Model timestep [s].
+  - `n`: Number of competing sinks, default `3` [-].
 
 # Returns
 
-Limited tendency:
+`-min(-S, limit(q, dt, n))` when `S < 0`, otherwise `S` [kg/kg/s].
 
-  - If `S < 0`: `-min(-S, limit(q, dt, n))`
-  - If `S ≥ 0`: `S` (unchanged)
-
-# Example
+# Examples
 
 ```julia
-# Limit rain evaporation to available rain
-S_evap_limited = limit_sink(S_evap, q_rain, dt, 3)
+# Limit rain evaporation to the available rain.
+S_evap_limited = limit_sink(S_evap, q_rai, dt, 3)
 ```
 """
 @inline function limit_sink(S, q, dt, n = 3)
@@ -68,16 +68,21 @@ end
 """
     tendency_limiter(tendency, tend_bound_pos, tend_bound_neg)
 
-Limits a `tendency` to be within `[tend_bound_neg, tend_bound_pos]`.
+Clip `tendency` to `[-tend_bound_neg, tend_bound_pos]`.
 
-  - If `tendency > 0`: limited by `min(tendency, tend_bound_pos)`
-  - If `tendency < 0`: limited by `-min(-tendency, tend_bound_neg)`
+Both bounds are magnitudes and are floored at zero before use, so a source
+(`tendency ≥ 0`) is capped at `tend_bound_pos` and a sink is capped in magnitude at
+`tend_bound_neg`. The selection is branchless for GPU broadcast.
 
-This ensures that sources do not exceed `tend_bound_pos` and sinks do not
-exceed `tend_bound_neg` (magnitude-wise).
+# Arguments
 
-Used by `limit_1m_tendencies` and `limit_2m_tendencies` to prevent
-negative tracer concentrations.
+  - `tendency`: Raw tendency, positive for a source [kg/kg/s].
+  - `tend_bound_pos`: Largest permitted source rate [kg/kg/s].
+  - `tend_bound_neg`: Largest permitted sink magnitude [kg/kg/s].
+
+# Returns
+
+The clipped tendency, in the same units as `tendency`.
 """
 @inline function tendency_limiter(
     tendency,
@@ -100,36 +105,34 @@ negative tracer concentrations.
 end
 
 """
-    coupled_sink_limit_factor(S1, S2, q1, q2, dt, n=3)
+    coupled_sink_limit_factor(S1, S2, q1, q2, dt, n = 3)
 
-Compute a uniform scaling factor for two coupled sink tendencies.
+Compute one scaling factor for a pair of tendencies that deplete two species together.
 
-For processes where two species are simultaneously depleted (e.g., autoconversion
-depletes both cloud liquid and number), compute a single scaling factor based on
-the most restrictive constraint.
+Mass and number are depleted by the same process (autoconversion removes both cloud
+liquid mass and droplet number), so they must be scaled by a common factor to keep
+the mean drop size consistent. The factor is the more restrictive of the two
+individual limits; a component that is not a sink, or that already respects its
+limit, contributes a factor of one.
 
 # Arguments
 
-  - `S1`, `S2`: Raw sink tendencies (must be ≤ 0) [kg/kg/s or #/kg/s]
-  - `q1`, `q2`: Available quantities [kg/kg or #/kg]
-  - `dt`: Timestep [s]
-  - `n`: Number of competing sinks (default: 3)
+  - `S1`, `S2`: Raw tendencies of the two coupled species [kg/kg/s and kg⁻¹/s];
+    only components with `S < 0` are limited.
+  - `q1`, `q2`: Corresponding available quantities [kg/kg and kg⁻¹].
+  - `dt`: Model timestep [s].
+  - `n`: Number of competing sinks, default `3` [-].
 
 # Returns
 
-Scaling factor `f ∈ [0, 1]` such that:
+A factor `f ∈ (0, 1]` [-] such that `|Sᵢ · f| ≤` ```limit``(qᵢ, dt, n)``` for
+every component that is a sink.
 
-  - `|S1 * f| ≤ q1/(dt*n)` and `|S2 * f| ≤ q2/(dt*n)`
-  - `f = min(M1/|S1|, M2/|S2|)` when both are sinks
-  - `f = 1` if either tendency is not a sink
-
-# Example
+# Examples
 
 ```julia
-# Autoconversion depletes both q_liq and n_liq
-f = coupled_sink_limit_factor(
-    dq_liq_auto, dn_liq_auto, q_liq, n_liq, dt,
-)
+# Autoconversion depletes both q_liq and n_liq.
+f = coupled_sink_limit_factor(dq_liq_auto, dn_liq_auto, q_liq, n_liq, dt)
 dq_liq_auto *= f
 dn_liq_auto *= f
 ```
@@ -152,7 +155,10 @@ end
 """
     apply_0m_tendency_limit(dq_tot_dt, q_tot, dt)
 
-Apply a limiter to 0M microphysics total water sink.
+Limit the 0-moment total-water sink to the available `q_tot`.
+
+Thin wrapper over `limit_sink` with the default three competing sinks.
+Called from `microphysics_tendencies_0m`.
 """
 @inline function apply_0m_tendency_limit(dq_tot_dt, q_tot, dt)
     return limit_sink(dq_tot_dt, q_tot, dt)
@@ -169,11 +175,22 @@ end
 # ============================================================================
 
 """
-    apply_2m_tendency_limits!(ᶜmp_tendency, timestepping, ᶜq_lcl, ᶜn_lcl, ᶜq_rai, ᶜn_rai, dt)
+    apply_2m_tendency_limits!(
+        ᶜmp_tendency, timestepping, ᶜq_lcl, ᶜn_lcl, ᶜq_rai, ᶜn_rai, dt,
+    )
 
-Apply physical limiting to 2M microphysics tendencies in-place.
+Limit the cached 2-moment tendency field in place so explicit steps stay positive.
 
-No-op for implicit timestepping as the Jacobian handles stability.
+Dispatches on `timestepping`:
+
+  - `Explicit`: scales the coupled liquid pair (`dq_lcl_dt`, `dn_lcl_dt`) and the
+    coupled rain pair (`dq_rai_dt`, `dn_rai_dt`) by their respective
+    `coupled_sink_limit_factor`; the ice entries `dq_ice_dt`, `dq_rim_dt`,
+    `db_rim_dt` pass through unchanged.
+  - `Implicit`: no-op, since the Jacobian provides the stability.
+  - `nothing`: no-op.
+
+Mutates `ᶜmp_tendency`; the return value is unused.
 """
 @inline apply_2m_tendency_limits!(ᶜmp_tendency, ::Implicit, args...) = nothing
 @inline function apply_2m_tendency_limits!(
