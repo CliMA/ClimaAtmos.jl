@@ -263,13 +263,23 @@ function initial_state_fddg(m::DGModel{FT}) where {FT}
     (; ccoords, fcoords, eE1, eE2, eE3, eN1, eN2, eN3) = m.fields
     z = ccoords.z
 
-    (; T, p, uE, uN) = jw_values(m)
+    rest = m.prob.ic_source == :rest
+    # :rest suppresses the perturbation (atmosphere at rest has no JW06 jet)
+    (; T, p, uE, uN) = jw_values(m.prob, m.c, m.params, m.fields.ccoords;
+        perturb = rest ? false : m.prob.perturb)
+    if rest
+        uE = @. FT(0) * uE
+        uN = @. FT(0) * uN
+    end
+
     ᶜp_ana = p
     ᶜρ = @. ᶜp_ana / c.R_d / T
+    # Exact smooth discrete hydrostatics (generalized product recursion, same
+    # as the VI IC): keeps analytic T, adjusts p column-smoothly.
+    # Avoids the eigenvalue −1 checkerboard δρ that discrete_hydrostatic_ρ!
+    # produces over terrain and poisons the horizontal PGF there.
+    discrete_hydrostatic_p!(ᶜp_ana, ᶜρ, T, c.R_d, @. c.grav * z)
 
-    discrete_hydrostatic_ρ!(ᶜρ, ᶜp_ana, z, c.grav)
-
-    # ρe such that the diagnosed pressure is exactly the analytic p
     ᶜK = @. (uE^2 + uN^2) / 2
     ᶜρe = @. c.cv_d * ᶜp_ana / c.R_d +
              ᶜρ * (ᶜK + c.grav * z - c.cv_d * c.T_tri)

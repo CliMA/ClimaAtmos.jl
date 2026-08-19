@@ -94,8 +94,9 @@ Base.@kwdef struct BaroclinicWaveFDDG{FT <: AbstractFloat}
     sleve_s::FT = 0.5
     constants_mode::Symbol = :parity
     # IC values: :setups (ClimaAtmos Setups.shallow_atmos_barowave_values,
-    # verified formula-identical) or :formulas (the examples' own JW06
-    # expressions). Both get the discrete-hydrostatic ρ correction.
+    # verified formula-identical), :formulas (the examples' own JW06
+    # expressions), or :rest (JW06 T/p profile, zero velocity — atmosphere
+    # at rest; the right start for HS+terrain to avoid JW06 wind imbalance).
     ic_source::Symbol = :setups
     # Held–Suarez (1994) forcing via ClimaAtmos's own functions
     held_suarez::Bool = false
@@ -120,8 +121,8 @@ function validate(p::BaroclinicWaveFDDG)
                not both")
     p.interface_flux in (:rusanov, :roe, :curvilinear_roe) ||
         error("interface_flux must be :rusanov, :roe, or :curvilinear_roe")
-    p.ic_source in (:setups, :formulas) ||
-        error("ic_source must be :setups or :formulas")
+    p.ic_source in (:setups, :formulas, :rest) ||
+        error("ic_source must be :setups, :formulas, or :rest")
     p.topography in (:none, :earth, :hughes2023) ||
         error("topography must be :none, :earth, or :hughes2023")
     p.terrain_warp in (:linear, :sleve) ||
@@ -228,8 +229,8 @@ function validate(p::BaroclinicWaveDG)
                (the fluctuation form is KE-compatible with the KG set)")
     p.terrain_u3 in (:wonly, :full) ||
         error("terrain_u3 must be :wonly or :full")
-    p.ic_source in (:setups, :formulas) ||
-        error("ic_source must be :setups or :formulas")
+    p.ic_source in (:setups, :formulas, :rest) ||
+        error("ic_source must be :setups, :formulas, or :rest")
     p.topography in (:none, :earth, :hughes2023) ||
         error("topography must be :none, :earth, or :hughes2023")
     p.terrain_warp in (:linear, :sleve) ||
