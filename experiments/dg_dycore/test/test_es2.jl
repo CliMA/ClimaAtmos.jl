@@ -57,6 +57,15 @@ import ClimaCore: Geometry as _G2
     F3 = fn(n̂, (y⁻p,), (y⁺p,))
     Fc3 = central(n̂, y⁻p, y⁺p)
     @test F3.ρ < Fc3.ρ
+
+    # contact upwinding: decelerating jet (ûₙ > 0, Δuₙ < 0, Δp′ = 0)
+    # gives Dρ = ûₙ·ρ̄·Δuₙ/ĉ < 0 — standard Roe, correctly upwinds the
+    # contact mode: F.ρ > F_central (more mass rightward toward upstream state)
+    y⁻j = mk(ρ = 1.0, p = 9e4, un = 40.0, p′ = 0.0)  # faster side (-)
+    y⁺j = mk(ρ = 1.0, p = 9e4, un = 35.0, p′ = 0.0)  # slower side (+)
+    Fj = fn(n̂, (y⁻j,), (y⁺j,))
+    Fcj = central(n̂, y⁻j, y⁺j)
+    @test Fj.ρ ≥ Fcj.ρ    # Roe upwinds leftward (Dρ < 0): F.ρ ≥ F_central
 end
 
 @testset ":es2 rest-state well-balance (Agnesi, U₀ = 0)" begin
