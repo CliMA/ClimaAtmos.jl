@@ -334,6 +334,7 @@ end
 interface_flux_fn(s::Symbol) =
     s == :roe ? Operators.kennedy_gruber_roe_cartesian :
     s == :curvilinear_roe ? Operators.kennedy_gruber_roe_cartesian_curvilinear :
+    s == :curvilinear_roe_wb ? kennedy_gruber_roe_cartesian_curvilinear_wb :
     Operators.kennedy_gruber_rusanov_cartesian
 
 function DGModel(prob::DGProblem)
@@ -359,7 +360,7 @@ function DGModel(prob::DGProblem)
         ᶜp_ref = copy(p)
         ᶜρ_ref = @. p / (c.R_d * T)
         discrete_hydrostatic_p!(ᶜp_ref, ᶜρ_ref, T, c.R_d, fields.ᶜΦ)
-        (; fields..., ᶜh_ref, ᶜu_ref = uE, ᶜv_ref = uN, ᶜp_ref)
+        (; fields..., ᶜh_ref, ᶜu_ref = uE, ᶜv_ref = uN, ᶜp_ref, ᶜρ_ref)
     end
     ops = dg_operators(c)
     opmats = (;

@@ -119,8 +119,9 @@ function validate(p::BaroclinicWaveFDDG)
         p.κ₄_frac !== nothing &&
         error("set κ₄ (absolute) or κ₄_frac (fraction of the SIPG cap), \
                not both")
-    p.interface_flux in (:rusanov, :roe, :curvilinear_roe) ||
-        error("interface_flux must be :rusanov, :roe, or :curvilinear_roe")
+    p.interface_flux in (:rusanov, :roe, :curvilinear_roe, :curvilinear_roe_wb) ||
+        error("interface_flux must be :rusanov, :roe, :curvilinear_roe, \
+               or :curvilinear_roe_wb")
     p.ic_source in (:setups, :formulas, :rest) ||
         error("ic_source must be :setups, :formulas, or :rest")
     p.topography in (:none, :earth, :hughes2023) ||
