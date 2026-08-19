@@ -422,7 +422,7 @@ Write the cosine of the solar zenith angle and the TOA flux into the RRTMGP solv
 
 Called from `rrtmgp_solver_callback!` before each radiation solve, so the insolation is
 refreshed on the `dt_rad` cadence rather than every step. Mutates
-`RRTMGP.cos_zenith(p.radiation.rrtmgp_solver)` and `RRTMGP.toa_flux(...)`; the return
+`RRTMGP.cos_zenith(p.radiation.rrtmgp_solver)` and `RRTMGP.toa_sw_flux_dn(...)`; the return
 value is unused.
 
 Dispatches on `p.atmos.insolation`:
@@ -447,13 +447,13 @@ function set_insolation_variables!(Y, p, t, ::RCEMIPIIInsolation)
     FT = Spaces.undertype(axes(Y.c))
     (; rrtmgp_solver) = p.radiation
     RRTMGP.cos_zenith(rrtmgp_solver) .= cosd(FT(42.05))
-    RRTMGP.toa_flux(rrtmgp_solver) .= FT(551.58)
+    RRTMGP.toa_sw_flux_dn(rrtmgp_solver) .= FT(551.58)
 end
 
 function set_insolation_variables!(Y, p, t, ::GCMDrivenInsolation)
     (; rrtmgp_solver) = p.radiation
     RRTMGP.cos_zenith(rrtmgp_solver) .= Fields.field2array(p.external_forcing.cos_zenith)
-    RRTMGP.toa_flux(rrtmgp_solver) .=
+    RRTMGP.toa_sw_flux_dn(rrtmgp_solver) .=
         Fields.field2array(p.external_forcing.toa_flux)
 end
 
@@ -469,7 +469,7 @@ function set_insolation_variables!(Y, p, t, ::ExternalTVInsolation)
 
     # set insolation variables from the values within the fields
     RRTMGP.cos_zenith(rrtmgp_solver) .= Fields.field2array(coszen)
-    RRTMGP.toa_flux(rrtmgp_solver) .= Fields.field2array(rsdt ./ coszen)
+    RRTMGP.toa_sw_flux_dn(rrtmgp_solver) .= Fields.field2array(rsdt ./ coszen)
 end
 
 function set_insolation_variables!(Y, p, t, ::IdealizedInsolation)
@@ -483,7 +483,7 @@ function set_insolation_variables!(Y, p, t, ::IdealizedInsolation)
     (; rrtmgp_solver) = p.radiation
     # Approximate annual mean insolation without diurnal cycle
     # Reference: O'Gorman and Schneider (2008), J. Climate, 21, 3815-3832
-    RRTMGP.toa_flux(rrtmgp_solver) .= 680
+    RRTMGP.toa_sw_flux_dn(rrtmgp_solver) .= 680
     cos_zenith = RRTMGP.cos_zenith(rrtmgp_solver)
     @. cos_zenith =
         (1 + FT(0.3) * (1 - 3 * sind(latitude)^2)) * FT(0.5)
@@ -493,7 +493,7 @@ function set_insolation_variables!(Y, p, t, ::Larcform1Insolation)
     FT = Spaces.undertype(axes(Y.c))
     (; rrtmgp_solver) = p.radiation
     RRTMGP.cos_zenith(rrtmgp_solver) .= eps(FT) # polar night; keep μ>0 for RRTMGP
-    RRTMGP.toa_flux(rrtmgp_solver) .= FT(0)
+    RRTMGP.toa_sw_flux_dn(rrtmgp_solver) .= FT(0)
 end
 
 function set_insolation_variables!(Y, p, t, tvi::TimeVaryingInsolation)
@@ -512,7 +512,7 @@ function set_insolation_variables!(Y, p, t, tvi::TimeVaryingInsolation)
     cos_zenith =
         Fields.array2field(RRTMGP.cos_zenith(rrtmgp_solver), axes(bottom_coords))
     toa_flux = Fields.array2field(
-        RRTMGP.toa_flux(rrtmgp_solver),
+        RRTMGP.toa_sw_flux_dn(rrtmgp_solver),
         axes(bottom_coords),
     )
 

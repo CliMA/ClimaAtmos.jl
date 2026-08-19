@@ -233,10 +233,10 @@ function compare_rrtmgp_solver(p1, p2; name)
             Function[
                 RRTMGP.clear_lw_flux_up,
                 RRTMGP.clear_lw_flux_dn,
-                RRTMGP.clear_lw_flux,
+                RRTMGP.clear_lw_flux_net,
                 RRTMGP.clear_sw_flux_up,
                 RRTMGP.clear_sw_flux_dn,
-                RRTMGP.clear_sw_flux,
+                RRTMGP.clear_sw_flux_net,
                 RRTMGP.clear_sw_direct_flux_dn,
                 RRTMGP.clear_net_flux,
             ],
