@@ -90,11 +90,11 @@ function compute_tendency_fddg!(
             ),
             ρ, ρe, e, p, uvw, u1, u2, u3, Ec1, Ec2, Ec3, λ, ᶜΦ,
         )
-        Operators.add_flux_differencing_divergence!(
-            Operators.kennedy_gruber_cartesian_flux_curvilinear,
-            dy_mw,
-            y,
-        )
+        volume_flux_curv =
+            m.prob.wb_gravity ?
+            Operators.kennedy_gruber_gravity_cartesian_flux_curvilinear :
+            Operators.kennedy_gruber_cartesian_flux_curvilinear
+        Operators.add_flux_differencing_divergence!(volume_flux_curv, dy_mw, y)
         Operators.add_numerical_flux_internal!(m.interface_flux_fn, dy_mw, y)
     else
         # wb_gravity: KG plus the well-balanced two-point geopotential
