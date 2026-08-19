@@ -29,8 +29,10 @@ Keywords (defaults in parentheses):
     (fraction of the resolution/Δt-aware SIPG cap Δh³/((2npoly+1)²Δt),
     the CA-style ν₄ ∝ h³ scaling) — absolute values silently go unstable
     when helem or dt change.
-  - `interface_flux` (`:rusanov`): `:rusanov` or `:roe` (wave-selective,
-    Harten-floored — the pure-KEP interface)
+  - `interface_flux` (`:rusanov`): `:rusanov`, `:roe` (wave-selective,
+    Harten-floored — the pure-KEP interface), or `:curvilinear_roe`
+    (full UVW metric — retains terrain cross-terms ``Ja^i_W`` in both
+    the volume flux and interface normal; requires topography)
   - `wb_gravity` (`false`): well-balanced two-point geopotential
     fluctuation in the horizontal volume kernel (Waruszewski et al. 2022,
     Eq. 76) — supplies the along-surface ``ρ∇Φ`` term the Cartesian core
@@ -46,8 +48,8 @@ Keywords (defaults in parentheses):
   - `topography` (`:none`): `:none`, `:earth` (ETOPO2022 via
     SpaceVaryingInput, smoothed, LinearAdaption warp), or `:hughes2023`
     (analytic double mountain). CAUTION: for THIS (Cartesian flux-form)
-    core, terrain is geometry plumbing only — the metric cross-terms are
-    absent, so valid for gentle smoothed slopes only.
+    core, the metric cross-terms are absent with `:rusanov`/`:roe` (flat-
+    metric volume and interface); use `:curvilinear_roe` to include them.
   - `topography_damping_factor` (5.0): damping factor for the `:earth`
     pre-smoothing diffusion (total smoothing ∝ log(factor)·Δh²)
   - `terrain_warp` (`:linear`): vertical coordinate adaption — `:linear`
@@ -116,8 +118,8 @@ function validate(p::BaroclinicWaveFDDG)
         p.κ₄_frac !== nothing &&
         error("set κ₄ (absolute) or κ₄_frac (fraction of the SIPG cap), \
                not both")
-    p.interface_flux in (:rusanov, :roe) ||
-        error("interface_flux must be :rusanov or :roe")
+    p.interface_flux in (:rusanov, :roe, :curvilinear_roe) ||
+        error("interface_flux must be :rusanov, :roe, or :curvilinear_roe")
     p.ic_source in (:setups, :formulas) ||
         error("ic_source must be :setups or :formulas")
     p.topography in (:none, :earth, :hughes2023) ||

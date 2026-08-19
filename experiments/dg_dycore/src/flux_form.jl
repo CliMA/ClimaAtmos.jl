@@ -69,28 +69,53 @@ function compute_tendency_fddg!(
     λ = @. sqrt(uE^2 + uN^2) + sqrt(c.γ * p / ρ)
 
     # --- Horizontal: FDDG volume + KG interfaces, full system ---
-    y = map(
-        (ρi, ρei, ei, pi, uvi, u1i, u2i, u3i, E1i, E2i, E3i, λi, Φi) -> (;
-            ρ = ρi, ρe = ρei, e = ei, p = pi, uv = uvi,
-            u1 = u1i, u2 = u2i, u3 = u3i,
-            E1 = E1i, E2 = E2i, E3 = E3i, λ = λi, Φ = Φi,
-        ),
-        ρ, ρe, e, p, uv, u1, u2, u3, E1, E2, E3, λ, ᶜΦ,
-    )
     dy_mw = map(
         _ -> (ρ = FT(0), ρe = FT(0), ρu1 = FT(0), ρu2 = FT(0), ρu3 = FT(0)),
         ρ,
     )
-    # wb_gravity: KG plus the well-balanced two-point geopotential
-    # fluctuation (Waruszewski et al. 2022 Eq. 76) — the along-surface
-    # ρ∇Φ term the Cartesian core otherwise omits over terrain. Identical
-    # on flat grids ([[Φ]] ≡ 0 along levels); interfaces unchanged
-    # (Φ single-valued at faces).
-    volume_flux =
-        m.prob.wb_gravity ? Operators.kennedy_gruber_gravity_cartesian_flux :
-        Operators.kennedy_gruber_cartesian_flux
-    Operators.add_flux_differencing_divergence!(volume_flux, dy_mw, y)
-    Operators.add_numerical_flux_internal!(m.interface_flux_fn, dy_mw, y)
+    if m.prob.interface_flux == :curvilinear_roe
+        # Curvilinear metric path: full UVW metric vectors in both the volume
+        # flux and the interface normal.  `uvw = UVWVector(uE, uN, w_c)` gives
+        # the correct normal velocity through terrain-tilted faces; `Ec1/Ec2/Ec3
+        # = UVWVector(eE_c, eN_c, eR_c)` supply the pressure flux projection.
+        uvw = @. Geometry.UVWVector(uE, uN, w_c)
+        Ec1 = @. Geometry.UVWVector(eE1, eN1, eR1)
+        Ec2 = @. Geometry.UVWVector(eE2, eN2, eR2)
+        Ec3 = @. Geometry.UVWVector(eE3, eN3, eR3)
+        y = map(
+            (ρi, ρei, ei, pi, uvwi, u1i, u2i, u3i, Ec1i, Ec2i, Ec3i, λi, Φi) -> (;
+                ρ = ρi, ρe = ρei, e = ei, p = pi, uvw = uvwi,
+                u1 = u1i, u2 = u2i, u3 = u3i,
+                Ec1 = Ec1i, Ec2 = Ec2i, Ec3 = Ec3i, λ = λi, Φ = Φi,
+            ),
+            ρ, ρe, e, p, uvw, u1, u2, u3, Ec1, Ec2, Ec3, λ, ᶜΦ,
+        )
+        Operators.add_flux_differencing_divergence!(
+            Operators.kennedy_gruber_cartesian_flux_curvilinear,
+            dy_mw,
+            y,
+        )
+        Operators.add_numerical_flux_internal!(m.interface_flux_fn, dy_mw, y)
+    else
+        # wb_gravity: KG plus the well-balanced two-point geopotential
+        # fluctuation (Waruszewski et al. 2022 Eq. 76) — the along-surface
+        # ρ∇Φ term the Cartesian core otherwise omits over terrain. Identical
+        # on flat grids ([[Φ]] ≡ 0 along levels); interfaces unchanged
+        # (Φ single-valued at faces).
+        y = map(
+            (ρi, ρei, ei, pi, uvi, u1i, u2i, u3i, E1i, E2i, E3i, λi, Φi) -> (;
+                ρ = ρi, ρe = ρei, e = ei, p = pi, uv = uvi,
+                u1 = u1i, u2 = u2i, u3 = u3i,
+                E1 = E1i, E2 = E2i, E3 = E3i, λ = λi, Φ = Φi,
+            ),
+            ρ, ρe, e, p, uv, u1, u2, u3, E1, E2, E3, λ, ᶜΦ,
+        )
+        volume_flux =
+            m.prob.wb_gravity ? Operators.kennedy_gruber_gravity_cartesian_flux :
+            Operators.kennedy_gruber_cartesian_flux
+        Operators.add_flux_differencing_divergence!(volume_flux, dy_mw, y)
+        Operators.add_numerical_flux_internal!(m.interface_flux_fn, dy_mw, y)
+    end
     @. dYc.ρ = dy_mw.ρ / lgeom_c.WJ
     @. dYc.ρe = dy_mw.ρe / lgeom_c.WJ
     @. dYc.ρu1 = dy_mw.ρu1 / lgeom_c.WJ
@@ -160,8 +185,8 @@ function compute_tendency_fddg!(
     ρw_sc = @. ρw_w.components.data.:1
     uvf = @. If(uv)
     λf =
-        m.prob.interface_flux == :roe ? (@. If(sqrt(uE^2 + uN^2))) :
-        (@. If(λ))
+        m.prob.interface_flux in (:roe, :curvilinear_roe) ?
+        (@. If(sqrt(uE^2 + uN^2))) : (@. If(λ))
     y_f = map((h, uvi, λi) -> (; h = h, uv = uvi, λ = λi), ρw_sc, uvf, λf)
     dρw_mw = @. hwdiv(uvf * ρw_sc) * (-(lgeom_f.WJ))
     Operators.add_numerical_flux_internal!(

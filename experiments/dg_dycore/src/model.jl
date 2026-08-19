@@ -333,6 +333,7 @@ end
 
 interface_flux_fn(s::Symbol) =
     s == :roe ? Operators.kennedy_gruber_roe_cartesian :
+    s == :curvilinear_roe ? Operators.kennedy_gruber_roe_cartesian_curvilinear :
     Operators.kennedy_gruber_rusanov_cartesian
 
 function DGModel(prob::DGProblem)
