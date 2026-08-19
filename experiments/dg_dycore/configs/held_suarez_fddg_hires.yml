@@ -1,6 +1,9 @@
 core: fddg
-interface_flux: roe   # kennedy_gruber_roe_cartesian: KG volume + Roe interface
-held_suarez: true     # Held-Suarez (1994) forcing, flat sphere (no topography)
+interface_flux: curvilinear_roe   # kennedy_gruber_roe_cartesian: KG volume + Roe interface
+held_suarez: false # Held-Suarez (1994) forcing, flat sphere (no topography)
+topography: earth
+topography_damping_factor: 5.0
+terrain_warp: sleve
 
 # --- no hyperviscosity: test whether conservation-form ES flux suffices ---
 kappa4: 0.0
@@ -9,11 +12,11 @@ kappa4: 0.0
 helem: 16
 npoly: 4
 zelem: 20
-zmax: 30000.0
+zmax: 45000.0
 zstretch: [300.0, 3000.0]
 
 # --- w-only Rayleigh sponge ---
-sponge_depth: 15000.0
+sponge_depth: 30000.0
 sponge_tau: 20.0
 sponge_uh: false
 
@@ -21,9 +24,9 @@ stepper: hevi
 dt: 30.0
 newton_max_iters: 2
 t_end: 864000.0       # 10 days
-perturb: true
+perturb: false
 constants_mode: clima_params
-ic_source: setups
+ic_source: rest
 output_dir: output/held_suarez_fddg_hires
 diag_period: 86400.0
 ndiag: 120            # hourly monitor (120 × 30 s = 3600 s)

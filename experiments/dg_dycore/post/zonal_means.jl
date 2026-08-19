@@ -27,7 +27,8 @@ function zonal_mean_panels(output_dir; spinup_days = nothing)
         zm = ClimaAnalysis.average_time(ClimaAnalysis.average_lon(var))
         # remaining dims: (lat, z)
         lats = zm.dims["lat"]
-        zs = zm.dims["z_reference"] ./ 1e3
+        zs = zm.dims["z"] ./ 1e3
+        #zs = zm.dims["z_reference"] ./ 1e3
         fig = CairoMakie.Figure()
         ax = CairoMakie.Axis(
             fig[1, 1];

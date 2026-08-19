@@ -1,8 +1,4 @@
-# Baroclinic wave (JW06) over smoothed Earth topography (ETOPO2022 ->
-# SpaceVaryingInput -> diffusion smoothing -> LinearAdaption warp).
-# CAUTION: for the FDDG (Cartesian) core terrain is geometry plumbing only
-# (metric cross-terms absent) — gentle smoothed slopes only; see README.
-helem: 8
+helem: 16
 npoly: 4
 zelem: 20
 zmax: 30000.0
