@@ -824,6 +824,78 @@ using ClimaAtmos
                     @test isfinite(result_direct.e_tot_hlpr)
                 end
 
+                @testset "0M: flux-weighted energy helper" begin
+                    # The energy sink reconstructed downstream as
+                    # dq_tot_dt · e_tot_hlpr must equal the SGS average of
+                    # the per-point product E[dq·e].
+                    quad = ClimaAtmos.SGSQuadrature(FT; quadrature_order = 3)
+                    mp_0m = CMP.Microphysics0MParams(toml_dict)
+                    thp = TD.Parameters.ThermodynamicsParameters(toml_dict)
+
+                    ρ = FT(1.1)
+                    Φ = FT(5e4)
+                    dt = FT(1.0)
+                    corr = FT(0.6)
+
+                    # Mixed-phase, saturated mean with substantial variances:
+                    # e_hlpr varies strongly across points, so the covariance
+                    # term is large.
+                    T_mean = FT(263.0)
+                    q_tot_mean =
+                        TD.q_vap_saturation(thp, T_mean, ρ) + FT(5e-4)
+                    T′T′ = FT(2.0)
+                    q′q′ = FT(5e-7)
+
+                    result = ClimaAtmos.microphysics_tendencies_0m(
+                        quad, mp_0m, thp, ρ, T_mean, q_tot_mean,
+                        T′T′, q′q′, corr, Φ, dt,
+                    )
+                    # Brute-force reference from the raw evaluator averages
+                    # (dt = 1 with q_tot ≫ |dq| keeps the limiter inactive,
+                    # so the wrapper's dq matches the raw average).
+                    ev = ClimaAtmos.Microphysics0MEvaluator(
+                        mp_0m, thp, ρ, T_mean, Φ,
+                    )
+                    raw = ClimaAtmos.integrate_over_sgs(
+                        ev, quad, q_tot_mean, T_mean, q′q′, T′T′, corr,
+                    )
+                    @test raw.dq_tot_dt < FT(0)  # regime has precipitation
+                    @test result.dq_tot_dt ≈ raw.dq_tot_dt rtol = sqrt(eps(FT))
+                    @test result.dq_tot_dt * result.e_tot_hlpr ≈ raw.dq_e rtol =
+                        sqrt(eps(FT))
+                    # The flux-weighted helper is a dq-weighted mean of
+                    # per-point helper values, so it stays a physical energy.
+                    @test isfinite(result.e_tot_hlpr)
+
+                    # Zero variance: single effective point, so the helper
+                    # reduces to the mean-state saturation-adjusted helper.
+                    result0 = ClimaAtmos.microphysics_tendencies_0m(
+                        quad, mp_0m, thp, ρ, T_mean, q_tot_mean,
+                        FT(0), FT(0), FT(0), Φ, dt,
+                    )
+                    λ_mean = TD.liquid_fraction_ramp(thp, T_mean)
+                    sa = ClimaAtmos.SaturationAdjustmentEvaluator(
+                        thp, ρ, λ_mean,
+                    )(
+                        T_mean, q_tot_mean,
+                    )
+                    e_hlpr_mean =
+                        ClimaAtmos.e_tot_0M_precipitation_sources_helper(
+                            thp, T_mean, sa.q_liq, sa.q_ice, Φ,
+                        )
+                    @test result0.e_tot_hlpr ≈ e_hlpr_mean rtol = sqrt(eps(FT))
+
+                    # Subsaturated mean with zero variance: no precipitation
+                    # anywhere; the fallback helper must still be finite.
+                    q_dry = TD.q_vap_saturation(thp, T_mean, ρ) - FT(5e-3)
+                    result_dry = ClimaAtmos.microphysics_tendencies_0m(
+                        quad, mp_0m, thp, ρ, T_mean, max(q_dry, FT(0)),
+                        FT(0), FT(0), FT(0), Φ, dt,
+                    )
+                    @test result_dry.dq_tot_dt == FT(0)
+                    @test isfinite(result_dry.e_tot_hlpr)
+                end
+
                 @testset "1M: sign consistency" begin
                     quad = ClimaAtmos.SGSQuadrature(FT)
                     mp_1m = CMP.Microphysics1MParams(toml_dict;

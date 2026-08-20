@@ -91,9 +91,10 @@ Diagnoses the local condensate by saturation adjustment, then calls
 
 # Returns
 
-NamedTuple with `dq_tot_dt` [kg/kg/s] and `e_tot_hlpr` [J/kg]. Both are returned
-from a single call so that `integrate_over_sgs` SGS-averages the energy helper
-consistently with the water sink that carries it.
+NamedTuple with `dq_tot_dt` [kg/kg/s] and the energy-flux product
+`dq_e = dq_tot_dt · e_tot_hlpr` [W/kg]. The product is formed per point so
+that its SGS average is the true energy sink `E[dq·e]` (averaging `dq` and
+`e` separately and multiplying the means would drop their covariance).
 """
 @inline function (eval::Microphysics0MEvaluator)(T_hat, q_hat)
     # Diagnose condensate via saturation adjustment
@@ -109,12 +110,12 @@ consistently with the water sink that carries it.
         BMT.Microphysics0Moment(), eval.cm_params, eval.sat_eval.thermo_params,
         T_hat, sa.q_liq, sa.q_ice, q_vap_sat,
     )
-    # Compute energy helper at this quadrature point using the
-    # locally-diagnosed condensate, so both fields are SGS-averaged.
+    # Energy helper at this quadrature point using the locally-diagnosed
+    # condensate; returned as the product with dq_tot_dt (see docstring).
     e_tot_hlpr = e_tot_0M_precipitation_sources_helper(
         eval.sat_eval.thermo_params, T_hat, sa.q_liq, sa.q_ice, eval.Φ,
     )
-    return (; dq_tot_dt, e_tot_hlpr)
+    return (; dq_tot_dt, dq_e = dq_tot_dt * e_tot_hlpr)
 end
 
 """
@@ -150,20 +151,36 @@ via `apply_0m_tendency_limit`.
 
 # Returns
 
-NamedTuple with `dq_tot_dt` [kg/kg/s] and `e_tot_hlpr` [J/kg].
+NamedTuple with `dq_tot_dt` [kg/kg/s] and `e_tot_hlpr` [J/kg]. In the
+quadrature form, `e_tot_hlpr` is the flux-weighted helper
+`E[dq·e] / E[dq]`, so downstream products `dq_tot_dt · e_tot_hlpr`
+reconstruct the true SGS-averaged energy sink `E[dq·e]` — including after
+the limiter, which scales mass and energy by the same factor. The
+flux-weighted helper is a `dq`-weighted average of the per-point helper
+values (all `dq` share one sign), so it lies within their range.
 """
 @inline function microphysics_tendencies_0m(
     SG_quad, cmp, thp, ρ, T, q_tot_nonneg, T′T′, q′q′, corr_Tq, Φ, dt,
 )
+    FT = typeof(ρ)
     # Create GPU-safe functor (Φ is constant within a grid cell)
     # The evaluator does saturation adjustment, computes saturation vapor pressure
-    # and computes the total water sink and energy helper from 0M microphysics
+    # and computes the total water sink and energy-flux product from 0M microphysics
     evaluator = Microphysics0MEvaluator(cmp, thp, ρ, T, Φ)
-    # Integrate over quadrature points; both dq_tot_dt and e_tot_hlpr
-    # are averaged over the SGS distribution.
-    (; dq_tot_dt, e_tot_hlpr) = integrate_over_sgs(
+    # Integrate over quadrature points; dq_tot_dt and the product dq·e are
+    # averaged over the SGS distribution.
+    (; dq_tot_dt, dq_e) = integrate_over_sgs(
         evaluator, SG_quad, q_tot_nonneg, T, q′q′, T′T′, corr_Tq,
     )
+    # Flux-weighted energy helper: E[dq·e] / E[dq]. The ratio is stable for
+    # any strictly negative mean sink because numerator and denominator share
+    # the dq scale. Where no quadrature point precipitates (E[dq] = 0), fall
+    # back to the mean-state helper.
+    sa = evaluator.sat_eval(T, q_tot_nonneg)
+    e_hlpr_mean = e_tot_0M_precipitation_sources_helper(
+        thp, T, sa.q_liq, sa.q_ice, Φ,
+    )
+    e_tot_hlpr = ifelse(dq_tot_dt < zero(FT), dq_e / dq_tot_dt, e_hlpr_mean)
     # Apply limiter
     dq_tot_dt = apply_0m_tendency_limit(dq_tot_dt, q_tot_nonneg, dt)
 

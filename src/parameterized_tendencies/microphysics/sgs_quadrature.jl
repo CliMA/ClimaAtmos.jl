@@ -713,7 +713,7 @@ Build the [`AbstractPhysicalPointTransform`](@ref) for `quad` from the mean
 state and (co)variances, converting variances to standard deviations and
 clamping the correlation on the way (see `sgs_stddevs_and_correlation`).
 Factored out of [`integrate_over_sgs`](@ref) so callers that need the
-individual quadrature-point values (see [`quadrature_point_values`](@ref))
+individual quadrature-point values (see `quadrature_point_values`)
 sample from exactly the same transform.
 """
 @inline function build_physical_transform(quad, μ_q, μ_T, q′q′, T′T′, corr_Tq)
@@ -739,7 +739,7 @@ end
 
 Evaluate `f(T_hat, q_hat)` at each of the `N²` quadrature points and return
 the values as an `SVector{N²}`, in the same point order as
-[`quadrature_prob_weights`](@ref). Unlike [`sum_over_quadrature_points`](@ref),
+`quadrature_prob_weights`. Unlike `sum_over_quadrature_points`,
 which only accumulates the weighted sum, this materializes the individual
 point values (in registers — `N` is a compile-time constant), for closures
 that need the sampled distribution itself, such as the discrete
@@ -761,7 +761,7 @@ end
     quadrature_prob_weights(quad)
 
 Return the `N²` probability weights of the two-dimensional quadrature rule as
-an `SVector{N²}` in the same point order as [`quadrature_point_values`](@ref):
+an `SVector{N²}` in the same point order as `quadrature_point_values`:
 the tensor products `wᵢ·wⱼ/π`, which sum to 1 for the Gauss-Hermite rule.
 """
 @inline function quadrature_prob_weights(quad::SGSQuadrature{N}) where {N}

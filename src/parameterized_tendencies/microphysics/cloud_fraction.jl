@@ -409,7 +409,7 @@ end
 # kinked integrand max(0, ·) imperfectly (and samples the q ≥ 0 clamp).
 # The analytic inverse of C = z·Φ(z) + φ(z) therefore only *seeds*
 # `λ_lagrange`; the multiplier is then fitted to the discrete constraint
-# Σᵢ wᵢ·max(0, λ + α·S′ᵢ) = q_c  over the same sampled points the 
+# Σᵢ wᵢ·max(0, λ + α·S′ᵢ) = q_c  over the same sampled points the
 # microphysics evaluator integrates (see `_fit_discrete_lagrange`),
 # so mass conservation holds exactly under the quadrature measure.
 #
@@ -422,8 +422,8 @@ end
 # which keeps CF well-behaved in the singular limit (q_c, σ_S²) → 0.  CF is
 # always computed by solving the truncated-Gaussian closure with `σ_aug`,
 # i.e. `C_aug = q_c / σ_aug`, `z_aug = _compute_z(C_aug)`, `CF = Φ(z_aug)`;
-# it is a probability under the continuous Gaussian model. `λ_lagrange` is 
-# *not* used to recover CF (the natural shortcut `Φ(λ/σ_aug)` would be 
+# it is a probability under the continuous Gaussian model. `λ_lagrange` is
+# *not* used to recover CF (the natural shortcut `Φ(λ/σ_aug)` would be
 # inconsistent because `λ` is fitted with the equilibrium `σ_S_eff`, not `σ_aug`).
 #
 # Inverting C = z·Φ(z)+φ(z) for z uses Newton iteration on
