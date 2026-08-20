@@ -360,7 +360,25 @@ function DGModel(prob::DGProblem)
         ᶜp_ref = copy(p)
         ᶜρ_ref = @. p / (c.R_d * T)
         discrete_hydrostatic_p!(ᶜp_ref, ᶜρ_ref, T, c.R_d, fields.ᶜΦ)
-        (; fields..., ᶜh_ref, ᶜu_ref = uE, ᶜv_ref = uN, ᶜp_ref, ᶜρ_ref)
+        # Well-balanced metric-defect correction (calibrated post-build in
+        # calibrate_wb_reference!): δ_c = tangential rest-tendency / p_ref, the
+        # pressure-scaled horizontal-kernel GCL defect the discrete metric
+        # identity fails to cancel over terrain. Zero until calibrated (and on
+        # flat grids / the VI core, which never read them).
+        ᶜwb_δ1 = zero(ᶜp_ref)
+        ᶜwb_δ2 = zero(ᶜp_ref)
+        ᶜwb_δ3 = zero(ᶜp_ref)
+        (;
+            fields...,
+            ᶜh_ref,
+            ᶜu_ref = uE,
+            ᶜv_ref = uN,
+            ᶜp_ref,
+            ᶜρ_ref,
+            ᶜwb_δ1,
+            ᶜwb_δ2,
+            ᶜwb_δ3,
+        )
     end
     ops = dg_operators(c)
     opmats = (;
@@ -413,7 +431,7 @@ function DGModel(prob::DGProblem)
     # surfaces device/topology errors at init instead of in the first step.
     Operators.dg_connectivity(spaces.horzspace)
 
-    return DGModel(
+    m = DGModel(
         prob,
         c,
         params,
@@ -428,4 +446,49 @@ function DGModel(prob::DGProblem)
         κ₄,
         κ₄_cap,
     )
+    # Calibrate the well-balanced metric-defect correction on the hydrostatic
+    # rest state (FDDG over terrain only; flat grids have no metric defect).
+    prob isa BaroclinicWaveFDDG &&
+        prob.topography != :none &&
+        calibrate_wb_reference!(m)
+    return m
+end
+
+"""
+    calibrate_wb_reference!(m)
+
+Fill `m.fields.ᶜwb_δ{1,2,3}` with the pressure-scaled horizontal-kernel GCL
+metric defect, measured on the hydrostatic rest state (ρ=ρ_ref, p=p_ref, u=0).
+At rest the only nonzero momentum tendency is the horizontal pressure-flux
+metric defect `p_ref·δ_c` (Coriolis/advection/vertical transport all vanish for
+u=0; Held–Suarez momentum drag ∝ u = 0), so `δ_c = tangential(dρu_c)/p_ref` is a
+pure, state-independent metric quantity. Subtracting `p·δ_c` in the tendency
+(flux_form.jl) then makes rest an exact discrete steady state and removes the
+pressure-scaled spurious terrain force off-rest. Runs with `ᶜwb_δ ≡ 0`, so the
+measured tendency is the raw defect. See project memory: the literal
+`−∂_ξ3(Ja³)` term is spatially misaligned (discrete GCL fails), hence this
+reference-subtraction closure.
+"""
+function calibrate_wb_reference!(m::DGModel{FT}) where {FT}
+    c = m.c
+    ρ = m.fields.ᶜρ_ref
+    p = m.fields.ᶜp_ref
+    ᶜΦ = m.fields.ᶜΦ
+    (; eR1, eR2, eR3) = m.fields
+    ρe = @. c.cv_d * p / c.R_d + ρ * (ᶜΦ - c.cv_d * c.T_tri)
+    Yc = map(
+        (ρi, ρei) ->
+            (; ρ = ρi, ρe = ρei, ρu1 = FT(0), ρu2 = FT(0), ρu3 = FT(0)),
+        ρ,
+        ρe,
+    )
+    Yf = map(_ -> (; ρw = C3(FT(0))), m.fields.fcoords)
+    Y_ref = Fields.FieldVector(c = Yc, f = Yf)
+    dY_ref = similar(Y_ref)
+    rhs_fddg!(dY_ref, Y_ref, m, FT(0))
+    dr = @. dY_ref.c.ρu1 * eR1 + dY_ref.c.ρu2 * eR2 + dY_ref.c.ρu3 * eR3
+    @. m.fields.ᶜwb_δ1 = (dY_ref.c.ρu1 - dr * eR1) / p
+    @. m.fields.ᶜwb_δ2 = (dY_ref.c.ρu2 - dr * eR2) / p
+    @. m.fields.ᶜwb_δ3 = (dY_ref.c.ρu3 - dr * eR3) / p
+    return m
 end

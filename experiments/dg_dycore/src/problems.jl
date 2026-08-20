@@ -30,9 +30,14 @@ Keywords (defaults in parentheses):
     the CA-style ν₄ ∝ h³ scaling) — absolute values silently go unstable
     when helem or dt change.
   - `interface_flux` (`:rusanov`): `:rusanov`, `:roe` (wave-selective,
-    Harten-floored — the pure-KEP interface), or `:curvilinear_roe`
+    Harten-floored — the pure-KEP interface), `:curvilinear_roe`
     (full UVW metric — retains terrain cross-terms ``Ja^i_W`` in both
-    the volume flux and interface normal; requires topography)
+    the volume flux and interface normal; requires topography), or
+    `:curvilinear_roe_wb` (`:curvilinear_roe` with hydrostatic-DEVIATION
+    Roe dissipation — the acoustic/contact amplitudes use
+    ``[[p − p_ref]]``/``[[ρ − ρ_ref]]`` so the O(1) hydrostatic jumps on
+    terrain-following faces are not damped from the rest state; see
+    `kennedy_gruber_roe_cartesian_curvilinear_wb` in flux_form.jl)
   - `wb_gravity` (`false`): well-balanced two-point geopotential
     fluctuation in the horizontal volume kernel (Waruszewski et al. 2022,
     Eq. 76) — supplies the along-surface ``ρ∇Φ`` term the Cartesian core
@@ -128,11 +133,6 @@ function validate(p::BaroclinicWaveFDDG)
         error("topography must be :none, :earth, or :hughes2023")
     p.terrain_warp in (:linear, :sleve) ||
         error("terrain_warp must be :linear or :sleve")
-    # The tendency cutoff filter is a projection applied after the KEP
-    # fluxes; the KE pairing is bilinear with the state outside the
-    # projection, so filtering voids the KEP telescoping this scheme's
-    # stability rests on (measured destabilization). It is therefore not
-    # even exposed as an option here.
     return p
 end
 
