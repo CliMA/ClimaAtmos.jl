@@ -15,7 +15,7 @@ adding a new format as a small dataset module.
 
 The cleanest runscript drives the case through a config dictionary. It merges
 over the defaults and wires the setup's forcing, insolation, and surface models
-into the `AtmosModel` for you:
+into the [`AtmosModel`](@ref ClimaAtmos.AtmosModel) for you:
 
 ```julia
 import ClimaAtmos as CA
@@ -38,9 +38,9 @@ CA.solve_atmos!(simulation)
 The forcing is a tuple of
 [`AbstractForcingTerm`](@ref ClimaAtmos.AbstractForcingTerm)s (`HorizontalAdvection()`, `VerticalFluctuation()`,
 `Nudging(variables...; timescale, mask)`, `Subsidence()`) passed to the setup's
-`forcing` slot. Note that the `AtmosSimulation(; model, setup)` constructor uses
+`forcing` slot. The `AtmosSimulation(; model, setup)` constructor uses
 `setup` only for the initial state, so the setup's forcing / insolation / surface
-models must be threaded into the `AtmosModel` explicitly (tracked by [#4696](https://github.com/CliMA/ClimaAtmos.jl/issues/4696)).
+models must be passed to the `AtmosModel` explicitly (tracked by [#4696](https://github.com/CliMA/ClimaAtmos.jl/issues/4696)).
 
 ```julia
 import ClimaAtmos as CA
@@ -73,7 +73,8 @@ CA.solve_atmos!(simulation)
 ```
 
 Per-variable relaxation timescales and height-dependent masks compose as
-multiple `Nudging` terms, e.g. relax temperature only above an inversion:
+multiple [`Nudging`](@ref ClimaAtmos.Nudging) terms, e.g. relax temperature only
+above an inversion:
 
 ```julia
 z_inv = 800.0

@@ -1,4 +1,4 @@
-# Global Simulations
+# Running Global Simulations
 
 How to run global simulations (aquaplanets and AMIP-style configurations)
 on the cubed sphere.
@@ -31,9 +31,9 @@ corresponds to about 550 km, 16 to about 206 km, and 30 to about 110 km.
 ## From a configuration file
 
 The aquaplanet configurations in `config/model_configs/` (e.g.,
-`prognostic_edmfx_aquaplanet.yml`, `aquaplanet_equil_allsky_gw_raw.yml`) and
+[`prognostic_edmfx_aquaplanet.yml`](https://github.com/CliMA/ClimaAtmos.jl/blob/main/config/model_configs/prognostic_edmfx_aquaplanet.yml), [`aquaplanet_equil_allsky_gw_raw.yml`](https://github.com/CliMA/ClimaAtmos.jl/blob/main/config/model_configs/aquaplanet_equil_allsky_gw_raw.yml)) and
 the production-oriented configurations in `config/longrun_configs/` (e.g.,
-`longrun_aquaplanet_allsky_progedmf_1M.yml`, `amip_target.yml`) are the best
+[`longrun_aquaplanet_allsky_progedmf_1M.yml`](https://github.com/CliMA/ClimaAtmos.jl/blob/main/config/longrun_configs/longrun_aquaplanet_allsky_progedmf_1M.yml), [`amip_target.yml`](https://github.com/CliMA/ClimaAtmos.jl/blob/main/config/longrun_configs/amip_target.yml)) are the best
 starting points:
 
 ```julia
@@ -54,8 +54,8 @@ in [Creating custom configurations](configuration.md), applies only to model
 configurations that do not fix those keys themselves; later files override
 earlier ones key by key.
 
-Output lands in `output/<job_id>` (see
-[Loading and Visualizing Output](visualizing_output.md)). The
-[Buildkite longrun jobs](longruns.md) page describes the tested global
-configurations. For GPU runs, see
+Output lands in a numbered subdirectory of `output/<job_id>`, with
+`output/<job_id>/output_active` linking to the latest run (see
+[Loading and Visualizing Output](visualizing_output.md)). The tested global
+production configurations can be found in `config/longrun_configs/`. For GPU runs, see
 [Running on GPUs and MPI](gpu_and_mpi.md).

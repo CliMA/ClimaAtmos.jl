@@ -49,9 +49,6 @@ value = 1
 [pressure_normalmode_drag_coeff]
 value = 8.0
 
-[tracer_vertical_diffusion_factor]
-value = 0
-
 [condensation_evaporation_timescale]
 value = 100
 

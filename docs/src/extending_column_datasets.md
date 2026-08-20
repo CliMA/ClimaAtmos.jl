@@ -45,14 +45,17 @@ simulation = CA.AtmosSimulation{Float64}(; model, setup, grid)
 The two methods are the complete interface when the tendency can evaluate its
 data at the current model time. A custom forcing can reuse the standard file
 reader by storing `CA.ColumnDatasets.ColumnDataset(path)` and calling the
-`ColumnDatasets.column_timevaryinginputs` or `ColumnDatasets.surface_timevaryinginputs` utilities in
-its cache method. It can instead store arrays or callables for a fully
-in-memory experiment.
+[`ColumnDatasets.column_timevaryinginputs`](@ref ClimaAtmos.ColumnDatasets.column_timevaryinginputs)
+or
+[`ColumnDatasets.surface_timevaryinginputs`](@ref ClimaAtmos.ColumnDatasets.surface_timevaryinginputs)
+utilities in its cache method. It can instead store arrays or callables for a
+fully in-memory experiment.
 
 If forcing data must be refreshed by a scheduled callback, also extend
-`CA.default_model_callbacks(::MyCaseForcing; kwargs...)` and return the
-callback tuple for that type. It will be composed with the model's other
-default callbacks. Supplying `callbacks` directly to `AtmosSimulation` requires
+`CA.default_model_callbacks(::MyCaseForcing; kwargs...)` and return the callback
+tuple for that type. It will be composed with the model's other default
+callbacks. Supplying `callbacks` directly to
+[`AtmosSimulation`](@ref ClimaAtmos.AtmosSimulation) requires
 `default_callbacks = false` and replaces the complete default callback set, so
 the component extension is normally the safer hook.
 
@@ -81,7 +84,7 @@ expects three files in one directory, following the ERA5 variable naming:
 
 On the `clima` and Caltech HPC servers, sites already covered by the
 `era5_hourly_atmos_raw` artifact (the tropical Pacific, first 5 days of July
-2007) work out of the box. To run elsewhere, download the raw data from
+2007) need no further setup. To run elsewhere, download the raw data from
 ECMWF, place the three files in one directory, and point the artifact at it
 in `~/.julia/artifacts/Overrides.toml`:
 
@@ -92,12 +95,20 @@ a1a465e8d237d78bef1e6d346054da395787a9f9 = "/path/to/processed_files" # processe
 
 ## Adding a format module
 
-A new format is one self-contained module under `src/column_datasets/`:
-define a singleton subtype of `ColumnDatasets.AbstractColumnFormat`, extend
-the three required methods (`format_name`, `format_variable_name`,
-`height_profile`) plus whichever overrides the format needs (`preprocess`
-for unit conversions and fill values, `dates` for nonstandard time axes,
-`read_profile`/`read_series` for layout quirks or derived variables,
-`open_dataset` for grouped files), and pass the singleton via the `format`
-keyword of `ColumnDatasets.ColumnDataset`. No changes to the forcing, setup, or
-config machinery are needed.
+A new format is one self-contained module under `src/column_datasets/`: define a
+singleton subtype of
+[`ColumnDatasets.AbstractColumnFormat`](@ref ClimaAtmos.ColumnDatasets.AbstractColumnFormat),
+extend the three required methods
+([`format_name`](@ref ClimaAtmos.ColumnDatasets.format_name),
+[`format_variable_name`](@ref ClimaAtmos.ColumnDatasets.format_variable_name),
+[`height_profile`](@ref ClimaAtmos.ColumnDatasets.height_profile)) plus
+whichever overrides the format needs
+([`preprocess`](@ref ClimaAtmos.ColumnDatasets.preprocess) for unit conversions
+and fill values, [`dates`](@ref ClimaAtmos.ColumnDatasets.dates) for nonstandard
+time axes,
+[`read_profile`](@ref ClimaAtmos.ColumnDatasets.read_profile)/[`read_series`](@ref ClimaAtmos.ColumnDatasets.read_series)
+for layout quirks or derived variables,
+[`open_dataset`](@ref ClimaAtmos.ColumnDatasets.open_dataset) for grouped
+files), and pass the singleton via the `format` keyword of
+[`ColumnDatasets.ColumnDataset`](@ref ClimaAtmos.ColumnDatasets.ColumnDataset).
+No changes to the forcing, setup, or config machinery are needed.

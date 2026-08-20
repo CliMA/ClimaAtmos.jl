@@ -13,17 +13,24 @@ import CloudMicrophysics.BulkMicrophysicsTendencies as BMT
 """
     _beres_latent_heating(mp, thp, ρ, T, q_tot, q_lcl, q_icl, q_rai, q_sno)
 
-Beres' canonical transport-free latent heating for one updraft:
+Return Beres' transport-free latent heating rate for one updraft [K/s]:
 
-    Q_lat = (1/cp^{(j)}) Σ_p L_p R_p^{(j)}   [K/s]
+    Q_lat = (1/cp⁽ʲ⁾) Σ_p L_p R_p⁽ʲ⁾
 
-where `p` runs over the microphysical phase-change processes (e.g., condensation, evaporation). `L_p` is the latent heat released or absorbed by process `p` [J/kg] and `R_p^{(j)}` is the mass-mixing-ratio tendency [kg/kg/s]. These rates can be built from CloudMicrophysics 1-moment aggregated phase-change tendencies `dq_{lcl,icl,rai,sno}_dt`. `cp^{(j)}` is the subdomain moist heat capacity `TD.cp_m(thp, q_tot, q_lcl, q_icl)`
+where `p` runs over the microphysical phase-change processes (e.g., condensation,
+evaporation), `L_p` is the latent heat released or absorbed by process `p` [J/kg], and
+`R_p⁽ʲ⁾` is the mass-mixing-ratio tendency [kg/kg/s], built from the CloudMicrophysics
+1-moment aggregated phase-change tendencies `dq_{lcl,icl,rai,sno}_dt`. `cp⁽ʲ⁾` is the
+subdomain moist heat capacity `TD.cp_m(thp, q_tot, q_lcl, q_icl)`.
 
-Relative to a vapor reference, the liquid reservoir (`lcl + rai`) is weighted by `L_v` and the ice reservoir (`icl + sno`) by `L_s`. Within the reservoir sums, the same-phase mass transfers cancel, and liquid↔ice transfers become `L_f = L_s − L_v`. So
+Relative to a vapor reference, the liquid reservoir (`lcl + rai`) is weighted by `L_v` and
+the ice reservoir (`icl + sno`) by `L_s`. Within the reservoir sums, same-phase mass
+transfers cancel, and liquid↔ice transfers become `L_f = L_s − L_v`, so
 
-    Q_lat = (1/cp^{(j)}) [ L_v·(dq_lcl_dt + dq_rai_dt) + L_s·(dq_icl_dt + dq_sno_dt) ]
+    Q_lat = (1/cp⁽ʲ⁾) [ L_v·(dq_lcl_dt + dq_rai_dt) + L_s·(dq_icl_dt + dq_sno_dt) ]
 
-`L_v` and `L_s` are reference-`T₀` constants.
+with reference-`T₀` constants `L_v` and `L_s`. Called from
+`compute_beres_convective_heating!` when `heating_latent` is enabled.
 """
 @inline function _beres_latent_heating(
     mp,
@@ -58,13 +65,48 @@ Relative to a vapor reference, the liquid reservoir (`lcl + rai`) is weighted by
     ) / cpʲ
 end
 
+"""
+    non_orographic_gravity_wave_cache(Y, atmos::AtmosModel)
+    non_orographic_gravity_wave_cache(Y, ::Nothing)
+    non_orographic_gravity_wave_cache(Y, gw::NonOrographicGravityWave)
+
+Allocate the non-orographic gravity wave (NOGW) cache for the state `Y`.
+
+Returns an empty `NamedTuple` when the model is disabled. Otherwise the cache holds the
+phase-speed grid `gw_c` (`nc = floor(2·cmax/dc + 1)` bins spanning `[-cmax, cmax]`), the
+latitude-dependent AD99 source amplitude and band widths, per-column source/damp level
+buffers, the working fields for the upward-marching kernel, and the accumulated forcings
+`uforcing`/`vforcing` [m/s²]. Beres source-property fields are appended only when
+`gw.beres_source` is a `BeresSourceParams` (see `_beres_cache_fields`).
+
+The column and sphere branches differ in how the AD99 launch level is set: a column uses
+the height `source_height` and damps from the model top down, a sphere uses
+`source_pressure` and `damp_pressure`. Any other horizontal space is an error.
+
+See also `non_orographic_gravity_wave_compute_tendency!`. The scheme is documented
+on the *Non-orographic Gravity Waves* page.
+"""
 non_orographic_gravity_wave_cache(Y, atmos::AtmosModel) =
     non_orographic_gravity_wave_cache(Y, atmos.non_orographic_gravity_wave)
 
 non_orographic_gravity_wave_cache(Y, ::Nothing) = (;)
 
-# Beres source-property cache fields, allocated only when the convective source
-# is configured. An AD99-only NOGW run gets `(;)` here instead.
+"""
+    _beres_cache_fields(Y, ::Nothing)
+    _beres_cache_fields(Y, ::BeresSourceParams)
+
+Allocate the Beres convective-source fields of the NOGW cache.
+
+Returns `(;)` for an AD99-only run, so those fields are absent from the cache and the Beres
+branches are never entered. Otherwise returns the per-column source properties (`gw_Q0`,
+`gw_h_heat`, `gw_u_heat`, `gw_v_heat`, `gw_N_source`, `gw_a_cover`, `gw_zbot`, `gw_ztop`,
+`gw_beres_active`), the two heating profiles (`gw_Q_conv`, `gw_Q_conv_ic`), the shared
+seven-slot column-reduction buffer `gw_reduce_result`, the Beres launch-level state
+`beres_source_ρ_z_u_v_level`, and the diagnostic fields `gw_halfsine`, `gw_launch_flux`,
+`gw_c_centroid`.
+
+Called from `non_orographic_gravity_wave_cache`.
+"""
 _beres_cache_fields(Y, ::Nothing) = (;)
 function _beres_cache_fields(Y, ::BeresSourceParams)
     FT = Spaces.undertype(axes(Y.c))
@@ -225,6 +267,39 @@ function non_orographic_gravity_wave_cache(Y, gw::NonOrographicGravityWave)
     end
 end
 
+"""
+    non_orographic_gravity_wave_compute_tendency!(Y, p, ::Nothing)
+    non_orographic_gravity_wave_compute_tendency!(Y, p, ::NonOrographicGravityWave)
+
+Compute the non-orographic gravity wave forcing and store it in the NOGW cache.
+
+Mutates `p.non_orographic_gravity_wave` (in particular `uforcing` and `vforcing`
+[m/s²], which are zeroed and then re-accumulated) and returns `nothing`; `Y` is read
+only. This is the expensive half of the parameterization and runs on the `dt_nogw`
+callback `nogw_model_callback!`; the cheap half,
+`non_orographic_gravity_wave_apply_tendency!`, applies the cached forcing every
+integrator step. The `::Nothing` method is a no-op.
+
+Steps, in order:
+
+ 1. Compute the buoyancy frequency `N = sqrt(g/T · (dT/dz + g/c_pm))` at cell centers from
+    `p.precomputed.ᶜT` and the moist heat capacity, floored at `sqrt(2.5e-5)` s⁻¹. The
+    cache field `ᶜbuoyancy_frequency` holds `N`, not `N²`, once this step completes.
+ 2. Locate the AD99 launch level per column and record `(ρ, u, v)` there: on a column, the
+    level closest to `source_height`; on a sphere, the highest level with
+    `p > source_pressure`. On a sphere the damp level is the lowest level with
+    `p < damp_pressure`; on a column it is the model top.
+ 3. When a Beres source is configured, call `compute_beres_convective_heating!` and
+    then locate the Beres launch level, the first level (going up) with `z ≥ gw_ztop`.
+ 4. Loop over the `gw_nk` horizontal wavenumber bands and, for each, run the shared
+    upward-marching kernel `waveforcing_column_accumulate!` for the AD99 source and
+    (when configured) again for the Beres source, accumulating both into `uforcing` and
+    `vforcing` via `postprocess_and_accumulate!`.
+
+Reads `p.precomputed.ᶜT`, `ᶜq_tot_nonneg`, `ᶜq_liq`, `ᶜq_ice`, and (on a sphere) `ᶜp`, and
+clobbers several `p.scratch` fields. Described in [alexander1999](@cite) and
+[beres2004](@cite); see the *Non-orographic Gravity Waves* page for the derivations.
+"""
 non_orographic_gravity_wave_compute_tendency!(Y, p, ::Nothing) = nothing
 
 function non_orographic_gravity_wave_compute_tendency!(
@@ -393,16 +468,53 @@ end
 """
     compute_beres_convective_heating!(Y, p, ᶜN)
 
-Extract per-column convective source properties from EDMF for the Beres (2004) spectrum: Q0 (half-sine amplitude), h (depth), u_heat/v_heat (mean wind), N_source, a_cover (envelope-mean updraft area, the deposition factor), and the beres_active flag.
+Extract the per-column convective source properties that the Beres spectrum needs.
 
-Heating fields:
+Mutates the Beres fields of `p.non_orographic_gravity_wave`; the return value is unused.
+The outputs are the half-sine amplitude `gw_Q0` [K/s], the heating depth `gw_h_heat` [m], the
+envelope bounds `gw_zbot`/`gw_ztop` [m], the mass-weighted envelope means `gw_u_heat`,
+`gw_v_heat` [m/s] and `gw_N_source` [1/s], the deposition factor `gw_a_cover` [-], and the
+activation flag `gw_beres_active` (1 or 0). Called from
+`non_orographic_gravity_wave_compute_tendency!`; requires a mass-flux EDMF with at least
+one updraft.
 
-  - `gw_Q_conv` — grid-mean heating (weighted by area fraction aʲ); triggers column activation (`Q0_threshold` is calibrated to grid-mean magnitudes).
-  - `gw_Q_conv_ic` — in-cloud heating (no area factor); the amplitude convention Beres' linear theory expects. Defines the envelope and Q0, then deposited flux is diluted by `a_cover` (see `waveforcing_column_accumulate!`), giving flux ∝ ā·Q_ic².
+Two heating profiles are built from the mass-flux divergence of dry-static-energy
+anomalies, `s = c_pd·T + g·z` (the `g·z` terms cancel in the anomaly, leaving
+`c_pd·(Tʲ − T̄)`):
 
-Envelope `[z_bot, z_top]`: moment-matched, fits a half-sine to the in-cloud heating `gw_Q_conv_ic` by its centroid z_c and spread σ (over z ≥ `z_bot_floor`, which skips the EDMF PBL/dry-thermal signal below ~1 km). Then h = σ/√((π²−8)/4π²), z_bot = z_c − h/2, z_top = z_c + h/2.
+  - `gw_Q_conv` — the grid-mean Yanai heat source Q₁, i.e. the draft anomalies weighted by
+    area fraction `aʲ`. Used for the activation gate and nowhere else, because
+    `Q0_threshold` is calibrated to grid-mean magnitudes.
+  - `gw_Q_conv_ic` — the ρaʲ-weighted in-cloud (conditional-mean) heating, with no area
+    factor. This is the local amplitude convention Beres' linear theory expects: it sets
+    the envelope and `gw_Q0`, and the deposited flux is later diluted by `gw_a_cover` in
+    `waveforcing_column_accumulate!`, giving a grid-mean flux ∝ ā·Q_ic². When
+    `heating_latent` is set, `gw_Q_conv_ic` is instead the ρaʲ-weighted in-cloud mean of
+    the transport-free latent heating `_beres_latent_heating`; `gw_Q_conv` is untouched.
 
-`ᶜN` is N (s⁻¹), passed in because the cached `ᶜbuoyancy_frequency` still holds N².
+The envelope `[z_bot, z_top]` is obtained by moment matching over `z ≥ z_bot_floor` (2 km
+by default, which excludes the EDMF boundary-layer and dry-thermal signal): a half-sine of
+depth `h` has variance `h²(π²−8)/(4π²)`, so `h = σ/√((π²−8)/(4π²))` with `σ` the spread of
+`max(gw_Q_conv_ic, 0)` about its centroid `z_c`, and `z_bot, z_top = z_c ∓ h/2` (`z_top`
+clamped to the domain top, `z_bot` to `[0, z_top]`). The amplitude follows from inverting
+the half-sine mean, `Q0 = (π/2)·∫ max(Q_ic, 0) dz / h`, with the same integral. Activation
+requires the grid-mean counterpart of that amplitude to exceed `Q0_threshold` and
+`h > h_heat_min`.
+
+# Arguments
+
+  - `Y`: Prognostic state; read only.
+  - `p`: Cache. Reads `p.precomputed` draft fields and clobbers `p.scratch.ᶜtemp_scalar`
+    and `ᶜtemp_scalar_2` through `ᶜtemp_scalar_6`.
+  - `ᶜN`: Buoyancy frequency at cell centers [1/s], passed explicitly rather than read from
+    the cache so the units are unambiguous at the call site.
+
+# Notes
+
+When `detailed_diagnostics` is set, the function additionally fills `gw_halfsine`,
+`gw_launch_flux`, and `gw_c_centroid`; otherwise it returns before that block.
+
+Described in [beres2004](@cite); see the *Non-orographic Gravity Waves* page.
 """
 function compute_beres_convective_heating!(Y, p, ᶜN)
     (; turbconv_model) = p.atmos
@@ -571,8 +683,9 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
     ᶜu = ᶜuv_temp.components.data.:1
     ᶜv = ᶜuv_temp.components.data.:2
 
-    # Pass 1: set the convective envelope [z_bot, z_top] and depth h, reusing the scratch with
-    # gw_u_heat = z_bot, gw_v_heat = z_top, gw_h_heat = h for Pass 2.
+    # Pass 1: set the convective envelope [z_bot, z_top] and depth h, staging
+    # gw_u_heat = z_bot and gw_v_heat = z_top for Pass 2 (both are overwritten
+    # with the mass-weighted mean winds once Pass 2 completes).
     # We construct the envelope by moment matching: fit a half-sine to the in-cloud
     # heating Q_conv_ic by its centroid z_c and spread σ. A half-sine of depth h has
     # variance h²·(π²−8)/(4π²), so h = σ/√(variance), z_bot = z_c − h/2,
@@ -667,8 +780,9 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
         ᶜa_up,
     )
     # Accumulator: (Q_integral, u_sum, v_sum, N_sum, mass_sum, Qic_integral, a_sum).
-    # Same 7-slot `result_field` as Pass 1, now with all slots used (Pass 1 used
-    # only slots 1-3 for the heating moments).
+    # Same 7-slot `result_field` as Pass 1, which used only slots 1-3 for the
+    # heating moments. Slot 6 (Qic_integral) is accumulated but currently unread:
+    # the amplitude Q0 comes from the Pass 1 moments instead.
     _zero = FT(0)
     _half = FT(0.5)
     reduce_init2 = (_zero, _zero, _zero, _zero, _zero, _zero, _zero)
@@ -775,6 +889,20 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
     end
 end
 
+"""
+    non_orographic_gravity_wave_apply_tendency!(Yₜ, Y, p, t, ::Nothing)
+    non_orographic_gravity_wave_apply_tendency!(Yₜ, Y, p, t, ::NonOrographicGravityWave)
+
+Add the cached non-orographic gravity wave drag to the horizontal momentum tendency.
+
+Mutates `Yₜ.c.uₕ`, and also sanitizes `p.non_orographic_gravity_wave.uforcing` and
+`vforcing` in place: any `NaN`/`Inf` is replaced by zero and the rest is clamped to
+±3e-3 m/s², the same limit the orographic scheme uses. The `::Nothing` method is a no-op.
+
+This runs every integrator step, while the forcing itself is refreshed only on the
+`dt_nogw` callback by `non_orographic_gravity_wave_compute_tendency!`, so between callbacks
+the same forcing is reapplied.
+"""
 non_orographic_gravity_wave_apply_tendency!(Yₜ, Y, p, t, ::Nothing) = nothing
 
 function non_orographic_gravity_wave_apply_tendency!(
@@ -805,6 +933,42 @@ function non_orographic_gravity_wave_apply_tendency!(
 
 end
 
+"""
+    non_orographic_gravity_wave_forcing(ᶜu, ᶜv, ᶜbf, ᶜρ, ᶜz, ᶜlevel, source_level,
+                                        damp_level, ᶜρ_source, ᶜu_source, ᶜv_source,
+                                        uforcing, vforcing, gw_ncval, u_waveforcing,
+                                        v_waveforcing, p)
+
+Accumulate the gravity wave drag from every source and wavenumber band into the forcings.
+
+Mutates `uforcing` and `vforcing`, in m/s², adding to whatever they already hold, so callers
+zero them first) along with the working fields `u_waveforcing`/`v_waveforcing`, and returns
+`nothing`. Called from `non_orographic_gravity_wave_compute_tendency!`.
+
+The kernel needs level `k+1` values alongside level `k`, which a ClimaCore column operator
+cannot index directly, so `ᶜρ`, `ᶜu`, `ᶜv`, `ᶜbf`, and `ᶜz` are first shifted down one
+level by `field_shiftlevel_up!` into scratch fields. The extrapolated values used at the
+top are geometric for ρ (`ρ_end²/ρ_end₋₁`), linear for `u`, `v`, and `z`, and a copy of the
+top level for the buoyancy frequency.
+
+Per horizontal wavenumber band `ink` (`gw_nk` bands, one by default) the AD99 background
+source is marched upward for the zonal and meridional directions and deposited by
+`postprocess_and_accumulate!`; when a Beres source is configured, the same pair of calls is
+repeated for it. Both sources use the same kernel
+`waveforcing_column_accumulate!` and differ only in the launch spectrum, the launch level,
+and the intermittency factor.
+
+# Arguments
+
+  - `ᶜu`, `ᶜv`: Physical horizontal wind components at cell centers [m/s].
+  - `ᶜbf`: Buoyancy frequency `N` at cell centers [1/s].
+  - `ᶜρ`, `ᶜz`, `ᶜlevel`: Density [kg/m³], height [m], and 1-based level index [-].
+  - `source_level`, `damp_level`: AD99 launch and damping level indices [-].
+  - `ᶜρ_source`, `ᶜu_source`, `ᶜv_source`: AD99 launch-level density and winds.
+  - `gw_ncval`: `Val(nc)` with `nc` the number of phase-speed bins.
+  - `p`: Cache; the NOGW cache supplies the source parameters and
+    `p.scratch.ᶜtemp_scalar` through `ᶜtemp_scalar_6` are clobbered.
+"""
 function non_orographic_gravity_wave_forcing(
     ᶜu,
     ᶜv,
@@ -1051,9 +1215,28 @@ function non_orographic_gravity_wave_forcing(
     return nothing
 end
 
-# Post-process u/v waveforcing pair and accumulate into forcing fields.
-# gw_average! overwrites the scratch field that the input tuples alias as ᶜρ_p1,
-# so both column_accumulate! calls must complete before this is called.
+"""
+    postprocess_and_accumulate!(u_waveforcing, v_waveforcing, u_waveforcing_top,
+                                v_waveforcing_top, uforcing, vforcing, damp_level,
+                                ᶜlevel, level_end, scratch)
+
+Redistribute the escaped flux of one source and add its drag to the forcing fields.
+
+Mutates `u_waveforcing`/`v_waveforcing` (used as working storage), the `*_top` fields, and
+`uforcing`/`vforcing`, which are incremented. Called once per wavenumber band and source
+from `non_orographic_gravity_wave_forcing`.
+
+The half-level drag left by the upward march is moved to full levels by averaging adjacent
+half-levels (`gw_average!`), after saving and zeroing the top level, whose value is the
+momentum flux that escaped through the model top. That escaped flux is then spread over the
+levels at and above `damp_level` by `gw_deposit`, so momentum is conserved.
+
+!!! warning
+
+    `gw_average!` clobbers `scratch`, which the caller's input tuples alias as the shifted
+    density field, so both `waveforcing_column_accumulate!` calls of the pair must have
+    completed before this function runs.
+"""
 function postprocess_and_accumulate!(
     u_waveforcing, v_waveforcing,
     u_waveforcing_top, v_waveforcing_top,
@@ -1094,10 +1277,33 @@ function postprocess_and_accumulate!(
     @. vforcing = vforcing + v_waveforcing
 end
 
-# Explicit source spectrum helpers for the two-pass accumulation.
+"""
+    compute_ad99_spectrum(c, u_source, Bw, Bn, cw, cn, c0, flag, gw_ncval)
+
+Return the AD99 launch spectrum for one column, as an `NTuple{nc}` of `B₀(c)` [m³/s³].
+
+A thin named wrapper around the AD99 method of `wave_source`, so that
+`waveforcing_column_accumulate!` selects between the two source spectra by name rather than
+by argument-count dispatch.
+"""
 compute_ad99_spectrum(c, u_source, Bw, Bn, cw, cn, c0, flag, gw_ncval) =
     wave_source(c, u_source, Bw, Bn, cw, cn, c0, flag, gw_ncval)
 
+"""
+    compute_beres_spectrum(beres::BeresSourceParams, beres_active_val, c, u_heat_val,
+                           Q0_val, h_val, N_val, gw_ncval)
+    compute_beres_spectrum(::Nothing, beres_active_val, c, u_heat_val, Q0_val, h_val,
+                           N_val, gw_ncval)
+
+Return the Beres launch spectrum for one column, as an `NTuple{nc}` of `B₀(c)` [m³/s³].
+
+Delegates to the `BeresSourceParams` method of `wave_source` when the column is convecting
+(`beres_active_val > 0.5`), and returns all zeros otherwise.
+
+The `::Nothing` method covers the AD99-only configuration. It is never reached at runtime,
+because the caller skips the Beres branch entirely in that case, but it must exist so both
+branches of the `MODE` dispatch in `waveforcing_column_accumulate!` compile on the GPU.
+"""
 function compute_beres_spectrum(
     beres::BeresSourceParams,
     beres_active_val,
@@ -1117,9 +1323,6 @@ function compute_beres_spectrum(
     end
 end
 
-# Fallback for when beres_source is nothing (AD99-only mode).
-# This is never called at runtime but must exist for GPU compilation
-# since both branches of the MODE dispatch must be compilable.
 function compute_beres_spectrum(
     ::Nothing, beres_active_val, c, u_heat_val, Q0_val, h_val, N_val,
     gw_ncval::Val{nc},
@@ -1127,12 +1330,20 @@ function compute_beres_spectrum(
     ntuple(_ -> typeof(Q0_val)(0), Val(nc))
 end
 
-# Summarize the launched Beres source spectrum for a single column into two
-# scalars: the total launched flux magnitude Σ_n |B0(c_n)| and the phase-speed
-# first moment Σ_n c_n·|B0(c_n)|. Their ratio is the flux-weighted spectral
-# centroid ⟨c⟩. The launched Beres spectrum is the same for every horizontal
-# wavenumber (the `ink` loop in the kernel), it varies only with phase speed c,
-# so this one evaluation captures the full launched spectrum.
+"""
+    _beres_launch_summary(beres, active, c, u_heat, Q0, h, N, gw_ncval) -> (s0, s1)
+
+Summarize the launched Beres spectrum of one column into two scalars.
+
+Returns the total launched flux magnitude `s0 = Σₙ |B₀(cₙ)|` and the phase-speed first
+moment `s1 = Σₙ cₙ·|B₀(cₙ)|`, whose ratio `s1/s0` is the flux-weighted spectral centroid
+`⟨c⟩` [m/s]. The launched Beres spectrum does not depend on the horizontal wavenumber band
+(the `ink` loop of the kernel), only on phase speed, so this single evaluation captures the
+whole launched spectrum.
+
+Called from `compute_beres_convective_heating!` to fill the `gw_launch_flux` and
+`gw_c_centroid` diagnostics.
+"""
 @inline function _beres_launch_summary(
     beres,
     active,
@@ -1155,8 +1366,53 @@ end
     return (s0, s1)
 end
 
-# Using column_accumulate function, calculate the gravity wave forcing at each point.
-# source_mode::Val{:ad99} or Val{:beres} selects which source spectrum and intermittency to use.
+"""
+    waveforcing_column_accumulate!(waveforcing, mask, input, c, c0, nk, ink, level_end,
+                                   gw_ncval, beres_source, source_mode::Val{MODE})
+
+March one source spectrum up each column and write the half-level drag it deposits.
+
+Mutates `waveforcing` [m/s²]; the return value is unused. This is the kernel shared by both
+sources; `MODE` is `:ad99` or `:beres` and selects the launch spectrum, the launch level,
+and the intermittency factor at compile time.
+
+At the bottom level the launch spectrum `B₀(c)` is evaluated once (by
+`compute_ad99_spectrum` or `compute_beres_spectrum`) and then carried upward by the column
+accumulator together with a `StaticBitVector` mask of the phase-speed bins still
+propagating. At each level at or above `source_level - 1`, every unmasked bin is tested in
+order and removed from the mask when it fails:
+
+ 1. Critical level, `ĉ = c[n] - u = 0`.
+ 2. Total internal reflection, `|ĉ|·k ≥ ω_r` with `ω_r² = N²k²/(k² + 1/(4Hb²))` and `Hb`
+    the local density scale height.
+ 3. Breaking, `B₀[n]/ĉ³ ≥ ½(ρ_{k+1}/ρ_source)·k/N`, or a sign change of `ĉ` relative to its
+    launch-level value (critical-level absorption).
+
+A bin removed at or above the launch level adds its `B₀[n]` to the level's flux sum `fm`;
+at the top level every surviving bin is removed and deposited there, so the flux escaping
+the model top is available to `gw_deposit`. The drag is then
+`(ρ_source/√(ρ_k·ρ_{k+1}))·fm·ε/(z_{k+1} - z_k)`, zero below the launch level, where the
+intermittency `ε` is `calc_intermitency` for AD99 and the convective coverage
+`a_cover/(ρ_source·nk)` for Beres.
+
+# Arguments
+
+  - `waveforcing`: Output drag at cell centers [m/s²]; overwritten.
+  - `mask`: Initial `StaticBitVector{nc}` of active phase-speed bins. A bit vector is used
+    because `unrolled_reduce` over a plain tuple mask allocates past 32 elements.
+  - `input`: Broadcasted 16-slot tuple field. Slots 1-7 are shared
+    (`u_{k+1}`, `N_{k+1}`, `ρ_k`, `ρ_{k+1}`, `z_{k+1}`, `z_k`, level index); slots 8-16 hold
+    the AD99 source fields or the Beres source fields, read by index under the `MODE` guard
+    so each specialization stays at 16 fields.
+  - `c`, `c0`: Phase-speed grid and its AD99 center [m/s].
+  - `nk`, `ink`: Number of horizontal wavenumber bands and the current band [-]. The
+    wavelength of band `ink` is `30·10^ink` km.
+  - `level_end`: Index of the topmost level [-].
+  - `beres_source`: `BeresSourceParams` or `nothing`.
+
+Described in [alexander1999](@cite) and [beres2004](@cite); see the *Non-orographic Gravity
+Waves* page.
+"""
 function waveforcing_column_accumulate!(
     waveforcing,
     mask,
@@ -1314,11 +1570,32 @@ function waveforcing_column_accumulate!(
     end
 end
 
-# calculate the intermittency factor eps -> assuming constant Δc.
+"""
+    calc_intermitency(ρ_source_level, source_ampl, nk, Bsum)
+
+Return the AD99 wave intermittency factor `ε = F_S0/(ρ₀·nk·Σ|B₀|)` [-].
+
+The launched spectrum is the flux of a wave train that is present only a fraction of the
+time; `ε` rescales it so the long-term mean flux matches the prescribed, latitude-dependent
+source amplitude `source_ampl` [kg/m/s²]. Assumes a constant phase-speed spacing `Δc`, so
+the spacing cancels between `source_ampl` and `Bsum` and does not appear here.
+
+Called from `waveforcing_column_accumulate!` in `:ad99` mode; the Beres mode uses the
+convective coverage instead.
+"""
 function calc_intermitency(ρ_source_level, source_ampl, nk, Bsum)
     return (source_ampl / ρ_source_level / nk) / Bsum
 end
 
+"""
+    gw_average!(wave_forcing, wave_forcing_m1)
+
+Move the drag from half-levels to full levels by averaging adjacent half-levels.
+
+Mutates `wave_forcing` in place, setting it to `½(X[k-1/2] + X[k+1/2])`, and clobbers
+`wave_forcing_m1`, which is used as scratch for the level-shifted copy (zero below the
+bottom level). Called from `postprocess_and_accumulate!`.
+"""
 function gw_average!(wave_forcing, wave_forcing_m1)
     FT = eltype(wave_forcing)
     L1 = Operators.LeftBiasedC2F(; bottom = Operators.SetValue(FT(0.0)))
@@ -1327,6 +1604,28 @@ function gw_average!(wave_forcing, wave_forcing_m1)
     @. wave_forcing = FT(0.5) * (wave_forcing + wave_forcing_m1)
 end
 
+"""
+    gw_deposit(wave_forcing_top, wave_forcing, damp_level, level, height)
+
+Add the momentum flux that escaped through the model top back into the sponge layer.
+
+Returns `wave_forcing` unchanged below `damp_level`, and `wave_forcing + wave_forcing_top/(height + 2 - damp_level)` at and above it, so the escaped flux is spread
+evenly over the damping layer and column momentum is conserved. Applied pointwise by
+`postprocess_and_accumulate!`.
+
+# Arguments
+
+  - `wave_forcing_top`: Drag carried by the waves that reached the model top [m/s²].
+  - `wave_forcing`: Drag already accumulated at this level [m/s²].
+  - `damp_level`: Index of the lowest damping level [-].
+  - `level`: Index of the current level [-].
+  - `height`: Index of the topmost level, i.e. the number of levels [-].
+
+# Notes
+
+There are `height + 1 - damp_level` levels at and above `damp_level`, so the divisor here
+distributes the escaped flux over one level more than the layer contains.
+"""
 function gw_deposit(wave_forcing_top, wave_forcing, damp_level, level, height)
     if level >= damp_level
         wave_forcing =
@@ -1335,12 +1634,44 @@ function gw_deposit(wave_forcing_top, wave_forcing, damp_level, level, height)
     return wave_forcing
 end
 
+"""
+    field_shiftlevel_up!(ᶜexample_field, ᶜshifted_field, Boundary_value)
+
+Shift a center-valued field down one level so that level `k` holds the level `k+1` value.
+
+Mutates `ᶜshifted_field`, setting `ᶜshifted_field[k] = ᶜexample_field[k+1]` for interior
+levels and `Boundary_value` at the topmost level. This is how
+`non_orographic_gravity_wave_forcing` gives the kernel access to level `k+1`, which
+ClimaCore column operators cannot index directly; the shift is a round trip to the faces
+using right-biased interpolation in both directions.
+"""
 function field_shiftlevel_up!(ᶜexample_field, ᶜshifted_field, Boundary_value)
     R1 = Operators.RightBiasedC2F(; top = Operators.SetValue(Boundary_value))
     R2 = Operators.RightBiasedF2C(;)
     ᶜshifted_field .= R2.(R1.(ᶜexample_field))
 end
 
+"""
+    wave_source(c, u_source, Bw, Bn, cw, cn, c0, flag, gw_ncval)
+
+Return the AD99 launch spectrum `B₀(c)` as an `NTuple{nc}` [m³/s³].
+
+The spectrum is the sum of a wide and a narrow Gaussian in phase speed, each of half-width
+at half-maximum `cw` and `cn` and peak amplitude `Bw` and `Bn` at `c0`, multiplied by
+`sgn(c - u_source)` so that waves faster and slower than the launch-level wind carry
+momentum of opposite sign.
+
+`flag` selects the reference frame of the Gaussians: `1` measures phase speed relative to
+the ground (extratropics), `0` relative to the launch-level wind `u_source` (tropics). The
+sign factor always uses the wind-relative speed.
+
+# Notes
+
+The launch spectrum is symmetric about its peak, so in the tropical frame it carries no net
+momentum at launch; the atmosphere filters one side out aloft.
+
+Described in [alexander1999](@cite) Eq. 17; see the *Non-orographic Gravity Waves* page.
+"""
 function wave_source(
     c,
     u_source,
@@ -1377,16 +1708,23 @@ end
 """
     V_hs_sq(m, h)
 
-Squared vertical half-sine shape factor for heating depth `h` at wavenumber `m`:
+Return the squared vertical shape factor of a half-sine heating profile.
 
-    V_hs_sq = (π/h)² · sin²(m·h) / (m² − (π/h)²)²
+For a heating layer of depth `h` [m] and vertical wavenumber `m` [1/m],
 
-written in `sinc` form (δ = m·h − π) so it's finite at resonance m = π/h (→ h²/4).
+    V_hs_sq = (π/h)² · sin²(m·h) / (m² − (π/h)²)²    [m²]
 
-Shared by both source paths: the steady (ν=0) path and the transient path in
-`_beres_spectrum_single_h`, where the launched amplitude uses R² = V_hs_sq·m²/(N²−ν̂²)².
+evaluated in `sinc` form with `δ = m·h − π`, which stays finite at the resonance
+`m = π/h` (vertical wavelength `2h`), where it takes the value `h²/4`.
 
-`sinc` here is unnormalized `sin(x)/x` by choice (consistent). Avoid Base.sinc which is normalized.
+Shared by both Beres source paths: the transient integrand in
+`_beres_spectrum_single_h` and the steady wave in `_beres_steady_flux`. Both build the
+squared response `R² = V_hs_sq·m²/(N² − ν̂²)²` from it.
+
+# Notes
+
+`sinc` here is the unnormalized `sin(x)/x`, inlined deliberately; `Base.sinc` is the
+normalized `sin(πx)/(πx)` and would be wrong.
 """
 @inline function V_hs_sq(m, h)
     FT = typeof(m)
@@ -1396,18 +1734,35 @@ Shared by both source paths: the steady (ν=0) path and the transient path in
 end
 
 """
-    _beres_spectrum_single_h(c_n, c_hat, h, ...)
+    _beres_spectrum_single_h(c_n, c_hat, h, u_heat, N2, N_source, Q0_sq, σ_x_sq,
+                             ν_min, dν, n_groups, boole_w)
 
-Launched momentum-flux magnitude for one phase-speed bin `c_n` and one heating depth `h`, obtained by integrating the Beres (2004) spectral density over intrinsic frequency ν ∈ [ν_min, ν_max] with composite Boole's rule (`n_groups` panels of 5 nodes, weights `boole_w`).
+Return the unsigned launched momentum flux of one phase-speed bin and one heating depth.
 
-Each node's integrand is the product of
-• horizontal heating spectrum  Q0Gk_sq = Q0²·(σ_x²/2)·exp(−k²σ_x²/2),  k = ν/c_n;
-• squared vertical half-sine shape  R² = V_hs_sq(m,h)·m²/(N²−ν̂²)²,  m from m² = k²(N²/ν̂²−1);
-• propagation factor  √(N²−ν̂²)/|ν̂|;  and
-• the ν→c jacobian  ν/c_n².
+The Beres spectral density is integrated over ground-relative frequency
+`ν ∈ [ν_min, ν_max]` at fixed phase speed `c_n`, using composite Boole's rule over
+`n_groups` panels of five nodes with weights `boole_w` and node spacing `dν`. The caller
+applies the sign and the scale factor.
 
-Here ν̂ = ν − k·u_heat is the intrinsic frequency. Evanescent/singular nodes
-(|ν̂| < 1e-4·N, |ν̂| ≥ N, or m² ≤ 0) contribute zero.
+Each node contributes the product of
+
+  - the horizontal heating spectrum `Q0²·G_k² = Q0²·(σ_x²/2)·exp(−k²σ_x²/2)`, with
+    `k = ν/c_n`;
+  - the squared vertical half-sine response `R² = V_hs_sq(m, h)·m²/(N² − ν̂²)²`, with `m`
+    from `m² = k²(N²/ν̂² − 1)`;
+  - the propagation factor `√(N² − ν̂²)/|ν̂|` and the normalization `1/√(2π)`; and
+  - the `ν → c` Jacobian `ν/c_n²`,
+
+where `ν̂ = ν − k·u_heat` is the intrinsic frequency. Nodes that are evanescent or singular
+(`|ν̂| < 1e-4·N_source`, `|ν̂| ≥ N_source`, or `m² ≤ 0`) contribute zero.
+
+# Notes
+
+`c_hat` is accepted for symmetry with the caller's bookkeeping but is not read; the
+integrand depends on the intrinsic frequency `ν̂`, not on the intrinsic phase speed.
+
+Described in [beres2004](@cite) Eqs. 23 and 29-30; see the *Non-orographic Gravity Waves*
+page.
 """
 @inline function _beres_spectrum_single_h(
     c_n,
@@ -1478,13 +1833,20 @@ end
 """
     _beres_steady_horizontal_const(σ_x, L_system)
 
-Horizontal-scale factor `H` of the steady (ν=0) source amplitude (Beres Eq. 32): how strongly a convective cell of width `σ_x` projects onto gravity waves, summed over horizontal scales down to the system size `L_system`.
+Return the horizontal-scale factor `H` of the steady source amplitude [m²].
 
-Closed form:
+`H` measures how strongly a convective cell of half-width `σ_x` [m] projects onto gravity
+waves, summed over all horizontal scales down to the largest system size `L_system` [m]:
 
-    H = (σ_x²/4) · E1(x),   x = k_min²·σ_x²/2,   k_min = 2π/L_system
+    H = (σ_x²/4) · E₁(x),   x = k_min²·σ_x²/2,   k_min = 2π/L_system
 
-using `E1(x) ≈ −γ − ln(x) + x` (valid since `x ≪ 1`; GPU-safe, just a `log`).
+The exponential integral is evaluated from its small-argument series
+`E₁(x) ≈ −γ_E − ln(x) + x`, which is accurate for the intended `x ≪ 1` and needs only a
+`log`, so it is GPU-safe. Outside that regime (`x ≥ 1`) `H` is set to zero rather than
+extrapolated.
+
+Called from `_beres_steady_flux`; this is the only place `L_system` enters. Described in
+[beres2004](@cite) Eq. 32.
 """
 @inline function _beres_steady_horizontal_const(σ_x, L_system)
     FT = typeof(σ_x)
@@ -1497,18 +1859,31 @@ using `E1(x) ≈ −γ − ln(x) + x` (valid since `x ≪ 1`; GPU-safe, just a `
 end
 
 """
-    _beres_steady_flux(U, N_source, h, Q0, scale_factor, n_h_avg, Δh_frac, σ_x, L_system, dc_frac, ν_min)
+    _beres_steady_flux(U, N_source, h, Q0, scale_factor, n_h_avg, Δh_frac, σ_x,
+                       L_system, dc_frac, ν_min)
 
-Launch flux of the steady (ν=0) wave for one azimuth: time-mean convective heating acts like a hill in the wind `U`, radiating one stationary wave (`m₀ = N/|U|`).
-Signed to decelerate `U`; summed alongside the transient bins (Beres 2004 Eqs. 31–34):
+Return the launch flux of the steady (ν = 0) convective wave for one azimuth.
 
-    F_steady = −sign(U) · scale_factor · (1/√(2π)) · Q0² · Q_t(0)² · V_hs_sq(m₀,h) · H / (N·|U|³)
+The time-mean convective heating acts like a fixed hill in the mean wind `U` [m/s] and
+radiates a single ground-stationary wave of vertical wavenumber `m₀ = N/|U|`:
 
-Reuses the transient primitives; the only new pieces are:
-• `H` — horizontal constant (`_beres_steady_horizontal_const`), the sole new `L`-dependence.
-• `Q_t(0)² = dc_frac · ν_min` — the DC weight. `dc_frac` is a user knob (default 1)
+    F_steady = −sign(U) · scale_factor · (1/√(2π)) · Q0² · Q_t(0)² · V_hs_sq(m₀,h) · H
+               / (N·|U|³)
 
-Steady and transient carry orthogonal frequencies, so no double-counting; their ratio is `scale_factor`-independent and ≈ O(1) for defaults.
+The sign opposes `U`, so the wave decelerates the flow like mountain-wave drag. The caller
+deposits this into the `c ≈ 0` phase-speed bin, which the transient spectrum leaves empty,
+so nothing is double-counted; the two components carry orthogonal frequencies.
+
+Everything except two pieces is shared with the transient path: `H` is the horizontal
+constant from `_beres_steady_horizontal_const`, and `Q_t(0)² = dc_frac·ν_min` is the
+zero-frequency temporal weight, with `dc_frac` a tuning knob (default 1). When
+`n_h_avg > 1` the half-sine factor is averaged over `n_h_avg` depths in
+`h ± Δh_frac·h`, the same resonance smoothing the transient path applies.
+
+Returns exactly zero for `|U| < 1e-6` m/s, where `m₀ → ∞`, the stationary wave vanishes,
+and the `1/|U|³` factor would otherwise blow up.
+
+Described in [beres2004](@cite) Eqs. 31-34; see the *Non-orographic Gravity Waves* page.
 """
 @inline function _beres_steady_flux(
     U,
@@ -1561,14 +1936,35 @@ end
 """
     wave_source(c, u_heat, Q0, h, N_source, beres::BeresSourceParams, gw_ncval)
 
-Compute the Beres (2004) convective gravity wave momentum flux spectrum.
-Dispatches on `BeresSourceParams` to distinguish from the AD Gaussian method.
+Return the Beres convective launch spectrum `B₀(c)` as an `NTuple{nc}` [m³/s³].
 
-Implements Eqs. (23), (29)-(30) from Beres, Alexander & Holton (2004, JAS).
-When `n_h_avg > 1`, averages the spectrum over multiple h values in the range `h ± Δh_frac * h` to smooth the resonance peaks, following the paper's
-recommendation (Section 2, Figure 4).
+Dispatch on `BeresSourceParams` distinguishes this from the AD99 Gaussian method above;
+both return a spectrum in the same units, so the propagation kernel treats them alike.
 
-Returns `NTuple{nc, FT}` in units consistent with the AD `wave_source`.
+For each phase-speed bin, `_beres_spectrum_single_h` integrates the spectral density over
+frequency, and the result is signed by `sgn(ĉ)` with `ĉ = c - u_heat` the intrinsic phase
+speed, then multiplied by `beres_scale_factor`. Bins with `|ĉ| < 1e-6` or `|c| < 1e-6` m/s
+are set to zero, the latter because the `ν → c` change of variables is singular there.
+When `n_h_avg > 1`, the integral is averaged over `n_h_avg` heating depths spanning
+`h ± Δh_frac·h`, which smooths the `mh = π` resonance.
+
+The steady (ν = 0) component from `_beres_steady_flux` is added to the `c ≈ 0` bin, which
+the transient spectrum leaves empty. It is included only when `beres_steady_source` is set
+and the phase-speed grid has an exact `c ≈ 0` bin; on a grid without one, adding it would
+corrupt a nonzero bin, so it is dropped instead.
+
+# Arguments
+
+  - `c`: Phase-speed grid [m/s].
+  - `u_heat`: Mass-weighted mean wind in the heating layer, for this azimuth [m/s].
+  - `Q0`: Half-sine heating amplitude [K/s].
+  - `h`: Heating depth [m].
+  - `N_source`: Mean buoyancy frequency in the heating layer [1/s].
+  - `beres`: Source parameters.
+  - `gw_ncval`: `Val(nc)` with `nc` the number of phase-speed bins.
+
+Described in [beres2004](@cite) Eqs. 23 and 29-30; see the *Non-orographic Gravity Waves*
+page.
 """
 function wave_source(
     c,

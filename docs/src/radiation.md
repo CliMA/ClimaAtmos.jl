@@ -17,13 +17,15 @@ cadence set by `dt_rad` (default `6hours`).
 
 The `rad` configuration argument selects the mode:
 
+  - `~` (default): no radiation.
   - `gray`: gray radiation, an idealized one-band model.
   - `clearsky`: RRTMGP with gases but no cloud optics.
   - `allsky`: RRTMGP with interactive cloud optics.
   - `allskywithclear`: as `allsky`, plus clear-sky diagnostic fluxes.
   - `held_suarez`: the Held–Suarez temperature relaxation (no radiative
-    transfer; applied every stage), plus idealized single-column forcings
-    (`DYCOMS`, `TRMM_LBA`, `ISDAC`).
+    transfer; applied every stage).
+  - `DYCOMS`, `TRMM_LBA`, `ISDAC`: idealized prescribed-radiation forcings for
+    the corresponding single-column cases.
 
 Clouds enter the all-sky modes either interactively from the model state or
 prescribed from ERA5 data (`prescribe_clouds_in_radiation`). Trace-gas

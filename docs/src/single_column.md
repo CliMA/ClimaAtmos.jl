@@ -1,8 +1,8 @@
-# Single Column Models
+# Running Single-Column Cases
 
 ## Idealized cases
 
-`ClimaAtmos.jl` supports several canonical test cases that are run in a single column model designed to verify how well PROPHET (an extended, prognostic EDMF scheme) reproduces each convective regime. These cases include variants of `bomex`, `dycoms`, `rico`, `soares`, `gabls`, and `trmm` and can be found in the `config/model_configs` directory. The purpose of each simulation is summarized in the following table:
+`ClimaAtmos.jl` supports several canonical test cases that are run in a single column model designed to verify how well PROPHET reproduces each convective regime. These cases include variants of `bomex`, `dycoms`, `rico`, `soares`, `gabls`, and `trmm` and can be found in the `config/model_configs` directory. The purpose of each simulation is summarized in the following table:
 
 | Abbreviation | Long Name                                            | Cloud Regime          | Reference                                                                                                                   |
 |:------------ |:---------------------------------------------------- |:--------------------- |:--------------------------------------------------------------------------------------------------------------------------- |
@@ -33,7 +33,10 @@ sol_res = CA.solve_atmos!(simulation) # run the simulation
 ```
 
 The same three lines run every case on this page; only the configuration
-file changes.
+file changes. CI runs these cases with a common diagnostics file prepended
+(e.g. `config/common_configs/diagnostics_column_progedmf_1M.yml`); see
+[Creating custom configurations](configuration.md) for combining
+configuration files.
 
 ## Externally-Driven Single Column Models
 
@@ -42,10 +45,10 @@ file changes.
 ### GCM-Driven Case
 
 For the `GCM` driven case, run the configuration file
-`config/model_configs/prognostic_edmfx_gcmdriven_column.yml`. In the config,
+[`config/model_configs/prognostic_edmfx_gcmdriven_column.yml`](https://github.com/CliMA/ClimaAtmos.jl/blob/main/config/model_configs/prognostic_edmfx_gcmdriven_column.yml). In the config,
 the following settings are important:
 
-```YAML
+```yaml
 initial_condition: "GCM"
 external_forcing_file: artifact"cfsite_gcm_forcing"/HadGEM2-A_amip.2004-2008.07.nc
 cfsite_number : "site23"
@@ -56,17 +59,19 @@ Setting `initial_condition` to `GCM` selects the GCM-driven setup, which supplie
 ### ARM VARANAL Case (SGP)
 
 The ARM VARANAL setup drives a single column at the SGP Central Facility with
-time-varying profiles and tendencies from the ARM Variational Analysis product
+time-varying profiles and tendencies from the
+[ARM Variational Analysis product](https://www.arm.gov/data/science-data-products/vaps/varanal)
 (`sgp60varanarucC1.c1`). Forcing includes horizontal advection, large-scale
-subsidence (from `omega`), nudging toward observed T/q/u/v, prescribed surface
-fluxes (LH/SH), and time-varying skin temperature. Monthly files are available
+subsidence (from `omega`), nudging toward observed temperatures, humidities, and
+winds, prescribed surface latent and sensible heat fluxes, and time-varying skin
+temperature. Monthly files are available
 from the [ARM Data Center](https://adc.arm.gov/discovery/). Run the
-configuration file `config/model_configs/prognostic_edmfx_armvaranal_column.yml`.
+configuration file [`config/model_configs/prognostic_edmfx_armvaranal_column.yml`](https://github.com/CliMA/ClimaAtmos.jl/blob/main/config/model_configs/prognostic_edmfx_armvaranal_column.yml).
 
 Key config entries (edit `external_forcing_file`, `start_date`, and `t_end` to
 pick a sub-period within the monthly file):
 
-```YAML
+```yaml
 initial_condition: "ARMVARANAL"
 external_forcing_file: artifact"arm_sgp_varanal_forcing"/sgp60varanarucC1.c1.20100901.000000.cdf
 start_date: "20100918"
@@ -88,7 +93,7 @@ set `external_forcing_file` to that month's VARANAL `.cdf` file.
 
 The `ReanalysisTimeVarying` case extends the `GCM` driven case to single-column simulations that resolve the diurnal cycle, can be run at any site globally, and are driven by reanalysis, allowing calibration of PROPHET to earth-system observations in the single-column setting. For example, a set of config file arguments can be:
 
-```YAML
+```yaml
 initial_condition: "ReanalysisTimeVarying"
 start_date: "20070701"
 site_latitude: 17.0
@@ -96,14 +101,14 @@ site_longitude: -149.0
 ```
 
 The case runs the configuration file
-`config/model_configs/prognostic_edmfx_tv_era5driven_column.yml`. The
+[`config/model_configs/prognostic_edmfx_tv_era5driven_column.yml`](https://github.com/CliMA/ClimaAtmos.jl/blob/main/config/model_configs/prognostic_edmfx_tv_era5driven_column.yml). The
 `ReanalysisTimeVarying` initial condition generates a column forcing file for
 the requested site and dates (regridded from the global ERA5 archive, stored
 through `ClimaArtifacts` for reproducibility) and hands it to the generic
 `ForcingFromFile` setup, which takes the
 initial condition, external forcing, surface skin temperature, and insolation
 from that one file (surface fluxes are computed interactively by Monin–Obukhov similarity theory). Setting `external_forcing: "ReanalysisTimeVarying"` as well
-is still accepted but no longer needed. You give the site and dates directly
+is accepted but unnecessary. You give the site and dates directly
 rather than a file path because the file is generated on demand:
 `start_date` is YYYYMMDD, `site_latitude` in degrees (-90...90), and
 `site_longitude` in (-180...180). Artifact-backed ERA5 data is currently
@@ -116,9 +121,22 @@ and only on the `clima` and Caltech HPC servers.
 
 #### Monthly Averaged Forcing
 
-As the matched ERA5 trajectory is data intensive, requiring downloads for each day, we have also implemented an external forcing dispatch to repeat a specific day of data indefinitely. This setup is ideal for monthly averaged ERA5 data by hour of day and can be used to calibrate to monthly statistics. The setup is similar, except we change the flag for `external_forcing` to indicate that we want to repeat data:
+Following a matched ERA5 trajectory is data intensive, since it needs a download
+for every simulated day. A second dispatch avoids that by cycling a single day of
+forcing indefinitely.
 
-```YAML
+The day it cycles is not a calendar day. ERA5 is averaged over the month
+separately at each hour of the day, which gives one composite day carrying that
+month's mean diurnal cycle; the file stores that day, and a periodic calendar
+repeats it for as long as the simulation runs. Forcing the column with it
+therefore drives the month's mean conditions and mean diurnal cycle without
+following any particular day's weather, which is what makes it suited to
+calibrating against monthly statistics.
+
+The configuration is as above, with `external_forcing` set to request the
+composite day:
+
+```yaml
 initial_condition: "ReanalysisTimeVarying"
 external_forcing: "ReanalysisMonthlyAveragedDiurnal"
 start_date: "20070701"
@@ -127,7 +145,7 @@ site_longitude: -149.0
 ```
 
 The corresponding configuration file is
-`config/model_configs/prognostic_edmfx_diurnal_scm_imp.yml`.
+[`config/model_configs/prognostic_edmfx_diurnal_scm_imp.yml`](https://github.com/CliMA/ClimaAtmos.jl/blob/main/config/model_configs/prognostic_edmfx_diurnal_scm_imp.yml).
 
 Running the reanalysis-driven cases at other times and locations requires
 downloading and naming the raw ERA5 files for the processing script; see

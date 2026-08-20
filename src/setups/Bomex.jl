@@ -7,7 +7,7 @@ balanced pressure profile. Profiles are sourced from AtmosphericProfilesLibrary.
 The `profiles` field stores precomputed atmospheric profile functions (computed
 at construction time before broadcasting).
 
-## Example
+# Examples
 
 ```julia
 setup = Bomex()                       # Float32 defaults

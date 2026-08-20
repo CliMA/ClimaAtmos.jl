@@ -1,11 +1,21 @@
 # Setups
 
-A setup defines the initial conditions for a simulation case. At its core, a
-setup is a struct that implements `center_initial_condition`, which returns a
+A setup defines the initial conditions for a simulation case. A setup is a
+struct that implements `center_initial_condition`, which returns a
 physical state NamedTuple at each grid point. The physical state describes the
 thermodynamic and kinematic state through temperature, pressure or density,
 moisture, and velocity, and is converted into prognostic variables
 automatically based on the model configuration.
+
+## `initial_state`
+
+The entry point that builds the full prognostic state from a setup, calling
+`center_initial_condition` and `face_initial_condition` pointwise and assembling
+the prognostic variables selected by the model configuration.
+
+```@docs
+ClimaAtmos.Setups.initial_state
+```
 
 ## `center_initial_condition`
 
@@ -16,12 +26,14 @@ or `ρ` are required; all other fields default to zero.
 For example, a minimal setup:
 
 ```julia
+import ClimaAtmos as CA
+
 struct MySetup end
 
-function Setups.center_initial_condition(::MySetup, local_geometry, params)
+function CA.Setups.center_initial_condition(::MySetup, local_geometry, params)
     z = local_geometry.coordinates.z
     FT = typeof(z)
-    return physical_state(; T = FT(300), p = FT(101500))
+    return CA.Setups.physical_state(; T = FT(300), p = FT(101500))
 end
 ```
 
@@ -136,6 +148,7 @@ ClimaAtmos.Setups.MoistAdiabaticProfileEDMFX
 
 ```@docs
 ClimaAtmos.Setups.GCMDriven
+ClimaAtmos.Setups.GCMDriven(::String, ::String)
 ClimaAtmos.Setups.ForcingFromFile
 ClimaAtmos.Setups.MoistFromFile
 ClimaAtmos.Setups.WeatherModel

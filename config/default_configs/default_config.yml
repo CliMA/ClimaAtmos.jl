@@ -127,7 +127,7 @@ prescribe_clouds_in_radiation:
   help: "Use prescribed clouds in radiation model. Clouds are read from ERA5 data and updated every time radiation is called. The year 2010 is used and continuously repeated. This mode only affect radiation and is only relevant for the RRTGMP mode. [`false` (default), `true`]"
   value: false
 insolation:
-  help: "Insolation used in radiation model [`idealized` (default), `timevarying`, `rcemipii`]"
+  help: "Insolation used in radiation model [`idealized` (default), `timevarying`, `rcemipii`, `gcmdriven`, `externaldriventv`, `larcform1`]"
   value: "idealized"
 add_isothermal_boundary_layer:
   help: "Add an isothermal boundary layer above the domain top for radiation [`false`, `true` (default)]"
@@ -228,7 +228,7 @@ surface_setup:
   help: "Surface flux scheme [`DefaultExchangeCoefficients` (default), `DefaultMoninObukhov`]"
   value: "DefaultExchangeCoefficients"
 initial_condition:
-  help: "Selects the simulation case/setup. Global/idealized options: `DryBaroclinicWave`, `MoistBaroclinicWave`, `ConstantBuoyancyFrequencyProfile`, `DecayingProfile` (default), `IsothermalProfile`, `Bomex`, `DryDensityCurrentProfile`, `RisingThermalBubbleProfile`, `ISDAC`, or a NetCDF file path (see docs). Externally-driven single-column cases: `GCM`, `ARMVARANAL`, `ColumnFromFile`, `ReanalysisTimeVarying`."
+  help: "Selects the simulation case/setup. Global/idealized options: `DryBaroclinicWave`, `MoistBaroclinicWave`, `ConstantBuoyancyFrequencyProfile`, `DecayingProfile` (default), `IsothermalProfile`, `Bomex`, `DryDensityCurrentProfile`, `RisingThermalBubbleProfile`, `ISDAC`, or a NetCDF file path (see docs). Externally-driven single-column cases: `GCM`, `ARMVARANAL`, `ForcingFromFile`, `ReanalysisTimeVarying`."
   value: "DecayingProfile"
 perturb_initstate:
   help: "Add a perturbation to the initial condition [`false`, `true` (default)]"
@@ -263,15 +263,24 @@ microphysics_n_substeps:
 microphysics_n_substeps_quadrature:
   help: "Number of susbteps for time averaging bulk microphysics tendencies with subgrid-scale quadrature. Default: 2"
   value: 2
-fixed_terminal_velocity:
-  help: "Use fixed terminal velocities for microphysics tracers [`true` (default), `false`]"
+fixed_terminal_velocity_liquid:
+  help: "Use fixed terminal velocity for cloud liquid sedimentation [`true` (default), `false`]"
+  value: true
+fixed_terminal_velocity_ice:
+  help: "Use fixed terminal velocity for cloud ice sedimentation [`true` (default), `false`]"
+  value: true
+fixed_terminal_velocity_rain:
+  help: "Use fixed terminal velocity for rain sedimentation [`true`, `false` (default)]"
+  value: false
+fixed_terminal_velocity_snow:
+  help: "Use fixed terminal velocity for snow sedimentation [`true` (default), `false`]"
   value: true
 cloud_liquid_formation:
   help: "Cloud liquid formation option for 1M microphysics [`CloudLiquidFormation` (default), ~]"
   value: "CloudLiquidFormation"
 cloud_ice_formation:
   help: "Cloud ice formation option for 1M microphysics [`ConstantTimescale` (default), `TemperatureDependent`, ~]"
-  value: "ConstantTimescale"
+  value: "TemperatureDependent"
 cloud_ice_melt:
   help: "Cloud ice melting option for 1M microphysics [`CloudIceMelt` (default), ~]"
   value: "CloudIceMelt"
@@ -316,13 +325,13 @@ energy_q_tot_upwinding:
   help: "Energy upwinding mode [`none`, `first_order` , `third_order`, `vanleer_limiter` (default)]"
   value: vanleer_limiter
 orographic_gravity_wave:
-  help: "Orographic drag on horizontal mean flow [`nothing` (default), `gfdl_restart`, `raw_topo`]"
+  help: "Orographic drag on horizontal mean flow [`nothing` (default), `gfdl_restart`, `raw_topo`, `linear` (test path)]"
   value: ~
 non_orographic_gravity_wave:
   help: "Apply parameterization for convective gravity wave forcing on horizontal mean flow [`false` (default), `true`]"
   value: false
 nogw_beres_source:
-  help: "Use Beres (2004) convective source spectrum for tropical NOGW (requires EDMF) [`false` (default), `true`]"
+  help: "Use Beres (2004) convective source spectrum for tropical non-orographic gravity waves (requires the eddy-diffusivity mass-flux scheme) [`false` (default), `true`]"
   value: false
 nogw_beres_heating_latent:
   help: "Source the Beres in-cloud heating from the canonical transport-free latent-heat sum instead of the DSE flux-divergence Q1. Requires microphysics_model=1M and turbconv=prognostic_edmfx. [`false` (default), `true`]"
@@ -394,6 +403,9 @@ approximate_linear_solve_iters:
 output_default_diagnostics:
   help: "Output the default diagnostics associated to the selected atmospheric model"
   value: true
+debug_tendency_diagnostics:
+  help: "Include ~96 per-process tendency-field diagnostics for debugging (3D center-space fields; short names of the form `tn_<field>_<process>`, plus the aggregate updraft ρa tendency `tn_sgsrhoa_aggregate`). Each sample runs one extra tendency evaluation into a persistent scratch FieldVector; enable only for debugging and use a coarse output cadence."
+  value: false
 enable_diagnostics:
   help: "Set to false to fully disable the diagnostics"
   value: true
@@ -416,7 +428,7 @@ deep_atmosphere:
   help: "If true, use deep atmosphere equations and metric terms, otherwise assume columns are cylindrical (shallow atmosphere) [`true` (default), `false`]"
   value: true
 restart_file:
-  help: "Path to HDF5 file to use as simulation starting point. Note that the simulation can only be restarted in a reproducible way when `reproducible_restart` is true."
+  help: "Path to HDF5 file to use as simulation starting point. The simulation can only be restarted in a reproducible way when `reproducible_restart` is true."
   value: ~
 detect_restart_file:
   help: "When true, try finding a restart file and use it to restart the simulation. Only works with ActiveLink."
@@ -434,7 +446,7 @@ chemistry_model:
   help: "Chemistry model [`~` (default, no passive tracers), `passive` (enables passive tracer A)]"
   value: ~
 
-# EDMF configuration
+# Eddy-diffusivity mass-flux (EDMF) configuration
 turbconv:
   help: "Turbulence convection scheme [`nothing` (default), 'prognostic_edmfx']"
   value: ~
@@ -442,43 +454,49 @@ advection_test:
   help: "Switches off all grid-scale and subgrid-scale momentum tendencies [`false` (default), `true`]"
   value: false
 edmfx_scale_blending:
-  help: "Method for blending physical scales in EDMFX mixing length calculation. [`SmoothMinimum` (default), `HardMinimum`]"
+  help: "Method for blending physical scales in the eddy-diffusivity mass-flux mixing-length calculation. [`SmoothMinimum` (default), `HardMinimum`]"
   value: "SmoothMinimum"
 edmfx_filter:
-  help: "If set to true, it switches on the relaxation of negative velocity in EDMFX.  [`true`, `false` (default)]"
+  help: "If set to true, it switches on the relaxation of negative velocity in the eddy-diffusivity mass-flux scheme.  [`true`, `false` (default)]"
   value: false
 edmfx_nh_pressure:
-  help: "If set to true, it switches on EDMFX pressure drag closure.  For prognostic EDMF, this only controls the drag term in the pressure closure. The buoyancy term is always applied. [`true`, `false` (default)]"
+  help: "If set to true, it switches on the eddy-diffusivity mass-flux pressure drag closure.  For the prognostic scheme, this only controls the drag term in the pressure closure. The buoyancy term is always applied. [`true`, `false` (default)]"
   value: false
 edmfx_vertical_diffusion:
-  help: "If set to true, it switches on vertical diffusion of prognostic EDMFX updrafts. [`true`, `false` (default)]"
+  help: "If set to true, it switches on vertical diffusion of prognostic eddy-diffusivity mass-flux updrafts. [`true`, `false` (default)]"
+  value: false
+edmfx_horizontal_diffusion:
+  help: "If set to true, it applies the grid-mean horizontal diffusion tendencies to the prognostic EDMFX updrafts. Requires `edmfx_sgs_horizontal_diffusive_flux`. Intended for high-resolution runs.  [`true`, `false` (default)]"
   value: false
 edmfx_entr_model:
-  help: "EDMFX entrainment closure.  [`nothing` (default), `PiGroups`, `Generalized`]"
-  value: ~
+  help: "Eddy-diffusivity mass-flux entrainment closure. Only consulted by `prognostic_edmfx`. [`Generalized` (default), `PiGroups`]"
+  value: "Generalized"
 edmfx_detr_model:
-  help: "EDMFX detrainment closure.  [`nothing` (default), `PiGroups`, `Generalized`]"
-  value: ~
+  help: "Eddy-diffusivity mass-flux detrainment closure. Only consulted by `prognostic_edmfx`. This is a placeholder for new detrainment models. For now only supports `Generalized`. [`Generalized` (default)]"
+  value: "Generalized"
 edmfx_mse_q_tot_upwinding:
-  help: "EDMFX upwinding mode [`none`, `first_order` (default), `third_order`]"
+  help: "Eddy-diffusivity mass-flux upwinding mode [`none`, `first_order` (default), `third_order`]"
   value: first_order
 edmfx_tracer_upwinding:
-  help: "EDMFX tracer upwinding mode [`none`, `first_order` (default)]"
+  help: "Eddy-diffusivity mass-flux tracer upwinding mode [`none`, `first_order` (default)]"
   value: first_order
 edmfx_sgsflux_upwinding:
-  help: "EDMFX SGS mass flux upwinding mode [`none` (default), `first_order`, `third_order`]"
+  help: "Eddy-diffusivity mass-flux subgrid-scale mass flux upwinding mode [`none` (default), `first_order`, `third_order`]"
   value: none
 edmfx_sgs_mass_flux:
-  help: "If set to true, it switches on EDMFX SGS mass flux.  [`true`, `false` (default)]"
+  help: "If set to true, it switches on the eddy-diffusivity mass-flux subgrid-scale mass flux.  [`true`, `false` (default)]"
   value: false
 edmfx_sgs_diffusive_flux:
-  help: "If set to true, it switches on EDMFX SGS diffusive flux.  [`true`, `false` (default)]"
+  help: "If set to true, it switches on the eddy-diffusivity mass-flux subgrid-scale diffusive flux.  [`true`, `false` (default)]"
+  value: false
+edmfx_sgs_horizontal_diffusive_flux:
+  help: "If set to true, it switches on the horizontal component of the EDMFX SGS diffusive flux. Intended for high-resolution runs.  [`true`, `false` (default)]"
   value: false
 updraft_number:
-  help: "Sets the number of updrafts for the EDMF scheme"
+  help: "Sets the number of updrafts for the eddy-diffusivity mass-flux scheme"
   value: 1
 radiation_reset_rng_seed:
-  help: "Reset the RNG seed before calling RRTGMP to a known value (the timestep number). When modeling cloud optics, RRTGMP uses a random number generator. Resetting the seed every time RRTGMP is called to a deterministic value ensures that the simulation is fully reproducible and can be restarted in a reproducible way. Disable this option when running production runs. Please note that this flag is only used for `AllSkyRadiation` and `AllSkyRadiationWithClearSkyDiagnostics` radiation modes."
+  help: "Reset the RNG seed before calling RRTGMP to a known value (the timestep number). When modeling cloud optics, RRTGMP uses a random number generator. Resetting the seed every time RRTGMP is called to a deterministic value ensures that the simulation is fully reproducible and can be restarted in a reproducible way. Disable this option when running production runs. This flag is only used for `AllSkyRadiation` and `AllSkyRadiationWithClearSkyDiagnostics` radiation modes."
   value: false
 log_to_file:
   help: "Log to stdout and file simultaneously. The log file is saved within the output directory"

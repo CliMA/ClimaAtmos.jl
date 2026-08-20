@@ -1,11 +1,12 @@
 # Column Datasets
 
 Adding a new externally-driven column case in a supported format requires no
-source code: point the config at the file and the `ForcingFromFile` setup
-builds the case (initial condition, external forcing, surface temperature, and
-insolation) from it.
+source code: point the config at the file and the
+[`ForcingFromFile`](@ref ClimaAtmos.Setups.ForcingFromFile) setup builds the
+case (initial condition, external forcing, surface temperature, and insolation)
+from it.
 
-```YAML
+```yaml
 initial_condition: "ForcingFromFile"
 external_forcing_file: /path/to/my_case_forcing.nc
 start_date: "20200101"
@@ -24,9 +25,11 @@ stale cached file (e.g. an ERA5 forcing file written by an older version in a
 different on-disk layout) is regenerated on demand from the source rather than read.
 
 The forcing is composed from explicit per-process terms
-(`HorizontalAdvection`, `VerticalFluctuation`, `Nudging`, `Subsidence`). The
-default composition is all four. A runscript can narrow or reshape it without
-any YAML option:
+([`HorizontalAdvection`](@ref ClimaAtmos.HorizontalAdvection),
+[`VerticalFluctuation`](@ref ClimaAtmos.VerticalFluctuation),
+[`Nudging`](@ref ClimaAtmos.Nudging),
+[`Subsidence`](@ref ClimaAtmos.Subsidence)). The default composition is all
+four. A runscript can narrow or reshape it without any YAML option:
 
 ```julia
 forcing = ClimaAtmos.ExternalDrivenTVForcing(
@@ -44,7 +47,9 @@ Per-variable relaxation timescales and height-dependent masks compose as
 multiple `Nudging` terms (`Nudging(:ta; timescale, mask = z -> ...)`).
 
 Surface-temperature and insolation inputs are required only when the model uses
-them (`ExternalTemperature` needs `ts`; `ExternalTVInsolation` needs
+them
+([`ExternalTemperature`](@ref ClimaAtmos.SurfaceConditions.ExternalTemperature)
+needs `ts`; [`ExternalTVInsolation`](@ref ClimaAtmos.ExternalTVInsolation) needs
 `coszen`/`rsdt`), so runscripts need not track those separately.
 
 The built-in file-driven cases wire these defaults (a runscript can override any
@@ -80,12 +85,13 @@ exceptions.
     `ts` [K], `hfls`/`hfss` [W m⁻², upward positive], `coszen` [1],
     `rsdt` [W m⁻²].
 
-Constructing a `ColumnDataset` validates a native file against this schema,
-including exact canonical SI unit strings, and reports all violations.
-`ColumnDatasets.validate(ColumnDatasets.ClimaColumnFile(), path)` performs
-the same check explicitly;
-`ClimaColumnFiles.write_column_forcing_file` is the one producer
-implementation, used by the ERA5 generator.
+Constructing a [`ColumnDataset`](@ref ClimaAtmos.ColumnDatasets.ColumnDataset)
+validates a native file against this schema, including exact canonical SI unit
+strings, and reports all violations.
+`ColumnDatasets.validate(ColumnDatasets.ClimaColumnFile(), path)` performs the
+same check explicitly;
+[`ClimaColumnFiles.write_column_forcing_file`](@ref ClimaAtmos.ColumnDatasets.ClimaColumnFiles.write_column_forcing_file)
+is the one producer implementation, used by the ERA5 generator.
 
 To extend this machinery (nonstandard forcing from a runscript, generating
 ERA5 forcing files, or a reader for a new file format), see

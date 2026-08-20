@@ -6,7 +6,7 @@ depth.
 
 ## State and cache
 
-ClimaAtmos integrates a prognostic state vector forward in time. A handful of
+ClimaAtmos integrates a prognostic state vector forward in time. A few
 single-letter names appear throughout the code:
 
 | Symbol | Meaning                                                                                                                                                                                                                              |
@@ -32,7 +32,7 @@ These are accessed through the integrator after a run, e.g.
   - **IMEX time stepping**: the implicit–explicit scheme used by default; the
     implicit part is handled by the [Implicit Solver](@ref).
   - **ITime**: the integer time type used for reproducible, exactly representable
-    simulation times. See [ITime](@ref).
+    simulation times. See [Integer Time (ITime)](@ref).
   - **PROPHET**: the Prognostic Representation Of Physics for Eddy Transport,
     the turbulence/convection scheme of ClimaAtmos: an extended, prognostic
     eddy-diffusivity mass-flux (EDMF) scheme, still called EDMFX in the code.
@@ -40,3 +40,7 @@ These are accessed through the integrator after a run, e.g.
   - **Diagnostics**: derived output variables, as opposed to the prognostic state
     `Y`. See [Computing and saving diagnostics](@ref) and the catalog of
     [available diagnostic variables](@ref "Available diagnostic variables").
+
+For the mapping between the symbols used in the equations pages and the
+names used in the code (the `ᶜ`/`ᶠ` prefixes, subdomain superscripts, and
+prognostic-variable names), see [Notation and Symbols](notation.md).

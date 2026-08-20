@@ -120,13 +120,17 @@ function set_covariance_cache_and_cloud_fraction!(Y, p)
 end
 
 """
-Guarded Aitken Δ² acceleration:
-c_acc = c0 - (c1 - c0)^2 / (c2 - 2c1 + c0)
+    _aitken_picard_helper(c0, c1, c2)
 
-Apply Aitken only when the Picard increments change sign, i.e. when the
-Picard iterates oscillate around the fixed point. In that case, the
-accelerated value is expected to remain between previously computed iterates.
-Otherwise, retain the second Picard iterate.
+Guarded Aitken Δ² acceleration of the cloud-fraction Picard iterates,
+`c_acc = c0 - (c1 - c0)^2 / (c2 - 2c1 + c0)`.
+
+The accelerated value is used only when the two Picard increments change sign,
+i.e. when the iterates oscillate about the fixed point and the Aitken value is
+expected to lie between them, and when the denominator is above roundoff.
+Otherwise the second Picard iterate `c2` is retained.
+
+Called from `set_covariance_cache_and_cloud_fraction!`.
 """
 @inline function _aitken_picard_helper(c0, c1, c2)
     FT = typeof(c0)
@@ -181,7 +185,7 @@ Whether SGS (co)variances of `(T, q_tot)` are needed by the configuration:
 either the microphysics quadrature API, 1M/2M non-equilibrium microphysics,
 or a `QuadratureCloud`/`MLCloud` model requires them. This is the single
 source of truth shared by the two places that must agree on it: the
-covariance-cache no-op guard ([`set_covariance_cache!`](@ref)) and the
+covariance-cache no-op guard (`set_covariance_cache!`) and the
 `ᶜl_mix` caching in `set_explicit_precomputed_quantities!`. When `true`,
 `ᶜl_mix` is materialized inside the covariance/cloud-fraction iteration and
 the explicit stage skips its redundant recompute; when `false`, only the
@@ -198,10 +202,11 @@ uses_covariances(atmos) =
     materialized_mixing_length!(Y, p)
 
 Materialize the SGS master mixing length into a center field and return it.
-For an `AbstractEDMF` with prognostic TKE this writes the `ᶜl_mix` cache
-(computed once, reused by TKE dissipation, the covariance closure, and
-diagnostics); for `AbstractEDMF` without prognostic TKE it uses scratch; for
-non-EDMF it falls back to the grid-mean Smagorinsky–Lilly length. Always
+For an `AbstractEDMF` this writes the persistent `ᶜl_mix` cache (computed once,
+reused by TKE dissipation, the covariance closure, and diagnostics); every
+`AbstractEDMF` carries `Y.c.ρtke`, so `ᶜmixing_length` is well defined. Otherwise
+it falls back to the grid-mean Smagorinsky-Lilly length, materialized in
+`p.scratch.ᶜtemp_scalar` by `compute_gm_mixing_length`. Always
 materializing (rather than passing the lazy `ᶜmixing_length` broadcast, which
 carries `mixing_length_lopez_gomez_2020` with its parameter structs) avoids
 recomputing the closure for each covariance and keeps GPU kernel parameters
@@ -229,7 +234,7 @@ computations (SGS quadrature, cloud fraction). Populates `p.precomputed.(ᶜT′
 
 Pipeline:
 
- 1. Compute mixing length via [`materialized_mixing_length!`](@ref)
+ 1. Compute mixing length via `materialized_mixing_length!`
  2. Materialize θ-based covariances from gradients
  3. Transform θ→T using `compute_∂T_∂θ!`
 """
@@ -298,7 +303,7 @@ end
 
 GPU-safe functor returning `(S(ξ) − μ_S)²` at each quadrature point, where
 S = q_tot_hat − q_sat_hat is the linear saturation excess and `μ_S` is the
-linearized SGS mean of S (see [`_sgs_saturation_moments`](@ref)). Used to
+linearized SGS mean of S (see `_sgs_saturation_moments`). Used to
 accumulate σ_S² = E[(S − μ_S)²] in one quadrature pass; avoids catastrophic
 cancellation in `E[S²] − (E[S])²` in Float32 when Var[S] ≪ (E[S])².
 """
@@ -422,7 +427,7 @@ condensate computation:
 
 where `S′ = S − μ_S ~ N(0, σ_S²)`.  The effective standard deviation used by
 the Lagrange-multiplier closure is `σ_S_eff = α · σ_S` (with `σ_S` clipped at
-`ϵ_numerics(FT)` inside [`_sgs_saturation_moments`](@ref)), so `C = q_c / σ_S_eff`
+`ϵ_numerics(FT)` inside `_sgs_saturation_moments`), so `C = q_c / σ_S_eff`
 and `λ = z · σ_S_eff`.
 
 With the default `cf_steepness_coeff = 1` this gives `α = 1` (full variance
@@ -471,10 +476,10 @@ end
     _compute_cloud_fraction(q_c, mu_S, sigma_S, q_sat, α, floor)
 
 Cloud fraction `CF = Φ(z)`, where `z` solves the truncated-Gaussian condensate
-relation `q_c/σ_aug = z·Φ(z) + φ(z)` (see [`_compute_z`](@ref)) with the
-augmented standard deviation `σ_aug = α · sqrt(σ_S² + σ_S_floor²)`. The
-`floor` NamedTuple bundles the floor magnitude and release-shape parameters
-(see [`cloud_fraction_floor_params`](@ref)).
+relation `q_c/σ_aug = z·Φ(z) + φ(z)` (see `_compute_z`) with the
+augmented standard deviation `σ_aug = α · sqrt(σ_S² + σ_S_floor²)`. The `floor`
+argument is a `CloudFractionFloorParams` bundling the floor magnitude and
+release-shape parameters (see `cloud_fraction_floor_params`).
 
 Scale-aware non-equilibrium floor. We assume the local condensate `q_c`
 fluctuates partly through the equilibrium variations of (T, q_tot) captured by
@@ -512,7 +517,7 @@ release width `w`:
     D  = D_min + (1 − D_min) · (1 + x²)^(−s/2),
 
 with four calibratable shape parameters (see
-[`cloud_fraction_floor_params`](@ref)):
+`cloud_fraction_floor_params`):
 
   - `margin` `c_w`: saturation margin in equilibrium PDF widths at which
     the release transitions. With `abs_margin = 0`, `w` is the equilibrium
@@ -606,12 +611,12 @@ end
     CloudFractionFloorParams{FT}
 
 Augmented-σ floor magnitude and release-shape parameters for
-[`_compute_cloud_fraction`](@ref), bundled into one isbits broadcast scalar
+`_compute_cloud_fraction`, bundled into one isbits broadcast scalar
 (a struct rather than a NamedTuple, which Base reserves from broadcasting):
 
   - `ε_rel`, `σ_abs`: relative and absolute floor magnitudes,
   - `margin`, `abs_margin`, `sharpness`, `residual`: release shape (see the
-    saturation-margin release section of [`_compute_cloud_fraction`](@ref)).
+    saturation-margin release section of `_compute_cloud_fraction`).
 """
 Base.@kwdef struct CloudFractionFloorParams{FT}
     ε_rel::FT
@@ -626,7 +631,7 @@ Base.broadcastable(x::CloudFractionFloorParams) = tuple(x)
 """
     cloud_fraction_floor_params(params)
 
-Build the [`CloudFractionFloorParams`](@ref) bundle from the model
+Build the `CloudFractionFloorParams` bundle from the model
 parameter set.
 """
 cloud_fraction_floor_params(params) = CloudFractionFloorParams(;
@@ -644,12 +649,12 @@ cloud_fraction_floor_params(params) = CloudFractionFloorParams(;
 Single quadrature pass returning `(sigma_S, λ_lagrange)`:
 
   - `sigma_S    = sqrt(E[(S − μ_S)²])`: SGS standard deviation, clipped at
-    `ϵ_numerics(FT)` (see [`_sgs_saturation_moments`](@ref)).
+    `ϵ_numerics(FT)` (see `_sgs_saturation_moments`).
   - `λ_lagrange = z·α·σ_S`: Lagrange multiplier satisfying
     `E[max(0, λ + α·S′)] = q_c`.
 
 The SGS mean `μ_S = q_tot − q_sat(T, ρ)` is analytic under the closure's
-linearization (see [`_sgs_saturation_moments`](@ref)) and is recomputed
+linearization (see `_sgs_saturation_moments`) and is recomputed
 on demand wherever it is needed downstream.
 """
 @inline function _compute_sgs_moments(
@@ -673,7 +678,7 @@ Final post-Aitken update. No-op when `ᶜsgs_moments` is not allocated (dry / 0M
 Uses ONE quadrature pass via `_compute_sgs_moments` to fill
 `ᶜsgs_moments = (sigma_S, λ_lagrange)`, then computes
 `ᶜcloud_fraction` consistently with the augmented `σ_aug` closure (see
-[`_compute_cloud_fraction`](@ref)) and applies EDMF updraft weighting.
+`_compute_cloud_fraction`) and applies EDMF updraft weighting.
 """
 NVTX.@annotate function set_sgs_moments_and_cloud_fraction!(Y, p)
     hasproperty(p.precomputed, :ᶜsgs_moments) || return nothing
@@ -724,17 +729,23 @@ end
 """
     set_cloud_fraction!(Y, p, microphysics_model, cloud_model)
 
-Compute and store grid-scale cloud fraction based on sub-grid scale properties.
+Compute the grid-scale cloud fraction from subgrid-scale properties and store it in
+`p.precomputed.ᶜcloud_fraction`.
 
 Dispatches on `microphysics_model` and `cloud_model`:
 
-  - `DryModel`: Cloud fraction and cloud condensate are zero.
-  - `GridScaleCloud`: Cloud fraction is 1 if grid-scale condensate exists, 0 otherwise.
-  - `QuadratureCloud`: Cloud fraction from the hybrid quadrature-moment formula
-    (`_compute_cloud_fraction`).
-  - `MLCloud`: Cloud fraction from neural network.
+  - `DryModel`: cloud fraction is zero everywhere.
+  - `GridScaleCloud`: 1 where grid-scale condensate is present, 0 otherwise.
+  - `QuadratureCloud`: the truncated-Gaussian closure with the fused `σ_S²`
+    quadrature pass (see `_compute_cloud_fraction`).
+  - `MLCloud`: the neural-network prediction (see
+    `set_ml_cloud_fraction!`).
 
-For EDMF turbulence models, updraft contributions are added to the environment values.
+With `PrognosticEDMFX`, the environment value is weighted by the environment area
+fraction and binary updraft contributions are added
+(`_apply_edmf_cloud_weighting!`).
+
+Mutates `p.precomputed.ᶜcloud_fraction`; the return value is unused.
 """
 NVTX.@annotate function set_cloud_fraction!(Y, p, ::DryModel, _)
     FT = eltype(p.params)
@@ -761,7 +772,7 @@ end
     _grid_mean_cloud_condensate(Y, p, microphysics_model)
 
 Grid-mean cloud condensate `(ᶜq_lcl, ᶜq_icl)`, used by `GridScaleCloud` and,
-without EDMF, by [`_get_condensate_means`](@ref). With non-equilibrium
+without EDMF, by `_get_condensate_means`. With non-equilibrium
 microphysics, uses the prognostic cloud condensate only; the precomputed
 `ᶜq_liq` / `ᶜq_ice` include precipitation (`q_rai` / `q_sno`), which should
 not count as cloud.
@@ -943,9 +954,9 @@ end
 
 Mean cloud condensate `(ᶜq_lcl, ᶜq_icl)` of the domain that carries the SGS
 cloud closure: the environment for PrognosticEDMFX
-([`_env_cloud_condensate`](@ref)), the grid mean otherwise
-([`_grid_mean_cloud_condensate`](@ref)). Updraft contributions are added
-separately by [`_apply_edmf_cloud_weighting!`](@ref).
+(`_env_cloud_condensate`), the grid mean otherwise
+(`_grid_mean_cloud_condensate`). Updraft contributions are added
+separately by `_apply_edmf_cloud_weighting!`.
 """
 _get_condensate_means(Y, p, turbconv_model, microphysics_model) =
     turbconv_model isa PrognosticEDMFX ?
@@ -1043,23 +1054,28 @@ _updraft_cloud_condensate(Y, p, j, microphysics_model) =
     set_ml_cloud_fraction!(Y, p, ml_cloud, thermo_params, turbconv_model,
                           ᶜρ_env, ᶜT_mean, ᶜq_mean, ᶜθ_mean)
 
-Overwrite the environment cloud fraction with ML-predicted values.
+Overwrite `p.precomputed.ᶜcloud_fraction` with the ML prediction.
 
-The ML model uses non-dimensional π groups derived from thermodynamic state
-and turbulence quantities. Only the cloud fraction is replaced by the ML
-prediction; condensate is computed from the grid-mean thermodynamic state.
+The network is evaluated point-wise on non-dimensional π groups built from the
+thermodynamic state, the mixing length, and the vertical gradients of `q_tot` and
+`θ_liq_ice` (see `compute_ml_cloud_fraction`). Only cloud fraction is
+predicted; the condensate is left as diagnosed elsewhere. EDMF area weighting is
+applied by the caller.
 
 # Arguments
 
-  - `Y`: State vector
-  - `p`: Cache/parameters
-  - `ml_cloud`: MLCloud configuration with trained neural network
-  - `thermo_params`: Thermodynamics parameters
-  - `turbconv_model`: Turbulence-convection model type
-  - `ᶜρ_env`: Environment air density [kg/m³]
-  - `ᶜT_mean`: Mean temperature [K]
-  - `ᶜq_mean`: Mean total specific humidity [kg/kg]
-  - `ᶜθ_mean`: Mean liquid-ice potential temperature [K]
+  - `Y`: State vector.
+  - `p`: Cache; reads `p.precomputed.ᶜgradᵥ_q_tot` and `ᶜgradᵥ_θ_liq_ice`, and uses
+    `p.scratch.ᶜtemp_scalar_2` and `ᶜtemp_scalar_3` for the projected gradients.
+  - `ml_cloud`: `MLCloud` configuration holding the trained network.
+  - `thermo_params`: Thermodynamics parameters.
+  - `turbconv_model`: Turbulence-convection model.
+  - `ᶜρ_env`: Environment air density [kg/m³].
+  - `ᶜT_mean`: Mean temperature [K].
+  - `ᶜq_mean`: Mean total specific humidity [kg/kg].
+  - `ᶜθ_mean`: Mean liquid-ice potential temperature [K].
+
+Mutates `p.precomputed.ᶜcloud_fraction`; the return value is unused.
 """
 function set_ml_cloud_fraction!(
     Y,

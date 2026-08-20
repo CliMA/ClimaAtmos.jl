@@ -1,9 +1,9 @@
 # The CliMA Ecosystem
 
 ClimaAtmos composes focused, independently developed and tested packages
-from the [CliMA](https://github.com/CliMA) ecosystem. Each package owns one
+from the [CliMA](https://github.com/CliMA) ecosystem. Each package covers one
 aspect of the model (thermodynamics, radiative transfer, surface fluxes,
-microphysics, parameters), and ClimaAtmos wires them together into an atmosphere model. This page explains what each
+microphysics, parameters), and ClimaAtmos links them together into an atmosphere model. This page explains what each
 package contributes, why the decomposition matters physically, and where each
 package enters the ClimaAtmos source code.
 
@@ -15,10 +15,9 @@ Two consistency principles motivate the decomposition:
     do not close. A single shared thermodynamics package guarantees this by
     construction.
   - **A single source of truth for parameters.** All physical constants and
-    calibratable parameters live in one place. The model can be adapted to
-    past climates or other planetary configurations just by changing
-    parameters there, without touching model code; calibration tools can
-    target any parameter uniformly.
+    calibratable parameters are defined in one place. The model can be adapted to
+    past climates or other planetary configurations by changing
+    parameters there; calibration tools can target any parameter.
 
 ## How the packages fit together
 
@@ -33,14 +32,17 @@ Two consistency principles motivate the decomposition:
 │   CloudMicrophysics.jl       │   ClimaDiagnostics.jl         │
 │                              │   ClimaUtilities.jl           │
 ├──────────────────────────────┴───────────────────────────────┤
-│ Shared foundation, used by every package above:              │
+│ Shared foundation for ClimaAtmos and the physics libraries:  │
 │   Thermodynamics.jl  ·  ClimaParams.jl                       │
 └──────────────────────────────────────────────────────────────┘
 ```
 
-The physics libraries are themselves clients of Thermodynamics.jl and
-ClimaParams.jl; this shared foundation, not ClimaAtmos, keeps the
-formulations consistent across packages.
+CloudMicrophysics.jl and SurfaceFluxes.jl themselves use
+Thermodynamics.jl, so this shared foundation, not ClimaAtmos, keeps the
+thermodynamic formulations consistent across packages. RRTMGP.jl and
+Insolation.jl do not depend on ClimaParams.jl, but their parameter structs are
+built by ClimaAtmos from the same ClimaParams TOML database, so their
+parameters are calibratable in the same way.
 
 ## Shared foundation
 
@@ -69,10 +71,11 @@ packages: fixed physical constants such as gas constants and latent heats, as
 well as calibratable closure parameters such as entrainment coefficients and
 mixing-length parameters.
 Because packages never hard-code parameter values, the model can be adapted to
-past climates or other planetary configurations just by changing parameters
+past climates or other planetary configurations by changing parameters
 (e.g., a different solar constant, rotation rate, gravity, or CO2
 concentration), and calibration frameworks can override any parameter through
-the same [TOML interface](parameters.md) used for manual experimentation.
+the same [TOML interface](@ref "Overriding parameters") used for manual
+experimentation.
 
 *Where it enters ClimaAtmos:* `src/parameters/create_parameters.jl` assembles
 the `ClimaAtmosParameters` struct from the ClimaParams TOML database, including
@@ -87,7 +90,7 @@ parameters via `toml: [...]`.
 [Insolation.jl](https://clima.github.io/Insolation.jl/stable/) sets the
 insolation at the top of the atmosphere: it computes the incoming solar flux
 and solar zenith angle from time, location, and the planet's orbital parameters
-(eccentricity, obliquity, precession). Because the orbital parameters are just
+(eccentricity, obliquity, precession). Because the orbital elements are ordinary
 parameters, paleoclimate (Milankovitch) configurations and idealized insolation
 experiments require no code changes.
 
@@ -131,7 +134,7 @@ instead.
 provides the microphysical process rates (condensation/evaporation,
 autoconversion, accretion, sedimentation velocities, ice nucleation, aerosol
 activation) for the 0-moment to 2-moment bulk schemes. ClimaAtmos calls these
-rates pointwise and handles their coupling to the dynamics (advection,
+rates pointwise and couples them to the dynamics (advection,
 sedimentation fluxes, energy sinks); see [Microphysics](microphysics.md).
 
 *Where it enters ClimaAtmos:* `src/parameterized_tendencies/microphysics/`,
@@ -141,7 +144,7 @@ selected by the `microphysics_model` configuration argument.
 
   - [ClimaCore.jl](https://clima.github.io/ClimaCore.jl/stable/) provides the
     spatial discretization: spectral-element/finite-difference grids, fields,
-    and the [discrete operators](equations.md) used to express the equations.
+    and the [discrete operators](discretization.md) used to express the equations.
   - [ClimaTimeSteppers.jl](https://clima.github.io/ClimaTimeSteppers.jl/stable/)
     provides the IMEX time integrators used together with the
     [implicit solver](implicit_solver.md).
@@ -168,11 +171,11 @@ selected by the `microphysics_model` configuration argument.
 ## Calibration
 
 ClimaAtmos is designed to be calibrated against data, and the parameter
-architecture above makes this work: because every closure parameter
-lives in ClimaParams.jl, a calibration only has to write TOML overrides.
+architecture above makes this work: because every closure parameter is defined
+in ClimaParams.jl, a calibration only has to write TOML overrides.
 
   - [ClimaCalibrate.jl](https://clima.github.io/ClimaCalibrate.jl/stable/)
-    orchestrates calibration-with-data workflows: it runs ensembles of
+    drives calibration-with-data workflows: it runs ensembles of
     ClimaAtmos simulations (locally or on HPC clusters), maps observations to
     model diagnostics, and iterates the parameter ensemble.
   - [EnsembleKalmanProcesses.jl](https://clima.github.io/EnsembleKalmanProcesses.jl/stable/)

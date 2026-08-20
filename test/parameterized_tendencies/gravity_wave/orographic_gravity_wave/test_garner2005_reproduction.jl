@@ -60,8 +60,6 @@ import ClimaCore:
 using CairoMakie
 using Statistics
 using NCDatasets
-import ClimaAnalysis
-import ClimaAnalysis: Visualize as viz, read_var, window
 
 include("../gw_remap_plot_utils.jl")
 include("ogw_test_utils.jl")

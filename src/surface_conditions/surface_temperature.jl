@@ -1,18 +1,23 @@
 """
     SurfaceTemperature
 
-Abstract supertype for ways of obtaining the surface temperature `T_sfc` used
-when computing surface conditions. Concrete subtypes:
+Abstract supertype for the sources of the surface temperature `T_sfc` [K] used
+when computing surface conditions.
 
-  - [`AnalyticTemperature`](@ref): a function `(coordinates, params, t) -> T_sfc`. A
-    spatially and temporally constant `T_sfc` is simply constructed as
+Subtypes:
+
+  - [`AnalyticTemperature`](@ref): a function `(coordinates, params, t) -> T_sfc`.
+    A spatially and temporally constant `T_sfc` is constructed as
     `AnalyticTemperature(Returns(T_sfc))`.
-  - [`ExternalTemperature`](@ref): time-varying input read from a cached Field.
-  - [`SlabOceanTemperature`](@ref): prognostic, reads `Y.sfc.T`. Carries slab params.
-  - [`CoupledTemperature`](@ref): a Field owned by an external driver (e.g. coupler).
+  - [`ExternalTemperature`](@ref): a time-varying input read from a cached `Field`.
+  - [`SlabOceanTemperature`](@ref): prognostic, reads `Y.sfc.T`; carries the slab
+    parameters.
+  - [`CoupledTemperature`](@ref): a `Field` owned by an external driver (the coupler).
 
-`surface_temperature(t, Y, p, t_time)` produces the value(s) that
-[`update_surface_conditions!`](@ref) will broadcast across the surface.
+Each subtype extends `surface_temperature(temperature, Y, p, t_time)`, which
+returns the value that [`update_surface_conditions!`](@ref) broadcasts across
+the surface: either a `DataLayout` of per-cell temperatures, or the temperature
+object itself when it must be evaluated per coordinate (see `resolve_T_sfc`).
 """
 abstract type SurfaceTemperature end
 
@@ -21,11 +26,23 @@ Base.broadcastable(t::SurfaceTemperature) = tuple(t)
 """
     AnalyticTemperature(f)
 
-A surface temperature given by `f(coordinates, params, t)`. Used for the
-analytic SST formulas (zonally-symmetric, RCEMIPII), time-varying setups
-(e.g. GABLS), and spatially-uniform constants (`AnalyticTemperature(Returns(T))`).
-`f` is broadcast per-coordinate inside the surface update; if the formula does
-not depend on time, simply ignore the `t` argument.
+A surface temperature given by `f(coordinates, surface_temp_params, t)` [K].
+
+Used for the analytic SST formulas (zonally symmetric, RCEMIPII), time-varying
+setups (e.g. GABLS), and spatially uniform constants
+(`AnalyticTemperature(Returns(T))`). `f` is evaluated per coordinate inside the
+surface-update broadcast, so it must be GPU-compatible; if the formula does not
+depend on time, ignore the `t` argument.
+
+# Fields
+
+  - `f`: Callable `(coordinates, surface_temp_params, t) -> T_sfc` [K].
+
+# Examples
+
+```julia
+temperature = AnalyticTemperature(Returns(300.0))
+```
 """
 struct AnalyticTemperature{F} <: SurfaceTemperature
     f::F
@@ -34,20 +51,34 @@ end
 """
     ExternalTemperature()
 
-A surface temperature read from a time-varying external input.
-`surface_temperature(::ExternalTemperature, Y, p, t)` evaluates the field
-from `p.external_forcing.surface_fields.ts` (driven by
-`surface_timevaryinginputs.ts`), so this temperature is only valid when the
-setup populates `external_forcing.surface_fields` (e.g. `ForcingFromFile`).
+A surface temperature read from a time-varying external input [K].
+
+`surface_temperature(::ExternalTemperature, Y, p, t_time)` evaluates
+`p.external_forcing.surface_timevaryinginputs.ts` into
+`p.external_forcing.surface_fields.ts`, so this temperature requires a setup
+that populates `external_forcing.surface_fields` from a file carrying the `ts`
+variable (e.g. `ForcingFromFile`).
 """
 struct ExternalTemperature <: SurfaceTemperature end
 
 """
-    SlabOceanTemperature{FT}()
+    SlabOceanTemperature{FT}(; depth_ocean, ρ_ocean, cp_ocean, q_flux, Q₀, ϕ₀)
 
-Prognostic slab-ocean surface temperature, read from `Y.sfc.T`. Carries the
-slab-ocean parameters used by `surface_temp_tendency!` and conservation
-diagnostics.
+Prognostic slab-ocean surface temperature, read from `Y.sfc.T` [K].
+
+The only [`SurfaceTemperature`](@ref) that adds surface prognostic state
+(`Y.sfc.T` and `Y.sfc.water`); its fields are the slab parameters used by
+`surface_temp_tendency!` and by the conservation diagnostics. The optional
+Q-flux is an idealized meridional profile of ocean heat-flux divergence.
+
+# Fields
+
+  - `depth_ocean = 40`: Ocean mixed-layer depth [m].
+  - `ρ_ocean = 1020`: Ocean density [kg/m³].
+  - `cp_ocean = 4184`: Ocean specific heat capacity [J/kg/K].
+  - `q_flux = false`: Whether to apply the idealized Q-flux [-].
+  - `Q₀ = -20`: Q-flux amplitude [W/m²].
+  - `ϕ₀ = 16`: Q-flux meridional scale [degrees].
 """
 @kwdef struct SlabOceanTemperature{FT} <: SurfaceTemperature
     depth_ocean::FT = 40        # ocean mixed-layer depth (m)
@@ -61,8 +92,13 @@ end
 """
     CoupledTemperature(field)
 
-A surface temperature owned by an external driver (the coupler). The driver
-writes into `field` between steps; ClimaAtmos reads from it.
+A surface temperature owned by an external driver (the coupler) [K].
+
+The driver writes into `field` between steps; ClimaAtmos only reads from it.
+
+# Fields
+
+  - `field`: Surface `Field` of temperatures [K].
 """
 struct CoupledTemperature{F} <: SurfaceTemperature
     field::F
@@ -70,13 +106,21 @@ end
 
 # ============================================================================
 # surface_temperature: dispatch from temperature type to the value used in
-# update_surface_conditions!. Returns either the temperature struct itself
-# (AnalyticTemperature, evaluated per-coordinate downstream via resolve_T_sfc)
-# or a DataLayout of per-cell values that broadcasts across the surface.
+# update_surface_conditions!.
 # ============================================================================
 
-# AnalyticTemperature must be evaluated per-coordinate downstream; we return
-# the temperature struct so update_surface_conditions! can dispatch on it.
+"""
+    surface_temperature(temperature, Y, p, t_time)
+
+Return the surface temperature [K] in the form consumed by
+[`update_surface_conditions!`](@ref).
+
+For an [`ExternalTemperature`](@ref), [`SlabOceanTemperature`](@ref), or
+[`CoupledTemperature`](@ref) this is a `DataLayout` of per-cell values (the
+external input is evaluated at `t_time` first). For an
+[`AnalyticTemperature`](@ref) it is the temperature object itself, which
+`resolve_T_sfc` evaluates per coordinate inside the surface broadcast.
+"""
 surface_temperature(t::AnalyticTemperature, Y, p, _) = t
 
 function surface_temperature(::ExternalTemperature, Y, p, t_time)

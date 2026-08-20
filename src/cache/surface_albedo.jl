@@ -2,10 +2,14 @@
 """
     SurfaceAlbedoModel
 
-Abstract supertype for surface shortwave albedo models. Concrete subtypes
-([`ConstantAlbedo`](@ref), [`RegressionFunctionAlbedo`](@ref),
-[`CouplerAlbedo`](@ref)) set the direct and diffuse shortwave reflectivities
+Strategy for setting the direct and diffuse shortwave surface reflectivities
 seen by the radiation scheme (via `set_surface_albedo!`).
+
+Subtypes:
+
+  - [`ConstantAlbedo`](@ref): a single constant albedo for idealized experiments.
+  - [`RegressionFunctionAlbedo`](@ref): the ocean-albedo regression of [Jin2011](@cite).
+  - [`CouplerAlbedo`](@ref): albedo supplied externally by the coupler.
 """
 abstract type SurfaceAlbedoModel end
 
@@ -19,19 +23,44 @@ no albedo computation of its own in this mode.
 struct CouplerAlbedo <: SurfaceAlbedoModel end
 
 """
-    struct ConstantAlbedo{FT} <: SurfaceAlbedoModel
+    ConstantAlbedo{FT} <: SurfaceAlbedoModel
 
-A constant surface albedo model. The default value is `α = 0.38`.
-It is used purely for idealized experiments.
+Spatially and temporally constant surface albedo, used for idealized experiments.
+
+The same value is applied to the direct and diffuse shortwave albedos. The field has
+no default: the Julia-API default in `AtmosModel` is `ConstantAlbedo(; α = 0.07)`,
+while the YAML configuration path constructs it from the ClimaParams parameter
+`idealized_ocean_albedo` (0.38, from O'Gorman and Schneider, 2008).
+
+# Fields
+
+  - `α`: Surface albedo for both direct and diffuse shortwave radiation [-].
 """
 @kwdef struct ConstantAlbedo{FT} <: SurfaceAlbedoModel
     α::FT
 end
 
 """
-    struct RegressionFunctionAlbedo{FT} <: SurfaceAlbedoModel
+    RegressionFunctionAlbedo{FT}(; n, n0, p, q_clear, q_cloud, wave_slope)
 
-A regression function-based surface albedo model of Jin et al. (2011, referred to as J11).
+Ocean surface albedo from the regression functions of [Jin2011](@cite) (J11),
+with direct and diffuse components computed separately. Volume reflectance
+(foam and subsurface scattering) is currently ignored.
+
+# Fields
+
+  - `n`: Relative refractive index of water and air, `n = n_w/n_a` [-].
+  - `n0`: Refractive index of water for visible light [-].
+  - `p`: Regression coefficients for the direct albedo (J11 eq. 4) [-].
+  - `q_clear`: Regression coefficients for the clear-sky diffuse albedo (J11 eq. 5a) [-].
+  - `q_cloud`: Regression coefficients for the cloudy-sky diffuse albedo (J11 eq. 5b) [-].
+  - `wave_slope`: Function of wind speed returning the mean wave-slope distribution
+    width of the Cox-Munk model (J11 eq. 2) [-].
+
+# Constructor
+
+The keyword constructor supplies the J11 regression coefficients as defaults, so
+`RegressionFunctionAlbedo{FT}()` is the standard usage.
 """
 struct RegressionFunctionAlbedo{FT, F <: Function} <: SurfaceAlbedoModel
     n::FT                           # relative refractive index of water and air (n = n_w/n_a) TODO: f(wavelength) for a spectrally dependent scheme
@@ -69,7 +98,9 @@ import RRTMGP
 """
     set_surface_albedo!(Y, p, t, α_model::ConstantAlbedo)
 
-Set the surface albedo to a constant value.
+Set the direct and diffuse shortwave surface albedos to the constant `α_model.α`.
+
+Mutates the direct and diffuse albedo arrays of `p.radiation.rrtmgp_solver`.
 """
 function set_surface_albedo!(Y, p, t, α_model::ConstantAlbedo{FT}) where {FT}
 
@@ -81,9 +112,15 @@ function set_surface_albedo!(Y, p, t, α_model::ConstantAlbedo{FT}) where {FT}
 end
 
 """
-    set_surface_albedo!(Y, p, t, α_model::RegressionFunctionAlbedo{FT})
+    set_surface_albedo!(Y, p, t, α_model::RegressionFunctionAlbedo)
 
-Wrapper to call the formulations of Jin et al. (2011), and set the direct and diffuse surface albedos of the ocean.
+Set the direct and diffuse shortwave surface albedos of the ocean from the
+regression functions of [Jin2011](@cite), evaluated at the current solar zenith
+angle and near-surface wind speed.
+
+Mutates the direct and diffuse albedo arrays of `p.radiation.rrtmgp_solver` and
+uses `p.scratch.temp_field_level` as scratch. Reads the cosine of the solar
+zenith angle from the RRTMGP solver and the wind speed from level 1 of `Y.c.uₕ`.
 """
 function set_surface_albedo!(
     Y,
@@ -122,11 +159,12 @@ end
 """
     set_surface_albedo!(Y, p, t, ::CouplerAlbedo)
 
-Tell the ClimaAtmos to skip setting the surface albedo, as it is handled by the coupler.
+Skip setting the surface albedo, which is handled by the coupler.
 
 To avoid NaNs or invalid values in the first radiation call, the coupler retrieves
-the albedo initial conditions from the surface models, and provides these to the
-atmosphere model before stepping.
+the albedo initial conditions from the surface models and provides them to the
+atmosphere model before stepping. At `t == 0`, this method initializes the
+insolation variables (unless the insolation is `IdealizedInsolation`).
 """
 function set_surface_albedo!(Y, p, t, ::CouplerAlbedo)
     FT = eltype(Y)
@@ -140,9 +178,13 @@ function set_surface_albedo!(Y, p, t, ::CouplerAlbedo)
 end
 
 """
-    surface_albedo_direct(α_model::RegressionFunctionAlbedo{FT}) where {FT}
+    surface_albedo_direct(α_model::RegressionFunctionAlbedo)
 
-Calculate the direct surface albedo using the regression function of Jin et al. (2011).
+Return a function `(λ, cosθ, u) -> α` that computes the direct ocean surface
+albedo from the regression function of [Jin2011](@cite) (eqs. 1 and 4), given the
+wavelength `λ` (currently unused) [m], the cosine of the solar zenith angle
+`cosθ` [-], and the near-surface wind speed `u` [m/s]. The result is clamped to
+[0, 1] and is zero when the sun is below the horizon (`cosθ ≤ 0`).
 """
 function surface_albedo_direct(α_model::RegressionFunctionAlbedo{FT}) where {FT}
     α_dir =
@@ -207,13 +249,18 @@ function surface_albedo_direct(α_model::RegressionFunctionAlbedo{FT}) where {FT
 end
 
 """
-    surface_albedo_diffuse!(α_model::RegressionFunctionAlbedo)
+    surface_albedo_diffuse(α_model::RegressionFunctionAlbedo)
 
-Calculate the diffuse surface albedo using the Jin et al. (2011) empirical formulation.
+Return a function `(λ, cosθ, u) -> α` that computes the diffuse ocean surface
+albedo from the regression functions of [Jin2011](@cite) (eqs. 5a and 5b), given
+the wavelength `λ` (currently unused) [m], the cosine of the solar zenith angle
+`cosθ` [-], and the near-surface wind speed `u` [m/s]. The result is clamped to
+[0, 1] and is zero when the sun is below the horizon (`cosθ ≤ 0`).
 
 !!! note
 
-    For now we assume that the cloud fraction is 0.0.
+    For now the cloud fraction is assumed to be 0, so only the clear-sky
+    branch (eq. 5a) contributes.
 """
 function surface_albedo_diffuse(
     α_model::RegressionFunctionAlbedo{FT},

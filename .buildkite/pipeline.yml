@@ -8,6 +8,16 @@
 #         (merge-queue fast path, see .buildkite/should_skip_merge_queue.sh), or
 #       * uploads the full CI pipeline (.buildkite/full_pipeline.yml).
 #
+# Downstream builds: upstream packages (e.g. ClimaCore) trigger this pipeline
+# with the UPSTREAM_PACKAGES env var set to test their branch against ClimaAtmos
+# CI (see the "Downstream test hook" in full_pipeline.yml for the entry format).
+# Such builds run on `main` but must behave like PR builds (run the full
+# pipeline) and must not touch the reproducibility reference store; hence the
+# UPSTREAM_PACKAGES guards on the conditions below and in full_pipeline.yml.
+#
+# UPSTREAM_PACKAGES can also be set by hand in the Buildkite UI to test any ClimaAtmos
+# branch against specific upstream versions, e.g. when debugging an unreleased breaking change.
+#
 # Keeping the full pipeline out of the initially-loaded steps is what lets the
 # decider suppress it: a merge-queue build must still report success for the
 # queue to merge, but it does not have to re-run work the PR already did.
@@ -23,7 +33,12 @@ env:
   SLURM_KILL_BAD_EXIT: 1
   JULIA_NVTX_CALLBACKS: gc
   JULIA_MAX_NUM_PRECOMPILE_FILES: 100
-  JULIA_DEPOT_PATH: "${BUILDKITE_BUILD_PATH}/${BUILDKITE_PIPELINE_SLUG}/${BUILDKITE_BUILD_NUMBER}/depot:${BUILDKITE_BUILD_PATH}/${BUILDKITE_PIPELINE_SLUG}/depot/shared"
+  # The read-only shared layer is hard-coded to climaatmos-ci (matching
+  # SHARED_DEPOT_ROOT in depot_pipeline.yml, which seeds it) so that other
+  # pipelines running this yml (e.g. climaatmos-downstream) reuse the warm
+  # depot instead of cold-starting. The writable layer stays slug-keyed, so
+  # pipelines never write into each other's depots.
+  JULIA_DEPOT_PATH: "${BUILDKITE_BUILD_PATH}/${BUILDKITE_PIPELINE_SLUG}/${BUILDKITE_BUILD_NUMBER}/depot:${BUILDKITE_BUILD_PATH}/climaatmos-ci/depot/shared"
   COMMON_CONFIG_PATH: "config/common_configs"
   CONFIG_PATH: "config/model_configs"
   GPU_CONFIG_PATH: "config/gpu_configs"
@@ -32,7 +47,7 @@ env:
 
 steps:
   - label: ":robot_face: Move reproducibility results to reference store"
-    if: 'build.branch == "main"'
+    if: 'build.branch == "main" && build.env("UPSTREAM_PACKAGES") == null'
     retry: &retry_policy
       automatic:
         - exit_status: -1  # Retry on agent lost
@@ -46,7 +61,7 @@ steps:
       - "julia --color=yes --project=.buildkite reproducibility_tests/publish_reference.jl"
 
   - label: ":arrows_counterclockwise: Decide pipeline"
-    if: 'build.branch != "main"'
+    if: 'build.branch != "main" || build.env("UPSTREAM_PACKAGES") != null'
     retry: *retry_policy
     command:
       - ".buildkite/decide_pipeline.sh"

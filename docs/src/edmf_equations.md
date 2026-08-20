@@ -27,7 +27,7 @@ handle the conversions between bases internally.
     where ``\phi`` is latitude, and ``\Omega`` is the planetary rotation rate in rads/sec (for Earth, ``7.29212 \times 10^{-5} s^{-1}``) and ``\boldsymbol{e}^v`` is the unit radial basis vector. This implies that the horizontal contravariant component ``\boldsymbol{\Omega}^h`` is zero.
   - ``\boldsymbol{u}_h = u_1 \boldsymbol{e}^1 + u_2 \boldsymbol{e}^2`` is the projection onto horizontal covariant components (covariance here means with respect to the reference element), stored at cell centers.
   - ``\Phi = g z`` is the geopotential, where ``g`` is the gravitational acceleration rate and ``z`` is altitude above the mean sea level.
-  - ``\rho`` is the grid-mean density; draft buoyancy is computed relative to it (the code no longer carries a separate reference-state density or pressure for the drafts).
+  - ``\rho`` is the grid-mean density; draft buoyancy is computed relative to it. The drafts carry no separate reference-state density or pressure.
   - ``p`` is air pressure, derived from the thermodynamic state, reconstructed at cell centers.
 
 ## Prognostic variables
@@ -41,44 +41,10 @@ handle the conversions between bases internally.
 
 ## Operators
 
-We make use of the following operators.
-
-!!! note
-
-    On ClimaCore `main`, the strong- and weak-form horizontal spectral operators
-    have been unified: `Divergence`, `Gradient`, and `Curl` take a form-type
-    parameter (`StrongForm`, the default, or `WeakForm`), so the weak divergence,
-    for example, is `Divergence{I, WeakForm}`. The ClimaAtmos code does not use
-    the unified names yet; the links below point to the operator documentation
-    in the latest ClimaCore release.
-
-### Reconstruction
-
-  - ``I^c`` is the face-to-center reconstruction operator [`ClimaCore.Operators.InterpolateF2C`](@extref) (arithmetic mean).
-  - ``I^f`` is the center-to-face reconstruction operator [`ClimaCore.Operators.InterpolateC2F`](@extref) (arithmetic mean).
-  - ``WI^f`` is the center-to-face weighted reconstruction operator [`ClimaCore.Operators.WeightedInterpolateC2F`](@extref).
-      + ``WI^f(J, x) = I^f(J*x) / I^f(J)``, where ``J`` is the value of the Jacobian for use in the weighted interpolation operator.
-  - ``U^f`` is the 1st-order ([`ClimaCore.Operators.UpwindBiasedProductC2F`](@extref)) or 3rd-order ([`ClimaCore.Operators.Upwind3rdOrderBiasedProductC2F`](@extref)) center-to-face upwind product operator.
-
-### Differential operators
-
-  - ``D_h`` is the discrete horizontal spectral divergence [`ClimaCore.Operators.Divergence`](@extref).
-  - ``\hat{\mathcal{D}}_h`` is the discrete horizontal spectral weak divergence [`ClimaCore.Operators.WeakDivergence`](@extref).
-  - ``D^c_v`` is the face-to-center vertical divergence [`ClimaCore.Operators.DivergenceF2C`](@extref).
-  - ``G_h`` is the discrete horizontal spectral gradient [`ClimaCore.Operators.Gradient`](@extref).
-  - ``G^f_v`` is the center-to-face vertical gradient [`ClimaCore.Operators.GradientC2F`](@extref).
-      + the gradient is set to 0 at the top and bottom boundaries.
-  - ``C_h`` is the curl components involving horizontal derivatives [`ClimaCore.Operators.Curl`](@extref).
-      + ``C_h[\boldsymbol{u}_h]`` returns a vector with only vertical _contravariant_ components.
-      + ``C_h[\boldsymbol{u}_v]`` returns a vector with only horizontal _contravariant_ components.
-  - ``\hat{\mathcal{C}}_h`` is the weak curl components involving horizontal derivatives [`ClimaCore.Operators.WeakCurl`](@extref).
-  - ``C^f_v`` is the center-to-face curl involving vertical derivatives [`ClimaCore.Operators.CurlC2F`](@extref).
-      + ``C^f_v[\boldsymbol{u}_h]`` returns a vector with only a horizontal _contravariant_ component.
-      + the curl is set to 0 at the top and bottom boundaries.
-
-### Projection
-
-  - ``\mathcal{P}`` is the [direct stiffness summation (DSS) operation](@extref ClimaCore DSS), which computes the projection onto the continuous spectral element basis.
+This page uses the same discrete operators as the rest of the model. They are
+defined once in [Discretization and Operators](discretization.md), which also
+gives the code alias for each one and the reason behind each strong-, weak-, and
+split-form choice.
 
 ## Auxiliary and derived quantities
 
@@ -136,7 +102,7 @@ This is discretized using the following
 
 ```math
 \frac{\partial}{\partial t} \hat{\rho}^j
-= - D_h \left[ \hat{\rho}^j (\boldsymbol{u}_h + I^c(\boldsymbol{u}_v^j)) \right] - D^c_v \left[WI^f( J, \hat{\rho}^j) \tilde{\boldsymbol{u}^j} \right] + RHS.
+= - \mathcal{D}_h \left[ \hat{\rho}^j (\boldsymbol{u}_h + I^c(\boldsymbol{u}_v^j)) \right] - \mathcal{D}^c_v \left[WI^f( J, \hat{\rho}^j) \tilde{\boldsymbol{u}^j} \right] + RHS.
 ```
 
 ### Momentum
@@ -169,13 +135,13 @@ projected onto the third contravariant direction.
 The ``(\nabla_v \times \boldsymbol{u}_h + \nabla_h \times \boldsymbol{u}_v^j) \times \boldsymbol{u}^h`` term is discretized as
 
 ```math
-(C^f_v[\boldsymbol{u}_h] + C_h[\boldsymbol{u}_v^j]) \times I^f(\boldsymbol{u}^h) ,
+(\mathcal{C}^f_v[\boldsymbol{u}_h] + \mathcal{C}_h[\boldsymbol{u}_v^j]) \times I^f(\boldsymbol{u}^h) ,
 ```
 
 and the ``-\frac{\rho^j - \rho}{\rho^j} \nabla_v \Phi - \nabla_v K^j`` terms as
 
 ```math
-- \frac{I^f(\rho^j - \rho)}{I^f(\rho^j)} G^f_v[\Phi] - G^f_v[K^j] ,
+- \frac{I^f(\rho^j - \rho)}{I^f(\rho^j)} \mathcal{G}^f_v[\Phi] - \mathcal{G}^f_v[K^j] ,
 ```
 
 The hyperviscosity term is
@@ -206,11 +172,11 @@ The equation is discretized as
 
 ```math
 \frac{\partial}{\partial t} \hat{\rho}^j e^j \approx
-- D_h \left[
+- \mathcal{D}_h \left[
     \left( \hat{\rho}^j e^j + \frac{\hat{\rho}^j}{\rho^j}p \right)
     \left( \boldsymbol{u}_h + I^c(\boldsymbol{u}_v^j) \right)
   \right]
-- D^c_v \left[
+- \mathcal{D}^c_v \left[
     WI^f(J,\hat{\rho}^j) \,  \tilde{\boldsymbol{u}}^j \, I^f \left(\frac{\hat{\rho}^j e^j + \frac{\hat{\rho}^j}{\rho^j}p}{\hat{\rho}^j} \right)
   \right]
   - \frac{p}{\rho} \frac{\partial}{\partial t} \hat{\rho}^j - \nu_h \hat{\mathcal{D}}_h( \rho \mathcal{G}_h(\psi^j) ) + RHS .
@@ -249,8 +215,8 @@ This is discretized using the following
 
 ```math
 \frac{\partial}{\partial t} \hat{\rho}^j q^j \approx
-- D_h[ \hat{\rho}^j q^j (\boldsymbol{u}_h + I^c(\boldsymbol{u}_v^j))]
-- D^c_v \left[ WI^f(J,\hat{\rho}^j) \, U^f\left( \tilde{\boldsymbol{u}}^j,  \frac{\hat{\rho}^j q^j}{\hat{\rho}^j} \right) \right]
+- \mathcal{D}_h[ \hat{\rho}^j q^j (\boldsymbol{u}_h + I^c(\boldsymbol{u}_v^j))]
+- \mathcal{D}^c_v \left[ WI^f(J,\hat{\rho}^j) \, U^f\left( \tilde{\boldsymbol{u}}^j,  \frac{\hat{\rho}^j q^j}{\hat{\rho}^j} \right) \right]
 - \nu_\chi \hat{\mathcal{D}}_h ( \hat{\rho^j} \, \mathcal{G}_h (\psi^j) ) + sedimentation + RHS.
 ```
 
@@ -263,7 +229,7 @@ where
 The `none` option corresponds to the central reconstruction
 
 ```math
-- D^c_v \left[ WI^f(J,\hat{\rho}^j) \, \tilde{\boldsymbol{u}}^j \, I^f\left( \frac{\hat{\rho}^j q^j}{\hat{\rho}^j} \right) \right]
+- \mathcal{D}^c_v \left[ WI^f(J,\hat{\rho}^j) \, \tilde{\boldsymbol{u}}^j \, I^f\left( \frac{\hat{\rho}^j q^j}{\hat{\rho}^j} \right) \right]
 ```
 
 !!! note
@@ -292,8 +258,8 @@ This is discretized using the following
 
 ```math
 \frac{\partial}{\partial t} \hat{\rho}^j \chi^j \approx
-- D_h[ \hat{\rho^j} \chi^j (\boldsymbol{u}_h + I^c(\boldsymbol{u}_v^j))]
-- D^c_v \left[ WI^f(J,\hat{\rho^j}) \, U^f\left( \tilde{\boldsymbol{u}}^j,  \frac{\hat{\rho}^j \chi^j}{\hat{\rho^j}} \right) \right]
+- \mathcal{D}_h[ \hat{\rho^j} \chi^j (\boldsymbol{u}_h + I^c(\boldsymbol{u}_v^j))]
+- \mathcal{D}^c_v \left[ WI^f(J,\hat{\rho^j}) \, U^f\left( \tilde{\boldsymbol{u}}^j,  \frac{\hat{\rho}^j \chi^j}{\hat{\rho^j}} \right) \right]
 - \nu_\chi \hat{\mathcal{D}}_h ( \hat{\rho^j} \, \mathcal{G}_h (\psi^j) ) + RHS.
 ```
 
@@ -306,7 +272,7 @@ where
 The `none` option corresponds to the central reconstruction
 
 ```math
-- D^c_v \left[ WI^f(J,\hat{\rho}^j) \, \tilde{\boldsymbol{u}}^j \, I^f\left( \frac{\hat{\rho}^j \chi^j}{\hat{\rho}^j} \right) \right]
+- \mathcal{D}^c_v \left[ WI^f(J,\hat{\rho}^j) \, \tilde{\boldsymbol{u}}^j \, I^f\left( \frac{\hat{\rho}^j \chi^j}{\hat{\rho}^j} \right) \right]
 ```
 
 !!! note

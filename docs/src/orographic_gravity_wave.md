@@ -18,7 +18,7 @@ The orographic gravity wave drag parameterization follows the methods described 
 
 ### Planetary Boundary Layer (PBL) top
 
-We implement the following simple criteria to find the PBL top level $k$ as the highest level that satisfies
+We implement the following criteria to find the PBL top level $k$ as the highest level that satisfies
 
 ```math
 {}^cp[k] \ge 0.5 ∗ {}^cp[1]
@@ -132,7 +132,7 @@ and given the orographic information $h_{\mathrm{max}}$ and $h_{\mathrm{min}}$, 
 \mathrm{Fr}_{\mathrm{min}} = \max(0, h_{\mathrm{min}}) \,\frac{N_{\text{pbl}}}{V_{\tau}}.
 ```
 
-The clamps to $\max(0, \cdot)$ on $h_{\mathrm{max}}$ and $h_{\mathrm{min}}$ treat negative height as zero. Here, $\mathrm{Fr}_{\mathrm{crit}} = 0.7$ is the critical Froude number for nonlinear flow. $\mathrm{Fr}_{\mathrm{crit}}$ acts as the primary tuning lever for partitioning drag between the low-level blocked flow and the upper-level wave breaking.
+The clamps to $\max(0, \cdot)$ on $h_{\mathrm{max}}$ and $h_{\mathrm{min}}$ treat negative height as zero. Here, $\mathrm{Fr}_{\mathrm{crit}} = 0.7$ (the parameter `ogw_critical_froude_number`) is the critical Froude number for nonlinear flow. $\mathrm{Fr}_{\mathrm{crit}}$ is the main parameter controlling how the drag is partitioned between the low-level blocked flow and the upper-level wave breaking.
 
 The saturation velocity is computed as
 
@@ -140,7 +140,7 @@ The saturation velocity is computed as
 U_{\mathrm{sat}} = \sqrt{\frac{\rho_{\text{pbl}}}{\rho_0} \frac{V_{\pmb{\tau}}^3}{N_{\text{pbl}}\, L_0}},
 ```
 
-where $\rho_0 = 1.2\,\mathrm{kg/m^3}$ is the arbitrary density scale, and $L_0 = 80\,000\,\mathrm{m}$ is the arbitrary horizontal length scale.
+where $\rho_0 = 1.2\,\mathrm{kg/m^3}$ is the arbitrary density scale (`ogw_density_scale_factor`), and $L_0 = 80\,000\,\mathrm{m}$ is the arbitrary horizontal length scale (`ogw_reference_mountain_width`).
 
 $U_{\mathrm{sat}}$ roughly measures the biggest wave the flow can carry before it breaks. A stronger wind ($V_\tau$) makes much bigger waves (note the cube), while stronger stratification ($N$) or a wider mountain ($L_0$) makes them break sooner and shrinks it.
 
@@ -192,7 +192,7 @@ Here, $(\gamma, \epsilon, \beta) = (0.4, 0.0, 0.5)$ are empirical shape paramete
 
 ### Saturation profiles for the propagating component
 
-Only the propagating component requires a saturation profile, as it carries a vertically propagating wave whose flux can saturate aloft. The non-propagating component remains the scalar $\tau_{np}$ from the base-flux calculation and is distributed in $z$ by pressure weighting across the blocking layer $[z_{\text{pbl}}, z_{\mathrm{ref}})$ (see [Non-propagating component](#non-propagating-component) below).
+Only the propagating component requires a saturation profile, as it carries a vertically propagating wave whose flux can saturate aloft. The non-propagating component remains the scalar $\tau_{np}$ from the base-flux calculation and is distributed in $z$ by pressure weighting across the blocking layer $[z_{\text{pbl}}, z_{\mathrm{ref}})$ (see [Non-propagating component](#Non-propagating-component) below).
 
 The vertical profile of saturated momentum flux $\tau_{\mathrm{sat}}$ is computed such that the momentum forcing follows from $d\overline{V}/dt = -\overline{\rho}^{-1}d\tau_{\mathrm{sat}}/dz$.
 
@@ -346,12 +346,18 @@ The tendencies above act on the physical horizontal wind components.
 
 The parameterization splits into an offline preprocessing step (Earth topography only) that builds an HDF5 artifact of $(h_{\mathrm{max}}, h_{\mathrm{min}}, t_{11}, t_{12}, t_{21}, t_{22})$ on the spectral element grid, and a runtime step that consumes the artifact via a `dt_ogw` callback and applies the cached forcing every integrator step.
 
+The scheme and its topographic-information source are selected with the
+`orographic_gravity_wave` configuration key: `gfdl_restart` regrids the GFDL
+`topo_drag.res.nc` artifact, `raw_topo` runs the pipeline below from raw
+elevation data, and a `linear` test path accepts user-supplied analytic drag
+coefficients.
+
 ```
 Offline (Earth topography only):
   compute_OGW_info
     ├─ calc_hpoz_latlon         → h₀ (raw 4th-moment statistic; rescaled to hmax, hmin in compute_OGW_info)
     ├─ calc_velocity_potential  → χ  (2D Hilbert transform)
-    ├─ calc_orographic_tensor   → t11, t12, t21, t22
+    ├─ calc_orographic_tensor   → t11, t21, t12, t22
     └─ regrid_OGW_info          → SpaceVaryingInput to spectral element
   write_computed_drag! → HDF5 artifact (common configs loadable via ClimaArtifacts)
 
@@ -367,7 +373,7 @@ Every dt_ogw seconds:
 
 Every dt (integrator step):
   orographic_gravity_wave_apply_tendency!
-    └─ Yₜ.c.uₕ += Covariant12Vector(ᶜuforcing, ᶜvforcing)
+    └─ Yₜ.c.uₕ += C12(UVVector(ᶜuforcing, ᶜvforcing))
 ```
 
 For analytical topographies (DCMIP200, Hughes2023, Agnesi, Schar, Cosine2d, Cosine3d), the tensor is computed on-the-fly at startup using ClimaCore horizontal gradient operators in place of the offline pipeline.

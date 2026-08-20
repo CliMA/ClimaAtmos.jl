@@ -8,7 +8,7 @@ simulation in Cartesian domains to global weather and climate simulation on
 the sphere [Yatunin2026](@cite).
 
 The model can be run from the Julia REPL, with no namelists or batch scripts
-required; a first global simulation takes three lines of code (see
+required; a first simulation takes a few lines of code (see
 [Your First Simulation](first_simulation.md)).
 
 ## What the model does
@@ -32,8 +32,8 @@ required; a first global simulation takes three lines of code (see
     scheme), avoids assumptions of scale separation that become inadequate as
     resolved scales approach the scales of parameterized processes such as
     atmospheric turbulence and convection. As resolution increases, the
-    parameterized transport diminishes and hands over to the resolved flow.
-  - **Built for calibration with data.** All model parameters live in a
+    parameterized transport diminishes and the resolved flow takes over.
+  - **Built for calibration with data.** All model parameters are defined in a
     central repository, [ClimaParams.jl](https://github.com/CliMA/ClimaParams.jl),
     and CliMA's calibration tools tune parameters against data, whether those
     are output from high-resolution simulations or Earth observations from space and from the ground.
@@ -79,31 +79,27 @@ matches yours:
   - **Getting Started**: new to ClimaAtmos? Start here.
 
       + [Installation](installation.md) -- install the package, or run from a clone
-      + [Your First Simulation](first_simulation.md) -- run and customize a simulation
+      + [Your First Simulation](first_simulation.md) -- build, run, and inspect one simulation
       + [Script vs Config Interface](interfaces.md) -- the two ways to configure a run
 
   - **How-to Guides**: task recipes for running and configuring simulations.
 
       + Running simulations: [single-column cases](single_column.md), [global simulations](global_simulations.md), [restarts](restarts.md), [running on GPUs and MPI](gpu_and_mpi.md)
-      + Configuration: [scripting simulations](scripting_simulations.md), [custom configurations](configuration.md), [parameters](parameters.md)
+      + Configuration: [scripting simulations](scripting_simulations.md), [custom configurations](configuration.md)
       + [Computing and saving diagnostics](diagnostics.md)
       + [Loading and visualizing output](visualizing_output.md)
 
   - **Explanation**: the science and numerics behind the model.
 
       + [The CliMA ecosystem](ecosystem.md) -- how ClimaAtmos composes the CliMA packages
-      + Dynamics & numerics: [governing equations](equations.md), [implicit solver](implicit_solver.md), [integer time (ITime)](itime.md)
+      + Dynamics & numerics: [thermodynamics](thermodynamics.md), [governing equations](equations.md), [discretization and operators](discretization.md), [conservation properties](conservation.md), [hyperdiffusion](hyperdiffusion.md), [model top and sponge layer](sponge.md), [implicit solver](implicit_solver.md), [integer time (ITime)](itime.md)
       + Physics & parameterizations: [PROPHET](edmf_equations.md), [microphysics](microphysics.md), [radiation](radiation.md), [non-orographic gravity-wave drag](non_orographic_gravity_wave.md), [orographic gravity-wave drag](orographic_gravity_wave.md), [ocean surface albedo](surface_albedo.md), [topography](topography.md)
 
   - **Reference**: look-up material.
 
-      + [API](api.md), [Configuration options](configuration_options.md), [Setups](setups.md), [Column Datasets](column_datasets_reference.md), [Grids](grids.md), [Surface conditions](surface_conditions.md), [Passive tracers](passive_tracers.md), [Trace gases](trace_gases.md), [Available diagnostics](available_diagnostics.md), [Glossary](glossary.md), [Bibliography](references.md)
+      + [API](api.md), [Configuration options](configuration_options.md), [Setups](setups.md), [Column Datasets](column_datasets_reference.md), [Grids](grids.md), [Surface conditions](surface_conditions.md), [Passive tracers](passive_tracers.md), [Trace gases](trace_gases.md), [Available diagnostics](available_diagnostics.md), [Notation](notation.md), [Glossary](glossary.md), [Bibliography](references.md)
 
-  - **Developer Guide**: [contributing](contributor_guide.md), extending the model ([setups](extending_setups.md), [diagnostics](extending_diagnostics.md), [tracers](extending_tracers.md), [column datasets](extending_column_datasets.md), [surface internals](surface_conditions_internals.md)), and the [Buildkite longrun jobs](longruns.md)
-
-New here? Start with [Installation](@ref) and [Your First Simulation](@ref), then pick
-the workflow that suits you in [Script vs Config Interface](@ref). For column experiments,
-see [Single Column Models](@ref).
+  - **Developer Guide**: [contributing](contributor_guide.md) and extending the model ([setups](extending_setups.md), [diagnostics](extending_diagnostics.md), [tracers](extending_tracers.md), [column datasets](extending_column_datasets.md), [surface internals](surface_conditions_internals.md))
 
 ClimaAtmos is open source under the Apache 2.0 license. Questions and bug
 reports are welcome on the

@@ -1,10 +1,25 @@
 import StaticArrays: @SVector
+
+# Background state shared by the analytic steady-state solutions below and by
+# the ConstantBuoyancyFrequencyProfile setup: a uniform zonal wind over a
+# constant-N atmosphere, capped by an isothermal layer.
 background_u(::Type{FT}) where {FT} = FT(10)
 background_N(::Type{FT}) where {FT} = FT(0.01) # This needs to be a small value.
 background_T_sfc(::Type{FT}) where {FT} = FT(288)
 background_T_min(::Type{FT}) where {FT} = FT(100)
 background_T_max(::Type{FT}) where {FT} = FT(500)
 
+"""
+    background_p_and_T(params, η)
+
+Return `(p, T)` of the hydrostatic constant-`N` background state at height `η`,
+in [Pa] and [K].
+
+The profile has surface temperature 288 K and Brunt-Väisälä frequency
+0.01 s⁻¹, and switches to isothermal above the level where the temperature
+would otherwise become unreasonably small or large. With zero gravity it
+degenerates to the surface values.
+"""
 function background_p_and_T(params, η)
     FT = eltype(params)
     g = CAP.grav(params)
@@ -36,7 +51,15 @@ function background_p_and_T(params, η)
     return (p, T)
 end
 
-# Replace η with z in the initial state so that it is hydrostatically balanced.
+"""
+    constant_buoyancy_frequency_initial_state(params, coord)
+
+Return `(; T, p, velocity)` of the constant-`N` background state at `coord`.
+
+The background profile is evaluated at the physical height `z` rather than the
+terrain-following coordinate `η`, so that the initial state is hydrostatically
+balanced.
+"""
 function constant_buoyancy_frequency_initial_state(params, coord)
     FT = eltype(params)
     (p, T) = background_p_and_T(params, coord.z)
@@ -47,24 +70,34 @@ end
 """
     ∂FΔU_∂Fh_approximation(params, η, k_x, k_y, z_top)
 
-Approximates the derivative `∂FΔU/∂Fh`, where `FΔU` is the Fourier transform of
-the 3D velocity perturbation `ΔU`, and `Fh` is the Fourier transform of the
-topography elevation `h`. This approximation is first-order in the maximum
-topography elevation `h_max` and zeroth-order in the static stability paramter
-`β = N^2 / g`. We assume that the topographic grid warping is a `LinearAdaption`
-and the perturbation's background state is a `ConstantBuoyancyFrequencyProfile`.
+Approximate the derivative `∂FΔU/∂Fh`, where `FΔU` is the Fourier transform of
+the 3D velocity perturbation `ΔU` and `Fh` is the Fourier transform of the
+topography elevation `h`.
+
+The approximation is first order in the maximum topography elevation `h_max`
+and zeroth order in the static stability parameter `β = N²/g`. It assumes that
+the topographic grid warping is a `LinearAdaption` and that the perturbation's
+background state is the constant-`N` profile of `background_p_and_T`. Called
+from `steady_state_velocity`, which
+inverse-transforms the result for a particular topography.
 
 TODO: Generalize this to work with any `HypsographyAdaption` from ClimaCore.
 
-Arguments:
+# Arguments
 
-  - `params`: `ClimaAtmosParameters` used to define the background state
-  - `η`: nondimensional terrain-following coordinate (0 at surface and 1 at top)
-  - `k_x`: wavenumber along `x`-direction
-  - `k_y`: wavenumber along `y`-direction
-  - `z_top`: elevation at the top of the model domain
+  - `params`: `ClimaAtmosParameters` defining the background state.
+  - `η`: Nondimensional terrain-following coordinate, 0 at the surface and 1 at
+    the top [-].
+  - `k_x`: Wavenumber along the `x` direction [1/m].
+  - `k_y`: Wavenumber along the `y` direction [1/m].
+  - `z_top`: Elevation of the top of the model domain [m].
 
-References:
+# Returns
+
+The `SVector` `[∂FΔu/∂Fh, ∂FΔv/∂Fh, ∂FΔw/∂Fh]` of complex derivatives, per unit
+elevation [1/s].
+
+# References
 
   - https://www.cosmo-model.org/content/model/documentation/newsLetters/newsLetter09/cnl9-04.pdf
   - http://dx.doi.org/10.1175/1520-0493(2003)131%3C1229:NCOMTI%3E2.0.CO;2
@@ -165,6 +198,28 @@ end
 ## Steady-state solutions for periodic topography
 ##
 
+"""
+    steady_state_velocity(topography, params, coord, z_top)
+
+Return the analytic steady-state velocity `UVW(u, v, w)` at `coord` [m/s] for
+flow over `topography`.
+
+The solution is the uniform background wind plus the linear mountain-wave
+perturbation obtained by inverse-transforming `∂FΔU_∂Fh_approximation`: a
+closed-form sum over the discrete wavenumbers for `CosineTopography`, and a
+numerical wavenumber integral for `AgnesiTopography` and `ScharTopography`. It
+is valid only for a constant-`N` background state with linear mesh warping, and
+is used to check that a topography simulation has reached steady state.
+
+# Arguments
+
+  - `topography`: An `AbstractTopography` with an analytic solution; the
+    supported ones are `NoTopography`, [`CosineTopography`](@ref),
+    [`AgnesiTopography`](@ref), and [`ScharTopography`](@ref).
+  - `params`: `ClimaAtmosParameters` defining the background state.
+  - `coord`: Coordinates of the point at which the velocity is evaluated.
+  - `z_top`: Elevation of the top of the model domain [m].
+"""
 function steady_state_velocity(::NoTopography, params, coord, z_top)
     FT = eltype(params)
     u = background_u(FT)
@@ -192,6 +247,17 @@ function steady_state_velocity(t::CosineTopography{3}, params, coord, z_top)
     return steady_state_velocity_cosine(params, x, y, z, t.λ, t.λ, z_top, t.h_max)
 end
 
+"""
+    steady_state_velocity_cosine(params, x, y, z, λ_x, λ_y, z_top, h_max)
+
+Return the steady-state velocity `UVW(u, v, w)` [m/s] over cosine hills of
+wavelengths `λ_x`, `λ_y` and amplitude `h_max`.
+
+Because the elevation is a single Fourier mode, the inverse transform collapses
+to one evaluation of `∂FΔU_∂Fh_approximation` at `(k_x, k_y)`. Called from
+`steady_state_velocity` for [`CosineTopography`](@ref); a 2D case passes
+`λ_y = Inf`.
+"""
 function steady_state_velocity_cosine(params, x, y, z, λ_x, λ_y, z_top, h_max)
     FT = eltype(params)
     u = background_u(FT)
@@ -216,13 +282,34 @@ end
 ## Steady-state solutions for mountain topography
 ##
 
-# Integrate f(x) from x1 to x2 by sampling its values n_samples times. We do not
-# use QuadGK for this because it is not compatible with GPUs.
+"""
+    definite_integral(f, x1, x2, n_samples)
+
+Integrate `f` from `x1` to `x2` with a Riemann sum of `n_samples` samples.
+
+Used instead of QuadGK because the integrand is evaluated on the GPU.
+"""
 function definite_integral(f::F, x1, x2, n_samples) where {F}
     dx = (x2 - x1) / n_samples
     return sum(index -> f(x1 + index * dx), 2:n_samples; init = f(x1 + dx)) * dx
 end
 
+"""
+    steady_state_velocity_mountain_2d(
+        mountain_elevation, centered_mountain_elevation_fourier_transform,
+        params, coord, z_top, x_center, k_x_max,
+    )
+
+Return the steady-state velocity `UVW(u, v, w)` [m/s] over an isolated 2D
+mountain, by integrating the wave response over wavenumbers up to `k_x_max`.
+
+The transform of the elevation *centered* at the origin is used, rather than
+that of the actual elevation, to avoid propagating the rapidly oscillating
+factor `exp(-i k_x x_center)` through the approximation. Called from
+`steady_state_velocity` for the Agnesi and Schär mountains, which supply
+their own analytic transforms and a `k_x_max` beyond which `Fh` is below
+`eps(FT)`.
+"""
 function steady_state_velocity_mountain_2d(
     mountain_elevation::F1,
     centered_mountain_elevation_fourier_transform::F2,

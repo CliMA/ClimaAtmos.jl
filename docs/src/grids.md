@@ -78,9 +78,13 @@ grid = CA.BoxGrid(Float64; nh_poly=1, x_elem=3, y_elem=6, x_max=100, y_max=100)
 spacefilling = CC.Topologies.spacefillingcurve(grid.horizontal_grid.topology.mesh)
 
 # Extract coordinates for plotting
+# `Nh` (the element index) is the last dimension of the parent array; the
+# leading dimensions are node and field indices, whose count depends on the
+# ClimaCore data layout, so take the first of each rather than hard-coding them.
+first_node(p) = p[ntuple(_ -> 1, ndims(p) - 1)..., :]
 coords = tuple.(
-   parent(grid.horizontal_grid.local_geometry.coordinates.x)[1,1,1,:],
-   parent(grid.horizontal_grid.local_geometry.coordinates.y)[1,1,1,:]
+   first_node(parent(grid.horizontal_grid.local_geometry.coordinates.x)),
+   first_node(parent(grid.horizontal_grid.local_geometry.coordinates.y))
 )
 
 # Plot the ordering index vs coordinate index

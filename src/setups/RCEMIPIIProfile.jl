@@ -1,17 +1,24 @@
 """
     RCEMIPIIProfile(temperature, humidity)
 
-An initial condition following the sounding for RCEMIPII as described by
-Wing et al. (2018) (https://doi.org/10.5194/gmd-11-793-2018).
+An initial condition following the RCEMIP-II sounding of [Wing2018](@cite).
 
-Three convenience constructors are provided:
+# Fields
 
-  - `RCEMIPIIProfile_295()` — SST = 295 K
-  - `RCEMIPIIProfile_300()` — SST = 300 K
-  - `RCEMIPIIProfile_305()` — SST = 305 K
+  - `temperature`: Surface temperature of the sounding [K].
+  - `humidity`: Surface specific humidity of the sounding [kg/kg].
 
-Note: this should be used for RCE_small and NOT RCE_large — RCE_large must
-be initialized with the final state of RCE_small.
+Three convenience constructors give the protocol's three SSTs:
+
+  - `RCEMIPIIProfile_295()`: 295 K.
+  - `RCEMIPIIProfile_300()`: 300 K.
+  - `RCEMIPIIProfile_305()`: 305 K.
+
+!!! note
+
+    The RCEMIP-II protocol prescribes this sounding for the small-domain
+    experiment only; the large-domain experiment is instead initialized from
+    the final state of the small-domain run.
 """
 struct RCEMIPIIProfile{FT}
     temperature::FT

@@ -19,6 +19,9 @@ value = 0.7
 [turb_entr_param_vec]
 value = [0.001, 1e5]
 
+[entr_inv_tau]
+value = 0
+
 [entr_coeff]
 value = 0.1
 
@@ -48,9 +51,6 @@ value = 1
 
 [pressure_normalmode_drag_coeff]
 value = 8.0
-
-[tracer_vertical_diffusion_factor]
-value = 0
 
 [condensation_evaporation_timescale]
 value = 100

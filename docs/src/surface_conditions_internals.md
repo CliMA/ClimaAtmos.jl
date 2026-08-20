@@ -2,12 +2,12 @@
 
 Design rationale, data flow, dispatch chains, extension points, and
 debugging for the surface-conditions subsystem. For the user-facing guide —
-the four configuration knobs and how to set them, see
+the four configuration fields and how to set them, see
 [Surface Conditions](surface_conditions.md).
 
 ## Design: one source of truth
 
-Surface behavior lives entirely on `atmos.surface`. Principles:
+Surface behavior is determined entirely by `atmos.surface`. Principles:
 
   - **Orthogonality**: `flux_scheme`, `temperature`, `boundary_overrides`, and
     `surface_albedo` are independent axes. Adding an option on one shouldn't touch
@@ -49,18 +49,22 @@ Three small families cover all behavior:
 | `CoupledTemperature`   | `field_values(t.field)`               |
 
 **`resolve_T_sfc`** (`surface_conditions.jl`): in the per-cell kernel, an
-`AnalyticTemperature` is evaluated as `t.f(coordinates, surface_temp_params, t_time)`; scalars and `DataLayout`s pass through. This two-step design lets
-analytic formulas see each cell's local coordinates while field-valued
-temperatures resolve once up front.
+[`AnalyticTemperature`](@ref ClimaAtmos.SurfaceConditions.AnalyticTemperature)
+is evaluated as `t.f(coordinates, surface_temp_params, t_time)`; scalars and
+`DataLayout`s pass through. This two-step design lets analytic formulas see each
+cell's local coordinates while field-valued temperatures resolve once up front.
 
 **Flux scheme → flux specs** (in `surface_state_to_conditions`): branches on
-`ExchangeCoefficients` vs `MoninObukhov`, and within `MoninObukhov` on whether
-fluxes are prescribed (`HeatFluxes`/`θAndQFluxes`) or derived from roughness.
+[`ExchangeCoefficients`](@ref ClimaAtmos.SurfaceConditions.ExchangeCoefficients)
+vs [`MoninObukhov`](@ref ClimaAtmos.SurfaceConditions.MoninObukhov), and within
+`MoninObukhov` on whether fluxes are prescribed
+([`HeatFluxes`](@ref ClimaAtmos.SurfaceConditions.HeatFluxes)/`θAndQFluxes`) or
+derived from roughness.
 
 ## Constraints
 
   - **Scalars must broadcast.** `Base.broadcastable(x) = tuple(x)` is defined once
-    on the abstract supertypes `SurfaceParameterization` and `SurfaceTemperature`,
+    on the abstract supertypes [`SurfaceParameterization`](@ref ClimaAtmos.SurfaceConditions.SurfaceParameterization) and [`SurfaceTemperature`](@ref ClimaAtmos.SurfaceConditions.SurfaceTemperature),
     so every concrete subtype inherits it for free. A new subtype needs nothing
     extra; the only ways to break this are introducing a parallel hierarchy that
     isn't a subtype, or removing the supertype method.
@@ -74,7 +78,7 @@ fluxes are prescribed (`HeatFluxes`/`θAndQFluxes`) or derived from roughness.
     the resulting numeric scheme is broadcast everywhere.
   - **`isnothing(flux_scheme)` is a supported state**: any reader of
     `atmos.surface.flux_scheme` must handle it.
-  - **Only `SlabOceanTemperature` adds prognostic state**: `Y.sfc` exists only for
+  - **Only [`SlabOceanTemperature`](@ref ClimaAtmos.SurfaceConditions.SlabOceanTemperature) adds prognostic state**: `Y.sfc` exists only for
     slab runs, so guard `Y.sfc.T` access on that type.
 
 ## Extending
@@ -88,7 +92,7 @@ redefine it.
 
 ### A new temperature source
 
- 1. **Define the type** as a subtype of `SurfaceConditions.SurfaceTemperature`.
+ 1. **Define the type** as a subtype of [`SurfaceConditions.SurfaceTemperature`](@ref ClimaAtmos.SurfaceConditions.SurfaceTemperature).
     Store whatever it needs (a function, a `Field`, parameters):
 
     ```julia
@@ -126,7 +130,7 @@ redefine it.
 
  5. **(Optional) Expose it to configs** by extending
     `AtmosSurface(::AtmosConfig, ...)` in `src/config/model_getters.jl` (or have a
-    setup return it from `surface_condition`).
+    setup return it from [`surface_condition`](@ref ClimaAtmos.Setups.surface_condition)).
 
 ### A new flux scheme
 
@@ -160,7 +164,7 @@ redefine it.
 
   - `AtmosSurface(::AtmosConfig, params, FT; setup_type)`
     (`src/config/model_getters.jl`) maps YAML keys + setup pieces into a concrete
-    `AtmosSurface`; setup pieces win via `@something`.
+    [`AtmosSurface`](@ref ClimaAtmos.AtmosSurface); setup pieces win via `@something`.
   - `build_cache` (`src/cache/cache.jl`) stores `p.sfc_setup = atmos.surface.boundary_overrides` (a scalar, or a `Field` for the coupler) and
     calls
     [`init_sfc_conditions_zero!`](@ref ClimaAtmos.SurfaceConditions.init_sfc_conditions_zero!)
@@ -175,7 +179,7 @@ ClimaAtmos.SurfaceConditions.init_sfc_conditions_zero!
   - **`sfc_conditions` NaN/uninitialized under the coupler**: `init_sfc_conditions_zero!`
     only fires when `isnothing(flux_scheme)`.
   - **`T_sfc` uniform when it should vary**: the temperature must return per-cell
-    values, or be an `AnalyticTemperature` whose `f` actually reads `coordinates`.
+    values, or be an `AnalyticTemperature` whose `f` reads `coordinates`.
   - **Space-mismatch error in `update_surface_conditions!`**: something returned a
     `Field` instead of a `DataLayout`/scalar, or a type is missing `broadcastable`.
   - **`Y.sfc` not found**: not a `SlabOceanTemperature` run; guard slab-only code.

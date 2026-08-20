@@ -16,7 +16,11 @@ Profiles are sourced from AtmosphericProfilesLibrary. RH is specified with respe
 to liquid water (Pithan 2016, Table 1). The humidity profile is split at the
 tropopause: RH-derived q_tot below, fixed q_top above.
 
-## Example
+TKE is initialized to zero regardless of `prognostic_tke`, unlike the other
+single-column setups, which fall back to a prescribed TKE profile when TKE is
+not prognostic.
+
+# Examples
 
 ```julia
 setup = Larcform1(; prognostic_tke = true, thermo_params)

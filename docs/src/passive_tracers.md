@@ -35,7 +35,7 @@ each discovered tracer.
 
 ## SGS Tracers (PROPHET)
 
-When PROPHET (prognostic EDMF) is enabled, each updraft carries its own set of scalar
+When PROPHET is enabled, each updraft carries its own set of scalar
 fields inside `Y.c.sgsʲs.:(j)`. The utility function `sgs_tracer_names(Y)`
 discovers all scalars in the first updraft (`Y.c.sgsʲs.:(1)`) and excludes
 the core PROPHET variables `ρa`, `mse`, and `q_tot`, which receive
