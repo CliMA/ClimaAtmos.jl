@@ -211,8 +211,9 @@ quadrature points.
   - `q_rai`, `q_sno`: Rain and snow specific humidity [kg/kg], clamped
     non-negative by the caller.
   - `λ`: Thermodynamic liquid fraction [-].
-  - `λ_lagrange`: Lagrange multiplier `z·α·σ_S` enforcing
-    `E[max(0, λ_lagrange + α·S′)] = q_c` [kg/kg].
+  - `λ_lagrange`: Lagrange multiplier enforcing
+    `E[max(0, λ_lagrange + α·S′)] = q_c` under the quadrature
+    measure (fitted in `_compute_sgs_moments`) [kg/kg].
   - `mu_S`: Linearized SGS mean saturation excess `q_tot − q_sat(T, ρ)` [kg/kg].
   - `α`: Variance fidelity parameter [-].
   - `dt`: Timestep used for the time-averaged process rates [s].
@@ -229,7 +230,7 @@ struct Microphysics1MEvaluator{S, MP, TPS, FT, Args <: Tuple}
     q_sno::FT
     # Truncated-Gaussian Lagrange multiplier, μ_S, and liquid fraction
     λ::FT              # liquid fraction (from thermodynamics, held fixed)
-    λ_lagrange::FT # Lagrange multiplier for centred S′: λ = z·α·σ_S
+    λ_lagrange::FT # Lagrange multiplier for centred S′ (discrete fit)
     mu_S::FT       # linearized SGS mean μ_S = q_tot_mean − q_sat(T_mean, ρ)
     α::FT          # variance fidelity parameter (from sgs_variance_fidelity)
     # Numerical parameters
@@ -339,8 +340,9 @@ accretion.
   - `T′T′`: Temperature variance ``\\langle T'^2 \\rangle`` [K²].
   - `q′q′`: Total-water variance ``\\langle q'^2 \\rangle`` [(kg/kg)²].
   - `corr_Tq`: Correlation coefficient corr(T′, q′) from `correlation_Tq(params)` [-].
-  - `λ_lagrange`: Lagrange multiplier `z·α·σ_S` from `ᶜsgs_moments`, precomputed to
-    enforce `E[max(0, λ_lagrange + α·S′)] = q_c` [kg/kg].
+  - `λ_lagrange`: Lagrange multiplier from `ᶜsgs_moments`, precomputed to
+    enforce `E[max(0, λ_lagrange + α·S′)] = q_c` exactly under the
+    quadrature measure [kg/kg].
   - `α`: Variance fidelity parameter from `sgs_variance_fidelity` [-].
   - `dt`: Timestep [s].
   - `nsubs`: Number of substeps for tendency averaging.
