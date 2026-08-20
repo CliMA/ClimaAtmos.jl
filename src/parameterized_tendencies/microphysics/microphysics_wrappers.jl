@@ -257,8 +257,16 @@ The local cloud condensate is obtained from the centred saturation excess
 `S′_hat = (q_tot_hat − q_sat(T_hat, ρ)) − mu_S`:
 
     shifted_excess = max(0, λ_lagrange + α · S′_hat)
-    q_lcl_hat      = max(0, λ · shifted_excess − q_rai)
-    q_icl_hat      = max(0, (1 − λ) · shifted_excess − q_sno)
+    q_lcl_hat      = λ · shifted_excess
+    q_icl_hat      = (1 − λ) · shifted_excess
+
+The Lagrange multiplier `λ_lagrange` is fitted (in `_compute_sgs_moments`) so
+that `E[shifted_excess] = q_c`, where `q_c = q_lcl + q_icl` is the grid-mean
+*cloud* condensate, excluding precipitation. The reconstruction therefore
+partitions `shifted_excess` into local cloud liquid and ice by the liquid
+fraction. Precipitation is held constant across quadrature points and is
+accounted for downstream, where CloudMicrophysics subtracts it from `q_tot`
+to diagnose the local vapor.
 
 `q_tot_hat` is clamped non-negative first. Subsaturated points contribute zero
 condensate but still drive rain evaporation and snow sublimation against the
@@ -273,15 +281,20 @@ with `dq_lcl_dt`, `dq_icl_dt`, `dq_rai_dt`, `dq_sno_dt` [kg/kg/s].
     FT = typeof(eval.ρ)
     q_tot_hat = max(FT(0), q_tot_hat)
 
-    # Local condensate from the Lagrange-multiplier closure.
+    # Local cloud condensate from the Lagrange-multiplier closure.
     # The mass conservation equation is E[max(0, λ + α·S′)] = q_c, so the
     # local shifted excess at each quadrature point is λ + α·S′_hat where
     # S′_hat = (q_tot_hat − q_sat_hat) − μ_S is the centred saturation excess.
+    # Precipitation in q_tot needs no special handling here: its mean level
+    # cancels in the centred S′ (the level is re-anchored by λ_lagrange, fitted
+    # to cloud-only q_c), and CloudMicrophysics subtracts q_rai/q_sno from
+    # q_tot_hat when it diagnoses the local vapor. Subtracting them from the
+    # cloud condensate as well would double-count them and break ⟨q_c^local⟩ = q_c.
     q_sat_hat = TD.q_vap_saturation(eval.tps, T_hat, eval.ρ)
     S′_hat = q_tot_hat - q_sat_hat - eval.mu_S
     shifted_excess = max(FT(0), eval.λ_lagrange + eval.α * S′_hat)
-    q_lcl_hat = max(FT(0), eval.λ * shifted_excess - eval.q_rai)
-    q_icl_hat = max(FT(0), (FT(1) - eval.λ) * shifted_excess - eval.q_sno)
+    q_lcl_hat = eval.λ * shifted_excess
+    q_icl_hat = (FT(1) - eval.λ) * shifted_excess
 
     return BMT.bulk_microphysics_tendencies(
         BMT.LinearizedAverage(),
