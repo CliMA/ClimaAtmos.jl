@@ -807,24 +807,45 @@ NVTX.@annotate function set_cloud_fraction!(
 
     (; ᶜT′T′, ᶜq′q′) = p.precomputed
 
-    # Hybrid cloud fraction: the σ_S² quadrature pass is fused into this
-    # broadcast kernel, so the moments stay in registers and are never written
-    # to a Field.
-    @. p.precomputed.ᶜcloud_fraction = _compute_cloud_fraction(
-        thermo_params,
-        ᶜT_mean,
-        ᶜρ_env,
-        ᶜq_mean,
-        ᶜq_lcl,
-        ᶜq_icl,
-        $(sgs_quad),
-        ᶜT′T′,
-        ᶜq′q′,
-        corr_Tq,
-        FT(α),
-        $(floor),
-    )
+    ᶜT_mean = Fields.field_values(ᶜT_mean)
+    ᶜρ_env = Fields.field_values(ᶜρ_env)
+    ᶜq_mean = Fields.field_values(ᶜq_mean)
+    ᶜq_lcl = Fields.field_values(ᶜq_lcl)
+    ᶜq_icl = Fields.field_values(ᶜq_icl)
+    ᶜT′T′ = Fields.field_values(ᶜT′T′)
+    ᶜq′q′ = Fields.field_values(ᶜq′q′)
+    ᶜcloud_fraction = Fields.field_values(p.precomputed.ᶜcloud_fraction)
+    α = FT(α)
 
+    let α = α, thermo_params = thermo_params, corr_Tq = corr_Tq, floor = floor,
+        sgs_quad = sgs_quad
+
+        DataLayouts.foreach_point(
+            ᶜcloud_fraction,
+            ᶜT_mean,
+            ᶜρ_env,
+            ᶜq_mean,
+            ᶜq_lcl,
+            ᶜq_icl,
+            ᶜT′T′,
+            ᶜq′q′,
+        ) do ᶜcloud_fraction, ᶜT_mean, ᶜρ_env, ᶜq_mean, ᶜq_lcl, ᶜq_icl, ᶜT′T′, ᶜq′q′
+            @. ᶜcloud_fraction = _compute_cloud_fraction(
+                thermo_params,
+                ᶜT_mean,
+                ᶜρ_env,
+                ᶜq_mean,
+                ᶜq_lcl,
+                ᶜq_icl,
+                $(sgs_quad),
+                ᶜT′T′,
+                ᶜq′q′,
+                corr_Tq,
+                α,
+                $(floor),
+            )
+        end
+    end
     _apply_edmf_cloud_weighting!(Y, p, turbconv_model, thermo_params)
 end
 
