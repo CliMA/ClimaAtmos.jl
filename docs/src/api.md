@@ -136,8 +136,8 @@ ClimaAtmos.integrate_over_sgs
 ### Turbulence and convection (PROPHET)
 
 The turbulence and convection scheme: an eddy-diffusivity mass-flux scheme,
-named `EDMFX` in the code. See the
-[PROPHET equations](edmf_equations.md).
+named `EDMFX` in the code. See
+[PROPHET: Overview and Equations](prophet.md).
 
 ```@docs
 ClimaAtmos.AbstractEDMF
@@ -170,6 +170,14 @@ ClimaAtmos.AbstractTendencyModel
 ClimaAtmos.UseAllTendency
 ClimaAtmos.NoGridScaleTendency
 ClimaAtmos.NoSubgridScaleTendency
+```
+
+Closure parameters. The fields of this set, and the ClimaParams names they come
+from, are listed in [PROPHET: Closures](prophet_closures.md#Parameters):
+
+```@docs
+ClimaAtmos.Parameters.AbstractTurbulenceConvectionParameters
+ClimaAtmos.Parameters.TurbulenceConvectionParameters
 ```
 
 ### Radiation

@@ -55,7 +55,7 @@ atmosphere models [Lauritzen2022](@cite). See
 
 When prognostic turbulence kinetic energy or PROPHET is enabled, the state also
 carries ``\rho \, \mathrm{tke}`` and the PROPHET subdomain variables described in
-the [PROPHET equations](@ref "PROPHET Sub-Grid Scale Equations"); a slab-ocean
+the [PROPHET equations](@ref "PROPHET: Overview and Equations"); a slab-ocean
 surface adds a prognostic surface state. [Notation and
 Symbols](notation.md) maps the symbols used here onto the names in the code.
 
@@ -280,7 +280,7 @@ and the scalar fluxes ``\boldsymbol{\mathcal{F}}_h``,
 and ``\boldsymbol{\mathcal{F}}_\chi`` represent the effect of unresolved
 processes on the resolved flow. They may have diffusive and advective components,
 the latter associated with convection closures; see
-[PROPHET](edmf_equations.md). Energetic consistency and invariance to the
+[PROPHET](prophet.md). Energetic consistency and invariance to the
 reference temperature constrain the diffusive part: the total enthalpy flux is
 decomposed into the enthalpy carried by the diffusive water flux and a thermal
 diffusion of dry static energy, rather than modeled as the gradient of a single

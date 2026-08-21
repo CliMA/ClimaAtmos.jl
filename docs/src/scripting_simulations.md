@@ -80,7 +80,7 @@ scripts start from one of them instead of from bare `AtmosModel` keywords.
 The model presets are `dry`, `equil_moist_0m`, `nonequil_moist_1m`,
 `prognostic_edmf`, and `prognostic_edmf_1m`; the simulation presets
 `aquaplanet`, `baroclinic_wave`, and `bomex` return a ready-to-run
-`AtmosSimulation`. The simulation presets and the PROPHET model presets take
+`AtmosSimulation`. The simulation presets and the [PROPHET](prophet.md) model presets take
 the float type as their first argument; `dry`, `equil_moist_0m`, and
 `nonequil_moist_1m` take keyword arguments only. Each forwards keyword
 arguments for further overrides:
