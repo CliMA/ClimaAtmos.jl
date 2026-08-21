@@ -375,6 +375,54 @@ using ClimaAtmos
                     @test result_quad.dq_sno_dt ≈ result_direct.dq_sno_dt rtol = FT(1e-5)
                 end
 
+                # Same exact-mean property, but with nonzero rain and
+                # snow. λ_lagrange enforces E[shifted_excess] = q_c on *cloud*
+                # condensate only, so at the mean point, the reconstruction must
+                # still recover q_lcl_hat = λ·q_c and q_icl_hat = (1−λ)·q_c,
+                # independent of q_rai / q_sno.
+                # Mixed-phase T so both the liquid (vs q_rai) and ice (vs q_sno)
+                # partitions are exercised.
+                @testset "Single Point = Grid Mean (precipitating)" begin
+                    quad_1pt = ClimaAtmos.SGSQuadrature(
+                        FT;
+                        quadrature_order = 1,
+                        distribution = ClimaAtmos.GaussianSGS(),
+                    )
+
+                    T_mix = FT(263.15)  # mixed-phase: 0 < λ < 1
+                    q_sat_mix = TD.q_vap_saturation(tps, T_mix, ρ)
+                    q_tot_mix = q_sat_mix + q_lcl_mean + q_icl_mean
+                    q_c = q_lcl_mean + q_icl_mean
+                    λ_mix = TD.liquid_fraction(tps, T_mix, q_lcl_mean, q_icl_mean)
+                    # Precipitation of the same order as (or larger than) q_c, so
+                    # the buggy subtraction would clamp the cloud water to zero.
+                    q_rai_p = FT(1e-3)
+                    q_sno_p = FT(5e-4)
+                    λ_lagrange_mix = q_c  # σ_S → 0 limit at the mean point
+
+                    result_quad = microphysics_tendencies_1m(
+                        BMT.Microphysics1Moment(),
+                        quad_1pt, mp, tps, ρ,
+                        T_mix, q_tot_mix, q_lcl_mean, q_icl_mean, q_rai_p, q_sno_p,
+                        T′T′, q′q′, corr_Tq, λ_lagrange_mix, α, dt, nsubs_quad,
+                    )
+
+                    # Reference: BMT called with the condensate the closure must
+                    # reconstruct at the mean point, plus the true precipitation.
+                    result_direct = BMT.bulk_microphysics_tendencies(
+                        BMT.LinearizedAverage(),
+                        BMT.Microphysics1Moment(),
+                        mp, tps, ρ, T_mix,
+                        q_tot_mix, λ_mix * q_c, (1 - λ_mix) * q_c,
+                        q_rai_p, q_sno_p, dt, nsubs_quad,
+                    )
+
+                    @test result_quad.dq_lcl_dt ≈ result_direct.dq_lcl_dt rtol = FT(1e-5)
+                    @test result_quad.dq_icl_dt ≈ result_direct.dq_icl_dt rtol = FT(1e-5)
+                    @test result_quad.dq_rai_dt ≈ result_direct.dq_rai_dt rtol = FT(1e-5)
+                    @test result_quad.dq_sno_dt ≈ result_direct.dq_sno_dt rtol = FT(1e-5)
+                end
+
                 # Test 2: Zero variance collapses to single-point → same as grid mean.
                 @testset "Zero Variance = Grid Mean" begin
                     quad = ClimaAtmos.SGSQuadrature(FT; quadrature_order = 3)
