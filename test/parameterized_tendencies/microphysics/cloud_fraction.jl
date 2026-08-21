@@ -236,4 +236,35 @@ floor_nt(
         end
     end
 
+    @testset "`_compute_z` inversion accuracy" begin
+        # z must satisfy the truncated-Gaussian relation z·Φ(z) + φ(z) = C.
+        # Two Newton steps leave < 0.7 % residual for C ≥ 0.05 and < 4 % for
+        # C ≥ 0.01 (a single step left 14 % and 36 %). Residuals are checked
+        # with `normal_cdf` (abs. error 7.5e-8), so tolerances stay well
+        # above the CDF approximation error.
+        for FT in (Float32, Float64)
+            @testset "FT = $FT" begin
+                φ(z) = exp(-z^2 / 2) / sqrt(FT(2) * FT(π))
+                h(z) = z * CA.normal_cdf(z) + φ(z)
+                for (C, rtol) in (
+                    (FT(0.01), FT(0.05)),
+                    (FT(0.05), FT(0.01)),
+                    (FT(0.1), FT(0.005)),
+                    (FT(0.3), FT(1e-3)),
+                    (FT(1), FT(1e-3)),
+                    (FT(5), FT(1e-3)),
+                    (FT(100), FT(1e-3)),
+                )
+                    z = CA._compute_z(C)
+                    @test h(z) ≈ C rtol = rtol
+                end
+                # C = 0 (no condensate): deeply negative z, negligible CF.
+                # Regression for the second-step ϵ_numerics guard, without
+                # which Float32 returned z ≈ −2.3 (CF ≈ 1 %).
+                z0 = CA._compute_z(FT(0))
+                @test CA.normal_cdf(z0) < FT(1e-10)
+            end
+        end
+    end
+
 end
