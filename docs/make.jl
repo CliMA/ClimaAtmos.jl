@@ -79,6 +79,7 @@ makedocs(;
             "Computing and Saving Diagnostics" => "diagnostics.md",
             "Loading and Visualizing Output" => "visualizing_output.md",
             "Configuring and Tuning PROPHET" => "prophet_howto.md",
+            "Running with Radiation" => "radiation_howto.md",
         ],
         "Explanation" => [
             "The CliMA Ecosystem" => "ecosystem.md",

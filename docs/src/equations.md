@@ -286,6 +286,11 @@ decomposed into the enthalpy carried by the diffusive water flux and a thermal
 diffusion of dry static energy, rather than modeled as the gradient of a single
 lumped enthalpy.
 
+**Radiative flux.** ``\boldsymbol{\mathcal{F}}_R`` is the net radiative flux,
+computed by a correlated-``k`` radiative transfer solve or by one of the
+idealized profiles, on a cadence much longer than the timestep. See
+[Radiation](radiation.md).
+
 **Hyperdiffusion.** The fluxes ``\boldsymbol{\mathcal{H}}`` serve numerical
 stability rather than physics, and act along terrain-following coordinate
 surfaces. See [Hyperdiffusion](hyperdiffusion.md).

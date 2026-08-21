@@ -3,7 +3,8 @@
 PROPHET (Prognostic Representation Of Physics for Eddy Transport) is
 ClimaAtmos's representation of turbulence, convection, and the clouds they
 produce. It is an extended eddy-diffusivity mass-flux (EDMF) scheme in the
-lineage of [Siebesma2007, Tan2018, Cohen2020, Lopez2020, Christopoulos2024](@cite),
+lineage of
+[Siebesma2007, Tan2018, Cohen2020, Lopez2020, Christopoulos2024](@cite),
 generalized along the lines of the conditional-filtering framework of
 [Thuburn2018, Thuburn2018b, Weller2019](@cite). The formulation is described in
 full in the PROPHET paper (Azimi et al., in preparation); this page states the
@@ -16,11 +17,12 @@ is `turbconv: "prognostic_edmfx"`, the types are
 `src/prognostic_equations/edmfx_*.jl`. The rename to PROPHET has not been
 carried into the code.
 
-Three companion pages complete the description:
-[Closures](prophet_closures.md) for the parameterized rates and diffusivities,
+Three companion pages complete the description: [Closures](prophet_closures.md)
+for the parameterized rates and diffusivities,
 [Discretization and Time Stepping](prophet_numerics.md) for the semi-discrete
-forms and the implicit solves, and [Horizontal Diffusion](prophet_horizontal_diffusion.md)
-for the optional horizontal component of the diffusive fluxes. The how-to guide
+forms and the implicit solves, and
+[Horizontal Diffusion](prophet_horizontal_diffusion.md) for the optional
+horizontal component of the diffusive fluxes. The how-to guide
 [Configuring and Tuning PROPHET](prophet_howto.md) covers the configuration
 surface.
 
@@ -388,9 +390,10 @@ diffusion. See [Governing Equations](equations.md) and
 
     Two pieces of the formulation above are not in the code:
 
-      - the perturbation-pressure work ``\boldsymbol{u}^m \cdot (\rho^m)^{-1} \nabla p^\dagger``
-        in the energy equation. `pressure_work.jl` is an explicit, documented
-        no-op dispatch point that reserves the place for it;
+      - the perturbation-pressure work
+        ``\boldsymbol{u}^m \cdot (\rho^m)^{-1} \nabla p^\dagger`` in the energy
+        equation. `pressure_work.jl` is an explicit, documented no-op dispatch
+        point that reserves the place for it;
       - the return-to-isotropy source that receives the kinetic energy the
         pressure drag removes. The drag itself is applied (in the implicit
         vertical-velocity solve), but the energy it extracts is currently lost
@@ -457,9 +460,10 @@ dry-static-energy-plus-water-enthalpy decomposition used for the diffusive part:
 it represents bodily motion of whole moist parcels, each at its own composition,
 so the dry-air-diffusion artifact that motivates the decomposition does not
 arise. Adding the grid-mean ``\kappa_{\mathrm{iso}}`` uniformly to every
-subdomain keeps ``\sum_m \hat{\rho}^m h_{\mathrm{tot}}^m = \rho h_{\mathrm{tot}}``;
-it cancels from the deviation that drives the flux. Water species and tracers
-take the generic form above.
+subdomain keeps
+``\sum_m \hat{\rho}^m h_{\mathrm{tot}}^m = \rho h_{\mathrm{tot}}``; it cancels
+from the deviation that drives the flux. Water species and tracers take the
+generic form above.
 
 !!! note "TODO: not yet implemented"
 
@@ -496,7 +500,8 @@ The reconstruction of a specific environment scalar divides by ``\hat{\rho}^0``,
 which is small wherever the drafts nearly fill the cell. `specific` and the
 `ᶜspecific_env_*` helpers in `src/utils/variable_manipulations.jl` therefore
 blend the residual toward the grid-mean value below an area threshold `a_half`;
-see [Environment reconstruction](prophet_numerics.md#Environment-reconstruction).
+see
+[Environment reconstruction](prophet_numerics.md#Environment-reconstruction).
 
 ### The high-resolution limit
 
@@ -538,27 +543,27 @@ options for the subdomain variables are configurable; see
 
 ## Symbols
 
-| Symbol                                            | Meaning                                                          | Units      |
-|:------------------------------------------------- |:---------------------------------------------------------------- |:---------- |
-| ``a^m``                                           | Volume fraction of subdomain ``m``                               |            |
-| ``\rho^m``, ``\hat{\rho}^m``                      | Subdomain density and effective density ``a^m \rho^m``            | kg m⁻³     |
-| ``\boldsymbol{u}^m``, ``\boldsymbol{w}^m``        | Subdomain velocity and its vertical part                         | m s⁻¹      |
-| ``h_s^m``                                         | Subdomain specific moist static energy                           | J kg⁻¹     |
-| ``q_t^m``, ``q_\mu^{\sigma m}``, ``\chi^m``       | Subdomain total water, condensate/precipitation, tracer          | kg kg⁻¹    |
-| ``T^m``, ``R_m^m``                                | Subdomain temperature and gas constant of moist air              | K, J kg⁻¹ K⁻¹ |
-| ``\boldsymbol{b}^m``, ``b^m``                     | Subdomain buoyancy and its vertical component                    | m s⁻²      |
-| ``\boldsymbol{b}_{\mathrm{eff}}^m``               | Effective buoyancy driving the subdomain momentum                | m s⁻²      |
-| ``\boldsymbol{d}^m``                              | Pressure (form) drag deceleration                                | m s⁻²      |
-| ``p_h``, ``p^\dagger``, ``\rho_h``                | Hydrostatic reference pressure, perturbation, reference density   | Pa, Pa, kg m⁻³ |
-| ``\kappa^m``, ``\boldsymbol{\omega}^m``           | Subdomain specific kinetic energy and relative vorticity         | J kg⁻¹, s⁻¹ |
-| ``E^{mn}``, ``\Delta^{mn}``                       | Dynamical entrainment (``n \to m``) and detrainment (``m \to n``) | s⁻¹        |
-| ``S_\psi^m``, ``S_{\psi,\mathrm{eff}}^m``         | Subdomain source of ``\psi``, and its dilution-corrected form    | s⁻¹, varies |
-| ``\hat{S}_{q_t}^m``                               | Effective subdomain mass source                                  | s⁻¹        |
-| ``W_\psi^m``, ``D_\psi^m``                        | Sedimentation flux of ``\psi`` and sedimentation-divergence term | varies     |
-| ``Q_R^m``                                         | Subdomain radiative heating rate                                 | W kg⁻¹     |
-| ``\kappa_{\mathrm{iso}}``, ``\kappa_{\mathrm{coh}}`` | Isotropic (intra-subdomain) and coherent (inter-subdomain) subgrid kinetic energy | J kg⁻¹ |
-| ``K_m``, ``K_\psi``                               | Eddy viscosity and eddy diffusivity                              | m² s⁻¹     |
-| ``l``                                             | Mixing and dissipation length scale                              | m          |
+| Symbol                                               | Meaning                                                                           | Units          |
+|:---------------------------------------------------- |:--------------------------------------------------------------------------------- |:-------------- |
+| ``a^m``                                              | Volume fraction of subdomain ``m``                                                |                |
+| ``\rho^m``, ``\hat{\rho}^m``                         | Subdomain density and effective density ``a^m \rho^m``                            | kg m⁻³         |
+| ``\boldsymbol{u}^m``, ``\boldsymbol{w}^m``           | Subdomain velocity and its vertical part                                          | m s⁻¹          |
+| ``h_s^m``                                            | Subdomain specific moist static energy                                            | J kg⁻¹         |
+| ``q_t^m``, ``q_\mu^{\sigma m}``, ``\chi^m``          | Subdomain total water, condensate/precipitation, tracer                           | kg kg⁻¹        |
+| ``T^m``, ``R_m^m``                                   | Subdomain temperature and gas constant of moist air                               | K, J kg⁻¹ K⁻¹  |
+| ``\boldsymbol{b}^m``, ``b^m``                        | Subdomain buoyancy and its vertical component                                     | m s⁻²          |
+| ``\boldsymbol{b}_{\mathrm{eff}}^m``                  | Effective buoyancy driving the subdomain momentum                                 | m s⁻²          |
+| ``\boldsymbol{d}^m``                                 | Pressure (form) drag deceleration                                                 | m s⁻²          |
+| ``p_h``, ``p^\dagger``, ``\rho_h``                   | Hydrostatic reference pressure, perturbation, reference density                   | Pa, Pa, kg m⁻³ |
+| ``\kappa^m``, ``\boldsymbol{\omega}^m``              | Subdomain specific kinetic energy and relative vorticity                          | J kg⁻¹, s⁻¹    |
+| ``E^{mn}``, ``\Delta^{mn}``                          | Dynamical entrainment (``n \to m``) and detrainment (``m \to n``)                 | s⁻¹            |
+| ``S_\psi^m``, ``S_{\psi,\mathrm{eff}}^m``            | Subdomain source of ``\psi``, and its dilution-corrected form                     | s⁻¹, varies    |
+| ``\hat{S}_{q_t}^m``                                  | Effective subdomain mass source                                                   | s⁻¹            |
+| ``W_\psi^m``, ``D_\psi^m``                           | Sedimentation flux of ``\psi`` and sedimentation-divergence term                  | varies         |
+| ``Q_R^m``                                            | Subdomain radiative heating rate                                                  | W kg⁻¹         |
+| ``\kappa_{\mathrm{iso}}``, ``\kappa_{\mathrm{coh}}`` | Isotropic (intra-subdomain) and coherent (inter-subdomain) subgrid kinetic energy | J kg⁻¹         |
+| ``K_m``, ``K_\psi``                                  | Eddy viscosity and eddy diffusivity                                               | m² s⁻¹         |
+| ``l``                                                | Mixing and dissipation length scale                                               | m              |
 
 The remaining closure symbols are defined on the [Closures](prophet_closures.md)
 page. [Notation and Symbols](notation.md) maps these onto the field names in the
@@ -593,14 +598,14 @@ cloud-top longwave cooling and a fully cloudy one sees all of it.
 
 ## Where this is implemented
 
-| Component                                     | Source                                                                                                                                                                             |
-|:--------------------------------------------- |:---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Model types and configuration dispatch        | [types.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/types.jl), [config/model_getters.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/config/model_getters.jl) |
-| Draft state variables                         | [setups/common/prognostic_variables.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/setups/common/prognostic_variables.jl)                                                |
-| Draft and environment diagnosed quantities    | [cache/prognostic_edmf_precomputed_quantities.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/cache/prognostic_edmf_precomputed_quantities.jl)                            |
-| Draft advection, buoyancy, sedimentation      | [advection.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/prognostic_equations/advection.jl), [water_advection.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/prognostic_equations/water_advection.jl) |
-| Entrainment and detrainment tendencies        | [edmfx_entr_detr.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/prognostic_equations/edmfx_entr_detr.jl)                                                                 |
-| Subgrid-scale fluxes onto the grid mean       | [edmfx_sgs_flux.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/prognostic_equations/edmfx_sgs_flux.jl)                                                                   |
-| Buoyancy, drag, and area helpers              | [mass_flux_closures.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/prognostic_equations/mass_flux_closures.jl)                                                           |
-| Environment reconstruction from residuals     | [utils/variable_manipulations.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/utils/variable_manipulations.jl)                                                            |
-| Diagnostics of subdomain quantities           | [diagnostics/edmfx_diagnostics.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/diagnostics/edmfx_diagnostics.jl)                                                          |
+| Component                                  | Source                                                                                                                                                                                                                     |
+|:------------------------------------------ |:-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Model types and configuration dispatch     | [types.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/types.jl), [config/model_getters.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/config/model_getters.jl)                                         |
+| Draft state variables                      | [setups/common/prognostic_variables.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/setups/common/prognostic_variables.jl)                                                                                        |
+| Draft and environment diagnosed quantities | [cache/prognostic_edmf_precomputed_quantities.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/cache/prognostic_edmf_precomputed_quantities.jl)                                                                    |
+| Draft advection, buoyancy, sedimentation   | [advection.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/prognostic_equations/advection.jl), [water_advection.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/prognostic_equations/water_advection.jl) |
+| Entrainment and detrainment tendencies     | [edmfx_entr_detr.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/prognostic_equations/edmfx_entr_detr.jl)                                                                                                         |
+| Subgrid-scale fluxes onto the grid mean    | [edmfx_sgs_flux.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/prognostic_equations/edmfx_sgs_flux.jl)                                                                                                           |
+| Buoyancy, drag, and area helpers           | [mass_flux_closures.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/prognostic_equations/mass_flux_closures.jl)                                                                                                   |
+| Environment reconstruction from residuals  | [utils/variable_manipulations.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/utils/variable_manipulations.jl)                                                                                                    |
+| Diagnostics of subdomain quantities        | [diagnostics/edmfx_diagnostics.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/diagnostics/edmfx_diagnostics.jl)                                                                                                  |
