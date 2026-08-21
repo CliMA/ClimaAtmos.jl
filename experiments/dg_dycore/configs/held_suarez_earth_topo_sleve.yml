@@ -1,0 +1,47 @@
+core: vi
+momentum_adv: vector_invariant
+face_set: es2
+held_suarez: true
+topography: earth
+
+# --- SLEVE coordinate (Schär 2002) ---
+# Horizontal pre-smoothing is moderate (factor 3 ≈ 1.1 Laplacian passes)
+# to remove the genuine sub-grid noise (features < 1 DOF spacing ≈ 126 km).
+# SLEVE then applies sinh-decay so coordinate surfaces flatten above
+# eta_h × zmax = 0.5 × 30 = 15 km — the CI is terrain-following only in
+# the lower troposphere where orographic forcing actually matters.
+# Compare with: topography_damping_factor 10 + linear = 2.3 passes + full
+# tilt everywhere → overcorrected and still tilted at 20 km.
+terrain_warp: sleve
+topography_damping_factor: 3.0
+sleve_eta_h: 0.5
+sleve_s: 0.5
+
+# --- interior dissipation ---
+kappa4: 0.0
+filter_Nc: 0
+nu_vert: 0.0
+nu_div_frac: 0.3
+
+# --- grid ---
+helem: 16
+npoly: 4
+zelem: 20
+zmax: 30000.0
+zstretch: [300.0, 3000.0]
+
+# --- w-only Rayleigh sponge in the top 15 km ---
+sponge_depth: 15000.0
+sponge_tau: 20.0
+sponge_uh: false
+
+stepper: hevi
+dt: 45.0
+newton_max_iters: 4
+t_end: 864000.0
+perturb: true
+constants_mode: clima_params
+ic_source: setups
+output_dir: output/held_suarez_earth_topo_sleve
+diag_period: 86400.0
+ndiag: 80

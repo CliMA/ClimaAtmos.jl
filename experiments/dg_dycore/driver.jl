@@ -54,6 +54,8 @@ function problem_from_yaml(path)
     fddg_only = (
         ("interface_flux", :interface_flux, Symbol),
         ("wb_gravity", :wb_gravity, Bool),
+        ("wb_metric", :wb_metric, Symbol),
+        ("entropy_correction", :entropy_correction, Bool),
     )
     vi_only = (
         ("momentum_adv", :momentum_adv, Symbol),

@@ -263,18 +263,17 @@ function compute_tendency_fddg!(
     @. dYc.ρu2 -= dmr * eR2
     @. dYc.ρu3 -= dmr * eR3
 
-    # --- Well-balanced metric-defect correction: subtract the pressure-scaled
-    #     horizontal-kernel GCL defect (δ_c = tangential rest tendency / p_ref,
-    #     calibrated in calibrate_wb_reference!).  The discrete metric identity
-    #     Σ_i ∂_ξi(Ja^i)=0 fails over terrain, so the KG pressure flux leaves a
-    #     spurious force p·δ_c the horizontal directions can't cancel; the
-    #     literal −∂_ξ3(Ja³) term is spatially misaligned (verified). Exact at
-    #     rest (p·δ_c → p_ref·δ_c = the raw defect). Explicit + ungated
-    #     (tangential, horizontal CFL) ⇒ HEVI split rhs = imp + rem preserved. ---
-    (; ᶜwb_δ1, ᶜwb_δ2, ᶜwb_δ3) = m.fields
-    @. dYc.ρu1 -= p * ᶜwb_δ1
-    @. dYc.ρu2 -= p * ᶜwb_δ2
-    @. dYc.ρu3 -= p * ᶜwb_δ3
+    # --- Terrain metric-defect correction (wb_metric == :metric_source):
+    #     subtract p·δ, δ the IC-agnostic pure-metric GCL defect calibrated on
+    #     an isothermal rest state (calibrate_wb_metric!). Removes the spurious
+    #     terrain force p·δ; leaves real pressure gradients (jet drive) intact.
+    #     Explicit + ungated ⇒ HEVI split rhs = imp + rem preserved. ---
+    if m.prob.wb_metric === :metric_source
+        (; ᶜwb_δ1, ᶜwb_δ2, ᶜwb_δ3) = m.fields
+        @. dYc.ρu1 -= p * ᶜwb_δ1
+        @. dYc.ρu2 -= p * ᶜwb_δ2
+        @. dYc.ρu3 -= p * ᶜwb_δ3
+    end
 
     # --- ρw: pressure gradient + buoyancy (discretely balanced pair,
     #     implicit under HEVI), vertical advection, horizontal DG

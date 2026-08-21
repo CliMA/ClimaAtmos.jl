@@ -88,6 +88,26 @@ Base.@kwdef struct BaroclinicWaveFDDG{FT <: AbstractFloat}
     κ₄_frac::Union{Nothing, FT} = nothing
     interface_flux::Symbol = :rusanov
     wb_gravity::Bool = false
+    # Terrain well-balancing backend for the horizontal-kernel GCL metric
+    # defect (the spurious p·δ force from Σ_i ∂_ξi(Ja^i) ≠ 0 discretely over
+    # warped grids):
+    #   :none          — no correction (baseline; unstable over steep terrain)
+    #   :metric_source — subtract p·δ, δ measured from the metric ALONE
+    #                    (horizontal kernel on p≡1, u≡0, gravity off; IC-agnostic,
+    #                    pressure-flux defect only)
+    #   :gcl_curl      — discretely-consistent (curl-form) metric reconstruction
+    #                    so δ ≡ 0 for all states (no source; also cancels the
+    #                    advective defect)
+    # δ is a pure GRID property — never calibrate it against an IC.
+    wb_metric::Symbol = :none
+    # Entropy correction (Chan et al. 2026, FCT): minimally-dissipative,
+    # provably entropy-stable stabilization for the KEP volume flux — a
+    # principled alternative to ∇⁴ hyperdiffusion (kept at κ₄ = 0). Blends the
+    # high-order KEP flux with a low-order entropy-stable (central+LxF) flux by
+    # the minimum element-wise amount that keeps the cell entropy residual ≥ 0.
+    # Applies to the horizontal explicit advective flux (source terms/vertical
+    # implicit acoustics are separate). false = no correction.
+    entropy_correction::Bool = false
     zstretch::Union{Nothing, Tuple{FT, FT}} = nothing
     sponge_τ::FT = 1200.0
     sponge_depth::FT = 7.5e3
@@ -133,6 +153,8 @@ function validate(p::BaroclinicWaveFDDG)
         error("topography must be :none, :earth, or :hughes2023")
     p.terrain_warp in (:linear, :sleve) ||
         error("terrain_warp must be :linear or :sleve")
+    p.wb_metric in (:none, :metric_source, :gcl_curl) ||
+        error("wb_metric must be :none, :metric_source, or :gcl_curl")
     return p
 end
 

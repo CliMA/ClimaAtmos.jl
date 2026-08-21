@@ -360,11 +360,13 @@ function DGModel(prob::DGProblem)
         ᶜp_ref = copy(p)
         ᶜρ_ref = @. p / (c.R_d * T)
         discrete_hydrostatic_p!(ᶜp_ref, ᶜρ_ref, T, c.R_d, fields.ᶜΦ)
-        # Well-balanced metric-defect correction (calibrated post-build in
-        # calibrate_wb_reference!): δ_c = tangential rest-tendency / p_ref, the
-        # pressure-scaled horizontal-kernel GCL defect the discrete metric
-        # identity fails to cancel over terrain. Zero until calibrated (and on
-        # flat grids / the VI core, which never read them).
+        # Terrain metric-defect correction δ_c (filled by calibrate_wb_metric!
+        # for wb_metric == :metric_source; zero otherwise). δ_c is a pure GRID
+        # quantity — the horizontal-kernel GCL defect per unit pressure — so it
+        # is measured on an ISOTHERMAL, horizontally-uniform hydrostatic state
+        # (no meridional structure ⇒ no physical PGF absorbed). Subtracting
+        # p·δ_c removes the spurious p·δ terrain force while leaving real
+        # pressure gradients (e.g. the baroclinic jet drive) untouched.
         ᶜwb_δ1 = zero(ᶜp_ref)
         ᶜwb_δ2 = zero(ᶜp_ref)
         ᶜwb_δ3 = zero(ᶜp_ref)
@@ -446,35 +448,50 @@ function DGModel(prob::DGProblem)
         κ₄,
         κ₄_cap,
     )
-    # Calibrate the well-balanced metric-defect correction on the hydrostatic
-    # rest state (FDDG over terrain only; flat grids have no metric defect).
     prob isa BaroclinicWaveFDDG &&
-        prob.topography != :none &&
-        calibrate_wb_reference!(m)
+        prob.wb_metric === :metric_source &&
+        calibrate_wb_metric!(m)
+    # :gcl_curl is NOT achievable. Empirically confirmed two independent ways
+    # (hwdiv+vdivf2c3, and the KG kernel on a unit-metric state): the RAW metric
+    # divergence D(ê_c·Ja) ≈ 7e-5, but the KG two-point pairing suppresses it
+    # ~100× (that is how it preserves free-stream), so the effective rest defect
+    # is δ ≈ 8.5e-7 — a state-entangled residual of a near-cancellation, NOT the
+    # raw divergence. Subtracting p·D(Ja) injects ~42× the defect (0.167 → ~7).
+    # No artificial-state/operator computation recovers the effective defect;
+    # exact well-balance needs a single SBP operator in all 3 directions
+    # (Waruszewski), which HEVI (implicit vertical) forbids. See project memory
+    # and experiments/dg_dycore/docs/terrain_metric_wellbalance.md.
+    prob isa BaroclinicWaveFDDG &&
+        prob.wb_metric === :gcl_curl &&
+        error("wb_metric = :gcl_curl is not achievable for this HEVI SEM/FD \
+               scheme (empirically confirmed; see terrain_metric_wellbalance.md)")
     return m
 end
 
 """
-    calibrate_wb_reference!(m)
+    calibrate_wb_metric!(m)
 
-Fill `m.fields.ᶜwb_δ{1,2,3}` with the pressure-scaled horizontal-kernel GCL
-metric defect, measured on the hydrostatic rest state (ρ=ρ_ref, p=p_ref, u=0).
-At rest the only nonzero momentum tendency is the horizontal pressure-flux
-metric defect `p_ref·δ_c` (Coriolis/advection/vertical transport all vanish for
-u=0; Held–Suarez momentum drag ∝ u = 0), so `δ_c = tangential(dρu_c)/p_ref` is a
-pure, state-independent metric quantity. Subtracting `p·δ_c` in the tendency
-(flux_form.jl) then makes rest an exact discrete steady state and removes the
-pressure-scaled spurious terrain force off-rest. Runs with `ᶜwb_δ ≡ 0`, so the
-measured tendency is the raw defect. See project memory: the literal
-`−∂_ξ3(Ja³)` term is spatially misaligned (discrete GCL fails), hence this
-reference-subtraction closure.
+Fill `m.fields.ᶜwb_δ{1,2,3}` with the horizontal-kernel GCL metric defect PER
+UNIT PRESSURE, for `wb_metric == :metric_source`. Measured on an ISOTHERMAL
+(`T ≡ T₀`), horizontally-uniform hydrostatic state at rest — a genuine
+equilibrium whose only nonzero tangential momentum tendency is the spurious
+`p·δ` terrain metric defect (the isothermal log-mean identity makes the
+pressure/gravity pairing telescope exactly, so nothing physical remains). The
+state carries NO meridional structure, so `δ` is a pure grid quantity and does
+not absorb any real pressure-gradient force — subtracting `p·δ` in the tendency
+leaves the baroclinic jet drive intact. IC-agnostic by construction.
 """
-function calibrate_wb_reference!(m::DGModel{FT}) where {FT}
+function calibrate_wb_metric!(m::DGModel{FT}) where {FT}
     c = m.c
-    ρ = m.fields.ᶜρ_ref
-    p = m.fields.ᶜp_ref
     ᶜΦ = m.fields.ᶜΦ
     (; eR1, eR2, eR3) = m.fields
+    T₀ = FT(250)                               # arbitrary: δ is pressure-independent
+    p = similar(m.fields.ᶜp_ref)
+    ρ = similar(p)
+    Tf = similar(p)
+    @. p = c.p_0                               # bottom value; recursion fills above
+    @. Tf = T₀
+    discrete_hydrostatic_p!(p, ρ, Tf, c.R_d, ᶜΦ)
     ρe = @. c.cv_d * p / c.R_d + ρ * (ᶜΦ - c.cv_d * c.T_tri)
     Yc = map(
         (ρi, ρei) ->
@@ -483,12 +500,12 @@ function calibrate_wb_reference!(m::DGModel{FT}) where {FT}
         ρe,
     )
     Yf = map(_ -> (; ρw = C3(FT(0))), m.fields.fcoords)
-    Y_ref = Fields.FieldVector(c = Yc, f = Yf)
-    dY_ref = similar(Y_ref)
-    rhs_fddg!(dY_ref, Y_ref, m, FT(0))
-    dr = @. dY_ref.c.ρu1 * eR1 + dY_ref.c.ρu2 * eR2 + dY_ref.c.ρu3 * eR3
-    @. m.fields.ᶜwb_δ1 = (dY_ref.c.ρu1 - dr * eR1) / p
-    @. m.fields.ᶜwb_δ2 = (dY_ref.c.ρu2 - dr * eR2) / p
-    @. m.fields.ᶜwb_δ3 = (dY_ref.c.ρu3 - dr * eR3) / p
+    Y_iso = Fields.FieldVector(c = Yc, f = Yf)
+    dY = similar(Y_iso)
+    rhs_fddg!(dY, Y_iso, m, FT(0))             # ᶜwb_δ ≡ 0 here ⇒ raw defect
+    dr = @. dY.c.ρu1 * eR1 + dY.c.ρu2 * eR2 + dY.c.ρu3 * eR3
+    @. m.fields.ᶜwb_δ1 = (dY.c.ρu1 - dr * eR1) / p
+    @. m.fields.ᶜwb_δ2 = (dY.c.ρu2 - dr * eR2) / p
+    @. m.fields.ᶜwb_δ3 = (dY.c.ρu3 - dr * eR3) / p
     return m
 end

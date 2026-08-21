@@ -1,0 +1,30 @@
+core: fddg
+interface_flux: curvilinear_roe_wb  # reference-subtracted Roe dissipation (change b)
+held_suarez: true
+topography: earth
+terrain_warp: sleve
+sleve_s: 0.5
+wb_gravity: true                 # well-balanced geopotential (required with terrain)
+
+kappa4: 0.0
+
+helem: 16
+npoly: 4
+zelem: 20
+zmax: 30000.0
+zstretch: [300.0, 3000.0]
+
+sponge_depth: 15000.0
+sponge_tau: 20.0
+sponge_uh: false
+
+stepper: hevi
+dt: 30.0
+newton_max_iters: 2
+t_end: 86400.0           # 1 day (quick A/B vs raw curvilinear_roe)
+perturb: false       # ignored for ic_source: rest; set explicitly for clarity
+constants_mode: clima_params
+ic_source: rest      # atmosphere at rest: JW06 T/p, zero velocity
+output_dir: output/held_suarez_curvilinear_roe_wb_topo
+diag_period: 3600.0
+ndiag: 120

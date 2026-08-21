@@ -1,0 +1,34 @@
+core: vi
+momentum_adv: vector_invariant
+face_set: es
+held_suarez: true
+# topography: none (default) — flat sphere to isolate acoustic Roe vs terrain
+
+# --- minimal interior dissipation ---
+kappa4: 0.0
+filter_Nc: 0
+nu_vert: 0.0
+nu_div_frac: 0.3
+
+# --- grid ---
+helem: 16
+npoly: 4
+zelem: 20
+zmax: 30000.0
+zstretch: [300.0, 3000.0]
+
+# --- w-only sponge ---
+sponge_depth: 15000.0
+sponge_tau: 20.0
+sponge_uh: false
+
+stepper: hevi
+dt: 60.0
+newton_max_iters: 4   # dt=60 at helem=16 needs 4 iterations
+t_end: 864000.0       # 10 days
+perturb: true
+constants_mode: clima_params
+ic_source: setups
+output_dir: output/held_suarez_flat_es_dt60
+diag_period: 86400.0
+ndiag: 60             # monitor every 60 steps × 60 s = 3600 s (hourly)
