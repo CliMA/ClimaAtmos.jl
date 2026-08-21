@@ -885,15 +885,20 @@ using ClimaAtmos
                         )
                     @test result0.e_tot_hlpr ≈ e_hlpr_mean rtol = sqrt(eps(FT))
 
-                    # Subsaturated mean with zero variance: no precipitation
-                    # anywhere; the fallback helper must still be finite.
+                    # Subsaturated mean: no quadrature point precipitates, so
+                    # the helper is zero and carries no energy.
                     q_dry = TD.q_vap_saturation(thp, T_mean, ρ) - FT(5e-3)
-                    result_dry = ClimaAtmos.microphysics_tendencies_0m(
-                        quad, mp_0m, thp, ρ, T_mean, max(q_dry, FT(0)),
-                        FT(0), FT(0), FT(0), Φ, dt,
-                    )
-                    @test result_dry.dq_tot_dt == FT(0)
-                    @test isfinite(result_dry.e_tot_hlpr)
+                    for (T′T′_dry, q′q′_dry) in
+                        ((FT(0), FT(0)), (FT(2), FT(5e-7)))
+                        result_dry = ClimaAtmos.microphysics_tendencies_0m(
+                            quad, mp_0m, thp, ρ, T_mean, max(q_dry, FT(0)),
+                            T′T′_dry, q′q′_dry, corr, Φ, dt,
+                        )
+                        @test result_dry.dq_tot_dt == FT(0)
+                        @test result_dry.e_tot_hlpr == FT(0)
+                        @test result_dry.dq_tot_dt * result_dry.e_tot_hlpr ==
+                              FT(0)
+                    end
                 end
 
                 @testset "1M: sign consistency" begin

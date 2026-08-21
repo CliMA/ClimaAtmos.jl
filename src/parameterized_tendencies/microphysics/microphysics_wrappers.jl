@@ -157,7 +157,9 @@ quadrature form, `e_tot_hlpr` is the flux-weighted helper
 reconstruct the true SGS-averaged energy sink `E[dq·e]` — including after
 the limiter, which scales mass and energy by the same factor. The
 flux-weighted helper is a `dq`-weighted average of the per-point helper
-values (all `dq` share one sign), so it lies within their range.
+values (all `dq` share one sign), so it lies within their range. It is
+zero where nothing precipitates, which carries no energy because
+`dq_tot_dt` is zero there too.
 """
 @inline function microphysics_tendencies_0m(
     SG_quad, cmp, thp, ρ, T, q_tot_nonneg, T′T′, q′q′, corr_Tq, Φ, dt,
@@ -174,13 +176,10 @@ values (all `dq` share one sign), so it lies within their range.
     )
     # Flux-weighted energy helper: E[dq·e] / E[dq]. The ratio is stable for
     # any strictly negative mean sink because numerator and denominator share
-    # the dq scale. Where no quadrature point precipitates (E[dq] = 0), fall
-    # back to the mean-state helper.
-    sa = evaluator.sat_eval(T, q_tot_nonneg)
-    e_hlpr_mean = e_tot_0M_precipitation_sources_helper(
-        thp, T, sa.q_liq, sa.q_ice, Φ,
-    )
-    e_tot_hlpr = ifelse(dq_tot_dt < zero(FT), dq_e / dq_tot_dt, e_hlpr_mean)
+    # the dq scale. The 0M sink is nonpositive at every quadrature point and
+    # the weights are positive, so `E[dq] = 0` means no point precipitates and
+    # the energy change is zero too.
+    e_tot_hlpr = ifelse(dq_tot_dt < zero(FT), dq_e / dq_tot_dt, zero(FT))
     # Apply limiter
     dq_tot_dt = apply_0m_tendency_limit(dq_tot_dt, q_tot_nonneg, dt)
 
