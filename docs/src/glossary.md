@@ -36,7 +36,7 @@ These are accessed through the integrator after a run, e.g.
   - **PROPHET**: the Prognostic Representation Of Physics for Eddy Transport,
     the turbulence/convection scheme of ClimaAtmos: an extended, prognostic
     eddy-diffusivity mass-flux (EDMF) scheme, still called EDMFX in the code.
-    See the [PROPHET equations](@ref "PROPHET Sub-Grid Scale Equations").
+    See the [PROPHET equations](@ref "PROPHET: Overview and Equations").
   - **Diagnostics**: derived output variables, as opposed to the prognostic state
     `Y`. See [Computing and saving diagnostics](@ref) and the catalog of
     [available diagnostic variables](@ref "Available diagnostic variables").

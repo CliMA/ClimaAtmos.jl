@@ -314,7 +314,7 @@ The fallback method is a no-op for turbulence-convection models other than
 
 Reads `Y`, the precomputed `ᶠu³ʲs`, `ᶜρʲs`, `ᶜρ_diffʲs`, and sedimentation
 velocities, the core field `ᶜgradᵥ_ᶠΦ`, and scratch space. `t` is unused. See the
-"EDMF equations" page of the docs (`docs/src/edmf_equations.md`) for the continuous
+"PROPHET: Overview and Equations" page (`docs/src/prophet.md`) for the continuous
 equations. Returns `nothing`.
 """
 edmfx_sgs_vertical_advection_tendency!(Yₜ, Y, p, t, turbconv_model) = nothing

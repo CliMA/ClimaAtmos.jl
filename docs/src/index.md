@@ -93,7 +93,7 @@ matches yours:
 
       + [The CliMA ecosystem](ecosystem.md) -- how ClimaAtmos composes the CliMA packages
       + Dynamics & numerics: [thermodynamics](thermodynamics.md), [governing equations](equations.md), [discretization and operators](discretization.md), [conservation properties](conservation.md), [hyperdiffusion](hyperdiffusion.md), [model top and sponge layer](sponge.md), [implicit solver](implicit_solver.md), [integer time (ITime)](itime.md)
-      + Physics & parameterizations: [PROPHET](edmf_equations.md), [microphysics](microphysics.md), [radiation](radiation.md), [non-orographic gravity-wave drag](non_orographic_gravity_wave.md), [orographic gravity-wave drag](orographic_gravity_wave.md), [ocean surface albedo](surface_albedo.md), [topography](topography.md)
+      + Physics & parameterizations: [PROPHET](prophet.md), [microphysics](microphysics.md), [radiation](radiation.md), [non-orographic gravity-wave drag](non_orographic_gravity_wave.md), [orographic gravity-wave drag](orographic_gravity_wave.md), [ocean surface albedo](surface_albedo.md), [topography](topography.md)
 
   - **Reference**: look-up material.
 
