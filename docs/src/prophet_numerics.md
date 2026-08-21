@@ -11,8 +11,8 @@ Two things make the draft equations harder to time-step than the resolved ones.
 Updraft vertical velocities are large, ``O(10)`` m s⁻¹, while the vertical grid
 spacing near the surface is small, ``O(10)`` m, so an explicit treatment of the
 vertical draft advection would cap the timestep at a few seconds. The draft mass
-variable ``\hat{\rho}^j`` can also approach zero, and the equations divide by it.
-Both are handled at the time-discretization level.
+variable ``\hat{\rho}^j`` can also approach zero, and the equations divide by
+it. Both are handled at the time-discretization level.
 
 ## Spatial discretization
 
@@ -102,14 +102,14 @@ vertical divergence,
 
 so that the reconstruction and the divergence operator are the same ones the
 flux form would use. The reconstruction ``U^f`` is selected by the
-configuration:
-`edmfx_mse_q_tot_upwinding` for ``h_s^j`` and ``q_t^j`` (default
+configuration: `edmfx_mse_q_tot_upwinding` for ``h_s^j`` and ``q_t^j`` (default
 `first_order`), `edmfx_tracer_upwinding` for the remaining draft tracers
 (default `first_order`), and `none` for the central reconstruction. The
-resolvability argument of [the high-resolution limit](prophet.md#The-high-resolution-limit)
-bears on this choice: upwinding adds numerical diffusion to the draft variables,
-which acts like a residual subgrid flux and so competes with the physical
-closure as the grid is refined.
+resolvability argument of
+[the high-resolution limit](prophet.md#The-high-resolution-limit) bears on this
+choice: upwinding adds numerical diffusion to the draft variables, which acts
+like a residual subgrid flux and so competes with the physical closure as the
+grid is refined.
 
 The buoyancy source in the energy equation is evaluated at centers from the
 face-interpolated draft velocity and the normalized density excess,
@@ -168,11 +168,13 @@ Two structural details matter for reading the code:
     ``q_{t,\mathrm{eff}} = q_t - q_r - q_s``, the suspended water, distributed
     to the cloud species by tendency scaling; rain and snow receive no turbulent
     transport, so that rain shafts dominated by sedimentation are not smeared.
-    Energy diffuses as ``-K_h [\nabla s_d + (h_{\mathrm{eff}} + \Phi) \nabla q_{t,\mathrm{eff}}]``,
+    Energy diffuses as
+    ``-K_h [\nabla s_d + (h_{\mathrm{eff}} + \Phi) \nabla q_{t,\mathrm{eff}}]``,
     the dry-static-energy-plus-water-enthalpy decomposition.
   - The interfacial-entrainment component ``K_e`` acts per species on each
-    species' own gradient, and on ``\nabla h_{\mathrm{tot}}`` for energy, because
-    interfacial entrainment transports every constituent bodily with the parcel.
+    species' own gradient, and on ``\nabla h_{\mathrm{tot}}`` for energy,
+    because interfacial entrainment transports every constituent bodily with the
+    parcel.
 
 When `edmfx_vertical_diffusion` is enabled, each draft receives the same
 *specific* tendency the grid mean receives, which is the discrete form of the
@@ -270,13 +272,14 @@ w^0 - w^j \approx - \frac{\rho}{\hat{\rho}^0} \, w^j ,
 ```
 
 which is exact for a single draft and is applied unchanged when there are
-several. The velocity-independent entrainment rates (background, buoyancy-driven,
-area-bounding, and turbulent) then contribute a *linear* sink in ``w^j``, the
-velocity-proportional entrainment contributes a *quadratic* sink, and the form
-drag is purely quadratic. The prognostic variable is the covariant component
-``u_3 = w \Delta z``, so the whole equation carries one factor of ``\Delta z``
-relative to the equation for ``w``. At face ``i`` the stage equation is then a
-quadratic, coupled to the face below through the advection term:
+several. The velocity-independent entrainment rates (background,
+buoyancy-driven, area-bounding, and turbulent) then contribute a *linear* sink
+in ``w^j``, the velocity-proportional entrainment contributes a *quadratic*
+sink, and the form drag is purely quadratic. The prognostic variable is the
+covariant component ``u_3 = w \Delta z``, so the whole equation carries one
+factor of ``\Delta z`` relative to the equation for ``w``. At face ``i`` the
+stage equation is then a quadratic, coupled to the face below through the
+advection term:
 
 ```math
 \mathcal{A} \, u_3^2 + \mathcal{B} \, u_3 + \mathcal{C}
@@ -326,9 +329,9 @@ ways that are easy to misread:
     entrainment, and buoyancy-detrainment pieces appear in ``(E^j - \Delta^j)``.
     The *mass-flux-divergence* component of detrainment does not; it becomes a
     multiplicative prefactor on ``\alpha_{\mathrm{top}}`` and
-    ``\alpha_{\mathrm{bot}}``, so that it is treated implicitly together with the
-    flux divergence it derives from. Where the draft is at ``a_{\max}``, that
-    prefactor is one and all converging mass is detrained.
+    ``\alpha_{\mathrm{bot}}``, so that it is treated implicitly together with
+    the flux divergence it derives from. Where the draft is at ``a_{\max}``,
+    that prefactor is one and all converging mass is detrained.
   - **The surface source enters the first cell's numerator.** In cell 1 the
     bottom coefficient is zeroed, since the physical flux is zero there
     (``u_3 = 0`` at the surface), and the capped surface mass source
@@ -351,13 +354,13 @@ The implicit residual is linearized by the Jacobian algorithms of
 blocks are assembled by five update functions that mirror the tendency
 structure, in a fixed order because they accumulate into shared blocks:
 
-| Update                                     | Covers                                                                                                      |
-|:------------------------------------------ |:----------------------------------------------------------------------------------------------------------- |
-| `update_sgs_advection_jacobian!`           | vertical advection of the draft scalars (assigns the diagonals, including the ``-I`` residual term) and draft sedimentation with its lateral-mixing correction |
-| `update_sgs_diffusion_jacobian!`           | the diffusive coupling between the grid mean and the drafts, including ``K_e``                               |
-| `update_sgs_entr_detr_jacobian!`           | the entrainment relaxation, including the feedback through the environment residual                          |
-| `update_sgs_boundary_condition_jacobian!`  | the surface mass-source relaxation in the first cell                                                         |
-| `update_sgs_massflux_jacobian!`            | the mass-flux contributions to the grid-mean scalars                                                         |
+| Update                                    | Covers                                                                                                                                                         |
+|:----------------------------------------- |:-------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `update_sgs_advection_jacobian!`          | vertical advection of the draft scalars (assigns the diagonals, including the ``-I`` residual term) and draft sedimentation with its lateral-mixing correction |
+| `update_sgs_diffusion_jacobian!`          | the diffusive coupling between the grid mean and the drafts, including ``K_e``                                                                                 |
+| `update_sgs_entr_detr_jacobian!`          | the entrainment relaxation, including the feedback through the environment residual                                                                            |
+| `update_sgs_boundary_condition_jacobian!` | the surface mass-source relaxation in the first cell                                                                                                           |
+| `update_sgs_massflux_jacobian!`           | the mass-flux contributions to the grid-mean scalars                                                                                                           |
 
 The ``\hat{\rho}^j`` and ``u_3^j`` rows receive fallback identity blocks,
 since their stage values come from the analytic solves. The block solver
@@ -424,7 +427,8 @@ grid mean is not. `edmfx_filter` is enabled in every PROPHET configuration in
 ### Other limiters
 
   - The entrainment and detrainment area limiters and the additive area-bounding
-    rate, described in [Closures](prophet_closures.md#Entrainment-and-detrainment).
+    rate, described in
+    [Closures](prophet_closures.md#Entrainment-and-detrainment).
   - A floor of 1 m on the mixing length, which prevents division by zero in the
     TKE dissipation.
   - Negative TKE is relaxed to zero within one timestep rather than being
@@ -437,18 +441,18 @@ grid mean is not. `edmfx_filter` is enabled in every PROPHET configuration in
 The precomputed quantities the tendencies read are set in two passes, and the
 order matters because the closures depend on each other:
 
-1. `set_implicit_precomputed_quantities!`: grid-mean velocities, thermodynamics
-   and pressure, then the draft diagnosed quantities
-   (`set_prognostic_edmf_precomputed_quantities_draft!`: draft velocities,
-   kinetic energies, temperatures, densities) and the environment residuals
-   (`..._environment!`). Called before every implicit tendency evaluation, so
-   these are consistent with the current Newton iterate.
-2. `set_explicit_precomputed_quantities!`: surface conditions, then the
-   PROPHET explicit closures (entrainment and detrainment rates, the surface
-   mass-source payload), then the coupled covariance/cloud-fraction Picard
-   iteration, then the face diffusivities (which need the final cloud fraction),
-   then the center mixing length, terminal velocities, and the microphysics
-   tendency cache. Called before every explicit tendency evaluation.
+ 1. `set_implicit_precomputed_quantities!`: grid-mean velocities, thermodynamics
+    and pressure, then the draft diagnosed quantities
+    (`set_prognostic_edmf_precomputed_quantities_draft!`: draft velocities,
+    kinetic energies, temperatures, densities) and the environment residuals
+    (`..._environment!`). Called before every implicit tendency evaluation, so
+    these are consistent with the current Newton iterate.
+ 2. `set_explicit_precomputed_quantities!`: surface conditions, then the
+    PROPHET explicit closures (entrainment and detrainment rates, the surface
+    mass-source payload), then the coupled covariance/cloud-fraction Picard
+    iteration, then the face diffusivities (which need the final cloud fraction),
+    then the center mixing length, terminal velocities, and the microphysics
+    tendency cache. Called before every explicit tendency evaluation.
 
 The face diffusivities are computed *after* the cloud fraction because the
 buoyancy gradient that enters ``N_{e,\mathrm{eff}}^2`` depends on it; the
@@ -458,15 +462,15 @@ shared predicate that keeps the two paths from disagreeing.
 
 ## Where this is implemented
 
-| Component                                        | Source                                                                                                                                                                                            |
-|:------------------------------------------------ |:-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Implicit/explicit split                          | [implicit/implicit_tendency.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/prognostic_equations/implicit/implicit_tendency.jl), [remaining_tendency.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/prognostic_equations/remaining_tendency.jl) |
-| Analytic stage solves for ``u_3^j`` and ``\hat{\rho}^j`` | [implicit/initialize_implicit_problem.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/prognostic_equations/implicit/initialize_implicit_problem.jl)                                |
-| Horizontal advection of draft variables          | [advection.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/prognostic_equations/advection.jl)                                                                                             |
-| Vertical advection, buoyancy, sedimentation      | [advection.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/prognostic_equations/advection.jl), [water_advection.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/prognostic_equations/water_advection.jl) |
-| Subgrid-scale flux discretization                | [edmfx_sgs_flux.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/prognostic_equations/edmfx_sgs_flux.jl)                                                                                   |
-| Draft hyperdiffusion                             | [hyperdiffusion.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/prognostic_equations/hyperdiffusion.jl)                                                                                   |
-| Jacobian blocks                                  | [implicit/manual_sparse_jacobian.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/prognostic_equations/implicit/manual_sparse_jacobian.jl)                                                 |
-| State filters                                    | [mass_flux_closures.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/prognostic_equations/mass_flux_closures.jl), [constrain_state.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/prognostic_equations/constrain_state.jl) |
-| Environment reconstruction and the blend weight  | [utils/variable_manipulations.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/utils/variable_manipulations.jl)                                                                            |
-| Precomputed-quantity ordering                    | [cache/precomputed_quantities.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/cache/precomputed_quantities.jl), [cache/prognostic_edmf_precomputed_quantities.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/cache/prognostic_edmf_precomputed_quantities.jl) |
+| Component                                                | Source                                                                                                                                                                                                                                                                           |
+|:-------------------------------------------------------- |:-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Implicit/explicit split                                  | [implicit/implicit_tendency.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/prognostic_equations/implicit/implicit_tendency.jl), [remaining_tendency.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/prognostic_equations/remaining_tendency.jl)               |
+| Analytic stage solves for ``u_3^j`` and ``\hat{\rho}^j`` | [implicit/initialize_implicit_problem.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/prognostic_equations/implicit/initialize_implicit_problem.jl)                                                                                                                     |
+| Horizontal advection of draft variables                  | [advection.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/prognostic_equations/advection.jl)                                                                                                                                                                           |
+| Vertical advection, buoyancy, sedimentation              | [advection.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/prognostic_equations/advection.jl), [water_advection.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/prognostic_equations/water_advection.jl)                                                       |
+| Subgrid-scale flux discretization                        | [edmfx_sgs_flux.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/prognostic_equations/edmfx_sgs_flux.jl)                                                                                                                                                                 |
+| Draft hyperdiffusion                                     | [hyperdiffusion.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/prognostic_equations/hyperdiffusion.jl)                                                                                                                                                                 |
+| Jacobian blocks                                          | [implicit/manual_sparse_jacobian.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/prognostic_equations/implicit/manual_sparse_jacobian.jl)                                                                                                                               |
+| State filters                                            | [mass_flux_closures.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/prognostic_equations/mass_flux_closures.jl), [constrain_state.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/prognostic_equations/constrain_state.jl)                                     |
+| Environment reconstruction and the blend weight          | [utils/variable_manipulations.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/utils/variable_manipulations.jl)                                                                                                                                                          |
+| Precomputed-quantity ordering                            | [cache/precomputed_quantities.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/cache/precomputed_quantities.jl), [cache/prognostic_edmf_precomputed_quantities.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/cache/prognostic_edmf_precomputed_quantities.jl) |
