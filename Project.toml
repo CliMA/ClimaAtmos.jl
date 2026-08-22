@@ -78,6 +78,7 @@ NCDatasets = "0.14.2"
 NVTX = "0.3, 1"
 NullBroadcasts = "0.1"
 OrderedCollections = "1.6"
+ParallelTestRunner = "2.7"
 Pkg = "1"
 PrettyTables = "3"
 RRTMGP = "0.22.2"
@@ -101,10 +102,11 @@ Downloads = "f43a241f-c20a-4ad4-852c-f6b1247861c6"
 IntervalSets = "8197267c-284f-5f27-9208-e0e47529a953"
 Musica = "d3d182ee-e566-4962-9279-3a9916be1802"
 OrderedCollections = "bac558e1-5e72-5ebc-8fee-abe8a469f55d"
+ParallelTestRunner = "d3525ed8-44d0-4b2c-a655-542cee43accc"
 Pkg = "44cfe95a-1eb2-52ea-b672-e2afdf69b78f"
 PrettyTables = "08abe8d2-0d0c-5749-adfa-8a2ac140af0d"
 SafeTestsets = "1bc83da4-3b8d-516f-aca4-4fe02f6d838f"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [targets]
-test = ["Aqua", "CairoMakie", "Distributions", "Downloads", "IntervalSets", "Musica", "OrderedCollections", "Pkg", "PrettyTables", "SafeTestsets", "Test"]
+test = ["Aqua", "CairoMakie", "Distributions", "Downloads", "IntervalSets", "Musica", "OrderedCollections", "ParallelTestRunner", "Pkg", "PrettyTables", "SafeTestsets", "Test"]
