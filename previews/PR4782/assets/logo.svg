@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="200" height="200" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+  <!-- ClimaAtmos.jl: a Rossby-wave jet (ridge + trough), phase tilting east with latitude. -->
+  <defs>
+    <clipPath id="disk"><circle cx="100" cy="100" r="70"/></clipPath>
+  </defs>
+
+  <!-- faint globe: outline + graticule -->
+  <circle cx="100" cy="100" r="70" fill="none" stroke="#c4c8d2" stroke-width="3"/>
+  <g fill="none" stroke="#dcdfe7" stroke-width="2" clip-path="url(#disk)">
+    <ellipse cx="100" cy="100" rx="24" ry="70"/>
+    <ellipse cx="100" cy="100" rx="52" ry="70"/>
+    <line x1="30" y1="100" x2="170" y2="100"/>
+    <ellipse cx="100" cy="100" rx="70" ry="34"/>
+  </g>
+
+  <!-- winds: parallel streamlines meandering through a ridge and a trough -->
+  <g fill="none" stroke-width="5.5" stroke-linecap="round" clip-path="url(#disk)">
+    <path transform="translate(10,0)" d="M 14 92  Q 22 81  30 79  C 53 53  77 53  100 79  C 123 105 147 105 170 79  Q 180 73  186 66"  stroke="#CB3C33"/>
+    <path transform="translate(3,0)" d="M 14 106 Q 22 95  30 93  C 53 67  77 67  100 93  C 123 119 147 119 170 93  Q 180 87  186 80"  stroke="#9558B2"/>
+    <path transform="translate(-3,0)" d="M 14 120 Q 22 109 30 107 C 53 81  77 81  100 107 C 123 133 147 133 170 107 Q 180 101 186 94"  stroke="#4063D8"/>
+    <path transform="translate(-10,0)" d="M 14 134 Q 22 123 30 121 C 53 95  77 95  100 121 C 123 147 147 147 170 121 Q 180 115 186 108" stroke="#389826"/>
+  </g>
+</svg>
