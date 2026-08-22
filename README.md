@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="logo.svg" alt="ClimaAtmos.jl Logo" width="140">
+  <img src="docs/src/assets/logo.svg" alt="ClimaAtmos.jl Logo" width="140" height="140">
 </div>
 
 # ClimaAtmos.jl
