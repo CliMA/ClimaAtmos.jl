@@ -1,135 +1,189 @@
-# When Julia 1.10+ is used interactively, stacktraces contain reduced type information to make them shorter.
-# On the other hand, the full type information is printed when julia is not run interactively.
-# Given that ClimaCore objects are heavily parametrized, non-abbreviated stacktraces are hard to read,
-# so we force abbreviated stacktraces even in non-interactive runs.
-# (See also Base.type_limited_string_from_context())
-redirect_stderr(IOContext(stderr, :stacktrace_types_limited => Ref(false)))
-using SafeTestsets
-using Test
+# # Running the tests
+#
+# Tests run in parallel across worker processes via ParallelTestRunner.jl. Each
+# test file gets a fresh worker module, so files must be self-contained.
+#
+# To run tests, you can do
+#
+#     julia --project=. 'using Pkg; Pkg.test("ClimaAtmos")'
+#
+# `] test` from the REPL works too, but its only flag is `--coverage`, so use
+# `Pkg.test` when you want any of the filters or flags below.
+#
+# You can set the environment variable `TEST_GROUPS` (see the constant
+# `TEST_GROUPS` below for the names) to run a specific group of tests.
+#
+#     TEST_GROUP=dynamics julia --project=. -e 'using Pkg; Pkg.test("ClimaAtmos")'
+#
+# You can also pass in the name of the test group to `test_args`:
+#
+#     Pkg.test("ClimaAtmos"; test_args = ["prognostic_equations"])
+#     Pkg.test("ClimaAtmos"; test_args = ["conservation", "grids"])
+#     Pkg.test("ClimaAtmos"; test_args = ["!era5"])
+#
+# Workers are recycled when they exceed a memory threshold, but this only happen
+#     when the a file is finished running. Tests with high memory usage are ran
+#     first and in serial order.
+#
+# Tips:
+#
+#   - Use `--jobs=1` when a failure looks like a issue with parallelism, or when
+#     the interleaved output of several workers is hard to read.
+#   - You can selectively run tests by passing a filter to `test_args`. For example,
+#     the command
+#     `Pkg.test("ClimaAtmos"; test_args = ["parameterized_tendencies/sp"])`
+#     run any tests starting with "sp" in "parameterized_tendencies".
 
-# Download test artifacts
+using ClimaAtmos
+using ParallelTestRunner
+
+# Download test artifacts on the driver, before any worker is spawned.
 include("download_artifacts.jl")
 
-# Get test group from environment variable (default: run all tests)
-TEST_GROUP = get(ENV, "TEST_GROUP", "all")
-
+# Test suite, grouped so that CI can run one group per job via TEST_GROUP.
+# Only files listed here run: the rest of `test/` holds shared helpers and
+# plot-only scripts that have no `@test` assertions.
 #! format: off
+const TEST_GROUPS = Dict(
+    # ========================================================================
+    # Infrastructure: Configuration, utilities, interfaces, and integration tests
+    # ========================================================================
+    "infrastructure" => [
+        "aqua",
+        "dependencies",
+        "callbacks",
+        "config",
+        "grids",
+        "utilities",
+        "variable_manipulations_tests",
+        "tracer_processes_tests",
+        "parameter_tests",
+        "test_output_yaml_path",
 
-# ============================================================================
-# Infrastructure: Configuration, utilities, interfaces, and integration tests
-# ============================================================================
-if TEST_GROUP in ("infrastructure", "all")
-    @safetestset "Aqua" begin @time include("aqua.jl") end
+        # Interface tests
+        "rrtmgp_interface",
+        "coupler_compatibility",
+        "surface_albedo",
+        "larcform1",
 
-    @safetestset "Dependencies" begin @time include("dependencies.jl") end
-    @safetestset "Callbacks" begin @time include("callbacks.jl") end
-    @safetestset "Configuration tests" begin @time include("config.jl") end
-    @safetestset "Grids" begin @time include("grids.jl") end
-    @safetestset "Utilities" begin @time include("utilities.jl") end
-    @safetestset "Variable manipulations" begin @time include("variable_manipulations_tests.jl") end
-    @safetestset "Tracer processes" begin @time include("tracer_processes_tests.jl") end
-    @safetestset "Parameter tests" begin @time include("parameter_tests.jl") end
+        # Config tests
+        "slab_ocean_warning",
+        "config/model_from_config",
+        "config/atmos_model_constructor",
+        "presets",
+        "topography",
+    ],
 
-    @safetestset "Check TOML path" begin @time include("test_output_yaml_path.jl") end
+    # ========================================================================
+    # Diagnostics: Unit tests for diagnostic variables
+    # ========================================================================
+    "diagnostics" => [
+        "diagnostics/unit_diagnostics",
+        "diagnostics/diagnostics_config",
+        "cosp/subcol_test",
+        "cosp/cloudsat_optics_test",
+        "cosp/cloudsat_reflectivity_test",
+        "cosp/cloudsat_cloud_fraction_test",
+        "cosp/cloudsat_cfad_test",
+    ],
 
-    # Interface tests
-    @safetestset "Radiation interface tests" begin @time include("rrtmgp_interface.jl") end
-    @safetestset "Coupler compatibility" begin @time include("coupler_compatibility.jl") end
-    @safetestset "Surface albedo tests" begin @time include("surface_albedo.jl") end
-    @safetestset "Larcform1 setup" begin @time include("larcform1.jl") end
+    # ========================================================================
+    # Dynamics: Prognostic equations and conservation tests
+    # ========================================================================
+    "dynamics" => [
+        "prognostic_equations",
+        "prognostic_equations/advection_tests",
+        "prognostic_equations/hyperdiffusion_tests",
+        "prognostic_equations/tendency_tests",
+        "prognostic_equations/tracer_mass_consistency_tests",
+        "prognostic_equations/correct_implicit_advection_tests",
+        "prognostic_equations/vertical_diffusion_tests",
+        "prognostic_equations/edmfx_sgs_diffusive_flux_tests",
+        "prognostic_equations/edmfx_horizontal_diffusion_tests",
+        "prognostic_equations/vertical_water_borrowing_tests",
+        "prognostic_equations/enforce_physical_constraints_tests",
+        "prognostic_equations/eddy_diffusion_closures_tests",
 
-    # Config tests
-    @safetestset "SlabOcean SST warning" begin @time include("slab_ocean_warning.jl") end
-    @safetestset "Model getters" begin @time include("config/model_from_config.jl") end
-    @safetestset "AtmosModel Constructor" begin @time include("config/atmos_model_constructor.jl") end
-    @safetestset "Presets" begin @time include("presets.jl") end
-    @safetestset "Topography tests" begin @time include("topography.jl") end
-end
+        # Conservation tests
+        "conservation/mass_conservation",
+        "conservation/energy_conservation",
+    ],
 
-# ============================================================================
-# Diagnostics: Unit tests for diagnostic variables
-# ============================================================================
-if TEST_GROUP in ("diagnostics", "all")
-    @safetestset "Diagnostics unit tests" begin @time include("diagnostics/unit_diagnostics.jl") end
-    @safetestset "DiagnosticsConfig" begin @time include("diagnostics/diagnostics_config.jl") end
-    @safetestset "COSP subcolumn tests" begin @time include("cosp/subcol_test.jl") end
-    @safetestset "COSP CloudSat optics tests" begin @time include("cosp/cloudsat_optics_test.jl") end
-    @safetestset "COSP CloudSat reflectivity tests" begin @time include("cosp/cloudsat_reflectivity_test.jl") end
-    @safetestset "COSP CloudSat cloud fraction tests" begin @time include("cosp/cloudsat_cloud_fraction_test.jl") end
-    @safetestset "COSP CloudSat CFAD tests" begin @time include("cosp/cloudsat_cfad_test.jl") end
-end
+    # ========================================================================
+    # Parameterizations: Parameterized tendency tests (excluding ERA5)
+    # ========================================================================
+    "parameterizations" => [
+        # Sponge layers (combined for shared space setup)
+        "parameterized_tendencies/sponge",
 
-# ============================================================================
-# Dynamics: Prognostic equations and conservation tests
-# ============================================================================
-if TEST_GROUP in ("dynamics", "all")
-    @safetestset "Prognostic equations" begin @time include("prognostic_equations.jl") end
-    @safetestset "Advection operators" begin @time include("prognostic_equations/advection_tests.jl") end
-    @safetestset "Hyperdiffusion" begin @time include("prognostic_equations/hyperdiffusion_tests.jl") end
-    @safetestset "Tendency computations" begin @time include("prognostic_equations/tendency_tests.jl") end
-    @safetestset "Tracer/mass transport consistency" begin @time include("prognostic_equations/tracer_mass_consistency_tests.jl") end
-    @safetestset "Post-Newton implicit-advection correction" begin @time include("prognostic_equations/correct_implicit_advection_tests.jl") end
-    @safetestset "Vertical diffusion tendency" begin @time include("prognostic_equations/vertical_diffusion_tests.jl") end
-    @safetestset "EDMFX SGS diffusive flux" begin @time include("prognostic_equations/edmfx_sgs_diffusive_flux_tests.jl") end
-    @safetestset "EDMFX horizontal diffusive flux" begin @time include("prognostic_equations/edmfx_horizontal_diffusion_tests.jl") end
-    @safetestset "Vertical water borrowing limiter" begin @time include("prognostic_equations/vertical_water_borrowing_tests.jl") end
-    @safetestset "Enforce physical constraints" begin @time include("prognostic_equations/enforce_physical_constraints_tests.jl") end
-    @safetestset "Eddy diffusion closures" begin @time include("prognostic_equations/eddy_diffusion_closures_tests.jl") end
+        # Microphysics tests
+        "parameterized_tendencies/microphysics/tendency",
+        "parameterized_tendencies/microphysics/microphysics_wrappers",
+        "parameterized_tendencies/microphysics/sgs_quadrature",
+        "parameterized_tendencies/microphysics/sgs_moments",
+        "parameterized_tendencies/microphysics/tendency_limiters",
+        "parameterized_tendencies/microphysics/moisture_fixers",
+        "parameterized_tendencies/microphysics/cloud_fraction",
+        "parameterized_tendencies/microphysics/sgs_saturation",
+        "parameterized_tendencies/microphysics/bmt_integration",
+        "parameterized_tendencies/microphysics/allocations",
 
-    # Conservation tests
-    @safetestset "Mass conservation" begin @time include("conservation/mass_conservation.jl") end
-    @safetestset "Energy conservation" begin @time include("conservation/energy_conservation.jl") end
-end
+        # Chemistry tests
+        "parameterized_tendencies/chemistry/chemistry_tendency",
 
-# ============================================================================
-# Parameterizations: Parameterized tendency tests (excluding ERA5)
-# ============================================================================
-if TEST_GROUP in ("parameterizations", "all")
-    # Sponge layers (combined for shared space setup)
-    @safetestset "Sponge layers" begin @time include("parameterized_tendencies/sponge.jl") end
+        # Gravity wave: Beres convective NOGW pure-function unit tests (no
+        # simulation build). The simulation-based Beres tests
+        # (test_beres_single_column.jl, test_beres_sphere_integration.jl) run as
+        # standalone Buildkite steps.
+        "parameterized_tendencies/gravity_wave/non_orographic_gravity_wave/test_beres_unit",
+    ],
 
-    # Microphysics tests
-    @safetestset "Microphysics tendency tests" begin @time include("parameterized_tendencies/microphysics/tendency.jl") end
-    @safetestset "Microphysics wrappers tests" begin @time include("parameterized_tendencies/microphysics/microphysics_wrappers.jl") end
-    @safetestset "SGS quadrature tests" begin @time include("parameterized_tendencies/microphysics/sgs_quadrature.jl") end
-    @safetestset "SGS moments tests" begin @time include("parameterized_tendencies/microphysics/sgs_moments.jl") end
-    @safetestset "Tendency limiters tests" begin @time include("parameterized_tendencies/microphysics/tendency_limiters.jl") end
-    @safetestset "Moisture fixers tests" begin @time include("parameterized_tendencies/microphysics/moisture_fixers.jl") end
-    @safetestset "Cloud fraction tests" begin @time include("parameterized_tendencies/microphysics/cloud_fraction.jl") end
-    @safetestset "SGS saturation tests" begin @time include("parameterized_tendencies/microphysics/sgs_saturation.jl") end
-    @safetestset "BMT integration tests" begin @time include("parameterized_tendencies/microphysics/bmt_integration.jl") end
-    @safetestset "Allocation tests" begin @time include("parameterized_tendencies/microphysics/allocations.jl") end
+    # ========================================================================
+    # Restarts: Restart and reproducibility tests
+    # ========================================================================
+    "restarts" => [
+        "restart",
+        "unit_reproducibility_infra",
+        "test_init_with_file",
+    ],
 
-    # Chemistry tests
-    @safetestset "Chemistry tendency tests" begin @time include("parameterized_tendencies/chemistry/chemistry_tendency.jl") end
-
-    # Gravity wave: Beres convective NOGW pure-function unit tests (no simulation
-    # build). The simulation-based Beres tests (test_beres_single_column.jl,
-    # test_beres_sphere_integration.jl) run as standalone Buildkite steps.
-    @safetestset "Beres NOGW unit tests" begin @time include("parameterized_tendencies/gravity_wave/non_orographic_gravity_wave/test_beres_unit.jl") end
-
-    # NOTE: Gravity wave visualization scripts (test_nogw_3d.jl, test_nogw_mima.jl,
-    # test_nogw_single_column.jl, test_ogw_3d.jl, test_ogw_baseflux.jl) are not included
-    # in the test suite because they have no @test assertions - they only generate
-    # comparison plots for visual verification.
-end
-
-# ============================================================================
-# Restarts: Restart and reproducibility tests
-# ============================================================================
-if TEST_GROUP in ("restarts", "all")
-    @safetestset "Restarts" begin @time include("restart.jl") end
-    @safetestset "Reproducibility infra" begin @time include("unit_reproducibility_infra.jl") end
-    @safetestset "Init with file" begin @time include("test_init_with_file.jl") end
-end
-
-# ============================================================================
-# ERA5: External forcing data tests (heavy)
-# ============================================================================
-if TEST_GROUP in ("era5", "all")
-    @safetestset "ERA5 forcing" begin @time include("era5_tests.jl") end
-    @safetestset "Column datasets" begin @time include("column_datasets_tests.jl") end
-end
+    # ========================================================================
+    # ERA5: External forcing data tests (heavy)
+    # ========================================================================
+    "era5" => [
+        "era5_tests",
+        "column_datasets_tests",
+    ],
+)
 #! format: on
 
-nothing
+# These tests are serial because they consume excessive memory which can cause
+# out of memory (OOM) errors when multiple processes are running them
+const SERIAL = [
+    "restart",
+    "prognostic_equations/tracer_mass_consistency_tests",
+]
+
+# Select which test group to run and fail if there is a typo
+const TEST_GROUP = get(ENV, "TEST_GROUP", "all")
+if TEST_GROUP != "all" && !haskey(TEST_GROUPS, TEST_GROUP)
+    groups = join(sort!(collect(keys(TEST_GROUPS))), ", ")
+    error("Unknown TEST_GROUP `$TEST_GROUP`; expected `all` or one of: $groups")
+end
+
+# Get all the tests we are going to run
+selected =
+    TEST_GROUP == "all" ? reduce(vcat, values(TEST_GROUPS)) : TEST_GROUPS[TEST_GROUP]
+testsuite = find_tests(@__DIR__)
+stale = setdiff([selected; SERIAL], keys(testsuite))
+isempty(stale) || error("No such test file(s): $(join(sort!(stale), ", "))")
+filter!(((name, _),) -> name in selected, testsuite)
+
+# ClimaCore objects are heavily parametrized, so non-abbreviated stacktraces are
+# hard to read. Julia only abbreviates them when running interactively, so force
+# it here as well. (See also Base.type_limited_string_from_context())
+init_worker_code = quote
+    redirect_stderr(IOContext(stderr, :stacktrace_types_limited => Ref(false)))
+end
+
+runtests(ClimaAtmos, ARGS; testsuite, init_worker_code, serial = SERIAL)
