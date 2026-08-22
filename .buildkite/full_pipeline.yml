@@ -77,6 +77,11 @@ steps:
             Pkg.status()'
         fi
 
+      - echo "--- Precompile --check-bounds=yes caches (Checkbounds step)"
+      - julia --check-bounds=yes --project=.buildkite -e 'using Pkg; Pkg.precompile(; strict=true)'
+      - echo "--- Instantiate perf/run-and-time (Component models step)"
+      - julia --project=perf/run-and-time -e 'using Pkg; Pkg.instantiate(; update_registry=false)'
+
     agents:
       slurm_cpus_per_task: 8
     env:
@@ -1112,9 +1117,9 @@ steps:
     steps:
       - label: ":test_tube: Component models: Smoke test"
         retry: *retry_policy
+        # The project is instantiated and precompiled in the Initialize step.
         command: >
           cd perf/run-and-time &&
-          julia --project -e 'using Pkg; Pkg.Registry.update(); Pkg.Pkg.instantiate(;verbose=true)' &&
           julia --color=yes --project ci_test_models.jl
         agents:
           slurm_mem: 20GB

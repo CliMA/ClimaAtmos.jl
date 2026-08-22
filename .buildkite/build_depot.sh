@@ -26,6 +26,9 @@ julia --project=.buildkite -e 'using Pkg; Pkg.Registry.update(); Pkg.instantiate
 echo "--- Precompile (--check-bounds=yes)"
 julia --check-bounds=yes --project=.buildkite -e 'using Pkg; Pkg.precompile(strict=true)'
 
+echo "--- Instantiate + precompile perf/run-and-time"
+julia --project=perf/run-and-time -e 'using Pkg; Pkg.instantiate(); Pkg.precompile(strict=true)'
+
 echo "--- Lock and publish (atomic symlink swap)"
 chmod -R a-w "$STAGING"
 cd "$SHARED_DEPOT_ROOT"
