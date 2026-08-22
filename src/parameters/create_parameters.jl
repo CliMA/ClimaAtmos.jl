@@ -538,6 +538,9 @@ function TurbulenceConvectionParameters(
         # Lateral correction scaling for updraft sedimentation
         # (see `updraft_sedimentation!`). 1.0 = full correction, 0.0 = disabled.
         sedimentation_lateral_coeff = FT(1), # Testing if stable now. To be removed, if yes.
+        # Shrink factor `f_decay` of the precipitation-fraction overlap
+        # recursion (see `set_precip_fraction!`). 1.0 = maximum overlap.
+        precip_overlap_decay = FT(1),
     )
     release_present = filter(collect(keys(release_defaults))) do name
         haskey(toml_dict.data, string(name))

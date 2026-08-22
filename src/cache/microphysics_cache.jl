@@ -936,13 +936,14 @@ function set_microphysics_tendency_cache!(
             ᶜT, cmp, thp, dt, nsubs,
         )
     else
-        (; ᶜT′T′, ᶜq′q′, ᶜsgs_moments) = p.precomputed
+        (; ᶜT′T′, ᶜq′q′, ᶜsgs_moments, ᶜprecip_frac) = p.precomputed
         corr_Tq = correlation_Tq(p.params)
         α = sgs_variance_fidelity(CAP.cloud_fraction_steepness_scale(p.params))
         @. ᶜmp_tendency = microphysics_tendencies_1m(
             BMT.Microphysics1Moment(), sgs_quad, cmp, thp, Y.c.ρ, ᶜT,
             ᶜq_tot_nonneg, ᶜq_lcl, ᶜq_icl, ᶜq_rai, ᶜq_sno,
             ᶜT′T′, ᶜq′q′, corr_Tq, ᶜsgs_moments.λ_lagrange, α,
+            ᶜprecip_frac, ᶜsgs_moments.CF_d, ᶜsgs_moments.sigma_S,
             dt, nsubs_quad,
         )
     end
@@ -999,7 +1000,7 @@ function set_microphysics_tendency_cache!(
             ᶜT⁰, cmp, thp, dt, nsubs,
         )
     else
-        (; ᶜT′T′, ᶜq′q′, ᶜsgs_moments) = p.precomputed
+        (; ᶜT′T′, ᶜq′q′, ᶜsgs_moments, ᶜprecip_frac) = p.precomputed
         corr_Tq = correlation_Tq(p.params)
         α = sgs_variance_fidelity(CAP.cloud_fraction_steepness_scale(p.params))
         # The liquid fraction `λ` and the linearized SGS saturation-excess mean
@@ -1014,6 +1015,7 @@ function set_microphysics_tendency_cache!(
             BMT.Microphysics1Moment(), sgs_quad, cmp, thp, ᶜρ⁰, ᶜT⁰,
             ᶜq_tot_nonneg⁰, ᶜq_lcl⁰, ᶜq_icl⁰, ᶜq_rai⁰, ᶜq_sno⁰,
             ᶜT′T′, ᶜq′q′, corr_Tq, ᶜsgs_moments.λ_lagrange, α,
+            ᶜprecip_frac, ᶜsgs_moments.CF_d, ᶜsgs_moments.sigma_S,
             dt, nsubs_quad, ᶜλ⁰, ᶜmu_S⁰,
         )
     end

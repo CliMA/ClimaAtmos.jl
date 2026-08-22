@@ -175,6 +175,9 @@ not yet define. `FT` is the float type; `VFT1`, `VFT2`, and `VTF3` are the
     retained deep inside a saturated deck [-].
   - `sedimentation_lateral_coeff`: Scaling of the lateral correction in updraft
     sedimentation; 1 is the full correction and 0 disables it [-].
+  - `precip_overlap_decay`: Shrink factor `f_decay` applied to the
+    precipitation fraction inherited from the level above in the
+    maximum-random overlap recursion; 1 is pure maximum overlap [-].
   - `interface_entr_efficiency`: Entrainment efficiency `A` in the interfacial
     entrainment diffusivity `K_e = γ w_e Δz` [-].
   - `sfc_mass_flux_ustar_coeff`: Coefficient `c_u` weighting the
@@ -231,6 +234,8 @@ Base.@kwdef struct TurbulenceConvectionParameters{FT, VFT1, VFT2, VTF3} <: ATCP
     cloud_fraction_floor_residual::FT
     # Scaling coefficient for the lateral correction in updraft sedimentation
     sedimentation_lateral_coeff::FT
+    # Shrink factor of the precipitation-fraction overlap recursion
+    precip_overlap_decay::FT
     interface_entr_efficiency::FT
     # Surface mass flux closure (`set_edmfx_surface_conditions!`).
     sfc_mass_flux_ustar_coeff::FT
