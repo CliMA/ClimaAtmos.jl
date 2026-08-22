@@ -733,9 +733,69 @@ uses the same quadrature points.
 end
 
 """
+    discrete_cloudy_weight_width_coeff(FT)
+
+Smoothing width of the discrete cloudy weight `sᵢ`, in units of the
+equilibrium PDF width `α·σ_S` (see `_discrete_cloud_fraction`).
+
+A hard indicator `1[shifted_excess > 0]` would make each point's
+cloudy/clear assignment jump as it crosses the cloud threshold between
+steps, injecting noise into any tendency conditioned on `CF_d`. `0.25`
+keeps the transition narrow compared with the Gauss-Hermite point spacing
+(`≈ 1.7 σ_S` at order 3), so `CF_d` stays close to the hard count, while
+still spreading each crossing over a finite range of states.
+
+TODO: promote to a calibratable parameter if the precipitation-overlap closure
+turns out to be sensitive to it.
+"""
+@inline discrete_cloudy_weight_width_coeff(::Type{FT}) where {FT} = FT(0.25)
+
+"""
+    _discrete_cloud_fraction(q_c, λ_lagrange, α, sigma_S, S′s, ws)
+
+Discrete cloudy mass of the quadrature measure,
+
+    shifted_excessᵢ = λ_lagrange + α·S′ᵢ
+    sᵢ              = sigmoid(shifted_excessᵢ / ε_w),
+                      ε_w = c_w·α·σ_S  (floored at ϵ_numerics)
+    CF_d            = Σᵢ wᵢ·sᵢ
+
+`shifted_excessᵢ` is the quantity whose positive part is the local condensate
+(`Microphysics1MEvaluator`), so `sᵢ` is a smoothed indicator of "point `i` is
+cloudy" under exactly the measure the microphysics evaluator integrates over.
+
+`CF_d` is the normalizer that makes a per-point assignment of a cell quantity to
+cloudy and clear points sum back to the cell mean under the discrete measure.
+It therefore cannot be replaced by `ᶜcloud_fraction`, which is continuous,
+carries the augmented-σ floor, and (under EDMF) is grid-box rather than
+environment weighted.
+
+Condensate-free cells (`q_c ≤ 0`) return `CF_d = 0`. There the fit parks
+`λ_lagrange` exactly on the largest kink (`g(λ) = 0`), so the moistest point
+sits precisely on the cloud threshold and the smooth weight would report half
+its quadrature weight (≈ 1.4% at order 3) as cloudy in every clear cell — the
+one place where `CF_d = 0` is load-bearing, since it is what marks a layer as
+below cloud base.
+
+The sigmoid is evaluated in `tanh` form, which cannot overflow.
+"""
+@inline function _discrete_cloud_fraction(q_c, λ_lagrange, α, sigma_S, S′s, ws)
+    FT = typeof(λ_lagrange)
+    q_c <= zero(FT) && return zero(FT)
+    c_w = discrete_cloudy_weight_width_coeff(FT)
+    ε_w = max(c_w * α * sigma_S, ϵ_numerics(FT))
+    CF_d = zero(FT)
+    @inbounds for i in eachindex(S′s)
+        shifted_excess = λ_lagrange + α * S′s[i]
+        CF_d += ws[i] * (1 + tanh(shifted_excess / (2 * ε_w))) / 2
+    end
+    return CF_d
+end
+
+"""
     _compute_sgs_moments(thp, ρ, T, q_tot, q_c, sgs_quad, T′T′, q′q′, corr_Tq, α)
 
-Single quadrature pass returning `(sigma_S, λ_lagrange)`:
+Single quadrature pass returning `(sigma_S, λ_lagrange, CF_d)`:
 
   - `sigma_S = sqrt(Σᵢ wᵢ·S′ᵢ²)`: SGS standard deviation of the sampled
     centred excess, clipped at `ϵ_numerics(FT)`.
@@ -744,6 +804,9 @@ Single quadrature pass returning `(sigma_S, λ_lagrange)`:
     quadrature measure — the same points and weights the microphysics
     evaluator integrates over (see `_fit_discrete_lagrange`; the analytic
     truncated-Gaussian inverse `_compute_z` provides the seed).
+  - `CF_d = Σᵢ wᵢ·sᵢ`: the discrete cloudy mass of the same measure, with `sᵢ`
+    a smoothed cloudy indicator (see `_discrete_cloud_fraction`). Accumulated
+    over points the pass already visits.
 
 The SGS mean `μ_S = q_tot − q_sat(T, ρ)` is analytic under the closure's
 linearization (see `_sgs_saturation_moments`) and is recomputed on demand
@@ -751,15 +814,19 @@ wherever it is needed downstream.
 
 Without SGS sampling (`nothing`, `GridMeanSGS`), all mass sits at the mean:
 `sigma_S = ϵ_numerics(FT)` and the constraint gives `λ_lagrange = q_c`
-directly, matching the σ_S → 0 limit of the sampled branch.
+directly, matching the σ_S → 0 limit of the sampled branch. `CF_d` is then the
+all-mass-at-the-mean limit `q_c > 0 ? 1 : 0`.
 """
 @inline function _compute_sgs_moments(
     thp, ρ, T, q_tot, q_c,
     sgs_quad, T′T′, q′q′, corr_Tq, α,
 )
     FT = typeof(ρ)
-    not_quadrature(sgs_quad) &&
-        return (; sigma_S = ϵ_numerics(FT), λ_lagrange = q_c)
+    not_quadrature(sgs_quad) && return (;
+        sigma_S = ϵ_numerics(FT),
+        λ_lagrange = q_c,
+        CF_d = ifelse(q_c > zero(FT), one(FT), zero(FT)),
+    )
 
     mu_S = q_tot - TD.q_vap_saturation(thp, T, ρ)
     transform =
@@ -774,7 +841,8 @@ directly, matching the σ_S → 0 limit of the sampled branch.
     σ_S_eff = α * sigma_S
     λ0 = _compute_z(q_c / σ_S_eff) * σ_S_eff
     λ_lagrange = _fit_discrete_lagrange(λ0, q_c, α, S′s, ws)
-    return (; sigma_S, λ_lagrange)
+    CF_d = _discrete_cloud_fraction(q_c, λ_lagrange, α, sigma_S, S′s, ws)
+    return (; sigma_S, λ_lagrange, CF_d)
 end
 
 """
@@ -783,7 +851,7 @@ end
 Final post-Aitken update. No-op when `ᶜsgs_moments` is not allocated (dry / 0M).
 
 Uses ONE quadrature pass via `_compute_sgs_moments` to fill
-`ᶜsgs_moments = (sigma_S, λ_lagrange)`, then computes
+`ᶜsgs_moments = (sigma_S, λ_lagrange, CF_d)`, then computes
 `ᶜcloud_fraction` consistently with the augmented `σ_aug` closure (see
 `_compute_cloud_fraction`) and applies EDMF updraft weighting.
 """
@@ -803,7 +871,7 @@ NVTX.@annotate function set_sgs_moments_and_cloud_fraction!(Y, p)
     floor = cloud_fraction_floor_params(p.params)
     (; ᶜT′T′, ᶜq′q′) = p.precomputed
 
-    # ONE quadrature pass → (sigma_S, λ_lagrange).
+    # ONE quadrature pass → (sigma_S, λ_lagrange, CF_d).
     @. p.precomputed.ᶜsgs_moments = _compute_sgs_moments(
         thermo_params, ᶜρ_env, ᶜT_mean, ᶜq_mean, ᶜq_lcl + ᶜq_icl,
         $(sgs_quad), ᶜT′T′, ᶜq′q′, corr_Tq, FT(α),
