@@ -283,12 +283,17 @@ with `dq_lcl_dt`, `dq_icl_dt`, `dq_rai_dt`, `dq_sno_dt` [kg/kg/s].
     q_lcl_hat = max(FT(0), eval.λ * shifted_excess - eval.q_rai)
     q_icl_hat = max(FT(0), (FT(1) - eval.λ) * shifted_excess - eval.q_sno)
 
-    # Nothing to do at this quadrature point. With no condensate and no
-    # precipitation every 1-moment process is identically zero: autoconversion
-    # and accretion need condensate, evaporation needs rain, melting and
-    # sublimation need snow. Verified exactly zero (not merely negligible)
-    # across sub- and super-saturated states, so skipping is bit-for-bit, not an
-    # approximation.
+    # Nothing to do at this quadrature point: subsaturated, no condensate, no
+    # precipitation. Then every 1-moment process is identically zero --
+    # autoconversion and accretion need condensate, evaporation needs rain,
+    # melting and sublimation need snow, and condensation needs supersaturation.
+    #
+    # The subsaturation test is load-bearing and was missing from the first
+    # version of this guard. Supersaturated air with no condensate still forms
+    # cloud, so without it this skips real condensation: a sweep found 616 of
+    # 2592 states returning nonzero, every one of them supersaturated. With it,
+    # 2272 subsaturated states all return exactly zero, so the skip is
+    # bit-for-bit rather than an approximation.
     #
     # Worth the branch because the call being skipped is essentially the entire
     # cost of this kernel, and it is evaluated at N^2 quadrature points in every
@@ -298,7 +303,8 @@ with `dq_lcl_dt`, `dq_icl_dt`, `dq_rai_dt`, `dq_sno_dt` [kg/kg/s].
     #
     # The returned NamedTuple must keep the same fields and types as the call
     # below, or the quadrature accumulator becomes type-unstable.
-    if iszero(q_lcl_hat) &&
+    if q_tot_hat <= q_sat_hat &&
+       iszero(q_lcl_hat) &&
        iszero(q_icl_hat) &&
        iszero(eval.q_rai) &&
        iszero(eval.q_sno)
