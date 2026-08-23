@@ -283,6 +283,29 @@ with `dq_lcl_dt`, `dq_icl_dt`, `dq_rai_dt`, `dq_sno_dt` [kg/kg/s].
     q_lcl_hat = max(FT(0), eval.λ * shifted_excess - eval.q_rai)
     q_icl_hat = max(FT(0), (FT(1) - eval.λ) * shifted_excess - eval.q_sno)
 
+    # Nothing to do at this quadrature point. With no condensate and no
+    # precipitation every 1-moment process is identically zero: autoconversion
+    # and accretion need condensate, evaporation needs rain, melting and
+    # sublimation need snow. Verified exactly zero (not merely negligible)
+    # across sub- and super-saturated states, so skipping is bit-for-bit, not an
+    # approximation.
+    #
+    # Worth the branch because the call being skipped is essentially the entire
+    # cost of this kernel, and it is evaluated at N^2 quadrature points in every
+    # cell -- while most of an AMIP column is clear and precipitation-free. The
+    # saving is per warp rather than per lane, but clear air comes in
+    # contiguous blocks, so whole warps skip together.
+    #
+    # The returned NamedTuple must keep the same fields and types as the call
+    # below, or the quadrature accumulator becomes type-unstable.
+    if iszero(q_lcl_hat) &&
+       iszero(q_icl_hat) &&
+       iszero(eval.q_rai) &&
+       iszero(eval.q_sno)
+        z = zero(FT)
+        return (; dq_lcl_dt = z, dq_icl_dt = z, dq_rai_dt = z, dq_sno_dt = z)
+    end
+
     return BMT.bulk_microphysics_tendencies(
         BMT.LinearizedAverage(),
         eval.scheme, eval.mp, eval.tps, eval.ρ, T_hat, q_tot_hat,
