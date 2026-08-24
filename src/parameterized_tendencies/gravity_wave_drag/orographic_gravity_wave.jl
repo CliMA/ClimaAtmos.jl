@@ -179,7 +179,7 @@ function orographic_gravity_wave_compute_tendency!(Y, p, ::FullOrographicGravity
         end
 
         # DEBUG: Check if Y has NaNs at entry
-        if any(isnan, parent(Y.c.ρ))
+        if any(isnan, Y.c.ρ)
             @error "OGWD: Input Y.c.ρ already has NaNs at function entry!"
             error("Cannot compute OGWD tendency with NaN inputs")
         end
@@ -383,8 +383,8 @@ function orographic_gravity_wave_forcing!(
     # the z-values don't change, but this is necessary for
     # calc_nonpropagating_forcing! to work on the GPU
     get_pbl_z!(topo_ᶜz_pbl, ᶜp, ᶜT, ᶜz, grav, cp_d)
-    parent(topo_ᶠz_pbl) .= parent(topo_ᶜz_pbl) .- FT(1 / 2) .* parent(Δz_bot)
     topo_ᶠz_pbl = topo_ᶠz_pbl.components.data.:1
+    topo_ᶠz_pbl .= topo_ᶜz_pbl .- FT(1 / 2) .* Δz_bot
 
     # compute base flux at the planetary boundary layer height
     calc_base_flux!(
@@ -487,10 +487,10 @@ function orographic_gravity_wave_forcing!(
 
     @debug begin
         # DEBUG: Check for NaNs in OGWD forcing
-        if any(isnan, parent(ᶜuforcing)) || any(isnan, parent(ᶜvforcing))
+        if any(isnan, ᶜuforcing) || any(isnan, ᶜvforcing)
             @error "NaN detected in OGWD forcing!"
-            @error "  ᶜuforcing: has_nan=$(any(isnan, parent(ᶜuforcing))), min=$(minimum(parent(ᶜuforcing))), max=$(maximum(parent(ᶜuforcing)))"
-            @error "  ᶜvforcing: has_nan=$(any(isnan, parent(ᶜvforcing))), min=$(minimum(parent(ᶜvforcing))), max=$(maximum(parent(ᶜvforcing)))"
+            @error "  ᶜuforcing: has_nan=$(any(isnan, ᶜuforcing)), min=$(minimum(ᶜuforcing)), max=$(maximum(ᶜuforcing))"
+            @error "  ᶜvforcing: has_nan=$(any(isnan, ᶜvforcing)), min=$(minimum(ᶜvforcing)), max=$(maximum(ᶜvforcing))"
             error("OGWD produced NaN forcing - aborting")
         end
     end
@@ -635,7 +635,7 @@ function calc_nonpropagating_forcing!(
     # - ᶜright_bias checks upper face > z_pbl (cell extends above z_pbl)
     # - ᶜleft_bias checks lower face < z_ref (cell starts below z_ref)
     # This ensures at least one cell is included when z_ref > z_pbl
-    @. ᶜmask = isone(CA.ᶜright_bias.((ᶠz .> ᶠz_pbl))) .&& isone(CA.ᶜleft_bias.((ᶠz .< ᶠz_ref)))
+    @. ᶜmask = isone(ᶜright_bias.((ᶠz .> ᶠz_pbl))) .&& isone(ᶜleft_bias.((ᶠz .< ᶠz_ref)))
     @. ᶜweights = ᶜinterp.(ᶠp .- ᶠp_ref)
     @. ᶜdiff = ᶜinterp.(ᶠp_m1 .- ᶠp)
 
@@ -644,7 +644,7 @@ function calc_nonpropagating_forcing!(
     # to the pressure-weighted average.
     @. ᶜmask = ᶜmask && (!iszero(ᶜweights))
 
-    parent(ᶜweights) .= parent(ᶜweights .* ᶜmask)
+    ᶜweights .= ᶜweights .* ᶜmask
 
     input = @. lazy(ifelse(ᶜmask == true, ᶜdiff / ᶜweights, FT(0)))
 
@@ -652,7 +652,7 @@ function calc_nonpropagating_forcing!(
         return acc + wtsum_field
     end
 
-    if any(isnan.(parent(ᶜwtsum)))
+    if any(isnan.(ᶜwtsum))
         @warn "NaN encountered in weight sum calculation of orographic gravity wave drag"
     end
 
@@ -696,8 +696,8 @@ function calc_propagate_forcing!(
     dτ_sat_dz,
     ᶜρ,
 )
-    parent(dτ_sat_dz) .=
-        parent(Geometry.WVector.(ᶜgradᵥ.(τ_sat)).components.data.:1)
+    dτ_sat_dz .=
+        Geometry.WVector.(ᶜgradᵥ.(τ_sat)).components.data.:1
 
     @. ᶜuforcing -= τ_x / τ_l / ᶜρ * dτ_sat_dz
     @. ᶜvforcing -= τ_y / τ_l / ᶜρ * dτ_sat_dz
