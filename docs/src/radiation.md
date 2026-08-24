@@ -69,7 +69,7 @@ with the interpolation scheme the solver was built with (`BestFit()`, with
 the thermodynamic state for radiation.
 
 **The isothermal boundary layer.** RRTMGP integrates to negligible pressure, but
-the model top is at a finite height, 30 km by default and 55 km in the global
+the model top is at a finite height, 30 km by default and 60 km in the global
 production configurations. With `add_isothermal_boundary_layer` (the default),
 RRTMGP appends one extra layer above the model top, isothermal and reaching
 effectively zero pressure, and fills it internally. Without it, the atmosphere
@@ -79,8 +79,8 @@ of the real atmosphere.
 
 **Spherical geometry.** In a deep atmosphere, the area of a spherical shell
 grows with height, so a flux that is uniform per unit area at the surface
-carries more energy per unit area aloft. With `deep_atmosphere`, RRTMGP scales
-the fluxes by ``(r/a)^2``. This requires the cell heights and the planet radius,
+carries less energy per unit area aloft. With `deep_atmosphere`, RRTMGP scales
+the fluxes by ``(a/r)^2``. This requires the cell heights and the planet radius,
 which the wrapper passes only for spherical geometries.
 
 **Boundary conditions.** The surface temperature comes from

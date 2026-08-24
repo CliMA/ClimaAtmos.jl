@@ -343,7 +343,7 @@ code implements it two-directionally, for a single draft exchanging with the
 environment, in `updraft_sedimentation!`; the second (``\psi^m``-weighted) term
 of ``D_\psi^m`` is neglected as small compared with the leading-order dynamics.
 
-**Diffusive fluxes are grid-mean.** The diffusive and hyperdiffusive flux
+**Diffusive fluxes are grid-mean.** The diffusive flux
 divergences in the draft equations are the *grid-mean* divergences, applied
 uniformly to every subdomain, not per-subdomain divergences. This is the
 conservative-exchange consistency condition of [Thuburn2022](@cite): taking the

@@ -24,9 +24,8 @@ Which mode fits depends on what the run is for.
 | Climate and weather runs                                            | `allskywithclear`             |
 | Stratocumulus, Arctic stratocumulus, deep-convection single columns | `DYCOMS`, `ISDAC`, `TRMM_LBA` |
 
-Bare `allsky` is available but no configuration in the repository uses it: the
-production and CI configurations all take `allskywithclear`, which adds the
-clear-sky fluxes and so the cloud radiative effect. Prefer `allskywithclear`
+The production runs use `allskywithclear`, which adds the
+clear-sky fluxes to the diagnostics. Prefer `allskywithclear`
 unless the extra work for the clear-sky fluxes is a problem.
 
 `held_suarez` replaces radiation by Newtonian relaxation of temperatures and
@@ -186,19 +185,7 @@ prescribed_aerosols: ["CB1", "CB2", "DST01", "DST02", "DST03", "DST04", "DST05",
 
 At the other end,
 [`single_column_radiative_equilibrium_gray.yml`](https://github.com/CliMA/ClimaAtmos.jl/blob/main/config/model_configs/single_column_radiative_equilibrium_gray.yml)
-is a single column relaxing to gray radiative equilibrium, and the aquaplanet
-EDMF configurations use `clearsky`. To run one:
-
-```julia
-import ClimaAtmos as CA
-
-config = CA.AtmosConfig(
-    "config/longrun_configs/longrun_aquaplanet_allsky_progedmf_1M.yml";
-    job_id = "allsky",
-)
-simulation = CA.AtmosSimulation(config)
-CA.solve_atmos!(simulation)
-```
+is a single column relaxing to gray radiative equilibrium.
 
 See [Running Global Simulations](global_simulations.md) for the surrounding
 configuration, and [Creating Custom Configurations](configuration.md) for

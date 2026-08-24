@@ -184,8 +184,7 @@ grid-mean-divergence requirement of [Thuburn2022](@cite).
 
 Draft variables are hyperdiffused for numerical stability, along
 terrain-following coordinate surfaces, using the decomposed and unweighted
-subdomain fields: each
-subdomain inherits the grid-mean specific hyperdiffusive tendency, with the
+subdomain fields, with the
 energy and moisture contributions split into a dry-static-energy term and a
 water term as in the grid mean. See [Hyperdiffusion](hyperdiffusion.md) for the
 operator and the reference-state subtraction.
