@@ -30,7 +30,7 @@ julia --project -e 'using CUDA; CUDA.set_runtime_version!(v"12.2")'
 ```
 
 =#
-
+redirect_stderr(IOContext(stderr, :stacktrace_types_limited => Ref(true)))
 # Activate ClimaCore's kernel renaming feature, so kernels show up in
 # profiler output (nsys/ncu) with human-readable names constructed from
 # the stack trace (function name, file, and line).

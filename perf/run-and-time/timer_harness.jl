@@ -7,6 +7,7 @@ from the script directory.
 # Always try using Revise if available
 # It will allow to skip setup+compilation overhead when iterating on a function
 # using the harness to re-do measurements
+redirect_stderr(IOContext(stderr, :stacktrace_types_limited => Ref(true)))
 try
     using Revise
 catch e
