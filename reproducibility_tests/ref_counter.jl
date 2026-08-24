@@ -1,4 +1,4 @@
-403
+405
 
 # **README**
 #
@@ -32,6 +32,14 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+405
+- SGS quadrature corrections: fit λ_lagrange to the discrete quadrature
+  measure and add a second Newton step to _compute_z; correct the 0M
+  energy sink by taking the covariance of dq_tot/dt and e_tot.
+
+404
+- SGS quadrature microphysics updates
+
 403
 - Viscous sponge: match hyperdiffusion and vertical diffusion. Energy is
   diffused as a dry-static-energy + h_eff-weighted q_tot_eff split rather
