@@ -1,6 +1,8 @@
 import NVTX
 import StaticArrays as SA
 import ClimaCore.RecursiveApply: rzero, ⊞, ⊠
+import ClimaCore.DataLayouts: foreach_point
+import UnrolledUtilities: unrolled_flatmap, unrolled_map, unrolled_sum
 
 """
     set_covariance_cache_and_cloud_fraction!(Y, p)
@@ -793,6 +795,21 @@ NVTX.@annotate function set_cloud_fraction!(
     turbconv_model = p.atmos.turbconv_model
     microphysics_model = p.atmos.microphysics_model
 
+    # With PrognosticEDMFX the cloud fraction is updated by `2 + n_updrafts`
+    # point-wise broadcast kernels (the truncated-Gaussian closure, the
+    # environment-area weighting, and one binary updraft contribution each), so
+    # they are fused into a single `foreach_point` kernel that keeps
+    # `ᶜcloud_fraction` and the shared intermediates (ρ⁰, ρa⁰) in registers.
+    if turbconv_model isa PrognosticEDMFX
+        return _set_cloud_fraction_edmfx_fused!(
+            Y,
+            p,
+            microphysics_model,
+            turbconv_model,
+            thermo_params,
+        )
+    end
+
     # Get environment density, temperature, and total specific humidity
     ᶜρ_env, ᶜT_mean, ᶜq_mean = _get_env_ρ_T_q(Y, p, thermo_params, turbconv_model)
 
@@ -826,6 +843,229 @@ NVTX.@annotate function set_cloud_fraction!(
     )
 
     _apply_edmf_cloud_weighting!(Y, p, turbconv_model, thermo_params)
+end
+
+"""
+    _set_cloud_fraction_edmfx_fused!(
+        Y, p, microphysics_model, turbconv_model, thermo_params,
+    )
+
+Compute the quadrature cloud fraction for `PrognosticEDMFX` in a single fused
+`foreach_point` kernel. The truncated-Gaussian environment cloud fraction, its
+environment-area weighting, and the binary updraft contributions are all
+evaluated point-wise in registers, so `ᶜcloud_fraction` is read from and
+written to global memory only once.
+
+The point views passed to the `foreach_point` closure are zero-dimensional, so
+the closure body is plain scalar code: inputs are read with `view[]`, shared
+intermediates (`ρ⁰`, `ρa⁰`, the environment condensate) are recomputed locally
+instead of being re-read from global memory, and the result is stored with
+`view[] = ...`. All scalar helpers (`TD.air_density`, `specific`,
+`_compute_cloud_fraction`, `draft_area`, `TD.has_condensate`) are the same
+functions the unfused broadcasts evaluate per point, so the arithmetic is
+identical.
+"""
+function _set_cloud_fraction_edmfx_fused!(
+    Y,
+    p,
+    microphysics_model,
+    turbconv_model,
+    thermo_params,
+)
+    fv = Fields.field_values
+    (; ᶜT⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜp) = p.precomputed
+    (; ᶜT′T′, ᶜq′q′, ᶜρʲs, ᶜcloud_fraction) = p.precomputed
+
+    sgs_quad = p.atmos.sgs_quadrature
+    corr_Tq = correlation_Tq(p.params)
+    FT = eltype(p.params)
+    α = FT(sgs_variance_fidelity(CAP.cloud_fraction_steepness_scale(p.params)))
+    floor = cloud_fraction_floor_params(p.params)
+    n = Val(n_mass_flux_subdomains(turbconv_model))
+
+    # Per-updraft point fields consumed by the fused kernel, flattened as
+    # (ρaʲ, q_lclʲ, q_iclʲ, ρʲ) for j in 1:n.
+    updraft_fields = unrolled_flatmap(ntuple(identity, n)) do j
+        ᶜq_lclʲ, ᶜq_iclʲ = _updraft_cloud_condensate(Y, p, j, microphysics_model)
+        (
+            fv(Y.c.sgsʲs.:($j).ρa),
+            fv(ᶜq_lclʲ),
+            fv(ᶜq_iclʲ),
+            fv(ᶜρʲs.:($j)),
+        )
+    end
+    env_args = (
+        fv(ᶜT⁰),
+        fv(ᶜp),
+        fv(ᶜq_tot_nonneg⁰),
+        fv(ᶜq_liq⁰),
+        fv(ᶜq_ice⁰),
+        fv(ᶜT′T′),
+        fv(ᶜq′q′),
+        fv(Y.c.ρ),
+    )
+    if microphysics_model isa NonEquilibriumMicrophysics
+        # Environment condensate from the prognostic cloud variables,
+        # recomputed point-wise (ρa⁰ is shared with the area weighting).
+        let thermo_params = thermo_params, sgs_quad = sgs_quad, corr_Tq = corr_Tq, α = α,
+            floor = floor, turbconv_model = turbconv_model, n = n
+
+            foreach_point(
+                fv(ᶜcloud_fraction),
+                env_args...,
+                fv(Y.c.ρq_lcl),
+                fv(Y.c.ρq_icl),
+                updraft_fields...,
+            ) do dst, T⁰, p⁰, qt⁰, ql⁰, qi⁰, T′T′, q′q′, ρ, ρq_lcl, ρq_icl, upd...
+                inds = ntuple(identity, n)
+                ρ_v = @inbounds ρ[]
+                ρaʲ_v = unrolled_map(j -> @inbounds(upd[4 * (j - 1) + 1][]), inds)
+                q_lclʲ_v = unrolled_map(j -> @inbounds(upd[4 * (j - 1) + 2][]), inds)
+                q_iclʲ_v = unrolled_map(j -> @inbounds(upd[4 * (j - 1) + 3][]), inds)
+                ρʲ_v = unrolled_map(j -> @inbounds(upd[4 * (j - 1) + 4][]), inds)
+
+                ρa⁰ = ρ_v - unrolled_sum(ρaʲ_v)
+                ρχ_lcl = @inbounds ρq_lcl[]
+                ρχ_icl = @inbounds ρq_icl[]
+                ρaχ_lcl = ρχ_lcl - unrolled_sum(unrolled_map(*, ρaʲ_v, q_lclʲ_v))
+                ρaχ_icl = ρχ_icl - unrolled_sum(unrolled_map(*, ρaʲ_v, q_iclʲ_v))
+                q_lcl⁰ = max(
+                    zero(typeof(ρ_v)),
+                    specific(ρaχ_lcl, ρa⁰, ρχ_lcl, ρ_v, turbconv_model),
+                )
+                q_icl⁰ = max(
+                    zero(typeof(ρ_v)),
+                    specific(ρaχ_icl, ρa⁰, ρχ_icl, ρ_v, turbconv_model),
+                )
+
+                @inbounds dst[] = _edmfx_cloud_fraction_point(
+                    thermo_params,
+                    sgs_quad,
+                    corr_Tq,
+                    α,
+                    floor,
+                    @inbounds(T⁰[]), @inbounds(p⁰[]), @inbounds(qt⁰[]),
+                    @inbounds(ql⁰[]), @inbounds(qi⁰[]),
+                    @inbounds(T′T′[]), @inbounds(q′q′[]),
+                    q_lcl⁰,
+                    q_icl⁰,
+                    ρa⁰,
+                    ρaʲ_v,
+                    q_lclʲ_v,
+                    q_iclʲ_v,
+                    ρʲ_v,
+                )
+                return nothing
+            end
+        end
+    else
+        # Environment condensate from the precomputed ᶜq_liq⁰ / ᶜq_ice⁰.
+        let thermo_params = thermo_params, sgs_quad = sgs_quad, corr_Tq = corr_Tq, α = α,
+            floor = floor, n = n
+
+            foreach_point(
+                fv(ᶜcloud_fraction),
+                env_args...,
+                fv(ᶜq_liq⁰),
+                fv(ᶜq_ice⁰),
+                updraft_fields...,
+            ) do dst, T⁰, p⁰, qt⁰, ql⁰, qi⁰, T′T′, q′q′, ρ, q_lcl⁰, q_icl⁰, upd...
+                inds = ntuple(identity, n)
+                ρ_v = @inbounds ρ[]
+                ρaʲ_v = unrolled_map(j -> @inbounds(upd[4 * (j - 1) + 1][]), inds)
+                q_lclʲ_v = unrolled_map(j -> @inbounds(upd[4 * (j - 1) + 2][]), inds)
+                q_iclʲ_v = unrolled_map(j -> @inbounds(upd[4 * (j - 1) + 3][]), inds)
+                ρʲ_v = unrolled_map(j -> @inbounds(upd[4 * (j - 1) + 4][]), inds)
+
+                ρa⁰ = ρ_v - unrolled_sum(ρaʲ_v)
+
+                @inbounds dst[] = _edmfx_cloud_fraction_point(
+                    thermo_params,
+                    sgs_quad,
+                    corr_Tq,
+                    α,
+                    floor,
+                    @inbounds(T⁰[]), @inbounds(p⁰[]), @inbounds(qt⁰[]),
+                    @inbounds(ql⁰[]), @inbounds(qi⁰[]),
+                    @inbounds(T′T′[]), @inbounds(q′q′[]),
+                    @inbounds(q_lcl⁰[]),
+                    @inbounds(q_icl⁰[]),
+                    ρa⁰,
+                    ρaʲ_v,
+                    q_lclʲ_v,
+                    q_iclʲ_v,
+                    ρʲ_v,
+                )
+                return nothing
+            end
+        end
+    end
+    return nothing
+end
+
+"""
+    _edmfx_cloud_fraction_point(
+        thermo_params, sgs_quad, corr_Tq, α, floor,
+        T⁰, p⁰, qt⁰, ql⁰, qi⁰, T′T′, q′q′, q_lcl⁰, q_icl⁰, ρa⁰,
+        ρaʲs, q_lclʲs, q_iclʲs, ρʲs,
+    )
+
+Point-wise `PrognosticEDMFX` cloud fraction: the truncated-Gaussian
+environment cloud fraction (with the fused σ_S² quadrature pass), weighted by
+the environment area fraction `draft_area(ρa⁰, ρ⁰)`, plus the binary updraft
+cloud fractions weighted by their area fractions. All arguments are scalars
+(per-updraft values are tuples of scalars); used to evaluate the fused
+`foreach_point` kernel in `_set_cloud_fraction_edmfx_fused!`.
+"""
+@inline function _edmfx_cloud_fraction_point(
+    thermo_params,
+    sgs_quad,
+    corr_Tq,
+    α,
+    floor,
+    T⁰,
+    p⁰,
+    qt⁰,
+    ql⁰,
+    qi⁰,
+    T′T′,
+    q′q′,
+    q_lcl⁰,
+    q_icl⁰,
+    ρa⁰,
+    ρaʲs,
+    q_lclʲs,
+    q_iclʲs,
+    ρʲs,
+)
+    FT = typeof(T⁰)
+    ρ⁰ = TD.air_density(thermo_params, T⁰, p⁰, qt⁰, ql⁰, qi⁰)
+    cloud_fraction = _compute_cloud_fraction(
+        thermo_params,
+        T⁰,
+        ρ⁰,
+        qt⁰,
+        q_lcl⁰,
+        q_icl⁰,
+        sgs_quad,
+        T′T′,
+        q′q′,
+        corr_Tq,
+        α,
+        floor,
+    )
+    cloud_fraction *= draft_area(ρa⁰, ρ⁰)
+    cloud_fraction += unrolled_sum(ntuple(identity, Val(length(ρaʲs)))) do j
+        ifelse(
+            TD.has_condensate(
+                thermo_params,
+                max(zero(FT), q_lclʲs[j] + q_iclʲs[j]),
+            ),
+            draft_area(ρaʲs[j], ρʲs[j]),
+            zero(FT),
+        )
+    end
+    return cloud_fraction
 end
 
 NVTX.@annotate function set_cloud_fraction!(
