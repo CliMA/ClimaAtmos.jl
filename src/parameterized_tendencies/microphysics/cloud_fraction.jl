@@ -831,9 +831,10 @@ NVTX.@annotate function set_sgs_moments_and_cloud_fraction!(Y, p)
         ᶜT′T′,
         ᶜq′q′
 
+            ᶜq_c = @. ᶜq_lcl + ᶜq_icl
             # ONE quadrature pass → (sigma_S, λ_lagrange).
             local_sgs_moments = @. _compute_sgs_moments(
-                thermo_params, ᶜρ_env, ᶜT_mean, ᶜq_mean, ᶜq_lcl + ᶜq_icl,
+                thermo_params, ᶜρ_env, ᶜT_mean, ᶜq_mean, ᶜq_c,
                 $(sgs_quad), ᶜT′T′, ᶜq′q′, corr_Tq, α,
             )
             @. ᶜsgs_moments = local_sgs_moments
@@ -845,7 +846,7 @@ NVTX.@annotate function set_sgs_moments_and_cloud_fraction!(Y, p)
             # must be re-applied here even though `set_cloud_fraction!` already
             # applied it during Picard.
             @. ᶜcloud_fraction = _compute_cloud_fraction(
-                ᶜq_lcl + ᶜq_icl,
+                ᶜq_c,
                 # μ_S recomputed analytically, matching `_sgs_saturation_moments`
                 # (condensate-free q_sat, consistent with the linear excess S).
                 ᶜq_mean - TD.q_vap_saturation(thermo_params, ᶜT_mean, ᶜρ_env),
