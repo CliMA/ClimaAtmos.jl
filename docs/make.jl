@@ -78,6 +78,8 @@ makedocs(;
             ],
             "Computing and Saving Diagnostics" => "diagnostics.md",
             "Loading and Visualizing Output" => "visualizing_output.md",
+            "Configuring and Tuning PROPHET" => "prophet_howto.md",
+            "Running with Radiation" => "radiation_howto.md",
         ],
         "Explanation" => [
             "The CliMA Ecosystem" => "ecosystem.md",
@@ -92,8 +94,12 @@ makedocs(;
                 "Integer Time (ITime)" => "itime.md",
             ],
             "Physics & Parameterizations" => [
-                "PROPHET: Prognostic Equations" => "edmf_equations.md",
-                "PROPHET: Horizontal Diffusion" => "edmf_horizontal_diffusion.md",
+                "PROPHET (Turbulence and Convection)" => [
+                    "Overview and Equations" => "prophet.md",
+                    "Closures" => "prophet_closures.md",
+                    "Discretization and Time Stepping" => "prophet_numerics.md",
+                    "Horizontal Diffusion" => "prophet_horizontal_diffusion.md",
+                ],
                 "Microphysics" => "microphysics.md",
                 "Radiation" => "radiation.md",
                 "Gravity Wave Drag" => [

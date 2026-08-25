@@ -136,8 +136,8 @@ ClimaAtmos.integrate_over_sgs
 ### Turbulence and convection (PROPHET)
 
 The turbulence and convection scheme: an eddy-diffusivity mass-flux scheme,
-named `EDMFX` in the code. See the
-[PROPHET equations](edmf_equations.md).
+named `EDMFX` in the code. See
+[PROPHET: Overview and Equations](prophet.md).
 
 ```@docs
 ClimaAtmos.AbstractEDMF
@@ -172,14 +172,41 @@ ClimaAtmos.NoGridScaleTendency
 ClimaAtmos.NoSubgridScaleTendency
 ```
 
+Closure parameters. The fields of this set, and the ClimaParams names they come
+from, are listed in [PROPHET: Closures](prophet_closures.md#Parameters):
+
+```@docs
+ClimaAtmos.Parameters.AbstractTurbulenceConvectionParameters
+ClimaAtmos.Parameters.TurbulenceConvectionParameters
+```
+
 ### Radiation
 
-See the [Radiation](radiation.md) page for an overview of the RRTMGP coupling.
+See the [Radiation](radiation.md) page for what each of these does, and
+[Running with Radiation](radiation_howto.md) for how to configure them.
+
+The RRTMGP modes, selected by the `rad` configuration key:
+
+```@docs
+ClimaAtmos.RRTMGPInterface.AbstractRRTMGPMode
+ClimaAtmos.RRTMGPInterface.GrayRadiation
+ClimaAtmos.RRTMGPInterface.ClearSkyRadiation
+ClimaAtmos.RRTMGPInterface.AllSkyRadiation
+ClimaAtmos.RRTMGPInterface.AllSkyRadiationWithClearSkyDiagnostics
+ClimaAtmos.RRTMGPInterface.rrtmgp_solver
+```
+
+Cloud properties seen by the radiation:
 
 ```@docs
 ClimaAtmos.AbstractCloudInRadiation
 ClimaAtmos.InteractiveCloudInRadiation
 ClimaAtmos.PrescribedCloudInRadiation
+```
+
+Idealized radiation for single-column cases:
+
+```@docs
 ClimaAtmos.RadiationDYCOMS
 ClimaAtmos.RadiationISDAC
 ClimaAtmos.RadiationTRMM_LBA

@@ -21,7 +21,7 @@ diffusive-flux treatment. Vertical SGS momentum fluxes are not yet included.
 
 The `PrognosticEDMFX` method is gated on `p.atmos.edmfx_model.sgs_mass_flux`;
 the generic method is a no-op. Mutates `Yₜ.c`; returns `nothing`. See the
-"PROPHET Sub-Grid Scale Equations" page (`docs/src/edmf_equations.md`).
+"PROPHET: Overview and Equations" page (`docs/src/prophet.md`).
 """
 edmfx_sgs_mass_flux_tendency!(Yₜ, Y, p, t, turbconv_model) = nothing
 

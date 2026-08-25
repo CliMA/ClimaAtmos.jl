@@ -2,7 +2,7 @@
 
 ## Idealized cases
 
-`ClimaAtmos.jl` supports several canonical test cases that are run in a single column model designed to verify how well PROPHET reproduces each convective regime. These cases include variants of `bomex`, `dycoms`, `rico`, `soares`, `gabls`, and `trmm` and can be found in the `config/model_configs` directory. The purpose of each simulation is summarized in the following table:
+`ClimaAtmos.jl` supports several canonical test cases that are run in a single column model designed to verify how well [PROPHET](prophet.md) reproduces each convective regime. These cases include variants of `bomex`, `dycoms`, `rico`, `soares`, `gabls`, and `trmm` and can be found in the `config/model_configs` directory. The purpose of each simulation is summarized in the following table:
 
 | Abbreviation | Long Name                                            | Cloud Regime          | Reference                                                                                                                   |
 |:------------ |:---------------------------------------------------- |:--------------------- |:--------------------------------------------------------------------------------------------------------------------------- |
