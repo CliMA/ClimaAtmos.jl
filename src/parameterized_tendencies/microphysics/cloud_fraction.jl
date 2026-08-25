@@ -778,8 +778,8 @@ microphysics, uses the prognostic cloud condensate only; the precomputed
 not count as cloud.
 """
 _grid_mean_cloud_condensate(Y, p, ::NonEquilibriumMicrophysics) = (
-    (@. lazy(max(0, specific(Y.c.ρq_lcl, Y.c.ρ)))),
-    (@. lazy(max(0, specific(Y.c.ρq_icl, Y.c.ρ)))),
+    (@. (max(0, specific(Y.c.ρq_lcl, Y.c.ρ)))),
+    (@. (max(0, specific(Y.c.ρq_icl, Y.c.ρ)))),
 )
 _grid_mean_cloud_condensate(Y, p, microphysics_model) =
     (p.precomputed.ᶜq_liq, p.precomputed.ᶜq_ice)
@@ -807,14 +807,7 @@ NVTX.@annotate function set_cloud_fraction!(
 
     (; ᶜT′T′, ᶜq′q′) = p.precomputed
 
-    ᶜT_mean = Fields.field_values(ᶜT_mean)
-    ᶜρ_env = Fields.field_values(ᶜρ_env)
-    ᶜq_mean = Fields.field_values(ᶜq_mean)
-    ᶜq_lcl = Fields.field_values(ᶜq_lcl)
-    ᶜq_icl = Fields.field_values(ᶜq_icl)
-    ᶜT′T′ = Fields.field_values(ᶜT′T′)
-    ᶜq′q′ = Fields.field_values(ᶜq′q′)
-    ᶜcloud_fraction = Fields.field_values(p.precomputed.ᶜcloud_fraction)
+    ᶜcloud_fraction = p.precomputed.ᶜcloud_fraction
     α = FT(α)
 
     let α = α, thermo_params = thermo_params, corr_Tq = corr_Tq, floor = floor,
@@ -891,15 +884,13 @@ function _get_env_ρ_T_q(Y, p, thermo_params, turbconv_model)
     (; ᶜp, ᶜT, ᶜq_tot_nonneg) = p.precomputed
     if turbconv_model isa PrognosticEDMFX
         (; ᶜT⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰) = p.precomputed
-        ᶜρ_env = @. lazy(
-            TD.air_density(
-                thermo_params,
-                ᶜT⁰,
-                ᶜp,
-                ᶜq_tot_nonneg⁰,
-                ᶜq_liq⁰,
-                ᶜq_ice⁰,
-            ),
+        ᶜρ_env = @. TD.air_density(
+            thermo_params,
+            ᶜT⁰,
+            ᶜp,
+            ᶜq_tot_nonneg⁰,
+            ᶜq_liq⁰,
+            ᶜq_ice⁰,
         )
         return ᶜρ_env, ᶜT⁰, ᶜq_tot_nonneg⁰
     else
@@ -993,8 +984,8 @@ precomputed `ᶜq_liq⁰` / `ᶜq_ice⁰` include precipitation (`q_rai⁰` / `q
 which should not count as cloud.
 """
 _env_cloud_condensate(Y, p, ::NonEquilibriumMicrophysics) = (
-    (@. lazy(max(0, $(ᶜspecific_env_value(@name(q_lcl), Y, p))))),
-    (@. lazy(max(0, $(ᶜspecific_env_value(@name(q_icl), Y, p))))),
+    (@. (max(0, $(ᶜspecific_env_value(@name(q_lcl), Y, p))))),
+    (@. (max(0, $(ᶜspecific_env_value(@name(q_icl), Y, p))))),
 )
 _env_cloud_condensate(Y, p, microphysics_model) =
     (p.precomputed.ᶜq_liq⁰, p.precomputed.ᶜq_ice⁰)
