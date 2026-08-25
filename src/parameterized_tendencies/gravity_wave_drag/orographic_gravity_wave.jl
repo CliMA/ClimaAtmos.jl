@@ -1241,7 +1241,10 @@ function compute_ogw_drag(
 
         if isfile(local_path)
             @info "Loading computed drag from local file: $(local_path)"
-            topo_info = load_preprocessed_topography(local_filename)
+            topo_info = load_preprocessed_topography(
+                local_filename,
+                ClimaComms.context(Y.c),
+            )
 
             @debug begin
                 # Checkpoint 1: Validate loaded drag tensor

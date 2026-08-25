@@ -1061,9 +1061,11 @@ end
 """
     load_preprocessed_topography(; topography, topo_smoothing,
                                  topography_damping_factor, h_elem)
-    load_preprocessed_topography(filename::String)
+    load_preprocessed_topography(filename::String, comms_ctx = ClimaComms.SingletonCommsContext())
 
 Read a preprocessed orographic drag field from an HDF5 file in the package root.
+The optional `comms_ctx` must be the run's MPI context on distributed runs so the
+field is read as correctly.
 
 Returns the `computed_drag` field written by `write_computed_drag!`. The keyword method
 derives the filename from the topography configuration via `generate_drag_filename`; the
@@ -1091,11 +1093,14 @@ function load_preprocessed_topography(;
     return computed_drag
 end
 
-function load_preprocessed_topography(filename::String)
+function load_preprocessed_topography(
+    filename::String,
+    comms_ctx = ClimaComms.SingletonCommsContext(),
+)
     @info "loading topography drag vector: $(filename)"
     reader = InputOutput.HDF5Reader(
         joinpath(@__DIR__, "../../../$(filename).hdf5"),
-        ClimaComms.SingletonCommsContext(),
+        comms_ctx,
     )
     computed_drag = InputOutput.read_field(reader, "computed_drag")
 
