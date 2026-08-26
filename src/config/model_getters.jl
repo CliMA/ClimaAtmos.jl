@@ -11,9 +11,8 @@ Accepted values:
 
   - `"dry"`: `DryModel`, no water in the model.
   - `"0M"`: `EquilibriumMicrophysics0M`, instantaneous removal of supersaturation.
-  - `"1M"`: `NonEquilibriumMicrophysics1M`, built with `n_substeps` from
-    `microphysics_n_substeps` and `n_substeps_quad` from
-    `microphysics_n_substeps_quadrature`.
+  - `"1M"`: `NonEquilibriumMicrophysics1M`, built from the config keys parsed by
+    [`get_microphysics_1m_options`](@ref).
   - `"2M"`: `NonEquilibriumMicrophysics2M`.
   - `"2MP3"`: `NonEquilibriumMicrophysics2MP3`.
 
@@ -27,9 +26,7 @@ function get_microphysics_model(parsed_args, params = nothing)
     elseif model_name == "0M"
         EquilibriumMicrophysics0M()
     elseif model_name == "1M"
-        n_substeps = parsed_args["microphysics_n_substeps"]
-        n_substeps_quad = parsed_args["microphysics_n_substeps_quadrature"]
-        NonEquilibriumMicrophysics1M(; n_substeps, n_substeps_quad)
+        NonEquilibriumMicrophysics1M(; get_microphysics_1m_options(parsed_args)...)
     elseif model_name == "2M"
         NonEquilibriumMicrophysics2M()
     elseif model_name == "2MP3"
@@ -44,10 +41,13 @@ end
 """
     get_microphysics_1m_options(parsed_args)
 
-Parse the config keys for 1-moment microphysics processes into a `NamedTuple` of
-keyword arguments for `CM.Parameters.Microphysics1MParams`.
+Parse the config keys for 1-moment microphysics into a `NamedTuple` of keyword
+arguments for [`NonEquilibriumMicrophysics1M`](@ref).
 
-Each key selects the process-option type that controls dispatch inside
+The substep counts come from `microphysics_n_substeps` (`n_substeps`) and
+`microphysics_n_substeps_quadrature` (`n_substeps_quad`).
+
+The remaining keys select the process-option type that controls dispatch inside
 `bulk_microphysics_tendencies`; a value of `~` (null) disables the process (`nothing`).
 Values are looked up with `parse_option`, so an unknown string raises an error listing
 the valid choices. Each option string names the `CM.Parameters` type it maps to:
@@ -68,6 +68,9 @@ the valid choices. Each option string names the `CM.Parameters` type it maps to:
 """
 function get_microphysics_1m_options(parsed_args)
     CMP = CM.Parameters
+
+    n_substeps = parsed_args["microphysics_n_substeps"]
+    n_substeps_quad = parsed_args["microphysics_n_substeps_quadrature"]
 
     cloud_liquid_formation = parse_option(
         parsed_args["cloud_liquid_formation"],
@@ -171,6 +174,8 @@ function get_microphysics_1m_options(parsed_args)
     )
 
     return (;
+        n_substeps,
+        n_substeps_quad,
         cloud_liquid_formation,
         cloud_ice_formation,
         cloud_ice_melt,
