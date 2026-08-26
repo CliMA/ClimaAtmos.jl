@@ -577,6 +577,10 @@ ascending height coordinate [m], `column` a `NamedTuple` of `(z,)` profiles
 (canonical variable => value). The data is steady: the reader interface returns
 constant-in-time inputs. Used for sources with no on-disk ClimaColumn file, such
 as the steady GCM-driven profiles built by `GCMColumnData`.
+
+The footprint is one vector per variable over the source's levels and does not
+grow with the run length, so this is only appropriate for a source that is
+steady (or otherwise small).
 """
 struct InMemoryColumnData{C <: NamedTuple, S <: NamedTuple, L} <:
        AbstractColumnData
@@ -634,7 +638,6 @@ read_initial_profiles(d::InMemoryColumnData, start_date) = (;
 # `target_space`, flat beyond the source range, returning a Field.
 function _interp_column(z_src, vals_src, target_space)
     ᶜz = ClimaCore.Fields.coordinate_field(target_space).z
-    field = similar(ᶜz)
     itp = Intp.extrapolate(
         Intp.interpolate(
             (Float64.(z_src),),
@@ -643,7 +646,8 @@ function _interp_column(z_src, vals_src, target_space)
         ),
         Intp.Flat(),
     )
-    parent(field) .= itp.(parent(ᶜz))
+    field = similar(ᶜz)
+    field .= itp.(ᶜz)
     return field
 end
 

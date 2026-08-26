@@ -467,7 +467,7 @@ ClimaAtmos.ColumnDatasets.ClimaColumnFiles.CANONICAL_UNITS
 ClimaAtmos.ColumnDatasets.ClimaColumnFiles.is_conforming
 ClimaAtmos.ColumnDatasets.ClimaColumnFiles.write_column_forcing_file
 ClimaAtmos.ColumnDatasets.VaranalFiles.to_climacolumn
-ClimaAtmos.ColumnDatasets.GCMColumnData.read
+ClimaAtmos.ColumnDatasets.GCMColumnData.read_cfsite
 ```
 
 ## Modules

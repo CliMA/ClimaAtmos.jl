@@ -202,7 +202,7 @@ function get_setup_type(parsed_args, thermo_params)
         # through the generic ForcingFromFile path. Defaults give an interactive
         # Monin-Obukhov surface with the file's `ts` and the constant insolation
         # carried in the data (matching the former GCMDrivenInsolation).
-        data = ColumnDatasets.GCMColumnData.read(
+        data = ColumnDatasets.GCMColumnData.read_cfsite(
             parsed_args["external_forcing_file"],
             parsed_args["cfsite_number"];
             thermo_params,

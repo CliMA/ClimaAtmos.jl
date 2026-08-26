@@ -3,7 +3,7 @@
 
 Reader for GCM-driven single-column (cfsite) forcing files. Its data lives in a
 per-site subgroup and is steady: the case is driven by time-mean profiles and
-tendencies. [`read`](@ref) builds an [`InMemoryColumnData`](@ref) of those
+tendencies. [`read_cfsite`](@ref) builds an [`InMemoryColumnData`](@ref) of those
 time-mean profiles, so the case runs through the same `ExternalDrivenTVForcing`
 per-term composition and `ForcingFromFile` setup as any other column source.
 
@@ -20,7 +20,31 @@ import Thermodynamics.Parameters as TDP
 import ..ColumnDatasets: InMemoryColumnData
 
 """
-    read(path, cfsite_number; thermo_params)
+    REQUIRED_VARS
+
+The cfsite subgroup variables [`read_cfsite`](@ref) reads. Checked up front so a
+file missing any of them errors at setup, naming all that are absent, rather
+than on first access.
+"""
+const REQUIRED_VARS = (
+    "zg",       # geopotential height [m]
+    "ta",       # air temperature [K]
+    "ua",       # eastward wind [m s-1]
+    "va",       # northward wind [m s-1]
+    "hus",      # specific humidity [kg kg-1]
+    "tntha",    # temperature horizontal-advection tendency [K s-1]
+    "tnhusha",  # humidity horizontal-advection tendency [kg kg-1 s-1]
+    "tntva",    # temperature vertical-advection tendency [K s-1]
+    "tnhusva",  # humidity vertical-advection tendency [kg kg-1 s-1]
+    "alpha",    # specific volume [m3 kg-1]
+    "wap",      # pressure velocity [Pa s-1]
+    "ts",       # surface (skin) temperature [K]
+    "coszen",   # cosine of the solar zenith angle [1]
+    "rsdt",     # TOA incoming shortwave radiation [W m-2]
+)
+
+"""
+    read_cfsite(path, cfsite_number; thermo_params)
 
 Read the cfsite subgroup `cfsite_number` from the GCM forcing file `path` and
 return a steady [`InMemoryColumnData`](@ref).
@@ -32,14 +56,33 @@ horizontal-advection tendencies `tntha`/`tnhusha`. Subsidence is
 eddy part of the GCM's total vertical advective tendency, `tntva + w̄ · ∂χ̄/∂z`,
 with the vertical gradient differenced on the GCM grid (Shen et al. 2022).
 
+Differencing `∂χ̄/∂z` on the GCM grid is a behavior change: the previous
+`GCMForcing` cache interpolated to the model grid first and differenced there.
+Taking the gradient where the data lives is more accurate, but it shifts the
+forcing wherever the two grids differ, most at sharp gradients.
+
 Surface variables reproduce the previous `GCMDrivenInsolation`: the skin
 temperature `ts` (time mean), and a constant `coszen`/`rsdt` chosen so that
 `coszen = coszen[1]` and `rsdt / coszen = mean(rsdt / coszen)`.
 """
-function read(path, cfsite_number; thermo_params)
+function read_cfsite(path, cfsite_number; thermo_params)
+    isnothing(path) && error(
+        "initial_condition `GCM` requires `external_forcing_file` to point at a \
+         GCM cfsite forcing file",
+    )
     g = TDP.grav(thermo_params)
     NC.NCDataset(path, "r") do ds
+        groups = keys(ds.group)
+        cfsite_number in groups || error(
+            "GCM forcing file $(path) has no cfsite group `$(cfsite_number)`; \
+             it contains $(join(groups, ", ")).",
+        )
         site = ds.group[cfsite_number]
+        missing_vars = [v for v in REQUIRED_VARS if !haskey(site, v)]
+        isempty(missing_vars) || error(
+            "cfsite group `$(cfsite_number)` of $(path) is missing the \
+             required variables $(join(missing_vars, ", ")).",
+        )
         tmean(v) = vec(mean(site[v][:, :], dims = 2))
 
         z = tmean("zg")
