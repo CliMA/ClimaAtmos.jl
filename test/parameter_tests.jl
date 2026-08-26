@@ -29,11 +29,20 @@ end
 @testset "1-moment microphysics process options" begin
     CMP = CAP.CM.Parameters
 
-    # Defaults come from CloudMicrophysics
+    # Defaults come from CloudMicrophysics, except where `default_config.yml`
+    # picks another variant
     defaults = CA.NonEquilibriumMicrophysics1M()
     @test defaults.processes.rain_autoconversion isa CMP.Kessler1M
+    @test defaults.processes.cloud_ice_formation isa CMP.TemperatureDependent
     # Unknown process names are rejected where they are written
     @test_throws Exception CA.NonEquilibriumMicrophysics1M(; not_a_process = 1)
+
+    # Building the model directly and from an unmodified config agree
+    default_config = CA.AtmosConfig(
+        Dict("microphysics_model" => "1M"),
+        job_id = "parameter_test_1m_defaults",
+    )
+    @test CA.get_microphysics_model(default_config.parsed_args) == defaults
 
     # Options set on the model select the parameters loaded for it
     model = CA.NonEquilibriumMicrophysics1M(;
