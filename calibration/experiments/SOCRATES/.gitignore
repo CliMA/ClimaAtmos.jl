@@ -1,0 +1,4 @@
+forcing/climacolumn/*.nc
+socrates_calibration/*
+run/output/*
+!.gitkeep

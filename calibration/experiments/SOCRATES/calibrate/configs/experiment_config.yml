@@ -1,0 +1,89 @@
+prior_path: prior.toml
+model_config: model_config.yml
+output_dir: <tbd>
+
+ensemble_size: 12
+n_iterations: 4
+batch_size: 1
+
+y_var_names: [thetaa, hus, clw]
+log_vars: [clw]
+
+z_max: 4000
+# Legacy SOCRATES default windows from CalibrateEDMF templates:
+# Obs_data used approximately 10-12 hours (Atlas paper convention).
+y_t_start_sec: 36000.0
+y_t_end_sec: 43200.0
+g_t_start_sec: 36000.0
+g_t_end_sec: 43200.0
+
+reduction: inst
+
+eki:
+  scheduler_on_terminate: continue
+  localization: none
+  failure_handler: sample_succ_gauss
+  accelerator: default
+
+# Optional precomputed normalization factors and constant noise by variable.
+norm_factors_by_var:
+  thetaa: [298.828, 8.617]
+  hus: [0.00676, 0.00423]
+  clw: [-9.808, 3.116]
+
+const_noise_by_var:
+  thetaa: 0.00005
+  hus: 0.00005
+  clw: 0.00005
+
+# Add one entry per SOCRATES flight/case.
+# Forcing and reference files are resolved at runtime via
+# SOCRATESSingleColumnForcings.open_atlas_les_input/output.
+cases:
+  - name: RF01_Obs
+    flight_number: 1
+    forcing_type: Obs_data
+  - name: RF01_ERA
+    flight_number: 1
+    forcing_type: ERA5_data
+
+  - name: RF09_Obs
+    flight_number: 9
+    forcing_type: Obs_daa
+  - name: RF09_ERA
+    flight_number: 9
+    forcing_type: ERA5_data
+
+  - name: RF10_Obs
+    flight_number: 10
+    forcing_type: Obs_daa
+  - name: RF10_ERA
+    flight_number: 10
+    forcing_type: ERA5_data
+
+  - name: RF11_Obs
+    flight_number: 10
+    forcing_type: Obs_daa
+  # - name: RF11_ERA
+  #   flight_number: 10
+  #   forcing_type: ERA5_data
+
+  - name: RF12_Obs
+    flight_number: 9
+    forcing_type: ERA5_data
+  - name: RF12_ERA
+    flight_number: 9
+    forcing_type: ERA5_data
+
+  - name: RF13_Obs
+    flight_number: 9
+    forcing_type: Obs_daa
+  - name: RF13_ERA
+    flight_number: 9
+    forcing_type: ERA5_data
+    
+    # Optional per-case overrides (used when present):
+    # y_t_start_sec: 36000.0
+    # y_t_end_sec: 43200.0
+    # g_t_start_sec: 36000.0
+    # g_t_end_sec: 43200.0

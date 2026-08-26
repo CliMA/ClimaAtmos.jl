@@ -1,0 +1,7 @@
+[entr_inv_tau]
+prior = "constrained_gaussian(entr_inv_tau, 1e-4, 6e-5, 0, Inf)"
+type = "float"
+
+[mixing_length_eddy_viscosity_coefficient]
+prior = "constrained_gaussian(mixing_length_eddy_viscosity_coefficient, 0.14, 0.07, 0, Inf)"
+type = "float"

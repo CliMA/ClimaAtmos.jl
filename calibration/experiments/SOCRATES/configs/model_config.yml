@@ -1,0 +1,55 @@
+# Shared ClimaAtmos column config for SOCRATES Atlas LES cases.
+# Driver injects SocratesSetup (IC + in-memory forcing). YAML initial_condition
+# is unused by get_simulation_with_setup; Bomex is a harmless placeholder.
+initial_condition: Bomex
+external_forcing: ~
+# Per-case at runtime: z_max, start_date, t_end, site lat/lon, N_CCN toml
+
+turbconv: prognostic_edmfx
+edmfx_entr_model: PiGroups
+edmfx_detr_model: Generalized
+edmfx_sgs_mass_flux: true
+edmfx_sgs_diffusive_flux: true
+edmfx_nh_pressure: true
+edmfx_vertical_diffusion: true
+edmfx_filter: true
+edmfx_sgsflux_upwinding: first_order
+prognostic_tke: true
+
+microphysics_model: 1M
+cloud_model: quadrature
+
+config: column
+hyperdiff: ~
+# z_max set per case from SSCF.default_new_z (LES top ~3–5 km)
+z_elem: 60
+z_stretch: true
+dz_bottom: 30
+perturb_initstate: false
+
+implicit_diffusion: true
+approximate_linear_solve_iters: 2
+rayleigh_sponge: false
+ode_algo: ARS222
+
+rad: allskywithclear
+prognostic_surface: PrescribedSST
+dt: 10secs
+dt_rad: 10mins
+# t_end set per case (Obs 12hours / ERA 14hours)
+
+
+toml: [toml/prognostic_edmfx_1M.toml]
+
+netcdf_output_at_levels: true
+netcdf_interpolation_num_points: [2, 2, 60]
+output_default_diagnostics: false
+log_progress: false
+
+diagnostics:
+  - short_name: [clw, cli, husra, hussn, ta, hus, thetaa]
+    period: 10mins
+    reduction_time: average
+  - short_name: [lwp, iwp, rwp, swp]
+    period: 10mins
+    reduction_time: average
