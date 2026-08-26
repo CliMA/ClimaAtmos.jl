@@ -26,19 +26,34 @@ const comms_ctx = ClimaComms.context(device)
 ClimaComms.init(comms_ctx)
 const secs = 1
 
-MANYTESTS = false
-if length(ARGS) > 0
-    if ARGS[1] == "--manytests"
-        # Check if the first argument is "--manytests" (if provided), if yes, check
-        # the second argument for true/false. If the second argument is not provided
-        # assume true.
-        second_argument = lowercase(get(ARGS, 2, "true"))
-        second_argument == "true" && (MANYTESTS = true)
-    else
-        error("Argument $(ARGS[1]) not recognized")
+# Command-line flags. Each flag is optionally followed by "true"/"false"; when
+# the value is omitted (or is another flag), the flag is taken to be "true".
+# For example, `--manytests`, `--manytests true`, and `--manytests --limiter`
+# all enable `--manytests`.
+const RESTART_FLAGS = Dict("--manytests" => false, "--limiter" => false)
+let i = 1
+    while i <= length(ARGS)
+        flag = ARGS[i]
+        haskey(RESTART_FLAGS, flag) || error("Argument $(flag) not recognized")
+        value = lowercase(get(ARGS, i + 1, "true"))
+        if value in ("true", "false")
+            RESTART_FLAGS[flag] = parse(Bool, value)
+            i += 2
+        else
+            RESTART_FLAGS[flag] = true
+            i += 1
+        end
     end
 end
+
+MANYTESTS = RESTART_FLAGS["--manytests"]
+# Run the same tests with the horizontal SEM quasi-monotone limiter turned on.
+# The limiter is stateful and exchanges data across elements, so it is worth
+# exercising it in the (MPI) restart tests.
+QUASIMONOTONE_LIMITER = RESTART_FLAGS["--limiter"]
+
 MANYTESTS && @info "Running multiple tests"
+QUASIMONOTONE_LIMITER && @info "Running with the quasi-monotone limiter"
 
 # Technical note:
 #

@@ -151,6 +151,9 @@ function test_restart(test_dict; job_id, comms_ctx, more_ignore = Symbol[])
             :hyperdiffusion_ghost_buffer,
             :data_handler,
             :rc,
+            # The limiter accumulates convergence statistics over the whole
+            # run, so they depend on how many steps a simulation has taken
+            :convergence_stats,
             # Scratch field for microphysics (uninitialized until tendencies run)
             :ᶜmp_tendency,
             # Covariance fields depend on scratch state
@@ -314,6 +317,20 @@ else
             more_ignore = Symbol[],
         ),
     )
+end
+
+if QUASIMONOTONE_LIMITER
+    # The bounds cached by the quasi-monotone limiter are only filled in when
+    # the tendencies are computed, so they have to be ignored when comparing a
+    # simulation that ran against one that was only read back from disk.
+    TESTING = map(TESTING) do t
+        test_dict = merge(
+            t.test_dict,
+            Dict("apply_sem_quasimonotone_limiter" => true),
+        )
+        more_ignore = vcat(t.more_ignore, :sem_quasimonotone_limiter)
+        (; test_dict, t.job_id, more_ignore)
+    end
 end
 
 # We know that this test is broken for old versions of ClimaCore
