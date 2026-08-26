@@ -980,6 +980,25 @@ end
 Run the maximum-random overlap recursion of `set_precip_fraction!` on plain
 fields, writing `a_p` into `ᶜprecip_frac`. Levels with
 `ᶜq_precip ≤ q_precip_min` carry no shaft.
+
+Implemented as a loop of level broadcasts rather than with
+`Operators.column_accumulate!`, which is the natural spelling but is not
+affordable here. Its CPU path walks columns one at a time and materializes a
+level `Field` per level per column, costing ~240 B of garbage per
+column-level: ~8.6 MB per call on a 1536-column sphere and ~83 MB on the
+`bm_default_1m` benchmark (13824 columns × 25 levels), against a 663 kB
+allocation budget for the entire timestep — and this runs every explicit
+stage. The loop below allocates ~32 B per level *independent of the number of
+columns* (~1 kB per call at 25 levels) and gives bitwise-identical results.
+Its cost on GPU is one kernel launch per level instead of one per sweep.
+
+The precipitation mask is folded into `ᶜprecip_frac` first, as a negative
+sentinel, so the recursion reads and writes a single field instead of carrying
+a tuple down the column. The sentinel is needed because a level holding no
+precipitation must both report `a_p = 0` *and* stop the shaft above it from
+being inherited further down, so "no precipitation" has to stay
+distinguishable from "precipitating, but with no cloud of its own"
+(`CF_d = 0`, which does inherit).
 """
 function _precip_fraction_sweep!(
     ᶜprecip_frac,
@@ -990,21 +1009,42 @@ function _precip_fraction_sweep!(
 )
     FT = eltype(ᶜprecip_frac)
 
-    # Level 1 is the bottom model level, so the top-down recursion sweeps with
-    # `reverse = true`. `init` is the state above the model top, where
-    # there is no shaft.
-    input = @. lazy(tuple(ᶜCF_d, ᶜq_precip))
-    Operators.column_accumulate!(
-        ᶜprecip_frac,
-        input;
-        init = zero(FT),
-        reverse = true,
-    ) do a_p_above, (CF_d_level, q_precip_level)
-        ifelse(
-            q_precip_level > q_precip_min,
-            max(CF_d_level, f_decay * a_p_above),
+    # The recursion as ClimaCore would spell it. Kept for reference, and to
+    # switch back to if `column_accumulate!` ever stops materializing a level
+    # `Field` per column-level on CPU (see the docstring); the loop below is
+    # bitwise-identical to it.
+    #
+    #     input = @. lazy(tuple(ᶜCF_d, ᶜq_precip))
+    #     Operators.column_accumulate!(
+    #         ᶜprecip_frac,
+    #         input;
+    #         init = zero(FT),
+    #         reverse = true,
+    #     ) do a_p_above, (CF_d_level, q_precip_level)
+    #         ifelse(
+    #             q_precip_level > q_precip_min,
+    #             max(CF_d_level, f_decay * a_p_above),
+    #             zero(FT),
+    #         )
+    #     end
+
+    @. ᶜprecip_frac = ifelse(ᶜq_precip > q_precip_min, ᶜCF_d, -one(FT))
+
+    # Level 1 is the bottom model level, so the recursion runs from the last
+    # level down. The top level has no shaft above it, so its sentinel just
+    # resolves to zero.
+    nz = Spaces.nlevels(axes(ᶜprecip_frac))
+    ᶜa_p_above = Fields.level(ᶜprecip_frac, nz)
+    @. ᶜa_p_above = max(ᶜa_p_above, zero(FT))
+    for level in (nz - 1):-1:1
+        ᶜa_p = Fields.level(ᶜprecip_frac, level)
+        # `ᶜa_p_above` has already been resolved, so it is non-negative here.
+        @. ᶜa_p = ifelse(
+            ᶜa_p < zero(FT),
             zero(FT),
+            max(ᶜa_p, f_decay * ᶜa_p_above),
         )
+        ᶜa_p_above = ᶜa_p
     end
     return nothing
 end
