@@ -69,6 +69,16 @@ The job ID is discovered automatically from the presence of `[job_id]/output_act
 5. Test that all RMS differences are within tolerance using `test_reproducibility`.
 6. Publish the data to the central cluster as the new reference (see below).
 
+### Comparison plots
+
+Every job's plots are drawn against the newest comparable reference, when one
+exists. The plotting block of `.buildkite/ci_driver.jl` asks
+`latest_comparable_dirs` for that reference, extracts its `nc_files.tar` beside
+the job's output directory, and passes both paths to `make_plots`, so each
+figure carries the reference alongside the current run. With no comparable
+reference (a ref-counter bump, or running outside `climaatmos-ci`) only the
+current run is plotted.
+
 ### Publishing references on merge
 
 The new reference is published from data the PR already computed, immediately
@@ -90,7 +100,10 @@ upon merge. It's a two-step **stage → publish** flow:
    (`stage_output.jl` → `stage_pr_data`) copies the bundle to a per-PR staging
    directory `/resnick/scratch/esm/slurm-buildkite/climaatmos-main-staging/pr-<n>/reproducibility_bundle/`.
    Overwrites on each push, so at most one bundle is kept per open PR. Nothing is
-   published yet.
+   published yet. Each job's `nc_files.tar` is staged alongside its
+   `prog_state.hdf5`: the RMS comparison needs only the latter, but the former
+   lets a later build plot its diagnostics against the reference (see
+   "Comparison plots" below).
 2. **Publish**: on merge, `climaatmos-ci` builds `main`.
    `.buildkite/pipeline.yml` dispatches by branch inline: on `main` every job
    step is skipped (`if: build.branch != "main"`) and only the "Move
