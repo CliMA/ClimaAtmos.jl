@@ -12,7 +12,7 @@ Accepted values:
   - `"dry"`: `DryModel`, no water in the model.
   - `"0M"`: `EquilibriumMicrophysics0M`, instantaneous removal of supersaturation.
   - `"1M"`: `NonEquilibriumMicrophysics1M`, built from the config keys parsed by
-    [`get_microphysics_1m_options`](@ref).
+    `get_microphysics_1m_options`.
   - `"2M"`: `NonEquilibriumMicrophysics2M`.
   - `"2MP3"`: `NonEquilibriumMicrophysics2MP3`.
 

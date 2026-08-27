@@ -90,8 +90,8 @@ Any process that is not passed keeps its default, so
 
 These match the defaults of the corresponding config keys, so a model built here
 and one built from an unmodified configuration file agree (see
-[`get_microphysics_1m_options`](@ref)). All variants except
-`cloud_ice_formation` are also the `CMP.Microphysics1MOptions` defaults.
+`get_microphysics_1m_options`). All variants except `cloud_ice_formation` are
+also the `CMP.Microphysics1MOptions` defaults.
 
 # Fields
 
