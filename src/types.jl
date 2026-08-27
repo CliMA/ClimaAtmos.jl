@@ -6,6 +6,7 @@ import Dates
 import ClimaParams as CP
 import ClimaUtilities.ClimaArtifacts: @clima_artifact
 import LazyArtifacts
+import CloudMicrophysics.Parameters as CMP
 
 """
     AbstractMicrophysicsModel
@@ -48,7 +49,11 @@ Selected by `microphysics_model: "0M"`. Requires `use_sgs_quadrature: true`.
 struct EquilibriumMicrophysics0M <: AbstractMicrophysicsModel end
 
 """
-    NonEquilibriumMicrophysics1M(; n_substeps = 1, n_substeps_quad = 1)
+    NonEquilibriumMicrophysics1M(;
+        n_substeps = 3,
+        n_substeps_quad = 2,
+        process_options...,
+    )
 
 Non-equilibrium 1-moment microphysics with prognostic cloud and precipitation mass.
 
@@ -59,24 +64,73 @@ The substep counts are handed to CloudMicrophysics' averaged tendency
 evaluation, which subdivides the dynamics step into substeps and returns the
 time-averaged rates; this keeps the explicit sources stable at large `dt`.
 
+`process_options` selects the variant used for each individual process; they are
+collected into a `CMP.Microphysics1MOptions`, which documents the full list of
+processes and their available variants. Passing `nothing` for a process disables
+it.
+
+Any process that is not passed keeps its default, so
+`NonEquilibriumMicrophysics1M()` turns every process on with these variants:
+
+| Process                         | Default variant              |
+|:------------------------------- |:---------------------------- |
+| `cloud_liquid_formation`        | `CloudLiquidFormation()`     |
+| `cloud_ice_formation`           | `TemperatureDependent()`     |
+| `cloud_ice_melt`                | `CloudIceMelt()`             |
+| `rain_autoconversion`           | `Kessler1M()`                |
+| `snow_autoconversion`           | `NoSupersaturation()`        |
+| `rain_condensation_evaporation` | `RainEvaporation()`          |
+| `snow_deposition_sublimation`   | `DepositionAndSublimation()` |
+| `snow_melt`                     | `SnowMelt()`                 |
+| `cloud_liquid_rain_accretion`   | `CloudLiquidRainAccretion()` |
+| `cloud_liquid_snow_accretion`   | `CloudLiquidSnowAccretion()` |
+| `cloud_ice_rain_accretion`      | `CloudIceRainAccretion()`    |
+| `cloud_ice_snow_accretion`      | `CloudIceSnowAccretion()`    |
+| `rain_snow_accretion`           | `RainSnowAccretion()`        |
+
+These match the defaults of the corresponding config keys, so a model built here
+and one built from an unmodified configuration file agree (see
+`get_microphysics_1m_options`). All variants except `cloud_ice_formation` are
+also the `CMP.Microphysics1MOptions` defaults.
+
 # Fields
 
   - `n_substeps`: Number of substeps used when the tendencies are evaluated at
     grid-mean conditions (no SGS quadrature) [-].
   - `n_substeps_quad`: Number of substeps used when the tendencies are integrated
     over the SGS quadrature [-].
+  - `processes`: Per-process variant selection, a `CMP.Microphysics1MOptions`.
 
 # Examples
 
 ```julia
-model = ClimaAtmos.NonEquilibriumMicrophysics1M(; n_substeps = 3, n_substeps_quad = 2)
+import ClimaAtmos as CA
+import CloudMicrophysics.Parameters as CMP
+
+model = CA.NonEquilibriumMicrophysics1M(;
+    n_substeps = 1,
+    rain_autoconversion = CMP.PrescribedNd(),
+    cloud_ice_formation = CMP.ConstantTimescale(),
+    rain_snow_accretion = nothing,  # process off
+)
 ```
 """
-struct NonEquilibriumMicrophysics1M <: AbstractMicrophysicsModel
+struct NonEquilibriumMicrophysics1M{OPT} <: AbstractMicrophysicsModel
     n_substeps::Int  # number of microphysics substeps
     n_substeps_quad::Int  # number of microphysics substeps with sgs quadrature
-    function NonEquilibriumMicrophysics1M(; n_substeps = 1, n_substeps_quad = 1)
-        return new(n_substeps, n_substeps_quad)
+    processes::OPT  # per-process variant selection (CMP.Microphysics1MOptions)
+    function NonEquilibriumMicrophysics1M(;
+        n_substeps = 3,
+        n_substeps_quad = 2,
+        process_options...,
+    )
+        # `cloud_ice_formation` overrides the CloudMicrophysics default
+        # (`ConstantTimescale`) so that these defaults match `default_config.yml`
+        processes = CMP.Microphysics1MOptions(;
+            cloud_ice_formation = CMP.TemperatureDependent(),
+            process_options...,
+        )
+        return new{typeof(processes)}(n_substeps, n_substeps_quad, processes)
     end
 end
 
