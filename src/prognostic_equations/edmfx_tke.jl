@@ -14,8 +14,8 @@ The generic method is a no-op. The method for
 Turbulent TKE transport and dissipation are applied separately, in
 `edmfx_sgs_diffusive_flux_tendency!`.
 
-Mutates `Yₜ.c.ρtke`; returns `nothing`. See the "PROPHET Sub-Grid Scale
-Equations" page (`docs/src/edmf_equations.md`) for the TKE budget.
+Mutates `Yₜ.c.ρtke`; returns `nothing`. See the "PROPHET: Closures" page
+(`docs/src/prophet_closures.md`) for the TKE budget.
 """
 edmfx_tke_tendency!(Yₜ, Y, p, t, turbconv_model) = nothing
 

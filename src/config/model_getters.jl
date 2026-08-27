@@ -1426,6 +1426,6 @@ function COSPModel(config::AtmosConfig)
 
     return COSPModel(;
         n_subcolumns = Val(n_subcolumns),
-        overlap,
+        overlap = Val(overlap),
     )
 end

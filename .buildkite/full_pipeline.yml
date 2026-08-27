@@ -77,6 +77,9 @@ steps:
             Pkg.status()'
         fi
 
+      - echo "--- Precompile --check-bounds=yes caches (Checkbounds step)"
+      - julia --check-bounds=yes --project=.buildkite -e 'using Pkg; Pkg.precompile(; strict=true)'
+
     agents:
       slurm_cpus_per_task: 8
     env:
@@ -1114,8 +1117,7 @@ steps:
         retry: *retry_policy
         command: >
           cd perf/run-and-time &&
-          julia --project -e 'using Pkg; Pkg.Registry.update(); Pkg.Pkg.instantiate(;verbose=true)' &&
-          julia --color=yes --project ci_test_models.jl
+          julia --color=yes --project=../../.buildkite ci_test_models.jl
         agents:
           slurm_mem: 20GB
 

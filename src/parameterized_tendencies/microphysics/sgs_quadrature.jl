@@ -700,15 +700,29 @@ perturbed.
 The weighted sum ``\\approx E[f(T, q)]``, of the same type as `f(T_hat, q_hat)`.
 """
 function integrate_over_sgs(f, quad, μ_q, μ_T, q′q′, T′T′, corr_Tq)
-    σ_q, σ_T, corr = sgs_stddevs_and_correlation(q′q′, T′T′, corr_Tq)
-
     # Use functor instead of closure to avoid heap allocations.
     # Field order is (T, q) to match return order of get_physical_point.
+    transform = build_physical_transform(quad, μ_q, μ_T, q′q′, T′T′, corr_Tq)
+    return sum_over_quadrature_points(f, transform, quad)
+end
+
+"""
+    build_physical_transform(quad, μ_q, μ_T, q′q′, T′T′, corr_Tq)
+
+Build the [`AbstractPhysicalPointTransform`](@ref) for `quad` from the mean
+state and (co)variances, converting variances to standard deviations and
+clamping the correlation on the way (see `sgs_stddevs_and_correlation`).
+Factored out of [`integrate_over_sgs`](@ref) so callers that need the
+individual quadrature-point values (see `quadrature_point_values`)
+sample from exactly the same transform.
+"""
+@inline function build_physical_transform(quad, μ_q, μ_T, q′q′, T′T′, corr_Tq)
+    σ_q, σ_T, corr = sgs_stddevs_and_correlation(q′q′, T′T′, corr_Tq)
 
     # Promote μ_T and μ_q to the widest type: with autodiff, either may
     # independently be a Dual (when ρe_tot or ρq_tot is perturbed).
     μ_T_p, μ_q_p = promote(μ_T, μ_q)
-    transform = create_physical_transform(
+    return create_physical_transform(
         quad.dist,
         μ_q_p,
         μ_T_p,
@@ -718,8 +732,46 @@ function integrate_over_sgs(f, quad, μ_q, μ_T, q′q′, T′T′, corr_Tq)
         oftype(μ_T_p, quad.T_min),
         oftype(μ_T_p, quad.q_max),
     )
+end
 
-    return sum_over_quadrature_points(f, transform, quad)
+"""
+    quadrature_point_values(f, get_x_hat, quad)
+
+Evaluate `f(T_hat, q_hat)` at each of the `N²` quadrature points and return
+the values as an `SVector{N²}`, in the same point order as
+`quadrature_prob_weights`. Unlike `sum_over_quadrature_points`,
+which only accumulates the weighted sum, this materializes the individual
+point values (in registers — `N` is a compile-time constant), for closures
+that need the sampled distribution itself, such as the discrete
+Lagrange-multiplier fit in `_compute_sgs_moments`.
+"""
+@inline function quadrature_point_values(
+    f,
+    get_x_hat,
+    quad::SGSQuadrature{N},
+) where {N}
+    χ = quad.a
+    return SA.SVector{N * N}(ntuple(Val(N * N)) do k
+        j, i = fldmod1(k, N)
+        f(get_x_hat(χ[i], χ[j])...)
+    end)
+end
+
+"""
+    quadrature_prob_weights(quad)
+
+Return the `N²` probability weights of the two-dimensional quadrature rule as
+an `SVector{N²}` in the same point order as `quadrature_point_values`:
+the tensor products `wᵢ·wⱼ/π`, which sum to 1 for the Gauss-Hermite rule.
+"""
+@inline function quadrature_prob_weights(quad::SGSQuadrature{N}) where {N}
+    w = quad.w
+    FT = eltype(w)
+    inv_pi = one(FT) / FT(π)
+    return SA.SVector{N * N}(ntuple(Val(N * N)) do k
+        j, i = fldmod1(k, N)
+        w[i] * w[j] * inv_pi
+    end)
 end
 
 """

@@ -521,50 +521,6 @@ function radiation_callback(
     )
 end
 
-"""
-    subcol_callback(dt_subcol, dt, t_start, t_end, checkpoint_frequency)
-
-Build the callback that generates the COSP subcolumns every `dt_subcol`.
-
-Unconditional: whether COSP runs at all is decided by `subcol_callback_enabled`. See
-`subcol_model_callback!`.
-"""
-function subcol_callback(
-    dt_subcol,
-    dt,
-    t_start,
-    t_end,
-    checkpoint_frequency,
-)
-    return scheduled_callback(
-        subcol_model_callback!,
-        dt_subcol,
-        dt,
-        t_start,
-        t_end,
-        checkpoint_frequency,
-    )
-end
-
-"""
-    subcol_callback_enabled(model::AtmosModel, dt_subcol)
-
-Return whether the COSP subcolumn callback should be installed.
-
-True only when the model configures COSP *and* `dt_subcol` is finite, so `dt_subcol = "Inf"` switches COSP off without changing the model.
-"""
-subcol_callback_enabled(model::AtmosModel, dt_subcol) =
-    !isnothing(model.cosp) && time_to_seconds(dt_subcol) != Inf
-
-"""
-    nogw_callback(non_orographic_gravity_wave, dt_nogw, dt, t_start, t_end,
-                  checkpoint_frequency)
-
-Build the callback that recomputes non-orographic gravity-wave drag every `dt_nogw`.
-
-Returns an empty tuple when the component is not a `NonOrographicGravityWave`. See
-`nogw_model_callback!`.
-"""
 function nogw_callback(
     non_orographic_gravity_wave,
     dt_nogw,
@@ -669,25 +625,14 @@ CA.default_model_callbacks(forcing::MyCaseForcing; dt = nothing, t_start, t_end,
 simulation = CA.AtmosSimulation{Float64}(; callback_kwargs = (; dt_rad = "3hours"))
 ```
 """
-function default_model_callbacks(model::AtmosModel;
-    dt_subcol = "Inf",
-    kwargs...,
-)
-    callbacks = ()
-    if subcol_callback_enabled(model, dt_subcol)
-        callbacks = (
-            callbacks...,
-            subcol_callback(
-                dt_subcol,
-                kwargs[:dt],
-                kwargs[:t_start],
-                kwargs[:t_end],
-                kwargs[:checkpoint_frequency],
-            )...,
-        )
-    end
-    model_component_names =
-        filter(x -> x !== :disable_surface_flux_tendency, propertynames(model))
+function default_model_callbacks(model::AtmosModel; kwargs...)
+    # Preserve the established ordering in which COSP runs before all other
+    # model-component callbacks.
+    callbacks = default_model_callbacks(model.cosp; kwargs...)
+    model_component_names = filter(
+        x -> x !== :cosp && x !== :disable_surface_flux_tendency,
+        propertynames(model),
+    )
     for property in model_component_names
         component_callbacks =
             default_model_callbacks(getproperty(model, property); kwargs...)
