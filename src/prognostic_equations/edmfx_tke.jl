@@ -77,6 +77,44 @@ function edmfx_tke_sources!(Yₜ, Y, p)
     # buoyancy production/destruction (face-flux consistent; includes the
     # interfacial-entrainment sink through ᶠK_entr)
     @. Yₜ.c.ρtke -= Y.c.ρ * ᶜinterp((ᶠK_h + ᶠK_entr) * ᶠbuoygrad)
+
+    # Pressure-drag return-to-isotropy
+    edmfx_pressure_drag_tke_source!(Yₜ, Y, p, p.atmos.turbconv_model)
+    return nothing
+end
+
+edmfx_pressure_drag_tke_source!(Yₜ, Y, p, turbconv_model) = nothing
+function edmfx_pressure_drag_tke_source!(
+    Yₜ, Y, p, turbconv_model::PrognosticEDMFX,
+)
+    p.atmos.edmfx_model.nh_pressure isa Val{true} || return nothing
+    n = n_mass_flux_subdomains(turbconv_model)
+    n == 0 && return nothing
+
+    turbconv_params = CAP.turbconv_params(p.params)
+    α_d = CAP.pressure_normalmode_drag_coeff(turbconv_params)
+    a_min = CAP.min_area(turbconv_params)
+    scale_height = CAP.R_d(p.params) * CAP.T_surf_ref(p.params) / CAP.grav(p.params)
+    (; ᶜρʲs, ᶠu³ʲs, ᶠu³⁰) = p.precomputed
+    # Environment area, shared across all updrafts.
+    ᶜa⁰ = @. lazy(a⁰(Y.c.sgsʲs, ᶜρʲs, turbconv_model))
+    ᶜdrag_coeff = p.scratch.ᶜtemp_scalar
+    for j in 1:n
+        ᶜaʲ = @. lazy(draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j)))
+        # Same `ᶜdrag_coeff` form as the momentum equation
+        # (`initialize_implicit_problem.jl`): C_d/r^{j0} with C_d = α_d/H,
+        # H = scale height, and 1/r^{j0} = ½·(1/√a_j + 1/√a_0).
+        @. ᶜdrag_coeff =
+            α_d / (2 * scale_height) *
+            (1 / sqrt(max(ᶜaʲ, a_min)) + 1 / sqrt(max(ᶜa⁰, a_min)))
+        @. Yₜ.c.ρtke += ᶜinterp(
+            ᶠinterp(Y.c.sgsʲs.:($$j).ρa * ᶜa⁰ * ᶜdrag_coeff) *
+            abs(
+                w_component(Geometry.WVector(ᶠu³ʲs.:($$j))) -
+                w_component(Geometry.WVector(ᶠu³⁰)),
+            )^3,
+        )
+    end
     return nothing
 end
 
