@@ -1,0 +1,33 @@
+# Baroclinic wave over Earth topography with the conservative-perturbation +
+# Waruszewski + Roe flux combination (ClimaCore as/moisture-0M-mpi):
+#   pgf: conservative_pert  — momentum pressure p′ = p − p_ref, (ρ−ρ_ref) g
+#                             buoyancy pair (well-balanced over terrain)
+#   volume_flux: waruszewski — entropy-conservative, machine-precision
+#                             well-balanced volume flux (gravity via ½ρ̂⟦φ⟧)
+#   interface_flux: roe      — wave-selective Roe dissipation
+core: fddg
+interface_flux: roe
+volume_flux: waruszewski
+pgf: conservative_pert
+
+helem: 16
+npoly: 4
+zelem: 20
+zmax: 30000.0
+zstretch: [300.0, 3000.0]
+stepper: hevi
+dt: 60.0
+newton_max_iters: 2
+t_end: 86400.0
+perturb: true
+topography: earth
+topography_damping_factor: 5.0
+terrain_warp: sleve
+# entropy-conservative volume flux — run without hyperdiffusion (kappa4 ≡ 0)
+kappa4: 0.0
+constants_mode: clima_params
+ic_source: setups
+held_suarez: false
+output_dir: output/baroclinic_wave_earth_topo_waruszewski
+diag_period: 86400.0
+ndiag: 60

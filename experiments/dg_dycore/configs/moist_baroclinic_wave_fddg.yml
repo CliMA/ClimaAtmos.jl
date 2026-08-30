@@ -1,0 +1,37 @@
+# Moist baroclinic wave on the flux-form FDDG core.
+#
+# Equilibrium moisture (prognostic ρq_tot + saturation adjustment via
+# Thermodynamics.jl) with 0-moment precipitation. The tracer rides the mass
+# flux as a passive KEP scalar; the moist EOS reuses the SAME saturation-
+# adjustment kernel ClimaAtmos uses in set_precomputed_quantities!. The dry
+# core is recovered exactly with `moisture: dry`.
+#
+# NOTE: first runnable cut. The IC hydrostatic balance is composed with the
+# dry R_d (small O(0.6·q_tot) startup transient) and the tracer is not yet in
+# the entropy-consistent two-point flux family — both are documented follow-ups.
+core: fddg
+float_type: Float64
+
+helem: 8
+npoly: 3
+zelem: 15
+stepper: hevi
+dt: 30.0
+t_end: 864000.0         # 10 days
+perturb: true
+
+volume_flux: kg
+interface_flux: rusanov
+pgf: conservative_pert
+
+moisture: equil
+microphysics: zero_moment
+precip_timescale: 600.0
+q_0: 0.018
+z_q1: 3000.0
+z_q2: 8000.0
+
+output_dir: output/moist_baroclinic_wave_fddg
+diag_period: 86400.0
+dt_save: 21600.0
+ndiag: 60
