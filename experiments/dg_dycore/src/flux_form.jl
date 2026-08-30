@@ -63,7 +63,15 @@ function compute_tendency_fddg!(
     w_c = @. Ic(ρw_w).components.data.:1 / ρ
 
     K = @. (uE^2 + uN^2 + w_c^2) / 2
-    p = @. pres_ρe(c, ρe, K, ᶜΦ, ρ)
+    # Moisture: q_tot = ρq_tot/ρ and the moist saturation-adjustment EOS
+    # (dry path unchanged). The Rusanov eigenvalue λ keeps the dry γ — a
+    # conservative sound-speed over-estimate, harmless for interface dissipation.
+    moist = m.prob.moisture != :dry
+    q_tot = moist ? (@. Yc.ρq_tot / ρ) : nothing
+    p =
+        moist ?
+        (@. pres_ρeq(m.fields.thermo_params, ρ, ρe / ρ - K - ᶜΦ, q_tot)) :
+        (@. pres_ρe(c, ρe, K, ᶜΦ, ρ))
     e = @. ρe / ρ
     h_tot = @. (ρe + p) / ρ
     λ = @. sqrt(uE^2 + uN^2) + sqrt(c.γ * p / ρ)
@@ -118,6 +126,26 @@ function compute_tendency_fddg!(
     @. dYc.ρu1 -= vdivf2c(VanLeer(ρw_w, u1, Δt))
     @. dYc.ρu2 -= vdivf2c(VanLeer(ρw_w, u2, Δt))
     @. dYc.ρu3 -= vdivf2c(VanLeer(ρw_w, u3, Δt))
+
+    # --- Moisture: ρq_tot transport (passive KEP scalar riding the flow),
+    #     all explicit — moisture is never in the implicit acoustic subsystem.
+    #     Horizontal: weak divergence of (uv·ρq_tot) + KG-Rusanov interface
+    #     (the ρw-scalar transport template, reused on centers). Vertical:
+    #     VanLeer, like the momentum components. Then 0-moment precipitation. ---
+    if moist
+        ρq = Yc.ρq_tot
+        y_q = map((h, uvi, λi) -> (; h = h, uv = uvi, λ = λi), ρq, uv, λ)
+        dq_mw = @. hwdiv(uv * ρq) * (-(lgeom_c.WJ))
+        Operators.add_numerical_flux_internal!(
+            Operators.kennedy_gruber_rusanov_height,
+            dq_mw,
+            y_q,
+        )
+        @. dYc.ρq_tot = dq_mw / lgeom_c.WJ
+        @. dYc.ρq_tot -= vdivf2c(VanLeer(ρw_w, q_tot, Δt))
+        m.prob.microphysics == :zero_moment &&
+            microphysics_0m_tendency!(dYc, ρ, ρe, K, ᶜΦ, q_tot, m)
+    end
 
     # --- Coriolis: −2Ω ẑ×u⃗, exact in the constant Cartesian frame ---
     @. dYc.ρu1 += 2 * c.Ω * ρ * u2
@@ -229,7 +257,14 @@ function implicit_tendency_fddg!(dY, Y, m::DGModel{FT}, t) where {FT}
     uN = @. (Yc.ρu1 * eN1 + Yc.ρu2 * eN2 + Yc.ρu3 * eN3) / ρ
     w_c = @. Ic(ρw_w).components.data.:1 / ρ
     K = @. (uE^2 + uN^2 + w_c^2) / 2
-    p_thermo = @. pres_ρe(c, ρe, K, ᶜΦ, ρ)
+    # Moist p must match the explicit path so the HEVI split rhs = imp + rem
+    # holds (the column Jacobian keeps the dry-effective ∂p coefficients — an
+    # approximate preconditioner, still convergent under Newton).
+    moist = m.prob.moisture != :dry
+    p_thermo =
+        moist ?
+        (@. pres_ρeq(m.fields.thermo_params, ρ, ρe / ρ - K - ᶜΦ, Yc.ρq_tot / ρ)) :
+        (@. pres_ρe(c, ρe, K, ᶜΦ, ρ))
     h_tot = @. (ρe + p_thermo) / ρ
 
     @. dY.c.ρ = -vdivf2c(ρw_w)
@@ -237,6 +272,7 @@ function implicit_tendency_fddg!(dY, Y, m::DGModel{FT}, t) where {FT}
     dY.c.ρu1 .= FT(0)
     dY.c.ρu2 .= FT(0)
     dY.c.ρu3 .= FT(0)
+    moist && (dY.c.ρq_tot .= FT(0))
     # Pressure-gradient + buoyancy pair (must match the explicit form in
     # compute_tendency_fddg! so the HEVI split rhs = implicit + remaining). The
     # perturbation form shifts p and ρ by the frozen reference, so the Jacobian

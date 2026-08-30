@@ -258,10 +258,17 @@ function discrete_hydrostatic_p!(ᶜp, ᶜρ, ᶜT, R_d, ᶜΦ_eff)
     return ᶜp
 end
 
+# Moist baroclinic-wave total specific humidity (Ullrich et al. 2014 /
+# DCMIP-2016 moist BW): a double-Gaussian in height, zero for the dry core.
+moist_q_tot(prob, z) =
+    prob.moisture == :dry ? zero(z) :
+    (@. prob.q_0 * exp(-(z / prob.z_q1)^2) * exp(-(z / prob.z_q2)^4))
+
 function initial_state_fddg(m::DGModel{FT}) where {FT}
     c = m.c
     (; ccoords, fcoords, eE1, eE2, eE3, eN1, eN2, eN3) = m.fields
     z = ccoords.z
+    moist = m.prob.moisture != :dry
 
     rest = m.prob.ic_source == :rest
     # :rest suppresses the perturbation (atmosphere at rest has no JW06 jet)
@@ -278,27 +285,53 @@ function initial_state_fddg(m::DGModel{FT}) where {FT}
     # as the VI IC): keeps analytic T, adjusts p column-smoothly.
     # Avoids the eigenvalue −1 checkerboard δρ that discrete_hydrostatic_ρ!
     # produces over terrain and poisons the horizontal PGF there.
+    # NOTE (moist): the balance is composed with the DRY R_d, so a moist start
+    # carries an O((R_m/R_d − 1)) ≈ O(0.6·q_tot) hydrostatic imbalance near the
+    # surface (small transient). A fully moist-balanced IC is a later refinement.
     discrete_hydrostatic_p!(ᶜp_ana, ᶜρ, T, c.R_d, @. c.grav * z)
 
     ᶜK = @. (uE^2 + uN^2) / 2
-    ᶜρe = @. c.cv_d * ᶜp_ana / c.R_d +
-             ᶜρ * (ᶜK + c.grav * z - c.cv_d * c.T_tri)
+    if moist
+        ᶜq_tot = moist_q_tot(m.prob, z)
+        # Moist total energy from the SAME kernel the tendency diagnoses with:
+        # e_int = internal_energy(T, q_tot) (unsaturated ⇒ q_liq = q_ice = 0).
+        tp = m.fields.thermo_params
+        ᶜρe = @. ᶜρ * (
+            TD.internal_energy(tp, T, ᶜq_tot, FT(0), FT(0)) + ᶜK + c.grav * z
+        )
+    else
+        ᶜq_tot = nothing
+        ᶜρe = @. c.cv_d * ᶜp_ana / c.R_d +
+                 ᶜρ * (ᶜK + c.grav * z - c.cv_d * c.T_tri)
+    end
 
     # u_c = uE (ê_E)_c + uN (ê_N)_c — Cartesian momentum components
-    Yc = map(
-        (ρi, ρei, uEi, uNi, e1E, e1N, e2E, e2N, e3E, e3N) -> (;
-            ρ = ρi,
-            ρe = ρei,
-            ρu1 = ρi * (uEi * e1E + uNi * e1N),
-            ρu2 = ρi * (uEi * e2E + uNi * e2N),
-            ρu3 = ρi * (uEi * e3E + uNi * e3N),
-        ),
-        ᶜρ,
-        ᶜρe,
-        uE,
-        uN,
-        eE1, eN1, eE2, eN2, eE3, eN3,
-    )
+    Yc = if moist
+        map(
+            (ρi, ρei, qti, uEi, uNi, e1E, e1N, e2E, e2N, e3E, e3N) -> (;
+                ρ = ρi,
+                ρe = ρei,
+                ρu1 = ρi * (uEi * e1E + uNi * e1N),
+                ρu2 = ρi * (uEi * e2E + uNi * e2N),
+                ρu3 = ρi * (uEi * e3E + uNi * e3N),
+                ρq_tot = ρi * qti,
+            ),
+            ᶜρ, ᶜρe, ᶜq_tot, uE, uN,
+            eE1, eN1, eE2, eN2, eE3, eN3,
+        )
+    else
+        map(
+            (ρi, ρei, uEi, uNi, e1E, e1N, e2E, e2N, e3E, e3N) -> (;
+                ρ = ρi,
+                ρe = ρei,
+                ρu1 = ρi * (uEi * e1E + uNi * e1N),
+                ρu2 = ρi * (uEi * e2E + uNi * e2N),
+                ρu3 = ρi * (uEi * e3E + uNi * e3N),
+            ),
+            ᶜρ, ᶜρe, uE, uN,
+            eE1, eN1, eE2, eN2, eE3, eN3,
+        )
+    end
     # ρw in Covariant3 so the HEVI Jacobian reuses the MatrixFields
     # machinery (g³³ pairings) verbatim
     Yf = map(_ -> (; ρw = C3(FT(0))), fcoords)

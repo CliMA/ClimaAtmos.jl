@@ -125,6 +125,25 @@ Base.@kwdef struct BaroclinicWaveFDDG{FT <: AbstractFloat}
     # Applies to the horizontal explicit advective flux (source terms/vertical
     # implicit acoustics are separate). false = no correction.
     entropy_correction::Bool = false
+    # Moisture. :dry (default; the historical dry core, byte-identical) or
+    # :equil (prognostic ρq_tot with saturation adjustment via
+    # Thermodynamics.jl — the moist EOS reuses the SAME kernel ClimaAtmos
+    # uses in set_precomputed_quantities!). The tracer rides the mass flux
+    # (passive KEP scalar); the implicit acoustic subsystem is unchanged
+    # (q_tot frozen in the column Jacobian).
+    moisture::Symbol = :dry
+    # Precipitation. :none, or :zero_moment — instantaneous removal of the
+    # supersaturation excess (CloudMicrophysics-0M semantics, implemented
+    # here with Thermodynamics saturation vapor humidity to avoid a new dep).
+    microphysics::Symbol = :none
+    # Relaxation time [s] for 0-moment condensate removal.
+    precip_timescale::FT = 600.0
+    # Moist baroclinic-wave humidity profile (Ullrich et al. 2014 / DCMIP-2016
+    # moist BW): q_tot(z) = q_0 exp[−(z/z_q1)²] exp[−(z/z_q2)⁴], q_tot = 0
+    # above z_t. Only used when moisture != :dry.
+    q_0::FT = 0.018
+    z_q1::FT = 3000.0
+    z_q2::FT = 8000.0
     zstretch::Union{Nothing, Tuple{FT, FT}} = nothing
     sponge_τ::FT = 1200.0
     sponge_depth::FT = 7.5e3
@@ -179,6 +198,13 @@ function validate(p::BaroclinicWaveFDDG)
         error("terrain_warp must be :linear or :sleve")
     p.wb_metric in (:none, :metric_source, :gcl_curl) ||
         error("wb_metric must be :none, :metric_source, or :gcl_curl")
+    p.moisture in (:dry, :equil) ||
+        error("moisture must be :dry or :equil")
+    p.microphysics in (:none, :zero_moment) ||
+        error("microphysics must be :none or :zero_moment")
+    p.microphysics == :zero_moment &&
+        p.moisture == :dry &&
+        error("microphysics = :zero_moment requires moisture = :equil")
     return p
 end
 

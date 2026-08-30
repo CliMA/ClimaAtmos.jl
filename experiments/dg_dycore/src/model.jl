@@ -417,7 +417,11 @@ function DGModel(prob::DGProblem)
     else
         FT(0)
     end
-    fields = (; fields..., ν_div)
+    # Thermodynamics parameter set for the moist EOS / saturation adjustment
+    # (moisture != :dry). Carried as a scalar struct in `fields`; dry runs
+    # never touch it.
+    thermo_params = params.thermodynamics_params
+    fields = (; fields..., ν_div, thermo_params)
     kep_vi = prob isa VIProblem && prob.face_set in (:kep, :es, :es2)
     κ₄ = if prob.κ₄ !== nothing
         prob.κ₄

@@ -58,6 +58,12 @@ function problem_from_yaml(path)
         ("wb_gravity", :wb_gravity, Bool),
         ("wb_metric", :wb_metric, Symbol),
         ("entropy_correction", :entropy_correction, Bool),
+        ("moisture", :moisture, Symbol),
+        ("microphysics", :microphysics, Symbol),
+        ("precip_timescale", :precip_timescale, FT),
+        ("q_0", :q_0, FT),
+        ("z_q1", :z_q1, FT),
+        ("z_q2", :z_q2, FT),
     )
     vi_only = (
         ("momentum_adv", :momentum_adv, Symbol),

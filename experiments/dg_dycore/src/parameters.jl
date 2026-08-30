@@ -97,3 +97,15 @@ end
 # TD.air_pressure(PhaseDry_ρe) to machine ε).
 pres_ρe(c::DGConstants, ρe, K, Φ, ρ) =
     ρ * c.R_d * ((ρe / ρ - K - Φ) / c.cv_d + c.T_tri)
+
+# Moist diagnostic pressure via saturation adjustment (Thermodynamics.jl 1.x
+# functional API — the SAME kernel ClimaAtmos calls in
+# set_precomputed_quantities!). Given (ρ, e_int, q_tot), the saturation
+# adjustment sets (T, q_liq, q_ice); p follows from the moist ideal-gas law.
+# Unlike pres_ρe this is NOT closed form (a Newton iteration), so the HEVI
+# column Jacobian keeps the dry-effective coefficients (q_tot frozen) — pres_ρeq
+# is only evaluated in the explicit/consistency path and the moist implicit p.
+function pres_ρeq(thermo_params, ρ, e_int, q_tot)
+    sa = TD.saturation_adjustment(thermo_params, TD.ρe(), ρ, e_int, q_tot)
+    return TD.air_pressure(thermo_params, sa.T, ρ, q_tot, sa.q_liq, sa.q_ice)
+end

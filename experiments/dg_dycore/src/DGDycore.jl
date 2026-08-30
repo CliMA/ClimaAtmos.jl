@@ -57,6 +57,7 @@ import Printf
 import ClimaParams as CP
 import ClimaAtmos as CA
 import ClimaAtmos.Parameters as CAP
+import Thermodynamics as TD
 
 const C3 = Geometry.Covariant3Vector
 const C12 = Geometry.Covariant12Vector
@@ -73,6 +74,7 @@ include("model.jl")
 include("initial_conditions.jl")
 include("held_suarez.jl")
 include("entropy_correction.jl")
+include("microphysics.jl")
 include("flux_form.jl")
 include("vector_invariant.jl")
 include("diagnostics.jl")
