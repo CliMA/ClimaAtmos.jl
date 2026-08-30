@@ -1,5 +1,10 @@
 core: fddg
-interface_flux: curvilinear_roe   # kennedy_gruber_roe_cartesian: KG volume + Roe interface
+# Terrain well-balancing: Waruszewski (2022) entropy-conservative volume flux
+# (carries gravity as the ½ρ̂⟦φ⟧ fluctuation) + perturbation momentum pressure
+# p′ = p − p_ref, Roe interface dissipation. Replaces the removed curvilinear_roe.
+interface_flux: roe
+volume_flux: waruszewski
+pgf: conservative_pert
 held_suarez: false # Held-Suarez (1994) forcing, flat sphere (no topography)
 topography: earth
 topography_damping_factor: 5.0

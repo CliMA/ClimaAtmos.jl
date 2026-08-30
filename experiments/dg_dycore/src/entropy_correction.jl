@@ -116,5 +116,7 @@ function low_order_es_flux_curvilinear(nvec_a, nvec_b, y_a, y_b)
         ρu3 = Fρu3 - h * (y_b.ρ * y_b.u3 - y_a.ρ * y_a.u3),
     )
 end
-Operators._fd_metric_style(::typeof(low_order_es_flux_curvilinear)) =
-    Val{:curvilinear}()
+# NOTE: the `_fd_metric_style`/`:curvilinear` flux-differencing metric mechanism
+# does not exist on the ClimaCore as/moisture-0M-mpi branch this core now targets;
+# the registration is removed. `low_order_es_flux_curvilinear` is a
+# verified-wrong placeholder retained only for entropy_probe.jl.

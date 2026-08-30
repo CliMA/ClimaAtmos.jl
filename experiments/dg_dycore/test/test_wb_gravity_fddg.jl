@@ -1,21 +1,24 @@
 #=
-FDDG `wb_gravity` knob (well-balanced geopotential fluctuation in the
-horizontal volume kernel, Waruszewski et al. 2022 Eq. 76 — ClimaCore
-`kennedy_gruber_gravity_cartesian_flux`): on flat grids the fluctuation is
-identically zero (Φ level-constant), so tendencies are BITWISE unchanged;
-over terrain it activates and stays finite. The operator-level exactness
-and cross-term attribution live in ClimaCore
-test/Operators/spectralelement/wb_gravity_flux.jl.
+FDDG Waruszewski volume flux — the moisture-0M-mpi replacement for the removed
+standalone `wb_gravity` KG-gravity operator. Waruszewski (2022) is entropy-
+conservative and machine-precision well-balanced over terrain, carrying gravity
+as the ½ρ̂⟦φ⟧ fluctuation; it requires the conservative-perturbation momentum
+pressure (pgf = :conservative_pert). Here: it runs finite over terrain and
+produces a momentum tendency distinct from the plain KG volume flux. Operator-
+level exactness lives in ClimaCore test/Operators/spectralelement.
+The legacy `wb_gravity` knob is now rejected by `validate`.
 =#
 
-@testset "FDDG wb_gravity: flat no-op + terrain smoke" begin
-    rhs(wb, topo) = begin
+@testset "FDDG waruszewski: terrain smoke + differs from KG" begin
+    rhs(vf) = begin
         prob = DG.BaroclinicWaveFDDG(;
             helem = 2,
             zelem = 5,
             dt = 60.0,
-            topography = topo,
-            wb_gravity = wb,
+            topography = :hughes2023,
+            volume_flux = vf,
+            pgf = vf == :kg ? :conservative : :conservative_pert,
+            interface_flux = :roe,
             perturb = false,
         )
         sim = DG.DGSimulation(prob)
@@ -23,17 +26,15 @@ test/Operators/spectralelement/wb_gravity_flux.jl.
         DG.rhs_fddg!(dY, sim.Y₀, sim.model, 0.0)
         dY
     end
-    # flat sphere: the fluctuation is exactly zero — bitwise identical
-    d0 = rhs(false, :none)
-    d1 = rhs(true, :none)
-    for name in (:ρ, :ρe, :ρu1, :ρu2, :ρu3)
-        @test parent(getproperty(d1.c, name)) ==
-              parent(getproperty(d0.c, name))
-    end
-    # terrain: activates (momentum differs), stays finite
-    t0 = rhs(false, :hughes2023)
-    t1 = rhs(true, :hughes2023)
-    @test !any(isnan, parent(t1.c))
-    @test parent(t1.c.ρu1) != parent(t0.c.ρu1)
-    @test parent(t1.c.ρ) == parent(t0.c.ρ)   # mass flux untouched
+    dkg = rhs(:kg)
+    dw = rhs(:waruszewski)
+    @test !any(isnan, parent(dw.c))
+    # the entropy-conservative flux changes the momentum tendency over terrain
+    @test parent(dw.c.ρu1) != parent(dkg.c.ρu1)
+end
+
+@testset "FDDG wb_gravity knob is deprecated" begin
+    @test_throws ErrorException DG.validate(
+        DG.BaroclinicWaveFDDG(; wb_gravity = true),
+    )
 end

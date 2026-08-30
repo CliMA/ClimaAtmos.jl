@@ -331,11 +331,23 @@ function dg_operators(::DGConstants{FT}) where {FT}
     )
 end
 
-interface_flux_fn(s::Symbol) =
-    s == :roe ? Operators.kennedy_gruber_roe_cartesian :
-    s == :curvilinear_roe ? Operators.kennedy_gruber_roe_cartesian_curvilinear :
-    s == :curvilinear_roe_wb ? kennedy_gruber_roe_cartesian_curvilinear_wb :
-    Operators.kennedy_gruber_rusanov_cartesian
+# Interface (surface) numerical flux, paired with the chosen volume-flux
+# family so the central part of the interface flux matches the volume flux
+# (KG / Ranocha / Waruszewski); `interface_flux` selects Roe vs Rusanov
+# dissipation within that family.
+function interface_flux_fn(prob::BaroclinicWaveFDDG)
+    roe = prob.interface_flux == :roe
+    if prob.volume_flux == :waruszewski
+        return roe ? Operators.waruszewski_roe_cartesian :
+               Operators.waruszewski_rusanov_cartesian
+    elseif prob.volume_flux == :ranocha
+        return roe ? Operators.ranocha_roe_cartesian :
+               Operators.ranocha_rusanov_cartesian
+    else
+        return roe ? Operators.kennedy_gruber_roe_cartesian :
+               Operators.kennedy_gruber_rusanov_cartesian
+    end
+end
 
 function DGModel(prob::DGProblem)
     validate(prob)
@@ -441,8 +453,7 @@ function DGModel(prob::DGProblem)
         fields,
         ops,
         opmats,
-        prob isa BaroclinicWaveFDDG ?
-        interface_flux_fn(prob.interface_flux) : nothing,
+        prob isa BaroclinicWaveFDDG ? interface_flux_fn(prob) : nothing,
         filter_Nc,
         Δt,
         κ₄,

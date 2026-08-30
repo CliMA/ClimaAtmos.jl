@@ -19,90 +19,6 @@ preallocation into the model is a later perf pass (measured against the
 reference driver's steps/sec).
 =#
 
-# Reference-subtracted curvilinear Roe interface (well-balanced dissipation).
-# Bitwise-identical to `Operators.kennedy_gruber_roe_cartesian_curvilinear`
-# EXCEPT the acoustic/contact wave AMPLITUDES use hydrostatic-DEVIATION jumps
-#   Δp′ = [[p − p_ref]],  Δρ′ = [[ρ − ρ_ref]]
-# instead of the raw [[p]], [[ρ]]. On terrain-following faces the raw jumps
-# carry an O(1) HYDROSTATIC component (neighbours at different true altitude);
-# damping it injects a spurious force from the rest state (change (b)). The
-# central flux and the Roe linearisation point (ρ̂, ĉ, Ĥ, û) stay on the FULL
-# state; velocity jumps are unchanged (the reference is at rest, u_ref = 0),
-# so the Harten floor's shear/contact stabilisation is retained. Reduces to
-# the raw curvilinear Roe wherever p_ref ≡ ρ_ref ≡ 0 (e.g. a flat non-terrain
-# base with zero reference).  Requires state fields `p_ref`, `ρ_ref` in
-# addition to those of `kennedy_gruber_roe_cartesian_curvilinear`.
-function kennedy_gruber_roe_cartesian_curvilinear_wb(normal, (y⁻,), (y⁺,))
-    F = Operators.kennedy_gruber_cartesian_flux_curvilinear(
-        normal,
-        normal,
-        y⁻,
-        y⁺,
-    )
-    γd = oftype(y⁻.ρ, Operators.γ_dry)
-    # face normal in Cartesian components (includes W terrain cross-term)
-    n1 = y⁻.Ec1' * normal
-    n2 = y⁻.Ec2' * normal
-    n3 = y⁻.Ec3' * normal
-    # Roe-averaged state (full physical state = linearisation point)
-    s⁻ = sqrt(y⁻.ρ)
-    s⁺ = sqrt(y⁺.ρ)
-    ρ̂ = s⁻ * s⁺
-    a⁻ = s⁻ / (s⁻ + s⁺)
-    a⁺ = 1 - a⁻
-    û1 = a⁻ * y⁻.u1 + a⁺ * y⁺.u1
-    û2 = a⁻ * y⁻.u2 + a⁺ * y⁺.u2
-    û3 = a⁻ * y⁻.u3 + a⁺ * y⁺.u3
-    ûuvw = a⁻ * y⁻.uvw + a⁺ * y⁺.uvw
-    Ĥ = a⁻ * (y⁻.e + y⁻.p / y⁻.ρ) + a⁺ * (y⁺.e + y⁺.p / y⁺.ρ)
-    ĉ = a⁻ * sqrt(γd * y⁻.p / y⁻.ρ) + a⁺ * sqrt(γd * y⁺.p / y⁺.ρ)
-    ûn = ûuvw' * normal
-    # hydrostatic-DEVIATION jumps (vanish on the reference base state)
-    Δρ = (y⁺.ρ - y⁺.ρ_ref) - (y⁻.ρ - y⁻.ρ_ref)
-    Δp = (y⁺.p - y⁺.p_ref) - (y⁻.p - y⁻.p_ref)
-    Δu1 = y⁺.u1 - y⁻.u1
-    Δu2 = y⁺.u2 - y⁻.u2
-    Δu3 = y⁺.u3 - y⁻.u3
-    Δuvw = y⁺.uvw - y⁻.uvw
-    Δun = Δuvw' * normal
-    α₊ = (Δp + ρ̂ * ĉ * Δun) / (2 * ĉ^2)
-    α₋ = (Δp - ρ̂ * ĉ * Δun) / (2 * ĉ^2)
-    α₀ = Δρ - Δp / ĉ^2
-    s₊ = abs(ûn + ĉ)
-    s₋ = abs(ûn - ĉ)
-    s₀ = max(abs(ûn), ĉ / 20)
-    Δut1 = Δu1 - Δun * n1
-    Δut2 = Δu2 - Δun * n2
-    Δut3 = Δu3 - Δun * n3
-    B = Ĥ - ĉ^2 / (γd - 1)
-    shear_E = ûuvw' * Δuvw - ûn * Δun
-    Dρ = s₊ * α₊ + s₋ * α₋ + s₀ * α₀
-    Dρu1 =
-        s₊ * α₊ * (û1 + ĉ * n1) + s₋ * α₋ * (û1 - ĉ * n1) +
-        s₀ * (α₀ * û1 + ρ̂ * Δut1)
-    Dρu2 =
-        s₊ * α₊ * (û2 + ĉ * n2) + s₋ * α₋ * (û2 - ĉ * n2) +
-        s₀ * (α₀ * û2 + ρ̂ * Δut2)
-    Dρu3 =
-        s₊ * α₊ * (û3 + ĉ * n3) + s₋ * α₋ * (û3 - ĉ * n3) +
-        s₀ * (α₀ * û3 + ρ̂ * Δut3)
-    Dρe =
-        s₊ * α₊ * (Ĥ + ĉ * ûn) + s₋ * α₋ * (Ĥ - ĉ * ûn) +
-        s₀ * (α₀ * B + ρ̂ * shear_E)
-    return (
-        ρ = F.ρ - Dρ / 2,
-        ρe = F.ρe - Dρe / 2,
-        ρu1 = F.ρu1 - Dρu1 / 2,
-        ρu2 = F.ρu2 - Dρu2 / 2,
-        ρu3 = F.ρu3 - Dρu3 / 2,
-    )
-end
-# Match the curvilinear metric style so `add_numerical_flux_internal!` passes a
-# UVWVector face normal (terrain cross-term retained), as for the raw variant.
-Operators._fd_metric_style(
-    ::typeof(kennedy_gruber_roe_cartesian_curvilinear_wb),
-) = Val{:curvilinear}()
-
 # Shared tendency core: `vertical_transport = true` gives the full tendency;
 # `false` gives the HEVI explicit part (everything except the central
 # vertical mass/energy fluxes and the ρw pressure-gradient + buoyancy terms,
@@ -157,58 +73,32 @@ function compute_tendency_fddg!(
         _ -> (ρ = FT(0), ρe = FT(0), ρu1 = FT(0), ρu2 = FT(0), ρu3 = FT(0)),
         ρ,
     )
-    if m.prob.interface_flux in (:curvilinear_roe, :curvilinear_roe_wb)
-        # Curvilinear metric path: full UVW metric vectors in both the volume
-        # flux and the interface normal.  `uvw = UVWVector(uE, uN, w_c)` gives
-        # the correct normal velocity through terrain-tilted faces; `Ec1/Ec2/Ec3
-        # = UVWVector(eE_c, eN_c, eR_c)` supply the pressure flux projection.
-        # `p_ref`/`ρ_ref` (hydrostatic reference) feed the well-balanced Roe
-        # interface (`:curvilinear_roe_wb`); the volume flux ignores them.
-        uvw = @. Geometry.UVWVector(uE, uN, w_c)
-        Ec1 = @. Geometry.UVWVector(eE1, eN1, eR1)
-        Ec2 = @. Geometry.UVWVector(eE2, eN2, eR2)
-        Ec3 = @. Geometry.UVWVector(eE3, eN3, eR3)
-        ᶜp_ref = m.fields.ᶜp_ref
-        ᶜρ_ref = m.fields.ᶜρ_ref
-        y = map(
-            (
-                ρi, ρei, ei, pi, uvwi, u1i, u2i, u3i, Ec1i, Ec2i, Ec3i, λi,
-                Φi, p_refi, ρ_refi,
-            ) -> (;
-                ρ = ρi, ρe = ρei, e = ei, p = pi, uvw = uvwi,
-                u1 = u1i, u2 = u2i, u3 = u3i,
-                Ec1 = Ec1i, Ec2 = Ec2i, Ec3 = Ec3i, λ = λi, Φ = Φi,
-                p_ref = p_refi, ρ_ref = ρ_refi,
-            ),
-            ρ, ρe, e, p, uvw, u1, u2, u3, Ec1, Ec2, Ec3, λ, ᶜΦ,
-            ᶜp_ref, ᶜρ_ref,
-        )
-        volume_flux_curv =
-            m.prob.wb_gravity ?
-            Operators.kennedy_gruber_gravity_cartesian_flux_curvilinear :
-            Operators.kennedy_gruber_cartesian_flux_curvilinear
-        Operators.add_flux_differencing_divergence!(volume_flux_curv, dy_mw, y)
-        Operators.add_numerical_flux_internal!(m.interface_flux_fn, dy_mw, y)
-    else
-        # wb_gravity: KG plus the well-balanced two-point geopotential
-        # fluctuation (Waruszewski et al. 2022 Eq. 76) — the along-surface
-        # ρ∇Φ term the Cartesian core otherwise omits over terrain. Identical
-        # on flat grids ([[Φ]] ≡ 0 along levels); interfaces unchanged
-        # (Φ single-valued at faces).
-        y = map(
-            (ρi, ρei, ei, pi, uvi, u1i, u2i, u3i, E1i, E2i, E3i, λi, Φi) -> (;
-                ρ = ρi, ρe = ρei, e = ei, p = pi, uv = uvi,
-                u1 = u1i, u2 = u2i, u3 = u3i,
-                E1 = E1i, E2 = E2i, E3 = E3i, λ = λi, Φ = Φi,
-            ),
-            ρ, ρe, e, p, uv, u1, u2, u3, E1, E2, E3, λ, ᶜΦ,
-        )
-        volume_flux =
-            m.prob.wb_gravity ? Operators.kennedy_gruber_gravity_cartesian_flux :
-            Operators.kennedy_gruber_cartesian_flux
-        Operators.add_flux_differencing_divergence!(volume_flux, dy_mw, y)
-        Operators.add_numerical_flux_internal!(m.interface_flux_fn, dy_mw, y)
-    end
+    # Momentum pressure `pm`: full thermodynamic p (:conservative) or the
+    # perturbation p′ = p − p_ref (:conservative_pert, well-balanced over
+    # terrain — differences the small p′). Energy always carries the full p.
+    pm = m.prob.pgf == :conservative_pert ? (@. p - m.fields.ᶜp_ref) : p
+    # State for the conservative (ρ,ρe,ρu⃗) two-point fluxes. `pm` feeds the
+    # momentum pressure slot; `φ` (geopotential) feeds the Waruszewski gravity
+    # fluctuation ½ρ̂⟦φ⟧ (KG/Ranocha volume + Roe/Rusanov interfaces ignore it;
+    # Φ is single-valued at faces).
+    y = map(
+        (ρi, ρei, ei, pi, pmi, uvi, u1i, u2i, u3i, E1i, E2i, E3i, λi, φi) -> (;
+            ρ = ρi, ρe = ρei, e = ei, p = pi, pm = pmi, uv = uvi,
+            u1 = u1i, u2 = u2i, u3 = u3i,
+            E1 = E1i, E2 = E2i, E3 = E3i, λ = λi, φ = φi,
+        ),
+        ρ, ρe, e, p, pm, uv, u1, u2, u3, E1, E2, E3, λ, ᶜΦ,
+    )
+    # Horizontal two-point VOLUME flux (KEP family): KG / Ranocha / Waruszewski.
+    # The interface flux (m.interface_flux_fn) is paired to the same family in
+    # model.jl so the central parts match.
+    volume_flux_fn =
+        m.prob.volume_flux == :waruszewski ?
+        Operators.waruszewski_cartesian_flux :
+        m.prob.volume_flux == :ranocha ? Operators.ranocha_cartesian_flux :
+        Operators.kennedy_gruber_cartesian_flux
+    Operators.add_flux_differencing_divergence!(volume_flux_fn, dy_mw, y)
+    Operators.add_numerical_flux_internal!(m.interface_flux_fn, dy_mw, y)
     @. dYc.ρ = dy_mw.ρ / lgeom_c.WJ
     @. dYc.ρe = dy_mw.ρe / lgeom_c.WJ
     @. dYc.ρu1 = dy_mw.ρu1 / lgeom_c.WJ
@@ -280,18 +170,27 @@ function compute_tendency_fddg!(
     #     advection, sponge ---
     w = @. ρw_w / If(ρ)
     if vertical_transport
-        @. dρw = Bw(
-            -(ᶠgradᵥ(p) + If(ρ) * ᶠgradᵥ(ᶜΦ)) -
-            C3(vvdivc2f(Ic(ρw_w ⊗ w)), lgeom_f),
-        )
+        if m.prob.pgf == :conservative_pert
+            # Stratified: −∂_ξ³ p′ − (ρ − ρ_ref) g buoyancy pair — differences
+            # the small p′ ⇒ well-balanced over terrain (pm = p − p_ref).
+            @. dρw = Bw(
+                -(ᶠgradᵥ(pm) + If(ρ - m.fields.ᶜρ_ref) * ᶠgradᵥ(ᶜΦ)) -
+                C3(vvdivc2f(Ic(ρw_w ⊗ w)), lgeom_f),
+            )
+        else
+            @. dρw = Bw(
+                -(ᶠgradᵥ(p) + If(ρ) * ᶠgradᵥ(ᶜΦ)) -
+                C3(vvdivc2f(Ic(ρw_w ⊗ w)), lgeom_f),
+            )
+        end
     else
         @. dρw = Bw(-C3(vvdivc2f(Ic(ρw_w ⊗ w)), lgeom_f))
     end
     ρw_sc = @. ρw_w.components.data.:1
     uvf = @. If(uv)
     λf =
-        m.prob.interface_flux in (:roe, :curvilinear_roe, :curvilinear_roe_wb) ?
-        (@. If(sqrt(uE^2 + uN^2))) : (@. If(λ))
+        m.prob.interface_flux == :roe ? (@. If(sqrt(uE^2 + uN^2))) :
+        (@. If(λ))
     y_f = map((h, uvi, λi) -> (; h = h, uv = uvi, λ = λi), ρw_sc, uvf, λf)
     dρw_mw = @. hwdiv(uvf * ρw_sc) * (-(lgeom_f.WJ))
     Operators.add_numerical_flux_internal!(
@@ -338,6 +237,15 @@ function implicit_tendency_fddg!(dY, Y, m::DGModel{FT}, t) where {FT}
     dY.c.ρu1 .= FT(0)
     dY.c.ρu2 .= FT(0)
     dY.c.ρu3 .= FT(0)
-    @. dY.f.ρw = Bw(-(ᶠgradᵥ(p_thermo) + If(ρ) * ᶠgradᵥ(ᶜΦ)))
+    # Pressure-gradient + buoyancy pair (must match the explicit form in
+    # compute_tendency_fddg! so the HEVI split rhs = implicit + remaining). The
+    # perturbation form shifts p and ρ by the frozen reference, so the Jacobian
+    # (jacobians.jl) is unchanged.
+    if m.prob.pgf == :conservative_pert
+        pm = @. p_thermo - m.fields.ᶜp_ref
+        @. dY.f.ρw = Bw(-(ᶠgradᵥ(pm) + If(ρ - m.fields.ᶜρ_ref) * ᶠgradᵥ(ᶜΦ)))
+    else
+        @. dY.f.ρw = Bw(-(ᶠgradᵥ(p_thermo) + If(ρ) * ᶠgradᵥ(ᶜΦ)))
+    end
     return dY
 end

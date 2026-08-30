@@ -29,22 +29,22 @@ Keywords (defaults in parentheses):
     (fraction of the resolution/Δt-aware SIPG cap Δh³/((2npoly+1)²Δt),
     the CA-style ν₄ ∝ h³ scaling) — absolute values silently go unstable
     when helem or dt change.
-  - `interface_flux` (`:rusanov`): `:rusanov`, `:roe` (wave-selective,
-    Harten-floored — the pure-KEP interface), `:curvilinear_roe`
-    (full UVW metric — retains terrain cross-terms ``Ja^i_W`` in both
-    the volume flux and interface normal; requires topography), or
-    `:curvilinear_roe_wb` (`:curvilinear_roe` with hydrostatic-DEVIATION
-    Roe dissipation — the acoustic/contact amplitudes use
-    ``[[p − p_ref]]``/``[[ρ − ρ_ref]]`` so the O(1) hydrostatic jumps on
-    terrain-following faces are not damped from the rest state; see
-    `kennedy_gruber_roe_cartesian_curvilinear_wb` in flux_form.jl)
-  - `wb_gravity` (`false`): well-balanced two-point geopotential
-    fluctuation in the horizontal volume kernel (Waruszewski et al. 2022,
-    Eq. 76) — supplies the along-surface ``ρ∇Φ`` term the Cartesian core
-    otherwise omits over terrain, in a form that cancels the along-surface
-    PGF pairwise on isothermal hydrostatic states. Interface fluxes are
-    unchanged (Φ is single-valued at faces). Flat grids: identical
-    tendencies (the fluctuation is exactly zero)
+  - `interface_flux` (`:rusanov`): `:rusanov` or `:roe` (wave-selective,
+    Harten-floored — the pure-KEP interface). Paired automatically with the
+    matching `volume_flux` family (KG / Ranocha / Waruszewski).
+  - `pgf` (`:conservative`): momentum-pressure formulation —
+    `:conservative` (full thermodynamic ``p`` in the momentum flux; historical
+    behaviour) or `:conservative_pert` (perturbation ``pm = p − p_ref`` in the
+    momentum flux plus the ``(ρ − ρ_ref) g`` buoyancy pair, energy keeps full
+    ``p``). Differences the small ``p′`` ⇒ well-balanced over terrain.
+  - `volume_flux` (`:kg`): horizontal two-point volume flux — `:kg`
+    (Kennedy–Gruber), `:ranocha` (entropy-conservative), or `:waruszewski`
+    (entropy-conservative and machine-precision well-balanced over terrain;
+    carries gravity as the ``½ρ̂⟦φ⟧`` fluctuation). Pair `:waruszewski` /
+    `:ranocha` with `pgf = :conservative_pert` for vertical well-balancing.
+  - `wb_gravity` (`false`): DEPRECATED — the two-point geopotential
+    fluctuation is now provided by `volume_flux = :waruszewski`. Setting this
+    `true` errors (the standalone KG-gravity operator was removed upstream).
   - `zstretch` (`nothing`): `(dz_bottom, dz_top)` [m] stretched vertical grid
   - `sponge_τ` (1200.0) [s], `sponge_depth` (7.5e3) [m]: w-sponge peak
     rate 1/τ over the top `sponge_depth`; `τ = Inf` disables (canonical)
@@ -53,8 +53,9 @@ Keywords (defaults in parentheses):
   - `topography` (`:none`): `:none`, `:earth` (ETOPO2022 via
     SpaceVaryingInput, smoothed, LinearAdaption warp), or `:hughes2023`
     (analytic double mountain). CAUTION: for THIS (Cartesian flux-form)
-    core, the metric cross-terms are absent with `:rusanov`/`:roe` (flat-
-    metric volume and interface); use `:curvilinear_roe` to include them.
+    core the metric cross-terms are absent with `:rusanov`/`:roe` (flat-
+    metric volume and interface); use `volume_flux = :waruszewski` with
+    `pgf = :conservative_pert` for terrain well-balancing instead.
   - `topography_damping_factor` (5.0): damping factor for the `:earth`
     pre-smoothing diffusion (total smoothing ∝ log(factor)·Δh²)
   - `terrain_warp` (`:linear`): vertical coordinate adaption — `:linear`
@@ -87,6 +88,22 @@ Base.@kwdef struct BaroclinicWaveFDDG{FT <: AbstractFloat}
     κ₄::Union{Nothing, FT} = nothing
     κ₄_frac::Union{Nothing, FT} = nothing
     interface_flux::Symbol = :rusanov
+    # Momentum-pressure formulation for the conservative (ρ,ρe,ρu⃗) flux family:
+    #   :conservative      — full thermodynamic p in the momentum flux (pm = p);
+    #                        the historical FDDG behaviour
+    #   :conservative_pert — perturbation momentum pressure pm = p − p_ref plus
+    #                        the (ρ−ρ_ref) g buoyancy pair; energy keeps the full
+    #                        p. Differences the small p′ ⇒ well-balanced over
+    #                        terrain (both horizontal flux and vertical ρw).
+    pgf::Symbol = :conservative
+    # Horizontal two-point VOLUME flux (all KEP):
+    #   :kg          — Kennedy–Gruber (pressure-equilibrium preserving)
+    #   :ranocha     — Ranocha (additionally entropy-conservative, Tadmor)
+    #   :waruszewski — Waruszewski et al. (2022): entropy-conservative AND
+    #                  machine-precision well-balanced over terrain — carries
+    #                  gravity as the ½ρ̂⟦φ⟧ fluctuation, superseding `wb_gravity`.
+    #                  Pair with `pgf = :conservative_pert` for vertical WB.
+    volume_flux::Symbol = :kg
     wb_gravity::Bool = false
     # Terrain well-balancing backend for the horizontal-kernel GCL metric
     # defect (the spurious p·δ force from Σ_i ∂_ξi(Ja^i) ≠ 0 discretely over
@@ -144,9 +161,16 @@ function validate(p::BaroclinicWaveFDDG)
         p.κ₄_frac !== nothing &&
         error("set κ₄ (absolute) or κ₄_frac (fraction of the SIPG cap), \
                not both")
-    p.interface_flux in (:rusanov, :roe, :curvilinear_roe, :curvilinear_roe_wb) ||
-        error("interface_flux must be :rusanov, :roe, :curvilinear_roe, \
-               or :curvilinear_roe_wb")
+    p.interface_flux in (:rusanov, :roe) ||
+        error("interface_flux must be :rusanov or :roe")
+    p.pgf in (:conservative, :conservative_pert) ||
+        error("pgf must be :conservative or :conservative_pert")
+    p.volume_flux in (:kg, :ranocha, :waruszewski) ||
+        error("volume_flux must be :kg, :ranocha, or :waruszewski")
+    p.wb_gravity &&
+        error("wb_gravity is no longer backed by a ClimaCore operator on this \
+               branch; use volume_flux = :waruszewski, which carries gravity as \
+               the entropy-conservative ½ρ̂⟦φ⟧ fluctuation")
     p.ic_source in (:setups, :formulas, :rest) ||
         error("ic_source must be :setups, :formulas, or :rest")
     p.topography in (:none, :earth, :hughes2023) ||
