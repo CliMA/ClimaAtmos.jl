@@ -1,7 +1,5 @@
 #=
-Flux-form FDDG tendencies — port of baroclinic_wave_fddg_fluxform.jl
-(compute_tendency_fddg!, implicit_tendency_fddg!) with every module-level
-const replaced by fields of the DGModel `m` (the integrator parameter).
+Flux-form FDDG tendencies (compute_tendency_fddg!, implicit_tendency_fddg!).
 
 Full system in flux form: (ρ, ρe, ρu⃗) with momentum in GLOBAL CARTESIAN
 components, all horizontal terms discretized with Kennedy–Gruber
@@ -12,11 +10,7 @@ differencing kinetic-energy-preserving with no curvature source terms.
 Shallow atmosphere: the Cartesian center-momentum tendency is projected
 tangentially against r̂; ρw (faces, Covariant3) carries radial momentum.
 
-State (ClimaAtmos naming): Y.c = (; ρ, ρe, ρu1, ρu2, ρu3), Y.f = (; ρw).
-
-NOTE (Stage A1): per-call temporary fields follow the example verbatim;
-preallocation into the model is a later perf pass (measured against the
-reference driver's steps/sec).
+State: Y.c = (; ρ, ρe, ρu1, ρu2, ρu3[, ρq_tot]), Y.f = (; ρw).
 =#
 
 # Shared tendency core: `vertical_transport = true` gives the full tendency;
@@ -63,15 +57,17 @@ function compute_tendency_fddg!(
     w_c = @. Ic(ρw_w).components.data.:1 / ρ
 
     K = @. (uE^2 + uN^2 + w_c^2) / 2
-    # Moisture: q_tot = ρq_tot/ρ and the moist saturation-adjustment EOS
-    # (dry path unchanged). The Rusanov eigenvalue λ keeps the dry γ — a
-    # conservative sound-speed over-estimate, harmless for interface dissipation.
+    # Moist (q_tot = ρq_tot/ρ) via the closed-form moist_p_dyn, or the dry EOS.
+    # λ keeps the dry γ — a conservative sound-speed over-estimate, harmless for
+    # the interface dissipation.
     moist = m.prob.moisture != :dry
     q_tot = moist ? (@. Yc.ρq_tot / ρ) : nothing
-    p =
+    dyn =
         moist ?
-        (@. pres_ρeq(m.fields.thermo_params, ρ, ρe / ρ - K - ᶜΦ, q_tot)) :
-        (@. pres_ρe(c, ρe, K, ᶜΦ, ρ))
+        (@. moist_p_dyn(m.fields.thermo_params, ρ, ρe / ρ - K - ᶜΦ, q_tot)) :
+        nothing
+    p = moist ? dyn.p : (@. pres_ρe(c, ρe, K, ᶜΦ, ρ))
+    T_air = moist ? dyn.T : nothing
     e = @. ρe / ρ
     h_tot = @. (ρe + p) / ρ
     λ = @. sqrt(uE^2 + uN^2) + sqrt(c.γ * p / ρ)
@@ -88,15 +84,25 @@ function compute_tendency_fddg!(
     # State for the conservative (ρ,ρe,ρu⃗) two-point fluxes. `pm` feeds the
     # momentum pressure slot; `φ` (geopotential) feeds the Waruszewski gravity
     # fluctuation ½ρ̂⟦φ⟧ (KG/Ranocha volume + Roe/Rusanov interfaces ignore it;
-    # Φ is single-valued at faces).
-    y = map(
-        (ρi, ρei, ei, pi, pmi, uvi, u1i, u2i, u3i, E1i, E2i, E3i, λi, φi) -> (;
-            ρ = ρi, ρe = ρei, e = ei, p = pi, pm = pmi, uv = uvi,
-            u1 = u1i, u2 = u2i, u3 = u3i,
-            E1 = E1i, E2 = E2i, E3 = E3i, λ = λi, φ = φi,
-        ),
-        ρ, ρe, e, p, pm, uv, u1, u2, u3, E1, E2, E3, λ, ᶜΦ,
-    )
+    # Φ is single-valued at faces). Moist adds `q` for the tracer flux.
+    y =
+        moist ?
+        map(
+            (ρi, ρei, ei, pi, pmi, uvi, u1i, u2i, u3i, E1i, E2i, E3i, λi, φi, qi) -> (;
+                ρ = ρi, ρe = ρei, e = ei, p = pi, pm = pmi, uv = uvi,
+                u1 = u1i, u2 = u2i, u3 = u3i,
+                E1 = E1i, E2 = E2i, E3 = E3i, λ = λi, φ = φi, q = qi,
+            ),
+            ρ, ρe, e, p, pm, uv, u1, u2, u3, E1, E2, E3, λ, ᶜΦ, q_tot,
+        ) :
+        map(
+            (ρi, ρei, ei, pi, pmi, uvi, u1i, u2i, u3i, E1i, E2i, E3i, λi, φi) -> (;
+                ρ = ρi, ρe = ρei, e = ei, p = pi, pm = pmi, uv = uvi,
+                u1 = u1i, u2 = u2i, u3 = u3i,
+                E1 = E1i, E2 = E2i, E3 = E3i, λ = λi, φ = φi,
+            ),
+            ρ, ρe, e, p, pm, uv, u1, u2, u3, E1, E2, E3, λ, ᶜΦ,
+        )
     # Horizontal two-point VOLUME flux (KEP family): KG / Ranocha / Waruszewski.
     # The interface flux (m.interface_flux_fn) is paired to the same family in
     # model.jl so the central parts match.
@@ -127,24 +133,26 @@ function compute_tendency_fddg!(
     @. dYc.ρu2 -= vdivf2c(VanLeer(ρw_w, u2, Δt))
     @. dYc.ρu3 -= vdivf2c(VanLeer(ρw_w, u3, Δt))
 
-    # --- Moisture: ρq_tot transport (passive KEP scalar riding the flow),
-    #     all explicit — moisture is never in the implicit acoustic subsystem.
-    #     Horizontal: weak divergence of (uv·ρq_tot) + KG-Rusanov interface
-    #     (the ρw-scalar transport template, reused on centers). Vertical:
-    #     VanLeer, like the momentum components. Then 0-moment precipitation. ---
+    # --- Moisture: ρq_tot transport (all explicit — never in the implicit
+    #     acoustic subsystem). Horizontal: KG tracer flux riding the same mass
+    #     flux as continuity + Rusanov penalty. Vertical: VanLeer. Then 0-moment
+    #     precipitation. ---
     if moist
-        ρq = Yc.ρq_tot
-        y_q = map((h, uvi, λi) -> (; h = h, uv = uvi, λ = λi), ρq, uv, λ)
-        dq_mw = @. hwdiv(uv * ρq) * (-(lgeom_c.WJ))
-        Operators.add_numerical_flux_internal!(
-            Operators.kennedy_gruber_rusanov_height,
-            dq_mw,
-            y_q,
+        dy_q = map(_ -> (ρq = FT(0),), ρ)
+        Operators.add_flux_differencing_divergence!(
+            Operators.kennedy_gruber_tracer_flux,
+            dy_q,
+            y,
         )
-        @. dYc.ρq_tot = dq_mw / lgeom_c.WJ
+        Operators.add_numerical_flux_internal!(
+            Operators.kennedy_gruber_rusanov_tracer,
+            dy_q,
+            y,
+        )
+        @. dYc.ρq_tot = dy_q.ρq / lgeom_c.WJ
         @. dYc.ρq_tot -= vdivf2c(VanLeer(ρw_w, q_tot, Δt))
         m.prob.microphysics == :zero_moment &&
-            microphysics_0m_tendency!(dYc, ρ, ρe, K, ᶜΦ, q_tot, m)
+            microphysics_0m_tendency!(dYc, ρ, ᶜΦ, q_tot, T_air, m)
     end
 
     # --- Coriolis: −2Ω ẑ×u⃗, exact in the constant Cartesian frame ---
@@ -263,7 +271,7 @@ function implicit_tendency_fddg!(dY, Y, m::DGModel{FT}, t) where {FT}
     moist = m.prob.moisture != :dry
     p_thermo =
         moist ?
-        (@. pres_ρeq(m.fields.thermo_params, ρ, ρe / ρ - K - ᶜΦ, Yc.ρq_tot / ρ)) :
+        (@. moist_p_dyn(m.fields.thermo_params, ρ, ρe / ρ - K - ᶜΦ, Yc.ρq_tot / ρ).p) :
         (@. pres_ρe(c, ρe, K, ᶜΦ, ρ))
     h_tot = @. (ρe + p_thermo) / ρ
 

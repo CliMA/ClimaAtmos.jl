@@ -1,16 +1,14 @@
 #=
-Scalar physical constants, bound once at model build time and carried in
-the DGModel — the tendency kernels only ever see plain scalars (no params
-struct access in hot loops, preserving the ClimaCore examples' code shape).
+Scalar physical constants, bound once at model build time and carried in the
+DGModel — the tendency kernels only ever see plain scalars (no params-struct
+access in hot loops).
 
 Two modes:
-  :parity       — the literal constants of the ClimaCore DG examples
-                  (sphere_dg_fd_model.jl lines 94–110), for field-level
-                  reproduction of reference runs.
-  :clima_params — from ClimaParams via ClimaAtmos (Stage A2+; defaults
-                  differ from parity in the last digits: grav 9.81 vs
-                  9.80616, Ω 7.2921159e-5 vs 7.29212e-5, MSLP 101325 vs
-                  1e5, R_d via molar mass vs 287.0).
+  :parity       — the literal parity-TOML constants, for field-level
+                  reproducibility.
+  :clima_params — from ClimaParams via ClimaAtmos (differs from parity in the
+                  last digits: grav 9.81 vs 9.80616, Ω 7.2921159e-5 vs
+                  7.29212e-5, MSLP 101325 vs 1e5, R_d via molar mass vs 287.0).
 =#
 
 struct DGConstants{FT <: AbstractFloat} # broadcast as a scalar (see below)
@@ -58,9 +56,8 @@ const PARITY_TOML =
     dg_params(FT, constants_mode) -> CAP.ClimaAtmosParameters
 
 The ClimaAtmos parameter set consumed by the reused components (Setups IC
-values, Held–Suarez forcing). In `:parity` mode ClimaParams is overridden
-with the ClimaCore examples' literal constants (configs/parity/), so those
-components reproduce the reference runs exactly.
+values, Held–Suarez forcing). In `:parity` mode ClimaParams is overridden with
+the parity-TOML constants (configs/parity/).
 """
 dg_params(::Type{FT}, constants_mode::Symbol) where {FT} =
     constants_mode == :parity ?
@@ -98,14 +95,15 @@ end
 pres_ρe(c::DGConstants, ρe, K, Φ, ρ) =
     ρ * c.R_d * ((ρe / ρ - K - Φ) / c.cv_d + c.T_tri)
 
-# Moist diagnostic pressure via saturation adjustment (Thermodynamics.jl 1.x
-# functional API — the SAME kernel ClimaAtmos calls in
-# set_precomputed_quantities!). Given (ρ, e_int, q_tot), the saturation
-# adjustment sets (T, q_liq, q_ice); p follows from the moist ideal-gas law.
-# Unlike pres_ρe this is NOT closed form (a Newton iteration), so the HEVI
-# column Jacobian keeps the dry-effective coefficients (q_tot frozen) — pres_ρeq
-# is only evaluated in the explicit/consistency path and the moist implicit p.
-function pres_ρeq(thermo_params, ρ, e_int, q_tot)
-    sa = TD.saturation_adjustment(thermo_params, TD.ρe(), ρ, e_int, q_tot)
-    return TD.air_pressure(thermo_params, sa.T, ρ, q_tot, sa.q_liq, sa.q_ice)
+# Moist dynamics pressure/temperature. Closed-form TD.air_temperature (no Newton
+# iteration) — the exact inverse of the TD.internal_energy the moist IC builds ρe
+# with, so the moist hydrostatic balance closes. Condensate treated as vapor for
+# the dynamics p (keeps the virtual-temperature effect via q_tot in R_m). Used
+# identically in the explicit and implicit tendencies so the HEVI split is exact.
+# No T clamp: a genuinely negative T/p surfaces as a NaN rather than being masked.
+@inline function moist_p_dyn(thermo_params, ρ, e_int, q_tot)
+    z = zero(q_tot)
+    T = TD.air_temperature(thermo_params, e_int, q_tot, z, z)
+    p = TD.air_pressure(thermo_params, T, ρ, q_tot, z, z)
+    return (; T, p)
 end

@@ -16,7 +16,7 @@ helem: 8
 npoly: 3
 zelem: 15
 stepper: hevi
-dt: 30.0
+dt: 10.0                # moist core stability limit (no unphysical p floor)
 t_end: 864000.0         # 10 days
 perturb: true
 

@@ -1,8 +1,7 @@
 #=
-Problem definitions — ENV-free port of the ClimaCore dg_problems.jl kwarg
-structs. A problem is pure configuration; `DGSimulation(prob)` builds the
-model/state/integrator from it (no include-time constants, no anonymous
-modules — successive problems coexist in one session naturally).
+Problem definitions — kwarg structs holding pure configuration.
+`DGSimulation(prob)` builds the model/state/integrator from a problem; successive
+problems coexist in one session naturally.
 =#
 
 """
@@ -70,8 +69,8 @@ Keywords (defaults in parentheses):
   - `sleve_s` (0.5): SLEVE decay rate (`s` in Schär 2002); larger = slower
     decay = terrain influence extends higher. Constraint: `s × zmax > max(z_sfc)`.
     Ignored for `:linear`.
-  - `constants_mode` (`:parity`): `:parity` (ClimaCore-example literals) or
-    `:clima_params` (Stage A2)
+  - `constants_mode` (`:parity`): `:parity` (parity-TOML literals) or
+    `:clima_params` (ClimaParams via ClimaAtmos)
   - `dt_save` (21600.0) [s]: solution snapshot interval
   - `ndiag` (150): monitor print interval in steps
 """
@@ -138,9 +137,19 @@ Base.@kwdef struct BaroclinicWaveFDDG{FT <: AbstractFloat}
     microphysics::Symbol = :none
     # Relaxation time [s] for 0-moment condensate removal.
     precip_timescale::FT = 600.0
-    # Moist baroclinic-wave humidity profile (Ullrich et al. 2014 / DCMIP-2016
-    # moist BW): q_tot(z) = q_0 exp[−(z/z_q1)²] exp[−(z/z_q2)⁴], q_tot = 0
-    # above z_t. Only used when moisture != :dry.
+    # Moist baroclinic-wave humidity IC (Ullrich et al. 2014 / DCMIP-2016). The
+    # analytic temperature is taken as the VIRTUAL temperature so ρ, p and the
+    # winds stay the dry-balanced fields (adding moisture does not perturb the
+    # geostrophic/hydrostatic balance; :rh with rh0 = 0 recovers dry exactly).
+    #   :rh    — q_tot = rh0 · q_sat(T_v, ρ): subsaturated everywhere (default,
+    #            no latent-heat shock at t = 0).
+    #   :dcmip — q_tot = min(q_0 exp[−(z/z_q1)²] exp[−(z/z_q2)⁴], rh_max · q_sat),
+    #            the DCMIP profile CAPPED at saturation (the raw uncapped profile
+    #            is ~18× supersaturated in cold polar columns ⇒ t = 0 shock).
+    # q_tot is zeroed above z_t = 15 km. Only used when moisture != :dry.
+    moisture_ic::Symbol = :rh
+    rh0::FT = 0.8
+    rh_max::FT = 1.0
     q_0::FT = 0.018
     z_q1::FT = 3000.0
     z_q2::FT = 8000.0
@@ -187,9 +196,9 @@ function validate(p::BaroclinicWaveFDDG)
     p.volume_flux in (:kg, :ranocha, :waruszewski) ||
         error("volume_flux must be :kg, :ranocha, or :waruszewski")
     p.wb_gravity &&
-        error("wb_gravity is no longer backed by a ClimaCore operator on this \
-               branch; use volume_flux = :waruszewski, which carries gravity as \
-               the entropy-conservative ½ρ̂⟦φ⟧ fluctuation")
+        error("wb_gravity is not supported; use volume_flux = :waruszewski, \
+               which carries gravity as the entropy-conservative ½ρ̂⟦φ⟧ \
+               fluctuation")
     p.ic_source in (:setups, :formulas, :rest) ||
         error("ic_source must be :setups, :formulas, or :rest")
     p.topography in (:none, :earth, :hughes2023) ||
@@ -205,6 +214,8 @@ function validate(p::BaroclinicWaveFDDG)
     p.microphysics == :zero_moment &&
         p.moisture == :dry &&
         error("microphysics = :zero_moment requires moisture = :equil")
+    p.moisture_ic in (:rh, :dcmip) ||
+        error("moisture_ic must be :rh or :dcmip")
     return p
 end
 

@@ -109,12 +109,32 @@ function fddg_implicit_equation_jacobian!(
     @. ∂ᶜ𝔼ₜ∂ᶠ𝕄 =
         -(ᶜdivᵥ_matrix()) * DiagonalMatrixRow(If(h_tot) * g³³(ᶠgⁱʲ))
 
-    # ᶠρwₜ = −ᶠgradᵥ(ᶜp) − ᶠinterp(ᶜρ)·ᶠgradᵥ(ᶜΦ)
-    @. ∂ᶠ𝕄ₜ∂ᶜ𝔼 = -(ᶠgradᵥ_matrix() * c.R_d / c.cv_d)
-    @. ∂ᶠ𝕄ₜ∂ᶜρ =
-        -(ᶠgradᵥ_matrix()) *
-        DiagonalMatrixRow(c.R_d * (-(K + ᶜΦ) / c.cv_d + c.T_tri)) -
-        DiagonalMatrixRow(ᶠgradᵥ(ᶜΦ)) * ᶠinterp_matrix()
+    # ᶠρwₜ = −ᶠgradᵥ(ᶜp) − ᶠinterp(ᶜρ)·ᶠgradᵥ(ᶜΦ). ∂p/∂ρe and ∂p/∂ρ must match
+    # the EOS the pressure is diagnosed with: moist_p_dyn (moist) carries TD's
+    # −R_m·T_0 energy reference, so ∂p/∂ρ = R_m·T − κ_m·(ρe/ρ) with κ_m = R_m/cv_m
+    # — NOT the dry R_d·(−(K+Φ)/cv_d + T_tri), whose RT reference term is wrong for
+    # the moist convention by R_d²·T_0/cv_d (q_tot frozen in the column solve).
+    if m.prob.moisture != :dry
+        tp = m.fields.thermo_params
+        R_v = TD.Parameters.R_v(tp)
+        cv_v = TD.Parameters.cv_v(tp)
+        q_tot = @. Y.c.ρq_tot / ρ
+        R_m = @. c.R_d * (1 - q_tot) + R_v * q_tot
+        cv_m = @. c.cv_d * (1 - q_tot) + cv_v * q_tot
+        κ_m = @. R_m / cv_m
+        Tair = @. moist_p_dyn(tp, ρ, ρe / ρ - K - ᶜΦ, q_tot).T
+        dp_dρ = @. R_m * Tair - κ_m * (ρe / ρ)
+        @. ∂ᶠ𝕄ₜ∂ᶜ𝔼 = -(ᶠgradᵥ_matrix()) * DiagonalMatrixRow(κ_m)
+        @. ∂ᶠ𝕄ₜ∂ᶜρ =
+            -(ᶠgradᵥ_matrix()) * DiagonalMatrixRow(dp_dρ) -
+            DiagonalMatrixRow(ᶠgradᵥ(ᶜΦ)) * ᶠinterp_matrix()
+    else
+        @. ∂ᶠ𝕄ₜ∂ᶜ𝔼 = -(ᶠgradᵥ_matrix() * c.R_d / c.cv_d)
+        @. ∂ᶠ𝕄ₜ∂ᶜρ =
+            -(ᶠgradᵥ_matrix()) *
+            DiagonalMatrixRow(c.R_d * (-(K + ᶜΦ) / c.cv_d + c.T_tri)) -
+            DiagonalMatrixRow(ᶠgradᵥ(ᶜΦ)) * ᶠinterp_matrix()
+    end
 
     I = one(∂R∂Y)
     @. ∂R∂Y = FT(δtγ) * ∂Yₜ∂Y - I
