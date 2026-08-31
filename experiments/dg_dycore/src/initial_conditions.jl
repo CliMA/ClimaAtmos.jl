@@ -1,4 +1,5 @@
 #=
+TODO: Unify with climaatmos
 Initial conditions: Ullrich et al. (2014) baroclinic wave, shallow atmosphere.
 The base (T, p, u, v) come from either ClimaAtmos's
 Setups.shallow_atmos_barowave_values (:setups) or the analytic JW06 formulas
@@ -132,12 +133,6 @@ Flux-form state, ClimaAtmos naming: `Y.c = (; ρ, ρe, ρu1, ρu2, ρu3)` at
 centers (momentum in global Cartesian components), `Y.f = (; ρw)` with
 ρw::Covariant3 at faces.
 """
-# (T, p, u, v) values on centers, from either source. Both are the same
-# Ullrich et al. shallow-atmosphere expressions; :setups reuses ClimaAtmos's
-# implementation (constants from ClimaParams — identical under the parity
-# TOML), :formulas keeps the examples' own copy (literal constants).
-# The DGModel-free method allows the model constructor to evaluate the
-# (unperturbed) base state as a diffusion reference before initial_state.
 function jw_values(
     prob,
     c::DGConstants{FT},
@@ -254,12 +249,9 @@ function discrete_hydrostatic_p!(ᶜp, ᶜρ, ᶜT, R_d, ᶜΦ_eff)
     return ᶜp
 end
 
-# Internal energy per mass for the moist IC: equilibrium condensate partition
-# then the moisture-weighted internal energy. Reduces to the dry cv_d(T−T_0)
-# when q_tot = 0.
 @inline function ic_eint(thermo_params, ρ, T, q_tot)
-    (q_liq, q_ice) = TD.condensate_partition(thermo_params, T, ρ, q_tot)
-    return TD.internal_energy(thermo_params, T, q_tot, q_liq, q_ice)
+    q0 = zero(q_tot)
+    return TD.internal_energy(thermo_params, T, q_tot, q0, q0)
 end
 
 # Column-wise discrete hydrostatic rebalance on the moist dynamics pressure
