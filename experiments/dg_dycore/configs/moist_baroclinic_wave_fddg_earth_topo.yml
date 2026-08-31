@@ -8,8 +8,8 @@ helem: 16
 npoly: 3
 zelem: 30
 stepper: hevi
-dt: 60.0
-t_end: 864000.0
+dt: 45.0
+t_end: 360.0
 perturb: false
 
 volume_flux: waruszewski
@@ -19,6 +19,7 @@ pgf: conservative_pert
 topography: earth
 topography_damping_factor: 1.0    
 terrain_warp: sleve
+zstretch: [300.0, 3000.0]
 
 moisture: equil
 microphysics: zero_moment
@@ -28,8 +29,7 @@ q_0: 0.018
 z_q1: 3000.0
 z_q2: 8000.0
 
-# Point at scratch on the cluster if preferred (SLURM used /scratch/asridhar/dg/npoly3/).
 output_dir: output/moist_baroclinic_wave_fddg_earth_topo
 diag_period: 86400.0
 dt_save: 21600.0
-ndiag: 60
+ndiag: 1
