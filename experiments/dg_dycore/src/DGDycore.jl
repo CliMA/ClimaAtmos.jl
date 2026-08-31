@@ -27,6 +27,7 @@ import ClimaCore:
     Geometry,
     Grids,
     Hypsography,
+    Limiters,
     Meshes,
     Operators,
     Quadratures,
@@ -62,6 +63,7 @@ include("initial_conditions.jl")
 include("held_suarez.jl")
 include("entropy_correction.jl")
 include("microphysics.jl")
+include("limiters.jl")
 include("flux_form.jl")
 include("vector_invariant.jl")
 include("diagnostics.jl")
