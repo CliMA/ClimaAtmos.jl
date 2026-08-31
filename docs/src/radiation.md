@@ -216,7 +216,7 @@ aerosol activation. Enabling `aerosol_radiation` without any aerosol species in
 ## Insolation
 
 The incoming solar flux at the top of the atmosphere is set by the `insolation`
-key, which selects one of six models. `set_insolation_variables!` writes the
+key, which selects one of five models. `set_insolation_variables!` writes the
 cosine of the solar zenith angle and the solar irradiance into the solver on
 each callback, so the insolation is refreshed on the `dt_rad` cadence like
 everything else.
@@ -227,8 +227,7 @@ everything else.
 | [`TimeVaryingInsolation`](@ref ClimaAtmos.TimeVaryingInsolation) | `timevarying`      | The full orbital calculation at the current date, from [Insolation.jl](https://clima.github.io/Insolation.jl/stable/), with a diurnal and seasonal cycle |
 | [`RCEMIPIIInsolation`](@ref ClimaAtmos.RCEMIPIIInsolation)       | `rcemipii`         | Fixed uniform values from the RCEMIP-II protocol [Wing2018](@cite)                                                                                       |
 | [`Larcform1Insolation`](@ref ClimaAtmos.Larcform1Insolation)     | `larcform1`        | Perpetual polar night: zero incoming solar flux                                                                                                          |
-| [`GCMDrivenInsolation`](@ref ClimaAtmos.GCMDrivenInsolation)     | `gcmdriven`        | Values from the GCM-driven external forcing file                                                                                                         |
-| [`ExternalTVInsolation`](@ref ClimaAtmos.ExternalTVInsolation)   | `externaldriventv` | Time-varying values from a column forcing file                                                                                                           |
+| [`ExternalTVInsolation`](@ref ClimaAtmos.ExternalTVInsolation)   | `externaldriventv` | Values from a column forcing file, time-varying or constant depending on the file                                                                        |
 
 Removing the diurnal cycle is not a small approximation for the boundary layer,
 but it removes the constraint that `dt_rad` be short enough to resolve a day,

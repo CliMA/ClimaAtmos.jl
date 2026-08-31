@@ -56,7 +56,7 @@ If `dt_rad` is shorter than or equal to `dt`, the callback fires once per step.
 ## Insolation
 
 ```yaml
-insolation: timevarying   # idealized, timevarying, rcemipii, gcmdriven,
+insolation: timevarying   # idealized, timevarying, rcemipii,
                           # externaldriventv, larcform1
 ```
 

@@ -127,7 +127,7 @@ prescribe_clouds_in_radiation:
   help: "Use prescribed clouds in radiation model. Clouds are read from ERA5 data and updated every time radiation is called. The year 2010 is used and continuously repeated. This mode only affect radiation and is only relevant for the RRTGMP mode. [`false` (default), `true`]"
   value: false
 insolation:
-  help: "Insolation used in radiation model [`idealized` (default), `timevarying`, `rcemipii`, `gcmdriven`, `externaldriventv`, `larcform1`]"
+  help: "Insolation used in radiation model [`idealized` (default), `timevarying`, `rcemipii`, `externaldriventv`, `larcform1`]"
   value: "idealized"
 add_isothermal_boundary_layer:
   help: "Add an isothermal boundary layer above the domain top for radiation [`false`, `true` (default)]"
@@ -362,7 +362,7 @@ check_steady_state:
   value: false
 # Single-column model (SCM) forcing
 external_forcing:
-  help: "External forcing for single-column experiments. Leave `~` for almost every case: the forcing is then taken from the setup chosen by `initial_condition` (the preferred route). Set it only to apply forcing that differs from the initial condition — the intended use is `ReanalysisMonthlyAveragedDiurnal` (monthly-averaged diurnal ERA5 forcing, which has no `initial_condition` counterpart), paired with `initial_condition: ReanalysisTimeVarying`. The values `GCM`/`ISDAC`/`ForcingFromFile`/`ReanalysisTimeVarying` merely mirror `initial_condition` and are redundant with it. [`~` (default), `ReanalysisMonthlyAveragedDiurnal`, `GCM`, `ISDAC`, `ForcingFromFile`, `ReanalysisTimeVarying`]"
+  help: "External forcing for single-column experiments. Leave `~` for almost every case: the forcing is then taken from the setup chosen by `initial_condition` (the preferred route). Set it only for `ReanalysisMonthlyAveragedDiurnal` (monthly-averaged diurnal ERA5 forcing, which has no `initial_condition` counterpart), paired with `initial_condition: ReanalysisTimeVarying`. [`~` (default), `ReanalysisMonthlyAveragedDiurnal`]"
   value: ~
 external_forcing_file:
   help: "Path to a NetCDF forcing file you supply, read by the file-driven single-column cases `GCM`, `ARMVARANAL`, and `ForcingFromFile`. The `ReanalysisTimeVarying` / `ReanalysisMonthlyAveragedDiurnal` cases ignore this and instead generate/locate their file from `site_latitude`/`site_longitude`/`start_date`. [`nothing` (default), `path/to/file`]"

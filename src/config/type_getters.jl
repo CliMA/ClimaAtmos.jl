@@ -198,10 +198,16 @@ function get_setup_type(parsed_args, thermo_params)
     elseif ic_name == "Rico"
         return Setups.Rico(; prognostic_tke = parsed_args["prognostic_tke"], thermo_params)
     elseif ic_name == "GCM"
-        return Setups.GCMDriven(
+        # Read the cfsite group into steady in-memory profiles, then drive it
+        # through the generic ForcingFromFile path. Defaults give an interactive
+        # Monin-Obukhov surface with the file's `ts` and the constant insolation
+        # carried in the data (matching the former GCMDrivenInsolation).
+        data = ColumnDatasets.GCMColumnData.read_cfsite(
             parsed_args["external_forcing_file"],
-            parsed_args["cfsite_number"],
+            parsed_args["cfsite_number"];
+            thermo_params,
         )
+        return Setups.ForcingFromFile(data, parsed_args["start_date"])
     elseif ic_name == "ARMVARANAL"
         varanal_file = parsed_args["external_forcing_file"]
         isnothing(varanal_file) && error(
@@ -250,24 +256,8 @@ function get_setup_type(parsed_args, thermo_params)
         )
     elseif ic_name == "ReanalysisTimeVarying"
         FT = eltype(thermo_params)
-        external_forcing_file =
-            get_external_daily_forcing_file_path(parsed_args)
-        if !isfile(external_forcing_file) ||
-           !check_daily_forcing_times(external_forcing_file, parsed_args) ||
-           !ClimaColumnFiles.is_conforming(external_forcing_file)
-            @info "External forcing file $(external_forcing_file) does not exist or does not cover the expected time range. Generating it now."
-            generate_multiday_era5_external_forcing_file(
-                parsed_args,
-                external_forcing_file,
-                FT,
-                input_data_dir = joinpath(
-                    @clima_artifact("era5_hourly_atmos_raw"),
-                    "daily",
-                ),
-            )
-        end
         return Setups.ForcingFromFile(
-            ColumnDatasets.ColumnDataset(external_forcing_file),
+            era5_dataset(parsed_args, FT),
             parsed_args["start_date"],
         )
     elseif ic_name == "ForcingFromFile"
