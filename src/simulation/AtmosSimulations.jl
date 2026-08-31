@@ -235,7 +235,10 @@ entry point for simulations written as scripts; configuration-driven runs go thr
 # Keyword Arguments
 
   - `model = AtmosModel()`: Physics and parameterization configuration.
-  - `params = ClimaAtmosParameters(FT)`: Physical parameters.
+  - `params = ClimaAtmosParameters(FT; microphysics_model = model.microphysics_model)`:
+    Physical parameters. Built from `model` by default, so only the parameter sets
+    the model needs are loaded and the microphysics process options set on the
+    model take effect.
   - `context = ClimaComms.context()`: Communications context (device and MPI).
   - `grid = SphereGrid(FT; radius = CAP.planet_radius(params), context)`: Computational
     grid. Use [`ColumnGrid`](@ref), [`BoxGrid`](@ref), [`PlaneGrid`](@ref), or
@@ -306,7 +309,9 @@ simulation = CA.AtmosSimulation{Float64}(;
 """
 function AtmosSimulation{FT}(;
     model = AtmosModel(),
-    params::Parameters.ClimaAtmosParameters = ClimaAtmosParameters(FT),
+    params::Parameters.ClimaAtmosParameters = ClimaAtmosParameters(
+        FT; model.microphysics_model,
+    ),
     context::ClimaComms.AbstractCommsContext = ClimaComms.context(),
     grid::Grids.AbstractGrid = SphereGrid(FT; radius = CAP.planet_radius(params), context),
     setup = Setups.DecayingProfile(; perturb = true, params),

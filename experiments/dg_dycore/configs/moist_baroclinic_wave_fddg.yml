@@ -12,7 +12,7 @@
 core: fddg
 float_type: Float64
 
-helem: 8
+helem: 16
 npoly: 3
 zelem: 15
 stepper: hevi
@@ -20,8 +20,8 @@ dt: 30.0
 t_end: 864000.0         # 10 days
 perturb: true
 
-volume_flux: kg
-interface_flux: rusanov
+volume_flux: waruszewski
+interface_flux: roe
 pgf: conservative_pert
 
 moisture: equil

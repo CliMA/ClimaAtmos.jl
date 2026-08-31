@@ -219,14 +219,6 @@ const ᶠcurlᵥ = Operators.CurlC2F(
 )
 
 """
-    upwind_biased_grad
-
-Gradient `upwind_biased_grad(v, θ)` of a field `θ`, upwinded according to the
-sign of the third contravariant component of the velocity `v`.
-"""
-const upwind_biased_grad = Operators.UpwindBiasedGradient()
-
-"""
     ᶠupwind1
 
 First-order upwind reconstruction of the product of a center scalar with a face

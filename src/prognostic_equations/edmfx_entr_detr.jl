@@ -574,8 +574,8 @@ scalar `χʲ` is relaxed toward its **environment** value,
     ∂χʲ/∂t += (entr + turb_entr) (χ⁰ - χʲ).
 
 The generic method is a no-op; the `PrognosticEDMFX` method mutates
-`Yₜ.c.sgsʲs` and returns `nothing`. See the "PROPHET Sub-Grid Scale Equations"
-page (`docs/src/edmf_equations.md`).
+`Yₜ.c.sgsʲs` and returns `nothing`. See the "PROPHET: Closures" page
+(`docs/src/prophet_closures.md`).
 
 # Notes
 

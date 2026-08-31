@@ -39,6 +39,7 @@ if TEST_GROUP in ("infrastructure", "all")
     @safetestset "Larcform1 setup" begin @time include("larcform1.jl") end
 
     # Config tests
+    @safetestset "SlabOcean SST warning" begin @time include("slab_ocean_warning.jl") end
     @safetestset "Model getters" begin @time include("config/model_from_config.jl") end
     @safetestset "AtmosModel Constructor" begin @time include("config/atmos_model_constructor.jl") end
     @safetestset "Presets" begin @time include("presets.jl") end
@@ -51,8 +52,11 @@ end
 if TEST_GROUP in ("diagnostics", "all")
     @safetestset "Diagnostics unit tests" begin @time include("diagnostics/unit_diagnostics.jl") end
     @safetestset "DiagnosticsConfig" begin @time include("diagnostics/diagnostics_config.jl") end
-    # COSP subcolumn tests
     @safetestset "COSP subcolumn tests" begin @time include("cosp/subcol_test.jl") end
+    @safetestset "COSP CloudSat optics tests" begin @time include("cosp/cloudsat_optics_test.jl") end
+    @safetestset "COSP CloudSat reflectivity tests" begin @time include("cosp/cloudsat_reflectivity_test.jl") end
+    @safetestset "COSP CloudSat cloud fraction tests" begin @time include("cosp/cloudsat_cloud_fraction_test.jl") end
+    @safetestset "COSP CloudSat CFAD tests" begin @time include("cosp/cloudsat_cfad_test.jl") end
 end
 
 # ============================================================================

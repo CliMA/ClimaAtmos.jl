@@ -205,7 +205,7 @@ function solve_sgs_u₃_implicit_stage_analytic!(Y, p, dtγ)
             @. ᶜdrag_coeff =
                 α_d / (2 * scale_height) *
                 (1 / sqrt(max(ᶜaʲ, a_min)) + 1 / sqrt(max(ᶜa⁰, a_min)))
-            @. ᶠa += ᶠinterp(ᶜdrag_coeff * ᶜρ_over_ρa⁰ * ᶜρ_over_ρa⁰) / ᶠdz
+            @. ᶠa += ᶠinterp(ᶜdrag_coeff * ᶜa⁰ * ᶜρ_over_ρa⁰ * ᶜρ_over_ρa⁰) / ᶠdz
         end
 
         # Optional Rayleigh sponge adds extra linear damping near the top.

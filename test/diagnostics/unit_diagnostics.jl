@@ -2,6 +2,7 @@
 Unit tests for diagnostic compute functions defined in:
   - conservation_diagnostics.jl
   - core_diagnostics.jl
+  - cosp_diagnostics.jl
   - edmfx_diagnostics.jl
   - gravitywave_diagnostics.jl
   - radiation_diagnostics.jl
@@ -56,6 +57,7 @@ The `states` dict maps symbol keys to (Y, p) tuples. Available keys:
   :ssv            — DryModel + steady-state velocity, plane grid
   :m0             — EquilibriumMicrophysics0M, column
   :m1             — NonEquilibriumMicrophysics1M, column
+  :m1_cosp        — NonEquilibriumMicrophysics1M + COSP, column
   :m2             — DISABLED  NonEquilibriumMicrophysics2M, column
   :nogw           — 0M + NonOrographicGravityWave, column
   :nogw_beres     — 0M + NonOrographicGravityWave + BeresSourceParams, column
@@ -183,6 +185,15 @@ model_1m = CA.AtmosModel(; microphysics_model = CA.NonEquilibriumMicrophysics1M(
 (Y_1m, p_1m) = build_state_cache(FT, model_1m; grid = column);
 # (Y_2m, p_2m) = build_state_cache(FT, model_2m; grid = column);
 
+## COSP with supported CloudSat microphysics
+model_1m_cosp = CA.AtmosModel(;
+    microphysics_model = CA.NonEquilibriumMicrophysics1M(),
+    cosp = CA.COSPModel(),
+)
+(Y_1m_cosp, p_1m_cosp) = build_state_cache(FT, model_1m_cosp; grid = column);
+p_1m_cosp.precomputed.cloudsat_tcc .= FT(25)
+p_1m_cosp.precomputed.cloudsat_tcc2 .= FT(12.5)
+
 ## Non-orographic gravity wave
 nogw_params = CA.NonOrographicGravityWaveParameters(FT)
 non_orographic_gravity_wave = CA.NonOrographicGravityWave(;
@@ -253,10 +264,10 @@ let rrtm = p_allsky.radiation.rrtmgp_solver
         RRTMGP.sw_flux_dn,
         RRTMGP.sw_direct_flux_dn,
         RRTMGP.clear_net_flux,
-        RRTMGP.clear_lw_flux,
+        RRTMGP.clear_lw_flux_net,
         RRTMGP.clear_lw_flux_up,
         RRTMGP.clear_lw_flux_dn,
-        RRTMGP.clear_sw_flux,
+        RRTMGP.clear_sw_flux_net,
         RRTMGP.clear_sw_flux_up,
         RRTMGP.clear_sw_flux_dn,
         RRTMGP.clear_sw_direct_flux_dn,
@@ -341,6 +352,7 @@ states = Dict(
     :ssv            => (Y_ssv,            p_ssv),
     :m0             => (Y_0m,             p_0m),
     :m1             => (Y_1m,             p_1m),
+    :m1_cosp        => (Y_1m_cosp,        p_1m_cosp),
     # :m2 and :m2_pedmfx DISABLED (CloudMicrophysics 0.37 compat): 2-moment
     # microphysics is temporarily blocked by an `@assert` in
     # `precomputed_quantities` (src/cache/precomputed_quantities.jl), so
@@ -419,6 +431,11 @@ VALID_CASES = [
     cases(("Dh_smag", "Dv_smag", "strainh_smag", "strainv_smag"), :smag)...,
     # steady-state velocity
     cases(("uapredicted", "vapredicted", "wapredicted", "uaerror", "vaerror", "waerror"), :ssv)...,
+
+    # ---------------------------------------------------------------------------
+    # cosp_diagnostics.jl
+    # ---------------------------------------------------------------------------
+    cases(("cloudsat_tcc", "cloudsat_tcc2"), :m1_cosp)...,
 
     # ---------------------------------------------------------------------------
     # gravitywave_diagnostics.jl
@@ -571,6 +588,12 @@ end
         @test_throws Exception compute_diag(getdiag("orog"), Y_dry, p_dry)
     end
 
+    for name in ("cloudsat_tcc", "cloudsat_tcc2")
+        @testset "$name requires enabled COSP" begin
+            @test_throws ErrorException compute_diag(getdiag(name), Y_1m, p_1m)
+        end
+    end
+
     for name in ("lmixh", "edth", "evuh")
         @testset "$name errors on dry model" begin
             @test_throws Exception compute_diag(getdiag(name), Y_dry, p_dry)
@@ -583,6 +606,13 @@ end
             )
         end
     end
+end
+
+@testset "COSP diagnostics expose persistent callback outputs" begin
+    @test compute_diag(getdiag("cloudsat_tcc"), Y_1m_cosp, p_1m_cosp) ===
+          p_1m_cosp.precomputed.cloudsat_tcc
+    @test compute_diag(getdiag("cloudsat_tcc2"), Y_1m_cosp, p_1m_cosp) ===
+          p_1m_cosp.precomputed.cloudsat_tcc2
 end
 
 # ---------------------------------------------------------------------------

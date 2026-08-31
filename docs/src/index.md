@@ -88,12 +88,13 @@ matches yours:
       + Configuration: [scripting simulations](scripting_simulations.md), [custom configurations](configuration.md)
       + [Computing and saving diagnostics](diagnostics.md)
       + [Loading and visualizing output](visualizing_output.md)
+      + Parameterizations: [configuring and tuning PROPHET](prophet_howto.md), [running with radiation](radiation_howto.md)
 
   - **Explanation**: the science and numerics behind the model.
 
       + [The CliMA ecosystem](ecosystem.md) -- how ClimaAtmos composes the CliMA packages
       + Dynamics & numerics: [thermodynamics](thermodynamics.md), [governing equations](equations.md), [discretization and operators](discretization.md), [conservation properties](conservation.md), [hyperdiffusion](hyperdiffusion.md), [model top and sponge layer](sponge.md), [implicit solver](implicit_solver.md), [integer time (ITime)](itime.md)
-      + Physics & parameterizations: [PROPHET](edmf_equations.md), [microphysics](microphysics.md), [radiation](radiation.md), [non-orographic gravity-wave drag](non_orographic_gravity_wave.md), [orographic gravity-wave drag](orographic_gravity_wave.md), [ocean surface albedo](surface_albedo.md), [topography](topography.md)
+      + Physics & parameterizations: [PROPHET](prophet.md) ([closures](prophet_closures.md), [discretization](prophet_numerics.md), [horizontal diffusion](prophet_horizontal_diffusion.md)), [microphysics](microphysics.md), [radiation](radiation.md), [non-orographic gravity-wave drag](non_orographic_gravity_wave.md), [orographic gravity-wave drag](orographic_gravity_wave.md), [ocean surface albedo](surface_albedo.md), [topography](topography.md)
 
   - **Reference**: look-up material.
 
