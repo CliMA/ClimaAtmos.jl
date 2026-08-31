@@ -18,7 +18,10 @@ helem: 8
 npoly: 3
 zelem: 15
 stepper: hevi
-dt: 30.0
+# dt: the moist core is stable without any T/p clamp at dt = 10 s (verified to
+# t = 1800 s at helem = 4); dt = 30 s produces a transient p < 0 (crash, by
+# design — no unphysical floor masks it). Bisect for your resolution.
+dt: 10.0
 t_end: 864000.0         # 10 days
 perturb: true
 

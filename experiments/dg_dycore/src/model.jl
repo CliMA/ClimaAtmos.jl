@@ -1,17 +1,12 @@
 #=
-DGModel: everything the tendency/Jacobian functions need, built once per
-problem (the de-globalized replacement for the ClimaCore examples'
-include-time module constants). Passed to the integrator as the parameter
-`p`, so every RHS/Wfact call receives it.
-
-Port of the setup sections of sphere_dg_fd_model.jl (grid, geopotential,
-Coriolis, Cartesian basis fields, sponge profiles, κ₄ cap, FD operators)
-plus the flux-form driver's tangential basis projections and vvdivc2f.
+DGModel: everything the tendency/Jacobian functions need, built once per problem
+and passed to the integrator as the parameter `p`. Holds the grid, geopotential,
+Coriolis, Cartesian basis fields, sponge profiles, κ₄ cap, and FD/DG operators.
 
 DG note: the horizontal space is the SAME SpectralElementSpace2D + GLL
-construction CG uses — DG means `weighted_dss!` is never called and the
-face coupling comes from `Operators.add_numerical_flux_internal!` /
-lifting corrections instead.
+construction CG uses — DG means `weighted_dss!` is never called and the face
+coupling comes from `Operators.add_numerical_flux_internal!` / lifting
+corrections instead.
 =#
 
 struct DGModel{FT <: AbstractFloat, P, PA, S, F, O, M, FLX}

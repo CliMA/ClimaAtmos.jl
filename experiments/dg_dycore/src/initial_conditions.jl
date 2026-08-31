@@ -1,13 +1,9 @@
 #=
-Initial conditions: Ullrich et al. (2014) dry baroclinic wave, shallow
-atmosphere — Stage A1 carries the ClimaCore example's formulas verbatim
-(sphere_dg_fd_model.jl lines 239–330) for parity runs; Stage A2 swaps the
-analytic values for ClimaAtmos's Setups.shallow_atmos_barowave_values
-(verified formula-identical) while KEEPING the discrete-hydrostatic ρ
-correction below, which no ClimaAtmos component reproduces.
-
-All formula constants live in `JWParams` (de-globalized from the example's
-module consts).
+Initial conditions: Ullrich et al. (2014) baroclinic wave, shallow atmosphere.
+The base (T, p, u, v) come from either ClimaAtmos's
+Setups.shallow_atmos_barowave_values (:setups) or the analytic JW06 formulas
+(:formulas); both feed the discrete-hydrostatic ρ correction below. Formula
+constants live in `JWParams`.
 =#
 
 struct JWParams{FT}
@@ -258,11 +254,36 @@ function discrete_hydrostatic_p!(ᶜp, ᶜρ, ᶜT, R_d, ᶜΦ_eff)
     return ᶜp
 end
 
-# Moist baroclinic-wave total specific humidity (Ullrich et al. 2014 /
-# DCMIP-2016 moist BW): a double-Gaussian in height, zero for the dry core.
-moist_q_tot(prob, z) =
-    prob.moisture == :dry ? zero(z) :
-    (@. prob.q_0 * exp(-(z / prob.z_q1)^2) * exp(-(z / prob.z_q2)^4))
+# Internal energy per mass for the moist IC: equilibrium condensate partition
+# then the moisture-weighted internal energy. Reduces to the dry cv_d(T−T_0)
+# when q_tot = 0.
+@inline function ic_eint(thermo_params, ρ, T, q_tot)
+    (q_liq, q_ice) = TD.condensate_partition(thermo_params, T, ρ, q_tot)
+    return TD.internal_energy(thermo_params, T, q_tot, q_liq, q_ice)
+end
+
+# Column-wise discrete hydrostatic rebalance on the moist dynamics pressure
+# p = ρ·a, a ≡ R_m·T. The centered face balance
+#   (ρa)[v+1] − (ρa)[v] = −gΔz (ρ[v]+ρ[v+1])/2
+# solves column-upward (bottom ρ = analytic) to
+#   ρ[v+1] = ρ[v]·(2 a[v] − gΔz)/(2 a[v+1] + gΔz),
+# removing the O(q_tot) imbalance a dry-p rebalance leaves in the moist column.
+function moist_hydrostatic_rebalance!(ᶜρ, ᶜa, ᶜz, grav)
+    ρ_par = parent(ᶜρ)
+    a_par = parent(ᶜa)
+    z_par = parent(ᶜz)
+    for v in 1:(size(ρ_par, 1) - 1)
+        @views @. ρ_par[v + 1, :, :, :, :] =
+            ρ_par[v, :, :, :, :] * (
+                2 * a_par[v, :, :, :, :] -
+                grav * (z_par[v + 1, :, :, :, :] - z_par[v, :, :, :, :])
+            ) / (
+                2 * a_par[v + 1, :, :, :, :] +
+                grav * (z_par[v + 1, :, :, :, :] - z_par[v, :, :, :, :])
+            )
+    end
+    return ᶜρ
+end
 
 function initial_state_fddg(m::DGModel{FT}) where {FT}
     c = m.c
@@ -279,28 +300,38 @@ function initial_state_fddg(m::DGModel{FT}) where {FT}
         uN = @. FT(0) * uN
     end
 
-    ᶜp_ana = p
-    ᶜρ = @. ᶜp_ana / c.R_d / T
-    # Exact smooth discrete hydrostatics (generalized product recursion, same
-    # as the VI IC): keeps analytic T, adjusts p column-smoothly.
-    # Avoids the eigenvalue −1 checkerboard δρ that discrete_hydrostatic_ρ!
-    # produces over terrain and poisons the horizontal PGF there.
-    # NOTE (moist): the balance is composed with the DRY R_d, so a moist start
-    # carries an O((R_m/R_d − 1)) ≈ O(0.6·q_tot) hydrostatic imbalance near the
-    # surface (small transient). A fully moist-balanced IC is a later refinement.
-    discrete_hydrostatic_p!(ᶜp_ana, ᶜρ, T, c.R_d, @. c.grav * z)
-
     ᶜK = @. (uE^2 + uN^2) / 2
     if moist
-        ᶜq_tot = moist_q_tot(m.prob, z)
-        # Moist total energy from the SAME kernel the tendency diagnoses with:
-        # e_int = internal_energy(T, q_tot) (unsaturated ⇒ q_liq = q_ice = 0).
+        # Virtual-temperature construction: the analytic Ullrich T is the VIRTUAL
+        # temperature T_v, so ρ = p/(R_d T_v) and p stay the dry-balanced fields
+        # and moisture does not perturb the momentum balance (rh0 = 0 recovers the
+        # dry state). Actual T = T_v·R_d/R_m ⇒ diagnosed p = ρ R_m T ≡ analytic p.
         tp = m.fields.thermo_params
-        ᶜρe = @. ᶜρ * (
-            TD.internal_energy(tp, T, ᶜq_tot, FT(0), FT(0)) + ᶜK + c.grav * z
-        )
+        z_t = FT(15e3)
+        ᶜTv = T
+        ᶜρ = @. p / (c.R_d * ᶜTv)
+        ᶜq_sat = @. TD.q_vap_saturation(tp, ᶜTv, ᶜρ)
+        ᶜq_tot =
+            m.prob.moisture_ic == :dcmip ?
+            (@. min(
+                m.prob.q_0 * exp(-(z / m.prob.z_q1)^2) *
+                exp(-(z / m.prob.z_q2)^4),
+                m.prob.rh_max * ᶜq_sat,
+            ) * (z ≤ z_t)) : (@. m.prob.rh0 * ᶜq_sat * (z ≤ z_t))
+        ᶜR_m = @. TD.gas_constant_air(tp, ᶜq_tot, FT(0), FT(0))
+        ᶜT = @. ᶜTv * c.R_d / ᶜR_m
+        # Moisture-consistent discrete hydrostatic rebalance on a = R_m·T.
+        moist_hydrostatic_rebalance!(ᶜρ, (@. ᶜR_m * ᶜT), z, c.grav)
+        ᶜρe = @. ᶜρ * (ic_eint(tp, ᶜρ, ᶜT, ᶜq_tot) + ᶜK + c.grav * z)
     else
         ᶜq_tot = nothing
+        ᶜp_ana = p
+        ᶜρ = @. ᶜp_ana / c.R_d / T
+        # Exact smooth discrete hydrostatics (generalized product recursion, same
+        # as the VI IC): keeps analytic T, adjusts p column-smoothly. Avoids the
+        # eigenvalue −1 checkerboard δρ that discrete_hydrostatic_ρ! produces over
+        # terrain and poisons the horizontal PGF there.
+        discrete_hydrostatic_p!(ᶜp_ana, ᶜρ, T, c.R_d, @. c.grav * z)
         ᶜρe = @. c.cv_d * ᶜp_ana / c.R_d +
                  ᶜρ * (ᶜK + c.grav * z - c.cv_d * c.T_tri)
     end
