@@ -141,19 +141,26 @@ function run!(sim::DGSimulation)
             @info "HEVI split check" split_c = r(:c) split_f = r(:f)
         end
         jacobian = fns.jac(Y, m)
-        ode_prob = CTS.ODEProblem(
-            CTS.ClimaODEFunction(;
-                T_imp! = CTS.ODEFunction(
-                    (dY, Y, p, t) -> fns.imp!(dY, Y, p, t);
-                    jac_prototype = jacobian,
-                    Wfact = fns.wfact!,
-                ),
-                T_exp! = (dY, Y, p, t) -> fns.rem!(dY, Y, p, t),
-            ),
-            Y,
-            (FT(0), t_end),
-            m,
+        T_imp! = CTS.ODEFunction(
+            (dY, Y, p, t) -> fns.imp!(dY, Y, p, t);
+            jac_prototype = jacobian,
+            Wfact = fns.wfact!,
         )
+        # Moist FDDG: pass the explicit tendency as T_lim! (not T_exp!) and add
+        # the per-stage positivity limiter — ClimaTimeSteppers only calls the
+        # `lim!` hook when a T_lim! is present. Dry keeps T_exp! (byte-identical).
+        ode_fn =
+            (m.prob isa BaroclinicWaveFDDG && m.prob.moisture != :dry) ?
+            CTS.ClimaODEFunction(;
+                T_imp!,
+                T_lim! = (dY, Y, p, t) -> fns.rem!(dY, Y, p, t),
+                lim! = (U, p, t, u_ref) -> lim_fddg!(U, p, t, u_ref),
+            ) :
+            CTS.ClimaODEFunction(;
+                T_imp!,
+                T_exp! = (dY, Y, p, t) -> fns.rem!(dY, Y, p, t),
+            )
+        ode_prob = CTS.ODEProblem(ode_fn, Y, (FT(0), t_end), m)
         ode_prob,
         CTS.IMEXAlgorithm(
             CTS.ARS343(),

@@ -416,7 +416,18 @@ function DGModel(prob::DGProblem)
     # (moisture != :dry). Carried as a scalar struct in `fields`; dry runs
     # never touch it.
     thermo_params = params.thermodynamics_params
-    fields = (; fields..., ν_div, thermo_params)
+    # Zhang–Shu per-stage positivity limiter (moist only; ρ_min/p_min keep the
+    # Waruszewski ln_mean(ρ)/√(γp/ρ) admissible, ρq_tot ≥ 0 keeps the moist
+    # thermodynamics valid). nothing for the dry core.
+    positivity_limiter =
+        (prob isa BaroclinicWaveFDDG && prob.moisture != :dry) ?
+        Limiters.PositivityLimiter(
+            FT;
+            ρ_min = FT(1e-6),
+            p_min = FT(1e-2),
+            maxiter = 10,
+        ) : nothing
+    fields = (; fields..., ν_div, thermo_params, positivity_limiter)
     kep_vi = prob isa VIProblem && prob.face_set in (:kep, :es, :es2)
     κ₄ = if prob.κ₄ !== nothing
         prob.κ₄
