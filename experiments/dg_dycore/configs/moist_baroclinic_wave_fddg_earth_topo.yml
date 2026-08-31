@@ -1,0 +1,43 @@
+# Moist baroclinic wave on the FDDG core WITH Earth topography (ETOPO2022).
+# Mirrors the SLURM setup: waruszewski volume flux + Roe interface +
+# perturbation-pressure PGF, DCMIP moist IC, 0-moment microphysics.
+#
+# UNVERIFIED COMBINATION. The moist path (Jacobian reference-RT-term fix,
+# Zhang–Shu positivity limiter) was validated on the FLAT sphere only, and the
+# FDDG core's terrain metric cross-terms are still incomplete (well-balance over
+# warped grids is not exact). Treat this as an experiment, not a known-good run.
+core: fddg
+float_type: Float64
+
+helem: 32
+npoly: 3
+zelem: 30
+stepper: hevi
+dt: 30.0
+t_end: 864000.0         # 10 days
+# perturb: false mirrors the SLURM (PERTURB=0) — a BALANCED zonal state, i.e. a
+# well-balancedness test over terrain (no wave develops). Set perturb: true for
+# the actual developing moist baroclinic wave.
+perturb: false
+
+volume_flux: waruszewski
+interface_flux: roe
+pgf: conservative_pert
+
+topography: earth
+topography_damping_factor: 1.0    # ETOPO_DAMPING=1
+terrain_warp: linear
+
+moisture: equil
+microphysics: zero_moment
+moisture_ic: dcmip                # capped DCMIP profile (min(q_0·…, rh_max·q_sat))
+rh_max: 1.0
+q_0: 0.018
+z_q1: 3000.0
+z_q2: 8000.0
+
+# Point at scratch on the cluster if preferred (SLURM used /scratch/asridhar/dg/npoly3/).
+output_dir: output/moist_baroclinic_wave_fddg_earth_topo
+diag_period: 86400.0
+dt_save: 21600.0
+ndiag: 60

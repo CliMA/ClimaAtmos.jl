@@ -96,6 +96,10 @@ function compute_rv!(out, state, cache, time)
     rv = dg_vorticity(state, cache)
     isnothing(out) ? rv : (out .= rv; out)
 end
+function compute_hus!(out, state, cache, time)
+    q = @. state.c.ρq_tot / state.c.ρ
+    isnothing(out) ? q : (out .= q; out)
+end
 
 # Metadata mirrors ClimaAtmos src/diagnostics/core_diagnostics.jl so output
 # is CMIP-style and directly comparable with CG runs.
@@ -161,6 +165,15 @@ const DG_DIAGNOSTIC_VARIABLES = [
     ),
 ]
 
+# Appended for moist runs only (state carries ρq_tot).
+const HUS_DIAGNOSTIC = DiagnosticVariable(;
+    short_name = "hus",
+    long_name = "Specific Humidity",
+    standard_name = "specific_humidity",
+    units = "kg kg^-1",
+    compute! = compute_hus!,
+)
+
 """
     dg_diagnostics(m, Y; output_dir, period) -> (scheduled, writer)
 
@@ -174,13 +187,16 @@ function dg_diagnostics(m::DGModel{FT}, Y; output_dir, period) where {FT}
         output_dir;
         start_date = nothing,
     )
+    vars =
+        (m.prob isa BaroclinicWaveFDDG && m.prob.moisture != :dry) ?
+        [DG_DIAGNOSTIC_VARIABLES..., HUS_DIAGNOSTIC] : DG_DIAGNOSTIC_VARIABLES
     scheduled = [
         ScheduledDiagnostic(;
             variable = v,
             output_writer = writer,
             compute_schedule_func = EveryDtSchedule(FT(period)),
             output_schedule_func = EveryDtSchedule(FT(period)),
-        ) for v in DG_DIAGNOSTIC_VARIABLES
+        ) for v in vars
     ]
     return scheduled, writer
 end
