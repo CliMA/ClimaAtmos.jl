@@ -254,6 +254,19 @@ end
     return TD.internal_energy(thermo_params, T, q_tot, q0, q0)
 end
 
+# DCMIP-2016 moist baroclinic-wave total specific humidity — the exact ClimaAtmos
+# CG profile (Setups/MoistBaroclinicWave.jl): a prescribed latitude+pressure
+# profile, subsaturated everywhere by construction (NO q_sat, NO saturation cap),
+# so it never condenses at t = 0. ϕ in degrees; p, MSLP in Pa. Above p_t the
+# stratosphere is a trace value q_t.
+@inline function dcmip_q_tot(q_0, ϕ, p, MSLP)
+    p_w = oftype(p, 3.4e4)
+    p_t = oftype(p, 1e4)
+    q_t = oftype(p, 1e-12)
+    ϕ_w = oftype(p, 40)
+    return p ≤ p_t ? q_t : q_0 * exp(-(ϕ / ϕ_w)^4) * exp(-((p - MSLP) / p_w)^2)
+end
+
 # Column-wise discrete hydrostatic rebalance on the moist dynamics pressure
 # p = ρ·a, a ≡ R_m·T. The centered face balance
 #   (ρa)[v+1] − (ρa)[v] = −gΔz (ρ[v]+ρ[v+1])/2
@@ -299,17 +312,14 @@ function initial_state_fddg(m::DGModel{FT}) where {FT}
         # and moisture does not perturb the momentum balance (rh0 = 0 recovers the
         # dry state). Actual T = T_v·R_d/R_m ⇒ diagnosed p = ρ R_m T ≡ analytic p.
         tp = m.fields.thermo_params
-        z_t = FT(15e3)
         ᶜTv = T
         ᶜρ = @. p / (c.R_d * ᶜTv)
-        ᶜq_sat = @. TD.q_vap_saturation(tp, ᶜTv, ᶜρ)
+        # :dcmip — the exact CG DCMIP profile (subsaturated by construction, no
+        # q_sat/cap ⇒ no condensation at t = 0). :rh — an rh·q_sat alternative.
         ᶜq_tot =
             m.prob.moisture_ic == :dcmip ?
-            (@. min(
-                m.prob.q_0 * exp(-(z / m.prob.z_q1)^2) *
-                exp(-(z / m.prob.z_q2)^4),
-                m.prob.rh_max * ᶜq_sat,
-            ) * (z ≤ z_t)) : (@. m.prob.rh0 * ᶜq_sat * (z ≤ z_t))
+            (@. dcmip_q_tot(m.prob.q_0, ccoords.lat, p, c.p_0)) :
+            (@. m.prob.rh0 * TD.q_vap_saturation(tp, ᶜTv, ᶜρ) * (z ≤ FT(15e3)))
         ᶜR_m = @. TD.gas_constant_air(tp, ᶜq_tot, FT(0), FT(0))
         ᶜT = @. ᶜTv * c.R_d / ᶜR_m
         # Moisture-consistent discrete hydrostatic rebalance on a = R_m·T.
