@@ -4,9 +4,21 @@ ClimaAtmos.jl Release Notes
 main
 ----
 
+0.42.8
+-------
+- [#4779](https://github.com/CliMA/ClimaAtmos.jl/pull/4779) ![][badge-🐛bugfix] ![][badge-🔥behavioralΔ] Fit the SGS quadrature Lagrange multiplier to the discrete quadrature rule instead of the continuous Gaussian, so the reconstructed condensate mass hits its target. Also correct the 0-moment energy sink for the covariance of `dq_tot/dt` and `e_tot`.
+- [#4751](https://github.com/CliMA/ClimaAtmos.jl/pull/4751) ![][badge-✨feature/enhancement] Move the 1-moment process selection into `NonEquilibriumMicrophysics1M`, so a model can be built in code rather than only from config keys. Constructor defaults are now `n_substeps = 3`, `n_substeps_quad = 2`.
+- [#4718](https://github.com/CliMA/ClimaAtmos.jl/pull/4718) ![][badge-✨feature/enhancement] Add a CloudSat radar simulator to the COSP workflow, with the diagnostics `cloudsat_tcc` and `cloudsat_tcc2`. The default `netcdf_interpolation_num_points` z value changed from 256 to 100.
+0.42.7
+-------
 - [#4702](https://github.com/CliMA/ClimaAtmos.jl/pull/4702) Add the shared helper `ᶜh_eff_plus_Φ!` for the mass-weighted water enthalpy of the single-gradient enthalpy flux, and the selectors `ᶜsuspended_water` and `ᶜdiffusing_water` for which water carries the enthalpy and which water diffuses, and use them in the EDMFX vertical and horizontal diffusive fluxes, the grid-mean and updraft hyperdiffusion, the vertical diffusion boundary layer, and the implicit Jacobian, which each assembled it separately. The EDMFX diffusive fluxes now also use the shared `ᶠgradᵥ`, `ᶜdiffdivᵥ` and `ᶜdiffusive_flux_divergenceᵥ` operators instead of local copies; the TKE flux keeps its dedicated divergence operator, since its bottom boundary has a nonzero surface TKE flux, but it now also uses the shared `ᶠgradᵥ`. Tendencies are unchanged.
 - [#4657](https://github.com/CliMA/ClimaAtmos.jl/pull/4657) ![][badge-✨feature/enhancement] Add a horizontal component to the EDMFX SGS diffusive flux, enabled by the opt-in `edmfx_sgs_horizontal_diffusive_flux` config option (default `false`), for high-resolution configurations: scalar and TKE fluxes, the momentum stress `τ = -2 K_{u,h} S` with the full strain rate, the corresponding TKE shear production from horizontal gradients, and diagnostics `lmixh`, `edth`, and `evuh`. The water and enthalpy fluxes follow the vertical convention of [#4753](https://github.com/CliMA/ClimaAtmos.jl/pull/4753): `q_tot_eff = q_tot - q_rai - q_sno` diffuses as a single substance with the enthalpy flux `ρ K_{h,h} (∇ₕs_d + (h_eff + Φ) ∇ₕq_tot_eff)`, suspended cloud mass and number species take a proportional share of it, and rain and snow receive no horizontal transport. With prognostic updrafts and the separate opt-in `edmfx_horizontal_diffusion` config option (default `false`, requires `edmfx_sgs_horizontal_diffusive_flux`), the grid-mean horizontal specific tendencies are also applied to the updraft scalars (moist static energy, total specific humidity, cloud species, and SGS tracers), so each subdomain inherits the grid-mean horizontal diffusion.
+
+0.42.6
+-------
 - [#4770](https://github.com/CliMA/ClimaAtmos.jl/pull/4770) ![][badge-🐛bugfix] ![][badge-🔥behavioralΔ] Distribute the aggregate `q_tot_eff` diffusion of `edmfx_sgs_diffusive_flux_tendency!` to the suspended cloud mass and number species. The distribution added in [#4753](https://github.com/CliMA/ClimaAtmos.jl/pull/4753) resolved its field names against `Y` rather than `Y.c`, so its guard was never satisfied and the block never ran: `ρq_tot` and `ρ` were tendencied while `ρq_lcl`, `ρq_icl` and their number densities were not. The hyperdiffusion and vertical-diffusion-boundary-layer paths already distributed correctly, so this removes an inconsistency between them.
+
+
 0.42.5
 -------
 - [#4762](https://github.com/CliMA/ClimaAtmos.jl/pull/4762) Include more terms in the `InvZEntrainment` closure.

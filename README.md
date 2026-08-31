@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="logo.svg" alt="ClimaAtmos.jl Logo" width="140">
+  <img src="docs/src/assets/logo.svg" alt="ClimaAtmos.jl Logo" width="140" height="140">
 </div>
 
 # ClimaAtmos.jl
@@ -11,7 +11,7 @@ ClimaAtmos.jl solves the compressible equations of atmospheric motion on cubed-s
 |                   |                                                                                                                                                                                                                                                                                                                                                                      |
 | -----------------:|:-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Documentation** | [![stable](https://img.shields.io/badge/docs-stable-blue.svg)](https://CliMA.github.io/ClimaAtmos.jl/stable/) [![dev](https://img.shields.io/badge/docs-dev-blue.svg)](https://CliMA.github.io/ClimaAtmos.jl/dev/)                                                                                                                                                   |
-| **Version**       | [![version](https://juliahub.com/docs/ClimaAtmos/version.svg)](https://juliahub.com/ui/Packages/General/ClimaAtmos)                                                                                                                                                                                                                                                  |
+| **Version**       | [![version](https://img.shields.io/github/v/release/CliMA/ClimaAtmos.jl?label=version)](https://github.com/CliMA/ClimaAtmos.jl/releases/latest)                                                                                                                                                                                                                      |
 | **License**       | [![license](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](https://github.com/CliMA/ClimaAtmos.jl/blob/main/LICENSE)                                                                                                                                                                                                                                   |
 | **Tests**         | [![gha ci](https://github.com/CliMA/ClimaAtmos.jl/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/CliMA/ClimaAtmos.jl/actions/workflows/ci.yml?query=branch%3Amain) [![buildkite](https://badge.buildkite.com/2a31b42d67409c27660a0dcce65b49294cd9c6b9f14c12f21e.svg?branch=main)](https://buildkite.com/clima/climaatmos-ci/builds?branch=main) |
 | **Code Coverage** | [![codecov](https://codecov.io/gh/CliMA/ClimaAtmos.jl/branch/main/graph/badge.svg)](https://codecov.io/gh/CliMA/ClimaAtmos.jl)                                                                                                                                                                                                                                       |
@@ -66,8 +66,10 @@ See [Your First Simulation](https://CliMA.github.io/ClimaAtmos.jl/dev/first_simu
 
 ## Documentation
 
-  - **[Stable docs](https://CliMA.github.io/ClimaAtmos.jl/stable/)**: equations, parameterizations, configuration reference, and API
-  - **[Dev docs](https://CliMA.github.io/ClimaAtmos.jl/dev/)**: latest development version
+  - **[Stable docs](https://CliMA.github.io/ClimaAtmos.jl/stable/)**: the released version
+  - **[Dev docs](https://CliMA.github.io/ClimaAtmos.jl/dev/)**: the latest development version
+  - **[API reference](https://CliMA.github.io/ClimaAtmos.jl/dev/api/)**: types and functions users construct
+  - **[Configuration options](https://CliMA.github.io/ClimaAtmos.jl/dev/configuration_options/)**: every YAML key, generated from the schema
   - **[Available diagnostics](https://CliMA.github.io/ClimaAtmos.jl/dev/available_diagnostics/)**: output variables
 
 ## Integration with CliMA models

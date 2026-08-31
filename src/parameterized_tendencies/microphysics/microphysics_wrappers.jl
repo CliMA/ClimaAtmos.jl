@@ -91,9 +91,10 @@ Diagnoses the local condensate by saturation adjustment, then calls
 
 # Returns
 
-NamedTuple with `dq_tot_dt` [kg/kg/s] and `e_tot_hlpr` [J/kg]. Both are returned
-from a single call so that `integrate_over_sgs` SGS-averages the energy helper
-consistently with the water sink that carries it.
+NamedTuple with `dq_tot_dt` [kg/kg/s] and the energy-flux product
+`dq_e = dq_tot_dt · e_tot_hlpr` [W/kg]. The product is formed per point so
+that its SGS average is the true energy sink `E[dq·e]` (averaging `dq` and
+`e` separately and multiplying the means would drop their covariance).
 """
 @inline function (eval::Microphysics0MEvaluator)(T_hat, q_hat)
     # Diagnose condensate via saturation adjustment
@@ -109,12 +110,12 @@ consistently with the water sink that carries it.
         BMT.Microphysics0Moment(), eval.cm_params, eval.sat_eval.thermo_params,
         T_hat, sa.q_liq, sa.q_ice, q_vap_sat,
     )
-    # Compute energy helper at this quadrature point using the
-    # locally-diagnosed condensate, so both fields are SGS-averaged.
+    # Energy helper at this quadrature point using the locally-diagnosed
+    # condensate; returned as the product with dq_tot_dt (see docstring).
     e_tot_hlpr = e_tot_0M_precipitation_sources_helper(
         eval.sat_eval.thermo_params, T_hat, sa.q_liq, sa.q_ice, eval.Φ,
     )
-    return (; dq_tot_dt, e_tot_hlpr)
+    return (; dq_tot_dt, dq_e = dq_tot_dt * e_tot_hlpr)
 end
 
 """
@@ -150,20 +151,35 @@ via `apply_0m_tendency_limit`.
 
 # Returns
 
-NamedTuple with `dq_tot_dt` [kg/kg/s] and `e_tot_hlpr` [J/kg].
+NamedTuple with `dq_tot_dt` [kg/kg/s] and `e_tot_hlpr` [J/kg]. In the
+quadrature form, `e_tot_hlpr` is the flux-weighted helper
+`E[dq·e] / E[dq]`, so downstream products `dq_tot_dt · e_tot_hlpr`
+reconstruct the true SGS-averaged energy sink `E[dq·e]` — including after
+the limiter, which scales mass and energy by the same factor. The
+flux-weighted helper is a `dq`-weighted average of the per-point helper
+values (all `dq` share one sign), so it lies within their range. It is
+zero where nothing precipitates, which carries no energy because
+`dq_tot_dt` is zero there too.
 """
 @inline function microphysics_tendencies_0m(
     SG_quad, cmp, thp, ρ, T, q_tot_nonneg, T′T′, q′q′, corr_Tq, Φ, dt,
 )
+    FT = typeof(ρ)
     # Create GPU-safe functor (Φ is constant within a grid cell)
     # The evaluator does saturation adjustment, computes saturation vapor pressure
-    # and computes the total water sink and energy helper from 0M microphysics
+    # and computes the total water sink and energy-flux product from 0M microphysics
     evaluator = Microphysics0MEvaluator(cmp, thp, ρ, T, Φ)
-    # Integrate over quadrature points; both dq_tot_dt and e_tot_hlpr
-    # are averaged over the SGS distribution.
-    (; dq_tot_dt, e_tot_hlpr) = integrate_over_sgs(
+    # Integrate over quadrature points; dq_tot_dt and the product dq·e are
+    # averaged over the SGS distribution.
+    (; dq_tot_dt, dq_e) = integrate_over_sgs(
         evaluator, SG_quad, q_tot_nonneg, T, q′q′, T′T′, corr_Tq,
     )
+    # Flux-weighted energy helper: E[dq·e] / E[dq]. The ratio is stable for
+    # any strictly negative mean sink because numerator and denominator share
+    # the dq scale. The 0M sink is nonpositive at every quadrature point and
+    # the weights are positive, so `E[dq] = 0` means no point precipitates and
+    # the energy change is zero too.
+    e_tot_hlpr = ifelse(dq_tot_dt < zero(FT), dq_e / dq_tot_dt, zero(FT))
     # Apply limiter
     dq_tot_dt = apply_0m_tendency_limit(dq_tot_dt, q_tot_nonneg, dt)
 
@@ -211,8 +227,9 @@ quadrature points.
   - `q_rai`, `q_sno`: Rain and snow specific humidity [kg/kg], clamped
     non-negative by the caller.
   - `λ`: Thermodynamic liquid fraction [-].
-  - `λ_lagrange`: Lagrange multiplier `z·α·σ_S` enforcing
-    `E[max(0, λ_lagrange + α·S′)] = q_c` [kg/kg].
+  - `λ_lagrange`: Lagrange multiplier enforcing
+    `E[max(0, λ_lagrange + α·S′)] = q_c` under the quadrature
+    measure (fitted in `_compute_sgs_moments`) [kg/kg].
   - `mu_S`: Linearized SGS mean saturation excess `q_tot − q_sat(T, ρ)` [kg/kg].
   - `α`: Variance fidelity parameter [-].
   - `dt`: Timestep used for the time-averaged process rates [s].
@@ -229,7 +246,7 @@ struct Microphysics1MEvaluator{S, MP, TPS, FT, Args <: Tuple}
     q_sno::FT
     # Truncated-Gaussian Lagrange multiplier, μ_S, and liquid fraction
     λ::FT              # liquid fraction (from thermodynamics, held fixed)
-    λ_lagrange::FT # Lagrange multiplier for centred S′: λ = z·α·σ_S
+    λ_lagrange::FT # Lagrange multiplier for centred S′ (discrete fit)
     mu_S::FT       # linearized SGS mean μ_S = q_tot_mean − q_sat(T_mean, ρ)
     α::FT          # variance fidelity parameter (from sgs_variance_fidelity)
     # Numerical parameters
@@ -257,8 +274,16 @@ The local cloud condensate is obtained from the centred saturation excess
 `S′_hat = (q_tot_hat − q_sat(T_hat, ρ)) − mu_S`:
 
     shifted_excess = max(0, λ_lagrange + α · S′_hat)
-    q_lcl_hat      = max(0, λ · shifted_excess − q_rai)
-    q_icl_hat      = max(0, (1 − λ) · shifted_excess − q_sno)
+    q_lcl_hat      = λ · shifted_excess
+    q_icl_hat      = (1 − λ) · shifted_excess
+
+The Lagrange multiplier `λ_lagrange` is fitted (in `_compute_sgs_moments`) so
+that `E[shifted_excess] = q_c`, where `q_c = q_lcl + q_icl` is the grid-mean
+*cloud* condensate, excluding precipitation. The reconstruction therefore
+partitions `shifted_excess` into local cloud liquid and ice by the liquid
+fraction. Precipitation is held constant across quadrature points and is
+accounted for downstream, where CloudMicrophysics subtracts it from `q_tot`
+to diagnose the local vapor.
 
 `q_tot_hat` is clamped non-negative first. Subsaturated points contribute zero
 condensate but still drive rain evaporation and snow sublimation against the
@@ -273,15 +298,20 @@ with `dq_lcl_dt`, `dq_icl_dt`, `dq_rai_dt`, `dq_sno_dt` [kg/kg/s].
     FT = typeof(eval.ρ)
     q_tot_hat = max(FT(0), q_tot_hat)
 
-    # Local condensate from the Lagrange-multiplier closure.
+    # Local cloud condensate from the Lagrange-multiplier closure.
     # The mass conservation equation is E[max(0, λ + α·S′)] = q_c, so the
     # local shifted excess at each quadrature point is λ + α·S′_hat where
     # S′_hat = (q_tot_hat − q_sat_hat) − μ_S is the centred saturation excess.
+    # Precipitation in q_tot needs no special handling here: its mean level
+    # cancels in the centred S′ (the level is re-anchored by λ_lagrange, fitted
+    # to cloud-only q_c), and CloudMicrophysics subtracts q_rai/q_sno from
+    # q_tot_hat when it diagnoses the local vapor. Subtracting them from the
+    # cloud condensate as well would double-count them and break ⟨q_c^local⟩ = q_c.
     q_sat_hat = TD.q_vap_saturation(eval.tps, T_hat, eval.ρ)
     S′_hat = q_tot_hat - q_sat_hat - eval.mu_S
     shifted_excess = max(FT(0), eval.λ_lagrange + eval.α * S′_hat)
-    q_lcl_hat = max(FT(0), eval.λ * shifted_excess - eval.q_rai)
-    q_icl_hat = max(FT(0), (FT(1) - eval.λ) * shifted_excess - eval.q_sno)
+    q_lcl_hat = eval.λ * shifted_excess
+    q_icl_hat = (FT(1) - eval.λ) * shifted_excess
 
     return BMT.bulk_microphysics_tendencies(
         BMT.LinearizedAverage(),
@@ -326,8 +356,9 @@ accretion.
   - `T′T′`: Temperature variance ``\\langle T'^2 \\rangle`` [K²].
   - `q′q′`: Total-water variance ``\\langle q'^2 \\rangle`` [(kg/kg)²].
   - `corr_Tq`: Correlation coefficient corr(T′, q′) from `correlation_Tq(params)` [-].
-  - `λ_lagrange`: Lagrange multiplier `z·α·σ_S` from `ᶜsgs_moments`, precomputed to
-    enforce `E[max(0, λ_lagrange + α·S′)] = q_c` [kg/kg].
+  - `λ_lagrange`: Lagrange multiplier from `ᶜsgs_moments`, precomputed to
+    enforce `E[max(0, λ_lagrange + α·S′)] = q_c` exactly under the
+    quadrature measure [kg/kg].
   - `α`: Variance fidelity parameter from `sgs_variance_fidelity` [-].
   - `dt`: Timestep [s].
   - `nsubs`: Number of substeps for tendency averaging.

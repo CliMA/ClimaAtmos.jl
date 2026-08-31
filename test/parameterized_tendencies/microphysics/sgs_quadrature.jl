@@ -375,6 +375,54 @@ using ClimaAtmos
                     @test result_quad.dq_sno_dt ≈ result_direct.dq_sno_dt rtol = FT(1e-5)
                 end
 
+                # Same exact-mean property, but with nonzero rain and
+                # snow. λ_lagrange enforces E[shifted_excess] = q_c on *cloud*
+                # condensate only, so at the mean point, the reconstruction must
+                # still recover q_lcl_hat = λ·q_c and q_icl_hat = (1−λ)·q_c,
+                # independent of q_rai / q_sno.
+                # Mixed-phase T so both the liquid (vs q_rai) and ice (vs q_sno)
+                # partitions are exercised.
+                @testset "Single Point = Grid Mean (precipitating)" begin
+                    quad_1pt = ClimaAtmos.SGSQuadrature(
+                        FT;
+                        quadrature_order = 1,
+                        distribution = ClimaAtmos.GaussianSGS(),
+                    )
+
+                    T_mix = FT(263.15)  # mixed-phase: 0 < λ < 1
+                    q_sat_mix = TD.q_vap_saturation(tps, T_mix, ρ)
+                    q_tot_mix = q_sat_mix + q_lcl_mean + q_icl_mean
+                    q_c = q_lcl_mean + q_icl_mean
+                    λ_mix = TD.liquid_fraction(tps, T_mix, q_lcl_mean, q_icl_mean)
+                    # Precipitation of the same order as (or larger than) q_c, so
+                    # the buggy subtraction would clamp the cloud water to zero.
+                    q_rai_p = FT(1e-3)
+                    q_sno_p = FT(5e-4)
+                    λ_lagrange_mix = q_c  # σ_S → 0 limit at the mean point
+
+                    result_quad = microphysics_tendencies_1m(
+                        BMT.Microphysics1Moment(),
+                        quad_1pt, mp, tps, ρ,
+                        T_mix, q_tot_mix, q_lcl_mean, q_icl_mean, q_rai_p, q_sno_p,
+                        T′T′, q′q′, corr_Tq, λ_lagrange_mix, α, dt, nsubs_quad,
+                    )
+
+                    # Reference: BMT called with the condensate the closure must
+                    # reconstruct at the mean point, plus the true precipitation.
+                    result_direct = BMT.bulk_microphysics_tendencies(
+                        BMT.LinearizedAverage(),
+                        BMT.Microphysics1Moment(),
+                        mp, tps, ρ, T_mix,
+                        q_tot_mix, λ_mix * q_c, (1 - λ_mix) * q_c,
+                        q_rai_p, q_sno_p, dt, nsubs_quad,
+                    )
+
+                    @test result_quad.dq_lcl_dt ≈ result_direct.dq_lcl_dt rtol = FT(1e-5)
+                    @test result_quad.dq_icl_dt ≈ result_direct.dq_icl_dt rtol = FT(1e-5)
+                    @test result_quad.dq_rai_dt ≈ result_direct.dq_rai_dt rtol = FT(1e-5)
+                    @test result_quad.dq_sno_dt ≈ result_direct.dq_sno_dt rtol = FT(1e-5)
+                end
+
                 # Test 2: Zero variance collapses to single-point → same as grid mean.
                 @testset "Zero Variance = Grid Mean" begin
                     quad = ClimaAtmos.SGSQuadrature(FT; quadrature_order = 3)
@@ -774,6 +822,83 @@ using ClimaAtmos
                     )
                     @test result_direct.dq_tot_dt <= FT(0)
                     @test isfinite(result_direct.e_tot_hlpr)
+                end
+
+                @testset "0M: flux-weighted energy helper" begin
+                    # The energy sink reconstructed downstream as
+                    # dq_tot_dt · e_tot_hlpr must equal the SGS average of
+                    # the per-point product E[dq·e].
+                    quad = ClimaAtmos.SGSQuadrature(FT; quadrature_order = 3)
+                    mp_0m = CMP.Microphysics0MParams(toml_dict)
+                    thp = TD.Parameters.ThermodynamicsParameters(toml_dict)
+
+                    ρ = FT(1.1)
+                    Φ = FT(5e4)
+                    dt = FT(1.0)
+                    corr = FT(0.6)
+
+                    # Mixed-phase, saturated mean with substantial variances:
+                    # e_hlpr varies strongly across points, so the covariance
+                    # term is large.
+                    T_mean = FT(263.0)
+                    q_tot_mean =
+                        TD.q_vap_saturation(thp, T_mean, ρ) + FT(5e-4)
+                    T′T′ = FT(2.0)
+                    q′q′ = FT(5e-7)
+
+                    result = ClimaAtmos.microphysics_tendencies_0m(
+                        quad, mp_0m, thp, ρ, T_mean, q_tot_mean,
+                        T′T′, q′q′, corr, Φ, dt,
+                    )
+                    # Brute-force reference from the raw evaluator averages
+                    # (dt = 1 with q_tot ≫ |dq| keeps the limiter inactive,
+                    # so the wrapper's dq matches the raw average).
+                    ev = ClimaAtmos.Microphysics0MEvaluator(
+                        mp_0m, thp, ρ, T_mean, Φ,
+                    )
+                    raw = ClimaAtmos.integrate_over_sgs(
+                        ev, quad, q_tot_mean, T_mean, q′q′, T′T′, corr,
+                    )
+                    @test raw.dq_tot_dt < FT(0)  # regime has precipitation
+                    @test result.dq_tot_dt ≈ raw.dq_tot_dt rtol = sqrt(eps(FT))
+                    @test result.dq_tot_dt * result.e_tot_hlpr ≈ raw.dq_e rtol =
+                        sqrt(eps(FT))
+                    # The flux-weighted helper is a dq-weighted mean of
+                    # per-point helper values, so it stays a physical energy.
+                    @test isfinite(result.e_tot_hlpr)
+
+                    # Zero variance: single effective point, so the helper
+                    # reduces to the mean-state saturation-adjusted helper.
+                    result0 = ClimaAtmos.microphysics_tendencies_0m(
+                        quad, mp_0m, thp, ρ, T_mean, q_tot_mean,
+                        FT(0), FT(0), FT(0), Φ, dt,
+                    )
+                    λ_mean = TD.liquid_fraction_ramp(thp, T_mean)
+                    sa = ClimaAtmos.SaturationAdjustmentEvaluator(
+                        thp, ρ, λ_mean,
+                    )(
+                        T_mean, q_tot_mean,
+                    )
+                    e_hlpr_mean =
+                        ClimaAtmos.e_tot_0M_precipitation_sources_helper(
+                            thp, T_mean, sa.q_liq, sa.q_ice, Φ,
+                        )
+                    @test result0.e_tot_hlpr ≈ e_hlpr_mean rtol = sqrt(eps(FT))
+
+                    # Subsaturated mean: no quadrature point precipitates, so
+                    # the helper is zero and carries no energy.
+                    q_dry = TD.q_vap_saturation(thp, T_mean, ρ) - FT(5e-3)
+                    for (T′T′_dry, q′q′_dry) in
+                        ((FT(0), FT(0)), (FT(2), FT(5e-7)))
+                        result_dry = ClimaAtmos.microphysics_tendencies_0m(
+                            quad, mp_0m, thp, ρ, T_mean, max(q_dry, FT(0)),
+                            T′T′_dry, q′q′_dry, corr, Φ, dt,
+                        )
+                        @test result_dry.dq_tot_dt == FT(0)
+                        @test result_dry.e_tot_hlpr == FT(0)
+                        @test result_dry.dq_tot_dt * result_dry.e_tot_hlpr ==
+                              FT(0)
+                    end
                 end
 
                 @testset "1M: sign consistency" begin

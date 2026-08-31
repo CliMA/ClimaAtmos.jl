@@ -242,6 +242,9 @@ function Base.summary(io::IO, numerics::AtmosNumerics)
     end
 end
 
+summary_type(prop) = typeof(prop)
+summary_type(::NonEquilibriumMicrophysics1M) = NonEquilibriumMicrophysics1M
+
 function Base.summary(io::IO, atmos::AtmosModel)
     pns = string.(propertynames(atmos))
     buf = maximum(length.(pns))
@@ -265,7 +268,7 @@ function Base.summary(io::IO, atmos::AtmosModel)
             '`',
             "::",
             '`',
-            typeof(prop),
+            summary_type(prop),
             '`',
             '\n',
         )
@@ -274,36 +277,32 @@ function Base.summary(io::IO, atmos::AtmosModel)
 end
 
 """
-    summary_microphysics(io::IO, microphysics_model, options)
+    summary_microphysics(io::IO, microphysics_model::NonEquilibriumMicrophysics1M)
 
-Print to `io` the microphysics settings that `summary(::AtmosModel)` does not
-surface.
-
-Two kinds of setting are hidden from the type-based summary: the substep counts
-of `NonEquilibriumMicrophysics1M`, which are struct fields rather than type
-parameters, and the per-process option selections, which live in the parameter
-set rather than in the `AtmosModel`.
+Print to `io` the 1-moment microphysics settings that `summary(::AtmosModel)`
+does not surface, because they are struct fields hidden by `typeof`: the substep
+counts and the per-process option selections (e.g. which autoconversion or
+accretion scheme is active, or `disabled` when the option is `nothing`).
 
 # Arguments
 
   - `io`: Stream to print to.
-  - `microphysics_model`: Microphysics model; substep counts are printed only for
-    `NonEquilibriumMicrophysics1M`.
-  - `options`: Per-process microphysics options; each is printed as the name of
-    its type, or as `disabled` when it is `nothing`.
+  - `microphysics_model`: Microphysics model whose substep counts and
+    per-process options are printed.
 """
-function summary_microphysics(io::IO, microphysics_model, options)
+function summary_microphysics(
+    io::IO,
+    microphysics_model::NonEquilibriumMicrophysics1M,
+)
+    options = microphysics_model.processes
     keys = collect(string.(propertynames(options)))
-    is_1m = microphysics_model isa NonEquilibriumMicrophysics1M
-    is_1m && append!(keys, ("n_substeps", "n_substeps_quad"))
+    append!(keys, ("n_substeps", "n_substeps_quad"))
     buf = maximum(length, keys)
     print(io, '\n')
     pad(k) = repeat(" ", buf - length(k) + 2)
     line(k, v) = print(io, "  ", pad(k), '`', k, '`', "::", '`', v, '`', '\n')
-    if is_1m
-        line("n_substeps", microphysics_model.n_substeps)
-        line("n_substeps_quad", microphysics_model.n_substeps_quad)
-    end
+    line("n_substeps", microphysics_model.n_substeps)
+    line("n_substeps_quad", microphysics_model.n_substeps_quad)
     for pn in propertynames(options)
         opt = getproperty(options, pn)
         label = isnothing(opt) ? "disabled" : string(nameof(typeof(opt)))
