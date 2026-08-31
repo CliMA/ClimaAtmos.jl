@@ -8,8 +8,8 @@ helem: 16
 npoly: 3
 zelem: 30
 stepper: hevi
-dt: 45.0
-t_end: 360.0
+dt: 120.0
+t_end: 864000.0
 perturb: false
 
 volume_flux: waruszewski
@@ -18,12 +18,12 @@ pgf: conservative_pert
 
 topography: earth
 topography_damping_factor: 1.0    
-terrain_warp: sleve
+terrain_warp: linear
 zstretch: [300.0, 3000.0]
 
 moisture: equil
 microphysics: zero_moment
-moisture_ic: dcmip                # capped DCMIP profile (min(q_0·…, rh_max·q_sat))
+moisture_ic: dcmip    
 rh_max: 1.0
 q_0: 0.018
 z_q1: 3000.0
@@ -32,4 +32,4 @@ z_q2: 8000.0
 output_dir: output/moist_baroclinic_wave_fddg_earth_topo
 diag_period: 86400.0
 dt_save: 21600.0
-ndiag: 1
+ndiag: 60
