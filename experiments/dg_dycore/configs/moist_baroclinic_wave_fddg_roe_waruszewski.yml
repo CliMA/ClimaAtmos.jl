@@ -1,0 +1,39 @@
+# Moist baroclinic wave on the flux-form FDDG core —
+# Waruszewski volume flux + Roe interface + perturbation-pressure PGF.
+#
+# The (ρ, ρe, ρu) subsystem uses the entropy-conservative, machine-precision
+# well-balanced Waruszewski two-point volume flux (½ρ̂⟦φ⟧ gravity fluctuation)
+# with Roe interface dissipation, paired with pgf: conservative_pert for the
+# vertical well-balance (needs the ᶜp_ref/ᶜρ_ref reference state).
+#
+# MOISTURE CAVEAT: q_tot is advected as a SEPARATE passive KEP scalar (it does
+# NOT ride the Waruszewski two-point flux). So Waruszewski's entropy-conservation
+# and machine-precision well-balancing are properties of the DRY (ρ,ρe,ρu)
+# subsystem only — moisture does not break them, but the moist system as a whole
+# is not provably entropy-consistent (the Tier-2 follow-up).
+core: fddg
+float_type: Float64
+
+helem: 8
+npoly: 3
+zelem: 15
+stepper: hevi
+dt: 30.0
+t_end: 864000.0         # 10 days
+perturb: true
+
+volume_flux: waruszewski
+interface_flux: roe
+pgf: conservative_pert
+
+moisture: equil
+microphysics: zero_moment
+precip_timescale: 600.0
+q_0: 0.018
+z_q1: 3000.0
+z_q2: 8000.0
+
+output_dir: output/moist_baroclinic_wave_fddg_roe_waruszewski
+diag_period: 86400.0
+dt_save: 21600.0
+ndiag: 60
