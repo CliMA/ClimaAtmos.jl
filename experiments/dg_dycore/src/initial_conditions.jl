@@ -366,7 +366,17 @@ function initial_state_fddg(m::DGModel{FT}) where {FT}
         )
     end
     # ρw in Covariant3 so the HEVI Jacobian reuses the MatrixFields
-    # machinery (g³³ pairings) verbatim
+    # machinery (g³³ pairings) verbatim.
+    #
+    # ρw = 0 is the physically-balanced IC over terrain (tested 2026-08-31):
+    # a coordinate-tangent IC (u³ = 0 ⇒ w = uₕ·level-slope) injects a
+    # several-m/s vertical-motion/buoyancy forcing through the whole column
+    # and drives p < 0 within ≤5 HEVI steps at production resolution, whereas
+    # with ρw = 0 the impermeability adjustment (u·∇h ≠ 0 at the surface) is
+    # confined near the surface and absorbed by the implicit acoustics
+    # (helem = 16, Earth topo, linear warp, dt = 120: clean). If steeper
+    # resolved slopes ever require taming the resting transient, use a
+    # SURFACE-DECAYED tangent profile — not a column-wide one.
     Yf = map(_ -> (; ρw = C3(FT(0))), fcoords)
     return Fields.FieldVector(c = Yc, f = Yf)
 end

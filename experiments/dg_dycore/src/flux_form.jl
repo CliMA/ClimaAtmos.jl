@@ -27,7 +27,8 @@ function compute_tendency_fddg!(
     vertical_transport,
 ) where {FT}
     c = m.c
-    (; Ic, If, vdivf2c, vvdivc2f, VanLeer, ᶠgradᵥ, Bw, hwdiv, hgrad) = m.ops
+    (; Ic, If, vdivf2c, vdivf2c3, vvdivc2f, VanLeer, ᶠgradᵥ, Bw, hwdiv, hgrad) =
+        m.ops
     (; ᶜΦ, ᶠβ_sponge, ᶜβ_sponge) = m.fields
     (; eE1, eE2, eE3, eN1, eN2, eN3, eR1, eR2, eR3, E1, E2, E3) = m.fields
     Δt = m.Δt
@@ -119,19 +120,42 @@ function compute_tendency_fddg!(
     @. dYc.ρu2 = dy_mw.ρu2 / lgeom_c.WJ
     @. dYc.ρu3 = dy_mw.ρu3 / lgeom_c.WJ
 
-    # --- Vertical FD (plane flux-form pattern; implicit under HEVI) ---
+    # --- Vertical FD (plane flux-form pattern; implicit under HEVI).
+    #     The face flux is the TOTAL momentum, so its Contravariant3
+    #     projection (taken inside vdivf2c/VanLeer with the face local
+    #     geometry) carries the terrain cross-term ρuₕ·∇ₓξ³: the horizontal
+    #     FDDG rows (Ja¹, Ja²) act along tilted coordinate surfaces and the
+    #     discrete GCL pairing Σᵢ Dᵢ(Jaⁱ) = 0 closes only with the full CT3
+    #     flux in the vertical family (verified to ~1e-13 relative on the
+    #     warped-box probe — the pointwise metric needs NO reconstruction).
+    #     A w-only vertical flux leaves the spurious ADVECTIVE source
+    #     −(1/J)∂_η(J ∂ξ³∂x·ρuₕ) — small for gentle linear warps, fatal under
+    #     SLEVE (∂_η of the slope is much larger, concentrated in the thinned
+    #     near-surface cells). This is distinct from — and does not touch —
+    #     the PRESSURE metric term p·Ja³_k (the earlier ∂_ξ3(p Ja³_k) flux
+    #     attempt double-hit the non-flux PGF and overshot ~13×; the pressure
+    #     side is handled by pgf = :conservative_pert / wb_metric instead).
+    #     Over flat topography ∂ξ³/∂x ≡ 0: cross entries multiply exact
+    #     zeros, bitwise-unchanged. ---
+    ᶠρuE = @. If(ρ * uE)
+    ᶠρuN = @. If(ρ * uN)
+    ᶠM = @. Geometry.UVWVector(ᶠρuE, ᶠρuN, ρw_w.components.data.:1)
     if vertical_transport
-        @. dYc.ρ -= vdivf2c(ρw_w)
-        @. dYc.ρe -= vdivf2c(VanLeer(ρw_w, h_tot, Δt))
+        @. dYc.ρ -= vdivf2c(ᶠM)
+        @. dYc.ρe -= vdivf2c(VanLeer(ᶠM, h_tot, Δt))
     else
-        # mass flux is fully implicit (linear); energy gets the explicit
-        # (VanLeer − central) correction so the HEVI total is Lin-VanLeer
+        # the ρw (acoustic) part of the mass flux is fully implicit (linear);
+        # the advective uₕ cross-term rides explicit. Energy gets the explicit
+        # (VanLeer(total) − central(ρw)) correction so the HEVI total is
+        # Lin-VanLeer on the total flux.
+        ᶠMcross = @. Geometry.UVWVector(ᶠρuE, ᶠρuN, zero(ᶠρuE))
+        @. dYc.ρ -= vdivf2c(ᶠMcross)
         @. dYc.ρe -=
-            vdivf2c(VanLeer(ρw_w, h_tot, Δt)) - vdivf2c(ρw_w * If(h_tot))
+            vdivf2c(VanLeer(ᶠM, h_tot, Δt)) - vdivf2c(ρw_w * If(h_tot))
     end
-    @. dYc.ρu1 -= vdivf2c(VanLeer(ρw_w, u1, Δt))
-    @. dYc.ρu2 -= vdivf2c(VanLeer(ρw_w, u2, Δt))
-    @. dYc.ρu3 -= vdivf2c(VanLeer(ρw_w, u3, Δt))
+    @. dYc.ρu1 -= vdivf2c(VanLeer(ᶠM, u1, Δt))
+    @. dYc.ρu2 -= vdivf2c(VanLeer(ᶠM, u2, Δt))
+    @. dYc.ρu3 -= vdivf2c(VanLeer(ᶠM, u3, Δt))
 
     # --- Moisture: ρq_tot transport (all explicit — never in the implicit
     #     acoustic subsystem). Horizontal: KG tracer flux riding the same mass
@@ -150,7 +174,7 @@ function compute_tendency_fddg!(
             y,
         )
         @. dYc.ρq_tot = dy_q.ρq / lgeom_c.WJ
-        @. dYc.ρq_tot -= vdivf2c(VanLeer(ρw_w, q_tot, Δt))
+        @. dYc.ρq_tot -= vdivf2c(VanLeer(ᶠM, q_tot, Δt))
         m.prob.microphysics == :zero_moment &&
             microphysics_0m_tendency!(dYc, ρ, ᶜΦ, q_tot, T_air, m)
     end
@@ -211,16 +235,16 @@ function compute_tendency_fddg!(
             # the small p′ ⇒ well-balanced over terrain (pm = p − p_ref).
             @. dρw = Bw(
                 -(ᶠgradᵥ(pm) + If(ρ - m.fields.ᶜρ_ref) * ᶠgradᵥ(ᶜΦ)) -
-                C3(vvdivc2f(Ic(ρw_w ⊗ w)), lgeom_f),
+                C3(vvdivc2f(Ic(ᶠM ⊗ w)), lgeom_f),
             )
         else
             @. dρw = Bw(
                 -(ᶠgradᵥ(p) + If(ρ) * ᶠgradᵥ(ᶜΦ)) -
-                C3(vvdivc2f(Ic(ρw_w ⊗ w)), lgeom_f),
+                C3(vvdivc2f(Ic(ᶠM ⊗ w)), lgeom_f),
             )
         end
     else
-        @. dρw = Bw(-C3(vvdivc2f(Ic(ρw_w ⊗ w)), lgeom_f))
+        @. dρw = Bw(-C3(vvdivc2f(Ic(ᶠM ⊗ w)), lgeom_f))
     end
     ρw_sc = @. ρw_w.components.data.:1
     uvf = @. If(uv)
