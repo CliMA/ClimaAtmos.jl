@@ -5,6 +5,12 @@ Unit tests for SGS Quadrature utilities (src/cache/sgs_quadrature.jl)
 using Test
 using ClimaAtmos
 
+# Uniform (unconditioned) precipitation arguments `(a_p, CF_d, sigma_S)` for
+# the quadrature form of `microphysics_tendencies_1m`: `a_p = 1` collapses both
+# conditioning weights to 1 for any `CF_d`, so precipitation is held constant
+# across the quadrature points, as it was before the overlap closure.
+uniform_precip_args(::Type{FT}) where {FT} = (FT(1), FT(0), FT(0))
+
 @testset "SGS Quadrature" begin
 
     @testset "Gauss-Hermite Quadrature" begin
@@ -359,7 +365,8 @@ using ClimaAtmos
                         BMT.Microphysics1Moment(),
                         quad_1pt, mp, tps, ρ,
                         T_mean, q_tot_mean, q_lcl_mean, q_icl_mean, q_rai, q_sno,
-                        T′T′, q′q′, corr_Tq, λ_lagrange, α, dt, nsubs_quad,
+                        T′T′, q′q′, corr_Tq, λ_lagrange, α, uniform_precip_args(FT)...,
+                        dt, nsubs_quad,
                     )
 
                     result_direct = BMT.bulk_microphysics_tendencies(
@@ -376,7 +383,7 @@ using ClimaAtmos
                 end
 
                 # Same exact-mean property, but with nonzero rain and
-                # snow. λ_lagrange enforces E[shifted_excess] = q_c on *cloud*
+                # snow. λ_lagrange enforces E[q_c_hat] = q_c on *cloud*
                 # condensate only, so at the mean point, the reconstruction must
                 # still recover q_lcl_hat = λ·q_c and q_icl_hat = (1−λ)·q_c,
                 # independent of q_rai / q_sno.
@@ -404,7 +411,8 @@ using ClimaAtmos
                         BMT.Microphysics1Moment(),
                         quad_1pt, mp, tps, ρ,
                         T_mix, q_tot_mix, q_lcl_mean, q_icl_mean, q_rai_p, q_sno_p,
-                        T′T′, q′q′, corr_Tq, λ_lagrange_mix, α, dt, nsubs_quad,
+                        T′T′, q′q′, corr_Tq, λ_lagrange_mix, α,
+                        uniform_precip_args(FT)..., dt, nsubs_quad,
                     )
 
                     # Reference: BMT called with the condensate the closure must
@@ -431,7 +439,8 @@ using ClimaAtmos
                         BMT.Microphysics1Moment(),
                         quad, mp, tps, ρ,
                         T_mean, q_tot_mean, q_lcl_mean, q_icl_mean, q_rai, q_sno,
-                        FT(0), FT(0), FT(0), λ_lagrange, α, dt, nsubs_quad,
+                        FT(0), FT(0), FT(0), λ_lagrange, α, uniform_precip_args(FT)...,
+                        dt, nsubs_quad,
                     )
 
                     result_direct = BMT.bulk_microphysics_tendencies(
@@ -453,7 +462,8 @@ using ClimaAtmos
                         BMT.Microphysics1Moment(),
                         quad, mp, tps, ρ,
                         T_mean, q_tot_mean, q_lcl_mean, q_icl_mean, q_rai, q_sno,
-                        T′T′, q′q′, corr_Tq, λ_lagrange, α, dt, nsubs_quad,
+                        T′T′, q′q′, corr_Tq, λ_lagrange, α, uniform_precip_args(FT)...,
+                        dt, nsubs_quad,
                     )
 
                     @test haskey(result, :dq_lcl_dt)
@@ -471,14 +481,16 @@ using ClimaAtmos
                         BMT.Microphysics1Moment(),
                         quad, mp, tps, ρ,
                         T_mean, q_tot_mean, q_lcl_mean, q_icl_mean, q_rai, q_sno,
-                        FT(4.0), FT(1e-5), FT(0.8), λ_lagrange, α, dt, nsubs_quad,
+                        FT(4.0), FT(1e-5), FT(0.8), λ_lagrange, α,
+                        uniform_precip_args(FT)..., dt, nsubs_quad,
                     )
 
                     result_no_var = microphysics_tendencies_1m(
                         BMT.Microphysics1Moment(),
                         quad, mp, tps, ρ,
                         T_mean, q_tot_mean, q_lcl_mean, q_icl_mean, q_rai, q_sno,
-                        FT(0), FT(0), FT(0), λ_lagrange, α, dt, nsubs_quad,
+                        FT(0), FT(0), FT(0), λ_lagrange, α, uniform_precip_args(FT)...,
+                        dt, nsubs_quad,
                     )
 
                     @test isfinite(result_var.dq_lcl_dt)
@@ -553,7 +565,8 @@ using ClimaAtmos
                 result = microphysics_tendencies_1m(
                     BMT.Microphysics1Moment(),
                     quad, mp, thp, ρ, T, q_tot, q_liq, q_ice, q_rai, q_sno,
-                    T′T′, q′q′, corr_Tq, λ_lagrange, α, dt, nsubs_quad,
+                    T′T′, q′q′, corr_Tq, λ_lagrange, α, uniform_precip_args(FT)..., dt,
+                    nsubs_quad,
                 )
 
                 # Total condensed water tendency
@@ -622,7 +635,8 @@ using ClimaAtmos
                 result = @inferred microphysics_tendencies_1m(
                     BMT.Microphysics1Moment(),
                     quad, mp, thp, ρ, T, q_tot, q_liq, q_ice, q_rai, q_sno,
-                    T′T′, q′q′, corr_Tq, λ_lagrange, α, dt, nsubs_quad,
+                    T′T′, q′q′, corr_Tq, λ_lagrange, α, uniform_precip_args(FT)..., dt,
+                    nsubs_quad,
                 )
 
                 # Verify return type
@@ -673,6 +687,8 @@ using ClimaAtmos
                     mp, thp, ρ,
                     q_rai, q_sno,
                     λ, λ_lagrange, mu_S, FT(1),
+                    # w_cloudy, w_clear, ε_w: unconditioned precipitation
+                    FT(1), FT(1), FT(1),
                     dt, nsubs_quad,
                     (),
                 )
@@ -750,7 +766,8 @@ using ClimaAtmos
                     BMT.Microphysics1Moment(),
                     quad_gm, mp, tps, ρ,
                     T_mean, q_tot, q_liq, q_ice, q_rai, q_sno,
-                    T′T′, q′q′, corr_Tq, λ_lagrange_gm, α_gm, dt, nsubs_quad,
+                    T′T′, q′q′, corr_Tq, λ_lagrange_gm, α_gm,
+                    uniform_precip_args(FT)..., dt, nsubs_quad,
                 )
 
                 # Direct BMT call
@@ -932,7 +949,8 @@ using ClimaAtmos
                         BMT.Microphysics1Moment(),
                         quad, mp_1m, thp, ρ, T,
                         q_tot, q_liq, q_ice, q_rai, q_sno,
-                        FT(0), FT(0), FT(0), λ_lagrange_gm, α_gm, dt,
+                        FT(0), FT(0), FT(0), λ_lagrange_gm, α_gm,
+                        uniform_precip_args(FT)..., dt,
                         nsubs_quad,
                     )
 
@@ -957,7 +975,8 @@ using ClimaAtmos
                         BMT.Microphysics1Moment(),
                         quad, mp_1m, thp, ρ, T,
                         q_tot, q_liq, q_ice, q_rai, q_sno,
-                        FT(4.0), FT(1e-5), FT(0.6), λ_lagrange_gm, α_gm, dt,
+                        FT(4.0), FT(1e-5), FT(0.6), λ_lagrange_gm, α_gm,
+                        uniform_precip_args(FT)..., dt,
                         nsubs_quad,
                     )
                     for field in (:dq_lcl_dt, :dq_icl_dt, :dq_rai_dt, :dq_sno_dt)
@@ -1119,7 +1138,8 @@ using ClimaAtmos
                     microphysics_tendencies_1m(
                         BMT.Microphysics1Moment(), quad, mp_1m, thp, ρ, T,
                         q_tot, q_lcl, q_icl, q_rai, q_sno,
-                        T′T′, q′q′, corr_Tq, λ_lagrange_perf, α_perf, dt,
+                        T′T′, q′q′, corr_Tq, λ_lagrange_perf, α_perf,
+                        uniform_precip_args(FT)..., dt,
                         nsubs_quad,
                     )
                 end
@@ -1127,7 +1147,8 @@ using ClimaAtmos
                     microphysics_tendencies_1m(
                         BMT.Microphysics1Moment(), quad, mp_1m, thp, ρ, T,
                         q_tot, q_lcl, q_icl, q_rai, q_sno,
-                        T′T′, q′q′, corr_Tq, λ_lagrange_perf, α_perf, dt,
+                        T′T′, q′q′, corr_Tq, λ_lagrange_perf, α_perf,
+                        uniform_precip_args(FT)..., dt,
                         nsubs_quad,
                     )
                 end
