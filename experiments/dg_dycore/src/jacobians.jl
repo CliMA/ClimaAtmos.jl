@@ -7,25 +7,22 @@ the DGModel and the Wfact receives it as the integrator parameter `p`.
 State names follow the ClimaAtmos convention: @name(c.ρ), @name(c.ρe),
 @name(f.ρw).
 
-Implicit tendency (vertical acoustics + vertical transport by the TOTAL
-flux ᶠM = UVW(ᶠρuE, ᶠρuN, ρw), terrain cross-term included; only the
-bounded limiter corrections and horizontal terms remain explicit):
-    ᶜρₜ   = −ᶜdivᵥ(ᶠM)                        [ρw part linear; ρuₕ part frozen]
-    ᶜρeₜ  = −ᶜdivᵥ(ᶠM · ᶠinterp(ᶜh_tot))      [central; VanLeer corr. explicit]
-    ᶜρuₖₜ = −ᶜdivᵥ(ᶠM · ᶠinterp(ᶜuₖ))         [central; k = 1..3]
-    ᶜρqₜ  = −ᶜdivᵥ(ᶠM · ᶠinterp(ᶜq_tot))      [central; moist only]
-    ᶠρwₜ  = −ᶠgradᵥ(ᶜp) − ᶠinterp(ᶜρ)·ᶠgradᵥ(ᶜΦ)
+Implicit tendency (vertical acoustic subsystem; the vertical mass/energy
+fluxes carry the TOTAL flux ᶠM = UVW(ᶠρuE, ᶠρuN, ρw) — terrain cross-term
+included, frozen in ρuₕ; everything else explicit):
+    ᶜρₜ  = −ᶜdivᵥ(ᶠM)                        [ρw part linear; ρuₕ part frozen]
+    ᶜρeₜ = −ᶜdivᵥ(ᶠM · ᶠinterp(ᶜh_tot))      [central; VanLeer corr. explicit]
+    ᶠρwₜ = −ᶠgradᵥ(ᶜp) − ᶠinterp(ᶜρ)·ᶠgradᵥ(ᶜΦ)
+    ρu_c, ρq_tot: no implicit tendency.
 
 Nonzero blocks (h_tot and K frozen — the validated :no_∂ᶜp∂ᶜK analog;
-∂ᶠρwₜ/∂ᶠρw ≡ 0 under frozen K; the advecting ᶠM is frozen in the transport
-blocks — frozen-flux Picard):
-    ∂ᶜρₜ/∂ᶠρw   = −ᶜdivᵥ_matrix ⋅ Diag(g³³)
-    ∂ᶜρeₜ/∂ᶠρw  = −ᶜdivᵥ_matrix ⋅ Diag(ᶠinterp(ᶜh_tot)·g³³)
-    ∂ᶜρuₖₜ/∂ᶜρuₖ = −ᶜdivᵥ_matrix ⋅ Diag(ᶠM³) ⋅ ᶠinterp_matrix ⋅ Diag(1/ρ)
-    ∂ᶜρqₜ/∂ᶜρq   = same tridiagonal block (shared operator)
-    ∂ᶠρwₜ/∂ᶜρe  = −ᶠgradᵥ_matrix ⋅ (R_d/cv_d)
-    ∂ᶠρwₜ/∂ᶜρ   = −ᶠgradᵥ_matrix ⋅ Diag(R_d(−(K+Φ)/cv_d + T_tri))
-                  − Diag(ᶠgradᵥ(ᶜΦ)) ⋅ ᶠinterp_matrix
+∂ᶠρwₜ/∂ᶠρw ≡ 0 under frozen K; the frozen ρuₕ cross-term shifts only the
+residual):
+    ∂ᶜρₜ/∂ᶠρw  = −ᶜdivᵥ_matrix ⋅ Diag(g³³)
+    ∂ᶜρeₜ/∂ᶠρw = −ᶜdivᵥ_matrix ⋅ Diag(ᶠinterp(ᶜh_tot)·g³³)
+    ∂ᶠρwₜ/∂ᶜρe = −ᶠgradᵥ_matrix ⋅ (R_d/cv_d)
+    ∂ᶠρwₜ/∂ᶜρ  = −ᶠgradᵥ_matrix ⋅ Diag(R_d(−(K+Φ)/cv_d + T_tri))
+                 − Diag(ᶠgradᵥ(ᶜΦ)) ⋅ ᶠinterp_matrix
 
 Residual convention (ClimaTimeSteppers, transform = false):
     R(Y) = Yᵖʳᵉᵛ + δtγ·Yₜ(Y) − Y,   ∂R/∂Y = δtγ·∂Yₜ/∂Y − I
@@ -34,10 +31,6 @@ Residual convention (ClimaTimeSteppers, transform = false):
 const ᶜρ_name = @name(c.ρ)
 const ᶜ𝔼_name = @name(c.ρe)
 const ᶠ𝕄F_name = @name(f.ρw)
-const ᶜρu1_name = @name(c.ρu1)
-const ᶜρu2_name = @name(c.ρu2)
-const ᶜρu3_name = @name(c.ρu3)
-const ᶜρq_name = @name(c.ρq_tot)
 
 struct FDDGImplicitEquationJacobian{TJ, RJ}
     ∂Yₜ∂Y::TJ
@@ -49,19 +42,6 @@ function FDDGImplicitEquationJacobian(Y, m::DGModel{FT}) where {FT}
     BidiagonalRow_ACT3 = BidiagonalMatrixRow{typeof(CT3(FT(0))')}
     TridiagonalRow_C3xACT3 =
         TridiagonalMatrixRow{typeof(C3(FT(0)) * CT3(FT(0))')}
-    TridiagonalRow = TridiagonalMatrixRow{FT}
-    # Momentum/moisture vertical-transport blocks (frozen advecting flux):
-    # scalar tridiagonal, decoupled from the acoustic arrowhead (∂/∂ρw of
-    # the transport dropped), so they are solved independently by the
-    # block₂ diagonal solve.
-    adv_blocks = (
-        (ᶜρu1_name, ᶜρu1_name) => zeros(TridiagonalRow, axes(Y.c)),
-        (ᶜρu2_name, ᶜρu2_name) => zeros(TridiagonalRow, axes(Y.c)),
-        (ᶜρu3_name, ᶜρu3_name) => zeros(TridiagonalRow, axes(Y.c)),
-    )
-    q_blocks =
-        MatrixFields.has_field(Y, ᶜρq_name) ?
-        ((ᶜρq_name, ᶜρq_name) => zeros(TridiagonalRow, axes(Y.c)),) : ()
     ∂Yₜ∂Y = MatrixFields.FieldMatrix(
         (ᶜρ_name, ᶠ𝕄F_name) => zeros(BidiagonalRow_ACT3, axes(Y.c)),
         (ᶜ𝔼_name, ᶠ𝕄F_name) => zeros(BidiagonalRow_ACT3, axes(Y.c)),
@@ -70,8 +50,6 @@ function FDDGImplicitEquationJacobian(Y, m::DGModel{FT}) where {FT}
         # kept (at zero) so the arrowhead structure matches the solver
         (ᶠ𝕄F_name, ᶠ𝕄F_name) =>
             zeros(TridiagonalRow_C3xACT3, axes(Y.f)),
-        adv_blocks...,
-        q_blocks...,
     )
     I = MatrixFields.identity_field_matrix(Y)
     ∂R∂Y = FT(1) .* ∂Yₜ∂Y .- I
@@ -119,34 +97,6 @@ function fddg_implicit_equation_jacobian!(
     K = @. (uE^2 + uN^2 + w_c^2) / 2
     p_thermo = @. pres_ρe(c, ρe, K, ᶜΦ, ρ)
     h_tot = @. (ρe + p_thermo) / ρ
-
-    # Vertical-transport blocks: dρχₜ = −ᶜdivᵥ(ᶠM · ᶠinterp(ρχ/ρ)) with ᶠM
-    # and ρ frozen ⇒ ∂/∂(ρχ) = −ᶜdivᵥ_matrix ⋅ Diag(ᶠM³) ⋅ ᶠinterp_matrix ⋅
-    # Diag(1/ρ) (tridiagonal per column; the roundoff-level tangential-
-    # projection sensitivity is dropped).
-    ᶠlg = Fields.local_geometry_field(Y.f.ρw)
-    ᶠρuE = @. If(ρ * uE)
-    ᶠρuN = @. If(ρ * uN)
-    ᶠM³ = @. CT3(
-        Geometry.contravariant3(
-            Geometry.UVWVector(
-                ᶠρuE,
-                ᶠρuN,
-                Geometry.WVector(Y.f.ρw).components.data.:1,
-            ),
-            ᶠlg,
-        ),
-    )
-    ∂ᶜρu1ₜ∂ᶜρu1 = ∂Yₜ∂Y[ᶜρu1_name, ᶜρu1_name]
-    @. ∂ᶜρu1ₜ∂ᶜρu1 =
-        -(ᶜdivᵥ_matrix()) *
-        DiagonalMatrixRow(ᶠM³) *
-        ᶠinterp_matrix() *
-        DiagonalMatrixRow(1 / ρ)
-    ∂Yₜ∂Y[ᶜρu2_name, ᶜρu2_name] .= ∂ᶜρu1ₜ∂ᶜρu1
-    ∂Yₜ∂Y[ᶜρu3_name, ᶜρu3_name] .= ∂ᶜρu1ₜ∂ᶜρu1
-    m.prob.moisture != :dry &&
-        (∂Yₜ∂Y[ᶜρq_name, ᶜρq_name] .= ∂ᶜρu1ₜ∂ᶜρu1)
 
     ᶠgⁱʲ = Fields.local_geometry_field(Y.f.ρw).gⁱʲ
     g³³(gⁱʲ) = reshape(
