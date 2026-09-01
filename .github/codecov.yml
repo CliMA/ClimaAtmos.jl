@@ -1,4 +1,0 @@
-# Configuration file for codecov. Used to remove some GitHub boxes
-comment: false
-github_checks:
-    annotations: false

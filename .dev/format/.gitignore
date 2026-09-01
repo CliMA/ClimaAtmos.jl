@@ -1,3 +1,0 @@
-# Resolved locally by the julia-formatter pre-commit hook; not committed so it
-# tracks the same JuliaFormatter v1.x that CI resolves at run time.
-Manifest*.toml

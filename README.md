@@ -1,83 +1,154 @@
-<div align="center">
-  <img src="logo.svg" alt="ClimaAtmos.jl Logo" width="140">
-</div>
+# DeveloperGuides
 
-# ClimaAtmos.jl
+Shared engineering standards, architectural patterns, and development guidelines for human and AI developers across the [CliMA](https://clima.caltech.edu) ecosystem.
 
-The atmosphere model of the CliMA Earth System Model: a GPU-capable global atmosphere model designed for calibration with data assimilation and machine learning.
+## Guides
 
-ClimaAtmos.jl solves the compressible equations of atmospheric motion on cubed-sphere and column grids, with physics parameterizations for turbulence and convection (EDMF), cloud microphysics, and radiation. It is built on [ClimaCore.jl](https://github.com/CliMA/ClimaCore.jl) and runs on CPUs and GPUs from a single codebase.
+Every guide applies across the CliMA ecosystem unless it says otherwise.
 
-|                   |                                                                                                                                                                                                                                                                                                                                                                      |
-| -----------------:|:-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Documentation** | [![stable](https://img.shields.io/badge/docs-stable-blue.svg)](https://CliMA.github.io/ClimaAtmos.jl/stable/) [![dev](https://img.shields.io/badge/docs-dev-blue.svg)](https://CliMA.github.io/ClimaAtmos.jl/dev/)                                                                                                                                                   |
-| **Version**       | [![version](https://juliahub.com/docs/ClimaAtmos/version.svg)](https://juliahub.com/ui/Packages/General/ClimaAtmos)                                                                                                                                                                                                                                                  |
-| **License**       | [![license](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](https://github.com/CliMA/ClimaAtmos.jl/blob/main/LICENSE)                                                                                                                                                                                                                                   |
-| **Tests**         | [![gha ci](https://github.com/CliMA/ClimaAtmos.jl/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/CliMA/ClimaAtmos.jl/actions/workflows/ci.yml?query=branch%3Amain) [![buildkite](https://badge.buildkite.com/2a31b42d67409c27660a0dcce65b49294cd9c6b9f14c12f21e.svg?branch=main)](https://buildkite.com/clima/climaatmos-ci/builds?branch=main) |
-| **Code Coverage** | [![codecov](https://codecov.io/gh/CliMA/ClimaAtmos.jl/branch/main/graph/badge.svg)](https://codecov.io/gh/CliMA/ClimaAtmos.jl)                                                                                                                                                                                                                                       |
-| **Downloads**     | [![Downloads](https://img.shields.io/badge/dynamic/json?url=http%3A%2F%2Fjuliapkgstats.com%2Fapi%2Fv1%2Ftotal_downloads%2FClimaAtmos&query=total_requests&label=Downloads)](https://juliapkgstats.com/pkg/ClimaAtmos)                                                                                                                                                |
+### Architecture
 
-<p align="center">
-  <img src="https://github.com/user-attachments/assets/778b0c14-a5d7-4907-82db-6d1f8a0c5b07" alt="Condensed water path from a global ClimaAtmos simulation">
-</p>
+- [repo_structure.md](architecture/repo_structure.md): how to navigate any CliMA Julia package.
+- [ecosystem_conventions.md](architecture/ecosystem_conventions.md): module aliases, `Y`/`Yₜ`/`p` state layout, `ᶜ`/`ᶠ` notation, CI structure, reproducibility, diagnostics.
+- [architectural_boundaries.md](architecture/architectural_boundaries.md): layered architecture and boundary rules.
+- [cross_repo_contracts.md](architecture/cross_repo_contracts.md): call-site conventions for ecosystem packages.
+- [dependency_management.md](architecture/dependency_management.md): runtime vs dev dependencies, compat bounds.
 
-Condensed water path from a global simulation initialized with ERA5 on 8-31-25 00Z. Output every 30 minutes; ran for ~4 days.
+### Performance
 
-## Features
+- [gpu_performance.md](performance/gpu_performance.md): GPU kernel rules, broadcast patterns, allocation avoidance.
+- [branchless_code.md](performance/branchless_code.md): avoiding warp divergence with `ifelse`, evaluate-both-cases splits, and fixed-iteration solvers chosen by offline tests.
+- [type_stability.md](performance/type_stability.md): Float32 compatibility, inference checks, struct field rules.
+- [numerical_robustness.md](performance/numerical_robustness.md): denominator regularization, clamping, NaN/Inf avoidance.
+- [ad_compatibility.md](performance/ad_compatibility.md): AD-safe patterns for ForwardDiff and Enzyme.
+- [allocation_debugging.md](performance/allocation_debugging.md): locating heap allocations with `Profile.Allocs`, JET, `@code_warntype`, flame graphs.
 
-  - **Global and single-column configurations**: cubed-sphere grids for global simulations, column grids for parameterization development and testing
-  - **Turbulence and convection**: eddy-diffusivity mass-flux (EDMF) schemes, designed for calibration with data assimilation and machine learning
-  - **Cloud microphysics**: 0-moment to 2-moment bulk schemes via [CloudMicrophysics.jl](https://github.com/CliMA/CloudMicrophysics.jl)
-  - **Radiation**: RRTMGP radiative transfer
-  - **GPU support**: runs on CPUs and NVIDIA GPUs from the same codebase
-  - **Composable configuration**: script and YAML-config interfaces for every aspect of a simulation
+### Code Quality
 
-## Installation
+- [getting_started.md](code-quality/getting_started.md): orienting newcomers to writing pointwise code compatible with ClimaCore `Field`s and broadcasting.
+- [code_style.md](code-quality/code_style.md): formatting, variable locality, Git workflow, feature removal, naming conventions.
+- [code_comments.md](code-quality/code_comments.md): what earns a comment, never describing a previous state, words to cut, sweeping a branch.
+- [documentation_policy.md](code-quality/documentation_policy.md): docstrings, repository-level docs, README and badge conventions, LICENSE/NOTICE and copyright notices, minimally viable documentation.
+- [changelogs_and_versions.md](code-quality/changelogs_and_versions.md): `NEWS.md` format, SemVer rules, and the release/tagging flow.
+- [variable_list.md](code-quality/variable_list.md): standardized CliMA variable naming conventions.
+- [glossary.md](code-quality/glossary.md): general CliMA software and simulation terminology.
+- [software_design_patterns.md](code-quality/software_design_patterns.md): numbered SDPs for branchless logic, functors, parameter extraction, and more.
 
-ClimaAtmos.jl is a registered Julia package (recommended Julia: v1.11):
+### Infrastructure
 
-```julia
-using Pkg
-Pkg.add("ClimaAtmos")
+- [testing_and_validation.md](infrastructure/testing_and_validation.md): type-stability checks, Aqua.jl, allocation regression, AD tests.
+- [clima_comms.md](infrastructure/clima_comms.md): device-agnostic and MPI-distributed code patterns.
+
+### Workflow
+
+- [onboarding.md](workflow/onboarding.md): install Julia, clone a CliMA repo, set up Revise/Infiltrator/JuliaFormatter, first PR loop.
+- [running_on_gpu.md](workflow/running_on_gpu.md): run a model on GPU — install Julia, add `CUDA.jl`, CUDA runtime compatibility, `CLIMACOMMS_DEVICE`, verify the device.
+- [agent_autonomy.md](workflow/agent_autonomy.md): actions that require explicit user approval.
+- [debugging.md](workflow/debugging.md): interactive debugging recipes for numerical instabilities, dispatch, and `Field` plotting.
+- [review.md](workflow/review.md): PR review instructions and checklist.
+- [ci_triage.md](workflow/ci_triage.md): checklist for "passes locally, fails on CI" failure modes.
+- [cross_repo_issue_pr_search.md](workflow/cross_repo_issue_pr_search.md): org-scoped GitHub search to find and filter issues/PRs across CliMA.
+
+---
+
+## About DeveloperGuides
+
+These guides are maintained in [CliMA/DeveloperGuides](https://github.com/CliMA/DeveloperGuides) and vendored into consumer repos as a Git subtree at the standardized path `docs/dev-guides/`. The material below is for maintaining and consuming that subtree; readers looking for engineering guidance want the [Guides](#guides) overview above.
+
+### Using the guides in a consumer repo
+
+A consumer repo keeps its own `AGENTS.md` at the root, which references `docs/dev-guides/AGENTS.md` (the agent entry point) plus a repo-specific guide (e.g. `docs/clima_atmos_specific.md`). See [`templates/`](templates/) for ready-to-copy starter files: a root `AGENTS.md`, a repo-specific guide skeleton, and the monthly sync workflow.
+
+```bash
+# Add the subtree to a new consumer repo
+git subtree add --prefix docs/dev-guides \
+    https://github.com/CliMA/DeveloperGuides.git main --squash
+
+# Pull the latest guides manually (most repos automate this monthly via update_dev_guides.yml)
+git subtree pull --prefix docs/dev-guides \
+    https://github.com/CliMA/DeveloperGuides.git main --squash \
+    -m "chore: sync dev guides from central repo"
 ```
 
-## Quick Example
+> [!NOTE]
+> **Subtree pitfalls.**
+>
+> - `git subtree add --prefix docs/dev-guides ...` nests all of DeveloperGuides, including its own `AGENTS.md`, `LICENSE`, and `README.md`, under that prefix. It does not touch the consumer's root files, so the initial add does not conflict with them.
+> - The real risk is editing the vendored copy under `docs/dev-guides/` directly instead of upstream (see "Contributing" below). A later `git subtree pull` merges upstream changes into that path, so a local edit there can produce a genuine merge conflict. Resolve it like any merge conflict: fix the conflicting file, `git add`, `git commit`. Subtree operations use merge, not rebase, so `git rebase --continue` does not apply.
+> - When there are no new upstream commits, the monthly run is a no-op. The workflow fails loudly on a `git subtree pull` error instead of masking it, so a red run needs attention.
 
-The simplest simulation uses all defaults — it solves the dry compressible Euler equations on a global cubed-sphere grid from a hydrostatically balanced state:
+### Fixing a broken subtree sync
 
-```julia
-import ClimaAtmos as CA
+The monthly sync breaks in one of two ways: a dev-guides PR was squash-merged — which discards the `git subtree` metadata the next pull relies on — or the workflow lacks the write permissions it needs to open a PR. If a repo's sync stopped producing PRs, apply whichever fix below it needs; most repos only need the first.
 
-simulation = CA.AtmosSimulation{Float32}(; t_end = "1days")
-CA.solve_atmos!(simulation)
+**1. Update the workflow file (do this on every consumer repo).** Replace the old workflow with the current template rather than hand-editing it:
+
+```bash
+git checkout -b update-dev-guides-workflow
+mkdir -p .github/workflows
+curl -fsSL https://raw.githubusercontent.com/CliMA/DeveloperGuides/main/templates/update_dev_guides.yml.template \
+    -o .github/workflows/update_dev_guides.yml
+git add .github/workflows/update_dev_guides.yml
+git commit -m "ci: refresh dev-guides sync workflow from template"
+git push -u origin update-dev-guides-workflow
 ```
 
-Every aspect of the simulation can be customized through keyword arguments, for example a single-column model:
+Then open a PR for that branch and merge it normally — this PR does not touch the subtree, so squash is fine. Also make sure **Settings → Actions → General → "Allow GitHub Actions to create and approve pull requests"** is enabled, or the workflow will fail when it tries to open the monthly sync PR.
 
-```julia
-grid = CA.ColumnGrid(Float32; z_elem = 30, z_max = 30000.0)
-simulation = CA.AtmosSimulation{Float32}(; grid, t_end = "6hours")
+**2. Repair broken subtree metadata (only if a sync PR was ever squash-merged).** Symptom: a manual `git subtree pull` (or the workflow log) fails with `fatal: can't squash-merge: 'docs/dev-guides' was never added.` Remove and re-add the subtree:
+
+```bash
+git checkout -b fix-dev-guides-subtree
+git rm -r docs/dev-guides
+git commit -m "chore: remove dev-guides subtree (re-adding to fix metadata)"
+git subtree add --prefix docs/dev-guides \
+    https://github.com/CliMA/DeveloperGuides.git main --squash
 ```
 
-See [Your First Simulation](https://CliMA.github.io/ClimaAtmos.jl/dev/first_simulation/) in the documentation for a guided introduction.
+Open a PR for this branch and **merge it with a merge commit, not squash** — squash-merging here immediately re-breaks the metadata. Any local edits to files under `docs/dev-guides/` are discarded, which is correct: that copy is vendored and should only be changed upstream.
 
-## Documentation
+### Contributing
 
-  - **[Stable docs](https://CliMA.github.io/ClimaAtmos.jl/stable/)** — equations, parameterizations, configuration reference, and API
-  - **[Dev docs](https://CliMA.github.io/ClimaAtmos.jl/dev/)** — latest development version
-  - **[Available diagnostics](https://CliMA.github.io/ClimaAtmos.jl/dev/available_diagnostics/)** — output variables
+Edits to shared guidelines belong in [CliMA/DeveloperGuides](https://github.com/CliMA/DeveloperGuides), not in the vendored copy inside a consumer repo. Open PRs there; once merged, the next subtree pull propagates them to every consumer.
 
-## Integration with CliMA models
+- Each guide has a **Self-correction** section: if you discover a guide is stale or missing a pattern, update it directly.
+- New guides go in the appropriate category directory and are added to this overview and to [AGENTS.md](AGENTS.md).
+- Cross-references between guides use relative paths (e.g. `../performance/gpu_performance.md`).
 
-ClimaAtmos.jl is a component of the [CliMA](https://github.com/CliMA) Earth System Model:
+### Repository layout
 
-  - [ClimaCore.jl](https://github.com/CliMA/ClimaCore.jl) — dynamical core and discretization tools
-  - [ClimaCoupler.jl](https://github.com/CliMA/ClimaCoupler.jl) — coupling to ocean, land, and sea ice components
-  - [Thermodynamics.jl](https://github.com/CliMA/Thermodynamics.jl) — moist thermodynamics
-  - [ClimaParams.jl](https://github.com/CliMA/ClimaParams.jl) — centralized, calibratable model parameters
+```text
+├── AGENTS.md                  # Agent entry point: autonomy gate + guide index
+├── README.md                  # This file: guide overview + repo info
+├── architecture/              # System design, layering, contracts
+├── performance/               # GPU, type stability, numerics, AD
+├── code-quality/              # Style, docstrings, changelogs, naming
+├── infrastructure/            # Testing, device abstraction
+├── workflow/                  # Onboarding, debugging, review, CI triage
+└── templates/                 # Starter files for consumer repos
+```
 
-## Contributing
+### CliMA ecosystem
 
-If you're interested in contributing to ClimaAtmos, we welcome contributions of any size! Let us know by [opening an issue](https://github.com/CliMA/ClimaAtmos.jl/issues/new) if you'd like to work on a new feature.
+These guides are the central source of engineering standards across [CliMA](https://github.com/CliMA), including:
 
-Contributors should follow the shared CliMA engineering standards in [`docs/dev-guides/`](docs/dev-guides/), which cover architecture, performance, code quality, documentation, and workflows. These are vendored from [CliMA/DeveloperGuides](https://github.com/CliMA/DeveloperGuides). The repo's [`AGENTS.md`](AGENTS.md) is a starting point for AI agents with repo-specific guidance. See also the [contributor's guide](https://clima.github.io/ClimaAtmos.jl/dev/contributor_guide/).
+- [ClimaAtmos](https://github.com/CliMA/ClimaAtmos.jl)
+- [ClimaCore](https://github.com/CliMA/ClimaCore.jl)
+- [ClimaLand](https://github.com/CliMA/ClimaLand.jl)
+- [ClimaOcean](https://github.com/CliMA/ClimaOcean.jl)
+- [ClimaCoupler](https://github.com/CliMA/ClimaCoupler.jl)
+- [Thermodynamics](https://github.com/CliMA/Thermodynamics.jl)
+- [CloudMicrophysics](https://github.com/CliMA/CloudMicrophysics.jl)
+- [SurfaceFluxes](https://github.com/CliMA/SurfaceFluxes.jl)
+- [ClimaTimeSteppers](https://github.com/CliMA/ClimaTimeSteppers.jl)
+
+### License
+
+[![license][license-img]][license-url] Apache 2.0; see [LICENSE](LICENSE).
+
+[license-img]: https://img.shields.io/github/license/CliMA/DeveloperGuides
+[license-url]: https://github.com/CliMA/DeveloperGuides/blob/main/LICENSE
+
+### Getting help
+
+For questions or suggestions, open an issue on [GitHub](https://github.com/CliMA/DeveloperGuides/issues).
