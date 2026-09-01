@@ -45,7 +45,7 @@ form, and `gh search` with the equivalent flags):
 | Open bugs across the org      | `org:CliMA state:open label:"bug 🐞"`               |
 | PRs awaiting your review      | `org:CliMA is:pr is:open review-requested:@me`      |
 | Issues assigned to you        | `org:CliMA is:issue is:open assignee:@me`           |
-| Stale PRs (untouched 30 days) | `org:CliMA is:pr is:open updated:<2026-04-16`       |
+| Stale PRs (untouched 30 days) | `org:CliMA is:pr is:open updated:<YYYY-MM-DD` (a date 30 days ago; GitHub search has no relative dates) |
 | Dependabot update PRs         | `org:CliMA is:pr is:open label:dependencies`        |
 | Untriaged issues              | `org:CliMA is:issue is:open no:label`               |
 | Mentions needing a reply      | `org:CliMA is:open mentions:@me`                    |

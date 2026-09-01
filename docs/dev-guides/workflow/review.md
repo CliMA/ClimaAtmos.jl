@@ -16,7 +16,7 @@ Work in this order:
 1. Read the changed files first, then step to the nearest controlling compute paths only when needed to confirm behavior or risk.
 2. Run the two mandatory passes: mathematical and physical correctness and consistency (section 1), then conformance to the performance guides (section 2).
 3. Use local evidence: changed code, nearby tests, call sites, docs, and config usage. Where a mathematical or codegen claim is in doubt, generate the evidence: derive the relation, check equivalence numerically, or inspect `@code_typed`/`@code_llvm`/`@allocated`.
-4. Report only evidence-backed findings or clearly labeled risks and open questions.
+4. Report only evidence-backed findings or explicitly labeled risks and open questions.
 
 ## 1. Mathematical and physical correctness and consistency (mandatory, in depth)
 
@@ -27,12 +27,13 @@ This is the heart of a CliMA review. Code can be clean, allocation-free, and GPU
 - [ ] Check **every** formula, algebraic identity, exponent, coefficient, unit, and physical constant in the changed code against its source: the cited paper or textbook, the governing equation, or the pre-change code. Re-derive it; do not assume a refactor preserved the math.
 - [ ] For each rewritten expression (a performance or clarity refactor: an exponent rewrite, a precomputed coefficient, a log-space reformulation, a fused `muladd`, a factored constant), **prove equivalence to the original** rather than eyeballing it. Confirm bit-identity with `===`, or agreement within a stated tolerance, across both `Float32` and `Float64`, on representative and extreme inputs. Recent example: `x^(2//3) -> cbrt(x)^2`, and `a_vent_0_coeff = av*cbrt(36)` replacing the inline `av / 6^(-2/3)`, were each confirmed identical before the change was accepted.
 - [ ] Watch for equivalence that holds algebraically but fails numerically: a reordering that overflows or underflows an intermediate (`cbrt(x^2)` vs `cbrt(x)^2`), catastrophic cancellation, a dropped `max(x, floor)` guard, or a broken sign assumption (`cbrt` accepts negatives, `sqrt` does not). See [numerical_robustness.md](../performance/numerical_robustness.md).
-- [ ] Check every **citation to a paper or reference**. Confirm the reference resolves (DOI, author-year, or equation/table/section number) and, more importantly, that it actually **supports the specific point being made**: the equation as written, the numerical value of a coefficient or threshold, the functional form of a parameterization, or the range of validity. Read the cited passage, do not trust the label. Flag a citation that supports something weaker or different than the code claims, an equation or table number that does not match the cited edition, a constant whose value disagrees with the source, and any new physics, empirical formula, or parameter value introduced without a citation. Keep citations consistent between code and docs (see [documentation_policy.md §3.4](../code-quality/documentation_policy.md)).
+- [ ] Check every **citation to a paper or reference**. Confirm the reference resolves (DOI, author-year, or equation/table/section number) and that it **supports the specific point being made**: the equation as written, the numerical value of a coefficient or threshold, the functional form of a parameterization, or the range of validity. Read the cited passage, do not trust the label. Flag a citation that supports something weaker or different than the code claims, an equation or table number that does not match the cited edition, a constant whose value disagrees with the source, and any new physics, empirical formula, or parameter value introduced without a citation. Keep citations consistent between code and docs (see [documentation_policy.md §3.4](../code-quality/documentation_policy.md)).
 
 ### Keep documentation consistent with code
 
 - [ ] Treat docstrings, code comments, and LaTeX/Documenter math as part of the artifact under review. Every relation they state must match the code **exactly**.
 - [ ] Flag as findings: a docstring formula that no longer matches the implementation, a comment describing a previous implementation, a field docstring whose "pre-computed ..." description disagrees with the constructor, an `@ref`/`@docs` pointing at a renamed or removed symbol, and units or symbol definitions that have drifted from the code. A doc/code inconsistency is a finding even when the code itself is correct. See [documentation_policy.md](../code-quality/documentation_policy.md).
+- [ ] Flag comments that describe a **previous state** of the code ("this used to ...", "previously ...", "no longer ..."): the history belongs in the commit message, and the comment reads as false to anyone without that context. Flag likewise a renamed symbol, flag, or test tier whose old name survives in a docstring, an example, or a CI config value — the last silently changes which jobs run. See [code_comments.md](../code-quality/code_comments.md).
 
 ### Physical reasoning
 
@@ -59,7 +60,7 @@ Check the changed hot-path and kernel code (both defined in [gpu_performance.md]
 ## 3. Validation
 
 - [ ] Map validation to the test groups in the repo's `test/runtests.jl`. The repo-specific guide (linked from [AGENTS.md](../AGENTS.md)) lists the groups and example jobs.
-- [ ] For any changed mathematical relation or physical behavior, confirm a test exists that would actually catch a wrong value: a limit test, a round-trip, or a comparison to an analytic result ([testing_and_validation.md](../infrastructure/testing_and_validation.md)). If a refactor is claimed "bit-identical," check whether an existing test truly pins the value or merely exercises the code path.
+- [ ] For any changed mathematical relation or physical behavior, confirm a test exists that would catch a wrong value: a limit test, a round-trip, or a comparison to an analytic result ([testing_and_validation.md](../infrastructure/testing_and_validation.md)). If a refactor is claimed "bit-identical," check whether an existing test truly pins the value or merely exercises the code path.
 - [ ] For config or runtime workflow changes, name the affected CI driver and Buildkite/GitHub Actions jobs explicitly.
 - [ ] Allocation benchmarks (typically under `perf/`) are not run in CI; catch allocation regressions in review with the `@allocated == 0` pattern from [allocation_debugging.md](../performance/allocation_debugging.md).
 - [ ] If validation is missing, name the exact missing test group, nearby test file, or CI job.

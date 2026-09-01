@@ -100,7 +100,7 @@ ClimaCore's broadcast machinery does not support a tuple of `Field`s on the LHS:
 
 ### Dollar interpolation for non-field arguments
 
-Use `$expr` to prevent the `@.` macro from broadcasting over a subexpression. This is essential for singleton dispatch types and computed scalars.
+Use `$expr` to prevent the `@.` macro from broadcasting over a subexpression, in particular singleton dispatch types and computed scalars.
 
 ```julia
 # ✅ Singleton escaped from broadcast
@@ -119,7 +119,7 @@ Extract non-`Field` arguments to local variables before the `@.` block; see [SDP
 
 Large functions (roughly > 200–300 lines) may exceed the Julia compiler's inlining budget. When this happens, broadcast kernels inside the function are not inlined, causing heap allocations for each broadcast.
 
-**Solution**: extract complex logical blocks into smaller `@inline` helper functions. Keeping the parent function small allows the compiler to stay within its heuristics threshold, ensuring all broadcasts are correctly fused.
+**Solution**: extract logical blocks into smaller `@inline` helper functions. Keeping the parent function small keeps the compiler within its inlining heuristics, so all broadcasts fuse.
 
 ## 6. Fixed iteration solvers
 
