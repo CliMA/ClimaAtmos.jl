@@ -64,11 +64,18 @@ Keywords (defaults in parentheses):
     terrain, so the full terrain amplitude is retained at the surface while
     metric cross-terms in the mid-to-upper troposphere are greatly reduced —
     preferable over heavy horizontal smoothing when orographic detail matters).
-  - `sleve_eta_h` (0.5): SLEVE — terrain warping applied only below
+  - `sleve_eta_h` (0.7): SLEVE — terrain warping applied only below
     `ηₕ × zmax`; grid is flat above. Ignored for `:linear`.
-  - `sleve_s` (0.5): SLEVE decay rate (`s` in Schär 2002); larger = slower
+  - `sleve_s` (10.0): SLEVE decay rate (`s` in Schär 2002); larger = slower
     decay = terrain influence extends higher. Constraint: `s × zmax > max(z_sfc)`.
-    Ignored for `:linear`.
+    Ignored for `:linear`. Defaults follow the ClimaAtmos CG system
+    (`SLEVEWarp(; eta = 0.7, s = 10.0)`): for `s ≫ 1` the decay is
+    ≈ linear-below-`ηₕ`, keeping near-surface cells at ≈ their linear-warp
+    thickness (Earth topo, 300 m zstretch floor: Δz_min 220 m vs 244 m linear)
+    while levels flatten above `ηₕ·zmax`. Aggressive pairs like `(0.5, 0.5)`
+    compress the bottom cell to ~70 m over the Himalaya and are not steppable
+    at production dt (dt = 15 s still crashes); `(0.7, 10.0)` is verified at
+    dt = 45 s (moist Earth-topo FDDG, helem 16, 2026-09).
   - `constants_mode` (`:parity`): `:parity` (parity-TOML literals) or
     `:clima_params` (ClimaParams via ClimaAtmos)
   - `dt_save` (21600.0) [s]: solution snapshot interval
@@ -160,8 +167,8 @@ Base.@kwdef struct BaroclinicWaveFDDG{FT <: AbstractFloat}
     topography::Symbol = :none
     topography_damping_factor::FT = 5.0
     terrain_warp::Symbol = :linear
-    sleve_eta_h::FT = 0.5
-    sleve_s::FT = 0.5
+    sleve_eta_h::FT = 0.7
+    sleve_s::FT = 10.0
     constants_mode::Symbol = :parity
     # IC values: :setups (ClimaAtmos Setups.shallow_atmos_barowave_values,
     # verified formula-identical), :formulas (the examples' own JW06
@@ -281,8 +288,8 @@ Base.@kwdef struct BaroclinicWaveDG{FT <: AbstractFloat}
     topography::Symbol = :none
     topography_damping_factor::FT = 5.0
     terrain_warp::Symbol = :linear
-    sleve_eta_h::FT = 0.5
-    sleve_s::FT = 0.5
+    sleve_eta_h::FT = 0.7
+    sleve_s::FT = 10.0
     constants_mode::Symbol = :parity
     ic_source::Symbol = :setups
     held_suarez::Bool = false

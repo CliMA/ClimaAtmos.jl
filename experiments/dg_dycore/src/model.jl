@@ -307,6 +307,14 @@ function dg_operators(::DGConstants{FT}) where {FT}
         top = Operators.FirstOrderOneSided(),
         constraint = Operators.MonotoneLocalExtrema(),
     )
+    # First-order upwind product for implicit vertical h_tot/q_tot
+    # transport (VERT_ENERGY=upwind1): linear in the transported scalar at
+    # frozen flux sign — unconditionally stable and monotone. Boundary
+    # faces are overridden by vdivf2c's zero-flux SetValue.
+    ᶠupwind1 = Operators.UpwindBiasedProductC2F(
+        bottom = Operators.Extrapolate(),
+        top = Operators.Extrapolate(),
+    )
     ᶠgradᵥ = Operators.GradientC2F(
         bottom = Operators.SetGradient(C3(FT(0))),
         top = Operators.SetGradient(C3(FT(0))),
@@ -322,7 +330,7 @@ function dg_operators(::DGConstants{FT}) where {FT}
     return (;
         hwdiv, hgrad, hcurl,
         Ic, If, wIf, vdivf2c, vdivf2c0, vdivf2c3, vvdivc2f, VanLeer,
-        ᶠgradᵥ, ᶠcurlᵥ, Bw,
+        ᶠupwind1, ᶠgradᵥ, ᶠcurlᵥ, Bw,
     )
 end
 

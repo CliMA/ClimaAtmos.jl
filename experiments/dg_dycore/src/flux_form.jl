@@ -27,8 +27,10 @@ function compute_tendency_fddg!(
     vertical_transport,
 ) where {FT}
     c = m.c
-    (; Ic, If, vdivf2c, vdivf2c3, vvdivc2f, VanLeer, ᶠgradᵥ, Bw, hwdiv, hgrad) =
-        m.ops
+    (;
+        Ic, If, vdivf2c, vdivf2c3, vvdivc2f, VanLeer, ᶠupwind1,
+        ᶠgradᵥ, Bw, hwdiv, hgrad,
+    ) = m.ops
     (; ᶜΦ, ᶠβ_sponge, ᶜβ_sponge) = m.fields
     (; eE1, eE2, eE3, eN1, eN2, eN3, eR1, eR2, eR3, E1, E2, E3) = m.fields
     Δt = m.Δt
@@ -120,42 +122,54 @@ function compute_tendency_fddg!(
     @. dYc.ρu2 = dy_mw.ρu2 / lgeom_c.WJ
     @. dYc.ρu3 = dy_mw.ρu3 / lgeom_c.WJ
 
-    # --- Vertical FD (plane flux-form pattern; implicit under HEVI).
-    #     The face flux is the TOTAL momentum, so its Contravariant3
-    #     projection (taken inside vdivf2c/VanLeer with the face local
-    #     geometry) carries the terrain cross-term ρuₕ·∇ₓξ³: the horizontal
-    #     FDDG rows (Ja¹, Ja²) act along tilted coordinate surfaces and the
-    #     discrete GCL pairing Σᵢ Dᵢ(Jaⁱ) = 0 closes only with the full CT3
-    #     flux in the vertical family (verified to ~1e-13 relative on the
-    #     warped-box probe — the pointwise metric needs NO reconstruction).
-    #     A w-only vertical flux leaves the spurious ADVECTIVE source
-    #     −(1/J)∂_η(J ∂ξ³∂x·ρuₕ) — small for gentle linear warps, fatal under
-    #     SLEVE (∂_η of the slope is much larger, concentrated in the thinned
-    #     near-surface cells). This is distinct from — and does not touch —
-    #     the PRESSURE metric term p·Ja³_k (the earlier ∂_ξ3(p Ja³_k) flux
-    #     attempt double-hit the non-flux PGF and overshot ~13×; the pressure
-    #     side is handled by pgf = :conservative_pert / wb_metric instead).
-    #     Over flat topography ∂ξ³/∂x ≡ 0: cross entries multiply exact
-    #     zeros, bitwise-unchanged. ---
+    # --- Vertical FD (implicit under HEVI). The face flux is the TOTAL
+    #     momentum: its CT3 projection carries the terrain cross-term
+    #     ρuₕ·∇ₓξ³, required for the discrete GCL Σᵢ Dᵢ(Jaⁱ) = 0 to close
+    #     against the horizontal FDDG rows over warped grids (w-only flux
+    #     leaves a spurious source −(1/J)∂_η(J ∂ξ³∂x·ρuₕ), fatal under
+    #     SLEVE). Flat topography: cross entries are exact zeros. ---
     ᶠρuE = @. If(ρ * uE)
     ᶠρuN = @. If(ρ * uN)
     ᶠM = @. Geometry.UVWVector(ᶠρuE, ᶠρuN, ρw_w.components.data.:1)
+    # VERT_ENERGY — vertical h_tot (and, under HEVI, q_tot) transport:
+    #   vanleer (default): 2nd-order monotone; the explicit correction's
+    #     (1 − |v|Δt) factor requires vertical advective C < 1.
+    #   central: central-implicit; no vertical dissipation (diagnostic only).
+    #   upwind1: 1st-order upwind, fully implicit (linear at frozen flux
+    #     sign): unconditionally stable and monotone — for large dt over
+    #     steep warped grids.
+    vert_energy = Symbol(get(ENV, "VERT_ENERGY", "vanleer"))
     if vertical_transport
         @. dYc.ρ -= vdivf2c(ᶠM)
-        @. dYc.ρe -= vdivf2c(VanLeer(ᶠM, h_tot, Δt))
+        if vert_energy == :central
+            @. dYc.ρe -= vdivf2c(ᶠM * If(h_tot))
+        elseif vert_energy == :upwind1
+            @. dYc.ρe -= vdivf2c(ᶠupwind1(ᶠM, h_tot))
+        else
+            @. dYc.ρe -= vdivf2c(VanLeer(ᶠM, h_tot, Δt))
+        end
     else
-        # the ρw (acoustic) part of the mass flux is fully implicit (linear);
-        # the advective uₕ cross-term rides explicit. Energy gets the explicit
-        # (VanLeer(total) − central(ρw)) correction so the HEVI total is
-        # Lin-VanLeer on the total flux.
-        ᶠMcross = @. Geometry.UVWVector(ᶠρuE, ᶠρuN, zero(ᶠρuE))
-        @. dYc.ρ -= vdivf2c(ᶠMcross)
-        @. dYc.ρe -=
-            vdivf2c(VanLeer(ᶠM, h_tot, Δt)) - vdivf2c(ρw_w * If(h_tot))
+        # Mass/energy transport by the full ᶠM is implicit (the cross-term
+        # is frozen in ρuₕ, so the Jacobian is unchanged). Explicit
+        # remainder: only the (VanLeer − central) correction (vanleer mode).
+        if vert_energy == :vanleer
+            @. dYc.ρe -=
+                vdivf2c(VanLeer(ᶠM, h_tot, Δt)) - vdivf2c(ᶠM * If(h_tot))
+        end
     end
-    @. dYc.ρu1 -= vdivf2c(VanLeer(ᶠM, u1, Δt))
-    @. dYc.ρu2 -= vdivf2c(VanLeer(ᶠM, u2, Δt))
-    @. dYc.ρu3 -= vdivf2c(VanLeer(ᶠM, u3, Δt))
+    # Vertical momentum-component transport: central-implicit under HEVI
+    # (tridiagonal Jacobian blocks; removes the explicit dt ≲ Δz_min/w
+    # limit); Lin-VanLeer under the explicit stepper (C < 1 regime).
+    vert_imp = m.prob.stepper == :hevi
+    if !vert_imp
+        @. dYc.ρu1 -= vdivf2c(VanLeer(ᶠM, u1, Δt))
+        @. dYc.ρu2 -= vdivf2c(VanLeer(ᶠM, u2, Δt))
+        @. dYc.ρu3 -= vdivf2c(VanLeer(ᶠM, u3, Δt))
+    elseif vertical_transport
+        @. dYc.ρu1 -= vdivf2c(ᶠM * If(u1))
+        @. dYc.ρu2 -= vdivf2c(ᶠM * If(u2))
+        @. dYc.ρu3 -= vdivf2c(ᶠM * If(u3))
+    end # HEVI remaining tendency: momentum transport is fully implicit
 
     # --- Moisture: ρq_tot transport (all explicit — never in the implicit
     #     acoustic subsystem). Horizontal: KG tracer flux riding the same mass
@@ -174,7 +188,18 @@ function compute_tendency_fddg!(
             y,
         )
         @. dYc.ρq_tot = dy_q.ρq / lgeom_c.WJ
-        @. dYc.ρq_tot -= vdivf2c(VanLeer(ᶠM, q_tot, Δt))
+        # Vertical: implicit under HEVI (upwind1 mode is monotone; central
+        # mode relies on the smooth moisture IC — monitor minρq);
+        # Lin-VanLeer under the explicit stepper.
+        if !vert_imp
+            @. dYc.ρq_tot -= vdivf2c(VanLeer(ᶠM, q_tot, Δt))
+        elseif vertical_transport
+            if vert_energy == :upwind1
+                @. dYc.ρq_tot -= vdivf2c(ᶠupwind1(ᶠM, q_tot))
+            else
+                @. dYc.ρq_tot -= vdivf2c(ᶠM * If(q_tot))
+            end
+        end
         m.prob.microphysics == :zero_moment &&
             microphysics_0m_tendency!(dYc, ρ, ᶜΦ, q_tot, T_air, m)
     end
@@ -277,7 +302,7 @@ remaining_tendency_fddg!(dY, Y, m, t) =
 # frozen h_tot; Jacobian in jacobians.jl.
 function implicit_tendency_fddg!(dY, Y, m::DGModel{FT}, t) where {FT}
     c = m.c
-    (; Ic, If, vdivf2c, ᶠgradᵥ, Bw) = m.ops
+    (; Ic, If, vdivf2c, ᶠupwind1, ᶠgradᵥ, Bw) = m.ops
     (; ᶜΦ, eE1, eE2, eE3, eN1, eN2, eN3) = m.fields
 
     Yc = Y.c
@@ -285,8 +310,18 @@ function implicit_tendency_fddg!(dY, Y, m::DGModel{FT}, t) where {FT}
     ρe = Yc.ρe
     ρw_w = @. Geometry.WVector(Y.f.ρw)
 
-    uE = @. (Yc.ρu1 * eE1 + Yc.ρu2 * eE2 + Yc.ρu3 * eE3) / ρ
-    uN = @. (Yc.ρu1 * eN1 + Yc.ρu2 * eN2 + Yc.ρu3 * eN3) / ρ
+    # Same tangential projection as the explicit path (keeps the HEVI
+    # split identity rhs == implicit + remaining exact).
+    (; eR1, eR2, eR3) = m.fields
+    u1r = @. Yc.ρu1 / ρ
+    u2r = @. Yc.ρu2 / ρ
+    u3r = @. Yc.ρu3 / ρ
+    ur = @. u1r * eR1 + u2r * eR2 + u3r * eR3
+    u1 = @. u1r - ur * eR1
+    u2 = @. u2r - ur * eR2
+    u3 = @. u3r - ur * eR3
+    uE = @. u1 * eE1 + u2 * eE2 + u3 * eE3
+    uN = @. u1 * eN1 + u2 * eN2 + u3 * eN3
     w_c = @. Ic(ρw_w).components.data.:1 / ρ
     K = @. (uE^2 + uN^2 + w_c^2) / 2
     # Moist p must match the explicit path so the HEVI split rhs = imp + rem
@@ -299,12 +334,34 @@ function implicit_tendency_fddg!(dY, Y, m::DGModel{FT}, t) where {FT}
         (@. pres_ρe(c, ρe, K, ᶜΦ, ρ))
     h_tot = @. (ρe + p_thermo) / ρ
 
-    @. dY.c.ρ = -vdivf2c(ρw_w)
-    @. dY.c.ρe = -vdivf2c(ρw_w * If(h_tot))
-    dY.c.ρu1 .= FT(0)
-    dY.c.ρu2 .= FT(0)
-    dY.c.ρu3 .= FT(0)
-    moist && (dY.c.ρq_tot .= FT(0))
+    # Full central vertical transport by the TOTAL flux (ρw + terrain
+    # cross-term ρuₕ·∇ₓξ³), mirroring the ClimaAtmos CG implicit block
+    # (implicit_tendency.jl uses the full ᶠu³). The cross-term is frozen in
+    # ρuₕ (identity rows in the implicit system), so it only shifts the
+    # Newton residual — the ∂/∂ρw Jacobian (jacobians.jl) is unchanged.
+    ᶠρuE = @. If(ρ * uE)
+    ᶠρuN = @. If(ρ * uN)
+    ᶠM = @. Geometry.UVWVector(ᶠρuE, ᶠρuN, ρw_w.components.data.:1)
+    @. dY.c.ρ = -vdivf2c(ᶠM)
+    # Energy: central by default (VanLeer correction rides explicit);
+    # monotone first-order upwind under VERT_ENERGY=upwind1.
+    if Symbol(get(ENV, "VERT_ENERGY", "vanleer")) == :upwind1
+        @. dY.c.ρe = -vdivf2c(ᶠupwind1(ᶠM, h_tot))
+    else
+        @. dY.c.ρe = -vdivf2c(ᶠM * If(h_tot))
+    end
+    # Momentum/moisture vertical transport by the frozen flux ᶠM: linear in
+    # the transported quantity (tridiagonal Jacobian blocks in jacobians.jl).
+    @. dY.c.ρu1 = -vdivf2c(ᶠM * If(u1))
+    @. dY.c.ρu2 = -vdivf2c(ᶠM * If(u2))
+    @. dY.c.ρu3 = -vdivf2c(ᶠM * If(u3))
+    if moist
+        if Symbol(get(ENV, "VERT_ENERGY", "vanleer")) == :upwind1
+            @. dY.c.ρq_tot = -vdivf2c(ᶠupwind1(ᶠM, Yc.ρq_tot / ρ))
+        else
+            @. dY.c.ρq_tot = -vdivf2c(ᶠM * If(Yc.ρq_tot / ρ))
+        end
+    end
     # Pressure-gradient + buoyancy pair (must match the explicit form in
     # compute_tendency_fddg! so the HEVI split rhs = implicit + remaining). The
     # perturbation form shifts p and ρ by the frozen reference, so the Jacobian
