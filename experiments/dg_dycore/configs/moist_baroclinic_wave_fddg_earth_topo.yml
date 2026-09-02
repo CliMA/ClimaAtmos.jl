@@ -1,22 +1,11 @@
-# Moist baroclinic wave on the FDDG core WITH Earth topography (ETOPO2022).
-# Mirrors the SLURM setup: waruszewski volume flux + Roe interface +
-# perturbation-pressure PGF, DCMIP moist IC, 0-moment microphysics.
 core: fddg
-    # State for the conservative (ρ,ρe,ρu⃗) two-point fluxes. `pm` feeds the
-    # momentum pressure slot; `φ` (geopotential) feeds the Waruszewski gravity
-    # fluctuation ½ρ̂⟦φ⟧ (KG/Ranocha volume + Roe/Rusanov interfaces ignore it;
-    # Φ is single-valued at faces). Moist adds `q` for the tracer flux.
-float_type: Float64
+float_type: Float32
 
 helem: 16
 npoly: 3
 zelem: 30
 stepper: hevi
 dt: 90.0
-    # State for the conservative (ρ,ρe,ρu⃗) two-point fluxes. `pm` feeds the
-    # momentum pressure slot; `φ` (geopotential) feeds the Waruszewski gravity
-    # fluctuation ½ρ̂⟦φ⟧ (KG/Ranocha volume + Roe/Rusanov interfaces ignore it;
-    # Φ is single-valued at faces). Moist adds `q` for the tracer flux.
 t_end: 864000.0
 perturb: false
 
@@ -27,7 +16,7 @@ pgf: conservative_pert
 topography: earth
 topography_damping_factor: 1.0    
 terrain_warp: sleve
-zstretch: [30.0, 3000.0]
+zstretch: [300.0, 3000.0]
 
 moisture: equil
 microphysics: zero_moment
