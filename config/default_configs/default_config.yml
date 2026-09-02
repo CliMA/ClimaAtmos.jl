@@ -40,6 +40,9 @@ topography:
 mesh_warp_type:
   help: "Sets the interior mesh warp method [`Linear`, `SLEVE`]"
   value: "SLEVE"
+horizontal_discretization:
+  help: "Horizontal spectral-element discretization [`CG` (continuous, DSS-coupled, default), `DG` (discontinuous, interface-flux-coupled)]"
+  value: "CG"
 sleve_eta:
   help: "If SLEVE coordinates are chosen, sets the `ηₕ` parameter (if z/z_top > ηₕ, no warping is applied)"
   value: 0.7

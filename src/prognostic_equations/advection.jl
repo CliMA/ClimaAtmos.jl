@@ -87,6 +87,9 @@ NVTX.@annotate function horizontal_dynamics_tendency!(Yₜ, Y, p, t)
         ) / 2,
     )
     # Without the C12(), the right-hand side would be a C1 or C2 in 2D space.
+
+    # DG spaces: complete the element-local tendencies with interface terms
+    dg_horizontal_dynamics_completion!(Yₜ, Y, p, t)
     return nothing
 end
 
@@ -139,6 +142,9 @@ NVTX.@annotate function horizontal_tracer_advection_tendency!(Yₜ, Y, p, t)
             end
         end
     end
+
+    # DG spaces: complete the grid-mean tracer advection with interface fluxes
+    dg_horizontal_tracer_completion!(Yₜ, Y, p, t)
     return nothing
 end
 
@@ -225,7 +231,11 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     ᶠω¹²ʲs = p.scratch.ᶠtemp_CT12ʲs
 
     if point_type <: Geometry.Abstract3DPoint
-        @. ᶜω³ = wcurlₕ(Y.c.uₕ)
+        if is_dg_horizontal(axes(Y.c))
+            dg_ω³!(ᶜω³, Y)
+        else
+            @. ᶜω³ = wcurlₕ(Y.c.uₕ)
+        end
     else
         @. ᶜω³ = zero(ᶜω³)
     end
@@ -234,7 +244,11 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     for j in 1:n
         @. ᶠω¹²ʲs.:($$j) = ᶠω¹²
     end
-    @. ᶠω¹² += CT12(wcurlₕ(Y.f.u₃))
+    if is_dg_horizontal(axes(Y.f))
+        dg_ω¹²_horizontal!(ᶠω¹², Y)
+    else
+        @. ᶠω¹² += CT12(wcurlₕ(Y.f.u₃))
+    end
     for j in 1:n
         @. ᶠω¹²ʲs.:($$j) += CT12(wcurlₕ(Y.f.sgsʲs.:($$j).u₃))
     end

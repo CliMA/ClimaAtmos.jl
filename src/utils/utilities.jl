@@ -613,8 +613,11 @@ summation, i.e. whether its quadrature is Gauss-Lobatto-Legendre.
 Single columns have no horizontal space and always return `false`.
 """
 function do_dss(space::Spaces.AbstractSpace)
-    return Spaces.quadrature_style(Spaces.horizontal_space(space)) isa
-           Quadratures.GLL
+    h_space = Spaces.horizontal_space(space)
+    # Discontinuous (DG) spaces are coupled by interface numerical fluxes in
+    # the tendencies (Operators.tendency_completion), never by DSS.
+    Grids.discretization(Spaces.grid(h_space)) isa Grids.DG && return false
+    return Spaces.quadrature_style(h_space) isa Quadratures.GLL
 end
 
 function do_dss(::Spaces.FiniteDifferenceSpace)

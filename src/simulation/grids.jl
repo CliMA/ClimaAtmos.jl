@@ -55,6 +55,7 @@ function SphereGrid(
     topography_damping_factor = 5.0,
     mesh_warp_type::MeshWarpType = SLEVEWarp{FT}(),
     topo_smoothing = false,
+    discretization::Union{Grids.Discretization, Nothing} = nothing,
     z_mesh = CommonGrids.DefaultZMesh(FT; z_min = 0, z_max, z_elem,
         stretch = get_stretching(FT, z_stretch, dz_bottom),
     ),
@@ -84,6 +85,7 @@ function SphereGrid(
         global_geometry,
         enable_bubble = bubble,
         h_topology,
+        discretization,
     )
 
     return grid
@@ -184,6 +186,7 @@ function BoxGrid(
     z_mesh = CommonGrids.DefaultZMesh(FT; z_min = 0, z_max, z_elem,
         stretch = get_stretching(FT, z_stretch, dz_bottom),
     ),
+    discretization::Union{Grids.Discretization, Nothing} = nothing,
 ) where {FT}
     n_quad_points = nh_poly + 1
     hypsography_fun = hypsography_function_from_topography(
@@ -199,6 +202,7 @@ function BoxGrid(
         global_geometry = Geometry.CartesianGlobalGeometry(),
         z_mesh,
         enable_bubble = bubble,
+        discretization,
     )
 
     return grid
@@ -251,6 +255,7 @@ function PlaneGrid(
     z_mesh = CommonGrids.DefaultZMesh(FT; z_min = 0, z_max, z_elem,
         stretch = get_stretching(FT, z_stretch, dz_bottom),
     ),
+    discretization::Union{Grids.Discretization, Nothing} = nothing,
 ) where {FT}
     n_quad_points = nh_poly + 1
     hypsography_fun = hypsography_function_from_topography(
@@ -267,6 +272,7 @@ function PlaneGrid(
         context,
         hypsography_fun,
         global_geometry = Geometry.CartesianGlobalGeometry(),
+        discretization,
     )
 
     return grid

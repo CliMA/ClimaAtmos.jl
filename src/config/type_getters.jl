@@ -129,6 +129,15 @@ function get_numerics(parsed_args, FT)
     diff_mode = parsed_args["implicit_diffusion"] ? Implicit() : Explicit()
 
     hyperdiff = get_hyperdiffusion_model(parsed_args, FT)
+    # CG hyperdiffusion is DSS-based; on a DG space it degenerates to an
+    # element-local (uncoupled) ∇⁴. The DG core relies on its interface
+    # (Rusanov) dissipation instead.
+    if get_horizontal_discretization(parsed_args) isa Grids.DG &&
+       !isnothing(hyperdiff)
+        @warn "hyperdiff is DSS-based and not meaningful with \
+               horizontal_discretization = DG; set `hyperdiff: ~` (DG uses \
+               interface dissipation)."
+    end
 
     numerics = AtmosNumerics(;
         energy_q_tot_upwinding,
@@ -501,6 +510,21 @@ function get_mesh_warp_type(FT, parsed_args)
 end
 
 """
+    get_horizontal_discretization(parsed_args)
+
+Map the `horizontal_discretization` config key to a `ClimaCore.Grids`
+discretization: `"CG"` → `Grids.CG()`, `"DG"` → `Grids.DG()`. `nothing`
+(key absent or `~`) follows the quadrature default (CG for GLL).
+"""
+function get_horizontal_discretization(parsed_args)
+    val = get(parsed_args, "horizontal_discretization", nothing)
+    isnothing(val) && return nothing
+    val == "CG" && return Grids.CG()
+    val == "DG" && return Grids.DG()
+    error("horizontal_discretization must be CG or DG, got $val")
+end
+
+"""
     get_grid(config::AtmosConfig, params)
     get_grid(parsed_args, params, context)
 
@@ -513,7 +537,9 @@ All grids read the vertical discretization keys `z_elem`, `z_max`, `z_stretch`, 
 `topography_damping_factor`, `mesh_warp_type`, and `topo_smoothing`. The sphere reads
 `h_elem`, `nh_poly`, `bubble`, and `deep_atmosphere`, with the planet radius taken from
 `params`; the box and plane read `x_elem`/`x_max` (and, for the box, `y_elem`/`y_max`)
-and are periodic in the horizontal.
+and are periodic in the horizontal. When `horizontal_discretization` is `"DG"`, the
+horizontal spectral-element grid is discontinuous and interface coupling moves from
+DSS to the tendencies' numerical-flux completions.
 """
 get_grid(config::AtmosConfig, params) =
     get_grid(config.parsed_args, params, config.comms_ctx)
@@ -538,6 +564,7 @@ function get_grid(parsed_args, params, context)
             topography_damping_factor = parsed_args["topography_damping_factor"],
             mesh_warp_type = get_mesh_warp_type(FT, parsed_args),
             topo_smoothing = parsed_args["topo_smoothing"],
+            discretization = get_horizontal_discretization(parsed_args),
         )
     end
 
