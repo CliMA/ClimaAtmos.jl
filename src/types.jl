@@ -1919,7 +1919,7 @@ plain symbols or strings.
     diffusion.
   - `hyperdiff`: `nothing`, or a `Hyperdiffusion` model.
 """
-struct AtmosNumerics{EN_UP, TR_UP, ED_UP, SG_UP, ED_TR_UP, TDC, RR, LIM, DM, HD}
+struct AtmosNumerics{EN_UP, TR_UP, ED_UP, SG_UP, ED_TR_UP, TDC, RR, LIM, DM, HD, DGEF, DGVF}
     # Enable specific upwinding schemes for specific equations
     energy_q_tot_upwinding::EN_UP
     tracer_upwinding::TR_UP
@@ -1935,15 +1935,14 @@ struct AtmosNumerics{EN_UP, TR_UP, ED_UP, SG_UP, ED_TR_UP, TDC, RR, LIM, DM, HD}
     diff_mode::DM
     # Hyperdiffusion model: nothing or Hyperdiffusion()
     hyperdiff::HD
-    # Horizontal DG equation form: :vi (vector-invariant, default) or :fddg
-    # (flux-form Cartesian momentum, Waruszewski + Roe + perturbation
-    # pressure). Ignored on CG spaces.
-    dg_equation_form::Symbol
-    # FDDG volume/interface flux family: :waruszewski (entropy-conservative;
-    # full-p momentum flux — over terrain the horizontal metric-GCL residual
-    # scales with p) or :kg_pert (Kennedy-Gruber carrying pm = p − p_ref —
-    # the terrain residual scales with the perturbation p′).
-    dg_volume_flux::Symbol
+    # Horizontal DG equation form: Val(:vi) (vector-invariant, default) or
+    # Val(:fddg) (flux-form Cartesian momentum). Val-typed (isbits) because
+    # AtmosNumerics rides into GPU kernels via the AtmosModel.
+    dg_equation_form::DGEF
+    # FDDG volume/interface flux family: Val(:waruszewski)
+    # (entropy-conservative; full-p momentum flux) or Val(:kg_pert)
+    # (Kennedy-Gruber carrying pm = p − p_ref — well-balanced over terrain).
+    dg_volume_flux::DGVF
 end
 Base.broadcastable(x::AtmosNumerics) = tuple(x)
 
@@ -2028,8 +2027,8 @@ function AtmosNumerics(;
         limiter,
         diff_mode,
         hyperdiff,
-        Symbol(dg_equation_form),
-        Symbol(dg_volume_flux),
+        Val(Symbol(dg_equation_form)),
+        Val(Symbol(dg_volume_flux)),
     )
 end
 

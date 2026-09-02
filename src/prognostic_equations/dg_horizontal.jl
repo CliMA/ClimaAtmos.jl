@@ -313,7 +313,7 @@ NVTX.@annotate function dg_fddg_horizontal_dynamics!(Yₜ, Y, p, t)
         axes(Y.c),
     )
     fill!(parent(dy), 0)
-    if p.atmos.numerics.dg_volume_flux == :kg_pert
+    if p.atmos.numerics.dg_volume_flux === Val(:kg_pert)
         Operators.add_flux_differencing_divergence!(
             Operators.kennedy_gruber_cartesian_flux,
             dy,
