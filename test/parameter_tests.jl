@@ -109,6 +109,35 @@ end
     end
 end
 
+@testset "Geometric SGS variance parameters" begin
+    # The horizontal scale factor is the switch for the resolved-gradient variance
+    # term; it must default to 0 so the historical closure is reproduced bitwise.
+    for FT in (Float32, Float64)
+        tc = CA.ClimaAtmosParameters(FT).turbconv_params
+        @test CAP.sgs_variance_horizontal_scale_factor(tc) == FT(0)
+        @test CAP.sgs_variance_geometric_coeff(tc) == FT(1 // 12)
+        @test CAP.sgs_variance_max_rel_std(tc) == FT(0.5)
+    end
+    # A run toml can enable the term.
+    mktemp() do path, io
+        write(
+            io,
+            """
+  [sgs_variance_horizontal_scale_factor]
+  value = 2.0
+  type = "float"
+  """,
+        )
+        flush(io)
+        config = CA.AtmosConfig(
+            Dict("toml" => [path]),
+            job_id = "parameter_test_sgs_variance_scale_factor",
+        )
+        tc = CA.ClimaAtmosParameters(config).turbconv_params
+        @test CAP.sgs_variance_horizontal_scale_factor(tc) == 2.0
+    end
+end
+
 @testset "AtmosConfig Parameter Overrides" begin
     # Test overriding a parameter via configuration logic
     # CA.AtmosConfig merges dicts into the parameters

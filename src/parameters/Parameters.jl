@@ -109,6 +109,17 @@ not yet define. `FT` is the float type; `VFT1`, `VFT2`, and `VTF3` are the
     flux [-].
   - `diagnostic_covariance_coeff`: Prefactor of the turbulent production term in
     the diagnostic covariance closure [-].
+  - `sgs_variance_geometric_coeff`: Coefficient `c_g` of the horizontal
+    resolved-gradient SGS variance term, `variance += c_g (c_Δx Δx_h)^2 |∇_h ψ|^2`,
+    added to the diagnostic `θ′θ′` and `q′q′` that feed the SGS quadrature.
+    `1/12` is the variance of a linear field over a uniform cell [-].
+  - `sgs_variance_horizontal_scale_factor`: Multiplier `c_Δx` on the horizontal grid
+    scale `Δx_h` in the geometric variance term; the effective horizontal
+    coefficient is `c_g c_Δx^2`. `0` (default) disables the term [-].
+  - `sgs_variance_max_rel_std`: Upper bound on the SGS total-water standard
+    deviation relative to the grid-mean total water, `σ_q ≤ sgs_variance_max_rel_std * q_tot`,
+    applied to the diagnosed `q′q′` whatever closure produced it. A wider variance puts a quadrature node
+    at negative total water; `0.5` keeps all nodes non-negative (default) [-].
   - `Tq_correlation_coefficient`: Default correlation between `T'` and `q_tot'`
     in the SGS quadrature, in `[-1, 1]` [-].
   - `static_stab_coeff`: Static stability coefficient `c_b` of the mixing-length
@@ -193,6 +204,9 @@ Base.@kwdef struct TurbulenceConvectionParameters{FT, VFT1, VFT2, VTF3} <: ATCP
     tke_surf_scale::FT
     tke_surf_flux_coeff::FT
     diagnostic_covariance_coeff::FT
+    sgs_variance_geometric_coeff::FT
+    sgs_variance_horizontal_scale_factor::FT
+    sgs_variance_max_rel_std::FT
     Tq_correlation_coefficient::FT
     static_stab_coeff::FT
     Prandtl_number_scale::FT
