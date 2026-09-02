@@ -144,10 +144,6 @@ Base.@kwdef struct BaroclinicWaveFDDG{FT <: AbstractFloat}
     microphysics::Symbol = :none
     # Relaxation time [s] for 0-moment condensate removal.
     precip_timescale::FT = 600.0
-    # Moist baroclinic-wave humidity IC (Ullrich et al. 2014 / DCMIP-2016). The
-    # analytic temperature is taken as the VIRTUAL temperature so ρ, p and the
-    # winds stay the dry-balanced fields (adding moisture does not perturb the
-    # geostrophic/hydrostatic balance; :rh with rh0 = 0 recovers dry exactly).
     #   :rh    — q_tot = rh0 · q_sat(T_v, ρ): subsaturated everywhere (default,
     #            no latent-heat shock at t = 0).
     #   :dcmip — q_tot = min(q_0 exp[−(z/z_q1)²] exp[−(z/z_q2)⁴], rh_max · q_sat),
@@ -165,15 +161,11 @@ Base.@kwdef struct BaroclinicWaveFDDG{FT <: AbstractFloat}
     sponge_depth::FT = 7.5e3
     sponge_uh::Bool = false
     topography::Symbol = :none
-    topography_damping_factor::FT = 5.0
+    topography_damping_factor::FT = 1.0
     terrain_warp::Symbol = :linear
     sleve_eta_h::FT = 0.7
     sleve_s::FT = 10.0
     constants_mode::Symbol = :parity
-    # IC values: :setups (ClimaAtmos Setups.shallow_atmos_barowave_values,
-    # verified formula-identical), :formulas (the examples' own JW06
-    # expressions), or :rest (JW06 T/p profile, zero velocity — atmosphere
-    # at rest; the right start for HS+terrain to avoid JW06 wind imbalance).
     ic_source::Symbol = :setups
     # Held–Suarez (1994) forcing via ClimaAtmos's own functions
     held_suarez::Bool = false
