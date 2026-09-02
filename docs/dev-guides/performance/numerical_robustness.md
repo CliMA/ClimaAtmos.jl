@@ -7,7 +7,7 @@ This guide covers safe numerical idioms for avoiding NaN, Inf, and DivideError i
 Dividing by quantities that may approach zero has several reasonable handlings. The right choice depends on:
 
 - whether `x → 0` is physically valid behavior or signals a bug,
-- whether downstream code can absorb `Inf` (or a large finite number) correctly,
+- whether downstream code can absorb `Inf` (or a large finite number),
 - whether you want to bound the magnitude or surface the invalid state.
 
 Float division does not raise an error: `a / 0.0` returns `Inf` (or `NaN` if `a` is also zero), and IEEE arithmetic propagates that through subsequent operations. You can sometimes deliberately allow `Inf` through, but only if downstream consumers are *known* to handle it: IEEE arithmetic does not take limits (`Inf * 0 = NaN`, `Inf - Inf = NaN`), so any later multiplication by a vanishing quantity silently produces `NaN` rather than the algebraic cancellation a mathematician would expect. Cases where allowing `Inf` is fine include a downstream `ifelse` or clamp that discards the singular branch, or operations where `Inf` results in well-defined behavior.
