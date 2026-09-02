@@ -199,10 +199,21 @@ function build_cache(
             )
         ) : (; col_integrated_precip_energy_tendency = (;))
 
-    sem_quasimonotone_limiter = if isnothing(atmos.numerics.limiter)
+    sem_quasimonotone_limiter =
+        if atmos.numerics.limiter isa QuasiMonotoneLimiter
+            Limiters.QuasiMonotoneLimiter(similar(Y.c, FT))
+        else
+            nothing
+        end
+
+    zhang_shu_limiter = if atmos.numerics.limiter isa ZhangShuLimiter
+        Limiters.PositivityLimiter(
+            FT;
+            ρ_min = atmos.numerics.limiter.ρ_min,
+            p_min = atmos.numerics.limiter.p_min,
+        )
+    else
         nothing
-    elseif atmos.numerics.limiter isa QuasiMonotoneLimiter
-        Limiters.QuasiMonotoneLimiter(similar(Y.c, FT))
     end
 
     nonneg_lim = atmos.water.tracer_nonnegativity_method
@@ -221,6 +232,7 @@ function build_cache(
 
     numerics = (;
         sem_quasimonotone_limiter,
+        zhang_shu_limiter,
         tracer_nonnegativity_limiter,
         vertical_water_borrowing_limiter,
         vertical_water_borrowing_species,

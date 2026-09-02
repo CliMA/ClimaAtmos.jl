@@ -5,6 +5,7 @@
 # stays off (DSS-based — DG uses interface dissipation).
 horizontal_discretization: "DG"
 hyperdiff: ~
+apply_zhang_shu_limiter: true
 dt: 120secs
 surface_setup: DefaultMoninObukhov
 rad: allskywithclear

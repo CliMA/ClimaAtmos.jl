@@ -3,6 +3,19 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- ![][badge-✨feature/enhancement] Add the Zhang–Shu (2010) positivity limiter
+  (ClimaCore's `Limiters.PositivityLimiter`), enabled by the opt-in
+  `apply_zhang_shu_limiter` config option (default `false`, mutually exclusive
+  with `apply_sem_quasimonotone_limiter`), with floors `zhang_shu_rho_min`
+  (default `1e-6`) and `zhang_shu_p_min` (default `1e-2`). Once per RK stage,
+  each element's conserved vector (ρ, ρe_tot, orthonormal ρuₕ, and ρq_tot when
+  present) is scaled at every node toward its WJ-weighted element mean by one
+  θ ∈ [0, 1] — a mean-preserving convex combination, not a pointwise clamp —
+  chosen as the smallest θ enforcing the density, tracer, and pressure floors
+  (the last on a dry ideal-gas proxy of the EOS via per-node bisection).
+  Intended for DG horizontal discretizations, whose transport is not
+  sign-preserving at nodal values; enabled in `aquaplanet_dg.yml` and
+  `edonly_edmfx_aquaplanet_dg.yml`.
 
 0.42.8
 -------

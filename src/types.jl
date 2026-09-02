@@ -1839,6 +1839,23 @@ neighborhood. Selected by `apply_sem_quasimonotone_limiter: true`.
 struct QuasiMonotoneLimiter end # For dispatching to use the ClimaCore QuasiMonotoneLimiter.
 
 """
+    ZhangShuLimiter(; ρ_min, p_min)
+
+Marker selecting ClimaCore's Zhang–Shu (2010) `PositivityLimiter`: per RK
+stage, each element's grid-mean conserved vector (ρ, ρe_tot, ρuₕ[, ρq_tot])
+is scaled at every node toward the WJ-weighted element mean by one θ ∈ [0, 1]
+— a mean-preserving convex combination, not a pointwise clamp — chosen as the
+smallest θ enforcing ρ ≥ ρ_min, ρq_tot ≥ 0, and p ≥ p_min. Intended for DG
+horizontal discretizations, whose transport is not sign-preserving at nodes.
+Selected by `apply_zhang_shu_limiter: true`, with the floors from
+`zhang_shu_rho_min` and `zhang_shu_p_min`.
+"""
+struct ZhangShuLimiter{FT}
+    ρ_min::FT
+    p_min::FT
+end
+
+"""
     AbstractScaleBlendingMethod
 
 Method used to combine the candidate EDMF mixing-length scales into a single
@@ -1895,7 +1912,8 @@ plain symbols or strings.
     cache with `NaN`s for debugging.
   - `reproducible_restart`: `nothing`, or `ReproducibleRestart` to make restarts
     reproducible.
-  - `limiter`: `nothing`, or `QuasiMonotoneLimiter` for horizontal tracer
+  - `limiter`: `nothing`, `ZhangShuLimiter` for per-stage positivity of the
+    conserved vector, or `QuasiMonotoneLimiter` for horizontal tracer
     transport.
   - `diff_mode`: `Explicit()` or `Implicit()`, the timestepping mode for vertical
     diffusion.
@@ -1949,7 +1967,8 @@ types for compile-time dispatch.
   - `reproducible_restart = nothing`: Pass `ReproducibleRestart()` for
     reproducible restarts.
   - `limiter = nothing`: Pass `QuasiMonotoneLimiter()` to limit horizontal tracer
-    transport.
+    transport, or `ZhangShuLimiter(...)` for per-stage positivity of the
+    conserved vector.
   - `diff_mode = Explicit()`: Timestepping mode for vertical diffusion.
   - `hyperdiff`: Hyperdiffusion model; defaults to a `Float32` `Hyperdiffusion`
     with the CAM-SE vorticity coefficient, `divergence_damping_factor = 5`, and
@@ -2686,7 +2705,7 @@ Internal testing and calibration components for single-column setups:
 
   - `energy_q_tot_upwinding`, `tracer_upwinding`, `edmfx_mse_q_tot_upwinding`, `edmfx_sgsflux_upwinding`, `edmfx_tracer_upwinding`: Val() upwinding schemes
   - `test_dycore_consistency`: nothing or TestDycoreConsistency() for debugging
-  - `limiter`: nothing or QuasiMonotoneLimiter()
+  - `limiter`: nothing, QuasiMonotoneLimiter(), or ZhangShuLimiter(...)
   - `vertical_water_borrowing_species`: internal value `nothing` (apply to all tracers; config default is `~`), empty tuple (apply to none; config `[]`), or Tuple{Symbol, ...} from config string/list (e.g. `["ρq_tot"]`) to apply only to those tracers. See config `vertical_water_borrowing_species` in default_config.yml for YAML options.
     (Note: The vertical water borrowing limiter is created in the cache based on `AtmosWaterModel.tracer_nonnegativity_method`)
   - `diff_mode`: Explicit(), Implicit() timestepping mode for diffusion

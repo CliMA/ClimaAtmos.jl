@@ -1,6 +1,66 @@
 import ClimaCore: Limiters
 
 """
+    zhang_shu_limiter_func!(Y, p, lim)
+
+Apply the Zhang–Shu (2010) positivity limiter (a ClimaCore
+`Limiters.PositivityLimiter`) to the grid-mean state, in place.
+
+The limiter interface takes a conserved vector, so the vector-invariant state
+is mapped to one: the prognostic densities (ρ, ρe_tot[, ρq_tot]) are passed
+directly, the horizontal momentum is staged in scratch as the orthonormal
+components ρuE/ρuN (single-valued at cubed-sphere panel edges) and written
+back to `uₕ` after limiting, and the face vertical velocity is left unscaled,
+its kinetic energy carried through the unscaled offset `off = w_c²/2 + Φ` (the
+same convention as the FDDG flux-form drivers). Each element's WJ-weighted
+means of ρ, ρe_tot, ρq_tot, and the orthonormal ρuₕ are preserved exactly.
+
+The pressure floor is enforced on a dry ideal-gas proxy of the EOS,
+`p = ρ R_d ((ρe/ρ − Kₕ − off)/cv_d + T_0)` — moisture corrections to R and cv
+are irrelevant at floor magnitudes, and the proxy is a cheap closed form for
+the per-node bisection in θ (a saturation adjustment there would be
+prohibitive and is not needed for admissibility).
+
+Called from `limiters_func!` when `p.numerics.zhang_shu_limiter` is set (the
+`apply_zhang_shu_limiter` configuration option).
+"""
+NVTX.@annotate function zhang_shu_limiter_func!(Y, p, lim)
+    (; params) = p
+    R_d = CAP.R_d(params)
+    cv_d = CAP.cv_d(params)
+    T_0 = CAP.T_0(params)
+    ᶜΦ = p.core.ᶜΦ
+    ᶜρu1 = p.scratch.ᶜtemp_scalar
+    ᶜρu2 = p.scratch.ᶜtemp_scalar_2
+    ᶜρu3 = p.scratch.ᶜtemp_scalar_3
+    ᶜoff = p.scratch.ᶜtemp_scalar_4
+    ᶜinterp = Operators.InterpolateF2C()
+
+    @. ᶜρu1 = Y.c.ρ * Geometry.UVVector(Y.c.uₕ).components.data.:1
+    @. ᶜρu2 = Y.c.ρ * Geometry.UVVector(Y.c.uₕ).components.data.:2
+    fill!(parent(ᶜρu3), 0)
+    @. ᶜoff =
+        Geometry.WVector(ᶜinterp(Y.f.u₃)).components.data.:1^2 / 2 + ᶜΦ
+
+    pfn = let R_d = R_d, cv_d = cv_d, T_0 = T_0
+        (ρ, ρe, ρu1, ρu2, ρu3, ρq, off) -> begin
+            K_h = (ρu1^2 + ρu2^2 + ρu3^2) / (2 * ρ^2)
+            ρ * R_d * ((ρe / ρ - K_h - off) / cv_d + T_0)
+        end
+    end
+    states =
+        hasproperty(Y.c, :ρq_tot) ?
+        (Y.c.ρ, Y.c.ρe_tot, ᶜρu1, ᶜρu2, ᶜρu3, Y.c.ρq_tot) :
+        (Y.c.ρ, Y.c.ρe_tot, ᶜρu1, ᶜρu2, ᶜρu3)
+    Limiters.apply_positivity_limiter!(lim, pfn, states, ᶜoff)
+
+    @. Y.c.uₕ = Geometry.Covariant12Vector(
+        Geometry.UVVector(ᶜρu1 / Y.c.ρ, ᶜρu2 / Y.c.ρ),
+    )
+    return nothing
+end
+
+"""
     _should_apply_limiter_to_tracer(ρχ_name, species) -> Bool
 
 Return whether the vertical mass borrowing limiter applies to the tracer
@@ -31,8 +91,10 @@ end
 
 Apply the configured tracer limiters to the prognostic state `Y` in place.
 
-Two limiters may be active, in this order, each skipped when its entry in
-`p.numerics` is `nothing`:
+When `p.numerics.zhang_shu_limiter` is set (mutually exclusive with the
+quasimonotone limiter), the Zhang–Shu positivity limiter is applied first;
+see `zhang_shu_limiter_func!`. Then two tracer limiters may be active, in
+this order, each skipped when its entry in `p.numerics` is `nothing`:
 
  1. **SEM quasimonotone limiter** (`sem_quasimonotone_limiter`): computes bounds
     from the reference state `ref_Y` and applies spectral-element limiting to every
@@ -64,10 +126,18 @@ Returns `nothing`.
 NVTX.@annotate function limiters_func!(Y, p, t, ref_Y)
     (;
         sem_quasimonotone_limiter,
+        zhang_shu_limiter,
         vertical_water_borrowing_limiter,
         vertical_water_borrowing_species,
     ) =
         p.numerics
+
+    # Zhang–Shu positivity limiter (mutually exclusive with the quasimonotone
+    # limiter; enforced at configuration time). Scales the whole conserved
+    # vector by one θ, so no mass-energy consistency fixup is needed.
+    if !isnothing(zhang_shu_limiter)
+        zhang_shu_limiter_func!(Y, p, zhang_shu_limiter)
+    end
 
     # Apply general (SEM quasimonotone) limiter if configured.
     # When ρq_tot is limited, update ρ and ρe_tot for mass and energy consistency.

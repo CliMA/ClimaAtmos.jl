@@ -123,8 +123,21 @@ function get_numerics(parsed_args, FT)
     edmfx_sgsflux_upwinding = Symbol(parsed_args["edmfx_sgsflux_upwinding"])
     edmfx_tracer_upwinding = Symbol(parsed_args["edmfx_tracer_upwinding"])
 
-    limiter =
-        parsed_args["apply_sem_quasimonotone_limiter"] ? QuasiMonotoneLimiter() : nothing
+    limiter = if parsed_args["apply_zhang_shu_limiter"]
+        parsed_args["apply_sem_quasimonotone_limiter"] && error(
+            "apply_zhang_shu_limiter and apply_sem_quasimonotone_limiter are \
+             mutually exclusive: both rescale nodal values within each \
+             element and would fight over the same state",
+        )
+        ZhangShuLimiter{FT}(
+            FT(parsed_args["zhang_shu_rho_min"]),
+            FT(parsed_args["zhang_shu_p_min"]),
+        )
+    elseif parsed_args["apply_sem_quasimonotone_limiter"]
+        QuasiMonotoneLimiter()
+    else
+        nothing
+    end
 
     diff_mode = parsed_args["implicit_diffusion"] ? Implicit() : Explicit()
 

@@ -242,6 +242,15 @@ perturb_initstate:
 apply_sem_quasimonotone_limiter:
   help: "Apply a horizontal SEM quasi-monotone limiter to every tracer [`false` (default), `true`]"
   value: false
+apply_zhang_shu_limiter:
+  help: "Apply the Zhang-Shu (2010) positivity limiter per RK stage: scale each element's conserved vector (ρ, ρe_tot, ρuₕ[, ρq_tot]) toward its mean by one θ enforcing ρ ≥ zhang_shu_rho_min, ρq_tot ≥ 0, p ≥ zhang_shu_p_min. Mean-preserving; intended for DG horizontal discretizations. Mutually exclusive with apply_sem_quasimonotone_limiter [`false` (default), `true`]"
+  value: false
+zhang_shu_rho_min:
+  help: "Density floor [kg/m³] enforced by the Zhang-Shu limiter"
+  value: 1.0e-6
+zhang_shu_p_min:
+  help: "Pressure floor [Pa] enforced by the Zhang-Shu limiter (via a dry ideal-gas proxy of the EOS)"
+  value: 1.0e-2
 vertical_water_borrowing_species:
   help: "Tracers to which the vertical water borrowing limiter is applied when using `tracer_nonnegativity_method: vertical_water_borrowing`. A single threshold (0.0) applies uniformly to all selected tracers. Omitted or `~` (null): apply to all tracers (ρq_tot, ρq_lcl, ρq_rai, etc., as present). Empty list `[]`: apply to no tracers. Specific names: use a string (e.g. `ρq_tot`) or list of strings (e.g. `[\"ρq_tot\"]`, `[\"ρq_tot\", \"ρq_lcl\"]`) — only those tracers get the limiter; names must match the state (e.g. ρq_tot, ρq_lcl, ρq_rai, ρq_icl, ρq_sno)."
   value: ~
