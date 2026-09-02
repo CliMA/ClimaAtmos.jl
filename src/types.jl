@@ -1935,6 +1935,15 @@ struct AtmosNumerics{EN_UP, TR_UP, ED_UP, SG_UP, ED_TR_UP, TDC, RR, LIM, DM, HD}
     diff_mode::DM
     # Hyperdiffusion model: nothing or Hyperdiffusion()
     hyperdiff::HD
+    # Horizontal DG equation form: :vi (vector-invariant, default) or :fddg
+    # (flux-form Cartesian momentum, Waruszewski + Roe + perturbation
+    # pressure). Ignored on CG spaces.
+    dg_equation_form::Symbol
+    # FDDG volume/interface flux family: :waruszewski (entropy-conservative;
+    # full-p momentum flux — over terrain the horizontal metric-GCL residual
+    # scales with p) or :kg_pert (Kennedy-Gruber carrying pm = p − p_ref —
+    # the terrain residual scales with the perturbation p′).
+    dg_volume_flux::Symbol
 end
 Base.broadcastable(x::AtmosNumerics) = tuple(x)
 
@@ -2000,6 +2009,8 @@ function AtmosNumerics(;
         divergence_damping_factor = 5,
         prandtl_number = 1.0,
     ),
+    dg_equation_form = :vi,
+    dg_volume_flux = :waruszewski,
     kwargs...,
 )
     # Helper to convert symbols/strings to Val types, or keep Val types as-is
@@ -2017,6 +2028,8 @@ function AtmosNumerics(;
         limiter,
         diff_mode,
         hyperdiff,
+        Symbol(dg_equation_form),
+        Symbol(dg_volume_flux),
     )
 end
 

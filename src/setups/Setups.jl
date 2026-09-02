@@ -15,6 +15,7 @@ import ..Parameters as CAP
 import ..geopotential
 import ..C12, ..C3
 import ..background_p_and_T, ..background_u
+import ..pref_from_phi, ..air_temperature_reference
 
 # File-based IC infrastructure (overwrite_from_file.jl, GCMDriven.jl, ForcingFromFile.jl)
 import Dates
@@ -348,6 +349,7 @@ include("TRMM_LBA.jl")
 include("ISDAC.jl")
 include("Larcform1.jl")
 include("IsothermalProfile.jl")
+include("ReferenceProfile.jl")
 include("ConstantBuoyancyFrequencyProfile.jl")
 include("DryDensityCurrentProfile.jl")
 include("RisingThermalBubbleProfile.jl")

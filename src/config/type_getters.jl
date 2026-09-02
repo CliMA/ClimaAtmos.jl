@@ -152,6 +152,13 @@ function get_numerics(parsed_args, FT)
                interface dissipation)."
     end
 
+    dg_equation_form = Symbol(get(parsed_args, "dg_equation_form", "vi"))
+    dg_equation_form in (:vi, :fddg) ||
+        error("dg_equation_form must be vi or fddg, got $dg_equation_form")
+    dg_volume_flux = Symbol(get(parsed_args, "dg_volume_flux", "waruszewski"))
+    dg_volume_flux in (:waruszewski, :kg_pert) ||
+        error("dg_volume_flux must be waruszewski or kg_pert, got $dg_volume_flux")
+
     numerics = AtmosNumerics(;
         energy_q_tot_upwinding,
         tracer_upwinding,
@@ -163,6 +170,8 @@ function get_numerics(parsed_args, FT)
         reproducible_restart,
         diff_mode,
         hyperdiff,
+        dg_equation_form,
+        dg_volume_flux,
     )
     @info "numerics $(summary(numerics))"
 
@@ -338,6 +347,8 @@ function get_setup_type(parsed_args, thermo_params)
             perturb = parsed_args["perturb_initstate"],
             thermo_params,
         )
+    elseif ic_name == "ReferenceProfile"
+        return Setups.ReferenceProfile()
     elseif ic_name in ("IsothermalProfile", "ConstantBuoyancyFrequencyProfile",
         "DryDensityCurrentProfile", "RisingThermalBubbleProfile")
         return getproperty(Setups, Symbol(ic_name))()

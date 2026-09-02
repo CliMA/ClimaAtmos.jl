@@ -164,3 +164,21 @@ function sd_r(thermo_params, p)
     T_r = air_temperature_reference(thermo_params, p)
     return cp_d * (T_r - T_0) + phi_r(thermo_params, p)
 end
+
+"""
+    pref_from_phi(thermo_params, Φ)
+
+Reference pressure at geopotential `Φ`: inverts [`phi_r`](@ref) by Newton
+iteration (`dΦ_r/dp = −R_d T_r/p`), starting from the isothermal profile.
+"""
+function pref_from_phi(thermo_params, Φ)
+    R_d = TD.TP.R_d(thermo_params)
+    T_sfc = TD.TP.T_surf_ref(thermo_params)
+    p = TD.TP.MSLP(thermo_params) * exp(-Φ / (R_d * T_sfc))
+    for _ in 1:8
+        T_r = air_temperature_reference(thermo_params, p)
+        p += p * (phi_r(thermo_params, p) - Φ) / (R_d * T_r)
+    end
+    return p
+end
+

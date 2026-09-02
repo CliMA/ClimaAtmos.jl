@@ -86,8 +86,8 @@ include(joinpath("parameterized_tendencies", "microphysics", "microphysics.jl"))
 include(joinpath("parameterized_tendencies", "chemistry", "chemistry.jl"))
 
 include(joinpath("surface_conditions", "SurfaceConditions.jl"))
-include(joinpath("setups", "Setups.jl"))
 include(joinpath("utils", "refstate_thermodynamics.jl"))
+include(joinpath("setups", "Setups.jl"))
 
 include(joinpath("prognostic_equations", "pressure_work.jl"))
 include(joinpath("prognostic_equations", "zero_velocity.jl"))

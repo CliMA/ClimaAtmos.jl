@@ -34,6 +34,14 @@ Returns `nothing`. The continuous-form equations are documented on the "Equation
 page of the docs (`docs/src/equations.md`).
 """
 NVTX.@annotate function horizontal_dynamics_tendency!(Yₜ, Y, p, t)
+    if is_dg_horizontal(axes(Y.c)) &&
+       p.atmos.numerics.dg_equation_form == :fddg
+        p.atmos.turbconv_model isa PrognosticEDMFX && error(
+            "dg_equation_form = fddg does not support PrognosticEDMFX \
+             (the sgsʲ horizontal terms have no flux-form counterpart yet)",
+        )
+        return dg_fddg_horizontal_dynamics!(Yₜ, Y, p, t)
+    end
     n = n_mass_flux_subdomains(p.atmos.turbconv_model)
     (; ᶜΦ) = p.core
     (; ᶜu, ᶜK, ᶜp, ᶜT, ᶜq_liq, ᶜq_ice) = p.precomputed
@@ -232,7 +240,12 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
 
     if point_type <: Geometry.Abstract3DPoint
         if is_dg_horizontal(axes(Y.c))
-            dg_ω³!(ᶜω³, Y)
+            if p.atmos.numerics.dg_equation_form == :fddg
+                # horizontal momentum advection lives in the flux-form terms
+                @. ᶜω³ = zero(ᶜω³)
+            else
+                dg_ω³!(ᶜω³, Y)
+            end
         else
             @. ᶜω³ = wcurlₕ(Y.c.uₕ)
         end

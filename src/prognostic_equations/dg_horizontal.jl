@@ -250,3 +250,107 @@ function dg_ω¹²_horizontal!(ᶠω¹², Y)
     ᶠω¹² .+= Geometry.project.(Ref(Geometry.Contravariant12Axis()), ω¹²_lift)
     return nothing
 end
+
+# ---------------------------------------------------------------------------
+# FDDG (flux-form) horizontal dynamics — `dg_equation_form = :fddg`:
+# Waruszewski entropy-conservative + well-balanced volume flux (gravity as
+# the ½ρ̂⟦φ⟧ fluctuation), Roe interface dissipation, perturbation pressure
+# pm = p − p_ref in the momentum slot. The Cartesian-component momentum
+# tendency is built in the tangential (E, N) frame and converted to the
+# velocity state: duₕ = (d(ρu) − uₕ dρ)/ρ.
+# ---------------------------------------------------------------------------
+
+"""
+    dg_fddg_horizontal_dynamics!(Yₜ, Y, p, t)
+
+Flux-form horizontal dynamics on DG spaces: replaces the split_divₕ (ρ,
+ρe_tot) terms, the Exner-split PGF, and the ω³ horizontal momentum advection
+of `horizontal_dynamics_tendency!` with Waruszewski flux-differencing volume
+terms + Roe interface fluxes over (ρ, ρe, ρu⃗) in global Cartesian momentum
+components. Coriolis, all vertical terms, and tracer advection are unchanged.
+"""
+NVTX.@annotate function dg_fddg_horizontal_dynamics!(Yₜ, Y, p, t)
+    FT = Spaces.undertype(axes(Y.c))
+    (; ᶜΦ) = p.core
+    (; ᶜp) = p.precomputed
+    thermo_params = CAP.thermodynamics_params(p.params)
+    coords = Fields.coordinate_field(axes(Y.c))
+    ᶜWJ = Fields.local_geometry_field(Y.c).WJ
+
+    # Geographic components of the Cartesian unit vectors (position-dependent,
+    # state-independent) and their tangential projections as UVVectors.
+    # TODO: memoize (static per grid), together with ᶜp_ref below.
+    eE1 = @. -sind(coords.long)
+    eE2 = @. cosd(coords.long)
+    eE3 = @. zero(eE1)
+    eN1 = @. -sind(coords.lat) * cosd(coords.long)
+    eN2 = @. -sind(coords.lat) * sind(coords.long)
+    eN3 = @. cosd(coords.lat)
+    E1 = @. Geometry.UVVector(eE1, eN1)
+    E2 = @. Geometry.UVVector(eE2, eN2)
+    E3 = @. Geometry.UVVector(eE3, eN3)
+
+    (ᶜuv, ᶜλ) = dg_face_velocity_and_λ(Y, p)
+    uE = ᶜuv.components.data.:1
+    uN = ᶜuv.components.data.:2
+    u1 = @. uE * eE1 + uN * eN1
+    u2 = @. uE * eE2 + uN * eN2
+    u3 = @. uE * eE3 + uN * eN3
+    e = @. Y.c.ρe_tot / Y.c.ρ
+    ᶜp_ref = @. pref_from_phi(thermo_params, ᶜΦ)
+    pm = @. ᶜp - ᶜp_ref
+
+    y = map(
+        (ρ, ρe, e, p_, pm_, uv, u1_, u2_, u3_, E1_, E2_, E3_, λ, φ) -> (;
+            ρ, ρe, e, p = p_, pm = pm_, uv,
+            u1 = u1_, u2 = u2_, u3 = u3_,
+            E1 = E1_, E2 = E2_, E3 = E3_, λ, φ,
+        ),
+        Y.c.ρ, Y.c.ρe_tot, e, ᶜp, pm, ᶜuv, u1, u2, u3, E1, E2, E3, ᶜλ, ᶜΦ,
+    )
+    dy = Fields.Field(
+        NamedTuple{(:ρ, :ρe, :ρu1, :ρu2, :ρu3), NTuple{5, FT}},
+        axes(Y.c),
+    )
+    fill!(parent(dy), 0)
+    if p.atmos.numerics.dg_volume_flux == :kg_pert
+        Operators.add_flux_differencing_divergence!(
+            Operators.kennedy_gruber_cartesian_flux,
+            dy,
+            y,
+        )
+        Operators.add_numerical_flux_interior!(
+            Operators.kennedy_gruber_roe_cartesian,
+            dy,
+            y,
+        )
+    else
+        Operators.add_flux_differencing_divergence!(
+            Operators.waruszewski_cartesian_flux,
+            dy,
+            y,
+        )
+        Operators.add_numerical_flux_interior!(
+            Operators.waruszewski_roe_cartesian,
+            dy,
+            y,
+        )
+    end
+
+    @. Yₜ.c.ρ += dy.ρ / ᶜWJ
+    @. Yₜ.c.ρe_tot += dy.ρe / ᶜWJ
+    # Geographic (E, N) projections of the Cartesian momentum tendency are
+    # tangential by construction (ê_E, ê_N ⊥ r̂); the velocity-form conversion
+    # accounts for the flux-form density scaling.
+    dρuE = @. (dy.ρu1 * eE1 + dy.ρu2 * eE2 + dy.ρu3 * eE3) / ᶜWJ
+    dρuN = @. (dy.ρu1 * eN1 + dy.ρu2 * eN2 + dy.ρu3 * eN3) / ᶜWJ
+    duE = @. (dρuE - uE * dy.ρ / ᶜWJ) / Y.c.ρ
+    duN = @. (dρuN - uN * dy.ρ / ᶜWJ) / Y.c.ρ
+    @. Yₜ.c.uₕ += C12(
+        Geometry.transform(
+            Geometry.Covariant12Axis(),
+            Geometry.UVVector(duE, duN),
+        ),
+    )
+    return nothing
+end

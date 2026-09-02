@@ -43,6 +43,12 @@ mesh_warp_type:
 horizontal_discretization:
   help: "Horizontal spectral-element discretization [`CG` (continuous, DSS-coupled, default), `DG` (discontinuous, interface-flux-coupled)]"
   value: "CG"
+dg_equation_form:
+  help: "Horizontal DG equation form [`vi` (vector-invariant, default), `fddg` (flux-form Cartesian momentum: Waruszewski volume flux + Roe interface + perturbation-pressure momentum flux)]. Ignored on CG."
+  value: "vi"
+dg_volume_flux:
+  help: "FDDG flux family [`waruszewski` (entropy-conservative, default), `kg_pert` (Kennedy-Gruber with perturbation-pressure momentum flux — better-balanced over terrain)]. Ignored unless dg_equation_form is fddg."
+  value: "waruszewski"
 sleve_eta:
   help: "If SLEVE coordinates are chosen, sets the `ηₕ` parameter (if z/z_top > ηₕ, no warping is applied)"
   value: 0.7
