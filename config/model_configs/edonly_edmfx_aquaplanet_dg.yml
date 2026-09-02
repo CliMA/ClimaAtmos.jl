@@ -1,0 +1,17 @@
+# EDOnly-EDMFX aquaplanet on DG horizontal dynamics: all-sky radiation,
+# Monin-Obukhov surface fluxes, eddy-diffusivity SGS fluxes, 0-moment
+# microphysics. EDOnly has no prognostic SGS subdomains, so all horizontal
+# terms are covered by the DG completions (dg_horizontal.jl); hyperdiffusion
+# stays off (DSS-based — DG uses interface dissipation).
+horizontal_discretization: "DG"
+hyperdiff: ~
+dt: 120secs
+surface_setup: DefaultMoninObukhov
+rad: allskywithclear
+edmfx_sgs_diffusive_flux: true
+turbconv: edonly_edmfx
+microphysics_model: "0M"
+use_sgs_quadrature: true
+t_end: 3hours
+dt_save_state_to_disk: 600secs
+output_default_diagnostics: false
