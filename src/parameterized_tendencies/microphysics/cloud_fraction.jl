@@ -220,6 +220,26 @@ function materialized_mixing_length!(Y, p)
 end
 
 """
+    hgrad_invariant!(ᶜinv, ᶜψ, p)
+
+Write the horizontal-gradient invariant `|∇_h ψ|²` of the center field `ᶜψ` into `ᶜinv`.
+The gradient vector is first made continuous across element boundaries by a weighted DSS.
+On a space that needs no DSS (single column) the nodal gradient is used.
+"""
+function hgrad_invariant!(ᶜinv, ᶜψ, p)
+    buf = p.scratch.ᶜC12_dss_buffer
+    if buf !== nothing
+        ᶜg = p.scratch.ᶜtemp_C12
+        @. ᶜg = gradₕ(ᶜψ)
+        Spaces.weighted_dss!(ᶜg, buf)
+        @. ᶜinv = norm_sqr(ᶜg)
+    else
+        @. ᶜinv = norm_sqr(gradₕ(ᶜψ))
+    end
+    return nothing
+end
+
+"""
     set_covariance_cache!(Y, p, thermo_params)
 
 Materializes T-based SGS covariances into cached fields for use by downstream
@@ -229,7 +249,12 @@ Pipeline:
 
  1. Compute mixing length via `materialized_mixing_length!`
  2. Materialize θ-based covariances from gradients
- 3. Transform θ→T using `compute_∂T_∂θ!`
+ 3. Add the horizontal resolved-gradient (geometric) term to θ′θ′ (skipped when
+    `sgs_variance_horizontal_scale_factor` is 0, the default)
+ 4. Transform θ→T using `compute_∂T_∂θ!`
+ 5. Add the horizontal resolved-gradient term to q′q′ (skipped together with
+    step 3)
+ 6. Apply the closure-validity bound `σ_q ≤ sgs_variance_max_rel_std * q_tot`
 """
 function set_covariance_cache!(Y, p, thermo_params)
     # Covariance fields are only allocated when the configuration needs them.
@@ -240,6 +265,25 @@ function set_covariance_cache!(Y, p, thermo_params)
 
     coeff = CAP.diagnostic_covariance_coeff(p.params)
     (; ᶜgradᵥ_q_tot, ᶜgradᵥ_θ_liq_ice) = p.precomputed
+
+    # Effective coefficient of the horizontal resolved-gradient (geometric) variance
+    # term, `geo_h = c_g (c_Δx Δx_h)^2`, which multiplies |∇_h ψ|^2 below. The scale
+    # factor `c_Δx` is the on/off switch: it defaults to 0, in which case the
+    # geometric additions are skipped entirely so the historical vertical-gradient
+    # closure is reproduced at no extra cost.
+    c_Δx = CAP.sgs_variance_horizontal_scale_factor(p.params)
+    use_geometric = !iszero(c_Δx)
+    geo_h = if use_geometric
+        c_g = CAP.sgs_variance_geometric_coeff(p.params)
+        Δx_h = eltype(p.params)(
+            Spaces.node_horizontal_length_scale(
+                Spaces.horizontal_space(axes(Y.c)),
+            ),
+        )
+        c_g * (c_Δx * Δx_h)^2
+    else
+        zero(c_Δx)
+    end
 
     # Materialize once (see materialized_mixing_length!) to avoid repeating
     # the closure broadcast across the ᶜq′q′ and ᶜT′T′ calculations.
@@ -262,10 +306,47 @@ function set_covariance_cache!(Y, p, thermo_params)
         Geometry.WVector(ᶜgradᵥ_θ_liq_ice),
         Geometry.WVector(ᶜgradᵥ_θ_liq_ice),
     )
+
+    # Horizontal resolved-gradient (geometric) variance
+    # `geo_h |∇_h ψ|^2`, the leading-order scale-similarity estimate of the subgrid
+    # variance from the resolved field, set by the local horizontal gradient and the
+    # horizontal grid scale alone. Added to θ′θ′ here and to q′q′ below. The prescribed T–q
+    # correlation then couples the inflated σ_T and σ_q in the quadrature.
+    if use_geometric
+        (; ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice) = p.precomputed
+        ᶜθ_li = p.scratch.ᶜtemp_scalar_3
+        @. ᶜθ_li = TD.liquid_ice_pottemp(
+            thermo_params,
+            ᶜT,
+            Y.c.ρ,
+            ᶜq_tot_nonneg,
+            ᶜq_liq,
+            ᶜq_ice,
+        )
+        ᶜinv_θ = p.scratch.ᶜtemp_scalar_5
+        hgrad_invariant!(ᶜinv_θ, ᶜθ_li, p)
+        @. ᶜT′T′ += geo_h * ᶜinv_θ
+    end
+
     # Transform θ′θ′ → T′T′ in-place using Jacobian ∂T/∂θ
     ᶜ∂T_∂θ = p.scratch.ᶜtemp_scalar_2
     compute_∂T_∂θ!(ᶜ∂T_∂θ, Y, p, thermo_params)
     @. ᶜT′T′ = ᶜ∂T_∂θ^2 * ᶜT′T′  # θ′θ′ → T′T′
+
+    # q′q′ geometric term (see the θ′θ′ addition above).
+    (; ᶜq_tot_nonneg) = p.precomputed
+    if use_geometric
+        ᶜinv_q = p.scratch.ᶜtemp_scalar_5
+        hgrad_invariant!(ᶜinv_q, ᶜq_tot_nonneg, p)
+        @. ᶜq′q′ += geo_h * ᶜinv_q
+    end
+
+    # Closure-validity bound `σ_q ≤ sgs_variance_max_rel_std * q_tot` (default
+    # 0.5). A wider Gaussian puts a quadrature node at negative total water;
+    # the clamped quadrature then carries more total water than the grid mean holds,
+    # and condensing it can drive the grid-mean vapour negative.
+    r_max = CAP.sgs_variance_max_rel_std(p.params)
+    @. ᶜq′q′ = min(ᶜq′q′, (r_max * ᶜq_tot_nonneg)^2)
     return nothing
 end
 
