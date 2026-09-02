@@ -1,0 +1,33 @@
+# Aquaplanet (0M) over topography on DG flux-form dynamics — the terrain
+# configuration recommended by the WB characterization (2026-09):
+#   dg_equation_form: fddg  + dg_volume_flux: kg_pert
+#     = KG volume/interface fluxes carrying pm = p − p_ref in the momentum
+#       slot (horizontal WB: machine C-property on the reference state) with
+#       CA's reference-split vertical (the conservative_pert pair).
+#   Structural stability (split-form KEP + Roe interface dissipation), no
+#   hyperdiffusion, no filters. For the entropy-conservative variant of the
+#   as/hi-res trio (vertical-WB only), set dg_volume_flux: waruszewski.
+horizontal_discretization: "DG"
+dg_equation_form: "fddg"
+dg_volume_flux: "kg_pert"
+hyperdiff: ~
+apply_zhang_shu_limiter: true
+config: "sphere"
+h_elem: 16
+z_elem: 30
+z_max: 30000.0
+dz_bottom: 300.0
+topography: "Earth"
+topography_damping_factor: 5.0
+mesh_warp_type: "SLEVE"
+rad: "gray"
+insolation: "idealized"
+surface_setup: "DefaultMoninObukhov"
+vert_diff: "VerticalDiffusion"
+implicit_diffusion: true
+microphysics_model: "0M"
+use_sgs_quadrature: true
+initial_condition: "MoistBaroclinicWave"
+dt: "120secs"
+t_end: "1days"
+dt_save_state_to_disk: "6hours"
