@@ -200,10 +200,11 @@ function test_restart(simulation, args; comms_ctx, more_ignore = Symbol[])
         simulation_restarted.integrator.p;
         name = "integrator.p",
         ignore = Set([
-            # `grid` and `setup` on p.atmos are separate but equivalent objects
-            # (the checkpoint's physics hash covers these)
-            :grid,
-            :setup,
+            # p.atmos is rebuilt from the same config, not read from the
+            # checkpoint, and it carries grid, params, and setup, so
+            # walking it is expensive and does not test restart reproducibility
+            # The checkpoint's atmos_model_hash check covers these.
+            :atmos,
             :ghost_buffer,
             :hyperdiffusion_ghost_buffer,
             :scratch,
@@ -263,10 +264,10 @@ function test_restart(simulation, args; comms_ctx, more_ignore = Symbol[])
         simulation_restarted2.integrator.p;
         name = "integrator.p",
         ignore = Set([
-            # `grid` and `setup` on p.atmos are separate but equivalent objects
-            # (the checkpoint's physics hash covers these)
-            :grid,
-            :setup,
+            # p.atmos is rebuilt from the same config, not read from the
+            # checkpoint, and it carries grid, params, and setup, so
+            # walking it is expensive and does not test restart reproducibility
+            :atmos,
             :scratch,
             :output_dir,
             :ghost_buffer,
