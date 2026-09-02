@@ -545,6 +545,14 @@ function TurbulenceConvectionParameters(
     # TODO: promote to ClimaParams (and the name_map above) once the
     # release shape has been calibrated.
     release_defaults = (;
+        # Optional background SGS variance source (branch zs/sgs_variance).
+        # Not in ClimaParams' default toml; default 0 (inert) and read from the
+        # run/calibration toml when provided. See `set_covariance_cache!`.
+        sgs_variance_coeff_q = FT(0),
+        sgs_variance_coeff_T = FT(0),
+        sgs_variance_coeff_hgrad = FT(0),
+        sgs_variance_max_rel_std = FT(0.5),
+        sgs_variance_hgrad_min_abs_lat = FT(0),
         cloud_fraction_floor_release_margin = FT(1),
         cloud_fraction_floor_release_abs_margin = FT(1),
         cloud_fraction_floor_release_sharpness = FT(1),

@@ -273,6 +273,67 @@ function set_covariance_cache!(Y, p, thermo_params)
     ᶜ∂T_∂θ = p.scratch.ᶜtemp_scalar_2
     compute_∂T_∂θ!(ᶜ∂T_∂θ, Y, p, thermo_params)
     @. ᶜT′T′ = ᶜ∂T_∂θ^2 * ᶜT′T′  # θ′θ′ → T′T′
+
+    # Optional background SGS variance SOURCE (branch zs/sgs_variance). The
+    # gradient*mixing-length closure above collapses to ~0 in the free
+    # troposphere, where the mixing length is pinned at its ~1 m floor as TKE→0,
+    # so grid-mean condensation is effectively off and vapour accumulates at high
+    # RH. Add a simple additive variance with standard deviations proportional to
+    # the grid-mean fields, σ_q = C_q*q_tot and σ_T = C_T*T (variance += (C*·)^2),
+    # controlled by calibratable coefficients that default to 0 (inert). Scaling
+    # by the grid-mean q_tot (not q_sat) keeps the relative moisture variability
+    # roughly constant: it vanishes in dry air, stays bounded below q_tot (so the
+    # clamped quadrature samples stay non-negative), and grows toward saturation
+    # exactly where the moist bias piles up. NOTE: this adds variance at every
+    # level; switching `+=` to `max(ᶜq′q′, (C_q*q_tot)^2)` would instead only lift
+    # levels below the floor (e.g. the free troposphere) and leave the boundary
+    # layer untouched.
+    C_q = CAP.sgs_variance_coeff_q(p.params)
+    C_T = CAP.sgs_variance_coeff_T(p.params)
+    if C_q > 0 || C_T > 0
+        (; ᶜT, ᶜq_tot_nonneg) = p.precomputed
+        @. ᶜq′q′ += (C_q * ᶜq_tot_nonneg)^2
+        @. ᶜT′T′ += (C_T * ᶜT)^2
+    end
+
+    # Optional horizontal-gradient (scale-similarity / mesoscale) variance source.
+    # The additive term above scales with the grid-mean q_tot, so it is strongest
+    # in the moist tropics/boundary layer and weakest in the cold extratropical
+    # free troposphere where the moist bias lives. The horizontal-gradient term
+    # instead scales with the resolved horizontal humidity gradient and the grid
+    # scale, `q'q' += C_h * Δ_h^2 * |∇_h q_tot|^2`, self-targeting fronts/storm
+    # tracks and surviving where TKE (hence the mixing length) collapses.
+    # The resulting σ_q is bounded by `sgs_variance_max_rel_std * q_tot` (default
+    # 0.5) so that the 3-point Gauss-Hermite nodes `q̂ = q_tot ± √3 σ_q` stay
+    # non-negative: without the bound, cells with a large resolved gradient next
+    # to nearly dry air get σ_q ≫ q_tot, the clamped quadrature then samples more
+    # total water than the grid mean holds, and condensing it can drive the
+    # grid-mean vapour negative (observed as a NaN at C_h = 1 without the bound).
+    # An optional smooth latitude ramp (`sgs_variance_hgrad_min_abs_lat` > 0)
+    # restricts the source to the extratropics; it exists only for attribution
+    # experiments and is off by default.
+    C_h = CAP.sgs_variance_coeff_hgrad(p.params)
+    if C_h > 0
+        (; ᶜq_tot_nonneg) = p.precomputed
+        FT = eltype(ᶜq′q′)
+        Δ_h = Spaces.node_horizontal_length_scale(Spaces.horizontal_space(axes(Y.c)))
+        r_max = CAP.sgs_variance_max_rel_std(p.params)
+        lat_min = CAP.sgs_variance_hgrad_min_abs_lat(p.params)
+        ramp(x) = x * x * (3 - 2 * x)  # smoothstep on [0, 1]
+        ᶜlat = Fields.coordinate_field(axes(Y.c)).lat
+        @. ᶜq′q′ = min(
+            ᶜq′q′ +
+            ifelse(
+                lat_min > 0,
+                ramp(clamp((abs(ᶜlat) - lat_min) / FT(15), FT(0), FT(1))),
+                FT(1),
+            ) *
+            C_h *
+            Δ_h^2 *
+            norm_sqr(gradₕ(ᶜq_tot_nonneg)),
+            (r_max * ᶜq_tot_nonneg)^2,
+        )
+    end
     return nothing
 end
 
