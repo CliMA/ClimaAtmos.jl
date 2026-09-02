@@ -106,7 +106,13 @@ function compare(
     return _compare(pass, v1, v2; name, ignore)
 end
 
-function _compare(pass, v1::T, v2::T; name, ignore) where {T}
+# Don't specialized on the argument types: the cache holds thousands of distinct
+# nested struct and NamedTuple types, and a specialized method would have to be
+# compiled once for each of them. The leaf methods below (numbers, arrays,
+# Fields) still dispatch on type.
+function _compare(pass, @nospecialize(v1), @nospecialize(v2); name, ignore)
+    typeof(v1) === typeof(v2) ||
+        error("$name: v1 and v2 have different types")
     properties = filter(x -> !(x in ignore), propertynames(v1))
     if isempty(properties)
         pass &= _compare(v1, v2; name, ignore)
@@ -125,7 +131,9 @@ function _compare(pass, v1::T, v2::T; name, ignore) where {T}
     return pass
 end
 
-function _compare(v1::T, v2::T; name, ignore) where {T}
+function _compare(@nospecialize(v1), @nospecialize(v2); name, ignore)
+    typeof(v1) === typeof(v2) ||
+        error("$name: v1 and v2 have different types")
     return print_maybe(v1 == v2, "$name differs")
 end
 
@@ -187,10 +195,6 @@ function _compare(
 ) where {FT <: AbstractFloat}
     error = maximum(_error(v1, v2))
     return print_maybe(error <= 100eps(eltype(v1)), "$name error: $error")
-end
-
-function _compare(pass, v1::T1, v2::T2; name, ignore) where {T1, T2}
-    error("v1 and v2 have different types")
 end
 
 function print_maybe(exp, what)
