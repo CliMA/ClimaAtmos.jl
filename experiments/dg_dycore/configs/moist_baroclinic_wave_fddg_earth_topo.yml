@@ -27,7 +27,7 @@ pgf: conservative_pert
 topography: earth
 topography_damping_factor: 1.0    
 terrain_warp: sleve
-zstretch: [300.0, 3000.0]
+zstretch: [30.0, 3000.0]
 
 moisture: equil
 microphysics: zero_moment
@@ -40,4 +40,4 @@ z_q2: 8000.0
 output_dir: output/moist_baroclinic_wave_fddg_earth_topo
 diag_period: 86400.0
 dt_save: 21600.0
-ndiag: 60
+ndiag: 1
