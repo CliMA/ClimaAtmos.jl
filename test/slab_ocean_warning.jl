@@ -40,7 +40,12 @@ import ClimaAtmos as CA
         logger = SimpleLogger(log_buffer, Logging.Warn)
 
         with_logger(logger) do
-            surface = CA.AtmosSurface(config_slab, params, FT; setup_type)
+            surface = CA.AtmosSurface(
+                config_slab,
+                params,
+                FT;
+                setup_traits = CA.Setups.setup_model_traits(setup_type, params, FT),
+            )
             @test surface.temperature isa CA.SurfaceConditions.SlabOceanTemperature
         end
 
@@ -56,7 +61,12 @@ import ClimaAtmos as CA
         logger = SimpleLogger(log_buffer, Logging.Warn)
 
         with_logger(logger) do
-            surface = CA.AtmosSurface(config_slab, params, FT; setup_type = nothing)
+            surface = CA.AtmosSurface(
+                config_slab,
+                params,
+                FT;
+                setup_traits = CA.Setups.setup_model_traits(nothing, params, FT),
+            )
             @test surface.temperature isa CA.SurfaceConditions.SlabOceanTemperature
         end
 
@@ -81,7 +91,12 @@ import ClimaAtmos as CA
         logger = SimpleLogger(log_buffer, Logging.Warn)
 
         with_logger(logger) do
-            surface = CA.AtmosSurface(config_prescribed, params, FT; setup_type)
+            surface = CA.AtmosSurface(
+                config_prescribed,
+                params,
+                FT;
+                setup_traits = CA.Setups.setup_model_traits(setup_type, params, FT),
+            )
             @test surface.temperature isa CA.SurfaceConditions.AnalyticTemperature
         end
 

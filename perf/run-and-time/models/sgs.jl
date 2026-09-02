@@ -66,8 +66,8 @@ function case_setup()
 
     params = CA.ClimaAtmosParameters(config)
     setup_type = CA.get_setup_type(pa, CA.CAP.thermodynamics_params(params))
-    model = CA.get_atmos(config, params; setup_type = setup_type)
     grid = CA.get_grid(pa, params, config.comms_ctx)
+    model = CA.get_atmos(config, params, grid; setup_type = setup_type)
 
     # Time arguments (dt is what the cache reads via `p.dt`).
     dt, t_start, t_end = CA.convert_time_args(
