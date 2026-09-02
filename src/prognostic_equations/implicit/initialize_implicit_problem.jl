@@ -155,12 +155,15 @@ function solve_sgs_u₃_implicit_stage_analytic!(Y, p, dtγ)
     α_b = CAP.pressure_normalmode_buoy_coeff1(turbconv_params)
     α_d = CAP.pressure_normalmode_drag_coeff(turbconv_params)
     a_min = CAP.min_area(turbconv_params)
+    a_max = CAP.max_area(turbconv_params)
     scale_height = CAP.R_d(params) * CAP.T_surf_ref(params) / CAP.grav(params)
 
-    # Approximation factor used in w₀ - w ≈ -(ρ / ρa⁰) w (single-updraft case).
-    # For multiple updrafts we approximate ρ / ρa⁰ ≈ 1, which implies w₀ ≈ 0.
-    ᶜρ_over_ρa⁰ = p.scratch.ᶜtemp_scalar
-    @. ᶜρ_over_ρa⁰ = Y.c.ρ / ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model)
+    # Approximation factor used in w₀ - w ≈ -(1 / a⁰) w (single-updraft case).
+    # Guard against unphysical extrapolated areas (ρa is solved analytically
+    # AFTER u₃, so the u₃ solve sees a possibly out-of-range ρa). Clamp
+    # a⁰ ∈ [1−a_max, 1].
+    ᶜa⁰_inv = p.scratch.ᶜtemp_scalar
+    @. ᶜa⁰_inv = FT(1) / clamp(a⁰(Y.c.sgsʲs, ᶜρʲs, turbconv_model), 1 - a_max, FT(1))
 
     ᶠdz = Fields.Δz_field(axes(Y.f))
 
@@ -185,27 +188,32 @@ function solve_sgs_u₃_implicit_stage_analytic!(Y, p, dtγ)
         # of the signed area-bounding rate (see `area_bounding_entr_detr`).
         # `entr_nonvel_rate` is included in the linear sink, with the assumption
         # that the change in b/w is slow.
-        @. ᶠa += ᶠinterp(ᶜentr_vel_scaleʲs.:($$j) * ᶜρ_over_ρa⁰ * ᶜρ_over_ρa⁰) / ᶠdz
+        @. ᶠa += ᶠinterp(ᶜentr_vel_scaleʲs.:($$j) * ᶜa⁰_inv * ᶜa⁰_inv) / ᶠdz
         @. ᶠb +=
             ᶠinterp(
                 (
                     max(FT(0), ᶜarea_bounding_entr_detrʲs.:($$j)) +
                     ᶜentr_nonvel_rateʲs.:($$j) +
                     ᶜturb_entrʲs.:($$j)
-                ) * ᶜρ_over_ρa⁰,
+                ) * ᶜa⁰_inv,
             )
 
         # Implicit NH pressure drag contributes a quadratic sink in w².
         if p.atmos.edmfx_model.nh_pressure isa Val{true}
-            ᶜaʲ = @. lazy(draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j)))
-            ᶜa⁰ = @. lazy(a⁰(Y.c.sgsʲs, ᶜρʲs, turbconv_model))
+            # Clamp a_j ∈ [0, a_max]; reuse the clamped ᶜa⁰ from above.
+            ᶜaʲ = @. lazy(
+                clamp(
+                    draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j)),
+                    FT(0), a_max,
+                ),
+            )
             # Use a scratch scalar here as @lazy results in a large fused kernel
             # that doesn't work on P100 GPUs.
             ᶜdrag_coeff = p.scratch.ᶜtemp_scalar_2
             @. ᶜdrag_coeff =
                 α_d / (2 * scale_height) *
-                (1 / sqrt(max(ᶜaʲ, a_min)) + 1 / sqrt(max(ᶜa⁰, a_min)))
-            @. ᶠa += ᶠinterp(ᶜdrag_coeff * ᶜa⁰ * ᶜρ_over_ρa⁰ * ᶜρ_over_ρa⁰) / ᶠdz
+                (1 / sqrt(max(ᶜaʲ, a_min)) + sqrt(ᶜa⁰_inv))
+            @. ᶠa += ᶠinterp(ᶜdrag_coeff * ᶜa⁰_inv) / ᶠdz
         end
 
         # Optional Rayleigh sponge adds extra linear damping near the top.
