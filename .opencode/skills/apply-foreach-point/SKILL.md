@@ -66,6 +66,8 @@ let scalar = scalar
 end
 ```
 
+The DataLayout and Field arguments passed to `foreach_point` do not need to be added to the let block.
+
 ### Only `isbits` captures are allowed on a GPU
 
 Every value captured into a `foreach_point` closure is eventually passed *into the
@@ -228,3 +230,4 @@ end
 - When implementing the diff do not get concerend with missing imports too much. Rather try to prepere somthing and iterate (by running) and observing the errors until you get it right.
 - Do not try to understand the details of each construct (e.g. `unrolled_sum`) just 
   use patterns in the codebase and apply it in a similar way.
+- Make as minimal changes as possible to code when adding the `foreach_point` construct. Ideally use the same variable names as the fields for the views returned by `foreach_point`. Preserve existing comments and don't add a comment simply to explain what `foreach_point` is doing.
