@@ -232,6 +232,13 @@ function precomputed_quantities(Y, atmos)
                         ᶜK_h_h = similar(Y.c, FT),
                     ) : (;)
                 )...,
+                # Horizontal master mixing length for the 3D SGS variance
+                # closure (`SGSVariance3D`); materialized inside the
+                # cloud-fraction Picard loop, so it needs a persistent field.
+                (
+                    uses_horizontal_sgs_variance(atmos, axes(Y.c)) ?
+                    (; ᶜl_mix_h = similar(Y.c, FT)) : (;)
+                )...,
             ) : (;)
         )...,
         ᶜstrain_rate_norm = similar(Y.c, FT),
@@ -261,10 +268,31 @@ function precomputed_quantities(Y, atmos)
         sigma_S::FT,
         λ_lagrange::FT,
     }
+    # Cached horizontal gradient invariants of (θ_li, q_tot) for the 3D SGS
+    # variance closure: the turbulent (`_t`, slope-corrected physical horizontal
+    # gradient) and geometric (`_g`, raw along-surface gradient) auto- and
+    # cross-products, filled once per update by `set_buoyancy_gradient_inputs!`.
+    SGSGradInvariantsNT = @NamedTuple{
+        θθ_t::FT,
+        qq_t::FT,
+        θq_t::FT,
+        θθ_g::FT,
+        qq_g::FT,
+        θq_g::FT,
+    }
     covariance_quantities = if uses_sgs_quadrature
         base = (;
             ᶜT′T′ = zeros(axes(Y.c)),
             ᶜq′q′ = zeros(axes(Y.c)),
+            # Cross-covariance and diagnosed correlation of (T, q_tot); filled
+            # by `set_covariance_cache!` (the constant `Tq_correlation_coefficient`
+            # under `ConstantTqCorrelation`).
+            ᶜT′q′ = zeros(axes(Y.c)),
+            ᶜcorr_Tq = zeros(axes(Y.c)),
+            (
+                uses_horizontal_sgs_variance(atmos, axes(Y.c)) ?
+                (; ᶜ∇ₕ_inv = similar(Y.c, SGSGradInvariantsNT)) : (;)
+            )...,
         )
         uses_microphysics_quadrature_moments ?
         (; base..., ᶜsgs_moments = similar(Y.c, SGSMomentsNT)) :
@@ -751,8 +779,7 @@ NVTX.@annotate function set_implicit_precomputed_quantities!(Y, p, t)
         # Two-pass SGS: recompute condensate using SGS quadrature over (T, q_tot)
         sgs_quad = p.atmos.sgs_quadrature
         if !isnothing(sgs_quad)
-            (; ᶜT′T′, ᶜq′q′) = p.precomputed
-            corr_Tq = correlation_Tq(p.params)
+            (; ᶜT′T′, ᶜq′q′, ᶜcorr_Tq) = p.precomputed
             @. ᶜsa_result = compute_sgs_saturation_adjustment(
                 thermo_params,
                 $(sgs_quad),
@@ -761,7 +788,7 @@ NVTX.@annotate function set_implicit_precomputed_quantities!(Y, p, t)
                 ᶜq_tot_nonneg,
                 ᶜT′T′,
                 ᶜq′q′,
-                corr_Tq,
+                ᶜcorr_Tq,
             )
             @. ᶜq_liq = ᶜsa_result.q_liq
             @. ᶜq_ice = ᶜsa_result.q_ice

@@ -3,6 +3,23 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- Add a 3D, scale-aware SGS variance closure for the covariances of `(θ_li, q_tot)`
+  that feed the SGS quadrature (cloud fraction, saturation adjustment, microphysics
+  tendencies), selected by the opt-in `sgs_variance_model` config option
+  (`vertical` (default) or `3d`). The historical closure uses vertical gradients
+  and the master mixing length only, so the variances vanish in stable
+  stratification. `3d` adds a horizontal turbulent term (with the horizontal mixing
+  length `ℓ_h`) and a resolved-gradient "geometric" term
+  `c_g [(c_Δz Δz)² (∂_z ψ)² + (c_Δx Δx_h)² |∇_h ψ|²]` that stays finite in stable
+  air and grows with the horizontal grid spacing, giving adequate SGS
+  condensation/microphysics at coarse resolution. The T-q correlation can be
+  diagnosed from the gradient covariance instead of prescribed, via the
+  `tq_correlation_model` config option (`constant` (default) or `diagnosed`, which
+  requires `sgs_variance_model: 3d`). New (currently non-ClimaParams) parameters
+  `sgs_variance_geometric_coeff` (`1/12`), `sgs_variance_horizontal_scale_factor`
+  (`1`), `sgs_variance_vertical_scale_factor` (`1`), and `sgs_correlation_max` (`1`).
+  Horizontal terms vanish identically on single columns. The defaults reproduce the
+  previous behavior bitwise.
 
 0.42.8
 -------

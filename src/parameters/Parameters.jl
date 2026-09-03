@@ -183,6 +183,14 @@ not yet define. `FT` is the float type; `VFT1`, `VFT2`, and `VTF3` are the
     surface mass-flux closure [m].
   - `sfc_mass_flux_cap_fraction`: Fraction `α` of the surface scalar flux that
     the updraft may transport, so the environment retains at least `1 - α` [-].
+  - `sgs_variance_geometric_coeff`: Coefficient `c_g` of the resolved-gradient
+    (geometric) SGS variance term; `1/12` for a linear field over a uniform cell [-].
+  - `sgs_variance_horizontal_scale_factor`: Multiplier `c_Δx` on the horizontal grid
+    scale in the geometric variance term [-].
+  - `sgs_variance_vertical_scale_factor`: Multiplier `c_Δz` on the vertical grid
+    scale in the geometric variance term; `0` disables the vertical geometric term [-].
+  - `sgs_correlation_max`: Cap `r_max` on the magnitude of the diagnosed T-q
+    correlation [-].
 """
 Base.@kwdef struct TurbulenceConvectionParameters{FT, VFT1, VFT2, VTF3} <: ATCP
     max_surface_area::FT
@@ -236,6 +244,11 @@ Base.@kwdef struct TurbulenceConvectionParameters{FT, VFT1, VFT2, VTF3} <: ATCP
     sfc_mass_flux_ustar_coeff::FT
     convective_zi::FT
     sfc_mass_flux_cap_fraction::FT
+    # 3D scale-aware SGS variance closure (`SGSVariance3D`).
+    sgs_variance_geometric_coeff::FT
+    sgs_variance_horizontal_scale_factor::FT
+    sgs_variance_vertical_scale_factor::FT
+    sgs_correlation_max::FT
 end
 
 """

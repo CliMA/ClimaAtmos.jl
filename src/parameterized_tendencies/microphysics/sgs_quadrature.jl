@@ -380,6 +380,25 @@ Correlation coefficient corr(T′, q′) ∈ [-1, 1] [-].
 """
 @inline correlation_Tq(params) = CAP.Tq_correlation_coefficient(params)
 
+"""
+    sgs_correlation_Tq(T′T′, q′q′, T′q′, fallback, r_max)
+
+Diagnose the SGS T-q correlation from the (co)variances,
+`corr = clamp(T′q′ / sqrt(T′T′ · q′q′), ±r_max)`. Where both variances are below
+the numerical floor (`T′T′ · q′q′ ≤ ϵ_numerics²`, e.g. quiescent air with no
+resolved gradients) the ratio is ill-conditioned, so the prescribed `fallback`
+(`correlation_Tq`) is returned instead. Used by `DiagnosedTqCorrelation`.
+"""
+@inline function sgs_correlation_Tq(T′T′, q′q′, T′q′, fallback, r_max)
+    FT = typeof(T′T′)
+    denom = T′T′ * q′q′
+    return ifelse(
+        denom > ϵ_numerics(FT)^2,
+        clamp(T′q′ / sqrt(denom), -r_max, r_max),
+        fallback,
+    )
+end
+
 # ============================================================================
 # Extract standard deviations and correlation coefficient
 # ============================================================================

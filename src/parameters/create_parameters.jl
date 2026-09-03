@@ -552,6 +552,17 @@ function TurbulenceConvectionParameters(
         # Lateral correction scaling for updraft sedimentation
         # (see `updraft_sedimentation!`). 1.0 = full correction, 0.0 = disabled.
         sedimentation_lateral_coeff = FT(1), # Testing if stable now. To be removed, if yes.
+        # 3D scale-aware SGS variance closure (`SGSVariance3D`, see
+        # `set_covariance_cache!`). Not yet in ClimaParams' default toml.
+        # c_g = 1/12 is the variance of a linear field over a uniform cell;
+        # c_Δx, c_Δz scale the horizontal/vertical grid length in the geometric
+        # term (c_Δz = 0 disables the vertical geometric term); r_max caps the
+        # magnitude of the diagnosed T-q correlation.
+        # TODO: promote to ClimaParams (and the name_map above) once calibrated.
+        sgs_variance_geometric_coeff = FT(1 // 12),
+        sgs_variance_horizontal_scale_factor = FT(1),
+        sgs_variance_vertical_scale_factor = FT(1),
+        sgs_correlation_max = FT(1),
     )
     release_present = filter(collect(keys(release_defaults))) do name
         haskey(toml_dict.data, string(name))

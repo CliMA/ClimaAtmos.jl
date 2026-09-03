@@ -260,6 +260,12 @@ sgs_distribution:
 quadrature_order:
   help: "Quadrature order for SGS integration (1-5). Higher orders are more accurate but slower. Default: 3"
   value: 3
+sgs_variance_model:
+  help: "Closure for the SGS (co)variances of (θ_li, q_tot) that feed the SGS quadrature. `vertical` (default) uses vertical gradients and the master mixing length only; `3d` adds a horizontal turbulent term and a scale-aware resolved-gradient (geometric) term. [`vertical` (default), `3d`]"
+  value: "vertical"
+tq_correlation_model:
+  help: "Closure for the SGS T-q correlation used to sample the joint PDF. `constant` uses the prescribed `Tq_correlation_coefficient`; `diagnosed` computes it from the gradient-based covariance (requires `sgs_variance_model: 3d`). [`constant` (default), `diagnosed`]"
+  value: "constant"
 microphysics_n_substeps:
   help: "Number of susbteps for time averaging bulk microphysics tendencies without subgrid-scale quadrature. Default: 3"
   value: 3

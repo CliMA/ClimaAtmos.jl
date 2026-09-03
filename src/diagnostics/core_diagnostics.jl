@@ -1165,14 +1165,15 @@ add_diagnostic_variable!(short_name = "swp", units = "kg m^-2",
 # Covariances (3d)
 ###
 function compute_covariance_diagnostics(_, cache, _, type)
-    (; ᶜT′T′, ᶜq′q′) = cache.precomputed
+    (; ᶜT′T′, ᶜq′q′, ᶜT′q′) = cache.precomputed
     if type == :qt_qt
         return ᶜq′q′
     elseif type == :T_T
         return ᶜT′T′
     elseif type == :T_qt
-        corr = correlation_Tq(cache.params)
-        return @. lazy(corr * sqrt(max(0, ᶜT′T′)) * sqrt(max(0, ᶜq′q′)))
+        # Cached covariance, consistent with the T-q correlation actually used
+        # (constant or diagnosed); see `set_tq_correlation!`.
+        return ᶜT′q′
     else
         error("Unknown variance type")
     end
@@ -1185,11 +1186,8 @@ compute_env_temperature_variance(state, cache, time) =
 compute_env_q_tot_temperature_covariance(state, cache, time) =
     compute_covariance_diagnostics(state, cache, time, :T_qt)
 
-function compute_env_q_tot_temperature_correlation(_, cache, _)
-    corr = correlation_Tq(cache.params)
-    (; ᶜtemp_scalar) = cache.scratch
-    return @. lazy(one(ᶜtemp_scalar) * corr)
-end
+compute_env_q_tot_temperature_correlation(_, cache, _) =
+    cache.precomputed.ᶜcorr_Tq
 
 add_diagnostic_variable!(short_name = "env_q_tot_variance", units = "kg^2 kg^-2",
     long_name = "Environment Variance of Total Specific Humidity",

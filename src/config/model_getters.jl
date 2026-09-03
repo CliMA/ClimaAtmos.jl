@@ -754,6 +754,49 @@ function get_cloud_model(parsed_args, params)
 end
 
 """
+    get_sgs_variance_model(parsed_args)
+
+Build the SGS variance closure selected by the `sgs_variance_model` config key.
+
+  - `"vertical"`: `SGSVarianceVertical`, vertical-gradient-only closure (historical).
+  - `"3d"`: `SGSVariance3D`, adds a horizontal turbulent term and a scale-aware
+    resolved-gradient (geometric) term.
+
+Any other value raises an error.
+"""
+function get_sgs_variance_model(parsed_args)
+    model = parsed_args["sgs_variance_model"]
+    return if model == "vertical"
+        SGSVarianceVertical()
+    elseif model == "3d"
+        SGSVariance3D()
+    else
+        error("Invalid sgs_variance_model $(model). Use: vertical, 3d")
+    end
+end
+
+"""
+    get_tq_correlation_model(parsed_args)
+
+Build the SGS T-q correlation closure selected by the `tq_correlation_model` config key.
+
+  - `"constant"`: `ConstantTqCorrelation`, the prescribed `Tq_correlation_coefficient`.
+  - `"diagnosed"`: `DiagnosedTqCorrelation`, computed from the gradient-based covariance.
+
+Any other value raises an error.
+"""
+function get_tq_correlation_model(parsed_args)
+    model = parsed_args["tq_correlation_model"]
+    return if model == "constant"
+        ConstantTqCorrelation()
+    elseif model == "diagnosed"
+        DiagnosedTqCorrelation()
+    else
+        error("Invalid tq_correlation_model $(model). Use: constant, diagnosed")
+    end
+end
+
+"""
     get_cloud_in_radiation(parsed_args)
 
 Choose how clouds enter the radiation calculation, from the
@@ -1104,6 +1147,22 @@ function AtmosWater(config::AtmosConfig, params, ::Type{FT}) where {FT}
 
     cloud_model = get_cloud_model(pa, params)
 
+    sgs_variance_model = get_sgs_variance_model(pa)
+    tq_correlation_model = get_tq_correlation_model(pa)
+    if sgs_variance_model isa SGSVariance3D && isnothing(sgs_quadrature)
+        error(
+            "sgs_variance_model: 3d requires use_sgs_quadrature: true (the 3D \
+             variance closure only feeds the SGS quadrature).",
+        )
+    end
+    if tq_correlation_model isa DiagnosedTqCorrelation &&
+       !(sgs_variance_model isa SGSVariance3D)
+        error(
+            "tq_correlation_model: diagnosed requires sgs_variance_model: 3d \
+             (the diagnosed correlation needs the gradient-based covariance ᶜT′q′).",
+        )
+    end
+
     terminal_velocity_liquid =
         pa["fixed_terminal_velocity_liquid"] ?
         FixedTerminalVelocity() : DiagnosticTerminalVelocity()
@@ -1126,6 +1185,8 @@ function AtmosWater(config::AtmosConfig, params, ::Type{FT}) where {FT}
                                              Explicit(),
         tracer_nonnegativity_method = get_tracer_nonnegativity_method(pa),
         sgs_quadrature,
+        sgs_variance_model,
+        tq_correlation_model,
         terminal_velocity_liquid,
         terminal_velocity_ice,
         terminal_velocity_rain,

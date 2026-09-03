@@ -357,6 +357,71 @@ temperature and total water. Selected by `cloud_model: "quadrature"`.
 """
 struct QuadratureCloud <: AbstractCloudModel end
 
+"""
+    AbstractSGSVarianceModel
+
+Strategy for the subgrid-scale (co)variances of `(θ_li, q_tot)` that feed the SGS
+quadrature (cloud fraction, saturation adjustment, microphysics tendencies).
+Selected by the YAML key `sgs_variance_model`.
+
+Subtypes:
+
+  - `SGSVarianceVertical`: the historical closure, `2 C ℓ² (∂_z ψ)²`, from vertical
+    gradients and the master mixing length only (`"vertical"`).
+  - `SGSVariance3D`: a scale-aware closure adding a horizontal turbulent term (with
+    the horizontal mixing length `ℓ_h`) and a resolved-gradient "geometric" term
+    `c_g [(c_Δz Δz)² (∂_z ψ)² + (c_Δx Δx_h)² |∇_h ψ|²]` that does not vanish in
+    stable stratification and grows with the horizontal grid spacing (`"3d"`).
+"""
+abstract type AbstractSGSVarianceModel end
+
+"""
+    SGSVarianceVertical
+
+Vertical-gradient-only SGS variance closure; see [`AbstractSGSVarianceModel`](@ref).
+"""
+struct SGSVarianceVertical <: AbstractSGSVarianceModel end
+
+"""
+    SGSVariance3D
+
+Three-dimensional, scale-aware SGS variance closure; see
+[`AbstractSGSVarianceModel`](@ref).
+"""
+struct SGSVariance3D <: AbstractSGSVarianceModel end
+
+"""
+    AbstractTqCorrelationModel
+
+Strategy for the subgrid-scale correlation `corr(T′, q_tot′)` used to sample the
+joint SGS PDF. Selected by the YAML key `tq_correlation_model`.
+
+Subtypes:
+
+  - `ConstantTqCorrelation`: the prescribed parameter `Tq_correlation_coefficient`
+    (`"constant"`).
+  - `DiagnosedTqCorrelation`: `corr = Cov / sqrt(Var_θ Var_q)` from the gradient-based
+    (co)variances, falling back to the prescribed value where both variances are
+    below a floor (`"diagnosed"`; requires an `SGSVariance3D`-capable covariance
+    cache carrying `ᶜT′q′`).
+"""
+abstract type AbstractTqCorrelationModel end
+
+"""
+    ConstantTqCorrelation
+
+Prescribed constant T–q correlation; see [`AbstractTqCorrelationModel`](@ref).
+"""
+struct ConstantTqCorrelation <: AbstractTqCorrelationModel end
+
+"""
+    DiagnosedTqCorrelation
+
+T–q correlation diagnosed from the SGS covariance; see
+[`AbstractTqCorrelationModel`](@ref).
+"""
+struct DiagnosedTqCorrelation <: AbstractTqCorrelationModel end
+
 
 """
     MLCloud{M}
@@ -2158,7 +2223,7 @@ Group of chemistry models inside an `AtmosModel`.
 end
 
 """
-    AtmosWater{MM, CM, MTTS, TNM, SQ, TVM}(; microphysics_model = DryModel(), kwargs...)
+    AtmosWater{MM, CM, MTTS, TNM, SQ, SVM, TCM, TVL, TVI, TVR, TVS}(; microphysics_model = DryModel(), kwargs...)
 
 Group of moisture, cloud, and microphysics choices inside an
 `AtmosModel`.
@@ -2172,6 +2237,10 @@ Group of moisture, cloud, and microphysics choices inside an
   - `tracer_nonnegativity_method`: `nothing`, or a `TracerNonnegativityMethod`.
   - `sgs_quadrature`: `nothing`, or an `SGSQuadrature` used to integrate cloud
     and microphysics quantities over the subgrid-scale distribution.
+  - `sgs_variance_model`: an `AbstractSGSVarianceModel`; `SGSVarianceVertical()` by
+    default.
+  - `tq_correlation_model`: an `AbstractTqCorrelationModel`; `ConstantTqCorrelation()`
+    by default.
   - `terminal_velocity_mode`: `DiagnosticTerminalVelocity()` (the default) or a
     `FixedTerminalVelocity`.
 
@@ -2184,12 +2253,14 @@ water = ClimaAtmos.AtmosWater(;
 )
 ```
 """
-@kwdef struct AtmosWater{MM, CM, MTTS, TNM, SQ, TVL, TVI, TVR, TVS}
+@kwdef struct AtmosWater{MM, CM, MTTS, TNM, SQ, SVM, TCM, TVL, TVI, TVR, TVS}
     microphysics_model::MM = DryModel()
     cloud_model::CM = QuadratureCloud()
     microphysics_tendency_timestepping::MTTS = nothing
     tracer_nonnegativity_method::TNM = nothing
     sgs_quadrature::SQ = nothing
+    sgs_variance_model::SVM = SGSVarianceVertical()
+    tq_correlation_model::TCM = ConstantTqCorrelation()
     terminal_velocity_liquid::TVL = FixedTerminalVelocity()
     terminal_velocity_ice::TVI = FixedTerminalVelocity()
     terminal_velocity_rain::TVR = DiagnosticTerminalVelocity()

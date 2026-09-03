@@ -426,6 +426,38 @@ function mixing_length_lopez_gomez_2020(
 end
 
 """
+    horizontal_gradient_invariants(Gθ_h, Gq_h, Gθ_v, Gq_v)
+
+Given the physical (Cartesian `UVW`) horizontal (along-coordinate-surface) and
+vertical gradients of `θ_li` and `q_tot`, return the six scalar invariants the 3D
+SGS variance closure needs, as a `NamedTuple`:
+
+  - `θθ_t, qq_t, θq_t`: turbulent invariants, the horizontal `(u, v)` auto- and
+    cross-products of the full physical gradient `G = G_h + G_v`. Using the
+    horizontal components of the *full* gradient makes them slope-corrected: over
+    sloped terrain the along-surface gradient `G_h` carries a vertical component
+    that the vertical gradient cancels, leaving the physical horizontal gradient.
+  - `θθ_g, qq_g, θq_g`: geometric invariants, the full auto- and cross-products of
+    the raw along-surface gradient `G_h` (including its vertical tilt component),
+    since a tilted cell genuinely spans that along-surface variation.
+"""
+@inline function horizontal_gradient_invariants(Gθ_h, Gq_h, Gθ_v, Gq_v)
+    # Full physical gradient (horizontal components are slope-corrected).
+    Gθu = Gθ_h.u + Gθ_v.u
+    Gθv = Gθ_h.v + Gθ_v.v
+    Gqu = Gq_h.u + Gq_v.u
+    Gqv = Gq_h.v + Gq_v.v
+    return (;
+        θθ_t = Gθu * Gθu + Gθv * Gθv,
+        qq_t = Gqu * Gqu + Gqv * Gqv,
+        θq_t = Gθu * Gqu + Gθv * Gqv,
+        θθ_g = Gθ_h.u * Gθ_h.u + Gθ_h.v * Gθ_h.v + Gθ_h.w * Gθ_h.w,
+        qq_g = Gq_h.u * Gq_h.u + Gq_h.v * Gq_h.v + Gq_h.w * Gq_h.w,
+        θq_g = Gθ_h.u * Gq_h.u + Gθ_h.v * Gq_h.v + Gθ_h.w * Gq_h.w,
+    )
+end
+
+"""
     set_buoyancy_gradient_inputs!(Y, p, thermo_params)
 
 Materialize, once per state update, everything the buoyancy-gradient stencils
@@ -478,6 +510,22 @@ NVTX.@annotate function set_buoyancy_gradient_inputs!(Y, p, thermo_params)
 
     @. ᶜgradᵥ_θ_liq_ice = ᶜgradᵥ(ᶠinterp(ᶜθ_li))
     @. ᶜgradᵥ_q_tot = ᶜgradᵥ(ᶠinterp(ᶜq_tot_nonneg))
+
+    # Horizontal gradient invariants for the 3D SGS variance closure. Computed
+    # once here (they do not depend on cloud fraction, so they stay fixed
+    # through the cloud-fraction Picard iteration), reusing the materialized
+    # `ᶜθ_li` and the just-filled vertical gradients. Skipped on single columns
+    # (no horizontal discretization) and when the vertical variance model is
+    # selected. No DSS: `gradₕ` is elementwise and the closure input is
+    # pointwise, matching the Smagorinsky strain-rate treatment.
+    if uses_horizontal_sgs_variance(p.atmos, axes(Y.c))
+        @. p.precomputed.ᶜ∇ₕ_inv = horizontal_gradient_invariants(
+            UVW(C123(gradₕ(ᶜθ_li))),
+            UVW(C123(gradₕ(ᶜq_tot_nonneg))),
+            UVW(C123(ᶜgradᵥ_θ_liq_ice)),
+            UVW(C123(ᶜgradᵥ_q_tot)),
+        )
+    end
     return nothing
 end
 

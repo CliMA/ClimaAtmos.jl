@@ -199,6 +199,23 @@ uses_covariances(atmos) =
     atmos.cloud_model isa Union{QuadratureCloud, MLCloud}
 
 """
+    uses_horizontal_sgs_variance(atmos, space)
+
+Whether the 3D SGS variance closure's horizontal terms are active for this
+configuration and grid: the covariances are used, `SGSVariance3D` is selected,
+and the grid has a horizontal discretization (`!iscolumn`). Single columns have
+no horizontal scale (`Δx_h = Inf`), so the horizontal invariants are neither
+allocated nor computed there. This predicate is the single source of truth
+shared by the allocation of `ᶜ∇ₕ_inv`/`ᶜl_mix_h` in `precomputed_quantities.jl`,
+the fill in `set_buoyancy_gradient_inputs!`, and the read in
+`set_covariance_cache!`.
+"""
+uses_horizontal_sgs_variance(atmos, space) =
+    uses_covariances(atmos) &&
+    atmos.sgs_variance_model isa SGSVariance3D &&
+    !iscolumn(space)
+
+"""
     materialized_mixing_length!(Y, p)
 
 Materialize the SGS master mixing length into a center field and return it.
@@ -227,22 +244,153 @@ function materialized_mixing_length!(Y, p)
 end
 
 """
+    materialized_mixing_lengths!(Y, p)
+
+Materialize the vertical and horizontal SGS master mixing lengths for the 3D
+variance closure and return `(ᶜl_v, ᶜl_h)`. `ᶜl_h` is `nothing` when the
+horizontal terms are inactive (single column or `SGSVarianceVertical`).
+
+`ᶜl_v` is the usual master mixing length (`materialized_mixing_length!`). `ᶜl_h`
+is the same physical mixing length capped by the horizontal node scale `Δx_h`
+instead of the resolvability filter scale `Δ_f`: for an `AbstractEDMF` it is
+`ᶜmixing_length(Y, p; grid_scale = Δx_h)` cached in `ᶜl_mix_h`; otherwise the
+Smagorinsky-Lilly length with the horizontal grid scale
+(`compute_gm_horizontal_mixing_length`).
+"""
+function materialized_mixing_lengths!(Y, p)
+    horiz = uses_horizontal_sgs_variance(p.atmos, axes(Y.c))
+    ᶜl_v = materialized_mixing_length!(Y, p)
+    horiz || return (ᶜl_v, nothing)
+    turbconv_model = p.atmos.turbconv_model
+    ᶜl_h = if turbconv_model isa AbstractEDMF
+        Δx_h = horizontal_filter_scale(axes(Y.c))
+        p.precomputed.ᶜl_mix_h .= ᶜmixing_length(Y, p; grid_scale = Δx_h)
+    else
+        compute_gm_horizontal_mixing_length(Y, p)
+    end
+    return (ᶜl_v, ᶜl_h)
+end
+
+"""
+    SGSVarianceCoeffs{FT}
+
+Isbits bundle of the 3D SGS variance coefficients, broadcast as a scalar (so the
+GPU kernel takes one argument instead of four):
+
+  - `C`: turbulent-production prefactor `diagnostic_covariance_coeff`,
+  - `c_g`: geometric (resolved-gradient) prefactor `sgs_variance_geometric_coeff`,
+  - `Δx_eff`: `c_Δx · Δx_h`, the effective horizontal cell width,
+  - `c_Δz`: multiplier on `Δz` in the vertical geometric term.
+"""
+struct SGSVarianceCoeffs{FT}
+    C::FT
+    c_g::FT
+    Δx_eff::FT
+    c_Δz::FT
+end
+Base.broadcastable(x::SGSVarianceCoeffs) = tuple(x)
+
+"""
+    sgs_variance_coeffs(params, space)
+
+Build the `SGSVarianceCoeffs` bundle. `Δx_eff = c_Δx · horizontal_filter_scale(space)`
+is `Inf` on single columns; it is only ever read on the horizontal path
+(guarded by `uses_horizontal_sgs_variance`), so the `Inf` is never multiplied.
+"""
+function sgs_variance_coeffs(params, space)
+    FT = eltype(params)
+    Δx_h = horizontal_filter_scale(space)
+    return SGSVarianceCoeffs{FT}(
+        CAP.diagnostic_covariance_coeff(params),
+        CAP.sgs_variance_geometric_coeff(params),
+        CAP.sgs_variance_horizontal_scale_factor(params) * Δx_h,
+        CAP.sgs_variance_vertical_scale_factor(params),
+    )
+end
+
+"""
+    sgs_cov_vertical(coeffs, l_v, Δz, dz_prod)
+    sgs_cov_horizontal(coeffs, l_h, inv_t, inv_g)
+
+Vertical and horizontal contributions to an SGS (co)variance. `dz_prod` is the
+product of vertical gradients `(∂_z φ)(∂_z ψ)`; `inv_t`, `inv_g` are the
+turbulent (slope-corrected horizontal) and geometric (raw along-surface)
+gradient invariants. Each combines a turbulent term `2 C ℓ² ·` and a geometric
+term `c_g Δ² ·`. Used for the auto-variances (`φ = ψ`, `dz_prod ≥ 0`) and the
+`(θ, q)` cross-covariance (either sign).
+"""
+@inline sgs_cov_vertical(coeffs, l_v, Δz, dz_prod) =
+    2 * coeffs.C * l_v^2 * dz_prod +
+    coeffs.c_g * (coeffs.c_Δz * Δz)^2 * dz_prod
+@inline sgs_cov_horizontal(coeffs, l_h, inv_t, inv_g) =
+    2 * coeffs.C * l_h^2 * inv_t + coeffs.c_g * coeffs.Δx_eff^2 * inv_g
+
+"""
+    set_tq_correlation!(Y, p, correlation_model)
+
+Fill `p.precomputed.ᶜcorr_Tq` with the SGS T-q correlation and set
+`p.precomputed.ᶜT′q′` to the consistent covariance `corr · sqrt(T′T′ · q′q′)`
+(so the covariance diagnostic and the sampled PDF agree). `ᶜT′T′` and `ᶜq′q′`
+must already be in the T basis.
+
+  - `ConstantTqCorrelation`: the prescribed `Tq_correlation_coefficient`.
+  - `DiagnosedTqCorrelation`: `corr = clamp(T′q′ / sqrt(T′T′ q′q′), ±r_max)`
+    from the gradient covariance already stored in `ᶜT′q′`, with the prescribed
+    value as the fallback where both variances are below the floor.
+"""
+function set_tq_correlation!(Y, p, ::ConstantTqCorrelation)
+    (; ᶜT′T′, ᶜq′q′, ᶜT′q′, ᶜcorr_Tq) = p.precomputed
+    corr = correlation_Tq(p.params)
+    @. ᶜcorr_Tq = corr
+    @. ᶜT′q′ = corr * sqrt(ᶜT′T′ * ᶜq′q′)
+    return nothing
+end
+function set_tq_correlation!(Y, p, ::DiagnosedTqCorrelation)
+    (; ᶜT′T′, ᶜq′q′, ᶜT′q′, ᶜcorr_Tq) = p.precomputed
+    fallback = correlation_Tq(p.params)
+    r_max = CAP.sgs_correlation_max(p.params)
+    @. ᶜcorr_Tq = sgs_correlation_Tq(ᶜT′T′, ᶜq′q′, ᶜT′q′, fallback, r_max)
+    @. ᶜT′q′ = ᶜcorr_Tq * sqrt(ᶜT′T′ * ᶜq′q′)
+    return nothing
+end
+
+"""
     set_covariance_cache!(Y, p, thermo_params)
 
-Materializes T-based SGS covariances into cached fields for use by downstream
-computations (SGS quadrature, cloud fraction). Populates `p.precomputed.(ᶜT′T′, ᶜq′q′)`.
+Materialize the T-based SGS (co)variances into the cached fields
+`p.precomputed.(ᶜT′T′, ᶜq′q′, ᶜT′q′, ᶜcorr_Tq)` for the SGS quadrature and cloud
+fraction. Dispatches on `p.atmos.sgs_variance_model`:
 
-Pipeline:
+  - `SGSVarianceVertical`: the historical closure `2 C ℓ² (∂_z ψ)²` from vertical
+    gradients and the master mixing length; the correlation is the prescribed
+    constant.
+  - `SGSVariance3D`: adds a horizontal turbulent term (with the horizontal
+    mixing length `ℓ_h`) and a resolved-gradient geometric term, and can diagnose
+    the correlation from the gradient covariance (see `set_tq_correlation!`).
 
- 1. Compute mixing length via `materialized_mixing_length!`
- 2. Materialize θ-based covariances from gradients
- 3. Transform θ→T using `compute_∂T_∂θ!`
+θ-based (co)variances are computed first, then transformed to the T basis via
+`compute_∂T_∂θ!`.
 """
 function set_covariance_cache!(Y, p, thermo_params)
     # Covariance fields are only allocated when the configuration needs them.
     # No-op otherwise (e.g. EquilMoist + 0M + GridScaleCloud).
     uses_covariances(p.atmos) || return nothing
+    set_covariance_cache!(
+        Y,
+        p,
+        thermo_params,
+        p.atmos.sgs_variance_model,
+        p.atmos.tq_correlation_model,
+    )
+end
 
+function set_covariance_cache!(
+    Y,
+    p,
+    thermo_params,
+    ::SGSVarianceVertical,
+    corr_model,
+)
     (; ᶜT′T′, ᶜq′q′) = p.precomputed
 
     coeff = CAP.diagnostic_covariance_coeff(p.params)
@@ -273,6 +421,66 @@ function set_covariance_cache!(Y, p, thermo_params)
     ᶜ∂T_∂θ = p.scratch.ᶜtemp_scalar_2
     compute_∂T_∂θ!(ᶜ∂T_∂θ, Y, p, thermo_params)
     @. ᶜT′T′ = ᶜ∂T_∂θ^2 * ᶜT′T′  # θ′θ′ → T′T′
+    # Correlation is the prescribed constant (DiagnosedTqCorrelation requires
+    # SGSVariance3D and is rejected at model construction).
+    set_tq_correlation!(Y, p, corr_model)
+    return nothing
+end
+
+function set_covariance_cache!(Y, p, thermo_params, ::SGSVariance3D, corr_model)
+    (; ᶜT′T′, ᶜq′q′, ᶜT′q′) = p.precomputed
+    (; ᶜgradᵥ_q_tot, ᶜgradᵥ_θ_liq_ice) = p.precomputed
+
+    coeffs = sgs_variance_coeffs(p.params, axes(Y.c))
+    ᶜΔz = Fields.Δz_field(axes(Y.c))
+    (ᶜl_v, ᶜl_h) = materialized_mixing_lengths!(Y, p)
+
+    # Vertical contributions (turbulent + geometric), in the θ basis. The
+    # WVector conversion gives the physical vertical gradient (∂_z ψ), matching
+    # the vertical-only closure.
+    @. ᶜq′q′ = sgs_cov_vertical(
+        coeffs,
+        ᶜl_v,
+        ᶜΔz,
+        dot(Geometry.WVector(ᶜgradᵥ_q_tot), Geometry.WVector(ᶜgradᵥ_q_tot)),
+    )
+    @. ᶜT′T′ = sgs_cov_vertical(
+        coeffs,
+        ᶜl_v,
+        ᶜΔz,
+        dot(
+            Geometry.WVector(ᶜgradᵥ_θ_liq_ice),
+            Geometry.WVector(ᶜgradᵥ_θ_liq_ice),
+        ),
+    )
+    @. ᶜT′q′ = sgs_cov_vertical(
+        coeffs,
+        ᶜl_v,
+        ᶜΔz,
+        dot(
+            Geometry.WVector(ᶜgradᵥ_θ_liq_ice),
+            Geometry.WVector(ᶜgradᵥ_q_tot),
+        ),
+    )
+
+    # Horizontal contributions, only where the grid has a horizontal scale
+    # (`ᶜ∇ₕ_inv` is allocated iff `uses_horizontal_sgs_variance`). On a single
+    # column these are skipped and `Δx_eff = Inf` is never multiplied.
+    if hasproperty(p.precomputed, :ᶜ∇ₕ_inv)
+        ᶜinv = p.precomputed.ᶜ∇ₕ_inv
+        @. ᶜq′q′ += sgs_cov_horizontal(coeffs, ᶜl_h, ᶜinv.qq_t, ᶜinv.qq_g)
+        @. ᶜT′T′ += sgs_cov_horizontal(coeffs, ᶜl_h, ᶜinv.θθ_t, ᶜinv.θθ_g)
+        @. ᶜT′q′ += sgs_cov_horizontal(coeffs, ᶜl_h, ᶜinv.θq_t, ᶜinv.θq_g)
+    end
+
+    # Transform θ-based (co)variances to the T basis via ∂T/∂θ (T′T′ scales with
+    # the square, the θ-q cross-covariance with the first power).
+    ᶜ∂T_∂θ = p.scratch.ᶜtemp_scalar_2
+    compute_∂T_∂θ!(ᶜ∂T_∂θ, Y, p, thermo_params)
+    @. ᶜT′T′ = ᶜ∂T_∂θ^2 * ᶜT′T′
+    @. ᶜT′q′ = ᶜ∂T_∂θ * ᶜT′q′
+
+    set_tq_correlation!(Y, p, corr_model)
     return nothing
 end
 
@@ -797,16 +1005,18 @@ NVTX.@annotate function set_sgs_moments_and_cloud_fraction!(Y, p)
     ᶜρ_env, ᶜT_mean, ᶜq_mean = _get_env_ρ_T_q(Y, p, thermo_params, turbconv_model)
     ᶜq_lcl, ᶜq_icl = _get_condensate_means(Y, p, turbconv_model, microphysics_model)
     sgs_quad = p.atmos.sgs_quadrature
-    corr_Tq = correlation_Tq(p.params)
     FT = eltype(p.params)
     α = sgs_variance_fidelity(CAP.cloud_fraction_steepness_scale(p.params))
     floor = cloud_fraction_floor_params(p.params)
-    (; ᶜT′T′, ᶜq′q′) = p.precomputed
+    # Cached per-point T-q correlation (the prescribed constant under
+    # `ConstantTqCorrelation`, diagnosed from the gradient covariance under
+    # `DiagnosedTqCorrelation`); see `set_covariance_cache!`.
+    (; ᶜT′T′, ᶜq′q′, ᶜcorr_Tq) = p.precomputed
 
     # ONE quadrature pass → (sigma_S, λ_lagrange).
     @. p.precomputed.ᶜsgs_moments = _compute_sgs_moments(
         thermo_params, ᶜρ_env, ᶜT_mean, ᶜq_mean, ᶜq_lcl + ᶜq_icl,
-        $(sgs_quad), ᶜT′T′, ᶜq′q′, corr_Tq, FT(α),
+        $(sgs_quad), ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, FT(α),
     )
     # Recompute CF from q_c and σ_S using the augmented-σ closure. We cannot
     # use `Φ(λ/σ_aug)` because λ was computed with the equilibrium σ_S_eff,
@@ -907,12 +1117,12 @@ NVTX.@annotate function set_cloud_fraction!(
     ᶜq_lcl, ᶜq_icl = _get_condensate_means(Y, p, turbconv_model, microphysics_model)
 
     sgs_quad = p.atmos.sgs_quadrature
-    corr_Tq = correlation_Tq(p.params)
     FT = eltype(p.params)
     α = sgs_variance_fidelity(CAP.cloud_fraction_steepness_scale(p.params))
     floor = cloud_fraction_floor_params(p.params)
 
-    (; ᶜT′T′, ᶜq′q′) = p.precomputed
+    # Cached per-point T-q correlation (see `set_covariance_cache!`).
+    (; ᶜT′T′, ᶜq′q′, ᶜcorr_Tq) = p.precomputed
 
     # Hybrid cloud fraction: the σ_S² quadrature pass is fused into this
     # broadcast kernel, so the moments stay in registers and are never written
@@ -927,7 +1137,7 @@ NVTX.@annotate function set_cloud_fraction!(
         $(sgs_quad),
         ᶜT′T′,
         ᶜq′q′,
-        corr_Tq,
+        ᶜcorr_Tq,
         FT(α),
         $(floor),
     )

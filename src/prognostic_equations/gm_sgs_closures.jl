@@ -118,3 +118,36 @@ NVTX.@annotate function compute_gm_mixing_length(Y, p)
     )
     return ᶜmixing_length
 end
+
+"""
+    compute_gm_horizontal_mixing_length(Y, p)
+
+Horizontal grid-mean Smagorinsky-Lilly mixing length, the counterpart of
+`compute_gm_mixing_length` capped by the horizontal node scale `Δx_h`
+(`horizontal_filter_scale`) instead of `Δz`. Used for the horizontal turbulent
+term of the 3D SGS variance closure when no EDMFX model is active.
+
+Assumes `compute_gm_mixing_length` has already run this update, so `ᶜN²_eff` and
+`ᶜstrain_rate_norm` in `p.precomputed` are current. Materializes into
+`p.scratch.ᶜtemp_scalar_3` (its Prandtl number into `ᶜtemp_scalar_6`) and returns
+it.
+"""
+function compute_gm_horizontal_mixing_length(Y, p)
+    (; params) = p
+    Δx_h = horizontal_filter_scale(axes(Y.c))
+    (; ᶜN²_eff, ᶜstrain_rate_norm) = p.precomputed
+
+    ᶜprandtl_nvec = p.scratch.ᶜtemp_scalar_6
+    @. ᶜprandtl_nvec =
+        turbulent_prandtl_number(params, ᶜN²_eff, ᶜstrain_rate_norm)
+
+    ᶜmixing_length_h = p.scratch.ᶜtemp_scalar_3
+    @. ᶜmixing_length_h = smagorinsky_lilly_length(
+        CAP.c_smag(params),
+        sqrt(max(ᶜN²_eff, 0)),   # N_eff
+        Δx_h,
+        ᶜprandtl_nvec,
+        ᶜstrain_rate_norm,
+    )
+    return ᶜmixing_length_h
+end
