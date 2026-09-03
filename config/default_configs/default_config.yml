@@ -49,6 +49,9 @@ dg_equation_form:
 dg_volume_flux:
   help: "FDDG flux family [`waruszewski` (entropy-conservative, default), `kg_pert` (Kennedy-Gruber with perturbation-pressure momentum flux — better-balanced over terrain)]. Ignored unless dg_equation_form is fddg."
   value: "waruszewski"
+dg_interface_flux:
+  help: "FDDG interface dissipation [`roe` (default), `es` (entropy-variable Lax-Friedrichs; requires dg_volume_flux: waruszewski — gives a discrete entropy inequality)]."
+  value: "roe"
 sleve_eta:
   help: "If SLEVE coordinates are chosen, sets the `ηₕ` parameter (if z/z_top > ηₕ, no warping is applied)"
   value: 0.7

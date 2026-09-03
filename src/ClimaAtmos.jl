@@ -169,6 +169,7 @@ include(
         "constant_horizontal_diffusion.jl",
     ),
 )
+include(joinpath("prognostic_equations", "dg_cartesian_fluxes.jl"))
 include(joinpath("prognostic_equations", "dg_horizontal.jl"))
 include(joinpath("prognostic_equations", "advection.jl"))
 

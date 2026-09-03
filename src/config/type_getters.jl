@@ -158,6 +158,11 @@ function get_numerics(parsed_args, FT)
     dg_volume_flux = Symbol(get(parsed_args, "dg_volume_flux", "waruszewski"))
     dg_volume_flux in (:waruszewski, :kg_pert) ||
         error("dg_volume_flux must be waruszewski or kg_pert, got $dg_volume_flux")
+    dg_interface_flux = Symbol(get(parsed_args, "dg_interface_flux", "roe"))
+    dg_interface_flux in (:roe, :es) ||
+        error("dg_interface_flux must be roe or es, got $dg_interface_flux")
+    (dg_interface_flux == :es && dg_volume_flux != :waruszewski) &&
+        error("dg_interface_flux = es requires dg_volume_flux = waruszewski")
 
     numerics = AtmosNumerics(;
         energy_q_tot_upwinding,
@@ -172,6 +177,7 @@ function get_numerics(parsed_args, FT)
         hyperdiff,
         dg_equation_form,
         dg_volume_flux,
+        dg_interface_flux,
     )
     @info "numerics $(summary(numerics))"
 

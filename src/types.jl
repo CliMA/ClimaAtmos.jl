@@ -1919,7 +1919,7 @@ plain symbols or strings.
     diffusion.
   - `hyperdiff`: `nothing`, or a `Hyperdiffusion` model.
 """
-struct AtmosNumerics{EN_UP, TR_UP, ED_UP, SG_UP, ED_TR_UP, TDC, RR, LIM, DM, HD, DGEF, DGVF}
+struct AtmosNumerics{EN_UP, TR_UP, ED_UP, SG_UP, ED_TR_UP, TDC, RR, LIM, DM, HD, DGEF, DGVF, DGIF}
     # Enable specific upwinding schemes for specific equations
     energy_q_tot_upwinding::EN_UP
     tracer_upwinding::TR_UP
@@ -1943,6 +1943,10 @@ struct AtmosNumerics{EN_UP, TR_UP, ED_UP, SG_UP, ED_TR_UP, TDC, RR, LIM, DM, HD,
     # (entropy-conservative; full-p momentum flux) or Val(:kg_pert)
     # (Kennedy-Gruber carrying pm = p − p_ref — well-balanced over terrain).
     dg_volume_flux::DGVF
+    # FDDG interface dissipation: Val(:roe) or Val(:es) (Lax-Friedrichs in
+    # entropy variables — with the Waruszewski volume flux this gives a
+    # discrete entropy inequality).
+    dg_interface_flux::DGIF
 end
 Base.broadcastable(x::AtmosNumerics) = tuple(x)
 
@@ -2010,6 +2014,7 @@ function AtmosNumerics(;
     ),
     dg_equation_form = :vi,
     dg_volume_flux = :waruszewski,
+    dg_interface_flux = :roe,
     kwargs...,
 )
     # Helper to convert symbols/strings to Val types, or keep Val types as-is
@@ -2029,6 +2034,7 @@ function AtmosNumerics(;
         hyperdiff,
         Val(Symbol(dg_equation_form)),
         Val(Symbol(dg_volume_flux)),
+        Val(Symbol(dg_interface_flux)),
     )
 end
 

@@ -315,26 +315,34 @@ NVTX.@annotate function dg_fddg_horizontal_dynamics!(Yₜ, Y, p, t)
     fill!(parent(dy), 0)
     if p.atmos.numerics.dg_volume_flux === Val(:kg_pert)
         Operators.add_flux_differencing_divergence!(
-            Operators.kennedy_gruber_cartesian_flux,
+            kennedy_gruber_cartesian_flux,
             dy,
             y,
         )
         Operators.add_numerical_flux_interior!(
-            Operators.kennedy_gruber_roe_cartesian,
+            kennedy_gruber_roe_cartesian,
             dy,
             y,
         )
     else
         Operators.add_flux_differencing_divergence!(
-            Operators.waruszewski_cartesian_flux,
+            waruszewski_cartesian_flux,
             dy,
             y,
         )
-        Operators.add_numerical_flux_interior!(
-            Operators.waruszewski_roe_cartesian,
-            dy,
-            y,
-        )
+        if p.atmos.numerics.dg_interface_flux === Val(:es)
+            Operators.add_numerical_flux_interior!(
+                waruszewski_es_cartesian,
+                dy,
+                y,
+            )
+        else
+            Operators.add_numerical_flux_interior!(
+                waruszewski_roe_cartesian,
+                dy,
+                y,
+            )
+        end
     end
 
     @. Yₜ.c.ρ += dy.ρ / ᶜWJ
