@@ -245,6 +245,14 @@ function build_cache(
     scratch = temporary_quantities(Y, atmos)
 
     precomputed = precomputed_quantities(Y, atmos)
+    tracers = tracer_cache(
+        Y,
+        params,
+        aerosol_names,
+        time_varying_trace_gas_names,
+        atmos.aerosols,
+        start_date,
+    )
     precomputing_arguments = (;
         atmos,
         core,
@@ -255,6 +263,7 @@ function build_cache(
         dt,
         conservation_check,
         external_forcing,
+        tracers,
     )
 
     # When flux_scheme is nothing, the surface conditions are entirely
@@ -277,7 +286,6 @@ function build_cache(
     non_orographic_gravity_wave = non_orographic_gravity_wave_cache(Y, atmos)
     orographic_gravity_wave = orographic_gravity_wave_cache(Y, atmos)
     radiation = radiation_model_cache(Y, atmos, radiation_args...)
-    tracers = tracer_cache(Y, aerosol_names, time_varying_trace_gas_names, start_date)
 
     args = (
         dt,

@@ -41,6 +41,10 @@ import ..PrognosticEDMFX
 import ..EDOnlyEDMFX
 import ..n_mass_flux_subdomains
 import ..AbstractChemistryModel
+import ..AtmosAerosols
+import ..PrognosticSeaSalt
+import ..AbstractPrognosticAerosol
+import ..species_models, ..bin_names
 import ..Parameters.ClimaAtmosParameters
 import Thermodynamics.Parameters.ThermodynamicsParameters
 

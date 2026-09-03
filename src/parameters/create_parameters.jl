@@ -15,6 +15,7 @@ import StaticArrays as SA
         has_non_orographic_gw = false,
         has_orographic_gw = false,
         has_beres_source = false,
+        has_prognostic_aerosols = false,
     )
 
 Construct the parameter set for a ClimaAtmos configuration.
@@ -29,7 +30,7 @@ RRTMGP, and Insolation are constructed from it here.
 
 Sub-parameter sets that the configuration does not need are stored as `nothing`,
 which keeps them out of the GPU kernels that capture the parameter set: the
-microphysics sets are filtered by `microphysics_model`, and each gravity-wave
+microphysics sets are filtered by `microphysics_model`, and each gravity-wave and prognostic-aerosol
 set is loaded only when its flag is `true`. Passing `microphysics_model = nothing` keeps all of them.
 
 # Arguments
@@ -45,6 +46,7 @@ set is loaded only when its flag is `true`. Passing `microphysics_model = nothin
     parameters.
   - `has_orographic_gw = false`: Load the orographic gravity-wave parameters.
   - `has_beres_source = false`: Load the Beres convective-source parameters.
+  - `has_prognostic_aerosols = false`: Load the prognostic-aerosol parameters.
 
 # Returns
 
@@ -66,6 +68,7 @@ function ClimaAtmosParameters(
     has_non_orographic_gw::Bool = false,
     has_orographic_gw::Bool = false,
     has_beres_source::Bool = false,
+    has_prognostic_aerosols::Bool = false,
 ) where {TD <: CP.ParamDict}
     FT = CP.float_type(toml_dict)
 
@@ -129,6 +132,11 @@ function ClimaAtmosParameters(
 
     prescribed_aerosol_params = prescribed_aerosol_parameters(toml_dict)
     PAP = typeof(prescribed_aerosol_params)
+
+    prognostic_aerosol_params =
+        has_prognostic_aerosols ? prognostic_aerosol_parameters(toml_dict) : nothing
+    PGAP = typeof(prognostic_aerosol_params)
+
     # Only load gravity-wave parameters if enabled
     non_orographic_gravity_wave_params =
         has_non_orographic_gw ? NonOrographicGravityWaveParameters(toml_dict) : nothing
@@ -160,6 +168,7 @@ function ClimaAtmosParameters(
         VDP,
         EFP,
         PAP,
+        PGAP,
         NOGWP,
         OGWP,
         BSP,
@@ -180,6 +189,7 @@ function ClimaAtmosParameters(
         vert_diff_params,
         external_forcing_params,
         prescribed_aerosol_params,
+        prognostic_aerosol_params,
         non_orographic_gravity_wave_params,
         orographic_gravity_wave_params,
         beres_source_params,
@@ -411,6 +421,19 @@ function prescribed_aerosol_parameters(toml_dict)
         :mam3_stdev_accum => :sulfate_std,
     )
     return CP.get_parameter_values(toml_dict, name_map, "ClimaAtmos")
+end
+
+function prognostic_aerosol_parameters(toml_dict)
+    name_map = (;
+        :ssa_size_bin_divisions => :ssa_bin_edges,
+        :ssa_r_ref => :ssa_r_ref,
+        :ssa_u_ref => :ssa_u_ref,
+        :ssa_gong_wind_exponent => :gong_wind_exp,
+        :ssa_gong_logfit_bin_3M_flux => :bin_mass_flux,
+        :ssa_residence => :τ_ssa,
+    )
+    parameters = CP.get_parameter_values(toml_dict, name_map, "ClimaAtmos")
+    return to_svec(parameters)
 end
 
 """
