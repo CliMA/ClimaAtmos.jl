@@ -244,8 +244,8 @@ end
 
 """
     mixing_length_lopez_gomez_2020(
-        turbconv_params, sf_params, vkc, ustar, ᶜz, z_sfc, ᶜΔ_f, sfc_tke,
-        ᶜN²_eff, ᶜN²_prod, ᶜtke, obukhov_length, ᶜstrain_rate_norm, ᶜPr,
+        turbconv_params, sf_params, vkc, ustar, z, z_sfc, Δ_f, sfc_tke,
+        N²_eff, N²_prod, tke, obukhov_length, strain_rate_norm, Pr,
         scale_blending_method,
     ) -> MixingLength
 
@@ -260,10 +260,10 @@ Three physical scales are formed and blended by `blend_scales`:
     with `a_pd = c_m (2 |S|² - N²_prod / Pr) √e`; dropped from the blend where
     the net production `a_pd` is non-positive.
   - `l_N`: buoyancy-limited scale `√(c_b e) / N_eff`, capped by the wall
-    distance and used only where `ᶜN²_eff > 0`.
+    distance and used only where `N²_eff > 0`.
 
 The blend is then limited by the wall distance and by the resolvability filter
-scale `ᶜΔ_f`, and floored at 1 m.
+scale `Δ_f`, and floored at 1 m.
 
 The same closure is evaluated at cell centers (`ᶜmixing_length`) and at faces
 (`set_face_diffusivities!`), with the corresponding inputs.
@@ -274,25 +274,25 @@ The same closure is evaluated at cell centers (`ᶜmixing_length`) and at faces
   - `sf_params`: Surface-flux parameters (Businger universal functions).
   - `vkc`: Von Kármán constant [-].
   - `ustar`: Friction velocity [m/s].
-  - `ᶜz`: Height of the evaluation point [m].
+  - `z`: Height of the evaluation point [m].
   - `z_sfc`: Surface elevation [m].
-  - `ᶜΔ_f`: Resolvability filter scale [m] that caps the mixing length (see
+  - `Δ_f`: Resolvability filter scale [m] that caps the mixing length (see
     `resolvability_filter_scale`; `Inf` where the grid imposes no scale,
     as in single columns).
   - `sfc_tke`: TKE near the surface (first cell center) [m²/s²].
-  - `ᶜN²_eff`: Effective squared buoyancy frequency [1/s²], used for `l_N`; may
+  - `N²_eff`: Effective squared buoyancy frequency [1/s²], used for `l_N`; may
     include the unresolved-jump augmentation of
     `interface_effective_N²`.
-  - `ᶜN²_prod`: Squared buoyancy frequency entering the production-dissipation
+  - `N²_prod`: Squared buoyancy frequency entering the production-dissipation
     balance for `l_TKE` [1/s²]. Passed separately so the balance uses the same
     stability as the actual TKE buoyancy production, keeping `l_TKE`
-    stencil-consistent with the budget it parameterizes even when `ᶜN²_eff`
+    stencil-consistent with the budget it parameterizes even when `N²_eff`
     carries the interface augmentation.
-  - `ᶜtke`: Turbulent kinetic energy at the evaluation point [m²/s²].
+  - `tke`: Turbulent kinetic energy at the evaluation point [m²/s²].
   - `obukhov_length`: Surface Monin-Obukhov length [m].
-  - `ᶜstrain_rate_norm`: Squared Frobenius norm of the strain-rate tensor,
+  - `strain_rate_norm`: Squared Frobenius norm of the strain-rate tensor,
     `SᵢⱼSᵢⱼ` [1/s²].
-  - `ᶜPr`: Turbulent Prandtl number [-].
+  - `Pr`: Turbulent Prandtl number [-].
   - `scale_blending_method`: Blending method for the physical scales
     (`blend_scales`).
 
@@ -306,20 +306,20 @@ function mixing_length_lopez_gomez_2020(
     sf_params,
     vkc,
     ustar,
-    ᶜz,
+    z,
     z_sfc,
-    ᶜΔ_f,
+    Δ_f,
     sfc_tke,
-    ᶜN²_eff,
-    ᶜN²_prod,
-    ᶜtke,
+    N²_eff,
+    N²_prod,
+    tke,
     obukhov_length,
-    ᶜstrain_rate_norm,
-    ᶜPr,
+    strain_rate_norm,
+    Pr,
     scale_blending_method,
 )
 
-    FT = eltype(ᶜz)
+    FT = eltype(z)
     eps_FT = eps(FT)
 
     c_m = CAP.tke_ed_coeff(turbconv_params)
@@ -327,8 +327,8 @@ function mixing_length_lopez_gomez_2020(
     c_b = CAP.static_stab_coeff(turbconv_params)
 
     # l_z: Geometric distance from the surface
-    l_z = ᶜz - z_sfc
-    # Ensure l_z is non-negative when ᶜz is numerically smaller than z_sfc.
+    l_z = z - z_sfc
+    # Ensure l_z is non-negative when z is numerically smaller than z_sfc.
     l_z = max(l_z, FT(0))
 
     # l_W: Wall-constrained length scale (near-surface limit, to match
@@ -360,7 +360,7 @@ function mixing_length_lopez_gomez_2020(
     l_W = max(l_W, FT(0)) # Ensure non-negative
 
     # --- l_TKE: TKE production-dissipation balance scale ---
-    tke_pos = max(ᶜtke, FT(0)) # Ensure TKE is not negative
+    tke_pos = max(tke, FT(0)) # Ensure TKE is not negative
     sqrt_tke_pos = sqrt(tke_pos)
 
     # Net production of TKE from shear and buoyancy is approximated by
@@ -368,7 +368,7 @@ function mixing_length_lopez_gomez_2020(
     # where S² denotes the gradient involved in shear production and
     # N²/Pr_t denotes the gradient involved in buoyancy production.
     # The factor below corresponds to that production term normalised by l.
-    a_pd = c_m * (2 * ᶜstrain_rate_norm - ᶜN²_prod / ᶜPr) * sqrt_tke_pos
+    a_pd = c_m * (2 * strain_rate_norm - N²_prod / Pr) * sqrt_tke_pos
 
     # Dissipation is modelled as c_d · k^{3/2} / l.
     # For the quadratic expression below, c_neg ≡ c_d · k^{3/2}.
@@ -382,7 +382,7 @@ function mixing_length_lopez_gomez_2020(
     l_TKE = ifelse(tke_pos > eps_FT, sqrt(c_neg / max(a_pd, eps_FT)), FT(0))
 
     # --- l_N: Static-stability length scale (buoyancy limit), constrained by l_z ---
-    N_eff_sq = max(ᶜN²_eff, FT(0)) # Use N^2 only if stable (N^2 > 0)
+    N_eff_sq = max(N²_eff, FT(0)) # Use N^2 only if stable (N^2 > 0)
     l_N = l_z # Default to wall distance if not stably stratified or TKE is zero
     if N_eff_sq > eps_FT && tke_pos > eps_FT
         N_eff = sqrt(N_eff_sq)
@@ -411,7 +411,7 @@ function mixing_length_lopez_gomez_2020(
 
     # 2. Impose the resolvability filter scale (see
     #    resolvability_filter_scale for the rationale and regimes).
-    l_grid = ᶜΔ_f
+    l_grid = Δ_f
     l_final = min(l_limited_phys_wall, l_grid)
 
     # Final check: guarantee that the mixing length is at least a small positive
@@ -440,8 +440,8 @@ share:
     corresponding centered (interpolate-then-difference) gradients, still as
     `Covariant3Vector`s.
 
-The centered, one-sided (`set_stability_buoyancy_gradient!`), and face-native
-(`set_face_diffusivities!`) buoyancy gradients then reduce to
+The centered and face-native (`set_face_diffusivities!`) buoyancy gradients
+then reduce to
 `blended_N²` FMA broadcasts, which may be evaluated repeatedly (e.g.,
 per cloud-fraction Picard iteration, where only `cf` changes) at negligible
 cost. The coefficients depend on `(T, ρ, q)` but not on `cf`, so they are
@@ -478,83 +478,6 @@ NVTX.@annotate function set_buoyancy_gradient_inputs!(Y, p, thermo_params)
 
     @. ᶜgradᵥ_θ_liq_ice = ᶜgradᵥ(ᶠinterp(ᶜθ_li))
     @. ᶜgradᵥ_q_tot = ᶜgradᵥ(ᶠinterp(ᶜq_tot_nonneg))
-    return nothing
-end
-
-"""
-    set_stability_buoyancy_gradient!(Y, p, thermo_params)
-
-Fill `p.precomputed.ᶜN²_eff` with an interface-aware effective stability.
-
-At each cell center the buoyancy gradient is evaluated twice, with
-upward- and downward-biased one-sided vertical gradients of `θ_li` and `q_tot`
-(i.e., the exact two-point gradients of the two adjacent faces), each is
-augmented by the unresolved-jump term of `interface_effective_N²`
-(when prognostic TKE is available), and the more stable (larger) of the two
-face values is kept.
-
-Rationale: centered two-cell gradients average across unresolved, strongly
-stable interfaces such as boundary-layer capping inversions, biasing N²_eff
-low — and hence the stability mixing length `l_N` and turbulent Prandtl
-number toward too much mixing — exactly in the entrainment zone. The one-sided
-evaluation lets a single-cell jump register at both adjacent cell centers, and
-the jump term of `interface_effective_N²` additionally accounts for the limit
-in which the jump is a sheet interface thinner than the grid: eddy excursions
-are then capped by the work against the full jump `Δb`, independent of `Δz`.
-Away from sharp interfaces both one-sided gradients agree with the centered
-one and the jump term is `O((Δz/l_N)²)`, so the correction is inactive.
-
-This field feeds the mixing-length and `Pr_t(Ri)` closures only; the TKE
-buoyancy production keeps the centered `ᶜbuoygrad`, so convective
-production in unstable layers is unaffected. Without prognostic TKE
-(`Y.c.ρtke` absent) the jump term is unavailable and the pure one-sided max is
-used.
-
-Reads `ᶜbg_coeffs`, `ᶠ∂θli∂z`, `ᶠ∂qt∂z` (from
-`set_buoyancy_gradient_inputs!`) and `ᶜcloud_fraction`; mutates
-`p.precomputed.ᶜN²_eff` and returns `nothing`.
-"""
-NVTX.@annotate function set_stability_buoyancy_gradient!(Y, p, thermo_params)
-    (; ᶜN²_eff, ᶜcloud_fraction) = p.precomputed
-    (; ᶜbg_coeffs, ᶠ∂θli∂z, ᶠ∂qt∂z) = p.precomputed
-    # One-sided center gradients: the exact face gradients (see
-    # `set_buoyancy_gradient_inputs!`) brought to centers from the upper
-    # (ᶜtop_bias) and lower (ᶜbottom_bias) adjacent faces. Domain-boundary
-    # faces carry zero gradient, so the biased estimates fall back to neutral
-    # there and the max picks the interior side.
-    ᶜN²_up = @. lazy(
-        blended_N²(
-            ᶜbg_coeffs,
-            ᶜcloud_fraction,
-            ᶜtop_bias(ᶠ∂θli∂z),
-            ᶜtop_bias(ᶠ∂qt∂z),
-        ),
-    )
-    ᶜN²_dn = @. lazy(
-        blended_N²(
-            ᶜbg_coeffs,
-            ᶜcloud_fraction,
-            ᶜbottom_bias(ᶠ∂θli∂z),
-            ᶜbottom_bias(ᶠ∂qt∂z),
-        ),
-    )
-    if MatrixFields.has_field(Y, @name(c.ρtke))
-        # Interface-aware effective stability: each one-sided face gradient is
-        # augmented by the unresolved-jump term of `interface_effective_N²`
-        # before taking the max, so an inversion concentrated at a face limits
-        # eddy excursions through the work against the full jump Δb = N² Δz
-        # rather than the Δz-diluted gradient.
-        turbconv_params = CAP.turbconv_params(p.params)
-        c_b = CAP.static_stab_coeff(turbconv_params)
-        ᶜtke_pos = @. lazy(max(specific(Y.c.ρtke, Y.c.ρ), 0))
-        ᶠΔz = Fields.Δz_field(axes(Y.f))
-        @. ᶜN²_eff = max(
-            interface_effective_N²(ᶜN²_up, ᶜtop_bias(ᶠΔz), ᶜtke_pos, c_b),
-            interface_effective_N²(ᶜN²_dn, ᶜbottom_bias(ᶠΔz), ᶜtke_pos, c_b),
-        )
-    else
-        @. ᶜN²_eff = max(ᶜN²_up, ᶜN²_dn)
-    end
     return nothing
 end
 
@@ -848,12 +771,7 @@ end
 Return a lazy cell-center field of the PROPHET (`EDMFX` in code) mixing length,
 selected by `property` (`get_mixing_length_field`).
 
-Evaluates `mixing_length_lopez_gomez_2020` with center inputs: the
-stability-biased `ᶜN²_eff` (which registers unresolved inversions; see
-`set_stability_buoyancy_gradient!`) limits `l_N` and sets the turbulent
-Prandtl number, while the centered `ᶜbuoygrad` enters the
-production-dissipation balance for `l_TKE`, consistent with the TKE budget.
-
+Evaluates `mixing_length_lopez_gomez_2020` with center inputs.
 Only valid for `AbstractEDMF` configurations, which always carry `Y.c.ρtke`.
 Writes `p.scratch.ᶜtemp_scalar_5` (the Prandtl number) as a side effect.
 
@@ -869,11 +787,10 @@ function ᶜmixing_length(
 ) where {P}
     (; params) = p
     (; ustar, obukhov_length) = p.precomputed.sfc_conditions
-    # Stability-biased buoyancy gradient: registers unresolved inversions
-    # (see set_stability_buoyancy_gradient!); feeds l_N and Pr_t(Ri). The
-    # centered gradient feeds the TKE production-dissipation balance for
-    # l_TKE, consistent with the actual TKE budget.
-    (; ᶜN²_eff, ᶜbuoygrad, ᶜstrain_rate_norm) = p.precomputed
+    # Centered buoyancy gradient feeds both `l_N` and Pr_t(Ri), and the TKE
+    # production-dissipation balance for `l_TKE` (consistent with the actual
+    # TKE budget).
+    (; ᶜbuoygrad, ᶜstrain_rate_norm) = p.precomputed
     ᶜz = Fields.coordinate_field(Y.c).z
     z_sfc = Fields.level(Fields.coordinate_field(Y.f).z, Fields.half)
     ᶜΔ_f = grid_scale
@@ -885,7 +802,7 @@ function ᶜmixing_length(
 
     ᶜprandtl_nvec = p.scratch.ᶜtemp_scalar_5
     @. ᶜprandtl_nvec =
-        turbulent_prandtl_number(params, ᶜN²_eff, ᶜstrain_rate_norm)
+        turbulent_prandtl_number(params, ᶜbuoygrad, ᶜstrain_rate_norm)
 
     # Extract sub-parameters before the lazy broadcast to avoid capturing
     # the full ClimaAtmosParameters struct (~4 KiB) in GPU kernel parameters.
@@ -903,7 +820,7 @@ function ᶜmixing_length(
             z_sfc,
             ᶜΔ_f,
             sfc_tke,
-            ᶜN²_eff,
+            ᶜbuoygrad,
             ᶜbuoygrad,
             ᶜtke,
             obukhov_length,
@@ -924,14 +841,14 @@ horizontal node spacing, `l_h = min(l_phys, Δx_h)`.
 """
 function set_horizontal_diffusivities!(Y, p)
     (; params) = p
-    (; ᶜK_u_h, ᶜK_h_h, ᶜN²_eff, ᶜstrain_rate_norm) = p.precomputed
+    (; ᶜK_u_h, ᶜK_h_h, ᶜbuoygrad, ᶜstrain_rate_norm) = p.precomputed
     turbconv_params = CAP.turbconv_params(params)
     Δx_h = horizontal_filter_scale(axes(Y.c))
     ᶜl_h = ᶜmixing_length(Y, p; grid_scale = Δx_h)
     ᶜtke = @. lazy(specific(Y.c.ρtke, Y.c.ρ))
     @. ᶜK_u_h = eddy_viscosity(turbconv_params, ᶜtke, ᶜl_h)
     ᶜprandtl_nvec =
-        @. lazy(turbulent_prandtl_number(params, ᶜN²_eff, ᶜstrain_rate_norm))
+        @. lazy(turbulent_prandtl_number(params, ᶜbuoygrad, ᶜstrain_rate_norm))
     @. ᶜK_h_h = eddy_diffusivity(ᶜK_u_h, ᶜprandtl_nvec)
     return nothing
 end
@@ -1021,17 +938,17 @@ there is no separate precipitation mass and this is `q_tot`.
     (@. lazy(specific(Y.c.ρq_tot, Y.c.ρ)))
 
 """
-    gradient_richardson_number(params, ᶜN²_eff, ᶜstrain_rate_norm)
+    gradient_richardson_number(params, ᶜN², ᶜstrain_rate_norm)
 
 Compute the gradient Richardson number, the ratio of the buoyancy to the shear
 term in the TKE budget:
 
-    Ri = ᶜN²_eff / max(2 SᵢⱼSᵢⱼ, eps).
+    Ri = ᶜN² / max(2 SᵢⱼSᵢⱼ, eps).
 
 # Arguments
 
   - `params`: Parameter set; used only for the floating-point type.
-  - `ᶜN²_eff`: Effective squared buoyancy frequency [1/s²].
+  - `ᶜN²`: Effective squared buoyancy frequency [1/s²].
   - `ᶜstrain_rate_norm`: Squared Frobenius norm of the strain-rate tensor,
     `SᵢⱼSᵢⱼ` [1/s²].
 
@@ -1039,20 +956,20 @@ term in the TKE budget:
 
 The gradient Richardson number [-].
 """
-function gradient_richardson_number(params, ᶜN²_eff, ᶜstrain_rate_norm)
+function gradient_richardson_number(params, ᶜN², ᶜstrain_rate_norm)
     FT = eltype(params)
 
     # Calculate the denominator term for Ri, ensuring it's not zero
     # Based on the formulation Ri = N^2 / max(2*|S|, eps)
     ᶜshear_term_safe = max(2 * ᶜstrain_rate_norm, eps(FT))
-    ᶜRi_grad = ᶜN²_eff / ᶜshear_term_safe
+    ᶜRi_grad = ᶜN² / ᶜshear_term_safe
 
     return ᶜRi_grad
 end
 
 
 """
-    turbulent_prandtl_number(params, ᶜN²_eff, ᶜstrain_rate_norm)
+    turbulent_prandtl_number(params, ᶜN², ᶜstrain_rate_norm)
 
 Compute the turbulent Prandtl number as a function of the gradient Richardson
 number (`gradient_richardson_number`).
@@ -1071,7 +988,7 @@ with `X = Pr_n + ω_pr Ri`, the neutral Prandtl number `Pr_n`
 # Arguments
 
   - `params`: Parameter set.
-  - `ᶜN²_eff`: Effective squared buoyancy frequency [1/s²].
+  - `ᶜN²`: Effective squared buoyancy frequency [1/s²].
   - `ᶜstrain_rate_norm`: Squared Frobenius norm of the strain-rate tensor,
     `SᵢⱼSᵢⱼ` [1/s²].
 
@@ -1083,7 +1000,7 @@ The strong-stability limit of this closure (`Pr(Ri) → ∞`) is what closes the
 TKE dissipation coefficient; see `tke_dissipation_coefficient` for that
 derivation.
 """
-function turbulent_prandtl_number(params, ᶜN²_eff, ᶜstrain_rate_norm)
+function turbulent_prandtl_number(params, ᶜN², ᶜstrain_rate_norm)
     FT = eltype(params)
     turbconv_params = CAP.turbconv_params(params)
     eps_FT = eps(FT)
@@ -1094,7 +1011,7 @@ function turbulent_prandtl_number(params, ᶜN²_eff, ᶜstrain_rate_norm)
     Pr_max = CAP.Pr_max(turbconv_params) # Maximum Prandtl number limit
 
     # Calculate the raw gradient Richardson number using the new helper function
-    ᶜRi_grad = gradient_richardson_number(params, ᶜN²_eff, ᶜstrain_rate_norm)
+    ᶜRi_grad = gradient_richardson_number(params, ᶜN², ᶜstrain_rate_norm)
 
     # --- Apply the Pr_t(Ri) formula valid for stable and unstable conditions ---
 
