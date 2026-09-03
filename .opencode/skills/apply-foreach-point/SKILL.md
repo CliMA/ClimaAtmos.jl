@@ -213,6 +213,15 @@ In short you need to:
  - Remove any lazy annotations (it is optional but may be good practice)
  - Call the functions inside the `foreach_point` clousure and pass the required fields as arguments in the argument list.
 
+When an intermediate variable is calculated that is only used later in the `foreach_point` closure, assign it with `var = @. ...`. This creates a local broadcasted result. This differs from `@. var = ...` which will write through the view provided by `foreach_point` into the backing field. Only cache intermediates, any outputs should be written directly to their destination. Example:
+
+```julia
+foreach_point(res, a_field, b_field) do res, a, b
+    c = @. a + b        # local intermediate, assigned with `c = @. ...`
+    @. res = c * 2      # persistent output, must be assigned with `@. res = ...`
+end
+```
+
 
 ## General advise
 
