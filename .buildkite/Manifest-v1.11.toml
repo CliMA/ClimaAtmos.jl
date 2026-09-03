@@ -2,7 +2,7 @@
 
 julia_version = "1.11.9"
 manifest_format = "2.0"
-project_hash = "69af49dac168f3e0b246a1c1099eddf10e953409"
+project_hash = "48060378db5a952243481206dcdc1e7bba0aa477"
 
 [[deps.ADTypes]]
 deps = ["PrecompileTools"]
@@ -444,9 +444,9 @@ weakdeps = ["CUDA"]
 
 [[deps.ClimaParams]]
 deps = ["Dates", "TOML"]
-git-tree-sha1 = "0bb6fde4f20ef440d8d4ac9438ec5350855cdc02"
+git-tree-sha1 = "1dfed2c818cda5e98be84c58497db55028ad3ac0"
 uuid = "5c42b081-d73a-476f-9059-fd94b934656c"
-version = "1.1.5"
+version = "1.1.6"
 
 [[deps.ClimaTimeSteppers]]
 deps = ["ClimaComms", "Krylov", "LinearAlgebra", "LinearOperators", "NVTX", "NullBroadcasts", "StaticArrays"]

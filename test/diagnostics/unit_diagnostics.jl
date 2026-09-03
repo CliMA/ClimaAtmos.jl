@@ -513,6 +513,7 @@ SKIP_CASES = Set([
     # tracer_diagnostics.jl
     "loadss", "mmrbcpi", "mmrbcpo", "mmrdust", "mmrocpi", "mmrocpo",
     "mmrso4", "mmrss", "o3",
+    ("mmr" .* lowercase.(string.(CA.AEROSOL_SPECIES_BIN_NAMES.seasalt)))...,
     # 2M-only (temporarily disabled, see note above)
     "cdnc", "ncra", "cdncup", "cdncen", "ncraup", "ncraen",
     # negative_scalars_diagnostics.jl

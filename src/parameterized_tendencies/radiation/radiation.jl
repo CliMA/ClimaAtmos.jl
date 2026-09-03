@@ -295,6 +295,7 @@ function rrtmgp_solver_kwargs(
             aod_sw_extinction = NaN,
             aod_sw_scattering = NaN,
             # assuming fixed aerosol radius
+            # TODO: Set in ClimaParams
             center_dust1_radius = 0.55,
             center_dust2_radius = 1.4,
             center_dust3_radius = 2.4,

@@ -442,6 +442,9 @@ reproducible_restart:
 prescribed_aerosols:
   help: "Which aerosols to add. List of keys from the data file (e.g., CB1, CB2)."
   value: []
+prognostic_aerosols:
+  help: "Aerosol species treated as prognostic tracers (currently only \"SSLT\"). Prognostic species are passive: radiation and aerosol-cloud interaction still read the prescribed_aerosols climatology."
+  value: []
 time_varying_trace_gases:
   help: "Trace gases that vary in time, e.g. [\"CO2\", \"O3\"]. Currently, only \"CO2\" and \"O3\" are supported. All other trace gases set fixed to default values from ClimaParams."
   value: []

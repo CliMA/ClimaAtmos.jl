@@ -23,7 +23,7 @@ function center_prognostic_variables(physical_state, local_geometry, params, atm
     sgs = turbconv_center_variables(
         physical_state, local_geometry, params,
         atmos_model.turbconv_model, atmos_model.microphysics_model,
-        atmos_model.chemistry_model,
+        atmos_model.chemistry_model, atmos_model.aerosols,
     )
     return (; gs..., sgs...)
 end
@@ -36,8 +36,8 @@ Build the grid-scale center prognostic variables from the physical state.
 Always returns the density `ρ` [kg/m³], the horizontal momentum-carrying
 velocity `uₕ` [m/s], and the total energy density `ρe_tot` [J/m³], which
 includes kinetic, potential, and internal contributions. The moisture,
-precipitation, and chemistry variables are appended by `moisture_variables`,
-`precip_variables`, and `chemistry_variables`, which may each contribute
+precipitation, chemistry, and aerosol variables are appended by `moisture_variables`,
+`precip_variables`, `chemistry_variables`, and `aerosol_variables`, which may each contribute
 nothing.
 """
 function grid_scale_center_variables(physical_state, local_geometry, params, atmos_model)
@@ -57,6 +57,7 @@ function grid_scale_center_variables(physical_state, local_geometry, params, atm
         moisture_variables(ρ, physical_state, atmos_model.microphysics_model)...,
         precip_variables(ρ, physical_state, atmos_model.microphysics_model)...,
         chemistry_variables(ρ, physical_state, atmos_model.chemistry_model)...,
+        aerosol_variables(ρ, physical_state, atmos_model.aerosols)...,
     )
 end
 
@@ -156,6 +157,43 @@ chemistry_sgs_variables(physical_state, ::AbstractChemistryModel) =
     (; q_gas_A = physical_state.q_gas_A)
 
 # ============================================================================
+# Aerosol dispatch
+# ============================================================================
+
+zero_tracers(::Val{names}, x) where {names} =
+    NamedTuple{names}(ntuple(Returns(zero(x)), Val(length(names))))
+
+@generated aerosol_state_names(::M) where {M <: AbstractPrognosticAerosol} =
+    :(Val($(map(n -> Symbol(:ρ, n), bin_names(M)))))
+
+"""
+Grid-scale aerosol tracers: one zero-initialized `ρ<bin>` tracer per bin of
+each prognostic species in `AtmosAerosols`.
+"""
+aerosol_variables(ρ, physical_state, a::AtmosAerosols) = merge(
+    map(m -> species_aerosol_variables(ρ, m), values(species_models(a)))...,
+)
+
+species_aerosol_variables(ρ, ::Nothing) = (;)
+species_aerosol_variables(ρ, m::AbstractPrognosticAerosol) =
+    zero_tracers(aerosol_state_names(m), ρ)
+
+"""
+SGS aerosol tracers to include in the updraft NamedTuple, one zero
+`<bin>` entry per bin of each prognostic species in `AtmosAerosols`.
+"""
+aerosol_sgs_variables(physical_state, a::AtmosAerosols) = merge(
+    map(
+        m -> species_aerosol_sgs_variables(physical_state, m),
+        values(species_models(a)),
+    )...,
+)
+
+species_aerosol_sgs_variables(physical_state, ::Nothing) = (;)
+species_aerosol_sgs_variables(physical_state, m::AbstractPrognosticAerosol) =
+    zero_tracers(Val(bin_names(m)), physical_state.T)
+
+# ============================================================================
 # Turbconv center dispatch
 # ============================================================================
 
@@ -189,7 +227,7 @@ subdomains — the moist static energy `mse` [J/kg], `q_tot` [kg/kg], and, for a
 non-equilibrium microphysics model, the subdomain condensate, precipitation,
 and number concentrations.
 """
-turbconv_center_variables(physical_state, local_geometry, params, ::Nothing, _, _) = (;)
+turbconv_center_variables(physical_state, local_geometry, params, ::Nothing, _, _, _) = (;)
 
 function turbconv_center_variables(
     physical_state,
@@ -198,6 +236,7 @@ function turbconv_center_variables(
     turbconv_model::PrognosticEDMFX,
     microphysics_model,
     chemistry_model,
+    aerosols,
 )
     ρ = air_density(physical_state, params)
     (; tke, draft_area, T, q_tot, q_liq, q_ice) = physical_state
@@ -208,7 +247,9 @@ function turbconv_center_variables(
     e_pot = geopotential(CAP.grav(params), local_geometry.coordinates.z)
     mse = TD.moist_static_energy(thermo_params, T, e_pot, q_tot, q_liq, q_ice)
     sgsʲs = uniform_subdomains(
-        (; ρa, mse, q_tot, chemistry_sgs_variables(physical_state, chemistry_model)...),
+        (; ρa, mse, q_tot,
+            chemistry_sgs_variables(physical_state, chemistry_model)...,
+            aerosol_sgs_variables(physical_state, aerosols)...),
         turbconv_model,
     )
     return (; ρtke, sgsʲs)
@@ -221,6 +262,7 @@ function turbconv_center_variables(
     turbconv_model::PrognosticEDMFX,
     microphysics_model::NonEquilibriumMicrophysics,
     chemistry_model,
+    aerosols,
 )
     (; T, q_tot, q_liq, q_ice, q_rai, q_sno, n_liq, n_rai, tke, draft_area) = physical_state
     ρ = air_density(physical_state, params)
@@ -231,10 +273,11 @@ function turbconv_center_variables(
     e_pot = geopotential(CAP.grav(params), local_geometry.coordinates.z)
     mse = TD.moist_static_energy(thermo_params, T, e_pot, q_tot, q_liq, q_ice)
     chem_sgs = chemistry_sgs_variables(physical_state, chemistry_model)
+    aero_sgs = aerosol_sgs_variables(physical_state, aerosols)
     if microphysics_model isa NonEquilibriumMicrophysics1M
         sgsʲs = uniform_subdomains(
             (; ρa, mse, q_tot, q_lcl = q_liq, q_icl = q_ice, q_rai, q_sno,
-                chem_sgs...),
+                chem_sgs..., aero_sgs...),
             turbconv_model,
         )
     else  # NonEquilibriumMicrophysics2M
@@ -242,7 +285,7 @@ function turbconv_center_variables(
             (; ρa, mse, q_tot,
                 q_lcl = q_liq, q_icl = q_ice, q_rai, q_sno,
                 n_lcl = n_liq, n_rai,
-                chem_sgs...,
+                chem_sgs..., aero_sgs...,
             ),
             turbconv_model,
         )
@@ -255,6 +298,7 @@ function turbconv_center_variables(
     local_geometry,
     params,
     turbconv_model::EDOnlyEDMFX,
+    _,
     _,
     _,
 )
