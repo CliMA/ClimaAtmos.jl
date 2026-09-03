@@ -211,6 +211,37 @@ NVTX.@annotate function dg_horizontal_tracer_completion!(Yₜ_lim, Y, p, t)
 end
 
 """
+    dg_fddg_tke_advection!(Yₜ, Y, p)
+
+Horizontal advection of prognostic TKE on DG spaces for the `:fddg` path.
+`horizontal_dynamics_tendency!` returns early for fddg (its `Yₜ.c.ρtke`
+split-divₕ term is skipped) and `dg_fddg_horizontal_dynamics!` only carries
+(ρ, ρe_tot, uₕ). `ρtke` is excluded from `is_tracer_var`, so the grid-mean
+tracer completion never sees it either — leaving TKE with NO horizontal
+transport in fddg mode, which lets the eddy-diffusivity closure accumulate
+TKE unboundedly over terrain. This restores it: `ρtke` is advected by the
+grid-mean mass flux exactly like a tracer (element-local `split_divₕ` volume
+term + `dg_tracer_interface` interface flux).
+"""
+function dg_fddg_tke_advection!(Yₜ, Y, p)
+    FT = Spaces.undertype(axes(Y.c))
+    (; ᶜu) = p.precomputed
+    ᶜWJ = Fields.local_geometry_field(Y.c).WJ
+    ᶜtke = @. lazy(specific(Y.c.ρtke, Y.c.ρ))
+    @. Yₜ.c.ρtke -= split_divₕ(Y.c.ρ * ᶜu, ᶜtke)   # element-local volume divergence
+    (ᶜuv, ᶜλ) = dg_face_velocity_and_λ(Y, p)
+    y = map(
+        (ρ, uv, λ, ρχ) -> (; ρ, uv, λ, χ = ρχ / ρ),
+        Y.c.ρ, ᶜuv, ᶜλ, Y.c.ρtke,
+    )
+    dy = Fields.Field(NamedTuple{(:ρχ,), Tuple{FT}}, axes(Y.c))
+    fill!(parent(dy), 0)
+    Operators.add_numerical_flux_interior!(dg_tracer_interface, dy, y)
+    @. Yₜ.c.ρtke += dy.ρχ / ᶜWJ
+    return nothing
+end
+
+"""
     dg_ω³!(ᶜω³, Y)
 
 DG replacement for `ᶜω³ = wcurlₕ(uₕ)`: strong horizontal curl plus the
@@ -299,14 +330,23 @@ NVTX.@annotate function dg_fddg_horizontal_dynamics!(Yₜ, Y, p, t)
     e = @. Y.c.ρe_tot / Y.c.ρ
     ᶜp_ref = @. pref_from_phi(thermo_params, ᶜΦ)
     pm = @. ᶜp - ᶜp_ref
+    # Reference density ρ_ref = p_ref/(R_d T_r) and perturbation density
+    # ρm = ρ − ρ_ref. The interface dissipation's contact/entropy amplitude
+    # uses ⟦ρm⟧ (not ⟦ρ⟧) so it vanishes at the hydrostatic reference over
+    # terrain — without this, the O(⟦ρ_ref⟧) contact residual injects a
+    # spurious mass flux at rest, unbalancing the column (spurious vertical
+    # velocity that destabilizes boundary-layer closures).
+    R_d = TD.Parameters.R_d(thermo_params)
+    ᶜρ_ref = @. ᶜp_ref / (R_d * air_temperature_reference(thermo_params, ᶜp_ref))
+    ρm = @. Y.c.ρ - ᶜρ_ref
 
     y = map(
-        (ρ, ρe, e, p_, pm_, uv, u1_, u2_, u3_, E1_, E2_, E3_, λ, φ) -> (;
-            ρ, ρe, e, p = p_, pm = pm_, uv,
+        (ρ, ρe, e, p_, pm_, ρm_, uv, u1_, u2_, u3_, E1_, E2_, E3_, λ, φ) -> (;
+            ρ, ρe, e, p = p_, pm = pm_, ρm = ρm_, uv,
             u1 = u1_, u2 = u2_, u3 = u3_,
             E1 = E1_, E2 = E2_, E3 = E3_, λ, φ,
         ),
-        Y.c.ρ, Y.c.ρe_tot, e, ᶜp, pm, ᶜuv, u1, u2, u3, E1, E2, E3, ᶜλ, ᶜΦ,
+        Y.c.ρ, Y.c.ρe_tot, e, ᶜp, pm, ρm, ᶜuv, u1, u2, u3, E1, E2, E3, ᶜλ, ᶜΦ,
     )
     dy = Fields.Field(
         NamedTuple{(:ρ, :ρe, :ρu1, :ρu2, :ρu3), NTuple{5, FT}},
@@ -319,11 +359,12 @@ NVTX.@annotate function dg_fddg_horizontal_dynamics!(Yₜ, Y, p, t)
             dy,
             y,
         )
-        Operators.add_numerical_flux_interior!(
-            kennedy_gruber_roe_cartesian,
-            dy,
-            y,
-        )
+        # rusanov = full |u|+c interface dissipation (stronger grid-scale noise
+        # control than roe's ~5% contact floor — needed when no hyperdiffusion
+        # is present, e.g. to keep EDMFX TKE production bounded over terrain).
+        kg_interface = p.atmos.numerics.dg_interface_flux === Val(:rusanov) ?
+            kennedy_gruber_rusanov_cartesian : kennedy_gruber_roe_cartesian
+        Operators.add_numerical_flux_interior!(kg_interface, dy, y)
     else
         Operators.add_flux_differencing_divergence!(
             waruszewski_cartesian_flux,

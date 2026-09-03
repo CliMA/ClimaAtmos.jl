@@ -40,7 +40,13 @@ NVTX.@annotate function horizontal_dynamics_tendency!(Yₜ, Y, p, t)
             "dg_equation_form = fddg does not support PrognosticEDMFX \
              (the sgsʲ horizontal terms have no flux-form counterpart yet)",
         )
-        return dg_fddg_horizontal_dynamics!(Yₜ, Y, p, t)
+        dg_fddg_horizontal_dynamics!(Yₜ, Y, p, t)
+        # ρtke is excluded from is_tracer_var and the split_divₕ term below is
+        # skipped by this early return, so TKE would have no horizontal
+        # transport in fddg mode — restore it (volume + DG interface flux).
+        use_prognostic_tke(p.atmos.turbconv_model) &&
+            dg_fddg_tke_advection!(Yₜ, Y, p)
+        return nothing
     end
     n = n_mass_flux_subdomains(p.atmos.turbconv_model)
     (; ᶜΦ) = p.core

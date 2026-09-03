@@ -189,12 +189,14 @@ function kennedy_gruber_roe_cartesian(normal, (y⁻,), (y⁺,))
     Ĥ = a⁻ * (y⁻.e + y⁻.p / y⁻.ρ) + a⁺ * (y⁺.e + y⁺.p / y⁺.ρ)
     ĉ = a⁻ * sqrt(γd * y⁻.p / y⁻.ρ) + a⁺ * sqrt(γd * y⁺.p / y⁺.ρ)
     ûn = û1 * n1 + û2 * n2 + û3 * n3
-    # jumps and wave amplitudes. The pressure jump uses the momentum pressure
-    # `pm` (= p for full conservative, = p' for stratified) so the acoustic
-    # amplitudes vanish at rest even over topography. (The entropy amplitude α₀
-    # still uses the full Δρ, so stratified Roe leaves an O(Δρ_ref) contact-wave
-    # residual over terrain — stable, not machine-precision; LMARS avoids it.)
-    Δρ = y⁺.ρ - y⁻.ρ
+    # jumps and wave amplitudes. Both the pressure jump (acoustic) and the
+    # density jump (entropy/contact, via α₀) use the PERTURBATION fields pm =
+    # p − p_ref and ρm = ρ − ρ_ref, so every wave amplitude vanishes at the
+    # hydrostatic reference state — the interface dissipation is then
+    # well-balanced over terrain (no spurious mass flux / vertical velocity at
+    # rest). Away from rest, ρm/pm carry the flow perturbations, so the
+    # dissipation still damps genuine contact/acoustic structure.
+    Δρ = y⁺.ρm - y⁻.ρm
     Δp = y⁺.pm - y⁻.pm
     Δu1 = y⁺.u1 - y⁻.u1
     Δu2 = y⁺.u2 - y⁻.u2
