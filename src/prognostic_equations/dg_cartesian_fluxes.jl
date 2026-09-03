@@ -265,6 +265,26 @@ function waruszewski_es_cartesian(normal, (y⁻,), (y⁺,))
 end
 
 """
+    entropy_variables(ρ, u1, u2, u3, p)
+
+Entropy variables ``w = ∂S/∂U`` for the ideal-gas Euler system with the
+mathematical (convex) entropy ``S = -ρs/(γ-1)``, ``s = \\log p - γ\\log ρ``
+(thermal frame). With ``β = ρ/(2p)``,
+
+    w = ((γ-s)/(γ-1) - β|u|²,  2βu1,  2βu2,  2βu3,  -2β).
+
+Additive constants in `s` drop under the jump `⟦w⟧`, so they are irrelevant to
+the dissipation built from these.
+"""
+@inline function entropy_variables(ρ, u1, u2, u3, p)
+    γd = oftype(ρ, γ_dry)
+    β = ρ / (2 * p)
+    s = log(p) - γd * log(ρ)
+    wρ = (γd - s) / (γd - 1) - β * (u1^2 + u2^2 + u3^2)
+    return (wρ, 2 * β * u1, 2 * β * u2, 2 * β * u3, -2 * β)
+end
+
+"""
     entropy_stable_dissipation(y⁻, y⁺)
 
 Lax-Friedrichs dissipation in ENTROPY variables, ``½ λ Ĥ ⟦w⟧``, where
