@@ -61,8 +61,14 @@ entropy-conservative fluxes (it is what makes ``⟦w⟧·F^\\# = ⟦ψ⟧`` hold
 @inline function ln_mean(x, y)
     ε = oftype(x, 1e-4)
     f² = (x * (x - 2 * y) + y * y) / (x * (x + 2 * y) + y * y)  # ((x−y)/(x+y))²
+    # series coefficients in the input precision: Float64 literals here make
+    # the ternary return Union{Float32, Float64}, which forces dynamic
+    # NamedTuple construction inside GPU kernels
+    c₃ = oftype(x, 2 / 3)
+    c₅ = oftype(x, 2 / 5)
+    c₇ = oftype(x, 2 / 7)
     return f² < ε ?
-           (x + y) / (2 + f² * (2 / 3 + f² * (2 / 5 + f² * 2 / 7))) :
+           (x + y) / (2 + f² * (c₃ + f² * (c₅ + f² * c₇))) :
            (y - x) / log(y / x)
 end
 
