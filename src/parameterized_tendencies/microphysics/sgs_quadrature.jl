@@ -10,6 +10,7 @@ import StaticArrays as SA
 import Thermodynamics as TD
 import ClimaCore.RecursiveApply: rzero, ⊞, ⊠
 import UnrolledUtilities: unrolled_reduce
+import ClimaCore.Utilities: static_select
 
 # ============================================================================
 # Gauss-Hermite Quadrature
@@ -621,9 +622,10 @@ Approximates the expectation
   \\frac{1}{\\pi} \\sum_{i,j} w_i w_j f(T_{ij}, q_{ij})
 ```
 
-with the ``1/\\pi`` normalization of the two-dimensional Gauss-Hermite rule applied
-as ``1/\\sqrt{\\pi}`` per dimension. Accumulation uses `RecursiveApply`'s `⊞` and
-`⊠`, so `f` may return a scalar or a `NamedTuple` of scalars.
+with the ``1/\\pi`` normalization of the two-dimensional Gauss-Hermite rule folded
+into a single per-point weight ``w_i w_j / \\pi``, summed in row-major order over
+the ``N^2`` points. Accumulation uses `RecursiveApply`'s `⊞` and `⊠`, so `f` may
+return a scalar or a `NamedTuple` of scalars.
 
 # Arguments
 
@@ -645,35 +647,42 @@ function sum_over_quadrature_points(
     weights = quad.w
     FT = eltype(χ)
 
-    inv_sqrt_pi = one(FT) / sqrt(FT(π))
+    inv_pi = one(FT) / FT(π)
 
-    # Use loops (not ntuple) for register reuse across iterations: each loop
-    # iteration releases registers from the previous one, dramatically reducing
-    # peak register usage. Seed both accumulators from real (i, j) = (1, 1)
-    # evaluations rather than a separate `rzero(f(...))` dummy call — that
-    # saves one full evaluation of `f` per cell (≈ 11% of work at N = 3).
-    @inbounds begin
+    # One runtime loop over the N² points, with the 2-D weight w_i w_j / π folded
+    # into a single per-point factor. This keeps exactly ONE evaluation of `f`
+    # live at a time. Nested `for j in 2:N` loops (N is a type parameter) get
+    # unrolled by LLVM, which interleaves several evaluation bodies and pushed
+    # the GPU kernel to the 255-register cap with ~2 kB of spills per thread; the
+    # single loop with a runtime trip count is not unrolled, so the kernel can be
+    # register-capped for occupancy (see `with_kernel_maxregs`).
+    #
+    # The nodes and weights are fetched with `ClimaCore.Utilities.static_select`,
+    # never `χ[i]` with the runtime `i`: inside a ClimaCore broadcast kernel a
+    # dynamic index into an `SVector` argument puts the kernel's whole repacked
+    # argument tuple (all parameter structs) into local memory; see its
+    # docstring. Measured on an A100 (he16ze63, Float32, N = 3): 1.5 kB of local
+    # memory and 176 local loads per point with `χ[i]`, 32 B with
+    # `static_select`; the register-capped kernel then runs 22.7 -> 12.6 ms.
+    #
+    # The first point seeds the accumulator so no `rzero(f(...))` dummy
+    # evaluation is needed. Accumulation uses `RecursiveApply`'s `⊞`/`⊠`, so `f`
+    # may return a scalar or a `NamedTuple` of scalars.
+    acc = @inbounds begin
         x_hat = get_x_hat(χ[1], χ[1])
-        inner_sum = f(x_hat...) ⊠ (weights[1] * inv_sqrt_pi)
-        for j in 2:N
-            x_hat = get_x_hat(χ[1], χ[j])
-            inner_sum = inner_sum ⊞ (f(x_hat...) ⊠ (weights[j] * inv_sqrt_pi))
-        end
-        outer_sum = inner_sum ⊠ (weights[1] * inv_sqrt_pi)
-
-        for i in 2:N
-            x_hat = get_x_hat(χ[i], χ[1])
-            inner_sum = f(x_hat...) ⊠ (weights[1] * inv_sqrt_pi)
-            for j in 2:N
-                x_hat = get_x_hat(χ[i], χ[j])
-                inner_sum = inner_sum ⊞ (f(x_hat...) ⊠ (weights[j] * inv_sqrt_pi))
-            end
-            outer_sum = outer_sum ⊞ (inner_sum ⊠ (weights[i] * inv_sqrt_pi))
-        end
+        f(x_hat...) ⊠ (weights[1] * weights[1] * inv_pi)
     end
-
-    return outer_sum
+    for idx in 2:(N * N)
+        i, j = divrem(idx - 1, N) .+ 1
+        χi = static_select(χ, i)
+        χj = static_select(χ, j)
+        wij = static_select(weights, i) * static_select(weights, j) * inv_pi
+        x_hat = get_x_hat(χi, χj)
+        acc = acc ⊞ (f(x_hat...) ⊠ wij)
+    end
+    return acc
 end
+
 
 """
     integrate_over_sgs(f, quad, μ_q, μ_T, q′q′, T′T′, corr_Tq)

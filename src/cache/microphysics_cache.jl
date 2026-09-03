@@ -910,6 +910,21 @@ end
 ### 1 Moment Microphysics
 ###
 
+# Register cap for the 1-moment microphysics broadcasts (GPU only; no-op on
+# CPU). The per-point function inlines ~16 `pow` and ~12 `exp`/`log` bodies per
+# substep and compiles to 220-255 registers per thread, which limits the kernel
+# to 8 warps per SM; Nsight Compute shows 58% of issue cycles with no eligible
+# warp. Capping the allocator at 128 registers trades a little spilling for
+# occupancy. Measured on an A100 (he16ze63, Float32): updraft kernel 2.1 -> 1.4
+# ms (bitwise-identical results); SGS-quadrature environment kernel 22.7 -> 12.6
+# ms together with the single-loop `sum_over_quadrature_points` (results differ
+# only by summation order, ~1e-13). Caps of 96 and 64 were slower again. The
+# cap only pays when the kernel has no other local-memory traffic: a dynamic
+# index into a broadcast argument (see `static_select`) puts the whole argument
+# tuple in local memory and makes the cap counterproductive. Re-measure before
+# changing.
+const MICROPHYSICS_1M_KERNEL_MAXREGS = 128
+
 function set_microphysics_tendency_cache!(
     Y, p, mp1m::NonEquilibriumMicrophysics1M, _,
 )
@@ -931,20 +946,24 @@ function set_microphysics_tendency_cache!(
     nsubs = mp1m.n_substeps
     nsubs_quad = mp1m.n_substeps_quad
     if not_quadrature(sgs_quad)
-        @. ᶜmp_tendency = microphysics_tendencies_1m(
-            Y.c.ρ, ᶜq_tot_nonneg, ᶜq_lcl, ᶜq_icl, ᶜq_rai, ᶜq_sno,
-            ᶜT, cmp, thp, dt, nsubs,
-        )
+        ClimaCore.DataLayouts.with_kernel_maxregs(MICROPHYSICS_1M_KERNEL_MAXREGS) do
+            @. ᶜmp_tendency = microphysics_tendencies_1m(
+                Y.c.ρ, ᶜq_tot_nonneg, ᶜq_lcl, ᶜq_icl, ᶜq_rai, ᶜq_sno,
+                ᶜT, cmp, thp, dt, nsubs,
+            )
+        end
     else
         (; ᶜT′T′, ᶜq′q′, ᶜsgs_moments) = p.precomputed
         corr_Tq = correlation_Tq(p.params)
         α = sgs_variance_fidelity(CAP.cloud_fraction_steepness_scale(p.params))
-        @. ᶜmp_tendency = microphysics_tendencies_1m(
-            BMT.Microphysics1Moment(), sgs_quad, cmp, thp, Y.c.ρ, ᶜT,
-            ᶜq_tot_nonneg, ᶜq_lcl, ᶜq_icl, ᶜq_rai, ᶜq_sno,
-            ᶜT′T′, ᶜq′q′, corr_Tq, ᶜsgs_moments.λ_lagrange, α,
-            dt, nsubs_quad,
-        )
+        ClimaCore.DataLayouts.with_kernel_maxregs(MICROPHYSICS_1M_KERNEL_MAXREGS) do
+            @. ᶜmp_tendency = microphysics_tendencies_1m(
+                BMT.Microphysics1Moment(), sgs_quad, cmp, thp, Y.c.ρ, ᶜT,
+                ᶜq_tot_nonneg, ᶜq_lcl, ᶜq_icl, ᶜq_rai, ᶜq_sno,
+                ᶜT′T′, ᶜq′q′, corr_Tq, ᶜsgs_moments.λ_lagrange, α,
+                dt, nsubs_quad,
+            )
+        end
     end
 
     return nothing
@@ -966,13 +985,15 @@ function set_microphysics_tendency_cache!(
     nsubs_quad = mp1m.n_substeps_quad
 
     ### Updraft contribution
-    for j in 1:n
-        @. ᶜmp_tendencyʲs.:($$j) = microphysics_tendencies_1m(
-            ᶜρʲs.:($$j), ᶜq_tot_nonnegʲs.:($$j),
-            Y.c.sgsʲs.:($$j).q_lcl, Y.c.sgsʲs.:($$j).q_icl,
-            Y.c.sgsʲs.:($$j).q_rai, Y.c.sgsʲs.:($$j).q_sno,
-            ᶜTʲs.:($$j), cmp, thp, dt, nsubs,
-        )
+    ClimaCore.DataLayouts.with_kernel_maxregs(MICROPHYSICS_1M_KERNEL_MAXREGS) do
+        for j in 1:n
+            @. ᶜmp_tendencyʲs.:($$j) = microphysics_tendencies_1m(
+                ᶜρʲs.:($$j), ᶜq_tot_nonnegʲs.:($$j),
+                Y.c.sgsʲs.:($$j).q_lcl, Y.c.sgsʲs.:($$j).q_icl,
+                Y.c.sgsʲs.:($$j).q_rai, Y.c.sgsʲs.:($$j).q_sno,
+                ᶜTʲs.:($$j), cmp, thp, dt, nsubs,
+            )
+        end
     end
 
     ### Environment contribution
@@ -994,10 +1015,12 @@ function set_microphysics_tendency_cache!(
     ᶜq_sno⁰ .= ᶜspecific_env_value(@name(q_sno), Y, p)
     sgs_quad = p.atmos.sgs_quadrature
     if not_quadrature(sgs_quad)
-        @. ᶜmp_tendency⁰ = microphysics_tendencies_1m(
-            ᶜρ⁰, ᶜq_tot_nonneg⁰, ᶜq_lcl⁰, ᶜq_icl⁰, ᶜq_rai⁰, ᶜq_sno⁰,
-            ᶜT⁰, cmp, thp, dt, nsubs,
-        )
+        ClimaCore.DataLayouts.with_kernel_maxregs(MICROPHYSICS_1M_KERNEL_MAXREGS) do
+            @. ᶜmp_tendency⁰ = microphysics_tendencies_1m(
+                ᶜρ⁰, ᶜq_tot_nonneg⁰, ᶜq_lcl⁰, ᶜq_icl⁰, ᶜq_rai⁰, ᶜq_sno⁰,
+                ᶜT⁰, cmp, thp, dt, nsubs,
+            )
+        end
     else
         (; ᶜT′T′, ᶜq′q′, ᶜsgs_moments) = p.precomputed
         corr_Tq = correlation_Tq(p.params)
@@ -1010,12 +1033,14 @@ function set_microphysics_tendency_cache!(
         ᶜmu_S⁰ = p.scratch.ᶜtemp_scalar_7
         @. ᶜλ⁰ = TD.liquid_fraction(thp, ᶜT⁰, max(0, ᶜq_lcl⁰), max(0, ᶜq_icl⁰))
         @. ᶜmu_S⁰ = ᶜq_tot_nonneg⁰ - TD.q_vap_saturation(thp, ᶜT⁰, ᶜρ⁰)
-        @. ᶜmp_tendency⁰ = microphysics_tendencies_1m(
-            BMT.Microphysics1Moment(), sgs_quad, cmp, thp, ᶜρ⁰, ᶜT⁰,
-            ᶜq_tot_nonneg⁰, ᶜq_lcl⁰, ᶜq_icl⁰, ᶜq_rai⁰, ᶜq_sno⁰,
-            ᶜT′T′, ᶜq′q′, corr_Tq, ᶜsgs_moments.λ_lagrange, α,
-            dt, nsubs_quad, ᶜλ⁰, ᶜmu_S⁰,
-        )
+        ClimaCore.DataLayouts.with_kernel_maxregs(MICROPHYSICS_1M_KERNEL_MAXREGS) do
+            @. ᶜmp_tendency⁰ = microphysics_tendencies_1m(
+                BMT.Microphysics1Moment(), sgs_quad, cmp, thp, ᶜρ⁰, ᶜT⁰,
+                ᶜq_tot_nonneg⁰, ᶜq_lcl⁰, ᶜq_icl⁰, ᶜq_rai⁰, ᶜq_sno⁰,
+                ᶜT′T′, ᶜq′q′, corr_Tq, ᶜsgs_moments.λ_lagrange, α,
+                dt, nsubs_quad, ᶜλ⁰, ᶜmu_S⁰,
+            )
+        end
     end
 
     return nothing
