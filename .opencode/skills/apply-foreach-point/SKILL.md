@@ -66,6 +66,8 @@ let scalar = scalar
 end
 ```
 
+The DataLayout and Field arguments passed to `foreach_point` do not need to be added to the let block.
+
 ### Only `isbits` captures are allowed on a GPU
 
 Every value captured into a `foreach_point` closure is eventually passed *into the
@@ -213,9 +215,19 @@ In short you need to:
  - Remove any lazy annotations (it is optional but may be good practice)
  - Call the functions inside the `foreach_point` clousure and pass the required fields as arguments in the argument list.
 
+When an intermediate variable is calculated that is only used later in the `foreach_point` closure, assign it with `var = @. ...`. This creates a local broadcasted result. This differs from `@. var = ...` which will write through the view provided by `foreach_point` into the backing field. Only cache intermediates, any outputs should be written directly to their destination. Example:
+
+```julia
+foreach_point(res, a_field, b_field) do res, a, b
+    c = @. a + b        # local intermediate, assigned with `c = @. ...`
+    @. res = c * 2      # persistent output, must be assigned with `@. res = ...`
+end
+```
+
 
 ## General advise
 
 - When implementing the diff do not get concerend with missing imports too much. Rather try to prepere somthing and iterate (by running) and observing the errors until you get it right.
 - Do not try to understand the details of each construct (e.g. `unrolled_sum`) just 
   use patterns in the codebase and apply it in a similar way.
+- Make as minimal changes as possible to code when adding the `foreach_point` construct. Ideally use the same variable names as the fields for the views returned by `foreach_point`. Preserve existing comments and don't add a comment simply to explain what `foreach_point` is doing.
