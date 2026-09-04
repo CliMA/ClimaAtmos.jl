@@ -3,6 +3,17 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- ![][badge-🔥behavioralΔ] Update to ClimaParams v1.1.7, which changes the
+  reference temperature profile to `temperature_surface_reference = 288 K`
+  and `temperature_min_reference = 215 K` (was 290 K and 220 K) to match the
+  dycore manuscript. This shifts the hydrostatic reference state subtracted
+  in the pressure-gradient and hyperdiffusion terms and the EDMF scale
+  height, so simulation output changes.
+- Read the exponent `s_ref` of the hydrostatic reference temperature profile
+  from the ClimaParams parameter `reference_temperature_exponent` (default 7),
+  exposed as `CAP.s_ref(params)` and passed to the reference-state functions in
+  `refstate_thermodynamics.jl`, instead of a hard-coded constant. The exponent
+  is stored as an `Int`, so results are unchanged.
 
 0.42.9
 -------

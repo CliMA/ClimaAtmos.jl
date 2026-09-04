@@ -39,6 +39,7 @@ NVTX.@annotate function horizontal_dynamics_tendency!(Yₜ, Y, p, t)
     (; ᶜu, ᶜK, ᶜp, ᶜT, ᶜq_liq, ᶜq_ice) = p.precomputed
     (; params) = p
     thermo_params = CAP.thermodynamics_params(params)
+    s_ref = CAP.s_ref(params)
     cp_d = thermo_params.cp_d
 
     if p.atmos.turbconv_model isa PrognosticEDMFX
@@ -72,10 +73,10 @@ NVTX.@annotate function horizontal_dynamics_tendency!(Yₜ, Y, p, t)
     end
 
     (; ᶜq_tot_nonneg) = p.precomputed
-    ᶜΦ_r = @. lazy(phi_r(thermo_params, ᶜp))
+    ᶜΦ_r = @. lazy(phi_r(thermo_params, s_ref, ᶜp))
     ᶜθ_v = p.scratch.ᶜtemp_scalar
     @. ᶜθ_v = theta_v(thermo_params, ᶜT, ᶜp, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice)
-    ᶜθ_vr = @. lazy(theta_vr(thermo_params, ᶜp))
+    ᶜθ_vr = @. lazy(theta_vr(thermo_params, s_ref, ᶜp))
     ᶜΠ = @. lazy(TD.exner_given_pressure(thermo_params, ᶜp))
     ᶜθ_v_diff = @. lazy(ᶜθ_v - ᶜθ_vr)
     # split form pressure gradient: 0.5 * cp_d * [θv ∇Π + ∇(θv Π) - Π∇θv]

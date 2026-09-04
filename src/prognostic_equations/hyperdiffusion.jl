@@ -118,6 +118,7 @@ NVTX.@annotate function prep_hyperdiffusion_tendency!(Yₜ, Y, p, t)
     (; params) = p
     (; ᶜΦ) = p.core
     thermo_params = CAP.thermodynamics_params(params)
+    s_ref = CAP.s_ref(params)
 
     isnothing(hyperdiff) && return nothing
 
@@ -142,7 +143,7 @@ NVTX.@annotate function prep_hyperdiffusion_tendency!(Yₜ, Y, p, t)
     @. ᶜ∇²s_d = wdivₕ(
         gradₕ(
             TD.dry_static_energy(thermo_params, ᶜT, ᶜΦ) -
-            sd_r(thermo_params, ᶜp),
+            sd_r(thermo_params, s_ref, ᶜp),
         ),
     )
     if MatrixFields.has_field(Y, @name(c.ρq_tot))
@@ -151,14 +152,14 @@ NVTX.@annotate function prep_hyperdiffusion_tendency!(Yₜ, Y, p, t)
             @. ᶜ∇²q_tot_eff = wdivₕ(
                 gradₕ(
                     specific(Y.c.ρq_tot - Y.c.ρq_rai - Y.c.ρq_sno, Y.c.ρ) -
-                    q_tot_r(thermo_params, ᶜp),
+                    q_tot_r(thermo_params, s_ref, ᶜp),
                 ),
             )
         else
             @. ᶜ∇²q_tot_eff = wdivₕ(
                 gradₕ(
                     specific(Y.c.ρq_tot, Y.c.ρ) -
-                    q_tot_r(thermo_params, ᶜp),
+                    q_tot_r(thermo_params, s_ref, ᶜp),
                 ),
             )
         end
@@ -190,7 +191,7 @@ NVTX.@annotate function prep_hyperdiffusion_tendency!(Yₜ, Y, p, t)
             @. ᶜ∇²s_dʲs.:($$j) = wdivₕ(
                 gradₕ(
                     TD.dry_static_energy(thermo_params, ᶜTʲs.:($$j), ᶜΦ) -
-                    sd_r(thermo_params, ᶜp),
+                    sd_r(thermo_params, s_ref, ᶜp),
                 ),
             )
             if p.atmos.microphysics_model isa Union{NonEquilibriumMicrophysics1M,
@@ -200,13 +201,13 @@ NVTX.@annotate function prep_hyperdiffusion_tendency!(Yₜ, Y, p, t)
                         Y.c.sgsʲs.:($$j).q_tot -
                         Y.c.sgsʲs.:($$j).q_rai -
                         Y.c.sgsʲs.:($$j).q_sno -
-                        q_tot_r(thermo_params, ᶜp),
+                        q_tot_r(thermo_params, s_ref, ᶜp),
                     ),
                 )
             else
                 @. ᶜ∇²q_tot_effʲs.:($$j) = wdivₕ(
                     gradₕ(
-                        Y.c.sgsʲs.:($$j).q_tot - q_tot_r(thermo_params, ᶜp),
+                        Y.c.sgsʲs.:($$j).q_tot - q_tot_r(thermo_params, s_ref, ᶜp),
                     ),
                 )
             end

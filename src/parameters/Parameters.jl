@@ -479,6 +479,8 @@ accessors generated at the bottom of this module, e.g.
   - `zd_viscous`: Height at which viscous sponge damping begins [m].
   - `zd_rayleigh`: Height at which Rayleigh sponge damping begins [m].
   - `kappa_2_sponge`: Viscous sponge coefficient `κ₂` [m²/s].
+  - `s_ref`: Exponent of the Exner function in the hydrostatic reference
+    temperature profile `T_r(p) = T_min + (T_sfc - T_min) Π(p)^s_ref` [-]. Stored as an `Int` so that `Π^s_ref` is computed exactly as the former hard-coded `Π^7`.
   - `idealized_ocean_albedo`: Ocean surface albedo for idealized simulations [-].
   - `water_refractive_index`: Refractive index of water relative to air, for the
     broadband ocean-albedo model [-].
@@ -559,6 +561,8 @@ Base.@kwdef struct ClimaAtmosParameters{
     zd_viscous::FT
     zd_rayleigh::FT
     kappa_2_sponge::FT
+    # Hydrostatic reference state
+    s_ref::Int
     # Radiation
     idealized_ocean_albedo::FT
     water_refractive_index::FT
