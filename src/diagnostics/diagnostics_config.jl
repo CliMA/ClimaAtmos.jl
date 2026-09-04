@@ -49,7 +49,7 @@ config = CA.DiagnosticsConfig(;
     ),
 )
 
-simulation = CA.AtmosSimulation{Float64}(; diagnostics = config)
+simulation = CA.AtmosSimulation(model; diagnostics = config)
 ```
 """
 @kwdef struct DiagnosticsConfig{A}

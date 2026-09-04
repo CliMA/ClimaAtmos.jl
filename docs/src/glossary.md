@@ -23,8 +23,12 @@ These are accessed through the integrator after a run, e.g.
 
   - **Setup**: the initial conditions, boundary conditions, and optional forcing
     that define a simulation *case* (BOMEX, DYCOMS, RICO, Held–Suarez, …). See [Setups](@ref).
-  - **Preset**: a one-line shortcut (`CA.Presets`) that bundles a grid, setup, and
-    model choices for a common configuration.
+  - **Preset**: a NamedTuple of `AtmosModel` keyword arguments (such as
+    `microphysics_model`, `turbconv_model`, `insolation`) that describes the
+    physics of a common configuration, passed to the `defaults` slot of
+    `AtmosModel`. See [`Presets`](api.md#Presets). A preset chooses the
+    parameterizations, while a setup chooses the case, so the two are combined
+    to specify a simulation.
   - **AtmosConfig**: the structure that parses YAML configuration files and
     builds the simulation setup.
   - **Integrator**: the time-stepping object that advances `Y`; its `.u` field is

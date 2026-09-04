@@ -91,7 +91,7 @@ by its fields in parentheses.
 
 ```julia
 julia> show(stdout, CA.AtmosRadiation())
-ClimaAtmos.AtmosRadiation(insolation = ClimaAtmos.IdealizedInsolation())
+ClimaAtmos.AtmosRadiation(insolation = ClimaAtmos.IdealizedInsolation(), aerosol_names = (), time_varying_trace_gases = ())
 ```
 """
 function parseable_show_with_fields_no_type_header(io::IO, x;
@@ -162,10 +162,38 @@ Base.show(io::IO, x::AtmosGravityWave) =
 Base.show(io::IO, x::AtmosSponge) =
     parseable_show_with_fields_no_type_header(io, x; skip_fields_by_value = (nothing,))
 Base.show(io::IO, x::AtmosSurface) = parseable_show_with_fields_no_type_header(io, x)
-Base.show(io::IO, x::AtmosModel) = parseable_show_with_fields_no_type_header(io, x)
 
-Base.show(io::IO, mime::MIME"text/plain", model::AtmosModel) =
-    verbose_show_type_and_fields(io, mime, model)
+function Base.show(io::IO, x::AtmosModel)
+    show(io, typeof(x).name.wrapper)
+    print(io, "(")
+    printed_first_arg = false
+    for (k, v) in pairs(_physics_fields(x))
+        v === nothing && continue
+        printed_first_arg && print(io, ", ")
+        print(io, "$k = ")
+        show(io, v)
+        printed_first_arg = true
+    end
+    print(io, ")")
+end
+
+# The REPL form: every field that is set, including `grid`, `params`, and `setup`
+function Base.show(io::IO, ::MIME"text/plain", model::AtmosModel)
+    # Physics fields, skipping nothing-valued (default/disabled) ones
+    entries =
+        Any[(k, v) for (k, v) in pairs(_physics_fields(model)) if !isnothing(v)]
+    # Summarize `grid`, `params`, and `setup` rather than dumping them
+    isnothing(model.grid) || push!(entries, (:grid, Base.summary(model.grid)))
+    isnothing(model.params) ||
+        push!(entries, (:params, "ClimaAtmosParameters{$(eltype(model.params))}"))
+    isnothing(model.setup) ||
+        push!(entries, (:setup, nameof(typeof(model.setup))))
+    print(io, "AtmosModel")
+    for (i, (k, v)) in enumerate(entries)
+        prefix = i == length(entries) ? "└─ " : "├─ "
+        print(io, "\n  " * prefix * "$k = ", v)
+    end
+end
 
 Base.show(io::IO, x::SpongeModel) = parseable_show_with_fields_no_type_header(io, x)
 
@@ -253,6 +281,8 @@ function Base.summary(io::IO, atmos::AtmosModel)
     bufs = (; zip(keys, vals)...)
     print(io, '\n')
     for pn in propertynames(atmos)
+        # These carry large types, and the model summary is about physics
+        pn in (:grid, :params, :setup) && continue
         prop = getproperty(atmos, pn)
         # Skip some data:
         prop isa Bool && continue

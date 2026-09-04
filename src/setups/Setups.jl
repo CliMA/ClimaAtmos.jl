@@ -145,10 +145,11 @@ coriolis_forcing(setup, ::Type{FT}) where {FT} = nothing
 
 Return the surface pieces prescribed by `setup`.
 
-Consumed by `AtmosSurface(::AtmosConfig, params, FT; setup_type)`, where a
-non-`nothing` field takes precedence over the corresponding config key. Only
-setups with case-specific surface properties (roughness, prescribed fluxes, a
-case SST) need to extend this.
+Consumed via [`model_components`](@ref) by
+`AtmosSurface(::AtmosConfig, params, FT; setup_components)`, where a non-`nothing`
+field takes precedence over the corresponding config key. Only setups with
+case-specific surface properties (roughness, prescribed fluxes, a case SST)
+need to extend this.
 
 # Returns
 
@@ -247,6 +248,30 @@ Defaults to `nothing`. It is also ignored when the `rad` config key is set
 explicitly, so a configuration can always override the setup's radiation.
 """
 radiation_model(setup, ::Type{FT}) where {FT} = nothing
+
+"""
+    model_components(setup, params, ::Type{FT})
+
+Evaluate every model-facing hook of `setup` once and return the raw
+results as a `NamedTuple`: `subsidence`, `ls_adv`, `scm_coriolis` (raw SCM
+profiles; consumers wrap them into model components), `external_forcing`,
+`insolation`, `radiation_mode`, `prescribed_flow` (model objects),
+`surface` (from [`surface_condition`](@ref)), and `surface_temperature`
+(from [`surface_temperature_model`](@ref)).
+"""
+function model_components(setup, params, ::Type{FT}) where {FT}
+    return (;
+        subsidence = subsidence_forcing(setup, FT),
+        ls_adv = large_scale_advection_forcing(setup, FT),
+        scm_coriolis = coriolis_forcing(setup, FT),
+        external_forcing = external_forcing(setup, FT),
+        insolation = insolation_model(setup),
+        radiation_mode = radiation_model(setup, FT),
+        prescribed_flow = prescribed_flow_model(setup, FT),
+        surface = surface_condition(setup, params),
+        surface_temperature = surface_temperature_model(setup),
+    )
+end
 
 # ============================================================================
 # Layer 2 and helpers — included files

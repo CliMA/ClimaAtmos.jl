@@ -18,13 +18,21 @@ using Logging # hide
 Logging.disable_logging(Logging.Info) # hide
 import ClimaAtmos as CA
 
-simulation = CA.AtmosSimulation{Float32}(; t_end = "1days")
+model = CA.AtmosModel(CA.SphereGrid(Float32))
+simulation = CA.AtmosSimulation(model; t_end = "1days")
 nothing # hide
 ```
 
+Construction has two steps: `AtmosModel(grid; ...)` defines the physical
+system -- it holds the grid, the parameters, and the case setup -- and
+`AtmosSimulation(model; ...)` defines how to run that system: the timestep, the
+duration, the callbacks, and the output.
+
 `t_end` accepts a number of seconds or a duration string (`secs`, `mins`,
-`hours`, `days`, `weeks`), as does the timestep `dt`. Every other aspect of the
-simulation has a keyword argument too; omitted ones take their defaults.
+`hours`, `days`, `weeks`), as does the timestep `dt`. See
+[`AtmosModel`](@ref ClimaAtmos.AtmosModel) and
+[`AtmosSimulation`](@ref ClimaAtmos.AtmosSimulation) for the full list of
+keyword arguments and their defaults.
 
 The first construction and solve in a session compile a large amount of code
 and can take several minutes; later calls are fast.
@@ -55,14 +63,24 @@ propertynames(Y.f)  # e.g., (:u₃,)
 
 ## Running a case end to end
 
-The default simulation is plain, and a global run is slow to
-integrate. Presets bundle a grid, a setup, and matching physics into one call,
-which is the quickest way to a running case, here a column with the BOMEX
-shallow-cumulus initial state and moist physics. `solve_atmos!` integrates it
+The default simulation is plain, and a global run is slow to integrate. A
+[setup](setups.md) supplies a case: its initial state, its boundary conditions,
+and its forcings. Here that is BOMEX, a shallow-cumulus column, paired with
+moist physics from a model preset. `solve_atmos!` integrates the simulation
 forward to `t_end`, and the integrator time confirms where the run stopped:
 
 ```@example first_sim
-simulation = CA.Presets.bomex(Float32; t_end = "10mins", output_dir = mktempdir())
+grid = CA.ColumnGrid(Float32; z_elem = 60, z_max = 3000.0, z_stretch = false)
+params = CA.ClimaAtmosParameters(Float32)
+model = CA.AtmosModel(
+    grid;
+    params,
+    setup = CA.Setups.Bomex(; thermo_params = params.thermodynamics_params),
+    defaults = CA.Presets.equil_moist_0m(),
+)
+simulation = CA.AtmosSimulation(
+    model; dt = 10, t_end = "10mins", output_dir = mktempdir(),
+)
 CA.solve_atmos!(simulation)
 simulation.integrator.t
 ```
@@ -70,15 +88,17 @@ simulation.integrator.t
 (This page runs during the documentation build, so it writes to a temporary
 directory; drop `output_dir` to get the default location described below.)
 
-Presets matter beyond brevity: the `setup` argument sets the initial state,
-while the physics comes from the model, so the two have to be chosen together.
-BOMEX with the default dry model would have no moisture to convect. Each preset
-pairs a setup with a matching grid and model. The pairing is minimal rather
-than complete: `Presets.bomex` enables moist physics but no
-turbulence-convection scheme or case forcings; pass
-`model = CA.Presets.prognostic_edmf(Float32)` to add convective transport, or
-run the corresponding YAML case config for the full published setup. See the
-[Presets](api.md#Presets) section of the API for the full list.
+The setup and the physics are not independent: the setup sets the initial state
+and the case forcings, while the parameterizations come from the rest of the
+model, so the two have to be chosen together. A setup can require prognostic
+variables that only some physics provide. BOMEX with the default dry model
+would have no moisture to convect, which is why `equil_moist_0m` appears above.
+Model presets provide reasonable physics defaults for simulations scientists
+commonly run. The setup and your own keyword arguments override them. The one
+above enables moist physics but no turbulence-convection scheme. Pass
+`defaults = CA.Presets.prognostic_edmf(Float32)` instead to add convective
+transport, or run the corresponding YAML case config for the full published
+setup. See the [Presets](api.md#Presets) section of the API for the full list.
 
 ## Where output goes
 

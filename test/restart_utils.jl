@@ -106,6 +106,13 @@ function compare(
     return _compare(pass, v1, v2; name, ignore)
 end
 
+# Don't specialize `_compare` on the argument types: the cache holds thousands
+# of distinct nested struct and NamedTuple types, and a specialized method would
+# have to be compiled once for each of them. Dispatch on the declared argument
+# types (numbers, arrays, Fields) still works, only the compiled bodies are
+# shared.
+@nospecialize
+
 function _compare(pass, v1::T, v2::T; name, ignore) where {T}
     properties = filter(x -> !(x in ignore), propertynames(v1))
     if isempty(properties)
@@ -190,8 +197,10 @@ function _compare(
 end
 
 function _compare(pass, v1::T1, v2::T2; name, ignore) where {T1, T2}
-    error("v1 and v2 have different types")
+    error("$name: v1 and v2 have different types")
 end
+
+@specialize
 
 function print_maybe(exp, what)
     exp || println(what)

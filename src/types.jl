@@ -1845,7 +1845,7 @@ struct HardMinimumBlending <: AbstractScaleBlendingMethod end
 Base.broadcastable(x::AbstractScaleBlendingMethod) = tuple(x)
 
 """
-    AtmosNumerics{EN_UP, TR_UP, ED_UP, SG_UP, ED_TR_UP, TDC, RR, LIM, DM, HD}
+    AtmosNumerics{EN_UP, TR_UP, ED_UP, SG_UP, ED_TR_UP, TDC, RR, LIM, DM, HD, VWB}
 
 Numerical options of an `AtmosModel`: upwinding schemes, limiter,
 diffusion timestepping mode, hyperdiffusion, and debugging switches.
@@ -1874,8 +1874,11 @@ plain symbols or strings.
   - `diff_mode`: `Explicit()` or `Implicit()`, the timestepping mode for vertical
     diffusion.
   - `hyperdiff`: `nothing`, or a `Hyperdiffusion` model.
+  - `vertical_water_borrowing_species`: `nothing` (all tracers), `()` (none), or
+    a `Tuple` of `Symbol`s naming the tracers that the vertical water borrowing
+    limiter applies to.
 """
-struct AtmosNumerics{EN_UP, TR_UP, ED_UP, SG_UP, ED_TR_UP, TDC, RR, LIM, DM, HD}
+struct AtmosNumerics{EN_UP, TR_UP, ED_UP, SG_UP, ED_TR_UP, TDC, RR, LIM, DM, HD, VWB}
     # Enable specific upwinding schemes for specific equations
     energy_q_tot_upwinding::EN_UP
     tracer_upwinding::TR_UP
@@ -1891,6 +1894,9 @@ struct AtmosNumerics{EN_UP, TR_UP, ED_UP, SG_UP, ED_TR_UP, TDC, RR, LIM, DM, HD}
     diff_mode::DM
     # Hyperdiffusion model: nothing or Hyperdiffusion()
     hyperdiff::HD
+    # Tracers the vertical water borrowing limiter applies to:
+    # `nothing` (all tracers), `()` (none), or a Tuple of Symbols
+    vertical_water_borrowing_species::VWB
 end
 Base.broadcastable(x::AtmosNumerics) = tuple(x)
 
@@ -1955,6 +1961,7 @@ function AtmosNumerics(;
         divergence_damping_factor = 5,
         prandtl_number = 1.0,
     ),
+    vertical_water_borrowing_species = nothing,
     kwargs...,
 )
     # Helper to convert symbols/strings to Val types, or keep Val types as-is
@@ -1972,6 +1979,7 @@ function AtmosNumerics(;
         limiter,
         diff_mode,
         hyperdiff,
+        vertical_water_borrowing_species,
     )
 end
 
@@ -2199,7 +2207,7 @@ water = ClimaAtmos.AtmosWater(;
 end
 
 """
-    AtmosRadiation{RM, IN}(; radiation_mode = nothing, insolation = IdealizedInsolation())
+    AtmosRadiation{RM, IN, AN, TVG}(; radiation_mode = nothing, insolation = IdealizedInsolation(), kwargs...)
 
 Group of radiation choices inside an `AtmosModel`.
 
@@ -2211,10 +2219,16 @@ Group of radiation choices inside an `AtmosModel`.
     (`RadiationDYCOMS`, `RadiationISDAC`, `RadiationTRMM_LBA`), or
     `HeldSuarezForcing()`.
   - `insolation`: An `AbstractInsolation`; `IdealizedInsolation()` by default.
+  - `aerosol_names`: Tuple of prescribed aerosol names made available to
+    RRTMGP (e.g. `("SO4", "CB1")`); empty for none.
+  - `time_varying_trace_gases`: Tuple of trace gas names read from
+    time-varying input files; empty for none.
 """
-@kwdef struct AtmosRadiation{RM, IN}
+@kwdef struct AtmosRadiation{RM, IN, AN, TVG}
     radiation_mode::RM = nothing
     insolation::IN = IdealizedInsolation()
+    aerosol_names::AN = ()
+    time_varying_trace_gases::TVG = ()
 end
 
 """
@@ -2372,10 +2386,11 @@ Base.broadcastable(x::COSPModel) = tuple(x)
 # methods are parsed.
 
 """
-    AtmosModel{W, SCM, R, TC, PF, GW, VD, SP, SU, NU, CM, COSP}
+    AtmosModel{W, SCM, R, TC, PF, GW, VD, SP, SU, NU, CM, COSP, G, P, SE}
 
-Complete description of the physics of an atmospheric simulation: which
-parameterizations are active and how each is configured.
+An atmospheric model: a complete description of the physics of an atmospheric
+simulation -- which parameterizations are active and how each is configured --
+bound to the grid it runs on, the physical parameters, and the case setup.
 
 Components are stored in grouped sub-structs to keep the number of type
 parameters manageable, but they can be read either way: `atmos.water.cloud_model`
@@ -2400,10 +2415,14 @@ names.
   - `cosp`: `nothing`, or a `COSPModel` for the satellite simulator.
   - `disable_surface_flux_tendency`: Whether to skip applying the surface flux
     tendency, independently of whether surface conditions are computed.
+  - `grid`: The `Grids.AbstractGrid` the model is built on.
+  - `params`: The `ClimaAtmosParameters` for the run.
+  - `setup`: The case setup (a `Setups` case) the model was built from.
 
-See the keyword constructor `AtmosModel(; kwargs...)` below.
+See the constructor `AtmosModel(grid; params, setup, defaults, kwargs...)`
+below.
 """
-struct AtmosModel{W, SCM, R, TC, PF, GW, VD, SP, SU, NU, CM, COSP}
+struct AtmosModel{W, SCM, R, TC, PF, GW, VD, SP, SU, NU, CM, COSP, G, P, SE}
     water::W
     scm_setup::SCM
     radiation::R
@@ -2419,7 +2438,13 @@ struct AtmosModel{W, SCM, R, TC, PF, GW, VD, SP, SU, NU, CM, COSP}
 
     # Whether to apply surface flux tendency (independent of surface conditions)
     disable_surface_flux_tendency::Bool
+
+    # The model's grid, parameters, and setup
+    grid::G
+    params::P
+    setup::SE
 end
+
 
 # Map grouped struct types to their names in AtmosModel struct
 """
@@ -2464,6 +2489,9 @@ const GROUPED_PROPERTY_MAP = Dict{Symbol, Symbol}(
     property in fieldnames(group_type)
 )
 
+# These fields tie a model to one specific run, all other fields contain physics
+const _MODEL_NON_PHYSICS_FIELDS = (:grid, :params, :setup)
+
 """
     Base.getproperty(atmos::AtmosModel, ::Val{property_name})
     Base.getproperty(atmos::AtmosModel, property_name::Symbol)
@@ -2501,177 +2529,8 @@ end
 
 Base.broadcastable(x::AtmosModel) = tuple(x)
 
-"""
-    AtmosModel(; kwargs...)
-
-Create an `AtmosModel`, defaulting to a minimal dry atmosphere.
-
-Every keyword argument is either the name of an `AtmosModel` field (a whole
-group, `vertical_diffusion`, `cosp`, `prescribed_flow`, or
-`disable_surface_flux_tendency`) or the name of a field of one of the grouped
-sub-structs. Flattened names are routed to their owning group through
-`GROUPED_PROPERTY_MAP`, so
-
-```julia
-AtmosModel(; microphysics_model = EquilibriumMicrophysics0M())
-```
-
-is equivalent to passing `water = AtmosWater(; microphysics_model = ...)`.
-Passing a complete group object wins: any flattened keywords belonging to that
-group are then ignored. Unknown keywords raise an error listing every valid
-name.
-
-The resulting model can be read either way:
-
-```julia
-model = AtmosModel(; microphysics_model = EquilibriumMicrophysics0M())
-model.microphysics_model        # forwarded access
-model.water.microphysics_model  # grouped access
-```
-
-With no keyword arguments the model is a minimal dry atmosphere:
-
-  - Dry atmosphere: `DryModel()`, with `QuadratureCloud()` but no SGS quadrature.
-  - Surface: `AnalyticTemperature` with a zonally symmetric SST, fixed exchange
-    coefficients, and a constant albedo of 0.07.
-  - `IdealizedInsolation()`, and no radiation, turbulence-convection, gravity
-    wave, sponge, or forcing model.
-  - Numerics: Van Leer limited upwinding for `ρe_tot`, `ρq_tot`, and the
-    tracers, `Explicit()` diffusion, and CAM-SE-like `Float32` hyperdiffusion.
-
-# Keyword Arguments
-
-Grouped into the sub-struct that owns each name; see that struct's docstring
-for the full list of admissible values.
-
-  - [`AtmosWater`](@ref): `microphysics_model`, `cloud_model`,
-    `microphysics_tendency_timestepping`, `tracer_nonnegativity_method`,
-    `sgs_quadrature`, `terminal_velocity_mode`.
-  - `SCMSetup`: `subsidence`, `external_forcing`, `ls_adv`,
-    `advection_test`, `scm_coriolis`. Normally supplied by a `Setups` case.
-  - [`AtmosRadiation`](@ref): `radiation_mode`, `insolation`.
-  - [`AtmosTurbconv`](@ref): `edmfx_model`, `turbconv_model`,
-    `smagorinsky_lilly`, `amd_les`, `constant_horizontal_diffusion`.
-  - [`AtmosGravityWave`](@ref): `non_orographic_gravity_wave`,
-    `orographic_gravity_wave`.
-  - [`AtmosSponge`](@ref): `viscous_sponge`, `rayleigh_sponge`.
-  - [`AtmosSurface`](@ref): `flux_scheme`, `temperature`, `boundary_overrides`,
-    `surface_albedo`.
-  - `AtmosNumerics`: the five `*_upwinding` options,
-    `test_dycore_consistency`, `reproducible_restart`, `limiter`, `diff_mode`,
-    `hyperdiff`.
-  - [`AtmosChem`](@ref): `chemistry_model`.
-  - Ungrouped `AtmosModel` fields: `vertical_diffusion`, `prescribed_flow`,
-    `cosp`, and `disable_surface_flux_tendency`.
-
-# Examples
-
-```julia
-# Minimal dry model
-model = AtmosModel()
-
-# Dry model with Held-Suarez forcing and custom hyperdiffusion
-model = AtmosModel(;
-    radiation_mode = HeldSuarezForcing(),
-    hyperdiff = Hyperdiffusion(;
-        ν₄_vorticity_coeff = 1e15,
-        divergence_damping_factor = 1.0,
-        prandtl_number = 1.0,
-    ),
-)
-
-# Moist model with all-sky radiation
-model = AtmosModel(;
-    microphysics_model = EquilibriumMicrophysics0M(),
-    radiation_mode = RRTMGPI.AllSkyRadiation(),
-)
-```
-
-# Default Configuration
-
-The default AtmosModel provides:
-
-  - **Dry atmosphere**: DryModel()
-  - **Basic surface**: AnalyticTemperature (zonally-symmetric SST) with default exchange coefficients
-  - **Cloud model**: QuadratureCloud() with SGS quadrature
-  - **Idealized insolation**: IdealizedInsolation()
-  - **Conservative numerics**: First-order upwinding with Explicit() timestepping
-  - **No advanced physics**: No radiation, turbulence, or forcing by default
-
-# Available Structs
-
-## AtmosWater
-
-  - `microphysics_model`: DryModel(), EquilibriumMicrophysics0M(), NonEquilibriumMicrophysics1M(), NonEquilibriumMicrophysics2M(), NonEquilibriumMicrophysics2MP3()
-  - `cloud_model`: GridScaleCloud(), QuadratureCloud()
-  - `microphysics_tendency_timestepping`: Explicit(), Implicit()
-  - `sgs_quadrature`: nothing or SGSQuadrature (subgrid-scale quadrature for microphysics tendencies)
-  - `terminal_velocity_liquid`: FixedTerminalVelocity (default) or DiagnosticTerminalVelocity
-  - `terminal_velocity_ice`: FixedTerminalVelocity (default) or DiagnosticTerminalVelocity
-  - `terminal_velocity_rain`: FixedTerminalVelocity or DiagnosticTerminalVelocity (default)
-  - `terminal_velocity_snow`: FixedTerminalVelocity (default) or DiagnosticTerminalVelocity
-
-## SCMSetup (Single-Column Model & LES specific - accessed via model.subsidence, model.external_forcing, etc.)
-
-Internal testing and calibration components for single-column setups:
-
-  - `subsidence`: nothing or Bomex_subsidence, Rico_subsidence, DYCOMS_subsidence, etc
-  - `external_forcing`: nothing or external forcing objects (ExternalDrivenTVForcing, ISDACForcing)
-  - `ls_adv`: nothing or LargeScaleAdvection()
-  - `advection_test`: Bool
-  - `scm_coriolis`: nothing or NamedTuple `(; prof_ug, prof_vg, coriolis_param)`
-
-## AtmosRadiation
-
-  - `radiation_mode`: Radiation and atmospheric forcing modes
-
-      + Global radiation: RRTMGPI.ClearSkyRadiation(), RRTMGPI.AllSkyRadiation()
-      + Atmospheric forcing: HeldSuarezForcing() (for idealized dynamics)
-      + SCM-specific: RadiationDYCOMS(), RadiationISDAC(), RadiationTRMM_LBA()
-
-  - `insolation`: IdealizedInsolation(), TimeVaryingInsolation(), etc.
-
-## AtmosTurbconv
-
-  - `edmfx_model`: EDMFXModel()
-  - `turbconv_model`: nothing, PrognosticEDMFX(), EDOnlyEDMFX()
-  - `smagorinsky_lilly`: nothing or SmagorinskyLilly()
-  - `amd_les`: nothing or AnisotropicMinimumDissipation()
-  - `constant_horizontal_diffusion`: nothing or ConstantHorizontalDiffusion()
-
-## AtmosGravityWave
-
-  - `non_orographic_gravity_wave`: nothing or NonOrographicGravityWave()
-  - `orographic_gravity_wave`: nothing or OrographicGravityWave()
-
-## AtmosSponge
-
-  - `viscous_sponge`: nothing or ViscousSponge()
-  - `rayleigh_sponge`: nothing or RayleighSponge()
-
-## AtmosSurface
-
-  - `flux_scheme`: SurfaceConditions.MoninObukhov, SurfaceConditions.ExchangeCoefficients, or a default marker (DefaultMoninObukhov/DefaultExchangeCoefficients), or `nothing` to disable.
-  - `temperature`: SurfaceConditions.AnalyticTemperature, ExternalTemperature, SlabOceanTemperature, or CoupledTemperature.
-  - `boundary_overrides`: SurfaceConditions.SurfaceBoundaryOverrides
-  - `surface_albedo`: ConstantAlbedo(), RegressionFunctionAlbedo(), CouplerAlbedo()
-
-## AtmosNumerics    # Create grouped structs - use provided complete objects or create from individual fields
-
-  - `energy_q_tot_upwinding`, `tracer_upwinding`, `edmfx_mse_q_tot_upwinding`, `edmfx_sgsflux_upwinding`, `edmfx_tracer_upwinding`: Val() upwinding schemes
-  - `test_dycore_consistency`: nothing or TestDycoreConsistency() for debugging
-  - `limiter`: nothing or QuasiMonotoneLimiter()
-  - `vertical_water_borrowing_species`: internal value `nothing` (apply to all tracers; config default is `~`), empty tuple (apply to none; config `[]`), or Tuple{Symbol, ...} from config string/list (e.g. `["ρq_tot"]`) to apply only to those tracers. See config `vertical_water_borrowing_species` in default_config.yml for YAML options.
-    (Note: The vertical water borrowing limiter is created in the cache based on `AtmosWaterModel.tracer_nonnegativity_method`)
-  - `diff_mode`: Explicit(), Implicit() timestepping mode for diffusion
-  - `hyperdiff`: nothing or Hyperdiffusion()
-
-## Top-level Options
-
-  - `vertical_diffusion`: nothing, VerticalDiffusion(), DecayWithHeightDiffusion()
-  - `disable_surface_flux_tendency`: Bool
-"""
-function AtmosModel(; kwargs...)
+# Internal builder from fully resolved kwargs. Does not apply setup components
+function _atmos_model(; kwargs...)
     group_kwargs, atmos_model_kwargs = _partition_atmos_model_kwargs(kwargs)
 
     # Create grouped structs - use provided complete objects or create from individual fields
@@ -2703,34 +2562,298 @@ function AtmosModel(; kwargs...)
 
     prescribed_flow = get(atmos_model_kwargs, :prescribed_flow, nothing)
 
-    return AtmosModel{
-        typeof(water),
-        typeof(scm_setup),
-        typeof(radiation),
-        typeof(turbconv),
-        typeof(prescribed_flow),
-        typeof(gravity_wave),
-        typeof(vertical_diffusion),
-        typeof(sponge),
-        typeof(surface),
-        typeof(numerics),
-        typeof(chemistry),
-        typeof(cosp),
-    }(
-        water,
-        scm_setup,
-        radiation,
-        turbconv,
-        prescribed_flow,
-        gravity_wave,
-        vertical_diffusion,
-        sponge,
-        surface,
-        numerics,
-        chemistry,
-        cosp,
-        disable_surface_flux_tendency,
+    # `nothing` for a model that describes physics only
+    grid = get(atmos_model_kwargs, :grid, nothing)
+    params = get(atmos_model_kwargs, :params, nothing)
+    setup = get(atmos_model_kwargs, :setup, nothing)
+
+    # The default constructor infers the type parameters from the arguments.
+    return AtmosModel(
+        water, scm_setup, radiation, turbconv, prescribed_flow, gravity_wave,
+        vertical_diffusion, sponge, surface, numerics, chemistry, cosp,
+        disable_surface_flux_tendency, grid, params, setup,
     )
+end
+
+"""
+    AtmosModel(grid::Grids.AbstractGrid; params, setup, defaults = (;), kwargs...)
+
+Construct an `AtmosModel` on `grid` with physical parameters `params` and
+case `setup`.
+
+Each field resolves in order: your kwargs (a leaf like `radiation_mode` or
+a whole group like `radiation = AtmosRadiation(...)`), then the setup's
+components (`Setups.Bomex` brings its subsidence, forcing, and surface
+conditions; see [`Setups.model_components`](@ref)), then `defaults`
+(a NamedTuple of leaf kwargs, e.g. a `Presets` model preset). Overriding
+a setup-defined value warns.
+
+# Example
+
+```julia
+model = AtmosModel(ColumnGrid(Float32; z_elem = 60, z_max = 3e3);
+    setup = Setups.Bomex(),
+    defaults = Presets.equil_moist_0m(),               # weakest tier
+    microphysics_model = EquilibriumMicrophysics0M(),  # explicit; wins
+)
+model.subsidence  # Bomex subsidence, derived from the setup
+```
+
+# Keyword Arguments
+
+Every keyword argument is either the name of an `AtmosModel` physics field (a
+whole group, `vertical_diffusion`, `cosp`, `prescribed_flow`, or
+`disable_surface_flux_tendency`) or the name of a field of one of the grouped
+sub-structs. Flattened names are routed to their owning group through
+`GROUPED_PROPERTY_MAP`, so
+
+```julia
+AtmosModel(grid; microphysics_model = EquilibriumMicrophysics0M())
+```
+
+is equivalent to passing `water = AtmosWater(; microphysics_model = ...)`.
+Passing a complete group object wins: any flattened keywords belonging to that
+group are then ignored. Unknown keywords raise an error listing every valid
+name.
+
+The resulting model can be read either way:
+
+```julia
+model = AtmosModel(grid; microphysics_model = EquilibriumMicrophysics0M())
+model.microphysics_model        # forwarded access
+model.water.microphysics_model  # grouped access
+```
+
+With no keyword arguments the model is a minimal dry atmosphere:
+
+  - Dry atmosphere: `DryModel()`, with `QuadratureCloud()` but no SGS quadrature.
+  - Surface: `AnalyticTemperature` with a zonally symmetric SST, fixed exchange
+    coefficients, and a constant albedo of 0.07.
+  - `IdealizedInsolation()`, and no radiation, turbulence-convection, gravity
+    wave, sponge, or forcing model.
+  - Numerics: Van Leer limited upwinding for `ρe_tot`, `ρq_tot`, and the
+    tracers, `Explicit()` diffusion, and CAM-SE-like `Float32` hyperdiffusion.
+
+The admissible names, grouped into the sub-struct that owns each one; see that
+struct's docstring for the full list of admissible values.
+
+  - [`AtmosWater`](@ref): `microphysics_model`, `cloud_model`,
+    `microphysics_tendency_timestepping`, `tracer_nonnegativity_method`,
+    `sgs_quadrature`, `terminal_velocity_liquid`, `terminal_velocity_ice`,
+    `terminal_velocity_rain`, `terminal_velocity_snow`.
+  - `SCMSetup`: `subsidence`, `external_forcing`, `ls_adv`,
+    `advection_test`, `scm_coriolis`. Normally supplied by a `Setups` case.
+  - [`AtmosRadiation`](@ref): `radiation_mode`, `insolation`, `aerosol_names`,
+    `time_varying_trace_gases`.
+  - [`AtmosTurbconv`](@ref): `edmfx_model`, `turbconv_model`,
+    `smagorinsky_lilly`, `amd_les`, `constant_horizontal_diffusion`.
+  - [`AtmosGravityWave`](@ref): `non_orographic_gravity_wave`,
+    `orographic_gravity_wave`.
+  - [`AtmosSponge`](@ref): `viscous_sponge`, `rayleigh_sponge`.
+  - [`AtmosSurface`](@ref): `flux_scheme`, `temperature`, `boundary_overrides`,
+    `surface_albedo`.
+  - `AtmosNumerics`: the five `*_upwinding` options,
+    `test_dycore_consistency`, `reproducible_restart`, `limiter`, `diff_mode`,
+    `hyperdiff`, `vertical_water_borrowing_species`.
+  - [`AtmosChem`](@ref): `chemistry_model`.
+  - Ungrouped `AtmosModel` fields: `vertical_diffusion`, `prescribed_flow`,
+    `cosp`, and `disable_surface_flux_tendency`.
+
+# More examples
+
+```julia
+# Minimal dry model
+model = AtmosModel(SphereGrid(Float32))
+
+# Dry model with Held-Suarez forcing and custom hyperdiffusion
+model = AtmosModel(grid;
+    radiation_mode = HeldSuarezForcing(),
+    hyperdiff = Hyperdiffusion(;
+        ν₄_vorticity_coeff = 1e15,
+        divergence_damping_factor = 1.0,
+        prandtl_number = 1.0,
+    ),
+)
+
+# Moist model with all-sky radiation
+model = AtmosModel(grid;
+    microphysics_model = EquilibriumMicrophysics0M(),
+    radiation_mode = RRTMGPI.AllSkyRadiation(),
+)
+```
+"""
+function AtmosModel(
+    grid::Grids.AbstractGrid;
+    params = nothing,
+    setup = nothing,
+    defaults = (;),
+    kwargs...,
+)
+    # Filter out non-physics fields
+    duplicated = filter(in(_MODEL_NON_PHYSICS_FIELDS), keys(kwargs))
+    isempty(duplicated) || error(
+        "$(join(duplicated, ", ")) cannot be passed in kwargs: `grid` is " *
+        "positional, `params`/`setup` are their own keyword arguments.",
+    )
+
+    spaces = get_spaces(grid)
+    FT = Spaces.undertype(spaces.center_space)
+
+    params = isnothing(params) ? ClimaAtmosParameters(FT) : params
+    eltype(params) == FT || error(
+        "Float-type mismatch: the grid is $FT but `params` is " *
+        "$(eltype(params)). Use `ClimaAtmosParameters($FT)`.",
+    )
+    setup = isnothing(setup) ? Setups.DecayingProfile(; perturb = true, params) : setup
+
+    # `defaults` accepts individual fields only. A whole group object there,
+    # such as `surface = AtmosSurface(...)`, would override the individual
+    # fields that the setup components set.
+    group_fields = map(last, ATMOS_MODEL_GROUPS)
+    is_leaf(k) =
+        haskey(GROUPED_PROPERTY_MAP, k) ||
+        k === :prescribed_flow ||
+        (
+            k in fieldnames(AtmosModel) &&
+            !(k in group_fields) &&
+            !(k in _MODEL_NON_PHYSICS_FIELDS)
+        )
+    invalid_defaults = filter(!is_leaf, keys(defaults))
+    unknown_defaults =
+        filter(k -> !(k in fieldnames(AtmosModel)), invalid_defaults)
+    isempty(unknown_defaults) || error(
+        "`defaults` has keys that are not `AtmosModel` fields: " *
+        "$(join(unknown_defaults, ", ")). See `AtmosModel` for the accepted names.",
+    )
+    isempty(invalid_defaults) || error(
+        "`defaults` accepts individual model fields only, got: " *
+        "$(join(invalid_defaults, ", ")). Pass these as regular keyword " *
+        "arguments instead.",
+    )
+
+    components = Setups.model_components(setup, params, FT)
+
+    # Collect the setup's values, skipping each field that the caller set
+    # directly, either as the field or as its whole group. Skipped fields go in
+    # `shadowed` for one warning below. The tiers get their precedence from the
+    # splat order in the final call, where the rightmost value wins.
+    component_kwargs = Dict{Symbol, Any}()
+    shadowed = Symbol[]
+    apply!(leaf, group, value) =
+        if !isnothing(value)
+            if haskey(kwargs, leaf) || haskey(kwargs, group)
+                push!(shadowed, leaf)
+            else
+                component_kwargs[leaf] = value
+            end
+        end
+
+    apply!(:subsidence, :scm_setup, get_subsidence_model(components))
+    apply!(:ls_adv, :scm_setup, get_large_scale_advection_model(components))
+    apply!(:scm_coriolis, :scm_setup, components.scm_coriolis)
+    apply!(:external_forcing, :scm_setup, components.external_forcing)
+    apply!(:radiation_mode, :radiation, components.radiation_mode)
+    apply!(:insolation, :radiation, components.insolation)
+    apply!(:prescribed_flow, :prescribed_flow, components.prescribed_flow)
+    apply!(:flux_scheme, :surface, components.surface.flux_scheme)
+    # Take the surface temperature only if the setup defines one. The generic
+    # fallback equals the AtmosSurface default, so passing it here would beat a
+    # temperature from `defaults` and change nothing.
+    generic_temperature = Setups.surface_temperature_model(nothing)
+    case_temperature = if !isnothing(components.surface.temperature)
+        components.surface.temperature
+    elseif components.surface_temperature !== generic_temperature
+        components.surface_temperature
+    else
+        nothing
+    end
+    apply!(:temperature, :surface, case_temperature)
+    apply!(:boundary_overrides, :surface, components.surface.overrides)
+
+    isempty(shadowed) || @warn(
+        "Model arguments override values defined by the " *
+        "$(nameof(typeof(setup))) setup: $(join(sort(shadowed), ", ")). " *
+        "Pass them via `defaults = (...)` to let the setup win.",
+    )
+
+    return _atmos_model(; grid, params, setup, defaults..., component_kwargs..., kwargs...)
+end
+
+"""
+    initial_state(model::AtmosModel)
+
+Build the initial prognostic state `Y` from the model's setup, params, and
+grid.
+"""
+function initial_state(model::AtmosModel)
+    spaces = get_spaces(model.grid)
+    Y = Setups.initial_state(
+        model.setup,
+        model.params,
+        model,
+        spaces.center_space,
+        spaces.face_space,
+    )
+    Setups.overwrite_initial_state!(
+        model.setup,
+        Y,
+        model.params.thermodynamics_params,
+    )
+    return Y
+end
+
+"""
+    AtmosModel(model::AtmosModel; changes...)
+
+Copy `model`, replacing the given top-level fields (group objects like
+`surface = ...`, or `grid`/`params`/`setup`). Leaf properties are not
+accepted: rebuild the group instead,
+e.g. `AtmosModel(model; surface = AtmosSurface(...))`.
+
+The supported way to swap one component without resetting the others.
+"""
+function AtmosModel(model::AtmosModel; changes...)
+    unknown = setdiff(keys(changes), fieldnames(AtmosModel))
+    if !isempty(unknown)
+        error(
+            "Unknown AtmosModel field(s): $(join(unknown, ", ")). " *
+            "AtmosModel(model; changes...) accepts top-level fields only " *
+            "($(join(fieldnames(AtmosModel), ", "))); to change a leaf " *
+            "property, rebuild its group (e.g. `surface = AtmosSurface(...)`).",
+        )
+    end
+    fields = map(fieldnames(AtmosModel)) do name
+        haskey(changes, name) ? changes[name] : getfield(model, name)
+    end
+    return AtmosModel(fields...)
+end
+
+# NamedTuple of every physics field. Used by checkpoint hashing, `show`, and
+# validation.
+_physics_fields(model::AtmosModel) = (;
+    (
+        name => getfield(model, name) for
+        name in fieldnames(AtmosModel) if !(name in _MODEL_NON_PHYSICS_FIELDS)
+    )...,
+)
+
+"""
+    hash_physics(model::AtmosModel)
+
+Hash of the physics of `model`, ignoring `grid`/`params`/`setup`. Used for
+checkpoint metadata, so restart validation compares physics, not grid or
+parameter objects. Deliberately not a `Base.hash` overload: two models on
+different grids are not equal.
+"""
+hash_physics(model::AtmosModel) = hash(_physics_fields(model))
+
+# When adapting the model to GPU, drop incompatible non physical fields
+function Adapt.adapt_structure(to, model::AtmosModel)
+    fields = map(fieldnames(AtmosModel)) do name
+        name in _MODEL_NON_PHYSICS_FIELDS ? nothing :
+        Adapt.adapt(to, getfield(model, name))
+    end
+    return AtmosModel(fields...)
 end
 
 """

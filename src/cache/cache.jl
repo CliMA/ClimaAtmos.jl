@@ -130,9 +130,7 @@ Adapt.@adapt_structure AtmosCache
 # This is a constant Coriolis frequency that is only used if space is flat
 
 """
-    build_cache(Y, atmos, params, dt, start_date, aerosol_names,
-                time_varying_trace_gas_names, steady_state_velocity,
-                vwb_species = nothing)
+    build_cache(Y, atmos, params, dt, start_date, steady_state_velocity)
 
 Allocate and initialize the `AtmosCache` `p` for the initial state `Y` and model
 configuration `atmos`.
@@ -150,13 +148,8 @@ gravity waves, radiation, tracers).
   - `params`: The `ClimaAtmosParameters`.
   - `dt`: Simulation timestep [s].
   - `start_date`: Simulation start date, used for time-varying inputs and radiation.
-  - `aerosol_names`: Names of prescribed aerosol species to read from file.
-  - `time_varying_trace_gas_names`: Names of time-varying trace gases (e.g. `"CO2"`,
-    `"O3"`).
   - `steady_state_velocity`: Predicted steady-state velocity for the
     `check_steady_state` diagnostic, or `nothing`.
-  - `vwb_species`: Species tuple for the vertical-water-borrowing limiter, or
-    `nothing`.
 
 # Returns
 
@@ -168,13 +161,13 @@ function build_cache(
     params,
     dt,
     start_date,
-    aerosol_names,
-    time_varying_trace_gas_names,
     steady_state_velocity,
-    vwb_species = nothing,
 )
     FT = eltype(params)
     dt = FT(dt)
+
+    aerosol_names = atmos.radiation.aerosol_names
+    time_varying_trace_gas_names = atmos.radiation.time_varying_trace_gases
 
     ᶜcoord = Fields.local_geometry_field(Y.c).coordinates
     ᶠcoord = Fields.local_geometry_field(Y.f).coordinates
@@ -213,7 +206,8 @@ function build_cache(
     end
 
     vertical_water_borrowing_limiter = nothing
-    vertical_water_borrowing_species = vwb_species
+    vertical_water_borrowing_species =
+        atmos.numerics.vertical_water_borrowing_species
 
     if atmos.water.tracer_nonnegativity_method isa TracerNonnegativityVerticalWaterBorrowing
         vertical_water_borrowing_limiter = Limiters.VerticalMassBorrowingLimiter((FT(0.0),))
