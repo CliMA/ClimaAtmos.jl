@@ -303,11 +303,26 @@ function hypsography_function_from_topography(
     return function hypsography(h_grid, z_grid)
         topography isa NoTopography && return Grids.Flat()
 
-        # Create horizontal space to work with topography
+        # Create horizontal space to work with topography. Always build it
+        # CONTINUOUS (CG): the surface elevation is a single-valued physical
+        # field, and on a DG grid the interpolation + element-local
+        # `diffuse_surface_elevation!` (weighted_dss! is a no-op on DG) leave the
+        # terrain multi-valued at shared nodes — up to ~2 km jumps — giving a
+        # discontinuous ∇Z that breaks free-stream over topography. Computing the
+        # surface on a CG view of the same nodes yields the identical continuous
+        # terrain a CG run would use; the DG dynamics then warp onto it.
         h_space = if h_grid isa Grids.SpectralElementGrid1D
-            Spaces.SpectralElementSpace1D(h_grid)
+            dg = Spaces.SpectralElementSpace1D(h_grid)
+            Spaces.SpectralElementSpace1D(
+                Spaces.topology(dg), Spaces.quadrature_style(dg);
+                discretization = Grids.CG(),
+            )
         elseif h_grid isa Grids.SpectralElementGrid2D
-            Spaces.SpectralElementSpace2D(h_grid)
+            dg = Spaces.SpectralElementSpace2D(h_grid)
+            Spaces.SpectralElementSpace2D(
+                Spaces.topology(dg), Spaces.quadrature_style(dg);
+                discretization = Grids.CG(),
+            )
         else
             error("Unsupported horizontal grid type $(typeof(h_grid))")
         end
@@ -340,6 +355,17 @@ function hypsography_function_from_topography(
             @. z_surface = max(z_surface, 0)
         elseif topo_smoothing
             Hypsography.diffuse_surface_elevation!(z_surface)
+        end
+
+        # The surface was interpolated and smoothed on a continuous (CG) space;
+        # transfer those single-valued node values onto the actual (possibly DG)
+        # horizontal grid the adaption requires, so the terrain is continuous
+        # across element boundaries while satisfying the adaption's grid check.
+        if Spaces.grid(axes(z_surface)) !== h_grid
+            z_surface = Fields.Field(
+                copy(Fields.field_values(z_surface)),
+                Spaces.SpectralElementSpace2D(h_grid),
+            )
         end
 
         # Create hypsography from mesh warp type

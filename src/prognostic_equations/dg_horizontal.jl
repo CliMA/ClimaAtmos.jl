@@ -241,6 +241,73 @@ function dg_fddg_tke_advection!(Yₜ, Y, p)
     return nothing
 end
 
+# Level-wise horizontal DG divergence (weak volume term + central interface
+# lifting), the linear operator `hdiv` used by the GCL cross-term commutator.
+function dg_central_weak_divergence(X)
+    lg = Fields.local_geometry_field(axes(X))
+    wd = Operators.Divergence{Operators.WeakForm}()
+    r = @. wd(X) * (-lg.WJ)
+    Operators.add_numerical_flux_interior!(
+        Operators.CentralNumericalFlux(identity),
+        r,
+        X,
+    )
+    return @. -r / lg.WJ
+end
+
+"""
+    set_dg_gcl_ᶠuₕ³!(ᶠuₕ³, ᶜuₕ, ᶜρ)
+
+GCL-consistent (free-stream-preserving) replacement for `compute_ᶠuₕ³` on DG
+horizontal spaces. The chain-form cross-term `ᶠwinterp(ρJ, CT3(uₕ))` applies
+`u·∇Z` with the center `∇Z` and a wide vertical mean, which does not telescope
+against the horizontal operator's terrain metric (`J∇ξ^{1,2} = J_v ⊙ flat`
+with `J_v_c[v] = z_f[v+1] − z_f[v]` exactly): a divergence-free flow over
+terrain then produces a spurious mass source. The commutator form
+
+    F³[face] = −( T̂(z_f ⊙ ŝ) − z_f ⊙ T̂(ŝ) ),   T̂(X) = ᶠJ · hdiv(X ⊘ ᶠJv)
+
+with `ᶠJv = GradientC2F(ᶜz)` (bitwise the stored face `J_v`) telescopes
+exactly: `δ_v(F³)` cancels the horizontal terrain defect, reducing the 3D
+divergence over terrain to the flat-form horizontal divergence (verified to
+the flat baseline; see docs/dg_fd_gcl_crossterm.md and dg_campaign jobs
+37–41). On flat grids the commutator vanishes identically.
+
+The surface and top face levels keep the chain-form value: the vertical mass
+divergence never reads them (`ᶜadvdivᵥ` has zero-flux boundaries), they only
+feed the `u₃` impenetrability filter — where the pointwise `u·∇Z` is the
+consistent tangency condition — and the boundary-face `WJ_v = J_v/2` special
+case makes the commutator inconsistent by 2× there.
+"""
+function set_dg_gcl_ᶠuₕ³!(ᶠuₕ³, ᶜuₕ, ᶜρ)
+    FT = Spaces.undertype(axes(ᶠuₕ³))
+    face_space = axes(ᶠuₕ³)
+    center_space = axes(ᶜρ)
+    ᶜz = Fields.coordinate_field(center_space).z
+    ᶠz = Fields.coordinate_field(face_space).z
+    ᶜJ = Fields.local_geometry_field(center_space).J
+    ᶠJ = Fields.local_geometry_field(face_space).J
+    gradᵥ_c2f = Operators.GradientC2F(;
+        bottom = Operators.SetGradient(Geometry.WVector(FT(1))),
+        top = Operators.SetGradient(Geometry.WVector(FT(1))),
+    )
+    ᶠ∇z = @. gradᵥ_c2f(ᶜz)
+    ᶠJv = ᶠ∇z.components.data.:1    # z_c[v] − z_c[v−1] at interior faces
+    ᶜuv = @. Geometry.UVVector(ᶜuₕ)
+    ᶠs = @. ᶠinterp(ᶜρ * ᶜuv)       # face horizontal mass flux
+    h1 = dg_central_weak_divergence(@. ᶠz * ᶠs / ᶠJv)
+    h2 = dg_central_weak_divergence(@. ᶠs / ᶠJv)
+    ᶠρJ = @. ᶠinterp(ᶜρ * ᶜJ)
+    ᶠuₕ³_gcl = @. CT3(ᶠJ * (ᶠz * h2 - h1) / ᶠρJ)
+    # chain form everywhere (supplies the boundary-face values), then the
+    # commutator form at interior faces
+    @. ᶠuₕ³ = ᶠwinterp(ᶜρ * ᶜJ, CT3(ᶜuₕ))
+    for i in 1:(Spaces.nlevels(center_space) - 1)
+        Fields.level(ᶠuₕ³, i + half) .= Fields.level(ᶠuₕ³_gcl, i + half)
+    end
+    return nothing
+end
+
 """
     dg_ω³!(ᶜω³, Y)
 
@@ -303,7 +370,7 @@ components. Coriolis, all vertical terms, and tracer advection are unchanged.
 NVTX.@annotate function dg_fddg_horizontal_dynamics!(Yₜ, Y, p, t)
     FT = Spaces.undertype(axes(Y.c))
     (; ᶜΦ) = p.core
-    (; ᶜp) = p.precomputed
+    (; ᶜp, ᶜK) = p.precomputed
     thermo_params = CAP.thermodynamics_params(p.params)
     coords = Fields.coordinate_field(axes(Y.c))
     ᶜWJ = Fields.local_geometry_field(Y.c).WJ
@@ -362,7 +429,8 @@ NVTX.@annotate function dg_fddg_horizontal_dynamics!(Yₜ, Y, p, t)
         # rusanov = full |u|+c interface dissipation (stronger grid-scale noise
         # control than roe's ~5% contact floor — needed when no hyperdiffusion
         # is present, e.g. to keep EDMFX TKE production bounded over terrain).
-        kg_interface = p.atmos.numerics.dg_interface_flux === Val(:rusanov) ?
+        kg_interface =
+            p.atmos.numerics.dg_interface_flux === Val(:rusanov) ?
             kennedy_gruber_rusanov_cartesian : kennedy_gruber_roe_cartesian
         Operators.add_numerical_flux_interior!(kg_interface, dy, y)
     else
@@ -401,5 +469,13 @@ NVTX.@annotate function dg_fddg_horizontal_dynamics!(Yₜ, Y, p, t)
             Geometry.UVVector(duE, duN),
         ),
     )
+    # Metric-exact KE-gradient split. The flux-form advects the physical
+    # horizontal velocity ᶜuv, so it carries only gradₕ(½|uᵥ|²); the vertical
+    # ᶠgradᵥ(ᶜK) uses the full ᶜK. Add the missing horizontal gradient of the
+    # vertical kinetic energy, gradₕ(ᶜK − ½|uᵥ|²) = gradₕ(½w²), so uₕ and u₃ see
+    # the two components of one ∇ᶜK (as in CG). Zero at rest and negligible where
+    # w is small (flat); nonzero only for vertical motion over terrain.
+    @. Yₜ.c.uₕ -=
+        C12(gradₕ(ᶜK - FT(1 // 2) * LinearAlgebra.norm_sqr(ᶜuv)))
     return nothing
 end

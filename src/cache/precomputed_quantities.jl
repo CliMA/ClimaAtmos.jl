@@ -704,7 +704,15 @@ NVTX.@annotate function set_implicit_precomputed_quantities!(Y, p, t)
     n = n_mass_flux_subdomains(turbconv_model)
     thermo_params = CAP.thermodynamics_params(p.params)
 
-    @. ᶠuₕ³ = $compute_ᶠuₕ³(Y.c.uₕ, Y.c.ρ)
+    if is_dg_horizontal(axes(Y.c))
+        # GCL-consistent cross-term: free-stream preserving over terrain for
+        # the DG-horizontal / FD-vertical operator pair (see
+        # docs/dg_fd_gcl_crossterm.md); the chain form below does not
+        # telescope against the horizontal operator's terrain metric.
+        set_dg_gcl_ᶠuₕ³!(ᶠuₕ³, Y.c.uₕ, Y.c.ρ)
+    else
+        @. ᶠuₕ³ = $compute_ᶠuₕ³(Y.c.uₕ, Y.c.ρ)
+    end
 
     # TODO: We might want to move this to constrain_state!
     if !(p.atmos.prescribed_flow isa PrescribedFlow)
