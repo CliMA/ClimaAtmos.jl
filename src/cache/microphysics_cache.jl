@@ -950,6 +950,10 @@ function set_microphysics_tendency_cache!(
     return nothing
 end
 
+
+unwrap_value(::Val{vals}) where {vals} = vals
+unwrap_value(x) = x
+
 function set_microphysics_tendency_cache!(
     Y, p, mp1m::NonEquilibriumMicrophysics1M, tm::PrognosticEDMFX,
 )
@@ -987,37 +991,78 @@ function set_microphysics_tendency_cache!(
     ᶜq_icl⁰ = p.scratch.ᶜtemp_scalar_3
     ᶜq_rai⁰ = p.scratch.ᶜtemp_scalar_4
     ᶜq_sno⁰ = p.scratch.ᶜtemp_scalar_5
-    @. ᶜρ⁰ = TD.air_density(thp, ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰)
+
     ᶜq_lcl⁰ .= ᶜspecific_env_value(@name(q_lcl), Y, p)
     ᶜq_icl⁰ .= ᶜspecific_env_value(@name(q_icl), Y, p)
     ᶜq_rai⁰ .= ᶜspecific_env_value(@name(q_rai), Y, p)
     ᶜq_sno⁰ .= ᶜspecific_env_value(@name(q_sno), Y, p)
     sgs_quad = p.atmos.sgs_quadrature
-    if not_quadrature(sgs_quad)
-        @. ᶜmp_tendency⁰ = microphysics_tendencies_1m(
-            ᶜρ⁰, ᶜq_tot_nonneg⁰, ᶜq_lcl⁰, ᶜq_icl⁰, ᶜq_rai⁰, ᶜq_sno⁰,
-            ᶜT⁰, cmp, thp, dt, nsubs,
-        )
-    else
-        (; ᶜT′T′, ᶜq′q′, ᶜsgs_moments) = p.precomputed
-        corr_Tq = correlation_Tq(p.params)
-        α = sgs_variance_fidelity(CAP.cloud_fraction_steepness_scale(p.params))
-        # The liquid fraction `λ` and the linearized SGS saturation-excess mean
-        # `mu_S` are held fixed across the quadrature (they depend only on the mean
-        # state), so compute them once here and pass them in, instead of recomputing
-        # them inside every quadrature evaluation.
-        ᶜλ⁰ = p.scratch.ᶜtemp_scalar_6
-        ᶜmu_S⁰ = p.scratch.ᶜtemp_scalar_7
-        @. ᶜλ⁰ = TD.liquid_fraction(thp, ᶜT⁰, max(0, ᶜq_lcl⁰), max(0, ᶜq_icl⁰))
-        @. ᶜmu_S⁰ = ᶜq_tot_nonneg⁰ - TD.q_vap_saturation(thp, ᶜT⁰, ᶜρ⁰)
-        @. ᶜmp_tendency⁰ = microphysics_tendencies_1m(
-            BMT.Microphysics1Moment(), sgs_quad, cmp, thp, ᶜρ⁰, ᶜT⁰,
-            ᶜq_tot_nonneg⁰, ᶜq_lcl⁰, ᶜq_icl⁰, ᶜq_rai⁰, ᶜq_sno⁰,
-            ᶜT′T′, ᶜq′q′, corr_Tq, ᶜsgs_moments.λ_lagrange, α,
-            dt, nsubs_quad, ᶜλ⁰, ᶜmu_S⁰,
-        )
-    end
 
+    (; ᶜT′T′, ᶜq′q′, ᶜsgs_moments) = p.precomputed
+
+    # Wrap all arguments in data layouts
+
+    ᶜsgs_moments_λ_lagrange = ᶜsgs_moments.λ_lagrange
+
+    corr_Tq = correlation_Tq(p.params)
+    α = sgs_variance_fidelity(CAP.cloud_fraction_steepness_scale(p.params))
+    let thp_val=Val(thp), cmp_val=Val(cmp), dt=dt, nsubs=nsubs, nsubs_quad=nsubs_quad,
+        sgs_quad=sgs_quad, corr_Tq=corr_Tq, α=α
+
+        DataLayouts.foreach_point(
+            ᶜmp_tendency⁰,
+            ᶜρ⁰,
+            ᶜq_tot_nonneg⁰,
+            ᶜq_lcl⁰,
+            ᶜq_icl⁰,
+            ᶜq_rai⁰,
+            ᶜq_sno⁰,
+            ᶜT⁰,
+            ᶜT′T′,
+            ᶜq′q′,
+            ᶜsgs_moments,
+            ᶜp,
+            ᶜq_liq⁰,
+            ᶜq_ice⁰,
+        ) do ᶜmp_tendency⁰,
+        ᶜρ⁰,
+        ᶜq_tot_nonneg⁰,
+        ᶜq_lcl⁰,
+        ᶜq_icl⁰,
+        ᶜq_rai⁰,
+        ᶜq_sno⁰,
+        ᶜT⁰,
+        ᶜT′T′,
+        ᶜq′q′,
+        ᶜsgs_moments,
+        ᶜp,
+        ᶜq_liq⁰,
+        ᶜq_ice⁰
+            thp_in = unwrap_value(thp_val)
+            cmp_in = unwrap_value(cmp_val)
+
+            ᶜρ⁰ = @. TD.air_density(thp_in, ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰)
+            if not_quadrature(sgs_quad)
+                @. ᶜmp_tendency⁰ = microphysics_tendencies_1m(
+                    ᶜρ⁰, ᶜq_tot_nonneg⁰, ᶜq_lcl⁰, ᶜq_icl⁰, ᶜq_rai⁰, ᶜq_sno⁰,
+                    ᶜT⁰, $cmp_in, $thp_in, dt, nsubs,
+                )
+            else
+                # The liquid fraction `λ` and the linearized SGS saturation-excess mean
+                # `mu_S` are held fixed across the quadrature (they depend only on the mean
+                # state), so compute them once here and pass them in, instead of recomputing
+                # them inside every quadrature evaluation.
+                ᶜλ⁰ = @. TD.liquid_fraction(thp_in, ᶜT⁰, max(0, ᶜq_lcl⁰), max(0, ᶜq_icl⁰))
+                ᶜmu_S⁰ = @. ᶜq_tot_nonneg⁰ - TD.q_vap_saturation(thp_in, ᶜT⁰, ᶜρ⁰)
+                @. ᶜmp_tendency⁰ = microphysics_tendencies_1m(
+                    BMT.Microphysics1Moment(), sgs_quad, cmp_in, thp_in, ᶜρ⁰, ᶜT⁰,
+                    ᶜq_tot_nonneg⁰, ᶜq_lcl⁰, ᶜq_icl⁰, ᶜq_rai⁰, ᶜq_sno⁰,
+                    ᶜT′T′, ᶜq′q′, corr_Tq, ᶜsgs_moments.λ_lagrange, α,
+                    dt, nsubs_quad, ᶜλ⁰, ᶜmu_S⁰,
+                )
+            end
+        end
+    end
     return nothing
 end
 
