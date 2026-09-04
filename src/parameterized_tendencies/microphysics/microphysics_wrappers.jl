@@ -262,12 +262,12 @@ struct Microphysics1MEvaluator{S, MP, TPS, FT, Args <: Tuple}
     # parameter structs live in the type domain (type parameters `MP`/`TPS`),
     # not in the evaluator's fields.
     function Microphysics1MEvaluator(
-        scheme::S, ::Val{MP}, ::Val{TPS}, ρ::FT,
+        scheme::S, mp, tps, ρ::FT,
         q_rai::FT, q_sno::FT,
         λ::FT, λ_lagrange::FT, mu_S::FT, α::FT,
         dt::FT, nsubs::Int, args::Args,
     ) where {S, MP, TPS, FT, Args <: Tuple}
-        return new{S, MP, TPS, FT, Args}(
+        return new{S, mp, tps, FT, Args}(
             scheme, ρ, q_rai, q_sno, λ, λ_lagrange, mu_S, α, dt, nsubs, args,
         )
     end
@@ -424,7 +424,7 @@ end
     q_sno_nonneg = max(FT(0), q_sno)
 
     evaluator = Microphysics1MEvaluator(
-        scheme, Val(cmp), Val(thp), ρ,
+        scheme, cmp, thp, ρ,
         q_rai_nonneg, q_sno_nonneg,
         λ, λ_lagrange, mu_S, α,
         dt, nsubs, args,
