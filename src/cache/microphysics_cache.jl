@@ -1006,8 +1006,38 @@ function set_microphysics_tendency_cache!(
 
     corr_Tq = correlation_Tq(p.params)
     α = sgs_variance_fidelity(CAP.cloud_fraction_steepness_scale(p.params))
-    let thp_val=Val(thp), cmp_val=Val(cmp), dt=dt, nsubs=nsubs, nsubs_quad=nsubs_quad, sgs_quad=sgs_quad, corr_Tq=corr_Tq, α=α
-        DataLayouts.foreach_point(ᶜmp_tendency⁰, ᶜρ⁰, ᶜq_tot_nonneg⁰, ᶜq_lcl⁰, ᶜq_icl⁰, ᶜq_rai⁰, ᶜq_sno⁰, ᶜT⁰, ᶜT′T′, ᶜq′q′, ᶜsgs_moments, ᶜp, ᶜq_liq⁰, ᶜq_ice⁰) do ᶜmp_tendency⁰, ᶜρ⁰, ᶜq_tot_nonneg⁰, ᶜq_lcl⁰, ᶜq_icl⁰, ᶜq_rai⁰, ᶜq_sno⁰, ᶜT⁰, ᶜT′T′, ᶜq′q′, ᶜsgs_moments, ᶜp, ᶜq_liq⁰, ᶜq_ice⁰
+    let thp_val=Val(thp), cmp_val=Val(cmp), dt=dt, nsubs=nsubs, nsubs_quad=nsubs_quad,
+        sgs_quad=sgs_quad, corr_Tq=corr_Tq, α=α
+
+        DataLayouts.foreach_point(
+            ᶜmp_tendency⁰,
+            ᶜρ⁰,
+            ᶜq_tot_nonneg⁰,
+            ᶜq_lcl⁰,
+            ᶜq_icl⁰,
+            ᶜq_rai⁰,
+            ᶜq_sno⁰,
+            ᶜT⁰,
+            ᶜT′T′,
+            ᶜq′q′,
+            ᶜsgs_moments,
+            ᶜp,
+            ᶜq_liq⁰,
+            ᶜq_ice⁰,
+        ) do ᶜmp_tendency⁰,
+        ᶜρ⁰,
+        ᶜq_tot_nonneg⁰,
+        ᶜq_lcl⁰,
+        ᶜq_icl⁰,
+        ᶜq_rai⁰,
+        ᶜq_sno⁰,
+        ᶜT⁰,
+        ᶜT′T′,
+        ᶜq′q′,
+        ᶜsgs_moments,
+        ᶜp,
+        ᶜq_liq⁰,
+        ᶜq_ice⁰
             thp_in = unwrap_value(thp_val)
             cmp_in = unwrap_value(cmp_val)
 
