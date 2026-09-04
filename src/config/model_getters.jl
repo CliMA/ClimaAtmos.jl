@@ -533,7 +533,6 @@ key.
   - `"raw_topo"` or `"gfdl_restart"`: `FullOrographicGravityWave`, parameterized by the
     source of the subgrid topography statistics and by the `topography` key, with
     coefficients from `params.orographic_gravity_wave_params`.
-  - `"linear"`: `LinearOrographicGravityWave`.
 
 Any other value raises an error.
 """
@@ -558,11 +557,9 @@ function get_orographic_gravity_wave_model(parsed_args, params, ::Type{FT}) wher
             topo_info,
             topography,
         )
-    elseif ogw_name == "linear"
-        LinearOrographicGravityWave(; topo_info = Val(:linear))
     else
         error(
-            """Unknown orographic_gravity_wave `$ogw_name`. Expected: ~, "gfdl_restart", "raw_topo", or "linear".""",
+            """Unknown orographic_gravity_wave `$ogw_name`. Expected: ~, "gfdl_restart", or "raw_topo".""",
         )
     end
 end
