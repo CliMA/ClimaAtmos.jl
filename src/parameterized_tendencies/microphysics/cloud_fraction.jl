@@ -309,32 +309,86 @@ function set_covariance_cache!(Y, p, thermo_params)
     # to nearly dry air get σ_q ≫ q_tot, the clamped quadrature then samples more
     # total water than the grid mean holds, and condensing it can drive the
     # grid-mean vapour negative (observed as a NaN at C_h = 1 without the bound).
-    # An optional smooth latitude ramp (`sgs_variance_hgrad_min_abs_lat` > 0)
-    # restricts the source to the extratropics; it exists only for attribution
-    # experiments and is off by default.
+    # Optional smooth ramps restrict the source to the extratropics
+    # (`sgs_variance_hgrad_min_abs_lat` > 0) and/or to above the boundary layer
+    # (`sgs_variance_hgrad_min_height` > 0, height above the surface); both exist
+    # for attribution/calibration experiments and are off by default.
     C_h = CAP.sgs_variance_coeff_hgrad(p.params)
     if C_h > 0
         (; ᶜq_tot_nonneg) = p.precomputed
-        FT = eltype(ᶜq′q′)
         Δ_h = Spaces.node_horizontal_length_scale(Spaces.horizontal_space(axes(Y.c)))
         r_max = CAP.sgs_variance_max_rel_std(p.params)
         lat_min = CAP.sgs_variance_hgrad_min_abs_lat(p.params)
-        ramp(x) = x * x * (3 - 2 * x)  # smoothstep on [0, 1]
-        ᶜlat = Fields.coordinate_field(axes(Y.c)).lat
+        z_min = CAP.sgs_variance_hgrad_min_height(p.params)
+        ᶜcoord = Fields.coordinate_field(Y.c)
+        z_sfc = Fields.level(Fields.coordinate_field(Y.f).z, Fields.half)
+        # Materialize the spectral gradient first: a surface-level field
+        # (`z_sfc`) cannot be broadcast together with a spectral operator.
+        ᶜ∇q_sq = p.scratch.ᶜtemp_scalar_5
+        @. ᶜ∇q_sq = norm_sqr(gradₕ(ᶜq_tot_nonneg))
         @. ᶜq′q′ = min(
             ᶜq′q′ +
-            ifelse(
-                lat_min > 0,
-                ramp(clamp((abs(ᶜlat) - lat_min) / FT(15), FT(0), FT(1))),
-                FT(1),
-            ) *
+            hgrad_lat_weight(ᶜcoord.lat, lat_min) *
+            hgrad_height_weight(ᶜcoord.z, z_sfc, z_min) *
             C_h *
             Δ_h^2 *
-            norm_sqr(gradₕ(ᶜq_tot_nonneg)),
+            ᶜ∇q_sq,
             (r_max * ᶜq_tot_nonneg)^2,
         )
     end
     return nothing
+end
+
+# Smoothstep ramp from 0 at x = 0 to 1 at x = 1 (x already clamped to [0, 1]).
+@inline smoothstep(x) = x * x * (3 - 2 * x)
+
+"""
+    hgrad_lat_weight(lat, lat_min)
+
+Latitude weight of the horizontal-gradient SGS variance source: `0` for
+`|lat| ≤ lat_min`, `1` for `|lat| ≥ lat_min + 15°`, smoothstep in between, and
+`1` everywhere when the mask is off (`lat_min ≤ 0`). Shared by the variance
+source and the regional cloud-fraction steepness (`ᶜsgs_variance_fidelity`).
+"""
+@inline function hgrad_lat_weight(lat::FT, lat_min::FT) where {FT}
+    lat_min > 0 || return one(FT)
+    return smoothstep(clamp((abs(lat) - lat_min) / FT(15), zero(FT), one(FT)))
+end
+
+"""
+    hgrad_height_weight(z, z_sfc, z_min)
+
+Height weight of the horizontal-gradient SGS variance source: `0` at and below
+`z_min` above the surface, `1` from `z_min + 1000 m` up, smoothstep in between,
+and `1` everywhere when the gate is off (`z_min ≤ 0`). Keeps the source out of
+the boundary layer, where the gradient*mixing-length closure already provides
+variance and where extra variance over-condenses liquid.
+"""
+@inline function hgrad_height_weight(z::FT, z_sfc::FT, z_min::FT) where {FT}
+    z_min > 0 || return one(FT)
+    return smoothstep(clamp((z - z_sfc - z_min) / FT(1000), zero(FT), one(FT)))
+end
+
+"""
+    ᶜsgs_variance_fidelity(p, space)
+
+Variance-fidelity parameter `α` used by the cloud-fraction closure and the
+quadrature condensate reconstruction. Returns the scalar
+`sgs_variance_fidelity(cloud_fraction_steepness_scale)` unless
+`cloud_fraction_steepness_scale_hgrad > 0` and the horizontal-gradient variance
+source is latitude-masked, in which case `α` is a lazy field that blends, with
+the source's own latitude weight, from the global value outside the source
+region to `1 / cloud_fraction_steepness_scale_hgrad` inside it — so the
+cloud-fraction width can be re-tuned only where the extra variance acts.
+"""
+function ᶜsgs_variance_fidelity(p, space)
+    α = sgs_variance_fidelity(CAP.cloud_fraction_steepness_scale(p.params))
+    steepness_in = CAP.cloud_fraction_steepness_scale_hgrad(p.params)
+    lat_min = CAP.sgs_variance_hgrad_min_abs_lat(p.params)
+    (steepness_in > 0 && lat_min > 0) || return α
+    α_in = sgs_variance_fidelity(steepness_in)
+    ᶜlat = Fields.coordinate_field(space).lat
+    return @. lazy(α + (α_in - α) * hgrad_lat_weight(ᶜlat, lat_min))
 end
 
 
@@ -860,7 +914,7 @@ NVTX.@annotate function set_sgs_moments_and_cloud_fraction!(Y, p)
     sgs_quad = p.atmos.sgs_quadrature
     corr_Tq = correlation_Tq(p.params)
     FT = eltype(p.params)
-    α = sgs_variance_fidelity(CAP.cloud_fraction_steepness_scale(p.params))
+    α = ᶜsgs_variance_fidelity(p, axes(Y.c))
     floor = cloud_fraction_floor_params(p.params)
     (; ᶜT′T′, ᶜq′q′) = p.precomputed
 
@@ -970,7 +1024,7 @@ NVTX.@annotate function set_cloud_fraction!(
     sgs_quad = p.atmos.sgs_quadrature
     corr_Tq = correlation_Tq(p.params)
     FT = eltype(p.params)
-    α = sgs_variance_fidelity(CAP.cloud_fraction_steepness_scale(p.params))
+    α = ᶜsgs_variance_fidelity(p, axes(Y.c))
     floor = cloud_fraction_floor_params(p.params)
 
     (; ᶜT′T′, ᶜq′q′) = p.precomputed

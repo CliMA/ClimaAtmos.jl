@@ -140,6 +140,17 @@ not yet define. `FT` is the float type; `VFT1`, `VFT2`, and `VTF3` are the
     attribution experiments that separate the in-place extratropical response from
     remote effects of tropical over-condensation. `0` disables the mask (default);
     experimental [degrees].
+  - `sgs_variance_hgrad_min_height`: If positive, the horizontal-gradient variance
+    source is additionally restricted to above the boundary layer with a smooth
+    (smoothstep) ramp in height above the surface from `sgs_variance_hgrad_min_height`
+    (weight 0) to `sgs_variance_hgrad_min_height + 1000` m (weight 1). `0` disables
+    the gate (default); experimental [m].
+  - `cloud_fraction_steepness_scale_hgrad`: If positive (and the horizontal-gradient
+    source is latitude-masked), the cloud-fraction steepness scale used inside the
+    masked source region, blended with the source's latitude weight from
+    `cloud_fraction_steepness_scale` outside it. Lets the cloud-fraction width be
+    re-tuned only where the extra variance acts. `0` disables (default);
+    experimental [-].
   - `Tq_correlation_coefficient`: Default correlation between `T'` and `q_tot'`
     in the SGS quadrature, in `[-1, 1]` [-].
   - `static_stab_coeff`: Static stability coefficient `c_b` of the mixing-length
@@ -229,6 +240,8 @@ Base.@kwdef struct TurbulenceConvectionParameters{FT, VFT1, VFT2, VTF3} <: ATCP
     sgs_variance_coeff_hgrad::FT
     sgs_variance_max_rel_std::FT
     sgs_variance_hgrad_min_abs_lat::FT
+    sgs_variance_hgrad_min_height::FT
+    cloud_fraction_steepness_scale_hgrad::FT
     Tq_correlation_coefficient::FT
     static_stab_coeff::FT
     Prandtl_number_scale::FT

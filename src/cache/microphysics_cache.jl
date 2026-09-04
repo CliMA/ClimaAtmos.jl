@@ -938,7 +938,7 @@ function set_microphysics_tendency_cache!(
     else
         (; ᶜT′T′, ᶜq′q′, ᶜsgs_moments) = p.precomputed
         corr_Tq = correlation_Tq(p.params)
-        α = sgs_variance_fidelity(CAP.cloud_fraction_steepness_scale(p.params))
+        α = ᶜsgs_variance_fidelity(p, axes(Y.c))
         @. ᶜmp_tendency = microphysics_tendencies_1m(
             BMT.Microphysics1Moment(), sgs_quad, cmp, thp, Y.c.ρ, ᶜT,
             ᶜq_tot_nonneg, ᶜq_lcl, ᶜq_icl, ᶜq_rai, ᶜq_sno,
@@ -1001,7 +1001,7 @@ function set_microphysics_tendency_cache!(
     else
         (; ᶜT′T′, ᶜq′q′, ᶜsgs_moments) = p.precomputed
         corr_Tq = correlation_Tq(p.params)
-        α = sgs_variance_fidelity(CAP.cloud_fraction_steepness_scale(p.params))
+        α = ᶜsgs_variance_fidelity(p, axes(Y.c))
         # The liquid fraction `λ` and the linearized SGS saturation-excess mean
         # `mu_S` are held fixed across the quadrature (they depend only on the mean
         # state), so compute them once here and pass them in, instead of recomputing

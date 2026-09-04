@@ -553,6 +553,8 @@ function TurbulenceConvectionParameters(
         sgs_variance_coeff_hgrad = FT(0),
         sgs_variance_max_rel_std = FT(0.5),
         sgs_variance_hgrad_min_abs_lat = FT(0),
+        sgs_variance_hgrad_min_height = FT(0),
+        cloud_fraction_steepness_scale_hgrad = FT(0),
         cloud_fraction_floor_release_margin = FT(1),
         cloud_fraction_floor_release_abs_margin = FT(1),
         cloud_fraction_floor_release_sharpness = FT(1),
