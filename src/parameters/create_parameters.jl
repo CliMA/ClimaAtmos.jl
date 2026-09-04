@@ -203,6 +203,7 @@ atmos_name_map = (;
     :equator_pole_temperature_gradient_dry => :ΔT_y_dry,
     :held_suarez_T_equator_wet => :T_equator_wet,
     :zd_rayleigh => :zd_rayleigh,
+    :reference_temperature_exponent => :s_ref,
     :zd_viscous => :zd_viscous,
     :planet_radius => :planet_radius,
     :potential_temp_vertical_gradient => :Δθ_z,

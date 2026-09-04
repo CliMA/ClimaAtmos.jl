@@ -11,15 +11,6 @@
 #####
 
 # TODO: Make sure this is consistent with the function in Thermodynamics.jl.
-# Once PR is merged in ClimaParams, import from there.
-# https://github.com/CliMA/ClimaParams.jl/pull/253
-"""
-    s_ref
-
-Exponent of the Exner function in the reference temperature profile
-`T_r(p) = T_min + (T_sfc - T_min) Π(p)^s_ref` [-].
-"""
-const s_ref = 7
 
 """
     RH_ref
@@ -63,7 +54,7 @@ function theta_v(thermo_params, T, p, q_tot, q_liq, q_ice)
 end
 
 """
-    air_temperature_reference(thermo_params, p)
+    air_temperature_reference(thermo_params, s_ref, p)
 
 Compute the reference-state air temperature at pressure `p` [K].
 
@@ -74,9 +65,9 @@ at `p = p_ref` and the reference minimum temperature `T_min_ref` aloft,
 T_r(p) = T_\\mathrm{min} + (T_\\mathrm{sfc} - T_\\mathrm{min})\\, Π(p)^{s_\\mathrm{ref}},
 ```
 
-with `Π` the Exner function and `s_ref` the exponent defined in this file.
+with `Π` the Exner function and `s_ref` the exponent of the profile, defined as ClimaParams parameter `reference_temperature_exponent`.
 """
-function air_temperature_reference(thermo_params, p)
+function air_temperature_reference(thermo_params, s_ref, p)
     T_min = TD.TP.T_min_ref(thermo_params)
     T_sfc = TD.TP.T_surf_ref(thermo_params)
 
@@ -86,7 +77,7 @@ function air_temperature_reference(thermo_params, p)
 end
 
 """
-    theta_vr(thermo_params, p)
+    theta_vr(thermo_params, s_ref, p)
 
 Compute the reference-state virtual potential temperature `θ_vr = T_r / Π` [K].
 
@@ -94,14 +85,14 @@ The reference state is dry, so its virtual and actual temperatures coincide.
 Subtracting `θ_vr` from `theta_v` gives the perturbation that enters the
 split-form horizontal pressure gradient.
 """
-function theta_vr(thermo_params, p)
-    T_r = air_temperature_reference(thermo_params, p)
+function theta_vr(thermo_params, s_ref, p)
+    T_r = air_temperature_reference(thermo_params, s_ref, p)
     Π = TD.exner_given_pressure(thermo_params, p)
     return T_r / Π
 end
 
 """
-    phi_r(thermo_params, p)
+    phi_r(thermo_params, s_ref, p)
 
 Compute the geopotential of the hydrostatic reference state at pressure `p`
 [m²/s²].
@@ -119,7 +110,7 @@ normalization `Φ_r = 0` at `Π = 1`, gives
 Only the gradient of `Φ - Φ_r` enters the momentum tendency, so the choice of
 normalization constant is immaterial.
 """
-function phi_r(thermo_params, p)
+function phi_r(thermo_params, s_ref, p)
     cp_d = TD.TP.cp_d(thermo_params)
     T_min = TD.TP.T_min_ref(thermo_params)
     T_sfc = TD.TP.T_surf_ref(thermo_params)
@@ -130,16 +121,16 @@ function phi_r(thermo_params, p)
 end
 
 """
-    q_tot_r(thermo_params, p)
+    q_tot_r(thermo_params, s_ref, p)
 
 Compute the reference-state total specific humidity
 `q_tot_r(p) = RH_ref · q_sat(T_r, ρ_r)` for `p ≥ p_q_tot_r_cutoff` and zero
 above [kg/kg], with the dry reference-state density `ρ_r = p / (R_d T_r)` and
 saturation over liquid.
 """
-function q_tot_r(thermo_params, p)
+function q_tot_r(thermo_params, s_ref, p)
     R_d = TD.TP.R_d(thermo_params)
-    T_r = air_temperature_reference(thermo_params, p)
+    T_r = air_temperature_reference(thermo_params, s_ref, p)
     ρ_r = p / (R_d * T_r)
     return ifelse(
         p < oftype(p, p_q_tot_r_cutoff),
@@ -150,17 +141,17 @@ function q_tot_r(thermo_params, p)
 end
 
 """
-    sd_r(thermo_params, p)
+    sd_r(thermo_params, s_ref, p)
 
 Compute the dry static energy of the reference state at pressure `p`,
 `s_{d,r}(p) = cp_d (T_r(p) - T_0) + Φ_r(p)` [J/kg], where `T_r(p)` is the
 reference temperature and `Φ_r(p)` is the reference geopotential (both pure
 functions of `p`; see `air_temperature_reference` and `phi_r`).
 """
-function sd_r(thermo_params, p)
+function sd_r(thermo_params, s_ref, p)
     T_0 = TD.TP.T_0(thermo_params)
     cp_d = TD.TP.cp_d(thermo_params)
 
-    T_r = air_temperature_reference(thermo_params, p)
-    return cp_d * (T_r - T_0) + phi_r(thermo_params, p)
+    T_r = air_temperature_reference(thermo_params, s_ref, p)
+    return cp_d * (T_r - T_0) + phi_r(thermo_params, s_ref, p)
 end

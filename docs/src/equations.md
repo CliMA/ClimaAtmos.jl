@@ -244,15 +244,15 @@ T_r(\Pi) = T_{\min} + (T_{sfc} - T_{\min}) \Pi^{n_s} ,
 ```
 
 which passes smoothly from ``T_{sfc}`` at the surface to ``T_{\min}`` in the
-stratosphere. Two of the three numbers in it are configurable:
+stratosphere. All three numbers in it are ClimaParams parameters, which can be
+overridden like any other parameter through a TOML file; see
+[Creating custom configurations](configuration.md):
 
-  - ``T_{sfc}`` and ``T_{\min}`` are Thermodynamics parameters, defaulting to
-    290 K and 220 K. Override them like any other parameter, through the
-    `temperature_surface_reference` and `temperature_min_reference` entries of a
-    TOML file; see [Creating custom configurations](configuration.md).
-  - ``n_s`` is the exponent `s_ref`, fixed at 7 by a constant in
-    `src/utils/refstate_thermodynamics.jl`. Changing it requires editing the
-    source.
+  - ``T_{sfc}`` and ``T_{\min}`` are the Thermodynamics parameters
+    `temperature_surface_reference` and `temperature_min_reference`, defaulting
+    to 290 K and 220 K.
+  - ``n_s`` is the exponent `s_ref`, the parameter
+    `reference_temperature_exponent`, defaulting to 7. It must be an integer.
 
 With ``\theta_{v,r} = T_r / \Pi`` and
 

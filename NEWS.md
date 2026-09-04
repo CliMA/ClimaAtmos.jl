@@ -3,6 +3,11 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- Read the exponent `s_ref` of the hydrostatic reference temperature profile
+  from the ClimaParams parameter `reference_temperature_exponent` (default 7),
+  exposed as `CAP.s_ref(params)` and passed to the reference-state functions in
+  `refstate_thermodynamics.jl`, instead of a hard-coded constant. The exponent
+  is stored as an `Int`, so results are unchanged.
 
 0.42.9
 -------

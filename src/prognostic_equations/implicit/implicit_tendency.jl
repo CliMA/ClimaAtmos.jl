@@ -189,6 +189,7 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     (; ᶠgradᵥ_ᶜΦ) = p.core
     (; ᶠu³, ᶜp, ᶜh_tot, ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice) = p.precomputed
     thermo_params = CAP.thermodynamics_params(params)
+    s_ref = CAP.s_ref(params)
     cp_d = CAP.cp_d(params)
 
     # Mass advection with zero flux through the top and bottom
@@ -282,10 +283,10 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     vertical_advection_of_water_tendency!(Yₜ, Y, p, t)
 
     # This is equivalent to grad_v(Φ) + grad_v(p) / ρ
-    ᶜΦ_r = @. lazy(phi_r(thermo_params, ᶜp))
+    ᶜΦ_r = @. lazy(phi_r(thermo_params, s_ref, ᶜp))
     ᶜθ_v = p.scratch.ᶜtemp_scalar
     @. ᶜθ_v = theta_v(thermo_params, ᶜT, ᶜp, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice)
-    ᶜθ_vr = @. lazy(theta_vr(thermo_params, ᶜp))
+    ᶜθ_vr = @. lazy(theta_vr(thermo_params, s_ref, ᶜp))
     ᶜΠ = @. lazy(TD.exner_given_pressure(thermo_params, ᶜp))
     @. Yₜ.f.u₃ -= ᶠgradᵥ_ᶜΦ - ᶠgradᵥ(ᶜΦ_r) +
                   cp_d * (ᶠinterp(ᶜθ_v - ᶜθ_vr)) * ᶠgradᵥ(ᶜΠ)
