@@ -148,7 +148,7 @@ end
     @test model.microphysics_model isa CA.EquilibriumMicrophysics0M
 end
 
-@testset "Binds grid/params/setup and derives traits" begin
+@testset "Binds grid/params/setup and derives components" begin
     setup = bomex_setup()
     model = make_model(; setup)
 
@@ -156,7 +156,7 @@ end
     @test model.params === TEST_PARAMS
     @test model.setup === setup
 
-    # Bomex's trait hooks are applied at construction (issue 06)
+    # Bomex's component hooks are applied at construction (issue 06)
     @test model.subsidence isa CA.LargeScaleSubsidence
     @test model.ls_adv isa CA.LargeScaleAdvection
     @test !isnothing(model.scm_coriolis)
@@ -173,10 +173,10 @@ end
     @test stripped.surface === model.surface
 end
 
-@testset "Explicit kwarg wins over setup trait (with warning)" begin
+@testset "Explicit kwarg wins over setup component (with warning)" begin
     setup = bomex_setup()
 
-    # A leaf kwarg beats the trait for that leaf only, and warns
+    # A leaf kwarg beats the component for that leaf only, and warns
     flux_scheme =
         CA.SurfaceConditions.ExchangeCoefficients{FT}(Cd = 0.001, Ch = 0.001)
     m1 = @test_logs (:warn, r"override values defined by the Bomex setup") make_model(;
@@ -184,9 +184,9 @@ end
         flux_scheme,
     )
     @test m1.surface.flux_scheme === flux_scheme
-    @test m1.subsidence isa CA.LargeScaleSubsidence  # other traits still applied
+    @test m1.subsidence isa CA.LargeScaleSubsidence  # other components still applied
 
-    # A wholesale group object beats every trait in that group (and warns)
+    # A wholesale group object beats every component in that group (and warns)
     m2 = @test_logs (:warn, r"ls_adv, scm_coriolis, subsidence") make_model(;
         setup,
         scm_setup = CA.SCMSetup(),
@@ -194,11 +194,11 @@ end
     @test isnothing(m2.subsidence)
     @test isnothing(m2.ls_adv)
     @test isnothing(m2.scm_coriolis)
-    # ... but other groups still receive their traits
+    # ... but other groups still receive their components
     @test m2.surface.flux_scheme isa CA.SurfaceConditions.MoninObukhov
 
-    # No warning when the setup defines no trait for the overridden leaf:
-    # DecayingProfile is trait-free, and the generic surface-temperature
+    # No warning when the setup defines no component for the overridden leaf:
+    # DecayingProfile is component-free, and the generic surface-temperature
     # fallback does not count as case-defined
     @test_logs make_model(;
         temperature = CA.SurfaceConditions.AnalyticTemperature(
@@ -207,7 +207,7 @@ end
     )
 end
 
-@testset "Defaults tier: explicit > trait > defaults > struct default" begin
+@testset "Defaults tier: explicit > component > defaults > struct default" begin
     setup = bomex_setup()
 
     # defaults beat the struct default...
@@ -216,14 +216,14 @@ end
     )
     @test m.microphysics_model isa CA.EquilibriumMicrophysics0M
 
-    # ...but lose to a setup trait (no warning: nothing is suppressed) ...
+    # ...but lose to a setup component (no warning: nothing is suppressed) ...
     preset_flux =
         CA.SurfaceConditions.ExchangeCoefficients{FT}(Cd = 0.002, Ch = 0.002)
     m = @test_logs make_model(; setup, defaults = (; flux_scheme = preset_flux))
     @test m.surface.flux_scheme isa CA.SurfaceConditions.MoninObukhov
 
     # The generic surface-temperature fallback is a default, not a case
-    # trait: with a trait-free setup, a defaults-tier temperature wins
+    # component: with a component-free setup, a defaults-tier temperature wins
     m = make_model(;
         defaults = (;
             temperature = CA.SurfaceConditions.SlabOceanTemperature{FT}(),

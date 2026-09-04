@@ -2529,7 +2529,7 @@ end
 
 Base.broadcastable(x::AtmosModel) = tuple(x)
 
-# Internal builder from fully resolved kwargs. Does not apply setup traits
+# Internal builder from fully resolved kwargs. Does not apply setup components
 function _atmos_model(; kwargs...)
     group_kwargs, atmos_model_kwargs = _partition_atmos_model_kwargs(kwargs)
 
@@ -2567,39 +2567,11 @@ function _atmos_model(; kwargs...)
     params = get(atmos_model_kwargs, :params, nothing)
     setup = get(atmos_model_kwargs, :setup, nothing)
 
-    return AtmosModel{
-        typeof(water),
-        typeof(scm_setup),
-        typeof(radiation),
-        typeof(turbconv),
-        typeof(prescribed_flow),
-        typeof(gravity_wave),
-        typeof(vertical_diffusion),
-        typeof(sponge),
-        typeof(surface),
-        typeof(numerics),
-        typeof(chemistry),
-        typeof(cosp),
-        typeof(grid),
-        typeof(params),
-        typeof(setup),
-    }(
-        water,
-        scm_setup,
-        radiation,
-        turbconv,
-        prescribed_flow,
-        gravity_wave,
-        vertical_diffusion,
-        sponge,
-        surface,
-        numerics,
-        chemistry,
-        cosp,
-        disable_surface_flux_tendency,
-        grid,
-        params,
-        setup,
+    # The default constructor infers the type parameters from the arguments.
+    return AtmosModel(
+        water, scm_setup, radiation, turbconv, prescribed_flow, gravity_wave,
+        vertical_diffusion, sponge, surface, numerics, chemistry, cosp,
+        disable_surface_flux_tendency, grid, params, setup,
     )
 end
 
@@ -2611,8 +2583,8 @@ case `setup`.
 
 Each field resolves in order: your kwargs (a leaf like `radiation_mode` or
 a whole group like `radiation = AtmosRadiation(...)`), then the setup's
-traits (`Setups.Bomex` brings its subsidence, forcing, and surface
-conditions; see [`Setups.setup_model_traits`](@ref)), then `defaults`
+components (`Setups.Bomex` brings its subsidence, forcing, and surface
+conditions; see [`Setups.model_components`](@ref)), then `defaults`
 (a NamedTuple of leaf kwargs, e.g. a `Presets` model preset). Overriding
 a setup-defined value warns.
 
@@ -2736,7 +2708,7 @@ function AtmosModel(
 
     # `defaults` accepts individual fields only. A whole group object there,
     # such as `surface = AtmosSurface(...)`, would override the individual
-    # fields that the setup traits set.
+    # fields that the setup components set.
     group_fields = map(last, ATMOS_MODEL_GROUPS)
     is_leaf(k) =
         haskey(GROUPED_PROPERTY_MAP, k) ||
@@ -2747,50 +2719,56 @@ function AtmosModel(
             !(k in _MODEL_NON_PHYSICS_FIELDS)
         )
     invalid_defaults = filter(!is_leaf, keys(defaults))
+    unknown_defaults =
+        filter(k -> !(k in fieldnames(AtmosModel)), invalid_defaults)
+    isempty(unknown_defaults) || error(
+        "`defaults` has keys that are not `AtmosModel` fields: " *
+        "$(join(unknown_defaults, ", ")). See `AtmosModel` for the accepted names.",
+    )
     isempty(invalid_defaults) || error(
         "`defaults` accepts individual model fields only, got: " *
         "$(join(invalid_defaults, ", ")). Pass these as regular keyword " *
         "arguments instead.",
     )
 
-    traits = Setups.setup_model_traits(setup, params, FT)
+    components = Setups.model_components(setup, params, FT)
 
     # Collect the setup's values, skipping each field that the caller set
     # directly, either as the field or as its whole group. Skipped fields go in
     # `shadowed` for one warning below. The tiers get their precedence from the
     # splat order in the final call, where the rightmost value wins.
-    trait_kwargs = Dict{Symbol, Any}()
+    component_kwargs = Dict{Symbol, Any}()
     shadowed = Symbol[]
     apply!(leaf, group, value) =
         if !isnothing(value)
             if haskey(kwargs, leaf) || haskey(kwargs, group)
                 push!(shadowed, leaf)
             else
-                trait_kwargs[leaf] = value
+                component_kwargs[leaf] = value
             end
         end
 
-    apply!(:subsidence, :scm_setup, get_subsidence_model(traits))
-    apply!(:ls_adv, :scm_setup, get_large_scale_advection_model(traits))
-    apply!(:scm_coriolis, :scm_setup, traits.scm_coriolis)
-    apply!(:external_forcing, :scm_setup, traits.external_forcing)
-    apply!(:radiation_mode, :radiation, traits.radiation_mode)
-    apply!(:insolation, :radiation, traits.insolation)
-    apply!(:prescribed_flow, :prescribed_flow, traits.prescribed_flow)
-    apply!(:flux_scheme, :surface, traits.surface.flux_scheme)
+    apply!(:subsidence, :scm_setup, get_subsidence_model(components))
+    apply!(:ls_adv, :scm_setup, get_large_scale_advection_model(components))
+    apply!(:scm_coriolis, :scm_setup, components.scm_coriolis)
+    apply!(:external_forcing, :scm_setup, components.external_forcing)
+    apply!(:radiation_mode, :radiation, components.radiation_mode)
+    apply!(:insolation, :radiation, components.insolation)
+    apply!(:prescribed_flow, :prescribed_flow, components.prescribed_flow)
+    apply!(:flux_scheme, :surface, components.surface.flux_scheme)
     # Take the surface temperature only if the setup defines one. The generic
     # fallback equals the AtmosSurface default, so passing it here would beat a
     # temperature from `defaults` and change nothing.
     generic_temperature = Setups.surface_temperature_model(nothing)
-    case_temperature = if !isnothing(traits.surface.temperature)
-        traits.surface.temperature
-    elseif traits.surface_temperature !== generic_temperature
-        traits.surface_temperature
+    case_temperature = if !isnothing(components.surface.temperature)
+        components.surface.temperature
+    elseif components.surface_temperature !== generic_temperature
+        components.surface_temperature
     else
         nothing
     end
     apply!(:temperature, :surface, case_temperature)
-    apply!(:boundary_overrides, :surface, traits.surface.overrides)
+    apply!(:boundary_overrides, :surface, components.surface.overrides)
 
     isempty(shadowed) || @warn(
         "Model arguments override values defined by the " *
@@ -2798,7 +2776,7 @@ function AtmosModel(
         "Pass them via `defaults = (...)` to let the setup win.",
     )
 
-    return _atmos_model(; grid, params, setup, defaults..., trait_kwargs..., kwargs...)
+    return _atmos_model(; grid, params, setup, defaults..., component_kwargs..., kwargs...)
 end
 
 """

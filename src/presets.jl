@@ -27,7 +27,9 @@ import ..SmoothMinimumBlending
     dry(; kwargs...)
 
 Dry-atmosphere model defaults (`microphysics_model = DryModel()`).
-Keyword arguments are merged in, and override the preset.
+Keyword arguments are merged in, and override the preset. Any `AtmosModel`
+field keyword argument is accepted (see [`AtmosModel`](@ref)); names that
+are not fields raise an error when the model is built.
 
 # Returns
 
@@ -47,7 +49,9 @@ dry(; kwargs...) = (; microphysics_model = DryModel(), kwargs...)
 
 Equilibrium-moisture model defaults: 0-moment microphysics, grid-scale
 cloud, prescribed zonally-symmetric SST, and idealized insolation.
-Keyword arguments are merged in, and override the preset.
+Keyword arguments are merged in, and override the preset. Any `AtmosModel`
+field keyword argument is accepted (see [`AtmosModel`](@ref)); names that
+are not fields raise an error when the model is built.
 
 # Returns
 
@@ -75,7 +79,9 @@ equil_moist_0m(; kwargs...) = (;
 
 [`equil_moist_0m`](@ref) with 1-moment non-equilibrium microphysics and
 explicit microphysics tendency timestepping in place of 0-moment equilibrium.
-Keyword arguments are merged in, and override the preset.
+Keyword arguments are merged in, and override the preset. Any `AtmosModel`
+field keyword argument is accepted (see [`AtmosModel`](@ref)); names that
+are not fields raise an error when the model is built.
 
 # Returns
 
@@ -120,7 +126,9 @@ microphysics is 0-moment equilibrium with grid-scale cloud.
     `PrognosticEDMFX` [-].
   - `n_updrafts = 1`: Number of updraft subdomains [-].
   - `prognostic_tke = true`: Whether TKE is prognostic.
-  - `kwargs...`: Merged in, overriding the preset.
+  - `kwargs...`: Merged in, overriding the preset. Any `AtmosModel` field
+    keyword argument is accepted (see [`AtmosModel`](@ref)); names that are not
+    fields raise an error when the model is built.
 
 # Returns
 

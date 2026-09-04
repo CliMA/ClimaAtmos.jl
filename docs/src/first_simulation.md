@@ -29,9 +29,10 @@ system -- it holds the grid, the parameters, and the case setup -- and
 duration, the callbacks, and the output.
 
 `t_end` accepts a number of seconds or a duration string (`secs`, `mins`,
-`hours`, `days`, `weeks`), as does the timestep `dt`. Every other aspect of the
-model and the simulation has a keyword argument too; omitted ones take their
-defaults.
+`hours`, `days`, `weeks`), as does the timestep `dt`. See
+[`AtmosModel`](@ref ClimaAtmos.AtmosModel) and
+[`AtmosSimulation`](@ref ClimaAtmos.AtmosSimulation) for the full list of
+keyword arguments and their defaults.
 
 The first construction and solve in a session compile a large amount of code
 and can take several minutes; later calls are fast.
@@ -89,12 +90,12 @@ directory; drop `output_dir` to get the default location described below.)
 
 The setup and the physics are not independent: the setup sets the initial state
 and the case forcings, while the parameterizations come from the rest of the
-model, so the two have to be chosen together. BOMEX with the default dry model
+model, so the two have to be chosen together. A setup can require prognostic
+variables that only some physics provide. BOMEX with the default dry model
 would have no moisture to convect, which is why `equil_moist_0m` appears above.
-Model presets are keyword bundles for exactly this purpose; each is a weakest
-tier of defaults that the setup and your own keyword arguments override. The
-one above is still minimal rather than complete: it enables moist physics but
-no turbulence-convection scheme. Pass
+Model presets provide reasonable physics defaults for simulations scientists
+commonly run. The setup and your own keyword arguments override them. The one
+above enables moist physics but no turbulence-convection scheme. Pass
 `defaults = CA.Presets.prognostic_edmf(Float32)` instead to add convective
 transport, or run the corresponding YAML case config for the full published
 setup. See the [Presets](api.md#Presets) section of the API for the full list.

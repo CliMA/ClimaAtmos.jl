@@ -106,13 +106,14 @@ function compare(
     return _compare(pass, v1, v2; name, ignore)
 end
 
-# Don't specialized on the argument types: the cache holds thousands of distinct
-# nested struct and NamedTuple types, and a specialized method would have to be
-# compiled once for each of them. The leaf methods below (numbers, arrays,
-# Fields) still dispatch on type.
-function _compare(pass, @nospecialize(v1), @nospecialize(v2); name, ignore)
-    typeof(v1) === typeof(v2) ||
-        error("$name: v1 and v2 have different types")
+# Don't specialize `_compare` on the argument types: the cache holds thousands
+# of distinct nested struct and NamedTuple types, and a specialized method would
+# have to be compiled once for each of them. Dispatch on the declared argument
+# types (numbers, arrays, Fields) still works, only the compiled bodies are
+# shared.
+@nospecialize
+
+function _compare(pass, v1::T, v2::T; name, ignore) where {T}
     properties = filter(x -> !(x in ignore), propertynames(v1))
     if isempty(properties)
         pass &= _compare(v1, v2; name, ignore)
@@ -131,9 +132,7 @@ function _compare(pass, @nospecialize(v1), @nospecialize(v2); name, ignore)
     return pass
 end
 
-function _compare(@nospecialize(v1), @nospecialize(v2); name, ignore)
-    typeof(v1) === typeof(v2) ||
-        error("$name: v1 and v2 have different types")
+function _compare(v1::T, v2::T; name, ignore) where {T}
     return print_maybe(v1 == v2, "$name differs")
 end
 
@@ -196,6 +195,12 @@ function _compare(
     error = maximum(_error(v1, v2))
     return print_maybe(error <= 100eps(eltype(v1)), "$name error: $error")
 end
+
+function _compare(pass, v1::T1, v2::T2; name, ignore) where {T1, T2}
+    error("$name: v1 and v2 have different types")
+end
+
+@specialize
 
 function print_maybe(exp, what)
     exp || println(what)

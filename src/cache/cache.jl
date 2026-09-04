@@ -151,10 +151,6 @@ gravity waves, radiation, tracers).
   - `steady_state_velocity`: Predicted steady-state velocity for the
     `check_steady_state` diagnostic, or `nothing`.
 
-The prescribed aerosol names, the time-varying trace gas names, and the
-vertical-water-borrowing species tuple come from `atmos` (`atmos.radiation` and
-`atmos.numerics`).
-
 # Returns
 
 A fully initialized `AtmosCache`.

@@ -49,9 +49,9 @@ function get_atmos(config::AtmosConfig, params, grid; setup_type)
         disable_momentum_vertical_diffusion, pa, params, FT,
     )
 
-    setup_traits = Setups.setup_model_traits(setup_type, params, FT)
+    setup_components = Setups.model_components(setup_type, params, FT)
 
-    prescribed_flow = setup_traits.prescribed_flow
+    prescribed_flow = setup_components.prescribed_flow
     if isnothing(prescribed_flow) && pa["prescribed_flow"] == "ShipwayHill2012"
         prescribed_flow = ShipwayHill2012VelocityProfile{FT}()
     end
@@ -61,13 +61,13 @@ function get_atmos(config::AtmosConfig, params, grid; setup_type)
         params,
         setup = setup_type,
         water = AtmosWater(config, params, FT),
-        scm_setup = SCMSetup(config, FT; setup_traits),
+        scm_setup = SCMSetup(config, FT; setup_components),
         prescribed_flow,
-        radiation = AtmosRadiation(config, FT; setup_traits),
+        radiation = AtmosRadiation(config, FT; setup_components),
         turbconv = AtmosTurbconv(config, params, FT),
         gravity_wave = AtmosGravityWave(config, params, FT),
         sponge = AtmosSponge(config, params),
-        surface = AtmosSurface(config, params, FT; setup_traits),
+        surface = AtmosSurface(config, params, FT; setup_components),
         numerics = AtmosNumerics(config, FT),
         chemistry = AtmosChem(config),
         cosp = COSPModel(config),
@@ -138,22 +138,6 @@ function get_numerics(parsed_args, FT; vertical_water_borrowing_species = nothin
     @info "numerics $(summary(numerics))"
 
     return numerics
-end
-
-"""
-    get_state_restart(config::AtmosConfig, restart_file, atmos_model_hash)
-
-Read the state `Y` and start time from `restart_file`, using the start date and
-communications context of `config`. Thin wrapper around the typed
-`get_state_restart` method in `simulation/restart.jl`.
-"""
-function get_state_restart(config::AtmosConfig, restart_file, atmos_model_hash)
-    return get_state_restart(
-        restart_file,
-        parse_date(config.parsed_args["start_date"]),
-        atmos_model_hash,
-        config.comms_ctx,
-    )
 end
 
 """

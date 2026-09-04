@@ -248,11 +248,11 @@ function get_sgs_quadrature(parsed_args, params = nothing)
 end
 
 """
-    get_insolation_form(parsed_args; setup_traits)
+    get_insolation_form(parsed_args; setup_components)
 
 Build the insolation model selected by the `insolation` config key.
 
-When `setup_traits` supplies an insolation model, that model wins and the config key is
+When `setup_components` supplies an insolation model, that model wins and the config key is
 ignored. Otherwise:
 
   - `"idealized"`: `IdealizedInsolation`.
@@ -263,8 +263,8 @@ ignored. Otherwise:
 
 Any other value raises an error.
 """
-function get_insolation_form(parsed_args; setup_traits)
-    isnothing(setup_traits.insolation) || return setup_traits.insolation
+function get_insolation_form(parsed_args; setup_components)
+    isnothing(setup_components.insolation) || return setup_components.insolation
     insolation = parsed_args["insolation"]
     return if insolation == "idealized"
         IdealizedInsolation()
@@ -565,11 +565,11 @@ function get_orographic_gravity_wave_model(parsed_args, params, ::Type{FT}) wher
 end
 
 """
-    get_radiation_mode(parsed_args, ::Type{FT}; setup_traits) where {FT}
+    get_radiation_mode(parsed_args, ::Type{FT}; setup_components) where {FT}
 
 Build the radiation model selected by the `rad` config key.
 
-When `rad` is unset and `setup_traits` supplies a radiation model, that model is used.
+When `rad` is unset and `setup_components` supplies a radiation model, that model is used.
 Otherwise:
 
   - `~` (null): `nothing`, no radiation.
@@ -589,11 +589,11 @@ Any other value raises an error. The RRTMGP modes also read `idealized_h2o`,
 clouds are mutually exclusive, and the cloud-related keys warn when used with a
 non-all-sky mode.
 """
-function get_radiation_mode(parsed_args, ::Type{FT}; setup_traits) where {FT}
+function get_radiation_mode(parsed_args, ::Type{FT}; setup_components) where {FT}
     radiation_name = parsed_args["rad"]
     # Use setup default only when config doesn't explicitly set rad
-    if isnothing(radiation_name) && !isnothing(setup_traits.radiation_mode)
-        return setup_traits.radiation_mode
+    if isnothing(radiation_name) && !isnothing(setup_components.radiation_mode)
+        return setup_components.radiation_mode
     end
     idealized_h2o = parsed_args["idealized_h2o"]
     idealized_clouds = parsed_args["idealized_clouds"]
@@ -781,29 +781,29 @@ end
 
 
 """
-    get_subsidence_model(setup_traits)
+    get_subsidence_model(setup_components)
 
-Return the `LargeScaleSubsidence` forcing supplied by `setup_traits`, or `nothing` when
+Return the `LargeScaleSubsidence` forcing supplied by `setup_components`, or `nothing` when
 the setup prescribes no subsidence profile. There is no config key for this: subsidence
 is owned by the setup chosen through `initial_condition`.
 """
-function get_subsidence_model(setup_traits)
-    profile = setup_traits.subsidence
+function get_subsidence_model(setup_components)
+    profile = setup_components.subsidence
     return isnothing(profile) ? nothing : LargeScaleSubsidence(profile)
 end
 
 """
-    get_large_scale_advection_model(setup_traits)
+    get_large_scale_advection_model(setup_components)
 
-Return the `LargeScaleAdvection` forcing supplied by `setup_traits`, or `nothing` when
+Return the `LargeScaleAdvection` forcing supplied by `setup_components`, or `nothing` when
 the setup prescribes no large-scale advective tendencies.
 
 The setup's temperature-tendency profile is evaluated in terms of the Exner function, so
 the returned closure supplies `dTdt` as a potential-temperature tendency converted with
 `TD.exner_given_pressure`.
 """
-function get_large_scale_advection_model(setup_traits)
-    data = setup_traits.ls_adv
+function get_large_scale_advection_model(setup_components)
+    data = setup_components.ls_adv
     isnothing(data) && return nothing
     prof_dqtdt = (_, _, _, z) -> data.prof_dqtdt(z)
     prof_dTdt =
@@ -813,14 +813,14 @@ function get_large_scale_advection_model(setup_traits)
 end
 
 """
-    get_external_forcing_model(parsed_args, ::Type{FT}; setup_traits) where {FT}
+    get_external_forcing_model(parsed_args, ::Type{FT}; setup_components) where {FT}
 
 Build the external (single-column) forcing selected by the `external_forcing` config
 key.
 
 Only two values are accepted:
 
-  - `~` (null): the forcing supplied by `setup_traits`, if any. This is the preferred
+  - `~` (null): the forcing supplied by `setup_components`, if any. This is the preferred
     route, and the only one for the `ISDAC`, `ForcingFromFile`, and
     `ReanalysisTimeVarying` cases, whose `initial_condition` setup supplies the matching
     forcing automatically.
@@ -834,7 +834,7 @@ Any other value raises an error. `"ReanalysisMonthlyAveragedDiurnal"` requires
 Before returning, `warn_if_run_exceeds_forcing` compares `t_end` with the time span of
 the forcing file.
 """
-function get_external_forcing_model(parsed_args, ::Type{FT}; setup_traits) where {FT}
+function get_external_forcing_model(parsed_args, ::Type{FT}; setup_components) where {FT}
     external_forcing = parsed_args["external_forcing"]
 
     if external_forcing == "ReanalysisMonthlyAveragedDiurnal"
@@ -850,7 +850,7 @@ function get_external_forcing_model(parsed_args, ::Type{FT}; setup_traits) where
         # `external_forcing` key, the forcing comes from the setup chosen by
         # `initial_condition` (GCM, ARMVARANAL, ReanalysisTimeVarying, ISDAC, and
         # ForcingFromFile all supply their own).
-        setup_traits.external_forcing
+        setup_components.external_forcing
     elseif external_forcing == "ReanalysisMonthlyAveragedDiurnal"
         # The one forcing that differs from the initial condition: monthly-
         # averaged diurnal ERA5, paired with `initial_condition: ReanalysisTimeVarying`.
@@ -1126,16 +1126,16 @@ function AtmosWater(config::AtmosConfig, params, ::Type{FT}) where {FT}
 end
 
 """
-    AtmosRadiation(config::AtmosConfig, ::Type{FT}; setup_traits) where {FT}
+    AtmosRadiation(config::AtmosConfig, ::Type{FT}; setup_components) where {FT}
 
 Assemble the `AtmosRadiation` group from a configuration, combining
 `get_radiation_mode` and `get_insolation_form`.
 """
-function AtmosRadiation(config::AtmosConfig, ::Type{FT}; setup_traits) where {FT}
+function AtmosRadiation(config::AtmosConfig, ::Type{FT}; setup_components) where {FT}
     pa = config.parsed_args
     return AtmosRadiation(;
-        radiation_mode = get_radiation_mode(pa, FT; setup_traits),
-        insolation = get_insolation_form(pa; setup_traits),
+        radiation_mode = get_radiation_mode(pa, FT; setup_components),
+        insolation = get_insolation_form(pa; setup_components),
         aerosol_names = Tuple(pa["prescribed_aerosols"]),
         time_varying_trace_gases = Tuple(pa["time_varying_trace_gases"]),
     )
@@ -1233,22 +1233,22 @@ AtmosNumerics(config::AtmosConfig, ::Type{FT}) where {FT} = get_numerics(
 )
 
 """
-    SCMSetup(config::AtmosConfig, ::Type{FT}; setup_traits) where {FT}
+    SCMSetup(config::AtmosConfig, ::Type{FT}; setup_components) where {FT}
 
 Assemble the single-column forcing group `SCMSetup` from a configuration, combining
 `get_subsidence_model`, `get_external_forcing_model`, `get_large_scale_advection_model`,
 the setup's `scm_coriolis`, and the `advection_test` config key. Most of these are
-supplied by `setup_traits` rather than by config keys.
+supplied by `setup_components` rather than by config keys.
 """
-function SCMSetup(config::AtmosConfig, ::Type{FT}; setup_traits) where {FT}
+function SCMSetup(config::AtmosConfig, ::Type{FT}; setup_components) where {FT}
     return SCMSetup(;
-        subsidence = get_subsidence_model(setup_traits),
+        subsidence = get_subsidence_model(setup_components),
         external_forcing = get_external_forcing_model(
-            config.parsed_args, FT; setup_traits,
+            config.parsed_args, FT; setup_components,
         ),
-        ls_adv = get_large_scale_advection_model(setup_traits),
+        ls_adv = get_large_scale_advection_model(setup_components),
         advection_test = config.parsed_args["advection_test"],
-        scm_coriolis = setup_traits.scm_coriolis,
+        scm_coriolis = setup_components.scm_coriolis,
     )
 end
 
@@ -1269,11 +1269,11 @@ function AtmosSponge(config::AtmosConfig, params)
 end
 
 """
-    AtmosSurface(config::AtmosConfig, params, ::Type{FT}; setup_traits) where {FT}
+    AtmosSurface(config::AtmosConfig, params, ::Type{FT}; setup_components) where {FT}
 
 Assemble the `AtmosSurface` group from a configuration.
 
-Surface pieces supplied by `setup_traits` (flux scheme, temperature, boundary overrides)
+Surface pieces supplied by `setup_components` (flux scheme, temperature, boundary overrides)
 take precedence over the config keys. Otherwise:
 
   - `prognostic_surface`: `"PrescribedSST"` uses the setup's temperature model,
@@ -1285,21 +1285,24 @@ take precedence over the config keys. Otherwise:
     set), or `"CouplerAlbedo"`; anything else errors.
 """
 function AtmosSurface(
-    config::AtmosConfig, params, ::Type{FT}; setup_traits,
+    config::AtmosConfig, params, ::Type{FT}; setup_components,
 ) where {FT}
     pa = config.parsed_args
 
     # Setup-provided surface pieces (flux_scheme, temperature, overrides)
-    setup_pieces = setup_traits.surface
+    setup_pieces = setup_components.surface
 
     temperature = if pa["prognostic_surface"] == "SlabOceanSST"
+        # `surface_temperature_model` falls back to a generic profile for every
+        # setup, so only a value that differs from it counts as setup-provided.
+        generic_temperature = Setups.surface_temperature_model(nothing)
         if !isnothing(setup_pieces.temperature) ||
-           !isnothing(setup_traits.surface_temperature)
+           setup_components.surface_temperature != generic_temperature
             @warn "`SlabOceanSST` is active; the surface temperature specified via `surface_condition` in the case setup will be overwritten by the slab ocean's prognostic initialization (see `prognostic_variables.jl`)."
         end
         SurfaceConditions.SlabOceanTemperature{FT}()
     elseif pa["prognostic_surface"] == "PrescribedSST"
-        @something(setup_pieces.temperature, setup_traits.surface_temperature)
+        @something(setup_pieces.temperature, setup_components.surface_temperature)
     else
         error(
             """Uncaught prognostic_surface `$(pa["prognostic_surface"])`. Expected: "PrescribedSST" | "SlabOceanSST".""",

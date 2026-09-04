@@ -1,14 +1,18 @@
 # Script vs Config Interface
 
-ClimaAtmos provides two ways to set up and run simulations. Both produce an
+ClimaAtmos provides two ways to set up and run simulations: the script
+interface, where the simulation is assembled in Julia code, and the config
+interface, where it is read from a YAML file. Both produce an
 `AtmosSimulation` that is run with `solve_atmos!`; they differ in where the
 configuration is written.
 
 The **script API** builds a model on a grid and then wraps it in a simulation:
 `AtmosSimulation(AtmosModel(grid; params, setup, ...); dt, t_end, ...)`. The
-model owns the grid, the parameters, and the setup; the simulation owns run
-control. It is best for interactive exploration, notebooks, and programmatic
-parameter sweeps.
+model owns the grid, the parameters, and the setup. The simulation owns
+everything about how the model is integrated: the timestep and end time, the
+time-stepping algorithm and Jacobian, callbacks, checkpointing, diagnostics,
+and the output directory. It is best for interactive exploration, notebooks,
+and programmatic parameter sweeps.
 [Your First Simulation](first_simulation.md) walks through it, and
 [Scripting Simulations](scripting_simulations.md) covers each component.
 
