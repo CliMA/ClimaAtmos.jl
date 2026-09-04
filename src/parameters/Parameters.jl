@@ -109,6 +109,30 @@ not yet define. `FT` is the float type; `VFT1`, `VFT2`, and `VTF3` are the
     flux [-].
   - `diagnostic_covariance_coeff`: Prefactor of the turbulent production term in
     the diagnostic covariance closure [-].
+  - `sgs_variance_coeff_q`: Coefficient of an optional background SGS total-water
+    variance source added to the diagnostic covariance, with standard deviation
+    `σ_q = sgs_variance_coeff_q * q_tot` (grid-mean total water). Restores subgrid
+    variance where the gradient*mixing-length closure collapses (free troposphere,
+    at the mixing-length floor). `0` disables it (default); experimental [-].
+  - `sgs_variance_coeff_T`: As `sgs_variance_coeff_q`, for the temperature
+    variance, with `σ_T = sgs_variance_coeff_T * T`. `0` disables (default);
+    experimental [-].
+  - `sgs_variance_coeff_hgrad`: Coefficient of an optional horizontal-gradient
+    (scale-similarity / mesoscale) SGS total-water variance source added to the
+    diagnostic covariance. It adds a variance proportional to the resolved
+    horizontal humidity gradient and the squared grid scale, and so survives
+    where turbulence (and the mixing length) collapses in the free troposphere,
+    self-targeting fronts and storm tracks. `0` disables it (default);
+    experimental [-].
+  - `sgs_variance_max_rel_std`: Upper bound on the SGS total-water standard
+    deviation relative to the grid-mean total water, `σ_q ≤ sgs_variance_max_rel_std * q_tot`,
+    applied when the horizontal-gradient source is active. The 3-point
+    Gauss-Hermite quadrature samples `q̂ = q_tot ± √3 σ_q`, so a Gaussian wider than
+    `q_tot/√3` puts a node at negative total water; the node is clamped to zero
+    without re-weighting, which makes the sampled distribution carry more water
+    than the grid mean and can drive the grid-mean vapour negative where the
+    resolved horizontal gradient is large next to nearly dry air. `0.5` keeps all
+    nodes non-negative (default); experimental [-].
   - `Tq_correlation_coefficient`: Default correlation between `T'` and `q_tot'`
     in the SGS quadrature, in `[-1, 1]` [-].
   - `static_stab_coeff`: Static stability coefficient `c_b` of the mixing-length
@@ -193,6 +217,10 @@ Base.@kwdef struct TurbulenceConvectionParameters{FT, VFT1, VFT2, VTF3} <: ATCP
     tke_surf_scale::FT
     tke_surf_flux_coeff::FT
     diagnostic_covariance_coeff::FT
+    sgs_variance_coeff_q::FT
+    sgs_variance_coeff_T::FT
+    sgs_variance_coeff_hgrad::FT
+    sgs_variance_max_rel_std::FT
     Tq_correlation_coefficient::FT
     static_stab_coeff::FT
     Prandtl_number_scale::FT
