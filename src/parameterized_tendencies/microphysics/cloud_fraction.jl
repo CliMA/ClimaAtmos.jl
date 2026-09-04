@@ -885,8 +885,8 @@ microphysics, uses the prognostic cloud condensate only; the precomputed
 not count as cloud.
 """
 _grid_mean_cloud_condensate(Y, p, ::NonEquilibriumMicrophysics) = (
-    (@. lazy(max(0, specific(Y.c.ρq_lcl, Y.c.ρ)))),
-    (@. lazy(max(0, specific(Y.c.ρq_icl, Y.c.ρ)))),
+    (@. (max(0, specific(Y.c.ρq_lcl, Y.c.ρ)))),
+    (@. (max(0, specific(Y.c.ρq_icl, Y.c.ρ)))),
 )
 _grid_mean_cloud_condensate(Y, p, microphysics_model) =
     (p.precomputed.ᶜq_liq, p.precomputed.ᶜq_ice)
@@ -914,24 +914,38 @@ NVTX.@annotate function set_cloud_fraction!(
 
     (; ᶜT′T′, ᶜq′q′) = p.precomputed
 
-    # Hybrid cloud fraction: the σ_S² quadrature pass is fused into this
-    # broadcast kernel, so the moments stay in registers and are never written
-    # to a Field.
-    @. p.precomputed.ᶜcloud_fraction = _compute_cloud_fraction(
-        thermo_params,
-        ᶜT_mean,
-        ᶜρ_env,
-        ᶜq_mean,
-        ᶜq_lcl,
-        ᶜq_icl,
-        $(sgs_quad),
-        ᶜT′T′,
-        ᶜq′q′,
-        corr_Tq,
-        FT(α),
-        $(floor),
-    )
+    ᶜcloud_fraction = p.precomputed.ᶜcloud_fraction
+    α = FT(α)
 
+    let α = α, thermo_params = thermo_params, corr_Tq = corr_Tq, floor = floor,
+        sgs_quad = sgs_quad
+
+        DataLayouts.foreach_point(
+            ᶜcloud_fraction,
+            ᶜT_mean,
+            ᶜρ_env,
+            ᶜq_mean,
+            ᶜq_lcl,
+            ᶜq_icl,
+            ᶜT′T′,
+            ᶜq′q′,
+        ) do ᶜcloud_fraction, ᶜT_mean, ᶜρ_env, ᶜq_mean, ᶜq_lcl, ᶜq_icl, ᶜT′T′, ᶜq′q′
+            @. ᶜcloud_fraction = _compute_cloud_fraction(
+                thermo_params,
+                ᶜT_mean,
+                ᶜρ_env,
+                ᶜq_mean,
+                ᶜq_lcl,
+                ᶜq_icl,
+                $(sgs_quad),
+                ᶜT′T′,
+                ᶜq′q′,
+                corr_Tq,
+                α,
+                $(floor),
+            )
+        end
+    end
     _apply_edmf_cloud_weighting!(Y, p, turbconv_model, thermo_params)
 end
 
@@ -977,15 +991,13 @@ function _get_env_ρ_T_q(Y, p, thermo_params, turbconv_model)
     (; ᶜp, ᶜT, ᶜq_tot_nonneg) = p.precomputed
     if turbconv_model isa PrognosticEDMFX
         (; ᶜT⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰) = p.precomputed
-        ᶜρ_env = @. lazy(
-            TD.air_density(
-                thermo_params,
-                ᶜT⁰,
-                ᶜp,
-                ᶜq_tot_nonneg⁰,
-                ᶜq_liq⁰,
-                ᶜq_ice⁰,
-            ),
+        ᶜρ_env = @. TD.air_density(
+            thermo_params,
+            ᶜT⁰,
+            ᶜp,
+            ᶜq_tot_nonneg⁰,
+            ᶜq_liq⁰,
+            ᶜq_ice⁰,
         )
         return ᶜρ_env, ᶜT⁰, ᶜq_tot_nonneg⁰
     else
@@ -1079,8 +1091,8 @@ precomputed `ᶜq_liq⁰` / `ᶜq_ice⁰` include precipitation (`q_rai⁰` / `q
 which should not count as cloud.
 """
 _env_cloud_condensate(Y, p, ::NonEquilibriumMicrophysics) = (
-    (@. lazy(max(0, $(ᶜspecific_env_value(@name(q_lcl), Y, p))))),
-    (@. lazy(max(0, $(ᶜspecific_env_value(@name(q_icl), Y, p))))),
+    (@. (max(0, $(ᶜspecific_env_value(@name(q_lcl), Y, p))))),
+    (@. (max(0, $(ᶜspecific_env_value(@name(q_icl), Y, p))))),
 )
 _env_cloud_condensate(Y, p, microphysics_model) =
     (p.precomputed.ᶜq_liq⁰, p.precomputed.ᶜq_ice⁰)
