@@ -519,23 +519,23 @@ NVTX.@annotate function set_stability_buoyancy_gradient!(Y, p, thermo_params)
     (; ᶜbg_coeffs, ᶠ∂θli∂z, ᶠ∂qt∂z) = p.precomputed
     # One-sided center gradients: the exact face gradients (see
     # `set_buoyancy_gradient_inputs!`) brought to centers from the upper
-    # (ᶜright_bias) and lower (ᶜleft_bias) adjacent faces. Domain-boundary
+    # (ᶜtop_bias) and lower (ᶜbottom_bias) adjacent faces. Domain-boundary
     # faces carry zero gradient, so the biased estimates fall back to neutral
     # there and the max picks the interior side.
     ᶜN²_up = @. lazy(
         blended_N²(
             ᶜbg_coeffs,
             ᶜcloud_fraction,
-            ᶜright_bias(ᶠ∂θli∂z),
-            ᶜright_bias(ᶠ∂qt∂z),
+            ᶜtop_bias(ᶠ∂θli∂z),
+            ᶜtop_bias(ᶠ∂qt∂z),
         ),
     )
     ᶜN²_dn = @. lazy(
         blended_N²(
             ᶜbg_coeffs,
             ᶜcloud_fraction,
-            ᶜleft_bias(ᶠ∂θli∂z),
-            ᶜleft_bias(ᶠ∂qt∂z),
+            ᶜbottom_bias(ᶠ∂θli∂z),
+            ᶜbottom_bias(ᶠ∂qt∂z),
         ),
     )
     if MatrixFields.has_field(Y, @name(c.ρtke))
@@ -549,8 +549,8 @@ NVTX.@annotate function set_stability_buoyancy_gradient!(Y, p, thermo_params)
         ᶜtke_pos = @. lazy(max(specific(Y.c.ρtke, Y.c.ρ), 0))
         ᶠΔz = Fields.Δz_field(axes(Y.f))
         @. ᶜN²_eff = max(
-            interface_effective_N²(ᶜN²_up, ᶜright_bias(ᶠΔz), ᶜtke_pos, c_b),
-            interface_effective_N²(ᶜN²_dn, ᶜleft_bias(ᶠΔz), ᶜtke_pos, c_b),
+            interface_effective_N²(ᶜN²_up, ᶜtop_bias(ᶠΔz), ᶜtke_pos, c_b),
+            interface_effective_N²(ᶜN²_dn, ᶜbottom_bias(ᶠΔz), ᶜtke_pos, c_b),
         )
     else
         @. ᶜN²_eff = max(ᶜN²_up, ᶜN²_dn)

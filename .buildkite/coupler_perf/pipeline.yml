@@ -17,7 +17,7 @@ env:
   # init, in the same convention (and with the same default list) as
   # ClimaCoupler's nightly pipeline. Set it from the web API to widen or
   # narrow the set for a single build.
-  UPSTREAM_PACKAGES: "${UPSTREAM_PACKAGES:-ClimaAtmos ClimaCore ClimaCoreMakie ClimaTimeSteppers Thermodynamics ClimaLand SurfaceFluxes RRTMGP}"
+  UPSTREAM_PACKAGES: "${UPSTREAM_PACKAGES:-ClimaAtmos ClimaCore ClimaTimeSteppers Thermodynamics ClimaLand SurfaceFluxes RRTMGP}"
 
 timeout_in_minutes: 840
 

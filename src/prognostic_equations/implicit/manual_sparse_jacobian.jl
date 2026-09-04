@@ -922,7 +922,7 @@ function update_sedimentation_jacobian!(matrix, Y, p, dtγ)
         ᶜwₚ = MatrixFields.get_field(p.precomputed, wₚ_name)
         # TODO: come up with read-able names for the intermediate computations...
         @. p.scratch.ᶠband_matrix_wvec =
-            ᶠright_bias_matrix() ⋅
+            ᶠtop_bias_matrix() ⋅
             DiagonalMatrixRow(ClimaCore.Geometry.WVector(-(ᶜwₚ) / ᶜρ))
         @. ∂ᶜρχₚ_err_∂ᶜρχₚ =
             p.scratch.ᶜbidiagonal_adjoint_matrix_c3 ⋅
@@ -1371,7 +1371,7 @@ function update_sgs_advection_jacobian!(matrix, Y, p, dtγ)
     }
         ᶜa = (@. lazy(draft_area(Y.c.sgsʲs.:(1).ρa, ᶜρʲs.:(1))))
         ᶜ∂a∂z = p.scratch.ᶜtemp_scalar_7
-        @. ᶜ∂a∂z = ᶜprecipdivᵥ(ᶠinterp(ᶜJ) / ᶠJ * ᶠright_bias(Geometry.WVector(ᶜa)))
+        @. ᶜ∂a∂z = ᶜprecipdivᵥ(ᶠinterp(ᶜJ) / ᶠJ * ᶠtop_bias(Geometry.WVector(ᶜa)))
         ᶜinv_ρ̂ = (@. lazy(
             specific(
                 FT(1),
@@ -1408,7 +1408,7 @@ function update_sgs_advection_jacobian!(matrix, Y, p, dtγ)
             #   ∂/∂χʲ of correction = α_lat · ∂a/∂z · ρ¹w¹/(1−a)
             @. ᶠsed_tracer_advection =
                 DiagonalMatrixRow(ᶠinterp(ᶜρʲs.:(1) * ᶜJ) / ᶠJ) ⋅
-                ᶠright_bias_matrix() ⋅
+                ᶠtop_bias_matrix() ⋅
                 DiagonalMatrixRow(-Geometry.WVector(ᶜwʲ))
             @. ᶜtridiagonal_matrix_scalar =
                 dtγ * ifelse(ᶜ∂a∂z < 0,
