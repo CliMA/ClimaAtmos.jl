@@ -56,10 +56,10 @@ import ClimaAtmos as CA
     )
 end
 
-@testset "Setup traits applied to the model via get_atmos" begin
+@testset "Setup components applied to the model via get_atmos" begin
     config = CA.AtmosConfig(
         Dict("config" => "column", "initial_condition" => "Bomex"),
-        job_id = "test_setup_traits_bomex",
+        job_id = "test_setup_components_bomex",
     )
     params = CA.ClimaAtmosParameters(config)
     setup = CA.get_setup_type(

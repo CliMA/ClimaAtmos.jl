@@ -44,7 +44,7 @@ import ClimaAtmos as CA
                 config_slab,
                 params,
                 FT;
-                setup_traits = CA.Setups.setup_model_traits(setup_type, params, FT),
+                setup_components = CA.Setups.model_components(setup_type, params, FT),
             )
             @test surface.temperature isa CA.SurfaceConditions.SlabOceanTemperature
         end
@@ -65,7 +65,7 @@ import ClimaAtmos as CA
                 config_slab,
                 params,
                 FT;
-                setup_traits = CA.Setups.setup_model_traits(nothing, params, FT),
+                setup_components = CA.Setups.model_components(nothing, params, FT),
             )
             @test surface.temperature isa CA.SurfaceConditions.SlabOceanTemperature
         end
@@ -95,7 +95,7 @@ import ClimaAtmos as CA
                 config_prescribed,
                 params,
                 FT;
-                setup_traits = CA.Setups.setup_model_traits(setup_type, params, FT),
+                setup_components = CA.Setups.model_components(setup_type, params, FT),
             )
             @test surface.temperature isa CA.SurfaceConditions.AnalyticTemperature
         end
