@@ -109,10 +109,10 @@ ClimaAtmos.Setups.radiation_model
 ```
 
 All of these hooks are evaluated together by
-[`Setups.setup_model_traits`](@ref ClimaAtmos.Setups.setup_model_traits):
+[`Setups.model_components`](@ref ClimaAtmos.Setups.model_components):
 
 ```@docs
-ClimaAtmos.Setups.setup_model_traits
+ClimaAtmos.Setups.model_components
 ```
 
 ## Defining a case in a runscript

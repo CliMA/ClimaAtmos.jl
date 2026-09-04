@@ -15,8 +15,8 @@ physics, together with the grid, the parameters, and the case setup) and adds ru
 control and an integrator. Constructing one sets everything up; `solve_atmos!`
 advances it to `t_end`. A case (its initial state, boundary conditions, and
 forcing) comes from the `Setups` submodule; common bundles of physics options
-come from the `Presets` submodule. See the Your First Simulation, Governing
-Equations, and API pages of the documentation.
+come from the `Presets` submodule. See [Your First Simulation](@ref),
+[Governing Equations](@ref), and the [API](@ref) page of the documentation.
 
 # Examples
 

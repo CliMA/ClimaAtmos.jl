@@ -8,6 +8,12 @@ Case definitions (initial conditions and forcing) live on the
 [Setups](setups.md) page; the YAML equivalents of these options are listed in
 [Configuration options](configuration_options.md).
 
+## Package
+
+```@docs
+ClimaAtmos
+```
+
 ## Simulation
 
 ```@docs

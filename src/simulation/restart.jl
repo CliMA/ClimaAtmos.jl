@@ -7,12 +7,14 @@ import ClimaUtilities.TimeManager: ITime
 #####
 
 """
-    get_state_restart(restart_file, start_date, atmos_model_hash, comms_ctx)
+    get_state_restart(restart_file, start_date, model::AtmosModel, comms_ctx)
 
 Read the state and start time from an HDF5 restart file.
 
-Warns when the file records a different `AtmosModel` hash than `atmos_model_hash`, since
-the restart is then not guaranteed to be compatible.
+Warns when the file records a different physics hash than `hash_physics(model)`,
+since the restart is then not guaranteed to be compatible. The hash covers the
+physics fields only: the grid is checked separately by the caller, and the
+setup and params do not affect whether a checkpoint can be resumed.
 
 # Returns
 
@@ -22,10 +24,11 @@ the restart is then not guaranteed to be compatible.
 function get_state_restart(
     restart_file,
     start_date,
-    atmos_model_hash,
+    model::AtmosModel,
     comms_ctx,
 )
     @assert !isnothing(restart_file)
+    atmos_model_hash = hash_physics(model)
     reader = InputOutput.HDF5Reader(restart_file, comms_ctx)
     Y = InputOutput.read_field(reader, "Y")
     # TODO: Do not use InputOutput.HDF5 directly
@@ -69,11 +72,7 @@ function handle_restart(
         @warn "Non zero `t_start` passed with a restarting simulation. The provided `t_start` will be ignored."
     end
 
-    # Both sides of the model-hash comparison use hash_physics, which
-    # ignores `grid`, `params`, and `setup`.
-    (Y, t_start) = get_state_restart(
-        restart_file, start_date, hash_physics(model), context,
-    )
+    (Y, t_start) = get_state_restart(restart_file, start_date, model, context)
 
     if verbose
         @info "Restarting simulation from file" restart_file restart_time =

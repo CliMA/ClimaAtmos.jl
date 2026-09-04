@@ -88,15 +88,15 @@ import ClimaCore: Fields, Spaces
 # ---------------------------------------------------------------------------
 
 """
-    build_state_cache(FT, model_kwargs; grid, kwargs...) -> (Y, p)
+    build_state_cache(FT, model_options; grid, kwargs...) -> (Y, p)
 
-Build an `AtmosModel` on `grid` from the `model_kwargs` NamedTuple, then a
+Build an `AtmosModel` on `grid` from the `model_options` NamedTuple, then a
 minimal state vector `Y` and cache `p` for it. All keyword arguments have
 sensible defaults; override only what the diagnostic under test actually
 requires (e.g. `aerosol_names` for aerosol diagnostics,
 `set_steady_state_velocity = true` for steady-state error diagnostics).
 """
-function build_state_cache(FT, model_kwargs; grid,
+function build_state_cache(FT, model_options; grid,
     params = CA.ClimaAtmosParameters(FT),
     ic = CA.Setups.DecayingProfile(; params),
     dt = FT(1.0), start_date = DateTime(2010, 1, 1),
@@ -109,7 +109,7 @@ function build_state_cache(FT, model_kwargs; grid,
         setup = ic,
         aerosol_names = Tuple(aerosol_names),
         time_varying_trace_gases = Tuple(time_varying_trace_gas_names),
-        model_kwargs...,
+        model_options...,
     )
     Y = CA.initial_state(model)
     # steady state velocity is only needed for some diagnostics
