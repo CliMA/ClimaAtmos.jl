@@ -10,6 +10,7 @@ import CloudMicrophysics.BulkMicrophysicsTendencies as BMT
 import Thermodynamics as TD
 import ClimaCore.Operators as Operators
 import ClimaCore.Fields as Fields
+import ClimaCore.DataLayouts: foreach_point
 
 const Iₗ = TD.internal_energy_liquid
 const Iᵢ = TD.internal_energy_ice
@@ -821,29 +822,50 @@ function set_microphysics_tendency_cache!(Y, p, ::EquilibriumMicrophysics0M, _)
 
     ### Grid-mean microphysics tendency with/without quadrature sampling.
     sgs_quad = p.atmos.sgs_quadrature
-    if not_quadrature(sgs_quad)
-        # Evaluate on the grid-mean.
-        (; ᶜq_liq, ᶜq_ice) = p.precomputed
-        @. ᶜmp_tendency = microphysics_tendencies_0m(
-            cm0, thp, Y.c.ρ, ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice, ᶜΦ, dt,
-        )
-    else
-        # Evaluate over quadrature points. Both dq_tot_dt and e_tot_hlpr
-        # are SGS-averaged so that the energy helper is consistent with
-        # the nonlinear dependence on condensate at each quadrature point.
-        (; ᶜT′T′, ᶜq′q′) = p.precomputed
-        corr_Tq = correlation_Tq(p.params)
-        @. ᶜmp_tendency = microphysics_tendencies_0m(
-            $(sgs_quad), cm0, thp, Y.c.ρ, ᶜT, ᶜq_tot_nonneg,
-            ᶜT′T′, ᶜq′q′, corr_Tq, ᶜΦ, dt,
-        )
-    end
-
-    # TODO - duplicated with tendency and implicit cache update
     (; ᶜρ_dq_tot_dt, ᶜρ_de_tot_dt) = p.precomputed
 
-    @. ᶜρ_dq_tot_dt = Y.c.ρ * ᶜmp_tendency.dq_tot_dt
-    @. ᶜρ_de_tot_dt = ᶜρ_dq_tot_dt * ᶜmp_tendency.e_tot_hlpr
+    let Y = Y, ᶜΦ = ᶜΦ, cm0 = cm0, thp = thp, sgs_quad = sgs_quad
+
+        if not_quadrature(sgs_quad)
+            (; ᶜq_liq, ᶜq_ice) = p.precomputed
+            foreach_point(
+                ᶜmp_tendency,
+                ᶜρ_dq_tot_dt,
+                ᶜρ_de_tot_dt,
+                Y.c.ρ,
+                ᶜT,
+                ᶜq_tot_nonneg,
+                ᶜq_liq,
+                ᶜq_ice,
+            ) do ᶜmp_tendency, ᶜρ_dq_tot_dt, ᶜρ_de_tot_dt, ρ, ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice
+                @. ᶜmp_tendency = microphysics_tendencies_0m(
+                    cm0, thp, ρ, ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice, ᶜΦ, dt,
+                )
+                @. ᶜρ_dq_tot_dt = ρ * ᶜmp_tendency.dq_tot_dt
+                @. ᶜρ_de_tot_dt = ᶜρ_dq_tot_dt * ᶜmp_tendency.e_tot_hlpr
+            end
+        else
+            (; ᶜT′T′, ᶜq′q′) = p.precomputed
+            corr_Tq = correlation_Tq(p.params)
+            foreach_point(
+                ᶜmp_tendency,
+                ᶜρ_dq_tot_dt,
+                ᶜρ_de_tot_dt,
+                Y.c.ρ,
+                ᶜT,
+                ᶜq_tot_nonneg,
+                ᶜT′T′,
+                ᶜq′q′,
+            ) do ᶜmp_tendency, ᶜρ_dq_tot_dt, ᶜρ_de_tot_dt, ρ, ᶜT, ᶜq_tot_nonneg, ᶜT′T′, ᶜq′q′
+                @. ᶜmp_tendency = microphysics_tendencies_0m(
+                    sgs_quad, cm0, thp, ρ, ᶜT, ᶜq_tot_nonneg,
+                    ᶜT′T′, ᶜq′q′, corr_Tq, ᶜΦ, dt,
+                )
+                @. ᶜρ_dq_tot_dt = ρ * ᶜmp_tendency.dq_tot_dt
+                @. ᶜρ_de_tot_dt = ᶜρ_dq_tot_dt * ᶜmp_tendency.e_tot_hlpr
+            end
+        end
+    end
     return nothing
 end
 
@@ -994,10 +1016,27 @@ function set_microphysics_tendency_cache!(
     ᶜq_sno⁰ .= ᶜspecific_env_value(@name(q_sno), Y, p)
     sgs_quad = p.atmos.sgs_quadrature
     if not_quadrature(sgs_quad)
-        @. ᶜmp_tendency⁰ = microphysics_tendencies_1m(
-            ᶜρ⁰, ᶜq_tot_nonneg⁰, ᶜq_lcl⁰, ᶜq_icl⁰, ᶜq_rai⁰, ᶜq_sno⁰,
-            ᶜT⁰, cmp, thp, dt, nsubs,
-        )
+        let ᶜρ⁰ = ᶜρ⁰, ᶜmp_tendency⁰ = ᶜmp_tendency⁰, ᶜT⁰ = ᶜT⁰,
+            ᶜq_tot_nonneg⁰ = ᶜq_tot_nonneg⁰, ᶜq_lcl⁰ = ᶜq_lcl⁰,
+            ᶜq_icl⁰ = ᶜq_icl⁰, ᶜq_rai⁰ = ᶜq_rai⁰, ᶜq_sno⁰ = ᶜq_sno⁰,
+            cmp = cmp, thp = thp, dt = dt, nsubs = nsubs
+
+            foreach_point(
+                ᶜmp_tendency⁰,
+                ᶜρ⁰,
+                ᶜT⁰,
+                ᶜq_tot_nonneg⁰,
+                ᶜq_lcl⁰,
+                ᶜq_icl⁰,
+                ᶜq_rai⁰,
+                ᶜq_sno⁰,
+            ) do ᶜmp_tendency⁰, ᶜρ⁰, ᶜT⁰, ᶜq_tot_nonneg⁰, ᶜq_lcl⁰, ᶜq_icl⁰, ᶜq_rai⁰, ᶜq_sno⁰
+                @. ᶜmp_tendency⁰ = microphysics_tendencies_1m(
+                    ᶜρ⁰, ᶜq_tot_nonneg⁰, ᶜq_lcl⁰, ᶜq_icl⁰, ᶜq_rai⁰, ᶜq_sno⁰,
+                    ᶜT⁰, cmp, thp, dt, nsubs,
+                )
+            end
+        end
     else
         (; ᶜT′T′, ᶜq′q′, ᶜsgs_moments) = p.precomputed
         corr_Tq = correlation_Tq(p.params)
@@ -1008,14 +1047,38 @@ function set_microphysics_tendency_cache!(
         # them inside every quadrature evaluation.
         ᶜλ⁰ = p.scratch.ᶜtemp_scalar_6
         ᶜmu_S⁰ = p.scratch.ᶜtemp_scalar_7
-        @. ᶜλ⁰ = TD.liquid_fraction(thp, ᶜT⁰, max(0, ᶜq_lcl⁰), max(0, ᶜq_icl⁰))
-        @. ᶜmu_S⁰ = ᶜq_tot_nonneg⁰ - TD.q_vap_saturation(thp, ᶜT⁰, ᶜρ⁰)
-        @. ᶜmp_tendency⁰ = microphysics_tendencies_1m(
-            BMT.Microphysics1Moment(), sgs_quad, cmp, thp, ᶜρ⁰, ᶜT⁰,
-            ᶜq_tot_nonneg⁰, ᶜq_lcl⁰, ᶜq_icl⁰, ᶜq_rai⁰, ᶜq_sno⁰,
-            ᶜT′T′, ᶜq′q′, corr_Tq, ᶜsgs_moments.λ_lagrange, α,
-            dt, nsubs_quad, ᶜλ⁰, ᶜmu_S⁰,
-        )
+        let ᶜρ⁰ = ᶜρ⁰, ᶜλ⁰ = ᶜλ⁰, ᶜmu_S⁰ = ᶜmu_S⁰, ᶜT⁰ = ᶜT⁰,
+            ᶜq_tot_nonneg⁰ = ᶜq_tot_nonneg⁰, ᶜq_lcl⁰ = ᶜq_lcl⁰,
+            ᶜq_icl⁰ = ᶜq_icl⁰, ᶜq_rai⁰ = ᶜq_rai⁰, ᶜq_sno⁰ = ᶜq_sno⁰,
+            sgs_quad = sgs_quad, cmp = cmp, thp = thp, corr_Tq = corr_Tq,
+            α = α, dt = dt, nsubs_quad = nsubs_quad,
+            ᶜT′T′ = ᶜT′T′, ᶜq′q′ = ᶜq′q′, ᶜsgs_moments = ᶜsgs_moments
+
+            foreach_point(
+                ᶜmp_tendency⁰,
+                ᶜρ⁰,
+                ᶜλ⁰,
+                ᶜmu_S⁰,
+                ᶜT⁰,
+                ᶜq_tot_nonneg⁰,
+                ᶜq_lcl⁰,
+                ᶜq_icl⁰,
+                ᶜq_rai⁰,
+                ᶜq_sno⁰,
+                ᶜT′T′,
+                ᶜq′q′,
+                ᶜsgs_moments,
+            ) do ᶜmp_tendency⁰, ᶜρ⁰, ᶜλ⁰, ᶜmu_S⁰, ᶜT⁰, ᶜq_tot_nonneg⁰, ᶜq_lcl⁰, ᶜq_icl⁰, ᶜq_rai⁰, ᶜq_sno⁰, ᶜT′T′, ᶜq′q′, ᶜsgs_moments
+                @. ᶜλ⁰ = TD.liquid_fraction(thp, ᶜT⁰, max(0, ᶜq_lcl⁰), max(0, ᶜq_icl⁰))
+                @. ᶜmu_S⁰ = ᶜq_tot_nonneg⁰ - TD.q_vap_saturation(thp, ᶜT⁰, ᶜρ⁰)
+                @. ᶜmp_tendency⁰ = microphysics_tendencies_1m(
+                    BMT.Microphysics1Moment(), sgs_quad, cmp, thp, ᶜρ⁰, ᶜT⁰,
+                    ᶜq_tot_nonneg⁰, ᶜq_lcl⁰, ᶜq_icl⁰, ᶜq_rai⁰, ᶜq_sno⁰,
+                    ᶜT′T′, ᶜq′q′, corr_Tq, ᶜsgs_moments.λ_lagrange, α,
+                    dt, nsubs_quad, ᶜλ⁰, ᶜmu_S⁰,
+                )
+            end
+        end
     end
 
     return nothing
@@ -1207,33 +1270,49 @@ function set_microphysics_tendency_cache!(
     ᶜq_rim = @. lazy(specific(Y.c.ρq_rim, Y.c.ρ))
     ᶜb_rim = @. lazy(specific(Y.c.ρb_rim, Y.c.ρ))
 
-    # Compute microphysics tendency
+    # Compute microphysics tendency and apply limiting
     # TODO - looks like aerosol activation is missing
-    @. ᶜmp_tendency = BMT.bulk_microphysics_tendencies(
-        BMT.Microphysics2Moment(), params_2mp3, thp, Y.c.ρ, ᶜT,
-        ᶜq_lcl, ᶜn_lcl, ᶜq_rai, ᶜn_rai, ᶜq_icl, ᶜn_ice, ᶜq_rim, ᶜb_rim, ᶜlogλ,
-    )
-    # Apply coupled limiting directly
-    ᶜf_liq = @. lazy(
-        coupled_sink_limit_factor(
-            ᶜmp_tendency.dq_lcl_dt, ᶜmp_tendency.dn_lcl_dt, ᶜq_lcl, ᶜn_lcl, dt,
-        ),
-    )
-    ᶜf_rai = @. lazy(
-        coupled_sink_limit_factor(
-            ᶜmp_tendency.dq_rai_dt, ᶜmp_tendency.dn_rai_dt, ᶜq_rai, ᶜn_rai, dt,
-        ),
-    )
-    @. ᶜmp_tendency.dq_lcl_dt *= ᶜf_liq
-    @. ᶜmp_tendency.dn_lcl_dt *= ᶜf_liq
-    @. ᶜmp_tendency.dq_rai_dt *= ᶜf_rai
-    @. ᶜmp_tendency.dn_rai_dt *= ᶜf_rai
-    # TODO - unify the P3 logic with mp_tendency
-    @. ᶜScoll.dq_rim_dt = ᶜmp_tendency.dq_rim_dt
-    @. ᶜScoll.db_rim_dt = ᶜmp_tendency.db_rim_dt
-    # TODO - snow not used in P3 (ice encompasses all frozen hydrometeors)
-    # Fix the structure of the named tuple
-    @. ᶜmp_tendency.dq_sno_dt = 0
+    let Y = Y, params_2mp3 = params_2mp3, thp = thp, ᶜlogλ = ᶜlogλ,
+        dt = dt, ᶜq_lcl = ᶜq_lcl, ᶜn_lcl = ᶜn_lcl, ᶜq_rai = ᶜq_rai, ᶜn_rai = ᶜn_rai
+
+        foreach_point(
+            ᶜmp_tendency,
+            ᶜScoll,
+            Y.c.ρ,
+            ᶜT,
+            ᶜq_lcl,
+            ᶜn_lcl,
+            ᶜq_rai,
+            ᶜn_rai,
+            ᶜq_icl,
+            ᶜn_ice,
+            ᶜq_rim,
+            ᶜb_rim,
+        ) do ᶜmp_tendency, ᶜScoll, ρ, ᶜT, ᶜq_lcl, ᶜn_lcl, ᶜq_rai, ᶜn_rai, ᶜq_icl, ᶜn_ice, ᶜq_rim, ᶜb_rim
+            # Compute microphysics tendency
+            @. ᶜmp_tendency = BMT.bulk_microphysics_tendencies(
+                BMT.Microphysics2Moment(), params_2mp3, thp, ρ, ᶜT,
+                ᶜq_lcl, ᶜn_lcl, ᶜq_rai, ᶜn_rai, ᶜq_icl, ᶜn_ice, ᶜq_rim, ᶜb_rim, ᶜlogλ,
+            )
+            # Apply coupled limiting directly
+            ᶜf_liq = @. coupled_sink_limit_factor(
+                ᶜmp_tendency.dq_lcl_dt, ᶜmp_tendency.dn_lcl_dt, ᶜq_lcl, ᶜn_lcl, dt,
+            )
+            ᶜf_rai = @. coupled_sink_limit_factor(
+                ᶜmp_tendency.dq_rai_dt, ᶜmp_tendency.dn_rai_dt, ᶜq_rai, ᶜn_rai, dt,
+            )
+            @. ᶜmp_tendency.dq_lcl_dt *= ᶜf_liq
+            @. ᶜmp_tendency.dn_lcl_dt *= ᶜf_liq
+            @. ᶜmp_tendency.dq_rai_dt *= ᶜf_rai
+            @. ᶜmp_tendency.dn_rai_dt *= ᶜf_rai
+            # TODO - unify the P3 logic with mp_tendency
+            @. ᶜScoll.dq_rim_dt = ᶜmp_tendency.dq_rim_dt
+            @. ᶜScoll.db_rim_dt = ᶜmp_tendency.db_rim_dt
+            # TODO - snow not used in P3 (ice encompasses all frozen hydrometeors)
+            # Fix the structure of the named tuple
+            @. ᶜmp_tendency.dq_sno_dt = 0
+        end
+    end
     return nothing
 end
 
