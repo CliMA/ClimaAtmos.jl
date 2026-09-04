@@ -553,6 +553,7 @@ end
         staging_root = STAGING_ROOT,
         ref_counter_file_PR = joinpath(@__DIR__, "ref_counter.jl"),
         repro_folder = "reproducibility_bundle",
+        extra_files = ("nc_files.tar",),
     )
 
 Copy a PR build's reproducibility bundle into a per-PR staging directory,
@@ -560,9 +561,12 @@ Copy a PR build's reproducibility bundle into a per-PR staging directory,
 staging for that PR (so at most one bundle is kept per open PR). Publishes
 nothing; `publish_reference.jl` moves it into the reference store on merge.
 
-Only the bundle is staged — `prog_state.hdf5` per job plus the job-independent
-`ref_counter.jl`, which is all reference comparisons read (see
-`reproducibility_results`). See reproducibility_tests/README.md.
+What is staged is the bundle — `prog_state.hdf5` per job plus the
+job-independent `ref_counter.jl`, which is all reference *comparisons* read
+(see `reproducibility_results`) — and `extra_files`, taken from each job's
+output directory. `nc_files.tar` is staged so that a later build can plot its
+own diagnostics against the reference (see the plotting block of
+`.buildkite/ci_driver.jl`). See reproducibility_tests/README.md.
 """
 function stage_pr_data(;
     dirs_src,
@@ -570,6 +574,7 @@ function stage_pr_data(;
     staging_root = STAGING_ROOT,
     ref_counter_file_PR = joinpath(@__DIR__, "ref_counter.jl"),
     repro_folder = "reproducibility_bundle",
+    extra_files = ("nc_files.tar",),
 )
     @assert isfile(ref_counter_file_PR)
     pr_dir = pr_staging_dir(pr_number; staging_root)
@@ -578,10 +583,18 @@ function stage_pr_data(;
     ispath(pr_dir) && rm(pr_dir; recursive = true, force = true)
     for src_dir in dirs_src
         job_id = basename(src_dir)
-        bundle_dir = joinpath(src_dir, "output_active", repro_folder)
+        out_dir = joinpath(src_dir, "output_active")
+        bundle_dir = joinpath(out_dir, repro_folder)
         isdir(bundle_dir) || continue
         for src in all_files_in_dir(bundle_dir)
             dest = joinpath(dest_repro, job_id, basename(src))
+            mkpath(dirname(dest))
+            cp(src, dest; force = true)
+        end
+        for file in extra_files
+            src = joinpath(out_dir, file)
+            isfile(src) || continue
+            dest = joinpath(dest_repro, job_id, file)
             mkpath(dirname(dest))
             cp(src, dest; force = true)
         end
