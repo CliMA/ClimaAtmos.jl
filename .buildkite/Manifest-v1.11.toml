@@ -2,7 +2,7 @@
 
 julia_version = "1.11.9"
 manifest_format = "2.0"
-project_hash = "5bc1eaf241750fef8114acf929a628cb2b1cf8aa"
+project_hash = "eef602b151ef4127374ab25f5cd9fc279c3306eb"
 
 [[deps.ADTypes]]
 deps = ["PrecompileTools"]
@@ -346,7 +346,7 @@ version = "0.5.23"
 deps = ["Adapt", "ArgParse", "Artifacts", "AtmosphericProfilesLibrary", "ClimaComms", "ClimaCore", "ClimaDiagnostics", "ClimaInterpolations", "ClimaParams", "ClimaTimeSteppers", "ClimaUtilities", "CloudMicrophysics", "Dates", "Flux", "ForwardDiff", "Insolation", "Interpolations", "JLD2", "LazyArtifacts", "LazyBroadcast", "LinearAlgebra", "Logging", "NCDatasets", "NVTX", "NullBroadcasts", "RRTMGP", "Random", "SparseMatrixColorings", "StaticArrays", "Statistics", "SurfaceFluxes", "Thermodynamics", "UnrolledUtilities", "YAML"]
 path = ".."
 uuid = "b2c96348-7fb7-4fe0-8da9-78d88439e717"
-version = "0.42.8"
+version = "0.42.9"
 
     [deps.ClimaAtmos.extensions]
     ClimaAtmosMusica = "Musica"
@@ -367,14 +367,22 @@ weakdeps = ["CUDA", "MPI"]
 
 [[deps.ClimaCore]]
 deps = ["Adapt", "BandedMatrices", "BlockArrays", "ClimaComms", "ClimaInterpolations", "CubedSphere", "DataStructures", "ForwardDiff", "GaussQuadrature", "GilbertCurves", "HDF5", "InteractiveUtils", "IntervalSets", "KrylovKit", "LLVM", "LazyBroadcast", "LinearAlgebra", "MultiBroadcastFusion", "NVTX", "PkgVersion", "Random", "RootSolvers", "SparseArrays", "StaticArrays", "Statistics", "UnrolledUtilities"]
-git-tree-sha1 = "935612b09edc7e74afc4c3e109bb66965e9810f1"
+git-tree-sha1 = "f11cb3c36eb6dbd62e547e564b6ada0b4eafc73f"
 uuid = "d414da3d-4745-48bb-8d80-42e94e092884"
-version = "0.15.3"
-weakdeps = ["CUDA", "GPUCompiler", "Krylov"]
+version = "0.16.0"
 
     [deps.ClimaCore.extensions]
     ClimaCoreCUDAExt = "CUDA"
+    ClimaCoreMakieExt = "Makie"
+    ClimaCoreRecipesBaseExt = "RecipesBase"
     KrylovExt = "Krylov"
+
+    [deps.ClimaCore.weakdeps]
+    CUDA = "052768ef-5323-5732-b1bb-66c8b64840ba"
+    GPUCompiler = "61eb1bfa-7361-4325-ad38-22787b887f55"
+    Krylov = "ba0b0d4f-ebba-5204-a429-3ac8c609bfb7"
+    Makie = "ee78f7c6-11fb-53f2-987a-cfe4a2b5a57a"
+    RecipesBase = "3cdcf5f2-1ef4-517c-9805-6587b60abb01"
 
 [[deps.ClimaCoreSpectra]]
 deps = ["FFTW"]
@@ -390,9 +398,9 @@ version = "0.3.20"
 
 [[deps.ClimaDiagnostics]]
 deps = ["Accessors", "ClimaComms", "ClimaCore", "ClimaTimeSteppers", "ClimaUtilities", "Dates", "NCDatasets", "NVTX", "OrderedCollections"]
-git-tree-sha1 = "8922a92d27d29b6c9d8407b35b9b34820eed0fac"
+git-tree-sha1 = "1005e58a2f96b10c909ec942ea4dd88f4c9e7d4f"
 uuid = "1ecacbb8-0713-4841-9a07-eb5aa8a2d53f"
-version = "0.3.8"
+version = "0.3.9"
 
 [[deps.ClimaInterpolations]]
 deps = ["DocStringExtensions"]
@@ -422,9 +430,9 @@ weakdeps = ["BenchmarkTools", "CUDA", "OrderedCollections", "PrettyTables"]
 
 [[deps.ClimaUtilities]]
 deps = ["Artifacts", "ClimaComms", "Dates"]
-git-tree-sha1 = "0b3bee4ed33c36adea64ed47fa4ef5bb60926006"
+git-tree-sha1 = "8abaaa338bcca7d139060df4991afcd71d355b80"
 uuid = "b3f4f4ca-9299-4f7f-bd9b-81e1242a7513"
-version = "0.1.31"
+version = "0.1.32"
 weakdeps = ["Adapt", "CUDA", "ClimaCore", "ClimaCoreTempestRemap", "Interpolations", "NCDatasets"]
 
     [deps.ClimaUtilities.extensions]

@@ -359,7 +359,7 @@ ClimaAtmos.ᶠdiffdivᵥ_u₃
 Biased and upwinded reconstructions:
 
 ```@docs
-ClimaAtmos.ᶠleft_bias
+ClimaAtmos.ᶠbottom_bias
 ClimaAtmos.ᶠupwind1
 ClimaAtmos.ᶠupwind3
 ClimaAtmos.ᶠlin_vanleer

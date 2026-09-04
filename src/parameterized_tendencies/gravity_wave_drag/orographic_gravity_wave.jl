@@ -632,10 +632,10 @@ function calc_nonpropagating_forcing!(
     end
 
     # Include cells that overlap with [z_pbl, z_ref):
-    # - ᶜright_bias checks upper face > z_pbl (cell extends above z_pbl)
-    # - ᶜleft_bias checks lower face < z_ref (cell starts below z_ref)
+    # - ᶜtop_bias checks upper face > z_pbl (cell extends above z_pbl)
+    # - ᶜbottom_bias checks lower face < z_ref (cell starts below z_ref)
     # This ensures at least one cell is included when z_ref > z_pbl
-    @. ᶜmask = isone(ᶜright_bias.((ᶠz .> ᶠz_pbl))) .&& isone(ᶜleft_bias.((ᶠz .< ᶠz_ref)))
+    @. ᶜmask = isone(ᶜtop_bias.((ᶠz .> ᶠz_pbl))) .&& isone(ᶜbottom_bias.((ᶠz .< ᶠz_ref)))
     @. ᶜweights = ᶜinterp.(ᶠp .- ᶠp_ref)
     @. ᶜdiff = ᶜinterp.(ᶠp_m1 .- ᶠp)
 
@@ -816,8 +816,8 @@ This is needed to access face values at level `k-1` from within a level-`k` comp
 (e.g., computing `ᶠp[k-1]` for pressure differences across cell layers). ClimaCore `column_reduce` and `column_accumulate` do not support direct `field[k-1]` indexing in broadcast expressions, so we
 construct the shifted view via a round-trip through the cell-center grid:
 
- 1. `LeftBiasedF2C` interpolates faces → cell centers using the value from below.
- 2. `LeftBiasedC2F` interpolates cell centers → faces using the value from below,
+ 1. `BottomBiasedF2C` interpolates faces → cell centers using the value from below.
+ 2. `BottomBiasedC2F` interpolates cell centers → faces using the value from below,
     with `boundary_value` prescribed at the bottom face.
 
 The net effect is `shifted_field[k] = source_field[k-1]` for interior faces,
@@ -826,8 +826,8 @@ and `shifted_field[bottom] = boundary_value` at the lowest face.
 Called from `orographic_gravity_wave_compute_tendency!` to build `ᶠp_m1`.
 """
 function field_shiftface_down!(source_field, shifted_field, boundary_value)
-    L1 = Operators.LeftBiasedC2F(; bottom = Operators.SetValue(boundary_value))
-    shifted_field .= L1.(ᶜleft_bias.(source_field))
+    B1 = Operators.BottomBiasedC2F(; bottom = Operators.SetValue(boundary_value))
+    shifted_field .= B1.(ᶜbottom_bias.(source_field))
 end
 
 """

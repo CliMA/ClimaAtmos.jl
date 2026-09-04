@@ -356,7 +356,7 @@ function solve_sgs_ρa_implicit_stage_analytic!(Y, p, dtγ)
     #   ᶜmass_flux_factor_bot = α_bot · (1 − implicit_detr_prefactor)
     # where α_face = (ᶠinterp(ρʲ·J)/ᶠJ · ᶠu₃ʲ/Δz_face) / (ρʲ_upwind · Δz).
     # For upward flow the upwind density at the bottom face is ρʲ[i−1], which we
-    # extract via `ᶠleft_bias(ᶜρʲs)`. The mass-flux-divergence component of the
+    # extract via `ᶠbottom_bias(ᶜρʲs)`. The mass-flux-divergence component of the
     # detrainment is folded into `ᶜone_minus_implicit_detr_prefactor` (a
     # multiplicative correction on the implicit advection term), leaving the
     # `(ε − δ)` term to carry only the area-bounding, velocity-scale
@@ -393,7 +393,7 @@ function solve_sgs_ρa_implicit_stage_analytic!(Y, p, dtγ)
         # The recurrence uses `one_minus_prefactor = U · (1 − L · C)`.
         ᶜone_minus_implicit_detr_prefactor = @. lazy(
             ifelse(
-                ᶜdivᵥ(ᶠleft_bias(Y.c.sgsʲs.:($$j).ρa) * Y.f.sgsʲs.:($$j).u₃) < 0,
+                ᶜdivᵥ(ᶠbottom_bias(Y.c.sgsʲs.:($$j).ρa) * Y.f.sgsʲs.:($$j).u₃) < 0,
                 ᶜupper_limiter_factor *
                 (FT(1) - ᶜlower_limiter_factor * detr_massflux_vertdiv_coeff),
                 FT(1),
@@ -426,16 +426,16 @@ function solve_sgs_ρa_implicit_stage_analytic!(Y, p, dtγ)
             max(
                 FT(0.1) / dtγ,
                 1 / dtγ - ᶜexplicit_entr_minus_detr +
-                ᶜone_minus_implicit_detr_prefactor * ᶜright_bias(
+                ᶜone_minus_implicit_detr_prefactor * ᶜtop_bias(
                     ᶠinterp(ᶜρʲs.:($$j) * ᶜJ) / ᶠJ * ᶠw,
                 ) / ᶜρʲs.:($$j) / ᶜdz,
             )
         @. ᶜmass_flux_factor_bot =
-            ᶜone_minus_implicit_detr_prefactor * ᶜleft_bias(
-                ᶠinterp(ᶜρʲs.:($$j) * ᶜJ) / ᶠJ * ᶠw / ᶠleft_bias(ᶜρʲs.:($$j)),
+            ᶜone_minus_implicit_detr_prefactor * ᶜbottom_bias(
+                ᶠinterp(ᶜρʲs.:($$j) * ᶜJ) / ᶠJ * ᶠw / ᶠbottom_bias(ᶜρʲs.:($$j)),
             ) / ᶜdz
         # Cell 1: overwrite α_bot[1] with 0 to bypass the NaN from
-        # `ᶠleft_bias(ᶜρʲ)` reading the undefined ghost cell below
+        # `ᶠbottom_bias(ᶜρʲ)` reading the undefined ghost cell below
         # (physical flux is zero there: u₃ = 0 at the surface).
         ᶜmass_flux_factor_bot_first =
             Fields.field_values(Fields.level(ᶜmass_flux_factor_bot, 1))

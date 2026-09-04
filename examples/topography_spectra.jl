@@ -162,7 +162,7 @@ on a spectral element grid with `h_elem` without any smoothing against
 the corresponding regridded and smoothed surface elevation field.
 Returns regridded arrays of target topography, and differences
 on cubed-sphere with `h_elem` elements per panel.
-(This field can then be plotted with `ClimaCorePlots`)
+(This field can then be plotted with `CairoMakie`, which this file already loads.)
 """
 function compare_elevation(;
     h_elem = 16,

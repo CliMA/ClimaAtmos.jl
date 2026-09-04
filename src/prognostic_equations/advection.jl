@@ -542,10 +542,10 @@ function updraft_sedimentation!(
     ᶜJ = Fields.local_geometry_field(axes(ᶜρ)).J
     # use output as a scratch field
     ∂a∂z = vtt
-    @. ∂a∂z = ᶜprecipdivᵥ(ᶠinterp(ᶜJ) / ᶠJ * ᶠright_bias(Geometry.WVector(ᶜa)))
+    @. ∂a∂z = ᶜprecipdivᵥ(ᶠinterp(ᶜJ) / ᶠJ * ᶠtop_bias(Geometry.WVector(ᶜa)))
     ᶠρ = @. p.scratch.ᶠtemp_scalar = ᶠinterp(ᶜρ * ᶜJ) / ᶠJ
-    ᶠwχ = @. p.scratch.ᶠtemp_scalar_2 = ᶠright_bias(-(ᶜw) * ᶜχ)
-    ᶠwaχ = @. p.scratch.ᶠtemp_scalar_3 = ᶠright_bias(-(ᶜw) * ᶜa * ᶜχ)
+    ᶠwχ = @. p.scratch.ᶠtemp_scalar_2 = ᶠtop_bias(-(ᶜw) * ᶜχ)
+    ᶠwaχ = @. p.scratch.ᶠtemp_scalar_3 = ᶠtop_bias(-(ᶜw) * ᶜa * ᶜχ)
     # Base: within-updraft flux convergence a · ∂_z(ρ w χ)
     # Lateral correction: α_lat · min(∂a/∂z, 0) · ρ⁰w⁰χ⁰
     @. vtt = ifelse(

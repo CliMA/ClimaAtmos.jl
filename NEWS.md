@@ -4,6 +4,17 @@ ClimaAtmos.jl Release Notes
 main
 ----
 
+0.42.9
+-------
+- Update to ClimaCore.jl v0.16 (support for v0.15 is dropped). The biased
+  interpolation operators are spelled `BottomBiased*`/`TopBiased*` instead of
+  `LeftBiased*`/`RightBiased*`, and the correspondingly renamed abbreviations
+  are `ᶠbottom_bias`, `ᶠtop_bias`, `ᶜbottom_bias` and `ᶜtop_bias`. The advection
+  operators' one-sided boundary conditions are replaced by the generalized
+  `Extrapolate{N}` ghost-point padding: `ᶠupwind3` uses `Extrapolate{1}` and
+  `ᶠlin_vanleer` uses `Extrapolate{0}`. Both change results at the two faces
+  nearest each boundary, so this is a behavioral change.
+
 0.42.8
 -------
 - [#4779](https://github.com/CliMA/ClimaAtmos.jl/pull/4779) ![][badge-🐛bugfix] ![][badge-🔥behavioralΔ] Fit the SGS quadrature Lagrange multiplier to the discrete quadrature rule instead of the continuous Gaussian, so the reconstructed condensate mass hits its target. Also correct the 0-moment energy sink for the covariance of `dq_tot/dt` and `e_tot`.
