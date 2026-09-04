@@ -1,4 +1,4 @@
-409
+411
 
 # **README**
 #
@@ -32,6 +32,12 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+411
+- Update to ClimaParams v1.1.7: the reference temperature profile now uses
+  T_surf_ref = 288 K and T_min_ref = 215 K (was 290 K and 220 K), matching
+  the dycore manuscript. Changes the hydrostatic reference state and the
+  scale height used in the EDMF closures.
+
 410
 - Update to ClimaCore 0.16
 

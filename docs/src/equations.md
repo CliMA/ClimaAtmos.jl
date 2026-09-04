@@ -250,7 +250,7 @@ overridden like any other parameter through a TOML file; see
 
   - ``T_{sfc}`` and ``T_{\min}`` are the Thermodynamics parameters
     `temperature_surface_reference` and `temperature_min_reference`, defaulting
-    to 290 K and 220 K.
+    to 288 K and 215 K.
   - ``n_s`` is the exponent `s_ref`, the parameter
     `reference_temperature_exponent`, defaulting to 7. It must be an integer.
 
