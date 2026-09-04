@@ -282,11 +282,14 @@ cloud_liquid_formation:
   help: "Cloud liquid formation option for 1M microphysics [`CloudLiquidFormation` (default), ~]"
   value: "CloudLiquidFormation"
 cloud_ice_formation:
-  help: "Cloud ice formation option for 1M microphysics [`ConstantTimescale` (default), `TemperatureDependent`, ~]"
-  value: "TemperatureDependent"
+  help: "Cloud ice formation option for 1M microphysics [`PrescribedIceNumber` (default), `ConstantTimescale`, `TemperatureDependent`, ~]"
+  value: "PrescribedIceNumber"
 cloud_ice_melt:
   help: "Cloud ice melting option for 1M microphysics [`CloudIceMelt` (default), ~]"
   value: "CloudIceMelt"
+cloud_liquid_freezing:
+  help: "Cloud liquid freezing option for 1M microphysics [`HomogeneousAndHeterogeneous` (default), `Homogeneous`, `Heterogeneous`, ~]"
+  value: "HomogeneousAndHeterogeneous"
 rain_autoconversion:
   help: "Rain autoconversion option for 1M microphysics [`Kessler1M` (default), `PrescribedNd`, ~]"
   value: "Kessler1M"

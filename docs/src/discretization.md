@@ -240,7 +240,7 @@ horizontal discretization would replace this list.
     [`ClimaCore.Operators.Divergence`](@extref).
 
   - ``\hat{\mathcal{D}}_h`` is the weak horizontal spectral divergence
-    [`ClimaCore.Operators.WeakDivergence`](@extref).
+    `ClimaCore.Operators.WeakDivergence`.
 
   - ``\mathcal{D}^{split}_h`` is the split, skew-symmetric horizontal divergence
     [`ClimaCore.Operators.SplitDivergence`](@extref),
@@ -263,7 +263,7 @@ horizontal discretization would replace this list.
     [`ClimaCore.Operators.Gradient`](@extref).
 
   - ``\hat{\mathcal{G}}_h`` is the weak horizontal spectral gradient
-    [`ClimaCore.Operators.WeakGradient`](@extref), the outer gradient of the
+    `ClimaCore.Operators.WeakGradient`, the outer gradient of the
     vector Laplacian.
 
   - ``\mathcal{C}_h`` is the curl of the components involving horizontal
@@ -273,7 +273,7 @@ horizontal discretization would replace this list.
     horizontal contravariant components.
 
   - ``\hat{\mathcal{C}}_h`` is the corresponding weak curl
-    [`ClimaCore.Operators.WeakCurl`](@extref).
+    `ClimaCore.Operators.WeakCurl`.
 
   - ``\mathcal{P}`` is the projection onto the continuous spectral element
     basis; see [Projection: direct stiffness summation](@ref).

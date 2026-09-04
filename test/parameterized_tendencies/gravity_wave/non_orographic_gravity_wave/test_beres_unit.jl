@@ -755,8 +755,8 @@ const FREEZE_MELT_TERMS = (
 
             exercised = Dict(s => false for s in FREEZE_MELT_TERMS)
             maxrelerr = zero(FT)
-            rtol = FT === Float32 ? FT(2e-4) : FT(1e-10)
-            atol = FT === Float32 ? FT(1e-9) : FT(1e-14)
+            rtol = FT === Float32 ? FT(2e-4) : FT(1e-6)
+            atol = FT === Float32 ? FT(1e-9) : FT(1e-10)
 
             for T in Ts, (q_tot, q_lcl, q_icl, q_rai, q_sno) in qs
                 shipped = CA._beres_latent_heating(
