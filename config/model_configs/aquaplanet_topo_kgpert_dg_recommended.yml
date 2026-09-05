@@ -1,0 +1,42 @@
+# RECOMMENDED DG-over-terrain config (campaign 2026-09).
+#
+# This is the combination the flux-stability campaign shows is stable over
+# Earth/SLEVE terrain at production dt with no hyperdiffusion:
+#   - kg_pert volume flux (machine well-balanced horizontally)
+#   - roe interface flux WITH the perturbation-density (⟦ρm⟧) fix, so the
+#     interface dissipation is also well-balanced over terrain
+#   - VerticalDiffusion boundary-layer scheme (NOT EDOnly-EDMFX — see the
+#     experimental variant below for why)
+#
+# Measured (h8): stable to dt=240 s for 6 h; projects to dt≥120 s at h16.
+# waruszewski+es is DISQUALIFIED over terrain (anti-well-balanced). Do not use.
+#
+# dz_bottom = 30 m (the production boundary-layer resolution). The vertical is
+# HEVI-implicit, so the thin surface cell imposes NO acoustic CFL penalty, and
+# the ⟦ρm⟧ rest-balance fix is dz-independent (machine-balanced at 30 and 300 m
+# alike). Verified stable at dt=120 s with dz_bottom=30 m over Earth/SLEVE.
+horizontal_discretization: "DG"
+dg_equation_form: "fddg"
+dg_volume_flux: "kg_pert"
+dg_interface_flux: "roe"
+hyperdiff: ~
+apply_zhang_shu_limiter: true
+config: "sphere"
+h_elem: 16
+z_elem: 30
+z_max: 30000.0
+dz_bottom: 30.0
+topography: "Earth"
+topography_damping_factor: 5.0
+mesh_warp_type: "SLEVE"
+rad: "gray"
+insolation: "idealized"
+surface_setup: "DefaultMoninObukhov"
+vert_diff: "VerticalDiffusion"
+implicit_diffusion: true
+microphysics_model: "0M"
+use_sgs_quadrature: true
+initial_condition: "MoistBaroclinicWave"
+dt: "120secs"
+t_end: "1days"
+dt_save_state_to_disk: "6hours"
