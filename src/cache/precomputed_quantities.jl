@@ -183,12 +183,6 @@ function precomputed_quantities(Y, atmos)
         # (cloud-fraction-blended) vertical gradient instead of the two-point
         # face gradient.
         ᶜbuoygrad = similar(Y.c, FT),
-        # Interface-aware effective stability N²_eff at centers; the center
-        # counterpart of `ᶠN²_eff` in `set_face_diffusivities!`, formed as the
-        # max over adjacent faces of the face-local N²_eff (including the
-        # unresolved-jump term). Feeds the mixing-length and Pr_t(Ri) closures
-        # near sharp inversions.
-        ᶜN²_eff = similar(Y.c, FT),
         # Pointwise chain-rule coefficients of the moist buoyancy gradient
         # and exact two-point face gradients of (θ_li, q_tot); filled once
         # per update by `set_buoyancy_gradient_inputs!` and shared by the
@@ -863,9 +857,9 @@ NVTX.@annotate function set_explicit_precomputed_quantities!(Y, p, t)
 
     set_covariance_cache_and_cloud_fraction!(Y, p)
 
-    # Interfacial entrainment diffusivity K_e at faces (interface-aware
-    # stability closure). Needs the final cloud fraction and ᶜN²_eff
-    # from the covariance/cloud-fraction update above.
+    # Interfacial entrainment diffusivity K_e at faces (interface-aware stability
+    # closure). Needs the final cloud fraction from the covariance/cloud-fraction
+    # update above.
     set_face_diffusivities!(Y, p)
 
     if turbconv_model isa AbstractEDMF && (

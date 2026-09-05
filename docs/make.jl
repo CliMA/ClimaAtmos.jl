@@ -50,7 +50,8 @@ makedocs(;
     # and the CI log; set LINKCHECK_STRICT=1 (e.g. in a manual or scheduled
     # run) to turn them into build failures. The check costs seconds.
     linkcheck = true,
-    warnonly = isempty(get(ENV, "LINKCHECK_STRICT", "")) ? [:linkcheck] :
+    warnonly = isempty(get(ENV, "LINKCHECK_STRICT", "")) ?
+               [:linkcheck, :external_cross_references] :
                Symbol[],
     format = Documenter.HTML(
         prettyurls = !isempty(get(ENV, "CI", "")),
