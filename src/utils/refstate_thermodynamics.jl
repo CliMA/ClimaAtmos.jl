@@ -169,7 +169,11 @@ end
     pref_from_phi(thermo_params, Φ)
 
 Reference pressure at geopotential `Φ`: inverts [`phi_r`](@ref) by Newton
-iteration (`dΦ_r/dp = −R_d T_r/p`), starting from the isothermal profile.
+iteration in `ln p` (`dΦ_r/d ln p = −R_d T_r`), starting from the isothermal
+profile. The multiplicative update keeps `p > 0` unconditionally; the additive
+form `p += p (Φ_r − Φ)/(R_d T_r)` overshoots to negative pressure above
+Φ ≈ 2.84e5 m²/s² (z ≈ 28.9 km), where the warm isothermal guess sits more than
+one scale height below the cold reference profile.
 """
 function pref_from_phi(thermo_params, Φ)
     R_d = TD.TP.R_d(thermo_params)
@@ -177,7 +181,7 @@ function pref_from_phi(thermo_params, Φ)
     p = TD.TP.MSLP(thermo_params) * exp(-Φ / (R_d * T_sfc))
     for _ in 1:8
         T_r = air_temperature_reference(thermo_params, p)
-        p += p * (phi_r(thermo_params, p) - Φ) / (R_d * T_r)
+        p *= exp((phi_r(thermo_params, p) - Φ) / (R_d * T_r))
     end
     return p
 end
