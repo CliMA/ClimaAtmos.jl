@@ -3,6 +3,7 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- ![][badge-🐛bugfix] Stop pinning the downstream ClimaCoupler checkout. The pin worked around an artifact a GitHub runner cannot fetch, but it required ClimaCore 0.15 and so stopped resolving once this package moved to 0.16, failing in `Pkg.develop` instead. `.github/workflows/downstream.yml` now tracks ClimaCoupler's default branch as upstream's workflow does, and both downstream jobs pass again, so the known issue that recorded the workaround is removed.
 - ![][badge-🐛bugfix] Point the ClimaCore documentation inventory at the v0.16 series, which is what `Project.toml` allows after the upstream sync, and correct the operator note that still described the 0.15 signature. The spectral-element operators dropped their `I` parameter in 0.16, so the weak divergence is `Divergence{WeakForm}`.
 - [#50](https://github.com/johannespletzer/ClimaAtmosResiDyn.jl/pull/50) ![][badge-🐛bugfix] Restored package precompilation on Julia 1.10 and 1.11 by reattaching the `tag_closure_callback!` docstring to its function, and restored the callback's API documentation.
 
