@@ -78,8 +78,9 @@ the closure, not the test.
 
 ## 2. Downstream ClimaCoupler tests need a cluster-only artifact
 
-**Status:** mitigated by pinning the downstream checkout; the artifact problem
-itself is not fixable from this repository.
+**Status:** not fixable from this repository, and no longer mitigated. The
+checkout was pinned until ClimaAtmos moved to ClimaCore 0.16; the pin now fails
+earlier and for a worse reason, so it has been removed.
 
 Both `downstream ClimaCoupler.jl` jobs failed during `CoupledSimulation`
 construction, on 1.10 and 1.11 identically:
@@ -120,14 +121,34 @@ What is established:
     ClimaAtmos config key and the config in question lives in the ClimaCoupler
     repository, so this repository cannot set it for that test.
 
-The checkout is therefore pinned to `3d9c07c3`, the last commit the job passed
-against, so it again reports on changes made *here* instead of on upstream data
-availability. The cost is that upstream API breaks now go unnoticed until
-someone unpins.
+The checkout was pinned to `3d9c07c3` for a while, the last commit the job passed
+against, so that it reported on changes made *here* instead of on upstream data
+availability.
 
-Unpin when any of these is true: ClimaCoupler's AMIP test no longer needs the
-artifact, the artifact gains a download block, or CI grows an `Overrides.toml`
-pointing at a copy of the data.
+**That pin expired with the upstream sync to ClimaAtmos v0.42.9.** The sync moves
+the compat bound to `ClimaCore = "0.16"`, and ClimaCoupler at `3d9c07c3` still
+requires 0.15, so the AMIP environment no longer has a solution. The job stopped
+reaching the artifact at all and began failing in `Pkg.develop`, inside
+`Pkg.Resolve.Graph`, which is a worse signal: a resolution error says nothing
+about whether this repository broke anything.
+
+The pin has therefore been removed and `.github/workflows/downstream.yml` is once
+again byte-identical to upstream's. The job still fails, on the artifact error
+above, but that failure is upstream-by-design and reproduces on
+`CliMA/ClimaAtmos.jl` identically, whereas the resolution error was ours.
+
+There are two distinct failure modes to tell apart when reading this job:
+
+  - `Artifact "wxquest_initial_conditions" was not found` — the known upstream
+    data problem described above. Expected.
+  - Anything raised from `Pkg.Resolve` — a genuine incompatibility between this
+    repository's bounds and ClimaCoupler's. Worth investigating.
+
+This is fixed when any of these becomes true: ClimaCoupler's AMIP test no longer
+needs the artifact, the artifact gains a download block, or CI grows an
+`Overrides.toml` pointing at a copy of the data. Re-pinning is not a fix unless a
+ClimaCoupler commit exists that both supports the ClimaCore series this package
+requires and predates the `initial_condition: "WeatherModel"` config change.
 
 ## 3. Levante 1/2/4 GPU scaling has not been measured
 
