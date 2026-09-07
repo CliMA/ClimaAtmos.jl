@@ -45,7 +45,7 @@ PrecompileCI = {path = "PrecompileCI"}
 [compat]
 ArgParse = "1"
 BenchmarkTools = "1.8.0"
-CUDA = "5, 6"
+CUDA = "5.5"
 CairoMakie = "0.15.7"
 ClimaAnalysis = "0.5"
 ClimaAtmos = "0.42"
