@@ -40,6 +40,11 @@ These are accessed through the integrator after a run, e.g.
   - **Diagnostics**: derived output variables, as opposed to the prognostic state
     `Y`. See [Computing and saving diagnostics](@ref) and the catalog of
     [available diagnostic variables](@ref "Available diagnostic variables").
+  - **Parent-budget ledger**: the internal accounting that checks whether air
+    mass, total water and total energy changed by exactly what the accepted
+    time step applied. Its terms, from *reservoir* to *reported*, are explained
+    in plain language on the [ledger vocabulary](parent_budget/vocabulary.md)
+    page.
 
 For the mapping between the symbols used in the equations pages and the
 names used in the code (the `ᶜ`/`ᶠ` prefixes, subdomain superscripts, and

@@ -305,7 +305,7 @@ performance jobs.
   - Emit versioned machine-readable output, and a concise human-readable
     summary.
   - Report each quantity and control volume as `pass`, `fail`, `blocked` or
-    `not_applicable`.
+    `not_applicable`, and a crossing as `reported`.
   - Include the configuration, backend and rank count, state and accounting
     precision, timestepper algorithm and adapter version, supported-scope
     classification, tolerances and scales, the parent, attribution and transfer

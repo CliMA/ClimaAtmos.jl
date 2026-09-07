@@ -14,6 +14,9 @@ by itself establish that any of them closes in a running simulation. What has
 been established at any moment is a property of the implementation, and each
 stack step in the plan names the one claim it adds.
 
+The same terms are explained in plain language, for model users, on the
+[vocabulary page](vocabulary.md). This page governs where the two differ.
+
 ## Claim levels
 
 Six claims are kept apart. Establishing one does **not** establish the next, and
@@ -74,7 +77,9 @@ to either of them ambiguous.
 | Invariant zero            | The amount is provably zero, and the proof is named.                                                                                               |
 | Not applicable            | The quantity does not exist for this path or reservoir in this configuration.                                                                      |
 | Unknown                   | Not established. Blocks the claim it belongs to.                                                                                                   |
-| Blocked                   | A claim that cannot be evaluated because a required component is unknown.                                                                          |
+| Blocked                   | A claim that cannot be evaluated because a required component is unknown, open, or missing.                                                        |
+| Open                      | A disposition not yet established from the code. Demands nothing of a record and blocks every claim it feeds.                                      |
+| Reported                  | The status of a crossing: a signed boundary flux with no verdict, because nothing exists to cancel against.                                        |
 
 ## The three identities
 
@@ -219,7 +224,9 @@ it declares:
   - the applicability of each quantity in each reservoir, and which components
     carry a proven-zero obligation;
   - whether an accepted channel envelope is required;
-  - whether process decomposition is required or optional.
+  - the roster of process rows each channel's decomposition must record, so an
+    omitted process is a named missing row and not an exact cancellation among
+    the rows that arrived.
 
 Three consequences follow, and each refuses a failure mode that an
 observation-driven report has by construction.
@@ -553,16 +560,20 @@ missing, duplicated or mismatched leg distinguishable after the fact.
 
 Every quantity, in every available control volume, reports exactly one of:
 
-| Status           | Meaning                                                        |
-|:---------------- |:-------------------------------------------------------------- |
-| `pass`           | Applicable, unblocked, and the residual is within tolerance.   |
-| `fail`           | Applicable, unblocked, and the residual exceeds tolerance.     |
-| `blocked`        | A required component is unknown, so no claim can be evaluated. |
-| `not_applicable` | No reservoir in this view owns the quantity.                   |
+| Status           | Meaning                                                      |
+|:---------------- |:------------------------------------------------------------ |
+| `pass`           | Applicable, unblocked, and the residual is within tolerance. |
+| `fail`           | Applicable, unblocked, and the residual exceeds tolerance.   |
+| `blocked`        | A required component is unknown, open or missing; no claim.  |
+| `not_applicable` | No reservoir in this view owns the quantity.                 |
+| `reported`       | A crossing: a signed boundary flux with no verdict to give.  |
 
 A blocked result still reports its numbers, because they are informative, but no
-closure claim may be made from it. An unavailable control volume is not reported
-at all, which is different from `not_applicable`.
+closure claim may be made from it. A `reported` result is not a verdict: a
+crossing out of the view or out of the model has nothing to cancel against, and
+its total is the boundary flux, which `not_applicable` would misdescribe as a
+quantity nobody owns. An unavailable control volume is not reported at all,
+which is different from `not_applicable`.
 
 ## Tolerance model
 
