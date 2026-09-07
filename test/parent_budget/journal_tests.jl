@@ -437,10 +437,18 @@ transfer_result(commit, event, quantity, cv) = only(
             ledger,
             transfer_leg(; leg = :atmosphere, channel = :explicit_main),
         )
-        PB.record_leg!(ledger, transfer_leg(; leg = :atmosphere))
+        # The event declares water measured, so the legs it accepts record it.
         PB.record_leg!(
             ledger,
-            transfer_leg(; leg = :surface, reservoir = PB.SlabSurfaceReservoir()),
+            transfer_leg(; leg = :atmosphere, water = mval(FT, 1)),
+        )
+        PB.record_leg!(
+            ledger,
+            transfer_leg(;
+                leg = :surface,
+                reservoir = PB.SlabSurfaceReservoir(),
+                water = mval(FT, -1),
+            ),
         )
         @test length(ledger.legs) == 2
     end
