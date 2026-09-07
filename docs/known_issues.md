@@ -76,81 +76,7 @@ in the sphere residual, is the right amount of leakage for this scheme. The
 corrected assertions bound it and record it; tightening it would mean changing
 the closure, not the test.
 
-## 2. Downstream ClimaCoupler tests need a cluster-only artifact
-
-**Status:** not fixable from this repository, and no longer mitigated. The
-checkout was pinned until ClimaAtmos moved to ClimaCore 0.16; the pin now fails
-earlier and for a worse reason, so it has been removed.
-
-Both `downstream ClimaCoupler.jl` jobs failed during `CoupledSimulation`
-construction, on 1.10 and 1.11 identically:
-
-```
-AMIP test: Error During Test
-  LoadError: Artifact "wxquest_initial_conditions" was not found by looking in the paths:
-    ~/.julia/artifacts/85b1e3654fb88f19a715ea6c235e1d66f254d2e6
-```
-
-raised from `@clima_artifact("wxquest_initial_conditions")` in
-`src/utils/weather_model.jl:85`, reached through `Setups.overwrite_initial_state!`
-in `src/setups/WeatherModel.jl:69`.
-
-What is established:
-
-  - The trigger is a config change upstream, not an API break.
-    `.github/workflows/downstream.yml` checked out `CliMA/ClimaCoupler.jl` **main**
-    unpinned. It passed against `3d9c07c3ef911991d0b98b70c52154e448feaa02` and
-    fails against `0ad056e025e3a622859c4457a0467e5c28d9bc0d`; the only difference
-    that reaches the AMIP test is one line added to
-    `config/atmos_configs/climaatmos_edonly.yml`, the atmos config that test
-    hands to ClimaAtmos:
-
-    ```
-    +initial_condition: "WeatherModel"
-    ```
-
-  - That initial condition requires data a GitHub runner cannot obtain.
-    `weather_model_data_path` takes the artifact path whenever
-    `era5_initial_condition_dir` is `nothing`, and `Artifacts.toml` declares
-    `wxquest_initial_conditions` with a `git-tree-sha1` and no `download` block,
-    so it resolves only through an `Overrides.toml` on a machine that already
-    holds the data. Upstream `CliMA/ClimaAtmos.jl@main` declares it identically,
-    so this is by design rather than local drift.
-
-  - `era5_initial_condition_dir` would bypass the artifact, but it is a
-    ClimaAtmos config key and the config in question lives in the ClimaCoupler
-    repository, so this repository cannot set it for that test.
-
-The checkout was pinned to `3d9c07c3` for a while, the last commit the job passed
-against, so that it reported on changes made *here* instead of on upstream data
-availability.
-
-**That pin expired with the upstream sync to ClimaAtmos v0.42.9.** The sync moves
-the compat bound to `ClimaCore = "0.16"`, and ClimaCoupler at `3d9c07c3` still
-requires 0.15, so the AMIP environment no longer has a solution. The job stopped
-reaching the artifact at all and began failing in `Pkg.develop`, inside
-`Pkg.Resolve.Graph`, which is a worse signal: a resolution error says nothing
-about whether this repository broke anything.
-
-The pin has therefore been removed and `.github/workflows/downstream.yml` is once
-again byte-identical to upstream's. The job still fails, on the artifact error
-above, but that failure is upstream-by-design and reproduces on
-`CliMA/ClimaAtmos.jl` identically, whereas the resolution error was ours.
-
-There are two distinct failure modes to tell apart when reading this job:
-
-  - `Artifact "wxquest_initial_conditions" was not found` — the known upstream
-    data problem described above. Expected.
-  - Anything raised from `Pkg.Resolve` — a genuine incompatibility between this
-    repository's bounds and ClimaCoupler's. Worth investigating.
-
-This is fixed when any of these becomes true: ClimaCoupler's AMIP test no longer
-needs the artifact, the artifact gains a download block, or CI grows an
-`Overrides.toml` pointing at a copy of the data. Re-pinning is not a fix unless a
-ClimaCoupler commit exists that both supports the ClimaCore series this package
-requires and predates the `initial_condition: "WeatherModel"` config change.
-
-## 3. Levante 1/2/4 GPU scaling has not been measured
+## 2. Levante 1/2/4 GPU scaling has not been measured
 
 **Status:** open, needs a run on Levante.
 
@@ -160,7 +86,7 @@ CUDA/MPI device test passes — but the strong-scaling numbers they exist to
 produce have not been collected. The measurement protocol is in
 `runscripts/README.md`.
 
-## 4. Tagged water does not close under AMD LES or under PrognosticEDMFX
+## 3. Tagged water does not close under AMD LES or under PrognosticEDMFX
 
 **Status:** diagnosed, not fixed. Neither combination is exercised by any test,
 so nothing currently fails.
@@ -193,7 +119,7 @@ Either guard the combinations in `check_water_tagging_supported`, or give the
 tags the matching transport. Until then, read `q_tag_res` as a closure monitor
 only for configurations that use a shared diffusivity and no prognostic EDMF.
 
-## 5. The implicit water-microphysics attribution has no Jacobian diagonal
+## 4. The implicit water-microphysics attribution has no Jacobian diagonal
 
 **Status:** diagnosed, not fixed.
 
@@ -212,7 +138,7 @@ a fixed Newton iteration count this is error in the answer rather than only
 slower convergence. Needs a precipitating run to show up; no GitHub CI job
 reaches it.
 
-## 6. `fill_with_nans!` would destroy the tag masks if it ever descended into the cache
+## 5. `fill_with_nans!` would destroy the tag masks if it ever descended into the cache
 
 **Status:** latent; harmless today.
 
@@ -222,7 +148,7 @@ plain struct and hits the `::Any` fallback — which means the feature is a no-o
 in general, not that the tags are protected. Worth knowing before anyone makes
 it work.
 
-## 7. Cleanup findings that belong to upstream ClimaAtmos, not to this fork
+## 6. Cleanup findings that belong to upstream ClimaAtmos, not to this fork
 
 **Status:** verified as upstream's, deliberately unchanged here.
 

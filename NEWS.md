@@ -3,6 +3,7 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- ![][badge-🐛bugfix] Stop pinning the downstream ClimaCoupler checkout. The pin worked around an artifact a GitHub runner cannot fetch, but it required ClimaCore 0.15 and so stopped resolving once this package moved to 0.16, failing in `Pkg.develop` instead. `.github/workflows/downstream.yml` now tracks ClimaCoupler's default branch as upstream's workflow does, and both downstream jobs pass again, so the known issue that recorded the workaround is removed.
 - [#50](https://github.com/johannespletzer/ClimaAtmosResiDyn.jl/pull/50) ![][badge-🐛bugfix] Restored package precompilation on Julia 1.10 and 1.11 by reattaching the `tag_closure_callback!` docstring to its function, and restored the callback's API documentation.
 
 - ![][badge-✨feature/enhancement] Add energy source tags, under the new config key `energy_source_tags`, adding one prognostic field `ρe_src_<name>` per tag. A source tag holds moist energy attributed to where it came from, which is the energy counterpart of the water tags and a different quantity from `ρe_tag_<name>`, a signed process tag. Both families take the same `source` labels and only the rule applied to them differs. Off by default. **Experimental**: the amount-of-energy and provenance reading holds only where `ρe_tot` is positive, so the donor share is defined, and while the tag itself is non-negative.
