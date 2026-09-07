@@ -210,10 +210,11 @@ otherwise leaves a ledger that has half-counted a step it never committed, with
 nothing in its own state to say so.
 
 **Ordering is deterministic.** Events are recorded against stable identifiers,
-and each recording carries an execution identity — step, stage, occurrence — so
-a path that legitimately fires several times within one accepted step stays
-legible and a path that fires twice by mistake is refused at the second
-recording rather than surfacing as a residual a step later.
+and each recording carries an execution identity — reservoir, channel, event,
+leg, step, stage, occurrence — so a path that legitimately fires several times
+within one accepted step stays legible, the two sides of one exchange may share
+a leg label without colliding, and a path that fires twice by mistake is refused
+at the second recording rather than surfacing as a residual a step later.
 
 **Bounded per-step memory.** Legs are cleared on commit. Cumulative state is a
 fixed set of totals per quantity and control volume. An audit mode may retain
