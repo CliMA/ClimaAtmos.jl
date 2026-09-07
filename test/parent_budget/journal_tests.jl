@@ -533,6 +533,10 @@ transfer_result(commit, event, quantity, cv) = only(
         )
         ledger = open_ledger(FT, schema, test_endpoints(FT, 0; m = 1, w = 1, e = 1))
         PB.record_leg!(ledger, test_leg(FT; mass = mval(FT, 2)))
+        # The identity the journal builds is the type its set of recorded keys
+        # is declared with; a mismatch would refuse every recording.
+        @test PB.execution_identity(only(ledger.legs)) isa
+              eltype(ledger.recorded_keys)
         # A duplicated leg is caught at the second recording rather than as a
         # residual a whole step later, and a duplicate whose amount is zero
         # would otherwise pass every closure test.

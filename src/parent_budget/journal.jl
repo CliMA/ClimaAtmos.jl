@@ -502,9 +502,12 @@ reservoir the surface side of a `flux` would be a duplicate of its atmospheric
 side, and a schema the constructor accepts could never be recorded in full.
 
 Deterministic, and stable across runs, so a leg can be named in a report and
-found again.
+found again. `ExecutionIdentity` is its type, and the ledger's set of recorded
+keys is declared with it, so the two cannot drift apart.
 """
-execution_identity(leg::BudgetLeg) = (
+const ExecutionIdentity = Tuple{Symbol, Symbol, Symbol, Symbol, Int, Int, Int}
+
+execution_identity(leg::BudgetLeg)::ExecutionIdentity = (
     reservoir_name(leg.reservoir),
     leg.channel,
     leg.event,

@@ -425,7 +425,7 @@ mutable struct BudgetLedger{FT}
     last_closing::Union{Nothing, BudgetEndpoints{FT}}
     legs::Vector{BudgetLeg{FT}}
     observations::Vector{StageObservation{FT}}
-    recorded_keys::Set{Tuple{Symbol, Symbol, Int, Int, Int}}
+    recorded_keys::Set{ExecutionIdentity}
     envelope_keys::Set{Tuple{Symbol, Symbol, Int}}
     event_levels::Dict{Tuple{Symbol, Int}, Symbol}
     cumulative_residual::Dict{Tuple{Symbol, Symbol}, FT}
@@ -444,7 +444,7 @@ BudgetLedger{FT}(schema::BudgetSchema) where {FT} = BudgetLedger{FT}(
     nothing,
     BudgetLeg{FT}[],
     StageObservation{FT}[],
-    Set{Tuple{Symbol, Symbol, Int, Int, Int}}(),
+    Set{ExecutionIdentity}(),
     Set{Tuple{Symbol, Symbol, Int}}(),
     Dict{Tuple{Symbol, Int}, Symbol}(),
     Dict{Tuple{Symbol, Symbol}, FT}(),
