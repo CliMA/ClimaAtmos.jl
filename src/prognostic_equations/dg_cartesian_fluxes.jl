@@ -293,7 +293,7 @@ Lax-Friedrichs dissipation in ENTROPY variables, ``½ λ Ĥ ⟦w⟧``, where
 ``Ĥ = ∂U/∂w`` is the (symmetric positive-definite) entropy Jacobian at the
 arithmetic-mean state and ``λ = \\max(|u|+c)``. Because `Ĥ` is SPD,
 ``⟦w⟧·(Ĥ⟦w⟧) ≥ 0``, so subtracting this from ANY entropy-conservative
-([`ranocha_cartesian_flux`](@ref)) or kinetic-energy-preserving
+(e.g. [`waruszewski_cartesian_flux`](@ref)) or kinetic-energy-preserving
 ([`kennedy_gruber_cartesian_flux`](@ref)) central flux gives a discrete entropy
 inequality (entropy stability) — the guarantee that conserved-variable
 Rusanov/Roe penalties do not provide. To leading order `Ĥ⟦w⟧ = ⟦U⟧`, so this is
