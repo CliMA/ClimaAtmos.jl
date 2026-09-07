@@ -560,13 +560,13 @@ missing, duplicated or mismatched leg distinguishable after the fact.
 
 Every quantity, in every available control volume, reports exactly one of:
 
-| Status           | Meaning                                                        |
-|:---------------- |:-------------------------------------------------------------- |
-| `pass`           | Applicable, unblocked, and the residual is within tolerance.   |
-| `fail`           | Applicable, unblocked, and the residual exceeds tolerance.     |
-| `blocked`        | A required component is unknown, open or missing; no claim.    |
-| `not_applicable` | No reservoir in this view owns the quantity.                   |
-| `reported`       | A crossing: a signed boundary flux with no verdict to give.    |
+| Status           | Meaning                                                      |
+|:---------------- |:------------------------------------------------------------ |
+| `pass`           | Applicable, unblocked, and the residual is within tolerance. |
+| `fail`           | Applicable, unblocked, and the residual exceeds tolerance.   |
+| `blocked`        | A required component is unknown, open or missing; no claim.  |
+| `not_applicable` | No reservoir in this view owns the quantity.                 |
+| `reported`       | A crossing: a signed boundary flux with no verdict to give.  |
 
 A blocked result still reports its numbers, because they are informative, but no
 closure claim may be made from it. A `reported` result is not a verdict: a
