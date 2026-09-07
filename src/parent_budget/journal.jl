@@ -91,9 +91,10 @@ status_name(::UnknownComponent) = :unknown
 Whether a component with this `status` is what the schema's `expected`
 disposition asked for. See `EXPECTED_DISPOSITIONS`.
 
-  - `:open` permits anything. The registry has not established what the path
-    does, so nothing is demanded of the record and the claim stays blocked on
-    other grounds.
+  - `:open` permits anything at the record. The registry has not established
+    what the path does, so nothing is demanded of a leg, and the claim the
+    declaration feeds is blocked by the schema at reconciliation instead; see
+    `open_dispositions`.
   - `:measured` permits a `Measured` component, and an `UnknownComponent`,
     which is the honest record of a measurement that was expected and not
     taken. It blocks, which is the point.
@@ -176,12 +177,22 @@ is a number rather than evidence.
 **An invariant zero must name its proof.** A zero with no proof is an assumption,
 and an assumed zero is exactly what the `UnknownComponent` status exists to keep
 out of the totals.
+
+**An amount must be finite.** `NaN` and `Inf` propagate through every sum and
+reach a verdict as a comparison that is silently false, so a non-finite amount
+is refused at construction rather than surfacing as a residual nobody can
+attribute.
 """
 struct BudgetComponent{FT}
     amount::FT
     evidence::BudgetEvidence
     function BudgetComponent{FT}(amount, evidence::BudgetEvidence) where {FT}
         a = convert(FT, amount)
+        isfinite(a) || error(
+            "A component amount must be finite, got $a. A NaN or Inf would " *
+            "pass through every sum and reach the verdict as a comparison " *
+            "that is silently false, so it is refused where it enters.",
+        )
         status = evidence.status
         if !(status isa Measured) && !iszero(a)
             error(
@@ -349,8 +360,11 @@ schema decides which of them this configuration expected.
 
 # Execution identity
 
-`(event, leg, step, stage, occurrence)` is what the journal refuses to record
-twice, and the last two are why it is not just `(event, leg, step)`. A
+`(reservoir, channel, event, leg, step, stage, occurrence)` is what the journal
+refuses to record twice. The reservoir is in it because the two sides of one
+exchange may carry the same leg label — the atmospheric and surface halves of a
+flux are each `flux` — and an identity without it would refuse the second side
+as a repeat of the first. The stage and occurrence are in it because a
 correction can fire several times within one accepted step:
 `update_constrain_state_every` accepts `"stage"` and `"dss"`, and at `"stage"`
 the same `constrain_state!` correction fires once per ARS343 stage. Each firing
@@ -379,7 +393,8 @@ number looks, and a raw stage difference belongs in a `StageObservation`.
 `weight` records the accepted-step coefficient already applied to reach the
 contribution — `1` for a whole-step map, otherwise a tableau coefficient
 generally involving `bᵢ` and the implicit `γᵢ`. `measured_at` records where the
-amount was taken. Both exist so a weighting can be audited instead of trusted.
+amount was taken. Both exist so a weighting can be audited instead of trusted. A
+non-finite `weight` is refused at construction.
 """
 Base.@kwdef struct BudgetLeg{FT}
     event::Symbol
@@ -398,6 +413,49 @@ Base.@kwdef struct BudgetLeg{FT}
     occurrence::Int = 1
     weight::FT = one(FT)
     measured_at::Symbol = :accepted_state
+    function BudgetLeg{FT}(
+        event,
+        leg,
+        reservoir,
+        channel,
+        level,
+        mass,
+        water,
+        energy,
+        path,
+        process,
+        phase,
+        step,
+        stage,
+        occurrence,
+        weight,
+        measured_at,
+    ) where {FT}
+        w = convert(FT, weight)
+        isfinite(w) || error(
+            "Leg $event/$leg has weight $w. An accepted-step coefficient is a " *
+            "finite number; a NaN or Inf here would silently poison the " *
+            "contribution it scales.",
+        )
+        return new{FT}(
+            event,
+            leg,
+            reservoir,
+            channel,
+            level,
+            mass,
+            water,
+            energy,
+            path,
+            process,
+            phase,
+            step,
+            stage,
+            occurrence,
+            w,
+            measured_at,
+        )
+    end
 end
 
 """
@@ -435,23 +493,38 @@ end
 """
     execution_identity(leg) -> Tuple
 
-The tuple the journal deduplicates on: event, leg, step, stage, occurrence.
+The tuple the journal deduplicates on: reservoir, channel, event, leg, step,
+stage, occurrence.
+
+The reservoir and channel are part of it because a transfer event declares its
+legs as `(reservoir, leg)` pairs and two of them may share a label. Without the
+reservoir the surface side of a `flux` would be a duplicate of its atmospheric
+side, and a schema the constructor accepts could never be recorded in full.
 
 Deterministic, and stable across runs, so a leg can be named in a report and
 found again.
 """
-execution_identity(leg::BudgetLeg) =
-    (leg.event, leg.leg, leg.step, leg.stage, leg.occurrence)
+execution_identity(leg::BudgetLeg) = (
+    reservoir_name(leg.reservoir),
+    leg.channel,
+    leg.event,
+    leg.leg,
+    leg.step,
+    leg.stage,
+    leg.occurrence,
+)
 
 """
     leg_label(leg) -> String
 
 A human-readable identity for `leg`, used when a report has to name which legs
-blocked a claim.
+blocked a claim. It names the reservoir, so the two sides of one exchange are
+told apart.
 """
-leg_label(
-    leg::BudgetLeg,
-) = "$(leg.event)/$(leg.leg)@step $(leg.step) stage $(leg.stage) #$(leg.occurrence)"
+function leg_label(leg::BudgetLeg)
+    location = "$(reservoir_name(leg.reservoir)) at step $(leg.step)"
+    return "$(leg.event)/$(leg.leg) in $location stage $(leg.stage) #$(leg.occurrence)"
+end
 
 """
     budget_component(record, quantity) -> BudgetComponent

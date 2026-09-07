@@ -676,10 +676,16 @@ function check_leg_declared(schema::BudgetSchema, leg::BudgetLeg)
         "does not declare as an accepted integrator channel.",
     )
     spec = channel_spec(schema, leg.channel)
-    if leg.level isa ChannelEnvelope
-        reservoir in spec.reservoirs || error(
-            "Leg $(leg_label(leg)) offers an envelope for channel " *
-            "$(leg.channel) in $reservoir, which that channel does not write.",
+    reservoir in spec.reservoirs || error(
+        "Leg $(leg_label(leg)) records channel $(leg.channel) in $reservoir, " *
+        "which that channel does not write.",
+    )
+    if leg.level isa ProcessDecomposition
+        (leg.process, reservoir) in spec.processes || error(
+            "Leg $(leg_label(leg)) decomposes channel $(leg.channel) with " *
+            "process $(leg.process) in $reservoir, which the channel does not " *
+            "declare. A row the registry did not declare is a row nothing " *
+            "checks for, so an omitted process could never be missed.",
         )
     end
     check_leg_dispositions(spec, leg)
@@ -698,8 +704,9 @@ Refused, loudly, in these cases.
     callback is writing into the wrong transaction.
   - The schema does not declare the leg's reservoir, channel, final map, or
     transfer event, or declares the event with different legs or in a different
-    channel. Expectations come from the configuration, so a record nothing
-    declared fails closed.
+    channel, or does not name the leg's process among the channel's declared
+    decomposition rows. Expectations come from the configuration, so a record
+    nothing declared fails closed.
   - A component contradicts the disposition its declaration gave it, such as a
     measurement on a quantity the registry says the path leaves provably zero.
   - A leg with the same `execution_identity` is already recorded, which is how a
@@ -948,6 +955,93 @@ function has_final_map_leg(
 end
 
 """
+    missing_processes(ledger, spec, control_volume) -> Vector{String}
+
+The decomposition rows `spec` declares in this view that no leg recorded, one
+per `(process, reservoir)` in the channel's roster.
+
+Read from the specification and never from what arrived. A decomposition that
+was satisfied by whichever rows happened to be recorded would let an omitted
+process vanish: the rows present can cancel exactly and the residual says
+nothing about the one that is not there. Each declared row is named, so a
+channel that recorded some of its processes is short by the rest and says
+which.
+"""
+function missing_processes(
+    ledger::BudgetLedger,
+    spec::ChannelSpec,
+    cv::ControlVolume,
+)
+    missing_rows = String[]
+    for (process, reservoir) in spec.processes
+        is_inside(cv, reservoir) || continue
+        has_process_leg(ledger, spec.name, process, reservoir) && continue
+        push!(
+            missing_rows,
+            "expected process $process of channel $(spec.name) in $reservoir " *
+            "was not recorded",
+        )
+    end
+    return missing_rows
+end
+
+# Whether a decomposition leg for this channel, process and reservoir was
+# recorded in the open transaction. Any status counts: a row recorded as not
+# applicable is a record, and an unknown one blocks on its own.
+function has_process_leg(
+    ledger::BudgetLedger,
+    channel::Symbol,
+    process::Symbol,
+    reservoir::Symbol,
+)
+    for leg in ledger.legs
+        leg.level isa ProcessDecomposition || continue
+        leg.channel === channel || continue
+        leg.process === process || continue
+        reservoir_name(leg.reservoir) === reservoir && return true
+    end
+    return false
+end
+
+"""
+    open_dispositions(specs, quantity, control_volume) -> Vector{String}
+
+Every declaration in `specs` that touches `control_volume` and whose disposition
+for `quantity` is still `:open`, as blockers.
+
+An open row is one the coverage registry has not established from the code. It
+demands nothing of a record, so a leg on it is accepted, but the claim it feeds
+cannot be evaluated: the registry does not know what the path writes, so no sum
+that includes it proves anything. A zero residual over an open row is a
+coincidence and not a closure, and the row blocks until it is declared. This is
+read from the schema alone, so a declaration that recorded nothing blocks
+exactly as one that recorded a measurement does.
+"""
+function open_dispositions(specs, quantity::Symbol, cv::ControlVolume)
+    blockers = String[]
+    for spec in specs
+        touches_view(spec, cv) || continue
+        expected_disposition(spec, quantity) === :open || continue
+        push!(
+            blockers,
+            "$(spec_kind(spec)) $(spec.name) leaves $quantity open in " *
+            "$(cv.name); the registry has not established what it writes",
+        )
+    end
+    return blockers
+end
+
+touches_view(spec::ChannelSpec, cv::ControlVolume) =
+    any(r -> is_inside(cv, r), spec.reservoirs)
+touches_view(spec::FinalMapSpec, cv::ControlVolume) =
+    any(r -> is_inside(cv, r), spec.reservoirs)
+touches_view(spec::TransferEventSpec, cv::ControlVolume) = event_in_view(spec, cv)
+
+spec_kind(::ChannelSpec) = "channel"
+spec_kind(::FinalMapSpec) = "final map"
+spec_kind(::TransferEventSpec) = "transfer event"
+
+"""
     declared_applicable(schema, reservoirs, quantity, control_volume) -> Bool
 
 Whether the configuration says any of `reservoirs` inside `control_volume` owns
@@ -981,8 +1075,11 @@ control volume.
 Returns `(; envelope, attributed, magnitude, explaining_count, blocked_by)`.
 Applicability is not among them: it comes from the schema, through
 `declared_applicable`, rather than from which legs arrived. Whether the channel
-recorded its required envelope is likewise read from the schema, by
-`missing_channel_envelopes`.
+recorded its required envelope and every row of its declared decomposition is
+likewise read from the schema, by `missing_channel_envelopes` and
+`missing_processes`. `explaining_count` counts the contributing rows and is
+informational; a count is satisfied by whichever rows arrive, so nothing is
+decided by it.
 """
 function project_attribution(
     ledger::BudgetLedger{FT},
@@ -1005,8 +1102,8 @@ function project_attribution(
             envelope += c.amount
             magnitude += abs(c.amount)
         elseif explains_envelope(leg.level)
-            explaining_count += 1
             is_contributing(c) || continue
+            explaining_count += 1
             attributed += c.amount
             magnitude += abs(c.amount)
         end
@@ -1217,9 +1314,12 @@ quantity in one control volume.
     numerical leg: a synthesized counterparty guarantees cancellation and
     therefore measures nothing. The total is the signed source or sink.
 
-Neither crossing gets a cancellation verdict, so their `status` is
-`:not_applicable` unless something blocks. Reading `status` without
-`expectation` would make a boundary flux look like a budget nobody owned.
+Neither crossing gets a cancellation verdict. Their `status` is `:reported`
+when the quantity is applicable and nothing blocks: a signed flux with no
+verdict attached. That is a different fact from `:not_applicable`, which is
+reserved for a quantity nothing in the view owns, and the two do not share a
+label, so `status` can be read on its own without a boundary flux looking like a
+budget nobody owned.
 
 A nonzero cancellation is a finding, not permission to synthesize a
 counter-entry. It names lagged coupling, clipping, inconsistent quadrature, or a
@@ -1334,11 +1434,14 @@ function reconcile_parent(
 
     applicable = before.applicable || after.applicable
     missing_expectations = missing_parent_terms(ledger, cv)
+    schema = ledger.schema
     blocked_by = vcat(
         before.blocked_by,
         after.blocked_by,
         projected.blocked_by,
         missing_expectations,
+        open_dispositions(schema.channels, quantity, cv),
+        open_dispositions(schema.final_maps, quantity, cv),
     )
     cumulative_residual = get(ledger.cumulative_residual, key, zero(FT)) + residual
     previous_abs = get(ledger.cumulative_abs_residual, key, zero(FT))
@@ -1379,10 +1482,11 @@ end
 
 Compute one `AttributionReconciliation` for a declared channel. Pure.
 
-A required envelope that was not recorded blocks, and so does a required
-decomposition that recorded nothing. Both are read from the specification rather
-than from what arrived, so a channel that reported nothing at all is a blocked
-row naming it.
+A required envelope that was not recorded blocks, and so does every declared
+decomposition row that was not recorded, and so does a disposition the registry
+has left open. All three are read from the specification rather than from what
+arrived, so a channel that reported nothing at all is a blocked row naming it,
+and a channel that reported some of its processes is blocked by the rest.
 """
 function reconcile_attribution(
     ledger::BudgetLedger{FT},
@@ -1398,14 +1502,9 @@ function reconcile_attribution(
     blocked_by = vcat(
         projected.blocked_by,
         missing_channel_envelopes(ledger, spec, cv),
+        missing_processes(ledger, spec, cv),
+        open_dispositions((spec,), quantity, cv),
     )
-    if spec.requires_decomposition && projected.explaining_count == 0
-        push!(
-            blocked_by,
-            "expected decomposition of channel $(spec.name) in $(cv.name) was " *
-            "not recorded",
-        )
-    end
     tolerance, blocked_by = resolve_tolerance(
         quantity_tolerance(tolerances, quantity),
         blocked_by,
@@ -1456,15 +1555,29 @@ function reconcile_transfer(
         quantity,
         cv,
     )
-    blocked_by = vcat(projected.blocked_by, projected.missing_legs)
+    blocked_by = vcat(
+        projected.blocked_by,
+        projected.missing_legs,
+        open_dispositions((spec,), quantity, cv),
+    )
 
     if expectation !== :cancellation
+        # A crossing takes no verdict. `:reported` is a signed flux with nothing
+        # to judge it against, which is a different fact from a quantity nothing
+        # in the view owns, and the two must not share a label.
+        status = if !applicable
+            :not_applicable
+        elseif !isempty(blocked_by)
+            :blocked
+        else
+            :reported
+        end
         return TransferReconciliation{FT}(;
             quantity,
             event = spec.name,
             control_volume = cv.name,
             step = ledger.step,
-            status = isempty(blocked_by) ? :not_applicable : :blocked,
+            status,
             topology,
             expectation,
             counterparty = spec.counterparty,

@@ -226,7 +226,8 @@ Write one rank's local contribution to a slot and mark it measured.
 
 Requires an unset slot. Refused once the packet has been reduced, because the
 reduced buffer is the global answer and writing into it would corrupt a value
-nothing would recompute.
+nothing would recompute. Refuses a non-finite value before the slot is claimed,
+so a refused write leaves the slot unset rather than measured.
 """
 function set_local!(
     packet::BudgetPacket,
@@ -234,6 +235,11 @@ function set_local!(
     quantity::Symbol,
     value,
 )
+    isfinite(value) || error(
+        "Budget packet slot $group/$quantity cannot be set to $value. A NaN " *
+        "or Inf sent into the collective would poison every rank's total, " *
+        "and no rank could say where it came from.",
+    )
     i = claim_slot!(packet, group, quantity, MeasuredSlot())
     @inbounds packet.values[i] = BUDGET_ACCOUNTING_TYPE(value)
     return nothing

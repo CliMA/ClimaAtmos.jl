@@ -21,6 +21,20 @@ zval(FT) = PB.invariant_zero(FT; proof = :writes_no_such_field, source = :test)
 naval(FT) = PB.not_applicable(FT)
 unkval(FT) = PB.unknown_component(FT)
 
+# A disposition tuple in `BUDGET_QUANTITIES` order: mass, water, energy. The
+# schema's default is `:open`, which blocks every claim it feeds, so a test that
+# expects a verdict declares what its legs will record.
+function disp(;
+    mass = :not_applicable,
+    water = :not_applicable,
+    energy = :not_applicable,
+)
+    return (mass, water, energy)
+end
+const MASS = disp(mass = :measured)
+const WATER = disp(water = :measured)
+const ENERGY = disp(energy = :measured)
+
 # A leg with everything defaulted, so a test only names what it is about.
 function test_leg(
     FT;
@@ -219,6 +233,24 @@ transfer_result(commit, event, quantity, cv) = only(
         @test_throws ErrorException PB.invariant_zero(FT; proof = :unspecified)
     end
 
+    @testset "Amounts and weights must be finite" begin
+        for bad in (NaN, Inf, -Inf)
+            @test_throws ErrorException PB.measured(FT(bad); method = :synthetic)
+            @test_throws ErrorException PB.BudgetComponent{FT}(
+                bad,
+                PB.BudgetEvidence(; status = PB.Measured(), method = :synthetic),
+            )
+            @test_throws ErrorException test_leg(
+                FT;
+                mass = mval(FT, 1),
+                weight = FT(bad),
+            )
+        end
+        # A finite weight other than one is a tableau coefficient and is kept.
+        leg = test_leg(FT; mass = mval(FT, 1), weight = FT(0.5))
+        @test leg.weight == 0.5
+    end
+
     @testset "Statuses do different things" begin
         @test PB.is_contributing(mval(FT, 3))
         @test PB.is_contributing(zval(FT))
@@ -274,6 +306,7 @@ transfer_result(commit, event, quantity, cv) = only(
             :explicit_main,
             ((ATMOS, :atmosphere),);
             counterparty = :space,
+            dispositions = ENERGY,
         )
         @test PB.topology_name(exterior.topology) === :exterior
         @test !PB.tests_cancellation(exterior.topology)
@@ -284,7 +317,8 @@ transfer_result(commit, event, quantity, cv) = only(
             :xfer_surface,
             PB.CoupledTransfer(),
             :implicit,
-            ((ATMOS, :atmosphere), (SLAB, :surface)),
+            ((ATMOS, :atmosphere), (SLAB, :surface));
+            dispositions = WATER,
         )
         @test PB.tests_cancellation(coupled.topology)
         @test isnothing(coupled.counterparty)
@@ -365,12 +399,18 @@ transfer_result(commit, event, quantity, cv) = only(
             :xfer_surface,
             PB.CoupledTransfer(),
             :implicit,
-            ((ATMOS, :atmosphere), (SLAB, :surface)),
+            ((ATMOS, :atmosphere), (SLAB, :surface));
+            dispositions = WATER,
         )
         schema = test_schema(;
             slab = true,
             channels = [
-                PB.ChannelSpec(:implicit, (ATMOS, SLAB); requires_envelope = false),
+                PB.ChannelSpec(
+                    :implicit,
+                    (ATMOS, SLAB);
+                    requires_envelope = false,
+                    dispositions = WATER,
+                ),
             ],
             events = [coupled],
         )
@@ -418,7 +458,12 @@ transfer_result(commit, event, quantity, cv) = only(
         )
         schema = test_schema(;
             channels = [
-                PB.ChannelSpec(:explicit_main, ATMOS; requires_envelope = false),
+                PB.ChannelSpec(
+                    :explicit_main,
+                    ATMOS;
+                    requires_envelope = false,
+                    dispositions = ENERGY,
+                ),
             ],
             events = [exterior],
         )
@@ -462,8 +507,8 @@ transfer_result(commit, event, quantity, cv) = only(
             ATMOS;
             dispositions = (:measured, :zero, :measured),
         )
-        # An open disposition demands nothing, which is what the registry's
-        # unestablished rows mean.
+        # An open disposition demands nothing of a record. It blocks the claim
+        # the declaration feeds at reconciliation instead, tested below.
         @test PB.OPEN_DISPOSITIONS ==
               ntuple(_ -> :open, length(PB.BUDGET_QUANTITIES))
         for status in (
@@ -483,7 +528,9 @@ transfer_result(commit, event, quantity, cv) = only(
     end
 
     @testset "A leg is recorded once" begin
-        schema = test_schema(; channels = [PB.ChannelSpec(:explicit_main, ATMOS)])
+        schema = test_schema(;
+            channels = [PB.ChannelSpec(:explicit_main, ATMOS; dispositions = MASS)],
+        )
         ledger = open_ledger(FT, schema, test_endpoints(FT, 0; m = 1, w = 1, e = 1))
         PB.record_leg!(ledger, test_leg(FT; mass = mval(FT, 2)))
         # A duplicated leg is caught at the second recording rather than as a
@@ -585,8 +632,8 @@ transfer_result(commit, event, quantity, cv) = only(
 
     @testset "A final map is a parent term and not a channel" begin
         schema = test_schema(;
-            channels = [PB.ChannelSpec(:explicit_main, ATMOS)],
-            final_maps = [PB.FinalMapSpec(:dss!, ATMOS)],
+            channels = [PB.ChannelSpec(:explicit_main, ATMOS; dispositions = MASS)],
+            final_maps = [PB.FinalMapSpec(:dss!, ATMOS; dispositions = MASS)],
         )
         ledger = open_ledger(FT, schema, test_endpoints(FT, 0; m = 10, w = 5, e = 3))
         PB.record_leg!(
@@ -626,7 +673,9 @@ transfer_result(commit, event, quantity, cv) = only(
     end
 
     @testset "An expected channel that recorded nothing blocks" begin
-        schema = test_schema(; channels = [PB.ChannelSpec(:implicit, ATMOS)])
+        schema = test_schema(;
+            channels = [PB.ChannelSpec(:implicit, ATMOS; dispositions = MASS)],
+        )
         ledger = open_ledger(FT, schema, test_endpoints(FT, 0; m = 10, w = 5, e = 3))
         commit = PB.commit_transaction!(
             ledger,
@@ -648,7 +697,9 @@ transfer_result(commit, event, quantity, cv) = only(
     end
 
     @testset "An expected final map that recorded nothing blocks" begin
-        schema = test_schema(; final_maps = [PB.FinalMapSpec(:lim!, ATMOS)])
+        schema = test_schema(;
+            final_maps = [PB.FinalMapSpec(:lim!, ATMOS; dispositions = MASS)],
+        )
         ledger = open_ledger(FT, schema, test_endpoints(FT, 0; m = 10, w = 5, e = 3))
         commit = PB.commit_transaction!(
             ledger,
@@ -663,7 +714,12 @@ transfer_result(commit, event, quantity, cv) = only(
     @testset "An aggregate is never summed with its decomposition" begin
         schema = test_schema(;
             channels = [
-                PB.ChannelSpec(:explicit_main, ATMOS; requires_decomposition = true),
+                PB.ChannelSpec(
+                    :explicit_main,
+                    ATMOS;
+                    dispositions = MASS,
+                    processes = ((:p1, ATMOS), (:p2, ATMOS)),
+                ),
             ],
         )
         ledger = open_ledger(FT, schema, test_endpoints(FT, 0; m = 10, w = 5, e = 3))
@@ -678,6 +734,7 @@ transfer_result(commit, event, quantity, cv) = only(
                     FT;
                     event = Symbol("proc_", i),
                     leg = Symbol("p", i),
+                    process = Symbol("p", i),
                     level = PB.ProcessDecomposition(),
                     mass = mval(FT, amount),
                 ),
@@ -707,17 +764,291 @@ transfer_result(commit, event, quantity, cv) = only(
         @test attribution.status === :pass
     end
 
+    @testset "An open disposition blocks the claim it feeds" begin
+        # Every declaration keeps the schema's default, `:open`. The numbers
+        # close exactly on every claim, and none of them may pass: a sum over a
+        # row the registry has not established proves nothing.
+        function declarations(; channel = (;), final_map = (;), event = (;))
+            return (;
+                slab = true,
+                channels = [
+                    PB.ChannelSpec(
+                        :explicit_main,
+                        ATMOS;
+                        processes = ((:p1, ATMOS),),
+                        channel...,
+                    ),
+                    PB.ChannelSpec(
+                        :implicit,
+                        (ATMOS, SLAB);
+                        requires_envelope = false,
+                        event...,
+                    ),
+                ],
+                final_maps = [PB.FinalMapSpec(:dss!, ATMOS; final_map...)],
+                events = [
+                    PB.TransferEventSpec(
+                        :xfer_surface,
+                        PB.CoupledTransfer(),
+                        :implicit,
+                        ((ATMOS, :atmosphere), (SLAB, :surface));
+                        event...,
+                    ),
+                ],
+            )
+        end
+        function record_all!(ledger)
+            PB.record_leg!(
+                ledger,
+                test_leg(FT; event = :env_main, mass = mval(FT, 4)),
+            )
+            PB.record_leg!(
+                ledger,
+                test_leg(
+                    FT;
+                    event = :proc_p1,
+                    leg = :p1,
+                    process = :p1,
+                    level = PB.ProcessDecomposition(),
+                    mass = mval(FT, 4),
+                ),
+            )
+            PB.record_leg!(
+                ledger,
+                test_leg(
+                    FT;
+                    event = :map_dss,
+                    leg = :dss,
+                    level = PB.FinalMap(),
+                    channel = :dss!,
+                    mass = mval(FT, 1),
+                ),
+            )
+            for (reservoir, leg, amount) in (
+                (PB.AtmosphereReservoir(), :atmosphere, -2),
+                (PB.SlabSurfaceReservoir(), :surface, 2),
+            )
+                PB.record_leg!(
+                    ledger,
+                    test_leg(
+                        FT;
+                        event = :xfer_surface,
+                        leg,
+                        reservoir,
+                        level = PB.ReservoirTransfer(),
+                        channel = :implicit,
+                        water = mval(FT, amount),
+                    ),
+                )
+            end
+            return nothing
+        end
+        opening = test_endpoints(FT, 0; m = 10, w = 5, e = 3, sfc_w = 1, sfc_e = 2)
+        closing = test_endpoints(FT, 1; m = 15, w = 5, e = 3, sfc_w = 1, sfc_e = 2)
+
+        ledger = open_ledger(FT, test_schema(; declarations()...), opening)
+        record_all!(ledger)
+        commit =
+            PB.commit_transaction!(ledger, closing; tolerances = loose_tolerance(FT))
+
+        parent = parent_result(commit, :mass, :atmosphere_only)
+        @test parent.residual == 0
+        @test parent.status === :blocked
+        @test any(b -> occursin("open", b), parent.blocked_by)
+        @test any(b -> occursin("explicit_main", b), parent.blocked_by)
+        @test any(b -> occursin("dss!", b), parent.blocked_by)
+
+        attribution =
+            attribution_result(commit, :explicit_main, :mass, :atmosphere_only)
+        @test attribution.residual == 0
+        @test attribution.status === :blocked
+        @test any(b -> occursin("open", b), attribution.blocked_by)
+
+        cancellation =
+            transfer_result(commit, :xfer_surface, :water, :atmosphere_and_surface)
+        @test cancellation.total == 0
+        @test cancellation.status === :blocked
+        @test any(b -> occursin("open", b), cancellation.blocked_by)
+        # An open crossing is blocked as well, never reported as a flux nobody
+        # has established.
+        crossing = transfer_result(commit, :xfer_surface, :water, :atmosphere_only)
+        @test crossing.status === :blocked
+
+        # Declaring the dispositions is what unblocks every one of them. The
+        # legs and the endpoints are the same.
+        declared = declarations(;
+            channel = (; dispositions = MASS),
+            final_map = (; dispositions = MASS),
+            event = (; dispositions = WATER),
+        )
+        ledger = open_ledger(FT, test_schema(; declared...), opening)
+        record_all!(ledger)
+        commit =
+            PB.commit_transaction!(ledger, closing; tolerances = loose_tolerance(FT))
+        @test parent_result(commit, :mass, :atmosphere_only).status === :pass
+        @test attribution_result(
+            commit,
+            :explicit_main,
+            :mass,
+            :atmosphere_only,
+        ).status === :pass
+        @test transfer_result(
+            commit,
+            :xfer_surface,
+            :water,
+            :atmosphere_and_surface,
+        ).status === :pass
+        @test transfer_result(commit, :xfer_surface, :water, :atmosphere_only).status ===
+              :reported
+    end
+
+    @testset "A required decomposition names its rows" begin
+        roster = PB.ChannelSpec(
+            :explicit_main,
+            ATMOS;
+            dispositions = MASS,
+            processes = ((:p1, ATMOS), (:p2, ATMOS)),
+        )
+        @test roster.requires_decomposition
+        @test !PB.ChannelSpec(:explicit_main, ATMOS).requires_decomposition
+        # A row in a reservoir the channel does not write, and a repeated row.
+        @test_throws ErrorException PB.ChannelSpec(
+            :explicit_main,
+            ATMOS;
+            processes = ((:p1, SLAB),),
+        )
+        @test_throws ErrorException PB.ChannelSpec(
+            :explicit_main,
+            ATMOS;
+            processes = ((:p1, ATMOS), (:p1, ATMOS)),
+        )
+
+        schema = test_schema(; channels = [roster])
+        ledger = open_ledger(FT, schema, test_endpoints(FT, 0; m = 10, w = 5, e = 3))
+        PB.record_leg!(ledger, test_leg(FT; event = :env_main, mass = mval(FT, 4)))
+        decomposition(process, amount) = test_leg(
+            FT;
+            event = Symbol("proc_", process),
+            leg = process,
+            process,
+            level = PB.ProcessDecomposition(),
+            mass = mval(FT, amount),
+        )
+        # A process the roster does not declare has no row to satisfy.
+        @test_throws ErrorException PB.record_leg!(ledger, decomposition(:p9, 4))
+        # One declared row carrying the whole envelope. The residual is zero and
+        # the claim is still blocked, naming the row that never arrived: the row
+        # present cannot vouch for the one that is missing.
+        PB.record_leg!(ledger, decomposition(:p1, 4))
+        commit = PB.commit_transaction!(
+            ledger,
+            test_endpoints(FT, 1; m = 14, w = 5, e = 3);
+            tolerances = loose_tolerance(FT),
+        )
+        attribution =
+            attribution_result(commit, :explicit_main, :mass, :atmosphere_only)
+        @test attribution.residual == 0
+        @test attribution.status === :blocked
+        @test any(b -> occursin("p2", b), attribution.blocked_by)
+        @test !any(b -> occursin("p1", b), attribution.blocked_by)
+        # The primary identity never used the decomposition and is unaffected.
+        @test parent_result(commit, :mass, :atmosphere_only).status === :pass
+
+        # A decomposition leg in a reservoir the channel does not write is
+        # refused, envelope or not.
+        slab_ledger = open_ledger(
+            FT,
+            test_schema(; slab = true, channels = [roster]),
+            test_endpoints(FT, 0; m = 10, w = 5, e = 3, sfc_w = 1, sfc_e = 2),
+        )
+        @test_throws ErrorException PB.record_leg!(
+            slab_ledger,
+            test_leg(
+                FT;
+                event = :proc_p1,
+                leg = :p1,
+                process = :p1,
+                reservoir = PB.SlabSurfaceReservoir(),
+                level = PB.ProcessDecomposition(),
+                mass = mval(FT, 1),
+            ),
+        )
+    end
+
+    @testset "Legs of one event may share a label across reservoirs" begin
+        # The surface flux has an atmospheric side and a surface side, and both
+        # are conventionally `flux`. The schema accepts that pair, so the journal
+        # has to as well: the reservoir is part of a leg's identity.
+        shared = PB.TransferEventSpec(
+            :xfer_surface,
+            PB.CoupledTransfer(),
+            :implicit,
+            ((ATMOS, :flux), (SLAB, :flux));
+            dispositions = WATER,
+        )
+        schema = test_schema(;
+            slab = true,
+            channels = [
+                PB.ChannelSpec(
+                    :implicit,
+                    (ATMOS, SLAB);
+                    requires_envelope = false,
+                    dispositions = WATER,
+                ),
+            ],
+            events = [shared],
+        )
+        ledger = open_ledger(
+            FT,
+            schema,
+            test_endpoints(FT, 0; m = 10, w = 5, e = 3, sfc_w = 1, sfc_e = 2),
+        )
+        flux(reservoir, amount) = test_leg(
+            FT;
+            event = :xfer_surface,
+            leg = :flux,
+            reservoir,
+            level = PB.ReservoirTransfer(),
+            channel = :implicit,
+            water = mval(FT, amount),
+        )
+        PB.record_leg!(ledger, flux(PB.AtmosphereReservoir(), -2))
+        PB.record_leg!(ledger, flux(PB.SlabSurfaceReservoir(), 2))
+        @test length(ledger.legs) == 2
+        # The same side twice is still a duplicate.
+        @test_throws ErrorException PB.record_leg!(
+            ledger,
+            flux(PB.SlabSurfaceReservoir(), 2),
+        )
+        commit = PB.commit_transaction!(
+            ledger,
+            test_endpoints(FT, 1; m = 10, w = 3, e = 3, sfc_w = 3, sfc_e = 2);
+            tolerances = loose_tolerance(FT),
+        )
+        result =
+            transfer_result(commit, :xfer_surface, :water, :atmosphere_and_surface)
+        @test result.leg_count == 2
+        @test result.total == 0
+        @test result.status === :pass
+    end
+
     @testset "An internal exchange cancels because its legs do" begin
         coupled = PB.TransferEventSpec(
             :xfer_surface,
             PB.CoupledTransfer(),
             :implicit,
-            ((ATMOS, :atmosphere), (SLAB, :surface)),
+            ((ATMOS, :atmosphere), (SLAB, :surface));
+            dispositions = WATER,
         )
         schema = test_schema(;
             slab = true,
             channels = [
-                PB.ChannelSpec(:implicit, (ATMOS, SLAB); requires_envelope = false),
+                PB.ChannelSpec(
+                    :implicit,
+                    (ATMOS, SLAB);
+                    requires_envelope = false,
+                    dispositions = WATER,
+                ),
             ],
             events = [coupled],
         )
@@ -766,7 +1097,10 @@ transfer_result(commit, event, quantity, cv) = only(
             transfer_result(commit, :xfer_surface, :water, :atmosphere_only)
         @test atmosphere_view.expectation === :boundary_crossing
         @test atmosphere_view.total == -2
-        @test atmosphere_view.status === :not_applicable
+        # A boundary flux is reported, not judged, and that is not the same fact
+        # as a quantity nothing in the view owns.
+        @test atmosphere_view.applicable
+        @test atmosphere_view.status === :reported
         @test isnothing(atmosphere_view.tolerance)
     end
 
@@ -775,12 +1109,18 @@ transfer_result(commit, event, quantity, cv) = only(
             :xfer_surface,
             PB.CoupledTransfer(),
             :implicit,
-            ((ATMOS, :atmosphere), (SLAB, :surface)),
+            ((ATMOS, :atmosphere), (SLAB, :surface));
+            dispositions = WATER,
         )
         schema = test_schema(;
             slab = true,
             channels = [
-                PB.ChannelSpec(:implicit, (ATMOS, SLAB); requires_envelope = false),
+                PB.ChannelSpec(
+                    :implicit,
+                    (ATMOS, SLAB);
+                    requires_envelope = false,
+                    dispositions = WATER,
+                ),
             ],
             events = [coupled],
         )
@@ -820,12 +1160,18 @@ transfer_result(commit, event, quantity, cv) = only(
             :xfer_surface,
             PB.CoupledTransfer(),
             :implicit,
-            ((ATMOS, :atmosphere), (SLAB, :surface)),
+            ((ATMOS, :atmosphere), (SLAB, :surface));
+            dispositions = WATER,
         )
         schema = test_schema(;
             slab = true,
             channels = [
-                PB.ChannelSpec(:implicit, (ATMOS, SLAB); requires_envelope = false),
+                PB.ChannelSpec(
+                    :implicit,
+                    (ATMOS, SLAB);
+                    requires_envelope = false,
+                    dispositions = WATER,
+                ),
             ],
             events = [coupled],
         )
@@ -855,10 +1201,16 @@ transfer_result(commit, event, quantity, cv) = only(
             :explicit_main,
             ((ATMOS, :atmosphere),);
             counterparty = :space,
+            dispositions = ENERGY,
         )
         schema = test_schema(;
             channels = [
-                PB.ChannelSpec(:explicit_main, ATMOS; requires_envelope = false),
+                PB.ChannelSpec(
+                    :explicit_main,
+                    ATMOS;
+                    requires_envelope = false,
+                    dispositions = ENERGY,
+                ),
             ],
             events = [exterior],
         )
@@ -890,7 +1242,8 @@ transfer_result(commit, event, quantity, cv) = only(
         # The total is the signed crossing, not a residual, so it takes no
         # cancellation verdict and is judged against no tolerance.
         @test result.total == -7
-        @test result.status === :not_applicable
+        @test result.applicable
+        @test result.status === :reported
         @test isnothing(result.tolerance)
 
         # There is no exterior reservoir to record a counter-leg against.
@@ -898,7 +1251,19 @@ transfer_result(commit, event, quantity, cv) = only(
     end
 
     @testset "Mass, water and energy stay independent" begin
-        schema = test_schema(; channels = [PB.ChannelSpec(:explicit_main, ATMOS)])
+        schema = test_schema(;
+            channels = [
+                PB.ChannelSpec(
+                    :explicit_main,
+                    ATMOS;
+                    dispositions = disp(;
+                        mass = :invariant_zero,
+                        water = :measured,
+                        energy = :measured,
+                    ),
+                ),
+            ],
+        )
         ledger = open_ledger(FT, schema, test_endpoints(FT, 0; m = 10, w = 5, e = 3))
         # One event measures energy, proves a mass zero, and has nothing to say
         # about water. A per-leg status would misdescribe two of the three.
@@ -941,7 +1306,9 @@ transfer_result(commit, event, quantity, cv) = only(
     end
 
     @testset "A late failure leaves the ledger untouched" begin
-        schema = test_schema(; channels = [PB.ChannelSpec(:explicit_main, ATMOS)])
+        schema = test_schema(;
+            channels = [PB.ChannelSpec(:explicit_main, ATMOS; dispositions = MASS)],
+        )
         ledger = open_ledger(FT, schema, test_endpoints(FT, 0; m = 10, w = 5, e = 3))
         PB.record_leg!(ledger, test_leg(FT; mass = mval(FT, 1)))
 
@@ -973,7 +1340,9 @@ transfer_result(commit, event, quantity, cv) = only(
     end
 
     @testset "Transactions are bounded and continuous" begin
-        schema = test_schema(; channels = [PB.ChannelSpec(:explicit_main, ATMOS)])
+        schema = test_schema(;
+            channels = [PB.ChannelSpec(:explicit_main, ATMOS; dispositions = MASS)],
+        )
         ledger = PB.BudgetLedger{FT}(schema)
         opening = test_endpoints(FT, 0; m = 10, w = 5, e = 3)
         PB.open_transaction!(ledger, opening)
@@ -1001,7 +1370,9 @@ transfer_result(commit, event, quantity, cv) = only(
     end
 
     @testset "Cumulative residuals cannot cancel each other away" begin
-        schema = test_schema(; channels = [PB.ChannelSpec(:explicit_main, ATMOS)])
+        schema = test_schema(;
+            channels = [PB.ChannelSpec(:explicit_main, ATMOS; dispositions = MASS)],
+        )
         ledger = PB.BudgetLedger{FT}(schema)
         # Two steps whose residuals are +1 and -1. The signed sum is zero and
         # reports a perfectly closed run that closed on neither step, which is
@@ -1046,7 +1417,9 @@ transfer_result(commit, event, quantity, cv) = only(
     end
 
     @testset "Stage observations are evidence, never accounting" begin
-        schema = test_schema(; channels = [PB.ChannelSpec(:explicit_main, ATMOS)])
+        schema = test_schema(;
+            channels = [PB.ChannelSpec(:explicit_main, ATMOS; dispositions = MASS)],
+        )
         ledger = open_ledger(FT, schema, test_endpoints(FT, 0; m = 10, w = 5, e = 3))
         PB.record_leg!(ledger, test_leg(FT; mass = mval(FT, 1)))
         observation = PB.StageObservation{FT}(;

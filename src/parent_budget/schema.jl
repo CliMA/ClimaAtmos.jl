@@ -412,8 +412,10 @@ const EXPECTED_DISPOSITIONS =
     OPEN_DISPOSITIONS
 
 Every quantity `:open`: the default for a declaration whose proof obligations
-have not been established yet. Demands nothing of a record and blocks nothing by
-itself, which is what the coverage registry's `open` rows mean.
+have not been established yet. It demands nothing of a record and blocks every
+claim the declaration feeds, which is what the coverage registry's `open` rows
+mean: a sum over a row nothing has established proves nothing, however small it
+comes out. A declaration passes only once its dispositions are declared.
 """
 const OPEN_DISPOSITIONS = ntuple(_ -> :open, length(BUDGET_QUANTITIES))
 
@@ -447,7 +449,7 @@ end
 
 """
     ChannelSpec(name, reservoirs; dispositions = OPEN_DISPOSITIONS,
-                requires_envelope = true, requires_decomposition = false)
+                requires_envelope = true, processes = ())
 
 An accepted integrator channel the configuration is expected to produce.
 
@@ -457,9 +459,19 @@ each quantity of its legs is expected to be; see `EXPECTED_DISPOSITIONS`.
 
 `requires_envelope` says the channel must record the complete update it applied.
 A missing required envelope blocks, because the primary identity has a term with
-nothing in it. `requires_decomposition` says the channel's classified processes
-must also be recorded; a channel can reconcile in the primary identity while its
-attribution is entirely unexplained, which is why the two are separate flags.
+nothing in it.
+
+`processes` is the roster of `(process, reservoir)` rows the channel's
+decomposition must record, each in a reservoir the channel names. A channel can
+reconcile in the primary identity while its attribution is entirely unexplained,
+which is why the roster is separate from the envelope. It is a roster and not a
+flag because a flag is satisfied by whichever rows happen to arrive: the rows
+present can cancel exactly and the residual says nothing about the one that is
+missing. Every declared row that was not recorded blocks the channel's
+attribution and is named. A decomposition leg for a process the roster does not
+declare is refused, so the roster is the complete list of what the channel
+explains itself with. `requires_decomposition` is true when the roster is not
+empty.
 """
 struct ChannelSpec
     name::Symbol
@@ -467,12 +479,13 @@ struct ChannelSpec
     dispositions::NTuple{length(BUDGET_QUANTITIES), Symbol}
     requires_envelope::Bool
     requires_decomposition::Bool
+    processes::Tuple{Vararg{Tuple{Symbol, Symbol}}}
     function ChannelSpec(
         name::Symbol,
         reservoirs::Tuple{Vararg{Symbol}};
         dispositions = OPEN_DISPOSITIONS,
         requires_envelope::Bool = true,
-        requires_decomposition::Bool = false,
+        processes::Tuple{Vararg{Tuple{Symbol, Symbol}}} = (),
     )
         name in ATTRIBUTION_CHANNELS || error(
             "Channel $name is not one of $(ATTRIBUTION_CHANNELS). A final " *
@@ -487,13 +500,26 @@ struct ChannelSpec
         )
         length(unique(reservoirs)) == length(reservoirs) ||
             error("Channel $name names the same reservoir twice.")
+        length(unique(processes)) == length(processes) || error(
+            "Channel $name declares the same (process, reservoir) row twice. " *
+            "A row is recorded once and a repeated declaration would demand " *
+            "two records of it.",
+        )
+        for (process, reservoir) in processes
+            reservoir in reservoirs || error(
+                "Channel $name expects process $process in $reservoir, which " *
+                "the channel does not write. A decomposition row belongs to a " *
+                "reservoir its channel names.",
+            )
+        end
         check_dispositions("Channel $name", dispositions)
         return new(
             name,
             reservoirs,
             dispositions,
             requires_envelope,
-            requires_decomposition,
+            !isempty(processes),
+            processes,
         )
     end
 end

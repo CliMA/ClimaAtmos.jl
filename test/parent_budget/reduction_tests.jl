@@ -105,6 +105,19 @@ end
         @test PB.slot_state(packet, ATMOS, :water) isa PB.NotApplicableSlot
     end
 
+    @testset "A slot refuses a non-finite value" begin
+        packet = atmosphere_packet()
+        for bad in (NaN, Inf, -Inf)
+            @test_throws ErrorException PB.set_local!(packet, ATMOS, :mass, bad)
+        end
+        # The refused write claimed nothing, so the slot is still unset and can
+        # still be measured. A NaN that had claimed the slot would have gone
+        # into the collective as a measurement.
+        @test PB.slot_state(packet, ATMOS, :mass) isa PB.UnsetSlot
+        PB.set_local!(packet, ATMOS, :mass, 1.0)
+        @test PB.packet_local_value(packet, ATMOS, :mass) == 1.0
+    end
+
     @testset "An unset slot blocks the reduction" begin
         packet = atmosphere_packet()
         PB.set_local!(packet, ATMOS, :mass, 1.0)
