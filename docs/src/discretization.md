@@ -201,12 +201,13 @@ while the vertical gradient and curl operators are set to zero there.
 
 !!! note
 
-    Since ClimaCore 0.15, the strong- and weak-form horizontal spectral
-    operators are unified: `Divergence`, `Gradient`, and `Curl` take a
-    form-type parameter (`StrongForm`, the default, or `WeakForm`), so the weak
-    divergence, for example, is `Divergence{I, WeakForm}`. The ClimaAtmos code
-    still uses the legacy names (`WeakDivergence`, `WeakGradient`, `WeakCurl`),
-    which remain as aliases.
+    ClimaCore unified the strong- and weak-form horizontal spectral operators
+    in 0.15: `Divergence`, `Gradient`, and `Curl` take a form-type parameter
+    (`StrongForm`, the default, or `WeakForm`), so the weak divergence, for
+    example, is `Divergence{WeakForm}`. The `I` parameter these operators also
+    carried was dropped in 0.16. The ClimaAtmos code still uses the legacy names
+    (`WeakDivergence`, `WeakGradient`, `WeakCurl`), which remain as bindings but
+    are no longer documented upstream, so they appear below without a link.
 
 Each operator below has a short name in the ClimaAtmos source, documented under
 [Discrete operators](@ref) in the API.

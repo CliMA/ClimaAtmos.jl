@@ -17,7 +17,7 @@ links = InterLinks(
         inventory("https://clima.github.io/ClimaComms.jl/stable/objects.inv"),
     # Keep this inventory on the ClimaCore minor series that Project.toml allows.
     # `stable` may advance to a pre-1.0 release with an incompatible API.
-    "ClimaCore" => inventory("https://clima.github.io/ClimaCore.jl/v0.15/objects.inv"),
+    "ClimaCore" => inventory("https://clima.github.io/ClimaCore.jl/v0.16/objects.inv"),
     "ClimaDiagnostics" =>
         inventory("https://clima.github.io/ClimaDiagnostics.jl/stable/objects.inv"),
     "ClimaTimeSteppers" =>
