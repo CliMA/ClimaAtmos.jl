@@ -453,6 +453,12 @@ function prognostic_aerosol_parameters(toml_dict)
         :ssa_lewis_b => :lewis_b,
         # explicit settling
         :ssa_settling_courant_max => :settling_courant_max,
+        # below-cloud washout: per-bin collection efficiency for the 1M
+        # swept-volume rate (Feng-anchored), and per-bin power-law prefactor
+        # [s⁻¹ at 1 mm/h] and exponent in rain rate for the 0M shadow
+        :ssa_collection_efficiency => :ssa_E_coll,
+        :ssa_washout_prefactor => :ssa_washout_a,
+        :ssa_washout_exponent => :ssa_washout_b,
         # turbulent dry deposition (Zhang 2001 scheme with the Emerson 2020
         # revised parameters and functional forms, water/ocean category).
         # The superseded Zhang values are kept in ClimaParams (deprecated);

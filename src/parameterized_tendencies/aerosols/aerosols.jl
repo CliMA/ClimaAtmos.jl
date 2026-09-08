@@ -152,14 +152,31 @@ aerosol_dry_deposition_tendency!(Yₜ, Y, p, t) = unrolled_foreach(
 )
 
 """
+    aerosol_wet_deposition_tendency!(Yₜ, Y, p, t)
+    aerosol_wet_deposition_tendency!(Yₜ, Y, p, t, species_model)
+
+Apply the wet-removal (below-cloud washout) tendency of every aerosol
+species, dispatching to methods within
+`AbstractPrognosticAerosol` species models.
+"""
+aerosol_wet_deposition_tendency!(Yₜ, Y, p, t, ::Nothing) = nothing
+aerosol_wet_deposition_tendency!(Yₜ, Y, p, t) = unrolled_foreach(
+    model -> aerosol_wet_deposition_tendency!(Yₜ, Y, p, t, model),
+    values(species_models(p.atmos.aerosols)),
+)
+
+"""
     aerosol_deposition_tendency!(Yₜ, Y, p, t)
 
-Apply every aerosol removal tendency that is not transport. The gravitational
+Apply every aerosol removal tendency that is not transport: the turbulent
+dry-deposition surface sink ([`aerosol_dry_deposition_tendency!`](@ref)) and
+wet removal ([`aerosol_wet_deposition_tendency!`](@ref)). The gravitational
 part of dry deposition leaves through the bottom boundary of
-[`aerosol_settling_tendency!`](@ref); this verb carries the rest.
+[`aerosol_settling_tendency!`](@ref).
 """
 function aerosol_deposition_tendency!(Yₜ, Y, p, t)
     aerosol_dry_deposition_tendency!(Yₜ, Y, p, t)
+    aerosol_wet_deposition_tendency!(Yₜ, Y, p, t)
     return nothing
 end
 
@@ -192,3 +209,4 @@ include("hygroscopic_growth.jl")
 include("settling.jl")
 include("dry_deposition.jl")
 include("sea_salt.jl")
+include("wet_deposition.jl")

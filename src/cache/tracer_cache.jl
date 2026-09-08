@@ -134,7 +134,9 @@ when uncoupled) and turbulent dry-deposition fluxes from
 [`set_sslt_dry_deposition_fluxes!`](@ref) every stage — handed to
 [`aerosol_emission_tendency!`](@ref) and
 [`aerosol_dry_deposition_tendency!`](@ref) respectively, the capped
-deposition velocities behind those fluxes — plus the per-bin
+deposition velocities behind those fluxes — per-bin wet-removal
+rates filled by [`set_sslt_wet_deposition_rates!`](@ref) (read only under
+0- and 1-moment microphysics, where they are populated), plus the per-bin
 spectrum moments ([`sslt_bin_moments`](@ref)) and the settling radii and
 Kelvin coefficients derived from them that the settling and dry-deposition
 tendencies consume every stage. These are pure functions of the (run-constant)
@@ -172,6 +174,25 @@ function species_aerosol_cache(Y, params, sslt::PrognosticSeaSalt)
             velocity
         end,
     )
+    n_updrafts = :sgsʲs in propertynames(Y.c) ? fieldcount(eltype(Y.c.sgsʲs)) : 0
+    sslt_wetdep_rates = NamedTuple{state_names}(
+        ntuple(n_bins) do _
+            rate = similar(Y.c, FT)
+            fill!(rate, zero(FT))
+            rate
+        end,
+    )
+    # Per-updraft wet-removal rates for `PrognosticEDMFX` (empty per bin
+    # without draft subdomains), filled next to the grid-mean rates.
+    sslt_wetdep_ratesʲs = NamedTuple{state_names}(
+        ntuple(n_bins) do _
+            ntuple(n_updrafts) do _
+                rate = similar(Y.c, FT)
+                fill!(rate, zero(FT))
+                rate
+            end
+        end,
+    )
 
     bin_moments = sslt_bin_moments(params, 6, FT)
     settling_radii = sslt_settling_radii(bin_moments, ap)
@@ -180,13 +201,14 @@ function species_aerosol_cache(Y, params, sslt::PrognosticSeaSalt)
     # environment and of each updraft, overwritten every stage by
     # `aerosol_settling_tendency!` before the bin loop reads it.
     air_state_type = NamedTuple{(:RH, :μ, :λ), NTuple{3, FT}}
-    n_updrafts = :sgsʲs in propertynames(Y.c) ? fieldcount(eltype(Y.c.sgsʲs)) : 0
     sslt_air_state⁰ = Fields.Field(air_state_type, axes(Y.c))
     sslt_air_stateʲs = ntuple(_ -> Fields.Field(air_state_type, axes(Y.c)), n_updrafts)
     return (;
         sslt_sfc_fluxes,
         sslt_drydep_fluxes,
         sslt_drydep_velocities,
+        sslt_wetdep_rates,
+        sslt_wetdep_ratesʲs,
         sslt_bin_moments = bin_moments,
         sslt_settling_radii = settling_radii,
         sslt_kelvin_coeffs = kelvin_coeffs,

@@ -1,11 +1,12 @@
 #=
 Unit tests for the prognostic sea-salt hygroscopic growth, gravitational
-settling, and dry-deposition physics in
+settling, dry-deposition, and below-cloud washout physics in
   src/parameterized_tendencies/aerosols/sea_salt.jl
   src/parameterized_tendencies/aerosols/lognormal_moments.jl
   src/parameterized_tendencies/aerosols/hygroscopic_growth.jl
   src/parameterized_tendencies/aerosols/settling.jl
   src/parameterized_tendencies/aerosols/dry_deposition.jl
+  src/parameterized_tendencies/aerosols/wet_deposition.jl
 
 These exercise the pure physics functions with the prognostic-aerosol
 parameter bundle read straight from ClimaParams (the ssa_* keys must exist
@@ -209,4 +210,98 @@ end
         @test M̂0 ≈ bin_0M_flux[i] rtol = 1e-3
         @test FT(4π / 3) * ρ_s * AP.aerosol_r_ref^3 * M̂3 ≈ bin_3M_flux[i] rtol = 1e-3
     end
+end
+
+@testset "Rain swept-volume collection rate" begin
+    toml = CA.CP.create_toml_dict(FT)
+    cmp = CA.CM.Parameters.Microphysics1MParams(toml)
+    rain = cmp.precip.rain
+    vel = cmp.terminal_velocity.rain
+    cloud_liquid = CA.CM.Parameters.CloudLiquid(toml)
+    ρ_air = FT(1.1)
+
+    # Λ/E is zero without rain and increases with rain water content.
+    @test CA.rain_swept_collection_rate(FT(0), ρ_air, rain, vel) == 0
+    Λs = map(
+        q -> CA.rain_swept_collection_rate(FT(q), ρ_air, rain, vel),
+        (1e-6, 1e-5, 1e-4, 1e-3),
+    )
+    @test all(>(0), Λs) && issorted(collect(Λs))
+
+    for q_rai in (FT(1e-5), FT(1e-4), FT(1e-3))
+        Λ = CA.rain_swept_collection_rate(q_rai, ρ_air, rain, vel)
+
+        # Matches the numerical swept-volume integral ∫ a(r)·v(r)·n(r) dr
+        # over the same Marshall-Palmer distribution (composite Simpson).
+        λ_inv = CA.CM1.lambda_inverse(rain.pdf, rain.mass, q_rai, ρ_air)
+        v0 = CA.CM1.get_v0(vel, ρ_air)
+        r0 = rain.mass.r0
+        integrand(r) =
+            rain.pdf.n0 *
+            exp(-r / λ_inv) *
+            rain.area.a0 *
+            rain.area.χa *
+            (r / r0)^(rain.area.ae + rain.area.Δa) *
+            v0 *
+            vel.χv *
+            (r / r0)^(vel.ve + vel.Δv)
+        N, r_hi = 4000, 60 * λ_inv
+        h = r_hi / N
+        Λ_num =
+            h / 3 * (
+                integrand(eps(FT)) +
+                integrand(r_hi) +
+                sum(j -> (isodd(j) ? 4 : 2) * integrand(j * h), 1:(N - 1))
+            )
+        @test Λ ≈ Λ_num rtol = 1e-4
+
+        # Reproduces the CloudMicrophysics accretion kernel to rounding:
+        # with unit cloud water, accretion = q_clo · E · Λ (the factor
+        # ordering differs, so equality holds to a few ulps, not bitwise).
+        E = FT(0.8)
+        n0 = rain.pdf.n0
+        accr = CA.CM1.accretion(
+            cloud_liquid, rain, vel, E, one(FT), q_rai, ρ_air, n0, v0, λ_inv,
+        )
+        @test E * Λ ≈ accr rtol = 8 * eps(FT)
+    end
+
+    # The DSD closes Λ ∝ R^((ae+ve+1)/(me+ve+1)) = R^(7/9) analytically
+    # (Feng 2007 fits 0.79-0.80 for coarse marine aerosol).
+    q_lo, q_hi = FT(1e-5), FT(1e-3)
+    R(q) = ρ_air * q * CA.CM1.terminal_velocity(rain, vel, ρ_air, q)
+    slope =
+        log(
+            CA.rain_swept_collection_rate(q_hi, ρ_air, rain, vel) /
+            CA.rain_swept_collection_rate(q_lo, ρ_air, rain, vel),
+        ) / log(R(q_hi) / R(q_lo))
+    @test slope ≈ 7 / 9 rtol = 1e-6
+end
+
+@testset "Collection efficiency defaults (Greenfield gap)" begin
+    E_coll = AP.ssa_E_coll
+    @test length(E_coll) == NBINS
+    # Accumulation bins collect far less efficiently than coarse bins,
+    # and efficiency is bounded by 1.
+    @test E_coll[1] == E_coll[2] < E_coll[3] == E_coll[4] < E_coll[5] <= 1
+end
+
+@testset "Power-law washout rate (0M)" begin
+    a, b = FT(2.2e-4), FT(0.79)
+    @test CA.power_law_washout_rate(FT(0), a, b) == 0
+    @test CA.power_law_washout_rate(FT(-1e-12), a, b) == 0   # round-off rain
+    @test CA.power_law_washout_rate(FT(1), a, b) ≈ a
+    @test CA.power_law_washout_rate(FT(4), a, b) ≈ a * 4^b
+    @test CA.power_law_washout_rate(FT(4), a, b) >
+          CA.power_law_washout_rate(FT(1), a, b)
+    # 1 kg m⁻² s⁻¹ of liquid water is 3600 mm h⁻¹.
+    @test CA.precipitation_rate_mm_h(FT(1), FT(1000)) ≈ 3600
+    @test CA.precipitation_rate_mm_h(FT(1) / 3600, FT(1000)) ≈ 1
+
+    # Defaults: sub-Greenfield-gap accumulation bins wash out orders of
+    # magnitude slower than coarse bins; exponents in the 0.6–0.8 range.
+    @test length(AP.ssa_washout_a) == length(AP.ssa_washout_b) == NBINS
+    @test AP.ssa_washout_a[1] == AP.ssa_washout_a[2] <
+          AP.ssa_washout_a[3] == AP.ssa_washout_a[4] < AP.ssa_washout_a[5]
+    @test all(b -> 0.6 <= b <= 0.8, AP.ssa_washout_b)
 end

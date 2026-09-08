@@ -49,16 +49,17 @@ tracer `Y.c.ρ<bin>`. Following the `ρχ` naming convention,
 the [Passive Tracers](passive_tracers.md) machinery automatically applies
 horizontal advection, vertical advection, vertical diffusion, and hyperdiffusion.
 
-As per [PROPHET: Prognostic Equations](edmf_equations.md), with prognostic EDMF, each updraft carries a tracer `<bin>` in `Y.c.sgsʲs.:(j)`, automatically wired through SGS tracer machinery: updraft tracers are transported by the mass flux, exchanged with the environment through entrainment and detrainment, and
+As per [PROPHET: Overview and Equations](prophet.md), with prognostic EDMF, each updraft carries a tracer `<bin>` in `Y.c.sgsʲs.:(j)`, automatically wired through SGS tracer machinery: updraft tracers are transported by the mass flux, exchanged with the environment through entrainment and detrainment, and
 contribute an SGS mass-flux term to the grid-mean equation.
 
-Prognostic aerosol species add three processes,
+Prognostic aerosol species add three tendency verbs,
 `aerosol_emission_tendency!`, `aerosol_settling_tendency!`, and
-`aerosol_deposition_tendency!`, dispatching off
+`aerosol_deposition_tendency!` (itself `aerosol_dry_deposition_tendency!`
+plus `aerosol_wet_deposition_tendency!`), dispatching off
 `AbstractPrognosticAerosol` to compute:
 
   - **Surface emission** (called from
-    `src/prognostic_equations/surface_flux.jl`): per-bin upward mass fluxes,
+    `src/prognostic_equations/remaining_tendency.jl`): per-bin upward mass fluxes,
     written by ClimaCoupler once per coupling step via
     `set_sslt_surface_fluxes!`, are applied as bottom boundary conditions
     on `Y.c.ρ<bin>` (and updrafts) via `boundary_tendency_scalar`.
@@ -66,10 +67,14 @@ Prognostic aerosol species add three processes,
     `src/prognostic_equations/remaining_tendency.jl`): explicit downward
     vertical advection at the bin's slip-corrected Stokes velocity, with free
     outflow at the surface.
-  - **Deposition** (called from
+  - **Dry deposition** (called from
     `src/prognostic_equations/remaining_tendency.jl`): a surface sink at the
     Zhang et al. (2001) turbulent dry-deposition velocity with the Emerson
     et al. (2020) revised parameters, applied like the emission flux.
+  - **Below-cloud wet removal** (called from
+    `src/prognostic_equations/remaining_tendency.jl`): first-order washout
+    at the cached per-bin rate from `set_sslt_wet_deposition_rates!`, under
+    0M or 1M microphysics (see [Below-cloud washout](@ref)).
 
 Prognostic sea salt requires `turbconv: prognostic_edmfx`: settling is
 evaluated per subdomain (environment and updrafts), and the surface fluxes
@@ -287,7 +292,7 @@ the settling boundary, so the two sum to the full deposition velocity without
 double counting. ``V_{d,\mathrm{turb}}`` is Courant-capped with the same
 `ssa_settling_courant_max` as settling so the explicit sink cannot
 over-deplete the lowest cell in one step (a numerical device; the settling
-speed inside the deposition Stokes number is uncapped). Wet removal is forthcoming.
+speed inside the deposition Stokes number is uncapped).
 
 The velocity is evaluated on the grid-mean lowest-level state and the flux
 ``-V_{d,\mathrm{turb}}\, \rho\chi|_1`` is cached per bin in
@@ -296,6 +301,49 @@ the tracers exactly as the emission flux does: as the bottom boundary
 condition of the grid-mean tracer, with the specific tendency mirrored onto
 each updraft tracer so subdomain and grid-mean concentrations do not drift
 apart at the surface.
+
+### Below-cloud washout
+
+With 1-moment microphysics each bin is removed at the first-order rate
+``k = E_\mathrm{bin}\,\Lambda(q_\mathrm{rai}, \rho)``, where ``\Lambda`` is the
+swept-volume collection rate of the Marshall–Palmer rain population
+(`rain_swept_collection_rate`, the same closed form as the accretion kernel)
+and ``E_\mathrm{bin}`` the per-bin collection efficiency
+(`ssa_collection_efficiency`). The sink is applied in the unconditionally
+stable form ``\partial_t(\rho\chi) = \rho\chi\,(e^{-k\Delta t} - 1)/\Delta t``.
+
+Under `PrognosticEDMFX` the rate is evaluated per subdomain from each
+subdomain's own rain and density, ``\Lambda^0`` on the environment residual
+``q_\mathrm{rai}^0`` and ``\Lambda^j`` on each updraft's ``q_\mathrm{rai}^j``.
+The grid-mean tracer is removed at the mass-weighted rate
+
+```math
+k = \frac{\rho a^0 \chi^0 k^0 + \sum_j \rho a^j \chi^j k^j}
+         {\rho a^0 \chi^0 + \sum_j \rho a^j \chi^j},
+```
+
+so the grid-scale sink is the sum of the subdomain sinks to first order in
+``k \Delta t`` and the opt-in
+`wetss` diagnostic (`src/diagnostics/local_diagnostics.jl`), which reads it,
+closes the tracer budget, while each updraft
+tracer is scavenged at its own rate (`p.tracers.sslt_wetdep_ratesʲs`), so
+detrainment returns depleted rather than pristine updraft air.
+
+With 0-moment microphysics there is no rain state: precipitation leaves the
+column the instant it forms. The washout then follows the *precipitation
+shadow*, the downward rain flux through each cell recovered from the cached
+total-water sink (`set_sslt_precipitation_shadow!`),
+
+```math
+P(z) = \int_z^{z_\mathrm{top}} \max\!\left(0, -\rho\,\partial_t q_\mathrm{tot}\right)\big|_{T \ge T_\mathrm{freeze}}\, dz',
+```
+
+and each bin is removed at the empirical power law of Feng (2007),
+``k = a_\mathrm{bin}\, R^{b_\mathrm{bin}}`` with ``R`` the rain rate in
+mm h⁻¹ (`power_law_washout_rate`; `ssa_washout_prefactor`,
+`ssa_washout_exponent`, exponents 0.6–0.8 across the marine size range).
+Because the shadow is a column quantity, under `PrognosticEDMFX` every
+subdomain is washed at the same rate.
 
 ## Adding a prognostic aerosol species
 
