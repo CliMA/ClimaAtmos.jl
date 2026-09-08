@@ -299,17 +299,26 @@ producing a closure claim that silently omits whatever the callback did.
 
 ### Timestepping methods supported
 
-  - `CTS.IMEXAlgorithm(CTS.ARS343(), CTS.NewtonsMethod(...))`, the default.
-  - `CTS.ExplicitAlgorithm` tableaus, for the explicit-only tests.
+Every `CTS.IMEXAlgorithm` built with the `Unconstrained` constraint, which is the
+family one IMEX-ARK stepper runs. It includes `ARS343`, the default, `ARS222`,
+which most configurations in this repository select, and the
+`CTS.ExplicitAlgorithm` tableaus, which are the same algorithm with identical
+explicit and implicit tableaus and no Newton solver. The adapter reads the
+tableau from the integrator at setup and never assumes a particular one.
+`SSP`-constrained tableaus and Rosenbrock algorithms run through different
+steppers and are refused at setup. Decided on 2026-09-08.
 
-Both are fixed-step. `args_integrator` passes a fixed `dt` and no controller, so
-there is no embedded error estimator, no step rejection, and no retry. The
-journal still commits only at step end, and an assertion fails if a rejection
-ever occurs, so the property is guarded rather than assumed.
+All of these are fixed-step. `args_integrator` passes a fixed `dt` and no
+controller, so there is no embedded error estimator, no step rejection, and no
+retry. The journal still commits only at step end, and an assertion fails if a
+rejection ever occurs, so the property is guarded rather than assumed.
 
 The behavior being adapted belongs to a specific `ClimaTimeSteppers` version.
-The adapter pins and records that version, and a change to it is a change to the
-contract's second claim level.
+The adapter records `pkgversion(ClimaTimeSteppers)` in every certificate, and its
+trace test fixes the stage construction and hook order it assumes, so a change
+in the dependency fails a test instead of silently changing the meaning of every
+implicit leg. The compat bound is deliberately not pinned to one patch version:
+the upstream syncs move it, and the trace test is the pin.
 
 ## Parent quantities and authoritative integrals
 
@@ -507,6 +516,21 @@ which stage moved the state is what turns "the step does not close" into a
 located defect. It is evidence, not accounting, and the type system keeps it out
 of the parent identity rather than relying on care.
 
+### A decomposition amount is net
+
+A process row books one signed amount per quantity, reservoir and accepted step:
+the integral of everything the process applied, its positive and negative parts
+together. The three identities are linear in these net amounts and need nothing
+else.
+
+Gross accounting keeps the positive and negative parts of a row apart. It is a
+diagnostic, not a closure term: it shows activity behind a zero net, such as
+interior diffusion or a limiter that moves water between columns, and it costs
+two more slots per row. It is available through the configuration key
+`parent_budget_attribution`, which takes `net`, the default, or `gross`. Under
+`gross` every decomposition row carries its two parts beside the net amount, and
+the identities still use the net. Decided on 2026-09-08.
+
 ### A hook folded into an aggregate is booked once
 
 Where the timestepper forms a stored implicit stage tendency by differencing the
@@ -593,9 +617,9 @@ For each parent quantity `q`:
     through zero and it cannot hide a sign.
   - `ε_acc` is the epsilon of the **accounting** arithmetic type, not of the
     state's type.
-  - `κ` covers reduction order and rank dependence. It must be **calibrated
-    against measured serial and distributed runs and recorded** with the result.
-    A guessed `κ` presented as universal is not acceptable.
+  - `κ` covers reduction order and rank dependence. It is **calibrated, never
+    chosen**, by the protocol below, and recorded with the result. A guessed `κ`
+    presented as universal is not acceptable.
 
 The endpoint magnitudes are inside the last term deliberately. Bounding the
 residual by the leg magnitudes alone is a stricter claim than the subtraction
@@ -603,6 +627,23 @@ supports, and fails on a step whose legs are tiny against the background.
 
 The algebraic solve defect is **not** inside this tolerance. It is a
 leading-order accounting term, reported separately.
+
+### Calibrating `κ`
+
+The protocol, decided on 2026-09-08. A row of the calibration table is one
+backend, one state float type and one rank count. For each row, a named
+configuration is run for 50 accepted steps with every term of the parent
+identity measured, and the largest ratio of `abs(R_q)` to the arithmetic term of
+`τ_q` evaluated with `κ = 1` is recorded over its steps and quantities. The
+row's `κ` is four times that ratio, rounded up to a power of two.
+
+The table is committed with the configuration name, the commit and the date of
+every calibration, and it is read at setup. A run whose backend, float type and
+rank count have no row has no tolerance: its verdicts are `blocked`, not `pass`.
+One serial row is re-measured in CI and must stay below `κ/4`. Distributed rows
+are measured where MPI is available, which is not this repository's GitHub
+Actions, and the certificate names the row it used. `a_q` and `r_q` are zero
+unless a configuration declares a physically motivated floor.
 
 ### The solve defect is leading order
 

@@ -115,8 +115,8 @@ instead of disappearing from it.
 recorded channel envelopes and final maps within tolerance.
 
 **Scope.** A timestepper adapter that captures the complete accepted explicit,
-limited, implicit, post-implicit and final-map envelopes, and the packed
-per-step reduction that makes collecting them affordable.
+limited and implicit envelopes and the final maps, and the packed per-step
+reduction that makes collecting them affordable.
 
 **Non-goals.** No per-process attribution. An envelope stands alone at this step
 and its decomposition is deliberately absent.
@@ -128,7 +128,8 @@ adapter under `src/parent_budget/`.
 
 **Requirements.**
 
-  - Pin and record the exact `ClimaTimeSteppers` behavior being adapted.
+  - Record the exact `ClimaTimeSteppers` version and behavior being adapted; the
+    trace test is the pin.
   - Add an executable trace test for stage construction and hook order.
   - Obtain every envelope from stage coefficients and applied increments, never
     from endpoint subtraction.
@@ -173,6 +174,9 @@ diffusion, radiation and microphysics files the registry lists, and a new
   - Build the run's schema from the registry, so the expected set of events is
     fixed by the configuration before the first step.
   - Generate the documentation table from the registry, or test exact agreement.
+  - Book net amounts. Under `parent_budget_attribution: gross` carry each row's
+    positive and negative parts as two further slots, with the identities still
+    on the net.
 
 **Tests.** Attribution residual per explicit channel; deliberate missing,
 duplicated and sign-reversed event tests; registry-to-documentation agreement.
@@ -206,6 +210,8 @@ is left blocked.
     changes are already folded into it, and never book an aggregate together
     with its decomposition.
   - Define the solve defect with a verified sign and accepted weight.
+  - Book the post-implicit correction as a decomposition row of the implicit
+    channel, never as an envelope.
 
 **Tests.** Converged and deliberately under-converged solves, sweeping
 `max_iters` and `approximate_solve_iters`; all three
@@ -268,9 +274,9 @@ stage observations unless their accepted weights are proven.
 
 **Requirements.**
 
-  - Represent restart restoration as a zero-duration transition, or segment the
-    report deliberately, and preserve cumulative ledger state where that is
-    semantically valid.
+  - Segment the report at a restart, persist the last closing endpoints in the
+    checkpoint, and check the restored state against them exactly before the
+    first transaction opens.
   - Require custom callbacks to declare read-only behavior or provide
     accounting, and fail closed for an unknown state-mutating callback.
   - Verify no duplicate charge across step, restart and callback boundaries.
@@ -301,7 +307,8 @@ performance jobs.
 **Requirements.**
 
   - Provide `off`, `summary` and `audit` modes, with `off` the default until
-    overhead and correctness are established.
+    overhead and correctness are established, and
+    `parent_budget_attribution: net | gross`, with `net` the default.
   - Emit versioned machine-readable output, and a concise human-readable
     summary.
   - Report each quantity and control volume as `pass`, `fail`, `blocked` or
@@ -311,7 +318,7 @@ performance jobs.
     classification, tolerances and scales, the parent, attribution and transfer
     residuals, the physical-completeness limitations, and any restart
     segmentation.
-  - Calibrate and record `κ`, rather than shipping a guessed value.
+  - Calibrate `κ` by the contract's protocol and commit the calibration table.
   - Verify bounded storage and no per-step allocation growth in summary mode,
     against an explicit acceptable runtime and memory overhead.
 
