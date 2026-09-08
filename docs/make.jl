@@ -70,6 +70,7 @@ makedocs(;
             "Running Simulations" => [
                 "Running Single-Column Cases" => "single_column.md",
                 "Running Global Simulations" => "global_simulations.md",
+                "Running a 2.5D Squall Line" => "squall_line.md",
                 "Restarting and Checkpointing" => "restarts.md",
                 "Running on GPUs and MPI" => "gpu_and_mpi.md",
             ],

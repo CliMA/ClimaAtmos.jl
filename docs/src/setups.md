@@ -141,6 +141,7 @@ ClimaAtmos.Setups.MoistBaroclinicWave
 ClimaAtmos.Setups.MoistBaroclinicWaveWithEDMF
 ClimaAtmos.Setups.DryDensityCurrentProfile
 ClimaAtmos.Setups.RisingThermalBubbleProfile
+ClimaAtmos.Setups.Gabersek2012
 ClimaAtmos.Setups.MoistAdiabaticProfileEDMFX
 ```
 

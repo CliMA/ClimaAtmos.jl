@@ -1,0 +1,10 @@
+# Gaberšek et al. (2012) 2.5D squall line
+
+# Case-standard Smagorinsky coefficient
+[c_smag]
+value = 0.18
+
+# Rayleigh sponge base: damp w above 15 km (keep the default
+# alpha_rayleigh_uh = 0 — the low-level shear must not be damped)
+[zd_rayleigh]
+value = 15000.0

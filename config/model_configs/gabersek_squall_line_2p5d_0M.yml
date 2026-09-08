@@ -1,0 +1,29 @@
+# Gaberšek et al. (2012) 2.5D squall line, 0-moment microphysics.
+# Saturated-BL sounding + low-level shear + 3 K warm bubble; cloud forms at
+# t ≈ 500 s and precipitation reaches the surface at t ≈ 900 s.
+initial_condition: "Gabersek2012"
+config: "box"
+microphysics_model: "0M"
+# Diffusion: Smagorinsky-Lilly only, no hyperdiffusion
+hyperdiff: ~
+smagorinsky_lilly: "UVW"
+rayleigh_sponge: true
+toml: [toml/gabersek_squall_line.toml]  # c_smag = 0.18, zd_rayleigh = 15 km
+# Domain: 150 x 12 x 24 km, 2.5D (single periodic element in y)
+x_max: 150000.0
+y_max: 12000.0
+z_max: 24000.0
+nh_poly: 3
+x_elem: 38  # ~1 km effective dx
+y_elem: 1   # 2.5D: 4 quadrature points across y
+z_elem: 80  # uniform 300 m
+z_stretch: false
+dt: "1secs"
+t_end: "9000secs"
+dt_save_state_to_disk: "3000secs"
+output_default_diagnostics: false
+netcdf_interpolation_num_points: [152, 4, 80]
+diagnostics:
+  - short_name: [ua, va, wa, ta, thetaa, thetaap, rhoa, pfull,
+                 hus, hur, cl, clw, cli, pr, prw, lwp, iwp, cape]
+    period: 300secs
