@@ -356,6 +356,7 @@ include("MoistBaroclinicWave.jl")
 include("RCEMIPIIProfile.jl")
 include("PrecipitatingColumn.jl")
 include("ShipwayHill2012.jl")
+include("Gabersek2012.jl")
 
 # File-based setups (depend on common/overwrite_from_file.jl)
 include("common/overwrite_from_file.jl")

@@ -163,7 +163,7 @@ values map to same-named types in `Setups`:
   - Idealized profiles: `"DecayingProfile"`, `"IsothermalProfile"`,
     `"ConstantBuoyancyFrequencyProfile"`, `"DryDensityCurrentProfile"`,
     `"RisingThermalBubbleProfile"`, `"MoistAdiabaticProfileEDMFX"`, `"SimplePlume"`,
-    `"PrecipitatingColumn"`, `"ShipwayHill2012"`.
+    `"PrecipitatingColumn"`, `"ShipwayHill2012"`, `"Gabersek2012"`.
   - Baroclinic waves: `"DryBaroclinicWave"`, `"MoistBaroclinicWave"`,
     `"MoistBaroclinicWaveWithEDMF"`, which read `perturb_initstate` and `deep_atmosphere`.
   - LES/SCM cases: `"Bomex"`, `"Rico"`, `"Soares"`, `"GATE_III"`, `"DYCOMS_RF01"`,
@@ -311,6 +311,8 @@ function get_setup_type(parsed_args, thermo_params)
         return Setups.PrecipitatingColumn(; thermo_params)
     elseif ic_name == "ShipwayHill2012"
         return Setups.ShipwayHill2012(; thermo_params)
+    elseif ic_name == "Gabersek2012"
+        return Setups.Gabersek2012(; thermo_params)
     elseif isfile(ic_name)
         return Setups.MoistFromFile(ic_name)
     end
@@ -353,7 +355,7 @@ mesh warping; any other combination raises an error. Called through
 """
 function get_steady_state_velocity(params, Y, topo, initial_condition, mesh_warp_type)
     initial_condition == "ConstantBuoyancyFrequencyProfile" &&
-    mesh_warp_type == "Linear" ||
+        mesh_warp_type == "Linear" ||
         error("The steady-state velocity can currently be computed only for a \
                ConstantBuoyancyFrequencyProfile with Linear mesh warping")
     top_level = Spaces.nlevels(axes(Y.c)) + Fields.half

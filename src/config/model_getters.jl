@@ -1019,7 +1019,7 @@ end
 Assert that the configuration describes a self-consistent case, erroring otherwise.
 
 Checks that `config` is one of `"sphere"`, `"column"`, `"box"`, `"plane"`; that an ISDAC
-run (`initial_condition: ISDAC`) uses a moist microphysics model; that implicit
+or Gabersek2012 run uses a moist microphysics model; that implicit
 vertical diffusion is paired with a
 turbulence-convection or vertical diffusion model; and that prescribed flow is used only
 with flat topography and an explicit solver. Called at the top of `get_atmos`.
@@ -1064,10 +1064,11 @@ function check_case_consistency(parsed_args)
     # ISDAC consistency: the case is selected by `initial_condition: ISDAC`
     # alone; the setup owns the surface, radiation, forcing, subsidence,
     # scm_coriolis, and ls_adv. It only requires a moist microphysics model.
-    if ic == "ISDAC"
+    # Gabersek2012 (squall line) is likewise moist by definition.
+    if ic in ("ISDAC", "Gabersek2012")
         @assert(
             microphysics != "dry",
-            "ISDAC requires a moist microphysics model (got `microphysics_model = \"dry\"`)",
+            "$ic requires a moist microphysics model (got `microphysics_model = \"dry\"`)",
         )
     elseif imp_vert_diff
         # Implicit vertical diffusion is only supported for specific models:

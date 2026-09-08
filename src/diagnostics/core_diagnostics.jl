@@ -30,6 +30,8 @@ compute_hur(state, cache, time, model) = error_diagnostic_variable("hur", model)
 
 =#
 
+import Statistics: mean
+
 """
     error_diagnostic_variable(message = "Cannot compute variable")
     error_diagnostic_variable(variable, model)
@@ -107,6 +109,32 @@ add_diagnostic_variable!(short_name = "thetaa", units = "K",
     long_name = "Air Potential Temperature",
     standard_name = "air_potential_temperature",
     compute = compute_thetaa,
+)
+
+###
+# Potential temperature horizontal anomaly (3d)
+###
+function compute_thetaap!(out, state, cache, time)
+    tps = CAP.thermodynamics_params(cache.params)
+    (; ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice) = cache.precomputed
+    ᶜρ = state.c.ρ
+    ᶜθ = cache.scratch.ᶜtemp_scalar
+    @. ᶜθ = TD.potential_temperature(tps, ᶜT, ᶜρ, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice)
+    out′ = isnothing(out) ? similar(ᶜθ) : out
+    for i in 1:Spaces.nlevels(axes(ᶜθ))
+        θ_level = Fields.level(ᶜθ, i)
+        # `mean` of a level field is area-weighted and reduces across ranks
+        Fields.level(out′, i) .= θ_level .- mean(θ_level)
+    end
+    return out′
+end
+
+add_diagnostic_variable!(short_name = "thetaap", units = "K",
+    long_name = "Air Potential Temperature Horizontal Anomaly",
+    comments = "Potential temperature minus its area-weighted horizontal \
+                mean at each model level (e.g. cold pools, convective \
+                structure in idealized cases)",
+    compute! = compute_thetaap!,
 )
 
 ###
