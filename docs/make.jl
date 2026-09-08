@@ -69,6 +69,7 @@ makedocs(;
         "How-to Guides" => [
             "Running Simulations" => [
                 "Running Single-Column Cases" => "single_column.md",
+                "Running Box Simulations" => "box_simulations.md",
                 "Running Global Simulations" => "global_simulations.md",
                 "Restarting and Checkpointing" => "restarts.md",
                 "Running on GPUs and MPI" => "gpu_and_mpi.md",
