@@ -119,8 +119,6 @@ if TEST_GROUP in ("dynamics_edmfx", "all")
     @safetestset "EDMFX SGS diffusive flux" begin @time include("prognostic_equations/edmfx_sgs_diffusive_flux_tests.jl") end
     @safetestset "EDMFX horizontal diffusive flux" begin @time include("prognostic_equations/edmfx_horizontal_diffusion_tests.jl") end
 end
-    @safetestset "EDMFX horizontal diffusive flux" begin @time include("prognostic_equations/edmfx_horizontal_diffusion_tests.jl") end
-end
 
 # ============================================================================
 # Tagging: end-to-end tagged energy, tagged water, energy source and process
