@@ -425,12 +425,23 @@ end
 
 function prognostic_aerosol_parameters(toml_dict)
     name_map = (;
+        # shared physical constants
+        :density_liquid_water => :ρ_water,
+        # SEA SALT AEROSOL
+        # emission (offline lognormal fit of Gong 2003, dry-radius basis)
         :ssa_size_bin_divisions => :ssa_bin_edges,
         :ssa_r_ref => :ssa_r_ref,
         :ssa_u_ref => :ssa_u_ref,
         :ssa_gong_wind_exponent => :gong_wind_exp,
         :ssa_gong_logfit_bin_3M_flux => :bin_mass_flux,
         :ssa_residence => :τ_ssa,
+        # hygroscopic growth
+        :seasalt_aerosol_kappa => :seasalt_kappa,
+        :surface_tension_water => :σ_w,
+        :ssa_rh_cap => :rh_cap,
+        :ssa_rh_efflorescence => :rh_effl,
+        :ssa_lewis_a => :lewis_a,
+        :ssa_lewis_b => :lewis_b,
     )
     parameters = CP.get_parameter_values(toml_dict, name_map, "ClimaAtmos")
     return to_svec(parameters)

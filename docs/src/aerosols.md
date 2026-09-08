@@ -105,7 +105,6 @@ the dimensionless dry radius ``\hat r = r_\mathrm{dry} / r_\mathrm{ref}``,
 converting the spectrum with ``\hat r_{80} = \chi \, \hat r``, with
 ``\chi`` = `ssa_r80_per_dry` = 2 as per Lewis & Schwartz (2004).
 
-
 #### 3-mode lognormal fit
 
 ClimaAtmos uses a 3-mode lognormal fit to approximate the Gong parameterization:
@@ -165,6 +164,41 @@ giving the number (`ssa_gong_logfit_bin_0M_flux` [m⁻² s⁻¹]) and dry-mass
 \mathcal{F}_i = k_i^{(3)}
 \left(\frac{u_{10}}{u_\mathrm{ref}}\right)^{3.41}
 ```
+
+### Hygroscopic growth
+
+Sea salt particles deliquesce, so their transport sizes depend on the ambient
+relative humidity. Consumers (settling, dry deposition) evaluate the per-bin
+growth factor ``\xi = r_\mathrm{wet}/r_\mathrm{dry}`` in-kernel with
+`sslt_growth_factor` from the relative humidity of the subdomain state they
+act on, so nothing is cached. The growth factor is the size-dependent fit of
+Lewis (2008, Eq. 34)
+
+```math
+\xi = a \left( b + \frac{1}{1 - \mathrm{RH} + (\xi_{\sigma,0}/a)^{3/2}} \right)^{1/3},
+\qquad \xi_{\sigma,0} = \frac{2\, \sigma_w}{\rho_w\, R_v\, T\, r_\mathrm{dry}},
+```
+
+with the NaCl coefficients ``a = 1.08``, ``b = 1.10`` (`ssa_lewis_a`,
+`ssa_lewis_b`). The Kelvin (curvature) term ``\xi_{\sigma,0}`` lowers the
+effective humidity, more so for smaller dry particles, so ξ stays finite at
+RH = 1 without a cap. Its temperature-independent part
+``C_i = (2\sigma_w/(\rho_w R_v a\, r_i))^{3/2}`` is precomputed per bin at the
+bin's mass-moment radius (`sslt_kelvin_coefficient`), and the kernel evaluates
+``(\xi_{\sigma,0}/a)^{3/2} = C_i\, T^{-3/2}``. Below the efflorescence RH
+(`ssa_rh_efflorescence`, 0.45 for NaCl) the particles are dry, ``\xi = 1``,
+without hysteresis. The κ-Köhler form ``(1 + \kappa\, a_w/(1 - a_w))^{1/3}``
+and the bulk Lewis fit ``a\,(b + 1/(1 - a_w))^{1/3}`` (Eq. 33), both with
+``a_w = \min(\mathrm{RH}, \mathrm{RH}_\mathrm{cap})`` (`ssa_rh_cap`), are
+available as `sslt_kappa_kohler_growth_factor` and `sslt_lewis33_growth_factor`
+but are not used by the tendencies.
+
+Under `PrognosticEDMFX` the grid-mean RH blends saturated updraft air into the
+drier environment, and ξ is steepest exactly where that blending happens, so
+consumers evaluate their velocities or rates on the environment and updraft
+states separately and combine those into grid-mean fluxes the way
+`set_precipitation_velocities!` combines subdomain sedimentation velocities; ξ
+itself is never area-averaged, because every size-to-flux map is convex in ξ.
 
 ### Deposition
 
