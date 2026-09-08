@@ -913,7 +913,7 @@ NVTX.@annotate function set_explicit_precomputed_quantities!(Y, p, t)
     # because for the 0 moment microphysics it's an integral of the q_tot sink).
     set_precipitation_surface_fluxes!(Y, p, p.atmos.microphysics_model)
 
-    # Below-cloud wet-removal rates need the current rain state.
+    # Wet-removal rates need the fresh cloud fraction and subdomain states.
     set_sslt_wet_deposition_rates!(Y, p)
 
     set_smagorinsky_lilly_precomputed_quantities!(Y, p, p.atmos.smagorinsky_lilly)

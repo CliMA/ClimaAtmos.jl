@@ -1,6 +1,6 @@
 #=
 Unit tests for the prognostic sea-salt hygroscopic growth, gravitational
-settling, dry-deposition, and below-cloud washout physics in
+settling, dry-deposition, and wet-scavenging (washout and in-cloud) physics in
   src/parameterized_tendencies/aerosols/sea_salt.jl
   src/parameterized_tendencies/aerosols/lognormal_moments.jl
   src/parameterized_tendencies/aerosols/hygroscopic_growth.jl
@@ -278,6 +278,62 @@ end
     @test slope ≈ 7 / 9 rtol = 1e-6
 end
 
+@testset "Liquid precipitation formation rate" begin
+    toml = CA.CP.create_toml_dict(FT)
+    cmp = CA.CM.Parameters.Microphysics1MParams(toml)
+    thp = CA.TD.Parameters.ThermodynamicsParameters(toml)
+    ρ_air, T_warm = FT(1.1), FT(288)
+
+    # Raining warm cloud: positive conversion of cloud liquid to rain.
+    Q = CA.cloud_precip_formation_rate(
+        cmp, thp, ρ_air, T_warm, FT(12e-3), FT(1e-3), FT(0), FT(5e-4), FT(0),
+    )
+    @test Q > 0
+
+    # No cloud liquid: rain evaporation must not leak into the driver
+    # (it is a sink of rain, not a formation pathway).
+    @test CA.cloud_precip_formation_rate(
+        cmp, thp, ρ_air, T_warm, FT(5e-3), FT(0), FT(0), FT(5e-4), FT(0),
+    ) == 0
+
+    # Clear sky: nothing to convert.
+    @test CA.cloud_precip_formation_rate(
+        cmp, thp, ρ_air, T_warm, FT(5e-3), FT(0), FT(0), FT(0), FT(0),
+    ) == 0
+end
+
+@testset "Wet scavenging rate assembly and sink stability" begin
+    dt = FT(600)
+    F, f_act, Λ = FT(0.3), FT(1), FT(2e-4)
+    Q, q_lcl = FT(1e-7), FT(1e-4)
+
+    k_in(F, Q, q) = CA.sslt_in_cloud_scavenging_rate(F, f_act, Q, q, dt)
+    k_below(F, Λ) = CA.sslt_below_cloud_scavenging_rate(F, f_act, Λ)
+
+    @test k_in(F, Q, q_lcl) + k_below(F, Λ) ≈
+          F * f_act * Q / q_lcl + (1 - F) * Λ
+
+    # In-cloud term gates off without cloud condensate and caps at 1/dt.
+    @test k_in(F, Q, FT(0)) == 0
+    @test k_in(F, FT(1), q_lcl) == F * f_act / dt
+
+    # Clear sky leaves washout only; no rain and no cloud removes nothing.
+    @test k_in(FT(0), Q, q_lcl) + k_below(FT(0), Λ) == Λ
+    @test k_in(F, FT(0), q_lcl) + k_below(F, FT(0)) == 0
+
+    # The two arms partition the aerosol mass: washout acts on everything not
+    # dissolved in condensate, so at f_act = 1 the cloudy area is excluded.
+    @test k_below(FT(1), Λ) == 0
+    @test k_below(F, Λ) ≈ (1 - F) * Λ
+
+    # The exponential sink removes at most the available tracer per step,
+    # for any k ≥ 0.
+    for F_any in (FT(0), FT(0.5), FT(1)), q_any in (FT(0), q_lcl)
+        k_any = k_in(F_any, Q, q_any) + k_below(F_any, Λ)
+        @test 0 <= -expm1(-k_any * dt) <= 1
+    end
+end
+
 @testset "Collection efficiency defaults (Greenfield gap)" begin
     E_coll = AP.ssa_E_coll
     @test length(E_coll) == NBINS
@@ -297,6 +353,11 @@ end
     # 1 kg m⁻² s⁻¹ of liquid water is 3600 mm h⁻¹.
     @test CA.precipitation_rate_mm_h(FT(1), FT(1000)) ≈ 3600
     @test CA.precipitation_rate_mm_h(FT(1) / 3600, FT(1000)) ≈ 1
+
+    # 0M in-cloud driver: the sign-flipped total-water sink, never negative.
+    @test CA.precipitation_conversion_rate_0m(FT(-1e-7)) == FT(1e-7)
+    @test CA.precipitation_conversion_rate_0m(FT(0)) == 0
+    @test CA.precipitation_conversion_rate_0m(FT(1e-7)) == 0
 
     # Defaults: sub-Greenfield-gap accumulation bins wash out orders of
     # magnitude slower than coarse bins; exponents in the 0.6–0.8 range.

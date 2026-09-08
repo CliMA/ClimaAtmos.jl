@@ -238,6 +238,86 @@ end
     end
 end
 
+@testset "Subdomain in-cloud scavenging (PrognosticEDMFX column)" begin
+    (; Y, p) = generate_test_simulation(edmf_column_config("sslt_subdomain_incloud"))
+    FTc = eltype(Y)
+    sslt = p.atmos.seasalt
+    a_updraft = FTc(0.1)
+    ρχ_fields = seed_sea_salt!(Y, p; a_updraft)
+    # Cloud liquid and rain in both subdomains, more in the updraft, so the
+    # updraft is cloudy (binary indicator 1) and precipitating.
+    @. Y.c.ρq_lcl = FTc(2e-4) * Y.c.ρ
+    @. Y.c.sgsʲs.:(1).q_lcl = FTc(1e-3)
+    seed_rain!(Y, p)
+    # Full explicit precompute: cloud fraction, microphysics cache, and the
+    # wet-removal rates, in production order.
+    CA.set_explicit_precomputed_quantities!(Y, p, FTc(0))
+
+    thp = CA.CAP.thermodynamics_params(p.params)
+    cmp = CA.CAP.microphysics_1m_params(p.params)
+    ap = CA.CAP.prognostic_aerosol_params(p.params)
+    dt = float(p.dt)
+    (; ᶜρʲs, ᶜTʲs, ᶜq_tot_nonnegʲs) = p.precomputed
+    sgs = Y.c.sgsʲs.:(1)
+    # Cloud indicator from cloud condensate only (rain is not cloud).
+    ᶜFʲ = @. ifelse(
+        TD.has_condensate(thp, max(FTc(0), sgs.q_lcl + sgs.q_icl)),
+        FTc(1),
+        FTc(0),
+    )
+    @test all(==(1), parent(ᶜFʲ))   # the seeded updraft is cloudy everywhere
+    ᶜQʲ = @. CA.cloud_precip_formation_rate(
+        cmp, thp, ᶜρʲs.:(1), ᶜTʲs.:(1), ᶜq_tot_nonnegʲs.:(1),
+        sgs.q_lcl, sgs.q_icl, sgs.q_rai, sgs.q_sno,
+    )
+    @test all(>(0), parent(ᶜQʲ))
+    for (i, name) in enumerate(CA.bin_names(sslt))
+        E = FTc(ap.ssa_E_coll[i])
+        ᶜk = getproperty(p.tracers.sslt_wetdep_rates, Symbol(:ρ, name))
+        ᶜkʲ = getproperty(p.tracers.sslt_wetdep_ratesʲs, Symbol(:ρ, name))[1]
+        # Updraft: the shared formula on the updraft's own ingredients. A
+        # cloudy updraft has no cloud-free washout term.
+        ᶜkʲ_ref = @. CA.sslt_in_cloud_scavenging_rate(
+            ᶜFʲ, FTc(1), ᶜQʲ, sgs.q_lcl + sgs.q_icl, dt,
+        ) + CA.sslt_below_cloud_scavenging_rate(
+            ᶜFʲ,
+            FTc(1),
+            E * CA.rain_swept_collection_rate(
+                sgs.q_rai, ᶜρʲs.:(1), cmp.precip.rain, cmp.terminal_velocity.rain,
+            ),
+        )
+        @test parent(ᶜkʲ) ≈ parent(ᶜkʲ_ref)
+        @test all(x -> isfinite(x) && x > 0, parent(ᶜkʲ))
+        # Grid mean: the rate is survival-weighted, so with a uniform
+        # concentration the implied environment survival
+        # (e^{−kΔt} − aʲe^{−kʲΔt})/a⁰ is a valid fraction — the exact
+        # statement that the grid sink is the sum of the subdomain sinks.
+        ᶜs⁰_implied = @. (
+            exp(-(ᶜk * dt)) - a_updraft * exp(-(ᶜkʲ * dt))
+        ) / (1 - a_updraft)
+        @test all(x -> isfinite(x) && 0 < x ≤ 1 + eps(FTc), parent(ᶜs⁰_implied))
+        @test all(x -> isfinite(x) && x ≥ 0, parent(ᶜk))
+    end
+
+    # Tendencies: sinks bounded by the available mass per step.
+    Yₜ = zero(Y)
+    CA.aerosol_wet_deposition_tendency!(Yₜ, Y, p, FTc(0))
+    for (name, ᶜρχ) in zip(CA.bin_names(sslt), ρχ_fields)
+        ᶜρχₜ = getproperty(Yₜ.c, Symbol(:ρ, name))
+        ᶜχʲ = getproperty(Y.c.sgsʲs.:(1), name)
+        ᶜχʲₜ = getproperty(Yₜ.c.sgsʲs.:(1), name)
+        @test all(≤(0), parent(ᶜρχₜ)) && all(<(0), parent(ᶜχʲₜ))
+        @test all(parent(ᶜρχₜ) .* dt .≥ -parent(ᶜρχ))
+        @test all(parent(ᶜχʲₜ) .* dt .≥ -parent(ᶜχʲ))
+    end
+    column_sink =
+        -sum(
+            name -> sum(parent(getproperty(Yₜ.c, Symbol(:ρ, name)))),
+            CA.bin_names(sslt),
+        )
+    @test column_sink > 0
+end
+
 @testset "Subdomain washout under 0M (PrognosticEDMFX column)" begin
     (; Y, p) = generate_test_simulation(
         edmf_column_config("sslt_subdomain_washout_0m"; microphysics = "0M"),
@@ -259,6 +339,16 @@ end
     @. ᶜρ_dq_tot_dt = ifelse(z_lo <= ᶜz <= z_hi, -FTc(1e-6), FTc(0))
     Operators.column_integral_definite!(surface_rain_flux, ᶜρ_dq_tot_dt)
     @test parent(surface_rain_flux)[1] < 0
+    # Washout only first: no cloud or 0M sink in either subdomain.
+    (; ᶜcloud_fraction, ᶜq_liq⁰, ᶜq_ice⁰, ᶜq_liqʲs, ᶜq_iceʲs) = p.precomputed
+    (; ᶜmp_tendency⁰, ᶜmp_tendencyʲs) = p.precomputed
+    @. ᶜcloud_fraction = FTc(0)
+    @. ᶜq_liq⁰ = FTc(0)
+    @. ᶜq_ice⁰ = FTc(0)
+    @. ᶜq_liqʲs.:(1) = FTc(0)
+    @. ᶜq_iceʲs.:(1) = FTc(0)
+    @. ᶜmp_tendency⁰.dq_tot_dt = FTc(0)
+    @. ᶜmp_tendencyʲs.:(1).dq_tot_dt = FTc(0)
 
     CA.set_sslt_wet_deposition_rates!(Y, p)
     for name in CA.bin_names(sslt)
@@ -268,7 +358,48 @@ end
         @test all(x -> isfinite(x) && x >= 0, k)
         @test all(>(0), k[1:(k_lo - 1)]) && all(iszero, k[(k_hi + 1):end])
         # Every subdomain sees the same column shadow.
-        @test parent(ᶜkʲ) == parent(ᶜk)
+        @test parent(ᶜkʲ) ≈ parent(ᶜk)
+    end
+
+    # In-cloud phase: in the layer the updraft is cloudy and precipitating
+    # (binary indicator 1, so no washout there) and the environment is
+    # half-cloudy with its own weaker sink; ᶜcloud_fraction = a⁰F⁰ + aʲ·1[condʲ].
+    a_updraft = FTc(0.1)
+    Qʲ, q_cldʲ = FTc(1e-7), FTc(1e-3)
+    Q⁰, q_cld⁰, F⁰ = FTc(2e-8), FTc(2e-4), FTc(0.5)
+    @. ᶜq_liqʲs.:(1) = ifelse(z_lo <= ᶜz <= z_hi, q_cldʲ, FTc(0))
+    @. ᶜmp_tendencyʲs.:(1).dq_tot_dt = ifelse(z_lo <= ᶜz <= z_hi, -Qʲ, FTc(0))
+    @. ᶜq_liq⁰ = ifelse(z_lo <= ᶜz <= z_hi, q_cld⁰, FTc(0))
+    @. ᶜmp_tendency⁰.dq_tot_dt = ifelse(z_lo <= ᶜz <= z_hi, -Q⁰, FTc(0))
+    @. ᶜcloud_fraction = ifelse(
+        z_lo <= ᶜz <= z_hi,
+        (1 - a_updraft) * F⁰ + a_updraft,
+        FTc(0),
+    )
+    CA.set_sslt_wet_deposition_rates!(Y, p)
+    ap = CA.CAP.prognostic_aerosol_params(p.params)
+    R_sfc = CA.precipitation_rate_mm_h(
+        -parent(surface_rain_flux)[1], FTc(ap.ρ_water),
+    )
+    for (i, name) in enumerate(CA.bin_names(sslt))
+        a, b = FTc(ap.ssa_washout_a[i]), FTc(ap.ssa_washout_b[i])
+        k = vec(parent(getproperty(p.tracers.sslt_wetdep_rates, Symbol(:ρ, name))))
+        kʲ = vec(parent(getproperty(p.tracers.sslt_wetdep_ratesʲs, Symbol(:ρ, name))[1]))
+        # Cloudy updraft: pure conversion rate, no washout.
+        @test all(x -> x ≈ Qʲ / q_cldʲ, kʲ[k_lo:k_hi])
+        # Below the layer both subdomains are cloud-free under the shadow.
+        @test all(kʲ[1:(k_lo - 1)] .≈ k[1:(k_lo - 1)])
+        @test all(>(0), k[1:(k_lo - 1)])
+        # Grid mean inside the layer: uniform χ ⇒ area-weighted mean of the
+        # environment rate F⁰·Q⁰/q_cld⁰ + (1−F⁰)·Λ, with 0 ≤ Λ ≤ Λ(R_sfc),
+        # and the updraft rate.
+        Λ_sfc = CA.power_law_washout_rate(R_sfc, a, b)
+        k⁰_lo, k⁰_hi = F⁰ * Q⁰ / q_cld⁰, F⁰ * Q⁰ / q_cld⁰ + (1 - F⁰) * Λ_sfc
+        for level in k_lo:k_hi
+            k⁰_implied = (k[level] - a_updraft * kʲ[level]) / (1 - a_updraft)
+            @test k⁰_lo - eps(FTc) ≤ k⁰_implied ≤ k⁰_hi + eps(FTc)
+        end
+        @test all(iszero, k[(k_hi + 1):end])
     end
 
     # Tendencies: grid mean and updraft both sink below the layer only,

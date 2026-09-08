@@ -1041,6 +1041,16 @@ function check_case_consistency(parsed_args)
         error("`prognostic_aerosols` requires `turbconv: prognostic_edmfx`")
     end
 
+    if !isempty(parsed_args["prognostic_aerosols"]) &&
+       parsed_args["cloud_model"] == "grid_scale"
+        error(
+            "`prognostic_aerosols` requires `cloud_model: quadrature` or \
+             `MLCloud`: wet scavenging recovers the environment cloud \
+             fraction from the area-weighted grid-mean value, which \
+             `grid_scale` does not produce",
+        )
+    end
+
     if parsed_args["edmfx_horizontal_diffusion"] &&
        !parsed_args["edmfx_sgs_horizontal_diffusive_flux"]
         error(

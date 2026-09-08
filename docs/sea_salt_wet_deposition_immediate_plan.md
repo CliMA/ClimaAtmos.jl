@@ -53,7 +53,7 @@ c₁ = (S_acnv_lcl_rai + S_accr_lcl_rai [+ S_accr_lcl_sno_warm]) / max(q_lcl, ε
 - `Λ(bin, q_rai)` = below-cloud scavenging coefficient [s⁻¹]. Two interchangeable closures: Feng `a(bin)·P_r^{b(bin)}` with `P_r [mm h⁻¹] = 3600 · Y.c.ρq_rai · ᶜwᵣ`, or — preferred once built — the **DSD-derived swept-volume form** computed from the model's own Marshall–Palmer rain distribution (§3b), which needs no `(a, b)` fit at all.
 - If Feng is used: `a(bin), b(bin)` are **mode-dependent**: coarse-mode values for SSLT04/05 (and upper SSLT03), accumulation-mode values for SSLT01–03. Small numbers for the accumulation bins (Greenfield gap) — do **not** reuse the coarse value across all bins.
 
-Grid-mean, explicit, no new prognostic state. Snow term (`+ a_s·P_s^{b_s}`, with `f_act=0` for ice-precip formation since sea salt isn't an IN) is a one-line add once rain is verified.
+Per subdomain (environment and each updraft) under `PrognosticEDMFX`, explicit, no new prognostic state. Snow term (`+ a_s·P_s^{b_s}`, with `f_act=0` for ice-precip formation since sea salt isn't an IN) is a one-line add once rain is verified.
 
 ---
 
@@ -148,6 +148,16 @@ Cache plumbing: one `InstantaneousVerbose` BMT call per subdomain in
 verbose cache re-evap will need). Interim bring-up fallback only:
 `max(ᶜmp_tendency.dq_rai_dt, 0) / max(q_lcl, ε)` — accept it for smoke tests,
 not for results.
+
+**Accepted inconsistency (environment SGS quadrature).** The environment `Q⁰`
+is a single `InstantaneousVerbose` evaluation on the mean environment state
+(`ᶜspecific_env_value` water species, mean `T`), even when the environment
+microphysics itself integrates the process rates over the SGS quadrature. The
+scavenging rate is first order in `Q⁰/q_cld⁰`, so the quadrature mean and the
+mean-state value differ only through sub-grid covariance of formation and
+condensate; that error is second order next to the Feng/activation-fraction
+uncertainty and is not worth a second quadrature pass per bin. Revisit if the
+verbose cache is ever populated inside the quadrature loop.
 
 ### 3b. Below-cloud Λ from the model's own rain DSD (swept volume)
 
@@ -291,7 +301,7 @@ Activated fraction is *computed*, not a parameter. Note the intent: the small ha
 - **Cloud-borne aerosol tracer** (interstitial↔activated bookkeeping). The rigorous ACI endpoint; needs extra prognostic state. Deferring means in-cloud scavenging is a one-way sink for the activated fraction — fine for a first budget, but it cannot yet return activated aerosol on non-precipitating cloud evaporation.
 - **Re-evaporation.** More important for accumulation number than coarse mass (returns CCN); pairs with the cloud-borne tracer. Deferred with it.
 - **Prognostic sea-salt number / finer size resolution.** The current 5 mass-bins fix a lognormal per bin, so intra-bin activation selectivity is approximate. This — not the scavenging formula — is the real ceiling on ACI fidelity, and is the recommended next architectural question.
-- **Convective/updraft (`ʲs`) in-cloud scavenging.** Grid-mean only for now, consistent with the existing settling TODO.
+- ~~**Convective/updraft (`ʲs`) in-cloud scavenging.**~~ Done: under `PrognosticEDMFX` every ingredient of the rate is evaluated per subdomain (environment residuals with a reconstructed environment cloud fraction; each updraft with its own water species, binary cloud indicator, `Qʲ` and `Λʲ`), the grid mean is removed at the mass-weighted rate, and each updraft tracer at its own (see `set_sslt_wet_deposition_rates!`).
 - **Wang (2011) cross-layer area partition** (`rainout→F_k`, `washout→max(0,F_{k+1}−F_k)`). One-cell vertical stencil; add after the local version verifies.
 
 ---

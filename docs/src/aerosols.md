@@ -71,10 +71,11 @@ plus `aerosol_wet_deposition_tendency!`), dispatching off
     `src/prognostic_equations/remaining_tendency.jl`): a surface sink at the
     Zhang et al. (2001) turbulent dry-deposition velocity with the Emerson
     et al. (2020) revised parameters, applied like the emission flux.
-  - **Below-cloud wet removal** (called from
-    `src/prognostic_equations/remaining_tendency.jl`): first-order washout
-    at the cached per-bin rate from `set_sslt_wet_deposition_rates!`, under
-    0M or 1M microphysics (see [Below-cloud washout](@ref)).
+  - **Wet removal** (called from
+    `src/prognostic_equations/remaining_tendency.jl`): first-order in-cloud
+    (nucleation) scavenging plus below-cloud washout at the cached per-bin
+    rate from `set_sslt_wet_deposition_rates!`, under 0M or 1M microphysics
+    (see [Wet removal](@ref)).
 
 Prognostic sea salt requires `turbconv: prognostic_edmfx`: settling is
 evaluated per subdomain (environment and updrafts), and the surface fluxes
@@ -274,10 +275,14 @@ R_s = \frac{1}{\varepsilon_0\, u_\star\,
 (E_B + E_\mathrm{IM})\, R_1},
 ```
 
-with MOST aerodynamic resistance ``R_a``, Brownian collection
+with the MOST aerodynamic resistance ``R_a = F_m/(\kappa u_\star)``, evaluated
+with the momentum profile and momentum roughness that the emission wind uses
+rather than Zhang's scalar pair, Brownian collection
 ``E_B = C_B\,\mathrm{Sc}^{-\gamma}``, impaction
 ``E_\mathrm{IM} = C_\mathrm{Im}(\mathrm{St}/(\alpha + \mathrm{St}))^\beta``,
-and rebound ``R_1 = e^{-\sqrt{\mathrm{St}}}``, using the water/ocean land-use
+and rebound ``R_1 = e^{-\sqrt{\mathrm{St}}}`` at the smooth-surface Stokes
+number ``\mathrm{St} = \tau u_\star^2/\nu`` with the particle relaxation time
+``\tau = V_g/g``, using the water/ocean land-use
 category everywhere for now. The revised values ``C_B = 0.2``,
 ``\gamma = 2/3``, ``C_\mathrm{Im} = 0.4`` and ``\beta = 1.7`` (the
 `emerson_*` parameters; the Zhang values remain in ClimaParams, deprecated,
@@ -302,48 +307,87 @@ condition of the grid-mean tracer, with the specific tendency mirrored onto
 each updraft tracer so subdomain and grid-mean concentrations do not drift
 apart at the surface.
 
-### Below-cloud washout
+### Wet removal
 
 With 1-moment microphysics each bin is removed at the first-order rate
-``k = E_\mathrm{bin}\,\Lambda(q_\mathrm{rai}, \rho)``, where ``\Lambda`` is the
-swept-volume collection rate of the Marshall–Palmer rain population
-(`rain_swept_collection_rate`, the same closed form as the accretion kernel)
-and ``E_\mathrm{bin}`` the per-bin collection efficiency
-(`ssa_collection_efficiency`). The sink is applied in the unconditionally
-stable form ``\partial_t(\rho\chi) = \rho\chi\,(e^{-k\Delta t} - 1)/\Delta t``.
-
-Under `PrognosticEDMFX` the rate is evaluated per subdomain from each
-subdomain's own rain and density, ``\Lambda^0`` on the environment residual
-``q_\mathrm{rai}^0`` and ``\Lambda^j`` on each updraft's ``q_\mathrm{rai}^j``.
-The grid-mean tracer is removed at the mass-weighted rate
 
 ```math
-k = \frac{\rho a^0 \chi^0 k^0 + \sum_j \rho a^j \chi^j k^j}
-         {\rho a^0 \chi^0 + \sum_j \rho a^j \chi^j},
+k = \underbrace{F\, f_\mathrm{act}\, \min\!\left(\frac{Q}{q_\mathrm{lcl} + q_\mathrm{icl}}, \frac{1}{\Delta t}\right)}_{\text{in-cloud}}
+  + \underbrace{(1 - F\, f_\mathrm{act})\, E_\mathrm{bin}\, \Lambda(q_\mathrm{rai}, \rho)}_{\text{below-cloud}},
 ```
 
-so the grid-scale sink is the sum of the subdomain sinks to first order in
-``k \Delta t`` and the opt-in
+the sum of in-cloud (nucleation) scavenging (`sslt_in_cloud_scavenging_rate`)
+— within the cloudy area ``F`` the activated fraction ``f_\mathrm{act}`` (one
+for every sea salt bin) is dissolved in cloud condensate and removed at the
+intensive rate at which that condensate, of either phase, converts to
+precipitation; ``Q`` is the process-level sum of every sink of
+``q_\mathrm{lcl}`` and ``q_\mathrm{icl}`` that lands in rain or snow
+(`cloud_precip_formation_rate`), so a glaciated subdomain is scavenged at the
+rate its ice converts to snow — and below-cloud washout
+(`sslt_below_cloud_scavenging_rate`) at the swept-volume collection rate
+``\Lambda`` of the Marshall–Palmer rain population
+(`rain_swept_collection_rate`, the same closed form as the accretion kernel)
+times the per-bin collection efficiency (`ssa_collection_efficiency`).
+Washout carries the weight ``1 - F f_\mathrm{act}``, the aerosol mass *not*
+dissolved in condensate: the cloud-free area plus the interstitial fraction of
+the cloudy area. The droplet-borne remainder is already removed by the
+in-cloud term, whose driver ``Q`` contains the rain-accretes-cloud-liquid arm,
+so weighting washout by the full area would count that channel twice. The sink is applied in the unconditionally
+stable form ``\partial_t(\rho\chi) = \rho\chi\,(e^{-k\Delta t} - 1)/\Delta t``.
+
+Under `PrognosticEDMFX` every ingredient is evaluated per subdomain. The
+environment uses the residual water species, its own ``Q^0`` and
+``\Lambda^0``, and the environment cloud fraction recovered from the
+area-weighted grid-mean value, ``F^0 = (F - \sum_j a^j\,\mathbb{1}[\text{condensate}^j]) / a^0`` (which is why
+`prognostic_aerosols` requires `cloud_model: quadrature` or `MLCloud`;
+`grid_scale` does not produce the area-weighted form);
+each updraft uses its own water species, a binary cloud indicator, ``Q^j``
+and ``\Lambda^j``. The grid-mean tracer is removed at the rate whose *survival*
+fraction is the mass-weighted mean of the subdomain survivals,
+
+```math
+e^{-k \Delta t} = \frac{\rho a^0 \chi^0 e^{-k^0 \Delta t}
+                        + \sum_j \rho a^j \chi^j e^{-k^j \Delta t}}
+                       {\rho a^0 \chi^0 + \sum_j \rho a^j \chi^j},
+```
+
+so the grid-scale sink is exactly the sum of the subdomain sinks for any
+``k\Delta t`` — weighting the rate instead would make the grid mean
+over-remove, since ``k \mapsto 1 - e^{-k\Delta t}`` is concave, and the
+residual environment would absorb the difference. The opt-in
 `wetss` diagnostic (`src/diagnostics/local_diagnostics.jl`), which reads it,
 closes the tracer budget, while each updraft
 tracer is scavenged at its own rate (`p.tracers.sslt_wetdep_ratesʲs`), so
 detrainment returns depleted rather than pristine updraft air.
 
-With 0-moment microphysics there is no rain state: precipitation leaves the
-column the instant it forms. The washout then follows the *precipitation
-shadow*, the downward rain flux through each cell recovered from the cached
-total-water sink (`set_sslt_precipitation_shadow!`),
+With 0-moment microphysics the same two-term rate is assembled from the
+0-moment ingredients. The in-cloud driver is the total-water sink itself,
+``Q = \max(0, -\partial_t q_\mathrm{tot})`` (`precipitation_conversion_rate_0m`),
+drained from the equilibrium condensate ``q_\mathrm{liq} + q_\mathrm{ice}``:
+the scheme resolves neither phase nor process, so the activated aerosol share
+follows whatever condensate converts to precipitation. There is no rain
+state, since precipitation leaves the column the instant it forms, so the
+washout follows the *precipitation shadow*, the downward rain flux through
+each cell recovered from the cached sink (`set_sslt_precipitation_shadow!`),
 
 ```math
 P(z) = \int_z^{z_\mathrm{top}} \max\!\left(0, -\rho\,\partial_t q_\mathrm{tot}\right)\big|_{T \ge T_\mathrm{freeze}}\, dz',
 ```
 
-and each bin is removed at the empirical power law of Feng (2007),
-``k = a_\mathrm{bin}\, R^{b_\mathrm{bin}}`` with ``R`` the rain rate in
-mm h⁻¹ (`power_law_washout_rate`; `ssa_washout_prefactor`,
-`ssa_washout_exponent`, exponents 0.6–0.8 across the marine size range).
-Because the shadow is a column quantity, under `PrognosticEDMFX` every
-subdomain is washed at the same rate.
+at the empirical power law of Feng (2007),
+``\Lambda_\mathrm{bin} = a_\mathrm{bin}\, R^{b_\mathrm{bin}}`` with ``R`` the
+rain rate in mm h⁻¹ (`power_law_washout_rate`; `ssa_washout_prefactor`,
+`ssa_washout_exponent`, exponents 0.6–0.8 across the marine size range):
+
+```math
+k = F\, \min\!\left(\frac{Q}{q_\mathrm{liq} + q_\mathrm{ice}}, \frac{1}{\Delta t}\right)
+  + (1 - F)\, a_\mathrm{bin}\, R^{b_\mathrm{bin}}.
+```
+
+Under `PrognosticEDMFX` the in-cloud term and the cloudy area are per
+subdomain exactly as for 1M, from each subdomain's own 0-moment sink and
+condensate, while the shadow is a column quantity, so every subdomain is
+washed at the same rain rate.
 
 ## Adding a prognostic aerosol species
 

@@ -155,8 +155,8 @@ aerosol_dry_deposition_tendency!(Yₜ, Y, p, t) = unrolled_foreach(
     aerosol_wet_deposition_tendency!(Yₜ, Y, p, t)
     aerosol_wet_deposition_tendency!(Yₜ, Y, p, t, species_model)
 
-Apply the wet-removal (below-cloud washout) tendency of every aerosol
-species, dispatching to methods within
+Apply the wet-removal (in-cloud scavenging + below-cloud washout) tendency of
+every aerosol species, dispatching to methods within
 `AbstractPrognosticAerosol` species models.
 """
 aerosol_wet_deposition_tendency!(Yₜ, Y, p, t, ::Nothing) = nothing
