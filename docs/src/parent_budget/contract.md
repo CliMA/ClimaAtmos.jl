@@ -516,9 +516,10 @@ again as its own leg double-counts. A hook already folded into an effective
 implicit increment may be booked independently **only** if the same amount is
 subtracted back out of that aggregate.
 
-Which hooks are folded in is a property of the pinned timestepper version. Until
-it is established there, an intermediate-stage leg is `unknown`, never
-`measured`.
+Which hooks are folded in is a property of the pinned timestepper version, and
+the coverage registry records what the pinned version does. Until a folded
+hook's accepted weight has been measured, an intermediate-stage leg is
+`unknown`, never `measured`.
 
 ## Component status and evidence
 
@@ -796,12 +797,12 @@ final report.
 
 Each blocks a named claim, not the whole ledger.
 
-| Blocker                                                                                                                             | Blocks                                                                     | Cleared by   |
-|:----------------------------------------------------------------------------------------------------------------------------------- |:-------------------------------------------------------------------------- |:------------ |
-| `Yₜ_lim` is a second explicit channel and an adapter reading `Yₜ` alone loses horizontal tracer advection and tracer hyperdiffusion | water closure, and energy closure wherever a limited tracer carries energy | stack step 3 |
-| Accepted implicit stage weights not yet read from the pinned timestepper                                                            | claim level 2 for implicit terms                                           | stack step 5 |
-| Which post-implicit hooks are folded into the effective implicit increment                                                          | claim level 3 for the implicit channel                                     | stack step 5 |
-| Coupled surface legs measured from two quadratures, agreement not yet measured                                                      | claim level 4 in the coupled view                                          | stack step 6 |
-| Energy-reference `b`                                                                                                                | the covariance claim                                                       | stack step 8 |
-| One packed collective per accepted step not yet in place                                                                            | enabling the ledger in a run at acceptable cost                            | stack step 3 |
-| `κ` not yet calibrated                                                                                                              | a numeric pass or fail verdict                                             | stack step 8 |
+| Blocker                                                                                                                               | Blocks                                                                     | Cleared by   |
+|:------------------------------------------------------------------------------------------------------------------------------------- |:-------------------------------------------------------------------------- |:------------ |
+| `Yₜ_lim` is a second explicit channel and an adapter reading `Yₜ` alone loses horizontal tracer advection and tracer hyperdiffusion   | water closure, and energy closure wherever a limited tracer carries energy | stack step 3 |
+| Accepted implicit stage weights not yet read from the pinned timestepper                                                              | claim level 2 for implicit terms                                           | stack step 5 |
+| The hooks folded into the effective implicit increment are known from the stepper source; their accepted weights are not yet measured | claim level 3 for the implicit channel                                     | stack step 5 |
+| Coupled surface legs measured from two quadratures, agreement not yet measured                                                        | claim level 4 in the coupled view                                          | stack step 6 |
+| Energy-reference `b`                                                                                                                  | the covariance claim                                                       | stack step 8 |
+| One packed collective per accepted step not yet in place                                                                              | enabling the ledger in a run at acceptable cost                            | stack step 3 |
+| `κ` not yet calibrated                                                                                                                | a numeric pass or fail verdict                                             | stack step 8 |
