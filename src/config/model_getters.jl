@@ -11,9 +11,8 @@ Accepted values:
 
   - `"dry"`: `DryModel`, no water in the model.
   - `"0M"`: `EquilibriumMicrophysics0M`, instantaneous removal of supersaturation.
-  - `"1M"`: `NonEquilibriumMicrophysics1M`, built with `n_substeps` from
-    `microphysics_n_substeps` and `n_substeps_quad` from
-    `microphysics_n_substeps_quadrature`.
+  - `"1M"`: `NonEquilibriumMicrophysics1M`, built from the config keys parsed by
+    `get_microphysics_1m_options`.
   - `"2M"`: `NonEquilibriumMicrophysics2M`.
   - `"2MP3"`: `NonEquilibriumMicrophysics2MP3`.
 
@@ -27,9 +26,7 @@ function get_microphysics_model(parsed_args, params = nothing)
     elseif model_name == "0M"
         EquilibriumMicrophysics0M()
     elseif model_name == "1M"
-        n_substeps = parsed_args["microphysics_n_substeps"]
-        n_substeps_quad = parsed_args["microphysics_n_substeps_quadrature"]
-        NonEquilibriumMicrophysics1M(; n_substeps, n_substeps_quad)
+        NonEquilibriumMicrophysics1M(; get_microphysics_1m_options(parsed_args)...)
     elseif model_name == "2M"
         NonEquilibriumMicrophysics2M()
     elseif model_name == "2MP3"
@@ -44,17 +41,21 @@ end
 """
     get_microphysics_1m_options(parsed_args)
 
-Parse the config keys for 1-moment microphysics processes into a `NamedTuple` of
-keyword arguments for `CM.Parameters.Microphysics1MParams`.
+Parse the config keys for 1-moment microphysics into a `NamedTuple` of keyword
+arguments for [`NonEquilibriumMicrophysics1M`](@ref).
 
-Each key selects the process-option type that controls dispatch inside
+The substep counts come from `microphysics_n_substeps` (`n_substeps`) and
+`microphysics_n_substeps_quadrature` (`n_substeps_quad`).
+
+The remaining keys select the process-option type that controls dispatch inside
 `bulk_microphysics_tendencies`; a value of `~` (null) disables the process (`nothing`).
 Values are looked up with `parse_option`, so an unknown string raises an error listing
 the valid choices. Each option string names the `CM.Parameters` type it maps to:
 
   - `cloud_liquid_formation`: `"CloudLiquidFormation"`.
-  - `cloud_ice_formation`: `"ConstantTimescale"`, `"TemperatureDependent"`.
+  - `cloud_ice_formation`: `"PrescribedIceNumber"`, `"ConstantTimescale"`, `"TemperatureDependent"`.
   - `cloud_ice_melt`: `"CloudIceMelt"`.
+  - `cloud_liquid_freezing`: `"HomogeneousAndHeterogeneous"`, `"Homogeneous"`, `"Heterogeneous"`.
   - `rain_autoconversion`: `"Kessler1M"`, `"PrescribedNd"`.
   - `snow_autoconversion`: `"NoSupersaturation"`, `"WithSupersaturation"`.
   - `rain_condensation_evaporation`: `"RainEvaporation"`.
@@ -69,6 +70,9 @@ the valid choices. Each option string names the `CM.Parameters` type it maps to:
 function get_microphysics_1m_options(parsed_args)
     CMP = CM.Parameters
 
+    n_substeps = parsed_args["microphysics_n_substeps"]
+    n_substeps_quad = parsed_args["microphysics_n_substeps_quadrature"]
+
     cloud_liquid_formation = parse_option(
         parsed_args["cloud_liquid_formation"],
         Dict(
@@ -80,6 +84,8 @@ function get_microphysics_1m_options(parsed_args)
     cloud_ice_formation = parse_option(
         parsed_args["cloud_ice_formation"],
         Dict(
+            "PrescribedIceNumber" =>
+                CMP.PrescribedIceNumber(),
             "ConstantTimescale" =>
                 CMP.ConstantTimescale(),
             "TemperatureDependent" =>
@@ -114,6 +120,18 @@ function get_microphysics_1m_options(parsed_args)
         parsed_args["rain_condensation_evaporation"],
         Dict("RainEvaporation" => CMP.RainEvaporation()),
         "rain_condensation_evaporation",
+    )
+    cloud_liquid_freezing = parse_option(
+        parsed_args["cloud_liquid_freezing"],
+        Dict(
+            "HomogeneousAndHeterogeneous" =>
+                CMP.HomogeneousAndHeterogeneous(),
+            "Homogeneous" =>
+                CMP.Homogeneous(),
+            "Heterogeneous" =>
+                CMP.Heterogeneous(),
+        ),
+        "cloud_liquid_freezing",
     )
     snow_deposition_sublimation = parse_option(
         parsed_args["snow_deposition_sublimation"],
@@ -171,9 +189,12 @@ function get_microphysics_1m_options(parsed_args)
     )
 
     return (;
+        n_substeps,
+        n_substeps_quad,
         cloud_liquid_formation,
         cloud_ice_formation,
         cloud_ice_melt,
+        cloud_liquid_freezing,
         rain_autoconversion,
         snow_autoconversion,
         rain_condensation_evaporation,
@@ -237,7 +258,6 @@ and the config key is ignored. Otherwise:
   - `"idealized"`: `IdealizedInsolation`.
   - `"timevarying"`: `TimeVaryingInsolation`.
   - `"rcemipii"`: `RCEMIPIIInsolation`.
-  - `"gcmdriven"`: `GCMDrivenInsolation`.
   - `"externaldriventv"`: `ExternalTVInsolation`.
   - `"larcform1"`: `Larcform1Insolation`.
 
@@ -255,15 +275,13 @@ function get_insolation_form(parsed_args; setup_type = nothing)
         TimeVaryingInsolation()
     elseif insolation == "rcemipii"
         RCEMIPIIInsolation()
-    elseif insolation == "gcmdriven"
-        GCMDrivenInsolation()
     elseif insolation == "externaldriventv"
         ExternalTVInsolation()
     elseif insolation == "larcform1"
         Larcform1Insolation()
     else
         error(
-            """Unknown insolation `$insolation`. Expected: "idealized", "timevarying", "rcemipii", "gcmdriven", "externaldriventv", or "larcform1".""",
+            """Unknown insolation `$insolation`. Expected: "idealized", "timevarying", "rcemipii", "externaldriventv", or "larcform1".""",
         )
     end
 end
@@ -808,96 +826,54 @@ end
 Build the external (single-column) forcing selected by the `external_forcing` config
 key.
 
-  - `~` (null): the forcing supplied by `setup_type`, if any. This is the preferred route.
-  - `"GCM"`: `GCMForcing` from `external_forcing_file` and `cfsite_number`.
-  - `"ReanalysisTimeVarying"`: reuses the setup's forcing; errors unless
-    `initial_condition` is also `ReanalysisTimeVarying`.
+Only two values are accepted:
+
+  - `~` (null): the forcing supplied by `setup_type`, if any. This is the preferred
+    route, and the only one for the `ISDAC`, `ForcingFromFile`, and
+    `ReanalysisTimeVarying` cases, whose `initial_condition` setup supplies the matching
+    forcing automatically.
   - `"ReanalysisMonthlyAveragedDiurnal"`: `ExternalDrivenTVForcing` reading the
     monthly-averaged diurnal ERA5 file for the site, generating it first when it is
     missing or written in a stale layout, and wrapping it with a periodic calendar so the
     single stored day repeats.
-  - `"ISDAC"`: `ISDACForcing`.
-  - `"ForcingFromFile"`: the setup's forcing when the setup supplies one, otherwise
-    `ExternalDrivenTVForcing` built from `external_forcing_file`.
 
-Any other value raises an error. The reanalysis options require `config = "column"`, and
-`era5_diurnal_warming` may only be set (to a number) with
-`"ReanalysisMonthlyAveragedDiurnal"`. Before returning,
-`warn_if_run_exceeds_forcing` compares `t_end` with the time span of the forcing file.
+Any other value raises an error. `"ReanalysisMonthlyAveragedDiurnal"` requires
+`config = "column"`, and `era5_diurnal_warming` may only be set (to a number) with it.
+Before returning, `warn_if_run_exceeds_forcing` compares `t_end` with the time span of
+the forcing file.
 """
 function get_external_forcing_model(
     parsed_args,
     ::Type{FT};
     setup_type = nothing,
 ) where {FT}
-    # TODO: Clean this function up after migrating GCMDriven
     external_forcing = parsed_args["external_forcing"]
 
-    if external_forcing in
-       ("ReanalysisTimeVarying", "ReanalysisMonthlyAveragedDiurnal")
-        @assert parsed_args["config"] == "column" "ReanalysisTimeVarying and ReanalysisMonthlyAveragedDiurnal are only supported in column mode."
+    if external_forcing == "ReanalysisMonthlyAveragedDiurnal"
+        @assert parsed_args["config"] == "column" "ReanalysisMonthlyAveragedDiurnal is only supported in column mode."
     end
     if !isnothing(parsed_args["era5_diurnal_warming"])
         @assert external_forcing == "ReanalysisMonthlyAveragedDiurnal" "era5_diurnal_warming is only supported for ReanalysisMonthlyAveragedDiurnal."
         @assert parsed_args["era5_diurnal_warming"] isa Number "era5_diurnal_warming is expected to be a number, but was supplied as a $(typeof(parsed_args["era5_diurnal_warming"]))"
     end
 
-    # The forcing that the chosen setup (`initial_condition`) already supplies,
-    # or `nothing`. With no `external_forcing` key we use it directly, which is
-    # the preferred route. The `ReanalysisTimeVarying` / `ForcingFromFile` string
-    # values below only reuse this same forcing, so they are redundant with it.
-    setup_forcing =
-        isnothing(setup_type) ? nothing : Setups.external_forcing(setup_type, FT)
-
     model = if isnothing(external_forcing)
-        setup_forcing
-    elseif external_forcing == "GCM"
-        GCMForcing{FT}(
-            parsed_args["external_forcing_file"],
-            parsed_args["cfsite_number"],
-        )
-    elseif external_forcing == "ReanalysisTimeVarying"
-        isnothing(setup_forcing) && error(
-            """external_forcing "ReanalysisTimeVarying" requires initial_condition "ReanalysisTimeVarying" (which supplies the same forcing automatically, so the key can simply be omitted).""",
-        )
-        setup_forcing
+        # Preferred (and only) route for setup-driven forcing: with no
+        # `external_forcing` key, the forcing comes from the setup chosen by
+        # `initial_condition` (GCM, ARMVARANAL, ReanalysisTimeVarying, ISDAC, and
+        # ForcingFromFile all supply their own).
+        isnothing(setup_type) ? nothing : Setups.external_forcing(setup_type, FT)
     elseif external_forcing == "ReanalysisMonthlyAveragedDiurnal"
-        external_forcing_file = get_external_monthly_forcing_file_path(parsed_args)
-        # Generate the monthly file if it is missing or in a stale layout.
-        if !isfile(external_forcing_file) ||
-           !check_monthly_forcing_times(external_forcing_file, parsed_args) ||
-           !ClimaColumnFiles.is_conforming(external_forcing_file)
-            generate_external_forcing_file(
-                parsed_args,
-                external_forcing_file,
-                FT,
-                input_data_dir = joinpath(
-                    @clima_artifact("era5_hourly_atmos_raw"),
-                    "monthly",
-                ),
-                data_strs = [
-                    "monthly_diurnal_profiles",
-                    "monthly_diurnal_inst",
-                    "monthly_diurnal_accum",
-                ],
-            )
-        end
-        # The monthly-averaged-diurnal file stores one day; repeat it in time.
+        # The one forcing that differs from the initial condition: monthly-
+        # averaged diurnal ERA5, paired with `initial_condition: ReanalysisTimeVarying`.
+        # The file stores one repeating day, so repeat it in time.
         ExternalDrivenTVForcing(
-            external_forcing_file;
+            era5_dataset(parsed_args, FT; monthly = true);
             time_interpolation_method = ColumnDatasets.periodic_calendar_method(),
         )
-    elseif external_forcing == "ISDAC"
-        ISDACForcing()
-    elseif external_forcing == "ForcingFromFile"
-        # Reuse the setup's forcing when initial_condition is also ForcingFromFile;
-        # otherwise build it from the file (forcing only, no ForcingFromFile IC).
-        isnothing(setup_forcing) ?
-        ExternalDrivenTVForcing(parsed_args["external_forcing_file"]) :
-        setup_forcing
     else
         error(
-            """Unknown external_forcing `$external_forcing`. Expected: ~, "ForcingFromFile", "GCM", "ISDAC", "ReanalysisTimeVarying", or "ReanalysisMonthlyAveragedDiurnal".""",
+            """`external_forcing` accepts only `~` (default; the forcing then comes from the `initial_condition` setup) or "ReanalysisMonthlyAveragedDiurnal", but got `$external_forcing`. The `GCM`/`ISDAC`/`ForcingFromFile`/`ReanalysisTimeVarying` values are supplied automatically by their `initial_condition` setup and are no longer accepted here.""",
         )
     end
 
@@ -1043,17 +1019,14 @@ end
 Assert that the configuration describes a self-consistent case, erroring otherwise.
 
 Checks that `config` is one of `"sphere"`, `"column"`, `"box"`, `"plane"`; that an ISDAC
-run sets `initial_condition`, `surface_setup`, `rad`, and `external_forcing` all to
-`ISDAC` with moist microphysics; that implicit vertical diffusion is paired with a
+run (`initial_condition: ISDAC`) uses a moist microphysics model; that implicit
+vertical diffusion is paired with a
 turbulence-convection or vertical diffusion model; and that prescribed flow is used only
 with flat topography and an explicit solver. Called at the top of `get_atmos`.
 """
 function check_case_consistency(parsed_args)
     ic = parsed_args["initial_condition"]
-    surf = parsed_args["surface_setup"]
-    rad = parsed_args["rad"]
     microphysics = parsed_args["microphysics_model"]
-    extf = parsed_args["external_forcing"]
     imp_vert_diff = parsed_args["implicit_diffusion"]
     vert_diff = parsed_args["vert_diff"]
     turbconv = parsed_args["turbconv"]
@@ -1069,15 +1042,32 @@ function check_case_consistency(parsed_args)
         "Unknown `config = $(repr(config))`. Valid options are: $(join(valid_configs, ", "))."
     )
 
-    # ISDAC consistency: when initial_condition is ISDAC, surface/rad/external
-    # forcing must all be set to the matching ISDAC variants. Subsidence,
-    # scm_coriolis, and ls_adv are owned by the setup, not the YAML schema.
-    ISDAC_mandatory = (ic, surf, rad, extf)
-    if "ISDAC" in ISDAC_mandatory
+    if parsed_args["edmfx_sgs_horizontal_diffusive_flux"] && (
+        !isnothing(parsed_args["smagorinsky_lilly"]) || parsed_args["amd_les"]
+    )
+        error(
+            "`edmfx_sgs_horizontal_diffusive_flux` cannot be combined with \
+             `smagorinsky_lilly` or `amd_les`, which already apply horizontal \
+             SGS diffusion to the same fields",
+        )
+    end
+
+    if parsed_args["edmfx_horizontal_diffusion"] &&
+       !parsed_args["edmfx_sgs_horizontal_diffusive_flux"]
+        error(
+            "`edmfx_horizontal_diffusion` requires \
+             `edmfx_sgs_horizontal_diffusive_flux`: the updraft scalars \
+             inherit the grid-mean horizontal diffusion tendencies",
+        )
+    end
+
+    # ISDAC consistency: the case is selected by `initial_condition: ISDAC`
+    # alone; the setup owns the surface, radiation, forcing, subsidence,
+    # scm_coriolis, and ls_adv. It only requires a moist microphysics model.
+    if ic == "ISDAC"
         @assert(
-            allequal(ISDAC_mandatory) &&
             microphysics != "dry",
-            "ISDAC setup not consistent"
+            "ISDAC requires a moist microphysics model (got `microphysics_model = \"dry\"`)",
         )
     elseif imp_vert_diff
         # Implicit vertical diffusion is only supported for specific models:
@@ -1219,8 +1209,10 @@ function AtmosTurbconv(config::AtmosConfig, params, ::Type{FT}) where {FT}
         detr_model = get_detrainment_model(pa),
         sgs_mass_flux = pa["edmfx_sgs_mass_flux"],
         sgs_diffusive_flux = pa["edmfx_sgs_diffusive_flux"],
+        sgs_diffusive_flux_horizontal = pa["edmfx_sgs_horizontal_diffusive_flux"],
         nh_pressure = pa["edmfx_nh_pressure"],
         vertical_diffusion = pa["edmfx_vertical_diffusion"],
+        horizontal_diffusion = pa["edmfx_horizontal_diffusion"],
         filter = pa["edmfx_filter"],
         scale_blending_method,
     )
@@ -1319,6 +1311,9 @@ function AtmosSurface(
         Setups.surface_condition(setup_type, params)
 
     temperature = if pa["prognostic_surface"] == "SlabOceanSST"
+        if !isnothing(setup_type)
+            @warn "`SlabOceanSST` is active; the surface temperature specified via `surface_condition` in the case setup will be overwritten by the slab ocean's prognostic initialization (see `prognostic_variables.jl`)."
+        end
         SurfaceConditions.SlabOceanTemperature{FT}()
     elseif pa["prognostic_surface"] == "PrescribedSST"
         @something(setup_pieces.temperature, Setups.surface_temperature_model(setup_type))
@@ -1389,6 +1384,6 @@ function COSPModel(config::AtmosConfig)
 
     return COSPModel(;
         n_subcolumns = Val(n_subcolumns),
-        overlap,
+        overlap = Val(overlap),
     )
 end

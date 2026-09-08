@@ -16,7 +16,7 @@ import ..geopotential
 import ..C12, ..C3
 import ..background_p_and_T, ..background_u
 
-# File-based IC infrastructure (overwrite_from_file.jl, GCMDriven.jl, ForcingFromFile.jl)
+# File-based IC infrastructure (overwrite_from_file.jl, ForcingFromFile.jl)
 import Dates
 import ClimaUtilities.SpaceVaryingInputs
 import ClimaUtilities.ClimaArtifacts: @clima_artifact
@@ -25,7 +25,6 @@ import NCDatasets as NC
 import Statistics: mean
 import ..ᶜinterp, ..ᶠinterp
 import ..compute_kinetic
-import ..gcm_height, ..gcm_driven_profile_tmean, ..gcm_driven_timeseries
 import ..weather_model_data_path
 import ..parse_date
 import ..pressure_to_height
@@ -53,10 +52,10 @@ import ..Parameters.ClimaAtmosParameters
 import Thermodynamics.Parameters.ThermodynamicsParameters
 
 # Model types returned by setup interface methods
-import ..GCMForcing, ..ISDACForcing
+import ..ISDACForcing
 import ..ExternalDrivenTVForcing, ..default_forcing_terms
 import ..ColumnDatasets
-import ..GCMDrivenInsolation, ..ExternalTVInsolation, ..TimeVaryingInsolation
+import ..ExternalTVInsolation, ..TimeVaryingInsolation
 import ..RCEMIPIIInsolation
 import ..ShipwayHill2012VelocityProfile
 import ..RadiationDYCOMS, ..RadiationTRMM_LBA, ..RadiationISDAC
@@ -95,7 +94,7 @@ end
 Overwrite the initial state `Y` in place after it has been constructed, and
 return `nothing`.
 
-The extension point for file-based setups (e.g. `GCMDriven`, `WeatherModel`),
+The extension point for file-based setups (e.g. `ForcingFromFile`, `WeatherModel`),
 which regrid whole fields rather than working pointwise. Called by the
 simulation setup after [`initial_state`](@ref). The default is a no-op.
 """
@@ -177,8 +176,8 @@ surface_condition(setup, params) =
 """
     external_forcing(setup, ::Type{FT})
 
-Return the external (large-scale) forcing model of `setup`, e.g. a
-`GCMForcing`, `ISDACForcing`, or `ExternalDrivenTVForcing`.
+Return the external (large-scale) forcing model of `setup`, e.g. an
+`ISDACForcing` or `ExternalDrivenTVForcing`.
 
 Defaults to `nothing`, in which case the model construction layer falls back to
 the `external_forcing` config key.
@@ -188,8 +187,8 @@ external_forcing(setup, ::Type{FT}) where {FT} = nothing
 """
     insolation_model(setup)
 
-Return the insolation model of `setup`, e.g. a `GCMDrivenInsolation`,
-`ExternalTVInsolation`, or `RCEMIPIIInsolation`.
+Return the insolation model of `setup`, e.g. an `ExternalTVInsolation` or
+`RCEMIPIIInsolation`.
 
 Defaults to `nothing`, in which case the `insolation` config key is used.
 """
@@ -366,7 +365,7 @@ surface. File-based setups then overwrite fields through
 
 # Arguments
 
-  - `setup`: A setup instance, e.g. `Bomex`, `Rico`, or `GCMDriven`.
+  - `setup`: A setup instance, e.g. `Bomex`, `Rico`, or `ForcingFromFile`.
   - `params`: The ClimaAtmos parameter set.
   - `atmos_model`: The `AtmosModel`, whose component models select the prognostic
     variables.
@@ -423,7 +422,6 @@ include("ShipwayHill2012.jl")
 
 # File-based setups (depend on common/overwrite_from_file.jl)
 include("common/overwrite_from_file.jl")
-include("GCMDriven.jl")
 include("ForcingFromFile.jl")
 include("MoistFromFile.jl")
 include("WeatherModel.jl")

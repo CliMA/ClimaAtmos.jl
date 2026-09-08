@@ -10,9 +10,14 @@ env:
   GKSwstype: 100
   SLURM_KILL_BAD_EXIT: 1
   COUPLER_PATH: ".buildkite/perf/ClimaCoupler.jl"
-  COUPLER_COMMIT: "85b285034d2d6da13f954f0bf6a114b34bb60857"
+  COUPLER_COMMIT: "a6671f6af1859e7a3a84fd70cf12d8118d9930ad"
   CONFIG_PATH: "$COUPLER_PATH/config/nightly_configs"
   BENCHMARK_CONFIG_PATH: "$COUPLER_PATH/config/benchmark_configs"
+  # Packages whose [compat] bounds are dropped from the coupler projects at
+  # init, in the same convention (and with the same default list) as
+  # ClimaCoupler's nightly pipeline. Set it from the web API to widen or
+  # narrow the set for a single build.
+  UPSTREAM_PACKAGES: "${UPSTREAM_PACKAGES:-ClimaAtmos ClimaCore ClimaTimeSteppers Thermodynamics ClimaLand SurfaceFluxes RRTMGP}"
 
 timeout_in_minutes: 840
 
@@ -22,6 +27,20 @@ steps:
     command:
       - git clone https://github.com/CliMA/ClimaCoupler.jl.git $COUPLER_PATH && bash -c "cd $COUPLER_PATH && git checkout $COUPLER_COMMIT"
       - "echo $$JULIA_DEPOT_PATH"
+      # Remove compat entries for packages in UPSTREAM_PACKAGES
+      - |
+        julia -e '
+          using TOML
+          upstream = [first(split(entry, r"[@#]")) for entry in split(ENV["UPSTREAM_PACKAGES"])]
+          coupler = ENV["COUPLER_PATH"]
+          for project in (coupler, joinpath(coupler, "experiments", "AMIP"))
+              file = joinpath(project, "Project.toml")
+              toml = TOML.parsefile(file)
+              haskey(toml, "compat") || continue
+              @info "Coupler perf: removing [compat] entries" project names = intersect(keys(toml["compat"]), upstream)
+              toml["compat"] = filter(entry -> !(first(entry) in upstream), toml["compat"])
+              open(io -> TOML.print(io, toml; sorted = true), file, "w")
+          end'
       # Update package registry, since dev installs do not do that with a manifest
       - "julia --project=$COUPLER_PATH/experiments/AMIP/ -e 'using Pkg; Pkg.Registry.update()'"
       - echo "--- Instantiate AMIP env"

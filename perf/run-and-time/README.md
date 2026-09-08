@@ -1,12 +1,12 @@
 # Compenent profiling
 
-This directory contains the  GPU test and profiling harnesses are run from this directory. Instantiate
-the local environment once, then invoke a harness with the model file to run:
+This directory contains the  GPU test and profiling harnesses are run from this directory.
+They use the `.buildkite` environment, the same one CI runs. Invoke a harness
+with the model file to run:
 
 ```sh
 export CLIMACOMMS_DEVICE=CUDA
-julia --project -e 'using Pkg; Pkg.instantiate()'
-julia --project HARNESS_SCRIPT.jl models/MODEL.jl
+julia --project=../../.buildkite HARNESS_SCRIPT.jl models/MODEL.jl
 ```
 
 To perform fast iteration make sure you have `Revise.jl` installed in the base
@@ -25,7 +25,7 @@ include("HARNESS_SCRIPT.jl")
   measurements for each kernel:
 
   ```sh
-  julia --project quickprof_harness.jl models/hyperdiff_tendency.jl
+  julia --project=../../.buildkite quickprof_harness.jl models/hyperdiff_tendency.jl
   ```
 
 - `prof_harness.jl` should be used to run the profiling with Nsight Compute or
@@ -34,21 +34,22 @@ include("HARNESS_SCRIPT.jl")
   Nsight Compute:
   ```sh
   ncu -o output.ncu-rep --import-source 1 --profile-from-start=off --set=full \
-    julia --project prof_harness.jl models/MODEL.jl
+    julia --project=../../.buildkite prof_harness.jl models/MODEL.jl
   ```
 
   Nsight Systems:
   ```sh
   nsys profile -o output.nsys-rep \
     --capture-range=cudaProfilerApi --trace=nvtx,cuda,osrt --gpu-metrics-device=cuda-visible --cuda-memory-usage=true \
-    julia --project prof_harness.jl models/MODEL.jl
+    julia --project=../../.buildkite prof_harness.jl models/MODEL.jl
   ```
 
   We also need to make sure that nsys/ncu is useing the same CUDA version as
   Julia. To change the version used by julia run, e.g.:
   ```
-  julia --project -e 'using CUDA; CUDA.set_runtime_version!(v"12.2")'
+  julia --project=../../.buildkite -e 'using CUDA; CUDA.set_runtime_version!(v"12.2")'
   ```
+  This writes `.buildkite/LocalPreferences.toml`, which CI reads too.
 
 ## Models
 

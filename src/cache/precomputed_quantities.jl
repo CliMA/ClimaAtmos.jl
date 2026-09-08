@@ -220,6 +220,18 @@ function precomputed_quantities(Y, atmos)
                 ᶠK_u = similar(Y.f, FT),
                 ᶠK_entr = similar(Y.f, FT),
                 ᶜl_mix = similar(Y.c, FT),
+                # Horizontal eddy viscosity/diffusivity of the TKE-based
+                # closure, with the mixing length limited by the horizontal
+                # node spacing; written by `set_horizontal_diffusivities!`.
+                (
+                    atmos.edmfx_model.sgs_diffusive_flux_horizontal isa
+                    Val{true} ||
+                    atmos.edmfx_model.horizontal_diffusion isa Val{true} ?
+                    (;
+                        ᶜK_u_h = similar(Y.c, FT),
+                        ᶜK_h_h = similar(Y.c, FT),
+                    ) : (;)
+                )...,
             ) : (;)
         )...,
         ᶜstrain_rate_norm = similar(Y.c, FT),
@@ -229,39 +241,7 @@ function precomputed_quantities(Y, atmos)
     ᶜcloud_fraction = similar(Y.c, FT)
     @. ᶜcloud_fraction = FT(0)
 
-    cosp_quantities = if !isnothing(atmos.cosp)
-        ᶜsubcolumn_cloud = similar(Y.c, FT)
-        ᶜsubcolumn_threshold = similar(Y.c, FT)
-        ᶜsubcolumn_precip = similar(Y.c, FT)
-        ᶜscops_selectors = (;
-            has_cloud = similar(Y.c, FT),
-            has_cloud_below = similar(Y.c, FT),
-            has_cloud_anywhere = similar(Y.c, FT),
-        )
-        ᶜprecip_subcolumn_scratch = (;
-            cloud = similar(Y.c, FT),
-            cloud_below = similar(Y.c, FT),
-            any_cloud = similar(Y.c, FT),
-            column_any = similar(Y.c, FT),
-        )
-        ᶜsampled_cloud_fraction = similar(Y.c, FT)
-        ᶜsampled_precip_fraction = similar(Y.c, FT)
-        @. ᶜsampled_cloud_fraction = FT(0)
-        @. ᶜsampled_precip_fraction = FT(0)
-        ᶜlarge_scale_precipitation_flux = similar(Y.c, FT)
-        (;
-            ᶜsubcolumn_cloud,
-            ᶜsubcolumn_threshold,
-            ᶜsubcolumn_precip,
-            ᶜscops_selectors,
-            ᶜprecip_subcolumn_scratch,
-            ᶜsampled_cloud_fraction,
-            ᶜsampled_precip_fraction,
-            ᶜlarge_scale_precipitation_flux,
-        )
-    else
-        (;)
-    end
+    cosp_quantities = cosp_precomputed_quantities(Y, atmos.cosp)
 
     # SGS covariances for hybrid cloud fraction and microphysics quadrature.
     # NonEquilibriumMicrophysics1M/2M always route through the quadrature API
@@ -887,6 +867,13 @@ NVTX.@annotate function set_explicit_precomputed_quantities!(Y, p, t)
     # stability closure). Needs the final cloud fraction and ᶜN²_eff
     # from the covariance/cloud-fraction update above.
     set_face_diffusivities!(Y, p)
+
+    if turbconv_model isa AbstractEDMF && (
+        p.atmos.edmfx_model.sgs_diffusive_flux_horizontal isa Val{true} ||
+        p.atmos.edmfx_model.horizontal_diffusion isa Val{true}
+    )
+        set_horizontal_diffusivities!(Y, p)
+    end
 
     # Master mixing length at centers for consumers that live at centers
     # (TKE dissipation, covariance closure, updraft internal diffusion,

@@ -262,9 +262,7 @@ NVTX.@annotate function apply_hyperdiffusion_tendency!(Yₜ, Y, p, t)
     ᶜρ = Y.c.ρ
     ᶜJ = Fields.local_geometry_field(Y.c).J
     point_type = eltype(Fields.coordinate_field(Y.c))
-    FT = eltype(params)
-    ϵ_FT = eps(FT)
-    (; ᶜT, ᶜq_liq, ᶜq_ice, ᶜq_tot_nonneg) = p.precomputed
+    (; ᶜT) = p.precomputed
     (; ᶜ∇²u, ᶜ∇²s_d, ᶜ∇²q_tot_eff) = p.hyperdiff
     if turbconv_model isa PrognosticEDMFX
         (; ᶜ∇²uʲs, ᶜ∇²s_dʲs, ᶜ∇²q_tot_effʲs) = p.hyperdiff
@@ -297,33 +295,16 @@ NVTX.@annotate function apply_hyperdiffusion_tendency!(Yₜ, Y, p, t)
     # Water enthalpy contribution — only when ρq_tot is prognostic (dry
     # configurations skip this entirely).
     if MatrixFields.has_field(Y, @name(c.ρq_tot))
-        # q_tot_eff and cloud-only q_lcl / q_icl. Non-eq: cloud parts come
-        # from ρq_lcl / ρq_icl prognostics. Eq: aggregated ᶜq_liq / ᶜq_ice
-        # from precomputed already exclude rain/snow.
-        ᶜq_vap = @. lazy(
-            TD.vapor_specific_humidity(ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice),
+        ᶜq_vap, ᶜq_lcl, ᶜq_icl = ᶜsuspended_water(Y, p)
+        ᶜh_eff_plus_Φ = ᶜh_eff_plus_Φ!(
+            p.scratch.ᶜtemp_scalar_2,
+            thermo_params,
+            ᶜT,
+            ᶜΦ,
+            ᶜq_vap,
+            ᶜq_lcl,
+            ᶜq_icl,
         )
-        ᶜq_lcl, ᶜq_icl =
-            p.atmos.microphysics_model isa Union{NonEquilibriumMicrophysics1M,
-                NonEquilibriumMicrophysics2M} ?
-            (
-                (@. lazy(specific(Y.c.ρq_lcl, Y.c.ρ))),
-                (@. lazy(specific(Y.c.ρq_icl, Y.c.ρ))),
-            ) : (ᶜq_liq, ᶜq_ice)
-        ᶜq_water_nonneg = @. lazy(
-            max(FT(0), ᶜq_vap) + max(FT(0), ᶜq_lcl) + max(FT(0), ᶜq_icl),
-        )
-        # Materialize `h_eff + Φ` into a scratch scalar before the `wdivₕ`
-        # broadcast — feeding the deeply-nested lazy `h_eff` directly into
-        # `wdivₕ` triggers a GPUCompiler segfault in
-        # `operator_return_eltype` → `divergence_result_type`.
-        ᶜh_eff_plus_Φ = p.scratch.ᶜtemp_scalar_2
-        @. ᶜh_eff_plus_Φ =
-            (
-                TD.enthalpy_vapor(thermo_params, ᶜT) * max(FT(0), ᶜq_vap) +
-                TD.enthalpy_liquid(thermo_params, ᶜT) * max(FT(0), ᶜq_lcl) +
-                TD.enthalpy_ice(thermo_params, ᶜT) * max(FT(0), ᶜq_icl)
-            ) / max(ᶜq_water_nonneg, ϵ_FT) + ᶜΦ
         @. ᶜh_flux_div += wdivₕ(ᶜρ * ᶜh_eff_plus_Φ * gradₕ(ᶜ∇²q_tot_eff))
     end
     @. Yₜ.c.ρe_tot -= ν₄_scalar * ᶜh_flux_div
@@ -362,23 +343,15 @@ NVTX.@annotate function apply_hyperdiffusion_tendency!(Yₜ, Y, p, t)
                     (@. lazy(Y.c.sgsʲs.:($$j).q_lcl)),
                     (@. lazy(Y.c.sgsʲs.:($$j).q_icl)),
                 ) : (ᶜq_liqʲs.:($j), ᶜq_iceʲs.:($j))
-            ᶜq_waterʲ_nonneg = @. lazy(
-                max(FT(0), ᶜq_vapʲ) +
-                max(FT(0), ᶜq_lclʲ) +
-                max(FT(0), ᶜq_iclʲ),
+            ᶜh_effⱼ_plus_Φ = ᶜh_eff_plus_Φ!(
+                p.scratch.ᶜtemp_scalar_2,
+                thermo_params,
+                ᶜTʲs.:($j),
+                ᶜΦ,
+                ᶜq_vapʲ,
+                ᶜq_lclʲ,
+                ᶜq_iclʲ,
             )
-            # Same GPUCompiler workaround as the grid-mean enthalpy block:
-            # materialize `h_effⱼ + Φ` before feeding into `wdivₕ`.
-            ᶜh_effⱼ_plus_Φ = p.scratch.ᶜtemp_scalar_2
-            @. ᶜh_effⱼ_plus_Φ =
-                (
-                    TD.enthalpy_vapor(thermo_params, ᶜTʲs.:($$j)) *
-                    max(FT(0), ᶜq_vapʲ) +
-                    TD.enthalpy_liquid(thermo_params, ᶜTʲs.:($$j)) *
-                    max(FT(0), ᶜq_lclʲ) +
-                    TD.enthalpy_ice(thermo_params, ᶜTʲs.:($$j)) *
-                    max(FT(0), ᶜq_iclʲ)
-                ) / max(ᶜq_waterʲ_nonneg, ϵ_FT) + ᶜΦ
             @. ᶜh_flux_div = wdivₕ(gradₕ(ᶜ∇²s_dʲs.:($$j)))
             @. ᶜh_flux_div +=
                 wdivₕ(ᶜh_effⱼ_plus_Φ * gradₕ(ᶜ∇²q_tot_effʲs.:($$j)))

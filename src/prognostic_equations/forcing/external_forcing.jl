@@ -7,68 +7,8 @@
 import Thermodynamics as TD
 import ClimaCore.Spaces as Spaces
 import ClimaCore.Fields as Fields
-import NCDatasets as NC
-import Interpolations as Intp
-import Dates
-using Statistics: mean
-import ClimaUtilities.TimeVaryingInputs
-import ClimaUtilities.TimeVaryingInputs: LinearInterpolation, TimeVaryingInput, evaluate!
+import ClimaUtilities.TimeVaryingInputs: evaluate!
 import UnrolledUtilities: unrolled_map, unrolled_foreach
-
-"""
-    interp_vertical_prof(x, xp, fp)
-
-Interpolate the vertical profile `fp`, defined at the points `xp`, to the query
-points `x`.
-
-Linear between the points of `xp`, flat (nearest-boundary value) outside their
-range.
-
-# Arguments
-
-  - `x`: Query points, an array or a `ClimaCore` `Field` (e.g. the model heights
-    [m]); the result keeps its shape.
-  - `xp`: Vector of points at which `fp` is defined, in the same units as `x`.
-  - `fp`: Vector of profile values at `xp`.
-
-# Returns
-
-An array of interpolated values shaped like `x` (like `parent(x)` when `x` is a
-`Field`).
-"""
-function interp_vertical_prof(x, xp, fp)
-    spl = Intp.extrapolate(
-        Intp.interpolate((xp,), fp, Intp.Gridded(Intp.Linear())),
-        Intp.Flat(),
-    )
-    # Interpolate on a flattened view and reshape back to the original shape.
-    x_data = x isa Fields.Field ? parent(x) : x
-    return reshape(spl(vec(x_data)), size(x_data))
-end
-
-
-"""
-    gcm_vert_advection!(ᶜχₜ, ᶜχ, ᶜls_subsidence)
-
-Add the mean vertical advection `⟨w̃⟩ ∂⟨χ̃⟩/∂z` to `ᶜχₜ`, converting a total
-vertical advection tendency into its eddy part.
-
-Used when building the GCM-driven forcing cache: `ᶜχₜ` is initialized with the
-GCM's total vertical advection tendency `-⟨w̃ ∂χ̃/∂z⟩`, and adding the mean
-advection back leaves the eddy fluctuation term, following the decomposition of
-Shen et al. (2022), Eqs. 9–10.
-
-# Arguments
-
-  - `ᶜχₜ`: Tendency field of `χ`, modified in place.
-  - `ᶜχ`: The GCM's time-mean profile of the specific scalar `χ`.
-  - `ᶜls_subsidence`: The GCM's large-scale mean subsidence velocity `⟨w̃⟩` [m/s].
-"""
-function gcm_vert_advection!(ᶜχₜ, ᶜχ, ᶜls_subsidence)
-    @. ᶜχₜ +=
-        Geometry.WVector(ᶜgradᵥ(ᶠinterp(ᶜχ))).components.data.:1 *
-        ᶜls_subsidence
-end
 
 """
     compute_gcm_driven_scalar_inv_τ(z::FT, params) where {FT}
@@ -188,134 +128,10 @@ end
 external_forcing_cache(Y, external_forcing::Nothing, params, _) = (;)
 
 """
-    external_forcing_cache(Y, external_forcing::GCMForcing, params, _)
-
-Build the cache for a GCM-driven single-column experiment, from the NetCDF file
-`external_forcing.external_forcing_file` and the group `external_forcing.cfsite_number`.
-
-Reads the time-mean vertical profiles of the GCM horizontal-advection tendencies
-(`tntha`, `tnhusha`), the vertical-advection tendencies (`tntva`, `tnhusva`), the
-GCM state used as the nudging target (`ta`, `hus`, `ua`, `va`), and the pressure
-velocity `wap`, from which the subsidence velocity follows by the hydrostatic
-approximation `w ≈ -ω α / g`. All profiles are interpolated to the model grid with
-`interp_vertical_prof`. The vertical-advection tendencies are converted into eddy
-fluctuation terms with `gcm_vert_advection!`, and the nudging inverse timescales
-are evaluated with `compute_gcm_driven_scalar_inv_τ` and
-`compute_gcm_driven_momentum_inv_τ`. The insolation entries store the TOA flux,
-recovered as `rsdt / coszen`, and the cosine of the solar zenith angle. The
-methodology is that of Shen et al. (2022).
-
-# Returns
-
-A `NamedTuple` of `ClimaCore` `Field`s: `ᶜdTdt_fluc`, `ᶜdqtdt_fluc`, `ᶜdTdt_hadv`,
-`ᶜdqtdt_hadv`, `ᶜT_nudge`, `ᶜqt_nudge`, `ᶜu_nudge`, `ᶜv_nudge`, `ᶜinv_τ_wind`,
-`ᶜinv_τ_scalar`, `ᶜls_subsidence`, `toa_flux`, and `cos_zenith`.
-"""
-function external_forcing_cache(Y, external_forcing::GCMForcing, params, _)
-    FT = Spaces.undertype(axes(Y.c))
-    ᶜdTdt_fluc = similar(Y.c, FT)
-    ᶜdqtdt_fluc = similar(Y.c, FT)
-    ᶜdTdt_hadv = similar(Y.c, FT)
-    ᶜdqtdt_hadv = similar(Y.c, FT)
-    ᶜT_nudge = similar(Y.c, FT)
-    ᶜqt_nudge = similar(Y.c, FT)
-    ᶜu_nudge = similar(Y.c, FT)
-    ᶜv_nudge = similar(Y.c, FT)
-    ᶜinv_τ_wind = similar(Y.c, FT)
-    ᶜinv_τ_scalar = similar(Y.c, FT)
-    ᶜls_subsidence = similar(Y.c, FT)
-    toa_flux = similar(Fields.level(Y.c.ρ, 1), FT)
-    cos_zenith = similar(Fields.level(Y.c.ρ, 1), FT)
-
-    (; external_forcing_file, cfsite_number) = external_forcing
-
-    NC.Dataset(external_forcing_file, "r") do ds
-
-        function setvar!(cc_field, varname, zc_gcm, zc_forcing)
-            parent(cc_field) .= interp_vertical_prof(
-                zc_gcm,
-                zc_forcing,
-                gcm_driven_profile_tmean(ds.group[cfsite_number], varname),
-            )
-        end
-
-        function setvar_subsidence!(cc_field, varname, zc_gcm, zc_forcing, params)
-            # Computes subsidence velocity from the hydrostatic approximation
-            # w \approx - ω α / g, where ω is pressure velocity and α = 1/ρ is
-            # the specific volume
-            parent(cc_field) .= interp_vertical_prof(
-                zc_gcm,
-                zc_forcing,
-                gcm_driven_profile_tmean(ds.group[cfsite_number], varname) .* .-(
-                    gcm_driven_profile_tmean(ds.group[cfsite_number], "alpha"),
-                ) ./ CAP.grav(params),
-            )
-        end
-
-        function set_toa_flux!(cc_field)
-            # rsdt is TOA insolation. We need
-            # TOA flux and the solar zenith angle separately. So compute
-            #`toa_flux = rsdt/cos(SZA)`.
-            parent(cc_field) .= mean(
-                ds.group[cfsite_number]["rsdt"][:] ./
-                ds.group[cfsite_number]["coszen"][:],
-            )
-        end
-
-        function set_cos_zenith!(cc_field)
-            parent(cc_field) .= ds.group[cfsite_number]["coszen"][1]
-        end
-
-        zc_forcing = gcm_height(ds.group[cfsite_number])
-        zc_gcm = Fields.coordinate_field(Y.c).z
-
-        setvar!(ᶜdTdt_hadv, "tntha", zc_gcm, zc_forcing)
-        setvar!(ᶜdqtdt_hadv, "tnhusha", zc_gcm, zc_forcing)
-        setvar_subsidence!(ᶜls_subsidence, "wap", zc_gcm, zc_forcing, params)
-        # GCM states, used for nudging + vertical eddy advection
-        setvar!(ᶜT_nudge, "ta", zc_gcm, zc_forcing)
-        setvar!(ᶜqt_nudge, "hus", zc_gcm, zc_forcing)
-        setvar!(ᶜu_nudge, "ua", zc_gcm, zc_forcing)
-        setvar!(ᶜv_nudge, "va", zc_gcm, zc_forcing)
-
-        # Vertical eddy advection (Shen et al., 2022; eqn. 9,10)
-        # sum of two terms to give total tendency. First term:
-        setvar!(ᶜdTdt_fluc, "tntva", zc_gcm, zc_forcing)
-        setvar!(ᶜdqtdt_fluc, "tnhusva", zc_gcm, zc_forcing)
-
-        # subtract mean vertical advection to obtain eddy part:
-        gcm_vert_advection!(ᶜdTdt_fluc, ᶜT_nudge, ᶜls_subsidence)
-        gcm_vert_advection!(ᶜdqtdt_fluc, ᶜqt_nudge, ᶜls_subsidence)
-
-        set_toa_flux!(toa_flux)
-        set_cos_zenith!(cos_zenith)
-
-        @. ᶜinv_τ_wind = compute_gcm_driven_momentum_inv_τ(zc_gcm, params)
-        @. ᶜinv_τ_scalar = compute_gcm_driven_scalar_inv_τ(zc_gcm, params)
-    end
-
-    return (;
-        ᶜdTdt_fluc,
-        ᶜdqtdt_fluc,
-        ᶜdTdt_hadv,
-        ᶜdqtdt_hadv,
-        ᶜT_nudge,
-        ᶜqt_nudge,
-        ᶜu_nudge,
-        ᶜv_nudge,
-        ᶜinv_τ_wind,
-        ᶜinv_τ_scalar,
-        ᶜls_subsidence,
-        toa_flux,
-        cos_zenith,
-    )
-end
-
-"""
     external_forcing_tendency!(Yₜ, Y, p, t, external_forcing)
 
-Add the tendencies of an external forcing (GCM data, reanalysis, or an idealized
-case such as ISDAC), dispatching on the forcing type.
+Add the tendencies of an external forcing (column forcing data, reanalysis, or an
+idealized case such as ISDAC), dispatching on the forcing type.
 
 Together with `external_forcing_cache`, this is the complete extension interface
 for a custom single-column forcing: define a forcing type and add one method of
@@ -344,7 +160,7 @@ external_forcing_tendency!(Yₜ, Y, p, t, ::Nothing) = nothing
 #
 # The wind/scalar nudging, the temperature-and-humidity → energy conversion,
 # and the large-scale subsidence math are common to the file-driven
-# (`ExternalDrivenTVForcing`), GCM, and ISDAC forcings. These kernels are the
+# (`ExternalDrivenTVForcing`) and ISDAC forcings. These kernels are the
 # single implementation; each forcing's tendency composes them.
 # ============================================================================
 
@@ -356,29 +172,13 @@ Relax the horizontal momentum `Y.c.uₕ` toward the target `(ᶜu_nudge, ᶜv_nu
 `-(uₕ - uₕ_nudge) / τ` to `Yₜ.c.uₕ`.
 
 Uses the scratch field `p.scratch.ᶜtemp_C12` to hold the target vector. Shared by
-the GCM, file-driven, and per-term `Nudging` forcings. Returns `nothing`.
+the file-driven and per-term `Nudging` forcings. Returns `nothing`.
 """
 function nudge_uv!(Yₜ, Y, p, ᶜu_nudge, ᶜv_nudge, ᶜinv_τ_wind)
     ᶜlg = Fields.local_geometry_field(Y.c)
     ᶜuₕ_nudge = p.scratch.ᶜtemp_C12
     @. ᶜuₕ_nudge = C12(Geometry.UVVector(ᶜu_nudge, ᶜv_nudge), ᶜlg)
     @. Yₜ.c.uₕ -= (Y.c.uₕ - ᶜuₕ_nudge) * ᶜinv_τ_wind
-    return nothing
-end
-
-"""
-    nudge_Tq!(ᶜdTdt, ᶜdqtdt, Y, p, ᶜT_nudge, ᶜqt_nudge, ᶜinv_τ_scalar)
-
-Write the temperature and total-specific-humidity nudging tendencies
-`-(ψ - ψ_nudge) * ᶜinv_τ_scalar` into `ᶜdTdt` [K/s] and `ᶜdqtdt` [1/s].
-
-Both outputs are overwritten, not accumulated. Reads the temperature from
-`p.precomputed.ᶜT` and the specific humidity from `Y`. Returns `nothing`.
-"""
-function nudge_Tq!(ᶜdTdt, ᶜdqtdt, Y, p, ᶜT_nudge, ᶜqt_nudge, ᶜinv_τ_scalar)
-    (; ᶜT) = p.precomputed
-    @. ᶜdTdt = -(ᶜT - ᶜT_nudge) * ᶜinv_τ_scalar
-    @. ᶜdqtdt = -(specific(Y.c.ρq_tot, Y.c.ρ) - ᶜqt_nudge) * ᶜinv_τ_scalar
     return nothing
 end
 
@@ -392,7 +192,7 @@ tendencies into total-energy and total-water tendencies, adding them to
 The energy conversion is `ρ [c_{v,m} dT/dt + (c_{v,v}(T - T₀) + L_{v,0} - R_v T₀) dq_tot/dt]`, i.e., the moist-mixture heat capacity times the temperature tendency
 plus the internal energy of the added vapor; no potential-energy term, since the
 water is added at constant height. Reads the thermodynamic state from
-`p.precomputed`. Shared by the GCM, file-driven, and ISDAC forcings. Returns
+`p.precomputed`. Shared by the file-driven and ISDAC forcings. Returns
 `nothing`.
 """
 function apply_Tq_forcing!(Yₜ, Y, p, ᶜdTdt, ᶜdqtdt)
@@ -443,50 +243,6 @@ function apply_subsidence_forcing!(Yₜ, Y, p, ᶜls_subsidence)
         ᶜq_tot,
         Val{:first_order}(),
     )
-    return nothing
-end
-
-"""
-    external_forcing_tendency!(Yₜ, Y, p, t, ::GCMForcing)
-
-Apply GCM-driven forcing from the always-populated cache: horizontal advection,
-vertical eddy fluctuation, nudging of winds, temperature, and humidity toward the
-GCM profiles, and subsidence.
-
-The three temperature and humidity contributions are summed into two scratch
-fields and converted once to `ρe_tot` and `ρq_tot` tendencies, composing the same
-shared kernels (`nudge_uv!`, `nudge_Tq!`, `apply_Tq_forcing!`,
-`apply_subsidence_forcing!`) that the file-driven `ExternalDrivenTVForcing` uses.
-Returns `nothing`.
-"""
-function external_forcing_tendency!(Yₜ, Y, p, t, ::GCMForcing)
-    (;
-        ᶜdTdt_fluc,
-        ᶜdqtdt_fluc,
-        ᶜdTdt_hadv,
-        ᶜdqtdt_hadv,
-        ᶜT_nudge,
-        ᶜqt_nudge,
-        ᶜu_nudge,
-        ᶜv_nudge,
-        ᶜls_subsidence,
-        ᶜinv_τ_wind,
-        ᶜinv_τ_scalar,
-    ) = p.external_forcing
-
-    nudge_uv!(Yₜ, Y, p, ᶜu_nudge, ᶜv_nudge, ᶜinv_τ_wind)
-
-    # Sum horizontal-advection, nudging, and vertical-fluctuation tendencies.
-    # `ᶜdTdt_sum`/`ᶜdqtdt_sum` alias the scratch fields the nudging tendency is
-    # written into, so the `@.` sum reads the nudging value pointwise.
-    ᶜdTdt_sum = p.scratch.ᶜtemp_scalar
-    ᶜdqtdt_sum = p.scratch.ᶜtemp_scalar_2
-    nudge_Tq!(ᶜdTdt_sum, ᶜdqtdt_sum, Y, p, ᶜT_nudge, ᶜqt_nudge, ᶜinv_τ_scalar)
-    @. ᶜdTdt_sum = ᶜdTdt_hadv + ᶜdTdt_sum + ᶜdTdt_fluc
-    @. ᶜdqtdt_sum = ᶜdqtdt_hadv + ᶜdqtdt_sum + ᶜdqtdt_fluc
-
-    apply_Tq_forcing!(Yₜ, Y, p, ᶜdTdt_sum, ᶜdqtdt_sum)
-    apply_subsidence_forcing!(Yₜ, Y, p, ᶜls_subsidence)
     return nothing
 end
 

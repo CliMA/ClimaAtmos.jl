@@ -1,4 +1,4 @@
-402
+409
 
 # **README**
 #
@@ -32,6 +32,36 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+410
+- Update to ClimaCore 0.16
+
+409
+- Use vapor-ice timescale change, adding supercoole liquid freezing
+
+408
+- Guards against unphysical extrapolated ρa (u₃ is solved before ρa).
+
+407
+- Update dependencies: CloudMicrophysics v0.38.1 -> v0.38.3
+
+406
+- Add updraft pressure drag tke source
+
+405
+- SGS quadrature corrections: fit λ_lagrange to the discrete quadrature
+  measure and add a second Newton step to _compute_z; correct the 0M
+  energy sink by taking the covariance of dq_tot/dt and e_tot.
+
+404
+- SGS quadrature microphysics updates
+
+403
+- Viscous sponge: match hyperdiffusion and vertical diffusion. Energy is
+  diffused as a dry-static-energy + h_eff-weighted q_tot_eff split rather
+  than as total enthalpy. Water mass diffuses on q_tot_eff (rain and snow
+  excluded); the aggregate tendency is distributed to the suspended cloud
+  mass species (ρq_lcl, ρq_icl).
+
 402
 - Hyperdiffusion: subtract a hydrostatic reference state from the diffused
   scalars (dry-static-energy `sd_r(p)` and total-water `q_tot_r(p)`. Removes

@@ -8,7 +8,9 @@ on:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  # Cancel superseded runs on branches and pull requests, but not on `main`, 
+  # so that the workflow badge does not report a cancellation as "failing".
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 # Needed to allow julia-actions/cache to delete old caches that it has created
 permissions:
@@ -91,16 +93,11 @@ jobs:
         version:
           - '1.10'
           - '1.11'
+        # Ubuntu only. `main` then exercises the required jobs that gate a 
+        # pull request, so the workflow badge means "the required checks are 
+        # green". 
         os:
           - ubuntu-latest
-          # There is a concurrency limit for MacOS runners across the
-          # entire organization.
-          # (see https://docs.github.com/en/actions/reference/limits#job-concurrency-limits-for-github-hosted-runners)
-          # To help with this, MacOS runners are only run when PRs are merged
-          # into the main branch.
-          - ${{ github.event_name == 'push' && 'macos-latest' || '' }}
-        exclude:
-          - os: ''
         test_group:
           - infrastructure
           - diagnostics

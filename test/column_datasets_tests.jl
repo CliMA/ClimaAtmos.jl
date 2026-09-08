@@ -261,6 +261,52 @@ end
           advection_only
 end
 
+"""
+Write a mock GCM cfsite forcing file: one per-site subgroup holding `(z, time)`
+profiles and `(time,)` surface series, with `z` stored top-down as the real
+cfsite files are. `skip` names variables to leave out, for the missing-variable
+checks.
+"""
+function write_test_cfsite_file(path, FT; site = "site23", nz = 8, nt = 5, skip = ())
+    # descending heights, so the reader has to sort them
+    zg = repeat(reverse(collect(range(FT(50), FT(15e3), nz))), 1, nt)
+    # a few percent of time variation per sample, so time means are nontrivial
+    tfac = reshape(FT(1) .+ FT(0.05) .* (1:nt), 1, nt)
+    profile(x0, dx) = FT.((x0 .+ dx .* zg ./ 1e3) .* tfac)
+    column = Dict(
+        "zg" => zg,
+        "ta" => profile(290, -6),
+        "ua" => profile(2, 1),
+        "va" => profile(-1, 0.5),
+        "hus" => profile(0.012, -5e-4),
+        "tntha" => profile(1e-5, 1e-7),
+        "tnhusha" => profile(1e-8, 1e-10),
+        "tntva" => profile(-2e-5, 1e-7),
+        "tnhusva" => profile(-3e-8, 1e-10),
+        "alpha" => profile(0.85, 0.05),
+        "wap" => profile(0.01, -1e-3),
+    )
+    surface = Dict(
+        "ts" => FT[300 + 0.1 * i for i in 1:nt],
+        "coszen" => FT[0.4 + 0.05 * i for i in 1:nt],
+        "rsdt" => FT[1300 * (0.4 + 0.05 * i) for i in 1:nt],
+    )
+    NCDataset(path, "c") do ds
+        group = defGroup(ds, site)
+        defDim(group, "z", nz)
+        defDim(group, "time", nt)
+        for (name, vals) in column
+            name in skip && continue
+            defVar(group, name, vals, ("z", "time"))
+        end
+        for (name, vals) in surface
+            name in skip && continue
+            defVar(group, name, vals, ("time",))
+        end
+    end
+    return (; column, surface, nz, nt)
+end
+
 @testset "Required-variable checks" begin
     FT = Float64
     # A native file carrying only initial-state, nudging, and subsidence
@@ -412,4 +458,130 @@ end
     @test scheme isa CA.SurfaceConditions.MoninObukhov
     @test !isnothing(scheme.fluxes)   # prescribed-flux closure plumbed through
     @test CA.Setups.insolation_model(setup) isa CA.TimeVaryingInsolation
+end
+
+@testset "GCM cfsite reader" begin
+    FT = Float64
+    thermo_params = CA.Parameters.thermodynamics_params(CA.ClimaAtmosParameters(FT))
+    g = thermo_params.grav
+    path = joinpath(mktempdir(), "cfsites.nc")
+    mock = write_test_cfsite_file(path, FT)
+    data = CD.GCMColumnData.read_cfsite(path, "site23"; thermo_params)
+
+    @test data isa CD.InMemoryColumnData
+    @test issorted(data.z)                       # stored top-down, read ascending
+    @test length(data.z) == mock.nz
+    @test issetequal(
+        data.column_vars,
+        [:ta, :ua, :va, :hus, :wa, :rho, :tntha, :tnhusha, :tntva, :tnhusva],
+    )
+    @test issetequal(data.surface_vars, [:ts, :coszen, :rsdt])
+    # the data satisfies the default forcing composition and the models the
+    # `ForcingFromFile` defaults resolve to
+    default_vars =
+        Tuple(union(CA.required_column_variables.(CA.default_forcing_terms())...))
+    @test isnothing(
+        CD.require_forcing_variables(data, default_vars, (:ts, :coszen, :rsdt)),
+    )
+
+    # time means, ascending in z
+    tmean(name) = reverse(vec(sum(mock.column[name], dims = 2) ./ mock.nt))
+    @test data.column.ta ≈ tmean("ta")
+    @test data.column.hus ≈ tmean("hus")
+    # subsidence from the mean pressure velocity and specific volume
+    @test data.column.wa ≈ tmean("wap") .* (.-tmean("alpha")) ./ g
+    # density is the mean of 1/α, not 1/mean(α)
+    @test data.column.rho ≈
+          reverse(vec(sum(inv.(mock.column["alpha"]), dims = 2) ./ mock.nt))
+    @test !(data.column.rho ≈ inv.(tmean("alpha")))
+    # the eddy part adds the mean vertical advection back on
+    dtadz = (tmean("ta")[3] - tmean("ta")[1]) / (data.z[3] - data.z[1])
+    @test data.column.tntva[2] ≈ tmean("tntva")[2] + data.column.wa[2] * dtadz
+
+    # steady insolation: coszen is the first sample, rsdt preserves the mean ratio
+    @test data.surface.ts ≈ sum(mock.surface["ts"]) / mock.nt
+    @test data.surface.coszen ≈ mock.surface["coszen"][1]
+    @test data.surface.rsdt / data.surface.coszen ≈
+          sum(mock.surface["rsdt"] ./ mock.surface["coszen"]) / mock.nt
+
+    # loud errors: no file, unknown site, trimmed file
+    @test_throws ErrorException CD.GCMColumnData.read_cfsite(
+        nothing,
+        "site23";
+        thermo_params,
+    )
+    @test_throws ErrorException CD.GCMColumnData.read_cfsite(
+        path,
+        "site99";
+        thermo_params,
+    )
+    trimmed = joinpath(mktempdir(), "trimmed.nc")
+    write_test_cfsite_file(trimmed, FT; skip = ("wap", "rsdt"))
+    @test_throws ErrorException CD.GCMColumnData.read_cfsite(
+        trimmed,
+        "site23";
+        thermo_params,
+    )
+end
+
+@testset "In-memory column data onto a column space" begin
+    FT = Float64
+    thermo_params = CA.Parameters.thermodynamics_params(CA.ClimaAtmosParameters(FT))
+    path = joinpath(mktempdir(), "cfsites.nc")
+    write_test_cfsite_file(path, FT)
+    data = CD.GCMColumnData.read_cfsite(path, "site23"; thermo_params)
+    start_date = Dates.DateTime(2000, 5, 6)
+
+    grid = CA.ColumnGrid(FT; z_elem = 25, z_max = FT(20e3), z_stretch = false)
+    center_space = ClimaCore.Spaces.CenterFiniteDifferenceSpace(grid)
+    ᶜz = ClimaCore.Fields.coordinate_field(center_space).z
+
+    column_inputs = CD.column_timevaryinginputs(
+        data,
+        (:ta, :wa),
+        center_space,
+        start_date,
+    )
+    dest = zero.(ᶜz)
+    evaluate!(dest, column_inputs.ta, 0.0)
+    # linear interpolation of the source profile, flat above its top level
+    ta_itp = Intp.extrapolate(
+        Intp.interpolate((data.z,), data.column.ta, Intp.Gridded(Intp.Linear())),
+        Intp.Flat(),
+    )
+    @test all(isapprox.(Array(parent(dest)), ta_itp.(Array(parent(ᶜz))), rtol = 1e-6))
+    @test maximum(Array(parent(ᶜz))) > maximum(data.z)  # extrapolation is exercised
+    @test ta_itp(1e6) ≈ data.column.ta[end]
+
+    # steady: the same values at any model time
+    later = zero.(ᶜz)
+    evaluate!(later, column_inputs.ta, 1e5)
+    @test Array(parent(later)) == Array(parent(dest))
+
+    surface_inputs =
+        CD.surface_timevaryinginputs(data, (:ts, :coszen), center_space, start_date)
+    evaluate!(dest, surface_inputs.ts, 0.0)
+    @test all(Array(parent(dest)) .≈ data.surface.ts)
+    series = CD.read_surface_series(data, (:ts,), start_date)
+    @test series.times == [0.0]
+    @test series.ts ≈ [data.surface.ts]
+
+    # a steady source never runs out of forcing, and carries no site location
+    @test CD.file_time_span(data, start_date) == Inf
+    @test_throws ErrorException CD.site_location(data)
+
+    # the GCM branch of the config getter drives this through ForcingFromFile
+    setup = CA.get_setup_type(
+        Dict(
+            "initial_condition" => "GCM",
+            "external_forcing_file" => path,
+            "cfsite_number" => "site23",
+            "start_date" => "20000506",
+        ),
+        thermo_params,
+    )
+    @test setup isa CA.Setups.ForcingFromFile
+    @test CA.Setups.external_forcing(setup, FT) isa CA.ExternalDrivenTVForcing
+    @test CA.Setups.insolation_model(setup) isa CA.ExternalTVInsolation
+    @test setup.profiles.T(2000.0) ≈ ta_itp(2000.0)
 end

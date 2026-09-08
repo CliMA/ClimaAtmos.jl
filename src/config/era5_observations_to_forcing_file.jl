@@ -645,6 +645,59 @@ function generate_multiday_era5_external_forcing_file(
 end
 
 """
+    era5_dataset(parsed_args, FT; monthly = false)
+
+Locate the ERA5 column forcing file for the configured site and dates, and
+return a `ColumnDataset` for it. The file is (re)generated from the
+`era5_hourly_atmos_raw` artifact when it is missing, does not cover the run, or
+is in a stale layout. `monthly = false` (default) selects the daily file used by
+the `ReanalysisTimeVarying` case; `monthly = true` selects the
+monthly-averaged-diurnal file (one repeating day) used by the
+`ReanalysisMonthlyAveragedDiurnal` forcing.
+
+The one ERA5 source, mirroring `VaranalFiles`/`GCMColumnData`: the config getters
+just call it and hand the result to `ForcingFromFile` / `ExternalDrivenTVForcing`.
+"""
+function era5_dataset(parsed_args, ::Type{FT}; monthly::Bool = false) where {FT}
+    path =
+        monthly ? get_external_monthly_forcing_file_path(parsed_args) :
+        get_external_daily_forcing_file_path(parsed_args)
+    times_cover = monthly ? check_monthly_forcing_times : check_daily_forcing_times
+    if !isfile(path) ||
+       !times_cover(path, parsed_args) ||
+       !ClimaColumnFiles.is_conforming(path)
+        @info "ERA5 forcing file $(path) is missing, does not cover the run, or is in a stale layout. Generating it now."
+        if monthly
+            generate_external_forcing_file(
+                parsed_args,
+                path,
+                FT,
+                input_data_dir = joinpath(
+                    @clima_artifact("era5_hourly_atmos_raw"),
+                    "monthly",
+                ),
+                data_strs = [
+                    "monthly_diurnal_profiles",
+                    "monthly_diurnal_inst",
+                    "monthly_diurnal_accum",
+                ],
+            )
+        else
+            generate_multiday_era5_external_forcing_file(
+                parsed_args,
+                path,
+                FT,
+                input_data_dir = joinpath(
+                    @clima_artifact("era5_hourly_atmos_raw"),
+                    "daily",
+                ),
+            )
+        end
+    end
+    return ColumnDatasets.ColumnDataset(path)
+end
+
+"""
     smooth_4D_era5(data, variable, lon_index, lat_index; smooth_amount = 4)
 
 Average a 4D ERA5 variable (longitude, latitude, pressure level, time) over a box of

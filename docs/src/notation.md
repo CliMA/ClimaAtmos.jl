@@ -1,7 +1,7 @@
 # Notation and Symbols
 
 The [governing equations](equations.md) and the
-[PROPHET equations](edmf_equations.md) use the notation of the papers they
+[PROPHET equations](prophet.md) use the notation of the papers they
 follow ([Yatunin2026](@cite) for the dynamical core). The source code uses
 ASCII- and Unicode-flavored names that encode where a field is defined and which
 subdomain it belongs to. This page is the bridge between the two.
@@ -40,6 +40,11 @@ drafts (updrafts), and the environment.
 
 The environment is not stored: it is recovered as the residual of the grid mean
 minus the drafts.
+
+The [PROPHET pages](prophet.md) index a general subdomain by ``m = 0, \dots, M``,
+following the paper, and a draft (``m \ge 1``) by ``j``, following the code. So
+``\sum_m`` runs over the drafts *and* the environment, while ``j`` is the loop
+index in `for j in 1:n`.
 
 ## Vector components
 

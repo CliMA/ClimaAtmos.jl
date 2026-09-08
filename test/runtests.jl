@@ -63,6 +63,7 @@ if TEST_GROUP in ("infrastructure", "all")
     @safetestset "Larcform1 setup" begin @time include("larcform1.jl") end
 
     # Config tests
+    @safetestset "SlabOcean SST warning" begin @time include("slab_ocean_warning.jl") end
     @safetestset "Model getters" begin @time include("config/model_from_config.jl") end
     @safetestset "Tracer config" begin @time include("config/tracer_config.jl") end
     @safetestset "AtmosModel Constructor" begin @time include("config/atmos_model_constructor.jl") end
@@ -76,8 +77,11 @@ end
 if TEST_GROUP in ("diagnostics", "all")
     @safetestset "Diagnostics unit tests" begin @time include("diagnostics/unit_diagnostics.jl") end
     @safetestset "DiagnosticsConfig" begin @time include("diagnostics/diagnostics_config.jl") end
-    # COSP subcolumn tests
     @safetestset "COSP subcolumn tests" begin @time include("cosp/subcol_test.jl") end
+    @safetestset "COSP CloudSat optics tests" begin @time include("cosp/cloudsat_optics_test.jl") end
+    @safetestset "COSP CloudSat reflectivity tests" begin @time include("cosp/cloudsat_reflectivity_test.jl") end
+    @safetestset "COSP CloudSat cloud fraction tests" begin @time include("cosp/cloudsat_cloud_fraction_test.jl") end
+    @safetestset "COSP CloudSat CFAD tests" begin @time include("cosp/cloudsat_cfad_test.jl") end
 end
 
 # ============================================================================
@@ -90,6 +94,7 @@ if TEST_GROUP in ("dynamics", "all")
     @safetestset "Post-Newton implicit-advection correction" begin @time include("prognostic_equations/correct_implicit_advection_tests.jl") end
     @safetestset "Vertical diffusion tendency" begin @time include("prognostic_equations/vertical_diffusion_tests.jl") end
     @safetestset "EDMFX SGS diffusive flux" begin @time include("prognostic_equations/edmfx_sgs_diffusive_flux_tests.jl") end
+    @safetestset "EDMFX horizontal diffusive flux" begin @time include("prognostic_equations/edmfx_horizontal_diffusion_tests.jl") end
     @safetestset "Vertical water borrowing limiter" begin @time include("prognostic_equations/vertical_water_borrowing_tests.jl") end
     @safetestset "Enforce physical constraints" begin @time include("prognostic_equations/enforce_physical_constraints_tests.jl") end
     @safetestset "Eddy diffusion closures" begin @time include("prognostic_equations/eddy_diffusion_closures_tests.jl") end

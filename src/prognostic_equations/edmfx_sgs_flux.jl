@@ -21,7 +21,7 @@ diffusive-flux treatment. Vertical SGS momentum fluxes are not yet included.
 
 The `PrognosticEDMFX` method is gated on `p.atmos.edmfx_model.sgs_mass_flux`;
 the generic method is a no-op. Mutates `Yₜ.c`; returns `nothing`. See the
-"PROPHET Sub-Grid Scale Equations" page (`docs/src/edmf_equations.md`).
+"PROPHET: Overview and Equations" page (`docs/src/prophet.md`).
 """
 edmfx_sgs_mass_flux_tendency!(Yₜ, Y, p, t, turbconv_model) = nothing
 
@@ -223,7 +223,6 @@ function edmfx_sgs_diffusive_flux_tendency!(
     (; dt, params) = p
     turbconv_params = CAP.turbconv_params(params)
     (; ᶜu) = p.precomputed
-    ᶠgradᵥ = Operators.GradientC2F()
     n = n_mass_flux_subdomains(turbconv_model)
     # The SGS-updraft branches below apply the same specific tendency the grid
     # mean receives to each subdomain scalar (uniform vertical diffusion across
@@ -263,17 +262,13 @@ function edmfx_sgs_diffusive_flux_tendency!(
         #   q_tot_eff = q_tot - q_rai - q_sno,
         #   h_eff = (h_v·q_v + h_l·q_lcl + h_i·q_icl) / max(q_water_nonneg, ε)
         # See `hyperdiffusion.jl` for the clipped-input protection.
-        ᶜdivᵥ_ρe_tot = Operators.DivergenceF2C(
-            top = Operators.SetValue(C3(FT(0))),
-            bottom = Operators.SetValue(C3(FT(0))),
-        )
         thermo_params = CAP.thermodynamics_params(params)
         (; ᶜΦ) = p.core
         (; ᶜT) = p.precomputed
         (; ᶜh_tot) = p.precomputed
         ᶜρe_totₜ_diffusion = p.scratch.ᶜtemp_scalar_2
         @. ᶜρe_totₜ_diffusion =
-            ᶜdivᵥ_ρe_tot(
+            ᶜdiffdivᵥ(
                 -(
                     ᶠρK_h * ᶠgradᵥ(TD.dry_static_energy(thermo_params, ᶜT, ᶜΦ)) +
                     ᶠρK_e * ᶠgradᵥ(ᶜh_tot)
@@ -307,43 +302,27 @@ function edmfx_sgs_diffusive_flux_tendency!(
             # Moisture contribution to the enthalpy K_h flux: adds
             # -ρK_h · (h_eff+Φ) · ∇q_tot_eff to the dry-part tendency
             # computed above.
-            (; ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice) = p.precomputed
-            ᶜq_vap = @. lazy(TD.vapor_specific_humidity(ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice))
-            ᶜq_lcl, ᶜq_icl =
-                p.atmos.microphysics_model isa
-                Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M} ?
-                (
-                    (@. lazy(specific(Y.c.ρq_lcl, Y.c.ρ))),
-                    (@. lazy(specific(Y.c.ρq_icl, Y.c.ρ))),
-                ) :
-                (ᶜq_liq, ᶜq_ice)
-            ᶜh_eff_plus_Φ = p.scratch.ᶜtemp_scalar_3
-            @. ᶜh_eff_plus_Φ =
-                (
-                    TD.enthalpy_vapor(thermo_params, ᶜT) * max(FT(0), ᶜq_vap) +
-                    TD.enthalpy_liquid(thermo_params, ᶜT) * max(FT(0), ᶜq_lcl) +
-                    TD.enthalpy_ice(thermo_params, ᶜT) * max(FT(0), ᶜq_icl)
-                ) /
-                max(max(FT(0), ᶜq_vap) + max(FT(0), ᶜq_lcl) + max(FT(0), ᶜq_icl), ϵ_FT) +
-                ᶜΦ
-            ᶜq_tot_eff =
-                p.atmos.microphysics_model isa
-                Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M} ?
-                (@. lazy(specific(Y.c.ρq_tot - Y.c.ρq_rai - Y.c.ρq_sno, Y.c.ρ))) :
-                (@. lazy(specific(Y.c.ρq_tot, Y.c.ρ)))
+            ᶜq_vap, ᶜq_lcl, ᶜq_icl = ᶜsuspended_water(Y, p)
+            ᶜh_eff_plus_Φ = ᶜh_eff_plus_Φ!(
+                p.scratch.ᶜtemp_scalar_3,
+                thermo_params,
+                ᶜT,
+                ᶜΦ,
+                ᶜq_vap,
+                ᶜq_lcl,
+                ᶜq_icl,
+            )
+            ᶜq_tot_eff = ᶜdiffusing_water(Y, p)
             @. ᶜρe_totₜ_diffusion +=
-                ᶜdivᵥ_ρe_tot(-(ᶠρK_h * ᶠinterp(ᶜh_eff_plus_Φ) * ᶠgradᵥ(ᶜq_tot_eff)))
+                ᶜdiffdivᵥ(-(ᶠρK_h * ᶠinterp(ᶜh_eff_plus_Φ) * ᶠgradᵥ(ᶜq_tot_eff)))
 
             # K_h water diffusion on q_tot_eff. Cloud species inherit via
             # clipped ratio; rain/snow/n_rai get no K_h transport. K_e
             # transport for all water species is handled in the unified
             # tracer loop below.
             ᶜρχₜ_diffusion = p.scratch.ᶜtemp_scalar
-            ᶜdivᵥ_ρq_tot = Operators.DivergenceF2C(
-                top = Operators.SetValue(C3(FT(0))),
-                bottom = Operators.SetValue(C3(FT(0))),
-            )
-            @. ᶜρχₜ_diffusion = ᶜdivᵥ_ρq_tot(-(ᶠρK_h * ᶠgradᵥ(ᶜq_tot_eff)))
+            ᶜ∇ᵥρK∇q_tot = ᶜdiffusive_flux_divergenceᵥ(ᶠρK_h, ᶜq_tot_eff)
+            @. ᶜρχₜ_diffusion = ᶜ∇ᵥρK∇q_tot
             @. Yₜ.c.ρq_tot -= ᶜρχₜ_diffusion
             @. Yₜ.c.ρ -= ᶜρχₜ_diffusion  # Effect of moisture diffusion on (moist) air mass
             if apply_sgs_updraft
@@ -408,14 +387,12 @@ function edmfx_sgs_diffusive_flux_tendency!(
         # species; precip has no K_h transport), while passive tracers
         # (`α = 1`) receive the full ρ·(K_h + K_e) diffusion.
         ᶜρχₜ_diffusion = p.scratch.ᶜtemp_scalar
-        ᶜdivᵥ_ρq = Operators.DivergenceF2C(
-            top = Operators.SetValue(C3(FT(0))),
-            bottom = Operators.SetValue(C3(FT(0))),
-        )
         foreach_gs_tracer(Yₜ, Y) do ᶜρχₜ, ᶜρχ, ρχ_name
             α = ρχ_name in microphysics_tracer_names(Y) ? FT(0) : FT(1)
             ᶜχ = (@. lazy(specific(ᶜρχ, Y.c.ρ)))
-            @. ᶜρχₜ_diffusion = ᶜdivᵥ_ρq(-((α * ᶠρK_h + ᶠρK_e) * ᶠgradᵥ(ᶜχ)))
+            ᶠρK = @. lazy(α * ᶠρK_h + ᶠρK_e)
+            ᶜ∇ᵥρK∇χ = ᶜdiffusive_flux_divergenceᵥ(ᶠρK, ᶜχ)
+            @. ᶜρχₜ_diffusion = ᶜ∇ᵥρK∇χ
             @. ᶜρχₜ -= ᶜρχₜ_diffusion
             # K_e bodily transport of ρq_tot also moves moist-air mass.
             if ρχ_name == @name(ρq_tot)
@@ -436,6 +413,174 @@ function edmfx_sgs_diffusive_flux_tendency!(
         ᶠstrain_rate = compute_strain_rate_face_vertical(ᶜu)
         @. Yₜ.c.uₕ -= C12(ᶜdivᵥ(-(2 * ᶠρaK_u * ᶠstrain_rate)) / Y.c.ρ)
     end
+
+    return nothing
+end
+
+"""
+    edmfx_sgs_horizontal_diffusive_flux_tendency!(Yₜ, Y, p, t, turbconv_model)
+
+Apply the tendency from the horizontal component of the EDMFX environment SGS
+diffusive flux, using the TKE-based eddy diffusivity with the mixing length
+limited by the horizontal node spacing rather than the resolvability filter
+scale.
+With prognostic updrafts and `edmfx_model.horizontal_diffusion` enabled, the
+grid-mean specific tendencies are also applied to the subdomain scalars.
+
+Always explicit; applied in the explicit remainder, independently of `diff_mode`.
+"""
+edmfx_sgs_horizontal_diffusive_flux_tendency!(Yₜ, Y, p, t, turbconv_model) =
+    nothing
+
+function edmfx_sgs_horizontal_diffusive_flux_tendency!(
+    Yₜ, Y, p, t, turbconv_model::Union{EDOnlyEDMFX, PrognosticEDMFX},
+)
+    p.atmos.edmfx_model.sgs_diffusive_flux_horizontal isa Val{true} ||
+        return nothing
+    iscolumn(axes(Y.c)) && return nothing
+    FT = Spaces.undertype(axes(Y.c))
+    ϵ_FT = eps(FT)
+    (; params) = p
+    (; ᶜK_u_h, ᶜK_h_h) = p.precomputed
+    ᶜρ = Y.c.ρ
+    ᶜtke = @. lazy(specific(Y.c.ρtke, ᶜρ))
+
+    n = n_mass_flux_subdomains(turbconv_model)
+    # With `edmfx_model.horizontal_diffusion`, each subdomain scalar receives
+    # the same specific tendency as the grid mean (uniform horizontal diffusion
+    # across the grid box).
+    apply_sgs_updraft =
+        turbconv_model isa PrognosticEDMFX &&
+        p.atmos.edmfx_model.horizontal_diffusion isa Val{true}
+
+    # Total enthalpy in the spurious-transport-safe form
+    # `F_h = -ρ K_h [∇ₕs_d + (h_eff + Φ) ∇ₕq_tot_eff]`, matching the vertical
+    # term in `edmfx_sgs_diffusive_flux_tendency!`. The dry static energy is
+    # diffused in every configuration; the water contribution is added below
+    # when `ρq_tot` is prognostic.
+    thermo_params = CAP.thermodynamics_params(params)
+    (; ᶜΦ) = p.core
+    (; ᶜT) = p.precomputed
+    ᶜρe_totₜ_diffusion = p.scratch.ᶜtemp_scalar_2
+    @. ᶜρe_totₜ_diffusion =
+        wdivₕ(ᶜρ * ᶜK_h_h * gradₕ(TD.dry_static_energy(thermo_params, ᶜT, ᶜΦ)))
+
+    if !(p.atmos.microphysics_model isa DryModel)
+        ᶜq_vap, ᶜq_lcl, ᶜq_icl = ᶜsuspended_water(Y, p)
+        ᶜh_eff_plus_Φ = ᶜh_eff_plus_Φ!(
+            p.scratch.ᶜtemp_scalar_6,
+            thermo_params,
+            ᶜT,
+            ᶜΦ,
+            ᶜq_vap,
+            ᶜq_lcl,
+            ᶜq_icl,
+        )
+        ᶜq_tot_eff = ᶜdiffusing_water(Y, p)
+        @. ᶜρe_totₜ_diffusion +=
+            wdivₕ(ᶜρ * ᶜK_h_h * ᶜh_eff_plus_Φ * gradₕ(ᶜq_tot_eff))
+
+        # Water diffusion on `q_tot_eff`, and its effect on the moist air mass.
+        # Cloud species inherit their share below; rain and snow get no
+        # horizontal transport.
+        ᶜρχₜ_diffusion = p.scratch.ᶜtemp_scalar_3
+        @. ᶜρχₜ_diffusion = wdivₕ(ᶜρ * ᶜK_h_h * gradₕ(ᶜq_tot_eff))
+        @. Yₜ.c.ρq_tot += ᶜρχₜ_diffusion
+        @. Yₜ.c.ρ += ᶜρχₜ_diffusion
+        if apply_sgs_updraft
+            for j in 1:n
+                @. Yₜ.c.sgsʲs.:($$j).q_tot += ᶜρχₜ_diffusion / ᶜρ
+            end
+            # The corresponding ρaⱼ dry-mass correction is omitted, matching
+            # `edmfx_sgs_diffusive_flux_tendency!`.
+        end
+
+        # Distribute the q_tot_eff diffusion to cloud mass and number species.
+        ᶜratio = p.scratch.ᶜtemp_scalar_4
+        for (q_name, n_name, ρq_name, ρn_name) in (
+            (@name(q_lcl), @name(n_lcl), @name(c.ρq_lcl), @name(c.ρn_lcl)),
+            (@name(q_icl), @name(n_icl), @name(c.ρq_icl), @name(c.ρn_icl)),
+        )
+            MatrixFields.has_field(Y, ρq_name) || continue
+            ᶜρq = MatrixFields.get_field(Y, ρq_name)
+            ᶜρqₜ = MatrixFields.get_field(Yₜ, ρq_name)
+            @. ᶜratio =
+                max(FT(0), min(FT(1), specific(ᶜρq, ᶜρ) / max(ᶜq_tot_eff, ϵ_FT)))
+            @. ᶜρqₜ += ᶜratio * ᶜρχₜ_diffusion
+            if apply_sgs_updraft
+                for j in 1:n
+                    if MatrixFields.has_field(Y.c.sgsʲs.:($j), q_name)
+                        ᶜqⱼₜ = MatrixFields.get_field(Yₜ.c.sgsʲs.:($j), q_name)
+                        @. ᶜqⱼₜ += ᶜratio * ᶜρχₜ_diffusion / ᶜρ
+                    end
+                end
+            end
+            if MatrixFields.has_field(Y, ρn_name)
+                ᶜρn = MatrixFields.get_field(Y, ρn_name)
+                ᶜρnₜ = MatrixFields.get_field(Yₜ, ρn_name)
+                @. ᶜρnₜ +=
+                    ᶜratio * max(FT(0), ᶜρn) / max(ᶜρq, ϵ_FT) * ᶜρχₜ_diffusion
+                if apply_sgs_updraft
+                    for j in 1:n
+                        ᶜnⱼₜ = MatrixFields.get_field(Yₜ.c.sgsʲs.:($j), n_name)
+                        @. ᶜnⱼₜ +=
+                            ᶜratio * max(FT(0), ᶜρn) / max(ᶜρq, ϵ_FT) *
+                            ᶜρχₜ_diffusion / ᶜρ
+                    end
+                end
+            end
+        end
+    end
+
+    @. Yₜ.c.ρe_tot += ᶜρe_totₜ_diffusion
+    if apply_sgs_updraft
+        for j in 1:n
+            @. Yₜ.c.sgsʲs.:($$j).mse += ᶜρe_totₜ_diffusion / ᶜρ
+        end
+    end
+
+    # Grid-mean tracers. The water tracers are handled above: `ρq_tot` and the
+    # cloud species through the aggregate flux, rain and snow not at all. The
+    # vertical path gives them only the interfacial-entrainment `K_e`, which
+    # has no horizontal analogue, so they receive no horizontal transport.
+    # Passive tracers use the unscaled `K_h`.
+    foreach_gs_tracer(Yₜ, Y) do ᶜρχₜ, ᶜρχ, ρχ_name
+        ρχ_name in microphysics_tracer_names(Y) && return
+        ᶜχ = @. lazy(specific(ᶜρχ, ᶜρ))
+        ᶜρχₜ_diffusion = p.scratch.ᶜtemp_scalar_3
+        @. ᶜρχₜ_diffusion = wdivₕ(ᶜρ * ᶜK_h_h * gradₕ(ᶜχ))
+        @. ᶜρχₜ += ᶜρχₜ_diffusion
+        if apply_sgs_updraft
+            χ_name = specific_tracer_name(ρχ_name)
+            for j in 1:n
+                if MatrixFields.has_field(Y.c.sgsʲs.:($j), χ_name)
+                    ᶜχⱼₜ = MatrixFields.get_field(Yₜ.c.sgsʲs.:($j), χ_name)
+                    @. ᶜχⱼₜ += ᶜρχₜ_diffusion / ᶜρ
+                end
+            end
+        end
+    end
+
+    (; ᶜu, ᶠu) = p.precomputed
+
+    # Turbulent TKE transport, and shear production from horizontal gradients;
+    # the production from vertical gradients is applied in the TKE tendency.
+    if use_prognostic_tke(turbconv_model)
+        @. Yₜ.c.ρtke += wdivₕ(ᶜρ * ᶜK_u_h * gradₕ(ᶜtke))
+        ᶜS_h = compute_strain_rate_center_horizontal(ᶜu)
+        @. Yₜ.c.ρtke += 2 * ᶜρ * ᶜK_u_h * norm_sqr(ᶜS_h)
+    end
+
+    # Momentum: horizontal weak divergence of the SGS stress `τ = -2 K_u S`
+    # with the full strain rate. The vertical stress divergence is handled by
+    # the vertical diffusion pathway.
+    ᶠρ = @. p.scratch.ᶠtemp_scalar = ᶠinterp(ᶜρ)
+    ᶜτ_h = compute_strain_rate_center_full!(p.scratch.ᶜtemp_UVWxUVW, ᶜu, ᶠu)
+    @. ᶜτ_h = -2 * ᶜK_u_h * ᶜτ_h
+    @. Yₜ.c.uₕ -= C12(wdivₕ(ᶜρ * ᶜτ_h) / ᶜρ)
+    ᶠτ_h = compute_strain_rate_face_full!(p.scratch.ᶠtemp_UVWxUVW, ᶜu, ᶠu)
+    @. ᶠτ_h = -2 * ᶠinterp(ᶜK_u_h) * ᶠτ_h
+    @. Yₜ.f.u₃ -= C3(wdivₕ(ᶠρ * ᶠτ_h) / ᶠρ)
 
     return nothing
 end

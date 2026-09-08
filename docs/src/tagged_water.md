@@ -159,7 +159,7 @@ Instead the flux itself is *mirrored*. `sediment_water_tags!` is called once per
 sedimenting species from inside the species loop of
 `vertical_advection_of_water_tendency!`, and builds each tag's flux from the very
 same specific content ``q``, terminal velocity ``w`` and face density ``\rho_f``
-as the parent — the same donor-cell (`ᶠright_bias`) reconstruction — scaled by
+as the parent — the same donor-cell (`ᶠtop_bias`) reconstruction — scaled by
 the tag's share of the local water. Because only the share differs, the tagged
 fluxes sum to the parent flux exactly, level by level, and surface precipitation
 is tagged.

@@ -363,8 +363,8 @@ function compute_detr(state, cache, _, ::PrognosticEDMFX)
     ᶠdz = Fields.Δz_field(axes(state.f))
     ρaʲ = state.c.sgsʲs.:(1).ρa
     u₃ʲ = state.f.sgsʲs.:(1).u₃
-    # Use ᶠleft_bias_zero_bot so that detrainment diagnostics are not NaN at the first cell
-    ᶠleft_bias_zero_bot = Operators.LeftBiasedC2F(bottom = Operators.SetValue(0))
+    # Use ᶠbottom_bias_zero_bot so that detrainment diagnostics are not NaN at the first cell
+    ᶠbottom_bias_zero_bot = Operators.BottomBiasedC2F(bottom = Operators.SetValue(0))
     # Evaluate the buoyancy inverse time scale at faces (where w and grad_Φ are
     # naturally defined) and interpolate to centers for smoother behaviour.
     ᶜbuoy_inv_time_scale = @. lazy(
@@ -386,7 +386,7 @@ function compute_detr(state, cache, _, ::PrognosticEDMFX)
             draft_area(ρaʲ, ᶜρʲs.:1),
             ρaʲ,
             ᶜbuoy_inv_time_scale,
-            ᶜdivᵥ(ᶠleft_bias_zero_bot(ρaʲ) * u₃ʲ),
+            ᶜdivᵥ(ᶠbottom_bias_zero_bot(ρaʲ) * u₃ʲ),
             ᶜarea_bounding_entr_detrʲs.:1,
             detr_model,
         ),
@@ -904,6 +904,74 @@ add_diagnostic_variable!(short_name = "kentr", units = "m^2 s^-1",
     long_name = "Interfacial Entrainment Eddy Diffusivity",
     comments = "Interfacial entrainment diffusivity K_e = γ w_e Δz of the EDMFX interface-aware stability closure, applied to all grid-mean fluxes (included in edt and evu), interpolated to cell centers",
     compute = compute_kentr,
+)
+
+###
+# Horizontal mixing length (3d)
+###
+compute_lmixh(state, cache, time) =
+    compute_lmixh(state, cache, time, cache.atmos.turbconv_model)
+compute_lmixh(_, _, _, turbconv_model) =
+    error_diagnostic_variable("lmixh", turbconv_model)
+
+function compute_lmixh(state, cache, _, ::Union{EDOnlyEDMFX, PrognosticEDMFX})
+    Δx_h = horizontal_filter_scale(axes(state.c))
+    return ᶜmixing_length(state, cache; grid_scale = Δx_h)
+end
+
+add_diagnostic_variable!(short_name = "lmixh", units = "m",
+    long_name = "Environment Horizontal Mixing Length",
+    comments = "Mixing length with the grid-scale limit set by the horizontal \
+                node spacing rather than the resolvability filter scale",
+    compute = compute_lmixh,
+)
+
+###
+# Horizontal diffusivity of heat (3d)
+###
+compute_edth(state, cache, time) =
+    compute_edth(state, cache, time, cache.atmos.turbconv_model)
+compute_edth(_, _, _, turbconv_model) =
+    error_diagnostic_variable("edth", turbconv_model)
+
+function compute_edth(state, cache, _, ::Union{EDOnlyEDMFX, PrognosticEDMFX})
+    hasproperty(cache.precomputed, :ᶜK_h_h) || error_diagnostic_variable(
+        "Can only compute the horizontal eddy diffusivity when \
+         `edmfx_sgs_horizontal_diffusive_flux` is enabled",
+    )
+    return cache.precomputed.ᶜK_h_h
+end
+
+add_diagnostic_variable!(short_name = "edth", units = "m^2 s^-1",
+    long_name = "Horizontal Eddy Diffusivity Coefficient for Temperature",
+    comments = "Horizontal diffusion coefficient for scalars in the EDMFX \
+                horizontal SGS diffusive flux, reported from the cached \
+                `ᶜK_h_h` applied by the tendency",
+    compute = compute_edth,
+)
+
+###
+# Horizontal diffusivity of momentum (3d)
+###
+compute_evuh(state, cache, time) =
+    compute_evuh(state, cache, time, cache.atmos.turbconv_model)
+compute_evuh(_, _, _, turbconv_model) =
+    error_diagnostic_variable("evuh", turbconv_model)
+
+function compute_evuh(state, cache, _, ::Union{EDOnlyEDMFX, PrognosticEDMFX})
+    hasproperty(cache.precomputed, :ᶜK_u_h) || error_diagnostic_variable(
+        "Can only compute the horizontal eddy viscosity when \
+         `edmfx_sgs_horizontal_diffusive_flux` is enabled",
+    )
+    return cache.precomputed.ᶜK_u_h
+end
+
+add_diagnostic_variable!(short_name = "evuh", units = "m^2 s^-1",
+    long_name = "Horizontal Eddy Viscosity Coefficient for Momentum",
+    comments = "Horizontal eddy viscosity from the TKE-based closure with the \
+                mixing length limited by the horizontal node spacing, reported \
+                from the cached `ᶜK_u_h` applied by the tendency",
+    compute = compute_evuh,
 )
 
 ###

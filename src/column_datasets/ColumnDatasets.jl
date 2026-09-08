@@ -246,8 +246,22 @@ without a formal specification.
 validate(::AbstractColumnFormat, path) = nothing
 
 # ============================================================================
-# The ColumnDataset handle
+# Column data sources
 # ============================================================================
+
+"""
+    AbstractColumnData
+
+Supertype of the column forcing data sources consumed by the file-driven
+forcing and `ForcingFromFile`: [`ColumnDataset`](@ref) (an on-disk file read
+through a format) and [`InMemoryColumnData`](@ref) (in-memory arrays, e.g. the
+steady GCM-driven profiles). Both provide the same reader interface
+(`column_timevaryinginputs`, `surface_timevaryinginputs`,
+`read_surface_series`, `read_initial_profiles`, `require_forcing_variables`,
+`time_interpolation_method`, `site_location`) and expose `column_vars` and
+`surface_vars`.
+"""
+abstract type AbstractColumnData end
 
 """
     ColumnDataset(path; format = nothing, options...)
@@ -268,7 +282,8 @@ incomplete file errors here rather than mid-simulation.
   - `column_vars`, `surface_vars`: The canonical column and surface variables the
     file actually carries.
 """
-struct ColumnDataset{F <: AbstractColumnFormat, O <: NamedTuple}
+struct ColumnDataset{F <: AbstractColumnFormat, O <: NamedTuple} <:
+       AbstractColumnData
     format::F
     path::String
     options::O
@@ -309,15 +324,20 @@ validate(cd::ColumnDataset) = validate(cd.format, cd.path)
 site_location(cd::ColumnDataset) =
     open_dataset(ds -> site_location(cd.format, ds), cd)
 
+time_interpolation_method(cd::ColumnDataset) =
+    time_interpolation_method(cd.format)
+
+source_name(cd::ColumnDataset) = "$(cd.path) ($(format_name(cd.format)) format)"
+
 # ============================================================================
-# Generic machinery (not overridden by format modules)
+# Generic machinery (shared by every `AbstractColumnData`)
 # ============================================================================
 
-# The variables in `column_vars`/`surface_vars` that the file does not carry.
-function _missing_required(cd::ColumnDataset, column_vars, surface_vars)
+# The variables in `column_vars`/`surface_vars` that the source does not carry.
+function _missing_required(data::AbstractColumnData, column_vars, surface_vars)
     return (
-        column = setdiff(column_vars, cd.column_vars),
-        surface = setdiff(surface_vars, cd.surface_vars),
+        column = setdiff(column_vars, data.column_vars),
+        surface = setdiff(surface_vars, data.surface_vars),
     )
 end
 
@@ -329,12 +349,19 @@ The requested forcing variables absent from the file: those in the given
 `column_vars`/`surface_vars`, or (single-argument form) the full canonical
 vocabulary.
 """
-function missing_forcing_variables(cd::ColumnDataset, column_vars, surface_vars)
-    m = _missing_required(cd, column_vars, surface_vars)
+function missing_forcing_variables(
+    data::AbstractColumnData,
+    column_vars,
+    surface_vars,
+)
+    m = _missing_required(data, column_vars, surface_vars)
     return Symbol[m.column; m.surface]
 end
-missing_forcing_variables(cd::ColumnDataset) =
-    missing_forcing_variables(cd, CANONICAL_COLUMN_VARS, CANONICAL_SURFACE_VARS)
+missing_forcing_variables(data::AbstractColumnData) = missing_forcing_variables(
+    data,
+    CANONICAL_COLUMN_VARS,
+    CANONICAL_SURFACE_VARS,
+)
 
 """
     require_forcing_variables(cd, column_vars, surface_vars)
@@ -343,8 +370,12 @@ Error, naming what is absent, unless the file carries every variable in
 `column_vars` (needed by the composed forcing terms) and `surface_vars`
 (needed by the resolved model).
 """
-function require_forcing_variables(cd::ColumnDataset, column_vars, surface_vars)
-    m = _missing_required(cd, column_vars, surface_vars)
+function require_forcing_variables(
+    data::AbstractColumnData,
+    column_vars,
+    surface_vars,
+)
+    m = _missing_required(data, column_vars, surface_vars)
     isempty(m.column) && isempty(m.surface) && return nothing
     advice = String[]
     isempty(m.column) || push!(
@@ -360,8 +391,8 @@ function require_forcing_variables(cd::ColumnDataset, column_vars, surface_vars)
          with RRTMGP radiation). Provide the data or change those model choices",
     )
     error(
-        "Forcing file $(cd.path) ($(format_name(cd.format)) format) is \
-         missing required variables: $(join(advice, "; ")).",
+        "Forcing data $(source_name(data)) is missing required variables: \
+         $(join(advice, "; ")).",
     )
 end
 
@@ -436,6 +467,18 @@ function read_initial_profiles(cd::ColumnDataset, ds, start_date)
         rho = profile(:rho),
     )
 end
+
+"""
+    read_initial_profiles(data, start_date)
+
+The initial-condition profiles for `data`, opening the file (for a
+[`ColumnDataset`](@ref)) or reading the stored arrays (for an
+[`InMemoryColumnData`](@ref)).
+"""
+read_initial_profiles(cd::ColumnDataset, start_date) =
+    open_dataset(cd) do ds
+        read_initial_profiles(cd, ds, start_date)
+    end
 
 """
     column_timevaryinginputs(cd, names, target_space, start_date; method)
@@ -522,6 +565,129 @@ function surface_timevaryinginputs(
 end
 
 # ============================================================================
+# In-memory column data
+# ============================================================================
+
+"""
+    InMemoryColumnData(; z, column, surface, site_location = nothing, source)
+
+A column data source backed by in-memory arrays instead of a file. `z` is the
+ascending height coordinate [m], `column` a `NamedTuple` of `(z,)` profiles
+(canonical variable => vector), and `surface` a `NamedTuple` of scalars
+(canonical variable => value). The data is steady: the reader interface returns
+constant-in-time inputs. Used for sources with no on-disk ClimaColumn file, such
+as the steady GCM-driven profiles built by `GCMColumnData`.
+
+The footprint is one vector per variable over the source's levels and does not
+grow with the run length, so this is only appropriate for a source that is
+steady (or otherwise small).
+"""
+struct InMemoryColumnData{C <: NamedTuple, S <: NamedTuple, L} <:
+       AbstractColumnData
+    z::Vector{Float64}
+    column::C
+    surface::S
+    site_location::L
+    source::String
+    column_vars::Vector{Symbol}
+    surface_vars::Vector{Symbol}
+end
+
+function InMemoryColumnData(;
+    z,
+    column,
+    surface,
+    site_location = nothing,
+    source = "in-memory column data",
+)
+    issorted(z) ||
+        error("`InMemoryColumnData` requires an ascending `z` coordinate")
+    return InMemoryColumnData(
+        Float64.(z),
+        column,
+        surface,
+        site_location,
+        source,
+        collect(Symbol, keys(column)),
+        collect(Symbol, keys(surface)),
+    )
+end
+
+source_name(d::InMemoryColumnData) = d.source
+
+time_interpolation_method(::InMemoryColumnData) =
+    TimeVaryingInputs.LinearInterpolation()
+
+file_time_span(::InMemoryColumnData, _) = Inf
+
+site_location(d::InMemoryColumnData) =
+    isnothing(d.site_location) ?
+    error("in-memory column source ($(d.source)) has no site location") :
+    d.site_location
+
+read_initial_profiles(d::InMemoryColumnData, start_date) = (;
+    z = d.z,
+    ta = d.column.ta,
+    ua = d.column.ua,
+    va = d.column.va,
+    hus = d.column.hus,
+    rho = d.column.rho,
+)
+
+# Interpolate an ascending `(z_src,) -> vals_src` profile onto the column of
+# `target_space`, flat beyond the source range, returning a Field.
+function _interp_column(z_src, vals_src, target_space)
+    ᶜz = ClimaCore.Fields.coordinate_field(target_space).z
+    itp = Intp.extrapolate(
+        Intp.interpolate(
+            (Float64.(z_src),),
+            Float64.(vals_src),
+            Intp.Gridded(Intp.Linear()),
+        ),
+        Intp.Flat(),
+    )
+    field = similar(ᶜz)
+    field .= itp.(ᶜz)
+    return field
+end
+
+# Steady in-memory profiles become constant-in-time analytic inputs: the
+# pre-interpolated field is copied into the destination on every `evaluate!`.
+function column_timevaryinginputs(
+    d::InMemoryColumnData,
+    names,
+    target_space,
+    start_date;
+    method = nothing,
+)
+    names = Tuple(names)
+    inputs = map(names) do name
+        field = _interp_column(d.z, d.column[name], target_space)
+        TimeVaryingInput(Returns(field))
+    end
+    return NamedTuple{names}(inputs)
+end
+
+function surface_timevaryinginputs(
+    d::InMemoryColumnData,
+    names,
+    target_space,
+    start_date;
+    method = nothing,
+)
+    names = Tuple(names)
+    FT = ClimaCore.Spaces.undertype(target_space)
+    inputs = map(name -> TimeVaryingInput(Returns(FT(d.surface[name]))), names)
+    return NamedTuple{names}(inputs)
+end
+
+function read_surface_series(d::InMemoryColumnData, names, start_date)
+    names = Tuple(names)
+    series = map(name -> [Float64(d.surface[name])], names)
+    return (; times = [0.0], NamedTuple{names}(series)...)
+end
+
+# ============================================================================
 # Format modules
 # ============================================================================
 
@@ -529,6 +695,8 @@ include("ClimaColumnFiles.jl")
 # Converter-only: reads a source format and writes a ClimaColumn-schema file
 # that the reader above then consumes.
 include("VaranalFiles.jl")
+# Reader-only: builds a steady `InMemoryColumnData` from a GCM cfsite file.
+include("GCMColumnData.jl")
 
 using .ClimaColumnFiles: ClimaColumnFile
 
