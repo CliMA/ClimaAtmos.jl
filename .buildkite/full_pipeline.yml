@@ -742,6 +742,17 @@ steps:
         agents:
           slurm_mem: 20GB
 
+      - label: ":large_blue_circle: Aquaplanet: Prognostic sea salt aerosol"
+        retry: *retry_policy
+        command: >
+          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+          --config_file $COMMON_CONFIG_PATH/numerics_sphere_he6ze31.yml
+          --config_file $CONFIG_PATH/aquaplanet_prognostic_seasalt.yml
+          --job_id aquaplanet_prognostic_seasalt
+        artifact_paths: "aquaplanet_prognostic_seasalt/output_active/*"
+        agents:
+          slurm_mem: 20GB
+
       # - label: ":large_blue_circle: Aquaplanet: Reproducibility test for allsky varying insolation, gravity wave (gfdl_restart)"
       #   retry: *retry_policy
       #   command: >

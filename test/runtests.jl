@@ -100,6 +100,9 @@ if TEST_GROUP in ("parameterizations", "all")
     @safetestset "BMT integration tests" begin @time include("parameterized_tendencies/microphysics/bmt_integration.jl") end
     @safetestset "Allocation tests" begin @time include("parameterized_tendencies/microphysics/allocations.jl") end
 
+    # Aerosol tests
+    @safetestset "Sea salt emission tests" begin @time include("parameterized_tendencies/aerosols/sea_salt_emission_tests.jl") end
+
     # Chemistry tests
     @safetestset "Chemistry tendency tests" begin @time include("parameterized_tendencies/chemistry/chemistry_tendency.jl") end
 

@@ -35,6 +35,7 @@ include(joinpath(@__DIR__, "check_docstring_refs.jl"))
 check_docstring_refs(ClimaAtmos, joinpath(@__DIR__, "src"))
 
 include(joinpath(@__DIR__, "src", "config_table.jl"))
+include(joinpath(@__DIR__, "src", "sea_salt_emission_fit.jl"))
 doctest(ClimaAtmos; plugins = [bib, links])
 disable_logging(Base.CoreLogging.BelowMinLevel) # Re-enable all logging
 
@@ -102,6 +103,7 @@ makedocs(;
                 ],
                 "Microphysics" => "microphysics.md",
                 "Radiation" => "radiation.md",
+                "Aerosols" => "aerosols.md",
                 "Gravity Wave Drag" => [
                     "Non-orographic Gravity Waves" => "non_orographic_gravity_wave.md",
                     "Orographic Gravity Waves" => "orographic_gravity_wave.md",
