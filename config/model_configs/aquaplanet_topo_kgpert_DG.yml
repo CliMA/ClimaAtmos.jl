@@ -1,0 +1,35 @@
+horizontal_discretization: "DG"
+dg_equation_form: "fddg"
+dg_volume_flux: "kg_pert"
+dg_interface_flux: "roe"
+hyperdiff: ~
+apply_zhang_shu_limiter: true
+config: "sphere"
+h_elem: 60
+z_elem: 63
+z_max: 30000.0
+dz_bottom: 30.0
+topography: "Earth"
+topography_damping_factor: 2.0
+mesh_warp_type: "SLEVE"
+rad: "allskywithclear"
+insolation: "timevarying"
+surface_setup: "DefaultMoninObukhov"
+turbconv: "edonly_edmfx"
+edmfx_sgs_diffusive_flux: true
+implicit_diffusion: true
+microphysics_model: "0M"
+use_sgs_quadrature: true
+initial_condition: "WeatherModel"
+start_date: "20100701"
+output_dir: "/scratch/asridhar/weathertest"
+# era5_initial_condition_dir: ~   # default (~) uses the wxquest_initial_conditions ClimaArtifact
+# era5_ic_full_pressure: false    # false = hydrostatic p from surface pressure; true = read 3D p from file
+dt: "30secs"
+t_end: "14days"
+approximate_linear_solve_iters: 2
+max_newton_iters_ode: 1
+diagnostics:
+  # Instantaneous snapshots (no reduction_time => not time-averaged)
+  - short_name: [ua, va, wa, rv, ta, hus, pfull, rhoa, hur, ts, ke]
+    period: 6hours
