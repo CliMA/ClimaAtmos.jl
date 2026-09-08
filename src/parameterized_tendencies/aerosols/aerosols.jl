@@ -80,4 +80,5 @@ aerosol_deposition_tendency!(Yₜ, Y, p, t) = unrolled_foreach(
     values(species_models(p.atmos.aerosols)),
 )
 
+include("hygroscopic_growth.jl")
 include("sea_salt.jl")
