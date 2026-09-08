@@ -208,16 +208,91 @@ end
 ###
 
 """
+    precip_conditioning_weights(a_p, CF_d)
+
+Per-cell weights `(w_cloudy, w_clear)` that condition precipitation on the
+sampled PDF inside the 1M quadrature: a two-level assignment that puts the
+shaft on the cloudy points first and spills the remainder into the clear ones.
+
+With `a_p` the precipitation fraction (`ᶜprecip_frac`), `CF_d` the discrete
+cloudy mass (`ᶜsgs_moments.CF_d`), and `sᵢ` the smooth cloudy weight of point
+`i` (`discrete_cloudy_weight`),
+
+    w_cloudy = min(a_p, CF_d) / (a_p·CF_d) = 1 / max(a_p, CF_d)
+    w_clear  = max(0, a_p − CF_d) / (a_p·(1 − CF_d))
+    q_rai_hat = q_rai · (sᵢ·w_cloudy + (1 − sᵢ)·w_clear)     # snow identically
+
+Both weights depend only on `(a_p, CF_d)`, so they are formed once per cell —
+the functor is register-bound (see the `@noinline` barrier comment below) and
+must not form them per point. The assignment conserves mass exactly under the
+discrete measure,
+
+    ⟨q_rai_hat⟩ = q_rai·(w_cloudy·CF_d + w_clear·(1 − CF_d)) = q_rai,
+
+for **any** weight shape `sᵢ`, provided `CF_d = Σᵢ wᵢ·sᵢ` was accumulated with
+that same shape (`min(a,c) + max(0,a−c) = a` telescopes the two branches).
+Bounds: `w_cloudy ∈ [1, 1/a_p]`, `w_clear ∈ [0, 1]`.
+
+Writing the cloudy weight as `1 / max(a_p, CF_d)` (identical to
+`min(a_p, CF_d) / (a_p·CF_d)`, since `min·max = a_p·CF_d`) divides by a
+quantity bounded below by both arguments, so it needs no `tiny × huge` clamp
+and satisfies `w_cloudy ≤ 1/a_p` by construction.
+
+Three cases return `(1, 1)`, which leaves `q_rai_hat = q_rai` at every point
+and conserves mass exactly:
+
+  - `a_p ≤ 0` (no shaft diagnosed);
+  - `CF_d ≤ 0` (condensate-free cell). `CF_d` is *forced* to zero there while
+    the smooth per-point weight can still be nonzero at a point sitting exactly
+    on the cloud threshold, so this is the only assignment whose discrete mean
+    is exact;
+  - `CF_d ≥ 1` (overcast cell), where the formula gives `w_cloudy = 1` and a
+    `0/0` clear branch carrying zero weight. Taking that branch to be 1 rather
+    than its limit 0 costs nothing when the cell really is overcast, and keeps
+    the mean exact if the per-point weights sum to slightly under 1.
+
+A shaft that fills the cell (`a_p = 1`) also gives `(1, 1)`, from the general
+formula rather than a special case.
+
+!!! note "Known limitation"
+
+    Where `CF_d = 0` — below cloud base — the cloudiness indicator carries no
+    information, both branches collapse to 1, and the assignment is uniform,
+    i.e. identical to holding `q_rai` constant across the points. This closure
+    therefore fixes the *in-cloud* overlap (accretion, spurious clear-air
+    evaporation inside a cloudy layer) and leaves the below-cloud evaporation
+    bias untouched.
+
+    Reaching that regime needs conditioning on something that stays informative
+    below cloud, such as ranking points by saturation excess: fit `S*` so that
+    `Σᵢ wᵢ·sigmoid((S′ᵢ − S*)/ε_S) = a_p` and take `q_rai_hat = q_rai·sᵢ/a_p`.
+    That is conservative by construction, coincides with this closure when
+    `a_p = CF_d`, and has no degenerate limit at `CF_d = 0`, but it costs one
+    extra light quadrature pass to fit `S*`, since `a_p` is not known until the
+    column sweep has run.
+"""
+@inline function precip_conditioning_weights(a_p, CF_d)
+    FT = typeof(a_p)
+    (a_p <= zero(FT) || CF_d <= zero(FT) || CF_d >= one(FT)) &&
+        return (one(FT), one(FT))
+    w_cloudy = one(FT) / max(a_p, CF_d)
+    w_clear = max(zero(FT), a_p - CF_d) / (a_p * (one(FT) - CF_d))
+    return (w_cloudy, w_clear)
+end
+
+"""
     Microphysics1MEvaluator{S, MP, TPS, FT, Args}
 
 GPU-safe functor evaluating 1-moment microphysics tendencies at SGS quadrature
 points, for use with [`integrate_over_sgs`](@ref).
 
 The local condensate at each point follows the truncated-Gaussian
-Lagrange-multiplier closure described in `microphysics_tendencies_1m`.
-Precipitation (`q_rai`, `q_sno`), the liquid fraction `λ`, and the closure
-quantities (`λ_lagrange`, `mu_S`, `α`) are grid-cell constants held fixed across
-quadrature points.
+Lagrange-multiplier closure described in `microphysics_tendencies_1m`. The
+cell-mean precipitation (`q_rai`, `q_sno`), the liquid fraction `λ`, and the
+closure quantities (`λ_lagrange`, `mu_S`, `α`) are grid-cell constants held
+fixed across quadrature points; the precipitation *seen at a point* is
+conditioned on the sampled PDF by `w_cloudy` / `w_clear` (see
+`precip_conditioning_weights`).
 
 # Fields
 
@@ -232,6 +307,8 @@ quadrature points.
     measure (fitted in `_compute_sgs_moments`) [kg/kg].
   - `mu_S`: Linearized SGS mean saturation excess `q_tot − q_sat(T, ρ)` [kg/kg].
   - `α`: Variance fidelity parameter [-].
+  - `w_cloudy`, `w_clear`: Per-cell precipitation-conditioning weights [-].
+  - `ε_w`: Width of the cloudy weight's sigmoid [kg/kg].
   - `dt`: Timestep used for the time-averaged process rates [s].
   - `nsubs`: Number of substeps in the tendency averaging.
   - `args`: Extra trailing arguments forwarded to the CloudMicrophysics call.
@@ -249,6 +326,10 @@ struct Microphysics1MEvaluator{S, MP, TPS, FT, Args <: Tuple}
     λ_lagrange::FT # Lagrange multiplier for centred S′ (discrete fit)
     mu_S::FT       # linearized SGS mean μ_S = q_tot_mean − q_sat(T_mean, ρ)
     α::FT          # variance fidelity parameter (from sgs_variance_fidelity)
+    # Two-level precipitation assignment (formed once per cell)
+    w_cloudy::FT   # multiplier on the cloudy share of each point
+    w_clear::FT    # multiplier on the clear share of each point
+    ε_w::FT        # width of the cloudy weight's sigmoid
     # Numerical parameters
     dt::FT
     nsubs::Int
@@ -273,17 +354,27 @@ Evaluate the 1-moment tendencies at one quadrature point `(T_hat, q_tot_hat)`
 The local cloud condensate is obtained from the centred saturation excess
 `S′_hat = (q_tot_hat − q_sat(T_hat, ρ)) − mu_S`:
 
-    shifted_excess = max(0, λ_lagrange + α · S′_hat)
-    q_lcl_hat      = λ · shifted_excess
-    q_icl_hat      = (1 − λ) · shifted_excess
+    shifted_excess = λ_lagrange + α · S′_hat      # signed
+    q_c_hat        = max(0, shifted_excess)
+    q_lcl_hat      = λ · q_c_hat
+    q_icl_hat      = (1 − λ) · q_c_hat
 
 The Lagrange multiplier `λ_lagrange` is fitted (in `_compute_sgs_moments`) so
-that `E[shifted_excess] = q_c`, where `q_c = q_lcl + q_icl` is the grid-mean
-*cloud* condensate, excluding precipitation. The reconstruction therefore
-partitions `shifted_excess` into local cloud liquid and ice by the liquid
-fraction. Precipitation is held constant across quadrature points and is
-accounted for downstream, where CloudMicrophysics subtracts it from `q_tot`
-to diagnose the local vapor.
+that `E[q_c_hat] = q_c`, where `q_c = q_lcl + q_icl` is the grid-mean *cloud*
+condensate, excluding precipitation. The reconstruction therefore partitions
+`q_c_hat` into local cloud liquid and ice by the liquid fraction.
+
+`shifted_excess` is the *signed* quantity throughout: `q_c_hat` is its positive
+part, and its sign is what the smooth cloudy weight keys on when conditioning
+precipitation (see `_conditioned_point_state`). The two are not
+interchangeable — passing the clipped value to `discrete_cloudy_weight` would
+give `s ≥ 1/2` at every point, so the assignment would no longer share a weight
+with `CF_d` and `⟨q_rai_hat⟩ = q_rai` would break silently.
+
+Precipitation is conditioned on the same sampled PDF (see
+`precip_conditioning_weights` and `_conditioned_point_state`) and
+overlaid on the sampled state, so the vapor this point presents to
+CloudMicrophysics does not depend on where the rain was placed.
 
 `q_tot_hat` is clamped non-negative first. Subsaturated points contribute zero
 condensate but still drive rain evaporation and snow sublimation against the
@@ -295,29 +386,82 @@ NamedTuple from `BMT.bulk_microphysics_tendencies(BMT.LinearizedAverage(), ...)`
 with `dq_lcl_dt`, `dq_icl_dt`, `dq_rai_dt`, `dq_sno_dt` [kg/kg/s].
 """
 @noinline function (eval::Microphysics1MEvaluator)(T_hat, q_tot_hat)
+    state = _conditioned_point_state(eval, T_hat, q_tot_hat)
+    return BMT.bulk_microphysics_tendencies(
+        BMT.LinearizedAverage(),
+        eval.scheme, eval.mp, eval.tps, eval.ρ, T_hat, state.q_tot,
+        state.q_lcl, state.q_icl, state.q_rai, state.q_sno,
+        eval.dt, eval.nsubs, eval.args...,
+    )
+end
+
+"""
+    _conditioned_point_state(eval::Microphysics1MEvaluator, T_hat, q_tot_hat)
+
+The water state handed to CloudMicrophysics at one quadrature point:
+`(; q_tot, q_lcl, q_icl, q_rai, q_sno)` [kg/kg].
+
+**Condensate** comes from the Lagrange-multiplier closure. The mass
+conservation constraint is `E[max(0, λ + α·S′)] = q_c`, so the local shifted
+excess is `λ_lagrange + α·S′_hat` with
+`S′_hat = (q_tot_hat − q_sat_hat) − μ_S` the centred saturation excess. `S′_hat`
+and `λ_lagrange` use the *unmodified* `q_tot_hat`: `S′` is centred, so a
+constant precipitation offset cancels, and the level is re-anchored by
+`λ_lagrange`, which was fitted to cloud-only `q_c`. Subtracting precipitation
+from the cloud condensate as well would double-count it and break
+`⟨q_c^local⟩ = q_c`.
+
+**Precipitation** is conditioned on the smooth cloudy weight
+`s = discrete_cloudy_weight(shifted_excess, ε_w)` — the same weight `CF_d` was
+accumulated with, which is what makes `⟨q_rai_hat⟩ = q_rai` exact:
+
+    q_rai_hat = q_rai · (s·w_cloudy + (1 − s)·w_clear)
+
+**Vapor** is protected by an overlay. The sampled
+`(T, q)` PDF is read as representing non-precipitating water only, and the
+conditioned precipitation is laid on top of it:
+
+    q_np_hat  = max(0, q_tot_hat − q_rai − q_sno)      # vapor + cloud, as sampled
+    q_tot_BMT = q_np_hat + q_rai_hat + q_sno_hat
+
+which leaves `q_v_hat = q_np_hat − q_c_hat` independent of where the rain was
+placed, while `⟨q_tot_BMT⟩ = q_tot` still holds exactly because
+`⟨q_rai_hat⟩ = q_rai`.
+
+Without the overlay the conditioning would be actively harmful rather than
+merely approximate: passing `q_tot_hat` through unchanged, a cloudy point
+receiving `q_rai/a_p` would have `q_rai(1/a_p − 1)` of vapor subtracted from it
+— inventing a large subsaturation at a point that is saturated by construction
+— while clear points would gain the mirror amount and suppress the very
+evaporation this closure exists to represent.
+"""
+@inline function _conditioned_point_state(
+    eval::Microphysics1MEvaluator,
+    T_hat,
+    q_tot_hat,
+)
     FT = typeof(eval.ρ)
     q_tot_hat = max(FT(0), q_tot_hat)
 
-    # Local cloud condensate from the Lagrange-multiplier closure.
-    # The mass conservation equation is E[max(0, λ + α·S′)] = q_c, so the
-    # local shifted excess at each quadrature point is λ + α·S′_hat where
-    # S′_hat = (q_tot_hat − q_sat_hat) − μ_S is the centred saturation excess.
-    # Precipitation in q_tot needs no special handling here: its mean level
-    # cancels in the centred S′ (the level is re-anchored by λ_lagrange, fitted
-    # to cloud-only q_c), and CloudMicrophysics subtracts q_rai/q_sno from
-    # q_tot_hat when it diagnoses the local vapor. Subtracting them from the
-    # cloud condensate as well would double-count them and break ⟨q_c^local⟩ = q_c.
     q_sat_hat = TD.q_vap_saturation(eval.tps, T_hat, eval.ρ)
     S′_hat = q_tot_hat - q_sat_hat - eval.mu_S
-    shifted_excess = max(FT(0), eval.λ_lagrange + eval.α * S′_hat)
-    q_lcl_hat = eval.λ * shifted_excess
-    q_icl_hat = (FT(1) - eval.λ) * shifted_excess
+    shifted_excess = eval.λ_lagrange + eval.α * S′_hat
+    q_c_hat = max(FT(0), shifted_excess)
+    q_lcl_hat = eval.λ * q_c_hat
+    q_icl_hat = (FT(1) - eval.λ) * q_c_hat
 
-    return BMT.bulk_microphysics_tendencies(
-        BMT.LinearizedAverage(),
-        eval.scheme, eval.mp, eval.tps, eval.ρ, T_hat, q_tot_hat,
-        q_lcl_hat, q_icl_hat, eval.q_rai, eval.q_sno,
-        eval.dt, eval.nsubs, eval.args...,
+    s = discrete_cloudy_weight(shifted_excess, eval.ε_w)
+    precip_factor = s * eval.w_cloudy + (FT(1) - s) * eval.w_clear
+    q_rai_hat = eval.q_rai * precip_factor
+    q_sno_hat = eval.q_sno * precip_factor
+
+    q_np_hat = max(FT(0), q_tot_hat - eval.q_rai - eval.q_sno)
+    return (;
+        q_tot = q_np_hat + q_rai_hat + q_sno_hat,
+        q_lcl = q_lcl_hat,
+        q_icl = q_icl_hat,
+        q_rai = q_rai_hat,
+        q_sno = q_sno_hat,
     )
 end
 
@@ -328,7 +472,8 @@ end
     microphysics_tendencies_1m(
         scheme, sgs_quad, cmp, thp, ρ, T, q_tot_nonneg,
         q_lcl, q_icl, q_rai, q_sno, T′T′, q′q′, corr_Tq,
-        λ_lagrange, α, dt, nsubs, λ = ..., mu_S = ..., args...,
+        λ_lagrange, α, a_p, CF_d, sigma_S, dt, nsubs,
+        λ = ..., mu_S = ..., args...,
     )
 
 Compute time-averaged 1-moment microphysics tendencies.
@@ -339,7 +484,8 @@ single CloudMicrophysics call with no SGS averaging.
 
 The quadrature form integrates over the SGS PDF using the truncated-Gaussian
 Lagrange-multiplier closure; see `Microphysics1MEvaluator` for the
-point-wise condensate diagnosis. Rain and snow are clamped non-negative before the
+point-wise condensate diagnosis and `_conditioned_point_state` for the
+precipitation conditioning. Rain and snow are clamped non-negative before the
 integration. Subsaturated quadrature points contribute below-cloud rain
 evaporation and snow sublimation; saturated points drive autoconversion and
 accretion.
@@ -360,6 +506,13 @@ accretion.
     enforce `E[max(0, λ_lagrange + α·S′)] = q_c` exactly under the
     quadrature measure [kg/kg].
   - `α`: Variance fidelity parameter from `sgs_variance_fidelity` [-].
+  - `a_p`: Precipitation fraction from `ᶜprecip_frac` [-].
+  - `CF_d`: Discrete cloudy mass from `ᶜsgs_moments.CF_d` [-]. Together with
+    `a_p` and `sigma_S` these form the per-cell precipitation-conditioning
+    weights (`precip_conditioning_weights`) once, outside the
+    quadrature loop.
+  - `sigma_S`: SGS saturation-excess standard deviation from
+    `ᶜsgs_moments.sigma_S` [kg/kg].
   - `dt`: Timestep [s].
   - `nsubs`: Number of substeps for tendency averaging.
   - `λ`: Liquid fraction [-]; defaults to `TD.liquid_fraction` at the mean state.
@@ -386,7 +539,7 @@ end
 @inline function microphysics_tendencies_1m( #microphysics_tendencies_quadrature_1m
     scheme, sgs_quad, cmp, thp, ρ, T, q_tot_nonneg,
     q_lcl, q_icl, q_rai, q_sno, T′T′, q′q′, corr_Tq,
-    λ_lagrange, α, dt, nsubs,
+    λ_lagrange, α, a_p, CF_d, sigma_S, dt, nsubs,
     # `λ` (liquid fraction) and `mu_S` (linearized SGS saturation-excess mean) are
     # invariant across the quadrature. They default to being computed here from the
     # mean state; a caller evaluating this broadcast over many quadrature points can
@@ -400,10 +553,14 @@ end
     q_rai_nonneg = max(FT(0), q_rai)
     q_sno_nonneg = max(FT(0), q_sno)
 
+    # Formed once per cell: the functor is register-bound, so the conditioning
+    # must not be rebuilt at every quadrature point.
+    w_cloudy, w_clear = precip_conditioning_weights(a_p, CF_d)
     evaluator = Microphysics1MEvaluator(
         scheme, cmp, thp, ρ,
         q_rai_nonneg, q_sno_nonneg,
         λ, λ_lagrange, mu_S, α,
+        w_cloudy, w_clear, discrete_cloudy_weight_width(α, sigma_S),
         dt, nsubs, args,
     )
     return integrate_over_sgs(

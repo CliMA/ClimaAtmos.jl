@@ -18,6 +18,9 @@ Tests cover:
 using Test
 using ClimaAtmos
 import ClimaAtmos as CA
+import ClimaComms
+ClimaComms.@import_required_backends
+import ClimaCore: CommonSpaces, Fields, Grids, Spaces
 
 floor_nt(
     ::Type{FT};
@@ -263,6 +266,124 @@ floor_nt(
                 # which Float32 returned z ≈ −2.3 (CF ≈ 1 %).
                 z0 = CA._compute_z(FT(0))
                 @test CA.normal_cdf(z0) < FT(1e-10)
+            end
+        end
+    end
+
+
+    @testset "`_precip_fraction_sweep!`: maximum-random overlap" begin
+        # `a_p(k) = max(CF_d(k), f_decay·a_p(k+1))` where precipitation is
+        # present, 0 where it is not. Level 1 is the bottom model level, so
+        # the recursion runs from the end of the profile toward its start.
+        for FT in (Float32, Float64)
+            @testset "FT = $FT" begin
+                nz = 8
+                space = CommonSpaces.ColumnSpace(
+                    FT;
+                    z_min = 0,
+                    z_max = 8000,
+                    z_elem = nz,
+                    device = ClimaComms.device(),
+                    staggering = Grids.CellCenter(),
+                )
+                # Presence threshold: Thermodynamics' `q_min`, the same
+                # value `set_precip_fraction!` reads from the parameter set.
+                q_min = FT(1e-10)
+                ᶜCF_d = Fields.Field(FT, space)
+                ᶜq_precip = Fields.Field(FT, space)
+                ᶜa_p = Fields.Field(FT, space)
+
+                # Write a bottom-up profile into a column field.
+                set_profile! = function (field, values)
+                    for k in 1:nz
+                        parent(Fields.level(field, k)) .= FT(values[k])
+                    end
+                end
+                profile =
+                    field -> [
+                        only(Array(parent(Fields.level(field, k)))) for k in 1:nz
+                    ]
+
+                # Cloud only at level 6, precipitation from level 6 down to
+                # level 3 (it evaporates below that).
+                cf_d = [0, 0, 0, 0, 0, FT(0.4), 0, 0]
+                q_p = [0, 0, FT(1e-5), FT(1e-5), FT(1e-5), FT(1e-5), 0, 0]
+
+                @testset "isolated cloudy layer, f_decay = 1" begin
+                    set_profile!(ᶜCF_d, cf_d)
+                    set_profile!(ᶜq_precip, q_p)
+                    CA._precip_fraction_sweep!(ᶜa_p, ᶜCF_d, ᶜq_precip, FT(1), q_min)
+                    a_p = profile(ᶜa_p)
+                    # The shaft is exactly the cloudy layer's own `CF_d`,
+                    # carried down through the precipitating levels below it.
+                    @test a_p[6] == FT(0.4)
+                    @test all(a_p[3:5] .== FT(0.4))
+                    # No precipitation above the cloud or below the shaft.
+                    @test all(a_p[[1, 2, 7, 8]] .== FT(0))
+                    # `a_p ≥ CF_d` everywhere.
+                    @test all(a_p .>= profile(ᶜCF_d))
+                end
+
+                @testset "f_decay < 1 shrinks the inherited shaft" begin
+                    set_profile!(ᶜCF_d, cf_d)
+                    set_profile!(ᶜq_precip, q_p)
+                    f_decay = FT(0.5)
+                    CA._precip_fraction_sweep!(ᶜa_p, ᶜCF_d, ᶜq_precip, f_decay, q_min)
+                    a_p = profile(ᶜa_p)
+                    @test a_p[6] == FT(0.4)
+                    @test a_p[5] ≈ FT(0.4) * f_decay rtol = sqrt(eps(FT))
+                    @test a_p[4] ≈ FT(0.4) * f_decay^2 rtol = sqrt(eps(FT))
+                    @test a_p[3] ≈ FT(0.4) * f_decay^3 rtol = sqrt(eps(FT))
+                    @test all(a_p[[1, 2, 7, 8]] .== FT(0))
+                end
+
+                @testset "a_p ≥ CF_d, and stacked layers take the max" begin
+                    # Two cloudy layers in one shaft: the lower level inherits
+                    # the larger of its own CF_d and the shaft from above.
+                    set_profile!(ᶜCF_d, [0, 0, FT(0.7), 0, FT(0.3), 0, 0, 0])
+                    set_profile!(
+                        ᶜq_precip,
+                        [0, FT(1e-5), FT(1e-5), FT(1e-5), FT(1e-5), 0, 0, 0],
+                    )
+                    CA._precip_fraction_sweep!(ᶜa_p, ᶜCF_d, ᶜq_precip, FT(1), q_min)
+                    a_p = profile(ᶜa_p)
+                    @test a_p[5] == FT(0.3)
+                    @test a_p[4] == FT(0.3)
+                    @test a_p[3] == FT(0.7)   # its own CF_d wins
+                    @test a_p[2] == FT(0.7)
+                    @test all(a_p .>= profile(ᶜCF_d))
+                end
+
+                @testset "a precipitation-free level resets the recursion" begin
+                    # The shaft above is not inherited across the gap at
+                    # level 4, so level 3 starts again from its own CF_d.
+                    set_profile!(ᶜCF_d, [0, FT(0.1), 0, 0, FT(0.6), 0, 0, 0])
+                    set_profile!(
+                        ᶜq_precip,
+                        [FT(1e-5), FT(1e-5), FT(1e-5), 0, FT(1e-5), 0, 0, 0],
+                    )
+                    CA._precip_fraction_sweep!(ᶜa_p, ᶜCF_d, ᶜq_precip, FT(1), q_min)
+                    a_p = profile(ᶜa_p)
+                    @test a_p[5] == FT(0.6)
+                    @test a_p[4] == FT(0)
+                    @test a_p[3] == FT(0)
+                    @test a_p[2] == FT(0.1)
+                    @test a_p[1] == FT(0.1)
+                end
+
+                @testset "no precipitation anywhere → a_p = 0" begin
+                    set_profile!(ᶜCF_d, [0, 0, 0, 0, FT(0.5), 0, 0, 0])
+                    set_profile!(ᶜq_precip, zeros(FT, nz))
+                    CA._precip_fraction_sweep!(ᶜa_p, ᶜCF_d, ᶜq_precip, FT(1), q_min)
+                    @test all(profile(ᶜa_p) .== FT(0))
+                end
+
+                @testset "overcast column → a_p = 1" begin
+                    set_profile!(ᶜCF_d, ones(FT, nz))
+                    set_profile!(ᶜq_precip, fill(FT(1e-5), nz))
+                    CA._precip_fraction_sweep!(ᶜa_p, ᶜCF_d, ᶜq_precip, FT(1), q_min)
+                    @test all(profile(ᶜa_p) .== FT(1))
+                end
             end
         end
     end
