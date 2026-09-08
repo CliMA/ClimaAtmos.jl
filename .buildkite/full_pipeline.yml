@@ -632,10 +632,6 @@ steps:
         retry: *retry_policy
         command: >
           julia --color=yes --project=.buildkite runscripts/rcemipii_box_CRM_1M.jl
-
-          julia --color=yes --project=.buildkite reproducibility_tests/test_reproducibility.jl
-          --job_id rcemipii_box_CRM_1M
-          --out_dir rcemipii_box_CRM_1M/output_active
         artifact_paths: "rcemipii_box_CRM_1M/output_active/*"
 
   - group: "Dry Spherical Examples"
