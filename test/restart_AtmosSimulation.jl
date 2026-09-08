@@ -362,9 +362,7 @@ if MANYTESTS
                         reproducible_restart = CA.ReproducibleRestart(),
                         test_dycore_consistency = CA.TestDycoreConsistency())
 
-                    # The `enable_bubble` case is broken for ClimaCore < 0.14.6, so we
-                    # hard-code this to be always false for those versions
-                    bubble = pkgversion(ClimaCore) > v"0.14.5"
+                    bubble = true
 
                     # Make sure that all MPI processes agree on the output_loc
                     output_loc =
@@ -431,7 +429,6 @@ else
     )
 end
 
-# We know that this test is broken for old versions of ClimaCore
 @test all(
     @time test_restart(
         t.simulation,
@@ -440,4 +437,4 @@ end
         more_ignore = t.more_ignore,
     )[1] for
     t in TESTING
-) skip = pkgversion(ClimaCore) < v"0.14.18"
+)

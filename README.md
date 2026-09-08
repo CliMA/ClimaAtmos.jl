@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="logo.svg" alt="ClimaAtmos.jl Logo" width="140">
+  <img src="docs/src/assets/logo.svg" alt="ClimaAtmos.jl Logo" width="140" height="140">
 </div>
 
 # ClimaAtmos.jl
@@ -69,8 +69,10 @@ See [Your First Simulation](https://CliMA.github.io/ClimaAtmos.jl/dev/first_simu
 
 ## Documentation
 
-  - **[Stable docs](https://CliMA.github.io/ClimaAtmos.jl/stable/)**: equations, parameterizations, configuration reference, and API
-  - **[Dev docs](https://CliMA.github.io/ClimaAtmos.jl/dev/)**: latest development version
+  - **[Stable docs](https://CliMA.github.io/ClimaAtmos.jl/stable/)**: the released version
+  - **[Dev docs](https://CliMA.github.io/ClimaAtmos.jl/dev/)**: the latest development version
+  - **[API reference](https://CliMA.github.io/ClimaAtmos.jl/dev/api/)**: types and functions users construct
+  - **[Configuration options](https://CliMA.github.io/ClimaAtmos.jl/dev/configuration_options/)**: every YAML key, generated from the schema
   - **[Available diagnostics](https://CliMA.github.io/ClimaAtmos.jl/dev/available_diagnostics/)**: output variables
 
 ## Integration with CliMA models

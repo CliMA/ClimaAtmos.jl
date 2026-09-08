@@ -151,7 +151,7 @@ ClimaAtmos provides a set of common numerical configurations that can be used as
 
 #### Diagnostics Configurations for PROPHET Columns
 
-Common diagnostics sets for PROPHET single-column runs. Each file defines a `diagnostics:` block mostly at 10-minute output frequency; individual model configs can add case-specific diagnostics on top.
+Common diagnostics sets for [PROPHET](prophet.md) single-column runs. Each file defines a `diagnostics:` block mostly at 10-minute output frequency; individual model configs can add case-specific diagnostics on top.
 
   - **[`diagnostics_column_progedmf_0M.yml`](https://github.com/CliMA/ClimaAtmos.jl/blob/main/config/common_configs/diagnostics_column_progedmf_0M.yml)**: Standard diagnostics for PROPHET columns with 0-moment microphysics (`microphysics_model: "0M"`). Includes atmospheric state, surface fluxes and precipitation, updraft/environment profiles, and entrainment/detrainment variables.
 

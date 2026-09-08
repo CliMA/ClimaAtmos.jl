@@ -223,17 +223,18 @@ every event over a long run is unbounded growth.
 
 ## Restarts
 
-A restart restores state that no transaction produced. Two representations are
-allowed and the report says which was used:
+A restart restores state that no transaction produced. The report is
+**segmented** at every restart: the cumulative totals start again with the
+segment, and the certificate names each boundary. The restoration itself is
+still checked as a **zero-duration transition**. The checkpoint carries the
+closing endpoints of the last committed step as attributes, and the first
+transaction after a restart measures the restored state and compares it against
+them, exactly, before it opens. A difference is a change nobody accounted for.
 
-  - A **zero-duration transition**, so the restoration is its own transaction
-    and is never charged to the next step; or
-  - **Deliberate segmentation**, where the cumulative record restarts and the
-    report names the segment boundary.
-
-Silently absorbing a restart into the next step's residual is not allowed. Where
-carrying cumulative ledger state across a restart is semantically valid, it is
-preserved rather than reset.
+Silently absorbing a restart into the next step's residual is not allowed.
+Carrying cumulative totals across a boundary is a later extension. It needs no
+checkpoint change beyond those attributes, and until it exists the report says
+the record is segmented. Decided on 2026-09-08.
 
 ## The timestepper adapter
 
@@ -243,7 +244,8 @@ knows nothing about tableaus.
 
 The adapter owns:
 
-  - the pinned `ClimaTimeSteppers` version and algorithm it is written against;
+  - the recorded `ClimaTimeSteppers` version and the tableau family it is
+    written against;
   - which channels exist and what an accepted envelope for each one is;
   - the accepted stage weights, and how to obtain an applied increment rather
     than an endpoint difference;

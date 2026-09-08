@@ -164,7 +164,7 @@ import RRTMGP:
     uniform_z_p
 
 # ClimaAtmos lays the MERRA aerosols into the RRTMGP state arrays in this order (which
-# must match RRTMGP's `AEROSOL_IDX`); RRTMGP resolves the short names to canonical ones.
+# must match the order in RRTMGP's `aerosol_index_map()`); RRTMGP resolves the short names to canonical ones.
 const _AEROSOL_SHORT_NAMES = (
     "dust1", "ss1", "so4", "bcpi", "bcpo", "ocpi", "ocpo",
     "dust2", "dust3", "dust4", "dust5", "ss2", "ss3", "ss4", "ss5",

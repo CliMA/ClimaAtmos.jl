@@ -136,8 +136,8 @@ ClimaAtmos.integrate_over_sgs
 ### Turbulence and convection (PROPHET)
 
 The turbulence and convection scheme: an eddy-diffusivity mass-flux scheme,
-named `EDMFX` in the code. See the
-[PROPHET equations](edmf_equations.md).
+named `EDMFX` in the code. See
+[PROPHET: Overview and Equations](prophet.md).
 
 ```@docs
 ClimaAtmos.AbstractEDMF
@@ -172,14 +172,41 @@ ClimaAtmos.NoGridScaleTendency
 ClimaAtmos.NoSubgridScaleTendency
 ```
 
+Closure parameters. The fields of this set, and the ClimaParams names they come
+from, are listed in [PROPHET: Closures](prophet_closures.md#Parameters):
+
+```@docs
+ClimaAtmos.Parameters.AbstractTurbulenceConvectionParameters
+ClimaAtmos.Parameters.TurbulenceConvectionParameters
+```
+
 ### Radiation
 
-See the [Radiation](radiation.md) page for an overview of the RRTMGP coupling.
+See the [Radiation](radiation.md) page for what each of these does, and
+[Running with Radiation](radiation_howto.md) for how to configure them.
+
+The RRTMGP modes, selected by the `rad` configuration key:
+
+```@docs
+ClimaAtmos.RRTMGPInterface.AbstractRRTMGPMode
+ClimaAtmos.RRTMGPInterface.GrayRadiation
+ClimaAtmos.RRTMGPInterface.ClearSkyRadiation
+ClimaAtmos.RRTMGPInterface.AllSkyRadiation
+ClimaAtmos.RRTMGPInterface.AllSkyRadiationWithClearSkyDiagnostics
+ClimaAtmos.RRTMGPInterface.rrtmgp_solver
+```
+
+Cloud properties seen by the radiation:
 
 ```@docs
 ClimaAtmos.AbstractCloudInRadiation
 ClimaAtmos.InteractiveCloudInRadiation
 ClimaAtmos.PrescribedCloudInRadiation
+```
+
+Idealized radiation for single-column cases:
+
+```@docs
 ClimaAtmos.RadiationDYCOMS
 ClimaAtmos.RadiationISDAC
 ClimaAtmos.RadiationTRMM_LBA
@@ -192,7 +219,6 @@ ClimaAtmos.AbstractInsolation
 ClimaAtmos.IdealizedInsolation
 ClimaAtmos.TimeVaryingInsolation
 ClimaAtmos.RCEMIPIIInsolation
-ClimaAtmos.GCMDrivenInsolation
 ClimaAtmos.ExternalTVInsolation
 ClimaAtmos.Larcform1Insolation
 ```
@@ -264,7 +290,6 @@ ClimaAtmos.AbstractForcing
 ClimaAtmos.LargeScaleSubsidence
 ClimaAtmos.LargeScaleAdvection
 ClimaAtmos.HeldSuarezForcing
-ClimaAtmos.GCMForcing
 ClimaAtmos.ISDACForcing
 ClimaAtmos.PrescribedFlow
 ClimaAtmos.ShipwayHill2012VelocityProfile
@@ -275,6 +300,17 @@ ClimaAtmos.ShipwayHill2012VelocityProfile
 ```@docs
 ClimaAtmos.AbstractChemistryModel
 ClimaAtmos.GasPhaseChem
+```
+
+### COSP and CloudSat
+
+```@docs
+ClimaAtmos.COSP.COSPCloudSatOptics.cloudsat_gas_attenuation!
+ClimaAtmos.COSP.COSPCloudSatOptics.cloudsat_grid_mean_sizes!
+ClimaAtmos.COSP.COSPCloudSatOptics.cloudsat_optics_subcolumn!
+ClimaAtmos.COSP.COSPCloudSatReflectivity.cloudsat_gas_path_attenuation!
+ClimaAtmos.COSP.COSPCloudSatReflectivity.cloudsat_reflectivity_subcolumn!
+ClimaAtmos.COSP.COSPCloudSatCFAD.accumulate_cloudsat_cfad!
 ```
 
 ## Numerics
@@ -323,8 +359,7 @@ ClimaAtmos.ᶠdiffdivᵥ_u₃
 Biased and upwinded reconstructions:
 
 ```@docs
-ClimaAtmos.ᶠleft_bias
-ClimaAtmos.upwind_biased_grad
+ClimaAtmos.ᶠbottom_bias
 ClimaAtmos.ᶠupwind1
 ClimaAtmos.ᶠupwind3
 ClimaAtmos.ᶠlin_vanleer
@@ -368,15 +403,17 @@ ClimaAtmos.SurfaceConditions.atmos_surface_conditions
 
 Data access for single-column (SCM) forcing files: the generic
 [`ColumnDataset`](@ref ClimaAtmos.ColumnDatasets.ColumnDataset) handle and format
-interface, the native `ClimaColumn` reader/writer, and the ARM VARANAL
-converter. See the
+interface, the in-memory source, the native `ClimaColumn` reader/writer, and the
+ARM VARANAL and GCM cfsite converters. See the
 [Column Datasets](@ref "Column Datasets") page for usage and
 [Adding a Column Dataset](@ref) for the extension interface.
 
 ### Opening and reading
 
 ```@docs
+ClimaAtmos.ColumnDatasets.AbstractColumnData
 ClimaAtmos.ColumnDatasets.ColumnDataset
+ClimaAtmos.ColumnDatasets.InMemoryColumnData
 ClimaAtmos.ColumnDatasets.open_dataset
 ClimaAtmos.ColumnDatasets.has_variable
 ClimaAtmos.ColumnDatasets.read_profile
@@ -430,6 +467,7 @@ ClimaAtmos.ColumnDatasets.ClimaColumnFiles.CANONICAL_UNITS
 ClimaAtmos.ColumnDatasets.ClimaColumnFiles.is_conforming
 ClimaAtmos.ColumnDatasets.ClimaColumnFiles.write_column_forcing_file
 ClimaAtmos.ColumnDatasets.VaranalFiles.to_climacolumn
+ClimaAtmos.ColumnDatasets.GCMColumnData.read_cfsite
 ```
 
 ## Modules
@@ -443,6 +481,7 @@ ClimaAtmos.AtmosArtifacts
 ClimaAtmos.ColumnDatasets
 ClimaAtmos.ColumnDatasets.ClimaColumnFiles
 ClimaAtmos.ColumnDatasets.VaranalFiles
+ClimaAtmos.ColumnDatasets.GCMColumnData
 ```
 
 ## Internals

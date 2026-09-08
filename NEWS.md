@@ -5,6 +5,8 @@ main
 ----
 - [#49](https://github.com/johannespletzer/ClimaAtmosResiDyn.jl/pull/49) ![][badge-✨feature/enhancement] Add the internal parent-budget journal and endpoint-reconciliation core under `ClimaAtmos.Internals.ParentBudget`, including a configuration-derived schema of expected coverage, explicit unset/measured/not-applicable packet slots, fixed-packet endpoint reduction, atomic transactions, and separate parent, attribution, and transfer results. Runtime instrumentation remains disabled.
 - [#48](https://github.com/johannespletzer/ClimaAtmosResiDyn.jl/pull/48) ![][badge-✨feature/enhancement] Specify the supported parent-budget contract, control volumes, nested reconciliation levels, and path-coverage requirements for mass, total water, and total energy.
+- ![][badge-🐛bugfix] Stop pinning the downstream ClimaCoupler checkout. The pin worked around an artifact a GitHub runner cannot fetch, but it required ClimaCore 0.15 and so stopped resolving once this package moved to 0.16, failing in `Pkg.develop` instead. `.github/workflows/downstream.yml` now tracks ClimaCoupler's default branch as upstream's workflow does, and both downstream jobs pass again, so the known issue that recorded the workaround is removed.
+- ![][badge-🐛bugfix] Point the ClimaCore documentation inventory at the v0.16 series, which is what `Project.toml` allows after the upstream sync, and correct the operator note that still described the 0.15 signature. The spectral-element operators dropped their `I` parameter in 0.16, so the weak divergence is `Divergence{WeakForm}`.
 - [#50](https://github.com/johannespletzer/ClimaAtmosResiDyn.jl/pull/50) ![][badge-🐛bugfix] Restored package precompilation on Julia 1.10 and 1.11 by reattaching the `tag_closure_callback!` docstring to its function, and restored the callback's API documentation.
 
 - ![][badge-✨feature/enhancement] Add energy source tags, under the new config key `energy_source_tags`, adding one prognostic field `ρe_src_<name>` per tag. A source tag holds moist energy attributed to where it came from, which is the energy counterpart of the water tags and a different quantity from `ρe_tag_<name>`, a signed process tag. Both families take the same `source` labels and only the rule applied to them differs. Off by default. **Experimental**: the amount-of-energy and provenance reading holds only where `ρe_tot` is positive, so the donor share is defined, and while the tag itself is non-negative.
@@ -62,7 +64,33 @@ main
 - ![][badge-✨feature/enhancement] Add `post_processing/plot_tracer_burdens.jl`, which plots every tracer's burden against time in one panel at 300 dpi. Colour encodes the height box and dash pattern the latitude box, so the legend has `n_latitude + n_height` entries rather than their product — the default configuration carries 48 tracers, which no categorical palette can distinguish. Written automatically by the experiment script and the CI job.
 - ![][badge-✨feature/enhancement] Register the stratospheric passive tracer diagnostics from the model at simulation setup instead of statically at package load. The source-region grid previously had to fit a fixed set of variables registered when ClimaAtmos loaded, which capped it at 12 latitude by 12 height bands; it is now unbounded, and a run that carries no passive tracers no longer pays for their diagnostics. Mirrors how the tagged tracers already register theirs.
 - ![][badge-✨feature/enhancement] Diagnose the WMO lapse-rate (thermal) tropopause online from the model temperature, as the new `ztrop` diagnostic and as the lower boundary of the stratospheric passive tracers. Two column sweeps, so it is GPU-compatible; columns where no tropopause exists fall back to a latitude-dependent climatology.
+
+0.42.9
+-------
+- Update to ClimaCore.jl v0.16 (support for v0.15 is dropped). The biased
+  interpolation operators are spelled `BottomBiased*`/`TopBiased*` instead of
+  `LeftBiased*`/`RightBiased*`, and the correspondingly renamed abbreviations
+  are `ᶠbottom_bias`, `ᶠtop_bias`, `ᶜbottom_bias` and `ᶜtop_bias`. The advection
+  operators' one-sided boundary conditions are replaced by the generalized
+  `Extrapolate{N}` ghost-point padding: `ᶠupwind3` uses `Extrapolate{1}` and
+  `ᶠlin_vanleer` uses `Extrapolate{0}`. Both change results at the two faces
+  nearest each boundary, so this is a behavioral change.
+
+0.42.8
+-------
+- [#4779](https://github.com/CliMA/ClimaAtmos.jl/pull/4779) ![][badge-🐛bugfix] ![][badge-🔥behavioralΔ] Fit the SGS quadrature Lagrange multiplier to the discrete quadrature rule instead of the continuous Gaussian, so the reconstructed condensate mass hits its target. Also correct the 0-moment energy sink for the covariance of `dq_tot/dt` and `e_tot`.
+- [#4751](https://github.com/CliMA/ClimaAtmos.jl/pull/4751) ![][badge-✨feature/enhancement] Move the 1-moment process selection into `NonEquilibriumMicrophysics1M`, so a model can be built in code rather than only from config keys. Constructor defaults are now `n_substeps = 3`, `n_substeps_quad = 2`.
+- [#4718](https://github.com/CliMA/ClimaAtmos.jl/pull/4718) ![][badge-✨feature/enhancement] Add a CloudSat radar simulator to the COSP workflow, with the diagnostics `cloudsat_tcc` and `cloudsat_tcc2`. The default `netcdf_interpolation_num_points` z value changed from 256 to 100.
+0.42.7
+-------
+- [#4702](https://github.com/CliMA/ClimaAtmos.jl/pull/4702) Add the shared helper `ᶜh_eff_plus_Φ!` for the mass-weighted water enthalpy of the single-gradient enthalpy flux, and the selectors `ᶜsuspended_water` and `ᶜdiffusing_water` for which water carries the enthalpy and which water diffuses, and use them in the EDMFX vertical and horizontal diffusive fluxes, the grid-mean and updraft hyperdiffusion, the vertical diffusion boundary layer, and the implicit Jacobian, which each assembled it separately. The EDMFX diffusive fluxes now also use the shared `ᶠgradᵥ`, `ᶜdiffdivᵥ` and `ᶜdiffusive_flux_divergenceᵥ` operators instead of local copies; the TKE flux keeps its dedicated divergence operator, since its bottom boundary has a nonzero surface TKE flux, but it now also uses the shared `ᶠgradᵥ`. Tendencies are unchanged.
+- [#4657](https://github.com/CliMA/ClimaAtmos.jl/pull/4657) ![][badge-✨feature/enhancement] Add a horizontal component to the EDMFX SGS diffusive flux, enabled by the opt-in `edmfx_sgs_horizontal_diffusive_flux` config option (default `false`), for high-resolution configurations: scalar and TKE fluxes, the momentum stress `τ = -2 K_{u,h} S` with the full strain rate, the corresponding TKE shear production from horizontal gradients, and diagnostics `lmixh`, `edth`, and `evuh`. The water and enthalpy fluxes follow the vertical convention of [#4753](https://github.com/CliMA/ClimaAtmos.jl/pull/4753): `q_tot_eff = q_tot - q_rai - q_sno` diffuses as a single substance with the enthalpy flux `ρ K_{h,h} (∇ₕs_d + (h_eff + Φ) ∇ₕq_tot_eff)`, suspended cloud mass and number species take a proportional share of it, and rain and snow receive no horizontal transport. With prognostic updrafts and the separate opt-in `edmfx_horizontal_diffusion` config option (default `false`, requires `edmfx_sgs_horizontal_diffusive_flux`), the grid-mean horizontal specific tendencies are also applied to the updraft scalars (moist static energy, total specific humidity, cloud species, and SGS tracers), so each subdomain inherits the grid-mean horizontal diffusion.
+
+0.42.6
+-------
 - [#4770](https://github.com/CliMA/ClimaAtmos.jl/pull/4770) ![][badge-🐛bugfix] ![][badge-🔥behavioralΔ] Distribute the aggregate `q_tot_eff` diffusion of `edmfx_sgs_diffusive_flux_tendency!` to the suspended cloud mass and number species. The distribution added in [#4753](https://github.com/CliMA/ClimaAtmos.jl/pull/4753) resolved its field names against `Y` rather than `Y.c`, so its guard was never satisfied and the block never ran: `ρq_tot` and `ρ` were tendencied while `ρq_lcl`, `ρq_icl` and their number densities were not. The hyperdiffusion and vertical-diffusion-boundary-layer paths already distributed correctly, so this removes an inconsistency between them.
+
+
 0.42.5
 -------
 - [#4762](https://github.com/CliMA/ClimaAtmos.jl/pull/4762) Include more terms in the `InvZEntrainment` closure.

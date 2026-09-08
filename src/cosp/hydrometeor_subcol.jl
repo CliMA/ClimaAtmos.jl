@@ -1,16 +1,22 @@
 module COSPHydrometeorSubcolumns
 
+import ClimaCore.Fields: @fused_direct
 import LazyBroadcast: lazy
 
-function accumulate_sampled_cloud_fraction!(sampled_fraction, cloud_mask, nsubcolumns)
-    FT = eltype(sampled_fraction)
-    @. sampled_fraction += _cloud_indicator(cloud_mask) / FT(nsubcolumns)
-    return nothing
-end
-
-function accumulate_sampled_precip_fraction!(sampled_fraction, precip_mask, nsubcolumns)
-    FT = eltype(sampled_fraction)
-    @. sampled_fraction += _precip_indicator(precip_mask) / FT(nsubcolumns)
+function accumulate_sampled_fractions!(
+    sampled_cloud_fraction,
+    sampled_precip_fraction,
+    cloud_mask,
+    precip_mask,
+    nsubcolumns,
+)
+    FT = eltype(sampled_cloud_fraction)
+    @fused_direct begin
+        @. sampled_cloud_fraction +=
+            _cloud_indicator(cloud_mask) / FT(nsubcolumns)
+        @. sampled_precip_fraction +=
+            _precip_indicator(precip_mask) / FT(nsubcolumns)
+    end
     return nothing
 end
 

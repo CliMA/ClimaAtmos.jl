@@ -285,6 +285,47 @@ import ClimaAtmos: limit_sink
                     @test result.dq_icl_dt ≈ ref.dq_icl_dt rtol = FT(1e-4)
                 end
 
+                @testset "Precipitation does not reduce reconstructed condensate" begin
+                    # λ_lagrange enforces E[shifted_excess] = q_c on *cloud*
+                    # condensate only, so at the mean point (S′_hat = 0), the
+                    # reconstruction must recover q_lcl_hat = λ·q_c and
+                    # q_icl_hat = (1−λ)·q_c regardless of q_rai / q_sno.
+                    #
+                    # Mixed-phase temperature so 0 < λ < 1 and both partitions
+                    # (liquid vs q_rai, ice vs q_sno) are exercised.
+                    T_mix = FT(263.15)
+                    q_sat_mix = TD.q_vap_saturation(thp, T_mix, ρ)
+                    q_tot_mix = q_sat_mix + FT(2e-3)
+                    mu_S_mix = q_tot_mix - q_sat_mix
+                    q_c = FT(1.5e-4)
+                    # Temperature-ramp liquid fraction (≈0.75 at 263.15 K). Used
+                    # identically below in the evaluator and the reference, so
+                    # the exact value only needs to lie strictly in (0, 1).
+                    λ_mix = TD.liquid_fraction_ramp(thp, T_mix)
+                    q_rai = FT(1e-3)
+                    q_sno = FT(5e-4)
+
+                    eval_precip = Microphysics1MEvaluator(
+                        BMT.Microphysics1Moment(), mp, thp, ρ,
+                        q_rai, q_sno,               # q_rai, q_sno
+                        λ_mix, q_c, mu_S_mix, FT(1),  # λ, λ_lagrange, mu_S, α
+                        dt, nsubs, (),
+                    )
+                    result = eval_precip(T_mix, q_tot_mix)
+                    # Reference: the condensate the closure must reconstruct at
+                    # the mean point, plus the true precipitation.
+                    ref = BMT.bulk_microphysics_tendencies(
+                        BMT.LinearizedAverage(),
+                        BMT.Microphysics1Moment(), mp, thp, ρ, T_mix,
+                        q_tot_mix, λ_mix * q_c, (1 - λ_mix) * q_c,
+                        q_rai, q_sno, dt, nsubs,
+                    )
+                    @test result.dq_lcl_dt ≈ ref.dq_lcl_dt rtol = FT(1e-4)
+                    @test result.dq_icl_dt ≈ ref.dq_icl_dt rtol = FT(1e-4)
+                    @test result.dq_rai_dt ≈ ref.dq_rai_dt rtol = FT(1e-4)
+                    @test result.dq_sno_dt ≈ ref.dq_sno_dt rtol = FT(1e-4)
+                end
+
                 @testset "Output is finite NamedTuple" begin
                     eval = Microphysics1MEvaluator(
                         BMT.Microphysics1Moment(), mp, thp, ρ,

@@ -284,7 +284,7 @@ function _check_field_axes(fields, reference, name)
         axes(field) == axes(reference) ||
             throw(
                 DimensionMismatch(
-                    "$name field must have the same axes as cloud_fraction",
+                    "$name field must have matching axes",
                 ),
             )
     end

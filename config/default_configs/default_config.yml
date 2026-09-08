@@ -119,7 +119,7 @@ dt_tracer_budget:
   value: "10days"
 cosp_n_subcolumns:
   help: "Number of COSP subcolumns."
-  value: 256
+  value: 100
 cosp_overlap:
   help: "COSP cloud overlap assumption [`maximum`, `random`, `maximum_random` (default)]."
   value: "maximum_random"
@@ -130,7 +130,7 @@ prescribe_clouds_in_radiation:
   help: "Use prescribed clouds in radiation model. Clouds are read from ERA5 data and updated every time radiation is called. The year 2010 is used and continuously repeated. This mode only affect radiation and is only relevant for the RRTGMP mode. [`false` (default), `true`]"
   value: false
 insolation:
-  help: "Insolation used in radiation model [`idealized` (default), `timevarying`, `rcemipii`, `gcmdriven`, `externaldriventv`, `larcform1`]"
+  help: "Insolation used in radiation model [`idealized` (default), `timevarying`, `rcemipii`, `externaldriventv`, `larcform1`]"
   value: "idealized"
 add_isothermal_boundary_layer:
   help: "Add an isothermal boundary layer above the domain top for radiation [`false`, `true` (default)]"
@@ -209,6 +209,9 @@ start_date:
 era5_initial_condition_dir:
   help: "Directory containing ERA5 initial condition files. Filenames inferred from start_date [none (default)]. Generated with `https://github.com/CliMA/WeatherQuest`."
   value: ~
+era5_ic_full_pressure:
+  help: "For `WeatherModel` initial conditions, read 3D pressure (`p_3d`) from the ERA5 file instead of integrating hydrostatically from surface pressure [`false` (default), `true`]"
+  value: false
 test_dycore_consistency:
   help: "Test dycore consistency [`false` (default), `true`]"
   value: false
@@ -282,11 +285,14 @@ cloud_liquid_formation:
   help: "Cloud liquid formation option for 1M microphysics [`CloudLiquidFormation` (default), ~]"
   value: "CloudLiquidFormation"
 cloud_ice_formation:
-  help: "Cloud ice formation option for 1M microphysics [`ConstantTimescale` (default), `TemperatureDependent`, ~]"
-  value: "TemperatureDependent"
+  help: "Cloud ice formation option for 1M microphysics [`PrescribedIceNumber` (default), `ConstantTimescale`, `TemperatureDependent`, ~]"
+  value: "PrescribedIceNumber"
 cloud_ice_melt:
   help: "Cloud ice melting option for 1M microphysics [`CloudIceMelt` (default), ~]"
   value: "CloudIceMelt"
+cloud_liquid_freezing:
+  help: "Cloud liquid freezing option for 1M microphysics [`HomogeneousAndHeterogeneous` (default), `Homogeneous`, `Heterogeneous`, ~]"
+  value: "HomogeneousAndHeterogeneous"
 rain_autoconversion:
   help: "Rain autoconversion option for 1M microphysics [`Kessler1M` (default), `PrescribedNd`, ~]"
   value: "Kessler1M"
@@ -362,7 +368,7 @@ check_steady_state:
   value: false
 # Single-column model (SCM) forcing
 external_forcing:
-  help: "External forcing for single-column experiments. Leave `~` for almost every case: the forcing is then taken from the setup chosen by `initial_condition` (the preferred route). Set it only to apply forcing that differs from the initial condition — the intended use is `ReanalysisMonthlyAveragedDiurnal` (monthly-averaged diurnal ERA5 forcing, which has no `initial_condition` counterpart), paired with `initial_condition: ReanalysisTimeVarying`. The values `GCM`/`ISDAC`/`ForcingFromFile`/`ReanalysisTimeVarying` merely mirror `initial_condition` and are redundant with it. [`~` (default), `ReanalysisMonthlyAveragedDiurnal`, `GCM`, `ISDAC`, `ForcingFromFile`, `ReanalysisTimeVarying`]"
+  help: "External forcing for single-column experiments. Leave `~` for almost every case: the forcing is then taken from the setup chosen by `initial_condition` (the preferred route). Set it only for `ReanalysisMonthlyAveragedDiurnal` (monthly-averaged diurnal ERA5 forcing, which has no `initial_condition` counterpart), paired with `initial_condition: ReanalysisTimeVarying`. [`~` (default), `ReanalysisMonthlyAveragedDiurnal`]"
   value: ~
 external_forcing_file:
   help: "Path to a NetCDF forcing file you supply, read by the file-driven single-column cases `GCM`, `ARMVARANAL`, and `ForcingFromFile`. The `ReanalysisTimeVarying` / `ReanalysisMonthlyAveragedDiurnal` cases ignore this and instead generate/locate their file from `site_latitude`/`site_longitude`/`start_date`. [`nothing` (default), `path/to/file`]"
@@ -500,6 +506,9 @@ edmfx_nh_pressure:
 edmfx_vertical_diffusion:
   help: "If set to true, it switches on vertical diffusion of prognostic eddy-diffusivity mass-flux updrafts. [`true`, `false` (default)]"
   value: false
+edmfx_horizontal_diffusion:
+  help: "If set to true, it applies the grid-mean horizontal diffusion tendencies to the prognostic EDMFX updrafts. Requires `edmfx_sgs_horizontal_diffusive_flux`. Intended for high-resolution runs.  [`true`, `false` (default)]"
+  value: false
 edmfx_entr_model:
   help: "Eddy-diffusivity mass-flux entrainment closure. Only consulted by `prognostic_edmfx`. [`Generalized` (default), `PiGroups`]"
   value: "Generalized"
@@ -520,6 +529,9 @@ edmfx_sgs_mass_flux:
   value: false
 edmfx_sgs_diffusive_flux:
   help: "If set to true, it switches on the eddy-diffusivity mass-flux subgrid-scale diffusive flux.  [`true`, `false` (default)]"
+  value: false
+edmfx_sgs_horizontal_diffusive_flux:
+  help: "If set to true, it switches on the horizontal component of the EDMFX SGS diffusive flux. Intended for high-resolution runs.  [`true`, `false` (default)]"
   value: false
 updraft_number:
   help: "Sets the number of updrafts for the eddy-diffusivity mass-flux scheme"

@@ -26,8 +26,9 @@ contract does not have to be read first.
   - **Accepted step**: One time step the integrator finished and kept. Only
     accepted updates count; what happens on an intermediate stage does not.
   - **Channel**: One of the ways the integrator applies an accepted update: the
-    explicit tendency, the limited explicit tendency, the implicit solve, and
-    the post-implicit correction.
+    explicit tendency, the limited explicit tendency, and the implicit solve.
+    The post-implicit correction is applied inside the implicit solve's update,
+    so it is a piece of that channel rather than a channel of its own.
   - **Envelope**: The whole change one channel made to one reservoir in one
     step, measured as one number from the update the integrator applied.
   - **Process**: One physical or numerical path inside a channel. Radiation, a

@@ -2,7 +2,7 @@
 
 ## Idealized cases
 
-`ClimaAtmos.jl` supports several canonical test cases that are run in a single column model designed to verify how well PROPHET reproduces each convective regime. These cases include variants of `bomex`, `dycoms`, `rico`, `soares`, `gabls`, and `trmm` and can be found in the `config/model_configs` directory. The purpose of each simulation is summarized in the following table:
+`ClimaAtmos.jl` supports several canonical test cases that are run in a single column model designed to verify how well [PROPHET](prophet.md) reproduces each convective regime. These cases include variants of `bomex`, `dycoms`, `rico`, `soares`, `gabls`, and `trmm` and can be found in the `config/model_configs` directory. The purpose of each simulation is summarized in the following table:
 
 | Abbreviation | Long Name                                            | Cloud Regime          | Reference                                                                                                                   |
 |:------------ |:---------------------------------------------------- |:--------------------- |:--------------------------------------------------------------------------------------------------------------------------- |
@@ -107,8 +107,7 @@ the requested site and dates (regridded from the global ERA5 archive, stored
 through `ClimaArtifacts` for reproducibility) and hands it to the generic
 `ForcingFromFile` setup, which takes the
 initial condition, external forcing, surface skin temperature, and insolation
-from that one file (surface fluxes are computed interactively by Monin–Obukhov similarity theory). Setting `external_forcing: "ReanalysisTimeVarying"` as well
-is accepted but unnecessary. You give the site and dates directly
+from that one file (surface fluxes are computed interactively by Monin–Obukhov similarity theory). You give the site and dates directly
 rather than a file path because the file is generated on demand:
 `start_date` is YYYYMMDD, `site_latitude` in degrees (-90...90), and
 `site_longitude` in (-180...180). Artifact-backed ERA5 data is currently

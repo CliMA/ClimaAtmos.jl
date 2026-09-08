@@ -59,7 +59,6 @@ include(joinpath("utils", "debug_utils.jl"))
 include(joinpath("utils", "variable_manipulations.jl"))
 include(joinpath("utils", "tracer_processes.jl"))
 include(joinpath("utils", "tropopause.jl"))
-include(joinpath("utils", "read_gcm_driven_scm_data.jl"))
 include(joinpath("config", "era5_observations_to_forcing_file.jl"))
 include(joinpath("utils", "weather_model.jl"))
 
@@ -76,6 +75,7 @@ include(joinpath("parameterized_tendencies", "radiation", "radiation.jl"))
 include(joinpath("cache", "prognostic_edmf_precomputed_quantities.jl"))
 include(joinpath("cache", "edonly_precomputed_quantities.jl"))
 include(joinpath("cache", "microphysics_cache.jl"))
+include(joinpath("cosp", "cosp_quantities.jl"))
 include(joinpath("cache", "precomputed_quantities.jl"))
 include(joinpath("cache", "surface_albedo.jl"))
 
@@ -212,6 +212,7 @@ include(joinpath("parent_budget", "ParentBudget.jl"))
 
 end
 
+include(joinpath("cosp", "callbacks.jl"))
 include(joinpath("callbacks", "callbacks.jl"))
 
 include(joinpath("diagnostics", "Diagnostics.jl"))
@@ -239,5 +240,6 @@ include(joinpath("utils", "show.jl"))
 
 include(joinpath("cosp", "cosp.jl"))
 import .COSP
+include(joinpath("cosp", "cloudsat.jl"))
 
 end # module

@@ -94,17 +94,23 @@ it produces no attribution result and demands none. Their rows are in the **Fina
 accepted-state maps** section below, and the identity sums this table and that
 one, never an aggregate of either alongside its own rows.
 
-| Event id               | Dispatch                              | Guard                                  | Channel       | Reservoirs | Parent fields                 | Disposition M·W·E              | Proof obligation                                                     | Level    | State | Evidence required                                                     | Test                | Step |
-|:---------------------- |:------------------------------------- |:-------------------------------------- |:------------- |:---------- |:----------------------------- |:------------------------------ |:-------------------------------------------------------------------- |:-------- |:----- |:--------------------------------------------------------------------- |:------------------- |:---- |
-| `env.explicit_main`    | accepted increment from `Yₜ`          | always                                 | `Yₜ`          | atmosphere | `ρ`, `ρq_tot`, `ρe_tot`       | measured · measured · measured | applied increment equals tableau-weighted stage sum                  | envelope | none  | accepted explicit weights from the pinned tableau                     | `envelope_tests.jl` | 3    |
-| `env.explicit_limited` | accepted increment from `Yₜ_lim`      | always                                 | `Yₜ_lim`      | atmosphere | `ρq_tot`, categories, tracers | measured · measured · measured | limited channel integrated through the limiter, separately from `Yₜ` | envelope | none  | accepted limited-channel increment                                    | `envelope_tests.jl` | 3    |
-| `env.implicit`         | accepted increment from `T_imp!`      | always                                 | `T_imp!`      | atmosphere | `ρ`, `ρq_tot`, `ρe_tot`       | measured · measured · measured | effective implicit increment as the pinned solver forms it           | envelope | none  | stage weights and hook-folding established against the pinned version | `envelope_tests.jl` | 3    |
-| `env.post_implicit`    | accepted increment from `T_post_imp!` | `energy_q_tot_upwinding != Val(:none)` | `T_post_imp!` | atmosphere | `ρq_tot`, `ρe_tot`            | measured · measured · measured | whether it is already inside `env.implicit`                          | envelope | none  | hook-folding decision, then one booking only                          | `envelope_tests.jl` | 3    |
+| Event id               | Dispatch                         | Guard  | Channel  | Reservoirs | Parent fields                 | Disposition M·W·E              | Proof obligation                                                     | Level    | State | Evidence required                                                     | Test                | Step |
+|:---------------------- |:-------------------------------- |:------ |:-------- |:---------- |:----------------------------- |:------------------------------ |:-------------------------------------------------------------------- |:-------- |:----- |:--------------------------------------------------------------------- |:------------------- |:---- |
+| `env.explicit_main`    | accepted increment from `Yₜ`     | always | `Yₜ`     | atmosphere | `ρ`, `ρq_tot`, `ρe_tot`       | measured · measured · measured | applied increment equals tableau-weighted stage sum                  | envelope | none  | accepted explicit weights from the pinned tableau                     | `envelope_tests.jl` | 3    |
+| `env.explicit_limited` | accepted increment from `Yₜ_lim` | always | `Yₜ_lim` | atmosphere | `ρq_tot`, categories, tracers | measured · measured · measured | limited channel integrated through the limiter, separately from `Yₜ` | envelope | none  | accepted limited-channel increment                                    | `envelope_tests.jl` | 3    |
+| `env.implicit`         | accepted increment from `T_imp!` | always | `T_imp!` | atmosphere | `ρ`, `ρq_tot`, `ρe_tot`       | measured · measured · measured | effective implicit increment as the pinned solver forms it           | envelope | none  | stage weights and hook-folding established against the pinned version | `envelope_tests.jl` | 3    |
 
 The algebraic solve defect is **not** a separate envelope. It is part of what the
 implicit channel applied, so it appears in `env.implicit` and shows up again as a
 term of that envelope's decomposition. An implicit attribution residual can only
 close with the defect included.
+
+Neither is the post-implicit correction. `ClimaTimeSteppers` applies
+`T_post_imp!` to the Newton-solved stage state and then forms the stored implicit
+stage tendency by differencing, so the correction is already inside
+`env.implicit`. Booking it as an envelope of its own would count it twice. It is
+a decomposition row of the implicit channel, `impl.post_implicit_correction`,
+below.
 
 ## Explicit limited channel decomposition
 
@@ -141,26 +147,24 @@ close with the defect included.
 
 ## Implicit channel decomposition
 
-| Event id                       | Dispatch                                      | Guard                                                    | Channel  | Reservoirs | Parent fields                | Disposition M·W·E              | Proof obligation                                                                                          | Level         | State | Evidence required                                       | Test                            | Step |
-|:------------------------------ |:--------------------------------------------- |:-------------------------------------------------------- |:-------- |:---------- |:---------------------------- |:------------------------------ |:--------------------------------------------------------------------------------------------------------- |:------------- |:----- |:------------------------------------------------------- |:------------------------------- |:---- |
-| `impl.vertical_advection`      | `implicit_vertical_advection_tendency!`       | always                                                   | `T_imp!` | atmosphere | `ρ`, `ρe_tot`, tracers, `u₃` | zero · zero · zero             | conservative transport with closed vertical boundaries; precipitation leaves through a different operator | decomposition | none  | operator global-zero test plus accepted implicit weight | `implicit_attribution_tests.jl` | 5    |
-| `impl.water_fallout`           | `vertical_advection_of_water_tendency!`       | `NonEquilibriumMicrophysics1M`                           | `T_imp!` | atmosphere | `ρ`, `ρq_tot`, `ρe_tot`      | measured · measured · measured | `ᶜprecipdivᵥ` of the category flux with free outflow at the lower boundary                                | transfer      | none  | applied increment with accepted implicit weight         | `transfer_tests.jl`             | 6    |
-| `impl.microphysics_removal_0m` | `microphysics_tendency!`, 0-moment            | `EquilibriumMicrophysics0M` and implicit microphysics    | `T_imp!` | atmosphere | `ρq_tot`, `ρ`, `ρe_tot`      | measured · measured · measured | removal straight out of the column, no receiving reservoir                                                | transfer      | none  | applied increment with accepted implicit weight         | `transfer_tests.jl`             | 6    |
-| `impl.microphysics_formation`  | `microphysics_tendency!`, 1M                  | `NonEquilibriumMicrophysics1M` and implicit microphysics | `T_imp!` | atmosphere | categories                   | zero · zero · zero             | redistributes inside `ρq_tot`                                                                             | decomposition | none  | field-write inventory                                   | `implicit_attribution_tests.jl` | 5    |
-| `impl.vertical_diffusion`      | `vertical_diffusion_boundary_layer_tendency!` | `diff_mode == Implicit()`                                | `T_imp!` | atmosphere | `ρe_tot`, tracers            | measured · measured · measured | interior operator, zero flux at top and bottom faces                                                      | decomposition | none  | applied increment with accepted implicit weight         | `implicit_attribution_tests.jl` | 5    |
-| `impl.solve_defect`            | Newton stage residual                         | implicit configurations                                  | `T_imp!` | atmosphere | `ρ`, `ρq_tot`, `ρe_tot`      | measured · measured · measured | leading order at `max_iters = 1`; sign and accepted weight verified                                       | decomposition | none  | independent projection of the algebraic residual        | `solve_defect_tests.jl`         | 5    |
-| `impl.zero_velocity`           | `zero_velocity_tendency!`                     | advection tests                                          | `T_imp!` | atmosphere | momentum                     | zero · zero · zero             | momentum only                                                                                             | decomposition | none  | field-write inventory                                   | `implicit_attribution_tests.jl` | 5    |
-| `impl.out_of_scope`            | `edmfx_*`, `sgs_*`, `pressure_work_tendency!` | out-of-scope configurations                              | `T_imp!` | —          | —                            | n/a · n/a · n/a                | excluded by the contract's scope                                                                          | decomposition | none  | configuration refused at setup                          | `scope_tests.jl`                | 3    |
+| Event id                        | Dispatch                                                     | Guard                                                    | Channel  | Reservoirs | Parent fields                | Disposition M·W·E              | Proof obligation                                                                                                                                                                      | Level         | State | Evidence required                                                           | Test                            | Step |
+|:------------------------------- |:------------------------------------------------------------ |:-------------------------------------------------------- |:-------- |:---------- |:---------------------------- |:------------------------------ |:------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |:------------- |:----- |:--------------------------------------------------------------------------- |:------------------------------- |:---- |
+| `impl.vertical_advection`       | `implicit_vertical_advection_tendency!`                      | always                                                   | `T_imp!` | atmosphere | `ρ`, `ρe_tot`, tracers, `u₃` | zero · zero · zero             | conservative transport with closed vertical boundaries; precipitation leaves through a different operator                                                                             | decomposition | none  | operator global-zero test plus accepted implicit weight                     | `implicit_attribution_tests.jl` | 5    |
+| `impl.water_fallout`            | `vertical_advection_of_water_tendency!`                      | `NonEquilibriumMicrophysics1M`                           | `T_imp!` | atmosphere | `ρ`, `ρq_tot`, `ρe_tot`      | measured · measured · measured | `ᶜprecipdivᵥ` of the category flux with free outflow at the lower boundary                                                                                                            | transfer      | none  | applied increment with accepted implicit weight                             | `transfer_tests.jl`             | 6    |
+| `impl.microphysics_removal_0m`  | `microphysics_tendency!`, 0-moment                           | `EquilibriumMicrophysics0M` and implicit microphysics    | `T_imp!` | atmosphere | `ρq_tot`, `ρ`, `ρe_tot`      | measured · measured · measured | removal straight out of the column, no receiving reservoir                                                                                                                            | transfer      | none  | applied increment with accepted implicit weight                             | `transfer_tests.jl`             | 6    |
+| `impl.microphysics_formation`   | `microphysics_tendency!`, 1M                                 | `NonEquilibriumMicrophysics1M` and implicit microphysics | `T_imp!` | atmosphere | categories                   | zero · zero · zero             | redistributes inside `ρq_tot`                                                                                                                                                         | decomposition | none  | field-write inventory                                                       | `implicit_attribution_tests.jl` | 5    |
+| `impl.vertical_diffusion`       | `vertical_diffusion_boundary_layer_tendency!`                | `diff_mode == Implicit()`                                | `T_imp!` | atmosphere | `ρe_tot`, tracers            | measured · measured · measured | interior operator, zero flux at top and bottom faces                                                                                                                                  | decomposition | none  | applied increment with accepted implicit weight                             | `implicit_attribution_tests.jl` | 5    |
+| `impl.solve_defect`             | Newton stage residual                                        | implicit configurations                                  | `T_imp!` | atmosphere | `ρ`, `ρq_tot`, `ρe_tot`      | measured · measured · measured | leading order at `max_iters = 1`; sign and accepted weight verified                                                                                                                   | decomposition | none  | independent projection of the algebraic residual                            | `solve_defect_tests.jl`         | 5    |
+| `impl.post_implicit_correction` | `correct_implicit_advection_tendency!` through `T_post_imp!` | `energy_q_tot_upwinding != Val(:none)`                   | `T_imp!` | atmosphere | `ρe_tot`, `ρq_tot`           | open · open · open             | folded into the effective implicit increment by the stepper; the difference of two vertical divergences with zero boundary flux, so a global zero is expected and not yet established | decomposition | none  | accepted implicit weight `b_imp[i]/γ` on the stage change, one booking only | `implicit_attribution_tests.jl` | 5    |
+| `impl.zero_velocity`            | `zero_velocity_tendency!`                                    | advection tests                                          | `T_imp!` | atmosphere | momentum                     | zero · zero · zero             | momentum only                                                                                                                                                                         | decomposition | none  | field-write inventory                                                       | `implicit_attribution_tests.jl` | 5    |
+| `impl.out_of_scope`             | `edmfx_*`, `sgs_*`, `pressure_work_tendency!`                | out-of-scope configurations                              | `T_imp!` | —          | —                            | n/a · n/a · n/a                | excluded by the contract's scope                                                                                                                                                      | decomposition | none  | configuration refused at setup                                              | `scope_tests.jl`                | 3    |
 
-Every implicit row's **accepted weight** is `open` until stack step 5 establishes
-that the accepted-solution coefficients can be read from the pinned timestepper.
-The disposition columns describe the tendency, not yet the accepted increment.
-
-## Post-implicit channel decomposition
-
-| Event id                               | Dispatch                               | Guard                                  | Channel       | Reservoirs | Parent fields      | Disposition M·W·E  | Proof obligation                                                   | Level         | State | Evidence required                                | Test                            | Step |
-|:-------------------------------------- |:-------------------------------------- |:-------------------------------------- |:------------- |:---------- |:------------------ |:------------------ |:------------------------------------------------------------------ |:------------- |:----- |:------------------------------------------------ |:------------------------------- |:---- |
-| `post_impl.correct_implicit_advection` | `correct_implicit_advection_tendency!` | `energy_q_tot_upwinding != Val(:none)` | `T_post_imp!` | atmosphere | `ρe_tot`, `ρq_tot` | open · open · open | whether it is already folded into the effective implicit increment | decomposition | none  | hook-folding decision against the pinned version | `implicit_attribution_tests.jl` | 5    |
+Every implicit row's **accepted weight** stays `open` until stack step 5 measures
+it. The pinned stepper's coefficients are known: it stores the implicit stage
+tendency as `(U − U_start)/dtγ` and the accepted update takes `dt · b_imp[i]` of
+it, so a change folded into stage `i` enters with weight `b_imp[i]/γ`, which for
+`ARS343` is 2.7726, −1.4784 and 1 at stages 2, 3 and 4. The disposition columns
+describe the tendency, not yet the accepted increment.
 
 ## Final accepted-state maps
 
@@ -215,17 +219,17 @@ and the resolved topology decides whether a cancellation test applies at all.
 ## Non-authoritative paths
 
 Listed so that no future reader has to rediscover that they were considered.
-None of them writes authoritative state, so none is ever booked.
+None of them writes a parent field, so none is ever booked.
 
-| Event id                           | Dispatch                                                                   | Hook               | Why it is not booked                                                              |
-|:---------------------------------- |:-------------------------------------------------------------------------- |:------------------ |:--------------------------------------------------------------------------------- |
-| `cache.precomputed`                | `set_precomputed_quantities!`                                              | `cache!`           | cache only                                                                        |
-| `cache.implicit_precomputed`       | `set_implicit_precomputed_quantities!`                                     | `cache_imp!`       | cache only                                                                        |
-| `cache.implicit_stage_setup`       | `initialize_implicit_stage_problem!`                                       | `initialize_imp!`  | stage setup                                                                       |
-| `cb.flux_accumulation`             | `flux_accumulation!`                                                       | discrete callback  | mutates `Ref`s in `p` only                                                        |
-| `cb.external_driven_single_column` | `external_driven_single_column!`                                           | discrete callback  | refreshes forcing caches only                                                     |
-| `cb.rrtmgp_solver`                 | `rrtmgp_solver_callback!`                                                  | discrete callback  | fills the radiation cache; the state effect arrives through `radiation_tendency!` |
-| `cb.read_only`                     | `nan_checking_callback`, `checkpoint_callback`, `gc_callback`, diagnostics | discrete callbacks | read-only with respect to `Y`                                                     |
+| Event id                           | Dispatch                                                                   | Hook               | Why it is not booked                                                                         |
+|:---------------------------------- |:-------------------------------------------------------------------------- |:------------------ |:-------------------------------------------------------------------------------------------- |
+| `cache.precomputed`                | `set_precomputed_quantities!`                                              | `cache!`           | cache, and the velocity filter on `Y.f.u₃` at the two boundary faces, which is momentum only |
+| `cache.implicit_precomputed`       | `set_implicit_precomputed_quantities!`                                     | `cache_imp!`       | cache, and the velocity filter on `Y.f.u₃` at the two boundary faces, which is momentum only |
+| `cache.implicit_stage_setup`       | `initialize_implicit_stage_problem!`                                       | `initialize_imp!`  | stage setup                                                                                  |
+| `cb.flux_accumulation`             | `flux_accumulation!`                                                       | discrete callback  | mutates `Ref`s in `p` only                                                                   |
+| `cb.external_driven_single_column` | `external_driven_single_column!`                                           | discrete callback  | refreshes forcing caches only                                                                |
+| `cb.rrtmgp_solver`                 | `rrtmgp_solver_callback!`                                                  | discrete callback  | fills the radiation cache; the state effect arrives through `radiation_tendency!`            |
+| `cb.read_only`                     | `nan_checking_callback`, `checkpoint_callback`, `gc_callback`, diagnostics | discrete callbacks | read-only with respect to `Y`                                                                |
 
 A custom callback outside this list is unsupported unless it declares itself
 read-only or supplies its own accounting, and an undeclared one fails the
@@ -280,16 +284,36 @@ are what the decomposition rows are reconciled against. They are never summed
 alongside their own decomposition, and an envelope may stand in for attribution
 that does not exist yet.
 
+**What the stored implicit tendency folds in.** For `ClimaTimeSteppers` 0.10.6 an
+implicit stage records `U_start` before `initialize_imp!`, then runs
+`initialize_imp!`, a DSS, the `WithDSS` constraint firing, the Newton solve,
+`T_post_imp!`, a DSS and the `EndOfStage` constraint firing, and only then stores
+`T_imp[i] = (U − U_start)/dtγ`. Every one of those changes is inside the
+effective implicit increment and none may be booked again on its own. The DSS
+and constraint that run on the assembled stage value before `U_start` is taken,
+and the stage-level `lim!`, are not inside it: they reach the endpoint only
+through the tableau and stay stage observations.
+
+**The velocity filter in the cache hooks.** `set_implicit_precomputed_quantities!`,
+which `set_precomputed_quantities!` also calls, rewrites `Y.f.u₃` at the bottom
+and top faces so that the contravariant vertical velocity vanishes there
+(`set_velocity_at_surface!`, `set_velocity_at_top!`). It runs at every `cache!`
+and `cache_imp!` call, including at initialization before `B⁰` is read and inside
+every implicit stage, where the stepper folds it into the effective implicit
+increment. It writes momentum and nothing else, so its mass, water and energy
+contributions are exactly zero by construction. It is on record so that a future
+change which made it touch `ρ` is seen to need a row.
+
 ## Open gaps and what they block
 
-| Gap                                                                | Blocks                                                                                      | Cleared by   |
-|:------------------------------------------------------------------ |:------------------------------------------------------------------------------------------- |:------------ |
-| `Yₜ_lim` unread by any adapter                                     | water closure, and energy closure wherever a limited tracer carries energy                  | stack step 3 |
-| Accepted implicit stage weights unestablished                      | claim level 2 for implicit terms                                                            | stack step 5 |
-| Hook folding into the effective implicit increment unestablished   | claim level 3 for the implicit channel, and `post_impl.correct_implicit_advection` entirely | stack step 5 |
-| Coupled surface legs unmeasured                                    | claim level 4 in the coupled view                                                           | stack step 6 |
-| Energy leg of `map.tracer_nonneg_vapor` at `constrain_qtot = true` | energy closure wherever that variant is configured                                          | stack step 7 |
-| This table is not generated from an executable registry            | any claim that coverage is complete                                                         | stack step 4 |
+| Gap                                                                                         | Blocks                                                                      | Cleared by   |
+|:------------------------------------------------------------------------------------------- |:--------------------------------------------------------------------------- |:------------ |
+| `Yₜ_lim` unread by any adapter                                                              | water closure, and energy closure wherever a limited tracer carries energy  | stack step 3 |
+| Accepted implicit stage weights unestablished                                               | claim level 2 for implicit terms                                            | stack step 5 |
+| Accepted weights of the hooks folded into the effective implicit increment not yet measured | claim level 3 for the implicit channel, and `impl.post_implicit_correction` | stack step 5 |
+| Coupled surface legs unmeasured                                                             | claim level 4 in the coupled view                                           | stack step 6 |
+| Energy leg of `map.tracer_nonneg_vapor` at `constrain_qtot = true`                          | energy closure wherever that variant is configured                          | stack step 7 |
+| This table is not generated from an executable registry                                     | any claim that coverage is complete                                         | stack step 4 |
 
 None of these may become `zero` by assumption. Each is turned into `measured` or
 `zero` by the stack step that owns it, with the evidence its row names.

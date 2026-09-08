@@ -179,7 +179,7 @@ function orographic_gravity_wave_compute_tendency!(Y, p, ::FullOrographicGravity
         end
 
         # DEBUG: Check if Y has NaNs at entry
-        if any(isnan, parent(Y.c.ρ))
+        if any(isnan, Y.c.ρ)
             @error "OGWD: Input Y.c.ρ already has NaNs at function entry!"
             error("Cannot compute OGWD tendency with NaN inputs")
         end
@@ -383,8 +383,8 @@ function orographic_gravity_wave_forcing!(
     # the z-values don't change, but this is necessary for
     # calc_nonpropagating_forcing! to work on the GPU
     get_pbl_z!(topo_ᶜz_pbl, ᶜp, ᶜT, ᶜz, grav, cp_d)
-    parent(topo_ᶠz_pbl) .= parent(topo_ᶜz_pbl) .- FT(1 / 2) .* parent(Δz_bot)
     topo_ᶠz_pbl = topo_ᶠz_pbl.components.data.:1
+    topo_ᶠz_pbl .= topo_ᶜz_pbl .- FT(1 / 2) .* Δz_bot
 
     # compute base flux at the planetary boundary layer height
     calc_base_flux!(
@@ -487,10 +487,10 @@ function orographic_gravity_wave_forcing!(
 
     @debug begin
         # DEBUG: Check for NaNs in OGWD forcing
-        if any(isnan, parent(ᶜuforcing)) || any(isnan, parent(ᶜvforcing))
+        if any(isnan, ᶜuforcing) || any(isnan, ᶜvforcing)
             @error "NaN detected in OGWD forcing!"
-            @error "  ᶜuforcing: has_nan=$(any(isnan, parent(ᶜuforcing))), min=$(minimum(parent(ᶜuforcing))), max=$(maximum(parent(ᶜuforcing)))"
-            @error "  ᶜvforcing: has_nan=$(any(isnan, parent(ᶜvforcing))), min=$(minimum(parent(ᶜvforcing))), max=$(maximum(parent(ᶜvforcing)))"
+            @error "  ᶜuforcing: has_nan=$(any(isnan, ᶜuforcing)), min=$(minimum(ᶜuforcing)), max=$(maximum(ᶜuforcing))"
+            @error "  ᶜvforcing: has_nan=$(any(isnan, ᶜvforcing)), min=$(minimum(ᶜvforcing)), max=$(maximum(ᶜvforcing))"
             error("OGWD produced NaN forcing - aborting")
         end
     end
@@ -632,10 +632,10 @@ function calc_nonpropagating_forcing!(
     end
 
     # Include cells that overlap with [z_pbl, z_ref):
-    # - ᶜright_bias checks upper face > z_pbl (cell extends above z_pbl)
-    # - ᶜleft_bias checks lower face < z_ref (cell starts below z_ref)
+    # - ᶜtop_bias checks upper face > z_pbl (cell extends above z_pbl)
+    # - ᶜbottom_bias checks lower face < z_ref (cell starts below z_ref)
     # This ensures at least one cell is included when z_ref > z_pbl
-    @. ᶜmask = ᶜright_bias.((ᶠz .> ᶠz_pbl)) .&& ᶜleft_bias.((ᶠz .< ᶠz_ref))
+    @. ᶜmask = isone(ᶜtop_bias.((ᶠz .> ᶠz_pbl))) .&& isone(ᶜbottom_bias.((ᶠz .< ᶠz_ref)))
     @. ᶜweights = ᶜinterp.(ᶠp .- ᶠp_ref)
     @. ᶜdiff = ᶜinterp.(ᶠp_m1 .- ᶠp)
 
@@ -644,7 +644,7 @@ function calc_nonpropagating_forcing!(
     # to the pressure-weighted average.
     @. ᶜmask = ᶜmask && (!iszero(ᶜweights))
 
-    parent(ᶜweights) .= parent(ᶜweights .* ᶜmask)
+    ᶜweights .= ᶜweights .* ᶜmask
 
     input = @. lazy(ifelse(ᶜmask == true, ᶜdiff / ᶜweights, FT(0)))
 
@@ -652,7 +652,7 @@ function calc_nonpropagating_forcing!(
         return acc + wtsum_field
     end
 
-    if any(isnan.(parent(ᶜwtsum)))
+    if any(isnan.(ᶜwtsum))
         @warn "NaN encountered in weight sum calculation of orographic gravity wave drag"
     end
 
@@ -696,8 +696,8 @@ function calc_propagate_forcing!(
     dτ_sat_dz,
     ᶜρ,
 )
-    parent(dτ_sat_dz) .=
-        parent(Geometry.WVector.(ᶜgradᵥ.(τ_sat)).components.data.:1)
+    dτ_sat_dz .=
+        Geometry.WVector.(ᶜgradᵥ.(τ_sat)).components.data.:1
 
     @. ᶜuforcing -= τ_x / τ_l / ᶜρ * dτ_sat_dz
     @. ᶜvforcing -= τ_y / τ_l / ᶜρ * dτ_sat_dz
@@ -816,8 +816,8 @@ This is needed to access face values at level `k-1` from within a level-`k` comp
 (e.g., computing `ᶠp[k-1]` for pressure differences across cell layers). ClimaCore `column_reduce` and `column_accumulate` do not support direct `field[k-1]` indexing in broadcast expressions, so we
 construct the shifted view via a round-trip through the cell-center grid:
 
- 1. `LeftBiasedF2C` interpolates faces → cell centers using the value from below.
- 2. `LeftBiasedC2F` interpolates cell centers → faces using the value from below,
+ 1. `BottomBiasedF2C` interpolates faces → cell centers using the value from below.
+ 2. `BottomBiasedC2F` interpolates cell centers → faces using the value from below,
     with `boundary_value` prescribed at the bottom face.
 
 The net effect is `shifted_field[k] = source_field[k-1]` for interior faces,
@@ -826,8 +826,8 @@ and `shifted_field[bottom] = boundary_value` at the lowest face.
 Called from `orographic_gravity_wave_compute_tendency!` to build `ᶠp_m1`.
 """
 function field_shiftface_down!(source_field, shifted_field, boundary_value)
-    L1 = Operators.LeftBiasedC2F(; bottom = Operators.SetValue(boundary_value))
-    shifted_field .= L1.(ᶜleft_bias.(source_field))
+    B1 = Operators.BottomBiasedC2F(; bottom = Operators.SetValue(boundary_value))
+    shifted_field .= B1.(ᶜbottom_bias.(source_field))
 end
 
 """
@@ -1241,7 +1241,10 @@ function compute_ogw_drag(
 
         if isfile(local_path)
             @info "Loading computed drag from local file: $(local_path)"
-            topo_info = load_preprocessed_topography(local_filename)
+            topo_info = load_preprocessed_topography(
+                local_filename,
+                ClimaComms.context(Y.c),
+            )
 
             @debug begin
                 # Checkpoint 1: Validate loaded drag tensor

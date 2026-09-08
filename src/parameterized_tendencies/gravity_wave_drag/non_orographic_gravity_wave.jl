@@ -1598,9 +1598,9 @@ bottom level). Called from `postprocess_and_accumulate!`.
 """
 function gw_average!(wave_forcing, wave_forcing_m1)
     FT = eltype(wave_forcing)
-    L1 = Operators.LeftBiasedC2F(; bottom = Operators.SetValue(FT(0.0)))
-    L2 = Operators.LeftBiasedF2C(;)
-    wave_forcing_m1 .= L2.(L1.(wave_forcing))
+    B1 = Operators.BottomBiasedC2F(; bottom = Operators.SetValue(FT(0.0)))
+    B2 = Operators.BottomBiasedF2C(;)
+    wave_forcing_m1 .= B2.(B1.(wave_forcing))
     @. wave_forcing = FT(0.5) * (wave_forcing + wave_forcing_m1)
 end
 
@@ -1643,12 +1643,12 @@ Mutates `ᶜshifted_field`, setting `ᶜshifted_field[k] = ᶜexample_field[k+1]
 levels and `Boundary_value` at the topmost level. This is how
 `non_orographic_gravity_wave_forcing` gives the kernel access to level `k+1`, which
 ClimaCore column operators cannot index directly; the shift is a round trip to the faces
-using right-biased interpolation in both directions.
+using top-biased interpolation in both directions.
 """
 function field_shiftlevel_up!(ᶜexample_field, ᶜshifted_field, Boundary_value)
-    R1 = Operators.RightBiasedC2F(; top = Operators.SetValue(Boundary_value))
-    R2 = Operators.RightBiasedF2C(;)
-    ᶜshifted_field .= R2.(R1.(ᶜexample_field))
+    T1 = Operators.TopBiasedC2F(; top = Operators.SetValue(Boundary_value))
+    T2 = Operators.TopBiasedF2C(;)
+    ᶜshifted_field .= T2.(T1.(ᶜexample_field))
 end
 
 """
