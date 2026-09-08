@@ -1,0 +1,12 @@
+dt: "120secs"
+t_end: "240secs"
+surface_setup: "DefaultMoninObukhov"
+rad: "allskywithclear"
+microphysics_model: "0M"
+vert_diff: "DecayWithHeightDiffusion"
+aerosol_radiation: true
+prescribed_aerosols: ["SSLT01", "SSLT02", "SSLT03", "SSLT04", "SSLT05"]
+prognostic_aerosols: ["SSLT"]
+diagnostics:
+  - short_name: [mmrss, loadss]
+    period: 240secs

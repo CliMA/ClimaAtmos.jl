@@ -89,6 +89,7 @@ function temporary_quantities(Y, atmos)
         ᶜtemp_scalar_7 = Fields.Field(FT, center_space),
         cosp_temporary_quantities(Y, atmos.cosp)...,
         ᶠtemp_field_level = Fields.level(Fields.Field(FT, face_space), half),
+        ᶠtemp_field_level_2 = Fields.level(Fields.Field(FT, face_space), half),
         temp_field_level = Fields.level(Fields.Field(FT, center_space), 1),
         temp_field_level_2 = Fields.level(Fields.Field(FT, center_space), 1),
         temp_field_level_3 = Fields.level(Fields.Field(FT, center_space), 1),

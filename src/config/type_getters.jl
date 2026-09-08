@@ -7,7 +7,7 @@ import Logging, NVTX
 
 Translate a configuration into a typed `ClimaAtmosParameters`.
 
-The microphysics model, the 1-moment process options, and the gravity-wave toggles are
+The microphysics model, the 1-moment process options, gravity-wave, and prognostic-aerosol toggles are
 resolved from the config first, so the underlying constructor only loads the parameter
 sets that the run will actually use.
 """
@@ -20,6 +20,7 @@ function ClimaAtmosParameters(config::AtmosConfig)
         has_orographic_gw =
         !isnothing(get(pa, "orographic_gravity_wave", nothing)),
         has_beres_source = get(pa, "nogw_beres_source", false) != false,
+        has_prognostic_aerosols = !isempty(get(pa, "prognostic_aerosols", ())),
     )
 end
 
@@ -69,6 +70,7 @@ function get_atmos(config::AtmosConfig, params; setup_type = nothing)
         numerics = AtmosNumerics(config, FT),
         chemistry = AtmosChem(config),
         cosp = COSPModel(config),
+        aerosols = AtmosAerosols(config, params),
         vertical_diffusion,
         disable_surface_flux_tendency = pa["disable_surface_flux_tendency"],
     )

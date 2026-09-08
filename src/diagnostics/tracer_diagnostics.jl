@@ -20,187 +20,49 @@ function compute_tracer!(out, state, cache, time, tracer_name)
     end
 end
 
-"""
-    compute_aerosol!(out, state, cache, time, aerosol_name)
+# A species "exists" when it has a prognostic model or at least one of its
+# bins is prescribed from the MERRA-2 climatology.
+species_exists(cache, bin_names, species_model) =
+    !isnothing(species_model) ||
+    any(name -> has_prescribed_aerosol_bin(cache, name), bin_names)
 
-Read one prescribed aerosol species out of `cache.tracers.prescribed_aerosols_field`.
-
-Mutates and returns `out`; when `out` is `nothing`, returns a copy of the cached field.
-Errors if the model prescribes no aerosols, or none called `aerosol_name`.
-"""
-function compute_aerosol!(out, state, cache, time, aerosol_name)
-    :prescribed_aerosols_field in propertynames(cache.tracers) ||
-        error("Aerosols do not exist in the model")
-    aerosol_name in propertynames(cache.tracers.prescribed_aerosols_field) ||
-        error("$aerosol_name does not exist in the model")
-    if isnothing(out)
-        return copy(
-            getproperty(cache.tracers.prescribed_aerosols_field, aerosol_name),
-        )
-    else
-        out .=
-            getproperty(cache.tracers.prescribed_aerosols_field, aerosol_name)
-    end
+function compute_species_bin_mmr!(out, state, cache, bin_name, species_model)
+    species_exists(cache, (bin_name,), species_model) ||
+        error("$bin_name does not exist in the model")
+    isnothing(out) && (out = zeros(axes(state.c)))
+    out .= ᶜaerosol_bin_mmr(state, cache, bin_name, species_model)
+    return out
 end
 
-"""
-    compute_dust!(out, state, cache, time)
-
-Sum the prescribed dust size bins `DST01` through `DST05` into a total mass mixing ratio.
-
-Bins absent from `cache.tracers.prescribed_aerosols_field` are skipped, so a model
-carrying only some of them still gives their sum. Mutates and returns `out`; when `out` is
-`nothing`, returns the scratch field holding the sum. Errors if the model prescribes no
-aerosols, or no dust bins at all.
-
-!!! warning
-
-    The result aliases `cache.scratch.ᶜtemp_scalar` in both branches, so it must be
-    consumed before the next use of that scratch field.
-"""
-function compute_dust!(out, state, cache, time)
-    :prescribed_aerosols_field in propertynames(cache.tracers) ||
-        error("Aerosols do not exist in the model")
-    any(
-        x -> x in propertynames(cache.tracers.prescribed_aerosols_field),
-        [:DST01, :DST02, :DST03, :DST04, :DST05],
-    ) || error("Dust does not exist in the model")
-    if isnothing(out)
-        aero_conc = cache.scratch.ᶜtemp_scalar
-        @. aero_conc = 0
-        for prescribed_aerosol_name in [:DST01, :DST02, :DST03, :DST04, :DST05]
-            if prescribed_aerosol_name in
-               propertynames(cache.tracers.prescribed_aerosols_field)
-                aerosol_field = getproperty(
-                    cache.tracers.prescribed_aerosols_field,
-                    prescribed_aerosol_name,
-                )
-                @. aero_conc += aerosol_field
-            end
-        end
-        return aero_conc
-    else
-        aero_conc = cache.scratch.ᶜtemp_scalar
-        @. aero_conc = 0
-        for prescribed_aerosol_name in [:DST01, :DST02, :DST03, :DST04, :DST05]
-            if prescribed_aerosol_name in
-               propertynames(cache.tracers.prescribed_aerosols_field)
-                aerosol_field = getproperty(
-                    cache.tracers.prescribed_aerosols_field,
-                    prescribed_aerosol_name,
-                )
-                @. aero_conc += aerosol_field
-            end
-        end
-        out .= aero_conc
-    end
+function compute_species_mmr!(
+    out,
+    state,
+    cache,
+    bin_names,
+    species_model,
+    species_label,
+)
+    species_exists(cache, bin_names, species_model) ||
+        error("$species_label does not exist in the model")
+    isnothing(out) && (out = zeros(axes(state.c)))
+    out .= ᶜaerosol_species_mmr(state, cache, bin_names, species_model)
+    return out
 end
 
-"""
-    compute_sea_salt!(out, state, cache, time)
-
-Sum the prescribed sea-salt size bins `SSLT01` through `SSLT05` into a total mass mixing
-ratio.
-
-Bins absent from `cache.tracers.prescribed_aerosols_field` are skipped. Mutates and
-returns `out`; when `out` is `nothing`, returns the scratch field holding the sum. Errors
-if the model prescribes no aerosols, or no sea-salt bins at all.
-
-!!! warning
-
-    The result aliases `cache.scratch.ᶜtemp_scalar` in both branches, so it must be
-    consumed before the next use of that scratch field.
-"""
-function compute_sea_salt!(out, state, cache, time)
-    :prescribed_aerosols_field in propertynames(cache.tracers) ||
-        error("Aerosols do not exist in the model")
-    any(
-        x -> x in propertynames(cache.tracers.prescribed_aerosols_field),
-        [:SSLT01, :SSLT02, :SSLT03, :SSLT04, :SSLT05],
-    ) || error("Sea salt does not exist in the model")
-    if isnothing(out)
-        aero_conc = cache.scratch.ᶜtemp_scalar
-        @. aero_conc = 0
-        for prescribed_aerosol_name in
-            [:SSLT01, :SSLT02, :SSLT03, :SSLT04, :SSLT05]
-            if prescribed_aerosol_name in
-               propertynames(cache.tracers.prescribed_aerosols_field)
-                aerosol_field = getproperty(
-                    cache.tracers.prescribed_aerosols_field,
-                    prescribed_aerosol_name,
-                )
-                @. aero_conc += aerosol_field
-            end
-        end
-        return aero_conc
-    else
-        aero_conc = cache.scratch.ᶜtemp_scalar
-        @. aero_conc = 0
-        for prescribed_aerosol_name in
-            [:SSLT01, :SSLT02, :SSLT03, :SSLT04, :SSLT05]
-            if prescribed_aerosol_name in
-               propertynames(cache.tracers.prescribed_aerosols_field)
-                aerosol_field = getproperty(
-                    cache.tracers.prescribed_aerosols_field,
-                    prescribed_aerosol_name,
-                )
-                @. aero_conc += aerosol_field
-            end
-        end
-        out .= aero_conc
-    end
-end
-
-"""
-    compute_sea_salt_column!(out, state, cache, time)
-
-Column-integrate the prescribed sea-salt burden, `∑ᵢ qᵢ ρ`, to a surface-level field.
-
-Sums the `SSLT01` through `SSLT05` mass mixing ratios present in the model, weights by air
-density, and integrates over the column, giving [kg/m²]. Mutates and returns `out`; when
-`out` is `nothing`, a surface-level field is allocated and returned instead. Errors if the
-model prescribes no aerosols, or no sea-salt bins at all.
-"""
-function compute_sea_salt_column!(out, state, cache, time)
-    :prescribed_aerosols_field in propertynames(cache.tracers) ||
-        error("Aerosols do not exist in the model")
-    any(
-        x -> x in propertynames(cache.tracers.prescribed_aerosols_field),
-        [:SSLT01, :SSLT02, :SSLT03, :SSLT04, :SSLT05],
-    ) || error("Sea salt does not exist in the model")
-    if isnothing(out)
-        out = zeros(axes(Fields.level(state.f, half)))
-        aero_conc = cache.scratch.ᶜtemp_scalar
-        @. aero_conc = 0
-        for prescribed_aerosol_name in
-            [:SSLT01, :SSLT02, :SSLT03, :SSLT04, :SSLT05]
-            if prescribed_aerosol_name in
-               propertynames(cache.tracers.prescribed_aerosols_field)
-                aerosol_field = getproperty(
-                    cache.tracers.prescribed_aerosols_field,
-                    prescribed_aerosol_name,
-                )
-                @. aero_conc += aerosol_field * state.c.ρ
-            end
-        end
-        Operators.column_integral_definite!(out, aero_conc)
-        return out
-    else
-        aero_conc = cache.scratch.ᶜtemp_scalar
-        @. aero_conc = 0
-        for prescribed_aerosol_name in
-            [:SSLT01, :SSLT02, :SSLT03, :SSLT04, :SSLT05]
-            if prescribed_aerosol_name in
-               propertynames(cache.tracers.prescribed_aerosols_field)
-                aerosol_field = getproperty(
-                    cache.tracers.prescribed_aerosols_field,
-                    prescribed_aerosol_name,
-                )
-                @. aero_conc += aerosol_field * state.c.ρ
-            end
-        end
-        Operators.column_integral_definite!(out, aero_conc)
-    end
+function compute_species_column!(
+    out,
+    state,
+    cache,
+    bin_names,
+    species_model,
+    species_label,
+)
+    species_exists(cache, bin_names, species_model) ||
+        error("$species_label does not exist in the model")
+    isnothing(out) && (out = zeros(axes(Fields.level(state.f, half))))
+    ᶜmmr = ᶜaerosol_species_mmr(state, cache, bin_names, species_model)
+    Operators.column_integral_definite!(out, @. lazy(ᶜmmr * state.c.ρ))
+    return out
 end
 
 ###
@@ -223,7 +85,15 @@ add_diagnostic_variable!(
     standard_name = "mass_fraction_of_dust_dry_aerosol_particles_in_air",
     units = "kg kg^-1",
     comments = "Prescribed dry mass fraction of dust aerosol particles in air.",
-    compute! = (out, u, p, t) -> compute_dust!(out, u, p, t),
+    compute! = (out, u, p, t) ->
+        compute_species_mmr!(
+            out,
+            u,
+            p,
+            AEROSOL_SPECIES_BIN_NAMES.dust,
+            p.atmos.dust,
+            "Dust",
+        ),
 )
 
 ###
@@ -234,9 +104,35 @@ add_diagnostic_variable!(
     long_name = "Sea-Salt Aerosol Mass Mixing Ratio",
     standard_name = "mass_fraction_of_sea_salt_dry_aerosol_particles_in_air",
     units = "kg kg^-1",
-    comments = "Prescribed dry mass fraction of sea salt aerosol particles in air.",
-    compute! = (out, u, p, t) -> compute_sea_salt!(out, u, p, t),
+    comments = "Dry mass fraction of sea salt aerosol particles in air, summed \
+                over size bins.",
+    compute! = (out, u, p, t) ->
+        compute_species_mmr!(
+            out,
+            u,
+            p,
+            AEROSOL_SPECIES_BIN_NAMES.seasalt,
+            p.atmos.seasalt,
+            "Sea salt",
+        ),
 )
+
+###
+# Sea salt per-bin concentrations (3d)
+###
+for (bin_index, bin_name) in enumerate(AEROSOL_SPECIES_BIN_NAMES.seasalt)
+    add_diagnostic_variable!(
+        short_name = "mmr$(lowercase(string(bin_name)))",
+        long_name = "Sea-Salt Aerosol Mass Mixing Ratio, bin $bin_index",
+        units = "kg kg^-1",
+        comments = "Dry mass fraction of sea salt aerosol particles in air in \
+                    size bin $bin_index; prognostic when sea salt is in \
+                    `prognostic_aerosols`, otherwise the prescribed MERRA-2 \
+                    climatology.",
+        compute! = (out, u, p, t) ->
+            compute_species_bin_mmr!(out, u, p, bin_name, p.atmos.seasalt),
+    )
+end
 
 ###
 # Sulfate concentration (3d)
@@ -247,7 +143,8 @@ add_diagnostic_variable!(
     standard_name = "mass_fraction_of_sulfate_dry_aerosol_particles_in_air",
     units = "kg kg^-1",
     comments = "Prescribed dry mass of sulfate (SO4) in aerosol particles as a fraction of air mass.",
-    compute! = (out, u, p, t) -> compute_aerosol!(out, u, p, t, :SO4),
+    compute! = (out, u, p, t) ->
+        compute_species_bin_mmr!(out, u, p, :SO4, p.atmos.sulfate),
 )
 
 ###
@@ -258,7 +155,8 @@ add_diagnostic_variable!(
     long_name = "Hydrophobic Elemental Carbon Mass Mixing Ratio",
     units = "kg kg^-1",
     comments = "Prescribed dry mass fraction of hydrophobic black carbon aerosol particles in air.",
-    compute! = (out, u, p, t) -> compute_aerosol!(out, u, p, t, :CB1),
+    compute! = (out, u, p, t) ->
+        compute_species_bin_mmr!(out, u, p, :CB1, p.atmos.black_carbon),
 )
 
 ###
@@ -269,7 +167,8 @@ add_diagnostic_variable!(
     long_name = "Hydrophilic Elemental Carbon Mass Mixing Ratio",
     units = "kg kg^-1",
     comments = "Prescribed dry mass fraction of hydrophilic black carbon aerosol particles in air.",
-    compute! = (out, u, p, t) -> compute_aerosol!(out, u, p, t, :CB2),
+    compute! = (out, u, p, t) ->
+        compute_species_bin_mmr!(out, u, p, :CB2, p.atmos.black_carbon),
 )
 
 ###
@@ -280,7 +179,8 @@ add_diagnostic_variable!(
     long_name = "Hydrophobic Organic Carbon Mass Mixing Ratio",
     units = "kg kg^-1",
     comments = "Prescribed dry mass fraction of hydrophobic organic carbon aerosol particles in air.",
-    compute! = (out, u, p, t) -> compute_aerosol!(out, u, p, t, :OC1),
+    compute! = (out, u, p, t) ->
+        compute_species_bin_mmr!(out, u, p, :OC1, p.atmos.organic_carbon),
 )
 
 ###
@@ -291,7 +191,8 @@ add_diagnostic_variable!(
     long_name = "Hydrophilic Organic Carbon Mass Mixing Ratio",
     units = "kg kg^-1",
     comments = "Prescribed dry mass fraction of hydrophilic organic carbon aerosol particles in air.",
-    compute! = (out, u, p, t) -> compute_aerosol!(out, u, p, t, :OC2),
+    compute! = (out, u, p, t) ->
+        compute_species_bin_mmr!(out, u, p, :OC2, p.atmos.organic_carbon),
 )
 
 ###
@@ -300,8 +201,15 @@ add_diagnostic_variable!(
 add_diagnostic_variable!(
     short_name = "loadss",
     long_name = "Load of Sea-Salt Aerosol",
-    standard_name = "atmosphere_mass_content_of_sea_salt_dry_aerosol _particles",
     units = "kg m^-2",
-    comments = "The total dry mass of sea salt aerosol particles per unit area.",
-    compute! = (out, u, p, t) -> compute_sea_salt_column!(out, u, p, t),
+    comments = "Total dry mass of sea salt aerosol particles per unit area.",
+    compute! = (out, u, p, t) ->
+        compute_species_column!(
+            out,
+            u,
+            p,
+            AEROSOL_SPECIES_BIN_NAMES.seasalt,
+            p.atmos.seasalt,
+            "Sea salt",
+        ),
 )
