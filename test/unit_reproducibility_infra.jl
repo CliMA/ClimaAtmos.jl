@@ -1119,710 +1119,707 @@ end
 using ClimaComms
 using ClimaCore: Spaces, Fields, Grids, InputOutput
 using ClimaCore
-if pkgversion(ClimaCore) ≥ v"0.14.20"
+using ClimaCore.CommonGrids
+@testset "Reproducibility infrastructure: to_dict" begin
+    make_and_cd() do dir
+        grid = ExtrudedCubedSphereGrid(;
+            z_elem = 10,
+            z_min = 0,
+            z_max = 1,
+            radius = 10,
+            h_elem = 10,
+            n_quad_points = 4,
+        )
+        space =
+            Spaces.ExtrudedFiniteDifferenceSpace(grid, Grids.CellCenter())
+        comms_ctx = ClimaComms.context(space)
 
-    using ClimaCore.CommonGrids
-    @testset "Reproducibility infrastructure: to_dict" begin
-        make_and_cd() do dir
-            grid = ExtrudedCubedSphereGrid(;
-                z_elem = 10,
-                z_min = 0,
-                z_max = 1,
-                radius = 10,
-                h_elem = 10,
-                n_quad_points = 4,
-            )
-            space =
-                Spaces.ExtrudedFiniteDifferenceSpace(grid, Grids.CellCenter())
-            comms_ctx = ClimaComms.context(space)
-
-            fv = Fields.FieldVector(; x = ones(space), y = ones(space))
-            file = joinpath(dir, "fv.hdf5")
-            hdfwriter = InputOutput.HDF5Writer(file, comms_ctx)
-            InputOutput.write!(hdfwriter, fv, "fv")
-            Base.close(hdfwriter)
-            dict = to_dict(file, "fv", comms_ctx)
-            @test dict["x"] isa Vector{Float64}
-            @test dict["y"] isa Vector{Float64}
-            zdict = zero_dict(file, "fv", comms_ctx)
-            @test zdict["x"] isa Vector{Float64}
-            @test zdict["y"] isa Vector{Float64}
-            @test all(x -> iszero(x), zdict["x"])
-            @test all(x -> iszero(x), zdict["y"])
-        end
+        fv = Fields.FieldVector(; x = ones(space), y = ones(space))
+        file = joinpath(dir, "fv.hdf5")
+        hdfwriter = InputOutput.HDF5Writer(file, comms_ctx)
+        InputOutput.write!(hdfwriter, fv, "fv")
+        Base.close(hdfwriter)
+        dict = to_dict(file, "fv", comms_ctx)
+        @test dict["x"] isa Vector{Float64}
+        @test dict["y"] isa Vector{Float64}
+        zdict = zero_dict(file, "fv", comms_ctx)
+        @test zdict["x"] isa Vector{Float64}
+        @test zdict["y"] isa Vector{Float64}
+        @test all(x -> iszero(x), zdict["x"])
+        @test all(x -> iszero(x), zdict["y"])
     end
+end
 
-    # ## state 1: end of simulation, folder structure
-    #  - `job_id/output_dir/`
-    #  - `job_id/output_dir/reproducibility_bundle/`
-    #  - `job_id/output_dir/reproducibility_bundle/ref_counter.jl`
-    #  - `job_id/output_dir/reproducibility_bundle/prog_state.hdf5`
-    # ## state 2: data is saved for future reference
-    #  - `commit_hash/job_id/reproducibility_bundle/`
-    #  - `commit_hash/job_id/reproducibility_bundle/ref_counter.jl`
-    #  - `commit_hash/job_id/reproducibility_bundle/prog_state.hdf5`
+# ## state 1: end of simulation, folder structure
+#  - `job_id/output_dir/`
+#  - `job_id/output_dir/reproducibility_bundle/`
+#  - `job_id/output_dir/reproducibility_bundle/ref_counter.jl`
+#  - `job_id/output_dir/reproducibility_bundle/prog_state.hdf5`
+# ## state 2: data is saved for future reference
+#  - `commit_hash/job_id/reproducibility_bundle/`
+#  - `commit_hash/job_id/reproducibility_bundle/ref_counter.jl`
+#  - `commit_hash/job_id/reproducibility_bundle/prog_state.hdf5`
 
-    @testset "Reproducibility infrastructure: reproducibility_results - legacy folder structure" begin
-        mktempdir2_cd_computed() do (save_dir, computed_dir)
-            grid = ExtrudedCubedSphereGrid(;
-                z_elem = 5,
-                z_min = 0,
-                z_max = 1,
-                radius = 10,
-                h_elem = 5,
-                n_quad_points = 2,
-            )
-            space =
-                Spaces.ExtrudedFiniteDifferenceSpace(grid, Grids.CellCenter())
-            comms_ctx = ClimaComms.context(space)
+@testset "Reproducibility infrastructure: reproducibility_results - legacy folder structure" begin
+    mktempdir2_cd_computed() do (save_dir, computed_dir)
+        grid = ExtrudedCubedSphereGrid(;
+            z_elem = 5,
+            z_min = 0,
+            z_max = 1,
+            radius = 10,
+            h_elem = 5,
+            n_quad_points = 2,
+        )
+        space =
+            Spaces.ExtrudedFiniteDifferenceSpace(grid, Grids.CellCenter())
+        comms_ctx = ClimaComms.context(space)
 
-            # Folder structure:
-            job_id = "unit_test"
-            rfolder = "rbundle"
-            output = "output_active"
-            repro_dir = joinpath(computed_dir, job_id, output, rfolder)
-            mkpath(repro_dir)
+        # Folder structure:
+        job_id = "unit_test"
+        rfolder = "rbundle"
+        output = "output_active"
+        repro_dir = joinpath(computed_dir, job_id, output, rfolder)
+        mkpath(repro_dir)
 
-            fv = Fields.FieldVector(; x = ones(space), y = ones(space))
-            file = joinpath(repro_dir, "my_prog_state.hdf5")
-            hdfwriter = InputOutput.HDF5Writer(file, comms_ctx)
-            InputOutput.write!(hdfwriter, fv, "Y")
-            Base.close(hdfwriter)
+        fv = Fields.FieldVector(; x = ones(space), y = ones(space))
+        file = joinpath(repro_dir, "my_prog_state.hdf5")
+        hdfwriter = InputOutput.HDF5Writer(file, comms_ctx)
+        InputOutput.write!(hdfwriter, fv, "Y")
+        Base.close(hdfwriter)
 
-            # Not on buildkite
-            (d, v, how) = reproducibility_results(
+        # Not on buildkite
+        (d, v, how) = reproducibility_results(
+            comms_ctx;
+            job_id,
+            name = "Y",
+            save_dir = save_dir,
+            ref_counter_PR = 1,
+            reference_filename = "my_prog_state.hdf5",
+            data_file_computed = file,
+            skip = true,
+        )
+        @test length(v) == 1
+        @test v[1]["x"] isa NamedTuple
+        @test v[1]["y"] isa NamedTuple
+        @test iszero(v[1]["x"].rms_diff)
+        @test iszero(v[1]["y"].rms_diff)
+
+        @test isempty(d)
+        @test how == :skipped
+
+        # Empty comparable dirs
+        job_id = "unit_test"
+        (d, v, how) = reproducibility_results(
+            comms_ctx;
+            job_id,
+            name = "Y",
+            save_dir = save_dir,
+            reference_filename = "my_prog_state.hdf5",
+            ref_counter_PR = 1,
+            data_file_computed = file,
+            skip = false,
+        )
+        @test length(v) == 1
+        @test v[1]["x"] isa NamedTuple
+        @test v[1]["y"] isa NamedTuple
+        @test iszero(v[1]["x"].rms_diff)
+        @test iszero(v[1]["y"].rms_diff)
+
+        @test isempty(d)
+        @test how == :no_comparable_dirs
+
+        # Successful comparison
+
+        commit_sha_01 = "commit_hash_01"
+        commit_sha_02 = "commit_hash_02"
+        commit_sha_03 = "commit_hash_03"
+        commit_sha_04 = "commit_hash_04"
+        commit_sha_05 = "commit_hash_05"
+        d01 = make_ref_file_counter(1, save_dir, commit_sha_01, rfolder)
+        d02 = make_ref_file_counter(2, save_dir, commit_sha_02, rfolder)
+        d03 = make_ref_file_counter(3, save_dir, commit_sha_03, rfolder)
+        d04 = make_ref_file_counter(3, save_dir, commit_sha_04, rfolder)
+        d05 = make_ref_file_counter(3, save_dir, commit_sha_05, rfolder)
+
+        put_data_file(
+            joinpath(d01, job_id),
+            fv,
+            comms_ctx;
+            filename = "ref_prog_state.hdf5",
+        )
+        put_data_file(
+            joinpath(d02, job_id),
+            fv,
+            comms_ctx;
+            filename = "ref_prog_state.hdf5",
+        )
+        put_data_file(
+            joinpath(d03, job_id),
+            fv,
+            comms_ctx;
+            filename = "ref_prog_state.hdf5",
+        )
+        put_data_file(
+            joinpath(d04, job_id),
+            fv,
+            comms_ctx;
+            filename = "ref_prog_state.hdf5",
+        )
+        fv.x .= 200
+        fv.y .= 300
+        put_data_file(
+            joinpath(d05, job_id),
+            fv,
+            comms_ctx;
+            filename = "ref_prog_state.hdf5",
+        )
+
+        # Test folder structure
+        @test isfile(
+            joinpath(
+                computed_dir,
+                job_id,
+                output,
+                rfolder,
+                "my_prog_state.hdf5",
+            ),
+        )
+        @test isfile(
+            joinpath(
+                save_dir,
+                commit_sha_01,
+                rfolder,
+                job_id,
+                "ref_prog_state.hdf5",
+            ),
+        )
+        @test isfile(
+            joinpath(
+                save_dir,
+                commit_sha_02,
+                rfolder,
+                job_id,
+                "ref_prog_state.hdf5",
+            ),
+        )
+        @test isfile(
+            joinpath(
+                save_dir,
+                commit_sha_03,
+                rfolder,
+                job_id,
+                "ref_prog_state.hdf5",
+            ),
+        )
+        @test isfile(
+            joinpath(
+                save_dir,
+                commit_sha_04,
+                rfolder,
+                job_id,
+                "ref_prog_state.hdf5",
+            ),
+        )
+        @test isfile(
+            joinpath(
+                save_dir,
+                commit_sha_05,
+                rfolder,
+                job_id,
+                "ref_prog_state.hdf5",
+            ),
+        )
+
+        (d, v, how) = reproducibility_results(
+            comms_ctx;
+            job_id,
+            name = "Y",
+            save_dir = save_dir,
+            ref_counter_PR = 3,
+            reference_filename = "ref_prog_state.hdf5",
+            data_file_computed = file,
+            skip = false,
+        )
+        # The first we compare against is most recent,
+        # And we set `fv.x .= 200` and `fv.y .= 300` for
+        # that dataset.
+        @test v[1]["x"].rms_diff > 0  # different data
+        @test v[1]["y"].rms_diff > 0
+        @test iszero(v[2]["x"].rms_diff)
+        @test iszero(v[2]["y"].rms_diff)
+        @test iszero(v[3]["x"].rms_diff)
+        @test iszero(v[3]["y"].rms_diff)
+
+        @test d == [d05, d04, d03]
+        @test how == :successful_comparison
+    end
+end
+
+@testset "Reproducibility infrastructure: reproducibility_results" begin
+    mktempdir2_cd_computed() do (save_dir, computed_dir)
+        grid = ExtrudedCubedSphereGrid(;
+            z_elem = 5,
+            z_min = 0,
+            z_max = 1,
+            radius = 10,
+            h_elem = 5,
+            n_quad_points = 2,
+        )
+        space =
+            Spaces.ExtrudedFiniteDifferenceSpace(grid, Grids.CellCenter())
+        comms_ctx = ClimaComms.context(space)
+
+        fv = Fields.FieldVector(; x = ones(space), y = ones(space))
+
+        # Folder structure:
+        job_id = "unit_test"
+        rfolder = "rbundle"
+        output = "output_active"
+        repro_dir = joinpath(computed_dir, job_id, output, rfolder)
+        mkpath(repro_dir)
+
+        file = joinpath(repro_dir, "computed_prog_state.hdf5")
+        mkpath(repro_dir)
+        hdfwriter = InputOutput.HDF5Writer(file, comms_ctx)
+        InputOutput.write!(hdfwriter, fv, "Y")
+        Base.close(hdfwriter)
+
+        # Not on buildkite
+        (d, v, how) = reproducibility_results(
+            comms_ctx;
+            job_id,
+            name = "Y",
+            save_dir = save_dir,
+            ref_counter_PR = 1,
+            reference_filename = "ref_prog_state.hdf5",
+            data_file_computed = file,
+            skip = true,
+        )
+        @test length(v) == 1
+        @test v[1]["x"] isa NamedTuple
+        @test v[1]["y"] isa NamedTuple
+        @test iszero(v[1]["x"].rms_diff)
+        @test iszero(v[1]["y"].rms_diff)
+
+        @test isempty(d)
+        @test how == :skipped
+
+        # Empty comparable dirs
+        (d, v, how) = reproducibility_results(
+            comms_ctx;
+            job_id,
+            name = "Y",
+            save_dir = save_dir,
+            reference_filename = "ref_prog_state.hdf5",
+            ref_counter_PR = 1,
+            data_file_computed = file,
+            skip = false,
+        )
+        @test length(v) == 1
+        @test v[1]["x"] isa NamedTuple
+        @test v[1]["y"] isa NamedTuple
+        @test iszero(v[1]["x"].rms_diff)
+        @test iszero(v[1]["y"].rms_diff)
+
+        @test isempty(d)
+        @test how == :no_comparable_dirs
+
+        # Successful comparison
+
+        commit_sha_01 = "commit_hash_01"
+        commit_sha_02 = "commit_hash_02"
+        commit_sha_03 = "commit_hash_03"
+        commit_sha_04 = "commit_hash_04"
+        commit_sha_05 = "commit_hash_05"
+        d01 = make_ref_file_counter(1, save_dir, commit_sha_01, rfolder)
+        d02 = make_ref_file_counter(2, save_dir, commit_sha_02, rfolder)
+        d03 = make_ref_file_counter(3, save_dir, commit_sha_03, rfolder)
+        d04 = make_ref_file_counter(3, save_dir, commit_sha_04, rfolder)
+        d05 = make_ref_file_counter(3, save_dir, commit_sha_05, rfolder)
+
+        put_data_file(
+            joinpath(d01, job_id),
+            fv,
+            comms_ctx;
+            filename = "ref_prog_state.hdf5",
+        )
+        put_data_file(
+            joinpath(d02, job_id),
+            fv,
+            comms_ctx;
+            filename = "ref_prog_state.hdf5",
+        )
+        put_data_file(
+            joinpath(d03, job_id),
+            fv,
+            comms_ctx;
+            filename = "ref_prog_state.hdf5",
+        )
+        put_data_file(
+            joinpath(d04, job_id),
+            fv,
+            comms_ctx;
+            filename = "ref_prog_state.hdf5",
+        )
+        fv.x .= 200
+        fv.y .= 300
+        put_data_file(
+            joinpath(d05, job_id),
+            fv,
+            comms_ctx;
+            filename = "ref_prog_state.hdf5",
+        )
+
+        job_id = "unit_test"
+        (d, v, how) = reproducibility_results(
+            comms_ctx;
+            job_id,
+            name = "Y",
+            save_dir = save_dir,
+            ref_counter_PR = 3,
+            reference_filename = "ref_prog_state.hdf5",
+            data_file_computed = file,
+            skip = false,
+        )
+        # The first we compare against is most recent,
+        # And we set `fv.x .= 200` and `fv.y .= 300` for
+        # that dataset.
+        @test v[1]["x"].rms_diff > 0  # different data
+        @test v[1]["y"].rms_diff > 0
+        @test iszero(v[2]["x"].rms_diff)
+        @test iszero(v[2]["y"].rms_diff)
+        @test iszero(v[3]["x"].rms_diff)
+        @test iszero(v[3]["y"].rms_diff)
+
+        @test d == [d05, d04, d03]
+        @test how == :successful_comparison
+
+        # Test folder structure
+        @test isfile(
+            joinpath(
+                computed_dir,
+                job_id,
+                output,
+                rfolder,
+                "computed_prog_state.hdf5",
+            ),
+        )
+        @test isfile(
+            joinpath(
+                save_dir,
+                commit_sha_01,
+                rfolder,
+                job_id,
+                "ref_prog_state.hdf5",
+            ),
+        )
+        @test isfile(
+            joinpath(
+                save_dir,
+                commit_sha_02,
+                rfolder,
+                job_id,
+                "ref_prog_state.hdf5",
+            ),
+        )
+        @test isfile(
+            joinpath(
+                save_dir,
+                commit_sha_03,
+                rfolder,
+                job_id,
+                "ref_prog_state.hdf5",
+            ),
+        )
+        @test isfile(
+            joinpath(
+                save_dir,
+                commit_sha_04,
+                rfolder,
+                job_id,
+                "ref_prog_state.hdf5",
+            ),
+        )
+        @test isfile(
+            joinpath(
+                save_dir,
+                commit_sha_05,
+                rfolder,
+                job_id,
+                "ref_prog_state.hdf5",
+            ),
+        )
+    end
+end
+
+@testset "Reproducibility infrastructure: export_reproducibility_results, legacy folder structure" begin
+    mktempdir2_cd_computed() do (save_dir, computed_dir)
+        grid = ExtrudedCubedSphereGrid(;
+            z_elem = 5,
+            z_min = 0,
+            z_max = 1,
+            radius = 10,
+            h_elem = 5,
+            n_quad_points = 2,
+        )
+        space =
+            Spaces.ExtrudedFiniteDifferenceSpace(grid, Grids.CellCenter())
+        comms_ctx = ClimaComms.context(space)
+
+        # Folder structure:
+        job_id = "unit_test_export_reproducibility_results"
+        rfolder = "rbundle"
+        output = "output_active"
+        repro_dir = joinpath(computed_dir, job_id, output, rfolder)
+        mkpath(repro_dir)
+
+        fv = Fields.FieldVector(; x = ones(space), y = ones(space))
+
+        # Test skipped case
+        (data_file_computed, computed_mses, dirs, how) =
+            export_reproducibility_results(
+                fv,
                 comms_ctx;
                 job_id,
-                name = "Y",
                 save_dir = save_dir,
+                computed_dir = computed_dir,
+                name = "Y",
+                n = 10,
                 ref_counter_PR = 1,
-                reference_filename = "my_prog_state.hdf5",
-                data_file_computed = file,
                 skip = true,
             )
-            @test length(v) == 1
-            @test v[1]["x"] isa NamedTuple
-            @test v[1]["y"] isa NamedTuple
-            @test iszero(v[1]["x"].rms_diff)
-            @test iszero(v[1]["y"].rms_diff)
+        @test how == :skipped
+        @test isempty(dirs)
 
-            @test isempty(d)
-            @test how == :skipped
-
-            # Empty comparable dirs
-            job_id = "unit_test"
-            (d, v, how) = reproducibility_results(
+        # Test no comparable dirs
+        (data_file_computed, computed_mses, dirs, how) =
+            export_reproducibility_results(
+                fv,
                 comms_ctx;
                 job_id,
-                name = "Y",
                 save_dir = save_dir,
-                reference_filename = "my_prog_state.hdf5",
+                computed_dir = computed_dir,
+                name = "Y",
+                n = 10,
                 ref_counter_PR = 1,
-                data_file_computed = file,
                 skip = false,
             )
-            @test length(v) == 1
-            @test v[1]["x"] isa NamedTuple
-            @test v[1]["y"] isa NamedTuple
-            @test iszero(v[1]["x"].rms_diff)
-            @test iszero(v[1]["y"].rms_diff)
+        @test how == :no_comparable_dirs
+        @test isempty(dirs)
 
-            @test isempty(d)
-            @test how == :no_comparable_dirs
+        # Successful comparisons, legacy path configuration
+        commit_sha_01 = "commit_hash_01"
+        commit_sha_02 = "commit_hash_02"
+        commit_sha_03 = "commit_hash_03"
+        commit_sha_04 = "commit_hash_04"
+        commit_sha_05 = "commit_hash_05"
+        d01 = make_ref_file_counter(1, save_dir, commit_sha_01)
+        d02 = make_ref_file_counter(2, save_dir, commit_sha_02)
+        d03 = make_ref_file_counter(3, save_dir, commit_sha_03)
+        d04 = make_ref_file_counter(3, save_dir, commit_sha_04)
+        d05 = make_ref_file_counter(3, save_dir, commit_sha_05)
 
-            # Successful comparison
+        put_data_file(
+            joinpath(d01, job_id),
+            fv,
+            comms_ctx;
+            filename = "ref_prog_state.hdf5",
+        )
+        put_data_file(
+            joinpath(d02, job_id),
+            fv,
+            comms_ctx;
+            filename = "ref_prog_state.hdf5",
+        )
+        put_data_file(
+            joinpath(d03, job_id),
+            fv,
+            comms_ctx;
+            filename = "ref_prog_state.hdf5",
+        )
+        put_data_file(
+            joinpath(d04, job_id),
+            fv,
+            comms_ctx;
+            filename = "ref_prog_state.hdf5",
+        )
+        fv.x .= 200
+        fv.y .= 300
+        put_data_file(
+            joinpath(d05, job_id),
+            fv,
+            comms_ctx;
+            filename = "ref_prog_state.hdf5",
+        )
 
-            commit_sha_01 = "commit_hash_01"
-            commit_sha_02 = "commit_hash_02"
-            commit_sha_03 = "commit_hash_03"
-            commit_sha_04 = "commit_hash_04"
-            commit_sha_05 = "commit_hash_05"
-            d01 = make_ref_file_counter(1, save_dir, commit_sha_01, rfolder)
-            d02 = make_ref_file_counter(2, save_dir, commit_sha_02, rfolder)
-            d03 = make_ref_file_counter(3, save_dir, commit_sha_03, rfolder)
-            d04 = make_ref_file_counter(3, save_dir, commit_sha_04, rfolder)
-            d05 = make_ref_file_counter(3, save_dir, commit_sha_05, rfolder)
+        @test isfile(joinpath(d01, job_id, "ref_prog_state.hdf5"))
+        @test isfile(joinpath(d02, job_id, "ref_prog_state.hdf5"))
+        @test isfile(joinpath(d03, job_id, "ref_prog_state.hdf5"))
+        @test isfile(joinpath(d04, job_id, "ref_prog_state.hdf5"))
+        @test isfile(joinpath(d05, job_id, "ref_prog_state.hdf5"))
+        @test isfile(joinpath(d01, "ref_counter.jl"))
+        @test isfile(joinpath(d02, "ref_counter.jl"))
+        @test isfile(joinpath(d03, "ref_counter.jl"))
+        @test isfile(joinpath(d04, "ref_counter.jl"))
+        @test isfile(joinpath(d05, "ref_counter.jl"))
 
-            put_data_file(
-                joinpath(d01, job_id),
+        (data_file_computed, computed_mses, dirs, how) =
+            export_reproducibility_results(
                 fv,
-                comms_ctx;
-                filename = "ref_prog_state.hdf5",
-            )
-            put_data_file(
-                joinpath(d02, job_id),
-                fv,
-                comms_ctx;
-                filename = "ref_prog_state.hdf5",
-            )
-            put_data_file(
-                joinpath(d03, job_id),
-                fv,
-                comms_ctx;
-                filename = "ref_prog_state.hdf5",
-            )
-            put_data_file(
-                joinpath(d04, job_id),
-                fv,
-                comms_ctx;
-                filename = "ref_prog_state.hdf5",
-            )
-            fv.x .= 200
-            fv.y .= 300
-            put_data_file(
-                joinpath(d05, job_id),
-                fv,
-                comms_ctx;
-                filename = "ref_prog_state.hdf5",
-            )
-
-            # Test folder structure
-            @test isfile(
-                joinpath(
-                    computed_dir,
-                    job_id,
-                    output,
-                    rfolder,
-                    "my_prog_state.hdf5",
-                ),
-            )
-            @test isfile(
-                joinpath(
-                    save_dir,
-                    commit_sha_01,
-                    rfolder,
-                    job_id,
-                    "ref_prog_state.hdf5",
-                ),
-            )
-            @test isfile(
-                joinpath(
-                    save_dir,
-                    commit_sha_02,
-                    rfolder,
-                    job_id,
-                    "ref_prog_state.hdf5",
-                ),
-            )
-            @test isfile(
-                joinpath(
-                    save_dir,
-                    commit_sha_03,
-                    rfolder,
-                    job_id,
-                    "ref_prog_state.hdf5",
-                ),
-            )
-            @test isfile(
-                joinpath(
-                    save_dir,
-                    commit_sha_04,
-                    rfolder,
-                    job_id,
-                    "ref_prog_state.hdf5",
-                ),
-            )
-            @test isfile(
-                joinpath(
-                    save_dir,
-                    commit_sha_05,
-                    rfolder,
-                    job_id,
-                    "ref_prog_state.hdf5",
-                ),
-            )
-
-            (d, v, how) = reproducibility_results(
                 comms_ctx;
                 job_id,
-                name = "Y",
                 save_dir = save_dir,
+                computed_dir = computed_dir,
+                name = "Y",
+                reference_filename = "ref_prog_state.hdf5",
+                computed_filename = "computed_prog_state.hdf5",
+                n = 10,
                 ref_counter_PR = 3,
-                reference_filename = "ref_prog_state.hdf5",
-                data_file_computed = file,
                 skip = false,
             )
-            # The first we compare against is most recent,
-            # And we set `fv.x .= 200` and `fv.y .= 300` for
-            # that dataset.
-            @test v[1]["x"].rms_diff > 0  # different data
-            @test v[1]["y"].rms_diff > 0
-            @test iszero(v[2]["x"].rms_diff)
-            @test iszero(v[2]["y"].rms_diff)
-            @test iszero(v[3]["x"].rms_diff)
-            @test iszero(v[3]["y"].rms_diff)
-
-            @test d == [d05, d04, d03]
-            @test how == :successful_comparison
-        end
+        @test how == :successful_comparison
+        @test dirs == [d05, d04, d03]
     end
+end
 
-    @testset "Reproducibility infrastructure: reproducibility_results" begin
-        mktempdir2_cd_computed() do (save_dir, computed_dir)
-            grid = ExtrudedCubedSphereGrid(;
-                z_elem = 5,
-                z_min = 0,
-                z_max = 1,
-                radius = 10,
-                h_elem = 5,
-                n_quad_points = 2,
-            )
-            space =
-                Spaces.ExtrudedFiniteDifferenceSpace(grid, Grids.CellCenter())
-            comms_ctx = ClimaComms.context(space)
+@testset "Reproducibility infrastructure: export_reproducibility_results" begin
+    mktempdir2_cd_computed() do (save_dir, computed_dir)
+        grid = ExtrudedCubedSphereGrid(;
+            z_elem = 5,
+            z_min = 0,
+            z_max = 1,
+            radius = 10,
+            h_elem = 5,
+            n_quad_points = 2,
+        )
+        space =
+            Spaces.ExtrudedFiniteDifferenceSpace(grid, Grids.CellCenter())
+        comms_ctx = ClimaComms.context(space)
 
-            fv = Fields.FieldVector(; x = ones(space), y = ones(space))
+        # Folder structure:
+        job_id = "unit_test_export_reproducibility_results"
+        rfolder = "rbundle"
+        output = "output_active"
+        repro_dir = joinpath(computed_dir, job_id, output, rfolder)
+        mkpath(repro_dir)
 
-            # Folder structure:
-            job_id = "unit_test"
-            rfolder = "rbundle"
-            output = "output_active"
-            repro_dir = joinpath(computed_dir, job_id, output, rfolder)
-            mkpath(repro_dir)
+        fv = Fields.FieldVector(; x = ones(space), y = ones(space))
 
-            file = joinpath(repro_dir, "computed_prog_state.hdf5")
-            mkpath(repro_dir)
-            hdfwriter = InputOutput.HDF5Writer(file, comms_ctx)
-            InputOutput.write!(hdfwriter, fv, "Y")
-            Base.close(hdfwriter)
-
-            # Not on buildkite
-            (d, v, how) = reproducibility_results(
+        # Test skipped case
+        (data_file_computed, computed_mses, dirs, how) =
+            export_reproducibility_results(
+                fv,
                 comms_ctx;
                 job_id,
-                name = "Y",
                 save_dir = save_dir,
-                ref_counter_PR = 1,
+                computed_dir = computed_dir,
                 reference_filename = "ref_prog_state.hdf5",
-                data_file_computed = file,
+                computed_filename = "computed_prog_state.hdf5",
+                name = "Y",
+                n = 10,
+                ref_counter_PR = 1,
                 skip = true,
+                repro_folder = rfolder,
             )
-            @test length(v) == 1
-            @test v[1]["x"] isa NamedTuple
-            @test v[1]["y"] isa NamedTuple
-            @test iszero(v[1]["x"].rms_diff)
-            @test iszero(v[1]["y"].rms_diff)
+        @test how == :skipped
+        @test isempty(dirs)
 
-            @test isempty(d)
-            @test how == :skipped
-
-            # Empty comparable dirs
-            (d, v, how) = reproducibility_results(
+        # Test no comparable dirs
+        (data_file_computed, computed_mses, dirs, how) =
+            export_reproducibility_results(
+                fv,
                 comms_ctx;
                 job_id,
-                name = "Y",
                 save_dir = save_dir,
+                computed_dir = computed_dir,
                 reference_filename = "ref_prog_state.hdf5",
+                computed_filename = "computed_prog_state.hdf5",
+                name = "Y",
+                n = 10,
                 ref_counter_PR = 1,
-                data_file_computed = file,
                 skip = false,
+                repro_folder = rfolder,
             )
-            @test length(v) == 1
-            @test v[1]["x"] isa NamedTuple
-            @test v[1]["y"] isa NamedTuple
-            @test iszero(v[1]["x"].rms_diff)
-            @test iszero(v[1]["y"].rms_diff)
+        @test how == :no_comparable_dirs
+        @test isempty(dirs)
 
-            @test isempty(d)
-            @test how == :no_comparable_dirs
+        # Successful comparisons, legacy path configuration (no repro folder)
+        commit_sha_01 = "sha_01"
+        commit_sha_02 = "sha_02"
+        commit_sha_03 = "sha_03"
+        commit_sha_04 = "sha_04"
+        commit_sha_05 = "sha_05"
+        d01 = make_ref_file_counter(1, save_dir, commit_sha_01)
+        d02 = make_ref_file_counter(2, save_dir, commit_sha_02)
+        d03 = make_ref_file_counter(3, save_dir, commit_sha_03)
+        d04 = make_ref_file_counter(3, save_dir, commit_sha_04)
+        d05 = make_ref_file_counter(3, save_dir, commit_sha_05)
 
-            # Successful comparison
+        put_data_file(
+            joinpath(d01, job_id),
+            fv,
+            comms_ctx;
+            filename = "ref_prog_state.hdf5",
+        )
+        put_data_file(
+            joinpath(d02, job_id),
+            fv,
+            comms_ctx;
+            filename = "ref_prog_state.hdf5",
+        )
+        put_data_file(
+            joinpath(d03, job_id),
+            fv,
+            comms_ctx;
+            filename = "ref_prog_state.hdf5",
+        )
+        put_data_file(
+            joinpath(d04, job_id),
+            fv,
+            comms_ctx;
+            filename = "ref_prog_state.hdf5",
+        )
+        fv.x .= 200
+        fv.y .= 300
+        put_data_file(
+            joinpath(d05, job_id),
+            fv,
+            comms_ctx;
+            filename = "ref_prog_state.hdf5",
+        )
 
-            commit_sha_01 = "commit_hash_01"
-            commit_sha_02 = "commit_hash_02"
-            commit_sha_03 = "commit_hash_03"
-            commit_sha_04 = "commit_hash_04"
-            commit_sha_05 = "commit_hash_05"
-            d01 = make_ref_file_counter(1, save_dir, commit_sha_01, rfolder)
-            d02 = make_ref_file_counter(2, save_dir, commit_sha_02, rfolder)
-            d03 = make_ref_file_counter(3, save_dir, commit_sha_03, rfolder)
-            d04 = make_ref_file_counter(3, save_dir, commit_sha_04, rfolder)
-            d05 = make_ref_file_counter(3, save_dir, commit_sha_05, rfolder)
+        @test isfile(joinpath(d01, job_id, "ref_prog_state.hdf5"))
+        @test isfile(joinpath(d02, job_id, "ref_prog_state.hdf5"))
+        @test isfile(joinpath(d03, job_id, "ref_prog_state.hdf5"))
+        @test isfile(joinpath(d04, job_id, "ref_prog_state.hdf5"))
+        @test isfile(joinpath(d05, job_id, "ref_prog_state.hdf5"))
+        @test isfile(joinpath(d01, "ref_counter.jl"))
+        @test isfile(joinpath(d02, "ref_counter.jl"))
+        @test isfile(joinpath(d03, "ref_counter.jl"))
+        @test isfile(joinpath(d04, "ref_counter.jl"))
+        @test isfile(joinpath(d05, "ref_counter.jl"))
 
-            put_data_file(
-                joinpath(d01, job_id),
+        (data_file_computed, computed_mses, dirs, how) =
+            export_reproducibility_results(
                 fv,
-                comms_ctx;
-                filename = "ref_prog_state.hdf5",
-            )
-            put_data_file(
-                joinpath(d02, job_id),
-                fv,
-                comms_ctx;
-                filename = "ref_prog_state.hdf5",
-            )
-            put_data_file(
-                joinpath(d03, job_id),
-                fv,
-                comms_ctx;
-                filename = "ref_prog_state.hdf5",
-            )
-            put_data_file(
-                joinpath(d04, job_id),
-                fv,
-                comms_ctx;
-                filename = "ref_prog_state.hdf5",
-            )
-            fv.x .= 200
-            fv.y .= 300
-            put_data_file(
-                joinpath(d05, job_id),
-                fv,
-                comms_ctx;
-                filename = "ref_prog_state.hdf5",
-            )
-
-            job_id = "unit_test"
-            (d, v, how) = reproducibility_results(
                 comms_ctx;
                 job_id,
-                name = "Y",
                 save_dir = save_dir,
-                ref_counter_PR = 3,
+                computed_dir = computed_dir,
+                name = "Y",
                 reference_filename = "ref_prog_state.hdf5",
-                data_file_computed = file,
+                computed_filename = "computed_prog_state.hdf5",
+                n = 10,
+                ref_counter_PR = 3,
                 skip = false,
+                repro_folder = rfolder,
             )
-            # The first we compare against is most recent,
-            # And we set `fv.x .= 200` and `fv.y .= 300` for
-            # that dataset.
-            @test v[1]["x"].rms_diff > 0  # different data
-            @test v[1]["y"].rms_diff > 0
-            @test iszero(v[2]["x"].rms_diff)
-            @test iszero(v[2]["y"].rms_diff)
-            @test iszero(v[3]["x"].rms_diff)
-            @test iszero(v[3]["y"].rms_diff)
-
-            @test d == [d05, d04, d03]
-            @test how == :successful_comparison
-
-            # Test folder structure
-            @test isfile(
-                joinpath(
-                    computed_dir,
-                    job_id,
-                    output,
-                    rfolder,
-                    "computed_prog_state.hdf5",
-                ),
-            )
-            @test isfile(
-                joinpath(
-                    save_dir,
-                    commit_sha_01,
-                    rfolder,
-                    job_id,
-                    "ref_prog_state.hdf5",
-                ),
-            )
-            @test isfile(
-                joinpath(
-                    save_dir,
-                    commit_sha_02,
-                    rfolder,
-                    job_id,
-                    "ref_prog_state.hdf5",
-                ),
-            )
-            @test isfile(
-                joinpath(
-                    save_dir,
-                    commit_sha_03,
-                    rfolder,
-                    job_id,
-                    "ref_prog_state.hdf5",
-                ),
-            )
-            @test isfile(
-                joinpath(
-                    save_dir,
-                    commit_sha_04,
-                    rfolder,
-                    job_id,
-                    "ref_prog_state.hdf5",
-                ),
-            )
-            @test isfile(
-                joinpath(
-                    save_dir,
-                    commit_sha_05,
-                    rfolder,
-                    job_id,
-                    "ref_prog_state.hdf5",
-                ),
-            )
-        end
-    end
-
-    @testset "Reproducibility infrastructure: export_reproducibility_results, legacy folder structure" begin
-        mktempdir2_cd_computed() do (save_dir, computed_dir)
-            grid = ExtrudedCubedSphereGrid(;
-                z_elem = 5,
-                z_min = 0,
-                z_max = 1,
-                radius = 10,
-                h_elem = 5,
-                n_quad_points = 2,
-            )
-            space =
-                Spaces.ExtrudedFiniteDifferenceSpace(grid, Grids.CellCenter())
-            comms_ctx = ClimaComms.context(space)
-
-            # Folder structure:
-            job_id = "unit_test_export_reproducibility_results"
-            rfolder = "rbundle"
-            output = "output_active"
-            repro_dir = joinpath(computed_dir, job_id, output, rfolder)
-            mkpath(repro_dir)
-
-            fv = Fields.FieldVector(; x = ones(space), y = ones(space))
-
-            # Test skipped case
-            (data_file_computed, computed_mses, dirs, how) =
-                export_reproducibility_results(
-                    fv,
-                    comms_ctx;
-                    job_id,
-                    save_dir = save_dir,
-                    computed_dir = computed_dir,
-                    name = "Y",
-                    n = 10,
-                    ref_counter_PR = 1,
-                    skip = true,
-                )
-            @test how == :skipped
-            @test isempty(dirs)
-
-            # Test no comparable dirs
-            (data_file_computed, computed_mses, dirs, how) =
-                export_reproducibility_results(
-                    fv,
-                    comms_ctx;
-                    job_id,
-                    save_dir = save_dir,
-                    computed_dir = computed_dir,
-                    name = "Y",
-                    n = 10,
-                    ref_counter_PR = 1,
-                    skip = false,
-                )
-            @test how == :no_comparable_dirs
-            @test isempty(dirs)
-
-            # Successful comparisons, legacy path configuration
-            commit_sha_01 = "commit_hash_01"
-            commit_sha_02 = "commit_hash_02"
-            commit_sha_03 = "commit_hash_03"
-            commit_sha_04 = "commit_hash_04"
-            commit_sha_05 = "commit_hash_05"
-            d01 = make_ref_file_counter(1, save_dir, commit_sha_01)
-            d02 = make_ref_file_counter(2, save_dir, commit_sha_02)
-            d03 = make_ref_file_counter(3, save_dir, commit_sha_03)
-            d04 = make_ref_file_counter(3, save_dir, commit_sha_04)
-            d05 = make_ref_file_counter(3, save_dir, commit_sha_05)
-
-            put_data_file(
-                joinpath(d01, job_id),
-                fv,
-                comms_ctx;
-                filename = "ref_prog_state.hdf5",
-            )
-            put_data_file(
-                joinpath(d02, job_id),
-                fv,
-                comms_ctx;
-                filename = "ref_prog_state.hdf5",
-            )
-            put_data_file(
-                joinpath(d03, job_id),
-                fv,
-                comms_ctx;
-                filename = "ref_prog_state.hdf5",
-            )
-            put_data_file(
-                joinpath(d04, job_id),
-                fv,
-                comms_ctx;
-                filename = "ref_prog_state.hdf5",
-            )
-            fv.x .= 200
-            fv.y .= 300
-            put_data_file(
-                joinpath(d05, job_id),
-                fv,
-                comms_ctx;
-                filename = "ref_prog_state.hdf5",
-            )
-
-            @test isfile(joinpath(d01, job_id, "ref_prog_state.hdf5"))
-            @test isfile(joinpath(d02, job_id, "ref_prog_state.hdf5"))
-            @test isfile(joinpath(d03, job_id, "ref_prog_state.hdf5"))
-            @test isfile(joinpath(d04, job_id, "ref_prog_state.hdf5"))
-            @test isfile(joinpath(d05, job_id, "ref_prog_state.hdf5"))
-            @test isfile(joinpath(d01, "ref_counter.jl"))
-            @test isfile(joinpath(d02, "ref_counter.jl"))
-            @test isfile(joinpath(d03, "ref_counter.jl"))
-            @test isfile(joinpath(d04, "ref_counter.jl"))
-            @test isfile(joinpath(d05, "ref_counter.jl"))
-
-            (data_file_computed, computed_mses, dirs, how) =
-                export_reproducibility_results(
-                    fv,
-                    comms_ctx;
-                    job_id,
-                    save_dir = save_dir,
-                    computed_dir = computed_dir,
-                    name = "Y",
-                    reference_filename = "ref_prog_state.hdf5",
-                    computed_filename = "computed_prog_state.hdf5",
-                    n = 10,
-                    ref_counter_PR = 3,
-                    skip = false,
-                )
-            @test how == :successful_comparison
-            @test dirs == [d05, d04, d03]
-        end
-    end
-
-    @testset "Reproducibility infrastructure: export_reproducibility_results" begin
-        mktempdir2_cd_computed() do (save_dir, computed_dir)
-            grid = ExtrudedCubedSphereGrid(;
-                z_elem = 5,
-                z_min = 0,
-                z_max = 1,
-                radius = 10,
-                h_elem = 5,
-                n_quad_points = 2,
-            )
-            space =
-                Spaces.ExtrudedFiniteDifferenceSpace(grid, Grids.CellCenter())
-            comms_ctx = ClimaComms.context(space)
-
-            # Folder structure:
-            job_id = "unit_test_export_reproducibility_results"
-            rfolder = "rbundle"
-            output = "output_active"
-            repro_dir = joinpath(computed_dir, job_id, output, rfolder)
-            mkpath(repro_dir)
-
-            fv = Fields.FieldVector(; x = ones(space), y = ones(space))
-
-            # Test skipped case
-            (data_file_computed, computed_mses, dirs, how) =
-                export_reproducibility_results(
-                    fv,
-                    comms_ctx;
-                    job_id,
-                    save_dir = save_dir,
-                    computed_dir = computed_dir,
-                    reference_filename = "ref_prog_state.hdf5",
-                    computed_filename = "computed_prog_state.hdf5",
-                    name = "Y",
-                    n = 10,
-                    ref_counter_PR = 1,
-                    skip = true,
-                    repro_folder = rfolder,
-                )
-            @test how == :skipped
-            @test isempty(dirs)
-
-            # Test no comparable dirs
-            (data_file_computed, computed_mses, dirs, how) =
-                export_reproducibility_results(
-                    fv,
-                    comms_ctx;
-                    job_id,
-                    save_dir = save_dir,
-                    computed_dir = computed_dir,
-                    reference_filename = "ref_prog_state.hdf5",
-                    computed_filename = "computed_prog_state.hdf5",
-                    name = "Y",
-                    n = 10,
-                    ref_counter_PR = 1,
-                    skip = false,
-                    repro_folder = rfolder,
-                )
-            @test how == :no_comparable_dirs
-            @test isempty(dirs)
-
-            # Successful comparisons, legacy path configuration (no repro folder)
-            commit_sha_01 = "sha_01"
-            commit_sha_02 = "sha_02"
-            commit_sha_03 = "sha_03"
-            commit_sha_04 = "sha_04"
-            commit_sha_05 = "sha_05"
-            d01 = make_ref_file_counter(1, save_dir, commit_sha_01)
-            d02 = make_ref_file_counter(2, save_dir, commit_sha_02)
-            d03 = make_ref_file_counter(3, save_dir, commit_sha_03)
-            d04 = make_ref_file_counter(3, save_dir, commit_sha_04)
-            d05 = make_ref_file_counter(3, save_dir, commit_sha_05)
-
-            put_data_file(
-                joinpath(d01, job_id),
-                fv,
-                comms_ctx;
-                filename = "ref_prog_state.hdf5",
-            )
-            put_data_file(
-                joinpath(d02, job_id),
-                fv,
-                comms_ctx;
-                filename = "ref_prog_state.hdf5",
-            )
-            put_data_file(
-                joinpath(d03, job_id),
-                fv,
-                comms_ctx;
-                filename = "ref_prog_state.hdf5",
-            )
-            put_data_file(
-                joinpath(d04, job_id),
-                fv,
-                comms_ctx;
-                filename = "ref_prog_state.hdf5",
-            )
-            fv.x .= 200
-            fv.y .= 300
-            put_data_file(
-                joinpath(d05, job_id),
-                fv,
-                comms_ctx;
-                filename = "ref_prog_state.hdf5",
-            )
-
-            @test isfile(joinpath(d01, job_id, "ref_prog_state.hdf5"))
-            @test isfile(joinpath(d02, job_id, "ref_prog_state.hdf5"))
-            @test isfile(joinpath(d03, job_id, "ref_prog_state.hdf5"))
-            @test isfile(joinpath(d04, job_id, "ref_prog_state.hdf5"))
-            @test isfile(joinpath(d05, job_id, "ref_prog_state.hdf5"))
-            @test isfile(joinpath(d01, "ref_counter.jl"))
-            @test isfile(joinpath(d02, "ref_counter.jl"))
-            @test isfile(joinpath(d03, "ref_counter.jl"))
-            @test isfile(joinpath(d04, "ref_counter.jl"))
-            @test isfile(joinpath(d05, "ref_counter.jl"))
-
-            (data_file_computed, computed_mses, dirs, how) =
-                export_reproducibility_results(
-                    fv,
-                    comms_ctx;
-                    job_id,
-                    save_dir = save_dir,
-                    computed_dir = computed_dir,
-                    name = "Y",
-                    reference_filename = "ref_prog_state.hdf5",
-                    computed_filename = "computed_prog_state.hdf5",
-                    n = 10,
-                    ref_counter_PR = 3,
-                    skip = false,
-                    repro_folder = rfolder,
-                )
-            @test how == :successful_comparison
-            @test dirs == [d05, d04, d03]
-            repro_dir = joinpath(computed_dir, rfolder)
-            @test isfile(joinpath(repro_dir, "computed_prog_state.hdf5"))
-            @test isfile(joinpath(repro_dir, "computed_rms_$commit_sha_05.dat"))
-            @test isfile(joinpath(repro_dir, "computed_rms_$commit_sha_04.dat"))
-            @test isfile(joinpath(repro_dir, "computed_rms_$commit_sha_03.dat"))
-        end
+        @test how == :successful_comparison
+        @test dirs == [d05, d04, d03]
+        repro_dir = joinpath(computed_dir, rfolder)
+        @test isfile(joinpath(repro_dir, "computed_prog_state.hdf5"))
+        @test isfile(joinpath(repro_dir, "computed_rms_$commit_sha_05.dat"))
+        @test isfile(joinpath(repro_dir, "computed_rms_$commit_sha_04.dat"))
+        @test isfile(joinpath(repro_dir, "computed_rms_$commit_sha_03.dat"))
     end
 end

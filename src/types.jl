@@ -6,6 +6,7 @@ import Dates
 import ClimaParams as CP
 import ClimaUtilities.ClimaArtifacts: @clima_artifact
 import LazyArtifacts
+import CloudMicrophysics.Parameters as CMP
 
 """
     AbstractMicrophysicsModel
@@ -48,7 +49,11 @@ Selected by `microphysics_model: "0M"`. Requires `use_sgs_quadrature: true`.
 struct EquilibriumMicrophysics0M <: AbstractMicrophysicsModel end
 
 """
-    NonEquilibriumMicrophysics1M(; n_substeps = 1, n_substeps_quad = 1)
+    NonEquilibriumMicrophysics1M(;
+        n_substeps = 3,
+        n_substeps_quad = 2,
+        process_options...,
+    )
 
 Non-equilibrium 1-moment microphysics with prognostic cloud and precipitation mass.
 
@@ -59,24 +64,74 @@ The substep counts are handed to CloudMicrophysics' averaged tendency
 evaluation, which subdivides the dynamics step into substeps and returns the
 time-averaged rates; this keeps the explicit sources stable at large `dt`.
 
+`process_options` selects the variant used for each individual process; they are
+collected into a `CMP.Microphysics1MOptions`, which documents the full list of
+processes and their available variants. Passing `nothing` for a process disables
+it.
+
+Any process that is not passed keeps its default, so
+`NonEquilibriumMicrophysics1M()` turns every process on with these variants:
+
+| Process                         | Default variant                 |
+|:------------------------------- |:------------------------------- |
+| `cloud_liquid_formation`        | `CloudLiquidFormation()`        |
+| `cloud_ice_formation`           | `PrescribedIceNumber()`         |
+| `cloud_ice_melt`                | `CloudIceMelt()`                |
+| `cloud_liquid_freezing`         | `HomogeneousAndHeterogeneous()` |
+| `rain_autoconversion`           | `Kessler1M()`                   |
+| `snow_autoconversion`           | `NoSupersaturation()`           |
+| `rain_condensation_evaporation` | `RainEvaporation()`             |
+| `snow_deposition_sublimation`   | `DepositionAndSublimation()`    |
+| `snow_melt`                     | `SnowMelt()`                    |
+| `cloud_liquid_rain_accretion`   | `CloudLiquidRainAccretion()`    |
+| `cloud_liquid_snow_accretion`   | `CloudLiquidSnowAccretion()`    |
+| `cloud_ice_rain_accretion`      | `CloudIceRainAccretion()`       |
+| `cloud_ice_snow_accretion`      | `CloudIceSnowAccretion()`       |
+| `rain_snow_accretion`           | `RainSnowAccretion()`           |
+
+These match the defaults of the corresponding config keys, so a model built here
+and one built from an unmodified configuration file agree (see
+`get_microphysics_1m_options`). `cloud_ice_formation` and `cloud_liquid_freezing`
+override the `CMP.Microphysics1MOptions` defaults.
+
 # Fields
 
   - `n_substeps`: Number of substeps used when the tendencies are evaluated at
     grid-mean conditions (no SGS quadrature) [-].
   - `n_substeps_quad`: Number of substeps used when the tendencies are integrated
     over the SGS quadrature [-].
+  - `processes`: Per-process variant selection, a `CMP.Microphysics1MOptions`.
 
 # Examples
 
 ```julia
-model = ClimaAtmos.NonEquilibriumMicrophysics1M(; n_substeps = 3, n_substeps_quad = 2)
+import ClimaAtmos as CA
+import CloudMicrophysics.Parameters as CMP
+
+model = CA.NonEquilibriumMicrophysics1M(;
+    n_substeps = 1,
+    rain_autoconversion = CMP.PrescribedNd(),
+    cloud_ice_formation = CMP.ConstantTimescale(),
+    rain_snow_accretion = nothing,  # process off
+)
 ```
 """
-struct NonEquilibriumMicrophysics1M <: AbstractMicrophysicsModel
+struct NonEquilibriumMicrophysics1M{OPT} <: AbstractMicrophysicsModel
     n_substeps::Int  # number of microphysics substeps
     n_substeps_quad::Int  # number of microphysics substeps with sgs quadrature
-    function NonEquilibriumMicrophysics1M(; n_substeps = 1, n_substeps_quad = 1)
-        return new(n_substeps, n_substeps_quad)
+    processes::OPT  # per-process variant selection (CMP.Microphysics1MOptions)
+    function NonEquilibriumMicrophysics1M(;
+        n_substeps = 3,
+        n_substeps_quad = 2,
+        process_options...,
+    )
+        # `cloud_ice_formation` overrides the CloudMicrophysics default
+        # (`ConstantTimescale`) so that these defaults match `default_config.yml`
+        processes = CMP.Microphysics1MOptions(;
+            cloud_ice_formation = CMP.PrescribedIceNumber(),
+            process_options...,
+        )
+        return new{typeof(processes)}(n_substeps, n_substeps_quad, processes)
     end
 end
 
@@ -158,6 +213,7 @@ Build the method selected by `method`.
 # Arguments
 
   - `method`: One of
+
       + `"elementwise_constraint"` → `TracerNonnegativityElementConstraint{include_qtot}()`,
       + `"vapor_constraint"` → `TracerNonnegativityVaporConstraint{include_qtot}()`,
       + `"vapor_tendency"` → `TracerNonnegativityVaporTendency()`,
@@ -346,8 +402,6 @@ Subtypes:
   - `TimeVaryingInsolation`: orbital insolation evaluated at the current date
     (`"timevarying"`).
   - `RCEMIPIIInsolation`: the fixed RCEMIP-II values (`"rcemipii"`).
-  - `GCMDrivenInsolation`: values read from the GCM-driven external forcing
-    (`"gcmdriven"`).
   - `ExternalTVInsolation`: time-varying values read from a column forcing file
     (`"externaldriventv"`).
   - `Larcform1Insolation`: polar night, i.e. no incoming solar flux (`"larcform1"`).
@@ -372,14 +426,6 @@ Uniform, time-invariant insolation prescribed by the RCEMIP-II protocol
 42.05°.
 """
 struct RCEMIPIIInsolation <: AbstractInsolation end
-
-"""
-    GCMDrivenInsolation
-
-Take the cosine of the zenith angle and the TOA flux from the GCM-driven
-external forcing (`p.external_forcing.cos_zenith` and `.toa_flux`).
-"""
-struct GCMDrivenInsolation <: AbstractInsolation end
 
 """
     ExternalTVInsolation
@@ -1106,7 +1152,7 @@ end
 Prescribed large-scale forcing imposed on a column or limited-area domain.
 
 `LargeScaleSubsidence` is currently the only subtype; the other forcing objects
-in this file (`LargeScaleAdvection`, `GCMForcing`, `ExternalDrivenTVForcing`,
+in this file (`LargeScaleAdvection`, `ExternalDrivenTVForcing`,
 `ISDACForcing`, `HeldSuarezForcing`) are dispatched on directly and are not
 part of this hierarchy.
 """
@@ -1162,32 +1208,12 @@ struct LargeScaleAdvection{PT, PQ}
     prof_dTdt::PT # Set large-scale cooling
     prof_dqtdt::PQ # Set large-scale drying
 end
-# maybe need to <: AbstractForcing
-"""
-    GCMForcing{FT}(external_forcing_file, cfsite_number)
-
-Forcing and nudging profiles extracted from a GCM simulation at a single
-CFMIP (cfSite) location.
-
-`FT` is the float type of the fields built from the file. Selected by
-`external_forcing: "GCM"`, which reads `external_forcing_file` and
-`cfsite_number` from the config.
-
-# Fields
-
-  - `external_forcing_file`: Path to the NetCDF file holding the GCM profiles.
-  - `cfsite_number`: Identifier of the cfSite column within that file, e.g. `"07"`.
-"""
-struct GCMForcing{FT}
-    external_forcing_file::String
-    cfsite_number::String
-end
-
 """
     ExternalDrivenTVForcing{CD, F, M}
 
-Generic time-varying forcing read from a column forcing file through the
-`ColumnDatasets` interface (the native ClimaColumn schema). Its `forcing`
+Generic time-varying forcing read from column forcing data through the
+`ColumnDatasets` interface (an on-disk ClimaColumn file or an in-memory
+source). Its `forcing`
 is a tuple of composed [`AbstractForcingTerm`](@ref)s (horizontal advection,
 vertical fluctuation, nudging, subsidence). Only data required by the composed
 terms is loaded, and missing data for a composed term is a loud error.
@@ -1218,17 +1244,19 @@ arguments. `forcing` defaults to `default_forcing_terms()` and
 `time_interpolation_method` to the dataset format's own method. Runscripts
 typically call `ExternalDrivenTVForcing(path; forcing = (...,))`.
 """
-struct ExternalDrivenTVForcing{CD <: ColumnDatasets.ColumnDataset, F <: Tuple, M}
+struct ExternalDrivenTVForcing{
+    CD <: ColumnDatasets.AbstractColumnData,
+    F <: Tuple,
+    M,
+}
     dataset::CD
     forcing::F
     time_interpolation_method::M
 end
 function ExternalDrivenTVForcing(
-    dataset::ColumnDatasets.ColumnDataset;
+    dataset::ColumnDatasets.AbstractColumnData;
     forcing = default_forcing_terms(),
-    time_interpolation_method = ColumnDatasets.time_interpolation_method(
-        dataset.format,
-    ),
+    time_interpolation_method = ColumnDatasets.time_interpolation_method(dataset),
 )
     forcing = Tuple(forcing)
     validate_forcing_terms(forcing)
@@ -1985,15 +2013,18 @@ accepts plain `Bool`s.
 """
 struct EDMFXModel{
     EEM, EDM,
-    ESMF <: ValTF, ESDF <: ValTF, ENP <: ValTF, EVD <: ValTF, EF <: ValTF,
+    ESMF <: ValTF, ESDF <: ValTF, ESDFH <: ValTF, ENP <: ValTF, EVD <: ValTF,
+    EHD <: ValTF, EF <: ValTF,
     SBM <: AbstractScaleBlendingMethod,
 }
     entr_model::EEM
     detr_model::EDM
     sgs_mass_flux::ESMF
     sgs_diffusive_flux::ESDF
+    sgs_diffusive_flux_horizontal::ESDFH
     nh_pressure::ENP
     vertical_diffusion::EVD
+    horizontal_diffusion::EHD
     filter::EF
     scale_blending_method::SBM
 end
@@ -2039,8 +2070,10 @@ function EDMFXModel(;
     detr_model = nothing,
     sgs_mass_flux::Union{Bool, ValTF} = false,
     sgs_diffusive_flux::Union{Bool, ValTF} = false,
+    sgs_diffusive_flux_horizontal::Union{Bool, ValTF} = false,
     nh_pressure::Union{Bool, ValTF} = false,
     vertical_diffusion::Union{Bool, ValTF} = false,
+    horizontal_diffusion::Union{Bool, ValTF} = false,
     filter::Union{Bool, ValTF} = false,
     scale_blending_method,
     kwargs...,
@@ -2053,8 +2086,10 @@ function EDMFXModel(;
         detr_model,
         parse_val_tf(sgs_mass_flux),
         parse_val_tf(sgs_diffusive_flux),
+        parse_val_tf(sgs_diffusive_flux_horizontal),
         parse_val_tf(nh_pressure),
         parse_val_tf(vertical_diffusion),
+        parse_val_tf(horizontal_diffusion),
         parse_val_tf(filter),
         scale_blending_method,
     )
@@ -2076,8 +2111,8 @@ usually supplied by a `Setups` case rather than set by hand.
 # Fields
 
   - `subsidence`: `nothing`, or a `LargeScaleSubsidence`.
-  - `external_forcing`: `nothing`, or a forcing object (`GCMForcing`,
-    `ExternalDrivenTVForcing`, `ISDACForcing`).
+  - `external_forcing`: `nothing`, or a forcing object
+    (`ExternalDrivenTVForcing`, `ISDACForcing`).
   - `ls_adv`: `nothing`, or a `LargeScaleAdvection`.
   - `advection_test`: Whether to run in pure tracer-advection test mode, in which
     the dynamics are frozen.
@@ -2652,11 +2687,14 @@ disables COSP entirely and leaves the model's `cosp` field as `nothing`.
   - `random_seed`: Seed for the SCOPS overlap selectors, fixed so that the
     subcolumns are reproducible across calls.
 """
-@kwdef struct COSPModel{N}
-    n_subcolumns::Val{N} = Val(256)
-    overlap::Symbol = :maximum_random
+@kwdef struct COSPModel{N, O}
+    n_subcolumns::Val{N} = Val(100)
+    overlap::Val{O} = Val(:maximum_random)
     random_seed::UInt64 = UInt64(1)
 end
+
+@inline _cosp_nsubcolumns(::Val{N}) where {N} = N
+@inline _cosp_overlap(::Val{O}) where {O} = O
 
 # Add broadcastable for the new grouped types
 Base.broadcastable(x::SCMSetup) = tuple(x)
@@ -2920,7 +2958,7 @@ The default AtmosModel provides:
 Internal testing and calibration components for single-column setups:
 
   - `subsidence`: nothing or Bomex_subsidence, Rico_subsidence, DYCOMS_subsidence, etc
-  - `external_forcing`: nothing or external forcing objects (GCMForcing, ExternalDrivenTVForcing, ISDACForcing)
+  - `external_forcing`: nothing or external forcing objects (ExternalDrivenTVForcing, ISDACForcing)
   - `ls_adv`: nothing or LargeScaleAdvection()
   - `advection_test`: Bool
   - `scm_coriolis`: nothing or NamedTuple `(; prof_ug, prof_vg, coriolis_param)`

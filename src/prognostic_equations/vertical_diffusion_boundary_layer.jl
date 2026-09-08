@@ -44,7 +44,7 @@ Increments:
   - Passive (non-microphysics) grid-mean tracers: divergence of
     `F_χ = -ρ K_h ∇ᵥχ`, diffused independently with the full `K_h`.
 
-Reads the precomputed `ᶜu`, `ᶜp`, `ᶜT`, `ᶜq_liq`, `ᶜq_ice`, `ᶜq_tot_nonneg`, the
+Reads the precomputed `ᶜu`, `ᶜp`, `ᶜT`, the
 geopotential `ᶜΦ` from `p.core`, and scratch space; `t` is unused. Called from
 `additional_tendency!` when `p.atmos.diff_mode == Explicit()`, and from
 `implicit_tendency!` otherwise. Returns `nothing`.
@@ -71,7 +71,7 @@ function vertical_diffusion_boundary_layer_tendency!(
     ϵ_FT = eps(FT)
     (; vertical_diffusion) = p.atmos
     thermo_params = CAP.thermodynamics_params(p.params)
-    (; ᶜu, ᶜp, ᶜT, ᶜq_liq, ᶜq_ice, ᶜq_tot_nonneg) = p.precomputed
+    (; ᶜu, ᶜp, ᶜT) = p.precomputed
     ᶜK_h = p.scratch.ᶜtemp_scalar
     if vertical_diffusion isa DecayWithHeightDiffusion
         ᶜK_h .= ᶜcompute_eddy_diffusivity_coefficient(Y.c.ρ, vertical_diffusion)
@@ -108,34 +108,23 @@ function vertical_diffusion_boundary_layer_tendency!(
     # do not diffuse. Enthalpy water contribution uses h_eff-weighted
     # single-gradient form.
     if !(p.atmos.microphysics_model isa DryModel)
-        ᶜq_tot_eff =
-            p.atmos.microphysics_model isa
-            Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M} ?
-            (@. lazy(specific(Y.c.ρq_tot - Y.c.ρq_rai - Y.c.ρq_sno, Y.c.ρ))) :
-            (@. lazy(specific(Y.c.ρq_tot, Y.c.ρ)))
+        ᶜq_tot_eff = ᶜdiffusing_water(Y, p)
         ᶜρq_tot_diff = p.scratch.ᶜtemp_scalar_2
         @. ᶜρq_tot_diff = ᶜdiffdivᵥ(-(ᶠρK * ᶠgradᵥ(ᶜq_tot_eff)))
         @. Yₜ.c.ρq_tot -= ᶜρq_tot_diff
         @. Yₜ.c.ρ -= ᶜρq_tot_diff
 
         # Water enthalpy contribution: -ρK·(h_eff+Φ)·∇q_tot_eff.
-        ᶜq_vap = @. lazy(TD.vapor_specific_humidity(ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice))
-        ᶜq_lcl, ᶜq_icl =
-            p.atmos.microphysics_model isa
-            Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M} ?
-            (
-                (@. lazy(specific(Y.c.ρq_lcl, Y.c.ρ))),
-                (@. lazy(specific(Y.c.ρq_icl, Y.c.ρ))),
-            ) :
-            (ᶜq_liq, ᶜq_ice)
-        ᶜh_eff_plus_Φ = p.scratch.ᶜtemp_scalar_3
-        @. ᶜh_eff_plus_Φ =
-            (
-                TD.enthalpy_vapor(thermo_params, ᶜT) * max(FT(0), ᶜq_vap) +
-                TD.enthalpy_liquid(thermo_params, ᶜT) * max(FT(0), ᶜq_lcl) +
-                TD.enthalpy_ice(thermo_params, ᶜT) * max(FT(0), ᶜq_icl)
-            ) /
-            max(max(FT(0), ᶜq_vap) + max(FT(0), ᶜq_lcl) + max(FT(0), ᶜq_icl), ϵ_FT) + ᶜΦ
+        ᶜq_vap, ᶜq_lcl, ᶜq_icl = ᶜsuspended_water(Y, p)
+        ᶜh_eff_plus_Φ = ᶜh_eff_plus_Φ!(
+            p.scratch.ᶜtemp_scalar_3,
+            thermo_params,
+            ᶜT,
+            ᶜΦ,
+            ᶜq_vap,
+            ᶜq_lcl,
+            ᶜq_icl,
+        )
         @. Yₜ.c.ρe_tot -=
             ᶜdiffdivᵥ(-(ᶠρK * ᶠinterp(ᶜh_eff_plus_Φ) * ᶠgradᵥ(ᶜq_tot_eff)))
 

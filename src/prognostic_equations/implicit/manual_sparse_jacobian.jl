@@ -940,7 +940,7 @@ function update_sedimentation_jacobian!(matrix, Y, p, dtγ)
         ᶜwₚ = MatrixFields.get_field(p.precomputed, wₚ_name)
         # TODO: come up with read-able names for the intermediate computations...
         @. p.scratch.ᶠband_matrix_wvec =
-            ᶠright_bias_matrix() ⋅
+            ᶠtop_bias_matrix() ⋅
             DiagonalMatrixRow(ClimaCore.Geometry.WVector(-(ᶜwₚ) / ᶜρ))
         @. ∂ᶜρχₚ_err_∂ᶜρχₚ =
             p.scratch.ᶜbidiagonal_adjoint_matrix_c3 ⋅
@@ -1030,11 +1030,11 @@ function update_water_tag_sedimentation_block!(matrix, Y, p, tag)
             sedimentation_velocity_name(ρqₚ_name),
         )
         ᶜρqₚ = MatrixFields.get_field(Y.c, ρqₚ_name)
-        # ∂/∂ρq_tag of -precipdivᵥ(ᶠρ ᶠright_bias(WVector(-wₚ) qₚ φ̂)), i.e. the
+        # ∂/∂ρq_tag of -precipdivᵥ(ᶠρ ᶠtop_bias(WVector(-wₚ) qₚ φ̂)), i.e. the
         # parent flux with qₚ φ̂ replaced by qₚ ∂φ̂/∂ρq_tag.
         ᶜdshare = water_tag_sediment_dshare_field(Y, p, tag)
         @. p.scratch.ᶠband_matrix_wvec =
-            ᶠright_bias_matrix() ⋅ DiagonalMatrixRow(
+            ᶠtop_bias_matrix() ⋅ DiagonalMatrixRow(
                 ClimaCore.Geometry.WVector(
                     -(ᶜwₚ) * specific(ᶜρqₚ, Y.c.ρ) * ᶜdshare,
                 ),
@@ -1227,26 +1227,20 @@ function update_diffusion_jacobian!(
         ∂ᶜρq_tot_err_∂ᶜρq_tot = matrix[@name(c.ρq_tot), @name(c.ρq_tot)]
         # ∂F/∂q_tot: T changes at fixed e_tot (through cv_m and e_int_v0),
         # and the q_tot_eff-gradient term carries h_tot,eff = h_eff + Φ.
-        # Materialize h_eff (clipped-input form matching the tendency) to
-        # avoid deep lazy nesting inside DiagonalMatrixRow.
-        ᶜq_vap = @. lazy(TD.vapor_specific_humidity(ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice))
-        ᶜq_lcl, ᶜq_icl =
-            p.atmos.microphysics_model isa
-            Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M} ?
-            ((@. lazy(specific(Y.c.ρq_lcl, ᶜρ))), (@. lazy(specific(Y.c.ρq_icl, ᶜρ)))) :
-            (ᶜq_liq, ᶜq_ice)
-        ᶜh_eff = p.scratch.ᶜtemp_scalar_4
-        @. ᶜh_eff =
-            (
-                TD.enthalpy_vapor(thermo_params, ᶜT) * max(FT(0), ᶜq_vap) +
-                TD.enthalpy_liquid(thermo_params, ᶜT) * max(FT(0), ᶜq_lcl) +
-                TD.enthalpy_ice(thermo_params, ᶜT) * max(FT(0), ᶜq_icl)
-            ) /
-            max(max(FT(0), ᶜq_vap) + max(FT(0), ᶜq_lcl) + max(FT(0), ᶜq_icl), eps(FT))
+        ᶜq_vap, ᶜq_lcl, ᶜq_icl = ᶜsuspended_water(Y, p)
+        ᶜh_eff_plus_Φ = ᶜh_eff_plus_Φ!(
+            p.scratch.ᶜtemp_scalar_4,
+            thermo_params,
+            ᶜT,
+            ᶜΦ,
+            ᶜq_vap,
+            ᶜq_lcl,
+            ᶜq_icl,
+        )
         @. ∂ᶜρe_tot_err_∂ᶜρq_tot +=
             dtγ * ᶜdiffusion_h_matrix ⋅ DiagonalMatrixRow(
                 (
-                    ᶜh_eff + ᶜΦ -
+                    ᶜh_eff_plus_Φ -
                     cp_d * (e_int_v0 + Δcv_v * (ᶜT - T_0)) / ᶜcv_m
                 ) / ᶜρ,
             )
@@ -1468,7 +1462,7 @@ function update_sgs_advection_jacobian!(matrix, Y, p, dtγ)
     }
         ᶜa = (@. lazy(draft_area(Y.c.sgsʲs.:(1).ρa, ᶜρʲs.:(1))))
         ᶜ∂a∂z = p.scratch.ᶜtemp_scalar_7
-        @. ᶜ∂a∂z = ᶜprecipdivᵥ(ᶠinterp(ᶜJ) / ᶠJ * ᶠright_bias(Geometry.WVector(ᶜa)))
+        @. ᶜ∂a∂z = ᶜprecipdivᵥ(ᶠinterp(ᶜJ) / ᶠJ * ᶠtop_bias(Geometry.WVector(ᶜa)))
         ᶜinv_ρ̂ = (@. lazy(
             specific(
                 FT(1),
@@ -1505,7 +1499,7 @@ function update_sgs_advection_jacobian!(matrix, Y, p, dtγ)
             #   ∂/∂χʲ of correction = α_lat · ∂a/∂z · ρ¹w¹/(1−a)
             @. ᶠsed_tracer_advection =
                 DiagonalMatrixRow(ᶠinterp(ᶜρʲs.:(1) * ᶜJ) / ᶠJ) ⋅
-                ᶠright_bias_matrix() ⋅
+                ᶠtop_bias_matrix() ⋅
                 DiagonalMatrixRow(-Geometry.WVector(ᶜwʲ))
             @. ᶜtridiagonal_matrix_scalar =
                 dtγ * ifelse(ᶜ∂a∂z < 0,

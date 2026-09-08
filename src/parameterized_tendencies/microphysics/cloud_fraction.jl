@@ -319,6 +319,24 @@ end
     return (s - eval.mu_S)^2
 end
 
+"""
+    SGSExcessEvaluator(tps, ρ, mu_S)
+
+GPU-safe functor returning the centred saturation excess
+`S′ = q_tot_hat − q_sat(T_hat, ρ) − μ_S` at each quadrature point. This is the
+quantity from which the `Microphysics1MEvaluator` reconstructs condensate. It is
+used with `quadrature_point_values` to materialize the sampled S′ distribution for
+the discrete Lagrange-multiplier fit in `_compute_sgs_moments`.
+"""
+struct SGSExcessEvaluator{TPS, FT}
+    tps::TPS
+    ρ::FT
+    mu_S::FT
+end
+
+@inline (eval::SGSExcessEvaluator)(T_hat, q_tot_hat) =
+    q_tot_hat - TD.q_vap_saturation(eval.tps, T_hat, eval.ρ) - eval.mu_S
+
 
 """
     _sgs_saturation_moments(thp, ρ, T_mean, q_tot_mean,
@@ -386,6 +404,15 @@ end
 #
 # where Φ is the standard normal CDF and φ is its PDF.
 #
+# The microphysics, however, uses (*) via the N²-point quadrature
+# rule (not the continuous Gaussian), and the discrete rule represents the
+# kinked integrand max(0, ·) imperfectly (and samples the q ≥ 0 clamp).
+# The analytic inverse of C = z·Φ(z) + φ(z) therefore only *seeds*
+# `λ_lagrange`; the multiplier is then fitted to the discrete constraint
+# Σᵢ wᵢ·max(0, λ + α·S′ᵢ) = q_c  over the same sampled points the
+# microphysics evaluator integrates (see `_fit_discrete_lagrange`),
+# so mass conservation holds exactly under the quadrature measure.
+#
 # For the *cloud fraction* we use an augmented variance with a fixed
 # non-equilibrium floor `σ_S_floor` (defined inside
 # `_compute_cloud_fraction`):
@@ -394,25 +421,24 @@ end
 #
 # which keeps CF well-behaved in the singular limit (q_c, σ_S²) → 0.  CF is
 # always computed by solving the truncated-Gaussian closure with `σ_aug`,
-# i.e. `C_aug = q_c / σ_aug`, `z_aug = _compute_z(C_aug)`, `CF = Φ(z_aug)`.
-# `λ_lagrange` is *not* used to recover CF (the natural shortcut
-# `Φ(λ/σ_aug)` would be inconsistent because `λ` is computed with the
-# equilibrium `σ_S_eff`, not `σ_aug`).  `λ_lagrange` is computed from the
-# raw `σ_S_eff` so the mass-conservation constraint (*) is preserved for
-# the microphysics tendencies.
+# i.e. `C_aug = q_c / σ_aug`, `z_aug = _compute_z(C_aug)`, `CF = Φ(z_aug)`;
+# it is a probability under the continuous Gaussian model. `λ_lagrange` is
+# *not* used to recover CF (the natural shortcut `Φ(λ/σ_aug)` would be
+# inconsistent because `λ` is fitted with the equilibrium `σ_S_eff`, not `σ_aug`).
 #
 # Inverting C = z·Φ(z)+φ(z) for z uses Newton iteration on
 # F(z) = z·Φ(z)+φ(z)−C with F′(z) = Φ(z):
 #
 #     z_{n+1} = (C − φ(z_n)) / Φ(z_n).
 #
-# **Algorithm** (one Newton step with a fitted initial guess):
+# **Algorithm** (two Newton steps with a fitted initial guess):
 # 1. Initial guess:  Φ(z₀) = tanh(1.35·C)  [least-squares fit to exact solution],
 #                    z₀    = Φ⁻¹(Φ(z₀))  via `normal_cdf_inv` (A&S 26.2.22).
 #    The A&S inverse correctly scales as −√(−2 ln Φ(z₀)) in the tail, avoiding
 #    the extreme underestimate of the tanh-based inverse that causes divergence.
-# 2. One Newton step:  z₁ = (C − φ(z₀)) / Φ(z₀).
-# 3. CF = Φ(z₁) via `normal_cdf` (A&S 26.2.17, max error ≈ 7.5×10⁻⁸).
+# 2. Two Newton steps:  z₁ = (C − φ(z₀)) / Φ(z₀), then likewise z₂ from z₁
+#    (skipped where Φ(z₁) ≤ ϵ_numerics; see `_compute_z`).
+# 3. CF = Φ(z₂) via `normal_cdf` (A&S 26.2.17, max error ≈ 7.5×10⁻⁸).
 
 """
     sgs_variance_fidelity(cf_steepness_coeff)
@@ -447,16 +473,23 @@ sgs_variance_fidelity(cf_steepness_coeff::FT) where {FT} = one(FT) / cf_steepnes
     _compute_z(C)
 
 Compute the normalised threshold `z` that satisfies the truncated-Gaussian
-condensate relation `C = z·Φ(z) + φ(z)` via one Newton step seeded with an
+condensate relation `C = z·Φ(z) + φ(z)` via two Newton steps seeded with an
 analytic initial guess.
 
 `C = q_c / σ_eff` is the normalised condensate; the caller is responsible
 for computing it (typically with `σ_eff = α · σ_S` or `σ_eff = σ_aug` for
 the smooth-floored CF formula) so this helper stays free of parameter-
 dependent logic.
+
+Accuracy: the residual `z·Φ(z) + φ(z) − C` after two steps is below 0.7 %
+of `C` for `C ≥ 0.05` and below 4 % for `C ≥ 0.01`; a single step leaves
+7–36 % in that range. Because the relation is convex, each Newton iterate
+overshoots `z` from above, so the (small) remaining error biases `Φ(z)`
+high.
 """
 @inline function _compute_z(C)
     FT = typeof(C)
+    inv_sqrt2π = one(FT) / sqrt(FT(2) * FT(π))
 
     # 1. Initial guess: Φ(z₀) = tanh(1.35 · C).
     Φz0 = tanh(FT(1.35) * C)
@@ -467,9 +500,18 @@ dependent logic.
     # z₀ = Φ⁻¹(Φz0) via A&S 26.2.22
     z0 = normal_cdf_inv(Φz0_safe)
 
-    # 2. One Newton step: z₁ = (C − φ(z₀)) / Φ(z₀)
-    φz0 = exp(-z0 * z0 / 2) / sqrt(FT(2) * FT(π))
-    return (C - φz0) / Φz0_safe
+    # 2. First Newton step: z₁ = (C − φ(z₀)) / Φ(z₀)
+    φz0 = exp(-z0 * z0 / 2) * inv_sqrt2π
+    z1 = (C - φz0) / Φz0_safe
+
+    # 3. Second Newton step. Applied only where Φ(z₁) is above
+    # the ϵ_numerics clamp; below that (z₁ ≲ −7 at Float32) the clamped
+    # denominator corrupts the ratio φ(z₁)/Φ(z₁), and the result is
+    # condensate- and cloud-free to machine precision either way.
+    φz1 = exp(-z1 * z1 / 2) * inv_sqrt2π
+    Φz1 = normal_cdf(z1)
+    z2 = (C - φz1) / max(Φz1, ϵ_numerics(FT))
+    return ifelse(Φz1 > ϵ_numerics(FT), z2, z1)
 end
 
 """
@@ -644,30 +686,95 @@ cloud_fraction_floor_params(params) = CloudFractionFloorParams(;
 )
 
 """
+    _fit_discrete_lagrange(λ0, q_c, α, S′s, ws)
+
+Solve the mass-conservation constraint under the discrete quadrature measure,
+
+    g(λ) = Σᵢ wᵢ · max(0, λ + α·S′ᵢ) = q_c,
+
+for the Lagrange multiplier `λ`, given the sampled centred excesses `S′s` and
+probability weights `ws` (summing to 1). `g` is convex, piecewise linear, and
+nondecreasing, with kinks at `λ = −α·S′ᵢ`; Newton with the exact one-sided
+slope solves the active segment exactly, and, by convexity, subsequent iterates
+lie on the root's side, so the iteration reaches the root within
+`length(S′s) + 2` fixed trips (GPU-safe: no data-dependent loop bound).
+
+`λ0` is the analytic truncated-Gaussian seed (see `_compute_z`); `q_c ≤ 0`
+returns the largest `λ` with `g(λ) = 0`.
+
+Fitting `λ` to the discrete rule rather than the continuous Gaussian makes
+`⟨q_c^local⟩ = q_c` hold exactly for the microphysics evaluator, which
+uses the same quadrature points.
+"""
+@inline function _fit_discrete_lagrange(λ0, q_c, α, S′s, ws)
+    FT = typeof(q_c)
+    λ_max_inactive = -α * maximum(S′s)  # largest λ with g(λ) = 0
+    q_c <= zero(FT) && return λ_max_inactive
+    λ = λ0
+    for _ in 1:(length(S′s) + 2)
+        g = zero(FT)
+        dg = zero(FT)
+        @inbounds for i in eachindex(S′s)
+            r = λ + α * S′s[i]
+            g += ifelse(r > zero(FT), ws[i] * r, zero(FT))
+            dg += ifelse(r > zero(FT), ws[i], zero(FT))
+        end
+        if dg == zero(FT)
+            # Below every kink (g = 0, slope 0): jump into the first active
+            # segment; the point with the largest S′ then has r = q_c > 0.
+            λ = λ_max_inactive + q_c
+        else
+            λ_new = λ + (q_c - g) / dg
+            λ_new == λ && return λ
+            λ = λ_new
+        end
+    end
+    return λ
+end
+
+"""
     _compute_sgs_moments(thp, ρ, T, q_tot, q_c, sgs_quad, T′T′, q′q′, corr_Tq, α)
 
 Single quadrature pass returning `(sigma_S, λ_lagrange)`:
 
-  - `sigma_S    = sqrt(E[(S − μ_S)²])`: SGS standard deviation, clipped at
-    `ϵ_numerics(FT)` (see `_sgs_saturation_moments`).
-  - `λ_lagrange = z·α·σ_S`: Lagrange multiplier satisfying
-    `E[max(0, λ + α·S′)] = q_c`.
+  - `sigma_S = sqrt(Σᵢ wᵢ·S′ᵢ²)`: SGS standard deviation of the sampled
+    centred excess, clipped at `ϵ_numerics(FT)`.
+  - `λ_lagrange`: Lagrange multiplier satisfying the mass-conservation
+    constraint `Σᵢ wᵢ·max(0, λ + α·S′ᵢ) = q_c` exactly under the discrete
+    quadrature measure — the same points and weights the microphysics
+    evaluator integrates over (see `_fit_discrete_lagrange`; the analytic
+    truncated-Gaussian inverse `_compute_z` provides the seed).
 
 The SGS mean `μ_S = q_tot − q_sat(T, ρ)` is analytic under the closure's
-linearization (see `_sgs_saturation_moments`) and is recomputed
-on demand wherever it is needed downstream.
+linearization (see `_sgs_saturation_moments`) and is recomputed on demand
+wherever it is needed downstream.
+
+Without SGS sampling (`nothing`, `GridMeanSGS`), all mass sits at the mean:
+`sigma_S = ϵ_numerics(FT)` and the constraint gives `λ_lagrange = q_c`
+directly, matching the σ_S → 0 limit of the sampled branch.
 """
 @inline function _compute_sgs_moments(
     thp, ρ, T, q_tot, q_c,
     sgs_quad, T′T′, q′q′, corr_Tq, α,
 )
-    moments =
-        _sgs_saturation_moments(thp, ρ, T, q_tot, sgs_quad, T′T′, q′q′, corr_Tq)
-    σ_S_eff = α * moments.sigma_S
-    C = q_c / σ_S_eff
-    z = _compute_z(C)
-    λ_lagrange = z * σ_S_eff
-    return (; moments.sigma_S, λ_lagrange)
+    FT = typeof(ρ)
+    not_quadrature(sgs_quad) &&
+        return (; sigma_S = ϵ_numerics(FT), λ_lagrange = q_c)
+
+    mu_S = q_tot - TD.q_vap_saturation(thp, T, ρ)
+    transform =
+        build_physical_transform(sgs_quad, q_tot, T, q′q′, T′T′, corr_Tq)
+    S′s = quadrature_point_values(
+        SGSExcessEvaluator(thp, ρ, mu_S), transform, sgs_quad,
+    )
+    ws = quadrature_prob_weights(sgs_quad)
+    sigma_S = max(sqrt(sum(ws .* S′s .* S′s)), ϵ_numerics(FT))
+
+    # Analytic truncated-Gaussian seed, then the exact discrete fit.
+    σ_S_eff = α * sigma_S
+    λ0 = _compute_z(q_c / σ_S_eff) * σ_S_eff
+    λ_lagrange = _fit_discrete_lagrange(λ0, q_c, α, S′s, ws)
+    return (; sigma_S, λ_lagrange)
 end
 
 """

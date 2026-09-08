@@ -102,6 +102,7 @@ function overwrite_initial_state!(setup::WeatherModel, Y, thermo_params)
         haskey(ds, "p_3d")
     end
     ᶠp = if use_p3d
+        @info "Using full 3D pressure from file variable `p_3d` (use_full_pressure=true)"
         SpaceVaryingInputs.SpaceVaryingInput(
             file_path, "p_3d", face_space; svi_kwargs...,
         )

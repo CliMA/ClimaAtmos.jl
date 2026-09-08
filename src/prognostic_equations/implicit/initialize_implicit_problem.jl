@@ -155,12 +155,15 @@ function solve_sgs_u₃_implicit_stage_analytic!(Y, p, dtγ)
     α_b = CAP.pressure_normalmode_buoy_coeff1(turbconv_params)
     α_d = CAP.pressure_normalmode_drag_coeff(turbconv_params)
     a_min = CAP.min_area(turbconv_params)
+    a_max = CAP.max_area(turbconv_params)
     scale_height = CAP.R_d(params) * CAP.T_surf_ref(params) / CAP.grav(params)
 
-    # Approximation factor used in w₀ - w ≈ -(ρ / ρa⁰) w (single-updraft case).
-    # For multiple updrafts we approximate ρ / ρa⁰ ≈ 1, which implies w₀ ≈ 0.
-    ᶜρ_over_ρa⁰ = p.scratch.ᶜtemp_scalar
-    @. ᶜρ_over_ρa⁰ = Y.c.ρ / ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model)
+    # Approximation factor used in w₀ - w ≈ -(1 / a⁰) w (single-updraft case).
+    # Guard against unphysical extrapolated areas (ρa is solved analytically
+    # AFTER u₃, so the u₃ solve sees a possibly out-of-range ρa). Clamp
+    # a⁰ ∈ [1−a_max, 1].
+    ᶜa⁰_inv = p.scratch.ᶜtemp_scalar
+    @. ᶜa⁰_inv = FT(1) / clamp(a⁰(Y.c.sgsʲs, ᶜρʲs, turbconv_model), 1 - a_max, FT(1))
 
     ᶠdz = Fields.Δz_field(axes(Y.f))
 
@@ -185,27 +188,32 @@ function solve_sgs_u₃_implicit_stage_analytic!(Y, p, dtγ)
         # of the signed area-bounding rate (see `area_bounding_entr_detr`).
         # `entr_nonvel_rate` is included in the linear sink, with the assumption
         # that the change in b/w is slow.
-        @. ᶠa += ᶠinterp(ᶜentr_vel_scaleʲs.:($$j) * ᶜρ_over_ρa⁰ * ᶜρ_over_ρa⁰) / ᶠdz
+        @. ᶠa += ᶠinterp(ᶜentr_vel_scaleʲs.:($$j) * ᶜa⁰_inv * ᶜa⁰_inv) / ᶠdz
         @. ᶠb +=
             ᶠinterp(
                 (
                     max(FT(0), ᶜarea_bounding_entr_detrʲs.:($$j)) +
                     ᶜentr_nonvel_rateʲs.:($$j) +
                     ᶜturb_entrʲs.:($$j)
-                ) * ᶜρ_over_ρa⁰,
+                ) * ᶜa⁰_inv,
             )
 
         # Implicit NH pressure drag contributes a quadratic sink in w².
         if p.atmos.edmfx_model.nh_pressure isa Val{true}
-            ᶜaʲ = @. lazy(draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j)))
-            ᶜa⁰ = @. lazy(a⁰(Y.c.sgsʲs, ᶜρʲs, turbconv_model))
+            # Clamp a_j ∈ [0, a_max]; reuse the clamped ᶜa⁰ from above.
+            ᶜaʲ = @. lazy(
+                clamp(
+                    draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j)),
+                    FT(0), a_max,
+                ),
+            )
             # Use a scratch scalar here as @lazy results in a large fused kernel
             # that doesn't work on P100 GPUs.
             ᶜdrag_coeff = p.scratch.ᶜtemp_scalar_2
             @. ᶜdrag_coeff =
                 α_d / (2 * scale_height) *
-                (1 / sqrt(max(ᶜaʲ, a_min)) + 1 / sqrt(max(ᶜa⁰, a_min)))
-            @. ᶠa += ᶠinterp(ᶜdrag_coeff * ᶜρ_over_ρa⁰ * ᶜρ_over_ρa⁰) / ᶠdz
+                (1 / sqrt(max(ᶜaʲ, a_min)) + sqrt(ᶜa⁰_inv))
+            @. ᶠa += ᶠinterp(ᶜdrag_coeff * ᶜa⁰_inv) / ᶠdz
         end
 
         # Optional Rayleigh sponge adds extra linear damping near the top.
@@ -348,7 +356,7 @@ function solve_sgs_ρa_implicit_stage_analytic!(Y, p, dtγ)
     #   ᶜmass_flux_factor_bot = α_bot · (1 − implicit_detr_prefactor)
     # where α_face = (ᶠinterp(ρʲ·J)/ᶠJ · ᶠu₃ʲ/Δz_face) / (ρʲ_upwind · Δz).
     # For upward flow the upwind density at the bottom face is ρʲ[i−1], which we
-    # extract via `ᶠleft_bias(ᶜρʲs)`. The mass-flux-divergence component of the
+    # extract via `ᶠbottom_bias(ᶜρʲs)`. The mass-flux-divergence component of the
     # detrainment is folded into `ᶜone_minus_implicit_detr_prefactor` (a
     # multiplicative correction on the implicit advection term), leaving the
     # `(ε − δ)` term to carry only the area-bounding, velocity-scale
@@ -385,7 +393,7 @@ function solve_sgs_ρa_implicit_stage_analytic!(Y, p, dtγ)
         # The recurrence uses `one_minus_prefactor = U · (1 − L · C)`.
         ᶜone_minus_implicit_detr_prefactor = @. lazy(
             ifelse(
-                ᶜdivᵥ(ᶠleft_bias(Y.c.sgsʲs.:($$j).ρa) * Y.f.sgsʲs.:($$j).u₃) < 0,
+                ᶜdivᵥ(ᶠbottom_bias(Y.c.sgsʲs.:($$j).ρa) * Y.f.sgsʲs.:($$j).u₃) < 0,
                 ᶜupper_limiter_factor *
                 (FT(1) - ᶜlower_limiter_factor * detr_massflux_vertdiv_coeff),
                 FT(1),
@@ -418,16 +426,16 @@ function solve_sgs_ρa_implicit_stage_analytic!(Y, p, dtγ)
             max(
                 FT(0.1) / dtγ,
                 1 / dtγ - ᶜexplicit_entr_minus_detr +
-                ᶜone_minus_implicit_detr_prefactor * ᶜright_bias(
+                ᶜone_minus_implicit_detr_prefactor * ᶜtop_bias(
                     ᶠinterp(ᶜρʲs.:($$j) * ᶜJ) / ᶠJ * ᶠw,
                 ) / ᶜρʲs.:($$j) / ᶜdz,
             )
         @. ᶜmass_flux_factor_bot =
-            ᶜone_minus_implicit_detr_prefactor * ᶜleft_bias(
-                ᶠinterp(ᶜρʲs.:($$j) * ᶜJ) / ᶠJ * ᶠw / ᶠleft_bias(ᶜρʲs.:($$j)),
+            ᶜone_minus_implicit_detr_prefactor * ᶜbottom_bias(
+                ᶠinterp(ᶜρʲs.:($$j) * ᶜJ) / ᶠJ * ᶠw / ᶠbottom_bias(ᶜρʲs.:($$j)),
             ) / ᶜdz
         # Cell 1: overwrite α_bot[1] with 0 to bypass the NaN from
-        # `ᶠleft_bias(ᶜρʲ)` reading the undefined ghost cell below
+        # `ᶠbottom_bias(ᶜρʲ)` reading the undefined ghost cell below
         # (physical flux is zero there: u₃ = 0 at the surface).
         ᶜmass_flux_factor_bot_first =
             Fields.field_values(Fields.level(ᶜmass_flux_factor_bot, 1))

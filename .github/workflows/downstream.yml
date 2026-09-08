@@ -33,16 +33,9 @@ jobs:
       - uses: julia-actions/cache@v3
 
       - uses: julia-actions/julia-buildpkg@v1
-      # Pinned, not tracking main. ClimaCoupler's AMIP test now needs the
-      # `wxquest_initial_conditions` artifact, which is declared with no
-      # download block. It resolves only through an Overrides.toml on a cluster
-      # that already holds the data, so a GitHub runner can never fetch it. On
-      # a newer ref this job fails on that data, not on anything in this
-      # repository. See docs/known_issues.md, item 2, for what unpins it.
       - uses: actions/checkout@v7
         with:
           repository: 'CliMA/ClimaCoupler.jl'
-          ref: '3d9c07c3ef911991d0b98b70c52154e448feaa02'
           path: ClimaCoupler.jl
       - run: |
           julia --color=yes --project=ClimaCoupler.jl/experiments/AMIP/ -e 'using Pkg; Pkg.instantiate()'

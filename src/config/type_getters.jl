@@ -16,7 +16,6 @@ function ClimaAtmosParameters(config::AtmosConfig)
     return ClimaAtmosParameters(
         config.toml_dict;
         microphysics_model = get_microphysics_model(pa),
-        microphysics_1m_options = get_microphysics_1m_options(pa),
         has_non_orographic_gw = get(pa, "non_orographic_gravity_wave", false) != false,
         has_orographic_gw =
         !isnothing(get(pa, "orographic_gravity_wave", nothing)),
@@ -78,10 +77,9 @@ function get_atmos(config::AtmosConfig, params; setup_type = nothing)
     @assert !@any_reltype(atmos, (UnionAll, DataType))
 
     @info "AtmosModel: \n$(summary(atmos))"
-    if !isnothing(params.microphysics_1m_params)
-        microphysics_model = atmos.water.microphysics_model
-        options = params.microphysics_1m_params.processes
-        @info "Microphysics settings: $(sprint(summary_microphysics, microphysics_model, options))"
+    microphysics_model = atmos.water.microphysics_model
+    if microphysics_model isa NonEquilibriumMicrophysics1M
+        @info "Microphysics settings: $(sprint(summary_microphysics, microphysics_model))"
     end
     return atmos
 end
@@ -109,18 +107,6 @@ function get_numerics(parsed_args, FT)
 
     energy_q_tot_upwinding = Symbol(parsed_args["energy_q_tot_upwinding"])
     tracer_upwinding = Symbol(parsed_args["tracer_upwinding"])
-
-    # Compat
-    if !(pkgversion(ClimaCore) ≥ v"0.14.22") &&
-       energy_q_tot_upwinding == :vanleer_limiter
-        energy_q_tot_upwinding = :none
-        @warn "energy_q_tot_upwinding=vanleer_limiter is not supported for ClimaCore $(pkgversion(ClimaCore)), please upgrade. Setting energy_q_tot_upwinding to :none"
-    end
-    if !(pkgversion(ClimaCore) ≥ v"0.14.22") &&
-       tracer_upwinding == :vanleer_limiter
-        tracer_upwinding = :none
-        @warn "tracer_upwinding=vanleer_limiter is not supported for ClimaCore $(pkgversion(ClimaCore)), please upgrade. Setting tracer_upwinding to :none"
-    end
 
     edmfx_mse_q_tot_upwinding = Symbol(parsed_args["edmfx_mse_q_tot_upwinding"])
     edmfx_sgsflux_upwinding = Symbol(parsed_args["edmfx_sgsflux_upwinding"])
@@ -185,10 +171,11 @@ values map to same-named types in `Setups`:
     `"DYCOMS_RF02"`, `"TRMM_LBA"`, `"Larcform1"`, `"GABLS"`, `"ISDAC"`, which read
     `prognostic_tke` (and, for ISDAC, `perturb_initstate`).
   - RCEMIP II: `"RCEMIPIIProfile_295"`, `"RCEMIPIIProfile_300"`, `"RCEMIPIIProfile_305"`.
-  - File- and reanalysis-driven: `"GCM"` (`external_forcing_file` plus `cfsite_number`),
+  - File and reanalysis-driven: `"GCM"` (`external_forcing_file` plus `cfsite_number`),
     `"ARMVARANAL"` (an ARM VARANAL file, converted to the ClimaColumn schema),
     `"ForcingFromFile"` (a ClimaColumn file), `"ReanalysisTimeVarying"` (an ERA5 file for
-    the site, generated when missing or stale), `"WeatherModel"`, and `"AMIPFromERA5"`.
+    the site, generated when missing or stale), `"WeatherModel"` (reads
+    `era5_initial_condition_dir` and `era5_ic_full_pressure`), and `"AMIPFromERA5"`.
 
 A value that names an existing file is read as a `Setups.MoistFromFile` initial state.
 Anything else raises an error.
@@ -200,10 +187,16 @@ function get_setup_type(parsed_args, thermo_params)
     elseif ic_name == "Rico"
         return Setups.Rico(; prognostic_tke = parsed_args["prognostic_tke"], thermo_params)
     elseif ic_name == "GCM"
-        return Setups.GCMDriven(
+        # Read the cfsite group into steady in-memory profiles, then drive it
+        # through the generic ForcingFromFile path. Defaults give an interactive
+        # Monin-Obukhov surface with the file's `ts` and the constant insolation
+        # carried in the data (matching the former GCMDrivenInsolation).
+        data = ColumnDatasets.GCMColumnData.read_cfsite(
             parsed_args["external_forcing_file"],
-            parsed_args["cfsite_number"],
+            parsed_args["cfsite_number"];
+            thermo_params,
         )
+        return Setups.ForcingFromFile(data, parsed_args["start_date"])
     elseif ic_name == "ARMVARANAL"
         varanal_file = parsed_args["external_forcing_file"]
         isnothing(varanal_file) && error(
@@ -252,24 +245,8 @@ function get_setup_type(parsed_args, thermo_params)
         )
     elseif ic_name == "ReanalysisTimeVarying"
         FT = eltype(thermo_params)
-        external_forcing_file =
-            get_external_daily_forcing_file_path(parsed_args)
-        if !isfile(external_forcing_file) ||
-           !check_daily_forcing_times(external_forcing_file, parsed_args) ||
-           !ClimaColumnFiles.is_conforming(external_forcing_file)
-            @info "External forcing file $(external_forcing_file) does not exist or does not cover the expected time range. Generating it now."
-            generate_multiday_era5_external_forcing_file(
-                parsed_args,
-                external_forcing_file,
-                FT,
-                input_data_dir = joinpath(
-                    @clima_artifact("era5_hourly_atmos_raw"),
-                    "daily",
-                ),
-            )
-        end
         return Setups.ForcingFromFile(
-            ColumnDatasets.ColumnDataset(external_forcing_file),
+            era5_dataset(parsed_args, FT),
             parsed_args["start_date"],
         )
     elseif ic_name == "ForcingFromFile"
@@ -285,7 +262,8 @@ function get_setup_type(parsed_args, thermo_params)
     elseif ic_name == "WeatherModel"
         return Setups.WeatherModel(
             parsed_args["start_date"],
-            parsed_args["era5_initial_condition_dir"],
+            parsed_args["era5_initial_condition_dir"];
+            use_full_pressure = parsed_args["era5_ic_full_pressure"],
         )
     elseif ic_name == "AMIPFromERA5"
         return Setups.AMIPFromERA5(parsed_args["start_date"])

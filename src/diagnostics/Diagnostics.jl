@@ -47,6 +47,7 @@ import ..NonEquilibriumMicrophysics2M
 import ..NonEquilibriumMicrophysics2MP3
 import ..NonEquilibriumMicrophysics
 import ..MoistMicrophysics
+import ..COSPModel
 
 # radiation
 import ClimaAtmos.RRTMGPInterface as RRTMGPI
@@ -107,6 +108,7 @@ import ..get_physical_w
 import ..compute_gm_mixing_length
 
 import ..horizontal_integral_at_boundary
+import ..horizontal_filter_scale
 import ..ᶜmixing_length
 import ..eddy_diffusivity
 import ..eddy_viscosity

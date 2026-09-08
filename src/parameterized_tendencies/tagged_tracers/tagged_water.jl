@@ -407,16 +407,16 @@ end
 ##### species `s` with terminal velocity `wₛ` and specific content `qₛ`,
 ##### `vertical_advection_of_water_tendency!` adds
 #####
-#####     vtt = -ᶜprecipdivᵥ(ᶠρ * ᶠright_bias(WVector(-wₛ) * qₛ))
+#####     vtt = -ᶜprecipdivᵥ(ᶠρ * ᶠtop_bias(WVector(-wₛ) * qₛ))
 #####
 ##### to `Yₜ.c.ρ` and `Yₜ.c.ρq_tot`. A tag gets the same expression with its
 ##### donor share `φ̂ₖ` placed inside the reconstruction:
 #####
-#####     vttₖ = -ᶜprecipdivᵥ(ᶠρ * ᶠright_bias(WVector(-wₛ) * qₛ * φ̂ₖ))
+#####     vttₖ = -ᶜprecipdivᵥ(ᶠρ * ᶠtop_bias(WVector(-wₛ) * qₛ * φ̂ₖ))
 #####
 ##### That placement buys three things. Closure is exact, because both operators
 ##### are linear, so shares summing to 1 pointwise give `Σₖ vttₖ = vtt` to
-##### roundoff. Provenance is right, because `ᶠright_bias` samples the cell the
+##### roundoff. Provenance is right, because `ᶠtop_bias` samples the cell the
 ##### water falls from. Surface removal comes for free, because `ᶜprecipdivᵥ`
 ##### leaves the bottom face as free outflow.
 #####
@@ -600,7 +600,7 @@ function _sediment_water_tags!(ᶜYₜ, ᶜY, ᶜnorm, ᶜq, ᶜw, ᶠρ, tags::
     if _is_partition_tag(tag)
         @. ᶜρq_tagₜ +=
             -1 * ᶜprecipdivᵥ(
-                ᶠρ * ᶠright_bias(
+                ᶠρ * ᶠtop_bias(
                     Geometry.WVector(-(ᶜw)) *
                     ᶜq *
                     water_tag_sediment_share(ᶜρq_tag, ᶜY.ρq_tot, ᶜnorm),
@@ -609,7 +609,7 @@ function _sediment_water_tags!(ᶜYₜ, ᶜY, ᶜnorm, ᶜq, ᶜw, ᶠρ, tags::
     else
         @. ᶜρq_tagₜ +=
             -1 * ᶜprecipdivᵥ(
-                ᶠρ * ᶠright_bias(
+                ᶠρ * ᶠtop_bias(
                     Geometry.WVector(-(ᶜw)) *
                     ᶜq *
                     water_tag_source_sediment_share(ᶜρq_tag, ᶜY.ρq_tot),
