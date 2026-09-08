@@ -763,6 +763,119 @@ function make_plots(
     make_plots_generic(output_paths, vars, y = 0.0, time = LAST_SNAP)
 end
 
+GabersekSquallLinePlots = Union{
+    Val{:gabersek_squall_line_2p5d_0M},
+    Val{:gabersek_squall_line_2p5d_1M},
+}
+
+"""
+    make_plots(::GabersekSquallLinePlots, output_paths)
+
+Reproduce the storm-evolution figures of the Gaberšek et al. (2012) squall
+line (cf. Tissaoui et al. 2023, Figs. 3-7): x-z panels of the potential
+temperature perturbation (`thetaap`, shaded) with the cloud outline
+(`clw` = 10⁻⁵ kg/kg, orange) and rain contours (`husra`, 1-7 g/kg, 1M only)
+at t ≈ 1500, 3000, 6000, and 9000 s, plus the surface rain accumulation as a
+function of x and the domain-maximum vertical velocity as a function of time.
+"""
+function make_plots(
+    ::GabersekSquallLinePlots,
+    output_paths::Vector{<:AbstractString},
+)
+    simdir = SimDir(output_paths[1])
+    avail = Set(ClimaAnalysis.available_vars(simdir))
+
+    slice_y(var) = haskey(var.dims, "y") ? slice(var; y = 0.0) : var
+    finite_extrema(data) = extrema(filter(isfinite, vec(float.(data))))
+
+    θp = slice_y(get(simdir; short_name = "thetaap"))
+    clw = slice_y(get(simdir; short_name = "clw"))
+    husra = "husra" in avail ? slice_y(get(simdir; short_name = "husra")) : nothing
+    wa = get(simdir; short_name = "wa")
+    pr = slice_y(get(simdir; short_name = "pr"))
+
+    t_avail = ClimaAnalysis.times(θp)
+    snapshot_times =
+        unique(map(t -> t_avail[argmin(abs.(t_avail .- t))], [1500, 3000, 6000, 9000]))
+    x_km = θp.dims["x"] ./ 1000
+    z_km = θp.dims["z"] ./ 1000
+
+    fig = CairoMakie.Figure(; size = (1100, 450 * cld(length(snapshot_times), 2) + 400))
+
+    # Storm evolution: θ' shading + cloud outline + rain contours (paper Figs. 3-6)
+    local hm
+    for (i, t) in enumerate(snapshot_times)
+        row, col = divrem(i - 1, 2) .+ 1
+        ax = CairoMakie.Axis(
+            fig[row + 1, col];
+            title = "t = $(round(Int, t)) s",
+            xlabel = "x [km]",
+            ylabel = "z [km]",
+        )
+        hm = CairoMakie.heatmap!(
+            ax, x_km, z_km, slice(θp; time = t).data;
+            colormap = :balance, colorrange = (-8, 8),
+        )
+        CairoMakie.contour!(
+            ax, x_km, z_km, slice(clw; time = t).data;
+            levels = [1e-5], color = :orange, linewidth = 2.5,
+        )
+        if !isnothing(husra)
+            CairoMakie.contour!(
+                ax, x_km, z_km, slice(husra; time = t).data;
+                levels = 1e-3:1e-3:7e-3, colormap = :winter,
+                colorrange = (1e-3, 7e-3),
+            )
+        end
+    end
+    CairoMakie.Colorbar(
+        fig[1, 1:2], hm;
+        label = "Potential temperature perturbation [K]" *
+                (isnothing(husra) ? "" : "; rain contours 1-7 g/kg"),
+        vertical = false,
+    )
+
+    bottom = cld(length(snapshot_times), 2) + 2
+
+    # Surface rain accumulation vs x (paper bottom sub-panels); pr is the
+    # downward-positive water mass flux [kg m^-2 s^-1] == [mm s^-1] of water
+    ax_acc = CairoMakie.Axis(
+        fig[bottom, 1];
+        xlabel = "x [km]",
+        ylabel = "Rain accumulation [mm]",
+    )
+    t_pr = ClimaAnalysis.times(pr)
+    rate = abs.(pr.data)  # (time, x)
+    acc = zero(rate)
+    for k in 2:length(t_pr)
+        acc[k, :] .=
+            acc[k - 1, :] .+
+            (t_pr[k] - t_pr[k - 1]) .* (rate[k, :] .+ rate[k - 1, :]) ./ 2
+    end
+    for t in snapshot_times
+        k = argmin(abs.(t_pr .- t))
+        CairoMakie.lines!(
+            ax_acc, pr.dims["x"] ./ 1000, acc[k, :];
+            label = "t = $(round(Int, t_pr[k])) s",
+        )
+    end
+    CairoMakie.axislegend(ax_acc; position = :lt)
+
+    # Domain-maximum vertical velocity vs time (paper Fig. 7 reports
+    # 20-30 m/s for Δx ≥ 290 m)
+    ax_w = CairoMakie.Axis(
+        fig[bottom, 2];
+        xlabel = "time [s]",
+        ylabel = "max w [m/s]",
+    )
+    t_w = ClimaAnalysis.times(wa)
+    max_w = [finite_extrema(slice(wa; time = t).data)[2] for t in t_w]
+    CairoMakie.scatterlines!(ax_w, t_w, max_w)
+
+    file_path = joinpath(output_paths[1], "summary.pdf")
+    CairoMakie.save(file_path, fig)
+end
+
 const PeriodicTopographyTest2D = Union{
     Val{:gpu_plane_no_topography_float64_test},
     Val{:gpu_plane_cosine_hills_float64_test},

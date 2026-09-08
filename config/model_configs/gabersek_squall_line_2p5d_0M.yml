@@ -1,6 +1,7 @@
 # Gaberšek et al. (2012) 2.5D squall line, 0-moment microphysics.
 # Saturated-BL sounding + low-level shear + 3 K warm bubble; cloud forms at
 # t ≈ 500 s and precipitation reaches the surface at t ≈ 900 s.
+reference_job_id: "gabersek_squall_line_2p5d_0M"  # for plotting
 initial_condition: "Gabersek2012"
 config: "box"
 microphysics_model: "0M"
