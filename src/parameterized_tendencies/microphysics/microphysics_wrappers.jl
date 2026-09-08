@@ -260,14 +260,15 @@ struct Microphysics1MEvaluator{S, MP, TPS, FT, Args <: Tuple}
 
     # Inner constructor: `cmp` and `thp` are captured as `Val`s so that the
     # parameter structs live in the type domain (type parameters `MP`/`TPS`),
-    # not in the evaluator's fields.
+    # not in the evaluator's fields. They may be passed either as plain structs
+    # or already `Val`-wrapped; both are unwrapped before specialization.
     function Microphysics1MEvaluator(
         scheme::S, mp, tps, ρ::FT,
         q_rai::FT, q_sno::FT,
         λ::FT, λ_lagrange::FT, mu_S::FT, α::FT,
         dt::FT, nsubs::Int, args::Args,
     ) where {S, FT, Args <: Tuple}
-        return new{S, mp, tps, FT, Args}(
+        return new{S, unwrap_value(mp), unwrap_value(tps), FT, Args}(
             scheme, ρ, q_rai, q_sno, λ, λ_lagrange, mu_S, α, dt, nsubs, args,
         )
     end
@@ -414,8 +415,14 @@ end
     # invariant across the quadrature. They default to being computed here from the
     # mean state; a caller evaluating this broadcast over many quadrature points can
     # precompute them once and pass them in to avoid recomputing them per point.
-    λ = TD.liquid_fraction(thp, T, max(zero(ρ), q_lcl), max(zero(ρ), q_icl)),
-    mu_S = q_tot_nonneg - TD.q_vap_saturation(thp, T, ρ),
+    # `cmp`/`thp` may be provided `Val`-wrapped (e.g. `Val(cmp)`) so the parameter
+    # structs are baked into `Microphysics1MEvaluator`'s type parameters. Since
+    # `integrate_over_sgs` results in a function call on the GPU (due to the
+    # @noinline barrier), embedding the constants in the type prevents the
+    # compiler from feeling obliged to copy the whole structs onto the stack
+    # (i.e. local memory).
+    λ = TD.liquid_fraction(unwrap_value(thp), T, max(zero(ρ), q_lcl), max(zero(ρ), q_icl)),
+    mu_S = q_tot_nonneg - TD.q_vap_saturation(unwrap_value(thp), T, ρ),
     args...,
 )
     FT = typeof(ρ)
@@ -433,6 +440,10 @@ end
         evaluator, sgs_quad, q_tot_nonneg, T, q′q′, T′T′, corr_Tq,
     )
 end
+
+# Unwrap `Val`-wrapped arguments
+@inline unwrap_value(::Val{vals}) where {vals} = vals
+@inline unwrap_value(x) = x
 
 ###
 ### 2 Moment Microphysics

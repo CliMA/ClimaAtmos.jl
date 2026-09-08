@@ -940,7 +940,8 @@ function set_microphysics_tendency_cache!(
         corr_Tq = correlation_Tq(p.params)
         α = sgs_variance_fidelity(CAP.cloud_fraction_steepness_scale(p.params))
         @. ᶜmp_tendency = microphysics_tendencies_1m(
-            BMT.Microphysics1Moment(), sgs_quad, cmp, thp, Y.c.ρ, ᶜT,
+            BMT.Microphysics1Moment(), sgs_quad,
+            $(Val(cmp)), $(Val(thp)), Y.c.ρ, ᶜT,
             ᶜq_tot_nonneg, ᶜq_lcl, ᶜq_icl, ᶜq_rai, ᶜq_sno,
             ᶜT′T′, ᶜq′q′, corr_Tq, ᶜsgs_moments.λ_lagrange, α,
             dt, nsubs_quad,
@@ -950,9 +951,6 @@ function set_microphysics_tendency_cache!(
     return nothing
 end
 
-
-unwrap_value(::Val{vals}) where {vals} = vals
-unwrap_value(x) = x
 
 function set_microphysics_tendency_cache!(
     Y, p, mp1m::NonEquilibriumMicrophysics1M, tm::PrognosticEDMFX,
@@ -1038,8 +1036,8 @@ function set_microphysics_tendency_cache!(
         ᶜp,
         ᶜq_liq⁰,
         ᶜq_ice⁰
-            thp_in = unwrap_value(thp_val)
-            cmp_in = unwrap_value(cmp_val)
+            thp_in = ClimaAtmos.unwrap_value(thp_val)
+            cmp_in = ClimaAtmos.unwrap_value(cmp_val)
 
             ᶜρ⁰ = @. TD.air_density(thp_in, ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰)
             if not_quadrature(sgs_quad)
@@ -1055,7 +1053,8 @@ function set_microphysics_tendency_cache!(
                 ᶜλ⁰ = @. TD.liquid_fraction(thp_in, ᶜT⁰, max(0, ᶜq_lcl⁰), max(0, ᶜq_icl⁰))
                 ᶜmu_S⁰ = @. ᶜq_tot_nonneg⁰ - TD.q_vap_saturation(thp_in, ᶜT⁰, ᶜρ⁰)
                 @. ᶜmp_tendency⁰ = microphysics_tendencies_1m(
-                    BMT.Microphysics1Moment(), sgs_quad, cmp_in, thp_in, ᶜρ⁰, ᶜT⁰,
+                    BMT.Microphysics1Moment(), sgs_quad,
+                    $(Val(cmp_in)), $(Val(thp_in)), ᶜρ⁰, ᶜT⁰,
                     ᶜq_tot_nonneg⁰, ᶜq_lcl⁰, ᶜq_icl⁰, ᶜq_rai⁰, ᶜq_sno⁰,
                     ᶜT′T′, ᶜq′q′, corr_Tq, ᶜsgs_moments.λ_lagrange, α,
                     dt, nsubs_quad, ᶜλ⁰, ᶜmu_S⁰,

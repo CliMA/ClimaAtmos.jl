@@ -621,7 +621,7 @@ using ClimaAtmos
                 # Test type stability
                 result = @inferred microphysics_tendencies_1m(
                     BMT.Microphysics1Moment(),
-                    quad, mp, thp, ρ, T, q_tot, q_liq, q_ice, q_rai, q_sno,
+                    quad, Val(mp), Val(thp), ρ, T, q_tot, q_liq, q_ice, q_rai, q_sno,
                     T′T′, q′q′, corr_Tq, λ_lagrange, α, dt, nsubs_quad,
                 )
 
