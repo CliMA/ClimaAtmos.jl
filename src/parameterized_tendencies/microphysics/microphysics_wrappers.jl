@@ -461,7 +461,13 @@ end
             2 * corr * σ_q * σ_T * dqsat_dT,
         ),
     )
-    if abs(mu_S) > ADAPTIVE_QUADRATURE_SIGMA[] * σ_S
+    # NB the `k > 0` guard is load-bearing, not defensive: `|mu_S| > 0 * σ_S` is
+    # `|mu_S| > 0`, which is true almost everywhere, so without it a threshold of
+    # zero collapses EVERY cell -- the exact opposite of disabling. That produced
+    # an invalid error measurement on 2026-09-09, whose reference arm was fully
+    # collapsed rather than fully quadratured.
+    k = ADAPTIVE_QUADRATURE_SIGMA[]
+    if k > 0 && abs(mu_S) > k * σ_S
         # The N=3 rule's centre node is the mean, and the weights normalise to
         # one, so this is the degenerate limit of the same quadrature.
         return evaluator(T, q_tot_nonneg, cmp, thp)
