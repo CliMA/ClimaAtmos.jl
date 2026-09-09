@@ -79,7 +79,8 @@ struct SlabSurfaceReservoir <: BudgetReservoir end
 """
     reservoir_name(reservoir) -> Symbol
 
-A short label for `reservoir`, and the packet group holding its endpoint slots.
+Return a short label for `reservoir`. It is also the packet group holding its
+endpoint slots.
 """
 reservoir_name(::AtmosphereReservoir) = ATMOSPHERE_ENDPOINT_GROUP
 reservoir_name(::SlabSurfaceReservoir) = SLAB_SURFACE_ENDPOINT_GROUP
@@ -121,7 +122,7 @@ const ATMOSPHERE_AND_SURFACE = ControlVolume(
 """
     is_inside(control_volume, reservoir) -> Bool
 
-Whether `reservoir` is one of the reservoirs `control_volume` contains.
+Return whether `reservoir` is one of the reservoirs `control_volume` contains.
 """
 is_inside(cv::ControlVolume, reservoir::BudgetReservoir) =
     any(r -> r === reservoir, cv.reservoirs)
@@ -129,7 +130,7 @@ is_inside(cv::ControlVolume, reservoir::BudgetReservoir) =
 """
     is_inside(control_volume, name::Symbol) -> Bool
 
-Whether the reservoir labelled `name` is inside `control_volume`.
+Return whether the reservoir labelled `name` is inside `control_volume`.
 """
 is_inside(cv::ControlVolume, name::Symbol) =
     any(r -> reservoir_name(r) === name, cv.reservoirs)
@@ -270,7 +271,7 @@ struct ReservoirTransfer <: CollectionLevel end
 """
     level_name(level) -> Symbol
 
-A short label for a `CollectionLevel`.
+Return a short label for a `CollectionLevel`.
 """
 level_name(::ChannelEnvelope) = :envelope
 level_name(::ProcessDecomposition) = :decomposition
@@ -280,7 +281,8 @@ level_name(::ReservoirTransfer) = :transfer
 """
     enters_parent_identity(level) -> Bool
 
-Whether a leg at this level is one of the primary identity's recorded terms.
+Return whether a leg at this level is one of the primary identity's recorded
+terms.
 
 True for `ChannelEnvelope` and `FinalMap`. False for the two levels that explain
 an envelope instead of adding to it, which is what makes it impossible to sum an
@@ -294,8 +296,8 @@ enters_parent_identity(::ReservoirTransfer) = false
 """
     explains_envelope(level) -> Bool
 
-Whether a leg at this level is one of the attribution identity's terms. The
-complement of `enters_parent_identity`.
+Return whether a leg at this level is one of the attribution identity's terms.
+The complement of `enters_parent_identity`.
 """
 explains_envelope(level::CollectionLevel) = !enters_parent_identity(level)
 
@@ -347,7 +349,7 @@ struct ExteriorCrossing <: TransferTopology end
 """
     topology_name(topology) -> Symbol
 
-A short label for a `TransferTopology`.
+Return a short label for a `TransferTopology`.
 """
 topology_name(::InternalTransfer) = :internal
 topology_name(::CoupledTransfer) = :coupled
@@ -356,8 +358,8 @@ topology_name(::ExteriorCrossing) = :exterior
 """
     tests_cancellation(topology) -> Bool
 
-Whether a signed sum of this event's legs is expected to cancel in a view holding
-every modeled reservoir it names.
+Return whether a signed sum of this event's legs is expected to cancel in a view
+holding every modeled reservoir it names.
 
 False for `ExteriorCrossing`, whose single modeled leg has nothing to cancel
 against. Testing it against zero would report a boundary flux as a broken
@@ -374,8 +376,8 @@ tests_cancellation(::ExteriorCrossing) = false
 """
     quantity_position(quantity) -> Int
 
-The index of `quantity` in `BUDGET_QUANTITIES`. Errors for anything else, so a
-misspelled quantity fails at the call rather than silently missing a slot.
+Return the index of `quantity` in `BUDGET_QUANTITIES`. Errors for anything else,
+so a misspelled quantity fails at the call rather than silently missing a slot.
 """
 function quantity_position(quantity::Symbol)
     for (i, q) in enumerate(BUDGET_QUANTITIES)
@@ -392,11 +394,11 @@ end
 
 What the coverage registry can say a component of a declared row will be.
 
-  - `:measured` — not provably zero, so the ledger has to measure it.
-  - `:invariant_zero` — provably zero, with the proof named in the record.
-  - `:not_applicable` — the row does not write this quantity in this
+  - `:measured`: not provably zero, so the ledger has to measure it.
+  - `:invariant_zero`: provably zero, with the proof named in the record.
+  - `:not_applicable`: the row does not write this quantity in this
     configuration.
-  - `:open` — not yet established from the code, so nothing is demanded of the
+  - `:open`: not established from the code, so nothing is demanded of the
     record and the claim it feeds stays blocked.
 
 This is the proof obligation half of what a schema declares. Applicability says
@@ -664,7 +666,7 @@ end
 """
     expected_disposition(spec, quantity) -> Symbol
 
-What `spec` declares this quantity's legs will be. One of
+Return what `spec` declares this quantity's legs will be. One of
 `EXPECTED_DISPOSITIONS`.
 """
 expected_disposition(spec, quantity::Symbol) =
@@ -673,7 +675,7 @@ expected_disposition(spec, quantity::Symbol) =
 """
     event_reservoir_names(spec) -> Vector{Symbol}
 
-The modeled reservoirs `spec` declares, in declaration order and without
+Return the modeled reservoirs `spec` declares, in declaration order and without
 repeats.
 """
 event_reservoir_names(spec::TransferEventSpec) = unique(first.(spec.modeled_legs))
@@ -693,7 +695,7 @@ The dictionaries are compiled once, here, so a transaction looks an identity up
 rather than discovering it. Nothing in a schema changes after construction, and
 no code path adds to one during a step.
 
-The inner constructor rejects a schema that contradicts itself: a repeated name,
+The keyword constructor rejects a schema that contradicts itself: a repeated name,
 a control volume naming an undeclared reservoir, a transfer event whose leg or
 channel is undeclared, a final map on an undeclared reservoir. Each of those
 would otherwise surface much later as a reconciliation nobody can explain.
@@ -791,8 +793,8 @@ end
 """
     schema_reservoir_names(schema) -> Vector{Symbol}
 
-The declared reservoirs, in declaration order. This is also the packet group
-order, so the layout follows the schema rather than the order values are
+Return the declared reservoirs, in declaration order. This is also the packet
+group order, so the layout follows the schema rather than the order values are
 produced in.
 """
 schema_reservoir_names(schema::BudgetSchema) =
@@ -801,7 +803,7 @@ schema_reservoir_names(schema::BudgetSchema) =
 """
     has_reservoir(schema, name) -> Bool
 
-Whether `name` is a declared reservoir.
+Return whether `name` is a declared reservoir.
 """
 has_reservoir(schema::BudgetSchema, name::Symbol) =
     haskey(schema.reservoir_index, name)
@@ -809,9 +811,9 @@ has_reservoir(schema::BudgetSchema, name::Symbol) =
 """
     reservoir_spec(schema, name) -> ReservoirSpec
 
-The declaration for one reservoir. Errors when the schema does not declare it,
-rather than returning a default that would let an undeclared reservoir behave
-like an ordinary one.
+Return the declaration for one reservoir. Errors when the schema does not
+declare it, rather than returning a default that would let an undeclared
+reservoir behave like an ordinary one.
 """
 function reservoir_spec(schema::BudgetSchema, name::Symbol)
     haskey(schema.reservoir_index, name) || error(
@@ -823,7 +825,7 @@ end
 """
     quantity_applicable(schema, reservoir, quantity) -> Bool
 
-Whether the configuration says `reservoir` owns `quantity`.
+Return whether the configuration says `reservoir` owns `quantity`.
 """
 function quantity_applicable(
     schema::BudgetSchema,
@@ -837,7 +839,7 @@ end
 """
     has_channel(schema, name) -> Bool
 
-Whether `name` is a declared attribution channel.
+Return whether `name` is a declared attribution channel.
 """
 has_channel(schema::BudgetSchema, name::Symbol) =
     haskey(schema.channel_index, name)
@@ -845,7 +847,7 @@ has_channel(schema::BudgetSchema, name::Symbol) =
 """
     channel_spec(schema, name) -> ChannelSpec
 
-The declaration for one attribution channel.
+Return the declaration for one attribution channel.
 """
 function channel_spec(schema::BudgetSchema, name::Symbol)
     haskey(schema.channel_index, name) ||
@@ -856,7 +858,7 @@ end
 """
     has_final_map(schema, name) -> Bool
 
-Whether `name` is a declared final accepted-state map.
+Return whether `name` is a declared final accepted-state map.
 """
 has_final_map(schema::BudgetSchema, name::Symbol) =
     haskey(schema.final_map_index, name)
@@ -864,7 +866,7 @@ has_final_map(schema::BudgetSchema, name::Symbol) =
 """
     final_map_spec(schema, name) -> FinalMapSpec
 
-The declaration for one final accepted-state map.
+Return the declaration for one final accepted-state map.
 """
 function final_map_spec(schema::BudgetSchema, name::Symbol)
     haskey(schema.final_map_index, name) ||
@@ -875,7 +877,7 @@ end
 """
     has_transfer_event(schema, name) -> Bool
 
-Whether `name` is a declared transfer event.
+Return whether `name` is a declared transfer event.
 """
 has_transfer_event(schema::BudgetSchema, name::Symbol) =
     haskey(schema.event_index, name)
@@ -883,7 +885,7 @@ has_transfer_event(schema::BudgetSchema, name::Symbol) =
 """
     transfer_event_spec(schema, name) -> TransferEventSpec
 
-The declaration for one transfer event, including its topology.
+Return the declaration for one transfer event, including its topology.
 """
 function transfer_event_spec(schema::BudgetSchema, name::Symbol)
     haskey(schema.event_index, name) ||
@@ -898,14 +900,11 @@ end
 """
     endpoint_schema(surface_temperature, microphysics_model)
 
-The schema a configuration supports at the endpoint-reconciliation stage.
+Build the endpoint-only schema of a configuration.
 
-Declares the reservoirs, their per-quantity applicability, and the control
-volumes that exist. It deliberately declares **no** channels, final maps, or
-transfer events: no runtime path records any yet, and declaring an expectation
-nothing can meet would report every configuration as blocked on work that has
-not started. Stack steps 3 to 7 add those declarations as they add the
-collection that satisfies them.
+It declares the reservoirs, their per-quantity applicability, and the control
+volumes, with no channels, final maps or transfer events. The endpoint tests use
+it. A simulation's schema is built from the coverage registry.
 
 Applicability comes from the configuration, never from field presence. See
 `owns_atmosphere_water`, `has_surface_reservoir` and `owns_surface_water`.

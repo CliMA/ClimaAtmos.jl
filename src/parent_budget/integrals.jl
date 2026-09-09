@@ -64,8 +64,8 @@ to_accounting(x) = BUDGET_ACCOUNTING_TYPE(x)
 """
     dry_air_density(ρ, ρq_tot)
 
-Pointwise dry-air density, widened before the subtraction so the cancellation
-happens in the accounting type.
+Return the pointwise dry-air density, widened before the subtraction so the
+cancellation happens in the accounting type.
 """
 dry_air_density(ρ, ρq_tot) =
     BUDGET_ACCOUNTING_TYPE(ρ) - BUDGET_ACCOUNTING_TYPE(ρq_tot)
@@ -73,7 +73,7 @@ dry_air_density(ρ, ρq_tot) =
 """
     boundary_areal_density(x, Δz)
 
-Pointwise integrand of a horizontal integral at a boundary level.
+Return the pointwise integrand of a horizontal integral at a boundary level.
 
 The 2D space carries no vertical metric, so the area element is reconstructed
 from the level's `Δz`, matching
@@ -105,8 +105,8 @@ elements this rank owns. Spectral-element quadrature weights are per element, so
 a node shared between two elements is counted once with each element's own
 weight, which is the correct integral and needs no ownership mask. DSS makes the
 *values* at such a node agree between ranks; it does not duplicate the weights.
-This is the same decomposition `Base.sum` relies on, and summing every rank's
-`local_volume_integral` reproduces `Base.sum` exactly.
+Summing every rank's `local_volume_integral` is the same decomposition
+`Base.sum` uses, evaluated in the accounting type.
 """
 local_volume_integral(field) =
     Fields.local_sum(Base.Broadcast.broadcasted(to_accounting, field))
@@ -153,8 +153,8 @@ end
 """
     budget_context(Y)
 
-The communications context the ledger reduces over, taken from the state it is
-measuring rather than from a global default.
+Return the communications context the ledger reduces over, taken from the state
+it is measuring rather than from a global default.
 """
 budget_context(Y) = ClimaComms.context(axes(Y.c))
 
@@ -165,7 +165,7 @@ budget_context(Y) = ClimaComms.context(axes(Y.c))
 """
     local_atmosphere_mass(Y)
 
-This rank's share of the total modeled atmospheric mass, `∫ρ`, in kg.
+Return this rank's share of the total modeled atmospheric mass, `∫ρ`, in kg.
 
 `Y.c.ρ` is moist air density and carries the whole of `ρq_tot`, precipitating
 water included.
@@ -181,7 +181,7 @@ local_atmosphere_mass(Y) = local_volume_integral(Y.c.ρ)
 """
     local_atmosphere_water(Y)
 
-This rank's share of the total atmospheric water, `∫ρq_tot`, in kg.
+Return this rank's share of the total atmospheric water, `∫ρq_tot`, in kg.
 
 `ρq_tot` is total water and already contains precipitation. The thermodynamic
 state is built from `q_liq = q_lcl + q_rai` and `q_ice = q_icl + q_sno`, with
@@ -202,7 +202,7 @@ local_atmosphere_water(Y) = local_volume_integral(Y.c.ρq_tot)
 """
     local_atmosphere_energy(Y)
 
-This rank's share of the total atmospheric energy, `∫ρe_tot`, in J.
+Return this rank's share of the total atmospheric energy, `∫ρe_tot`, in J.
 
 Total energy is prognostic, so this is authoritative and nothing is
 reconstructed from momentum and thermodynamic state. `ρtke`, the tagged tracers
@@ -214,7 +214,7 @@ local_atmosphere_energy(Y) = local_volume_integral(Y.c.ρe_tot)
 """
     local_atmosphere_dry_mass(Y)
 
-This rank's share of the dry-air mass, `∫(ρ − ρq_tot)`, in kg.
+Return this rank's share of the dry-air mass, `∫(ρ − ρq_tot)`, in kg.
 
 Written as one integral rather than a difference of two totals so the
 cancellation happens pointwise, where it is exact, instead of between two large
@@ -230,7 +230,7 @@ end
 """
     atmosphere_dry_mass(Y)
 
-Dry-air mass `∫(ρ − ρq_tot)` over the whole domain, in kg.
+Return the dry-air mass `∫(ρ − ρq_tot)` over the whole domain, in kg.
 
 This is a **diagnostic derived from state, not a parent quantity and not a
 conservation invariant.** Prescribed forcing adds water to a column without
@@ -254,17 +254,19 @@ end
 # Applicability
 # ============================================================================
 #
-# Applicability is decided by the configuration, never by field presence. The
-# state cannot answer these questions: `surface_prognostic_variables` builds a
-# slab as `(; T, water = FT(0))` whatever the moisture model is, so `Y.sfc.water`
-# exists in a dry run and holds a permanent zero. Dispatching on presence
-# reported that zero as a measured budget, which is exactly the confusion between
-# a measured zero and an inapplicable quantity that the ledger exists to prevent.
+# Applicability of a parent quantity is decided by the configuration, never by
+# field presence. The dry-mass diagnostic above is the one exception, and it is
+# not a parent quantity. The state cannot answer these questions:
+# `surface_prognostic_variables` builds a slab as `(; T, water = FT(0))` whatever
+# the moisture model is, so `Y.sfc.water` exists in a dry run and holds a
+# permanent zero. Dispatching on presence would report that zero as a measured
+# budget, which is exactly the confusion between a measured zero and an
+# inapplicable quantity that the ledger exists to prevent.
 
 """
     owns_atmosphere_water(microphysics_model) -> Bool
 
-Whether the atmosphere owns a water budget in this configuration.
+Return whether the atmosphere owns a water budget in this configuration.
 """
 owns_atmosphere_water(::DryModel) = false
 owns_atmosphere_water(::AbstractMicrophysicsModel) = true
@@ -272,7 +274,7 @@ owns_atmosphere_water(::AbstractMicrophysicsModel) = true
 """
     has_surface_reservoir(surface_temperature) -> Bool
 
-Whether the configuration has a prognostic surface reservoir at all.
+Return whether the configuration has a prognostic surface reservoir at all.
 
 Only a `SurfaceConditions.SlabOceanTemperature` owns surface state. Every other
 surface temperature is prescribed or diagnosed, which makes it exterior to the
@@ -284,8 +286,8 @@ has_surface_reservoir(::SurfaceConditions.SlabOceanTemperature) = true
 """
     owns_surface_water(surface_temperature, microphysics_model) -> Bool
 
-Whether the surface reservoir owns water, and therefore the mass that goes with
-it.
+Return whether the surface reservoir owns water, and therefore the mass that
+goes with it.
 
 Both arguments are required. A slab in a dry run has a `Y.sfc.water` field
 holding a permanent zero, and a moist run without a slab has no surface state at
@@ -302,7 +304,7 @@ owns_surface_water(surface_temperature, microphysics_model) =
 """
     slab_heat_capacity(slab)
 
-Areal heat capacity `ρ_ocean · cp_ocean · depth_ocean` of a
+Return the areal heat capacity `ρ_ocean · cp_ocean · depth_ocean` of a
 `SurfaceConditions.SlabOceanTemperature`, in J m⁻² K⁻¹.
 
 Constant, which is what makes `local_surface_energy` linear in
@@ -314,7 +316,8 @@ slab_heat_capacity(slab::SurfaceConditions.SlabOceanTemperature) =
 """
     local_surface_energy(Y, slab)
 
-This rank's share of the energy held by the prognostic surface reservoir, in J.
+Return this rank's share of the energy held by the prognostic surface reservoir,
+in J.
 
 Only defined for a `SurfaceConditions.SlabOceanTemperature`. Callers check
 `has_surface_reservoir` first; there is deliberately no method that
@@ -327,7 +330,8 @@ local_surface_energy(Y, slab::SurfaceConditions.SlabOceanTemperature) =
 """
     local_surface_water(Y, slab)
 
-This rank's share of the water held by the prognostic surface reservoir, in kg.
+Return this rank's share of the water held by the prognostic surface reservoir,
+in kg.
 
 Callers check `owns_surface_water` first.
 
@@ -345,7 +349,8 @@ local_surface_water(Y, ::SurfaceConditions.SlabOceanTemperature) =
 """
     local_surface_mass(Y, slab)
 
-This rank's share of the mass held by the prognostic surface reservoir, in kg.
+Return this rank's share of the mass held by the prognostic surface reservoir,
+in kg.
 
 The slab owns mass as well as water. What it gains left the atmosphere as
 `ρq_tot`, and `ρ` carries the whole of `ρq_tot`, so the same deposition is a
@@ -353,9 +358,9 @@ mass leg and a water leg of the same size.
 
 **These are two projections of one endpoint, not two measurements.** This
 returns `local_surface_water` unchanged, so the two values cannot disagree and
-no test of them can discover anything. `local_endpoint_packet` therefore reduces
+no test of them can discover anything. `local_endpoint_packet` therefore sums
 `Y.sfc.water` once and writes the same number into both slots, rather than
-calling this and paying for the reduction twice.
+calling this and paying for the sum twice.
 
 Independent measurement is a property of the *transfer legs*: the atmospheric
 side of a surface exchange and the surface side of it are collected separately,

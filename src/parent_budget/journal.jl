@@ -29,7 +29,7 @@
 """
     ComponentStatus
 
-What is known about one component of a `BudgetComponent`.
+What is known about one `BudgetComponent` of a leg, observation or endpoint.
 
   - `Measured`: the amount was taken from the implemented update.
   - `InvariantZero`: the amount is provably zero, and the proof is named.
@@ -77,8 +77,8 @@ struct UnknownComponent <: ComponentStatus end
 """
     status_name(status) -> Symbol
 
-A short label for a `ComponentStatus`, used when a report tallies statuses
-rather than naming each one.
+Return a short label for a `ComponentStatus`, used when a report tallies
+statuses rather than naming each one.
 """
 status_name(::Measured) = :measured
 status_name(::InvariantZero) = :invariant_zero
@@ -88,7 +88,7 @@ status_name(::UnknownComponent) = :unknown
 """
     disposition_permits(expected, status) -> Bool
 
-Whether a component with this `status` is what the schema's `expected`
+Return whether a component with this `status` is what the schema's `expected`
 disposition asked for. See `EXPECTED_DISPOSITIONS`.
 
   - `:open` permits anything at the record. The registry has not established
@@ -101,7 +101,7 @@ disposition asked for. See `EXPECTED_DISPOSITIONS`.
   - `:invariant_zero` permits an `InvariantZero`, and an `UnknownComponent`
     for a proof not yet established. A `Measured` component is **not**
     permitted: the registry says this path is provably zero, so a measurement
-    here means the proof no longer holds or never did, which is a disagreement
+    here means the proof does not hold, which is a disagreement
     between the registry and the code rather than a residual.
   - `:not_applicable` permits only a `NotApplicable` component. There is
     nothing here to be unknown about.
@@ -166,9 +166,9 @@ a helper.
 
 **Only a measured component may carry a nonzero amount.** `is_contributing` is
 true for `InvariantZero`, so a nonzero one would add a real amount into a total
-while labelled as proven zero — a wrong number wearing the one label that says
-it cannot be wrong. A nonzero `NotApplicable` or `UnknownComponent` amount is
-never read, so it is dead data that misleads anyone inspecting a leg.
+while labelled as proven zero. That is a wrong number wearing the one label
+that says it cannot be wrong. A nonzero `NotApplicable` or `UnknownComponent`
+amount is never read, so it is dead data that misleads anyone inspecting a leg.
 
 **A measured component must name its method.** An amount with no account of
 where it came from is not auditable, and a budget whose terms cannot be traced
@@ -226,36 +226,36 @@ BudgetComponent(amount::FT, evidence::BudgetEvidence) where {FT} =
 """
     component_status(component) -> ComponentStatus
 
-The status of one `BudgetComponent`.
+Return the status of one `BudgetComponent`.
 """
 component_status(c::BudgetComponent) = c.evidence.status
 
 """
     component_method(component) -> Symbol
 
-How the amount was obtained, or the proof of an `InvariantZero`.
+Return how the amount was obtained, or the proof of an `InvariantZero`.
 """
 component_method(c::BudgetComponent) = c.evidence.method
 
 """
     component_source(component) -> Symbol
 
-The adapter or coverage-registry entry the amount came from.
+Return the adapter or coverage-registry entry the amount came from.
 """
 component_source(c::BudgetComponent) = c.evidence.source
 
 """
     component_route(component) -> Symbol
 
-The precision and reduction path the amount travelled.
+Return the precision and reduction path the amount travelled.
 """
 component_route(c::BudgetComponent) = c.evidence.route
 
 """
     measured(amount; method, source = :unspecified, route = :unspecified)
 
-A `BudgetComponent` holding a measured signed amount. `method` is required: an
-amount with no account of where it came from cannot be audited.
+Build a `BudgetComponent` holding a measured signed amount. `method` is
+required: an amount with no account of where it came from cannot be audited.
 """
 measured(
     amount::FT;
@@ -270,8 +270,8 @@ measured(
 """
     invariant_zero(FT; proof, source = :unspecified)
 
-A `BudgetComponent` that is provably zero. The amount is exactly zero, which is
-what makes it safe to include in a sum, and `proof` names why.
+Build a `BudgetComponent` that is provably zero. The amount is exactly zero,
+which is what makes it safe to include in a sum, and `proof` names why.
 """
 invariant_zero(
     ::Type{FT};
@@ -285,7 +285,7 @@ invariant_zero(
 """
     not_applicable(FT; reason = :not_in_configuration, source = :contract)
 
-A `BudgetComponent` for a quantity this configuration does not own. It
+Build a `BudgetComponent` for a quantity this configuration does not own. It
 contributes nothing, blocks nothing, and is not a measured zero.
 """
 not_applicable(
@@ -300,8 +300,8 @@ not_applicable(
 """
     unknown_component(FT; reason = :not_established, source = :unspecified)
 
-A `BudgetComponent` that has not been established. It contributes nothing to a
-sum and blocks the closure claim for its quantity.
+Build a `BudgetComponent` that has not been established. It contributes nothing
+to a sum and blocks the closure claim for its quantity.
 """
 unknown_component(
     ::Type{FT};
@@ -315,7 +315,7 @@ unknown_component(
 """
     is_contributing(component) -> Bool
 
-Whether the component may be added into a total.
+Return whether the component may be added into a total.
 
 True for `Measured` and `InvariantZero`. False for `NotApplicable` and
 `UnknownComponent`, whose amounts are zero anyway; the distinction matters
@@ -327,7 +327,7 @@ is_contributing(c::BudgetComponent) =
 """
     is_blocking(component) -> Bool
 
-Whether the component blocks the claim for its quantity. True only for
+Return whether the component blocks the claim for its quantity. True only for
 `UnknownComponent`.
 """
 is_blocking(c::BudgetComponent) = component_status(c) isa UnknownComponent
@@ -335,7 +335,7 @@ is_blocking(c::BudgetComponent) = component_status(c) isa UnknownComponent
 """
     is_applicable(component) -> Bool
 
-Whether the quantity exists here at all. False only for `NotApplicable`.
+Return whether the quantity exists here at all. False only for `NotApplicable`.
 """
 is_applicable(c::BudgetComponent) = !(component_status(c) isa NotApplicable)
 
@@ -362,9 +362,9 @@ schema decides which of them this configuration expected.
 
 `(reservoir, channel, event, leg, step, stage, occurrence)` is what the journal
 refuses to record twice. The reservoir is in it because the two sides of one
-exchange may carry the same leg label — the atmospheric and surface halves of a
-flux are each `flux` — and an identity without it would refuse the second side
-as a repeat of the first. The stage and occurrence are in it because a
+exchange may carry the same leg label. The atmospheric and surface halves of a
+flux are each `flux`, and an identity without the reservoir would refuse the
+second side as a repeat of the first. The stage and occurrence are in it because a
 correction can fire several times within one accepted step:
 `update_constrain_state_every` accepts `"stage"` and `"dss"`, and at `"stage"`
 the same `constrain_state!` correction fires once per ARS343 stage. Each firing
@@ -391,10 +391,10 @@ on the endpoint. Booking its raw difference here is wrong however plausible the
 number looks, and a raw stage difference belongs in a `StageObservation`.
 
 `weight` records the accepted-step coefficient already applied to reach the
-contribution — `1` for a whole-step map, otherwise a tableau coefficient
-generally involving `bᵢ` and the implicit `γᵢ`. `measured_at` records where the
-amount was taken. Both exist so a weighting can be audited instead of trusted. A
-non-finite `weight` is refused at construction.
+contribution. It is `1` for a whole-step map, and otherwise a tableau
+coefficient generally involving `bᵢ` and the implicit `γᵢ`. `measured_at`
+records where the amount was taken. Both exist so a weighting can be audited
+instead of trusted. A non-finite `weight` is refused at construction.
 """
 Base.@kwdef struct BudgetLeg{FT}
     event::Symbol
@@ -491,10 +491,17 @@ Base.@kwdef struct StageObservation{FT}
 end
 
 """
-    execution_identity(leg) -> Tuple
+    ExecutionIdentity
 
-The tuple the journal deduplicates on: reservoir, channel, event, leg, step,
-stage, occurrence.
+The tuple type the journal deduplicates on.
+"""
+const ExecutionIdentity = Tuple{Symbol, Symbol, Symbol, Symbol, Int, Int, Int}
+
+"""
+    execution_identity(leg) -> ExecutionIdentity
+
+Return the tuple the journal deduplicates on: reservoir, channel, event, leg,
+step, stage, occurrence.
 
 The reservoir and channel are part of it because a transfer event declares its
 legs as `(reservoir, leg)` pairs and two of them may share a label. Without the
@@ -505,8 +512,6 @@ Deterministic, and stable across runs, so a leg can be named in a report and
 found again. `ExecutionIdentity` is its type, and the ledger's set of recorded
 keys is declared with it, so the two cannot drift apart.
 """
-const ExecutionIdentity = Tuple{Symbol, Symbol, Symbol, Symbol, Int, Int, Int}
-
 execution_identity(leg::BudgetLeg)::ExecutionIdentity = (
     reservoir_name(leg.reservoir),
     leg.channel,
@@ -520,9 +525,9 @@ execution_identity(leg::BudgetLeg)::ExecutionIdentity = (
 """
     leg_label(leg) -> String
 
-A human-readable identity for `leg`, used when a report has to name which legs
-blocked a claim. It names the reservoir, so the two sides of one exchange are
-told apart.
+Return a human-readable identity for `leg`, used when a report has to name which
+legs blocked a claim. It names the reservoir, so the two sides of one exchange
+are told apart.
 """
 function leg_label(leg::BudgetLeg)
     location = "$(reservoir_name(leg.reservoir)) at step $(leg.step)"
@@ -532,8 +537,8 @@ end
 """
     budget_component(record, quantity) -> BudgetComponent
 
-The `quantity` component of a leg or observation, where `quantity` is `:mass`,
-`:water`, or `:energy`.
+Return the `quantity` component of a leg or observation, where `quantity` is
+`:mass`, `:water`, or `:energy`.
 """
 function budget_component(
     record::Union{BudgetLeg, StageObservation},

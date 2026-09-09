@@ -62,7 +62,7 @@ end
 """
     endpoint_reservoir(group) -> BudgetReservoir
 
-The reservoir a packet group belongs to.
+Return the reservoir a packet group belongs to.
 
 Errors for anything else, so a group the layout should never have produced fails
 here rather than becoming a reservoir nothing else knows about.
@@ -76,7 +76,7 @@ end
 """
     endpoint_component(packet, group, quantity, FT)
 
-One endpoint component read out of a reduced packet.
+Read one endpoint component out of a reduced packet.
 
 A measured slot becomes a `Measured` component naming the packed collective as
 its route. A slot the schema declared not applicable becomes `NotApplicable`,
@@ -158,8 +158,8 @@ control volume is skipped entirely, so it can neither contribute nor block.
 
 `applicable` is false when no reservoir in the view owns the quantity at all,
 which is not the same as a total of zero. Water in a dry model would otherwise
-be reported as an ordinary closed budget at zero — a claim the ledger never
-made.
+be reported as an ordinary closed budget at zero. The ledger never made that
+claim.
 
 `magnitude` is the sum of absolute endpoint values, which the tolerance needs
 and which a signed total cannot supply.
@@ -365,7 +365,7 @@ end
 """
     claim_status(applicable, blocked_by, residual, tolerance) -> Symbol
 
-The verdict for one claim, resolved in this order:
+Return the verdict for one claim, resolved in this order:
 
  1. `:not_applicable` when nothing in the view owns the quantity, so there is no
     claim to make.
@@ -486,10 +486,10 @@ change that happened between the two transactions and that nothing recorded.
 Status is checked as well as amount because comparing amounts alone lets a
 reservoir change what it owns without anyone noticing. A quantity that was
 measured and is now unknown, or was inapplicable and is now measured, would slip
-through a check that skips any pair where one side does not contribute — which
-is precisely the pair a status change produces. A configuration transition
-mid-run is not supported, so a status change is a defect until it is
-deliberately represented.
+through a check that skips any pair where one side does not contribute. That is
+precisely the pair a status change produces. A configuration transition mid-run
+is not supported, so a status change is a defect until it is deliberately
+represented.
 """
 function check_endpoint_continuity(
     ledger::BudgetLedger{FT},
@@ -588,10 +588,9 @@ callbacks in between, and comparing them is what turns a callback that quietly
 mutates `Y` into an error instead of a silent gap in the cumulative total. Reuse
 makes that comparison compare a value with itself.
 
-The trade is sound exactly while no callback mutates the state, which is a
-property of the model established by the coverage registry rather than a
-property of the ledger. It is therefore opt-in and the measured path stays the
-default.
+Nothing in the ledger chooses between the two openings. The caller takes the
+trade, and it is sound exactly while no callback mutates the state. That premise
+is a property of the model the coverage registry establishes, not of the ledger.
 
 Errors when there is no previous closing endpoint, which is the first step.
 """
@@ -724,8 +723,9 @@ What must never happen is both landing in one total, and that is prevented by
 here is one event claiming to be two different kinds of thing, which is a
 classification error and would make both identities wrong.
 
-Why keep the duplicate guard, given that a duplicated nonzero leg does move the
-residual and does fail closure. It localizes the fault at the second recording
+The duplicate guard is kept even though a duplicated nonzero leg already moves
+the residual and fails closure, for three reasons. It localizes the fault at the
+second recording
 rather than in a residual a whole step later. It catches a doubled leg whose
 amount happens to be zero, which genuinely would pass every closure test. And it
 forces each firing of a repeating path to carry a distinct execution identity,
@@ -879,8 +879,8 @@ end
 """
     missing_parent_terms(ledger, control_volume) -> Vector{String}
 
-Every term the schema declares for the primary identity in this view that no leg
-recorded.
+Return every term the schema declares for the primary identity in this view that
+no leg recorded.
 
 This is what keeps a channel that never reported from disappearing from the
 report. The list is built by walking the schema's declarations, so a term that
@@ -908,7 +908,7 @@ end
 """
     missing_channel_envelopes(ledger, spec, control_volume) -> Vector{String}
 
-The envelopes `spec` requires in this view that no leg recorded, one per
+Return the envelopes `spec` requires in this view that no leg recorded, one per
 reservoir the channel writes.
 
 Checked per reservoir rather than per channel, so a channel that recorded one of
@@ -957,8 +957,8 @@ end
 """
     missing_processes(ledger, spec, control_volume) -> Vector{String}
 
-The decomposition rows `spec` declares in this view that no leg recorded, one
-per `(process, reservoir)` in the channel's roster.
+Return the decomposition rows `spec` declares in this view that no leg recorded,
+one per `(process, reservoir)` in the channel's roster.
 
 Read from the specification and never from what arrived. A decomposition that
 was satisfied by whichever rows happened to be recorded would let an omitted
@@ -1006,8 +1006,8 @@ end
 """
     open_dispositions(specs, quantity, control_volume) -> Vector{String}
 
-Every declaration in `specs` that touches `control_volume` and whose disposition
-for `quantity` is still `:open`, as blockers.
+Return every declaration in `specs` that touches `control_volume` and whose
+disposition for `quantity` is still `:open`, as blockers.
 
 An open row is one the coverage registry has not established from the code. It
 demands nothing of a record, so a leg on it is accepted, but the claim it feeds
@@ -1044,8 +1044,8 @@ spec_kind(::TransferEventSpec) = "transfer event"
 """
     declared_applicable(schema, reservoirs, quantity, control_volume) -> Bool
 
-Whether the configuration says any of `reservoirs` inside `control_volume` owns
-`quantity`.
+Return whether the configuration says any of `reservoirs` inside
+`control_volume` owns `quantity`.
 
 Applicability is read from the schema and never from whether a leg arrived. An
 expected channel or event that recorded nothing is a **blocked** claim, not a
@@ -1198,7 +1198,8 @@ end
 """
     transfer_expectation(spec, control_volume) -> Symbol
 
-What this event's signed sum means in this view, from the declared topology.
+Return what this event's signed sum means in this view, from the declared
+topology.
 
   - `:exterior_crossing` when the far side is not modeled. There is one modeled
     leg and nothing for it to cancel against, so no cancellation is tested and
@@ -1346,7 +1347,7 @@ end
 """
     is_blocked(reconciliation) -> Bool
 
-Whether the reconciliation's status is `:blocked`.
+Return whether the reconciliation's status is `:blocked`.
 """
 is_blocked(r::ParentReconciliation) = r.status === :blocked
 is_blocked(r::AttributionReconciliation) = r.status === :blocked
@@ -1377,7 +1378,7 @@ end
 """
     quantity_tolerance(tolerances, quantity)
 
-The `BudgetTolerance` declared for `quantity`, or `nothing`.
+Return the `BudgetTolerance` declared for `quantity`, or `nothing`.
 
 `tolerances` is a mapping from quantity to tolerance, or `nothing` when none has
 been declared. There is no default: `kappa` has to be calibrated, and a
@@ -1482,11 +1483,11 @@ end
 
 Compute one `AttributionReconciliation` for a declared channel. Pure.
 
-A required envelope that was not recorded blocks, and so does every declared
-decomposition row that was not recorded, and so does a disposition the registry
-has left open. All three are read from the specification rather than from what
-arrived, so a channel that reported nothing at all is a blocked row naming it,
-and a channel that reported some of its processes is blocked by the rest.
+Three things block. A required envelope that was not recorded. A declared
+decomposition row that was not recorded. A disposition the registry has left
+open. All three are read from the specification rather than from what arrived,
+so a channel that reported nothing at all is a blocked row naming it, and a
+channel that reported some of its processes is blocked by the rest.
 """
 function reconcile_attribution(
     ledger::BudgetLedger{FT},
@@ -1653,8 +1654,8 @@ The commit is **atomic**. Every check and every reconciliation is computed into
 a temporary first, and the ledger is not touched until all of them have
 succeeded. Updating the cumulative totals inside the loop would leave an error
 raised part way through with some quantities already advanced in a transaction
-that was still open — a ledger that had half-counted a step it never committed,
-with no way to tell from its own state.
+that was still open. The ledger would have half-counted a step it never
+committed, with no way to tell from its own state.
 """
 function commit_transaction!(
     ledger::BudgetLedger{FT},

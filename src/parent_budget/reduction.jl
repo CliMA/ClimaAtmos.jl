@@ -58,7 +58,7 @@ struct NotApplicableSlot <: PacketSlotState end
 """
     slot_state_name(state) -> Symbol
 
-A short label for a `PacketSlotState`.
+Return a short label for a `PacketSlotState`.
 """
 slot_state_name(::UnsetSlot) = :unset
 slot_state_name(::MeasuredSlot) = :measured
@@ -102,8 +102,8 @@ end
 """
     endpoint_packet_layout(groups)
 
-The endpoint layout for `groups`: every quantity of every group, groups in the
-order given and quantities in `BUDGET_QUANTITIES` order.
+Build the endpoint layout for `groups`: every quantity of every group, groups in
+the order given and quantities in `BUDGET_QUANTITIES` order.
 
 Inapplicable slots are still laid out. A dry configuration's water slot exists
 and is marked not applicable, so the buffer length depends on which reservoirs
@@ -121,8 +121,8 @@ end
 """
     endpoint_packet_layout(schema::BudgetSchema)
 
-The endpoint layout a schema declares: one group per declared reservoir, in
-declaration order.
+Build the endpoint layout a schema declares: one group per declared reservoir,
+in declaration order.
 """
 endpoint_packet_layout(schema::BudgetSchema) =
     endpoint_packet_layout(schema_reservoir_names(schema))
@@ -130,15 +130,15 @@ endpoint_packet_layout(schema::BudgetSchema) =
 """
     packet_length(layout) -> Int
 
-How many values a packet with this layout holds.
+Return how many values a packet with this layout holds.
 """
 packet_length(layout::BudgetPacketLayout) = length(layout.slots)
 
 """
     packet_index(layout, group, quantity) -> Int
 
-The buffer index of one slot. Errors when the layout has no such slot, rather
-than returning a default that would silently read someone else's value.
+Return the buffer index of one slot. Errors when the layout has no such slot,
+rather than returning a default that would silently read someone else's value.
 """
 function packet_index(layout::BudgetPacketLayout, group::Symbol, quantity::Symbol)
     slot = (group, quantity)
@@ -190,7 +190,7 @@ end
 """
     slot_state(packet, group, quantity) -> PacketSlotState
 
-The disposition of one slot.
+Return the disposition of one slot.
 """
 slot_state(packet::BudgetPacket, group::Symbol, quantity::Symbol) =
     @inbounds packet.states[packet_index(packet.layout, group, quantity)]
@@ -267,7 +267,7 @@ end
 """
     unresolved_slots(packet) -> Vector{Tuple{Symbol, Symbol}}
 
-Every slot still `UnsetSlot`, in layout order.
+Return every slot still `UnsetSlot`, in layout order.
 """
 function unresolved_slots(packet::BudgetPacket)
     unresolved = Tuple{Symbol, Symbol}[]
@@ -325,8 +325,8 @@ end
 """
     packet_value(packet, group, quantity)
 
-The global value of one slot. Errors if the packet has not been reduced, or if
-the slot was never resolved.
+Return the global value of one slot. Errors if the packet has not been reduced,
+or if the slot was never resolved.
 """
 function packet_value(packet::BudgetPacket, group::Symbol, quantity::Symbol)
     packet.is_reduced || error(
@@ -343,8 +343,8 @@ end
 """
     packet_local_value(packet, group, quantity)
 
-The local value of one slot, before reduction. For tests and for assembling a
-packet; a global total comes from `packet_value`.
+Return the local value of one slot, before reduction. For tests and for
+assembling a packet; a global total comes from `packet_value`.
 """
 packet_local_value(packet::BudgetPacket, group::Symbol, quantity::Symbol) =
     @inbounds packet.values[packet_index(packet.layout, group, quantity)]
@@ -352,7 +352,7 @@ packet_local_value(packet::BudgetPacket, group::Symbol, quantity::Symbol) =
 """
     packet_applicable(packet, group, quantity) -> Bool
 
-Whether this slot holds a measurement. False for a slot the configuration
+Return whether this slot holds a measurement. False for a slot the configuration
 declared not applicable, and false for one nothing has written; use
 `slot_state` when the two have to be told apart.
 """
@@ -362,7 +362,7 @@ packet_applicable(packet::BudgetPacket, group::Symbol, quantity::Symbol) =
 """
     packet_groups(packet) -> Vector{Symbol}
 
-The groups the packet holds, in layout order and without repeats.
+Return the groups the packet holds, in layout order and without repeats.
 """
 function packet_groups(packet::BudgetPacket)
     groups = Symbol[]
@@ -379,8 +379,8 @@ end
 """
     local_endpoint_packet(Y, schema, surface_temperature)
 
-Every declared reservoir's authoritative integrals over the part of the domain
-this rank owns, in one buffer, with no communication.
+Pack every declared reservoir's authoritative integrals over the part of the
+domain this rank owns into one buffer, with no communication.
 
 The schema decides which slots are measured and which are not applicable, and
 `surface_temperature` supplies the slab's areal heat capacity. Applicability is
@@ -388,9 +388,9 @@ never read off field presence: a slab carries `Y.sfc.water` even in a dry run,
 where it holds a permanent zero, so presence cannot distinguish an inapplicable
 quantity from a measured one.
 
-`Y.sfc.water` is reduced **once**. The slab's water and its mass are two
+`Y.sfc.water` is summed locally **once**. The slab's water and its mass are two
 projections of that one endpoint rather than two measurements, so the second
-projection reuses the reduced value instead of repeating the reduction.
+projection reuses that sum instead of repeating it.
 """
 function local_endpoint_packet(Y, schema::BudgetSchema, surface_temperature)
     packet = BudgetPacket(endpoint_packet_layout(schema))
@@ -444,8 +444,9 @@ end
 """
     reduced_endpoint_packet(Y, schema, surface_temperature)
 
-`local_endpoint_packet` followed by `reduce_packet!`: one collective for every
-endpoint of every declared reservoir.
+Build the endpoint packet and reduce it. This is `local_endpoint_packet`
+followed by `reduce_packet!`: one collective for every endpoint of every declared
+reservoir.
 """
 function reduced_endpoint_packet(Y, schema::BudgetSchema, surface_temperature)
     packet = local_endpoint_packet(Y, schema, surface_temperature)

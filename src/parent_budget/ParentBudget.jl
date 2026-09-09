@@ -8,8 +8,7 @@ explained by what the model recorded.
 **Unstable internal machinery.** Nothing here is exported, public, or covered by
 any compatibility promise, and it is not wired into any simulation: no runtime
 path constructs a ledger, so enabling nothing changes any trajectory. See
-`docs/src/parent_budget/` for the contract these types implement and
-`docs/src/parent_budget/plan.md` for the order the rest is built in.
+`docs/src/parent_budget/` for the contract these types implement.
 
 The files are included in dependency order.
 
@@ -28,9 +27,9 @@ import ClimaComms
 import ClimaCore.Fields as Fields
 import ClimaCore.Spaces as Spaces
 
-# The adapter boundary. These are the only ClimaAtmos types the ledger
-# dispatches on, and naming them here keeps the dependency visible in one place
-# rather than scattered through the files below.
+# The ClimaAtmos types the applicability functions and the slab integrals
+# dispatch on. Naming every ClimaAtmos import here keeps the dependency visible
+# in one place.
 import ...AbstractMicrophysicsModel
 import ...DryModel
 import ...SurfaceConditions
