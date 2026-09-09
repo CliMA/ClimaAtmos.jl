@@ -173,22 +173,39 @@ end
     @test stripped.surface === model.surface
 end
 
-@testset "Adapted model is isbits" begin
-    # Closures that capture `atmos` are broadcast inside GPU kernels, so the
-    # adapted model has to be isbits. Everything that is not (the grid, the
-    # parameters, the setup, and the radiation name tuples) is read only while
-    # the cache is built, and `Adapt.adapt_structure` drops it.
+@testset "physics_only and isbits" begin
+    # `physics_only` returns the components of the AtmosModel stored in the cache
     model = make_model(;
         microphysics_model = CA.NonEquilibriumMicrophysics1M(),
         aerosol_names = ("SO4", "CB1"),
         time_varying_trace_gases = ("O3",),
     )
-    @test !isbitstype(typeof(model))
+    physics = CA.physics_only(model)
+    @test isnothing(physics.grid)
+    @test isnothing(physics.params)
+    @test isnothing(physics.setup)
+    @test physics.water === model.water
+    @test CA.hash_physics(physics) == CA.hash_physics(model)
 
-    stripped = Adapt.adapt(Array, model)
-    @test isbitstype(typeof(stripped))
-    @test stripped.aerosol_names == ()
-    @test stripped.time_varying_trace_gases == ()
+    other_grid = CA.ColumnGrid(FT; z_elem = 7, z_max = 2e3, z_stretch = false)
+    other = CA.AtmosModel(
+        other_grid;
+        params = TEST_PARAMS,
+        microphysics_model = CA.NonEquilibriumMicrophysics1M(),
+        aerosol_names = ("SO4", "CB1"),
+        time_varying_trace_gases = ("O3",),
+    )
+    @test typeof(CA.physics_only(other)) === typeof(physics)
+
+    # Closures that capture `p.atmos` are broadcast inside GPU kernels, so the
+    # adapted model has to be isbits. The aerosol and trace-gas names are
+    # `Tuple`s of `String`s and are read only while the cache is built, so
+    # `Adapt.adapt_structure` drops them too.
+    @test !isbitstype(typeof(model))
+    adapted = Adapt.adapt(Array, model)
+    @test isbitstype(typeof(adapted))
+    @test adapted.aerosol_names == ()
+    @test adapted.time_varying_trace_gases == ()
 end
 
 @testset "Explicit kwarg wins over setup component (with warning)" begin

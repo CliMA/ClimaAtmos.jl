@@ -2859,14 +2859,30 @@ different grids are not equal.
 """
 hash_physics(model::AtmosModel) = hash(_physics_fields(model))
 
-# When adapting the model to GPU, drop incompatible non physical fields
-function Adapt.adapt_structure(to, model::AtmosModel)
-    fields = map(fieldnames(AtmosModel)) do name
-        name in _MODEL_NON_PHYSICS_FIELDS ? nothing :
-        Adapt.adapt(to, getfield(model, name))
-    end
-    return AtmosModel(fields...)
-end
+"""
+    physics_only(model::AtmosModel)
+
+Return `model` with `grid`, `params`, and `setup` replaced by `nothing`.
+
+These three fields bind a model to one run. They are read while a simulation is
+being built and never afterwards, so `build_cache` stores this stripped model as
+`p.atmos`: the same physics on any grid then gives the same `AtmosModel` type,
+which keeps `p.atmos` isbits (it is captured by closures that are broadcast
+inside GPU kernels) and lets compiled methods be shared across grids.
+"""
+# `_physics_fields` keeps declaration order and the run bindings are the
+# trailing fields, so the physics values splat straight into the constructor.
+physics_only(model::AtmosModel) = AtmosModel(
+    values(_physics_fields(model))...,
+    map(_ -> nothing, _MODEL_NON_PHYSICS_FIELDS)...,
+)
+
+# Adapting to a device also drops the run bindings, so that a model that was
+# not stripped by `physics_only` still lands on the device as isbits.
+Adapt.adapt_structure(to, model::AtmosModel) = AtmosModel(
+    map(field -> Adapt.adapt(to, field), values(_physics_fields(model)))...,
+    map(_ -> nothing, _MODEL_NON_PHYSICS_FIELDS)...,
+)
 
 """
     _create_grouped_struct(StructType, atmos_model_kwargs, group_kwargs)
