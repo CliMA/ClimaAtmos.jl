@@ -5,7 +5,7 @@ import CloudMicrophysics.AerosolModel as CMAM
 import CloudMicrophysics.AerosolActivation as CMAA
 
 # Import SGS quadrature utilities
-using ..ClimaAtmos: integrate_over_sgs
+using ..ClimaAtmos: integrate_over_sgs, sgs_stddevs_and_correlation
 
 ###
 ### 0 Moment Microphysics
@@ -242,6 +242,17 @@ quadrature points.
 # alloca the ABI writes to local memory before each `@noinline` call; the same
 # values passed as arguments stay in .param space and are read field-by-field.
 # They are threaded through `sum_over_quadrature_points`'s `extra` tuple instead.
+# How many standard deviations the subgrid PDF must sit from the saturation
+# kink before the quadrature is collapsed to its centre node. Larger is more
+# conservative. Measured warp fractions (fraction of 32-lane warps in which
+# EVERY lane is clear, which is what decides whether the branch pays):
+#
+#     2 sigma  94.3%      5 sigma  89.1%
+#     3 sigma  92.2%     10 sigma  83.2%
+#
+# Set to zero to disable and always run the full rule.
+const ADAPTIVE_QUADRATURE_SIGMA = Ref{Float64}(10.0)
+
 struct Microphysics1MEvaluator{S, FT, Args <: Tuple}
     scheme::S
     ρ::FT
@@ -410,6 +421,52 @@ end
         λ, λ_lagrange, mu_S, α,
         dt, nsubs, args,
     )
+
+    # EXPERIMENT 2026-09-09: skip the quadrature where the subgrid PDF cannot
+    # reach the saturation kink.
+    #
+    # The only feature the N^2 rule exists to resolve is the `max(0, ·)` in the
+    # condensate reconstruction below. Where the PDF sits many standard
+    # deviations from it, every quadrature point lands on the same smooth branch
+    # and the rule is integrating a locally linear function nine times.
+    # Measured over a full AMIP state (results/sgs-degeneracy.toml): the median
+    # cell sits 449 sigma from the kink, and at 10 sigma 98.7% of points -- and
+    # 83.2% of 32-lane WARPS -- are entirely clear of it.
+    #
+    # Warps are what matter. A GPU warp executes both sides of a divergent
+    # branch, so a criterion true at scattered points saves nothing; it pays
+    # only when all 32 lanes agree. That is why the earlier clear-air early-out
+    # returned +1.79% off a 77.7% point fraction: its warp fraction was 21.5%.
+    #
+    # This must stay a real branch. Written branchlessly as a mask or `select`
+    # the compiler evaluates both sides and discards one, which is strictly
+    # worse than not trying. The body here is large enough (N^2 @noinline calls
+    # into the full microphysics) that no compiler will if-convert it.
+    #
+    # NOT an identity: clear of the kink the integrand is smooth but not
+    # constant, so collapsing incurs O(sigma^2 f'') error. That error is
+    # unmeasured and this is an experiment, not a proposed change.
+    σ_q, σ_T, corr = sgs_stddevs_and_correlation(q′q′, T′T′, corr_Tq)
+    # mu_S = q_tot_nonneg - q_sat, so q_sat comes back without recomputing it.
+    q_sat = q_tot_nonneg - mu_S
+    L_v = TD.Parameters.LH_v0(thp)
+    R_v = TD.Parameters.R_v(thp)
+    # Clausius-Clapeyron, matching scripts/measure-sgs-degeneracy.jl exactly so
+    # the measured warp fractions describe this criterion and not a variant.
+    dqsat_dT = q_sat * L_v / (R_v * T^2)
+    σ_S = sqrt(
+        max(
+            FT(0),
+            σ_q^2 + (dqsat_dT * σ_T)^2 -
+            2 * corr * σ_q * σ_T * dqsat_dT,
+        ),
+    )
+    if abs(mu_S) > ADAPTIVE_QUADRATURE_SIGMA[] * σ_S
+        # The N=3 rule's centre node is the mean, and the weights normalise to
+        # one, so this is the degenerate limit of the same quadrature.
+        return evaluator(T, q_tot_nonneg, cmp, thp)
+    end
+
     return integrate_over_sgs(
         evaluator, sgs_quad, q_tot_nonneg, T, q′q′, T′T′, corr_Tq, (cmp, thp),
     )
