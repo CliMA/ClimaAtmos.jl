@@ -111,9 +111,15 @@ end
 # have to be compiled once for each of them. Dispatch on the declared argument
 # types (numbers, arrays, Fields) still works, only the compiled bodies are
 # shared.
+#
+# The two generic methods below take untyped arguments on purpose. A signature
+# like `(v1::T, v2::T) where {T}` forces specialization even under
+# `@nospecialize`, because there is no declared type to widen the argument to,
+# so the type variable is checked at run time instead.
 @nospecialize
 
-function _compare(pass, v1::T, v2::T; name, ignore) where {T}
+function _compare(pass, v1, v2; name, ignore)
+    typeof(v1) === typeof(v2) || error("$name: v1 and v2 have different types")
     properties = filter(x -> !(x in ignore), propertynames(v1))
     if isempty(properties)
         pass &= _compare(v1, v2; name, ignore)
@@ -132,7 +138,8 @@ function _compare(pass, v1::T, v2::T; name, ignore) where {T}
     return pass
 end
 
-function _compare(v1::T, v2::T; name, ignore) where {T}
+function _compare(v1, v2; name, ignore)
+    typeof(v1) === typeof(v2) || error("$name: v1 and v2 have different types")
     return print_maybe(v1 == v2, "$name differs")
 end
 
@@ -194,10 +201,6 @@ function _compare(
 ) where {FT <: AbstractFloat}
     error = maximum(_error(v1, v2))
     return print_maybe(error <= 100eps(eltype(v1)), "$name error: $error")
-end
-
-function _compare(pass, v1::T1, v2::T2; name, ignore) where {T1, T2}
-    error("$name: v1 and v2 have different types")
 end
 
 @specialize
