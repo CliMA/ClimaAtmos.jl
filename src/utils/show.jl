@@ -176,7 +176,7 @@ Base.show(io::IO, x::RRTMGPI.AbstractRRTMGPMode) =
     parseable_show_with_fields_no_type_header(io, x)
 
 # src/initial_conditions/initial_conditions.jl
-Base.show(io::IO, x::Setups.RCEMIPIIProfile) =
+Base.show(io::IO, x::Setups.RCEMIPProfile) =
     parseable_show_with_fields_no_type_header(io, x)
 
 # src/simulation/AtmosSimulations.jl
