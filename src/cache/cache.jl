@@ -14,7 +14,9 @@ state and may be overwritten by any function.
 # Fields
 
   - `dt`: Simulation timestep, also used by callbacks and tendencies [s].
-  - `atmos`: The `AtmosModel` configuration.
+  - `atmos`: The physics of the `AtmosModel`. `build_cache` stores
+    `physics_only(atmos)` here, so the cached model carries no grid,
+    parameters, or setup.
   - `numerics`: Limiters (quasi-monotone, tracer-nonnegativity, vertical water borrowing).
   - `params`: The `ClimaAtmosParameters` used by the model.
   - `core`: Generally used quantities, such as the geopotential `ᶜΦ`, its gradients,
@@ -144,7 +146,8 @@ gravity waves, radiation, tracers).
 # Arguments
 
   - `Y`: Initial prognostic state, used for its spaces and element type.
-  - `atmos`: The `AtmosModel` configuration.
+  - `atmos`: The `AtmosModel`. Only its physics is stored in the cache, see
+    `physics_only`.
   - `params`: The `ClimaAtmosParameters`.
   - `dt`: Simulation timestep [s].
   - `start_date`: Simulation start date, used for time-varying inputs and radiation.
@@ -168,6 +171,8 @@ function build_cache(
 
     aerosol_names = atmos.radiation.aerosol_names
     time_varying_trace_gas_names = atmos.radiation.time_varying_trace_gases
+
+    atmos = physics_only(atmos)
 
     ᶜcoord = Fields.local_geometry_field(Y.c).coordinates
     ᶠcoord = Fields.local_geometry_field(Y.f).coordinates
