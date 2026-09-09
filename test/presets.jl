@@ -44,11 +44,11 @@ end
     @test prog.turbconv_model isa CA.PrognosticEDMFX
     @test prog.edmfx_model.entr_model isa CA.InvZEntrainment
     @test prog.edmfx_model.detr_model isa CA.BuoyancyVelocityDetrainment
-    @test prog.edmfx_model.sgs_mass_flux === Val(true)
-    @test prog.edmfx_model.sgs_diffusive_flux === Val(true)
-    @test prog.edmfx_model.nh_pressure === Val(true)
-    @test prog.edmfx_model.vertical_diffusion === Val(true)
-    @test prog.edmfx_model.filter === Val(true)
+    @test prog.edmfx_model.sgs_mass_flux
+    @test prog.edmfx_model.sgs_diffusive_flux
+    @test prog.edmfx_model.nh_pressure
+    @test prog.edmfx_model.vertical_diffusion
+    @test prog.edmfx_model.filter
 
     # area_fraction kwarg flows through to the turbconv model
     custom = CA.Presets.prognostic_edmf(FT; area_fraction = FT(5e-5))

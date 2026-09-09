@@ -199,7 +199,7 @@ function solve_sgs_u₃_implicit_stage_analytic!(Y, p, dtγ)
             )
 
         # Implicit NH pressure drag contributes a quadratic sink in w².
-        if p.atmos.edmfx_model.nh_pressure isa Val{true}
+        if p.atmos.edmfx_model.nh_pressure
             # Clamp a_j ∈ [0, a_max]; reuse the clamped ᶜa⁰ from above.
             ᶜaʲ = @. lazy(
                 clamp(

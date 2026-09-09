@@ -349,7 +349,7 @@ helpers selected by the active microphysics and turbulence-convection models.
     `NonEquilibriumMicrophysics1M` and `NonEquilibriumMicrophysics2M`.
   - `enforce_edmf_updraft_constraints!` runs for `AbstractEDMF` when
     the `edmfx_filter` configuration flag is enabled
-    (`atmos.edmfx_model.filter isa Val{true}`); it is itself a no-op for models
+    (`atmos.edmfx_model.filter`); it is itself a no-op for models
     without prognostic mass-flux subdomains, such as `EDOnlyEDMFX`.
 
 Mutates `Y`; returns `nothing`. Called from `constrain_state!` after each
@@ -365,7 +365,7 @@ function enforce_physical_constraints!(Y, p, t, atmos::AtmosModel)
     # EDMF updraft constraints: only active when the filter flag is enabled.
     # Each helper is a no-op for EDOnlyEDMFX (n_prognostic_mass_flux_subdomains == 0).
     if atmos.turbconv_model isa AbstractEDMF &&
-       atmos.edmfx_model.filter isa Val{true}
+       atmos.edmfx_model.filter
         enforce_edmf_updraft_constraints!(Y, p, t, atmos.turbconv_model)
     end
 
