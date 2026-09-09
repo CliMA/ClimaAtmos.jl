@@ -49,16 +49,18 @@ A file under `src/parameterized_tendencies/` should not contain orchestration lo
 
 ## Test groups
 
-`test/runtests.jl` groups tests by `TEST_GROUP`: `infrastructure`, `diagnostics`, `dynamics`, `tagging_energy`, `tagging_water`, `tagging_source`, `tagging_record`, `parameterizations`, `restarts`, `era5`. Map your changes to the relevant group.
+`test/runtests.jl` groups tests by `TEST_GROUP`: `infrastructure`, `diagnostics`, `dynamics`, `dynamics_tracers`, `dynamics_edmfx`, `tagging_energy`, `tagging_water`, `tagging_source`, `tagging_record`, `parameterizations`, `restarts`, `era5`. Map your changes to the relevant group.
 
-| Change area          | Test group          | Example Buildkite job         |
-|:-------------------- |:------------------- |:----------------------------- |
-| Prognostic equations | `dynamics`          | `sphere_baroclinic_wave_rhoe` |
-| Tagged tracers/water | `tagging_*`         | `baroclinic_wave_tagged_*`    |
-| Microphysics / EDMF  | `parameterizations` | `prognostic_edmfx_*`          |
-| Restarts             | `restarts`          | `restart_*`                   |
-| Diagnostics          | `diagnostics`       | any `--diagnostics` job       |
-| Config semantics     | `infrastructure`    | `config.jl`                   |
+| Change area                         | Test group          | Example Buildkite job                    |
+|:----------------------------------- |:------------------- |:---------------------------------------- |
+| Prognostic equations                | `dynamics`          | `sphere_baroclinic_wave_rhoe`            |
+| Tracer transport and water limiters | `dynamics_tracers`  | `sphere_baroclinic_wave_rhoe_equilmoist` |
+| EDMFX diffusion                     | `dynamics_edmfx`    | `prognostic_edmfx_*`                     |
+| Tagged tracers/water                | `tagging_*`         | `baroclinic_wave_tagged_*`               |
+| Microphysics / EDMF                 | `parameterizations` | `prognostic_edmfx_*`                     |
+| Restarts                            | `restarts`          | `restart_*`                              |
+| Diagnostics                         | `diagnostics`       | any `--diagnostics` job                  |
+| Config semantics                    | `infrastructure`    | `config.jl`                              |
 
 The `tagging_*` groups are one file each: `tagging_energy` runs
 `test/tagged_tracers_integration.jl`, `tagging_water` runs
