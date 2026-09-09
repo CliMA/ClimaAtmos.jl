@@ -173,6 +173,24 @@ end
     @test stripped.surface === model.surface
 end
 
+@testset "Adapted model is isbits" begin
+    # Closures that capture `atmos` are broadcast inside GPU kernels, so the
+    # adapted model has to be isbits. Everything that is not (the grid, the
+    # parameters, the setup, and the radiation name tuples) is read only while
+    # the cache is built, and `Adapt.adapt_structure` drops it.
+    model = make_model(;
+        microphysics_model = CA.NonEquilibriumMicrophysics1M(),
+        aerosol_names = ("SO4", "CB1"),
+        time_varying_trace_gases = ("O3",),
+    )
+    @test !isbitstype(typeof(model))
+
+    stripped = Adapt.adapt(Array, model)
+    @test isbitstype(typeof(stripped))
+    @test stripped.aerosol_names == ()
+    @test stripped.time_varying_trace_gases == ()
+end
+
 @testset "Explicit kwarg wins over setup component (with warning)" begin
     setup = bomex_setup()
 
@@ -270,7 +288,6 @@ end
     )
     @test CA.hash_physics(model) == CA.hash_physics(other)
     @test CA.hash_physics(model) != CA.hash_physics(changed)
-    @test typeof(model) === typeof(other)
 end
 
 @testset "Internal Consistency" begin

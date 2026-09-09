@@ -2233,6 +2233,17 @@ Group of radiation choices inside an `AtmosModel`.
     time_varying_trace_gases::TVG = ()
 end
 
+# The two name tuples hold `String`s, so they are not isbits, and `atmos` is
+# captured by closures that run inside GPU kernels. They are only read while the
+# cache is built (`build_cache` passes them to `tracer_cache` and the RRTMGP
+# setup), never in a kernel, so drop them when adapting to the device.
+Adapt.adapt_structure(to, radiation::AtmosRadiation) = AtmosRadiation(
+    Adapt.adapt(to, radiation.radiation_mode),
+    Adapt.adapt(to, radiation.insolation),
+    (),
+    (),
+)
+
 """
     AtmosTurbconv{EDMFX, TCM, SL, AMD, CHD}(; edmfx_model = nothing, turbconv_model = nothing, kwargs...)
 
@@ -2388,7 +2399,7 @@ Base.broadcastable(x::COSPModel) = tuple(x)
 # methods are parsed.
 
 """
-    AtmosModel{W, SCM, R, TC, PF, GW, VD, SP, SU, NU, CM, COSP}
+    AtmosModel{W, SCM, R, TC, PF, GW, VD, SP, SU, NU, CM, COSP, G, P, SE}
 
 An atmospheric model: a complete description of the physics of an atmospheric
 simulation -- which parameterizations are active and how each is configured --
@@ -2424,7 +2435,7 @@ names.
 See the constructor `AtmosModel(grid; params, setup, defaults, kwargs...)`
 below.
 """
-struct AtmosModel{W, SCM, R, TC, PF, GW, VD, SP, SU, NU, CM, COSP}
+struct AtmosModel{W, SCM, R, TC, PF, GW, VD, SP, SU, NU, CM, COSP, G, P, SE}
     water::W
     scm_setup::SCM
     radiation::R
@@ -2441,12 +2452,9 @@ struct AtmosModel{W, SCM, R, TC, PF, GW, VD, SP, SU, NU, CM, COSP}
     # Whether to apply surface flux tendency (independent of surface conditions)
     disable_surface_flux_tendency::Bool
 
-    # Untyped on purpose: grid and parameter types are deeply nested, and
-    # putting them in the signature of every method that takes an `AtmosModel`
-    # makes inference much more expensive. Only setup code reads them.
-    grid::Any
-    params::Any
-    setup::Any
+    grid::G
+    params::P
+    setup::SE
 end
 
 
