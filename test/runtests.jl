@@ -18,6 +18,8 @@ const KNOWN_TEST_GROUPS = (
     "infrastructure",
     "diagnostics",
     "dynamics",
+    "dynamics_tracers",
+    "dynamics_edmfx",
     "tagging_energy",
     "tagging_water",
     "tagging_source",
@@ -87,17 +89,35 @@ end
 # ============================================================================
 # Dynamics: Prognostic equations
 # ============================================================================
+# ============================================================================
+# Dynamics: the prognostic equations, in three groups against the 90-minute
+# job timeout. As one group the ten files took 75 to 92 minutes on GitHub's
+# runners, and a job cancelled at the limit reports as failed while never
+# running the files that had not started. Almost all of the time is
+# compilation of freshly built models: measured on one CPU with Julia 1.11,
+# `tracer_mass_consistency_tests.jl` took 24 minutes,
+# `edmfx_horizontal_diffusion_tests.jl` 17, `enforce_physical_constraints_tests.jl`
+# 7, `edmfx_sgs_diffusive_flux_tests.jl` 4.5, and the other six files 7
+# minutes together. The groups keep related files together and each stays
+# under half the limit: the transport and water-consistency files, the two
+# EDMFX diffusion files, and the rest.
 if TEST_GROUP in ("dynamics", "all")
     @safetestset "Prognostic equations" begin @time include("prognostic_equations.jl") end
     @safetestset "Advection operators" begin @time include("prognostic_equations/advection_tests.jl") end
-    @safetestset "Tracer/mass transport consistency" begin @time include("prognostic_equations/tracer_mass_consistency_tests.jl") end
     @safetestset "Post-Newton implicit-advection correction" begin @time include("prognostic_equations/correct_implicit_advection_tests.jl") end
     @safetestset "Vertical diffusion tendency" begin @time include("prognostic_equations/vertical_diffusion_tests.jl") end
-    @safetestset "EDMFX SGS diffusive flux" begin @time include("prognostic_equations/edmfx_sgs_diffusive_flux_tests.jl") end
-    @safetestset "EDMFX horizontal diffusive flux" begin @time include("prognostic_equations/edmfx_horizontal_diffusion_tests.jl") end
+    @safetestset "Eddy diffusion closures" begin @time include("prognostic_equations/eddy_diffusion_closures_tests.jl") end
+end
+
+if TEST_GROUP in ("dynamics_tracers", "all")
+    @safetestset "Tracer/mass transport consistency" begin @time include("prognostic_equations/tracer_mass_consistency_tests.jl") end
     @safetestset "Vertical water borrowing limiter" begin @time include("prognostic_equations/vertical_water_borrowing_tests.jl") end
     @safetestset "Enforce physical constraints" begin @time include("prognostic_equations/enforce_physical_constraints_tests.jl") end
-    @safetestset "Eddy diffusion closures" begin @time include("prognostic_equations/eddy_diffusion_closures_tests.jl") end
+end
+
+if TEST_GROUP in ("dynamics_edmfx", "all")
+    @safetestset "EDMFX SGS diffusive flux" begin @time include("prognostic_equations/edmfx_sgs_diffusive_flux_tests.jl") end
+    @safetestset "EDMFX horizontal diffusive flux" begin @time include("prognostic_equations/edmfx_horizontal_diffusion_tests.jl") end
 end
 
 # ============================================================================

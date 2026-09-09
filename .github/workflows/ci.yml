@@ -102,6 +102,8 @@ jobs:
           - infrastructure
           - diagnostics
           - dynamics
+          - dynamics_tracers
+          - dynamics_edmfx
           - tagging_energy
           - tagging_water
           - tagging_source
