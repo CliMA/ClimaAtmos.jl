@@ -270,6 +270,7 @@ end
     )
     @test CA.hash_physics(model) == CA.hash_physics(other)
     @test CA.hash_physics(model) != CA.hash_physics(changed)
+    @test typeof(model) === typeof(other)
 end
 
 @testset "Internal Consistency" begin

@@ -2388,7 +2388,7 @@ Base.broadcastable(x::COSPModel) = tuple(x)
 # methods are parsed.
 
 """
-    AtmosModel{W, SCM, R, TC, PF, GW, VD, SP, SU, NU, CM, COSP, G, P, SE}
+    AtmosModel{W, SCM, R, TC, PF, GW, VD, SP, SU, NU, CM, COSP}
 
 An atmospheric model: a complete description of the physics of an atmospheric
 simulation -- which parameterizations are active and how each is configured --
@@ -2424,7 +2424,7 @@ names.
 See the constructor `AtmosModel(grid; params, setup, defaults, kwargs...)`
 below.
 """
-struct AtmosModel{W, SCM, R, TC, PF, GW, VD, SP, SU, NU, CM, COSP, G, P, SE}
+struct AtmosModel{W, SCM, R, TC, PF, GW, VD, SP, SU, NU, CM, COSP}
     water::W
     scm_setup::SCM
     radiation::R
@@ -2441,10 +2441,12 @@ struct AtmosModel{W, SCM, R, TC, PF, GW, VD, SP, SU, NU, CM, COSP, G, P, SE}
     # Whether to apply surface flux tendency (independent of surface conditions)
     disable_surface_flux_tendency::Bool
 
-    # The model's grid, parameters, and setup
-    grid::G
-    params::P
-    setup::SE
+    # Untyped on purpose: grid and parameter types are deeply nested, and
+    # putting them in the signature of every method that takes an `AtmosModel`
+    # makes inference much more expensive. Only setup code reads them.
+    grid::Any
+    params::Any
+    setup::Any
 end
 
 

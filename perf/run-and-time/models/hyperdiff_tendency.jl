@@ -93,10 +93,7 @@ function case_setup()
         params,
         dt,
         CA.parse_date(pa["start_date"]),
-        Tuple(pa["prescribed_aerosols"]),
-        Tuple(pa["time_varying_trace_gases"]),
         resolved_steady_state_velocity,
-        CA.vertical_water_borrowing_species_from_config(config),
     )
 
     t = t_start
