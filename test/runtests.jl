@@ -103,6 +103,7 @@ if TEST_GROUP in ("parameterizations", "all")
     # Aerosol tests
     @safetestset "Sea salt emission tests" begin @time include("parameterized_tendencies/aerosols/sea_salt_emission_tests.jl") end
     @safetestset "Sea salt aerosol tests" begin @time include("parameterized_tendencies/aerosols/sea_salt_aerosol_tests.jl") end
+    @safetestset "Sea salt subdomain tests" begin @time include("parameterized_tendencies/aerosols/sea_salt_subdomain_tests.jl") end
 
     # Chemistry tests
     @safetestset "Chemistry tendency tests" begin @time include("parameterized_tendencies/chemistry/chemistry_tendency.jl") end

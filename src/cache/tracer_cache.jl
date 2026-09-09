@@ -130,7 +130,11 @@ prognostic_aerosol_cache(Y, params, aerosols::AtmosAerosols) = foldl(
 
 Cache per-bin emission surface fluxes, written by ClimaCoupler through
 [`set_sslt_surface_fluxes!`](@ref) once per coupling step (zero when
-uncoupled) and handed to [`aerosol_emission_tendency!`](@ref).
+uncoupled) and handed to [`aerosol_emission_tendency!`](@ref), plus the
+per-bin spectrum moments ([`sslt_bin_moments`](@ref)) and the settling radii
+and Kelvin coefficients derived from them that the settling and
+dry-deposition tendencies consume every stage. These are pure functions of the
+(run-constant) parameters, so they are computed once here.
 """
 species_aerosol_cache(Y, params, ::Nothing) = (;)
 function species_aerosol_cache(Y, params, sslt::PrognosticSeaSalt)
@@ -147,7 +151,17 @@ function species_aerosol_cache(Y, params, sslt::PrognosticSeaSalt)
             flux
         end,
     )
-    return (; sslt_sfc_fluxes)
+    # Spectrum moments and the radii derived from them depend only on
+    # parameters, so they are evaluated once here rather than per step.
+    bin_moments = sslt_bin_moments(params, FT)
+    settling_radii = sslt_settling_radii(bin_moments, params)
+    kelvin_coeffs = sslt_kelvin_coefficients(settling_radii, params)
+    return (;
+        sslt_sfc_fluxes,
+        sslt_bin_moments = bin_moments,
+        sslt_settling_radii = settling_radii,
+        sslt_kelvin_coeffs = kelvin_coeffs,
+    )
 end
 
 """

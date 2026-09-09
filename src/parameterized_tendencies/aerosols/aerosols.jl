@@ -68,11 +68,28 @@ aerosol_emission_tendency!(Yₜ, Y, p, t) = unrolled_foreach(
 
 
 """
+    aerosol_settling_tendency!(Yₜ, Y, p, t)
+    aerosol_settling_tendency!(Yₜ, Y, p, t, species_model)
+
+Apply the gravitational settling tendency of every aerosol species,
+dispatching to methods within `AbstractPrognosticAerosol` species models.
+Settling deposits the gravitational flux through its free-outflow bottom
+boundary; the turbulent (surface-flux) part of dry removal is forthcoming.
+"""
+aerosol_settling_tendency!(Yₜ, Y, p, t, ::Nothing) = nothing
+aerosol_settling_tendency!(Yₜ, Y, p, t) = unrolled_foreach(
+    model -> aerosol_settling_tendency!(Yₜ, Y, p, t, model),
+    values(species_models(p.atmos.aerosols)),
+)
+
+"""
     aerosol_deposition_tendency!(Yₜ, Y, p, t)
     aerosol_deposition_tendency!(Yₜ, Y, p, t, species_model)
 
 Apply the deposition tendency of every aerosol species, dispatching
-to methods within `AbstractPrognosticAerosol` species models.
+to methods within `AbstractPrognosticAerosol` species models. Currently a
+uniform residence-time decay placeholder; forthcoming branches turn it into
+the accumulated dry and wet deposition sinks.
 """
 aerosol_deposition_tendency!(Yₜ, Y, p, t, ::Nothing) = nothing
 aerosol_deposition_tendency!(Yₜ, Y, p, t) = unrolled_foreach(
@@ -81,4 +98,5 @@ aerosol_deposition_tendency!(Yₜ, Y, p, t) = unrolled_foreach(
 )
 
 include("hygroscopic_growth.jl")
+include("settling.jl")
 include("sea_salt.jl")

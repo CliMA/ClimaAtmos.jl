@@ -260,6 +260,7 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
     # at the cost of water vapor.
     tracer_nonnegativity_vapor_tendency!(Yₜ, Y, p, t, microphysics_model)
 
+    aerosol_settling_tendency!(Yₜ, Y, p, t)
     aerosol_deposition_tendency!(Yₜ, Y, p, t)
 
     # NOTE: This will zero out all momentum tendencies in the EDMFX advection test,

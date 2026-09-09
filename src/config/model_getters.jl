@@ -1036,6 +1036,11 @@ function check_case_consistency(parsed_args)
         )
     end
 
+    if !isempty(parsed_args["prognostic_aerosols"]) &&
+       turbconv != "prognostic_edmfx"
+        error("`prognostic_aerosols` requires `turbconv: prognostic_edmfx`")
+    end
+
     if parsed_args["edmfx_horizontal_diffusion"] &&
        !parsed_args["edmfx_sgs_horizontal_diffusive_flux"]
         error(
