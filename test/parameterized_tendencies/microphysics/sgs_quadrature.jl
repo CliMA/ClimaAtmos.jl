@@ -245,20 +245,24 @@ using ClimaAtmos
         end
     end
 
-    @testset "RecursiveApply Operations" begin
-        import ClimaCore.RecursiveApply: rzero, ⊞, ⊠
+    # The accumulators in `sum_over_quadrature_points` rely on these to add and
+    # scale a composite result of `f` elementwise.
+    @testset "AutoBroadcaster Operations" begin
+        import ClimaCore.Utilities:
+            add_auto_broadcasters, drop_auto_broadcasters
+        ab, db = add_auto_broadcasters, drop_auto_broadcasters
         for FT in (Float32, Float64)
             @testset "FT = $FT" begin
-                # Scalars
-                @test rzero(FT(1.5)) == FT(0)
-                @test FT(1) ⊞ FT(2) == FT(3)
-                @test FT(2) ⊠ FT(3) == FT(6)
+                # Scalars are passed through unwrapped
+                @test db(zero(ab(typeof(FT(1.5))))) === FT(0)
+                @test db(ab(FT(1)) + ab(FT(2))) === FT(3)
+                @test db(ab(FT(2)) * FT(3)) === FT(6)
 
-                # NamedTuples
+                # NamedTuples are mapped over elementwise
                 nt = (; a = FT(1), b = FT(2))
-                @test rzero(nt) == (; a = FT(0), b = FT(0))
-                @test nt ⊞ nt == (; a = FT(2), b = FT(4))
-                @test nt ⊠ FT(3) == (; a = FT(3), b = FT(6))
+                @test db(zero(ab(typeof(nt)))) === (; a = FT(0), b = FT(0))
+                @test db(ab(nt) + ab(nt)) === (; a = FT(2), b = FT(4))
+                @test db(ab(nt) * FT(3)) === (; a = FT(3), b = FT(6))
             end
         end
     end

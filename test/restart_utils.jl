@@ -5,8 +5,7 @@ import ClimaAtmos.RRTMGP as RRTMGP
 import ClimaCore
 import ClimaCore: DataLayouts, Fields, Geometry, Meshes
 import ClimaCore.Fields: Field, FieldVector, field_values
-import ClimaCore.DataLayouts: AbstractData
-import ClimaCore.Geometry: AxisTensor
+import ClimaCore.DataLayouts: DataLayout
 import ClimaCore.Spaces: AbstractSpace
 import ClimaComms
 import ClimaParams
@@ -160,11 +159,11 @@ function _compare(
     v2::T;
     name,
     ignore,
-) where {T <: Field{<:AbstractData{<:Real}}}
+) where {T <: Field{<:DataLayout{<:Real}}}
     return _compare(parent(v1), parent(v2); name, ignore)
 end
 
-function _compare(pass, v1::T, v2::T; name, ignore) where {T <: AbstractData}
+function _compare(pass, v1::T, v2::T; name, ignore) where {T <: DataLayout}
     return pass && _compare(parent(v1), parent(v2); name, ignore)
 end
 

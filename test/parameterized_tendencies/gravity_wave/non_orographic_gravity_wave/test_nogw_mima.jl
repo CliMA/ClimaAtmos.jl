@@ -167,7 +167,10 @@ column_domain = ClimaCore.Domains.IntervalDomain(
 column_mesh = ClimaCore.Meshes.IntervalMesh(column_domain, nelems = 40)
 
 # Construct the face space from the center one
-column_face_space = ClimaCore.Spaces.FaceFiniteDifferenceSpace(column_mesh)
+column_face_space = ClimaCore.Spaces.FaceFiniteDifferenceSpace(
+    ClimaComms.device(),
+    column_mesh,
+)
 column_center_space =
     Spaces.CenterFiniteDifferenceSpace(column_face_space)
 

@@ -70,12 +70,12 @@ strong form and (with the `w` prefix) a weak form.
 `∇ₕ·(ρu χ)`, used for the horizontal advection of scalars.
 """
 const divₕ = Operators.Divergence()
-const wdivₕ = Operators.WeakDivergence()
+const wdivₕ = Operators.Divergence{Operators.WeakForm}()
 const split_divₕ = Operators.SplitDivergence()
 const gradₕ = Operators.Gradient()
-const wgradₕ = Operators.WeakGradient()
+const wgradₕ = Operators.Gradient{Operators.WeakForm}()
 const curlₕ = Operators.Curl()
-const wcurlₕ = Operators.WeakCurl()
+const wcurlₕ = Operators.Curl{Operators.WeakForm}()
 
 """
     ᶜinterp

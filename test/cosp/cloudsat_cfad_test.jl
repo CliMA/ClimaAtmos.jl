@@ -1,5 +1,6 @@
 using Test
 import ClimaAtmos.COSP.COSPCloudSatCFAD as CCFAD
+import ClimaComms
 using ClimaCore: Domains, Meshes, Spaces, Fields, Geometry
 
 function make_cfad_center_field(FT, profile)
@@ -9,7 +10,7 @@ function make_cfad_center_field(FT, profile)
         boundary_names = (:bottom, :top),
     )
     z_mesh = Meshes.IntervalMesh(z_domain, nelems = length(profile))
-    face_space = Spaces.FaceFiniteDifferenceSpace(z_mesh)
+    face_space = Spaces.FaceFiniteDifferenceSpace(ClimaComms.device(), z_mesh)
     center_space = Spaces.CenterFiniteDifferenceSpace(face_space)
     field = Fields.Field(FT, center_space)
     for (level, value) in enumerate(profile)
