@@ -194,6 +194,24 @@ include(joinpath("cache", "eddy_diffusivity_coefficient.jl"))
 include(joinpath("prognostic_equations", "constrain_state.jl"))
 include(joinpath("prognostic_equations", "limited_tendencies.jl"))
 
+"""
+    ClimaAtmos.Internals
+
+Unstable internal machinery.
+
+Nothing under this module is public API. Names, signatures and behavior may
+change in any release, nothing here is exported, and no top-level alias
+forwards to it, so a user cannot come to depend on it by accident.
+
+`Internals.ParentBudget` is the parent-budget ledger's implementation. It is not
+wired into any simulation.
+"""
+module Internals
+
+include(joinpath("parent_budget", "ParentBudget.jl"))
+
+end
+
 include(joinpath("cosp", "callbacks.jl"))
 include(joinpath("callbacks", "callbacks.jl"))
 
