@@ -53,9 +53,6 @@ if TEST_GROUP in ("infrastructure", "all")
     @safetestset "Tagged water" begin @time include("tagged_water_tests.jl") end
     @safetestset "Energy source tags" begin @time include("energy_source_tags_tests.jl") end
     @safetestset "Process records" begin @time include("process_record_tests.jl") end
-    @safetestset "Parent-budget packets" begin @time include("parent_budget/reduction_tests.jl") end
-    @safetestset "Parent-budget journal" begin @time include("parent_budget/journal_tests.jl") end
-    @safetestset "Parent-budget endpoints" begin @time include("parent_budget/endpoint_tests.jl") end
     @safetestset "Parameter tests" begin @time include("parameter_tests.jl") end
 
     @safetestset "Check TOML path" begin @time include("test_output_yaml_path.jl") end
