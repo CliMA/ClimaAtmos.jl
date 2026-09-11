@@ -42,9 +42,7 @@ Both are accepted by `Pkg.test()`; match whichever convention the repo already u
 
 ## 2. Runtime vs development dependencies
 
-**Rule**: never place development tools (for example, `JuliaFormatter.jl`, `BenchmarkTools.jl`, `Aqua.jl`, `JET.jl`) in the root `[deps]` section of `Project.toml`. Put them in `test/Project.toml` (or in the `[extras]`/`[targets]` block: see §1).
-
-**Why**: dev tools in root `[deps]` cause `Aqua.test_stale_deps` to fail (if unused by `src/`) and inflate the dependency footprint for every downstream consumer.
+Never place development tools (`JuliaFormatter.jl`, `BenchmarkTools.jl`, `Aqua.jl`, `JET.jl`, ...) in the root `[deps]`; put them in `test/Project.toml` or the `[extras]`/`[targets]` block. This is the same rule as the first bullet of §1, called out because dev tools are the most common offender: they fail `Aqua.test_stale_deps` and inflate the dependency footprint of every downstream consumer.
 
 ## 3. Package extensions
 
@@ -118,7 +116,7 @@ Prefer standard Julia operations over internal modules from dependencies. Intern
 
 ## 7. Writing `[compat]` bounds
 
-Keep `[compat]` entries as broad as the package's API actually supports. Overly narrow upper bounds in upstream packages are the most common source of unresolvable graphs across the CliMA ecosystem. Tighten a bound only when you can name the specific incompatibility (a removed symbol, a changed signature, a regression). When working across nested environments (`docs/`, `test/`, `perf/`, `.buildkite/`) against a local checkout of the parent package, use `Pkg.develop(path="..")` so the subdirectory picks up unreleased changes.
+Keep `[compat]` entries as broad as the package's API supports. Overly narrow upper bounds in upstream packages are the most common source of unresolvable graphs across the CliMA ecosystem. Tighten a bound only when you can name the specific incompatibility (a removed symbol, a changed signature, a regression). When working across nested environments (`docs/`, `test/`, `perf/`, `.buildkite/`) against a local checkout of the parent package, use `Pkg.develop(path="..")` so the subdirectory picks up unreleased changes.
 
 For the recovery procedure when an environment fails to resolve, see [onboarding.md §8](../workflow/onboarding.md).
 

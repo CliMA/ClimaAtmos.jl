@@ -57,7 +57,7 @@ Place this near the top of your entry point or test file, before calling `ClimaC
 export CLIMACOMMS_DEVICE="CUDA"   # in the shell, no spaces around =
 ```
 
-or, equivalently, at the very top of your Julia script before any CliMA package loads:
+or, equivalently, at the top of your Julia script before any CliMA package loads:
 
 ```julia
 ENV["CLIMACOMMS_DEVICE"] = "CUDA"
@@ -73,7 +73,7 @@ export CLIMACOMMS_CONTEXT="SINGLETON"
 
 ## 6. Verify the device
 
-Confirm the model is actually on the GPU rather than silently on CPU:
+Confirm the model is on the GPU rather than silently on CPU:
 
 ```julia
 using ClimaComms

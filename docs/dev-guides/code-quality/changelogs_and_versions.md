@@ -46,7 +46,7 @@ One bullet per change. Entries under a released version are final and should not
 
 ### 1.4 Badges
 
-Some repos (notably `ClimaAtmos`, `ClimaCore`, `ClimaTimeSteppers`) prefix entries with a badge that classifies the change. The badge definitions live at the bottom of `NEWS.md` and must not be removed.
+Some repos (`ClimaAtmos`, `ClimaCore`, `ClimaTimeSteppers`) prefix entries with a badge that classifies the change. The badge definitions live at the bottom of `NEWS.md` and must not be removed.
 
 | Badge                              | When to use                                                   |
 |:-----------------------------------|:--------------------------------------------------------------|
@@ -122,7 +122,7 @@ Test for breaking-ness: *can a downstream package, pinned to the current compat,
 
 ### 2.4 Merging a PR with breaking changes
 
-When merging a PR that contains breaking changes, ensure that the `NEWS.md` entry for the change is properly tagged with `![][badge-💥breaking]`. It is your responsibility to open PRs in downstream repositiories that will be affected when the breaking release is made. Ideally, the PRs in the downstream repositories should be opened before the breaking release is made. They can be tested with the new changes by `dev`ing the branch of the upstream package's repo.
+When merging a PR that contains breaking changes, ensure that the `NEWS.md` entry for the change is tagged with `![][badge-💥breaking]`. It is your responsibility to open PRs in downstream repositories that will be affected when the breaking release is made. Ideally, the PRs in the downstream repositories should be opened before the breaking release is made. They can be tested with the new changes by `dev`ing the branch of the upstream package's repo.
 
 ---
 

@@ -1,6 +1,6 @@
 # Software Design Patterns (SDPs)
 
-This file is an agent-facing checklist for writing robust, maintainable, and GPU-compatible Julia code.
+This file is an agent-facing checklist for writing correct, maintainable, and GPU-compatible Julia code.
 
 Unless explicitly instructed otherwise, treat all rules below as defaults.
 

@@ -31,7 +31,7 @@ When a function is broadcasted over one or more `ClimaCore.Fields.Field`(s), and
 
 ### Spatial Derivatives
 
-When writing code that computes spatial derivatives, use the operators provided by `ClimaCore` (e.g., `ClimaCore.grad`, `ClimaCore.div`, `ClimaCore.curl`) rather than manually indexing into fields. This ensures that the code is compatible with the discretization and can be efficiently executed on the GPU.
+When writing code that computes spatial derivatives, use the operators provided by `ClimaCore.Operators` (gradient, divergence, curl, interpolation) rather than manually indexing into fields. This ensures that the code is compatible with the discretization and can be efficiently executed on the GPU.
 
 ## Self-correction
 
