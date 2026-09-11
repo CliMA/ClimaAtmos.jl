@@ -4,7 +4,7 @@ using ClimaUtilities: SpaceVaryingInputs.SpaceVaryingInput
 import .AtmosArtifacts as AA
 import ClimaComms
 
-export SphereGrid, ColumnGrid, BoxGrid, PlaneGrid
+export SphereGrid, ColumnGrid, MultiColumnGrid, BoxGrid, PlaneGrid
 
 """
     SphereGrid(::Type{FT}; kwargs...)
@@ -126,6 +126,54 @@ function ColumnGrid(
     )
 
     return grid
+end
+
+"""
+    MultiColumnGrid(::Type{FT}; points, radius, kwargs...)
+
+Create a grid of independent columns at the given `points` on a sphere of radius
+`radius`. The columns share the vertical discretization of a [`ColumnGrid`](@ref)
+and have no horizontal connectivity.
+
+# Arguments
+
+  - `FT`: the floating-point type [`Float32`, `Float64`]
+
+# Keyword Arguments
+
+  - `points`: a vector of `Geometry.LatLongPoint`, one per column
+  - `radius`: the planet radius
+  - `context = ClimaComms.context()`: the ClimaComms communications context
+  - `z_elem = 10`: the number of z-points
+  - `z_max = 30000.0`: the domain maximum along the z-direction
+  - `z_stretch = true`: whether to use vertical stretching
+  - `dz_bottom = 500.0`: bottom layer thickness for stretching
+  - `z_mesh`: Optionally provide a custom z-mesh, instead of `z_elem`, `z_max`, `z_stretch`
+  - `deep_atmosphere = true`: use deep atmosphere equations and metric terms,
+    otherwise assume columns are cylindrical (shallow atmosphere)
+"""
+function MultiColumnGrid(
+    ::Type{FT};
+    points,
+    radius,
+    context = ClimaComms.context(),
+    z_elem = 10,
+    z_max = 30000.0,
+    z_stretch = true,
+    dz_bottom = 500.0,
+    deep_atmosphere = true,
+    z_mesh = CommonGrids.DefaultZMesh(FT; z_min = 0, z_max, z_elem,
+        stretch = get_stretching(FT, z_stretch, dz_bottom),
+    ),
+) where {FT}
+    context isa ClimaComms.SingletonCommsContext ||
+        error("Multi-column grids can only be created on Singleton contexts.")
+    return CommonGrids.MultiColumnGrid(
+        FT;
+        points, radius, z_elem, z_min = 0, z_max, z_mesh,
+        device = ClimaComms.device(context),
+        deep = deep_atmosphere,
+    )
 end
 
 """
@@ -362,21 +410,11 @@ get_stretching(::Type{FT}, z_stretch, dz_bottom) where {FT} =
 Create the center and face spaces of a ClimaCore grid, returned as
 `(; center_space, face_space)`.
 
-Supports extruded grids (sphere, box, plane) and single-column finite difference grids;
-any other grid type raises an error.
+Supports every grid with a vertical staggering: extruded grids (sphere, box, plane),
+single-column finite difference grids, and multi-column grids.
 """
 function get_spaces(grid)
-    if grid isa Grids.ExtrudedFiniteDifferenceGrid
-        center_space = Spaces.CenterExtrudedFiniteDifferenceSpace(grid)
-        face_space = Spaces.FaceExtrudedFiniteDifferenceSpace(grid)
-    elseif grid isa Grids.FiniteDifferenceGrid
-        center_space = Spaces.CenterFiniteDifferenceSpace(grid)
-        face_space = Spaces.FaceFiniteDifferenceSpace(grid)
-    else
-        error(
-            """Unsupported grid type: $(typeof(grid)). Expected \
-            ExtrudedFiniteDifferenceGrid or FiniteDifferenceGrid""",
-        )
-    end
+    center_space = Spaces.space(grid, Grids.CellCenter())
+    face_space = Spaces.space(grid, Grids.CellFace())
     return (; center_space, face_space)
 end

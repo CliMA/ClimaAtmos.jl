@@ -439,7 +439,7 @@ function radiation_model_cache(
         rrtmgp_params,
         context,
         radiation_mode;
-        ncol = length(Spaces.all_nodes(axes(Spaces.level(Y.c, 1)))),
+        ncol = Spaces.ncolumns(axes(Y.c)),
         domain_nlay = Spaces.nlevels(axes(Y.c)),
         interpolation,
         bottom_extrapolation,

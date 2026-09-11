@@ -41,6 +41,7 @@ ClimaAtmos.Presets.bomex
 ```@docs
 ClimaAtmos.SphereGrid
 ClimaAtmos.ColumnGrid
+ClimaAtmos.MultiColumnGrid
 ClimaAtmos.BoxGrid
 ClimaAtmos.PlaneGrid
 ```

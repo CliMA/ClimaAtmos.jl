@@ -1712,7 +1712,7 @@ is ignored.
 function (::ShipwayHill2012VelocityProfile{FT})(z, t) where {FT}
     w1 = FT(1.5)
     t1 = FT(600)
-    return t < t1 ? w1 * sinpi(FT(t) / t1) : FT(0)
+    return FT(t) < t1 ? w1 * sinpi(FT(t) / t1) : FT(0)
 end
 
 """

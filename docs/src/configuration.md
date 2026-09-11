@@ -76,6 +76,27 @@ The `help` field is optional if you don't plan on making a permanent change to t
 The full list of configuration arguments is in
 [Configuration options](configuration_options.md).
 
+### Multiple independent columns
+
+`config: "multicolumn"` runs several single columns side by side in one simulation,
+with no horizontal coupling between them. The columns are placed on a sphere at the
+latitudes and longitudes (in degrees) listed in `column_latitudes` and
+`column_longitudes`, paired by position; the default is one column at (0, 0). Because
+the columns sit on a sphere, latitude-dependent physics (Coriolis, insolation, the
+default surface temperature) differs from the Cartesian `config: "column"` unless the
+columns are at the equator, and `deep_atmosphere` applies as on the sphere, so it must
+be `false` to reproduce a single-column run.
+
+```yaml
+config: "multicolumn"
+column_latitudes: [0.0, 0.0, 30.0]
+column_longitudes: [0.0, 90.0, -50.0]
+deep_atmosphere: false
+```
+
+NetCDF diagnostics carry a `column` dimension with `lat` and `lon` coordinate
+variables instead of a horizontal grid.
+
 ## Overriding parameters
 
 Physical constants and calibratable parameters are managed by

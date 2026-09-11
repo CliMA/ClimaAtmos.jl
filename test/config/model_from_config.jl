@@ -55,3 +55,22 @@ import ClimaAtmos as CA
         FT,
     )
 end
+
+@testset "check_case_consistency" begin
+    parsed_args(overrides) =
+        CA.AtmosConfig(overrides; job_id = "test_check_case_consistency").parsed_args
+    multicolumn(overrides...) =
+        parsed_args(Dict("config" => "multicolumn", overrides...))
+
+    default_multicolumn = multicolumn()
+    @test_nowarn CA.check_case_consistency(default_multicolumn)
+    @test_throws AssertionError CA.check_case_consistency(
+        multicolumn("column_latitudes" => [0.0, 30.0]),
+    )
+    @test_throws AssertionError CA.check_case_consistency(
+        multicolumn("column_latitudes" => Float64[], "column_longitudes" => Float64[]),
+    )
+    @test_throws AssertionError CA.check_case_consistency(
+        parsed_args(Dict("config" => "cylinder")),
+    )
+end

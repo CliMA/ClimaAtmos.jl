@@ -1,5 +1,5 @@
 import ClimaComms
-import ClimaCore: Fields, Grids, Spaces
+import ClimaCore: Fields, Geometry, Grids, Spaces
 import Logging, NVTX
 
 """
@@ -483,15 +483,17 @@ end
     get_grid(parsed_args, params, context)
 
 Build the computational grid selected by the `config` key: `"sphere"` gives a
-`SphereGrid`, `"column"` a `ColumnGrid`, `"box"` a `BoxGrid`, and `"plane"` a
-`PlaneGrid`.
+`SphereGrid`, `"column"` a `ColumnGrid`, `"multicolumn"` a `MultiColumnGrid`, `"box"` a
+`BoxGrid`, and `"plane"` a `PlaneGrid`.
 
 All grids read the vertical discretization keys `z_elem`, `z_max`, `z_stretch`, and
-`dz_bottom`. Every grid except the column also reads the topography keys `topography`,
+`dz_bottom`. Every grid except the columns also reads the topography keys `topography`,
 `topography_damping_factor`, `mesh_warp_type`, and `topo_smoothing`. The sphere reads
 `h_elem`, `nh_poly`, `bubble`, and `deep_atmosphere`, with the planet radius taken from
 `params`; the box and plane read `x_elem`/`x_max` (and, for the box, `y_elem`/`y_max`)
-and are periodic in the horizontal.
+and are periodic in the horizontal. The multi-column grid places one independent column
+at each `(column_latitudes[i], column_longitudes[i])` on a sphere of the planet radius
+and also reads `deep_atmosphere`.
 """
 get_grid(config::AtmosConfig, params) =
     get_grid(config.parsed_args, params, config.comms_ctx)
@@ -508,8 +510,8 @@ function get_grid(parsed_args, params, context)
         dz_bottom = parsed_args["dz_bottom"],
     )
 
-    # Add topography parameters for non-column grids
-    if config != "column"
+    # Add topography parameters for grids with a horizontal discretization
+    if config ∉ ("column", "multicolumn")
         kwargs = (
             kwargs...,
             topography = get_topography(FT, parsed_args),
@@ -533,6 +535,18 @@ function get_grid(parsed_args, params, context)
         )
     elseif config == "column"
         ColumnGrid(FT; context, kwargs...)
+    elseif config == "multicolumn"
+        MultiColumnGrid(
+            FT;
+            context,
+            radius = CAP.planet_radius(params),
+            points = Geometry.LatLongPoint{FT}.(
+                parsed_args["column_latitudes"],
+                parsed_args["column_longitudes"],
+            ),
+            deep_atmosphere = parsed_args["deep_atmosphere"],
+            kwargs...,
+        )
     elseif config == "box"
         BoxGrid(
             FT;

@@ -161,7 +161,7 @@ add_diagnostic_variable!(short_name = "pfull", units = "Pa",
 function compute_rv(_, cache, _)
     vort = @. w_component(WVec(wcurlₕ(cache.precomputed.ᶜu)))  # TODO: Allocates
     # We need to ensure smoothness, so we call DSS
-    Spaces.weighted_dss!(vort)
+    do_dss(axes(vort)) && Spaces.weighted_dss!(vort)
     return vort
 end
 
