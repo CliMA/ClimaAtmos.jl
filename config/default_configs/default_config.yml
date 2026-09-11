@@ -136,8 +136,14 @@ aerosol_radiation:
   help: "Use aerosols in radiation [`false` (default)]"
   value: false
 config:
-  help: "Spatial configuration [`sphere` (default), `column`, `box`, `plane`]"
+  help: "Spatial configuration [`sphere` (default), `column`, `multicolumn`, `box`, `plane`]"
   value: "sphere"
+column_latitudes:
+  help: "Latitudes [degrees] of the independent columns of a `multicolumn` configuration, one per column, paired with `column_longitudes`. Default: [0.0]"
+  value: [0.0]
+column_longitudes:
+  help: "Longitudes [degrees] of the independent columns of a `multicolumn` configuration, one per column, paired with `column_latitudes`. Default: [0.0]"
+  value: [0.0]
 FLOAT_TYPE:
   help: "Float type"
   value: "Float32"
