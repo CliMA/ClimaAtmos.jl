@@ -315,7 +315,9 @@ spherical geometry, the horizontal component `ᶠf¹²` is also nonzero. On a pl
 `nothing`. Called from `build_cache`.
 """
 function compute_coriolis(ᶜcoord, ᶠcoord, params)
-    if eltype(ᶜcoord) <: Geometry.LatLongZPoint
+    # Columns have no horizontal dynamics, so their Coriolis frequency is the
+    # prescribed f-plane parameter regardless of where they sit on the sphere.
+    if eltype(ᶜcoord) <: Geometry.LatLongZPoint && !iscolumn(axes(ᶜcoord))
         Ω = CAP.Omega(params)
         global_geom = Spaces.global_geometry(axes(ᶜcoord))
         if global_geom isa Geometry.DeepSphericalGlobalGeometry

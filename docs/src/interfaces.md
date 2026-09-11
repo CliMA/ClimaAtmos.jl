@@ -37,6 +37,7 @@ take objects built by their own constructors (`Setups.*` and
 |:----------- |:--------------------------------------- |:---------------------------------------- |
 | Entry point | `AtmosSimulation(model; kwargs...)`     | `AtmosSimulation(AtmosConfig("f.yml"))`  |
 | Grid        | `AtmosModel(ColumnGrid(...); ...)`      | `config: "column"` + `z_max`, `z_elem`   |
+|             | `AtmosModel(MultiColumnGrid(...); ...)` | `config: "multicolumn"` + `column_latitudes`, `column_longitudes` |
 |             | `AtmosModel(SphereGrid(...); ...)`      | `config: "sphere"` + `h_elem`, `z_elem`  |
 |             | `AtmosModel(BoxGrid(...); ...)`         | `config: "box"` + `x_max`, `y_max`, etc. |
 | Model       | `AtmosModel(grid; params, setup, ...)`  | physics keys (`turbconv`, `rad`, ...)    |

@@ -204,7 +204,7 @@ if MANYTESTS
     # step per grid.
     available_grids =
         comms_ctx isa ClimaComms.SingletonCommsContext ?
-        ["sphere", "box", "column"] : ["sphere", "box"]
+        ["sphere", "box", "column", "multicolumn"] : ["sphere", "box"]
     grids = if isempty(GRIDS)
         available_grids
     else
