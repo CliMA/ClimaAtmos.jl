@@ -35,7 +35,7 @@ The horizontal vector Laplacian is computed as `∇ₕ²u = ∇ₕ(∇ₕ·u) - 
 onto the horizontal (Covariant12) axis.
 """
 function viscous_sponge_tendency_uₕ(ᶜuₕ, s)
-    if s isa Nothing || axes(ᶜuₕ) isa Spaces.FiniteDifferenceSpace
+    if s isa Nothing || iscolumn(axes(ᶜuₕ))
         return NullBroadcasted()
     end
     (; ᶜz, ᶠz) = z_coordinate_fields(axes(ᶜuₕ))

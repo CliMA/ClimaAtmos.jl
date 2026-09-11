@@ -396,24 +396,35 @@ function g³³_field(space)
 end
 
 """
+    ColumnSpace
+
+A space of one or more independent columns with no horizontal discretization: a
+single column (`Spaces.FiniteDifferenceSpace`) or several columns at arbitrary
+locations (`Spaces.MultiColumnFiniteDifferenceSpace`).
+"""
+const ColumnSpace = Union{
+    Spaces.FiniteDifferenceSpace,
+    Spaces.MultiColumnFiniteDifferenceSpace,
+}
+
+"""
     horizontal_filter_scale(space::Spaces.ExtrudedFiniteDifferenceSpace)
-    horizontal_filter_scale(space::Spaces.FiniteDifferenceSpace)
+    horizontal_filter_scale(space::ColumnSpace)
 
 Return the horizontal filter length scale `Δx_h` of `space` [m].
 
 For extruded 2D/3D spaces this is the per-node spectral-element length scale
-`Spaces.node_horizontal_length_scale`. For single columns it is `Inf`: a column
-has no horizontal discretization, and its filter scale is set by the forcing or
-the ensemble it represents, not by a grid length.
+`Spaces.node_horizontal_length_scale`. For columns it is `Inf`: a column has no
+horizontal discretization, and its filter scale is set by the forcing or the
+ensemble it represents, not by a grid length.
 """
 horizontal_filter_scale(space::Spaces.ExtrudedFiniteDifferenceSpace) =
     Spaces.undertype(space)(
         Spaces.node_horizontal_length_scale(Spaces.horizontal_space(space)),
     )
-# Do not route single columns through node_horizontal_length_scale: its
-# PointSpace method returns the placeholder 1 [m].
-horizontal_filter_scale(space::Spaces.FiniteDifferenceSpace) =
-    Spaces.undertype(space)(Inf)
+# Do not route columns through node_horizontal_length_scale: its PointSpace
+# method returns the placeholder 1 [m], and multi-point spaces have none.
+horizontal_filter_scale(space::ColumnSpace) = Spaces.undertype(space)(Inf)
 
 """
     resolvability_filter_scale(Δx_h, Δz)
@@ -497,7 +508,7 @@ end
 Return `true` if `space` has a non-flat hypsography, i.e. if the model has
 terrain. Single columns never do.
 """
-has_topography(space::Spaces.FiniteDifferenceSpace) = false
+has_topography(space::ColumnSpace) = false
 has_topography(space) = Spaces.grid(space).hypsography != Grids.Flat()
 
 """
@@ -610,16 +621,14 @@ end
 Return whether the horizontal space of `space` requires direct stiffness
 summation, i.e. whether its quadrature is Gauss-Lobatto-Legendre.
 
-Single columns have no horizontal space and always return `false`.
+Columns have no horizontal discretization and always return `false`.
 """
 function do_dss(space::Spaces.AbstractSpace)
     return Spaces.quadrature_style(Spaces.horizontal_space(space)) isa
            Quadratures.GLL
 end
 
-function do_dss(::Spaces.FiniteDifferenceSpace)
-    return false
-end
+do_dss(::ColumnSpace) = false
 
 using ClimaComms
 """
@@ -924,20 +933,20 @@ parse_date(dt::DateTime) = dt
 """
     iscolumn(space)
 
-Return whether `space` is a single column, i.e. a `FiniteDifferenceSpace`.
+Return whether `space` consists of independent columns with no horizontal
+discretization, i.e. whether it is a [`ColumnSpace`](@ref).
 """
-iscolumn(space::Spaces.FiniteDifferenceSpace) = true
+iscolumn(space::ColumnSpace) = true
 iscolumn(space) = false
 
 """
     issphere(space)
 
-Return whether the horizontal domain of `space` is a sphere.
+Return whether `space` lies on a sphere, i.e. whether its global geometry is
+spherical.
 """
-function issphere(space)
-    return Meshes.domain(Spaces.topology(Spaces.horizontal_space(space))) isa
-           Domains.SphereDomain
-end
+issphere(space) =
+    Spaces.global_geometry(space) isa Geometry.AbstractSphericalGlobalGeometry
 
 """
     clima_to_era5_name_dict()

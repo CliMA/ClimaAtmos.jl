@@ -501,6 +501,9 @@ function column_timevaryinginputs(
 )
     names = Tuple(names)
     d = cd.format
+    # One site's profiles apply to every column of a horizontally extended space.
+    horizontally_uniform =
+        !(target_space isa ClimaCore.Spaces.FiniteDifferenceSpace)
     inputs = map(names) do name
         prep = preprocess(d, name)
         file_reader_kwargs =
@@ -510,7 +513,10 @@ function column_timevaryinginputs(
             format_variable_name(d, name),
             target_space;
             start_date,
-            regridder_kwargs = (; extrapolation_bc = extrapolation_bc(d)),
+            regridder_kwargs = (;
+                extrapolation_bc = extrapolation_bc(d),
+                horizontally_uniform,
+            ),
             file_reader_kwargs,
             method,
         )

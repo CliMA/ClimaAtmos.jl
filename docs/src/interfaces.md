@@ -31,6 +31,7 @@ grid constructors, `AtmosModel`, and `Setups.*`) before being handed to
 |:----------- |:--------------------------------------- |:---------------------------------------- |
 | Entry point | `AtmosSimulation{FT}(; kwargs...)`      | `AtmosSimulation(AtmosConfig("f.yml"))`  |
 | Grid        | `grid = ColumnGrid(...)`                | `config: "column"` + `z_max`, `z_elem`   |
+|             | `grid = MultiColumnGrid(...)`           | `config: "multicolumn"` + `column_latitudes`, `column_longitudes` |
 |             | `grid = SphereGrid(...)`                | `config: "sphere"` + `h_elem`, `z_elem`  |
 |             | `grid = BoxGrid(...)`                   | `config: "box"` + `x_max`, `y_max`, etc. |
 | Model       | `model = AtmosModel(...)`               | physics keys (`turbconv`, `rad`, ...)    |

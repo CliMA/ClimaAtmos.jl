@@ -837,8 +837,9 @@ Only two values are accepted:
     missing or written in a stale layout, and wrapping it with a periodic calendar so the
     single stored day repeats.
 
-Any other value raises an error. `"ReanalysisMonthlyAveragedDiurnal"` requires
-`config = "column"`, and `era5_diurnal_warming` may only be set (to a number) with it.
+Any other value raises an error. `"ReanalysisMonthlyAveragedDiurnal"` requires a column
+configuration (`config` `"column"` or `"multicolumn"`), and `era5_diurnal_warming` may
+only be set (to a number) with it.
 Before returning, `warn_if_run_exceeds_forcing` compares `t_end` with the time span of
 the forcing file.
 """
@@ -850,7 +851,7 @@ function get_external_forcing_model(
     external_forcing = parsed_args["external_forcing"]
 
     if external_forcing == "ReanalysisMonthlyAveragedDiurnal"
-        @assert parsed_args["config"] == "column" "ReanalysisMonthlyAveragedDiurnal is only supported in column mode."
+        @assert parsed_args["config"] in ("column", "multicolumn") "ReanalysisMonthlyAveragedDiurnal is only supported in column configurations."
     end
     if !isnothing(parsed_args["era5_diurnal_warming"])
         @assert external_forcing == "ReanalysisMonthlyAveragedDiurnal" "era5_diurnal_warming is only supported for ReanalysisMonthlyAveragedDiurnal."
@@ -1018,9 +1019,10 @@ end
 
 Assert that the configuration describes a self-consistent case, erroring otherwise.
 
-Checks that `config` is one of `"sphere"`, `"column"`, `"box"`, `"plane"`; that an ISDAC
-run (`initial_condition: ISDAC`) uses a moist microphysics model; that implicit
-vertical diffusion is paired with a
+Checks that `config` is one of `"sphere"`, `"column"`, `"multicolumn"`, `"box"`,
+`"plane"`, and for `"multicolumn"` that `column_latitudes` and `column_longitudes` are
+non-empty and of equal length; that an ISDAC run (`initial_condition: ISDAC`) uses a
+moist microphysics model; that implicit vertical diffusion is paired with a
 turbulence-convection or vertical diffusion model; and that prescribed flow is used only
 with flat topography and an explicit solver. Called at the top of `get_atmos`.
 """
@@ -1036,11 +1038,20 @@ function check_case_consistency(parsed_args)
 
     # Geometry consistency (always checked, independent of the case-specific
     # checks below)
-    valid_configs = ("sphere", "column", "box", "plane")
+    valid_configs = ("sphere", "column", "multicolumn", "box", "plane")
     @assert(
         config in valid_configs,
         "Unknown `config = $(repr(config))`. Valid options are: $(join(valid_configs, ", "))."
     )
+    if config == "multicolumn"
+        latitudes = parsed_args["column_latitudes"]
+        longitudes = parsed_args["column_longitudes"]
+        @assert(
+            length(latitudes) == length(longitudes),
+            "`column_latitudes` and `column_longitudes` must have the same length",
+        )
+        @assert(!isempty(latitudes), "`column_latitudes` must list at least one column")
+    end
 
     if parsed_args["edmfx_sgs_horizontal_diffusive_flux"] && (
         !isnothing(parsed_args["smagorinsky_lilly"]) || parsed_args["amd_les"]

@@ -53,4 +53,32 @@ import ClimaCore as CC
         linearorder = vec(collect(CC.Meshes.elements(mesh)))
         @test linearorder != spacefilling
     end
+
+    @testset "MultiColumnGrid" begin
+        points = [
+            CC.Geometry.LatLongPoint(0.0, 0.0),
+            CC.Geometry.LatLongPoint(30.0, 90.0),
+            CC.Geometry.LatLongPoint(-45.0, -120.0),
+        ]
+        radius = 6.371229e6
+        grid = CA.MultiColumnGrid(Float64; points, radius, z_elem = 5)
+        (; center_space) = CA.get_spaces(grid)
+        @test CC.Spaces.ncolumns(center_space) == length(points)
+
+        coords = CC.Fields.coordinate_field(center_space)
+        for (h, point) in enumerate(points)
+            column_coords = CC.Fields.column(coords, 1, 1, h)
+            @test all(==(point.lat), parent(column_coords.lat))
+            @test all(==(point.long), parent(column_coords.long))
+        end
+
+        for (deep_atmosphere, GlobalGeometry) in (
+            (false, CC.Geometry.ShallowSphericalGlobalGeometry),
+            (true, CC.Geometry.DeepSphericalGlobalGeometry),
+        )
+            geometry_grid =
+                CA.MultiColumnGrid(Float64; points, radius, z_elem = 5, deep_atmosphere)
+            @test CC.Grids.global_geometry(geometry_grid) isa GlobalGeometry
+        end
+    end
 end

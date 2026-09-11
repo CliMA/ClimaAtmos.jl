@@ -241,8 +241,8 @@ entry point for simulations written as scripts; configuration-driven runs go thr
     model take effect.
   - `context = ClimaComms.context()`: Communications context (device and MPI).
   - `grid = SphereGrid(FT; radius = CAP.planet_radius(params), context)`: Computational
-    grid. Use [`ColumnGrid`](@ref), [`BoxGrid`](@ref), [`PlaneGrid`](@ref), or
-    [`SphereGrid`](@ref).
+    grid. Use [`ColumnGrid`](@ref), [`MultiColumnGrid`](@ref), [`BoxGrid`](@ref),
+    [`PlaneGrid`](@ref), or [`SphereGrid`](@ref).
   - `setup = Setups.DecayingProfile(; perturb = true, params)`: Setup defining the initial
     state, and, for single-column cases, the forcings. See [Setups](@ref "Setups").
   - `dt = 600`: Timestep [s], or a string such as `"10mins"`.
