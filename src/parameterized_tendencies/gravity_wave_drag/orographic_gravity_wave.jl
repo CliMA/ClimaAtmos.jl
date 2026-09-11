@@ -47,6 +47,10 @@ The source is selected by `ogw.topo_info`:
   - `Val(:raw_topo)`: build the drag from the configured topography with
     `compute_ogw_drag`, which loads a preprocessed HDF5 artifact for Earth topography and
     computes the tensor on the fly for the analytical test topographies.
+  - `Val(:raw_topo_online)`: build the drag from the raw ETOPO elevation at initialization
+    with `compute_ogw_drag_online`, which runs the `compute_OGW_info` preprocessing
+    pipeline for Earth topography and falls back to the analytical path for the test
+    topographies.
   - `Val(:linear)`: user-defined analytical drag input, for idealized tests.
 
 Any other value is an error. Called from `orographic_gravity_wave_cache`.
@@ -57,6 +61,46 @@ A `NamedTuple` of surface-level `Field`s: the effective maximum and minimum subg
 obstacle heights `hmax`, `hmin` [m], and the four components `t11`, `t12`, `t21`, `t22` of
 the orographic tensor `T = −∇χ (∇h)ᵀ`, stored with `tᵢⱼ = −∂χ/∂xⱼ · ∂h/∂xᵢ`.
 """
+# Shape parameters the shipped `raw_topo` (`ogw_computed_drag_h*`) artifacts were
+# generated with, i.e. the ClimaParams defaults for `ogw_mountain_height_width_exponent`,
+# `ogw_critical_height_threshold`, and `ogw_smoothing_scale_fraction`.
+const RAW_TOPO_ARTIFACT_γ = 0.4
+const RAW_TOPO_ARTIFACT_H_FRAC = 0.1
+const RAW_TOPO_ARTIFACT_α_SMOOTHING = 0.15
+
+"""
+    warn_if_stale_raw_topo_artifact(ogw)
+
+Warn when `raw_topo` is used for Earth topography with `γ`, `h_frac`, or `α_smoothing` that
+differ from the values the shipped artifact was built with.
+
+The `raw_topo` artifact fixes `hmax`, `hmin`, and the drag tensor at generation time, so
+overriding these parameters leaves the drag input inconsistent with the runtime physics
+(which does use the current parameters). Switch to `raw_topo_online` to rebuild the drag
+input from the current parameters. Only Earth topography loads an artifact, so no warning is
+issued for the analytical test topographies.
+"""
+function warn_if_stale_raw_topo_artifact(ogw)
+    (ogw.topography == Val(:Earth) || ogw.topography == Val(:NoWarp)) ||
+        return nothing
+    FT = typeof(ogw.h_frac)
+    stale = String[]
+    isapprox(ogw.γ, FT(RAW_TOPO_ARTIFACT_γ)) ||
+        push!(stale, "γ = $(ogw.γ) (artifact $(RAW_TOPO_ARTIFACT_γ))")
+    isapprox(ogw.h_frac, FT(RAW_TOPO_ARTIFACT_H_FRAC)) ||
+        push!(stale, "h_frac = $(ogw.h_frac) (artifact $(RAW_TOPO_ARTIFACT_H_FRAC))")
+    isapprox(ogw.α_smoothing, FT(RAW_TOPO_ARTIFACT_α_SMOOTHING)) || push!(
+        stale,
+        "α_smoothing = $(ogw.α_smoothing) (artifact $(RAW_TOPO_ARTIFACT_α_SMOOTHING))",
+    )
+    isempty(stale) && return nothing
+    @warn "orographic_gravity_wave = \"raw_topo\" loads a preprocessed artifact built at \
+           the default shape parameters, so the drag input will not reflect the \
+           overridden $(join(stale, ", ")). Use \"raw_topo_online\" to recompute the drag \
+           input from the current parameters."
+    return nothing
+end
+
 function get_topo_info(Y, ogw::OrographicGravityWave)
     # For now, the initialisation of the cache is the same for all types of
     # orographic gravity wave drag parameterizations
@@ -66,6 +110,7 @@ function get_topo_info(Y, ogw::OrographicGravityWave)
         orographic_info_rll = joinpath(topo_path, "topo_drag.res.nc")
         topo_info = regrid_OGW_info(Y, orographic_info_rll)
     elseif ogw.topo_info == Val(:raw_topo)
+        warn_if_stale_raw_topo_artifact(ogw)
         earth_radius =
             Spaces.topology(
                 Spaces.horizontal_space(axes(Y.c)),
@@ -75,6 +120,19 @@ function get_topo_info(Y, ogw::OrographicGravityWave)
             earth_radius,
             ogw.topography,
             ogw.h_frac,
+        )
+    elseif ogw.topo_info == Val(:raw_topo_online)
+        earth_radius =
+            Spaces.topology(
+                Spaces.horizontal_space(axes(Y.c)),
+            ).mesh.domain.radius
+        topo_info = compute_ogw_drag_online(
+            Y,
+            earth_radius,
+            ogw.topography,
+            ogw.γ,
+            ogw.h_frac,
+            ogw.α_smoothing,
         )
     elseif ogw.topo_info == Val(:linear)
         # For user-defined analytical tests
@@ -1330,6 +1388,55 @@ function compute_ogw_drag(
 
     return (; hmax, hmin, t11, t21, t12, t22)
 
+end
+
+"""
+    compute_ogw_drag_online(Y, earth_radius, topography, γ, h_frac, α_smoothing)
+
+Build the orographic drag input `(; hmax, hmin, t11, t12, t21, t22)` at initialization by
+running the preprocessing pipeline directly, rather than reading a stored artifact.
+
+For Earth topography (`Val(:Earth)` or `Val(:NoWarp)`) this calls `compute_OGW_info` on the
+raw ETOPO elevation (`AA.earth_orography_file_path`), so the result reflects the run's
+resolution together with `γ`, `h_frac`, and `α_smoothing`. The neighborhood statistics are
+computed on the host and regridded onto the model surface space with the GPU-capable
+`SpaceVaryingInput`, so both CPU and GPU runs are supported at a one-time initialization
+cost.
+
+For the analytical test topographies the computation already lives in `compute_ogw_drag`,
+so this delegates to it.
+
+# Arguments
+
+  - `Y`: Prognostic state, used only for its spaces.
+  - `earth_radius`: Sphere radius [m].
+  - `topography`: `Val` of the configured topography name.
+  - `γ`: Mountain height-width exponent [-].
+  - `h_frac`: Ratio of the minimum to the maximum obstacle height [-].
+  - `α_smoothing`: Smoothing scale as a fraction of the model grid spacing [-].
+"""
+function compute_ogw_drag_online(
+    Y,
+    earth_radius,
+    topography,
+    γ,
+    h_frac,
+    α_smoothing,
+)
+    if topography == Val(:Earth) || topography == Val(:NoWarp)
+        @info "Computing orographic gravity wave drag input at initialization (raw_topo_online)" α_smoothing
+        elevation_data =
+            AA.earth_orography_file_path(context = ClimaComms.context(Y.c))
+        return compute_OGW_info(
+            Y,
+            elevation_data,
+            earth_radius,
+            γ,
+            h_frac;
+            α_smoothing,
+        )
+    end
+    return compute_ogw_drag(Y, earth_radius, topography, h_frac)
 end
 
 
