@@ -51,7 +51,6 @@ Aqua = "0.8.9"
 ArgParse = "1"
 Artifacts = "1"
 AtmosphericProfilesLibrary = "0.1.8"
-CairoMakie = "0.15.7"
 ClimaComms = "0.6.9"
 ClimaCore = "0.16"
 ClimaDiagnostics = "0.3.9"
@@ -95,7 +94,6 @@ julia = "1.9"
 
 [extras]
 Aqua = "4c88cf16-eb10-579e-8560-4a9242c79595"
-CairoMakie = "13f3f980-e62b-5c42-98c6-ff1f3baf88f0"
 Distributions = "31c24e10-a181-5473-b8eb-7969acd0382f"
 Downloads = "f43a241f-c20a-4ad4-852c-f6b1247861c6"
 IntervalSets = "8197267c-284f-5f27-9208-e0e47529a953"
@@ -107,4 +105,4 @@ SafeTestsets = "1bc83da4-3b8d-516f-aca4-4fe02f6d838f"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [targets]
-test = ["Aqua", "CairoMakie", "Distributions", "Downloads", "IntervalSets", "Musica", "OrderedCollections", "Pkg", "PrettyTables", "SafeTestsets", "Test"]
+test = ["Aqua", "Distributions", "Downloads", "IntervalSets", "Musica", "OrderedCollections", "Pkg", "PrettyTables", "SafeTestsets", "Test"]

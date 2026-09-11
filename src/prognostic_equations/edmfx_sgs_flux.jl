@@ -53,7 +53,7 @@ function edmfx_sgs_mass_flux_tendency!(
     )
     ᶜρa⁰ = @. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model))
 
-    if p.atmos.edmfx_model.sgs_mass_flux isa Val{true}
+    if p.atmos.edmfx_model.sgs_mass_flux
 
         # Enthalpy fluxes. First sum up the draft fluxes
         # TODO: Isolate assembly of flux term pattern to a function and
@@ -230,9 +230,9 @@ function edmfx_sgs_diffusive_flux_tendency!(
     # opt in/out just like the old subdomain-native diffusion did.
     apply_sgs_updraft =
         turbconv_model isa PrognosticEDMFX &&
-        p.atmos.edmfx_model.vertical_diffusion isa Val{true}
+        p.atmos.edmfx_model.vertical_diffusion
 
-    if p.atmos.edmfx_model.sgs_diffusive_flux isa Val{true}
+    if p.atmos.edmfx_model.sgs_diffusive_flux
 
         # Face-native eddy diffusivity/viscosity and interfacial entrainment
         # diffusivity, evaluated at the faces where the fluxes live (see

@@ -1984,15 +1984,18 @@ domain so that it can be dispatched on at compile time.
 const ValTF = Union{Val{true}, Val{false}}
 
 """
-    EDMFXModel{EEM, EDM, ESMF, ESDF, ENP, EVD, EF, SBM}
+    EDMFXModel{EEM, EDM, ESDFH, EHD, SBM}
 
 Switches and closures of the EDMF scheme, kept separate from the
 turbulence-convection model itself (`PrognosticEDMFX` or `EDOnlyEDMFX`) so that
 the individual terms can be enabled independently.
 
-The boolean switches are stored as `Val{true}`/`Val{false}` (see `ValTF`) so
-that the disabled terms are compiled away; the keyword constructor below
-accepts plain `Bool`s.
+Most switches are plain `Bool` fields, so that flipping one does not create a
+new `EDMFXModel` type and force the whole EDMF stack to recompile. Two stay in
+the type domain as `Val{true}`/`Val{false}` (see `ValTF`):
+`sgs_diffusive_flux_horizontal` and `horizontal_diffusion` decide whether
+`build_cache` allocates `ᶜK_u_h`/`ᶜK_h_h`, so the cache type depends on their
+value. The keyword constructor accepts plain `Bool`s for all of them.
 
 # Fields
 
@@ -2012,32 +2015,30 @@ accepts plain `Bool`s.
     mixing-length scales (`edmfx_scale_blending`).
 """
 struct EDMFXModel{
-    EEM, EDM,
-    ESMF <: ValTF, ESDF <: ValTF, ESDFH <: ValTF, ENP <: ValTF, EVD <: ValTF,
-    EHD <: ValTF, EF <: ValTF,
+    EEM, EDM, ESDFH <: ValTF, EHD <: ValTF,
     SBM <: AbstractScaleBlendingMethod,
 }
     entr_model::EEM
     detr_model::EDM
-    sgs_mass_flux::ESMF
-    sgs_diffusive_flux::ESDF
+    sgs_mass_flux::Bool
+    sgs_diffusive_flux::Bool
     sgs_diffusive_flux_horizontal::ESDFH
-    nh_pressure::ENP
-    vertical_diffusion::EVD
+    nh_pressure::Bool
+    vertical_diffusion::Bool
     horizontal_diffusion::EHD
-    filter::EF
+    filter::Bool
     scale_blending_method::SBM
 end
 
 
-# Convenience constructor that converts booleans to Val types
-# This outer constructor allows passing booleans, which are converted to Val types
+# Convenience constructor accepting plain booleans for every switch
 """
     EDMFXModel(; entr_model = nothing, detr_model = nothing, sgs_mass_flux = false,
                sgs_diffusive_flux = false, nh_pressure = false, vertical_diffusion = false,
                filter = false, scale_blending_method, kwargs...)
 
-Create an `EDMFXModel`, lifting the boolean switches to `Val` types.
+Create an `EDMFXModel`, lifting the two cache-shaping switches to `Val` types
+and storing the rest as plain `Bool`s.
 
 # Keyword Arguments
 
@@ -2050,7 +2051,7 @@ Create an `EDMFXModel`, lifting the boolean switches to `Val` types.
   - `filter = false`: Enable relaxation of negative updraft velocities.
   - `scale_blending_method`: Required; an `AbstractScaleBlendingMethod`.
 
-Each boolean may also be given as an already-wrapped `Val{true}`/`Val{false}`.
+Each switch may also be given as an already-wrapped `Val{true}`/`Val{false}`.
 Unrecognized keyword arguments are absorbed by `kwargs...` and ignored.
 
 # Examples
@@ -2080,17 +2081,18 @@ function EDMFXModel(;
 )
     parse_val_tf(x::Bool) = Val(x)
     parse_val_tf(x::ValTF) = x
-    # Convert booleans to Val types, keep Val types as-is
+    parse_bool(x::Bool) = x
+    parse_bool(::Val{B}) where {B} = B
     return EDMFXModel(
         entr_model,
         detr_model,
-        parse_val_tf(sgs_mass_flux),
-        parse_val_tf(sgs_diffusive_flux),
+        parse_bool(sgs_mass_flux),
+        parse_bool(sgs_diffusive_flux),
         parse_val_tf(sgs_diffusive_flux_horizontal),
-        parse_val_tf(nh_pressure),
-        parse_val_tf(vertical_diffusion),
+        parse_bool(nh_pressure),
+        parse_bool(vertical_diffusion),
         parse_val_tf(horizontal_diffusion),
-        parse_val_tf(filter),
+        parse_bool(filter),
         scale_blending_method,
     )
 end

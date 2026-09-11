@@ -89,7 +89,7 @@ edmfx_pressure_drag_tke_source!(Yₜ, Y, p, turbconv_model) = nothing
 function edmfx_pressure_drag_tke_source!(
     Yₜ, Y, p, turbconv_model::PrognosticEDMFX,
 )
-    p.atmos.edmfx_model.nh_pressure isa Val{true} || return nothing
+    p.atmos.edmfx_model.nh_pressure || return nothing
     n = n_mass_flux_subdomains(turbconv_model)
     n == 0 && return nothing
 

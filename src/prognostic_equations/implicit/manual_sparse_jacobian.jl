@@ -368,7 +368,7 @@ grid-mean scalars.
 These are the `(grid-mean tracer, updraft tracer)` blocks, the
 `(sedimenting tracer, f.u₃)` blocks, and the `ρe_tot` couplings to the updraft
 `mse` and to `ρ`. Returns `()` unless `atmos.turbconv_model` is a
-`PrognosticEDMFX` with `edmfx_model.sgs_mass_flux` set to `Val(true)`.
+`PrognosticEDMFX` with `edmfx_model.sgs_mass_flux` enabled.
 
 # Returns
 
@@ -377,7 +377,7 @@ These are the `(grid-mean tracer, updraft tracer)` blocks, the
 function sgs_massflux_jacobian_blocks(Y, atmos)
     (
         atmos.turbconv_model isa PrognosticEDMFX &&
-        atmos.edmfx_model.sgs_mass_flux isa Val{true}
+        atmos.edmfx_model.sgs_mass_flux
     ) || return ()
     FT = Spaces.undertype(axes(Y.c))
     (; TridiagonalRow, BidiagonalRow_ACT3) = jacobian_row_types(FT)
@@ -1443,7 +1443,7 @@ Update the Jacobian blocks for implicit vertical diffusion of the updraft
 scalars under the unified grid-mean tendency.
 
 No-op unless `p.atmos.turbconv_model` is a `PrognosticEDMFX`, `diffusion_flag`
-is `UseDerivative()`, and `edmfx_model.sgs_diffusive_flux` is `Val(true)` —
+is `UseDerivative()`, and `edmfx_model.sgs_diffusive_flux` is enabled —
 the same gate as the tendency being linearized. The updraft `mse`, `q_tot`,
 and passive tracer diagonals accumulate the full `ρ(K_h + K_entr)` diffusion
 matrix built by `update_diffusion_jacobian!`, while the sedimenting SGS tracers
@@ -1471,7 +1471,7 @@ function update_sgs_diffusion_jacobian!(matrix, Y, p, dtγ, diffusion_flag)
     # (`edmfx_sgs_diffusive_flux_tendency!` inside the sgs_diffusive_flux
     # branch): without it, the updraft scalar diagonals would carry
     # diffusion terms that have no tendency counterpart.
-    p.atmos.edmfx_model.sgs_diffusive_flux isa Val{true} || return nothing
+    p.atmos.edmfx_model.sgs_diffusive_flux || return nothing
     (; params) = p
     (; ᶜdiffusion_h_matrix) = p.scratch
     ᶜρ = Y.c.ρ
@@ -1655,14 +1655,14 @@ were already zeroed by `update_diffusion_jacobian!`; when diffusion is
 explicit they are zeroed here so that both can safely use `+=`.
 
 No-op unless `p.atmos.turbconv_model` is a `PrognosticEDMFX` with
-`edmfx_model.sgs_mass_flux` set to `Val(true)`. Writes
+`edmfx_model.sgs_mass_flux` enabled. Writes
 `ᶠbidiagonal_matrix_ct3` and `ᶜtridiagonal_matrix_scalar` in `p.scratch`,
 mutates `matrix`, and returns `nothing`.
 """
 function update_sgs_massflux_jacobian!(matrix, Y, p, dtγ, diffusion_flag)
     (
         p.atmos.turbconv_model isa PrognosticEDMFX &&
-        p.atmos.edmfx_model.sgs_mass_flux isa Val{true}
+        p.atmos.edmfx_model.sgs_mass_flux
     ) || return nothing
     (; params) = p
     (; ᶜΦ) = p.core
