@@ -55,7 +55,7 @@ jobs:
     if: needs.decide.outputs.skip != 'true'
 
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 70
+    timeout-minutes: 90
     strategy:
       fail-fast: false
       matrix:

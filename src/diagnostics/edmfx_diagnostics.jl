@@ -363,8 +363,8 @@ function compute_detr(state, cache, _, ::PrognosticEDMFX)
     ᶠdz = Fields.Δz_field(axes(state.f))
     ρaʲ = state.c.sgsʲs.:(1).ρa
     u₃ʲ = state.f.sgsʲs.:(1).u₃
-    # Use ᶠleft_bias_zero_bot so that detrainment diagnostics are not NaN at the first cell
-    ᶠleft_bias_zero_bot = Operators.LeftBiasedC2F(bottom = Operators.SetValue(0))
+    # Use ᶠbottom_bias_zero_bot so that detrainment diagnostics are not NaN at the first cell
+    ᶠbottom_bias_zero_bot = Operators.BottomBiasedC2F(bottom = Operators.SetValue(0))
     # Evaluate the buoyancy inverse time scale at faces (where w and grad_Φ are
     # naturally defined) and interpolate to centers for smoother behaviour.
     ᶜbuoy_inv_time_scale = @. lazy(
@@ -386,7 +386,7 @@ function compute_detr(state, cache, _, ::PrognosticEDMFX)
             draft_area(ρaʲ, ᶜρʲs.:1),
             ρaʲ,
             ᶜbuoy_inv_time_scale,
-            ᶜdivᵥ(ᶠleft_bias_zero_bot(ρaʲ) * u₃ʲ),
+            ᶜdivᵥ(ᶠbottom_bias_zero_bot(ρaʲ) * u₃ʲ),
             ᶜarea_bounding_entr_detrʲs.:1,
             detr_model,
         ),

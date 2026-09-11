@@ -197,36 +197,28 @@ if ClimaComms.iamroot(config.comms_ctx)
         ),
     )
     @info "Plotting"
-    paths = latest_comparable_dirs() # __build__ path (not job path)
-    if isempty(paths)
-        make_plots(Val(Symbol(reference_job_id)), simulation.output_dir)
-    else
-        main_job_path = joinpath(first(paths), reference_job_id)
-        nc_dir = joinpath(main_job_path, "nc_files")
-        if ispath(nc_dir)
-            @info "nc_dir exists"
+    reference_dirs = latest_comparable_dirs() # __build__ paths (not job paths)
+    paths = [simulation.output_dir]
+    if !isempty(reference_dirs)
+        reference_tar =
+            joinpath(first(reference_dirs), reference_job_id, "nc_files.tar")
+        if isfile(reference_tar)
+            # Extract next to, not inside, the output directory: files left
+            # inside it would land in this job's own `nc_files.tar` below.
+            reference_nc_dir = joinpath(
+                dirname(rstrip(simulation.output_dir, '/')),
+                "reference_nc_files",
+            )
+            rm(reference_nc_dir; recursive = true, force = true)
+            Tar.extract(reference_tar, reference_nc_dir)
+            push!(paths, reference_nc_dir)
+            @info "Comparing against reference $(first(reference_dirs))"
         else
-            mkpath(nc_dir)
-            # Try to extract nc files from tarball:
-            @info "Comparing against $(readdir(nc_dir))"
+            @warn "No reference nc_files.tar found; plotting without a \
+                   comparison" reference_tar
         end
-        if isempty(readdir(nc_dir))
-            if isfile(joinpath(main_job_path, "nc_files.tar"))
-                Tar.extract(joinpath(main_job_path, "nc_files.tar"), nc_dir)
-            else
-                @warn "No nc_files found"
-            end
-        else
-            @info "Files already extracted"
-        end
-
-        paths = if isempty(readdir(nc_dir))
-            simulation.output_dir
-        else
-            [simulation.output_dir, nc_dir]
-        end
-        make_plots(Val(Symbol(reference_job_id)), paths)
     end
+    make_plots(Val(Symbol(reference_job_id)), paths)
     @info "Plotting done"
 
     if islink(simulation.output_dir)

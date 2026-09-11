@@ -223,15 +223,15 @@ function compute_lmix(state, cache, _)
         return cache.precomputed.ᶜl_mix
     end
     (; params) = cache
-    (; ᶜN²_eff, ᶜstrain_rate_norm) = cache.precomputed
+    (; ᶜbuoygrad, ᶜstrain_rate_norm) = cache.precomputed
     ᶜdz = Fields.Δz_field(axes(state.c))
     ᶜprandtl_nvec = @. lazy(turbulent_prandtl_number(
-        params, ᶜN²_eff, ᶜstrain_rate_norm,
+        params, ᶜbuoygrad, ᶜstrain_rate_norm,
     ))
     return @. lazy(
         smagorinsky_lilly_length(
             CAP.c_smag(params),
-            sqrt(max(ᶜN²_eff, 0)),   # N_eff
+            sqrt(max(ᶜbuoygrad, 0)),   # N_eff
             ᶜdz, ᶜprandtl_nvec, ᶜstrain_rate_norm,
         ),
     )

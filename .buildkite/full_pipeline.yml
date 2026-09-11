@@ -82,6 +82,7 @@ steps:
 
     agents:
       slurm_cpus_per_task: 8
+      slurm_mem: 20GB
     env:
       JULIA_NUM_PRECOMPILE_TASKS: 8
       JULIA_MAX_NUM_PRECOMPILE_FILES: 50

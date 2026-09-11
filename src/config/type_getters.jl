@@ -107,18 +107,6 @@ function get_numerics(parsed_args, FT)
     energy_q_tot_upwinding = Symbol(parsed_args["energy_q_tot_upwinding"])
     tracer_upwinding = Symbol(parsed_args["tracer_upwinding"])
 
-    # Compat
-    if !(pkgversion(ClimaCore) ≥ v"0.14.22") &&
-       energy_q_tot_upwinding == :vanleer_limiter
-        energy_q_tot_upwinding = :none
-        @warn "energy_q_tot_upwinding=vanleer_limiter is not supported for ClimaCore $(pkgversion(ClimaCore)), please upgrade. Setting energy_q_tot_upwinding to :none"
-    end
-    if !(pkgversion(ClimaCore) ≥ v"0.14.22") &&
-       tracer_upwinding == :vanleer_limiter
-        tracer_upwinding = :none
-        @warn "tracer_upwinding=vanleer_limiter is not supported for ClimaCore $(pkgversion(ClimaCore)), please upgrade. Setting tracer_upwinding to :none"
-    end
-
     edmfx_mse_q_tot_upwinding = Symbol(parsed_args["edmfx_mse_q_tot_upwinding"])
     edmfx_sgsflux_upwinding = Symbol(parsed_args["edmfx_sgsflux_upwinding"])
     edmfx_tracer_upwinding = Symbol(parsed_args["edmfx_tracer_upwinding"])

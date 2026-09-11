@@ -53,8 +53,9 @@ Values are looked up with `parse_option`, so an unknown string raises an error l
 the valid choices. Each option string names the `CM.Parameters` type it maps to:
 
   - `cloud_liquid_formation`: `"CloudLiquidFormation"`.
-  - `cloud_ice_formation`: `"ConstantTimescale"`, `"TemperatureDependent"`.
+  - `cloud_ice_formation`: `"PrescribedIceNumber"`, `"ConstantTimescale"`, `"TemperatureDependent"`.
   - `cloud_ice_melt`: `"CloudIceMelt"`.
+  - `cloud_liquid_freezing`: `"HomogeneousAndHeterogeneous"`, `"Homogeneous"`, `"Heterogeneous"`.
   - `rain_autoconversion`: `"Kessler1M"`, `"PrescribedNd"`.
   - `snow_autoconversion`: `"NoSupersaturation"`, `"WithSupersaturation"`.
   - `rain_condensation_evaporation`: `"RainEvaporation"`.
@@ -83,6 +84,8 @@ function get_microphysics_1m_options(parsed_args)
     cloud_ice_formation = parse_option(
         parsed_args["cloud_ice_formation"],
         Dict(
+            "PrescribedIceNumber" =>
+                CMP.PrescribedIceNumber(),
             "ConstantTimescale" =>
                 CMP.ConstantTimescale(),
             "TemperatureDependent" =>
@@ -117,6 +120,18 @@ function get_microphysics_1m_options(parsed_args)
         parsed_args["rain_condensation_evaporation"],
         Dict("RainEvaporation" => CMP.RainEvaporation()),
         "rain_condensation_evaporation",
+    )
+    cloud_liquid_freezing = parse_option(
+        parsed_args["cloud_liquid_freezing"],
+        Dict(
+            "HomogeneousAndHeterogeneous" =>
+                CMP.HomogeneousAndHeterogeneous(),
+            "Homogeneous" =>
+                CMP.Homogeneous(),
+            "Heterogeneous" =>
+                CMP.Heterogeneous(),
+        ),
+        "cloud_liquid_freezing",
     )
     snow_deposition_sublimation = parse_option(
         parsed_args["snow_deposition_sublimation"],
@@ -179,6 +194,7 @@ function get_microphysics_1m_options(parsed_args)
         cloud_liquid_formation,
         cloud_ice_formation,
         cloud_ice_melt,
+        cloud_liquid_freezing,
         rain_autoconversion,
         snow_autoconversion,
         rain_condensation_evaporation,

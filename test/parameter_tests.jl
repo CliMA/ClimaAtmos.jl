@@ -33,7 +33,7 @@ end
     # picks another variant
     defaults = CA.NonEquilibriumMicrophysics1M()
     @test defaults.processes.rain_autoconversion isa CMP.Kessler1M
-    @test defaults.processes.cloud_ice_formation isa CMP.TemperatureDependent
+    @test defaults.processes.cloud_ice_formation isa CMP.PrescribedIceNumber
     # Unknown process names are rejected where they are written
     @test_throws Exception CA.NonEquilibriumMicrophysics1M(; not_a_process = 1)
 
