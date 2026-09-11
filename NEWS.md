@@ -4,6 +4,16 @@ ClimaAtmos.jl Release Notes
 main
 ----
 
+0.42.10
+-------
+- [#4803](https://github.com/CliMA/ClimaAtmos.jl/pull/4803)
+  ![][badge-✨feature/enhancement] Generate comparison plots for the
+  reproducibility tests, so a failing job shows the reference and the candidate
+  side by side instead of only the RMSE table.
+- [#4800](https://github.com/CliMA/ClimaAtmos.jl/pull/4800)
+  ![][badge-🔥behavioralΔ] Add tke source due to entr/detr mixing; delete
+  stability-biased buoygrad at cell centers and use unbiased buoygrad instead.
+
 0.42.9
 -------
 - Update to ClimaCore.jl v0.16 (support for v0.15 is dropped). The biased
