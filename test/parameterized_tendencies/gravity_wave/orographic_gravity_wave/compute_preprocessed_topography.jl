@@ -49,12 +49,10 @@ end
 
 earth_radius = Spaces.topology(hspace).mesh.domain.radius
 
-(; γ, h_frac) = params.orographic_gravity_wave_params
+(; γ, h_frac, α_smoothing) = params.orographic_gravity_wave_params
 
 elevation_data =
     CA.AA.earth_orography_file_path(; context = ClimaComms.context(Y.c))
-
-α_smoothing = 0.15  # smoothing scale as fraction of grid resolution
 
 load_preprocessed_topography = false
 

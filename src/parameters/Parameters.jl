@@ -347,6 +347,9 @@ nonlinear drag. Loaded only when the scheme is enabled.
   - `a0`: Coefficient of the propagating (linear) wave drag [-].
   - `a1`: Coefficient of the nonpropagating (blocked) drag [-].
   - `Fr_crit`: Critical Froude number, the nondimensional critical height [-].
+  - `α_smoothing`: Preprocessing smoothing scale as a fraction of the model grid
+    spacing, `L = α · Δx`, used by `compute_OGW_info` (both `raw_topo_online` and
+    offline artifact generation) [-].
 """
 Base.@kwdef struct OrographicGravityWaveParameters{FT} <: AGWP
     γ::FT                    # mountain_height_width_exponent: L ∝ h^γ (equation 14, paper suggests γ ≈ 0.4)
@@ -358,6 +361,7 @@ Base.@kwdef struct OrographicGravityWaveParameters{FT} <: AGWP
     a0::FT                   # linear_drag_coefficient: a_0 = 0.9, coefficient for propagating wave drag
     a1::FT                   # nonlinear_drag_coefficient: a_1 = 3.0, coefficient for nonpropagating (blocked) drag
     Fr_crit::FT              # critical_froude_number: Fr_crit = 0.7, critical Froude number h̃_c = Fr_crit
+    α_smoothing::FT          # smoothing_scale_fraction: preprocessing smoothing scale L = α·Δx (used by compute_OGW_info)
 end
 
 # Physical/tuning parameters for the Beres (2004) convective gravity-wave source.
