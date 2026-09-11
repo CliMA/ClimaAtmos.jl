@@ -331,7 +331,7 @@ energy_q_tot_upwinding:
   help: "Energy upwinding mode [`none`, `first_order` , `third_order`, `vanleer_limiter` (default)]"
   value: vanleer_limiter
 orographic_gravity_wave:
-  help: "Orographic drag on horizontal mean flow [`nothing` (default), `gfdl_restart`, `raw_topo`, `linear` (test path)]"
+  help: "Orographic drag on horizontal mean flow [`nothing` (default), `gfdl_restart`, `raw_topo` (load preprocessed artifact), `raw_topo_online` (run preprocessing at initialization), `linear` (test path)]"
   value: ~
 non_orographic_gravity_wave:
   help: "Apply parameterization for convective gravity wave forcing on horizontal mean flow [`false` (default), `true`]"

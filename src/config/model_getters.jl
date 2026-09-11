@@ -530,9 +530,12 @@ Build the orographic gravity wave model selected by the `orographic_gravity_wave
 key.
 
   - `~` (null): `nothing`, no orographic gravity wave drag.
-  - `"raw_topo"` or `"gfdl_restart"`: `FullOrographicGravityWave`, parameterized by the
-    source of the subgrid topography statistics and by the `topography` key, with
-    coefficients from `params.orographic_gravity_wave_params`.
+  - `"raw_topo"`, `"raw_topo_online"`, or `"gfdl_restart"`:
+    `FullOrographicGravityWave`, parameterized by the source of the subgrid
+    topography statistics and by the `topography` key, with coefficients from
+    `params.orographic_gravity_wave_params`. `"raw_topo"` loads a preprocessed
+    HDF5 artifact, `"raw_topo_online"` runs the preprocessing pipeline at
+    initialization, and `"gfdl_restart"` regrids the GFDL restart file.
   - `"linear"`: `LinearOrographicGravityWave`.
 
 Any other value raises an error.
@@ -540,8 +543,10 @@ Any other value raises an error.
 function get_orographic_gravity_wave_model(parsed_args, params, ::Type{FT}) where {FT}
     ogw_name = parsed_args["orographic_gravity_wave"]
     isnothing(ogw_name) && return nothing
-    return if ogw_name == "raw_topo" || ogw_name == "gfdl_restart"
-        (; γ, ϵ, β, h_frac, ρscale, L0, a0, a1, Fr_crit) =
+    return if ogw_name == "raw_topo" ||
+              ogw_name == "raw_topo_online" ||
+              ogw_name == "gfdl_restart"
+        (; γ, ϵ, β, h_frac, ρscale, L0, a0, a1, Fr_crit, α_smoothing) =
             params.orographic_gravity_wave_params
         topo_info = Val(Symbol(parsed_args["orographic_gravity_wave"]))
         topography = Val(Symbol(parsed_args["topography"]))
@@ -555,6 +560,7 @@ function get_orographic_gravity_wave_model(parsed_args, params, ::Type{FT}) wher
             a0,
             a1,
             Fr_crit,
+            α_smoothing,
             topo_info,
             topography,
         )
@@ -562,7 +568,7 @@ function get_orographic_gravity_wave_model(parsed_args, params, ::Type{FT}) wher
         LinearOrographicGravityWave(; topo_info = Val(:linear))
     else
         error(
-            """Unknown orographic_gravity_wave `$ogw_name`. Expected: ~, "gfdl_restart", "raw_topo", or "linear".""",
+            """Unknown orographic_gravity_wave `$ogw_name`. Expected: ~, "gfdl_restart", "raw_topo", "raw_topo_online", or "linear".""",
         )
     end
 end

@@ -344,22 +344,35 @@ The tendencies above act on the physical horizontal wind components.
 
 ## Implementation Summary
 
-The parameterization splits into an offline preprocessing step (Earth topography only) that builds an HDF5 artifact of $(h_{\mathrm{max}}, h_{\mathrm{min}}, t_{11}, t_{12}, t_{21}, t_{22})$ on the spectral element grid, and a runtime step that consumes the artifact via a `dt_ogw` callback and applies the cached forcing every integrator step.
+The parameterization splits into a preprocessing step (Earth topography only) that builds $(h_{\mathrm{max}}, h_{\mathrm{min}}, t_{11}, t_{12}, t_{21}, t_{22})$ on the spectral element grid, and a runtime step that consumes those fields via a `dt_ogw` callback and applies the cached forcing every integrator step. The preprocessing runs offline into an HDF5 artifact (`raw_topo`) or at initialization (`raw_topo_online`).
 
 The scheme and its topographic-information source are selected with the
 `orographic_gravity_wave` configuration key: `gfdl_restart` regrids the GFDL
-`topo_drag.res.nc` artifact, `raw_topo` runs the pipeline below from raw
-elevation data, and a `linear` test path accepts user-supplied analytic drag
-coefficients.
+`topo_drag.res.nc` artifact, `raw_topo` loads a preprocessed HDF5 artifact built
+by the pipeline below, `raw_topo_online` runs that pipeline at initialization so
+the drag input matches the run's resolution and the `γ`, `h_frac`, and
+`α_smoothing` (`ogw_smoothing_scale_fraction`) parameters, and a `linear` test
+path accepts user-supplied analytic drag coefficients.
+
+!!! note "raw_topo artifacts are tied to their generation parameters"
+
+    The `raw_topo` artifacts fix $(h_{\mathrm{max}}, h_{\mathrm{min}}, t_{11}, t_{12}, t_{21}, t_{22})$
+    at the values used when they were generated (the ClimaParams defaults
+    `γ = 0.4`, `h_frac = 0.1`, `α_smoothing = 0.15`). The runtime drag physics still
+    uses the current parameters, so overriding `γ`, `h_frac`, or `α_smoothing` while
+    keeping `raw_topo` leaves the drag input inconsistent with the physics (a warning
+    is emitted). Use `raw_topo_online` to rebuild the drag input from the current
+    parameters.
 
 ```
-Offline (Earth topography only):
+Preprocessing (Earth topography only); offline for raw_topo, or at
+initialization for raw_topo_online:
   compute_OGW_info
     ├─ calc_hpoz_latlon         → h₀ (raw 4th-moment statistic; rescaled to hmax, hmin in compute_OGW_info)
     ├─ calc_velocity_potential  → χ  (2D Hilbert transform)
     ├─ calc_orographic_tensor   → t11, t21, t12, t22
     └─ regrid_OGW_info          → SpaceVaryingInput to spectral element
-  write_computed_drag! → HDF5 artifact (common configs loadable via ClimaArtifacts)
+  write_computed_drag! → HDF5 artifact (raw_topo; loadable via ClimaArtifacts)
 
 Every dt_ogw seconds:
   ogw_model_callback!
