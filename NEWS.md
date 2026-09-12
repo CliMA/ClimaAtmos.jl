@@ -3,6 +3,9 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- [#4802](https://github.com/CliMA/ClimaAtmos.jl/pull/4802) ![][badge-✨feature/enhancement] Horizontal resolved-gradient (geometric) SGS variance term
+  `c_g (c_Δx Δx_h)² |∇_h ψ|²` for the SGS quadrature (`sgs_variance_horizontal_scale_factor` switches it on), with a closure-validity bound on
+  σ_q (`sgs_variance_max_rel_std`); The new parameters default to the historical closure.
 
 0.42.10
 -------

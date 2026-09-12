@@ -536,15 +536,24 @@ function TurbulenceConvectionParameters(
     )
     parameters = CP.get_parameter_values(toml_dict, name_map, "ClimaAtmos")
     FT = CP.float_type(toml_dict)
-    # Cloud-fraction shape parameters (see `_compute_cloud_fraction`).
-    # Not yet in ClimaParams' default toml, so they are fetched only when a
-    # run/calibration toml defines them and otherwise fall back to the
-    # defaults below (margin = abs_margin = sharpness = 1, residual = 0),
-    # which release the floor on a one-width saturation margin guarded by an
-    # absolute margin of one floor width.
-    # TODO: promote to ClimaParams (and the name_map above) once the
-    # release shape has been calibrated.
-    release_defaults = (;
+    # Provisional parameters: not yet in ClimaParams' default toml. Each is
+    # read from the run/calibration toml when defined there and otherwise
+    # falls back to the default below.
+    # TODO: promote each to ClimaParams (and the name_map above) once it has
+    # been calibrated, and remove it from this block.
+    provisional_defaults = (;
+        # Horizontal resolved-gradient (geometric) SGS variance term (see
+        # `set_covariance_cache!`). geometric_coeff is the variance of a linear field
+        # over a uniform cell and horizontal_scale_factor scales the horizontal grid length; 0
+        # disables the term (default). The max_rel_std bound applies to the diagnosed q′q′
+        # and keeps the quadrature nodes non-negative.
+        sgs_variance_geometric_coeff = FT(1 // 12),
+        sgs_variance_horizontal_scale_factor = FT(0),
+        sgs_variance_max_rel_std = FT(0.5),
+        # Cloud-fraction floor release shape (see `_compute_cloud_fraction`):
+        # margin = abs_margin = sharpness = 1, residual = 0 release the floor on
+        # a one-width saturation margin guarded by an absolute margin of one
+        # floor width.
         cloud_fraction_floor_release_margin = FT(1),
         cloud_fraction_floor_release_abs_margin = FT(1),
         cloud_fraction_floor_release_sharpness = FT(1),
@@ -553,18 +562,18 @@ function TurbulenceConvectionParameters(
         # (see `updraft_sedimentation!`). 1.0 = full correction, 0.0 = disabled.
         sedimentation_lateral_coeff = FT(1), # Testing if stable now. To be removed, if yes.
     )
-    release_present = filter(collect(keys(release_defaults))) do name
+    provisional_present = filter(collect(keys(provisional_defaults))) do name
         haskey(toml_dict.data, string(name))
     end
-    release_params =
-        isempty(release_present) ? (;) :
+    provisional_params =
+        isempty(provisional_present) ? (;) :
         CP.get_parameter_values(
             toml_dict,
-            String.(release_present),
+            String.(provisional_present),
             "ClimaAtmos",
         )
     parameters =
-        merge(parameters, release_defaults, release_params, overrides)
+        merge(parameters, provisional_defaults, provisional_params, overrides)
     parameters = to_svec(parameters)
     VFT1 = typeof(parameters.entr_param_vec)
     VFT2 = typeof(parameters.turb_entr_param_vec)

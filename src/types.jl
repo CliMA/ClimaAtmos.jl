@@ -2162,7 +2162,7 @@ Group of chemistry models inside an `AtmosModel`.
 end
 
 """
-    AtmosWater{MM, CM, MTTS, TNM, SQ, TVM}(; microphysics_model = DryModel(), kwargs...)
+    AtmosWater{MM, CM, MTTS, TNM, SQ, TVL, TVI, TVR, TVS}(; microphysics_model = DryModel(), kwargs...)
 
 Group of moisture, cloud, and microphysics choices inside an
 `AtmosModel`.
