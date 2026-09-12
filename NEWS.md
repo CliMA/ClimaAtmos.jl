@@ -3,6 +3,18 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- Remove the remaining uses of deprecated ClimaCore names, aliases and
+  constructors. `Geometry.AxisTensor` is `Geometry.Tensor` (with its `T` and `N`
+  parameters swapped) and the generic `Geometry.ContravariantAxis{I}` is the
+  concrete `Contravariant3Axis`/`Contravariant12Axis`; `Geometry.components(x)`
+  is `parent(x)`; `DataLayouts.AbstractData` is `DataLayouts.DataLayout`;
+  `Operators.WeakDivergence`/`WeakGradient`/`WeakCurl` are
+  `Divergence{WeakForm}`/`Gradient{WeakForm}`/`Curl{WeakForm}`; the
+  `MatrixFields` matrix product `⋅` is `*`; `FaceFiniteDifferenceSpace(mesh)`
+  takes a device as its first argument; and the `ClimaCore.RecursiveApply`
+  compatibility module (`⊞`, `⊠`, `rzero`, `rpromote_type`) is replaced by the
+  `AutoBroadcaster` wrappers in `ClimaCore.Utilities`. These are spelling
+  changes only; results are unchanged.
 
 0.42.10
 -------

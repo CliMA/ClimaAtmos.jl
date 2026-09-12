@@ -305,7 +305,6 @@ function get_cartesian_spaces(; FT = Float32)
         boundary_names = (:bottom, :top),
     )
     vertmesh = Meshes.IntervalMesh(vertdomain, stretch, nelems = velem)
-    vert_face_space = Spaces.FaceFiniteDifferenceSpace(vertmesh)
     vert_topology = Topologies.IntervalTopology(
         ClimaComms.SingletonCommsContext(device),
         vertmesh,

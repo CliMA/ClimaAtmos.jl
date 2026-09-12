@@ -162,12 +162,12 @@ function temporary_quantities(Y, atmos)
         ᶠbidiagonal_matrix_ct3xct12 = similar(
             Y.f,
             BidiagonalMatrixRow{
-                ClimaCore.Geometry.AxisTensor{
-                    FT,
+                ClimaCore.Geometry.Tensor{
                     2,
+                    FT,
                     Tuple{
-                        ClimaCore.Geometry.ContravariantAxis{(3,)},
-                        ClimaCore.Geometry.ContravariantAxis{(1, 2)},
+                        ClimaCore.Geometry.Contravariant3Axis,
+                        ClimaCore.Geometry.Contravariant12Axis,
                     },
                     SMatrix{1, 2, FT, 2},
                 },
