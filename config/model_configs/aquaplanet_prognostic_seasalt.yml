@@ -1,9 +1,26 @@
-dt: "120secs"
-t_end: "240secs"
-surface_setup: "DefaultMoninObukhov"
-rad: "allskywithclear"
+# Prognostic sea salt requires prognostic EDMF; grid and EDMF settings follow
+# prognostic_edmfx_aquaplanet.yml.
+z_max: 30000.0
+z_elem: 10
+dz_bottom: 500.0
+dt: 20secs
+t_end: 240secs
+surface_setup: DefaultMoninObukhov
+rad: allskywithclear
+turbconv: prognostic_edmfx
+prognostic_tke: true
+edmfx_entr_model: "Generalized"
+edmfx_detr_model: "Generalized"
+edmfx_nh_pressure: true
+edmfx_vertical_diffusion: true
+edmfx_filter: true
+edmfx_sgs_mass_flux: true
+edmfx_sgs_diffusive_flux: true
+implicit_diffusion: true
+approximate_linear_solve_iters: 2
 microphysics_model: "0M"
-vert_diff: "DecayWithHeightDiffusion"
+toml: [toml/prognostic_edmfx.toml]
+ode_algo: "ARS222"
 aerosol_radiation: true
 prescribed_aerosols: ["SSLT01", "SSLT02", "SSLT03", "SSLT04", "SSLT05"]
 prognostic_aerosols: ["SSLT"]
