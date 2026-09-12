@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>Available Diagnostics · ClimaAtmos.jl</title><meta name="title" content="Available Diagnostics · ClimaAtmos.jl"/><meta property="og:title" content="Available Diagnostics · ClimaAtmos.jl"/><meta property="twitter:title" content="Available Diagnostics · ClimaAtmos.jl"/><meta name="description" content="Documentation for ClimaAtmos.jl."/><meta property="og:description" content="Documentation for ClimaAtmos.jl."/><meta property="twitter:description" content="Documentation for ClimaAtmos.jl."/><script data-outdated-warner src="../assets/warner.js"></script><link href="https://cdnjs.cloudflare.com/ajax/libs/lato-font/3.0.0/css/lato-font.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/juliamono/0.050/juliamono.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.8/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL=".."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="../assets/documenter.js"></script><script src="../search_index.js"></script><script src="../siteinfo.js"></script><script src="../../versions.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/documenter-dark.css" data-theme-name="documenter-dark" data-theme-primary-dark/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="../assets/themeswap.js"></script></head><body><div id="documenter"><nav class="docs-sidebar"><div class="docs-package-name"><span class="docs-autofit"><a href="../">ClimaAtmos.jl</a></span></div><button class="docs-search-query input is-rounded is-small is-clickable my-2 mx-auto py-1 px-2" id="documenter-search-query">Search docs (Ctrl + /)</button><ul class="docs-menu"><li><a class="tocitem" href="../">Home</a></li><li><a class="tocitem" href="../installation_instructions/">Installation instructions</a></li><li><a class="tocitem" href="../contributor_guide/">Contributor Guide</a></li><li><a class="tocitem" href="../equations/">Equations</a></li><li><a class="tocitem" href="../edmf_equations/">EDMF Equations</a></li><li><a class="tocitem" href="../diagnostics/">Diagnostics</a></li><li class="is-active"><a class="tocitem" href>Available Diagnostics</a></li><li><a class="tocitem" href="../diagnostic_edmf_equations/">Diagnostic EDMF Equations</a></li><li><a class="tocitem" href="../gravity_wave/">Gravity Wave Drag Parameterizations</a></li><li><a class="tocitem" href="../radiative_equilibrium/">Radiative Equilibrium</a></li><li><a class="tocitem" href="../repl_scripts/">REPL scripts</a></li><li><a class="tocitem" href="../config/">Configuration</a></li><li><a class="tocitem" href="../parameters/">Parameters</a></li><li><a class="tocitem" href="../api/">API</a></li><li><a class="tocitem" href="../references/">References</a></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><a class="docs-sidebar-button docs-navbar-link fa-solid fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a><nav class="breadcrumb"><ul class="is-hidden-mobile"><li class="is-active"><a href>Available Diagnostics</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href>Available Diagnostics</a></li></ul></nav><div class="docs-right"><a class="docs-navbar-link" href="https://github.com/CliMA/ClimaAtmos.jl" title="View the repository on GitHub"><span class="docs-icon fa-brands"></span><span class="docs-label is-hidden-touch">GitHub</span></a><a class="docs-navbar-link" href="https://github.com/CliMA/ClimaAtmos.jl/blob/main/docs/src/available_diagnostics.md" title="Edit source on GitHub"><span class="docs-icon fa-solid"></span></a><a class="docs-settings-button docs-navbar-link fa-solid fa-gear" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-article-toggle-button fa-solid fa-chevron-up" id="documenter-article-toggle-button" href="javascript:;" title="Collapse all docstrings"></a></div></header><article class="content" id="documenter-page"><h1 id="Available-diagnostic-variables"><a class="docs-heading-anchor" href="#Available-diagnostic-variables">Available diagnostic variables</a><a id="Available-diagnostic-variables-1"></a><a class="docs-heading-anchor-permalink" href="#Available-diagnostic-variables" title="Permalink"></a></h1><p>Autogenerate table of available diagnostics:</p><pre><code class="language-julia hljs">include(&quot;make_diagnostic_table.jl&quot;)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">┌────────────┬─────────────────┬──────────┬──────────────────────────────────┬─────────────────┐
+│ Short name │ Long name       │ Units    │ Comments                         │ Standard name   │
+├────────────┼─────────────────┼──────────┼──────────────────────────────────┼─────────────────┤
+│ rhoa       │ Air Density     │ kg m^-3  │                                  │ air_density     │
+├────────────┼─────────────────┼──────────┼──────────────────────────────────┼─────────────────┤
+│ taen       │ Environment     │ K        │                                  │                 │
+│            │ Air Temperature │          │                                  │                 │
+├────────────┼─────────────────┼──────────┼──────────────────────────────────┼─────────────────┤
+│ pr         │ Precipitation   │ m s^-1   │ Total precipitation including    │ precipitation   │
+│            │                 │          │ rain and snow                    │                 │
+├────────────┼─────────────────┼──────────┼──────────────────────────────────┼─────────────────┤
+│ rhoaup     │ Updraft Air     │ kg m^-3  │ Density of the first updraft     │                 │
+│            │ Density         │          │                                  │                 │
+├────────────┼─────────────────┼──────────┼──────────────────────────────────┼─────────────────┤
+│ waup       │ Updraft Upward  │ m s^-1   │ Vertical wind component of the   │                 │
+│            │ Air Velocity    │          │ first updraft                    │                 │
+├────────────┼─────────────────┼──────────┼──────────────────────────────────┼─────────────────┤
+│ rld        │ Downwelling     │ W m^-2   │ Downwelling longwave radiation   │ surface_downwel │
+│            │ Longwave        │          │                                  │ ling_longwave_f │
+│            │ Radiation       │          │                                  │ lux_in_air      │
+├────────────┼─────────────────┼──────────┼──────────────────────────────────┼─────────────────┤
+│ wa         │ Upward Air      │ m s^-1   │ Vertical wind component          │ upward_air_velo │
+│            │ Velocity        │          │                                  │ city            │
+├────────────┼─────────────────┼──────────┼──────────────────────────────────┼─────────────────┤
+│ hfes       │ Surface Upward  │ W m^-2   │ Energy flux at the surface       │                 │
+│            │ Energy Flux     │          │                                  │                 │
+├────────────┼─────────────────┼──────────┼──────────────────────────────────┼─────────────────┤
+│ ua         │ Eastward Wind   │ m s^-1   │ Eastward (zonal) wind component  │ eastward_wind   │
+├────────────┼─────────────────┼──────────┼──────────────────────────────────┼─────────────────┤
+│ cli        │ Mass Fraction   │ kg kg^-1 │ Includes both large-scale and    │ mass_fraction_o │
+│            │ of Cloud Ice    │          │ convective cloud.                │ f_cloud_ice_in_ │
+│            │                 │          │ This is calculated as the mass   │ air             │
+│            │                 │          │ of cloud ice in the grid cell    │                 │
+│            │                 │          │ divided by                       │                 │
+│            │                 │          │ the mass of air (including the   │                 │
+│            │                 │          │ water in all phases) in the      │                 │
+│            │                 │          │ grid cell.                       │                 │
+│            │                 │          │                                  │                 │
+├────────────┼─────────────────┼──────────┼──────────────────────────────────┼─────────────────┤
+│ thetaaup   │ Updraft Air     │ K        │ Potential Temperature of the     │                 │
+│            │ Potential       │          │ first updraft                    │                 │
+│            │ Temperature     │          │                                  │                 │
+├────────────┼─────────────────┼──────────┼──────────────────────────────────┼─────────────────┤
+│ rsucs      │ Upwelling       │ W m^-2   │ Upwelling clear sky shortwave    │ surface_upwelli │
+│            │ Clear-Sky       │          │ radiation                        │ ng_shortwave_fl │
+│            │ Shortwave       │          │                                  │ ux_in_air_assum │
+│            │ Radiation       │          │                                  │ ing_clear_sky   │
+├────────────┼─────────────────┼──────────┼──────────────────────────────────┼─────────────────┤
+│ rsu        │ Upwelling       │ W m^-2   │ Upwelling shortwave radiation    │ surface_upwelli │
+│            │ Shortwave       │          │                                  │ ng_shortwave_fl │
+│            │ Radiation       │          │                                  │ ux_in_air       │
+├────────────┼─────────────────┼──────────┼──────────────────────────────────┼─────────────────┤
+│ hussfc     │ Surface         │ kg kg^-1 │ Mass of all water phases per     │ specific_humidi │
+│            │ Specific        │          │ mass of air in the layer         │ ty              │
+│            │ Humidity        │          │ infinitely close to the surface  │                 │
+├────────────┼─────────────────┼──────────┼──────────────────────────────────┼─────────────────┤
+│ tke        │ Environment     │ m^2 s^-2 │                                  │                 │
+│            │ Turbulent       │          │                                  │                 │
+│            │ Kinetic Energy  │          │                                  │                 │
+├────────────┼─────────────────┼──────────┼──────────────────────────────────┼─────────────────┤
+│ rv         │ Relative        │ s^-1     │ Vertical component of relative   │ relative_vortic │
+│            │ Vorticity       │          │ vorticity                        │ ity             │
+├────────────┼─────────────────┼──────────┼──────────────────────────────────┼─────────────────┤
+│ thetaa     │ Air Potential   │ K        │                                  │ air_potential_t │
+│            │ Temperature     │          │                                  │ emperature      │
+├────────────┼─────────────────┼──────────┼──────────────────────────────────┼─────────────────┤
+│ husup      │ Updraft         │ kg kg^-1 │ Specific humidity of the first   │                 │
+│            │ Specific        │          │ updraft                          │                 │
+│            │ Humidity        │          │                                  │                 │
+├────────────┼─────────────────┼──────────┼──────────────────────────────────┼─────────────────┤
+│ rsd        │ Downwelling     │ W m^-2   │ Downwelling shortwave radiation  │ surface_downwel │
+│            │ Shortwave       │          │                                  │ ling_shortwave_ │
+│            │ Radiation       │          │                                  │ flux_in_air     │
+├────────────┼─────────────────┼──────────┼──────────────────────────────────┼─────────────────┤
+│ rlu        │ Upwelling       │ W m^-2   │ Upwelling longwave radiation     │ surface_upwelli │
+│            │ Longwave        │          │                                  │ ng_longwave_flu │
+│            │ Radiation       │          │                                  │ x_in_air        │
+├────────────┼─────────────────┼──────────┼──────────────────────────────────┼─────────────────┤
+│ aren       │ Environment     │          │                                  │                 │
+│            │ Area Fraction   │          │                                  │                 │
+├────────────┼─────────────────┼──────────┼──────────────────────────────────┼─────────────────┤
+│ arup       │ Updraft Area    │          │ Area fraction of the first       │                 │
+│            │ Fraction        │          │ updraft                          │                 │
+├────────────┼─────────────────┼──────────┼──────────────────────────────────┼─────────────────┤
+│ hur        │ Relative        │          │ Total amount of water vapor in   │ relative_humidi │
+│            │ Humidity        │          │ the air relative to the amount   │ ty              │
+│            │                 │          │ achievable by saturation at the  │                 │
+│            │                 │          │ current temperature              │                 │
+├────────────┼─────────────────┼──────────┼──────────────────────────────────┼─────────────────┤
+│ husra      │ Mass Fraction   │ kg kg^-1 │ This is calculated as the mass   │ mass_fraction_o │
+│            │ of Rain         │          │ of rain water in the grid cell   │ f_rain_in_air   │
+│            │                 │          │ divided by                       │                 │
+│            │                 │          │ the mass of air (dry air +       │                 │
+│            │                 │          │ water vapor + cloud condensate)  │                 │
+│            │                 │          │ in the grid cells.               │                 │
+│            │                 │          │                                  │                 │
+├────────────┼─────────────────┼──────────┼──────────────────────────────────┼─────────────────┤
+│ lmix       │ Environment     │ m        │                                  │                 │
+│            │ Mixing Length   │          │                                  │                 │
+├────────────┼─────────────────┼──────────┼──────────────────────────────────┼─────────────────┤
+│ rlucs      │ Upwelling       │ W m^-2   │ Upwelling clear sky longwave     │ surface_upwelli │
+│            │ Clear-Sky       │          │ radiation                        │ ng_longwave_flu │
+│            │ Longwave        │          │                                  │ x_in_air_assumi │
+│            │ Radiation       │          │                                  │ ng_clear_sky    │
+├────────────┼─────────────────┼──────────┼──────────────────────────────────┼─────────────────┤
+│ hus        │ Specific        │ kg kg^-1 │ Mass of all water phases per     │ specific_humidi │
+│            │ Humidity        │          │ mass of air                      │ ty              │
+├────────────┼─────────────────┼──────────┼──────────────────────────────────┼─────────────────┤
+│ tauv       │ Surface         │ Pa       │ Northward component of the       │ downward_northw │
+│            │ Downward        │          │ surface drag                     │ ard_stress      │
+│            │ Northward Wind  │          │                                  │                 │
+│            │ Stress          │          │                                  │                 │
+├────────────┼─────────────────┼──────────┼──────────────────────────────────┼─────────────────┤
+│ haup       │ Updraft Air     │ m^2 s^-2 │ Specific enthalpy of the first   │                 │
+│            │ Specific        │          │ updraft                          │                 │
+│            │ Enthalpy        │          │                                  │                 │
+├────────────┼─────────────────┼──────────┼──────────────────────────────────┼─────────────────┤
+│ taup       │ Updraft Air     │ K        │ Temperature of the first updraft │                 │
+│            │ Temperature     │          │                                  │                 │
+├────────────┼─────────────────┼──────────┼──────────────────────────────────┼─────────────────┤
+│ cliup      │ Updraft Mass    │ kg kg^-1 │ This is calculated as the mass   │                 │
+│            │ Fraction of     │          │ of cloud ice in the first        │                 │
+│            │ Cloud Ice       │          │ updraft divided by               │                 │
+│            │                 │          │ the mass of air (including the   │                 │
+│            │                 │          │ water in all phases) in the      │                 │
+│            │                 │          │ first updraft.                   │                 │
+│            │                 │          │                                  │                 │
+├────────────┼─────────────────┼──────────┼──────────────────────────────────┼─────────────────┤
+│ thetaaen   │ Environment     │ K        │                                  │                 │
+│            │ Air Potential   │          │                                  │                 │
+│            │ Temperature     │          │                                  │                 │
+├────────────┼─────────────────┼──────────┼──────────────────────────────────┼─────────────────┤
+│ ta         │ Air Temperature │ K        │                                  │ air_temperature │
+├────────────┼─────────────────┼──────────┼──────────────────────────────────┼─────────────────┤
+│ ha         │ Air Specific    │ m^2 s^-2 │                                  │                 │
+│            │ Enthalpy        │          │                                  │                 │
+├────────────┼─────────────────┼──────────┼──────────────────────────────────┼─────────────────┤
+│ rsdcs      │ Downwelling     │ W m^-2   │ Downwelling clear sky shortwave  │ surface_downwel │
+│            │ Clear-Sky       │          │ radiation                        │ ling_shortwave_ │
+│            │ Shortwave       │          │                                  │ flux_in_air_ass │
+│            │ Radiation       │          │                                  │ uming_clear_sky │
+├────────────┼─────────────────┼──────────┼──────────────────────────────────┼─────────────────┤
+│ clwup      │ Updraft Mass    │ kg kg^-1 │ This is calculated as the mass   │                 │
+│            │ Fraction of     │          │ of cloud liquid water in the     │                 │
+│            │ Cloud Liquid    │          │ first updraft divided by         │                 │
+│            │ Water           │          │ the mass of air (including the   │                 │
+│            │                 │          │ water in all phases) in the      │                 │
+│            │                 │          │ first updraft.                   │                 │
+│            │                 │          │                                  │                 │
+├────────────┼─────────────────┼──────────┼──────────────────────────────────┼─────────────────┤
+│ tauu       │ Surface         │ Pa       │ Eastward component of the        │ downward_eastwa │
+│            │ Downward        │          │ surface drag                     │ rd_stress       │
+│            │ Eastward Wind   │          │                                  │                 │
+│            │ Stress          │          │                                  │                 │
+├────────────┼─────────────────┼──────────┼──────────────────────────────────┼─────────────────┤
+│ haen       │ Environment     │ K        │                                  │                 │
+│            │ Air Specific    │          │                                  │                 │
+│            │ Enthalpy        │          │                                  │                 │
+├────────────┼─────────────────┼──────────┼──────────────────────────────────┼─────────────────┤
+│ hussn      │ Mass Fraction   │ kg kg^-1 │ This is calculated as the mass   │ mass_fraction_o │
+│            │ of Snow         │          │ of snow in the grid cell         │ f_snow_in_air   │
+│            │                 │          │ divided by                       │                 │
+│            │                 │          │ the mass of air (dry air +       │                 │
+│            │                 │          │ water vapor + cloud condensate)  │                 │
+│            │                 │          │ in the grid cells.               │                 │
+│            │                 │          │                                  │                 │
+├────────────┼─────────────────┼──────────┼──────────────────────────────────┼─────────────────┤
+│ evspsbl    │ Evaporation     │ kg m^-2  │ evaporation at the surface       │                 │
+│            │ Including       │ s^-1     │                                  │                 │
+│            │ Sublimation     │          │                                  │                 │
+│            │ and             │          │                                  │                 │
+│            │ Transpiration   │          │                                  │                 │
+├────────────┼─────────────────┼──────────┼──────────────────────────────────┼─────────────────┤
+│ clwen      │ Envrionment     │ kg kg^-1 │ This is calculated as the mass   │                 │
+│            │ Mass Fraction   │          │ of cloud liquid water in the     │                 │
+│            │ of Cloud        │          │ environment divided by           │                 │
+│            │ Liquid Water    │          │ the mass of air (including the   │                 │
+│            │                 │          │ water in all phases) in the      │                 │
+│            │                 │          │ environment.                     │                 │
+│            │                 │          │                                  │                 │
+├────────────┼─────────────────┼──────────┼──────────────────────────────────┼─────────────────┤
+│ ts         │ Surface         │ K        │ Temperature of the lower         │ surface_tempera │
+│            │ Temperature     │          │ boundary of the atmosphere       │ ture            │
+├────────────┼─────────────────┼──────────┼──────────────────────────────────┼─────────────────┤
+│ huren      │ Environment     │          │                                  │                 │
+│            │ Relative        │          │                                  │                 │
+│            │ Humidity        │          │                                  │                 │
+├────────────┼─────────────────┼──────────┼──────────────────────────────────┼─────────────────┤
+│ rhoaen     │ Environment     │ kg m^-3  │                                  │                 │
+│            │ Air Density     │          │                                  │                 │
+├────────────┼─────────────────┼──────────┼──────────────────────────────────┼─────────────────┤
+│ clw        │ Mass Fraction   │ kg kg^-1 │ Includes both large-scale and    │ mass_fraction_o │
+│            │ of Cloud        │          │ convective cloud.                │ f_cloud_liquid_ │
+│            │ Liquid Water    │          │ This is calculated as the mass   │ water_in_air    │
+│            │                 │          │ of cloud liquid water in the     │                 │
+│            │                 │          │ grid cell divided by             │                 │
+│            │                 │          │ the mass of air (including the   │                 │
+│            │                 │          │ water in all phases) in the      │                 │
+│            │                 │          │ grid cells.                      │                 │
+│            │                 │          │                                  │                 │
+├────────────┼─────────────────┼──────────┼──────────────────────────────────┼─────────────────┤
+│ va         │ Northward Wind  │ m s^-1   │ Northward (meridional) wind      │ northward_wind  │
+│            │                 │          │ component                        │                 │
+├────────────┼─────────────────┼──────────┼──────────────────────────────────┼─────────────────┤
+│ husen      │ Environment     │ kg kg^-1 │                                  │                 │
+│            │ Specific        │          │                                  │                 │
+│            │ Humidity        │          │                                  │                 │
+├────────────┼─────────────────┼──────────┼──────────────────────────────────┼─────────────────┤
+│ pfull      │ Pressure at     │ Pa       │                                  │                 │
+│            │ Model           │          │                                  │                 │
+│            │ Full-Levels     │          │                                  │                 │
+├────────────┼─────────────────┼──────────┼──────────────────────────────────┼─────────────────┤
+│ rldcs      │ Downwelling     │ W m^-2   │ Downwelling clear sky longwave   │ surface_downwel │
+│            │ Clear-Sky       │          │ radiation                        │ ling_longwave_f │
+│            │ Longwave        │          │                                  │ lux_in_air_assu │
+│            │ Radiation       │          │                                  │ ming_clear_sky  │
+├────────────┼─────────────────┼──────────┼──────────────────────────────────┼─────────────────┤
+│ clien      │ Environment     │ kg kg^-1 │ This is calculated as the mass   │                 │
+│            │ Mass Fraction   │          │ of cloud ice in the environment  │                 │
+│            │ of Cloud Ice    │          │ divided by                       │                 │
+│            │                 │          │ the mass of air (including the   │                 │
+│            │                 │          │ water in all phases) in the      │                 │
+│            │                 │          │ environment.                     │                 │
+│            │                 │          │                                  │                 │
+├────────────┼─────────────────┼──────────┼──────────────────────────────────┼─────────────────┤
+│ orog       │ Surface         │ m        │ Elevation of the horizontal      │ surface_altitud │
+│            │ Altitude        │          │ coordinates                      │ e               │
+├────────────┼─────────────────┼──────────┼──────────────────────────────────┼─────────────────┤
+│ hurup      │ Updraft         │          │ Relative humidity of the first   │                 │
+│            │ Relative        │          │ updraft                          │                 │
+│            │ Humidity        │          │                                  │                 │
+├────────────┼─────────────────┼──────────┼──────────────────────────────────┼─────────────────┤
+│ waen       │ Environment     │ m s^-1   │ Vertical wind component of the   │                 │
+│            │ Upward Air      │          │ environment                      │                 │
+│            │ Velocity        │          │                                  │                 │
+└────────────┴─────────────────┴──────────┴──────────────────────────────────┴─────────────────┘</code></pre></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../diagnostics/">« Diagnostics</a><a class="docs-footer-nextpage" href="../diagnostic_edmf_equations/">Diagnostic EDMF Equations »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="auto">Automatic (OS)</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.1.2 on <span class="colophon-date" title="Tuesday 5 December 2023 01:58">Tuesday 5 December 2023</span>. Using Julia version 1.9.4.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
