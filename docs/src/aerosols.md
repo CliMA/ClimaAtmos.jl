@@ -52,18 +52,31 @@ horizontal advection, vertical advection, vertical diffusion, and hyperdiffusion
 As per [PROPHET: Prognostic Equations](edmf_equations.md), with prognostic EDMF, each updraft carries a tracer `<bin>` in `Y.c.sgsʲs.:(j)`, automatically wired through SGS tracer machinery: updraft tracers are transported by the mass flux, exchanged with the environment through entrainment and detrainment, and
 contribute an SGS mass-flux term to the grid-mean equation.
 
-Prognostic aerosol species add two processes,
-`aerosol_emission_tendency!` and `aerosol_deposition_tendency!`
-dispatching off `AbstractPrognosticAerosol` to compute:
+Prognostic aerosol species add three processes,
+`aerosol_emission_tendency!`, `aerosol_settling_tendency!`, and
+`aerosol_deposition_tendency!`, dispatching off
+`AbstractPrognosticAerosol` to compute:
 
   - **Surface emission** (called from
     `src/prognostic_equations/surface_flux.jl`): per-bin upward mass fluxes,
     written by ClimaCoupler once per coupling step via
     `set_sslt_surface_fluxes!`, are applied as bottom boundary conditions
     on `Y.c.ρ<bin>` (and updrafts) via `boundary_tendency_scalar`.
+  - **Gravitational settling** (called from
+    `src/prognostic_equations/remaining_tendency.jl`): explicit downward
+    vertical advection at the bin's slip-corrected Stokes velocity, with free
+    outflow at the surface.
   - **Deposition** (called from
     `src/prognostic_equations/remaining_tendency.jl`): sink tendencies
-    applied with the other remaining tendencies.
+    applied with the other remaining tendencies; currently a residence-time
+    decay placeholder that forthcoming branches turn into the accumulated
+    dry and wet deposition sinks.
+
+Prognostic sea salt requires `turbconv: prognostic_edmfx`: every size-dependent
+process is evaluated per subdomain (environment and updrafts).
+`PrognosticSeaSalt` is a mass-only scheme: its `ρ<bin>` tracers carry dry
+mass, and size-dependent processes (settling, deposition) act on each bin at
+its mass-weighted settling radius.
 
 ## Prognostic sea salt
 
@@ -184,7 +197,7 @@ with the NaCl coefficients ``a = 1.08``, ``b = 1.10`` (`ssa_lewis_a`,
 effective humidity, more so for smaller dry particles, so ξ stays finite at
 RH = 1 without a cap. Its temperature-independent part
 ``C_i = (2\sigma_w/(\rho_w R_v a\, r_i))^{3/2}`` is precomputed per bin at the
-bin's mass-moment radius (`sslt_kelvin_coefficient`), and the kernel evaluates
+bin's settling radius (`sslt_kelvin_coefficient`), and the kernel evaluates
 ``(\xi_{\sigma,0}/a)^{3/2} = C_i\, T^{-3/2}``. Below the efflorescence RH
 (`ssa_rh_efflorescence`, 0.45 for NaCl) the particles are dry, ``\xi = 1``,
 without hysteresis. The κ-Köhler form ``(1 + \kappa\, a_w/(1 - a_w))^{1/3}``
@@ -200,9 +213,52 @@ states separately and combine those into grid-mean fluxes the way
 `set_precipitation_velocities!` combines subdomain sedimentation velocities; ξ
 itself is never area-averaged, because every size-to-flux map is convex in ξ.
 
+### Gravitational settling
+
+Each bin tracer is advected downward at the slip-corrected Stokes terminal
+velocity of its mass-weighted settling radius:
+
+```math
+v_g = \frac{2}{9} \frac{(\rho_\mathrm{wet} - \rho_\mathrm{air})\, g\,
+r_\mathrm{wet}^2\, C_c(\mathrm{Kn})}{\mu(T)},
+```
+
+with Sutherland viscosity ``\mu(T)`` and Cunningham slip correction ``C_c``.
+The working radius is the bin's wet settling radius
+``\xi \cdot \sqrt{\langle r^5\rangle/\langle r^3\rangle}``, whose Stokes
+speed carries the bin's mass settling flux. The sub-bin weights come from the
+same lognormal fit of the Gong spectrum that sets the emission scales: the
+per-bin radius moments ``\hat M_k``, ``k = 0,\dots,6``, of the fitted
+spectrum are evaluated in closed form (erf of the shifted lognormal) once at
+cache construction (`sslt_bin_moments`, stored in `p.tracers`), and the
+settling radii are read off them (`sslt_settling_radii`). Settling is explicit with a
+per-cell Courant cap (`ssa_settling_courant_max`), using the
+`ᶠright_bias`/`ᶜprecipdivᵥ` free-outflow stencil, so the gravitational flux
+``v_g \cdot \rho\chi`` deposits at the surface. The turbulent part of dry
+removal and wet removal are forthcoming.
+
+Under `PrognosticEDMFX` settling follows the subdomain treatment of the
+microphysics species (`set_precipitation_velocities!` and the updraft
+sedimentation in `edmfx_sgs_vertical_advection_tendency!`). The environment
+velocity ``w^0`` is evaluated on the environment state and each updraft
+velocity ``w^j`` on its draft state. The grid-mean tracer settles at the
+mass-weighted velocity
+
+```math
+w = \frac{\rho a^0 \chi^0 w^0 + \sum_j \rho a^j \chi^j w^j}
+         {\rho a^0 \chi^0 + \sum_j \rho a^j \chi^j},
+```
+
+so the grid-scale settling flux equals the sum of the subdomain fluxes, and
+each updraft tracer receives its within-updraft flux convergence with the
+lateral-detrainment correction (`updraft_sedimentation!`), with the
+environment flux density ``\rho^0 w^0 \chi^0`` supplied directly rather than
+reconstructed from the grid mean.
+
 ### Deposition
 
-Sea salt aerosol removal is currently a uniform residence-time decay:
+Beyond the settled gravitational flux, sea salt removal is currently a
+uniform residence-time decay:
 
 ```math
 \frac{\partial \rho\chi_i}{\partial t} = -\frac{\rho\chi_i}{\tau},
@@ -210,8 +266,9 @@ Sea salt aerosol removal is currently a uniform residence-time decay:
 
 with ``\tau = 0.55`` days (`ssa_residence`), the AeroCom phase III
 ensemble-mean sea salt lifetime [Gliss2021](@cite). This uniform rate
-over-deposits small bins and under-deposits large ones; size-resolved wet
-and dry deposition are forthcoming.
+over-deposits small bins and under-deposits large ones; forthcoming
+branches replace it with the accumulated size-resolved dry and wet
+deposition sinks.
 
 ## Adding a prognostic aerosol species
 
@@ -238,9 +295,9 @@ else needs to change):
     the fields the tendencies need (there is no generic fallback, so this
     method is required).
  5. **Tendencies** (new file under `src/parameterized_tendencies/aerosols/`,
-    included from `aerosols.jl`): implement
-    `aerosol_emission_tendency!(Yₜ, Y, p, t, ::PrognosticMySpecies)` and
-    `aerosol_deposition_tendency!(Yₜ, Y, p, t, ::PrognosticMySpecies)`.
+    included from `aerosols.jl`): implement the per-species methods of the
+    process hooks dispatched in `aerosols.jl` (e.g.
+    `aerosol_emission_tendency!(Yₜ, Y, p, t, ::PrognosticMySpecies)`).
     Species without a process can define the method as a no-op.
 
 State variables (`Y.c.ρ<bin>` plus the EDMF updraft tracers) and the

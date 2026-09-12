@@ -427,14 +427,24 @@ function prognostic_aerosol_parameters(toml_dict)
     name_map = (;
         # shared physical constants
         :density_liquid_water => :ρ_water,
+        :air_viscosity_sutherland_reference => :μ_air_ref,
+        :air_viscosity_sutherland_temperature => :T_μ_ref,
+        :air_viscosity_sutherland_constant => :S_μ,
+        :cunningham_slip_coefficients => :cunningham_C,
+        # reference radius that the fitted size spectra are nondimensionalized by
+        :ssa_r_ref => :aerosol_r_ref,
         # SEA SALT AEROSOL
         # emission (offline lognormal fit of Gong 2003, dry-radius basis)
         :ssa_size_bin_divisions => :ssa_bin_edges,
-        :ssa_r_ref => :ssa_r_ref,
         :ssa_u_ref => :ssa_u_ref,
         :ssa_gong_wind_exponent => :gong_wind_exp,
         :ssa_gong_logfit_bin_3M_flux => :bin_mass_flux,
+        # deposition placeholder (residence-time decay)
         :ssa_residence => :τ_ssa,
+        # sub-bin spectrum moments for settling and dry deposition
+        :ssa_gong_logfit_mode1 => :gong_mode1,
+        :ssa_gong_logfit_mode2 => :gong_mode2,
+        :ssa_gong_logfit_mode3 => :gong_mode3,
         # hygroscopic growth
         :seasalt_aerosol_kappa => :seasalt_kappa,
         :surface_tension_water => :σ_w,
@@ -442,6 +452,8 @@ function prognostic_aerosol_parameters(toml_dict)
         :ssa_rh_efflorescence => :rh_effl,
         :ssa_lewis_a => :lewis_a,
         :ssa_lewis_b => :lewis_b,
+        # explicit settling
+        :ssa_settling_courant_max => :settling_courant_max,
     )
     parameters = CP.get_parameter_values(toml_dict, name_map, "ClimaAtmos")
     return to_svec(parameters)
