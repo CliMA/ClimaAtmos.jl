@@ -67,13 +67,14 @@ Prognostic aerosol species add three processes,
     vertical advection at the bin's slip-corrected Stokes velocity, with free
     outflow at the surface.
   - **Deposition** (called from
-    `src/prognostic_equations/remaining_tendency.jl`): sink tendencies
-    applied with the other remaining tendencies; currently a residence-time
-    decay placeholder that forthcoming branches turn into the accumulated
-    dry and wet deposition sinks.
+    `src/prognostic_equations/remaining_tendency.jl`): a surface sink at the
+    Zhang et al. (2001) turbulent dry-deposition velocity with the Emerson
+    et al. (2020) revised parameters, applied like the emission flux.
 
-Prognostic sea salt requires `turbconv: prognostic_edmfx`: every size-dependent
-process is evaluated per subdomain (environment and updrafts).
+Prognostic sea salt requires `turbconv: prognostic_edmfx`: settling is
+evaluated per subdomain (environment and updrafts), and the surface fluxes
+(emission, dry deposition) act on the grid mean and are mirrored onto the
+updrafts.
 `PrognosticSeaSalt` is a mass-only scheme: its `ρ<bin>` tracers carry dry
 mass, and size-dependent processes (settling, deposition) act on each bin at
 its mass-weighted settling radius.
@@ -223,7 +224,8 @@ v_g = \frac{2}{9} \frac{(\rho_\mathrm{wet} - \rho_\mathrm{air})\, g\,
 r_\mathrm{wet}^2\, C_c(\mathrm{Kn})}{\mu(T)},
 ```
 
-with Sutherland viscosity ``\mu(T)`` and Cunningham slip correction ``C_c``.
+with the air viscosity ``\mu(T)`` and mean free path of Seinfeld & Pandis (2006,
+Eqs. 9.6–9.7) and the Cunningham slip correction ``C_c`` of Zhang et al. (2001, Eq. 3).
 The working radius is the bin's wet settling radius
 ``\xi \cdot \sqrt{\langle r^5\rangle/\langle r^3\rangle}``, whose Stokes
 speed carries the bin's mass settling flux. The sub-bin weights come from the
@@ -234,8 +236,7 @@ cache construction (`sslt_bin_moments`, stored in `p.tracers`), and the
 settling radii are read off them (`sslt_settling_radii`). Settling is explicit with a
 per-cell Courant cap (`ssa_settling_courant_max`), using the
 `ᶠright_bias`/`ᶜprecipdivᵥ` free-outflow stencil, so the gravitational flux
-``v_g \cdot \rho\chi`` deposits at the surface. The turbulent part of dry
-removal and wet removal are forthcoming.
+``v_g \cdot \rho\chi`` deposits at the surface.
 
 Under `PrognosticEDMFX` settling follows the subdomain treatment of the
 microphysics species (`set_precipitation_velocities!` and the updraft
@@ -257,18 +258,44 @@ reconstructed from the grid mean.
 
 ### Deposition
 
-Beyond the settled gravitational flux, sea salt removal is currently a
-uniform residence-time decay:
+The turbulent part of dry removal is a surface-flux sink at the
+[Zhang2001](@cite) deposition velocity, with the revised parameters and
+functional forms of [Emerson2020](@cite),
 
 ```math
-\frac{\partial \rho\chi_i}{\partial t} = -\frac{\rho\chi_i}{\tau},
+V_{d,\mathrm{turb}} = \frac{1}{R_a + R_s},
+\qquad
+R_s = \frac{1}{\varepsilon_0\, u_\star\,
+(E_B + E_\mathrm{IM})\, R_1},
 ```
 
-with ``\tau = 0.55`` days (`ssa_residence`), the AeroCom phase III
-ensemble-mean sea salt lifetime [Gliss2021](@cite). This uniform rate
-over-deposits small bins and under-deposits large ones; forthcoming
-branches replace it with the accumulated size-resolved dry and wet
-deposition sinks.
+with MOST aerodynamic resistance ``R_a``, Brownian collection
+``E_B = C_B\,\mathrm{Sc}^{-\gamma}``, impaction
+``E_\mathrm{IM} = C_\mathrm{Im}(\mathrm{St}/(\alpha + \mathrm{St}))^\beta``,
+and rebound ``R_1 = e^{-\sqrt{\mathrm{St}}}``, using the water/ocean land-use
+category everywhere for now. The revised values ``C_B = 0.2``,
+``\gamma = 2/3``, ``C_\mathrm{Im} = 0.4`` and ``\beta = 1.7`` (the
+`emerson_*` parameters; the Zhang values remain in ClimaParams, deprecated,
+and their forms are kept commented out in `sslt_dry_deposition_velocity` for
+side-by-side comparison runs)
+lower the deposition velocity of accumulation-mode particles by roughly an
+order of magnitude, which is what the measurements of [Emerson2020](@cite)
+support. Their revised interception term
+``E_\mathrm{IN} = C_\mathrm{In}(d_p/A)^\upsilon`` is not used over water,
+which has no characteristic collector radius ``A``. The gravitational contribution is already deposited by
+the settling boundary, so the two sum to the full deposition velocity without
+double counting. ``V_{d,\mathrm{turb}}`` is Courant-capped with the same
+`ssa_settling_courant_max` as settling so the explicit sink cannot
+over-deplete the lowest cell in one step (a numerical device; the settling
+speed inside the deposition Stokes number is uncapped). Wet removal is forthcoming.
+
+The velocity is evaluated on the grid-mean lowest-level state and the flux
+``-V_{d,\mathrm{turb}}\, \rho\chi|_1`` is cached per bin in
+`p.tracers.sslt_drydep_fluxes`. It enters
+the tracers exactly as the emission flux does: as the bottom boundary
+condition of the grid-mean tracer, with the specific tendency mirrored onto
+each updraft tracer so subdomain and grid-mean concentrations do not drift
+apart at the surface.
 
 ## Adding a prognostic aerosol species
 

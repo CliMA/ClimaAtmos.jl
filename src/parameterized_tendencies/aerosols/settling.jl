@@ -3,35 +3,35 @@
 ###
 
 """
-    settling_velocity(r_wet, ρ_wet, ρ_air, T, R_d, grav, ap)
+    settling_velocity(r_dry, ξ, ρ_wet, ρ_air, μ, λ, grav, ap)
 
 Slip-corrected Stokes terminal velocity of a wet aerosol (positive
-downward, m s⁻¹).
+downward, m s⁻¹), at the wet settling radius `r_wet = ξ · r_dry`, with the
+air viscosity `μ` and mean free path `λ` from [`_aerosol_air_state`](@ref).
 
-`r_wet` is the bin's wet settling radius `ξ · √(⟨r_dry⁵⟩/⟨r_dry³⟩)`
+`r_dry` is the bin's dry settling radius `√(⟨r_dry⁵⟩/⟨r_dry³⟩)`
 ([`sslt_settling_radii`](@ref), built on [`mass_settling_radius`](@ref)).
 """
-function settling_velocity(r_wet, ρ_wet, ρ_air, T, R_d, grav, ap)
-    FT = typeof(r_wet)
-    μ = air_dynamic_viscosity(T, ap)
-    v̄ = sqrt(8 * R_d * T / FT(π))
-    λ = μ / (FT(0.499) * ρ_air * v̄)
+function settling_velocity(r_dry, ξ, ρ_wet, ρ_air, μ, λ, grav, ap)
+    FT = typeof(r_dry)
+    r_wet = r_dry * ξ
     C_c = cunningham_slip_correction(λ / r_wet, ap.cunningham_C)
     v_g = FT(2 / 9) * (ρ_wet - ρ_air) * grav * r_wet^2 * C_c / μ
     return max(v_g, zero(FT))
 end
 
 """
-    bin_settling_velocity(RH, T, r_dry, C_kelvin, ρ_s, ρ_air, R_d, grav, ap)
+    bin_settling_velocity(air, T, r_dry, C_kelvin, ρ_s, ρ_air, grav, ap)
 
-Settling velocity of one bin at its dry settling radius `r_dry`: the growth
-factor is evaluated once and feeds both the wet radius and the wet density.
+Settling velocity of one bin at its dry settling radius `r_dry`, given the
+cell's bin-independent air state `air = (; RH, μ, λ)` (relative humidity plus
+[`_aerosol_air_state`](@ref)): the growth factor is evaluated once and feeds
+both the wet radius and the wet density.
 """
-function bin_settling_velocity(RH, T, r_dry, C_kelvin, ρ_s, ρ_air, R_d, grav, ap)
-    ξ = sslt_growth_factor(RH, sslt_kelvin_shift(C_kelvin, T), ap)
-    r_wet = ξ * r_dry
+function bin_settling_velocity(air, T, r_dry, C_kelvin, ρ_s, ρ_air, grav, ap)
+    ξ = sslt_growth_factor(air.RH, sslt_kelvin_shift(C_kelvin, T), ap)
     ρ_wet = wet_density(ρ_s, ap.ρ_water, ξ)
-    return settling_velocity(r_wet, ρ_wet, ρ_air, T, R_d, grav, ap)
+    return settling_velocity(r_dry, ξ, ρ_wet, ρ_air, air.μ, air.λ, grav, ap)
 end
 
 ###
@@ -50,7 +50,10 @@ mass_settling_radius(bin_moments, ap) =
 """
     air_dynamic_viscosity(T, ap)
 
-Dynamic viscosity of air μ(T) (Pa s) from Sutherland's law
+Dynamic viscosity of air μ(T) (Pa s), Seinfeld & Pandis (2006) Eq. 9.7:
+`μ = μ_ref · (T/T_ref)^(3/2) · (T_ref + S)/(T + S)` with
+`μ_ref = 1.8325e-5 Pa s`, `T_ref = 296.16 K`, `S = 120 K` (Sutherland form;
+the constants come from ClimaParams as `μ_air_ref`, `T_μ_ref`, `S_μ`).
 """
 function air_dynamic_viscosity(T, ap)
     (; μ_air_ref, T_μ_ref, S_μ) = ap

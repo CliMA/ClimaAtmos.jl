@@ -70,7 +70,10 @@ Apply cached per-bin surface fluxes (surface `C3` fields keyed by tracer
 name, upward positive) as bottom boundary conditions on the grid-mean
 `Y.c.ρ<bin>` tracers, using [`boundary_tendency_scalar`](@ref), and mirror
 the specific tendency onto each updraft tracer so updraft and grid-mean
-concentrations do not drift apart at the surface. Skipped entirely when
+concentrations do not drift apart at the surface. The species methods of
+[`aerosol_emission_tendency!`](@ref) (upward fluxes, a source) and
+[`aerosol_dry_deposition_tendency!`](@ref) (downward fluxes, a sink) hand
+their cached fluxes to this one function. Skipped entirely when
 `disable_surface_flux_tendency` is set, so every aerosol surface exchange
 follows the same switch as the momentum, energy, and water fluxes.
 """
@@ -125,8 +128,9 @@ aerosol_emission_tendency!(Yₜ, Y, p, t) = unrolled_foreach(
 
 Apply the gravitational settling tendency of every aerosol species,
 dispatching to methods within `AbstractPrognosticAerosol` species models.
-Settling deposits the gravitational flux through its free-outflow bottom
-boundary; the turbulent (surface-flux) part of dry removal is forthcoming.
+Together with [`aerosol_dry_deposition_tendency!`](@ref) this makes up dry
+removal: settling deposits the gravitational flux through its free-outflow
+bottom boundary, and the surface flux adds only the turbulent part.
 """
 aerosol_settling_tendency!(Yₜ, Y, p, t, ::Nothing) = nothing
 aerosol_settling_tendency!(Yₜ, Y, p, t) = unrolled_foreach(
@@ -135,21 +139,56 @@ aerosol_settling_tendency!(Yₜ, Y, p, t) = unrolled_foreach(
 )
 
 """
-    aerosol_deposition_tendency!(Yₜ, Y, p, t)
-    aerosol_deposition_tendency!(Yₜ, Y, p, t, species_model)
+    aerosol_dry_deposition_tendency!(Yₜ, Y, p, t)
+    aerosol_dry_deposition_tendency!(Yₜ, Y, p, t, species_model)
 
-Apply the deposition tendency of every aerosol species, dispatching
-to methods within `AbstractPrognosticAerosol` species models. Currently a
-uniform residence-time decay placeholder; forthcoming branches turn it into
-the accumulated dry and wet deposition sinks.
+Apply the turbulent dry-deposition surface sink of every aerosol species,
+dispatching to methods within `AbstractPrognosticAerosol` species models.
 """
-aerosol_deposition_tendency!(Yₜ, Y, p, t, ::Nothing) = nothing
-aerosol_deposition_tendency!(Yₜ, Y, p, t) = unrolled_foreach(
-    model -> aerosol_deposition_tendency!(Yₜ, Y, p, t, model),
+aerosol_dry_deposition_tendency!(Yₜ, Y, p, t, ::Nothing) = nothing
+aerosol_dry_deposition_tendency!(Yₜ, Y, p, t) = unrolled_foreach(
+    model -> aerosol_dry_deposition_tendency!(Yₜ, Y, p, t, model),
     values(species_models(p.atmos.aerosols)),
 )
+
+"""
+    aerosol_deposition_tendency!(Yₜ, Y, p, t)
+
+Apply every aerosol removal tendency that is not transport. The gravitational
+part of dry deposition leaves through the bottom boundary of
+[`aerosol_settling_tendency!`](@ref); this verb carries the rest.
+"""
+function aerosol_deposition_tendency!(Yₜ, Y, p, t)
+    aerosol_dry_deposition_tendency!(Yₜ, Y, p, t)
+    return nothing
+end
+
+###
+### Helpers
+###
+
+"""
+    _aerosol_air_state(thp, T, p, q_tot, q_liq, q_ice, ρ_air, R_d, ap)
+
+Cell relative humidity, viscosity, and mean free path, pre-computed
+to avoid per bin computation. Evaluated per
+subdomain into `p.tracers.sslt_air_state⁰` / `sslt_air_stateʲs`.
+"""
+function _aerosol_air_state(thp, T, p, q_tot, q_liq, q_ice, ρ_air, R_d, ap)
+    FT = typeof(T)
+
+    RH = TD.relative_humidity(thp, T, p, q_tot, q_liq, q_ice)
+
+    μ = air_dynamic_viscosity(T, ap)
+    v̄ = sqrt(8 * R_d * T / FT(π))
+    λ = 2 * μ / (ρ_air * v̄)
+
+    return (; RH, μ, λ)
+end
+
 
 include("lognormal_moments.jl")
 include("hygroscopic_growth.jl")
 include("settling.jl")
+include("dry_deposition.jl")
 include("sea_salt.jl")

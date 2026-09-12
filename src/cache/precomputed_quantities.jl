@@ -853,6 +853,10 @@ NVTX.@annotate function set_explicit_precomputed_quantities!(Y, p, t)
         SurfaceConditions.update_surface_conditions!(Y, p, FT(t))
     end
 
+    # Deposition velocities need the fresh surface conditions; the flux also
+    # reads the lowest-level tracer state.
+    set_sslt_dry_deposition_fluxes!(Y, p, p.atmos.seasalt)
+
     if turbconv_model isa PrognosticEDMFX
         set_prognostic_edmf_precomputed_quantities_explicit_closures!(Y, p, t)
     end

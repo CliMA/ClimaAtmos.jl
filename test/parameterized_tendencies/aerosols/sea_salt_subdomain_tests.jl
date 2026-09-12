@@ -3,6 +3,7 @@ import ClimaAtmos as CA
 import ClimaCore.Fields as Fields
 import ClimaCore.Spaces as Spaces
 import ClimaCore.Operators as Operators
+import LinearAlgebra: dot
 const TD = CA.TD
 
 include(joinpath(@__DIR__, "..", "..", "test_helpers.jl"))
@@ -102,6 +103,49 @@ end
     Yₜ = zero(Y)
     CA.aerosol_settling_tendency!(Yₜ, Y, p, FTc(0))
     for name in CA.bin_names(sslt)
+        @test all(iszero, parent(getproperty(Yₜ.c, Symbol(:ρ, name))))
+        @test all(iszero, parent(getproperty(Yₜ.c.sgsʲs.:(1), name)))
+    end
+end
+
+@testset "Dry deposition surface sink (PrognosticEDMFX column)" begin
+    (; Y, p) = generate_test_simulation(edmf_column_config("sslt_subdomain_drydep"))
+    FTc = eltype(Y)
+    sslt = p.atmos.seasalt
+    ρχ_fields = seed_sea_salt!(Y, p)
+    # Realistic surface conditions so the deposition velocity is active.
+    @. p.precomputed.sfc_conditions.ustar = FTc(0.3)
+    @. p.precomputed.sfc_conditions.obukhov_length = FTc(-50)
+
+    CA.set_sslt_dry_deposition_fluxes!(Y, p, sslt)
+    Yₜ = zero(Y)
+    CA.aerosol_deposition_tendency!(Yₜ, Y, p, FTc(0))
+    (; surface_ct3_unit) = p.core
+    for name in CA.bin_names(sslt)
+        ᶜρχₜ = getproperty(Yₜ.c, Symbol(:ρ, name))
+        ᶜχʲₜ = getproperty(Yₜ.c.sgsʲs.:(1), name)
+        # Grid mean and updraft: a sink confined to the lowest cell.
+        @test all(<(0), parent(Fields.level(ᶜρχₜ, 1)))
+        @test all(iszero, parent(Fields.level(ᶜρχₜ, 2)))
+        @test all(<(0), parent(Fields.level(ᶜχʲₜ, 1)))
+        @test all(iszero, parent(Fields.level(ᶜχʲₜ, 2)))
+        @test !any(isnan, parent(ᶜρχₜ)) && !any(isnan, parent(ᶜχʲₜ))
+        # Cached flux points downward (positive toward the surface).
+        flux = getproperty(p.tracers.sslt_drydep_fluxes, Symbol(:ρ, name))
+        @test all(>(0), parent(@. -dot(flux, surface_ct3_unit)))
+    end
+    # Zero tracer ⇒ exactly zero fluxes and tendencies.
+    for ᶜρχ in ρχ_fields
+        @. ᶜρχ = FTc(0)
+    end
+    CA.set_sslt_dry_deposition_fluxes!(Y, p, sslt)
+    Yₜ = zero(Y)
+    CA.aerosol_deposition_tendency!(Yₜ, Y, p, FTc(0))
+    for name in CA.bin_names(sslt)
+        @test all(
+            iszero,
+            parent(getproperty(p.tracers.sslt_drydep_fluxes, Symbol(:ρ, name))),
+        )
         @test all(iszero, parent(getproperty(Yₜ.c, Symbol(:ρ, name))))
         @test all(iszero, parent(getproperty(Yₜ.c.sgsʲs.:(1), name)))
     end

@@ -1,10 +1,11 @@
 #=
-Unit tests for the prognostic sea-salt hygroscopic growth and gravitational
-settling physics in
+Unit tests for the prognostic sea-salt hygroscopic growth, gravitational
+settling, and dry-deposition physics in
   src/parameterized_tendencies/aerosols/sea_salt.jl
   src/parameterized_tendencies/aerosols/lognormal_moments.jl
   src/parameterized_tendencies/aerosols/hygroscopic_growth.jl
   src/parameterized_tendencies/aerosols/settling.jl
+  src/parameterized_tendencies/aerosols/dry_deposition.jl
 
 These exercise the pure physics functions with the prognostic-aerosol
 parameter bundle read straight from ClimaParams (the ssa_* keys must exist
@@ -24,6 +25,14 @@ const ρ_s = CA.CAP.prescribed_aerosol_params(PARAMS).seasalt_density  # dry sal
 const R_V = CA.CAP.R_v(PARAMS)
 const R_D = FT(287)
 const G = FT(9.81)
+const THP = CA.CAP.thermodynamics_params(PARAMS)
+
+# Cell air state at (T, ρ) as the caches build it, for dry air: the mean free
+# path and viscosity are humidity-independent, so the tests below that only
+# need (μ, λ) pass a dry state.
+air_state(T, ρ) =
+    CA._aerosol_air_state(THP, T, ρ * R_D * T, FT(0), FT(0), FT(0), ρ, R_D, AP)
+
 const NBINS = length(AP.ssa_bin_edges) - 1
 const MAX_MOMENT = 6
 
@@ -125,10 +134,21 @@ end
     @test CA.wet_density(ρ_s, AP.ρ_water, FT(1e6)) ≈ AP.ρ_water rtol = 1e-6
 end
 
-@testset "Air viscosity (Sutherland)" begin
+@testset "Air viscosity (Seinfeld & Pandis Eq. 9.7)" begin
     μ288 = CA.air_dynamic_viscosity(FT(288), AP)
     @test 1.7e-5 < μ288 < 1.9e-5                        # ≈ 1.79e-5 Pa s
     @test CA.air_dynamic_viscosity(FT(250), AP) < μ288  # μ increases with T
+end
+
+@testset "Air state (Seinfeld & Pandis Eq. 9.6 mean free path)" begin
+    T, ρ = FT(288), FT(1.2)
+    air = air_state(T, ρ)
+    @test air.μ == CA.air_dynamic_viscosity(T, AP)
+    # density form ≡ pressure form λ = 2μ / (p √(8 M/(π R T))) with p = ρ R_d T
+    p_air = ρ * R_D * T
+    @test air.λ ≈ 2 * air.μ / (p_air * sqrt(8 / (FT(π) * R_D * T))) rtol = 1e-12
+    @test 5e-8 < air.λ < 8e-8                          # ≈ 0.065 µm at sea level
+    @test air_state(T, ρ / 3).λ ≈ 3 * air.λ  # λ ∝ 1/ρ at fixed T
 end
 
 @testset "Cunningham slip correction" begin
@@ -138,12 +158,39 @@ end
 end
 
 @testset "Stokes settling velocity" begin
+    air = air_state(FT(288), FT(1.2))
     v(rw, ρwet = FT(1200)) =
-        CA.settling_velocity(rw, ρwet, FT(1.2), FT(288), R_D, G, AP)
+        CA.settling_velocity(rw, FT(1), ρwet, FT(1.2), air.μ, air.λ, G, AP)
     @test v(FT(1e-6)) < v(FT(1e-5)) < v(FT(3e-5))   # monotone in wet radius
     @test v(FT(1e-5)) > 0
     @test 1e-3 < v(FT(1e-5)) < 1e-1                 # coarse mode ~ cm/s
     @test v(FT(1e-5), FT(2000)) > v(FT(1e-5), FT(1100))  # denser falls faster
+end
+
+@testset "Dry deposition velocity" begin
+    # the model's own SurfaceFluxes parameter path (sea_salt.jl), not a mirror
+    sfp = CA.CAP.surface_fluxes_params(PARAMS)
+    uf_params = CA.SFP.uf_params(sfp)
+    κ_vk = CA.SFP.von_karman_const(sfp)
+    function Vd(vg, rw; T = FT(290), L = FT(-50), u★ = FT(0.3))
+        (; μ, λ) = air_state(T, FT(1.2))
+        return CA.sslt_dry_deposition_velocity(
+            vg, rw, FT(1), FT(1.2), T, μ, λ, FT(30), L, FT(1e-4), u★, uf_params,
+            κ_vk, G, AP,
+        )
+    end
+    Vd_coarse = Vd(FT(0.02), FT(1e-5))
+    Vd_fine = Vd(FT(1e-5), FT(1e-7))
+    @test Vd_coarse > 0 && isfinite(Vd_coarse) && Vd_coarse < 1
+    @test Vd_fine > 0 && isfinite(Vd_fine)
+    # calm surface (u★ = 0) => zero
+    @test Vd(FT(0.02), FT(1e-5); u★ = FT(0)) == 0
+    # strongly-unstable profile: R_a is floored, so V_d stays finite and ≥ 0
+    Vd_unstable = Vd(FT(0.02), FT(1e-5); T = FT(300), L = FT(-1), u★ = FT(0.5))
+    @test isfinite(Vd_unstable) && Vd_unstable ≥ 0
+    # Brownian-regime (fine) particle: higher u★ ⇒ faster turbulent deposition
+    @test Vd(FT(1e-5), FT(1e-7); u★ = FT(0.6)) >
+          Vd(FT(1e-5), FT(1e-7); u★ = FT(0.2))
 end
 
 @testset "Emission flux tables ↔ mode fit consistency" begin

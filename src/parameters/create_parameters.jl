@@ -426,6 +426,7 @@ end
 function prognostic_aerosol_parameters(toml_dict)
     name_map = (;
         # shared physical constants
+        :boltzmann_constant => :k_B,
         :density_liquid_water => :ρ_water,
         :air_viscosity_sutherland_reference => :μ_air_ref,
         :air_viscosity_sutherland_temperature => :T_μ_ref,
@@ -439,8 +440,6 @@ function prognostic_aerosol_parameters(toml_dict)
         :ssa_u_ref => :ssa_u_ref,
         :ssa_gong_wind_exponent => :gong_wind_exp,
         :ssa_gong_logfit_bin_3M_flux => :bin_mass_flux,
-        # deposition placeholder (residence-time decay)
-        :ssa_residence => :τ_ssa,
         # sub-bin spectrum moments for settling and dry deposition
         :ssa_gong_logfit_mode1 => :gong_mode1,
         :ssa_gong_logfit_mode2 => :gong_mode2,
@@ -454,6 +453,22 @@ function prognostic_aerosol_parameters(toml_dict)
         :ssa_lewis_b => :lewis_b,
         # explicit settling
         :ssa_settling_courant_max => :settling_courant_max,
+        # turbulent dry deposition (Zhang 2001 scheme with the Emerson 2020
+        # revised parameters and functional forms, water/ocean category).
+        # The superseded Zhang values are kept in ClimaParams (deprecated);
+        # uncommenting them here and the matching lines in
+        # `sslt_dry_deposition_velocity` runs the original scheme for a
+        # side-by-side comparison.
+        # :zhang_collection_prefactor => :zhang_ε0,
+        # :zhang_impaction_exponent => :zhang_β,
+        # :zhang_impaction_alpha_water => :zhang_α_water,
+        # :zhang_brownian_gamma_water => :zhang_γ_water,
+        :emerson_collection_prefactor => :dep_ε0,
+        :emerson_brownian_prefactor => :dep_C_B,
+        :emerson_brownian_gamma => :dep_γ,
+        :emerson_impaction_prefactor => :dep_C_Im,
+        :emerson_impaction_exponent => :dep_β,
+        :emerson_impaction_alpha_water => :dep_α_water,
     )
     parameters = CP.get_parameter_values(toml_dict, name_map, "ClimaAtmos")
     return to_svec(parameters)

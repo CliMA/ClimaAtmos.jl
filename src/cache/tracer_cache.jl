@@ -128,13 +128,17 @@ prognostic_aerosol_cache(Y, params, aerosols::AtmosAerosols) = foldl(
 """
     species_aerosol_cache(Y, params, species_model)
 
-Cache per-bin emission surface fluxes, written by ClimaCoupler through
-[`set_sslt_surface_fluxes!`](@ref) once per coupling step (zero when
-uncoupled) and handed to [`aerosol_emission_tendency!`](@ref), plus the
-per-bin spectrum moments ([`sslt_bin_moments`](@ref)) and the settling radii
-and Kelvin coefficients derived from them that the settling and
-dry-deposition tendencies consume every stage. These are pure functions of the
-(run-constant) parameters, so they are computed once here.
+Cache per-bin surface fluxes — emission fluxes written by ClimaCoupler
+through [`set_sslt_surface_fluxes!`](@ref) once per coupling step (zero
+when uncoupled) and turbulent dry-deposition fluxes from
+[`set_sslt_dry_deposition_fluxes!`](@ref) every stage — handed to
+[`aerosol_emission_tendency!`](@ref) and
+[`aerosol_dry_deposition_tendency!`](@ref) respectively, the capped
+deposition velocities behind those fluxes — plus the per-bin
+spectrum moments ([`sslt_bin_moments`](@ref)) and the settling radii and
+Kelvin coefficients derived from them that the settling and dry-deposition
+tendencies consume every stage. These are pure functions of the (run-constant)
+parameters, so they are computed once here.
 """
 species_aerosol_cache(Y, params, ::Nothing) = (;)
 function species_aerosol_cache(Y, params, sslt::PrognosticSeaSalt)
@@ -150,15 +154,44 @@ function species_aerosol_cache(Y, params, sslt::PrognosticSeaSalt)
             flux
         end,
     )
+    # Overwritten every stage by `set_sslt_dry_deposition_fluxes!`; zeroed so
+    # a diagnostic read before the first stage sees no garbage.
+    sslt_drydep_fluxes = NamedTuple{state_names}(
+        ntuple(n_bins) do _
+            flux = similar(Spaces.level(Y.f, half), C3{FT})
+            fill!(flux, zero(C3{FT}))
+            flux
+        end,
+    )
+    # The capped velocity behind each of those fluxes, so a later sink can act
+    # on the mass dry deposition leaves rather than on the same mass again.
+    sslt_drydep_velocities = NamedTuple{state_names}(
+        ntuple(n_bins) do _
+            velocity = similar(Spaces.level(Y.f, half), FT)
+            fill!(velocity, zero(FT))
+            velocity
+        end,
+    )
 
     bin_moments = sslt_bin_moments(params, 6, FT)
     settling_radii = sslt_settling_radii(bin_moments, ap)
     kelvin_coeffs = sslt_kelvin_coefficients(settling_radii, params)
+    # Bin-independent air state (RH, viscosity, mean free path) of the
+    # environment and of each updraft, overwritten every stage by
+    # `aerosol_settling_tendency!` before the bin loop reads it.
+    air_state_type = NamedTuple{(:RH, :μ, :λ), NTuple{3, FT}}
+    n_updrafts = :sgsʲs in propertynames(Y.c) ? fieldcount(eltype(Y.c.sgsʲs)) : 0
+    sslt_air_state⁰ = Fields.Field(air_state_type, axes(Y.c))
+    sslt_air_stateʲs = ntuple(_ -> Fields.Field(air_state_type, axes(Y.c)), n_updrafts)
     return (;
         sslt_sfc_fluxes,
+        sslt_drydep_fluxes,
+        sslt_drydep_velocities,
         sslt_bin_moments = bin_moments,
         sslt_settling_radii = settling_radii,
         sslt_kelvin_coeffs = kelvin_coeffs,
+        sslt_air_state⁰,
+        sslt_air_stateʲs,
     )
 end
 
