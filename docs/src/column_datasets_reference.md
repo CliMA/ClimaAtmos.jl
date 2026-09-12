@@ -36,8 +36,8 @@ forcing = ClimaAtmos.ExternalDrivenTVForcing(
     forcing_file;
     forcing = (ClimaAtmos.HorizontalAdvection(),),   # advection only
 )
-model = ClimaAtmos.AtmosModel(; external_forcing = forcing)
-simulation = ClimaAtmos.AtmosSimulation{Float64}(; model, setup, grid)
+model = ClimaAtmos.AtmosModel(grid; setup, external_forcing = forcing)
+simulation = ClimaAtmos.AtmosSimulation(model)
 ```
 
 When the same file also supplies the initial condition, pass the terms to the

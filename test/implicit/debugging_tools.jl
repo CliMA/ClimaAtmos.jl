@@ -23,10 +23,16 @@ function autodiff_wfact_block(Y, p, dtγ, t, Yₜ_name, Y_name, colidx)
     (; atmos) = p
     convert_to_duals(fields) =
         Fields._values(similar(Fields.FieldVector(; fields...), eltype(Yᴰ)))
-    dry_atmos_name_pairs = map(propertynames(atmos)) do name
-        name => name == :microphysics_model ? DryModel() : atmos.:($name)
-    end
-    dry_atmos = AtmosModel(; dry_atmos_name_pairs...)
+    # Swap the microphysics to DryModel, keeping everything else
+    dry_water = AtmosWater(;
+        (
+            name =>
+                name == :microphysics_model ? DryModel() :
+                getfield(atmos.water, name) for
+            name in fieldnames(typeof(atmos.water))
+        )...,
+    )
+    dry_atmos = AtmosModel(atmos; water = dry_water)
     pᴰ = (;
         p...,
         convert_to_duals(temporary_quantities(atmos, axes(Y.c), axes(Y.f)))...,

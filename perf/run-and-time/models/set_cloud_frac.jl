@@ -67,8 +67,8 @@ function case_setup()
 
     params = CA.ClimaAtmosParameters(config)
     setup_type = CA.get_setup_type(pa, CA.CAP.thermodynamics_params(params))
-    model = CA.get_atmos(config, params; setup_type = setup_type)
     grid = CA.get_grid(pa, params, config.comms_ctx)
+    model = CA.get_atmos(config, params, grid; setup_type = setup_type)
 
     # Time arguments (dt is what the cache reads via `p.dt`).
     dt, t_start, t_end = CA.convert_time_args(
@@ -96,10 +96,7 @@ function case_setup()
         params,
         dt,
         CA.parse_date(pa["start_date"]),
-        Tuple(pa["prescribed_aerosols"]),
-        Tuple(pa["time_varying_trace_gases"]),
         resolved_steady_state_velocity,
-        CA.vertical_water_borrowing_species_from_config(config),
     )
 
     t = t_start

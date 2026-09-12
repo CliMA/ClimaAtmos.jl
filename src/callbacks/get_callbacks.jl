@@ -622,7 +622,7 @@ CA.default_model_callbacks(forcing::MyCaseForcing; dt = nothing, t_start, t_end,
         my_forcing_callback!, "1hours", dt, t_start, t_end, checkpoint_frequency,
     )
 
-simulation = CA.AtmosSimulation{Float64}(; callback_kwargs = (; dt_rad = "3hours"))
+simulation = CA.AtmosSimulation(model; callback_kwargs = (; dt_rad = "3hours"))
 ```
 """
 function default_model_callbacks(model::AtmosModel; kwargs...)

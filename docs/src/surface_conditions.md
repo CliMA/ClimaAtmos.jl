@@ -159,11 +159,11 @@ surface = CA.AtmosSurface(;
     # boundary_overrides defaults to all-`nothing` (physical defaults)
 )
 
-model = CA.AtmosModel(; surface, microphysics_model = CA.DryModel())
+model = CA.AtmosModel(grid; surface, microphysics_model = CA.DryModel())
 ```
 
 Omitted fields take their defaults. You can also pass the surface fields
-directly to `AtmosModel` (`CA.AtmosModel(; flux_scheme = …, temperature = …)`),
+directly to `AtmosModel` (`CA.AtmosModel(grid; flux_scheme = …, temperature = …)`),
 which assembles the `AtmosSurface` for you. To swap in an interactive slab
 ocean use `temperature = SC.SlabOceanTemperature{FT}()`; for prescribed heat
 fluxes, `flux_scheme = SC.MoninObukhov(; z0 = FT(1e-4), shf = …, lhf = …)`.
