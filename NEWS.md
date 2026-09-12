@@ -17,6 +17,8 @@ main
   ![][badge-🔥behavioralΔ] Add tke source due to entr/detr mixing; delete
   stability-biased buoygrad at cell centers and use unbiased buoygrad instead.
 
+- [#4798](https://github.com/CliMA/ClimaAtmos.jl/pull/4798) ![][badge-🐛bugfix] ![][badge-🔥behavioralΔ] Made command-line runs without `--job_id` use the `job_id` from the selected configuration, or derive it from the selected config file names, instead of always using `default_config`.
+
 0.42.9
 -------
 - Update to ClimaCore.jl v0.16 (support for v0.15 is dropped). The biased
