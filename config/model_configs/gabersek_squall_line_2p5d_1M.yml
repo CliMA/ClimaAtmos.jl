@@ -6,8 +6,13 @@ initial_condition: "Gabersek2012"
 config: "box"
 microphysics_model: "1M"
 cloud_model: "grid_scale"
-# Diffusion: Smagorinsky-Lilly only, no hyperdiffusion
-hyperdiff: ~
+# Diffusion: Smagorinsky-Lilly (physical SGS) + minimal numerical
+# hyperdiffusion to damp grid-scale noise. Coefficients are well below the
+# full CAM-SE set (0.1857, divergence factor 5.0) because Smagorinsky-Lilly
+# already supplies the physical subgrid mixing.
+hyperdiff: "Hyperdiffusion"
+vorticity_hyperdiffusion_coefficient: 0.02  # ~1/10 of CAM-SE
+divergence_damping_factor: 1.0              # CAM-SE uses 5.0
 smagorinsky_lilly: "UVW"
 rayleigh_sponge: true
 toml: [toml/gabersek_squall_line.toml]  # c_smag = 0.18, zd_rayleigh = 15 km

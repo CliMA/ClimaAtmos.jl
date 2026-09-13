@@ -785,13 +785,26 @@ function make_plots(
     simdir = SimDir(output_paths[1])
     avail = Set(ClimaAnalysis.available_vars(simdir))
 
+    # Restrict the vertical extent to the troposphere (0-15 km); the domain
+    # above is the Rayleigh sponge (zd_rayleigh = 15 km) and not of interest.
+    z_top = 15000.0
     slice_y(var) = haskey(var.dims, "y") ? slice(var; y = 0.0) : var
+    window_z(var) =
+        window(var, ClimaAnalysis.altitude_name(var); right = z_top)
     finite_extrema(data) = extrema(filter(isfinite, vec(float.(data))))
 
-    θp = slice_y(get(simdir; short_name = "thetaap"))
-    clw = slice_y(get(simdir; short_name = "clw"))
-    husra = "husra" in avail ? slice_y(get(simdir; short_name = "husra")) : nothing
-    wa = get(simdir; short_name = "wa")
+    θp = window_z(slice_y(get(simdir; short_name = "thetaap")))
+    # Cloud outline follows total cloud condensate (liquid + ice); `clw` is
+    # liquid-only and `cli` is ice-only, so the anvil/ice cloud would be missed
+    # if we contoured `clw` alone.
+    clw = window_z(slice_y(get(simdir; short_name = "clw")))
+    cli =
+        "cli" in avail ? window_z(slice_y(get(simdir; short_name = "cli"))) :
+        nothing
+    husra =
+        "husra" in avail ? window_z(slice_y(get(simdir; short_name = "husra"))) :
+        nothing
+    wa = window_z(get(simdir; short_name = "wa"))
     pr = slice_y(get(simdir; short_name = "pr"))
 
     t_avail = ClimaAnalysis.times(θp)
@@ -802,7 +815,8 @@ function make_plots(
 
     fig = CairoMakie.Figure(; size = (1100, 450 * cld(length(snapshot_times), 2) + 400))
 
-    # Storm evolution: θ' shading + cloud outline + rain contours (paper Figs. 3-6)
+    # Storm evolution: θ' shading + cloud-condensate outline + rain contours
+    # (paper Figs. 3-6)
     local hm
     for (i, t) in enumerate(snapshot_times)
         row, col = divrem(i - 1, 2) .+ 1
@@ -816,9 +830,14 @@ function make_plots(
             ax, x_km, z_km, slice(θp; time = t).data;
             colormap = :balance, colorrange = (-8, 8),
         )
+        # Total cloud condensate = cloud liquid + cloud ice
+        condensate = slice(clw; time = t).data
+        if !isnothing(cli)
+            condensate = condensate .+ slice(cli; time = t).data
+        end
         CairoMakie.contour!(
-            ax, x_km, z_km, slice(clw; time = t).data;
-            levels = [1e-5], color = :orange, linewidth = 2.5,
+            ax, x_km, z_km, condensate;
+            levels = [1e-5], color = :orange, linewidth = 4,
         )
         if !isnothing(husra)
             CairoMakie.contour!(
