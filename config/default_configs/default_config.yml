@@ -195,7 +195,7 @@ tracer_nonnegativity_method:
     - `vapor_tendency`: Weakly enforce nonnegativity by applying a tendency to each tracer to redistribute tracer mass between vapor (q_tot) and each tracer
     - `vertical_water_borrowing`: Enforce nonnegativity using VerticalMassBorrowingLimiter, which redistributes tracer mass vertically. Uses a single threshold (0.0) for all tracers to which the limiter is applied.
     - `~` (default): Do not enforce nonnegativity
-    Note: append `_qtot` to the method name to enforce nonnegativity of q_tot as well (not applicable to `vertical_water_borrowing`).
+    Note: append `_qtot` to `elementwise_constraint` to include q_tot among the constrained tracers. `vapor_constraint_qtot` is accepted but leaves q_tot unchanged; `vapor_tendency` and `vertical_water_borrowing` ignore the suffix with a warning.
   value: ~
 bubble:
   help: "Enable bubble correction for more accurate surface areas"

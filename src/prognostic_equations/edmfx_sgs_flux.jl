@@ -336,7 +336,7 @@ function edmfx_sgs_diffusive_flux_tendency!(
             ᶜratio = p.scratch.ᶜtemp_scalar_4
             for (q_name, n_name) in (
                 (@name(q_lcl), @name(n_lcl)),
-                (@name(q_icl), @name(n_icl)),
+                (@name(q_icl), @name(n_ice)),
             )
                 ρq_name = get_ρχ_name(q_name)
                 ρn_name = get_ρχ_name(n_name)
@@ -499,7 +499,7 @@ function edmfx_sgs_horizontal_diffusive_flux_tendency!(
         ᶜratio = p.scratch.ᶜtemp_scalar_4
         for (q_name, n_name, ρq_name, ρn_name) in (
             (@name(q_lcl), @name(n_lcl), @name(c.ρq_lcl), @name(c.ρn_lcl)),
-            (@name(q_icl), @name(n_icl), @name(c.ρq_icl), @name(c.ρn_icl)),
+            (@name(q_icl), @name(n_ice), @name(c.ρq_icl), @name(c.ρn_ice)),
         )
             MatrixFields.has_field(Y, ρq_name) || continue
             ᶜρq = MatrixFields.get_field(Y, ρq_name)

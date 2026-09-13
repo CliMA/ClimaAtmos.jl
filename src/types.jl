@@ -264,7 +264,8 @@ struct TracerNonnegativityElementConstraint{qtot} <: TracerNonnegativityConstrai
     TracerNonnegativityVaporConstraint{qtot}
 
 Restore nonnegativity by moving mass between water vapor and the offending
-tracer at the same point. See `TracerNonnegativityMethod`.
+tracer at the same point. `qtot = true` is accepted but leaves `ρq_tot` unchanged:
+a negative total water has no vapor to borrow from. See `TracerNonnegativityMethod`.
 """
 struct TracerNonnegativityVaporConstraint{qtot} <: TracerNonnegativityConstraint{qtot} end
 
