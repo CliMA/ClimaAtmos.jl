@@ -190,9 +190,15 @@ energy and each grid-scale tracer receive the vertical diffusive-flux divergence
 flux divergence), and the `ρq_tot` diffusion is also applied to `Yₜ.c.ρ` so that moisture
 diffusion conserves mass. Reads `ᶜS`, `ᶠS`, `ᶜνₜ_v`, and `ᶜh_tot` from `p.precomputed`.
 
-This tendency is always applied explicitly, including the vertical diffusion; it is not
-part of the implicit solver. It is a no-op unless the model's axes include the vertical
-direction (`is_smagorinsky_vertical`); the `::Nothing` method is a no-op. See also
+Applied from `additional_tendency!` when `p.atmos.diff_mode == Explicit()`, and from
+`implicit_tendency!` when it is `Implicit()`. In the implicit case the Jacobian
+(`update_diffusion_jacobian!`) linearizes the enthalpy, tracer, and `uₕ` flux
+divergences with a frozen eddy viscosity; the `u₃` term, the horizontal-gradient part of
+`τ`, and the per-species condensate diagonals are carried without a Jacobian
+contribution, which affects the Newton convergence rate but not the tendency.
+
+It is a no-op unless the model's axes include the vertical direction
+(`is_smagorinsky_vertical`); the `::Nothing` method is a no-op. See also
 `horizontal_smagorinsky_lilly_tendency!`.
 """
 function vertical_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, model::SmagorinskyLilly)

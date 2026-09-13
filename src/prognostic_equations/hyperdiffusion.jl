@@ -486,7 +486,7 @@ NVTX.@annotate function apply_tracer_hyperdiffusion_tendency!(Yₜ, Y, p, t)
         # clipped mass fraction `min(q_μ/q_t_eff, 1)`. This is NOT
         # divergence form for the individual species.
         #
-        # Number density tendencies (ρn_lcl, ρn_icl if present) are made
+        # Number density tendencies (ρn_lcl, ρn_ice if present) are made
         # proportional to their corresponding mass tendencies via
         # dρn/n = dρq/q, i.e. dρn = (ρn/ρq) · dρq. That preserves the mean
         # particle mass across the hyperdiff.
@@ -497,7 +497,7 @@ NVTX.@annotate function apply_tracer_hyperdiffusion_tendency!(Yₜ, Y, p, t)
             (@. lazy(Y.c.ρq_tot - Y.c.ρq_rai - Y.c.ρq_sno)) : (@. lazy(Y.c.ρq_tot))
         for (ρq_name, ρn_name) in (
             (@name(c.ρq_lcl), @name(c.ρn_lcl)),
-            (@name(c.ρq_icl), @name(c.ρn_icl)),
+            (@name(c.ρq_icl), @name(c.ρn_ice)),
         )
             MatrixFields.has_field(Y, ρq_name) || continue
             ᶜρq = MatrixFields.get_field(Y, ρq_name)
@@ -554,7 +554,7 @@ NVTX.@annotate function apply_tracer_hyperdiffusion_tendency!(Yₜ, Y, p, t)
                 )) : (@. lazy(Y.c.sgsʲs.:($$j).q_tot))
             for (χⱼ_name, nⱼ_name) in (
                 (@name(q_lcl), @name(n_lcl)),
-                (@name(q_icl), @name(n_icl)),
+                (@name(q_icl), @name(n_ice)),
             )
                 MatrixFields.has_field(Y.c.sgsʲs.:($j), χⱼ_name) || continue
                 ᶜχⱼ = MatrixFields.get_field(Y.c.sgsʲs.:($j), χⱼ_name)

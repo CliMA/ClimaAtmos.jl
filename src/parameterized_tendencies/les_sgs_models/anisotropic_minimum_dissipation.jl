@@ -7,16 +7,6 @@ import ClimaCore.Operators as Operators
 import ClimaCore: Geometry
 import LinearAlgebra: norm_sqr
 
-"""
-    set_amd_precomputed_quantities!(Y, p)
-
-Do nothing; placeholder for precomputed quantities in the Anisotropic Minimum Dissipation
-model, kept as an extension point for debugging workflows. Return `nothing`.
-"""
-function set_amd_precomputed_quantities!(Y, p)
-    nothing
-end
-
 horizontal_amd_tendency!(Yₜ, Y, p, t, ::Nothing) = nothing
 vertical_amd_tendency!(Yₜ, Y, p, t, ::Nothing) = nothing
 

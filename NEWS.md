@@ -3,6 +3,16 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- ![][badge-🐛bugfix] The vertical Smagorinsky-Lilly diffusion follows `implicit_diffusion`:
+  with `implicit_diffusion: true` it is part of the implicit tendency, with the eddy viscosity
+  refreshed on every Newton iterate, matching the Jacobian block that already existed for it.
+  A vertically-acting Smagorinsky-Lilly closure now satisfies the implicit-diffusion
+  configuration check on its own. Requires ClimaCore 0.16.3, whose autodiff-compatible
+  tensor return types let the closure run under `use_auto_jacobian` and `use_dense_jacobian`.
+- ![][badge-🐛bugfix] The number-density redistribution in vertical diffusion, hyperdiffusion,
+  the viscous sponge, and the PROPHET diffusive flux looks up the P3 ice number field `ρn_ice`;
+  it looked up `ρn_icl`, which no configuration carries, so the ice-number branches never ran.
+- The four AMD precomputed fields that no tendency read are no longer allocated.
 - [#4802](https://github.com/CliMA/ClimaAtmos.jl/pull/4802) ![][badge-✨feature/enhancement] Horizontal resolved-gradient (geometric) SGS variance term
   `c_g (c_Δx Δx_h)² |∇_h ψ|²` for the SGS quadrature (`sgs_variance_horizontal_scale_factor` switches it on), with a closure-validity bound on
   σ_q (`sgs_variance_max_rel_std`); The new parameters default to the historical closure.
