@@ -8,8 +8,8 @@ quantities they contain are defined in
 [Thermodynamics and the Working Fluid](thermodynamics.md).
 
 The equations appear first in a form independent of any coordinate system, which
-is what lets the same equation set serve Cartesian geometries for large-eddy and
-cloud-resolving simulation and the sphere for global weather and climate
+lets one equation set cover Cartesian geometries, for large-eddy and
+cloud-resolving simulation, and the sphere, for global weather and climate
 simulation.
 
 That coordinate-independent form is also the one ClimaAtmos implements. The
@@ -61,7 +61,7 @@ Symbols](notation.md) maps the symbols used here onto the names in the code.
 
 ## Coordinate-independent equations of motion
 
-Scalar quantities use flux form, which is what makes discrete conservation
+Scalar quantities use flux form, which makes discrete conservation
 attainable. Momentum uses the vector-invariant form, in which advection is
 expressed through vorticity and a kinetic-energy gradient by the identity
 ``\boldsymbol{u} \cdot \nabla \boldsymbol{u} = \nabla \|\boldsymbol{u}\|^2 / 2 + (\nabla \times \boldsymbol{u}) \times \boldsymbol{u}``. This form represents
@@ -106,8 +106,10 @@ The governing equations for a general deep atmosphere are as follows
 !!! note "TODO: not yet implemented"
 
     The work done by the subgrid-scale and hyperdiffusive momentum fluxes, the
-    term ``\boldsymbol{u} \cdot (\boldsymbol{\mathcal{T}} + \boldsymbol{\mathcal{H}}_u)`` in the energy equation above, is part of the
-    formulation in [Yatunin2026](@cite) but is not yet in the code. The energy
+    term
+    ``\boldsymbol{u} \cdot (\boldsymbol{\mathcal{T}} + \boldsymbol{\mathcal{H}}_u)``
+    in the energy equation above, is part of the formulation in
+    [Yatunin2026](@cite) but is not yet in the code. The energy
     tendency currently carries advection, vertical diffusion, subgrid-scale and
     surface fluxes, sedimentation, and hyperdiffusion.
 
@@ -152,39 +154,39 @@ p = \rho R_m T
 
 ### Symbols
 
-| Symbol                                                                                            | Meaning                                                                    | Units           |
-|:------------------------------------------------------------------------------------------------- |:-------------------------------------------------------------------------- |:--------------- |
-| ``e_{tot}``                                                                                       | Specific total energy of moist air                                         | J kg⁻¹          |
-| ``h_{tot}``                                                                                       | Specific total enthalpy, ``h_{tot} = e_{tot} + p/\rho``                    | J kg⁻¹          |
-| ``I``                                                                                             | Specific internal energy of moist air                                      | J kg⁻¹          |
-| ``\hat{\boldsymbol{k}}``                                                                          | Vertical unit vector                                                       |                 |
-| ``p``                                                                                             | Pressure                                                                   | Pa              |
-| ``q_t``, ``q_l``, ``q_i``                                                                         | Total water, liquid, and ice specific humidity                             | kg kg⁻¹         |
-| ``R_m``                                                                                           | Gas constant of moist air, dependent on the specific humidities            | J kg⁻¹ K⁻¹      |
-| ``s_d``                                                                                           | Dry static energy, ``s_d = c_{pd}(T - T_0) + \Phi``                        | J kg⁻¹          |
-| ``T``                                                                                             | Temperature                                                                | K               |
-| ``\boldsymbol{u}``                                                                                | Three-dimensional velocity of dry air                                      | m s⁻¹           |
-| ``w_\mu^\sigma``                                                                                  | Sedimentation or fall velocity, positive downward                          | m s⁻¹           |
-| ``W_h``, ``W_{q_t}``                                                                              | Sedimentation flux of enthalpy, of total water                             | W m kg⁻¹, m s⁻¹ |
-| ``\theta_v``, ``\theta_{v,r}``                                                                    | Virtual potential temperature and its reference                            | K               |
-| ``\kappa``, ``\kappa_{SGS}``                                                                      | Resolved and subgrid-scale specific kinetic energy                         | J kg⁻¹          |
-| ``\Pi``                                                                                           | Exner function, ``\Pi = (p/p_0)^{R_d/c_{pd}}``                             |                 |
-| ``\rho``                                                                                          | Density of moist air                                                       | kg m⁻³          |
-| ``\Phi``, ``\Phi_r``                                                                              | Geopotential and its reference                                             | m² s⁻²          |
-| ``\chi``                                                                                          | Generic tracer                                                             | kg kg⁻¹         |
-| ``\boldsymbol{\omega}``                                                                           | Relative vorticity, ``\boldsymbol{\omega} = \nabla \times \boldsymbol{u}`` | s⁻¹             |
-| ``\boldsymbol{\Omega}``                                                                           | Angular velocity of planetary rotation                                     | s⁻¹             |
-| ``\boldsymbol{S}_u``                                                                              | Specific momentum source                                                   | m s⁻²           |
-| ``S_\psi``, ``\hat{S}_{q_t}``                                                                     | Source of scalar ``\psi``; effective source of total water                 | s⁻¹             |
-| ``\boldsymbol{\mathcal{F}}_R``                                                                    | Radiative energy flux                                                      | W m kg⁻¹        |
-| ``\boldsymbol{\mathcal{F}}_h``, ``\boldsymbol{\mathcal{F}}_\psi``                                 | Subgrid-scale flux of enthalpy, of scalar ``\psi``                         | W m kg⁻¹, m s⁻¹ |
-| ``\boldsymbol{\mathcal{H}}_h``, ``\boldsymbol{\mathcal{H}}_\psi``, ``\boldsymbol{\mathcal{H}}_u`` | Hyperdiffusive fluxes                                                      |                 |
-| ``\boldsymbol{\mathcal{T}}``                                                                      | Subgrid-scale momentum flux tensor                                         | m² s⁻²          |
+| Symbol                                                                                            | Meaning                                                                                                      | Units           |
+|:------------------------------------------------------------------------------------------------- |:------------------------------------------------------------------------------------------------------------ |:--------------- |
+| ``e_{tot}``                                                                                       | Specific total energy of moist air                                                                           | J kg⁻¹          |
+| ``h_{tot}``                                                                                       | Specific total enthalpy, ``h_{tot} = e_{tot} + p/\rho``                                                      | J kg⁻¹          |
+| ``I``                                                                                             | Specific internal energy of moist air                                                                        | J kg⁻¹          |
+| ``\hat{\boldsymbol{k}}``                                                                          | Vertical unit vector                                                                                         |                 |
+| ``p``                                                                                             | Pressure                                                                                                     | Pa              |
+| ``q_t``, ``q_l``, ``q_i``                                                                         | Total water, liquid, and ice specific humidity                                                               | kg kg⁻¹         |
+| ``R_m``                                                                                           | Gas constant of moist air, dependent on the specific humidities                                              | J kg⁻¹ K⁻¹      |
+| ``s_d``                                                                                           | Dry static energy, ``s_d = c_{pd}(T - T_0) + \Phi``                                                          | J kg⁻¹          |
+| ``T``                                                                                             | Temperature                                                                                                  | K               |
+| ``\boldsymbol{u}``                                                                                | Three-dimensional velocity of dry air                                                                        | m s⁻¹           |
+| ``w_\mu^\sigma``                                                                                  | Sedimentation or fall velocity, positive downward                                                            | m s⁻¹           |
+| ``W_h``, ``W_{q_t}``                                                                              | Sedimentation flux of enthalpy, of total water                                                               | W m kg⁻¹, m s⁻¹ |
+| ``\theta_v``, ``\theta_{v,r}``                                                                    | Virtual potential temperature and its reference                                                              | K               |
+| ``\kappa``, ``\kappa_{SGS}``                                                                      | Resolved and subgrid-scale specific kinetic energy; written ``K`` on the discretization page and in the code | J kg⁻¹          |
+| ``\Pi``                                                                                           | Exner function, ``\Pi = (p/p_0)^{R_d/c_{pd}}``                                                               |                 |
+| ``\rho``                                                                                          | Density of moist air                                                                                         | kg m⁻³          |
+| ``\Phi``, ``\Phi_r``                                                                              | Geopotential and its reference                                                                               | m² s⁻²          |
+| ``\chi``                                                                                          | Generic tracer                                                                                               | kg kg⁻¹         |
+| ``\boldsymbol{\omega}``                                                                           | Relative vorticity, ``\boldsymbol{\omega} = \nabla \times \boldsymbol{u}``                                   | s⁻¹             |
+| ``\boldsymbol{\Omega}``                                                                           | Angular velocity of planetary rotation                                                                       | s⁻¹             |
+| ``\boldsymbol{S}_u``                                                                              | Specific momentum source                                                                                     | m s⁻²           |
+| ``S_\psi``, ``\hat{S}_{q_t}``                                                                     | Source of scalar ``\psi``; effective source of total water                                                   | s⁻¹             |
+| ``\boldsymbol{\mathcal{F}}_R``                                                                    | Radiative energy flux                                                                                        | W m kg⁻¹        |
+| ``\boldsymbol{\mathcal{F}}_h``, ``\boldsymbol{\mathcal{F}}_\psi``                                 | Subgrid-scale flux of enthalpy, of scalar ``\psi``                                                           | W m kg⁻¹, m s⁻¹ |
+| ``\boldsymbol{\mathcal{H}}_h``, ``\boldsymbol{\mathcal{H}}_\psi``, ``\boldsymbol{\mathcal{H}}_u`` | Hyperdiffusive fluxes                                                                                        |                 |
+| ``\boldsymbol{\mathcal{T}}``                                                                      | Subgrid-scale momentum flux tensor                                                                           | m² s⁻²          |
 
 Under the shallow-atmosphere approximation, the planetary rotation vector is
 ``\boldsymbol{\Omega} = \Omega \sin(\phi) \boldsymbol{e}^v``, with ``\phi``
 latitude and ``\boldsymbol{e}^v`` the unit radial vector, so that its horizontal
-contravariant component vanishes. For a deep atmosphere it is
+contravariant component vanishes. For a deep atmosphere, it is
 ``\boldsymbol{\Omega} = (0, 0, \Omega)``, aligned with the rotation axis. For
 Earth, ``\Omega = 7.2921159 \times 10^{-5}`` s⁻¹ (the
 `angular_velocity_planet_rotation` parameter).
@@ -261,8 +263,10 @@ With ``\theta_{v,r} = T_r / \Pi`` and
   + \frac{T_{sfc} - T_{\min}}{n_s} \left( \Pi^{n_s} - 1 \right) \right],
 ```
 
-the reference state satisfies ``c_{pd} \theta_{v,r} \nabla \Pi + \nabla \Phi_r = 0`` for any ``\Pi``, which gives the combined pressure-gradient and geopotential
-terms in the momentum equation.
+the reference state satisfies
+``c_{pd} \theta_{v,r} \nabla \Pi + \nabla \Phi_r = 0`` for any ``\Pi``, which
+gives the combined pressure-gradient and geopotential terms in the momentum
+equation.
 
 **Reference temperature invariance.** The energetics are invariant under shifts
 of the reference temperature ``T_0``, so the choice of ``T_0`` affects physical
@@ -291,9 +295,9 @@ computed by a correlated-``k`` radiative transfer solve or by one of the
 idealized profiles, on a cadence much longer than the timestep. See
 [Radiation](radiation.md).
 
-**Hyperdiffusion.** The fluxes ``\boldsymbol{\mathcal{H}}`` serve numerical
-stability rather than physics, and act along terrain-following coordinate
-surfaces. See [Hyperdiffusion](hyperdiffusion.md).
+**Hyperdiffusion.** The fluxes ``\boldsymbol{\mathcal{H}}`` are there for
+numerical stability rather than physics, and act along terrain-following
+coordinate surfaces. See [Hyperdiffusion](hyperdiffusion.md).
 
 **Sedimentation and fall velocities.** Condensate sediments and precipitation
 falls with velocities ``w_\mu^\sigma``, defined positive downward. A microphysics
@@ -306,7 +310,7 @@ enthalpy is ``W_h = q_l h_{tot,l} w_l + q_i h_{tot,i} w_i``.
 the continuity equation arises from the subgrid-scale water fluxes. Taking the
 difference between the continuity and total water equations yields an exact
 conservation law for the dry air mass density ``\rho (1 - q_t)``, with no source
-term. In Earth's atmosphere ``\hat{S}_{q_t}`` is usually at least two orders of
+term. In Earth's atmosphere, ``\hat{S}_{q_t}`` is usually at least two orders of
 magnitude smaller than the other terms, and most models neglect it
 [Abbott2024](@cite). It is retained here for generality, and matters where the
 condensable species is a major atmospheric constituent, as carbon dioxide is on
@@ -320,36 +324,19 @@ sponge layer beneath it; see [Model Top and Sponge Layer](sponge.md).
 
 ## Generalized coordinates
 
-This section gives the form ClimaCore evaluates. Nothing here appears in the
-ClimaAtmos tendencies, which stay in the coordinate-independent form above; it is
-included because the metric terms determine what the operators do, and a reader
-tracing an operator or a boundary condition will meet them.
+The tendencies stay in the coordinate-independent form above; ClimaCore
+evaluates them in the generalized coordinates of its grids, and its
+[Mathematical framework](@extref ClimaCore Mathematical-framework) and
+[Hybrid grids and generalized coordinates](@extref ClimaCore Hybrid-grids-and-generalized-coordinates)
+pages define the covariant and contravariant bases, the metric tensor, the
+Jacobian ``J``, and the forms the gradient, divergence, and curl take in those
+coordinates. ClimaAtmos makes three choices on top of that machinery.
 
-The grid uses a height-based, terrain-following, stretched vertical coordinate
-``\xi^3`` together with horizontal coordinates ``(\xi^1, \xi^2)`` that
-parameterize a cubed sphere [Sadourny1972, Ronchi1996](@cite). In the presence of
-topography these coordinates are curvilinear and non-orthogonal. See
-[Topography Representation](topography.md) for the vertical coordinate and
-[Grids](grids.md) for the meshes.
-
-Write ``\boldsymbol{e}_i = \partial \boldsymbol{r} / \partial \xi^i`` for the
-covariant basis vectors, tangent to the coordinate surfaces, and
-``\boldsymbol{e}^i = \nabla \xi^i`` for the contravariant basis vectors,
-orthogonal to them. The metric tensor components are ``g_{ij} = \boldsymbol{e}_i \cdot \boldsymbol{e}_j`` and ``g^{ij} = \boldsymbol{e}^i \cdot \boldsymbol{e}^j``, and ``J = (\det(\boldsymbol{g}))^{1/2}`` is the Jacobian
-determinant, the volume element in generalized coordinates. Any vector has
-covariant and contravariant components, ``\boldsymbol{u} = u_i \boldsymbol{e}^i = u^i \boldsymbol{e}_i``, related by ``u_i = g_{ij} u^j``. The differential
-operators become
-
-```math
-\nabla = \boldsymbol{e}^i \frac{\partial}{\partial \xi^i}, \qquad
-\nabla \cdot {} = \frac{1}{J} \frac{\partial}{\partial \xi^i} J (\boldsymbol{e}^i)^\top, \qquad
-\nabla \times {} = \mathcal{E}^{ijk} \boldsymbol{e}_i
-  \frac{\partial}{\partial \xi^j} (\boldsymbol{e}_k)^\top ,
-```
-
-with ``\mathcal{E}^{ijk} = \varepsilon^{ijk} / J`` the contravariant alternating
-tensor. Applying these to the equations above gives the same system in
-generalized coordinates.
+The vertical coordinate is height-based, terrain-following, and stretched; on
+the sphere the horizontal coordinates are those of an equiangular cubed sphere
+[Sadourny1972, Ronchi1996](@cite). Which warp and stretching are used, and the
+keys that select them, are on [Topography Representation](topography.md) and
+[Grids](grids.md).
 
 The covariant velocity components ``u_i`` are the prognostic variables, following
 [Gardner2018](@cite). That choice isolates the vertical pressure and geopotential
@@ -357,9 +344,11 @@ gradients in the ``i = 3`` component of the momentum equation, which keeps
 hydrostatic balance straightforward to maintain and confines the implicit
 vertical solve to one momentum component.
 
-Evaluating a tensor divergence in these coordinates brings in curvature terms.
-The model avoids computing them by transforming to Cartesian coordinates, taking
-the divergence there, and transforming back [Vinokur1974](@cite).
+Momentum advection is written in vector-invariant form, so that only scalar
+gradients and curls of vectors appear. Where a tensor divergence does have to
+be evaluated, the curvature terms it brings in non-orthogonal coordinates are
+avoided by transforming to Cartesian coordinates, taking the divergence there,
+and transforming back [Vinokur1974](@cite).
 
 ## Where this is implemented
 
@@ -378,6 +367,7 @@ to the code.
 | Hyperdiffusive fluxes                    | [hyperdiffusion.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/prognostic_equations/hyperdiffusion.jl)                                                                                                                                                         |
 | Vertical diffusion                       | [vertical_diffusion_boundary_layer.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/prognostic_equations/vertical_diffusion_boundary_layer.jl)                                                                                                                   |
 | Sponge terms                             | [sponge/](https://github.com/CliMA/ClimaAtmos.jl/tree/main/src/parameterized_tendencies/sponge)                                                                                                                                                                          |
+| Subgrid-scale fluxes (LES closures)      | [les_sgs_models/](https://github.com/CliMA/ClimaAtmos.jl/tree/main/src/parameterized_tendencies/les_sgs_models)                                                                                                                                                          |
 | Subgrid-scale fluxes (PROPHET)           | [edmfx_sgs_flux.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/prognostic_equations/edmfx_sgs_flux.jl)                                                                                                                                                         |
 | Assembly of all tendencies               | [remaining_tendency.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/prognostic_equations/remaining_tendency.jl)                                                                                                                                                 |
 

@@ -4,14 +4,14 @@
 
 ### From a YAML file
 
-If you configure your simulation with YAML files, there are two important
-options. When `output_default_diagnostics` is set to `true`, the
-default diagnostics for the given atmospheric model will be output. These may
-be incompatible with your simulation, if for instance you ask for hourly maxima
+If you configure your simulation with YAML files, you have two options. The
+first is `output_default_diagnostics`: when it is `true`, the default
+diagnostics for the given atmospheric model are written. These may be
+incompatible with your simulation, if for instance you ask for hourly maxima
 when the timestep is 4 hours.
 
-Second, you can specify the diagnostics you want to output directly in the
-`diagnostics` section of your YAML file. For instance:
+The second is to specify the diagnostics you want directly in the `diagnostics`
+section of your YAML file. For instance:
 
 ```yaml
 diagnostics:
@@ -54,7 +54,7 @@ configurations are also supported. By default
 (`netcdf_output_at_levels: true`), fields are written at the model levels, with
 no vertical interpolation.
 
-!!! note "Did you know?"
+!!! note "Calendar-aligned periods"
 
     For the `period`, you can also specify `"monthly"`, `"weekly"`, and
     `"daily"`. These options align the reductions to start at the beginning of
@@ -112,8 +112,8 @@ and `topography` stand for values you supply, and the last two are required
 keyword arguments. `DiagnosticsConfig(; default = true)` is the higher-level
 entry point that supplies all of them for you.)
 
-Technically, the diagnostics are represented as `ScheduledDiagnostic` objects,
-which contain information about what variable has to be computed, how often,
+The diagnostics are represented as `ScheduledDiagnostic` objects, which contain
+information about what variable has to be computed, how often,
 where to save it, and so on (read below for more information on this). You can
 construct your own lists of `ScheduledDiagnostic`s starting from the variables
 defined by `ClimaAtmos`. The `DiagnosticVariable`s in `ClimaAtmos` are
@@ -162,6 +162,6 @@ gives the elevation above sea level of the point with indices `[i, j, k]`.
 
 ## Adding a new diagnostic variable
 
-Defining new diagnostic variables is developer territory; see
+Defining new diagnostic variables is a developer task; see
 [Adding a Diagnostic Variable](extending_diagnostics.md) in the Developer
 Guide.

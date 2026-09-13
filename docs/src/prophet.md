@@ -24,11 +24,11 @@ forms and the implicit solves, and
 [Horizontal Diffusion](prophet_horizontal_diffusion.md) for the optional
 horizontal component of the diffusive fluxes. The how-to guide
 [Configuring and Tuning PROPHET](prophet_howto.md) covers the configuration
-surface.
+options.
 
 ## What PROPHET adds to a dynamical core
 
-The [governing equations](equations.md) carry subgrid-scale flux terms: the
+The [governing equations](equations.md) include subgrid-scale flux terms: the
 momentum flux tensor ``\boldsymbol{\mathcal{T}}`` and the scalar fluxes
 ``\boldsymbol{\mathcal{F}}_h``, ``\boldsymbol{\mathcal{F}}_{q_t}``,
 ``\boldsymbol{\mathcal{F}}_{q_\mu^\sigma}``, and
@@ -70,7 +70,7 @@ downdrafts) and the enveloping, more isotropically turbulent remainder;
 formally, they are the result of a conditional averaging operation on the
 subgrid flow [Thuburn2018](@cite). Subdomain ``m = 0`` is called the
 *environment*. Unlike in earlier EDMF formulations, it is not structurally
-distinct: it is simply the
+distinct: it is the
 subdomain whose prognostic equations are eliminated. The remaining subdomains
 ``m \ge 1``, collectively the *drafts*, are the ones the model integrates. The
 number of drafts is set by `updraft_number` and is 1 by default; ``M = 1``
@@ -164,6 +164,19 @@ inside a flux divergence is numerically fragile [Weller2019](@cite).
     + \hat{\rho}^m \hat{S}_{q_t}^m
 ```
 
+!!! note "TODO: not yet implemented"
+
+    Two terms of this equation are missing from the draft mass tendency, which
+    carries only horizontal advection, the analytic vertical solve, and the
+    microphysics and hyperdiffusion parts of ``\hat{S}_{q_t}^m``:
+
+      - the sedimentation mass flux ``-\nabla \cdot [\hat{\rho}^m W_{q_t}^m \hat{\boldsymbol{k}}]``. The grid mean does receive its counterpart, so
+        draft and grid-mean mass budgets treat falling condensate differently;
+      - the turbulent-diffusive part of ``\hat{S}_{q_t}^m``. The draft
+        ``q_t^m`` receives the diffusion, but the matching ``\hat{\rho}^m``
+        correction is deliberately omitted, matching the treatment of the
+        subdomain diffusive flux.
+
 **Momentum.** The shared horizontal velocity reduces this to a single equation
 for ``u_3^m``:
 
@@ -247,7 +260,7 @@ pressure; here, it returns density, because pressure is shared.
 Which water species a draft carries follows the grid-mean microphysics model.
 In the equilibrium case, only ``q_t^m`` is prognostic and the condensate
 partition comes from saturation adjustment; in the non-equilibrium cases, each
-draft also carries cloud and precipitation species (and, for two-moment
+draft also prognoses cloud and precipitation species (and, for two-moment
 microphysics, their number concentrations), each with its own sedimentation flux
 and sources.
 
@@ -300,7 +313,7 @@ does not appear in the resolved momentum equation.
     at gray-zone resolutions. Reconciling them is tracked as a code-side task.
 
 **Effective sources.** For a scalar ``\psi \ne q_t``, the source that appears in
-the advective-form equation carries the dilution effect of the mass source,
+the advective-form equation includes the dilution effect of the mass source,
 
 ```math
 S_{\psi,\mathrm{eff}}^m = S_\psi^m - \psi^m S_{q_t}^m ,
@@ -337,7 +350,7 @@ where a draft's volume fraction varies with height, its boundary is not
 vertical, and sedimenting condensate crosses it. A draft that narrows downward
 loses falling condensate to its surroundings; one that widens downward gains it.
 This transfer acts only on condensate species and carries pure condensate rather
-than a parcel at the source subdomain's composition, which is what makes it
+than a parcel at the source subdomain's composition, which makes it
 structurally distinct from the dynamical entrainment and detrainment below. The
 code implements it two-directionally, for a single draft exchanging with the
 environment, in `updraft_sedimentation!`; the second (``\psi^m``-weighted) term
@@ -362,7 +375,7 @@ moist static energy
 h_s^m = c_{pm}(q^m)(T^m - T_0) + (q_t^m - q_c^m) L_{v,0} - q_i^m L_{f,0} + \Phi ,
 ```
 
-not the total energy the resolved equations carry. The energy equation neglects
+not the total energy of the resolved equations. The energy equation neglects
 the explicit ``\partial p^\dagger / \partial t`` but retains the work term
 ``-\boldsymbol{u}^m \cdot (-(\rho^m)^{-1} \nabla p^\dagger + \boldsymbol{b}^m + \boldsymbol{S}_u^m)``,
 the reversible conversion between kinetic and moist static energy.
@@ -388,16 +401,11 @@ diffusion. See [Governing Equations](equations.md) and
 
 !!! note "TODO: not yet implemented"
 
-    Two pieces of the formulation above are not in the code:
-
-      - the perturbation-pressure work
-        ``\boldsymbol{u}^m \cdot (\rho^m)^{-1} \nabla p^\dagger`` in the energy
-        equation. `pressure_work.jl` is an explicit, documented no-op dispatch
-        point that reserves the place for it;
-      - the return-to-isotropy source that receives the kinetic energy the
-        pressure drag removes. The drag itself is applied (in the implicit
-        vertical-velocity solve), but the energy it extracts is currently lost
-        rather than transferred to the turbulence kinetic energy budget.
+    One piece of the formulation above is not in the code: the
+    perturbation-pressure work
+    ``\boldsymbol{u}^m \cdot (\rho^m)^{-1} \nabla p^\dagger`` in the energy
+    equation. `pressure_work.jl` is an explicit, documented no-op dispatch point
+    that reserves the place for it.
 
 ## Coupling to the resolved equations
 

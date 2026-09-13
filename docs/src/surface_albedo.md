@@ -7,7 +7,7 @@ Three methods are available to specify the ocean albedo, selected by the
 
 ## 1) `ConstantAlbedo`
 
-A constant albedo, used for idealized experiments. In YAML configurations the
+A constant albedo, used for idealized experiments. In YAML configurations, the
 value comes from the ClimaParams key `idealized_ocean_albedo`, default 0.38
 (following [OGorman2008](@cite)); the `AtmosModel` script-API default is 0.07.
 
@@ -73,7 +73,7 @@ for clear sky, and
 α_{diff}(λ, μ, u) = -0.1479 + 0.1502n - 0.016nσ(u)
 ```
 
-for cloudy sky. In the current implementation we assume clear skies everywhere.
+for cloudy sky. In the current implementation, we assume clear skies everywhere.
 
 In the code, both the direct and the diffuse albedo are clamped to the
 interval ``[0, 1]``, since the diffuse regression can otherwise go negative,

@@ -71,7 +71,7 @@ Only a tracer that **sediments** requires edits: add it to
 | Sedimentation Jacobian entries | See Step 4 above (sedimenting tracers only) |
 | Diagnostics output             | User must define short names                |
 
-# Implementation details
+## Implementation details
 
 The auto-discovery relies on two patterns:
 

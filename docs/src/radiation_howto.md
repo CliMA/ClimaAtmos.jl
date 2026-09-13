@@ -2,7 +2,7 @@
 
 Radiation is off by default. This page covers what to switch on for each kind of
 run, how to choose the solve cadence, and which diagnostics tell you whether the
-result is sensible. For what the modes actually compute, see
+result is sensible. For what the modes compute, see
 [Radiation](radiation.md).
 
 ## Choosing a mode
@@ -24,9 +24,9 @@ Which mode fits depends on what the run is for.
 | Climate and weather runs                                            | `allskywithclear`             |
 | Stratocumulus, Arctic stratocumulus, deep-convection single columns | `DYCOMS`, `ISDAC`, `TRMM_LBA` |
 
-The production runs use `allskywithclear`, which adds the
-clear-sky fluxes to the diagnostics. Prefer `allskywithclear`
-unless the extra work for the clear-sky fluxes is a problem.
+The production runs use `allskywithclear`, which adds the clear-sky fluxes to
+the diagnostics. Prefer it unless the extra work those fluxes require is a
+problem.
 
 `held_suarez` replaces radiation by Newtonian relaxation of temperatures and
 ignores `dt_rad`; the single-column modes are prescribed profiles evaluated
@@ -44,12 +44,11 @@ changes.
     clear-sky runs.
   - With `insolation: timevarying` the solar zenith angle changes through the
     day, and a 6-hour cadence resolves it with four samples. For boundary-layer
-    or diurnal-cycle work, shorten it to an hour or less. Note that a cadence
-    that does not divide the day evenly will alias the diurnal cycle.
-  - In single-column cases the solve is one column, so a short cadence is
-    unremarkable. In global all-sky runs, the radiation solve is a noticeable
-    part of the wall-clock time, and halving `dt_rad` roughly doubles that
-    part.
+    or diurnal-cycle work, shorten it to an hour or less. A cadence that does
+    not divide the day evenly will alias the diurnal cycle.
+  - In single-column cases the solve covers one column, so the cadence can be
+    short. In global all-sky runs, the radiation solve is a noticeable part of
+    the wall-clock time, and halving `dt_rad` roughly doubles that part.
 
 If `dt_rad` is shorter than or equal to `dt`, the callback fires once per step.
 
@@ -62,7 +61,7 @@ insolation: timevarying   # idealized, timevarying, rcemipii,
 
 `idealized` is the conventional choice for idealized aquaplanet climate runs:
 annual-mean, latitude-dependent, no diurnal cycle. Use `timevarying` when the
-diurnal or seasonal cycle matters, which includes essentially all AMIP-style and
+diurnal or seasonal cycle matters, which covers nearly all AMIP-style and
 site-comparison work. From a script, `TimeVaryingInsolation` also takes an
 explicit site:
 
@@ -105,10 +104,9 @@ want:
 `aerosol_radiation: true` requires at least one species in
 `prescribed_aerosols`, from `DST01`–`DST05`, `SSLT01`–`SSLT05`, `SO4`, `CB1`,
 `CB2`, `OC1`, `OC2`. Enabling it with an empty list raises an error at model
-construction rather than running without aerosols. Note that the prescribed
-aerosols also feed the cloud droplet number closure behind the liquid effective
-radius, so switching them on changes cloud optics even in the shortwave-only
-sense.
+construction rather than running without aerosols. The prescribed aerosols also
+feed the cloud droplet number closure behind the liquid effective
+radius, so switching them on changes the cloud optics as well.
 
 For time-varying ozone and carbon dioxide, including which artifact supplies the
 ozone data, see [Trace Gases](trace_gases.md).

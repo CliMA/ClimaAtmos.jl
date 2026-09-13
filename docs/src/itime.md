@@ -11,7 +11,7 @@ For the timestepping scheme that advances the state over that time, see
 
 ## Why not floating-point time
 
-Accumulating a timestep in floating point drifts, and eventually stops
+A simulation time accumulated in floating point drifts, and eventually stops
 advancing altogether.
 
 Drift appears immediately, because most decimal timesteps are not exactly
@@ -36,7 +36,7 @@ Counting seconds in `Float32`, time stops incrementing after about 194 days.
 
 An inaccurate simulation time is not a cosmetic problem. Dates derived from it
 are wrong, and diagnostics keyed to those dates are written at the wrong times.
-Counting integer periods avoids both failure modes exactly.
+Counting integer periods avoids both failure modes.
 
 ## How ITime represents time
 
@@ -80,7 +80,10 @@ Two consequences are worth knowing about.
     the nearest integer counter, keeping the same period and epoch. The
     simulation therefore advances at the resolution of that period, which can
     slightly change surface conditions and any forcing or tendency that depends
-    explicitly on time.
+    explicitly on time. The operation exists to subdivide a timestep across
+    Runge–Kutta stages, so `a` has to lie in ``[0, 1]``; any other value is an
+    error, on the grounds that the intent was probably to convert the `ITime` to
+    a float instead.
 
 !!! note "Different results from `float` on `ITime`"
 

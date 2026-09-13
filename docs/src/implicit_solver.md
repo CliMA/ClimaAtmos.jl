@@ -51,7 +51,7 @@ R'(Y[k]) \, \Delta Y[k] = R(Y[k]) ,
 and updates ``Y[k+1] = Y[k] - \Delta Y[k]``. The update follows from the
 linearization ``R(Y - \Delta Y) \approx R(Y) - R'(Y) \Delta Y``, set to zero.
 
-By default a single iteration is taken (`max_newton_iters_ode`), so ``Y[1]`` is
+By default, a single iteration is taken (`max_newton_iters_ode`), so ``Y[1]`` is
 the solution of the implicit step. Iterating to a tolerance instead is available
 through `use_newton_rtol` and `newton_rtol`. The linear system is solved
 directly by default; setting `use_krylov_method` solves it instead with a
@@ -165,11 +165,11 @@ sets ``P`` to an ``N \times n`` slice of the identity and recovers the
 corresponding slice of the derivative matrix; the partitions together give the
 full matrix.
 
-Storing ``\partial R / \partial Y`` densely costs time and memory proportional
+Storing ``\partial R / \partial Y`` densely takes time and memory proportional
 to ``N^2``. The linear system is solved by
 [LU factorization](https://en.wikipedia.org/wiki/LU_decomposition), factorized
-and back-substituted in parallel across columns; forming the factors costs
-``N^3`` and applying them ``N^2``.
+and back-substituted in parallel across columns; forming the factors scales as
+``N^3`` and applying them as ``N^2``.
 
 This algorithm is a reference rather than a production choice: it makes no
 assumptions about sparsity, so it is the standard against which the two sparse
@@ -211,14 +211,14 @@ solve even though they are large.
 They cannot be dropped from the coloring. Every non-negligible derivative has to
 appear in the sparsity pattern used to assign colors, whether or not it is used
 in the solve; otherwise it pollutes the entries that share its color. Including
-them sometimes costs additional colors and sometimes fits within the existing
-ones.
+them sometimes requires additional colors and sometimes fits within the
+existing ones.
 
 [`ClimaAtmos.AutoSparseJacobian`](@ref) takes its sparsity structure and its
 linear solver from a `ManualSparseJacobian`, and colors that structure with
 [SparseMatrixColorings.jl](https://github.com/JuliaDiff/SparseMatrixColorings.jl).
 Its memory scales as ``N c``, which can still exceed GPU memory when ``c`` is
-large, so the ``c`` colors are split into partitions of ``n < c``. On GPUs the
+large, so the ``c`` colors are split into partitions of ``n < c``. On GPUs, the
 number of partitions is the smallest for which the result fits, allowing twice
 the memory currently free to leave room for garbage collection; on CPUs a single
 partition is always used.
