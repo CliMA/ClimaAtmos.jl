@@ -6,6 +6,12 @@ main
 - [#4802](https://github.com/CliMA/ClimaAtmos.jl/pull/4802) ![][badge-✨feature/enhancement] Horizontal resolved-gradient (geometric) SGS variance term
   `c_g (c_Δx Δx_h)² |∇_h ψ|²` for the SGS quadrature (`sgs_variance_horizontal_scale_factor` switches it on), with a closure-validity bound on
   σ_q (`sgs_variance_max_rel_std`); The new parameters default to the historical closure.
+- (branch `zs/sgs_variance_rh`) ![][badge-✨feature/enhancement] Options on the geometric SGS variance term, all defaulting to the merged
+  behaviour: the saturation-excess form `sgs_variance_horizontal_form: rh` (`c_g (c_Δx Δx_h)² q_sat² |∇_h RH|²` in q′q′ only, no θ′θ′ term);
+  a diagnosed T–q correlation `tq_correlation_model: diagnosed` (from the gradient covariance T′q′, clamped by `sgs_correlation_max`; the
+  `env_q_tot_temperature_{covariance,correlation}` diagnostics now report the sampled values); a Richardson-number weight fading the term
+  where the resolved flow is turbulent (`sgs_variance_geometric_Ri_factor`, 0 = off); and an element-linear (lumped GLL{2}) restriction of
+  the gradient invariants that removes the spectral-element mesh imprint (`sgs_variance_element_filter: linear`).
 
 0.42.10
 -------

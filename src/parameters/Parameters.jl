@@ -120,6 +120,17 @@ not yet define. `FT` is the float type; `VFT1`, `VFT2`, and `VTF3` are the
     deviation relative to the grid-mean total water, `σ_q ≤ sgs_variance_max_rel_std * q_tot`,
     applied to the diagnosed `q′q′` whatever closure produced it. A wider variance puts a quadrature node
     at negative total water; `0.5` keeps all nodes non-negative (default) [-].
+  - `sgs_variance_geometric_Ri_factor`: Factor `k` setting the gradient-Richardson-
+    number scale `Ri₀ = k Ri_crit` of the weight `w = Ri₊² / (Ri₊² + Ri₀²)`,
+    `Ri₊ = max(N², 0) / max(2 |S|², ε)`, that multiplies the geometric variance term
+    (`sgs_geometric_stability_weight`): the resolved-gradient estimate is meant for
+    stably stratified air where the turbulence closure has collapsed; where the
+    resolved flow is turbulent the closure already carries the variance, so the term
+    is faded out. Its `N²` blends the moist and dry buoyancy gradients with the
+    grid-scale cloud indicator (condensate present or not). `0` (default) makes the
+    weight exactly 1 [-].
+  - `sgs_correlation_max`: Clamp `r` on the magnitude of the diagnosed SGS T–q
+    correlation, `ρ = clamp(T′q′ / √(T′T′ q′q′), ±r)` (`tq_correlation_model: diagnosed`). `1` by default [-].
   - `Tq_correlation_coefficient`: Default correlation between `T'` and `q_tot'`
     in the SGS quadrature, in `[-1, 1]` [-].
   - `static_stab_coeff`: Static stability coefficient `c_b` of the mixing-length
@@ -207,6 +218,8 @@ Base.@kwdef struct TurbulenceConvectionParameters{FT, VFT1, VFT2, VTF3} <: ATCP
     sgs_variance_geometric_coeff::FT
     sgs_variance_horizontal_scale_factor::FT
     sgs_variance_max_rel_std::FT
+    sgs_variance_geometric_Ri_factor::FT
+    sgs_correlation_max::FT
     Tq_correlation_coefficient::FT
     static_stab_coeff::FT
     Prandtl_number_scale::FT
