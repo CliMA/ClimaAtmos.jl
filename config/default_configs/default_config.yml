@@ -235,7 +235,7 @@ disable_surface_flux_tendency:
   help: "(Bool) Whether to disable surface flux tendencies of momentum, energy, and tracers [`true`, `false` (default)]. When this flag is true, the surface flux tendency is not applied, no matter how surface conditions are computed."
   value: false
 surface_setup:
-  help: "Surface flux scheme [`DefaultExchangeCoefficients` (default), `DefaultMoninObukhov`]"
+  help: "Surface flux scheme [`DefaultExchangeCoefficients` (default), `DefaultMoninObukhov`, `PrescribedSurface`]"
   value: "DefaultExchangeCoefficients"
 initial_condition:
   help: "Selects the simulation case/setup. Global/idealized options: `DryBaroclinicWave`, `MoistBaroclinicWave`, `ConstantBuoyancyFrequencyProfile`, `DecayingProfile` (default), `IsothermalProfile`, `Bomex`, `DryDensityCurrentProfile`, `RisingThermalBubbleProfile`, `ISDAC`, or a NetCDF file path (see docs). Externally-driven single-column cases: `GCM`, `ARMVARANAL`, `ForcingFromFile`, `ReanalysisTimeVarying`."
@@ -381,10 +381,10 @@ cfsite_number:
   help: "Used only by the `GCM` case: selects which cfsite column to read from `external_forcing_file`, specified as siteN. For site details see Shen et al. 2022 `https://doi.org/10.1029/2021MS002631`. [`site23` (default), `siteN`]"
   value: "site23"
 site_latitude:
-  help: "Used only by the `ReanalysisTimeVarying` / `ReanalysisMonthlyAveragedDiurnal` cases, which use it (with `site_longitude` and `start_date`) to generate and locate the ERA5 forcing file; other cases take location from `external_forcing_file` or `cfsite_number`. Artifact support is currently for the eastern Pacific region in July 2007 only. [`17.0` (default)]"
+  help: "Used only by the `ReanalysisTimeVarying` / `ReanalysisMonthlyAveragedDiurnal` cases, which use it (with `site_longitude` and `start_date`) to generate and locate the ERA5 forcing file; other cases take location from `external_forcing_file` or `cfsite_number`. The ERA5 artifact currently covers only the tropical Pacific during the first five days of July 2007. [`17.0` (default)]"
   value: 17.0
 site_longitude:
-  help: "Used only by the `ReanalysisTimeVarying` / `ReanalysisMonthlyAveragedDiurnal` cases, which use it (with `site_latitude` and `start_date`) to generate and locate the ERA5 forcing file; other cases take location from `external_forcing_file` or `cfsite_number`. Artifact support is currently for the eastern Pacific region in July 2007 only. [`-149.0` (default)]"
+  help: "Used only by the `ReanalysisTimeVarying` / `ReanalysisMonthlyAveragedDiurnal` cases, which use it (with `site_latitude` and `start_date`) to generate and locate the ERA5 forcing file; other cases take location from `external_forcing_file` or `cfsite_number`. The ERA5 artifact currently covers only the tropical Pacific during the first five days of July 2007. [`-149.0` (default)]"
   value: -149.0
 era5_diurnal_warming:
   help: Applies a warming scenario by adding a constant temperature offset (in Kelvin). Supported only by the `ReanalysisMonthlyAveragedDiurnal` forcing model. This affects the target surface temperature for the entire simulation, the initial atmospheric temperature profile, and the relaxation temperature profile above `gcmdriven_relaxation_minimum_height`. Specific humidity is increased to hold relative humidity constant in the initial and relaxation profiles.
@@ -461,7 +461,7 @@ chemistry_model:
 
 # Eddy-diffusivity mass-flux (EDMF) configuration
 turbconv:
-  help: "Turbulence convection scheme [`nothing` (default), 'prognostic_edmfx']"
+  help: "Turbulence convection scheme [`nothing` (default), `prognostic_edmfx`, `edonly_edmfx`]"
   value: ~
 advection_test:
   help: "Switches off all grid-scale and subgrid-scale momentum tendencies [`false` (default), `true`]"
@@ -473,7 +473,7 @@ edmfx_filter:
   help: "If set to true, it switches on the relaxation of negative velocity in the eddy-diffusivity mass-flux scheme.  [`true`, `false` (default)]"
   value: false
 edmfx_nh_pressure:
-  help: "If set to true, it switches on the eddy-diffusivity mass-flux pressure drag closure.  For the prognostic scheme, this only controls the drag term in the pressure closure. The buoyancy term is always applied. [`true`, `false` (default)]"
+  help: "If set to true, it switches on the eddy-diffusivity mass-flux pressure drag closure. For the prognostic scheme, this only controls the drag term in the pressure closure. The buoyancy term is always applied. [`true`, `false` (default)]"
   value: false
 edmfx_vertical_diffusion:
   help: "If set to true, it switches on vertical diffusion of prognostic eddy-diffusivity mass-flux updrafts. [`true`, `false` (default)]"

@@ -1,37 +1,48 @@
 # Discretization and Operators
 
 ClimaAtmos discretizes the [governing equations](equations.md) with a hybrid
-scheme: a spectral element method in the horizontal and finite differences on a
-staggered grid in the vertical [Yatunin2026](@cite). This page explains that
-choice and defines the discrete operators once, for use by every other page in
-these docs.
+scheme: a Galerkin spectral element method in the horizontal and finite
+differences on a staggered grid in the vertical [Yatunin2026](@cite). The
+horizontal method is continuous Galerkin (CG) today; ClimaCore also provides
+discontinuous Galerkin (DG) on the same element structure, and the two differ
+only in how element-local results are completed across element boundaries, so
+this page is written to cover both and marks the one place they part ways.
 
-The operators themselves come from
-[ClimaCore.jl](https://clima.github.io/ClimaCore.jl/stable/). This page gives the
-symbol used for each one in the equations and the discrete identities each
-satisfies. For the short names the tendencies are written in, and what each
-accepts, see [Discrete operators](@ref) in the API.
+The page explains the choice of scheme, states the two rules that decide which
+operator each term uses, defines the operator symbols used throughout these
+docs, and shows how the pieces assemble into a discretized equation. Readers who
+need only the symbols can go straight to the [operator reference](@ref "Operator reference"); those adding a term to the model want
+[Writing a new tendency](@ref).
+
+The operators come from ClimaCore, whose
+[Mathematical framework](@extref ClimaCore Mathematical-framework),
+[Spectral elements: continuous and discontinuous Galerkin](@extref ClimaCore Spectral-elements:-continuous-and-discontinuous-Galerkin),
+[Staggered vertical discretization](@extref ClimaCore Staggered-vertical-discretization),
+and [DSS and numerical fluxes](@extref ClimaCore DSS-and-numerical-fluxes)
+pages define the nodal basis, the strong and weak forms, the staggered vertical
+operators, and the completion step (direct stiffness summation for CG,
+interface fluxes for DG). This page states the choices ClimaAtmos makes among
+those operators — which form each term uses, and which reconstruction — and
+gives the symbol used for each one in the equations. For the short names the
+tendencies are written in, see [Discrete operators](@ref) in the API.
 
 ## Why a hybrid scheme
 
 The horizontal and vertical directions of an atmospheric grid have different
 requirements, and the scheme treats them differently.
 
-Horizontally, the spectral element method [Karniadakis2005, Deville2002](@cite)
-gives high-order accuracy and scales to many nodes. Only one operation communicates between elements, a single
-neighbor exchange, which is why the method parallelizes well.
-
-Vertical resolution is much finer than horizontal resolution: tens of meters
-near the surface against tens of kilometers horizontally. The fast vertical
-waves this allows would otherwise set the timestep. Finite differences on a
-staggered grid suppress the computational modes that an unstaggered high-order
-vertical discretization admits, and they couple only neighboring levels, so the
-vertical terms can be solved implicitly. See
-[Implicit Solver](implicit_solver.md) for that solve.
+Horizontally, spectral elements give high-order accuracy with one neighbor
+exchange per step; vertically, finite differences on a staggered grid couple
+only neighboring levels, so the fast vertical waves that fine vertical spacing
+admits can be solved implicitly column by column, and the staggering
+suppresses the computational modes of an unstaggered vertical grid.
+ClimaCore's [Staggered vertical discretization](@extref ClimaCore Staggered-vertical-discretization)
+gives the argument in full, including why Lorenz staggering is used. See
+[Implicit Solver](implicit_solver.md) for the implicit solve.
 
 The two parts are independent. The vertical staggering, the reconstruction
-rules, and the implicit solve make no reference to how horizontal derivatives
-are computed, and the [semi-discrete equations](@ref "Semi-discrete equations")
+rules, and the implicit solve are independent of how horizontal derivatives are
+computed, and the [assembled equations](@ref "Assembling a discretized equation")
 at the end of this page are written in operator symbols rather than in any one
 method's terms. An alternative horizontal discretization — a discontinuous
 Galerkin method, for example — would supply its own realization of the
@@ -43,7 +54,7 @@ of this page, and of the model, unchanged.
 The domain is divided into ``N_h`` horizontal elements, each extruded into
 ``N_v`` vertical layers. Horizontal elements carry ``(N_p + 1)^2``
 Gauss–Lobatto–Legendre nodal points, so fields are polynomials of order ``N_p``
-within an element. On the sphere the horizontal mesh is an equiangular cubed
+within an element. On the sphere, the horizontal mesh is an equiangular cubed
 sphere [Sadourny1972, Ronchi1996](@cite); in Cartesian geometry the same
 machinery discretizes a box. See
 [Grids](grids.md) for the constructors and
@@ -53,9 +64,7 @@ coordinate.
 The vertical arrangement is a **Lorenz staggering**: the covariant
 vertical velocity component ``u_3`` is defined on element faces, and every other
 variable — including the horizontal velocity components ``u_1`` and ``u_2`` —
-is defined on element centers. Lorenz staggering is used in preference to
-Charney–Phillips because it is less involved and still has similar wave propagation
-properties [ThuburnWoollings2005, Yatunin2026](@cite).
+is defined on element centers [Yatunin2026](@cite).
 
 Throughout the docs and the code, a ``ᶜ`` prefix marks a center field and a
 ``ᶠ`` prefix marks a face field; see [Notation and Symbols](notation.md) for the
@@ -65,33 +74,21 @@ full convention.
 
 Within each element, fields are expanded in a nodal polynomial basis on the
 Gauss–Lobatto–Legendre points, and horizontal derivatives are computed by
-differentiating that expansion. Everything in this section is specific to the
-continuous spectral element method; the vertical discretization and the
-semi-discrete equations do not depend on it.
+differentiating that expansion. The element-local operators, and the rule
+below for choosing between their strong and weak forms, are the same for
+continuous and discontinuous Galerkin; the two methods differ only in the
+completion step at the end of this section. The vertical discretization does
+not depend on either.
 
 ### Strong and weak forms: which to use
 
-The spectral element method offers two formulations of every horizontal
-derivative. They have the same order of accuracy and the same cost, and both
-satisfy the vector identities ``\nabla_h \times \nabla_h = 0`` and
-``\nabla_h \cdot (\nabla_h \times) = 0`` [TaylorFournier2010](@cite). They
-differ in one property, and that property decides which to use.
-
-The **strong** form differentiates the basis functions directly, which is the
-obvious discrete derivative.
-
-The **weak** form is constructed so that it is the *negative adjoint* of the
-strong form under the discrete inner product: for any two fields ``\phi`` and
-``\psi``,
-
-```math
-\mathscr{I}\!\left( \phi, \tilde{\partial}_i \psi \right)
-  + \mathscr{I}\!\left( \psi, \partial_i \phi \right) = 0 ,
-```
-
-a discrete integration by parts. From that identity follow discrete analogues of
-the divergence and Stokes theorems, and those are what turn a local operator into
-a global conservation statement.
+Every horizontal derivative comes in a **strong** form, which differentiates the
+basis functions directly, and a **weak** form, constructed to be the negative
+adjoint of the strong form under the discrete inner product — a discrete
+integration by parts, from which discrete divergence and Stokes theorems
+follow. ClimaCore's
+[Spectral elements](@extref ClimaCore Spectral-elements:-continuous-and-discontinuous-Galerkin)
+page derives both; what matters here is which one each term uses.
 
 #### The rule
 
@@ -107,7 +104,7 @@ domain telescopes into boundary terms alone. That gives a short rule:
 | Scalar Laplacian                      | ``\tilde{\nabla}_h \cdot \nabla_h``                                               | Weak divergence of a strong gradient satisfies a second-order integration by parts                                                |
 | Vector Laplacian                      | ``\tilde{\nabla}_h (\nabla_h \cdot) - \tilde{\nabla}_h \times (\nabla_h \times)`` | Same identity, with the weak operator on the outside                                                                              |
 
-Mixing the two forms is therefore deliberate rather than incidental: using the
+Mixing the two forms is therefore deliberate: using the
 weak divergence for the mass flux and the strong gradient for kinetic energy is
 what makes the two terms cancel exactly in the energy budget. Using the same form
 for both would break that cancellation and leave a spurious energy source. See
@@ -124,57 +121,70 @@ inter-element discontinuities without disturbing the inner product; see
 
 #### In the code
 
-The strong operators are `divₕ`, `gradₕ`, and `curlₕ`; the weak ones carry a `w`
+The strong operators are `divₕ`, `gradₕ`, and `curlₕ`; the weak ones take a `w`
 prefix: `wdivₕ`, `wgradₕ`, `wcurlₕ`; the split divergence is `split_divₕ`. So
 the scalar and vector Laplacians read
 
 ```julia
-ᶜ∇²s_d = @. wdivₕ(gradₕ(s_d))                                  # weak div ∘ strong grad
+ᶜ∇²s_d = @. wdivₕ(gradₕ(s_d - sd_r))                           # weak div ∘ strong grad
 ᶜ∇²u = @. C123(wgradₕ(divₕ(ᶜu))) - C123(wcurlₕ(C123(curlₕ(ᶜu))))
 ```
 
 The variable-resolution behavior of these operators is examined by
 [Guba2014](@cite).
 
-### Projection: direct stiffness summation
+### Completing a tendency across elements
 
-The nodal expansions of neighboring elements meet at shared boundary points,
-where their values can disagree. The projection ``\mathcal{P}`` onto the
-continuous spectral element basis is the
-[direct stiffness summation](@extref ClimaCore DSS) (DSS): it replaces the
-value at each element boundary point with a volume-weighted average over the
-points collocated with it in neighboring elements.
+An element-local operator evaluates each element on its own, so at a node on
+an element boundary the weak-form result is incomplete: it holds only that
+element's share. A *completion* step, written ``\mathcal{P}`` in these docs,
+supplies the rest, and it is the one place where continuous and discontinuous
+Galerkin differ; ClimaCore's
+[DSS and numerical fluxes](@extref ClimaCore DSS-and-numerical-fluxes) page
+develops both.
 
-DSS is the only operation that communicates horizontally between elements,
-which is why the horizontal discretization parallelizes well. It preserves the
+With continuous elements, which ClimaAtmos uses, ``\mathcal{P}`` is direct
+stiffness summation (DSS): the volume-weighted average over the copies of each
+boundary node, which makes the field single-valued there. It preserves the
 discrete inner product, so it leaves the conservation properties of the weak
-operators intact. The timestepper applies it several times per step — at stage
+operators intact, and it is the only operation that communicates horizontally
+between elements. ClimaAtmos applies it several times per step — at stage
 boundaries, around the implicit solve, and at the end of the step — which keeps
 round-off errors from accumulating as discontinuities across element
 boundaries.
+
+With discontinuous elements, fields may jump at element boundaries, and
+``\mathcal{P}`` instead adds an interface numerical flux (a central or Rusanov
+flux, or a user-supplied one) to each conservative term and a lifting flux to
+each gradient or curl. The element-local operators and the choice of form are
+untouched; only the completion changes, and the discrete conservation
+statements above carry over because the numerical flux is single-valued and
+antisymmetric across each interface.
 
 ## The vertical discretization: interpolating between centers and faces
 
 Staggering forces interpolation. The covariant vertical velocity ``u_3`` is
 defined on faces and everything else on centers, so any flux term needs one or
-the other moved. Which average is used is not a matter of taste: as with the
-strong and weak forms, the choice determines whether a discrete conservation law
-holds.
+the other moved. As with the strong and weak forms, the choice of average
+decides whether a discrete conservation law holds.
 
-Three kinds appear, and they answer three different questions.
+Three kinds appear.
 
 **Arithmetic mean** (``I^c``, ``I^f``; `ᶜinterp`, `ᶠinterp`). The plain average of
 the two neighbors. Use it for quantities that are not weighted by mass, such as
 the covariant velocity components, and wherever no conservation statement rides
 on the result.
 
-**Mass-weighted average** (``WI^f``; `ᶠwinterp`). The average weighted by ``\rho J``, that is, ``WI^f(J, x) = I^f(J x) / I^f(J)``. Use it for a quantity that will
-be multiplied by a mass flux. The arithmetic and mass-weighted averages form an
-adjoint pair satisfying a density-weighted averaging-by-parts identity, which is
-what lets the vertical flux divergence telescope; using two arithmetic means
-instead would leave a residual. In the code it appears where the horizontal
-velocity is reconstructed onto faces to build the face mass flux, and in the
-hyperdiffusive momentum tendency.
+**Mass-weighted average** (``WI^f``; `ᶠwinterp`). The average weighted by
+``\rho J``, that is, ``WI^f(w, x) = I^f(w x) / I^f(w)``. Use it for a quantity
+that will be multiplied by a mass flux. The arithmetic and mass-weighted
+averages form an adjoint pair satisfying a density-weighted averaging-by-parts
+identity, so the vertical flux divergence telescopes; using two
+arithmetic means instead would leave a residual. In the code, it appears where
+the horizontal velocity is reconstructed onto faces, and in the hyperdiffusive
+momentum tendency. The face mass flux itself is not this operator: it is
+``I^f(\rho J) \tilde{\boldsymbol{u}} / J^f``, divided by the face Jacobian
+rather than by ``I^f(J)``, so that it telescopes exactly.
 
 **Upwind or limited reconstruction** (``U^f``; `ᶠupwind1`, `ᶠupwind3`,
 `ᶠlin_vanleer`). A biased or flux-corrected reconstruction
@@ -191,11 +201,11 @@ neighboring center values.
 | A face value of an advected scalar             | Upwind or limited     | Preserves monotonicity and positivity                           |
 | A center value of the vertical velocity        | Arithmetic mean       | There is no unique mass-weighted inverse                        |
 
-Two consequences are worth keeping in mind. Setting ``\psi = 1`` in the scalar
-flux reconstruction recovers the mass flux divergence, so tracer transport stays
-consistent with mass transport, and a uniform tracer field stays uniform. And at
-the domain boundaries ``I^f`` extrapolates by reusing the nearest interior value,
-while the vertical gradient and curl operators are set to zero there.
+Two consequences follow. Setting ``\psi = 1`` in the scalar flux reconstruction
+recovers the mass flux divergence, so tracer transport stays consistent with
+mass transport, and a uniform tracer field stays uniform. At the domain
+boundaries, ``I^f`` extrapolates by reusing the nearest interior value, while
+the vertical gradient and curl operators are set to zero there.
 
 ## Operator reference
 
@@ -204,24 +214,42 @@ while the vertical gradient and curl operators are set to zero there.
     Since ClimaCore 0.15, the strong- and weak-form horizontal spectral
     operators are unified: `Divergence`, `Gradient`, and `Curl` take a
     form-type parameter (`StrongForm`, the default, or `WeakForm`), so the weak
-    divergence, for example, is `Divergence{WeakForm}`.
+    divergence, for example, is
+    [`ClimaCore.Operators.Divergence`](@extref)`{WeakForm}`.
 
 Each operator below has a short name in the ClimaAtmos source, documented under
 [Discrete operators](@ref) in the API.
 
 ### Reconstruction between centers and faces
 
-  - ``I^c`` is the face-to-center interpolation
+  - The face-to-center interpolation ``I^c`` is
     [`ClimaCore.Operators.InterpolateF2C`](@extref), an arithmetic mean.
-  - ``I^f`` is the center-to-face interpolation
+
+  - The center-to-face interpolation ``I^f`` is
     [`ClimaCore.Operators.InterpolateC2F`](@extref), an arithmetic mean with
     constant extrapolation to the domain boundaries.
-  - ``WI^f`` is the center-to-face weighted interpolation
+
+  - The center-to-face weighted interpolation ``WI^f`` is
     [`ClimaCore.Operators.WeightedInterpolateC2F`](@extref), with
-    ``WI^f(J, x) = I^f(J x) / I^f(J)`` for a weight ``J``. With the metric
-    Jacobian as the weight, this is the mass-weighted average the conservation
-    proofs use.
-  - ``U^f`` is the center-to-face upwind product: first order
+    ``WI^f(w, x) = I^f(w x) / I^f(w)`` for a weight ``w``. It appears with the
+    weight ``\rho J``, to reconstruct the horizontal velocity onto faces and in
+    the hyperdiffusive vertical-momentum tendency.
+
+  - The face mass flux ``\mathcal{M}^f(\rho)`` is
+
+    ```math
+    \mathcal{M}^f(\rho) = \frac{I^f(\rho J)}{J^f} \, \tilde{\boldsymbol{u}} ,
+    ```
+
+    with ``J^f`` the Jacobian on faces. Dividing by ``J^f`` rather than by
+    ``I^f(J)`` makes the flux divergence telescope: ``D^c``
+    multiplies its argument by ``J^f`` before differencing, so the ``J^f``
+    cancels and the flux that leaves one cell is exactly the flux that enters
+    the next. The two denominators agree only where ``J^f = I^f(J)``, which
+    holds on a flat or linearly warped grid but not under a SLEVE warp; see
+    [Topography Representation](topography.md).
+
+  - The center-to-face upwind product ``U^f``: first order
     [`ClimaCore.Operators.UpwindBiasedProductC2F`](@extref), third order
     [`ClimaCore.Operators.Upwind3rdOrderBiasedProductC2F`](@extref), or the van
     Leer limiter [`ClimaCore.Operators.LinVanLeerC2F`](@extref). The van Leer
@@ -231,16 +259,17 @@ Each operator below has a short name in the ClimaAtmos source, documented under
 
 ### Horizontal differential operators
 
-These realize the spectral element forms of the previous section; a different
-horizontal discretization would replace this list.
+These are the element-local strong and weak forms of the previous section, and
+they are the same operators for continuous and discontinuous elements; only
+``\mathcal{P}`` below changes between the two.
 
-  - ``\mathcal{D}_h`` is the strong horizontal spectral divergence
+  - The strong horizontal spectral divergence ``\mathcal{D}_h`` is
     [`ClimaCore.Operators.Divergence`](@extref).
 
-  - ``\hat{\mathcal{D}}_h`` is the weak horizontal spectral divergence
+  - The weak horizontal spectral divergence ``\hat{\mathcal{D}}_h`` is
     `Divergence{WeakForm}` (see [`ClimaCore.Operators.Divergence`](@extref)).
 
-  - ``\mathcal{D}^{split}_h`` is the split, skew-symmetric horizontal divergence
+  - The split, skew-symmetric horizontal divergence ``\mathcal{D}^{split}_h`` is
     [`ClimaCore.Operators.SplitDivergence`](@extref),
 
     ```math
@@ -257,36 +286,43 @@ horizontal discretization would replace this list.
     `split_divₕ(ρu, 1)`). The horizontal pressure-gradient term uses an
     analogous split form.
 
-  - ``\mathcal{G}_h`` is the strong horizontal spectral gradient
+  - The strong horizontal spectral gradient ``\mathcal{G}_h`` is
     [`ClimaCore.Operators.Gradient`](@extref).
 
-  - ``\hat{\mathcal{G}}_h`` is the weak horizontal spectral gradient
+  - The weak horizontal spectral gradient ``\hat{\mathcal{G}}_h`` is
     `Gradient{WeakForm}` (see [`ClimaCore.Operators.Gradient`](@extref)), the
     outer gradient of the vector Laplacian.
 
-  - ``\mathcal{C}_h`` is the curl of the components involving horizontal
+  - The curl ``\mathcal{C}_h`` acts on the components involving horizontal
     derivatives [`ClimaCore.Operators.Curl`](@extref). Applied to
     ``\boldsymbol{u}_h`` it returns a vector with only vertical contravariant
     components; applied to ``\boldsymbol{u}_v`` it returns a vector with only
     horizontal contravariant components.
 
-  - ``\hat{\mathcal{C}}_h`` is the corresponding weak curl
+  - The corresponding weak curl ``\hat{\mathcal{C}}_h`` is
     `Curl{WeakForm}` (see [`ClimaCore.Operators.Curl`](@extref)).
 
-  - ``\mathcal{P}`` is the projection onto the continuous spectral element
-    basis; see [Projection: direct stiffness summation](@ref).
+  - The completion step ``\mathcal{P}`` across element boundaries is direct
+    stiffness summation on the continuous elements ClimaAtmos uses; see
+    [Completing a tendency across elements](@ref).
 
 ### Vertical differential operators
 
-  - ``\mathcal{D}^c_v`` is the face-to-center vertical divergence
-    [`ClimaCore.Operators.DivergenceF2C`](@extref). Separate variants carry the
+  - The face-to-center vertical divergence ``D^c`` is
+    [`ClimaCore.Operators.DivergenceF2C`](@extref). Separate variants impose the
     boundary conditions for advective, precipitation, and diffusive fluxes.
 
-  - ``\mathcal{G}^f_v`` is the center-to-face vertical gradient
+  - The center-to-face vertical gradient ``G^f`` is
     [`ClimaCore.Operators.GradientC2F`](@extref), set to zero at the top and
-    bottom boundaries.
+    bottom boundaries. The boundary values are placeholders: the vertical
+    velocity at the boundaries is fixed instead by the impenetrability
+    condition described above.
 
-  - ``\mathcal{C}^f_v`` is the center-to-face curl of the components involving
+  - The face-to-center vertical gradient ``G^c`` is
+    [`ClimaCore.Operators.GradientF2C`](@extref), used where a face-defined
+    field such as the geopotential is differentiated onto centers.
+
+  - The center-to-face curl ``C^f`` acts on the components involving
     vertical derivatives [`ClimaCore.Operators.CurlC2F`](@extref), set to zero
     at the top and bottom boundaries. Applied to ``\boldsymbol{u}_h`` it returns
     a vector with only a horizontal contravariant component.
@@ -297,8 +333,8 @@ The reconstructions above are the ones that make the global conservation laws
 hold [Yatunin2026](@cite); they resemble those of
 [SimmonsBurridge1981](@cite) in some respects.
 
-  - **Density** is reconstructed onto faces with a Jacobian-weighted average,
-    which is the weight the mass-weighted average ``WI^f`` needs.
+  - **Density** is reconstructed onto faces as ``I^f(\rho J) / J^f``, the
+    Jacobian-weighted average that the face mass flux needs.
   - **Velocity** covariant components use unweighted averages; the contravariant
     vertical component on faces uses a mass-weighted average. There is no unique
     reconstruction of the contravariant vertical velocity onto centers.
@@ -306,9 +342,9 @@ hold [Yatunin2026](@cite); they resemble those of
     curl.
   - **Momentum advection** uses the vector-invariant form, with a strong
     horizontal gradient of kinetic energy and a weighted average of the vorticity
-    term. In this form momentum advection conserves kinetic energy and vorticity
-    globally, and avoids the curvature terms that appear in advection terms in
-    non-orthogonal coordinates.
+    term. In this form, momentum advection conserves kinetic energy and
+    vorticity globally, and avoids the curvature terms that appear in advection
+    terms in non-orthogonal coordinates.
 
 Because total energy is separately conserved, any numerical conversion between
 kinetic and non-kinetic energy comes from the discretized pressure-gradient term
@@ -341,10 +377,12 @@ to each governing equation.
 
 Tendencies are split into an explicit part and an implicit part and advanced
 with a horizontally explicit, vertically implicit (HEVI) additive Runge–Kutta
-method [Ascher1997, Gardner2018](@cite). The implicit part carries the vertical terms responsible for sound and
-gravity waves, falling and sedimenting condensate, vertical diffusion, and
-sponge damping; because it involves no horizontal derivatives, it can be solved
-independently in each column, with no horizontal communication.
+method [Ascher1997, Gardner2018](@cite). The implicit part takes the vertical
+terms responsible for sound and gravity waves, falling and sedimenting
+condensate, the Rayleigh damping of ``u_3``, and, when `implicit_diffusion` is
+enabled, the vertical diffusion; the viscous sponge stays explicit. Because the
+implicit part involves no horizontal derivatives, it can be solved independently
+in each column, with no horizontal communication.
 
 This lifts the timestep restriction from fast vertical dynamics and leaves the
 horizontal propagation of sound waves as the limit, so the maximum timestep
@@ -355,285 +393,105 @@ distance between nodal points and the speed of sound.
 approximation, and the available Jacobian algorithms.
 [Integer Time (ITime)](itime.md) explains how time itself is represented.
 
-## Semi-discrete equations
+## Assembling a discretized equation
 
-The sections above define the operators. What follows applies them: the
-semi-discrete form of each governing equation, that is, the equations discretized
-in space but still continuous in time. The continuous equations these come from
-are on the [Governing Equations](equations.md) page.
-
-### Reconstructed velocities and kinetic energy
-
-Two reconstructed velocities appear throughout, along with the kinetic energy
-built from them. All follow from the staggering: the covariant vertical
-component lives on faces and everything else on centers, so each flux term
-needs one or the other interpolated.
-
-  - ``\tilde{\boldsymbol{u}}`` is the mass-weighted reconstruction of velocity at the interfaces,
-    carried out by weighted interpolation of the horizontal components (see `compute_ᶠuₕ³` in
-    `src/cache/precomputed_quantities.jl`):
-
-    ```math
-    \tilde{\boldsymbol{u}} = WI^f(\rho J, \boldsymbol{u}_h) + \boldsymbol{u}_v
-    ```
-
-  - ``\bar{\boldsymbol{u}}`` is the reconstruction of velocity at cell-centers, carried out by linear interpolation of the covariant vertical component:
-
-    ```math
-    \bar{\boldsymbol{u}} = \boldsymbol{u}_h + I^c(\boldsymbol{u}_v)
-    ```
-
-  - ``K = \tfrac{1}{2} \|\boldsymbol{u}\|^2`` is the specific kinetic energy (J/kg), reconstructed at cell centers by
-
-    ```math
-    K = \tfrac{1}{2} (\boldsymbol{u}_{h} \cdot \boldsymbol{u}_{h} + 2 \boldsymbol{u}_{h} \cdot I^c (\boldsymbol{u}_{v}) + I^c(\boldsymbol{u}_{v} \cdot \boldsymbol{u}_{v})),
-    ```
-
-    where ``\boldsymbol{u}_{h}`` is defined on cell-centers, ``\boldsymbol{u}_{v}`` is defined on cell-faces, and ``I^c (\boldsymbol{u}_{v})`` is interpolated using covariant components.
-
-  - No-flux boundary conditions are enforced by requiring the vertical contravariant component ``\tilde{u}^3`` of the face-valued velocity at the boundary to be zero, which fixes the boundary value of the covariant component:
-
-    ```math
-    u_3 = -\frac{g^{31} u_1 + g^{32} u_2}{g^{33}}.
-    ```
-
-### Mass
-
-Follows the continuity equation
+The operators above combine in the same way in every prognostic equation. Two
+reconstructed velocities and the kinetic energy built from them appear
+throughout; all follow from the staggering, since the covariant vertical
+component lives on faces and everything else on centers:
 
 ```math
-\frac{\partial}{\partial t} \rho = - \nabla \cdot(\rho \boldsymbol{u}) + \rho \hat{S}_{q_t}.
+\tilde{\boldsymbol{u}} = WI^f(\rho J, \boldsymbol{u}_h) + \boldsymbol{u}_v ,
+\qquad
+\bar{\boldsymbol{u}} = \boldsymbol{u}_h + I^c(\boldsymbol{u}_v) ,
+\qquad
+K = \tfrac{1}{2} \left( \boldsymbol{u}_h \cdot \boldsymbol{u}_h
+  + 2 \boldsymbol{u}_h \cdot I^c(\boldsymbol{u}_v)
+  + I^c(\boldsymbol{u}_v \cdot \boldsymbol{u}_v) \right) .
 ```
 
-This is discretized using the following
+``\tilde{\boldsymbol{u}}`` is the face velocity (see `compute_ᶠuₕ³` in
+`src/cache/precomputed_quantities.jl`), ``\bar{\boldsymbol{u}}`` the
+center velocity, and ``K`` the specific kinetic energy at centers. The no-flux
+condition at the surface and the model top fixes the covariant vertical
+component from the horizontal one, ``u_3 = -(g^{31} u_1 + g^{32} u_2)/g^{33}``,
+so that the contravariant ``\tilde{u}^3`` vanishes there; see
+[Topography](topography.md).
+
+### One equation in full: total energy
+
+Total energy shows every pattern the other equations reuse. Its continuous form
+is
 
 ```math
-\frac{\partial}{\partial t} \rho
-= - \hat{\mathcal{D}}_h[ \rho \bar{\boldsymbol{u}}] - \mathcal{D}^c_v \left[WI^f( J, \rho) \tilde{\boldsymbol{u}} \right] + \rho \hat{S}_{q_t}
+\frac{\partial}{\partial t} \rho e_{tot}
+  = - \nabla \cdot \left[ (\rho e_{tot} + p) \boldsymbol{u} + \boldsymbol{F}_R \right]
+  + \rho S_e ,
 ```
 
-with the
-
-```math
--\mathcal{D}^c_v[WI^f(J, \rho) \tilde{\boldsymbol{u}}]
-```
-
-term treated implicitly (the full face velocity ``\tilde{\boldsymbol{u}}``, including
-the topographic contribution of ``\boldsymbol{u}_h``, enters the implicit term).
-
-### Momentum
-
-Uses the vector-invariant form
-
-```math
-\frac{\partial}{\partial t} \boldsymbol{u}  = - (2 \boldsymbol{\Omega} + \nabla \times \boldsymbol{u}) \times \boldsymbol{u} - c_{pd} (\theta_v - \theta_{v, r}) \nabla \Pi  - \nabla [(\Phi - \Phi_r) + K].
-```
-
-The pressure-gradient force is expressed through the Exner function,
-``-\nabla p / \rho = -c_{pd} \theta_v \nabla \Pi``, with a hydrostatically
-balanced reference state ``(\theta_{v,r}, \Phi_r)`` subtracted; the reference
-profile, its defining formulas, and its parameters are given on the
-[Governing Equations](equations.md) page.
-
-#### Horizontal momentum
-
-By breaking the curl and cross product terms into horizontal and vertical contributions, and removing zero terms (e.g. ``\nabla_v \times \boldsymbol{u}_v = 0``), we obtain
-
-```math
-\frac{\partial}{\partial t} \boldsymbol{u}_h  =
-  - (2 \boldsymbol{\Omega}^h + \nabla_v \times \boldsymbol{u}_h +  \nabla_h \times \boldsymbol{u}_v) \times \boldsymbol{u}^v
-  - (2 \boldsymbol{\Omega}^v + \nabla_h \times \boldsymbol{u}_h) \times \boldsymbol{u}^h
-  - c_{pd} (\theta_v - \theta_{v, r}) \nabla_h \Pi  - \nabla_h [(\Phi - \Phi_r) + K],
-```
-
-where ``\boldsymbol{u}^h`` and ``\boldsymbol{u}^v`` are the horizontal and vertical *contravariant* vectors.
-
-Topography enters through the computation of the contravariant velocity components (projections from the covariant velocity representation) before the cross-product contributions.
-
-This is stabilized by adding 4th-order vector hyperviscosity
-
-```math
--\nu_u \, \nabla_h^2 (\nabla_h^2(\boldsymbol{\overline{u}})),
-```
-
-projected onto the first two covariant directions, where
-``\boldsymbol{\overline{u}}`` is the center-valued velocity defined above and
-
-```math
-\nabla_h^2(\boldsymbol{v}) = \nabla_h(\nabla_{h} \cdot \boldsymbol{v}) - \nabla_{h} \times (\nabla_{h} \times \boldsymbol{v})
-```
-
-is the horizontal vector Laplacian.
-
-The ``(2 \boldsymbol{\Omega}^h + \nabla_v \times \boldsymbol{u}_h + \nabla_h \times \boldsymbol{u}_v) \times \boldsymbol{u}^v`` term is discretized as:
-
-```math
-\frac{I^c\{(2 \boldsymbol{\Omega}^h + \mathcal{C}^f_v[\boldsymbol{u}_h] + \hat{\mathcal{C}}_h[\boldsymbol{u}_v]) \times (I^f(\rho J)\tilde{\boldsymbol{u}}^v)\}}{\rho J} ,
-```
-
-in which ``\mathcal{C}^f_v[\boldsymbol{u}_h] + \hat{\mathcal{C}}_h[\boldsymbol{u}_v]`` is the discrete horizontal relative vorticity ``\boldsymbol{\omega}^h``.
-
-The ``(2 \boldsymbol{\Omega}^v + \nabla_h \times \boldsymbol{u}_h) \times \boldsymbol{u}^h`` term is discretized as
-
-```math
-(2 \boldsymbol{\Omega}^v + \hat{\mathcal{C}}_h[\boldsymbol{u}_h]) \times \boldsymbol{u}^h
-```
-
-and the ``c_{pd} (\theta_v - \theta_{v,r}) \nabla_h \Pi + \nabla_h (\Phi - \Phi_r + K)`` term is discretized as
-
-```math
-c_{pd} (\theta_v - \theta_{v,r}) \mathcal{G}_h[\Pi] + \mathcal{G}_h[\Phi - \Phi_r + K] ,
-```
-
-where all these terms are treated explicitly.
-
-The hyperviscosity term is
-
-```math
-- \nu_u \left\{ \delta_{div} \, \hat{\mathcal{G}}_h ( \mathcal{D}_h(\boldsymbol{\psi}_h) ) - \hat{\mathcal{C}}_h( \mathcal{C}_h( \boldsymbol{\psi}_h )) \right\}
-```
-
-where
-
-```math
-\boldsymbol{\psi}_h = \mathcal{P} \left[ \hat{\mathcal{G}}_h ( \mathcal{D}_h(\boldsymbol{u}_h) ) - \hat{\mathcal{C}}_h( \mathcal{C}_h( \boldsymbol{u}_h )) \right]
-```
-
-and ``\delta_{div}`` is the divergence damping factor, which strengthens the
-damping of divergent modes; see [Hyperdiffusion](hyperdiffusion.md).
-
-#### Vertical momentum
-
-Similarly for vertical velocity
-
-```math
-\frac{\partial}{\partial t} \boldsymbol{u}_v  =
-  - (2 \boldsymbol{\Omega}^h + \nabla_v \times \boldsymbol{u}_h + \nabla_h \times \boldsymbol{u}_v) \times \boldsymbol{u}^h
-  -c_{pd} (\theta_v - \theta_{v, r}) \nabla_v \Pi  - \nabla_v [(\Phi - \Phi_r)].
-```
-
-The ``(2 \boldsymbol{\Omega}^h + \nabla_v \times \boldsymbol{u}_h + \nabla_h \times \boldsymbol{u}_v) \times \boldsymbol{u}^h`` term is discretized as
-
-```math
-(2 \boldsymbol{\Omega}^h + \mathcal{C}^f_v[\boldsymbol{u}_h] + \hat{\mathcal{C}}_h[\boldsymbol{u}_v]) \times I^f(\boldsymbol{u}^h) ,
-```
-
-The ``\nabla_v K`` term is discretized as
-
-```math
-\mathcal{G}^f_v[K],
-```
-
-The ``c_{pd} (\theta_v - \theta_{v,r}) \nabla_v \Pi + \nabla_v (\Phi - \Phi_r)`` term is discretized as
-
-```math
-I^f[c_{pd} (\theta_v - \theta_{v, r} ) ] \mathcal{G}^f_v[\Pi] + \mathcal{G}^f_v[\Phi - \Phi_r],
-```
-
-and is treated implicitly.
-
-This is stabilized by adding 4th-order vector hyperviscosity
-
-```math
--\nu_u \, \nabla_h^2 (\nabla_h^2(\boldsymbol{\overline{u}})),
-```
-
-projected onto the third covariant direction after a ``\rho J``-weighted
-interpolation to faces.
-
-### Total energy
-
-```math
-\frac{\partial}{\partial t} \rho e_{tot} = - \nabla \cdot((\rho e_{tot} + p) \boldsymbol{u} + \boldsymbol{F}_R) + \rho S_{e},
-```
-
-which is stabilized by adding a 4th-order hyperdiffusion term on total enthalpy:
-
-```math
-- \nu_h \left[ \nabla \cdot \left( \rho \nabla^3 s_d \right)
-  + \sum_\mu \nabla \cdot \left( \rho \, (h_\mu + \Phi) \, \nabla^3 q_\mu \right) \right],
-```
-
-where the total enthalpy is decomposed into dry static energy ``s_d`` and the
-water-species enthalpies ``h_\mu`` (for ``\mu \in \{v, l, i\}``), so that the
-``\nabla^4`` operator never acts on a lumped total enthalpy.
-
-This is discretized using
+stabilized by fourth-order hyperdiffusion of the total enthalpy, decomposed into
+dry static energy and a water-enthalpy piece (see
+[Hyperdiffusion](hyperdiffusion.md)). Discretized, it reads
 
 ```math
 \frac{\partial}{\partial t} \rho e_{tot} \approx
-- \mathcal{D}^{split}_h[ \rho \bar{\boldsymbol{u}}, \tfrac{\rho e_{tot} + p}{\rho} ]
-- \mathcal{D}^c_v \left[ WI^f(J,\rho) \,  \tilde{\boldsymbol{u}} \, I^f \left(\frac{\rho e_{tot} + p}{\rho} \right) \right]
-- \mathcal{D}^c_v \left[ \boldsymbol{F}_R \right]
-- \nu_h \left[ \hat{\mathcal{D}}_h( \rho \mathcal{G}_h(\psi_{s_d}) )
-  + \sum_\mu \hat{\mathcal{D}}_h( \rho (h_\mu + \Phi) \mathcal{G}_h(\psi_{q_\mu}) ) \right],
+- \mathcal{D}^{split}_h \left[ \rho \bar{\boldsymbol{u}},
+    \tfrac{\rho e_{tot} + p}{\rho} \right]
+- D^c \left[ \mathcal{M}^f(\rho) \, I^f \left( \tfrac{\rho e_{tot} + p}{\rho} \right) \right]
+- D^c \left[ \boldsymbol{F}_R \right]
+- \nu_h \left[ \hat{\mathcal{D}}_h \left( \rho \, \mathcal{G}_h(\psi_{s_d}) \right)
+  + \hat{\mathcal{D}}_h \left( \rho \, h_{\mathrm{tot,cl}} \,
+      \mathcal{G}_h(\psi_{q_t^{\mathrm{eff}}}) \right) \right],
+\qquad
+\psi_x = \mathcal{P} \left[ \hat{\mathcal{D}}_h \left( \mathcal{G}_h (x - x_r) \right) \right],
 ```
 
-where
+with ``x_r`` the hydrostatic reference profile subtracted before the first
+Laplacian. Reading the terms in order:
 
-```math
-\psi_x = \mathcal{P} \left[ \hat{\mathcal{D}}_h \left( \mathcal{G}_h (x) \right) \right],
-```
-
-and the radiative flux divergence ``-\mathcal{D}^c_v[\boldsymbol{F}_R]`` is
-applied separately as an explicit tendency.
-
-The central reconstruction
-
-```math
-- \mathcal{D}^c_v \left[ WI^f(J,\rho) \,  \tilde{\boldsymbol{u}} \, I^f \left(\frac{\rho e_{tot} + p}{\rho} \right) \right]
-```
-
-is treated implicitly.
-
-!!! note
-
-    When upwinding is enabled for energy advection (the van Leer limiter by
-    default), the implicit solve still uses the central reconstruction; the
-    difference between the upwinded and central fluxes is applied after the
+  - The horizontal advective flux uses the split divergence
+    ``\mathcal{D}^{split}_h`` of the center velocity, the entropy-stable form
+    from the rule above.
+  - The vertical advective flux is the face mass flux ``\mathcal{M}^f(\rho)``
+    times the centrally interpolated enthalpy, differenced with ``D^c``. This
+    term is **implicit**. When upwinding is enabled for energy (the van Leer
+    limiter by default), the implicit solve still uses this central form, and
+    the difference between the upwinded and central fluxes is applied after the
     Newton solve as a `T_post_imp!` correction
-    (`correct_implicit_advection_tendency!`), so the upwind flux is evaluated
-    with the Newton-solved velocity.
+    (`correct_implicit_advection_tendency!`), so the upwind flux sees the
+    Newton-solved velocity.
+  - The radiative flux divergence is explicit and applied separately.
+  - Hyperdiffusion is two Laplacians with the completion ``\mathcal{P}`` in
+    between, each a weak divergence of a strong gradient.
 
-### Scalars
+### The other equations
 
-For an arbitrary scalar ``\chi``, the density-weighted scalar ``\rho\chi`` follows the continuity equation
+The remaining equations follow the same template; the table gives the operator
+each term uses and where it lives. Everything in the "Implicit" column is
+solved column by column as described under [Timestepping](@ref); everything
+else is explicit.
 
-```math
-\frac{\partial}{\partial t} \rho \chi = - \nabla \cdot(\rho \chi \boldsymbol{u}) + \rho S_{\chi}.
-```
+| Equation                                 | Horizontal                                                                                                                                        | Vertical                                                                                                                                                                             | Implicit part                                               | Source                                                                                                                          |
+|:---------------------------------------- |:------------------------------------------------------------------------------------------------------------------------------------------------- |:------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |:----------------------------------------------------------- |:------------------------------------------------------------------------------------------------------------------------------- |
+| Mass ``\rho``                            | ``\hat{\mathcal{D}}_h[\rho \bar{\boldsymbol{u}}]``, which is ``\mathcal{D}^{split}_h`` with unit scalar                                           | ``D^c[\mathcal{M}^f(\rho)]``                                                                                                                                                         | the vertical flux, with the full ``\tilde{\boldsymbol{u}}`` | [advection.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/prognostic_equations/advection.jl)                          |
+| Horizontal momentum ``\boldsymbol{u}_h`` | strong gradient ``\mathcal{G}_h`` of ``\Phi - \Phi_r + K`` and the split-form pressure gradient; weak curls ``\hat{\mathcal{C}}_h`` for vorticity | ``I^c\{\boldsymbol{\omega}^h \times I^f(\rho J)\tilde{\boldsymbol{u}}^v\} / \rho J``, with ``\boldsymbol{\omega}^h = C^f[\boldsymbol{u}_h] + \hat{\mathcal{C}}_h[\boldsymbol{u}_v]`` | none                                                        | [advection.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/prognostic_equations/advection.jl)                          |
+| Vertical momentum ``u_3``                | the same vorticity terms, ``\times I^f(\boldsymbol{u}^h)``                                                                                        | ``G^f[K]``, and ``I^f[c_{pd}\theta_v'] \, G^f[\Pi] + G^f[\Phi - \Phi_r]``                                                                                                            | the pressure-gradient and geopotential term                 | [implicit_tendency.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/prognostic_equations/implicit/implicit_tendency.jl) |
+| Total water ``\rho q_t``                 | ``\mathcal{D}^{split}_h[\rho \bar{\boldsymbol{u}}, q_t]``                                                                                         | ``D^c[\mathcal{M}^f(\rho) I^f(q_t)]``, upwind correction after the solve as for energy                                                                                               | the central vertical flux                                   | [implicit_tendency.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/prognostic_equations/implicit/implicit_tendency.jl) |
+| Other grid-mean tracers ``\rho \chi``    | ``\mathcal{D}^{split}_h[\rho \bar{\boldsymbol{u}}, \chi]``                                                                                        | ``D^c\left[\tfrac{I^f(\rho J)}{J^f} U^f(\tilde{\boldsymbol{u}}, \chi)\right]`` with `tracer_upwinding`                                                                               | none                                                        | [advection.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/prognostic_equations/advection.jl)                          |
 
-This is stabilized by adding a 4th-order hyperdiffusion term
+Two details of the momentum rows are worth spelling out. The pressure-gradient
+and geopotential terms in the momentum equation are written as a departure from
+a hydrostatic reference state ``(\theta_{v,r}, \Phi_r)``, with
+``\theta_v' = \theta_v - \theta_{v,r}``; the horizontal part uses the split
+form ``\tfrac{c_{pd}}{2}\{\theta_v' \mathcal{G}_h[\Pi] + \mathcal{G}_h[\theta_v' \Pi]
 
-```math
-- \nu_\chi \nabla \cdot(\rho \nabla^3(\chi))
-```
+  - \Pi \mathcal{G}_h[\theta_v']\}``, and the reference profile itself is on the [Governing Equations](equations.md) page. And the momentum hyperviscosity is the vector Laplacian of the rule table applied twice,``-\nu_u \{ \delta_{div} \hat{\mathcal{G}}_h(\mathcal{D}_h \boldsymbol{\psi})
+  - \hat{\mathcal{C}}_h(\mathcal{C}_h \boldsymbol{\psi}) \}``with``\boldsymbol{\psi} = \mathcal{P}[\hat{\mathcal{G}}_h(\mathcal{D}_h \bar{\boldsymbol{u}})
+  - \hat{\mathcal{C}}_h(\mathcal{C}_h \bar{\boldsymbol{u}})]``, projected onto the horizontal covariant directions for``\boldsymbol{u}_h``and onto the vertical one, after a``\rho J``-weighted interpolation to faces, for``u_3``; the divergence damping factor``\delta_{div}`` is described under
+    [Hyperdiffusion](hyperdiffusion.md).
 
-This is discretized using
-
-```math
-\frac{\partial}{\partial t} \rho \chi \approx
-- \mathcal{D}^{split}_h[ \rho \bar{\boldsymbol{u}}, \chi ]
-- \mathcal{D}^c_v \left[ WI^f(J,\rho) \, U^f\left( \tilde{\boldsymbol{u}},  \frac{\rho \chi}{\rho} \right) \right]
-- \nu_\chi \hat{\mathcal{D}}_h ( \rho \, \mathcal{G}_h (\psi) )
-```
-
-where
-
-```math
-\psi = \mathcal{P} \left[ \hat{\mathcal{D}}_h \left( \mathcal{G}_h \left( \frac{\rho \chi}{\rho} \right)\right) \right]
-```
-
-For total water ``\rho q_\mathrm{tot}``, the central reconstruction
-
-```math
-- \mathcal{D}^c_v \left[ WI^f(J,\rho) \, \tilde{\boldsymbol{u}} \, I^f\left( \frac{\rho \chi}{\rho} \right) \right]
-```
-
-is treated implicitly (as for total energy), with the upwind-central difference
-applied after the Newton solve as a `T_post_imp!` correction. All other
-grid-mean tracers are advected fully explicitly with the reconstruction
-selected by `tracer_upwinding` (the van Leer limiter by default).
+The fully expanded forms of each tendency are in the source files linked above
+and in Appendix B of [Yatunin2026](@cite).
 
 ## Where this is implemented
 

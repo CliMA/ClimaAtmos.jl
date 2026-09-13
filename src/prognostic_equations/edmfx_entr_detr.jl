@@ -210,7 +210,7 @@ third from `area_bounding_entr_detr` (its positive branch).
   - `PiGroupsEntrainment`: `Π`-group closure
     (`calculate_pi_groups`), `entr_vel_scale = limiter · max(0, Σᵢ cᵢ|Πᵢ| + c₆) / (ᶜz - z_sfc)` with the coefficients
     `entr_param_vec`.
-  - `InvZEntrainment`: `entr_vel_scale = limiter · entr_coeff / (ᶜz - z_sfc)`.
+  - `InvZEntrainment`: `entr_vel_scale = limiter · (entr_inv_length + entr_coeff / (ᶜz - z_sfc))`.
 
 Both non-trivial models multiply by `upper_area_limiter_factor` and
 return zero at or below the surface, where `1/(ᶜz - z_sfc)` is singular.

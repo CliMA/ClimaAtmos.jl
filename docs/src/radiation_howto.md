@@ -2,7 +2,7 @@
 
 Radiation is off by default. This page covers what to switch on for each kind of
 run, how to choose the solve cadence, and which diagnostics tell you whether the
-result is sensible. For what the modes actually compute, see
+result is sensible. For what the modes compute, see
 [Radiation](radiation.md).
 
 ## Choosing a mode
@@ -24,9 +24,9 @@ Which mode fits depends on what the run is for.
 | Climate and weather runs                                            | `allskywithclear`             |
 | Stratocumulus, Arctic stratocumulus, deep-convection single columns | `DYCOMS`, `ISDAC`, `TRMM_LBA` |
 
-The production runs use `allskywithclear`, which adds the
-clear-sky fluxes to the diagnostics. Prefer `allskywithclear`
-unless the extra work for the clear-sky fluxes is a problem.
+The production runs use `allskywithclear`, which adds the clear-sky fluxes to
+the diagnostics. Prefer it unless the extra work those fluxes require is a
+problem.
 
 `held_suarez` replaces radiation by Newtonian relaxation of temperatures and
 ignores `dt_rad`; the single-column modes are prescribed profiles evaluated
@@ -44,12 +44,11 @@ changes.
     clear-sky runs.
   - With `insolation: timevarying` the solar zenith angle changes through the
     day, and a 6-hour cadence resolves it with four samples. For boundary-layer
-    or diurnal-cycle work, shorten it to an hour or less. Note that a cadence
-    that does not divide the day evenly will alias the diurnal cycle.
-  - In single-column cases the solve is one column, so a short cadence is
-    unremarkable. In global all-sky runs, the radiation solve is a noticeable
-    part of the wall-clock time, and halving `dt_rad` roughly doubles that
-    part.
+    or diurnal-cycle work, shorten it to an hour or less. A cadence that does
+    not divide the day evenly will alias the diurnal cycle.
+  - In single-column cases the solve covers one column, so the cadence can be
+    short. In global all-sky runs, the radiation solve is a noticeable part of
+    the wall-clock time, and halving `dt_rad` roughly doubles that part.
 
 If `dt_rad` is shorter than or equal to `dt`, the callback fires once per step.
 
@@ -62,7 +61,7 @@ insolation: timevarying   # idealized, timevarying, rcemipii,
 
 `idealized` is the conventional choice for idealized aquaplanet climate runs:
 annual-mean, latitude-dependent, no diurnal cycle. Use `timevarying` when the
-diurnal or seasonal cycle matters, which includes essentially all AMIP-style and
+diurnal or seasonal cycle matters, which covers nearly all AMIP-style and
 site-comparison work. From a script, `TimeVaryingInsolation` also takes an
 explicit site:
 
@@ -105,18 +104,17 @@ want:
 `aerosol_radiation: true` requires at least one species in
 `prescribed_aerosols`, from `DST01`–`DST05`, `SSLT01`–`SSLT05`, `SO4`, `CB1`,
 `CB2`, `OC1`, `OC2`. Enabling it with an empty list raises an error at model
-construction rather than running without aerosols. Note that the prescribed
-aerosols also feed the cloud droplet number closure behind the liquid effective
-radius, so switching them on changes cloud optics even in the shortwave-only
-sense.
+construction. The prescribed aerosols also
+feed the cloud droplet number closure behind the liquid effective
+radius, so switching them on changes the cloud optics as well.
 
 For time-varying ozone and carbon dioxide, including which artifact supplies the
 ozone data, see [Trace Gases](trace_gases.md).
 
 Turn off `add_isothermal_boundary_layer` only if you want top-of-atmosphere
 fluxes reported at the model top rather than at the top of the real atmosphere.
-With it off, downwelling longwave is assumed to be zero at the model top (rather
-than TOA), and the TOA longwave will be biased against observations.
+With it off, downwelling longwave is assumed to be zero at the model top, and
+the TOA longwave will be biased against observations.
 
 ## Surface
 
@@ -158,7 +156,7 @@ the cloud radiative effect:
 The shortwave and longwave cloud radiative effects at the top of the atmosphere
 are then `rsutcs - rsut` and `rlutcs - rlut`.
 
-For diagnosing the cloud optics rather than the fluxes, `reffclw` and `reffcli`
+For diagnosing the cloud optics, `reffclw` and `reffcli`
 give the effective radii the radiation used, and `clt` and `cltl` the cloud
 cover the shortwave and longwave McICA sampling produced. Requesting a
 diagnostic that the active mode does not compute raises an error naming the
@@ -215,4 +213,4 @@ error names both the variable and the active mode.
 **Radiation dominates the run time.** Lengthen `dt_rad`, or drop to `clearsky`
 if cloud radiative effects are not part of the question. Dropping from
 `allskywithclear` to `allsky` removes the clear-sky fluxes and the work that
-produces them, but then the cloud radiative effect is no longer available.
+produces them, and with them the cloud radiative effect.

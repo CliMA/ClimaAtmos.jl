@@ -2,7 +2,11 @@
 
 ## Idealized cases
 
-`ClimaAtmos.jl` supports several canonical test cases that are run in a single column model designed to verify how well [PROPHET](prophet.md) reproduces each convective regime. These cases include variants of `bomex`, `dycoms`, `rico`, `soares`, `gabls`, and `trmm` and can be found in the `config/model_configs` directory. The purpose of each simulation is summarized in the following table:
+`ClimaAtmos.jl` supports several canonical test cases, run in a single-column
+model, that check how well [PROPHET](prophet.md) reproduces each convective
+regime. They include variants of `bomex`, `dycoms`, `rico`, `soares`, `gabls`,
+and `trmm`, and live in the `config/model_configs` directory. The table below
+summarizes what each one probes:
 
 | Abbreviation | Long Name                                            | Cloud Regime          | Reference                                                                                                                   |
 |:------------ |:---------------------------------------------------- |:--------------------- |:--------------------------------------------------------------------------------------------------------------------------- |
@@ -32,17 +36,24 @@ simulation = CA.AtmosSimulation(config)
 sol_res = CA.solve_atmos!(simulation) # run the simulation
 ```
 
-The same three lines run every case on this page; only the configuration
+These lines run each case on this page; only the configuration
 file changes. CI runs these cases with a common diagnostics file prepended
 (e.g. `config/common_configs/diagnostics_column_progedmf_1M.yml`); see
 [Creating custom configurations](configuration.md) for combining
 configuration files.
 
-## Externally-Driven Single Column Models
+## Externally driven single-column models
 
-`ClimaAtmos.jl` currently supports several externally driven single column setups: `GCM` driven, `ReanalysisTimeVarying`, `ReanalysisMonthlyAveragedDiurnal`, and ARM VARANAL. Externally-driven means that the model is initialized and forced with data from a different simulation or analysis product. This differs from setups such as BOMEX or SOARES, which have steady forcing or functional forcing, respectively. These setups have been developed for model calibration and testing by recreating statistics that are close to either LES (for the `GCM` driven case only) or observations.
+`ClimaAtmos.jl` currently supports several externally driven single-column
+setups: `GCM` driven, `ReanalysisTimeVarying`,
+`ReanalysisMonthlyAveragedDiurnal`, and ARM VARANAL. Externally driven means
+that the model is initialized and forced with data from a different simulation
+or analysis product, rather than from steady or prescribed functional forcing
+as in BOMEX or SOARES. These setups were developed for model calibration and
+testing, by recreating statistics close to either LES (for the `GCM` driven
+case only) or observations.
 
-### GCM-Driven Case
+### GCM-driven case
 
 For the `GCM` driven case, run the configuration file
 [`config/model_configs/prognostic_edmfx_gcmdriven_column.yml`](https://github.com/CliMA/ClimaAtmos.jl/blob/main/config/model_configs/prognostic_edmfx_gcmdriven_column.yml). In the config,
@@ -54,9 +65,18 @@ external_forcing_file: artifact"cfsite_gcm_forcing"/HadGEM2-A_amip.2004-2008.07.
 cfsite_number : "site23"
 ```
 
-Setting `initial_condition` to `GCM` selects the GCM-driven setup, which supplies the external forcing, surface treatment, and insolation from the external file. The `external_forcing_file` and `cfsite_number` together determine the temperature, specific humidity, and wind as well as horizontal and vertical advection profiles that drive the simulation, and can be set to a local file path instead of the artifact. Radiation and surface temperature are also specified. Here the forcing file, an example of which is stored in the artifact, contains groups for each `cfsite` to drive the simulation. See [Shen et al. 2022](https://agupubs.onlinelibrary.wiley.com/doi/full/10.1029/2021MS002631) for more information.
+Setting `initial_condition` to `GCM` selects the GCM-driven setup, which takes
+the external forcing, surface treatment, and insolation from the external file.
+The `external_forcing_file` and `cfsite_number` together determine the
+temperature, specific humidity, and wind, as well as the horizontal and
+vertical advection profiles that drive the simulation; `external_forcing_file`
+can point to a local file instead of the artifact. Radiation and surface
+temperature are specified there too. The forcing file, an example of which is
+stored in the artifact, holds one group per `cfsite`. See [Shen et al.
+2022](https://agupubs.onlinelibrary.wiley.com/doi/full/10.1029/2021MS002631)
+for more information.
 
-### ARM VARANAL Case (SGP)
+### ARM VARANAL case (SGP)
 
 The ARM VARANAL setup drives a single column at the SGP Central Facility with
 time-varying profiles and tendencies from the
@@ -87,11 +107,15 @@ The default period (Sep 18–22, 2010) spans a clear-to-convective transition
 with a cold-front passage, a good diurnal-cycle test. To run another period,
 set `external_forcing_file` to that month's VARANAL `.cdf` file.
 
-### Reanalysis-Driven Case
+### Reanalysis-driven case
 
-#### Matched ERA5 Trajectory
+#### Matched ERA5 trajectory
 
-The `ReanalysisTimeVarying` case extends the `GCM` driven case to single-column simulations that resolve the diurnal cycle, can be run at any site globally, and are driven by reanalysis, allowing calibration of PROPHET to earth-system observations in the single-column setting. For example, a set of config file arguments can be:
+The `ReanalysisTimeVarying` case extends the `GCM` driven case to single-column
+simulations that resolve the diurnal cycle, can be run at any site on the
+globe, and are driven by reanalysis. That makes it possible to calibrate
+PROPHET against Earth system observations in the single-column setting. A set
+of configuration arguments can be:
 
 ```yaml
 initial_condition: "ReanalysisTimeVarying"
@@ -116,20 +140,23 @@ and only on the `clima` and Caltech HPC servers.
 
 !!! note
 
-    Depending on the amount of smoothing and data resolution, points near the boundaries can throw index errors. With default settings, users should stay at least 5 points away from the poles (1° for ERA5 data) for smoothing (4 points) and gradients (one extra point).
+    Depending on the amount of smoothing and the data resolution, points near
+    the boundaries can throw index errors. With default settings, stay at least
+    5 points away from the poles (1° for ERA5 data): 4 points for smoothing and
+    one more for gradients.
 
-#### Monthly Averaged Forcing
+#### Monthly averaged forcing
 
-Following a matched ERA5 trajectory is data intensive, since it needs a download
-for every simulated day. A second dispatch avoids that by cycling a single day of
-forcing indefinitely.
+Following a matched ERA5 trajectory is data intensive, since it needs a
+download for each simulated day. A second dispatch avoids that by cycling a
+single day of forcing indefinitely.
 
 The day it cycles is not a calendar day. ERA5 is averaged over the month
 separately at each hour of the day, which gives one composite day carrying that
 month's mean diurnal cycle; the file stores that day, and a periodic calendar
 repeats it for as long as the simulation runs. Forcing the column with it
 therefore drives the month's mean conditions and mean diurnal cycle without
-following any particular day's weather, which is what makes it suited to
+following any particular day's weather, which makes it suited to
 calibrating against monthly statistics.
 
 The configuration is as above, with `external_forcing` set to request the
