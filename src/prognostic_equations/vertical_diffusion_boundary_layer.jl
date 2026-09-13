@@ -38,7 +38,7 @@ Increments:
   - `Yₜ.c.ρq_lcl` and `Yₜ.c.ρq_icl`: no flux of their own. Each takes a share of
     the aggregate water tendency, scaled by the clipped ratio
     `min(q_μ / q_tot_eff, 1)`, and the matching number densities `ρn_lcl` and
-    `ρn_icl` scale with it too, which preserves the mean particle mass.
+    `ρn_ice` scale with it too, which preserves the mean particle mass.
   - Rain, snow, and rain number density (`ρq_rai`, `ρq_sno`, `ρn_rai`) are not
     diffused, since they sediment rather than mix.
   - Passive (non-microphysics) grid-mean tracers: divergence of
@@ -131,7 +131,7 @@ function vertical_diffusion_boundary_layer_tendency!(
         # Distribute ρq_tot_diff to cloud mass (and number) species.
         ᶜratio = p.scratch.ᶜtemp_scalar_4
         for (ρq_name, ρn_name) in
-            ((@name(c.ρq_lcl), @name(c.ρn_lcl)), (@name(c.ρq_icl), @name(c.ρn_icl)))
+            ((@name(c.ρq_lcl), @name(c.ρn_lcl)), (@name(c.ρq_icl), @name(c.ρn_ice)))
             MatrixFields.has_field(Y, ρq_name) || continue
             ᶜρq = MatrixFields.get_field(Y, ρq_name)
             ᶜρqₜ = MatrixFields.get_field(Yₜ, ρq_name)

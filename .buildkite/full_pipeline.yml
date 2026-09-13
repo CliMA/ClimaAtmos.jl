@@ -628,6 +628,14 @@ steps:
           --job_id box_density_current_test
         artifact_paths: "box_density_current_test/output_active/*"
 
+      - label: ":package: Non-spherical: 3D box, density current, implicit Smagorinsky-Lilly"
+        retry: *retry_policy
+        command: >
+          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+          --config_file $CONFIG_PATH/box_density_current_test_implicit.yml
+          --job_id box_density_current_test_implicit
+        artifact_paths: "box_density_current_test_implicit/output_active/*"
+
       - label: ":package: Non-spherical: Reproducibility test for radiative convective equilibrium in a 3D box"
         retry: *retry_policy
         command: >
