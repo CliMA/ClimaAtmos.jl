@@ -550,6 +550,11 @@ function TurbulenceConvectionParameters(
         sgs_variance_geometric_coeff = FT(1 // 12),
         sgs_variance_horizontal_scale_factor = FT(0),
         sgs_variance_max_rel_std = FT(0.5),
+        # Stability weight on the geometric term (k = 0: weight ≡ 1, inert; see
+        # `set_covariance_cache!`) and clamp on the diagnosed T-q correlation
+        # (`tq_correlation_model: diagnosed`).
+        sgs_variance_geometric_Ri_factor = FT(0),
+        sgs_correlation_max = FT(1),
         # Cloud-fraction floor release shape (see `_compute_cloud_fraction`):
         # margin = abs_margin = sharpness = 1, residual = 0 release the floor on
         # a one-width saturation margin guarded by an absolute margin of one

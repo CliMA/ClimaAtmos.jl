@@ -259,6 +259,10 @@ function precomputed_quantities(Y, atmos)
         base = (;
             ᶜT′T′ = zeros(axes(Y.c)),
             ᶜq′q′ = zeros(axes(Y.c)),
+            # T-q covariance and the correlation the quadrature samples (constant or
+            # diagnosed; see `set_tq_correlation!`)
+            ᶜT′q′ = zeros(axes(Y.c)),
+            ᶜcorr_Tq = zeros(axes(Y.c)),
         )
         uses_microphysics_quadrature_moments ?
         (; base..., ᶜsgs_moments = similar(Y.c, SGSMomentsNT)) :
@@ -745,8 +749,7 @@ NVTX.@annotate function set_implicit_precomputed_quantities!(Y, p, t)
         # Two-pass SGS: recompute condensate using SGS quadrature over (T, q_tot)
         sgs_quad = p.atmos.sgs_quadrature
         if !isnothing(sgs_quad)
-            (; ᶜT′T′, ᶜq′q′) = p.precomputed
-            corr_Tq = correlation_Tq(p.params)
+            (; ᶜT′T′, ᶜq′q′, ᶜcorr_Tq) = p.precomputed
             @. ᶜsa_result = compute_sgs_saturation_adjustment(
                 thermo_params,
                 $(sgs_quad),
@@ -755,7 +758,7 @@ NVTX.@annotate function set_implicit_precomputed_quantities!(Y, p, t)
                 ᶜq_tot_nonneg,
                 ᶜT′T′,
                 ᶜq′q′,
-                corr_Tq,
+                ᶜcorr_Tq,
             )
             @. ᶜq_liq = ᶜsa_result.q_liq
             @. ᶜq_ice = ᶜsa_result.q_ice
