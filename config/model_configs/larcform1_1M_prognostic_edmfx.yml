@@ -6,7 +6,7 @@ initial_condition: Larcform1
 rayleigh_sponge: true
 
 # Surface #
-prognostic_surface: PrescribedSST     # Constant temp starting at 250K. Pithan2016 uses sea ice models.
+prognostic_surface: PrescribedSST     # Constant temp starting at 250K. Pithan 2016 intercomparison uses constant, sea-ice, and sea-ice with snow.
 surface_setup: DefaultMoninObukhov
 disable_surface_flux_tendency: false
 
@@ -15,13 +15,13 @@ disable_surface_flux_tendency: false
 
 # Temporal
 FLOAT_TYPE: Float32
-t_end: 5days                          # Pithan2016 runs 20days with analysis over first 10
+t_end: 5days                          # Pithan 2016 runs 20days with analysis over first 10
 dt: 120secs
 dt_rad: 30mins
 
 # Spatial #
 config: "column"
-z_max: 9000.0                         # Pithan models were in pressure coords running up to roughly ~160hPa
+z_max: 9000.0                         # Pithan 2016 models were in pressure coords running up to roughly ~160hPa
 z_elem: 90
 z_stretch: true # clw and z-banding both appear very sensitive to this
 dz_bottom: 10.0
