@@ -222,7 +222,6 @@ quadrature points.
 # Fields
 
   - `scheme`: CloudMicrophysics scheme tag (e.g. `BMT.Microphysics1Moment()`).
-  - `mp`, `tps`: Microphysics and thermodynamics parameters.
   - `ρ`: Air density [kg/m³].
   - `q_rai`, `q_sno`: Rain and snow specific humidity [kg/kg], clamped
     non-negative by the caller.
@@ -235,11 +234,16 @@ quadrature points.
   - `dt`: Timestep used for the time-averaged process rates [s].
   - `nsubs`: Number of substeps in the tendency averaging.
   - `args`: Extra trailing arguments forwarded to the CloudMicrophysics call.
+
+The microphysics and thermodynamics parameter structs are not fields: they are
+carried in the type parameters `MP` and `TPS` (passed to the constructor as
+`Val`s), so their values are baked into the generated code as immediates
+instead of being loaded from the evaluator object. This keeps the evaluator
+small enough to live in registers and avoids spilling the parameter structs
+to local memory on GPU.
 """
 struct Microphysics1MEvaluator{S, MP, TPS, FT, Args <: Tuple}
     scheme::S
-    mp::MP
-    tps::TPS
     ρ::FT
     # Precipitation (held fixed across quadrature points)
     q_rai::FT
@@ -253,6 +257,21 @@ struct Microphysics1MEvaluator{S, MP, TPS, FT, Args <: Tuple}
     dt::FT
     nsubs::Int
     args::Args
+
+    # Inner constructor: `cmp` and `thp` are captured as `Val`s so that the
+    # parameter structs live in the type domain (type parameters `MP`/`TPS`),
+    # not in the evaluator's fields. They may be passed either as plain structs
+    # or already `Val`-wrapped; both are unwrapped before specialization.
+    function Microphysics1MEvaluator(
+        scheme::S, mp, tps, ρ::FT,
+        q_rai::FT, q_sno::FT,
+        λ::FT, λ_lagrange::FT, mu_S::FT, α::FT,
+        dt::FT, nsubs::Int, args::Args,
+    ) where {S, FT, Args <: Tuple}
+        return new{S, unwrap_value(mp), unwrap_value(tps), FT, Args}(
+            scheme, ρ, q_rai, q_sno, λ, λ_lagrange, mu_S, α, dt, nsubs, args,
+        )
+    end
 end
 # `@noinline` here is the SGS quadrature function barrier. The functor body
 # below (saturation, shape-function partition, plus the heavy
@@ -294,7 +313,9 @@ local vapor.
 NamedTuple from `BMT.bulk_microphysics_tendencies(BMT.LinearizedAverage(), ...)`
 with `dq_lcl_dt`, `dq_icl_dt`, `dq_rai_dt`, `dq_sno_dt` [kg/kg/s].
 """
-@noinline function (eval::Microphysics1MEvaluator)(T_hat, q_tot_hat)
+@noinline function (eval::Microphysics1MEvaluator{S, MP, TPS})(
+    T_hat, q_tot_hat,
+) where {S, MP, TPS}
     FT = typeof(eval.ρ)
     q_tot_hat = max(FT(0), q_tot_hat)
 
@@ -307,7 +328,10 @@ with `dq_lcl_dt`, `dq_icl_dt`, `dq_rai_dt`, `dq_sno_dt` [kg/kg/s].
     # to cloud-only q_c), and CloudMicrophysics subtracts q_rai/q_sno from
     # q_tot_hat when it diagnoses the local vapor. Subtracting them from the
     # cloud condensate as well would double-count them and break ⟨q_c^local⟩ = q_c.
-    q_sat_hat = TD.q_vap_saturation(eval.tps, T_hat, eval.ρ)
+    # The parameter structs are type parameters of `eval` (see the struct
+    # docstring); referencing them here materializes their values as
+    # immediates in the generated code rather than field loads.
+    q_sat_hat = TD.q_vap_saturation(TPS, T_hat, eval.ρ)
     S′_hat = q_tot_hat - q_sat_hat - eval.mu_S
     shifted_excess = max(FT(0), eval.λ_lagrange + eval.α * S′_hat)
     q_lcl_hat = eval.λ * shifted_excess
@@ -315,7 +339,7 @@ with `dq_lcl_dt`, `dq_icl_dt`, `dq_rai_dt`, `dq_sno_dt` [kg/kg/s].
 
     return BMT.bulk_microphysics_tendencies(
         BMT.LinearizedAverage(),
-        eval.scheme, eval.mp, eval.tps, eval.ρ, T_hat, q_tot_hat,
+        eval.scheme, MP, TPS, eval.ρ, T_hat, q_tot_hat,
         q_lcl_hat, q_icl_hat, eval.q_rai, eval.q_sno,
         eval.dt, eval.nsubs, eval.args...,
     )
@@ -391,8 +415,14 @@ end
     # invariant across the quadrature. They default to being computed here from the
     # mean state; a caller evaluating this broadcast over many quadrature points can
     # precompute them once and pass them in to avoid recomputing them per point.
-    λ = TD.liquid_fraction(thp, T, max(zero(ρ), q_lcl), max(zero(ρ), q_icl)),
-    mu_S = q_tot_nonneg - TD.q_vap_saturation(thp, T, ρ),
+    # `cmp`/`thp` may be provided `Val`-wrapped (e.g. `Val(cmp)`) so the parameter
+    # structs are baked into `Microphysics1MEvaluator`'s type parameters. Since
+    # `integrate_over_sgs` results in a function call on the GPU (due to the
+    # @noinline barrier), embedding the constants in the type prevents the
+    # compiler from feeling obliged to copy the whole structs onto the stack
+    # (i.e. local memory).
+    λ = TD.liquid_fraction(unwrap_value(thp), T, max(zero(ρ), q_lcl), max(zero(ρ), q_icl)),
+    mu_S = q_tot_nonneg - TD.q_vap_saturation(unwrap_value(thp), T, ρ),
     args...,
 )
     FT = typeof(ρ)
@@ -410,6 +440,10 @@ end
         evaluator, sgs_quad, q_tot_nonneg, T, q′q′, T′T′, corr_Tq,
     )
 end
+
+# Unwrap `Val`-wrapped arguments
+@inline unwrap_value(::Val{vals}) where {vals} = vals
+@inline unwrap_value(x) = x
 
 ###
 ### 2 Moment Microphysics
