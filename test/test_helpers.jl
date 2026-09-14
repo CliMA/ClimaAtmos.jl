@@ -118,7 +118,7 @@ function make_horizontal_space(mesh, quad, comms_ctx, bubble)
     if mesh isa Meshes.AbstractMesh1D
         error("Distributed mode does not work with 1D horizontal spaces.")
     elseif mesh isa Meshes.AbstractMesh2D
-        topology = Topologies.DistributedTopology2D(
+        topology = Topologies.Topology2D(
             comms_ctx,
             mesh,
             Topologies.spacefillingcurve(mesh),
@@ -305,7 +305,6 @@ function get_cartesian_spaces(; FT = Float32)
         boundary_names = (:bottom, :top),
     )
     vertmesh = Meshes.IntervalMesh(vertdomain, stretch, nelems = velem)
-    vert_face_space = Spaces.FaceFiniteDifferenceSpace(vertmesh)
     vert_topology = Topologies.IntervalTopology(
         ClimaComms.SingletonCommsContext(device),
         vertmesh,

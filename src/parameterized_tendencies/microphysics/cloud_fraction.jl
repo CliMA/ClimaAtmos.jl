@@ -1,6 +1,5 @@
 import NVTX
 import StaticArrays as SA
-import ClimaCore.RecursiveApply: rzero, ⊞, ⊠
 
 """
     set_covariance_cache_and_cloud_fraction!(Y, p)
