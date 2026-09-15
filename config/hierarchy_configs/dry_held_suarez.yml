@@ -1,0 +1,7 @@
+implicit_diffusion: false
+approximate_linear_solve_iters: 1
+t_end: "366days"
+rad: "held_suarez"
+dt_save_state_to_disk: "1months"
+disable_surface_flux_tendency: true
+toml: [toml/hierarchy_toml/sponge.toml]

@@ -1,0 +1,10 @@
+implicit_diffusion: false
+approximate_linear_solve_iters: 1
+t_end: "30days"
+initial_condition: "MoistBaroclinicWave"
+microphysics_model: "0M"
+dt_save_state_to_disk: "10days"
+disable_surface_flux_tendency: true
+diagnostics:
+  - short_name: [pfull, wa, va, rv, hus, ke]
+    period: 10days

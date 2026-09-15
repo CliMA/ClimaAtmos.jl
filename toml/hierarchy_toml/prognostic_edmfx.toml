@@ -1,0 +1,17 @@
+[EDMF_max_area]
+value = 0.7
+
+[entr_coeff]
+value = 0.3
+
+[detr_coeff]
+value = 0
+
+[detr_buoy_coeff]
+value = 1
+
+[detr_vertdiv_coeff]
+value = 0
+
+[detr_massflux_vertdiv_coeff]
+value = 0.3
