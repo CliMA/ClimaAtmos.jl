@@ -423,7 +423,8 @@ NVTX.@annotate function prep_tracer_hyperdiffusion_tendency!(Yₜ, Y, p, t)
 
     (; ᶜ∇²specific_tracers) = p.hyperdiff
 
-    # TODO: Fix RecursiveApply bug in gradₕ to fuse this operation.
+    # TODO: Fix the ClimaCore auto-broadcasting bug in gradₕ to fuse this
+    # operation.
     # ᶜ∇²specific_tracers .= wdivₕ.(gradₕ.(ᶜspecific_gs_tracers(Y)))
     foreach_gs_tracer(Y, ᶜ∇²specific_tracers) do ᶜρχ, ᶜ∇²χ, _
         @. ᶜ∇²χ = wdivₕ(gradₕ(specific(ᶜρχ, Y.c.ρ)))
