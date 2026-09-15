@@ -19,23 +19,8 @@ simulation = CA.get_simulation(config);
 (; integrator) = simulation;
 
 device = ClimaComms.device(config.comms_ctx)
-(; table_summary, trials) = CTS.benchmark_step(
-    integrator,
-    device;
-    crop = false,
-    hcrop = 168,
-    only = [
-        "Wfact",
-        "ldiv!",
-        "T_imp!",
-        "T_exp_T_lim!",
-        # "lim!",
-        "dss!",  # TODO: Rename to constrain_state! once ClimaTimeSteppers.jl updates its API
-        "cache!",
-        "cache_imp!",
-        "step!",
-    ],
-)
+(; summaries, trials) =
+    CTS.benchmark_step(integrator, device; crop = false, hcrop = 168)
 
 CTS.step!(integrator) # compile first
 
@@ -56,14 +41,16 @@ are_boundschecks_forced = Base.JLOptions().check_bounds == 1
                 true
             end
         end
-        @test compare_mem(trials, "Wfact", 0)
+        @test compare_mem(trials, "Wfact!", 0)
         @test compare_mem(trials, "ldiv!", 0)
         @test compare_mem(trials, "T_imp!", 0)
-        @test compare_mem(trials, "T_exp_T_lim!", 190420)
+        @test compare_mem(trials, "T_exp!", 7648)
         @test compare_mem(trials, "lim!", 0)
         @test compare_mem(trials, "dss!", 0)
-        @test compare_mem(trials, "cache!", 408)
-        @test compare_mem(trials, "cache_imp!", 160)
+        @test compare_mem(trials, "constrain_state!", 0)
+        @test compare_mem(trials, "initialize_imp!", 0)
+        @test compare_mem(trials, "cache!", 256)
+        @test compare_mem(trials, "cache_imp!", 0)
 
         # It's difficult to guarantee zero allocations,
         # so let's just leave this as broken for now.
@@ -72,10 +59,10 @@ are_boundschecks_forced = Base.JLOptions().check_bounds == 1
 end
 
 if get(ENV, "BUILDKITE", "") == "true"
-    # Export table_summary
+    # Export summaries
     import JSON
     path = pkgdir(CA)
     open(joinpath(path, "perf_benchmark_$job_id.json"), "w") do io
-        JSON.print(io, table_summary)
+        JSON.print(io, summaries)
     end
 end
