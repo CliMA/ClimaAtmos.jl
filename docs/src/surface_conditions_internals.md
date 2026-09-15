@@ -65,7 +65,7 @@ derived from roughness.
 
   - **Scalars must broadcast.** `Base.broadcastable(x) = tuple(x)` is defined once
     on the abstract supertypes [`SurfaceParameterization`](@ref ClimaAtmos.SurfaceConditions.SurfaceParameterization) and [`SurfaceTemperature`](@ref ClimaAtmos.SurfaceConditions.SurfaceTemperature),
-    so every concrete subtype inherits it for free. A new subtype needs nothing
+    so each concrete subtype inherits it. A new subtype needs nothing
     extra; the only ways to break this are introducing a parallel hierarchy that
     isn't a subtype, or removing the supertype method.
   - **`surface_temperature` returns a `DataLayout`, an `AnalyticTemperature`, or a
@@ -87,8 +87,8 @@ Both extension points follow the same shape: define a concrete subtype, then add
 the handful of methods the pipeline dispatches on. Because
 `Base.broadcastable(::SurfaceTemperature)` and
 `Base.broadcastable(::SurfaceParameterization)` are defined on the *abstract*
-supertypes, your subtype inherits broadcastability for free; you do not need to
-redefine it.
+supertypes, your subtype inherits broadcastability; you do not need to redefine
+it.
 
 ### A new temperature source
 

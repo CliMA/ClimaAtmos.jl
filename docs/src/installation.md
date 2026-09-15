@@ -73,4 +73,5 @@ The device defaults to CPU. Select a GPU with the `CLIMACOMMS_DEVICE` environmen
 variable (`"CUDA"`; set it before `@import_required_backends`), or, in a YAML
 configuration, with the `device` key (`device: CUDADevice`).
 
-If these load without errors, you're ready to go. Continue to [Your First Simulation](@ref).
+If these load without errors, the GPU backend is available. Continue to
+[Your First Simulation](@ref).

@@ -5,8 +5,9 @@
 """
     edmfx_tke_tendency!(Yₜ, Y, p, t, turbconv_model)
 
-Add the PROPHET (`EDMFX` in code) shear and buoyancy TKE production terms to
-`Yₜ.c.ρtke`.
+Add the PROPHET (`EDMFX` in code) TKE sources to `Yₜ.c.ρtke`: shear and
+buoyancy production, and, for `PrognosticEDMFX`, the pressure-drag
+return-to-isotropy and detrainment shear-mixing sources.
 
 The generic method is a no-op. The method for
 `turbconv_model::Union{EDOnlyEDMFX, PrognosticEDMFX}` forwards to
@@ -34,8 +35,10 @@ end
 """
     edmfx_tke_sources!(Yₜ, Y, p)
 
-Add the shear and buoyancy sources of the isotropic (intra-subdomain) TKE to
-`Yₜ.c.ρtke`.
+Add the sources of the isotropic (intra-subdomain) TKE to `Yₜ.c.ρtke`: shear and
+buoyancy production for every EDMF model, plus the pressure-drag
+return-to-isotropy source (when `edmfx_nh_pressure` is on) and the detrainment
+shear-mixing source for `PrognosticEDMFX`.
 
 Both terms use the same face diffusivities and face buoyancy gradient as the
 diffusive fluxes they parameterize (`set_face_diffusivities!`):

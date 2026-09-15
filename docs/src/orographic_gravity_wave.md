@@ -16,7 +16,7 @@ Throughout this document, an overbar (e.g. $\overline{\vec{v}}$, $\overline{\rho
 
 The orographic gravity wave drag parameterization follows the methods described in [garner2005](@cite). The momentum drag from subgrid-scale mountains is divided into a non-propagating component and a propagating component. The non-propagating (blocked/deflected flow) component deposits momentum drag in a low-level layer extending from the planetary boundary layer top up to a reference level $z_{\mathrm{ref}}$ (with pressure weighting that concentrates the drag near the surface), while the propagating component generates a stationary ($c = 0$, zero phase speed) gravity wave which propagates upwards and deposits momentum flux to the layers where it breaks.
 
-### Planetary Boundary Layer (PBL) top
+### Planetary boundary layer (PBL) top
 
 We implement the following criteria to find the PBL top level $k$ as the highest level that satisfies
 
@@ -86,7 +86,7 @@ Second, $h_0$ is rescaled using the mountain height–width exponent $\gamma$ an
 h_{\mathrm{max}} = \left( h_0^{2-\gamma} \cdot \frac{\gamma+2}{2\gamma} \cdot \frac{1 - h_{\mathrm{frac}}^{2\gamma}}{1 - h_{\mathrm{frac}}^{\gamma+2}} \right)^{1/(2-\gamma)}, \quad h_{\mathrm{min}} = h_{\mathrm{frac}} \cdot h_{\mathrm{max}}.
 ```
 
-This rescaling adjusts the raw statistic to account for the assumed power-law distribution of mountain heights within the grid cell (cf. the Appendix in [garner2005](@cite)). Note that $h_{\mathrm{frac}}$ is a ClimaParams tuning parameter (`ogw_critical_height_threshold`).
+This rescaling adjusts the raw statistic to account for the assumed power-law distribution of mountain heights within the grid cell (cf. the Appendix in [garner2005](@cite)). $h_{\mathrm{frac}}$ is a ClimaParams tuning parameter (`ogw_critical_height_threshold`).
 
 ### Base flux
 
@@ -282,7 +282,7 @@ The non-propagating drag is confined to a finite layer above the PBL top, bounde
 \mathrm{phase} \mathrel{+}= ({}^fz[k] - z_{\text{pbl}}) \cdot \frac{\max(N_{\mathrm{min}}, \min(N_{\mathrm{max}}, {}^fN[k]))}{\max(vvmin, {}^fV_{\tau}[k])},
 ```
 
-setting $z_{\mathrm{ref}} = {}^fz[k]$ at the first face where $\mathrm{phase} > \pi$. Here $N_{\mathrm{min}} = 0.7 \times 10^{-2}\,\mathrm{s^{-1}}$, $N_{\mathrm{max}} = 1.7 \times 10^{-2}\,\mathrm{s^{-1}}$, $vvmin = 1.0\,\mathrm{m/s}$, and $({}^fN, {}^fV_{\tau})$ are obtained from the saturation-profile calculation. If $\mathrm{phase}$ never exceeds $\pi$ in the column, $z_{\mathrm{ref}}$ falls back to the model top. Note that the pressure weighting below still concentrates most of the drag near the surface.
+setting $z_{\mathrm{ref}} = {}^fz[k]$ at the first face where $\mathrm{phase} > \pi$. Here $N_{\mathrm{min}} = 0.7 \times 10^{-2}\,\mathrm{s^{-1}}$, $N_{\mathrm{max}} = 1.7 \times 10^{-2}\,\mathrm{s^{-1}}$, $vvmin = 1.0\,\mathrm{m/s}$, and $({}^fN, {}^fV_{\tau})$ are obtained from the saturation-profile calculation. If $\mathrm{phase}$ never exceeds $\pi$ in the column, $z_{\mathrm{ref}}$ falls back to the model top. The pressure weighting below still concentrates most of the drag near the surface.
 
 Here, $N / V_\tau$ is the vertical wavenumber of a stationary hydrostatic gravity wave, so summing it over height accumulates the wave's vertical phase. Reaching $\pi$ means the flow has turned through half a vertical wavelength. This marks the top of the blocked/deflected low-level layer, which sets $z_{\mathrm{ref}}$. Half a wavelength is the natural cutoff because the wave wiggles up and down as $\sin(mz)$: over the first half-wavelength it makes a single bump, which is the air piling up and overturning right against the mountain. Past that point the wave flips to the other sign and starts behaving like the free wave traveling upward, not the air trapped and blocked near the surface, so that is where the blocked layer ends. The clamps on $N$ and $V_\tau$ keep the wavenumber physical so the layer depth stays sensible.
 
@@ -342,7 +342,7 @@ To avoid instability due to large tendencies from the forcing, we constrain the 
 
 The tendencies above act on the physical horizontal wind components.
 
-## Implementation Summary
+## Implementation summary
 
 The parameterization splits into an offline preprocessing step (Earth topography only) that builds an HDF5 artifact of $(h_{\mathrm{max}}, h_{\mathrm{min}}, t_{11}, t_{12}, t_{21}, t_{22})$ on the spectral element grid, and a runtime step that consumes the artifact via a `dt_ogw` callback and applies the cached forcing every integrator step.
 
@@ -377,3 +377,20 @@ Every dt (integrator step):
 ```
 
 For analytical topographies (DCMIP200, Hughes2023, Agnesi, Schar, Cosine2d, Cosine3d), the tensor is computed on-the-fly at startup using ClimaCore horizontal gradient operators in place of the offline pipeline.
+
+## Where this is implemented
+
+| Concept                                                                | Source                                                                                                                                                                                                                       |
+|:---------------------------------------------------------------------- |:---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Base flux, saturation profile, propagating and blocked-flow tendencies | [src/parameterized_tendencies/gravity_wave_drag/orographic_gravity_wave.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/parameterized_tendencies/gravity_wave_drag/orographic_gravity_wave.jl)                      |
+| Orographic statistics and tensor helpers                               | [orographic_gravity_wave_helper.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/parameterized_tendencies/gravity_wave_drag/orographic_gravity_wave_helper.jl)                                                       |
+| Offline topography preprocessing                                       | [preprocess_topography.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/parameterized_tendencies/gravity_wave_drag/preprocess_topography.jl)                                                                         |
+| Callback scheduling at `dt_ogw`                                        | [src/callbacks/get_callbacks.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/callbacks/get_callbacks.jl), [src/callbacks/callbacks.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/callbacks/callbacks.jl) |
+| Model types                                                            | [`ClimaAtmos.OrographicGravityWave`](@ref), [`ClimaAtmos.FullOrographicGravityWave`](@ref), [`ClimaAtmos.LinearOrographicGravityWave`](@ref)                                                                                 |
+
+The scheme is selected with the `orographic_gravity_wave` key
+(`nothing`, `gfdl_restart`, `raw_topo`, or `linear`) and its update interval
+with `dt_ogw`. The surface field it acts on comes from
+[Topography Representation](topography.md). See
+[Configuration Options](configuration_options.md) and
+[Running Global Simulations](global_simulations.md).

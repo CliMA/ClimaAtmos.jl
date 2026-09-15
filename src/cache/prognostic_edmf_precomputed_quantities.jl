@@ -245,8 +245,10 @@ Update the precomputed quantities of the `PrognosticEDMFX` explicit closures.
 Returns `nothing`.
 
 Mutates in `p.precomputed`, per mass-flux subdomain `j`: the entrainment velocity
-scale `ᶜentr_vel_scaleʲs` [m/s], the turbulent entrainment rate `ᶜturb_entrʲs`
-[1/s], the signed area-bounding entrainment/detrainment rate
+scale `ᶜentr_vel_scaleʲs` [1/m], which multiplies a velocity to give a rate, the
+non-velocity entrainment rate `ᶜentr_nonvel_rateʲs` [1/s], the turbulent
+entrainment rate `ᶜturb_entrʲs` [1/s], the signed area-bounding
+entrainment/detrainment rate
 `ᶜarea_bounding_entr_detrʲs` [1/s], and the relative density excess `ᶜρ_diffʲs`
 [-]. It also writes the squared strain-rate norm `ᶜstrain_rate_norm` [1/s²], the
 surface TKE flux `ρtke_flux`, and (via `set_edmfx_surface_conditions!`) the

@@ -5,7 +5,7 @@
 Sources from cloud microphysics ``\mathcal{S}`` represent the transfer of mass
 between different water categories such as cloud water, cloud ice or precipitation,
 as well as the latent heat release due to phase changes.
-The model supports four different cloud microphysics and precipitation representations:
+The model supports four cloud microphysics and precipitation representations:
 
   - equilibrium cloud formation coupled with a 0-moment microphysics scheme,
   - nonequilibrium cloud formation coupled with a 1-moment microphysics scheme
@@ -38,8 +38,8 @@ and are defined as the change of mass normalized by the mass of the working flui
 See the [CloudMicrophysics.jl docs](https://clima.github.io/CloudMicrophysics.jl/dev/)
 for more details.
 
-Considering the transition from
-``x \rightarrow y`` where ``x`` and ``y`` can be any of the microphysics tracers
+Consider the transition ``x \rightarrow y``, where ``x`` and ``y`` can be any
+of the microphysics tracers:
 
 ```math
 \mathcal{S}_{x \rightarrow y} := \frac{\frac{dm_x}{dt}}{m_{dry} + m_{vap} + m_{liq} + m_{ice} + m_{rai} + m_{sno}}
@@ -67,7 +67,7 @@ total water, density or total energy.
 
 !!! note
 
-    In the above derivations we assume that the volume
+    In the above derivations, we assume that the volume
     of the working fluid is constant (not the pressure).
 
 ## Sedimentation
@@ -101,7 +101,11 @@ Our strategy is to minimize the effects of those errors.
 
 ### Implicit treatment of microphysics sinks
 
-Microphysical processes can produce large negative tendencies (sinks) for tracer variables. These tendencies are handled through a time-averaged formulation in CloudMicrophysics.jl, in which sink terms are locally linearized and incorporated into the time integration scheme (see [here](https://clima.github.io/CloudMicrophysics.jl/dev/BulkTendencies/)).
+Microphysical processes can produce large negative tendencies (sinks) for
+tracer variables. These are handled through a time-averaged formulation in
+CloudMicrophysics.jl, in which sink terms are locally linearized and folded
+into the time integration scheme; see the [CloudMicrophysics.jl bulk-tendency
+documentation](https://clima.github.io/CloudMicrophysics.jl/dev/BulkTendencies/).
 
 ### Enforcing physical constraints
 
@@ -133,9 +137,9 @@ tracer values or condensate mass exceeding the available total moisture.
 
 Hyperdiffusion (``\nabla^4`` operator) is a tendency applied
 to remove noise buildup at the small scales and improve model stability.
-It is more selective than the standard diffusion operator, and applies the damping only
-at the smallest scales of the simulation without degrading the sharp features
-of the modeled tracers.
+It is more selective than the second-order diffusion operator of
+[Diffusion](diffusion.md), damping only the smallest scales of the simulation
+without degrading the sharp features of the modeled tracers.
 
 Hyperdiffusion is a higher order derivative operator, and as a result does not guarantee positivity.
 Total water (`q_tot_eff = q_tot - q_rai - q_sno` for the 1M and 2M schemes;
@@ -147,32 +151,24 @@ hyperdiffusion.
 
 ### Diffusion
 
-ClimaAtmos provides different horizontal and vertical diffusion schemes that
-improve model stability and reduce negative numbers and spurious oscillations.
-
-Horizontal diffusion tendency is based on either the Smagorinsky-Lilly model
-[Sridhar2022](@cite) or the Anisotropic Minimum-Dissipation model (AMD) [Akbar2016](@cite)
-and is applied explicitly.
-
-Vertical diffusion tendency can be based on either of the above models,
-or computed as a function that decays with height and is capped at some value above the tropopause.
-Vertical diffusion can be applied implicitly when using `VerticalDiffusion`,
-`DecayWithHeightDiffusion`, or the PROPHET diffusive flux; the Smagorinsky-Lilly
-and AMD vertical tendencies are always explicit.
-With `VerticalDiffusion` or `DecayWithHeightDiffusion`, `q_tot_eff` (defined as
-for hyperdiffusion above) is diffused directly and the resulting mass tendency is
-distributed proportionally to the cloud species; precipitating species
-(`q_rai`, `q_sno`, `n_rai`) receive no diffusion. The Smagorinsky-Lilly and
-AMD models apply the full eddy diffusivity to every grid-scale tracer.
+Physical diffusion smooths tracer gradients, so it also reduces the negative
+values and spurious oscillations discussed above. The available schemes, which
+species each one diffuses, and how the tendency is split between the implicit
+and explicit halves of the timestep are described in
+[Diffusion](diffusion.md).
 
 ### Non-negativity constraints
 
-Often, the diffusion and limiters described above are not enough to ensure positivity of the microphysics tracers.
+Often, diffusion and the limiters described above are not enough to ensure
+positivity of the microphysics tracers.
 ClimaAtmos supports four additional constraints that can be used to enforce non-negativity of the microphysics tracers.
 This is controlled by the `tracer_nonnegativity_method` in the `AtmosWater` struct.
-Each method (except `vertical_water_borrowing`) also comes in a `_qtot` variant,
-which additionally constrains `ρq_tot` itself and then restores mass–energy
-consistency.
+`elementwise_constraint` also comes in a `_qtot` variant that includes `ρq_tot`
+itself among the constrained tracers and adds the water it creates to the air
+mass and total energy as vapor, so that the three budgets stay consistent.
+`vapor_constraint_qtot` is accepted but leaves `ρq_tot` unchanged, since a
+negative total water has no vapor to borrow from; `vapor_tendency` and
+`vertical_water_borrowing` ignore the suffix with a warning.
 The available options are:
 
   - `TracerNonnegativityElementConstraint`:
@@ -220,13 +216,62 @@ The available options are:
     the other three options, this one acts in the timestepper's limiter stage
     rather than in the state-constraint hook.
 
-## Aerosol Activation for 2-Moment Microphysics
+## Aerosol activation for 2-moment microphysics
 
-Aerosol activation uses functions from the [CloudMicrophysics.jl](https://github.com/CliMA/CloudMicrophysics.jl) library, based on the Abdul-Razzak and Ghan (ARG) parameterization [AbdulRazzakGhan2000](@cite). ARG predicts the number of activated cloud droplets assuming a parcel of clear air rising adiabatically. This formulation is traditionally applied only at cloud base, where the maximum supersaturation typically occurs.
+Aerosol activation uses functions from the
+[CloudMicrophysics.jl](https://github.com/CliMA/CloudMicrophysics.jl) library,
+based on the Abdul-Razzak and Ghan (ARG) parameterization
+[AbdulRazzakGhan2000](@cite). ARG predicts the number of activated cloud
+droplets in a parcel of clear air rising adiabatically. It is traditionally
+applied only at cloud base, where the maximum supersaturation typically occurs.
 
-To enable ARG to be used locally (i.e., without explicitly identifying cloud base), CloudMicrophysics.jl implements a modified equation for the maximum supersaturation that accounts for the presence of pre-existing liquid and ice particles. This allows activation to be applied inside clouds. To ensure that activation occurs only where physically appropriate, we apply additional clipping logic:
+To use ARG locally, without explicitly identifying cloud base,
+CloudMicrophysics.jl implements a modified equation for the maximum
+supersaturation that accounts for pre-existing liquid and ice particles.
+Activation can then be applied inside clouds. So that it occurs only where it
+is physically appropriate, we add clipping logic:
 
   - If the predicted maximum supersaturation is less than the local supersaturation (i.e., supersaturation is decreasing), aerosol activation is not applied.
   - If the predicted number of activated droplets is less than the existing local cloud droplet number concentration, activation is also suppressed.
 
-This ensures that droplet activation occurs only in physically meaningful regions—typically near cloud base—even though the activation routine can be applied throughout the domain.
+Droplet activation therefore occurs only in physically meaningful regions —
+typically near cloud base — even though the activation routine can be applied
+throughout the domain.
+
+## Symbols
+
+| Symbol                            | Meaning                                                                                                   | Units         |
+|:--------------------------------- |:--------------------------------------------------------------------------------------------------------- |:------------- |
+| ``\mathcal{S}_{x \rightarrow y}`` | Microphysical transfer from category ``x`` to category ``y``, normalized by the mass of the working fluid | s⁻¹           |
+| ``\mathcal{S}_{fixer}``           | Restoring tendency of the non-negativity fixer                                                            | s⁻¹           |
+| ``m_x``                           | Mass of category ``x``, with ``x`` one of dry air, vapor, liquid, ice, rain, snow                         | kg            |
+| ``q_{tot}``, ``q_{vap}``          | Total water and water vapor specific humidity                                                             | kg kg⁻¹       |
+| ``q_{liq}``, ``q_{ice}``          | Cloud liquid and cloud ice specific humidity, carried as `ρq_lcl` and `ρq_icl`                            | kg kg⁻¹       |
+| ``q_{rai}``, ``q_{sno}``          | Rain and snow specific content, carried as `ρq_rai` and `ρq_sno`                                          | kg kg⁻¹       |
+| ``q_x``                           | Any one of the microphysics tracers                                                                       | kg kg⁻¹       |
+| ``N_{liq}``, ``N_{rai}``          | Cloud droplet and rain drop number per unit mass of working fluid, carried as `ρn_lcl` and `ρn_rai`       | kg⁻¹          |
+| ``I_y``                           | Specific internal energy of phase ``y``                                                                   | J kg⁻¹        |
+| ``\Phi``                          | Geopotential                                                                                              | m² s⁻²        |
+| ``\rho``, ``\rho e``              | Density and volumetric total energy of moist air                                                          | kg m⁻³, J m⁻³ |
+| ``a^j``, ``\chi^j``               | Area fraction and tracer of updraft subdomain ``j``                                                       | varies        |
+| ``\Delta t``                      | Model timestep                                                                                            | s             |
+
+[Notation and Symbols](notation.md) maps these onto the field names in the code;
+there the water species are written ``q_l^{cl}``, ``q_i^{cl}``, ``q_r``, ``q_s``,
+``n_l``, and ``n_r``, following the dycore paper.
+
+## Where this is implemented
+
+| Concept                                                    | Source                                                                                                                                                                                                                                                                             |
+|:---------------------------------------------------------- |:---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Microphysics tendencies, all four schemes                  | [src/parameterized_tendencies/microphysics/tendency.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/parameterized_tendencies/microphysics/tendency.jl)                                                                                                                    |
+| CloudMicrophysics.jl wrappers and subgrid-scale quadrature | [microphysics_wrappers.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/parameterized_tendencies/microphysics/microphysics_wrappers.jl), [sgs_quadrature.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/parameterized_tendencies/microphysics/sgs_quadrature.jl) |
+| Sedimentation of water and its enthalpy                    | [src/prognostic_equations/water_advection.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/prognostic_equations/water_advection.jl)                                                                                                                                        |
+| State-constraint hook                                      | [src/prognostic_equations/constrain_state.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/prognostic_equations/constrain_state.jl)                                                                                                                                        |
+| Vapor-borrowing tendency fixer                             | [src/parameterized_tendencies/microphysics/moisture_fixers.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/parameterized_tendencies/microphysics/moisture_fixers.jl)                                                                                                      |
+| Element and vertical-borrowing limiters                    | [src/prognostic_equations/limited_tendencies.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/prognostic_equations/limited_tendencies.jl)                                                                                                                                  |
+| Tracer hyperdiffusion                                      | [src/prognostic_equations/hyperdiffusion.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/prognostic_equations/hyperdiffusion.jl)                                                                                                                                          |
+| Model types                                                | [`ClimaAtmos.EquilibriumMicrophysics0M`](@ref), [`ClimaAtmos.NonEquilibriumMicrophysics1M`](@ref), [`ClimaAtmos.NonEquilibriumMicrophysics2M`](@ref), [`ClimaAtmos.NonEquilibriumMicrophysics2MP3`](@ref), [`ClimaAtmos.TracerNonnegativityMethod`](@ref)                          |
+
+The scheme is selected with the `microphysics_model` configuration key; see
+[Configuration Options](configuration_options.md).

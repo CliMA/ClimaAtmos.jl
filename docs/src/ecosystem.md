@@ -3,9 +3,9 @@
 ClimaAtmos composes focused, independently developed and tested packages
 from the [CliMA](https://github.com/CliMA) ecosystem. Each package covers one
 aspect of the model (thermodynamics, radiative transfer, surface fluxes,
-microphysics, parameters), and ClimaAtmos links them together into an atmosphere model. This page explains what each
-package contributes, why the decomposition matters physically, and where each
-package enters the ClimaAtmos source code.
+microphysics, parameters), and ClimaAtmos links them into an atmosphere model.
+This page explains what each package contributes, why the decomposition matters
+physically, and where it enters the ClimaAtmos source code.
 
 Two consistency principles motivate the decomposition:
 
@@ -42,11 +42,11 @@ Thermodynamics.jl, so this shared foundation, not ClimaAtmos, keeps the
 thermodynamic formulations consistent across packages. RRTMGP.jl and
 Insolation.jl do not depend on ClimaParams.jl, but their parameter structs are
 built by ClimaAtmos from the same ClimaParams TOML database, so their
-parameters are calibratable in the same way.
+parameters are calibratable too.
 
 ## Shared foundation
 
-### Thermodynamics.jl — one thermodynamic formulation for all of CliMA
+### Thermodynamics.jl: one thermodynamic formulation for all of CliMA
 
 [Thermodynamics.jl](https://clima.github.io/Thermodynamics.jl/stable/) is the
 unified moist thermodynamics library for all CliMA code. Every package that
@@ -63,7 +63,7 @@ as a calorically perfect ideal mixture of dry air, water vapor, and condensates
 or queried, typically as `TD.PhaseEquil_ρeq(...)`, `TD.air_temperature(...)`,
 etc., with parameters accessed via `CAP.thermodynamics_params(params)`.
 
-### ClimaParams.jl — single source of truth for parameters
+### ClimaParams.jl: single source of truth for parameters
 
 [ClimaParams.jl](https://clima.github.io/ClimaParams.jl/stable/) stores every
 model parameter in one central TOML database shared across all CliMA
@@ -85,7 +85,7 @@ parameters via `toml: [...]`.
 
 ## Physics libraries
 
-### Insolation.jl — solar forcing at the top of the atmosphere
+### Insolation.jl: solar forcing at the top of the atmosphere
 
 [Insolation.jl](https://clima.github.io/Insolation.jl/stable/) sets the
 insolation at the top of the atmosphere: it computes the incoming solar flux
@@ -97,10 +97,10 @@ experiments require no code changes.
 *Where it enters ClimaAtmos:* the radiation callback
 (`src/callbacks/callbacks.jl`) calls `Insolation.insolation` to update the
 zenith angle and top-of-atmosphere flux that RRTMGP consumes; the available
-insolation modes (idealized, time-varying, RCEMIP-II, GCM-driven, externally
-driven, and Larcform1) are selected by the `insolation` configuration argument.
+insolation modes (idealized, time-varying, RCEMIP-II, externally driven, and
+Larcform1) are selected by the `insolation` configuration argument.
 
-### RRTMGP.jl — radiative transfer in the atmosphere
+### RRTMGP.jl: radiative transfer in the atmosphere
 
 [RRTMGP.jl](https://clima.github.io/RRTMGP.jl/stable/) handles radiative
 transfer within the atmosphere: a GPU-capable Julia implementation of the
@@ -114,7 +114,7 @@ solvers; `radiation.jl` and the radiation callback keep the inputs (state,
 [trace gases](trace_gases.md), clouds, insolation) up to date. The mode is
 selected by the `rad` configuration argument.
 
-### SurfaceFluxes.jl — turbulent exchange with the surface
+### SurfaceFluxes.jl: turbulent exchange with the surface
 
 [SurfaceFluxes.jl](https://clima.github.io/SurfaceFluxes.jl/stable/) provides
 the turbulent fluxes of energy, momentum, water, and tracers at ocean, ice, and
@@ -128,7 +128,7 @@ and evaluates SurfaceFluxes.jl to fill the lower boundary conditions; see
 guide. In coupled simulations, ClimaCoupler.jl supplies the surface states
 instead.
 
-### CloudMicrophysics.jl — cloud and precipitation processes
+### CloudMicrophysics.jl: cloud and precipitation processes
 
 [CloudMicrophysics.jl](https://clima.github.io/CloudMicrophysics.jl/stable/)
 provides the microphysical process rates (condensation/evaporation,
@@ -171,11 +171,11 @@ selected by the `microphysics_model` configuration argument.
 ## Calibration
 
 ClimaAtmos is designed to be calibrated against data, and the parameter
-architecture above makes this work: because every closure parameter is defined
-in ClimaParams.jl, a calibration only has to write TOML overrides.
+architecture above makes that practical: because each closure parameter
+is defined in ClimaParams.jl, a calibration only has to write TOML overrides.
 
   - [ClimaCalibrate.jl](https://clima.github.io/ClimaCalibrate.jl/stable/)
-    drives calibration-with-data workflows: it runs ensembles of
+    drives the calibration workflows: it runs ensembles of
     ClimaAtmos simulations (locally or on HPC clusters), maps observations to
     model diagnostics, and iterates the parameter ensemble.
   - [EnsembleKalmanProcesses.jl](https://clima.github.io/EnsembleKalmanProcesses.jl/stable/)
@@ -194,6 +194,5 @@ Earth-system-model configurations,
 [ClimaCoupler.jl](https://clima.github.io/ClimaCoupler.jl/stable/) mediates the
 exchange between ClimaAtmos and the land, ocean, and sea-ice models: the
 coupler supplies surface states (temperature, albedo, roughness) and receives
-the SurfaceFluxes.jl-computed fluxes, with Thermodynamics.jl and ClimaParams.jl
-guaranteeing that all components agree on the underlying formulation and
-constants.
+the fluxes computed with SurfaceFluxes.jl. Thermodynamics.jl and ClimaParams.jl
+keep all components on the same underlying formulation and constants.

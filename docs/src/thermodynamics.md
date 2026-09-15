@@ -35,7 +35,7 @@ particle size distribution.
 Composition is described by mass fractions: dry air ``q_d``, water vapor
 ``q_v``, liquid ``q_l``, and ice ``q_i``. The condensate fraction is
 ``q_c = q_l + q_i``, and the total water specific humidity is
-``q_t = q_v + q_c``. Since these account for every component, ``q_t + q_d = 1``.
+``q_t = q_v + q_c``. Since these account for all components, ``q_t + q_d = 1``.
 
 !!! note "No small-humidity assumption"
 
@@ -45,8 +45,9 @@ Composition is described by mass fractions: dry air ``q_d``, water vapor
     affects air mass and dynamics.
 
 Bulk microphysics schemes often split the condensate further into suspended
-cloud condensate and precipitation, ``q_l = q_l^{cl} + q_l^{pr}`` and ``q_i = q_i^{cl} + q_i^{pr}``. The equations of motion allow for that distinction; see
-[Microphysics](microphysics.md).
+cloud condensate and precipitation, ``q_l = q_l^{cl} + q_l^{pr}`` and
+``q_i = q_i^{cl} + q_i^{pr}``. The equations of motion allow for that
+distinction; see [Microphysics](microphysics.md).
 
 ## Equation of state
 
@@ -87,8 +88,8 @@ with temperature; treating them as constant introduces an error below 1% for dry
 air and at most a few percent for the water phases.
 
 The assumption has a consequence for latent heats [Ambaum2020](@cite).
-Kirchhoff's relation, ``dL/dT = \Delta c_p``, integrates under constant specific heats to a latent heat that
-is **linear** in temperature,
+Kirchhoff's relation, ``dL/dT = \Delta c_p``, integrates under constant specific
+heats to a latent heat that is **linear** in temperature,
 
 ```math
 L(T) = L_0 + \Delta c_p (T - T_0),
@@ -103,8 +104,9 @@ expected relation ``L_s(T) = L_v(T) + L_f(T)`` follows.
 Specific internal energies of the constituents are referenced to ``T_0``
 [Romps2008](@cite). Two reference values may be chosen independently, because
 dry air and water cannot be converted into one another: the reference specific
-internal energy of liquid water is set to zero and that of dry air to ``-R_d T_0``, which simplifies the later enthalpy and enthalpy-flux expressions. The
-internal energy of moist air is the mass-weighted sum,
+internal energy of liquid water is set to zero and that of dry air to
+``-R_d T_0``, which simplifies the later enthalpy and enthalpy-flux expressions.
+The internal energy of moist air is the mass-weighted sum,
 
 ```math
 I(T, q) = c_{vm}(q) (T - T_0) + (q_t - q_c) I_{v,0} - q_i I_{i,0}
@@ -130,9 +132,10 @@ and the subgrid-scale flux terms of the [governing equations](equations.md).
 
 The Clausius–Clapeyron relation, combined with the linear latent heat above,
 integrates to a closed-form expression for the saturation vapor pressure — the
-Rankine–Kirchhoff approximation [Duarte2014, Romps2021](@cite). For a mixture of liquid and ice out of
-thermodynamic equilibrium, as in mixed-phase clouds, a thermodynamically
-consistent saturation vapor pressure uses the liquid-fraction-weighted average
+Rankine–Kirchhoff approximation [Duarte2014, Romps2021](@cite). For a mixture of
+liquid and ice out of thermodynamic equilibrium, as in mixed-phase clouds, a
+thermodynamically consistent saturation vapor pressure uses the
+liquid-fraction-weighted average
 [Pressel2015](@cite),
 ``L = \lambda_f L_v + (1 - \lambda_f) L_s`` with
 ``\lambda_f = q_l / q_c``.
@@ -157,18 +160,20 @@ remain prognostic.
 Strict equilibrium requires the liquid fraction to be a Heaviside function of
 temperature. Supercooled liquid is out of equilibrium and exists between the
 homogeneous ice nucleation temperature and the freezing temperature; a ramp
-function between the two is often used to represent it [Kaul2015](@cite). That ramp is available
-in the code, and it remains an approximation, since out-of-equilibrium phases
-depend on the history of the air mass as well as on its thermodynamic state. By
-default the model gives the condensed phases their own prognostic equations
-instead. See [Microphysics](microphysics.md) for the available schemes.
+function between the two is often used to represent it [Kaul2015](@cite). That
+ramp is available in the code, and it remains an approximation, since
+out-of-equilibrium phases depend on the history of the air mass as well as on
+its thermodynamic state. All moist configurations except the equilibrium `0M`
+scheme give the condensed phases their own prognostic equations instead. See
+[Microphysics](microphysics.md) for the available schemes.
 
 ## Reference temperature invariance
 
 The reference temperature ``T_0`` is arbitrary, and the model's physics must not
-depend on it. The formulation is constructed so that it does not: a shift ``T_0 \to T_0 + \delta T_0``, with the reference latent heats shifted consistently by
-Kirchhoff's relation, offsets each constituent's specific internal energy and
-enthalpy by a constant.
+depend on it. The formulation is constructed so that it does not: a shift
+``T_0 \to T_0 + \delta T_0``, with the reference latent heats shifted
+consistently by Kirchhoff's relation, offsets each constituent's specific
+internal energy and enthalpy by a constant.
 
 The offset for dry air differs from that for water, but the offsets for all
 three water phases are *identical*. The extra terms in the total energy equation

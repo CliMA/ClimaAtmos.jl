@@ -38,7 +38,7 @@ objects constructed separately and passed in, as the following sections show.
 The `grid`, `setup`, and `model` arguments are not independent: a setup
 supplies the initial state, the model supplies the physics, and a case only
 makes sense when they match. Running the BOMEX setup with the default dry
-model, for instance, leaves no moisture to convect. The presets below pair
+model, for instance, leaves no moisture. The presets below pair
 them correctly; when assembling the pieces yourself, choose them together.
 
 ## Grid

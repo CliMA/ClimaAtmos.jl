@@ -282,8 +282,10 @@ ClimaAtmos.LinearOrographicGravityWave
 
 ### Forcings
 
-Forcing terms for externally driven single-column cases are documented on the
-[Single Column Models](single_column.md) page.
+The forcing formulations are described in
+[Forcings and Idealized Cases](forcings.md); the terms for externally driven
+single-column cases are documented on the
+[Column Datasets](column_datasets_reference.md) page.
 
 ```@docs
 ClimaAtmos.AbstractForcing

@@ -3,9 +3,9 @@
 ClimaAtmos is the atmosphere model of the Climate Modeling Alliance (CliMA)
 Earth system model. CliMA is a consortium, led by Caltech and MIT, that has
 built a new Earth system model from scratch, in Julia, designed to learn from
-data. ClimaAtmos is its nonhydrostatic atmosphere component, spanning large-eddy
-simulation in Cartesian domains to global weather and climate simulation on
-the sphere [Yatunin2026](@cite).
+data. ClimaAtmos is its nonhydrostatic atmosphere component, used from
+large-eddy simulation in Cartesian domains to global weather and climate
+simulation on the sphere [Yatunin2026](@cite).
 
 The model can be run from the Julia REPL, with no namelists or batch scripts
 required; a first simulation takes a few lines of code (see
@@ -26,25 +26,25 @@ required; a first simulation takes a few lines of code (see
     parameterizations.
   - **Performance portable.** The model runs on CPUs and GPUs from the same
     code base and scales from a laptop to cloud supercomputers, with strong and
-    weak scaling that make kilometer-scale global simulations achievable.
+    weak scaling that support kilometer-scale global simulations.
   - **Resolution-adaptive physics.** The parameterization suite, built around
     the PROPHET scheme (an extended, prognostic eddy-diffusivity mass-flux
     scheme), avoids assumptions of scale separation that become inadequate as
-    resolved scales approach the scales of parameterized processes such as
+    the resolved scales approach those of parameterized processes such as
     atmospheric turbulence and convection. As resolution increases, the
-    parameterized transport diminishes and the resolved flow takes over.
+    parameterized transport diminishes, and the resolved flow takes over.
   - **Built for calibration with data.** All model parameters are defined in a
     central repository, [ClimaParams.jl](https://github.com/CliMA/ClimaParams.jl),
-    and CliMA's calibration tools tune parameters against data, whether those
-    are output from high-resolution simulations or Earth observations from space and from the ground.
+    and CliMA's tools calibrate them against data, whether that is output from
+    high-resolution simulations or Earth observations from space and the ground.
 
-To learn more, the dynamical core (concepts, numerics, and scaling) is
-described in [Yatunin2026](@cite), with companion papers to follow.
+The dynamical core (concepts, numerics, and scaling) is described in
+[Yatunin2026](@cite); companion papers are to follow.
 
 ## ClimaAtmos in the CliMA ecosystem
 
 ClimaAtmos composes packages from the CliMA ecosystem into a full model;
-installing ClimaAtmos brings every dependency along.
+installing ClimaAtmos brings the dependencies along.
 
   - [ClimaCore.jl](https://clima.github.io/ClimaCore.jl/stable/) provides the
     numerical methods for the dynamical core: the
@@ -56,7 +56,7 @@ installing ClimaAtmos brings every dependency along.
   - [Thermodynamics.jl](https://clima.github.io/Thermodynamics.jl/stable/) and
     [ClimaParams.jl](https://clima.github.io/ClimaParams.jl/stable/) are the
     shared foundation: one thermodynamic formulation for all CliMA components
-    (the basis for energetic consistency) and a single source of truth for all
+    (the basis for energetic consistency), and a single source of truth for all
     model parameters.
   - Physics libraries supply the parameterized processes:
     [Insolation.jl](https://clima.github.io/Insolation.jl/stable/),
@@ -66,7 +66,7 @@ installing ClimaAtmos brings every dependency along.
   - [ClimaCoupler.jl](https://clima.github.io/ClimaCoupler.jl/stable/) couples
     ClimaAtmos to the CliMA land, ocean, and sea-ice models, and
     [ClimaCalibrate.jl](https://clima.github.io/ClimaCalibrate.jl/stable/)
-    drives the calibration-with-data workflows.
+    drives the calibration workflows.
 
 See [The CliMA Ecosystem](ecosystem.md) for the full architectural overview,
 including where each package enters the ClimaAtmos source code.
@@ -78,9 +78,9 @@ matches yours:
 
   - **Getting Started**: new to ClimaAtmos? Start here.
 
-      + [Installation](installation.md) -- install the package, or run from a clone
-      + [Your First Simulation](first_simulation.md) -- build, run, and inspect one simulation
-      + [Script vs Config Interface](interfaces.md) -- the two ways to configure a run
+      + [Installation](installation.md): install the package, or run from a clone
+      + [Your First Simulation](first_simulation.md): build, run, and inspect a simulation
+      + [Script vs Config Interface](interfaces.md): the two ways to configure a run
 
   - **How-to Guides**: task recipes for running and configuring simulations.
 
@@ -92,9 +92,9 @@ matches yours:
 
   - **Explanation**: the science and numerics behind the model.
 
-      + [The CliMA ecosystem](ecosystem.md) -- how ClimaAtmos composes the CliMA packages
+      + [The CliMA ecosystem](ecosystem.md): how ClimaAtmos composes the CliMA packages
       + Dynamics & numerics: [thermodynamics](thermodynamics.md), [governing equations](equations.md), [discretization and operators](discretization.md), [conservation properties](conservation.md), [hyperdiffusion](hyperdiffusion.md), [model top and sponge layer](sponge.md), [implicit solver](implicit_solver.md), [integer time (ITime)](itime.md)
-      + Physics & parameterizations: [PROPHET](prophet.md) ([closures](prophet_closures.md), [discretization](prophet_numerics.md), [horizontal diffusion](prophet_horizontal_diffusion.md)), [microphysics](microphysics.md), [radiation](radiation.md), [non-orographic gravity-wave drag](non_orographic_gravity_wave.md), [orographic gravity-wave drag](orographic_gravity_wave.md), [ocean surface albedo](surface_albedo.md), [topography](topography.md)
+      + Physics & parameterizations: [PROPHET](prophet.md) ([closures](prophet_closures.md), [discretization](prophet_numerics.md), [horizontal diffusion](prophet_horizontal_diffusion.md)), [diffusion](diffusion.md), [large-eddy simulation closures](les_sgs.md), [microphysics](microphysics.md), [radiation](radiation.md), [forcings and idealized cases](forcings.md), [non-orographic gravity-wave drag](non_orographic_gravity_wave.md), [orographic gravity-wave drag](orographic_gravity_wave.md), [ocean surface albedo](surface_albedo.md), [topography](topography.md)
 
   - **Reference**: look-up material.
 
