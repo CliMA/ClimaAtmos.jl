@@ -19,7 +19,18 @@ if [ ! -d "$BASE" ]; then
 fi
 if [ -n "$BASE" ] && [ -d "$BASE" ]; then
   echo "--- Seeding staging depot from $BASE"
-  cp -a "$BASE/." "$STAGING/"
+  # Copy everything except `compiled/`. Packages, artifacts and registries are
+  # content-addressed, so reusing them is safe. Precompile caches are not:
+  # `@__DIR__`, `@__FILE__` and `const` paths are baked into the cache as
+  # literal strings naming the depot they were built in (e.g. ClimaParams
+  # resolves `joinpath(@__DIR__, "parameters.toml")` this way). Julia 1.11
+  # caches are relocatable for *validation*, so a copied cache still counts as
+  # fresh, but those literals keep pointing at the original version dir. Once
+  # that dir is pruned three builds later, every consumer fails with
+  # "versions/<old>/packages/...: No such file". Rebuilding `compiled/` in
+  # $STAGING makes the baked paths point at the depot that gets published.
+  find "$BASE" -mindepth 1 -maxdepth 1 ! -name compiled \
+    -exec cp -a -t "$STAGING" {} +
   chmod -R u+w "$STAGING"                   # published copy is read-only
   # A corrupted depot (e.g. a version that was `rm -rf`'d while consumers had
   # its files open on NFS) leaves empty artifact dirs. Pkg treats an existing
