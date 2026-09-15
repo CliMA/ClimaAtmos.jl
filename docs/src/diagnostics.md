@@ -98,7 +98,7 @@ simulation. So, for example
 import ClimaAtmos as CA
 import ClimaAtmos.Diagnostics as CAD
 
-model = CA.AtmosModel(; microphysics_model = CA.DryModel())
+model = CA.AtmosModel(grid; microphysics_model = CA.DryModel())
 
 diagnostics = CAD.default_diagnostics(
     model, duration, start_date, t_start;

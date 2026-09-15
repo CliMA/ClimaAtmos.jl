@@ -28,8 +28,8 @@ config.parsed_args["topography_damping_factor"] = 1;
 
 params = CA.ClimaAtmosParameters(config)
 setup_type = CA.get_setup_type(config.parsed_args, params.thermodynamics_params)
-atmos = CA.get_atmos(config, params; setup_type)
 grid = CA.get_grid(config.parsed_args, params, config.comms_ctx)
+atmos = CA.get_atmos(config, params, grid; setup_type)
 spaces = CA.get_spaces(grid)
 
 parsed_args = config.parsed_args
@@ -46,13 +46,7 @@ computed_drag = load_computed_drag(parsed_args, comms_ctx)
 
 #########################################
 
-Y = CA.Setups.initial_state(
-    setup_type,
-    params,
-    atmos,
-    spaces.center_space,
-    spaces.face_space,
-)
+Y = CA.initial_state(atmos)
 
 # Initialize cache vars for orographic gravity wave
 γ = 0.4
