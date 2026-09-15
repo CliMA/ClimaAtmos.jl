@@ -169,6 +169,7 @@ values map to same-named types in `Setups`:
   - LES/SCM cases: `"Bomex"`, `"Rico"`, `"Soares"`, `"GATE_III"`, `"DYCOMS_RF01"`,
     `"DYCOMS_RF02"`, `"TRMM_LBA"`, `"Larcform1"`, `"GABLS"`, `"ISDAC"`, which read
     `prognostic_tke` (and, for ISDAC, `perturb_initstate`).
+  - RCEMIP I: `"RCEMIPIProfile_295"`, `"RCEMIPIProfile_300"`, `"RCEMIPIProfile_305"`.
   - RCEMIP II: `"RCEMIPIIProfile_295"`, `"RCEMIPIIProfile_300"`, `"RCEMIPIIProfile_305"`.
   - File and reanalysis-driven: `"GCM"` (`external_forcing_file` plus `cfsite_number`),
     `"ARMVARANAL"` (an ARM VARANAL file, converted to the ClimaColumn schema),
@@ -305,7 +306,8 @@ function get_setup_type(parsed_args, thermo_params)
         return Setups.SimplePlume(;
             prognostic_tke = parsed_args["prognostic_tke"],
         )
-    elseif ic_name in ("RCEMIPIIProfile_295", "RCEMIPIIProfile_300", "RCEMIPIIProfile_305")
+    elseif ic_name in ("RCEMIPIProfile_295", "RCEMIPIProfile_300", "RCEMIPIProfile_305",
+        "RCEMIPIIProfile_295", "RCEMIPIIProfile_300", "RCEMIPIIProfile_305")
         return getproperty(Setups, Symbol(ic_name))()
     elseif ic_name == "PrecipitatingColumn"
         return Setups.PrecipitatingColumn(; thermo_params)
