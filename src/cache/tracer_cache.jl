@@ -174,6 +174,27 @@ function species_aerosol_cache(Y, params, sslt::PrognosticSeaSalt)
             velocity
         end,
     )
+    # Per-bin gravitational-settling surface mass flux [kg m⁻² s⁻¹], written by
+    # `aerosol_settling_tendency!` for the `setss` budget diagnostic; positive
+    # downward. Not read by any tendency.
+    sslt_settling_fluxes = NamedTuple{state_names}(
+        ntuple(n_bins) do _
+            flux = similar(Spaces.level(Y.f, half), FT)
+            fill!(flux, zero(FT))
+            flux
+        end,
+    )
+    # Per-bin grid-mean settling fall speed at the lowest level [m s⁻¹],
+    # written by `aerosol_settling_tendency!`. Read by
+    # `aerosol_wet_deposition_tendency!` so level-1 scavenging acts only on the
+    # mass that gravitational settling has not already removed this stage.
+    sslt_settling_velocities = NamedTuple{state_names}(
+        ntuple(n_bins) do _
+            velocity = similar(Spaces.level(Y.f, half), FT)
+            fill!(velocity, zero(FT))
+            velocity
+        end,
+    )
     n_updrafts = :sgsʲs in propertynames(Y.c) ? fieldcount(eltype(Y.c.sgsʲs)) : 0
     sslt_wetdep_rates = NamedTuple{state_names}(
         ntuple(n_bins) do _
@@ -210,6 +231,8 @@ function species_aerosol_cache(Y, params, sslt::PrognosticSeaSalt)
         sslt_sfc_fluxes,
         sslt_drydep_fluxes,
         sslt_drydep_velocities,
+        sslt_settling_fluxes,
+        sslt_settling_velocities,
         sslt_wetdep_rates,
         sslt_wetdep_ratesʲs,
         sslt_bin_moments = bin_moments,

@@ -82,3 +82,41 @@ add_diagnostic_variable!(
     compute! = (out, u, p, t) ->
         compute_sslt_wetdep_column!(out, u, p, p.atmos.seasalt),
 )
+
+###
+# Sea salt gravitational settling rate (2d)
+###
+
+function compute_sslt_settling_column!(out, state, cache, sslt_model)
+    sslt_model isa PrognosticSeaSalt || error(
+        "setss requires `prognostic_aerosols` to include sea salt",
+    )
+    isnothing(out) && (out = zeros(axes(Fields.level(state.f, half))))
+    fluxes = cache.tracers.sslt_settling_fluxes
+    # Each per-bin field already holds the grid-mean settling surface mass
+    # flux (downward, positive) written by `aerosol_settling_tendency!`; sum
+    # over bins.
+    sfc_sinks = map(bin_names(sslt_model)) do bin_name
+        getproperty(fluxes, Symbol(:ρ, bin_name))
+    end
+    out .= foldl((a, b) -> @.(lazy(a + b)), sfc_sinks)
+    return out
+end
+
+add_diagnostic_variable!(
+    short_name = "setss",
+    long_name = "Sea-Salt Aerosol Gravitational Settling Rate",
+    standard_name = "tendency_of_atmosphere_mass_content_of_sea_salt_dry_aerosol_particles_due_to_gravitational_settling",
+    units = "kg m^-2 s^-1",
+    comments = "Gravitational-settling surface mass flux of prognostic sea \
+                salt, summed over size bins, positive toward the surface. \
+                Reads the grid-mean settling flux (mass-weighted fall speed \
+                times the lowest-level mass) actually applied by the tendency, \
+                so tracer mass budgets close against emission minus dryss, \
+                wetss, and setss. This is the gravitational surface outflow \
+                that the settling term's free-outflow boundary removes; it is \
+                the term dry deposition (turbulent) and wet deposition \
+                (scavenging) do not include.",
+    compute! = (out, u, p, t) ->
+        compute_sslt_settling_column!(out, u, p, p.atmos.seasalt),
+)

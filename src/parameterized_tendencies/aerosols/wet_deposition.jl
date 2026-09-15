@@ -801,6 +801,7 @@ function aerosol_wet_deposition_tendency!(
     rates = p.tracers.sslt_wetdep_rates
     ratesʲs = p.tracers.sslt_wetdep_ratesʲs
     velocities = p.tracers.sslt_drydep_velocities
+    settling_velocities = p.tracers.sslt_settling_velocities
     dt = float(p.dt)
     n = n_mass_flux_subdomains(p.atmos.turbconv_model)
 
@@ -822,15 +823,19 @@ function aerosol_wet_deposition_tendency!(
             @. ᶜχʲₜ += ᶜχʲ * expm1(-(ᶜkʲ * dt)) / dt
         end
 
-        # Level 1 is also drained by the dry-deposition surface flux this
-        # stage, so scavenge only the fraction that survives it. Every level
-        # view is hoisted out of the broadcasts below.
+        # Level 1 is also drained by the dry-deposition AND gravitational-
+        # settling surface fluxes this stage, so scavenge only the fraction
+        # that survives both. Both are downward level-1 fall speeds, so their
+        # Courant numbers add. Every level view is hoisted out of the
+        # broadcasts below. (Settling reuses the grid-mean fall speed for the
+        # updraft correction too, matching how V_d is reused there.)
         V_d_values = Fields.field_values(velocities[bin])
+        Vs_values = Fields.field_values(settling_velocities[bin])
         k1_values = level1(ᶜk)
         ρχ1_values = level1(ᶜρχ)
         ρχ1ₜ_values = level1(ᶜρχₜ)
         @. ρχ1ₜ_values -=
-            min(V_d_values * dt / Δz1_values, one(FT)) *
+            min((V_d_values + Vs_values) * dt / Δz1_values, one(FT)) *
             ρχ1_values *
             expm1(-(k1_values * dt)) / dt
         for j in 1:n
@@ -839,7 +844,7 @@ function aerosol_wet_deposition_tendency!(
                 level1(MatrixFields.get_field(Yₜ.c.sgsʲs.:($j), χ_name))
             kʲ1_values = level1(ratesʲs[bin][j])
             @. χʲ1ₜ_values -=
-                min(V_d_values * dt / Δz1_values, one(FT)) *
+                min((V_d_values + Vs_values) * dt / Δz1_values, one(FT)) *
                 χʲ1_values *
                 expm1(-(kʲ1_values * dt)) / dt
         end
