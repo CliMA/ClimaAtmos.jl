@@ -398,9 +398,9 @@ version = "0.3.20"
 
 [[deps.ClimaDiagnostics]]
 deps = ["Accessors", "ClimaComms", "ClimaCore", "ClimaTimeSteppers", "ClimaUtilities", "Dates", "NCDatasets", "NVTX", "OrderedCollections"]
-git-tree-sha1 = "1005e58a2f96b10c909ec942ea4dd88f4c9e7d4f"
+git-tree-sha1 = "89e8abdd24668814e1083f75d5e0f14b7e07ba28"
 uuid = "1ecacbb8-0713-4841-9a07-eb5aa8a2d53f"
-version = "0.3.9"
+version = "0.3.10"
 
 [[deps.ClimaInterpolations]]
 deps = ["Adapt", "DocStringExtensions"]
@@ -420,9 +420,9 @@ version = "1.1.9"
 
 [[deps.ClimaTimeSteppers]]
 deps = ["ClimaComms", "Krylov", "LinearAlgebra", "LinearOperators", "NVTX", "NullBroadcasts", "StaticArrays"]
-git-tree-sha1 = "62f40548365d804d05ac3fd7fd1fc71dce544edb"
+git-tree-sha1 = "1e92499cb77fdb5c9075815ee1e33d7ecd6a1c5c"
 uuid = "595c0a79-7f3d-439a-bc5a-b232dc3bde79"
-version = "0.10.7"
+version = "1.0.0"
 weakdeps = ["BenchmarkTools", "CUDA", "ClimaCore", "OrderedCollections", "PrettyTables"]
 
     [deps.ClimaTimeSteppers.extensions]

@@ -190,15 +190,20 @@ metric_tups = [
     ("time_median", "time_median"),
 ]
 
-# These functions should match with those in
-# the `trials` `Dict` in `perf/benchmark.jl`.
+# These names must match the keys that `CTS.benchmark_step` puts in its
+# `summaries` `Dict`
 funcs = [
-    "Wfact",
-    "linsolve",
-    "implicit_tendency!",
-    "remaining_tendency!",
-    "additional_tendency!",
     "step!",
+    "ldiv!",
+    "Wfact!",
+    "T_imp!",
+    "T_exp!",
+    "lim!",
+    "dss!",
+    "constrain_state!",
+    "initialize_imp!",
+    "cache!",
+    "cache_imp!",
 ]
 
 function compute_has_func(summaries, funcs)
