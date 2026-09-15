@@ -28,18 +28,12 @@ config.parsed_args["orographic_gravity_wave"] = "raw_topo";
 
 params = CA.ClimaAtmosParameters(config)
 setup_type = CA.get_setup_type(config.parsed_args, params.thermodynamics_params)
-atmos = CA.get_atmos(config, params; setup_type)
 grid = CA.get_grid(config.parsed_args, params, config.comms_ctx)
+atmos = CA.get_atmos(config, params, grid; setup_type)
 spaces = CA.get_spaces(grid)
 hspace = Spaces.horizontal_space(spaces.center_space)
 
-Y = CA.Setups.initial_state(
-    setup_type,
-    params,
-    atmos,
-    spaces.center_space,
-    spaces.face_space,
-)
+Y = CA.initial_state(atmos)
 
 parsed_args = config.parsed_args
 
