@@ -21,7 +21,9 @@ physically admissible range:
   - `prescribe_flow!(Y, p, t, p.atmos.prescribed_flow)`: imposes the velocity,
     density, and energy of a 'kinematic driver'-like simulation.
   - `tracer_nonnegativity_constraint!(Y, p, t, p.atmos.water.tracer_nonnegativity_method)`:
-    removes negative tracer masses.
+    removes negative water tracer masses.
+  - `aerosol_nonnegativity_constraint!(Y, p, t)`: removes negative prognostic aerosol tracer
+    masses (unconditional, not gated by a config option — see its docstring for why).
   - `enforce_physical_constraints!(Y, p, t, p.atmos)`: grid-mean microphysics and
     EDMF updraft corrections.
 
@@ -34,6 +36,7 @@ timestepper runs them through its own `dss!` and `cache!` hooks. Returns `nothin
 NVTX.@annotate function constrain_state!(Y, p, t)
     prescribe_flow!(Y, p, t, p.atmos.prescribed_flow)
     tracer_nonnegativity_constraint!(Y, p, t, p.atmos.water.tracer_nonnegativity_method)
+    aerosol_nonnegativity_constraint!(Y, p, t)
     enforce_physical_constraints!(Y, p, t, p.atmos)
     return nothing
 end

@@ -219,11 +219,22 @@ function build_cache(
         vertical_water_borrowing_limiter = Limiters.VerticalMassBorrowingLimiter((FT(0.0),))
     end
 
+    # Unconditional (not config-gated) numerical safety net for the prognostic aerosol bins,
+    # mirroring `tracer_nonnegativity_limiter` above: ARS222's explicit tableau has a negative
+    # third-stage coefficient (`δ = 1 - 1/(2γ) ≈ -0.707`), so it is not strong-stability-
+    # preserving, and a per-stage Courant cap on an explicitly-treated sink (settling + dry
+    # deposition, `settling_courant_max`) cannot bound what the stages' recombination does to a
+    # tracer that starts a step close to zero. See `aerosol_nonnegativity_constraint!`.
+    aerosol_nonnegativity_limiter =
+        any(!isnothing, values(species_models(atmos.aerosols))) ?
+        Limiters.QuasiMonotoneLimiter(similar(Y.c.ρ, FT)) : nothing
+
     numerics = (;
         sem_quasimonotone_limiter,
         tracer_nonnegativity_limiter,
         vertical_water_borrowing_limiter,
         vertical_water_borrowing_species,
+        aerosol_nonnegativity_limiter,
     )
 
     sfc_local_geometry =

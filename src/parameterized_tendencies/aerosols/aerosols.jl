@@ -180,6 +180,77 @@ function aerosol_deposition_tendency!(Yₜ, Y, p, t)
     return nothing
 end
 
+"""
+    aerosol_nonnegativity_constraint!(Y, p, t)
+    aerosol_nonnegativity_constraint!(Y, p, t, species_model)
+
+Remove negative prognostic aerosol tracer masses from the state `Y` in place, dispatching to
+every active `AbstractPrognosticAerosol` species model the same way the other aerosol
+tendencies do (`values(species_models(p.atmos.aerosols))`).
+
+WHY THIS EXISTS. `settling_courant_max` (`aerosol_settling_tendency!`,
+`set_sslt_dry_deposition_fluxes!`) caps the EXPLICIT removal velocity of settling and dry
+deposition so that no single stage evaluation removes more than one cell's worth of mass in
+that stage alone. That is necessary but not sufficient: ARS222's explicit Butcher tableau has a
+negative third-stage coefficient (`δ = 1 - 1/(2γ) ≈ -0.707` with `γ = 1 - √2/2`), so the scheme
+is not strong-stability-preserving for an explicitly-treated sink. A per-stage Courant cap
+bounds each stage's own contribution, but cannot bound what the stages' non-convex
+recombination (weights `δ` and `1 - δ ≈ 1.707`, not both in `[0, 1]`) does to a tracer that
+starts the step close to zero — the recombination can still drive it negative regardless of how
+tightly the cap is set. This is why tightening `settling_courant_max` alone only delays, rather
+than eliminates, an eventual blow-up once the settled bin (in practice the largest, fastest-
+falling one) carries real mass: a tighter cap shrinks each stage's contribution and so slows how
+fast the recombination error compounds, but does not touch the mechanism.
+
+This mirrors `tracer_nonnegativity_constraint!`'s `TracerNonnegativityElementConstraint`
+treatment of the water tracers (`ClimaCore.Limiters.QuasiMonotoneLimiter`-based clip to
+`[0, max(ρχ)]` within each spectral element, which redistributes the deficit horizontally
+rather than creating or destroying mass — the reason it is safe to run unconditionally against
+the baton relay's mass-conservation audit in ShipAerosolBench, which checks total column mass,
+not sign), extended to the aerosol bins, which had no equivalent protection at all. Unlike the
+water-tracer version, this is unconditional — not gated by a config option — because it guards
+against a specific, verified integrator defect rather than expressing a tunable physics choice;
+`p.numerics.aerosol_nonnegativity_limiter` is built whenever any `AbstractPrognosticAerosol`
+species is active (`build_cache`) and is `nothing` (making this a no-op) otherwise.
+
+FINAL HARD CLAMP, AND WHY IT IS NEEDED DESPITE THE ABOVE. Mass-conserving redistribution is
+mathematically unable to make a spectral element non-negative everywhere if that element's OWN
+MEAN has already gone negative (redistributing a negative total among non-negative numbers while
+preserving that total is impossible) — verified directly: an element driven uniformly negative
+comes out of `apply_limiter!` still partly negative. That situation should not arise in practice
+(this runs every step, `update_constrain_state_every: "step"`, so it catches each step's
+excursion before it can compound into something that drags a whole element's mean negative), but
+"should not arise" is not a guarantee, and this function exists specifically because the
+previous guarantee ("the velocity cap alone keeps this non-negative") turned out not to hold. A
+plain `max(0, ρχ)` after the limiter closes the gap unconditionally: a no-op whenever the
+limiter already succeeded (the common case, verified below), and a bounded, honest mass
+creation of exactly the residual deficit only in the pathological case the limiter cannot solve
+— which is strictly better than leaving a value that has already been established to be capable
+of reaching ~1e19 kg.
+"""
+aerosol_nonnegativity_constraint!(Y, p, t) = unrolled_foreach(
+    model -> aerosol_nonnegativity_constraint!(Y, p, t, model),
+    values(species_models(p.atmos.aerosols)),
+)
+aerosol_nonnegativity_constraint!(Y, p, t, ::Nothing) = nothing
+function aerosol_nonnegativity_constraint!(
+    Y, p, t, species_model::AbstractPrognosticAerosol,
+)
+    limiter = p.numerics.aerosol_nonnegativity_limiter
+    isnothing(limiter) && return nothing
+    ᶜscratch = p.scratch.ᶜtemp_scalar
+    ᶜρ = Y.c.ρ
+    for ρχ_name in aerosol_state_names(species_model)
+        MatrixFields.has_field(Y.c, ρχ_name) || continue
+        ᶜρχ = MatrixFields.get_field(Y.c, ρχ_name)
+        @. ᶜscratch = max(0, ᶜρχ)
+        Limiters.compute_bounds!(limiter, ᶜscratch, ᶜρ)
+        Limiters.apply_limiter!(ᶜρχ, ᶜρ, limiter; warn = false)
+        @. ᶜρχ = max(0, ᶜρχ)
+    end
+    return nothing
+end
+
 ###
 ### Helpers
 ###
