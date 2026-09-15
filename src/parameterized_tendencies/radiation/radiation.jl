@@ -192,7 +192,9 @@ function rrtmgp_solver_kwargs(
     ᶜΔz = Fields.Δz_field(ᶜspace)
     ᶜz = Fields.coordinate_field(ᶜspace).z
     ᶠz = Fields.coordinate_field(ᶠspace).z
-    if ᶜspace.grid.global_geometry isa Geometry.AbstractSphericalGlobalGeometry
+    # `planet_radius` enables RRTMGP's (r/a)² area scaling, which only matches the
+    # dynamics when the grid uses the deep spherical metric.
+    if ᶜspace.grid.global_geometry isa Geometry.DeepSphericalGlobalGeometry
         planet_radius = ᶜspace.grid.global_geometry.radius
     end
     latitude = if eltype(bottom_coords) <: Geometry.LatLongZPoint
@@ -325,7 +327,7 @@ function rrtmgp_solver_kwargs(
 
     if include_z
         if ᶜspace.grid.global_geometry isa
-           Geometry.AbstractSphericalGlobalGeometry
+           Geometry.DeepSphericalGlobalGeometry
             kwargs = (;
                 kwargs...,
                 center_z = Fields.field2array(ᶜz),
@@ -439,7 +441,7 @@ function radiation_model_cache(
         rrtmgp_params,
         context,
         radiation_mode;
-        ncol = length(Spaces.all_nodes(axes(Spaces.level(Y.c, 1)))),
+        ncol = Spaces.ncolumns(axes(Y.c)),
         domain_nlay = Spaces.nlevels(axes(Y.c)),
         interpolation,
         bottom_extrapolation,

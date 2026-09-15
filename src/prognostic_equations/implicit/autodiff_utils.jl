@@ -76,7 +76,8 @@ append_to_atmos_cache(atmos_cache, precomputed, scratch) = AtmosCache(
     end...,
 )
 
-# The horizontal SpectralElementSpace of the fields in a FieldVector.
+# The horizontal space (spectral element or multi-point) of the fields in a FieldVector,
+# or `nothing` for a single column.
 function horizontal_space(field_vector)
     all_values = Fields._values(field_vector)
     space = axes(unrolled_argfirst(value -> value isa Fields.Field, all_values))
@@ -89,11 +90,14 @@ end
 
 Return an iterator over the column indices `(i, j, h)` of all fields in
 `field_vector`, or `((1, 1, 1),)` when there is no horizontal space. For a
-`SpectralElementSpace1D` the indices are pairs `(i, h)`.
+`SpectralElementSpace1D` the indices are pairs `(i, h)`, and for a
+`MultiPointSpace` (independent columns) they are `(1, 1, h)`.
 """
 function column_index_iterator(field_vector)
     horz_space = horizontal_space(field_vector)
     isnothing(horz_space) && return ((1, 1, 1),)
+    horz_space isa Spaces.MultiPointSpace &&
+        return Iterators.product(1:1, 1:1, 1:Spaces.ncolumns(horz_space))
     qs = 1:Quadratures.degrees_of_freedom(Spaces.quadrature_style(horz_space))
     hs = Spaces.eachslabindex(horz_space)
     return horz_space isa Spaces.SpectralElementSpace1D ?

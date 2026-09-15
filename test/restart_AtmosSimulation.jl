@@ -314,6 +314,12 @@ if MANYTESTS
             CA.SphereGrid(FT; topography, context = comms_ctx),
             CA.BoxGrid(FT; context = comms_ctx),
             CA.ColumnGrid(FT; context = comms_ctx),
+            CA.MultiColumnGrid(
+                FT;
+                points = [Geometry.LatLongPoint(FT(0), FT(0))],
+                radius = 6.371229e6,
+                context = comms_ctx,
+            ),
         )
     else
         grids = (
@@ -323,11 +329,13 @@ if MANYTESTS
     end
 
     for grid in grids
-        mesh = if hasproperty(grid, :horizontal_grid)
-            grid.horizontal_grid.topology.mesh
-        else
-            nothing
-        end
+        mesh =
+            if hasproperty(grid, :horizontal_grid) &&
+               hasproperty(grid.horizontal_grid, :topology)
+                grid.horizontal_grid.topology.mesh
+            else
+                nothing
+            end
         if mesh isa Meshes.EquiangularCubedSphere
             microphys_models = (CA.NonEquilibriumMicrophysics1M(),)
             topography_type = CA.EarthTopography()
@@ -373,7 +381,8 @@ if MANYTESTS
                     # Create job_id string from configuration
                     config_name =
                         mesh isa Meshes.EquiangularCubedSphere ? "sphere" :
-                        mesh isa Meshes.RectilinearMesh ? "box" : "column"
+                        mesh isa Meshes.RectilinearMesh ? "box" :
+                        hasproperty(grid, :horizontal_grid) ? "multicolumn" : "column"
                     microphysics_name =
                         microphysics_model isa CA.NonEquilibriumMicrophysics1M ?
                         "nonequil_1M" : "equil_0M"

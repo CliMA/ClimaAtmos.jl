@@ -187,7 +187,7 @@ TESTING = Any[]
 # Add a configuration with all the bells and whistles
 if MANYTESTS
     if comms_ctx isa ClimaComms.SingletonCommsContext
-        configurations = ["sphere", "box", "column"]
+        configurations = ["sphere", "box", "column", "multicolumn"]
     else
         configurations = ["sphere", "box"]
     end
