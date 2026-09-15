@@ -70,15 +70,21 @@ if TEST_GROUP in ("dynamics", "all")
     @safetestset "Tracer/mass transport consistency" begin @time include("prognostic_equations/tracer_mass_consistency_tests.jl") end
     @safetestset "Post-Newton implicit-advection correction" begin @time include("prognostic_equations/correct_implicit_advection_tests.jl") end
     @safetestset "Vertical diffusion tendency" begin @time include("prognostic_equations/vertical_diffusion_tests.jl") end
+
+    # Conservation tests
+    @safetestset "Mass conservation" begin @time include("conservation/mass_conservation.jl") end
+    @safetestset "Energy conservation" begin @time include("conservation/energy_conservation.jl") end
+end
+
+# ============================================================================
+# Dynamics (EDMFX): SGS diffusion, limiters, and closures (split out for CI time)
+# ============================================================================
+if TEST_GROUP in ("dynamics_edmfx", "all")
     @safetestset "EDMFX SGS diffusive flux" begin @time include("prognostic_equations/edmfx_sgs_diffusive_flux_tests.jl") end
     @safetestset "EDMFX horizontal diffusive flux" begin @time include("prognostic_equations/edmfx_horizontal_diffusion_tests.jl") end
     @safetestset "Vertical water borrowing limiter" begin @time include("prognostic_equations/vertical_water_borrowing_tests.jl") end
     @safetestset "Enforce physical constraints" begin @time include("prognostic_equations/enforce_physical_constraints_tests.jl") end
     @safetestset "Eddy diffusion closures" begin @time include("prognostic_equations/eddy_diffusion_closures_tests.jl") end
-
-    # Conservation tests
-    @safetestset "Mass conservation" begin @time include("conservation/mass_conservation.jl") end
-    @safetestset "Energy conservation" begin @time include("conservation/energy_conservation.jl") end
 end
 
 # ============================================================================
