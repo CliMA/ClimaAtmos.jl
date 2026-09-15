@@ -202,31 +202,32 @@ than eliminates, an eventual blow-up once the settled bin (in practice the large
 falling one) carries real mass: a tighter cap shrinks each stage's contribution and so slows how
 fast the recombination error compounds, but does not touch the mechanism.
 
-This mirrors `tracer_nonnegativity_constraint!`'s `TracerNonnegativityElementConstraint`
-treatment of the water tracers (`ClimaCore.Limiters.QuasiMonotoneLimiter`-based clip to
-`[0, max(ρχ)]` within each spectral element, which redistributes the deficit horizontally
-rather than creating or destroying mass — the reason it is safe to run unconditionally against
-the baton relay's mass-conservation audit in ShipAerosolBench, which checks total column mass,
-not sign), extended to the aerosol bins, which had no equivalent protection at all. Unlike the
-water-tracer version, this is unconditional — not gated by a config option — because it guards
-against a specific, verified integrator defect rather than expressing a tunable physics choice;
-`p.numerics.aerosol_nonnegativity_limiter` is built whenever any `AbstractPrognosticAerosol`
-species is active (`build_cache`) and is `nothing` (making this a no-op) otherwise.
+This mirrors `tracer_nonnegativity_constraint!`'s **`TracerNonnegativityVaporConstraint`**
+treatment of the water tracers — a plain pointwise `max(0, ρχ)`, not the mass-conserving
+`TracerNonnegativityElementConstraint` variant (`ClimaCore.Limiters.QuasiMonotoneLimiter`-based
+clip that redistributes the deficit horizontally instead of creating or destroying mass).
 
-FINAL HARD CLAMP, AND WHY IT IS NEEDED DESPITE THE ABOVE. Mass-conserving redistribution is
-mathematically unable to make a spectral element non-negative everywhere if that element's OWN
-MEAN has already gone negative (redistributing a negative total among non-negative numbers while
-preserving that total is impossible) — verified directly: an element driven uniformly negative
-comes out of `apply_limiter!` still partly negative. That situation should not arise in practice
-(this runs every step, `update_constrain_state_every: "step"`, so it catches each step's
-excursion before it can compound into something that drags a whole element's mean negative), but
-"should not arise" is not a guarantee, and this function exists specifically because the
-previous guarantee ("the velocity cap alone keeps this non-negative") turned out not to hold. A
-plain `max(0, ρχ)` after the limiter closes the gap unconditionally: a no-op whenever the
-limiter already succeeded (the common case, verified below), and a bounded, honest mass
-creation of exactly the residual deficit only in the pathological case the limiter cannot solve
-— which is strictly better than leaving a value that has already been established to be capable
-of reaching ~1e19 kg.
+THAT WAS THE FIRST VERSION OF THIS FIX, AND IT DOES NOT WORK ON THIS GPU+MPI COMBINATION.
+`QuasiMonotoneLimiter` carries a `ghost_buffer` field for cross-element MPI communication which
+is not a GPU-kernel-compatible bitstype under `ClimaComms.MPICommsContext` (the context this
+experiment runs under via `CLIMACOMMS_CONTEXT=MPI`, even at `nprocs=1`); calling
+`Limiters.compute_bounds!` from this function crashed `KernelError: passing non-bitstype
+argument` in production (Slurm 258172, day 1). The water-tracer path that uses this same limiter
+is disabled in this experiment's config (`tracer_nonnegativity_method: nothing`), so nothing had
+ever actually exercised `QuasiMonotoneLimiter` on the GPU here before this function did. A plain
+elementwise `max(0, ρχ)` is trivially GPU-safe (no limiter object, no MPI-carrying struct, no
+kernel launch beyond ordinary broadcast) and sidesteps the incompatibility entirely, at the cost
+of the mass-conserving redistribution property: a triggered clamp is now honest, bounded mass
+creation (the size of whatever deficit it corrected) rather than a horizontal transfer within
+the element. That trade is unambiguously worth it here: unconditional, always-correct GPU safety
+beats a "nicer" fix that crashes the moment it actually runs. Restoring the
+element-conserving version is future work, gated on either a ClimaCore/GPUCompiler fix for
+`QuasiMonotoneLimiter` under an MPI context, or constructing it against a `SingletonCommsContext`
+specifically for this call regardless of the run's overall communications context.
+
+Unconditional (not gated by a config option) whenever `p.atmos.aerosols` has at least one
+`AbstractPrognosticAerosol` species active, because it guards against a specific, verified
+integrator defect rather than expressing a tunable physics choice.
 """
 aerosol_nonnegativity_constraint!(Y, p, t) = unrolled_foreach(
     model -> aerosol_nonnegativity_constraint!(Y, p, t, model),
@@ -236,16 +237,9 @@ aerosol_nonnegativity_constraint!(Y, p, t, ::Nothing) = nothing
 function aerosol_nonnegativity_constraint!(
     Y, p, t, species_model::AbstractPrognosticAerosol,
 )
-    limiter = p.numerics.aerosol_nonnegativity_limiter
-    isnothing(limiter) && return nothing
-    ᶜscratch = p.scratch.ᶜtemp_scalar
-    ᶜρ = Y.c.ρ
     for ρχ_name in aerosol_state_names(species_model)
         MatrixFields.has_field(Y.c, ρχ_name) || continue
         ᶜρχ = MatrixFields.get_field(Y.c, ρχ_name)
-        @. ᶜscratch = max(0, ᶜρχ)
-        Limiters.compute_bounds!(limiter, ᶜscratch, ᶜρ)
-        Limiters.apply_limiter!(ᶜρχ, ᶜρ, limiter; warn = false)
         @. ᶜρχ = max(0, ᶜρχ)
     end
     return nothing
