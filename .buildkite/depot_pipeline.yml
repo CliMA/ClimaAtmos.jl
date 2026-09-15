@@ -31,5 +31,6 @@ steps:
       slurm_cpus_per_task: 8
     env:
       JULIA_NUM_PRECOMPILE_TASKS: 8
+    timeout_in_minutes: 60
     command:
       - ".buildkite/build_depot.sh"
