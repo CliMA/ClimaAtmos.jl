@@ -71,6 +71,7 @@ jobs:
           - infrastructure
           - diagnostics
           - dynamics
+          - dynamics_edmfx
           - parameterizations
           - restarts
           - era5
@@ -84,8 +85,14 @@ jobs:
       - uses: julia-actions/cache@v3
       - uses: julia-actions/julia-buildpkg@v1
       - uses: julia-actions/julia-runtest@v1
+        with:
+          # EDMFX simulation tests are compile-bound, coverage instrumentation
+          # increases their wall time
+          coverage: ${{ matrix.test_group != 'dynamics_edmfx' }}
       - uses: julia-actions/julia-processcoverage@v1
+        if: matrix.test_group != 'dynamics_edmfx'
       - uses: codecov/codecov-action@v7
+        if: matrix.test_group != 'dynamics_edmfx'
         with:
           file: lcov.info
           token: ${{secrets.CODECOV_TOKEN}}
