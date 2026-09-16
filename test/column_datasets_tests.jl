@@ -264,6 +264,96 @@ end
 end
 
 """
+Write a ClimaColumn file whose `ta` is `280 + offset + 1e-3 z + hours` on the
+given hourly time axis, with `ts = 300 + offset + hours`, at the given site.
+"""
+function write_test_site_file(path, FT; offset, hours, site)
+    z = FT[100, 1000, 2000, 5000]
+    time = [Dates.DateTime(2000, 5, 6) + Dates.Hour(h) for h in hours]
+    ta = FT[280 + offset + 1e-3 * zk + h for zk in z, h in hours]
+    CD.ClimaColumnFiles.write_column_forcing_file(
+        path,
+        FT;
+        z,
+        time,
+        time_attrib = [
+            "units" => "hours since 2000-05-06 00:00:00",
+            "calendar" => "standard",
+        ],
+        column_vars = Dict(
+            "ta" => ta,
+            "ua" => fill(FT(1), size(ta)),
+            "va" => fill(FT(2), size(ta)),
+            "hus" => fill(FT(0.01), size(ta)),
+            "rho" => fill(FT(1), size(ta)),
+        ),
+        surface_vars = Dict("ts" => FT[300 + offset + h for h in hours]),
+        site_latitude = site[1],
+        site_longitude = site[2],
+    )
+    return CD.ColumnDataset(path)
+end
+
+@testset "One file per column" begin
+    FT = Float64
+    dir = mktempdir()
+    a = write_test_site_file(
+        joinpath(dir, "a.nc"),
+        FT;
+        offset = 0,
+        hours = 0:8,
+        site = (10.0, 20.0),
+    )
+    b = write_test_site_file(
+        joinpath(dir, "b.nc"),
+        FT;
+        offset = 5,
+        hours = 0:2:6,
+        site = (-30.0, 40.0),
+    )
+    datasets = [a, b, a]
+    start_date = Dates.DateTime(2000, 5, 6)
+    (; latitude, longitude) = CD.site_location(datasets)
+    @test latitude == [10.0, -30.0, 10.0] && longitude == [20.0, 40.0, 20.0]
+
+    points = ClimaCore.Geometry.LatLongPoint{FT}.(latitude, longitude)
+    grid = CA.MultiColumnGrid(
+        FT;
+        points,
+        radius = 6.371229e6,
+        z_elem = 10,
+        z_max = 6000.0,
+        z_stretch = false,
+    )
+    (; center_space, face_space) = CA.get_spaces(grid)
+    ᶜz = ClimaCore.Fields.coordinate_field(center_space).z
+    z = Array(ClimaCore.Fields.field2array(ᶜz))
+    inputs = CD.column_timevaryinginputs(datasets, (:ta,), center_space, start_date)
+    dest = zero.(ᶜz)
+    evaluate!(dest, inputs.ta, 3.5 * 3600)
+    values = Array(ClimaCore.Fields.field2array(dest))
+    expected(offset, c) = (280 + offset + 3.5) .+ 1e-3 .* clamp.(z[:, c], 100, 5000)
+    @test values[:, 1] ≈ expected(0, 1)
+    @test values[:, 2] ≈ expected(5, 2)
+    @test values[:, 3] ≈ expected(0, 3)
+
+    surface_space = ClimaCore.Spaces.level(face_space, ClimaCore.Utilities.half)
+    sfc = CD.surface_timevaryinginputs(datasets, (:ts,), surface_space, start_date)
+    sfc_dest = ClimaCore.Fields.zeros(surface_space)
+    evaluate!(sfc_dest, sfc.ts, 3.5 * 3600)
+    @test vec(Array(ClimaCore.Fields.field2array(sfc_dest))) ≈ [303.5, 308.5, 303.5]
+
+    # the run is bounded by the shortest file
+    @test CD.file_time_span(datasets, start_date) == 6 * 3600
+    @test CD.time_interpolation_method(datasets) isa
+          CA.ColumnDatasets.TimeVaryingInputs.LinearInterpolation
+    @test CD.surface_vars(datasets) == [:ts]
+    @test_throws ErrorException CD.require_forcing_variables(datasets, (:tntha,), ())
+    @test CA.ExternalDrivenTVForcing(datasets; forcing = (CA.Nudging(:ta),)).dataset ===
+          datasets
+end
+
+"""
 Write a mock GCM cfsite forcing file: one per-site subgroup holding `(z, time)`
 profiles and `(time,)` surface series, with `z` stored top-down as the real
 cfsite files are. `skip` names variables to leave out, for the missing-variable

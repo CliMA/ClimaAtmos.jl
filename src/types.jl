@@ -1230,14 +1230,15 @@ Surface-temperature and insolation requirements are derived from the resolved
 
 # Fields
 
-  - `dataset`: The `ColumnDatasets.ColumnDataset` handle for the forcing file.
+  - `dataset`: The `ColumnDatasets.ColumnData`: one `ColumnDataset` handle read by
+    every column, or a vector with one dataset per column.
   - `forcing`: Tuple of composed forcing terms, validated at construction.
   - `time_interpolation_method`: Time-interpolation method handed to the file's
     `TimeVaryingInput`s.
 
 # Constructor
 
-    ExternalDrivenTVForcing(dataset::ColumnDatasets.ColumnDataset; forcing, time_interpolation_method)
+    ExternalDrivenTVForcing(dataset::ColumnDatasets.ColumnData; forcing, time_interpolation_method)
     ExternalDrivenTVForcing(path::String; kwargs...)
 
 The `path` method opens the file as a `ColumnDataset` and forwards the keyword
@@ -1245,17 +1246,13 @@ arguments. `forcing` defaults to `default_forcing_terms()` and
 `time_interpolation_method` to the dataset format's own method. Runscripts
 typically call `ExternalDrivenTVForcing(path; forcing = (...,))`.
 """
-struct ExternalDrivenTVForcing{
-    CD <: ColumnDatasets.AbstractColumnData,
-    F <: Tuple,
-    M,
-}
+struct ExternalDrivenTVForcing{CD <: ColumnDatasets.ColumnData, F <: Tuple, M}
     dataset::CD
     forcing::F
     time_interpolation_method::M
 end
 function ExternalDrivenTVForcing(
-    dataset::ColumnDatasets.AbstractColumnData;
+    dataset::ColumnDatasets.ColumnData;
     forcing = default_forcing_terms(),
     time_interpolation_method = ColumnDatasets.time_interpolation_method(dataset),
 )

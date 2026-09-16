@@ -322,6 +322,43 @@ time_interpolation_method(cd::ColumnDataset) =
 
 source_name(cd::ColumnDataset) = "$(cd.path) ($(format_name(cd.format)) format)"
 
+"""
+    ColumnData
+
+The data behind a file-driven column forcing: one [`AbstractColumnData`](@ref)
+read by every column, or a vector with one dataset per column in column
+order (the order of the points of a multi-column grid). The vector supports
+the same reader interface; its time span is the shortest dataset's and its
+surface variables are those every dataset carries.
+"""
+const ColumnData = Union{AbstractColumnData, AbstractVector{<:AbstractColumnData}}
+
+const ColumnDataVector = AbstractVector{<:AbstractColumnData}
+
+require_forcing_variables(data::ColumnDataVector, column_vars, surface_vars) =
+    foreach(d -> require_forcing_variables(d, column_vars, surface_vars), data)
+time_interpolation_method(data::ColumnDataVector) =
+    only(unique(map(time_interpolation_method, data)))
+file_time_span(data::ColumnDataVector, start_date) =
+    minimum(d -> file_time_span(d, start_date), data)
+read_initial_profiles(data::ColumnDataVector, start_date) =
+    map(d -> read_initial_profiles(d, start_date), data)
+# A NamedTuple of vectors, so `(; latitude, longitude) = site_location(data)`
+# destructures a scalar and a vector alike.
+site_location(data::ColumnDataVector) = (;
+    latitude = [site_location(d).latitude for d in data],
+    longitude = [site_location(d).longitude for d in data],
+)
+
+"""
+    surface_vars(data)
+
+The canonical surface variables `data` carries; for a vector of datasets, those
+carried by every dataset.
+"""
+surface_vars(d::AbstractColumnData) = d.surface_vars
+surface_vars(data::ColumnDataVector) = intersect(map(surface_vars, data)...)
+
 # ============================================================================
 # Generic machinery (shared by every `AbstractColumnData`)
 # ============================================================================
@@ -481,12 +518,20 @@ read by the file-backed `TimeVaryingInput`s.
 """
 data_source(cd::ColumnDataset, name::Symbol) =
     DataSource(cd.path, format_variable_name(cd.format, name))
+data_source(data::AbstractVector{<:ColumnDataset}, name::Symbol) =
+    map(cd -> data_source(cd, name), data)
+
+# The files of one run share their format
+_format(cd::ColumnDataset) = cd.format
+_format(data::AbstractVector{<:ColumnDataset}) = only(unique(map(_format, data)))
 
 """
-    column_timevaryinginputs(cd, names, target_space, start_date; method)
+    column_timevaryinginputs(data, names, target_space, start_date; method)
 
 A `NamedTuple` of `TimeVaryingInput`s, one per requested column variable,
-targeting `target_space`, the model's center column space.
+targeting `target_space`, the model's center column space. `data` is a
+[`ColumnDataset`](@ref) read by every column or a vector of them, one per
+column.
 
 The default builds file-backed inputs: each variable is read once, regridded
 onto the levels of `target_space` (linear in height, constant beyond the
@@ -496,20 +541,20 @@ non-height vertical coordinate — overrides this to build in-memory inputs
 instead.
 """
 function column_timevaryinginputs(
-    cd::ColumnDataset,
+    data::Union{ColumnDataset, AbstractVector{<:ColumnDataset}},
     names,
     target_space,
     start_date;
-    method = time_interpolation_method(cd),
+    method = time_interpolation_method(data),
 )
     names = Tuple(names)
     inputs = map(names) do name
         TimeVaryingInput(
-            data_source(cd, name),
+            data_source(data, name),
             target_space;
             start_date,
             method,
-            preprocess_func = preprocess(cd.format, name),
+            preprocess_func = preprocess(_format(data), name),
         )
     end
     return NamedTuple{names}(inputs)
@@ -540,19 +585,19 @@ function read_surface_series(cd::ColumnDataset, names, start_date)
 end
 
 """
-    surface_timevaryinginputs(cd, names, target_space, start_date; method)
+    surface_timevaryinginputs(data, names, target_space, start_date; method)
 
 A `NamedTuple` of `TimeVaryingInput`s, one per requested surface variable,
 targeting `target_space`, the model's surface space. A `(time,)` variable is
 read as a single-level column, so the inputs must be evaluated on that space.
 """
 surface_timevaryinginputs(
-    cd::ColumnDataset,
+    data::Union{ColumnDataset, AbstractVector{<:ColumnDataset}},
     names,
     target_space,
     start_date;
-    method = time_interpolation_method(cd),
-) = column_timevaryinginputs(cd, names, target_space, start_date; method)
+    method = time_interpolation_method(data),
+) = column_timevaryinginputs(data, names, target_space, start_date; method)
 
 # ============================================================================
 # In-memory column data

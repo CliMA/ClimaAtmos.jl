@@ -420,6 +420,7 @@ ARM VARANAL and GCM cfsite converters. See the
 
 ```@docs
 ClimaAtmos.ColumnDatasets.AbstractColumnData
+ClimaAtmos.ColumnDatasets.ColumnData
 ClimaAtmos.ColumnDatasets.ColumnDataset
 ClimaAtmos.ColumnDatasets.InMemoryColumnData
 ClimaAtmos.ColumnDatasets.open_dataset
@@ -428,6 +429,7 @@ ClimaAtmos.ColumnDatasets.read_profile
 ClimaAtmos.ColumnDatasets.read_series
 ClimaAtmos.ColumnDatasets.read_initial_profiles
 ClimaAtmos.ColumnDatasets.read_surface_series
+ClimaAtmos.ColumnDatasets.surface_vars
 ClimaAtmos.ColumnDatasets.height_profile
 ClimaAtmos.ColumnDatasets.site_location
 ```
