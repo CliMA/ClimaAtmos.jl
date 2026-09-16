@@ -14,7 +14,9 @@ state and may be overwritten by any function.
 # Fields
 
   - `dt`: Simulation timestep, also used by callbacks and tendencies [s].
-  - `atmos`: The `AtmosModel` configuration.
+  - `atmos`: The physics of the `AtmosModel`. `build_cache` stores
+    `physics_only(atmos)` here, so the cached model carries no grid,
+    parameters, or setup.
   - `numerics`: Limiters (quasi-monotone, tracer-nonnegativity, vertical water borrowing).
   - `params`: The `ClimaAtmosParameters` used by the model.
   - `core`: Generally used quantities, such as the geopotential `ᶜΦ`, its gradients,
@@ -130,9 +132,7 @@ Adapt.@adapt_structure AtmosCache
 # This is a constant Coriolis frequency that is only used if space is flat
 
 """
-    build_cache(Y, atmos, params, dt, start_date, aerosol_names,
-                time_varying_trace_gas_names, steady_state_velocity,
-                vwb_species = nothing)
+    build_cache(Y, atmos, params, dt, start_date, steady_state_velocity)
 
 Allocate and initialize the `AtmosCache` `p` for the initial state `Y` and model
 configuration `atmos`.
@@ -146,17 +146,13 @@ gravity waves, radiation, tracers).
 # Arguments
 
   - `Y`: Initial prognostic state, used for its spaces and element type.
-  - `atmos`: The `AtmosModel` configuration.
+  - `atmos`: The `AtmosModel`. Only its physics is stored in the cache, see
+    `physics_only`.
   - `params`: The `ClimaAtmosParameters`.
   - `dt`: Simulation timestep [s].
   - `start_date`: Simulation start date, used for time-varying inputs and radiation.
-  - `aerosol_names`: Names of prescribed aerosol species to read from file.
-  - `time_varying_trace_gas_names`: Names of time-varying trace gases (e.g. `"CO2"`,
-    `"O3"`).
   - `steady_state_velocity`: Predicted steady-state velocity for the
     `check_steady_state` diagnostic, or `nothing`.
-  - `vwb_species`: Species tuple for the vertical-water-borrowing limiter, or
-    `nothing`.
 
 # Returns
 
@@ -168,13 +164,15 @@ function build_cache(
     params,
     dt,
     start_date,
-    aerosol_names,
-    time_varying_trace_gas_names,
     steady_state_velocity,
-    vwb_species = nothing,
 )
     FT = eltype(params)
     dt = FT(dt)
+
+    aerosol_names = atmos.radiation.aerosol_names
+    time_varying_trace_gas_names = atmos.radiation.time_varying_trace_gases
+
+    atmos = physics_only(atmos)
 
     ᶜcoord = Fields.local_geometry_field(Y.c).coordinates
     ᶠcoord = Fields.local_geometry_field(Y.f).coordinates
@@ -213,7 +211,8 @@ function build_cache(
     end
 
     vertical_water_borrowing_limiter = nothing
-    vertical_water_borrowing_species = vwb_species
+    vertical_water_borrowing_species =
+        atmos.numerics.vertical_water_borrowing_species
 
     if atmos.water.tracer_nonnegativity_method isa TracerNonnegativityVerticalWaterBorrowing
         vertical_water_borrowing_limiter = Limiters.VerticalMassBorrowingLimiter((FT(0.0),))
