@@ -1,0 +1,51 @@
+# Prognostic EDMF + 1-moment microphysics parameters for the single-column
+# cases of the model hierarchy. Copied from toml/prognostic_edmfx_1M.toml, with
+# entries equal to the ClimaParams default removed so only genuine overrides
+# remain. The ClimaParams default is noted for each.
+#
+# Dropped as default-equal: EDMF_max_surface_area (0.1), EDMF_min_area (1e-5),
+# entr_inv_tau (0), min/max_area_limiter_scale (0.001), min/max_area_limiter_power
+# (1), and turb_entr_param_vec -- the default [0.001, 1e5, 0.0] matches the
+# override in the only two elements the code reads (edmfx_entr_detr.jl).
+
+# Sponge layer. Inert for the column cases (no sponge), kept for the sphere.
+[zd_rayleigh]        # default 15000
+value = 40000.0
+
+[zd_viscous]         # default 15000
+value = 40000.0
+
+[alpha_rayleigh_tracer]  # default 0.0
+value = 0.001
+
+# Updraft area limits
+[EDMF_max_area]      # default 0.9
+value = 0.7
+
+# Entrainment
+[entr_coeff]         # default 1
+value = 0.2
+
+# Detrainment
+[detr_coeff]         # default 0.001
+value = 0
+
+[detr_buoy_coeff]    # default 0.12
+value = 1
+
+[detr_vertdiv_coeff]  # default 1
+value = 0
+
+[detr_massflux_vertdiv_coeff]  # default 1
+value = 0.3
+
+# Perturbation pressure closure
+[pressure_normalmode_drag_coeff]  # default 10.0
+value = 8.0
+
+# Non-equilibrium condensate relaxation (1M only)
+[condensation_evaporation_timescale]  # default 10.0
+value = 100
+
+[sublimation_deposition_timescale]  # default 10.0
+value = 100

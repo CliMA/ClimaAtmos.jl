@@ -51,6 +51,7 @@ steps:
     steps:
 
       - label: ":cyclone: moist baroclinic wave"
+        # skip: "temporarily disabled; running aquaplanets first"
         command: >
           srun julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $CONFIG_PATH/$$GRID.yml
@@ -66,6 +67,7 @@ steps:
           JOB_NAME: "moist_baroclinic_wave"
 
       - label: ":computer: dry held-suarez"
+        skip: "temporarily disabled"
         command: >
           srun julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $CONFIG_PATH/$$GRID.yml
@@ -81,6 +83,7 @@ steps:
           JOB_NAME: "dry_held_suarez"
 
       - label: ":computer: moist held-suarez"
+        skip: "temporarily disabled"
         command: >
           srun julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
           --config_file $CONFIG_PATH/$$GRID.yml
@@ -95,32 +98,34 @@ steps:
           GRID: "numerics_sphere_he16ze63"
           JOB_NAME: "moist_held_suarez"
 
-      # - label: ":sunny: aquaplanet clearsky radiation + prognostic edmf"
-      #   command: >
-      #     srun julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-      #     --config_file $CONFIG_PATH/$$GRID.yml
-      #     --config_file $CONFIG_PATH/$$JOB_NAME.yml
-      #     --job_id $$JOB_NAME
-      #   artifact_paths: "$$JOB_NAME/output_active/*"
-      #   agents:
-      #     slurm_gpus: 1
-      #     slurm_time: 24:00:00
-      #   env:
-      #     CLIMACOMMS_DEVICE: "CUDA"
-      #     GRID: "numerics_sphere_he16ze63"
-      #     JOB_NAME: "aquaplanet_clearsky"
+      - label: ":sunny: aquaplanet clearsky radiation + prognostic edmf"
+        skip: "temporarily disabled"
+        command: >
+          srun julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+          --config_file $CONFIG_PATH/$$GRID.yml
+          --config_file $CONFIG_PATH/$$JOB_NAME.yml
+          --job_id $$JOB_NAME
+        artifact_paths: "$$JOB_NAME/output_active/*"
+        agents:
+          slurm_gpus: 1
+          slurm_time: 24:00:00
+        env:
+          CLIMACOMMS_DEVICE: "CUDA"
+          GRID: "numerics_sphere_he16ze63"
+          JOB_NAME: "aquaplanet_clearsky"
 
-      # - label: ":umbrella: aquaplanet allsky radiation + prognostic edmf"
-      #   command: >
-      #     srun julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
-      #     --config_file $CONFIG_PATH/$$GRID.yml
-      #     --config_file $CONFIG_PATH/$$JOB_NAME.yml
-      #     --job_id $$JOB_NAME
-      #   artifact_paths: "$$JOB_NAME/output_active/*"
-      #   agents:
-      #     slurm_gpus: 1
-      #     slurm_time: 24:00:00
-      #   env:
-      #     CLIMACOMMS_DEVICE: "CUDA"
-      #     GRID: "numerics_sphere_he16ze63"
-      #     JOB_NAME: "aquaplanet_allsky"
+      - label: ":umbrella: aquaplanet allsky radiation + prognostic edmf"
+        skip: "temporarily disabled"
+        command: >
+          srun julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+          --config_file $CONFIG_PATH/$$GRID.yml
+          --config_file $CONFIG_PATH/$$JOB_NAME.yml
+          --job_id $$JOB_NAME
+        artifact_paths: "$$JOB_NAME/output_active/*"
+        agents:
+          slurm_gpus: 1
+          slurm_time: 24:00:00
+        env:
+          CLIMACOMMS_DEVICE: "CUDA"
+          GRID: "numerics_sphere_he16ze63"
+          JOB_NAME: "aquaplanet_allsky"

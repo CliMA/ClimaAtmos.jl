@@ -1,0 +1,11 @@
+# Non-equilibrium condensate relaxation timescales, used only by the 1-moment
+# microphysics (`microphysics_model: "1M"`). Kept out of prognostic_edmfx.toml
+# because that file is shared with the 0M sphere cases and `strict_params`
+# defaults to true. Values match toml/prognostic_edmfx_1M.toml; the ClimaParams
+# defaults are 10 s, i.e. 10x faster relaxation toward saturation adjustment.
+
+[condensation_evaporation_timescale]
+value = 100
+
+[sublimation_deposition_timescale]
+value = 100
