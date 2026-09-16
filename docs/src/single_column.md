@@ -136,7 +136,9 @@ rather than a file path because the file is generated on demand:
 `start_date` is YYYYMMDD, `site_latitude` in degrees (-90...90), and
 `site_longitude` in (-180...180). Artifact-backed ERA5 data is currently
 available only for the tropical Pacific in the first 5 days of July 2007,
-and only on the `clima` and Caltech HPC servers.
+and only on the `clima` and Caltech HPC servers. With `config: "multicolumn"`,
+`site_latitude` and `site_longitude` may be lists of the same length, one site
+per column; columns at one site share its file.
 
 !!! note
 

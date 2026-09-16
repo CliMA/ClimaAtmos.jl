@@ -97,6 +97,26 @@ deep_atmosphere: false
 NetCDF diagnostics carry a `column` dimension with `lat` and `lon` coordinate
 variables instead of a horizontal grid.
 
+The file-driven cases (`ForcingFromFile`, `ARMVARANAL`, `GCM`,
+`ReanalysisTimeVarying`) can drive each column with its own data: the dataset
+option of the case (`external_forcing_file`, `cfsite_number`, or the
+`site_latitude`/`site_longitude` pair) accepts a list with one entry per column,
+in column order. The list sets the number of columns, and the columns are placed
+at their datasets' sites (the file's `site_latitude`/`site_longitude`, the
+cfsite group's `lat`/`lon`), overriding `column_latitudes`/`column_longitudes`;
+each column's initial condition, forcing, surface temperature, and insolation
+come from its own dataset, and two entries at one site must name the same data.
+A single value drives every column with the same data, placed at its site. The
+placement has no physical effect on these cases (Coriolis and the RRTMGP latitude
+are those of a column), so each column reproduces the single-column run on its
+dataset.
+
+```yaml
+config: "multicolumn"
+initial_condition: "ForcingFromFile"
+external_forcing_file: [site_a.nc, site_b.nc, site_a.nc]
+```
+
 ## Overriding parameters
 
 Physical constants and calibratable parameters are managed by
