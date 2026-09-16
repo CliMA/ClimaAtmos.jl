@@ -1,0 +1,12 @@
+# Overlay for a 1-hour workshop sphere run.
+# Use with config/model_configs/baroclinic_wave.yml, or skip the YAML path
+# and use CA.Presets.baroclinic_wave (recommended in the tutorial).
+#
+# Default grid is already coarse (h_elem = 6, z_elem = 10, ~550 km).
+# One day of model time is enough to write diagnostics; the wave is not
+# fully developed — this session is about running and looking at variables.
+t_end: "1days"
+dt_save_state_to_disk: "Inf"
+diagnostics:
+  - short_name: [pfull, ua, va, wa, ta, rhoa, ke]
+    period: 6hours

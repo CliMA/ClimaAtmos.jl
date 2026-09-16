@@ -1,0 +1,8 @@
+# Overlay for a 1-hour workshop column run.
+# Use with config/model_configs/prognostic_edmfx_bomex_column.yml, or skip
+# the YAML path and use CA.Presets.bomex (recommended in the tutorial).
+t_end: "1hours"
+dt_save_state_to_disk: "Inf"
+diagnostics:
+  - short_name: [ta, thetaa, ua, wa, hus, rhoa]
+    period: 10mins

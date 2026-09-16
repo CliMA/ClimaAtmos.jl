@@ -1,0 +1,493 @@
+%==============================================================================
+%  ClimaAtmos.jl — 1-hour hands-on tutorial
+%  Companion to talks/main.tex (overview). This session is running & exploring
+%  variables, not choosing physically relevant grids or timesteps.
+%
+%  COMPILE:  latexmk -pdf tutorial_1h.tex     (or pdflatex twice)
+%  Participant scripts: tutorial_1h.jl, tutorial_1h_plots.jl
+%==============================================================================
+\documentclass[aspectratio=169,11pt]{beamer}
+
+%------------------------------------------------------------------------------
+% >>> THEME BLOCK <<<  (same as talks/main.tex)
+%------------------------------------------------------------------------------
+\usetheme{Madrid}
+\usecolortheme{seahorse}
+\definecolor{climablue}{RGB}{20,70,120}
+\definecolor{climateal}{RGB}{20,130,130}
+\setbeamercolor{structure}{fg=climablue}
+\setbeamercolor{frametitle}{fg=white,bg=climablue}
+\setbeamercolor{title}{fg=climablue}
+\setbeamertemplate{navigation symbols}{}
+\setbeamertemplate{caption}[numbered]
+%------------------------------------------------------------------------------
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage{booktabs}
+\usepackage{tikz}
+\usetikzlibrary{positioning, arrows.meta}
+
+\newcommand{\pkg}[1]{\texttt{#1}}
+\newcommand{\cta}[1]{{\color{climateal}\textbf{#1}}}
+
+\title[ClimaAtmos tutorial]{Running \texttt{ClimaAtmos.jl}}
+\subtitle{A 1-hour hands-on: clone, instantiate, first runs, plots}
+\author{Akshay Sridhar}
+\institute{Climate Modeling Alliance (CliMA)}
+\date{1-hour workshop}
+
+\begin{document}
+
+%==============================================================================
+\begin{frame}[plain]
+  \titlepage
+  \begin{center}\small
+    Goal: a working clone, two short simulations, and a look at the output.\\
+    Not today: production resolution, CFL, or physically tuned cases.
+  \end{center}
+\end{frame}
+
+%==============================================================================
+\begin{frame}{This hour}
+\begin{center}
+\begin{tabular}{clp{0.55\textwidth}}
+  \toprule
+  \textbf{min} & \textbf{block} & \textbf{you will} \\
+  \midrule
+  0--5   & Welcome        & know what we will / will not do \\
+  5--15  & Clone          & have the repository on disk \\
+  15--25 & Instantiate    & have a compiled Julia environment \\
+  25--45 & First runs     & run a column and a sphere \\
+  45--55 & Visualize      & plot diagnostics from NetCDF \\
+  55--60 & Recap          & leave with a cheat sheet \\
+  \bottomrule
+\end{tabular}
+\end{center}
+\vspace{0.6em}
+\small
+Keep \textbf{one} Julia session open. The first compile is slow; restarting
+throws that work away.
+\note{If instantiate was done as homework, spend the recovered 10 min on
+inspecting \texttt{Y} and extra plots. If it was not, start instantiate
+immediately after clone and talk through the mental model while it runs.}
+\end{frame}
+
+%==============================================================================
+\begin{frame}{What this is not}
+\begin{itemize}
+  \item Not a dynamics lecture --- the overview talk covers that.
+  \item Not a resolution / timestep / physics-tuning session.
+    The grids here are \cta{coarse on purpose} so they finish in the room.
+  \item Not ``BOMEX as published'' or ``baroclinic wave at day 10''.
+    We will see the \emph{variables} those cases write, on a laptop budget.
+\end{itemize}
+\vspace{0.8em}
+Three objects, used all afternoon:
+\begin{itemize}
+  \item \texttt{Y} --- prognostic state (\texttt{Y.c} centres, \texttt{Y.f} faces)
+  \item \texttt{p} --- cache of precomputed fields and parameters
+  \item diagnostics --- derived NetCDF output (\texttt{ta}, \texttt{ua}, \texttt{hus}, \ldots)
+\end{itemize}
+\note{Write \texttt{Y}/\texttt{p} on the board. Centre vs face is the only
+discretization fact they need today.}
+\end{frame}
+
+%==============================================================================
+\begin{frame}[fragile]{0. Prerequisites}
+Before (or while) we start:
+\begin{itemize}
+  \item \textbf{Julia 1.11} via \href{https://julialang.org/install/}{juliaup}
+  \item \textbf{Git}, and \textbf{$\sim$10\,GB} disk (deps + artifacts)
+  \item Network for the first instantiate
+\end{itemize}
+\vspace{0.4em}
+\begin{semiverbatim}
+curl -fsSL https://install.julialang.org | sh
+juliaup add 1.11
+juliaup default 1.11
+julia --version          # 1.11.x
+\end{semiverbatim}
+\vspace{0.4em}
+\small
+Optional but useful, in the \emph{default} environment (plain \texttt{julia},
+no \texttt{--project}):
+\begin{semiverbatim}
+julia -e 'using Pkg; Pkg.add(["ClimaAnalysis","CairoMakie"])'
+\end{semiverbatim}
+\note{Do not Pkg.add plotting packages into the ClimaAtmos project --- that
+edits Project.toml. Same rule as CUDA in the installation docs.}
+\end{frame}
+
+%==============================================================================
+\begin{frame}[fragile]{1. Clone}
+HTTPS is the reliable workshop default (no SSH keys required):
+\vspace{0.4em}
+\begin{semiverbatim}
+git clone https://github.com/CliMA/ClimaAtmos.jl.git
+cd ClimaAtmos.jl
+ls
+\end{semiverbatim}
+\vspace{0.5em}
+What you should see, at a glance:
+\begin{itemize}
+  \item \texttt{src/} --- the model
+  \item \texttt{config/} --- YAML cases (\texttt{model\_configs/}, \texttt{default\_configs/})
+  \item \texttt{talks/} --- this tutorial's scripts
+  \item \texttt{Project.toml} / \texttt{Manifest.toml} --- pinned environment
+\end{itemize}
+\small
+Docs: \url{https://clima.github.io/ClimaAtmos.jl/dev/installation/}
+\note{Walk the tree for 60 seconds. Point at config/model\_configs so YAML
+later is not a surprise. Do not dive into src/.}
+\end{frame}
+
+%==============================================================================
+\begin{frame}[fragile]{2. Instantiate (precompile)}
+From the repository root:
+\vspace{0.3em}
+\begin{semiverbatim}
+julia +1.11 --project
+\end{semiverbatim}
+Then in the REPL:
+\begin{semiverbatim}
+using Pkg
+Pkg.instantiate()    # download + precompile the Manifest
+import ClimaAtmos as CA
+\end{semiverbatim}
+\vspace{0.4em}
+\begin{block}{Expect a wait}
+The first instantiate downloads and precompiles the full stack and can take
+\textbf{tens of minutes}. Later sessions start quickly. Leave this REPL open.
+\end{block}
+\small
+Equivalent one-liner: \texttt{julia +1.11 --project -e 'using Pkg; Pkg.instantiate()'}
+\note{Start this before explaining Y if the room is cold. Filler: two
+interfaces (script vs YAML), output layout, short-name diagnostics.}
+\end{frame}
+
+%==============================================================================
+\begin{frame}{While that compiles}
+Two equivalent ways to launch a run --- we will use the \cta{script} path:
+\vspace{0.4em}
+\begin{center}
+\begin{tabular}{lll}
+  \toprule
+   & \textbf{script} & \textbf{YAML} \\
+  \midrule
+  entry & \texttt{AtmosSimulation} / \texttt{Presets} & \texttt{AtmosConfig("file.yml")} \\
+  best for & REPL, notebooks, this hour & CI, sharing a case \\
+  \bottomrule
+\end{tabular}
+\end{center}
+\vspace{0.8em}
+Output always lands under \texttt{output/<job\_id>/}:
+\begin{itemize}
+  \item numbered run directories \texttt{output\_0000}, \texttt{output\_0001}, \ldots
+  \item \texttt{output\_active} $\to$ the latest
+  \item \textbf{NetCDF} (\texttt{.nc}) = diagnostics; \textbf{HDF5} = checkpoints
+\end{itemize}
+\end{frame}
+
+%==============================================================================
+\begin{frame}[fragile]{Diagnostics we can plot}
+Default diagnostics are time averages, and they write nothing for runs
+shorter than 1 hour (at 1 hour you get a single hourly mean). Request
+instantaneous snapshots so we can see evolution --- and skip \texttt{hus}
+on dry cases:
+\vspace{0.3em}
+\begin{semiverbatim}
+diag = CA.DiagnosticsConfig(;
+    default = false,
+    additional = (
+        "ta"   => (; period = "10mins"),
+        "hus"  => (; period = "10mins"),
+        "ua"   => (; period = "10mins"),
+        "rhoa" => (; period = "10mins"),
+    ),
+)
+\end{semiverbatim}
+\small
+Diagnostics are fixed at construction. For the dry wave, drop \texttt{hus}
+and use a 6-hour period (\texttt{sphere\_diagnostics} in the script).
+\end{frame}
+
+%==============================================================================
+\begin{frame}[fragile]{3a. Single column --- BOMEX}
+Shallow-cumulus \emph{initial state} in one column. The preset is moist 0-moment
+microphysics, \textbf{no} EDMF: enough physics to have humidity, cheap enough
+to finish here.
+\vspace{0.3em}
+\begin{semiverbatim}
+import ClimaAtmos as CA
+
+column = CA.Presets.bomex(
+    Float32;
+    t_end = "1hours",
+    job_id = "workshop_bomex",
+    diagnostics = diag,
+)
+\end{semiverbatim}
+\vspace{0.3em}
+\small
+Defaults inside the preset: 60 uniform levels, $z_\mathrm{max} = 3$\,km,
+\texttt{dt = 10}\,s. Construction fills \texttt{Y} but does \emph{not} step time.
+\note{Say out loud: this is not the published BOMEX + PROPHET YAML. That
+config is prognostic\_edmfx\_bomex\_column.yml; we will name it, not run it.}
+\end{frame}
+
+%==============================================================================
+\begin{frame}[fragile]{Inspect \texttt{Y} before running}
+\begin{semiverbatim}
+Y = column.integrator.u
+propertynames(Y.c)   # centres: ρ, uₕ, ρe_tot, ρq_tot, ...
+propertynames(Y.f)   # faces:   u₃, ...
+extrema(Y.c.ρ)
+extrema(Y.c.ρe_tot)
+\end{semiverbatim}
+\vspace{0.5em}
+\begin{itemize}
+  \item Prognostic variables are densities ($\rho$, $\rho e_\mathrm{tot}$,
+        $\rho q_\mathrm{tot}$) plus velocity.
+  \item Diagnostics later are the familiar names: \texttt{ta}, \texttt{hus},
+        \texttt{ua}, \ldots
+  \item \texttt{p = column.integrator.p} is the cache --- peek, don't mutate.
+\end{itemize}
+\note{Have people shout out propertynames. If compile is still going, this
+slide is the waiting-room activity once AtmosSimulation returns.}
+\end{frame}
+
+%==============================================================================
+\begin{frame}[fragile]{Run the column}
+\begin{semiverbatim}
+CA.solve_atmos!(column)
+column.integrator.t      # should be 3600 s
+column.output_dir        # output/workshop_bomex/output_0000
+\end{semiverbatim}
+\vspace{0.5em}
+First \texttt{solve\_atmos!} in a session compiles the time stepper and can
+take several minutes. The 1-hour integration itself is short on a column.
+\vspace{0.5em}
+Optional: one timestep at a time
+\begin{semiverbatim}
+import ClimaTimeSteppers: step!
+step!(column.integrator)
+\end{semiverbatim}
+\end{frame}
+
+%==============================================================================
+\begin{frame}[fragile]{3b. Sphere --- dry baroclinic wave}
+Idealized mid-latitude jet + a perturbation, on a cubed sphere. Dry, no
+surface fluxes. Default grid: \texttt{h\_elem = 6} ($\sim$550\,km),
+\texttt{z\_elem = 10}, \texttt{dt = 10}\,min.
+\vspace{0.3em}
+\begin{semiverbatim}
+sphere = CA.Presets.baroclinic_wave(
+    Float32;
+    t_end = "1days",
+    job_id = "workshop_bcw",
+    diagnostics = diag_dry,   # like diag, but no hus; 6-hour period
+)
+Y = sphere.integrator.u
+propertynames(Y.c)     # no ρq_tot
+CA.solve_atmos!(sphere)
+\end{semiverbatim}
+\small
+A published wave is typically integrated 8--10 days. One day is enough to
+write fields and look at them. Do not read this as a converged test.
+\note{Show that moist vs dry is visible in propertynames. hus on a dry model
+errors --- that is a useful live demo if someone tries it.}
+\end{frame}
+
+%==============================================================================
+\begin{frame}{What you just ran}
+\begin{center}
+\begin{tabular}{lll}
+  \toprule
+   & \textbf{column} & \textbf{sphere} \\
+  \midrule
+  preset & \texttt{Presets.bomex} & \texttt{Presets.baroclinic\_wave} \\
+  grid & 60 levels, 3\,km & $h=6$, 10 levels, 30\,km \\
+  physics & moist 0M, no EDMF & dry, no surface flux \\
+  model time & 1 hour & 1 day \\
+  look at & \texttt{ta}, \texttt{hus} vs $z$ & \texttt{ua} zonal mean \\
+  \bottomrule
+\end{tabular}
+\end{center}
+\vspace{0.8em}
+Both used \texttt{Float32}. Output is under
+\texttt{output/workshop\_bomex/} and \texttt{output/workshop\_bcw/}.
+\end{frame}
+
+%==============================================================================
+\begin{frame}[fragile]{4. Visualize --- a second Julia}
+Plotting packages go in the \cta{default} environment, not the model project.
+\vspace{0.3em}
+\begin{semiverbatim}
+# new terminal, from ClimaAtmos.jl, *no* --project
+julia +1.11
+\end{semiverbatim}
+\begin{semiverbatim}
+import Pkg; Pkg.add(["ClimaAnalysis", "CairoMakie"])
+using ClimaAnalysis
+import ClimaAnalysis.Visualize as viz
+import CairoMakie
+
+simdir = SimDir("output/workshop_bomex/output_active")
+ta = get(simdir, "ta")
+\end{semiverbatim}
+\small
+\texttt{SimDir} catalogs every diagnostic the run wrote. \texttt{get} loads
+one by short name as an \texttt{OutputVar}.
+\end{frame}
+
+%==============================================================================
+\begin{frame}[fragile]{Column profiles}
+\begin{semiverbatim}
+using ClimaAnalysis: times
+t0 = first(times(ta))
+hus = get(simdir, "hus")
+
+fig = CairoMakie.Figure(; size = (900, 400))
+viz.plot!(fig[1, 1], ta;  time = t0, lon = 0, lat = 0)
+viz.plot!(fig[1, 2], hus; time = t0, lon = 0, lat = 0)
+CairoMakie.save("workshop_bomex_ic.png", fig)
+\end{semiverbatim}
+\vspace{0.4em}
+\texttt{viz.plot!} picks a line or a heatmap from how many dimensions remain.
+Drop extra axes with \texttt{slice} / keyword slices; reduce with
+\texttt{average\_lon}, \texttt{average\_time}, \ldots
+\end{frame}
+
+%==============================================================================
+\begin{frame}[fragile]{Sphere fields}
+\begin{semiverbatim}
+bcw = SimDir("output/workshop_bcw/output_active")
+ua = get(bcw, "ua")
+ta = get(bcw, "ta")
+t = last(times(ua))
+
+fig = CairoMakie.Figure()
+viz.plot!(fig, average_lon(ua); time = t)   # lat--height
+CairoMakie.save("workshop_bcw_ua_zonal_mean.png", fig)
+
+fig = CairoMakie.Figure()
+viz.plot!(fig, ta; z = 0, time = t)         # lat--lon near surface
+CairoMakie.save("workshop_bcw_ta_surface.png", fig)
+\end{semiverbatim}
+\small
+Full copy-paste: \texttt{talks/tutorial\_1h\_plots.jl}
+\end{frame}
+
+%==============================================================================
+\begin{frame}[fragile]{YAML path (optional)}
+The same runs, file-driven --- later files override earlier keys:
+\vspace{0.3em}
+\begin{semiverbatim}
+config = CA.AtmosConfig(
+    ["config/model_configs/baroclinic_wave.yml",
+     "talks/workshop_configs/short_sphere.yml"];
+    job_id = "workshop_bcw_yaml",
+)
+sim = CA.AtmosSimulation(config)
+CA.solve_atmos!(sim)
+\end{semiverbatim}
+\vspace{0.3em}
+Or edit one key in the REPL after loading:
+\begin{semiverbatim}
+config = CA.AtmosConfig("config/model_configs/baroclinic_wave.yml")
+config.parsed_args["t_end"] = "1days"
+\end{semiverbatim}
+\small
+The published BOMEX+PROPHET case is
+\texttt{config/model\_configs/prognostic\_edmfx\_bomex\_column.yml} ---
+that is the physically complete column, not what we ran live.
+\end{frame}
+
+%==============================================================================
+\begin{frame}{Cheat sheet}
+{\small
+\begin{tabular}{@{}ll@{}}
+  \toprule
+  clone & \texttt{git clone https://github.com/CliMA/ClimaAtmos.jl.git} \\
+  env & \texttt{julia +1.11 --project} then \texttt{Pkg.instantiate()} \\
+  column & \texttt{CA.Presets.bomex(Float32; t\_end="1hours", job\_id=...)} \\
+  sphere & \texttt{CA.Presets.baroclinic\_wave(Float32; t\_end="1days", ...)} \\
+  run & \texttt{CA.solve\_atmos!(simulation)} \\
+  state & \texttt{Y = simulation.integrator.u} \\
+  output & \texttt{output/<job\_id>/output\_active} \\
+  plot env & default Julia + \texttt{ClimaAnalysis}, \texttt{CairoMakie} \\
+  load & \texttt{SimDir(...) ; get(simdir, "ta")} \\
+  \bottomrule
+\end{tabular}
+}
+\vspace{0.6em}
+Scripts in this repo: \texttt{talks/tutorial\_1h.jl}, \texttt{talks/tutorial\_1h\_plots.jl}
+\end{frame}
+
+%==============================================================================
+\begin{frame}{Where to go next}
+\begin{itemize}
+  \item Docs: \url{https://clima.github.io/ClimaAtmos.jl/dev/}
+        --- first simulation, single-column cases, visualizing output
+  \item Next workshop hour (not today): grids at physically relevant scales,
+        timesteps / CFL, PROPHET, radiation
+  \item YAML library: \texttt{config/model\_configs/} and
+        \texttt{config/longrun\_configs/}
+\end{itemize}
+\vspace{0.8em}
+\begin{center}
+\large Questions --- while we still have a live REPL.
+\end{center}
+\end{frame}
+
+%==============================================================================
+\appendix
+\begin{frame}[fragile]{Backup: if instantiate fails}
+Typical recovery, still in \texttt{julia --project}:
+\begin{semiverbatim}
+using Pkg
+Pkg.resolve()
+Pkg.instantiate()
+\end{semiverbatim}
+\vspace{0.4em}
+If a download stalled, retry on a better network. Do not \texttt{Pkg.update()}
+in a workshop --- that floats off the Manifest.
+\vspace{0.4em}
+Shared depot (instructors): set \texttt{JULIA\_DEPOT\_PATH} to a pre-warmed
+\texttt{.julia} so the room skips the download.
+\end{frame}
+
+\begin{frame}[fragile]{Backup: inspecting a \texttt{Field} without plots}
+\begin{semiverbatim}
+import ClimaCore as CC
+z = CC.Fields.coordinate_field(Y.c).z
+extrema(Y.c.ρ)
+any(isnan, parent(Y.c.ρ))
+parent(Y.c.ρ)          # raw array, column is small
+\end{semiverbatim}
+Useful when CairoMakie is not installed yet, or when a run looks wrong.
+\end{frame}
+
+\begin{frame}{Backup: diagnostic short names we used}
+\begin{center}
+\begin{tabular}{lll}
+  \toprule
+  name & quantity & notes \\
+  \midrule
+  \texttt{ta} & air temperature & both cases \\
+  \texttt{thetaa} & potential temperature & column \\
+  \texttt{hus} & specific humidity & moist only \\
+  \texttt{ua},\texttt{va},\texttt{wa} & wind components & \\
+  \texttt{rhoa} & air density & \\
+  \texttt{pfull} & pressure & sphere \\
+  \bottomrule
+\end{tabular}
+\end{center}
+\vspace{0.5em}
+Catalog: docs $\to$ \emph{Available diagnostic variables}. Requesting
+\texttt{hus} on a dry model errors at setup --- that is expected.
+\end{frame}
+
+\end{document}
