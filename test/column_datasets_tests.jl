@@ -580,6 +580,28 @@ end
         "20000506",
     )
 
+    # one dataset per column gives one flux pair per column, resolved to one
+    # scheme per surface point; the scalar path is unchanged
+    fluxes2 = CA.SurfaceConditions.FileHeatFluxes([data, data], "20000506")
+    hf2 = fluxes2(0.0, FT)
+    @test hf2.shf == [hf.shf, hf.shf] && hf2.lhf == [hf.lhf, hf.lhf]
+    points = ClimaCore.Geometry.LatLongPoint{FT}.([0.0, 0.0], [0.0, 0.0])
+    grid2 = CA.MultiColumnGrid(FT; points, radius = 6.371229e6, z_elem = 5)
+    surface_space = ClimaCore.Spaces.level(
+        CA.get_spaces(grid2).face_space,
+        ClimaCore.Utilities.half,
+    )
+    mo(fluxes) =
+        CA.SurfaceConditions.MoninObukhov(; z0 = FT(0.05), ustar = FT(0.28), fluxes)
+    scheme2 = CA.SurfaceConditions.resolve_flux_scheme(mo(fluxes2), 0.0, FT, surface_space)
+    @test scheme2 isa ClimaCore.DataLayouts.AbstractData
+    scheme2_field = ClimaCore.Fields.Field(scheme2, surface_space)
+    @test all(==(hf.shf), parent(scheme2_field.fluxes.shf))
+    @test all(==(hf.lhf), parent(scheme2_field.fluxes.lhf))
+    @test all(==(FT(0.28)), parent(scheme2_field.ustar))
+    scheme1 = CA.SurfaceConditions.resolve_flux_scheme(mo(fluxes), 0.0, FT, surface_space)
+    @test scheme1 isa CA.SurfaceConditions.MoninObukhov && scheme1.fluxes == hf
+
     # the insolation and flux_scheme kwargs are stored and returned by components
     (lat, lon) = CD.site_location(data)
     setup = CA.Setups.ForcingFromFile(

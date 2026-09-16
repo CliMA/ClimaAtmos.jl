@@ -47,7 +47,12 @@ function update_surface_conditions!(Y, p, t)
 
     overrides = boundary_overrides_wrapper(sfc_setup)
     T_sfc_values = surface_temperature(atmos.surface.temperature, Y, p, t)
-    flux_scheme = resolve_flux_scheme(atmos.surface.flux_scheme, t, eltype(params))
+    flux_scheme = resolve_flux_scheme(
+        atmos.surface.flux_scheme,
+        t,
+        eltype(params),
+        axes(sfc_conditions),
+    )
 
     @. sfc_conditions_values = surface_state_to_conditions(
         overrides,
@@ -73,6 +78,7 @@ end
 
 """
     resolve_flux_scheme(flux_scheme, t, ::Type{FT})
+    resolve_flux_scheme(flux_scheme, t, ::Type{FT}, surface_space)
 
 Evaluate a time-varying prescribed-flux closure at time `t`.
 
@@ -81,12 +87,35 @@ A [`MoninObukhov`](@ref) whose `fluxes` field is a callable
 every other flux scheme passes through unchanged. Called once per surface
 update from [`update_surface_conditions!`](@ref), before the per-cell
 broadcast, so the callable is never invoked inside the broadcast kernel.
+
+The four-argument form is what the update calls. Fluxes given per column
+(vectors, from a [`FileHeatFluxes`](@ref) over one dataset per column) become
+a `DataLayout` of schemes, one per point of `surface_space`, which the
+broadcast consumes like the per-cell overrides; custom schemes need only the
+three-argument method.
 """
 function resolve_flux_scheme(p::MoninObukhov, t, ::Type{FT}) where {FT}
     p.fluxes isa Function || return p
     return MoninObukhov(p.z0m, p.z0b, p.fluxes(t, FT), p.ustar)
 end
 resolve_flux_scheme(p, t, ::Type{FT}) where {FT} = p
+resolve_flux_scheme(p, t, ::Type{FT}, surface_space) where {FT} =
+    resolve_flux_scheme(p, t, FT)
+function resolve_flux_scheme(p::MoninObukhov, t, ::Type{FT}, surface_space) where {FT}
+    scheme = resolve_flux_scheme(p, t, FT)
+    (; fluxes) = scheme
+    fluxes isa HeatFluxes && fluxes.shf isa AbstractVector || return scheme
+    function column_field(values)
+        field = Fields.zeros(surface_space)
+        copyto!(Fields.field2array(field), values)
+        return field
+    end
+    shf = column_field(fluxes.shf)
+    lhf = isnothing(fluxes.lhf) ? nothing : column_field(fluxes.lhf)
+    return Fields.field_values(
+        @. MoninObukhov(scheme.z0m, scheme.z0b, HeatFluxes(shf, lhf), scheme.ustar)
+    )
+end
 
 """
     boundary_overrides_wrapper(overrides)

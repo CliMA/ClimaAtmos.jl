@@ -25,9 +25,11 @@ struct DefaultExchangeCoefficients end
 
 """
     FileHeatFluxes(data::ColumnDatasets.ColumnDataset, start_date; nan_to_zero = true)
+    FileHeatFluxes(data::AbstractVector{<:ColumnDataset}, start_date; nan_to_zero = true)
 
 Prescribed surface heat fluxes read from a column forcing file, callable as
-`(t, FT) -> HeatFluxes`.
+`(t, FT) -> HeatFluxes`; with one dataset per column, the fluxes are vectors
+with one entry per column.
 
 Used as the `fluxes` field of a [`MoninObukhov`](@ref) scheme, where
 `resolve_flux_scheme` calls it once per surface update. The `hfls`/`hfss`
@@ -44,7 +46,8 @@ convention (upward-positive latent and sensible heat fluxes) matches
 # Fields
 
   - `lhf_interp`, `shf_interp`: Time interpolants of the latent and sensible heat
-    flux series [W/m²], in seconds since `start_date`.
+    flux series [W/m²], in seconds since `start_date`; one per column for a
+    vector of datasets.
   - `nan_to_zero`: As above [-].
 
 # Examples
@@ -81,22 +84,39 @@ function FileHeatFluxes(
     )
 end
 
+# One dataset per column: one interpolant pair per column
+function FileHeatFluxes(
+    data::AbstractVector{<:ColumnDatasets.ColumnDataset},
+    start_date;
+    nan_to_zero = true,
+)
+    parts = map(d -> FileHeatFluxes(d, start_date; nan_to_zero), data)
+    return FileHeatFluxes(
+        getfield.(parts, :lhf_interp),
+        getfield.(parts, :shf_interp),
+        nan_to_zero,
+    )
+end
+
 """
     (f::FileHeatFluxes)(t, ::Type{FT})
 
 Return the [`HeatFluxes`](@ref) interpolated to simulation time `t` [s], with
-components converted to `FT` [W/m²].
+components converted to `FT` [W/m²] (vectors over the columns for one dataset
+per column).
 """
 function (f::FileHeatFluxes)(t, ::Type{FT}) where {FT}
     t_sec = Float64(t isa Number ? t : float(t))
-    lhf = f.lhf_interp(t_sec)
-    shf = f.shf_interp(t_sec)
+    lhf = _at(f.lhf_interp, t_sec)
+    shf = _at(f.shf_interp, t_sec)
     if f.nan_to_zero
-        lhf = isnan(lhf) ? 0.0 : lhf
-        shf = isnan(shf) ? 0.0 : shf
+        lhf = ifelse.(isnan.(lhf), 0.0, lhf)
+        shf = ifelse.(isnan.(shf), 0.0, shf)
     end
-    return HeatFluxes(; shf = FT(shf), lhf = FT(lhf))
+    return HeatFluxes(; shf = FT.(shf), lhf = FT.(lhf))
 end
+_at(interp, t) = interp(t)
+_at(interps::Vector, t) = map(interp -> interp(t), interps)
 
 _flat_time_interpolant(times, data) = Interpolations.extrapolate(
     Interpolations.interpolate(

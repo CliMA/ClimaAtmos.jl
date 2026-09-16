@@ -245,12 +245,12 @@ function set_insolation_variables!(Y, p, t, tvi::TimeVaryingInsolation)
     # Note: μ is already clamped at 0 by Insolation.jl but rrtmgp needs a non-zero μ
     if !isnothing(tvi.latitude) && !isnothing(tvi.longitude)
         # Explicit lat/lon override (e.g. single-column setups whose coordinate
-        # system doesn't carry lat/lon).
+        # system doesn't carry lat/lon), computed in FT like the grid coordinates.
         insolation_tuple .= Ref(
             Insolation.insolation(
                 current_datetime,
-                tvi.latitude,
-                tvi.longitude,
+                FT(tvi.latitude),
+                FT(tvi.longitude),
                 insolation_params,
             ),
         )

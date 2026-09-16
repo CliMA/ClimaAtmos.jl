@@ -75,7 +75,9 @@ derived from roughness.
     struct (`AnalyticTemperature`) or `field_values(...)`.
   - **Time-varying fluxes resolve per-update, not per-cell**: a `MoninObukhov`
     with a callable `fluxes` has it evaluated once by `resolve_flux_scheme`, then
-    the resulting numeric scheme is broadcast everywhere.
+    the resulting numeric scheme is broadcast everywhere. Fluxes given per column
+    (one forcing dataset per column) resolve to one scheme per surface point, a
+    `DataLayout` the broadcast consumes like the per-cell overrides.
   - **`isnothing(flux_scheme)` is a supported state**: any reader of
     `atmos.surface.flux_scheme` must handle it.
   - **Only [`SlabOceanTemperature`](@ref ClimaAtmos.SurfaceConditions.SlabOceanTemperature) adds prognostic state**: `Y.sfc` exists only for
@@ -151,7 +153,9 @@ it.
 
  3. **(Optional) Add a `resolve_flux_scheme` method** if the scheme varies in
     time, mirroring how `MoninObukhov` resolves a callable `fluxes`. It runs once
-    per update (not per-cell) and must return a concrete, time-independent scheme:
+    per update (not per-cell) and must return a concrete, time-independent scheme
+    (the update calls a four-argument form with the surface space, which forwards
+    to this method):
 
     ```julia
     SurfaceConditions.resolve_flux_scheme(p::MyScheme, t, ::Type{FT}) where {FT} =
