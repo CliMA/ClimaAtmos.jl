@@ -208,7 +208,7 @@ end
 ###
 
 """
-    Microphysics1MEvaluator{S, MP, TPS, FT, Args}
+    Microphysics1MEvaluator{S, FT, Args}
 
 GPU-safe functor evaluating 1-moment microphysics tendencies at SGS quadrature
 points, for use with [`integrate_over_sgs`](@ref).
@@ -222,7 +222,7 @@ quadrature points.
 # Fields
 
   - `scheme`: CloudMicrophysics scheme tag (e.g. `BMT.Microphysics1Moment()`).
-  - `mp`, `tps`: Microphysics and thermodynamics parameters.
+  - `mp`, `tps`: passed as call arguments, not stored; see the note below.
   - `ρ`: Air density [kg/m³].
   - `q_rai`, `q_sno`: Rain and snow specific humidity [kg/kg], clamped
     non-negative by the caller.
@@ -236,10 +236,14 @@ quadrature points.
   - `nsubs`: Number of substeps in the tendency averaging.
   - `args`: Extra trailing arguments forwarded to the CloudMicrophysics call.
 """
-struct Microphysics1MEvaluator{S, MP, TPS, FT, Args <: Tuple}
+# `mp` and `tps` are deliberately NOT fields. They are identical for every cell
+# and every quadrature point, and storing them here made this struct 472 B, of
+# which 432 B was those two parameter structs. A struct built per cell becomes an
+# alloca the ABI writes to local memory before each `@noinline` call; the same
+# values passed as arguments stay in .param space and are read field-by-field.
+# They are threaded through `sum_over_quadrature_points`'s `extra` tuple instead.
+struct Microphysics1MEvaluator{S, FT, Args <: Tuple}
     scheme::S
-    mp::MP
-    tps::TPS
     ρ::FT
     # Precipitation (held fixed across quadrature points)
     q_rai::FT
@@ -294,7 +298,7 @@ local vapor.
 NamedTuple from `BMT.bulk_microphysics_tendencies(BMT.LinearizedAverage(), ...)`
 with `dq_lcl_dt`, `dq_icl_dt`, `dq_rai_dt`, `dq_sno_dt` [kg/kg/s].
 """
-@noinline function (eval::Microphysics1MEvaluator)(T_hat, q_tot_hat)
+@noinline function (eval::Microphysics1MEvaluator)(T_hat, q_tot_hat, mp, tps)
     FT = typeof(eval.ρ)
     q_tot_hat = max(FT(0), q_tot_hat)
 
@@ -307,7 +311,7 @@ with `dq_lcl_dt`, `dq_icl_dt`, `dq_rai_dt`, `dq_sno_dt` [kg/kg/s].
     # to cloud-only q_c), and CloudMicrophysics subtracts q_rai/q_sno from
     # q_tot_hat when it diagnoses the local vapor. Subtracting them from the
     # cloud condensate as well would double-count them and break ⟨q_c^local⟩ = q_c.
-    q_sat_hat = TD.q_vap_saturation(eval.tps, T_hat, eval.ρ)
+    q_sat_hat = TD.q_vap_saturation(tps, T_hat, eval.ρ)
     S′_hat = q_tot_hat - q_sat_hat - eval.mu_S
     shifted_excess = max(FT(0), eval.λ_lagrange + eval.α * S′_hat)
     q_lcl_hat = eval.λ * shifted_excess
@@ -315,7 +319,7 @@ with `dq_lcl_dt`, `dq_icl_dt`, `dq_rai_dt`, `dq_sno_dt` [kg/kg/s].
 
     return BMT.bulk_microphysics_tendencies(
         BMT.LinearizedAverage(),
-        eval.scheme, eval.mp, eval.tps, eval.ρ, T_hat, q_tot_hat,
+        eval.scheme, mp, tps, eval.ρ, T_hat, q_tot_hat,
         q_lcl_hat, q_icl_hat, eval.q_rai, eval.q_sno,
         eval.dt, eval.nsubs, eval.args...,
     )
@@ -401,13 +405,13 @@ end
     q_sno_nonneg = max(FT(0), q_sno)
 
     evaluator = Microphysics1MEvaluator(
-        scheme, cmp, thp, ρ,
+        scheme, ρ,
         q_rai_nonneg, q_sno_nonneg,
         λ, λ_lagrange, mu_S, α,
         dt, nsubs, args,
     )
     return integrate_over_sgs(
-        evaluator, sgs_quad, q_tot_nonneg, T, q′q′, T′T′, corr_Tq,
+        evaluator, sgs_quad, q_tot_nonneg, T, q′q′, T′T′, corr_Tq, (cmp, thp),
     )
 end
 

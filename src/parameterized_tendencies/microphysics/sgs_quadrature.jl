@@ -636,10 +636,18 @@ as ``1/\\sqrt{\\pi}`` per dimension. Accumulation uses `RecursiveApply`'s `⊞` 
 
 The weighted sum, of the same type as `f(T_hat, q_hat)`.
 """
+# `extra` is splatted into every `f` call rather than captured in `f` itself.
+# Values placed here arrive as kernel arguments and stay in .param space, where
+# the callee reads fields directly; the same values stored as fields of `f` make
+# `f` a per-cell struct, which becomes an alloca the ABI must write to local
+# memory before each call. For the microphysics evaluator that is 432 bytes of
+# parameter structs -- identical for every cell and every quadrature point --
+# and the 9-point kernel spills 1864 B against 592 B at one point.
 function sum_over_quadrature_points(
     f,
     get_x_hat,
     quad::SGSQuadrature{N},
+    extra::Tuple = (),
 ) where {N}
     χ = quad.a
     weights = quad.w
@@ -654,19 +662,19 @@ function sum_over_quadrature_points(
     # saves one full evaluation of `f` per cell (≈ 11% of work at N = 3).
     @inbounds begin
         x_hat = get_x_hat(χ[1], χ[1])
-        inner_sum = f(x_hat...) ⊠ (weights[1] * inv_sqrt_pi)
+        inner_sum = f(x_hat..., extra...) ⊠ (weights[1] * inv_sqrt_pi)
         for j in 2:N
             x_hat = get_x_hat(χ[1], χ[j])
-            inner_sum = inner_sum ⊞ (f(x_hat...) ⊠ (weights[j] * inv_sqrt_pi))
+            inner_sum = inner_sum ⊞ (f(x_hat..., extra...) ⊠ (weights[j] * inv_sqrt_pi))
         end
         outer_sum = inner_sum ⊠ (weights[1] * inv_sqrt_pi)
 
         for i in 2:N
             x_hat = get_x_hat(χ[i], χ[1])
-            inner_sum = f(x_hat...) ⊠ (weights[1] * inv_sqrt_pi)
+            inner_sum = f(x_hat..., extra...) ⊠ (weights[1] * inv_sqrt_pi)
             for j in 2:N
                 x_hat = get_x_hat(χ[i], χ[j])
-                inner_sum = inner_sum ⊞ (f(x_hat...) ⊠ (weights[j] * inv_sqrt_pi))
+                inner_sum = inner_sum ⊞ (f(x_hat..., extra...) ⊠ (weights[j] * inv_sqrt_pi))
             end
             outer_sum = outer_sum ⊞ (inner_sum ⊠ (weights[i] * inv_sqrt_pi))
         end
@@ -699,11 +707,11 @@ perturbed.
 
 The weighted sum ``\\approx E[f(T, q)]``, of the same type as `f(T_hat, q_hat)`.
 """
-function integrate_over_sgs(f, quad, μ_q, μ_T, q′q′, T′T′, corr_Tq)
+function integrate_over_sgs(f, quad, μ_q, μ_T, q′q′, T′T′, corr_Tq, extra::Tuple = ())
     # Use functor instead of closure to avoid heap allocations.
     # Field order is (T, q) to match return order of get_physical_point.
     transform = build_physical_transform(quad, μ_q, μ_T, q′q′, T′T′, corr_Tq)
-    return sum_over_quadrature_points(f, transform, quad)
+    return sum_over_quadrature_points(f, transform, quad, extra)
 end
 
 """
@@ -783,8 +791,10 @@ Lets callers pass a bare `GridMeanSGS()` without wrapping it in an
 [`SGSQuadrature`](@ref), which would require knowing `FT` from the space. The
 variances and correlation are accepted for signature compatibility and ignored.
 """
-@inline function integrate_over_sgs(f, ::GridMeanSGS, μ_q, μ_T, q′q′, T′T′, corr_Tq)
-    return f(μ_T, μ_q)
+@inline function integrate_over_sgs(
+    f, ::GridMeanSGS, μ_q, μ_T, q′q′, T′T′, corr_Tq, extra::Tuple = (),
+)
+    return f(μ_T, μ_q, extra...)
 end
 
 """
