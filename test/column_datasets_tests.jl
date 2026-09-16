@@ -369,6 +369,27 @@ end
         "20000506";
         sites = (; latitude = [1.0, 1.0], longitude = [2.0, 2.0]),
     )
+
+    # the config list builds the same setup, and the datasets' sites place the columns
+    setup_cfg = CA.get_setup_type(
+        Dict(
+            "initial_condition" => "ForcingFromFile",
+            "external_forcing_file" => [a.path, b.path, a.path],
+            "start_date" => "20000506",
+        ),
+        CA.Parameters.thermodynamics_params(params),
+    )
+    @test setup_cfg.dataset isa Vector{<:CD.ColumnDataset}
+    @test CA.Setups.column_sites(setup_cfg) == setup.sites
+    one = Dict("column_latitudes" => [0.0], "column_longitudes" => [0.0])
+    @test CA.column_points(one, FT, setup.sites) == points
+    # a shared dataset places every configured column at its site; without sites
+    # the configured coordinates stand
+    two = Dict("column_latitudes" => [0.0, 30.0], "column_longitudes" => [0.0, -50.0])
+    shared = CA.Setups.ForcingFromFile(a, "20000506")
+    @test CA.column_points(two, FT, CA.Setups.column_sites(shared)) == fill(points[1], 2)
+    @test CA.column_points(two, FT, nothing) ==
+          ClimaCore.Geometry.LatLongPoint{FT}.([0.0, 30.0], [0.0, -50.0])
 end
 
 """

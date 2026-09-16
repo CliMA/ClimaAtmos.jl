@@ -111,9 +111,16 @@ function read_cfsite(path, cfsite_number; thermo_params)
         coszen = Float64(site["coszen"][1])
         rsdt = mean(site["rsdt"][:] ./ site["coszen"][:]) * coszen
 
+        # The cfsite groups record their site as `lat`/`lon` scalars
+        site_location =
+            haskey(site, "lat") && haskey(site, "lon") ?
+            (; latitude = Float64(site["lat"][]), longitude = Float64(site["lon"][])) :
+            nothing
+
         col(v) = Float64.(v[order])
         return InMemoryColumnData(;
             z = z[order],
+            site_location,
             column = (;
                 ta = col(ta),
                 ua = col(ua),

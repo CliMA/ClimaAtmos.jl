@@ -137,6 +137,15 @@ function get_numerics(parsed_args, FT; vertical_water_borrowing_species = nothin
 end
 
 """
+    per_column(f, option)
+
+Apply `f` to a dataset option of the configuration: to each entry of a list,
+giving one dataset per column of a `multicolumn` configuration, or to a scalar,
+giving the one dataset every column reads.
+"""
+per_column(f, option) = option isa AbstractVector ? map(f, option) : f(option)
+
+"""
     get_setup_type(parsed_args, thermo_params)
 
 Build the setup object named by the `initial_condition` config key.
@@ -171,15 +180,17 @@ function get_setup_type(parsed_args, thermo_params)
     elseif ic_name == "Rico"
         return Setups.Rico(; prognostic_tke = parsed_args["prognostic_tke"], thermo_params)
     elseif ic_name == "GCM"
-        # Read the cfsite group into steady in-memory profiles, then drive it
+        # Read the cfsite group(s) into steady in-memory profiles, then drive them
         # through the generic ForcingFromFile path. Defaults give an interactive
         # Monin-Obukhov surface with the file's `ts` and the constant insolation
         # carried in the data (matching the former GCMDrivenInsolation).
-        data = ColumnDatasets.GCMColumnData.read_cfsite(
-            parsed_args["external_forcing_file"],
-            parsed_args["cfsite_number"];
-            thermo_params,
-        )
+        data = per_column(parsed_args["cfsite_number"]) do cfsite_number
+            ColumnDatasets.GCMColumnData.read_cfsite(
+                parsed_args["external_forcing_file"],
+                cfsite_number;
+                thermo_params,
+            )
+        end
         return Setups.ForcingFromFile(data, parsed_args["start_date"])
     elseif ic_name == "ARMVARANAL"
         varanal_file = parsed_args["external_forcing_file"]
@@ -189,20 +200,21 @@ function get_setup_type(parsed_args, thermo_params)
         )
         start_date = parsed_args["start_date"]
         FT = eltype(thermo_params)
-        # Convert the pressure-level VARANAL file to the ClimaColumn schema, then
-        # drive it through the generic ForcingFromFile path with the VARANAL
+        # Convert the pressure-level VARANAL file(s) to the ClimaColumn schema, then
+        # drive them through the generic ForcingFromFile path with the VARANAL
         # forcing composition (no vertical fluctuation, subsidence from `wa`).
-        varanal_dir =
-            get(ENV, "BUILDKITE", "") == "true" ? mktempdir() :
-            dirname(varanal_file)
-        canonical = ColumnDatasets.VaranalFiles.to_climacolumn(
-            varanal_file;
-            thermo_params,
-            dir = varanal_dir,
-        )
-        data = ColumnDatasets.ColumnDataset(canonical)
-        (; latitude, longitude) = ColumnDatasets.site_location(data)
-        flux_scheme = if issubset((:hfls, :hfss), data.surface_vars)
+        # One output directory per call, so a file listed twice converts to one path
+        tmpdir = get(ENV, "BUILDKITE", "") == "true" ? mktempdir() : nothing
+        data = per_column(varanal_file) do file
+            dir = something(tmpdir, dirname(file))
+            ColumnDatasets.ColumnDataset(
+                ColumnDatasets.VaranalFiles.to_climacolumn(file; thermo_params, dir),
+            )
+        end
+        # A single column has no coordinates, so its insolation takes the file's
+        # site; the columns of a multi-column grid sit at their datasets' sites.
+        site = data isa AbstractVector ? (;) : ColumnDatasets.site_location(data)
+        flux_scheme = if issubset((:hfls, :hfss), ColumnDatasets.surface_vars(data))
             SurfaceConditions.MoninObukhov(;
                 z0 = FT(0.05),
                 ustar = FT(0.28),
@@ -223,14 +235,13 @@ function get_setup_type(parsed_args, thermo_params)
             flux_scheme,
             insolation = TimeVaryingInsolation(;
                 start_date = parse_date(start_date),
-                latitude,
-                longitude,
+                site...,
             ),
         )
     elseif ic_name == "ReanalysisTimeVarying"
         FT = eltype(thermo_params)
         return Setups.ForcingFromFile(
-            era5_dataset(parsed_args, FT),
+            era5_datasets(parsed_args, FT),
             parsed_args["start_date"],
         )
     elseif ic_name == "ForcingFromFile"
@@ -240,7 +251,7 @@ function get_setup_type(parsed_args, thermo_params)
              to point at a column forcing file",
         )
         return Setups.ForcingFromFile(
-            ColumnDatasets.ColumnDataset(external_forcing_file),
+            per_column(ColumnDatasets.ColumnDataset, external_forcing_file),
             parsed_args["start_date"],
         )
     elseif ic_name == "WeatherModel"
@@ -300,6 +311,27 @@ function get_setup_type(parsed_args, thermo_params)
         return Setups.MoistFromFile(ic_name)
     end
     error("Unknown initial_condition: $ic_name")
+end
+
+"""
+    column_points(parsed_args, FT, sites)
+
+The points of a `multicolumn` grid: the configured `column_latitudes` /
+`column_longitudes`, or, when the setup provides the datasets' `sites`
+(`Setups.column_sites`), one point per site. A single site is repeated over the
+configured columns; a list of sites sets the column count, and a `NaN` site
+keeps the configured coordinate of its column.
+"""
+function column_points(parsed_args, ::Type{FT}, sites) where {FT}
+    lats, lons = parsed_args["column_latitudes"], parsed_args["column_longitudes"]
+    if !isnothing(sites)
+        n = max(length(sites.latitude), length(lats))
+        at(v, i) = v[min(i, length(v))]
+        pick(site, config, i) = isnan(at(site, i)) ? at(config, i) : at(site, i)
+        lats = [pick(sites.latitude, lats, i) for i in 1:n]
+        lons = [pick(sites.longitude, lons, i) for i in 1:n]
+    end
+    return Geometry.LatLongPoint{FT}.(lats, lons)
 end
 
 """
@@ -465,7 +497,7 @@ end
 
 """
     get_grid(config::AtmosConfig, params)
-    get_grid(parsed_args, params, context)
+    get_grid(parsed_args, params, context; sites = nothing)
 
 Build the computational grid selected by the `config` key: `"sphere"` gives a
 `SphereGrid`, `"column"` a `ColumnGrid`, `"multicolumn"` a `MultiColumnGrid`, `"box"` a
@@ -477,15 +509,20 @@ All grids read the vertical discretization keys `z_elem`, `z_max`, `z_stretch`, 
 `h_elem`, `nh_poly`, `bubble`, and `deep_atmosphere`, with the planet radius taken from
 `params`; the box and plane read `x_elem`/`x_max` (and, for the box, `y_elem`/`y_max`)
 and are periodic in the horizontal. The multi-column grid places one independent column
-at each `(column_latitudes[i], column_longitudes[i])` on a sphere of the planet radius
-and also reads `deep_atmosphere`.
+at each `(column_latitudes[i], column_longitudes[i])` on a sphere of the planet radius,
+or at the setup's dataset `sites` when given (see [`column_points`](@ref)), and also
+reads `deep_atmosphere`.
 """
 get_grid(config::AtmosConfig, params) =
     get_grid(config.parsed_args, params, config.comms_ctx)
 
-function get_grid(parsed_args, params, context)
+function get_grid(parsed_args, params, context; sites = nothing)
     FT = eltype(params)
     config = parsed_args["config"]
+    isnothing(sites) ||
+        length(sites.latitude) == 1 ||
+        config == "multicolumn" ||
+        error("A list of datasets needs `config: multicolumn`")
 
     # Common vertical discretization parameters
     kwargs = (
@@ -525,10 +562,7 @@ function get_grid(parsed_args, params, context)
             FT;
             context,
             radius = CAP.planet_radius(params),
-            points = Geometry.LatLongPoint{FT}.(
-                parsed_args["column_latitudes"],
-                parsed_args["column_longitudes"],
-            ),
+            points = column_points(parsed_args, FT, sites),
             kwargs...,
         )
     elseif config == "box"
@@ -701,7 +735,7 @@ function get_simulation(config::AtmosConfig)
     job_id = config.job_id
     params = ClimaAtmosParameters(config)
     setup = get_setup_type(pa, CAP.thermodynamics_params(params))
-    grid = get_grid(pa, params, config.comms_ctx)
+    grid = get_grid(pa, params, config.comms_ctx; sites = Setups.column_sites(setup))
     model = get_atmos(config, params, grid; setup_type = setup)
 
     log_context(config.comms_ctx)

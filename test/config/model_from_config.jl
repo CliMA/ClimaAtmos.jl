@@ -135,4 +135,18 @@ end
     @test_throws AssertionError CA.check_case_consistency(
         parsed_args(Dict("config" => "cylinder")),
     )
+
+    # dataset options accept one entry per column
+    lists = parsed_args(
+        Dict(
+            "site_latitude" => [17, 17],
+            "site_longitude" => [-149.0, -150.0],
+            "cfsite_number" => ["site23", "site17"],
+            "external_forcing_file" => ["a.nc", "b.nc"],
+        ),
+    )
+    @test lists["site_latitude"] == [17.0, 17.0] &&
+          lists["site_latitude"] isa Vector{Float64}
+    @test lists["cfsite_number"] == ["site23", "site17"]
+    @test lists["external_forcing_file"] == ["a.nc", "b.nc"]
 end

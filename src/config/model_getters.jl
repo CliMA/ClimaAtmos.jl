@@ -857,7 +857,7 @@ function get_external_forcing_model(parsed_args, ::Type{FT}; setup_components) w
         # averaged diurnal ERA5, paired with `initial_condition: ReanalysisTimeVarying`.
         # The file stores one repeating day, so repeat it in time.
         ExternalDrivenTVForcing(
-            era5_dataset(parsed_args, FT; monthly = true);
+            era5_datasets(parsed_args, FT; monthly = true);
             time_interpolation_method = ColumnDatasets.periodic_calendar_method(),
         )
     else

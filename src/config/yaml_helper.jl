@@ -100,7 +100,11 @@ Dispatch order, most specific first:
  4. `coerce_to_default(::Type{<:AbstractFloat}, v::AbstractString)` — `"3.14"`
     → `3.14`. Note `"42"` also parses as a `Float64` here if the schema
     default is float.
- 5. `coerce_to_default(::Type{T}, v) = convert(T, v)` — fallback. Catches
+ 5. `coerce_to_default(::Type{T}, v::AbstractVector)` for a scalar number or
+    string default — each entry is coerced to `T`: a list where the default is a
+    scalar gives one value per column of a `multicolumn` configuration
+    (`site_latitude`, `cfsite_number`).
+ 6. `coerce_to_default(::Type{T}, v) = convert(T, v)` — fallback. Catches
     things like `Int → Float64` (schema default `1.0`, user wrote `1`).
     For unrelated types this throws `MethodError`.
 
@@ -126,6 +130,10 @@ coerce_to_default(::Type{T}, v::AbstractString) where {T <: Integer} =
     parse(T, v)
 coerce_to_default(::Type{T}, v::AbstractString) where {T <: AbstractFloat} =
     parse(T, v)
+coerce_to_default(
+    ::Type{T},
+    v::AbstractVector,
+) where {T <: Union{Number, AbstractString}} = coerce_to_default.(T, v)
 coerce_to_default(::Type{T}, v) where {T} = convert(T, v)
 
 function override_default_config(config_dict::AbstractDict;)
