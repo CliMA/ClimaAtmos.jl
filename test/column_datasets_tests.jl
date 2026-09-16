@@ -351,6 +351,24 @@ end
     @test_throws ErrorException CD.require_forcing_variables(datasets, (:tntha,), ())
     @test CA.ExternalDrivenTVForcing(datasets; forcing = (CA.Nudging(:ta),)).dataset ===
           datasets
+
+    # the initial condition of a column is the profile set of the dataset at its site
+    setup = CA.Setups.ForcingFromFile(datasets, "20000506")
+    @test setup.sites == CD.column_sites(datasets) == (; latitude, longitude)
+    params = CA.ClimaAtmosParameters(FT)
+    ic = CA.Setups.initial_condition_field(
+        lg -> CA.Setups.center_initial_condition(setup, lg, params),
+        center_space,
+    )
+    T = Array(ClimaCore.Fields.field2array(ic.T))
+    @test T[:, 1] ≈ expected(0, 1) .- 3.5
+    @test T[:, 2] ≈ expected(5, 2) .- 3.5
+    @test T[:, 3] ≈ expected(0, 3) .- 3.5
+    @test_throws ErrorException CA.Setups.ForcingFromFile(
+        [a, b],
+        "20000506";
+        sites = (; latitude = [1.0, 1.0], longitude = [2.0, 2.0]),
+    )
 end
 
 """

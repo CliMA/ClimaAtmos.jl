@@ -432,6 +432,7 @@ ClimaAtmos.ColumnDatasets.read_surface_series
 ClimaAtmos.ColumnDatasets.surface_vars
 ClimaAtmos.ColumnDatasets.height_profile
 ClimaAtmos.ColumnDatasets.site_location
+ClimaAtmos.ColumnDatasets.column_sites
 ```
 
 ### Time coordinates and interpolation

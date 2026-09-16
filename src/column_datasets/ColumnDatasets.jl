@@ -351,6 +351,20 @@ site_location(data::ColumnDataVector) = (;
 )
 
 """
+    column_sites(data)
+
+The sites of the datasets of `data` as `(; latitude, longitude)` vectors, one
+entry per dataset (one for a scalar dataset), `NaN` where a dataset records no
+site. Used to place the columns of a multi-column grid.
+"""
+column_sites(data::ColumnDataVector) = (;
+    latitude = [_site(d).latitude for d in data],
+    longitude = [_site(d).longitude for d in data],
+)
+column_sites(d::AbstractColumnData) = column_sites([d])
+_site(d::AbstractColumnData) = site_location(d)
+
+"""
     surface_vars(data)
 
 The canonical surface variables `data` carries; for a vector of datasets, those
@@ -659,6 +673,8 @@ site_location(d::InMemoryColumnData) =
     isnothing(d.site_location) ?
     error("in-memory column source ($(d.source)) has no site location") :
     d.site_location
+_site(d::InMemoryColumnData) =
+    something(d.site_location, (; latitude = NaN, longitude = NaN))
 
 read_initial_profiles(d::InMemoryColumnData, start_date) = (;
     z = d.z,
