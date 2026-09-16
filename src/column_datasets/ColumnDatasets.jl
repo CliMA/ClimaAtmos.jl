@@ -16,8 +16,8 @@ Define a singleton subtype of [`AbstractColumnFormat`](@ref) in a new module
 under `src/column_datasets/`, extend the three required methods
 ([`format_name`](@ref), [`format_variable_name`](@ref),
 [`height_profile`](@ref)) plus any optional ones (`open_dataset`, `preprocess`,
-`dates`, `read_profile`, `read_series`, `extrapolation_bc`,
-`time_interpolation_method`, `site_location`, `validate`), and pass it via the
+`dates`, `read_profile`, `read_series`, `time_interpolation_method`,
+`site_location`, `validate`), and pass it via the
 `format` keyword of [`ColumnDataset`](@ref).
 """
 module ColumnDatasets
@@ -28,6 +28,7 @@ import Interpolations as Intp
 import ClimaCore
 import ClimaUtilities.TimeVaryingInputs
 import ClimaUtilities.TimeVaryingInputs: TimeVaryingInput
+import ClimaUtilities.FileReaders: DataSource
 import ClimaUtilities.Utils: period_to_seconds_float
 
 # ============================================================================
@@ -189,14 +190,6 @@ applied.
 function read_series(d::AbstractColumnFormat, ds, name::Symbol)
     return preprocess(d, name).(vec(ds[format_variable_name(d, name)][:]))
 end
-
-"""
-    extrapolation_bc(format)
-
-Extrapolation setting for file-backed `TimeVaryingInput`s of this format,
-matching the dimensionality of its stored variables.
-"""
-extrapolation_bc(::AbstractColumnFormat) = (Intp.Flat(),)
 
 """
     time_interpolation_method(format)
@@ -481,13 +474,23 @@ read_initial_profiles(cd::ColumnDataset, start_date) =
     end
 
 """
+    data_source(cd, name::Symbol)
+
+The `DataSource` describing the canonical variable `name` in the file of `cd`,
+read by the file-backed `TimeVaryingInput`s.
+"""
+data_source(cd::ColumnDataset, name::Symbol) =
+    DataSource(cd.path, format_variable_name(cd.format, name))
+
+"""
     column_timevaryinginputs(cd, names, target_space, start_date; method)
 
 A `NamedTuple` of `TimeVaryingInput`s, one per requested column variable,
 targeting `target_space`, the model's center column space.
 
-The default builds file-backed inputs, applying the format's
-`extrapolation_bc` and `preprocess` hooks. A format whose
+The default builds file-backed inputs: each variable is read once, regridded
+onto the levels of `target_space` (linear in height, constant beyond the
+file's levels) with the format's `preprocess` hook applied. A format whose
 on-disk layout the file readers cannot consume directly — a grouped file, or a
 non-height vertical coordinate — overrides this to build in-memory inputs
 instead.
@@ -497,28 +500,16 @@ function column_timevaryinginputs(
     names,
     target_space,
     start_date;
-    method = time_interpolation_method(cd.format),
+    method = time_interpolation_method(cd),
 )
     names = Tuple(names)
-    d = cd.format
-    # One site's profiles apply to every column of a horizontally extended space.
-    horizontally_uniform =
-        !(target_space isa ClimaCore.Spaces.FiniteDifferenceSpace)
     inputs = map(names) do name
-        prep = preprocess(d, name)
-        file_reader_kwargs =
-            prep === identity ? (;) : (; preprocess_func = prep)
         TimeVaryingInput(
-            cd.path,
-            format_variable_name(d, name),
+            data_source(cd, name),
             target_space;
             start_date,
-            regridder_kwargs = (;
-                extrapolation_bc = extrapolation_bc(d),
-                horizontally_uniform,
-            ),
-            file_reader_kwargs,
             method,
+            preprocess_func = preprocess(cd.format, name),
         )
     end
     return NamedTuple{names}(inputs)
@@ -552,23 +543,16 @@ end
     surface_timevaryinginputs(cd, names, target_space, start_date; method)
 
 A `NamedTuple` of `TimeVaryingInput`s, one per requested surface variable,
-read into in-memory inputs on the simulation time axis (`t = 0` at
-`start_date`) from a single file open.
+targeting `target_space`, the model's surface space. A `(time,)` variable is
+read as a single-level column, so the inputs must be evaluated on that space.
 """
-function surface_timevaryinginputs(
+surface_timevaryinginputs(
     cd::ColumnDataset,
     names,
     target_space,
     start_date;
-    method = time_interpolation_method(cd.format),
-)
-    names = Tuple(names)
-    FT = ClimaCore.Spaces.undertype(target_space)
-    read = read_surface_series(cd, names, start_date)
-    times = FT.(read.times)
-    inputs = map(name -> TimeVaryingInput(times, FT.(read[name]); method), names)
-    return NamedTuple{names}(inputs)
-end
+    method = time_interpolation_method(cd),
+) = column_timevaryinginputs(cd, names, target_space, start_date; method)
 
 # ============================================================================
 # In-memory column data

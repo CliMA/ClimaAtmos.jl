@@ -222,16 +222,18 @@ end
         isapprox.(vec(parent(dest)), ta_itp.(vec(parent(ᶜz))), rtol = 1e-6),
     )
 
-    # surface series are read as in-memory (time,) inputs
+    # surface series are read as single-level inputs on the surface space
+    surface_space = ClimaCore.Spaces.level(center_space, 1)
     surface_fields = CD.surface_timevaryinginputs(
         data,
         CD.CANONICAL_SURFACE_VARS,
-        center_space,
+        surface_space,
         start_date,
     )
     @test keys(surface_fields) == CD.CANONICAL_SURFACE_VARS
-    evaluate!(dest, surface_fields.ts, 0.0)
-    @test all(parent(dest) .≈ 1)
+    sfc_dest = ClimaCore.Fields.zeros(surface_space)
+    evaluate!(sfc_dest, surface_fields.ts, 0.0)
+    @test all(parent(sfc_dest) .≈ 1)
 
     # the ForcingFromFile setup sources IC and models from the same handle
     setup = CA.Setups.ForcingFromFile(data, "20000506")

@@ -444,7 +444,6 @@ ClimaAtmos.ColumnDatasets.column_timevaryinginputs
 ClimaAtmos.ColumnDatasets.surface_timevaryinginputs
 ClimaAtmos.ColumnDatasets.time_interpolation_method
 ClimaAtmos.ColumnDatasets.periodic_calendar_method
-ClimaAtmos.ColumnDatasets.extrapolation_bc
 ClimaAtmos.ColumnDatasets.preprocess
 ```
 
