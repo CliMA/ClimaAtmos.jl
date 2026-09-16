@@ -150,7 +150,9 @@ function rrtmgp_solver_kwargs(
         planet_radius = ᶜspace.grid.global_geometry.radius
     end
     bottom_coords = Fields.coordinate_field(Spaces.level(ᶜspace, 1))
-    latitude = if eltype(bottom_coords) <: Geometry.LatLongZPoint
+    # Columns have no horizontal position, so RRTMGP sees them at the equator
+    # like the Cartesian column, wherever they sit on the sphere.
+    latitude = if eltype(bottom_coords) <: Geometry.LatLongZPoint && !iscolumn(ᶜspace)
         Fields.field2array(bottom_coords.lat)
     else
         Fields.field2array(zero(bottom_coords.z)) # flat space is on Equator
@@ -195,7 +197,9 @@ function rrtmgp_solver_kwargs(
     if ᶜspace.grid.global_geometry isa Geometry.AbstractSphericalGlobalGeometry
         planet_radius = ᶜspace.grid.global_geometry.radius
     end
-    latitude = if eltype(bottom_coords) <: Geometry.LatLongZPoint
+    # Columns have no horizontal position, so RRTMGP sees them at the equator
+    # like the Cartesian column, wherever they sit on the sphere.
+    latitude = if eltype(bottom_coords) <: Geometry.LatLongZPoint && !iscolumn(ᶜspace)
         Fields.field2array(bottom_coords.lat)
     else
         Fields.field2array(zero(bottom_coords.z)) # flat space is on Equator
