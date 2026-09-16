@@ -685,39 +685,37 @@ read_initial_profiles(d::InMemoryColumnData, start_date) = (;
     rho = d.column.rho,
 )
 
-# Interpolate an ascending `(z_src,) -> vals_src` profile onto the column of
-# `target_space`, flat beyond the source range, returning a Field.
-function _interp_column(z_src, vals_src, target_space)
-    ᶜz = ClimaCore.Fields.coordinate_field(target_space).z
-    itp = Intp.extrapolate(
-        Intp.interpolate(
-            (Float64.(z_src),),
-            Float64.(vals_src),
-            Intp.Gridded(Intp.Linear()),
-        ),
-        Intp.Flat(),
-    )
-    field = similar(ᶜz)
-    field .= itp.(ᶜz)
-    return field
-end
+# Linear interpolant of an ascending `(z_src,) -> vals_src` profile, flat beyond
+# the source range.
+_interpolant(z_src, vals_src) = Intp.extrapolate(
+    Intp.interpolate(
+        (Float64.(z_src),),
+        Float64.(vals_src),
+        Intp.Gridded(Intp.Linear()),
+    ),
+    Intp.Flat(),
+)
 
 # Steady in-memory profiles become constant-in-time analytic inputs: the
 # pre-interpolated field is copied into the destination on every `evaluate!`.
-function column_timevaryinginputs(
+# One source is read by every column of `target_space`.
+column_timevaryinginputs(
     d::InMemoryColumnData,
     names,
     target_space,
     start_date;
     method = nothing,
+) = column_timevaryinginputs(
+    fill(d, _ncolumns(target_space)),
+    names,
+    target_space,
+    start_date,
 )
-    names = Tuple(names)
-    inputs = map(names) do name
-        field = _interp_column(d.z, d.column[name], target_space)
-        TimeVaryingInput(Returns(field))
-    end
-    return NamedTuple{names}(inputs)
-end
+
+_ncolumns(space) = size(
+    ClimaCore.Fields.field2array(ClimaCore.Fields.coordinate_field(space).z),
+    2,
+)
 
 function surface_timevaryinginputs(
     d::InMemoryColumnData,
@@ -736,6 +734,48 @@ function read_surface_series(d::InMemoryColumnData, names, start_date)
     names = Tuple(names)
     series = map(name -> [Float64(d.surface[name])], names)
     return (; times = [0.0], NamedTuple{names}(series)...)
+end
+
+# One steady profile set per column, interpolated on the host and copied over;
+# `field2array` orders the columns as the grid points.
+function column_timevaryinginputs(
+    data::AbstractVector{<:InMemoryColumnData},
+    names,
+    target_space,
+    start_date;
+    method = nothing,
+)
+    names = Tuple(names)
+    ᶜz = ClimaCore.Fields.coordinate_field(target_space).z
+    z = Array(ClimaCore.Fields.field2array(ᶜz))
+    inputs = map(names) do name
+        values = similar(z)
+        for (c, d) in enumerate(data)
+            values[:, c] .= _interpolant(d.z, d.column[name]).(z[:, c])
+        end
+        field = similar(ᶜz)
+        copyto!(ClimaCore.Fields.field2array(field), values)
+        TimeVaryingInput(Returns(field))
+    end
+    return NamedTuple{names}(inputs)
+end
+
+function surface_timevaryinginputs(
+    data::AbstractVector{<:InMemoryColumnData},
+    names,
+    target_space,
+    start_date;
+    method = nothing,
+)
+    names = Tuple(names)
+    FT = ClimaCore.Spaces.undertype(target_space)
+    inputs = map(names) do name
+        field = ClimaCore.Fields.zeros(target_space)
+        values = [FT(d.surface[name]) for d in data]
+        copyto!(ClimaCore.Fields.field2array(field), values)
+        TimeVaryingInput(Returns(field))
+    end
+    return NamedTuple{names}(inputs)
 end
 
 # ============================================================================

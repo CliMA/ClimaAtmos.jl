@@ -396,9 +396,18 @@ end
 Write a mock GCM cfsite forcing file: one per-site subgroup holding `(z, time)`
 profiles and `(time,)` surface series, with `z` stored top-down as the real
 cfsite files are. `skip` names variables to leave out, for the missing-variable
-checks.
+checks; `mode = "a"` adds the group to an existing file.
 """
-function write_test_cfsite_file(path, FT; site = "site23", nz = 8, nt = 5, skip = ())
+function write_test_cfsite_file(
+    path,
+    FT;
+    site = "site23",
+    nz = 8,
+    nt = 5,
+    skip = (),
+    location = (20.0, -150.0),
+    mode = "c",
+)
     # descending heights, so the reader has to sort them
     zg = repeat(reverse(collect(range(FT(50), FT(15e3), nz))), 1, nt)
     # a few percent of time variation per sample, so time means are nontrivial
@@ -422,10 +431,13 @@ function write_test_cfsite_file(path, FT; site = "site23", nz = 8, nt = 5, skip 
         "coszen" => FT[0.4 + 0.05 * i for i in 1:nt],
         "rsdt" => FT[1300 * (0.4 + 0.05 * i) for i in 1:nt],
     )
-    NCDataset(path, "c") do ds
+    NCDataset(path, mode) do ds
         group = defGroup(ds, site)
         defDim(group, "z", nz)
         defDim(group, "time", nt)
+        # the site as `lat`/`lon` scalars, as in the cfsite files
+        defVar(group, "lat", FT(location[1]), ())
+        defVar(group, "lon", FT(location[2]), ())
         for (name, vals) in column
             name in skip && continue
             defVar(group, name, vals, ("z", "time"))
@@ -697,9 +709,9 @@ end
     @test series.times == [0.0]
     @test series.ts ≈ [data.surface.ts]
 
-    # a steady source never runs out of forcing, and carries no site location
+    # a steady source never runs out of forcing; the site comes from the group
     @test CD.file_time_span(data, start_date) == Inf
-    @test_throws ErrorException CD.site_location(data)
+    @test CD.site_location(data) == (; latitude = 20.0, longitude = -150.0)
 
     # the GCM branch of the config getter drives this through ForcingFromFile
     setup = CA.get_setup_type(
@@ -715,4 +727,67 @@ end
     @test CA.Setups.external_forcing(setup, FT) isa CA.ExternalDrivenTVForcing
     @test CA.Setups.insolation_model(setup) isa CA.ExternalTVInsolation
     @test setup.profiles.T(2000.0) ≈ ta_itp(2000.0)
+
+    # one cfsite group per column: a second group with a different time mean
+    write_test_cfsite_file(
+        path,
+        FT;
+        site = "site17",
+        nt = 7,
+        location = (-5.0, 30.0),
+        mode = "a",
+    )
+    data17 = CD.GCMColumnData.read_cfsite(path, "site17"; thermo_params)
+    datasets = [data, data17, data]
+    (; latitude, longitude) = CD.column_sites(datasets)
+    @test latitude == [20.0, -5.0, 20.0] && longitude == [-150.0, 30.0, -150.0]
+    points = ClimaCore.Geometry.LatLongPoint{FT}.(latitude, longitude)
+    grid3 = CA.MultiColumnGrid(
+        FT;
+        points,
+        radius = 6.371229e6,
+        z_elem = 25,
+        z_max = 20e3,
+        z_stretch = false,
+    )
+    (; center_space, face_space) = CA.get_spaces(grid3)
+    ᶜz = Array(
+        ClimaCore.Fields.field2array(ClimaCore.Fields.coordinate_field(center_space).z),
+    )
+    inputs3 = CD.column_timevaryinginputs(datasets, (:ta,), center_space, start_date)
+    dest3 = ClimaCore.Fields.zeros(center_space)
+    evaluate!(dest3, inputs3.ta, 1e5)
+    values = Array(ClimaCore.Fields.field2array(dest3))
+    itp(d) = Intp.extrapolate(
+        Intp.interpolate((d.z,), d.column.ta, Intp.Gridded(Intp.Linear())),
+        Intp.Flat(),
+    )
+    @test values[:, 1] ≈ itp(data).(ᶜz[:, 1])
+    @test values[:, 2] ≈ itp(data17).(ᶜz[:, 2])
+    @test values[:, 3] == values[:, 1]
+    @test !(values[:, 2] ≈ values[:, 1])
+    surface_space = ClimaCore.Spaces.level(face_space, ClimaCore.Utilities.half)
+    sfc3 = CD.surface_timevaryinginputs(datasets, (:ts,), surface_space, start_date)
+    sfc_dest = ClimaCore.Fields.zeros(surface_space)
+    evaluate!(sfc_dest, sfc3.ts, 0.0)
+    @test vec(Array(ClimaCore.Fields.field2array(sfc_dest))) ≈
+          [data.surface.ts, data17.surface.ts, data.surface.ts]
+    setup3 = CA.get_setup_type(
+        Dict(
+            "initial_condition" => "GCM",
+            "external_forcing_file" => path,
+            "cfsite_number" => ["site23", "site17", "site23"],
+            "start_date" => "20000506",
+        ),
+        thermo_params,
+    )
+    @test setup3.dataset isa Vector{<:CD.InMemoryColumnData} && length(setup3.dataset) == 3
+    @test setup3.sites == (; latitude, longitude)
+    params = CA.ClimaAtmosParameters(FT)
+    ic = CA.Setups.initial_condition_field(
+        lg -> CA.Setups.center_initial_condition(setup3, lg, params),
+        center_space,
+    )
+    T = Array(ClimaCore.Fields.field2array(ic.T))
+    @test T[:, 1] ≈ itp(data).(ᶜz[:, 1]) && T[:, 2] ≈ itp(data17).(ᶜz[:, 2])
 end
