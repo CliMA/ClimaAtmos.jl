@@ -2299,6 +2299,36 @@ Group of model-top sponge layers inside an `AtmosModel`.
 end
 
 """
+    check_sponge_heights(sponge::AtmosSponge, z_max)
+
+Check the damping height `zd` of each active sponge in `sponge` against the domain top
+`z_max` [m]. Called from `_atmos_model` whenever the model is bound to a grid.
+
+Both sponge profiles are proportional to `sin²(π (z - zd) / (2 (z_max - zd)))`, so
+`zd == z_max` divides by zero and the tendencies become `NaN` (or `sinpi` throws a
+`DomainError` on the CPU); this case raises an error. With `zd > z_max` the profile is
+finite but no level lies above `zd`, so the sponge is inactive; this case only warns.
+"""
+function check_sponge_heights(sponge::AtmosSponge, z_max)
+    for (name, param_name) in
+        ((:viscous_sponge, "zd_viscous"), (:rayleigh_sponge, "zd_rayleigh"))
+        s = getfield(sponge, name)
+        (isnothing(s) || !hasproperty(s, :zd)) && continue
+        s.zd == z_max && error(
+            "`$name` has its damping height `zd` = $(s.zd) m equal to the domain top " *
+            "`z_max`, so the sponge layer has zero depth and its damping profile " *
+            "divides by zero. Lower `zd` (the `$param_name` parameter) or raise `z_max`.",
+        )
+        s.zd > z_max && @warn(
+            "`$name` has its damping height `zd` = $(s.zd) m above the domain top " *
+            "`z_max` = $z_max m, so it applies no damping. Lower `zd` (the " *
+            "`$param_name` parameter) or disable the sponge.",
+        )
+    end
+    return nothing
+end
+
+"""
     AtmosSurface{FS, ST, BO, AL}(; flux_scheme, temperature, boundary_overrides, surface_albedo)
 
 Group of surface models inside an `AtmosModel`: the flux closure, the surface
@@ -2578,6 +2608,9 @@ function _atmos_model(; kwargs...)
     grid = get(atmos_model_kwargs, :grid, nothing)
     params = get(atmos_model_kwargs, :params, nothing)
     setup = get(atmos_model_kwargs, :setup, nothing)
+
+    isnothing(grid) ||
+        check_sponge_heights(sponge, Spaces.z_max(get_spaces(grid).face_space))
 
     # The default constructor infers the type parameters from the arguments.
     return AtmosModel(
