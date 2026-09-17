@@ -30,6 +30,21 @@ floor_nt(
 ) where {FT} = (; ε_rel, σ_abs, margin, abs_margin, sharpness, residual)
 
 @testset "Cloud Fraction" begin
+    @testset "`sgs_geometric_stability_weight`" begin
+        for FT in (Float32, Float64)
+            w = CA.sgs_geometric_stability_weight
+            N², S², Ri₀ = FT(1e-4), FT(1e-4), FT(0.25)
+            @test w(N², S², FT(0)) === one(FT)          # k = 0: exactly 1
+            @test w(-N², S², FT(0)) === one(FT)         # k = 0: 1 even at Ri₊ = 0
+            @test w(-N², S², Ri₀) === zero(FT)          # unstable: 0
+            @test w(zero(FT), S², Ri₀) === zero(FT)     # neutral: 0
+            @test w(N², zero(FT), Ri₀) ≈ one(FT)        # no shear: Ri → ∞
+            @test w(2 * S² * Ri₀, S², Ri₀) ≈ FT(0.5)    # Ri₊ = Ri₀
+            ws = [w(n, S², Ri₀) for n in FT.((1e-6, 1e-5, 1e-4, 1e-3))]
+            @test issorted(ws) && all(0 .<= ws .<= 1)
+        end
+    end
+
 
     @testset "`_compute_cloud_fraction`" begin
         for FT in (Float32, Float64)

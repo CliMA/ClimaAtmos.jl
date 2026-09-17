@@ -120,6 +120,10 @@ not yet define. `FT` is the float type; `VFT1`, `VFT2`, and `VTF3` are the
     deviation relative to the grid-mean total water, `σ_q ≤ sgs_variance_max_rel_std * q_tot`,
     applied to the diagnosed `q′q′` whatever closure produced it. A wider variance puts a quadrature node
     at negative total water; `0.5` keeps all nodes non-negative (default) [-].
+  - `sgs_variance_geometric_Ri_factor`: Factor `k` in `Ri₀ = k Ri_crit`, the scale of the
+    Richardson-number weight `w = Ri₊² / (Ri₊² + Ri₀²)` on the geometric variance term
+    (`sgs_geometric_stability_weight`), with `Ri₊ = max(N²_sat, 0) / max(2 SᵢⱼSᵢⱼ, ε)`
+    on the saturated moist buoyancy gradient. `0` (default) makes the weight exactly 1 [-].
   - `Tq_correlation_coefficient`: Default correlation between `T'` and `q_tot'`
     in the SGS quadrature, in `[-1, 1]` [-].
   - `static_stab_coeff`: Static stability coefficient `c_b` of the mixing-length
@@ -207,6 +211,7 @@ Base.@kwdef struct TurbulenceConvectionParameters{FT, VFT1, VFT2, VTF3} <: ATCP
     sgs_variance_geometric_coeff::FT
     sgs_variance_horizontal_scale_factor::FT
     sgs_variance_max_rel_std::FT
+    sgs_variance_geometric_Ri_factor::FT
     Tq_correlation_coefficient::FT
     static_stab_coeff::FT
     Prandtl_number_scale::FT

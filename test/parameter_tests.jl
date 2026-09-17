@@ -117,14 +117,18 @@ end
         @test CAP.sgs_variance_horizontal_scale_factor(tc) == FT(0)
         @test CAP.sgs_variance_geometric_coeff(tc) == FT(1 // 12)
         @test CAP.sgs_variance_max_rel_std(tc) == FT(0.5)
+        @test CAP.sgs_variance_geometric_Ri_factor(tc) == FT(0)
     end
-    # A run toml can enable the term.
+    # A run toml can enable the term and its Richardson weight.
     mktemp() do path, io
         write(
             io,
             """
   [sgs_variance_horizontal_scale_factor]
   value = 2.0
+  type = "float"
+  [sgs_variance_geometric_Ri_factor]
+  value = 1.0
   type = "float"
   """,
         )
@@ -135,6 +139,7 @@ end
         )
         tc = CA.ClimaAtmosParameters(config).turbconv_params
         @test CAP.sgs_variance_horizontal_scale_factor(tc) == 2.0
+        @test CAP.sgs_variance_geometric_Ri_factor(tc) == 1.0
     end
 end
 
