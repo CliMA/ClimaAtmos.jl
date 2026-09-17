@@ -3,6 +3,10 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- ![][badge-✨feature/enhancement] `WeatherModel` ERA5 IC filenames now use the
+  `HHMM` of `start_date` (e.g. `start_date = "20191231-1200"` →  `..._1200.nc`),
+  matching the ClimaCoupler subseasonal / WeatherQuest naming; date-only strings
+  still default to `0000`.
 - ![][badge-🐛bugfix] The vertical Smagorinsky-Lilly diffusion follows `implicit_diffusion`:
   with `implicit_diffusion: true` it is part of the implicit tendency, with the eddy viscosity
   refreshed on every Newton iterate, matching the Jacobian block that already existed for it.

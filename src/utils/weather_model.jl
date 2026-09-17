@@ -39,8 +39,10 @@ WeatherQuest download script.
 
 # Notes
 
-Only `HHMM = 0000` is supported on the user-directory path, because the coupler
-cannot yet specify a time of day.
+The hour/minute (`HHMM`) of `start_date` is used in the inferred filenames on
+both the artifact and user-directory paths, so non-00Z initializations (e.g.
+`start_date = "20191231-1200"`) resolve to `..._1200.nc`. Date-only strings
+default to `0000`, matching the ClimaCoupler subseasonal naming convention.
 """
 function weather_model_data_path(
     start_date,
@@ -64,7 +66,7 @@ function weather_model_data_path(
         # User-provided directory
         ic_data_path = joinpath(
             era5_initial_condition_dir,
-            "era5_init_processed_internal_$(start_date_str)_0000.nc", # TODO: generalize for all times once Coupler supports HHMM specification
+            "era5_init_processed_internal_$(start_date_str)_$(start_time).nc",
         )
         if isfile(ic_data_path)
             @info "Using existing interpolated IC file: $ic_data_path"
@@ -72,7 +74,7 @@ function weather_model_data_path(
         end
         raw_data_path = joinpath(
             era5_initial_condition_dir,
-            "era5_raw_$(start_date_str)_0000.nc",
+            "era5_raw_$(start_date_str)_$(start_time).nc",
         )
         if !isfile(raw_data_path)
             error(
@@ -92,7 +94,7 @@ function weather_model_data_path(
     # Fallback: generate a 1D-interpolated IC file when processed_internal file absent
     ic_data_path_1d = joinpath(
         era5_initial_condition_dir,
-        "era5_init_$(start_date_str)_0000.nc",
+        "era5_init_$(start_date_str)_$(start_time).nc",
     )
     @info "Processed 3D IC not found; falling back to 1D interpolation" (
         raw = raw_data_path,
