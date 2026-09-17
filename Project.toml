@@ -47,7 +47,7 @@ ClimaAtmosMusica = "Musica"
 
 [compat]
 Adapt = "4.1"
-Aqua = "0.8.9"
+Aqua = "0.8.9 - 0.8.16, 0.8.18"
 ArgParse = "1"
 Artifacts = "1"
 AtmosphericProfilesLibrary = "0.1.8"
@@ -90,7 +90,7 @@ Test = "1"
 Thermodynamics = "1.2"
 UnrolledUtilities = "0.1.9"
 YAML = "0.4"
-julia = "1.9"
+julia = "1.10"
 
 [extras]
 Aqua = "4c88cf16-eb10-579e-8560-4a9242c79595"
