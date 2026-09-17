@@ -887,7 +887,7 @@ function warn_if_run_exceeds_forcing(
 )
     haskey(parsed_args, "t_end") && !isnothing(parsed_args["t_end"]) ||
         return nothing
-    start_date = Dates.DateTime(parsed_args["start_date"], "yyyymmdd")
+    start_date = parse_date(parsed_args["start_date"])
     run_seconds = time_to_seconds(parsed_args["t_end"])
     file_seconds =
         ColumnDatasets.file_time_span(forcing.dataset, start_date)
