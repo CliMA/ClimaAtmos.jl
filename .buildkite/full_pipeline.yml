@@ -1253,6 +1253,7 @@ steps:
         artifact_paths: "flame_aquaplanet_progedmf_1m/*"
         agents:
           slurm_mem: 32GB
+          slurm_time: 02:00:00
 
       # This job takes too long (a hour) so it is temporarily disabled
       # - label: ":fire: Flame graph: prognostic edmf dense autodiff"
