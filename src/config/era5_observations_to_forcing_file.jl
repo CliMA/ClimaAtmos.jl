@@ -39,8 +39,7 @@ function get_external_daily_forcing_file_path(
 )
     start_date = parsed_args["start_date"]
     t_end = get(parsed_args, "t_end", "23hours") # generate a single day file if t_end is not specified
-    end_time =
-        DateTime(start_date, "yyyymmdd") + Dates.Second(time_to_seconds(t_end))
+    end_time = parse_date(start_date) + Dates.Second(time_to_seconds(t_end))
     end_date = Dates.format(end_time, "yyyymmdd")
     # round to era5 quarter degree resolution for site selection
     site_latitude = round(parsed_args["site_latitude"] * 4) / 4
@@ -108,7 +107,7 @@ that closure: the function itself currently always returns `true`, and the warni
 the effective signal.
 """
 function check_daily_forcing_times(forcing_file_path, parsed_args)
-    start = Dates.DateTime(parsed_args["start_date"], "yyyymmdd")
+    start = parse_date(parsed_args["start_date"])
     stop = start + Dates.Second(time_to_seconds(parsed_args["t_end"]))
     NCDataset(forcing_file_path) do ds
         if ds["time"][1] > start
@@ -138,7 +137,7 @@ As in `check_daily_forcing_times`, the `return false` statements exit only the
 `NCDataset` `do` block, so the function itself currently always returns `true`.
 """
 function check_monthly_forcing_times(path, parsed_args)
-    start = Dates.DateTime(parsed_args["start_date"], "yyyymmdd")
+    start = parse_date(parsed_args["start_date"])
     stop = start + Dates.Day(1)
     NCDataset(path) do ds
         dt = ds["time"][2] - ds["time"][1]
@@ -599,7 +598,7 @@ function generate_multiday_era5_external_forcing_file(
 )
     # run generate_external_era5_forcing_file for each day if its processed data file not found
     # get range of starttimes and endtimes
-    start_date = DateTime(parsed_args["start_date"], "yyyymmdd")
+    start_date = parse_date(parsed_args["start_date"])
     end_time = start_date + Dates.Second(time_to_seconds(parsed_args["t_end"]))
     end_date = Dates.format(end_time, "yyyymmdd")
 
