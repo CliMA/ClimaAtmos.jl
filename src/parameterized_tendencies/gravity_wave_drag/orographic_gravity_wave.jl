@@ -384,7 +384,11 @@ function orographic_gravity_wave_forcing!(
     # calc_nonpropagating_forcing! to work on the GPU
     get_pbl_z!(topo_ᶜz_pbl, ᶜp, ᶜT, ᶜz, grav, cp_d)
     topo_ᶠz_pbl = topo_ᶠz_pbl.components.data.:1
-    topo_ᶠz_pbl .= topo_ᶜz_pbl .- FT(1 / 2) .* Δz_bot
+    # z_pbl lives on the first center level and topo_ᶠz_pbl on the bottom face
+    # level, which are different spaces, so combine the raw data instead.
+    Fields.field_values(topo_ᶠz_pbl) .=
+        Fields.field_values(topo_ᶜz_pbl) .-
+        FT(1 / 2) .* Fields.field_values(Δz_bot)
 
     # compute base flux at the planetary boundary layer height
     calc_base_flux!(
