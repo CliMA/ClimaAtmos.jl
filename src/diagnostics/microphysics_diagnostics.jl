@@ -180,10 +180,11 @@ function compute_mp1m_source_env(state, cache, ::Val{F}) where {F}
     ᶜρ⁰ = @. lazy(
         TD.air_density(thp, ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰),
     )
-    ᶜq_lcl⁰ = ᶜspecific_env_value(@name(q_lcl), state, cache)
-    ᶜq_icl⁰ = ᶜspecific_env_value(@name(q_icl), state, cache)
-    ᶜq_rai⁰ = ᶜspecific_env_value(@name(q_rai), state, cache)
-    ᶜq_sno⁰ = ᶜspecific_env_value(@name(q_sno), state, cache)
+    turbconv_model = cache.atmos.turbconv_model
+    ᶜq_lcl⁰ = ᶜspecific_env_value(@name(q_lcl), state.c, turbconv_model)
+    ᶜq_icl⁰ = ᶜspecific_env_value(@name(q_icl), state.c, turbconv_model)
+    ᶜq_rai⁰ = ᶜspecific_env_value(@name(q_rai), state.c, turbconv_model)
+    ᶜq_sno⁰ = ᶜspecific_env_value(@name(q_sno), state.c, turbconv_model)
     return @. lazy(
         _mp1m_source_term(
             $Val(F), cmp, thp,

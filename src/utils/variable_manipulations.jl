@@ -360,7 +360,7 @@ end
 
 
 """
-    ᶜspecific_env_value(χ_name, Y, p)
+    ᶜspecific_env_value(χ_name, Yc, turbconv_model)
 
 Compute the specific value `χ⁰` of a quantity `χ` in the environment.
 
@@ -368,7 +368,7 @@ Domain decomposition gives the environment numerator `ρa⁰χ⁰ = ρχ - Σⱼ
 and denominator `ρa⁰ = ρ - Σⱼ ρaʲ`; the quotient is then formed with the
 regularized `specific`, which stays finite as the environment area fraction goes
 to zero. The grid-mean tracer name is derived from `χ_name` with
-`get_ρχ_name`, so `χ` must have a grid-mean counterpart `ρχ` in `Y.c`.
+`get_ρχ_name`, so `χ` must have a grid-mean counterpart `ρχ` in `Yc`.
 
 Only `PrognosticEDMFX` is supported; `EDOnlyEDMFX` throws, since it has no draft
 subdomains and its environment coincides with the grid mean.
@@ -377,20 +377,19 @@ subdomains and its environment coincides with the grid mean.
 
   - `χ_name`: `MatrixFields.FieldName` of the specific quantity, e.g.
     `@name(q_tot)`.
-  - `Y`: State, providing the grid mean `Y.c` and the drafts `Y.c.sgsʲs`.
-  - `p`: Cache, providing `p.atmos.turbconv_model`.
+  - `Yc`: Centred valued fields of State, (i.e. the grid mean `Y.c`) and the drafts `Yc.sgsʲs`.
+  - `turbconv_model`: Turbulence-convection model; supplies the draft
+    subdomains and the regularization parameter `a_half`.
 
 # Returns
 
 A lazy center `Field` with the environment value `χ⁰`.
 """
-function ᶜspecific_env_value(χ_name, Y, p)
-    turbconv_model = p.atmos.turbconv_model
-
+function ᶜspecific_env_value(χ_name, Yc, turbconv_model)
     # Grid-scale density-weighted variable name, e.g., ρq_tot
     ρχ_name = get_ρχ_name(χ_name)
 
-    ᶜρχ = MatrixFields.get_field(Y.c, ρχ_name)
+    ᶜρχ = MatrixFields.get_field(Yc, ρχ_name)
 
     # environment density-area-weighted mse (`ρa⁰χ⁰`).
     # Numerator: ρa⁰χ⁰ = ρχ - (Σ ρaʲ * χʲ)
@@ -402,10 +401,10 @@ function ᶜspecific_env_value(χ_name, Y, p)
             sgsʲ ->
                 MatrixFields.get_field(sgsʲ, @name(ρa)) *
                 MatrixFields.get_field(sgsʲ, χ_name),
-            Y.c.sgsʲs,
+            Yc.sgsʲs,
         )
         # Denominator: ρa⁰ = ρ - Σ ρaʲ
-        ᶜρa⁰ = @. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model))
+        ᶜρa⁰ = @. lazy(ρa⁰(Yc.ρ, Yc.sgsʲs, turbconv_model))
 
     elseif turbconv_model isa EDOnlyEDMFX
         error("Not implemented. You should use grid mean values.")
@@ -415,7 +414,7 @@ function ᶜspecific_env_value(χ_name, Y, p)
         ᶜρaχ⁰,                      # ρaχ for environment
         ᶜρa⁰,                   # ρa for environment
         ᶜρχ,               # Fallback ρχ is the grid-mean value
-        Y.c.ρ,                      # Fallback ρ is the grid-mean value
+        Yc.ρ,                      # Fallback ρ is the grid-mean value
         turbconv_model,
     ))
 end

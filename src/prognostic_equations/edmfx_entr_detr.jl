@@ -596,7 +596,8 @@ function edmfx_entr_detr_tendency!(Yₜ, Y, p, t, turbconv_model::PrognosticEDMF
     ) = p.precomputed
 
     ᶜmse⁰ = ᶜspecific_env_mse(Y, p)
-    ᶜq_tot⁰ = ᶜspecific_env_value(@name(q_tot), Y, p)
+    ᶜq_tot⁰ =
+        ᶜspecific_env_value(@name(q_tot), Y.c, p.atmos.turbconv_model)
     ᶜlg = Fields.local_geometry_field(Y.c)
 
     for j in 1:n
@@ -620,7 +621,7 @@ function edmfx_entr_detr_tendency!(Yₜ, Y, p, t, turbconv_model::PrognosticEDMF
         # Auto-discovered SGS tracers (microphysics species and any
         # user-defined passive tracers)
         for χ_name in sgs_tracer_names(Y)
-            ᶜχ⁰ = ᶜspecific_env_value(χ_name, Y, p)
+            ᶜχ⁰ = ᶜspecific_env_value(χ_name, Y.c, p.atmos.turbconv_model)
             ᶜχʲ = MatrixFields.get_field(Y.c.sgsʲs.:(1), χ_name)
             ᶜχʲₜ = MatrixFields.get_field(Yₜ.c.sgsʲs.:(1), χ_name)
             @. ᶜχʲₜ += (ᶜentrʲ .+ ᶜturb_entrʲ) * (ᶜχ⁰ - ᶜχʲ)

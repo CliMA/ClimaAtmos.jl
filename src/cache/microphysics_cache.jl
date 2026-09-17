@@ -220,7 +220,7 @@ function set_precipitation_velocities!(
         e_int_func = internal_energy_func(χ_name)
         ᶜw = MatrixFields.get_field(p.precomputed, w_name)
 
-        ᶜχ⁰ = ᶜspecific_env_value(χ_name, Y, p)
+        ᶜχ⁰ = ᶜspecific_env_value(χ_name, Y.c, p.atmos.turbconv_model)
         ᶜρa⁰χ⁰ = @. lazy(max(zero(Y.c.ρ), ᶜρa⁰) * max(zero(Y.c.ρ), ᶜχ⁰))
         @. ᶜρχ = ᶜρa⁰χ⁰
         @. ᶜw = ᶜρa⁰χ⁰ * terminal_velocity_function(χ_name, ᶜρ⁰, ᶜχ⁰)
@@ -391,8 +391,8 @@ function set_precipitation_velocities!(
     # Compute grid-scale sedimentation velocity based on subdomain velocities
     # assuming grid-scale flux is equal to the  sum of sub-grid-scale fluxes.
 
-    ᶜq_lcl⁰ = ᶜspecific_env_value(@name(q_lcl), Y, p)
-    ᶜn_lcl⁰ = ᶜspecific_env_value(@name(n_lcl), Y, p)
+    ᶜq_lcl⁰ = ᶜspecific_env_value(@name(q_lcl), Y.c, p.atmos.turbconv_model)
+    ᶜn_lcl⁰ = ᶜspecific_env_value(@name(n_lcl), Y.c, p.atmos.turbconv_model)
     ###
     ### Cloud liquid (number)
     ###
@@ -460,7 +460,7 @@ function set_precipitation_velocities!(
     ###
     ### Cloud ice
     ###
-    ᶜq_icl⁰ = ᶜspecific_env_value(@name(q_icl), Y, p)
+    ᶜq_icl⁰ = ᶜspecific_env_value(@name(q_icl), Y.c, p.atmos.turbconv_model)
     # TODO sedimentation of ice is based on the 1M scheme
     @. ᶜw⁰ = CMNe.terminal_velocity(
         cmc.ice,
@@ -487,8 +487,8 @@ function set_precipitation_velocities!(
     ###
     ### Rain (number)
     ###
-    ᶜq_rai⁰ = ᶜspecific_env_value(@name(q_rai), Y, p)
-    ᶜn_rai⁰ = ᶜspecific_env_value(@name(n_rai), Y, p)
+    ᶜq_rai⁰ = ᶜspecific_env_value(@name(q_rai), Y.c, p.atmos.turbconv_model)
+    ᶜn_rai⁰ = ᶜspecific_env_value(@name(n_rai), Y.c, p.atmos.turbconv_model)
     @. ᶜw⁰ = getindex(
         CM2.rain_terminal_velocity(
             cm2p.warm_rain.seifert_beheng,
@@ -553,7 +553,7 @@ function set_precipitation_velocities!(
     ###
     ### Snow
     ####
-    ᶜq_sno⁰ = ᶜspecific_env_value(@name(q_sno), Y, p)
+    ᶜq_sno⁰ = ᶜspecific_env_value(@name(q_sno), Y.c, p.atmos.turbconv_model)
     # TODO sedimentation of snow is based on the 1M scheme
     @. ᶜw⁰ = CM1.terminal_velocity(
         cm1p.precip.snow,
@@ -988,10 +988,10 @@ function set_microphysics_tendency_cache!(
     ᶜq_rai⁰ = p.scratch.ᶜtemp_scalar_4
     ᶜq_sno⁰ = p.scratch.ᶜtemp_scalar_5
     @. ᶜρ⁰ = TD.air_density(thp, ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰)
-    ᶜq_lcl⁰ .= ᶜspecific_env_value(@name(q_lcl), Y, p)
-    ᶜq_icl⁰ .= ᶜspecific_env_value(@name(q_icl), Y, p)
-    ᶜq_rai⁰ .= ᶜspecific_env_value(@name(q_rai), Y, p)
-    ᶜq_sno⁰ .= ᶜspecific_env_value(@name(q_sno), Y, p)
+    ᶜq_lcl⁰ .= ᶜspecific_env_value(@name(q_lcl), Y.c, p.atmos.turbconv_model)
+    ᶜq_icl⁰ .= ᶜspecific_env_value(@name(q_icl), Y.c, p.atmos.turbconv_model)
+    ᶜq_rai⁰ .= ᶜspecific_env_value(@name(q_rai), Y.c, p.atmos.turbconv_model)
+    ᶜq_sno⁰ .= ᶜspecific_env_value(@name(q_sno), Y.c, p.atmos.turbconv_model)
     sgs_quad = p.atmos.sgs_quadrature
     if not_quadrature(sgs_quad)
         @. ᶜmp_tendency⁰ = microphysics_tendencies_1m(
@@ -1151,12 +1151,12 @@ function set_microphysics_tendency_cache!(
     end
 
     ### Environment contribution
-    ᶜn_lcl⁰ = ᶜspecific_env_value(@name(n_lcl), Y, p)
-    ᶜn_rai⁰ = ᶜspecific_env_value(@name(n_rai), Y, p)
-    ᶜq_lcl⁰ = ᶜspecific_env_value(@name(q_lcl), Y, p)
-    ᶜq_rai⁰ = ᶜspecific_env_value(@name(q_rai), Y, p)
-    ᶜq_icl⁰ = ᶜspecific_env_value(@name(q_icl), Y, p)
-    ᶜq_sno⁰ = ᶜspecific_env_value(@name(q_sno), Y, p)
+    ᶜn_lcl⁰ = ᶜspecific_env_value(@name(n_lcl), Y.c, p.atmos.turbconv_model)
+    ᶜn_rai⁰ = ᶜspecific_env_value(@name(n_rai), Y.c, p.atmos.turbconv_model)
+    ᶜq_lcl⁰ = ᶜspecific_env_value(@name(q_lcl), Y.c, p.atmos.turbconv_model)
+    ᶜq_rai⁰ = ᶜspecific_env_value(@name(q_rai), Y.c, p.atmos.turbconv_model)
+    ᶜq_icl⁰ = ᶜspecific_env_value(@name(q_icl), Y.c, p.atmos.turbconv_model)
+    ᶜq_sno⁰ = ᶜspecific_env_value(@name(q_sno), Y.c, p.atmos.turbconv_model)
     ᶜρ⁰ = @. lazy(
         TD.air_density(thp, ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰),
     )

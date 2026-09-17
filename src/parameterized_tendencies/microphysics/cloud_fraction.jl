@@ -977,8 +977,9 @@ NVTX.@annotate function set_cloud_fraction!(
     # Get environment density, temperature, and total specific humidity
     ᶜρ_env, ᶜT_mean, ᶜq_mean = _get_env_ρ_T_q(Y, p, thermo_params, turbconv_model)
 
-    # Get condensate means (dispatches on microphysics_model)
-    ᶜq_lcl, ᶜq_icl = _get_condensate_means(Y, p, turbconv_model, microphysics_model)
+    # The condensate means (`_get_condensate_means`) are inlined in the
+    # pointwise closure below; the required p.precomputed inputs are passed
+    # explicitly (one field per argument) in the foreach_point arg list.
 
     sgs_quad = p.atmos.sgs_quadrature
     corr_Tq = correlation_Tq(p.params)
@@ -986,24 +987,66 @@ NVTX.@annotate function set_cloud_fraction!(
     α = sgs_variance_fidelity(CAP.cloud_fraction_steepness_scale(p.params))
     floor = cloud_fraction_floor_params(p.params)
 
-    (; ᶜT′T′, ᶜq′q′) = p.precomputed
+    # Precomputed condensate-mean fallbacks used by the pointwise helper:
+    #  - `ᶜq_liq`, `ᶜq_ice`: grid-mean (non-EDMF) equilibrium condensate,
+    #  - `ᶜq_liq⁰`, `ᶜq_ice⁰`: environment equilibrium condensate.
+    (; ᶜT′T′, ᶜq′q′, ᶜq_liq, ᶜq_ice, ᶜq_liq⁰, ᶜq_ice⁰) = p.precomputed
 
     ᶜcloud_fraction = p.precomputed.ᶜcloud_fraction
     α = FT(α)
-
     let α = α, thermo_params = thermo_params, corr_Tq = corr_Tq, floor = floor,
-        sgs_quad = sgs_quad
+        sgs_quad = sgs_quad, turbconv_model = turbconv_model,
+        microphysics_model = microphysics_model
 
         DataLayouts.foreach_point(
             ᶜcloud_fraction,
             ᶜT_mean,
             ᶜρ_env,
             ᶜq_mean,
-            ᶜq_lcl,
-            ᶜq_icl,
             ᶜT′T′,
             ᶜq′q′,
-        ) do ᶜcloud_fraction, ᶜT_mean, ᶜρ_env, ᶜq_mean, ᶜq_lcl, ᶜq_icl, ᶜT′T′, ᶜq′q′
+            ᶜq_liq,
+            ᶜq_ice,
+            ᶜq_liq⁰,
+            ᶜq_ice⁰,
+            Y.c,
+        ) do ᶜcloud_fraction,
+        ᶜT_mean,
+        ᶜρ_env,
+        ᶜq_mean,
+        ᶜT′T′,
+        ᶜq′q′,
+        ᶜq_liq,
+        ᶜq_ice,
+        ᶜq_liq⁰,
+        ᶜq_ice⁰,
+        Yc
+
+            # Inlined `_get_condensate_means` (both branches; `turbconv_model`
+            # and `microphysics_model` are captured as concrete types in the
+            # enclosing `let`, so the `isa` tests fold at compile time).
+            if turbconv_model isa PrognosticEDMFX
+                # `_env_cloud_condensate`
+                if microphysics_model isa NonEquilibriumMicrophysics
+                    # The prognostic environment cloud condensate only
+                    # (precomputed `ᶜq_liq⁰`/`ᶜq_ice⁰` include precipitation).
+                    ᶜq_lcl = @. max(0, $(ᶜspecific_env_value(@name(q_lcl), Yc, turbconv_model)))
+                    ᶜq_icl = @. max(0, $(ᶜspecific_env_value(@name(q_icl), Yc, turbconv_model)))
+                else
+                    ᶜq_lcl = ᶜq_liq⁰
+                    ᶜq_icl = ᶜq_ice⁰
+                end
+            else
+                # `_grid_mean_cloud_condensate`
+                if microphysics_model isa NonEquilibriumMicrophysics
+                    ᶜq_lcl = @. max(0, $(specific(Yc.ρq_lcl, Yc.ρ)))
+                    ᶜq_icl = @. max(0, $(specific(Yc.ρq_icl, Yc.ρ)))
+                else
+                    ᶜq_lcl = ᶜq_liq
+                    ᶜq_icl = ᶜq_ice
+                end
+            end
+
             @. ᶜcloud_fraction = _compute_cloud_fraction(
                 thermo_params,
                 ᶜT_mean,
@@ -1011,12 +1054,12 @@ NVTX.@annotate function set_cloud_fraction!(
                 ᶜq_mean,
                 ᶜq_lcl,
                 ᶜq_icl,
-                $(sgs_quad),
+                sgs_quad,
                 ᶜT′T′,
                 ᶜq′q′,
                 corr_Tq,
                 α,
-                $(floor),
+                floor,
             )
         end
     end
@@ -1165,8 +1208,8 @@ precomputed `ᶜq_liq⁰` / `ᶜq_ice⁰` include precipitation (`q_rai⁰` / `q
 which should not count as cloud.
 """
 _env_cloud_condensate(Y, p, ::NonEquilibriumMicrophysics) = (
-    (@. (max(0, $(ᶜspecific_env_value(@name(q_lcl), Y, p))))),
-    (@. (max(0, $(ᶜspecific_env_value(@name(q_icl), Y, p))))),
+    (@. (max(0, $(ᶜspecific_env_value(@name(q_lcl), Y.c, p.atmos.turbconv_model))))),
+    (@. (max(0, $(ᶜspecific_env_value(@name(q_icl), Y.c, p.atmos.turbconv_model))))),
 )
 _env_cloud_condensate(Y, p, microphysics_model) =
     (p.precomputed.ᶜq_liq⁰, p.precomputed.ᶜq_ice⁰)

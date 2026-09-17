@@ -107,7 +107,8 @@ function edmfx_sgs_mass_flux_tendency!(
                 @. Yₜ.c.ρ += vtt  # Effect of SGS water flux on (moist) air mass
             end
             # Add the environment fluxes
-            ᶜq_tot⁰ = ᶜspecific_env_value(@name(q_tot), Y, p)
+            ᶜq_tot⁰ =
+                ᶜspecific_env_value(@name(q_tot), Y.c, p.atmos.turbconv_model)
             @. ᶠu³_diff = ᶠu³⁰ - ᶠu³
             @. ᶜa_scalar =
                 (ᶜq_tot⁰ - specific(Y.c.ρq_tot, Y.c.ρ)) * draft_area(ᶜρa⁰, ᶜρ⁰)
@@ -156,7 +157,7 @@ function edmfx_sgs_mass_flux_tendency!(
         for χ_name in sgs_tracer_names(Y)
             ρχ_name = get_ρχ_name(χ_name)
             ᶜρχ = MatrixFields.get_field(Y.c, ρχ_name)
-            ᶜχ⁰ = ᶜspecific_env_value(χ_name, Y, p)
+            ᶜχ⁰ = ᶜspecific_env_value(χ_name, Y.c, p.atmos.turbconv_model)
             @. ᶜa_scalar =
                 (ᶜχ⁰ - specific(ᶜρχ, Y.c.ρ)) * draft_area(ᶜρa⁰, ᶜρ⁰)
             vtt = vertical_transport(

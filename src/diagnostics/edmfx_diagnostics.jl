@@ -597,8 +597,8 @@ compute_clwen(_, _, _, _, _) =
 compute_clwen(_, cache, _, ::EquilibriumMicrophysics0M, ::PrognosticEDMFX) =
     cache.precomputed.ᶜq_liq⁰
 
-compute_clwen(state, cache, _, ::NonEquilibriumMicrophysics, ::PrognosticEDMFX) =
-    ᶜspecific_env_value(@name(q_lcl), state, cache)
+compute_clwen(state, cache, _, ::NonEquilibriumMicrophysics, turbconv_model::PrognosticEDMFX) =
+    ᶜspecific_env_value(@name(q_lcl), state.c, turbconv_model)
 
 add_diagnostic_variable!(short_name = "clwen", units = "kg kg^-1",
     long_name = "Envrionment Mass Fraction of Cloud Liquid Water",
@@ -618,8 +618,8 @@ compute_cdncen(_, _, _, _, _) =
          number mixing ratio with a 2M model and with PrognosticEDMFX",
     )
 
-compute_cdncen(state, cache, _, ::NonEquilibriumMicrophysics2M, ::PrognosticEDMFX) =
-    ᶜspecific_env_value(@name(n_lcl), state, cache)
+compute_cdncen(state, cache, _, ::NonEquilibriumMicrophysics2M, turbconv_model::PrognosticEDMFX) =
+    ᶜspecific_env_value(@name(n_lcl), state.c, turbconv_model)
 
 add_diagnostic_variable!(short_name = "cdncen", units = "kg^-1",
     long_name = "Environment Number Mixing Ratio of Cloud Liquid Water",
@@ -643,8 +643,8 @@ compute_clien(_, _, _, _, _) =
 compute_clien(_, cache, _, ::EquilibriumMicrophysics0M, ::PrognosticEDMFX) =
     cache.precomputed.ᶜq_ice⁰
 
-compute_clien(state, cache, _, ::NonEquilibriumMicrophysics, ::PrognosticEDMFX) =
-    ᶜspecific_env_value(@name(q_icl), state, cache)
+compute_clien(state, cache, _, ::NonEquilibriumMicrophysics, turbconv_model::PrognosticEDMFX) =
+    ᶜspecific_env_value(@name(q_icl), state.c, turbconv_model)
 
 add_diagnostic_variable!(short_name = "clien", units = "kg kg^-1",
     long_name = "Environment Mass Fraction of Cloud Ice",
@@ -666,8 +666,9 @@ compute_husraen(_, _, _, _, _) =
                                with a 1M or 2M model and with PrognosticEDMFX")
 
 compute_husraen(state, cache, _,
-    ::Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M}, ::PrognosticEDMFX,
-) = ᶜspecific_env_value(@name(q_rai), state, cache)
+    ::Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M},
+    turbconv_model::PrognosticEDMFX,
+) = ᶜspecific_env_value(@name(q_rai), state.c, turbconv_model)
 
 add_diagnostic_variable!(short_name = "husraen", units = "kg kg^-1",
     long_name = "Environment Mass Fraction of Rain",
@@ -685,8 +686,8 @@ compute_ncraen(_, _, _, _, _) =
     error_diagnostic_variable("Can only compute environment rain number mixing ratio \
                                with a 2M model and with PrognosticEDMFX")
 
-compute_ncraen(state, cache, _, ::NonEquilibriumMicrophysics2M, ::PrognosticEDMFX) =
-    ᶜspecific_env_value(@name(n_rai), state, cache)
+compute_ncraen(state, cache, _, ::NonEquilibriumMicrophysics2M, turbconv_model::PrognosticEDMFX) =
+    ᶜspecific_env_value(@name(n_rai), state.c, turbconv_model)
 
 add_diagnostic_variable!(short_name = "ncraen", units = "kg^-1",
     long_name = "Environment Number Mixing Ratio of Rain",
@@ -708,8 +709,9 @@ compute_hussnen(_, _, _, _, _) =
                                with a 1M or 2M model and with PrognosticEDMFX")
 
 compute_hussnen(state, cache, _,
-    ::Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M}, ::PrognosticEDMFX,
-) = ᶜspecific_env_value(@name(q_sno), state, cache)
+    ::Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M},
+    turbconv_model::PrognosticEDMFX,
+) = ᶜspecific_env_value(@name(q_sno), state.c, turbconv_model)
 
 add_diagnostic_variable!(short_name = "hussnen", units = "kg kg^-1",
     long_name = "Environment Mass Fraction of Snow",

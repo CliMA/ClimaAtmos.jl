@@ -49,7 +49,8 @@ function set_edmfx_surface_conditions!(Y, p)
 
     ᶜq_tot = @. lazy(specific(Y.c.ρq_tot, Y.c.ρ))
     ᶜmse⁰ = ᶜspecific_env_mse(Y, p)
-    ᶜq_tot⁰ = ᶜspecific_env_value(@name(q_tot), Y, p)
+    ᶜq_tot⁰ =
+        ᶜspecific_env_value(@name(q_tot), Y.c, p.atmos.turbconv_model)
 
     lg_val = Fields.field_values(
         Fields.local_geometry_field(Fields.level(Y.f, Fields.half)),

@@ -77,16 +77,16 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_environment!(
     set_sgs_ᶠu₃!(u₃⁰, ᶠu₃⁰, Y, turbconv_model)
     set_velocity_quantities!(ᶜu⁰, ᶠu³⁰, ᶜK⁰, ᶠu₃⁰, Y.c.uₕ, ᶠuₕ³)
     # @. ᶜK⁰ += ᶜtke
-    ᶜq_tot⁰ = ᶜspecific_env_value(@name(q_tot), Y, p)
+    ᶜq_tot⁰ = ᶜspecific_env_value(@name(q_tot), Y.c, turbconv_model)
 
     ᶜmse⁰ = ᶜspecific_env_mse(Y, p)
 
     if p.atmos.microphysics_model isa
        Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M}
-        ᶜq_lcl⁰ = ᶜspecific_env_value(@name(q_lcl), Y, p)
-        ᶜq_icl⁰ = ᶜspecific_env_value(@name(q_icl), Y, p)
-        ᶜq_rai⁰ = ᶜspecific_env_value(@name(q_rai), Y, p)
-        ᶜq_sno⁰ = ᶜspecific_env_value(@name(q_sno), Y, p)
+        ᶜq_lcl⁰ = ᶜspecific_env_value(@name(q_lcl), Y.c, turbconv_model)
+        ᶜq_icl⁰ = ᶜspecific_env_value(@name(q_icl), Y.c, turbconv_model)
+        ᶜq_rai⁰ = ᶜspecific_env_value(@name(q_rai), Y.c, turbconv_model)
+        ᶜq_sno⁰ = ᶜspecific_env_value(@name(q_sno), Y.c, turbconv_model)
         # Compute env thermodynamic state from primitives
         @. ᶜq_liq⁰ = max(0, ᶜq_lcl⁰ + ᶜq_rai⁰)
         @. ᶜq_ice⁰ = max(0, ᶜq_icl⁰ + ᶜq_sno⁰)
