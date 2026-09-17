@@ -7,6 +7,9 @@ main
   `c_g (c_Δx Δx_h)² |∇_h ψ|²` for the SGS quadrature (`sgs_variance_horizontal_scale_factor` switches it on), with a closure-validity bound on
   σ_q (`sgs_variance_max_rel_std`); The new parameters default to the historical closure.
 - [#4828](https://github.com/CliMA/ClimaAtmos.jl/pull/4828) Update to ClimaTimeSteppers v1 and update benchmark test
+- [#4838](https://github.com/CliMA/ClimaAtmos.jl/pull/4838) ![][badge-🐛bugfix] Constructing an `AtmosModel` now errors when a sponge damping
+  height (`zd_rayleigh`, `zd_viscous`) equals the domain top, where the damping profile divides by zero, and warns when it lies above the
+  domain top, where the sponge is inactive. `rcemipii_box_CRM_1M.yml` now uses `z_max: 33000.0` so that it lies above its `zd_rayleigh`.
 
 0.42.10
 -------
