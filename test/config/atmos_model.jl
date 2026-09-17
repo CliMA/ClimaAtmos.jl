@@ -242,6 +242,31 @@ end
     )
 end
 
+@testset "Sponge damping height is checked against the domain top" begin
+    z_max = FT(3e3)  # domain top of TEST_GRID
+
+    # zd == z_max: the damping profile divides by zero, so construction errors
+    @test_throws "equal to the domain top" make_model(;
+        rayleigh_sponge = CA.RayleighSponge{FT}(; zd = z_max),
+    )
+    @test_throws "equal to the domain top" make_model(;
+        viscous_sponge = CA.ViscousSponge{FT}(; zd = z_max, κ₂ = 1),
+    )
+    # ... also when the sponge arrives inside a whole group object
+    @test_throws "equal to the domain top" make_model(;
+        sponge = CA.AtmosSponge(; rayleigh_sponge = CA.RayleighSponge{FT}(; zd = z_max)),
+    )
+
+    # zd > z_max: the sponge is inactive, which only warns
+    m = @test_logs (:warn, r"applies no damping") make_model(;
+        rayleigh_sponge = CA.RayleighSponge{FT}(; zd = 2 * z_max),
+    )
+    @test m.rayleigh_sponge.zd == 2 * z_max
+
+    # zd < z_max: no error and no warning
+    @test_logs make_model(; rayleigh_sponge = CA.RayleighSponge{FT}(; zd = z_max / 2))
+end
+
 @testset "Defaults tier: explicit > component > defaults > struct default" begin
     setup = bomex_setup()
 
