@@ -958,8 +958,8 @@ microphysics, uses the prognostic cloud condensate only; the precomputed
 not count as cloud.
 """
 _grid_mean_cloud_condensate(Y, p, ::NonEquilibriumMicrophysics) = (
-    (@. (max(0, specific(Y.c.ρq_lcl, Y.c.ρ)))),
-    (@. (max(0, specific(Y.c.ρq_icl, Y.c.ρ)))),
+    (@. lazy((max(0, specific(Y.c.ρq_lcl, Y.c.ρ))))),
+    (@. lazy((max(0, specific(Y.c.ρq_icl, Y.c.ρ))))),
 )
 _grid_mean_cloud_condensate(Y, p, microphysics_model) =
     (p.precomputed.ᶜq_liq, p.precomputed.ᶜq_ice)
@@ -977,7 +977,10 @@ NVTX.@annotate function set_cloud_fraction!(
     ᶜρ_env, ᶜT_mean, ᶜq_mean = _get_env_ρ_T_q(Y, p, thermo_params, turbconv_model)
 
     # Get condensate means (dispatches on microphysics_model)
-    ᶜq_lcl, ᶜq_icl = _get_condensate_means(Y, p, turbconv_model, microphysics_model)
+    ᶜq_lcl_lazy, ᶜq_icl_lazy =
+        _get_condensate_means(Y, p, turbconv_model, microphysics_model)
+    ᶜq_lcl = (p.scratch.ᶜtemp_scalar .= ᶜq_lcl_lazy)
+    ᶜq_icl = (p.scratch.ᶜtemp_scalar_2 .= ᶜq_icl_lazy)
 
     sgs_quad = p.atmos.sgs_quadrature
     corr_Tq = correlation_Tq(p.params)
@@ -1164,8 +1167,8 @@ precomputed `ᶜq_liq⁰` / `ᶜq_ice⁰` include precipitation (`q_rai⁰` / `q
 which should not count as cloud.
 """
 _env_cloud_condensate(Y, p, ::NonEquilibriumMicrophysics) = (
-    (@. (max(0, $(ᶜspecific_env_value(@name(q_lcl), Y, p))))),
-    (@. (max(0, $(ᶜspecific_env_value(@name(q_icl), Y, p))))),
+    (@. lazy((max(0, $(ᶜspecific_env_value(@name(q_lcl), Y, p)))))),
+    (@. lazy((max(0, $(ᶜspecific_env_value(@name(q_icl), Y, p)))))),
 )
 _env_cloud_condensate(Y, p, microphysics_model) =
     (p.precomputed.ᶜq_liq⁰, p.precomputed.ᶜq_ice⁰)
