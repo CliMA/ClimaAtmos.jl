@@ -4,6 +4,14 @@ ClimaAtmos.jl Release Notes
 main
 ----
 
+- ![][badge-💥breaking]![][badge-🚀performance] `AtmosNumerics` stores
+  `test_dycore_consistency` and `reproducible_restart` as `Bool` fields instead
+  of type parameters, and the `TestDycoreConsistency` and `ReproducibleRestart`
+  marker types are removed. Pass `true`/`false` instead. Both switches reach the
+  tendencies through `p.atmos`, so lifting them to the type domain gave any run
+  that set them a private set of specializations; the restart tests, which set
+  both, shared no compiled code with the rest of CI.
+
 0.42.11
 -------
 

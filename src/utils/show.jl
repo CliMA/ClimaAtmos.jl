@@ -254,6 +254,9 @@ function Base.summary(io::IO, numerics::AtmosNumerics)
     print(io, '\n')
     for pn in propertynames(numerics)
         prop = getproperty(numerics, pn)
+        # Most numerics options are encoded in the type, but the `Bool` switches
+        # carry their setting in the value, so print that instead.
+        shown = prop isa Bool ? prop : typeof(prop)
         s = string(
             "  ", # needed for some reason
             getproperty(bufs, pn),
@@ -262,7 +265,7 @@ function Base.summary(io::IO, numerics::AtmosNumerics)
             '`',
             "::",
             '`',
-            typeof(prop),
+            shown,
             '`',
             '\n',
         )
