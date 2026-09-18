@@ -1270,21 +1270,13 @@ function set_ml_cloud_fraction!(
 )
     ᶜmixing_length_field = materialized_mixing_length!(Y, p)
 
+    ᶜlg = Fields.local_geometry_field(Y.c)
+
     # Vertical gradients of q_tot and θ_liq_ice
     ᶜ∇q = p.scratch.ᶜtemp_scalar_2
-    ᶜ∇q .=
-        projected_vector_data.(
-            C3,
-            p.precomputed.ᶜgradᵥ_q_tot,
-            Fields.level(Fields.local_geometry_field(Y.c)),
-        )
+    @. ᶜ∇q = projected_vector_data(C3, p.precomputed.ᶜgradᵥ_q_tot, ᶜlg)
     ᶜ∇θ = p.scratch.ᶜtemp_scalar_3
-    ᶜ∇θ .=
-        projected_vector_data.(
-            C3,
-            p.precomputed.ᶜgradᵥ_θ_liq_ice,
-            Fields.level(Fields.local_geometry_field(Y.c)),
-        )
+    @. ᶜ∇θ = projected_vector_data(C3, p.precomputed.ᶜgradᵥ_θ_liq_ice, ᶜlg)
 
     p.precomputed.ᶜcloud_fraction .=
         compute_ml_cloud_fraction.(

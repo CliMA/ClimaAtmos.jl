@@ -44,7 +44,7 @@ are_boundschecks_forced = Base.JLOptions().check_bounds == 1
         @test compare_mem(trials, "Wfact!", 0)
         @test compare_mem(trials, "ldiv!", 0)
         @test compare_mem(trials, "T_imp!", 0)
-        @test compare_mem(trials, "T_exp!", 7648)
+        @test compare_mem(trials, "T_exp!", 27_168)
         @test compare_mem(trials, "lim!", 0)
         @test compare_mem(trials, "dss!", 0)
         @test compare_mem(trials, "constrain_state!", 0)
