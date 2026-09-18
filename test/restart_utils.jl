@@ -25,19 +25,52 @@ const comms_ctx = ClimaComms.context(device)
 ClimaComms.init(comms_ctx)
 const secs = 1
 
-MANYTESTS = false
-if length(ARGS) > 0
-    if ARGS[1] == "--manytests"
-        # Check if the first argument is "--manytests" (if provided), if yes, check
-        # the second argument for true/false. If the second argument is not provided
-        # assume true.
-        second_argument = lowercase(get(ARGS, 2, "true"))
-        second_argument == "true" && (MANYTESTS = true)
-    else
-        error("Argument $(ARGS[1]) not recognized")
+"""
+    parse_restart_args(args)
+
+Parse the restart tests' command-line arguments into `(; manytests, grids)`.
+
+  - `--manytests [true|false]`: run the full matrix of grids instead of the
+    single default one. The value is optional and defaults to `true`.
+  - `--grid <name>`: restrict `--manytests` to one grid (`"sphere"`, `"box"`, or
+    `"column"`, the values of the `config` key). Repeatable; no occurrence means
+    every grid available for the current context.
+"""
+function parse_restart_args(args)
+    manytests = false
+    grids = String[]
+    i = firstindex(args)
+    while i <= lastindex(args)
+        arg = args[i]
+        if arg == "--manytests"
+            # The value is optional, so only consume the next argument when it
+            # actually looks like one.
+            value = lowercase(get(args, i + 1, ""))
+            if value in ("true", "false")
+                manytests = value == "true"
+                i += 2
+            else
+                manytests = true
+                i += 1
+            end
+        elseif arg == "--grid"
+            i < lastindex(args) || error("--grid expects a grid name")
+            push!(grids, args[i + 1])
+            i += 2
+        else
+            error("Argument $(arg) not recognized")
+        end
     end
+    return (; manytests, grids)
 end
-MANYTESTS && @info "Running multiple tests"
+
+restart_args = parse_restart_args(ARGS)
+MANYTESTS = restart_args.manytests
+GRIDS = restart_args.grids
+if MANYTESTS
+    selected = isempty(GRIDS) ? "all" : join(GRIDS, ", ")
+    @info "Running multiple tests (grids: $(selected))"
+end
 
 # Technical note:
 #

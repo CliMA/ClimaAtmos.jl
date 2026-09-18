@@ -1758,26 +1758,6 @@ function get_ρu₃qₜ_surface(flow::ShipwayHill2012VelocityProfile, thermo_par
 end
 
 """
-    TestDycoreConsistency
-
-Debugging marker: fill the cache with `NaN`s before each tendency evaluation so
-that any quantity the dycore reads without first setting it shows up as a
-`NaN`. Selected by `test_dycore_consistency: true`.
-"""
-struct TestDycoreConsistency end
-
-"""
-    ReproducibleRestart
-
-Marker requesting that the simulation be reproducible when restarted from a
-restart file, at the cost of deterministically reconstructing cache state that
-would otherwise depend on the previous step (the cloud fraction is first
-recomputed with `GridScaleCloud` before the Picard iteration). Selected by
-`reproducible_restart: true`; disable it for production runs.
-"""
-struct ReproducibleRestart end
-
-"""
     AbstractTimesteppingMode
 
 Whether a process is integrated explicitly or implicitly.
@@ -1846,15 +1826,15 @@ struct HardMinimumBlending <: AbstractScaleBlendingMethod end
 Base.broadcastable(x::AbstractScaleBlendingMethod) = tuple(x)
 
 """
-    AtmosNumerics{EN_UP, TR_UP, ED_UP, SG_UP, ED_TR_UP, TDC, RR, LIM, DM, HD, VWB}
+    AtmosNumerics{EN_UP, TR_UP, ED_UP, SG_UP, ED_TR_UP, LIM, DM, HD, VWB}
 
-Numerical options of an `AtmosModel`: upwinding schemes, limiter,
-diffusion timestepping mode, hyperdiffusion, and debugging switches.
+Numerical options of an `AtmosModel`: upwinding schemes, limiter, diffusion
+timestepping mode, hyperdiffusion, and debugging switches.
 
 The upwinding fields hold `Val` symbols so that the scheme is a compile-time
 dispatch: `Val(:none)`, `Val(:first_order)`, `Val(:third_order)`, or
-`Val(:vanleer_limiter)`. Use the keyword constructor below to pass them as
-plain symbols or strings.
+`Val(:vanleer_limiter)`. Use the keyword constructor below to pass them as plain
+symbols or strings.
 
 # Fields
 
@@ -1862,24 +1842,28 @@ plain symbols or strings.
     and `ρq_tot`.
   - `tracer_upwinding`: Upwinding for the vertical advection of the remaining
     grid-scale tracers.
-  - `edmfx_mse_q_tot_upwinding`: Upwinding for the EDMF subdomain `mse`, `q_tot`,
-    and TKE advection.
+  - `edmfx_mse_q_tot_upwinding`: Upwinding for the EDMF subdomain `mse`,
+    `q_tot`, and TKE advection.
   - `edmfx_sgsflux_upwinding`: Upwinding for the EDMF subgrid-scale mass flux.
   - `edmfx_tracer_upwinding`: Upwinding for the EDMF subdomain tracers.
-  - `test_dycore_consistency`: `nothing`, or `TestDycoreConsistency` to fill the
-    cache with `NaN`s for debugging.
-  - `reproducible_restart`: `nothing`, or `ReproducibleRestart` to make restarts
-    reproducible.
+  - `test_dycore_consistency`: Whether to fill the cache with `NaN`s before each
+    tendency evaluation, so that any quantity the dycore reads without first
+    setting it shows up as a `NaN`.
+  - `reproducible_restart`: Whether the simulation is reproducible when
+    restarted from a restart file, at the cost of deterministically
+    reconstructing cache state that would otherwise depend on the previous step
+    (the cloud fraction is first recomputed with `GridScaleCloud` before the
+    Picard iteration). Should be disabled for production runs.
   - `limiter`: `nothing`, or `QuasiMonotoneLimiter` for horizontal tracer
     transport.
-  - `diff_mode`: `Explicit()` or `Implicit()`, the timestepping mode for vertical
-    diffusion.
+  - `diff_mode`: `Explicit()` or `Implicit()`, the timestepping mode for
+    vertical diffusion.
   - `hyperdiff`: `nothing`, or a `Hyperdiffusion` model.
   - `vertical_water_borrowing_species`: `nothing` (all tracers), `()` (none), or
     a `Tuple` of `Symbol`s naming the tracers that the vertical water borrowing
     limiter applies to.
 """
-struct AtmosNumerics{EN_UP, TR_UP, ED_UP, SG_UP, ED_TR_UP, TDC, RR, LIM, DM, HD, VWB}
+struct AtmosNumerics{EN_UP, TR_UP, ED_UP, SG_UP, ED_TR_UP, LIM, DM, HD, VWB}
     # Enable specific upwinding schemes for specific equations
     energy_q_tot_upwinding::EN_UP
     tracer_upwinding::TR_UP
@@ -1887,9 +1871,9 @@ struct AtmosNumerics{EN_UP, TR_UP, ED_UP, SG_UP, ED_TR_UP, TDC, RR, LIM, DM, HD,
     edmfx_sgsflux_upwinding::SG_UP
     edmfx_tracer_upwinding::ED_TR_UP
     # Add NaNs to certain equations to track down problems
-    test_dycore_consistency::TDC
+    test_dycore_consistency::Bool
     # Whether the simulation is reproducible when restarting from a restart file
-    reproducible_restart::RR
+    reproducible_restart::Bool
     limiter::LIM
     # Timestepping mode for diffusion: Explicit() or Implicit()
     diff_mode::DM
@@ -1904,8 +1888,8 @@ Base.broadcastable(x::AtmosNumerics) = tuple(x)
 """
     AtmosNumerics(; energy_q_tot_upwinding = :vanleer_limiter, tracer_upwinding = :vanleer_limiter,
                   edmfx_mse_q_tot_upwinding = :first_order, edmfx_sgsflux_upwinding = :none,
-                  edmfx_tracer_upwinding = :first_order, test_dycore_consistency = nothing,
-                  reproducible_restart = nothing, limiter = nothing, diff_mode = Explicit(),
+                  edmfx_tracer_upwinding = :first_order, test_dycore_consistency = false,
+                  reproducible_restart = false, limiter = nothing, diff_mode = Explicit(),
                   hyperdiff = Hyperdiffusion{Float32}(...), kwargs...)
 
 Create an `AtmosNumerics`, converting the upwinding options to `Val`
@@ -1925,10 +1909,8 @@ types for compile-time dispatch.
     flux.
   - `edmfx_tracer_upwinding = :first_order`: Upwinding for the EDMF subdomain
     tracers.
-  - `test_dycore_consistency = nothing`: Pass `TestDycoreConsistency()` to fill
-    the cache with `NaN`s.
-  - `reproducible_restart = nothing`: Pass `ReproducibleRestart()` for
-    reproducible restarts.
+  - `test_dycore_consistency = false`: Pass `true` to fill the cache with `NaN`s.
+  - `reproducible_restart = false`: Pass `true` for reproducible restarts.
   - `limiter = nothing`: Pass `QuasiMonotoneLimiter()` to limit horizontal tracer
     transport.
   - `diff_mode = Explicit()`: Timestepping mode for vertical diffusion.
@@ -1953,8 +1935,8 @@ function AtmosNumerics(;
     edmfx_mse_q_tot_upwinding = :first_order,
     edmfx_sgsflux_upwinding = :none,
     edmfx_tracer_upwinding = :first_order,
-    test_dycore_consistency = nothing,
-    reproducible_restart = nothing,
+    test_dycore_consistency = false,
+    reproducible_restart = false,
     limiter = nothing,
     diff_mode = Explicit(),
     hyperdiff = Hyperdiffusion{Float32}(;

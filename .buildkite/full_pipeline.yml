@@ -857,19 +857,61 @@ steps:
           slurm_gpus: 1
           slurm_mem: 16G
 
-      - label: ":computer: Restart: Using manytests"
+      # `--manytests` runs one restart test per grid, and each grid compiles its
+      # own copy of the model. Running all three in a single step put the job
+      # over the time limit, so they are split across agents with `--grid`. Keep
+      # this list in sync with `available_grids` in test/restart.jl.
+      - label: ":computer: Restart: Using manytests, sphere"
         retry: *retry_policy
         command: >
           julia --color=yes --project=.buildkite test/restart.jl --manytests true
+          --grid sphere
         agents:
           slurm_mem: 16GB
 
-      # This jobs times out after updating to ClimaCore v1.
-      # Add a temporary soft fail
-      - label: ":computer: Restart: Using manytests, GPU"
+      - label: ":computer: Restart: Using manytests, box"
         retry: *retry_policy
         command: >
           julia --color=yes --project=.buildkite test/restart.jl --manytests true
+          --grid box
+        agents:
+          slurm_mem: 16GB
+
+      - label: ":computer: Restart: Using manytests, column"
+        retry: *retry_policy
+        command: >
+          julia --color=yes --project=.buildkite test/restart.jl --manytests true
+          --grid column
+        agents:
+          slurm_mem: 16GB
+
+      - label: ":computer: Restart: Using manytests, sphere, GPU"
+        retry: *retry_policy
+        command: >
+          julia --color=yes --project=.buildkite test/restart.jl --manytests true
+          --grid sphere
+        env:
+          CLIMACOMMS_DEVICE: "CUDA"
+        agents:
+          slurm_gpus: 1
+          slurm_mem: 16G
+
+      - label: ":computer: Restart: Using manytests, box, GPU"
+        retry: *retry_policy
+        command: >
+          julia --color=yes --project=.buildkite test/restart.jl --manytests true
+          --grid box
+        env:
+          CLIMACOMMS_DEVICE: "CUDA"
+        agents:
+          slurm_gpus: 1
+          slurm_mem: 16G
+
+      - label: ":computer: Restart: Using manytests, column, GPU"
+        retry: *retry_policy
+        command: >
+          julia --color=yes --project=.buildkite test/restart.jl --manytests true
+          --grid column
         env:
           CLIMACOMMS_DEVICE: "CUDA"
         soft_fail:

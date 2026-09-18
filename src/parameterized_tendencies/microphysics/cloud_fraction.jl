@@ -47,7 +47,7 @@ function set_covariance_cache_and_cloud_fraction!(Y, p)
     # The buoyancy gradient depends on cloud fraction, and cloud fraction depends
     # on the covariance cache through the mixing length. For reproducible restart,
     # first reconstruct the initial cloud fraction deterministically.
-    if p.atmos.numerics.reproducible_restart isa ReproducibleRestart
+    if p.atmos.numerics.reproducible_restart
         set_cloud_fraction!(Y, p, microphysics_model, GridScaleCloud())
     end
 
