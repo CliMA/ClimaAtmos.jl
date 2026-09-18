@@ -208,6 +208,12 @@ git-tree-sha1 = "1b96ea4a01afe0ea4090c5c8039690672dd13f2e"
 uuid = "6e34b625-4abd-537c-b88f-471c36dfa7a0"
 version = "1.0.9+0"
 
+[[deps.CDSAPI]]
+deps = ["Dates", "Downloads", "HTTP", "JSON", "ScopedValues"]
+git-tree-sha1 = "008f1b6e10f16eaa0a6c9c2e64a605f1f5fc53c3"
+uuid = "8a7b9de3-9c00-473e-88b4-7eccd7ef2fea"
+version = "2.3.1"
+
 [[deps.CEnum]]
 git-tree-sha1 = "389ad5c84de1ae7cf0e28e381131c98ea87d54fc"
 uuid = "fa961155-64e5-5f13-b03f-caf6b980ea82"
@@ -343,7 +349,7 @@ version = "0.5.24"
     Makie = "ee78f7c6-11fb-53f2-987a-cfe4a2b5a57a"
 
 [[deps.ClimaAtmos]]
-deps = ["Adapt", "ArgParse", "Artifacts", "AtmosphericProfilesLibrary", "ClimaComms", "ClimaCore", "ClimaDiagnostics", "ClimaInterpolations", "ClimaParams", "ClimaTimeSteppers", "ClimaUtilities", "CloudMicrophysics", "Dates", "Flux", "ForwardDiff", "Insolation", "Interpolations", "JLD2", "LazyArtifacts", "LazyBroadcast", "LinearAlgebra", "Logging", "NCDatasets", "NVTX", "NullBroadcasts", "RRTMGP", "Random", "SparseMatrixColorings", "StaticArrays", "Statistics", "SurfaceFluxes", "Thermodynamics", "UnrolledUtilities", "YAML"]
+deps = ["Adapt", "ArgParse", "Artifacts", "AtmosphericProfilesLibrary", "ClimaComms", "ClimaCore", "ClimaDiagnostics", "ClimaInitialConditions", "ClimaInterpolations", "ClimaParams", "ClimaTimeSteppers", "ClimaUtilities", "CloudMicrophysics", "Dates", "Flux", "ForwardDiff", "Insolation", "Interpolations", "JLD2", "LazyArtifacts", "LazyBroadcast", "LinearAlgebra", "Logging", "NCDatasets", "NVTX", "NullBroadcasts", "RRTMGP", "Random", "SparseMatrixColorings", "StaticArrays", "Statistics", "SurfaceFluxes", "Thermodynamics", "UnrolledUtilities", "YAML"]
 path = ".."
 uuid = "b2c96348-7fb7-4fe0-8da9-78d88439e717"
 version = "0.42.12"
@@ -401,6 +407,12 @@ deps = ["Accessors", "ClimaComms", "ClimaCore", "ClimaTimeSteppers", "ClimaUtili
 git-tree-sha1 = "15e521fc314e7059b4304c9777aa9bebeff4f46b"
 uuid = "1ecacbb8-0713-4841-9a07-eb5aa8a2d53f"
 version = "0.3.11"
+
+[[deps.ClimaInitialConditions]]
+deps = ["CDSAPI", "Dates", "FileWatching", "NCDatasets", "Scratch"]
+git-tree-sha1 = "07e72c2a4b268d281ca0667d0e40a6cd5c822172"
+uuid = "a7be033f-8c2c-4c2d-9045-a1e5e881f8d2"
+version = "0.1.0"
 
 [[deps.ClimaInterpolations]]
 deps = ["Adapt", "DocStringExtensions"]
@@ -461,6 +473,12 @@ deps = ["InteractiveUtils", "REPL", "UUIDs"]
 git-tree-sha1 = "cfb7a2e89e245a9d5016b70323db412b3a7438d5"
 uuid = "da1fd8a2-8d9e-5ec2-8556-3022fb5608a2"
 version = "3.0.2"
+
+[[deps.CodecZlib]]
+deps = ["TranscodingStreams", "Zlib_jll"]
+git-tree-sha1 = "970758a3d591a2a5c2a907c53f2e2f8c1b1d3537"
+uuid = "944b1d66-785c-5afd-91f1-9de20f533193"
+version = "0.7.9"
 
 [[deps.CodecZstd]]
 deps = ["TranscodingStreams", "Zstd_jll"]
@@ -772,12 +790,10 @@ deps = ["Pkg", "Requires", "UUIDs"]
 git-tree-sha1 = "6621fef488e496356c9c9625d0562c12a6070819"
 uuid = "5789e2e9-d7fb-5bc7-8068-2c6fae9b9549"
 version = "1.20.0"
+weakdeps = ["HTTP"]
 
     [deps.FileIO.extensions]
     HTTPExt = "HTTP"
-
-    [deps.FileIO.weakdeps]
-    HTTP = "cd3eb016-35fb-5094-929b-558a96fad6f3"
 
 [[deps.FilePaths]]
 deps = ["FilePathsBase", "MacroTools", "Reexport"]
@@ -1032,6 +1048,12 @@ deps = ["Artifacts", "CompilerSupportLibraries_jll", "JLLWrappers", "LLVMOpenMP_
 git-tree-sha1 = "38c8874692d48d5440d5752d6c74b0c6b0b60739"
 uuid = "0234f1f7-429e-5d53-9886-15a909be8d59"
 version = "1.14.2+1"
+
+[[deps.HTTP]]
+deps = ["Base64", "CodecZlib", "Dates", "EnumX", "Logging", "PrecompileTools", "Random", "Reseau", "SHA", "URIs", "UUIDs", "Zlib_jll"]
+git-tree-sha1 = "255d90f16a26c52d5afe69981ef772f12796125b"
+uuid = "cd3eb016-35fb-5094-929b-558a96fad6f3"
+version = "2.8.0"
 
 [[deps.HarfBuzz_jll]]
 deps = ["Artifacts", "Cairo_jll", "Fontconfig_jll", "FreeType2_jll", "Glib_jll", "Graphite2_jll", "JLLWrappers", "Libdl", "Libffi_jll"]
@@ -2186,6 +2208,12 @@ git-tree-sha1 = "62389eeff14780bfe55195b7204c0d8738436d64"
 uuid = "ae029012-a4dd-5104-9daa-d747884805df"
 version = "1.3.1"
 
+[[deps.Reseau]]
+deps = ["NetworkOptions", "OpenSSL_jll", "PrecompileTools", "Random", "SHA"]
+git-tree-sha1 = "1a152e648e0af6fdaa18c6379bd6debb712d64ea"
+uuid = "802f3686-a58f-41ce-bb0c-3c43c75bba36"
+version = "1.5.0"
+
 [[deps.Rmath]]
 deps = ["Random", "Rmath_jll"]
 git-tree-sha1 = "5b3d50eb374cea306873b371d3f8d3915a018f0b"
@@ -2614,6 +2642,11 @@ version = "0.11.3"
 git-tree-sha1 = "4d4ed7f294cda19382ff7de4c137d24d16adc89b"
 uuid = "981d1d27-644d-49a2-9326-4793e63143c3"
 version = "0.1.0"
+
+[[deps.URIs]]
+git-tree-sha1 = "908fec9df6c5de98548ead82a468c95ccf6cd263"
+uuid = "5c2747f8-b7ea-4ff2-ba2e-563bfd36b1d4"
+version = "1.7.0"
 
 [[deps.UUIDs]]
 deps = ["Random", "SHA"]
