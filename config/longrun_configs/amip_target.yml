@@ -19,6 +19,7 @@ edmfx_sgs_mass_flux: true
 edmfx_sgs_diffusive_flux: true
 microphysics_model: "1M"
 non_orographic_gravity_wave: true
+orographic_gravity_wave: "raw_topo"
 dt_nogw: "400secs"
 nogw_beres_source: true
 topography: "Earth"
