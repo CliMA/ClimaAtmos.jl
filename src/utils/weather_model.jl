@@ -1,5 +1,6 @@
 using NCDatasets
 using Dates
+import InitialConditions
 import ClimaInterpolations.Interpolation1D: interpolate1d!, Linear, Flat
 import ..parse_date
 
@@ -34,8 +35,10 @@ WeatherQuest download script.
 
 # Keyword Arguments
 
-  - `interp_w = false`: On the 1D fallback path, write `w = 0` when `false` and
-    interpolate the ERA5 `w` when `true`.
+  - `interp_w = false`: Write `w = 0` when `false` and convert the ERA5
+    pressure velocity when `true`. ERA5 `w` is omega from a hydrostatic model,
+    and files from `InitialConditions.ERA5` do not carry it at all, in which
+    case `w = 0` regardless.
 
 # Notes
 
@@ -75,8 +78,27 @@ function weather_model_data_path(
             "era5_raw_$(start_date_str)_0000.nc",
         )
         if !isfile(raw_data_path)
-            error(
-                "Neither preprocessed nor raw initial condition file exist in $(era5_initial_condition_dir).  Please run `python get_initial_conditions.py` in the WeatherQuest repository to download the data.",
+            # DRAFT: fetch the raw ERA5 state on demand instead of asking the
+            # user to go run WeatherQuest's download script by hand.
+            #
+            # `fetch_initial_conditions` downloads, processes, validates and
+            # caches all six files for the date, and is a no-op when they are
+            # already cached. It writes into `era5_initial_condition_dir`, so a
+            # later run finds `raw_data_path` and skips the network entirely.
+            #
+            # MPI: call this on the root rank only, then barrier. The function
+            # takes a per-date lock so concurrent callers sharing a directory
+            # take turns rather than racing, but one download beats N waits.
+            @info "No ERA5 initial condition found; fetching from CDS" (
+                dir = era5_initial_condition_dir,
+                date = dt,
+            )
+            InitialConditions.ERA5.fetch_initial_conditions(
+                dt;
+                dir = era5_initial_condition_dir,
+            )
+            isfile(raw_data_path) || error(
+                "InitialConditions.ERA5 ran but produced no $(raw_data_path).",
             )
         end
         generate_needed = true
@@ -89,7 +111,31 @@ function weather_model_data_path(
         return ic_data_path
     end
 
-    # Fallback: generate a 1D-interpolated IC file when processed_internal file absent
+    # No preprocessed file, so build one from the raw download. Which path
+    # applies depends on how the raw file was downloaded: `InitialConditions`
+    # and WeatherQuest both fetch the 137 native model levels, while an older
+    # pressure-level download takes the 1D path.
+    on_model_levels = NCDataset(raw_data_path) do ds
+        !haskey(ds, "pressure_level")
+    end
+
+    if on_model_levels
+        @info "Interpolating ERA5 model levels onto the target altitudes" (
+            raw = raw_data_path,
+            dest = ic_data_path,
+            n_target_levels = length(target_levels),
+        )
+        to_z_levels_3d_model(
+            raw_data_path,
+            ic_data_path,
+            target_levels,
+            Float32;
+            interp_w,
+        )
+        return ic_data_path
+    end
+
+    # Fallback: generate a 1D-interpolated IC file from a pressure-level file
     ic_data_path_1d = joinpath(
         era5_initial_condition_dir,
         "era5_init_$(start_date_str)_0000.nc",
