@@ -1178,8 +1178,8 @@ struct HeldSuarezForcing end
 Prescribed large-scale subsidence, advecting scalars vertically with a
 specified subsidence velocity profile.
 
-Total enthalpy and `ρq_tot` are subsided, as are `ρq_lcl` and `ρq_icl` for
-non-equilibrium microphysics; rain and snow are not. The profile is supplied by
+Total enthalpy and `ρq_tot` subside, as do `ρq_lcl` and `ρq_icl` for
+non-equilibrium microphysics; rain and snow do not. The profile is supplied by
 the setup (e.g. `Setups.Bomex`), not by a YAML key.
 
 # Fields
@@ -1279,8 +1279,8 @@ end
     ISDACForcing
 
 Analytic large-scale forcing for the ISDAC mixed-phase Arctic stratocumulus
-case. Selected by `external_forcing: "ISDAC"`, and supplied automatically by
-`Setups.ISDAC`.
+case. Supplied by `Setups.ISDAC`, which `initial_condition: "ISDAC"` selects; the
+`external_forcing` key does not accept it.
 """
 struct ISDACForcing end
 
@@ -2358,7 +2358,7 @@ surface = ClimaAtmos.AtmosSurface(;
 end
 
 """
-    COSPModel{N}(; n_subcolumns = Val(256), overlap = :maximum_random, random_seed = UInt64(1))
+    COSPModel(; n_subcolumns = Val(100), overlap = Val(:maximum_random), random_seed = UInt64(1))
 
 Configuration of the COSP satellite simulator, which samples the model's cloud
 field into statistically generated subcolumns before computing instrument-like

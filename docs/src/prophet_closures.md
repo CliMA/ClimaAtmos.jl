@@ -15,14 +15,14 @@ the PROPHET paper (Azimi et al., in preparation), that is stated.
 
 ## Entrainment and detrainment
 
-Entrainment and detrainment parameterize the exchange of mass and of every
-property the exchanged fluid carries. PROPHET treats them as *relaxation rates*
+Entrainment and detrainment parameterize the exchange of mass and of the
+properties the exchanged fluid carries. PROPHET treats them as *relaxation rates*
 ``E^{mn}`` and ``\Delta^{mn}`` with units of inverse time, rather than as the
 fractional rates per unit length ``\epsilon^{mn} = E^{mn}/w^m`` conventional in
-mass-flux schemes. Rates carry no coordinate dependence through an explicit
+mass-flux schemes. Rates introduce no coordinate dependence through an explicit
 velocity. They also make plain that entrainment and detrainment relax subdomain
 properties toward each other, on timescales ``1/E^{mn}`` and
-``1/\Delta^{mn}``, which is what makes their numerical treatment and the
+``1/\Delta^{mn}``, which makes their numerical treatment and the
 positivity of ``\hat{\rho}^m`` tractable.
 
 Mass and scalar conservation require the symmetry
@@ -139,8 +139,8 @@ displaced entirely.
 
 !!! note "Departure from the formulation"
 
-    In the paper the pairwise mass flux
-    ``\hat{\rho}^m E^{mn} = \hat{\rho}^n \Delta^{nm}`` carries a *single* shared
+    In the paper, the pairwise mass flux
+    ``\hat{\rho}^m E^{mn} = \hat{\rho}^n \Delta^{nm}`` has a *single* shared
     limiter, so the symmetry relation holds by construction. The code instead
     treats entrainment and detrainment as unrelated closures with independent
     one-sided limiters, and evaluates the entrainment relaxation against the
@@ -186,7 +186,7 @@ form drag,
 ```math
 d^j = \frac{\alpha_d}{2 H}
   \left( \frac{1}{\sqrt{\max(a^j, a_{\min})}}
-       + \frac{1}{\sqrt{\max(a^0, a_{\min})}} \right)
+       + \frac{1}{\sqrt{\mathrm{clamp}(a^0, 1 - a_{\max}, 1)}} \right)
   (w^j - w^0) |w^j - w^0| ,
 ```
 
@@ -195,8 +195,15 @@ with ``\alpha_d`` = `pressure_normalmode_drag_coeff` and
 `edmfx_nh_pressure` and contributes a quadratic sink to the stage equation for
 ``w^j``. This is the pairwise form above for the draft–environment pair with
 ``r^m = H \sqrt{a^m}``, so the harmonic mean gives the sum of ``1/\sqrt{a}``
-terms and ``r^{mn} \to 0`` as either area vanishes. The
-``\hat{\rho}^n / \rho`` weighting is not included; the environment velocity is
+terms. The two subdomains are floored differently: the draft radius may shrink
+to ``a_{\min}``, so ``r^j \to 0`` and the drag on a vanishing draft diverges,
+but the environment is clamped from below at ``1 - a_{\max}``. Because the
+vertical-velocity solve runs before the area solve, it can be handed an
+extrapolated ``a^0`` outside ``[0, 1]``, and the clamp keeps the drag finite
+there; with the default ``a_{\max} = 0.7`` the environment factor never exceeds
+``1/\sqrt{0.3}``. The TKE return-to-isotropy source uses the ``a_{\min}`` floor
+for both subdomains instead, so the two drag coefficients differ by that
+factor. The ``\hat{\rho}^n / \rho`` weighting is not included; the environment velocity is
 instead eliminated in favor of ``w^j`` in the implicit solve, which brings in
 factors of ``\rho / \hat{\rho}^0`` (see
 [Discretization and Time Stepping](prophet_numerics.md)).
@@ -215,16 +222,17 @@ intra-subdomain part and a coherent inter-subdomain part,
 
 Only ``\kappa_{\mathrm{iso}}`` does the mixing, so the diffusivity and
 dissipation closures are functions of it alone; ``\kappa_{\mathrm{coh}}`` is
-diagnosable from the subdomain velocities the model already carries. It is
+diagnosable from the subdomain velocities already in the state. It is
 ``\kappa_{\mathrm{iso}}`` that the model prognoses, as `Y.c.ρtke` (enabled by
 `prognostic_tke`).
 
 Because the diffusive fluxes are grid-mean quantities applied uniformly across
-subdomains, a single grid-mean ``\kappa_{\mathrm{iso}}`` suffices. That is also
-a considerable simplification: the inter-subdomain transfers of isotropic TKE by
-entrainment, detrainment, and return-to-isotropy drag redistribute energy within
-the cell and sum to zero over it [Tan2018, Lopez2020](@cite), so none of them
-has to be computed.
+subdomains, a single grid-mean ``\kappa_{\mathrm{iso}}`` suffices, and the
+inter-subdomain transfers of isotropic TKE redistribute energy within the cell
+and sum to zero over it [Tan2018, Lopez2020](@cite). Two of those transfers are
+nonetheless sources of grid-mean TKE, because they convert *coherent* subdomain
+kinetic energy into isotropic turbulence: the return-to-isotropy drag and the
+shear mixing that detrainment produces.
 
 The budget is the compressible TKE equation [Pope2000, Wyngaard2010](@cite):
 
@@ -236,6 +244,7 @@ The budget is the compressible TKE equation [Pope2000, Wyngaard2010](@cite):
 - \underbrace{\tfrac{2}{3} \rho \kappa_{\mathrm{iso}} \nabla \cdot \boldsymbol{u}}_{\text{dilatation}}
 - \underbrace{\rho K_h \frac{\partial b}{\partial z}}_{\text{buoyancy production}}
 + \underbrace{\rho R_{\mathrm{coh} \to \mathrm{iso}}}_{\text{drag return-to-isotropy}}
++ \underbrace{\rho R_\Delta}_{\text{detrainment shear mixing}}
 - \underbrace{\rho D_\kappa}_{\text{dissipation}} ,
 ```
 
@@ -248,6 +257,29 @@ term is usually dropped under anelastic or Boussinesq assumptions; it belongs
 here because the dynamical core is fully compressible, and keeping it is what
 makes the conversion between resolved kinetic energy, internal energy, and
 subgrid TKE consistent.
+
+The two coherent-to-isotropic transfers convert kinetic energy that the drafts
+carry as an organized vertical motion into turbulence the drafts themselves do
+not resolve. The pressure drag decelerates a draft relative to its environment,
+and the energy it removes reappears as isotropic TKE at the same rate,
+
+```math
+\rho R_{\mathrm{coh} \to \mathrm{iso}} = \sum_j \hat{\rho}^j a^0 d_c^j
+  \left| w^j - w^0 \right|^3 ,
+```
+
+with ``d_c^j`` the drag coefficient of the pressure-drag closure above.
+Detrainment mixes air leaving a draft into the environment at a velocity
+contrast ``w^j - w^0``, and half of the corresponding kinetic energy goes into
+isotropic turbulence,
+
+```math
+\rho R_\Delta = \sum_j \tfrac{1}{2} \Delta^j \hat{\rho}^j
+  \left( w^j - w^0 \right)^2 .
+```
+
+The first term is applied only when `edmfx_nh_pressure` is on, since it is the
+drag closure's counterpart; the second is always applied.
 
 Only the *diffusive* part of the buoyancy flux is a source of
 ``\kappa_{\mathrm{iso}}``. The full Favre-averaged buoyancy flux is
@@ -278,7 +310,7 @@ K_m = c_m \, l \sqrt{\kappa_{\mathrm{iso}}} ,
 K_\psi = \frac{K_m}{\mathrm{Pr}_t(\mathrm{Ri})} .
 ```
 
-The turbulent Prandtl number follows [Li2019](@cite) (with an algebraic error in
+The turbulent Prandtl number follows [Li2015](@cite) (with an algebraic error in
 the published expression corrected), as the positive root
 
 ```math
@@ -294,14 +326,12 @@ column rather than only in the surface layer.
 
 !!! note "TODO: not yet implemented"
 
-    Three terms of the budget above are absent from `edmfx_tke.jl`: the
-    dilatation term, the return-to-isotropy source
-    ``R_{\mathrm{coh} \to \mathrm{iso}}`` that should receive the kinetic energy
-    the pressure drag removes, and the
-    ``\tfrac{2}{3} \kappa_{\mathrm{iso}} \boldsymbol{I}`` trace of the
-    diffusive momentum flux. Together, these are what would close the
-    resolved-kinetic-energy ↔ ``\kappa_{\mathrm{iso}}`` ↔ ``e_{\mathrm{tot}}``
-    chain exactly. ``\kappa_{\mathrm{coh}}`` is also not currently diagnosed.
+    Two terms of the budget above are absent from `edmfx_tke.jl`: the dilatation
+    term and the ``\tfrac{2}{3} \kappa_{\mathrm{iso}} \boldsymbol{I}`` trace of
+    the diffusive momentum flux. Together with the terms that are present, these
+    are what would close the resolved-kinetic-energy ↔
+    ``\kappa_{\mathrm{iso}}`` ↔ ``e_{\mathrm{tot}}`` chain exactly.
+    ``\kappa_{\mathrm{coh}}`` is also not currently diagnosed.
 
     The strain rate itself is not the deviatoric one either, and on the default
     path it is built from vertical gradients only
@@ -333,7 +363,7 @@ The mixing length is a smooth minimum (`edmfx_scale_blending`, default
     the scale at which production balances dissipation (dropped from the blend
     where net production is non-positive). This balance uses the *un-augmented*
     ``N_e^2``, not the interface-aware ``N_{e,\mathrm{eff}}^2`` below, so it
-    stays consistent with the TKE budget it parameterizes; the code carries the
+    stays consistent with the TKE budget it parameterizes; the code passes the
     two as separate arguments;
   - a **buoyancy** scale
     ``l_N = \sqrt{c_b \kappa_{\mathrm{iso}}} / N_{e,\mathrm{eff}}``, used only
@@ -351,7 +381,7 @@ resolved dynamics only if it is resolvable in every direction, so the coarsest
 grid direction sets the cap. In single columns (``\Delta x_h \to \infty``) and
 at global-model horizontal resolutions, the cap is inert and the mixing length
 is purely physical, and therefore convergent under vertical refinement. In the
-gray zone it binds at ``\Delta x_h``, and on isotropic grids it reduces to the
+gray zone, it binds at ``\Delta x_h``, and on isotropic grids it reduces to the
 Deardorff bound ``l \le \Delta``.
 
 The buoyancy frequency is the *moist effective* one,
@@ -359,10 +389,10 @@ The buoyancy frequency is the *moist effective* one,
 prognostic state through the saturated and unsaturated branches
 [OGorman2011, Marquet2011](@cite), so that latent heat release across phase
 changes is accounted for. It is the same quantity that drives the buoyancy
-production in the TKE budget and enters the Richardson number, which is what
-keeps the length scale, the flux, and the budget mutually consistent.
+production in the TKE budget and enters the Richardson number, which keeps the
+length scale, the flux, and the budget mutually consistent.
 
-**The dissipation coefficient is not independent.** In stably stratified air
+**The dissipation coefficient is derived.** In stably stratified air
 with a buoyancy-limited mixing length, the local TKE balance is linear in
 ``\kappa_{\mathrm{iso}}``: there is no equilibrium TKE, only a threshold, and
 turbulence grows or decays according to the sign of
@@ -427,12 +457,11 @@ w_e = A \frac{\sqrt{\kappa_{\mathrm{iso}}}}{\max(\mathrm{Ri}_b, 1)} ,
 ```
 
 with ``\ell_e`` the energy-containing eddy scale, taken as the minimum of
-``l_W`` and ``l_{\mathrm{TKE}}``, which unlike ``l_N`` are not suppressed by the
-interface itself. The floor on ``\mathrm{Ri}_b`` restricts the efficiency law
-to the strong interfaces it describes and bounds ``w_e`` by the turbulent
-velocity scale. To
-express the entrainment flux ``-w_e \Delta \psi`` in the down-gradient form the
-model discretizes, it suffices to add a face diffusivity
+``l_W`` and ``l_{\mathrm{TKE}}``, which the interface leaves intact, in contrast to ``l_N``, and capped in turn by the grid scale ``\Delta_f``. The floor
+on ``\mathrm{Ri}_b`` restricts the efficiency law to the strong interfaces it
+describes and bounds ``w_e`` by the turbulent velocity scale. To express the
+entrainment flux ``-w_e \Delta \psi`` in the down-gradient form the model
+discretizes, it suffices to add a face diffusivity
 
 ```math
 K_e = \gamma \, w_e \, \Delta z ,
@@ -452,9 +481,9 @@ recovers the pure stability closure.
 
 ``K_e`` is added to the face diffusivities for all scalars and for momentum, so
 energy, water, and momentum transport stay conservative and mutually consistent.
-The TKE buoyancy term is evaluated from the same face diffusivities and the same
-face gradient, so the interfacial sink ``-\gamma w_e \Delta b`` per face is
-carried without a separate term. That sink is bounded by
+The TKE buoyancy term is evaluated from the same face diffusivities and face
+gradient, so the interfacial sink ``-\gamma w_e \Delta b`` per face is
+applied without a separate term. That sink is bounded by
 ``A \kappa_{\mathrm{iso}}^{3/2} / \ell_e``, a fixed multiple of the dissipation,
 which is how the efficiency inherits the classical energetic bound on
 entrainment.
@@ -467,8 +496,8 @@ face stencil with no interpolation and no loss of sharpness; pointwise factors
 rate) vary smoothly between adjacent cells and are interpolated arithmetically.
 Evaluating the closure at centers and interpolating the resulting diffusivity
 instead cannot confine the collapse to the interface. A cell that registers the
-jump carries its collapsed diffusivity to *both* of its faces, so it throttles
-mixing on the boundary-layer side too. Meanwhile the interpolation across the
+jump carries its collapsed diffusivity to *both* of its faces, so it damps
+mixing on the boundary-layer side too. Meanwhile, the interpolation across the
 inversion hands about half the boundary-layer diffusivity to the face where the
 flux should vanish.
 
@@ -482,9 +511,8 @@ flux should vanish.
     trade-wind inversion with a small buoyancy jump but a large humidity jump,
     the down-gradient form transports moisture up the jump faster than it warms
     and dries the layer, and on a coarse grid the thick inversion-base cell can
-    saturate. Coarse-grid
-    trade-cumulus cloud cover therefore remains resolution-dependent for any
-    ``A``. Entrainment at cumulus tops is localized to penetrating plumes and
+    saturate. Coarse-grid trade-cumulus cloud cover therefore remains
+    resolution-dependent for any ``A``. Entrainment at cumulus tops is localized to penetrating plumes and
     belongs to the entrainment closures above, not to a grid-mean face
     diffusivity. Calibrate ``A`` against equilibrium (a day or longer) targets;
     spin-up snapshots reward values that fail at equilibrium.
@@ -508,8 +536,33 @@ PROPHET uses the classical production–dissipation balance of
 ```
 
 a single isotropic intra-subdomain variance shared across subdomains, driven by
-grid-mean gradients with the grid-mean mixing length. The cross-covariance is
-set through a prescribed correlation,
+the vertical grid-mean gradients with the grid-mean mixing length.
+
+An optional second term estimates the variance that the resolved horizontal
+field implies but the turbulence closure cannot represent, from the horizontal
+gradient and the horizontal grid scale alone,
+
+```math
+\sigma_{\psi,\mathrm{geo}}^2 = w \, c_g \, (c_{\Delta x} \Delta x_h)^2 \, |\nabla_h \psi|^2 ,
+\qquad
+w = \frac{\mathrm{Ri}_+^2}{\mathrm{Ri}_+^2 + \mathrm{Ri}_0^2} ,
+\quad
+\mathrm{Ri}_+ = \frac{\max(N^2, 0)}{2 \|\boldsymbol{\mathcal{E}}_D\|_F^2} ,
+\quad
+\mathrm{Ri}_0 = k_{\mathrm{Ri}} \, \mathrm{Ri}_c ,
+```
+
+added to both the ``\theta_{li}`` and ``q_t`` variances. It is the
+leading-order scale-similarity estimate of subgrid variance, and the weight
+``w`` fades it out where the resolved flow is turbulent (``\mathrm{Ri} \lesssim \mathrm{Ri}_0``) and the mixing-length closure already carries the variance;
+``N^2`` is evaluated for saturated air. The term is off by default
+(``c_{\Delta x} = 0``), and ``k_{\mathrm{Ri}} = 0`` sets ``w = 1``. The
+total-water standard deviation is then bounded by ``\sigma_q \le r_{\max} q_t``
+(``r_{\max} = 0.5``), because a wider Gaussian places a quadrature node at
+negative total water, and condensing the clamped excess can drive the grid-mean
+vapor negative.
+
+The cross-covariance is set through a prescribed correlation,
 
 ```math
 \sigma_{\psi \phi} = r_{\psi \phi} \, \sigma_\psi \, \sigma_\phi ,
@@ -564,11 +617,11 @@ computed iterates.
 
 The grid-mean cloud fraction is the volume-fraction-weighted sum
 ``f_c^{\mathrm{tot}} = \sum_m a^m f_c^m``. In the current implementation, the
-quadrature closure is evaluated for the environment, which carries the bulk of
+quadrature closure is evaluated for the environment, which accounts for most of
 the intra-subdomain variability; the drafts, comparatively homogeneous and
 near-saturated where cloudy, use a condensate-presence indicator.
 
-!!! note "This part of the scheme is in flux"
+!!! note "Under active development"
 
     The cloud-fraction and SGS-microphysics closures are under active
     development; the phase partition, the treatment of skewness, and the floor
@@ -586,7 +639,7 @@ near-saturated where cloudy, use a condensate-presence indicator.
 **Vertical velocity.** The rigid lower boundary gives every subdomain the same
 Dirichlet condition as the grid mean, ``w^m(z_s) = w(z_s)``, which vanishes over
 flat terrain. Draft velocities at interior faces then develop from buoyancy in
-the lowest cell. The model top is likewise rigid for every subdomain.
+the lowest cell. The model top is likewise rigid for all subdomains.
 
 **Draft area.** No Dirichlet condition is imposed. Because the vertical velocity
 vanishes at the surface, the advective mass flux through the bottom face is
@@ -684,32 +737,32 @@ The table maps the symbols above onto the accessor in
 The full list of fields is in the docstring of
 [`ClimaAtmos.Parameters.TurbulenceConvectionParameters`](@ref).
 
-| Symbol                                                              | Accessor                                                                                         | ClimaParams name                                                                                        |
-|:------------------------------------------------------------------- |:------------------------------------------------------------------------------------------------ |:------------------------------------------------------------------------------------------------------- |
-| ``a_{\min}``, ``a_{\max}``                                          | `min_area`, `max_area`                                                                           | `EDMF_min_area`, `EDMF_max_area`                                                                        |
-| ``a_{s,\max}``                                                      | `max_surface_area`                                                                               | `EDMF_max_surface_area`                                                                                 |
-| ``c_u``, ``z_i``, ``\alpha``                                        | `sfc_mass_flux_ustar_coeff`, `convective_zi`, `sfc_mass_flux_cap_fraction`                       | `EDMF_sfc_mass_flux_ustar_coeff`, `EDMF_convective_zi`, `EDMF_sfc_mass_flux_cap_fraction`               |
-| ``c_\varepsilon``, ``1/L_\varepsilon``                              | `entr_coeff`, `entr_inv_length`                                                                  | `entr_coeff`, `entr_inv_length`                                                                         |
-| ``c_{\varepsilon b}``, ``\tau_\varepsilon^{-1}``                    | `entr_buoy_coeff`, `entr_inv_tau`                                                                | `entr_buoy_coeff`, `entr_inv_tau`                                                                       |
-| ``\tau_{\max}^{-1}``                                                | `entr_detr_buoy_inv_tau_max`                                                                     | `entr_detr_buoy_inv_tau_max`                                                                            |
-| ``c_1 \dots c_6`` (Π groups)                                        | `entr_param_vec`                                                                                 | `entr_param_vec`                                                                                        |
-| ``\varepsilon_t``, ``c_t``                                          | `turb_entr_param_vec`                                                                            | `turb_entr_param_vec`                                                                                   |
-| ``c_\delta``, ``c_{\delta \nabla}``                                 | `detr_buoy_coeff`, `detr_massflux_vertdiv_coeff`                                                 | `detr_buoy_coeff`, `detr_massflux_vertdiv_coeff`                                                        |
-| ``s_{\min}``, ``p_{\min}``                                          | `min_area_limiter_scale`, `min_area_limiter_power`                                               | `min_area_limiter_scale`, `min_area_limiter_power`                                                      |
-| ``s_{\max}``, ``p_{\max}``                                          | `max_area_limiter_scale`, `max_area_limiter_power`                                               | `max_area_limiter_scale`, `max_area_limiter_power`                                                      |
-| ``\alpha_b``, ``\alpha_d``                                          | `pressure_normalmode_buoy_coeff1`, `pressure_normalmode_drag_coeff`                              | same                                                                                                    |
-| ``c_m``                                                             | `tke_ed_coeff`                                                                                   | `mixing_length_eddy_viscosity_coefficient`                                                              |
-| ``c_b``                                                             | `static_stab_coeff`                                                                              | `mixing_length_static_stab_coeff`                                                                       |
-| ``\mathrm{Ri}_c``                                                   | `Ri_crit`                                                                                        | `mixing_length_Ri_crit`                                                                                 |
-| ``c_d``                                                             | `tke_dissipation_coefficient` (derived)                                                          | —                                                                                                       |
-| ``\mathrm{Pr}_n``, ``\omega_{\mathrm{pr}}``, ``\mathrm{Pr}_{\max}`` | `Prandtl_number_0`, `Prandtl_number_scale`, `Pr_max`                                             | `mixing_length_Prandtl_number_0`, `mixing_length_Prandtl_number_scale`, `mixing_length_Prandtl_maximum` |
-| ``c_k``                                                             | `tke_surf_flux_coeff`                                                                            | `mixing_length_tke_surf_flux_coeff`                                                                     |
-| ``c_\sigma``                                                        | `diagnostic_covariance_coeff`, which is ``c_\sigma / 2`` (the closure carries the factor of two) | `diagnostic_covariance_coeff`                                                                           |
-| ``r_{T,q_t}``                                                       | `Tq_correlation_coefficient`                                                                     | `Tq_correlation_coefficient`                                                                            |
-| ``c_g``, ``c_{\Delta x}``                                           | `sgs_variance_geometric_coeff`, `sgs_variance_horizontal_scale_factor` (0 = term off)            | — (provisional)                                                                                         |
-| ``r_{\max}``                                                        | `sgs_variance_max_rel_std` (bound ``\sigma_q \le r_{\max} q_t``)                                 | — (provisional)                                                                                         |
-| ``k_{\mathrm{Ri}}``                                                 | `sgs_variance_geometric_Ri_factor` (``\mathrm{Ri}_0 = k_{\mathrm{Ri}} \mathrm{Ri}_c``; 0 = off)  | — (provisional)                                                                                         |
-| ``A``                                                               | `interface_entr_efficiency`                                                                      | `EDMF_interface_entr_efficiency`                                                                        |
+| Symbol                                                              | Accessor                                                                                          | ClimaParams name                                                                                        |
+|:------------------------------------------------------------------- |:------------------------------------------------------------------------------------------------- |:------------------------------------------------------------------------------------------------------- |
+| ``a_{\min}``, ``a_{\max}``                                          | `min_area`, `max_area`                                                                            | `EDMF_min_area`, `EDMF_max_area`                                                                        |
+| ``a_{s,\max}``                                                      | `max_surface_area`                                                                                | `EDMF_max_surface_area`                                                                                 |
+| ``c_u``, ``z_i``, ``\alpha``                                        | `sfc_mass_flux_ustar_coeff`, `convective_zi`, `sfc_mass_flux_cap_fraction`                        | `EDMF_sfc_mass_flux_ustar_coeff`, `EDMF_convective_zi`, `EDMF_sfc_mass_flux_cap_fraction`               |
+| ``c_\varepsilon``, ``1/L_\varepsilon``                              | `entr_coeff`, `entr_inv_length`                                                                   | `entr_coeff`, `entr_inv_length`                                                                         |
+| ``c_{\varepsilon b}``, ``\tau_\varepsilon^{-1}``                    | `entr_buoy_coeff`, `entr_inv_tau`                                                                 | `entr_buoy_coeff`, `entr_inv_tau`                                                                       |
+| ``\tau_{\max}^{-1}``                                                | `entr_detr_buoy_inv_tau_max`                                                                      | `entr_detr_buoy_inv_tau_max`                                                                            |
+| ``c_1 \dots c_6`` (Π groups)                                        | `entr_param_vec`                                                                                  | `entr_param_vec`                                                                                        |
+| ``\varepsilon_t``, ``c_t``                                          | `turb_entr_param_vec`                                                                             | `turb_entr_param_vec`                                                                                   |
+| ``c_\delta``, ``c_{\delta \nabla}``                                 | `detr_buoy_coeff`, `detr_massflux_vertdiv_coeff`                                                  | `detr_buoy_coeff`, `detr_massflux_vertdiv_coeff`                                                        |
+| ``s_{\min}``, ``p_{\min}``                                          | `min_area_limiter_scale`, `min_area_limiter_power`                                                | `min_area_limiter_scale`, `min_area_limiter_power`                                                      |
+| ``s_{\max}``, ``p_{\max}``                                          | `max_area_limiter_scale`, `max_area_limiter_power`                                                | `max_area_limiter_scale`, `max_area_limiter_power`                                                      |
+| ``\alpha_b``, ``\alpha_d``                                          | `pressure_normalmode_buoy_coeff1`, `pressure_normalmode_drag_coeff`                               | same                                                                                                    |
+| ``c_m``                                                             | `tke_ed_coeff`                                                                                    | `mixing_length_eddy_viscosity_coefficient`                                                              |
+| ``c_b``                                                             | `static_stab_coeff`                                                                               | `mixing_length_static_stab_coeff`                                                                       |
+| ``\mathrm{Ri}_c``                                                   | `Ri_crit`                                                                                         | `mixing_length_Ri_crit`                                                                                 |
+| ``c_d``                                                             | `tke_dissipation_coefficient` (derived)                                                           | —                                                                                                       |
+| ``\mathrm{Pr}_n``, ``\omega_{\mathrm{pr}}``, ``\mathrm{Pr}_{\max}`` | `Prandtl_number_0`, `Prandtl_number_scale`, `Pr_max`                                              | `mixing_length_Prandtl_number_0`, `mixing_length_Prandtl_number_scale`, `mixing_length_Prandtl_maximum` |
+| ``c_k``                                                             | `tke_surf_flux_coeff`                                                                             | `mixing_length_tke_surf_flux_coeff`                                                                     |
+| ``c_\sigma``                                                        | `diagnostic_covariance_coeff`, which is ``c_\sigma / 2`` (the closure includes the factor of two) | `diagnostic_covariance_coeff`                                                                           |
+| ``r_{T,q_t}``                                                       | `Tq_correlation_coefficient`                                                                      | `Tq_correlation_coefficient`                                                                            |
+| ``c_g``, ``c_{\Delta x}``                                           | `sgs_variance_geometric_coeff`, `sgs_variance_horizontal_scale_factor` (0 = term off)             | — (provisional)                                                                                         |
+| ``r_{\max}``                                                        | `sgs_variance_max_rel_std` (bound ``\sigma_q \le r_{\max} q_t``)                                  | — (provisional)                                                                                         |
+| ``k_{\mathrm{Ri}}``                                                 | `sgs_variance_geometric_Ri_factor` (``\mathrm{Ri}_0 = k_{\mathrm{Ri}} \mathrm{Ri}_c``; 0 = off)   | — (provisional)                                                                                         |
+| ``A``                                                               | `interface_entr_efficiency`                                                                       | `EDMF_interface_entr_efficiency`                                                                        |
 
 The generated [Configuration Options](configuration_options.md) table lists the
 YAML keys; [Configuring and Tuning PROPHET](prophet_howto.md) explains which of

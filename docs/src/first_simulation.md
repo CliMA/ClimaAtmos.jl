@@ -1,10 +1,10 @@
 # Your First Simulation
 
-This page walks through building, running, and inspecting one simulation. To
+This page walks through building, running, and inspecting a simulation. To
 configure each component in turn, see
 [Scripting Simulations](scripting_simulations.md); to run from a YAML file
 instead, see [Creating Custom Configurations](configuration.md), and for how
-the two interfaces relate, [Script vs Config Interface](interfaces.md).
+the two interfaces relate, see [Script vs Config Interface](interfaces.md).
 
 ## Minimal example
 
@@ -49,7 +49,7 @@ integrator:
     the density `ρ` and the total energy `ρe_tot`) and `Y.f` the cell-face
     variables (such as the vertical velocity `u₃`). The `integrator` is the
     ODE integrator, from ClimaTimeSteppers, that advances the state in time.
-    See the [Glossary](@ref) for these and other recurring names.
+    See the [Glossary](@ref) for these and other recurring terms.
 
 ```@example first_sim
 Y = simulation.integrator.u
@@ -63,7 +63,7 @@ propertynames(Y.f)  # e.g., (:u₃,)
 
 ## Running a case end to end
 
-The default simulation is plain, and a global run is slow to integrate. A
+The default global simulation is slow to integrate on a laptop. A
 [setup](setups.md) supplies a case: its initial state, its boundary conditions,
 and its forcings. Here that is BOMEX, a shallow-cumulus column, paired with
 moist physics from a model preset. `solve_atmos!` integrates the simulation
@@ -88,17 +88,16 @@ simulation.integrator.t
 (This page runs during the documentation build, so it writes to a temporary
 directory; drop `output_dir` to get the default location described below.)
 
-The setup and the physics are not independent: the setup sets the initial state
-and the case forcings, while the parameterizations come from the rest of the
-model, so the two have to be chosen together. A setup can require prognostic
-variables that only some physics provide. BOMEX with the default dry model
-would have no moisture to convect, which is why `equil_moist_0m` appears above.
-Model presets provide reasonable physics defaults for simulations scientists
-commonly run. The setup and your own keyword arguments override them. The one
-above enables moist physics but no turbulence-convection scheme. Pass
-`defaults = CA.Presets.prognostic_edmf(Float32)` instead to add convective
-transport, or run the corresponding YAML case config for the full published
-setup. See the [Presets](api.md#Presets) section of the API for the full list.
+The setup sets the initial state and the case forcings, while the
+parameterizations come from the rest of the model, so the two have to be chosen
+together. A setup can require prognostic variables that only some physics
+provide. BOMEX with the default dry model would have no moisture, which is why
+`equil_moist_0m` appears above. Model presets provide reasonable physics
+defaults for simulations scientists commonly run. The setup and your own keyword
+arguments override them. The one above enables moist physics but no
+turbulence-convection scheme. Pass `defaults = CA.Presets.prognostic_edmf(Float32)` instead to add convective transport, or run
+the corresponding YAML case config for the full published setup. See the
+[Presets](api.md#Presets) section of the API for the full list.
 
 ## Where output goes
 
@@ -108,24 +107,24 @@ when the `CI` environment variable is set); with the default `job_id` of
 `atmos_sim`, that is `output/atmos_sim`. Each run writes to a numbered
 subdirectory of the base directory — `simulation.output_dir` is that
 subdirectory, such as `output/atmos_sim/output_0000` — and
-`output/atmos_sim/output_active` links to the most recent one. Two
-formats appear there, each with a distinct role:
+`output/atmos_sim/output_active` links to the most recent one. Two formats
+appear there:
 
-  - **NetCDF** (`.nc`) files hold the **diagnostics** -- derived (and often interpolated)
-    output variables such as temperature or precipitation. See
+  - **NetCDF** (`.nc`) files hold the diagnostics: derived (and often
+    interpolated) output variables such as temperature or precipitation. See
     [Computing and saving diagnostics](@ref) for how to configure them.
-  - **HDF5** (`.hdf5`) files hold full-resolution **model-state checkpoints**, written when
-    `checkpoint_frequency` is set. These are the files a simulation reads to
-    [restart](@ref "Restarting and Checkpointing").
+  - **HDF5** (`.hdf5`) files hold full-resolution model-state checkpoints,
+    written when `checkpoint_frequency` is set. These are the files a
+    simulation reads to [restart](@ref "Restarting and Checkpointing").
 
 [Loading and Visualizing Output](visualizing_output.md) covers reading the
 NetCDF files with ClimaAnalysis.
 
 ## Next steps
 
-  - [Scripting Simulations](@ref) -- configure the grid, model, setup, and
+  - [Scripting Simulations](@ref): configure the grid, model, setup, and
     diagnostics from a script, and step the integrator interactively
-  - [Script vs Config Interface](@ref) -- the same runs from YAML files
-  - [Running Single-Column Cases](@ref) -- BOMEX, DYCOMS, RICO, and more
-  - [Computing and saving diagnostics](@ref) -- configure output variables and formats
-  - [Glossary](@ref) -- the state vector `Y`, the cache `p`, and other recurring symbols
+  - [Script vs Config Interface](@ref): the same runs configured from YAML files
+  - [Running Single-Column Cases](@ref): BOMEX, DYCOMS, RICO, and more
+  - [Computing and saving diagnostics](@ref): configure output variables and formats
+  - [Glossary](@ref): the state vector `Y`, the cache `p`, and other recurring symbols

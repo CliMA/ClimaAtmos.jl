@@ -14,8 +14,8 @@ layout, and [Adding a Column Dataset](extending_column_datasets.md) for
 adding a new format as a small dataset module.
 
 The cleanest runscript drives the case through a config dictionary. It merges
-over the defaults and wires the setup's forcing, insolation, and surface models
-into the [`AtmosModel`](@ref ClimaAtmos.AtmosModel) for you:
+over the defaults and passes the setup's forcing, insolation, and surface
+models into the [`AtmosModel`](@ref ClimaAtmos.AtmosModel) for you:
 
 ```julia
 import ClimaAtmos as CA

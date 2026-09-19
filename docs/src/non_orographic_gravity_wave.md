@@ -75,7 +75,7 @@ The gravity wave drag at half-levels is then
 X(z_{n-1/2}) = \frac{\epsilon \rho_0}{\rho(z_{n-1/2})\Delta z} \sum_j (B_0)_j
 ```
 
-where the sum is over the breaking waves and $\epsilon = F_{S0} / (\rho_0\, n_k \sum |B_0|)$ is the wave intermittency ($n_k$ is the number of horizontal wavenumber bands, one by default). Here $F_{S0}$ is the prescribed time-averaged total momentum flux, specified as a latitude-dependent quantity.
+where the sum is over the breaking waves and $\epsilon = F_{S0} / (\rho_0\, n_k \sum |B_0|)$ is the wave intermittency ($n_k$ is the number of horizontal wavenumber bands, one by default). Here, $F_{S0}$ is the prescribed time-averaged total momentum flux, specified as a latitude-dependent quantity.
 
 Any momentum flux that propagates to the model top without breaking is re-deposited by spreading it uniformly over the levels at and above the damping level (defined by `nogw_damp_pressure`). The divisor in the code is one larger than the number of those levels, so this recovers the escaped momentum only approximately.
 
@@ -140,14 +140,14 @@ The envelope detection makes several deliberate simplifications:
 
   - **Single envelope depth.** Beres (2004)'s half-sine response function is parameterized by one heating depth $h$. The continuous envelope $[z_{\text{bot}}, z_{\text{top}}]$ collapses a possibly multi-peaked or asymmetric heating profile to a single depth. Bottom-heavy and top-heavy regimes are approximated by this single-depth construction.
   - **Altitude floor on $z_{\text{bot}}$.** The floor $z_{\text{bot,floor}}$ prevents the boundary-layer / dry-thermal $Q_1$ signal from anchoring the envelope at the surface. It works together with the activation threshold $h_{\min}$: convection that does not extend at least $h_{\min}$ above the floor is filtered out, so the Beres source acts on deep convection only.
-  - **Mass-weighted means.** $\bar{u}_{\text{heat}}$, $\bar{v}_{\text{heat}}$, and $\bar{N}_{\text{source}}$ are weighted by mass ($\rho \Delta z$) over the geometric envelope, not by $Q_1$. This is consistent with the geometric (rather than heating-based) envelope definition. Beres (2004) assumes constant $U$ over the heating depth, so either weighting is a defensible discretization choice. In sheared environments the difference can affect the asymmetry of the source spectrum.
+  - **Mass-weighted means.** $\bar{u}_{\text{heat}}$, $\bar{v}_{\text{heat}}$, and $\bar{N}_{\text{source}}$ are weighted by mass ($\rho \Delta z$) over the geometric envelope, not by $Q_1$. This is consistent with the geometric (rather than heating-based) envelope definition. Beres (2004) assumes constant $U$ over the heating depth, so either weighting is a defensible discretization choice. In sheared environments, the difference can affect the asymmetry of the source spectrum.
 
 ### Activation criteria
 
 The Beres source activates in a column only when both conditions are met:
 
   - the grid-mean heating amplitude exceeds a threshold, $(\pi/2)\,h^{-1}\!\int_{z_{\text{bot}}}^{z_{\text{top}}} Q_1\,dz > Q_{0,\text{threshold}}$, of order $1\;\text{K/day}$ (`nogw_beres_Q0_threshold`). This gate deliberately uses the grid-mean $Q_1$ (not the in-cloud $Q_0$ that sets the launched amplitude) because its threshold is calibrated to grid-mean magnitudes.
-  - $h > h_{\min}$, a heating-depth threshold of order $1\;\text{km}$ (`nogw_beres_h_heat_min`).
+  - the heating depth exceeds a threshold, $h > h_{\min}$, of order $1\;\text{km}$ (`nogw_beres_h_heat_min`).
 
 This filters out shallow or weak convection. In columns where the criteria are not met, the Beres contribution is zero and only the AD99 background source acts. Where they are met, the Beres flux is added on top of the AD99 background.
 
@@ -199,8 +199,8 @@ B_0(c) = \text{sgn}(\hat{c}) \cdot \alpha \int_{\nu_{\min}}^{\nu_{\max}} F\!\lef
 
 where $\hat{c} = c - \bar{u}_{\text{heat}}$ is the intrinsic phase speed. The integration uses Boole's rule quadrature. The integration limits $\nu_{\min}$ and $\nu_{\max}$ should satisfy:
 
-  - $\nu_{\min} > 0$, both for numerical reasons (the integrand contains $\nu/c^2$ and $1/|\hat{\nu}|$) and to keep the steady ($\nu = 0$) part out of the transient integral (it is handled separately, see "Steady component" below).
-  - $\nu_{\max}$ small enough that propagating waves exist over the resolved $c$ range. The range $|\hat{\nu}| \geq N$ contributes zero by construction.
+  - a positive lower frequency bound, $\nu_{\min} > 0$, both for numerical reasons (the integrand contains $\nu/c^2$ and $1/|\hat{\nu}|$) and to keep the steady ($\nu = 0$) part out of the transient integral (it is handled separately, see "Steady component" below).
+  - an upper frequency bound $\nu_{\max}$ small enough that propagating waves exist over the resolved $c$ range. The range $|\hat{\nu}| \geq N$ contributes zero by construction.
 
 The factor $\alpha$ (`nogw_beres_scale_factor`) bundles the dimensional prefactor $\rho_0/(L\tau)$ from Beres Eq. (30), the white-noise $|Q_t|^2$ normalization, and any empirical tuning multiplier.
 
@@ -223,7 +223,7 @@ The Beres source spectrum $B_0(c)$ is propagated upward with the same reflection
 
 The Beres forcing computed this way is added to the AD99 background forcing in each column. The two source spectra are propagated and accumulated independently.
 
-## Implementation Summary
+## Implementation summary
 
 The parameterization runs on a callback timer (`dt_nogw`) and applies the accumulated forcing every integrator step.
 
@@ -258,3 +258,18 @@ Every dt (integrator step):
   non_orographic_gravity_wave_apply_tendency!
     └─ Clamp forcing, zero NaN/Inf, apply to wind tendencies
 ```
+
+## Where this is implemented
+
+| Concept                                          | Source                                                                                                                                                                                                                       |
+|:------------------------------------------------ |:---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Source spectra, upward propagation, and breaking | [src/parameterized_tendencies/gravity_wave_drag/non_orographic_gravity_wave.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/parameterized_tendencies/gravity_wave_drag/non_orographic_gravity_wave.jl)              |
+| Callback scheduling at `dt_nogw`                 | [src/callbacks/get_callbacks.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/callbacks/get_callbacks.jl), [src/callbacks/callbacks.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/callbacks/callbacks.jl) |
+| Model types                                      | [`ClimaAtmos.AbstractGravityWave`](@ref), [`ClimaAtmos.NonOrographicGravityWave`](@ref)                                                                                                                                      |
+
+The scheme is switched on with `non_orographic_gravity_wave: true`. The Beres
+convective source is added with `nogw_beres_source`, which requires PROPHET;
+`nogw_beres_heating_latent` and `nogw_beres_detailed_diagnostics` control the
+heating source and the verification diagnostics. See
+[Configuration Options](configuration_options.md) and
+[Running Global Simulations](global_simulations.md).

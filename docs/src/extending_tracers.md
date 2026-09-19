@@ -7,8 +7,12 @@ that are handled automatically, see [Passive Tracers](passive_tracers.md).
 The model includes a working, config-selectable passive tracer:
 setting `chemistry_model: "passive"` enables the tracer `q_gas_A`, threaded
 through [`physical_state`](@ref ClimaAtmos.Setups.physical_state) and the
-prognostic-variable construction, with `q_gas_A`/`q_gas_Aup` diagnostics. It is
-exercised by [`config/model_configs/prognostic_edmfx_bomex_tracerA_column.yml`](https://github.com/CliMA/ClimaAtmos.jl/blob/main/config/model_configs/prognostic_edmfx_bomex_tracerA_column.yml)
+prognostic-variable construction, with `q_gas_A`/`q_gas_Aup` diagnostics. The
+same key constructs a [`GasPhaseChem`](@ref ClimaAtmos.GasPhaseChem) model whose
+chemistry sources come from the `ClimaAtmosMusica` package extension; that
+extension loads only when `Musica` is imported alongside ClimaAtmos, and without
+it the chemistry tendency is a no-op, so the tracer is transported but never
+produced or destroyed. It is exercised by [`config/model_configs/prognostic_edmfx_bomex_tracerA_column.yml`](https://github.com/CliMA/ClimaAtmos.jl/blob/main/config/model_configs/prognostic_edmfx_bomex_tracerA_column.yml)
 and is the best reference implementation for the steps below.
 
 To add a new passive tracer `A` that is transported through the full
@@ -71,7 +75,7 @@ Only a tracer that **sediments** requires edits: add it to
 | Sedimentation Jacobian entries | See Step 4 above (sedimenting tracers only) |
 | Diagnostics output             | User must define short names                |
 
-# Implementation details
+## Implementation details
 
 The auto-discovery relies on two patterns:
 

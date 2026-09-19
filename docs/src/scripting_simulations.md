@@ -37,11 +37,11 @@ number in seconds or a string with a unit (`secs`, `mins`, `hours`, `days`,
 `weeks`), the same syntax the YAML interface uses. The composite pieces are
 objects constructed separately and passed in, as the following sections show.
 
-The grid, the setup, and the physics are not independent: a setup supplies the
-initial state, the physics keywords supply the parameterizations, and a case
-only makes sense when they match. Running the BOMEX setup with the default dry
-model, for instance, leaves no moisture to convect. The presets below pair
-them correctly; when assembling the pieces yourself, choose them together.
+A setup supplies the initial state, the physics keywords supply the
+parameterizations, and a case only makes sense when they match. Running the
+BOMEX setup with the default dry model, for instance, leaves no moisture. The
+presets below pair them correctly; when assembling the pieces yourself, choose
+them together.
 
 ## Grid
 
@@ -79,7 +79,7 @@ model = CA.AtmosModel(grid;
 ```
 
 Preset constructors in `CA.Presets` assemble common combinations, so most
-scripts start from one of them instead of from bare `AtmosModel` keywords.
+scripts start from one of them.
 The model presets are `dry`, `equil_moist_0m`, `nonequil_moist_1m`,
 `prognostic_edmf`, and `prognostic_edmf_1m`; each returns a NamedTuple of
 `AtmosModel` keyword arguments for its `defaults` slot, which the setup and

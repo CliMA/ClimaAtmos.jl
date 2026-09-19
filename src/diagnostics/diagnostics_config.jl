@@ -24,7 +24,9 @@ and `additional` is empty. The type parameter `A` is the type of the `additional
   - `interpolation_num_points = nothing`: Override for the NetCDF remap grid, e.g.
     `(180, 90, 10)`. When `nothing`, the default for the underlying space is used.
   - `output_at_levels::Bool = true`: Whether to write on model levels, applying no vertical
-    interpolation. Set to `false` to interpolate to pressure levels instead.
+    interpolation. Set to `false` to interpolate onto height levels spaced exponentially
+    to approximate constant-pressure surfaces; the coordinate is still height. True
+    pressure coordinates come from `pressure_coordinates: true` on the diagnostic.
   - `debug_tendency::Bool = false`: include the column-integrated per-process
     tendency diagnostics (short names of the form `<field>_tend_<process>_colint`).
     Debug-only; each sample allocates a full `Y`-sized `FieldVector` and runs
