@@ -974,13 +974,15 @@ NVTX.@annotate function set_cloud_fraction!(
     microphysics_model = p.atmos.microphysics_model
 
     # Get environment density, temperature, and total specific humidity
-    ᶜρ_env, ᶜT_mean, ᶜq_mean = _get_env_ρ_T_q(Y, p, thermo_params, turbconv_model)
+    ᶜρ_env_lazy, ᶜT_mean, ᶜq_mean = _get_env_ρ_T_q(Y, p, thermo_params, turbconv_model)
+
+    ᶜρ_env = (p.scratch.ᶜtemp_scalar .= ᶜρ_env_lazy)
 
     # Get condensate means (dispatches on microphysics_model)
     ᶜq_lcl_lazy, ᶜq_icl_lazy =
         _get_condensate_means(Y, p, turbconv_model, microphysics_model)
-    ᶜq_lcl = (p.scratch.ᶜtemp_scalar .= ᶜq_lcl_lazy)
-    ᶜq_icl = (p.scratch.ᶜtemp_scalar_2 .= ᶜq_icl_lazy)
+    ᶜq_lcl = (p.scratch.ᶜtemp_scalar_2 .= ᶜq_lcl_lazy)
+    ᶜq_icl = (p.scratch.ᶜtemp_scalar_3 .= ᶜq_icl_lazy)
 
     sgs_quad = p.atmos.sgs_quadrature
     corr_Tq = correlation_Tq(p.params)
@@ -1067,13 +1069,15 @@ function _get_env_ρ_T_q(Y, p, thermo_params, turbconv_model)
     (; ᶜp, ᶜT, ᶜq_tot_nonneg) = p.precomputed
     if turbconv_model isa PrognosticEDMFX
         (; ᶜT⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰) = p.precomputed
-        ᶜρ_env = @. TD.air_density(
+        ᶜρ_env = @. lazy (
+            TD.air_density(
             thermo_params,
             ᶜT⁰,
             ᶜp,
             ᶜq_tot_nonneg⁰,
             ᶜq_liq⁰,
             ᶜq_ice⁰,
+        )
         )
         return ᶜρ_env, ᶜT⁰, ᶜq_tot_nonneg⁰
     else
