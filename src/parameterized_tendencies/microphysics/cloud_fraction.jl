@@ -126,7 +126,10 @@ function set_covariance_cache_and_cloud_fraction!(Y, p)
 end
 
 # Extra launches per call for the probe above.
-const LAUNCH_PROBE_COUNT = Ref(1000)
+# 5000, not 1000. At roughly 7 us per launch the smaller probe moves SYPD about
+# 2.3%, which sits on the +-2% noise floor of a full AMIP run. A larger probe
+# puts the effect well clear of it; the cost per launch is then the slope.
+const LAUNCH_PROBE_COUNT = Ref(5000)
 
 """
     _aitken_picard_helper(c0, c1, c2)
