@@ -221,6 +221,9 @@ era5_initial_condition_dir:
 era5_ic_full_pressure:
   help: "For `WeatherModel` initial conditions, read 3D pressure (`p_3d`) from the ERA5 file instead of integrating hydrostatically from surface pressure [`false` (default), `true`]"
   value: false
+ic_hydrostatic_rebalance:
+  help: "For file-based initial conditions (WeatherModel, AMIPFromERA5, or a NetCDF path), rebalance the column pressure against the model's discrete Exner-split vertical pressure gradient, removing the spurious vertical acceleration the plain ln-p hydrostatic integration leaves over steep terrain [`false` (default), `true`]"
+  value: false
 test_dycore_consistency:
   help: "Test dycore consistency [`false` (default), `true`]"
   value: false

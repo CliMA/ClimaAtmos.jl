@@ -91,6 +91,92 @@ function hydrostatic_pressure(p_sfc, ᶜT, ᶜq_tot, face_space, thermo_params)
 end
 
 """
+    rebalance_hydrostatic_pressure(ᶜp_anchor, ᶜT, ᶜq_tot, ᶜΦ, thermo_params)
+
+Compute the center pressure that is in *discrete* hydrostatic balance with the
+model's Exner-split vertical pressure gradient (the `Yₜ.f.u₃` PGF in
+`implicit_vertical_advection_tendency!`),
+
+```math
+∇ᵥΦ - ∇ᵥΦ_r(p) + c_{p,d}\\,\\overline{(θ_v - θ_{vr}(p))}\\,∇ᵥΠ(p) = 0
+```
+
+at every interior face, holding `ᶜT` and `ᶜq_tot` fixed. The `ln p` column
+integration of [`hydrostatic_pressure`](@ref) satisfies a *different*
+discretization (a face-to-face midpoint rule), which leaves an O((Δz/H)²)
+residual in the model operator that peaks over steep terrain where the
+vertical grid is stretched — measured as 0.56 m/s² of spurious `u₃` forcing
+over the Himalaya (h8/z63 SLEVE, ~6× the analytic-IC baseline) for ERA5-type
+initial conditions, independent of the file data.
+
+Per interior face between centers `k` and `k+1` the recurrence solves
+
+```math
+F(x) = ΔΦ - (Φ_r(p) - Φ_r(p_k))
+     + \\tfrac{c_{p,d}}{2}\\,(θ_v'_k + θ_v'(p))\\,(Π(p) - Π(p_k)) = 0,
+     \\quad p = e^x,
+```
+
+with `θ_v' = θ_v - θ_{vr}`, by Newton iteration in `x = ln p` (fixed 8
+iterations; the multiplicative update keeps `p > 0`, cf. `pref_from_phi`).
+The interior-face `ᶠgradᵥ`/`ᶠinterp` stencils reduce to the difference and
+arithmetic mean of adjacent centers, so zeroing `F` zeroes the covariant
+tendency exactly. The first-level value is copied from `ᶜp_anchor`, preserving
+the caller's (topography-corrected) surface-pressure anchor. `q_liq = q_ice = 0`
+is assumed, matching the pre-cache state; where the input is supersaturated,
+the first saturation adjustment shifts `T` and reintroduces a small local
+residual.
+"""
+function rebalance_hydrostatic_pressure(
+    ᶜp_anchor, ᶜT, ᶜq_tot, ᶜΦ, thermo_params,
+)
+    FT = eltype(ᶜT)
+    R_d = TD.TP.R_d(thermo_params)
+    cp_d = TD.TP.cp_d(thermo_params)
+    ᶜp_bal = similar(ᶜT)
+    input = Base.broadcasted(tuple, ᶜΦ, ᶜT, ᶜq_tot, ᶜp_anchor)
+    # Carry: (p, Φ, θ_v′) of the level below; NaN marks "below the first level".
+    init = (FT(NaN), FT(NaN), FT(NaN))
+    Operators.column_accumulate!(
+        ᶜp_bal,
+        input;
+        init,
+        transform = first,
+    ) do (p_prev, Φ_prev, θvp_prev), (Φ, T, q, p_anchor)
+        p = if isnan(p_prev)
+            p_anchor
+        else
+            R_m = TD.gas_constant_air(thermo_params, q, zero(q), zero(q))
+            # Naive hydrostatic step as the initial guess (error O((Δz/H)²)).
+            x = log(p_prev) - (Φ - Φ_prev) / (R_m * T)
+            Π_prev = TD.exner_given_pressure(thermo_params, p_prev)
+            Φr_prev = phi_r(thermo_params, p_prev)
+            for _ in 1:8
+                pn = exp(x)
+                Π = TD.exner_given_pressure(thermo_params, pn)
+                θvp =
+                    theta_v(thermo_params, T, pn, q, zero(q), zero(q)) -
+                    theta_vr(thermo_params, pn)
+                F =
+                    (Φ - Φ_prev) - (phi_r(thermo_params, pn) - Φr_prev) +
+                    cp_d / 2 * (θvp_prev + θvp) * (Π - Π_prev)
+                # dF/dx up to an O(ΔΠ/Π) term: −dΦ_r/dx = R_d T_r and
+                # cp_d κ_d Π θ̄_v′ = R_d Π θ̄_v′; together ≈ R_d T̄_v > 0.
+                T_r = air_temperature_reference(thermo_params, pn)
+                dFdx = R_d * T_r + R_d * Π * (θvp_prev + θvp) / 2
+                x -= F / dFdx
+            end
+            exp(x)
+        end
+        θvp =
+            theta_v(thermo_params, T, p, q, zero(q), zero(q)) -
+            theta_vr(thermo_params, p)
+        return (p, Φ, θvp)
+    end
+    return ᶜp_bal
+end
+
+"""
     assign_velocity_energy!(Y, ᶜT, ᶜq_tot, ᶠp, thermo_params, file_path, svi_kwargs)
 
 Regrid velocity from file, compute kinetic and total energy, and assign to Y.
@@ -192,11 +278,15 @@ end
 
 """
     overwrite_from_file!(file_path, extrapolation_bc, Y, thermo_params;
-                         regridder_type=nothing, interpolation_method=nothing)
+                         regridder_type=nothing, interpolation_method=nothing,
+                         hydrostatic_rebalance=false)
 
 Overwrite the prognostic state `Y` with data regridded from a NetCDF file.
 Recomputes vertical pressure levels assuming hydrostatic balance from
-surface pressure.
+surface pressure. With `hydrostatic_rebalance = true`, the column pressure is
+additionally rebalanced against the model's *discrete* Exner-split vertical
+pressure gradient (see [`rebalance_hydrostatic_pressure`](@ref)), so the
+initial state exerts no spurious vertical acceleration at `t = 0`.
 
 Expected variables in the file:
 
@@ -214,6 +304,7 @@ function overwrite_from_file!(
     thermo_params;
     regridder_type = nothing,
     interpolation_method = nothing,
+    hydrostatic_rebalance = false,
 )
     regridder_kwargs = filter(!isnothing, (; extrapolation_bc, interpolation_method))
     svi_kwargs =
@@ -254,11 +345,22 @@ function overwrite_from_file!(
         )
     end
 
-    # Hydrostatic pressure integration
+    # Hydrostatic pressure integration (also the rebalance anchor at level 1)
     ᶠp = hydrostatic_pressure(p_sfc, ᶜT, ᶜq_tot, face_space, thermo_params)
+    ᶜp = if hydrostatic_rebalance
+        ᶜΦ = geopotential.(
+            thermo_params.grav,
+            Fields.coordinate_field(Y.c).z,
+        )
+        rebalance_hydrostatic_pressure(
+            ᶜinterp.(ᶠp), ᶜT, ᶜq_tot, ᶜΦ, thermo_params,
+        )
+    else
+        ᶜinterp.(ᶠp)
+    end
 
     # Density
-    Y.c.ρ .= TD.air_density.(thermo_params, ᶜT, ᶜinterp.(ᶠp), ᶜq_tot)
+    Y.c.ρ .= TD.air_density.(thermo_params, ᶜT, ᶜp, ᶜq_tot)
 
     # Velocity and energy
     e_pot = assign_velocity_energy!(

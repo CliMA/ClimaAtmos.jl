@@ -17,9 +17,11 @@ reading the 00:00 UTC snapshot of `start_date` from the
 """
 struct AMIPFromERA5
     start_date::Dates.DateTime
+    hydrostatic_rebalance::Bool
 end
 
-AMIPFromERA5(start_date::String) = AMIPFromERA5(parse_date(start_date))
+AMIPFromERA5(start_date::String; hydrostatic_rebalance::Bool = false) =
+    AMIPFromERA5(parse_date(start_date), hydrostatic_rebalance)
 
 function center_initial_condition(::AMIPFromERA5, local_geometry, params)
     FT = eltype(params)
@@ -40,5 +42,6 @@ function overwrite_initial_state!(setup::AMIPFromERA5, Y, thermo_params)
         file_path, extrapolation_bc, Y, thermo_params;
         regridder_type = :InterpolationsRegridder,
         interpolation_method = Intp.Linear(),
+        hydrostatic_rebalance = setup.hydrostatic_rebalance,
     )
 end

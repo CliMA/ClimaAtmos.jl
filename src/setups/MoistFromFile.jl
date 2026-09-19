@@ -23,10 +23,17 @@ The file is expected to carry:
   - `cswc`, `crwc`: Snow and rain water contents, optional [kg/kg].
   - `z_sfc`: Surface altitude, optional; enables the topographic pressure
     correction [m].
+
+A second field, `hydrostatic_rebalance`, selects the discrete rebalance of the
+column pressure against the model's vertical PGF operator (see
+`rebalance_hydrostatic_pressure`).
 """
 struct MoistFromFile
     file_path::String
+    hydrostatic_rebalance::Bool
 end
+
+MoistFromFile(file_path::String) = MoistFromFile(file_path, false)
 
 function center_initial_condition(setup::MoistFromFile, local_geometry, params)
     FT = eltype(params)
@@ -34,5 +41,8 @@ function center_initial_condition(setup::MoistFromFile, local_geometry, params)
 end
 
 function overwrite_initial_state!(setup::MoistFromFile, Y, thermo_params)
-    return overwrite_from_file!(setup.file_path, nothing, Y, thermo_params)
+    return overwrite_from_file!(
+        setup.file_path, nothing, Y, thermo_params;
+        hydrostatic_rebalance = setup.hydrostatic_rebalance,
+    )
 end

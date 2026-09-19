@@ -23,6 +23,12 @@ use_sgs_quadrature: true
 initial_condition: "WeatherModel"
 start_date: "20100701"
 output_dir: "/scratch/asridhar/weathertest"
+# Rebalance the IC column pressure against the model's discrete Exner-split
+# vertical PGF. Without it, the ln-p hydrostatic integration leaves an
+# O(0.5 m/s²) spurious u₃ forcing over steep terrain (measured over the
+# Himalaya at h8/z63; prime suspect for the h60 t≈1-2h GPU DomainError).
+# Set to false to A/B against the legacy construction.
+ic_hydrostatic_rebalance: true
 # era5_initial_condition_dir: ~   # default (~) uses the wxquest_initial_conditions ClimaArtifact
 # era5_ic_full_pressure: false    # false = hydrostatic p from surface pressure; true = read 3D p from file
 dt: "30secs"

@@ -20,15 +20,20 @@ then overwrites the whole prognostic state with ERA5 data located by
 
   - `use_full_pressure = false`: Whether to read the 3D pressure from the file
     instead of integrating it hydrostatically.
+  - `hydrostatic_rebalance = false`: Whether to rebalance the column pressure
+    against the model's discrete Exner-split vertical pressure gradient after
+    the hydrostatic integration (see `rebalance_hydrostatic_pressure`).
 
 # Fields
 
   - `start_date`: The parsed `DateTime`.
   - `use_full_pressure`: As above [-].
+  - `hydrostatic_rebalance`: As above [-].
 """
 struct WeatherModel
     start_date::Dates.DateTime
     use_full_pressure::Bool
+    hydrostatic_rebalance::Bool
 end
 
 const _ERA5_IC_DIR = Ref{Any}(nothing)
@@ -37,11 +42,13 @@ function WeatherModel(
     start_date::String,
     era5_initial_condition_dir = nothing;
     use_full_pressure::Bool = false,
+    hydrostatic_rebalance::Bool = false,
 )
     _ERA5_IC_DIR[] = era5_initial_condition_dir
     return WeatherModel(
         parse_date(start_date),
         use_full_pressure,
+        hydrostatic_rebalance,
     )
 end
 
@@ -77,6 +84,7 @@ function overwrite_initial_state!(setup::WeatherModel, Y, thermo_params)
         return overwrite_from_file!(
             file_path, extrapolation_bc, Y, thermo_params;
             regridder_type, interpolation_method,
+            hydrostatic_rebalance = setup.hydrostatic_rebalance,
         )
     end
 

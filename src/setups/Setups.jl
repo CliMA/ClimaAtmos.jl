@@ -16,6 +16,7 @@ import ..geopotential
 import ..C12, ..C3
 import ..background_p_and_T, ..background_u
 import ..pref_from_phi, ..air_temperature_reference
+import ..theta_v, ..theta_vr, ..phi_r
 
 # File-based IC infrastructure (overwrite_from_file.jl, GCMDriven.jl, ForcingFromFile.jl)
 import Dates

@@ -324,9 +324,13 @@ function get_setup_type(parsed_args, thermo_params)
             parsed_args["start_date"],
             parsed_args["era5_initial_condition_dir"];
             use_full_pressure = parsed_args["era5_ic_full_pressure"],
+            hydrostatic_rebalance = parsed_args["ic_hydrostatic_rebalance"],
         )
     elseif ic_name == "AMIPFromERA5"
-        return Setups.AMIPFromERA5(parsed_args["start_date"])
+        return Setups.AMIPFromERA5(
+            parsed_args["start_date"];
+            hydrostatic_rebalance = parsed_args["ic_hydrostatic_rebalance"],
+        )
     elseif ic_name == "DecayingProfile"
         return Setups.DecayingProfile(;
             perturb = parsed_args["perturb_initstate"],
@@ -375,7 +379,10 @@ function get_setup_type(parsed_args, thermo_params)
     elseif ic_name == "ShipwayHill2012"
         return Setups.ShipwayHill2012(; thermo_params)
     elseif isfile(ic_name)
-        return Setups.MoistFromFile(ic_name)
+        return Setups.MoistFromFile(
+            ic_name,
+            parsed_args["ic_hydrostatic_rebalance"],
+        )
     end
     error("Unknown initial_condition: $ic_name")
 end
@@ -416,7 +423,7 @@ mesh warping; any other combination raises an error. Called through
 """
 function get_steady_state_velocity(params, Y, topo, initial_condition, mesh_warp_type)
     initial_condition == "ConstantBuoyancyFrequencyProfile" &&
-    mesh_warp_type == "Linear" ||
+        mesh_warp_type == "Linear" ||
         error("The steady-state velocity can currently be computed only for a \
                ConstantBuoyancyFrequencyProfile with Linear mesh warping")
     top_level = Spaces.nlevels(axes(Y.c)) + Fields.half
