@@ -112,6 +112,12 @@ function temporary_quantities(Y, atmos)
             Fields.level(Fields.Field(FT, center_space), 1),
         ),
         ᶜtemp_C12 = Fields.Field(C12{FT}, center_space), # ᶜuₕ_mean
+        # second horizontal gradient for `hgrad_cross_invariant!` / `hgrad_invariants_pair!`
+        # (the diagnosed T-q correlation cross term, or the isentropic form's ∇θ_li·∇q invariant)
+        ᶜtemp_C12_2 = (
+            atmos.tq_correlation_model isa DiagnosedTqCorrelation ||
+            atmos.sgs_variance_horizontal_form isa IsentropicHorizontalVariance
+        ) ? Fields.Field(C12{FT}, center_space) : nothing,
         # DSS buffer for the horizontal gradient vector of the geometric SGS variance
         # (`hgrad_invariant!`); `nothing` on spaces that need no DSS (single columns).
         ᶜC12_dss_buffer = (uses_covariances(atmos) && do_dss(center_space)) ?

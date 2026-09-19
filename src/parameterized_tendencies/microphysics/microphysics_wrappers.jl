@@ -355,7 +355,8 @@ accretion.
   - `q_rai`, `q_sno`: Rain and snow specific humidity [kg/kg].
   - `T′T′`: Temperature variance ``\\langle T'^2 \\rangle`` [K²].
   - `q′q′`: Total-water variance ``\\langle q'^2 \\rangle`` [(kg/kg)²].
-  - `corr_Tq`: Correlation coefficient corr(T′, q′) from `correlation_Tq(params)` [-].
+  - `corr_Tq`: Correlation coefficient corr(T′, q′) [-], the per-cell
+    `p.precomputed.ᶜcorr_Tq` set by `set_tq_correlation!`.
   - `λ_lagrange`: Lagrange multiplier from `ᶜsgs_moments`, precomputed to
     enforce `E[max(0, λ_lagrange + α·S′)] = q_c` exactly under the
     quadrature measure [kg/kg].

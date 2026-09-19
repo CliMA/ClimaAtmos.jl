@@ -219,7 +219,7 @@ function test_restart(simulation, args; comms_ctx, more_ignore = Symbol[])
             # DataHandlers contains caches, so they are stateful
             :data_handler,
             # Covariance fields are recomputed in set_precomputed_quantities!
-            :ᶜT′T′, :ᶜq′q′,
+            :ᶜT′T′, :ᶜq′q′, :ᶜcorr_Tq, :ᶜT′q′,
             # Scratch fields for prognostic EDMF (uninitialized until tendencies run)
             :ᶠu₃_tendencyʲs,
             :ᶜρa_tendencyʲs,
@@ -274,7 +274,7 @@ function test_restart(simulation, args; comms_ctx, more_ignore = Symbol[])
             :hyperdiffusion_ghost_buffer,
             :data_handler,
             :ᶜmp_tendency,
-            :ᶜT′T′, :ᶜq′q′,
+            :ᶜT′T′, :ᶜq′q′, :ᶜcorr_Tq, :ᶜT′q′,
             :rc,
             # The raw RRTMGP solver contains internal workspaces that are
             # uninitialized or only partially written by design; its

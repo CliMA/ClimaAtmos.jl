@@ -214,7 +214,10 @@ The two-dimensional rule evaluates `N²` points.
 
 Build the quadrature for floating-point type `FT`. `GridMeanSGS` always overrides
 `quadrature_order` to `N = 1`. The `T`-`q` correlation coefficient is deliberately
-not stored here; it is supplied per call via `correlation_Tq(params)`.
+not stored here; it is supplied per call as `corr_Tq`, the cache field
+`p.precomputed.ᶜcorr_Tq` filled by `set_tq_correlation!` (the prescribed
+`Tq_correlation_coefficient`, or the diagnosed gradient covariance when
+`tq_correlation_model: diagnosed`).
 """
 struct SGSQuadrature{N, A, W, D <: AbstractSGSDistribution, FT} <: AbstractSGSamplingType
     a::A             # quadrature points

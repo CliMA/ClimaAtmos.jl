@@ -14,6 +14,17 @@ main
 - [#4837](https://github.com/CliMA/ClimaAtmos.jl/pull/4837) ![][badge-✨feature/enhancement] Richardson-number stability weight on the geometric SGS
   variance term (`sgs_variance_geometric_Ri_factor`, 0 = off), built on the saturated moist buoyancy gradient and the strain rate, fading the
   term where the resolved flow is turbulent or conditionally unstable.
+- (branch `zs/sgs_variance_rh`) ![][badge-✨feature/enhancement] Options on the geometric SGS variance term, all defaulting to the merged
+  behaviour: a TKE weight `tke₀ / (tke₀ + max(tke, 0))` on the prognostic EDMF TKE fading the term where the closure reports an active
+  turbulent layer (`sgs_variance_geometric_tke_scale`, 0 = off; requires prognostic TKE; multiplies the Richardson weight when both are set);
+  an isentropic form (`sgs_variance_horizontal_form: isentropic`) in which `q′q′` carries `|∇_h q_tot − r ∇_h θ_li|²`, the gradient of `q_tot`
+  along the `θ_li` surface with `r` the regularised, capped `(∂q_tot/∂z)/(∂θ_li/∂z)` (`sgs_variance_isentropic_min_dtheta_dz`,
+  `sgs_variance_isentropic_slope_cap`), no `θ′θ′` term, and its own validity weight `1[N² > 0]` on the saturated moist `N²`; and an
+  element-linear (lumped GLL{2}) restriction of the gradient invariants that removes the spectral-element mesh imprint
+  (`sgs_variance_element_filter: linear`); and a diagnosed T–q correlation `tq_correlation_model: diagnosed` (from the gradient covariance
+  T′q′, clamped by `sgs_correlation_max`; the `env_q_tot_temperature_{covariance,correlation}` diagnostics now report the sampled values).
+  The applied weight on the term is materialized once per call into `p.precomputed.ᶜgeo_weight` and reported by the new `sgs_geo_weight`
+  diagnostic (1 = term on and unweighted, 0 = term inactive).
 
 0.42.10
 -------
