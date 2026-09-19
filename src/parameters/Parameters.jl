@@ -124,6 +124,21 @@ not yet define. `FT` is the float type; `VFT1`, `VFT2`, and `VTF3` are the
     Richardson-number weight `w = Ri₊² / (Ri₊² + Ri₀²)` on the geometric variance term
     (`sgs_geometric_stability_weight`), with `Ri₊ = max(N²_sat, 0) / max(2 SᵢⱼSᵢⱼ, ε)`
     on the saturated moist buoyancy gradient. `0` (default) makes the weight exactly 1 [-].
+  - `sgs_variance_geometric_tke_scale`: Turbulence-kinetic-energy scale `tke₀` of the
+    weight `w = tke₀ / (tke₀ + max(tke, 0))` that multiplies the geometric variance
+    term (`sgs_geometric_tke_weight`), with `tke` the prognostic EDMF TKE: the term is
+    faded where the closure reports an active turbulent (mixed) layer and kept where
+    the TKE has collapsed. Multiplies the Richardson weight when both are set. `0`
+    (default) makes the weight exactly 1 [m^2 s^-2].
+  - `sgs_variance_isentropic_min_dtheta_dz`: Regularisation `θz_min` of the slope
+    ratio `r = (∂q/∂z)(∂θ_li/∂z) / ((∂θ_li/∂z)² + θz_min²)` of the isentropic geometric
+    variance form (`sgs_variance_horizontal_form: isentropic`); keeps `r` finite in
+    neutral layers. `1e-3` by default [K m^-1].
+  - `sgs_variance_isentropic_slope_cap`: Cap `r_cap` on `|r|` of the isentropic form,
+    bounding the slantwise amplification of the horizontal q gradient. `5e-4` by
+    default [kg kg^-1 K^-1].
+  - `sgs_correlation_max`: Clamp `r` on the magnitude of the diagnosed SGS T–q
+    correlation, `ρ = clamp(T′q′ / √(T′T′ q′q′), ±r)` (`tq_correlation_model: diagnosed`). `1` by default [-].
   - `Tq_correlation_coefficient`: Default correlation between `T'` and `q_tot'`
     in the SGS quadrature, in `[-1, 1]` [-].
   - `static_stab_coeff`: Static stability coefficient `c_b` of the mixing-length
@@ -212,6 +227,10 @@ Base.@kwdef struct TurbulenceConvectionParameters{FT, VFT1, VFT2, VTF3} <: ATCP
     sgs_variance_horizontal_scale_factor::FT
     sgs_variance_max_rel_std::FT
     sgs_variance_geometric_Ri_factor::FT
+    sgs_variance_geometric_tke_scale::FT
+    sgs_variance_isentropic_min_dtheta_dz::FT
+    sgs_variance_isentropic_slope_cap::FT
+    sgs_correlation_max::FT
     Tq_correlation_coefficient::FT
     static_stab_coeff::FT
     Prandtl_number_scale::FT

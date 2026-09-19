@@ -260,6 +260,15 @@ sgs_distribution:
 quadrature_order:
   help: "Quadrature order for SGS integration (1-5). Higher orders are more accurate but slower. Default: 3"
   value: 3
+sgs_variance_horizontal_form:
+  help: "Field on which the horizontal resolved-gradient (geometric) SGS variance term is built when `sgs_variance_horizontal_scale_factor` is nonzero. `tq` adds `|∇_h θ_li|²` to θ′θ′ and `|∇_h q_tot|²` to q′q′, coupled by the T-q correlation; `isentropic` adds `|∇_h q_tot − r ∇_h θ_li|²` (the gradient of q_tot along the θ_li surface, r = regularised ∂q/∂z / ∂θ_li/∂z) to q′q′ only, weighted by 1[N² > 0] on the saturation-conditioned moist N². [`tq` (default), `isentropic`]"
+  value: "tq"
+tq_correlation_model:
+  help: "Closure for the SGS T-q correlation that couples σ_T and σ_q in the sampled joint PDF. `constant` uses the prescribed `Tq_correlation_coefficient`; `diagnosed` computes it from the gradient-based covariance T′q′ (vertical cross term plus the geometric cross term), clamped to ±`sgs_correlation_max`, falling back to the constant where the variances vanish. Requires `sgs_variance_horizontal_form: tq` and a nonzero `sgs_variance_horizontal_scale_factor` (the vertical closure alone gives a correlation of exactly ±1); pair with `sgs_correlation_max` below 1 when a weight (Richardson `sgs_variance_geometric_Ri_factor` or TKE `sgs_variance_geometric_tke_scale`) fades the geometric term. [`constant` (default), `diagnosed`]"
+  value: "constant"
+sgs_variance_element_filter:
+  help: "Within-element filter of the horizontal-gradient invariants of the geometric SGS variance term. `none` uses the DSS'd nodal invariant; `linear` replaces it by its element-linear (lumped GLL{2}) restriction, removing the element-boundary enhancement of the nodal spectral-element gradient while conserving each element's mean. [`none` (default), `linear`]"
+  value: "none"
 microphysics_n_substeps:
   help: "Number of susbteps for time averaging bulk microphysics tendencies without subgrid-scale quadrature. Default: 3"
   value: 3

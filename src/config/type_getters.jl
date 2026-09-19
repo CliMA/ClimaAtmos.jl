@@ -76,6 +76,17 @@ function get_atmos(config::AtmosConfig, params, grid; setup_type)
     )
     # TODO: Should this go in the AtmosModel constructor?
     @assert !@any_reltype(_physics_fields(atmos), (UnionAll, DataType))
+    # The TKE weight on the geometric SGS variance term needs prognostic TKE (see
+    # `sgs_geometric_tke_weight`); fail here rather than at the first cache update.
+    if !isnothing(params) &&
+       !iszero(CAP.sgs_variance_horizontal_scale_factor(params)) &&
+       CAP.sgs_variance_geometric_tke_scale(params) > 0 &&
+       !use_prognostic_tke(atmos.turbconv_model)
+        error(
+            "sgs_variance_geometric_tke_scale > 0 requires prognostic TKE " *
+            "(an EDMF turbulence-convection model with prognostic_tke: true)",
+        )
+    end
 
     @info "AtmosModel: \n$(summary(atmos))"
     microphysics_model = atmos.water.microphysics_model

@@ -239,35 +239,203 @@ returns exactly 1.
 end
 
 """
-    ᶜsgs_geo_weight(Y, p)
+    sgs_geometric_tke_weight(tke, tke₀)
 
-The weight applied to the horizontal geometric SGS variance term.
+Weight `w ∈ (0, 1]` applied to the geometric (resolved-gradient) SGS variance:
 
-Returns a single concrete lazy broadcast for every parameter setting: the
-`k = 0` case is folded into `sgs_geometric_stability_weight` rather than taken
-as an early return, so the result stays inferrable and does not box. Callers
-guard the `c_Δx = 0` case by not evaluating the geometric term at all.
+    w = tke₀ / (tke₀ + max(tke, 0))
+
+with `tke` the prognostic EDMF turbulence kinetic energy and
+`tke₀ = sgs_variance_geometric_tke_scale` (`tke₀ ≤ 0` returns exactly `1`, no weight).
+It is the turbulence-state counterpart of `sgs_geometric_stability_weight`: the
+geometric term is faded where the closure itself reports an active turbulent (mixed)
+layer, whose variance the turbulence closure already represents, and kept where the
+TKE has collapsed (the stably stratified free troposphere, where the mixing length sits
+at its floor). The prognostic TKE is Picard-invariant within a step, carries the
+closure's memory (dissipation and transport), so the weight is smooth in time.
+`tke` is clipped at zero (the prognostic field can be slightly
+negative). Requires prognostic TKE (`use_prognostic_tke`); checked at configuration
+time in `get_atmos` and again in `set_covariance_cache!`.
 """
-function ᶜsgs_geo_weight(Y, p)
-    Ri₀ = CAP.sgs_variance_geometric_Ri_factor(p.params) * CAP.Ri_crit(p.params)
-    (; ᶜbg_coeffs, ᶜstrain_rate_norm, ᶜgradᵥ_θ_liq_ice, ᶜgradᵥ_q_tot) =
-        p.precomputed
-    FT = eltype(Y.c.ρ)
-    ᶜlg = Fields.local_geometry_field(Y.c)
-    # Stratification is measured for saturated air (`cf = 1`), which works better empirically.
-    return @. lazy(
-        sgs_geometric_stability_weight(
-            blended_N²(
-                ᶜbg_coeffs,
-                one(FT),
-                projected_vector_data(C3, ᶜgradᵥ_θ_liq_ice, ᶜlg),
-                projected_vector_data(C3, ᶜgradᵥ_q_tot, ᶜlg),
-            ),
-            ᶜstrain_rate_norm,
-            Ri₀,
-        ),
+@inline function sgs_geometric_tke_weight(tke, tke₀)
+    FT = typeof(tke)
+    return ifelse(tke₀ > 0, tke₀ / (tke₀ + max(tke, zero(FT))), one(FT))
+end
+
+"""
+    isentropic_slope_ratio(∂q∂z, ∂θ∂z, θz_min, r_cap)
+
+Ratio `r = (∂q_tot/∂z)(∂θ_li/∂z) / ((∂θ_li/∂z)² + θz_min²)`, clamped to `±r_cap`, that
+converts the horizontal gradient of `θ_li` into the vertical displacement a horizontal
+excursion along a sloping `θ_li` surface implies, times the vertical `q_tot` gradient
+(`IsentropicHorizontalVariance`). It is the regularised `∂q/∂z / ∂θ/∂z`: the
+regularisation `θz_min` (`sgs_variance_isentropic_min_dtheta_dz`) keeps it finite where
+the layer is neutral and the cap `r_cap` (`sgs_variance_isentropic_slope_cap`) bounds
+the slantwise amplification; both bind mainly in the boundary layer.
+"""
+@inline function isentropic_slope_ratio(∂q∂z, ∂θ∂z, θz_min, r_cap)
+    r = ∂q∂z * ∂θ∂z / (∂θ∂z^2 + θz_min^2)
+    return clamp(r, -r_cap, r_cap)
+end
+
+"""
+    isentropic_gradient_invariant(inv_q, inv_θq, inv_θ, r)
+
+`|∇_h q_tot − r ∇_h θ_li|² = |∇_h q|² − 2 r (∇_h θ_li · ∇_h q) + r² |∇_h θ_li|²`, the
+squared horizontal gradient of `q_tot` ALONG the `θ_li` surface, from the three DSS'd
+gradient invariants and the slope ratio `r` (`isentropic_slope_ratio`); floored at
+zero against round-off.
+"""
+@inline isentropic_gradient_invariant(inv_q, inv_θq, inv_θ, r) =
+    max(inv_q - 2 * r * inv_θq + r^2 * inv_θ, zero(inv_q))
+
+"""
+    element_linear!(ᶜf)
+
+Replace `ᶜf` in place by its element-linear (bilinear, corner-node) lumped restriction:
+within each spectral element and level, `θ_ab = Σ_ij B_ia B_jb WJ_ij f_ij / Σ_ij B_ia B_jb WJ_ij`
+on the four corner basis functions `B` (the linear Lagrange basis on the element corners
+evaluated at the horizontal GLL nodes), prolonged back to the nodes, `f_ij = Σ_ab B_ia B_jb θ_ab`.
+This is the lumped-mass construction of ClimaCore's `Restrict` to `GLL{2}` followed by
+`Interpolate`: it conserves the WJ-weighted element integral exactly (Σ_ab B_ia B_jb = 1),
+reproduces a constant exactly, and retains about one third of a linear slope inside the
+element (a smoothing filter, not an L2 projection). It removes the element-boundary
+enhancement of the nodal `|∇_h ψ|²` — the per-element polynomial derivative is 1.2-2×
+too large at the boundary GLL nodes and too small inside once the field has structure
+within a few elements — while conserving each element's WJ-weighted mean. Implemented as
+reductions over the two horizontal node dimensions of the `(Nv, Ni, Nj, Nf, Nh)` data
+layout (CPU and GPU arrays); allocates temporaries of a few times the field size per
+call. A no-op on spaces without a horizontal spectral element (single columns).
+"""
+function element_linear!(ᶜf)
+    do_dss(axes(ᶜf)) || return nothing
+    pf = parent(ᶜf)
+    pw = parent(Spaces.local_geometry_data(axes(ᶜf)).WJ)
+    @assert ndims(pf) == 5 && size(pf, 2) == size(pw, 2) && size(pf, 3) == size(pw, 3)
+    FT = eltype(pf)
+    Ni = size(pf, 2)
+    qs = Spaces.quadrature_style(Spaces.horizontal_space(axes(ᶜf)))
+    ξ, _ = Quadratures.quadrature_points(FT, qs)
+    # linear (corner) Lagrange basis at the GLL nodes; built on the host as a plain
+    # Array, then copied to the device in one bulk `copyto!` (a static matrix would
+    # be copied element by element, which is scalar indexing on a GPU array)
+    B_host = Array{FT}(hcat((one(FT) .- ξ) ./ 2, (one(FT) .+ ξ) ./ 2))
+    B = similar(pf, Ni, 2)
+    copyto!(B, B_host)
+    Bi = reshape(B, 1, Ni, 1, 1, 1, 2, 1)
+    Bj = reshape(B, 1, 1, Ni, 1, 1, 1, 2)
+    wf = reshape(pf .* pw, size(pf)..., 1, 1)
+    w = reshape(pw, size(pw)..., 1, 1)
+    θ = sum(wf .* Bi .* Bj; dims = (2, 3)) ./ sum(w .* Bi .* Bj; dims = (2, 3))
+    pf .= dropdims(sum(θ .* Bi .* Bj; dims = (6, 7)); dims = (6, 7))
+    return nothing
+end
+
+"""
+    hgrad_invariants_pair!(ᶜinv1, ᶜinv2, ᶜinv12, ᶜψ1, ᶜψ2, p)
+
+Write `|∇_h ψ1|²`, `|∇_h ψ2|²` and `∇_h ψ1 · ∇_h ψ2` into the three center fields from ONE
+evaluation (and DSS) of each horizontal gradient, using both `C12` scratch buffers
+(`ᶜtemp_C12`, `ᶜtemp_C12_2`; the second is allocated only for the isentropic form).
+Used by the isentropic geometric variance form.
+"""
+function hgrad_invariants_pair!(ᶜinv1, ᶜinv2, ᶜinv12, ᶜψ1, ᶜψ2, p)
+    buf = p.scratch.ᶜC12_dss_buffer
+    if buf !== nothing
+        ᶜg1 = p.scratch.ᶜtemp_C12
+        ᶜg2 = p.scratch.ᶜtemp_C12_2
+        @assert ᶜg2 !== nothing "hgrad_invariants_pair! needs the ᶜtemp_C12_2 scratch buffer"
+        @. ᶜg1 = gradₕ(ᶜψ1)
+        @. ᶜg2 = gradₕ(ᶜψ2)
+        Spaces.weighted_dss!(ᶜg1, buf)
+        Spaces.weighted_dss!(ᶜg2, buf)
+        @. ᶜinv1 = norm_sqr(ᶜg1)
+        @. ᶜinv2 = norm_sqr(ᶜg2)
+        @. ᶜinv12 = dot(Geometry.Contravariant12Vector(ᶜg1), ᶜg2)
+    else
+        @. ᶜinv1 = norm_sqr(gradₕ(ᶜψ1))
+        @. ᶜinv2 = norm_sqr(gradₕ(ᶜψ2))
+        @. ᶜinv12 = dot(Geometry.Contravariant12Vector(gradₕ(ᶜψ1)), gradₕ(ᶜψ2))
+    end
+    return nothing
+end
+
+"""
+    hgrad_cross_invariant!(ᶜinv, ᶜψ1, ᶜψ2, p)
+
+Write the horizontal-gradient cross invariant `∇_h ψ1 · ∇_h ψ2` into `ᶜinv`, with the
+same gradient estimate as [`hgrad_invariant!`](@ref) (DSS'd gradient vectors; the nodal
+gradients on a space that needs no DSS). Scratch `p.scratch.ᶜtemp_C12`, `ᶜtemp_C12_2`
+(the second is allocated for the diagnosed T–q correlation and the isentropic form).
+"""
+function hgrad_cross_invariant!(ᶜinv, ᶜψ1, ᶜψ2, p)
+    buf = p.scratch.ᶜC12_dss_buffer
+    if buf !== nothing
+        ᶜg1 = p.scratch.ᶜtemp_C12
+        ᶜg2 = p.scratch.ᶜtemp_C12_2
+        @assert ᶜg2 !== nothing "hgrad_cross_invariant! needs the ᶜtemp_C12_2 scratch buffer"
+        @. ᶜg1 = gradₕ(ᶜψ1)
+        @. ᶜg2 = gradₕ(ᶜψ2)
+        Spaces.weighted_dss!(ᶜg1, buf)
+        Spaces.weighted_dss!(ᶜg2, buf)
+        @. ᶜinv = dot(Geometry.Contravariant12Vector(ᶜg1), ᶜg2)
+    else
+        @. ᶜinv = dot(Geometry.Contravariant12Vector(gradₕ(ᶜψ1)), gradₕ(ᶜψ2))
+    end
+    return nothing
+end
+
+"""
+    sgs_correlation_Tq(T′T′, q′q′, T′q′, fallback, r_max)
+
+Diagnosed SGS T–q correlation `clamp(T′q′ / √(T′T′ q′q′), ±r_max)`, or `fallback`
+where the product of the variances is at the round-off floor.
+"""
+@inline function sgs_correlation_Tq(T′T′, q′q′, T′q′, fallback, r_max)
+    FT = typeof(T′T′)
+    v = max(T′T′, zero(FT)) * max(q′q′, zero(FT))
+    return ifelse(
+        v > eps(FT)^2,
+        clamp(T′q′ / sqrt(max(v, eps(FT)^2)), -r_max, r_max),
+        fallback,
     )
 end
+
+"""
+    set_tq_correlation!(p, correlation_model)
+
+Fill `p.precomputed.ᶜcorr_Tq` with the SGS T–q correlation the quadrature samples.
+`ConstantTqCorrelation`: the prescribed `Tq_correlation_coefficient`.
+`DiagnosedTqCorrelation`: from the gradient covariance accumulated in
+`p.precomputed.ᶜT′q′` by `set_covariance_cache!` (see [`sgs_correlation_Tq`](@ref)); the
+fallback where the variances vanish is the prescribed value, clamped like the diagnosed
+one. `ᶜT′T′` and `ᶜq′q′` must already be in the T basis and bounded. The covariance
+diagnostic is formed lazily from `ᶜcorr_Tq` and the variances (`compute_covariance_diagnostics`).
+"""
+function set_tq_correlation!(p, ::ConstantTqCorrelation)
+    (; ᶜcorr_Tq) = p.precomputed
+    corr = correlation_Tq(p.params)
+    @. ᶜcorr_Tq = corr
+    return nothing
+end
+function set_tq_correlation!(p, ::DiagnosedTqCorrelation)
+    (; ᶜT′T′, ᶜq′q′, ᶜT′q′, ᶜcorr_Tq) = p.precomputed
+    r_max = CAP.sgs_correlation_max(p.params)
+    fallback = clamp(correlation_Tq(p.params), -r_max, r_max)
+    @. ᶜcorr_Tq = sgs_correlation_Tq(ᶜT′T′, ᶜq′q′, ᶜT′q′, fallback, r_max)
+    return nothing
+end
+
+"""
+    add_geometric!(ᶜdst, ᶜw, geo_h, ᶜinv)
+
+Add the geometric variance `geo_h ᶜinv` to `ᶜdst`, multiplied by the geometric-term
+weight `ᶜw` when one is in use (`p.precomputed.ᶜgeo_weight`, the product of the
+Richardson and TKE weights `sgs_geometric_stability_weight` × `sgs_geometric_tke_weight`;
+`ᶜw === nothing` adds the unweighted term, bitwise as before).
+"""
+add_geometric!(ᶜdst, ::Nothing, geo_h, ᶜinv) = (@. ᶜdst += geo_h * ᶜinv; nothing)
+add_geometric!(ᶜdst, ᶜw, geo_h, ᶜinv) = (@. ᶜdst += ᶜw * (geo_h * ᶜinv); nothing)
 
 """
     hgrad_invariant!(ᶜinv, ᶜψ, p)
@@ -293,21 +461,33 @@ end
     set_covariance_cache!(Y, p, thermo_params)
 
 Materializes T-based SGS covariances into cached fields for use by downstream
-computations (SGS quadrature, cloud fraction). Populates `p.precomputed.(ᶜT′T′, ᶜq′q′)`.
+computations (SGS quadrature, cloud fraction). Populates
+`p.precomputed.(ᶜT′T′, ᶜq′q′, ᶜcorr_Tq)` (and `ᶜT′q′` for the diagnosed correlation,
+`ᶜgeo_weight` for the weight applied to the geometric term).
 
 Pipeline:
 
  1. Compute mixing length via `materialized_mixing_length!`
- 2. Materialize θ-based covariances from gradients
+ 2. Materialize θ-based covariances from gradients (and, for the diagnosed T–q
+    correlation, the θ–q cross covariance)
  3. Add the horizontal resolved-gradient (geometric) term to θ′θ′ (skipped when
-    `sgs_variance_horizontal_scale_factor` is 0, the default)
+    `sgs_variance_horizontal_scale_factor` is 0, the default, or for the isentropic form)
  4. Transform θ→T using `compute_∂T_∂θ!`
- 5. Add the horizontal resolved-gradient term to q′q′ (skipped together with
-    step 3)
+ 5. Add the horizontal resolved-gradient term to q′q′ (`|∇_h q_tot|²`, or
+    `|∇_h q_tot − r ∇_h θ_li|²` for the isentropic form; skipped together with step 3)
  6. Apply the closure-validity bound `σ_q ≤ sgs_variance_max_rel_std * q_tot`
+ 7. Set the sampled T–q correlation (`set_tq_correlation!`; for the diagnosed
+    model the covariance is first rescaled with the bound so the correlation is
+    invariant under it)
 
-The geometric term is multiplied by the Richardson-number stability weight
-`ᶜsgs_geo_weight`.
+Options on the geometric term (all default to the plain term): the field it is built
+on (`sgs_variance_horizontal_form`: `tq`, or `isentropic` = the gradient of q_tot along
+the θ_li surface with its own validity weight 1[N² > 0]), a Richardson-number stability
+weight (`sgs_variance_geometric_Ri_factor`; `sgs_geometric_stability_weight`), a TKE
+weight (`sgs_variance_geometric_tke_scale`; `sgs_geometric_tke_weight`; the two weights
+multiply and the applied weight is cached in `ᶜgeo_weight`, diagnostic `sgs_geo_weight`)
+a within-element filter of the gradient invariants (`sgs_variance_element_filter`;
+`element_linear!`) and the T–q correlation model (`tq_correlation_model`).
 """
 function set_covariance_cache!(Y, p, thermo_params)
     # Covariance fields are only allocated when the configuration needs them.
@@ -337,6 +517,79 @@ function set_covariance_cache!(Y, p, thermo_params)
     else
         zero(c_Δx)
     end
+    isen_form =
+        p.atmos.sgs_variance_horizontal_form isa IsentropicHorizontalVariance
+    elem_filter = p.atmos.sgs_variance_element_filter isa ElementLinearFilter
+    diag_corr = p.atmos.tq_correlation_model isa DiagnosedTqCorrelation
+
+    # Weights on the geometric term, materialized once per call into the persistent
+    # `p.precomputed.ᶜgeo_weight` (also the `sgs_geo_weight` diagnostic):
+    #  * the Richardson (stability) weight `sgs_geometric_stability_weight`,
+    #    Ri₀ = k Ri_crit with k = `sgs_variance_geometric_Ri_factor`. Its N² is the
+    #    model's chain-rule coefficients evaluated with the SATURATED branch in every
+    #    cell (`blended_N²` with cloud fraction 1): the moist-adiabatic buoyancy
+    #    frequency, negative wherever the lapse rate is steeper than the moist adiabat
+    #    (cumulus and stratocumulus layers, convecting and dry-mixed layers), so the
+    #    term is kept only in air that is absolutely stable to a saturated displacement
+    #    (`ᶜbuoygrad` itself, the diagnosed-cf blend, is unchanged).
+    #  * the TKE weight `sgs_geometric_tke_weight`, tke₀ =
+    #    `sgs_variance_geometric_tke_scale`, on the prognostic EDMF TKE `Y.c.ρtke / Y.c.ρ`.
+    # Both default to off (k = 0, tke₀ = 0): then `ᶜw === nothing`, the term is added
+    # unweighted (bitwise as before) and `ᶜgeo_weight` is set to 1 so the diagnostic
+    # reports the applied weight. When both are on they multiply.
+    Ri₀ = CAP.sgs_variance_geometric_Ri_factor(p.params) * CAP.Ri_crit(p.params)
+    tke₀ = CAP.sgs_variance_geometric_tke_scale(p.params)
+    use_ri_weight = use_geometric && Ri₀ > 0
+    use_tke_weight = use_geometric && tke₀ > 0
+    if use_tke_weight && !use_prognostic_tke(p.atmos.turbconv_model)
+        error(
+            "sgs_variance_geometric_tke_scale > 0 requires prognostic TKE " *
+            "(an EDMF turbulence-convection model with prognostic_tke: true)",
+        )
+    end
+    FT_w = eltype(p.params)
+    # [IsentropicHorizontalVariance] the term is defined only where a stably stratified
+    # moist isentrope exists: it carries the validity weight 1[N² > 0] on the same
+    # saturated N² the Richardson weight uses (no shear, no threshold).
+    use_isen_step = use_geometric && isen_form
+    ᶜN²_w = if use_ri_weight || use_isen_step
+        (; ᶜbg_coeffs) = p.precomputed
+        ᶜlg_w = Fields.local_geometry_field(Y.c)
+        @. lazy(
+            blended_N²(
+                ᶜbg_coeffs,
+                one(FT_w),
+                projected_vector_data(C3, ᶜgradᵥ_θ_liq_ice, ᶜlg_w),
+                projected_vector_data(C3, ᶜgradᵥ_q_tot, ᶜlg_w),
+            ),
+        )
+    else
+        nothing
+    end
+    ᶜw = if use_ri_weight || use_tke_weight || use_isen_step
+        (; ᶜgeo_weight) = p.precomputed
+        if use_ri_weight
+            (; ᶜstrain_rate_norm) = p.precomputed
+            @. ᶜgeo_weight =
+                sgs_geometric_stability_weight(ᶜN²_w, ᶜstrain_rate_norm, Ri₀)
+        else
+            @. ᶜgeo_weight = one(FT_w)
+        end
+        if use_tke_weight
+            @. ᶜgeo_weight *=
+                sgs_geometric_tke_weight(specific(Y.c.ρtke, Y.c.ρ), tke₀)
+        end
+        if use_isen_step
+            @. ᶜgeo_weight *= ifelse(ᶜN²_w > 0, one(FT_w), zero(FT_w))
+        end
+        ᶜgeo_weight
+    else
+        if use_geometric
+            (; ᶜgeo_weight) = p.precomputed
+            @. ᶜgeo_weight = one(FT_w)
+        end
+        nothing
+    end
 
     # Materialize once (see materialized_mixing_length!) to avoid repeating
     # the closure broadcast across the ᶜq′q′ and ᶜT′T′ calculations.
@@ -359,14 +612,29 @@ function set_covariance_cache!(Y, p, thermo_params)
         Geometry.WVector(ᶜgradᵥ_θ_liq_ice),
         Geometry.WVector(ᶜgradᵥ_θ_liq_ice),
     )
+    # [DiagnosedTqCorrelation] θ′q′ from the same vertical-gradient closure (θ basis;
+    # transformed with ∂T/∂θ below and turned into the sampled correlation at the end
+    # by `set_tq_correlation!`). `ᶜT′q′` exists only for the diagnosed model.
+    if diag_corr
+        (; ᶜT′q′) = p.precomputed
+        @. ᶜT′q′ = cov_from_grad(
+            coeff,
+            ᶜmixing_length_field,
+            Geometry.WVector(ᶜgradᵥ_θ_liq_ice),
+            Geometry.WVector(ᶜgradᵥ_q_tot),
+        )
+    end
 
     # Horizontal resolved-gradient (geometric) variance
     # `geo_h |∇_h ψ|^2`, the leading-order scale-similarity estimate of the subgrid
     # variance from the resolved field, set by the local horizontal gradient and the
-    # horizontal grid scale alone, times the Richardson weight `ᶜsgs_geo_weight`.
-    # Added to θ′θ′ here and to q′q′ below. The prescribed T–q correlation then couples
-    # the inflated σ_T and σ_q in the quadrature.
-    if use_geometric
+    # horizontal grid scale alone. Added to θ′θ′ here and to q′q′ below. The T–q
+    # correlation then couples the inflated σ_T and σ_q in the quadrature.
+    # [IsentropicHorizontalVariance] no θ′θ′ term (θ_li is constant along the surface);
+    # the whole geometric variance is carried by q′q′, so σ_T keeps the base vertical
+    # closure. The invariants are those of the DSS'd gradient (`hgrad_invariant!`),
+    # optionally replaced by their element-linear restriction (`element_linear!`).
+    if use_geometric && !isen_form
         (; ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice) = p.precomputed
         ᶜθ_li = p.scratch.ᶜtemp_scalar_3
         @. ᶜθ_li = TD.liquid_ice_pottemp(
@@ -379,24 +647,91 @@ function set_covariance_cache!(Y, p, thermo_params)
         )
         ᶜinv_θ = p.scratch.ᶜtemp_scalar_5
         hgrad_invariant!(ᶜinv_θ, ᶜθ_li, p)
-        # Bind outside the `@.`: ᶜsgs_geo_weight already returns a lazy
-        # broadcast, so the call itself must not be dotted.
-        ᶜgeo_weight = ᶜsgs_geo_weight(Y, p)
-        @. ᶜT′T′ += ᶜgeo_weight * (geo_h * ᶜinv_θ)
+        elem_filter && element_linear!(ᶜinv_θ)
+        add_geometric!(ᶜT′T′, ᶜw, geo_h, ᶜinv_θ)
+        if diag_corr
+            # geometric cross term ∇_h θ_li · ∇_h q_tot (θ basis), same weight and
+            # element filter as the variances
+            (; ᶜT′q′) = p.precomputed
+            ᶜinv_θq = p.scratch.ᶜtemp_scalar_6
+            hgrad_cross_invariant!(ᶜinv_θq, ᶜθ_li, ᶜq_tot_nonneg, p)
+            elem_filter && element_linear!(ᶜinv_θq)
+            add_geometric!(ᶜT′q′, ᶜw, geo_h, ᶜinv_θq)
+        end
     end
 
     # Transform θ′θ′ → T′T′ in-place using Jacobian ∂T/∂θ
     ᶜ∂T_∂θ = p.scratch.ᶜtemp_scalar_2
     compute_∂T_∂θ!(ᶜ∂T_∂θ, Y, p, thermo_params)
     @. ᶜT′T′ = ᶜ∂T_∂θ^2 * ᶜT′T′  # θ′θ′ → T′T′
+    if diag_corr
+        (; ᶜT′q′) = p.precomputed
+        @. ᶜT′q′ = ᶜ∂T_∂θ * ᶜT′q′  # θ′q′ → T′q′
+    end
 
     # q′q′ geometric term (see the θ′θ′ addition above).
     (; ᶜq_tot_nonneg) = p.precomputed
     if use_geometric
         ᶜinv_q = p.scratch.ᶜtemp_scalar_5
-        hgrad_invariant!(ᶜinv_q, ᶜq_tot_nonneg, p)
-        ᶜgeo_weight = ᶜsgs_geo_weight(Y, p)
-        @. ᶜq′q′ += ᶜgeo_weight * (geo_h * ᶜinv_q)
+        if isen_form
+            # [IsentropicHorizontalVariance] the gradient of q_tot ALONG the θ_li surface,
+            # |∇_θ q|² = |∇_h q − r ∇_h θ_li|², r = regularised (∂q/∂z)/(∂θ_li/∂z)
+            # (`isentropic_slope_ratio`): a horizontal excursion δ on a sloping isentrope
+            # carries the parcel down/up by r-weighted amounts, so aligned (warm = moist)
+            # gradients amplify and anti-aligned ones cancel the saturation variance. No
+            # θ′θ′ term (θ_li is constant along the surface). The validity weight 1[N² > 0]
+            # (weight block above) zeroes the WHOLE term where the layer is moist-neutral or
+            # unstable (there is no isentrope to displace along and the SGS variability is
+            # convective, carried by the EDMF plumes) — the "form × step" configuration of
+            # the a-priori screen, not the "r → 0 only" variant, under which the term would
+            # revert to |∇_h q|². The three invariants are filtered individually when the
+            # element filter is on. Scratch: `ᶜtemp_scalar_2` is free again (θ′θ′ → T′T′
+            # done), `_3` holds θ_li and `_6` the cross invariant (the diagnosed
+            # correlation is rejected with this form at configuration time).
+            (; ᶜT, ᶜq_liq, ᶜq_ice) = p.precomputed
+            ᶜθ_li_i = p.scratch.ᶜtemp_scalar_3
+            @. ᶜθ_li_i = TD.liquid_ice_pottemp(
+                thermo_params,
+                ᶜT,
+                Y.c.ρ,
+                ᶜq_tot_nonneg,
+                ᶜq_liq,
+                ᶜq_ice,
+            )
+            ᶜinv_θ_i = p.scratch.ᶜtemp_scalar_2
+            ᶜinv_θq_i = p.scratch.ᶜtemp_scalar_6
+            hgrad_invariants_pair!(
+                ᶜinv_θ_i,
+                ᶜinv_q,
+                ᶜinv_θq_i,
+                ᶜθ_li_i,
+                ᶜq_tot_nonneg,
+                p,
+            )
+            if elem_filter
+                element_linear!(ᶜinv_θ_i)
+                element_linear!(ᶜinv_θq_i)
+                element_linear!(ᶜinv_q)
+            end
+            θz_min = CAP.sgs_variance_isentropic_min_dtheta_dz(p.params)
+            r_cap = CAP.sgs_variance_isentropic_slope_cap(p.params)
+            ᶜlg_i = Fields.local_geometry_field(Y.c)
+            @. ᶜinv_q = isentropic_gradient_invariant(
+                ᶜinv_q,
+                ᶜinv_θq_i,
+                ᶜinv_θ_i,
+                isentropic_slope_ratio(
+                    projected_vector_data(C3, ᶜgradᵥ_q_tot, ᶜlg_i),
+                    projected_vector_data(C3, ᶜgradᵥ_θ_liq_ice, ᶜlg_i),
+                    θz_min,
+                    r_cap,
+                ),
+            )
+        else
+            hgrad_invariant!(ᶜinv_q, ᶜq_tot_nonneg, p)
+        end
+        elem_filter && !isen_form && element_linear!(ᶜinv_q)
+        add_geometric!(ᶜq′q′, ᶜw, geo_h, ᶜinv_q)
     end
 
     # Closure-validity bound `σ_q ≤ sgs_variance_max_rel_std * q_tot` (default
@@ -404,7 +739,23 @@ function set_covariance_cache!(Y, p, thermo_params)
     # the clamped quadrature then carries more total water than the grid mean holds,
     # and condensing it can drive the grid-mean vapour negative.
     r_max = CAP.sgs_variance_max_rel_std(p.params)
+    if diag_corr
+        (; ᶜT′q′) = p.precomputed
+        # Keep the diagnosed correlation invariant under the bound: where the bound
+        # cuts σ_q by a factor s, the covariance T′q′ scales by the same s.
+        FT_b = eltype(p.params)
+        @. ᶜT′q′ *= sqrt(
+            min(
+                one(FT_b),
+                (r_max * ᶜq_tot_nonneg)^2 / max(ᶜq′q′, eps(FT_b)^2),
+            ),
+        )
+    end
     @. ᶜq′q′ = min(ᶜq′q′, (r_max * ᶜq_tot_nonneg)^2)
+
+    # Correlation that the quadrature samples (constant or diagnosed), consistent
+    # with the bounded variances above.
+    set_tq_correlation!(p, p.atmos.tq_correlation_model)
     return nothing
 end
 
@@ -929,16 +1280,15 @@ NVTX.@annotate function set_sgs_moments_and_cloud_fraction!(Y, p)
     ᶜρ_env, ᶜT_mean, ᶜq_mean = _get_env_ρ_T_q(Y, p, thermo_params, turbconv_model)
     ᶜq_lcl, ᶜq_icl = _get_condensate_means(Y, p, turbconv_model, microphysics_model)
     sgs_quad = p.atmos.sgs_quadrature
-    corr_Tq = correlation_Tq(p.params)
     FT = eltype(p.params)
     α = sgs_variance_fidelity(CAP.cloud_fraction_steepness_scale(p.params))
     floor = cloud_fraction_floor_params(p.params)
-    (; ᶜT′T′, ᶜq′q′) = p.precomputed
+    (; ᶜT′T′, ᶜq′q′, ᶜcorr_Tq) = p.precomputed
 
     # ONE quadrature pass → (sigma_S, λ_lagrange).
     @. p.precomputed.ᶜsgs_moments = _compute_sgs_moments(
         thermo_params, ᶜρ_env, ᶜT_mean, ᶜq_mean, ᶜq_lcl + ᶜq_icl,
-        $(sgs_quad), ᶜT′T′, ᶜq′q′, corr_Tq, FT(α),
+        $(sgs_quad), ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, FT(α),
     )
     # Recompute CF from q_c and σ_S using the augmented-σ closure. We cannot
     # use `Φ(λ/σ_aug)` because λ was computed with the equilibrium σ_S_eff,
@@ -1039,12 +1389,11 @@ NVTX.@annotate function set_cloud_fraction!(
     ᶜq_lcl, ᶜq_icl = _get_condensate_means(Y, p, turbconv_model, microphysics_model)
 
     sgs_quad = p.atmos.sgs_quadrature
-    corr_Tq = correlation_Tq(p.params)
     FT = eltype(p.params)
     α = sgs_variance_fidelity(CAP.cloud_fraction_steepness_scale(p.params))
     floor = cloud_fraction_floor_params(p.params)
 
-    (; ᶜT′T′, ᶜq′q′) = p.precomputed
+    (; ᶜT′T′, ᶜq′q′, ᶜcorr_Tq) = p.precomputed
 
     # Hybrid cloud fraction: the σ_S² quadrature pass is fused into this
     # broadcast kernel, so the moments stay in registers and are never written
@@ -1059,7 +1408,7 @@ NVTX.@annotate function set_cloud_fraction!(
         $(sgs_quad),
         ᶜT′T′,
         ᶜq′q′,
-        corr_Tq,
+        ᶜcorr_Tq,
         FT(α),
         $(floor),
     )

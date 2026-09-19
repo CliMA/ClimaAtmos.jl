@@ -409,6 +409,7 @@ VALID_CASES = [
         "bgrad", "strain", "cl", "ke", "ts", "tas", "uas", "vas", "tauu", "tauv",
         "hfes", "dsevi", "env_q_tot_variance", "env_temperature_variance",
         "env_q_tot_temperature_covariance", "env_q_tot_temperature_correlation",
+        "sgs_geo_weight",
     ), :dry)...,
     # sphere-only (DSS / hypsography)
     cases(("rv", "orog"), :sphere)...,

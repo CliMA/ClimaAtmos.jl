@@ -1165,14 +1165,15 @@ add_diagnostic_variable!(short_name = "swp", units = "kg m^-2",
 # Covariances (3d)
 ###
 function compute_covariance_diagnostics(_, cache, _, type)
-    (; ᶜT′T′, ᶜq′q′) = cache.precomputed
+    (; ᶜT′T′, ᶜq′q′, ᶜcorr_Tq) = cache.precomputed
     if type == :qt_qt
         return ᶜq′q′
     elseif type == :T_T
         return ᶜT′T′
     elseif type == :T_qt
-        corr = correlation_Tq(cache.params)
-        return @. lazy(corr * sqrt(max(0, ᶜT′T′)) * sqrt(max(0, ᶜq′q′)))
+        # covariance consistent with the correlation the quadrature samples
+        # (constant or diagnosed); see `set_tq_correlation!`
+        return @. lazy(ᶜcorr_Tq * sqrt(max(0, ᶜT′T′)) * sqrt(max(0, ᶜq′q′)))
     else
         error("Unknown variance type")
     end
@@ -1186,7 +1187,10 @@ compute_env_q_tot_temperature_covariance(state, cache, time) =
     compute_covariance_diagnostics(state, cache, time, :T_qt)
 
 function compute_env_q_tot_temperature_correlation(_, cache, _)
-    corr = correlation_Tq(cache.params)
+    # the sampled correlation lives in the cache only when SGS covariances are used;
+    # otherwise report the prescribed constant
+    hasproperty(cache.precomputed, :ᶜcorr_Tq) && return cache.precomputed.ᶜcorr_Tq
+    corr = CAP.Tq_correlation_coefficient(cache.params)
     (; ᶜtemp_scalar) = cache.scratch
     return @. lazy(one(ᶜtemp_scalar) * corr)
 end
@@ -1214,6 +1218,23 @@ add_diagnostic_variable!(
     long_name = "Environment Correlation of Total Specific Humidity and Temperature",
     units = "1",
     compute = compute_env_q_tot_temperature_correlation,
+)
+
+function compute_sgs_geo_weight(_, cache, _)
+    # the weight applied to the horizontal geometric SGS variance term lives in the
+    # cache only when SGS covariances are used; it is 1 where the term is on and
+    # unweighted and 0 where the term is inactive (see `set_covariance_cache!`)
+    hasproperty(cache.precomputed, :ᶜgeo_weight) &&
+        return cache.precomputed.ᶜgeo_weight
+    (; ᶜtemp_scalar) = cache.scratch
+    return @. lazy(zero(ᶜtemp_scalar))
+end
+
+add_diagnostic_variable!(
+    short_name = "sgs_geo_weight",
+    long_name = "Weight Applied to the Geometric SGS Variance Term",
+    units = "1",
+    compute = compute_sgs_geo_weight,
 )
 
 ###

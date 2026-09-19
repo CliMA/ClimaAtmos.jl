@@ -99,9 +99,12 @@ function test_restart(test_dict; job_id, comms_ctx, more_ignore = Symbol[])
             :data_handler,
             # Scratch field for microphysics (uninitialized until tendencies run)
             :ᶜmp_tendency,
-            # Covariance fields depend on scratch state
+            # Covariance fields depend on scratch state (ᶜcorr_Tq, ᶜT′q′ are derived
+            # from them in `set_tq_correlation!`)
             :ᶜT′T′,
             :ᶜq′q′,
+            :ᶜcorr_Tq,
+            :ᶜT′q′,
             # Scratch fields for prognostic EDMF (uninitialized until tendencies run)
             :ᶠu₃_tendencyʲs,
             :ᶜρa_tendencyʲs,
@@ -161,9 +164,12 @@ function test_restart(test_dict; job_id, comms_ctx, more_ignore = Symbol[])
             :rc,
             # Scratch field for microphysics (uninitialized until tendencies run)
             :ᶜmp_tendency,
-            # Covariance fields depend on scratch state
+            # Covariance fields depend on scratch state (ᶜcorr_Tq, ᶜT′q′ are derived
+            # from them in `set_tq_correlation!`)
             :ᶜT′T′,
             :ᶜq′q′,
+            :ᶜcorr_Tq,
+            :ᶜT′q′,
             # The raw RRTMGP solver contains internal workspaces that are
             # uninitialized or only partially written by design; its
             # domain-masked outputs are compared through the public getters
