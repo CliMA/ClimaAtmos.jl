@@ -11,6 +11,9 @@ main
   `c_g (c_Δx Δx_h)² |∇_h ψ|²` for the SGS quadrature (`sgs_variance_horizontal_scale_factor` switches it on), with a closure-validity bound on
   σ_q (`sgs_variance_max_rel_std`); The new parameters default to the historical closure.
 - [#4828](https://github.com/CliMA/ClimaAtmos.jl/pull/4828) Update to ClimaTimeSteppers v1 and update benchmark test
+- [#4837](https://github.com/CliMA/ClimaAtmos.jl/pull/4837) ![][badge-✨feature/enhancement] Richardson-number stability weight on the geometric SGS
+  variance term (`sgs_variance_geometric_Ri_factor`, 0 = off), built on the saturated moist buoyancy gradient and the strain rate, fading the
+  term where the resolved flow is turbulent or conditionally unstable.
 
 0.42.10
 -------

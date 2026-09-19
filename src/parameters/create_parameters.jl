@@ -464,7 +464,8 @@ to_svec(x::NamedTuple) = map(x -> to_svec(x), x)
 
 Build the PROPHET (prognostic EDMF) parameter set.
 
-Most values come from ClimaParams through an explicit name map. A few
+Most values come from ClimaParams through an explicit name map. The geometric
+SGS-variance term parameters (`sgs_variance_*`), a few
 cloud-fraction release-shape parameters and the updraft sedimentation
 coefficient are not yet in ClimaParams' default TOML: they fall back to the
 defaults set here, and are read from `toml_dict` only when a run or calibration
@@ -550,6 +551,9 @@ function TurbulenceConvectionParameters(
         sgs_variance_geometric_coeff = FT(1 // 12),
         sgs_variance_horizontal_scale_factor = FT(0),
         sgs_variance_max_rel_std = FT(0.5),
+        # Richardson (stability) weight on the geometric term (k = 0: weight ≡ 1,
+        # see `set_covariance_cache!`).
+        sgs_variance_geometric_Ri_factor = FT(0),
         # Cloud-fraction floor release shape (see `_compute_cloud_fraction`):
         # margin = abs_margin = sharpness = 1, residual = 0 release the floor on
         # a one-width saturation margin guarded by an absolute margin of one
