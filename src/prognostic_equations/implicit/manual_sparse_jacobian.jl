@@ -970,8 +970,9 @@ end
 Return the center-space eddy diffusivity and viscosity used by the non-EDMF
 implicit diffusion Jacobian, as a `NamedTuple` `(; ᶜK_u, ᶜK_h)` [m²/s].
 
-May write to `p.scratch.ᶜtemp_scalar_3`, and calls
-`set_smagorinsky_lilly_precomputed_quantities!` for the Smagorinsky closure.
+May write to `p.scratch.ᶜtemp_scalar_3`. For the Smagorinsky closure it reads the
+`ᶜνₜ_v` and `ᶜD_v` refreshed by `set_implicit_precomputed_quantities!` at the
+current Newton iterate (this function only runs with `diff_mode == Implicit()`).
 Both fields are `nothing` for `AbstractEDMF` configurations, whose grid-mean
 diffusion Jacobian instead uses the face-native `ᶠK_h`, `ᶠK_u`, and `ᶠK_entr`
 from `set_face_diffusivities!` (see `update_diffusion_jacobian!` and
@@ -990,7 +991,6 @@ function eddy_diffusivity_coefficients!(Y, p)
         ᶜK_h .= ᶜcompute_eddy_diffusivity_coefficient(Y.c.uₕ, ᶜp, vertical_diffusion)
         ᶜK_u = ᶜK_h
     elseif is_smagorinsky_vertical(smagorinsky_lilly)
-        set_smagorinsky_lilly_precomputed_quantities!(Y, p, smagorinsky_lilly)
         ᶜK_u = p.precomputed.ᶜνₜ_v
         ᶜK_h = p.precomputed.ᶜD_v
     end

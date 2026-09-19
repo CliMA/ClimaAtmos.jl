@@ -715,12 +715,12 @@ function get_tracer_nonnegativity_method(parsed_args)
     elseif method == "vapor_constraint"
         TracerNonnegativityVaporConstraint{qtot}()
     elseif method == "vapor_tendency"
-        qtot && warn("`tracer_nonnegativity_method` $(method) does not support \
-                        `_qtot` suffix. qtot will be ignored.")
+        qtot && @warn("`tracer_nonnegativity_method` $(method) does not support \
+                       `_qtot` suffix. qtot will be ignored.")
         TracerNonnegativityVaporTendency()
     elseif method == "vertical_water_borrowing"
-        qtot && warn("`tracer_nonnegativity_method` $(method) does not support \
-                        `_qtot` suffix. qtot will be ignored.")
+        qtot && @warn("`tracer_nonnegativity_method` $(method) does not support \
+                       `_qtot` suffix. qtot will be ignored.")
         TracerNonnegativityVerticalWaterBorrowing()
     else
         error("Invalid `tracer_nonnegativity_method` $(method)")
@@ -996,9 +996,10 @@ Assert that the configuration describes a self-consistent case, erroring otherwi
 
 Checks that `config` is one of `"sphere"`, `"column"`, `"box"`, `"plane"`; that an ISDAC
 run (`initial_condition: ISDAC`) uses a moist microphysics model; that implicit
-vertical diffusion is paired with a
-turbulence-convection or vertical diffusion model; and that prescribed flow is used only
-with flat topography and an explicit solver. Called at the top of `get_atmos`.
+vertical diffusion is paired with a turbulence-convection model, a vertical
+diffusion model, or a vertically-acting Smagorinsky-Lilly closure; and that
+prescribed flow is used only with flat topography and an explicit solver. Each
+check is independent. Called at the top of `get_atmos`.
 """
 function check_case_consistency(parsed_args)
     ic = parsed_args["initial_condition"]
@@ -1008,6 +1009,7 @@ function check_case_consistency(parsed_args)
     turbconv = parsed_args["turbconv"]
     topography = parsed_args["topography"]
     prescribed_flow = parsed_args["prescribed_flow"]
+    smagorinsky_lilly = parsed_args["smagorinsky_lilly"]
     config = parsed_args["config"]
 
     # Geometry consistency (always checked, independent of the case-specific
@@ -1045,14 +1047,28 @@ function check_case_consistency(parsed_args)
             microphysics != "dry",
             "ISDAC requires a moist microphysics model (got `microphysics_model = \"dry\"`)",
         )
-    elseif imp_vert_diff
-        # Implicit vertical diffusion is only supported for specific models:
+    end
+
+    # Implicit vertical diffusion is only supported for the closures that have a
+    # matching Jacobian block: EDMF, the prescribed vertical diffusion models,
+    # and a vertically-acting Smagorinsky-Lilly closure. AMD has no Jacobian
+    # branch and so stays explicit.
+    smagorinsky_vertical = is_smagorinsky_vertical(
+        isnothing(smagorinsky_lilly) ? nothing :
+        SmagorinskyLilly(; axes = Symbol(smagorinsky_lilly)),
+    )
+    if imp_vert_diff
         @assert(
-            !isnothing(turbconv) || !isnothing(vert_diff),
+            !isnothing(turbconv) ||
+            !isnothing(vert_diff) ||
+            smagorinsky_vertical,
             "Implicit vertical diffusion is only supported when using a " *
-            "turbulence convection model or vertical diffusion model.",
+            "turbulence convection model, a vertical diffusion model, or a " *
+            "Smagorinsky-Lilly closure that acts on the vertical axis.",
         )
-    elseif !isnothing(prescribed_flow)
+    end
+
+    if !isnothing(prescribed_flow)
         @assert(topography == "NoWarp",
             "Prescribed flow elides `set_velocity_at_surface!` and `set_velocity_at_top!` \
              which is needed for topography. Thus, prescribed flow must have flat surface."

@@ -37,6 +37,7 @@ function implicit_temporary_quantities(Y, atmos)
         ᶜtemp_scalar_4 = Fields.Field(FT, center_space), # ᶜq_icl (in surface conditions)
         ᶜtemp_C3 = Fields.Field(C3{FT}, center_space), # ᶜu₃ʲ
         ᶠtemp_CT3 = Fields.Field(CT3{FT}, face_space), # ᶠuₕ³, ᶠu³_diff
+        ᶜtemp_UVWxUVW = Fields.Field(typeof(uvw_vec * uvw_vec'), center_space), # ᶜτ_smag in the implicit Smagorinsky tendency
         ᶠtemp_UVWxUVW = Fields.Field(typeof(uvw_vec * uvw_vec'), face_space), # ᶠstrain_rate
         temp_data_level = Fields.field_values(
             Fields.level(Fields.Field(FT, center_space), 1),

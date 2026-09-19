@@ -75,6 +75,13 @@ NVTX.@annotate function implicit_tendency!(Yₜ, Y, p, t)
             t,
             p.atmos.vertical_diffusion,
         )
+        vertical_smagorinsky_lilly_tendency!(
+            Yₜ,
+            Y,
+            p,
+            t,
+            p.atmos.smagorinsky_lilly,
+        )
         edmfx_sgs_diffusive_flux_tendency!(Yₜ, Y, p, t, p.atmos.turbconv_model)
     end
 

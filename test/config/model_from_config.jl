@@ -76,3 +76,44 @@ end
     @test atmos.surface.temperature isa
           CA.SurfaceConditions.AnalyticTemperature
 end
+
+@testset "Smagorinsky-Lilly axes options" begin
+    # The constructor accepts exactly the four documented axes symbols and
+    # rejects anything else.
+    @test_throws AssertionError CA.SmagorinskyLilly(; axes = :XYZ)
+
+    # Each axis symbol classifies the closure along the horizontal and vertical
+    # axes; only `:UVW` couples all axes isotropically.
+    for (axes, horizontal, vertical, uvw_coupled) in (
+        (:UVW, true, true, true),
+        (:UV, true, false, false),
+        (:W, false, true, false),
+        (:UV_W, true, true, false),
+    )
+        model = CA.SmagorinskyLilly(; axes)
+        @test CA.is_smagorinsky_horizontal(model) == horizontal
+        @test CA.is_smagorinsky_vertical(model) == vertical
+        @test CA.is_smagorinsky_UVW_coupled(model) == uvw_coupled
+    end
+
+    # `check_case_consistency` pairs implicit vertical diffusion only with a
+    # vertically-acting closure. The horizontal-only `UV` closure has no
+    # vertical Jacobian block, so it must be rejected, while `UVW`, `W`, and
+    # `UV_W` are accepted.
+    consistency(smag) = CA.check_case_consistency(
+        CA.AtmosConfig(
+            Dict(
+                "config" => "box",
+                "smagorinsky_lilly" => smag,
+                "implicit_diffusion" => true,
+                "turbconv" => nothing,
+                "vert_diff" => nothing,
+            );
+            job_id = "smag_$(smag)_imp_diff",
+        ).parsed_args,
+    )
+    @test_throws AssertionError consistency("UV")
+    for smag in ("UVW", "W", "UV_W")
+        @test consistency(smag) === nothing
+    end
+end
