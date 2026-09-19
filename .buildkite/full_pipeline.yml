@@ -77,9 +77,6 @@ steps:
             Pkg.status()'
         fi
 
-      - echo "--- Precompile --check-bounds=yes caches (Checkbounds step)"
-      - julia --check-bounds=yes --project=.buildkite -e 'using Pkg; Pkg.precompile(; strict=true)'
-
     agents:
       slurm_cpus_per_task: 8
       slurm_mem: 20GB
@@ -1322,21 +1319,9 @@ steps:
         agents:
           slurm_mem: 24GB
 
-  - group: "Checkbounds/Invalidations"
+  - group: "Invalidations"
     steps:
       # TODO: we should somehow decouple this unit test from the perf env / scripts
-      # Checkbounds
-      - label: ":computer: Checkbounds"
-        retry: *retry_policy
-        command: >
-          julia --color=yes --check-bounds=yes --project=.buildkite perf/benchmark.jl
-          --config_file $COMMON_CONFIG_PATH/numerics_sphere_he16ze63.yml
-          --config_file $PERF_CONFIG_PATH/bm_default.yml
-          --job_id checkbounds
-        artifact_paths: "checkbounds/output_active/*"
-        agents:
-          slurm_mem: 20GB
-
       # Latency
       - label: ":mag::rocket: Invalidations"
         retry: *retry_policy

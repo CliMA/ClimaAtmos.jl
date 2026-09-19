@@ -4,51 +4,75 @@ using PrecompileTools, Logging
 import ClimaAtmos as CA
 import ClimaComms
 import ClimaParams
+import ClimaTimeSteppers as CTS
+import Dates
 
+# Build the state, the cache, and the tendency function, the stages that a
+# simulation shares with every job. `CTS.init` and the diagnostic writers are
+# left out: they cost far more to precompile than they save.
+function build_tendency(model; ode_algo = CTS.ARS343())
+    (; params) = model
+    ode_config = CTS.IMEXAlgorithm(
+        ode_algo,
+        CTS.NewtonsMethod(;
+            max_iters = 1,
+            update_j = CTS.UpdateEvery(CTS.NewNewtonIteration),
+        ),
+    )
+    start_date = Dates.DateTime(2010, 1, 1)
+    dt, t_start, t_end = CA.convert_time_args(60, 0, 3600, start_date)
+    Y = CA.initial_state(model)
+    p = CA.build_cache(Y, model, params, dt, start_date, nothing)
+    return CA.args_integrator(
+        Y, p, (t_start, t_end), ode_config, CTS.CallbackSet(),
+        CA.ManualSparseJacobian(; approximate_solve_iters = 2), false,
+        model.prescribed_flow, dt, "stage", "step",
+    )
+end
+
+# The grids, the spaces, and the dry cache are precompiled in ClimaAtmos
+# itself; this workload only covers what depends on a specific configuration.
 @compile_workload begin
     with_logger(NullLogger()) do
         FT = Float32 # Float64?
-        h_elem = 6 # 16, 30?
-        z_elem = 10 # 30, 31, 63?
-        x_elem = y_elem = 2
-        x_max = y_max = 1e8
-        z_max = FT(30000.0)
-        dz_bottom = FT(500)
-        z_stretch = true
-        bubble = true
-        nh_poly = 3 # GLL{4} = nh_poly + 1
         # TODO: compile CUDA methods as well
         context = ClimaComms.context(ClimaComms.CPUSingleThreaded())
-        topography = CA.NoTopography()
         params = CA.ClimaAtmosParameters(FT)
-        radius = CA.Parameters.planet_radius(params)
+        sphere_grid = CA.SphereGrid(FT; context)
 
-        sphere_grid = CA.SphereGrid(
-            FT;
-            context,
-            radius, h_elem, nh_poly,
-            z_elem, z_max, z_stretch, dz_bottom,
-            bubble, topography,
+        # Single-column prognostic EDMF with 1-moment microphysics, the shape of
+        # most column jobs in the pipeline.
+        scm_grid = CA.ColumnGrid(
+            FT; context, z_max = FT(3000), z_stretch = false,
         )
-        box_grid = CA.BoxGrid(
-            FT;
-            context,
-            x_elem, x_max, y_elem, y_max, nh_poly, periodic_x = true, periodic_y = true,
-            z_elem, z_max, z_stretch, dz_bottom,
-            bubble, topography,
+        scm_model = CA.AtmosModel(
+            scm_grid;
+            params,
+            setup = CA.Setups.Bomex(FT),
+            microphysics_model = CA.NonEquilibriumMicrophysics1M(),
+            turbconv_model = CA.PrognosticEDMFX(; area_fraction = 1e-5),
+            edmfx_model = CA.EDMFXModel(;
+                entr_model = CA.InvZEntrainment(),
+                detr_model = CA.BuoyancyVelocityDetrainment(),
+                sgs_mass_flux = true,
+                sgs_diffusive_flux = true,
+                nh_pressure = true,
+                vertical_diffusion = true,
+                filter = true,
+                scale_blending_method = CA.SmoothMinimumBlending(),
+            ),
         )
-        plane_grid = CA.PlaneGrid(
-            FT;
-            context,
-            x_elem, x_max, nh_poly, periodic_x = true,
-            z_elem, z_max, z_stretch, dz_bottom,
-            topography,
+
+        # Moist sphere without radiation, the shape of the baroclinic wave
+        # and MPI jobs.
+        sphere_model = CA.AtmosModel(
+            sphere_grid;
+            params,
+            microphysics_model = CA.EquilibriumMicrophysics0M(),
         )
-        column_grid = CA.ColumnGrid(
-            FT; context, z_elem, z_max, z_stretch, dz_bottom,
-        )
-        all_grids = (sphere_grid, box_grid, plane_grid, column_grid)
-        foreach(CA.get_spaces, all_grids)
+
+        build_tendency(scm_model; ode_algo = CTS.ARS222())
+        build_tendency(sphere_model)
     end
 end
 

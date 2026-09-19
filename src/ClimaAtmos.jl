@@ -209,4 +209,6 @@ include(joinpath("cosp", "cosp.jl"))
 import .COSP
 include(joinpath("cosp", "cloudsat.jl"))
 
+include("precompile.jl")
+
 end # module
