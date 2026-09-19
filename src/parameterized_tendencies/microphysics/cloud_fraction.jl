@@ -108,8 +108,25 @@ function set_covariance_cache_and_cloud_fraction!(Y, p)
     # microphysics SGS moments (σ_S, λ_lagrange) using the final covariance.
     set_sgs_moments_and_cloud_fraction!(Y, p)
 
+    # MEASUREMENT PROBE, not an optimization. Adds a known number of extra
+    # kernel launches per step so the marginal host cost of a launch can be had
+    # as a slope. Writes only to a scratch field, after every consumer of
+    # scratch in this function has run, so results are unchanged.
+    #
+    # Paired deliberately: the baseline and probe profiles must be produced
+    # adjacently in one session. An earlier attempt compared a probe run against
+    # a baseline from a previous day, and host-side timing moved 49% between
+    # sessions with identical code, which is the same size as the effect.
+    probe = p.scratch.ᶜtemp_scalar_2
+    for _ in 1:LAUNCH_PROBE_COUNT[]
+        @. probe = ᶜcloud_fraction
+    end
+
     return nothing
 end
+
+# Extra launches per call for the probe above.
+const LAUNCH_PROBE_COUNT = Ref(1000)
 
 """
     _aitken_picard_helper(c0, c1, c2)
