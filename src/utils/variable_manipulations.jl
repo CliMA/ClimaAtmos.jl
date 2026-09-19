@@ -1,5 +1,17 @@
 import ClimaCore.MatrixFields: @name
-import ClimaCore.RecursiveApply: ⊞, ⊠, rzero, rpromote_type
+import ClimaCore.Utilities: add_auto_broadcasters, drop_auto_broadcasters
+
+# Recursive analogues of `+`, `*`, `zero`, and `promote_type` that broadcast
+# over nested `Tuple`s and `NamedTuple`s (formerly `ClimaCore.RecursiveApply`,
+# which ClimaCore v1 replaced with the `AutoBroadcaster` mechanism).
+⊞(x, y) = drop_auto_broadcasters(
+    add_auto_broadcasters(x) + add_auto_broadcasters(y),
+)
+⊠(x, y) = drop_auto_broadcasters(
+    add_auto_broadcasters(x) * add_auto_broadcasters(y),
+)
+rzero(x) = drop_auto_broadcasters(zero(add_auto_broadcasters(x)))
+rpromote_type(x) = drop_auto_broadcasters(promote_type(add_auto_broadcasters(x)))
 
 """
     specific(ρχ, ρ)
@@ -604,9 +616,9 @@ u₃⁰(ρaʲs, u₃ʲs, ρ, u₃, turbconv_model) = specific(
 Reduce `f` over `iter...` with `op`, inferring the `init` value automatically.
 
 `mapreduce` needs an explicit `init` when the elements are custom structs or
-`ClimaCore.Geometry.AxisTensor`s, whose zero is not a scalar. The zero is built
-here with `rzero` and `rpromote_type` from `ClimaCore.RecursiveApply`, applied to
-the result of `f` on the first elements, which keeps the reduction type-stable.
+`ClimaCore.Geometry.Tensor`s, whose zero is not a scalar. The zero is built
+here with the recursive `rzero` and `rpromote_type` helpers, applied to the
+result of `f` on the first elements, which keeps the reduction type-stable.
 
 # Arguments
 
@@ -623,12 +635,12 @@ end
     promote_type_mul(x, y)
 
 Return the type of the product of a `Number` and a
-`ClimaCore.Geometry.AxisTensor`, which is the type of the tensor.
+`ClimaCore.Geometry.Tensor`, which is the type of the tensor.
 
 Used by `unrolled_dotproduct` to build the zero element of the reduction.
 """
-promote_type_mul(n::Number, x::Geometry.AxisTensor) = typeof(x)
-promote_type_mul(x::Geometry.AxisTensor, n::Number) = typeof(x)
+promote_type_mul(n::Number, x::Geometry.Tensor) = typeof(x)
+promote_type_mul(x::Geometry.Tensor, n::Number) = typeof(x)
 
 """
     unrolled_dotproduct(a::Tuple, b::Tuple)
@@ -637,8 +649,8 @@ Compute the dot product `Σᵢ a[i] * b[i]` of two equal-length `Tuple`s.
 
 The recursion is manually unrolled, which keeps the result type-stable in CUDA
 kernels, where `mapreduce` can fail type inference. Products and sums go through
-the `ClimaCore.RecursiveApply` operators `⊠` and `⊞`, so the tuples may hold
-nested types such as `ClimaCore.Geometry.AxisTensor`s.
+the recursive operators `⊠` and `⊞`, so the tuples may hold nested types such
+as `ClimaCore.Geometry.Tensor`s.
 
 # Arguments
 

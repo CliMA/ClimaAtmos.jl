@@ -8,8 +8,10 @@
 
 import StaticArrays as SA
 import Thermodynamics as TD
-import ClimaCore.RecursiveApply: rzero, ⊞, ⊠
 import UnrolledUtilities: unrolled_reduce
+
+# The recursive operators `rzero`, `⊞`, and `⊠` are defined in
+# src/utils/variable_manipulations.jl.
 
 # ============================================================================
 # Gauss-Hermite Quadrature
@@ -622,7 +624,7 @@ Approximates the expectation
 ```
 
 with the ``1/\\pi`` normalization of the two-dimensional Gauss-Hermite rule applied
-as ``1/\\sqrt{\\pi}`` per dimension. Accumulation uses `RecursiveApply`'s `⊞` and
+as ``1/\\sqrt{\\pi}`` per dimension. Accumulation uses the recursive operators `⊞` and
 `⊠`, so `f` may return a scalar or a `NamedTuple` of scalars.
 
 # Arguments

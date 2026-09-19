@@ -25,7 +25,7 @@ transfers momentum from the atmosphere to the surface (drag).
   - `ᶜuₕ`: Cell-center horizontal velocity; used only for its space and element type
     [m/s].
   - `ρ_flux_uₕ_surface`: Surface flux of horizontal momentum, a
-    `ClimaCore.Geometry.AxisTensor` of type `C3 ⊗ C12` [kg/m/s²].
+    `ClimaCore.Geometry.Tensor` of type `C3 ⊗ C12` [kg/m/s²].
 
 # Returns
 

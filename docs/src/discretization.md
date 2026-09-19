@@ -201,12 +201,11 @@ while the vertical gradient and curl operators are set to zero there.
 
 !!! note
 
-    Since ClimaCore 0.15, the strong- and weak-form horizontal spectral
-    operators are unified: `Divergence`, `Gradient`, and `Curl` take a
-    form-type parameter (`StrongForm`, the default, or `WeakForm`), so the weak
-    divergence, for example, is `Divergence{I, WeakForm}`. The ClimaAtmos code
-    still uses the legacy names (`WeakDivergence`, `WeakGradient`, `WeakCurl`),
-    which remain as aliases.
+    The strong- and weak-form horizontal spectral operators are unified in
+    ClimaCore: `Divergence`, `Gradient`, and `Curl` take a form-type parameter
+    (`StrongForm`, the default, or `WeakForm`), so the weak divergence, for
+    example, is `Divergence{WeakForm}`. The legacy aliases (`WeakDivergence`,
+    `WeakGradient`, `WeakCurl`) were removed in ClimaCore v1.
 
 Each operator below has a short name in the ClimaAtmos source, documented under
 [Discrete operators](@ref) in the API.
@@ -239,8 +238,8 @@ horizontal discretization would replace this list.
   - ``\mathcal{D}_h`` is the strong horizontal spectral divergence
     [`ClimaCore.Operators.Divergence`](@extref).
 
-  - ``\hat{\mathcal{D}}_h`` is the weak horizontal spectral divergence
-    [`ClimaCore.Operators.WeakDivergence`](@extref).
+  - ``\hat{\mathcal{D}}_h`` is the weak horizontal spectral divergence, the
+    `WeakForm` variant of [`ClimaCore.Operators.Divergence`](@extref).
 
   - ``\mathcal{D}^{split}_h`` is the split, skew-symmetric horizontal divergence
     [`ClimaCore.Operators.SplitDivergence`](@extref),
@@ -262,9 +261,9 @@ horizontal discretization would replace this list.
   - ``\mathcal{G}_h`` is the strong horizontal spectral gradient
     [`ClimaCore.Operators.Gradient`](@extref).
 
-  - ``\hat{\mathcal{G}}_h`` is the weak horizontal spectral gradient
-    [`ClimaCore.Operators.WeakGradient`](@extref), the outer gradient of the
-    vector Laplacian.
+  - ``\hat{\mathcal{G}}_h`` is the weak horizontal spectral gradient, the
+    `WeakForm` variant of [`ClimaCore.Operators.Gradient`](@extref); it is the
+    outer gradient of the vector Laplacian.
 
   - ``\mathcal{C}_h`` is the curl of the components involving horizontal
     derivatives [`ClimaCore.Operators.Curl`](@extref). Applied to
@@ -272,8 +271,8 @@ horizontal discretization would replace this list.
     components; applied to ``\boldsymbol{u}_v`` it returns a vector with only
     horizontal contravariant components.
 
-  - ``\hat{\mathcal{C}}_h`` is the corresponding weak curl
-    [`ClimaCore.Operators.WeakCurl`](@extref).
+  - ``\hat{\mathcal{C}}_h`` is the corresponding weak curl, the `WeakForm`
+    variant of [`ClimaCore.Operators.Curl`](@extref).
 
   - ``\mathcal{P}`` is the projection onto the continuous spectral element
     basis; see [Projection: direct stiffness summation](@ref).

@@ -245,8 +245,8 @@ using ClimaAtmos
         end
     end
 
-    @testset "RecursiveApply Operations" begin
-        import ClimaCore.RecursiveApply: rzero, ⊞, ⊠
+    @testset "Recursive Operations" begin
+        import ClimaAtmos: rzero, ⊞, ⊠
         for FT in (Float32, Float64)
             @testset "FT = $FT" begin
                 # Scalars

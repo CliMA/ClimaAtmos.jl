@@ -2,8 +2,7 @@ import ClimaAtmos as CA
 import ClimaCore
 import ClimaCore: DataLayouts, Fields, Geometry
 import ClimaCore.Fields: Field, FieldVector, field_values
-import ClimaCore.DataLayouts: AbstractData
-import ClimaCore.Geometry: AxisTensor
+import ClimaCore.DataLayouts: DataLayout
 import ClimaCore.Spaces: AbstractSpace
 import ClimaComms
 import ClimaUtilities.OutputPathGenerator: maybe_wait_filesystem

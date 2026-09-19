@@ -1598,8 +1598,8 @@ bottom level). Called from `postprocess_and_accumulate!`.
 """
 function gw_average!(wave_forcing, wave_forcing_m1)
     FT = eltype(wave_forcing)
-    L1 = Operators.LeftBiasedC2F(; bottom = Operators.SetValue(FT(0.0)))
-    L2 = Operators.LeftBiasedF2C(;)
+    L1 = Operators.BottomBiasedC2F(; bottom = Operators.SetValue(FT(0.0)))
+    L2 = Operators.BottomBiasedF2C(;)
     wave_forcing_m1 .= L2.(L1.(wave_forcing))
     @. wave_forcing = FT(0.5) * (wave_forcing + wave_forcing_m1)
 end
@@ -1646,8 +1646,8 @@ ClimaCore column operators cannot index directly; the shift is a round trip to t
 using right-biased interpolation in both directions.
 """
 function field_shiftlevel_up!(ᶜexample_field, ᶜshifted_field, Boundary_value)
-    R1 = Operators.RightBiasedC2F(; top = Operators.SetValue(Boundary_value))
-    R2 = Operators.RightBiasedF2C(;)
+    R1 = Operators.TopBiasedC2F(; top = Operators.SetValue(Boundary_value))
+    R2 = Operators.TopBiasedF2C(;)
     ᶜshifted_field .= R2.(R1.(ᶜexample_field))
 end
 

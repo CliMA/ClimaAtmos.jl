@@ -816,8 +816,8 @@ This is needed to access face values at level `k-1` from within a level-`k` comp
 (e.g., computing `ᶠp[k-1]` for pressure differences across cell layers). ClimaCore `column_reduce` and `column_accumulate` do not support direct `field[k-1]` indexing in broadcast expressions, so we
 construct the shifted view via a round-trip through the cell-center grid:
 
- 1. `LeftBiasedF2C` interpolates faces → cell centers using the value from below.
- 2. `LeftBiasedC2F` interpolates cell centers → faces using the value from below,
+ 1. `BottomBiasedF2C` interpolates faces → cell centers using the value from below.
+ 2. `BottomBiasedC2F` interpolates cell centers → faces using the value from below,
     with `boundary_value` prescribed at the bottom face.
 
 The net effect is `shifted_field[k] = source_field[k-1]` for interior faces,
@@ -826,7 +826,7 @@ and `shifted_field[bottom] = boundary_value` at the lowest face.
 Called from `orographic_gravity_wave_compute_tendency!` to build `ᶠp_m1`.
 """
 function field_shiftface_down!(source_field, shifted_field, boundary_value)
-    L1 = Operators.LeftBiasedC2F(; bottom = Operators.SetValue(boundary_value))
+    L1 = Operators.BottomBiasedC2F(; bottom = Operators.SetValue(boundary_value))
     shifted_field .= L1.(ᶜleft_bias.(source_field))
 end
 

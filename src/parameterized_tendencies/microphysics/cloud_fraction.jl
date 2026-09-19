@@ -1,6 +1,8 @@
 import NVTX
 import StaticArrays as SA
-import ClimaCore.RecursiveApply: rzero, ⊞, ⊠
+
+# The recursive operators `rzero`, `⊞`, and `⊠` are defined in
+# src/utils/variable_manipulations.jl.
 
 """
     set_covariance_cache_and_cloud_fraction!(Y, p)

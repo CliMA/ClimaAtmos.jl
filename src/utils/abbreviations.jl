@@ -70,12 +70,12 @@ strong form and (with the `w` prefix) a weak form.
 `∇ₕ·(ρu χ)`, used for the horizontal advection of scalars.
 """
 const divₕ = Operators.Divergence()
-const wdivₕ = Operators.WeakDivergence()
+const wdivₕ = Operators.Divergence{Operators.WeakForm}()
 const split_divₕ = Operators.SplitDivergence()
 const gradₕ = Operators.Gradient()
-const wgradₕ = Operators.WeakGradient()
+const wgradₕ = Operators.Gradient{Operators.WeakForm}()
 const curlₕ = Operators.Curl()
-const wcurlₕ = Operators.WeakCurl()
+const wcurlₕ = Operators.Curl{Operators.WeakForm}()
 
 """
     ᶜinterp
@@ -157,10 +157,10 @@ or above (`right`) the target point.
 `ᶠright_bias` also supplies the free-outflow boundary reconstruction used with
 `ᶜprecipdivᵥ`.
 """
-const ᶠleft_bias = Operators.LeftBiasedC2F()
-const ᶠright_bias = Operators.RightBiasedC2F() # for free outflow in ᶜprecipdivᵥ
-const ᶜleft_bias = Operators.LeftBiasedF2C()
-const ᶜright_bias = Operators.RightBiasedF2C()
+const ᶠleft_bias = Operators.BottomBiasedC2F()
+const ᶠright_bias = Operators.TopBiasedC2F() # for free outflow in ᶜprecipdivᵥ
+const ᶜleft_bias = Operators.BottomBiasedF2C()
+const ᶜright_bias = Operators.TopBiasedF2C()
 
 # TODO: Implement proper extrapolation instead of simply reusing the first
 # interior value at the surface.
@@ -230,12 +230,12 @@ const ᶠupwind1 = Operators.UpwindBiasedProductC2F()
     ᶠupwind3
 
 Third-order upwind-biased reconstruction of the product of a center scalar with
-a face velocity, degrading to a third-order one-sided stencil at the top and
-bottom boundaries.
+a face velocity, padding the ghost points of the boundary stencils with linear
+(first-order) extrapolation from the interior.
 """
 const ᶠupwind3 = Operators.Upwind3rdOrderBiasedProductC2F(
-    bottom = Operators.ThirdOrderOneSided(),
-    top = Operators.ThirdOrderOneSided(),
+    bottom = Operators.Extrapolate{1}(),
+    top = Operators.Extrapolate{1}(),
 )
 
 """
@@ -243,17 +243,13 @@ const ᶠupwind3 = Operators.Upwind3rdOrderBiasedProductC2F(
 
 Linear van Leer reconstruction of the product of a center scalar with a face
 velocity, with the `MonotoneLocalExtrema` (Mono5) slope constraint and
-first-order one-sided stencils at the boundaries.
-
-Defined only when ClimaCore is at least v0.14.22.
+constant (zero-order) extrapolation of ghost points at the boundaries.
 """
-@static if pkgversion(ClimaCore) ≥ v"0.14.22"
-    const ᶠlin_vanleer = Operators.LinVanLeerC2F(
-        bottom = Operators.FirstOrderOneSided(),
-        top = Operators.FirstOrderOneSided(),
-        constraint = Operators.MonotoneLocalExtrema(), # (Mono5)
-    )
-end
+const ᶠlin_vanleer = Operators.LinVanLeerC2F(
+    bottom = Operators.Extrapolate{0}(),
+    top = Operators.Extrapolate{0}(),
+    constraint = Operators.MonotoneLocalExtrema(), # (Mono5)
+)
 
 """
     ᶜinterp_matrix
