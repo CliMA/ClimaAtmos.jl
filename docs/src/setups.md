@@ -138,7 +138,7 @@ ClimaAtmos.Setups.Larcform1
 ClimaAtmos.Setups.SimplePlume
 ClimaAtmos.Setups.PrecipitatingColumn
 ClimaAtmos.Setups.ShipwayHill2012
-ClimaAtmos.Setups.RCEMIPIIProfile
+ClimaAtmos.Setups.RCEMIPProfile
 ```
 
 ### Global Cases
