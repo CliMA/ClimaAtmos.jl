@@ -926,33 +926,27 @@ NVTX.@annotate function set_sgs_moments_and_cloud_fraction!(Y, p)
     turbconv_model = p.atmos.turbconv_model
     microphysics_model = p.atmos.microphysics_model
 
-    ᶜρ_env, ᶜT_mean, ᶜq_mean = _get_env_ρ_T_q(Y, p, thermo_params, turbconv_model)
-    ᶜq_lcl, ᶜq_icl = _get_condensate_means(Y, p, turbconv_model, microphysics_model)
+    ᶜρ_env_lazy, ᶜT_mean, ᶜq_mean = _get_env_ρ_T_q(Y, p, thermo_params, turbconv_model)
+    ᶜq_lcl_lazy, ᶜq_icl_lazy =
+        _get_condensate_means(Y, p, turbconv_model, microphysics_model)
     sgs_quad = p.atmos.sgs_quadrature
     corr_Tq = correlation_Tq(p.params)
     FT = eltype(p.params)
     α = sgs_variance_fidelity(CAP.cloud_fraction_steepness_scale(p.params))
     floor = cloud_fraction_floor_params(p.params)
-    (; ᶜT′T′, ᶜq′q′) = p.precomputed
+    (; ᶜT′T′, ᶜq′q′, ᶜsgs_moments, ᶜcloud_fraction) = p.precomputed
 
-    # Obtain the DataLayouts for the foreach_point loop
-    ᶜρ_env_dl = Fields.field_values(ᶜρ_env)
-    ᶜT_mean_dl = Fields.field_values(ᶜT_mean)
-    ᶜq_mean_dl = Fields.field_values(ᶜq_mean)
-    ᶜq_lcl_dl = Fields.field_values(ᶜq_lcl)
-    ᶜq_icl_dl = Fields.field_values(ᶜq_icl)
-    ᶜT′T′_dl = Fields.field_values(ᶜT′T′)
-    ᶜq′q′_dl = Fields.field_values(ᶜq′q′)
-    ᶜsgs_moments_dl = Fields.field_values(p.precomputed.ᶜsgs_moments)
-    ᶜcloud_fraction_dl = Fields.field_values(p.precomputed.ᶜcloud_fraction)
+    # Materialize lazy fields to pass to foreach_point
+    ᶜρ_env = (p.scratch.ᶜtemp_scalar .= ᶜρ_env_lazy)
+    ᶜq_lcl = (p.scratch.ᶜtemp_scalar_2 .= ᶜq_lcl_lazy)
+    ᶜq_icl = (p.scratch.ᶜtemp_scalar_3 .= ᶜq_icl_lazy)
 
-    α = FT(α)
-    let α = α, thermo_params = thermo_params, floor = floor, sgs_quad = sgs_quad,
+    let α = FT(α), thermo_params = thermo_params, floor = floor, sgs_quad = sgs_quad,
         corr_Tq = corr_Tq
 
         DataLayouts.foreach_point(
-            ᶜsgs_moments_dl, ᶜcloud_fraction_dl, ᶜρ_env_dl, ᶜT_mean_dl, ᶜq_mean_dl,
-            ᶜq_lcl_dl, ᶜq_icl_dl, ᶜT′T′_dl, ᶜq′q′_dl,
+            ᶜsgs_moments, ᶜcloud_fraction, ᶜρ_env, ᶜT_mean, ᶜq_mean,
+            ᶜq_lcl, ᶜq_icl, ᶜT′T′, ᶜq′q′,
         ) do ᶜsgs_moments,
         ᶜcloud_fraction,
         ᶜρ_env,
@@ -965,11 +959,10 @@ NVTX.@annotate function set_sgs_moments_and_cloud_fraction!(Y, p)
 
             ᶜq_c = @. ᶜq_lcl + ᶜq_icl
             # ONE quadrature pass → (sigma_S, λ_lagrange).
-            local_sgs_moments = @. _compute_sgs_moments(
+            @. ᶜsgs_moments = _compute_sgs_moments(
                 thermo_params, ᶜρ_env, ᶜT_mean, ᶜq_mean, ᶜq_c,
                 $(sgs_quad), ᶜT′T′, ᶜq′q′, corr_Tq, α,
             )
-            @. ᶜsgs_moments = local_sgs_moments
             # Recompute CF from q_c and σ_S using the augmented-σ closure. We cannot
             # use `Φ(λ/σ_aug)` because λ was computed with the equilibrium σ_S_eff,
             # not σ_aug — `Φ(λ/σ_aug)` would not match the truncated-Gaussian
@@ -982,7 +975,7 @@ NVTX.@annotate function set_sgs_moments_and_cloud_fraction!(Y, p)
                 # μ_S recomputed analytically, matching `_sgs_saturation_moments`
                 # (condensate-free q_sat, consistent with the linear excess S).
                 ᶜq_mean - TD.q_vap_saturation(thermo_params, ᶜT_mean, ᶜρ_env),
-                local_sgs_moments.sigma_S,
+                ᶜsgs_moments.sigma_S,
                 TD.q_vap_saturation(thermo_params, ᶜT_mean, ᶜρ_env, ᶜq_lcl, ᶜq_icl),
                 α,
                 $(floor),
