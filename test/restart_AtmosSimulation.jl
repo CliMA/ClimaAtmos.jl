@@ -1,3 +1,7 @@
+# Load the CI precompilation cache before ClimaAtmos; see the note in
+# test/restart.jl for why this is guarded on the package being reachable.
+!isnothing(Base.find_package("PrecompileCI")) && (using PrecompileCI)
+
 # This test checks that:
 
 # 1. A simulation, saved to a checkpoint, is read back identically (up to some
@@ -99,8 +103,8 @@ function amip_target(context, output_dir)
         hyperdiff,
         diff_mode,
         aerosol_names,
-        reproducible_restart = CA.ReproducibleRestart(),
-        test_dycore_consistency = CA.TestDycoreConsistency(),
+        reproducible_restart = true,
+        test_dycore_consistency = true,
     )
 
     jacobian = CA.ManualSparseJacobian(; approximate_solve_iters = 2)
@@ -365,8 +369,8 @@ if MANYTESTS
                         turbconv_model,
                         edmfx_model,
                         insolation = CA.IdealizedInsolation(),
-                        reproducible_restart = CA.ReproducibleRestart(),
-                        test_dycore_consistency = CA.TestDycoreConsistency())
+                        reproducible_restart = true,
+                        test_dycore_consistency = true)
 
                     bubble = true
 

@@ -101,12 +101,8 @@ warning on ClimaCore versions older than 0.14.22.
 `vertical_water_borrowing_species_from_config`.
 """
 function get_numerics(parsed_args, FT; vertical_water_borrowing_species = nothing)
-    test_dycore_consistency =
-        parsed_args["test_dycore_consistency"] ? TestDycoreConsistency() :
-        nothing
-    reproducible_restart =
-        parsed_args["reproducible_restart"] ? ReproducibleRestart() :
-        nothing
+    test_dycore_consistency = parsed_args["test_dycore_consistency"]::Bool
+    reproducible_restart = parsed_args["reproducible_restart"]::Bool
 
     energy_q_tot_upwinding = Symbol(parsed_args["energy_q_tot_upwinding"])
     tracer_upwinding = Symbol(parsed_args["tracer_upwinding"])
