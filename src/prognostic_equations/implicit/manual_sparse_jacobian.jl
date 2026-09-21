@@ -713,7 +713,7 @@ Mutates `matrix` and returns `nothing`.
 function update_advection_jacobian!(matrix, Y, p, dtγ, topography_flag)
     (; params) = p
     (; ᶜΦ) = p.core
-    (; ᶠu³, ᶜK, ᶜp, ᶜT, ᶜh_tot) = p.precomputed
+    (; ᶜK, ᶜp, ᶜT, ᶜh_tot) = p.precomputed
     (; ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice) = p.precomputed
     (; ∂ᶜK_∂ᶜuₕ, ∂ᶜK_∂ᶠu₃, ᶠp_grad_matrix, ᶜadvection_matrix) = p.scratch
     rs = p.atmos.rayleigh_sponge
@@ -726,7 +726,6 @@ function update_advection_jacobian!(matrix, Y, p, dtγ, topography_flag)
     R_d = FT(CAP.R_d(params))
     R_v = FT(CAP.R_v(params))
     cp_d = FT(CAP.cp_d(params))
-    e_int_v0 = FT(CAP.e_int_v0(params))
     thermo_params = CAP.thermodynamics_params(params)
 
     ᶜρ = Y.c.ρ
@@ -1043,11 +1042,8 @@ function update_diffusion_jacobian!(
     (; ᶜK_u, ᶜK_h) = eddy_diffusivities
     FT = Spaces.undertype(axes(Y.c))
     T_0 = FT(CAP.T_0(params))
-    R_v = FT(CAP.R_v(params))
 
     ᶜρ = Y.c.ρ
-    ᶜkappa_m = ᶜkappa_m_field!(Y, p)
-    ᶜ∂p∂ρq_tot = ᶜ∂p∂ρq_tot_field!(Y, p, ᶜkappa_m)
 
     # In dry configurations, the ρe_tot diagonal is initialized here (moist
     # configurations initialize it in update_sedimentation_jacobian!).
@@ -1472,7 +1468,6 @@ function update_sgs_diffusion_jacobian!(matrix, Y, p, dtγ, diffusion_flag)
     # branch): without it, the updraft scalar diagonals would carry
     # diffusion terms that have no tendency counterpart.
     p.atmos.edmfx_model.sgs_diffusive_flux || return nothing
-    (; params) = p
     (; ᶜdiffusion_h_matrix) = p.scratch
     ᶜρ = Y.c.ρ
 

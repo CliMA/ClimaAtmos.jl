@@ -1160,7 +1160,7 @@ function make_plots(
                 z = 1500,
             )
         end
-    tmp_file = make_plots_generic(
+    make_plots_generic(
         output_paths,
         vars_3D,
         time = LAST_SNAP,

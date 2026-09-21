@@ -188,9 +188,8 @@ Vertical advection of passive tracers by the mean flow is treated explicitly.
 Returns `nothing`.
 """
 function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
-    (; microphysics_model, turbconv_model, rayleigh_sponge) = p.atmos
+    (; microphysics_model, rayleigh_sponge) = p.atmos
     (; params, dt) = p
-    n = n_mass_flux_subdomains(turbconv_model)
     ᶜJ = Fields.local_geometry_field(axes(Y.c)).J
     ᶠJ = Fields.local_geometry_field(axes(Y.f)).J
     (; ᶠgradᵥ_ᶜΦ) = p.core

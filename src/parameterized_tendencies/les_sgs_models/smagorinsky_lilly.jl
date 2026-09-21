@@ -85,7 +85,6 @@ See also `horizontal_smagorinsky_lilly_tendency!` and
 function set_smagorinsky_lilly_precomputed_quantities!(Y, p, model)
     (; ᶜu, ᶠu, ᶜS, ᶠS, ᶜL_h, ᶜL_v, ᶜS_norm_h, ᶜS_norm_v, ᶜνₜ_h, ᶜνₜ_v, ᶜD_h, ᶜD_v) =
         p.precomputed
-    (; ᶜtemp_scalar) = p.scratch
     c_smag = CAP.c_smag(p.params)
 
     # Precompute 3D strain rate tensor
@@ -215,7 +214,7 @@ It is a no-op unless the model's axes include the vertical direction
 function vertical_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, model::SmagorinskyLilly)
     is_smagorinsky_vertical(model) || return nothing
     (; ᶜS, ᶠS, ᶜνₜ_v) = p.precomputed
-    (; ᶜtemp_UVWxUVW, ᶠtemp_UVWxUVW, ᶠtemp_scalar, ᶠtemp_scalar_2) = p.scratch
+    (; ᶜtemp_UVWxUVW, ᶠtemp_UVWxUVW, ᶠtemp_scalar) = p.scratch
     Pr_t = CAP.Prandtl_number_0(CAP.turbconv_params(p.params))
     ᶜρ = Y.c.ρ
     ᶠρ = @. ᶠtemp_scalar = ᶠinterp(ᶜρ)

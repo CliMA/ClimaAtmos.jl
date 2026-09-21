@@ -204,7 +204,6 @@ function precomputed_quantities(Y, atmos)
             !(atmos.turbconv_model isa PrognosticEDMFX)
     @assert isnothing(atmos.turbconv_model) ||
             isnothing(atmos.vertical_diffusion)
-    sa_result_type = @NamedTuple{T::FT, q_liq::FT, q_ice::FT}
     SCT = SurfaceConditions.surface_conditions_type(atmos, FT)
     cspace = axes(Y.c)
     n = n_mass_flux_subdomains(atmos.turbconv_model)
@@ -435,15 +434,6 @@ function precomputed_quantities(Y, atmos)
         ᶜgradᵥ_q_tot = Fields.Field(C3{FT}, cspace),
         ᶜgradᵥ_θ_liq_ice = Fields.Field(C3{FT}, cspace),
     )
-
-    diagnostic_precipitation_sgs_quantities =
-        atmos.microphysics_model isa NonEquilibriumMicrophysics1M ?
-        (;
-            ᶜq_lclʲs = similar(Y.c, NTuple{n, FT}),
-            ᶜq_iclʲs = similar(Y.c, NTuple{n, FT}),
-            ᶜq_raiʲs = similar(Y.c, NTuple{n, FT}),
-            ᶜq_snoʲs = similar(Y.c, NTuple{n, FT}),
-        ) : (;)
 
     # Allocated here only when the vertical Smagorinsky-Lilly tendency is
     # explicit; with `diff_mode == Implicit()` these fields are written by

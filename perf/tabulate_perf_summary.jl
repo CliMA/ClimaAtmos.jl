@@ -144,7 +144,7 @@ function tabulate_summaries(summaries, job_id, metric_tup, funcs, has_func)
         end
         percent_change = compute_percent_change.(this_PR, main)
     else
-        percent_change = map(funcs) do func
+        percent_change = map(funcs) do _
             "Insufficient data for percent change"
         end
     end
@@ -157,7 +157,7 @@ function tabulate_summaries(summaries, job_id, metric_tup, funcs, has_func)
 
     header = (
         ["Function", header_names..., "Percent change"],
-        ["", ["" for c in commits]..., "(PR-main)/main×100"],
+        ["", ["" for _ in commits]..., "(PR-main)/main×100"],
     )
 
     worsened(data_ij) = !(data_ij isa String) && (data_ij > 0)

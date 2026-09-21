@@ -197,7 +197,6 @@ where `c_d` is the TKE dissipation coefficient
   - `mixing_length`: Turbulent mixing length [m].
 """
 function tke_dissipation(turbconv_params, ρtke, tke, mixing_length)
-    FT = typeof(tke)
     c_d = tke_dissipation_coefficient(turbconv_params)
     dissipation_rate_vol = c_d * ρtke * sqrt(abs(tke)) / mixing_length
     return dissipation_rate_vol

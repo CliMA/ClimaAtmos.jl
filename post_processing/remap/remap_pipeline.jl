@@ -73,7 +73,7 @@ function parse_commandline()
 end
 
 function get_params()
-    (s, parsed_args) = parse_commandline()
+    (_, parsed_args) = parse_commandline()
     data_dir = parsed_args["data_dir"]
     out_dir = parsed_args["out_dir"]
     nlat = parsed_args["nlat"]

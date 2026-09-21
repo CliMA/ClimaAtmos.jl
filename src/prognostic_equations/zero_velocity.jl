@@ -3,7 +3,6 @@
 ###
 
 import ClimaCore: MatrixFields
-import LinearAlgebra: UniformScaling
 
 """
     zero_velocity_tendency!(Yₜ, Y, p, t)
@@ -84,8 +83,6 @@ column variables. Called from `zero_velocity_jacobian!`.
 function set_identity_matrix_entry!(matrix_entry, row_name, col_name)
     identity_matrix_entry_value = if row_name == col_name
         # TODO: Add a method for one(::Tensor{2}) to simplify this.
-        T = eltype(eltype(matrix_entry))
-        tensor_data = UniformScaling(one(eltype(T)))
         -DiagonalMatrixRow(one(eltype(eltype(matrix_entry))))
     else
         zero(eltype(matrix_entry))

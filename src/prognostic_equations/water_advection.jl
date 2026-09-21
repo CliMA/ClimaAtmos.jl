@@ -106,7 +106,7 @@ function vertical_advection_of_water_tendency!(Yₜ, Y, p, t)
     # grid-mean flux by construction, and both corrections enter with the
     # same sign convention as the grid-mean flux.
     if p.atmos.turbconv_model isa PrognosticEDMFX
-        (; ᶜρʲs, ᶜTʲs, ᶜq_tot_nonnegʲs, ᶜq_liqʲs, ᶜq_iceʲs, ᶜuʲs) = p.precomputed
+        (; ᶜρʲs, ᶜTʲs, ᶜuʲs) = p.precomputed
         (; ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜu⁰) = p.precomputed
 
         ᶜρ⁰ = p.scratch.ᶜtemp_scalar

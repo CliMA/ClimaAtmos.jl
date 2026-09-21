@@ -58,7 +58,7 @@ debugging workflows, comment out the call in `remaining_tendency.jl`. See also
 `vertical_amd_tendency!`.
 """
 function horizontal_amd_tendency!(Yₜ, Y, p, t, les::AnisotropicMinimumDissipation)
-    (; atmos, precomputed, scratch, params) = p
+    (; atmos, precomputed, scratch) = p
     FT = eltype(Y)
     c_amd = les.c_amd
     (; ᶜu, ᶠu³) = precomputed
@@ -82,7 +82,6 @@ function horizontal_amd_tendency!(Yₜ, Y, p, t, les::AnisotropicMinimumDissipat
     h_space = Spaces.horizontal_space(axes(Y.c))
     Δ_h = Spaces.node_horizontal_length_scale(h_space)
     ᶜΔ_z = Fields.Δz_field(Y.c)
-    ᶠΔ_z = Fields.Δz_field(Y.f)
 
     # Gradients
     ## cell centers
@@ -104,11 +103,7 @@ function horizontal_amd_tendency!(Yₜ, Y, p, t, les::AnisotropicMinimumDissipat
     ᶜ∂̂u_uvw = @.ᶜtemp_UVWxUVW = Δ_h * Geometry.project(axis_uvw, gradₕ(ᶜu_uvw))
     @. ᶜ∂̂u_uvw += ᶜΔ_z * Geometry.project(axis_uvw, ᶜgradᵥ(ᶠu_uvw))
 
-    ᶠ∂̂u_uvw = @.ᶠtemp_UVWxUVW = Δ_h * Geometry.project(axis_uvw, gradₕ(ᶠu_uvw))
-    @. ᶠ∂̂u_uvw += ᶠΔ_z * Geometry.project(axis_uvw, ᶠgradᵥ_uvw(ᶜu_uvw))
-
     ᶜ∂ₖuᵢ∂ₖuⱼ = @. lazy(ᶜ∂̂u_uvw * adjoint(ᶜ∂̂u_uvw))
-    ᶠ∂ₖuᵢ∂ₖuⱼ = @. lazy(ᶠ∂̂u_uvw * adjoint(ᶠ∂̂u_uvw))
 
     # AMD eddy viscosity
     ᶜνₜ = @. ᶜtemp_scalar = max(
@@ -244,7 +239,6 @@ function vertical_amd_tendency!(Yₜ, Y, p, t, les::AnisotropicMinimumDissipatio
     @. ᶠ∂̂u_uvw += ᶠΔ_z * Geometry.project(axis_uvw, ᶠgradᵥ_uvw(ᶜu_uvw))
 
     ᶜ∂ₖuᵢ∂ₖuⱼ = @. lazy(ᶜ∂̂u_uvw * adjoint(ᶜ∂̂u_uvw))
-    ᶠ∂ₖuᵢ∂ₖuⱼ = @. lazy(ᶠ∂̂u_uvw * adjoint(ᶠ∂̂u_uvw))
 
     # AMD eddy viscosity
     ᶜνₜ = @. ᶜtemp_scalar = max(

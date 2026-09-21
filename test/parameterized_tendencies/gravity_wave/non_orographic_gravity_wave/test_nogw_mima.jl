@@ -112,7 +112,6 @@ function non_orographic_gravity_wave_param(
 
     gw_Bn = @. ifelse(dϕ_s <= lat <= dϕ_n, FT(0), Bn)
     gw_cw = @. ifelse(dϕ_s <= lat <= dϕ_n, cw_tropics, cw)
-    gw_flag = zeros(axes(lat))
 
     # Source amplitude following MiMA: radical change between subtropics and the tropic
     one_half = FT(0.5)
@@ -201,7 +200,7 @@ scratch = (;
     temp_field_level = similar(Fields.level(ᶜz, 1), FT),
 )
 
-for j in 1:length(lat)
+for j in eachindex(lat)
     local non_orographic_gravity_wave = (;
         non_orographic_gravity_wave_param(lat[j], FT)...,
         u_waveforcing_top = similar(Fields.level(ᶜz, 1), FT),

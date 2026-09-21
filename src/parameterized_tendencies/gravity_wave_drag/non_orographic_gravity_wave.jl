@@ -646,7 +646,6 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
         ᶜq_tot_nonnegʲs = p.precomputed.ᶜq_tot_nonnegʲs
         gw_Q_conv_ic .= FT(0)
         ᶜρa_sum .= FT(0)
-        ᶜlg = Fields.local_geometry_field(Y.c)
         for j in 1:n_updrafts
             ᶜρaʲ = Y.c.sgsʲs.:($j).ρa
             ᶜρʲ = ᶜρʲs.:($j)
