@@ -555,6 +555,21 @@ at each quadrature point and aggregated linearly, which preserves total water
 and total energy at the subdomain level because the bulk rates preserve them
 pointwise.
 
+How each cloud-condensate species is placed over the quadrature nodes when the
+1-moment microphysical rates are evaluated is a separate choice, made
+independently for liquid and ice (`sgs_liquid_distribution`,
+`sgs_ice_distribution`). The default `excess` gives every node its
+liquid-fraction share of the reconstructed excess (``\lambda`` for liquid,
+``1-\lambda`` for ice), so the species is present only where the node is
+saturated. With `uniform`, every node carries the subdomain mean (``q_{lcl}`` or
+``q_{icl}``), held fixed across the distribution in the same way as rain and
+snow: the other species is unchanged, the quadrature mean of the local cloud
+condensate is still ``q_{lcl} + q_{icl}`` in subdomains with condensate, and the
+uniform species condenses or deposits at supersaturated nodes and evaporates or
+sublimates at subsaturated ones as a non-equilibrium species rather than
+following the local excess. The cloud-fraction closure, which counts nodes with
+positive excess, is not affected by these choices.
+
 Because the variance depends on the mixing length, the mixing length on the
 buoyancy gradient, and the buoyancy gradient on the cloud fraction, the closure
 is solved as a fixed point at each timestep. Two Picard iterations are followed

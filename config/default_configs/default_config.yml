@@ -260,6 +260,12 @@ sgs_distribution:
 quadrature_order:
   help: "Quadrature order for SGS integration (1-5). Higher orders are more accurate but slower. Default: 3"
   value: 3
+sgs_liquid_distribution:
+  help: "Cloud-liquid distribution over the SGS quadrature in the 1-moment microphysics. [`excess` (default): liquid is the λ share of the reconstructed saturation excess at every node; `uniform`: the subdomain-mean cloud liquid at every node, held fixed like rain and snow]"
+  value: "excess"
+sgs_ice_distribution:
+  help: "Cloud-ice distribution over the SGS quadrature in the 1-moment microphysics. [`excess` (default): ice is the (1 − λ) share of the reconstructed saturation excess at every node; `uniform`: the subdomain-mean cloud ice at every node, held fixed like rain and snow]"
+  value: "excess"
 microphysics_n_substeps:
   help: "Number of susbteps for time averaging bulk microphysics tendencies without subgrid-scale quadrature. Default: 3"
   value: 3

@@ -4,6 +4,12 @@ ClimaAtmos.jl Release Notes
 main
 ----
 
+- [#XXXX](https://github.com/CliMA/ClimaAtmos.jl/pull/XXXX) ![][badge-✨feature/enhancement] Uniform cloud condensate over the SGS
+  quadrature (`sgs_liquid_distribution` / `sgs_ice_distribution`: `excess` (default, bitwise unchanged) or `uniform`, per species): in the
+  1-moment quadrature microphysics a `uniform` species is the subdomain mean (`q_lcl` / `q_icl`) at every quadrature node, held fixed like
+  rain and snow, instead of its liquid-fraction share of the reconstructed saturation excess. It then condenses/deposits at supersaturated
+  nodes and evaporates/sublimates at subsaturated ones as a non-equilibrium species; the cloud-fraction closure is unchanged.
+
 0.42.11
 -------
 

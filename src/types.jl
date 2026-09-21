@@ -2184,6 +2184,9 @@ Group of moisture, cloud, and microphysics choices inside an
   - `tracer_nonnegativity_method`: `nothing`, or a `TracerNonnegativityMethod`.
   - `sgs_quadrature`: `nothing`, or an `SGSQuadrature` used to integrate cloud
     and microphysics quantities over the subgrid-scale distribution.
+  - `sgs_liquid_distribution`, `sgs_ice_distribution`: how cloud liquid and cloud
+    ice are distributed over the SGS quadrature in the 1-moment microphysics,
+    `ExcessCondensateDistribution()` (default) or a `UniformCondensateDistribution`.
   - `terminal_velocity_mode`: `DiagnosticTerminalVelocity()` (the default) or a
     `FixedTerminalVelocity`.
 
@@ -2196,12 +2199,14 @@ water = ClimaAtmos.AtmosWater(;
 )
 ```
 """
-@kwdef struct AtmosWater{MM, CM, MTTS, TNM, SQ, TVL, TVI, TVR, TVS}
+@kwdef struct AtmosWater{MM, CM, MTTS, TNM, SQ, SLD, SID, TVL, TVI, TVR, TVS}
     microphysics_model::MM = DryModel()
     cloud_model::CM = QuadratureCloud()
     microphysics_tendency_timestepping::MTTS = nothing
     tracer_nonnegativity_method::TNM = nothing
     sgs_quadrature::SQ = nothing
+    sgs_liquid_distribution::SLD = ExcessCondensateDistribution()
+    sgs_ice_distribution::SID = ExcessCondensateDistribution()
     terminal_velocity_liquid::TVL = FixedTerminalVelocity()
     terminal_velocity_ice::TVI = FixedTerminalVelocity()
     terminal_velocity_rain::TVR = DiagnosticTerminalVelocity()

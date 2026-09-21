@@ -15,6 +15,7 @@
 # Core utilities (used by other files)
 include("sgs_quadrature.jl")
 include("sgs_saturation.jl")
+include("sgs_condensate_distribution.jl")
 include("tendency_limiters.jl")
 
 # Cloud diagnostics

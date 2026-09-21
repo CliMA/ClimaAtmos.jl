@@ -689,6 +689,33 @@ function get_sgs_distribution(parsed_args)
 end
 
 """
+    get_sgs_condensate_distribution(parsed_args, key)
+
+Build the distribution of one cloud-condensate species over the SGS quadrature
+from the config key `key` (`sgs_liquid_distribution` or `sgs_ice_distribution`):
+
+  - `"excess"` (default): `ExcessCondensateDistribution`, the historical
+    liquid-fraction share of the reconstructed saturation excess at every node.
+  - `"uniform"`: `UniformCondensateDistribution`, the subdomain mean at every node.
+
+Any other value raises an error.
+"""
+function get_sgs_condensate_distribution(parsed_args, key)
+    name = get(parsed_args, key, "excess")
+    return if name == "excess"
+        ExcessCondensateDistribution()
+    elseif name == "uniform"
+        UniformCondensateDistribution()
+    else
+        error("Invalid $(key) $(name). Use: excess, uniform")
+    end
+end
+get_sgs_liquid_distribution(parsed_args) =
+    get_sgs_condensate_distribution(parsed_args, "sgs_liquid_distribution")
+get_sgs_ice_distribution(parsed_args) =
+    get_sgs_condensate_distribution(parsed_args, "sgs_ice_distribution")
+
+"""
     get_tracer_nonnegativity_method(parsed_args)
 
 Build the tracer nonnegativity constraint selected by the
@@ -1072,8 +1099,8 @@ end
 
 Assemble the `AtmosWater` group from a configuration.
 
-Combines `get_microphysics_model`, `get_cloud_model`, `get_sgs_quadrature`, and
-`get_tracer_nonnegativity_method`, and reads `implicit_microphysics` (which selects
+Combines `get_microphysics_model`, `get_cloud_model`, `get_sgs_quadrature`,
+`get_sgs_liquid_distribution`, `get_sgs_ice_distribution`, and `get_tracer_nonnegativity_method`, and reads `implicit_microphysics` (which selects
 `Implicit` or `Explicit` microphysics timestepping) and `fixed_terminal_velocity`
 (which selects `FixedTerminalVelocity` with the four fixed fall speeds from `params`,
 or `DiagnosticTerminalVelocity`). Errors when 0-moment microphysics is requested
@@ -1083,6 +1110,8 @@ function AtmosWater(config::AtmosConfig, params, ::Type{FT}) where {FT}
     pa = config.parsed_args
     microphysics_model = get_microphysics_model(pa)
     sgs_quadrature = get_sgs_quadrature(pa, params)
+    sgs_liquid_distribution = get_sgs_liquid_distribution(pa)
+    sgs_ice_distribution = get_sgs_ice_distribution(pa)
 
     if microphysics_model isa DryModel
         @warn "Running simulations without any moisture present."
@@ -1118,6 +1147,8 @@ function AtmosWater(config::AtmosConfig, params, ::Type{FT}) where {FT}
                                              Explicit(),
         tracer_nonnegativity_method = get_tracer_nonnegativity_method(pa),
         sgs_quadrature,
+        sgs_liquid_distribution,
+        sgs_ice_distribution,
         terminal_velocity_liquid,
         terminal_velocity_ice,
         terminal_velocity_rain,

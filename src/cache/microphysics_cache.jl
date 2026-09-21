@@ -939,11 +939,18 @@ function set_microphysics_tendency_cache!(
         (; ᶜT′T′, ᶜq′q′, ᶜsgs_moments) = p.precomputed
         corr_Tq = correlation_Tq(p.params)
         α = sgs_variance_fidelity(CAP.cloud_fraction_steepness_scale(p.params))
+        ice_dist = p.atmos.sgs_ice_distribution
+        liq_dist = p.atmos.sgs_liquid_distribution
+        # `λ` and `mu_S` are the wrapper's defaults, spelled out here so the
+        # condensate distributions can follow them positionally.
         @. ᶜmp_tendency = microphysics_tendencies_1m(
             BMT.Microphysics1Moment(), sgs_quad, cmp, thp, Y.c.ρ, ᶜT,
             ᶜq_tot_nonneg, ᶜq_lcl, ᶜq_icl, ᶜq_rai, ᶜq_sno,
             ᶜT′T′, ᶜq′q′, corr_Tq, ᶜsgs_moments.λ_lagrange, α,
             dt, nsubs_quad,
+            TD.liquid_fraction(thp, ᶜT, max(0, ᶜq_lcl), max(0, ᶜq_icl)),
+            ᶜq_tot_nonneg - TD.q_vap_saturation(thp, ᶜT, Y.c.ρ),
+            $(ice_dist), $(liq_dist),
         )
     end
 
@@ -1006,6 +1013,8 @@ function set_microphysics_tendency_cache!(
         # `mu_S` are held fixed across the quadrature (they depend only on the mean
         # state), so compute them once here and pass them in, instead of recomputing
         # them inside every quadrature evaluation.
+        ice_dist = p.atmos.sgs_ice_distribution
+        liq_dist = p.atmos.sgs_liquid_distribution
         ᶜλ⁰ = p.scratch.ᶜtemp_scalar_6
         ᶜmu_S⁰ = p.scratch.ᶜtemp_scalar_7
         @. ᶜλ⁰ = TD.liquid_fraction(thp, ᶜT⁰, max(0, ᶜq_lcl⁰), max(0, ᶜq_icl⁰))
@@ -1014,7 +1023,7 @@ function set_microphysics_tendency_cache!(
             BMT.Microphysics1Moment(), sgs_quad, cmp, thp, ᶜρ⁰, ᶜT⁰,
             ᶜq_tot_nonneg⁰, ᶜq_lcl⁰, ᶜq_icl⁰, ᶜq_rai⁰, ᶜq_sno⁰,
             ᶜT′T′, ᶜq′q′, corr_Tq, ᶜsgs_moments.λ_lagrange, α,
-            dt, nsubs_quad, ᶜλ⁰, ᶜmu_S⁰,
+            dt, nsubs_quad, ᶜλ⁰, ᶜmu_S⁰, $(ice_dist), $(liq_dist),
         )
     end
 
