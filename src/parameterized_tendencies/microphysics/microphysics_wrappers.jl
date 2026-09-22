@@ -224,6 +224,8 @@ quadrature points.
   - `scheme`: CloudMicrophysics scheme tag (e.g. `BMT.Microphysics1Moment()`).
   - `mp`, `tps`: Microphysics and thermodynamics parameters.
   - `ρ`: Air density [kg/m³].
+  - `w`: Physical vertical velocity [m/s], used for velocity-dependent
+    rain autoconversion.
   - `q_rai`, `q_sno`: Rain and snow specific humidity [kg/kg], clamped
     non-negative by the caller.
   - `λ`: Thermodynamic liquid fraction [-].
@@ -241,6 +243,7 @@ struct Microphysics1MEvaluator{S, MP, TPS, FT, Args <: Tuple}
     mp::MP
     tps::TPS
     ρ::FT
+    w::FT              # physical vertical velocity [m/s]
     # Precipitation (held fixed across quadrature points)
     q_rai::FT
     q_sno::FT
@@ -315,18 +318,18 @@ with `dq_lcl_dt`, `dq_icl_dt`, `dq_rai_dt`, `dq_sno_dt` [kg/kg/s].
 
     return BMT.bulk_microphysics_tendencies(
         BMT.LinearizedAverage(),
-        eval.scheme, eval.mp, eval.tps, eval.ρ, T_hat, q_tot_hat,
-        q_lcl_hat, q_icl_hat, eval.q_rai, eval.q_sno,
+        eval.scheme, eval.mp, eval.tps, eval.ρ, T_hat, eval.w,
+        q_tot_hat, q_lcl_hat, q_icl_hat, eval.q_rai, eval.q_sno,
         eval.dt, eval.nsubs, eval.args...,
     )
 end
 
 """
     microphysics_tendencies_1m(
-        ρ, q_tot_nonneg, q_lcl, q_icl, q_rai, q_sno, T, cmp, thp, dt, nsubs,
+        ρ, q_tot_nonneg, q_lcl, q_icl, q_rai, q_sno, T, w, cmp, thp, dt, nsubs,
     )
     microphysics_tendencies_1m(
-        scheme, sgs_quad, cmp, thp, ρ, T, q_tot_nonneg,
+        scheme, sgs_quad, cmp, thp, ρ, T, w, q_tot_nonneg,
         q_lcl, q_icl, q_rai, q_sno, T′T′, q′q′, corr_Tq,
         λ_lagrange, α, dt, nsubs, λ = ..., mu_S = ..., args...,
     )
@@ -350,6 +353,8 @@ accretion.
   - `sgs_quad`: `SGSQuadrature` configuration.
   - `cmp`, `thp`: Microphysics and thermodynamics parameters.
   - `ρ`, `T`: Air density [kg/m³] and temperature [K].
+  - `w`: Physical vertical velocity [m/s], used for velocity-dependent
+    rain autoconversion.
   - `q_tot_nonneg`: Total water specific humidity, clamped non-negative [kg/kg].
   - `q_lcl`, `q_icl`: Cloud liquid and cloud ice specific humidity [kg/kg].
   - `q_rai`, `q_sno`: Rain and snow specific humidity [kg/kg].
@@ -374,17 +379,17 @@ NamedTuple with `dq_lcl_dt`, `dq_icl_dt`, `dq_rai_dt`, `dq_sno_dt` [kg/kg/s],
 positive when a source of the corresponding tracer.
 """
 @inline function microphysics_tendencies_1m( #compute_1m_precipitation_tendencies!(
-    ρ, q_tot_nonneg, q_lcl, q_icl, q_rai, q_sno, T, cmp, thp, dt, nsubs,
+    ρ, q_tot_nonneg, q_lcl, q_icl, q_rai, q_sno, T, w, cmp, thp, dt, nsubs,
 )
     local_tendency = BMT.bulk_microphysics_tendencies(
         BMT.LinearizedAverage(),
-        BMT.Microphysics1Moment(), cmp, thp, ρ, T,
+        BMT.Microphysics1Moment(), cmp, thp, ρ, T, w,
         q_tot_nonneg, q_lcl, q_icl, q_rai, q_sno, dt, nsubs,
     )
     return local_tendency
 end
 @inline function microphysics_tendencies_1m( #microphysics_tendencies_quadrature_1m
-    scheme, sgs_quad, cmp, thp, ρ, T, q_tot_nonneg,
+    scheme, sgs_quad, cmp, thp, ρ, T, w, q_tot_nonneg,
     q_lcl, q_icl, q_rai, q_sno, T′T′, q′q′, corr_Tq,
     λ_lagrange, α, dt, nsubs,
     # `λ` (liquid fraction) and `mu_S` (linearized SGS saturation-excess mean) are
@@ -401,7 +406,7 @@ end
     q_sno_nonneg = max(FT(0), q_sno)
 
     evaluator = Microphysics1MEvaluator(
-        scheme, cmp, thp, ρ,
+        scheme, cmp, thp, ρ, w,
         q_rai_nonneg, q_sno_nonneg,
         λ, λ_lagrange, mu_S, α,
         dt, nsubs, args,

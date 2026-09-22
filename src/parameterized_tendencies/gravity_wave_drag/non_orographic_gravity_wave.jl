@@ -11,7 +11,7 @@ import ClimaCore.Operators as Operator
 import CloudMicrophysics.BulkMicrophysicsTendencies as BMT
 
 """
-    _beres_latent_heating(mp, thp, ρ, T, q_tot, q_lcl, q_icl, q_rai, q_sno)
+    _beres_latent_heating(mp, thp, ρ, T, w, q_tot, q_lcl, q_icl, q_rai, q_sno)
 
 Return Beres' transport-free latent heating rate for one updraft [K/s]:
 
@@ -37,6 +37,7 @@ with reference-`T₀` constants `L_v` and `L_s`. Called from
     thp,
     ρ,
     T,
+    w,
     q_tot,
     q_lcl,
     q_icl,
@@ -50,6 +51,7 @@ with reference-`T₀` constants `L_v` and `L_s`. Called from
         thp,
         ρ,
         T,
+        w,
         q_tot,
         q_lcl,
         q_icl,
@@ -644,15 +646,19 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
         ᶜq_tot_nonnegʲs = p.precomputed.ᶜq_tot_nonnegʲs
         gw_Q_conv_ic .= FT(0)
         ᶜρa_sum .= FT(0)
+        ᶜlg = Fields.local_geometry_field(Y.c)
         for j in 1:n_updrafts
             ᶜρaʲ = Y.c.sgsʲs.:($j).ρa
             ᶜρʲ = ᶜρʲs.:($j)
             ᶜTʲ = ᶜTʲs.:($j)
+            ᶜuʲ = ᶜuʲs.:($j)
             ᶜq_totʲ = ᶜq_tot_nonnegʲs.:($j)
             ᶜq_lclʲ = Y.c.sgsʲs.:($j).q_lcl
             ᶜq_iclʲ = Y.c.sgsʲs.:($j).q_icl
             ᶜq_raiʲ = Y.c.sgsʲs.:($j).q_rai
             ᶜq_snoʲ = Y.c.sgsʲs.:($j).q_sno
+            # physical draft vertical velocity [m/s] for the velocity-dependent autoconversion
+            ᶜwʲ_air = @. lazy(w_component(WVec(ᶜuʲ)))
             @. gw_Q_conv_ic += ifelse(
                 ᶜρʲ > eps(FT),
                 max(ᶜρaʲ, FT(0)) * _beres_latent_heating(
@@ -660,6 +666,7 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
                     thp,
                     ᶜρʲ,
                     ᶜTʲ,
+                    ᶜwʲ_air,
                     ᶜq_totʲ,
                     ᶜq_lclʲ,
                     ᶜq_iclʲ,
