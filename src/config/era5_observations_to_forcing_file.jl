@@ -37,10 +37,12 @@ function get_external_daily_forcing_file_path(
         "daily",
     ),
 )
-    start_date = parsed_args["start_date"]
+    # Force filenames to calendar dates (`yyyymmdd`); HHMM belongs in the
+    # DateTime arithmetic for the span, not in the path stamp.
+    start_time = parse_date(parsed_args["start_date"])
     t_end = get(parsed_args, "t_end", "23hours") # generate a single day file if t_end is not specified
-    end_time =
-        DateTime(start_date, "yyyymmdd") + Dates.Second(time_to_seconds(t_end))
+    end_time = start_time + Dates.Second(time_to_seconds(t_end))
+    start_date = Dates.format(start_time, "yyyymmdd")
     end_date = Dates.format(end_time, "yyyymmdd")
     # round to era5 quarter degree resolution for site selection
     site_latitude = round(parsed_args["site_latitude"] * 4) / 4
@@ -76,7 +78,9 @@ function get_external_monthly_forcing_file_path(
         "monthly",
     ),
 )
-    start_date = parsed_args["start_date"]
+    # Monthly diurnal files are keyed by calendar date only.
+    start_date =
+        Dates.format(parse_date(parsed_args["start_date"]), "yyyymmdd")
     warming_amount = parsed_args["era5_diurnal_warming"]
     warming_amount_str =
         (warming_amount isa Number) ? "_plus_$(float(warming_amount))K" : ""
@@ -108,7 +112,7 @@ that closure: the function itself currently always returns `true`, and the warni
 the effective signal.
 """
 function check_daily_forcing_times(forcing_file_path, parsed_args)
-    start = Dates.DateTime(parsed_args["start_date"], "yyyymmdd")
+    start = parse_date(parsed_args["start_date"])
     stop = start + Dates.Second(time_to_seconds(parsed_args["t_end"]))
     NCDataset(forcing_file_path) do ds
         if ds["time"][1] > start
@@ -138,7 +142,9 @@ As in `check_daily_forcing_times`, the `return false` statements exit only the
 `NCDataset` `do` block, so the function itself currently always returns `true`.
 """
 function check_monthly_forcing_times(path, parsed_args)
-    start = Dates.DateTime(parsed_args["start_date"], "yyyymmdd")
+    # Monthly diurnal files cover one calendar day from midnight; strip any
+    # HHMM from start_date, then promote back to DateTime for the comparison.
+    start = DateTime(Dates.Date(parse_date(parsed_args["start_date"])))
     stop = start + Dates.Day(1)
     NCDataset(path) do ds
         dt = ds["time"][2] - ds["time"][1]
@@ -317,7 +323,9 @@ function generate_external_forcing_file(
     # unpack parsed args
     lat = parsed_args["site_latitude"]
     lon = parsed_args["site_longitude"]
-    start_date = parsed_args["start_date"]
+    # Raw ERA5 inputs are named by calendar date only (`yyyymmdd`).
+    start_date =
+        Dates.format(parse_date(parsed_args["start_date"]), "yyyymmdd")
 
     external_tv_params = CP.get_parameter_values(
         CP.create_toml_dict(FT),
@@ -599,11 +607,11 @@ function generate_multiday_era5_external_forcing_file(
 )
     # run generate_external_era5_forcing_file for each day if its processed data file not found
     # get range of starttimes and endtimes
-    start_date = DateTime(parsed_args["start_date"], "yyyymmdd")
+    start_date = parse_date(parsed_args["start_date"])
     end_time = start_date + Dates.Second(time_to_seconds(parsed_args["t_end"]))
-    end_date = Dates.format(end_time, "yyyymmdd")
-
-    start_dates = start_date:Day(1):end_time
+    # Calendar-date range: a DateTime:Day(1):DateTime span at a non-midnight
+    # clock time can drop the end calendar day (e.g. noon → next midnight).
+    start_dates = Date(start_date):Day(1):Date(end_time)
 
     daily_specs = map(start_dates) do dd
         single_parsed_args = Dict(
