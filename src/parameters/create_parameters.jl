@@ -471,9 +471,7 @@ coefficient are not yet in ClimaParams' default TOML: they fall back to the
 defaults set here, and are read from `toml_dict` only when a run or calibration
 TOML defines them. The defaults `margin = abs_margin = sharpness = 1` and
 `residual = 0` release the cloud-fraction floor on a one-width saturation
-margin guarded by an absolute margin of one floor width, and
-`sedimentation_lateral_coeff = 0` disables the lateral sedimentation
-correction.
+margin guarded by an absolute margin of one floor width.
 
 `overrides` is merged last, so it wins over both the TOML values and the
 defaults above.
@@ -562,9 +560,6 @@ function TurbulenceConvectionParameters(
         cloud_fraction_floor_release_abs_margin = FT(1),
         cloud_fraction_floor_release_sharpness = FT(1),
         cloud_fraction_floor_residual = FT(0),
-        # Lateral correction scaling for updraft sedimentation
-        # (see `updraft_sedimentation!`). 1.0 = full correction, 0.0 = disabled.
-        sedimentation_lateral_coeff = FT(1), # Testing if stable now. To be removed, if yes.
     )
     provisional_present = filter(collect(keys(provisional_defaults))) do name
         haskey(toml_dict.data, string(name))

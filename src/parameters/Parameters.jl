@@ -188,8 +188,6 @@ not yet define. `FT` is the float type; `VFT1`, `VFT2`, and `VTF3` are the
     transition; larger values approach a switch [-].
   - `cloud_fraction_floor_residual`: Fraction `D_min` of the relative floor
     retained deep inside a saturated deck [-].
-  - `sedimentation_lateral_coeff`: Scaling of the lateral correction in updraft
-    sedimentation; 1 is the full correction and 0 disables it [-].
   - `interface_entr_efficiency`: Entrainment efficiency `A` in the interfacial
     entrainment diffusivity `K_e = γ w_e Δz` [-].
   - `sfc_mass_flux_ustar_coeff`: Coefficient `c_u` weighting the
@@ -248,8 +246,6 @@ Base.@kwdef struct TurbulenceConvectionParameters{FT, VFT1, VFT2, VTF3} <: ATCP
     cloud_fraction_floor_release_abs_margin::FT
     cloud_fraction_floor_release_sharpness::FT
     cloud_fraction_floor_residual::FT
-    # Scaling coefficient for the lateral correction in updraft sedimentation
-    sedimentation_lateral_coeff::FT
     interface_entr_efficiency::FT
     # Surface mass flux closure (`set_edmfx_surface_conditions!`).
     sfc_mass_flux_ustar_coeff::FT
