@@ -47,14 +47,13 @@ separating a turbulent layer from quiescent, strongly stratified air, where an
 arithmetic mean would leave about ``K/2``.
 
 Vertical diffusion can instead come from [PROPHET](prophet.md), whose diffusive
-flux is closed by a prognostic turbulence kinetic energy, or from a vertically
-acting [Smagorinsky–Lilly](les_sgs.md) closure. The three paths are meant as
-alternatives, and the shipped PROPHET and LES configurations leave `vert_diff`
-unset. Nothing enforces this: a configuration that sets `vert_diff` alongside
-`turbconv` or `smagorinsky_lilly` adds both tendencies and mixes twice, without
-an error or a warning. This differs from the horizontal case, where combining
-`edmfx_sgs_horizontal_diffusive_flux` with an LES closure is rejected at model
-construction.
+flux is closed by a prognostic turbulence kinetic energy, or from the
+[LES closures](les_sgs.md): a vertically acting Smagorinsky–Lilly, or AMD,
+which always acts on both axes. These paths are alternatives, and a
+configuration that sets `vert_diff` alongside `turbconv`, `amd_les`, or a
+vertically acting `smagorinsky_lilly` is rejected at model construction, as is
+`edmfx_sgs_horizontal_diffusive_flux` alongside an LES closure in the
+horizontal.
 
 ### What each variable receives
 
@@ -116,9 +115,9 @@ optional PROPHET horizontal diffusive flux. All of them are explicit. See
 [PROPHET Horizontal Diffusion](prophet_horizontal_diffusion.md).
 
 The species treatment differs from the vertical closures above.
-Smagorinsky–Lilly and the constant horizontal diffusion apply one diffusivity
-to all grid-scale tracers, precipitation included, while anisotropic minimum
-dissipation forms one diffusivity per scalar.
+Smagorinsky–Lilly and the constant horizontal diffusion apply a single scalar
+diffusivity to all grid-scale tracers, precipitation included, while
+anisotropic minimum dissipation forms a diffusivity per scalar.
 
 ## Where this is implemented
 

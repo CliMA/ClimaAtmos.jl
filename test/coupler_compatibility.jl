@@ -13,7 +13,6 @@ import ClimaCore.Utilities: half
 const z0m = 1e-3
 const z0b = 1e-5
 const gustiness = 1
-const beta = 1
 const T1 = 300
 const T2 = 290
 
@@ -49,13 +48,13 @@ const T2 = 290
 
     # Coupler pattern: build an AtmosSurface with a CoupledTemperature whose
     # field the driver writes into between steps, plus per-cell boundary
-    # overrides for gustiness/beta. Re-build the atmos with this surface and
+    # overrides for gustiness. Re-build the atmos with this surface and
     # overwrite p.atmos / p.sfc_setup.
     sfc_space = Spaces.level(Y.f, half)
     T_field = similar(sfc_space, FT)
     @. T_field = FT(NaN)
     overrides = CA.SurfaceConditions.SurfaceBoundaryOverrides(;
-        gustiness = FT(gustiness), beta = FT(beta),
+        gustiness = FT(gustiness),
     )
     overrides_field = similar(sfc_space, typeof(overrides))
     @. overrides_field = (overrides,)

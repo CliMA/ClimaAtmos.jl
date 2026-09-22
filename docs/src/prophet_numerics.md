@@ -269,10 +269,19 @@ w^0 - w^j \approx - \frac{\rho}{\hat{\rho}^0} \, w^j ,
 ```
 
 which is exact for a single draft and is applied unchanged when there are
-several. The velocity-independent entrainment rates (background,
-buoyancy-driven, area-bounding, and turbulent) then contribute a *linear* sink
-in ``w^j``, the velocity-proportional entrainment contributes a *quadratic*
-sink, and the form drag is purely quadratic. The prognostic variable is the
+several. Each velocity difference then brings one factor of
+``\rho / \hat{\rho}^0 = 1/a^0``. The velocity-independent entrainment rates
+(background, buoyancy-driven, area-bounding, and turbulent), collected in
+``E^j_0``, contribute the *linear* sink ``E^j_0 w^j / a^0``; the
+velocity-proportional entrainment ``\epsilon^j |w^j - w^0|`` contributes the
+*quadratic* sink ``\epsilon^j (w^j)^2 / (a^0)^2``, with ``\epsilon^j`` the
+velocity scale that enters the draft-mass equation below, where the rate is
+evaluated with ``w^0 \approx 0``; and the form drag
+``d^j = a^0 d_c^j (w^j - w^0) |w^j - w^0|`` contributes the quadratic sink
+``d_c^j (w^j)^2 / a^0``, its weight ``a^0`` cancelling one of the two factors
+from the velocity differences. The area ``a^0`` is clamped to
+``[1 - a_{\max}, 1]`` here, because the velocity solve runs before the area
+solve and can be handed an extrapolated area. The prognostic variable is the
 covariant component ``u_3 = w \Delta z``, so the whole equation carries one
 factor of ``\Delta z`` relative to the equation for ``w``. At face ``i``, the
 stage equation is then a quadratic, coupled to the face below through the

@@ -179,6 +179,13 @@ Total entrainment rate [1/s], assembled from the three precomputed pieces:
 `area_bounding_entr_detr` (positive ⇒ this entrainment branch,
 negative ⇒ the detrainment branch in `compute_detrainment`).
 `ᶜwʲ` is the physical updraft vertical velocity [m/s].
+
+TODO: scale the velocity-proportional term with the relative velocity
+`|wʲ - w⁰|`, as the formulation has it. Setting `w⁰ = 0` bounds the entrainment
+of a draft with `wʲ ≈ 0`, whose area would otherwise grow without limit; the
+analytic `ρa` stage solve holds the area fixed through the Newton iteration,
+which closes that path. The implicit `u₃` solve already assumes the
+relative-velocity form, so the two solves use rates that differ by `1/a⁰`.
 """
 compute_entrainment(
     ᶜentr_vel_scale,
@@ -576,11 +583,6 @@ scalar `χʲ` is relaxed toward its **environment** value,
 The generic method is a no-op; the `PrognosticEDMFX` method mutates
 `Yₜ.c.sgsʲs` and returns `nothing`. See the "PROPHET: Closures" page
 (`docs/src/prophet_closures.md`).
-
-# Notes
-
-The SGS-tracer loop reads and writes `Y.c.sgsʲs.:(1)` rather than subdomain
-`j`, so with more than one updraft only the first receives tracer entrainment.
 """
 edmfx_entr_detr_tendency!(Yₜ, Y, p, t, turbconv_model) = nothing
 
@@ -621,8 +623,8 @@ function edmfx_entr_detr_tendency!(Yₜ, Y, p, t, turbconv_model::PrognosticEDMF
         # user-defined passive tracers)
         for χ_name in sgs_tracer_names(Y)
             ᶜχ⁰ = ᶜspecific_env_value(χ_name, Y, p)
-            ᶜχʲ = MatrixFields.get_field(Y.c.sgsʲs.:(1), χ_name)
-            ᶜχʲₜ = MatrixFields.get_field(Yₜ.c.sgsʲs.:(1), χ_name)
+            ᶜχʲ = MatrixFields.get_field(Y.c.sgsʲs.:($j), χ_name)
+            ᶜχʲₜ = MatrixFields.get_field(Yₜ.c.sgsʲs.:($j), χ_name)
             @. ᶜχʲₜ += (ᶜentrʲ .+ ᶜturb_entrʲ) * (ᶜχ⁰ - ᶜχʲ)
         end
     end

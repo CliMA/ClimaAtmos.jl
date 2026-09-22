@@ -16,23 +16,20 @@ Profiles are sourced from AtmosphericProfilesLibrary. RH is specified with respe
 to liquid water (Pithan 2016, Table 1). The humidity profile is split at the
 tropopause: RH-derived q_tot below, fixed q_top above.
 
-TKE is initialized to zero regardless of `prognostic_tke`, unlike the other
-single-column setups, which fall back to a prescribed TKE profile when TKE is
-not prognostic.
+TKE starts from zero. The case has no prescribed TKE profile, so it takes no
+`prognostic_tke` keyword and is meant to run with prognostic TKE.
 
 # Examples
 
 ```julia
-setup = Larcform1(; prognostic_tke = true, thermo_params)
+setup = Larcform1(; thermo_params)
 ```
 """
 struct Larcform1{P}
-    prognostic_tke::Bool
     profiles::P
 end
 
-Larcform1(; prognostic_tke::Bool = true, thermo_params) =
-    Larcform1(prognostic_tke, larcform1_profiles(thermo_params))
+Larcform1(; thermo_params) = Larcform1(larcform1_profiles(thermo_params))
 
 function larcform1_profiles(thermo_params)
     FT = eltype(thermo_params)
@@ -96,7 +93,7 @@ function surface_condition(::Larcform1, params)
     return (;
         flux_scheme = MoninObukhov(; z0 = FT(1e-3)),
         temperature = AnalyticTemperature(Returns(T_surface)),
-        overrides = SurfaceBoundaryOverrides(p = p_surface, q_vap = FT(q_vap)),
+        overrides = SurfaceBoundaryOverrides(q_vap = FT(q_vap)),
     )
 end
 

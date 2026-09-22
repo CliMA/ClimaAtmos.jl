@@ -53,7 +53,7 @@ function surface_condition(::ShipwayHill2012, params)
     return (;
         flux_scheme = ExchangeCoefficients(; Cd = FT(0), Ch = FT(0)),
         temperature = AnalyticTemperature(Returns(FT(297.9))),
-        overrides = SurfaceBoundaryOverrides(p = FT(100700), q_vap = q_vap),
+        overrides = SurfaceBoundaryOverrides(q_vap = q_vap),
     )
 end
 

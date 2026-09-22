@@ -47,7 +47,6 @@ The source is selected by `ogw.topo_info`:
   - `Val(:raw_topo)`: build the drag from the configured topography with
     `compute_ogw_drag`, which loads a preprocessed HDF5 artifact for Earth topography and
     computes the tensor on the fly for the analytical test topographies.
-  - `Val(:linear)`: user-defined analytical drag input, for idealized tests.
 
 Any other value is an error. Called from `orographic_gravity_wave_cache`.
 
@@ -58,9 +57,6 @@ obstacle heights `hmax`, `hmin` [m], and the four components `t11`, `t12`, `t21`
 the orographic tensor `T = −∇χ (∇h)ᵀ`, stored with `tᵢⱼ = −∂χ/∂xⱼ · ∂h/∂xᵢ`.
 """
 function get_topo_info(Y, ogw::OrographicGravityWave)
-    # For now, the initialisation of the cache is the same for all types of
-    # orographic gravity wave drag parameterizations
-
     if ogw.topo_info == Val(:gfdl_restart)
         topo_path = @clima_artifact("topo_drag", ClimaComms.context(Y.c))
         orographic_info_rll = joinpath(topo_path, "topo_drag.res.nc")
@@ -76,15 +72,10 @@ function get_topo_info(Y, ogw::OrographicGravityWave)
             ogw.topography,
             ogw.h_frac,
         )
-    elseif ogw.topo_info == Val(:linear)
-        # For user-defined analytical tests
-        topo_info = initialize_drag_input_as_fields(Y, ogw.drag_input)
     else
-        error("topo_info must be a symbol of type gfdl_restart, raw_topo, or linear")
+        error("topo_info must be Val(:gfdl_restart) or Val(:raw_topo)")
     end
-
     return topo_info
-
 end
 
 function orographic_gravity_wave_cache(Y, ogw::OrographicGravityWave, topo_info = nothing)

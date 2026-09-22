@@ -34,31 +34,31 @@ three-dimensional velocity gradient, and its norm is
 ``|\boldsymbol{S}| = \sqrt{2 \boldsymbol{S} : \boldsymbol{S}}``, evaluated after
 projection onto whichever axes the closure uses.
 
-Energy is diffused through the total specific enthalpy ``h_{tot}``, taken as a
-single lumped variable. Smagorinsky–Lilly and the constant horizontal diffusion
-apply one diffusivity to all grid-scale tracers, while anisotropic minimum
-dissipation forms one diffusivity per scalar. Because total water is part of the
-working fluid, its diffusive tendency is also added to the density tendency.
-All water species, precipitation included, diffuse with the same diffusivity and keep their own tendencies.
+The energy flux is split, as in the other diffusive terms of the model (the
+[prescribed vertical diffusion](diffusion.md), the PROPHET fluxes,
+[hyperdiffusion](hyperdiffusion.md), and the [viscous sponge](sponge.md)), into
+a dry-static-energy part and the enthalpy carried by the diffusing water,
 
-!!! note "TODO: split the enthalpy flux"
+```math
+\boldsymbol{\mathcal{F}}_h = -\rho D \left( \nabla s_d
+  + (h_{\mathrm{eff}} + \Phi) \nabla q_t^{\mathrm{eff}} \right) ,
+```
 
-    All three closures diffuse ``h_{tot}`` directly. The other diffusive terms
-    in the model — the [prescribed vertical diffusion](diffusion.md), the
-    PROPHET fluxes, [hyperdiffusion](hyperdiffusion.md), and the
-    [viscous sponge](sponge.md) — instead split the enthalpy flux into a
-    dry-static-energy part and a water-enthalpy part carried on the effective
-    total water,
-
-    ```math
-    \boldsymbol{\mathcal{F}}_h = -\rho D \left( \nabla s_d
-      + h_{\mathrm{tot,cl}} \nabla q_t^{\mathrm{eff}} \right) ,
-    ```
-
-    which makes them invariant to the reference temperature ``T_0`` and
-    keeps the energy and water budgets consistent (see
-    [Thermodynamics and the Working Fluid](thermodynamics.md)). The LES
-    closures do not yet share that property, and should be split the same way.
+with ``h_{\mathrm{eff}}`` the mass-weighted enthalpy of the suspended water and
+``q_t^{\mathrm{eff}}`` the total water less rain and snow. The split makes the
+flux invariant to the reference temperature ``T_0`` and ties the energy the
+water flux carries to the water flux itself (see
+[Thermodynamics and the Working Fluid](thermodynamics.md)). Anisotropic minimum
+dissipation forms a diffusivity per scalar, so the two parts of the split use
+the diffusivity of the gradient each acts on. Smagorinsky–Lilly and the
+constant horizontal diffusion use a single scalar diffusivity for both parts of
+the split and for all grid-scale tracers: Smagorinsky–Lilly divides its eddy
+viscosity by the turbulent Prandtl number (below), and the constant horizontal
+diffusion prescribes the diffusivity outright. Because total water is part of
+the working fluid, its diffusive tendency is also added to the density tendency.
+All water species, precipitation included, diffuse with the same diffusivity and
+keep their own tendencies; the enthalpy that rain and snow carry is left out of
+the energy flux, since ``q_t^{\mathrm{eff}}`` excludes them.
 
 ## Smagorinsky–Lilly
 
@@ -159,10 +159,11 @@ TODO to move it to `parameters.toml`.
 ## Constant horizontal diffusion
 
 The simplest option applies a fixed horizontal diffusivity to the scalars —
-total enthalpy and the grid-scale tracers — and leaves momentum alone. It is
-switched on with `constant_horizontal_diffusion: true`, and the diffusivity
-comes from the `D_horizontal_diffusion` parameter, default ``5 \times 10^5``
-m² s⁻¹. No configuration in the repository currently enables it.
+the split energy flux and the grid-scale tracers — and leaves momentum alone.
+It is switched on with `constant_horizontal_diffusion: true`, and the
+diffusivity comes from the `D_horizontal_diffusion` parameter, default
+``5 \times 10^5`` m² s⁻¹. No configuration in the repository currently enables
+it.
 
 ## Boundary conditions and surface fluxes
 
@@ -197,10 +198,9 @@ rejected at configuration time; see
 
 **Hyperdiffusion** is a numerical filter rather than a turbulence closure, and
 nothing in the code couples the two: whether it runs alongside an LES closure is
-left to the configuration. The Smagorinsky configurations set `hyperdiff: ~`,
-since the closure already damps the grid scale. The AMD configurations do not
-set `hyperdiff` at all, so they inherit the default and currently run with
-hyperdiffusion on. See [Hyperdiffusion](hyperdiffusion.md).
+left to the configuration. The Smagorinsky and AMD configurations set
+`hyperdiff: ~`, since the closure already damps the grid scale. See
+[Hyperdiffusion](hyperdiffusion.md).
 
 **Implicit vertical diffusion.** With `implicit_diffusion: true`, the vertical
 Smagorinsky–Lilly tendency moves into the implicit tendency, and the eddy

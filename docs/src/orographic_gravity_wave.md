@@ -386,10 +386,10 @@ For analytical topographies (DCMIP200, Hughes2023, Agnesi, Schar, Cosine2d, Cosi
 | Orographic statistics and tensor helpers                               | [orographic_gravity_wave_helper.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/parameterized_tendencies/gravity_wave_drag/orographic_gravity_wave_helper.jl)                                                       |
 | Offline topography preprocessing                                       | [preprocess_topography.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/parameterized_tendencies/gravity_wave_drag/preprocess_topography.jl)                                                                         |
 | Callback scheduling at `dt_ogw`                                        | [src/callbacks/get_callbacks.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/callbacks/get_callbacks.jl), [src/callbacks/callbacks.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/callbacks/callbacks.jl) |
-| Model types                                                            | [`ClimaAtmos.OrographicGravityWave`](@ref), [`ClimaAtmos.FullOrographicGravityWave`](@ref), [`ClimaAtmos.LinearOrographicGravityWave`](@ref)                                                                                 |
+| Model types                                                            | [`ClimaAtmos.OrographicGravityWave`](@ref), [`ClimaAtmos.FullOrographicGravityWave`](@ref)                                                                                                                                   |
 
 The scheme is selected with the `orographic_gravity_wave` key
-(`nothing`, `gfdl_restart`, `raw_topo`, or `linear`) and its update interval
+(`nothing`, `gfdl_restart`, or `raw_topo`) and its update interval
 with `dt_ogw`. The surface field it acts on comes from
 [Topography Representation](topography.md). See
 [Configuration Options](configuration_options.md) and

@@ -99,6 +99,7 @@ function edmfx_pressure_drag_tke_source!(
     turbconv_params = CAP.turbconv_params(p.params)
     α_d = CAP.pressure_normalmode_drag_coeff(turbconv_params)
     a_min = CAP.min_area(turbconv_params)
+    a_max = CAP.max_area(turbconv_params)
     scale_height = CAP.R_d(p.params) * CAP.T_surf_ref(p.params) / CAP.grav(p.params)
     (; ᶜρʲs, ᶜuʲs, ᶜu⁰) = p.precomputed
     # Environment area, shared across all updrafts.
@@ -107,12 +108,10 @@ function edmfx_pressure_drag_tke_source!(
     ᶜlg = Fields.local_geometry_field(Y.c)
     for j in 1:n
         ᶜaʲ = @. lazy(draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j)))
-        # Same `ᶜdrag_coeff` form as the momentum equation
-        # (`initialize_implicit_problem.jl`): C_d/r^{j0} with C_d = α_d/H,
-        # H = scale height, and 1/r^{j0} = ½·(1/√a_j + 1/√a_0).
+        # The coefficient of the momentum equation's drag sink, so the energy
+        # removed there is the energy received here.
         @. ᶜdrag_coeff =
-            α_d / (2 * scale_height) *
-            (1 / sqrt(max(ᶜaʲ, a_min)) + 1 / sqrt(max(ᶜa⁰, a_min)))
+            pressure_drag_coefficient(α_d, scale_height, ᶜaʲ, ᶜa⁰, a_min, a_max)
         @. Yₜ.c.ρtke +=
             Y.c.sgsʲs.:($$j).ρa * ᶜa⁰ * ᶜdrag_coeff *
             abs(get_physical_w(ᶜuʲs.:($$j) - ᶜu⁰, ᶜlg))^3
