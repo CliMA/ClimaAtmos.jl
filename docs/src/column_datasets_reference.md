@@ -19,6 +19,9 @@ state from the file, which must then contain the `ta`, `ua`, `va`, `hus`, and
 forcing, so the only value the `external_forcing` key takes is
 `"ReanalysisMonthlyAveragedDiurnal"`.
 
+With `config: "multicolumn"`, `external_forcing_file` may be a list with one file
+per column (see [Multiple independent columns](configuration.md#Multiple-independent-columns)).
+
 The reader uses one format: the native `ClimaColumn` schema (below),
 written by the ERA5 generator and the target for hand-made case files. A file
 that does not conform to the ClimaColumn schema raises an error at
@@ -87,7 +90,8 @@ config: "column"
 
 Nothing else selects the case: the setup supplies the forcing, the surface, and
 the insolation. There is no `external_forcing: "GCM"` or
-`insolation: "gcmdriven"`; both raise an error.
+`insolation: "gcmdriven"`; both raise an error. With `config: "multicolumn"`,
+`cfsite_number` may be a list with one group per column.
 
 [`GCMColumnData.read_cfsite`](@ref ClimaAtmos.ColumnDatasets.GCMColumnData.read_cfsite)
 reads the cfsite subgroup into in-memory time-mean profiles, which then run
