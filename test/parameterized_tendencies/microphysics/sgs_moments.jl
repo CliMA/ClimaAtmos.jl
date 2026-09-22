@@ -244,4 +244,114 @@ end
         end
     end
 
+    @testset "Discrete cloudy mass CF_d" begin
+        # `CF_d = Σᵢ wᵢ·sigmoid(shifted_excessᵢ/ε_w)` is the cloudy mass of
+        # the *discrete* quadrature measure: a smoothed count of the points
+        # whose `shifted_excessᵢ = λ_lagrange + α·S′ᵢ` is positive, i.e. the
+        # points the microphysics evaluator reconstructs condensate at.
+        for FT in (Float32, Float64)
+            @testset "FT = $FT" begin
+                toml_dict = CP.create_toml_dict(FT)
+                thp = TD.Parameters.ThermodynamicsParameters(toml_dict)
+                α = FT(1)
+                corr = FT(0.6)
+                ρ = FT(1.1)
+                T = FT(288)
+                q_sat = TD.q_vap_saturation(thp, T, ρ)
+
+                # Hard count Σᵢ wᵢ·1[shifted_excessᵢ > 0] over the same
+                # points, for comparison with the smoothed weight.
+                hard_cloudy_mass = function (quad, q_tot, q_c, T′T′, q′q′)
+                    m = CA._compute_sgs_moments(
+                        thp, ρ, T, q_tot, q_c, quad, T′T′, q′q′, corr, α,
+                    )
+                    mu_S = q_tot - q_sat
+                    S′s = CA.quadrature_point_values(
+                        CA.SGSExcessEvaluator(thp, ρ, mu_S),
+                        CA.build_physical_transform(
+                            quad, q_tot, T, q′q′, T′T′, corr,
+                        ),
+                        quad,
+                    )
+                    ws = CA.quadrature_prob_weights(quad)
+                    return sum(
+                        ws .* (m.λ_lagrange .+ α .* S′s .> 0),
+                    )
+                end
+
+                @testset "bounds, monotonicity in q_c, hard-count agreement" begin
+                    for order in (1, 3, 5)
+                        quad = CA.SGSQuadrature(FT; quadrature_order = order)
+                        q_tot = q_sat + FT(2e-4)
+                        prev = FT(-1)
+                        for q_c in FT[1e-6, 1e-5, 1e-4, 5e-4, 2e-3]
+                            m = CA._compute_sgs_moments(
+                                thp, ρ, T, q_tot, q_c, quad,
+                                FT(1), FT(1e-6), corr, α,
+                            )
+                            @test zero(FT) <= m.CF_d <= one(FT)
+                            # More condensate wets more of the discrete
+                            # measure (weakly, since points are discrete).
+                            @test m.CF_d >= prev - sqrt(eps(FT))
+                            prev = m.CF_d
+                            # The smooth weight stays close to the hard count:
+                            # only points within ~ε_w of the cloud threshold
+                            # differ, and each contributes at most half its
+                            # probability weight (the heaviest point of the
+                            # order-3 rule carries 4/9).
+                            hard = hard_cloudy_mass(
+                                quad, q_tot, q_c, FT(1), FT(1e-6),
+                            )
+                            @test abs(m.CF_d - hard) < FT(0.3)
+                        end
+                    end
+                end
+
+                @testset "condensate-free cells give CF_d = 0" begin
+                    quad = CA.SGSQuadrature(FT; quadrature_order = 3)
+                    for dq in FT[-5e-3, 0, 2e-3]
+                        m = CA._compute_sgs_moments(
+                            thp, ρ, T, q_sat + dq, FT(0), quad,
+                            FT(1), FT(1e-6), corr, α,
+                        )
+                        @test m.CF_d == FT(0)
+                    end
+                end
+
+                @testset "overcast and zero-variance limits give CF_d = 1" begin
+                    quad = CA.SGSQuadrature(FT; quadrature_order = 3)
+                    # Deep in a saturated deck: every sampled point is cloudy.
+                    m_wet = CA._compute_sgs_moments(
+                        thp, ρ, T, q_sat + FT(5e-3), FT(5e-3), quad,
+                        FT(1), FT(1e-8), corr, α,
+                    )
+                    @test m_wet.CF_d ≈ one(FT) rtol = FT(1e-4)
+                    # All mass at the mean: the single point carries q_c > 0.
+                    m_0 = CA._compute_sgs_moments(
+                        thp, ρ, T, q_sat + FT(1e-3), FT(3e-4), quad,
+                        FT(0), FT(0), corr, α,
+                    )
+                    @test m_0.CF_d ≈ one(FT) rtol = FT(1e-4)
+                end
+
+                @testset "grid-mean fallback: CF_d = 1[q_c > 0]" begin
+                    q_tot = q_sat + FT(1e-3)
+                    for sq in (nothing, CA.GridMeanSGS(),
+                        CA.SGSQuadrature(FT; distribution = CA.GridMeanSGS()))
+                        m_c = CA._compute_sgs_moments(
+                            thp, ρ, T, q_tot, FT(3e-4), sq,
+                            FT(1), FT(1e-6), corr, α,
+                        )
+                        @test m_c.CF_d == one(FT)
+                        m_z = CA._compute_sgs_moments(
+                            thp, ρ, T, q_tot, FT(0), sq,
+                            FT(1), FT(1e-6), corr, α,
+                        )
+                        @test m_z.CF_d == zero(FT)
+                    end
+                end
+            end
+        end
+    end
+
 end
