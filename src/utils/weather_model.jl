@@ -1,5 +1,6 @@
 using NCDatasets
 using Dates
+import ClimaComms
 import InitialConditions
 import ClimaInterpolations.Interpolation1D: interpolate1d!, Linear, Flat
 import ..parse_date
@@ -11,6 +12,7 @@ import ..parse_date
         target_levels,
         era5_initial_condition_dir = nothing;
         interp_w = false,
+        comms_ctx = ClimaComms.context(),
     )
 
 Return the path to the ERA5-derived initial-condition file for `start_date`.
@@ -19,19 +21,21 @@ Without `era5_initial_condition_dir`, the path is taken from the
 `wxquest_initial_conditions` artifact and returned without checking that the
 file exists.
 
-With `era5_initial_condition_dir`, a preprocessed 3D file in that directory is
-used if present. Otherwise the raw ERA5 file is interpolated to `target_levels`
-by `to_z_levels_1d` and the generated 1D file is returned. If neither
-the preprocessed nor the raw file exists, an error is thrown pointing at the
-WeatherQuest download script.
+With `era5_initial_condition_dir`, a preprocessed file in that directory is
+used if present. Otherwise the raw ERA5 file is interpolated to
+`target_levels`, by `to_z_levels_3d_model` for model levels and
+`to_z_levels_1d` for pressure levels. A missing raw file is fetched from the
+Copernicus Climate Data Store by `InitialConditions.ERA5`.
 
 # Arguments
 
   - `start_date`: Start date, as a string `yyyymmdd` or `yyyymmdd-HHMM`, or a
     `DateTime`; parsed by `parse_date`.
-  - `target_levels`: Target altitude levels for the 1D fallback [m].
+  - `target_levels`: Target altitude levels [m].
   - `era5_initial_condition_dir = nothing`: Directory holding preprocessed or raw
     ERA5 files; `nothing` selects the artifact path.
+  - `comms_ctx = ClimaComms.context()`: The download and the interpolation run
+    on the root rank only, with a barrier before the path is returned.
 
 # Keyword Arguments
 
@@ -52,6 +56,7 @@ function weather_model_data_path(
     target_levels,
     era5_initial_condition_dir = nothing;
     interp_w::Bool = false,
+    comms_ctx = ClimaComms.context(),
 )
     # Parse the date using the existing parse_date function
     dt = parse_date(start_date)
@@ -63,7 +68,6 @@ function weather_model_data_path(
     # Determine source/destination and whether generation is needed
     local raw_data_path::String
     local ic_data_path::String
-    local generate_needed::Bool
 
     if !isnothing(era5_initial_condition_dir)
         # User-provided directory
@@ -80,30 +84,22 @@ function weather_model_data_path(
             "era5_raw_$(start_date_str)_$(start_time).nc",
         )
         if !isfile(raw_data_path)
-            # DRAFT: fetch the raw ERA5 state on demand instead of asking the
-            # user to go run WeatherQuest's download script by hand.
-            #
-            # `fetch_initial_conditions` downloads, processes, validates and
-            # caches all six files for the date, and is a no-op when they are
-            # already cached. It writes into `era5_initial_condition_dir`, so a
-            # later run finds `raw_data_path` and skips the network entirely.
-            #
-            # MPI: call this on the root rank only, then barrier. The function
-            # takes a per-date lock so concurrent callers sharing a directory
-            # take turns rather than racing, but one download beats N waits.
-            @info "No ERA5 initial condition found; fetching from CDS" (
-                dir = era5_initial_condition_dir,
-                date = dt,
-            )
-            InitialConditions.ERA5.fetch_initial_conditions(
-                dt;
-                dir = era5_initial_condition_dir,
-            )
+            # Downloads, processes, validates and caches all six files
+            if ClimaComms.iamroot(comms_ctx)
+                @info "No ERA5 initial condition found; fetching from CDS" (
+                    dir = era5_initial_condition_dir,
+                    date = dt,
+                )
+                InitialConditions.ERA5.fetch_initial_conditions(
+                    dt;
+                    dir = era5_initial_condition_dir,
+                )
+            end
+            ClimaComms.barrier(comms_ctx)
             isfile(raw_data_path) || error(
                 "InitialConditions.ERA5 ran but produced no $(raw_data_path).",
             )
         end
-        generate_needed = true
     else
         # Artifact-based paths
         ic_data_path = joinpath(
@@ -122,18 +118,21 @@ function weather_model_data_path(
     end
 
     if on_model_levels
-        @info "Interpolating ERA5 model levels onto the target altitudes" (
-            raw = raw_data_path,
-            dest = ic_data_path,
-            n_target_levels = length(target_levels),
-        )
-        to_z_levels_3d_model(
-            raw_data_path,
-            ic_data_path,
-            target_levels,
-            Float32;
-            interp_w,
-        )
+        if ClimaComms.iamroot(comms_ctx)
+            @info "Interpolating ERA5 model levels onto the target altitudes" (
+                raw = raw_data_path,
+                dest = ic_data_path,
+                n_target_levels = length(target_levels),
+            )
+            to_z_levels_3d_model(
+                raw_data_path,
+                ic_data_path,
+                target_levels,
+                Float32;
+                interp_w,
+            )
+        end
+        ClimaComms.barrier(comms_ctx)
         return ic_data_path
     end
 
@@ -142,18 +141,21 @@ function weather_model_data_path(
         era5_initial_condition_dir,
         "era5_init_$(start_date_str)_$(start_time).nc",
     )
-    @info "Processed 3D IC not found; falling back to 1D interpolation" (
-        raw = raw_data_path,
-        dest = ic_data_path_1d,
-        n_target_levels = length(target_levels),
-    )
-    to_z_levels_1d(
-        raw_data_path,
-        ic_data_path_1d,
-        target_levels,
-        Float32;
-        interp_w = interp_w,
-    )
+    if ClimaComms.iamroot(comms_ctx)
+        @info "Processed 3D IC not found; falling back to 1D interpolation" (
+            raw = raw_data_path,
+            dest = ic_data_path_1d,
+            n_target_levels = length(target_levels),
+        )
+        to_z_levels_1d(
+            raw_data_path,
+            ic_data_path_1d,
+            target_levels,
+            Float32;
+            interp_w = interp_w,
+        )
+    end
+    ClimaComms.barrier(comms_ctx)
     return ic_data_path_1d
 end
 

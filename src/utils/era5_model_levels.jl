@@ -1,15 +1,6 @@
 # Turn an ERA5 model-level file into the altitude-level file `WeatherModel`
-# reads.
-#
-# ERA5 stores the atmosphere on the 137 IFS hybrid levels, whose height
-# depends on surface pressure and the temperature profile, so it is not a
-# coordinate a regridder can use. This file computes geopotential height per
-# column and interpolates each column onto the target altitudes. The
-# horizontal grid is left alone: `SpaceVaryingInput` regrids that onto the
-# model space when the file is read.
-#
-# Ported from `to_z_levels_3d_model` in WeatherQuest `processing/interpolate.jl`.
-# `to_z_levels_1d` in `weather_model.jl` is the pressure-level equivalent.
+# reads. Ported from `to_z_levels_3d_model` in WeatherQuest
+# `processing/interpolate.jl`.
 
 import Thermodynamics as TD
 import ClimaInterpolations.Interpolation1D: interpolate1d!, Linear, Flat
@@ -96,12 +87,9 @@ const L137_B_HALF = (
 """
     era5_hybrid_coeffs(ds, nlev, FT)
 
-Hybrid half-level coefficients `(a, b)` for `nlev` model levels, ordered
-surface first, so half-level pressures are `p_half[k] = a[k] + b[k] * sp` and
-both arrays have length `nlev + 1`.
-
-Uses `a` and `b` from the file when present, otherwise the compiled-in L137
-table.
+Hybrid coefficients `(a, b)` at the `nlev + 1` layer interfaces, surface
+first, giving interface pressures `a[k] + b[k] * sp`. Read from `ds` when it
+carries them, otherwise from the compiled-in L137 table.
 """
 function era5_hybrid_coeffs(ds, nlev::Int, ::Type{FT}) where {FT}
     a_half, b_half = if haskey(ds, "a") && haskey(ds, "b")
@@ -190,15 +178,10 @@ end
 """
     hydrostatic_heights(t, q, sp, phi_sfc, a_half, b_half, grav)
 
-Geopotential height [m] at every full model level, on a `(lon, lat, lev)`
-grid ordered surface first.
-
-Integrates upward from the surface over the half-level pressures
-`a_half[k] + b_half[k] * sp`, using moist virtual temperature and the ECMWF
-alpha weighting, following `compute_geopotential_on_ml.py`.
-
-ERA5-complete archives model-level geopotential at level 1 only, so
-reconstructing it is the normal path rather than a fallback.
+Geopotential height [m] at every model level, on a `(lon, lat, lev)` grid
+ordered surface first. Integrates upward from the surface over the interface
+pressures `a_half[k] + b_half[k] * sp`, using moist virtual temperature and
+the ECMWF alpha weighting.
 """
 function hydrostatic_heights(t, q, sp, phi_sfc, a_half, b_half, grav::FT) where {FT}
     R_d = FT(287.06)
@@ -261,8 +244,6 @@ end
     clean_era5_attrib(var)
 
 Attributes of `var` without the ones describing how the source was encoded.
-Copying `scale_factor` or `_FillValue` onto decoded data would make a reader
-undo a transformation already applied.
 """
 function clean_era5_attrib(var)
     dropped =
@@ -276,15 +257,13 @@ end
 Interpolate an ERA5 model-level file onto `target_levels` and write the result,
 the file `WeatherModel` reads.
 
-The vertical coordinate is geopotential height reconstructed by
-[`hydrostatic_heights`](@ref), because ERA5-complete archives model-level
-geopotential at level 1 alone. Pressure comes from the same hybrid
-coefficients and is written as `p_3d`, interpolated in `log(p)` so the
-stratosphere is not biased high.
+The vertical coordinate is geopotential height from
+[`hydrostatic_heights`](@ref). Pressure comes from the same hybrid
+coefficients and is written as `p_3d`, interpolated in `log(p)`.
 
 The ERA5 horizontal grid is kept, with latitude sorted increasing.
 `SpaceVaryingInput` regrids horizontally when the file is read, so pick
-`target_levels` to match the model grid rather than a fine intermediate one.
+`target_levels` to match the model grid.
 
 Writes `u`, `v`, `t`, `q`, `w`, `p_3d`, the surface fields `skt`, `p`, and
 `z_sfc` broadcast over z, and any of `crwc`, `cswc`, `clwc`, `ciwc` the source
@@ -302,8 +281,8 @@ carries.
 
   - `interp_w = false`: write `w = 0` when `false`. When `true`, convert the
     ERA5 pressure velocity with `w = -omega * R_d * T / (p * g)`, tapered to 0
-    between 100 and 10 hPa. ERA5 omega comes from a hydrostatic model, and
-    files from `InitialConditions.ERA5` omit it, giving `w = 0` either way.
+    between 100 and 10 hPa. Files from `InitialConditions.ERA5` carry no `w`,
+    giving `w = 0` either way.
 """
 function to_z_levels_3d_model(
     source_file,
