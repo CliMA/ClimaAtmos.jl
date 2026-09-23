@@ -14,6 +14,9 @@ quadrature nodes when the 1-moment microphysics is evaluated
     rain and snow. It then condenses/deposits at supersaturated nodes and
     evaporates/sublimates at subsaturated ones against the local vapour,
     instead of being tied to the local saturation excess.
+  - [`BlendedCondensateDistribution`](@ref): a linear blend of the two, `(1 − ξ)` of
+    the excess share plus `ξ` of the subdomain mean at every node
+    (`ξ = sgs_condensate_uniform_fraction`).
 
 Any combination conserves the quadrature mean of the local cloud condensate in
 cells with condensate (`λ q_c = q_lcl`, `(1 − λ) q_c = q_icl`). Selected by the
@@ -36,6 +39,18 @@ The species at every quadrature node is its subdomain mean, uniform across the
 SGS distribution like rain and snow.
 """
 struct UniformCondensateDistribution <: AbstractSGSCondensateDistribution end
+
+"""
+    BlendedCondensateDistribution(uniform_fraction)
+
+The species at a quadrature node is `(1 − ξ)` times its excess share plus `ξ` times
+its subdomain mean, `ξ = uniform_fraction ∈ [0, 1]`: `ξ = 0` reproduces
+`ExcessCondensateDistribution`, `ξ = 1` `UniformCondensateDistribution`. The
+quadrature mean of the species is conserved for any `ξ` (both ends conserve it).
+"""
+struct BlendedCondensateDistribution{FT} <: AbstractSGSCondensateDistribution
+    uniform_fraction::FT
+end
 Base.broadcastable(x::AbstractSGSCondensateDistribution) = tuple(x)
 
 """
@@ -47,6 +62,10 @@ its liquid-fraction share of the reconstructed excess (`λ·excess` or
 """
 @inline sgs_local_species(::ExcessCondensateDistribution, share, q_mean) = share
 @inline sgs_local_species(::UniformCondensateDistribution, share, q_mean) = q_mean
+@inline function sgs_local_species(d::BlendedCondensateDistribution, share, q_mean)
+    ξ = oftype(share, d.uniform_fraction)
+    return (one(ξ) - ξ) * share + ξ * q_mean
+end
 
 """
     sgs_local_cloud_condensate(liq, ice, λ, shifted_excess, q_lcl, q_icl)

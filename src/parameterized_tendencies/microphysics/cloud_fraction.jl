@@ -307,7 +307,8 @@ Pipeline:
  6. Apply the closure-validity bound `σ_q ≤ sgs_variance_max_rel_std * q_tot`
 
 The geometric term is multiplied by the Richardson-number stability weight
-`ᶜsgs_geo_weight`.
+`ᶜsgs_geo_weight`; its θ′θ′ (temperature) channel additionally carries the factor
+`sgs_variance_geometric_T_factor` (1 by default: both channels share `c_g`).
 """
 function set_covariance_cache!(Y, p, thermo_params)
     # Covariance fields are only allocated when the configuration needs them.
@@ -382,7 +383,10 @@ function set_covariance_cache!(Y, p, thermo_params)
         # Bind outside the `@.`: ᶜsgs_geo_weight already returns a lazy
         # broadcast, so the call itself must not be dotted.
         ᶜgeo_weight = ᶜsgs_geo_weight(Y, p)
-        @. ᶜT′T′ += ᶜgeo_weight * (geo_h * ᶜinv_θ)
+        # Temperature-channel factor c_T (`sgs_variance_geometric_T_factor`); 1 by
+        # default, in which case `c_T * geo_h` is `geo_h` exactly.
+        c_T = CAP.sgs_variance_geometric_T_factor(p.params)
+        @. ᶜT′T′ += ᶜgeo_weight * ((c_T * geo_h) * ᶜinv_θ)
     end
 
     # Transform θ′θ′ → T′T′ in-place using Jacobian ∂T/∂θ

@@ -31,6 +31,13 @@ const CA = ClimaAtmos
                   CA.ExcessCondensateDistribution
             @test getter(Dict{String, Any}(key => "uniform")) isa
                   CA.UniformCondensateDistribution
+            # blended: ξ from the parameters (0.5 without them)
+            bl = getter(Dict{String, Any}(key => "blended"))
+            @test bl isa CA.BlendedCondensateDistribution && bl.uniform_fraction == 0.5
+            params = CA.ClimaAtmosParameters(Float32)
+            bl = getter(Dict{String, Any}(key => "blended"), params)
+            @test bl isa CA.BlendedCondensateDistribution{Float32} &&
+                  bl.uniform_fraction == 0.5f0
             @test_throws ErrorException getter(Dict{String, Any}(key => "nope"))
         end
         # the keys are independent
@@ -49,6 +56,9 @@ const CA = ClimaAtmos
             mp = CMP.Microphysics1MParams(toml_dict)
             exc = CA.ExcessCondensateDistribution()
             uni = CA.UniformCondensateDistribution()
+            bl0 = CA.BlendedCondensateDistribution(FT(0))
+            bl1 = CA.BlendedCondensateDistribution(FT(1))
+            blh = CA.BlendedCondensateDistribution(FT(0.25))
 
             @testset "local condensate split" begin
                 for λ in (FT(0), FT(0.3), FT(1)), se in (FT(0), FT(2e-4))
@@ -62,6 +72,16 @@ const CA = ClimaAtmos
                     @test ql === q_l && qi === (FT(1) - λ) * se
                     ql, qi = CA.sgs_local_cloud_condensate(uni, uni, λ, se, q_l, q_i)
                     @test ql === q_l && qi === q_i
+                    # blended ends reproduce the two distributions; the interior is the
+                    # linear blend and conserves the species mean at the mean node
+                    ql, qi = CA.sgs_local_cloud_condensate(exc, bl0, λ, se, q_l, q_i)
+                    @test qi == (FT(1) - λ) * se
+                    ql, qi = CA.sgs_local_cloud_condensate(exc, bl1, λ, se, q_l, q_i)
+                    @test qi == q_i
+                    ql, qi = CA.sgs_local_cloud_condensate(blh, blh, λ, se, q_l, q_i)
+                    @test ql ≈ FT(0.75) * λ * se + FT(0.25) * q_l
+                    @test qi ≈ FT(0.75) * (FT(1) - λ) * se + FT(0.25) * q_i
+                    @test qi isa FT && ql isa FT
                 end
             end
 

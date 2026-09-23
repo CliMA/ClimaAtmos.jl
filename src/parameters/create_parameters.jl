@@ -554,6 +554,12 @@ function TurbulenceConvectionParameters(
         # Richardson (stability) weight on the geometric term (k = 0: weight ≡ 1,
         # see `set_covariance_cache!`).
         sgs_variance_geometric_Ri_factor = FT(0),
+        # Factor on the temperature channel of the geometric term (1: same coefficient
+        # as the q channel, bitwise unchanged; see `set_covariance_cache!`).
+        sgs_variance_geometric_T_factor = FT(1),
+        # Uniform fraction ξ of a species under `BlendedCondensateDistribution`
+        # (`sgs_*_distribution: blended`); 0 = excess split, 1 = uniform.
+        sgs_condensate_uniform_fraction = FT(0.5),
         # Cloud-fraction floor release shape (see `_compute_cloud_fraction`):
         # margin = abs_margin = sharpness = 1, residual = 0 release the floor on
         # a one-width saturation margin guarded by an absolute margin of one

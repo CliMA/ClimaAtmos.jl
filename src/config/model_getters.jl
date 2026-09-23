@@ -697,23 +697,34 @@ from the config key `key` (`sgs_liquid_distribution` or `sgs_ice_distribution`):
   - `"excess"` (default): `ExcessCondensateDistribution`, the historical
     liquid-fraction share of the reconstructed saturation excess at every node.
   - `"uniform"`: `UniformCondensateDistribution`, the subdomain mean at every node.
+  - `"blended"`: `BlendedCondensateDistribution(ξ)`, `(1 − ξ)` excess share plus `ξ`
+    subdomain mean, with `ξ = sgs_condensate_uniform_fraction` from `params`
+    (0.5 when `params` is `nothing`).
 
 Any other value raises an error.
 """
-function get_sgs_condensate_distribution(parsed_args, key)
+function get_sgs_condensate_distribution(parsed_args, key, params = nothing)
     name = get(parsed_args, key, "excess")
     return if name == "excess"
         ExcessCondensateDistribution()
     elseif name == "uniform"
         UniformCondensateDistribution()
+    elseif name == "blended"
+        ξ =
+            isnothing(params) ? 0.5 :
+            CAP.sgs_condensate_uniform_fraction(params)
+        (0 <= ξ <= 1) || error(
+            "sgs_condensate_uniform_fraction must be in [0, 1], got $(ξ)",
+        )
+        BlendedCondensateDistribution(ξ)
     else
-        error("Invalid $(key) $(name). Use: excess, uniform")
+        error("Invalid $(key) $(name). Use: excess, uniform, blended")
     end
 end
-get_sgs_liquid_distribution(parsed_args) =
-    get_sgs_condensate_distribution(parsed_args, "sgs_liquid_distribution")
-get_sgs_ice_distribution(parsed_args) =
-    get_sgs_condensate_distribution(parsed_args, "sgs_ice_distribution")
+get_sgs_liquid_distribution(parsed_args, params = nothing) =
+    get_sgs_condensate_distribution(parsed_args, "sgs_liquid_distribution", params)
+get_sgs_ice_distribution(parsed_args, params = nothing) =
+    get_sgs_condensate_distribution(parsed_args, "sgs_ice_distribution", params)
 
 """
     get_tracer_nonnegativity_method(parsed_args)
@@ -1110,8 +1121,8 @@ function AtmosWater(config::AtmosConfig, params, ::Type{FT}) where {FT}
     pa = config.parsed_args
     microphysics_model = get_microphysics_model(pa)
     sgs_quadrature = get_sgs_quadrature(pa, params)
-    sgs_liquid_distribution = get_sgs_liquid_distribution(pa)
-    sgs_ice_distribution = get_sgs_ice_distribution(pa)
+    sgs_liquid_distribution = get_sgs_liquid_distribution(pa, params)
+    sgs_ice_distribution = get_sgs_ice_distribution(pa, params)
 
     if microphysics_model isa DryModel
         @warn "Running simulations without any moisture present."

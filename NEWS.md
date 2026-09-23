@@ -4,6 +4,10 @@ ClimaAtmos.jl Release Notes
 main
 ----
 
+- [#XXXX](https://github.com/CliMA/ClimaAtmos.jl/pull/XXXX) ![][badge-✨feature/enhancement] Two one-parameter switches on the SGS quadrature,
+  both bitwise unchanged at their defaults: `sgs_variance_geometric_T_factor` (c_T, default 1) scales the temperature channel of the
+  horizontal geometric variance term relative to its moisture channel; `sgs_liquid_distribution` / `sgs_ice_distribution: blended`
+  puts `(1 − ξ)` of a species' excess share plus `ξ` of its subdomain mean at every node (`sgs_condensate_uniform_fraction`, default 0.5).
 - [#XXXX](https://github.com/CliMA/ClimaAtmos.jl/pull/XXXX) ![][badge-✨feature/enhancement] Uniform cloud condensate over the SGS
   quadrature (`sgs_liquid_distribution` / `sgs_ice_distribution`: `excess` (default, bitwise unchanged) or `uniform`, per species): in the
   1-moment quadrature microphysics a `uniform` species is the subdomain mean (`q_lcl` / `q_icl`) at every quadrature node, held fixed like

@@ -2186,7 +2186,8 @@ Group of moisture, cloud, and microphysics choices inside an
     and microphysics quantities over the subgrid-scale distribution.
   - `sgs_liquid_distribution`, `sgs_ice_distribution`: how cloud liquid and cloud
     ice are distributed over the SGS quadrature in the 1-moment microphysics,
-    `ExcessCondensateDistribution()` (default) or a `UniformCondensateDistribution`.
+    `ExcessCondensateDistribution()` (default), `UniformCondensateDistribution()` or a
+    `BlendedCondensateDistribution(ξ)`.
   - `terminal_velocity_mode`: `DiagnosticTerminalVelocity()` (the default) or a
     `FixedTerminalVelocity`.
 

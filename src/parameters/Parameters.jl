@@ -124,6 +124,14 @@ not yet define. `FT` is the float type; `VFT1`, `VFT2`, and `VTF3` are the
     Richardson-number weight `w = Ri₊² / (Ri₊² + Ri₀²)` on the geometric variance term
     (`sgs_geometric_stability_weight`), with `Ri₊ = max(N²_sat, 0) / max(2 SᵢⱼSᵢⱼ, ε)`
     on the saturated moist buoyancy gradient. `0` (default) makes the weight exactly 1 [-].
+  - `sgs_variance_geometric_T_factor`: Factor `c_T` on the geometric variance term added
+    to `θ′θ′` (the temperature channel) relative to the one added to `q′q′`:
+    `θ′θ′ += c_T w c_g (c_Δx Δx_h)^2 |∇_h θ_li|^2`. `1` (default) keeps the two channels
+    at the same coefficient (bitwise unchanged); values below 1 damp, above 1 amplify
+    the sub-grid temperature variance implied by the resolved gradient [-].
+  - `sgs_condensate_uniform_fraction`: Fraction `ξ` of a cloud-condensate species that
+    is uniform over the SGS quadrature nodes under `BlendedCondensateDistribution`
+    (`ξ = 0` is the excess split, `ξ = 1` the uniform distribution) [-].
   - `Tq_correlation_coefficient`: Default correlation between `T'` and `q_tot'`
     in the SGS quadrature, in `[-1, 1]` [-].
   - `static_stab_coeff`: Static stability coefficient `c_b` of the mixing-length
@@ -212,6 +220,8 @@ Base.@kwdef struct TurbulenceConvectionParameters{FT, VFT1, VFT2, VTF3} <: ATCP
     sgs_variance_horizontal_scale_factor::FT
     sgs_variance_max_rel_std::FT
     sgs_variance_geometric_Ri_factor::FT
+    sgs_variance_geometric_T_factor::FT
+    sgs_condensate_uniform_fraction::FT
     Tq_correlation_coefficient::FT
     static_stab_coeff::FT
     Prandtl_number_scale::FT
