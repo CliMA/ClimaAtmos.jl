@@ -1310,8 +1310,8 @@ run before the other SGS updates, which accumulate into them.
 
 The sedimentation derivative also carries the lateral-mixing correction that
 the tendency applies where the draft area decreases with height,
-`α_lat ∂ᵥa (ρʲwʲχʲ - ρ⁰w⁰χ⁰)`, whose environment part contributes
-`α_lat ∂ᵥa ρʲwʲ / (1 - a)` to the diagonal. No-op unless `p.atmos.turbconv_model`
+`∂ᵥa (ρʲwʲχʲ - ρ⁰w⁰χ⁰)`, whose environment part contributes
+`∂ᵥa ρʲwʲ / (1 - a)` to the diagonal. No-op unless `p.atmos.turbconv_model`
 is a `PrognosticEDMFX`. Writes `ᶜtemp_scalar_7`, `ᶠsed_tracer_advection`, and
 `ᶜtridiagonal_matrix_scalar` in `p.scratch`, mutates `matrix`, and returns
 `nothing`.
@@ -1320,7 +1320,6 @@ function update_sgs_advection_jacobian!(matrix, Y, p, dtγ)
     p.atmos.turbconv_model isa PrognosticEDMFX || return nothing
     (; ᶜρʲs, ᶠu³ʲs) = p.precomputed
     FT = Spaces.undertype(axes(Y.c))
-    α_lat = CAP.sedimentation_lateral_coeff(p.params)
     ᶜJ = Fields.local_geometry_field(Y.c).J
     ᶠJ = Fields.local_geometry_field(Y.f).J
     (; ᶠsed_tracer_advection, ᶜtridiagonal_matrix_scalar) = p.scratch
@@ -1403,10 +1402,10 @@ function update_sgs_advection_jacobian!(matrix, Y, p, dtγ)
             # sedimentation
             # Base: a·∂_z(ρwχ) — always the same regardless of ∂a/∂z sign
             # Correction when ∂a/∂z < 0 :
-            #   α_lat · ∂a/∂z · (ρ¹w¹χ¹ − ρ⁰w⁰χ⁰)
+            #   ∂a/∂z · (ρ¹w¹χ¹ − ρ⁰w⁰χ⁰)
             #   ρ⁰w⁰χ⁰ = (w_GS·ρχ_GS − ρa¹·w¹·χ¹)/(1−a), so
             #   ∂(ρ⁰w⁰χ⁰)/∂χʲ = −ρa¹·w¹/(1−a) and
-            #   ∂/∂χʲ of correction = α_lat · ∂a/∂z · ρ¹w¹/(1−a)
+            #   ∂/∂χʲ of correction = ∂a/∂z · ρ¹w¹/(1−a)
             @. ᶠsed_tracer_advection =
                 DiagonalMatrixRow(ᶠinterp(ᶜρʲs.:(1) * ᶜJ) / ᶠJ) *
                 ᶠtop_bias_matrix() *
@@ -1416,7 +1415,7 @@ function update_sgs_advection_jacobian!(matrix, Y, p, dtγ)
                     -(ᶜprecipdivᵥ_matrix()) * ᶠsed_tracer_advection *
                     DiagonalMatrixRow(ᶜa) +
                     DiagonalMatrixRow(
-                        α_lat * ᶜ∂a∂z * ᶜρʲs.:(1) * ᶜwʲ / max(1 - ᶜa, eps(eltype(ᶜa))),
+                        ᶜ∂a∂z * ᶜρʲs.:(1) * ᶜwʲ / max(1 - ᶜa, eps(eltype(ᶜa))),
                     ),
                     -DiagonalMatrixRow(ᶜa) * ᶜprecipdivᵥ_matrix() * ᶠsed_tracer_advection,
                 )
