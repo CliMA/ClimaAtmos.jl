@@ -2477,12 +2477,12 @@ happens at compile time and the forwarding costs nothing at run time; the
 `Symbol` method simply wraps its argument in a `Val`. Names that are fields of
 `AtmosModel` itself are returned directly.
 """
-# Forward property access: atmos.microphysics_model → atmos.water.microphysics_model
-# Use ::Val constant for @generated compile-time access
 @generated function Base.getproperty(
     atmos::AtmosModel,
     ::Val{property_name},
 ) where {property_name}
+    # Forward property access: atmos.microphysics_model → atmos.water.microphysics_model
+    # Use ::Val constant for @generated compile-time access
     if haskey(GROUPED_PROPERTY_MAP, property_name)
         group_field = GROUPED_PROPERTY_MAP[property_name]
         return quote
@@ -2830,9 +2830,9 @@ being built and never afterwards, so `build_cache` stores this stripped model as
 which keeps `p.atmos` isbits (it is captured by closures that are broadcast
 inside GPU kernels) and lets compiled methods be shared across grids.
 """
-# `_physics_fields` keeps declaration order and the run bindings are the
-# trailing fields, so the physics values splat straight into the constructor.
 physics_only(model::AtmosModel) = AtmosModel(
+    # `_physics_fields` keeps declaration order and the run bindings are the
+    # trailing fields, so the physics values splat straight into the constructor.
     values(_physics_fields(model))...,
     map(_ -> nothing, _MODEL_NON_PHYSICS_FIELDS)...,
 )

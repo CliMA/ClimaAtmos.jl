@@ -318,7 +318,7 @@ function interpz_3d(ztarget, zsource, fsource)
     # check the size of the input arrays
     @assert ndims(ztarget) == 1 && ndims(zsource) == 3 && ndims(fsource) == 3 "Input arrays must have expected dimensions"
 
-    nx, ny, nz = size(zsource)
+    nx, ny, _ = size(zsource)
     # permute dimensions from (nx, ny, nz) to (nz, nx, ny) if needed
     ztargetp = ndims(ztarget) == 1 ? ztarget : permutedims(ztarget, (3, 1, 2))
     zsourcep = ndims(zsource) == 1 ? zsource : permutedims(zsource, (3, 1, 2))

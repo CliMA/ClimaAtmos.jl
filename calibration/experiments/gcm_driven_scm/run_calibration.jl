@@ -83,7 +83,7 @@ for ref_path in ref_paths
     )
 end
 
-series_names = [ref_paths[i] for i in 1:length(ref_paths)]
+series_names = [ref_paths[i] for i in eachindex(ref_paths)]
 
 ### define minibatcher
 rfs_minibatcher =

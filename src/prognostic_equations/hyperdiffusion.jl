@@ -418,7 +418,7 @@ field. Does nothing when `p.atmos.hyperdiff` is `nothing`. `Yₜ` and `t` are un
 is called. Called from `hyperdiffusion_tendency!`. Returns `nothing`.
 """
 NVTX.@annotate function prep_tracer_hyperdiffusion_tendency!(Yₜ, Y, p, t)
-    (; hyperdiff, turbconv_model) = p.atmos
+    (; hyperdiff) = p.atmos
     isnothing(hyperdiff) && return nothing
 
     (; ᶜ∇²specific_tracers) = p.hyperdiff
@@ -431,6 +431,13 @@ NVTX.@annotate function prep_tracer_hyperdiffusion_tendency!(Yₜ, Y, p, t)
     end
     return nothing
 end
+
+# The species the generic ∇⁴ tracer tendency skips. They equal the sedimenting
+# tracers today, and are named separately because the two decisions are
+# distinct: one is which tracers fall, the other is which take their share of
+# the total-water tendency (or none at all) in place of a ∇⁴ tendency.
+const hyperdiffusion_excluded_gs_names = gs_sedimenting_tracer_candidates
+const hyperdiffusion_excluded_sgs_names = sgs_sedimenting_tracer_candidates
 
 """
     apply_tracer_hyperdiffusion_tendency!(Yₜ, Y, p, t)
@@ -458,13 +465,6 @@ Requires DSS to have been applied to the pairs from
 `nothing`. Called from `hyperdiffusion_tendency!` with the limited tendency vector
 `Yₜ_lim`. Returns `nothing`.
 """
-# The species the generic ∇⁴ tracer tendency skips. They equal the sedimenting
-# tracers today, and are named separately because the two decisions are
-# distinct: one is which tracers fall, the other is which take their share of
-# the total-water tendency (or none at all) in place of a ∇⁴ tendency.
-const hyperdiffusion_excluded_gs_names = gs_sedimenting_tracer_candidates
-const hyperdiffusion_excluded_sgs_names = sgs_sedimenting_tracer_candidates
-
 NVTX.@annotate function apply_tracer_hyperdiffusion_tendency!(Yₜ, Y, p, t)
     (; hyperdiff, turbconv_model) = p.atmos
     isnothing(hyperdiff) && return nothing

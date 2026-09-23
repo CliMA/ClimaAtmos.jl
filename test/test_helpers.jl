@@ -21,7 +21,6 @@ import ClimaCore:
 # specialised test functions with multiple uses, define them here.)
 
 function generate_test_simulation(config)
-    parsed_args = config.parsed_args
     simulation = CA.get_simulation(config)
     (; integrator) = simulation
     Y = integrator.u
@@ -141,7 +140,6 @@ function get_spherical_spaces(; FT = Float32)
     mesh = Meshes.EquiangularCubedSphere(domain, ne)
     topology = Topologies.Topology2D(context, mesh)
     quad = Quadratures.GLL{Nq}()
-    space = Spaces.SpectralElementSpace2D(topology, quad)
     enable_bubble = false
     no_bubble_space =
         Spaces.SpectralElementSpace2D(topology, quad; enable_bubble)
@@ -274,7 +272,6 @@ function get_cartesian_spaces(; FT = Float32)
     helem = 5
     velem = 10
     npoly = 5
-    ndims = 3
     stretch = Meshes.Uniform()
     device = ClimaComms.CPUSingleThreaded()
     comms_context = ClimaComms.SingletonCommsContext(device)
@@ -310,7 +307,6 @@ function get_cartesian_spaces(; FT = Float32)
         vertmesh,
     )
     vert_grid = Grids.FiniteDifferenceGrid(vert_topology)
-    ArrayType = ClimaComms.array_type(device)
     grid = Grids.ExtrudedFiniteDifferenceGrid(horz_grid, vert_grid)
     cent_space = Spaces.CenterExtrudedFiniteDifferenceSpace(grid)
     face_space = Spaces.FaceExtrudedFiniteDifferenceSpace(grid)

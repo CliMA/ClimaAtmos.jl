@@ -180,7 +180,7 @@ function main()
                     push!(mins, col_min)
                 end
                 if in(var_name, cal_vars)
-                    y_true, Σ_obs, norm_vec_obs = get_obs(
+                    y_true, _, _ = get_obs(
                         ref_paths[config_i],
                         [var_name],
                         zc_model;
@@ -198,7 +198,6 @@ function main()
                 rmse_per_member = sqrt.(sum_squared_errors / n_vert_levels)
                 # Filter out NaNs (failed simulations)
                 valid_rmse = rmse_per_member[.!isnan.(rmse_per_member)]
-                non_nan_simulation_count = length(valid_rmse)
                 mean_rmse = mean(valid_rmse)
                 min_rmse = minimum(valid_rmse)
                 max_rmse = maximum(valid_rmse)

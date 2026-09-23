@@ -106,10 +106,9 @@ The order of calls matters: microphysics must precede `surface_temp_tendency!`
 NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
 
     ᶜuₕ = Y.c.uₕ
-    ᶠu₃ = Y.f.u₃
     ᶜρ = Y.c.ρ
     (; radiation_mode, microphysics_model, turbconv_model) = p.atmos
-    (; rayleigh_sponge, viscous_sponge) = p.atmos
+    (; rayleigh_sponge) = p.atmos
     (; ls_adv, scm_coriolis) = p.atmos
     (; params) = p
     thermo_params = CAP.thermodynamics_params(params)

@@ -1101,7 +1101,6 @@ function set_microphysics_tendency_cache!(
 )
     (; dt) = p
     thp = CAP.thermodynamics_params(p.params)
-    cm1p = CAP.microphysics_1m_params(p.params)
     cm2p = CAP.microphysics_2m_params(p.params)
     acp = CAP.microphysics_cloud_params(p.params).activation
     pap = p.params.prescribed_aerosol_params
@@ -1110,7 +1109,6 @@ function set_microphysics_tendency_cache!(
 
     (; ᶜρʲs, ᶜTʲs, ᶜuʲs, ᶜq_tot_nonnegʲs) = p.precomputed
     (; ᶜu⁰, ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰) = p.precomputed
-    (; ᶜwₗʲs, ᶜwᵢʲs, ᶜwᵣʲs, ᶜwₛʲs, ᶜwₙₗʲs, ᶜwₙᵣʲs) = p.precomputed
     (; ᶜmp_tendency⁰, ᶜmp_tendencyʲs) = p.precomputed
 
     # Get prescribed aerosol concentrations

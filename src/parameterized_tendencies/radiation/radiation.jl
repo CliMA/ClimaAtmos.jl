@@ -381,7 +381,6 @@ function radiation_model_cache(
     bottom_extrapolation = RRTMGPI.SameAsInterpolation(),
 )
     context = ClimaComms.context(axes(Y.c))
-    device = context.device
     if !(radiation_mode isa RRTMGPI.GrayRadiation)
         (; aerosol_radiation) = radiation_mode
         if aerosol_radiation && !(any(
@@ -751,7 +750,7 @@ explicitly at every stage. No cache is allocated; the flux is built in `p.scratc
 """
 function radiation_tendency!(Yₜ, Y, p, t, radiation_mode::RadiationISDAC)
     (; F₀, F₁, κ) = radiation_mode
-    (; params, precomputed) = p
+    (; precomputed) = p
     (; ᶜq_liq) = precomputed
 
     ᶜρq = p.scratch.ᶜtemp_scalar

@@ -28,7 +28,6 @@ Described in [garner2005](@cite) Eq. 6; see the *Orographic Gravity Waves* page.
 """
 function calc_orographic_tensor(elev, χ, lon, lat, earth_radius)
     @info "Computing T tensor..."
-    FT = eltype(elev)
 
     # compute ∇h
     @. elev = max(0, elev)

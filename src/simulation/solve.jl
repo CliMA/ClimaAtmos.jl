@@ -56,7 +56,6 @@ the throughput in simulated years per day, and the walltime per timestep.
 """
 function timed_solve!(integrator)
     device = ClimaComms.device(integrator.u.c)
-    comms_ctx = ClimaComms.context(device)
     local sol
     walltime = ClimaComms.elapsed(device) do
         sol = CTS.solve!(integrator)

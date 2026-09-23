@@ -103,10 +103,8 @@ function surface_flux_tendency!(Yₜ, Y, p, t)
     p.atmos.disable_surface_flux_tendency && return
 
     FT = eltype(Y)
-    (; params) = p
     (; turbconv_model) = p.atmos
-    (; sfc_conditions, ᶜT, ᶜq_liq, ᶜq_ice) = p.precomputed
-    thermo_params = CAP.thermodynamics_params(params)
+    (; sfc_conditions) = p.precomputed
 
     if !disable_momentum_vertical_diffusion(p.atmos.vertical_diffusion)
         btt = boundary_tendency_momentum(Y.c.ρ, Y.c.uₕ, sfc_conditions.ρ_flux_uₕ)

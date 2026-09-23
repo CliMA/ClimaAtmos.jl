@@ -32,7 +32,7 @@ environment, but this is a current approximation.
 function set_covariance_cache_and_cloud_fraction!(Y, p)
     (; cloud_model, microphysics_model) = p.atmos
     (; ᶜgradᵥ_q_tot, ᶜgradᵥ_θ_liq_ice, ᶜcloud_fraction) = p.precomputed
-    (; ᶜbuoygrad, ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice) = p.precomputed
+    (; ᶜbuoygrad) = p.precomputed
     thermo_params = CAP.thermodynamics_params(p.params)
     ᶜlg = Fields.local_geometry_field(Y.c)
 
@@ -1078,7 +1078,7 @@ NVTX.@annotate function set_cloud_fraction!(
     microphysics_model = p.atmos.microphysics_model
 
     # Get environment state, condensate, and covariances
-    ᶜρ_env, ᶜT_mean, ᶜq_mean, ᶜθ_mean, ᶜq_lcl, ᶜq_icl, ᶜT′T′, ᶜq′q′ =
+    ᶜρ_env, ᶜT_mean, ᶜq_mean, ᶜθ_mean, _, _, _, _ =
         _compute_cloud_state(Y, p, thermo_params, turbconv_model, microphysics_model)
 
     set_ml_cloud_fraction!(
