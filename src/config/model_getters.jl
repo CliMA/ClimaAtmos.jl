@@ -876,6 +876,49 @@ function get_external_forcing_model(parsed_args, ::Type{FT}; setup_components) w
 end
 
 """
+    get_era5_relaxation_model(parsed_args, ::Type{FT}) where {FT}
+
+Build the global ERA5 relaxation selected by the `era5_relaxation` config key.
+
+Returns `nothing` when the key is unset (the default), and otherwise an
+[`ERA5Relaxation`](@ref) whose data directory is the key's value and whose
+timescales, window, and taper come from the `era5_relaxation_*` keys (all set in
+hours, so they can be changed from the coupler without touching ClimaParams). The
+taper begins at `era5_relaxation_taper_begin_frac` of the window and reaches zero
+at `era5_relaxation_taper_end_frac` of it.
+"""
+function get_era5_relaxation_model(parsed_args, ::Type{FT}) where {FT}
+    data_dir = parsed_args["era5_relaxation"]
+    isnothing(data_dir) && return nothing
+
+    hours_to_seconds(x) = FT(x) * FT(3600)
+    window = hours_to_seconds(parsed_args["era5_relaxation_window_hours"])
+    τ_temperature =
+        hours_to_seconds(parsed_args["era5_relaxation_tau_temperature_hours"])
+    τ_humidity =
+        hours_to_seconds(parsed_args["era5_relaxation_tau_humidity_hours"])
+    τ_wind = hours_to_seconds(parsed_args["era5_relaxation_tau_wind_hours"])
+
+    begin_frac = FT(parsed_args["era5_relaxation_taper_begin_frac"])
+    end_frac = FT(parsed_args["era5_relaxation_taper_end_frac"])
+    0 <= begin_frac <= end_frac <= 1 || error(
+        "era5_relaxation taper fractions must satisfy " *
+        "0 ≤ taper_begin_frac ≤ taper_end_frac ≤ 1, got " *
+        "begin = $begin_frac, end = $end_frac.",
+    )
+
+    return ERA5Relaxation{FT, typeof(data_dir)}(
+        data_dir,
+        τ_temperature,
+        τ_humidity,
+        τ_wind,
+        window,
+        begin_frac * window,
+        end_frac * window,
+    )
+end
+
+"""
     warn_if_run_exceeds_forcing(forcing, parsed_args)
 
 Warn when the run length `t_end` exceeds the time span covered by an

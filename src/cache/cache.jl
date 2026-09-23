@@ -57,6 +57,7 @@ struct AtmosCache{
     SCRA,
     HYPE,
     EXTFORCING,
+    ERAREL,
     NONGW,
     ORGW,
     RAD,
@@ -99,6 +100,7 @@ struct AtmosCache{
 
     # Additional parameters used by the various tendencies
     external_forcing::EXTFORCING
+    era5_relaxation::ERAREL
     non_orographic_gravity_wave::NONGW
     orographic_gravity_wave::ORGW
     radiation::RAD
@@ -240,6 +242,7 @@ function build_cache(
         ),
     )
     external_forcing = external_forcing_cache(Y, atmos, params, start_date)
+    era5_relaxation = era5_relaxation_cache(Y, atmos, start_date)
     sfc_setup = atmos.surface.boundary_overrides
     scratch = temporary_quantities(Y, atmos)
 
@@ -290,6 +293,7 @@ function build_cache(
         scratch,
         hyperdiff,
         external_forcing,
+        era5_relaxation,
         non_orographic_gravity_wave,
         orographic_gravity_wave,
         radiation,

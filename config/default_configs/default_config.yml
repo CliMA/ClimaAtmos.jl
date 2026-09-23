@@ -389,6 +389,27 @@ site_longitude:
 era5_diurnal_warming:
   help: Applies a warming scenario by adding a constant temperature offset (in Kelvin). Supported only by the `ReanalysisMonthlyAveragedDiurnal` forcing model. This affects the target surface temperature for the entire simulation, the initial atmospheric temperature profile, and the relaxation temperature profile above `gcmdriven_relaxation_minimum_height`. Specific humidity is increased to hold relative humidity constant in the initial and relaxation profiles.
   value: ~
+era5_relaxation:
+  help: "Global Newtonian relaxation (nudging) of the model toward ERA5 over a pre-forecast window. Set to the directory of 6-hourly ERA5 pressure-level files (`era5_pressure_levels_<yyyymmdd>_<HHMM>.nc`) to enable; a combined `lon`-`lat`-`z`-`time` file is generated on first use. Intended for weather runs initialized at `t0 - window` (e.g. from the coupler). [`~` (default, off), `path/to/era5/dir`]"
+  value: ~
+era5_relaxation_window_hours:
+  help: "Length of the ERA5 relaxation window from `t = 0` (initialization) in hours. Relaxation is applied for `0 <= t <= window`; the free forecast runs afterward. Used only when `era5_relaxation` is set."
+  value: 12.0
+era5_relaxation_tau_temperature_hours:
+  help: "Relaxation timescale for temperature in hours. Used only when `era5_relaxation` is set."
+  value: 6.0
+era5_relaxation_tau_humidity_hours:
+  help: "Relaxation timescale for total specific humidity in hours. Used only when `era5_relaxation` is set."
+  value: 6.0
+era5_relaxation_tau_wind_hours:
+  help: "Relaxation timescale for the horizontal wind (u, v) in hours. Used only when `era5_relaxation` is set."
+  value: 6.0
+era5_relaxation_taper_begin_frac:
+  help: "Fraction of the window at which the relaxation taper starts ramping down from 1 (alpha = 1 before this). Used only when `era5_relaxation` is set."
+  value: 0.5
+era5_relaxation_taper_end_frac:
+  help: "Fraction of the window at which the relaxation taper reaches 0 (alpha = 0 after this). Must be >= taper_begin_frac. Used only when `era5_relaxation` is set."
+  value: 1.0
 toml:
   help: "TOML file(s) used to override model parameters"
   value: []

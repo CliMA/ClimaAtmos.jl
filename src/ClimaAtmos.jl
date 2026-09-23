@@ -63,6 +63,7 @@ include(joinpath("utils", "variable_manipulations.jl"))
 include(joinpath("utils", "tracer_processes.jl"))
 include(joinpath("config", "era5_observations_to_forcing_file.jl"))
 include(joinpath("utils", "weather_model.jl"))
+include(joinpath("utils", "era5_relaxation_data.jl"))
 
 include(joinpath("utils", "AtmosArtifacts.jl"))
 import .AtmosArtifacts as AA
@@ -109,6 +110,7 @@ include(joinpath("prognostic_equations", "remaining_tendency.jl"))
 include(joinpath("prognostic_equations", "forcing", "large_scale_advection.jl")) # TODO: should this be in tendencies/?
 include(joinpath("prognostic_equations", "forcing", "subsidence.jl"))
 include(joinpath("prognostic_equations", "forcing", "external_forcing.jl"))
+include(joinpath("prognostic_equations", "forcing", "era5_relaxation.jl"))
 
 include(joinpath("prognostic_equations", "surface_temp.jl"))
 

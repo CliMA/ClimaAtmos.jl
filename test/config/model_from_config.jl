@@ -2,6 +2,7 @@ using ClimaComms
 ClimaComms.@import_required_backends
 import ClimaAtmos as CA
 import Logging
+import Dates
 
 @testset "Hyperdiffusion config" begin
     @info "CAM_SE (Special case of Hyperdiffusion)"
@@ -177,4 +178,52 @@ end
     @test_logs (:warn,) CA.warn_if_stale_raw_topo_artifact(
         mk(; γ = 0.5, h_frac = 0.1, α = 0.15),
     )
+end
+
+@testset "ERA5 relaxation config" begin
+    FT = Float64
+
+    # Disabled by default.
+    @test CA.get_era5_relaxation_model(
+        Dict("era5_relaxation" => nothing),
+        FT,
+    ) === nothing
+
+    parsed_args = Dict(
+        "era5_relaxation" => "/some/era5/dir",
+        "era5_relaxation_window_hours" => 12.0,
+        "era5_relaxation_tau_temperature_hours" => 6.0,
+        "era5_relaxation_tau_humidity_hours" => 4.0,
+        "era5_relaxation_tau_wind_hours" => 3.0,
+        "era5_relaxation_taper_begin_frac" => 0.5,
+        "era5_relaxation_taper_end_frac" => 1.0,
+    )
+    er = CA.get_era5_relaxation_model(parsed_args, FT)
+    @test er isa CA.ERA5Relaxation
+    @test er.data_dir == "/some/era5/dir"
+    @test er.window == 12 * 3600
+    @test er.τ_temperature == 6 * 3600
+    @test er.τ_humidity == 4 * 3600
+    @test er.τ_wind == 3 * 3600
+    @test er.taper_begin == 6 * 3600   # 0.5 * window
+    @test er.taper_end == 12 * 3600    # 1.0 * window
+
+    # Taper: 1 before taper_begin, linear ramp to 0, then 0.
+    @test CA.era5_relaxation_taper(0.0, er) == 1
+    @test CA.era5_relaxation_taper(er.taper_begin, er) == 1
+    @test CA.era5_relaxation_taper(er.taper_end, er) == 0
+    @test CA.era5_relaxation_taper(2 * er.taper_end, er) == 0
+    midpoint = (er.taper_begin + er.taper_end) / 2
+    @test CA.era5_relaxation_taper(midpoint, er) ≈ 0.5
+
+    # Invalid taper fractions are rejected.
+    bad = merge(parsed_args, Dict("era5_relaxation_taper_begin_frac" => 1.5))
+    @test_throws ErrorException CA.get_era5_relaxation_model(bad, FT)
+
+    # Snapshot dates bracket the window on the 6-hourly grid.
+    start_date = Dates.DateTime(2016, 12, 31, 3)
+    dates = CA.era5_relaxation_snapshot_dates(start_date, 12 * 3600)
+    @test first(dates) <= start_date
+    @test last(dates) >= start_date + Dates.Hour(12)
+    @test all(diff(Dates.value.(dates)) .> 0)
 end

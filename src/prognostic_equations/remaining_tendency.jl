@@ -182,6 +182,8 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
 
     external_forcing_tendency!(Yₜ, Y, p, t, p.atmos.external_forcing)
 
+    era5_relaxation_tendency!(Yₜ, Y, p, t, p.atmos.era5_relaxation)
+
     if p.atmos.diff_mode == Explicit()
         vertical_diffusion_boundary_layer_tendency!(
             Yₜ,

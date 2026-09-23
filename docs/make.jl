@@ -108,6 +108,7 @@ makedocs(;
                 "Radiation" => "radiation.md",
                 "COSP Satellite Simulator" => "cosp.md",
                 "Forcings and Idealized Cases" => "forcings.md",
+                "ERA5 Relaxation (Spin-up)" => "era5_relaxation.md",
                 "Gravity Wave Drag" => [
                     "Non-orographic Gravity Waves" => "non_orographic_gravity_wave.md",
                     "Orographic Gravity Waves" => "orographic_gravity_wave.md",

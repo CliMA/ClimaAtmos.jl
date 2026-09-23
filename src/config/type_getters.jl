@@ -71,6 +71,7 @@ function get_atmos(config::AtmosConfig, params, grid; setup_type)
         numerics = AtmosNumerics(config, FT),
         chemistry = AtmosChem(config),
         cosp = COSPModel(config),
+        era5_relaxation = get_era5_relaxation_model(pa, FT),
         vertical_diffusion,
         disable_surface_flux_tendency = pa["disable_surface_flux_tendency"],
     )

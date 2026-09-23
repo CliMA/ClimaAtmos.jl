@@ -1290,6 +1290,50 @@ case. Supplied by `Setups.ISDAC`, which `initial_condition: "ISDAC"` selects; th
 struct ISDACForcing end
 
 """
+    ERA5Relaxation{FT, S}
+
+Global Newtonian relaxation (nudging) of the model toward ERA5 over a
+pre-forecast window, used to spin the atmosphere up to the model's own dynamics
+and physics before a free forecast begins.
+
+The model is initialized (from ERA5 model levels, as usual) at `t = 0`, which the
+coupler sets to `t₀ - window`. For `0 ≤ t ≤ window` the tendency
+`-α(t) (X - X_ERA5(t)) / τ_X` is added for `X ∈ {T, q_tot, u, v}`, where
+`X_ERA5(t)` is the ERA5 field regridded to the model grid and linearly
+interpolated in time between snapshots, `τ_X` is the per-variable timescale, and
+`α(t)` is a taper that ramps from 1 to 0 across the window so the free forecast
+(`t > window`, where `α = 0`) is untouched. Temperature and humidity are relaxed
+through the physically independent pair `(T, q_tot)` and reconstructed into
+`ρe_tot`/`ρq_tot` with `apply_Tq_forcing!`, so redundant thermodynamic variables
+are never nudged independently.
+
+Selected by the `era5_relaxation` configuration key (the directory of 6-hourly
+ERA5 pressure-level files); all fields are set from `era5_relaxation_*` config
+keys, so the timescales and window can be changed from the coupler without
+touching ClimaParams.
+
+# Fields
+
+  - `data_dir`: Directory of raw ERA5 pressure-level snapshots
+    (`era5_pressure_levels_<yyyymmdd>_<HHMM>.nc`) [-].
+  - `τ_temperature`: Relaxation timescale for temperature [s].
+  - `τ_humidity`: Relaxation timescale for total specific humidity [s].
+  - `τ_wind`: Relaxation timescale for the horizontal wind [s].
+  - `window`: Length of the relaxation window from `t = 0` [s].
+  - `taper_begin`: Time at which the taper starts ramping down from 1 [s].
+  - `taper_end`: Time at which the taper reaches 0 [s]; `α = 0` for `t ≥ taper_end`.
+"""
+struct ERA5Relaxation{FT, S}
+    data_dir::S
+    τ_temperature::FT
+    τ_humidity::FT
+    τ_wind::FT
+    window::FT
+    taper_begin::FT
+    taper_end::FT
+end
+
+"""
     AbstractEnvBuoyGradClosure
 
 Closure used to convert environmental thermodynamic gradients into a buoyancy
@@ -2414,6 +2458,8 @@ names.
   - `numerics`: An `AtmosNumerics` group.
   - `chemistry`: An `AtmosChem` group.
   - `cosp`: `nothing`, or a `COSPModel` for the satellite simulator.
+  - `era5_relaxation`: `nothing`, or an [`ERA5Relaxation`](@ref) for global
+    pre-forecast nudging toward ERA5.
   - `disable_surface_flux_tendency`: Whether to skip applying the surface flux
     tendency, independently of whether surface conditions are computed.
   - `grid`: The `Grids.AbstractGrid` the model is built on.
@@ -2423,7 +2469,7 @@ names.
 See the constructor `AtmosModel(grid; params, setup, defaults, kwargs...)`
 below.
 """
-struct AtmosModel{W, SCM, R, TC, PF, GW, VD, SP, SU, NU, CM, COSP, G, P, SE}
+struct AtmosModel{W, SCM, R, TC, PF, GW, VD, SP, SU, NU, CM, COSP, ER, G, P, SE}
     water::W
     scm_setup::SCM
     radiation::R
@@ -2436,6 +2482,9 @@ struct AtmosModel{W, SCM, R, TC, PF, GW, VD, SP, SU, NU, CM, COSP, G, P, SE}
     numerics::NU
     chemistry::CM
     cosp::COSP
+
+    # Global ERA5 relaxation (pre-forecast nudging); `nothing` when disabled
+    era5_relaxation::ER
 
     # Whether to apply surface flux tendency (independent of surface conditions)
     disable_surface_flux_tendency::Bool
@@ -2557,6 +2606,7 @@ function _atmos_model(; kwargs...)
 
     vertical_diffusion = get(atmos_model_kwargs, :vertical_diffusion, nothing)
     cosp = get(atmos_model_kwargs, :cosp, nothing)
+    era5_relaxation = get(atmos_model_kwargs, :era5_relaxation, nothing)
     disable_surface_flux_tendency =
         get(atmos_model_kwargs, :disable_surface_flux_tendency, false)
 
@@ -2571,7 +2621,7 @@ function _atmos_model(; kwargs...)
     return AtmosModel(
         water, scm_setup, radiation, turbconv, prescribed_flow, gravity_wave,
         vertical_diffusion, sponge, surface, numerics, chemistry, cosp,
-        disable_surface_flux_tendency, grid, params, setup,
+        era5_relaxation, disable_surface_flux_tendency, grid, params, setup,
     )
 end
 
@@ -2602,9 +2652,10 @@ model.subsidence  # Bomex subsidence, derived from the setup
 # Keyword Arguments
 
 Every keyword argument is either the name of an `AtmosModel` physics field (a
-whole group, `vertical_diffusion`, `cosp`, `prescribed_flow`, or
-`disable_surface_flux_tendency`) or the name of a field of one of the grouped
-sub-structs. Flattened names are routed to their owning group through
+whole group, `vertical_diffusion`, `cosp`, `prescribed_flow`,
+`era5_relaxation`, or `disable_surface_flux_tendency`) or the name of a field of
+one of the grouped sub-structs. Flattened names are routed to their owning group
+through
 `GROUPED_PROPERTY_MAP`, so
 
 ```julia
@@ -2657,7 +2708,7 @@ struct's docstring for the full list of admissible values.
     `hyperdiff`, `vertical_water_borrowing_species`.
   - [`AtmosChem`](@ref): `chemistry_model`.
   - Ungrouped `AtmosModel` fields: `vertical_diffusion`, `prescribed_flow`,
-    `cosp`, and `disable_surface_flux_tendency`.
+    `cosp`, `era5_relaxation`, and `disable_surface_flux_tendency`.
 
 # More examples
 
