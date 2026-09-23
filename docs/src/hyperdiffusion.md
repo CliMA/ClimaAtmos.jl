@@ -92,9 +92,14 @@ diagnosed from the total and the condensate specific humidities.
 The implementation adds two details to the expression above. The share each
 cloud species receives is clipped to the interval ``[0, 1]``, so a species'
 specific humidity exceeding the suspended total through limiter or round-off
-effects cannot produce a share above one. Where a two-moment scheme carries
-number densities, those scale with their corresponding mass species; rain number
-density, like rain and snow mass, receives no hyperdiffusion.
+effects cannot produce a share above one. The quantities attached to a cloud
+mass species follow it in proportion: the cloud droplet and ice number densities
+of the two-moment schemes, which keeps the mean particle mass, and the rime mass
+and rime volume of the P3 ice scheme, which keeps the rime fraction and rime
+density. Rain number density, like rain and snow mass, receives no
+hyperdiffusion. With the microphysics species covered by the distribution
+above, the generic ``\nabla^4`` tendency applies to the passive tracers that
+remain.
 
 ## Energy: an enthalpy-consistent flux
 

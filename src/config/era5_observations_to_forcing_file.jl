@@ -102,19 +102,16 @@ end
 """
     check_daily_forcing_times(forcing_file_path, parsed_args)
 
-Check that the run's start and end times, derived from `start_date` and `t_end`, lie
-within the time range of the forcing file, warning when they do not.
+Return `true` when the run's start and end times, derived from `start_date` and `t_end`,
+lie within the time range of the forcing file, and `false` (with a warning) otherwise.
 
-# Notes
-
-The `return false` statements sit inside the `NCDataset` `do` block, so they exit only
-that closure: the function itself currently always returns `true`, and the warnings are
-the effective signal.
+The `do` block is the function's return value: `NCDataset(f, path)` returns whatever `f`
+returns, so a `return false` inside the block propagates to the caller.
 """
 function check_daily_forcing_times(forcing_file_path, parsed_args)
     start = parse_date(parsed_args["start_date"])
     stop = start + Dates.Second(time_to_seconds(parsed_args["t_end"]))
-    NCDataset(forcing_file_path) do ds
+    return NCDataset(forcing_file_path) do ds
         if ds["time"][1] > start
             @warn "Start time $start is before the first time step in the forcing file"
             return false
@@ -123,30 +120,26 @@ function check_daily_forcing_times(forcing_file_path, parsed_args)
             @warn "End time $stop is after the last time step in the forcing file"
             return false
         end
+        return true
     end
-    return true
 end
 
 """
     check_monthly_forcing_times(path, parsed_args)
 
-Check that the monthly-averaged diurnal forcing file covers exactly one day starting at
-`start_date`, warning when it does not.
+Return `true` when the monthly-averaged diurnal forcing file covers exactly one day
+starting at `start_date`, and `false` (with a warning) otherwise.
 
 Exactly one day is required because the file is read with
-`ClimaUtilities.TimeVaryingInputs.PeriodicCalendar`, which wraps it in time.
-
-# Notes
-
-As in `check_daily_forcing_times`, the `return false` statements exit only the
-`NCDataset` `do` block, so the function itself currently always returns `true`.
+`ClimaUtilities.TimeVaryingInputs.PeriodicCalendar`, which wraps it in time. As in
+`check_daily_forcing_times`, the `do` block is the return value.
 """
 function check_monthly_forcing_times(path, parsed_args)
     # Monthly diurnal files cover one calendar day from midnight; strip any
     # HHMM from start_date, then promote back to DateTime for the comparison.
     start = DateTime(Dates.Date(parse_date(parsed_args["start_date"])))
     stop = start + Dates.Day(1)
-    NCDataset(path) do ds
+    return NCDataset(path) do ds
         dt = ds["time"][2] - ds["time"][1]
         if ds["time"][1] > start
             @warn "Start time $start is before the first time step in the forcing file"
@@ -156,8 +149,8 @@ function check_monthly_forcing_times(path, parsed_args)
             @warn "Forcing should cover one day, following ClimaUtilities.TimeVaryingInputs.PeriodicCalendar indexing"
             return false
         end
+        return true
     end
-    return true
 end
 
 """

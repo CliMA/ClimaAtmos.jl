@@ -117,3 +117,24 @@ end
         @test consistency(smag) === nothing
     end
 end
+
+@testset "vert_diff is rejected alongside PROPHET or a vertical LES closure" begin
+    # `job_id` has to stay unique across the cases below.
+    consistency(; extra...) = CA.check_case_consistency(
+        CA.AtmosConfig(
+            Dict{String, Any}(
+                "config" => "column",
+                "vert_diff" => "VerticalDiffusion",
+                (String(k) => v for (k, v) in extra)...,
+            );
+            job_id = "vert_diff_" * join((string(v) for v in values(extra)), "_"),
+        ).parsed_args,
+    )
+    @test consistency() === nothing
+    @test_throws "cannot be combined" consistency(; turbconv = "prognostic_edmfx")
+    @test_throws "cannot be combined" consistency(; smagorinsky_lilly = "UVW")
+    # AMD acts on both axes, so it conflicts whatever its configuration.
+    @test_throws "cannot be combined" consistency(; amd_les = true)
+    # A horizontal-only Smagorinsky closure leaves the vertical to `vert_diff`.
+    @test consistency(; smagorinsky_lilly = "UV") === nothing
+end

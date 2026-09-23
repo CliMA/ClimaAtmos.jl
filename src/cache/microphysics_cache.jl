@@ -209,16 +209,17 @@ function set_precipitation_velocities!(
     )
 
     microphysics_tracers = (
-        (@name(q_lcl), @name(ᶜwₗʲs.:(1)), @name(ᶜwₗ)),
-        (@name(q_icl), @name(ᶜwᵢʲs.:(1)), @name(ᶜwᵢ)),
-        (@name(q_rai), @name(ᶜwᵣʲs.:(1)), @name(ᶜwᵣ)),
-        (@name(q_sno), @name(ᶜwₛʲs.:(1)), @name(ᶜwₛ)),
+        (@name(q_lcl), @name(ᶜwₗʲs), @name(ᶜwₗ)),
+        (@name(q_icl), @name(ᶜwᵢʲs), @name(ᶜwᵢ)),
+        (@name(q_rai), @name(ᶜwᵣʲs), @name(ᶜwᵣ)),
+        (@name(q_sno), @name(ᶜwₛʲs), @name(ᶜwₛ)),
     )
-    MatrixFields.unrolled_foreach(microphysics_tracers) do (χ_name, wʲ_name, w_name)
+    MatrixFields.unrolled_foreach(microphysics_tracers) do (χ_name, wʲs_name, w_name)
         MatrixFields.has_field(Y.c.sgsʲs.:(1), χ_name) || return
 
         e_int_func = internal_energy_func(χ_name)
         ᶜw = MatrixFields.get_field(p.precomputed, w_name)
+        ᶜwʲs = MatrixFields.get_field(p.precomputed, wʲs_name)
 
         ᶜχ⁰ = ᶜspecific_env_value(χ_name, Y, p)
         ᶜρa⁰χ⁰ = @. lazy(max(zero(Y.c.ρ), ᶜρa⁰) * max(zero(Y.c.ρ), ᶜχ⁰))
@@ -227,8 +228,8 @@ function set_precipitation_velocities!(
         @. ᶜimplied_env_mass_flux = 0
         # add updraft contributions
         for j in 1:n
-            ᶜχʲ = MatrixFields.get_field(Y.c.sgsʲs.:(1), χ_name)
-            ᶜwʲ = MatrixFields.get_field(p.precomputed, wʲ_name)
+            ᶜχʲ = MatrixFields.get_field(Y.c.sgsʲs.:($j), χ_name)
+            ᶜwʲ = ᶜwʲs.:($j)
 
             ᶜρaʲχʲ = @. lazy(
                 max(zero(Y.c.ρ), Y.c.sgsʲs.:($$j).ρa) *

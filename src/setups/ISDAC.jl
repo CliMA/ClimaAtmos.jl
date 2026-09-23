@@ -50,7 +50,7 @@ function center_initial_condition(setup::ISDAC, local_geometry, params)
     q_tot = profiles.q_tot(z)
     p = profiles.p(z)
     T = TD.air_temperature(thermo_params, TD.pθ_li(), p, θ, q_tot)
-    tke = prognostic_tke ? profiles.tke(z) : FT(0)
+    tke = prognostic_tke ? FT(0) : profiles.tke(z)
 
     return physical_state(;
         T, p, q_tot,
@@ -64,7 +64,7 @@ function surface_condition(::ISDAC, params)
     return (;
         flux_scheme = MoninObukhov(; z0 = FT(4e-4)),
         temperature = AnalyticTemperature(Returns(FT(267))),
-        overrides = SurfaceBoundaryOverrides(p = FT(102000)),
+        overrides = SurfaceBoundaryOverrides(),
     )
 end
 

@@ -73,16 +73,12 @@ air–surface gradients:
 
 ### Boundary overrides (`boundary_overrides`)
 
-By default, surface values come from physics (pressure hydrostatically
-extrapolated, humidity saturated at `T_sfc`, zero winds, unit gustiness/moisture
-availability).
+By default, surface values come from physics (density hydrostatically
+extrapolated, humidity saturated at `T_sfc`, zero winds, unit gustiness).
 [`SurfaceBoundaryOverrides`](@ref ClimaAtmos.SurfaceConditions.SurfaceBoundaryOverrides)
-pins a value to a fixed override; each field defaults to `nothing` (use the
-physical default). Currently, only `q_vap`, `u`, `v`, and `gustiness` are
-read by `surface_state_to_conditions`; the `p` and `beta` fields are
-accepted and stored but not yet applied (the surface density comes from
-`SurfaceFluxes.surface_density`). Many idealized setups nevertheless set `p`
-for future use.
+pins `q_vap`, `u`, `v`, or `gustiness` to a fixed value; each field defaults to
+`nothing` (use the physical default). The surface density always comes from
+`SurfaceFluxes.surface_density`.
 
 ### Albedo (`surface_albedo`)
 

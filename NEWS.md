@@ -7,6 +7,44 @@ main
   `HHMM` of `start_date` (e.g. `start_date = "20191231-1200"` →  `..._1200.nc`),
   matching the ClimaCoupler subseasonal / WeatherQuest naming; date-only strings
   still default to `0000`.
+- ![][badge-🐛bugfix] With several PROPHET updrafts, the entrainment, the physical-constraint
+  clipping, the Rayleigh sponge, and the sedimentation cache act on the SGS tracers
+  (microphysics species and passive tracers) of the updraft they are called for; they acted
+  on updraft 1 throughout. The default single updraft is unaffected.
+- ![][badge-🐛bugfix] The pressure drag coefficient is computed by the function
+  `pressure_drag_coefficient` for the momentum equation and the TKE return-to-isotropy
+  source, with the environment area clamped to `[1 - a_max, 1]` in both; the TKE source
+  floored it at `a_min`.
+- ![][badge-🐛bugfix] The AMD eddy viscosity divides by the norm of the unscaled velocity
+  gradient. Its numerator and denominator shared one scratch tensor, so the denominator
+  was evaluated after the filter-scaled derivative had overwritten it, leaving a
+  viscosity smaller by roughly the square of the filter width (a factor of order `1e6`
+  in a 3.2 km box) and with the units of an inverse time.
+- ![][badge-🐛bugfix] The LES closures (Smagorinsky-Lilly, AMD, constant horizontal
+  diffusion) diffuse energy through the split enthalpy flux
+  `-ρ D [∇s_d + (h_eff + Φ) ∇q_tot_eff]` used by the other diffusive terms, in place of a
+  lumped `h_tot`. The horizontal AMD scalar diffusivity divides by the physical norm of
+  the gradient, as the vertical one already did.
+- ![][badge-🐛bugfix] Hyperdiffusion scales the P3 ice number `ρn_ice`, rime mass `ρq_rim`, and
+  rime volume `ρb_rim` with the cloud ice tendency; `ρn_ice` received that and a second
+  full-strength `∇⁴` tendency, and the rime species received the latter only.
+- ![][badge-🐛bugfix] The ERA5 forcing-file coverage checks report a file that does not
+  cover the run, so a stale cached file is regenerated; they always reported success.
+- ![][badge-🐛bugfix] `job_id_from_config_file` detects configuration files that share a base
+  name; the comparison never matched.
+- ![][badge-🐛bugfix] The ISDAC setup follows the shared convention `prognostic_tke ? 0 :
+  prescribed profile`; its operands were reversed. `Setups.Larcform1` drops the
+  `prognostic_tke` keyword it never read.
+- ![][badge-🐛bugfix] A `Setups.DecayingProfile()` constructed without parameters builds a
+  simulation, taking the thermodynamics parameters from the model.
+- ![][badge-💥breaking] `SurfaceBoundaryOverrides` drops the `p` and `beta` fields, which were
+  stored and never applied; the setups that set `p` no longer do. The `orographic_gravity_wave:
+  "linear"` option and `LinearOrographicGravityWave` are removed; the option errored at
+  runtime. `AtmosNumerics` and the `EDMFXModel` keyword constructor reject unrecognized
+  keywords with a `MethodError`; they absorbed them.
+- ![][badge-🔥behavioralΔ] `vert_diff` combined with `turbconv`, `amd_les`, or a vertically
+  acting `smagorinsky_lilly` is rejected at model construction. The two AMD configurations
+  set `hyperdiff: ~`, like the Smagorinsky ones.
 - ![][badge-🐛bugfix] The vertical Smagorinsky-Lilly diffusion follows `implicit_diffusion`:
   with `implicit_diffusion: true` it is part of the implicit tendency, with the eddy viscosity
   refreshed on every Newton iterate, matching the Jacobian block that already existed for it.

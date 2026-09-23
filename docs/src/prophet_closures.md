@@ -143,12 +143,13 @@ displaced entirely.
     ``\hat{\rho}^m E^{mn} = \hat{\rho}^n \Delta^{nm}`` has a *single* shared
     limiter, so the symmetry relation holds by construction. The code instead
     treats entrainment and detrainment as unrelated closures with independent
-    one-sided limiters, and evaluates the entrainment relaxation against the
-    environment value with ``w^0`` set to zero at the call site rather than
-    using the true velocity difference. That substitution is deliberate: the
-    true difference spuriously grows trivial drafts where ``w^j \approx 0``. A
-    symmetric redesign has to address that failure mode, and is tracked as a
-    code-side task.
+    one-sided limiters, and evaluates the entrainment relaxation with ``w^0``
+    set to zero at the call site in place of the velocity difference. Setting
+    ``w^0 = 0`` bounds the entrainment of a draft with ``w^j \approx 0``, whose
+    area would otherwise grow without limit. The analytic area solve holds the
+    draft area fixed through the Newton iteration, which closes that path, so
+    restoring the velocity difference is a code-side task, as is a symmetric
+    redesign of the limiters.
 
 Detrainment does not appear in the explicit scalar tendencies. It is absorbed
 into the analytic implicit solve for ``\hat{\rho}^j``, and scalars are detrained
@@ -184,10 +185,10 @@ buoyancy reduction factor ``(1 - \alpha_b)`` with
 form drag,
 
 ```math
-d^j = \frac{\alpha_d}{2 H}
-  \left( \frac{1}{\sqrt{\max(a^j, a_{\min})}}
-       + \frac{1}{\sqrt{\mathrm{clamp}(a^0, 1 - a_{\max}, 1)}} \right)
-  (w^j - w^0) |w^j - w^0| ,
+d^j = a^0 \, d_c^j \, (w^j - w^0) |w^j - w^0| , \qquad
+d_c^j = \frac{\alpha_d}{2 H}
+  \left( \frac{1}{\sqrt{\mathrm{clamp}(a^j, a_{\min}, a_{\max})}}
+       + \frac{1}{\sqrt{\mathrm{clamp}(a^0, 1 - a_{\max}, 1)}} \right) ,
 ```
 
 with ``\alpha_d`` = `pressure_normalmode_drag_coeff` and
@@ -201,11 +202,13 @@ but the environment is clamped from below at ``1 - a_{\max}``. Because the
 vertical-velocity solve runs before the area solve, it can be handed an
 extrapolated ``a^0`` outside ``[0, 1]``, and the clamp keeps the drag finite
 there; with the default ``a_{\max} = 0.7`` the environment factor never exceeds
-``1/\sqrt{0.3}``. The TKE return-to-isotropy source uses the ``a_{\min}`` floor
-for both subdomains instead, so the two drag coefficients differ by that
-factor. The ``\hat{\rho}^n / \rho`` weighting is not included; the environment velocity is
-instead eliminated in favor of ``w^j`` in the implicit solve, which brings in
-factors of ``\rho / \hat{\rho}^0`` (see
+``1/\sqrt{0.3}``. The coefficient ``d_c^j`` is computed by the function
+`pressure_drag_coefficient` for the momentum equation and for the TKE
+return-to-isotropy source, so the kinetic energy the drag removes from the draft
+is the energy the TKE budget receives. The leading ``a^0`` is the pairwise
+weighting ``\hat{\rho}^0 / \rho`` for the environment; the environment velocity
+is eliminated in favor of ``w^j`` in the implicit solve, which brings in factors
+of ``\rho / \hat{\rho}^0`` (see
 [Discretization and Time Stepping](prophet_numerics.md)).
 
 ## Turbulence kinetic energy and eddy diffusivity
