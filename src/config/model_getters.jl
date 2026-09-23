@@ -56,7 +56,11 @@ the valid choices. Each option string names the `CM.Parameters` type it maps to:
   - `cloud_ice_formation`: `"PrescribedIceNumber"`, `"ConstantTimescale"`, `"TemperatureDependent"`.
   - `cloud_ice_melt`: `"CloudIceMelt"`.
   - `cloud_liquid_freezing`: `"HomogeneousAndHeterogeneous"`, `"Homogeneous"`, `"Heterogeneous"`.
-  - `rain_autoconversion`: `"Kessler1M"`, `"PrescribedNd"`.
+  - `rain_autoconversion`: `"Kessler1M"`, `"PrescribedNd"`. `Kessler1M` is the Kessler scheme
+    whose timescale and threshold blend between stratiform (`*_stratiform` ClimaParams keys)
+    and convective values with the vertical velocity of the subdomain being evaluated (grid
+    mean, updraft, or environment); equal values (the ClimaParams defaults) give the classic
+    velocity-independent scheme.
   - `snow_autoconversion`: `"NoSupersaturation"`, `"WithSupersaturation"`.
   - `rain_condensation_evaporation`: `"RainEvaporation"`.
   - `snow_deposition_sublimation`: `"SublimationOnly"`, `"DepositionAndSublimation"`.

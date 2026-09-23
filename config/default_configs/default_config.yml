@@ -298,7 +298,7 @@ cloud_liquid_freezing:
   help: "Cloud liquid freezing option for 1M microphysics [`HomogeneousAndHeterogeneous` (default), `Homogeneous`, `Heterogeneous`, ~]"
   value: "HomogeneousAndHeterogeneous"
 rain_autoconversion:
-  help: "Rain autoconversion option for 1M microphysics [`Kessler1M` (default), `PrescribedNd`, ~]"
+  help: "Rain autoconversion option for 1M microphysics [`Kessler1M` (default), `PrescribedNd`, ~]. `Kessler1M` blends its timescale and threshold between the stratiform (ClimaParams `rain_autoconversion_timescale_stratiform`, `cloud_liquid_water_specific_humidity_autoconversion_threshold_stratiform`) and convective (`rain_autoconversion_timescale`, `cloud_liquid_water_specific_humidity_autoconversion_threshold`) values with the vertical velocity of each subdomain (scale `rain_autoconversion_velocity_scale`); with equal values (the ClimaParams defaults) it is the classic velocity-independent Kessler scheme, so a TOML override of a convective key should be paired with its `_stratiform` key to stay velocity independent."
   value: "Kessler1M"
 snow_autoconversion:
   help: "Snow autoconversion option for 1M microphysics [`NoSupersaturation` (default), `WithSupersaturation`, ~]"

@@ -360,14 +360,14 @@ using ClimaAtmos
                     result_quad = microphysics_tendencies_1m(
                         BMT.Microphysics1Moment(),
                         quad_1pt, mp, tps, ρ,
-                        T_mean, q_tot_mean, q_lcl_mean, q_icl_mean, q_rai, q_sno,
+                        T_mean, FT(0), q_tot_mean, q_lcl_mean, q_icl_mean, q_rai, q_sno,
                         T′T′, q′q′, corr_Tq, λ_lagrange, α, dt, nsubs_quad,
                     )
 
                     result_direct = BMT.bulk_microphysics_tendencies(
                         BMT.LinearizedAverage(),
                         BMT.Microphysics1Moment(),
-                        mp, tps, ρ, T_mean,
+                        mp, tps, ρ, T_mean, FT(0),
                         q_tot_mean, q_lcl_mean, q_icl_mean, q_rai, q_sno, dt, nsubs_quad,
                     )
 
@@ -405,7 +405,8 @@ using ClimaAtmos
                     result_quad = microphysics_tendencies_1m(
                         BMT.Microphysics1Moment(),
                         quad_1pt, mp, tps, ρ,
-                        T_mix, q_tot_mix, q_lcl_mean, q_icl_mean, q_rai_p, q_sno_p,
+                        T_mix, FT(0), q_tot_mix, q_lcl_mean, q_icl_mean, q_rai_p,
+                        q_sno_p,
                         T′T′, q′q′, corr_Tq, λ_lagrange_mix, α, dt, nsubs_quad,
                     )
 
@@ -414,7 +415,7 @@ using ClimaAtmos
                     result_direct = BMT.bulk_microphysics_tendencies(
                         BMT.LinearizedAverage(),
                         BMT.Microphysics1Moment(),
-                        mp, tps, ρ, T_mix,
+                        mp, tps, ρ, T_mix, FT(0),
                         q_tot_mix, λ_mix * q_c, (1 - λ_mix) * q_c,
                         q_rai_p, q_sno_p, dt, nsubs_quad,
                     )
@@ -432,14 +433,14 @@ using ClimaAtmos
                     result_quad = microphysics_tendencies_1m(
                         BMT.Microphysics1Moment(),
                         quad, mp, tps, ρ,
-                        T_mean, q_tot_mean, q_lcl_mean, q_icl_mean, q_rai, q_sno,
+                        T_mean, FT(0), q_tot_mean, q_lcl_mean, q_icl_mean, q_rai, q_sno,
                         FT(0), FT(0), FT(0), λ_lagrange, α, dt, nsubs_quad,
                     )
 
                     result_direct = BMT.bulk_microphysics_tendencies(
                         BMT.LinearizedAverage(),
                         BMT.Microphysics1Moment(),
-                        mp, tps, ρ, T_mean,
+                        mp, tps, ρ, T_mean, FT(0),
                         q_tot_mean, q_lcl_mean, q_icl_mean, q_rai, q_sno, dt, nsubs_quad,
                     )
 
@@ -454,7 +455,7 @@ using ClimaAtmos
                     result = microphysics_tendencies_1m(
                         BMT.Microphysics1Moment(),
                         quad, mp, tps, ρ,
-                        T_mean, q_tot_mean, q_lcl_mean, q_icl_mean, q_rai, q_sno,
+                        T_mean, FT(0), q_tot_mean, q_lcl_mean, q_icl_mean, q_rai, q_sno,
                         T′T′, q′q′, corr_Tq, λ_lagrange, α, dt, nsubs_quad,
                     )
 
@@ -472,14 +473,14 @@ using ClimaAtmos
                     result_var = microphysics_tendencies_1m(
                         BMT.Microphysics1Moment(),
                         quad, mp, tps, ρ,
-                        T_mean, q_tot_mean, q_lcl_mean, q_icl_mean, q_rai, q_sno,
+                        T_mean, FT(0), q_tot_mean, q_lcl_mean, q_icl_mean, q_rai, q_sno,
                         FT(4.0), FT(1e-5), FT(0.8), λ_lagrange, α, dt, nsubs_quad,
                     )
 
                     result_no_var = microphysics_tendencies_1m(
                         BMT.Microphysics1Moment(),
                         quad, mp, tps, ρ,
-                        T_mean, q_tot_mean, q_lcl_mean, q_icl_mean, q_rai, q_sno,
+                        T_mean, FT(0), q_tot_mean, q_lcl_mean, q_icl_mean, q_rai, q_sno,
                         FT(0), FT(0), FT(0), λ_lagrange, α, dt, nsubs_quad,
                     )
 
@@ -491,13 +492,13 @@ using ClimaAtmos
                 @testset "Direct (non-quadrature) evaluation" begin
                     result_direct_wrapper = microphysics_tendencies_1m(
                         ρ, q_tot_mean, q_lcl_mean, q_icl_mean, q_rai, q_sno,
-                        T_mean, mp, tps, dt, nsubs,
+                        T_mean, FT(0), mp, tps, dt, nsubs,
                     )
 
                     result_bmt = BMT.bulk_microphysics_tendencies(
                         BMT.LinearizedAverage(),
                         BMT.Microphysics1Moment(),
-                        mp, tps, ρ, T_mean,
+                        mp, tps, ρ, T_mean, FT(0),
                         q_tot_mean, q_lcl_mean, q_icl_mean, q_rai, q_sno, dt,
                     )
 
@@ -554,7 +555,7 @@ using ClimaAtmos
 
                 result = microphysics_tendencies_1m(
                     BMT.Microphysics1Moment(),
-                    quad, mp, thp, ρ, T, q_tot, q_liq, q_ice, q_rai, q_sno,
+                    quad, mp, thp, ρ, T, FT(0), q_tot, q_liq, q_ice, q_rai, q_sno,
                     T′T′, q′q′, corr_Tq, λ_lagrange, α, dt, nsubs_quad,
                 )
 
@@ -623,7 +624,7 @@ using ClimaAtmos
                 # Test type stability
                 result = @inferred microphysics_tendencies_1m(
                     BMT.Microphysics1Moment(),
-                    quad, mp, thp, ρ, T, q_tot, q_liq, q_ice, q_rai, q_sno,
+                    quad, mp, thp, ρ, T, FT(0), q_tot, q_liq, q_ice, q_rai, q_sno,
                     T′T′, q′q′, corr_Tq, λ_lagrange, α, dt, nsubs_quad,
                 )
 
@@ -672,7 +673,7 @@ using ClimaAtmos
                 # Create evaluator with Lagrange-multiplier closure
                 evaluator = Microphysics1MEvaluator(
                     BMT.Microphysics1Moment(),
-                    mp, thp, ρ,
+                    mp, thp, ρ, FT(0),
                     q_rai, q_sno,
                     λ, λ_lagrange, mu_S, FT(1),
                     dt, nsubs_quad,
@@ -751,7 +752,7 @@ using ClimaAtmos
                 result_quad = microphysics_tendencies_1m(
                     BMT.Microphysics1Moment(),
                     quad_gm, mp, tps, ρ,
-                    T_mean, q_tot, q_liq, q_ice, q_rai, q_sno,
+                    T_mean, FT(0), q_tot, q_liq, q_ice, q_rai, q_sno,
                     T′T′, q′q′, corr_Tq, λ_lagrange_gm, α_gm, dt, nsubs_quad,
                 )
 
@@ -759,7 +760,7 @@ using ClimaAtmos
                 result_direct = BMT.bulk_microphysics_tendencies(
                     BMT.LinearizedAverage(),
                     BMT.Microphysics1Moment(),
-                    mp, tps, ρ, T_mean,
+                    mp, tps, ρ, T_mean, FT(0),
                     q_tot, q_liq, q_ice, q_rai, q_sno, dt, nsubs_quad,
                 )
 
@@ -932,7 +933,7 @@ using ClimaAtmos
                     # With zero variances, quadrature should match direct BMT
                     result_quad = ClimaAtmos.microphysics_tendencies_1m(
                         BMT.Microphysics1Moment(),
-                        quad, mp_1m, thp, ρ, T,
+                        quad, mp_1m, thp, ρ, T, FT(0),
                         q_tot, q_liq, q_ice, q_rai, q_sno,
                         FT(0), FT(0), FT(0), λ_lagrange_gm, α_gm, dt,
                         nsubs_quad,
@@ -941,7 +942,7 @@ using ClimaAtmos
                     result_direct = BMT.bulk_microphysics_tendencies(
                         BMT.LinearizedAverage(),
                         BMT.Microphysics1Moment(),
-                        mp_1m, thp, ρ, T,
+                        mp_1m, thp, ρ, T, FT(0),
                         q_tot, q_liq, q_ice, q_rai, q_sno, dt,
                     )
 
@@ -957,7 +958,7 @@ using ClimaAtmos
                     # With non-zero variances, should still be finite
                     result_var = ClimaAtmos.microphysics_tendencies_1m(
                         BMT.Microphysics1Moment(),
-                        quad, mp_1m, thp, ρ, T,
+                        quad, mp_1m, thp, ρ, T, FT(0),
                         q_tot, q_liq, q_ice, q_rai, q_sno,
                         FT(4.0), FT(1e-5), FT(0.6), λ_lagrange_gm, α_gm, dt,
                         nsubs_quad,
@@ -969,7 +970,7 @@ using ClimaAtmos
                     # Non-quadrature (direct) wrapper should also match
                     result_direct_wrapper = ClimaAtmos.microphysics_tendencies_1m(
                         ρ, q_tot, q_liq, q_ice, q_rai, q_sno,
-                        T, mp_1m, thp, dt, nsubs,
+                        T, FT(0), mp_1m, thp, dt, nsubs,
                     )
                     for field in (:dq_lcl_dt, :dq_icl_dt, :dq_rai_dt, :dq_sno_dt)
                         @test getfield(result_direct_wrapper, field) ≈
@@ -1087,14 +1088,14 @@ using ClimaAtmos
             for _ in 1:N_warmup
                 BMT.bulk_microphysics_tendencies(
                     BMT.LinearizedAverage(),
-                    BMT.Microphysics1Moment(), mp_1m, thp, ρ, T,
+                    BMT.Microphysics1Moment(), mp_1m, thp, ρ, T, FT(0),
                     q_tot, q_lcl, q_icl, q_rai, q_sno, dt,
                 )
             end
             t_direct_1m = @elapsed for _ in 1:N_bench
                 BMT.bulk_microphysics_tendencies(
                     BMT.LinearizedAverage(),
-                    BMT.Microphysics1Moment(), mp_1m, thp, ρ, T,
+                    BMT.Microphysics1Moment(), mp_1m, thp, ρ, T, FT(0),
                     q_tot, q_lcl, q_icl, q_rai, q_sno, dt,
                 )
             end
@@ -1103,13 +1104,13 @@ using ClimaAtmos
             for _ in 1:N_warmup
                 microphysics_tendencies_1m(
                     ρ, q_tot, q_lcl, q_icl, q_rai, q_sno,
-                    T, mp_1m, thp, dt, nsubs,
+                    T, FT(0), mp_1m, thp, dt, nsubs,
                 )
             end
             t_wrapper_1m = @elapsed for _ in 1:N_bench
                 microphysics_tendencies_1m(
                     ρ, q_tot, q_lcl, q_icl, q_rai, q_sno,
-                    T, mp_1m, thp, dt, nsubs,
+                    T, FT(0), mp_1m, thp, dt, nsubs,
                 )
             end
 
@@ -1119,7 +1120,7 @@ using ClimaAtmos
                 quad = ClimaAtmos.SGSQuadrature(FT; quadrature_order = order)
                 for _ in 1:N_warmup
                     microphysics_tendencies_1m(
-                        BMT.Microphysics1Moment(), quad, mp_1m, thp, ρ, T,
+                        BMT.Microphysics1Moment(), quad, mp_1m, thp, ρ, T, FT(0),
                         q_tot, q_lcl, q_icl, q_rai, q_sno,
                         T′T′, q′q′, corr_Tq, λ_lagrange_perf, α_perf, dt,
                         nsubs_quad,
@@ -1127,7 +1128,7 @@ using ClimaAtmos
                 end
                 t = @elapsed for _ in 1:N_bench
                     microphysics_tendencies_1m(
-                        BMT.Microphysics1Moment(), quad, mp_1m, thp, ρ, T,
+                        BMT.Microphysics1Moment(), quad, mp_1m, thp, ρ, T, FT(0),
                         q_tot, q_lcl, q_icl, q_rai, q_sno,
                         T′T′, q′q′, corr_Tq, λ_lagrange_perf, α_perf, dt,
                         nsubs_quad,

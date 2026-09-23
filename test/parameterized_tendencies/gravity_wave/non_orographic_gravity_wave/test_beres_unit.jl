@@ -678,6 +678,7 @@ end
 # CloudMicrophysics `_aggregate_tendencies`). L_f is derived as L_s − L_v so the
 # two forms share identical constants and must agree to round-off.
 function Q_lat_explicit(mp, thp, ρ, T, q_tot, q_lcl, q_icl, q_rai, q_sno)
+    FT = typeof(ρ)
     src = BMT.bulk_microphysics_tendencies(
         BMT.InstantaneousVerbose(),
         BMT.Microphysics1Moment(),
@@ -685,6 +686,7 @@ function Q_lat_explicit(mp, thp, ρ, T, q_tot, q_lcl, q_icl, q_rai, q_sno)
         thp,
         ρ,
         T,
+        FT(0),
         q_tot,
         q_lcl,
         q_icl,
@@ -764,6 +766,7 @@ const FREEZE_MELT_TERMS = (
                     thp,
                     ρ,
                     T,
+                    FT(0),
                     q_tot,
                     q_lcl,
                     q_icl,
@@ -788,6 +791,7 @@ const FREEZE_MELT_TERMS = (
                     thp,
                     ρ,
                     T,
+                    FT(0),
                     q_tot,
                     q_lcl,
                     q_icl,
@@ -831,6 +835,7 @@ end
         thp,
         ρ,
         T_warm,
+        FT(0),               # w
         FT(2) * q_sat_warm,  # q_tot well above saturation
         FT(1e-3),
         FT(0),
@@ -845,6 +850,7 @@ end
         thp,
         ρ,
         T_warm,
+        FT(0),                 # w
         FT(0.1) * q_sat_warm,  # very dry
         FT(0),
         FT(0),
