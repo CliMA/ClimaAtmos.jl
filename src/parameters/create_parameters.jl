@@ -685,8 +685,23 @@ function OrographicGravityWaveParameters(
         :ogw_smoothing_scale_fraction => :α_smoothing, # L = α·Δx
     )
     parameters = CP.get_parameter_values(toml_dict, name_map, "ClimaAtmos")
-    parameters = merge(parameters, overrides)
     FT = CP.float_type(toml_dict)
+    # TOFD (Beljaars 2004) master amplitude. Not yet a registered ClimaParams
+    # parameter, so it defaults to 0 (TOFD disabled, reproducing GWD-only behavior)
+    # and can be overridden from a run/calibration TOML via `ogw_tofd_coefficient`
+    # or programmatically through `overrides`.
+    a_tofd = if haskey(toml_dict.data, "ogw_tofd_coefficient")
+        FT(
+            CP.get_parameter_values(
+                toml_dict,
+                (; ogw_tofd_coefficient = :a_tofd),
+                "ClimaAtmos",
+            ).a_tofd,
+        )
+    else
+        FT(0)
+    end
+    parameters = merge((; a_tofd), parameters, overrides)
     CAP.OrographicGravityWaveParameters{FT}(; parameters...)
 end
 

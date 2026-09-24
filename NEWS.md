@@ -3,6 +3,27 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- ![][badge-✨feature/enhancement] Added the Beljaars (2004) turbulent orographic
+  form drag (TOFD) as a low-level term of the orographic gravity-wave scheme,
+  following the IFS / SURFEX `sso_beljaars04` formulation
+  (`du/dt = −C_d(z)|U|u` with `C_d ∝ σ²·exp[−(z/1500)^{1.5}]·z^{−1.2}`). It is
+  controlled by the new `ogw_tofd_coefficient` (master amplitude `a_tofd`) and is
+  **disabled by default** (`a_tofd = 0`, so GWD-only runs are unchanged); set
+  `ogw_tofd_coefficient` in a run/calibration TOML (`1.0` is the IFS-nominal
+  amplitude) to enable it. This supplies the near-surface drag that the
+  propagating and blocked components, which act above the PBL top, do not.
+- ![][badge-🔥behavioralΔ] The orographic gravity-wave forcing magnitude limiter
+  now scales the `(u, v)` tendency vector by a single factor (capping `|F|` at
+  `3e-3·√2 m/s²`, the diagonal of the former `±3e-3` per-component box) instead of
+  clipping each component independently, so it no longer rotates the drag away from
+  the flow direction where it binds and is no tighter than the previous clamp in any
+  direction. Columns whose drag never reaches the limit are unaffected.
+- ![][badge-🐛bugfix] The orographic gravity-wave blocked (non-propagating) drag
+  accumulates the WKB phase as `Σ Δz·N/V_τ` and the column weight sum as
+  `Σ Δp·weight`, matching GFDL `topo_drag`. The phase used the full height above
+  the PBL at every face, and the weight sum divided instead of multiplying, so
+  the blocked layer was too shallow and the tendency was unphysically large
+  (saturating the `±3e-3 m/s²` clamp over topography).
 - ![][badge-✨feature/enhancement] `WeatherModel` ERA5 IC filenames now use the
   `HHMM` of `start_date` (e.g. `start_date = "20191231-1200"` →  `..._1200.nc`),
   matching the ClimaCoupler subseasonal / WeatherQuest naming; date-only strings

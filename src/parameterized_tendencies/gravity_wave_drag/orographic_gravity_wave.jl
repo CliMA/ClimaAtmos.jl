@@ -149,7 +149,7 @@ function orographic_gravity_wave_cache(Y, ogw::OrographicGravityWave, topo_info 
             Domains.SphereDomain
 
     FT = Spaces.undertype(axes(Y.c))
-    (; γ, ϵ, β, ρscale, L0, a0, a1, Fr_crit) = ogw
+    (; γ, ϵ, β, ρscale, L0, a0, a1, Fr_crit, a_tofd) = ogw
 
     if topo_info === nothing
         topo_info = get_topo_info(Y, ogw)
@@ -168,6 +168,7 @@ function orographic_gravity_wave_cache(Y, ogw::OrographicGravityWave, topo_info 
             topo_γ = γ,
             topo_β = β,
             topo_ϵ = ϵ,
+            topo_a_tofd = a_tofd,
         ),
         topo_ᶜτ_sat = Fields.Field(FT, axes(Y.c)),
         topo_ᶠτ_sat = Fields.Field(FT, axes(Y.f.u₃)),
@@ -354,8 +355,8 @@ Mutates `Yₜ.c.uₕ` by adding the covariant form of the cached `ᶜuforcing`/`
 [m/s²]. The `::Nothing` method is a no-op.
 
 This runs every integrator step, while the forcing itself is refreshed only on the `dt_ogw`
-callback by `orographic_gravity_wave_compute_tendency!`, which also clamps it to
-±3e-3 m/s²; between callbacks the same forcing is reapplied.
+callback by `orographic_gravity_wave_compute_tendency!`, which also limits its magnitude to
+3e-3·√2 m/s² (preserving direction); between callbacks the same forcing is reapplied.
 """
 orographic_gravity_wave_apply_tendency!(Yₜ, p, ::Nothing) = nothing
 
@@ -394,8 +395,10 @@ Steps, in order:
  4. `calc_propagate_forcing!` converts `dτ_sat/dz` into a tendency, and
     `calc_nonpropagating_forcing!` adds the blocked-flow tendency between `z_pbl` and the
     reference level.
- 5. Both components are clamped to ±3e-3 m/s² so a large tendency cannot destabilize the
-    integrator.
+ 5. The forcing vector magnitude is limited to 3e-3·√2 m/s² (scaling `(u, v)` together so
+    the drag direction is preserved) so a large tendency cannot destabilize the integrator.
+    The cap is the diagonal of the old ±3e-3 per-component box, so it is isotropic yet no
+    tighter than that box in any direction.
 
 Clobbers `p.scratch.ᶜtemp_scalar`, `ᶜtemp_scalar_2`, `temp_field_level`, and
 `ᶠtemp_field_level`.
@@ -540,9 +543,46 @@ function orographic_gravity_wave_forcing!(
         grav,
     )
 
-    # constrain forcing
-    @. ᶜuforcing = max(FT(-3e-3), min(FT(3e-3), ᶜuforcing))
-    @. ᶜvforcing = max(FT(-3e-3), min(FT(3e-3), ᶜvforcing))
+    # Low-level turbulent orographic form drag (Beljaars 2004), added on top of the
+    # Garner propagating + blocked drag. Disabled when a_tofd == 0.
+    if !iszero(ogw_params.topo_a_tofd)
+        # Terrain-surface height (bottom face) copied onto the center-level space so it
+        # broadcasts against the center-column height; mixing center- and face-level
+        # fields in a broadcast directly is not supported, hence the field_values copy.
+        # `temp_field_level` is free here (last used by calc_nonpropagating_forcing!).
+        ᶜz_sfc = p.scratch.temp_field_level
+        Fields.field_values(ᶜz_sfc) .=
+            Fields.field_values(Fields.level(ᶠz, half))
+        calc_tofd_forcing!(
+            ᶜuforcing,
+            ᶜvforcing,
+            u_phy,
+            v_phy,
+            ᶜz,
+            ᶜz_sfc,
+            topo_info.hmax,
+            ogw_params.topo_a_tofd,
+        )
+    end
+
+    # Constrain the forcing magnitude as a numerical safety rail for the explicit
+    # application, but preserve its direction: scale the (u, v) vector by
+    # min(1, F_max/|F|) instead of clipping each component independently (which would
+    # rotate the drag away from the flow whenever only one component saturates). The
+    # scale is materialized first so scaling ᶜuforcing does not change the |F| seen by
+    # ᶜvforcing.
+    # The cap is the diagonal of the old ±3e-3 per-component box (|F| = 3e-3·√2), so
+    # the limiter is isotropic yet no tighter than the previous (already stable) clamp
+    # in any direction: the box inscribes this circle, reaching 3e-3·√2 at its corners.
+    F_max = FT(3e-3) * sqrt(FT(2))
+    ᶜdrag_scale = p.scratch.ᶜtemp_scalar
+    @. ᶜdrag_scale = ifelse(
+        sqrt(ᶜuforcing^2 + ᶜvforcing^2) > F_max,
+        F_max / sqrt(ᶜuforcing^2 + ᶜvforcing^2),
+        FT(1),
+    )
+    @. ᶜuforcing *= ᶜdrag_scale
+    @. ᶜvforcing *= ᶜdrag_scale
 
     @debug begin
         # DEBUG: Check for NaNs in OGWD forcing
@@ -569,15 +609,17 @@ Increments `ᶜuforcing` and `ᶜvforcing` [m/s²] and fills the working fields 
 The drag is confined to the layer between the PBL top and a reference level `z_ref`, and is
 distributed within it by pressure weighting, which concentrates it near the surface. `z_ref`
 is the first face above `z_pbl` at which the accumulated vertical phase of a stationary
-hydrostatic wave, `Σ (z − z_pbl)·N/V_τ`, exceeds `π`, i.e. half a vertical wavelength; `N`
+hydrostatic wave, `Σ Δz·N/V_τ` over the layers above `z_pbl`, exceeds `π`, i.e. half a
+vertical wavelength; `N`
 is clamped to `[0.7e-2, 1.7e-2]` 1/s and `V_τ` floored at 1 m/s so the layer depth stays
 physical. If the phase never reaches `π`, `z_ref` ends up at the model top.
 
 The mask keeps cells overlapping `[z_pbl, z_ref)` (upper face above `z_pbl` and lower face
 below `z_ref`, so at least one cell survives whenever `z_ref > z_pbl`) and drops cells of
-zero weight, which contribute nothing and would divide by zero. The tendency is then
+zero weight, which contribute nothing to the pressure-weighted sum. The tendency is then
 `g·τ_x·τ_np/(τ_l·wtsum)·weight` and likewise for `τ_y`, and is set to zero in columns where
-the mask is empty.
+the mask is empty. `wtsum = Σ Δp·weight` (not `Σ Δp/weight`), matching GFDL `topo_drag` so
+that the column-integrated blocked stress equals `τ_np/τ_l · τ`.
 
 # Arguments
 
@@ -654,9 +696,14 @@ function calc_nonpropagating_forcing!(
             return (z_ref_acc, ᶠz_pbl_acc, phase_acc, true)
         end
         if (z_face > ᶠz_pbl_itr)
-            # Only accumulate phase above z_pbl
+            # Accumulate the WKB phase over the LOCAL layer thickness, i.e.
+            # Σ Δz·N/V_τ (matches GFDL topo_drag). The lower edge of the first
+            # increment is z_pbl; above that it is the previous face height,
+            # carried in z_ref_acc (0 while still below z_pbl, so the max picks
+            # z_pbl for the first face above the PBL top).
+            z_prev_face = max(z_ref_acc, ᶠz_pbl_itr)
             phase_acc +=
-                (z_face - ᶠz_pbl_itr) * max(min_n_val, min(max_n_val, N_face)) /
+                (z_face - z_prev_face) * max(min_n_val, min(max_n_val, N_face)) /
                 max(min_Vτ_val, Vτ_face)
 
             # If phase exceeds π, stop and return current z_col as z_ref
@@ -698,14 +745,16 @@ function calc_nonpropagating_forcing!(
     @. ᶜweights = ᶜinterp.(ᶠp .- ᶠp_ref)
     @. ᶜdiff = ᶜinterp.(ᶠp_m1 .- ᶠp)
 
-    # Exclude cells with zero weights from the mask to avoid division by zero.
-    # Zero weight means p == p_ref at that cell, so it contributes nothing
-    # to the pressure-weighted average.
+    # Exclude cells with zero weight: p == p_ref there, so they contribute
+    # nothing to the pressure-weighted sum or the forcing anyway.
     @. ᶜmask = ᶜmask && (!iszero(ᶜweights))
 
     ᶜweights .= ᶜweights .* ᶜmask
 
-    input = @. lazy(ifelse(ᶜmask == true, ᶜdiff / ᶜweights, FT(0)))
+    # Column stress sum wtsum = Σ Δp·weight (GFDL topo_drag: `wtsum += dp*weight`).
+    # The forcing below divides by wtsum, so this normalization conserves the
+    # column-integrated blocked stress; multiplying (not dividing) is essential.
+    input = @. lazy(ifelse(ᶜmask == true, ᶜdiff * ᶜweights, FT(0)))
 
     Operators.column_reduce!(ᶜwtsum, input; init = FT(0)) do acc, wtsum_field
         return acc + wtsum_field
@@ -729,6 +778,96 @@ function calc_nonpropagating_forcing!(
         grav * τ_y * τ_np / τ_l / ᶜwtsum * ᶜweights,
     )
 
+end
+
+"""
+    calc_tofd_forcing!(ᶜuforcing, ᶜvforcing, u_phy, v_phy, ᶜz, z_sfc, hmax, a_tofd)
+
+Add the Beljaars (2004) turbulent orographic form drag (TOFD) to the forcing fields.
+
+Increments `ᶜuforcing` and `ᶜvforcing` [m/s²] with a low-level, near-surface drag that
+represents the form drag of orographic scales too small to launch resolved gravity waves.
+Following [beljaars2004](@cite) (and the IFS / SURFEX `sso_beljaars04` implementation) the
+deceleration is
+
+```
+∂u/∂t = − C_d(z) · |U| · u,   C_d(z) = a_tofd · K · σ² · exp[−(z/1500)^{1.5}] · z^{−1.2},
+```
+
+with `z` the height above the local surface, `σ = 0.5·hmax` the standard deviation of the
+filtered small-scale orography (`hmax` is used as the `σ_oro` proxy and the `0.5` is the
+IFS `σ_flt/σ_oro` ratio), and the constant
+
+```
+K = α·β·C_corr·C_md·2.109·C_avar,   C_avar = k1^{n1−n2} / (C_ih · k_flt^{n1}),
+```
+
+using the Beljaars constants `α = 12`, `β = 1`, `C_md = 0.005`, `C_corr = 0.6`,
+`C_ih = 0.00102 m⁻¹`, `k_flt = 0.00035 m⁻¹`, `k1 = 0.003 m⁻¹`, `n1 = −1.9`, `n2 = −2.8`.
+The `exp[−(z/1500)^{1.5}]·z^{−1.2}` structure concentrates the drag in the lowest ~1 km, so
+it acts as the surface / low-level drag that the propagating and blocked components (which
+live above the PBL top) do not provide.
+
+`a_tofd` is the master amplitude coefficient: `a_tofd == 0` disables the term (early return,
+so the GWD-only forcing is bit-for-bit unchanged) and `a_tofd == 1` is the IFS-nominal
+amplitude. Called from `orographic_gravity_wave_forcing!` before the 3e-3·√2 m/s² magnitude
+limiter.
+
+# Arguments
+
+  - `u_phy`, `v_phy`: Physical horizontal wind components at cell centers [m/s].
+  - `ᶜz`: Cell-center height (altitude) [m].
+  - `z_sfc`: Terrain surface height (bottom face), on the center-level space so it
+    broadcasts against `ᶜz` [m]; `z − z_sfc` is height above ground.
+  - `hmax`: Effective maximum subgrid obstacle height on the surface space [m].
+  - `a_tofd`: Master TOFD amplitude coefficient [-].
+"""
+function calc_tofd_forcing!(
+    ᶜuforcing,
+    ᶜvforcing,
+    u_phy,
+    v_phy,
+    ᶜz,
+    z_sfc,
+    hmax,
+    a_tofd,
+)
+    FT = eltype(ᶜuforcing)
+    iszero(a_tofd) && return nothing
+
+    # Beljaars et al. (2004) constants (IFS / SURFEX sso_beljaars04).
+    c_alpha = FT(12)
+    c_beta = FT(1)
+    c_cmd = FT(0.005)
+    c_cor = FT(0.6)
+    c_ih = FT(0.00102)      # m⁻¹
+    c_kflt = FT(0.00035)    # m⁻¹
+    c_k1 = FT(0.003)        # m⁻¹
+    c_n1 = FT(-1.9)
+    c_n2 = FT(-2.8)
+    c_avar = c_k1^(c_n1 - c_n2) / (c_ih * c_kflt^c_n1)   # m^(1+n2) = m^-1.8
+    beljaars_const = c_alpha * c_beta * c_cor * c_cmd * FT(2.109) * c_avar
+
+    z_decay = FT(1500)         # e-folding-like decay scale [m]
+    decay_exp = FT(1.5)
+    power_exp = FT(-1.2)
+    σ_over_hmax = FT(0.5)      # σ_flt = 0.5·σ_oro, with hmax as the σ_oro proxy
+    z_floor = FT(1)            # floor on height-above-ground so z^-1.2 stays finite [m]
+
+    # Height above the local surface, floored so the z^-1.2 factor is finite at the
+    # lowest cell center. σ² is a surface field and broadcasts up the column.
+    z_agl = @. lazy(max(z_floor, ᶜz - z_sfc))
+    σ_sq = @. lazy((σ_over_hmax * max(FT(0), hmax))^2)
+    Cd = @. lazy(
+        a_tofd * beljaars_const * σ_sq * exp(-(z_agl / z_decay)^decay_exp) *
+        z_agl^power_exp,
+    )
+    speed = @. lazy(sqrt(u_phy^2 + v_phy^2))
+
+    @. ᶜuforcing -= Cd * speed * u_phy
+    @. ᶜvforcing -= Cd * speed * v_phy
+
+    return nothing
 end
 
 """
