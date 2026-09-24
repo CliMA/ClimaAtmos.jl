@@ -59,6 +59,7 @@ a0 = 0.9
 a1 = 3.0
 Fr_crit = 0.7
 α_smoothing = 0.15
+a_tofd = 0.0
 topo_info = Val(:gfdl_restart)
 topography = Val(:Earth)
 FT = eltype(Y.c.ρ)
@@ -73,6 +74,7 @@ ogw = CA.FullOrographicGravityWave{FT, typeof(topo_info), typeof(topography)}(;
     a1,
     Fr_crit,
     α_smoothing,
+    a_tofd,
     topo_info,
     topography,
 )

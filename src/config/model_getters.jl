@@ -547,7 +547,7 @@ function get_orographic_gravity_wave_model(parsed_args, params, ::Type{FT}) wher
     return if ogw_name == "raw_topo" ||
               ogw_name == "raw_topo_online" ||
               ogw_name == "gfdl_restart"
-        (; γ, ϵ, β, h_frac, ρscale, L0, a0, a1, Fr_crit, α_smoothing) =
+        (; γ, ϵ, β, h_frac, ρscale, L0, a0, a1, Fr_crit, α_smoothing, a_tofd) =
             params.orographic_gravity_wave_params
         topo_info = Val(Symbol(parsed_args["orographic_gravity_wave"]))
         topography = Val(Symbol(parsed_args["topography"]))
@@ -562,6 +562,7 @@ function get_orographic_gravity_wave_model(parsed_args, params, ::Type{FT}) wher
             a1,
             Fr_crit,
             α_smoothing,
+            a_tofd,
             topo_info,
             topography,
         )
