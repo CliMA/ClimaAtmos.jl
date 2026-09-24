@@ -91,6 +91,7 @@ _test_floor_params(::Type{FT}) where {FT} = (;
     abs_margin = FT(1),
     sharpness = FT(1),
     residual = FT(0),
+    wellmixed_gref = FT(0),
 )
 
 function _allocs_cloud_fraction_simple()
