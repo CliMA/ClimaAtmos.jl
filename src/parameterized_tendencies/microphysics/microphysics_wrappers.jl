@@ -229,6 +229,9 @@ quadrature points.
   - `q_rai`, `q_sno`: Rain and snow specific humidity [kg/kg], clamped
     non-negative by the caller.
   - `λ`: Thermodynamic liquid fraction [-].
+  - `ξ_liq`, `ξ_ice`: Uniform fractions of cloud liquid and cloud ice over the
+    quadrature [-].
+  - `q_lcl`, `q_icl`: Subdomain-mean cloud liquid and cloud ice [kg/kg].
   - `λ_lagrange`: Lagrange multiplier enforcing
     `E[max(0, λ_lagrange + α·S′)] = q_c` under the quadrature
     measure (fitted in `_compute_sgs_moments`) [kg/kg].
@@ -247,8 +250,14 @@ struct Microphysics1MEvaluator{S, MP, TPS, FT, Args <: Tuple}
     # Precipitation (held fixed across quadrature points)
     q_rai::FT
     q_sno::FT
-    # Truncated-Gaussian Lagrange multiplier, μ_S, and liquid fraction
     λ::FT              # liquid fraction (from thermodynamics, held fixed)
+    # Uniform fractions of each species over the quadrature and the subdomain
+    # means they draw on
+    ξ_liq::FT
+    ξ_ice::FT
+    q_lcl::FT
+    q_icl::FT
+    # Truncated-Gaussian Lagrange multiplier, μ_S, and liquid fraction
     λ_lagrange::FT # Lagrange multiplier for centred S′ (discrete fit)
     mu_S::FT       # linearized SGS mean μ_S = q_tot_mean − q_sat(T_mean, ρ)
     α::FT          # variance fidelity parameter (from sgs_variance_fidelity)
@@ -257,6 +266,30 @@ struct Microphysics1MEvaluator{S, MP, TPS, FT, Args <: Tuple}
     nsubs::Int
     args::Args
 end
+"""
+    sgs_local_condensate(λ, shifted_excess, ξ_liq, ξ_ice, q_lcl, q_icl)
+
+Local cloud liquid and cloud ice `(q_lcl_hat, q_icl_hat)` [kg/kg] at one
+quadrature node from the reconstructed `shifted_excess = max(0, λ_lagrange + α S′)`,
+the liquid fraction `λ`, the subdomain means `q_lcl`, `q_icl` and the uniform
+fractions `ξ_liq`, `ξ_ice`:
+
+    q_lcl_hat = (1 − ξ_liq) · λ · shifted_excess       + ξ_liq · q_lcl
+    q_icl_hat = (1 − ξ_ice) · (1 − λ) · shifted_excess + ξ_ice · q_icl
+
+`ξ = 0` is the excess reconstruction (the species sits only where the node is
+saturated, in proportion to its excess); `ξ = 1` is the uniform distribution (the
+species is the subdomain mean at every node). Either end, and any blend, conserves
+the quadrature mean of the species in cells with condensate, since the excess
+share has mean `λ q_c = q_lcl` (resp. `(1 − λ) q_c = q_icl`) by construction of
+`λ_lagrange`.
+"""
+@inline function sgs_local_condensate(λ, shifted_excess, ξ_liq, ξ_ice, q_lcl, q_icl)
+    q_lcl_hat = (1 - ξ_liq) * (λ * shifted_excess) + ξ_liq * q_lcl
+    q_icl_hat = (1 - ξ_ice) * ((1 - λ) * shifted_excess) + ξ_ice * q_icl
+    return (q_lcl_hat, q_icl_hat)
+end
+
 # `@noinline` here is the SGS quadrature function barrier. The functor body
 # below (saturation, shape-function partition, plus the heavy
 # `BMT.average_bulk_microphysics_tendencies` call with its `nsubs`
@@ -277,16 +310,18 @@ The local cloud condensate is obtained from the centred saturation excess
 `S′_hat = (q_tot_hat − q_sat(T_hat, ρ)) − mu_S`:
 
     shifted_excess = max(0, λ_lagrange + α · S′_hat)
-    q_lcl_hat      = λ · shifted_excess
-    q_icl_hat      = (1 − λ) · shifted_excess
+    q_lcl_hat      = (1 − ξ_liq) · λ · shifted_excess       + ξ_liq · q_lcl
+    q_icl_hat      = (1 − ξ_ice) · (1 − λ) · shifted_excess + ξ_ice · q_icl
 
 The Lagrange multiplier `λ_lagrange` is fitted (in `_compute_sgs_moments`) so
 that `E[shifted_excess] = q_c`, where `q_c = q_lcl + q_icl` is the grid-mean
 *cloud* condensate, excluding precipitation. The reconstruction therefore
 partitions `shifted_excess` into local cloud liquid and ice by the liquid
-fraction. Precipitation is held constant across quadrature points and is
-accounted for downstream, where CloudMicrophysics subtracts it from `q_tot`
-to diagnose the local vapor.
+fraction; the uniform fractions `ξ_liq`, `ξ_ice` replace part of a
+species' share by its subdomain mean at every node (see
+`sgs_local_condensate`). Precipitation is held constant across
+quadrature points and is accounted for downstream, where CloudMicrophysics
+subtracts it from `q_tot` to diagnose the local vapor.
 
 `q_tot_hat` is clamped non-negative first. Subsaturated points contribute zero
 condensate but still drive rain evaporation and snow sublimation against the
@@ -313,8 +348,9 @@ with `dq_lcl_dt`, `dq_icl_dt`, `dq_rai_dt`, `dq_sno_dt` [kg/kg/s].
     q_sat_hat = TD.q_vap_saturation(eval.tps, T_hat, eval.ρ)
     S′_hat = q_tot_hat - q_sat_hat - eval.mu_S
     shifted_excess = max(FT(0), eval.λ_lagrange + eval.α * S′_hat)
-    q_lcl_hat = eval.λ * shifted_excess
-    q_icl_hat = (FT(1) - eval.λ) * shifted_excess
+    q_lcl_hat, q_icl_hat = sgs_local_condensate(
+        eval.λ, shifted_excess, eval.ξ_liq, eval.ξ_ice, eval.q_lcl, eval.q_icl,
+    )
 
     return BMT.bulk_microphysics_tendencies(
         BMT.LinearizedAverage(),
@@ -331,7 +367,7 @@ end
     microphysics_tendencies_1m(
         scheme, sgs_quad, cmp, thp, ρ, T, w, q_tot_nonneg,
         q_lcl, q_icl, q_rai, q_sno, T′T′, q′q′, corr_Tq,
-        λ_lagrange, α, dt, nsubs, λ = ..., mu_S = ..., args...,
+        λ_lagrange, α, ξ_liq, ξ_ice, dt, nsubs, λ = ..., mu_S = ..., args...,
     )
 
 Compute time-averaged 1-moment microphysics tendencies.
@@ -365,6 +401,9 @@ accretion.
     enforce `E[max(0, λ_lagrange + α·S′)] = q_c` exactly under the
     quadrature measure [kg/kg].
   - `α`: Variance fidelity parameter from `sgs_variance_fidelity` [-].
+  - `ξ_liq`, `ξ_ice`: Uniform fractions of cloud liquid and cloud ice over the
+    quadrature (`sgs_liquid_uniform_fraction`, `sgs_ice_uniform_fraction`, in
+    `[0, 1]`); `0` is the excess reconstruction, see `sgs_local_condensate`.
   - `dt`: Timestep [s].
   - `nsubs`: Number of substeps for tendency averaging.
   - `λ`: Liquid fraction [-]; defaults to `TD.liquid_fraction` at the mean state.
@@ -391,7 +430,7 @@ end
 @inline function microphysics_tendencies_1m( #microphysics_tendencies_quadrature_1m
     scheme, sgs_quad, cmp, thp, ρ, T, w, q_tot_nonneg,
     q_lcl, q_icl, q_rai, q_sno, T′T′, q′q′, corr_Tq,
-    λ_lagrange, α, dt, nsubs,
+    λ_lagrange, α, ξ_liq, ξ_ice, dt, nsubs,
     # `λ` (liquid fraction) and `mu_S` (linearized SGS saturation-excess mean) are
     # invariant across the quadrature. They default to being computed here from the
     # mean state; a caller evaluating this broadcast over many quadrature points can
@@ -407,9 +446,9 @@ end
 
     evaluator = Microphysics1MEvaluator(
         scheme, cmp, thp, ρ, w,
-        q_rai_nonneg, q_sno_nonneg,
-        λ, λ_lagrange, mu_S, α,
-        dt, nsubs, args,
+        q_rai_nonneg, q_sno_nonneg, λ,
+        FT(ξ_liq), FT(ξ_ice), max(zero(ρ), q_lcl), max(zero(ρ), q_icl),
+        λ_lagrange, mu_S, α, dt, nsubs, args,
     )
     return integrate_over_sgs(
         evaluator, sgs_quad, q_tot_nonneg, T, q′q′, T′T′, corr_Tq,
