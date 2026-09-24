@@ -281,7 +281,7 @@ carries.
 
   - `interp_w = false`: write `w = 0` when `false`. When `true`, convert the
     ERA5 pressure velocity with `w = -omega * R_d * T / (p * g)`, tapered to 0
-    between 100 and 10 hPa. Files from `InitialConditions.ERA5` carry no `w`,
+    between 100 and 10 hPa. Files from `ClimaInitialConditions.ERA5` carry no `w`,
     giving `w = 0` either way.
 """
 function to_z_levels_3d_model(
@@ -345,13 +345,31 @@ function to_z_levels_3d_model(
             defDim(ncout, "lon", nx)
             defDim(ncout, "lat", ny)
             defDim(ncout, "z", nz)
-            defVar(ncout, "lon", lon, ("lon",), attrib = Dict(
-                "standard_name" => "longitude", "units" => "degrees_east"))
-            defVar(ncout, "lat", lat[lat_order], ("lat",), attrib = Dict(
-                "standard_name" => "latitude", "units" => "degrees_north"))
-            defVar(ncout, "z", z_t, ("z",), attrib = Dict(
-                "standard_name" => "altitude", "long_name" => "altitude",
-                "units" => "m"))
+            defVar(
+                ncout,
+                "lon",
+                lon,
+                ("lon",),
+                attrib = Dict(
+                    "standard_name" => "longitude", "units" => "degrees_east"),
+            )
+            defVar(
+                ncout,
+                "lat",
+                lat[lat_order],
+                ("lat",),
+                attrib = Dict(
+                    "standard_name" => "latitude", "units" => "degrees_north"),
+            )
+            defVar(
+                ncout,
+                "z",
+                z_t,
+                ("z",),
+                attrib = Dict(
+                    "standard_name" => "altitude", "long_name" => "altitude",
+                    "units" => "m"),
+            )
 
             t_out = to_levels(t_src)
             for (name, field) in
@@ -360,18 +378,25 @@ function to_z_levels_3d_model(
                 # Interpolation in z can undershoot into negative humidity
                 name == "q" && (out = max.(out, FT(0)))
                 defVar(ncout, name, sorted(out), ("lon", "lat", "z"),
-                       attrib = clean_era5_attrib(ncin[name]))
+                    attrib = clean_era5_attrib(ncin[name]))
             end
 
             # log(p) because pressure is close to exponential in z
             p_out = exp.(to_levels(log.(p_src)))
-            defVar(ncout, "p_3d", sorted(p_out), ("lon", "lat", "z"), attrib = Dict(
-                "standard_name" => "air_pressure",
-                "long_name" => "air pressure on the target levels",
-                "units" => "Pa",
-                "source" => "ERA5 model levels via hybrid coefficients, " *
-                            "interpolated in log(p) against z",
-            ))
+            defVar(
+                ncout,
+                "p_3d",
+                sorted(p_out),
+                ("lon", "lat", "z"),
+                attrib = Dict(
+                    "standard_name" => "air_pressure",
+                    "long_name" => "air pressure on the target levels",
+                    "units" => "Pa",
+                    "source" =>
+                        "ERA5 model levels via hybrid coefficients, " *
+                        "interpolated in log(p) against z",
+                ),
+            )
 
             w_out = if interp_w && haskey(ncin, "w")
                 omega = to_levels(read3d("w"))
@@ -381,25 +406,32 @@ function to_z_levels_3d_model(
             else
                 zeros(FT, nx, ny, nz)
             end
-            defVar(ncout, "w", sorted(w_out), ("lon", "lat", "z"), attrib = Dict(
-                "standard_name" => "upward_air_velocity",
-                "long_name" => "geometric vertical velocity",
-                "units" => "m s-1",
-            ))
+            defVar(
+                ncout,
+                "w",
+                sorted(w_out),
+                ("lon", "lat", "z"),
+                attrib = Dict(
+                    "standard_name" => "upward_air_velocity",
+                    "long_name" => "geometric vertical velocity",
+                    "units" => "m s-1",
+                ),
+            )
 
             # The reader does not take 2D fields yet, so broadcast over z
             for (src_name, dst_name) in
                 (("skt", "skt"), ("sp", "p"), ("surface_geopotential", "z_sfc"))
                 field = src_name == "sp" ? sp_src : read_surface(ncin, src_name, FT)
                 dst_name == "z_sfc" && (field = field ./ grav)
-                attrib = dst_name == "z_sfc" ?
+                attrib =
+                    dst_name == "z_sfc" ?
                     Dict("standard_name" => "surface_altitude",
-                         "long_name" => "surface altitude from ERA5",
-                         "units" => "m", "source_variable" => src_name) :
+                        "long_name" => "surface altitude from ERA5",
+                        "units" => "m", "source_variable" => src_name) :
                     clean_era5_attrib(ncin[src_name])
                 broadcast_z = FT[field[i, j] for i in 1:nx, j in 1:ny, _ in 1:nz]
                 defVar(ncout, dst_name, sorted(broadcast_z), ("lon", "lat", "z"),
-                       attrib = attrib)
+                    attrib = attrib)
             end
 
             for name in ("crwc", "cswc", "clwc", "ciwc")
@@ -407,7 +439,7 @@ function to_z_levels_3d_model(
                 field = read3d(name)
                 nlev >= 2 && lev[1] < lev[end] && (field = reverse(field; dims = 3))
                 defVar(ncout, name, sorted(to_levels(field)), ("lon", "lat", "z"),
-                       attrib = clean_era5_attrib(ncin[name]))
+                    attrib = clean_era5_attrib(ncin[name]))
             end
         end
     end

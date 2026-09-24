@@ -1,7 +1,7 @@
 using NCDatasets
 using Dates
 import ClimaComms
-import InitialConditions
+import ClimaInitialConditions
 import ClimaInterpolations.Interpolation1D: interpolate1d!, Linear, Flat
 import ..parse_date
 
@@ -25,7 +25,7 @@ With `era5_initial_condition_dir`, a preprocessed file in that directory is
 used if present. Otherwise the raw ERA5 file is interpolated to
 `target_levels`, by `to_z_levels_3d_model` for model levels and
 `to_z_levels_1d` for pressure levels. A missing raw file is fetched from the
-Copernicus Climate Data Store by `InitialConditions.ERA5`.
+Copernicus Climate Data Store by `ClimaInitialConditions.ERA5`.
 
 # Arguments
 
@@ -41,7 +41,7 @@ Copernicus Climate Data Store by `InitialConditions.ERA5`.
 
   - `interp_w = false`: Write `w = 0` when `false` and convert the ERA5
     pressure velocity when `true`. ERA5 `w` is omega from a hydrostatic model,
-    and files from `InitialConditions.ERA5` do not carry it at all, in which
+    and files from `ClimaInitialConditions.ERA5` do not carry it at all, in which
     case `w = 0` regardless.
 
 # Notes
@@ -90,14 +90,14 @@ function weather_model_data_path(
                     dir = era5_initial_condition_dir,
                     date = dt,
                 )
-                InitialConditions.ERA5.fetch_initial_conditions(
+                ClimaInitialConditions.ERA5.fetch_initial_conditions(
                     dt;
                     dir = era5_initial_condition_dir,
                 )
             end
             ClimaComms.barrier(comms_ctx)
             isfile(raw_data_path) || error(
-                "InitialConditions.ERA5 ran but produced no $(raw_data_path).",
+                "ClimaInitialConditions.ERA5 ran but produced no $(raw_data_path).",
             )
         end
     else
@@ -110,7 +110,7 @@ function weather_model_data_path(
     end
 
     # No preprocessed file, so build one from the raw download. Which path
-    # applies depends on how the raw file was downloaded: `InitialConditions`
+    # applies depends on how the raw file was downloaded: `ClimaInitialConditions`
     # and WeatherQuest both fetch the 137 native model levels, while an older
     # pressure-level download takes the 1D path.
     on_model_levels = NCDataset(raw_data_path) do ds
