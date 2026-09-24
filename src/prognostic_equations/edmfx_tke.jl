@@ -198,6 +198,11 @@ where `c_d` is the TKE dissipation coefficient
 """
 function tke_dissipation(turbconv_params, ρtke, tke, mixing_length)
     c_d = tke_dissipation_coefficient(turbconv_params)
-    dissipation_rate_vol = c_d * ρtke * sqrt(abs(tke)) / mixing_length
+    FT = eltype(mixing_length)
+    # `max(mixing_length, 1)` is a numerical divide-by-zero guard applied at
+    # the point of division (dissipation only), not a physical floor on
+    # `mixing_length`.
+    dissipation_rate_vol =
+        c_d * ρtke * sqrt(abs(tke)) / max(mixing_length, FT(1))
     return dissipation_rate_vol
 end
