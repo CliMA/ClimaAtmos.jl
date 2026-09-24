@@ -1099,7 +1099,7 @@ Base.@kwdef struct LinearOrographicGravityWave{S} <: OrographicGravityWave
 end
 
 """
-    FullOrographicGravityWave{FT, S, T}(; γ, ϵ, β, h_frac, ρscale, L0, a0, a1, Fr_crit, α_smoothing, topo_info, topography)
+    FullOrographicGravityWave{FT, S, T}(; γ, ϵ, β, h_frac, ρscale, L0, a0, a1, Fr_crit, α_smoothing, a_tofd, topo_info, topography)
 
 Orographic gravity-wave drag following [garner2005](@cite), combining the drag
 of vertically propagating waves with the drag of low-level blocked flow.
@@ -1124,6 +1124,9 @@ with the shape parameters taken from `params.orographic_gravity_wave_params`.
   - `α_smoothing`: Preprocessing smoothing scale as a fraction of the model grid
     spacing, `L = α · Δx`. Applied by `compute_OGW_info` for `raw_topo_online` (and
     when regenerating `raw_topo` artifacts offline) [-].
+  - `a_tofd`: Master amplitude of the Beljaars (2004) turbulent orographic form
+    drag (TOFD); `0` disables the low-level TOFD term, `1` is the IFS-nominal
+    amplitude [-].
   - `topo_info`: `Val(:raw_topo)`, `Val(:raw_topo_online)`, or
     `Val(:gfdl_restart)`, selecting how the orographic drag tensor is built (see
     `get_topo_info`).
@@ -1141,6 +1144,7 @@ Base.@kwdef struct FullOrographicGravityWave{FT, S, T} <: OrographicGravityWave
     a1::FT
     Fr_crit::FT
     α_smoothing::FT
+    a_tofd::FT
     topo_info::S
     topography::T
 end

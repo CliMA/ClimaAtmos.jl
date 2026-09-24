@@ -365,6 +365,9 @@ nonlinear drag. Loaded only when the scheme is enabled.
   - `α_smoothing`: Preprocessing smoothing scale as a fraction of the model grid
     spacing, `L = α · Δx`, used by `compute_OGW_info` (both `raw_topo_online` and
     offline artifact generation) [-].
+  - `a_tofd`: Master amplitude coefficient for the Beljaars (2004) turbulent
+    orographic form drag (TOFD); `0` disables TOFD, `1` is the IFS-nominal
+    amplitude [-].
 """
 Base.@kwdef struct OrographicGravityWaveParameters{FT} <: AGWP
     γ::FT                    # mountain_height_width_exponent: L ∝ h^γ (equation 14, paper suggests γ ≈ 0.4)
@@ -377,6 +380,7 @@ Base.@kwdef struct OrographicGravityWaveParameters{FT} <: AGWP
     a1::FT                   # nonlinear_drag_coefficient: a_1 = 3.0, coefficient for nonpropagating (blocked) drag
     Fr_crit::FT              # critical_froude_number: Fr_crit = 0.7, critical Froude number h̃_c = Fr_crit
     α_smoothing::FT          # smoothing_scale_fraction: preprocessing smoothing scale L = α·Δx (used by compute_OGW_info)
+    a_tofd::FT               # tofd_coefficient: master amplitude of Beljaars (2004) turbulent orographic form drag (0 disables, 1 = IFS-nominal)
 end
 
 # Physical/tuning parameters for the Beres (2004) convective gravity-wave source.
