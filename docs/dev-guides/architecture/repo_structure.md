@@ -23,6 +23,8 @@ Most CliMA Julia packages share these directories:
 - `perf/` or `benchmarks/`: performance/allocation benchmarks. Often not run in CI.
 - `examples/`, `runscripts/`, `post_processing/`, `calibration/`: repo-dependent.
 
+Alongside these, every repo root carries `README.md`, `LICENSE`, and — in Apache-licensed repos — `NOTICE`. Apache 2.0 is the CliMA default, but not universal: Oceananigans.jl and ClimaOcean.jl are MIT. See [documentation_policy.md §2.4](../code-quality/documentation_policy.md).
+
 ## Conventions to expect
 
 - **Cache / precomputed quantities**: ClimaAtmos has a `src/cache/` area where per-stage scratch state update functions are defined. The convention is to allocate once at construction and never inside per-step setters.

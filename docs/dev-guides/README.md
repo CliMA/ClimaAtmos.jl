@@ -27,7 +27,8 @@ Every guide applies across the CliMA ecosystem unless it says otherwise.
 
 - [getting_started.md](code-quality/getting_started.md): orienting newcomers to writing pointwise code compatible with ClimaCore `Field`s and broadcasting.
 - [code_style.md](code-quality/code_style.md): formatting, variable locality, Git workflow, feature removal, naming conventions.
-- [documentation_policy.md](code-quality/documentation_policy.md): docstrings, repository-level docs, minimally viable documentation.
+- [code_comments.md](code-quality/code_comments.md): what earns a comment, never describing a previous state, words to cut, sweeping a branch.
+- [documentation_policy.md](code-quality/documentation_policy.md): docstrings, repository-level docs, README and badge conventions, LICENSE/NOTICE and copyright notices, minimally viable documentation.
 - [changelogs_and_versions.md](code-quality/changelogs_and_versions.md): `NEWS.md` format, SemVer rules, and the release/tagging flow.
 - [variable_list.md](code-quality/variable_list.md): standardized CliMA variable naming conventions.
 - [glossary.md](code-quality/glossary.md): general CliMA software and simulation terminology.
@@ -74,7 +75,7 @@ git subtree pull --prefix docs/dev-guides \
 >
 > - `git subtree add --prefix docs/dev-guides ...` nests all of DeveloperGuides, including its own `AGENTS.md`, `LICENSE`, and `README.md`, under that prefix. It does not touch the consumer's root files, so the initial add does not conflict with them.
 > - The real risk is editing the vendored copy under `docs/dev-guides/` directly instead of upstream (see "Contributing" below). A later `git subtree pull` merges upstream changes into that path, so a local edit there can produce a genuine merge conflict. Resolve it like any merge conflict: fix the conflicting file, `git add`, `git commit`. Subtree operations use merge, not rebase, so `git rebase --continue` does not apply.
-> - When there are no new upstream commits the monthly run is a clean no-op. The workflow now fails loudly on a genuine `git subtree pull` error instead of masking it, so a red run means something actually needs attention.
+> - When there are no new upstream commits, the monthly run is a no-op. The workflow fails loudly on a `git subtree pull` error instead of masking it, so a red run needs attention.
 
 ### Fixing a broken subtree sync
 

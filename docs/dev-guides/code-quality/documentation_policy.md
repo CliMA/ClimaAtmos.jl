@@ -9,6 +9,8 @@ CliMA is committed to producing high-quality, well-documented software so that k
 - **Do** document interfaces, expected behavior, and short examples.
 - **Do not** narrate what the code does line by line; the code itself should be self-explanatory.
 
+This guide covers docstrings and repository-level documentation. For the `#` comments beside the code — what earns one, and the defects to sweep for — see [code_comments.md](code_comments.md).
+
 ## 2. Repository documentation
 
 Every repository must include the following pages (typically under `docs/src/` or in `README.md`):
@@ -18,7 +20,7 @@ Every repository must include the following pages (typically under `docs/src/` o
 3. **API reference**: interface concepts, purpose, and function signatures.
 4. **Contribution guidelines**: how to contribute (PRs, style, CI).
 
-All repositories must also include a `LICENSE` file (Apache 2.0) and a `NOTICE` file in the repository root.
+Every repository must also carry a `README.md`, a `LICENSE`, and — for Apache-licensed repos — a `NOTICE` in the root. See §2.3 and §2.4.
 
 ### 2.1 Organizing documentation by user need
 
@@ -37,6 +39,111 @@ These modes are guides, not strict partitions: CliMA repos commonly interleave t
 - [Literate.jl](https://fredrikekre.github.io/Literate.jl/stable/) generates markdown and notebook-style examples from Julia scripts and runs them in CI.
 - Sources live in `docs/src/`; tutorials in `tutorials/` if present.
 - For local iteration, use `LiveServer.servedocs()` (see [onboarding.md §9](../workflow/onboarding.md)).
+
+### 2.3 README
+
+The README is the first thing most users and agents see. Keep it short and current; depth belongs in `docs/src/`. Use this section order, omitting what does not apply:
+
+1. **Logo** (if the repo has one), centered, then the package name as an `#` heading.
+2. **One-sentence tagline**, then one short paragraph on what the package does and what it is built on.
+3. **Badge table** (below).
+4. **Features**: a handful of bullets, each naming a capability rather than an implementation detail.
+5. **Installation**: `Pkg.add("<PackageName>")` for a registered package.
+6. **Quick Example**: the shortest runnable snippet that produces something.
+7. **Documentation**: links to the stable and dev docs, plus any high-value pages.
+8. **Integration with CliMA models**: which ecosystem packages this one uses or is used by, with links.
+9. **Contributing**: point at `docs/dev-guides/` and the repo's `AGENTS.md`.
+
+**Run the Quick Example before committing it.** Execute it against the repo environment, or lift it verbatim from a doctested page (a Documenter `@example` block runs on every docs build). A README snippet that only *looks* right is worse than none: it is the first thing a new user pastes into a REPL. Verify the comments too — a snippet that runs but whose comment misstates the result is still wrong. When a snippet is copied from a docs page, prefer copying it verbatim so the two cannot drift.
+
+**Badge table.** Use reference-style link definitions, keep the label column right-aligned and the badge column left-aligned, and place the definitions immediately below the table:
+
+~~~markdown
+|||
+|------------------:|:------------------------------------------------------------|
+| **Documentation** | [![stable][docs-stable-img]][docs-stable-url] [![dev][docs-dev-img]][docs-dev-url] |
+| **Version**       | [![version][version-img]][version-url]                      |
+| **License**       | [![license][license-img]][license-url]                      |
+| **Tests**         | [![gha ci][gha-ci-img]][gha-ci-url] [![buildkite][bk-ci-img]][bk-ci-url] |
+| **Code Coverage** | [![codecov][codecov-img]][codecov-url]                      |
+| **Downloads**     | [![Downloads][dlt-img]][dlt-url]                            |
+
+[docs-stable-img]: https://img.shields.io/badge/docs-stable-blue.svg
+[docs-stable-url]: https://CliMA.github.io/<Package>.jl/stable/
+~~~
+
+Row conventions:
+
+- **Omit rows that do not apply.** Drop the Buildkite badge in a repo with no Buildkite pipeline (or one that does not build `main` — see below) rather than shipping a badge that reads `unknown`.
+- **Add rows where warranted.** A repo with a Zenodo DOI or a JOSS paper gets a **DOI** and/or **JOSS** row; keep the existing DOI identifier exactly as-is when reformatting a table.
+- **Version** points at the JuliaHub badge for registered packages: `https://juliahub.com/docs/General/<Package>/stable/version.svg`. Some packages only resolve at `https://juliahub.com/docs/<Package>/version.svg` — fetch the URL and check for a 200 before committing it.
+
+**Badges must track `main`, and must be able to.** A badge that misreports status trains everyone to ignore it. Two independent requirements:
+
+1. *The workflow has to run on `main`.* A workflow triggered only by `pull_request` never produces a `main` run, so its badge falls back to the most recent run on **any** branch — one failing PR turns the badge red while `main` is green. Add a push trigger:
+
+   ~~~yaml
+   on:
+     push:
+       branches: [main]
+       tags: '*'
+     pull_request:
+   ~~~
+
+   A `tags:` filter under `pull_request` does nothing; tag filters only take effect under `push`.
+
+2. *The badge URL has to be pinned to `main`.* Append `?branch=main` to the badge image and filter the link target:
+
+   ~~~markdown
+   [gha-ci-img]: https://github.com/CliMA/<Package>.jl/actions/workflows/ci.yml/badge.svg?branch=main
+   [gha-ci-url]: https://github.com/CliMA/<Package>.jl/actions/workflows/ci.yml?query=branch%3Amain
+   ~~~
+
+Both are required: pinning a badge to `main` for a workflow that never runs there yields `no status`, and a `main`-running workflow with an unpinned badge still reports other branches. See [ci_triage.md §13](../workflow/ci_triage.md) for diagnosing a badge that reads `failing`, `unknown`, or `no status`.
+
+**Markdown is formatted in some repos.** Where the formatter hook covers markdown (ClimaAtmos runs JuliaFormatter over `types_or: [julia, markdown]`), it will inline reference-style links, pad table columns, and indent list items. Run the repo's pinned formatter over the README before pushing, and match the version CI uses — see [code_style.md §1](code_style.md).
+
+### 2.4 License, NOTICE, and copyright
+
+**Which license.** Apache 2.0 is the default across CliMA. It is not universal: repos in the Oceananigans lineage — [Oceananigans.jl](https://github.com/CliMA/Oceananigans.jl) and [ClimaOcean.jl](https://github.com/CliMA/ClimaOcean.jl) — are **MIT**. Never "standardize" a repo's license as part of unrelated work: relicensing is a legal decision for the maintainers and copyright holders, not a formatting cleanup. Read the existing `LICENSE` before touching anything near it.
+
+| | Apache 2.0 (most repos) | MIT (Oceananigans, ClimaOcean) |
+|:---|:---|:---|
+| `LICENSE` | Full Apache text; copyright notice in the appendix | MIT text with the copyright line inline |
+| `NOTICE` | Present, mirroring the `LICENSE` copyright line | Not used |
+| Badge | `license-Apache%202.0-blue` | `license-MIT-blue` |
+
+**Copyright notice.** The Apache boilerplate ships with a placeholder that often gets committed unfilled:
+
+~~~text
+Copyright [yyyy] [name of copyright owner]
+~~~
+
+Replace it with the year range and holder. CliMA repos use:
+
+~~~text
+Copyright 2021-2026 California Institute of Technology (Climate Modeling Alliance)
+~~~
+
+MIT repos carry the equivalent line inside the license text itself, in the form that license expects:
+
+~~~text
+Copyright (c) 2018 Climate Modeling Alliance
+~~~
+
+Conventions:
+
+- **The start year is the repo's first commit**, not the year the file was written. Find it with `git log --reverse --format=%ci | head -1`.
+- **Keep `NOTICE` and `LICENSE` in agreement.** Where both exist they should name the same holder and the same range; they drift because they are edited separately.
+- **A stale end year is not urgent.** Refresh it when you are already touching the file; a year-only bump is not worth a standalone PR.
+
+### 2.5 GitHub repository metadata
+
+The About line and topics are how a repo is found and understood from outside; they are part of its documentation.
+
+- **About**: one sentence, no trailing period, naming what the package *is* and its most distinguishing property — for example, "GPU-capable cloud microphysics and aerosol parameterizations for the CliMA Earth System Model". Avoid bare restatements of the name ("Clima's Land Model") and internal shorthand.
+- **Topics**: 8–12 lowercase, hyphenated tags. Cover the language (`julia`), the domain (`climate-modeling`, `atmospheric-physics`), the methods (`spectral-elements`, `ode-solvers`), and the platform (`gpu`). Topics drive GitHub search and the ecosystem's discoverability.
+- Both are set through the repo settings UI or `gh repo edit --description ... --add-topic ...`. Neither lives in the git history, so a change takes effect immediately and is not reviewable in a PR — mention it in the PR description when it accompanies one.
 
 ## 3. Docstrings
 

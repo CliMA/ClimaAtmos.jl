@@ -15,21 +15,19 @@ readability wins there.
 
 ## 1. Why rare branches are not rare at climate-model scale
 
-On GPUs, threads execute in warps (typically 32) in lockstep. A data-dependent
-`if/else` where threads in the same warp take different paths forces the
-hardware to run *both* paths sequentially (**thread divergence**), which can
-halve throughput or worse. The full SIMT mechanics are in
-[gpu_performance.md §1](gpu_performance.md).
+On GPUs, a data-dependent `if/else` where threads in the same warp take
+different paths forces the hardware to run *both* paths sequentially
+(**thread divergence**), which can halve throughput or worse. The SIMT
+mechanics are in [gpu_performance.md §1](gpu_performance.md).
 
 The scale of a climate model makes this worse than it first appears. A CliMA
 simulation evaluates each pointwise function at **10⁶–10⁹ grid points**, every
 timestep (and every Runge–Kutta stage), for **thousands to millions** of steps.
 A branch that guards a "rare" special case (a parcel that is exactly saturated,
 a point that just crossed freezing, a near-zero denominator) is, in aggregate,
-*almost never rare*. Across millions of points per stage, essentially every warp
-contains at least one point in the special case at essentially every step. The
-"rarely taken" branch therefore pays its divergence cost on **essentially
-every step**.
+*almost never rare*: at millions of points per stage, nearly every warp
+contains at least one point in the special case at nearly every step, so the
+"rarely taken" branch pays its divergence cost on **every step**.
 
 The practical consequence: **inside a kernel, cost a data-dependent branch as if
 it is always taken.** Do not reason "this case is unusual, so the branch is
