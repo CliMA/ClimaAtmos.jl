@@ -367,23 +367,30 @@ function mixing_length_lopez_gomez_2020(
     #     (S² − N²/Pr_t) · √TKE · l,
     # where S² denotes the gradient involved in shear production and
     # N²/Pr_t denotes the gradient involved in buoyancy production.
-    # The factor below corresponds to that production term normalised by l.
-    a_pd = c_m * (2 * strain_rate_norm - N²_prod / Pr) * sqrt_tke_pos
+    # The factor below corresponds to that production term normalised by √TKE · l.
+    a_pd = c_m * (2 * strain_rate_norm - N²_prod / Pr)
 
-    # Dissipation is modelled as c_d · k^{3/2} / l.
-    # For the quadratic expression below, c_neg ≡ c_d · k^{3/2}.
-    c_neg = c_d * tke_pos * sqrt_tke_pos
+    # Lopez-Gomez balance: l_LG = √(c_d/a_pd)·√TKE. α_kε is an O(1)
+    # correction for the ε/ω-lag (dε/dt = 0 rather than dTKE/dt = 0).
+    α_kε = CAP.mixing_length_alpha(turbconv_params)
+    l_TKE_LG = α_kε * sqrt(c_d / max(a_pd, eps_FT)) * sqrt_tke_pos
 
-    # Solve for l_TKE in
-    #     a_pd · l_TKE − c_neg / l_TKE = 0
-    #  ⇒  a_pd · l_TKE² − c_neg = 0
-    # yielding
-    #     l_TKE = √c_neg / a_pd.
-    l_TKE = ifelse(tke_pos > eps_FT, sqrt(c_neg / max(a_pd, eps_FT)), FT(0))
+    # Empirical TKE-only ceiling: l_empirical_CC = l_0·(1+x)·exp(−x),
+    # x = TKE/TKE_max. Bounded above by l_0 at TKE=0, decays exponentially
+    # for TKE ≫ TKE_max so ε ∝ TKE^{1/2}·exp(TKE/TKE_max) damps runaway.
+    l_0 = CAP.mixing_length_l_0(turbconv_params)
+    tke_max = CAP.mixing_length_tke_max(turbconv_params)
+    tke_nondim = tke_pos / tke_max
+    l_empirical_CC = l_0 * (FT(1) + tke_nondim) * exp(-tke_nondim)
+
+    # Cap the balance-derived l_TKE by the empirical ceiling. Below the
+    # ceiling the closure behaves as α_kε·l_LG; above it, l_TKE is limited
+    # so dissipation catches up with production.
+    l_TKE = min(l_TKE_LG, l_empirical_CC)
 
     # --- l_N: Static-stability length scale (buoyancy limit), constrained by l_z ---
     N_eff_sq = max(N²_eff, FT(0)) # Use N^2 only if stable (N^2 > 0)
-    l_N = l_z # Default to wall distance if not stably stratified or TKE is zero
+    l_N = l_W # Default to wall distance if not stably stratified or TKE is zero
     if N_eff_sq > eps_FT && tke_pos > eps_FT
         N_eff = sqrt(N_eff_sq)
         # l_N ~ sqrt(c_b * TKE) / N_eff
@@ -396,11 +403,10 @@ function mixing_length_lopez_gomez_2020(
 
     # --- Combine Scales ---
 
-    # Vector of *physical* scales (wall, TKE, stability)
-    # These scales (l_W, l_TKE, l_N) are already ensured to be non-negative.
-    # l_N is already limited by l_z. l_W and l_TKE are not necessarily.
-    l_physical_scales =
-        (tke_pos > eps_FT && a_pd <= 0) ? SA.SVector(l_W, l_N) : SA.SVector(l_W, l_TKE, l_N)
+    # Vector of *physical* scales (wall, TKE, stability). All ≥ 0.
+    # l_N is already limited by l_z; l_W and l_TKE are not, but the master
+    # wall + grid caps below still apply.
+    l_physical_scales = SA.SVector(l_W, l_TKE, l_N)
 
     l_smin =
         blend_scales(scale_blending_method, l_physical_scales, turbconv_params)
@@ -417,10 +423,9 @@ function mixing_length_lopez_gomez_2020(
     # Final check: guarantee that the mixing length is at least a small positive
     # value.  This prevents division-by-zero in
     #     ε_d = C_d · TKE^{3/2} / l_mix
-    # when TKE > 0.  When TKE = 0, l_mix is inconsequential, but eps_FT
+    # when TKE > 0.  When TKE = 0, l_mix is inconsequential, but the floor
     # provides a conservative lower bound.
-    # minimum mixing length
-    l_final = max(l_final, FT(1)) # TODO: make a climaparam
+    l_final = max(l_final, CAP.mixing_length_min(turbconv_params))
 
     return MixingLength(l_final, l_W, l_TKE, l_N, l_grid)
 end
@@ -476,8 +481,8 @@ NVTX.@annotate function set_buoyancy_gradient_inputs!(Y, p, thermo_params)
     @. ᶠ∂θli∂z = projected_vector_data(C3, ᶠgradᵥ(ᶜθ_li), ᶠlg)
     @. ᶠ∂qt∂z = projected_vector_data(C3, ᶠgradᵥ(ᶜq_tot_nonneg), ᶠlg)
 
-    @. ᶜgradᵥ_θ_liq_ice = ᶜgradᵥ(ᶠinterp(ᶜθ_li))
-    @. ᶜgradᵥ_q_tot = ᶜgradᵥ(ᶠinterp(ᶜq_tot_nonneg))
+    @. ᶜgradᵥ_θ_liq_ice = ᶜbottom_bias(ᶠgradᵥ(ᶜθ_li))
+    @. ᶜgradᵥ_q_tot = ᶜbottom_bias(ᶠgradᵥ(ᶜq_tot_nonneg))
     return nothing
 end
 
@@ -680,12 +685,11 @@ NVTX.@annotate function set_face_diffusivities!(Y, p)
     # downstream reads (SGS fluxes, TKE budget, diffusion Jacobian) always see
     # a defined value regardless of how the field was allocated.
     if !iszero(A_entr)
-        val_energy_containing = Val{:energy_containing}()
         @. ᶠK_entr = interface_entrainment_diffusivity(
             ᶠbuoygrad,
             ᶠΔz,
             ᶠκ,
-            get_mixing_length_field(ᶠml, val_energy_containing),
+            get_mixing_length_field(ᶠml, val_master),
             c_b,
             A_entr,
         )

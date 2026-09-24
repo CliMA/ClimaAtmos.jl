@@ -72,14 +72,13 @@ Reads `ᶜstrain_rate_norm`, `ᶠbuoygrad`, `ᶠK_h`, `ᶠK_u`, and `ᶠK_entr` 
 """
 function edmfx_tke_sources!(Yₜ, Y, p)
     (; ᶜstrain_rate_norm) = p.precomputed
-    (; ᶠbuoygrad, ᶠK_h, ᶠK_u, ᶠK_entr) = p.precomputed
+    (; ᶜbuoygrad, ᶠK_h, ᶠK_u, ᶠK_entr) = p.precomputed
 
     # shear production (face viscosities brought to centers)
     @. Yₜ.c.ρtke +=
         2 * Y.c.ρ * ᶜinterp(ᶠK_u + ᶠK_entr) * ᶜstrain_rate_norm
-    # buoyancy production/destruction (face-flux consistent; includes the
-    # interfacial-entrainment sink through ᶠK_entr)
-    @. Yₜ.c.ρtke -= Y.c.ρ * ᶜinterp((ᶠK_h + ᶠK_entr) * ᶠbuoygrad)
+    # buoyancy production/destruction (face-flux consistent)
+    @. Yₜ.c.ρtke -= Y.c.ρ * ᶜinterp(ᶠK_h + ᶠK_entr) * ᶜbuoygrad
 
     # Pressure-drag return-to-isotropy
     edmfx_pressure_drag_tke_source!(Yₜ, Y, p, p.atmos.turbconv_model)

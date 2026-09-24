@@ -3,6 +3,11 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- Add empirical `l_TKE` ceiling `l_empirical_CC = l_0·(1+x)·exp(−x)`,
+  `x = TKE/tke_max`, to the mixing-length closure.
+- ClimaParams v1.1.14 changes the default `EDMF_interface_entr_efficiency`
+  from `0.4` to `0.0`: the interfacial cloud-top entrainment closure is
+  now off by default.
 - ![][badge-✨feature/enhancement] `WeatherModel` ERA5 IC filenames now use the
   `HHMM` of `start_date` (e.g. `start_date = "20191231-1200"` →  `..._1200.nc`),
   matching the ClimaCoupler subseasonal / WeatherQuest naming; date-only strings
