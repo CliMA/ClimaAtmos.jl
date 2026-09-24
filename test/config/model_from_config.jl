@@ -153,6 +153,9 @@ end
         @test ogw isa CA.FullOrographicGravityWave
         @test ogw.topo_info == Val(Symbol(name))
         @test ogw.α_smoothing == ogw_params.α_smoothing
+        @test ogw.a_tofd == ogw_params.a_tofd
+        # TOFD defaults to off unless a run TOML sets `ogw_tofd_coefficient`.
+        @test ogw.a_tofd == 0
     end
 
     @test CA.get_orographic_gravity_wave_model(
@@ -182,6 +185,7 @@ end
             a1 = 3.0,
             Fr_crit = 0.7,
             α_smoothing = α,
+            a_tofd = 0.0,
             topo_info = Val(:raw_topo),
             topography,
         )

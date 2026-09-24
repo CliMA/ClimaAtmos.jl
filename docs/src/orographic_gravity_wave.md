@@ -279,7 +279,7 @@ Here, $(\tau_x, \tau_y, \tau_l)$ is computed in the base flux calculation, and $
 The non-propagating drag is confined to a finite layer above the PBL top, bounded above by a reference level $z_{\mathrm{ref}}$. To locate $z_{\mathrm{ref}}$, we iterate over face levels above $z_{\text{pbl}}$ and accumulate a wave phase
 
 ```math
-\mathrm{phase} \mathrel{+}= ({}^fz[k] - z_{\text{pbl}}) \cdot \frac{\max(N_{\mathrm{min}}, \min(N_{\mathrm{max}}, {}^fN[k]))}{\max(vvmin, {}^fV_{\tau}[k])},
+\mathrm{phase} \mathrel{+}= ({}^fz[k] - {}^fz[k-1]) \cdot \frac{\max(N_{\mathrm{min}}, \min(N_{\mathrm{max}}, {}^fN[k]))}{\max(vvmin, {}^fV_{\tau}[k])},
 ```
 
 setting $z_{\mathrm{ref}} = {}^fz[k]$ at the first face where $\mathrm{phase} > \pi$. Here $N_{\mathrm{min}} = 0.7 \times 10^{-2}\,\mathrm{s^{-1}}$, $N_{\mathrm{max}} = 1.7 \times 10^{-2}\,\mathrm{s^{-1}}$, $vvmin = 1.0\,\mathrm{m/s}$, and $({}^fN, {}^fV_{\tau})$ are obtained from the saturation-profile calculation. If $\mathrm{phase}$ never exceeds $\pi$ in the column, $z_{\mathrm{ref}}$ falls back to the model top. The pressure weighting below still concentrates most of the drag near the surface.
@@ -298,11 +298,15 @@ where ${}^f p_{\mathrm{ref}}$ is the face pressure at $z_{\mathrm{ref}}$, and th
 \mathrm{diff}[k] = \overline{{}^f p[k-1] - {}^f p[k]}^c,
 ```
 
-and the sum of the weights is
+and the column stress sum is
 
 ```math
-wtsum = \sum_{k \in \mathrm{mask}} \frac{\mathrm{diff}[k]}{\mathrm{weight}[k]}.
+wtsum = \sum_{k \in \mathrm{mask}} \mathrm{diff}[k] \cdot \mathrm{weight}[k],
 ```
+
+which is the GFDL `topo_drag` normalization (`wtsum += dp*weight`). Dividing the
+forcing by this sum conserves the column-integrated blocked stress:
+$\sum_k (\partial u/\partial t)_k \,\mathrm{diff}[k]/g = \tau_x\,\tau_{np}/\tau_l$.
 
 The mask selects cells that overlap with the interval $[z_{\text{pbl}}, z_{\mathrm{ref}})$ and have nonzero weights.
 
@@ -318,29 +322,70 @@ For masked levels, the forcing due to the non-propagating component is
 
 where $(\tau_x, \tau_y, \tau_l, \tau_{np})$ is computed in the base flux calculation. When the mask is empty ($wtsum = 0$, i.e. no cells overlap $[z_{\text{pbl}}, z_{\mathrm{ref}})$), the non-propagating forcing is set to zero in that column to avoid division by zero.
 
+### Turbulent orographic form drag (TOFD)
+
+The propagating and blocked components both act at and above the PBL top, so they
+supply no drag in the layer right next to the surface. Small-scale orography
+(scales too short to launch resolved gravity waves) nonetheless exerts a
+form drag there. Following [beljaars2004](@cite) — the IFS / SURFEX
+`sso_beljaars04` formulation — this turbulent orographic form drag is added as a
+low-level term
+
+```math
+{}^c \left( \frac{d\mathbf{u}}{dt}[k] \right)_{\mathrm{TOFD}} = - C_d(z)\, |\mathbf{u}|\, \mathbf{u},
+\qquad
+C_d(z) = a_{\mathrm{tofd}}\, K\, \sigma^2\, e^{-(z/1500)^{1.5}}\, z^{-1.2},
+```
+
+where $z$ is height above the local surface (floored at 1 m so $z^{-1.2}$ stays
+finite), $\sigma = 0.5\, h_{\mathrm{max}}$ is the standard deviation of the
+filtered small-scale orography ($h_{\mathrm{max}}$ used as the $\sigma_{\mathrm{oro}}$
+proxy, $0.5$ the IFS $\sigma_{\mathrm{flt}}/\sigma_{\mathrm{oro}}$ ratio), and
+
+```math
+K = \alpha\, \beta\, C_{\mathrm{corr}}\, C_{md}\, 2.109\, C_{\mathrm{avar}},
+\qquad
+C_{\mathrm{avar}} = \frac{k_1^{\,n_1-n_2}}{C_{ih}\, k_{\mathrm{flt}}^{\,n_1}},
+```
+
+with the Beljaars constants $\alpha = 12$, $\beta = 1$, $C_{md} = 0.005$,
+$C_{\mathrm{corr}} = 0.6$, $C_{ih} = 1.02\times10^{-3}\,\mathrm{m^{-1}}$,
+$k_{\mathrm{flt}} = 3.5\times10^{-4}\,\mathrm{m^{-1}}$,
+$k_1 = 3\times10^{-3}\,\mathrm{m^{-1}}$, $n_1 = -1.9$, $n_2 = -2.8$. The
+$e^{-(z/1500)^{1.5}} z^{-1.2}$ structure concentrates the drag in the lowest
+$\sim 1\,\mathrm{km}$.
+
+The master amplitude $a_{\mathrm{tofd}}$ is set by the `ogw_tofd_coefficient`
+parameter: $a_{\mathrm{tofd}} = 0$ (the default) disables TOFD and reproduces the
+GWD-only forcing exactly, while $a_{\mathrm{tofd}} = 1$ is the IFS-nominal
+amplitude. TOFD is added to the propagating and blocked tendencies before the
+magnitude constraint below.
+
 ### Constrain the forcings
 
-The total drag from both components is
+The total drag combines the propagating, blocked, and TOFD components
 
 ```math
-{}^c \left( \frac{du}{dt} [k] \right)_{\tau} = {}^c \left( \frac{du}{dt} [k] \right)_{p} + {}^c \left( \frac{du}{dt} [k] \right)_{np},
+{}^c \left( \frac{d\mathbf{u}}{dt} [k] \right)_{\tau} = {}^c \left( \frac{d\mathbf{u}}{dt} [k] \right)_{p} + {}^c \left( \frac{d\mathbf{u}}{dt} [k] \right)_{np} + {}^c \left( \frac{d\mathbf{u}}{dt} [k] \right)_{\mathrm{TOFD}}.
 ```
+
+To avoid instability from large tendencies under the explicit application, we limit the
+forcing *magnitude* to $\epsilon_V = 3\times10^{-3}\sqrt{2}\,\mathrm{m/s^2}$ while preserving
+its direction, by scaling the horizontal vector by a single factor rather than clipping each
+component independently (which would rotate the drag away from the flow). The cap is the
+diagonal of the former $\pm 3\times10^{-3}$ per-component box, so the limiter is isotropic yet
+no tighter than that box in any direction:
 
 ```math
-{}^c \left( \frac{dv}{dt} [k] \right)_{\tau} = {}^c \left( \frac{dv}{dt} [k] \right)_{p} + {}^c \left( \frac{dv}{dt} [k] \right)_{np}.
+{}^c \left( \frac{d\mathbf{u}}{dt} [k] \right)_{\tau} \leftarrow
+s[k]\, {}^c \left( \frac{d\mathbf{u}}{dt} [k] \right)_{\tau},
+\qquad
+s[k] = \min\!\left(1, \frac{\epsilon_V}{\left| {}^c \left( \frac{d\mathbf{u}}{dt} [k] \right)_{\tau} \right|}\right).
 ```
 
-To avoid instability due to large tendencies from the forcing, we constrain the forcing magnitude with $\epsilon_V = 3e-3$, and let
-
-```math
-{}^c \left( \frac{du}{dt} [k] \right)_{\tau} = \max(-\epsilon_V, \min(\epsilon_V, {}^c \left( \frac{du}{dt} [k] \right)_{\pmb{\tau}})),
-```
-
-```math
-{}^c \left( \frac{dv}{dt} [k] \right)_{\tau} = \max(-\epsilon_V, \min(\epsilon_V, {}^c \left( \frac{dv}{dt} [k] \right)_{\pmb{\tau}})).
-```
-
-The tendencies above act on the physical horizontal wind components.
+This is a numerical safety rail, not a physical bound: it conserves the drag direction but,
+where it binds, reduces the column-integrated stress below the parameterized value. The
+tendencies above act on the physical horizontal wind components.
 
 ## Implementation summary
 
@@ -382,7 +427,8 @@ Every dt_ogw seconds:
         ├─ calc_saturation_profile!     → τ_sat(z)
         ├─ calc_propagate_forcing!      → propagating tendency
         ├─ calc_nonpropagating_forcing! → blocked-flow tendency
-        └─ Clamp forcing to ±3e-3 m/s²
+        ├─ calc_tofd_forcing!           → low-level TOFD tendency (if a_tofd > 0)
+        └─ Limit forcing magnitude to 3e-3·√2 m/s² (direction preserved)
 
 Every dt (integrator step):
   orographic_gravity_wave_apply_tendency!
@@ -395,7 +441,7 @@ For analytical topographies (DCMIP200, Hughes2023, Agnesi, Schar, Cosine2d, Cosi
 
 | Concept                                                                | Source                                                                                                                                                                                                                       |
 |:---------------------------------------------------------------------- |:---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Base flux, saturation profile, propagating and blocked-flow tendencies | [src/parameterized_tendencies/gravity_wave_drag/orographic_gravity_wave.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/parameterized_tendencies/gravity_wave_drag/orographic_gravity_wave.jl)                      |
+| Base flux, saturation profile, propagating, blocked-flow, and TOFD tendencies | [src/parameterized_tendencies/gravity_wave_drag/orographic_gravity_wave.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/parameterized_tendencies/gravity_wave_drag/orographic_gravity_wave.jl)                      |
 | Orographic statistics and tensor helpers                               | [orographic_gravity_wave_helper.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/parameterized_tendencies/gravity_wave_drag/orographic_gravity_wave_helper.jl)                                                       |
 | Offline topography preprocessing                                       | [preprocess_topography.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/parameterized_tendencies/gravity_wave_drag/preprocess_topography.jl)                                                                         |
 | Callback scheduling at `dt_ogw`                                        | [src/callbacks/get_callbacks.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/callbacks/get_callbacks.jl), [src/callbacks/callbacks.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/callbacks/callbacks.jl) |
