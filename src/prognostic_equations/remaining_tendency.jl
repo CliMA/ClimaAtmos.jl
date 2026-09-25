@@ -221,6 +221,7 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
     )
     orographic_gravity_wave_apply_tendency!(
         Yₜ,
+        Y,
         p,
         p.atmos.orographic_gravity_wave,
     )

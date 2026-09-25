@@ -157,6 +157,22 @@ function orographic_gravity_wave_cache(Y, ogw::OrographicGravityWave, topo_info 
 
     center_space, face_space = axes(Y.c), axes(Y.f)
 
+    # The TOFD drag coefficient depends only on the grid and the orography, so it is
+    # built once here and combined with the current wind every step.
+    ᶜtofd_Cd = zero(Y.c.ρ)
+    if !iszero(a_tofd)
+        ᶜz_sfc = similar(Fields.level(Y.c.ρ, 1))
+        Fields.field_values(ᶜz_sfc) .=
+            Fields.field_values(Fields.level(Fields.coordinate_field(Y.f).z, half))
+        tofd_drag_coefficient!(
+            ᶜtofd_Cd,
+            Fields.coordinate_field(Y.c).z,
+            ᶜz_sfc,
+            topo_info.hmax,
+            a_tofd,
+        )
+    end
+
     # Prepare cache
     return (;
         ogw_params = (;
@@ -191,6 +207,7 @@ function orographic_gravity_wave_cache(Y, ogw::OrographicGravityWave, topo_info 
         ᶠbuoyancy_frequency = Fields.Field(FT, face_space),
         ᶜuforcing = zero(Y.c.ρ),
         ᶜvforcing = zero(Y.c.ρ),
+        ᶜtofd_Cd,
         ᶜdTdz = similar(Y.c.ρ),
         ᶠp_m1 = Fields.Field(FT, face_space),
         ᶠp_ref = similar(Fields.level(Y.f.u₃, half), FT),
@@ -208,8 +225,8 @@ Compute the orographic gravity wave drag and store it in the OGW cache.
 Mutates `p.orographic_gravity_wave` (notably `ᶜuforcing` and `ᶜvforcing` [m/s²], which are
 zeroed and then recomputed) and reads `Y`. This is the expensive half of the
 parameterization and runs on the `dt_ogw` callback `ogw_model_callback!`; the cheap half,
-`orographic_gravity_wave_apply_tendency!`, applies the cached forcing every integrator
-step. The `::Nothing` method is a no-op.
+`orographic_gravity_wave_apply_tendency!`, applies the cached forcing (plus the
+per-step implicit TOFD) every integrator step. The `::Nothing` method is a no-op.
 
 Prepares the inputs the forcing routine needs and then calls
 `orographic_gravity_wave_forcing!`:
@@ -346,30 +363,43 @@ function orographic_gravity_wave_compute_tendency!(Y, p, ::FullOrographicGravity
 end
 
 """
-    orographic_gravity_wave_apply_tendency!(Yₜ, p, ::Nothing)
-    orographic_gravity_wave_apply_tendency!(Yₜ, p, ::OrographicGravityWave)
+    orographic_gravity_wave_apply_tendency!(Yₜ, Y, p, ::Nothing)
+    orographic_gravity_wave_apply_tendency!(Yₜ, Y, p, ::OrographicGravityWave)
 
-Add the cached orographic gravity wave drag to the horizontal momentum tendency.
+Add the orographic drag to the horizontal momentum tendency.
 
-Mutates `Yₜ.c.uₕ` by adding the covariant form of the cached `ᶜuforcing`/`ᶜvforcing`
-[m/s²]. The `::Nothing` method is a no-op.
+Mutates `Yₜ.c.uₕ`. The `::Nothing` method is a no-op. Two contributions are added every
+integrator step:
 
-This runs every integrator step, while the forcing itself is refreshed only on the `dt_ogw`
-callback by `orographic_gravity_wave_compute_tendency!`, which also limits its magnitude to
-3e-3·√2 m/s² (preserving direction); between callbacks the same forcing is reapplied.
+  - The cached propagating and blocked gravity-wave forcing `ᶜuforcing`/`ᶜvforcing`
+    [m/s²]. It is refreshed only on the `dt_ogw` callback by
+    `orographic_gravity_wave_compute_tendency!`, which also limits its magnitude to
+    3e-3·√2 m/s² (preserving direction); between callbacks the same forcing is reapplied.
+  - The Beljaars (2004) turbulent orographic form drag, evaluated from the current wind
+    `Y.c.uₕ` with the static drag coefficient `ᶜtofd_Cd` and the backward-Euler rate
+    `tofd_implicit_rate`. Near the surface over steep orography its damping time is far
+    shorter than `dt_ogw` and can be shorter than `p.dt`, so it is neither cached nor
+    passed through the magnitude limiter; the implicit rate bounds the per-step decrement
+    by the wind itself instead. Skipped when `a_tofd == 0`.
 """
-orographic_gravity_wave_apply_tendency!(Yₜ, p, ::Nothing) = nothing
+orographic_gravity_wave_apply_tendency!(Yₜ, Y, p, ::Nothing) = nothing
 
 function orographic_gravity_wave_apply_tendency!(
     Yₜ,
+    Y,
     p,
     ::OrographicGravityWave,
 )
-    (; ᶜuforcing, ᶜvforcing) = p.orographic_gravity_wave
+    (; ᶜuforcing, ᶜvforcing, ᶜtofd_Cd, ogw_params) = p.orographic_gravity_wave
 
     @. Yₜ.c.uₕ +=
         C12.(Geometry.UVVector.(ᶜuforcing, ᶜvforcing))
 
+    iszero(ogw_params.topo_a_tofd) && return nothing
+    dt = eltype(ᶜtofd_Cd)(p.dt)
+    @. Yₜ.c.uₕ -=
+        tofd_implicit_rate(ᶜtofd_Cd, sqrt(norm_sqr(Y.c.uₕ)), dt) * Y.c.uₕ
+    return nothing
 end
 
 
@@ -542,28 +572,6 @@ function orographic_gravity_wave_forcing!(
         ᶠdz,
         grav,
     )
-
-    # Low-level turbulent orographic form drag (Beljaars 2004), added on top of the
-    # Garner propagating + blocked drag. Disabled when a_tofd == 0.
-    if !iszero(ogw_params.topo_a_tofd)
-        # Terrain-surface height (bottom face) copied onto the center-level space so it
-        # broadcasts against the center-column height; mixing center- and face-level
-        # fields in a broadcast directly is not supported, hence the field_values copy.
-        # `temp_field_level` is free here (last used by calc_nonpropagating_forcing!).
-        ᶜz_sfc = p.scratch.temp_field_level
-        Fields.field_values(ᶜz_sfc) .=
-            Fields.field_values(Fields.level(ᶠz, half))
-        calc_tofd_forcing!(
-            ᶜuforcing,
-            ᶜvforcing,
-            u_phy,
-            v_phy,
-            ᶜz,
-            ᶜz_sfc,
-            topo_info.hmax,
-            ogw_params.topo_a_tofd,
-        )
-    end
 
     # Constrain the forcing magnitude as a numerical safety rail for the explicit
     # application, but preserve its direction: scale the (u, v) vector by
@@ -781,59 +789,42 @@ function calc_nonpropagating_forcing!(
 end
 
 """
-    calc_tofd_forcing!(ᶜuforcing, ᶜvforcing, u_phy, v_phy, ᶜz, z_sfc, hmax, a_tofd)
+    tofd_drag_coefficient!(ᶜCd, ᶜz, z_sfc, hmax, a_tofd)
 
-Add the Beljaars (2004) turbulent orographic form drag (TOFD) to the forcing fields.
+Fill `ᶜCd` [m⁻¹] with the Beljaars (2004) turbulent orographic form drag (TOFD) coefficient.
 
-Increments `ᶜuforcing` and `ᶜvforcing` [m/s²] with a low-level, near-surface drag that
-represents the form drag of orographic scales too small to launch resolved gravity waves.
-Following [beljaars2004](@cite) (and the IFS / SURFEX `sso_beljaars04` implementation) the
-deceleration is
-
-```
-∂u/∂t = − C_d(z) · |U| · u,   C_d(z) = a_tofd · K · σ² · exp[−(z/1500)^{1.5}] · z^{−1.2},
-```
-
-with `z` the height above the local surface, `σ = 0.5·hmax` the standard deviation of the
-filtered small-scale orography (`hmax` is used as the `σ_oro` proxy and the `0.5` is the
-IFS `σ_flt/σ_oro` ratio), and the constant
+TOFD represents the form drag of orographic scales too small to launch resolved gravity
+waves. Following [beljaars2004](@cite) (and the IFS / SURFEX `sso_beljaars04`
+implementation) the deceleration is `∂u/∂t = −C_d(z)·|U|·u` with
 
 ```
+C_d(z) = a_tofd · K · σ² · exp[−(z/1500)^{1.5}] · z^{−1.2},
 K = α·β·C_corr·C_md·2.109·C_avar,   C_avar = k1^{n1−n2} / (C_ih · k_flt^{n1}),
 ```
 
-using the Beljaars constants `α = 12`, `β = 1`, `C_md = 0.005`, `C_corr = 0.6`,
-`C_ih = 0.00102 m⁻¹`, `k_flt = 0.00035 m⁻¹`, `k1 = 0.003 m⁻¹`, `n1 = −1.9`, `n2 = −2.8`.
-The `exp[−(z/1500)^{1.5}]·z^{−1.2}` structure concentrates the drag in the lowest ~1 km, so
-it acts as the surface / low-level drag that the propagating and blocked components (which
-live above the PBL top) do not provide.
+where `z` is the height above the local surface (floored at 1 m so `z^{−1.2}` stays finite),
+`σ = 0.5·hmax` is the standard deviation of the filtered small-scale orography (`hmax` is
+used as the `σ_oro` proxy and the `0.5` is the IFS `σ_flt/σ_oro` ratio), and the Beljaars
+constants are `α = 12`, `β = 1`, `C_md = 0.005`, `C_corr = 0.6`, `C_ih = 0.00102 m⁻¹`,
+`k_flt = 0.00035 m⁻¹`, `k1 = 0.003 m⁻¹`, `n1 = −1.9`, `n2 = −2.8`. The profile concentrates
+the drag in the lowest ~1 km, below the PBL-top layer where the propagating and blocked
+components act.
 
-`a_tofd` is the master amplitude coefficient: `a_tofd == 0` disables the term (early return,
-so the GWD-only forcing is bit-for-bit unchanged) and `a_tofd == 1` is the IFS-nominal
-amplitude. Called from `orographic_gravity_wave_forcing!` before the 3e-3·√2 m/s² magnitude
-limiter.
+`C_d` depends only on the grid and the orography, so it is computed once when the cache is
+built; `orographic_gravity_wave_apply_tendency!` combines it with the current wind through
+`tofd_implicit_rate`. `a_tofd` is the master amplitude: `0` gives `C_d ≡ 0`, `1` is the
+IFS-nominal amplitude.
 
 # Arguments
 
-  - `u_phy`, `v_phy`: Physical horizontal wind components at cell centers [m/s].
   - `ᶜz`: Cell-center height (altitude) [m].
   - `z_sfc`: Terrain surface height (bottom face), on the center-level space so it
     broadcasts against `ᶜz` [m]; `z − z_sfc` is height above ground.
   - `hmax`: Effective maximum subgrid obstacle height on the surface space [m].
   - `a_tofd`: Master TOFD amplitude coefficient [-].
 """
-function calc_tofd_forcing!(
-    ᶜuforcing,
-    ᶜvforcing,
-    u_phy,
-    v_phy,
-    ᶜz,
-    z_sfc,
-    hmax,
-    a_tofd,
-)
-    FT = eltype(ᶜuforcing)
-    iszero(a_tofd) && return nothing
+function tofd_drag_coefficient!(ᶜCd, ᶜz, z_sfc, hmax, a_tofd)
+    FT = eltype(ᶜCd)
 
     # Beljaars et al. (2004) constants (IFS / SURFEX sso_beljaars04).
     c_alpha = FT(12)
@@ -854,20 +845,34 @@ function calc_tofd_forcing!(
     σ_over_hmax = FT(0.5)      # σ_flt = 0.5·σ_oro, with hmax as the σ_oro proxy
     z_floor = FT(1)            # floor on height-above-ground so z^-1.2 stays finite [m]
 
-    # Height above the local surface, floored so the z^-1.2 factor is finite at the
-    # lowest cell center. σ² is a surface field and broadcasts up the column.
+    # σ² is a surface field and broadcasts up the column.
     z_agl = @. lazy(max(z_floor, ᶜz - z_sfc))
     σ_sq = @. lazy((σ_over_hmax * max(FT(0), hmax))^2)
-    Cd = @. lazy(
-        a_tofd * beljaars_const * σ_sq * exp(-(z_agl / z_decay)^decay_exp) *
-        z_agl^power_exp,
-    )
-    speed = @. lazy(sqrt(u_phy^2 + v_phy^2))
-
-    @. ᶜuforcing -= Cd * speed * u_phy
-    @. ᶜvforcing -= Cd * speed * v_phy
-
+    @. ᶜCd =
+        FT(a_tofd) * beljaars_const * σ_sq * exp(-(z_agl / z_decay)^decay_exp) *
+        z_agl^power_exp
     return nothing
+end
+
+"""
+    tofd_implicit_rate(Cd, speed, dt)
+
+Return the backward-Euler TOFD damping rate `r / (1 + r·dt)` [s⁻¹], with `r = Cd·speed`.
+
+The tendency `−tofd_implicit_rate(Cd, |U|, dt)·u` is the increment of the linearized
+implicit update `u⁺ = u / (1 + r·dt)` divided by `dt`. It equals the explicit drag
+`−Cd·|U|·u` when `r·dt ≪ 1` and saturates at `−u/dt` when `r·dt ≫ 1`, so one step can
+bring the wind to rest but never reverse it, however large `Cd` is.
+
+# Arguments
+
+  - `Cd`: TOFD drag coefficient from `tofd_drag_coefficient!` [m⁻¹].
+  - `speed`: Horizontal wind speed `|U|` [m/s].
+  - `dt`: Model time step [s].
+"""
+function tofd_implicit_rate(Cd, speed, dt)
+    r = Cd * speed
+    return r / (1 + r * dt)
 end
 
 """

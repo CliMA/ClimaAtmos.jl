@@ -19,6 +19,9 @@ main
   `ogw_tofd_coefficient` in a run/calibration TOML (`1.0` is the IFS-nominal
   amplitude) to enable it. This supplies the near-surface drag that the
   propagating and blocked components, which act above the PBL top, do not.
+  TOFD is applied every integrator step with the current wind in backward-Euler
+  form (`du/dt = −r/(1 + r·Δt)·u`, `r = C_d|U|`), so it cannot reverse the wind,
+  and it is not subject to the `dt_ogw` cache or the forcing magnitude limiter.
 - ![][badge-🔥behavioralΔ] The orographic gravity-wave forcing magnitude limiter
   now scales the `(u, v)` tendency vector by a single factor (capping `|F|` at
   `3e-3·√2 m/s²`, the diagonal of the former `±3e-3` per-component box) instead of
