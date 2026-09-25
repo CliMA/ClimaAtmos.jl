@@ -144,9 +144,10 @@ function overwrite_initial_state!(setup::WeatherModel, Y, thermo_params)
         )
     end
 
-    # Density
+    # Density. Interpolate face pressure to centers in log space to avoid
+    # overestimating center pressure.
     Y.c.ρ .= TD.air_density.(
-        thermo_params, ᶜT, ᶜinterp.(ᶠp), ᶜq_tot, ᶜq_liq, ᶜq_ice,
+        thermo_params, ᶜT, exp.(ᶜinterp.(log.(ᶠp))), ᶜq_tot, ᶜq_liq, ᶜq_ice,
     )
 
     # Velocity and energy
