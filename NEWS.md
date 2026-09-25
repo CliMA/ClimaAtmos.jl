@@ -3,6 +3,12 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+
+0.42.12
+-------
+- ![][badge-🔥behavioralΔ] The CI environment updates to ClimaParams 1.1.14, which sets the
+  default `EDMF_interface_entr_efficiency` to `0.0` (from `0.4`), turning off the interfacial
+  cloud-top entrainment closure by default.
 - ![][badge-🐛bugfix] File-based initial conditions (`WeatherModel`,
   `MoistFromFile`, `AMIPFromERA5`) now interpolate the face pressure to cell
   centers in log space (`exp(ᶜinterp(log(p)))`) when computing the initial
