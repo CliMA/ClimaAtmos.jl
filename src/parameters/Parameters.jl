@@ -136,6 +136,17 @@ not yet define. `FT` is the float type; `VFT1`, `VFT2`, and `VTF3` are the
     closure [-].
   - `smin_rm`: Upper ratio limit of the smooth-minimum function in the
     mixing-length closure [-].
+  - `mixing_length_alpha`: Non-equilibrium correction factor `α_kε` on
+    `l_TKE`, accounting for the ε/ω-lag (dε/dt = 0 rather than dTKE/dt = 0)
+    in the closure derivation [-].
+  - `mixing_length_l_0`: Base BL mixing length in the empirical
+    `l_empirical_CC = l_0·(1+x)·exp(−x)` TKE-only ceiling on `l_TKE`; the
+    ceiling equals `l_0` at TKE = 0 [m].
+  - `mixing_length_tke_max`: Characteristic TKE magnitude at which the
+    empirical `l_TKE` ceiling decays; larger values relax the cap
+    [m²/s²].
+  - `mixing_length_min`: Minimum mixing length applied to the master
+    `l_final` to prevent division-by-zero in dissipation [m].
   - `min_updraft_top`: Minimum updraft height used by the entrainment limiter
     [m].
   - `pressure_normalmode_buoy_coeff1`: Buoyancy coefficient of the perturbation
@@ -217,6 +228,10 @@ Base.@kwdef struct TurbulenceConvectionParameters{FT, VFT1, VFT2, VTF3} <: ATCP
     Pr_max::FT
     smin_ub::FT
     smin_rm::FT
+    mixing_length_alpha::FT
+    mixing_length_l_0::FT
+    mixing_length_tke_max::FT
+    mixing_length_min::FT
     min_updraft_top::FT
     pressure_normalmode_buoy_coeff1::FT
     pressure_normalmode_drag_coeff::FT

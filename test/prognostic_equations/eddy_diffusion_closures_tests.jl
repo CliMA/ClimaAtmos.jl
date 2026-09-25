@@ -320,12 +320,12 @@ import ClimaCore.CommonSpaces
                 # physical scales.
                 l_inf = ml(FT(Inf))
                 @test isfinite(l_inf.master)
-                @test FT(100) < l_inf.master <= z - z_sfc
+                @test FT(90) < l_inf.master <= z - z_sfc
                 @test ml(FT(1e7)).master == l_inf.master
                 @test l_inf.l_grid == FT(Inf)
                 # Where the physical scales exceed Δ_f, the cap binds
                 # exactly.
-                for Δ_f in FT[50, 100]
+                for Δ_f in FT[50, 90]
                     l_capped = ml(Δ_f)
                     @test l_capped.l_grid == Δ_f
                     @test l_capped.master == Δ_f
