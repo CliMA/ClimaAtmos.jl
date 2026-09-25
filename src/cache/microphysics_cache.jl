@@ -96,8 +96,8 @@ sub-grid-scale fluxes.
 """
 function set_precipitation_velocities!(Y, p, _, _)
     (; ᶜwₜqₜ, ᶜwₕhₜ) = p.precomputed
-    @. ᶜwₜqₜ = Geometry.WVector(0)
-    @. ᶜwₕhₜ = Geometry.WVector(0)
+    @. ᶜwₜqₜ = WVec(0)
+    @. ᶜwₕhₜ = WVec(0)
     return nothing
 end
 function set_precipitation_velocities!(
@@ -148,9 +148,9 @@ function set_precipitation_velocities!(
     end
 
     # compute their contributions to energy and total water advection
-    @. ᶜwₕhₜ = Geometry.WVector(ᶜρwₕhₜ) / Y.c.ρ
+    @. ᶜwₕhₜ = WVec(ᶜρwₕhₜ) / Y.c.ρ
     @. ᶜwₜqₜ =
-        Geometry.WVector(
+        WVec(
             ᶜwₗ * Y.c.ρq_lcl +
             ᶜwᵢ * Y.c.ρq_icl +
             ᶜwᵣ * Y.c.ρq_rai +
@@ -209,16 +209,17 @@ function set_precipitation_velocities!(
     )
 
     microphysics_tracers = (
-        (@name(q_lcl), @name(ᶜwₗʲs.:(1)), @name(ᶜwₗ)),
-        (@name(q_icl), @name(ᶜwᵢʲs.:(1)), @name(ᶜwᵢ)),
-        (@name(q_rai), @name(ᶜwᵣʲs.:(1)), @name(ᶜwᵣ)),
-        (@name(q_sno), @name(ᶜwₛʲs.:(1)), @name(ᶜwₛ)),
+        (@name(q_lcl), @name(ᶜwₗʲs), @name(ᶜwₗ)),
+        (@name(q_icl), @name(ᶜwᵢʲs), @name(ᶜwᵢ)),
+        (@name(q_rai), @name(ᶜwᵣʲs), @name(ᶜwᵣ)),
+        (@name(q_sno), @name(ᶜwₛʲs), @name(ᶜwₛ)),
     )
-    MatrixFields.unrolled_foreach(microphysics_tracers) do (χ_name, wʲ_name, w_name)
+    MatrixFields.unrolled_foreach(microphysics_tracers) do (χ_name, wʲs_name, w_name)
         MatrixFields.has_field(Y.c.sgsʲs.:(1), χ_name) || return
 
         e_int_func = internal_energy_func(χ_name)
         ᶜw = MatrixFields.get_field(p.precomputed, w_name)
+        ᶜwʲs = MatrixFields.get_field(p.precomputed, wʲs_name)
 
         ᶜχ⁰ = ᶜspecific_env_value(χ_name, Y, p)
         ᶜρa⁰χ⁰ = @. lazy(max(zero(Y.c.ρ), ᶜρa⁰) * max(zero(Y.c.ρ), ᶜχ⁰))
@@ -227,8 +228,8 @@ function set_precipitation_velocities!(
         @. ᶜimplied_env_mass_flux = 0
         # add updraft contributions
         for j in 1:n
-            ᶜχʲ = MatrixFields.get_field(Y.c.sgsʲs.:(1), χ_name)
-            ᶜwʲ = MatrixFields.get_field(p.precomputed, wʲ_name)
+            ᶜχʲ = MatrixFields.get_field(Y.c.sgsʲs.:($j), χ_name)
+            ᶜwʲ = ᶜwʲs.:($j)
 
             ᶜρaʲχʲ = @. lazy(
                 max(zero(Y.c.ρ), Y.c.sgsʲs.:($$j).ρa) *
@@ -258,9 +259,9 @@ function set_precipitation_velocities!(
         @. ᶜρwₕhₜ += ᶜimplied_env_mass_flux * (e_int_func(thp, ᶜT⁰) + ᶜΦ)
     end
 
-    @. ᶜwₕhₜ = Geometry.WVector(ᶜρwₕhₜ) / Y.c.ρ
+    @. ᶜwₕhₜ = WVec(ᶜρwₕhₜ) / Y.c.ρ
     @. ᶜwₜqₜ =
-        Geometry.WVector(
+        WVec(
             ᶜwₗ * Y.c.ρq_lcl +
             ᶜwᵢ * Y.c.ρq_icl +
             ᶜwᵣ * Y.c.ρq_rai +
@@ -342,14 +343,14 @@ function set_precipitation_velocities!(
 
     # compute their contributions to energy and total water advection
     @. ᶜwₜqₜ =
-        Geometry.WVector(
+        WVec(
             ᶜwₗ * Y.c.ρq_lcl +
             ᶜwᵢ * Y.c.ρq_icl +
             ᶜwᵣ * Y.c.ρq_rai +
             ᶜwₛ * Y.c.ρq_sno,
         ) / Y.c.ρ
     @. ᶜwₕhₜ =
-        Geometry.WVector(
+        WVec(
             ᶜwₗ * Y.c.ρq_lcl * (Iₗ(thp, ᶜT) + ᶜΦ + $(Kin(ᶜwₗ, ᶜu))) +
             ᶜwᵢ * Y.c.ρq_icl * (Iᵢ(thp, ᶜT) + ᶜΦ + $(Kin(ᶜwᵢ, ᶜu))) +
             ᶜwᵣ * Y.c.ρq_rai * (Iₗ(thp, ᶜT) + ᶜΦ + $(Kin(ᶜwᵣ, ᶜu))) +
@@ -589,10 +590,10 @@ function set_precipitation_velocities!(
                 ᶜwₛʲs.:($$j) * Y.c.sgsʲs.:($$j).q_sno * (Iᵢ(thp, ᶜTʲs.:($$j)) + ᶜΦ)
             )
     end
-    @. ᶜwₕhₜ = Geometry.WVector(ᶜρwₕhₜ) / Y.c.ρ
+    @. ᶜwₕhₜ = WVec(ᶜρwₕhₜ) / Y.c.ρ
 
     @. ᶜwₜqₜ =
-        Geometry.WVector(
+        WVec(
             ᶜwₗ * Y.c.ρq_lcl +
             ᶜwᵢ * Y.c.ρq_icl +
             ᶜwᵣ * Y.c.ρq_rai +
@@ -660,9 +661,9 @@ function set_precipitation_velocities!(
     @. ᶜwᵢ = CMP3.ice_terminal_velocity_mass_weighted(args...; use_aspect_ratio)
 
     # compute their contributions to energy and total water advection
-    @. ᶜwₜqₜ = Geometry.WVector(ᶜwₗ * ρq_lcl + ᶜwᵢ * ρq_icl + ᶜwᵣ * ρq_rai) / ρ
+    @. ᶜwₜqₜ = WVec(ᶜwₗ * ρq_lcl + ᶜwᵢ * ρq_icl + ᶜwᵣ * ρq_rai) / ρ
     @. ᶜwₕhₜ =
-        Geometry.WVector(
+        WVec(
             ᶜwₗ * ρq_lcl * (Iₗ(thp, ᶜT) + ᶜΦ + $(Kin(ᶜwₗ, ᶜu))) +
             ᶜwᵢ * ρq_icl * (Iᵢ(thp, ᶜT) + ᶜΦ + $(Kin(ᶜwᵢ, ᶜu))) +
             ᶜwᵣ * ρq_rai * (Iₗ(thp, ᶜT) + ᶜΦ + $(Kin(ᶜwᵣ, ᶜu))),
@@ -914,7 +915,7 @@ function set_microphysics_tendency_cache!(
     Y, p, mp1m::NonEquilibriumMicrophysics1M, _,
 )
     (; dt) = p
-    (; ᶜT, ᶜq_tot_nonneg, ᶜmp_tendency) = p.precomputed
+    (; ᶜT, ᶜu, ᶜq_tot_nonneg, ᶜmp_tendency) = p.precomputed
 
     thp = CAP.thermodynamics_params(p.params)
     cmp = CAP.microphysics_1m_params(p.params)
@@ -930,17 +931,18 @@ function set_microphysics_tendency_cache!(
     sgs_quad = p.atmos.sgs_quadrature
     nsubs = mp1m.n_substeps
     nsubs_quad = mp1m.n_substeps_quad
+    ᶜw_air = @. lazy(w_component(WVec(ᶜu)))
     if not_quadrature(sgs_quad)
         @. ᶜmp_tendency = microphysics_tendencies_1m(
             Y.c.ρ, ᶜq_tot_nonneg, ᶜq_lcl, ᶜq_icl, ᶜq_rai, ᶜq_sno,
-            ᶜT, cmp, thp, dt, nsubs,
+            ᶜT, ᶜw_air, cmp, thp, dt, nsubs,
         )
     else
         (; ᶜT′T′, ᶜq′q′, ᶜsgs_moments) = p.precomputed
         corr_Tq = correlation_Tq(p.params)
         α = sgs_variance_fidelity(CAP.cloud_fraction_steepness_scale(p.params))
         @. ᶜmp_tendency = microphysics_tendencies_1m(
-            BMT.Microphysics1Moment(), sgs_quad, cmp, thp, Y.c.ρ, ᶜT,
+            BMT.Microphysics1Moment(), sgs_quad, cmp, thp, Y.c.ρ, ᶜT, ᶜw_air,
             ᶜq_tot_nonneg, ᶜq_lcl, ᶜq_icl, ᶜq_rai, ᶜq_sno,
             ᶜT′T′, ᶜq′q′, corr_Tq, ᶜsgs_moments.λ_lagrange, α,
             dt, nsubs_quad,
@@ -954,8 +956,8 @@ function set_microphysics_tendency_cache!(
     Y, p, mp1m::NonEquilibriumMicrophysics1M, tm::PrognosticEDMFX,
 )
     (; dt) = p
-    (; ᶜρʲs, ᶜTʲs, ᶜq_tot_nonnegʲs) = p.precomputed
-    (; ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰) = p.precomputed
+    (; ᶜρʲs, ᶜTʲs, ᶜuʲs, ᶜq_tot_nonnegʲs) = p.precomputed
+    (; ᶜu⁰, ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰) = p.precomputed
     (; ᶜmp_tendency⁰, ᶜmp_tendencyʲs) = p.precomputed
 
     thp = CAP.thermodynamics_params(p.params)
@@ -967,11 +969,12 @@ function set_microphysics_tendency_cache!(
 
     ### Updraft contribution
     for j in 1:n
+        ᶜwʲ_air = @. lazy(w_component(WVec(ᶜuʲs.:($$j))))
         @. ᶜmp_tendencyʲs.:($$j) = microphysics_tendencies_1m(
             ᶜρʲs.:($$j), ᶜq_tot_nonnegʲs.:($$j),
             Y.c.sgsʲs.:($$j).q_lcl, Y.c.sgsʲs.:($$j).q_icl,
             Y.c.sgsʲs.:($$j).q_rai, Y.c.sgsʲs.:($$j).q_sno,
-            ᶜTʲs.:($$j), cmp, thp, dt, nsubs,
+            ᶜTʲs.:($$j), ᶜwʲ_air, cmp, thp, dt, nsubs,
         )
     end
 
@@ -993,10 +996,11 @@ function set_microphysics_tendency_cache!(
     ᶜq_rai⁰ .= ᶜspecific_env_value(@name(q_rai), Y, p)
     ᶜq_sno⁰ .= ᶜspecific_env_value(@name(q_sno), Y, p)
     sgs_quad = p.atmos.sgs_quadrature
+    ᶜw⁰_air = @. lazy(w_component(WVec(ᶜu⁰)))
     if not_quadrature(sgs_quad)
         @. ᶜmp_tendency⁰ = microphysics_tendencies_1m(
             ᶜρ⁰, ᶜq_tot_nonneg⁰, ᶜq_lcl⁰, ᶜq_icl⁰, ᶜq_rai⁰, ᶜq_sno⁰,
-            ᶜT⁰, cmp, thp, dt, nsubs,
+            ᶜT⁰, ᶜw⁰_air, cmp, thp, dt, nsubs,
         )
     else
         (; ᶜT′T′, ᶜq′q′, ᶜsgs_moments) = p.precomputed
@@ -1011,7 +1015,7 @@ function set_microphysics_tendency_cache!(
         @. ᶜλ⁰ = TD.liquid_fraction(thp, ᶜT⁰, max(0, ᶜq_lcl⁰), max(0, ᶜq_icl⁰))
         @. ᶜmu_S⁰ = ᶜq_tot_nonneg⁰ - TD.q_vap_saturation(thp, ᶜT⁰, ᶜρ⁰)
         @. ᶜmp_tendency⁰ = microphysics_tendencies_1m(
-            BMT.Microphysics1Moment(), sgs_quad, cmp, thp, ᶜρ⁰, ᶜT⁰,
+            BMT.Microphysics1Moment(), sgs_quad, cmp, thp, ᶜρ⁰, ᶜT⁰, ᶜw⁰_air,
             ᶜq_tot_nonneg⁰, ᶜq_lcl⁰, ᶜq_icl⁰, ᶜq_rai⁰, ᶜq_sno⁰,
             ᶜT′T′, ᶜq′q′, corr_Tq, ᶜsgs_moments.λ_lagrange, α,
             dt, nsubs_quad, ᶜλ⁰, ᶜmu_S⁰,
@@ -1068,7 +1072,7 @@ function set_microphysics_tendency_cache!(
         # Get aerosol parameters and vertical velocity
         pap = p.params.prescribed_aerosol_params
         acp = CAP.microphysics_cloud_params(p.params).activation
-        ᶜw = @. lazy(w_component(Geometry.WVector(ᶜu)))
+        ᶜw = @. lazy(w_component(WVec(ᶜu)))
 
         # Get prescribed aerosol concentrations
         seasalt_num = p.scratch.ᶜtemp_scalar
@@ -1097,7 +1101,6 @@ function set_microphysics_tendency_cache!(
 )
     (; dt) = p
     thp = CAP.thermodynamics_params(p.params)
-    cm1p = CAP.microphysics_1m_params(p.params)
     cm2p = CAP.microphysics_2m_params(p.params)
     acp = CAP.microphysics_cloud_params(p.params).activation
     pap = p.params.prescribed_aerosol_params
@@ -1106,7 +1109,6 @@ function set_microphysics_tendency_cache!(
 
     (; ᶜρʲs, ᶜTʲs, ᶜuʲs, ᶜq_tot_nonnegʲs) = p.precomputed
     (; ᶜu⁰, ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰) = p.precomputed
-    (; ᶜwₗʲs, ᶜwᵢʲs, ᶜwᵣʲs, ᶜwₛʲs, ᶜwₙₗʲs, ᶜwₙᵣʲs) = p.precomputed
     (; ᶜmp_tendency⁰, ᶜmp_tendencyʲs) = p.precomputed
 
     # Get prescribed aerosol concentrations
@@ -1139,7 +1141,7 @@ function set_microphysics_tendency_cache!(
         #ᶜmp_tendencyʲs.:($j).dq_rim_dt = 0
         #ᶜmp_tendencyʲs.:($j).db_rim_dt = 0
         # Aerosol activation
-        ᶜwʲ = @. lazy(max(0, w_component(Geometry.WVector(ᶜuʲs.:($$j)))))
+        ᶜwʲ = @. lazy(max(0, w_component(WVec(ᶜuʲs.:($$j)))))
         @. ᶜmp_tendencyʲs.:($$j).dn_lcl_dt += aerosol_activation_sources(
             acp, seasalt_num, seasalt_mean_radius, sulfate_num,
             ᶜq_tot_nonnegʲs.:($$j),
@@ -1178,7 +1180,7 @@ function set_microphysics_tendency_cache!(
     # Aerosol activation
     # TODO - make it part of BMT
     # TODO - should be included in limiting
-    ᶜw⁰ = @. lazy(w_component(Geometry.WVector(ᶜu⁰)))
+    ᶜw⁰ = @. lazy(w_component(WVec(ᶜu⁰)))
     @. ᶜmp_tendency⁰.dn_lcl_dt += aerosol_activation_sources(
         acp, seasalt_num, seasalt_mean_radius, sulfate_num, ᶜq_tot_nonneg⁰,
         ᶜq_lcl⁰ + ᶜq_rai⁰, ᶜq_icl⁰ + ᶜq_sno⁰, ᶜn_lcl⁰ + ᶜn_rai⁰,

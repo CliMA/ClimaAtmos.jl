@@ -56,7 +56,11 @@ the valid choices. Each option string names the `CM.Parameters` type it maps to:
   - `cloud_ice_formation`: `"PrescribedIceNumber"`, `"ConstantTimescale"`, `"TemperatureDependent"`.
   - `cloud_ice_melt`: `"CloudIceMelt"`.
   - `cloud_liquid_freezing`: `"HomogeneousAndHeterogeneous"`, `"Homogeneous"`, `"Heterogeneous"`.
-  - `rain_autoconversion`: `"Kessler1M"`, `"PrescribedNd"`.
+  - `rain_autoconversion`: `"Kessler1M"`, `"PrescribedNd"`. `Kessler1M` is the Kessler scheme
+    whose timescale and threshold blend between stratiform (`*_stratiform` ClimaParams keys)
+    and convective values with the vertical velocity of the subdomain being evaluated (grid
+    mean, updraft, or environment); equal values (the ClimaParams defaults) give the classic
+    velocity-independent scheme.
   - `snow_autoconversion`: `"NoSupersaturation"`, `"WithSupersaturation"`.
   - `rain_condensation_evaporation`: `"RainEvaporation"`.
   - `snow_deposition_sublimation`: `"SublimationOnly"`, `"DepositionAndSublimation"`.
@@ -527,9 +531,12 @@ Build the orographic gravity wave model selected by the `orographic_gravity_wave
 key.
 
   - `~` (null): `nothing`, no orographic gravity wave drag.
-  - `"raw_topo"` or `"gfdl_restart"`: `FullOrographicGravityWave`, parameterized by the
-    source of the subgrid topography statistics and by the `topography` key, with
-    coefficients from `params.orographic_gravity_wave_params`.
+  - `"raw_topo"`, `"raw_topo_online"`, or `"gfdl_restart"`:
+    `FullOrographicGravityWave`, parameterized by the source of the subgrid
+    topography statistics and by the `topography` key, with coefficients from
+    `params.orographic_gravity_wave_params`. `"raw_topo"` loads a preprocessed
+    HDF5 artifact, `"raw_topo_online"` runs the preprocessing pipeline at
+    initialization, and `"gfdl_restart"` regrids the GFDL restart file.
   - `"linear"`: `LinearOrographicGravityWave`.
 
 Any other value raises an error.
@@ -537,8 +544,10 @@ Any other value raises an error.
 function get_orographic_gravity_wave_model(parsed_args, params, ::Type{FT}) where {FT}
     ogw_name = parsed_args["orographic_gravity_wave"]
     isnothing(ogw_name) && return nothing
-    return if ogw_name == "raw_topo" || ogw_name == "gfdl_restart"
-        (; γ, ϵ, β, h_frac, ρscale, L0, a0, a1, Fr_crit) =
+    return if ogw_name == "raw_topo" ||
+              ogw_name == "raw_topo_online" ||
+              ogw_name == "gfdl_restart"
+        (; γ, ϵ, β, h_frac, ρscale, L0, a0, a1, Fr_crit, α_smoothing) =
             params.orographic_gravity_wave_params
         topo_info = Val(Symbol(parsed_args["orographic_gravity_wave"]))
         topography = Val(Symbol(parsed_args["topography"]))
@@ -552,14 +561,13 @@ function get_orographic_gravity_wave_model(parsed_args, params, ::Type{FT}) wher
             a0,
             a1,
             Fr_crit,
+            α_smoothing,
             topo_info,
             topography,
         )
-    elseif ogw_name == "linear"
-        LinearOrographicGravityWave(; topo_info = Val(:linear))
     else
         error(
-            """Unknown orographic_gravity_wave `$ogw_name`. Expected: ~, "gfdl_restart", "raw_topo", or "linear".""",
+            """Unknown orographic_gravity_wave `$ogw_name`. Expected: ~, "gfdl_restart", "raw_topo", "raw_topo_online", or "linear".""",
         )
     end
 end
@@ -715,12 +723,12 @@ function get_tracer_nonnegativity_method(parsed_args)
     elseif method == "vapor_constraint"
         TracerNonnegativityVaporConstraint{qtot}()
     elseif method == "vapor_tendency"
-        qtot && warn("`tracer_nonnegativity_method` $(method) does not support \
-                        `_qtot` suffix. qtot will be ignored.")
+        qtot && @warn("`tracer_nonnegativity_method` $(method) does not support \
+                       `_qtot` suffix. qtot will be ignored.")
         TracerNonnegativityVaporTendency()
     elseif method == "vertical_water_borrowing"
-        qtot && warn("`tracer_nonnegativity_method` $(method) does not support \
-                        `_qtot` suffix. qtot will be ignored.")
+        qtot && @warn("`tracer_nonnegativity_method` $(method) does not support \
+                       `_qtot` suffix. qtot will be ignored.")
         TracerNonnegativityVerticalWaterBorrowing()
     else
         error("Invalid `tracer_nonnegativity_method` $(method)")
@@ -887,7 +895,7 @@ function warn_if_run_exceeds_forcing(
 )
     haskey(parsed_args, "t_end") && !isnothing(parsed_args["t_end"]) ||
         return nothing
-    start_date = Dates.DateTime(parsed_args["start_date"], "yyyymmdd")
+    start_date = parse_date(parsed_args["start_date"])
     run_seconds = time_to_seconds(parsed_args["t_end"])
     file_seconds =
         ColumnDatasets.file_time_span(forcing.dataset, start_date)
@@ -996,9 +1004,10 @@ Assert that the configuration describes a self-consistent case, erroring otherwi
 
 Checks that `config` is one of `"sphere"`, `"column"`, `"box"`, `"plane"`; that an ISDAC
 run (`initial_condition: ISDAC`) uses a moist microphysics model; that implicit
-vertical diffusion is paired with a
-turbulence-convection or vertical diffusion model; and that prescribed flow is used only
-with flat topography and an explicit solver. Called at the top of `get_atmos`.
+vertical diffusion is paired with a turbulence-convection model, a vertical
+diffusion model, or a vertically-acting Smagorinsky-Lilly closure; and that
+prescribed flow is used only with flat topography and an explicit solver. Each
+check is independent. Called at the top of `get_atmos`.
 """
 function check_case_consistency(parsed_args)
     ic = parsed_args["initial_condition"]
@@ -1008,6 +1017,7 @@ function check_case_consistency(parsed_args)
     turbconv = parsed_args["turbconv"]
     topography = parsed_args["topography"]
     prescribed_flow = parsed_args["prescribed_flow"]
+    smagorinsky_lilly = parsed_args["smagorinsky_lilly"]
     config = parsed_args["config"]
 
     # Geometry consistency (always checked, independent of the case-specific
@@ -1037,6 +1047,24 @@ function check_case_consistency(parsed_args)
         )
     end
 
+    # The prescribed vertical diffusion, PROPHET, a vertically acting
+    # Smagorinsky-Lilly closure, and AMD diffuse the same grid-mean fields in
+    # the vertical, so at most one of them may be active. AMD always acts on
+    # both axes, so `amd_les` conflicts whatever its configuration.
+    smagorinsky_vertical = is_smagorinsky_vertical(
+        isnothing(smagorinsky_lilly) ? nothing :
+        SmagorinskyLilly(; axes = Symbol(smagorinsky_lilly)),
+    )
+    if !isnothing(vert_diff) && (
+        !isnothing(turbconv) || smagorinsky_vertical || parsed_args["amd_les"]
+    )
+        error(
+            "`vert_diff` cannot be combined with `turbconv`, `amd_les`, or a \
+             vertically acting `smagorinsky_lilly`, which already apply \
+             vertical diffusion to the same fields",
+        )
+    end
+
     # ISDAC consistency: the case is selected by `initial_condition: ISDAC`
     # alone; the setup owns the surface, radiation, forcing, subsidence,
     # scm_coriolis, and ls_adv. It only requires a moist microphysics model.
@@ -1045,14 +1073,24 @@ function check_case_consistency(parsed_args)
             microphysics != "dry",
             "ISDAC requires a moist microphysics model (got `microphysics_model = \"dry\"`)",
         )
-    elseif imp_vert_diff
-        # Implicit vertical diffusion is only supported for specific models:
+    end
+
+    # Implicit vertical diffusion is only supported for the closures that have a
+    # matching Jacobian block: EDMF, the prescribed vertical diffusion models,
+    # and a vertically-acting Smagorinsky-Lilly closure. AMD has no Jacobian
+    # branch and so stays explicit.
+    if imp_vert_diff
         @assert(
-            !isnothing(turbconv) || !isnothing(vert_diff),
+            !isnothing(turbconv) ||
+            !isnothing(vert_diff) ||
+            smagorinsky_vertical,
             "Implicit vertical diffusion is only supported when using a " *
-            "turbulence convection model or vertical diffusion model.",
+            "turbulence convection model, a vertical diffusion model, or a " *
+            "Smagorinsky-Lilly closure that acts on the vertical axis.",
         )
-    elseif !isnothing(prescribed_flow)
+    end
+
+    if !isnothing(prescribed_flow)
         @assert(topography == "NoWarp",
             "Prescribed flow elides `set_velocity_at_surface!` and `set_velocity_at_top!` \
              which is needed for topography. Thus, prescribed flow must have flat surface."

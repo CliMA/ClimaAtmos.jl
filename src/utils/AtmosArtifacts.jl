@@ -29,7 +29,7 @@ function _artifact_exists(name)
     return try
         Artifacts.@artifact_str(name)
         true
-    catch error
+    catch
         false
     end
 end

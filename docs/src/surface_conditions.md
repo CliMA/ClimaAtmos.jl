@@ -4,7 +4,7 @@ The lower boundary is where the atmosphere exchanges momentum, heat, and
 moisture with whatever lies beneath it (ocean, land, sea ice, or an idealized
 slab). ClimaAtmos collects everything controlling this boundary into one object,
 `AtmosSurface`, stored as `atmos.surface`. It is read at each step to fill
-`p.precomputed.sfc_conditions`, the surface fluxes and values consumed as
+`p.precomputed.sfc_conditions`, the surface fluxes and values used as
 boundary conditions by the dynamical core, radiation, and turbulence schemes.
 
 The [User Guide](#User-Guide) covers the options and how to choose; the
@@ -41,7 +41,7 @@ fluxes of momentum, heat, and moisture:
     `(t, FT) -> HeatFluxes/θAndQFluxes`; it is resolved once per update (e.g.
     TRMM_LBA's diurnal SHF/LHF), while `z0`/`ustar` stay constant.
   - **[`ExchangeCoefficients`](@ref ClimaAtmos.SurfaceConditions.ExchangeCoefficients)**:
-    bulk fluxes with fixed `Cd`/`Ch`; simpler and cheaper, for idealized constant
+    bulk fluxes with fixed `Cd`/`Ch`; simpler and faster, for idealized constant
     exchange coefficients (rather than coefficients determined by MOST).
   - **`nothing`**: no atmos-side computation; an external driver supplies the
     conditions (see [Coupling](#Coupling-to-an-external-driver)).
@@ -73,16 +73,12 @@ air–surface gradients:
 
 ### Boundary overrides (`boundary_overrides`)
 
-By default, surface values come from physics (pressure hydrostatically
-extrapolated, humidity saturated at `T_sfc`, zero winds, unit gustiness/moisture
-availability).
+By default, surface values come from physics (density hydrostatically
+extrapolated, humidity saturated at `T_sfc`, zero winds, unit gustiness).
 [`SurfaceBoundaryOverrides`](@ref ClimaAtmos.SurfaceConditions.SurfaceBoundaryOverrides)
-pins a value to a fixed override; each field defaults to `nothing` (use the
-physical default). Currently only `q_vap`, `u`, `v`, and `gustiness` are
-consumed by `surface_state_to_conditions`; the `p` and `beta` fields are
-accepted and stored but not yet applied (the surface density comes from
-`SurfaceFluxes.surface_density`). Many idealized setups nevertheless set `p`
-for future use.
+pins `q_vap`, `u`, `v`, or `gustiness` to a fixed value; each field defaults to
+`nothing` (use the physical default). The surface density always comes from
+`SurfaceFluxes.surface_density`.
 
 ### Albedo (`surface_albedo`)
 
@@ -97,20 +93,21 @@ Sets the shortwave reflectivity passed to the radiation scheme. Three models:
   - **[`CouplerAlbedo`](@ref ClimaAtmos.CouplerAlbedo)**: albedo supplied by an
     external driver (the coupler).
 
-**Direct vs. diffuse** The model carries distinct
+**Direct vs. diffuse.** The model carries distinct
 `direct_sw_surface_albedo` and `diffuse_sw_surface_albedo` fields.
 `ConstantAlbedo` sets them equal, `RegressionFunctionAlbedo` computes them
 separately.
 
-**Spectral** Both atmosphere-side models write a single value across every shortwave band,
-and the [`RegressionFunctionAlbedo`](@ref ClimaAtmos.RegressionFunctionAlbedo)
-scheme treats the refractive index as wavelength-independent. The RRTMGP
+**Spectral.** Both atmosphere-side models write a single value across all
+shortwave bands, and the
+[`RegressionFunctionAlbedo`](@ref ClimaAtmos.RegressionFunctionAlbedo) scheme
+treats the refractive index as wavelength-independent. The RRTMGP
 interface arrays are band-resolved (`(nbnd_sw, ncol)`), so per-band albedo is a
 supported extension point but it would require a model that fills bands with
 distinct values.
 
-**Longwave surface reflectivity** Albedo is shortwave-only; longwave surface reflectivity is handled
-separately through `surface_emissivity`.
+**Longwave surface reflectivity.** Albedo is shortwave-only; the longwave is
+handled separately through `surface_emissivity`.
 
 See the [Ocean Surface Albedo](@ref "Ocean Surface Albedo") page for the
 Jin (2011) [`RegressionFunctionAlbedo`](@ref ClimaAtmos.RegressionFunctionAlbedo) formulation.
@@ -165,7 +162,7 @@ model = CA.AtmosModel(grid; surface, microphysics_model = CA.DryModel())
 Omitted fields take their defaults. You can also pass the surface fields
 directly to `AtmosModel` (`CA.AtmosModel(grid; flux_scheme = …, temperature = …)`),
 which assembles the `AtmosSurface` for you. To swap in an interactive slab
-ocean use `temperature = SC.SlabOceanTemperature{FT}()`; for prescribed heat
+ocean, use `temperature = SC.SlabOceanTemperature{FT}()`; for prescribed heat
 fluxes, `flux_scheme = SC.MoninObukhov(; z0 = FT(1e-4), shf = …, lhf = …)`.
 
 #### File-driven surface
@@ -219,9 +216,9 @@ the two patterns differ only in the `flux_scheme`/`temperature` pair:
  1. **Atmosphere skips surface computation**: `flux_scheme = nothing` (YAML
     `"PrescribedSurface"`). `update_surface_conditions!` early-returns, so
     `temperature` is never read (leave it at its default).
-    `init_sfc_conditions_zero!` pre-fills safe defaults at cache-build so RRTMGP /
-    the diagnostic eddy-diffusivity mass-flux scheme never see uninitialized memory, and the coupler overwrites
-    `sfc_conditions` directly.
+    `init_sfc_conditions_zero!` pre-fills safe defaults at cache-build so that
+    RRTMGP and the diagnostic eddy-diffusivity mass-flux scheme never see
+    uninitialized memory, and the coupler overwrites `sfc_conditions` directly.
  2. **Atmosphere computes fluxes from a coupler-supplied SST**: a real
     `flux_scheme` (e.g. `MoninObukhov(…)`) *together with*
     `temperature = CoupledTemperature(field)`. The coupler writes `T_sfc` into
@@ -230,7 +227,7 @@ the two patterns differ only in the `flux_scheme`/`temperature` pair:
     `Fields.Field{<:SurfaceBoundaryOverrides}` on the cache. See
     `test/coupler_compatibility.jl`.
 
-## Developer guide
+## Developer Guide
 
 The design rationale, data flow, dispatch chains, extension points, and
 debugging checklist are in

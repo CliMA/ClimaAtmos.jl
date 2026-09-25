@@ -1,6 +1,7 @@
 using ClimaComms
 ClimaComms.@import_required_backends
 import ClimaAtmos as CA
+import Logging
 
 @testset "Hyperdiffusion config" begin
     @info "CAM_SE (Special case of Hyperdiffusion)"
@@ -75,4 +76,126 @@ end
     @test atmos.surface.flux_scheme isa CA.SurfaceConditions.MoninObukhov
     @test atmos.surface.temperature isa
           CA.SurfaceConditions.AnalyticTemperature
+end
+
+@testset "Smagorinsky-Lilly axes options" begin
+    # The constructor accepts exactly the four documented axes symbols and
+    # rejects anything else.
+    @test_throws AssertionError CA.SmagorinskyLilly(; axes = :XYZ)
+
+    # Each axis symbol classifies the closure along the horizontal and vertical
+    # axes; only `:UVW` couples all axes isotropically.
+    for (axes, horizontal, vertical, uvw_coupled) in (
+        (:UVW, true, true, true),
+        (:UV, true, false, false),
+        (:W, false, true, false),
+        (:UV_W, true, true, false),
+    )
+        model = CA.SmagorinskyLilly(; axes)
+        @test CA.is_smagorinsky_horizontal(model) == horizontal
+        @test CA.is_smagorinsky_vertical(model) == vertical
+        @test CA.is_smagorinsky_UVW_coupled(model) == uvw_coupled
+    end
+
+    # `check_case_consistency` pairs implicit vertical diffusion only with a
+    # vertically-acting closure. The horizontal-only `UV` closure has no
+    # vertical Jacobian block, so it must be rejected, while `UVW`, `W`, and
+    # `UV_W` are accepted.
+    consistency(smag) = CA.check_case_consistency(
+        CA.AtmosConfig(
+            Dict(
+                "config" => "box",
+                "smagorinsky_lilly" => smag,
+                "implicit_diffusion" => true,
+                "turbconv" => nothing,
+                "vert_diff" => nothing,
+            );
+            job_id = "smag_$(smag)_imp_diff",
+        ).parsed_args,
+    )
+    @test_throws AssertionError consistency("UV")
+    for smag in ("UVW", "W", "UV_W")
+        @test consistency(smag) === nothing
+    end
+end
+
+@testset "vert_diff is rejected alongside PROPHET or a vertical LES closure" begin
+    # `job_id` has to stay unique across the cases below.
+    consistency(; extra...) = CA.check_case_consistency(
+        CA.AtmosConfig(
+            Dict{String, Any}(
+                "config" => "column",
+                "vert_diff" => "VerticalDiffusion",
+                (String(k) => v for (k, v) in extra)...,
+            );
+            job_id = "vert_diff_" * join((string(v) for v in values(extra)), "_"),
+        ).parsed_args,
+    )
+    @test consistency() === nothing
+    @test_throws "cannot be combined" consistency(; turbconv = "prognostic_edmfx")
+    @test_throws "cannot be combined" consistency(; smagorinsky_lilly = "UVW")
+    # AMD acts on both axes, so it conflicts whatever its configuration.
+    @test_throws "cannot be combined" consistency(; amd_les = true)
+    # A horizontal-only Smagorinsky closure leaves the vertical to `vert_diff`.
+    @test consistency(; smagorinsky_lilly = "UV") === nothing
+end
+
+@testset "Orographic gravity wave config" begin
+    FT = Float64
+    ogw_params = CA.OrographicGravityWaveParameters(FT)
+    # `get_orographic_gravity_wave_model` only reads `orographic_gravity_wave_params`.
+    params = (; orographic_gravity_wave_params = ogw_params)
+
+    for name in ("raw_topo", "raw_topo_online", "gfdl_restart")
+        parsed_args =
+            Dict("orographic_gravity_wave" => name, "topography" => "Earth")
+        ogw = CA.get_orographic_gravity_wave_model(parsed_args, params, FT)
+        @test ogw isa CA.FullOrographicGravityWave
+        @test ogw.topo_info == Val(Symbol(name))
+        @test ogw.α_smoothing == ogw_params.α_smoothing
+    end
+
+    @test CA.get_orographic_gravity_wave_model(
+        Dict("orographic_gravity_wave" => nothing),
+        params,
+        FT,
+    ) === nothing
+
+    @test_throws ErrorException CA.get_orographic_gravity_wave_model(
+        Dict("orographic_gravity_wave" => "bogus", "topography" => "Earth"),
+        params,
+        FT,
+    )
+end
+
+@testset "raw_topo stale-artifact warning" begin
+    FT = Float64
+    mk(; γ, h_frac, α, topography = Val(:Earth)) =
+        CA.FullOrographicGravityWave{FT, Val{:raw_topo}, typeof(topography)}(;
+            γ,
+            ϵ = 0.0,
+            β = 0.5,
+            h_frac,
+            ρscale = 1.2,
+            L0 = 8.0e4,
+            a0 = 0.9,
+            a1 = 3.0,
+            Fr_crit = 0.7,
+            α_smoothing = α,
+            topo_info = Val(:raw_topo),
+            topography,
+        )
+
+    # Defaults match the shipped artifact: no warning.
+    @test_logs min_level = Logging.Warn CA.warn_if_stale_raw_topo_artifact(
+        mk(; γ = 0.4, h_frac = 0.1, α = 0.15),
+    )
+    # Analytical topography loads no artifact: no warning even when overridden.
+    @test_logs min_level = Logging.Warn CA.warn_if_stale_raw_topo_artifact(
+        mk(; γ = 0.5, h_frac = 0.2, α = 0.3, topography = Val(:Schar)),
+    )
+    # Overridden shape parameter on Earth: warn.
+    @test_logs (:warn,) CA.warn_if_stale_raw_topo_artifact(
+        mk(; γ = 0.5, h_frac = 0.1, α = 0.15),
+    )
 end

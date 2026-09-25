@@ -369,3 +369,28 @@ end
     overlap = intersect(grouped_args, direct_args)
     @test isempty(overlap)
 end
+
+@testset "Keyword constructors reject unrecognized options" begin
+    @test_throws MethodError CA.AtmosNumerics(; tracer_upwindng = :none)
+    @test_throws MethodError CA.EDMFXModel(;
+        scale_blending_method = CA.SmoothMinimumBlending(), nh_presure = true,
+    )
+end
+
+@testset "A parameter-free DecayingProfile builds a simulation" begin
+    setup = CA.Setups.DecayingProfile()
+    @test isnothing(setup.thermo_params)
+    model = CA.AtmosModel(
+        CA.SphereGrid(Float64; z_elem = 10, h_elem = 2);
+        params = CA.ClimaAtmosParameters(Float64),
+        setup,
+    )
+    simulation = CA.AtmosSimulation(
+        model;
+        dt = "10mins",
+        t_end = "10mins",
+        job_id = "decaying_profile_without_params",
+        output_dir = mktempdir(),
+    )
+    @test all(isfinite, parent(simulation.integrator.u.c.ρ))
+end

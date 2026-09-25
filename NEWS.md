@@ -3,13 +3,83 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- ![][badge-✨feature/enhancement] `WeatherModel` ERA5 IC filenames now use the
+  `HHMM` of `start_date` (e.g. `start_date = "20191231-1200"` →  `..._1200.nc`),
+  matching the ClimaCoupler subseasonal / WeatherQuest naming; date-only strings
+  still default to `0000`.
+- ![][badge-🐛bugfix] With several PROPHET updrafts, the entrainment, the physical-constraint
+  clipping, the Rayleigh sponge, and the sedimentation cache act on the SGS tracers
+  (microphysics species and passive tracers) of the updraft they are called for; they acted
+  on updraft 1 throughout. The default single updraft is unaffected.
+- ![][badge-🐛bugfix] The pressure drag coefficient is computed by the function
+  `pressure_drag_coefficient` for the momentum equation and the TKE return-to-isotropy
+  source, with the environment area clamped to `[1 - a_max, 1]` in both; the TKE source
+  floored it at `a_min`.
+- ![][badge-🐛bugfix] The AMD eddy viscosity divides by the norm of the unscaled velocity
+  gradient. Its numerator and denominator shared one scratch tensor, so the denominator
+  was evaluated after the filter-scaled derivative had overwritten it, leaving a
+  viscosity smaller by roughly the square of the filter width (a factor of order `1e6`
+  in a 3.2 km box) and with the units of an inverse time.
+- ![][badge-🐛bugfix] The LES closures (Smagorinsky-Lilly, AMD, constant horizontal
+  diffusion) diffuse energy through the split enthalpy flux
+  `-ρ D [∇s_d + (h_eff + Φ) ∇q_tot_eff]` used by the other diffusive terms, in place of a
+  lumped `h_tot`. The horizontal AMD scalar diffusivity divides by the physical norm of
+  the gradient, as the vertical one already did.
+- ![][badge-🐛bugfix] Hyperdiffusion scales the P3 ice number `ρn_ice`, rime mass `ρq_rim`, and
+  rime volume `ρb_rim` with the cloud ice tendency; `ρn_ice` received that and a second
+  full-strength `∇⁴` tendency, and the rime species received the latter only.
+- ![][badge-🐛bugfix] The ERA5 forcing-file coverage checks report a file that does not
+  cover the run, so a stale cached file is regenerated; they always reported success.
+- ![][badge-🐛bugfix] `job_id_from_config_file` detects configuration files that share a base
+  name; the comparison never matched.
+- ![][badge-🐛bugfix] The ISDAC setup follows the shared convention `prognostic_tke ? 0 :
+  prescribed profile`; its operands were reversed. `Setups.Larcform1` drops the
+  `prognostic_tke` keyword it never read.
+- ![][badge-🐛bugfix] A `Setups.DecayingProfile()` constructed without parameters builds a
+  simulation, taking the thermodynamics parameters from the model.
+- ![][badge-💥breaking] `SurfaceBoundaryOverrides` drops the `p` and `beta` fields, which were
+  stored and never applied; the setups that set `p` no longer do. The `orographic_gravity_wave:
+  "linear"` option and `LinearOrographicGravityWave` are removed; the option errored at
+  runtime. `AtmosNumerics` and the `EDMFXModel` keyword constructor reject unrecognized
+  keywords with a `MethodError`; they absorbed them.
+- ![][badge-🔥behavioralΔ] `vert_diff` combined with `turbconv`, `amd_les`, or a vertically
+  acting `smagorinsky_lilly` is rejected at model construction. The two AMD configurations
+  set `hyperdiff: ~`, like the Smagorinsky ones.
+- ![][badge-🐛bugfix] The vertical Smagorinsky-Lilly diffusion follows `implicit_diffusion`:
+  with `implicit_diffusion: true` it is part of the implicit tendency, with the eddy viscosity
+  refreshed on every Newton iterate, matching the Jacobian block that already existed for it.
+  A vertically-acting Smagorinsky-Lilly closure now satisfies the implicit-diffusion
+  configuration check on its own. Running the closure under the autodiff Jacobians
+  (`use_auto_jacobian`, `use_dense_jacobian`) needs ClimaCore 1.0, whose tensor return
+  types keep Dual storage; the default manual sparse Jacobian works on any supported
+  ClimaCore.
+- ![][badge-🐛bugfix] The number-density redistribution in vertical diffusion, hyperdiffusion,
+  the viscous sponge, and the PROPHET diffusive flux looks up the P3 ice number field `ρn_ice`;
+  it looked up `ρn_icl`, which no configuration carries, so the ice-number branches never ran.
+- The four AMD precomputed fields that no tendency read are no longer allocated.
+
+- ![][badge-💥breaking]![][badge-🚀performance] `AtmosNumerics` stores
+  `test_dycore_consistency` and `reproducible_restart` as `Bool` fields instead
+  of type parameters, and the `TestDycoreConsistency` and `ReproducibleRestart`
+  marker types are removed. Pass `true`/`false` instead. Both switches reach the
+  tendencies through `p.atmos`, so lifting them to the type domain gave any run
+  that set them a private set of specializations; the restart tests, which set
+  both, shared no compiled code with the rest of CI.
+
+- [#4838](https://github.com/CliMA/ClimaAtmos.jl/pull/4838) ![][badge-🐛bugfix] Constructing an `AtmosModel` now errors when a sponge damping
+  height (`zd_rayleigh`, `zd_viscous`) equals the domain top, where the damping profile divides by zero, and warns when it lies above the
+  domain top, where the sponge is inactive. `rcemipii_box_CRM_1M.yml` now uses `z_max: 33000.0` so that it lies above its `zd_rayleigh`.
+
+0.42.11
+-------
+
 - [#4802](https://github.com/CliMA/ClimaAtmos.jl/pull/4802) ![][badge-✨feature/enhancement] Horizontal resolved-gradient (geometric) SGS variance term
   `c_g (c_Δx Δx_h)² |∇_h ψ|²` for the SGS quadrature (`sgs_variance_horizontal_scale_factor` switches it on), with a closure-validity bound on
   σ_q (`sgs_variance_max_rel_std`); The new parameters default to the historical closure.
 - [#4828](https://github.com/CliMA/ClimaAtmos.jl/pull/4828) Update to ClimaTimeSteppers v1 and update benchmark test
-- [#4838](https://github.com/CliMA/ClimaAtmos.jl/pull/4838) ![][badge-🐛bugfix] Constructing an `AtmosModel` now errors when a sponge damping
-  height (`zd_rayleigh`, `zd_viscous`) equals the domain top, where the damping profile divides by zero, and warns when it lies above the
-  domain top, where the sponge is inactive. `rcemipii_box_CRM_1M.yml` now uses `z_max: 33000.0` so that it lies above its `zd_rayleigh`.
+- [#4837](https://github.com/CliMA/ClimaAtmos.jl/pull/4837) ![][badge-✨feature/enhancement] Richardson-number stability weight on the geometric SGS
+  variance term (`sgs_variance_geometric_Ri_factor`, 0 = off), built on the saturated moist buoyancy gradient and the strain rate, fading the
+  term where the resolved flow is turbulent or conditionally unstable.
 
 0.42.10
 -------

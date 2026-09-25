@@ -51,7 +51,7 @@ netcdf_interpolation_num_points: [2, 2, 60]
 ode_algo: "ARS222"
 ```
 
-Keys can also point to artifacts. As artifacts are folders, we specify both the artifact name, as we would from the REPL, and file to read from, separated by a `/`. For example, to drive a single
+Keys can also point to artifacts. As artifacts are folders, we specify both the artifact name, as we would from the REPL, and the file to read from, separated by a `/`. For example, to drive a single
 column model with an external forcing file from GCM output, we include the following lines in the
 configuration:
 
@@ -127,17 +127,17 @@ configuration file:
     runs, described under
     [Running on GPUs and MPI](gpu_and_mpi.md).
 
-## Common Configurations
+## Common configurations
 
 ClimaAtmos provides a set of common numerical configurations that can be used as building blocks for different types of simulations. These configurations are located in `config/common_configs/` and contain standardized settings for grid resolution, time stepping, numerical schemes, and diagnostics.
 
-### Available Common Configurations
+### Available common configurations
 
-#### Column Configurations
+#### Column configurations
 
   - **[`numerics_column_ze63.yml`](https://github.com/CliMA/ClimaAtmos.jl/blob/main/config/common_configs/numerics_column_ze63.yml)**: Single column configuration with 63 vertical levels
 
-#### Sphere Configurations
+#### Sphere configurations
 
   - **[`numerics_sphere_he6ze10.yml`](https://github.com/CliMA/ClimaAtmos.jl/blob/main/config/common_configs/numerics_sphere_he6ze10.yml)**: Spherical configuration with 6 horizontal elements (550km), 10 vertical levels, 30km domain top, no sponge, explicit vertical diffusion
 
@@ -149,7 +149,7 @@ ClimaAtmos provides a set of common numerical configurations that can be used as
 
   - **[`numerics_sphere_he30ze63.yml`](https://github.com/CliMA/ClimaAtmos.jl/blob/main/config/common_configs/numerics_sphere_he30ze63.yml)**: Spherical configuration with 30 horizontal elements (110km), 63 vertical levels, 60km domain top, rayleigh and viscous sponges, implicit vertical diffusion
 
-#### Diagnostics Configurations for PROPHET Columns
+#### Diagnostics configurations for PROPHET columns
 
 Common diagnostics sets for [PROPHET](prophet.md) single-column runs. Each file defines a `diagnostics:` block mostly at 10-minute output frequency; individual model configs can add case-specific diagnostics on top.
 
@@ -157,7 +157,7 @@ Common diagnostics sets for [PROPHET](prophet.md) single-column runs. Each file 
 
   - **[`diagnostics_column_progedmf_1M.yml`](https://github.com/CliMA/ClimaAtmos.jl/blob/main/config/common_configs/diagnostics_column_progedmf_1M.yml)**: Standard diagnostics for PROPHET columns with 1-moment microphysics (`microphysics_model: "1M"`). Mirrors the 0M set (without the static-energy variables `ha`/`haup`/`haen`) and adds rain/snow specific humidities, supersaturations, updraft/environment precipitation variables, and the full suite of 1M bulk microphysics process rates for the grid mean, updraft, and environment (`mp1m_*`, `mp1mup_*`, `mp1men_*`).
 
-### Using Common Configurations
+### Using common configurations
 
 Common configurations are designed to be combined with model-specific configurations. In the CI pipeline and when running simulations, you can specify multiple configuration files:
 

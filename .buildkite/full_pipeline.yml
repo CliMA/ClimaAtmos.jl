@@ -628,6 +628,14 @@ steps:
           --job_id box_density_current_test
         artifact_paths: "box_density_current_test/output_active/*"
 
+      - label: ":package: Non-spherical: 3D box, density current, implicit Smagorinsky-Lilly"
+        retry: *retry_policy
+        command: >
+          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+          --config_file $CONFIG_PATH/box_density_current_test_implicit.yml
+          --job_id box_density_current_test_implicit
+        artifact_paths: "box_density_current_test_implicit/output_active/*"
+
       - label: ":package: Non-spherical: Reproducibility test for radiative convective equilibrium in a 3D box"
         retry: *retry_policy
         command: >
@@ -849,24 +857,71 @@ steps:
           slurm_gpus: 1
           slurm_mem: 16G
 
-      - label: ":computer: Restart: Using manytests"
+      # `--manytests` runs one restart test per grid, and each grid compiles its
+      # own copy of the model. Running all three in a single step put the job
+      # over the time limit, so they are split across agents with `--grid`. Keep
+      # this list in sync with `available_grids` in test/restart.jl.
+      - label: ":computer: Restart: Using manytests, sphere"
         retry: *retry_policy
         command: >
           julia --color=yes --project=.buildkite test/restart.jl --manytests true
+          --grid sphere
         agents:
           slurm_mem: 16GB
 
-      - label: ":computer: Restart: Using manytests, GPU"
+      - label: ":computer: Restart: Using manytests, box"
         retry: *retry_policy
         command: >
           julia --color=yes --project=.buildkite test/restart.jl --manytests true
+          --grid box
+        agents:
+          slurm_mem: 16GB
+
+      - label: ":computer: Restart: Using manytests, column"
+        retry: *retry_policy
+        command: >
+          julia --color=yes --project=.buildkite test/restart.jl --manytests true
+          --grid column
+        agents:
+          slurm_mem: 16GB
+
+      - label: ":computer: Restart: Using manytests, sphere, GPU"
+        retry: *retry_policy
+        command: >
+          julia --color=yes --project=.buildkite test/restart.jl --manytests true
+          --grid sphere
         env:
           CLIMACOMMS_DEVICE: "CUDA"
         agents:
           slurm_gpus: 1
           slurm_mem: 16G
 
-      # This job occasionally times out. We add a soft file when the agent is
+      - label: ":computer: Restart: Using manytests, box, GPU"
+        retry: *retry_policy
+        command: >
+          julia --color=yes --project=.buildkite test/restart.jl --manytests true
+          --grid box
+        env:
+          CLIMACOMMS_DEVICE: "CUDA"
+        agents:
+          slurm_gpus: 1
+          slurm_mem: 16G
+
+      - label: ":computer: Restart: Using manytests, column, GPU"
+        retry: *retry_policy
+        command: >
+          julia --color=yes --project=.buildkite test/restart.jl --manytests true
+          --grid column
+        env:
+          CLIMACOMMS_DEVICE: "CUDA"
+        soft_fail:
+          - exit_status: -1
+          - exit_status: 255
+        agents:
+          slurm_gpus: 1
+          slurm_mem: 16G
+
+      # This job occasionally times out. We add a soft fail when the agent is
       # lost because of timeout
       - label: ":computer: Restart 2-process MPI"
         command: >
@@ -1253,6 +1308,7 @@ steps:
         artifact_paths: "flame_aquaplanet_progedmf_1m/*"
         agents:
           slurm_mem: 32GB
+          slurm_time: 02:00:00
 
       # This job takes too long (a hour) so it is temporarily disabled
       # - label: ":fire: Flame graph: prognostic edmf dense autodiff"

@@ -53,6 +53,6 @@ function surface_condition(::Soares, params)
             ustar = FT(0.28),
         ),
         temperature = AnalyticTemperature(Returns(FT(300))),
-        overrides = SurfaceBoundaryOverrides(p = FT(1e5), q_vap = FT(5e-3)),
+        overrides = SurfaceBoundaryOverrides(q_vap = FT(5e-3)),
     )
 end

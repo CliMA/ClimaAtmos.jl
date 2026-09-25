@@ -185,7 +185,14 @@ constant_horizontal_diffusion:
   help: "Constant horizontal diffusion closure [`true`, `false` (default)]"
   value: false
 smagorinsky_lilly:
-  help: "Smagorinsky-Lilly diffusive closure [`nothing` (default), `UVW`, `UV`, `W`, `UV_W_decoupled`]"
+  help: |
+    Smagorinsky-Lilly diffusive closure. The value selects the axes the closure acts on:
+    - `UVW`: isotropic closure coupling all axes, with a single mixing length `c_smag ∛(Δx Δy Δz) fb`.
+    - `UV`: horizontal axes only.
+    - `W`: vertical axis only.
+    - `UV_W`: horizontal and vertical axes, treated separately (distinct horizontal and vertical mixing lengths).
+    - `~` (default): closure off.
+    The `W`, `UV_W`, and `UVW` options act on the vertical and can be paired with `implicit_diffusion: true`.
   value: ~
 tracer_nonnegativity_method:
   help: |
@@ -195,7 +202,7 @@ tracer_nonnegativity_method:
     - `vapor_tendency`: Weakly enforce nonnegativity by applying a tendency to each tracer to redistribute tracer mass between vapor (q_tot) and each tracer
     - `vertical_water_borrowing`: Enforce nonnegativity using VerticalMassBorrowingLimiter, which redistributes tracer mass vertically. Uses a single threshold (0.0) for all tracers to which the limiter is applied.
     - `~` (default): Do not enforce nonnegativity
-    Note: append `_qtot` to the method name to enforce nonnegativity of q_tot as well (not applicable to `vertical_water_borrowing`).
+    Note: append `_qtot` to `elementwise_constraint` to include q_tot among the constrained tracers. `vapor_constraint_qtot` is accepted but leaves q_tot unchanged; `vapor_tendency` and `vertical_water_borrowing` ignore the suffix with a warning.
   value: ~
 bubble:
   help: "Enable bubble correction for more accurate surface areas"
@@ -228,7 +235,7 @@ disable_surface_flux_tendency:
   help: "(Bool) Whether to disable surface flux tendencies of momentum, energy, and tracers [`true`, `false` (default)]. When this flag is true, the surface flux tendency is not applied, no matter how surface conditions are computed."
   value: false
 surface_setup:
-  help: "Surface flux scheme [`DefaultExchangeCoefficients` (default), `DefaultMoninObukhov`]"
+  help: "Surface flux scheme [`DefaultExchangeCoefficients` (default), `DefaultMoninObukhov`, `PrescribedSurface`]"
   value: "DefaultExchangeCoefficients"
 initial_condition:
   help: "Selects the simulation case/setup. Global/idealized options: `DryBaroclinicWave`, `MoistBaroclinicWave`, `ConstantBuoyancyFrequencyProfile`, `DecayingProfile` (default), `IsothermalProfile`, `Bomex`, `DryDensityCurrentProfile`, `RisingThermalBubbleProfile`, `ISDAC`, or a NetCDF file path (see docs). Externally-driven single-column cases: `GCM`, `ARMVARANAL`, `ForcingFromFile`, `ReanalysisTimeVarying`."
@@ -291,7 +298,7 @@ cloud_liquid_freezing:
   help: "Cloud liquid freezing option for 1M microphysics [`HomogeneousAndHeterogeneous` (default), `Homogeneous`, `Heterogeneous`, ~]"
   value: "HomogeneousAndHeterogeneous"
 rain_autoconversion:
-  help: "Rain autoconversion option for 1M microphysics [`Kessler1M` (default), `PrescribedNd`, ~]"
+  help: "Rain autoconversion option for 1M microphysics [`Kessler1M` (default), `PrescribedNd`, ~]. `Kessler1M` blends its timescale and threshold between the stratiform (ClimaParams `rain_autoconversion_timescale_stratiform`, `cloud_liquid_water_specific_humidity_autoconversion_threshold_stratiform`) and convective (`rain_autoconversion_timescale`, `cloud_liquid_water_specific_humidity_autoconversion_threshold`) values with the vertical velocity of each subdomain (scale `rain_autoconversion_velocity_scale`); with equal values (the ClimaParams defaults) it is the classic velocity-independent Kessler scheme, so a TOML override of a convective key should be paired with its `_stratiform` key to stay velocity independent."
   value: "Kessler1M"
 snow_autoconversion:
   help: "Snow autoconversion option for 1M microphysics [`NoSupersaturation` (default), `WithSupersaturation`, ~]"
@@ -331,7 +338,7 @@ energy_q_tot_upwinding:
   help: "Energy upwinding mode [`none`, `first_order` , `third_order`, `vanleer_limiter` (default)]"
   value: vanleer_limiter
 orographic_gravity_wave:
-  help: "Orographic drag on horizontal mean flow [`nothing` (default), `gfdl_restart`, `raw_topo`, `linear` (test path)]"
+  help: "Orographic drag on horizontal mean flow [`nothing` (default), `gfdl_restart`, `raw_topo` (load preprocessed artifact), `raw_topo_online` (run preprocessing at initialization), `linear` (test path)]"
   value: ~
 non_orographic_gravity_wave:
   help: "Apply parameterization for convective gravity wave forcing on horizontal mean flow [`false` (default), `true`]"
@@ -374,10 +381,10 @@ cfsite_number:
   help: "Used only by the `GCM` case: selects which cfsite column to read from `external_forcing_file`, specified as siteN. For site details see Shen et al. 2022 `https://doi.org/10.1029/2021MS002631`. [`site23` (default), `siteN`]"
   value: "site23"
 site_latitude:
-  help: "Used only by the `ReanalysisTimeVarying` / `ReanalysisMonthlyAveragedDiurnal` cases, which use it (with `site_longitude` and `start_date`) to generate and locate the ERA5 forcing file; other cases take location from `external_forcing_file` or `cfsite_number`. Artifact support is currently for the eastern Pacific region in July 2007 only. [`17.0` (default)]"
+  help: "Used only by the `ReanalysisTimeVarying` / `ReanalysisMonthlyAveragedDiurnal` cases, which use it (with `site_longitude` and `start_date`) to generate and locate the ERA5 forcing file; other cases take location from `external_forcing_file` or `cfsite_number`. The ERA5 artifact currently covers only the tropical Pacific during the first five days of July 2007. [`17.0` (default)]"
   value: 17.0
 site_longitude:
-  help: "Used only by the `ReanalysisTimeVarying` / `ReanalysisMonthlyAveragedDiurnal` cases, which use it (with `site_latitude` and `start_date`) to generate and locate the ERA5 forcing file; other cases take location from `external_forcing_file` or `cfsite_number`. Artifact support is currently for the eastern Pacific region in July 2007 only. [`-149.0` (default)]"
+  help: "Used only by the `ReanalysisTimeVarying` / `ReanalysisMonthlyAveragedDiurnal` cases, which use it (with `site_latitude` and `start_date`) to generate and locate the ERA5 forcing file; other cases take location from `external_forcing_file` or `cfsite_number`. The ERA5 artifact currently covers only the tropical Pacific during the first five days of July 2007. [`-149.0` (default)]"
   value: -149.0
 era5_diurnal_warming:
   help: Applies a warming scenario by adding a constant temperature offset (in Kelvin). Supported only by the `ReanalysisMonthlyAveragedDiurnal` forcing model. This affects the target surface temperature for the entire simulation, the initial atmospheric temperature profile, and the relaxation temperature profile above `gcmdriven_relaxation_minimum_height`. Specific humidity is increased to hold relative humidity constant in the initial and relaxation profiles.
@@ -454,7 +461,7 @@ chemistry_model:
 
 # Eddy-diffusivity mass-flux (EDMF) configuration
 turbconv:
-  help: "Turbulence convection scheme [`nothing` (default), 'prognostic_edmfx']"
+  help: "Turbulence convection scheme [`nothing` (default), `prognostic_edmfx`, `edonly_edmfx`]"
   value: ~
 advection_test:
   help: "Switches off all grid-scale and subgrid-scale momentum tendencies [`false` (default), `true`]"
@@ -466,7 +473,7 @@ edmfx_filter:
   help: "If set to true, it switches on the relaxation of negative velocity in the eddy-diffusivity mass-flux scheme.  [`true`, `false` (default)]"
   value: false
 edmfx_nh_pressure:
-  help: "If set to true, it switches on the eddy-diffusivity mass-flux pressure drag closure.  For the prognostic scheme, this only controls the drag term in the pressure closure. The buoyancy term is always applied. [`true`, `false` (default)]"
+  help: "If set to true, it switches on the eddy-diffusivity mass-flux pressure drag closure. For the prognostic scheme, this only controls the drag term in the pressure closure. The buoyancy term is always applied. [`true`, `false` (default)]"
   value: false
 edmfx_vertical_diffusion:
   help: "If set to true, it switches on vertical diffusion of prognostic eddy-diffusivity mass-flux updrafts. [`true`, `false` (default)]"

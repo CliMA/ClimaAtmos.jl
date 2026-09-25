@@ -101,12 +101,8 @@ warning on ClimaCore versions older than 0.14.22.
 `vertical_water_borrowing_species_from_config`.
 """
 function get_numerics(parsed_args, FT; vertical_water_borrowing_species = nothing)
-    test_dycore_consistency =
-        parsed_args["test_dycore_consistency"] ? TestDycoreConsistency() :
-        nothing
-    reproducible_restart =
-        parsed_args["reproducible_restart"] ? ReproducibleRestart() :
-        nothing
+    test_dycore_consistency = parsed_args["test_dycore_consistency"]::Bool
+    reproducible_restart = parsed_args["reproducible_restart"]::Bool
 
     energy_q_tot_upwinding = Symbol(parsed_args["energy_q_tot_upwinding"])
     tracer_upwinding = Symbol(parsed_args["tracer_upwinding"])
@@ -156,8 +152,10 @@ values map to same-named types in `Setups`:
   - Baroclinic waves: `"DryBaroclinicWave"`, `"MoistBaroclinicWave"`,
     `"MoistBaroclinicWaveWithEDMF"`, which read `perturb_initstate` and `deep_atmosphere`.
   - LES/SCM cases: `"Bomex"`, `"Rico"`, `"Soares"`, `"GATE_III"`, `"DYCOMS_RF01"`,
-    `"DYCOMS_RF02"`, `"TRMM_LBA"`, `"Larcform1"`, `"GABLS"`, `"ISDAC"`, which read
-    `prognostic_tke` (and, for ISDAC, `perturb_initstate`).
+    `"DYCOMS_RF02"`, `"TRMM_LBA"`, `"GABLS"`, `"ISDAC"`, which read `prognostic_tke`
+    (and, for ISDAC, `perturb_initstate`), and `"Larcform1"`, which starts from zero
+    TKE and reads neither.
+  - RCEMIP I: `"RCEMIPIProfile_295"`, `"RCEMIPIProfile_300"`, `"RCEMIPIProfile_305"`.
   - RCEMIP II: `"RCEMIPIIProfile_295"`, `"RCEMIPIIProfile_300"`, `"RCEMIPIIProfile_305"`.
   - File and reanalysis-driven: `"GCM"` (`external_forcing_file` plus `cfsite_number`),
     `"ARMVARANAL"` (an ARM VARANAL file, converted to the ClimaColumn schema),
@@ -266,12 +264,13 @@ function get_setup_type(parsed_args, thermo_params)
             perturb = parsed_args["perturb_initstate"],
             deep_atmosphere = parsed_args["deep_atmosphere"],
         )
-    elseif ic_name in
-           ("Soares", "GATE_III", "DYCOMS_RF01", "DYCOMS_RF02", "TRMM_LBA", "Larcform1")
+    elseif ic_name in ("Soares", "GATE_III", "DYCOMS_RF01", "DYCOMS_RF02", "TRMM_LBA")
         return getproperty(Setups, Symbol(ic_name))(;
             prognostic_tke = parsed_args["prognostic_tke"],
             thermo_params,
         )
+    elseif ic_name == "Larcform1"
+        return Setups.Larcform1(; thermo_params)
     elseif ic_name == "GABLS"
         return Setups.GABLS(;
             prognostic_tke = parsed_args["prognostic_tke"],
@@ -294,7 +293,8 @@ function get_setup_type(parsed_args, thermo_params)
         return Setups.SimplePlume(;
             prognostic_tke = parsed_args["prognostic_tke"],
         )
-    elseif ic_name in ("RCEMIPIIProfile_295", "RCEMIPIIProfile_300", "RCEMIPIIProfile_305")
+    elseif ic_name in ("RCEMIPIProfile_295", "RCEMIPIProfile_300", "RCEMIPIProfile_305",
+        "RCEMIPIIProfile_295", "RCEMIPIIProfile_300", "RCEMIPIIProfile_305")
         return getproperty(Setups, Symbol(ic_name))()
     elseif ic_name == "PrecipitatingColumn"
         return Setups.PrecipitatingColumn(; thermo_params)

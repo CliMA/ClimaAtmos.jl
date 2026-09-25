@@ -900,6 +900,34 @@ function ᶜh_eff_plus_Φ!(ᶜout, thermo_params, ᶜT, ᶜΦ, ᶜq_vap, ᶜq_li
 end
 
 """
+    ᶜh_eff_plus_Φ!(ᶜout, Y, p)
+
+Write `h_eff + Φ` into `ᶜout` and return it, taking the temperature and
+geopotential from the cache and the suspended water from `ᶜsuspended_water`.
+"""
+function ᶜh_eff_plus_Φ!(ᶜout, Y, p)
+    thermo_params = CAP.thermodynamics_params(p.params)
+    (; ᶜT) = p.precomputed
+    (; ᶜΦ) = p.core
+    ᶜq_vap, ᶜq_lcl, ᶜq_icl = ᶜsuspended_water(Y, p)
+    return ᶜh_eff_plus_Φ!(ᶜout, thermo_params, ᶜT, ᶜΦ, ᶜq_vap, ᶜq_lcl, ᶜq_icl)
+end
+
+"""
+    ᶜdry_static_energy(p)
+
+Return the lazy dry static energy `s_d = h_d + Φ` from the cached temperature
+and geopotential, the scalar whose gradient the diffusive enthalpy flux
+`F_h = -K [∇s_d + (h_eff + Φ) ∇q_tot_eff]` acts on besides the diffusing water.
+"""
+function ᶜdry_static_energy(p)
+    thermo_params = CAP.thermodynamics_params(p.params)
+    (; ᶜT) = p.precomputed
+    (; ᶜΦ) = p.core
+    return @. lazy(TD.dry_static_energy(thermo_params, ᶜT, ᶜΦ))
+end
+
+"""
     ᶜsuspended_water(Y, p)
 
 Return the lazy specific humidities `(q_vap, q_lcl, q_icl)` of the suspended

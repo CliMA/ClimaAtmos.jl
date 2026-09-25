@@ -58,7 +58,7 @@ required but currently unused.
   - `add_isothermal_boundary_layer`: Whether RRTMGP appends an isothermal layer above the
     model top, so that the domain reaches negligible pressure. RRTMGP allocates and fills it
     internally.
-  - `deep_atmosphere`: Whether to scale fluxes by the spherical area ratio `(r/a)²`, which
+  - `deep_atmosphere`: Whether to scale fluxes by the spherical area ratio `(a/r)²`, which
     matters only for deep-atmosphere configurations. Applied only when `planet_radius` is
     also passed to `rrtmgp_solver`.
 """
@@ -81,7 +81,7 @@ Full RRTMGP correlated k-distribution radiation with gases but without cloud opt
   - `add_isothermal_boundary_layer`: Whether RRTMGP appends an isothermal layer above the
     model top.
   - `aerosol_radiation`: Whether prescribed aerosols contribute to the shortwave optics.
-  - `deep_atmosphere`: Whether to scale fluxes by the spherical area ratio `(r/a)²`.
+  - `deep_atmosphere`: Whether to scale fluxes by the spherical area ratio `(a/r)²`.
 """
 @kwdef struct ClearSkyRadiation <: AbstractRRTMGPMode
     idealized_h2o::Bool = false
@@ -113,7 +113,7 @@ Full RRTMGP correlated k-distribution radiation, including cloud optics.
   - `reset_rng_seed`: Whether to reset the RNG seed to the timestep number before each RRTMGP
     call. The cloud-optics sampling is stochastic, so a deterministic seed makes runs and
     restarts bitwise reproducible. Leave disabled for production runs.
-  - `deep_atmosphere`: Whether to scale fluxes by the spherical area ratio `(r/a)²`.
+  - `deep_atmosphere`: Whether to scale fluxes by the spherical area ratio `(a/r)²`.
 """
 @kwdef struct AllSkyRadiation{ACR <: Union{Nothing, AbstractCloudInRadiation}} <:
               AbstractRRTMGPMode

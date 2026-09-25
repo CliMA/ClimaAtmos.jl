@@ -30,8 +30,6 @@ surface_precipitation_tendency!(Yₜ, Y, p, t, ::SlabOceanTemperature, ::DryMode
 function surface_precipitation_tendency!(
     Yₜ, Y, p, t, slab::SlabOceanTemperature, microphysics_model,
 )
-    FT = eltype(Y)
-
     # Surface energy from precipitation
     pet = p.precomputed.col_integrated_precip_energy_tendency
     depth_ocean = slab.depth_ocean
@@ -77,7 +75,6 @@ surface_temp_tendency!(Yₜ, Y, p, t, ::SurfaceTemperature) = nothing
 
 function surface_temp_tendency!(Yₜ, Y, p, t, slab::SlabOceanTemperature)
     FT = eltype(Y)
-    params = p.params
 
     depth_ocean = slab.depth_ocean
     ρ_ocean = slab.ρ_ocean

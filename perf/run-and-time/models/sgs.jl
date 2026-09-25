@@ -62,15 +62,13 @@ function case_setup()
     pa["topography"] = "NoWarp"                # skip ETOPO load + spectral smoothing
     pa["topo_smoothing"] = false
 
-    FT = eltype(config)
-
     params = CA.ClimaAtmosParameters(config)
     setup_type = CA.get_setup_type(pa, CA.CAP.thermodynamics_params(params))
     grid = CA.get_grid(pa, params, config.comms_ctx)
     model = CA.get_atmos(config, params, grid; setup_type = setup_type)
 
     # Time arguments (dt is what the cache reads via `p.dt`).
-    dt, t_start, t_end = CA.convert_time_args(
+    dt, t_start, _ = CA.convert_time_args(
         pa["dt"], pa["t_start"], pa["t_end"], CA.parse_date(pa["start_date"]),
     )
 

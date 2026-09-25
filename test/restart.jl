@@ -1,3 +1,9 @@
+# PrecompileCI (.buildkite/PrecompileCI) caches native code for the simulation
+# setup and first steps so that CI jobs do not recompile it from scratch. It has
+# to be loaded before ClimaAtmos and is only available from the .buildkite
+# project so we check if it's visible.
+!isnothing(Base.find_package("PrecompileCI")) && (using PrecompileCI)
+
 import ClimaAtmos as CA
 import ClimaCore
 import ClimaCore: DataLayouts, Fields, Geometry
@@ -194,18 +200,31 @@ TESTING = Any[]
 
 # Add a configuration with all the bells and whistles
 if MANYTESTS
-    if comms_ctx isa ClimaComms.SingletonCommsContext
-        configurations = ["sphere", "box", "column"]
+    # Every grid compiles its own copy of the model, so CI runs one Buildkite
+    # step per grid.
+    available_grids =
+        comms_ctx isa ClimaComms.SingletonCommsContext ?
+        ["sphere", "box", "column"] : ["sphere", "box"]
+    grids = if isempty(GRIDS)
+        available_grids
     else
-        configurations = ["sphere", "box"]
+        unknown = setdiff(GRIDS, available_grids)
+        isempty(unknown) || error(
+            "Unknown grid(s) $(join(unknown, ", ")). " *
+            "Available here: $(join(available_grids, ", "))",
+        )
+        filter(in(GRIDS), available_grids)
     end
 
-    for configuration in configurations
-        if configuration == "sphere"
+    for grid in grids
+        if grid == "sphere"
             microphysics_models = ["1M"]
             topography = "Earth"
+            # NOTE: EDMF only supports equilibrium moisture, so the
+            # `prognostic_edmfx` entry is skipped below for every `1M` model and
+            # the sphere currently yields no EDMF configuration. Testing EDMF
+            # restarts on a sphere requires adding "0M" to `microphysics_models`.
             turbconv_models = [nothing, "prognostic_edmfx"]
-            # turbconv_models = ["prognostic_edmfx"]
             radiations = [nothing, "allsky"]
         else
             microphysics_models = ["0M"]
@@ -236,14 +255,14 @@ if MANYTESTS
                     # Let's add an additional check here.
                     maybe_wait_filesystem(comms_ctx, output_loc)
 
-                    job_id = "$(configuration)_$(mp_model)_$(topography)_$(radiation)_$(turbconv_mode)"
+                    job_id = "$(grid)_$(mp_model)_$(topography)_$(radiation)_$(turbconv_mode)"
                     test_dict = Dict(
                         "test_dycore_consistency" => true, # We will add NaNs to the cache, just to make sure
                         "reproducible_restart" => true,
                         "check_nan_every" => 3,
                         "log_progress" => false,
                         "microphysics_model" => mp_model,
-                        "config" => configuration,
+                        "config" => grid,
                         "topography" => topography,
                         "turbconv" => turbconv_mode,
                         "dt" => "1secs",

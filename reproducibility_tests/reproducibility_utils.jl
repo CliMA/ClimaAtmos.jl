@@ -138,7 +138,7 @@ Return a flat vector of all file paths (recursively) under `dir`.
 """
 function all_files_in_dir(dir)
     all_files = String[]
-    for (root, dirs, files) in walkdir(dir)
+    for (root, _, files) in walkdir(dir)
         for file in files
             f = joinpath(root, file)
             isfile(f) || continue # avoid symlinks
@@ -170,7 +170,7 @@ file `ref_counter.jl`.
 function sorted_dirs_with_matched_files(; dir = pwd())
     filename = "ref_counter.jl"
     matched_dirs = String[]
-    for (root, dirs, files) in walkdir(dir)
+    for (root, dirs, _) in walkdir(dir)
         for dir in dirs
             push!(matched_dirs, joinpath(root, dir))
         end
@@ -399,7 +399,7 @@ function get_reference_dirs_to_delete(;
     if !isempty(sorted_dirs)
         # Now, sorted_dirs[1] is newest, sorted_dirs[end] is oldest
         bins = compute_bins(sorted_dirs)
-        for i in 1:length(bins), j in 1:length(bins[i])
+        for i in eachindex(bins), j in eachindex(bins[i])
             if i ≤ keep_n_bins_back
                 if !(j ≤ keep_n_comparable_states)
                     push!(dir_to_delete, bins[i][j])

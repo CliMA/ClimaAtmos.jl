@@ -99,9 +99,7 @@ NVTX.@annotate function rrtmgp_solver_callback!(integrator)
     p = integrator.p
     t = integrator.t
     FT = eltype(Y)
-    (; params) = p
     (; ᶠradiation_flux, rrtmgp_solver) = p.radiation
-    (; radiation_mode) = p.atmos
 
     RRTMGPI.update_atmospheric_state!(integrator)
 

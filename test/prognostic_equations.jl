@@ -146,3 +146,18 @@ end
         end
     end
 end
+
+@testset "pressure_drag_coefficient" begin
+    # `d_c = α_d / (2H) (1/√aʲ + 1/√a⁰)`, with the updraft area clamped to
+    # `[a_min, a_max]` and the environment area to `[1 - a_max, 1]`.
+    for FT in (Float32, Float64)
+        α_d, H, a_min, a_max = FT(10), FT(8000), FT(1e-5), FT(0.7)
+        d_c(aʲ, a⁰) = ClimaAtmos.pressure_drag_coefficient(α_d, H, aʲ, a⁰, a_min, a_max)
+        @test d_c(FT(0.1), FT(0.9)) ≈ α_d / (2H) * (1 / sqrt(FT(0.1)) + 1 / sqrt(FT(0.9)))
+        @test d_c(FT(0), FT(0.9)) == d_c(a_min, FT(0.9))
+        @test d_c(FT(0.9), FT(0.9)) == d_c(a_max, FT(0.9))
+        @test d_c(FT(0.1), FT(-0.2)) == d_c(FT(0.1), 1 - a_max)
+        @test d_c(FT(0.1), FT(1.3)) == d_c(FT(0.1), FT(1))
+        @test d_c(FT(0.1), FT(0.9)) isa FT
+    end
+end

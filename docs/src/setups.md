@@ -77,7 +77,7 @@ data. Defaults to a no-op.
 ClimaAtmos.Setups.overwrite_initial_state!
 ```
 
-## SCM Forcing Methods
+## SCM forcing methods
 
 Single-column setups can provide forcing profiles. These are applied wherever
 the model is built from the setup: `AtmosModel(grid; setup, ...)` on the
@@ -91,7 +91,7 @@ ClimaAtmos.Setups.large_scale_advection_forcing
 ClimaAtmos.Setups.coriolis_forcing
 ```
 
-## Model Methods
+## Model methods
 
 Setups can return model objects directly. Like the SCM forcing methods, these
 are applied by `AtmosModel(grid; setup, ...)` and by the YAML path; when a
@@ -121,9 +121,9 @@ Worked walkthroughs for defining data-driven and analytic cases in a
 runscript are in [Adding a Setup](extending_setups.md) in the Developer
 Guide.
 
-## Available Setups
+## Available setups
 
-### SCM Cases
+### SCM cases
 
 ```@docs
 ClimaAtmos.Setups.Bomex
@@ -138,10 +138,10 @@ ClimaAtmos.Setups.Larcform1
 ClimaAtmos.Setups.SimplePlume
 ClimaAtmos.Setups.PrecipitatingColumn
 ClimaAtmos.Setups.ShipwayHill2012
-ClimaAtmos.Setups.RCEMIPIIProfile
+ClimaAtmos.Setups.RCEMIPProfile
 ```
 
-### Global Cases
+### Global cases
 
 ```@docs
 ClimaAtmos.Setups.DecayingProfile
@@ -155,7 +155,7 @@ ClimaAtmos.Setups.RisingThermalBubbleProfile
 ClimaAtmos.Setups.MoistAdiabaticProfileEDMFX
 ```
 
-### Data-Driven
+### Data-driven cases
 
 ```@docs
 ClimaAtmos.Setups.ForcingFromFile

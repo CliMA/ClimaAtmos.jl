@@ -72,7 +72,7 @@ The flux-form continuity equation is discretized as
 ```math
 \frac{\partial \hat{\rho}^j}{\partial t}
 = - \hat{\mathcal{D}}_h \left[ \hat{\rho}^j \bar{\boldsymbol{u}}^j \right]
-  - \mathcal{D}^c_v \left[ WI^f(J, \hat{\rho}^j) \, \tilde{\boldsymbol{u}}^j \right]
+  - D^c \left[ \frac{I^f(\hat{\rho}^j J)}{J^f} \, \tilde{\boldsymbol{u}}^j \right]
   + \text{sources} ,
 ```
 
@@ -96,8 +96,8 @@ of the draft velocity. Vertically, the same construction is applied with the
 vertical divergence,
 
 ```math
-- \mathcal{D}^c_v \left[ U^f(\tilde{\boldsymbol{u}}^j, \psi^j) \right]
-+ \psi^j \, \mathcal{D}^c_v \left[ \tilde{\boldsymbol{u}}^j \right] ,
+- D^c \left[ U^f(\tilde{\boldsymbol{u}}^j, \psi^j) \right]
++ \psi^j \, D^c \left[ \tilde{\boldsymbol{u}}^j \right] ,
 ```
 
 so that the reconstruction and the divergence operator are the same ones the
@@ -116,7 +116,7 @@ face-interpolated draft velocity and the normalized density excess,
 
 ```math
 \left[ \frac{\partial h_s^j}{\partial t} \right]_{\mathrm{buoy}}
-= I^c(\boldsymbol{u}_v^j) \cdot \frac{\rho^j - \rho}{\rho^j} \, \mathcal{G}^f_v[\Phi] .
+= I^c(\boldsymbol{u}_v^j) \cdot \frac{\rho^j - \rho}{\rho^j} \, G^c[\Phi] .
 ```
 
 ### Draft vertical momentum
@@ -127,9 +127,9 @@ contributions and dropping the terms that vanish
 
 ```math
 \frac{\partial \boldsymbol{u}_v^j}{\partial t}
-= - \left( \mathcal{C}^f_v[\boldsymbol{u}_h]
+= - \left( C^f[\boldsymbol{u}_h]
     + \mathcal{C}_h[\boldsymbol{u}_v^j] \right) \times I^f(\boldsymbol{u}_h)
-  - \mathcal{G}^f_v \left[ \kappa^j - I^c(\kappa_v^j) \right]
+  - G^f \left[ \kappa^j - I^c(\kappa_v^j) \right]
   + \text{hyperdiffusion} .
 ```
 
@@ -147,13 +147,13 @@ grid-mean scalar is the vertical transport of ``a^k (\chi^k - \chi)`` by the
 velocity difference,
 
 ```math
-- \mathcal{D}^c_v \left[ WI^f(J, \rho^k) \, U^f \!\left(
+- D^c \left[ \frac{I^f(\rho^k J)}{J^f} \, U^f \!\left(
     \tilde{\boldsymbol{u}}^k - \tilde{\boldsymbol{u}}, \;
     a^k (\chi^k - \chi) \right) \right] ,
 ```
 
 reconstructed with `edmfx_sgsflux_upwinding` (default `none`, i.e. central).
-Writing the flux with both differences taken explicitly is what makes it vanish
+Writing the flux with both differences taken explicitly makes it vanish
 identically when ``\chi^k = \chi``, whatever the area gradients. For energy, the
 transported scalar is ``h_s^j + \kappa^j`` for the drafts and the grid-mean
 enthalpy is subtracted; the ``q_t`` flux also increments ``\rho``,
@@ -184,9 +184,8 @@ grid-mean-divergence requirement of [Thuburn2022](@cite).
 
 Draft variables are hyperdiffused for numerical stability, along
 terrain-following coordinate surfaces, using the decomposed and unweighted
-subdomain fields, with the
-energy and moisture contributions split into a dry-static-energy term and a
-water term as in the grid mean. See [Hyperdiffusion](hyperdiffusion.md) for the
+subdomain fields, with the energy and moisture contributions split into a
+dry-static-energy term and a water term as in the grid mean. See [Hyperdiffusion](hyperdiffusion.md) for the
 operator and the reference-state subtraction.
 
 ## The implicit–explicit split
@@ -245,9 +244,8 @@ the implicit tendencies of those variables. Because the tendencies are
 *assigned* rather than accumulated, and the corresponding Jacobian rows are
 identity blocks, the Newton solve reproduces the analytic stage values exactly
 and leaves them alone. The result is less general than a Newton solve but
-unconditionally robust: each solve is exact, needs one sweep through the column,
-and is constructed so that it cannot produce a negative area or a downward
-updraft.
+cannot fail: each solve is exact, needs one sweep through the column, and is
+constructed so that it cannot produce a negative area or a downward updraft.
 
 ### Vertical velocity
 
@@ -271,12 +269,21 @@ w^0 - w^j \approx - \frac{\rho}{\hat{\rho}^0} \, w^j ,
 ```
 
 which is exact for a single draft and is applied unchanged when there are
-several. The velocity-independent entrainment rates (background,
-buoyancy-driven, area-bounding, and turbulent) then contribute a *linear* sink
-in ``w^j``, the velocity-proportional entrainment contributes a *quadratic*
-sink, and the form drag is purely quadratic. The prognostic variable is the
+several. Each velocity difference then brings one factor of
+``\rho / \hat{\rho}^0 = 1/a^0``. The velocity-independent entrainment rates
+(background, buoyancy-driven, area-bounding, and turbulent), collected in
+``E^j_0``, contribute the *linear* sink ``E^j_0 w^j / a^0``; the
+velocity-proportional entrainment ``\epsilon^j |w^j - w^0|`` contributes the
+*quadratic* sink ``\epsilon^j (w^j)^2 / (a^0)^2``, with ``\epsilon^j`` the
+velocity scale that enters the draft-mass equation below, where the rate is
+evaluated with ``w^0 \approx 0``; and the form drag
+``d^j = a^0 d_c^j (w^j - w^0) |w^j - w^0|`` contributes the quadratic sink
+``d_c^j (w^j)^2 / a^0``, its weight ``a^0`` cancelling one of the two factors
+from the velocity differences. The area ``a^0`` is clamped to
+``[1 - a_{\max}, 1]`` here, because the velocity solve runs before the area
+solve and can be handed an extrapolated area. The prognostic variable is the
 covariant component ``u_3 = w \Delta z``, so the whole equation carries one
-factor of ``\Delta z`` relative to the equation for ``w``. At face ``i`` the
+factor of ``\Delta z`` relative to the equation for ``w``. At face ``i``, the
 stage equation is then a quadratic, coupled to the face below through the
 advection term:
 
@@ -330,7 +337,8 @@ ways that are easy to misread:
     multiplicative prefactor on ``\alpha_{\mathrm{top}}`` and
     ``\alpha_{\mathrm{bot}}``, so that it is treated implicitly together with
     the flux divergence it derives from. Where the draft is at ``a_{\max}``,
-    that prefactor is one and all converging mass is detrained.
+    that prefactor is zero: the whole converging mass flux is detrained, and
+    none of it is left to grow the area.
   - **The surface source enters the first cell's numerator.** In cell 1 the
     bottom coefficient is zeroed, since the physical flux is zero there
     (``u_3 = 0`` at the surface), and the capped surface mass source
@@ -377,8 +385,9 @@ without a hand-written derivative, and the `*_sparse_autodiff` and
 ## Regularizations and state filters
 
 Several devices keep the scheme well behaved at the edges of its validity. Each
-introduces a small inconsistency in order to stay robust, and each shows up in
-the code and in the diagnostics, so it helps to know which is which.
+introduces a small inconsistency so that the scheme does not break down there,
+and each shows up in the code and in the diagnostics, so it helps to know which
+is which.
 
 ### Environment reconstruction
 
@@ -398,10 +407,10 @@ differentiation turns into `NaN`s. The weight ``\mathcal{W}`` is a sigmoid in
 the environment area fraction ``\hat{\rho}^0/\rho`` that is zero at zero area,
 one half at ``a_{1/2}``, one above ``42 a_{1/2}``, and continuously
 differentiable with vanishing endpoint derivatives, so the blend introduces no
-kinks. Where the area fraction is small, the subdomains then no longer sum
-exactly to the grid mean. ``a_{1/2}`` is the `a_half` field of
-[`PrognosticEDMFX`](@ref ClimaAtmos.PrognosticEDMFX), which
-`get_turbconv_model` sets to the minimum draft area `EDMF_min_area`.
+kinks. Where the area fraction is small, the subdomains then sum to the grid
+mean only approximately. ``a_{1/2}`` is the `a_half` field of
+[`PrognosticEDMFX`](@ref ClimaAtmos.PrognosticEDMFX), which `get_turbconv_model`
+sets to the minimum draft area `EDMF_min_area`.
 
 ### State filters
 
@@ -420,7 +429,7 @@ timestepper stage (from `constrain_state!`) and, for each draft:
 These are *filters*, not conservative corrections; the clipping of
 ``\hat{\rho}^j`` from above and the scalar bounds are mass-conserving in the
 sense that the environment absorbs the difference, but the relaxation toward the
-grid mean is not. `edmfx_filter` is enabled in every PROPHET configuration in
+grid mean is not. `edmfx_filter` is enabled in all PROPHET configurations in
 `config/model_configs/` except the advection test.
 
 ### Other limiters
@@ -432,6 +441,10 @@ grid mean is not. `edmfx_filter` is enabled in every PROPHET configuration in
     TKE dissipation.
   - Negative TKE is relaxed to zero within one timestep rather than being
     clipped, in `edmfx_sgs_diffusive_flux_tendency!`.
+  - The subgrid total-water standard deviation is bounded by
+    ``\sigma_q \le r_{\max} q_t`` (`sgs_variance_max_rel_std`, default 0.5)
+    before the quadrature, in `set_covariance_cache!`; see
+    [Closures](prophet_closures.md#Variances-and-cloud-fraction).
   - Draft entrainment prefactors return zero at or below the surface, where
     ``1/(z - z_s)`` is singular.
 
@@ -447,11 +460,12 @@ order matters because the closures depend on each other:
     (`..._environment!`). Called before every implicit tendency evaluation, so
     these are consistent with the current Newton iterate.
  2. `set_explicit_precomputed_quantities!`: surface conditions, then the
-    PROPHET explicit closures (entrainment and detrainment rates, the surface
-    mass-source payload), then the coupled covariance/cloud-fraction Picard
-    iteration, then the face diffusivities (which need the final cloud fraction),
-    then the center mixing length, terminal velocities, and the microphysics
-    tendency cache. Called before every explicit tendency evaluation.
+    PROPHET explicit closures (the entrainment rates and the signed
+    area-bounding rate, the surface mass-source terms; detrainment itself is
+    assembled at each call site), then the coupled covariance/cloud-fraction
+    Picard iteration, then the face diffusivities (which need the final cloud
+    fraction), then the center mixing length, terminal velocities, and the
+    microphysics tendency cache. Called before every explicit tendency evaluation.
 
 The face diffusivities are computed *after* the cloud fraction because the
 buoyancy gradient that enters ``N_{e,\mathrm{eff}}^2`` depends on it; the

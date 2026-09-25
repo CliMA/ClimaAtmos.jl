@@ -120,6 +120,10 @@ not yet define. `FT` is the float type; `VFT1`, `VFT2`, and `VTF3` are the
     deviation relative to the grid-mean total water, `σ_q ≤ sgs_variance_max_rel_std * q_tot`,
     applied to the diagnosed `q′q′` whatever closure produced it. A wider variance puts a quadrature node
     at negative total water; `0.5` keeps all nodes non-negative (default) [-].
+  - `sgs_variance_geometric_Ri_factor`: Factor `k` in `Ri₀ = k Ri_crit`, the scale of the
+    Richardson-number weight `w = Ri₊² / (Ri₊² + Ri₀²)` on the geometric variance term
+    (`sgs_geometric_stability_weight`), with `Ri₊ = max(N²_sat, 0) / max(2 SᵢⱼSᵢⱼ, ε)`
+    on the saturated moist buoyancy gradient. `0` (default) makes the weight exactly 1 [-].
   - `Tq_correlation_coefficient`: Default correlation between `T'` and `q_tot'`
     in the SGS quadrature, in `[-1, 1]` [-].
   - `static_stab_coeff`: Static stability coefficient `c_b` of the mixing-length
@@ -184,8 +188,6 @@ not yet define. `FT` is the float type; `VFT1`, `VFT2`, and `VTF3` are the
     transition; larger values approach a switch [-].
   - `cloud_fraction_floor_residual`: Fraction `D_min` of the relative floor
     retained deep inside a saturated deck [-].
-  - `sedimentation_lateral_coeff`: Scaling of the lateral correction in updraft
-    sedimentation; 1 is the full correction and 0 disables it [-].
   - `interface_entr_efficiency`: Entrainment efficiency `A` in the interfacial
     entrainment diffusivity `K_e = γ w_e Δz` [-].
   - `sfc_mass_flux_ustar_coeff`: Coefficient `c_u` weighting the
@@ -207,6 +209,7 @@ Base.@kwdef struct TurbulenceConvectionParameters{FT, VFT1, VFT2, VTF3} <: ATCP
     sgs_variance_geometric_coeff::FT
     sgs_variance_horizontal_scale_factor::FT
     sgs_variance_max_rel_std::FT
+    sgs_variance_geometric_Ri_factor::FT
     Tq_correlation_coefficient::FT
     static_stab_coeff::FT
     Prandtl_number_scale::FT
@@ -243,8 +246,6 @@ Base.@kwdef struct TurbulenceConvectionParameters{FT, VFT1, VFT2, VTF3} <: ATCP
     cloud_fraction_floor_release_abs_margin::FT
     cloud_fraction_floor_release_sharpness::FT
     cloud_fraction_floor_residual::FT
-    # Scaling coefficient for the lateral correction in updraft sedimentation
-    sedimentation_lateral_coeff::FT
     interface_entr_efficiency::FT
     # Surface mass flux closure (`set_edmfx_surface_conditions!`).
     sfc_mass_flux_ustar_coeff::FT
@@ -361,6 +362,9 @@ nonlinear drag. Loaded only when the scheme is enabled.
   - `a0`: Coefficient of the propagating (linear) wave drag [-].
   - `a1`: Coefficient of the nonpropagating (blocked) drag [-].
   - `Fr_crit`: Critical Froude number, the nondimensional critical height [-].
+  - `α_smoothing`: Preprocessing smoothing scale as a fraction of the model grid
+    spacing, `L = α · Δx`, used by `compute_OGW_info` (both `raw_topo_online` and
+    offline artifact generation) [-].
 """
 Base.@kwdef struct OrographicGravityWaveParameters{FT} <: AGWP
     γ::FT                    # mountain_height_width_exponent: L ∝ h^γ (equation 14, paper suggests γ ≈ 0.4)
@@ -372,6 +376,7 @@ Base.@kwdef struct OrographicGravityWaveParameters{FT} <: AGWP
     a0::FT                   # linear_drag_coefficient: a_0 = 0.9, coefficient for propagating wave drag
     a1::FT                   # nonlinear_drag_coefficient: a_1 = 3.0, coefficient for nonpropagating (blocked) drag
     Fr_crit::FT              # critical_froude_number: Fr_crit = 0.7, critical Froude number h̃_c = Fr_crit
+    α_smoothing::FT          # smoothing_scale_fraction: preprocessing smoothing scale L = α·Δx (used by compute_OGW_info)
 end
 
 # Physical/tuning parameters for the Beres (2004) convective gravity-wave source.

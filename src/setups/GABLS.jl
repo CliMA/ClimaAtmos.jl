@@ -52,7 +52,7 @@ function surface_condition(::GABLS, params)
     return (;
         flux_scheme = MoninObukhov(; z0 = FT(0.1)),
         temperature = AnalyticTemperature(gabls_T),
-        overrides = SurfaceBoundaryOverrides(p = FT(1e5), q_vap = FT(0)),
+        overrides = SurfaceBoundaryOverrides(q_vap = FT(0)),
     )
 end
 

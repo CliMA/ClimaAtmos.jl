@@ -378,7 +378,7 @@ include("RisingThermalBubbleProfile.jl")
 include("MoistAdiabaticProfileEDMFX.jl")
 include("SimplePlume.jl")
 include("MoistBaroclinicWave.jl")
-include("RCEMIPIIProfile.jl")
+include("RCEMIPProfile.jl")
 include("PrecipitatingColumn.jl")
 include("ShipwayHill2012.jl")
 

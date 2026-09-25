@@ -32,7 +32,7 @@ environment, but this is a current approximation.
 function set_covariance_cache_and_cloud_fraction!(Y, p)
     (; cloud_model, microphysics_model) = p.atmos
     (; ᶜgradᵥ_q_tot, ᶜgradᵥ_θ_liq_ice, ᶜcloud_fraction) = p.precomputed
-    (; ᶜbuoygrad, ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice) = p.precomputed
+    (; ᶜbuoygrad) = p.precomputed
     thermo_params = CAP.thermodynamics_params(p.params)
     ᶜlg = Fields.local_geometry_field(Y.c)
 
@@ -47,7 +47,7 @@ function set_covariance_cache_and_cloud_fraction!(Y, p)
     # The buoyancy gradient depends on cloud fraction, and cloud fraction depends
     # on the covariance cache through the mixing length. For reproducible restart,
     # first reconstruct the initial cloud fraction deterministically.
-    if p.atmos.numerics.reproducible_restart isa ReproducibleRestart
+    if p.atmos.numerics.reproducible_restart
         set_cloud_fraction!(Y, p, microphysics_model, GridScaleCloud())
     end
 
@@ -66,9 +66,9 @@ function set_covariance_cache_and_cloud_fraction!(Y, p)
             projected_vector_data(C3, ᶜgradᵥ_θ_liq_ice, ᶜlg),
             projected_vector_data(C3, ᶜgradᵥ_q_tot, ᶜlg),
         )
-        # Cache SGS covariances (no-op for dry/0M/GridScaleCloud configs).
-        # For EDMF: gradients are precomputed above.
-        # For non-EDMF: gradients are computed inside set_covariance_cache!.
+        # Cache SGS covariances (no-op for dry/0M/GridScaleCloud configs). The vertical
+        # gradients and N² coefficients were materialized above by
+        # set_buoyancy_gradient_inputs! for every turbconv model.
         set_covariance_cache!(Y, p, thermo_params)
         set_cloud_fraction!(Y, p, microphysics_model, cloud_model)
         return nothing
@@ -219,6 +219,57 @@ function materialized_mixing_length!(Y, p)
 end
 
 """
+    sgs_geometric_stability_weight(N², S², Ri₀)
+
+Weight `w ∈ [0, 1]` applied to the geometric (resolved-gradient) SGS variance term,
+
+    Ri₊ = max(N², 0) / max(2 S², ε),    w = Ri₊² / (Ri₊² + Ri₀²),
+
+with `N²` a squared buoyancy frequency, `S²` the squared strain-rate norm and `Ri₀ = k Ri_crit`
+(`sgs_variance_geometric_Ri_factor` k). The geometric term estimates the variance of a
+field that the turbulence closure cannot represent — stably stratified air where the
+mixing length has collapsed; where the resolved flow is turbulent (`Ri ≲ Ri₀`) the
+closure already carries the variance, so the term is faded out. `Ri₀ = 0` (the default `k = 0`)
+returns exactly 1.
+"""
+@inline function sgs_geometric_stability_weight(N², S², Ri₀)
+    FT = typeof(N²)
+    Ri₊ = max(N², zero(FT)) / max(2 * S², eps(FT))
+    return ifelse(Ri₀ > 0, Ri₊^2 / (Ri₊^2 + Ri₀^2), one(FT))
+end
+
+"""
+    ᶜsgs_geo_weight(Y, p)
+
+The weight applied to the horizontal geometric SGS variance term.
+
+Returns a single concrete lazy broadcast for every parameter setting: the
+`k = 0` case is folded into `sgs_geometric_stability_weight` rather than taken
+as an early return, so the result stays inferrable and does not box. Callers
+guard the `c_Δx = 0` case by not evaluating the geometric term at all.
+"""
+function ᶜsgs_geo_weight(Y, p)
+    Ri₀ = CAP.sgs_variance_geometric_Ri_factor(p.params) * CAP.Ri_crit(p.params)
+    (; ᶜbg_coeffs, ᶜstrain_rate_norm, ᶜgradᵥ_θ_liq_ice, ᶜgradᵥ_q_tot) =
+        p.precomputed
+    FT = eltype(Y.c.ρ)
+    ᶜlg = Fields.local_geometry_field(Y.c)
+    # Stratification is measured for saturated air (`cf = 1`), which works better empirically.
+    return @. lazy(
+        sgs_geometric_stability_weight(
+            blended_N²(
+                ᶜbg_coeffs,
+                one(FT),
+                projected_vector_data(C3, ᶜgradᵥ_θ_liq_ice, ᶜlg),
+                projected_vector_data(C3, ᶜgradᵥ_q_tot, ᶜlg),
+            ),
+            ᶜstrain_rate_norm,
+            Ri₀,
+        ),
+    )
+end
+
+"""
     hgrad_invariant!(ᶜinv, ᶜψ, p)
 
 Write the horizontal-gradient invariant `|∇_h ψ|²` of the center field `ᶜψ` into `ᶜinv`.
@@ -254,6 +305,9 @@ Pipeline:
  5. Add the horizontal resolved-gradient term to q′q′ (skipped together with
     step 3)
  6. Apply the closure-validity bound `σ_q ≤ sgs_variance_max_rel_std * q_tot`
+
+The geometric term is multiplied by the Richardson-number stability weight
+`ᶜsgs_geo_weight`.
 """
 function set_covariance_cache!(Y, p, thermo_params)
     # Covariance fields are only allocated when the configuration needs them.
@@ -309,8 +363,9 @@ function set_covariance_cache!(Y, p, thermo_params)
     # Horizontal resolved-gradient (geometric) variance
     # `geo_h |∇_h ψ|^2`, the leading-order scale-similarity estimate of the subgrid
     # variance from the resolved field, set by the local horizontal gradient and the
-    # horizontal grid scale alone. Added to θ′θ′ here and to q′q′ below. The prescribed T–q
-    # correlation then couples the inflated σ_T and σ_q in the quadrature.
+    # horizontal grid scale alone, times the Richardson weight `ᶜsgs_geo_weight`.
+    # Added to θ′θ′ here and to q′q′ below. The prescribed T–q correlation then couples
+    # the inflated σ_T and σ_q in the quadrature.
     if use_geometric
         (; ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice) = p.precomputed
         ᶜθ_li = p.scratch.ᶜtemp_scalar_3
@@ -324,7 +379,10 @@ function set_covariance_cache!(Y, p, thermo_params)
         )
         ᶜinv_θ = p.scratch.ᶜtemp_scalar_5
         hgrad_invariant!(ᶜinv_θ, ᶜθ_li, p)
-        @. ᶜT′T′ += geo_h * ᶜinv_θ
+        # Bind outside the `@.`: ᶜsgs_geo_weight already returns a lazy
+        # broadcast, so the call itself must not be dotted.
+        ᶜgeo_weight = ᶜsgs_geo_weight(Y, p)
+        @. ᶜT′T′ += ᶜgeo_weight * (geo_h * ᶜinv_θ)
     end
 
     # Transform θ′θ′ → T′T′ in-place using Jacobian ∂T/∂θ
@@ -337,7 +395,8 @@ function set_covariance_cache!(Y, p, thermo_params)
     if use_geometric
         ᶜinv_q = p.scratch.ᶜtemp_scalar_5
         hgrad_invariant!(ᶜinv_q, ᶜq_tot_nonneg, p)
-        @. ᶜq′q′ += geo_h * ᶜinv_q
+        ᶜgeo_weight = ᶜsgs_geo_weight(Y, p)
+        @. ᶜq′q′ += ᶜgeo_weight * (geo_h * ᶜinv_q)
     end
 
     # Closure-validity bound `σ_q ≤ sgs_variance_max_rel_std * q_tot` (default
@@ -1019,7 +1078,7 @@ NVTX.@annotate function set_cloud_fraction!(
     microphysics_model = p.atmos.microphysics_model
 
     # Get environment state, condensate, and covariances
-    ᶜρ_env, ᶜT_mean, ᶜq_mean, ᶜθ_mean, ᶜq_lcl, ᶜq_icl, ᶜT′T′, ᶜq′q′ =
+    ᶜρ_env, ᶜT_mean, ᶜq_mean, ᶜθ_mean, _, _, _, _ =
         _compute_cloud_state(Y, p, thermo_params, turbconv_model, microphysics_model)
 
     set_ml_cloud_fraction!(
@@ -1270,21 +1329,13 @@ function set_ml_cloud_fraction!(
 )
     ᶜmixing_length_field = materialized_mixing_length!(Y, p)
 
+    ᶜlg = Fields.local_geometry_field(Y.c)
+
     # Vertical gradients of q_tot and θ_liq_ice
     ᶜ∇q = p.scratch.ᶜtemp_scalar_2
-    ᶜ∇q .=
-        projected_vector_data.(
-            C3,
-            p.precomputed.ᶜgradᵥ_q_tot,
-            Fields.level(Fields.local_geometry_field(Y.c)),
-        )
+    @. ᶜ∇q = projected_vector_data(C3, p.precomputed.ᶜgradᵥ_q_tot, ᶜlg)
     ᶜ∇θ = p.scratch.ᶜtemp_scalar_3
-    ᶜ∇θ .=
-        projected_vector_data.(
-            C3,
-            p.precomputed.ᶜgradᵥ_θ_liq_ice,
-            Fields.level(Fields.local_geometry_field(Y.c)),
-        )
+    @. ᶜ∇θ = projected_vector_data(C3, p.precomputed.ᶜgradᵥ_θ_liq_ice, ᶜlg)
 
     p.precomputed.ᶜcloud_fraction .=
         compute_ml_cloud_fraction.(

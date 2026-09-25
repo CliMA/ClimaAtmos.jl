@@ -23,7 +23,6 @@ This wrapper keeps the SGS subdomain thermodynamics to a single
   - `q_tot`: Total water specific humidity [kg/kg].
 """
 function saturation_adjustment_tuple(thermo_params, ::TD.ph, p, h, q_tot)
-    FT = eltype(thermo_params)
     sa_result = TD.saturation_adjustment(
         thermo_params,
         TD.ph(),
@@ -69,7 +68,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_environment!(
     thermo_params = CAP.thermodynamics_params(p.params)
     (; turbconv_model) = p.atmos
     (; ᶜΦ,) = p.core
-    (; ᶜp, ᶜK) = p.precomputed
+    (; ᶜp) = p.precomputed
     (; ᶠu₃⁰, ᶜu⁰, ᶠu³⁰, ᶜK⁰, ᶜT⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰) =
         p.precomputed
 
@@ -245,8 +244,10 @@ Update the precomputed quantities of the `PrognosticEDMFX` explicit closures.
 Returns `nothing`.
 
 Mutates in `p.precomputed`, per mass-flux subdomain `j`: the entrainment velocity
-scale `ᶜentr_vel_scaleʲs` [m/s], the turbulent entrainment rate `ᶜturb_entrʲs`
-[1/s], the signed area-bounding entrainment/detrainment rate
+scale `ᶜentr_vel_scaleʲs` [1/m], which multiplies a velocity to give a rate, the
+non-velocity entrainment rate `ᶜentr_nonvel_rateʲs` [1/s], the turbulent
+entrainment rate `ᶜturb_entrʲs` [1/s], the signed area-bounding
+entrainment/detrainment rate
 `ᶜarea_bounding_entr_detrʲs` [1/s], and the relative density excess `ᶜρ_diffʲs`
 [-]. It also writes the squared strain-rate norm `ᶜstrain_rate_norm` [1/s²], the
 surface TKE flux `ρtke_flux`, and (via `set_edmfx_surface_conditions!`) the
@@ -298,7 +299,6 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
     (; ustar) = p.precomputed.sfc_conditions
 
     ᶜz = Fields.coordinate_field(Y.c).z
-    ᶜdz = Fields.Δz_field(axes(Y.c))
     z_sfc = Fields.level(Fields.coordinate_field(Y.f).z, Fields.half)
     ᶜlg = Fields.local_geometry_field(Y.c)
     ᶜtke = @. lazy(specific(Y.c.ρtke, Y.c.ρ))

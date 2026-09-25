@@ -418,7 +418,7 @@ field. Does nothing when `p.atmos.hyperdiff` is `nothing`. `Yₜ` and `t` are un
 is called. Called from `hyperdiffusion_tendency!`. Returns `nothing`.
 """
 NVTX.@annotate function prep_tracer_hyperdiffusion_tendency!(Yₜ, Y, p, t)
-    (; hyperdiff, turbconv_model) = p.atmos
+    (; hyperdiff) = p.atmos
     isnothing(hyperdiff) && return nothing
 
     (; ᶜ∇²specific_tracers) = p.hyperdiff
@@ -431,6 +431,13 @@ NVTX.@annotate function prep_tracer_hyperdiffusion_tendency!(Yₜ, Y, p, t)
     end
     return nothing
 end
+
+# The species the generic ∇⁴ tracer tendency skips. They equal the sedimenting
+# tracers today, and are named separately because the two decisions are
+# distinct: one is which tracers fall, the other is which take their share of
+# the total-water tendency (or none at all) in place of a ∇⁴ tendency.
+const hyperdiffusion_excluded_gs_names = gs_sedimenting_tracer_candidates
+const hyperdiffusion_excluded_sgs_names = sgs_sedimenting_tracer_candidates
 
 """
     apply_tracer_hyperdiffusion_tendency!(Yₜ, Y, p, t)
@@ -487,18 +494,19 @@ NVTX.@annotate function apply_tracer_hyperdiffusion_tendency!(Yₜ, Y, p, t)
         # clipped mass fraction `min(q_μ/q_t_eff, 1)`. This is NOT
         # divergence form for the individual species.
         #
-        # Number density tendencies (ρn_lcl, ρn_icl if present) are made
-        # proportional to their corresponding mass tendencies via
-        # dρn/n = dρq/q, i.e. dρn = (ρn/ρq) · dρq. That preserves the mean
-        # particle mass across the hyperdiff.
+        # The quantities attached to a cloud mass species follow it in
+        # proportion, dρχ = (ρχ/ρq) · dρq: for the number densities ρn_lcl
+        # and ρn_ice this preserves the mean particle mass, and for the P3
+        # rime mass ρq_rim and rime volume ρb_rim it preserves the rime
+        # fraction and rime density of the ice.
         ᶜratio = p.scratch.ᶜtemp_scalar_2
         ᶜρq_tot_eff =
             p.atmos.microphysics_model isa Union{NonEquilibriumMicrophysics1M,
                 NonEquilibriumMicrophysics2M} ?
             (@. lazy(Y.c.ρq_tot - Y.c.ρq_rai - Y.c.ρq_sno)) : (@. lazy(Y.c.ρq_tot))
-        for (ρq_name, ρn_name) in (
-            (@name(c.ρq_lcl), @name(c.ρn_lcl)),
-            (@name(c.ρq_icl), @name(c.ρn_icl)),
+        for (ρq_name, attached_names) in (
+            (@name(c.ρq_lcl), (@name(c.ρn_lcl),)),
+            (@name(c.ρq_icl), (@name(c.ρn_ice), @name(c.ρq_rim), @name(c.ρb_rim))),
         )
             MatrixFields.has_field(Y, ρq_name) || continue
             ᶜρq = MatrixFields.get_field(Y, ρq_name)
@@ -506,29 +514,26 @@ NVTX.@annotate function apply_tracer_hyperdiffusion_tendency!(Yₜ, Y, p, t)
             @. ᶜratio =
                 max(FT(0), min(FT(1), ᶜρq / max(ᶜρq_tot_eff, ϵ_FT)))
             @. ᶜρqₜ -= ᶜratio * ᶜρq_tot_hyperdiff
-            if MatrixFields.has_field(Y, ρn_name)
-                ᶜρn = MatrixFields.get_field(Y, ρn_name)
-                ᶜρnₜ = MatrixFields.get_field(Yₜ, ρn_name)
-                @. ᶜρnₜ -=
-                    ᶜratio * max(FT(0), ᶜρn) / max(ᶜρq, ϵ_FT) * ᶜρq_tot_hyperdiff
+            for ρχ_name in attached_names
+                MatrixFields.has_field(Y, ρχ_name) || continue
+                ᶜρχ = MatrixFields.get_field(Y, ρχ_name)
+                ᶜρχₜ = MatrixFields.get_field(Yₜ, ρχ_name)
+                @. ᶜρχₜ -=
+                    ᶜratio * max(FT(0), ᶜρχ) / max(ᶜρq, ϵ_FT) * ᶜρq_tot_hyperdiff
             end
         end
     end
 
-    _microphysics_names = (
-        @name(ρq_lcl), @name(ρq_icl), @name(ρq_rai),
-        @name(ρq_sno), @name(ρn_lcl), @name(ρn_rai),
-    )
     # TODO: Since we are not applying the limiter to density (or area-weighted
     # density), the mass redistributed by hyperdiffusion will not be conserved
     # by the limiter. Is this a significant problem?
     foreach_gs_tracer(Yₜ, ᶜ∇²specific_tracers) do ᶜρχₜ, ᶜ∇²χ, ρχ_name
-        # ρq_tot is handled via the flux above; cloud species (lcl, icl,
-        # n_lcl) are handled via the tendency split above; rain/snow/n_rai do
-        # not hyperdiffuse. Everything else falls through and gets its
-        # standard ∇⁴ tendency.
+        # ρq_tot takes the flux above; the cloud masses, with the quantities
+        # attached to them, take their share from the distribution above;
+        # rain, snow, and rain number receive no hyperdiffusion. The passive
+        # tracers that remain get the standard ∇⁴ tendency.
         ρχ_name == @name(ρq_tot) && return
-        ρχ_name in _microphysics_names && return
+        ρχ_name in hyperdiffusion_excluded_gs_names && return
         @. ᶜρχₜ -= ν₄_scalar * wdivₕ(Y.c.ρ * gradₕ(ᶜ∇²χ))
     end
 
@@ -555,7 +560,7 @@ NVTX.@annotate function apply_tracer_hyperdiffusion_tendency!(Yₜ, Y, p, t)
                 )) : (@. lazy(Y.c.sgsʲs.:($$j).q_tot))
             for (χⱼ_name, nⱼ_name) in (
                 (@name(q_lcl), @name(n_lcl)),
-                (@name(q_icl), @name(n_icl)),
+                (@name(q_icl), @name(n_ice)),
             )
                 MatrixFields.has_field(Y.c.sgsʲs.:($j), χⱼ_name) || continue
                 ᶜχⱼ = MatrixFields.get_field(Y.c.sgsʲs.:($j), χⱼ_name)
@@ -575,17 +580,13 @@ NVTX.@annotate function apply_tracer_hyperdiffusion_tendency!(Yₜ, Y, p, t)
         # Passive (non-microphysics) SGS tracers keep their independent ∇⁴
         # tendency. Cloud SGS species are handled via the q_tot_effⱼ flux
         # split above; rain/snow/n_rai do not hyperdiffuse.
-        _microphysics_sgs_names = (
-            @name(q_lcl), @name(q_icl), @name(q_rai),
-            @name(q_sno), @name(n_lcl), @name(n_rai),
-        )
         if !isempty(sgs_tracer_names(Y))
             (; ᶜ∇²sgs_tracerʲs) = p.hyperdiff
             for χ_name in sgs_tracer_names(Y)
                 # `continue`, not `return`: this is a plain for-loop, not a
                 # do-block, so `return` would exit the whole function and
                 # skip any passive tracers after a microphysics one.
-                χ_name in _microphysics_sgs_names && continue
+                χ_name in hyperdiffusion_excluded_sgs_names && continue
                 for j in 1:n
                     ᶜχʲ = MatrixFields.get_field(Y.c.sgsʲs.:($j), χ_name)
                     @. ᶜ∇²sgs_tracerʲs.:($$j) = wdivₕ(gradₕ(ᶜχʲ))

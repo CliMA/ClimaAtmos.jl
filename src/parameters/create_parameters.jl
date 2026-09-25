@@ -464,15 +464,14 @@ to_svec(x::NamedTuple) = map(x -> to_svec(x), x)
 
 Build the PROPHET (prognostic EDMF) parameter set.
 
-Most values come from ClimaParams through an explicit name map. A few
+Most values come from ClimaParams through an explicit name map. The geometric
+SGS-variance term parameters (`sgs_variance_*`), a few
 cloud-fraction release-shape parameters and the updraft sedimentation
 coefficient are not yet in ClimaParams' default TOML: they fall back to the
 defaults set here, and are read from `toml_dict` only when a run or calibration
 TOML defines them. The defaults `margin = abs_margin = sharpness = 1` and
 `residual = 0` release the cloud-fraction floor on a one-width saturation
-margin guarded by an absolute margin of one floor width, and
-`sedimentation_lateral_coeff = 0` disables the lateral sedimentation
-correction.
+margin guarded by an absolute margin of one floor width.
 
 `overrides` is merged last, so it wins over both the TOML values and the
 defaults above.
@@ -550,6 +549,9 @@ function TurbulenceConvectionParameters(
         sgs_variance_geometric_coeff = FT(1 // 12),
         sgs_variance_horizontal_scale_factor = FT(0),
         sgs_variance_max_rel_std = FT(0.5),
+        # Richardson (stability) weight on the geometric term (k = 0: weight ≡ 1,
+        # see `set_covariance_cache!`).
+        sgs_variance_geometric_Ri_factor = FT(0),
         # Cloud-fraction floor release shape (see `_compute_cloud_fraction`):
         # margin = abs_margin = sharpness = 1, residual = 0 release the floor on
         # a one-width saturation margin guarded by an absolute margin of one
@@ -558,9 +560,6 @@ function TurbulenceConvectionParameters(
         cloud_fraction_floor_release_abs_margin = FT(1),
         cloud_fraction_floor_release_sharpness = FT(1),
         cloud_fraction_floor_residual = FT(0),
-        # Lateral correction scaling for updraft sedimentation
-        # (see `updraft_sedimentation!`). 1.0 = full correction, 0.0 = disabled.
-        sedimentation_lateral_coeff = FT(1), # Testing if stable now. To be removed, if yes.
     )
     provisional_present = filter(collect(keys(provisional_defaults))) do name
         haskey(toml_dict.data, string(name))
@@ -683,6 +682,7 @@ function OrographicGravityWaveParameters(
         :ogw_linear_drag_coefficient => :a0, # a_0 = 0.9
         :ogw_nonlinear_drag_coefficient => :a1, # a_1 = 3.0
         :ogw_critical_froude_number => :Fr_crit, # Fr_crit = 0.7
+        :ogw_smoothing_scale_fraction => :α_smoothing, # L = α·Δx
     )
     parameters = CP.get_parameter_values(toml_dict, name_map, "ClimaAtmos")
     parameters = merge(parameters, overrides)

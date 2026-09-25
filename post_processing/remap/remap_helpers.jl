@@ -96,7 +96,6 @@ function remap2latlon(filein, data_dir, remap_tmpdir, weightfile, nlat, nlon)
     # reconstruct space
     cspace = axes(Y.c)
     fspace = axes(Y.f)
-    hspace = Spaces.horizontal_space(cspace)
 
     ### create an nc file to store raw cg data
     # create data

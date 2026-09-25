@@ -63,8 +63,13 @@ Fill every `Field` in the cache `p` with `NaN`s, but only when the
 
 Poisoning the cache before a tendency evaluation exposes any quantity that the
 tendency reads without first recomputing it. Returns `nothing`.
+
+!!! warning
+
+    This is currently a no-op even when the switch is on: `p` is an `AtmosCache`,
+    a plain struct, so it matches `fill_with_nans_generic!(::Any)` and the
+    recursion never starts.
 """
 fill_with_nans!(p) =
-    fill_with_nans!(p, p.atmos.numerics.test_dycore_consistency)
-fill_with_nans!(p, ::Nothing) = nothing
-fill_with_nans!(p, ::TestDycoreConsistency) = fill_with_nans_generic!(p)
+    p.atmos.numerics.test_dycore_consistency ? fill_with_nans_generic!(p) :
+    nothing
