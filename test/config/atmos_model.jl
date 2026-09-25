@@ -264,7 +264,22 @@ end
     @test m.rayleigh_sponge.zd == 2 * z_max
 
     # zd < z_max: no error and no warning
-    @test_logs make_model(; rayleigh_sponge = CA.RayleighSponge{FT}(; zd = z_max / 2))
+    base =
+        @test_logs make_model(; rayleigh_sponge = CA.RayleighSponge{FT}(; zd = z_max / 2))
+
+    # The copy constructor checks a new sponge ...
+    @test_throws "equal to the domain top" CA.AtmosModel(
+        base;
+        sponge = CA.AtmosSponge(; rayleigh_sponge = CA.RayleighSponge{FT}(; zd = z_max)),
+    )
+    # ... and an existing sponge against a new grid
+    low_grid = CA.ColumnGrid(FT; z_elem = 10, z_max = z_max / 2, z_stretch = false)
+    @test_throws "equal to the domain top" CA.AtmosModel(base; grid = low_grid)
+    # Changing an unrelated field does not repeat the warning
+    above = @test_logs (:warn, r"applies no damping") make_model(;
+        rayleigh_sponge = CA.RayleighSponge{FT}(; zd = 2 * z_max),
+    )
+    @test_logs CA.AtmosModel(above; disable_surface_flux_tendency = true)
 end
 
 @testset "Defaults tier: explicit > component > defaults > struct default" begin

@@ -2302,7 +2302,9 @@ end
     check_sponge_heights(sponge::AtmosSponge, z_max)
 
 Check the damping height `zd` of each active sponge in `sponge` against the domain top
-`z_max` [m]. Called from `_atmos_model` whenever the model is bound to a grid.
+`z_max` [m]. Called from `_atmos_model` and from the copy constructor
+`AtmosModel(model; changes...)` whenever the model is bound to a grid; the method
+taking a grid is a no-op when `grid` is `nothing`.
 
 Both sponge profiles are proportional to `sin²(π (z - zd) / (2 (z_max - zd)))`, so
 `zd == z_max` divides by zero and the tendencies become `NaN` (or `sinpi` throws a
@@ -2327,6 +2329,10 @@ function check_sponge_heights(sponge::AtmosSponge, z_max)
     end
     return nothing
 end
+
+check_sponge_heights(sponge::AtmosSponge, ::Nothing) = nothing
+check_sponge_heights(sponge::AtmosSponge, grid::Grids.AbstractGrid) =
+    check_sponge_heights(sponge, Spaces.z_max(get_spaces(grid).face_space))
 
 """
     AtmosSurface{FS, ST, BO, AL}(; flux_scheme, temperature, boundary_overrides, surface_albedo)
@@ -2609,8 +2615,7 @@ function _atmos_model(; kwargs...)
     params = get(atmos_model_kwargs, :params, nothing)
     setup = get(atmos_model_kwargs, :setup, nothing)
 
-    isnothing(grid) ||
-        check_sponge_heights(sponge, Spaces.z_max(get_spaces(grid).face_space))
+    check_sponge_heights(sponge, grid)
 
     # The default constructor infers the type parameters from the arguments.
     return AtmosModel(
@@ -2870,7 +2875,12 @@ function AtmosModel(model::AtmosModel; changes...)
     fields = map(fieldnames(AtmosModel)) do name
         haskey(changes, name) ? changes[name] : getfield(model, name)
     end
-    return AtmosModel(fields...)
+    new_model = AtmosModel(fields...)
+    # Recheck only if the sponge or the grid changed, so copying a model whose
+    # sponge lies above the domain top does not repeat the warning.
+    (haskey(changes, :sponge) || haskey(changes, :grid)) &&
+        check_sponge_heights(getfield(new_model, :sponge), getfield(new_model, :grid))
+    return new_model
 end
 
 # NamedTuple of every physics field. Used by checkpoint hashing, `show`, and
