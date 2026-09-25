@@ -358,15 +358,31 @@ $\sim 1\,\mathrm{km}$.
 The master amplitude $a_{\mathrm{tofd}}$ is set by the `ogw_tofd_coefficient`
 parameter: $a_{\mathrm{tofd}} = 0$ (the default) disables TOFD and reproduces the
 GWD-only forcing exactly, while $a_{\mathrm{tofd}} = 1$ is the IFS-nominal
-amplitude. TOFD is added to the propagating and blocked tendencies before the
+amplitude.
+
+Near steep orography the damping time $(C_d |\mathbf{u}|)^{-1}$ in the lowest
+model levels is minutes, far shorter than both `dt_ogw` and the integrator step,
+so an explicit, cached tendency would overshoot and reverse the wind. TOFD is
+therefore not part of the cached `dt_ogw` forcing: $C_d(z)$ is precomputed once
+at initialization, and every integrator step applies the backward-Euler form
+
+```math
+{}^c \left( \frac{d\mathbf{u}}{dt}[k] \right)_{\mathrm{TOFD}} = - \frac{r}{1 + r\,\Delta t}\, \mathbf{u},
+\qquad
+r = C_d(z)\, |\mathbf{u}|,
+```
+
+evaluated with the current wind. The factor is a scalar, so the drag stays
+antiparallel to the flow, and its magnitude saturates at $|\mathbf{u}|/\Delta t$,
+so one step can at most bring the wind to rest. TOFD is not subject to the
 magnitude constraint below.
 
 ### Constrain the forcings
 
-The total drag combines the propagating, blocked, and TOFD components
+The cached gravity-wave drag combines the propagating and blocked components
 
 ```math
-{}^c \left( \frac{d\mathbf{u}}{dt} [k] \right)_{\tau} = {}^c \left( \frac{d\mathbf{u}}{dt} [k] \right)_{p} + {}^c \left( \frac{d\mathbf{u}}{dt} [k] \right)_{np} + {}^c \left( \frac{d\mathbf{u}}{dt} [k] \right)_{\mathrm{TOFD}}.
+{}^c \left( \frac{d\mathbf{u}}{dt} [k] \right)_{\tau} = {}^c \left( \frac{d\mathbf{u}}{dt} [k] \right)_{p} + {}^c \left( \frac{d\mathbf{u}}{dt} [k] \right)_{np}.
 ```
 
 To avoid instability from large tendencies under the explicit application, we limit the
@@ -427,12 +443,13 @@ Every dt_ogw seconds:
         ├─ calc_saturation_profile!     → τ_sat(z)
         ├─ calc_propagate_forcing!      → propagating tendency
         ├─ calc_nonpropagating_forcing! → blocked-flow tendency
-        ├─ calc_tofd_forcing!           → low-level TOFD tendency (if a_tofd > 0)
         └─ Limit forcing magnitude to 3e-3·√2 m/s² (direction preserved)
 
 Every dt (integrator step):
   orographic_gravity_wave_apply_tendency!
-    └─ Yₜ.c.uₕ += C12(UVVector(ᶜuforcing, ᶜvforcing))
+    ├─ Yₜ.c.uₕ += C12(UVVector(ᶜuforcing, ᶜvforcing))
+    └─ Yₜ.c.uₕ -= tofd_implicit_rate(ᶜtofd_Cd, |uₕ|, dt) · uₕ   (if a_tofd > 0;
+                  ᶜtofd_Cd from tofd_drag_coefficient! at initialization)
 ```
 
 For analytical topographies (DCMIP200, Hughes2023, Agnesi, Schar, Cosine2d, Cosine3d), the tensor is computed on-the-fly at startup using ClimaCore horizontal gradient operators in place of the offline pipeline.
