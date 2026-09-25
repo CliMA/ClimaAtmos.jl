@@ -3,6 +3,11 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- ![][badge-🐛bugfix] File-based initial conditions (`WeatherModel`,
+  `MoistFromFile`, `AMIPFromERA5`) now interpolate the face pressure to cell
+  centers in log space (`exp(ᶜinterp(log(p)))`) when computing the initial
+  density, instead of the arithmetic mean `ᶜinterp(p)`, which overestimated
+  center pressure and left the initial column ~1 hPa too heavy.
 - ![][badge-✨feature/enhancement] `WeatherModel` ERA5 IC filenames now use the
   `HHMM` of `start_date` (e.g. `start_date = "20191231-1200"` →  `..._1200.nc`),
   matching the ClimaCoupler subseasonal / WeatherQuest naming; date-only strings
