@@ -66,6 +66,10 @@ main
   that set them a private set of specializations; the restart tests, which set
   both, shared no compiled code with the rest of CI.
 
+- [#4838](https://github.com/CliMA/ClimaAtmos.jl/pull/4838) ![][badge-🐛bugfix] Constructing an `AtmosModel` now errors when a sponge damping
+  height (`zd_rayleigh`, `zd_viscous`) equals the domain top, where the damping profile divides by zero, and warns when it lies above the
+  domain top, where the sponge is inactive. `rcemipii_box_CRM_1M.yml` now uses `z_max: 33000.0` so that it lies above its `zd_rayleigh`.
+
 0.42.11
 -------
 
