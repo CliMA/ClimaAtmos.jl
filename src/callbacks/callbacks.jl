@@ -108,7 +108,15 @@ NVTX.@annotate function rrtmgp_solver_callback!(integrator)
     set_insolation_variables!(Y, p, t, p.atmos.insolation)
     set_surface_albedo!(Y, p, t, p.atmos.surface_albedo)
 
-    RRTMGP.update_fluxes!(rrtmgp_solver, UInt32(floor(FT(t) / integrator.p.dt)))
+    # CLIMA_RAD_SEED_OFFSET shifts the McICA seed without changing anything
+    # else, so "same physics, different cloud draw" can be measured as the
+    # control for a change that alters how randomness is consumed. Unset means
+    # zero, i.e. no change in behavior.
+    seed_offset = parse(UInt32, get(ENV, "CLIMA_RAD_SEED_OFFSET", "0"))
+    RRTMGP.update_fluxes!(
+        rrtmgp_solver,
+        UInt32(floor(FT(t) / integrator.p.dt)) + seed_offset,
+    )
     Fields.field2array(ᶠradiation_flux) .= RRTMGP.net_flux(rrtmgp_solver)
     return nothing
 end
