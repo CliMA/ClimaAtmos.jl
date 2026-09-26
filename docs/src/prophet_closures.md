@@ -600,12 +600,15 @@ the *prognostic* mean condensate exactly. The prognostic equations carry
 non-equilibrium condensate (supersaturation not yet condensed at the resolved
 scale, persistent supercooled liquid), while fluctuations within a subdomain are
 assumed to relax onto the saturation curve
-[Sommeria1977, Mellor1977, Bechtold1995](@cite). The cloud fraction is then the
-fraction of the distribution carrying positive local condensate, evaluated with
-a variance augmented by a non-equilibrium floor that scales with the saturation
-specific humidity and is released as the subdomain mean saturates. That floor
-keeps the cloud fraction from being driven to one by a vanishing equilibrium
-variance, and loosely parallels the critical-relative-humidity scaling of
+[Sommeria1977, Mellor1977, Bechtold1995](@cite). Each species' share of the
+reconstructed excess can be blended with its subdomain mean through the
+parameters `sgs_liquid_uniform_fraction` and `sgs_ice_uniform_fraction`.
+The cloud fraction is then the fraction of the distribution carrying positive
+local condensate, evaluated with a variance augmented by a non-equilibrium floor
+that scales with the saturation specific humidity and is released as the
+subdomain mean saturates. That floor keeps the cloud fraction from being driven
+to one by a vanishing equilibrium variance, and loosely parallels the
+critical-relative-humidity scaling of
 statistical cloud schemes [Quaas2012](@cite). Microphysical rates are evaluated
 at each quadrature point and aggregated linearly, which preserves total water
 and total energy at the subdomain level because the bulk rates preserve them

@@ -118,6 +118,9 @@ end
         @test CAP.sgs_variance_geometric_coeff(tc) == FT(1 // 12)
         @test CAP.sgs_variance_max_rel_std(tc) == FT(0.5)
         @test CAP.sgs_variance_geometric_Ri_factor(tc) == FT(0)
+        # the condensate reconstruction defaults to the excess split for both species
+        @test CAP.sgs_liquid_uniform_fraction(tc) == FT(0)
+        @test CAP.sgs_ice_uniform_fraction(tc) == FT(0)
     end
     # A run toml can enable the term and its Richardson weight.
     mktemp() do path, io
@@ -130,6 +133,9 @@ end
   [sgs_variance_geometric_Ri_factor]
   value = 1.0
   type = "float"
+  [sgs_ice_uniform_fraction]
+  value = 0.5
+  type = "float"
   """,
         )
         flush(io)
@@ -140,6 +146,8 @@ end
         tc = CA.ClimaAtmosParameters(config).turbconv_params
         @test CAP.sgs_variance_horizontal_scale_factor(tc) == 2.0
         @test CAP.sgs_variance_geometric_Ri_factor(tc) == 1.0
+        @test CAP.sgs_ice_uniform_fraction(tc) == 0.5
+        @test CAP.sgs_liquid_uniform_fraction(tc) == 0.0
     end
 end
 
