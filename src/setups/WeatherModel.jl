@@ -69,7 +69,8 @@ function overwrite_initial_state!(setup::WeatherModel, Y, thermo_params)
     file_path = weather_model_data_path(
         setup.start_date,
         target_levels,
-        era5_dir,
+        era5_dir;
+        comms_ctx = ClimaComms.context(Fields.axes(Y.c)),
     )
 
     if !setup.use_full_pressure

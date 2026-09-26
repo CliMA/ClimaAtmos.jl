@@ -211,7 +211,7 @@ start_date:
   help: "Start date and time of the simulation. Specified as either yyyymmdd (defaults to midnight) or yyyymmdd-HHMM. Examples: [`20100101`, `20100101-0000`]"
   value: "20100101"
 era5_initial_condition_dir:
-  help: "Directory containing ERA5 initial condition files. Filenames inferred from start_date [none (default)]. Generated with `https://github.com/CliMA/WeatherQuest`."
+  help: "Directory containing ERA5 initial condition files. Filenames inferred from start_date [none (default)]. A missing raw file is fetched with ClimaInitialConditions."
   value: ~
 era5_ic_full_pressure:
   help: "For `WeatherModel` initial conditions, read 3D pressure (`p_3d`) from the ERA5 file instead of integrating hydrostatically from surface pressure [`false` (default), `true`]"
