@@ -16,7 +16,8 @@ import CloudMicrophysics.Microphysics0M as CM0
 import CloudMicrophysics.BulkMicrophysicsTendencies as BMT
 
 # Import limiters
-import ClimaAtmos: limit_sink, microphysics_tendencies_1m, Microphysics1MEvaluator
+import ClimaAtmos:
+    limit_sink, microphysics_tendencies_1m, Microphysics1MEvaluator, sgs_local_condensate
 
 @testset "Microphysics Wrappers" begin
 
@@ -250,7 +251,7 @@ import ClimaAtmos: limit_sink, microphysics_tendencies_1m, Microphysics1MEvaluat
                     quad_1m(w) = microphysics_tendencies_1m(
                         BMT.Microphysics1Moment(), quad, mp, thp, ρ, T, w,
                         q_tot, q_lcl, q_icl, q_rai, q_sno,
-                        FT(0), FT(0), FT(0), λ_lagrange, α, dt, nsubs,
+                        FT(0), FT(0), FT(0), λ_lagrange, α, FT(0), FT(0), dt, nsubs,
                     )
                     q_rest = quad_1m(w_rest)
                     q_up = quad_1m(w_up)
@@ -262,7 +263,8 @@ import ClimaAtmos: limit_sink, microphysics_tendencies_1m, Microphysics1MEvaluat
                 @testset "Microphysics1MEvaluator forwards w" begin
                     evaluator(w) = Microphysics1MEvaluator(
                         BMT.Microphysics1Moment(), mp, thp, ρ, w,
-                        q_rai, q_sno, λ, λ_lagrange, mu_S, α, dt, nsubs, (),
+                        q_rai, q_sno, λ, FT(0), FT(0), FT(0), FT(0),
+                        λ_lagrange, mu_S, α, dt, nsubs, (),
                     )
                     e_rest = evaluator(w_rest)(T, q_tot)
                     e_up = evaluator(w_up)(T, q_tot)
@@ -353,7 +355,8 @@ import ClimaAtmos: limit_sink, microphysics_tendencies_1m, Microphysics1MEvaluat
                     eval_clear = Microphysics1MEvaluator(
                         BMT.Microphysics1Moment(), mp, thp, ρ, FT(0),
                         FT(0), FT(0),           # q_rai, q_sno
-                        FT(1), FT(-1), mu_S, FT(1),  # λ, λ_lagrange, mu_S, α
+                        FT(1), FT(0), FT(0), FT(0), FT(0),  # λ, ξ_liq, ξ_ice, q_lcl, q_icl
+                        FT(-1), mu_S, FT(1),         # λ_lagrange, mu_S, α
                         dt, nsubs, (),
                     )
                     # At the grid-mean point S′_hat = 0, so shifted_excess = max(0,-1) = 0.
@@ -375,7 +378,8 @@ import ClimaAtmos: limit_sink, microphysics_tendencies_1m, Microphysics1MEvaluat
                     eval_cloud = Microphysics1MEvaluator(
                         BMT.Microphysics1Moment(), mp, thp, ρ, FT(0),
                         FT(0), FT(0),            # q_rai, q_sno
-                        FT(1), q_c, mu_S, FT(1), # λ, λ_lagrange, mu_S, α
+                        FT(1), FT(0), FT(0), FT(0), FT(0),  # λ, ξ_liq, ξ_ice, q_lcl, q_icl
+                        q_c, mu_S, FT(1),            # λ_lagrange, mu_S, α
                         dt, nsubs, (),
                     )
                     result = eval_cloud(T_mean, q_tot_mean)
@@ -411,7 +415,8 @@ import ClimaAtmos: limit_sink, microphysics_tendencies_1m, Microphysics1MEvaluat
                     eval_precip = Microphysics1MEvaluator(
                         BMT.Microphysics1Moment(), mp, thp, ρ, FT(0),
                         q_rai, q_sno,               # q_rai, q_sno
-                        λ_mix, q_c, mu_S_mix, FT(1),  # λ, λ_lagrange, mu_S, α
+                        λ_mix, FT(0), FT(0), FT(0), FT(0),  # λ, ξ_liq, ξ_ice, q_lcl, q_icl
+                        q_c, mu_S_mix, FT(1),        # λ_lagrange, mu_S, α
                         dt, nsubs, (),
                     )
                     result = eval_precip(T_mix, q_tot_mix)
@@ -433,7 +438,8 @@ import ClimaAtmos: limit_sink, microphysics_tendencies_1m, Microphysics1MEvaluat
                     eval = Microphysics1MEvaluator(
                         BMT.Microphysics1Moment(), mp, thp, ρ, FT(0),
                         FT(0), FT(0),
-                        FT(1), FT(5e-4), mu_S, FT(1),
+                        FT(1), FT(0), FT(0), FT(0), FT(0),
+                        FT(5e-4), mu_S, FT(1),
                         dt, nsubs, (),
                     )
                     result = eval(T_mean, q_tot_mean)
@@ -447,4 +453,101 @@ import ClimaAtmos: limit_sink, microphysics_tendencies_1m, Microphysics1MEvaluat
         end
     end
 
+    @testset "uniform fractions of the condensate reconstruction" begin
+        for FT in (Float32, Float64)
+            @testset "FT = $FT" begin
+                toml_dict = CP.create_toml_dict(FT)
+                thp = TD.Parameters.ThermodynamicsParameters(toml_dict)
+                mp = CMP.Microphysics1MParams(toml_dict)
+                dt = FT(60)
+                nsubs = 1
+                ρ = FT(0.6)
+                w = FT(0)
+
+                @testset "sgs_local_condensate: limits and blend" begin
+                    for λ in (FT(0), FT(0.3), FT(1)), se in (FT(0), FT(2e-4))
+                        q_l, q_i = FT(4e-5), FT(5e-5)
+                        # ξ = 0: the excess split, bitwise
+                        ql, qi = sgs_local_condensate(λ, se, FT(0), FT(0), q_l, q_i)
+                        @test ql === λ * se && qi === (FT(1) - λ) * se
+                        # ξ = 1: the subdomain mean at the node
+                        ql, qi = sgs_local_condensate(λ, se, FT(1), FT(1), q_l, q_i)
+                        @test ql == q_l && qi == q_i
+                        # mixed: liquid excess, ice uniform (the run-15 configuration)
+                        ql, qi = sgs_local_condensate(λ, se, FT(0), FT(1), q_l, q_i)
+                        @test ql === λ * se && qi == q_i
+                        # interior blend and type stability
+                        ql, qi = sgs_local_condensate(λ, se, FT(0.25), FT(0.5), q_l, q_i)
+                        @test ql ≈ FT(0.75) * λ * se + FT(0.25) * q_l
+                        @test qi ≈ FT(0.5) * (FT(1) - λ) * se + FT(0.5) * q_i
+                        @test ql isa FT && qi isa FT
+                    end
+                end
+
+                # ---- ice-only cell at −25 °C (λ = 0)
+                T = FT(248)
+                q_icl = FT(3e-5)
+                q_c = q_icl
+                λ_i = FT(TD.liquid_fraction(thp, T, FT(0), q_icl))
+                @test λ_i == 0
+                q_sat = TD.q_vap_saturation(thp, T, ρ)
+                q_tot = q_sat + q_c
+                mu_S = q_tot - q_sat
+                make(ξ_l, ξ_i) = Microphysics1MEvaluator(
+                    BMT.Microphysics1Moment(), mp, thp, ρ, w, FT(0), FT(0), λ_i,
+                    ξ_l, ξ_i, FT(0), q_icl, q_c, mu_S, FT(1), dt, nsubs, (),
+                )
+                ev_e = make(FT(0), FT(0))
+                ev_u = make(FT(0), FT(1))
+                ev_h = make(FT(0), FT(0.5))
+
+                @testset "dry node: ice sublimates when uniform, absent when excess" begin
+                    q̂ = FT(0.9) * TD.q_vap_saturation(thp, T, ρ, TD.Ice())
+                    @test q_c + q̂ - q_tot < 0   # shifted_excess = 0 at this node
+                    out_e = ev_e(T, q̂)
+                    out_u = ev_u(T, q̂)
+                    out_h = ev_h(T, q̂)
+                    @test out_e.dq_icl_dt == 0
+                    @test out_u.dq_icl_dt < 0
+                    @test out_h.dq_icl_dt < 0 && out_h.dq_icl_dt > out_u.dq_icl_dt
+                end
+
+                @testset "mean node: all fractions hold q_icl" begin
+                    ref = BMT.bulk_microphysics_tendencies(
+                        BMT.LinearizedAverage(),
+                        BMT.Microphysics1Moment(), mp, thp, ρ, T, w,
+                        q_tot, FT(0), q_icl, FT(0), FT(0), dt, nsubs,
+                    )
+                    for ev in (ev_e, ev_u, ev_h)
+                        out = ev(T, q_tot)
+                        @test out.dq_icl_dt ≈ ref.dq_icl_dt rtol = FT(1e-4)
+                    end
+                end
+
+                @testset "quadrature wrapper: explicit λ, mu_S equal their defaults; ξ_ice = 1 differs" begin
+                    quad = ClimaAtmos.SGSQuadrature(FT; quadrature_order = 3)
+                    T′T′ = FT(1)
+                    q′q′ = (FT(0.1) * q_tot)^2
+                    base = microphysics_tendencies_1m(
+                        BMT.Microphysics1Moment(), quad, mp, thp, ρ, T, w, q_tot,
+                        FT(0), q_icl, FT(0), FT(0), T′T′, q′q′, FT(0.6),
+                        q_c, FT(1), FT(0), FT(0), dt, nsubs,
+                    )
+                    same = microphysics_tendencies_1m(
+                        BMT.Microphysics1Moment(), quad, mp, thp, ρ, T, w, q_tot,
+                        FT(0), q_icl, FT(0), FT(0), T′T′, q′q′, FT(0.6),
+                        q_c, FT(1), FT(0), FT(0), dt, nsubs, λ_i, mu_S,
+                    )
+                    @test same === base
+                    uni = microphysics_tendencies_1m(
+                        BMT.Microphysics1Moment(), quad, mp, thp, ρ, T, w, q_tot,
+                        FT(0), q_icl, FT(0), FT(0), T′T′, q′q′, FT(0.6),
+                        q_c, FT(1), FT(0), FT(1), dt, nsubs, λ_i, mu_S,
+                    )
+                    @test all(isfinite, values(uni))
+                    @test uni.dq_icl_dt != base.dq_icl_dt
+                end
+            end
+        end
+    end
 end

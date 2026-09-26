@@ -124,6 +124,12 @@ not yet define. `FT` is the float type; `VFT1`, `VFT2`, and `VTF3` are the
     Richardson-number weight `w = Ri₊² / (Ri₊² + Ri₀²)` on the geometric variance term
     (`sgs_geometric_stability_weight`), with `Ri₊ = max(N²_sat, 0) / max(2 SᵢⱼSᵢⱼ, ε)`
     on the saturated moist buoyancy gradient. `0` (default) makes the weight exactly 1 [-].
+  - `sgs_liquid_uniform_fraction`, `sgs_ice_uniform_fraction`: Fractions `ξ` of
+    cloud liquid and cloud ice that are uniform over the SGS quadrature nodes in
+    the 1-moment microphysics, in `[0, 1]`: at each node a species is
+    `(1 − ξ)` times its liquid-fraction share of the reconstructed saturation
+    excess plus `ξ` times its subdomain mean (`sgs_local_condensate`). `0`
+    (default) is the excess reconstruction; `1` treats the species uniform at every node [-].
   - `Tq_correlation_coefficient`: Default correlation between `T'` and `q_tot'`
     in the SGS quadrature, in `[-1, 1]` [-].
   - `static_stab_coeff`: Static stability coefficient `c_b` of the mixing-length
@@ -210,6 +216,8 @@ Base.@kwdef struct TurbulenceConvectionParameters{FT, VFT1, VFT2, VTF3} <: ATCP
     sgs_variance_horizontal_scale_factor::FT
     sgs_variance_max_rel_std::FT
     sgs_variance_geometric_Ri_factor::FT
+    sgs_liquid_uniform_fraction::FT
+    sgs_ice_uniform_fraction::FT
     Tq_correlation_coefficient::FT
     static_stab_coeff::FT
     Prandtl_number_scale::FT

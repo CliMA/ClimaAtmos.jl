@@ -3,7 +3,13 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
-
+- ![][badge-✨feature/enhancement] Two parameters,
+  `sgs_liquid_uniform_fraction` and `sgs_ice_uniform_fraction` (default 0),
+  blend the SGS-quadrature condensate reconstruction of the 1-moment
+  microphysics between the excess split (a species sits only at supersaturated
+  nodes, in proportion to its excess) and a uniform distribution (the
+  subdomain mean at every node, like rain and snow).
+  
 0.42.12
 -------
 - ![][badge-🔥behavioralΔ] The CI environment updates to ClimaParams 1.1.14, which sets the
