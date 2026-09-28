@@ -1,0 +1,42 @@
+# Chemistry timing test (15 species): aquaplanet with the Julia Photochemical
+# Mechanism (JPM, Sturm & Silva 2025), config/chemistry_configs/jpm.json.
+# Identical to timing_aquaplanet_no_mechanism except for the chemistry mechanism and
+# one instantaneous q_gas_O3 snapshot (sanity check). Initial concentrations for
+# the 15 gas species come from the default DecayingProfile setup (typical-urban).
+# Requires Musica loaded so the ClimaAtmosMusica extension solves the chemistry.
+z_max: 30000.0
+z_elem: 10
+dz_bottom: 500.0
+dt: 20secs
+t_end: 1hours
+surface_setup: DefaultMoninObukhov
+rad: clearsky
+turbconv: prognostic_edmfx
+prognostic_tke: true
+edmfx_entr_model: "Generalized"
+edmfx_detr_model: "Generalized"
+edmfx_nh_pressure: true
+edmfx_vertical_diffusion: true
+edmfx_filter: true
+edmfx_sgs_mass_flux: true
+edmfx_sgs_diffusive_flux: true
+implicit_diffusion: true
+approximate_linear_solve_iters: 2
+microphysics_model: "0M"
+toml: [toml/prognostic_edmfx.toml]
+dt_save_state_to_disk: "Inf"
+log_progress: false
+output_default_diagnostics: false
+chemistry_model: "passive"
+chemistry_config: "config/chemistry_configs/jpm.json"
+diagnostics:
+  - short_name: [q_gas_O3]
+    period: 1hours
+ode_algo: "ARS222"
+config: sphere
+h_elem: 6 # 550 km
+nh_poly: 3
+hyperdiff: Hyperdiffusion
+rayleigh_sponge: true
+viscous_sponge: true
+max_newton_iters_ode: 1

@@ -1,0 +1,35 @@
+# Chemistry timing test (3 species): Bomex column with the ABBA toy mechanism
+# (q_gas_A, q_gas_B, q_gas_AB). Identical to timing_bomex_no_mechanism except for the
+# chemistry mechanism and one instantaneous q_gas_AB snapshot (sanity check).
+# Requires Musica loaded so the ClimaAtmosMusica extension solves the chemistry.
+initial_condition: "Bomex"
+turbconv: "prognostic_edmfx"
+implicit_diffusion: true
+approximate_linear_solve_iters: 2
+edmfx_entr_model: "Generalized"
+edmfx_detr_model: "Generalized"
+edmfx_sgs_mass_flux: true
+edmfx_sgs_diffusive_flux: true
+edmfx_nh_pressure: true
+edmfx_vertical_diffusion: true
+edmfx_filter: true
+prognostic_tke: true
+microphysics_model: "1M"
+config: "column"
+z_max: 3e3
+z_elem: 60
+z_stretch: false
+perturb_initstate: false
+dt: "120secs"
+t_end: "6hours"
+dt_save_state_to_disk: "Inf"
+log_progress: false
+toml: [toml/prognostic_edmfx_bomex.toml]
+netcdf_interpolation_num_points: [2, 2, 60]
+ode_algo: "ARS222"
+chemistry_model: "passive"
+chemistry_config: "config/chemistry_configs/abba.yaml"
+output_default_diagnostics: false
+diagnostics:
+  - short_name: [q_gas_AB]
+    period: 6hours

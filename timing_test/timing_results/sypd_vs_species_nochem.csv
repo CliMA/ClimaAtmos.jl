@@ -1,0 +1,7 @@
+platform,n_species,chemistry,sypd,job_id
+bomex,0,off,211.484,timing_bomex_no_mechanism
+bomex,3,off,101.024,timing_bomex_abba
+bomex,15,off,12.546,timing_bomex_jpm
+aquaplanet,0,off,0.081,timing_aquaplanet_no_mechanism
+aquaplanet,3,off,0.071,timing_aquaplanet_abba
+aquaplanet,15,off,0.047,timing_aquaplanet_jpm

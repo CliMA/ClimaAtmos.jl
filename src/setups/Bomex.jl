@@ -65,9 +65,12 @@ function center_initial_condition(setup::Bomex, local_geometry, params)
 
     return physical_state(;
         T, p, q_tot, u = profiles.u(z), tke,
-        # Start only the parent molecule (A, B default to 0), mirroring the
-        # aquaplanet ABBA setup in `DecayingProfile`.
-        gas_tracers = (; q_gas_AB = FT(0.6)),
+        # Initial gas-tracer concentrations for the test chemistry mechanisms.
+        # Each mechanism only creates the tracers it defines (unused entries are
+        # ignored, missing ones default to 0), mirroring `DecayingProfile`:
+        #   * q_gas_AB (ABBA): parent molecule of the toy mechanism (A, B start 0)
+        #   * JPM (jpm.json): typical urban concentrations (`_jpm_urban_gas_tracers`)
+        gas_tracers = (; q_gas_AB = FT(0.6), _jpm_urban_gas_tracers(FT)...),
     )
 end
 
