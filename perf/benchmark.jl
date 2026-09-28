@@ -49,7 +49,7 @@ are_boundschecks_forced = Base.JLOptions().check_bounds == 1
         @test compare_mem(trials, "dss!", 0)
         @test compare_mem(trials, "constrain_state!", 0)
         @test compare_mem(trials, "initialize_imp!", 0)
-        @test compare_mem(trials, "cache!", 256)
+        @test compare_mem(trials, "cache!", 544)
         @test compare_mem(trials, "cache_imp!", 0)
 
         # It's difficult to guarantee zero allocations,

@@ -176,12 +176,14 @@ ClimaAtmos.NoGridScaleTendency
 ClimaAtmos.NoSubgridScaleTendency
 ```
 
-Closure parameters. The fields of this set, and the ClimaParams names they come
+Closure parameters. The fields of these sets, and the ClimaParams names they come
 from, are listed in [PROPHET: Closures](prophet_closures.md#Parameters):
 
 ```@docs
 ClimaAtmos.Parameters.AbstractTurbulenceConvectionParameters
 ClimaAtmos.Parameters.TurbulenceConvectionParameters
+ClimaAtmos.Parameters.AbstractSGSQuadratureParameters
+ClimaAtmos.Parameters.SGSQuadratureParameters
 ```
 
 ### Radiation

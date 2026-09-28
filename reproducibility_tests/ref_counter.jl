@@ -1,4 +1,4 @@
-416
+417
 
 # **README**
 #
@@ -32,6 +32,9 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+417
+- Update to ClimaParams 1.1.16, which changes the default of some SGS quadrature parameters.
+
 416
 - Update to ClimaParams 1.1.14 from ClimaParams 1.1.13, which changes the default
   `EDMF_interface_entr_efficiency` from 0.4 to 0.0 (2026-09-25)

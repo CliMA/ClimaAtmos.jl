@@ -72,6 +72,9 @@ function ClimaAtmosParameters(
     turbconv_params = TurbulenceConvectionParameters(toml_dict)
     TCP = typeof(turbconv_params)
 
+    sgs_quadrature_params = SGSQuadratureParameters(toml_dict)
+    SQP = typeof(sgs_quadrature_params)
+
     thermodynamics_params = ThermodynamicsParameters(toml_dict)
     TP = typeof(thermodynamics_params)
 
@@ -156,6 +159,7 @@ function ClimaAtmosParameters(
         MP2MP3,
         SFP,
         TCP,
+        SQP,
         STP,
         VDP,
         EFP,
@@ -176,6 +180,7 @@ function ClimaAtmosParameters(
         microphysics_2mp3_params,
         surface_fluxes_params,
         turbconv_params,
+        sgs_quadrature_params,
         surface_temp_params,
         vert_diff_params,
         external_forcing_params,
@@ -462,19 +467,8 @@ to_svec(x::NamedTuple) = map(x -> to_svec(x), x)
     TurbulenceConvectionParameters(FT, overrides = NamedTuple())
     TurbulenceConvectionParameters(toml_dict, overrides = NamedTuple())
 
-Build the PROPHET (prognostic EDMF) parameter set.
-
-Most values come from ClimaParams through an explicit name map. The geometric
-SGS-variance term parameters (`sgs_variance_*`), a few
-cloud-fraction release-shape parameters and the updraft sedimentation
-coefficient are not yet in ClimaParams' default TOML: they fall back to the
-defaults set here, and are read from `toml_dict` only when a run or calibration
-TOML defines them. The defaults `margin = abs_margin = sharpness = 1` and
-`residual = 0` release the cloud-fraction floor on a one-width saturation
-margin guarded by an absolute margin of one floor width.
-
-`overrides` is merged last, so it wins over both the TOML values and the
-defaults above.
+Build the PROPHET (prognostic EDMF) parameter set from ClimaParams through an
+explicit name map. `overrides` is merged last, so it wins over the TOML values.
 """
 TurbulenceConvectionParameters(
     ::Type{FT},
@@ -492,8 +486,6 @@ function TurbulenceConvectionParameters(
         :mixing_length_tke_surf_scale => :tke_surf_scale,
         :mixing_length_tke_surf_flux_coeff => :tke_surf_flux_coeff,
         :mixing_length_Ri_crit => :Ri_crit,
-        :diagnostic_covariance_coeff => :diagnostic_covariance_coeff,
-        :Tq_correlation_coefficient => :Tq_correlation_coefficient,
         :detr_buoy_coeff => :detr_buoy_coeff,
         :EDMF_max_area => :max_area,
         :mixing_length_smin_rm => :smin_rm,
@@ -525,13 +517,61 @@ function TurbulenceConvectionParameters(
         :entr_inv_tau => :entr_inv_tau,
         :entr_detr_limit_inv_tau => :entr_detr_limit_inv_tau,
         :cloud_fraction_param_vec => :cloud_fraction_param_vec,
-        :cloud_fraction_steepness_scale => :cloud_fraction_steepness_scale,
-        :cloud_fraction_eps_rel => :cloud_fraction_eps_rel,
-        :cloud_fraction_sigma_abs => :cloud_fraction_sigma_abs,
         :EDMF_interface_entr_efficiency => :interface_entr_efficiency,
         :EDMF_sfc_mass_flux_ustar_coeff => :sfc_mass_flux_ustar_coeff,
         :EDMF_convective_zi => :convective_zi,
         :EDMF_sfc_mass_flux_cap_fraction => :sfc_mass_flux_cap_fraction,
+    )
+    parameters = CP.get_parameter_values(toml_dict, name_map, "ClimaAtmos")
+    FT = CP.float_type(toml_dict)
+    parameters = merge(parameters, overrides)
+    parameters = to_svec(parameters)
+    VFT1 = typeof(parameters.entr_param_vec)
+    VFT2 = typeof(parameters.turb_entr_param_vec)
+    VTF3 = typeof(parameters.cloud_fraction_param_vec)
+    CAP.TurbulenceConvectionParameters{FT, VFT1, VFT2, VTF3}(; parameters...)
+end
+
+"""
+    SGSQuadratureParameters(FT, overrides = NamedTuple())
+    SGSQuadratureParameters(toml_dict, overrides = NamedTuple())
+
+Build the SGS covariance, quadrature and cloud-fraction parameter set.
+
+Most values come from ClimaParams through an explicit name map. The
+cloud-fraction floor release-shape parameters are not yet in ClimaParams'
+default TOML: they fall back to the defaults set here, and are read from
+`toml_dict` only when a run or calibration TOML defines them. The defaults
+`margin = abs_margin = sharpness = 1` and `residual = 0` release the
+cloud-fraction floor on a one-width saturation margin guarded by an absolute
+margin of one floor width.
+
+`overrides` is merged last, so it wins over both the TOML values and the
+defaults above.
+"""
+SGSQuadratureParameters(
+    ::Type{FT},
+    overrides = NamedTuple(),
+) where {FT <: AbstractFloat} =
+    SGSQuadratureParameters(CP.create_toml_dict(FT), overrides)
+
+function SGSQuadratureParameters(
+    toml_dict::CP.ParamDict,
+    overrides = NamedTuple(),
+)
+    name_map = (;
+        :diagnostic_covariance_coeff => :diagnostic_covariance_coeff,
+        :Tq_correlation_coefficient => :Tq_correlation_coefficient,
+        :sgs_variance_geometric_coeff => :sgs_variance_geometric_coeff,
+        :sgs_variance_horizontal_scale_factor =>
+            :sgs_variance_horizontal_scale_factor,
+        :sgs_variance_max_rel_std => :sgs_variance_max_rel_std,
+        :sgs_variance_geometric_Ri_factor => :sgs_variance_geometric_Ri_factor,
+        :sgs_liquid_uniform_fraction => :sgs_liquid_uniform_fraction,
+        :sgs_ice_uniform_fraction => :sgs_ice_uniform_fraction,
+        :cloud_fraction_steepness_scale => :cloud_fraction_steepness_scale,
+        :cloud_fraction_eps_rel => :cloud_fraction_eps_rel,
+        :cloud_fraction_sigma_abs => :cloud_fraction_sigma_abs,
     )
     parameters = CP.get_parameter_values(toml_dict, name_map, "ClimaAtmos")
     FT = CP.float_type(toml_dict)
@@ -541,22 +581,6 @@ function TurbulenceConvectionParameters(
     # TODO: promote each to ClimaParams (and the name_map above) once it has
     # been calibrated, and remove it from this block.
     provisional_defaults = (;
-        # Horizontal resolved-gradient (geometric) SGS variance term (see
-        # `set_covariance_cache!`). geometric_coeff is the variance of a linear field
-        # over a uniform cell and horizontal_scale_factor scales the horizontal grid length; 0
-        # disables the term (default). The max_rel_std bound applies to the diagnosed q′q′
-        # and keeps the quadrature nodes non-negative.
-        sgs_variance_geometric_coeff = FT(1 // 12),
-        sgs_variance_horizontal_scale_factor = FT(0),
-        sgs_variance_max_rel_std = FT(0.5),
-        # Richardson (stability) weight on the geometric term (k = 0: weight ≡ 1,
-        # see `set_covariance_cache!`).
-        sgs_variance_geometric_Ri_factor = FT(0),
-        # Uniform fractions of cloud liquid / ice over the SGS quadrature nodes
-        # (0 = excess reconstruction, 1 = subdomain mean at every node;
-        # see `sgs_local_condensate`).
-        sgs_liquid_uniform_fraction = FT(0),
-        sgs_ice_uniform_fraction = FT(0),
         # Cloud-fraction floor release shape (see `_compute_cloud_fraction`):
         # margin = abs_margin = sharpness = 1, residual = 0 release the floor on
         # a one-width saturation margin guarded by an absolute margin of one
@@ -578,11 +602,7 @@ function TurbulenceConvectionParameters(
         )
     parameters =
         merge(parameters, provisional_defaults, provisional_params, overrides)
-    parameters = to_svec(parameters)
-    VFT1 = typeof(parameters.entr_param_vec)
-    VFT2 = typeof(parameters.turb_entr_param_vec)
-    VTF3 = typeof(parameters.cloud_fraction_param_vec)
-    CAP.TurbulenceConvectionParameters{FT, VFT1, VFT2, VTF3}(; parameters...)
+    CAP.SGSQuadratureParameters{FT}(; parameters...)
 end
 
 """

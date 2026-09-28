@@ -740,8 +740,10 @@ Closure parameters come from ClimaParams and are overridden through the `toml:`
 key of a configuration file; `toml/prognostic_edmfx*.toml` hold the tuned sets.
 The table maps the symbols above onto the accessor in
 [`ClimaAtmos.Parameters`](@ref ClimaAtmos.Parameters) and the ClimaParams name.
-The full list of fields is in the docstring of
-[`ClimaAtmos.Parameters.TurbulenceConvectionParameters`](@ref).
+The full list of fields is in the docstrings of
+[`ClimaAtmos.Parameters.TurbulenceConvectionParameters`](@ref) and, for the SGS
+covariance, quadrature and cloud-fraction closures,
+[`ClimaAtmos.Parameters.SGSQuadratureParameters`](@ref).
 
 | Symbol                                                              | Accessor                                                                                          | ClimaParams name                                                                                        |
 |:------------------------------------------------------------------- |:------------------------------------------------------------------------------------------------- |:------------------------------------------------------------------------------------------------------- |
@@ -765,9 +767,9 @@ The full list of fields is in the docstring of
 | ``c_k``                                                             | `tke_surf_flux_coeff`                                                                             | `mixing_length_tke_surf_flux_coeff`                                                                     |
 | ``c_\sigma``                                                        | `diagnostic_covariance_coeff`, which is ``c_\sigma / 2`` (the closure includes the factor of two) | `diagnostic_covariance_coeff`                                                                           |
 | ``r_{T,q_t}``                                                       | `Tq_correlation_coefficient`                                                                      | `Tq_correlation_coefficient`                                                                            |
-| ``c_g``, ``c_{\Delta x}``                                           | `sgs_variance_geometric_coeff`, `sgs_variance_horizontal_scale_factor` (0 = term off)             | — (provisional)                                                                                         |
-| ``r_{\max}``                                                        | `sgs_variance_max_rel_std` (bound ``\sigma_q \le r_{\max} q_t``)                                  | — (provisional)                                                                                         |
-| ``k_{\mathrm{Ri}}``                                                 | `sgs_variance_geometric_Ri_factor` (``\mathrm{Ri}_0 = k_{\mathrm{Ri}} \mathrm{Ri}_c``; 0 = off)   | — (provisional)                                                                                         |
+| ``c_g``, ``c_{\Delta x}``                                           | `sgs_variance_geometric_coeff`, `sgs_variance_horizontal_scale_factor` (0 = term off)             | `sgs_variance_geometric_coeff`, `sgs_variance_horizontal_scale_factor`                                  |
+| ``r_{\max}``                                                        | `sgs_variance_max_rel_std` (bound ``\sigma_q \le r_{\max} q_t``)                                  | `sgs_variance_max_rel_std`                                                                              |
+| ``k_{\mathrm{Ri}}``                                                 | `sgs_variance_geometric_Ri_factor` (``\mathrm{Ri}_0 = k_{\mathrm{Ri}} \mathrm{Ri}_c``; 0 = off)   | `sgs_variance_geometric_Ri_factor`                                                                      |
 | ``A``                                                               | `interface_entr_efficiency`                                                                       | `EDMF_interface_entr_efficiency`                                                                        |
 
 The generated [Configuration Options](configuration_options.md) table lists the

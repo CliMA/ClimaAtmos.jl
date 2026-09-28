@@ -229,7 +229,7 @@ with `N²` a squared buoyancy frequency, `S²` the squared strain-rate norm and 
 (`sgs_variance_geometric_Ri_factor` k). The geometric term estimates the variance of a
 field that the turbulence closure cannot represent — stably stratified air where the
 mixing length has collapsed; where the resolved flow is turbulent (`Ri ≲ Ri₀`) the
-closure already carries the variance, so the term is faded out. `Ri₀ = 0` (the default `k = 0`)
+closure already carries the variance, so the term is faded out. `Ri₀ = 0` (`k = 0`)
 returns exactly 1.
 """
 @inline function sgs_geometric_stability_weight(N², S², Ri₀)
@@ -300,7 +300,7 @@ Pipeline:
  1. Compute mixing length via `materialized_mixing_length!`
  2. Materialize θ-based covariances from gradients
  3. Add the horizontal resolved-gradient (geometric) term to θ′θ′ (skipped when
-    `sgs_variance_horizontal_scale_factor` is 0, the default)
+    `sgs_variance_horizontal_scale_factor` is 0)
  4. Transform θ→T using `compute_∂T_∂θ!`
  5. Add the horizontal resolved-gradient term to q′q′ (skipped together with
     step 3)
@@ -321,9 +321,9 @@ function set_covariance_cache!(Y, p, thermo_params)
 
     # Effective coefficient of the horizontal resolved-gradient (geometric) variance
     # term, `geo_h = c_g (c_Δx Δx_h)^2`, which multiplies |∇_h ψ|^2 below. The scale
-    # factor `c_Δx` is the on/off switch: it defaults to 0, in which case the
-    # geometric additions are skipped entirely so the historical vertical-gradient
-    # closure is reproduced at no extra cost.
+    # factor `c_Δx` is the on/off switch: when it is 0 the geometric additions are
+    # skipped entirely, so the vertical-gradient closure is reproduced at no extra
+    # cost.
     c_Δx = CAP.sgs_variance_horizontal_scale_factor(p.params)
     use_geometric = !iszero(c_Δx)
     geo_h = if use_geometric

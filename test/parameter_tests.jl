@@ -13,6 +13,7 @@ import Thermodynamics as TD
         # Verify sub-components types
         @test params.thermodynamics_params isa CAP.TD.Parameters.ThermodynamicsParameters
         @test params.turbconv_params isa CAP.TurbulenceConvectionParameters
+        @test params.sgs_quadrature_params isa CAP.SGSQuadratureParameters
         @test params.microphysics_cloud_params isa NamedTuple
         @test params.microphysics_cloud_params.liquid isa CAP.CM.Parameters.CloudLiquid
 
@@ -110,19 +111,17 @@ end
 end
 
 @testset "Geometric SGS variance parameters" begin
-    # The horizontal scale factor is the switch for the resolved-gradient variance
-    # term; it must default to 0 so the historical closure is reproduced bitwise.
+    # The defaults come from ClimaParams.
     for FT in (Float32, Float64)
-        tc = CA.ClimaAtmosParameters(FT).turbconv_params
-        @test CAP.sgs_variance_horizontal_scale_factor(tc) == FT(0)
-        @test CAP.sgs_variance_geometric_coeff(tc) == FT(1 // 12)
-        @test CAP.sgs_variance_max_rel_std(tc) == FT(0.5)
-        @test CAP.sgs_variance_geometric_Ri_factor(tc) == FT(0)
-        # the condensate reconstruction defaults to the excess split for both species
-        @test CAP.sgs_liquid_uniform_fraction(tc) == FT(0)
-        @test CAP.sgs_ice_uniform_fraction(tc) == FT(0)
+        sq = CA.ClimaAtmosParameters(FT).sgs_quadrature_params
+        @test CAP.sgs_variance_horizontal_scale_factor(sq) == FT(3)
+        @test CAP.sgs_variance_geometric_coeff(sq) == FT(1 // 12)
+        @test CAP.sgs_variance_max_rel_std(sq) == FT(0.5)
+        @test CAP.sgs_variance_geometric_Ri_factor(sq) == FT(1)
+        @test CAP.sgs_liquid_uniform_fraction(sq) == FT(1)
+        @test CAP.sgs_ice_uniform_fraction(sq) == FT(1)
     end
-    # A run toml can enable the term and its Richardson weight.
+    # A run toml overrides the defaults.
     mktemp() do path, io
         write(
             io,
@@ -131,7 +130,7 @@ end
   value = 2.0
   type = "float"
   [sgs_variance_geometric_Ri_factor]
-  value = 1.0
+  value = 0.0
   type = "float"
   [sgs_ice_uniform_fraction]
   value = 0.5
@@ -143,11 +142,11 @@ end
             Dict("toml" => [path]),
             job_id = "parameter_test_sgs_variance_scale_factor",
         )
-        tc = CA.ClimaAtmosParameters(config).turbconv_params
-        @test CAP.sgs_variance_horizontal_scale_factor(tc) == 2.0
-        @test CAP.sgs_variance_geometric_Ri_factor(tc) == 1.0
-        @test CAP.sgs_ice_uniform_fraction(tc) == 0.5
-        @test CAP.sgs_liquid_uniform_fraction(tc) == 0.0
+        sq = CA.ClimaAtmosParameters(config).sgs_quadrature_params
+        @test CAP.sgs_variance_horizontal_scale_factor(sq) == 2.0
+        @test CAP.sgs_variance_geometric_Ri_factor(sq) == 0.0
+        @test CAP.sgs_ice_uniform_fraction(sq) == 0.5
+        @test CAP.sgs_liquid_uniform_fraction(sq) == 1.0
     end
 end
 
