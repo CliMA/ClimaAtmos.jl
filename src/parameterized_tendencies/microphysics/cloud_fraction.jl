@@ -941,46 +941,44 @@ NVTX.@annotate function set_sgs_moments_and_cloud_fraction!(Y, p)
     ᶜq_lcl = (p.scratch.ᶜtemp_scalar_2 .= ᶜq_lcl_lazy)
     ᶜq_icl = (p.scratch.ᶜtemp_scalar_3 .= ᶜq_icl_lazy)
 
-    let α = FT(α), thermo_params = thermo_params, floor = floor, sgs_quad = sgs_quad,
-        corr_Tq = corr_Tq
+    α_ft = FT(α)
 
-        DataLayouts.foreach_point(
-            ᶜsgs_moments, ᶜcloud_fraction, ᶜρ_env, ᶜT_mean, ᶜq_mean,
-            ᶜq_lcl, ᶜq_icl, ᶜT′T′, ᶜq′q′,
-        ) do ᶜsgs_moments,
-        ᶜcloud_fraction,
-        ᶜρ_env,
-        ᶜT_mean,
-        ᶜq_mean,
-        ᶜq_lcl,
-        ᶜq_icl,
-        ᶜT′T′,
-        ᶜq′q′
+    DataLayouts.foreach_point(
+        ᶜsgs_moments, ᶜcloud_fraction, ᶜρ_env, ᶜT_mean, ᶜq_mean,
+        ᶜq_lcl, ᶜq_icl, ᶜT′T′, ᶜq′q′,
+    ) do ᶜsgs_moments,
+    ᶜcloud_fraction,
+    ᶜρ_env,
+    ᶜT_mean,
+    ᶜq_mean,
+    ᶜq_lcl,
+    ᶜq_icl,
+    ᶜT′T′,
+    ᶜq′q′
 
-            ᶜq_c = @. ᶜq_lcl + ᶜq_icl
-            # ONE quadrature pass → (sigma_S, λ_lagrange).
-            @. ᶜsgs_moments = _compute_sgs_moments(
-                thermo_params, ᶜρ_env, ᶜT_mean, ᶜq_mean, ᶜq_c,
-                $(sgs_quad), ᶜT′T′, ᶜq′q′, corr_Tq, α,
-            )
-            # Recompute CF from q_c and σ_S using the augmented-σ closure. We cannot
-            # use `Φ(λ/σ_aug)` because λ was computed with the equilibrium σ_S_eff,
-            # not σ_aug — `Φ(λ/σ_aug)` would not match the truncated-Gaussian
-            # closure for the augmented variance. This overwrites the Picard iterate
-            # with a value consistent with the final SGS moments, so EDMF weighting
-            # must be re-applied here even though `set_cloud_fraction!` already
-            # applied it during Picard.
-            @. ᶜcloud_fraction = _compute_cloud_fraction(
-                ᶜq_c,
-                # μ_S recomputed analytically, matching `_sgs_saturation_moments`
-                # (condensate-free q_sat, consistent with the linear excess S).
-                ᶜq_mean - TD.q_vap_saturation(thermo_params, ᶜT_mean, ᶜρ_env),
-                ᶜsgs_moments.sigma_S,
-                TD.q_vap_saturation(thermo_params, ᶜT_mean, ᶜρ_env, ᶜq_lcl, ᶜq_icl),
-                α,
-                $(floor),
-            )
-        end
+        ᶜq_c = @. ᶜq_lcl + ᶜq_icl
+        # ONE quadrature pass → (sigma_S, λ_lagrange).
+        @. ᶜsgs_moments = _compute_sgs_moments(
+            thermo_params, ᶜρ_env, ᶜT_mean, ᶜq_mean, ᶜq_c,
+            $(sgs_quad), ᶜT′T′, ᶜq′q′, corr_Tq, α_ft,
+        )
+        # Recompute CF from q_c and σ_S using the augmented-σ closure. We cannot
+        # use `Φ(λ/σ_aug)` because λ was computed with the equilibrium σ_S_eff,
+        # not σ_aug — `Φ(λ/σ_aug)` would not match the truncated-Gaussian
+        # closure for the augmented variance. This overwrites the Picard iterate
+        # with a value consistent with the final SGS moments, so EDMF weighting
+        # must be re-applied here even though `set_cloud_fraction!` already
+        # applied it during Picard.
+        @. ᶜcloud_fraction = _compute_cloud_fraction(
+            ᶜq_c,
+            # μ_S recomputed analytically, matching `_sgs_saturation_moments`
+            # (condensate-free q_sat, consistent with the linear excess S).
+            ᶜq_mean - TD.q_vap_saturation(thermo_params, ᶜT_mean, ᶜρ_env),
+            ᶜsgs_moments.sigma_S,
+            TD.q_vap_saturation(thermo_params, ᶜT_mean, ᶜρ_env, ᶜq_lcl, ᶜq_icl),
+            α_ft,
+            $(floor),
+        )
     end
 
     _apply_edmf_cloud_weighting!(Y, p, turbconv_model, thermo_params)
