@@ -536,18 +536,8 @@ end
     SGSQuadratureParameters(FT, overrides = NamedTuple())
     SGSQuadratureParameters(toml_dict, overrides = NamedTuple())
 
-Build the SGS covariance, quadrature and cloud-fraction parameter set.
-
-Most values come from ClimaParams through an explicit name map. The
-cloud-fraction floor release-shape parameters are not yet in ClimaParams'
-default TOML: they fall back to the defaults set here, and are read from
-`toml_dict` only when a run or calibration TOML defines them. The defaults
-`margin = abs_margin = sharpness = 1` and `residual = 0` release the
-cloud-fraction floor on a one-width saturation margin guarded by an absolute
-margin of one floor width.
-
-`overrides` is merged last, so it wins over both the TOML values and the
-defaults above.
+Build the SGS covariance, quadrature and cloud-fraction parameter set from
+ClimaParams through an explicit name map, with `overrides` merged last.
 """
 SGSQuadratureParameters(
     ::Type{FT},
@@ -575,33 +565,7 @@ function SGSQuadratureParameters(
     )
     parameters = CP.get_parameter_values(toml_dict, name_map, "ClimaAtmos")
     FT = CP.float_type(toml_dict)
-    # Provisional parameters: not yet in ClimaParams' default toml. Each is
-    # read from the run/calibration toml when defined there and otherwise
-    # falls back to the default below.
-    # TODO: promote each to ClimaParams (and the name_map above) once it has
-    # been calibrated, and remove it from this block.
-    provisional_defaults = (;
-        # Cloud-fraction floor release shape (see `_compute_cloud_fraction`):
-        # margin = abs_margin = sharpness = 1, residual = 0 release the floor on
-        # a one-width saturation margin guarded by an absolute margin of one
-        # floor width.
-        cloud_fraction_floor_release_margin = FT(1),
-        cloud_fraction_floor_release_abs_margin = FT(1),
-        cloud_fraction_floor_release_sharpness = FT(1),
-        cloud_fraction_floor_residual = FT(0),
-    )
-    provisional_present = filter(collect(keys(provisional_defaults))) do name
-        haskey(toml_dict.data, string(name))
-    end
-    provisional_params =
-        isempty(provisional_present) ? (;) :
-        CP.get_parameter_values(
-            toml_dict,
-            String.(provisional_present),
-            "ClimaAtmos",
-        )
-    parameters =
-        merge(parameters, provisional_defaults, provisional_params, overrides)
+    parameters = merge(parameters, overrides)
     CAP.SGSQuadratureParameters{FT}(; parameters...)
 end
 

@@ -3,6 +3,17 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- ![][badge-🔥behavioralΔ] The cloud-fraction floor is no longer released where
+  the subdomain mean is saturated: `σ_S_floor² = (ε_rel q_sat)² + σ_abs²` applies
+  everywhere, and the four release-shape parameters
+  (`cloud_fraction_floor_release_margin`, `cloud_fraction_floor_release_abs_margin`,
+  `cloud_fraction_floor_release_sharpness`, `cloud_fraction_floor_residual`) are
+  removed together with the provisional-parameter block of
+  `SGSQuadratureParameters`. `_compute_cloud_fraction` takes `(ε_rel, σ_abs)`
+  instead of a `CloudFractionFloorParams` bundle and no longer needs `μ_S`.
+  Cloud fraction changes only where the mean is saturated by more than one PDF
+  width while the condensate is below the floor width, which is rare enough
+  that the effect on a coupled AMIP month is below the replicate noise.
 - ![][badge-🔥behavioralΔ] Update to ClimaParams 1.1.16, which provides the
   SGS-quadrature parameters and changes the defaults.
   The SGS covariance, quadrature and cloud-fraction

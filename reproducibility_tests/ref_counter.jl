@@ -1,4 +1,4 @@
-417
+418
 
 # **README**
 #
@@ -32,6 +32,9 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+418
+- Remove the release of the cloud-fraction floor (the floor `(eps_rel q_sat)^2 + sigma_abs^2` now applies everywhere; four release-shape parameters deleted).
+
 417
 - Update to ClimaParams 1.1.16, which changes the default of some SGS quadrature parameters.
 
