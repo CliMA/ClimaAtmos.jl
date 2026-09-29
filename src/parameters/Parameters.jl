@@ -55,6 +55,15 @@ abstract type AbstractTurbulenceConvectionParameters end
 const ATCP = AbstractTurbulenceConvectionParameters
 
 """
+    AbstractSGSQuadratureParameters
+
+Supertype of the SGS quadrature and cloud-fraction parameter sets, aliased
+`ASQP`. The only concrete subtype is `SGSQuadratureParameters`.
+"""
+abstract type AbstractSGSQuadratureParameters end
+const ASQP = AbstractSGSQuadratureParameters
+
+"""
     AbstractSurfaceTemperatureParameters
 
 Supertype of the prescribed-surface-temperature parameter sets, aliased `ASTP`.
@@ -81,6 +90,7 @@ const AGWP = AbstractGravityWaveParameters
 
 Base.broadcastable(param_set::ACAP) = tuple(param_set)
 Base.broadcastable(param_set::ATCP) = tuple(param_set)
+Base.broadcastable(param_set::ASQP) = tuple(param_set)
 Base.broadcastable(param_set::ASTP) = tuple(param_set)
 
 """
@@ -88,10 +98,10 @@ Base.broadcastable(param_set::ASTP) = tuple(param_set)
 
 Parameters of the PROPHET (prognostic EDMF) turbulence and convection scheme.
 
-Most values come from ClimaParams; see the `TurbulenceConvectionParameters`
+All values come from ClimaParams; see the `TurbulenceConvectionParameters`
 constructor in `create_parameters.jl` for the mapping from ClimaParams names to
-the fields below, and for the defaults of the few fields that ClimaParams does
-not yet define. `FT` is the float type; `VFT1`, `VFT2`, and `VTF3` are the
+the fields below. The SGS covariance, quadrature and cloud-fraction closure
+parameters are in `SGSQuadratureParameters`. `FT` is the float type; `VFT1`, `VFT2`, and `VTF3` are the
 `SVector` types of the three data-driven parameter vectors.
 
 # Fields
@@ -107,31 +117,6 @@ not yet define. `FT` is the float type; `VFT1`, `VFT2`, and `VTF3` are the
     velocity [-].
   - `tke_surf_flux_coeff`: Coefficient of the flux term in the `u*³` surface TKE
     flux [-].
-  - `diagnostic_covariance_coeff`: Prefactor of the turbulent production term in
-    the diagnostic covariance closure [-].
-  - `sgs_variance_geometric_coeff`: Coefficient `c_g` of the horizontal
-    resolved-gradient SGS variance term, `variance += c_g (c_Δx Δx_h)^2 |∇_h ψ|^2`,
-    added to the diagnostic `θ′θ′` and `q′q′` that feed the SGS quadrature.
-    `1/12` is the variance of a linear field over a uniform cell [-].
-  - `sgs_variance_horizontal_scale_factor`: Multiplier `c_Δx` on the horizontal grid
-    scale `Δx_h` in the geometric variance term; the effective horizontal
-    coefficient is `c_g c_Δx^2`. `0` (default) disables the term [-].
-  - `sgs_variance_max_rel_std`: Upper bound on the SGS total-water standard
-    deviation relative to the grid-mean total water, `σ_q ≤ sgs_variance_max_rel_std * q_tot`,
-    applied to the diagnosed `q′q′` whatever closure produced it. A wider variance puts a quadrature node
-    at negative total water; `0.5` keeps all nodes non-negative (default) [-].
-  - `sgs_variance_geometric_Ri_factor`: Factor `k` in `Ri₀ = k Ri_crit`, the scale of the
-    Richardson-number weight `w = Ri₊² / (Ri₊² + Ri₀²)` on the geometric variance term
-    (`sgs_geometric_stability_weight`), with `Ri₊ = max(N²_sat, 0) / max(2 SᵢⱼSᵢⱼ, ε)`
-    on the saturated moist buoyancy gradient. `0` (default) makes the weight exactly 1 [-].
-  - `sgs_liquid_uniform_fraction`, `sgs_ice_uniform_fraction`: Fractions `ξ` of
-    cloud liquid and cloud ice that are uniform over the SGS quadrature nodes in
-    the 1-moment microphysics, in `[0, 1]`: at each node a species is
-    `(1 − ξ)` times its liquid-fraction share of the reconstructed saturation
-    excess plus `ξ` times its subdomain mean (`sgs_local_condensate`). `0`
-    (default) is the excess reconstruction; `1` treats the species uniform at every node [-].
-  - `Tq_correlation_coefficient`: Default correlation between `T'` and `q_tot'`
-    in the SGS quadrature, in `[-1, 1]` [-].
   - `static_stab_coeff`: Static stability coefficient `c_b` of the mixing-length
     closure [-].
   - `Prandtl_number_scale`: Cospectral budget factor `ω_pr` for the turbulent
@@ -178,22 +163,7 @@ not yet define. `FT` is the float type; `VFT1`, `VFT2`, and `VTF3` are the
   - `max_area_limiter_scale`: Rate coefficient of the maximum-area limiter in
     detrainment [1/s].
   - `max_area_limiter_power`: Exponent of the maximum-area limiter [-].
-  - `cloud_fraction_steepness_scale`: Steepness scale `α` of the
-    cloud-fraction/condensate relationship; 1 for exact Gaussian or lognormal SGS
-    distributions [-].
   - `cloud_fraction_param_vec`: Data-driven cloud-fraction parameter vector [-].
-  - `cloud_fraction_eps_rel`: Residual fractional saturation variability
-    `ε_rel` in the augmented-`σ` floor of the cloud-fraction closure [-].
-  - `cloud_fraction_sigma_abs`: Absolute floor `σ_abs` on the augmented
-    saturation-deficit standard deviation [kg/kg].
-  - `cloud_fraction_floor_release_margin`: Saturation margin `c_w`, in
-    equilibrium PDF widths, at which the relative floor is released [-].
-  - `cloud_fraction_floor_release_abs_margin`: Absolute margin `c_a`, in floor
-    units, added in quadrature to the release width [-].
-  - `cloud_fraction_floor_release_sharpness`: Exponent `s` of the release
-    transition; larger values approach a switch [-].
-  - `cloud_fraction_floor_residual`: Fraction `D_min` of the relative floor
-    retained deep inside a saturated deck [-].
   - `interface_entr_efficiency`: Entrainment efficiency `A` in the interfacial
     entrainment diffusivity `K_e = γ w_e Δz` [-].
   - `sfc_mass_flux_ustar_coeff`: Coefficient `c_u` weighting the
@@ -211,14 +181,6 @@ Base.@kwdef struct TurbulenceConvectionParameters{FT, VFT1, VFT2, VTF3} <: ATCP
     Ri_crit::FT
     tke_surf_scale::FT
     tke_surf_flux_coeff::FT
-    diagnostic_covariance_coeff::FT
-    sgs_variance_geometric_coeff::FT
-    sgs_variance_horizontal_scale_factor::FT
-    sgs_variance_max_rel_std::FT
-    sgs_variance_geometric_Ri_factor::FT
-    sgs_liquid_uniform_fraction::FT
-    sgs_ice_uniform_fraction::FT
-    Tq_correlation_coefficient::FT
     static_stab_coeff::FT
     Prandtl_number_scale::FT
     Prandtl_number_0::FT
@@ -246,19 +208,86 @@ Base.@kwdef struct TurbulenceConvectionParameters{FT, VFT1, VFT2, VTF3} <: ATCP
     min_area_limiter_power::FT
     max_area_limiter_scale::FT
     max_area_limiter_power::FT
-    cloud_fraction_steepness_scale::FT
     cloud_fraction_param_vec::VTF3
+    interface_entr_efficiency::FT
+    # Surface mass flux closure (`set_edmfx_surface_conditions!`).
+    sfc_mass_flux_ustar_coeff::FT
+    convective_zi::FT
+    sfc_mass_flux_cap_fraction::FT
+end
+
+"""
+    SGSQuadratureParameters{FT} <: AbstractSGSQuadratureParameters
+
+Parameters of the subgrid-scale (SGS) covariance closure, the SGS quadrature
+over the subdomain distribution of `T` and `q_tot`, and the cloud-fraction
+closure built on it. They apply to every configuration that uses SGS
+covariances, with or without an EDMF scheme.
+
+Most values come from ClimaParams; see the `SGSQuadratureParameters`
+constructor in `create_parameters.jl` for the mapping from ClimaParams names to
+the fields below, and for the defaults of the few fields that ClimaParams does
+not yet define.
+
+# Fields
+
+  - `diagnostic_covariance_coeff`: Prefactor of the turbulent production term in
+    the diagnostic covariance closure [-].
+  - `sgs_variance_geometric_coeff`: Coefficient `c_g` of the horizontal
+    resolved-gradient SGS variance term, `variance += c_g (c_Δx Δx_h)^2 |∇_h ψ|^2`,
+    added to the diagnostic `θ′θ′` and `q′q′` that feed the SGS quadrature.
+    `1/12` is the variance of a linear field over a uniform cell [-].
+  - `sgs_variance_horizontal_scale_factor`: Multiplier `c_Δx` on the horizontal grid
+    scale `Δx_h` in the geometric variance term; the effective horizontal
+    coefficient is `c_g c_Δx^2`. `0` disables the term [-].
+  - `sgs_variance_max_rel_std`: Upper bound on the SGS total-water standard
+    deviation relative to the grid-mean total water, `σ_q ≤ sgs_variance_max_rel_std * q_tot`,
+    applied to the diagnosed `q′q′` whatever closure produced it. A wider variance puts a quadrature node
+    at negative total water; `0.5` keeps all nodes non-negative [-].
+  - `sgs_variance_geometric_Ri_factor`: Factor `k` in `Ri₀ = k Ri_crit`, the scale of the
+    Richardson-number weight `w = Ri₊² / (Ri₊² + Ri₀²)` on the geometric variance term
+    (`sgs_geometric_stability_weight`), with `Ri₊ = max(N²_sat, 0) / max(2 SᵢⱼSᵢⱼ, ε)`
+    on the saturated moist buoyancy gradient. `0` makes the weight exactly 1 [-].
+  - `sgs_liquid_uniform_fraction`, `sgs_ice_uniform_fraction`: Fractions `ξ` of
+    cloud liquid and cloud ice that are uniform over the SGS quadrature nodes in
+    the 1-moment microphysics, in `[0, 1]`: at each node a species is
+    `(1 − ξ)` times its liquid-fraction share of the reconstructed saturation
+    excess plus `ξ` times its subdomain mean (`sgs_local_condensate`). `0`
+    is the excess reconstruction; `1` treats the species uniform at every node [-].
+  - `Tq_correlation_coefficient`: Default correlation between `T'` and `q_tot'`
+    in the SGS quadrature, in `[-1, 1]` [-].
+  - `cloud_fraction_steepness_scale`: Steepness scale `α` of the
+    cloud-fraction/condensate relationship; 1 for exact Gaussian or lognormal SGS
+    distributions [-].
+  - `cloud_fraction_eps_rel`: Residual fractional saturation variability
+    `ε_rel` in the augmented-`σ` floor of the cloud-fraction closure [-].
+  - `cloud_fraction_sigma_abs`: Absolute floor `σ_abs` on the augmented
+    saturation-deficit standard deviation [kg/kg].
+  - `cloud_fraction_floor_release_margin`: Saturation margin `c_w`, in
+    equilibrium PDF widths, at which the relative floor is released [-].
+  - `cloud_fraction_floor_release_abs_margin`: Absolute margin `c_a`, in floor
+    units, added in quadrature to the release width [-].
+  - `cloud_fraction_floor_release_sharpness`: Exponent `s` of the release
+    transition; larger values approach a switch [-].
+  - `cloud_fraction_floor_residual`: Fraction `D_min` of the relative floor
+    retained deep inside a saturated deck [-].
+"""
+Base.@kwdef struct SGSQuadratureParameters{FT} <: ASQP
+    diagnostic_covariance_coeff::FT
+    sgs_variance_geometric_coeff::FT
+    sgs_variance_horizontal_scale_factor::FT
+    sgs_variance_max_rel_std::FT
+    sgs_variance_geometric_Ri_factor::FT
+    sgs_liquid_uniform_fraction::FT
+    sgs_ice_uniform_fraction::FT
+    Tq_correlation_coefficient::FT
+    cloud_fraction_steepness_scale::FT
     cloud_fraction_eps_rel::FT
     cloud_fraction_sigma_abs::FT
     cloud_fraction_floor_release_margin::FT
     cloud_fraction_floor_release_abs_margin::FT
     cloud_fraction_floor_release_sharpness::FT
     cloud_fraction_floor_residual::FT
-    interface_entr_efficiency::FT
-    # Surface mass flux closure (`set_edmfx_surface_conditions!`).
-    sfc_mass_flux_ustar_coeff::FT
-    convective_zi::FT
-    sfc_mass_flux_cap_fraction::FT
 end
 
 """
@@ -469,6 +498,7 @@ accessors generated at the bottom of this module, e.g.
     parameters, or `nothing`.
   - `surface_fluxes_params`: `SurfaceFluxes.Parameters.SurfaceFluxesParameters`.
   - `turbconv_params`: `TurbulenceConvectionParameters`.
+  - `sgs_quadrature_params`: `SGSQuadratureParameters`.
   - `surface_temp_params`: `SurfaceTemperatureParameters`.
   - `vert_diff_params`: Parameters of the simple vertical-diffusion schemes:
     `C_E` [-], and `H` [m] and `D₀` [m²/s] for `DecayWithHeightDiffusion`.
@@ -539,6 +569,7 @@ Base.@kwdef struct ClimaAtmosParameters{
     MP2MP3,
     SFP,
     TCP,
+    SQP,
     STP,
     VDP,
     EFP,
@@ -558,6 +589,7 @@ Base.@kwdef struct ClimaAtmosParameters{
     microphysics_2mp3_params::MP2MP3
     surface_fluxes_params::SFP
     turbconv_params::TCP
+    sgs_quadrature_params::SQP
     surface_temp_params::STP
     vert_diff_params::VDP
     external_forcing_params::EFP
@@ -623,6 +655,15 @@ for var in fieldnames(TCPS)
 end
 for fn in fieldnames(TCPS)
     @eval $(fn)(ps::ATCP) = ps.$(fn)
+end
+
+# Forward SGS quadrature parameters in the same way.
+const SQPS = SGSQuadratureParameters
+for var in fieldnames(SQPS)
+    @eval $var(ps::ACAP) = $var(sgs_quadrature_params(ps))
+end
+for fn in fieldnames(SQPS)
+    @eval $(fn)(ps::ASQP) = ps.$(fn)
 end
 
 # Forward the Thermodynamics parameters, so that e.g. `CAP.R_d(ps)` works.

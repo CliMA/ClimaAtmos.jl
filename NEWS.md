@@ -3,8 +3,15 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- ![][badge-🔥behavioralΔ] Update to ClimaParams 1.1.16, which provides the
+  SGS-quadrature parameters and changes the defaults.
+  The SGS covariance, quadrature and cloud-fraction
+  closure parameters move from `TurbulenceConvectionParameters` to a new
+  `SGSQuadratureParameters` set, held as `sgs_quadrature_params`. `CAP.x(params)`
+  accessors and TOML names are unchanged; code that reads these fields from
+  `turbconv_params` must read them from `sgs_quadrature_params`.
 - ![][badge-✨feature/enhancement] Two parameters,
-  `sgs_liquid_uniform_fraction` and `sgs_ice_uniform_fraction` (default 0),
+  `sgs_liquid_uniform_fraction` and `sgs_ice_uniform_fraction`,
   blend the SGS-quadrature condensate reconstruction of the 1-moment
   microphysics between the excess split (a species sits only at supersaturated
   nodes, in proportion to its excess) and a uniform distribution (the
