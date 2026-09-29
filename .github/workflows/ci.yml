@@ -60,7 +60,6 @@ jobs:
       fail-fast: false
       matrix:
         version:
-          - '1.10'
           - '1.11'
         # Ubuntu only. `main` then exercises the required jobs that gate a 
         # pull request, so the workflow badge means "the required checks are 
@@ -75,8 +74,15 @@ jobs:
           - parameterizations
           - restarts
           - era5
+        include:
+          - version: '1.10'
+            os: ubuntu-latest
+            test_group: infrastructure
     env:
       TEST_GROUP: ${{ matrix.test_group }}
+      # EDMFX simulation tests are compile-bound, coverage instrumentation
+      # increases their wall time
+      COVERAGE: ${{ matrix.test_group != 'dynamics_edmfx' }}
     steps:
       - uses: actions/checkout@v7
       - uses: julia-actions/setup-julia@v3
@@ -86,13 +92,11 @@ jobs:
       - uses: julia-actions/julia-buildpkg@v1
       - uses: julia-actions/julia-runtest@v1
         with:
-          # EDMFX simulation tests are compile-bound, coverage instrumentation
-          # increases their wall time
-          coverage: ${{ matrix.test_group != 'dynamics_edmfx' }}
+          coverage: ${{ env.COVERAGE }}
       - uses: julia-actions/julia-processcoverage@v1
-        if: matrix.test_group != 'dynamics_edmfx'
+        if: env.COVERAGE == 'true'
       - uses: codecov/codecov-action@v7
-        if: matrix.test_group != 'dynamics_edmfx'
+        if: env.COVERAGE == 'true'
         with:
           file: lcov.info
           token: ${{secrets.CODECOV_TOKEN}}

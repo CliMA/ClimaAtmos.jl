@@ -52,7 +52,8 @@ A file under `src/parameterized_tendencies/` should not contain orchestration lo
 | Prognostic equations       | `dynamics`          | `sphere_baroclinic_wave_rhoe` |
 | EDMFX diffusion / limiters | `dynamics_edmfx`    | `prognostic_edmfx_*`          |
 | Microphysics / EDMF        | `parameterizations` | `prognostic_edmfx_*`          |
-| Restarts                   | `restarts`          | `restart_*`                   |
+| Restarts                   | Buildkite only      | `Restarting` group            |
+| Initialization from file   | `restarts`          | `test_init_with_file.jl`      |
 | Diagnostics                | `diagnostics`       | any `--diagnostics` job       |
 | Config semantics           | `infrastructure`    | `config.jl`                   |
 
@@ -88,7 +89,7 @@ When reviewing or writing changes, name the validation surface explicitly:
 
 ## Local commands
 
-  - Prefer Julia 1.11.x for local work. CI also runs 1.10 and 1.11.
+  - Prefer Julia 1.11.x for local work. GitHub CI runs every test group on 1.11 and only `infrastructure` on 1.10.
   - For runtime validation, prefer `julia +1.11 --project=.buildkite .buildkite/ci_driver.jl ...`.
   - For package tests, prefer `Pkg.test()` over manually `include`ing `test/runtests.jl` because test-only deps are loaded through the package test path.
 
