@@ -122,11 +122,10 @@ if TEST_GROUP in ("parameterizations", "all")
 end
 
 # ============================================================================
-# Restarts: Restart and reproducibility tests
+# Restarts: Initialization from file. restart.jl and
+# unit_reproducibility_infra.jl run as Buildkite steps.
 # ============================================================================
 if TEST_GROUP in ("restarts", "all")
-    @safetestset "Restarts" begin @time include("restart.jl") end
-    @safetestset "Reproducibility infra" begin @time include("unit_reproducibility_infra.jl") end
     @safetestset "Init with file" begin @time include("test_init_with_file.jl") end
 end
 
