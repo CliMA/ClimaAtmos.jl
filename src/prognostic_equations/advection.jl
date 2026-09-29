@@ -98,12 +98,12 @@ EDMFX-subdomain tracers.
 
 Increments (with a minus sign on each flux divergence):
 
-  - Every grid-mean tracer `Yₜ.c.ρχ`: flux-form advection `∇ₕ⋅(ρu χ)` for all
+  - Every grid-mean tracer `Yₜ.c.ρχ`: weak flux-form advection `wdivₕ(ρu χ)` for all
     prognostic tracer variables in `Y.c` (identified by `is_tracer_var`).
   - `Yₜ.c.sgsʲs.:(j).q_tot`, when `p.atmos.turbconv_model isa PrognosticEDMFX`:
-    advective-form advection with the updraft velocity `ᶜuʲs`.
+    weak advective-form advection with the updraft velocity `ᶜuʲs`.
   - Every auto-discovered SGS tracer in `Yₜ.c.sgsʲs.:(j)` (microphysics species and
-    user-defined passive tracers, from `sgs_tracer_names`), also in advective form.
+    user-defined passive tracers, from `sgs_tracer_names`), also in weak advective form.
 
 Reads `Y.c`, the precomputed velocities `ᶜu` (and `ᶜuʲs` for `PrognosticEDMFX`) from
 `p`. `t` is unused. Called from `remaining_tendency!` with the limited tendency
@@ -120,22 +120,21 @@ NVTX.@annotate function horizontal_tracer_advection_tendency!(Yₜ, Y, p, t)
 
     for ρχ_name in filter(is_tracer_var, propertynames(Y.c))
         ᶜχ = @. lazy(specific(Y.c.:($$ρχ_name), Y.c.ρ))
-        @. Yₜ.c.:($$ρχ_name) -= split_divₕ(Y.c.ρ * ᶜu, ᶜχ)
+        @. Yₜ.c.:($$ρχ_name) -= wdivₕ(Y.c.ρ * ᶜu * ᶜχ)
     end
 
     if p.atmos.turbconv_model isa PrognosticEDMFX
         for j in 1:n
             @. Yₜ.c.sgsʲs.:($$j).q_tot -=
-                split_divₕ(ᶜuʲs.:($$j), Y.c.sgsʲs.:($$j).q_tot) -
-                Y.c.sgsʲs.:($$j).q_tot * split_divₕ(ᶜuʲs.:($$j), 1)
+                wdivₕ(Y.c.sgsʲs.:($$j).q_tot * ᶜuʲs.:($$j)) -
+                Y.c.sgsʲs.:($$j).q_tot * wdivₕ(ᶜuʲs.:($$j))
             # Auto-discovered SGS tracers (microphysics species and any
             # user-defined passive tracers)
             for χ_name in sgs_tracer_names(Y)
                 ᶜχʲ = MatrixFields.get_field(Y.c.sgsʲs.:(1), χ_name)
                 ᶜχʲₜ = MatrixFields.get_field(Yₜ.c.sgsʲs.:(1), χ_name)
                 @. ᶜχʲₜ -=
-                    split_divₕ(ᶜuʲs.:($$j), ᶜχʲ) -
-                    ᶜχʲ * split_divₕ(ᶜuʲs.:($$j), 1)
+                    wdivₕ(ᶜχʲ * ᶜuʲs.:($$j)) - ᶜχʲ * wdivₕ(ᶜuʲs.:($$j))
             end
         end
     end
