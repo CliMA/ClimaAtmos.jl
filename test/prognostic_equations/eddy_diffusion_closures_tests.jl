@@ -291,10 +291,10 @@ import ClimaCore.CommonSpaces
                 sf_params = CAP.surface_fluxes_params(params)
                 vkc = CAP.von_karman_const(params)
                 # Neutral, well-mixed inputs chosen so all physical scales
-                # (l_W, l_TKE, l_N = l_z) are several hundred meters or more:
-                # the filter-scale cap, where finite, is the binding limit.
+                # (l_W, l_TKE, l_N = l_z) exceed ~100 m: the filter-scale
+                # cap, where finite, is the binding limit.
                 z, z_sfc = FT(1000), FT(0)
-                ustar, sfc_tke, tke = FT(0.3), FT(0.09), FT(1)
+                ustar, sfc_tke, tke = FT(0.3), FT(0.09), FT(0.11)
                 N²_eff = N²_prod = FT(0)
                 obukhov_length = FT(1e8)     # neutral surface layer
                 strain, Pr = FT(1e-8), FT(1)

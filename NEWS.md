@@ -3,6 +3,8 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- ![][badge-🔥behavioralΔ] Add empirical mixing length `l_TKE = l_0·sqrt(x)·(1+x)·exp(−x)`,
+  `x = TKE/(l_inf/tau_eps)^2`, to the mixing-length closure.
 - ![][badge-🔥behavioralΔ] Update to ClimaParams 1.1.16, which provides the
   SGS-quadrature parameters and changes the defaults.
   The SGS covariance, quadrature and cloud-fraction

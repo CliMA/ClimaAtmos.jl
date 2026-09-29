@@ -1212,10 +1212,17 @@ function update_diffusion_jacobian!(
         # coefficients above, this omits a ∂l_mix/∂tke chain term — a
         # convergence-rate approximation that is largest in the strongly
         # stable cells where l_N ∝ √tke dominates the mixing length.
+        # `max(mixing_length, 1)` matches `tke_dissipation` in
+        # `edmfx_tke.jl`: the floor is applied at the point of division
+        # (dissipation only), not on the master mixing length itself.
         @inline tke_dissipation_rate_tendency(tke, mixing_length) =
-            tke >= 0 ? c_d * sqrt(tke) / mixing_length : 1 / typeof(tke)(dt)
+            tke >= 0 ?
+            c_d * sqrt(tke) / max(mixing_length, one(mixing_length)) :
+            1 / typeof(tke)(dt)
         @inline ∂tke_dissipation_rate_tendency_∂tke(tke, mixing_length) =
-            tke > 0 ? c_d / (2 * mixing_length * sqrt(tke)) :
+            tke > 0 ?
+            c_d /
+            (2 * max(mixing_length, one(mixing_length)) * sqrt(tke)) :
             typeof(tke)(0)
 
         ᶜdissipation_matrix_diagonal = p.scratch.ᶜtemp_scalar

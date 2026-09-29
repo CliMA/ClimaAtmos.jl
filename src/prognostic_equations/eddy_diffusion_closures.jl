@@ -249,21 +249,22 @@ end
         scale_blending_method,
     ) -> MixingLength
 
-Compute the turbulent mixing length pointwise from the generalized closure of
-[Lopez2020](@cite).
+Compute the turbulent mixing length pointwise from a modified version of the
+[Lopez2020](@cite) closure with an *empirical* TKE-scale form that unifies
+the P = ε balance and the bounded amplitude limits.
 
 Three physical scales are formed and blended by `blend_scales`:
 
   - `l_W`: wall scale `κ (z - z_sfc) ustar / (c_m √e_sfc φ_m(ζ))`, matching
     Monin-Obukhov similarity in the surface layer.
-  - `l_TKE`: TKE production-dissipation balance scale `√(c_d e^{3/2} / a_pd)`
-    with `a_pd = c_m (2 |S|² - N²_prod / Pr) √e`; dropped from the blend where
-    the net production `a_pd` is non-positive.
+  - `l_TKE`: empirical scale `l_inf · √x · (1 + x) · exp(−x)` with
+    `x = TKE / (l_inf / τ_ε)²` and reference eddy turnover time `τ_ε`. In the
+    small-`x` limit this reduces to the Lopez-Gomez P = ε balance mixing length.
   - `l_N`: buoyancy-limited scale `√(c_b e) / N_eff`, capped by the wall
     distance and used only where `N²_eff > 0`.
 
 The blend is then limited by the wall distance and by the resolvability filter
-scale `Δ_f`, and floored at 1 m.
+scale `Δ_f`, and clamped to non-negative values.
 
 The same closure is evaluated at cell centers (`ᶜmixing_length`) and at faces
 (`set_face_diffusivities!`), with the corresponding inputs.
@@ -325,6 +326,9 @@ function mixing_length_lopez_gomez_2020(
     c_m = CAP.tke_ed_coeff(turbconv_params)
     c_d = tke_dissipation_coefficient(turbconv_params)
     c_b = CAP.static_stab_coeff(turbconv_params)
+    c_tke = CAP.mixing_length_tke_coeff(turbconv_params)
+    l_inf = CAP.mixing_length_tke_l_inf(turbconv_params)
+    τ_ε_max = CAP.mixing_length_tke_tau_max(turbconv_params)
 
     # l_z: Geometric distance from the surface
     l_z = z - z_sfc
@@ -359,27 +363,30 @@ function mixing_length_lopez_gomez_2020(
 
     l_W = max(l_W, FT(0)) # Ensure non-negative
 
-    # --- l_TKE: TKE production-dissipation balance scale ---
-    tke_pos = max(tke, FT(0)) # Ensure TKE is not negative
-    sqrt_tke_pos = sqrt(tke_pos)
+    # --- l_TKE: empirical mixing length ---
+    tke_pos = max(tke, FT(0))
+    # `a_pd = c_m·(2|S̃|² − N²/Pr)` is the shear+buoyancy production
+    # coefficient; `√(c_d/a_pd)` is the eddy turnover time at P = ε balance.
+    a_pd = c_m * (2 * strain_rate_norm - N²_prod / Pr)
 
-    # Net production of TKE from shear and buoyancy is approximated by
-    #     (S² − N²/Pr_t) · √TKE · l,
-    # where S² denotes the gradient involved in shear production and
-    # N²/Pr_t denotes the gradient involved in buoyancy production.
-    # The factor below corresponds to that production term normalised by l.
-    a_pd = c_m * (2 * strain_rate_norm - N²_prod / Pr) * sqrt_tke_pos
-
-    # Dissipation is modelled as c_d · k^{3/2} / l.
-    # For the quadratic expression below, c_neg ≡ c_d · k^{3/2}.
-    c_neg = c_d * tke_pos * sqrt_tke_pos
-
-    # Solve for l_TKE in
-    #     a_pd · l_TKE − c_neg / l_TKE = 0
-    #  ⇒  a_pd · l_TKE² − c_neg = 0
-    # yielding
-    #     l_TKE = √c_neg / a_pd.
-    l_TKE = ifelse(tke_pos > eps_FT, sqrt(c_neg / max(a_pd, eps_FT)), FT(0))
+    # Empirical form:
+    #     l_TKE = l_inf · √x · (1+x)·exp(−x),   x = TKE / (l_inf/τ_ε)²,
+    #     τ_ε = c_tke · √(c_d/a_pd)
+    # `τ_ε` is the reference eddy turnover time: `c_tke` times the eddy
+    # turnover time at P = ε balance.
+    # For small x, (1+x)·exp(−x) → 1 and l_TKE → τ_ε · √TKE =
+    # c_tke · √(c_d/a_pd) · √TKE — the Lopez-Gomez P = ε balance mixing length
+    # scaled by `c_tke`. `x` is *adaptive*: stronger forcing (smaller τ_ε)
+    # raises `(l_inf/τ_ε)²` so higher TKE is allowed before the decay
+    # kicks in. Peak: l_TKE is maximized at x = 1 with max(l_TKE) = (2/e)·l_inf
+    # ≈ 0.74·l_inf.
+    # τ_ε is capped at `τ_ε_max`, the residual eddy turnover from
+    # background processes; the cap is inert wherever local production
+    # is strong (c_tke·√(c_d/a_pd) ≪ τ_ε_max).
+    τ_ε = min(τ_ε_max, c_tke * sqrt(c_d / max(a_pd, eps_FT)))
+    tke_nondim = tke_pos / (l_inf / τ_ε)^2
+    l_TKE = l_inf * sqrt(tke_nondim) *
+            (FT(1) + tke_nondim) * exp(-tke_nondim)
 
     # --- l_N: Static-stability length scale (buoyancy limit), constrained by l_z ---
     N_eff_sq = max(N²_eff, FT(0)) # Use N^2 only if stable (N^2 > 0)
@@ -396,11 +403,10 @@ function mixing_length_lopez_gomez_2020(
 
     # --- Combine Scales ---
 
-    # Vector of *physical* scales (wall, TKE, stability)
-    # These scales (l_W, l_TKE, l_N) are already ensured to be non-negative.
-    # l_N is already limited by l_z. l_W and l_TKE are not necessarily.
-    l_physical_scales =
-        (tke_pos > eps_FT && a_pd <= 0) ? SA.SVector(l_W, l_N) : SA.SVector(l_W, l_TKE, l_N)
+    # Vector of *physical* scales (wall, TKE, stability). All ≥ 0.
+    # l_N is already limited by l_z; l_W and l_TKE are not, but the master
+    # wall + grid caps below still apply.
+    l_physical_scales = SA.SVector(l_W, l_TKE, l_N)
 
     l_smin =
         blend_scales(scale_blending_method, l_physical_scales, turbconv_params)
@@ -414,13 +420,13 @@ function mixing_length_lopez_gomez_2020(
     l_grid = Δ_f
     l_final = min(l_limited_phys_wall, l_grid)
 
-    # Final check: guarantee that the mixing length is at least a small positive
-    # value.  This prevents division-by-zero in
-    #     ε_d = C_d · TKE^{3/2} / l_mix
-    # when TKE > 0.  When TKE = 0, l_mix is inconsequential, but eps_FT
-    # provides a conservative lower bound.
-    # minimum mixing length
-    l_final = max(l_final, FT(1)) # TODO: make a climaparam
+    # `l_final` is not floored here: leaving it at its physical value
+    # (possibly zero) avoids introducing artificial diffusivities where
+    # eddy activity is genuinely absent. The dissipation-rate consumers
+    # (`tke_dissipation` in `edmfx_tke.jl`, and the implicit Jacobian
+    # inline in `manual_sparse_jacobian.jl`) apply a small local floor
+    # only where division-by-zero would matter.
+    l_final = max(l_final, FT(0))    # ensure non-negative only
 
     return MixingLength(l_final, l_W, l_TKE, l_N, l_grid)
 end

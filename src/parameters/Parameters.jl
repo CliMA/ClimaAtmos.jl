@@ -127,6 +127,18 @@ parameters are in `SGSQuadratureParameters`. `FT` is the float type; `VFT1`, `VF
     closure [-].
   - `smin_rm`: Upper ratio limit of the smooth-minimum function in the
     mixing-length closure [-].
+  - `mixing_length_tke_coeff`: Dimensionless prefactor on the eddy
+    turnover time at the Lopez-Gomez P = ε balance closure, setting the
+    reference eddy turnover time in the empirical `l_TKE`:
+    `τ_ε = c_tke · √(c_d/a_pd)`. Order 1 [-].
+  - `mixing_length_tke_l_inf`: Base BL mixing length in the empirical
+    `l_TKE = l_inf · √x · (1 + x) · exp(−x)`, `x = TKE / (l_inf/τ_ε)²`;
+    the peak mixing length is `(2/e) · l_inf ≈ 0.74 · l_inf`.
+  - `mixing_length_tke_tau_max`: Upper cap on the reference eddy turnover
+    time `τ_ε = c_tke · √(c_d/a_pd)` in the empirical `l_TKE`,
+    representing the residual eddy turnover time from background
+    processes. The cap is inert wherever local shear/buoyancy production
+    is strong [s].
   - `min_updraft_top`: Minimum updraft height used by the entrainment limiter
     [m].
   - `pressure_normalmode_buoy_coeff1`: Buoyancy coefficient of the perturbation
@@ -187,6 +199,9 @@ Base.@kwdef struct TurbulenceConvectionParameters{FT, VFT1, VFT2, VTF3} <: ATCP
     Pr_max::FT
     smin_ub::FT
     smin_rm::FT
+    mixing_length_tke_coeff::FT
+    mixing_length_tke_l_inf::FT
+    mixing_length_tke_tau_max::FT
     min_updraft_top::FT
     pressure_normalmode_buoy_coeff1::FT
     pressure_normalmode_drag_coeff::FT

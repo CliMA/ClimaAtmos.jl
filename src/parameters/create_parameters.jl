@@ -511,6 +511,9 @@ function TurbulenceConvectionParameters(
         :mixing_length_Prandtl_number_0 => :Prandtl_number_0,
         :mixing_length_Prandtl_maximum => :Pr_max,
         :mixing_length_static_stab_coeff => :static_stab_coeff,
+        :mixing_length_tke_coeff => :mixing_length_tke_coeff,
+        :mixing_length_tke_l_inf => :mixing_length_tke_l_inf,
+        :mixing_length_tke_tau_max => :mixing_length_tke_tau_max,
         :pressure_normalmode_buoy_coeff1 =>
             :pressure_normalmode_buoy_coeff1,
         :detr_inv_tau => :detr_inv_tau,
