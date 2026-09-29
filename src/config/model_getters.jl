@@ -53,7 +53,8 @@ Values are looked up with `parse_option`, so an unknown string raises an error l
 the valid choices. Each option string names the `CM.Parameters` type it maps to:
 
   - `cloud_liquid_formation`: `"CloudLiquidFormation"`.
-  - `cloud_ice_formation`: `"PrescribedIceNumber"`, `"ConstantTimescale"`, `"TemperatureDependent"`.
+  - `cloud_ice_formation`: `"PrescribedIceNumber"`, `"TemperatureDependentIceNumber"`,
+    `"ConstantTimescale"`, `"TemperatureDependent"`.
   - `cloud_ice_melt`: `"CloudIceMelt"`.
   - `cloud_liquid_freezing`: `"HomogeneousAndHeterogeneous"`, `"Homogeneous"`, `"Heterogeneous"`.
   - `rain_autoconversion`: `"Kessler1M"`, `"PrescribedNd"`. `Kessler1M` is the Kessler scheme
@@ -90,6 +91,8 @@ function get_microphysics_1m_options(parsed_args)
         Dict(
             "PrescribedIceNumber" =>
                 CMP.PrescribedIceNumber(),
+            "TemperatureDependentIceNumber" =>
+                CMP.TemperatureDependentIceNumber(),
             "ConstantTimescale" =>
                 CMP.ConstantTimescale(),
             "TemperatureDependent" =>
