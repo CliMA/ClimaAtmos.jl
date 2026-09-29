@@ -116,7 +116,7 @@ function deep_atmos_barowave_values(z, ϕ, λ, params, perturb)
     ∫τ̃₂ = C * z * exp(-(z / b / H)^2) # (Eq A2)
     I_T =
         ((z + R) / R * cosd(ϕ))^k -
-        (k / (k + 2)) * ((z + R) / R * cosd(ϕ))^(k + 2)
+        (FT(k) / (k + 2)) * ((z + R) / R * cosd(ϕ))^(k + 2)
     T = FT((R / (z + R))^2 * (τ̃₁ - τ̃₂ * I_T)^(-1)) # (Eq A3)
     p = FT(MSLP * exp(-grav / R_d * (∫τ̃₁ - ∫τ̃₂ * I_T))) # (Eq A6)
     # Horizontal velocity

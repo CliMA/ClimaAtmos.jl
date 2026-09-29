@@ -207,9 +207,11 @@ function set_insolation_variables!(Y, p, t, ::IdealizedInsolation)
     # Approximate annual mean insolation without diurnal cycle
     # Reference: O'Gorman and Schneider (2008), J. Climate, 21, 3815-3832
     RRTMGP.toa_sw_flux_dn(rrtmgp_solver) .= 680
+    Δs = FT(1.2)  # equator-to-pole insolation contrast [-]
+    cos_zenith_mean = FT(0.5)
     cos_zenith = RRTMGP.cos_zenith(rrtmgp_solver)
     @. cos_zenith =
-        (1 + FT(0.3) * (1 - 3 * sind(latitude)^2)) * FT(0.5)
+        (1 + Δs / 4 * (1 - 3 * sind(latitude)^2)) * cos_zenith_mean
 end
 
 function set_insolation_variables!(Y, p, t, ::Larcform1Insolation)

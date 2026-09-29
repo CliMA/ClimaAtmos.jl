@@ -1433,6 +1433,7 @@ function waveforcing_column_accumulate!(
     source_mode::Val{MODE},
 ) where {nc, MODE}
     FT = eltype(waveforcing)
+    kwv = 2 * FT(π) / (30 * FT(10)^ink * 1000) # wave number of gravity waves
     # Here we use column_accumulate function to pass the variable B0 and mask through different levels, and calculate waveforcing at each level.
     Operators.column_accumulate!(
         waveforcing,
@@ -1475,7 +1476,6 @@ function waveforcing_column_accumulate!(
         N_val = MODE == :ad99 ? zero(FT1) : inp[12]
         beres_a_cover = MODE == :ad99 ? zero(FT1) : inp[16]
 
-        kwv = 2.0 * π / ((30.0 * (10.0^ink)) * 1.e3) # wave number of gravity waves
         k2 = kwv * kwv
 
         fac = FT1(0.5) * (ρ_kp1 / ρ_source_eff) * kwv / bf_kp1

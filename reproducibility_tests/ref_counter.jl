@@ -1,4 +1,4 @@
-417
+418
 
 # **README**
 #
@@ -32,6 +32,10 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+418
+- Compute the EDMF surface scalar coefficient and other constants in `FT`
+  instead of Float64, which changes Float32 results in the last bits
+
 417
 - Update to ClimaParams 1.1.16, which changes the default of some SGS quadrature parameters.
 
