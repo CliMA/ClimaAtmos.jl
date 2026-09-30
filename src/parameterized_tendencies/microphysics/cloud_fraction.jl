@@ -1033,15 +1033,10 @@ NVTX.@annotate function set_cloud_fraction!(
     microphysics_model = p.atmos.microphysics_model
 
     # Get environment density, temperature, and total specific humidity
-    ᶜρ_env_lazy, ᶜT_mean, ᶜq_mean = _get_env_ρ_T_q(Y, p, thermo_params, turbconv_model)
-
-    ᶜρ_env = (p.scratch.ᶜtemp_scalar .= ᶜρ_env_lazy)
+    ᶜρ_env, ᶜT_mean, ᶜq_mean = _get_env_ρ_T_q(Y, p, thermo_params, turbconv_model)
 
     # Get condensate means (dispatches on microphysics_model)
-    ᶜq_lcl_lazy, ᶜq_icl_lazy =
-        _get_condensate_means(Y, p, turbconv_model, microphysics_model)
-    ᶜq_lcl = (p.scratch.ᶜtemp_scalar_2 .= ᶜq_lcl_lazy)
-    ᶜq_icl = (p.scratch.ᶜtemp_scalar_3 .= ᶜq_icl_lazy)
+    ᶜq_lcl, ᶜq_icl = _get_condensate_means(Y, p, turbconv_model, microphysics_model)
 
     sgs_quad = p.atmos.sgs_quadrature
     corr_Tq = correlation_Tq(p.params)
@@ -1051,34 +1046,24 @@ NVTX.@annotate function set_cloud_fraction!(
 
     (; ᶜT′T′, ᶜq′q′) = p.precomputed
 
-    ᶜcloud_fraction = p.precomputed.ᶜcloud_fraction
-    α_ft = FT(α)
-
-    DataLayouts.foreach_point(
-        ᶜcloud_fraction,
+    # Hybrid cloud fraction: the σ_S² quadrature pass is fused into this
+    # broadcast kernel, so the moments stay in registers and are never written
+    # to a Field.
+    @. p.precomputed.ᶜcloud_fraction = _compute_cloud_fraction(
+        thermo_params,
         ᶜT_mean,
         ᶜρ_env,
         ᶜq_mean,
         ᶜq_lcl,
         ᶜq_icl,
+        $(sgs_quad),
         ᶜT′T′,
         ᶜq′q′,
-    ) do ᶜcloud_fraction, ᶜT_mean, ᶜρ_env, ᶜq_mean, ᶜq_lcl, ᶜq_icl, ᶜT′T′, ᶜq′q′
-        @. ᶜcloud_fraction = _compute_cloud_fraction(
-            thermo_params,
-            ᶜT_mean,
-            ᶜρ_env,
-            ᶜq_mean,
-            ᶜq_lcl,
-            ᶜq_icl,
-            $(sgs_quad),
-            ᶜT′T′,
-            ᶜq′q′,
-            corr_Tq,
-            α_ft,
-            $(floor),
-        )
-    end
+        corr_Tq,
+        FT(α),
+        $(floor),
+    )
+
     _apply_edmf_cloud_weighting!(Y, p, turbconv_model, thermo_params)
 end
 
