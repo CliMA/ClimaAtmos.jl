@@ -932,20 +932,21 @@ NVTX.@annotate function set_sgs_moments_and_cloud_fraction!(Y, p)
     sgs_quad = p.atmos.sgs_quadrature
     corr_Tq = correlation_Tq(p.params)
     FT = eltype(p.params)
-    α = sgs_variance_fidelity(CAP.cloud_fraction_steepness_scale(p.params))
+    α_ft = FT(sgs_variance_fidelity(CAP.cloud_fraction_steepness_scale(p.params)))
     floor = cloud_fraction_floor_params(p.params)
     (; ᶜT′T′, ᶜq′q′, ᶜsgs_moments, ᶜcloud_fraction) = p.precomputed
 
-    # Materialize lazy fields to pass to foreach_point
+    # Materialize lazy fields to pass to foreach_point. The condensate sum is
+    # also materialized here: allocating it inside the per-point closure
+    # (`ᶜq_c = @. ᶜq_lcl + ᶜq_icl`) does not compile on GPU.
     ᶜρ_env = (p.scratch.ᶜtemp_scalar .= ᶜρ_env_lazy)
     ᶜq_lcl = (p.scratch.ᶜtemp_scalar_2 .= ᶜq_lcl_lazy)
     ᶜq_icl = (p.scratch.ᶜtemp_scalar_3 .= ᶜq_icl_lazy)
-
-    α_ft = FT(α)
+    ᶜq_c = (p.scratch.ᶜtemp_scalar_4 .= ᶜq_lcl .+ ᶜq_icl)
 
     DataLayouts.foreach_point(
         ᶜsgs_moments, ᶜcloud_fraction, ᶜρ_env, ᶜT_mean, ᶜq_mean,
-        ᶜq_lcl, ᶜq_icl, ᶜT′T′, ᶜq′q′,
+        ᶜq_lcl, ᶜq_icl, ᶜq_c, ᶜT′T′, ᶜq′q′,
     ) do ᶜsgs_moments,
     ᶜcloud_fraction,
     ᶜρ_env,
@@ -953,10 +954,9 @@ NVTX.@annotate function set_sgs_moments_and_cloud_fraction!(Y, p)
     ᶜq_mean,
     ᶜq_lcl,
     ᶜq_icl,
+    ᶜq_c,
     ᶜT′T′,
     ᶜq′q′
-
-        ᶜq_c = @. ᶜq_lcl + ᶜq_icl
         # ONE quadrature pass → (sigma_S, λ_lagrange).
         @. ᶜsgs_moments = _compute_sgs_moments(
             thermo_params, ᶜρ_env, ᶜT_mean, ᶜq_mean, ᶜq_c,
