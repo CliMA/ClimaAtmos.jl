@@ -1069,11 +1069,15 @@ NVTX.@annotate function set_cloud_fraction!(
     microphysics_model = p.atmos.microphysics_model
 
     # Get environment density, temperature, and total specific humidity
-    ᶜρ_env, ᶜT_mean, ᶜq_mean = _get_env_ρ_T_q(Y, p, thermo_params, turbconv_model)
+    ᶜρ_env_lazy, ᶜT_mean, ᶜq_mean = _get_env_ρ_T_q(Y, p, thermo_params, turbconv_model)
+
+    ᶜρ_env = (p.scratch.ᶜtemp_scalar .= ᶜρ_env_lazy)
 
     # Grid-mean cloud condensate the cover is computed from (single-domain
     # cover, see `_grid_mean_cloud_condensate`)
-    ᶜq_lcl, ᶜq_icl = _grid_mean_cloud_condensate(Y, p, microphysics_model)
+    ᶜq_lcl_lazy, ᶜq_icl_lazy = _grid_mean_cloud_condensate(Y, p, microphysics_model)
+    ᶜq_lcl = (p.scratch.ᶜtemp_scalar_2 .= ᶜq_lcl_lazy)
+    ᶜq_icl = (p.scratch.ᶜtemp_scalar_3 .= ᶜq_icl_lazy)
 
     sgs_quad = p.atmos.sgs_quadrature
     corr_Tq = correlation_Tq(p.params)
@@ -1083,23 +1087,34 @@ NVTX.@annotate function set_cloud_fraction!(
 
     (; ᶜT′T′, ᶜq′q′) = p.precomputed
 
-    # Hybrid cloud fraction: the σ_S² quadrature pass is fused into this
-    # broadcast kernel, so the moments stay in registers and are never written
-    # to a Field.
-    @. p.precomputed.ᶜcloud_fraction = _compute_cloud_fraction(
-        thermo_params,
+    ᶜcloud_fraction = p.precomputed.ᶜcloud_fraction
+    α_ft = FT(α)
+
+    DataLayouts.foreach_point(
+        ᶜcloud_fraction,
         ᶜT_mean,
         ᶜρ_env,
         ᶜq_mean,
         ᶜq_lcl,
         ᶜq_icl,
-        $(sgs_quad),
         ᶜT′T′,
         ᶜq′q′,
-        corr_Tq,
-        FT(α),
-        $(floor),
-    )
+    ) do ᶜcloud_fraction, ᶜT_mean, ᶜρ_env, ᶜq_mean, ᶜq_lcl, ᶜq_icl, ᶜT′T′, ᶜq′q′
+        @. ᶜcloud_fraction = _compute_cloud_fraction(
+            thermo_params,
+            ᶜT_mean,
+            ᶜρ_env,
+            ᶜq_mean,
+            ᶜq_lcl,
+            ᶜq_icl,
+            $(sgs_quad),
+            ᶜT′T′,
+            ᶜq′q′,
+            corr_Tq,
+            α_ft,
+            $(floor),
+        )
+    end
 end
 
 NVTX.@annotate function set_cloud_fraction!(
