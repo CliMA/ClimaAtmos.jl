@@ -2152,6 +2152,32 @@ Group of chemistry models inside an `AtmosModel`.
 end
 
 """
+    AbstractSGSHorizontalVarianceForm
+
+Field on which the horizontal resolved-gradient (geometric) SGS variance term
+`c_g (c_Δx Δx_h)² |∇_h ψ|²` is built (see `set_covariance_cache!`; the term is on when
+`sgs_variance_horizontal_scale_factor` is nonzero). Selected by the YAML key
+`sgs_variance_horizontal_form`.
+
+  - `TQHorizontalVariance`: `ψ = θ_li` in `θ′θ′` and `ψ = q_tot` in `q′q′`, coupled in
+    the quadrature by the T–q correlation (`"tq"`, default).
+  - `IsentropicHorizontalVariance`: no `θ′θ′` term; `q′q′` carries
+    `|∇_h q_tot − r ∇_h θ_li|²`, the squared gradient of `q_tot` ALONG the `θ_li`
+    surface, with `r` the regularised, capped `(∂q_tot/∂z)/(∂θ_li/∂z)`
+    (`sgs_variance_isentropic_min_dtheta_dz`, `sgs_variance_isentropic_slope_cap`):
+    the advection–condensation picture in which subgrid moisture variance at fixed
+    height comes from slantwise excursions along sloping isentropes, so aligned
+    (warm = moist) gradients amplify and anti-aligned ones cancel. The term carries
+    its own validity weight `1[N² > 0]` on the saturated moist `N²` (the one the
+    Richardson weight uses), which zeroes the WHOLE term where the layer is
+    moist-neutral or unstable (no isentrope to move along; the SGS variability there
+    is convective) rather than reverting to the horizontal gradient (`"isentropic"`).
+"""
+abstract type AbstractSGSHorizontalVarianceForm end
+struct TQHorizontalVariance <: AbstractSGSHorizontalVarianceForm end
+struct IsentropicHorizontalVariance <: AbstractSGSHorizontalVarianceForm end
+
+"""
     AbstractTqCorrelationModel
 
 Closure for the SGS T–q correlation that couples `σ_T` and `σ_q` in the sampled joint
@@ -2195,7 +2221,7 @@ struct NoElementFilter <: AbstractSGSElementFilter end
 struct ElementLumpedFilter <: AbstractSGSElementFilter end
 
 """
-    AtmosWater{MM, CM, MTTS, TNM, SQ, TQC, SEF, TVL, TVI, TVR, TVS}(; microphysics_model = DryModel(), kwargs...)
+    AtmosWater{MM, CM, MTTS, TNM, SQ, SVF, TQC, SEF, TVL, TVI, TVR, TVS}(; microphysics_model = DryModel(), kwargs...)
 
 Group of moisture, cloud, and microphysics choices inside an
 `AtmosModel`.
@@ -2209,6 +2235,9 @@ Group of moisture, cloud, and microphysics choices inside an
   - `tracer_nonnegativity_method`: `nothing`, or a `TracerNonnegativityMethod`.
   - `sgs_quadrature`: `nothing`, or an `SGSQuadrature` used to integrate cloud
     and microphysics quantities over the subgrid-scale distribution.
+  - `sgs_variance_horizontal_form`: An `AbstractSGSHorizontalVarianceForm`;
+    `TQHorizontalVariance()` by default (`IsentropicHorizontalVariance()` carries the
+    geometric variance as the gradient of q_tot along the θ_li surface, in `q′q′` only).
   - `tq_correlation_model`: An `AbstractTqCorrelationModel`; `ConstantTqCorrelation()`
     by default (`DiagnosedTqCorrelation()` diagnoses the T–q correlation from the
     gradient covariance).
@@ -2226,12 +2255,13 @@ water = ClimaAtmos.AtmosWater(;
 )
 ```
 """
-@kwdef struct AtmosWater{MM, CM, MTTS, TNM, SQ, TQC, SEF, TVL, TVI, TVR, TVS}
+@kwdef struct AtmosWater{MM, CM, MTTS, TNM, SQ, SVF, TQC, SEF, TVL, TVI, TVR, TVS}
     microphysics_model::MM = DryModel()
     cloud_model::CM = QuadratureCloud()
     microphysics_tendency_timestepping::MTTS = nothing
     tracer_nonnegativity_method::TNM = nothing
     sgs_quadrature::SQ = nothing
+    sgs_variance_horizontal_form::SVF = TQHorizontalVariance()
     tq_correlation_model::TQC = ConstantTqCorrelation()
     sgs_variance_element_filter::SEF = NoElementFilter()
     terminal_velocity_liquid::TVL = FixedTerminalVelocity()

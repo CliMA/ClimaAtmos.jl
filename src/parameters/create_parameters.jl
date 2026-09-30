@@ -594,6 +594,10 @@ function SGSQuadratureParameters(
         cloud_fraction_floor_residual = FT(0),
         # Clamp on the diagnosed T-q correlation (`tq_correlation_model: diagnosed`).
         sgs_correlation_max = FT(1),
+        # Isentropic geometric variance form (`sgs_variance_horizontal_form: isentropic`):
+        # regularisation of ∂θ_li/∂z [K/m] and cap on the slope ratio [kg/kg/K].
+        sgs_variance_isentropic_min_dtheta_dz = FT(1e-3),
+        sgs_variance_isentropic_slope_cap = FT(5e-4),
     )
     provisional_present = filter(collect(keys(provisional_defaults))) do name
         haskey(toml_dict.data, string(name))

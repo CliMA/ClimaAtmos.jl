@@ -271,6 +271,13 @@ not yet define.
     is the excess reconstruction; `1` treats the species uniform at every node [-].
   - `Tq_correlation_coefficient`: Default correlation between `T'` and `q_tot'`
     in the SGS quadrature, in `[-1, 1]` [-].
+  - `sgs_variance_isentropic_min_dtheta_dz`: Regularisation `θz_min` of the slope
+    ratio `r = (∂q/∂z)(∂θ_li/∂z) / ((∂θ_li/∂z)² + θz_min²)` of the isentropic geometric
+    variance form (`sgs_variance_horizontal_form: isentropic`); keeps `r` finite in
+    neutral layers. `1e-3` by default [K m^-1].
+  - `sgs_variance_isentropic_slope_cap`: Cap `r_cap` on `|r|` of the isentropic form,
+    bounding the slantwise amplification of the horizontal q gradient. `5e-4` by
+    default [kg kg^-1 K^-1].
   - `sgs_correlation_max`: Clamp `r` on the magnitude of the diagnosed SGS T–q
     correlation, `ρ = clamp(T′q′ / √(T′T′ q′q′), ±r)` (`tq_correlation_model: diagnosed`).
     `1` by default [-].
@@ -307,6 +314,8 @@ Base.@kwdef struct SGSQuadratureParameters{FT} <: ASQP
     cloud_fraction_floor_release_sharpness::FT
     cloud_fraction_floor_residual::FT
     sgs_correlation_max::FT
+    sgs_variance_isentropic_min_dtheta_dz::FT
+    sgs_variance_isentropic_slope_cap::FT
 end
 
 """

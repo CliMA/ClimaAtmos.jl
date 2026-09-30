@@ -3,6 +3,13 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- ![][badge-✨feature/enhancement] An isentropic form of the geometric SGS variance term
+  (`sgs_variance_horizontal_form: isentropic`; default `tq` is the current behaviour):
+  `q′q′` carries `|∇_h q_tot − r ∇_h θ_li|²`, the gradient of `q_tot` along the `θ_li`
+  surface with `r` the regularised, capped `(∂q_tot/∂z)/(∂θ_li/∂z)` (provisional
+  parameters `sgs_variance_isentropic_min_dtheta_dz`, `sgs_variance_isentropic_slope_cap`),
+  no `θ′θ′` term, and its own validity weight `1[N² > 0]` on the saturated moist `N²` that
+  zeroes the whole term where the layer is moist-neutral or unstable.
 - ![][badge-✨feature/enhancement] Two options on the geometric SGS variance term, both
   defaulting to the current behaviour: `tq_correlation_model: diagnosed` diagnoses the
   T–q correlation sampled by the SGS quadrature from the gradient covariance T′q′
