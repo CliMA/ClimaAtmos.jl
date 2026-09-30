@@ -1109,18 +1109,6 @@ end
 # Each consolidates the YAML→typed-object translation for one group.
 
 """
-    AtmosWater(config::AtmosConfig, params, ::Type{FT}) where {FT}
-
-Assemble the `AtmosWater` group from a configuration.
-
-Combines `get_microphysics_model`, `get_cloud_model`, `get_sgs_quadrature`, and
-`get_tracer_nonnegativity_method`, and reads `implicit_microphysics` (which selects
-`Implicit` or `Explicit` microphysics timestepping) and `fixed_terminal_velocity`
-(which selects `FixedTerminalVelocity` with the four fixed fall speeds from `params`,
-or `DiagnosticTerminalVelocity`). Errors when 0-moment microphysics is requested
-without `use_sgs_quadrature`, and warns when the run is dry.
-"""
-"""
     get_sgs_variance_element_filter(parsed_args)
 
 Return the `AbstractSGSElementFilter` selected by the `sgs_variance_element_filter`
@@ -1134,6 +1122,18 @@ function get_sgs_variance_element_filter(parsed_args)
     )
 end
 
+"""
+    AtmosWater(config::AtmosConfig, params, ::Type{FT}) where {FT}
+
+Assemble the `AtmosWater` group from a configuration.
+
+Combines `get_microphysics_model`, `get_cloud_model`, `get_sgs_quadrature`, and
+`get_tracer_nonnegativity_method`, and reads `implicit_microphysics` (which selects
+`Implicit` or `Explicit` microphysics timestepping) and `fixed_terminal_velocity`
+(which selects `FixedTerminalVelocity` with the four fixed fall speeds from `params`,
+or `DiagnosticTerminalVelocity`). Errors when 0-moment microphysics is requested
+without `use_sgs_quadrature`, and warns when the run is dry.
+"""
 function AtmosWater(config::AtmosConfig, params, ::Type{FT}) where {FT}
     pa = config.parsed_args
     microphysics_model = get_microphysics_model(pa)
