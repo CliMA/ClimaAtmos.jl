@@ -271,7 +271,7 @@ function dg_fields(prob, c::DGConstants{FT}, spaces) where {FT}
 end
 
 function dg_operators(::DGConstants{FT}) where {FT}
-    hwdiv = Operators.WeakDivergence()
+    hwdiv = Operators.Divergence{Operators.WeakForm}()
     hgrad = Operators.Gradient()
     hcurl = Operators.Curl()
     Ic = Operators.InterpolateF2C()
@@ -303,8 +303,8 @@ function dg_operators(::DGConstants{FT}) where {FT}
         top = Operators.SetDivergence(Geometry.WVector(FT(0))),
     )
     VanLeer = Operators.LinVanLeerC2F(
-        bottom = Operators.FirstOrderOneSided(),
-        top = Operators.FirstOrderOneSided(),
+        bottom = Operators.Extrapolate{0}(),
+        top = Operators.Extrapolate{0}(),
         constraint = Operators.MonotoneLocalExtrema(),
     )
     ᶠgradᵥ = Operators.GradientC2F(
