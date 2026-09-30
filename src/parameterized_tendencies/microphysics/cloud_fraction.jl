@@ -300,24 +300,102 @@ function hgrad_invariant!(ᶜinv, ᶜψ, p)
 end
 
 """
+    hgrad_cross_invariant!(ᶜinv, ᶜψ1, ᶜψ2, p)
+
+Write the horizontal-gradient cross invariant `∇_h ψ1 · ∇_h ψ2` into `ᶜinv`, with the
+same gradient estimate and element filter as [`hgrad_invariant!`](@ref) (DSS'd gradient
+vectors, optionally lumped within each element and DSS'd again; the nodal gradients on a
+space that needs no DSS). Scratch `p.scratch.ᶜtemp_C12`, `ᶜtemp_C12_2` (the second is
+allocated only for `DiagnosedTqCorrelation`).
+"""
+function hgrad_cross_invariant!(ᶜinv, ᶜψ1, ᶜψ2, p)
+    buf = p.scratch.ᶜC12_dss_buffer
+    if buf !== nothing
+        ᶜg1 = p.scratch.ᶜtemp_C12
+        ᶜg2 = p.scratch.ᶜtemp_C12_2
+        @assert ᶜg2 !== nothing "hgrad_cross_invariant! needs the ᶜtemp_C12_2 scratch buffer"
+        @. ᶜg1 = gradₕ(ᶜψ1)
+        @. ᶜg2 = gradₕ(ᶜψ2)
+        Spaces.weighted_dss!(ᶜg1, buf)
+        Spaces.weighted_dss!(ᶜg2, buf)
+        if p.atmos.sgs_variance_element_filter isa ElementLumpedFilter
+            @. ᶜinv = lumpedₕ(dot(Geometry.Contravariant12Vector(ᶜg1), ᶜg2))
+            Spaces.weighted_dss!(ᶜinv, p.scratch.ᶜscalar_dss_buffer)
+        else
+            @. ᶜinv = dot(Geometry.Contravariant12Vector(ᶜg1), ᶜg2)
+        end
+    else
+        @. ᶜinv = dot(Geometry.Contravariant12Vector(gradₕ(ᶜψ1)), gradₕ(ᶜψ2))
+    end
+    return nothing
+end
+
+"""
+    sgs_correlation_Tq(T′T′, q′q′, T′q′, fallback, r_max)
+
+Diagnosed SGS T–q correlation `clamp(T′q′ / √(T′T′ q′q′), ±r_max)`, or `fallback`
+where the product of the variances is at the round-off floor.
+"""
+@inline function sgs_correlation_Tq(T′T′, q′q′, T′q′, fallback, r_max)
+    FT = typeof(T′T′)
+    v = max(T′T′, zero(FT)) * max(q′q′, zero(FT))
+    return ifelse(
+        v > eps(FT)^2,
+        clamp(T′q′ / sqrt(max(v, eps(FT)^2)), -r_max, r_max),
+        fallback,
+    )
+end
+
+"""
+    set_tq_correlation!(p, correlation_model)
+
+Fill `p.precomputed.ᶜcorr_Tq` with the SGS T–q correlation the quadrature samples.
+`ConstantTqCorrelation`: the prescribed `Tq_correlation_coefficient`.
+`DiagnosedTqCorrelation`: from the gradient covariance accumulated in
+`p.precomputed.ᶜT′q′` by `set_covariance_cache!` (see [`sgs_correlation_Tq`](@ref)); the
+fallback where the variances vanish is the prescribed value, clamped like the diagnosed
+one. `ᶜT′T′` and `ᶜq′q′` must already be in the T basis and bounded. The covariance
+diagnostic is formed lazily from `ᶜcorr_Tq` and the variances (`compute_covariance_diagnostics`).
+"""
+function set_tq_correlation!(p, ::ConstantTqCorrelation)
+    (; ᶜcorr_Tq) = p.precomputed
+    corr = correlation_Tq(p.params)
+    @. ᶜcorr_Tq = corr
+    return nothing
+end
+function set_tq_correlation!(p, ::DiagnosedTqCorrelation)
+    (; ᶜT′T′, ᶜq′q′, ᶜT′q′, ᶜcorr_Tq) = p.precomputed
+    r_max = CAP.sgs_correlation_max(p.params)
+    fallback = clamp(correlation_Tq(p.params), -r_max, r_max)
+    @. ᶜcorr_Tq = sgs_correlation_Tq(ᶜT′T′, ᶜq′q′, ᶜT′q′, fallback, r_max)
+    return nothing
+end
+
+"""
     set_covariance_cache!(Y, p, thermo_params)
 
 Materializes T-based SGS covariances into cached fields for use by downstream
-computations (SGS quadrature, cloud fraction). Populates `p.precomputed.(ᶜT′T′, ᶜq′q′)`.
+computations (SGS quadrature, cloud fraction). Populates
+`p.precomputed.(ᶜT′T′, ᶜq′q′, ᶜcorr_Tq)` (and `ᶜT′q′` for the diagnosed correlation).
 
 Pipeline:
 
  1. Compute mixing length via `materialized_mixing_length!`
- 2. Materialize θ-based covariances from gradients
+ 2. Materialize θ-based covariances from gradients (and, for the diagnosed T–q
+    correlation, the θ–q cross covariance)
  3. Add the horizontal resolved-gradient (geometric) term to θ′θ′ (skipped when
     `sgs_variance_horizontal_scale_factor` is 0)
  4. Transform θ→T using `compute_∂T_∂θ!`
  5. Add the horizontal resolved-gradient term to q′q′ (skipped together with
     step 3)
  6. Apply the closure-validity bound `σ_q ≤ sgs_variance_max_rel_std * q_tot`
+ 7. Set the sampled T–q correlation (`set_tq_correlation!`; for the diagnosed
+    model the covariance is first rescaled with the bound so the correlation is
+    invariant under it)
 
 The geometric term is multiplied by the Richardson-number stability weight
-`ᶜsgs_geo_weight`.
+`ᶜsgs_geo_weight`; the diagnosed correlation's geometric cross term
+`∇_h θ_li · ∇_h q_tot` carries the same weight and element filter as the variances.
 """
 function set_covariance_cache!(Y, p, thermo_params)
     # Covariance fields are only allocated when the configuration needs them.
@@ -325,6 +403,7 @@ function set_covariance_cache!(Y, p, thermo_params)
     uses_covariances(p.atmos) || return nothing
 
     (; ᶜT′T′, ᶜq′q′) = p.precomputed
+    diag_corr = p.atmos.tq_correlation_model isa DiagnosedTqCorrelation
 
     coeff = CAP.diagnostic_covariance_coeff(p.params)
     (; ᶜgradᵥ_q_tot, ᶜgradᵥ_θ_liq_ice) = p.precomputed
@@ -369,6 +448,18 @@ function set_covariance_cache!(Y, p, thermo_params)
         Geometry.WVector(ᶜgradᵥ_θ_liq_ice),
         Geometry.WVector(ᶜgradᵥ_θ_liq_ice),
     )
+    # [DiagnosedTqCorrelation] θ′q′ from the same vertical-gradient closure (θ basis;
+    # transformed with ∂T/∂θ below and turned into the sampled correlation at the end
+    # by `set_tq_correlation!`). `ᶜT′q′` exists only for the diagnosed model.
+    if diag_corr
+        (; ᶜT′q′) = p.precomputed
+        @. ᶜT′q′ = cov_from_grad(
+            coeff,
+            ᶜmixing_length_field,
+            Geometry.WVector(ᶜgradᵥ_θ_liq_ice),
+            Geometry.WVector(ᶜgradᵥ_q_tot),
+        )
+    end
 
     # Horizontal resolved-gradient (geometric) variance
     # `geo_h |∇_h ψ|^2`, the leading-order scale-similarity estimate of the subgrid
@@ -393,12 +484,24 @@ function set_covariance_cache!(Y, p, thermo_params)
         # broadcast, so the call itself must not be dotted.
         ᶜgeo_weight = ᶜsgs_geo_weight(Y, p)
         @. ᶜT′T′ += ᶜgeo_weight * (geo_h * ᶜinv_θ)
+        if diag_corr
+            # geometric cross term ∇_h θ_li · ∇_h q_tot (θ basis), same weight and
+            # element filter as the variances
+            (; ᶜT′q′) = p.precomputed
+            ᶜinv_θq = p.scratch.ᶜtemp_scalar_6
+            hgrad_cross_invariant!(ᶜinv_θq, ᶜθ_li, ᶜq_tot_nonneg, p)
+            @. ᶜT′q′ += ᶜgeo_weight * (geo_h * ᶜinv_θq)
+        end
     end
 
     # Transform θ′θ′ → T′T′ in-place using Jacobian ∂T/∂θ
     ᶜ∂T_∂θ = p.scratch.ᶜtemp_scalar_2
     compute_∂T_∂θ!(ᶜ∂T_∂θ, Y, p, thermo_params)
     @. ᶜT′T′ = ᶜ∂T_∂θ^2 * ᶜT′T′  # θ′θ′ → T′T′
+    if diag_corr
+        (; ᶜT′q′) = p.precomputed
+        @. ᶜT′q′ = ᶜ∂T_∂θ * ᶜT′q′  # θ′q′ → T′q′
+    end
 
     # q′q′ geometric term (see the θ′θ′ addition above).
     (; ᶜq_tot_nonneg) = p.precomputed
@@ -414,7 +517,23 @@ function set_covariance_cache!(Y, p, thermo_params)
     # the clamped quadrature then carries more total water than the grid mean holds,
     # and condensing it can drive the grid-mean vapour negative.
     r_max = CAP.sgs_variance_max_rel_std(p.params)
+    if diag_corr
+        (; ᶜT′q′) = p.precomputed
+        # Keep the diagnosed correlation invariant under the bound: where the bound
+        # cuts σ_q by a factor s, the covariance T′q′ scales by the same s.
+        FT_b = eltype(p.params)
+        @. ᶜT′q′ *= sqrt(
+            min(
+                one(FT_b),
+                (r_max * ᶜq_tot_nonneg)^2 / max(ᶜq′q′, eps(FT_b)^2),
+            ),
+        )
+    end
     @. ᶜq′q′ = min(ᶜq′q′, (r_max * ᶜq_tot_nonneg)^2)
+
+    # Correlation that the quadrature samples (constant or diagnosed), consistent
+    # with the bounded variances above.
+    set_tq_correlation!(p, p.atmos.tq_correlation_model)
     return nothing
 end
 
@@ -939,16 +1058,15 @@ NVTX.@annotate function set_sgs_moments_and_cloud_fraction!(Y, p)
     ᶜρ_env, ᶜT_mean, ᶜq_mean = _get_env_ρ_T_q(Y, p, thermo_params, turbconv_model)
     ᶜq_lcl, ᶜq_icl = _get_condensate_means(Y, p, turbconv_model, microphysics_model)
     sgs_quad = p.atmos.sgs_quadrature
-    corr_Tq = correlation_Tq(p.params)
     FT = eltype(p.params)
     α = sgs_variance_fidelity(CAP.cloud_fraction_steepness_scale(p.params))
     floor = cloud_fraction_floor_params(p.params)
-    (; ᶜT′T′, ᶜq′q′) = p.precomputed
+    (; ᶜT′T′, ᶜq′q′, ᶜcorr_Tq) = p.precomputed
 
     # ONE quadrature pass → (sigma_S, λ_lagrange).
     @. p.precomputed.ᶜsgs_moments = _compute_sgs_moments(
         thermo_params, ᶜρ_env, ᶜT_mean, ᶜq_mean, ᶜq_lcl + ᶜq_icl,
-        $(sgs_quad), ᶜT′T′, ᶜq′q′, corr_Tq, FT(α),
+        $(sgs_quad), ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, FT(α),
     )
     # Recompute CF from q_c and σ_S using the augmented-σ closure. We cannot
     # use `Φ(λ/σ_aug)` because λ was computed with the equilibrium σ_S_eff,
@@ -1049,12 +1167,11 @@ NVTX.@annotate function set_cloud_fraction!(
     ᶜq_lcl, ᶜq_icl = _get_condensate_means(Y, p, turbconv_model, microphysics_model)
 
     sgs_quad = p.atmos.sgs_quadrature
-    corr_Tq = correlation_Tq(p.params)
     FT = eltype(p.params)
     α = sgs_variance_fidelity(CAP.cloud_fraction_steepness_scale(p.params))
     floor = cloud_fraction_floor_params(p.params)
 
-    (; ᶜT′T′, ᶜq′q′) = p.precomputed
+    (; ᶜT′T′, ᶜq′q′, ᶜcorr_Tq) = p.precomputed
 
     # Hybrid cloud fraction: the σ_S² quadrature pass is fused into this
     # broadcast kernel, so the moments stay in registers and are never written
@@ -1069,7 +1186,7 @@ NVTX.@annotate function set_cloud_fraction!(
         $(sgs_quad),
         ᶜT′T′,
         ᶜq′q′,
-        corr_Tq,
+        ᶜcorr_Tq,
         FT(α),
         $(floor),
     )

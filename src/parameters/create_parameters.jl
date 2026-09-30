@@ -592,6 +592,8 @@ function SGSQuadratureParameters(
         cloud_fraction_floor_release_abs_margin = FT(1),
         cloud_fraction_floor_release_sharpness = FT(1),
         cloud_fraction_floor_residual = FT(0),
+        # Clamp on the diagnosed T-q correlation (`tq_correlation_model: diagnosed`).
+        sgs_correlation_max = FT(1),
     )
     provisional_present = filter(collect(keys(provisional_defaults))) do name
         haskey(toml_dict.data, string(name))

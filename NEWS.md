@@ -3,6 +3,15 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- ![][badge-✨feature/enhancement] Two options on the geometric SGS variance term, both
+  defaulting to the current behaviour: `tq_correlation_model: diagnosed` diagnoses the
+  T–q correlation sampled by the SGS quadrature from the gradient covariance T′q′
+  (vertical cross term plus the geometric cross term, clamped by the new provisional
+  parameter `sgs_correlation_max`; the `env_q_tot_temperature_{covariance,correlation}`
+  diagnostics report the sampled values), and `sgs_variance_element_filter: lumped`
+  replaces the gradient invariants by their lumped GLL{2} restriction within each element
+  (ClimaCore `Operators.LumpedRestriction`, followed by a weighted DSS), removing the
+  spectral-element mesh imprint of the term on condensate and precipitation.
 - ![][badge-🔥behavioralΔ] Add empirical mixing length `l_TKE = l_0·sqrt(x)·(1+x)·exp(−x)`,
   `x = TKE/(l_inf/tau_eps)^2`, to the mixing-length closure.
 - ![][badge-🔥behavioralΔ] Update to ClimaParams 1.1.16, which provides the

@@ -261,6 +261,9 @@ implicit_microphysics:
 use_sgs_quadrature:
   help: "Enable subgrid-scale quadrature integration for microphysics tendencies. When true, microphysics tendencies are integrated over the joint SGS PDF of (T, q_tot). [`true` (default), `false`]"
   value: true
+tq_correlation_model:
+  help: "Closure for the SGS T-q correlation that couples σ_T and σ_q in the sampled joint PDF. `constant` uses the prescribed `Tq_correlation_coefficient`; `diagnosed` computes it from the gradient-based covariance T′q′ (vertical cross term plus the geometric cross term), clamped to ±`sgs_correlation_max`, falling back to the constant where the variances vanish. Requires a nonzero `sgs_variance_horizontal_scale_factor` (the vertical closure alone gives a correlation of exactly ±1); pair with `sgs_correlation_max` below 1 when the Richardson weight `sgs_variance_geometric_Ri_factor` fades the geometric term. [`constant` (default), `diagnosed`]"
+  value: "constant"
 sgs_variance_element_filter:
   help: "Within-element filter of the horizontal-gradient invariants of the geometric SGS variance term. `none` uses the DSS'd nodal invariant; `lumped` replaces it by its lumped GLL{2} restriction (ClimaCore `LumpedRestriction`) plus a weighted DSS, removing the element-boundary excess of the nodal spectral-element gradient while conserving each element's mean. [`none` (default), `lumped`]"
   value: "none"

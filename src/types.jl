@@ -2152,6 +2152,30 @@ Group of chemistry models inside an `AtmosModel`.
 end
 
 """
+    AbstractTqCorrelationModel
+
+Closure for the SGS T–q correlation that couples `σ_T` and `σ_q` in the sampled joint
+PDF (and in the saturation-excess width `σ_S² = σ_q² − 2ργσ_qσ_T + γ²σ_T²`). Selected by
+the YAML key `tq_correlation_model`.
+
+  - `ConstantTqCorrelation`: the prescribed `Tq_correlation_coefficient` everywhere
+    (`"constant"`, default).
+  - `DiagnosedTqCorrelation`: `ρ = clamp(T′q′ / √(T′T′ q′q′), ±sgs_correlation_max)`
+    from the gradient-based covariance `T′q′` — the vertical closure's cross term
+    `2 C ℓ² (∂_z θ_li)(∂_z q_tot)` plus the geometric cross term
+    `c_g (c_Δx Δx_h)² ∇_h θ_li · ∇_h q_tot` (with the same Richardson weight and element
+    filter as the variances), transformed to the T basis — falling back to the
+    prescribed value where the variances vanish (`"diagnosed"`; requires a nonzero
+    `sgs_variance_horizontal_scale_factor`: with the vertical closure alone
+    `T′q′² = T′T′ q′q′` and the correlation would be identically ±1; the same limit is
+    approached where the Richardson weight fades the geometric term, so pair the
+    diagnosed model with `sgs_correlation_max < 1` when `sgs_variance_geometric_Ri_factor > 0`).
+"""
+abstract type AbstractTqCorrelationModel end
+struct ConstantTqCorrelation <: AbstractTqCorrelationModel end
+struct DiagnosedTqCorrelation <: AbstractTqCorrelationModel end
+
+"""
     AbstractSGSElementFilter
 
 Within-element filter applied to the horizontal-gradient invariants `|∇_h ψ|²` of the
@@ -2171,7 +2195,7 @@ struct NoElementFilter <: AbstractSGSElementFilter end
 struct ElementLumpedFilter <: AbstractSGSElementFilter end
 
 """
-    AtmosWater{MM, CM, MTTS, TNM, SQ, SEF, TVL, TVI, TVR, TVS}(; microphysics_model = DryModel(), kwargs...)
+    AtmosWater{MM, CM, MTTS, TNM, SQ, TQC, SEF, TVL, TVI, TVR, TVS}(; microphysics_model = DryModel(), kwargs...)
 
 Group of moisture, cloud, and microphysics choices inside an
 `AtmosModel`.
@@ -2185,6 +2209,9 @@ Group of moisture, cloud, and microphysics choices inside an
   - `tracer_nonnegativity_method`: `nothing`, or a `TracerNonnegativityMethod`.
   - `sgs_quadrature`: `nothing`, or an `SGSQuadrature` used to integrate cloud
     and microphysics quantities over the subgrid-scale distribution.
+  - `tq_correlation_model`: An `AbstractTqCorrelationModel`; `ConstantTqCorrelation()`
+    by default (`DiagnosedTqCorrelation()` diagnoses the T–q correlation from the
+    gradient covariance).
   - `sgs_variance_element_filter`: An `AbstractSGSElementFilter` for the gradient
     invariants of the geometric SGS variance term; `NoElementFilter()` by default.
   - `terminal_velocity_mode`: `DiagnosticTerminalVelocity()` (the default) or a
@@ -2199,12 +2226,13 @@ water = ClimaAtmos.AtmosWater(;
 )
 ```
 """
-@kwdef struct AtmosWater{MM, CM, MTTS, TNM, SQ, SEF, TVL, TVI, TVR, TVS}
+@kwdef struct AtmosWater{MM, CM, MTTS, TNM, SQ, TQC, SEF, TVL, TVI, TVR, TVS}
     microphysics_model::MM = DryModel()
     cloud_model::CM = QuadratureCloud()
     microphysics_tendency_timestepping::MTTS = nothing
     tracer_nonnegativity_method::TNM = nothing
     sgs_quadrature::SQ = nothing
+    tq_correlation_model::TQC = ConstantTqCorrelation()
     sgs_variance_element_filter::SEF = NoElementFilter()
     terminal_velocity_liquid::TVL = FixedTerminalVelocity()
     terminal_velocity_ice::TVI = FixedTerminalVelocity()
