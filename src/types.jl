@@ -2152,7 +2152,26 @@ Group of chemistry models inside an `AtmosModel`.
 end
 
 """
-    AtmosWater{MM, CM, MTTS, TNM, SQ, TVL, TVI, TVR, TVS}(; microphysics_model = DryModel(), kwargs...)
+    AbstractSGSElementFilter
+
+Within-element filter applied to the horizontal-gradient invariants `|∇_h ψ|²` of the
+geometric SGS variance term (`hgrad_invariant!`). Selected by the YAML key
+`sgs_variance_element_filter`.
+
+  - `NoElementFilter`: the DSS'd nodal invariant is used as is (`"none"`, default).
+  - `ElementLumpedFilter`: the invariant is replaced by its lumped GLL{2} restriction
+    (`ClimaCore.Operators.LumpedRestriction`) followed by a weighted DSS. This removes
+    the systematic excess of the nodal invariant at element edges and corners (the
+    rectified end-of-interval error of polynomial differentiation, which DSS of the
+    gradient cannot remove) while conserving each element's WJ-weighted integral of
+    the invariant (`"lumped"`).
+"""
+abstract type AbstractSGSElementFilter end
+struct NoElementFilter <: AbstractSGSElementFilter end
+struct ElementLumpedFilter <: AbstractSGSElementFilter end
+
+"""
+    AtmosWater{MM, CM, MTTS, TNM, SQ, SEF, TVL, TVI, TVR, TVS}(; microphysics_model = DryModel(), kwargs...)
 
 Group of moisture, cloud, and microphysics choices inside an
 `AtmosModel`.
@@ -2166,6 +2185,8 @@ Group of moisture, cloud, and microphysics choices inside an
   - `tracer_nonnegativity_method`: `nothing`, or a `TracerNonnegativityMethod`.
   - `sgs_quadrature`: `nothing`, or an `SGSQuadrature` used to integrate cloud
     and microphysics quantities over the subgrid-scale distribution.
+  - `sgs_variance_element_filter`: An `AbstractSGSElementFilter` for the gradient
+    invariants of the geometric SGS variance term; `NoElementFilter()` by default.
   - `terminal_velocity_mode`: `DiagnosticTerminalVelocity()` (the default) or a
     `FixedTerminalVelocity`.
 
@@ -2178,12 +2199,13 @@ water = ClimaAtmos.AtmosWater(;
 )
 ```
 """
-@kwdef struct AtmosWater{MM, CM, MTTS, TNM, SQ, TVL, TVI, TVR, TVS}
+@kwdef struct AtmosWater{MM, CM, MTTS, TNM, SQ, SEF, TVL, TVI, TVR, TVS}
     microphysics_model::MM = DryModel()
     cloud_model::CM = QuadratureCloud()
     microphysics_tendency_timestepping::MTTS = nothing
     tracer_nonnegativity_method::TNM = nothing
     sgs_quadrature::SQ = nothing
+    sgs_variance_element_filter::SEF = NoElementFilter()
     terminal_velocity_liquid::TVL = FixedTerminalVelocity()
     terminal_velocity_ice::TVI = FixedTerminalVelocity()
     terminal_velocity_rain::TVR = DiagnosticTerminalVelocity()

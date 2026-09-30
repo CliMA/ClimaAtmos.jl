@@ -275,6 +275,11 @@ end
 Write the horizontal-gradient invariant `|∇_h ψ|²` of the center field `ᶜψ` into `ᶜinv`.
 The gradient vector is first made continuous across element boundaries by a weighted DSS.
 On a space that needs no DSS (single column) the nodal gradient is used.
+
+With `sgs_variance_element_filter: lumped` (`ElementLumpedFilter`) the invariant is
+replaced by its lumped GLL{2} restriction within each element (`lumpedₕ`, ClimaCore's
+`LumpedRestriction`) and then made continuous by a weighted DSS, which removes the
+element-edge and corner excess of the nodal invariant at fixed element mean.
 """
 function hgrad_invariant!(ᶜinv, ᶜψ, p)
     buf = p.scratch.ᶜC12_dss_buffer
@@ -282,7 +287,12 @@ function hgrad_invariant!(ᶜinv, ᶜψ, p)
         ᶜg = p.scratch.ᶜtemp_C12
         @. ᶜg = gradₕ(ᶜψ)
         Spaces.weighted_dss!(ᶜg, buf)
-        @. ᶜinv = norm_sqr(ᶜg)
+        if p.atmos.sgs_variance_element_filter isa ElementLumpedFilter
+            @. ᶜinv = lumpedₕ(norm_sqr(ᶜg))
+            Spaces.weighted_dss!(ᶜinv, p.scratch.ᶜscalar_dss_buffer)
+        else
+            @. ᶜinv = norm_sqr(ᶜg)
+        end
     else
         @. ᶜinv = norm_sqr(gradₕ(ᶜψ))
     end

@@ -1120,10 +1120,25 @@ Combines `get_microphysics_model`, `get_cloud_model`, `get_sgs_quadrature`, and
 or `DiagnosticTerminalVelocity`). Errors when 0-moment microphysics is requested
 without `use_sgs_quadrature`, and warns when the run is dry.
 """
+"""
+    get_sgs_variance_element_filter(parsed_args)
+
+Return the `AbstractSGSElementFilter` selected by the `sgs_variance_element_filter`
+config key: `"none"` → `NoElementFilter()`, `"lumped"` → `ElementLumpedFilter()`.
+"""
+function get_sgs_variance_element_filter(parsed_args)
+    return parse_option(
+        get(parsed_args, "sgs_variance_element_filter", "none"),
+        Dict("none" => NoElementFilter(), "lumped" => ElementLumpedFilter()),
+        "sgs_variance_element_filter",
+    )
+end
+
 function AtmosWater(config::AtmosConfig, params, ::Type{FT}) where {FT}
     pa = config.parsed_args
     microphysics_model = get_microphysics_model(pa)
     sgs_quadrature = get_sgs_quadrature(pa, params)
+    sgs_variance_element_filter = get_sgs_variance_element_filter(pa)
 
     if microphysics_model isa DryModel
         @warn "Running simulations without any moisture present."
@@ -1159,6 +1174,7 @@ function AtmosWater(config::AtmosConfig, params, ::Type{FT}) where {FT}
                                              Explicit(),
         tracer_nonnegativity_method = get_tracer_nonnegativity_method(pa),
         sgs_quadrature,
+        sgs_variance_element_filter,
         terminal_velocity_liquid,
         terminal_velocity_ice,
         terminal_velocity_rain,
