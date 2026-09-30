@@ -245,7 +245,7 @@ end
 """
     mixing_length_lopez_gomez_2020(
         turbconv_params, sf_params, vkc, ustar, z, z_sfc, Δ_f, sfc_tke,
-        N²_eff, N²_prod, tke, obukhov_length, strain_rate_norm, Pr,
+        N²_prod, tke, obukhov_length, strain_rate_norm, Pr,
         scale_blending_method,
     ) -> MixingLength
 
@@ -260,8 +260,8 @@ Three physical scales are formed and blended by `blend_scales`:
   - `l_TKE`: empirical scale `l_inf · √x · (1 + x) · exp(−x)` with
     `x = TKE / (l_inf / τ_ε)²` and reference eddy turnover time `τ_ε`. In the
     small-`x` limit this reduces to the Lopez-Gomez P = ε balance mixing length.
-  - `l_N`: buoyancy-limited scale `√(c_b e) / N_eff`, capped by the wall
-    distance and used only where `N²_eff > 0`.
+  - `l_N`: buoyancy-limited scale `√(c_b e) / N`, capped by the wall
+    distance and used only where `N²_prod > 0`.
 
 The blend is then limited by the wall distance and by the resolvability filter
 scale `Δ_f`, and clamped to non-negative values.
@@ -281,14 +281,8 @@ The same closure is evaluated at cell centers (`ᶜmixing_length`) and at faces
     `resolvability_filter_scale`; `Inf` where the grid imposes no scale,
     as in single columns).
   - `sfc_tke`: TKE near the surface (first cell center) [m²/s²].
-  - `N²_eff`: Effective squared buoyancy frequency [1/s²], used for `l_N`; may
-    include the unresolved-jump augmentation of
-    `interface_effective_N²`.
   - `N²_prod`: Squared buoyancy frequency entering the production-dissipation
-    balance for `l_TKE` [1/s²]. Passed separately so the balance uses the same
-    stability as the actual TKE buoyancy production, keeping `l_TKE`
-    stencil-consistent with the budget it parameterizes even when `N²_eff`
-    carries the interface augmentation.
+    balance for `l_TKE` and the buoyancy-limited length `l_N` [1/s²].
   - `tke`: Turbulent kinetic energy at the evaluation point [m²/s²].
   - `obukhov_length`: Surface Monin-Obukhov length [m].
   - `strain_rate_norm`: Squared Frobenius norm of the strain-rate tensor,
@@ -311,7 +305,6 @@ function mixing_length_lopez_gomez_2020(
     z_sfc,
     Δ_f,
     sfc_tke,
-    N²_eff,
     N²_prod,
     tke,
     obukhov_length,
@@ -389,7 +382,7 @@ function mixing_length_lopez_gomez_2020(
             (FT(1) + tke_nondim) * exp(-tke_nondim)
 
     # --- l_N: Static-stability length scale (buoyancy limit), constrained by l_z ---
-    N_eff_sq = max(N²_eff, FT(0)) # Use N^2 only if stable (N^2 > 0)
+    N_eff_sq = max(N²_prod, FT(0)) # Use N^2 only if stable (N^2 > 0)
     l_N = l_z # Default to wall distance if not stably stratified or TKE is zero
     if N_eff_sq > eps_FT && tke_pos > eps_FT
         N_eff = sqrt(N_eff_sq)
@@ -488,36 +481,6 @@ NVTX.@annotate function set_buoyancy_gradient_inputs!(Y, p, thermo_params)
 end
 
 """
-    interface_effective_N²(N², Δz, κ_iso, c_b)
-
-Return the interface-aware effective squared buoyancy frequency [1/s²],
-
-    N²_eff = N² + [(Δb)₊]² / (c_b κ_iso),    Δb = N² Δz,
-
-where `N²` is the two-point buoyancy gradient [1/s²], `Δz` the adjacent grid
-spacing [m], `κ_iso` the isotropic TKE [m²/s²], and `c_b` the
-static-stability mixing-length coefficient
-(`mixing_length_static_stab_coeff`) [-].
-
-The face jump `Δb` is compatible with any subgrid profile between a uniform
-gradient over `Δz` (which centered differencing assumes) and a sheet interface
-at the face. An eddy of energy `κ_iso` crossing a sheet performs work `Δb ℓ`
-over a penetration distance `ℓ`, capping excursions at `ℓ_p = c_b κ_iso / Δb`;
-the jump term makes the buoyancy-limited length `l_N = √(c_b κ_iso)/N_eff`
-interpolate between the standard resolved limit and `ℓ_p`. In smooth regions
-the correction is relatively `O((Δz/l_N)²)` — quadratically small wherever the
-stratification is resolved — so `N²_eff` is a consistent, second-order-accurate
-discretization of the same continuum stability and acts as a smooth interface
-indicator without a mode switch. The positive-part clamp restricts the
-correction to stable jumps, leaving convectively unstable layers untouched.
-"""
-@inline function interface_effective_N²(N², Δz, κ_iso, c_b)
-    FT = typeof(N²)
-    Δb_pos = max(N² * Δz, FT(0))
-    return N² + Δb_pos^2 / (c_b * max(κ_iso, eps(FT)))
-end
-
-"""
     set_face_diffusivities!(Y, p)
 
 Fill the face-native turbulence pipeline: at the cell faces where the
@@ -528,97 +491,32 @@ diffusive fluxes live, this sets
     chain-rule coefficients interpolated to the face (see `blended_N²`);
 
   - `p.precomputed.ᶠK_h`, `p.precomputed.ᶠK_u`: eddy diffusivity/viscosity
-    evaluated natively at the face from the face effective stability
-    `N²_eff = ᶠbuoygrad + [(Δb)₊]²/(c_b κ)` (`interface_effective_N²`),
-    the face turbulent Prandtl number, and the face mixing length (the same
-    `mixing_length_lopez_gomez_2020` closure evaluated with face inputs);
-
-  - `p.precomputed.ᶠK_entr`: the interfacial entrainment diffusivity
-
-        K_e = γ w_e Δz,   w_e = A √κ / max(Ri_b, 1),   Ri_b = ℓ_e Δb / κ,
-
-    with `Δb = (ᶠbuoygrad Δz)₊` the stable face buoyancy jump, `ℓ_e` the
-    face-native energy-containing eddy scale (minimum of the wall and
-    TKE-balance components, which — unlike `l_N` — are not suppressed by the
-    interface), `A` the entrainment efficiency
-    (`EDMF_interface_entr_efficiency`), and the gate
-    `γ = jt/(ᶠbuoygrad + jt)` the fraction of the effective stability carried
-    by the unresolved-jump term.
-
-Evaluating the stability closure *at the face* keeps the collapse of `K` at
-an unresolved inversion confined to the jump face: a center-based evaluation
-(where the max over adjacent faces registers the jump at the whole cell)
-necessarily leaks the collapse to the cell's opposite face through
-interpolation, under-mixing the interior of the entrainment-zone cell.
-
-The discrete face flux `K_e Δψ/Δz = γ w_e Δψ` represents interfacial
-entrainment at velocity `w_e` in down-gradient form: collapsing the
-down-gradient diffusivity at a sheet interface (via `N²_eff`) is correct for
-turbulent mixing but leaves finite-velocity entrainment unrepresented; `K_e`
-restores it. `γ → 1` at sheet interfaces and vanishes as `(Δz/l_N)²` where
-the stratification is resolved, so `K_e → 0` doubly — through `γ` and through
-`Δz` — as `Δz → 0`, recovering the standard local closure. At coarse `Δz`
-over a sharp inversion the entrainment flux `w_e Δψ` is
-resolution-independent by construction. (When an inversion is smeared over
-two faces, each face carries its partial jump and the summed entrainment flux
-under-recovers; the full sub-cell reconstruction that would remove this
-residual `Δz`-sensitivity is left to future work.)
-
-`K_e` is added to the face diffusivities for all scalars and momentum in
-`edmfx_sgs_diffusive_flux_tendency!` (and its Jacobian), keeping energy,
-water, and momentum transport conservative and mutually consistent. The TKE
-buoyancy production/destruction is evaluated from the same face diffusivities
-and the same `ᶠbuoygrad` (see `edmfx_tke_tendency!`), so the interfacial
-sink `−γ w_e Δb` per face — bounded by `A κ^{3/2}/ℓ_e`, a fixed multiple of
-the dissipation — is carried automatically and the discrete energy
-conversions mirror the fluxes term by term.
+    evaluated natively at the face from `ᶠbuoygrad`, the face turbulent
+    Prandtl number, and the face mixing length (the same
+    `mixing_length_lopez_gomez_2020` closure evaluated with face inputs).
 
 No-op (fields remain at their previous values) unless
 `p.atmos.turbconv_model isa AbstractEDMF`, which is also the condition under
-which `Y.c.ρtke` is available. `ᶠK_entr` is zeroed whenever
-`EDMF_interface_entr_efficiency` is zero, so downstream reads always see a
-defined value. Mutates
-`p.precomputed.ᶠbuoygrad`, `ᶠK_h`, `ᶠK_u`, `ᶠK_entr` and uses four `p.scratch`
-face scalars; returns `nothing`.
+which `Y.c.ρtke` is available. Mutates `p.precomputed.ᶠbuoygrad`, `ᶠK_h`,
+`ᶠK_u` and uses three `p.scratch` face scalars; returns `nothing`.
 
 # Extended help
 
 Pointwise face inputs (`κ = ᶠinterp(tke)`, strain, coefficients) use
 arithmetic interpolation: it is the second-order-accurate choice in the
-resolved limit, and the O(1) factor it introduces at sheet interfaces (the
-face `κ` mixes the turbulent and quiescent sides) is absorbed by the
-calibration of `c_b` and `A`.
-
-Validity domain: the closure targets strong, mixed-layer-capping inversions
-(large stable buoyancy jump `Δb`), where the restored diffusive exchange
-represents mixed-layer entrainment — DYCOMS and BOMEX cloud cover and
-inversion height converge under vertical refinement with it active. At
-weak-`Δb`, moisture-dominated (trade-cumulus) inversions on coarse grids,
-the down-gradient form transports moisture up the jump faster than it warms
-and dries, and the thick inversion-base cell can saturate: 24 h RICO at
-`Δz = 160 m` relapses to overcast for *any* `A` (at `A = 0` by moisture
-trapping under the unresolved inversion; at larger `A` faster, by diffusive
-moistening of the inversion layer), while the fine grid holds trade-cumulus
-cover. Cumulus-top entrainment is localized to penetrating plumes and
-belongs to the entrainment/detrainment closures, not to `K_e`. Consequently,
-calibrate `A` against equilibrium (≳ 24 h) targets — spin-up snapshots
-reward values that fail at equilibrium — and treat coarse-grid
-weak-inversion cloud cover as outside this closure's convergence guarantee.
+resolved limit.
 """
 NVTX.@annotate function set_face_diffusivities!(Y, p)
     p.atmos.turbconv_model isa AbstractEDMF || return nothing
-    (; ᶠbuoygrad, ᶠK_h, ᶠK_u, ᶠK_entr) = p.precomputed
+    (; ᶠbuoygrad, ᶠK_h, ᶠK_u) = p.precomputed
     (; ᶜbg_coeffs, ᶠ∂θli∂z, ᶠ∂qt∂z) = p.precomputed
     (; ᶜcloud_fraction, ᶜstrain_rate_norm) = p.precomputed
     (; ustar, obukhov_length) = p.precomputed.sfc_conditions
     (; params) = p
     turbconv_params = CAP.turbconv_params(params)
-    c_b = CAP.static_stab_coeff(turbconv_params)
-    A_entr = CAP.interface_entr_efficiency(turbconv_params)
     sf_params = CAP.surface_fluxes_params(params)
     vkc = CAP.von_karman_const(params)
 
-    ᶠΔz = Fields.Δz_field(axes(Y.f))
     ᶠΔ_f = resolvability_filter_scale(axes(Y.f))
     ᶠz = Fields.coordinate_field(Y.f).z
     z_sfc = Fields.level(Fields.coordinate_field(Y.f).z, Fields.half)
@@ -641,18 +539,13 @@ NVTX.@annotate function set_face_diffusivities!(Y, p)
     # point-space surface fields (sfc_tke, z_sfc, ustar) the closure needs.
     ᶠκ = p.scratch.ᶠtemp_scalar
     @. ᶠκ = ᶠinterp(max(ᶜtke, 0))
-    ᶠN²_eff = p.scratch.ᶠtemp_scalar_2
-    @. ᶠN²_eff = interface_effective_N²(ᶠbuoygrad, ᶠΔz, ᶠκ, c_b)
-    ᶠstrain = p.scratch.ᶠtemp_scalar_3
+    ᶠstrain = p.scratch.ᶠtemp_scalar_2
     @. ᶠstrain = ᶠinterp(ᶜstrain_rate_norm)
-    ᶠPr = p.scratch.ᶠtemp_scalar_4
-    @. ᶠPr = turbulent_prandtl_number(params, ᶠN²_eff, ᶠstrain)
+    ᶠPr = p.scratch.ᶠtemp_scalar_3
+    @. ᶠPr = turbulent_prandtl_number(params, ᶠbuoygrad, ᶠstrain)
 
     # Face mixing length: same closure and constants as the center pipeline,
-    # evaluated with face inputs. The augmented N²_eff limits l_N (and the
-    # eddy excursions it represents); the un-augmented face gradient enters
-    # the production-dissipation balance for l_TKE, consistent with the TKE
-    # budget stencils.
+    # evaluated with face inputs.
     ᶠml = @. lazy(
         mixing_length_lopez_gomez_2020(
             turbconv_params,
@@ -663,7 +556,6 @@ NVTX.@annotate function set_face_diffusivities!(Y, p)
             z_sfc,
             ᶠΔ_f,
             sfc_tke,
-            ᶠN²_eff,
             ᶠbuoygrad,
             ᶠκ,
             obukhov_length,
@@ -679,67 +571,7 @@ NVTX.@annotate function set_face_diffusivities!(Y, p)
         get_mixing_length_field(ᶠml, val_master),
     )
     @. ᶠK_h = eddy_diffusivity(ᶠK_u, ᶠPr)
-
-    # Interfacial entrainment diffusivity; `A` is constant over a run, so the
-    # (comparatively expensive) closure is skipped when interfacial entrainment
-    # is disabled. ᶠK_entr is still zeroed on every update in that case, so
-    # downstream reads (SGS fluxes, TKE budget, diffusion Jacobian) always see
-    # a defined value regardless of how the field was allocated.
-    if !iszero(A_entr)
-        val_energy_containing = Val{:energy_containing}()
-        @. ᶠK_entr = interface_entrainment_diffusivity(
-            ᶠbuoygrad,
-            ᶠΔz,
-            ᶠκ,
-            get_mixing_length_field(ᶠml, val_energy_containing),
-            c_b,
-            A_entr,
-        )
-    else
-        @. ᶠK_entr = 0
-    end
     return nothing
-end
-"""
-    interface_entrainment_diffusivity(N²_face, Δz, κ_iso, ℓ_e, c_b, A)
-
-Return the pointwise interfacial entrainment diffusivity `K_e = γ w_e Δz`
-[m²/s]; see `set_face_diffusivities!` for the closure.
-
-# Arguments
-
-  - `N²_face`: Face buoyancy gradient [1/s²].
-  - `Δz`: Face-adjacent grid spacing [m].
-  - `κ_iso`: Isotropic TKE at the face [m²/s²].
-  - `ℓ_e`: Energy-containing eddy scale [m].
-  - `c_b`: Static-stability mixing-length coefficient [-].
-  - `A`: Interface entrainment efficiency [-].
-
-# Returns
-
-The entrainment diffusivity [m²/s]; zero where the face jump is not stable
-(`Δb ≤ 0`).
-"""
-@inline function interface_entrainment_diffusivity(
-    N²_face,
-    Δz,
-    κ_iso,
-    ℓ_e,
-    c_b,
-    A,
-)
-    FT = typeof(Δz)
-    κ_safe = max(κ_iso, eps(FT))
-    Δb_pos = max(N²_face * Δz, FT(0))
-    jt = Δb_pos^2 / (c_b * κ_safe)
-    # Gate: fraction of the effective stability carried by the jump term.
-    # Branchless (avoids warp divergence). The division is guarded by the
-    # `jt > 0` branch: `jt > 0` implies `Δb_pos > 0`, hence `N²_face > 0`, so
-    # the denominator `N²_face + jt > 0` and no zero-guard is needed.
-    γ = ifelse(jt > zero(jt), jt / (N²_face + jt), zero(jt))
-    Ri_b = ℓ_e * Δb_pos / κ_safe
-    w_e = A * sqrt(κ_safe) / max(Ri_b, FT(1))
-    return γ * w_e * Δz
 end
 
 """
@@ -748,28 +580,13 @@ end
 Extract one length scale [m] from a `MixingLength`, selected by the `Val`
 property tag `P` (GPU-safe field access without runtime symbol lookup).
 
-Tags: `:master` (the blended scale), `:wall`, `:tke`, `:buoy`, `:l_grid`, and
-`:energy_containing` (a derived scale, see the comment below).
+Tags: `:master` (the blended scale), `:wall`, `:tke`, `:buoy`, `:l_grid`.
 """
 @inline get_mixing_length_field(ml::MixingLength, ::Val{:master}) = ml.master
 @inline get_mixing_length_field(ml::MixingLength, ::Val{:wall}) = ml.wall
 @inline get_mixing_length_field(ml::MixingLength, ::Val{:tke}) = ml.tke
 @inline get_mixing_length_field(ml::MixingLength, ::Val{:buoy}) = ml.buoy
 @inline get_mixing_length_field(ml::MixingLength, ::Val{:l_grid}) = ml.l_grid
-# Energy-containing eddy scale ℓ_e for the interfacial entrainment closure:
-# the scales of the eddies that scour an interface (wall and TKE-balance),
-# which — unlike l_N — are not suppressed by the interface itself. Also
-# bounded by the resolvability filter scale l_grid where the grid imposes a
-# finite one (l_grid = max(Δx_h, Δz); Inf for single columns, so the bound
-# is inert there and binds only in the gray zone / LES). Branchless ifelse
-# avoids GPU warp divergence.
-@inline function get_mixing_length_field(
-    ml::MixingLength,
-    ::Val{:energy_containing},
-)
-    ℓ_phys = ifelse(ml.tke > zero(ml.tke), min(ml.wall, ml.tke), ml.wall)
-    return min(ℓ_phys, ml.l_grid)
-end
 
 """
     ᶜmixing_length(Y, p, property::Val{P} = Val{:master}(); grid_scale)
@@ -826,7 +643,6 @@ function ᶜmixing_length(
             z_sfc,
             ᶜΔ_f,
             sfc_tke,
-            ᶜbuoygrad,
             ᶜbuoygrad,
             ᶜtke,
             obukhov_length,

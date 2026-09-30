@@ -1,4 +1,4 @@
-419
+420
 
 # **README**
 #
@@ -32,6 +32,9 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+420
+- Remove interface_effective_N² and interface_entrainment_diffusivity (fix GABLS)
+
 419
 - TKE budget fixes; EDMF interface entrainment fix; break local balance in l_TKE
 

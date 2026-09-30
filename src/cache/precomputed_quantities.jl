@@ -236,9 +236,8 @@ function precomputed_quantities(Y, atmos)
         # live, keeps the collapse of K at an unresolved inversion from
         # leaking to the adjacent interior face.
         #
-        # All four face fields are written by `set_face_diffusivities!` on
-        # every explicit update (ᶠK_entr is zeroed there when the interface
-        # entrainment closure is off), and ᶜl_mix by `materialized_mixing_length!`,
+        # All three face fields are written by `set_face_diffusivities!` on
+        # every explicit update, and ᶜl_mix by `materialized_mixing_length!`,
         # before any read, so `similar` is safe.
         (
             atmos.turbconv_model isa AbstractEDMF ?
@@ -246,7 +245,6 @@ function precomputed_quantities(Y, atmos)
                 ᶠbuoygrad = similar(Y.f, FT),
                 ᶠK_h = similar(Y.f, FT),
                 ᶠK_u = similar(Y.f, FT),
-                ᶠK_entr = similar(Y.f, FT),
                 ᶜl_mix = similar(Y.c, FT),
                 # Horizontal eddy viscosity/diffusivity of the TKE-based
                 # closure, with the mixing length limited by the horizontal
