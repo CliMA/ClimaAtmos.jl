@@ -282,7 +282,7 @@ not yet define.
   - `cloud_fraction_floor_release_sharpness`: Exponent `s` of the release
     transition; larger values approach a switch [-].
   - `cloud_fraction_floor_residual`: Fraction `D_min` of the relative floor
-    retained deep inside a saturated deck [-].
+    retained deep inside a saturated deck; 1 (default) disables the release [-].
 """
 Base.@kwdef struct SGSQuadratureParameters{FT} <: ASQP
     diagnostic_covariance_coeff::FT

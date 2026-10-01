@@ -622,10 +622,11 @@ successive increments change sign, so that the accelerated value lies between
 computed iterates.
 
 The grid-mean cloud fraction is the volume-fraction-weighted sum
-``f_c^{\mathrm{tot}} = \sum_m a^m f_c^m``. In the current implementation, the
-quadrature closure is evaluated for the environment, which accounts for most of
-the intra-subdomain variability; the drafts, comparatively homogeneous and
-near-saturated where cloudy, use a condensate-presence indicator.
+``f_c^{\mathrm{tot}} = \sum_m a^m f_c^m``. In the current implementation the
+cloud fraction is a single-domain quantity: the environment's PDF
+inversion is applied to the grid-mean cloud condensate,
+``f_c = f_c^0\!\left(a^0 q_c^0 + \sum_j a^j q_c^j\right)``, with no area weighting and
+no separate draft term.
 
 !!! note "Under active development"
 
