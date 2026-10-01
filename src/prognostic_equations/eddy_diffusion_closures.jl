@@ -436,8 +436,9 @@ share:
   - `p.precomputed.ᶠ∂θli∂z`, `p.precomputed.ᶠ∂qt∂z`: exact two-point face
     gradients of `θ_li` and `q_tot`, projected to physical scalars;
   - `p.precomputed.ᶜgradᵥ_θ_liq_ice`, `p.precomputed.ᶜgradᵥ_q_tot`: the
-    corresponding centered (interpolate-then-difference) gradients, still as
-    `Covariant3Vector`s.
+    corresponding centered gradients, obtained by applying the Van Leer
+    harmonic-mean limiter (`ᶜVanLeer_gradient!`) to the physical face
+    gradients and stored as `Covariant3Vector`s.
 
 The centered and face-native (`set_face_diffusivities!`) buoyancy gradients
 then reduce to
@@ -446,7 +447,8 @@ per cloud-fraction Picard iteration, where only `cf` changes) at negligible
 cost. The coefficients depend on `(T, ρ, q)` but not on `cf`, so they are
 fixed during the Picard iteration.
 
-Mutates `p.precomputed` and uses `p.scratch.ᶜtemp_scalar`; returns `nothing`.
+Mutates `p.precomputed` and uses `p.scratch.ᶜtemp_scalar`;
+returns `nothing`.
 """
 NVTX.@annotate function set_buoyancy_gradient_inputs!(Y, p, thermo_params)
     (; ᶜbg_coeffs, ᶠ∂θli∂z, ᶠ∂qt∂z, ᶜgradᵥ_θ_liq_ice, ᶜgradᵥ_q_tot) = p.precomputed
@@ -475,9 +477,63 @@ NVTX.@annotate function set_buoyancy_gradient_inputs!(Y, p, thermo_params)
     @. ᶠ∂θli∂z = projected_vector_data(C3, ᶠgradᵥ(ᶜθ_li), ᶠlg)
     @. ᶠ∂qt∂z = projected_vector_data(C3, ᶠgradᵥ(ᶜq_tot_nonneg), ᶠlg)
 
-    @. ᶜgradᵥ_θ_liq_ice = ᶜgradᵥ(ᶠinterp(ᶜθ_li))
-    @. ᶜgradᵥ_q_tot = ᶜgradᵥ(ᶠinterp(ᶜq_tot_nonneg))
+    ᶜVanLeer_gradient!(ᶜgradᵥ_θ_liq_ice, ᶠ∂θli∂z)
+    ᶜVanLeer_gradient!(ᶜgradᵥ_q_tot, ᶠ∂qt∂z)
     return nothing
+end
+
+"""
+    ᶜVanLeer_gradient!(ᶜout, ᶠ∂ψ∂z)
+
+Write the Van Leer-limited vertical gradient of a center scalar field,
+derived from the already-materialized physical face gradient `ᶠ∂ψ∂z`, into
+the `Covariant3Vector` center field `ᶜout`. At each center the two adjacent
+*physical* face gradients are combined using the harmonic-mean limiter
+`2ab/(a+b)` (zero when they differ in sign), and the result is converted
+back into the covariant basis.
+
+For the bottom and top cells, the center gradient is taken from the adjacent
+interior face gradient rather than blending the gradients at the two bounding
+faces, since the boundary face gradients are imposed by the zero-gradient BC
+and do not represent the physical slope.
+"""
+function ᶜVanLeer_gradient!(ᶜout, ᶠ∂ψ∂z)
+    ᶜlg = Fields.local_geometry_field(axes(ᶜout))
+    nc = Spaces.nlevels(axes(ᶜout))
+    # At the domain boundaries, `ᶠ∂ψ∂z` carries `ᶠgradᵥ`'s zero-gradient BC
+    # (it is not the physical slope). Override via `SetValue` so the
+    # bottom (top) center's bias returns the first (last) *interior* face
+    # gradient; the limiter at that cell then reduces to that gradient.
+    ᶜbias_below = Operators.BottomBiasedF2C(
+        bottom = Operators.SetValue(
+            Fields.level(ᶠ∂ψ∂z, 1 + Fields.half),
+        ),
+    )
+    ᶜbias_above = Operators.TopBiasedF2C(
+        top = Operators.SetValue(
+            Fields.level(ᶠ∂ψ∂z, nc - Fields.half),
+        ),
+    )
+    @. ᶜout = Geometry.Covariant3Vector(
+        harmonic_mean(ᶜbias_below(ᶠ∂ψ∂z), ᶜbias_above(ᶠ∂ψ∂z)) *
+        unit_basis_vector_data(C3, ᶜlg),
+    )
+    return nothing
+end
+
+"""
+    harmonic_mean(a, b)
+
+Van Leer's harmonic-mean slope limiter: `2ab/(a+b)` when `a` and `b` share
+a sign, else zero. Written as `2*a*(b/denom)` rather than `2*a*b/denom` so
+that small-but-equal arguments at Float32 (e.g. humidity slopes on coarse
+grids) do not underflow through the intermediate `a*b`.
+"""
+@inline function harmonic_mean(a, b)
+    same_sign = ((a > zero(a)) & (b > zero(b))) |
+                ((a < zero(a)) & (b < zero(b)))
+    denom = ifelse(same_sign, a + b, one(a))
+    return ifelse(same_sign, 2 * a * (b / denom), zero(a))
 end
 
 """
