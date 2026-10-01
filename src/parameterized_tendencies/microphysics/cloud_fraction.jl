@@ -805,7 +805,8 @@ multiplier of the microphysics reconstruction keeps `α` from
     # Uniform (top-hat) PDF of the same variance: q_c = √3 σ_aug CF² for all
     # CF ∈ [0, 1] (both the partly cloudy and the mostly cloudy branch).
     cf_tophat = min(one(FT), sqrt(max(C, zero(FT)) / sqrt(FT(3))))
-    return ifelse(β == zero(FT), cf_gauss, (1 - β) * cf_gauss + β * cf_tophat)
+    cf = ifelse(β == zero(FT), cf_gauss, (1 - β) * cf_gauss + β * cf_tophat)
+    return cloud_fraction_min_condensate_cap(cf, q_c, λ, phase)
 end
 
 """
@@ -913,7 +914,9 @@ bundled into one isbits broadcast scalar: the width scales `α_liq`, `α_ice`
 inversion and the top-hat PDF weights `β_liq`, `β_ice`
 (`cloud_fraction_tophat_weight_{liquid,ice}`), and the temperature-ramp width
 `ΔT_ramp` of the phase weight (`cloud_fraction_phase_temperature_width`; 0
-selects the condensate liquid fraction, see `cloud_fraction_phase_weight`).
+selects the condensate liquid fraction, see `cloud_fraction_phase_weight`), and
+the minimum in-cloud condensate for cover `q_min_liq`, `q_min_ice`
+(`cloud_fraction_min_condensate_{liquid,ice}`, kg/kg; 0 disables the cap).
 """
 Base.@kwdef struct CloudFractionPhaseParams{FT}
     α_liq::FT
@@ -921,9 +924,11 @@ Base.@kwdef struct CloudFractionPhaseParams{FT}
     β_liq::FT
     β_ice::FT
     ΔT_ramp::FT = zero(FT)
+    q_min_liq::FT = zero(FT)
+    q_min_ice::FT = zero(FT)
 end
 CloudFractionPhaseParams(α_liq::FT, α_ice::FT, β_liq::FT, β_ice::FT) where {FT} =
-    CloudFractionPhaseParams{FT}(α_liq, α_ice, β_liq, β_ice, zero(FT))
+    CloudFractionPhaseParams{FT}(α_liq, α_ice, β_liq, β_ice, zero(FT), zero(FT), zero(FT))
 Base.broadcastable(x::CloudFractionPhaseParams) = tuple(x)
 
 """
@@ -939,7 +944,31 @@ cloud_fraction_phase_params(params) = CloudFractionPhaseParams(;
     β_liq = CAP.cloud_fraction_tophat_weight_liquid(params),
     β_ice = CAP.cloud_fraction_tophat_weight_ice(params),
     ΔT_ramp = CAP.cloud_fraction_phase_temperature_width(params),
+    q_min_liq = CAP.cloud_fraction_min_condensate_liquid(params),
+    q_min_ice = CAP.cloud_fraction_min_condensate_ice(params),
 )
+
+"""
+    cloud_fraction_min_condensate_cap(cf, q_c, λ_ph, phase)
+
+Cap the cover `cf` so that the in-cloud condensate `q_c / cf` is at least the
+phase-blended minimum `q_min = λ_ph q_min_liq + (1 − λ_ph) q_min_ice`
+(`CloudFractionPhaseParams`): `cf ≤ q_c / q_min`. Cover below this in-cloud
+amount is optically empty (a 30-m layer at 0.02 g/kg has LWP < 1 g m⁻²) and
+should not count as cloud for radiation or total cover. Ice is optically
+thinner per unit mass than liquid (larger particles), hence a separate
+`q_min_ice`. `q_min ≤ 0` leaves `cf` unchanged (bitwise default).
+"""
+@inline function cloud_fraction_min_condensate_cap(cf, q_c, λ_ph, phase)
+    FT = typeof(cf)
+    λ = clamp(λ_ph, zero(FT), one(FT))
+    q_min = λ * phase.q_min_liq + (1 - λ) * phase.q_min_ice
+    return ifelse(
+        q_min > zero(FT),
+        min(cf, max(q_c, zero(FT)) / q_min),
+        cf,
+    )
+end
 
 """
     _fit_discrete_lagrange(λ0, q_c, α, S′s, ws)

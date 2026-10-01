@@ -296,6 +296,10 @@ not yet define.
   - `cloud_fraction_phase_temperature_width`: Width of the temperature ramp
     above `T_icenuc` over which the cover closure blends from its ice to its
     liquid parameters; 0 (default) uses the condensate liquid fraction instead [K].
+  - `cloud_fraction_min_condensate_liquid`: Minimum in-cloud liquid condensate
+    for cover; the cover is capped at `q_c / q_min` (0 disables) [kg/kg].
+  - `cloud_fraction_min_condensate_ice`: Minimum in-cloud ice condensate for
+    cover (0 disables) [kg/kg].
 """
 Base.@kwdef struct SGSQuadratureParameters{FT} <: ASQP
     diagnostic_covariance_coeff::FT
@@ -318,6 +322,8 @@ Base.@kwdef struct SGSQuadratureParameters{FT} <: ASQP
     cloud_fraction_tophat_weight_liquid::FT
     cloud_fraction_tophat_weight_ice::FT
     cloud_fraction_phase_temperature_width::FT
+    cloud_fraction_min_condensate_liquid::FT
+    cloud_fraction_min_condensate_ice::FT
 end
 
 """
