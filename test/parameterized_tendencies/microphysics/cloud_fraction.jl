@@ -82,6 +82,15 @@ floor_nt(
                     @test CA._compute_cloud_fraction(FT(1e-2), FT(1), μ, σ_S, q_sat, floor, th) == one(FT)
                     # The 5-field constructor defaults the ramp width to 0.
                     @test CA.CloudFractionPhaseParams(α, α, FT(0), FT(0)).ΔT_ramp == zero(FT)
+                    # Minimum in-cloud condensate cap: cover ≤ q_c / q_min,
+                    # phase-blended, inactive at 0.
+                    cap = CA.CloudFractionPhaseParams{FT}(α, α, 0, 0, 0, FT(1e-4), FT(4e-4))
+                    @test CA._compute_cloud_fraction(q_c, FT(1), μ, σ_S, q_sat, floor, cap) ≈
+                          min(ref, q_c / FT(1e-4)) rtol = 1e-6
+                    @test CA._compute_cloud_fraction(q_c, FT(0), μ, σ_S, q_sat, floor, cap) ≈
+                          min(ref, q_c / FT(4e-4)) rtol = 1e-6
+                    @test CA.cloud_fraction_min_condensate_cap(FT(0.3), q_c, FT(1), same) === FT(0.3)
+                    @test CA.cloud_fraction_min_condensate_cap(FT(1), FT(5e-5), FT(1), cap) ≈ FT(0.5)
                     # The blend is linear in β.
                     half = CA.CloudFractionPhaseParams(α, α, FT(0.5), FT(0.5))
                     @test CA._compute_cloud_fraction(q_c, FT(1), μ, σ_S, q_sat, floor, half) ≈
