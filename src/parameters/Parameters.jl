@@ -283,6 +283,16 @@ not yet define.
     transition; larger values approach a switch [-].
   - `cloud_fraction_floor_residual`: Fraction `D_min` of the relative floor
     retained deep inside a saturated deck; 1 (default) disables the release [-].
+  - `cloud_fraction_steepness_scale_liquid`: Steepness scale of the cover
+    inversion for liquid cloud condensate (defaults to
+    `cloud_fraction_steepness_scale`; the cover width is `α_liq = 1/·`) [-].
+  - `cloud_fraction_steepness_scale_ice`: Steepness scale of the cover
+    inversion for cloud ice (defaults to `cloud_fraction_steepness_scale`) [-].
+  - `cloud_fraction_tophat_weight_liquid`: Weight `β_liq ∈ [0, 1]` of the
+    bounded (top-hat) saturation-excess PDF in the cover closure for liquid
+    condensate; 0 is the truncated Gaussian [-].
+  - `cloud_fraction_tophat_weight_ice`: Weight `β_ice ∈ [0, 1]` of the
+    top-hat PDF in the cover closure for cloud ice [-].
 """
 Base.@kwdef struct SGSQuadratureParameters{FT} <: ASQP
     diagnostic_covariance_coeff::FT
@@ -300,6 +310,10 @@ Base.@kwdef struct SGSQuadratureParameters{FT} <: ASQP
     cloud_fraction_floor_release_abs_margin::FT
     cloud_fraction_floor_release_sharpness::FT
     cloud_fraction_floor_residual::FT
+    cloud_fraction_steepness_scale_liquid::FT
+    cloud_fraction_steepness_scale_ice::FT
+    cloud_fraction_tophat_weight_liquid::FT
+    cloud_fraction_tophat_weight_ice::FT
 end
 
 """
