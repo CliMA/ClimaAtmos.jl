@@ -1,32 +1,66 @@
-# ClimaAtmos Agent Guide
+# CliMA Developer Guides: Agent Entry Point
 
-## Ecosystem Guidelines
+Read this file first. It is the agent entry point for the shared engineering guidelines. Each guide applies across the CliMA ecosystem unless stated otherwise.
 
-Please refer to the shared CliMA agent index for ecosystem-wide rules regarding architecture, performance, code quality, infrastructure, and workflows:
+In consumer repos, these guides live at `docs/dev-guides/` and are supplied by a git subtree from the canonical source <https://github.com/CliMA/DeveloperGuides>. The consumer's root `AGENTS.md` references this file and the repo-specific guide. Edit shared guides in the canonical repo, not in the subtree copy.
 
-- [docs/dev-guides/AGENTS.md](docs/dev-guides/AGENTS.md) — Shared CliMA agent guidelines.
+## Before you act: agent autonomy
 
-> Shared guides live at `docs/dev-guides/` and are vendored from the canonical source:
-> https://github.com/CliMA/DeveloperGuides. Edit shared guides there, not here.
+Local, reversible work (editing files, running tests, formatting, committing to the current branch) needs no permission. Get explicit user approval before any irreversible, externally visible, or scientifically consequential action:
 
-## Repo-Specific Guidelines
+- **Git/GitHub**: `git push`, force-push, rebasing or amending pushed commits, `git reset --hard` or `git clean` with uncommitted changes, deleting branches, opening/merging/closing PRs, commenting on issues or PRs, tagging or pushing releases.
+- **Versioning and dependencies**: bumping `version` in `Project.toml`, editing `Manifest.toml`, changing `[compat]` or `[deps]`, `Pkg.update()`.
+- **Reproducibility data**: editing reference counters, MSE tolerances, or checksum/golden files in reproducibility-test directories. Change these only for a user-confirmed output change.
+- **CI and infrastructure**: editing `.buildkite/pipeline.yml` or `.github/workflows/*`, adding or removing CI jobs, disabling tests, skipping hooks (`--no-verify`).
+- **Public API and user-visible behavior**: renaming or removing exported symbols, renaming diagnostics or changing their units, changing or removing user-visible config keys.
 
-Always read the ClimaAtmos-specific guide before working in this repository:
+The full enumeration and the allowed-without-approval list are in [workflow/agent_autonomy.md](workflow/agent_autonomy.md). When in doubt, ask.
 
-- [docs/clima_atmos_specific.md](docs/clima_atmos_specific.md) — directory tree, test groups, and reproducibility specifics for *this* repo.
+## Guides
 
-## Local norms
+### Architecture
 
-- Prefer Julia 1.11.x for local work. CI also runs 1.10 and 1.11.
-- For runtime validation, prefer `julia +1.11 --project=.buildkite .buildkite/ci_driver.jl ...`.
-- For package tests, prefer `Pkg.test()` over manually `include`ing `test/runtests.jl` because test-only deps are loaded through the package test path.
-- Keep edits inside the owning subtree when possible; use [src/ClimaAtmos.jl](src/ClimaAtmos.jl) to trace where a feature is wired.
-- Match existing style: explicit names, narrow imports, comments that explain why.
-- Follow the software design patterns in [docs/dev-guides/architecture/software_design_patterns.md](docs/dev-guides/architecture/software_design_patterns.md) for new code and refactor toward them when touching existing code.
-- Format code before committing. CI checks formatting via the `prek` hook in [.github/workflows/run-prek.yml](.github/workflows/run-prek.yml), which runs JuliaFormatter from the version-pinned [.dev/format/Project.toml](.dev/format/Project.toml) environment (currently `=2.10.1`). Match CI with either `prek run julia-formatter --all-files` or the pinned env directly: `julia --startup-file=no --project=.dev/format -e 'using Pkg; Pkg.instantiate(io=devnull); using JuliaFormatter; format(ARGS)' .`. Avoid `julia -e 'using JuliaFormatter; format(\".\")'` from your global environment — `Pkg.add("JuliaFormatter")` installs v2 by default and a mismatched version produces a different diff.
-- Optional but recommended: install the pre-commit hooks in [.pre-commit-config.yaml](.pre-commit-config.yaml) (`uv tool install prek && prek install`) to auto-format and trim trailing whitespace on commit. See [docs/src/contributor_guide.md](docs/src/contributor_guide.md) ("Pre-commit hooks").
+- [repo_structure.md](architecture/repo_structure.md): how to navigate any CliMA Julia package.
+- [ecosystem_conventions.md](architecture/ecosystem_conventions.md): module aliases, `Y`/`Yₜ`/`p` state layout, `ᶜ`/`ᶠ` notation, CI structure, reproducibility, diagnostics.
+- [architectural_boundaries.md](architecture/architectural_boundaries.md): layered architecture and boundary rules.
+- [cross_repo_contracts.md](architecture/cross_repo_contracts.md): call-site conventions for ecosystem packages.
+- [dependency_management.md](architecture/dependency_management.md): runtime vs dev dependencies, compat bounds.
+
+### Performance
+
+- [gpu_performance.md](performance/gpu_performance.md): GPU kernel rules, broadcast patterns, allocation avoidance.
+- [branchless_code.md](performance/branchless_code.md): avoiding warp divergence with `ifelse`, evaluate-both-cases splits, and fixed-iteration solvers chosen by offline tests.
+- [type_stability.md](performance/type_stability.md): Float32 compatibility, inference checks, struct field rules.
+- [numerical_robustness.md](performance/numerical_robustness.md): denominator regularization, clamping, NaN/Inf avoidance.
+- [ad_compatibility.md](performance/ad_compatibility.md): AD-safe patterns for ForwardDiff and Enzyme.
+- [allocation_debugging.md](performance/allocation_debugging.md): locating heap allocations with `Profile.Allocs`, JET, `@code_warntype`, flame graphs.
+
+### Code Quality
+
+- [getting_started.md](code-quality/getting_started.md): orienting newcomers to writing pointwise code compatible with ClimaCore `Field`s and broadcasting.
+- [code_style.md](code-quality/code_style.md): formatting, variable locality, Git workflow, feature removal, naming conventions.
+- [code_comments.md](code-quality/code_comments.md): what earns a comment, never describing a previous state, words to cut, sweeping a branch.
+- [documentation_policy.md](code-quality/documentation_policy.md): docstrings, repository-level docs, README and badge conventions, LICENSE/NOTICE and copyright notices, minimally viable documentation.
+- [changelogs_and_versions.md](code-quality/changelogs_and_versions.md): `NEWS.md` format, SemVer rules, and the release/tagging flow.
+- [variable_list.md](code-quality/variable_list.md): standardized CliMA variable naming conventions.
+- [glossary.md](code-quality/glossary.md): general CliMA software and simulation terminology.
+- [software_design_patterns.md](code-quality/software_design_patterns.md): numbered SDPs for branchless logic, functors, parameter extraction, and more.
+
+### Infrastructure
+
+- [testing_and_validation.md](infrastructure/testing_and_validation.md): type-stability checks, Aqua.jl, allocation regression, AD tests.
+- [clima_comms.md](infrastructure/clima_comms.md): device-agnostic and MPI-distributed code patterns.
+
+### Workflow
+
+- [onboarding.md](workflow/onboarding.md): install Julia, clone a CliMA repo, set up Revise/Infiltrator/JuliaFormatter, first PR loop.
+- [running_on_gpu.md](workflow/running_on_gpu.md): run a model on GPU — install Julia, add `CUDA.jl`, CUDA runtime compatibility, `CLIMACOMMS_DEVICE`, verify the device.
+- [agent_autonomy.md](workflow/agent_autonomy.md): actions that require explicit user approval.
+- [debugging.md](workflow/debugging.md): interactive debugging recipes for numerical instabilities, dispatch, and `Field` plotting.
+- [review.md](workflow/review.md): PR review instructions and checklist.
+- [ci_triage.md](workflow/ci_triage.md): checklist for "passes locally, fails on CI" failure modes.
+- [cross_repo_issue_pr_search.md](workflow/cross_repo_issue_pr_search.md): org-scoped GitHub search to find and filter issues/PRs across CliMA.
 
 ## Self-correction
 
-- If the code map in [docs/clima_atmos_specific.md](docs/clima_atmos_specific.md) is discovered to be stale, update it.
-- If the user gives a correction about how work should be done in this repo, add it to `Local norms` or another clearly labeled persistent section in this file or in [docs/clima_atmos_specific.md](docs/clima_atmos_specific.md) so future sessions inherit it.
+If this index is stale or missing a guide, update it here and in the matching [README.md](README.md#guides) overview.

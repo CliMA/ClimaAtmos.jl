@@ -1,8 +1,0 @@
-# This file allows 'git blame' to ignore specific commits.
-# Add commits that only have formatting changes here.
-# Github's blame view will use this by default.
-# To set your local git to use this file by default, run:
-# 'git config blame.ignoreRevsFile .git-blame-ignore-revs'
-##########################################################
-# Formatting docstrings and trimming whitespace repo wide, all files except lock files
-1ad5c782478df7532ec2438e8fbc0b8b714cdc83
