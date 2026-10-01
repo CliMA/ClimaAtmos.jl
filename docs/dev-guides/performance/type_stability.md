@@ -113,9 +113,9 @@ A unit test may pass with standard inputs but fail in integrated simulations bec
 - The test inputs never trigger the code path containing the Float64 literal.
 - Edge-case inputs (zero, negative, very large) expose a hidden `Inf` or `NaN` literal.
 
-## 6. Prefer using base julia general number functions
+## 6. Prefer Base Julia's generic number functions
 
-Use general number functions from Base Julia that are designed to work across numeric types, as they often have optimized methods for different types and can help maintain type stability. Examples include `iszero`, `isfinite`, `isinf`, `isone`, `isodd`, and `isnan`. These functions are more likely to return consistent types across different numeric inputs, reducing the risk of type instability in your code.
+Use Base's generic number predicates (`iszero`, `isfinite`, `isinf`, `isone`, `isodd`, `isnan`) rather than hand-written comparisons. They have optimized methods per numeric type and return consistent types across numeric inputs, which reduces the risk of type instability.
 
 ## Self-correction
 
