@@ -187,10 +187,11 @@ import ClimaAtmos:
         # with the direct BMT call made with the same `w`.
         for FT in (Float32, Float64)
             @testset "FT = $FT" begin
+                # Stratiform timescale = 1000 s · 10.0 = 10000 s (convective 1000 s).
                 toml_dict = CP.create_toml_dict(FT;
                     override_file = Dict(
-                        "rain_autoconversion_timescale_stratiform" =>
-                            Dict("value" => 10000.0, "type" => "float"),
+                        "rain_autoconversion_timescale_stratiform_scale" =>
+                            Dict("value" => 10.0, "type" => "float"),
                         "rain_autoconversion_timescale" =>
                             Dict("value" => 1000.0, "type" => "float"),
                     ),
