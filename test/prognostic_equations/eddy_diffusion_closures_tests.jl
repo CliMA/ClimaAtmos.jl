@@ -8,18 +8,7 @@ Unit tests for the pointwise closures in eddy_diffusion_closures.jl:
    independently computed g/θᵥ·∂θᵥ/∂z, equivalence with the
    `buoyancy_gradients` reference path, and physical sign conventions.
 
-2. `interface_effective_N²` — N²_eff = N² + [(Δb)₊]²/(c_b·κ):
-   resolved-limit consistency (correction quadratically small in Δz),
-   exactness of the jump term, inertness for unstable/neutral gradients,
-   and monotonicity in Δz.
-
-3. `interface_entrainment_diffusivity` — K_e = γ·w_e·Δz:
-   zero for A = 0, unstable faces, or absent turbulence; cubic decay
-   K_e ∝ Δz³ in the resolved limit; resolution-independent entrainment
-   flux coefficient K_e/Δz = γ·w_e at a sheet interface (fixed Δb,
-   Δz ≫ ℓ_p); and the w_e ≤ A√κ efficiency bound.
-
-4. `horizontal_filter_scale` + `resolvability_filter_scale` + the grid cap
+2. `horizontal_filter_scale` + `resolvability_filter_scale` + the grid cap
    in `mixing_length_lopez_gomez_2020`: single columns are uncapped
    (Δx_h = Inf), extruded spaces return the spectral-element node scale,
    Δ_f = max(Δx_h, Δz) pointwise and as a field over a space, the cap
@@ -137,81 +126,6 @@ import ClimaCore.CommonSpaces
                 @test coeffs.ΔCθ < 0
             end
 
-            @testset "interface_effective_N²" begin
-                c_b = FT(0.4)
-                N², κ = FT(1e-4), FT(0.3)
-                # Exact jump term for a stable gradient
-                for Δz in FT[10, 50, 200]
-                    Δb = N² * Δz
-                    @test CA.interface_effective_N²(N², Δz, κ, c_b) ≈
-                          N² + Δb^2 / (c_b * κ) rtol = 4 * eps(FT)
-                end
-                # Resolved limit: correction relatively O((Δz/l_N)²) ≪ 1
-                l_N = sqrt(c_b * κ) / sqrt(N²)   # ≈ 35 m here
-                Δz = l_N / 100
-                rel = CA.interface_effective_N²(N², Δz, κ, c_b) / N² - 1
-                @test 0 < rel < FT(2e-4)
-                # Unstable and neutral gradients pass through unchanged
-                @test CA.interface_effective_N²(-N², Δz, κ, c_b) == -N²
-                @test CA.interface_effective_N²(FT(0), Δz, κ, c_b) == 0
-                # Monotonically increasing in Δz for stable gradients
-                vals = [
-                    CA.interface_effective_N²(N², dz, κ, c_b) for
-                    dz in FT[5, 25, 100, 400]
-                ]
-                @test issorted(vals)
-                # κ → 0 stays finite (eps guard)
-                @test isfinite(CA.interface_effective_N²(N², FT(50), FT(0), c_b))
-            end
-
-            @testset "interface_entrainment_diffusivity" begin
-                c_b, A = FT(0.4), FT(0.4)
-                κ, ℓ_e = FT(0.3), FT(100)
-                # Inert cases
-                @test CA.interface_entrainment_diffusivity(
-                    FT(1e-4), FT(50), κ, ℓ_e, c_b, FT(0),
-                ) == 0
-                @test CA.interface_entrainment_diffusivity(
-                    FT(-1e-4), FT(50), κ, ℓ_e, c_b, A,
-                ) == 0
-                @test CA.interface_entrainment_diffusivity(
-                    FT(0), FT(50), κ, ℓ_e, c_b, A,
-                ) == 0
-                # Absent turbulence: K_e ≈ 0 (κ enters as κ^{3/2}/Δb via the
-                # Ri_b branch, so the eps-guarded value is negligible)
-                @test CA.interface_entrainment_diffusivity(
-                    FT(1e-4), FT(50), FT(0), ℓ_e, c_b, A,
-                ) < 10 * eps(FT)
-                # Resolved limit: γ ∝ Δz² and Ri_b < 1, so K_e ∝ Δz³
-                N² = FT(1e-4)
-                K(dz) = CA.interface_entrainment_diffusivity(
-                    N², dz, κ, ℓ_e, c_b, A,
-                )
-                @test K(FT(2)) / K(FT(1)) ≈ 8 rtol = FT(0.05)
-                @test K(FT(4)) / K(FT(2)) ≈ 8 rtol = FT(0.05)
-                # Sheet interface: fixed jump Δb, Δz ≫ ℓ_p = c_b κ / Δb.
-                # The entrainment flux coefficient K_e/Δz = γ·w_e approaches a
-                # Δz-independent limit.
-                Δb = FT(0.25)                     # DYCOMS-like jump [m/s²]
-                ℓ_p = c_b * κ / Δb                # ≈ 0.5 m
-                flux_coeff(dz) =
-                    CA.interface_entrainment_diffusivity(
-                        Δb / dz, dz, κ, ℓ_e, c_b, A,
-                    ) / dz
-                f1, f2 = flux_coeff(FT(100)), flux_coeff(FT(200))
-                @test f1 ≈ f2 rtol = FT(0.01)
-                # ... and equals the closure's w_e (γ → 1, Ri_b > 1 here)
-                Ri_b = ℓ_e * Δb / κ
-                w_e = A * sqrt(κ) / max(Ri_b, FT(1))
-                @test f2 ≈ w_e rtol = FT(0.01)
-                # Efficiency bound: w_e ≤ A√κ ⟹ K_e ≤ A√κ·Δz
-                for dz in FT[10, 100, 500], n² in FT[1e-5, 1e-3, 1e-1]
-                    @test CA.interface_entrainment_diffusivity(
-                        n², dz, κ, ℓ_e, c_b, A,
-                    ) <= A * sqrt(κ) * dz * (1 + 4 * eps(FT))
-                end
-            end
-
             @testset "horizontal_filter_scale: space dispatch" begin
                 # Single column: no horizontal discretization — the filter
                 # scale is unbounded (cap inert).
@@ -295,7 +209,7 @@ import ClimaCore.CommonSpaces
                 # cap, where finite, is the binding limit.
                 z, z_sfc = FT(1000), FT(0)
                 ustar, sfc_tke, tke = FT(0.3), FT(0.09), FT(0.11)
-                N²_eff = N²_prod = FT(0)
+                N²_prod = FT(0)
                 obukhov_length = FT(1e8)     # neutral surface layer
                 strain, Pr = FT(1e-8), FT(1)
                 ml(Δ_f) = CA.mixing_length_lopez_gomez_2020(
@@ -307,7 +221,6 @@ import ClimaCore.CommonSpaces
                     z_sfc,
                     Δ_f,
                     sfc_tke,
-                    N²_eff,
                     N²_prod,
                     tke,
                     obukhov_length,

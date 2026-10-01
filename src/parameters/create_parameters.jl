@@ -520,7 +520,6 @@ function TurbulenceConvectionParameters(
         :entr_inv_tau => :entr_inv_tau,
         :entr_detr_limit_inv_tau => :entr_detr_limit_inv_tau,
         :cloud_fraction_param_vec => :cloud_fraction_param_vec,
-        :EDMF_interface_entr_efficiency => :interface_entr_efficiency,
         :EDMF_sfc_mass_flux_ustar_coeff => :sfc_mass_flux_ustar_coeff,
         :EDMF_convective_zi => :convective_zi,
         :EDMF_sfc_mass_flux_cap_fraction => :sfc_mass_flux_cap_fraction,

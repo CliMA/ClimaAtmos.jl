@@ -176,8 +176,6 @@ parameters are in `SGSQuadratureParameters`. `FT` is the float type; `VFT1`, `VF
     detrainment [1/s].
   - `max_area_limiter_power`: Exponent of the maximum-area limiter [-].
   - `cloud_fraction_param_vec`: Data-driven cloud-fraction parameter vector [-].
-  - `interface_entr_efficiency`: Entrainment efficiency `A` in the interfacial
-    entrainment diffusivity `K_e = γ w_e Δz` [-].
   - `sfc_mass_flux_ustar_coeff`: Coefficient `c_u` weighting the
     friction-velocity contribution in the surface mass-flux blend [-].
   - `convective_zi`: Prescribed convective boundary-layer depth `z_i` used in the
@@ -224,7 +222,6 @@ Base.@kwdef struct TurbulenceConvectionParameters{FT, VFT1, VFT2, VTF3} <: ATCP
     max_area_limiter_scale::FT
     max_area_limiter_power::FT
     cloud_fraction_param_vec::VTF3
-    interface_entr_efficiency::FT
     # Surface mass flux closure (`set_edmfx_surface_conditions!`).
     sfc_mass_flux_ustar_coeff::FT
     convective_zi::FT
