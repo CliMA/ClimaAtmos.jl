@@ -578,7 +578,19 @@ are at coarse horizontal resolution, where vertical gradients of opposite sign
 dominate. The implementation evaluates the gradient closure for
 ``(\theta_{li}, q_t)``, converts to a temperature variance through the
 thermodynamic Jacobian ``\partial T / \partial \theta_{li}``, and prescribes the
-``T``–``q_t`` correlation as a constant (`Tq_correlation_coefficient`).
+``T``–``q_t`` correlation as a constant (`Tq_correlation_coefficient`) by default.
+With `tq_correlation_model: diagnosed` the correlation is instead diagnosed from
+the gradient covariance ``\langle T' q_t' \rangle`` (the vertical cross term plus
+the horizontal geometric cross term ``c_g (c_{\Delta x} \Delta x_h)^2 \nabla_h \theta_{li}
+\cdot \nabla_h q_t``), clamped to ``\pm`` `sgs_correlation_max`; this requires the
+horizontal geometric variance term (`sgs_variance_horizontal_scale_factor` ``\neq 0``),
+since the vertical closure alone gives the collinear, singular limit above.
+With `sgs_variance_horizontal_form: isentropic` the geometric term is instead built
+on the gradient of ``q_t`` along the ``\theta_{li}`` surface,
+``|\nabla_h q_t - r \nabla_h \theta_{li}|^2`` with ``r`` the regularised, capped
+``(\partial q_t/\partial z)/(\partial \theta_{li}/\partial z)``
+(`sgs_variance_isentropic_min_dtheta_dz`, `sgs_variance_isentropic_slope_cap`), added
+to ``q_t'q_t'`` only and zeroed where the saturated ``N^2 \le 0``.
 
 The total grid-mean subgrid covariance adds the inter-subdomain spread to this
 intra-subdomain part [Lappen2001, Siebesma2007](@cite),

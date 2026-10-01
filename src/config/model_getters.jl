@@ -1109,6 +1109,62 @@ end
 # Each consolidates the YAML→typed-object translation for one group.
 
 """
+    get_sgs_variance_horizontal_form(parsed_args)
+
+Return the `AbstractSGSHorizontalVarianceForm` selected by the
+`sgs_variance_horizontal_form` config key: `"tq"` → `TQHorizontalVariance()`,
+`"isentropic"` → `IsentropicHorizontalVariance()`.
+"""
+function get_sgs_variance_horizontal_form(parsed_args)
+    return parse_option(
+        get(parsed_args, "sgs_variance_horizontal_form", "tq"),
+        Dict(
+            "tq" => TQHorizontalVariance(),
+            "isentropic" => IsentropicHorizontalVariance(),
+        ),
+        "sgs_variance_horizontal_form",
+    )
+end
+
+"""
+    get_tq_correlation_model(parsed_args)
+
+Return the `AbstractTqCorrelationModel` selected by the `tq_correlation_model` config
+key: `"constant"` → `ConstantTqCorrelation()`, `"diagnosed"` → `DiagnosedTqCorrelation()`.
+"""
+function get_tq_correlation_model(parsed_args)
+    return parse_option(
+        get(parsed_args, "tq_correlation_model", "constant"),
+        Dict(
+            "constant" => ConstantTqCorrelation(),
+            "diagnosed" => DiagnosedTqCorrelation(),
+        ),
+        "tq_correlation_model",
+    )
+end
+
+"""
+    get_sgs_variance_element_filter(parsed_args)
+
+Return the `AbstractSGSElementFilter` selected by the `sgs_variance_element_filter`
+config key: `"none"` → `NoElementFilter()`, `"lumped"` → `ElementLumpedFilter()`.
+"""
+function get_sgs_variance_element_filter(parsed_args)
+    filter = parse_option(
+        get(parsed_args, "sgs_variance_element_filter", "none"),
+        Dict("none" => NoElementFilter(), "lumped" => ElementLumpedFilter()),
+        "sgs_variance_element_filter",
+    )
+    if filter isa ElementLumpedFilter && isnothing(lumpedₕ)
+        error(
+            "sgs_variance_element_filter: lumped requires a ClimaCore with " *
+            "`Operators.LumpedRestriction` (ClimaCore branch zs/imprinting or later).",
+        )
+    end
+    return filter
+end
+
+"""
     AtmosWater(config::AtmosConfig, params, ::Type{FT}) where {FT}
 
 Assemble the `AtmosWater` group from a configuration.
@@ -1124,6 +1180,35 @@ function AtmosWater(config::AtmosConfig, params, ::Type{FT}) where {FT}
     pa = config.parsed_args
     microphysics_model = get_microphysics_model(pa)
     sgs_quadrature = get_sgs_quadrature(pa, params)
+    sgs_variance_horizontal_form = get_sgs_variance_horizontal_form(pa)
+    tq_correlation_model = get_tq_correlation_model(pa)
+    sgs_variance_element_filter = get_sgs_variance_element_filter(pa)
+    if tq_correlation_model isa DiagnosedTqCorrelation &&
+       sgs_variance_horizontal_form isa IsentropicHorizontalVariance
+        error(
+            "tq_correlation_model: diagnosed requires sgs_variance_horizontal_form: tq " *
+            "(the diagnosed correlation is built from the θ and q gradient covariances; " *
+            "the isentropic form carries the geometric variance in q′q′ only).",
+        )
+    end
+    if sgs_variance_horizontal_form isa IsentropicHorizontalVariance &&
+       !isnothing(params) &&
+       !(CAP.sgs_variance_isentropic_min_dtheta_dz(params) > 0)
+        error(
+            "sgs_variance_horizontal_form: isentropic requires " *
+            "sgs_variance_isentropic_min_dtheta_dz > 0 (it regularises " *
+            "(∂q/∂z)/(∂θ_li/∂z) in neutral layers; 0 gives 0/0).",
+        )
+    end
+    if tq_correlation_model isa DiagnosedTqCorrelation &&
+       !isnothing(params) &&
+       iszero(CAP.sgs_variance_horizontal_scale_factor(params))
+        error(
+            "tq_correlation_model: diagnosed requires the horizontal geometric variance " *
+            "term (sgs_variance_horizontal_scale_factor ≠ 0): with the vertical-gradient " *
+            "closure alone T′q′² = T′T′ q′q′ and the diagnosed correlation is identically ±1.",
+        )
+    end
 
     if microphysics_model isa DryModel
         @warn "Running simulations without any moisture present."
@@ -1159,6 +1244,9 @@ function AtmosWater(config::AtmosConfig, params, ::Type{FT}) where {FT}
                                              Explicit(),
         tracer_nonnegativity_method = get_tracer_nonnegativity_method(pa),
         sgs_quadrature,
+        sgs_variance_horizontal_form,
+        tq_correlation_model,
+        sgs_variance_element_filter,
         terminal_velocity_liquid,
         terminal_velocity_ice,
         terminal_velocity_rain,

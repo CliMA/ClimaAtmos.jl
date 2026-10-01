@@ -73,6 +73,11 @@ const divₕ = Operators.Divergence()
 const wdivₕ = Operators.Divergence{Operators.WeakForm}()
 const split_divₕ = Operators.SplitDivergence()
 const gradₕ = Operators.Gradient()
+# Lumped GLL{2} restriction within each element (`sgs_variance_element_filter: lumped`);
+# `nothing` on a ClimaCore without the operator (the option then errors at configuration).
+const lumpedₕ =
+    isdefined(Operators, :LumpedRestriction) ? Operators.LumpedRestriction() :
+    nothing
 const wgradₕ = Operators.Gradient{Operators.WeakForm}()
 const curlₕ = Operators.Curl()
 const wcurlₕ = Operators.Curl{Operators.WeakForm}()
