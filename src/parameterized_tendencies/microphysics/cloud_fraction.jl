@@ -272,20 +272,19 @@ end
 """
     hgrad_invariant!(ᶜinv, ᶜψ, p)
 
-Write the horizontal-gradient invariant `|∇_h ψ|²` of the center field `ᶜψ` into `ᶜinv`.
-The gradient vector is first made continuous across element boundaries by a weighted DSS.
-On a space that needs no DSS (single column) the nodal gradient is used.
+Write the element-scale horizontal-gradient invariant `|∇_h ψ|²` of the center field `ᶜψ`
+into `ᶜinv`: the invariant of the nodal spectral-element gradient, replaced within each
+element by its lumped GLL{2} restriction (`lumpedₕ`, ClimaCore's `LumpedRestriction`), in
+one fused broadcast. The nodal invariant is systematically too large at the element-boundary
+nodes and too small inside once `ψ` has structure near the element scale; the restriction removes
+that node-position bias while conserving each element's WJ-weighted integral of the invariant.
+One weighted DSS then makes the result continuous across elements. On a space that
+needs no DSS (single column) the restriction is a no-op and the nodal invariant is used.
 """
 function hgrad_invariant!(ᶜinv, ᶜψ, p)
-    buf = p.scratch.ᶜC12_dss_buffer
-    if buf !== nothing
-        ᶜg = p.scratch.ᶜtemp_C12
-        @. ᶜg = gradₕ(ᶜψ)
-        Spaces.weighted_dss!(ᶜg, buf)
-        @. ᶜinv = norm_sqr(ᶜg)
-    else
-        @. ᶜinv = norm_sqr(gradₕ(ᶜψ))
-    end
+    @. ᶜinv = lumpedₕ(norm_sqr(gradₕ(ᶜψ)))
+    buf = p.scratch.ᶜscalar_dss_buffer
+    buf === nothing || Spaces.weighted_dss!(ᶜinv, buf)
     return nothing
 end
 

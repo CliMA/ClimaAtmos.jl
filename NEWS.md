@@ -3,6 +3,12 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- ![][badge-🔥behavioralΔ] The horizontal-gradient invariants of the geometric SGS
+  variance term (`hgrad_invariant!`) and the TKE shear production from horizontal
+  gradients now use ClimaCore's `LumpedRestriction`: within each element the
+  invariant of the nodal spectral-element gradient is replaced by its lumped GLL{2}
+  restriction, which removes the systematic excess at element-boundary nodes
+  while conserving each element's integral of the invariant.
 - ![][badge-🔥behavioralΔ] Add empirical mixing length `l_TKE = l_0·sqrt(x)·(1+x)·exp(−x)`,
   `x = TKE/(l_inf/tau_eps)^2`, to the mixing-length closure.
 - ![][badge-🔥behavioralΔ] Update to ClimaParams 1.1.16, which provides the
