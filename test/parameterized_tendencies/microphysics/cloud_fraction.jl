@@ -80,6 +80,8 @@ floor_nt(
                     @test cf_th ≈ min(one(FT), sqrt(q_c / σ_aug / sqrt(FT(3)))) rtol = 1e-5
                     @test cf_th > ref
                     @test CA._compute_cloud_fraction(FT(1e-2), FT(1), μ, σ_S, q_sat, floor, th) == one(FT)
+                    # The 5-field constructor defaults the ramp width to 0.
+                    @test CA.CloudFractionPhaseParams(α, α, FT(0), FT(0)).ΔT_ramp == zero(FT)
                     # The blend is linear in β.
                     half = CA.CloudFractionPhaseParams(α, α, FT(0.5), FT(0.5))
                     @test CA._compute_cloud_fraction(q_c, FT(1), μ, σ_S, q_sat, floor, half) ≈

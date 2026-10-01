@@ -293,6 +293,9 @@ not yet define.
     condensate; 0 is the truncated Gaussian [-].
   - `cloud_fraction_tophat_weight_ice`: Weight `β_ice ∈ [0, 1]` of the
     top-hat PDF in the cover closure for cloud ice [-].
+  - `cloud_fraction_phase_temperature_width`: Width of the temperature ramp
+    above `T_icenuc` over which the cover closure blends from its ice to its
+    liquid parameters; 0 (default) uses the condensate liquid fraction instead [K].
 """
 Base.@kwdef struct SGSQuadratureParameters{FT} <: ASQP
     diagnostic_covariance_coeff::FT
@@ -314,6 +317,7 @@ Base.@kwdef struct SGSQuadratureParameters{FT} <: ASQP
     cloud_fraction_steepness_scale_ice::FT
     cloud_fraction_tophat_weight_liquid::FT
     cloud_fraction_tophat_weight_ice::FT
+    cloud_fraction_phase_temperature_width::FT
 end
 
 """

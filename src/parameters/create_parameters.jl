@@ -600,6 +600,7 @@ function SGSQuadratureParameters(
         cloud_fraction_steepness_scale_ice = parameters.cloud_fraction_steepness_scale,
         cloud_fraction_tophat_weight_liquid = FT(0),
         cloud_fraction_tophat_weight_ice = FT(0),
+        cloud_fraction_phase_temperature_width = FT(0),
     )
     provisional_present = filter(collect(keys(provisional_defaults))) do name
         haskey(toml_dict.data, string(name))

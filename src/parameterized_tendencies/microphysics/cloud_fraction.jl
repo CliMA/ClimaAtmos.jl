@@ -822,12 +822,34 @@ materialized to a Field.
         thermo_params, ρ, T, q_tot, sgs_quad, T′T′, q′q′, corr_Tq,
     )
     q_sat = TD.q_vap_saturation(thermo_params, T, ρ, q_liq, q_ice)
-    # Liquid fraction of the cloud condensate (the thermodynamic ramp where
-    # there is none), the same phase weight the microphysics reconstruction uses.
-    λ_ph = TD.liquid_fraction(thermo_params, T, q_liq, q_ice)
+    λ_ph = cloud_fraction_phase_weight(thermo_params, T, q_liq, q_ice, phase)
     return _compute_cloud_fraction(
         q_liq + q_ice, λ_ph, moments.mu_S, moments.sigma_S, q_sat, floor, phase,
     )
+end
+
+"""
+    cloud_fraction_phase_weight(thermo_params, T, q_liq, q_ice, phase)
+
+Liquid weight `λ_ph ∈ [0, 1]` of the phase-dependent cover closure. With
+`phase.ΔT_ramp ≤ 0` it is the liquid fraction of the cloud condensate (the
+sharp thermodynamic ramp at freezing where there is none), the same phase
+weight the microphysics reconstruction uses. With `ΔT_ramp > 0` it is a
+temperature ramp from the homogeneous-nucleation temperature,
+
+    λ_ph = clamp((T − T_icenuc) / ΔT_ramp, 0, 1),
+
+so that the "ice" cover parameters apply fully only in the cold-cirrus regime
+(T ≤ T_icenuc, homogeneous freezing) and fade out over `ΔT_ramp` toward the
+mixed-phase layer; `ΔT_ramp = T_freeze − T_icenuc` (40 K) recovers the
+thermodynamic liquid-fraction ramp.
+"""
+@inline function cloud_fraction_phase_weight(thermo_params, T, q_liq, q_ice, phase)
+    FT = typeof(T)
+    ΔT = phase.ΔT_ramp
+    λ_c = TD.liquid_fraction(thermo_params, T, q_liq, q_ice)
+    λ_T = clamp((T - TD.Parameters.T_icenuc(thermo_params)) / max(ΔT, eps(FT)), zero(FT), one(FT))
+    return ifelse(ΔT > zero(FT), λ_T, λ_c)
 end
 
 """
@@ -873,14 +895,19 @@ Phase-dependent cover-closure parameters for `_compute_cloud_fraction`,
 bundled into one isbits broadcast scalar: the width scales `α_liq`, `α_ice`
 (= 1 / `cloud_fraction_steepness_scale_{liquid,ice}`) of the cover
 inversion and the top-hat PDF weights `β_liq`, `β_ice`
-(`cloud_fraction_tophat_weight_{liquid,ice}`).
+(`cloud_fraction_tophat_weight_{liquid,ice}`), and the temperature-ramp width
+`ΔT_ramp` of the phase weight (`cloud_fraction_phase_temperature_width`; 0
+selects the condensate liquid fraction, see `cloud_fraction_phase_weight`).
 """
 Base.@kwdef struct CloudFractionPhaseParams{FT}
     α_liq::FT
     α_ice::FT
     β_liq::FT
     β_ice::FT
+    ΔT_ramp::FT = zero(FT)
 end
+CloudFractionPhaseParams(α_liq::FT, α_ice::FT, β_liq::FT, β_ice::FT) where {FT} =
+    CloudFractionPhaseParams{FT}(α_liq, α_ice, β_liq, β_ice, zero(FT))
 Base.broadcastable(x::CloudFractionPhaseParams) = tuple(x)
 
 """
@@ -895,6 +922,7 @@ cloud_fraction_phase_params(params) = CloudFractionPhaseParams(;
     α_ice = sgs_variance_fidelity(CAP.cloud_fraction_steepness_scale_ice(params)),
     β_liq = CAP.cloud_fraction_tophat_weight_liquid(params),
     β_ice = CAP.cloud_fraction_tophat_weight_ice(params),
+    ΔT_ramp = CAP.cloud_fraction_phase_temperature_width(params),
 )
 
 """
@@ -1034,7 +1062,7 @@ NVTX.@annotate function set_sgs_moments_and_cloud_fraction!(Y, p)
     # the Picard iterate with a value consistent with the final SGS moments.
     @. p.precomputed.ᶜcloud_fraction = _compute_cloud_fraction(
         ᶜq_lcl_cf + ᶜq_icl_cf,
-        TD.liquid_fraction(thermo_params, ᶜT_mean, ᶜq_lcl_cf, ᶜq_icl_cf),
+        cloud_fraction_phase_weight(thermo_params, ᶜT_mean, ᶜq_lcl_cf, ᶜq_icl_cf, $(phase)),
         # μ_S recomputed analytically, matching `_sgs_saturation_moments`
         # (condensate-free q_sat, consistent with the linear excess S).
         ᶜq_mean - TD.q_vap_saturation(thermo_params, ᶜT_mean, ᶜρ_env),
