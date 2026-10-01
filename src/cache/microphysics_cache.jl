@@ -254,7 +254,8 @@ function set_precipitation_velocities!(
             ᶜw,
             ᶜρχ,
         )
-        @. ᶜimplied_env_mass_flux += MatrixFields.get_field(Y.c, get_ρχ_name(χ_name)) * ᶜw
+        ᶜρχ_gs = MatrixFields.get_field(Y.c, get_ρχ_name(χ_name))
+        @. ᶜimplied_env_mass_flux += ᶜρχ_gs * ᶜw
         # contribution of env sedimentation to htot
         @. ᶜρwₕhₜ += ᶜimplied_env_mass_flux * (e_int_func(thp, ᶜT⁰) + ᶜΦ)
     end

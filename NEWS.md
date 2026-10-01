@@ -3,6 +3,13 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- ![][badge-🐛bugfix] `get_ρχ_name` now builds the density-weighted `FieldName`
+  at compile time (`@generated`, like `specific_tracer_name`), and the 1M
+  prognostic-EDMF sedimentation cache no longer calls it inside a broadcast.
+  The previous recursive implementation constructed a `Symbol` at runtime and
+  relied on the compiler constant-folding it; when that folding does not happen
+  (as reported for Julia 1.10 in #4809) the GPU kernel fails to compile with
+  `unsupported call through a literal pointer (call to ijl_symbol_n)`.
 - ![][badge-🔥behavioralΔ] Add empirical mixing length `l_TKE = l_0·sqrt(x)·(1+x)·exp(−x)`,
   `x = TKE/(l_inf/tau_eps)^2`, to the mixing-length closure.
 - ![][badge-🔥behavioralΔ] Update to ClimaParams 1.1.16, which provides the

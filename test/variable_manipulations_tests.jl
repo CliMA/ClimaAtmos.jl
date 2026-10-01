@@ -87,6 +87,12 @@ end
     # Test get_ρχ_name: X -> ρX
     @test CA.get_ρχ_name(@name(q_tot)) == @name(ρq_tot)
     @test CA.get_ρχ_name(@name(h_tot)) == @name(ρh_tot)
+    @test CA.get_ρχ_name(@name(sgsʲs.:(1).q_rai)) == @name(sgsʲs.:(1).ρq_rai)
+    # The name must be a compile-time constant so that it can be used inside
+    # GPU kernels (no runtime `Symbol` construction).
+    @test @inferred(CA.get_ρχ_name(@name(q_rai))) == @name(ρq_rai)
+    @test @inferred(CA.get_ρχ_name(@name(sgsʲs.:(1).q_rai))) ==
+          @name(sgsʲs.:(1).ρq_rai)
 
     # Test get_χʲ_name_from_ρχ_name: ρX -> sgsʲs.:(1).X
     # Note: Requires MatrixFields internal knowledge

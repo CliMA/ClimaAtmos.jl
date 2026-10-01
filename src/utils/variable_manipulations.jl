@@ -435,15 +435,17 @@ This is the pairing that lets an SGS tracer `χ` in `Y.c.sgsʲs.:(j)` find its
 grid-mean counterpart `ρχ` in `Y.c`; see the Passive Tracers page of the
 documentation.
 """
-function get_ρχ_name(χ_name)
-    parent_name = MatrixFields.FieldName(MatrixFields.extract_first(χ_name))
-    child_name = MatrixFields.drop_first(χ_name)
-    ρχ_name =
-        (child_name == MatrixFields.@name()) ?
-        MatrixFields.FieldName(Symbol(:ρ, MatrixFields.extract_first(χ_name))) :
-        MatrixFields.append_internal_name(parent_name, get_ρχ_name(child_name))
-
-    return ρχ_name
+@generated function get_ρχ_name(
+    ::MatrixFields.FieldName{χ_name_chain},
+) where {χ_name_chain}
+    # Build the new name at compile time. A runtime `Symbol(:ρ, χ)` is a call
+    # into the Julia runtime (`jl_symbol_n`), which cannot be compiled into a
+    # GPU kernel, so this must not depend on the compiler constant-folding the
+    # previous recursive implementation (which it did not always do; see
+    # CliMA/ClimaAtmos.jl#4809).
+    ρχ_name_chain =
+        (Base.front(χ_name_chain)..., Symbol(:ρ, last(χ_name_chain)))
+    return :(MatrixFields.FieldName{$ρχ_name_chain}())
 end
 
 """
