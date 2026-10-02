@@ -116,7 +116,7 @@ Use this pattern when adding a new GPU test entry point so all packages stay con
 
 - **Implicit host transfer**: `sum(field)` on a GPU field is fine; `field[1]` is not. The first goes through a GPU reduction; the second triggers `allowscalar` and either errors (recommended) or silently transfers.
 - **Random number streams under MPI**: `rand()` is not synchronized across ranks. For an independent per-rank stream, seed an explicit RNG with a rank-dependent seed (`rng = Random.Xoshiro(base_seed + ClimaComms.mypid(context))`); for cross-rank-synchronized randomness, generate on root and broadcast (`ClimaComms.bcast`).
-- **`println` inside kernels**: not GPU-compatible and not MPI-safe. See [gpu_performance.md](../performance/gpu_performance.md) §7 for the static-error rule.
+- **`println` inside kernels**: not GPU-compatible and not MPI-safe. See [gpu_performance.md §7](../performance/gpu_performance.md) for the static-error rule.
 - **Saving to a shared filesystem from every rank**: causes file lock contention. Use root-only IO or rank-suffixed filenames.
 
 ## Self-correction
