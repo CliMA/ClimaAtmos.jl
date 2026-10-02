@@ -14,6 +14,12 @@ Unit tests for the pointwise closures in eddy_diffusion_closures.jl:
    Δ_f = max(Δx_h, Δz) pointwise and as a field over a space, the cap
    binds exactly at Δ_f when the physical scales exceed it, and the mixing
    length is monotonically nondecreasing in Δ_f.
+
+3. `harmonic_mean` — the pointwise Van Leer slope limiter used by
+   `ᶜVanLeer_gradient!`: identity on equal same-sign arguments, zero on
+   opposite signs / exact zeros, symmetry, bounds relative to arithmetic
+   mean, and (for Float32) no underflow on same-sign arguments at the
+   edge of the subnormal range.
 =#
 
 using Test
@@ -124,6 +130,53 @@ import ClimaCore.CommonSpaces
                 # condensation/evaporation (ΔCθ < 0).
                 @test coeffs.ΔCq > 0
                 @test coeffs.ΔCθ < 0
+            end
+
+            @testset "harmonic_mean (Van Leer slope limiter)" begin
+                hm = CA.harmonic_mean
+                # Identity on equal, same-sign arguments.
+                for a in FT[1e-6, 1e-3, 1.0, 1e3]
+                    @test hm(a, a) == a
+                    @test hm(-a, -a) == -a
+                end
+                # Symmetry.
+                for (a, b) in [
+                    (FT(0.4), FT(1.6)),
+                    (FT(3.0), FT(2.0)),
+                    (FT(-0.5), FT(-0.1)),
+                ]
+                    @test hm(a, b) == hm(b, a)
+                end
+                # Opposite signs and either side exactly zero → zero.
+                for (a, b) in [
+                    (FT(1.0), FT(-1.0)),
+                    (FT(2.5), FT(-0.1)),
+                    (FT(-3.0), FT(4.0)),
+                    (FT(0.0), FT(1.0)),
+                    (FT(1.0), FT(0.0)),
+                    (FT(0.0), FT(0.0)),
+                ]
+                    @test hm(a, b) == 0
+                end
+                # Classic bound: |hm(a,b)| ≤ |arithmetic mean| when same sign.
+                for (a, b) in [
+                    (FT(0.5), FT(1.5)),
+                    (FT(2.0), FT(3.0)),
+                    (FT(-0.4), FT(-2.0)),
+                ]
+                    @test abs(hm(a, b)) <= abs((a + b) / 2) + 4 * eps(FT)
+                end
+                # Known value: hm(1, 3) = 2·1·3/(1+3) = 1.5.
+                @test hm(FT(1), FT(3)) ≈ FT(1.5) rtol = 4 * eps(FT)
+                # FP32 small-argument safety: with `2*a*b/(a+b)`, equal
+                # arguments at the edge of subnormals would underflow
+                # through `a*b` before dividing. The `2*a*(b/denom)`
+                # formulation returns `a` even there.
+                if FT === Float32
+                    tiny = FT(1e-22)   # tiny² = 1e-44 ≪ nextfloat(0f0)
+                    @test hm(tiny, tiny) ≈ tiny rtol = 4 * eps(FT)
+                    @test hm(-tiny, -tiny) ≈ -tiny rtol = 4 * eps(FT)
+                end
             end
 
             @testset "horizontal_filter_scale: space dispatch" begin
