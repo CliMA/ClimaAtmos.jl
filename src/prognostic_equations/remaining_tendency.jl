@@ -180,6 +180,7 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
     @. Yₜ.c.uₕ += edmf_cor_tend_uₕ
 
     external_forcing_tendency!(Yₜ, Y, p, t, p.atmos.external_forcing)
+    ml_correction_tendency!(Yₜ, Y, p, t, p.atmos.ml_correction)
 
     if p.atmos.diff_mode == Explicit()
         vertical_diffusion_boundary_layer_tendency!(

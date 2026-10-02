@@ -136,6 +136,14 @@ include(
         "orographic_gravity_wave.jl",
     ),
 )
+include(joinpath("parameterized_tendencies", "ml_correction", "column_net.jl"))
+include(
+    joinpath(
+        "parameterized_tendencies",
+        "ml_correction",
+        "ml_tendency_correction.jl",
+    ),
+)
 include(joinpath("prognostic_equations", "hyperdiffusion.jl"))
 include(joinpath("prognostic_equations", "gm_sgs_closures.jl"))
 include(joinpath("prognostic_equations", "scm_coriolis.jl"))

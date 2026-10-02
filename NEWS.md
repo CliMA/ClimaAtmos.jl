@@ -3,25 +3,22 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
-
-0.42.13
--------
-- ![][badge-🔥behavioralΔ] The horizontal-gradient invariants of the geometric SGS
-  variance term (`hgrad_invariant!`) and the TKE shear production from horizontal
-  gradients now use ClimaCore's `LumpedRestriction`: within each element the
-  invariant of the nodal spectral-element gradient is replaced by its lumped GLL{2}
-  restriction, which removes the systematic excess at element-boundary nodes
-  while conserving each element's integral of the invariant.
-- ![][badge-🔥behavioralΔ] Add empirical mixing length `l_TKE = l_0·sqrt(x)·(1+x)·exp(−x)`,
-  `x = TKE/(l_inf/tau_eps)^2`, to the mixing-length closure.
+- ![][badge-✨feature/enhancement] Added an online ML tendency correction
+  (`MLTendencyCorrection`): an offline-trained column network, exported to
+  NetCDF and evaluated in pure Julia on the root process (CPU or GPU), predicts
+  the CliMA − ERA5 temperature and humidity drift rate on ERA5 pressure levels
+  from the instantaneous state, and `-gain` times the prediction is added as a
+  tendency. It is enabled by the `ml_correction` config key (the network path)
+  and configured by `ml_correction_gain`, `ml_correction_dt`,
+  `ml_correction_variables`, `ml_correction_t_cap`, `ml_correction_q_cap`,
+  `ml_correction_p_full`, `ml_correction_p_zero` (a pressure taper that confines
+  it to the troposphere and lower stratosphere, 100 → 50 hPa by default),
+  `ml_correction_smoothing`, `ml_correction_start`, and `ml_correction_ramp`;
+  it is off by default. See the
+  "ML Tendency Correction" documentation page. `AtmosModel` gains an
+  `ml_correction` field and `AtmosCache` an `ml_correction` field (after
+  `tracers`), so code that constructs `AtmosCache` positionally must pass it.
 - ![][badge-🔥behavioralΔ] The `tas` diagnostic (near-surface / 2 m air temperature, CMIP `tas`) is now diagnosed at 2 m above the surface using Monin-Obukhov similarity theory, interpolating the dry static energy between the surface temperature and the lowest model level with the heat similarity profile. Previously `tas` returned the temperature at the bottom cell center. The MOST interpolation is used both when the surface flux scheme is `MoninObukhov` and in the coupler-handoff case (`flux_scheme === nothing`), where the coupler supplies the surface temperature and Monin-Obukhov length. The thermal roughness length `z0b` is now stored in `sfc_conditions` (defaulted in the coupler case, overwritable by the coupler). Only schemes without a roughness length (e.g. `ExchangeCoefficients`) still fall back to the lowest model level temperature. See `SurfaceConditions.diagnostic_temperature_at_height`.
-- ![][badge-🔥behavioralΔ] Update to ClimaParams 1.1.16, which provides the
-  SGS-quadrature parameters and changes the defaults.
-  The SGS covariance, quadrature and cloud-fraction
-  closure parameters move from `TurbulenceConvectionParameters` to a new
-  `SGSQuadratureParameters` set, held as `sgs_quadrature_params`. `CAP.x(params)`
-  accessors and TOML names are unchanged; code that reads these fields from
-  `turbconv_params` must read them from `sgs_quadrature_params`.
 - ![][badge-✨feature/enhancement] Added the Beljaars (2004) turbulent orographic
   form drag (TOFD) as a low-level term of the orographic gravity-wave scheme,
   following the IFS / SURFEX `sso_beljaars04` formulation
@@ -46,6 +43,24 @@ main
   the PBL at every face, and the weight sum divided instead of multiplying, so
   the blocked layer was too shallow and the tendency was unphysically large
   (saturating the `±3e-3 m/s²` clamp over topography).
+
+0.42.13
+-------
+- ![][badge-🔥behavioralΔ] The horizontal-gradient invariants of the geometric SGS
+  variance term (`hgrad_invariant!`) and the TKE shear production from horizontal
+  gradients now use ClimaCore's `LumpedRestriction`: within each element the
+  invariant of the nodal spectral-element gradient is replaced by its lumped GLL{2}
+  restriction, which removes the systematic excess at element-boundary nodes
+  while conserving each element's integral of the invariant.
+- ![][badge-🔥behavioralΔ] Add empirical mixing length `l_TKE = l_0·sqrt(x)·(1+x)·exp(−x)`,
+  `x = TKE/(l_inf/tau_eps)^2`, to the mixing-length closure.
+- ![][badge-🔥behavioralΔ] Update to ClimaParams 1.1.16, which provides the
+  SGS-quadrature parameters and changes the defaults.
+  The SGS covariance, quadrature and cloud-fraction
+  closure parameters move from `TurbulenceConvectionParameters` to a new
+  `SGSQuadratureParameters` set, held as `sgs_quadrature_params`. `CAP.x(params)`
+  accessors and TOML names are unchanged; code that reads these fields from
+  `turbconv_params` must read them from `sgs_quadrature_params`.
 - ![][badge-✨feature/enhancement] Two parameters,
   `sgs_liquid_uniform_fraction` and `sgs_ice_uniform_fraction`,
   blend the SGS-quadrature condensate reconstruction of the 1-moment

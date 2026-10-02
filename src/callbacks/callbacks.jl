@@ -143,6 +143,25 @@ NVTX.@annotate function ogw_model_callback!(integrator)
     return nothing
 end
 
+"""
+    ml_correction_callback!(integrator)
+
+Recompute the online ML tendency correction from the current state.
+
+Mutates the correction fields in `integrator.p.ml_correction` and returns
+`nothing`. Installed by the `MLTendencyCorrection` method of
+`default_model_callbacks` on the `ml_correction_dt` cadence.
+"""
+NVTX.@annotate function ml_correction_callback!(integrator)
+    ml_correction_update!(
+        integrator.u,
+        integrator.p,
+        integrator.t,
+        integrator.p.atmos.ml_correction,
+    )
+    return nothing
+end
+
 #Uniform insolation, magnitudes from Wing et al. (2018)
 #Note that the TOA downward shortwave fluxes won't be the same as the values in the paper if add_isothermal_boundary_layer is true
 """

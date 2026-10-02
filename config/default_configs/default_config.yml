@@ -358,6 +358,39 @@ dt_nogw:
 dt_ogw:
   help: "Time between calling orographic gravity wave update"
   value: "1800secs"
+ml_correction:
+  help: "Path of an exported column tendency-correction network (NetCDF, from `tendency_corr/export_julia.py`). Enables the online ML correction of temperature and humidity tendencies; `~` (default) disables it. Requires a moist model."
+  value: ~
+ml_correction_gain:
+  help: "Gain of the ML correction: the applied tendency is `-gain` times the predicted CliMA - ERA5 drift rate"
+  value: 0.5
+ml_correction_dt:
+  help: "Time between recomputing the ML correction; the correction is held fixed in between"
+  value: "1hours"
+ml_correction_variables:
+  help: "Variables corrected by the ML correction [`t` (default), `q`, `tq`]"
+  value: "t"
+ml_correction_t_cap:
+  help: "Maximum magnitude of the ML temperature correction, after the gain [K per hour]"
+  value: 0.5
+ml_correction_q_cap:
+  help: "Maximum magnitude of the ML total-specific-humidity correction, after the gain [kg/kg per hour]"
+  value: 2.0e-4
+ml_correction_p_full:
+  help: "Pressure at and above which the ML correction acts at full strength [Pa]; it tapers with a half cosine to zero at `ml_correction_p_zero`, which keeps it out of the upper stratosphere and the sponge layer"
+  value: 10000.0
+ml_correction_p_zero:
+  help: "Pressure at and below which the ML correction vanishes [Pa]"
+  value: 5000.0
+ml_correction_smoothing:
+  help: "Standard deviation of the masked Gaussian smoothing of the ML prediction on the network's 1-degree grid [grid cells]; 0 (default) disables it"
+  value: 0.0
+ml_correction_start:
+  help: "Simulation time at which the ML correction switches on"
+  value: "0secs"
+ml_correction_ramp:
+  help: "Duration of the linear ramp of the ML correction from 0 to full strength after `ml_correction_start`; `0secs` (default) switches it on at once"
+  value: "0secs"
 nh_poly:
   help: "Horizontal polynomial degree. Note: The number of quadrature points in 1D within each horizontal element is then Nq = <--nh_poly> + 1"
   value: 3

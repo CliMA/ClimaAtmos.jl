@@ -1429,3 +1429,51 @@ function COSPModel(config::AtmosConfig)
         overlap = Val(overlap),
     )
 end
+
+"""
+    get_ml_correction_model(parsed_args, ::Type{FT}) where {FT}
+
+Build the online ML tendency correction selected by the `ml_correction` config
+key, the path of an exported network file.
+
+Returns `nothing` when the key is unset (the default), and otherwise an
+[`MLTendencyCorrection`](@ref) configured by the `ml_correction_*` keys:
+`ml_correction_gain`; `ml_correction_dt`, `ml_correction_start`, and
+`ml_correction_ramp` (time strings); `ml_correction_variables`, one of `"t"`,
+`"q"`, or `"tq"`; `ml_correction_t_cap` [K per hour] and `ml_correction_q_cap`
+[kg/kg per hour]; `ml_correction_smoothing` [grid cells]; and
+`ml_correction_p_full` and `ml_correction_p_zero` [Pa], the pressures between
+which the correction tapers from full strength to zero.
+"""
+function get_ml_correction_model(parsed_args, ::Type{FT}) where {FT}
+    path = parsed_args["ml_correction"]
+    isnothing(path) && return nothing
+    isfile(path) || error("ml_correction file `$path` does not exist")
+
+    variables = string(parsed_args["ml_correction_variables"])
+    variables in ("t", "q", "tq") || error(
+        "ml_correction_variables must be `t`, `q`, or `tq`, got `$variables`",
+    )
+    refresh_period = time_to_seconds(parsed_args["ml_correction_dt"])
+    isfinite(refresh_period) && refresh_period > 0 ||
+        error("ml_correction_dt must be a positive, finite time")
+    p_full = FT(parsed_args["ml_correction_p_full"])
+    p_zero = FT(parsed_args["ml_correction_p_zero"])
+    p_full > p_zero >= 0 ||
+        error("ml_correction_p_full must exceed ml_correction_p_zero ≥ 0")
+
+    return MLTendencyCorrection{FT, String}(
+        path,
+        FT(parsed_args["ml_correction_gain"]),
+        FT(refresh_period),
+        occursin('t', variables),
+        occursin('q', variables),
+        FT(parsed_args["ml_correction_t_cap"]) / FT(3600),
+        FT(parsed_args["ml_correction_q_cap"]) / FT(3600),
+        FT(parsed_args["ml_correction_smoothing"]),
+        p_full,
+        p_zero,
+        FT(time_to_seconds(parsed_args["ml_correction_start"])),
+        FT(time_to_seconds(parsed_args["ml_correction_ramp"])),
+    )
+end

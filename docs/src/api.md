@@ -321,6 +321,19 @@ ClimaAtmos.COSP.COSPCloudSatReflectivity.cloudsat_reflectivity_subcolumn!
 ClimaAtmos.COSP.COSPCloudSatCFAD.accumulate_cloudsat_cfad!
 ```
 
+### ML tendency correction
+
+Described in [ML Tendency Correction](ml_tendency_correction.md).
+
+```@docs
+ClimaAtmos.MLTendencyCorrection
+ClimaAtmos.ml_correction_update!
+ClimaAtmos.ml_correction_on_grid
+ClimaAtmos.ColumnNet
+ClimaAtmos.load_column_net
+ClimaAtmos.column_net_predict
+```
+
 ## Numerics
 
 ```@docs

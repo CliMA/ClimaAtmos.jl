@@ -71,6 +71,7 @@ function get_atmos(config::AtmosConfig, params, grid; setup_type)
         numerics = AtmosNumerics(config, FT),
         chemistry = AtmosChem(config),
         cosp = COSPModel(config),
+        ml_correction = get_ml_correction_model(pa, FT),
         vertical_diffusion,
         disable_surface_flux_tendency = pa["disable_surface_flux_tendency"],
     )
