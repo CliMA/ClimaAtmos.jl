@@ -67,11 +67,28 @@ floor_nt(
                     # Pure phases select their own width scale.
                     α_i = FT(0.5)
                     ph = CA.CloudFractionPhaseParams(α, α_i, FT(0), FT(0))
-                    @test CA._compute_cloud_fraction(q_c, FT(1), μ, σ_S, q_sat, floor, ph) === ref
-                    @test CA._compute_cloud_fraction(q_c, FT(0), μ, σ_S, q_sat, floor, ph) ===
+                    @test CA._compute_cloud_fraction(
+                        q_c,
+                        FT(1),
+                        μ,
+                        σ_S,
+                        q_sat,
+                        floor,
+                        ph,
+                    ) === ref
+                    @test CA._compute_cloud_fraction(
+                        q_c,
+                        FT(0),
+                        μ,
+                        σ_S,
+                        q_sat,
+                        floor,
+                        ph,
+                    ) ===
                           CA._compute_cloud_fraction(q_c, μ, σ_S, q_sat, α_i, floor)
                     # A smaller width gives more cover at fixed condensate.
-                    @test CA._compute_cloud_fraction(q_c, FT(0), μ, σ_S, q_sat, floor, ph) > ref
+                    @test CA._compute_cloud_fraction(q_c, FT(0), μ, σ_S, q_sat, floor, ph) >
+                          ref
                     # Top-hat: more cover than the Gaussian tail at low CF, equals
                     # sqrt(C/√3) with the same augmented width, bounded by 1.
                     th = CA.CloudFractionPhaseParams(α, α, FT(1), FT(1))
@@ -79,21 +96,64 @@ floor_nt(
                     σ_aug = α * sqrt(σ_S^2 + (floor.ε_rel * q_sat)^2 + floor.σ_abs^2)
                     @test cf_th ≈ min(one(FT), sqrt(q_c / σ_aug / sqrt(FT(3)))) rtol = 1e-5
                     @test cf_th > ref
-                    @test CA._compute_cloud_fraction(FT(1e-2), FT(1), μ, σ_S, q_sat, floor, th) == one(FT)
+                    @test CA._compute_cloud_fraction(
+                        FT(1e-2),
+                        FT(1),
+                        μ,
+                        σ_S,
+                        q_sat,
+                        floor,
+                        th,
+                    ) == one(FT)
                     # The 5-field constructor defaults the ramp width to 0.
-                    @test CA.CloudFractionPhaseParams(α, α, FT(0), FT(0)).ΔT_ramp == zero(FT)
+                    @test CA.CloudFractionPhaseParams(α, α, FT(0), FT(0)).ΔT_ramp ==
+                          zero(FT)
                     # Minimum in-cloud condensate cap: cover ≤ q_c / q_min,
                     # phase-blended, inactive at 0.
                     cap = CA.CloudFractionPhaseParams{FT}(α, α, 0, 0, 0, FT(1e-4), FT(4e-4))
-                    @test CA._compute_cloud_fraction(q_c, FT(1), μ, σ_S, q_sat, floor, cap) ≈
+                    @test CA._compute_cloud_fraction(
+                        q_c,
+                        FT(1),
+                        μ,
+                        σ_S,
+                        q_sat,
+                        floor,
+                        cap,
+                    ) ≈
                           min(ref, q_c / FT(1e-4)) rtol = 1e-6
-                    @test CA._compute_cloud_fraction(q_c, FT(0), μ, σ_S, q_sat, floor, cap) ≈
+                    @test CA._compute_cloud_fraction(
+                        q_c,
+                        FT(0),
+                        μ,
+                        σ_S,
+                        q_sat,
+                        floor,
+                        cap,
+                    ) ≈
                           min(ref, q_c / FT(4e-4)) rtol = 1e-6
-                    @test CA.cloud_fraction_min_condensate_cap(FT(0.3), q_c, FT(1), same) === FT(0.3)
-                    @test CA.cloud_fraction_min_condensate_cap(FT(1), FT(5e-5), FT(1), cap) ≈ FT(0.5)
+                    @test CA.cloud_fraction_min_condensate_cap(
+                        FT(0.3),
+                        q_c,
+                        FT(1),
+                        same,
+                    ) === FT(0.3)
+                    @test CA.cloud_fraction_min_condensate_cap(
+                        FT(1),
+                        FT(5e-5),
+                        FT(1),
+                        cap,
+                    ) ≈ FT(0.5)
                     # The blend is linear in β.
                     half = CA.CloudFractionPhaseParams(α, α, FT(0.5), FT(0.5))
-                    @test CA._compute_cloud_fraction(q_c, FT(1), μ, σ_S, q_sat, floor, half) ≈
+                    @test CA._compute_cloud_fraction(
+                        q_c,
+                        FT(1),
+                        μ,
+                        σ_S,
+                        q_sat,
+                        floor,
+                        half,
+                    ) ≈
                           (ref + cf_th) / 2 rtol = 1e-5
                 end
                 # Subsaturated mean: μ_S ≤ 0 ⇒ D = 1, floor fully active
