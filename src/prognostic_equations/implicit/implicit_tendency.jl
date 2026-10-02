@@ -36,6 +36,11 @@ See [Implicit Solver](@ref) for the IMEX formulation.
 NVTX.@annotate function implicit_tendency!(Yₜ, Y, p, t)
     fill_with_nans!(p)
     Yₜ .= zero(eltype(Yₜ))
+
+    @show "*********************"
+    @show parent(Y.c.ρ)[16:20]
+    @show parent(Y.c.ρq_tot)[16:20]
+
     implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
 
     if p.atmos.microphysics_tendency_timestepping == Implicit()
