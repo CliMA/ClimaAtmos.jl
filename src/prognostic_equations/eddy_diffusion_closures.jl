@@ -481,7 +481,6 @@ NVTX.@annotate function set_buoyancy_gradient_inputs!(Y, p, thermo_params)
     ᶜVanLeer_gradient!(ᶜgradᵥ_q_tot, ᶠ∂qt∂z)
 
     @show "###########################"
-    @show parent(Y.c.ρ)[16:20]
     @show parent(Y.c.ρq_tot)[16:20]
     # @show parent(ᶜθ_li)[16:20]
     # @show parent(ᶠ∂θli∂z)[16:20]

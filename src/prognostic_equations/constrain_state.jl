@@ -32,6 +32,10 @@ The `dss!` and `set_precomputed_quantities!` calls are not part of this — the
 timestepper runs them through its own `dss!` and `cache!` hooks. Returns `nothing`.
 """
 NVTX.@annotate function constrain_state!(Y, p, t)
+
+    @show "@@@@@@@@@@@@@@@@@@@@@@@"
+    @show parent(Y.c.ρq_tot)[16:20]
+
     prescribe_flow!(Y, p, t, p.atmos.prescribed_flow)
     tracer_nonnegativity_constraint!(Y, p, t, p.atmos.water.tracer_nonnegativity_method)
     enforce_physical_constraints!(Y, p, t, p.atmos)

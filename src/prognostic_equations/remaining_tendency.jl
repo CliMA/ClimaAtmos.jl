@@ -49,7 +49,6 @@ NVTX.@annotate function remaining_tendency!(Yₜ, Yₜ_lim, Y, p, t)
     Yₜ_lim .= zero(eltype(Yₜ_lim))
     Yₜ .= zero(eltype(Yₜ))
     @show "===============================", float(t)
-    @show parent(Y.c.ρ)[16:20]
     @show parent(Y.c.ρq_tot)[16:20]
     horizontal_tracer_advection_tendency!(Yₜ_lim, Y, p, t)
     fill_with_nans!(p)  # TODO: would be better to limit this to debug mode (e.g., if p.debug_mode...)
