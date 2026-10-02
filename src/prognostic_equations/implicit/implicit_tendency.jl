@@ -37,13 +37,13 @@ NVTX.@annotate function implicit_tendency!(Yₜ, Y, p, t)
     fill_with_nans!(p)
     Yₜ .= zero(eltype(Yₜ))
 
-    @show "*********************"
-    @show parent(Y.c.ρq_tot)[16:20]
+    # @show "*********************"
+    # @show parent(Y.c.ρq_tot)[16:20]
 
     implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
 
-    @show "*****"
-    @show parent(Yₜ.c.ρq_tot)[16:20]
+    # @show "*****"
+    # @show parent(Yₜ.c.ρq_tot)[16:20]
 
     if p.atmos.microphysics_tendency_timestepping == Implicit()
         microphysics_tendency!(
@@ -66,7 +66,7 @@ NVTX.@annotate function implicit_tendency!(Yₜ, Y, p, t)
         )
     end
 
-    @show parent(Yₜ.c.ρq_tot)[16:20]
+    # @show parent(Yₜ.c.ρq_tot)[16:20]
 
     edmfx_sgs_vertical_advection_tendency!(
         Yₜ,
@@ -76,7 +76,7 @@ NVTX.@annotate function implicit_tendency!(Yₜ, Y, p, t)
         p.atmos.turbconv_model,
     )
 
-    @show parent(Yₜ.c.ρq_tot)[16:20]
+    # @show parent(Yₜ.c.ρq_tot)[16:20]
 
     if p.atmos.diff_mode == Implicit()
         vertical_diffusion_boundary_layer_tendency!(
@@ -96,34 +96,34 @@ NVTX.@annotate function implicit_tendency!(Yₜ, Y, p, t)
         edmfx_sgs_diffusive_flux_tendency!(Yₜ, Y, p, t, p.atmos.turbconv_model)
     end
 
-    @show parent(Yₜ.c.ρq_tot)[16:20]
+    # @show parent(Yₜ.c.ρq_tot)[16:20]
 
     edmfx_entr_detr_tendency!(Yₜ, Y, p, t, p.atmos.turbconv_model)
 
 
-    @show parent(Yₜ.c.ρq_tot)[16:20]
+    # @show parent(Yₜ.c.ρq_tot)[16:20]
 
     edmfx_sgs_mass_flux_tendency!(Yₜ, Y, p, t, p.atmos.turbconv_model)
 
 
-    @show parent(Yₜ.c.ρq_tot)[16:20]
+    # @show parent(Yₜ.c.ρq_tot)[16:20]
 
     edmfx_boundary_condition_tendency!(Yₜ, Y, p, t, p.atmos.turbconv_model)
 
 
-    @show parent(Yₜ.c.ρq_tot)[16:20]
+    # @show parent(Yₜ.c.ρq_tot)[16:20]
 
     # NOTE: All ρa tendencies should be applied before calling this function
     pressure_work_tendency!(Yₜ, Y, p, t, p.atmos.turbconv_model)
 
 
-    @show parent(Yₜ.c.ρq_tot)[16:20]
+    # @show parent(Yₜ.c.ρq_tot)[16:20]
 
     sgs_u₃_implicit_tendency!(Yₜ, Y, p, t, p.atmos.turbconv_model)
     sgs_ρa_implicit_tendency!(Yₜ, Y, p, t, p.atmos.turbconv_model)
 
 
-    @show parent(Yₜ.c.ρq_tot)[16:20]
+    # @show parent(Yₜ.c.ρq_tot)[16:20]
 
     # NOTE: This will zero out all momentum tendencies in the edmfx advection test
     # DO NOT add additional velocity tendencies after this function
@@ -358,8 +358,8 @@ NVTX.@annotate function correct_implicit_advection_tendency!(Yₜ, Y, p, t)
     (; dt) = p
     (; ᶠu³, ᶜh_tot) = p.precomputed
 
-    @show "++++++++++++++++++++++"
-    @show parent(Y.c.ρq_tot)[16:20]
+    # @show "++++++++++++++++++++++"
+    # @show parent(Y.c.ρq_tot)[16:20]
 
     vtt_up = vertical_transport(Y.c.ρ, ᶠu³, ᶜh_tot, dt, energy_q_tot_upwinding)
     vtt_c = vertical_transport(Y.c.ρ, ᶠu³, ᶜh_tot, dt, Val(:none))
@@ -371,6 +371,6 @@ NVTX.@annotate function correct_implicit_advection_tendency!(Yₜ, Y, p, t)
         @. Yₜ.c.ρq_tot = vtt_up - vtt_c
     end
 
-    @show parent(Yₜ.c.ρq_tot)[16:20]
+    # @show parent(Yₜ.c.ρq_tot)[16:20]
     return nothing
 end

@@ -33,8 +33,8 @@ timestepper runs them through its own `dss!` and `cache!` hooks. Returns `nothin
 """
 NVTX.@annotate function constrain_state!(Y, p, t)
 
-    @show "@@@@@@@@@@@@@@@@@@@@@@@"
-    @show parent(Y.c.ρq_tot)[16:20]
+    # @show "@@@@@@@@@@@@@@@@@@@@@@@"
+    # @show parent(Y.c.ρq_tot)[16:20]
 
     prescribe_flow!(Y, p, t, p.atmos.prescribed_flow)
     tracer_nonnegativity_constraint!(Y, p, t, p.atmos.water.tracer_nonnegativity_method)

@@ -480,14 +480,14 @@ NVTX.@annotate function set_buoyancy_gradient_inputs!(Y, p, thermo_params)
     ᶜVanLeer_gradient!(ᶜgradᵥ_θ_liq_ice, ᶠ∂θli∂z)
     ᶜVanLeer_gradient!(ᶜgradᵥ_q_tot, ᶠ∂qt∂z)
 
-    @show "###########################"
-    @show parent(Y.c.ρq_tot)[16:20]
+    # @show "###########################"
+    # @show parent(Y.c.ρq_tot)[16:20]
     # @show parent(ᶜθ_li)[16:20]
     # @show parent(ᶠ∂θli∂z)[16:20]
     # @show parent(ᶜgradᵥ_θ_liq_ice.components.data.:1)[16:20]
-    @show parent(ᶜq_tot_nonneg)[16:20]
-    @show parent(ᶠ∂qt∂z)[16:20]
-    @show parent(ᶜgradᵥ_q_tot.components.data.:1)[16:20]
+    # @show parent(ᶜq_tot_nonneg)[16:20]
+    # @show parent(ᶠ∂qt∂z)[16:20]
+    # @show parent(ᶜgradᵥ_q_tot.components.data.:1)[16:20]
     return nothing
 end
 
@@ -542,7 +542,8 @@ grids) do not underflow through the intermediate `a*b`.
     same_sign = ((a > zero(a)) & (b > zero(b))) |
                 ((a < zero(a)) & (b < zero(b)))
     denom = ifelse(same_sign, a + b, one(a))
-    return ifelse(same_sign, 2 * a * (b / denom), zero(a))
+    # return ifelse(same_sign, 2 * a * (b / denom), zero(a))
+    return (a + b) / 2
 end
 
 """
