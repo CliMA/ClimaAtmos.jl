@@ -849,7 +849,11 @@ thermodynamic liquid-fraction ramp.
     FT = typeof(T)
     ΔT = phase.ΔT_ramp
     λ_c = TD.liquid_fraction(thermo_params, T, q_liq, q_ice)
-    λ_T = clamp((T - TD.Parameters.T_icenuc(thermo_params)) / max(ΔT, eps(FT)), zero(FT), one(FT))
+    λ_T = clamp(
+        (T - TD.Parameters.T_icenuc(thermo_params)) / max(ΔT, eps(FT)),
+        zero(FT),
+        one(FT),
+    )
     return ifelse(ΔT > zero(FT), λ_T, λ_c)
 end
 
