@@ -384,7 +384,7 @@ function mixing_length_lopez_gomez_2020(
     # --- l_N: Static-stability length scale (buoyancy limit), constrained by l_z ---
     N_eff_sq = max(N²_prod, FT(0)) # Use N^2 only if stable (N^2 > 0)
     l_N = l_z # Default to wall distance if not stably stratified or TKE is zero
-    if N_eff_sq > FT(0) && tke_pos > eps_FT
+    if N_eff_sq > eps_FT && tke_pos > eps_FT
         N_eff = sqrt(N_eff_sq)
         # l_N ~ sqrt(c_b * TKE) / N_eff
         l_N_physical = sqrt(c_b * tke_pos) / N_eff
@@ -477,8 +477,8 @@ NVTX.@annotate function set_buoyancy_gradient_inputs!(Y, p, thermo_params)
     @. ᶠ∂θli∂z = projected_vector_data(C3, ᶠgradᵥ(ᶜθ_li), ᶠlg)
     @. ᶠ∂qt∂z = projected_vector_data(C3, ᶠgradᵥ(ᶜq_tot_nonneg), ᶠlg)
 
-    ᶜVanLeer_gradient!(ᶜgradᵥ_θ_liq_ice, ᶠ∂θli∂z)
-    ᶜVanLeer_gradient!(ᶜgradᵥ_q_tot, ᶠ∂qt∂z)
+    ᶜVanLeer_gradient!(ᶜgradᵥ_θ_liq_ice, ᶠ∂θli∂z, ᶜθ_li)
+    ᶜVanLeer_gradient!(ᶜgradᵥ_q_tot, ᶠ∂qt∂z, ᶜq_tot_nonneg)
 
     # @show "###########################"
     # @show parent(Y.c.ρq_tot)[16:20]
@@ -492,7 +492,7 @@ NVTX.@annotate function set_buoyancy_gradient_inputs!(Y, p, thermo_params)
 end
 
 """
-    ᶜVanLeer_gradient!(ᶜout, ᶠ∂ψ∂z)
+    ᶜVanLeer_gradient!(ᶜout, ᶠ∂ψ∂z, ᶜψ)
 
 Write the Van Leer-limited vertical gradient of a center scalar field,
 derived from the already-materialized physical face gradient `ᶠ∂ψ∂z`, into
@@ -506,13 +506,13 @@ interior face gradient rather than blending the gradients at the two bounding
 faces, since the boundary face gradients are imposed by the zero-gradient BC
 and do not represent the physical slope.
 """
-function ᶜVanLeer_gradient!(ᶜout, ᶠ∂ψ∂z)
+function ᶜVanLeer_gradient!(ᶜout, ᶠ∂ψ∂z, ᶜψ)
     ᶜlg = Fields.local_geometry_field(axes(ᶜout))
     nc = Spaces.nlevels(axes(ᶜout))
-    # At the domain boundaries, `ᶠ∂ψ∂z` carries `ᶠgradᵥ`'s zero-gradient BC
-    # (it is not the physical slope). Override via `SetValue` so the
-    # bottom (top) center's bias returns the first (last) *interior* face
-    # gradient; the limiter at that cell then reduces to that gradient.
+    FT = Spaces.undertype(axes(ᶜout))
+    # TODO: pull Δz from the local geometry instead of hardcoding.
+    Δz = FT(50)
+    c_threshold = FT(10)
     ᶜbias_below = Operators.BottomBiasedF2C(
         bottom = Operators.SetValue(
             Fields.level(ᶠ∂ψ∂z, 1 + Fields.half),
@@ -524,26 +524,33 @@ function ᶜVanLeer_gradient!(ᶜout, ᶠ∂ψ∂z)
         ),
     )
     @. ᶜout = Geometry.Covariant3Vector(
-        harmonic_mean(ᶜbias_below(ᶠ∂ψ∂z), ᶜbias_above(ᶠ∂ψ∂z)) *
-        unit_basis_vector_data(C3, ᶜlg),
+        harmonic_mean(
+            ᶜbias_below(ᶠ∂ψ∂z),
+            ᶜbias_above(ᶠ∂ψ∂z),
+            c_threshold * eps(ᶜψ) / Δz,
+        ) * unit_basis_vector_data(C3, ᶜlg),
     )
     return nothing
 end
 
 """
-    harmonic_mean(a, b)
+    harmonic_mean(a, b, τ = zero(a))
 
 Van Leer's harmonic-mean slope limiter: `2ab/(a+b)` when `a` and `b` share
-a sign, else zero. Written as `2*a*(b/denom)` rather than `2*a*b/denom` so
-that small-but-equal arguments at Float32 (e.g. humidity slopes on coarse
-grids) do not underflow through the intermediate `a*b`.
+a sign *and* both have magnitude above `τ`, else zero. Written as
+`2*a*(b/denom)` rather than `2*a*b/denom` so that small-but-equal arguments
+at Float32 (e.g. humidity slopes on coarse grids) do not underflow through
+the intermediate `a*b`.
 """
-@inline function harmonic_mean(a, b)
+@inline harmonic_mean(a, b) = harmonic_mean(a, b, zero(a))
+
+@inline function harmonic_mean(a, b, τ)
     same_sign = ((a > zero(a)) & (b > zero(b))) |
                 ((a < zero(a)) & (b < zero(b)))
-    denom = ifelse(same_sign, a + b, one(a))
-    return ifelse(same_sign, 2 * a * (b / denom), zero(a))
-    # return (a + b) / 2
+    above_floor = (abs(a) > τ) & (abs(b) > τ)
+    use_hm = same_sign & above_floor
+    denom = ifelse(use_hm, a + b, one(a))
+    return ifelse(use_hm, 2 * a * (b / denom), zero(a))
 end
 
 """

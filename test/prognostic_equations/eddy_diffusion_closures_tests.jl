@@ -18,8 +18,10 @@ Unit tests for the pointwise closures in eddy_diffusion_closures.jl:
 3. `harmonic_mean` — the pointwise Van Leer slope limiter used by
    `ᶜVanLeer_gradient!`: identity on equal same-sign arguments, zero on
    opposite signs / exact zeros, symmetry, bounds relative to arithmetic
-   mean, and (for Float32) no underflow on same-sign arguments at the
-   edge of the subnormal range.
+   mean, (for Float32) no underflow on same-sign arguments at the
+   edge of the subnormal range, and the magnitude-threshold branch
+   `|a| > τ && |b| > τ` that zeroes out face gradients at the
+   floating-point noise floor.
 =#
 
 using Test
@@ -177,6 +179,26 @@ import ClimaCore.CommonSpaces
                     @test hm(tiny, tiny) ≈ tiny rtol = 4 * eps(FT)
                     @test hm(-tiny, -tiny) ≈ -tiny rtol = 4 * eps(FT)
                 end
+
+                # Magnitude threshold τ: either |a| or |b| ≤ τ → zero,
+                # regardless of sign. Above τ, same-sign pairs recover the
+                # usual harmonic mean.
+                τ = FT(1e-3)
+                @test hm(FT(1e-4), FT(1e-4), τ) == 0
+                @test hm(FT(-1e-4), FT(-1e-4), τ) == 0
+                @test hm(FT(2.0), FT(1e-4), τ) == 0
+                @test hm(FT(1e-4), FT(2.0), τ) == 0
+                # Boundary: |a| == τ fails the strict inequality.
+                @test hm(τ, τ, τ) == 0
+                # Clearly above threshold: same-sign recovers the regular
+                # harmonic mean; opposite-sign remains zero.
+                @test hm(FT(2.0), FT(2.0), τ) ≈ FT(2.0) rtol = 4 * eps(FT)
+                @test hm(FT(0.5), FT(1.5), τ) ≈
+                      2 * FT(0.5) * FT(1.5) / (FT(0.5) + FT(1.5)) rtol =
+                    4 * eps(FT)
+                @test hm(FT(2.0), FT(-2.0), τ) == 0
+                # Default τ = 0 reproduces the two-argument form.
+                @test hm(FT(0.5), FT(1.5), FT(0)) == hm(FT(0.5), FT(1.5))
             end
 
             @testset "horizontal_filter_scale: space dispatch" begin
