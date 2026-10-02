@@ -3,6 +3,9 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+
+0.42.13
+-------
 - ![][badge-🔥behavioralΔ] The horizontal-gradient invariants of the geometric SGS
   variance term (`hgrad_invariant!`) and the TKE shear production from horizontal
   gradients now use ClimaCore's `LumpedRestriction`: within each element the
