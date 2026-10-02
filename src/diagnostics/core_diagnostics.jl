@@ -46,9 +46,13 @@ error_diagnostic_variable(variable, ::T) where {T} =
 ###
 # Density (3d)
 ###
+# `state.c.ρ` is a component slice of `Y.c`, so its parent array is a view, not a
+# plain `CuArray`. Returning it directly makes pressure-coordinate output fail on
+# GPUs (ClimaInterpolations' CUDA method needs `CuArray`s and otherwise falls back
+# to scalar indexing). The identity broadcast is materialized into a fresh Field.
 add_diagnostic_variable!(short_name = "rhoa", units = "kg m^-3",
     long_name = "Air Density", standard_name = "air_density",
-    compute = (state, _, _) -> state.c.ρ,
+    compute = (state, _, _) -> @.(lazy(identity(state.c.ρ))),
 )
 
 ###
