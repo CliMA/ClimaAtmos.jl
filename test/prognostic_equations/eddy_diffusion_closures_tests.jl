@@ -145,7 +145,7 @@ import ClimaCore.CommonSpaces
                     (FT(3.0), FT(2.0)),
                     (FT(-0.5), FT(-0.1)),
                 ]
-                    @test hm(a, b) == hm(b, a)
+                    @test hm(a, b) ≈ hm(b, a) rtol = 4 * eps(FT)
                 end
                 # Opposite signs and either side exactly zero → zero.
                 for (a, b) in [

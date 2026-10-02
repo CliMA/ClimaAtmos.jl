@@ -530,8 +530,8 @@ that small-but-equal arguments at Float32 (e.g. humidity slopes on coarse
 grids) do not underflow through the intermediate `a*b`.
 """
 @inline function harmonic_mean(a, b)
-    same_sign = (a > zero(a)) & (b > zero(b)) |
-                (a < zero(a)) & (b < zero(b))
+    same_sign = ((a > zero(a)) & (b > zero(b))) |
+                ((a < zero(a)) & (b < zero(b)))
     denom = ifelse(same_sign, a + b, one(a))
     return ifelse(same_sign, 2 * a * (b / denom), zero(a))
 end
