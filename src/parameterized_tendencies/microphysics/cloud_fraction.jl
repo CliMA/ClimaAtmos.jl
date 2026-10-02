@@ -917,7 +917,8 @@ Final post-Aitken update. No-op when `ᶜsgs_moments` is not allocated (dry / 0M
 Uses ONE quadrature pass via `_compute_sgs_moments` to fill
 `ᶜsgs_moments = (sigma_S, λ_lagrange)`, then computes
 `ᶜcloud_fraction` consistently with the augmented `σ_aug` closure (see
-`_compute_cloud_fraction`) and applies EDMF updraft weighting.
+`_compute_cloud_fraction`) from the grid-mean cloud condensate
+(`_grid_mean_cloud_condensate`).
 """
 NVTX.@annotate function set_sgs_moments_and_cloud_fraction!(Y, p)
     hasproperty(p.precomputed, :ᶜsgs_moments) || return nothing
@@ -927,7 +928,12 @@ NVTX.@annotate function set_sgs_moments_and_cloud_fraction!(Y, p)
     microphysics_model = p.atmos.microphysics_model
 
     ᶜρ_env, ᶜT_mean, ᶜq_mean = _get_env_ρ_T_q(Y, p, thermo_params, turbconv_model)
+    # Environment condensate for the microphysics reconstruction (the λ fit,
+    # conserved exactly under the quadrature measure) ...
     ᶜq_lcl, ᶜq_icl = _get_condensate_means(Y, p, turbconv_model, microphysics_model)
+    # ... and the grid-mean cloud condensate the cover is computed from
+    # (single-domain cover, see `_grid_mean_cloud_condensate`).
+    ᶜq_lcl_cf, ᶜq_icl_cf = _grid_mean_cloud_condensate(Y, p, microphysics_model)
     sgs_quad = p.atmos.sgs_quadrature
     corr_Tq = correlation_Tq(p.params)
     FT = eltype(p.params)
@@ -940,24 +946,21 @@ NVTX.@annotate function set_sgs_moments_and_cloud_fraction!(Y, p)
         thermo_params, ᶜρ_env, ᶜT_mean, ᶜq_mean, ᶜq_lcl + ᶜq_icl,
         $(sgs_quad), ᶜT′T′, ᶜq′q′, corr_Tq, FT(α),
     )
-    # Recompute CF from q_c and σ_S using the augmented-σ closure. We cannot
-    # use `Φ(λ/σ_aug)` because λ was computed with the equilibrium σ_S_eff,
-    # not σ_aug — `Φ(λ/σ_aug)` would not match the truncated-Gaussian
-    # closure for the augmented variance. This overwrites the Picard iterate
-    # with a value consistent with the final SGS moments, so EDMF weighting
-    # must be re-applied here even though `set_cloud_fraction!` already
-    # applied it during Picard.
+    # Recompute CF from the grid-mean q_c and σ_S using the augmented-σ
+    # closure. We cannot use `Φ(λ/σ_aug)` because λ was computed with the
+    # equilibrium σ_S_eff, not σ_aug — `Φ(λ/σ_aug)` would not match the
+    # truncated-Gaussian closure for the augmented variance. This overwrites
+    # the Picard iterate with a value consistent with the final SGS moments.
     @. p.precomputed.ᶜcloud_fraction = _compute_cloud_fraction(
-        ᶜq_lcl + ᶜq_icl,
+        ᶜq_lcl_cf + ᶜq_icl_cf,
         # μ_S recomputed analytically, matching `_sgs_saturation_moments`
         # (condensate-free q_sat, consistent with the linear excess S).
         ᶜq_mean - TD.q_vap_saturation(thermo_params, ᶜT_mean, ᶜρ_env),
         p.precomputed.ᶜsgs_moments.sigma_S,
-        TD.q_vap_saturation(thermo_params, ᶜT_mean, ᶜρ_env, ᶜq_lcl, ᶜq_icl),
+        TD.q_vap_saturation(thermo_params, ᶜT_mean, ᶜρ_env, ᶜq_lcl_cf, ᶜq_icl_cf),
         FT(α),
         $(floor),
     )
-    _apply_edmf_cloud_weighting!(Y, p, turbconv_model, thermo_params)
 end
 
 
@@ -980,9 +983,11 @@ Dispatches on `microphysics_model` and `cloud_model`:
   - `MLCloud`: the neural-network prediction (see
     `set_ml_cloud_fraction!`).
 
-With `PrognosticEDMFX`, the environment value is weighted by the environment area
-fraction and binary updraft contributions are added
-(`_apply_edmf_cloud_weighting!`).
+With `PrognosticEDMFX` the cloud fraction is a single-domain quantity: the
+`QuadratureCloud` cover is evaluated with the grid-mean cloud condensate
+(`_grid_mean_cloud_condensate`) and the `MLCloud` prediction is used as is; there
+is no separate updraft term. # TODO: Take into account area fraction as a
+skewness of the PDF.
 
 Mutates `p.precomputed.ᶜcloud_fraction`; the return value is unused.
 """
@@ -1010,11 +1015,16 @@ end
 """
     _grid_mean_cloud_condensate(Y, p, microphysics_model)
 
-Grid-mean cloud condensate `(ᶜq_lcl, ᶜq_icl)`, used by `GridScaleCloud` and,
-without EDMF, by `_get_condensate_means`. With non-equilibrium
-microphysics, uses the prognostic cloud condensate only; the precomputed
-`ᶜq_liq` / `ᶜq_ice` include precipitation (`q_rai` / `q_sno`), which should
-not count as cloud.
+Grid-mean cloud condensate `(ᶜq_lcl, ᶜq_icl)`, used by `GridScaleCloud`, by
+the `QuadratureCloud` cover and, without EDMF, by `_get_condensate_means`.
+With non-equilibrium microphysics, uses the prognostic cloud condensate only;
+the precomputed `ᶜq_liq` / `ᶜq_ice` include precipitation (`q_rai` / `q_sno`),
+which should not count as cloud.
+
+The cloud fraction is a single-domain quantity: with PrognosticEDMFX the
+environment PDF inversion is applied to this grid-mean condensate
+`a⁰ q_c⁰ + Σⱼ aʲ q_cʲ`. The microphysics reconstruction (the λ fit) uses the
+environment condensate, `_get_condensate_means`.
 """
 _grid_mean_cloud_condensate(Y, p, ::NonEquilibriumMicrophysics) = (
     (@. lazy(max(0, specific(Y.c.ρq_lcl, Y.c.ρ)))),
@@ -1035,8 +1045,9 @@ NVTX.@annotate function set_cloud_fraction!(
     # Get environment density, temperature, and total specific humidity
     ᶜρ_env, ᶜT_mean, ᶜq_mean = _get_env_ρ_T_q(Y, p, thermo_params, turbconv_model)
 
-    # Get condensate means (dispatches on microphysics_model)
-    ᶜq_lcl, ᶜq_icl = _get_condensate_means(Y, p, turbconv_model, microphysics_model)
+    # Grid-mean cloud condensate the cover is computed from (single-domain
+    # cover, see `_grid_mean_cloud_condensate`)
+    ᶜq_lcl, ᶜq_icl = _grid_mean_cloud_condensate(Y, p, microphysics_model)
 
     sgs_quad = p.atmos.sgs_quadrature
     corr_Tq = correlation_Tq(p.params)
@@ -1063,8 +1074,6 @@ NVTX.@annotate function set_cloud_fraction!(
         FT(α),
         $(floor),
     )
-
-    _apply_edmf_cloud_weighting!(Y, p, turbconv_model, thermo_params)
 end
 
 NVTX.@annotate function set_cloud_fraction!(
@@ -1092,7 +1101,6 @@ NVTX.@annotate function set_cloud_fraction!(
         ᶜq_mean,
         ᶜθ_mean,
     )
-    _apply_edmf_cloud_weighting!(Y, p, turbconv_model, thermo_params)
 end
 
 # ============================================================================
@@ -1192,10 +1200,10 @@ end
     _get_condensate_means(Y, p, turbconv_model, microphysics_model)
 
 Mean cloud condensate `(ᶜq_lcl, ᶜq_icl)` of the domain that carries the SGS
-cloud closure: the environment for PrognosticEDMFX
-(`_env_cloud_condensate`), the grid mean otherwise
-(`_grid_mean_cloud_condensate`). Updraft contributions are added
-separately by `_apply_edmf_cloud_weighting!`.
+microphysics closure (the Lagrange-multiplier fit of `_compute_sgs_moments`):
+the environment for PrognosticEDMFX (`_env_cloud_condensate`), the grid mean
+otherwise (`_grid_mean_cloud_condensate`). The cover is evaluated with the
+grid-mean condensate instead.
 """
 _get_condensate_means(Y, p, turbconv_model, microphysics_model) =
     turbconv_model isa PrognosticEDMFX ?
@@ -1216,74 +1224,6 @@ _env_cloud_condensate(Y, p, ::NonEquilibriumMicrophysics) = (
 )
 _env_cloud_condensate(Y, p, microphysics_model) =
     (p.precomputed.ᶜq_liq⁰, p.precomputed.ᶜq_ice⁰)
-
-"""
-    _apply_edmf_cloud_weighting!(Y, p, turbconv_model, thermo_params)
-
-Apply EDMF-specific adjustments to cloud diagnostics.
-
-For PrognosticEDMFX:
-
- 1. Weights environment cloud diagnostics by environment area fraction
- 2. Adds updraft contributions weighted by their respective area fractions
-
-Updraft cloud fraction is binary: 1 if updraft contains condensate, 0 otherwise.
-"""
-function _apply_edmf_cloud_weighting!(Y, p, turbconv_model, thermo_params)
-    (; ᶜp) = p.precomputed
-
-    # Weight by environment area fraction if using PrognosticEDMFX (assumed 1 otherwise)
-    if turbconv_model isa PrognosticEDMFX
-        ᶜρa⁰ = @. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model))
-        (; ᶜT⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰) = p.precomputed
-        ᶜρ⁰ = @. lazy(
-            TD.air_density(
-                thermo_params,
-                ᶜT⁰,
-                ᶜp,
-                ᶜq_tot_nonneg⁰,
-                ᶜq_liq⁰,
-                ᶜq_ice⁰,
-            ),
-        )
-        @. p.precomputed.ᶜcloud_fraction *= draft_area(ᶜρa⁰, ᶜρ⁰)
-    end
-
-    # Add contributions from the updrafts if using EDMF
-    if turbconv_model isa PrognosticEDMFX
-        n = n_mass_flux_subdomains(turbconv_model)
-        (; ᶜρʲs) = p.precomputed
-        microphysics_model = p.atmos.microphysics_model
-        for j in 1:n
-            ᶜρaʲ = Y.c.sgsʲs.:($j).ρa
-            ᶜq_liqʲ, ᶜq_iceʲ =
-                _updraft_cloud_condensate(Y, p, j, microphysics_model)
-
-            @. p.precomputed.ᶜcloud_fraction +=
-                ifelse(
-                    TD.has_condensate(
-                        thermo_params,
-                        max(0, ᶜq_liqʲ + ᶜq_iceʲ),
-                    ),
-                    draft_area(ᶜρaʲ, ᶜρʲs.:($$j)),
-                    0,
-                )
-        end
-    end
-end
-
-"""
-    _updraft_cloud_condensate(Y, p, j, microphysics_model)
-
-Cloud condensate of updraft `j`, used for the binary updraft cloud check.
-With non-equilibrium microphysics, uses the prognostic cloud condensate
-(`q_lclʲ`, `q_iclʲ`) only; the precomputed `ᶜq_liqʲs` / `ᶜq_iceʲs` include
-precipitation (`q_raiʲ` / `q_snoʲ`), which should not count as cloud.
-"""
-_updraft_cloud_condensate(Y, p, j, ::NonEquilibriumMicrophysics) =
-    (Y.c.sgsʲs.:($j).q_lcl, Y.c.sgsʲs.:($j).q_icl)
-_updraft_cloud_condensate(Y, p, j, microphysics_model) =
-    (p.precomputed.ᶜq_liqʲs.:($j), p.precomputed.ᶜq_iceʲs.:($j))
 
 # ============================================================================
 # Machine Learning Cloud Fraction

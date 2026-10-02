@@ -543,10 +543,11 @@ Build the SGS covariance, quadrature and cloud-fraction parameter set.
 Most values come from ClimaParams through an explicit name map. The
 cloud-fraction floor release-shape parameters are not yet in ClimaParams'
 default TOML: they fall back to the defaults set here, and are read from
-`toml_dict` only when a run or calibration TOML defines them. The defaults
-`margin = abs_margin = sharpness = 1` and `residual = 0` release the
-cloud-fraction floor on a one-width saturation margin guarded by an absolute
-margin of one floor width.
+`toml_dict` only when a run or calibration TOML defines them. The default
+`residual = 1` keeps the relative floor fully active everywhere (no
+saturation-margin release); `margin = abs_margin = sharpness = 1` describe the
+release shape that a `residual < 1` would turn on (a one-width saturation margin
+guarded by an absolute margin of one floor width).
 
 `overrides` is merged last, so it wins over both the TOML values and the
 defaults above.
@@ -583,14 +584,15 @@ function SGSQuadratureParameters(
     # TODO: promote each to ClimaParams (and the name_map above) once it has
     # been calibrated, and remove it from this block.
     provisional_defaults = (;
-        # Cloud-fraction floor release shape (see `_compute_cloud_fraction`):
-        # margin = abs_margin = sharpness = 1, residual = 0 release the floor on
-        # a one-width saturation margin guarded by an absolute margin of one
-        # floor width.
+        # Cloud-fraction floor release (see `_compute_cloud_fraction`):
+        # residual = 1 keeps the relative floor fully active everywhere (no
+        # release, D ≡ 1). margin = abs_margin = sharpness = 1 are the release
+        # shape used when residual < 1: a one-width saturation margin guarded
+        # by an absolute margin of one floor width.
         cloud_fraction_floor_release_margin = FT(1),
         cloud_fraction_floor_release_abs_margin = FT(1),
         cloud_fraction_floor_release_sharpness = FT(1),
-        cloud_fraction_floor_residual = FT(0),
+        cloud_fraction_floor_residual = FT(1),
     )
     provisional_present = filter(collect(keys(provisional_defaults))) do name
         haskey(toml_dict.data, string(name))
