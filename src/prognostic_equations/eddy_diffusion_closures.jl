@@ -542,8 +542,8 @@ grids) do not underflow through the intermediate `a*b`.
     same_sign = ((a > zero(a)) & (b > zero(b))) |
                 ((a < zero(a)) & (b < zero(b)))
     denom = ifelse(same_sign, a + b, one(a))
-    # return ifelse(same_sign, 2 * a * (b / denom), zero(a))
-    return (a + b) / 2
+    return ifelse(same_sign, 2 * a * (b / denom), zero(a))
+    # return (a + b) / 2
 end
 
 """
