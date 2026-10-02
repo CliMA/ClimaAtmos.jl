@@ -34,6 +34,8 @@ state and may be overwritten by any function.
   - `orographic_gravity_wave`: Parameters used by the orographic gravity wave tendency.
   - `radiation`: Radiation model cache (e.g. the RRTMGP solver).
   - `tracers`: Prescribed aerosol and trace-gas inputs.
+  - `ml_correction`: Network, remappers, and current correction of the online
+    ML tendency correction (see `ml_correction_cache`); empty when disabled.
   - `net_energy_flux_toa`: Net radiative energy that has entered through the top of
     the atmosphere, accumulated over the domain area and over time by the
     `flux_accumulation!` callback. A one-element vector, so that it can be mutated
@@ -61,6 +63,7 @@ struct AtmosCache{
     ORGW,
     RAD,
     TRAC,
+    MLC,
     NETFLUXTOA,
     NETFLUXSFC,
     SSV,
@@ -103,6 +106,9 @@ struct AtmosCache{
     orographic_gravity_wave::ORGW
     radiation::RAD
     tracers::TRAC
+
+    # Network, remappers, and current correction of the online ML tendency correction
+    ml_correction::MLC
 
     # Net energy flux coming through top of atmosphere and surface
     net_energy_flux_toa::NETFLUXTOA
@@ -277,6 +283,7 @@ function build_cache(
     orographic_gravity_wave = orographic_gravity_wave_cache(Y, atmos)
     radiation = radiation_model_cache(Y, atmos, radiation_args...)
     tracers = tracer_cache(Y, aerosol_names, time_varying_trace_gas_names, start_date)
+    ml_correction = ml_correction_cache(Y, atmos, precomputed, start_date)
 
     args = (
         dt,
@@ -294,6 +301,7 @@ function build_cache(
         orographic_gravity_wave,
         radiation,
         tracers,
+        ml_correction,
         net_energy_flux_toa,
         net_energy_flux_sfc,
         steady_state_velocity,

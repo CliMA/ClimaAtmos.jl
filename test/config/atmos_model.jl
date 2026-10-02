@@ -60,6 +60,7 @@ end
             :rayleigh_sponge => nothing,
             :hyperdiff => Union{Nothing, CA.Hyperdiffusion},
             :vertical_diffusion => nothing,
+            :ml_correction => nothing,
         )
 
         test_defaults(model, expected_defaults)
@@ -206,6 +207,20 @@ end
     @test isbitstype(typeof(adapted))
     @test adapted.aerosol_names == ()
     @test adapted.time_varying_trace_gases == ()
+
+    # The network path of the ML correction is likewise dropped.
+    ml_correction = CA.MLTendencyCorrection{FT, String}(
+        "net.nc", 0.5, 3600, true, false, 1e-4, 1e-7, 0, 1e4, 5e3, 0, 0,
+    )
+    ml_model = make_model(;
+        microphysics_model = CA.EquilibriumMicrophysics0M(),
+        ml_correction,
+    )
+    @test ml_model.ml_correction === ml_correction
+    ml_adapted = Adapt.adapt(Array, ml_model)
+    @test isbitstype(typeof(ml_adapted))
+    @test isnothing(ml_adapted.ml_correction.path)
+    @test ml_adapted.ml_correction.gain == ml_correction.gain
 end
 
 @testset "Explicit kwarg wins over setup component (with warning)" begin

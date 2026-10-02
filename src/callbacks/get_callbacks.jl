@@ -683,6 +683,22 @@ function default_model_callbacks(gravity_wave::AtmosGravityWave;
     )
 end
 
+function default_model_callbacks(ml_correction::MLTendencyCorrection;
+    dt,
+    t_start,
+    t_end,
+    checkpoint_frequency,
+    kwargs...)
+    return scheduled_callback(
+        ml_correction_callback!,
+        "$(Float64(ml_correction.refresh_period))secs",
+        dt,
+        t_start,
+        t_end,
+        checkpoint_frequency,
+    )
+end
+
 default_model_callbacks(scm::SCMSetup; kwargs...) =
     default_model_callbacks(scm.external_forcing; kwargs...)
 

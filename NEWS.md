@@ -3,6 +3,21 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- ![][badge-✨feature/enhancement] Added an online ML tendency correction
+  (`MLTendencyCorrection`): an offline-trained column network, exported to
+  NetCDF and evaluated in pure Julia on the root process (CPU or GPU), predicts
+  the CliMA − ERA5 temperature and humidity drift rate on ERA5 pressure levels
+  from the instantaneous state, and `-gain` times the prediction is added as a
+  tendency. It is enabled by the `ml_correction` config key (the network path)
+  and configured by `ml_correction_gain`, `ml_correction_dt`,
+  `ml_correction_variables`, `ml_correction_t_cap`, `ml_correction_q_cap`,
+  `ml_correction_p_full`, `ml_correction_p_zero` (a pressure taper that confines
+  it to the troposphere and lower stratosphere, 100 → 50 hPa by default),
+  `ml_correction_smoothing`, `ml_correction_start`, and `ml_correction_ramp`;
+  it is off by default. See the
+  "ML Tendency Correction" documentation page. `AtmosModel` gains an
+  `ml_correction` field and `AtmosCache` an `ml_correction` field (after
+  `tracers`), so code that constructs `AtmosCache` positionally must pass it.
 - ![][badge-🔥behavioralΔ] The `tas` diagnostic (near-surface / 2 m air temperature, CMIP `tas`) is now diagnosed at 2 m above the surface using Monin-Obukhov similarity theory, interpolating the dry static energy between the surface temperature and the lowest model level with the heat similarity profile. Previously `tas` returned the temperature at the bottom cell center. The MOST interpolation is used both when the surface flux scheme is `MoninObukhov` and in the coupler-handoff case (`flux_scheme === nothing`), where the coupler supplies the surface temperature and Monin-Obukhov length. The thermal roughness length `z0b` is now stored in `sfc_conditions` (defaulted in the coupler case, overwritable by the coupler). Only schemes without a roughness length (e.g. `ExchangeCoefficients`) still fall back to the lowest model level temperature. See `SurfaceConditions.diagnostic_temperature_at_height`.
 - ![][badge-🔥behavioralΔ] Update to ClimaParams 1.1.16, which provides the
   SGS-quadrature parameters and changes the defaults.

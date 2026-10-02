@@ -107,6 +107,7 @@ makedocs(;
                 "Microphysics" => "microphysics.md",
                 "Radiation" => "radiation.md",
                 "COSP Satellite Simulator" => "cosp.md",
+                "ML Tendency Correction" => "ml_tendency_correction.md",
                 "Forcings and Idealized Cases" => "forcings.md",
                 "Gravity Wave Drag" => [
                     "Non-orographic Gravity Waves" => "non_orographic_gravity_wave.md",

@@ -2368,6 +2368,78 @@ end
 @inline _cosp_nsubcolumns(::Val{N}) where {N} = N
 @inline _cosp_overlap(::Val{O}) where {O} = O
 
+"""
+    MLTendencyCorrection{FT, S}
+
+Online correction of the model's temperature and humidity tendencies by an
+offline-trained column network that predicts the short-range CliMA − ERA5 drift
+rate on ERA5 pressure levels.
+
+Every `refresh_period` the state is interpolated to the network's pressure
+levels and regular latitude-longitude grid (as in the pressure-coordinate
+diagnostics the network was trained on), the network ensemble runs on the root
+process, and `-gain` times its prediction is regridded and interpolated back to
+the model levels; the cached correction is added every step through
+`apply_Tq_forcing!` and scaled by a start-time ramp. See
+`ml_correction_update!` and the "ML Tendency Correction" documentation page.
+
+Selected by the `ml_correction` configuration key, the path of a network file
+exported by the training repository; the remaining fields come from the
+`ml_correction_*` keys. Requires a moist model.
+
+# Fields
+
+  - `path`: Path of the exported network (NetCDF). Read only while the cache is
+    built, and dropped when the model is adapted to a device.
+  - `gain`: Multiplier of the predicted drift rate; the correction is `-gain`
+    times the prediction [-].
+  - `refresh_period`: Time between recomputations of the correction [s].
+  - `correct_temperature`: Whether the temperature correction is applied.
+  - `correct_humidity`: Whether the total-specific-humidity correction is applied.
+  - `t_cap`: Maximum magnitude of the temperature correction [K/s].
+  - `q_cap`: Maximum magnitude of the humidity correction [1/s].
+  - `smoothing_sigma`: Standard deviation of the masked Gaussian smoothing of the
+    prediction on the network's grid; 0 disables it [grid cells].
+  - `p_full`: Pressure at and below which (i.e. at higher pressure) the correction
+    acts at full strength [Pa].
+  - `p_zero`: Pressure at and above which (i.e. at lower pressure) the correction
+    vanishes; between `p_zero` and `p_full` it tapers with a half cosine [Pa].
+  - `start_time`: Simulation time at which the correction switches on [s].
+  - `ramp_time`: Duration of the linear ramp to full strength after `start_time`;
+    0 switches it on at once [s].
+"""
+struct MLTendencyCorrection{FT, S}
+    path::S
+    gain::FT
+    refresh_period::FT
+    correct_temperature::Bool
+    correct_humidity::Bool
+    t_cap::FT
+    q_cap::FT
+    smoothing_sigma::FT
+    p_full::FT
+    p_zero::FT
+    start_time::FT
+    ramp_time::FT
+end
+
+# The path is a `String`, so it is not isbits; it is only read while the cache
+# is built, so drop it when adapting to the device.
+Adapt.adapt_structure(to, x::MLTendencyCorrection) = MLTendencyCorrection(
+    nothing,
+    x.gain,
+    x.refresh_period,
+    x.correct_temperature,
+    x.correct_humidity,
+    x.t_cap,
+    x.q_cap,
+    x.smoothing_sigma,
+    x.p_full,
+    x.p_zero,
+    x.start_time,
+    x.ramp_time,
+)
+
 # Add broadcastable for the new grouped types
 Base.broadcastable(x::SCMSetup) = tuple(x)
 Base.broadcastable(x::AtmosWater) = tuple(x)
@@ -2383,7 +2455,7 @@ Base.broadcastable(x::COSPModel) = tuple(x)
 # methods are parsed.
 
 """
-    AtmosModel{W, SCM, R, TC, PF, GW, VD, SP, SU, NU, CM, COSP, G, P, SE}
+    AtmosModel{W, SCM, R, TC, PF, GW, VD, SP, SU, NU, CM, COSP, MLC, G, P, SE}
 
 An atmospheric model: a complete description of the physics of an atmospheric
 simulation -- which parameterizations are active and how each is configured --
@@ -2410,6 +2482,8 @@ names.
   - `numerics`: An `AtmosNumerics` group.
   - `chemistry`: An `AtmosChem` group.
   - `cosp`: `nothing`, or a `COSPModel` for the satellite simulator.
+  - `ml_correction`: `nothing`, or an [`MLTendencyCorrection`](@ref) adding an
+    offline-trained temperature and humidity tendency correction.
   - `disable_surface_flux_tendency`: Whether to skip applying the surface flux
     tendency, independently of whether surface conditions are computed.
   - `grid`: The `Grids.AbstractGrid` the model is built on.
@@ -2419,7 +2493,7 @@ names.
 See the constructor `AtmosModel(grid; params, setup, defaults, kwargs...)`
 below.
 """
-struct AtmosModel{W, SCM, R, TC, PF, GW, VD, SP, SU, NU, CM, COSP, G, P, SE}
+struct AtmosModel{W, SCM, R, TC, PF, GW, VD, SP, SU, NU, CM, COSP, MLC, G, P, SE}
     water::W
     scm_setup::SCM
     radiation::R
@@ -2432,6 +2506,7 @@ struct AtmosModel{W, SCM, R, TC, PF, GW, VD, SP, SU, NU, CM, COSP, G, P, SE}
     numerics::NU
     chemistry::CM
     cosp::COSP
+    ml_correction::MLC
 
     # Whether to apply surface flux tendency (independent of surface conditions)
     disable_surface_flux_tendency::Bool
@@ -2553,6 +2628,7 @@ function _atmos_model(; kwargs...)
 
     vertical_diffusion = get(atmos_model_kwargs, :vertical_diffusion, nothing)
     cosp = get(atmos_model_kwargs, :cosp, nothing)
+    ml_correction = get(atmos_model_kwargs, :ml_correction, nothing)
     disable_surface_flux_tendency =
         get(atmos_model_kwargs, :disable_surface_flux_tendency, false)
 
@@ -2567,7 +2643,7 @@ function _atmos_model(; kwargs...)
     return AtmosModel(
         water, scm_setup, radiation, turbconv, prescribed_flow, gravity_wave,
         vertical_diffusion, sponge, surface, numerics, chemistry, cosp,
-        disable_surface_flux_tendency, grid, params, setup,
+        ml_correction, disable_surface_flux_tendency, grid, params, setup,
     )
 end
 
@@ -2653,7 +2729,7 @@ struct's docstring for the full list of admissible values.
     `hyperdiff`, `vertical_water_borrowing_species`.
   - [`AtmosChem`](@ref): `chemistry_model`.
   - Ungrouped `AtmosModel` fields: `vertical_diffusion`, `prescribed_flow`,
-    `cosp`, and `disable_surface_flux_tendency`.
+    `cosp`, `ml_correction`, and `disable_surface_flux_tendency`.
 
 # More examples
 
