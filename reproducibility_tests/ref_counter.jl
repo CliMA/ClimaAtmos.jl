@@ -1,4 +1,4 @@
-421
+422
 
 # **README**
 #
@@ -32,6 +32,9 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+422
+- Use LumpedRestriction for some horizontal gradients
+
 421
 - Change cloud fraction formulation and default ice depostion scheme
 

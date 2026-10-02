@@ -536,10 +536,15 @@ function edmfx_sgs_horizontal_diffusive_flux_tendency!(
 
     # Turbulent TKE transport, and shear production from horizontal gradients;
     # the production from vertical gradients is applied in the TKE tendency.
+    # The strain-rate invariant of the nodal spectral-element gradient is too
+    # large at element-boundary nodes and too small inside (the rectified
+    # end-of-interval error of polynomial differentiation), so it is replaced
+    # within each element by its lumped GLL{2} restriction (`lumpedₕ`), which
+    # conserves the element's integral of the invariant.
     if use_prognostic_tke(turbconv_model)
         @. Yₜ.c.ρtke += wdivₕ(ᶜρ * ᶜK_u_h * gradₕ(ᶜtke))
         ᶜS_h = compute_strain_rate_center_horizontal(ᶜu)
-        @. Yₜ.c.ρtke += 2 * ᶜρ * ᶜK_u_h * norm_sqr(ᶜS_h)
+        @. Yₜ.c.ρtke += 2 * ᶜρ * ᶜK_u_h * lumpedₕ(norm_sqr(ᶜS_h))
     end
 
     # Momentum: horizontal weak divergence of the SGS stress `τ = -2 K_u S`

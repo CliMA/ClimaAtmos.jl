@@ -190,7 +190,10 @@ box_config_dict(; extra...) = bomex_edmfx_config_dict(;
     ᶜS_h = CA.compute_strain_rate_center_horizontal(p.precomputed.ᶜu)
     ᶜρtke_ref = similar(Y.c.ρ)
     @. ᶜρtke_ref = CA.wdivₕ(Y.c.ρ * p.precomputed.ᶜK_u_h * CA.gradₕ(ᶜtke))
-    @. ᶜρtke_ref += 2 * Y.c.ρ * p.precomputed.ᶜK_u_h * CA.norm_sqr(ᶜS_h)
+    # The shear production uses the lumped restriction of the strain-rate invariant,
+    # as in the model (see `edmfx_sgs_horizontal_diffusive_flux_tendency!`).
+    @. ᶜρtke_ref +=
+        2 * Y.c.ρ * p.precomputed.ᶜK_u_h * CA.lumpedₕ(CA.norm_sqr(ᶜS_h))
     @test parent(Yₜ.c.ρtke) ≈ parent(ᶜρtke_ref) rtol = FT(1e-10)
     # Identically zero tracers stay identically zero.
     for name in (:ρq_icl, :ρq_sno)
