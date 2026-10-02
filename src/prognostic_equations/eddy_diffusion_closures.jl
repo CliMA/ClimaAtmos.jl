@@ -384,7 +384,7 @@ function mixing_length_lopez_gomez_2020(
     # --- l_N: Static-stability length scale (buoyancy limit), constrained by l_z ---
     N_eff_sq = max(N²_prod, FT(0)) # Use N^2 only if stable (N^2 > 0)
     l_N = l_z # Default to wall distance if not stably stratified or TKE is zero
-    if N_eff_sq > eps_FT && tke_pos > eps_FT
+    if N_eff_sq > FT(0) && tke_pos > eps_FT
         N_eff = sqrt(N_eff_sq)
         # l_N ~ sqrt(c_b * TKE) / N_eff
         l_N_physical = sqrt(c_b * tke_pos) / N_eff
