@@ -2,7 +2,7 @@
 
 julia_version = "1.11.9"
 manifest_format = "2.0"
-project_hash = "de2cf8a6d7579d816d90e560509cd899a59e4fce"
+project_hash = "7ef61fc9f6581e0ee36bad048e58eb31cd2e4526"
 
 [[deps.ADTypes]]
 deps = ["PrecompileTools"]
@@ -373,9 +373,9 @@ weakdeps = ["CUDA", "MPI"]
 
 [[deps.ClimaCore]]
 deps = ["Adapt", "BandedMatrices", "BlockArrays", "ClimaComms", "ClimaInterpolations", "CubedSphere", "DataStructures", "ForwardDiff", "GaussQuadrature", "GilbertCurves", "HDF5", "InteractiveUtils", "IntervalSets", "KrylovKit", "LLVM", "LazyBroadcast", "LinearAlgebra", "MultiBroadcastFusion", "NVTX", "PkgVersion", "Random", "RootSolvers", "SparseArrays", "StaticArrays", "Statistics", "UnrolledUtilities"]
-git-tree-sha1 = "8b9d852878a6b153dd923aabfff335f9a0a497cb"
+git-tree-sha1 = "0980ca3acb8a5268e665fc3919b6ab8f4b177f73"
 uuid = "d414da3d-4745-48bb-8d80-42e94e092884"
-version = "1.0.1"
+version = "1.0.2"
 
     [deps.ClimaCore.extensions]
     ClimaCoreCUDAExt = ["CUDA", "GPUCompiler"]

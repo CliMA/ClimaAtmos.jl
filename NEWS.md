@@ -3,6 +3,8 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- Update to ClimaCore 1.0.2 (compat floors: ClimaCore 1.0.2, ClimaComms 0.6.12,
+  ClimaDiagnostics 0.3.11, ClimaUtilities 0.1.33, UnrolledUtilities 0.1.11).
 - ![][badge-🔥behavioralΔ] Add empirical mixing length `l_TKE = l_0·sqrt(x)·(1+x)·exp(−x)`,
   `x = TKE/(l_inf/tau_eps)^2`, to the mixing-length closure.
 - ![][badge-🔥behavioralΔ] Update to ClimaParams 1.1.16, which provides the
