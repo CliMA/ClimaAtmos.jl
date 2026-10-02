@@ -275,8 +275,23 @@ end
 Write the horizontal-gradient invariant `|∇_h ψ|²` of the center field `ᶜψ` into `ᶜinv`.
 The gradient vector is first made continuous across element boundaries by a weighted DSS.
 On a space that needs no DSS (single column) the nodal gradient is used.
+
+With `sgs_variance_element_filter: lumped` (`ElementLumpedFilter`) the invariant of the
+NODAL gradient is replaced, in one fused broadcast, by its lumped GLL{2} restriction within
+each element (`lumpedₕ`, ClimaCore's `LumpedRestriction`), which removes the element-edge
+and corner excess of the nodal invariant at fixed element mean; no DSS of the gradient
+vector is needed. One weighted DSS of the result then makes the width continuous across
+elements: the condensate is convex in the width, so the DSS of the tendency would otherwise
+average the condensation of two different widths at a boundary node and re-create a small
+boundary excess (notes 2026-09-13 §10, §12).
 """
 function hgrad_invariant!(ᶜinv, ᶜψ, p)
+    if p.atmos.sgs_variance_element_filter isa ElementLumpedFilter
+        @. ᶜinv = lumpedₕ(norm_sqr(gradₕ(ᶜψ)))
+        sbuf = p.scratch.ᶜscalar_dss_buffer
+        sbuf === nothing || Spaces.weighted_dss!(ᶜinv, sbuf)
+        return nothing
+    end
     buf = p.scratch.ᶜC12_dss_buffer
     if buf !== nothing
         ᶜg = p.scratch.ᶜtemp_C12
@@ -718,7 +733,50 @@ The floor enters *only* the CF computation; the Lagrange multiplier `λ` (in
 """
 @inline function _compute_cloud_fraction(q_c, mu_S, sigma_S, q_sat, α, floor)
     FT = typeof(q_c)
+    phase = CloudFractionPhaseParams(FT(α), FT(α), zero(FT), zero(FT))
+    return _compute_cloud_fraction(
+        q_c, one(FT), mu_S, sigma_S, q_sat, floor, phase,
+    )
+end
+
+"""
+    _compute_cloud_fraction(q_c, λ_ph, mu_S, sigma_S, q_sat, floor, phase)
+
+Phase-aware cover closure (see the 6-argument method for the Gaussian
+closure, floor and release). `λ_ph ∈ [0, 1]` is the liquid fraction of the
+cloud condensate and `phase` a `CloudFractionPhaseParams` bundle holding,
+for liquid and ice separately, the width scale `α` of the cover inversion
+and the weight `β` of a bounded (top-hat) saturation-excess PDF:
+
+    α_ph = λ_ph α_liq + (1 − λ_ph) α_ice,       β_ph = λ_ph β_liq + (1 − λ_ph) β_ice,
+    σ_aug = α_ph sqrt(σ_S² + σ_S_floor²),       C = q_c / σ_aug,
+    CF_gauss = Φ(z),  z Φ(z) + φ(z) = C          (truncated Gaussian, `_compute_z`),
+    CF_tophat = min(1, sqrt(C / √3))             (uniform PDF of the same variance:
+                                                  q_c = √3 σ CF² for every CF ∈ [0, 1]),
+    CF = (1 − β_ph) CF_gauss + β_ph CF_tophat.
+
+Rationale: the width that fixes the humidity (the SGS variance) is shared
+by condensation and cover, but the cover per unit condensate that this width
+implies is phase-selective in the comparison with ERA5/CERES — too little
+cover per unit liquid in the boundary layer (a Gaussian tail gives the least
+cover per condensate at low CF; a bounded PDF 2–3× more), too much cover per
+unit ice in the upper troposphere (thin, broad cirrus). The liquid/ice
+blend lets the cover closure differ by phase without any spatially dependent
+parameter. With `α_liq = α_ice = α` and `β_liq = β_ice = 0` the result is
+bitwise the Gaussian closure. Only the cover is affected; the Lagrange
+multiplier of the microphysics reconstruction keeps `α` from
+`cloud_fraction_steepness_scale`.
+"""
+@inline function _compute_cloud_fraction(
+    q_c, λ_ph, mu_S, sigma_S, q_sat, floor, phase,
+)
+    FT = typeof(q_c)
     (; ε_rel, σ_abs, margin, abs_margin, sharpness, residual) = floor
+    (; α_liq, α_ice, β_liq, β_ice) = phase
+    λ = clamp(λ_ph, zero(FT), one(FT))
+    # Exact fall-through when the two phases share a value (bitwise default).
+    α = ifelse(α_liq == α_ice, α_liq, λ * α_liq + (1 - λ) * α_ice)
+    β = ifelse(β_liq == β_ice, β_liq, λ * β_liq + (1 - λ) * β_ice)
     # Release the relative floor only where the mean is saturated by a
     # margin relative to the release width `w` — by default the
     # *equilibrium* PDF width, so the floor is released where the unfloored
@@ -743,13 +801,18 @@ The floor enters *only* the CF computation; the Lagrange multiplier `λ` (in
     σ_aug = α * sqrt(sigma_S^2 + σ_S_floor_sq)
     C = q_c / σ_aug
     z = _compute_z(C)
-    return normal_cdf(z)
+    cf_gauss = normal_cdf(z)
+    # Uniform (top-hat) PDF of the same variance: q_c = √3 σ_aug CF² for all
+    # CF ∈ [0, 1] (both the partly cloudy and the mostly cloudy branch).
+    cf_tophat = min(one(FT), sqrt(max(C, zero(FT)) / sqrt(FT(3))))
+    cf = ifelse(β == zero(FT), cf_gauss, (1 - β) * cf_gauss + β * cf_tophat)
+    return cloud_fraction_min_condensate_cap(cf, q_c, λ, phase)
 end
 
 """
     _compute_cloud_fraction(
         thermo_params, T, ρ, q_tot, q_liq, q_ice,
-        sgs_quad, T′T′, q′q′, corr_Tq, α, floor,
+        sgs_quad, T′T′, q′q′, corr_Tq, floor, phase,
     )
 
 Fused production overload: compute the hybrid cloud fraction in a single
@@ -769,16 +832,45 @@ materialized to a Field.
     T′T′,
     q′q′,
     corr_Tq,
-    α,
     floor,
+    phase,
 )
     moments = _sgs_saturation_moments(
         thermo_params, ρ, T, q_tot, sgs_quad, T′T′, q′q′, corr_Tq,
     )
     q_sat = TD.q_vap_saturation(thermo_params, T, ρ, q_liq, q_ice)
+    λ_ph = cloud_fraction_phase_weight(thermo_params, T, q_liq, q_ice, phase)
     return _compute_cloud_fraction(
-        q_liq + q_ice, moments.mu_S, moments.sigma_S, q_sat, α, floor,
+        q_liq + q_ice, λ_ph, moments.mu_S, moments.sigma_S, q_sat, floor, phase,
     )
+end
+
+"""
+    cloud_fraction_phase_weight(thermo_params, T, q_liq, q_ice, phase)
+
+Liquid weight `λ_ph ∈ [0, 1]` of the phase-dependent cover closure. With
+`phase.ΔT_ramp ≤ 0` it is the liquid fraction of the cloud condensate (the
+sharp thermodynamic ramp at freezing where there is none), the same phase
+weight the microphysics reconstruction uses. With `ΔT_ramp > 0` it is a
+temperature ramp from the homogeneous-nucleation temperature,
+
+    λ_ph = clamp((T − T_icenuc) / ΔT_ramp, 0, 1),
+
+so that the "ice" cover parameters apply fully only in the cold-cirrus regime
+(T ≤ T_icenuc, homogeneous freezing) and fade out over `ΔT_ramp` toward the
+mixed-phase layer; `ΔT_ramp = T_freeze − T_icenuc` (40 K) recovers the
+thermodynamic liquid-fraction ramp.
+"""
+@inline function cloud_fraction_phase_weight(thermo_params, T, q_liq, q_ice, phase)
+    FT = typeof(T)
+    ΔT = phase.ΔT_ramp
+    λ_c = TD.liquid_fraction(thermo_params, T, q_liq, q_ice)
+    λ_T = clamp(
+        (T - TD.Parameters.T_icenuc(thermo_params)) / max(ΔT, eps(FT)),
+        zero(FT),
+        one(FT),
+    )
+    return ifelse(ΔT > zero(FT), λ_T, λ_c)
 end
 
 """
@@ -816,6 +908,71 @@ cloud_fraction_floor_params(params) = CloudFractionFloorParams(;
     sharpness = CAP.cloud_fraction_floor_release_sharpness(params),
     residual = CAP.cloud_fraction_floor_residual(params),
 )
+
+"""
+    CloudFractionPhaseParams{FT}
+
+Phase-dependent cover-closure parameters for `_compute_cloud_fraction`,
+bundled into one isbits broadcast scalar: the width scales `α_liq`, `α_ice`
+(= 1 / `cloud_fraction_steepness_scale_{liquid,ice}`) of the cover
+inversion and the top-hat PDF weights `β_liq`, `β_ice`
+(`cloud_fraction_tophat_weight_{liquid,ice}`), and the temperature-ramp width
+`ΔT_ramp` of the phase weight (`cloud_fraction_phase_temperature_width`; 0
+selects the condensate liquid fraction, see `cloud_fraction_phase_weight`), and
+the minimum in-cloud condensate for cover `q_min_liq`, `q_min_ice`
+(`cloud_fraction_min_condensate_{liquid,ice}`, kg/kg; 0 disables the cap).
+"""
+Base.@kwdef struct CloudFractionPhaseParams{FT}
+    α_liq::FT
+    α_ice::FT
+    β_liq::FT
+    β_ice::FT
+    ΔT_ramp::FT = zero(FT)
+    q_min_liq::FT = zero(FT)
+    q_min_ice::FT = zero(FT)
+end
+CloudFractionPhaseParams(α_liq::FT, α_ice::FT, β_liq::FT, β_ice::FT) where {FT} =
+    CloudFractionPhaseParams{FT}(α_liq, α_ice, β_liq, β_ice, zero(FT), zero(FT), zero(FT))
+Base.broadcastable(x::CloudFractionPhaseParams) = tuple(x)
+
+"""
+    cloud_fraction_phase_params(params)
+
+Build the `CloudFractionPhaseParams` bundle from the model parameter set.
+"""
+cloud_fraction_phase_params(params) = CloudFractionPhaseParams(;
+    α_liq = sgs_variance_fidelity(
+        CAP.cloud_fraction_steepness_scale_liquid(params),
+    ),
+    α_ice = sgs_variance_fidelity(CAP.cloud_fraction_steepness_scale_ice(params)),
+    β_liq = CAP.cloud_fraction_tophat_weight_liquid(params),
+    β_ice = CAP.cloud_fraction_tophat_weight_ice(params),
+    ΔT_ramp = CAP.cloud_fraction_phase_temperature_width(params),
+    q_min_liq = CAP.cloud_fraction_min_condensate_liquid(params),
+    q_min_ice = CAP.cloud_fraction_min_condensate_ice(params),
+)
+
+"""
+    cloud_fraction_min_condensate_cap(cf, q_c, λ_ph, phase)
+
+Cap the cover `cf` so that the in-cloud condensate `q_c / cf` is at least the
+phase-blended minimum `q_min = λ_ph q_min_liq + (1 − λ_ph) q_min_ice`
+(`CloudFractionPhaseParams`): `cf ≤ q_c / q_min`. Cover below this in-cloud
+amount is optically empty (a 30-m layer at 0.02 g/kg has LWP < 1 g m⁻²) and
+should not count as cloud for radiation or total cover. Ice is optically
+thinner per unit mass than liquid (larger particles), hence a separate
+`q_min_ice`. `q_min ≤ 0` leaves `cf` unchanged (bitwise default).
+"""
+@inline function cloud_fraction_min_condensate_cap(cf, q_c, λ_ph, phase)
+    FT = typeof(cf)
+    λ = clamp(λ_ph, zero(FT), one(FT))
+    q_min = λ * phase.q_min_liq + (1 - λ) * phase.q_min_ice
+    return ifelse(
+        q_min > zero(FT),
+        min(cf, max(q_c, zero(FT)) / q_min),
+        cf,
+    )
+end
 
 """
     _fit_discrete_lagrange(λ0, q_c, α, S′s, ws)
@@ -939,6 +1096,7 @@ NVTX.@annotate function set_sgs_moments_and_cloud_fraction!(Y, p)
     FT = eltype(p.params)
     α = sgs_variance_fidelity(CAP.cloud_fraction_steepness_scale(p.params))
     floor = cloud_fraction_floor_params(p.params)
+    phase = cloud_fraction_phase_params(p.params)
     (; ᶜT′T′, ᶜq′q′) = p.precomputed
 
     # ONE quadrature pass → (sigma_S, λ_lagrange).
@@ -953,13 +1111,14 @@ NVTX.@annotate function set_sgs_moments_and_cloud_fraction!(Y, p)
     # the Picard iterate with a value consistent with the final SGS moments.
     @. p.precomputed.ᶜcloud_fraction = _compute_cloud_fraction(
         ᶜq_lcl_cf + ᶜq_icl_cf,
+        cloud_fraction_phase_weight(thermo_params, ᶜT_mean, ᶜq_lcl_cf, ᶜq_icl_cf, $(phase)),
         # μ_S recomputed analytically, matching `_sgs_saturation_moments`
         # (condensate-free q_sat, consistent with the linear excess S).
         ᶜq_mean - TD.q_vap_saturation(thermo_params, ᶜT_mean, ᶜρ_env),
         p.precomputed.ᶜsgs_moments.sigma_S,
         TD.q_vap_saturation(thermo_params, ᶜT_mean, ᶜρ_env, ᶜq_lcl_cf, ᶜq_icl_cf),
-        FT(α),
         $(floor),
+        $(phase),
     )
 end
 
@@ -1051,9 +1210,8 @@ NVTX.@annotate function set_cloud_fraction!(
 
     sgs_quad = p.atmos.sgs_quadrature
     corr_Tq = correlation_Tq(p.params)
-    FT = eltype(p.params)
-    α = sgs_variance_fidelity(CAP.cloud_fraction_steepness_scale(p.params))
     floor = cloud_fraction_floor_params(p.params)
+    phase = cloud_fraction_phase_params(p.params)
 
     (; ᶜT′T′, ᶜq′q′) = p.precomputed
 
@@ -1071,8 +1229,8 @@ NVTX.@annotate function set_cloud_fraction!(
         ᶜT′T′,
         ᶜq′q′,
         corr_Tq,
-        FT(α),
         $(floor),
+        $(phase),
     )
 end
 

@@ -261,6 +261,9 @@ implicit_microphysics:
 use_sgs_quadrature:
   help: "Enable subgrid-scale quadrature integration for microphysics tendencies. When true, microphysics tendencies are integrated over the joint SGS PDF of (T, q_tot). [`true` (default), `false`]"
   value: true
+sgs_variance_element_filter:
+  help: "Within-element filter of the horizontal-gradient invariants of the geometric SGS variance term. `none` uses the DSS'd nodal invariant; `lumped` replaces it by its lumped GLL{2} restriction (ClimaCore `LumpedRestriction`) plus a weighted DSS, removing the element-boundary excess of the nodal spectral-element gradient while conserving each element's mean. [`none` (default), `lumped`]"
+  value: "none"
 sgs_distribution:
   help: "Distribution type for SGS quadrature over microphysics. [`gaussian` (default), `lognormal`, `mean` (grid-mean only, no SGS sampling)]"
   value: "gaussian"

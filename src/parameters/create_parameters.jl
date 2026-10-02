@@ -593,6 +593,16 @@ function SGSQuadratureParameters(
         cloud_fraction_floor_release_abs_margin = FT(1),
         cloud_fraction_floor_release_sharpness = FT(1),
         cloud_fraction_floor_residual = FT(1),
+        # Phase-dependent cover closure (see `_compute_cloud_fraction`): the
+        # cover-inversion steepness per phase defaults to the shared
+        # steepness, and the top-hat PDF weights to 0 (truncated Gaussian).
+        cloud_fraction_steepness_scale_liquid = parameters.cloud_fraction_steepness_scale,
+        cloud_fraction_steepness_scale_ice = parameters.cloud_fraction_steepness_scale,
+        cloud_fraction_tophat_weight_liquid = FT(0),
+        cloud_fraction_tophat_weight_ice = FT(0),
+        cloud_fraction_phase_temperature_width = FT(0),
+        cloud_fraction_min_condensate_liquid = FT(0),
+        cloud_fraction_min_condensate_ice = FT(0),
     )
     provisional_present = filter(collect(keys(provisional_defaults))) do name
         haskey(toml_dict.data, string(name))

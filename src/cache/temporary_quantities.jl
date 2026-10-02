@@ -117,6 +117,12 @@ function temporary_quantities(Y, atmos)
         ᶜC12_dss_buffer = (uses_covariances(atmos) && do_dss(center_space)) ?
                           Spaces.create_dss_buffer(Fields.Field(C12{FT}, center_space)) :
                           nothing,
+        # DSS buffer for the element-filtered scalar invariant (`ElementLumpedFilter`)
+        ᶜscalar_dss_buffer = (
+            uses_covariances(atmos) &&
+            do_dss(center_space) &&
+            atmos.sgs_variance_element_filter isa ElementLumpedFilter
+        ) ? Spaces.create_dss_buffer(Fields.Field(FT, center_space)) : nothing,
         ᶜtemp_C3 = Fields.Field(C3{FT}, center_space), # ᶜ∇Φ₃
         ᶜtemp_CT3 = Fields.Field(CT3{FT}, center_space), # ᶜω³, ᶜ∇Φ³
         ᶜtemp_CT123 = Fields.Field(CT123{FT}, center_space),
