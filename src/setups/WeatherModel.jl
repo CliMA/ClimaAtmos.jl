@@ -110,8 +110,13 @@ function overwrite_initial_state!(setup::WeatherModel, Y, thermo_params)
     end
     ᶠp = if use_p3d
         @info "Using full 3D pressure from file variable `p_3d` (use_full_pressure=true)"
-        SpaceVaryingInputs.SpaceVaryingInput(
-            file_path, "p_3d", face_space; svi_kwargs...,
+        # Interpolate log(p): p is ~exponential in z, so linear-in-z interpolation
+        # across the file's coarse upper levels biases p high (~0.1% above 20 km).
+        exp.(
+            SpaceVaryingInputs.SpaceVaryingInput(
+                file_path, "p_3d", face_space; svi_kwargs...,
+                file_reader_kwargs = (; preprocess_func = log),
+            ),
         )
     else
         @warn "Requested full pressure initialization, but variable `p_3d` " *
