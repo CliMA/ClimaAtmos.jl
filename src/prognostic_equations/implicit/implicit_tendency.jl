@@ -358,6 +358,9 @@ NVTX.@annotate function correct_implicit_advection_tendency!(Yₜ, Y, p, t)
     (; dt) = p
     (; ᶠu³, ᶜh_tot) = p.precomputed
 
+    @show "++++++++++++++++++++++"
+    @show parent(Y.c.ρq_tot)[16:20]
+
     vtt_up = vertical_transport(Y.c.ρ, ᶠu³, ᶜh_tot, dt, energy_q_tot_upwinding)
     vtt_c = vertical_transport(Y.c.ρ, ᶠu³, ᶜh_tot, dt, Val(:none))
     @. Yₜ.c.ρe_tot = vtt_up - vtt_c
@@ -367,5 +370,7 @@ NVTX.@annotate function correct_implicit_advection_tendency!(Yₜ, Y, p, t)
         vtt_c = vertical_transport(Y.c.ρ, ᶠu³, ᶜq_tot, dt, Val(:none))
         @. Yₜ.c.ρq_tot = vtt_up - vtt_c
     end
+
+    @show parent(Yₜ.c.ρq_tot)[16:20]
     return nothing
 end
