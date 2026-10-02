@@ -19,7 +19,7 @@ y_elem: 2
 z_elem: 30
 z_stretch: false
 dt: 120secs
-t_end: 6hours
+t_end: 62mins
 dt_save_state_to_disk: 10mins
 toml: [toml/prognostic_edmfx_1M.toml]
 netcdf_interpolation_num_points: [2, 2, 30]
