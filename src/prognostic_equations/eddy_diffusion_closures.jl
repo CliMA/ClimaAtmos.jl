@@ -511,8 +511,8 @@ function ᶜVanLeer_gradient!(ᶜout, ᶠ∂ψ∂z, ᶜψ)
     nc = Spaces.nlevels(axes(ᶜout))
     FT = Spaces.undertype(axes(ᶜout))
     # TODO: pull Δz from the local geometry instead of hardcoding.
-    Δz = FT(50)
-    c_threshold = FT(10)
+    # Δz = FT(50)
+    # c_threshold = FT(10)
     ᶜbias_below = Operators.BottomBiasedF2C(
         bottom = Operators.SetValue(
             Fields.level(ᶠ∂ψ∂z, 1 + Fields.half),
@@ -527,7 +527,7 @@ function ᶜVanLeer_gradient!(ᶜout, ᶠ∂ψ∂z, ᶜψ)
         harmonic_mean(
             ᶜbias_below(ᶠ∂ψ∂z),
             ᶜbias_above(ᶠ∂ψ∂z),
-            c_threshold * eps(ᶜψ) / Δz,
+            # c_threshold * eps(ᶜψ) / Δz,
         ) * unit_basis_vector_data(C3, ᶜlg),
     )
     return nothing
@@ -544,11 +544,11 @@ the intermediate `a*b`.
 """
 @inline harmonic_mean(a, b) = harmonic_mean(a, b, zero(a))
 
-@inline function harmonic_mean(a, b, τ)
+@inline function harmonic_mean(a, b)
     same_sign = ((a > zero(a)) & (b > zero(b))) |
                 ((a < zero(a)) & (b < zero(b)))
-    above_floor = (abs(a) > τ) & (abs(b) > τ)
-    use_hm = same_sign & above_floor
+    # above_floor = (abs(a) > τ) & (abs(b) > τ)
+    use_hm = same_sign# & above_floor
     denom = ifelse(use_hm, a + b, one(a))
     return ifelse(use_hm, 2 * a * (b / denom), zero(a))
 end

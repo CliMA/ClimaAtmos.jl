@@ -648,7 +648,12 @@ function radiation_tendency!(Yₜ, Y, p, t, radiation_mode::RadiationDYCOMS)
             abs(specific.(nt1.ρq_tot, nt1.ρ) - q_tot_isoline) <
             abs(specific.(nt2.ρq_tot, nt2.ρ) - q_tot_isoline) ? nt1 : nt2,
         isoline_z_ρ_ρq,
-        Base.broadcasted(NT ∘ tuple, ᶜz, Y.c.ρ, Y.c.ρq_tot),
+        Base.broadcasted(
+            (z, ρ, ρq_tot) -> (; z, ρ, ρq_tot),
+            ᶜz,
+            Y.c.ρ,
+            Y.c.ρq_tot,
+        ),
     )
 
     zi = isoline_z_ρ_ρq.z
