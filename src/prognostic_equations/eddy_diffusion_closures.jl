@@ -542,8 +542,6 @@ a sign *and* both have magnitude above `τ`, else zero. Written as
 at Float32 (e.g. humidity slopes on coarse grids) do not underflow through
 the intermediate `a*b`.
 """
-@inline harmonic_mean(a, b) = harmonic_mean(a, b, zero(a))
-
 @inline function harmonic_mean(a, b)
     same_sign = ((a > zero(a)) & (b > zero(b))) |
                 ((a < zero(a)) & (b < zero(b)))
