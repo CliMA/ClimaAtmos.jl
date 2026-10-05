@@ -20,7 +20,7 @@ without double counting.
     `E_IN = 0` over water, rebound `R₁ = exp(-√St)`, smooth-surface Stokes
     number `St = τ·u★²/ν` with the particle relaxation time `τ = V_g/g`, and
     `Sc = ν/D_B`,
-    `D_B = k_B·T·Cc/(6π·μ·r_wet)` (Stokes–Einstein), with the wet settling
+    `D_B = k_B·T·Cc/(6π·μ·r_wet)` ([`brownian_diffusivity`](@ref)), with the wet settling
     radius `r_wet = ξ · r_dry`, the air viscosity `μ` and mean free path `λ`
     from the same [`_aerosol_air_state`](@ref) as the settling velocity, and
     `Cc = Cc(λ/r_wet)`.
@@ -74,7 +74,7 @@ function sslt_dry_deposition_velocity(
 
     C_c = cunningham_slip_correction(λ / r_wet, ap.cunningham_C)
     ν = μ / ρ_air
-    D_B = ap.k_B * T * C_c / (6 * FT(π) * μ * r_wet)
+    D_B = brownian_diffusivity(T, C_c, μ, r_wet, ap.k_B)
     Sc = ν / D_B
 
     St = V_g * ustar^2 / (grav * ν)
@@ -107,12 +107,51 @@ factor is evaluated once and feeds the wet radius, the wet density, and the
 function sslt_bin_dry_deposition_velocity(
     air, T, r_dry, C_kelvin, ρ_s, ρ_air, z_R, L, z₀, ustar, uf_params, κ_vk, grav, ap,
 )
-    (; RH, μ, λ) = air
-    ξ = sslt_growth_factor(RH, sslt_kelvin_shift(C_kelvin, T), ap)
-    ρ_wet = wet_density(ρ_s, ap.ρ_water, ξ)
-    V_g = settling_velocity(r_dry, ξ, ρ_wet, ρ_air, μ, λ, grav, ap)
+    (; μ, λ) = air
+    ξ, _, V_g = bin_wet_particle(air, T, r_dry, C_kelvin, ρ_s, ρ_air, grav, ap)
     return sslt_dry_deposition_velocity(
         V_g, r_dry, ξ, ρ_air, T, μ, λ, z_R, L, z₀, ustar, uf_params, κ_vk, grav,
         ap,
     )
+end
+
+"""
+    sslt_bin_budgeted_deposition_velocity(
+        air, T, r_dry, C_kelvin, ρ_s, ρ_air, z_R, L, z₀, ustar, uf_params, κ_vk,
+        grav, courant_budget, ap,
+    )
+
+[`sslt_bin_dry_deposition_velocity`](@ref) limited so that settling and dry
+deposition TOGETHER stay inside one explicit-removal budget `courant_budget`
+(`settling_courant_max · Δz₁ / Δt`), rather than each being capped at the full
+budget separately.
+
+Capping them separately lets the lowest cell lose `Courant = 1` in a single
+stage — settling drains up to half of it through the free-outflow surface
+boundary while dry deposition removes up to half again — which empties the cell
+and, with any stage-splitting overshoot, drives it negative. Both sinks are
+proportional to the tracer, so a negative concentration turns them into
+sources: sea-salt bin 5 (the only bin whose velocities saturate both caps)
+diverged super-exponentially from the surface upward this way. The joint budget
+is also what `settling_courant_max` is documented to mean in ClimaParams:
+"the explicit gravitational settling *and* turbulent dry-deposition sinks".
+
+Settling has first claim on the budget because it is the term with the surface
+outflow boundary; dry deposition receives whatever is left, which is zero in
+the (rare) cells where settling alone saturates it.
+"""
+function sslt_bin_budgeted_deposition_velocity(
+    air, T, r_dry, C_kelvin, ρ_s, ρ_air, z_R, L, z₀, ustar, uf_params, κ_vk,
+    grav, courant_budget, ap,
+)
+    FT = typeof(courant_budget)
+    (; μ, λ) = air
+    ξ, _, V_g = bin_wet_particle(air, T, r_dry, C_kelvin, ρ_s, ρ_air, grav, ap)
+    V_d = sslt_dry_deposition_velocity(
+        V_g, r_dry, ξ, ρ_air, T, μ, λ, z_R, L, z₀, ustar, uf_params, κ_vk, grav,
+        ap,
+    )
+    # what settling already claims in this cell, then the remainder
+    remaining = courant_budget - min(V_g, courant_budget)
+    return min(V_d, max(remaining, zero(FT)))
 end

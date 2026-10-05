@@ -453,10 +453,15 @@ function prognostic_aerosol_parameters(toml_dict)
         :ssa_lewis_b => :lewis_b,
         # explicit settling
         :ssa_settling_courant_max => :settling_courant_max,
-        # below-cloud washout: per-bin collection efficiency for the 1M
-        # swept-volume rate (Feng-anchored), and per-bin power-law prefactor
-        # [s⁻¹ at 1 mm/h] and exponent in rain rate for the 0M shadow
-        :ssa_collection_efficiency => :ssa_E_coll,
+        # below-cloud washout: the Slinn (1984) raindrop–aerosol collection
+        # efficiency (Brownian, interception, impaction terms, as reproduced
+        # in Feng 2007) evaluated per bin on the 1M swept-volume rate, and the
+        # per-bin power-law prefactor [s⁻¹ at 1 mm/h] and exponent in rain
+        # rate for the 0M shadow, which has no rain state to evaluate E on
+        :slinn_brownian_coefficients => :slinn_C_B,
+        :slinn_critical_stokes_coefficients => :slinn_S_star_C,
+        :slinn_impaction_exponent => :slinn_impaction_exp,
+        :liquid_water_dynamic_viscosity => :μ_water,
         :ssa_washout_prefactor => :ssa_washout_a,
         :ssa_washout_exponent => :ssa_washout_b,
         # turbulent dry deposition (Zhang 2001 scheme with the Emerson 2020

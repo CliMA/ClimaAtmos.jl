@@ -195,13 +195,20 @@ reproduces the fit's slope analytically and replaces the fitted prefactor
 
 **Tiering for `E_bin`:**
 
-1. **First draft — per-bin constant `E_bin`** (mirrors the accretion kernel's
-   own constant `E = 0.8`): evaluate the Slinn (1984) semi-empirical
-   efficiency at the bin's wet radius (`ᶜsslt_ξ · p.tracers.sslt_settling_radii[bin]`) and a
+1. **First draft — per-bin constant `E_bin`** (*was implemented, then
+   replaced 2026-09-21; see "Superseded" below*; mirrored the accretion
+   kernel's own constant `E = 0.8`): the Slinn (1984) semi-empirical
+   efficiency pre-evaluated offline at the bin's wet radius and a
    representative drop size; coarse bins → `E ≈ 1` (inertial impaction),
    SSLT01–02 → small (Greenfield gap). One ClimaParams vector `ssa_E_coll`
    per bin; closed form, one broadcast, GPU-trivial.
-2. **Follow-up — `E(D, a_wet)` resolved**: CM has **no** Slinn/impaction code
+   1.5. **Implemented (2026-09-21) — Slinn `E` in-kernel, one drop per cell**:
+   `slinn_collection_efficiency` evaluated per cell, per subdomain, per bin at
+   the bin's wet settling radius (dry settling radius × Lewis Eq. 34 ξ at the
+   subdomain RH) against the swept-volume-weighted mean drop
+   `r_D = (ae+ve+Δa+Δv+1)·λ⁻¹` of the model DSD; no DSD integral of `E`, no
+   per-bin table. Only Slinn's own coefficients are parameters.
+2. **Remaining follow-up — `E(D, a_wet)` resolved over the DSD**: CM has **no** Slinn/impaction code
    anywhere (verified — the only "collision efficiency" hits are the constant
    TOML scalars), so a size-resolved E is genuinely new. Two routes: numerical
    `Quadrature.integrate` with exponential-quantile bounds — the exact pattern
@@ -247,8 +254,22 @@ consistency that justifies a constant `E_bin`):
 | SSLT03, SSLT04 | 3 (coarse-a) | `0.42` |
 | SSLT05 | 4 (coarse-b) | `0.94` |
 
-These are the `ssa_collection_efficiency` ClimaParams defaults; they inherit
-Feng's magnitude while the model's own DSD supplies the R-dependence.
+These were the `ssa_collection_efficiency` ClimaParams defaults (removed
+2026-09-21); they inherited Feng's magnitude while the model's own DSD supplied
+the R-dependence.
+
+**Superseded (2026-09-21):** the constant is replaced by the Slinn (1984)
+efficiency itself (`slinn_collection_efficiency`, Feng 2007 form: Brownian +
+interception + impaction, clamped to [0, 1]), evaluated per cell, per
+subdomain, per bin at the bin's wet settling radius (dry settling radius × the
+Lewis Eq. 34 growth factor at the subdomain RH) against one representative drop
+per cell — the swept-volume-weighted mean radius `r_D = (ae+ve+Δa+Δv+1)·λ⁻¹` of
+the model DSD, falling at the same 1M power-law speed
+(`rain_representative_drop`). `E` is now a function of RH, rain state, and
+bin, not a table; the only new coefficients are Slinn's own
+(`slinn_brownian_coefficients`, `slinn_critical_stokes_coefficients`,
+`slinn_impaction_exponent`) plus `liquid_water_dynamic_viscosity`. The 0M path
+has no rain state and stays on the Feng power law.
 
 ### 3c. Activation-driven in-cloud scavenging
 
@@ -266,7 +287,7 @@ The precip-formation driver feeding this term is fixed by §3a (process-level ve
 
 | Param | Meaning | Note |
 |---|---|---|
-| `ssa_E_coll[bin]` | per-bin collection efficiency in the DSD-derived Λ (§3b) | the one genuinely new physics knob; Slinn-evaluated defaults, coarse → ~1, accumulation → small (Greenfield gap) |
+| ~~`ssa_E_coll[bin]`~~ → `slinn_C_B`, `slinn_S_star_C`, `slinn_impaction_exp`, `μ_water` | Slinn (1984) collection efficiency evaluated in-kernel in the DSD-derived Λ (§3b) | replaces the per-bin constant; coarse → ~1, accumulation → small (Greenfield gap) falls out of the formula |
 | `wash_a[bin]`, `wash_b[bin]` | Feng `aP^b` per bin, rain — **cross-check/fallback closure only** (§3b) | coarse-mode for SSLT04/05, accumulation-mode (small) for SSLT01–03 |
 | `wash_a_snow[bin]`, `wash_b_snow[bin]` | same, snow | higher than rain; add with snow term |
 
@@ -277,12 +298,16 @@ Required addition to the (server-side, prepped) ClimaParams TOML — the same
 uncommitted-keys situation as the other `ssa_*` parameters:
 
 ```toml
-[ssa_collection_efficiency]
-value = [5.2e-4, 5.2e-4, 0.42, 0.42, 0.94]
-type = "float"
-description = "Per-bin rain collection efficiency for sea salt below-cloud washout (Feng 2007 marine, anchored to the model rain DSD; see docs §3b)."
+[slinn_brownian_coefficients]          # C₁, C₂ of E_Br
+value = [0.4, 0.16]
+[slinn_critical_stokes_coefficients]   # a, b of S* = (a + b ln(1+Re)) / (1 + ln(1+Re))
+value = [1.2, 0.08333]
+[slinn_impaction_exponent]             # 3/2
+value = 1.5
+[liquid_water_dynamic_viscosity]       # μ_w in ω = μ_w/μ_a, kg m⁻¹ s⁻¹ (~20 °C)
+value = 1.0e-3
 ```
-Activated fraction is *computed*, not a parameter. Note the intent: the small handful of coefficients (`ssa_E_coll`, or Feng `a` if that closure is active) are the calibration knobs against 210Pb / sea-salt obs — not free tuning to hide structural error.
+(`ssa_collection_efficiency` removed.) Activated fraction is *computed*, not a parameter. Note the intent: the small handful of coefficients (Slinn's, or Feng `a` if that closure is active) are the calibration knobs against 210Pb / sea-salt obs — not free tuning to hide structural error.
 
 ---
 
@@ -320,3 +345,24 @@ Activated fraction is *computed*, not a parameter. Note the intent: the small ha
    drop diameter is the natural choice), and whether the run's TOML uses the
    geometric or `CliMA_1M`-calibrated rain area parameters.
 4. **How soon to add the cloud-borne tracer** — gated on whether pristine-ocean ACI is an early deliverable.
+
+---
+
+## 8. Diagnostics: interpreting washout vs. settling (future improvement)
+
+When comparing below-cloud washout to gravitational settling as *removal
+timescales*, washout is intrinsically length-free (`τ_wash = 1/Λ`, a volumetric
+first-order sink), but settling is a surface flux and only becomes a rate once
+divided by a column depth. The current diagnostic charts use a **fixed 1-km
+well-mixed sub-cloud column** (`τ_settle = H/V_g`, `H = 1 km`) — simple and good
+enough for a first look, but the `H` is arbitrary and, worse, size-independent.
+
+**Better (deferred):** use each bin's own **vertical scale height** as the
+settling length, because burden ÷ surface-flux = scale height automatically
+(`τ_settle = h/V_g` for `C ∝ e^{−z/h}`), so it is not a free parameter. Two
+routes, in order of rigor: (1) diagnose `h_i` directly from the model's own bin
+profiles (`burden_i / surface_C_i`); (2) estimate `h_i ≈ min(K/V_g,i, z_cloud_base)`
+from the settling–diffusion balance. This matters most for the coarse bins:
+they settle fastest *and* sit lowest, so a fixed 1-km column overstates washout's
+dominance for exactly SSLT04–05 (e.g. bin 5's washout/settling ratio at 1 mm h⁻¹
+drops from ~14× with `H = 1 km` to ~4× with its real ~300 m scale height).

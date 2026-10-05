@@ -305,16 +305,34 @@ apart at the surface.
 ### Below-cloud washout
 
 With 1-moment microphysics each bin is removed at the first-order rate
-``k = E_\mathrm{bin}\,\Lambda(q_\mathrm{rai}, \rho)``, where ``\Lambda`` is the
+``k = E\,\Lambda(q_\mathrm{rai}, \rho)``, where ``\Lambda`` is the
 swept-volume collection rate of the Marshall–Palmer rain population
 (`rain_swept_collection_rate`, the same closed form as the accretion kernel)
-and ``E_\mathrm{bin}`` the per-bin collection efficiency
-(`ssa_collection_efficiency`). The sink is applied in the unconditionally
-stable form ``\partial_t(\rho\chi) = \rho\chi\,(e^{-k\Delta t} - 1)/\Delta t``.
+and ``E \in [0, 1]`` the raindrop–aerosol collection efficiency of Slinn (1984)
+as reproduced in Feng (2007) (`slinn_collection_efficiency`): the sum of a
+Brownian-diffusion, an interception, and an inertial-impaction term, clamped
+to ``[0, 1]``. ``E`` is evaluated per cell, per subdomain, and per bin
+(`sslt_bin_washout_rate`) for the bin's *wet* settling radius, the dry
+settling radius ``\sqrt{M_5/M_3}`` times the Lewis Eq. 34 growth factor
+``\xi`` at the subdomain relative humidity, with the wet density and settling
+speed of the settling chain and the Brownian diffusivity of the dry-deposition
+chain, against one representative raindrop per cell: the swept-volume-weighted
+mean radius of the exponential rain size distribution,
+``r_D = (a_e + v_e + \Delta_a + \Delta_v + 1)\,\lambda^{-1}``
+(`rain_representative_drop_radius`), falling at the same 1-moment power-law
+speed (`rain_drop_fall_speed`). The Greenfield gap of the accumulation bins
+(``E \sim 10^{-4}``–``10^{-3}``) and ``E \approx 1`` of the coarse bins fall
+out of the formula rather than being tabulated. Slinn's coefficients are the
+ClimaParams keys `slinn_brownian_coefficients`,
+`slinn_critical_stokes_coefficients`, and `slinn_impaction_exponent`, and the
+drop-side viscosity of the interception term is `liquid_water_dynamic_viscosity`.
+The sink is applied in the unconditionally stable form
+``\partial_t(\rho\chi) = \rho\chi\,(e^{-k\Delta t} - 1)/\Delta t``.
 
 Under `PrognosticEDMFX` the rate is evaluated per subdomain from each
-subdomain's own rain and density, ``\Lambda^0`` on the environment residual
-``q_\mathrm{rai}^0`` and ``\Lambda^j`` on each updraft's ``q_\mathrm{rai}^j``.
+subdomain's own rain, density, temperature, and relative humidity,
+``E^0\Lambda^0`` on the environment residual ``q_\mathrm{rai}^0`` and
+``E^j\Lambda^j`` on each updraft's ``q_\mathrm{rai}^j``.
 The grid-mean tracer is removed at the mass-weighted rate
 
 ```math

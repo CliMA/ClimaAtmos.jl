@@ -198,8 +198,11 @@ function species_aerosol_cache(Y, params, sslt::PrognosticSeaSalt)
     settling_radii = sslt_settling_radii(bin_moments, ap)
     kelvin_coeffs = sslt_kelvin_coefficients(settling_radii, params)
     # Bin-independent air state (RH, viscosity, mean free path) of the
-    # environment and of each updraft, overwritten every stage by
-    # `aerosol_settling_tendency!` before the bin loop reads it.
+    # environment and of each updraft, refilled from the current state by
+    # `set_sslt_air_states!` wherever it is read: in the precomputed update
+    # (`set_sslt_wet_deposition_rates!`) and in the tendency
+    # (`aerosol_settling_tendency!`), each before its own bin loop, because
+    # the two run at different points of a stage.
     air_state_type = NamedTuple{(:RH, :μ, :λ), NTuple{3, FT}}
     sslt_air_state⁰ = Fields.Field(air_state_type, axes(Y.c))
     sslt_air_stateʲs = ntuple(_ -> Fields.Field(air_state_type, axes(Y.c)), n_updrafts)

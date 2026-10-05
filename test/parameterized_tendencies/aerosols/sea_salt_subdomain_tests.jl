@@ -180,28 +180,53 @@ end
 
     CA.set_sslt_wet_deposition_rates!(Y, p)
     cmp = CA.CAP.microphysics_1m_params(p.params)
+    rain, vel = cmp.precip.rain, cmp.terminal_velocity.rain
     ap = CA.CAP.prognostic_aerosol_params(p.params)
-    (; ᶜρʲs) = p.precomputed
+    thp = CA.CAP.thermodynamics_params(p.params)
+    grav = FTc(CA.CAP.grav(p.params))
+    ρ_s = CA.CAP.prescribed_aerosol_params(p.params).seasalt_density
+    (; ᶜρʲs, ᶜTʲs, ᶜp, ᶜT⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰) = p.precomputed
+    (; sslt_air_state⁰, sslt_air_stateʲs, sslt_settling_radii, sslt_kelvin_coeffs) =
+        p.tracers
+
+    # Reference chain of each subdomain, as the rate setter evaluates it: the
+    # representative drop and unit-efficiency swept rate of that subdomain's
+    # rain, then the Slinn efficiency at the bin's wet settling radius on the
+    # subdomain air state (filled by `set_sslt_wet_deposition_rates!`).
+    ᶜq_raiʲ = @. max(FTc(0), Y.c.sgsʲs.:(1).q_rai)
+    ᶜρʲ = ᶜρʲs.:(1)
+    ᶜr_Dʲ = @. CA.rain_representative_drop_radius(ᶜq_raiʲ, ᶜρʲ, rain, vel)
+    ᶜV_Dʲ = @. CA.rain_drop_fall_speed(ᶜr_Dʲ, ᶜρʲ, rain, vel)
+    ᶜΛʲ = @. CA.rain_swept_collection_rate(ᶜq_raiʲ, ᶜρʲ, rain, vel)
+    ᶜq_rai⁰ = CA.ᶜspecific_env_value(CA.MatrixFields.@name(q_rai), Y, p)
+    ᶜρ⁰ = @. TD.air_density(thp, ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰)
+    ᶜr_D⁰ = @. CA.rain_representative_drop_radius(ᶜq_rai⁰, ᶜρ⁰, rain, vel)
+    ᶜV_D⁰ = @. CA.rain_drop_fall_speed(ᶜr_D⁰, ᶜρ⁰, rain, vel)
+    ᶜΛ⁰ = @. CA.rain_swept_collection_rate(ᶜq_rai⁰, ᶜρ⁰, rain, vel)
+    @test all(>(0), parent(ᶜr_Dʲ)) && all(>(0), parent(ᶜV_Dʲ))
     for (i, name) in enumerate(CA.bin_names(sslt))
         ᶜk = getproperty(p.tracers.sslt_wetdep_rates, Symbol(:ρ, name))
         ᶜkʲ = getproperty(p.tracers.sslt_wetdep_ratesʲs, Symbol(:ρ, name))[1]
         @test all(x -> isfinite(x) && x > 0, parent(ᶜk))
         @test all(x -> isfinite(x) && x > 0, parent(ᶜkʲ))
+        r_settle, C_kelvin = sslt_settling_radii[i], sslt_kelvin_coeffs[i]
         # The updraft rate is the washout rate of the updraft's own rain.
-        E = FTc(ap.ssa_E_coll[i])
-        ᶜkʲ_ref = @. E * CA.rain_swept_collection_rate(
-            Y.c.sgsʲs.:(1).q_rai, ᶜρʲs.:(1), cmp.precip.rain, cmp.terminal_velocity.rain,
+        ᶜkʲ_ref = @. CA.sslt_bin_washout_rate(
+            sslt_air_stateʲs[1], ᶜTʲs.:(1), r_settle, C_kelvin, ρ_s, ᶜρʲ,
+            ᶜr_Dʲ, ᶜV_Dʲ, ᶜΛʲ, grav, (ap,),
         )
         @test parent(ᶜkʲ) ≈ parent(ᶜkʲ_ref)
+        # E ≤ 1, so no rate exceeds the swept rate of its own rain.
+        @test all(parent(ᶜkʲ) .<= parent(ᶜΛʲ))
         # The updraft holds more rain than the environment residual, so its
-        # rate exceeds the mass-weighted grid-mean rate, which in turn exceeds
-        # a rate evaluated on the (drier) environment residual alone.
-        ᶜq_rai⁰ = CA.ᶜspecific_env_value(CA.MatrixFields.@name(q_rai), Y, p)
-        ᶜk⁰_ref = @. E * CA.rain_swept_collection_rate(
-            ᶜq_rai⁰, Y.c.ρ, cmp.precip.rain, cmp.terminal_velocity.rain,
+        # rate exceeds the mass-weighted grid-mean rate, which in turn lies
+        # above the rate of the (drier) environment residual alone.
+        ᶜk⁰_ref = @. CA.sslt_bin_washout_rate(
+            sslt_air_state⁰, ᶜT⁰, r_settle, C_kelvin, ρ_s, ᶜρ⁰,
+            ᶜr_D⁰, ᶜV_D⁰, ᶜΛ⁰, grav, (ap,),
         )
         @test all(parent(ᶜkʲ) .> parent(ᶜk))
-        @test all(parent(ᶜk) .> FTc(0.999) .* parent(ᶜk⁰_ref))
+        @test all(parent(ᶜk) .>= FTc(1 - 1e-6) .* parent(ᶜk⁰_ref))
     end
 
     # Tendencies: sinks in both subdomains, exponential form bounded by the

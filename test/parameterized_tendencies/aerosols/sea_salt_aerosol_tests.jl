@@ -278,12 +278,76 @@ end
     @test slope ≈ 7 / 9 rtol = 1e-6
 end
 
-@testset "Collection efficiency defaults (Greenfield gap)" begin
-    E_coll = AP.ssa_E_coll
-    @test length(E_coll) == NBINS
-    # Accumulation bins collect far less efficiently than coarse bins,
-    # and efficiency is bounded by 1.
-    @test E_coll[1] == E_coll[2] < E_coll[3] == E_coll[4] < E_coll[5] <= 1
+@testset "Slinn collection efficiency (Greenfield gap)" begin
+    toml = CA.CP.create_toml_dict(FT)
+    cmp = CA.CM.Parameters.Microphysics1MParams(toml)
+    rain = cmp.precip.rain
+    vel = cmp.terminal_velocity.rain
+
+    # Fixed forcings of the figure suite: T = 288.15 K, p = 1013.25 hPa,
+    # RH = 0.86 (mass-weighted mean RH of the sea-salt population in the
+    # 1-day run), R = 1 mm/h of rain, i.e. ρ q_rai v_term(q_rai) = 1/3600.
+    T, p_air, RH = FT(288.15), FT(101325), FT(0.86)
+    ρ_air = p_air / (R_D * T)
+    (; μ, λ) = air_state(T, ρ_air)
+    air = (; RH, μ, λ)
+    P = FT(1) / 3600
+    flux(q) = ρ_air * q * CA.CM1.terminal_velocity(rain, vel, ρ_air, q)
+    q_lo, q_hi = FT(1e-12), FT(1e-1)
+    for _ in 1:200
+        q_mid = sqrt(q_lo * q_hi)
+        flux(q_mid) < P ? (q_lo = q_mid) : (q_hi = q_mid)
+    end
+    q_rai = sqrt(q_lo * q_hi)
+    r_D, V_D = CA.rain_representative_drop(q_rai, ρ_air, rain, vel)
+    Λ = CA.rain_swept_collection_rate(q_rai, ρ_air, rain, vel)
+    # The swept-volume-weighted mean drop is (ae+ve+Δa+Δv+1) λ⁻¹ and falls at
+    # the 1M power-law speed.
+    λ_inv = CA.CM1.lambda_inverse(rain.pdf, rain.mass, q_rai, ρ_air)
+    k = rain.area.ae + vel.ve + rain.area.Δa + vel.Δv
+    @test r_D ≈ (k + 1) * λ_inv
+    @test V_D ≈ vel.χv * CA.CM1.get_v0(vel, ρ_air) * (r_D / rain.mass.r0)^(vel.ve + vel.Δv)
+    @test CA.rain_representative_drop(FT(0), ρ_air, rain, vel) == (0, 0)
+
+    bin_moments = CA.sslt_bin_moments(PARAMS, MAX_MOMENT, FT)
+    r_dry = CA.sslt_settling_radii(bin_moments, AP)
+    C_kelvin = CA.sslt_kelvin_coefficients(r_dry, PARAMS)
+    function slinn_E(i, r_D, V_D)
+        ξ, ρ_wet, V_g =
+            CA.bin_wet_particle(air, T, r_dry[i], C_kelvin[i], ρ_s, ρ_air, G, AP)
+        r_wet = r_dry[i] * ξ
+        C_c = CA.cunningham_slip_correction(λ / r_wet, AP.cunningham_C)
+        D_B = CA.brownian_diffusivity(T, C_c, μ, r_wet, AP.k_B)
+        return CA.slinn_collection_efficiency(
+            r_wet, ρ_wet, V_g, D_B, r_D, V_D, ρ_air, μ, G, AP,
+        )
+    end
+    E = map(i -> slinn_E(i, r_D, V_D), 1:NBINS)
+    @test all(x -> isfinite(x) && 0 <= x <= 1, E)
+    # Greenfield gap: the accumulation bins (Brownian + interception only)
+    # collect orders of magnitude less efficiently than the coarse bins, which
+    # impaction takes to E ≈ 1.
+    @test E[1] < 1e-3 && E[2] < 1e-3
+    @test 1e-3 < E[3] < E[4] <= E[5]
+    @test E[5] ≈ 1
+    # The washout rate is E times the swept rate.
+    for i in 1:NBINS
+        @test CA.sslt_bin_washout_rate(
+            air, T, r_dry[i], C_kelvin[i], ρ_s, ρ_air, r_D, V_D, Λ, G, AP,
+        ) ≈ E[i] * Λ
+    end
+    # No drop ⇒ no collection, and the guarded branch stays finite.
+    @test all(i -> slinn_E(i, FT(0), FT(0)) == 0, 1:NBINS)
+    @test all(i -> slinn_E(i, r_D, FT(0)) == 0, 1:NBINS)
+    # Float32 in, finite Float32 out.
+    to32(x::AbstractFloat) = Float32(x)
+    to32(x::AbstractArray) = Float32.(x)
+    to32(x) = x
+    E32 = CA.slinn_collection_efficiency(
+        Float32(1e-6), 1500.0f0, 1.0f-4, 1.0f-11, Float32(r_D), Float32(V_D),
+        Float32(ρ_air), Float32(μ), Float32(G), map(to32, AP),
+    )
+    @test E32 isa Float32 && isfinite(E32) && 0 <= E32 <= 1
 end
 
 @testset "Power-law washout rate (0M)" begin

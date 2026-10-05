@@ -130,6 +130,9 @@ include("negative_scalars_diagnostics.jl")
 include("microphysics_diagnostics.jl")
 include("cosp_diagnostics.jl")
 include("tendency_diagnostics.jl")
+# AUTODEBUG (local only, do not commit): opt-in sea-salt deposition
+# diagnostics dryss/wetss, needed for the physical ground-truth run.
+include("local_diagnostics.jl")
 
 # Default diagnostics and higher level interfaces
 include("default_diagnostics.jl")

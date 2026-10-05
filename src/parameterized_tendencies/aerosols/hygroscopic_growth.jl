@@ -52,10 +52,31 @@ end
 
 Lewis (2008, Eq. 34): Eq. 33 with the dry-size-dependent Kelvin shift `ε`
 ([`sslt_kelvin_shift`](@ref)), `a (b + 1 / (1 - h + ε))^(1/3)`,
-`h = clamp(RH, 0, 1)`; finite at RH = 1 without a cap.
+`h = clamp(RH, 0, rh_cap)`.
+
+The Kelvin term alone does keep Eq. 34 finite at RH = 1, but only barely and
+in a size-dependent way: `ε ∝ r_dry^(-3/2)`, so the coarse bins reach
+`ξ ≈ 59` (bin 4) and `ξ ≈ 95` (bin 5) there, i.e. wet radii of 0.2-0.8 mm.
+Those are not equilibrium sizes in any usable sense — a particle this large is
+past its Köhler maximum (critical supersaturation ~1e-4 % for giant sea salt),
+so no stable equilibrium exists, the radius is set by where the singularity
+happens to be regularized, and it is unreachable anyway: the growth here is
+diagnostic, so the model would jump to it in one step without drawing the
+water from `q_tot`. Downstream, a Stokes settling velocity at that radius is
+also invalid (Re ~ 10²-10³).
+
+Capping at `rh_cap` keeps the growth factor inside the regime where an
+equilibrium radius exists, matching what
+[`sslt_kappa_kohler_growth_factor`](@ref) and
+[`sslt_lewis33_growth_factor`](@ref) already do.
+
+NOTE: this leaves the removal of *activated* coarse sea salt unrepresented —
+there is no in-cloud or nucleation scavenging on this branch, only below-cloud
+washout. Giant nuclei really are removed within minutes in cloud; that physics
+is missing, not merely capped.
 """
 function sslt_lewis34_growth_factor(RH, ε, ap)
-    h = clamp(RH, zero(RH), one(RH))
+    h = clamp(RH, zero(RH), ap.rh_cap)
     return ap.lewis_a * cbrt(ap.lewis_b + 1 / (1 - h + ε))
 end
 

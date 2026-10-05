@@ -34,6 +34,194 @@ function rain_swept_collection_rate(q_rai, ρ, rain, vel)
 end
 
 """
+    rain_representative_drop_radius(q_rai, ρ, rain, vel)
+
+Radius `r_D` [m] of the single raindrop that stands in for the whole
+Marshall–Palmer population when the collection efficiency is evaluated (one
+drop per cell, not a size-distribution integral of `E`): the swept-volume
+weighted mean radius
+
+    r_D = ∫ r·a(r)·v(r)·n(r) dr / ∫ a(r)·v(r)·n(r) dr = (k + 1) · λ⁻¹,
+    k = ae + ve + Δa + Δv,
+
+i.e. `Γ(k+2)/Γ(k+1) = k + 1` for the exponential `n(r) = n₀·exp(−r/λ⁻¹)`,
+with the same area and fall-speed power laws as
+[`rain_swept_collection_rate`](@ref) so the drop is the one whose sweeping
+that rate already counts. Zero when `q_rai` is below the `ϵ_numerics` gate
+of that rate.
+"""
+function rain_representative_drop_radius(q_rai, ρ, rain, vel)
+    FT = typeof(q_rai)
+    λ_inv = CM1.lambda_inverse(rain.pdf, rain.mass, q_rai, ρ)
+    (; ae, Δa) = rain.area
+    (; ve, Δv) = vel
+    r_D = (ae + ve + Δa + Δv + 1) * λ_inv
+    return ifelse(q_rai > ϵ_numerics(FT), r_D, zero(FT))
+end
+
+"""
+    rain_drop_fall_speed(r_D, ρ, rain, vel)
+
+Fall speed `V_D = χᵥ·v₀(ρ)·(r_D/r₀)^(ve+Δv)` [m s⁻¹] of a raindrop of radius
+`r_D`, the same power-law velocity of the 1-moment scheme that the swept
+collection rate and the rain sedimentation use. Zero for `r_D = 0` (no rain).
+"""
+function rain_drop_fall_speed(r_D, ρ, rain, vel)
+    FT = typeof(r_D)
+    v0 = CM1.get_v0(vel, ρ)
+    (; r0) = rain.mass
+    (; χv, ve, Δv) = vel
+    return ifelse(r_D > zero(FT), χv * v0 * (r_D / r0)^(ve + Δv), zero(FT))
+end
+
+"""
+    rain_representative_drop(q_rai, ρ, rain, vel)
+
+`(r_D, V_D)` of the representative raindrop,
+[`rain_representative_drop_radius`](@ref) and [`rain_drop_fall_speed`](@ref)
+together; the drivers call the two separately so each can be hoisted into
+its own scratch field.
+"""
+function rain_representative_drop(q_rai, ρ, rain, vel)
+    r_D = rain_representative_drop_radius(q_rai, ρ, rain, vel)
+    return (r_D, rain_drop_fall_speed(r_D, ρ, rain, vel))
+end
+
+"""
+    slinn_collection_efficiency(
+        r_wet, ρ_wet, V_g, D_B, r_D, V_D, ρ_air, μ_air, grav, ap,
+    )
+
+Raindrop–aerosol collection efficiency `E ∈ [0, 1]` of Slinn (1984) as
+reproduced in Feng (2007, Atmos. Environ., doi:10.1016/j.atmosenv.2007.04.046),
+for a wet particle of radius `r_wet`, density `ρ_wet`, settling speed `V_g`,
+and Brownian diffusivity `D_B` collected by one drop of radius `r_D` falling
+at `V_D` through air of density `ρ_air` and viscosity `μ_air`:
+
+    E = E_Br + E_int + E_imp
+
+    E_Br  = 4 / (Re·Sc) · (1 + C₁·Re^½·Sc^⅓ + C₂·Re^½·Sc^½)        Brownian diffusion
+    E_int = 4·φ · (1/ω + (1 + 2·Re^½)·φ)                            interception
+    E_imp = ((St − S*) / (St − S* + 2/3))^(3/2) · (ρ_w/ρ_wet)^½    inertial impaction, St > S* only
+
+with the radius-based drop Reynolds number `Re = r_D·V_D·ρ_air/μ_air`
+(Slinn's convention, `D·V_D·ρ_air/(2μ_air)`), the particle Schmidt number
+`Sc = μ_air/(ρ_air·D_B)`, the size ratio `φ = r_wet/r_D`, the viscosity ratio
+`ω = μ_water/μ_air`, the Stokes number `St = τ·(V_D − V_g)/r_D` with the
+relaxation time `τ = V_g/g`, and the critical Stokes number
+`S* = (a + b·ln(1+Re)) / (1 + ln(1+Re))`. `C₁, C₂` are `ap.slinn_C_B`,
+`a, b` are `ap.slinn_S_star_C`, the impaction exponent is
+`ap.slinn_impaction_exp`, and `μ_water` is `ap.μ_water`.
+
+The drop is the single representative drop of
+[`rain_representative_drop`](@ref) rather than an integral of `E` over the
+size distribution, so `E` multiplies the swept-volume rate of the whole
+population. Zero where there is no drop (`r_D = 0` or `V_D = 0`); the
+denominators are guarded so the discarded branch stays finite. Kernel safe:
+no allocations, `ifelse` for the impaction branch.
+"""
+function slinn_collection_efficiency(
+    r_wet,
+    ρ_wet,
+    V_g,
+    D_B,
+    r_D,
+    V_D,
+    ρ_air,
+    μ_air,
+    grav,
+    ap,
+)
+    FT = typeof(r_wet)
+    has_drop = (r_D > zero(FT)) & (V_D > zero(FT))
+    # Evaluate on a unit drop where there is none, so every denominator below
+    # is finite, then discard that value.
+    r_D⁺ = ifelse(has_drop, r_D, one(FT))
+    V_D⁺ = ifelse(has_drop, V_D, one(FT))
+
+    Re = r_D⁺ * V_D⁺ * ρ_air / μ_air
+    sqrt_Re = sqrt(Re)
+    Sc = μ_air / (ρ_air * D_B)
+    C_B = ap.slinn_C_B
+    E_brownian =
+        4 / (Re * Sc) *
+        (1 + C_B[1] * sqrt_Re * cbrt(Sc) + C_B[2] * sqrt_Re * sqrt(Sc))
+
+    φ = r_wet / r_D⁺
+    ω = ap.μ_water / μ_air
+    E_interception = 4 * φ * (1 / ω + (1 + 2 * sqrt_Re) * φ)
+
+    τ = V_g / grav
+    St = τ * (V_D⁺ - V_g) / r_D⁺
+    log_Re = log1p(Re)
+    C_S = ap.slinn_S_star_C
+    S_star = (C_S[1] + C_S[2] * log_Re) / (1 + log_Re)
+    # The floor keeps the base of the power non-negative in the discarded
+    # `St ≤ S*` branch (a negative base to a fractional power is NaN). The
+    # 2/3 here, like the 4s of E_Br and E_int above, is a structural constant
+    # of Slinn's functional form and stays a literal; the fitted coefficients
+    # (C_B, S* coefficients, impaction exponent) are the ClimaParams keys.
+    ΔSt = max(St - S_star, zero(FT))
+    E_impaction = ifelse(
+        St > S_star,
+        (ΔSt / (ΔSt + FT(2 / 3)))^ap.slinn_impaction_exp *
+        sqrt(ap.ρ_water / ρ_wet),
+        zero(FT),
+    )
+
+    E = clamp(E_brownian + E_interception + E_impaction, zero(FT), one(FT))
+    return ifelse(has_drop, E, zero(FT))
+end
+
+"""
+    sslt_bin_washout_rate(
+        air, T, r_dry, C_kelvin, ρ_s, ρ_air, r_D, V_D, Λ, grav, ap,
+    )
+
+Below-cloud washout rate `k = E · Λ` [s⁻¹] of one bin at its dry settling
+radius `r_dry`, given the cell's bin-independent air state `air = (; RH, μ, λ)`,
+the representative raindrop `(r_D, V_D)` of the same subdomain, and the
+unit-efficiency swept collection rate `Λ` ([`rain_swept_collection_rate`](@ref)).
+The growth factor, wet density, and settling speed come from
+[`bin_wet_particle`](@ref) (the chain the settling and dry-deposition terms
+evaluate), the diffusivity from [`brownian_diffusivity`](@ref) at the wet
+radius, and `E` from [`slinn_collection_efficiency`](@ref).
+"""
+function sslt_bin_washout_rate(
+    air,
+    T,
+    r_dry,
+    C_kelvin,
+    ρ_s,
+    ρ_air,
+    r_D,
+    V_D,
+    Λ,
+    grav,
+    ap,
+)
+    (; μ, λ) = air
+    ξ, ρ_wet, V_g =
+        bin_wet_particle(air, T, r_dry, C_kelvin, ρ_s, ρ_air, grav, ap)
+    r_wet = r_dry * ξ
+    C_c = cunningham_slip_correction(λ / r_wet, ap.cunningham_C)
+    D_B = brownian_diffusivity(T, C_c, μ, r_wet, ap.k_B)
+    E = slinn_collection_efficiency(
+        r_wet,
+        ρ_wet,
+        V_g,
+        D_B,
+        r_D,
+        V_D,
+        ρ_air,
+        μ,
+        grav,
+        ap,
+    )
+    return E * Λ
+end
+
+"""
     precipitation_rate_mm_h(P, ρ_water)
 
 Rain rate `R` [mm h⁻¹] of a downward liquid precipitation mass flux `P`
@@ -110,12 +298,18 @@ surface precipitation flux updates. No-op unless sea salt is prognostic and
 the microphysics is one of [`WetDepositionMicrophysics`](@ref); with any
 other microphysics the rates are never read and wet deposition is off.
 
-Under `NonEquilibriumMicrophysics1M` the rate is `ssa_E_coll[bin]` times
-[`rain_swept_collection_rate`](@ref) on the rain state. Prognostic sea salt
-requires `PrognosticEDMFX`, so the rate is always evaluated per subdomain — `Λ⁰` from the environment
-rain `q_rai⁰` (the residual `ᶜspecific_env_value`) and density, `Λʲ` from
-each updraft's own `q_rai` and density — mirroring the subdomain split of
-the microphysics process rates. Two sets are cached:
+Under `NonEquilibriumMicrophysics1M` the rate is `k = E · Λ`
+([`sslt_bin_washout_rate`](@ref)): the Slinn (1984) collection efficiency
+[`slinn_collection_efficiency`](@ref) of the bin's wet settling radius (dry
+settling radius times the Lewis Eq. 34 growth factor at the subdomain's RH)
+by the representative raindrop [`rain_representative_drop`](@ref) of the
+subdomain's rain, times the unit-efficiency swept collection rate
+[`rain_swept_collection_rate`](@ref) `Λ` on that rain state. Prognostic sea
+salt requires `PrognosticEDMFX`, so everything is evaluated per subdomain —
+`E⁰Λ⁰` from the environment rain `q_rai⁰` (the residual
+`ᶜspecific_env_value`), density, temperature and air state, `EʲΛʲ` from each
+updraft's own — mirroring the subdomain split of the microphysics process
+rates. Two sets are cached:
 
   - `p.tracers.sslt_wetdep_rates[bin]`, the grid-mean rate
     `k = (ρa⁰χ⁰k⁰ + Σⱼ ρaʲχʲkʲ) / (ρa⁰χ⁰ + Σⱼ ρaʲχʲ)`, mass-weighted so the
@@ -201,41 +395,86 @@ function set_sslt_wet_deposition_rates!(
     thp = CAP.thermodynamics_params(p.params)
     rain = cmp.precip.rain
     vel = cmp.terminal_velocity.rain
-    (; ᶜp, ᶜT⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜρʲs) = p.precomputed
+    grav = FT(CAP.grav(p.params))
+    ρ_s = CAP.prescribed_aerosol_params(p.params).seasalt_density
+    (; ᶜp, ᶜT⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜTʲs, ᶜρʲs) = p.precomputed
+    (; sslt_air_state⁰, sslt_air_stateʲs) = p.tracers
     rates = p.tracers.sslt_wetdep_rates
     ratesʲs = p.tracers.sslt_wetdep_ratesʲs
     n = n_mass_flux_subdomains(turbconv_model)
+    dt = float(p.dt)
 
-    # Bin-independent environment quantities, hoisted: density, rain, and the
-    # unit-efficiency collection rate Λ⁰ (the bins differ only through E).
+    # Bin-independent environment quantities, hoisted: density and rain, plus
+    # the air state (RH, μ, λ) of every subdomain that the growth factor and
+    # the Brownian diffusivity read. The air-state cache is refilled here, not
+    # reused from the settling tendency: this runs in the precomputed update,
+    # before the tendencies, so that fill is a stage stale (unset at the first).
     ᶜρ⁰ = p.scratch.ᶜtemp_scalar
     ᶜq_rai⁰ = p.scratch.ᶜtemp_scalar_2
-    ᶜΛ⁰ = p.scratch.ᶜtemp_scalar_3
     @. ᶜρ⁰ = TD.air_density(thp, ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰)
     ᶜq_rai⁰ .= ᶜspecific_env_value(@name(q_rai), Y, p)
-    @. ᶜΛ⁰ = rain_swept_collection_rate(ᶜq_rai⁰, ᶜρ⁰, rain, vel)
+    set_sslt_air_states!(Y, p, ᶜρ⁰)
     ᶜρa⁰ = @. lazy(max(zero(FT), ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model)))
-    dt = float(p.dt)
     # Scratch accumulators of the mass and the survived mass per bin.
     ᶜρaχ = p.scratch.ᶜtemp_scalar_4
     ᶜρaχE = p.scratch.ᶜtemp_scalar_5
+    # Unit-efficiency collection rate Λ and representative raindrop (radius,
+    # fall speed) of the subdomain being processed, hoisted out of its bin
+    # loop (the bins differ only through E). The updrafts go first so the
+    # environment's Λ⁰ and drop can then stay in place through the bin loop
+    # that composes the grid-mean rate.
+    ᶜΛ = p.scratch.ᶜtemp_scalar_3
+    ᶜr_D = p.scratch.ᶜtemp_scalar_6
+    ᶜV_D = p.scratch.ᶜtemp_scalar_7
 
-    ρχ_names = aerosol_state_names(sslt)
-    bins = ntuple(Val(length(ρχ_names))) do i
-        (ρχ_names[i], FT(ap.ssa_E_coll[i]))
-    end
-    MatrixFields.unrolled_foreach(bins) do (ρχ_name, E_bin)
-        bin = MatrixFields.extract_first(ρχ_name)
-        for j in 1:n
-            @. ratesʲs[bin][j] =
-                E_bin * rain_swept_collection_rate(
-                    max(zero(FT), Y.c.sgsʲs.:($$j).q_rai),
-                    ᶜρʲs.:($$j),
-                    rain,
-                    vel,
-                )
+    bins = sslt_settling_bin_props(p, sslt)
+    for j in 1:n
+        ᶜρʲ = ᶜρʲs.:($j)
+        ᶜTʲ = ᶜTʲs.:($j)
+        ᶜairʲ = sslt_air_stateʲs[j]
+        ᶜq_raiʲ = @. lazy(max(zero(FT), Y.c.sgsʲs.:($$j).q_rai))
+        @. ᶜΛ = rain_swept_collection_rate(ᶜq_raiʲ, ᶜρʲ, rain, vel)
+        @. ᶜr_D = rain_representative_drop_radius(ᶜq_raiʲ, ᶜρʲ, rain, vel)
+        @. ᶜV_D = rain_drop_fall_speed(ᶜr_D, ᶜρʲ, rain, vel)
+        MatrixFields.unrolled_foreach(bins) do (ρχ_name, r_settle, C_kelvin)
+            bin = MatrixFields.extract_first(ρχ_name)
+            @. ratesʲs[bin][j] = sslt_bin_washout_rate(
+                ᶜairʲ,
+                ᶜTʲ,
+                r_settle,
+                C_kelvin,
+                ρ_s,
+                ᶜρʲ,
+                ᶜr_D,
+                ᶜV_D,
+                ᶜΛ,
+                grav,
+                (ap,),
+            )
         end
-        ᶜk⁰ = @. lazy(E_bin * ᶜΛ⁰)
+    end
+
+    @. ᶜΛ = rain_swept_collection_rate(ᶜq_rai⁰, ᶜρ⁰, rain, vel)
+    @. ᶜr_D = rain_representative_drop_radius(ᶜq_rai⁰, ᶜρ⁰, rain, vel)
+    @. ᶜV_D = rain_drop_fall_speed(ᶜr_D, ᶜρ⁰, rain, vel)
+    # Nothing reads q_rai⁰ past this point, so its scratch holds the
+    # environment rate k⁰ of the bin being composed.
+    ᶜk⁰ = ᶜq_rai⁰
+    MatrixFields.unrolled_foreach(bins) do (ρχ_name, r_settle, C_kelvin)
+        bin = MatrixFields.extract_first(ρχ_name)
+        @. ᶜk⁰ = sslt_bin_washout_rate(
+            sslt_air_state⁰,
+            ᶜT⁰,
+            r_settle,
+            C_kelvin,
+            ρ_s,
+            ᶜρ⁰,
+            ᶜr_D,
+            ᶜV_D,
+            ᶜΛ,
+            grav,
+            (ap,),
+        )
         sslt_mass_weighted_rate!(
             rates[bin],
             ᶜk⁰,

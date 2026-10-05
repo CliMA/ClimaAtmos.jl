@@ -63,8 +63,8 @@ sslt_settling_radii(bin_moments, ap) = map(m -> mass_settling_radius(m, ap), bin
     sslt_settling_bin_props(p, sslt)
 
 Per-bin `(ρχ_name, r_settle, C_kelvin)` tuples for [`bin_settling_velocity`](@ref),
-shared by gravitational settling and dry deposition so both evaluate the same
-settling radius for a bin.
+shared by gravitational settling, dry deposition, and below-cloud washout so
+all three evaluate the same settling radius for a bin.
 """
 function sslt_settling_bin_props(p, sslt::PrognosticSeaSalt)
     (; sslt_settling_radii, sslt_kelvin_coeffs) = p.tracers
@@ -135,6 +135,55 @@ aerosol_emission_tendency!(Yₜ, Y, p, t, sslt::PrognosticSeaSalt) =
     aerosol_surface_flux_tendency!(Yₜ, Y, p, sslt, p.tracers.sslt_sfc_fluxes)
 
 """
+    set_sslt_air_states!(Y, p, ᶜρ⁰)
+
+Fill the bin-independent air state `(; RH, μ, λ)` of the environment and of
+each updraft ([`_aerosol_air_state`](@ref)) into `p.tracers.sslt_air_state⁰`
+and `sslt_air_stateʲs`, given the environment density `ᶜρ⁰` the caller has
+already materialized. Hoisted out of the per-bin loops of
+[`aerosol_settling_tendency!`](@ref) and
+[`set_sslt_wet_deposition_rates!`](@ref); each refills the cache from the
+current state before reading it, because the two run at different points of a
+stage (tendency vs. precomputed update) and neither may assume the other's
+fill is current.
+"""
+function set_sslt_air_states!(Y, p, ᶜρ⁰)
+    FT = eltype(Y)
+    ap = CAP.prognostic_aerosol_params(p.params)
+    thp = CAP.thermodynamics_params(p.params)
+    R_d = FT(CAP.R_d(p.params))
+    (; ᶜp, ᶜT⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰) = p.precomputed
+    (; ᶜTʲs, ᶜρʲs, ᶜq_tot_nonnegʲs, ᶜq_liqʲs, ᶜq_iceʲs) = p.precomputed
+    (; sslt_air_state⁰, sslt_air_stateʲs) = p.tracers
+    @. sslt_air_state⁰ = _aerosol_air_state(
+        thp,
+        ᶜT⁰,
+        ᶜp,
+        ᶜq_tot_nonneg⁰,
+        ᶜq_liq⁰,
+        ᶜq_ice⁰,
+        ᶜρ⁰,
+        R_d,
+        (ap,),
+    )
+    for j in 1:length(sslt_air_stateʲs)
+        ᶜairʲ = sslt_air_stateʲs[j]
+        @. ᶜairʲ = _aerosol_air_state(
+            thp,
+            ᶜTʲs.:($$j),
+            ᶜp,
+            ᶜq_tot_nonnegʲs.:($$j),
+            ᶜq_liqʲs.:($$j),
+            ᶜq_iceʲs.:($$j),
+            ᶜρʲs.:($$j),
+            R_d,
+            (ap,),
+        )
+    end
+    return nothing
+end
+
+"""
     aerosol_settling_tendency!(Yₜ, Y, p, t, sslt::PrognosticSeaSalt)
 
 Downward vertical advection of aerosol tracers at terminal velocity of its
@@ -167,10 +216,8 @@ function aerosol_settling_tendency!(Yₜ, Y, p, t, sslt::PrognosticSeaSalt)
     FT = eltype(Y)
     ap = CAP.prognostic_aerosol_params(p.params)
     thp = CAP.thermodynamics_params(p.params)
-    (; ᶜp, ᶜT⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰) = p.precomputed
-    (; ᶜTʲs, ᶜρʲs, ᶜq_tot_nonnegʲs, ᶜq_liqʲs, ᶜq_iceʲs) = p.precomputed
+    (; ᶜp, ᶜT⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜTʲs, ᶜρʲs) = p.precomputed
     grav = FT(CAP.grav(p.params))
-    R_d = FT(CAP.R_d(p.params))
     ρ_s = CAP.prescribed_aerosol_params(p.params).seasalt_density
     α_lat = CAP.sedimentation_lateral_coeff(p.params)
     ᶜJ = Fields.local_geometry_field(Y.c).J
@@ -187,32 +234,8 @@ function aerosol_settling_tendency!(Yₜ, Y, p, t, sslt::PrognosticSeaSalt)
     @. ᶠρ = ᶠinterp(Y.c.ρ * ᶜJ) / ᶠJ
     # Bin-independent air state of each subdomain (RH, μ, λ), once per stage.
     (; sslt_air_state⁰, sslt_air_stateʲs) = p.tracers
+    set_sslt_air_states!(Y, p, ᶜρ⁰)
     ᶜair⁰ = sslt_air_state⁰
-    @. ᶜair⁰ = _aerosol_air_state(
-        thp,
-        ᶜT⁰,
-        ᶜp,
-        ᶜq_tot_nonneg⁰,
-        ᶜq_liq⁰,
-        ᶜq_ice⁰,
-        ᶜρ⁰,
-        R_d,
-        (ap,),
-    )
-    for j in 1:n
-        ᶜairʲ = sslt_air_stateʲs[j]
-        @. ᶜairʲ = _aerosol_air_state(
-            thp,
-            ᶜTʲs.:($$j),
-            ᶜp,
-            ᶜq_tot_nonnegʲs.:($$j),
-            ᶜq_liqʲs.:($$j),
-            ᶜq_iceʲs.:($$j),
-            ᶜρʲs.:($$j),
-            R_d,
-            (ap,),
-        )
-    end
     # Per-bin scratch, written and consumed within one bin iteration.
     ᶜw⁰ = p.scratch.ᶜtemp_scalar
     ᶜρaχw = p.scratch.ᶜtemp_scalar_2
@@ -359,39 +382,41 @@ function set_sslt_dry_deposition_fluxes!(Y, p, sslt::PrognosticSeaSalt)
         ρχ1_values = level1(MatrixFields.get_field(Y.c, ρχ_name))
         sfc_flux_values = Fields.field_values(fluxes[bin])
         V_d_values = Fields.field_values(velocities[bin])
-        @. V_d_values = min(
-            sslt_bin_dry_deposition_velocity(
-                _aerosol_air_state(
-                    thp,
-                    T1_values,
-                    p1_values,
-                    q_tot1_values,
-                    q_liq1_values,
-                    q_ice1_values,
-                    ρ1_values,
-                    R_d,
-                    (ap,),
-                ),
+        # Settling and dry deposition share ONE explicit-removal budget; see
+        # `sslt_bin_budgeted_deposition_velocity`. Capping them separately at
+        # `settling_courant_max` let the lowest cell lose Courant = 1 per stage
+        # and drove bin 5 negative, then divergent.
+        @. V_d_values = sslt_bin_budgeted_deposition_velocity(
+            _aerosol_air_state(
+                thp,
                 T1_values,
-                r_settle,
-                C_kelvin,
-                ρ_s,
+                p1_values,
+                q_tot1_values,
+                q_liq1_values,
+                q_ice1_values,
                 ρ1_values,
-                z1_values - z_sfc_values,
-                L_values,
-                SF.momentum_roughness(
-                    roughness_spec,
-                    ustar_values,
-                    sfp,
-                    nothing,
-                ),
-                ustar_values,
-                uf_params,
-                κ_vk,
-                grav,
+                R_d,
                 (ap,),
             ),
+            T1_values,
+            r_settle,
+            C_kelvin,
+            ρ_s,
+            ρ1_values,
+            z1_values - z_sfc_values,
+            L_values,
+            SF.momentum_roughness(
+                roughness_spec,
+                ustar_values,
+                sfp,
+                nothing,
+            ),
+            ustar_values,
+            uf_params,
+            κ_vk,
+            grav,
             ap.settling_courant_max * Δz1_values / dt,
+            (ap,),
         )
         @. sfc_flux_values = C3(
             -V_d_values *
