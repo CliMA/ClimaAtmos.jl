@@ -597,6 +597,10 @@ function SGSQuadratureParameters(
         # Isentropic geometric variance term: floor on ∂θ_li/∂z [K/m] in the
         # slope ratio and in the cell-geometry bound.
         sgs_variance_isentropic_min_dtheta_dz = FT(1e-3),
+        # Temperature ramp of the uniform-ice fraction over the quadrature
+        # (`sgs_ice_uniform_fraction_ramped`): disabled when T_high ≤ T_low.
+        sgs_ice_uniform_ramp_T_low = FT(0),
+        sgs_ice_uniform_ramp_T_high = FT(0),
     )
     provisional_present = filter(collect(keys(provisional_defaults))) do name
         haskey(toml_dict.data, string(name))

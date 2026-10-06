@@ -266,6 +266,11 @@ not yet define.
     `(1 − ξ)` times its liquid-fraction share of the reconstructed saturation
     excess plus `ξ` times its subdomain mean (`sgs_local_condensate`). `0`
     is the excess reconstruction; `1` treats the species uniform at every node [-].
+  - `sgs_ice_uniform_ramp_T_low`, `sgs_ice_uniform_ramp_T_high`: Temperature ramp
+    of the uniform-ice fraction at the quadrature nodes
+    (`sgs_ice_uniform_fraction_ramped`): `sgs_ice_uniform_fraction` at node
+    temperatures above `T_high`, 1 (uniform) below `T_low`, linear in between.
+    `T_high ≤ T_low` (the default `0, 0`) disables the ramp [K].
   - `Tq_correlation_coefficient`: Correlation between `T'` and `q_tot'` in the
     SGS quadrature, in `[-1, 1]`. Used verbatim by `tq_correlation_model: constant`;
     used as the turbulent-block cross `ρ_turb` (and the fallback where all variance
@@ -301,6 +306,8 @@ Base.@kwdef struct SGSQuadratureParameters{FT} <: ASQP
     sgs_variance_max_rel_std::FT
     sgs_liquid_uniform_fraction::FT
     sgs_ice_uniform_fraction::FT
+    sgs_ice_uniform_ramp_T_low::FT
+    sgs_ice_uniform_ramp_T_high::FT
     Tq_correlation_coefficient::FT
     cloud_fraction_steepness_scale::FT
     cloud_fraction_eps_rel::FT
