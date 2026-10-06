@@ -932,12 +932,11 @@ iscolumn(space) = false
 """
     issphere(space)
 
-Return whether the horizontal domain of `space` is a sphere.
+Return whether `space` has a spherical global geometry except for column spaces
+which always return `false`.
 """
-function issphere(space)
-    return Meshes.domain(Spaces.topology(Spaces.horizontal_space(space))) isa
-           Domains.SphereDomain
-end
+issphere(space) =
+    Spaces.global_geometry(space) isa Geometry.AbstractSphericalGlobalGeometry
 
 """
     clima_to_era5_name_dict()

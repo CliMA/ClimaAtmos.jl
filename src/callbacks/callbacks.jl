@@ -198,7 +198,7 @@ end
 function set_insolation_variables!(Y, p, t, ::IdealizedInsolation)
     FT = Spaces.undertype(axes(Y.c))
     bottom_coords = Fields.coordinate_field(Spaces.level(Y.c, 1))
-    if eltype(bottom_coords) <: Geometry.LatLongZPoint
+    if issphere(axes(Y.c))
         latitude = Fields.field2array(bottom_coords.lat)
     else
         latitude = Fields.field2array(zero(bottom_coords.z)) # flat space is on Equator
@@ -254,7 +254,7 @@ function set_insolation_variables!(Y, p, t, tvi::TimeVaryingInsolation)
                 insolation_params,
             ),
         )
-    elseif eltype(bottom_coords) <: Geometry.LatLongZPoint
+    elseif issphere(axes(Y.c))
         @. insolation_tuple = Insolation.insolation(
             current_datetime,
             bottom_coords.lat,
