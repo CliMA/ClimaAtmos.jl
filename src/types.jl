@@ -449,9 +449,9 @@ struct Larcform1Insolation <: AbstractInsolation end
 
 Compute insolation from the orbital parameters at the current simulation date.
 
-When `latitude`/`longitude` are `nothing`, lat/lon are taken from the grid for
-`LatLongZPoint` coordinates and fall back to `(0, 0)` for flat-space columns
-(the default global behavior). When provided, the explicit lat/lon are used
+When `latitude`/`longitude` are `nothing`, lat/lon are taken from the grid on
+the sphere and fall back to `(0, 0)` on other grids (the default global
+behavior). When provided, the explicit lat/lon are used
 instead — useful for single-column setups whose coordinate system doesn't
 carry lat/lon (e.g. ARM VARANAL).
 

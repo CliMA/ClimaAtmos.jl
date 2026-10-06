@@ -315,11 +315,11 @@ spherical geometry, the horizontal component `ᶠf¹²` is also nonzero. On a pl
 `nothing`. Called from `build_cache`.
 """
 function compute_coriolis(ᶜcoord, ᶠcoord, params)
-    if eltype(ᶜcoord) <: Geometry.LatLongZPoint
+    if issphere(axes(ᶜcoord))
         Ω = CAP.Omega(params)
         global_geom = Spaces.global_geometry(axes(ᶜcoord))
         if global_geom isa Geometry.DeepSphericalGlobalGeometry
-            coriolis_deep(coord::Geometry.LatLongZPoint) = Geometry.LocalVector(
+            coriolis_deep(coord) = Geometry.LocalVector(
                 Geometry.Cartesian123Vector(zero(Ω), zero(Ω), 2 * Ω),
                 global_geom,
                 coord,
@@ -327,8 +327,7 @@ function compute_coriolis(ᶜcoord, ᶠcoord, params)
             ᶜf³ = @. CT3(CT123(coriolis_deep(ᶜcoord)))
             ᶠf¹² = @. CT12(CT123(coriolis_deep(ᶠcoord)))
         else
-            coriolis_shallow(coord::Geometry.LatLongZPoint) =
-                Geometry.WVector(2 * Ω * sind(coord.lat))
+            coriolis_shallow(coord) = Geometry.WVector(2 * Ω * sind(coord.lat))
             ᶜf³ = @. CT3(coriolis_shallow(ᶜcoord))
             ᶠf¹² = nothing
         end

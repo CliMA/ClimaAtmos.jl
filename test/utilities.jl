@@ -180,6 +180,20 @@ end
     @test maximum(abs.(CA.g³ʰ.(lg_gⁱʲ).components.data.:2)) == 0
 end
 
+@testset "issphere" begin
+    for (grid, sphere) in (
+        (CA.SphereGrid(Float64; h_elem = 2), true),
+        (CA.SphereGrid(Float64; h_elem = 2, deep_atmosphere = false), true),
+        (CA.ColumnGrid(Float64), false),
+        (CA.BoxGrid(Float64), false),
+        (CA.PlaneGrid(Float64), false),
+    )
+        (; center_space, face_space) = CA.get_spaces(grid)
+        @test CA.issphere(center_space) == sphere
+        @test CA.issphere(face_space) == sphere
+    end
+end
+
 @testset "horizontal_integral_at_boundary" begin
     # Test horizontal_integral_at_boundary which computes ∫∫ f dA at a horizontal level
     # Two method signatures: (field, level) and (level_field)
