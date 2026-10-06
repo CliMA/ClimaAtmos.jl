@@ -593,6 +593,10 @@ function SGSQuadratureParameters(
         cloud_fraction_floor_release_abs_margin = FT(1),
         cloud_fraction_floor_release_sharpness = FT(1),
         cloud_fraction_floor_residual = FT(1),
+        # Temperature ramp of the uniform-ice fraction over the quadrature
+        # (`sgs_ice_uniform_fraction_ramped`): disabled when T_high ≤ T_low.
+        sgs_ice_uniform_ramp_T_low = FT(0),
+        sgs_ice_uniform_ramp_T_high = FT(0),
     )
     provisional_present = filter(collect(keys(provisional_defaults))) do name
         haskey(toml_dict.data, string(name))

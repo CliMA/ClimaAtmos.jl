@@ -502,6 +502,23 @@ import ClimaAtmos:
                 ev_u = make(FT(0), FT(1))
                 ev_h = make(FT(0), FT(0.5))
 
+                @testset "ξ_ice temperature ramp" begin
+                    ramp = ClimaAtmos.sgs_ice_uniform_fraction_ramped
+                    @test ramp(FT(0), T, FT(0), FT(0)) === FT(0)          # disabled
+                    @test ramp(FT(0.3), T, FT(0), FT(0)) === FT(0.3)
+                    @test ramp(FT(0.3), T + 1, T - 10, T) == FT(0.3)      # warm end
+                    @test ramp(FT(0.3), T - 11, T - 10, T) == FT(1)       # cold end
+                    @test ramp(FT(0), T - 5, T - 10, T) ≈ FT(0.5)
+                    make_r(ξ_i, lo, hi) = Microphysics1MEvaluator(
+                        BMT.Microphysics1Moment(), mp, thp, ρ, w, FT(0), FT(0), λ_i,
+                        FT(0), ξ_i, FT(0), q_icl, q_c, mu_S, FT(1), dt, nsubs, (), lo, hi,
+                    )
+                    q̂ = FT(0.9) * TD.q_vap_saturation(thp, T, ρ, TD.Ice())
+                    @test make_r(FT(0), T + 5, T + 10)(T, q̂) == ev_u(T, q̂)   # node colder than T_lo: uniform
+                    @test make_r(FT(0), T - 10, T - 5)(T, q̂) == ev_e(T, q̂)   # node warmer than T_hi: excess
+                    @test make_r(FT(0), FT(0), FT(0))(T, q̂) == ev_e(T, q̂)    # disabled == 18-argument constructor
+                end
+
                 @testset "dry node: ice sublimates when uniform, absent when excess" begin
                     q̂ = FT(0.9) * TD.q_vap_saturation(thp, T, ρ, TD.Ice())
                     @test q_c + q̂ - q_tot < 0   # shifted_excess = 0 at this node

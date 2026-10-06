@@ -265,6 +265,39 @@ struct Microphysics1MEvaluator{S, MP, TPS, FT, Args <: Tuple}
     dt::FT
     nsubs::Int
     args::Args
+    # Temperature ramp of ξ_ice (`sgs_ice_uniform_fraction_ramped`): ξ_ice at
+    # T ≥ T_ramp_hi, 1 at T ≤ T_ramp_lo; disabled when T_ramp_hi ≤ T_ramp_lo.
+    T_ramp_lo::FT
+    T_ramp_hi::FT
+end
+# Ramp-free construction (ramp disabled), the pre-existing positional signature.
+Microphysics1MEvaluator(
+    scheme, mp, tps, ρ, w, q_rai, q_sno, λ, ξ_liq, ξ_ice, q_lcl, q_icl,
+    λ_lagrange, mu_S, α, dt, nsubs, args,
+) = Microphysics1MEvaluator(
+    scheme, mp, tps, ρ, w, q_rai, q_sno, λ, ξ_liq, ξ_ice, q_lcl, q_icl,
+    λ_lagrange, mu_S, α, dt, nsubs, args, zero(ρ), zero(ρ),
+)
+
+"""
+    sgs_ice_uniform_fraction_ramped(ξ_ice, T, T_lo, T_hi)
+
+Uniform-ice fraction at a quadrature node of temperature `T` [K]: `ξ_ice` at
+`T ≥ T_hi`, `1` (ice uniform over the nodes) at `T ≤ T_lo`, linear in between.
+`T_hi ≤ T_lo` disables the ramp and returns `ξ_ice` exactly. Physical reading:
+in mixed-phase clouds the ice follows the condensate distribution (excess
+reconstruction, so the thick nodes carry the ice that converts their liquid),
+while cold cirrus ice is detrained and long-lived, hence uniform.
+"""
+@inline function sgs_ice_uniform_fraction_ramped(ξ_ice, T, T_lo, T_hi)
+    FT = typeof(ξ_ice)
+    width = max(T_hi - T_lo, eps(FT))
+    r = ifelse(
+        T_hi > T_lo,
+        clamp((T_hi - T) / width, zero(FT), one(FT)),
+        zero(FT),
+    )
+    return ξ_ice + (one(FT) - ξ_ice) * r
 end
 """
     sgs_local_condensate(λ, shifted_excess, ξ_liq, ξ_ice, q_lcl, q_icl)
@@ -348,8 +381,11 @@ with `dq_lcl_dt`, `dq_icl_dt`, `dq_rai_dt`, `dq_sno_dt` [kg/kg/s].
     q_sat_hat = TD.q_vap_saturation(eval.tps, T_hat, eval.ρ)
     S′_hat = q_tot_hat - q_sat_hat - eval.mu_S
     shifted_excess = max(FT(0), eval.λ_lagrange + eval.α * S′_hat)
+    ξ_ice = sgs_ice_uniform_fraction_ramped(
+        eval.ξ_ice, T_hat, eval.T_ramp_lo, eval.T_ramp_hi,
+    )
     q_lcl_hat, q_icl_hat = sgs_local_condensate(
-        eval.λ, shifted_excess, eval.ξ_liq, eval.ξ_ice, eval.q_lcl, eval.q_icl,
+        eval.λ, shifted_excess, eval.ξ_liq, ξ_ice, eval.q_lcl, eval.q_icl,
     )
 
     return BMT.bulk_microphysics_tendencies(
@@ -410,6 +446,8 @@ accretion.
   - `mu_S`: Linearized SGS mean saturation excess [kg/kg]; defaults to
     `q_tot_nonneg − q_sat(T, ρ)`. Both are quadrature invariants and may be
     precomputed by the caller to avoid recomputing them at every point.
+  - `ice_ramp_T_low`, `ice_ramp_T_high`: Temperature ramp of `ξ_ice` at the nodes
+    (`sgs_ice_uniform_fraction_ramped`); the defaults `0, 0` disable it [K].
   - `args...`: Extra trailing arguments forwarded to CloudMicrophysics.
 
 # Returns
@@ -437,6 +475,8 @@ end
     # precompute them once and pass them in to avoid recomputing them per point.
     λ = TD.liquid_fraction(thp, T, max(zero(ρ), q_lcl), max(zero(ρ), q_icl)),
     mu_S = q_tot_nonneg - TD.q_vap_saturation(thp, T, ρ),
+    ice_ramp_T_low = zero(ρ),
+    ice_ramp_T_high = zero(ρ),
     args...,
 )
     FT = typeof(ρ)
@@ -449,6 +489,7 @@ end
         q_rai_nonneg, q_sno_nonneg, λ,
         FT(ξ_liq), FT(ξ_ice), max(zero(ρ), q_lcl), max(zero(ρ), q_icl),
         λ_lagrange, mu_S, α, dt, nsubs, args,
+        FT(ice_ramp_T_low), FT(ice_ramp_T_high),
     )
     return integrate_over_sgs(
         evaluator, sgs_quad, q_tot_nonneg, T, q′q′, T′T′, corr_Tq,
