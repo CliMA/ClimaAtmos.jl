@@ -336,6 +336,9 @@ main
   columns in one simulation: set `n_columns` with `config: "column"`, or use
   `MultiColumnGrid(FT; n_columns)`.
   NetCDF output gains a `column` dimension.
+- ![][badge-💥breaking] The `ColumnDatasets.extrapolation_bc` hook of column file formats is
+  removed: file-backed column forcing inputs always hold the profiles constant above and
+  below the file's levels.
 - ![][badge-🔥behavioralΔ] The along-surface depth of the geometric SGS
   variance block is bounded by the height above the surface,
   `ℓ_a = min(H, z − z_sfc)`: in a neutral layer the along-surface
