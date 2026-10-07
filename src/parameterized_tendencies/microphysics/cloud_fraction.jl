@@ -81,6 +81,11 @@ function set_covariance_cache_and_cloud_fraction!(Y, p)
     # ᶜtemp_scalar, ᶜtemp_scalar_2, ᶜtemp_scalar_3, ᶜtemp_scalar_5, ᶜtemp_scalar_6 might
     # change inside the functions that are called in picard_step!() and should not be used
     # here to store variables before calling picard_step!
+    # (`set_covariance_cache!` and the QuadratureCloud `set_cloud_fraction!` write them).
+    # Conversely, those callees and `set_sgs_moments_and_cloud_fraction!` must never write
+    # ᶜtemp_scalar_4 or ᶜtemp_scalar_7. c2 shares ᶜtemp_scalar, which is safe only
+    # because it is written after the last picard_step!() and consumed by the Aitken
+    # update before `set_sgs_moments_and_cloud_fraction!` overwrites it.
     c0 = p.scratch.ᶜtemp_scalar_4
     c1 = p.scratch.ᶜtemp_scalar_7
     c2 = p.scratch.ᶜtemp_scalar
@@ -918,6 +923,11 @@ Uses ONE quadrature pass via `_compute_sgs_moments` to fill
 `ᶜcloud_fraction` consistently with the augmented `σ_aug` closure (see
 `_compute_cloud_fraction`) from the grid-mean cloud condensate
 (`_grid_mean_cloud_condensate`).
+
+Overwrites `p.scratch.ᶜtemp_scalar`, `ᶜtemp_scalar_2`, `ᶜtemp_scalar_3`,
+`ᶜtemp_scalar_5`, and `ᶜtemp_scalar_6`. It must not touch `ᶜtemp_scalar_4` or
+`ᶜtemp_scalar_7`, which `set_covariance_cache_and_cloud_fraction!` reserves for
+the Picard iterates.
 """
 NVTX.@annotate function set_sgs_moments_and_cloud_fraction!(Y, p)
     hasproperty(p.precomputed, :ᶜsgs_moments) || return nothing
@@ -926,40 +936,70 @@ NVTX.@annotate function set_sgs_moments_and_cloud_fraction!(Y, p)
     turbconv_model = p.atmos.turbconv_model
     microphysics_model = p.atmos.microphysics_model
 
-    ᶜρ_env, ᶜT_mean, ᶜq_mean = _get_env_ρ_T_q(Y, p, thermo_params, turbconv_model)
+    ᶜρ_env_lazy, ᶜT_mean, ᶜq_mean = _get_env_ρ_T_q(Y, p, thermo_params, turbconv_model)
     # Environment condensate for the microphysics reconstruction (the λ fit,
     # conserved exactly under the quadrature measure) ...
-    ᶜq_lcl, ᶜq_icl = _get_condensate_means(Y, p, turbconv_model, microphysics_model)
+    ᶜq_lcl_lazy, ᶜq_icl_lazy =
+        _get_condensate_means(Y, p, turbconv_model, microphysics_model)
     # ... and the grid-mean cloud condensate the cover is computed from
     # (single-domain cover, see `_grid_mean_cloud_condensate`).
-    ᶜq_lcl_cf, ᶜq_icl_cf = _grid_mean_cloud_condensate(Y, p, microphysics_model)
+    ᶜq_lcl_cf_lazy, ᶜq_icl_cf_lazy =
+        _grid_mean_cloud_condensate(Y, p, microphysics_model)
     sgs_quad = p.atmos.sgs_quadrature
     corr_Tq = correlation_Tq(p.params)
     FT = eltype(p.params)
     α = sgs_variance_fidelity(CAP.cloud_fraction_steepness_scale(p.params))
     floor = cloud_fraction_floor_params(p.params)
-    (; ᶜT′T′, ᶜq′q′) = p.precomputed
+    (; ᶜT′T′, ᶜq′q′, ᶜsgs_moments, ᶜcloud_fraction) = p.precomputed
 
-    # ONE quadrature pass → (sigma_S, λ_lagrange).
-    @. p.precomputed.ᶜsgs_moments = _compute_sgs_moments(
-        thermo_params, ᶜρ_env, ᶜT_mean, ᶜq_mean, ᶜq_lcl + ᶜq_icl,
-        $(sgs_quad), ᶜT′T′, ᶜq′q′, corr_Tq, FT(α),
-    )
-    # Recompute CF from the grid-mean q_c and σ_S using the augmented-σ
-    # closure. We cannot use `Φ(λ/σ_aug)` because λ was computed with the
-    # equilibrium σ_S_eff, not σ_aug — `Φ(λ/σ_aug)` would not match the
-    # truncated-Gaussian closure for the augmented variance. This overwrites
-    # the Picard iterate with a value consistent with the final SGS moments.
-    @. p.precomputed.ᶜcloud_fraction = _compute_cloud_fraction(
-        ᶜq_lcl_cf + ᶜq_icl_cf,
-        # μ_S recomputed analytically, matching `_sgs_saturation_moments`
-        # (condensate-free q_sat, consistent with the linear excess S).
-        ᶜq_mean - TD.q_vap_saturation(thermo_params, ᶜT_mean, ᶜρ_env),
-        p.precomputed.ᶜsgs_moments.sigma_S,
-        TD.q_vap_saturation(thermo_params, ᶜT_mean, ᶜρ_env, ᶜq_lcl_cf, ᶜq_icl_cf),
-        FT(α),
-        $(floor),
-    )
+    # Materialize lazy fields to pass to foreach_point. Only the scratch fields
+    # that the Picard step already clobbers (plus ᶜtemp_scalar_6) are used, so
+    # the iterates that `set_covariance_cache_and_cloud_fraction!` keeps in
+    # ᶜtemp_scalar_4 and ᶜtemp_scalar_7 are never overwritten.
+    ᶜρ_env = (p.scratch.ᶜtemp_scalar .= ᶜρ_env_lazy)
+    ᶜq_lcl = (p.scratch.ᶜtemp_scalar_2 .= ᶜq_lcl_lazy)
+    ᶜq_icl = (p.scratch.ᶜtemp_scalar_3 .= ᶜq_icl_lazy)
+    ᶜq_lcl_cf = (p.scratch.ᶜtemp_scalar_5 .= ᶜq_lcl_cf_lazy)
+    ᶜq_icl_cf = (p.scratch.ᶜtemp_scalar_6 .= ᶜq_icl_cf_lazy)
+
+    α_ft = FT(α)
+
+    DataLayouts.foreach_point(
+        ᶜsgs_moments, ᶜcloud_fraction, ᶜρ_env, ᶜT_mean, ᶜq_mean,
+        ᶜq_lcl, ᶜq_icl, ᶜq_lcl_cf, ᶜq_icl_cf, ᶜT′T′, ᶜq′q′,
+    ) do ᶜsgs_moments,
+    ᶜcloud_fraction,
+    ᶜρ_env,
+    ᶜT_mean,
+    ᶜq_mean,
+    ᶜq_lcl,
+    ᶜq_icl,
+    ᶜq_lcl_cf,
+    ᶜq_icl_cf,
+    ᶜT′T′,
+    ᶜq′q′
+
+        # ONE quadrature pass → (sigma_S, λ_lagrange).
+        @. ᶜsgs_moments = _compute_sgs_moments(
+            thermo_params, ᶜρ_env, ᶜT_mean, ᶜq_mean, ᶜq_lcl + ᶜq_icl,
+            $(sgs_quad), ᶜT′T′, ᶜq′q′, corr_Tq, α_ft,
+        )
+        # Recompute CF from the grid-mean q_c and σ_S using the augmented-σ
+        # closure. We cannot use `Φ(λ/σ_aug)` because λ was computed with the
+        # equilibrium σ_S_eff, not σ_aug — `Φ(λ/σ_aug)` would not match the
+        # truncated-Gaussian closure for the augmented variance. This overwrites
+        # the Picard iterate with a value consistent with the final SGS moments.
+        @. ᶜcloud_fraction = _compute_cloud_fraction(
+            ᶜq_lcl_cf + ᶜq_icl_cf,
+            # μ_S recomputed analytically, matching `_sgs_saturation_moments`
+            # (condensate-free q_sat, consistent with the linear excess S).
+            ᶜq_mean - TD.q_vap_saturation(thermo_params, ᶜT_mean, ᶜρ_env),
+            ᶜsgs_moments.sigma_S,
+            TD.q_vap_saturation(thermo_params, ᶜT_mean, ᶜρ_env, ᶜq_lcl_cf, ᶜq_icl_cf),
+            α_ft,
+            $(floor),
+        )
+    end
 end
 
 
@@ -1042,11 +1082,19 @@ NVTX.@annotate function set_cloud_fraction!(
     microphysics_model = p.atmos.microphysics_model
 
     # Get environment density, temperature, and total specific humidity
-    ᶜρ_env, ᶜT_mean, ᶜq_mean = _get_env_ρ_T_q(Y, p, thermo_params, turbconv_model)
+    ᶜρ_env_lazy, ᶜT_mean, ᶜq_mean = _get_env_ρ_T_q(Y, p, thermo_params, turbconv_model)
+
+    # Materialize lazy fields to pass to foreach_point. This method runs inside
+    # the Picard step of `set_covariance_cache_and_cloud_fraction!`, so it may
+    # never ᶜtemp_scalar_4 or
+    # ᶜtemp_scalar_7, which hold the Picard iterates).
+    ᶜρ_env = (p.scratch.ᶜtemp_scalar .= ᶜρ_env_lazy)
 
     # Grid-mean cloud condensate the cover is computed from (single-domain
     # cover, see `_grid_mean_cloud_condensate`)
-    ᶜq_lcl, ᶜq_icl = _grid_mean_cloud_condensate(Y, p, microphysics_model)
+    ᶜq_lcl_lazy, ᶜq_icl_lazy = _grid_mean_cloud_condensate(Y, p, microphysics_model)
+    ᶜq_lcl = (p.scratch.ᶜtemp_scalar_2 .= ᶜq_lcl_lazy)
+    ᶜq_icl = (p.scratch.ᶜtemp_scalar_3 .= ᶜq_icl_lazy)
 
     sgs_quad = p.atmos.sgs_quadrature
     corr_Tq = correlation_Tq(p.params)
@@ -1056,23 +1104,34 @@ NVTX.@annotate function set_cloud_fraction!(
 
     (; ᶜT′T′, ᶜq′q′) = p.precomputed
 
-    # Hybrid cloud fraction: the σ_S² quadrature pass is fused into this
-    # broadcast kernel, so the moments stay in registers and are never written
-    # to a Field.
-    @. p.precomputed.ᶜcloud_fraction = _compute_cloud_fraction(
-        thermo_params,
+    ᶜcloud_fraction = p.precomputed.ᶜcloud_fraction
+    α_ft = FT(α)
+
+    DataLayouts.foreach_point(
+        ᶜcloud_fraction,
         ᶜT_mean,
         ᶜρ_env,
         ᶜq_mean,
         ᶜq_lcl,
         ᶜq_icl,
-        $(sgs_quad),
         ᶜT′T′,
         ᶜq′q′,
-        corr_Tq,
-        FT(α),
-        $(floor),
-    )
+    ) do ᶜcloud_fraction, ᶜT_mean, ᶜρ_env, ᶜq_mean, ᶜq_lcl, ᶜq_icl, ᶜT′T′, ᶜq′q′
+        @. ᶜcloud_fraction = _compute_cloud_fraction(
+            thermo_params,
+            ᶜT_mean,
+            ᶜρ_env,
+            ᶜq_mean,
+            ᶜq_lcl,
+            ᶜq_icl,
+            $(sgs_quad),
+            ᶜT′T′,
+            ᶜq′q′,
+            corr_Tq,
+            α_ft,
+            $(floor),
+        )
+    end
 end
 
 NVTX.@annotate function set_cloud_fraction!(
