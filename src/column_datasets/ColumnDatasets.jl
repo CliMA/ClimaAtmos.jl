@@ -16,7 +16,7 @@ Define a singleton subtype of [`AbstractColumnFormat`](@ref) in a new module
 under `src/column_datasets/`, extend the three required methods
 ([`format_name`](@ref), [`format_variable_name`](@ref),
 [`height_profile`](@ref)) plus any optional ones (`open_dataset`, `preprocess`,
-`dates`, `read_profile`, `read_series`, `extrapolation_bc`,
+`dates`, `read_profile`, `read_series`,
 `time_interpolation_method`, `site_location`, `validate`), and pass it via the
 `format` keyword of [`ColumnDataset`](@ref).
 """
@@ -28,6 +28,7 @@ import Interpolations as Intp
 import ClimaCore
 import ClimaUtilities.TimeVaryingInputs
 import ClimaUtilities.TimeVaryingInputs: TimeVaryingInput
+import ClimaUtilities.FileReaders: DataSource
 import ClimaUtilities.Utils: period_to_seconds_float
 
 # ============================================================================
@@ -137,8 +138,8 @@ open_dataset(f, ::AbstractColumnFormat, path, options) =
 
 Elementwise function applied to every value of the canonical variable `name`
 read from this format (unit conversions, fill-value handling). Applied both by
-the direct `read_*` methods and, through the file reader's `preprocess_func`
-hook, by file-backed `TimeVaryingInput`s.
+the direct `read_*` methods and, as their `preprocess_func`, by file-backed
+`TimeVaryingInput`s.
 """
 preprocess(::AbstractColumnFormat, name::Symbol) = identity
 
@@ -189,14 +190,6 @@ applied.
 function read_series(d::AbstractColumnFormat, ds, name::Symbol)
     return preprocess(d, name).(vec(ds[format_variable_name(d, name)][:]))
 end
-
-"""
-    extrapolation_bc(format)
-
-Extrapolation setting for file-backed `TimeVaryingInput`s of this format,
-matching the dimensionality of its stored variables.
-"""
-extrapolation_bc(::AbstractColumnFormat) = (Intp.Flat(),)
 
 """
     time_interpolation_method(format)
@@ -486,8 +479,9 @@ read_initial_profiles(cd::ColumnDataset, start_date) =
 A `NamedTuple` of `TimeVaryingInput`s, one per requested column variable,
 targeting `target_space`, the model's center column space.
 
-The default builds file-backed inputs, applying the format's
-`extrapolation_bc` and `preprocess` hooks. A format whose
+The default builds file-backed inputs, applying the format's `preprocess`
+hook; the profiles are interpolated linearly onto the levels of `target_space`
+and held constant above and below the file's levels. A format whose
 on-disk layout the file readers cannot consume directly — a grouped file, or a
 non-height vertical coordinate — overrides this to build in-memory inputs
 instead.
@@ -502,17 +496,12 @@ function column_timevaryinginputs(
     names = Tuple(names)
     d = cd.format
     inputs = map(names) do name
-        prep = preprocess(d, name)
-        file_reader_kwargs =
-            prep === identity ? (;) : (; preprocess_func = prep)
         TimeVaryingInput(
-            cd.path,
-            format_variable_name(d, name),
+            DataSource(cd.path, format_variable_name(d, name)),
             target_space;
             start_date,
-            regridder_kwargs = (; extrapolation_bc = extrapolation_bc(d)),
-            file_reader_kwargs,
             method,
+            preprocess_func = preprocess(d, name),
         )
     end
     return NamedTuple{names}(inputs)
