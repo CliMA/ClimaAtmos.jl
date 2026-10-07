@@ -1,4 +1,4 @@
-407
+424
 
 # **README**
 #
@@ -32,6 +32,66 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+424
+- Van Leer-limited centered vertical gradients for θ_li and q_tot
+
+423
+- Update to SurfaceFluxes from 1.2.1 to 1.3.0
+
+422
+- Use LumpedRestriction for some horizontal gradients
+
+421
+- Change cloud fraction formulation and default ice depostion scheme
+
+420
+- Remove interface_effective_N² and interface_entrainment_diffusivity (fix GABLS)
+
+419
+- Add empirical l_TKE
+
+418
+- Compute the EDMF surface scalar coefficient and other constants in `FT`
+  instead of Float64, which changes Float32 results in the last bits
+
+417
+- Update to ClimaParams 1.1.16, which changes the default of some SGS quadrature parameters.
+
+416
+- Update to ClimaParams 1.1.14 from ClimaParams 1.1.13, which changes the default
+  `EDMF_interface_entr_efficiency` from 0.4 to 0.0 (2026-09-25)
+
+415
+- Share the pressure drag coefficient of the implicit updraft velocity solve with the
+  TKE source, split the LES enthalpy flux, correct the AMD viscosity denominator, and
+  turn hyperdiffusion off in the AMD configurations (2026-09-20)
+
+414
+- Changed the default N_ice number in vapor-ice transfer
+
+413
+- Changed solver in CloudMicrophysics.jl
+
+412
+- Add a bound for sgs variance
+
+411
+- Update to ClimaParams 1.1.9 from ClimaParams 1.1.6
+
+410
+- Add entr/detr shear-mixing source to the TKE budget and drop the stability-biased
+  ᶜN²_eff in favor of the unbiased ᶜbuoygrad for center l_N, Pr_t, and the Smag-Lilly
+  length scale.
+
+410
+- Update to ClimaCore 0.16
+
+409
+- Use vapor-ice timescale change, adding supercoole liquid freezing
+
+408
+- Guard against unphysical extrapolated ρa (u₃ is solved before ρa).
+
 407
 - Update dependencies: CloudMicrophysics v0.38.1 -> v0.38.3
 

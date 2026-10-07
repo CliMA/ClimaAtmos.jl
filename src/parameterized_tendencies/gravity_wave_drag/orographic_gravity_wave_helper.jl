@@ -28,7 +28,6 @@ Described in [garner2005](@cite) Eq. 6; see the *Orographic Gravity Waves* page.
 """
 function calc_orographic_tensor(elev, χ, lon, lat, earth_radius)
     @info "Computing T tensor..."
-    FT = eltype(elev)
 
     # compute ∇h
     @. elev = max(0, elev)
@@ -644,6 +643,7 @@ function compute_OGW_info(
 )
     # obtain lat, lon, elevation from the elev_data
     FT = Spaces.undertype(Spaces.axes(Y.c))
+    ctx = ClimaComms.context(Y.c)
 
     # Extract GCM grid resolution for grid-aware smoothing
     hspace = Spaces.horizontal_space(Spaces.axes(Y.c))
@@ -659,74 +659,90 @@ function compute_OGW_info(
     raw_data_resolution = FT(2 * π * earth_radius / 21600)  # ~10 km
     skip_pt = max(1, Int(round(smoothing_length_scale / (4 * raw_data_resolution))))
 
-    @info "Grid-aware OGWD preprocessing" Δh_GCM smoothing_length_scale skip_pt α_smoothing
+    ClimaComms.iamroot(ctx) &&
+        @info "Grid-aware OGWD preprocessing" Δh_GCM smoothing_length_scale skip_pt α_smoothing
 
     # Apply smoothing for hmax and chi, but not for elevation used in drag tensors
     smoothing_length_scale_chi = smoothing_length_scale  # Smooth chi for numerical stability
     smoothing_length_scale_elev = nothing  # No smoothing for tensor gradients (keep raw elevation)
-    # downsample to elev dims (3600×1800)
-    nt = NCDataset(elev_data, "r") do ds
-        lon = FT.(Array(ds["lon"]))[1:skip_pt:end]
-        lat = FT.(Array(ds["lat"]))[1:skip_pt:end]
-        elev = FT.(Array(ds["z"]))[1:skip_pt:end, 1:skip_pt:end]
-        (; lon, lat, elev)
-    end
-    (; lon, lat, elev) = nt
-    FT = eltype(elev)
 
-    # compute hmax and hmin (with grid-aware smoothing)
-    # The calc_hpoz_latlon function computes hmn (local mean) at smoothing_length_scale
-    # and subtracts it when computing hmax, effectively filtering out features > smoothing_length_scale
-    # less smoothing -> stronger drag
-    @info "skip_pt = $skip_pt"
-    @info "smoothing_length_scale for calc_hpoz_latlon = $smoothing_length_scale"
-    hpoz = calc_hpoz_latlon(
-        elev,
-        lon,
-        lat,
-        earth_radius;
-        smoothing_length_scale = smoothing_length_scale,
-    )
-    hpoz = @. max(FT(0), hpoz)^(FT(2) - γ)
-    hmax = @. (
-        abs(hpoz) * (γ + FT(2)) / (FT(2) * γ) * (FT(1) - h_frac^(FT(2) * γ)) /
-        (FT(1) - h_frac^(γ + FT(2)))
-    )^(FT(1) / (FT(2) - γ))
-    hmin = hmax .* h_frac
+    # The lat-lon preprocessing (elevation read + Hilbert transform + tensor) is
+    # identical on every rank, so run it once on root and broadcast the result. Each
+    # rank still writes its own temporary NetCDF and calls `regrid_OGW_info` below,
+    # which is a distributed operation that must run on all ranks.
+    latlon_info = if ClimaComms.iamroot(ctx)
+        # Strided read: slice the on-disk variables directly so only the subsampled
+        # elements are loaded.
+        nt = NCDataset(elev_data, "r") do ds
+            lon = FT.(ds["lon"][1:skip_pt:end])
+            lat = FT.(ds["lat"][1:skip_pt:end])
+            elev = FT.(ds["z"][1:skip_pt:end, 1:skip_pt:end])
+            (; lon, lat, elev)
+        end
+        (; lon, lat, elev) = nt
 
-    # compute χ (no smoothing if chi_length_scale is nothing)
-    # less smoothing -> stronger drag
-    chi_length_scale = smoothing_length_scale_chi
-    # If no length scale, use n_smoothing_cells = 0 (no smoothing)
-    chi_n_cells = chi_length_scale !== nothing ? nothing : 0.0
-    @info "chi smoothing: length_scale=$chi_length_scale, n_cells=$chi_n_cells"
-    χ = calc_velocity_potential(
-        elev,
-        lon,
-        lat,
-        earth_radius;
-        smoothing_length_scale = chi_length_scale,
-        n_smoothing_cells = chi_n_cells,
-    )
-
-    # Optionally smooth elevation for tensor gradient computation
-    # (matches effective resolution of coarser Fortran elevation data)
-    elev_for_tensor = if smoothing_length_scale_elev !== nothing
-        @info "Smoothing elevation for tensor gradients (scale=$(smoothing_length_scale_elev)m)"
-        smooth_field_latlon(
-            copy(elev),
+        # compute hmax and hmin (with grid-aware smoothing)
+        # The calc_hpoz_latlon function computes hmn (local mean) at smoothing_length_scale
+        # and subtracts it when computing hmax, effectively filtering out features > smoothing_length_scale
+        # less smoothing -> stronger drag
+        @info "skip_pt = $skip_pt"
+        @info "smoothing_length_scale for calc_hpoz_latlon = $smoothing_length_scale"
+        hpoz = calc_hpoz_latlon(
+            elev,
             lon,
             lat,
             earth_radius;
-            smoothing_length_scale = smoothing_length_scale_elev,
+            smoothing_length_scale = smoothing_length_scale,
         )
+        hpoz = @. max(FT(0), hpoz)^(FT(2) - γ)
+        hmax = @. (
+            abs(hpoz) * (γ + FT(2)) / (FT(2) * γ) * (FT(1) - h_frac^(FT(2) * γ)) /
+            (FT(1) - h_frac^(γ + FT(2)))
+        )^(FT(1) / (FT(2) - γ))
+        hmin = hmax .* h_frac
+
+        # compute χ (no smoothing if chi_length_scale is nothing)
+        # less smoothing -> stronger drag
+        chi_length_scale = smoothing_length_scale_chi
+        # If no length scale, use n_smoothing_cells = 0 (no smoothing)
+        chi_n_cells = chi_length_scale !== nothing ? nothing : 0.0
+        @info "chi smoothing: length_scale=$chi_length_scale, n_cells=$chi_n_cells"
+        χ = calc_velocity_potential(
+            elev,
+            lon,
+            lat,
+            earth_radius;
+            smoothing_length_scale = chi_length_scale,
+            n_smoothing_cells = chi_n_cells,
+        )
+
+        # Optionally smooth elevation for tensor gradient computation
+        # (matches effective resolution of coarser Fortran elevation data)
+        elev_for_tensor = if smoothing_length_scale_elev !== nothing
+            @info "Smoothing elevation for tensor gradients (scale=$(smoothing_length_scale_elev)m)"
+            smooth_field_latlon(
+                copy(elev),
+                lon,
+                lat,
+                earth_radius;
+                smoothing_length_scale = smoothing_length_scale_elev,
+            )
+        else
+            elev
+        end
+
+        # compute orographic tensor (t11, t21, t12, t22)
+        t11, t21, t12, t22 =
+            calc_orographic_tensor(elev_for_tensor, χ, lon, lat, earth_radius)
+
+        (; lon, lat, hmax, hmin, t11, t12, t21, t22)
     else
-        elev
+        nothing
     end
 
-    # compute orographic tensor (t11, t21, t12, t22)
-    t11, t21, t12, t22 =
-        calc_orographic_tensor(elev_for_tensor, χ, lon, lat, earth_radius)
+    # Broadcast the root-computed lat-lon fields to all ranks (no-op without MPI).
+    (; lon, lat, hmax, hmin, t11, t12, t21, t22) =
+        ClimaComms.bcast(ctx, latlon_info)
 
     # create ClimaCore.Fields
     topo_cg = fill(
@@ -1061,14 +1077,17 @@ end
 """
     load_preprocessed_topography(; topography, topo_smoothing,
                                  topography_damping_factor, h_elem)
-    load_preprocessed_topography(filename::String)
+    load_preprocessed_topography(filename::String, comms_ctx = ClimaComms.SingletonCommsContext())
 
 Read a preprocessed orographic drag field from an HDF5 file in the package root.
+The optional `comms_ctx` must be the run's MPI context on distributed runs so the
+field is read correctly.
 
 Returns the `computed_drag` field written by `write_computed_drag!`. The keyword method
-derives the filename from the topography configuration via `generate_drag_filename`; the
-`String` method takes the extensionless filename directly. Both read on a single CPU
-context, so a GPU run has to move the result with `move_topo_info_to_gpu`.
+derives the filename from the topography configuration via `generate_drag_filename` and
+reads on a single-threaded CPU context; the `String` method takes the extensionless
+filename directly and reads with the supplied `comms_ctx`. A GPU run has to move the
+result with `move_topo_info_to_gpu`.
 """
 function load_preprocessed_topography(;
     topography,
@@ -1091,11 +1110,14 @@ function load_preprocessed_topography(;
     return computed_drag
 end
 
-function load_preprocessed_topography(filename::String)
+function load_preprocessed_topography(
+    filename::String,
+    comms_ctx = ClimaComms.SingletonCommsContext(),
+)
     @info "loading topography drag vector: $(filename)"
     reader = InputOutput.HDF5Reader(
         joinpath(@__DIR__, "../../../$(filename).hdf5"),
-        ClimaComms.SingletonCommsContext(),
+        comms_ctx,
     )
     computed_drag = InputOutput.read_field(reader, "computed_drag")
 

@@ -73,6 +73,7 @@ const divₕ = Operators.Divergence()
 const wdivₕ = Operators.Divergence{Operators.WeakForm}()
 const split_divₕ = Operators.SplitDivergence()
 const gradₕ = Operators.Gradient()
+const lumpedₕ = Operators.LumpedRestriction()
 const wgradₕ = Operators.Gradient{Operators.WeakForm}()
 const curlₕ = Operators.Curl()
 const wcurlₕ = Operators.Curl{Operators.WeakForm}()
@@ -115,7 +116,7 @@ Face-to-center vertical divergence of a precipitation flux, with zero flux at
 the top and free outflow at the bottom.
 
 Leaving the bottom boundary unconstrained lets the extrapolated interior flux
-carry precipitation out of the domain; `ᶠright_bias` supplies that
+carry precipitation out of the domain; `ᶠtop_bias` supplies that
 reconstruction.
 """
 const ᶜprecipdivᵥ = Operators.DivergenceF2C(top = Operators.SetValue(CT3(0)))
@@ -146,21 +147,21 @@ const ᶠdiffdivᵥ_u₃ = Operators.DivergenceC2F(
 )
 
 """
-    ᶠleft_bias
-    ᶠright_bias
-    ᶜleft_bias
-    ᶜright_bias
+    ᶠbottom_bias
+    ᶠtop_bias
+    ᶜbottom_bias
+    ᶜtop_bias
 
-One-sided reconstructions that take the value from the neighbor below (`left`)
-or above (`right`) the target point.
+One-sided reconstructions that take the value from the neighbor below
+(`bottom`) or above (`top`) the target point.
 
-`ᶠright_bias` also supplies the free-outflow boundary reconstruction used with
+`ᶠtop_bias` also supplies the free-outflow boundary reconstruction used with
 `ᶜprecipdivᵥ`.
 """
-const ᶠleft_bias = Operators.BottomBiasedC2F()
-const ᶠright_bias = Operators.TopBiasedC2F() # for free outflow in ᶜprecipdivᵥ
-const ᶜleft_bias = Operators.BottomBiasedF2C()
-const ᶜright_bias = Operators.TopBiasedF2C()
+const ᶠbottom_bias = Operators.BottomBiasedC2F()
+const ᶠtop_bias = Operators.TopBiasedC2F() # for free outflow in ᶜprecipdivᵥ
+const ᶜbottom_bias = Operators.BottomBiasedF2C()
+const ᶜtop_bias = Operators.TopBiasedF2C()
 
 # TODO: Implement proper extrapolation instead of simply reusing the first
 # interior value at the surface.
@@ -230,8 +231,8 @@ const ᶠupwind1 = Operators.UpwindBiasedProductC2F()
     ᶠupwind3
 
 Third-order upwind-biased reconstruction of the product of a center scalar with
-a face velocity, padding the ghost points of the boundary stencils with linear
-(first-order) extrapolation from the interior.
+a face velocity, with the interior stencil's ghost points at the top and bottom
+boundaries filled by linear extrapolation from the interior.
 """
 const ᶠupwind3 = Operators.Upwind3rdOrderBiasedProductC2F(
     bottom = Operators.Extrapolate{1}(),
@@ -243,7 +244,7 @@ const ᶠupwind3 = Operators.Upwind3rdOrderBiasedProductC2F(
 
 Linear van Leer reconstruction of the product of a center scalar with a face
 velocity, with the `MonotoneLocalExtrema` (Mono5) slope constraint and
-constant (zero-order) extrapolation of ghost points at the boundaries.
+closest-value ghost points at the boundaries.
 """
 const ᶠlin_vanleer = Operators.LinVanLeerC2F(
     bottom = Operators.Extrapolate{0}(),
@@ -253,12 +254,12 @@ const ᶠlin_vanleer = Operators.LinVanLeerC2F(
 
 """
     ᶜinterp_matrix
-    ᶜleft_bias_matrix
-    ᶜright_bias_matrix
+    ᶜbottom_bias_matrix
+    ᶜtop_bias_matrix
     ᶜdivᵥ_matrix
     ᶜadvdivᵥ_matrix
     ᶜprecipdivᵥ_matrix
-    ᶠright_bias_matrix
+    ᶠtop_bias_matrix
     ᶠinterp_matrix
     ᶠwinterp_matrix
     ᶠgradᵥ_matrix
@@ -273,12 +274,12 @@ linear action of the operator, including its boundary conditions. They are the
 building blocks of the implicit Jacobian in `manual_sparse_jacobian.jl`.
 """
 const ᶜinterp_matrix = MatrixFields.operator_matrix(ᶜinterp)
-const ᶜleft_bias_matrix = MatrixFields.operator_matrix(ᶜleft_bias)
-const ᶜright_bias_matrix = MatrixFields.operator_matrix(ᶜright_bias)
+const ᶜbottom_bias_matrix = MatrixFields.operator_matrix(ᶜbottom_bias)
+const ᶜtop_bias_matrix = MatrixFields.operator_matrix(ᶜtop_bias)
 const ᶜdivᵥ_matrix = MatrixFields.operator_matrix(ᶜdivᵥ)
 const ᶜadvdivᵥ_matrix = MatrixFields.operator_matrix(ᶜadvdivᵥ)
 const ᶜprecipdivᵥ_matrix = MatrixFields.operator_matrix(ᶜprecipdivᵥ)
-const ᶠright_bias_matrix = MatrixFields.operator_matrix(ᶠright_bias)
+const ᶠtop_bias_matrix = MatrixFields.operator_matrix(ᶠtop_bias)
 const ᶠinterp_matrix = MatrixFields.operator_matrix(ᶠinterp)
 const ᶠwinterp_matrix = MatrixFields.operator_matrix(ᶠwinterp)
 const ᶠgradᵥ_matrix = MatrixFields.operator_matrix(ᶠgradᵥ)

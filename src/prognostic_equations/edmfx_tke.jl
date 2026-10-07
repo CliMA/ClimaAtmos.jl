@@ -5,8 +5,9 @@
 """
     edmfx_tke_tendency!(Yₜ, Y, p, t, turbconv_model)
 
-Add the PROPHET (`EDMFX` in code) shear and buoyancy TKE production terms to
-`Yₜ.c.ρtke`.
+Add the PROPHET (`EDMFX` in code) TKE sources to `Yₜ.c.ρtke`: shear and
+buoyancy production, and, for `PrognosticEDMFX`, the pressure-drag
+return-to-isotropy and detrainment shear-mixing sources.
 
 The generic method is a no-op. The method for
 `turbconv_model::Union{EDOnlyEDMFX, PrognosticEDMFX}` forwards to
@@ -34,27 +35,25 @@ end
 """
     edmfx_tke_sources!(Yₜ, Y, p)
 
-Add the shear and buoyancy sources of the isotropic (intra-subdomain) TKE to
-`Yₜ.c.ρtke`.
+Add the sources of the isotropic (intra-subdomain) TKE to `Yₜ.c.ρtke`: shear and
+buoyancy production for every EDMF model, plus the pressure-drag
+return-to-isotropy source (when `edmfx_nh_pressure` is on) and the detrainment
+shear-mixing source for `PrognosticEDMFX`.
 
 Both terms use the same face diffusivities and face buoyancy gradient as the
 diffusive fluxes they parameterize (`set_face_diffusivities!`):
 
-  - Buoyancy production/destruction `−ρ interp((ᶠK_h + ᶠK_entr) ᶠbuoygrad)`
-    is stencil-exact: the product is formed at the faces from the same
-    factors as the scalar fluxes and only then interpolated, so it is
-    exactly the (interpolated) buoyancy content of those fluxes. In
-    unstable layers it is the usual convective production; at stable
-    unresolved jumps the `ᶠK_entr ᶠbuoygrad` part carries the interfacial-
-    entrainment sink `−γ w_e Δb` per face automatically (bounded by
-    `A κ^{3/2}/ℓ_e`, a fixed multiple of the dissipation).
-  - Shear production `+2 ρ interp(ᶠK_u + ᶠK_entr) ‖S‖²` corresponds to the
-    momentum flux `−2 ρ (ᶠK_u + ᶠK_entr) 𝔈` at the adjacent faces, but only
-    approximately at the stencil level: the viscosity is interpolated
-    separately and multiplied by the *center* strain-rate norm (the face
-    norm is not precomputed), rather than interpolating the face-local
-    product. The two agree to second order in smooth flow and differ by an
-    O(1) factor only where `K` or `‖S‖²` jumps between adjacent faces.
+  - Buoyancy production/destruction `−ρ interp(ᶠK_h ᶠbuoygrad)` is
+    stencil-exact: the product is formed at the faces from the same factors
+    as the scalar fluxes and only then interpolated, so it is exactly the
+    (interpolated) buoyancy content of those fluxes.
+  - Shear production `+2 ρ interp(ᶠK_u) ‖S‖²` corresponds to the momentum
+    flux `−2 ρ K_u 𝔈` at the adjacent faces, but only approximately at the
+    stencil level: the viscosity is interpolated separately and multiplied
+    by the *center* strain-rate norm (the face norm is not precomputed),
+    rather than interpolating the face-local product. The two agree to
+    second order in smooth flow and differ by an O(1) factor only where `K`
+    or `‖S‖²` jumps between adjacent faces.
 
 Only the diffusive (intra-subdomain) piece of the Favre-averaged buoyancy
 flux enters this budget. The coherent (mass-flux) piece
@@ -64,22 +63,22 @@ prognostic subdomain velocities already carry; adding it here would
 double-count buoyancy production and spuriously inflate K near cloud tops
 with active drafts.
 
-Reads `ᶜstrain_rate_norm`, `ᶠbuoygrad`, `ᶠK_h`, `ᶠK_u`, and `ᶠK_entr` from
+Reads `ᶜstrain_rate_norm`, `ᶠbuoygrad`, `ᶠK_h`, and `ᶠK_u` from
 `p.precomputed`; mutates `Yₜ.c.ρtke` and returns `nothing`.
 """
 function edmfx_tke_sources!(Yₜ, Y, p)
     (; ᶜstrain_rate_norm) = p.precomputed
-    (; ᶠbuoygrad, ᶠK_h, ᶠK_u, ᶠK_entr) = p.precomputed
+    (; ᶠbuoygrad, ᶠK_h, ᶠK_u) = p.precomputed
 
     # shear production (face viscosities brought to centers)
-    @. Yₜ.c.ρtke +=
-        2 * Y.c.ρ * ᶜinterp(ᶠK_u + ᶠK_entr) * ᶜstrain_rate_norm
-    # buoyancy production/destruction (face-flux consistent; includes the
-    # interfacial-entrainment sink through ᶠK_entr)
-    @. Yₜ.c.ρtke -= Y.c.ρ * ᶜinterp((ᶠK_h + ᶠK_entr) * ᶠbuoygrad)
+    @. Yₜ.c.ρtke += 2 * Y.c.ρ * ᶜinterp(ᶠK_u) * ᶜstrain_rate_norm
+    # buoyancy production/destruction (face-flux consistent)
+    @. Yₜ.c.ρtke -= Y.c.ρ * ᶜinterp(ᶠK_h * ᶠbuoygrad)
 
     # Pressure-drag return-to-isotropy
     edmfx_pressure_drag_tke_source!(Yₜ, Y, p, p.atmos.turbconv_model)
+    # Entr/detr shear-mixing source: 0.5 δ · ρa · |Δw|² per updraft.
+    edmfx_entr_detr_tke_source!(Yₜ, Y, p, p.atmos.turbconv_model)
     return nothing
 end
 
@@ -87,33 +86,89 @@ edmfx_pressure_drag_tke_source!(Yₜ, Y, p, turbconv_model) = nothing
 function edmfx_pressure_drag_tke_source!(
     Yₜ, Y, p, turbconv_model::PrognosticEDMFX,
 )
-    p.atmos.edmfx_model.nh_pressure isa Val{true} || return nothing
+    p.atmos.edmfx_model.nh_pressure || return nothing
     n = n_mass_flux_subdomains(turbconv_model)
     n == 0 && return nothing
 
     turbconv_params = CAP.turbconv_params(p.params)
     α_d = CAP.pressure_normalmode_drag_coeff(turbconv_params)
     a_min = CAP.min_area(turbconv_params)
+    a_max = CAP.max_area(turbconv_params)
     scale_height = CAP.R_d(p.params) * CAP.T_surf_ref(p.params) / CAP.grav(p.params)
-    (; ᶜρʲs, ᶠu³ʲs, ᶠu³⁰) = p.precomputed
+    (; ᶜρʲs, ᶜuʲs, ᶜu⁰) = p.precomputed
     # Environment area, shared across all updrafts.
     ᶜa⁰ = @. lazy(a⁰(Y.c.sgsʲs, ᶜρʲs, turbconv_model))
     ᶜdrag_coeff = p.scratch.ᶜtemp_scalar
+    ᶜlg = Fields.local_geometry_field(Y.c)
     for j in 1:n
         ᶜaʲ = @. lazy(draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j)))
-        # Same `ᶜdrag_coeff` form as the momentum equation
-        # (`initialize_implicit_problem.jl`): C_d/r^{j0} with C_d = α_d/H,
-        # H = scale height, and 1/r^{j0} = ½·(1/√a_j + 1/√a_0).
+        # The coefficient of the momentum equation's drag sink, so the energy
+        # removed there is the energy received here.
         @. ᶜdrag_coeff =
-            α_d / (2 * scale_height) *
-            (1 / sqrt(max(ᶜaʲ, a_min)) + 1 / sqrt(max(ᶜa⁰, a_min)))
-        @. Yₜ.c.ρtke += ᶜinterp(
-            ᶠinterp(Y.c.sgsʲs.:($$j).ρa * ᶜa⁰ * ᶜdrag_coeff) *
-            abs(
-                w_component(Geometry.WVector(ᶠu³ʲs.:($$j))) -
-                w_component(Geometry.WVector(ᶠu³⁰)),
-            )^3,
+            pressure_drag_coefficient(α_d, scale_height, ᶜaʲ, ᶜa⁰, a_min, a_max)
+        @. Yₜ.c.ρtke +=
+            Y.c.sgsʲs.:($$j).ρa * ᶜa⁰ * ᶜdrag_coeff *
+            abs(get_physical_w(ᶜuʲs.:($$j) - ᶜu⁰, ᶜlg))^3
+    end
+    return nothing
+end
+
+edmfx_entr_detr_tke_source!(Yₜ, Y, p, turbconv_model) = nothing
+function edmfx_entr_detr_tke_source!(
+    Yₜ, Y, p, turbconv_model::PrognosticEDMFX,
+)
+    n = n_mass_flux_subdomains(turbconv_model)
+    n == 0 && return nothing
+
+    (;
+        ᶜρʲs,
+        ᶜρ_diffʲs,
+        ᶜarea_bounding_entr_detrʲs,
+        ᶜuʲs,
+        ᶠu³ʲs,
+        ᶜu⁰,
+    ) = p.precomputed
+    (; ᶠgradᵥ_ᶜΦ) = p.core
+
+    turbconv_params = CAP.turbconv_params(p.params)
+    entr_detr_buoy_inv_tau_max =
+        CAP.entr_detr_buoy_inv_tau_max(turbconv_params)
+    detr_model = p.atmos.edmfx_model.detr_model
+    ᶜlg = Fields.local_geometry_field(Y.c)
+    ᶠlg = Fields.local_geometry_field(Y.f)
+    ᶠbottom_bias_zero_bot = Operators.BottomBiasedC2F(bottom = Operators.SetValue(0))
+    FT = Spaces.undertype(axes(Y.c))
+
+    for j in 1:n
+        ᶜaʲ = @. lazy(draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j)))
+        ᶜbuoy_inv_time_scale = @. lazy(
+            ᶜinterp(
+                detr_buoy_inv_time_scale(
+                    get_physical_w(ᶠu³ʲs.:($$j), ᶠlg),
+                    vertical_buoyancy_acceleration(
+                        ᶠinterp(ᶜρ_diffʲs.:($$j)),
+                        ᶠgradᵥ_ᶜΦ,
+                        ᶠlg,
+                    ),
+                    entr_detr_buoy_inv_tau_max,
+                ),
+            ),
         )
+        ᶜdetr = @. lazy(
+            compute_detrainment(
+                turbconv_params,
+                ᶜaʲ,
+                Y.c.sgsʲs.:($$j).ρa,
+                ᶜbuoy_inv_time_scale,
+                ᶜdivᵥ(ᶠbottom_bias_zero_bot(Y.c.sgsʲs.:($$j).ρa) * ᶠu³ʲs.:($$j)),
+                ᶜarea_bounding_entr_detrʲs.:($$j),
+                detr_model,
+            ),
+        )
+
+        @. Yₜ.c.ρtke +=
+            FT(0.5) * ᶜdetr * Y.c.sgsʲs.:($$j).ρa *
+            get_physical_w(ᶜuʲs.:($$j) - ᶜu⁰, ᶜlg)^2
     end
     return nothing
 end
@@ -136,8 +191,12 @@ where `c_d` is the TKE dissipation coefficient
   - `mixing_length`: Turbulent mixing length [m].
 """
 function tke_dissipation(turbconv_params, ρtke, tke, mixing_length)
-    FT = typeof(tke)
     c_d = tke_dissipation_coefficient(turbconv_params)
-    dissipation_rate_vol = c_d * ρtke * sqrt(abs(tke)) / mixing_length
+    FT = eltype(mixing_length)
+    # `max(mixing_length, 1)` is a numerical divide-by-zero guard applied at
+    # the point of division (dissipation only), not a physical floor on
+    # `mixing_length`.
+    dissipation_rate_vol =
+        c_d * ρtke * sqrt(abs(tke)) / max(mixing_length, FT(1))
     return dissipation_rate_vol
 end

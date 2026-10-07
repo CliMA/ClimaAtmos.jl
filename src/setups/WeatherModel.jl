@@ -76,7 +76,8 @@ function overwrite_initial_state!(setup::WeatherModel, Y, thermo_params)
     file_path = weather_model_data_path(
         setup.start_date,
         target_levels,
-        era5_dir,
+        era5_dir;
+        comms_ctx = ClimaComms.context(Fields.axes(Y.c)),
     )
 
     if !setup.use_full_pressure
@@ -102,9 +103,16 @@ function overwrite_initial_state!(setup::WeatherModel, Y, thermo_params)
     ᶜT = SpaceVaryingInputs.SpaceVaryingInput(
         file_path, "t", center_space; svi_kwargs...,
     )
-    ᶜq_tot = SpaceVaryingInputs.SpaceVaryingInput(
+    ᶜq_vap = SpaceVaryingInputs.SpaceVaryingInput(
         file_path, "q", center_space; svi_kwargs...,
     )
+
+    # Optional condensate species and the thermodynamic moisture partition, read
+    # before ρ / p / ρe_tot so the initial state is consistent with ρq_tot.
+    (; ᶜq_lcl, ᶜq_icl, ᶜq_rai, ᶜq_sno) =
+        read_microphysics_from_file(file_path, center_space, svi_kwargs)
+    (; ᶜq_tot, ᶜq_liq, ᶜq_ice) =
+        thermodynamic_partition(Y, ᶜq_vap, ᶜq_lcl, ᶜq_icl, ᶜq_rai, ᶜq_sno)
 
     use_p3d = NC.NCDataset(file_path) do ds
         haskey(ds, "p_3d")
@@ -130,7 +138,8 @@ function overwrite_initial_state!(setup::WeatherModel, Y, thermo_params)
         end
         if has_surface_altitude
             correct_surface_pressure_for_topography!(
-                p_sfc, file_path, face_space, Y, ᶜT, ᶜq_tot,
+                p_sfc, file_path, face_space, Y, ᶜT,
+                ᶜq_tot, ᶜq_liq, ᶜq_ice,
                 thermo_params, regridder_kwargs;
                 surface_altitude_var,
             )
@@ -138,36 +147,28 @@ function overwrite_initial_state!(setup::WeatherModel, Y, thermo_params)
             @warn "Skipping topographic correction because variable " *
                   "`$surface_altitude_var` is missing from $(file_path)."
         end
-        hydrostatic_pressure(p_sfc, ᶜT, ᶜq_tot, face_space, thermo_params)
+        hydrostatic_pressure(
+            p_sfc, ᶜT, ᶜq_tot, ᶜq_liq, ᶜq_ice, face_space,
+            thermo_params,
+        )
     end
 
-    # Density
-    Y.c.ρ .= TD.air_density.(thermo_params, ᶜT, ᶜinterp.(ᶠp), ᶜq_tot)
+    # Density. Interpolate face pressure to centers in log space to avoid
+    # overestimating center pressure.
+    Y.c.ρ .= TD.air_density.(
+        thermo_params, ᶜT, exp.(ᶜinterp.(log.(ᶠp))), ᶜq_tot, ᶜq_liq, ᶜq_ice,
+    )
 
     # Velocity and energy
     e_pot = assign_velocity_energy!(
-        Y, ᶜT, ᶜq_tot, ᶠp, thermo_params, file_path, svi_kwargs,
+        Y, ᶜT, ᶜq_tot, ᶜq_liq, ᶜq_ice, ᶠp, thermo_params,
+        file_path, svi_kwargs,
     )
-
-    # Microphysics fields from file (rain/snow water content)
-    has_microphysics_vars = NC.NCDataset(file_path) do ds
-        haskey(ds, "cswc") && haskey(ds, "crwc")
-    end
-    if has_microphysics_vars
-        ᶜq_rai = SpaceVaryingInputs.SpaceVaryingInput(
-            file_path, "crwc", center_space; svi_kwargs...,
-        )
-        ᶜq_sno = SpaceVaryingInputs.SpaceVaryingInput(
-            file_path, "cswc", center_space; svi_kwargs...,
-        )
-    else
-        ᶜq_rai = nothing
-        ᶜq_sno = nothing
-    end
 
     # Moisture and EDMF
     assign_moisture_edmf!(
-        Y, ᶜT, ᶜq_tot, e_pot, thermo_params, ᶜq_rai, ᶜq_sno,
+        Y, ᶜT, ᶜq_tot, ᶜq_liq, ᶜq_ice, e_pot, thermo_params,
+        ᶜq_lcl, ᶜq_icl, ᶜq_rai, ᶜq_sno,
     )
 
     return nothing

@@ -368,7 +368,7 @@ grid-mean scalars.
 These are the `(grid-mean tracer, updraft tracer)` blocks, the
 `(sedimenting tracer, f.u₃)` blocks, and the `ρe_tot` couplings to the updraft
 `mse` and to `ρ`. Returns `()` unless `atmos.turbconv_model` is a
-`PrognosticEDMFX` with `edmfx_model.sgs_mass_flux` set to `Val(true)`.
+`PrognosticEDMFX` with `edmfx_model.sgs_mass_flux` enabled.
 
 # Returns
 
@@ -377,7 +377,7 @@ These are the `(grid-mean tracer, updraft tracer)` blocks, the
 function sgs_massflux_jacobian_blocks(Y, atmos)
     (
         atmos.turbconv_model isa PrognosticEDMFX &&
-        atmos.edmfx_model.sgs_mass_flux isa Val{true}
+        atmos.edmfx_model.sgs_mass_flux
     ) || return ()
     FT = Spaces.undertype(axes(Y.c))
     (; TridiagonalRow, BidiagonalRow_ACT3) = jacobian_row_types(FT)
@@ -713,7 +713,7 @@ Mutates `matrix` and returns `nothing`.
 function update_advection_jacobian!(matrix, Y, p, dtγ, topography_flag)
     (; params) = p
     (; ᶜΦ) = p.core
-    (; ᶠu³, ᶜK, ᶜp, ᶜT, ᶜh_tot) = p.precomputed
+    (; ᶜK, ᶜp, ᶜT, ᶜh_tot) = p.precomputed
     (; ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice) = p.precomputed
     (; ∂ᶜK_∂ᶜuₕ, ∂ᶜK_∂ᶠu₃, ᶠp_grad_matrix, ᶜadvection_matrix) = p.scratch
     rs = p.atmos.rayleigh_sponge
@@ -726,7 +726,6 @@ function update_advection_jacobian!(matrix, Y, p, dtγ, topography_flag)
     R_d = FT(CAP.R_d(params))
     R_v = FT(CAP.R_v(params))
     cp_d = FT(CAP.cp_d(params))
-    e_int_v0 = FT(CAP.e_int_v0(params))
     thermo_params = CAP.thermodynamics_params(params)
 
     ᶜρ = Y.c.ρ
@@ -922,7 +921,7 @@ function update_sedimentation_jacobian!(matrix, Y, p, dtγ)
         ᶜwₚ = MatrixFields.get_field(p.precomputed, wₚ_name)
         # TODO: come up with read-able names for the intermediate computations...
         @. p.scratch.ᶠband_matrix_wvec =
-            ᶠright_bias_matrix() *
+            ᶠtop_bias_matrix() *
             DiagonalMatrixRow(ClimaCore.Geometry.WVector(-(ᶜwₚ) / ᶜρ))
         @. ∂ᶜρχₚ_err_∂ᶜρχₚ =
             p.scratch.ᶜbidiagonal_adjoint_matrix_c3 *
@@ -970,11 +969,12 @@ end
 Return the center-space eddy diffusivity and viscosity used by the non-EDMF
 implicit diffusion Jacobian, as a `NamedTuple` `(; ᶜK_u, ᶜK_h)` [m²/s].
 
-May write to `p.scratch.ᶜtemp_scalar_3`, and calls
-`set_smagorinsky_lilly_precomputed_quantities!` for the Smagorinsky closure.
+May write to `p.scratch.ᶜtemp_scalar_3`. For the Smagorinsky closure it reads the
+`ᶜνₜ_v` and `ᶜD_v` refreshed by `set_implicit_precomputed_quantities!` at the
+current Newton iterate (this function only runs with `diff_mode == Implicit()`).
 Both fields are `nothing` for `AbstractEDMF` configurations, whose grid-mean
-diffusion Jacobian instead uses the face-native `ᶠK_h`, `ᶠK_u`, and `ᶠK_entr`
-from `set_face_diffusivities!` (see `update_diffusion_jacobian!` and
+diffusion Jacobian instead uses the face-native `ᶠK_h` and `ᶠK_u` from
+`set_face_diffusivities!` (see `update_diffusion_jacobian!` and
 `update_sgs_diffusion_jacobian!`).
 """
 function eddy_diffusivity_coefficients!(Y, p)
@@ -990,7 +990,6 @@ function eddy_diffusivity_coefficients!(Y, p)
         ᶜK_h .= ᶜcompute_eddy_diffusivity_coefficient(Y.c.uₕ, ᶜp, vertical_diffusion)
         ᶜK_u = ᶜK_h
     elseif is_smagorinsky_vertical(smagorinsky_lilly)
-        set_smagorinsky_lilly_precomputed_quantities!(Y, p, smagorinsky_lilly)
         ᶜK_u = p.precomputed.ᶜνₜ_v
         ᶜK_h = p.precomputed.ᶜD_v
     end
@@ -1006,7 +1005,7 @@ scalars (including TKE dissipation) and of `uₕ`.
 No-op when `diffusion_flag` is `IgnoreDerivative()`. `eddy_diffusivities` is
 the `NamedTuple` returned by `eddy_diffusivity_coefficients!`; its center
 diffusivities are used only for the non-EDMF closures, since `AbstractEDMF`
-configurations use the face-native `ᶠK_h`, `ᶠK_u`, and `ᶠK_entr`. The face
+configurations use the face-native `ᶠK_h` and `ᶠK_u`. The face
 interpolation of the diffusivity matches the corresponding tendency in each
 case (harmonic mean for `VerticalDiffusion` and `DecayWithHeightDiffusion`,
 arithmetic for Smagorinsky, face-native for EDMF).
@@ -1043,11 +1042,8 @@ function update_diffusion_jacobian!(
     (; ᶜK_u, ᶜK_h) = eddy_diffusivities
     FT = Spaces.undertype(axes(Y.c))
     T_0 = FT(CAP.T_0(params))
-    R_v = FT(CAP.R_v(params))
 
     ᶜρ = Y.c.ρ
-    ᶜkappa_m = ᶜkappa_m_field!(Y, p)
-    ᶜ∂p∂ρq_tot = ᶜ∂p∂ρq_tot_field!(Y, p, ᶜkappa_m)
 
     # In dry configurations, the ρe_tot diagonal is initialized here (moist
     # configurations initialize it in update_sedimentation_jacobian!).
@@ -1058,24 +1054,22 @@ function update_diffusion_jacobian!(
 
     ∂ᶠρχ_dif_flux_∂ᶜχ = ᶠp_grad_matrix
     # Face diffusivities, consistent with the diffusive tendencies:
-    # - AbstractEDMF: the face-native ᶠK_h/ᶠK_u plus the interfacial
-    #   entrainment diffusivity ᶠK_entr (see set_face_diffusivities! and
-    #   edmfx_sgs_diffusive_flux_tendency!), treated as frozen
-    #   coefficients (no ∂K/∂state terms).
+    # - AbstractEDMF: the face-native ᶠK_h/ᶠK_u (see
+    #   set_face_diffusivities! and edmfx_sgs_diffusive_flux_tendency!),
+    #   treated as frozen coefficients (no ∂K/∂state terms).
     # - VerticalDiffusion/DecayWithHeightDiffusion: harmonic-mean face
     #   interpolation of the center K (see
     #   vertical_diffusion_boundary_layer_tendency!).
     # - Smagorinsky: arithmetic interpolation, matching its tendency.
-    # ᶠK_h/ᶠK_u/ᶠK_entr exist only for AbstractEDMF (see precomputed_quantities);
+    # ᶠK_h/ᶠK_u exist only for AbstractEDMF (see precomputed_quantities);
     # the other closures use the center ᶜK_h/ᶜK_u, so the face fields are
     # destructured inside the AbstractEDMF branches only.
     turbconv_model = p.atmos.turbconv_model
     ϵK = eps(FT)
     if turbconv_model isa AbstractEDMF
-        (; ᶠK_h, ᶠK_entr) = p.precomputed
+        (; ᶠK_h) = p.precomputed
         @. ∂ᶠρχ_dif_flux_∂ᶜχ =
-            DiagonalMatrixRow(ᶠinterp(ᶜρ) * (ᶠK_h + ᶠK_entr)) *
-            ᶠgradᵥ_matrix()
+            DiagonalMatrixRow(ᶠinterp(ᶜρ) * ᶠK_h) * ᶠgradᵥ_matrix()
     elseif is_smagorinsky_vertical(p.atmos.smagorinsky_lilly)
         @. ∂ᶠρχ_dif_flux_∂ᶜχ =
             DiagonalMatrixRow(ᶠinterp(ᶜρ) * ᶠinterp(ᶜK_h)) * ᶠgradᵥ_matrix()
@@ -1091,10 +1085,9 @@ function update_diffusion_jacobian!(
         !disable_momentum_vertical_diffusion(p.atmos.vertical_diffusion)
     )
         if turbconv_model isa AbstractEDMF
-            (; ᶠK_u, ᶠK_entr) = p.precomputed
+            (; ᶠK_u) = p.precomputed
             @. ∂ᶠρχ_dif_flux_∂ᶜχ =
-                DiagonalMatrixRow(ᶠinterp(ᶜρ) * (ᶠK_u + ᶠK_entr)) *
-                ᶠgradᵥ_matrix()
+                DiagonalMatrixRow(ᶠinterp(ᶜρ) * ᶠK_u) * ᶠgradᵥ_matrix()
         elseif is_smagorinsky_vertical(p.atmos.smagorinsky_lilly)
             @. ∂ᶠρχ_dif_flux_∂ᶜχ =
                 DiagonalMatrixRow(ᶠinterp(ᶜρ) * ᶠinterp(ᶜK_u)) *
@@ -1170,27 +1163,12 @@ function update_diffusion_jacobian!(
 
     # Sedimenting mass and number tracers (cloud + precip): K_h diffusion is
     # applied via q_tot_eff distribution with a frozen ratio (zero self-
-    # contribution), but per-species K_e (entrainment) transport gives a
-    # real self-diagonal. Under EDMF the diagonal receives the K_e-only
-    # diffusion matrix ρ·K_e; for non-EDMF vertical diffusion there is no
-    # K_e and no contribution is added.
-    if turbconv_model isa AbstractEDMF
-        ᶜtracer_diffusion_matrix = p.scratch.ᶜtridiagonal_matrix_scalar
-        @. ∂ᶠρχ_dif_flux_∂ᶜχ =
-            DiagonalMatrixRow(ᶠinterp(ᶜρ) * ᶠK_entr) * ᶠgradᵥ_matrix()
-        @. ᶜtracer_diffusion_matrix = ᶜadvdivᵥ_matrix() * ∂ᶠρχ_dif_flux_∂ᶜχ
-        MatrixFields.unrolled_foreach(sedimenting_tracer_names(Y)) do ρχ_name
-            ρχ_state_name = center_state_name(ρχ_name)
-            ∂ᶜρχ_err_∂ᶜρχ = matrix[ρχ_state_name, ρχ_state_name]
-            @. ∂ᶜρχ_err_∂ᶜρχ +=
-                dtγ * ᶜtracer_diffusion_matrix * DiagonalMatrixRow(1 / ᶜρ)
-        end
-    end
+    # contribution), so no self-diagonal entry is added here.
 
-    # Passive (non-water) grid-scale tracers are diffused with the full
-    # scalar diffusivity: ρ·(K_h + K_e) under EDMF, ρ·K_h under non-EDMF
-    # vertical diffusion (see edmfx_sgs_diffusive_flux_tendency! and
-    # vertical_diffusion_boundary_layer_tendency!) — both captured by
+    # Passive (non-water) grid-scale tracers are diffused with ρ·K_h under
+    # both EDMF and non-EDMF vertical diffusion (see
+    # edmfx_sgs_diffusive_flux_tendency! and
+    # vertical_diffusion_boundary_layer_tendency!), captured by
     # `ᶜdiffusion_h_matrix` above. Their diagonals receive no other
     # implicit contributions, so they are initialized here.
     MatrixFields.unrolled_foreach(passive_gs_tracer_names(Y)) do ρχ_name
@@ -1216,10 +1194,17 @@ function update_diffusion_jacobian!(
         # coefficients above, this omits a ∂l_mix/∂tke chain term — a
         # convergence-rate approximation that is largest in the strongly
         # stable cells where l_N ∝ √tke dominates the mixing length.
+        # `max(mixing_length, 1)` matches `tke_dissipation` in
+        # `edmfx_tke.jl`: the floor is applied at the point of division
+        # (dissipation only), not on the master mixing length itself.
         @inline tke_dissipation_rate_tendency(tke, mixing_length) =
-            tke >= 0 ? c_d * sqrt(tke) / mixing_length : 1 / typeof(tke)(dt)
+            tke >= 0 ?
+            c_d * sqrt(tke) / max(mixing_length, one(mixing_length)) :
+            1 / typeof(tke)(dt)
         @inline ∂tke_dissipation_rate_tendency_∂tke(tke, mixing_length) =
-            tke > 0 ? c_d / (2 * mixing_length * sqrt(tke)) :
+            tke > 0 ?
+            c_d /
+            (2 * max(mixing_length, one(mixing_length)) * sqrt(tke)) :
             typeof(tke)(0)
 
         ᶜdissipation_matrix_diagonal = p.scratch.ᶜtemp_scalar
@@ -1302,7 +1287,7 @@ Update the Jacobian blocks for implicit vertical advection of the updraft
 scalars with the updraft velocity, and for implicit sedimentation of the SGS
 condensate tracers (including their couplings to the updraft `q_tot`).
 
-The advective-form derivative `∂ᵥ(u³ʲ) - ∂ᵥ(upwind(u³ʲ, *))` uses the upwind
+The advective-form derivative `∂ᵥ(u³ʲ) - ∂ᵥ(upwind(u³ʲ, ⋅))` uses the upwind
 matrix from `sgs_upwinding_operators`, with `edmfx_mse_q_tot_upwinding` for
 `q_tot` and `mse` and `edmfx_tracer_upwinding` for all other SGS scalars. These
 diagonals are assigned (including the `-I` residual term), so this update must
@@ -1310,8 +1295,8 @@ run before the other SGS updates, which accumulate into them.
 
 The sedimentation derivative also carries the lateral-mixing correction that
 the tendency applies where the draft area decreases with height,
-`α_lat ∂ᵥa (ρʲwʲχʲ - ρ⁰w⁰χ⁰)`, whose environment part contributes
-`α_lat ∂ᵥa ρʲwʲ / (1 - a)` to the diagonal. No-op unless `p.atmos.turbconv_model`
+`∂ᵥa (ρʲwʲχʲ - ρ⁰w⁰χ⁰)`, whose environment part contributes
+`∂ᵥa ρʲwʲ / (1 - a)` to the diagonal. No-op unless `p.atmos.turbconv_model`
 is a `PrognosticEDMFX`. Writes `ᶜtemp_scalar_7`, `ᶠsed_tracer_advection`, and
 `ᶜtridiagonal_matrix_scalar` in `p.scratch`, mutates `matrix`, and returns
 `nothing`.
@@ -1320,7 +1305,6 @@ function update_sgs_advection_jacobian!(matrix, Y, p, dtγ)
     p.atmos.turbconv_model isa PrognosticEDMFX || return nothing
     (; ᶜρʲs, ᶠu³ʲs) = p.precomputed
     FT = Spaces.undertype(axes(Y.c))
-    α_lat = CAP.sedimentation_lateral_coeff(p.params)
     ᶜJ = Fields.local_geometry_field(Y.c).J
     ᶠJ = Fields.local_geometry_field(Y.f).J
     (; ᶠsed_tracer_advection, ᶜtridiagonal_matrix_scalar) = p.scratch
@@ -1372,7 +1356,7 @@ function update_sgs_advection_jacobian!(matrix, Y, p, dtγ)
     }
         ᶜa = (@. lazy(draft_area(Y.c.sgsʲs.:(1).ρa, ᶜρʲs.:(1))))
         ᶜ∂a∂z = p.scratch.ᶜtemp_scalar_7
-        @. ᶜ∂a∂z = ᶜprecipdivᵥ(ᶠinterp(ᶜJ) / ᶠJ * ᶠright_bias(Geometry.WVector(ᶜa)))
+        @. ᶜ∂a∂z = ᶜprecipdivᵥ(ᶠinterp(ᶜJ) / ᶠJ * ᶠtop_bias(Geometry.WVector(ᶜa)))
         ᶜinv_ρ̂ = (@. lazy(
             specific(
                 FT(1),
@@ -1403,20 +1387,20 @@ function update_sgs_advection_jacobian!(matrix, Y, p, dtγ)
             # sedimentation
             # Base: a·∂_z(ρwχ) — always the same regardless of ∂a/∂z sign
             # Correction when ∂a/∂z < 0 :
-            #   α_lat · ∂a/∂z · (ρ¹w¹χ¹ − ρ⁰w⁰χ⁰)
+            #   ∂a/∂z · (ρ¹w¹χ¹ − ρ⁰w⁰χ⁰)
             #   ρ⁰w⁰χ⁰ = (w_GS·ρχ_GS − ρa¹·w¹·χ¹)/(1−a), so
             #   ∂(ρ⁰w⁰χ⁰)/∂χʲ = −ρa¹·w¹/(1−a) and
-            #   ∂/∂χʲ of correction = α_lat · ∂a/∂z · ρ¹w¹/(1−a)
+            #   ∂/∂χʲ of correction = ∂a/∂z · ρ¹w¹/(1−a)
             @. ᶠsed_tracer_advection =
                 DiagonalMatrixRow(ᶠinterp(ᶜρʲs.:(1) * ᶜJ) / ᶠJ) *
-                ᶠright_bias_matrix() *
+                ᶠtop_bias_matrix() *
                 DiagonalMatrixRow(-Geometry.WVector(ᶜwʲ))
             @. ᶜtridiagonal_matrix_scalar =
                 dtγ * ifelse(ᶜ∂a∂z < 0,
                     -(ᶜprecipdivᵥ_matrix()) * ᶠsed_tracer_advection *
                     DiagonalMatrixRow(ᶜa) +
                     DiagonalMatrixRow(
-                        α_lat * ᶜ∂a∂z * ᶜρʲs.:(1) * ᶜwʲ / max(1 - ᶜa, eps(eltype(ᶜa))),
+                        ᶜ∂a∂z * ᶜρʲs.:(1) * ᶜwʲ / max(1 - ᶜa, eps(eltype(ᶜa))),
                     ),
                     -DiagonalMatrixRow(ᶜa) * ᶜprecipdivᵥ_matrix() * ᶠsed_tracer_advection,
                 )
@@ -1444,13 +1428,13 @@ Update the Jacobian blocks for implicit vertical diffusion of the updraft
 scalars under the unified grid-mean tendency.
 
 No-op unless `p.atmos.turbconv_model` is a `PrognosticEDMFX`, `diffusion_flag`
-is `UseDerivative()`, and `edmfx_model.sgs_diffusive_flux` is `Val(true)` —
+is `UseDerivative()`, and `edmfx_model.sgs_diffusive_flux` is enabled —
 the same gate as the tendency being linearized. The updraft `mse`, `q_tot`,
-and passive tracer diagonals accumulate the full `ρ(K_h + K_entr)` diffusion
-matrix built by `update_diffusion_jacobian!`, while the sedimenting SGS tracers
-accumulate an `α·K_h + K_entr` matrix rebuilt here in
-`p.scratch.ᶜtridiagonal_matrix_scalar`, matching their tendency. Mutates
-`matrix` and returns `nothing`.
+and passive tracer diagonals accumulate the `ρ·K_h` diffusion matrix built
+by `update_diffusion_jacobian!`; sedimenting SGS tracers receive no
+self-diagonal from the diffusive path (K_h transport is carried through the
+q_tot_eff distribution with a frozen ratio). Mutates `matrix` and returns
+`nothing`.
 
 Under the "uniform diffusion in the grid box" tendency in
 `edmfx_sgs_diffusive_flux_tendency!`, each
@@ -1472,13 +1456,12 @@ function update_sgs_diffusion_jacobian!(matrix, Y, p, dtγ, diffusion_flag)
     # (`edmfx_sgs_diffusive_flux_tendency!` inside the sgs_diffusive_flux
     # branch): without it, the updraft scalar diagonals would carry
     # diffusion terms that have no tendency counterpart.
-    p.atmos.edmfx_model.sgs_diffusive_flux isa Val{true} || return nothing
-    (; params) = p
+    p.atmos.edmfx_model.sgs_diffusive_flux || return nothing
     (; ᶜdiffusion_h_matrix) = p.scratch
     ᶜρ = Y.c.ρ
 
     # mseⱼ and q_totⱼ diagonals: same operator, no tracer factor. Uses the
-    # full ρ(K_h + K_entr) diffusion matrix.
+    # ρ·K_h diffusion matrix.
     ∂ᶜmseʲ_err_∂ᶜmseʲ =
         matrix[@name(c.sgsʲs.:(1).mse), @name(c.sgsʲs.:(1).mse)]
     ∂ᶜq_totʲ_err_∂ᶜq_totʲ =
@@ -1488,30 +1471,11 @@ function update_sgs_diffusion_jacobian!(matrix, Y, p, dtγ, diffusion_flag)
     @. ∂ᶜq_totʲ_err_∂ᶜq_totʲ +=
         dtγ * DiagonalMatrixRow(1 / ᶜρ) * ᶜdiffusion_h_matrix
 
-    # Sedimenting SGS tracers: K_h piece contributes 0 to the self-diagonal
-    # (lagged ratio distribution). K_e piece (per-species entrainment)
-    # contributes a ρ·K_e self-diagonal via the SGS updraft's own gradient.
-    if p.atmos.microphysics_model isa Union{
-        NonEquilibriumMicrophysics1M,
-        NonEquilibriumMicrophysics2M,
-    }
-        (; ᶠK_entr) = p.precomputed
-        ᶜsgs_tracer_diffusion_matrix = p.scratch.ᶜtridiagonal_matrix_scalar
-        @. ᶜsgs_tracer_diffusion_matrix =
-            ᶜadvdivᵥ_matrix() *
-            DiagonalMatrixRow(ᶠinterp(ᶜρ) * ᶠK_entr) * ᶠgradᵥ_matrix()
-        MatrixFields.unrolled_foreach(
-            sedimenting_sgs_tracer_names(Y),
-        ) do χ_name
-            χ_state_name = sgs_state_name(χ_name)
-            ∂ᶜχʲ_err_∂ᶜχʲ = matrix[χ_state_name, χ_state_name]
-            @. ∂ᶜχʲ_err_∂ᶜχʲ +=
-                dtγ * DiagonalMatrixRow(1 / ᶜρ) *
-                ᶜsgs_tracer_diffusion_matrix
-        end
-    end
+    # Sedimenting SGS tracers: K_h transport is carried through the
+    # q_tot_eff distribution with a frozen ratio, so they receive no
+    # self-diagonal contribution from the diffusive path.
 
-    # Passive SGS tracers: unscaled ρ(K_h + K_entr), same as mseⱼ / q_totⱼ.
+    # Passive SGS tracers: ρ·K_h, same as mseⱼ / q_totⱼ.
     MatrixFields.unrolled_foreach(passive_sgs_tracer_names(Y)) do χ_name
         χ_state_name = sgs_state_name(χ_name)
         ∂ᶜχʲ_err_∂ᶜχʲ = matrix[χ_state_name, χ_state_name]
@@ -1656,14 +1620,14 @@ were already zeroed by `update_diffusion_jacobian!`; when diffusion is
 explicit they are zeroed here so that both can safely use `+=`.
 
 No-op unless `p.atmos.turbconv_model` is a `PrognosticEDMFX` with
-`edmfx_model.sgs_mass_flux` set to `Val(true)`. Writes
+`edmfx_model.sgs_mass_flux` enabled. Writes
 `ᶠbidiagonal_matrix_ct3` and `ᶜtridiagonal_matrix_scalar` in `p.scratch`,
 mutates `matrix`, and returns `nothing`.
 """
 function update_sgs_massflux_jacobian!(matrix, Y, p, dtγ, diffusion_flag)
     (
         p.atmos.turbconv_model isa PrognosticEDMFX &&
-        p.atmos.edmfx_model.sgs_mass_flux isa Val{true}
+        p.atmos.edmfx_model.sgs_mass_flux
     ) || return nothing
     (; params) = p
     (; ᶜΦ) = p.core

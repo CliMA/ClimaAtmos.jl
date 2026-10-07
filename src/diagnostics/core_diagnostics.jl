@@ -223,15 +223,15 @@ function compute_lmix(state, cache, _)
         return cache.precomputed.ᶜl_mix
     end
     (; params) = cache
-    (; ᶜN²_eff, ᶜstrain_rate_norm) = cache.precomputed
+    (; ᶜbuoygrad, ᶜstrain_rate_norm) = cache.precomputed
     ᶜdz = Fields.Δz_field(axes(state.c))
     ᶜprandtl_nvec = @. lazy(turbulent_prandtl_number(
-        params, ᶜN²_eff, ᶜstrain_rate_norm,
+        params, ᶜbuoygrad, ᶜstrain_rate_norm,
     ))
     return @. lazy(
         smagorinsky_lilly_length(
             CAP.c_smag(params),
-            sqrt(max(ᶜN²_eff, 0)),   # N_eff
+            sqrt(max(ᶜbuoygrad, 0)),   # N_eff
             ᶜdz, ᶜprandtl_nvec, ᶜstrain_rate_norm,
         ),
     )
@@ -274,11 +274,11 @@ add_diagnostic_variable!(short_name = "Dv_smag", units = "m^2 s^-1",
     long_name = "Vertical smagorinsky diffusivity",
     compute = (_, cache, _) -> cache.precomputed.ᶜD_v,
 )
-add_diagnostic_variable!(short_name = "strainh_smag", units = "s",
+add_diagnostic_variable!(short_name = "strainh_smag", units = "s^-1",
     long_name = "Horizontal strain rate magnitude (for Smagorinsky)",
     compute = (_, cache, _) -> cache.precomputed.ᶜS_norm_h,
 )
-add_diagnostic_variable!(short_name = "strainv_smag", units = "s",
+add_diagnostic_variable!(short_name = "strainv_smag", units = "s^-1",
     long_name = "Vertical strain rate magnitude (for Smagorinsky)",
     compute = (_, cache, _) -> cache.precomputed.ᶜS_norm_v,
 )

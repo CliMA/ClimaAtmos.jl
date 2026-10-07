@@ -18,7 +18,7 @@ import ..background_p_and_T, ..background_u
 import ..pref_from_phi, ..air_temperature_reference
 import ..theta_v, ..theta_vr, ..phi_r
 
-# File-based IC infrastructure (overwrite_from_file.jl, GCMDriven.jl, ForcingFromFile.jl)
+# File-based IC infrastructure (overwrite_from_file.jl, ForcingFromFile.jl)
 import Dates
 import ClimaUtilities.SpaceVaryingInputs
 import ClimaUtilities.ClimaArtifacts: @clima_artifact
@@ -27,7 +27,6 @@ import NCDatasets as NC
 import Statistics: mean
 import ..ᶜinterp, ..ᶠinterp
 import ..compute_kinetic
-import ..gcm_height, ..gcm_driven_profile_tmean, ..gcm_driven_timeseries
 import ..weather_model_data_path
 import ..parse_date
 import ..pressure_to_height
@@ -48,10 +47,10 @@ import ..Parameters.ClimaAtmosParameters
 import Thermodynamics.Parameters.ThermodynamicsParameters
 
 # Model types returned by setup interface methods
-import ..GCMForcing, ..ISDACForcing
+import ..ISDACForcing
 import ..ExternalDrivenTVForcing, ..default_forcing_terms
 import ..ColumnDatasets
-import ..GCMDrivenInsolation, ..ExternalTVInsolation, ..TimeVaryingInsolation
+import ..ExternalTVInsolation, ..TimeVaryingInsolation
 import ..RCEMIPIIInsolation
 import ..ShipwayHill2012VelocityProfile
 import ..RadiationDYCOMS, ..RadiationTRMM_LBA, ..RadiationISDAC
@@ -90,7 +89,7 @@ end
 Overwrite the initial state `Y` in place after it has been constructed, and
 return `nothing`.
 
-The extension point for file-based setups (e.g. `GCMDriven`, `WeatherModel`),
+The extension point for file-based setups (e.g. `ForcingFromFile`, `WeatherModel`),
 which regrid whole fields rather than working pointwise. Called by the
 simulation setup after [`initial_state`](@ref). The default is a no-op.
 """
@@ -148,10 +147,11 @@ coriolis_forcing(setup, ::Type{FT}) where {FT} = nothing
 
 Return the surface pieces prescribed by `setup`.
 
-Consumed by `AtmosSurface(::AtmosConfig, params, FT; setup_type)`, where a
-non-`nothing` field takes precedence over the corresponding config key. Only
-setups with case-specific surface properties (roughness, prescribed fluxes, a
-case SST) need to extend this.
+Consumed via [`model_components`](@ref) by
+`AtmosSurface(::AtmosConfig, params, FT; setup_components)`, where a non-`nothing`
+field takes precedence over the corresponding config key. Only setups with
+case-specific surface properties (roughness, prescribed fluxes, a case SST)
+need to extend this.
 
 # Returns
 
@@ -172,8 +172,8 @@ surface_condition(setup, params) =
 """
     external_forcing(setup, ::Type{FT})
 
-Return the external (large-scale) forcing model of `setup`, e.g. a
-`GCMForcing`, `ISDACForcing`, or `ExternalDrivenTVForcing`.
+Return the external (large-scale) forcing model of `setup`, e.g. an
+`ISDACForcing` or `ExternalDrivenTVForcing`.
 
 Defaults to `nothing`, in which case the model construction layer falls back to
 the `external_forcing` config key.
@@ -183,8 +183,8 @@ external_forcing(setup, ::Type{FT}) where {FT} = nothing
 """
     insolation_model(setup)
 
-Return the insolation model of `setup`, e.g. a `GCMDrivenInsolation`,
-`ExternalTVInsolation`, or `RCEMIPIIInsolation`.
+Return the insolation model of `setup`, e.g. an `ExternalTVInsolation` or
+`RCEMIPIIInsolation`.
 
 Defaults to `nothing`, in which case the `insolation` config key is used.
 """
@@ -251,6 +251,30 @@ explicitly, so a configuration can always override the setup's radiation.
 """
 radiation_model(setup, ::Type{FT}) where {FT} = nothing
 
+"""
+    model_components(setup, params, ::Type{FT})
+
+Evaluate every model-facing hook of `setup` once and return the raw
+results as a `NamedTuple`: `subsidence`, `ls_adv`, `scm_coriolis` (raw SCM
+profiles; consumers wrap them into model components), `external_forcing`,
+`insolation`, `radiation_mode`, `prescribed_flow` (model objects),
+`surface` (from [`surface_condition`](@ref)), and `surface_temperature`
+(from [`surface_temperature_model`](@ref)).
+"""
+function model_components(setup, params, ::Type{FT}) where {FT}
+    return (;
+        subsidence = subsidence_forcing(setup, FT),
+        ls_adv = large_scale_advection_forcing(setup, FT),
+        scm_coriolis = coriolis_forcing(setup, FT),
+        external_forcing = external_forcing(setup, FT),
+        insolation = insolation_model(setup),
+        radiation_mode = radiation_model(setup, FT),
+        prescribed_flow = prescribed_flow_model(setup, FT),
+        surface = surface_condition(setup, params),
+        surface_temperature = surface_temperature_model(setup),
+    )
+end
+
 # ============================================================================
 # Layer 2 and helpers — included files
 # ============================================================================
@@ -305,7 +329,7 @@ surface. File-based setups then overwrite fields through
 
 # Arguments
 
-  - `setup`: A setup instance, e.g. `Bomex`, `Rico`, or `GCMDriven`.
+  - `setup`: A setup instance, e.g. `Bomex`, `Rico`, or `ForcingFromFile`.
   - `params`: The ClimaAtmos parameter set.
   - `atmos_model`: The `AtmosModel`, whose component models select the prognostic
     variables.
@@ -357,13 +381,12 @@ include("RisingThermalBubbleProfile.jl")
 include("MoistAdiabaticProfileEDMFX.jl")
 include("SimplePlume.jl")
 include("MoistBaroclinicWave.jl")
-include("RCEMIPIIProfile.jl")
+include("RCEMIPProfile.jl")
 include("PrecipitatingColumn.jl")
 include("ShipwayHill2012.jl")
 
 # File-based setups (depend on common/overwrite_from_file.jl)
 include("common/overwrite_from_file.jl")
-include("GCMDriven.jl")
 include("ForcingFromFile.jl")
 include("MoistFromFile.jl")
 include("WeatherModel.jl")

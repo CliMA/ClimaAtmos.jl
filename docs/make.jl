@@ -50,7 +50,8 @@ makedocs(;
     # and the CI log; set LINKCHECK_STRICT=1 (e.g. in a manual or scheduled
     # run) to turn them into build failures. The check costs seconds.
     linkcheck = true,
-    warnonly = isempty(get(ENV, "LINKCHECK_STRICT", "")) ? [:linkcheck] :
+    warnonly = isempty(get(ENV, "LINKCHECK_STRICT", "")) ?
+               [:linkcheck, :external_cross_references] :
                Symbol[],
     format = Documenter.HTML(
         prettyurls = !isempty(get(ENV, "CI", "")),
@@ -68,6 +69,7 @@ makedocs(;
         "How-to Guides" => [
             "Running Simulations" => [
                 "Running Single-Column Cases" => "single_column.md",
+                "Running Box Simulations" => "box_simulations.md",
                 "Running Global Simulations" => "global_simulations.md",
                 "Restarting and Checkpointing" => "restarts.md",
                 "Running on GPUs and MPI" => "gpu_and_mpi.md",
@@ -100,8 +102,12 @@ makedocs(;
                     "Discretization and Time Stepping" => "prophet_numerics.md",
                     "Horizontal Diffusion" => "prophet_horizontal_diffusion.md",
                 ],
+                "Diffusion" => "diffusion.md",
+                "Large-Eddy Simulation Closures" => "les_sgs.md",
                 "Microphysics" => "microphysics.md",
                 "Radiation" => "radiation.md",
+                "COSP Satellite Simulator" => "cosp.md",
+                "Forcings and Idealized Cases" => "forcings.md",
                 "Gravity Wave Drag" => [
                     "Non-orographic Gravity Waves" => "non_orographic_gravity_wave.md",
                     "Orographic Gravity Waves" => "orographic_gravity_wave.md",

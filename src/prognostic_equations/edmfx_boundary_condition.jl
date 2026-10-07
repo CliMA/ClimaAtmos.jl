@@ -603,7 +603,7 @@ function percentile_bounds_mean_norm(
     low_percentile,
     high_percentile::FT,
 ) where {FT}
-    std_normal_pdf(x) = -exp(-x * x / 2) / sqrt(2 * pi)
+    std_normal_pdf(x) = -exp(-x * x / 2) / sqrt(2 * oftype(x, π))
     xp_high = gauss_quantile(high_percentile)
     xp_low = gauss_quantile(low_percentile)
 

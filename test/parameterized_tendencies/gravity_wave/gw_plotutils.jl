@@ -37,9 +37,9 @@ function create_plot!(
     linewidth = 2,
     orientation = :vertical,
 )
-    if Z == nothing
+    if isnothing(Z)
         generic_axis = fig[p_loc[1], p_loc[2]] = GridLayout()
-        axis = Axis(generic_axis[1, 1]; title, xlabel, ylabel, xscale, yscale)
+        Axis(generic_axis[1, 1]; title, xlabel, ylabel, xscale, yscale)
         CairoMakie.lines!(X, Y; linewidth, label = label[1], linestyle = :solid)
     else
         generic_axis = fig[p_loc[1], p_loc[2]] = GridLayout() # Generic Axis Layout

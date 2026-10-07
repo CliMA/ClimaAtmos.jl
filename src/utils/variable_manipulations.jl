@@ -1,18 +1,6 @@
 import ClimaCore.MatrixFields: @name
 import ClimaCore.Utilities: add_auto_broadcasters, drop_auto_broadcasters
 
-# Recursive analogues of `+`, `*`, `zero`, and `promote_type` that broadcast
-# over nested `Tuple`s and `NamedTuple`s (formerly `ClimaCore.RecursiveApply`,
-# which ClimaCore v1 replaced with the `AutoBroadcaster` mechanism).
-⊞(x, y) = drop_auto_broadcasters(
-    add_auto_broadcasters(x) + add_auto_broadcasters(y),
-)
-⊠(x, y) = drop_auto_broadcasters(
-    add_auto_broadcasters(x) * add_auto_broadcasters(y),
-)
-rzero(x) = drop_auto_broadcasters(zero(add_auto_broadcasters(x)))
-rpromote_type(x) = drop_auto_broadcasters(promote_type(add_auto_broadcasters(x)))
-
 """
     specific(ρχ, ρ)
     specific(ρaχ, ρa, ρχ, ρ, turbconv_model)
@@ -616,9 +604,10 @@ u₃⁰(ρaʲs, u₃ʲs, ρ, u₃, turbconv_model) = specific(
 Reduce `f` over `iter...` with `op`, inferring the `init` value automatically.
 
 `mapreduce` needs an explicit `init` when the elements are custom structs or
-`ClimaCore.Geometry.Tensor`s, whose zero is not a scalar. The zero is built
-here with the recursive `rzero` and `rpromote_type` helpers, applied to the
-result of `f` on the first elements, which keeps the reduction type-stable.
+`ClimaCore.Geometry.Tensor`s, whose zero is not a scalar. The zero is built from
+the type of `f` on the first elements, wrapped in a
+`ClimaCore.Utilities.AutoBroadcaster` so that `zero` maps over the elements of a
+composite type, which keeps the reduction type-stable.
 
 # Arguments
 
@@ -627,20 +616,10 @@ result of `f` on the first elements, which keeps the reduction type-stable.
   - `iter...`: One or more iterators, zipped elementwise by `f`.
 """
 function mapreduce_with_init(f, op, iter...)
-    r₀ = rzero(rpromote_type(typeof(f(map(first, iter)...))))
+    T = add_auto_broadcasters(typeof(f(map(first, iter)...)))
+    r₀ = drop_auto_broadcasters(zero(T))
     mapreduce(f, op, iter...; init = r₀)
 end
-
-"""
-    promote_type_mul(x, y)
-
-Return the type of the product of a `Number` and a
-`ClimaCore.Geometry.Tensor`, which is the type of the tensor.
-
-Used by `unrolled_dotproduct` to build the zero element of the reduction.
-"""
-promote_type_mul(n::Number, x::Geometry.Tensor) = typeof(x)
-promote_type_mul(x::Geometry.Tensor, n::Number) = typeof(x)
 
 """
     unrolled_dotproduct(a::Tuple, b::Tuple)
@@ -648,9 +627,10 @@ promote_type_mul(x::Geometry.Tensor, n::Number) = typeof(x)
 Compute the dot product `Σᵢ a[i] * b[i]` of two equal-length `Tuple`s.
 
 The recursion is manually unrolled, which keeps the result type-stable in CUDA
-kernels, where `mapreduce` can fail type inference. Products and sums go through
-the recursive operators `⊠` and `⊞`, so the tuples may hold nested types such
-as `ClimaCore.Geometry.Tensor`s.
+kernels, where `mapreduce` can fail type inference. The elements are wrapped in
+`ClimaCore.Utilities.AutoBroadcaster`s, so `*` and `+` map over the elements of
+composite types and the tuples may hold nested types such as
+`ClimaCore.Geometry.Tensor`s.
 
 # Arguments
 
@@ -658,12 +638,7 @@ as `ClimaCore.Geometry.Tensor`s.
   - `b`: Second `Tuple`, of the same length as `a`.
 """
 @inline function unrolled_dotproduct(a::Tuple, b::Tuple)
-    r = rzero(promote_type_mul(first(a), first(b)))
-    unrolled_dotproduct(r, a, b)
+    ClimaCore.DataLayouts.unrolled_mapreduce(+, a, b) do an, bn
+        add_auto_broadcasters(add_auto_broadcasters(an) * add_auto_broadcasters(bn))
+    end
 end
-@inline unrolled_dotproduct(s, ::Tuple{}, ::Tuple{}) = s
-@inline unrolled_dotproduct(s, a::Tuple, b::Tuple) =
-    s ⊞ (first(a) ⊠ first(b)) ⊞
-    unrolled_dotproduct(s, Base.tail(a), Base.tail(b))
-@inline unrolled_dotproduct(s, a::Tuple{<:Any}, b::Tuple{<:Any}) =
-    s ⊞ (first(a) ⊠ first(b))

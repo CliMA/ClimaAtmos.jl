@@ -51,15 +51,19 @@ The simplest simulation uses all defaults: it solves the dry compressible equati
 ```julia
 import ClimaAtmos as CA
 
-simulation = CA.AtmosSimulation{Float32}(; t_end = "1days")
+model = CA.AtmosModel(CA.SphereGrid(Float32))
+simulation = CA.AtmosSimulation(model; t_end = "1days")
 CA.solve_atmos!(simulation)
 ```
 
-Every aspect of the simulation can be customized through keyword arguments, for example a single-column model:
+The model owns the grid, the parameters, and the case setup, and chooses which
+parameterizations are active. The simulation adds run control: timestepping,
+output, diagnostics, and callbacks. For example, a single-column model:
 
 ```julia
 grid = CA.ColumnGrid(Float32; z_elem = 30, z_max = 30000.0)
-simulation = CA.AtmosSimulation{Float32}(; grid, t_end = "6hours")
+model = CA.AtmosModel(grid)
+simulation = CA.AtmosSimulation(model; t_end = "6hours")
 ```
 
 See [Your First Simulation](https://CliMA.github.io/ClimaAtmos.jl/dev/first_simulation/) in the documentation for a guided introduction.

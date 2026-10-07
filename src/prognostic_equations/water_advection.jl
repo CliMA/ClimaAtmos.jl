@@ -71,7 +71,7 @@ function vertical_advection_of_water_tendency!(Yₜ, Y, p, t)
         @. ᶜq = specific(ᶜρq, Y.c.ρ)
         @. vtt =
             -1 * ᶜprecipdivᵥ(
-                ᶠρ * ᶠright_bias(
+                ᶠρ * ᶠtop_bias(
                     Geometry.WVector(-(ᶜw)) * ᶜq,
                 ),
             )
@@ -82,7 +82,7 @@ function vertical_advection_of_water_tendency!(Yₜ, Y, p, t)
         @. p.scratch.ᶜtemp_scalar_3 =
             -(ᶜw) * ᶜq * (e_int_func(thp, ᶜT) + ᶜΦ + $(Kin(ᶜw, ᶜu)))
         @. Yₜ.c.ρe_tot -= ᶜprecipdivᵥ(
-            ᶠρ * ᶠright_bias(
+            ᶠρ * ᶠtop_bias(
                 Geometry.WVector(p.scratch.ᶜtemp_scalar_3),
             ),
         )
@@ -106,7 +106,7 @@ function vertical_advection_of_water_tendency!(Yₜ, Y, p, t)
     # grid-mean flux by construction, and both corrections enter with the
     # same sign convention as the grid-mean flux.
     if p.atmos.turbconv_model isa PrognosticEDMFX
-        (; ᶜρʲs, ᶜTʲs, ᶜq_tot_nonnegʲs, ᶜq_liqʲs, ᶜq_iceʲs, ᶜuʲs) = p.precomputed
+        (; ᶜρʲs, ᶜTʲs, ᶜuʲs) = p.precomputed
         (; ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜu⁰) = p.precomputed
 
         ᶜρ⁰ = p.scratch.ᶜtemp_scalar
@@ -140,7 +140,7 @@ function vertical_advection_of_water_tendency!(Yₜ, Y, p, t)
                 p.scratch.ᶜtemp_scalar_2
             @. Yₜ.c.ρe_tot -=
                 ᶜprecipdivᵥ(
-                    ᶠinterp(ᶜρʲs.:(1) * ᶜJ) / ᶠJ * ᶠright_bias(
+                    ᶠinterp(ᶜρʲs.:(1) * ᶜJ) / ᶠJ * ᶠtop_bias(
                         Geometry.WVector(-(ᶜwʲ)) *
                         draft_area(Y.c.sgsʲs.:(1).ρa, ᶜρʲs.:(1)) * ᶜqʲ *
                         p.scratch.ᶜtemp_scalar_3,
@@ -158,7 +158,7 @@ function vertical_advection_of_water_tendency!(Yₜ, Y, p, t)
             ᶜwaq⁰ = @. lazy((ᶜρq * ᶜw - Y.c.sgsʲs.:(1).ρa * ᶜqʲ * ᶜwʲ) / ᶜρ⁰)
             @. Yₜ.c.ρe_tot -=
                 ᶜprecipdivᵥ(
-                    ᶠinterp(ᶜρ⁰ * ᶜJ) / ᶠJ * ᶠright_bias(
+                    ᶠinterp(ᶜρ⁰ * ᶜJ) / ᶠJ * ᶠtop_bias(
                         Geometry.WVector(-(ᶜwaq⁰)) *
                         p.scratch.ᶜtemp_scalar_3,
                     ),

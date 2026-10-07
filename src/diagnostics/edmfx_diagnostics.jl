@@ -363,8 +363,8 @@ function compute_detr(state, cache, _, ::PrognosticEDMFX)
     ᶠdz = Fields.Δz_field(axes(state.f))
     ρaʲ = state.c.sgsʲs.:(1).ρa
     u₃ʲ = state.f.sgsʲs.:(1).u₃
-    # Use ᶠleft_bias_zero_bot so that detrainment diagnostics are not NaN at the first cell
-    ᶠleft_bias_zero_bot = Operators.BottomBiasedC2F(bottom = Operators.SetValue(0))
+    # Use ᶠbottom_bias_zero_bot so that detrainment diagnostics are not NaN at the first cell
+    ᶠbottom_bias_zero_bot = Operators.BottomBiasedC2F(bottom = Operators.SetValue(0))
     # Evaluate the buoyancy inverse time scale at faces (where w and grad_Φ are
     # naturally defined) and interpolate to centers for smoother behaviour.
     ᶜbuoy_inv_time_scale = @. lazy(
@@ -386,7 +386,7 @@ function compute_detr(state, cache, _, ::PrognosticEDMFX)
             draft_area(ρaʲ, ᶜρʲs.:1),
             ρaʲ,
             ᶜbuoy_inv_time_scale,
-            ᶜdivᵥ(ᶠleft_bias_zero_bot(ρaʲ) * u₃ʲ),
+            ᶜdivᵥ(ᶠbottom_bias_zero_bot(ρaʲ) * u₃ʲ),
             ᶜarea_bounding_entr_detrʲs.:1,
             detr_model,
         ),
@@ -809,19 +809,17 @@ function compute_edt(state, cache, _,
     ::Nothing, ::Union{PrognosticEDMFX, EDOnlyEDMFX},
 )
     # The effective scalar diffusivity the model applies to the grid-mean
-    # fluxes: the face-native ᶠK_h plus the interfacial entrainment
-    # diffusivity ᶠK_entr (see set_face_diffusivities! and
+    # fluxes: the face-native ᶠK_h (see set_face_diffusivities! and
     # edmfx_sgs_diffusive_flux_tendency!), interpolated to centers for
-    # output. The interfacial contribution alone is output as `kentr`, so
-    # the turbulent-mixing part is recoverable as edt − kentr.
-    (; ᶠK_h, ᶠK_entr) = cache.precomputed
-    return @. lazy(ᶜinterp(ᶠK_h + ᶠK_entr))
+    # output.
+    (; ᶠK_h) = cache.precomputed
+    return @. lazy(ᶜinterp(ᶠK_h))
 end
 
 add_diagnostic_variable!(short_name = "edt", units = "m^2 s^-1",
     long_name = "Eddy Diffusivity Coefficient for Temperature",
     standard_name = "atmosphere_heat_diffusivity",
-    comments = "Effective vertical diffusion coefficient for scalars due to parameterized eddies (for EDMFX, the face-native coefficient applied to the grid-mean fluxes, including the interfacial entrainment contribution `kentr`, interpolated to cell centers)",
+    comments = "Effective vertical diffusion coefficient for scalars due to parameterized eddies (for EDMFX, the face-native coefficient applied to the grid-mean fluxes, interpolated to cell centers)",
     compute = compute_edt,
 )
 
@@ -858,52 +856,16 @@ function compute_evu(
     ::Union{PrognosticEDMFX, EDOnlyEDMFX},
 )
     # The effective viscosity the model applies to the grid-mean momentum
-    # flux: the face-native ᶠK_u plus the interfacial entrainment
-    # diffusivity ᶠK_entr, interpolated to centers for output (see
-    # compute_edt).
-    (; ᶠK_u, ᶠK_entr) = cache.precomputed
-    return @. lazy(ᶜinterp(ᶠK_u + ᶠK_entr))
+    # flux: the face-native ᶠK_u, interpolated to centers for output.
+    (; ᶠK_u) = cache.precomputed
+    return @. lazy(ᶜinterp(ᶠK_u))
 end
 
 add_diagnostic_variable!(short_name = "evu", units = "m^2 s^-1",
     long_name = "Eddy Viscosity Coefficient for Momentum",
     standard_name = "atmosphere_momentum_diffusivity",
-    comments = "Effective vertical diffusion coefficient for momentum due to parameterized eddies (for EDMFX, the face-native coefficient applied to the grid-mean momentum flux, including the interfacial entrainment contribution `kentr`, interpolated to cell centers)",
+    comments = "Effective vertical diffusion coefficient for momentum due to parameterized eddies (for EDMFX, the face-native coefficient applied to the grid-mean momentum flux, interpolated to cell centers)",
     compute = compute_evu,
-)
-
-###
-# Interfacial entrainment diffusivity (3d)
-###
-"""
-    compute_kentr(state, cache, time)
-
-Compute the interfacial entrainment eddy diffusivity, `kentr`.
-
-Defined for both EDMFX turbulence-convection models and errors otherwise. This is the
-contribution that `edt` and `evu` add on top of the turbulent-mixing coefficients, so the
-turbulent part alone is recoverable as `edt - kentr`.
-"""
-compute_kentr(state, cache, time) =
-    compute_kentr(state, cache, time, cache.atmos.turbconv_model)
-compute_kentr(_, _, _, _) =
-    error_diagnostic_variable("Can only compute the interfacial entrainment \
-                               diffusivity with EDMFX")
-
-function compute_kentr(state, cache, _, ::Union{PrognosticEDMFX, EDOnlyEDMFX})
-    # Interfacial entrainment diffusivity K_e = γ w_e Δz of the
-    # interface-aware stability closure (see set_face_diffusivities!),
-    # interpolated to centers for output. Included in `edt`/`evu`; zero
-    # where no unresolved stable jump is detected or when
-    # EDMF_interface_entr_efficiency = 0.
-    (; ᶠK_entr) = cache.precomputed
-    return @. lazy(ᶜinterp(ᶠK_entr))
-end
-
-add_diagnostic_variable!(short_name = "kentr", units = "m^2 s^-1",
-    long_name = "Interfacial Entrainment Eddy Diffusivity",
-    comments = "Interfacial entrainment diffusivity K_e = γ w_e Δz of the EDMFX interface-aware stability closure, applied to all grid-mean fluxes (included in edt and evu), interpolated to cell centers",
-    compute = compute_kentr,
 )
 
 ###

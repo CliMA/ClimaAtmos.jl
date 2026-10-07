@@ -38,8 +38,8 @@ function external_forcing_tendency!(Yₜ, Y, p, t, ::MyCaseForcing)
 end
 
 forcing = MyCaseForcing(case_data, case_mask)
-model = CA.AtmosModel(; external_forcing = forcing)
-simulation = CA.AtmosSimulation{Float64}(; model, setup, grid)
+model = CA.AtmosModel(grid; setup, external_forcing = forcing)
+simulation = CA.AtmosSimulation(model)
 ```
 
 The two methods are the complete interface when the tendency can evaluate its

@@ -1,3 +1,7 @@
+# Load the CI precompilation cache before ClimaAtmos; see the note in
+# test/restart.jl for why this is guarded on the package being reachable.
+!isnothing(Base.find_package("PrecompileCI")) && (using PrecompileCI)
+
 # This test checks that:
 
 # 1. A simulation, saved to a checkpoint, is read back identically (up to some
@@ -84,7 +88,11 @@ function amip_target(context, output_dir)
     z_max = 60000.0
     dz_bottom = 30.0
 
-    model = CA.AtmosModel(;
+    grid = CA.SphereGrid(FT; topography, h_elem, z_elem, z_max, dz_bottom, context)
+
+    model = CA.AtmosModel(
+        grid;
+        params,
         microphysics_model,
         turbconv_model,
         edmfx_model,
@@ -94,11 +102,10 @@ function amip_target(context, output_dir)
         viscous_sponge,
         hyperdiff,
         diff_mode,
-        reproducible_restart = CA.ReproducibleRestart(),
-        test_dycore_consistency = CA.TestDycoreConsistency(),
+        aerosol_names,
+        reproducible_restart = true,
+        test_dycore_consistency = true,
     )
-
-    grid = CA.SphereGrid(FT; topography, h_elem, z_elem, z_max, dz_bottom, context)
 
     jacobian = CA.ManualSparseJacobian(; approximate_solve_iters = 2)
     max_newton_iters_ode = 1
@@ -117,21 +124,18 @@ function amip_target(context, output_dir)
         dt_rad = "1secs",
     )
 
-    args = (; model,
-        grid,
-        aerosol_names,
+    sim_kwargs = (;
         dt = 1secs,
         t_end = 3secs,
         checkpoint_frequency = 1secs,
         jacobian,
         callback_kwargs,
         ode_config,
-        context,
         job_id = "amip_target",
         output_dir)
-    simulation = CA.AtmosSimulation{FT}(; args...)
+    simulation = CA.AtmosSimulation(model; sim_kwargs...)
 
-    return (; simulation, args)
+    return (; simulation, args = (; model, sim_kwargs))
 
 end
 
@@ -154,9 +158,10 @@ Logging.disable_logging(Logging.Info)
 
 
 """
-    test_restart(simulation, model, grid; job_id, comms_ctx, more_ignore = Symbol[])
+    test_restart(simulation, args; comms_ctx, more_ignore = Symbol[])
 
-Test if the restarts are consistent for a simulation.
+Test if the restarts are consistent for a simulation. `args` is the
+`(; model, sim_kwargs)` NamedTuple used to rebuild the simulation on restart.
 
 `more_ignore` is a Vector of Symbols that identifies config-specific keys that
 have to be ignored when reading a simulation.
@@ -176,11 +181,11 @@ function test_restart(simulation, args; comms_ctx, more_ignore = Symbol[])
     Random.seed!(1234)
 
     ClimaComms.iamroot(comms_ctx) && println("    just reading data")
-    # Recreate simulation with detect_restart_file=true
-    FT = typeof(simulation.integrator.p.dt)
-    simulation_restarted = CA.AtmosSimulation{FT}(;
-        args...,
-        context = comms_ctx,
+    # Recreate simulation with detect_restart_file=true (the context is
+    # carried by the model's grid)
+    simulation_restarted = CA.AtmosSimulation(
+        args.model;
+        args.sim_kwargs...,
         detect_restart_file = true,
     )
 
@@ -199,6 +204,11 @@ function test_restart(simulation, args; comms_ctx, more_ignore = Symbol[])
         simulation_restarted.integrator.p;
         name = "integrator.p",
         ignore = Set([
+            # p.atmos is rebuilt from the same config, not read from the
+            # checkpoint, and it carries grid, params, and setup, so
+            # walking it is expensive and does not test restart reproducibility
+            # The checkpoint's atmos_model_hash check covers these.
+            :atmos,
             :ghost_buffer,
             :hyperdiffusion_ghost_buffer,
             :scratch,
@@ -240,10 +250,9 @@ function test_restart(simulation, args; comms_ctx, more_ignore = Symbol[])
     restart_file = joinpath(simulation.output_dir, "day0.2.hdf5")
     @test isfile(joinpath(restart_dir, "day0.2.hdf5"))
     # Restart from specific file
-    FT = typeof(simulation.integrator.p.dt)
-    simulation_restarted2 = CA.AtmosSimulation{FT}(;
-        args...,
-        context = comms_ctx,
+    simulation_restarted2 = CA.AtmosSimulation(
+        args.model;
+        args.sim_kwargs...,
         restart_file,
     )
     CA.fill_with_nans!(simulation_restarted2.integrator.p)
@@ -259,6 +268,10 @@ function test_restart(simulation, args; comms_ctx, more_ignore = Symbol[])
         simulation_restarted2.integrator.p;
         name = "integrator.p",
         ignore = Set([
+            # p.atmos is rebuilt from the same config, not read from the
+            # checkpoint, and it carries grid, params, and setup, so
+            # walking it is expensive and does not test restart reproducibility
+            :atmos,
             :scratch,
             :output_dir,
             :ghost_buffer,
@@ -349,18 +362,17 @@ if MANYTESTS
                 for microphysics_model in microphys_models
 
                     edmfx_model = get_edmfx_model(turbconv_model)
-                    model = CA.AtmosModel(;
+                    model = CA.AtmosModel(
+                        grid;
                         radiation_mode,
                         microphysics_model,
                         turbconv_model,
                         edmfx_model,
                         insolation = CA.IdealizedInsolation(),
-                        reproducible_restart = CA.ReproducibleRestart(),
-                        test_dycore_consistency = CA.TestDycoreConsistency())
+                        reproducible_restart = true,
+                        test_dycore_consistency = true)
 
-                    # The `enable_bubble` case is broken for ClimaCore < 0.14.6, so we
-                    # hard-code this to be always false for those versions
-                    bubble = pkgversion(ClimaCore) > v"0.14.5"
+                    bubble = true
 
                     # Make sure that all MPI processes agree on the output_loc
                     output_loc =
@@ -389,9 +401,7 @@ if MANYTESTS
                     callback_kwargs = (;
                         dt_rad = "1secs",
                     )
-                    args = (;
-                        model,
-                        grid,
+                    sim_kwargs = (;
                         job_id,
                         callback_kwargs,
                         diagnostics = CA.DiagnosticsConfig(; default = false),
@@ -399,10 +409,14 @@ if MANYTESTS
                         t_end = 3secs,
                         checkpoint_frequency = 1secs,
                     )
-                    simulation = CA.AtmosSimulation{FT}(; args..., context = comms_ctx)
+                    simulation = CA.AtmosSimulation(model; sim_kwargs...)
                     push!(
                         TESTING,
-                        (; simulation, args, more_ignore = Symbol[]),
+                        (;
+                            simulation,
+                            args = (; model, sim_kwargs),
+                            more_ignore = Symbol[],
+                        ),
                     )
                 end
             end
@@ -427,7 +441,6 @@ else
     )
 end
 
-# We know that this test is broken for old versions of ClimaCore
 @test all(
     @time test_restart(
         t.simulation,
@@ -436,4 +449,4 @@ end
         more_ignore = t.more_ignore,
     )[1] for
     t in TESTING
-) skip = pkgversion(ClimaCore) < v"0.14.18"
+)

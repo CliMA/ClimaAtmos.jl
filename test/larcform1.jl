@@ -22,7 +22,7 @@ import Thermodynamics as TD
     FT = eltype(thermo_params)
     LC = APL.Larcform1_constants
 
-    setup = Setups.Larcform1(; prognostic_tke = true, thermo_params)
+    setup = Setups.Larcform1(; thermo_params)
     profs = setup.profiles
 
     # Temperature: surface and tropopause match Pithan 2016 Table 1

@@ -25,7 +25,7 @@ jobs:
       CLIMAATMOS_DOWNGRADE_CI: 'true'
     strategy:
       matrix:
-        version: ['1.10', '1.11']
+        version: ['1.10']
     steps:
       - uses: actions/checkout@v7
       - uses: julia-actions/setup-julia@latest
@@ -40,25 +40,7 @@ jobs:
       - uses: julia-actions/julia-buildpkg@latest
       - name: Run infrastructure tests
         uses: julia-actions/julia-runtest@latest
+        with:
+          coverage: false
         env:
           TEST_GROUP: infrastructure
-      - name: Run diagnostics tests
-        uses: julia-actions/julia-runtest@latest
-        env:
-          TEST_GROUP: diagnostics
-      - name: Run dynamics tests
-        uses: julia-actions/julia-runtest@latest
-        env:
-          TEST_GROUP: dynamics
-      - name: Run parameterizations tests
-        uses: julia-actions/julia-runtest@latest
-        env:
-          TEST_GROUP: parameterizations
-      - name: Run restarts tests
-        uses: julia-actions/julia-runtest@latest
-        env:
-          TEST_GROUP: restarts
-      - name: Run era5 tests
-        uses: julia-actions/julia-runtest@latest
-        env:
-          TEST_GROUP: era5

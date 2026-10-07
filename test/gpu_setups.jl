@@ -41,7 +41,7 @@ device = ClimaComms.device()
     @testset "$FT" for FT in (Float64, Float32)
         params = CA.ClimaAtmosParameters(FT)
         thermo_params = CA.Parameters.thermodynamics_params(params)
-        larcform1 = Setups.Larcform1(; prognostic_tke = true, thermo_params)
+        larcform1 = Setups.Larcform1(; thermo_params)
         shipwayhill = Setups.ShipwayHill2012(; thermo_params)
         trmm_lba = Setups.TRMM_LBA(; prognostic_tke = true, thermo_params)
         @test shipwayhill isa Setups.ShipwayHill2012

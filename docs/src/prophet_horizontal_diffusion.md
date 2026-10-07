@@ -6,7 +6,7 @@ Two opt-in configuration options add the analogous horizontal down-gradient term
   - `edmfx_sgs_horizontal_diffusive_flux` adds the horizontal component of the grid-mean environment SGS diffusive flux;
   - `edmfx_horizontal_diffusion` applies the grid-mean horizontal diffusion tendencies to the prognostic EDMFX updrafts, and requires `edmfx_sgs_horizontal_diffusive_flux`.
 
-Both terms are always explicit: they are applied in the explicit remainder tendency, independently of `diff_mode`, and never enter the implicit column solve.
+Both terms are always explicit: they are applied in the explicit remainder tendency, independently of `diff_mode`.
 Each requires a horizontal discretization, so both return immediately on single columns.
 
 ## Horizontal eddy diffusivity
@@ -21,7 +21,7 @@ where ``l_h`` is the horizontal mixing length (see [Mixing length](@ref)), ``\ka
 `set_horizontal_diffusivities!` evaluates ``K_{u,h}`` and ``K_{h,h}`` at cell centers on each update of the explicit precomputed cache, storing them in `ᶜK_u_h` and `ᶜK_h_h`.
 The horizontal tendencies and the `edth`/`evuh` diagnostics read these cached fields.
 
-Unlike the vertical face pipeline (`set_face_diffusivities!`), the horizontal diffusivities do not include the interfacial entrainment diffusivity ``K_e``: that term parameterizes vertical entrainment across an unresolved inversion face (``K_e = \gamma \, w_e \, \Delta z``) and has no horizontal analogue.
+The horizontal diffusivities omit the interfacial entrainment diffusivity ``K_e`` of the vertical face pipeline (`set_face_diffusivities!`): that term parameterizes vertical entrainment across an unresolved inversion face (``K_e = \gamma \, w_e \, \Delta z``) and has no horizontal analogue.
 
 ## Grid-mean flux
 
@@ -67,7 +67,7 @@ When prognostic TKE is active, the horizontal flux transports TKE and adds the h
 \partial_t (\rho \kappa_{\mathrm{iso}}) \mathrel{+}= \nabla_h \cdot (\rho \, K_{u,h} \, \nabla_h \kappa_{\mathrm{iso}}) + 2 \rho \, K_{u,h} \, \mathcal{S}_h : \mathcal{S}_h ,
 ```
 
-with ``\mathcal{S}_h`` the strain rate built from horizontal gradients only (the tensor written ``\boldsymbol{\mathcal{E}}`` on the [Closures](prophet_closures.md) page).
+with ``\mathcal{S}_h`` the strain rate built from horizontal gradients only (the tensor written ``\boldsymbol{\mathcal{E}}_D`` on the [Closures](prophet_closures.md) page).
 The shear production is positive definite; the production from vertical gradients and its stencil are applied by the vertical TKE tendency.
 
 The momentum tendency is the horizontal weak divergence of the SGS stress ``\tau = -2 K_{u,h} \mathcal{S}``, with ``\mathcal{S}`` the full three-dimensional strain rate of the grid-mean velocity,
@@ -91,7 +91,7 @@ This is one of the reasons the option is off by default.
 ## Updraft horizontal diffusion
 
 The option `edmfx_horizontal_diffusion` switches on horizontal diffusion of the prognostic updraft variables.
-It requires `edmfx_sgs_horizontal_diffusive_flux`: each subdomain scalar receives the specific tendency of the corresponding grid-mean flux, so every subdomain inherits the same horizontal diffusion as the grid box, matching the uniform vertical treatment of `edmfx_vertical_diffusion`.
+It requires `edmfx_sgs_horizontal_diffusive_flux`: each subdomain scalar receives the specific tendency of the corresponding grid-mean flux, so all subdomains inherit the grid box's horizontal diffusion, matching the uniform vertical treatment of `edmfx_vertical_diffusion`.
 For each updraft ``j``, the total specific humidity, the cloud species shares, and the SGS tracers receive
 
 ```math
@@ -99,7 +99,7 @@ For each updraft ``j``, the total specific humidity, the cloud species shares, a
 ```
 
 with the same species treatment as the grid mean, and the moist static energy receives the grid-mean total-enthalpy tendency, ``\partial_t \mathrm{mse}^j \mathrel{+}= \partial_t(\rho e_\text{tot}) \, / \, \rho``.
-The area-weighted density ``\rho a^j`` is not tendencied, matching `edmfx_sgs_diffusive_flux_tendency!`.
+The area-weighted density ``\rho a^j`` receives no tendency, matching `edmfx_sgs_diffusive_flux_tendency!`.
 Diffusing each subdomain's own scalars instead would erode the updraft-environment contrasts that the mass-flux decomposition maintains.
 
 ## Mixing length
@@ -125,7 +125,7 @@ This is the high-resolution and gray-zone regime, where an anisotropic SGS lengt
 At coarse horizontal resolution (for example global runs with ``\Delta x_h`` of tens of kilometers), the horizontal limiter rarely binds, the horizontal diffusivity reduces to the isotropic environment value, and the term is typically negligible next to resolved horizontal transport.
 Both options are off by default for that reason.
 
-The Smagorinsky-Lilly and anisotropic-minimum-dissipation closures already supply horizontal SGS diffusion of the same fields, so combining `edmfx_sgs_horizontal_diffusive_flux` with either is rejected at model construction, as is `edmfx_horizontal_diffusion` without `edmfx_sgs_horizontal_diffusive_flux`.
+The Smagorinsky–Lilly and anisotropic-minimum-dissipation closures ([Large-Eddy Simulation Closures](les_sgs.md)) already supply horizontal SGS diffusion of the same fields, so combining `edmfx_sgs_horizontal_diffusive_flux` with either is rejected at model construction, as is `edmfx_horizontal_diffusion` without `edmfx_sgs_horizontal_diffusive_flux`.
 
 Because the term is explicit, it adds a horizontal diffusive stability limit on the timestep, ``\Delta t \lesssim \Delta x_h^2 / (2 K_{h,h})``.
 At the fine horizontal resolutions where this closure is intended, the timestep is in practice already set by the explicit horizontal acoustic limit ``\Delta t \lesssim \Delta x_h / c_s``, which is the more restrictive of the two.

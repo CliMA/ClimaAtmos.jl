@@ -151,6 +151,17 @@ end
     # So we can test the monthly time check in the same way.
     @test CA.check_monthly_forcing_times(sim_forcing_daily, parsed_args)
 
+    # A run that starts before the file's first time step, or that runs past
+    # its last one, is reported as uncovered (with a warning).
+    early_args = merge(parsed_args, Dict("start_date" => "20000505"))
+    @test !(@test_logs (:warn,) CA.check_daily_forcing_times(sim_forcing_daily, early_args))
+    @test !(@test_logs (:warn,) CA.check_monthly_forcing_times(
+        sim_forcing_daily,
+        early_args,
+    ))
+    long_args = merge(parsed_args, Dict("t_end" => "2days"))
+    @test !(@test_logs (:warn,) CA.check_daily_forcing_times(sim_forcing_daily, long_args))
+
     close(processed_data)
 
     # the generated file passes ClimaColumn schema validation (probing and

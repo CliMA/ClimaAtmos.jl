@@ -20,7 +20,7 @@ field or operator name says which.
 The state vector mirrors this split: `Y.c` holds center variables and `Y.f`
 holds face variables, and the same convention applies to the cache `p`.
 
-For operators the prefix names the *output* location, so `ᶜinterp` interpolates
+For operators, the prefix names the *output* location, so `ᶜinterp` interpolates
 faces to centers and `ᶠinterp` interpolates centers to faces. A `ᵥ` subscript
 marks a vertical (finite-difference) operator and an `ₕ` subscript a horizontal
 (spectral-element) one: `ᶜdivᵥ` versus `divₕ`. A leading `w` on a horizontal
@@ -31,12 +31,12 @@ operator marks the weak form, as in `wdivₕ` and `wcurlₕ`.
 PROPHET partitions each grid cell into subdomains: the grid mean, one or more
 drafts (updrafts), and the environment.
 
-| Superscript | Meaning                        | Example                      |
-|:----------- |:------------------------------ |:---------------------------- |
-| (none)      | Grid mean                      | `ᶜρ`, `ᶜu`                   |
-| `ʲ`         | A single draft (subdomain `j`) | `ᶜρaʲ`, `ᶠu₃ʲ`, `ᶜmseʲ`      |
-| `ʲs`        | The tuple over all drafts      | `Y.c.sgsʲs`, `ᶜρaʲs`, `ᶜuʲs` |
-| `⁰`         | The environment                | `ᶜmse⁰`, `ᶜq_tot⁰`, `ᶠu₃⁰`   |
+| Superscript | Meaning                        | Example                     |
+|:----------- |:------------------------------ |:--------------------------- |
+| (none)      | Grid mean                      | `ᶜρ`, `ᶜu`                  |
+| `ʲ`         | A single draft (subdomain `j`) | `ᶜρaʲ`, `ᶠu₃ʲ`, `ᶜmseʲ`     |
+| `ʲs`        | The tuple over all drafts      | `Y.c.sgsʲs`, `ᶜTʲs`, `ᶜuʲs` |
+| `⁰`         | The environment                | `ᶜmse⁰`, `ᶜq_tot⁰`, `ᶠu₃⁰`  |
 
 The environment is not stored: it is recovered as the residual of the grid mean
 minus the drafts.
@@ -66,20 +66,24 @@ velocities per unit reference-element length.
 
 ## Prognostic variables
 
-| Paper symbol         | Code name | Location | Description                                |
-|:-------------------- |:--------- |:-------- |:------------------------------------------ |
-| ``\rho``             | `ρ`       | center   | Moist air density [kg/m³].                 |
-| ``\boldsymbol{u}_h`` | `uₕ`      | center   | Horizontal covariant velocity.             |
-| ``u_3``              | `u₃`      | face     | Vertical covariant velocity.               |
-| ``\rho e_{tot}``     | `ρe_tot`  | center   | Total energy density [J/m³].               |
-| ``\rho q_t``         | `ρq_tot`  | center   | Total water content [kg/m³].               |
-| ``\rho q_l^{cl}``    | `ρq_lcl`  | center   | Cloud liquid water content [kg/m³].        |
-| ``\rho q_i^{cl}``    | `ρq_icl`  | center   | Cloud ice content [kg/m³].                 |
-| ``\rho q_r``         | `ρq_rai`  | center   | Rain water content [kg/m³].                |
-| ``\rho q_s``         | `ρq_sno`  | center   | Snow content [kg/m³].                      |
-| ``\rho n_l``         | `ρn_lcl`  | center   | Cloud droplet number concentration [1/m³]. |
-| ``\rho n_r``         | `ρn_rai`  | center   | Rain drop number concentration [1/m³].     |
-| ``\rho e_{tke}``     | `ρtke`    | center   | Turbulence kinetic energy density [J/m³].  |
+| Paper symbol         | Code name  | Location | Description                                              |
+|:-------------------- |:---------- |:-------- |:-------------------------------------------------------- |
+| ``\rho``             | `ρ`        | center   | Moist air density [kg/m³].                               |
+| ``\boldsymbol{u}_h`` | `uₕ`       | center   | Horizontal covariant velocity.                           |
+| ``u_3``              | `u₃`       | face     | Vertical covariant velocity.                             |
+| ``\rho e_{tot}``     | `ρe_tot`   | center   | Total energy density [J/m³].                             |
+| ``\rho q_t``         | `ρq_tot`   | center   | Total water content [kg/m³].                             |
+| ``\rho q_l^{cl}``    | `ρq_lcl`   | center   | Cloud liquid water content [kg/m³].                      |
+| ``\rho q_i^{cl}``    | `ρq_icl`   | center   | Cloud ice content [kg/m³].                               |
+| ``\rho q_r``         | `ρq_rai`   | center   | Rain water content [kg/m³].                              |
+| ``\rho q_s``         | `ρq_sno`   | center   | Snow content [kg/m³].                                    |
+| ``\rho n_l``         | `ρn_lcl`   | center   | Cloud droplet number concentration [1/m³].               |
+| ``\rho n_r``         | `ρn_rai`   | center   | Rain drop number concentration [1/m³].                   |
+| ``\rho n_i``         | `ρn_ice`   | center   | Cloud ice number concentration, `2MP3` only [1/m³].      |
+| ``\rho q_{rim}``     | `ρq_rim`   | center   | Rime mass content, `2MP3` only [kg/m³].                  |
+| ``\rho b_{rim}``     | `ρb_rim`   | center   | Rime volume per unit volume, `2MP3` only [m³/m³].        |
+| ``\rho q_{A}``       | `ρq_gas_A` | center   | Passive chemical tracer, with a chemistry model [kg/m³]. |
+| ``\rho e_{tke}``     | `ρtke`     | center   | Turbulence kinetic energy density [J/m³].                |
 
 Which of these exist depends on the configuration: the moisture and
 precipitation variables are added by the microphysics model, and `ρtke` by the
@@ -96,6 +100,10 @@ density-weighted), except for the effective density itself:
 | ``q_t^j``        | `q_tot`   | Specific total water [kg/kg].                               |
 | ``u_3^j``        | `u₃`      | Vertical covariant velocity of the draft (a face variable). |
 
+Non-equilibrium microphysics adds the specific condensate and precipitation
+variables to each draft (`q_lcl`, `q_icl`, `q_rai`, `q_sno`, plus `n_lcl` and
+`n_rai` for the two-moment schemes), and a chemistry model adds `q_gas_A`.
+
 With a slab-ocean surface, the prognostic surface state is `Y.sfc`.
 
 ## Derived and cached quantities
@@ -105,7 +113,7 @@ With a slab-ocean surface, the prognostic surface state is `Y.sfc`.
 | ``p``                     | `ᶜp`           | Air pressure [Pa].                                                |
 | ``K``                     | `ᶜK`           | Specific kinetic energy [J/kg].                                   |
 | ``\Phi``                  | `ᶜΦ`           | Geopotential [m²/s²].                                             |
-| ``\Pi``                   | `ᶜΠ`           | Exner function [-].                                               |
+| ``\Pi``                   | `ᶜΠ`           | Exner function [-]; a lazy local where used, not a stored field.  |
 | ``\tilde{\boldsymbol u}`` | `ᶠu³`          | Mass-weighted face velocity (contravariant).                      |
 | ``\bar{\boldsymbol u}``   | `ᶜu`           | Cell-center reconstruction of the velocity.                       |
 | ``\rho^j``                | `ᶜρʲs`         | Draft air densities in kg/m³; the area fraction is `a^j = ρa/ρʲ`. |
@@ -119,13 +127,13 @@ Tendencies carry a `ₜ` subscript: `Yₜ` is the tendency of the state, and
 
 ## Common suffixes and shorthands
 
-| Suffix / name       | Meaning                                                                                     |
-|:------------------- |:------------------------------------------------------------------------------------------- |
-| `_nonneg`           | A copy clipped at zero, e.g. `ᶜq_tot_nonneg`.                                               |
-| `ʲs` / `⁰`          | Cache fields carry the same subdomain suffixes as the state, e.g. `ᶜTʲs`, `ᶜT⁰`, `ᶜq_liq⁰`. |
-| `ᶜspecific`         | Conversion from a density-weighted variable to a specific one.                              |
-| `FT`                | The working float type (`Float32` or `Float64`).                                            |
-| `Y`, `Yₜ`, `p`, `t` | State, tendency, cache, and time; see the [Glossary](glossary.md).                          |
+| Suffix / name       | Meaning                                                                                                           |
+|:------------------- |:----------------------------------------------------------------------------------------------------------------- |
+| `_nonneg`           | A copy clipped at zero, e.g. `ᶜq_tot_nonneg`.                                                                     |
+| `ʲs` / `⁰`          | Cache fields carry the same subdomain suffixes as the state, e.g. `ᶜTʲs`, `ᶜT⁰`, `ᶜq_liq⁰`.                       |
+| `ᶜspecific_*`       | Conversion from density-weighted to specific: `ᶜspecific_gs_tracers`, `ᶜspecific_env_value`, `ᶜspecific_env_mse`. |
+| `FT`                | The working float type (`Float32` or `Float64`).                                                                  |
+| `Y`, `Yₜ`, `p`, `t` | State, tendency, cache, and time; see the [Glossary](glossary.md).                                                |
 
 The operator shorthands (`ᶜinterp`, `ᶠwinterp`, `ᶜadvdivᵥ`, `ᶠupwind1`, …) are
 defined and documented in `src/utils/abbreviations.jl`; the

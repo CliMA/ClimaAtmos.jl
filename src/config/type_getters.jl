@@ -24,7 +24,7 @@ function ClimaAtmosParameters(config::AtmosConfig)
 end
 
 """
-    get_atmos(config::AtmosConfig, params; setup_type = nothing)
+    get_atmos(config::AtmosConfig, params, grid; setup_type)
 
 Build the `AtmosModel` described by a configuration.
 
@@ -35,9 +35,10 @@ groups (`AtmosWater`, `SCMSetup`, `AtmosRadiation`, `AtmosTurbconv`,
 either from the setup or from `prescribed_flow = "ShipwayHill2012"`. Momentum vertical
 diffusion is disabled for Held-Suarez runs (`rad = "held_suarez"`). `setup_type` is the
 setup object built by `get_setup_type`; the setup supplies model pieces (forcings,
-surface conditions, insolation, prescribed flow) that have no config key.
+surface conditions, insolation, prescribed flow) that have no config key. `grid`,
+`params`, and `setup_type` are stored on the model.
 """
-function get_atmos(config::AtmosConfig, params; setup_type = nothing)
+function get_atmos(config::AtmosConfig, params, grid; setup_type)
     pa = config.parsed_args
     FT = eltype(config)
     check_case_consistency(pa)
@@ -48,24 +49,25 @@ function get_atmos(config::AtmosConfig, params; setup_type = nothing)
         disable_momentum_vertical_diffusion, pa, params, FT,
     )
 
-    prescribed_flow = if !isnothing(setup_type)
-        Setups.prescribed_flow_model(setup_type, FT)
-    else
-        nothing
-    end
+    setup_components = Setups.model_components(setup_type, params, FT)
+
+    prescribed_flow = setup_components.prescribed_flow
     if isnothing(prescribed_flow) && pa["prescribed_flow"] == "ShipwayHill2012"
         prescribed_flow = ShipwayHill2012VelocityProfile{FT}()
     end
 
-    atmos = AtmosModel(;
+    atmos = _atmos_model(;
+        grid,
+        params,
+        setup = setup_type,
         water = AtmosWater(config, params, FT),
-        scm_setup = SCMSetup(config, FT; setup_type),
+        scm_setup = SCMSetup(config, FT; setup_components),
         prescribed_flow,
-        radiation = AtmosRadiation(config, FT; setup_type),
+        radiation = AtmosRadiation(config, FT; setup_components),
         turbconv = AtmosTurbconv(config, params, FT),
         gravity_wave = AtmosGravityWave(config, params, FT),
         sponge = AtmosSponge(config, params),
-        surface = AtmosSurface(config, params, FT; setup_type),
+        surface = AtmosSurface(config, params, FT; setup_components),
         numerics = AtmosNumerics(config, FT),
         chemistry = AtmosChem(config),
         cosp = COSPModel(config),
@@ -73,7 +75,7 @@ function get_atmos(config::AtmosConfig, params; setup_type = nothing)
         disable_surface_flux_tendency = pa["disable_surface_flux_tendency"],
     )
     # TODO: Should this go in the AtmosModel constructor?
-    @assert !@any_reltype(atmos, (UnionAll, DataType))
+    @assert !@any_reltype(_physics_fields(atmos), (UnionAll, DataType))
 
     @info "AtmosModel: \n$(summary(atmos))"
     microphysics_model = atmos.water.microphysics_model
@@ -84,7 +86,7 @@ function get_atmos(config::AtmosConfig, params; setup_type = nothing)
 end
 
 """
-    get_numerics(parsed_args, FT)
+    get_numerics(parsed_args, FT; vertical_water_borrowing_species = nothing)
 
 Build the `AtmosNumerics` group from the numerics config keys.
 
@@ -95,14 +97,12 @@ converted to a `Symbol`), the `apply_sem_quasimonotone_limiter`,
 (which selects `Implicit` or `Explicit` diffusion), and the hyperdiffusion model from
 `get_hyperdiffusion_model`. `vanleer_limiter` upwinding falls back to `:none` with a
 warning on ClimaCore versions older than 0.14.22.
+`vertical_water_borrowing_species` is parsed separately, by
+`vertical_water_borrowing_species_from_config`.
 """
-function get_numerics(parsed_args, FT)
-    test_dycore_consistency =
-        parsed_args["test_dycore_consistency"] ? TestDycoreConsistency() :
-        nothing
-    reproducible_restart =
-        parsed_args["reproducible_restart"] ? ReproducibleRestart() :
-        nothing
+function get_numerics(parsed_args, FT; vertical_water_borrowing_species = nothing)
+    test_dycore_consistency = parsed_args["test_dycore_consistency"]::Bool
+    reproducible_restart = parsed_args["reproducible_restart"]::Bool
 
     energy_q_tot_upwinding = Symbol(parsed_args["energy_q_tot_upwinding"])
     tracer_upwinding = Symbol(parsed_args["tracer_upwinding"])
@@ -168,26 +168,11 @@ function get_numerics(parsed_args, FT)
         dg_equation_form,
         dg_volume_flux,
         dg_interface_flux,
+        vertical_water_borrowing_species,
     )
     @info "numerics $(summary(numerics))"
 
     return numerics
-end
-
-"""
-    get_state_restart(config::AtmosConfig, restart_file, atmos_model_hash)
-
-Read the state `Y` and start time from `restart_file`, using the start date and
-communications context of `config`. Thin wrapper around the typed
-`get_state_restart` method in `simulation/restart.jl`.
-"""
-function get_state_restart(config::AtmosConfig, restart_file, atmos_model_hash)
-    return get_state_restart(
-        restart_file,
-        parse_date(config.parsed_args["start_date"]),
-        atmos_model_hash,
-        config.comms_ctx,
-    )
 end
 
 """
@@ -206,8 +191,10 @@ values map to same-named types in `Setups`:
   - Baroclinic waves: `"DryBaroclinicWave"`, `"MoistBaroclinicWave"`,
     `"MoistBaroclinicWaveWithEDMF"`, which read `perturb_initstate` and `deep_atmosphere`.
   - LES/SCM cases: `"Bomex"`, `"Rico"`, `"Soares"`, `"GATE_III"`, `"DYCOMS_RF01"`,
-    `"DYCOMS_RF02"`, `"TRMM_LBA"`, `"Larcform1"`, `"GABLS"`, `"ISDAC"`, which read
-    `prognostic_tke` (and, for ISDAC, `perturb_initstate`).
+    `"DYCOMS_RF02"`, `"TRMM_LBA"`, `"GABLS"`, `"ISDAC"`, which read `prognostic_tke`
+    (and, for ISDAC, `perturb_initstate`), and `"Larcform1"`, which starts from zero
+    TKE and reads neither.
+  - RCEMIP I: `"RCEMIPIProfile_295"`, `"RCEMIPIProfile_300"`, `"RCEMIPIProfile_305"`.
   - RCEMIP II: `"RCEMIPIIProfile_295"`, `"RCEMIPIIProfile_300"`, `"RCEMIPIIProfile_305"`.
   - File and reanalysis-driven: `"GCM"` (`external_forcing_file` plus `cfsite_number`),
     `"ARMVARANAL"` (an ARM VARANAL file, converted to the ClimaColumn schema),
@@ -225,10 +212,16 @@ function get_setup_type(parsed_args, thermo_params)
     elseif ic_name == "Rico"
         return Setups.Rico(; prognostic_tke = parsed_args["prognostic_tke"], thermo_params)
     elseif ic_name == "GCM"
-        return Setups.GCMDriven(
+        # Read the cfsite group into steady in-memory profiles, then drive it
+        # through the generic ForcingFromFile path. Defaults give an interactive
+        # Monin-Obukhov surface with the file's `ts` and the constant insolation
+        # carried in the data (matching the former GCMDrivenInsolation).
+        data = ColumnDatasets.GCMColumnData.read_cfsite(
             parsed_args["external_forcing_file"],
-            parsed_args["cfsite_number"],
+            parsed_args["cfsite_number"];
+            thermo_params,
         )
+        return Setups.ForcingFromFile(data, parsed_args["start_date"])
     elseif ic_name == "ARMVARANAL"
         varanal_file = parsed_args["external_forcing_file"]
         isnothing(varanal_file) && error(
@@ -277,24 +270,8 @@ function get_setup_type(parsed_args, thermo_params)
         )
     elseif ic_name == "ReanalysisTimeVarying"
         FT = eltype(thermo_params)
-        external_forcing_file =
-            get_external_daily_forcing_file_path(parsed_args)
-        if !isfile(external_forcing_file) ||
-           !check_daily_forcing_times(external_forcing_file, parsed_args) ||
-           !ClimaColumnFiles.is_conforming(external_forcing_file)
-            @info "External forcing file $(external_forcing_file) does not exist or does not cover the expected time range. Generating it now."
-            generate_multiday_era5_external_forcing_file(
-                parsed_args,
-                external_forcing_file,
-                FT,
-                input_data_dir = joinpath(
-                    @clima_artifact("era5_hourly_atmos_raw"),
-                    "daily",
-                ),
-            )
-        end
         return Setups.ForcingFromFile(
-            ColumnDatasets.ColumnDataset(external_forcing_file),
+            era5_dataset(parsed_args, FT),
             parsed_args["start_date"],
         )
     elseif ic_name == "ForcingFromFile"
@@ -330,12 +307,13 @@ function get_setup_type(parsed_args, thermo_params)
             perturb = parsed_args["perturb_initstate"],
             deep_atmosphere = parsed_args["deep_atmosphere"],
         )
-    elseif ic_name in
-           ("Soares", "GATE_III", "DYCOMS_RF01", "DYCOMS_RF02", "TRMM_LBA", "Larcform1")
+    elseif ic_name in ("Soares", "GATE_III", "DYCOMS_RF01", "DYCOMS_RF02", "TRMM_LBA")
         return getproperty(Setups, Symbol(ic_name))(;
             prognostic_tke = parsed_args["prognostic_tke"],
             thermo_params,
         )
+    elseif ic_name == "Larcform1"
+        return Setups.Larcform1(; thermo_params)
     elseif ic_name == "GABLS"
         return Setups.GABLS(;
             prognostic_tke = parsed_args["prognostic_tke"],
@@ -360,7 +338,8 @@ function get_setup_type(parsed_args, thermo_params)
         return Setups.SimplePlume(;
             prognostic_tke = parsed_args["prognostic_tke"],
         )
-    elseif ic_name in ("RCEMIPIIProfile_295", "RCEMIPIIProfile_300", "RCEMIPIIProfile_305")
+    elseif ic_name in ("RCEMIPIProfile_295", "RCEMIPIProfile_300", "RCEMIPIProfile_305",
+        "RCEMIPIIProfile_295", "RCEMIPIIProfile_300", "RCEMIPIIProfile_305")
         return getproperty(Setups, Symbol(ic_name))()
     elseif ic_name == "PrecipitatingColumn"
         return Setups.PrecipitatingColumn(; thermo_params)
@@ -640,8 +619,8 @@ end
     steady_state_velocity_from_config(config::AtmosConfig, params)
 
 Return a callable `(Y, params) -> velocity` when the `check_steady_state` config key is
-set, and `nothing` otherwise. `AtmosSimulation{FT}` invokes the callable once `Y` has
-been built; it forwards to `get_steady_state_velocity`.
+set, and `nothing` otherwise. `AtmosSimulation(model; ...)` invokes the callable once
+`Y` has been built; it forwards to `get_steady_state_velocity`.
 """
 function steady_state_velocity_from_config(config::AtmosConfig, params)
     config.parsed_args["check_steady_state"] || return nothing
@@ -691,7 +670,7 @@ end
 
 Bundle the callback config keys (`dt_subcol`, `dt_rad`, `dt_nogw`, `dt_ogw`,
 `log_progress`, `check_nan_every`, `check_conservation`) into the `NamedTuple` expected
-by the `callback_kwargs` keyword of `AtmosSimulation{FT}`.
+by the `callback_kwargs` keyword of `AtmosSimulation(model; ...)`.
 """
 function callback_kwargs_from_config(config::AtmosConfig)
     pa = config.parsed_args
@@ -736,7 +715,7 @@ Write the run's TOML parameter manifest (`<job_id>_parameters.toml`) and a YAML
 snapshot of the merged configuration (`<job_id>.yml`) into `output_dir`.
 
 Returns `nothing`. Config-driven runs only: simulations built directly from
-`AtmosSimulation{FT}` do not get these manifests. `strict_params` controls whether
+`AtmosSimulation(model; ...)` do not get these manifests. `strict_params` controls whether
 unused parameters are an error.
 """
 function log_yaml_and_toml_manifests(config::AtmosConfig, output_dir, job_id)
@@ -757,11 +736,12 @@ end
 
 Build an [`AtmosSimulation`](@ref) from a configuration.
 
-Resolves the parameters, setup, model, and grid from `config` and forwards them, along
-with the time, output, restart, numerics, callback, and diagnostics keys, to the
-`AtmosSimulation{FT}` keyword constructor. Config-driven runs are always verbose, and
-their parameter manifest and config snapshot are written into the resolved output
-directory by `log_yaml_and_toml_manifests`.
+Resolves the parameters, setup, grid, and model from `config` (params → setup →
+grid → model) and forwards the time, output, restart, numerics, callback, and
+diagnostics keys to the `AtmosSimulation(model; ...)` keyword constructor.
+Config-driven runs are always verbose, and their parameter manifest and config
+snapshot are written into the resolved output directory by
+`log_yaml_and_toml_manifests`.
 
 # Examples
 
@@ -778,17 +758,13 @@ function get_simulation(config::AtmosConfig)
     job_id = config.job_id
     params = ClimaAtmosParameters(config)
     setup = get_setup_type(pa, CAP.thermodynamics_params(params))
-    model = get_atmos(config, params; setup_type = setup)
     grid = get_grid(pa, params, config.comms_ctx)
+    model = get_atmos(config, params, grid; setup_type = setup)
 
     log_context(config.comms_ctx)
 
-    sim = AtmosSimulation{FT}(;
-        model,
-        params,
-        context = config.comms_ctx,
-        grid,
-        setup,
+    sim = AtmosSimulation(
+        model;
         steady_state_velocity = steady_state_velocity_from_config(config, params),
         dt = pa["dt"],
         start_date = parse_date(pa["start_date"]),
@@ -799,10 +775,6 @@ function get_simulation(config::AtmosConfig)
         debug_jacobian = pa["debug_jacobian"],
         update_cache_every = pa["update_cache_every"],
         update_constrain_state_every = pa["update_constrain_state_every"],
-        aerosol_names = Tuple(pa["prescribed_aerosols"]),
-        time_varying_trace_gases = Tuple(pa["time_varying_trace_gases"]),
-        vertical_water_borrowing_species =
-        vertical_water_borrowing_species_from_config(config),
         job_id,
         output_dir = pa["output_dir"],
         output_dir_style = pa["output_dir_style"],

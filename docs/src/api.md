@@ -8,12 +8,17 @@ Case definitions (initial conditions and forcing) live on the
 [Setups](setups.md) page; the YAML equivalents of these options are listed in
 [Configuration options](configuration_options.md).
 
+## Package
+
+```@docs
+ClimaAtmos
+```
+
 ## Simulation
 
 ```@docs
 ClimaAtmos.AtmosSimulation
-ClimaAtmos.AtmosSimulation{FT}()
-ClimaAtmos.AtmosSimulation()
+ClimaAtmos.AtmosSimulation(::ClimaAtmos.AtmosModel)
 ClimaAtmos.AtmosSimulation(::ClimaAtmos.AtmosConfig)
 ClimaAtmos.AtmosConfig
 ClimaAtmos.AtmosConfig(::String)
@@ -32,8 +37,6 @@ ClimaAtmos.Presets.nonequil_moist_1m
 ClimaAtmos.Presets.prognostic_edmf
 ClimaAtmos.Presets.prognostic_edmf_1m
 ClimaAtmos.Presets.aquaplanet
-ClimaAtmos.Presets.baroclinic_wave
-ClimaAtmos.Presets.bomex
 ```
 
 ## Grids
@@ -69,13 +72,14 @@ ClimaAtmos.SLEVEWarp
 
 ## The atmosphere model
 
-`AtmosModel` holds the physics configuration. Its components are grouped into
+`AtmosModel` holds the physics configuration, together with the grid it runs
+on, the parameters, and the case setup. Its physics components are grouped into
 the structs below; keyword arguments may be passed either to the group or
 directly to `AtmosModel`, which routes them to the right group.
 
 ```@docs
 ClimaAtmos.AtmosModel
-ClimaAtmos.AtmosModel()
+ClimaAtmos.initial_state
 ClimaAtmos.AtmosWater
 ClimaAtmos.AtmosTurbconv
 ClimaAtmos.AtmosRadiation
@@ -172,12 +176,14 @@ ClimaAtmos.NoGridScaleTendency
 ClimaAtmos.NoSubgridScaleTendency
 ```
 
-Closure parameters. The fields of this set, and the ClimaParams names they come
+Closure parameters. The fields of these sets, and the ClimaParams names they come
 from, are listed in [PROPHET: Closures](prophet_closures.md#Parameters):
 
 ```@docs
 ClimaAtmos.Parameters.AbstractTurbulenceConvectionParameters
 ClimaAtmos.Parameters.TurbulenceConvectionParameters
+ClimaAtmos.Parameters.AbstractSGSQuadratureParameters
+ClimaAtmos.Parameters.SGSQuadratureParameters
 ```
 
 ### Radiation
@@ -219,7 +225,6 @@ ClimaAtmos.AbstractInsolation
 ClimaAtmos.IdealizedInsolation
 ClimaAtmos.TimeVaryingInsolation
 ClimaAtmos.RCEMIPIIInsolation
-ClimaAtmos.GCMDrivenInsolation
 ClimaAtmos.ExternalTVInsolation
 ClimaAtmos.Larcform1Insolation
 ```
@@ -278,20 +283,20 @@ ClimaAtmos.AbstractGravityWave
 ClimaAtmos.NonOrographicGravityWave
 ClimaAtmos.OrographicGravityWave
 ClimaAtmos.FullOrographicGravityWave
-ClimaAtmos.LinearOrographicGravityWave
 ```
 
 ### Forcings
 
-Forcing terms for externally driven single-column cases are documented on the
-[Single Column Models](single_column.md) page.
+The forcing formulations are described in
+[Forcings and Idealized Cases](forcings.md); the terms for externally driven
+single-column cases are documented on the
+[Column Datasets](column_datasets_reference.md) page.
 
 ```@docs
 ClimaAtmos.AbstractForcing
 ClimaAtmos.LargeScaleSubsidence
 ClimaAtmos.LargeScaleAdvection
 ClimaAtmos.HeldSuarezForcing
-ClimaAtmos.GCMForcing
 ClimaAtmos.ISDACForcing
 ClimaAtmos.PrescribedFlow
 ClimaAtmos.ShipwayHill2012VelocityProfile
@@ -307,6 +312,7 @@ ClimaAtmos.GasPhaseChem
 ### COSP and CloudSat
 
 ```@docs
+ClimaAtmos.COSPModel
 ClimaAtmos.COSP.COSPCloudSatOptics.cloudsat_gas_attenuation!
 ClimaAtmos.COSP.COSPCloudSatOptics.cloudsat_grid_mean_sizes!
 ClimaAtmos.COSP.COSPCloudSatOptics.cloudsat_optics_subcolumn!
@@ -361,7 +367,7 @@ ClimaAtmos.ᶠdiffdivᵥ_u₃
 Biased and upwinded reconstructions:
 
 ```@docs
-ClimaAtmos.ᶠleft_bias
+ClimaAtmos.ᶠbottom_bias
 ClimaAtmos.ᶠupwind1
 ClimaAtmos.ᶠupwind3
 ClimaAtmos.ᶠlin_vanleer
@@ -405,15 +411,17 @@ ClimaAtmos.SurfaceConditions.atmos_surface_conditions
 
 Data access for single-column (SCM) forcing files: the generic
 [`ColumnDataset`](@ref ClimaAtmos.ColumnDatasets.ColumnDataset) handle and format
-interface, the native `ClimaColumn` reader/writer, and the ARM VARANAL
-converter. See the
+interface, the in-memory source, the native `ClimaColumn` reader/writer, and the
+ARM VARANAL and GCM cfsite converters. See the
 [Column Datasets](@ref "Column Datasets") page for usage and
 [Adding a Column Dataset](@ref) for the extension interface.
 
 ### Opening and reading
 
 ```@docs
+ClimaAtmos.ColumnDatasets.AbstractColumnData
 ClimaAtmos.ColumnDatasets.ColumnDataset
+ClimaAtmos.ColumnDatasets.InMemoryColumnData
 ClimaAtmos.ColumnDatasets.open_dataset
 ClimaAtmos.ColumnDatasets.has_variable
 ClimaAtmos.ColumnDatasets.read_profile
@@ -467,6 +475,7 @@ ClimaAtmos.ColumnDatasets.ClimaColumnFiles.CANONICAL_UNITS
 ClimaAtmos.ColumnDatasets.ClimaColumnFiles.is_conforming
 ClimaAtmos.ColumnDatasets.ClimaColumnFiles.write_column_forcing_file
 ClimaAtmos.ColumnDatasets.VaranalFiles.to_climacolumn
+ClimaAtmos.ColumnDatasets.GCMColumnData.read_cfsite
 ```
 
 ## Modules
@@ -480,6 +489,7 @@ ClimaAtmos.AtmosArtifacts
 ClimaAtmos.ColumnDatasets
 ClimaAtmos.ColumnDatasets.ClimaColumnFiles
 ClimaAtmos.ColumnDatasets.VaranalFiles
+ClimaAtmos.ColumnDatasets.GCMColumnData
 ```
 
 ## Internals

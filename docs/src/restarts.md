@@ -19,10 +19,10 @@ useful for
 
 !!! note
 
-    In the current version, restarting a simulation will check if the `AtmosModel`
-    used to produce the restart file is identical to the new one and throw a warning
-    if that is not the case. When the warning is produced, it is your responsibility
-    to ensure that what you are doing makes sense.
+    Restarting checks whether the `AtmosModel` that produced the restart file
+    is identical to the new one, and warns if it is not. When that warning
+    appears, it is your responsibility to make sure that what you are doing
+    makes sense.
 
 !!! note
 
@@ -34,7 +34,7 @@ useful for
 
 ## Checkpointing and restarting a run
 
-The minimal recipe is two configuration keys:
+The minimum is two configuration keys:
 
 ```yaml
 # my_run.yml
@@ -49,7 +49,7 @@ from a specific checkpoint instead, set `restart_file: <path/to/dayD.S.hdf5>`.
 
 The rest of this page explains what these options do.
 
-## How Restarts Work
+## How restarts work
 
 `ClimaAtmos` periodically saves the simulation state to a *restart file*, an
 HDF5 file holding everything needed to resume from that point: the values of all
@@ -58,7 +58,7 @@ prognostic variables.
 Each file is named for the elapsed simulation time, as `day$day.$sec.hdf5`. A
 checkpoint written 10 days and 3600 seconds into a run is `day10.3600.hdf5`.
 They are written to the run's output directory, which defaults to
-`output/<job_id>`. Under the default `ActiveLink` style that directory holds a
+`output/<job_id>`. Under the default `ActiveLink` style, that directory holds a
 numbered subdirectory per run — `output_0000`, `output_0001`, and so on — with an
 `output_active` symlink pointing at the current one, so a checkpoint from the
 first run lands in `output/<job_id>/output_0000/day10.3600.hdf5`.
@@ -77,12 +77,11 @@ On restart, a new simulation is prepared as specified by the new configuration,
 but takes its state from the file. Non-prognostic variables are recomputed from
 that state.
 
-`ClimaAtmos` can automatically detect the latest restart file within a
-structured output directory generated using the `ActiveLinkStyle`. When
-`ClimaAtmos` is configured to do so (e.g., with the `detect_restart_file` option),
-`ClimaAtmos` scans previous output directories for the most recent file that
-matches the expected name for a restart file. If none is found, a new simulation
-is started.
+`ClimaAtmos` can detect the latest restart file automatically within a
+structured output directory generated with the `ActiveLinkStyle`. With
+`detect_restart_file` set, it scans previous output directories for the most
+recent file matching the expected restart-file name. If none is found, a new
+simulation starts.
 
 It is also possible to manually specify a restart file with the `restart_file`
 configuration option, which overrides any automatically detected file.
@@ -93,11 +92,10 @@ useful when manually restarting a simulation (e.g., by overwriting the initial
 conditions). When a simulation is restarted from a checkpoint, the checkpoint
 supplies the time and any `t_start` given is ignored, with a warning.
 
-## Accumulated Diagnostics
+## Accumulated diagnostics
 
-At the moment, `ClimaAtmos` does not support working with accumulated
-diagnostics across restarts. The present limitations are best illustrated with
-an example.
+`ClimaAtmos` does not yet support accumulated diagnostics across restarts. An
+example shows the limitation.
 
 Suppose you are saving 30-day averages and stop the simulation at day 45. You'll
 find output for day 30 and the checkpoint at day 45. Then, if you

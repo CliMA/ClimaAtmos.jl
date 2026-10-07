@@ -201,7 +201,7 @@ NVTX.@annotate function viscous_sponge_tendency!(Yₜ, Y, p)
         ᶜratio = p.scratch.ᶜtemp_scalar_3
         for (ρq_name, ρn_name) in (
             (@name(c.ρq_lcl), @name(c.ρn_lcl)),
-            (@name(c.ρq_icl), @name(c.ρn_icl)),
+            (@name(c.ρq_icl), @name(c.ρn_ice)),
         )
             MatrixFields.has_field(Y, ρq_name) || continue
             ᶜρq = MatrixFields.get_field(Y, ρq_name)

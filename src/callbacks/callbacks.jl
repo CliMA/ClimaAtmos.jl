@@ -99,9 +99,7 @@ NVTX.@annotate function rrtmgp_solver_callback!(integrator)
     p = integrator.p
     t = integrator.t
     FT = eltype(Y)
-    (; params) = p
     (; ᶠradiation_flux, rrtmgp_solver) = p.radiation
-    (; radiation_mode) = p.atmos
 
     RRTMGPI.update_atmospheric_state!(integrator)
 
@@ -167,8 +165,8 @@ Dispatches on `p.atmos.insolation`:
   - `TimeVaryingInsolation`: the full orbital calculation, via `Insolation.insolation` at
     the current date. Uses the explicit `latitude`/`longitude` override when set, otherwise
     the column coordinates, falling back to the equator on a flat space.
-  - `GCMDrivenInsolation` and `ExternalTVInsolation`: values read from the external forcing.
-    The latter reconstructs the TOA flux as `rsdt / coszen`.
+  - `ExternalTVInsolation`: values read from the external forcing, with the TOA flux
+    reconstructed as `rsdt / coszen`.
 
 !!! note
 
@@ -180,13 +178,6 @@ function set_insolation_variables!(Y, p, t, ::RCEMIPIIInsolation)
     (; rrtmgp_solver) = p.radiation
     RRTMGP.cos_zenith(rrtmgp_solver) .= cosd(FT(42.05))
     RRTMGP.toa_sw_flux_dn(rrtmgp_solver) .= FT(551.58)
-end
-
-function set_insolation_variables!(Y, p, t, ::GCMDrivenInsolation)
-    (; rrtmgp_solver) = p.radiation
-    RRTMGP.cos_zenith(rrtmgp_solver) .= Fields.field2array(p.external_forcing.cos_zenith)
-    RRTMGP.toa_sw_flux_dn(rrtmgp_solver) .=
-        Fields.field2array(p.external_forcing.toa_flux)
 end
 
 function set_insolation_variables!(Y, p, t, ::ExternalTVInsolation)
@@ -216,9 +207,11 @@ function set_insolation_variables!(Y, p, t, ::IdealizedInsolation)
     # Approximate annual mean insolation without diurnal cycle
     # Reference: O'Gorman and Schneider (2008), J. Climate, 21, 3815-3832
     RRTMGP.toa_sw_flux_dn(rrtmgp_solver) .= 680
+    Δs = FT(1.2)  # equator-to-pole insolation contrast [-]
+    cos_zenith_mean = FT(0.5)
     cos_zenith = RRTMGP.cos_zenith(rrtmgp_solver)
     @. cos_zenith =
-        (1 + FT(0.3) * (1 - 3 * sind(latitude)^2)) * FT(0.5)
+        (1 + Δs / 4 * (1 - 3 * sind(latitude)^2)) * cos_zenith_mean
 end
 
 function set_insolation_variables!(Y, p, t, ::Larcform1Insolation)
@@ -312,7 +305,7 @@ NVTX.@annotate function save_state_to_disk_func(integrator, output_dir)
     InputOutput.HDF5.write_attribute(
         hdfwriter.file,
         "atmos_model_hash",
-        hash(p.atmos),
+        hash_physics(p.atmos),
     )
     InputOutput.write!(hdfwriter, Y, "Y")
     Base.close(hdfwriter)

@@ -41,7 +41,7 @@ if TEST_GROUP in ("infrastructure", "all")
     # Config tests
     @safetestset "SlabOcean SST warning" begin @time include("slab_ocean_warning.jl") end
     @safetestset "Model getters" begin @time include("config/model_from_config.jl") end
-    @safetestset "AtmosModel Constructor" begin @time include("config/atmos_model_constructor.jl") end
+    @safetestset "AtmosModel" begin @time include("config/atmos_model.jl") end
     @safetestset "Presets" begin @time include("presets.jl") end
     @safetestset "Topography tests" begin @time include("topography.jl") end
 end
@@ -70,15 +70,21 @@ if TEST_GROUP in ("dynamics", "all")
     @safetestset "Tracer/mass transport consistency" begin @time include("prognostic_equations/tracer_mass_consistency_tests.jl") end
     @safetestset "Post-Newton implicit-advection correction" begin @time include("prognostic_equations/correct_implicit_advection_tests.jl") end
     @safetestset "Vertical diffusion tendency" begin @time include("prognostic_equations/vertical_diffusion_tests.jl") end
+
+    # Conservation tests
+    @safetestset "Mass conservation" begin @time include("conservation/mass_conservation.jl") end
+    @safetestset "Energy conservation" begin @time include("conservation/energy_conservation.jl") end
+end
+
+# ============================================================================
+# Dynamics (EDMFX): SGS diffusion, limiters, and closures (split out for CI time)
+# ============================================================================
+if TEST_GROUP in ("dynamics_edmfx", "all")
     @safetestset "EDMFX SGS diffusive flux" begin @time include("prognostic_equations/edmfx_sgs_diffusive_flux_tests.jl") end
     @safetestset "EDMFX horizontal diffusive flux" begin @time include("prognostic_equations/edmfx_horizontal_diffusion_tests.jl") end
     @safetestset "Vertical water borrowing limiter" begin @time include("prognostic_equations/vertical_water_borrowing_tests.jl") end
     @safetestset "Enforce physical constraints" begin @time include("prognostic_equations/enforce_physical_constraints_tests.jl") end
     @safetestset "Eddy diffusion closures" begin @time include("prognostic_equations/eddy_diffusion_closures_tests.jl") end
-
-    # Conservation tests
-    @safetestset "Mass conservation" begin @time include("conservation/mass_conservation.jl") end
-    @safetestset "Energy conservation" begin @time include("conservation/energy_conservation.jl") end
 end
 
 # ============================================================================
@@ -87,6 +93,7 @@ end
 if TEST_GROUP in ("parameterizations", "all")
     # Sponge layers (combined for shared space setup)
     @safetestset "Sponge layers" begin @time include("parameterized_tendencies/sponge.jl") end
+    @safetestset "LES energy flux split" begin @time include("parameterized_tendencies/les_energy_split_tests.jl") end
 
     # Microphysics tests
     @safetestset "Microphysics tendency tests" begin @time include("parameterized_tendencies/microphysics/tendency.jl") end
@@ -115,11 +122,10 @@ if TEST_GROUP in ("parameterizations", "all")
 end
 
 # ============================================================================
-# Restarts: Restart and reproducibility tests
+# Restarts: Initialization from file. restart.jl and
+# unit_reproducibility_infra.jl run as Buildkite steps.
 # ============================================================================
 if TEST_GROUP in ("restarts", "all")
-    @safetestset "Restarts" begin @time include("restart.jl") end
-    @safetestset "Reproducibility infra" begin @time include("unit_reproducibility_infra.jl") end
     @safetestset "Init with file" begin @time include("test_init_with_file.jl") end
 end
 
@@ -128,6 +134,7 @@ end
 # ============================================================================
 if TEST_GROUP in ("era5", "all")
     @safetestset "ERA5 forcing" begin @time include("era5_tests.jl") end
+    @safetestset "ERA5 model levels" begin @time include("era5_model_levels_tests.jl") end
     @safetestset "Column datasets" begin @time include("column_datasets_tests.jl") end
 end
 #! format: on

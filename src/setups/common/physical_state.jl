@@ -82,7 +82,7 @@ function physical_state(;
 end
 
 # ============================================================================
-# Column profiles (shared by GCMDriven, ForcingFromFile)
+# Column profiles (shared by the file- and GCM-driven ForcingFromFile cases)
 # ============================================================================
 
 """

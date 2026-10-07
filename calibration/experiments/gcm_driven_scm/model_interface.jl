@@ -29,8 +29,6 @@ Turns off default diagnostics and sets the TOML parameter file to the member's p
 This assumes that the  config dictionary has an `output_dir` key.
 """
 function set_up_forward_model(member, iteration, experiment_dir::AbstractString)
-    experiment_config_dict =
-        YAML.load_file(joinpath(experiment_dir, model_config))
     config_dict = YAML.load_file(joinpath(experiment_dir, model_config))
     iter_path = CAL.path_to_iteration(output_dir, iteration)
     eki = JLD2.load_object(joinpath(iter_path, "eki_file.jld2"))

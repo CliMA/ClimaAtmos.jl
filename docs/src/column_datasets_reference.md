@@ -13,31 +13,33 @@ start_date: "20200101"
 config: "column"
 ```
 
-To use a forcing file with a different (analytic) initial condition, set
-`external_forcing: "ForcingFromFile"` instead and keep your `initial_condition`.
-When the file supplies the initial condition, it must contain the `ta`, `ua`,
-`va`, `hus`, and `rho` profiles in addition to the forcing variables.
+`initial_condition: "ForcingFromFile"` takes both the forcing and the initial
+state from the file, which must then contain the `ta`, `ua`, `va`, `hus`, and
+`rho` profiles in addition to the forcing variables. Each setup supplies its own
+forcing, so the only value the `external_forcing` key takes is
+`"ReanalysisMonthlyAveragedDiurnal"`.
 
 The reader uses one format: the native `ClimaColumn` schema (below),
 written by the ERA5 generator and the target for hand-made case files. A file
-that is not a conforming ClimaColumn file is a loud error at construction. A
+that does not conform to the ClimaColumn schema raises an error at
+construction. A
 stale cached file (e.g. an ERA5 forcing file written by an older version in a
-different on-disk layout) is regenerated on demand from the source rather than read.
+different on-disk layout) is regenerated on demand from the source.
 
 The forcing is composed from explicit per-process terms
 ([`HorizontalAdvection`](@ref ClimaAtmos.HorizontalAdvection),
 [`VerticalFluctuation`](@ref ClimaAtmos.VerticalFluctuation),
 [`Nudging`](@ref ClimaAtmos.Nudging),
 [`Subsidence`](@ref ClimaAtmos.Subsidence)). The default composition is all
-four. A runscript can narrow or reshape it without any YAML option:
+four. A runscript can narrow or reshape it directly:
 
 ```julia
 forcing = ClimaAtmos.ExternalDrivenTVForcing(
     forcing_file;
     forcing = (ClimaAtmos.HorizontalAdvection(),),   # advection only
 )
-model = ClimaAtmos.AtmosModel(; external_forcing = forcing)
-simulation = ClimaAtmos.AtmosSimulation{Float64}(; model, setup, grid)
+model = ClimaAtmos.AtmosModel(grid; setup, external_forcing = forcing)
+simulation = ClimaAtmos.AtmosSimulation(model)
 ```
 
 When the same file also supplies the initial condition, pass the terms to the
@@ -60,6 +62,7 @@ slot):
 | `ForcingFromFile`, `ReanalysisTimeVarying` (ERA5 time-varying)                | `default_forcing_terms()`: HAdv + VertFluc + Nudge(`ta`,`hus`) + Nudge(`ua`,`va`) + Subsidence | MO (`z0 = 1e-4`); `ExternalTemperature` (file `ts`); `ExternalTVInsolation` (file `coszen`/`rsdt`)                                            |
 | `ReanalysisMonthlyAveragedDiurnal` (ERA5 monthly, set via `external_forcing`) | same terms, but periodic time interpolation (repeats the one-day file)                         | MO (`z0 = 1e-4`); `ExternalTemperature`; `ExternalTVInsolation`                                                                               |
 | `ARMVARANAL`                                                                  | HAdv + Nudge(`ta`,`hus`) + Nudge(`ua`,`va`) + Subsidence (no VertFluc)                         | MO (`z0 = 0.05`, `ustar = 0.28`) + `FileHeatFluxes` when `hfls`/`hfss` present; `ExternalTemperature`; `TimeVaryingInsolation` (site lat/lon) |
+| `GCM` (cfsite, see below)                                                     | `default_forcing_terms()`, steady in time                                                      | MO (`z0 = 1e-4`); `ExternalTemperature` (mean `ts`); `ExternalTVInsolation` (constant `coszen`/`rsdt`)                                        |
 
 ```@docs
 ClimaAtmos.ExternalDrivenTVForcing
@@ -69,6 +72,46 @@ ClimaAtmos.VerticalFluctuation
 ClimaAtmos.Subsidence
 ClimaAtmos.Nudging
 ```
+
+## GCM-driven (cfsite) runs
+
+A GCM-driven column is configured with `initial_condition: "GCM"`, the cfsite
+forcing file, and the site group inside it:
+
+```yaml
+initial_condition: "GCM"
+external_forcing_file: artifact"cfsite_gcm_forcing"/HadGEM2-A_amip.2004-2008.07.nc
+cfsite_number: "site23"
+config: "column"
+```
+
+Nothing else selects the case: the setup supplies the forcing, the surface, and
+the insolation. There is no `external_forcing: "GCM"` or
+`insolation: "gcmdriven"`; both raise an error.
+
+[`GCMColumnData.read_cfsite`](@ref ClimaAtmos.ColumnDatasets.GCMColumnData.read_cfsite)
+reads the cfsite subgroup into in-memory time-mean profiles, which then run
+through the same `ForcingFromFile` setup and per-term composition as any other
+column source, so a runscript can reshape it the same way:
+
+```julia
+data = ClimaAtmos.ColumnDatasets.GCMColumnData.read_cfsite(
+    forcing_file, "site23"; thermo_params,
+)
+setup = ClimaAtmos.Setups.ForcingFromFile(
+    data, "20040701"; forcing = (ClimaAtmos.HorizontalAdvection(),),
+)
+```
+
+The profiles are time means, so the forcing is constant in time and does not
+limit the run length.
+
+!!! note "Where the eddy vertical fluctuation is differenced"
+
+    The vertical-fluctuation term is `tntva + w̄ ∂T̄/∂z` (likewise for `hus`),
+    with the gradient differenced on the GCM grid. Interpolating to the model
+    grid before differencing would smooth the gradient, most noticeably at
+    sharp features such as the trade inversion.
 
 ## The ClimaColumn schema
 

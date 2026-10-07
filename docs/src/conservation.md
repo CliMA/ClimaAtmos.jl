@@ -20,7 +20,7 @@ Models that do not conserve by construction often add *energy fixers*
 [Lauritzen2022, Jablonowski2011](@cite):
 corrections that redistribute the imbalance to close the budget. A fixer hides
 the error instead of removing it, and it obscures how energy moves through the
-model. Here the discrete equations conserve to floating-point precision, so no
+model. Here, the discrete equations conserve to floating-point precision, so no
 fixer is needed.
 
 ## Where conservation comes from
@@ -48,8 +48,8 @@ the presence of phase changes.
 including the reference-temperature invariance that any new energy flux must
 respect.
 
-**A mimetic discretization.** A discretization can break conservation that the
-continuous equations have. The spectral element method's weak-form flux
+**A mimetic discretization.** A discretization can destroy a conservation
+property that the continuous equations have. The spectral element method's weak-form flux
 divergences satisfy discrete analogues of the divergence and Stokes theorems;
 direct stiffness summation preserves the discrete inner product; the vertical
 averaging and difference operators satisfy discrete integration-by-parts and
@@ -61,9 +61,9 @@ conservation laws. See [Discretization and Operators](discretization.md).
 
 Because momentum advection in vector-invariant form conserves kinetic energy and
 vorticity globally, and because total energy is separately conserved, any
-numerical conversion between kinetic and non-kinetic energy is performed
-**solely** by the discretized pressure-gradient term and by the physical sources
-and sinks. The advection scheme contributes none. Energy therefore moves between
+numerical conversion between kinetic and non-kinetic energy is performed solely
+by the discretized pressure-gradient term and by the physical sources and
+sinks. The advection scheme contributes none. Energy therefore moves between
 the resolved scales and the thermodynamic reservoirs along one path, in moist
 conditions as well as dry.
 
@@ -77,8 +77,8 @@ The same decomposition governs the turbulent enthalpy flux and the
 
 ## What is not conserved
 
-There is a trade-off. Potential temperature, which some models conserve
-discretely along material trajectories, has no such guarantee here.
+Potential temperature, which some models conserve discretely along material
+trajectories, has no such guarantee here.
 
 Potential temperature is conserved only for dry, adiabatic dynamics, and it is
 not an extensive quantity satisfying a volume-integrated conservation law. Under
@@ -107,14 +107,14 @@ This returns dimensionless relative errors:
 
   - `energy_conservation`: the change in atmospheric plus surface energy, less
     the net radiative input at the top, divided by the initial total energy.
-  - `mass_conservation`: the change in total dry-plus-moist mass, divided by the
-    initial mass.
+  - `mass_conservation`: the change in total dry-plus-moist mass, plus any water
+    exchanged with a prognostic surface, divided by the initial mass. This one is signed; the other two are absolute values.
   - `water_conservation`: the change in atmospheric plus surface water, divided
     by the final total atmospheric water. Zero for dry runs.
 
 The surface terms matter: energy and water leave the atmosphere through surface
 fluxes and precipitation, so a closed budget has to account for what the surface
-receives. With a slab ocean the surface reservoir is explicit; otherwise the
+receives. With a slab ocean, the surface reservoir is explicit; otherwise the
 accumulated surface fluxes stand in for it.
 
 !!! note "Interpreting the numbers"

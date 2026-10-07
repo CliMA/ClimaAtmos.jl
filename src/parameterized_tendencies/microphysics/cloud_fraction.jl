@@ -1,9 +1,6 @@
 import NVTX
 import StaticArrays as SA
 
-# The recursive operators `rzero`, `⊞`, and `⊠` are defined in
-# src/utils/variable_manipulations.jl.
-
 """
     set_covariance_cache_and_cloud_fraction!(Y, p)
 
@@ -35,7 +32,7 @@ environment, but this is a current approximation.
 function set_covariance_cache_and_cloud_fraction!(Y, p)
     (; cloud_model, microphysics_model) = p.atmos
     (; ᶜgradᵥ_q_tot, ᶜgradᵥ_θ_liq_ice, ᶜcloud_fraction) = p.precomputed
-    (; ᶜbuoygrad, ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice) = p.precomputed
+    (; ᶜbuoygrad) = p.precomputed
     thermo_params = CAP.thermodynamics_params(p.params)
     ᶜlg = Fields.local_geometry_field(Y.c)
 
@@ -50,7 +47,7 @@ function set_covariance_cache_and_cloud_fraction!(Y, p)
     # The buoyancy gradient depends on cloud fraction, and cloud fraction depends
     # on the covariance cache through the mixing length. For reproducible restart,
     # first reconstruct the initial cloud fraction deterministically.
-    if p.atmos.numerics.reproducible_restart isa ReproducibleRestart
+    if p.atmos.numerics.reproducible_restart
         set_cloud_fraction!(Y, p, microphysics_model, GridScaleCloud())
     end
 
@@ -69,15 +66,9 @@ function set_covariance_cache_and_cloud_fraction!(Y, p)
             projected_vector_data(C3, ᶜgradᵥ_θ_liq_ice, ᶜlg),
             projected_vector_data(C3, ᶜgradᵥ_q_tot, ᶜlg),
         )
-
-        # Stability-biased buoyancy gradient for the mixing-length and
-        # Pr_t(Ri) closures (max of one-sided estimates; registers
-        # unresolved inversions that the centered gradient dilutes).
-        set_stability_buoyancy_gradient!(Y, p, thermo_params)
-
-        # Cache SGS covariances (no-op for dry/0M/GridScaleCloud configs).
-        # For EDMF: gradients are precomputed above.
-        # For non-EDMF: gradients are computed inside set_covariance_cache!.
+        # Cache SGS covariances (no-op for dry/0M/GridScaleCloud configs). The vertical
+        # gradients and N² coefficients were materialized above by
+        # set_buoyancy_gradient_inputs! for every turbconv model.
         set_covariance_cache!(Y, p, thermo_params)
         set_cloud_fraction!(Y, p, microphysics_model, cloud_model)
         return nothing
@@ -90,6 +81,11 @@ function set_covariance_cache_and_cloud_fraction!(Y, p)
     # ᶜtemp_scalar, ᶜtemp_scalar_2, ᶜtemp_scalar_3, ᶜtemp_scalar_5, ᶜtemp_scalar_6 might
     # change inside the functions that are called in picard_step!() and should not be used
     # here to store variables before calling picard_step!
+    # (`set_covariance_cache!` and the QuadratureCloud `set_cloud_fraction!` write them).
+    # Conversely, those callees and `set_sgs_moments_and_cloud_fraction!` must never write
+    # ᶜtemp_scalar_4 or ᶜtemp_scalar_7. c2 shares ᶜtemp_scalar, which is safe only
+    # because it is written after the last picard_step!() and consumed by the Aitken
+    # update before `set_sgs_moments_and_cloud_fraction!` overwrites it.
     c0 = p.scratch.ᶜtemp_scalar_4
     c1 = p.scratch.ᶜtemp_scalar_7
     c2 = p.scratch.ᶜtemp_scalar
@@ -111,7 +107,6 @@ function set_covariance_cache_and_cloud_fraction!(Y, p)
         projected_vector_data(C3, ᶜgradᵥ_θ_liq_ice, ᶜlg),
         projected_vector_data(C3, ᶜgradᵥ_q_tot, ᶜlg),
     )
-    set_stability_buoyancy_gradient!(Y, p, thermo_params)
     set_covariance_cache!(Y, p, thermo_params)
 
     # Final post-Aitken update: one quadrature pass refreshes both CF and the
@@ -229,6 +224,76 @@ function materialized_mixing_length!(Y, p)
 end
 
 """
+    sgs_geometric_stability_weight(N², S², Ri₀)
+
+Weight `w ∈ [0, 1]` applied to the geometric (resolved-gradient) SGS variance term,
+
+    Ri₊ = max(N², 0) / max(2 S², ε),    w = Ri₊² / (Ri₊² + Ri₀²),
+
+with `N²` a squared buoyancy frequency, `S²` the squared strain-rate norm and `Ri₀ = k Ri_crit`
+(`sgs_variance_geometric_Ri_factor` k). The geometric term estimates the variance of a
+field that the turbulence closure cannot represent — stably stratified air where the
+mixing length has collapsed; where the resolved flow is turbulent (`Ri ≲ Ri₀`) the
+closure already carries the variance, so the term is faded out. `Ri₀ = 0` (`k = 0`)
+returns exactly 1.
+"""
+@inline function sgs_geometric_stability_weight(N², S², Ri₀)
+    FT = typeof(N²)
+    Ri₊ = max(N², zero(FT)) / max(2 * S², eps(FT))
+    return ifelse(Ri₀ > 0, Ri₊^2 / (Ri₊^2 + Ri₀^2), one(FT))
+end
+
+"""
+    ᶜsgs_geo_weight(Y, p)
+
+The weight applied to the horizontal geometric SGS variance term.
+
+Returns a single concrete lazy broadcast for every parameter setting: the
+`k = 0` case is folded into `sgs_geometric_stability_weight` rather than taken
+as an early return, so the result stays inferrable and does not box. Callers
+guard the `c_Δx = 0` case by not evaluating the geometric term at all.
+"""
+function ᶜsgs_geo_weight(Y, p)
+    Ri₀ = CAP.sgs_variance_geometric_Ri_factor(p.params) * CAP.Ri_crit(p.params)
+    (; ᶜbg_coeffs, ᶜstrain_rate_norm, ᶜgradᵥ_θ_liq_ice, ᶜgradᵥ_q_tot) =
+        p.precomputed
+    FT = eltype(Y.c.ρ)
+    ᶜlg = Fields.local_geometry_field(Y.c)
+    # Stratification is measured for saturated air (`cf = 1`), which works better empirically.
+    return @. lazy(
+        sgs_geometric_stability_weight(
+            blended_N²(
+                ᶜbg_coeffs,
+                one(FT),
+                projected_vector_data(C3, ᶜgradᵥ_θ_liq_ice, ᶜlg),
+                projected_vector_data(C3, ᶜgradᵥ_q_tot, ᶜlg),
+            ),
+            ᶜstrain_rate_norm,
+            Ri₀,
+        ),
+    )
+end
+
+"""
+    hgrad_invariant!(ᶜinv, ᶜψ, p)
+
+Write the element-scale horizontal-gradient invariant `|∇_h ψ|²` of the center field `ᶜψ`
+into `ᶜinv`: the invariant of the nodal spectral-element gradient, replaced within each
+element by its lumped GLL{2} restriction (`lumpedₕ`, ClimaCore's `LumpedRestriction`), in
+one fused broadcast. The nodal invariant is systematically too large at the element-boundary
+nodes and too small inside once `ψ` has structure near the element scale; the restriction removes
+that node-position bias while conserving each element's WJ-weighted integral of the invariant.
+One weighted DSS then makes the result continuous across elements. On a space that
+needs no DSS (single column) the restriction is a no-op and the nodal invariant is used.
+"""
+function hgrad_invariant!(ᶜinv, ᶜψ, p)
+    @. ᶜinv = lumpedₕ(norm_sqr(gradₕ(ᶜψ)))
+    buf = p.scratch.ᶜscalar_dss_buffer
+    buf === nothing || Spaces.weighted_dss!(ᶜinv, buf)
+    return nothing
+end
+
+"""
     set_covariance_cache!(Y, p, thermo_params)
 
 Materializes T-based SGS covariances into cached fields for use by downstream
@@ -238,7 +303,15 @@ Pipeline:
 
  1. Compute mixing length via `materialized_mixing_length!`
  2. Materialize θ-based covariances from gradients
- 3. Transform θ→T using `compute_∂T_∂θ!`
+ 3. Add the horizontal resolved-gradient (geometric) term to θ′θ′ (skipped when
+    `sgs_variance_horizontal_scale_factor` is 0)
+ 4. Transform θ→T using `compute_∂T_∂θ!`
+ 5. Add the horizontal resolved-gradient term to q′q′ (skipped together with
+    step 3)
+ 6. Apply the closure-validity bound `σ_q ≤ sgs_variance_max_rel_std * q_tot`
+
+The geometric term is multiplied by the Richardson-number stability weight
+`ᶜsgs_geo_weight`.
 """
 function set_covariance_cache!(Y, p, thermo_params)
     # Covariance fields are only allocated when the configuration needs them.
@@ -249,6 +322,25 @@ function set_covariance_cache!(Y, p, thermo_params)
 
     coeff = CAP.diagnostic_covariance_coeff(p.params)
     (; ᶜgradᵥ_q_tot, ᶜgradᵥ_θ_liq_ice) = p.precomputed
+
+    # Effective coefficient of the horizontal resolved-gradient (geometric) variance
+    # term, `geo_h = c_g (c_Δx Δx_h)^2`, which multiplies |∇_h ψ|^2 below. The scale
+    # factor `c_Δx` is the on/off switch: when it is 0 the geometric additions are
+    # skipped entirely, so the vertical-gradient closure is reproduced at no extra
+    # cost.
+    c_Δx = CAP.sgs_variance_horizontal_scale_factor(p.params)
+    use_geometric = !iszero(c_Δx)
+    geo_h = if use_geometric
+        c_g = CAP.sgs_variance_geometric_coeff(p.params)
+        Δx_h = eltype(p.params)(
+            Spaces.node_horizontal_length_scale(
+                Spaces.horizontal_space(axes(Y.c)),
+            ),
+        )
+        c_g * (c_Δx * Δx_h)^2
+    else
+        zero(c_Δx)
+    end
 
     # Materialize once (see materialized_mixing_length!) to avoid repeating
     # the closure broadcast across the ᶜq′q′ and ᶜT′T′ calculations.
@@ -271,10 +363,52 @@ function set_covariance_cache!(Y, p, thermo_params)
         Geometry.WVector(ᶜgradᵥ_θ_liq_ice),
         Geometry.WVector(ᶜgradᵥ_θ_liq_ice),
     )
+
+    # Horizontal resolved-gradient (geometric) variance
+    # `geo_h |∇_h ψ|^2`, the leading-order scale-similarity estimate of the subgrid
+    # variance from the resolved field, set by the local horizontal gradient and the
+    # horizontal grid scale alone, times the Richardson weight `ᶜsgs_geo_weight`.
+    # Added to θ′θ′ here and to q′q′ below. The prescribed T–q correlation then couples
+    # the inflated σ_T and σ_q in the quadrature.
+    if use_geometric
+        (; ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice) = p.precomputed
+        ᶜθ_li = p.scratch.ᶜtemp_scalar_3
+        @. ᶜθ_li = TD.liquid_ice_pottemp(
+            thermo_params,
+            ᶜT,
+            Y.c.ρ,
+            ᶜq_tot_nonneg,
+            ᶜq_liq,
+            ᶜq_ice,
+        )
+        ᶜinv_θ = p.scratch.ᶜtemp_scalar_5
+        hgrad_invariant!(ᶜinv_θ, ᶜθ_li, p)
+        # Bind outside the `@.`: ᶜsgs_geo_weight already returns a lazy
+        # broadcast, so the call itself must not be dotted.
+        ᶜgeo_weight = ᶜsgs_geo_weight(Y, p)
+        @. ᶜT′T′ += ᶜgeo_weight * (geo_h * ᶜinv_θ)
+    end
+
     # Transform θ′θ′ → T′T′ in-place using Jacobian ∂T/∂θ
     ᶜ∂T_∂θ = p.scratch.ᶜtemp_scalar_2
     compute_∂T_∂θ!(ᶜ∂T_∂θ, Y, p, thermo_params)
     @. ᶜT′T′ = ᶜ∂T_∂θ^2 * ᶜT′T′  # θ′θ′ → T′T′
+
+    # q′q′ geometric term (see the θ′θ′ addition above).
+    (; ᶜq_tot_nonneg) = p.precomputed
+    if use_geometric
+        ᶜinv_q = p.scratch.ᶜtemp_scalar_5
+        hgrad_invariant!(ᶜinv_q, ᶜq_tot_nonneg, p)
+        ᶜgeo_weight = ᶜsgs_geo_weight(Y, p)
+        @. ᶜq′q′ += ᶜgeo_weight * (geo_h * ᶜinv_q)
+    end
+
+    # Closure-validity bound `σ_q ≤ sgs_variance_max_rel_std * q_tot` (default
+    # 0.5). A wider Gaussian puts a quadrature node at negative total water;
+    # the clamped quadrature then carries more total water than the grid mean holds,
+    # and condensing it can drive the grid-mean vapour negative.
+    r_max = CAP.sgs_variance_max_rel_std(p.params)
+    @. ᶜq′q′ = min(ᶜq′q′, (r_max * ᶜq_tot_nonneg)^2)
     return nothing
 end
 
@@ -787,7 +921,13 @@ Final post-Aitken update. No-op when `ᶜsgs_moments` is not allocated (dry / 0M
 Uses ONE quadrature pass via `_compute_sgs_moments` to fill
 `ᶜsgs_moments = (sigma_S, λ_lagrange)`, then computes
 `ᶜcloud_fraction` consistently with the augmented `σ_aug` closure (see
-`_compute_cloud_fraction`) and applies EDMF updraft weighting.
+`_compute_cloud_fraction`) from the grid-mean cloud condensate
+(`_grid_mean_cloud_condensate`).
+
+Overwrites `p.scratch.ᶜtemp_scalar`, `ᶜtemp_scalar_2`, `ᶜtemp_scalar_3`,
+`ᶜtemp_scalar_5`, and `ᶜtemp_scalar_6`. It must not touch `ᶜtemp_scalar_4` or
+`ᶜtemp_scalar_7`, which `set_covariance_cache_and_cloud_fraction!` reserves for
+the Picard iterates.
 """
 NVTX.@annotate function set_sgs_moments_and_cloud_fraction!(Y, p)
     hasproperty(p.precomputed, :ᶜsgs_moments) || return nothing
@@ -796,38 +936,70 @@ NVTX.@annotate function set_sgs_moments_and_cloud_fraction!(Y, p)
     turbconv_model = p.atmos.turbconv_model
     microphysics_model = p.atmos.microphysics_model
 
-    ᶜρ_env, ᶜT_mean, ᶜq_mean = _get_env_ρ_T_q(Y, p, thermo_params, turbconv_model)
-    ᶜq_lcl, ᶜq_icl = _get_condensate_means(Y, p, turbconv_model, microphysics_model)
+    ᶜρ_env_lazy, ᶜT_mean, ᶜq_mean = _get_env_ρ_T_q(Y, p, thermo_params, turbconv_model)
+    # Environment condensate for the microphysics reconstruction (the λ fit,
+    # conserved exactly under the quadrature measure) ...
+    ᶜq_lcl_lazy, ᶜq_icl_lazy =
+        _get_condensate_means(Y, p, turbconv_model, microphysics_model)
+    # ... and the grid-mean cloud condensate the cover is computed from
+    # (single-domain cover, see `_grid_mean_cloud_condensate`).
+    ᶜq_lcl_cf_lazy, ᶜq_icl_cf_lazy =
+        _grid_mean_cloud_condensate(Y, p, microphysics_model)
     sgs_quad = p.atmos.sgs_quadrature
     corr_Tq = correlation_Tq(p.params)
     FT = eltype(p.params)
     α = sgs_variance_fidelity(CAP.cloud_fraction_steepness_scale(p.params))
     floor = cloud_fraction_floor_params(p.params)
-    (; ᶜT′T′, ᶜq′q′) = p.precomputed
+    (; ᶜT′T′, ᶜq′q′, ᶜsgs_moments, ᶜcloud_fraction) = p.precomputed
 
-    # ONE quadrature pass → (sigma_S, λ_lagrange).
-    @. p.precomputed.ᶜsgs_moments = _compute_sgs_moments(
-        thermo_params, ᶜρ_env, ᶜT_mean, ᶜq_mean, ᶜq_lcl + ᶜq_icl,
-        $(sgs_quad), ᶜT′T′, ᶜq′q′, corr_Tq, FT(α),
-    )
-    # Recompute CF from q_c and σ_S using the augmented-σ closure. We cannot
-    # use `Φ(λ/σ_aug)` because λ was computed with the equilibrium σ_S_eff,
-    # not σ_aug — `Φ(λ/σ_aug)` would not match the truncated-Gaussian
-    # closure for the augmented variance. This overwrites the Picard iterate
-    # with a value consistent with the final SGS moments, so EDMF weighting
-    # must be re-applied here even though `set_cloud_fraction!` already
-    # applied it during Picard.
-    @. p.precomputed.ᶜcloud_fraction = _compute_cloud_fraction(
-        ᶜq_lcl + ᶜq_icl,
-        # μ_S recomputed analytically, matching `_sgs_saturation_moments`
-        # (condensate-free q_sat, consistent with the linear excess S).
-        ᶜq_mean - TD.q_vap_saturation(thermo_params, ᶜT_mean, ᶜρ_env),
-        p.precomputed.ᶜsgs_moments.sigma_S,
-        TD.q_vap_saturation(thermo_params, ᶜT_mean, ᶜρ_env, ᶜq_lcl, ᶜq_icl),
-        FT(α),
-        $(floor),
-    )
-    _apply_edmf_cloud_weighting!(Y, p, turbconv_model, thermo_params)
+    # Materialize lazy fields to pass to foreach_point. Only the scratch fields
+    # that the Picard step already clobbers (plus ᶜtemp_scalar_6) are used, so
+    # the iterates that `set_covariance_cache_and_cloud_fraction!` keeps in
+    # ᶜtemp_scalar_4 and ᶜtemp_scalar_7 are never overwritten.
+    ᶜρ_env = (p.scratch.ᶜtemp_scalar .= ᶜρ_env_lazy)
+    ᶜq_lcl = (p.scratch.ᶜtemp_scalar_2 .= ᶜq_lcl_lazy)
+    ᶜq_icl = (p.scratch.ᶜtemp_scalar_3 .= ᶜq_icl_lazy)
+    ᶜq_lcl_cf = (p.scratch.ᶜtemp_scalar_5 .= ᶜq_lcl_cf_lazy)
+    ᶜq_icl_cf = (p.scratch.ᶜtemp_scalar_6 .= ᶜq_icl_cf_lazy)
+
+    α_ft = FT(α)
+
+    DataLayouts.foreach_point(
+        ᶜsgs_moments, ᶜcloud_fraction, ᶜρ_env, ᶜT_mean, ᶜq_mean,
+        ᶜq_lcl, ᶜq_icl, ᶜq_lcl_cf, ᶜq_icl_cf, ᶜT′T′, ᶜq′q′,
+    ) do ᶜsgs_moments,
+    ᶜcloud_fraction,
+    ᶜρ_env,
+    ᶜT_mean,
+    ᶜq_mean,
+    ᶜq_lcl,
+    ᶜq_icl,
+    ᶜq_lcl_cf,
+    ᶜq_icl_cf,
+    ᶜT′T′,
+    ᶜq′q′
+
+        # ONE quadrature pass → (sigma_S, λ_lagrange).
+        @. ᶜsgs_moments = _compute_sgs_moments(
+            thermo_params, ᶜρ_env, ᶜT_mean, ᶜq_mean, ᶜq_lcl + ᶜq_icl,
+            $(sgs_quad), ᶜT′T′, ᶜq′q′, corr_Tq, α_ft,
+        )
+        # Recompute CF from the grid-mean q_c and σ_S using the augmented-σ
+        # closure. We cannot use `Φ(λ/σ_aug)` because λ was computed with the
+        # equilibrium σ_S_eff, not σ_aug — `Φ(λ/σ_aug)` would not match the
+        # truncated-Gaussian closure for the augmented variance. This overwrites
+        # the Picard iterate with a value consistent with the final SGS moments.
+        @. ᶜcloud_fraction = _compute_cloud_fraction(
+            ᶜq_lcl_cf + ᶜq_icl_cf,
+            # μ_S recomputed analytically, matching `_sgs_saturation_moments`
+            # (condensate-free q_sat, consistent with the linear excess S).
+            ᶜq_mean - TD.q_vap_saturation(thermo_params, ᶜT_mean, ᶜρ_env),
+            ᶜsgs_moments.sigma_S,
+            TD.q_vap_saturation(thermo_params, ᶜT_mean, ᶜρ_env, ᶜq_lcl_cf, ᶜq_icl_cf),
+            α_ft,
+            $(floor),
+        )
+    end
 end
 
 
@@ -850,9 +1022,11 @@ Dispatches on `microphysics_model` and `cloud_model`:
   - `MLCloud`: the neural-network prediction (see
     `set_ml_cloud_fraction!`).
 
-With `PrognosticEDMFX`, the environment value is weighted by the environment area
-fraction and binary updraft contributions are added
-(`_apply_edmf_cloud_weighting!`).
+With `PrognosticEDMFX` the cloud fraction is a single-domain quantity: the
+`QuadratureCloud` cover is evaluated with the grid-mean cloud condensate
+(`_grid_mean_cloud_condensate`) and the `MLCloud` prediction is used as is; there
+is no separate updraft term. # TODO: Take into account area fraction as a
+skewness of the PDF.
 
 Mutates `p.precomputed.ᶜcloud_fraction`; the return value is unused.
 """
@@ -880,11 +1054,16 @@ end
 """
     _grid_mean_cloud_condensate(Y, p, microphysics_model)
 
-Grid-mean cloud condensate `(ᶜq_lcl, ᶜq_icl)`, used by `GridScaleCloud` and,
-without EDMF, by `_get_condensate_means`. With non-equilibrium
-microphysics, uses the prognostic cloud condensate only; the precomputed
-`ᶜq_liq` / `ᶜq_ice` include precipitation (`q_rai` / `q_sno`), which should
-not count as cloud.
+Grid-mean cloud condensate `(ᶜq_lcl, ᶜq_icl)`, used by `GridScaleCloud`, by
+the `QuadratureCloud` cover and, without EDMF, by `_get_condensate_means`.
+With non-equilibrium microphysics, uses the prognostic cloud condensate only;
+the precomputed `ᶜq_liq` / `ᶜq_ice` include precipitation (`q_rai` / `q_sno`),
+which should not count as cloud.
+
+The cloud fraction is a single-domain quantity: with PrognosticEDMFX the
+environment PDF inversion is applied to this grid-mean condensate
+`a⁰ q_c⁰ + Σⱼ aʲ q_cʲ`. The microphysics reconstruction (the λ fit) uses the
+environment condensate, `_get_condensate_means`.
 """
 _grid_mean_cloud_condensate(Y, p, ::NonEquilibriumMicrophysics) = (
     (@. lazy(max(0, specific(Y.c.ρq_lcl, Y.c.ρ)))),
@@ -903,10 +1082,19 @@ NVTX.@annotate function set_cloud_fraction!(
     microphysics_model = p.atmos.microphysics_model
 
     # Get environment density, temperature, and total specific humidity
-    ᶜρ_env, ᶜT_mean, ᶜq_mean = _get_env_ρ_T_q(Y, p, thermo_params, turbconv_model)
+    ᶜρ_env_lazy, ᶜT_mean, ᶜq_mean = _get_env_ρ_T_q(Y, p, thermo_params, turbconv_model)
 
-    # Get condensate means (dispatches on microphysics_model)
-    ᶜq_lcl, ᶜq_icl = _get_condensate_means(Y, p, turbconv_model, microphysics_model)
+    # Materialize lazy fields to pass to foreach_point. This method runs inside
+    # the Picard step of `set_covariance_cache_and_cloud_fraction!`, so it may
+    # never ᶜtemp_scalar_4 or
+    # ᶜtemp_scalar_7, which hold the Picard iterates).
+    ᶜρ_env = (p.scratch.ᶜtemp_scalar .= ᶜρ_env_lazy)
+
+    # Grid-mean cloud condensate the cover is computed from (single-domain
+    # cover, see `_grid_mean_cloud_condensate`)
+    ᶜq_lcl_lazy, ᶜq_icl_lazy = _grid_mean_cloud_condensate(Y, p, microphysics_model)
+    ᶜq_lcl = (p.scratch.ᶜtemp_scalar_2 .= ᶜq_lcl_lazy)
+    ᶜq_icl = (p.scratch.ᶜtemp_scalar_3 .= ᶜq_icl_lazy)
 
     sgs_quad = p.atmos.sgs_quadrature
     corr_Tq = correlation_Tq(p.params)
@@ -916,25 +1104,34 @@ NVTX.@annotate function set_cloud_fraction!(
 
     (; ᶜT′T′, ᶜq′q′) = p.precomputed
 
-    # Hybrid cloud fraction: the σ_S² quadrature pass is fused into this
-    # broadcast kernel, so the moments stay in registers and are never written
-    # to a Field.
-    @. p.precomputed.ᶜcloud_fraction = _compute_cloud_fraction(
-        thermo_params,
+    ᶜcloud_fraction = p.precomputed.ᶜcloud_fraction
+    α_ft = FT(α)
+
+    DataLayouts.foreach_point(
+        ᶜcloud_fraction,
         ᶜT_mean,
         ᶜρ_env,
         ᶜq_mean,
         ᶜq_lcl,
         ᶜq_icl,
-        $(sgs_quad),
         ᶜT′T′,
         ᶜq′q′,
-        corr_Tq,
-        FT(α),
-        $(floor),
-    )
-
-    _apply_edmf_cloud_weighting!(Y, p, turbconv_model, thermo_params)
+    ) do ᶜcloud_fraction, ᶜT_mean, ᶜρ_env, ᶜq_mean, ᶜq_lcl, ᶜq_icl, ᶜT′T′, ᶜq′q′
+        @. ᶜcloud_fraction = _compute_cloud_fraction(
+            thermo_params,
+            ᶜT_mean,
+            ᶜρ_env,
+            ᶜq_mean,
+            ᶜq_lcl,
+            ᶜq_icl,
+            $(sgs_quad),
+            ᶜT′T′,
+            ᶜq′q′,
+            corr_Tq,
+            α_ft,
+            $(floor),
+        )
+    end
 end
 
 NVTX.@annotate function set_cloud_fraction!(
@@ -948,7 +1145,7 @@ NVTX.@annotate function set_cloud_fraction!(
     microphysics_model = p.atmos.microphysics_model
 
     # Get environment state, condensate, and covariances
-    ᶜρ_env, ᶜT_mean, ᶜq_mean, ᶜθ_mean, ᶜq_lcl, ᶜq_icl, ᶜT′T′, ᶜq′q′ =
+    ᶜρ_env, ᶜT_mean, ᶜq_mean, ᶜθ_mean, _, _, _, _ =
         _compute_cloud_state(Y, p, thermo_params, turbconv_model, microphysics_model)
 
     set_ml_cloud_fraction!(
@@ -962,7 +1159,6 @@ NVTX.@annotate function set_cloud_fraction!(
         ᶜq_mean,
         ᶜθ_mean,
     )
-    _apply_edmf_cloud_weighting!(Y, p, turbconv_model, thermo_params)
 end
 
 # ============================================================================
@@ -1062,10 +1258,10 @@ end
     _get_condensate_means(Y, p, turbconv_model, microphysics_model)
 
 Mean cloud condensate `(ᶜq_lcl, ᶜq_icl)` of the domain that carries the SGS
-cloud closure: the environment for PrognosticEDMFX
-(`_env_cloud_condensate`), the grid mean otherwise
-(`_grid_mean_cloud_condensate`). Updraft contributions are added
-separately by `_apply_edmf_cloud_weighting!`.
+microphysics closure (the Lagrange-multiplier fit of `_compute_sgs_moments`):
+the environment for PrognosticEDMFX (`_env_cloud_condensate`), the grid mean
+otherwise (`_grid_mean_cloud_condensate`). The cover is evaluated with the
+grid-mean condensate instead.
 """
 _get_condensate_means(Y, p, turbconv_model, microphysics_model) =
     turbconv_model isa PrognosticEDMFX ?
@@ -1086,74 +1282,6 @@ _env_cloud_condensate(Y, p, ::NonEquilibriumMicrophysics) = (
 )
 _env_cloud_condensate(Y, p, microphysics_model) =
     (p.precomputed.ᶜq_liq⁰, p.precomputed.ᶜq_ice⁰)
-
-"""
-    _apply_edmf_cloud_weighting!(Y, p, turbconv_model, thermo_params)
-
-Apply EDMF-specific adjustments to cloud diagnostics.
-
-For PrognosticEDMFX:
-
- 1. Weights environment cloud diagnostics by environment area fraction
- 2. Adds updraft contributions weighted by their respective area fractions
-
-Updraft cloud fraction is binary: 1 if updraft contains condensate, 0 otherwise.
-"""
-function _apply_edmf_cloud_weighting!(Y, p, turbconv_model, thermo_params)
-    (; ᶜp) = p.precomputed
-
-    # Weight by environment area fraction if using PrognosticEDMFX (assumed 1 otherwise)
-    if turbconv_model isa PrognosticEDMFX
-        ᶜρa⁰ = @. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model))
-        (; ᶜT⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰) = p.precomputed
-        ᶜρ⁰ = @. lazy(
-            TD.air_density(
-                thermo_params,
-                ᶜT⁰,
-                ᶜp,
-                ᶜq_tot_nonneg⁰,
-                ᶜq_liq⁰,
-                ᶜq_ice⁰,
-            ),
-        )
-        @. p.precomputed.ᶜcloud_fraction *= draft_area(ᶜρa⁰, ᶜρ⁰)
-    end
-
-    # Add contributions from the updrafts if using EDMF
-    if turbconv_model isa PrognosticEDMFX
-        n = n_mass_flux_subdomains(turbconv_model)
-        (; ᶜρʲs) = p.precomputed
-        microphysics_model = p.atmos.microphysics_model
-        for j in 1:n
-            ᶜρaʲ = Y.c.sgsʲs.:($j).ρa
-            ᶜq_liqʲ, ᶜq_iceʲ =
-                _updraft_cloud_condensate(Y, p, j, microphysics_model)
-
-            @. p.precomputed.ᶜcloud_fraction +=
-                ifelse(
-                    TD.has_condensate(
-                        thermo_params,
-                        max(0, ᶜq_liqʲ + ᶜq_iceʲ),
-                    ),
-                    draft_area(ᶜρaʲ, ᶜρʲs.:($$j)),
-                    0,
-                )
-        end
-    end
-end
-
-"""
-    _updraft_cloud_condensate(Y, p, j, microphysics_model)
-
-Cloud condensate of updraft `j`, used for the binary updraft cloud check.
-With non-equilibrium microphysics, uses the prognostic cloud condensate
-(`q_lclʲ`, `q_iclʲ`) only; the precomputed `ᶜq_liqʲs` / `ᶜq_iceʲs` include
-precipitation (`q_raiʲ` / `q_snoʲ`), which should not count as cloud.
-"""
-_updraft_cloud_condensate(Y, p, j, ::NonEquilibriumMicrophysics) =
-    (Y.c.sgsʲs.:($j).q_lcl, Y.c.sgsʲs.:($j).q_icl)
-_updraft_cloud_condensate(Y, p, j, microphysics_model) =
-    (p.precomputed.ᶜq_liqʲs.:($j), p.precomputed.ᶜq_iceʲs.:($j))
 
 # ============================================================================
 # Machine Learning Cloud Fraction
@@ -1199,21 +1327,13 @@ function set_ml_cloud_fraction!(
 )
     ᶜmixing_length_field = materialized_mixing_length!(Y, p)
 
+    ᶜlg = Fields.local_geometry_field(Y.c)
+
     # Vertical gradients of q_tot and θ_liq_ice
     ᶜ∇q = p.scratch.ᶜtemp_scalar_2
-    ᶜ∇q .=
-        projected_vector_data.(
-            C3,
-            p.precomputed.ᶜgradᵥ_q_tot,
-            Fields.level(Fields.local_geometry_field(Y.c)),
-        )
+    @. ᶜ∇q = projected_vector_data(C3, p.precomputed.ᶜgradᵥ_q_tot, ᶜlg)
     ᶜ∇θ = p.scratch.ᶜtemp_scalar_3
-    ᶜ∇θ .=
-        projected_vector_data.(
-            C3,
-            p.precomputed.ᶜgradᵥ_θ_liq_ice,
-            Fields.level(Fields.local_geometry_field(Y.c)),
-        )
+    @. ᶜ∇θ = projected_vector_data(C3, p.precomputed.ᶜgradᵥ_θ_liq_ice, ᶜlg)
 
     p.precomputed.ᶜcloud_fraction .=
         compute_ml_cloud_fraction.(
