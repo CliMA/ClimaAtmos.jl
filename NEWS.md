@@ -107,6 +107,9 @@ main
   columns in one simulation: set `n_columns` with `config: "column"`, or use
   `MultiColumnGrid(FT; n_columns)`.
   NetCDF output gains a `column` dimension.
+- ![][badge-💥breaking] The `ColumnDatasets.extrapolation_bc` hook of column file formats is
+  removed: file-backed column forcing inputs always hold the profiles constant above and
+  below the file's levels.
 - ![][badge-🐛bugfix] The vertical Smagorinsky-Lilly diffusion follows `implicit_diffusion`:
   with `implicit_diffusion: true` it is part of the implicit tendency, with the eddy viscosity
   refreshed on every Newton iterate, matching the Jacobian block that already existed for it.
