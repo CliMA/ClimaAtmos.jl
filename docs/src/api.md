@@ -423,6 +423,7 @@ ARM VARANAL and GCM cfsite converters. See the
 ClimaAtmos.ColumnDatasets.AbstractColumnData
 ClimaAtmos.ColumnDatasets.ColumnDataset
 ClimaAtmos.ColumnDatasets.InMemoryColumnData
+ClimaAtmos.ColumnDatasets.PerColumnDatasets
 ClimaAtmos.ColumnDatasets.open_dataset
 ClimaAtmos.ColumnDatasets.has_variable
 ClimaAtmos.ColumnDatasets.read_profile

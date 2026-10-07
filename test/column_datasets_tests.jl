@@ -585,3 +585,169 @@ end
     @test CA.Setups.insolation_model(setup) isa CA.ExternalTVInsolation
     @test setup.profiles.T(2000.0) ≈ ta_itp(2000.0)
 end
+
+"""
+    write_offset_forcing_file(FT, offset; shift = Dates.Minute(0))
+
+Write a ClimaColumn file whose values grow with `offset`, so that files with
+different offsets give different columns, with its times shifted by `shift`.
+"""
+function write_offset_forcing_file(FT, offset; shift = Dates.Minute(0))
+    path = joinpath(mktempdir(), "forcing_$offset.nc")
+    nt = 5
+    z = FT[0, 1000, 2000, 4000]
+    hours = 0:(nt - 1)
+    profile(base, scale) =
+        [base + scale * (offset + 1) * (zi / 1000 + t) for zi in z, t in hours]
+    series(base, scale) = [base + scale * (offset + 1 + t) for t in hours]
+    CD.ClimaColumnFiles.write_column_forcing_file(
+        path,
+        FT;
+        z,
+        time = [Dates.DateTime(2000, 5, 6) + Dates.Hour(t) - shift for t in hours],
+        time_attrib = [
+            "units" => "hours since 2000-05-06 00:00:00",
+            "calendar" => "standard",
+        ],
+        column_vars = Dict(
+            "ta" => profile(290, -1),
+            "hus" => profile(0.01, -1e-4),
+            "ua" => profile(1, 0.5),
+            "va" => profile(-1, 0.25),
+            "wa" => profile(0, 1e-3),
+            "rho" => profile(1.2, -0.01),
+            "tntha" => profile(0, 1e-5),
+            "tnhusha" => profile(0, 1e-8),
+            "tntva" => profile(0, -1e-5),
+            "tnhusva" => profile(0, -1e-8),
+        ),
+        surface_vars = Dict(
+            "ts" => series(300, 1),
+            "hfls" => series(100, 10),
+            "hfss" => series(10, 1),
+            "coszen" => series(0.3, 0.05),
+            "rsdt" => series(400, 10),
+        ),
+        site_latitude = 0,
+        site_longitude = 0,
+    )
+    return path
+end
+
+@testset "One file per column" begin
+    @test_throws ErrorException CD.PerColumnDatasets(CD.ColumnDataset[])
+    for FT in (Float32, Float64)
+        # The third file is on a different time axis
+        datasets = [
+            CD.ColumnDataset(write_offset_forcing_file(FT, 0)),
+            CD.ColumnDataset(write_offset_forcing_file(FT, 1)),
+            CD.ColumnDataset(
+                write_offset_forcing_file(FT, 2; shift = Dates.Minute(30)),
+            ),
+        ]
+        data = CD.PerColumnDatasets(datasets)
+        start_date = Dates.DateTime(2000, 5, 6)
+        @test issetequal(data.column_vars, CD.CANONICAL_COLUMN_VARS)
+        @test CD.file_time_span(data, start_date) == 3.5 * 3600
+
+        grid_kwargs = (; z_elem = 8, z_max = FT(5e3), z_stretch = false)
+        multi = CA.get_spaces(CA.MultiColumnGrid(FT; n_columns = 3, grid_kwargs...))
+        single = CA.get_spaces(CA.ColumnGrid(FT; grid_kwargs...))
+        surface(spaces) =
+            ClimaCore.Spaces.level(spaces.face_space, ClimaCore.Utilities.half)
+        column(field, h) = parent(ClimaCore.Fields.column(field, 1, 1, h))
+
+        # Column h of the per-column inputs equals the inputs of file h, and a
+        # repeated file equals a shared one
+        names = (:ta, :wa)
+        inputs = (
+            column = CD.column_timevaryinginputs(
+                data,
+                names,
+                multi.center_space,
+                start_date,
+            ),
+            surface = CD.surface_timevaryinginputs(
+                data,
+                (:ts,),
+                surface(multi),
+                start_date,
+            ),
+            repeated = CD.column_timevaryinginputs(
+                CD.PerColumnDatasets(fill(datasets[1], 3)),
+                names,
+                multi.center_space,
+                start_date,
+            ),
+            shared = CD.column_timevaryinginputs(
+                datasets[1],
+                names,
+                multi.center_space,
+                start_date,
+            ),
+        )
+        ᶜmulti, ᶜshared = (ClimaCore.Fields.zeros(multi.center_space) for _ in 1:2)
+        ᶜsingle = ClimaCore.Fields.zeros(single.center_space)
+        sfc_multi = ClimaCore.Fields.zeros(surface(multi))
+        sfc_single = ClimaCore.Fields.zeros(surface(single))
+        for t in (0.0, 1800.0, 5400.0, 10800.0)
+            for (h, cd) in enumerate(datasets)
+                single_inputs = CD.column_timevaryinginputs(
+                    cd,
+                    names,
+                    single.center_space,
+                    start_date,
+                )
+                for name in names
+                    evaluate!(ᶜmulti, inputs.column[name], t)
+                    evaluate!(ᶜsingle, single_inputs[name], t)
+                    @test column(ᶜmulti, h) == parent(ᶜsingle)
+                end
+                evaluate!(sfc_multi, inputs.surface.ts, t)
+                evaluate!(
+                    sfc_single,
+                    CD.surface_timevaryinginputs(
+                        cd,
+                        (:ts,),
+                        surface(single),
+                        start_date,
+                    ).ts,
+                    t,
+                )
+                @test column(sfc_multi, h) == parent(sfc_single)
+            end
+            for name in names
+                evaluate!(ᶜmulti, inputs.repeated[name], t)
+                evaluate!(ᶜshared, inputs.shared[name], t)
+                @test parent(ᶜmulti) == parent(ᶜshared)
+            end
+        end
+
+        # Column h starts from the initial state of a single column on file h
+        model_kwargs = (; microphysics_model = CA.EquilibriumMicrophysics0M())
+        setup = CA.Setups.ForcingFromFile(datasets, "20000506")
+        Y = CA.initial_state(
+            CA.AtmosModel(CA.MultiColumnGrid(FT; n_columns = 3, grid_kwargs...);
+                setup,
+                model_kwargs...,
+            ),
+        )
+        for (h, cd) in enumerate(datasets)
+            Yʰ = CA.initial_state(
+                CA.AtmosModel(CA.ColumnGrid(FT; grid_kwargs...);
+                    setup = CA.Setups.ForcingFromFile(cd, "20000506"),
+                    model_kwargs...,
+                ),
+            )
+            @test column(Y.c, h) == parent(Yʰ.c)
+            @test column(Y.f, h) == parent(Yʰ.f)
+        end
+        @test column(Y.c, 1) != column(Y.c, 2)
+        @test_throws ErrorException CA.initial_state(
+            CA.AtmosModel(CA.MultiColumnGrid(FT; n_columns = 2, grid_kwargs...);
+                setup,
+                model_kwargs...,
+            ),
+        )
+    end
+end

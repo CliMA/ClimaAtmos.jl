@@ -73,6 +73,20 @@ ClimaAtmos.Subsidence
 ClimaAtmos.Nudging
 ```
 
+## One file per column
+
+A multi-column run (`config: "column"` with `n_columns`) can read one forcing
+file per column. Given a vector of `ColumnDataset`s, `ForcingFromFile` and
+`ExternalDrivenTVForcing` initialize and force column `h` from file `h`, as a
+single-column run on that file would:
+
+```julia
+datasets = ClimaAtmos.ColumnDatasets.ColumnDataset.(["site_a.nc", "site_b.nc"])
+setup = ClimaAtmos.Setups.ForcingFromFile(datasets, "20200101")
+```
+
+The files must share a format, and there must be one file per column.
+
 ## GCM-driven (cfsite) runs
 
 A GCM-driven column is configured with `initial_condition: "GCM"`, the cfsite

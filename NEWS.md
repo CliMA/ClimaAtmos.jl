@@ -107,6 +107,9 @@ main
   columns in one simulation: set `n_columns` with `config: "column"`, or use
   `MultiColumnGrid(FT; n_columns)`.
   NetCDF output gains a `column` dimension.
+- ![][badge-✨feature/enhancement] `ForcingFromFile` and `ExternalDrivenTVForcing` take a
+  vector of `ColumnDataset`s, one per column of a multi-column grid: each column is
+  initialized and forced from its own file.
 - ![][badge-💥breaking] The `ColumnDatasets.extrapolation_bc` hook of column file formats is
   removed: file-backed column forcing inputs always hold the profiles constant above and
   below the file's levels.
