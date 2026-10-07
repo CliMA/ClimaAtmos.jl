@@ -964,6 +964,9 @@ function set_microphysics_tendency_cache!(
 
     thp = CAP.thermodynamics_params(p.params)
     cmp = CAP.microphysics_1m_params(p.params)
+    # Carried into the two heavy kernels in the type, so the parameters fold to
+    # literals there instead of being read from a struct per quadrature point.
+    vcmp, vthp = Val(cmp), Val(thp)
 
     n = n_mass_flux_subdomains(tm)
     nsubs = mp1m.n_substeps
@@ -976,7 +979,7 @@ function set_microphysics_tendency_cache!(
             ᶜρʲs.:($$j), ᶜq_tot_nonnegʲs.:($$j),
             Y.c.sgsʲs.:($$j).q_lcl, Y.c.sgsʲs.:($$j).q_icl,
             Y.c.sgsʲs.:($$j).q_rai, Y.c.sgsʲs.:($$j).q_sno,
-            ᶜTʲs.:($$j), ᶜwʲ_air, cmp, thp, dt, nsubs,
+            ᶜTʲs.:($$j), ᶜwʲ_air, vcmp, vthp, dt, nsubs,
         )
     end
 
@@ -1002,7 +1005,7 @@ function set_microphysics_tendency_cache!(
     if not_quadrature(sgs_quad)
         @. ᶜmp_tendency⁰ = microphysics_tendencies_1m(
             ᶜρ⁰, ᶜq_tot_nonneg⁰, ᶜq_lcl⁰, ᶜq_icl⁰, ᶜq_rai⁰, ᶜq_sno⁰,
-            ᶜT⁰, ᶜw⁰_air, cmp, thp, dt, nsubs,
+            ᶜT⁰, ᶜw⁰_air, vcmp, vthp, dt, nsubs,
         )
     else
         (; ᶜT′T′, ᶜq′q′, ᶜsgs_moments) = p.precomputed
@@ -1019,7 +1022,7 @@ function set_microphysics_tendency_cache!(
         @. ᶜλ⁰ = TD.liquid_fraction(thp, ᶜT⁰, max(0, ᶜq_lcl⁰), max(0, ᶜq_icl⁰))
         @. ᶜmu_S⁰ = ᶜq_tot_nonneg⁰ - TD.q_vap_saturation(thp, ᶜT⁰, ᶜρ⁰)
         @. ᶜmp_tendency⁰ = microphysics_tendencies_1m(
-            BMT.Microphysics1Moment(), sgs_quad, cmp, thp, ᶜρ⁰, ᶜT⁰, ᶜw⁰_air,
+            BMT.Microphysics1Moment(), sgs_quad, vcmp, vthp, ᶜρ⁰, ᶜT⁰, ᶜw⁰_air,
             ᶜq_tot_nonneg⁰, ᶜq_lcl⁰, ᶜq_icl⁰, ᶜq_rai⁰, ᶜq_sno⁰,
             ᶜT′T′, ᶜq′q′, corr_Tq, ᶜsgs_moments.λ_lagrange, α, ξ_liq, ξ_ice,
             dt, nsubs_quad, ᶜλ⁰, ᶜmu_S⁰,
