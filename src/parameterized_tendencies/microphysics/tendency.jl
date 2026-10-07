@@ -38,7 +38,8 @@ Dispatches on `(microphysics_model, turbconv_model)`:
 
   - `DryModel`: no-op.
   - `EquilibriumMicrophysics0M`: precipitation removal; sinks of `ρq_tot`, `ρ`,
-    and `ρe_tot`.
+    and `ρe_tot`, plus (when on) the grid-mean source from below-cloud
+    evaporation of the precipitation flux (`precipitation_evaporation_tendency!`).
   - `NonEquilibriumMicrophysics1M`: sources for `ρq_lcl`, `ρq_icl`, `ρq_rai`, `ρq_sno`.
   - `NonEquilibriumMicrophysics2M`: sources for `ρq_lcl`, `ρn_lcl`, `ρq_rai`,
     `ρn_rai`, and `ρq_icl`.
@@ -83,6 +84,7 @@ function microphysics_tendency!(Yₜ, Y, p, t,
     @. Yₜ.c.ρq_tot += ρ_dq_tot_dt
     @. Yₜ.c.ρ += ρ_dq_tot_dt
     @. Yₜ.c.ρe_tot += ρ_dq_tot_dt * ᶜmp_tendency.e_tot_hlpr
+    precipitation_evaporation_tendency!(Yₜ, p)
     return nothing
 end
 
@@ -129,6 +131,28 @@ function microphysics_tendency!(Yₜ, Y, p, t,
                 TD.internal_energy(thp, ᶜTʲs.:($$j))
             )
     end
+    # Below-cloud evaporation: grid mean only, so the environment receives it.
+    precipitation_evaporation_tendency!(Yₜ, p)
+    return nothing
+end
+
+"""
+    precipitation_evaporation_tendency!(Yₜ, p)
+
+Add the cached below-cloud evaporation / sublimation of the 0-moment
+precipitation flux, `p.precomputed.ᶜprecip_evap` (see
+`set_precipitation_evaporation_cache!`), to the grid-mean `ρq_tot`, `ρ` and
+`ρe_tot`. With `PrognosticEDMFX` the updraft prognostics are not touched, so the
+water and the evaporative cooling go to the environment. A no-op (bit-for-bit)
+when `precipitation_evaporation_active` is false.
+"""
+function precipitation_evaporation_tendency!(Yₜ, p)
+    precipitation_evaporation_active(p.params) || return nothing
+    (; ᶜprecip_evap) = p.precomputed
+    ᶜρ_evap = @. lazy(ᶜprecip_evap.ρ_evap_rai + ᶜprecip_evap.ρ_evap_sno)
+    @. Yₜ.c.ρq_tot += ᶜρ_evap
+    @. Yₜ.c.ρ += ᶜρ_evap
+    @. Yₜ.c.ρe_tot += ᶜprecip_evap.ρe_evap
     return nothing
 end
 

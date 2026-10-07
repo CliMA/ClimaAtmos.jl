@@ -511,6 +511,11 @@ accessors generated at the bottom of this module, e.g.
     and `supersaturation_precipitation_threshold_updraft`, which default to the
     grid-mean `precipitation_timescale` and
     `supersaturation_precipitation_threshold`.
+  - `precipitation_evaporation_*`: below-cloud evaporation of the 0-moment
+    precipitation flux (coefficient `k_E` [s⁻¹], critical relative humidity
+    `RH_c`, precipitating area fraction `a_p`, flux scale `α₂`
+    [kg m⁻² s⁻¹] and exponent `α₃`), from optional ClimaAtmos TOML keys;
+    `k_E = 0` (the default) switches it off.
   - `microphysics_1m_params`: `CloudMicrophysics` 1-moment parameters, or
     `nothing`.
   - `microphysics_2m_params`: `CloudMicrophysics` 2-moment warm-rain parameters,
@@ -656,6 +661,14 @@ Base.@kwdef struct ClimaAtmosParameters{
     fixed_snow_terminal_velocity::FT
     # 0M environment / grid-mean precipitation threshold floor [kg/kg]
     precipitation_threshold_floor::FT
+    # 0M below-cloud evaporation / sublimation of the precipitation flux
+    # (Kessler-Tiedtke deficit form; see `precipitation_evaporation_parameters`).
+    # A zero coefficient switches it off.
+    precipitation_evaporation_coefficient::FT
+    precipitation_evaporation_rh_crit::FT
+    precipitation_evaporation_area_fraction::FT
+    precipitation_evaporation_flux_scale::FT
+    precipitation_evaporation_exponent::FT
 end
 
 Base.eltype(::ClimaAtmosParameters{FT}) where {FT} = FT

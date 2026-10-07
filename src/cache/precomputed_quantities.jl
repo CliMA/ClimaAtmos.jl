@@ -340,7 +340,17 @@ function precomputed_quantities(Y, atmos)
         # surface fluxes) live in implicit_precomputed_quantities: the
         # implicit microphysics refresh rewrites them from the Newton
         # iterate, so autodiff needs Dual-typed copies of them.
-        precipitation_quantities = (; ᶜmp_tendency = similar(Y.c, MP0_NT))
+        # ᶜprecip_evap: below-cloud evaporation of the precipitation flux
+        # (kg m⁻³ s⁻¹ of rain and snow, and its energy W m⁻³), computed in the
+        # explicit stage and frozen through the Newton iterations. Zero when
+        # evaporation is off, so its diagnostics read zero.
+        ᶜprecip_evap = similar(
+            Y.c,
+            @NamedTuple{ρ_evap_rai::FT, ρ_evap_sno::FT, ρe_evap::FT}
+        )
+        fill!(parent(ᶜprecip_evap), 0)
+        precipitation_quantities =
+            (; ᶜmp_tendency = similar(Y.c, MP0_NT), ᶜprecip_evap)
     elseif atmos.microphysics_model isa NonEquilibriumMicrophysics1M
         precipitation_quantities = (;
             ᶜwₗ = similar(Y.c, FT),

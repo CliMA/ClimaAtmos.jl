@@ -354,3 +354,101 @@ end
         )
     end
 end
+
+@testset "0M precipitation evaporation parameters" begin
+    m0 = CA.EquilibriumMicrophysics0M()
+    names = (
+        "precipitation_evaporation_coefficient",
+        "precipitation_evaporation_rh_crit",
+        "precipitation_evaporation_area_fraction",
+        "precipitation_evaporation_flux_scale",
+        "precipitation_evaporation_exponent",
+    )
+    for FT in (Float32, Float64)
+        # Defaults: off, and nothing added to the caller's dictionary.
+        toml_dict = CP.create_toml_dict(FT)
+        params = CA.ClimaAtmosParameters(toml_dict; microphysics_model = m0)
+        @test CAP.precipitation_evaporation_coefficient(params) === FT(0)
+        @test CAP.precipitation_evaporation_rh_crit(params) === FT(0.9)
+        @test CAP.precipitation_evaporation_area_fraction(params) === FT(0.5)
+        @test CAP.precipitation_evaporation_flux_scale(params) === FT(5.09e-3)
+        @test CAP.precipitation_evaporation_exponent(params) === FT(0.5777)
+        @test !CA.precipitation_evaporation_active(params)
+        @test all(n -> !haskey(toml_dict.data, n), names)
+        @test CA.ClimaAtmosParameters(FT) isa CAP.ClimaAtmosParameters
+
+        mk(d) = CP.create_toml_dict(
+            FT;
+            override_file = Dict(
+                k => Dict("value" => v, "type" => "float") for (k, v) in d
+            ),
+        )
+        # Overrides are read, converted to FT and logged as used.
+        toml_dict = mk((
+            "precipitation_evaporation_coefficient" => 5.44e-4,
+            "precipitation_evaporation_rh_crit" => 0.85,
+            "precipitation_evaporation_area_fraction" => 0.3,
+        ))
+        params = CA.ClimaAtmosParameters(toml_dict; microphysics_model = m0)
+        @test CAP.precipitation_evaporation_coefficient(params) === FT(5.44e-4)
+        @test CAP.precipitation_evaporation_rh_crit(params) === FT(0.85)
+        @test CAP.precipitation_evaporation_area_fraction(params) === FT(0.3)
+        @test CAP.precipitation_evaporation_flux_scale(params) === FT(5.09e-3)
+        @test CA.precipitation_evaporation_active(params)
+        pe = CA.precipitation_evaporation_params(params)
+        @test pe.k_E === FT(5.44e-4) && pe.a_p === FT(0.3)
+        for n in names[1:3]
+            @test "ClimaAtmos" in toml_dict.data[n]["used_in"]
+        end
+        # Also read when no microphysics model is given.
+        @test CAP.precipitation_evaporation_coefficient(
+            CA.ClimaAtmosParameters(mk(("precipitation_evaporation_coefficient" => 1e-4,))),
+        ) === FT(1e-4)
+
+        # Validation of set values.
+        for (n, bad) in (
+            ("precipitation_evaporation_coefficient", (-1e-4, Inf, NaN)),
+            ("precipitation_evaporation_rh_crit", (0.0, 1.1, NaN)),
+            ("precipitation_evaporation_area_fraction", (0.0, 1.5, NaN)),
+            ("precipitation_evaporation_flux_scale", (0.0, -1.0, Inf)),
+            ("precipitation_evaporation_exponent", (0.0, -0.5, NaN)),
+        )
+            for v in bad
+                @test_throws ErrorException CA.ClimaAtmosParameters(
+                    mk((n => v,));
+                    microphysics_model = m0,
+                )
+            end
+        end
+        # Entry without `type` gives an error naming the key.
+        err = try
+            CA.ClimaAtmosParameters(
+                CP.create_toml_dict(
+                    FT;
+                    override_file = Dict(
+                        "precipitation_evaporation_coefficient" =>
+                            Dict("value" => 1e-4),
+                    ),
+                );
+                microphysics_model = m0,
+            )
+            nothing
+        catch e
+            e
+        end
+        @test err isa ErrorException
+        @test occursin("precipitation_evaporation_coefficient", err.msg)
+
+        # Not read (stays off, not logged) for non-0M microphysics.
+        toml_dict = mk(("precipitation_evaporation_coefficient" => -1.0,))
+        params = CA.ClimaAtmosParameters(
+            toml_dict;
+            microphysics_model = CA.NonEquilibriumMicrophysics1M(),
+        )
+        @test CAP.precipitation_evaporation_coefficient(params) === FT(0)
+        @test !haskey(
+            toml_dict.data["precipitation_evaporation_coefficient"],
+            "used_in",
+        )
+    end
+end

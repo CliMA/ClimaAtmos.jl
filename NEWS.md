@@ -41,6 +41,25 @@ main
   `max(S_0 q_vap_sat, floor)`, so thin cirrus aloft (where `S_0 q_vap_sat` is
   ~1e-6) is not removed. Updrafts are unaffected. Stored as the scalar
   `precipitation_threshold_floor` in `ClimaAtmosParameters`.
+- ![][badge-✨feature/enhancement] Optional below-cloud evaporation /
+  sublimation of the `EquilibriumMicrophysics0M` precipitation flux
+  (Kessler/Tiedtke deficit form
+  `E = a_p k_E max(0, RH_c q_sat - q_vap) [sqrt(p/p_s) (F/a_p) / α₂]^α₃`).
+  The rain and snow fluxes are scanned top-down through each column, limited
+  so that no more evaporates than falls in from above or than cools the air to
+  its wet-bulb `RH_c` saturation. The water and its energy are returned to the
+  grid mean `ρ`, `ρq_tot`, `ρe_tot` (so to the environment with
+  `PrognosticEDMFX`), and the surface rain/snow fluxes and column precipitation
+  energy are reduced to match, so column water and energy budgets close.
+  Evaporated water is returned with the phase (liquid or ice energy) it was
+  removed with. ClimaAtmos TOML keys (`type = "float"`):
+  `precipitation_evaporation_coefficient` (`k_E` [s⁻¹], default 0 = off and
+  bit-for-bit unchanged; IFS 5.44e-4), `precipitation_evaporation_rh_crit`
+  (0.9), `precipitation_evaporation_area_fraction` (0.5),
+  `precipitation_evaporation_flux_scale` (5.09e-3 kg m⁻² s⁻¹),
+  `precipitation_evaporation_exponent` (0.5777); read only for 0M. New
+  diagnostics `prevap` (2D, kg m⁻² s⁻¹, positive) and `tnhusevp` (3D,
+  kg kg⁻¹ s⁻¹).
 
 0.42.13
 -------
