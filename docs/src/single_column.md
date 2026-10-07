@@ -185,3 +185,15 @@ nonstandard forcing in a runscript, generate ERA5 forcing files, or write
 your own datasets, see
 [Adding a Column Dataset](extending_column_datasets.md) in the Developer
 Guide.
+
+## Multiple independent columns
+
+A column configuration can run several independent columns in one simulation,
+for example an ensemble of columns. Set `n_columns` (default 1):
+
+```yaml
+config: "column"
+n_columns: 3
+```
+
+In a script, use `AtmosModel(MultiColumnGrid(FT; n_columns = 3); ...)`.
