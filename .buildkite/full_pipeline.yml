@@ -858,7 +858,7 @@ steps:
           slurm_mem: 16G
 
       # `--manytests` runs one restart test per grid, and each grid compiles its
-      # own copy of the model. Running all three in a single step put the job
+      # own copy of the model. Running them all in a single step put the job
       # over the time limit, so they are split across agents with `--grid`. Keep
       # this list in sync with `available_grids` in test/restart.jl.
       - label: ":computer: Restart: Using manytests, sphere"
@@ -882,6 +882,14 @@ steps:
         command: >
           julia --color=yes --project=.buildkite test/restart.jl --manytests true
           --grid column
+        agents:
+          slurm_mem: 16GB
+
+      - label: ":computer: Restart: Using manytests, multicolumn"
+        retry: *retry_policy
+        command: >
+          julia --color=yes --project=.buildkite test/restart.jl --manytests true
+          --grid multicolumn
         agents:
           slurm_mem: 16GB
 
