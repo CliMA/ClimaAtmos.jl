@@ -1974,8 +1974,8 @@ function AtmosNumerics(;
     dg_equation_form = :vi,
     dg_volume_flux = :waruszewski,
     dg_interface_flux = :roe,
-    kwargs...,
     vertical_water_borrowing_species = nothing,
+    kwargs...,
 )
     # Helper to convert symbols/strings to Val types, or keep Val types as-is
     parse_upwinding(x::Union{Symbol, String}) = Val(Symbol(x))
