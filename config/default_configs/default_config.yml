@@ -21,6 +21,9 @@ y_elem:
 y_max:
   help: "Model domain size, y direction. Default: 300km"
   value: 300000.0
+n_columns:
+  help: "Number of independent columns of a `column` configuration [`1` (default)]"
+  value: 1
 z_elem:
   help: "number of vertical elements"
   value: 10
