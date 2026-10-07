@@ -271,6 +271,10 @@ not yet define.
     (`sgs_ice_uniform_fraction_ramped`): `sgs_ice_uniform_fraction` at node
     temperatures above `T_high`, 1 (uniform) below `T_low`, linear in between.
     `T_high ≤ T_low` (the default `0, 0`) disables the ramp [K].
+  - `sgs_ice_incloud_fraction`: Fraction `β` of the uniform ice share that is
+    confined to the ice-supersaturated quadrature nodes instead of being spread
+    over all nodes (`sgs_ice_incloud_factor`), in `[0, 1]`; `0` (the default)
+    disables the in-cloud placement [-].
   - `Tq_correlation_coefficient`: Correlation between `T'` and `q_tot'` in the
     SGS quadrature, in `[-1, 1]`. Used verbatim by `tq_correlation_model: constant`;
     used as the turbulent-block cross `ρ_turb` (and the fallback where all variance
@@ -308,6 +312,7 @@ Base.@kwdef struct SGSQuadratureParameters{FT} <: ASQP
     sgs_ice_uniform_fraction::FT
     sgs_ice_uniform_ramp_T_low::FT
     sgs_ice_uniform_ramp_T_high::FT
+    sgs_ice_incloud_fraction::FT
     Tq_correlation_coefficient::FT
     cloud_fraction_steepness_scale::FT
     cloud_fraction_eps_rel::FT
