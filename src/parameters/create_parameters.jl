@@ -604,6 +604,9 @@ function SGSQuadratureParameters(
         # In-cloud placement of the uniform ice share over the quadrature
         # (`sgs_ice_incloud_factor`): 0 = uniform (off).
         sgs_ice_incloud_fraction = FT(0),
+        # Precipitation-fraction placement of rain and snow over the quadrature
+        # (moist half of the PDF): 0 = uniform (off).
+        sgs_precip_incloud_fraction = FT(0),
     )
     provisional_present = filter(collect(keys(provisional_defaults))) do name
         haskey(toml_dict.data, string(name))
