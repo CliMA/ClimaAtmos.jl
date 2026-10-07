@@ -2152,7 +2152,28 @@ Group of chemistry models inside an `AtmosModel`.
 end
 
 """
-    AtmosWater{MM, CM, MTTS, TNM, SQ, TVL, TVI, TVR, TVS}(; microphysics_model = DryModel(), kwargs...)
+    AbstractTqCorrelationModel
+
+Closure for the SGS T–q correlation sampled by the joint-PDF quadrature.
+Selected by the YAML key `tq_correlation_model`.
+
+  - `ConstantTqCorrelation` (`"constant"`, default): the prescribed
+    `Tq_correlation_coefficient` everywhere.
+  - `DiagnosedTqCorrelation` (`"diagnosed"`): `ρ = T′q′ / √(T′T′ q′q′)` from
+    the gradient-based covariance `T′q′`, summed over the three variance
+    blocks — turbulent `ρ_turb · σ_T,turb · σ_q,turb` (prescribed `ρ_turb`),
+    horizontal geometric `c_g (c_Δx Δx_h)² ∇_h θ_li · ∇_h q_tot`, and vertical
+    uniform-box `c_g (c_Δz Δz)² ∂_z θ_li · ∂_z q_tot` — transformed to T basis
+    and rescaled under the σ_q bound so `ρ` is clamp-invariant. Falls back to
+    the prescribed value where all blocks vanish, and is clamped to `[-1, 1]`
+    to absorb Float32 roundoff at the Cauchy-Schwarz boundary.
+"""
+abstract type AbstractTqCorrelationModel end
+struct ConstantTqCorrelation <: AbstractTqCorrelationModel end
+struct DiagnosedTqCorrelation <: AbstractTqCorrelationModel end
+
+"""
+    AtmosWater{MM, CM, MTTS, TNM, SQ, TQC, TVL, TVI, TVR, TVS}(; microphysics_model = DryModel(), kwargs...)
 
 Group of moisture, cloud, and microphysics choices inside an
 `AtmosModel`.
@@ -2166,6 +2187,9 @@ Group of moisture, cloud, and microphysics choices inside an
   - `tracer_nonnegativity_method`: `nothing`, or a `TracerNonnegativityMethod`.
   - `sgs_quadrature`: `nothing`, or an `SGSQuadrature` used to integrate cloud
     and microphysics quantities over the subgrid-scale distribution.
+  - `tq_correlation_model`: An `AbstractTqCorrelationModel`; `ConstantTqCorrelation()`
+    by default (`DiagnosedTqCorrelation()` diagnoses the T–q correlation from the
+    gradient covariance).
   - `terminal_velocity_mode`: `DiagnosticTerminalVelocity()` (the default) or a
     `FixedTerminalVelocity`.
 
@@ -2178,12 +2202,13 @@ water = ClimaAtmos.AtmosWater(;
 )
 ```
 """
-@kwdef struct AtmosWater{MM, CM, MTTS, TNM, SQ, TVL, TVI, TVR, TVS}
+@kwdef struct AtmosWater{MM, CM, MTTS, TNM, SQ, TQC, TVL, TVI, TVR, TVS}
     microphysics_model::MM = DryModel()
     cloud_model::CM = QuadratureCloud()
     microphysics_tendency_timestepping::MTTS = nothing
     tracer_nonnegativity_method::TNM = nothing
     sgs_quadrature::SQ = nothing
+    tq_correlation_model::TQC = ConstantTqCorrelation()
     terminal_velocity_liquid::TVL = FixedTerminalVelocity()
     terminal_velocity_ice::TVI = FixedTerminalVelocity()
     terminal_velocity_rain::TVR = DiagnosticTerminalVelocity()

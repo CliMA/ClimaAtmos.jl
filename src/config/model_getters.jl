@@ -1109,6 +1109,23 @@ end
 # Each consolidates the YAML→typed-object translation for one group.
 
 """
+    get_tq_correlation_model(parsed_args)
+
+Return the `AbstractTqCorrelationModel` selected by the `tq_correlation_model` config
+key: `"constant"` → `ConstantTqCorrelation()` (default), `"diagnosed"` → `DiagnosedTqCorrelation()`.
+"""
+function get_tq_correlation_model(parsed_args)
+    return parse_option(
+        get(parsed_args, "tq_correlation_model", "constant"),
+        Dict(
+            "constant" => ConstantTqCorrelation(),
+            "diagnosed" => DiagnosedTqCorrelation(),
+        ),
+        "tq_correlation_model",
+    )
+end
+
+"""
     AtmosWater(config::AtmosConfig, params, ::Type{FT}) where {FT}
 
 Assemble the `AtmosWater` group from a configuration.
@@ -1124,6 +1141,11 @@ function AtmosWater(config::AtmosConfig, params, ::Type{FT}) where {FT}
     pa = config.parsed_args
     microphysics_model = get_microphysics_model(pa)
     sgs_quadrature = get_sgs_quadrature(pa, params)
+    tq_correlation_model = get_tq_correlation_model(pa)
+    # No horizontal-term requirement for `DiagnosedTqCorrelation`: the vertical
+    # resolved-gradient block (uniform-box, always on) and the prescribed-ρ_turb
+    # turbulent cross together give a well-defined T′q′ even in single-column
+    # configurations where `sgs_variance_horizontal_scale_factor = 0`.
 
     if microphysics_model isa DryModel
         @warn "Running simulations without any moisture present."
@@ -1159,6 +1181,7 @@ function AtmosWater(config::AtmosConfig, params, ::Type{FT}) where {FT}
                                              Explicit(),
         tracer_nonnegativity_method = get_tracer_nonnegativity_method(pa),
         sgs_quadrature,
+        tq_correlation_model,
         terminal_velocity_liquid,
         terminal_velocity_ice,
         terminal_velocity_rain,
