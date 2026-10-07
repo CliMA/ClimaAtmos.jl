@@ -1,5 +1,5 @@
 horizontal_discretization: "DG"
-dg_equation_form: "fddg"
+dg_equation_form: "vi"
 dg_volume_flux: "kg_pert"
 dg_interface_flux: "roe"
 hyperdiff: ~
@@ -9,33 +9,40 @@ h_elem: 60
 z_elem: 63
 z_max: 30000.0
 dz_bottom: 30.0
+dt_rad: "6hours"
 topography: "Earth"
-topography_damping_factor: 2.0
+topography_damping_factor: 1.0
 mesh_warp_type: "SLEVE"
 rad: "allskywithclear"
 insolation: "timevarying"
 surface_setup: "DefaultMoninObukhov"
 turbconv: "edonly_edmfx"
+#turbconv: "prognostic_edmfx"
 edmfx_sgs_diffusive_flux: true
 implicit_diffusion: true
-microphysics_model: "0M"
+#prognostic_tke: true
+#edmfx_entr_model: "Generalized"
+#edmfx_detr_model: "Generalized"
+#edmfx_nh_pressure: true
+#edmfx_vertical_diffusion: true
+#edmfx_filter: true
+#edmfx_sgs_mass_flux: true
+microphysics_model: "1M"
 use_sgs_quadrature: true
 initial_condition: "WeatherModel"
 start_date: "20100701"
 output_dir: "/scratch/asridhar/weathertest"
 # Rebalance the IC column pressure against the model's discrete Exner-split
-# vertical PGF. Without it, the ln-p hydrostatic integration leaves an
-# O(0.5 m/s²) spurious u₃ forcing over steep terrain (measured over the
-# Himalaya at h8/z63; prime suspect for the h60 t≈1-2h GPU DomainError).
-# Set to false to A/B against the legacy construction.
+# vertical PGF 
 ic_hydrostatic_rebalance: true
 # era5_initial_condition_dir: ~   # default (~) uses the wxquest_initial_conditions ClimaArtifact
-# era5_ic_full_pressure: false    # false = hydrostatic p from surface pressure; true = read 3D p from file
+# So far, only tried with era5_ic_full_pressure = false
+era5_ic_full_pressure: true # false = hydrostatic p from surface pressure; true = read 3D p from file
 dt: "30secs"
-t_end: "14days"
+t_end: "7days"
 approximate_linear_solve_iters: 2
 max_newton_iters_ode: 1
 diagnostics:
   # Instantaneous snapshots (no reduction_time => not time-averaged)
-  - short_name: [ua, va, wa, rv, ta, hus, pfull, rhoa, hur, ts, ke]
+  - short_name: [ua, va, wa, rv, ta, hus, pfull, rhoa, hur, ts, ke, pr, clw, cli, lwp, clivi]
     period: 6hours
