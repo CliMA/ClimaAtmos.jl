@@ -64,7 +64,7 @@ the valid choices. Each option string names the `CM.Parameters` type it maps to:
     default 1.0, giving the classic velocity-independent scheme).
   - `snow_autoconversion`: `"NoSupersaturation"`, `"WithSupersaturation"`.
   - `rain_condensation_evaporation`: `"RainEvaporation"`.
-  - `snow_deposition_sublimation`: `"SublimationOnly"`, `"DepositionAndSublimation"`.
+  - `snow_deposition_sublimation`: `"SublimationOnly"`, `"DepositionAndSublimation"`, `"DepositionOnly"`.
   - `snow_melt`: `"SnowMelt"`.
   - `cloud_liquid_rain_accretion`: `"CloudLiquidRainAccretion"`.
   - `cloud_liquid_snow_accretion`: `"CloudLiquidSnowAccretion"`.
@@ -146,6 +146,7 @@ function get_microphysics_1m_options(parsed_args)
             "SublimationOnly" => CMP.SublimationOnly(),
             "DepositionAndSublimation" =>
                 CMP.DepositionAndSublimation(),
+            "DepositionOnly" => CMP.DepositionOnly(),
         ),
         "snow_deposition_sublimation",
     )

@@ -45,6 +45,18 @@ end
         job_id = "parameter_test_1m_defaults",
     )
     @test CA.get_microphysics_model(default_config.parsed_args) == defaults
+    # The snow vapour-exchange variants are all selectable from the config
+    for (name, T) in (
+        ("DepositionAndSublimation", CMP.DepositionAndSublimation),
+        ("SublimationOnly", CMP.SublimationOnly),
+        ("DepositionOnly", CMP.DepositionOnly),
+    )
+        cfg = CA.AtmosConfig(
+            Dict("microphysics_model" => "1M", "snow_deposition_sublimation" => name),
+            job_id = "parameter_test_1m_snow_$(name)",
+        )
+        @test CA.get_microphysics_model(cfg.parsed_args).processes.snow_deposition_sublimation isa T
+    end
 
     # Options set on the model select the parameters loaded for it
     model = CA.NonEquilibriumMicrophysics1M(;

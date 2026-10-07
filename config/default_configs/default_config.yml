@@ -310,7 +310,7 @@ rain_condensation_evaporation:
   help: "Rain condensation/evaporation option for 1M microphysics [`RainEvaporation` (default), ~]"
   value: "RainEvaporation"
 snow_deposition_sublimation:
-  help: "Snow sublimation/deposition option for 1M microphysics [`DepositionAndSublimation` (default), `SublimationOnly`, ~]"
+  help: "Snow sublimation/deposition option for 1M microphysics [`DepositionAndSublimation` (default), `SublimationOnly`, `DepositionOnly` (no sublimation; attribution), ~]"
   value: "DepositionAndSublimation"
 snow_melt:
   help: "Snow melting option for 1M microphysics [`SnowMelt` (default), ~]"
