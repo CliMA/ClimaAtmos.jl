@@ -252,7 +252,8 @@ steady GCM-driven profiles). Both provide the same reader interface
 (`column_timevaryinginputs`, `surface_timevaryinginputs`,
 `read_surface_series`, `read_initial_profiles`, `require_forcing_variables`,
 `time_interpolation_method`, `site_location`) and expose `column_vars` and
-`surface_vars`.
+`surface_vars`. [`PerColumnDatasets`](@ref), one `ColumnDataset` per column,
+provides the inputs and the checks.
 """
 abstract type AbstractColumnData end
 
@@ -321,6 +322,41 @@ time_interpolation_method(cd::ColumnDataset) =
     time_interpolation_method(cd.format)
 
 source_name(cd::ColumnDataset) = "$(cd.path) ($(format_name(cd.format)) format)"
+
+"""
+    PerColumnDatasets(datasets)
+
+One [`ColumnDataset`](@ref) per column of a multi-column grid: column `h` reads
+`datasets[h]`. The files share a format, and `column_vars` and `surface_vars`
+are the variables that every file carries.
+"""
+struct PerColumnDatasets{D <: ColumnDataset, F <: AbstractColumnFormat} <:
+       AbstractColumnData
+    datasets::Vector{D}
+    format::F
+    column_vars::Vector{Symbol}
+    surface_vars::Vector{Symbol}
+end
+
+function PerColumnDatasets(datasets::AbstractVector{<:ColumnDataset})
+    isempty(datasets) && error("`PerColumnDatasets` needs at least one file")
+    format = first(datasets).format
+    all(cd -> cd.format == format, datasets) || error(
+        "The column forcing files $(join((cd.path for cd in datasets), ", ")) \
+         have different formats",
+    )
+    return PerColumnDatasets(
+        collect(datasets),
+        format,
+        intersect((cd.column_vars for cd in datasets)...),
+        intersect((cd.surface_vars for cd in datasets)...),
+    )
+end
+
+time_interpolation_method(data::PerColumnDatasets) =
+    time_interpolation_method(data.format)
+
+source_name(data::PerColumnDatasets) = join(source_name.(data.datasets), ", ")
 
 # ============================================================================
 # Generic machinery (shared by every `AbstractColumnData`)
@@ -416,6 +452,9 @@ file_time_span(cd::ColumnDataset, start_date) =
     open_dataset(cd) do ds
         maximum(simulation_times(cd.format, ds, start_date))
     end
+# The run errors once it passes the end of any column's file
+file_time_span(data::PerColumnDatasets, start_date) =
+    minimum(cd -> file_time_span(cd, start_date), data.datasets)
 
 """
     wraps_periodically(method)
@@ -487,7 +526,7 @@ non-height vertical coordinate — overrides this to build in-memory inputs
 instead.
 """
 function column_timevaryinginputs(
-    cd::ColumnDataset,
+    cd::Union{ColumnDataset, PerColumnDatasets},
     names,
     target_space,
     start_date;
@@ -496,8 +535,11 @@ function column_timevaryinginputs(
     names = Tuple(names)
     d = cd.format
     inputs = map(names) do name
+        sources =
+            cd isa ColumnDataset ? DataSource(cd.path, format_variable_name(d, name)) :
+            [DataSource(c.path, format_variable_name(d, name)) for c in cd.datasets]
         TimeVaryingInput(
-            DataSource(cd.path, format_variable_name(d, name)),
+            sources,
             target_space;
             start_date,
             method,
@@ -536,7 +578,8 @@ end
 
 A `NamedTuple` of `TimeVaryingInput`s, one per requested surface variable,
 read into in-memory inputs on the simulation time axis (`t = 0` at
-`start_date`) from a single file open.
+`start_date`) from a single file open. For [`PerColumnDatasets`](@ref), each
+column reads the series of its own source.
 """
 function surface_timevaryinginputs(
     cd::ColumnDataset,
@@ -552,6 +595,8 @@ function surface_timevaryinginputs(
     inputs = map(name -> TimeVaryingInput(times, FT.(read[name]); method), names)
     return NamedTuple{names}(inputs)
 end
+surface_timevaryinginputs(data::PerColumnDatasets, args...; kwargs...) =
+    column_timevaryinginputs(data, args...; kwargs...)
 
 # ============================================================================
 # In-memory column data
