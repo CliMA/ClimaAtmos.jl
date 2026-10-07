@@ -185,6 +185,7 @@ end
         (CA.SphereGrid(Float64; h_elem = 2), true),
         (CA.SphereGrid(Float64; h_elem = 2, deep_atmosphere = false), true),
         (CA.ColumnGrid(Float64), false),
+        (CA.MultiColumnGrid(Float64; n_columns = 2), false),
         (CA.BoxGrid(Float64), false),
         (CA.PlaneGrid(Float64), false),
     )
