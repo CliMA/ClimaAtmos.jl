@@ -446,7 +446,7 @@ struct SGSVarianceEvaluator{TPS, FT}
 end
 
 @inline function (eval::SGSVarianceEvaluator)(T_hat, q_tot_hat)
-    q_sat_hat = TD.q_vap_saturation(eval.tps, T_hat, eval.ρ)
+    q_sat_hat = TD.q_vap_saturation(_unwrapped(eval.tps), T_hat, eval.ρ)
     s = q_tot_hat - q_sat_hat
     return (s - eval.mu_S)^2
 end
@@ -467,7 +467,8 @@ struct SGSExcessEvaluator{TPS, FT}
 end
 
 @inline (eval::SGSExcessEvaluator)(T_hat, q_tot_hat) =
-    q_tot_hat - TD.q_vap_saturation(eval.tps, T_hat, eval.ρ) - eval.mu_S
+    q_tot_hat - TD.q_vap_saturation(_unwrapped(eval.tps), T_hat, eval.ρ) -
+    eval.mu_S
 
 
 """
@@ -497,7 +498,7 @@ Returns `(; mu_S, sigma_S)`.
     sgs_quad, T′T′, q′q′, corr_Tq,
 )
     FT = typeof(ρ)
-    mu_S = q_tot_mean - TD.q_vap_saturation(thp, T_mean, ρ)
+    mu_S = q_tot_mean - TD.q_vap_saturation(_unwrapped(thp), T_mean, ρ)
     sgs_quad_eff = isnothing(sgs_quad) ? GridMeanSGS() : sgs_quad
     evaluator = SGSVarianceEvaluator(thp, ρ, mu_S)
     sigma_S_sq = integrate_over_sgs(
@@ -775,7 +776,7 @@ materialized to a Field.
     moments = _sgs_saturation_moments(
         thermo_params, ρ, T, q_tot, sgs_quad, T′T′, q′q′, corr_Tq,
     )
-    q_sat = TD.q_vap_saturation(thermo_params, T, ρ, q_liq, q_ice)
+    q_sat = TD.q_vap_saturation(_unwrapped(thermo_params), T, ρ, q_liq, q_ice)
     return _compute_cloud_fraction(
         q_liq + q_ice, moments.mu_S, moments.sigma_S, q_sat, α, floor,
     )
@@ -893,7 +894,7 @@ directly, matching the σ_S → 0 limit of the sampled branch.
     not_quadrature(sgs_quad) &&
         return (; sigma_S = ϵ_numerics(FT), λ_lagrange = q_c)
 
-    mu_S = q_tot - TD.q_vap_saturation(thp, T, ρ)
+    mu_S = q_tot - TD.q_vap_saturation(_unwrapped(thp), T, ρ)
     transform =
         build_physical_transform(sgs_quad, q_tot, T, q′q′, T′T′, corr_Tq)
     S′s = quadrature_point_values(
@@ -937,7 +938,7 @@ NVTX.@annotate function set_sgs_moments_and_cloud_fraction!(Y, p)
 
     # ONE quadrature pass → (sigma_S, λ_lagrange).
     @. p.precomputed.ᶜsgs_moments = _compute_sgs_moments(
-        thermo_params, ᶜρ_env, ᶜT_mean, ᶜq_mean, ᶜq_lcl + ᶜq_icl,
+        $(Val(thermo_params)), ᶜρ_env, ᶜT_mean, ᶜq_mean, ᶜq_lcl + ᶜq_icl,
         $(sgs_quad), ᶜT′T′, ᶜq′q′, corr_Tq, FT(α),
     )
     # Recompute CF from q_c and σ_S using the augmented-σ closure. We cannot
@@ -1050,7 +1051,7 @@ NVTX.@annotate function set_cloud_fraction!(
     # broadcast kernel, so the moments stay in registers and are never written
     # to a Field.
     @. p.precomputed.ᶜcloud_fraction = _compute_cloud_fraction(
-        thermo_params,
+        $(Val(thermo_params)),
         ᶜT_mean,
         ᶜρ_env,
         ᶜq_mean,
