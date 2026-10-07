@@ -472,7 +472,8 @@ end
     get_grid(parsed_args, params, context)
 
 Build the computational grid selected by the `config` key: `"sphere"` gives a
-`SphereGrid`, `"column"` a `ColumnGrid`, `"box"` a `BoxGrid`, and `"plane"` a
+`SphereGrid`, `"column"` a `ColumnGrid` (or a `MultiColumnGrid` of `n_columns`
+columns when `n_columns` is not 1), `"box"` a `BoxGrid`, and `"plane"` a
 `PlaneGrid`.
 
 All grids read the vertical discretization keys `z_elem`, `z_max`, `z_stretch`, and
@@ -521,7 +522,9 @@ function get_grid(parsed_args, params, context)
             kwargs...,
         )
     elseif config == "column"
-        ColumnGrid(FT; context, kwargs...)
+        n_columns = parsed_args["n_columns"]
+        n_columns == 1 ? ColumnGrid(FT; context, kwargs...) :
+        MultiColumnGrid(FT; context, n_columns, kwargs...)
     elseif config == "box"
         BoxGrid(
             FT;

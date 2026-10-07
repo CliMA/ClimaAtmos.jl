@@ -103,6 +103,10 @@ main
 - ![][badge-🔥behavioralΔ] `vert_diff` combined with `turbconv`, `amd_les`, or a vertically
   acting `smagorinsky_lilly` is rejected at model construction. The two AMD configurations
   set `hyperdiff: ~`, like the Smagorinsky ones.
+- ![][badge-✨feature/enhancement] A column configuration can run several independent
+  columns in one simulation: set `n_columns` with `config: "column"`, or use
+  `MultiColumnGrid(FT; n_columns)`.
+  NetCDF output gains a `column` dimension.
 - ![][badge-🐛bugfix] The vertical Smagorinsky-Lilly diffusion follows `implicit_diffusion`:
   with `implicit_diffusion: true` it is part of the implicit tendency, with the eddy viscosity
   refreshed on every Newton iterate, matching the Jacobian block that already existed for it.
