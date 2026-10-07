@@ -8,12 +8,17 @@ Case definitions (initial conditions and forcing) live on the
 [Setups](setups.md) page; the YAML equivalents of these options are listed in
 [Configuration options](configuration_options.md).
 
+## Package
+
+```@docs
+ClimaAtmos
+```
+
 ## Simulation
 
 ```@docs
 ClimaAtmos.AtmosSimulation
-ClimaAtmos.AtmosSimulation{FT}()
-ClimaAtmos.AtmosSimulation()
+ClimaAtmos.AtmosSimulation(::ClimaAtmos.AtmosModel)
 ClimaAtmos.AtmosSimulation(::ClimaAtmos.AtmosConfig)
 ClimaAtmos.AtmosConfig
 ClimaAtmos.AtmosConfig(::String)
@@ -32,8 +37,6 @@ ClimaAtmos.Presets.nonequil_moist_1m
 ClimaAtmos.Presets.prognostic_edmf
 ClimaAtmos.Presets.prognostic_edmf_1m
 ClimaAtmos.Presets.aquaplanet
-ClimaAtmos.Presets.baroclinic_wave
-ClimaAtmos.Presets.bomex
 ```
 
 ## Grids
@@ -69,13 +72,14 @@ ClimaAtmos.SLEVEWarp
 
 ## The atmosphere model
 
-`AtmosModel` holds the physics configuration. Its components are grouped into
+`AtmosModel` holds the physics configuration, together with the grid it runs
+on, the parameters, and the case setup. Its physics components are grouped into
 the structs below; keyword arguments may be passed either to the group or
 directly to `AtmosModel`, which routes them to the right group.
 
 ```@docs
 ClimaAtmos.AtmosModel
-ClimaAtmos.AtmosModel()
+ClimaAtmos.initial_state
 ClimaAtmos.AtmosWater
 ClimaAtmos.AtmosTurbconv
 ClimaAtmos.AtmosRadiation
@@ -172,12 +176,14 @@ ClimaAtmos.NoGridScaleTendency
 ClimaAtmos.NoSubgridScaleTendency
 ```
 
-Closure parameters. The fields of this set, and the ClimaParams names they come
+Closure parameters. The fields of these sets, and the ClimaParams names they come
 from, are listed in [PROPHET: Closures](prophet_closures.md#Parameters):
 
 ```@docs
 ClimaAtmos.Parameters.AbstractTurbulenceConvectionParameters
 ClimaAtmos.Parameters.TurbulenceConvectionParameters
+ClimaAtmos.Parameters.AbstractSGSQuadratureParameters
+ClimaAtmos.Parameters.SGSQuadratureParameters
 ```
 
 ### Radiation
@@ -277,13 +283,14 @@ ClimaAtmos.AbstractGravityWave
 ClimaAtmos.NonOrographicGravityWave
 ClimaAtmos.OrographicGravityWave
 ClimaAtmos.FullOrographicGravityWave
-ClimaAtmos.LinearOrographicGravityWave
 ```
 
 ### Forcings
 
-Forcing terms for externally driven single-column cases are documented on the
-[Single Column Models](single_column.md) page.
+The forcing formulations are described in
+[Forcings and Idealized Cases](forcings.md); the terms for externally driven
+single-column cases are documented on the
+[Column Datasets](column_datasets_reference.md) page.
 
 ```@docs
 ClimaAtmos.AbstractForcing
@@ -305,6 +312,7 @@ ClimaAtmos.GasPhaseChem
 ### COSP and CloudSat
 
 ```@docs
+ClimaAtmos.COSPModel
 ClimaAtmos.COSP.COSPCloudSatOptics.cloudsat_gas_attenuation!
 ClimaAtmos.COSP.COSPCloudSatOptics.cloudsat_grid_mean_sizes!
 ClimaAtmos.COSP.COSPCloudSatOptics.cloudsat_optics_subcolumn!

@@ -1,15 +1,15 @@
 # Configuring and Tuning PROPHET
 
-[PROPHET](prophet.md) has a wide configuration surface: about a dozen `edmfx_*`
-keys, four that select the cloud and quadrature treatment, and some fifty
-closure parameters in ClimaParams. This page says what each of them does, which
-ones are to change, and how to tell whether a change did what you meant. For the
-formulation itself, see [PROPHET: Overview and Equations](prophet.md) and
+[PROPHET](prophet.md) has a lot of configuration: about a dozen `edmfx_*` keys,
+four that select the cloud and quadrature treatment, and some fifty closure
+parameters in ClimaParams. This page says what each of them does, which
+ones are worth changing, and how to tell whether a change did what you meant.
+For the formulation itself, see [PROPHET: Overview and Equations](prophet.md) and
 [PROPHET: Closures](prophet_closures.md).
 
-The scheme is named `EDMFX` in the code, so every configuration key and every
-diagnostic name below carries `edmf` or `up`/`en` (updraft/environment) rather
-than `prophet`.
+The scheme is named `EDMFX` in the code, so the configuration keys and
+diagnostic names below use `edmf`, `up` (updraft), and `en` (environment)
+rather than `prophet`.
 
 ## Turning PROPHET on
 
@@ -35,13 +35,13 @@ implicit_diffusion: true
 approximate_linear_solve_iters: 2
 ```
 
-Every physics configuration in `config/model_configs/` sets exactly these; the
-exceptions are the two diagnostic cases (`prognostic_edmfx_adv_test_column.yml`
-and `prognostic_edmfx_simpleplume_column.yml`), which deliberately switch the
-grid-mean feedback off. Start from one of the physics configurations,
+Nearly all physics configurations in `config/model_configs/` set exactly this
+list. The two diagnostic cases (`prognostic_edmfx_adv_test_column.yml` and
+`prognostic_edmfx_simpleplume_column.yml`) deliberately switch the grid-mean
+feedback off, and `prognostic_edmfx_bomex_fixtke_column.yml` runs with
+`prognostic_tke: false`. Start from one of the physics configurations,
 `prognostic_edmfx_bomex_column.yml` for a single column or
-`prognostic_edmfx_aquaplanet.yml` for a sphere, rather than assembling the list
-by hand.
+`prognostic_edmfx_aquaplanet.yml` for a sphere.
 
 `turbconv: "edonly_edmfx"` selects
 [`EDOnlyEDMFX`](@ref ClimaAtmos.EDOnlyEDMFX): the eddy-diffusivity and TKE
@@ -85,15 +85,17 @@ diffusion), and `edmfx_horizontal_diffusion` without
 
 ## Microphysics coupling
 
-PROPHET carries whichever water species the grid-mean microphysics model
-carries. With `microphysics_model: "0M"`, a draft holds only ``q_t^j`` and its
-condensate follows from saturation adjustment; with `"1M"`, it also holds
-`q_lcl`, `q_icl`, `q_rai`, `q_sno`, and with `"2M"` the number concentrations
-`n_lcl` and `n_rai` as well. Each of those is advected, entrained, sedimented,
+PROPHET carries whichever water species the grid-mean microphysics model does.
+With `microphysics_model: "0M"`, a draft has only ``q_t^j`` and its condensate
+follows from saturation adjustment; with `"1M"`, it adds `q_lcl`, `q_icl`,
+`q_rai`, `q_sno`, and with `"2M"` the number concentrations `n_lcl` and `n_rai`
+as well. Each of those is advected, entrained, sedimented,
 and given its own microphysical sources inside the draft.
 
-The draft microphysics and sedimentation paths currently support a single draft
-and raise an error for `updraft_number > 1` with non-equilibrium microphysics.
+The draft microphysics and sedimentation paths currently handle a single draft:
+with `updraft_number > 1` and non-equilibrium microphysics they silently act on
+the first draft only. Nothing rejects that configuration, so treat
+`updraft_number: 1` as the only tested setting for these schemes.
 
 Microphysical rates and cloud fraction are integrated over the SGS distribution
 described in [Closures](prophet_closures.md#Variances-and-cloud-fraction). The
@@ -102,7 +104,7 @@ practical consequences:
   - `sgs_distribution: "mean"` (or `use_sgs_quadrature: false`) collapses the
     quadrature to the mean state. Use it to isolate the effect of the SGS
     integration, not for production.
-  - the number of microphysics evaluations grows as the square of
+  - The number of microphysics evaluations grows as the square of
     `quadrature_order`, and 3 already resolves the leading moments to within a
     few percent for typical variances [LopezGomez2022](@cite).
   - `cloud_model: "grid_scale"` bypasses the variance closure entirely, which is
@@ -122,7 +124,7 @@ The tuned sets in `toml/` are the starting point:
 `prognostic_edmfx.toml` (0M), `prognostic_edmfx_1M.toml`,
 `prognostic_edmfx_calibrated.toml`, and case-specific variants such as
 `prognostic_edmfx_bomex_pigroup.toml` and `prognostic_edmfx_gcmdriven.toml`.
-[Closures](prophet_closures.md#Parameters) maps every symbol in the formulation
+[Closures](prophet_closures.md#Parameters) maps each symbol in the formulation
 onto its ClimaParams name.
 
 If you are tuning by hand rather than calibrating, these are the parameters with
@@ -145,7 +147,7 @@ the largest effect, roughly in order:
   - `diagnostic_covariance_coeff` (``c_\sigma / 2``) and
     `cloud_fraction_eps_rel` control cloud fraction at fixed condensate.
   - `EDMF_min_area`, `EDMF_max_area`, `EDMF_max_surface_area` are
-    bounds, not tuning knobs; changing them changes what the limiters do rather
+    bounds, not tuning knobs: moving them changes what the limiters do rather
     than the physics.
 
 The calibration workflow under `calibration/` fits these against single-column
@@ -221,7 +223,7 @@ Later `--config_file` arguments win on conflicting keys; see
 **The draft never develops.** Check the surface buoyancy flux. The surface mass
 source vanishes with the positive part of ``z_i \overline{w'b'}_s``, so it is
 identically zero in a stable boundary layer, by construction, and `arup` should
-then sit near `EDMF_min_area`, held there by the area-bounding rate. If the
+then stay near `EDMF_min_area`, held there by the area-bounding rate. If the
 surface buoyancy flux is positive and `arup` still does not grow, look at `entr`
 and `detr` in the lowest cells.
 
@@ -238,14 +240,6 @@ all set
 diffusive coupling between the grid mean and the drafts is stiff at the
 timesteps of interest. Check those first, then that `edmfx_filter: true` is
 set.
-
-**Stratocumulus shallows over days in a global run.** Too little interfacial
-entrainment to balance large-scale subsidence. The entrainment velocity ``w_e``
-is powered by the cell-mean TKE at the face, with a self-quenching feedback and
-no direct radiative or evaporative pathway, so
-`EDMF_interface_entr_efficiency` is the available knob. Raising it will not fix
-weak, moisture-dominated inversions, which lie outside the closure's
-[validity domain](prophet_closures.md#Capping-inversions-as-unresolved-interfaces).
 
 **Reproducibility.** Changing any PROPHET parameter or flag changes simulation
 output, so the reference counter in `reproducibility_tests/ref_counter.jl` has

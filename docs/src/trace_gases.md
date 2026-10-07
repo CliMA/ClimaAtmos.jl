@@ -2,7 +2,7 @@
 
 `ClimaAtmos` implements two modes each for ozone and carbon dioxide: one time varying and one time invariant. These are only relevant for radiative transfer, and only when RRTMGP is used. All other atmospheric gases are held fixed with default values from RRTMGP that can be changed in the toml file. See [Radiation](radiation.md) for how the gas concentrations reach the solver, and [Running with Radiation](radiation_howto.md) for the configuration keys.
 
-## Time Invariant Ozone Profile
+## Time-invariant ozone profile
 
 The time invariant type of ozone uses the `idealized_ozone` function to
 compute an idealized ozone profile based on the work of [Wing2018](@cite).
@@ -33,7 +33,7 @@ nothing # hide
 
 ![Idealized ozone profile](idealized_ozone.png)
 
-## Time Varying Ozone Profile
+## Time-varying ozone profile
 
 The time varying ozone profile uses CMIP6 forcing data to prescribe ozone
 as read from files. A high-resolution, multi-year file is available in the
@@ -48,12 +48,12 @@ We interpolate the file data in time whenever radiation is called. The
 interpolation used is `LinearInterpolation` from `ClimaUtilities` (linear in
 time between file snapshots).
 
-## Time Invariant CO2 Profile
+## Time-invariant CO2 profile
 
 By default, CO2 concentrations are set to 397.547 ppm. This value can be changed
 with the `CO2_fixed_value` parameter in the toml file.
 
-## Time Varying CO2 Profile
+## Time-varying CO2 profile
 
 `ClimaAtmos` can prescribe CO2 concentration using data
 from [Mauna Loa CO2 measurements](https://gml.noaa.gov/ccgg/trends/data.html).

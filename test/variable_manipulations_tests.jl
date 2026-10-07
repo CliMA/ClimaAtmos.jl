@@ -143,9 +143,6 @@ end
 end
 
 @testset "ᶜenv_value & helpers" begin
-    # Make promote_type_mul work with Numbers for testing
-    # variable_manipulations.jl only defines it for AxisTensor
-    CA.promote_type_mul(::Number, ::Number) = Float64
 
     # Test draft_sum and ᶜenv_value (decomposition)
     FT = Float64

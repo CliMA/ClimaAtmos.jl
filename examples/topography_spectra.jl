@@ -53,7 +53,6 @@ function generate_spaces(;
     h_space = make_horizontal_space(cubed_sphere_mesh, quad, comms_ctx, true)
     Δh_scale = Spaces.node_horizontal_length_scale(h_space)
     @assert h_space isa CC.Spaces.SpectralElementSpace2D
-    coords = CC.Fields.coordinate_field(h_space)
     elev_from_file = SpaceVaryingInputs.SpaceVaryingInput(
         AA.earth_orography_file_path(; context = comms_ctx),
         "z",
@@ -80,7 +79,7 @@ Returns an `Array` containing the values which make up `test_var`.
 """
 function remap_to_array(test_var, hcoords)
     remapper = Remapping.Remapper(axes(test_var), hcoords)
-    orog = Array(Remapping.interpolate(remapper, test_var))
+    return Array(Remapping.interpolate(remapper, test_var))
 end
 
 """
@@ -109,7 +108,7 @@ function gen_spectra(test_var)
     len2 = size(test_var)[2]
     @assert len1 == 2len2
     mass_weight = FT(1) # No weighting applied
-    spectrum_data, wave_numbers, _spherical, mesh_info =
+    spectrum_data, _, _, mesh_info =
         power_spectrum_2d(FT, test_var, mass_weight)
     power_spectrum =
         dropdims(sum(spectrum_data, dims = 1), dims = 1)[begin:(end - 1), :]
@@ -143,9 +142,7 @@ function generate_all_spectra(; h_elem = 16)
     for ii in collect(range(1, 10, length = 10))
         n_attenuation = ii
         test_var = generate_spaces(; h_elem, n_attenuation)
-        Δh_scale = Spaces.node_horizontal_length_scale(Spaces.axes(test_var))
         diff_courant = 0.05 # Arbitrary example value.
-        κ = diff_courant * Δh_scale^2
         maxiter = Int(round(log(n_attenuation) / diff_courant))
         sph_wn, psd = gen_spectra(test_var)
         scatterlines!(sph_wn[2:end], psd[2:end], label = "iter = $(maxiter)")
@@ -221,7 +218,7 @@ function generate_fig_Δelevation(; h_elem = 16, n_attenuation = 5)
     )
     color_levels = 25
     cmap = cgrad(:curl, color_levels; categorical = true)
-    raw_Δelevation, regridded_Δelevation, lon, lat, regridded_tgt =
+    _, regridded_Δelevation, lon, lat, regridded_tgt =
         compare_elevation(; h_elem, n_attenuation)
     figdata1 = CairoMakie.contourf!(
         ax1,

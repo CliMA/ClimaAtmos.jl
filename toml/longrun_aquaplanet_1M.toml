@@ -7,6 +7,10 @@ value = 150
 [snow_autoconversion_timescale]
 value = 1e4
 
+# Kessler1M (CloudMicrophysics >= 0.41) blends the rain autoconversion timescale between
+# a stratiform and a convective value with the vertical velocity. Override the convective
+# value to 150 s; the stratiform scale defaults to 1.0, giving the classic
+# velocity-independent scheme (stratiform timescale = 150 s · 1.0 = 150 s).
 [rain_autoconversion_timescale]
 value = 150
 

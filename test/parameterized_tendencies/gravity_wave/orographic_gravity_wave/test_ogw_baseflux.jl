@@ -75,7 +75,7 @@ function compute_base_flux(ogw_mode::String, comms_ctx, config_file, job_id; h_e
         p.orographic_gravity_wave
     (; values_at_z_pbl, topo_info) =
         p.orographic_gravity_wave
-    (; ᶜdTdz, ᶜbuoyancy_frequency) = p.orographic_gravity_wave
+    (; ᶜbuoyancy_frequency) = p.orographic_gravity_wave
 
     # Extract parameters
     ogw_params = p.orographic_gravity_wave.ogw_params

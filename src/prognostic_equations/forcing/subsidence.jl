@@ -62,7 +62,7 @@ for each advected quantity, incrementing:
   - `Yₜ.c.ρe_tot`, advecting the total enthalpy `ᶜh_tot`.
   - `Yₜ.c.ρq_tot`, unless the microphysics model is a `DryModel`.
   - `Yₜ.c.ρq_lcl` and `Yₜ.c.ρq_icl`, for a `NonEquilibriumMicrophysics` model. Rain
-    and snow are not subsided.
+    and snow do not subside.
 
 Reads `Y.c.ρ`, the precomputed `ᶜh_tot`, and scratch space; `t` is unused. Called
 from `additional_tendency!`. Returns `nothing`.

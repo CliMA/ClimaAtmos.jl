@@ -66,11 +66,59 @@ value = 800
 
 # Microphysics
 
+[cloud_liquid_snow_collision_efficiency]
+value = 0.3090163608367027
+
+[snow_ventilation_coefficient_b]
+value = 1.6208042750394516
+
+[rain_autoconversion_timescale]
+value = 4448.8692292650185
+
+[cloud_ice_snow_collision_efficiency]
+value = 0.8800064111667907
+
+[cloud_ice_specific_humidity_autoconversion_threshold]
+value = 0.0036611093450312536
+
+[cloud_liquid_water_specific_humidity_autoconversion_threshold]
+value = 0.0013587169911283958
+
+[cloud_ice_rain_collision_efficiency]
+value = 0.69648723068907
+
+[fixed_cloud_ice_terminal_velocity]
+value = 0.021038826251611464
+
+[snow_autoconversion_timescale]
+value = 1741.8651208309705
+
 [condensation_evaporation_timescale]
-value = 50
+value = 19.69756195571661
+
+[rain_snow_collision_efficiency]
+value = 0.6896543848084287
+
+[fixed_rain_terminal_velocity]
+value = 3.3031374942630958
+
+[rain_ventilation_coefficient_b]
+value = 1.1730192086536644
+
+[rain_ventilation_coefficient_a]
+value = 1.0092266679160695
+
+[fixed_cloud_liquid_terminal_velocity]
+value = 0.022727710454275463
+
+[fixed_snow_terminal_velocity]
+value = 2.3449889922020706
+
+[cloud_liquid_rain_collision_efficiency]
+value = 0.09587215881277678
+
+[snow_ventilation_coefficient_a]
+value = 0.9273307219084937
 
 [sublimation_deposition_timescale]
-value = 50
-
-[precipitation_timescale]
-value = 600
+value = 1436.4867213169466

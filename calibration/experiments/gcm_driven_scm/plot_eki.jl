@@ -96,7 +96,7 @@ for iteration in iterations
     push!(loss_results[:var_weighted_min_loss_avg], var_min_loss)
 
     plt = plot()
-    for i in 1:size(g_non_nan, 2)
+    for i in axes(g_non_nan, 2)
         plot!(plt, 1:size(g_non_nan, 1), g_non_nan[:, i], label = false)
     end
     plot!(plt, 1:size(y_i, 1), y_i, label = "Observations", color = :black)
@@ -209,7 +209,7 @@ end
 
 
 
-for param_i in 1:size(phi_all_stacked, 1)
+for param_i in axes(phi_all_stacked, 1)
     param_name = names[param_i]
     data = phi_all_stacked[param_i, :, :]
 

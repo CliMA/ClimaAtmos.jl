@@ -232,15 +232,12 @@ function topography_hughes2023(coord)
     # Angles in degrees
     ϕ₁ = FT(45)
     ϕ₂ = FT(45)
-    λ_min = minimum(λ)
     λ₁ = FT(72)
     λ₂ = FT(140)
     λₘ = FT(7)
     ϕₘ = FT(40)
     d = ϕₘ / 2 * (-log(0.1))^(-1 / 6)
     c = λₘ / 2 * (-log(0.1))^(-1 / 2)
-    d₁ = (λ - λ_min) - λ₁
-    d₂ = (λ - λ_min) - λ₂
     l₁ = λ - λ₁
     l₂ = λ - λ₂
     zₛ = FT(

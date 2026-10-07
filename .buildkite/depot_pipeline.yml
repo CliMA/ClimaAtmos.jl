@@ -29,7 +29,9 @@ steps:
           limit: 1
     agents:
       slurm_cpus_per_task: 8
+      slurm_mem: 20GB
     env:
       JULIA_NUM_PRECOMPILE_TASKS: 8
+    timeout_in_minutes: 60
     command:
       - ".buildkite/build_depot.sh"

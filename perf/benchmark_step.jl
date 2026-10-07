@@ -23,7 +23,7 @@ import CUDA
 include("common.jl")
 
 function benchmark_step!(integrator, Y₀, n_steps = 10)
-    for i in 1:n_steps
+    for _ in 1:n_steps
         CTS.step!(integrator)
         integrator.u .= Y₀ # temporary hack to simplify performance benchmark.
     end

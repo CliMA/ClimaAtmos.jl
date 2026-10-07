@@ -8,7 +8,7 @@
 
 import StaticArrays as SA
 import Thermodynamics as TD
-import ClimaCore.RecursiveApply: rzero, ⊞, ⊠
+import ClimaCore.Utilities: add_auto_broadcasters, drop_auto_broadcasters
 import UnrolledUtilities: unrolled_reduce
 
 # ============================================================================
@@ -622,8 +622,9 @@ Approximates the expectation
 ```
 
 with the ``1/\\pi`` normalization of the two-dimensional Gauss-Hermite rule applied
-as ``1/\\sqrt{\\pi}`` per dimension. Accumulation uses `RecursiveApply`'s `⊞` and
-`⊠`, so `f` may return a scalar or a `NamedTuple` of scalars.
+as ``1/\\sqrt{\\pi}`` per dimension. The accumulators are wrapped in
+`ClimaCore.Utilities.AutoBroadcaster`s, so `+` and `*` map over the elements of a
+composite result and `f` may return a scalar or a `NamedTuple` of scalars.
 
 # Arguments
 
@@ -650,29 +651,32 @@ function sum_over_quadrature_points(
     # Use loops (not ntuple) for register reuse across iterations: each loop
     # iteration releases registers from the previous one, dramatically reducing
     # peak register usage. Seed both accumulators from real (i, j) = (1, 1)
-    # evaluations rather than a separate `rzero(f(...))` dummy call — that
+    # evaluations rather than a separate `zero(f(...))` dummy call — that
     # saves one full evaluation of `f` per cell (≈ 11% of work at N = 3).
+    # `add_auto_broadcasters` makes `+` and `*` map over the elements of a
+    # composite result, so `f` may return a `NamedTuple`; scalar results are
+    # left unwrapped. The accumulator is unwrapped once at the end.
     @inbounds begin
         x_hat = get_x_hat(χ[1], χ[1])
-        inner_sum = f(x_hat...) ⊠ (weights[1] * inv_sqrt_pi)
+        inner_sum = add_auto_broadcasters(f(x_hat...)) * (weights[1] * inv_sqrt_pi)
         for j in 2:N
             x_hat = get_x_hat(χ[1], χ[j])
-            inner_sum = inner_sum ⊞ (f(x_hat...) ⊠ (weights[j] * inv_sqrt_pi))
+            inner_sum += add_auto_broadcasters(f(x_hat...)) * (weights[j] * inv_sqrt_pi)
         end
-        outer_sum = inner_sum ⊠ (weights[1] * inv_sqrt_pi)
+        outer_sum = inner_sum * (weights[1] * inv_sqrt_pi)
 
         for i in 2:N
             x_hat = get_x_hat(χ[i], χ[1])
-            inner_sum = f(x_hat...) ⊠ (weights[1] * inv_sqrt_pi)
+            inner_sum = add_auto_broadcasters(f(x_hat...)) * (weights[1] * inv_sqrt_pi)
             for j in 2:N
                 x_hat = get_x_hat(χ[i], χ[j])
-                inner_sum = inner_sum ⊞ (f(x_hat...) ⊠ (weights[j] * inv_sqrt_pi))
+                inner_sum += add_auto_broadcasters(f(x_hat...)) * (weights[j] * inv_sqrt_pi)
             end
-            outer_sum = outer_sum ⊞ (inner_sum ⊠ (weights[i] * inv_sqrt_pi))
+            outer_sum += inner_sum * (weights[i] * inv_sqrt_pi)
         end
     end
 
-    return outer_sum
+    return drop_auto_broadcasters(outer_sum)
 end
 
 """

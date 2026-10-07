@@ -49,7 +49,7 @@ import ClimaAtmos as CA
 import Dates
 
 diagnostics = CA.Diagnostics.default_diagnostics(
-    CA.AtmosModel(),
+    CA.AtmosModel(grid),
     86400 * 10,                    # 10-day simulation
     Dates.DateTime(2010, 1, 1),
     0;

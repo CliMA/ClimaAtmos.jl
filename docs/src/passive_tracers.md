@@ -7,7 +7,7 @@ field that follows the naming convention is automatically picked up for
 transport, diffusion, and other generic operations; no
 additional code changes are required.
 
-## Grid-Scale Tracers
+## Grid-scale tracers
 
 Grid-scale tracers are density-weighted scalars ``\rho \chi`` stored at cell
 centers in the prognostic state `Y.c`.
@@ -33,7 +33,7 @@ and `ρtke`.
 The iteration utility `foreach_gs_tracer(f, Y...)` applies a function `f` to
 each discovered tracer.
 
-## SGS Tracers (PROPHET)
+## SGS tracers (PROPHET)
 
 When PROPHET is enabled, each updraft carries its own set of scalar
 fields inside `Y.c.sgsʲs.:(j)`. The utility function `sgs_tracer_names(Y)`
@@ -72,10 +72,11 @@ changes are needed when adding a new tracer:
 | Updraft constraint enforcement                  | `mass_flux_closures.jl` | `for χ_name in sgs_tracer_names(Y)` |
 | Rayleigh sponge damping                         | `remaining_tendency.jl` | `for χ_name in sgs_tracer_names(Y)` |
 
-Sedimenting microphysics species are diffused with the reduced coefficient
-`α_vert_diff_microphysics * K_h`; passive tracers use the unscaled `K_h`.
+Sedimenting species (`ρq_rai`, `ρq_sno`, `ρn_rai`) do not diffuse; cloud
+condensate takes a share of the aggregate `ρq_tot` diffusion rather than a flux
+of its own. Passive tracers diffuse independently with the full `K_h`.
 
 ## Adding a new passive tracer
 
-Adding a tracer is developer territory; see
+Adding a tracer is a developer task; see
 [Adding a Passive Tracer](extending_tracers.md) in the Developer Guide.

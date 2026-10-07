@@ -5,8 +5,7 @@ import ClimaAtmos.RRTMGP as RRTMGP
 import ClimaCore
 import ClimaCore: DataLayouts, Fields, Geometry, Meshes
 import ClimaCore.Fields: Field, FieldVector, field_values
-import ClimaCore.DataLayouts: AbstractData
-import ClimaCore.Geometry: AxisTensor
+import ClimaCore.DataLayouts: DataLayout
 import ClimaCore.Spaces: AbstractSpace
 import ClimaComms
 import ClimaParams
@@ -26,19 +25,52 @@ const comms_ctx = ClimaComms.context(device)
 ClimaComms.init(comms_ctx)
 const secs = 1
 
-MANYTESTS = false
-if length(ARGS) > 0
-    if ARGS[1] == "--manytests"
-        # Check if the first argument is "--manytests" (if provided), if yes, check
-        # the second argument for true/false. If the second argument is not provided
-        # assume true.
-        second_argument = lowercase(get(ARGS, 2, "true"))
-        second_argument == "true" && (MANYTESTS = true)
-    else
-        error("Argument $(ARGS[1]) not recognized")
+"""
+    parse_restart_args(args)
+
+Parse the restart tests' command-line arguments into `(; manytests, grids)`.
+
+  - `--manytests [true|false]`: run the full matrix of grids instead of the
+    single default one. The value is optional and defaults to `true`.
+  - `--grid <name>`: restrict `--manytests` to one grid (`"sphere"`, `"box"`, or
+    `"column"`, the values of the `config` key). Repeatable; no occurrence means
+    every grid available for the current context.
+"""
+function parse_restart_args(args)
+    manytests = false
+    grids = String[]
+    i = firstindex(args)
+    while i <= lastindex(args)
+        arg = args[i]
+        if arg == "--manytests"
+            # The value is optional, so only consume the next argument when it
+            # actually looks like one.
+            value = lowercase(get(args, i + 1, ""))
+            if value in ("true", "false")
+                manytests = value == "true"
+                i += 2
+            else
+                manytests = true
+                i += 1
+            end
+        elseif arg == "--grid"
+            i < lastindex(args) || error("--grid expects a grid name")
+            push!(grids, args[i + 1])
+            i += 2
+        else
+            error("Argument $(arg) not recognized")
+        end
     end
+    return (; manytests, grids)
 end
-MANYTESTS && @info "Running multiple tests"
+
+restart_args = parse_restart_args(ARGS)
+MANYTESTS = restart_args.manytests
+GRIDS = restart_args.grids
+if MANYTESTS
+    selected = isempty(GRIDS) ? "all" : join(GRIDS, ", ")
+    @info "Running multiple tests (grids: $(selected))"
+end
 
 # Technical note:
 #
@@ -106,7 +138,20 @@ function compare(
     return _compare(pass, v1, v2; name, ignore)
 end
 
-function _compare(pass, v1::T, v2::T; name, ignore) where {T}
+# Don't specialize `_compare` on the argument types: the cache holds thousands
+# of distinct nested struct and NamedTuple types, and a specialized method would
+# have to be compiled once for each of them. Dispatch on the declared argument
+# types (numbers, arrays, Fields) still works, only the compiled bodies are
+# shared.
+#
+# The two generic methods below take untyped arguments on purpose. A signature
+# like `(v1::T, v2::T) where {T}` forces specialization even under
+# `@nospecialize`, because there is no declared type to widen the argument to,
+# so the type variable is checked at run time instead.
+@nospecialize
+
+function _compare(pass, v1, v2; name, ignore)
+    typeof(v1) === typeof(v2) || error("$name: v1 and v2 have different types")
     properties = filter(x -> !(x in ignore), propertynames(v1))
     if isempty(properties)
         pass &= _compare(v1, v2; name, ignore)
@@ -125,7 +170,8 @@ function _compare(pass, v1::T, v2::T; name, ignore) where {T}
     return pass
 end
 
-function _compare(v1::T, v2::T; name, ignore) where {T}
+function _compare(v1, v2; name, ignore)
+    typeof(v1) === typeof(v2) || error("$name: v1 and v2 have different types")
     return print_maybe(v1 == v2, "$name differs")
 end
 
@@ -160,11 +206,11 @@ function _compare(
     v2::T;
     name,
     ignore,
-) where {T <: Field{<:AbstractData{<:Real}}}
+) where {T <: Field{<:DataLayout{<:Real}}}
     return _compare(parent(v1), parent(v2); name, ignore)
 end
 
-function _compare(pass, v1::T, v2::T; name, ignore) where {T <: AbstractData}
+function _compare(pass, v1::T, v2::T; name, ignore) where {T <: DataLayout}
     return pass && _compare(parent(v1), parent(v2); name, ignore)
 end
 
@@ -189,9 +235,7 @@ function _compare(
     return print_maybe(error <= 100eps(eltype(v1)), "$name error: $error")
 end
 
-function _compare(pass, v1::T1, v2::T2; name, ignore) where {T1, T2}
-    error("v1 and v2 have different types")
-end
+@specialize
 
 function print_maybe(exp, what)
     exp || println(what)

@@ -144,7 +144,7 @@ function tabulate_summaries(summaries, job_id, metric_tup, funcs, has_func)
         end
         percent_change = compute_percent_change.(this_PR, main)
     else
-        percent_change = map(funcs) do func
+        percent_change = map(funcs) do _
             "Insufficient data for percent change"
         end
     end
@@ -157,7 +157,7 @@ function tabulate_summaries(summaries, job_id, metric_tup, funcs, has_func)
 
     header = (
         ["Function", header_names..., "Percent change"],
-        ["", ["" for c in commits]..., "(PR-main)/main×100"],
+        ["", ["" for _ in commits]..., "(PR-main)/main×100"],
     )
 
     worsened(data_ij) = !(data_ij isa String) && (data_ij > 0)
@@ -190,15 +190,20 @@ metric_tups = [
     ("time_median", "time_median"),
 ]
 
-# These functions should match with those in
-# the `trials` `Dict` in `perf/benchmark.jl`.
+# These names must match the keys that `CTS.benchmark_step` puts in its
+# `summaries` `Dict`
 funcs = [
-    "Wfact",
-    "linsolve",
-    "implicit_tendency!",
-    "remaining_tendency!",
-    "additional_tendency!",
     "step!",
+    "ldiv!",
+    "Wfact!",
+    "T_imp!",
+    "T_exp!",
+    "lim!",
+    "dss!",
+    "constrain_state!",
+    "initialize_imp!",
+    "cache!",
+    "cache_imp!",
 ]
 
 function compute_has_func(summaries, funcs)

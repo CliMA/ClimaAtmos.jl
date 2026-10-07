@@ -75,6 +75,13 @@ NVTX.@annotate function implicit_tendency!(Yₜ, Y, p, t)
             t,
             p.atmos.vertical_diffusion,
         )
+        vertical_smagorinsky_lilly_tendency!(
+            Yₜ,
+            Y,
+            p,
+            t,
+            p.atmos.smagorinsky_lilly,
+        )
         edmfx_sgs_diffusive_flux_tendency!(Yₜ, Y, p, t, p.atmos.turbconv_model)
     end
 
@@ -181,9 +188,8 @@ Vertical advection of passive tracers by the mean flow is treated explicitly.
 Returns `nothing`.
 """
 function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
-    (; microphysics_model, turbconv_model, rayleigh_sponge) = p.atmos
+    (; microphysics_model, rayleigh_sponge) = p.atmos
     (; params, dt) = p
-    n = n_mass_flux_subdomains(turbconv_model)
     ᶜJ = Fields.local_geometry_field(axes(Y.c)).J
     ᶠJ = Fields.local_geometry_field(axes(Y.f)).J
     (; ᶠgradᵥ_ᶜΦ) = p.core

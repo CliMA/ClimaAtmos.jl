@@ -106,18 +106,23 @@ for any `turbconv_model` other than `PrognosticEDMFX`.
 
 The underlying evolution equation for the physical vertical velocity `w` is
 
-    ∂w/∂t + ∂(w²/2)/∂z = b + ε (w₀ − w) − (α_d/H) (w − w₀)²,
+    ∂w/∂t + ∂(w²/2)/∂z = (1 − α_b) b + E (w₀ − w) − a⁰ d_c (w − w₀) |w − w₀|,
 
-which, at an IMEX/ARK stage, becomes an algebraic equation for the new
-stage value. The environment velocity is eliminated with
+with `d_c` the coefficient of `pressure_drag_coefficient` and `a⁰ = ρ̂⁰/ρ` the
+environment weight of the pairwise form drag, which, at an IMEX/ARK stage,
+becomes an algebraic equation for the new stage value. The environment
+velocity is eliminated with the mass-flux constraint,
 
-    w₀ − w = (ρ / ρa⁰)(w_env − w) ≈ −(ρ / ρa⁰) w,
+    w₀ − w ≈ −w / a⁰,
 
-so that the turbulent entrainment rate and the entrainment branch of the signed
-area-bounding rate contribute a linear sink in `w`, the velocity-proportional
-entrainment rate `ε = entr_vel_scale · |w|` contributes a quadratic sink, and
-pressure drag is purely quadratic. After rearrangement, the stage equation for
-face `i` reduces to
+so that each velocity difference brings one factor of `1/a⁰`: the
+velocity-independent entrainment rates (background, the entrainment branch of
+the signed area-bounding rate, and turbulent) contribute the linear sink
+`E w / a⁰`; the velocity-proportional entrainment rate, which scales with the
+relative velocity `entr_vel_scale · |w − w₀|`, contributes the quadratic sink
+`entr_vel_scale w² / a⁰²`; and the drag contributes the quadratic sink
+`d_c w² / a⁰`, its weight `a⁰` cancelling one of the two factors. After
+rearrangement, the stage equation for face `i` reduces to
 
     a u₃² + b u₃ + c − (u₃[i−1] / Δz)² / 2 = 0,
 
@@ -181,13 +186,16 @@ function solve_sgs_u₃_implicit_stage_analytic!(Y, p, dtγ)
         @. ᶠb = 1 / dtγ
         @. ᶠc = -1 * (Y.f.sgsʲs.:($$j).u₃.components.data.:1 / dtγ)
 
-        # Implicit entrainment: the velocity-dependent coefficient contributes a
-        # quadratic sink (∝ w²) and the background/turbulent entrainment contributes
-        # a linear sink (∝ w), after applying the approximation w₀ - w ≈ -(ρ/ρa⁰) w.
-        # The positive part of `area_bounding_entr_detr` is the entrainment branch
-        # of the signed area-bounding rate (see `area_bounding_entr_detr`).
-        # `entr_nonvel_rate` is included in the linear sink, with the assumption
-        # that the change in b/w is slow.
+        # Implicit entrainment E (w₀ - w) ≈ -E w / a⁰. The velocity-dependent
+        # rate scales with the relative velocity, `entr_vel_scale · |w - w₀|`
+        # ≈ `entr_vel_scale · w / a⁰`, so it contributes a quadratic sink (∝ w²)
+        # with two factors of 1/a⁰; the velocity-independent rates contribute a
+        # linear sink (∝ w) with one. The ρa solve evaluates the same rate with
+        # w₀ ≈ 0 (`compute_entrainment`). The positive part of
+        # `area_bounding_entr_detr` is the entrainment branch of the signed
+        # area-bounding rate (see `area_bounding_entr_detr`). `entr_nonvel_rate`
+        # is included in the linear sink, with the assumption that the change
+        # in b/w is slow.
         @. ᶠa += ᶠinterp(ᶜentr_vel_scaleʲs.:($$j) * ᶜa⁰_inv * ᶜa⁰_inv) / ᶠdz
         @. ᶠb +=
             ᶠinterp(
@@ -198,21 +206,20 @@ function solve_sgs_u₃_implicit_stage_analytic!(Y, p, dtγ)
                 ) * ᶜa⁰_inv,
             )
 
-        # Implicit NH pressure drag contributes a quadratic sink in w².
+        # Implicit NH pressure drag a⁰ d_c (w - w₀)|w - w₀| ≈ d_c w² / a⁰
+        # contributes a quadratic sink: two factors of 1/a⁰ from the velocity
+        # differences, one cancelled by the environment weight a⁰ of the
+        # pairwise form.
         if p.atmos.edmfx_model.nh_pressure
-            # Clamp a_j ∈ [0, a_max]; reuse the clamped ᶜa⁰ from above.
-            ᶜaʲ = @. lazy(
-                clamp(
-                    draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j)),
-                    FT(0), a_max,
-                ),
-            )
+            ᶜaʲ = @. lazy(draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j)))
             # Use a scratch scalar here as @lazy results in a large fused kernel
-            # that doesn't work on P100 GPUs.
+            # that doesn't work on P100 GPUs. `1 / ᶜa⁰_inv` is the clamped
+            # environment area, which keeps the subdomain sum out of this
+            # kernel; the clamp inside the coefficient is then idempotent.
             ᶜdrag_coeff = p.scratch.ᶜtemp_scalar_2
-            @. ᶜdrag_coeff =
-                α_d / (2 * scale_height) *
-                (1 / sqrt(max(ᶜaʲ, a_min)) + sqrt(ᶜa⁰_inv))
+            @. ᶜdrag_coeff = pressure_drag_coefficient(
+                α_d, scale_height, ᶜaʲ, 1 / ᶜa⁰_inv, a_min, a_max,
+            )
             @. ᶠa += ᶠinterp(ᶜdrag_coeff * ᶜa⁰_inv) / ᶠdz
         end
 

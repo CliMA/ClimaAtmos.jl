@@ -437,7 +437,7 @@ end
         "20000506",
     )
 
-    # the insolation and flux_scheme kwargs are stored and returned by traits
+    # the insolation and flux_scheme kwargs are stored and returned by components
     (lat, lon) = CD.site_location(data)
     setup = CA.Setups.ForcingFromFile(
         data,

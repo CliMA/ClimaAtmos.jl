@@ -274,11 +274,11 @@ add_diagnostic_variable!(short_name = "Dv_smag", units = "m^2 s^-1",
     long_name = "Vertical smagorinsky diffusivity",
     compute = (_, cache, _) -> cache.precomputed.ᶜD_v,
 )
-add_diagnostic_variable!(short_name = "strainh_smag", units = "s",
+add_diagnostic_variable!(short_name = "strainh_smag", units = "s^-1",
     long_name = "Horizontal strain rate magnitude (for Smagorinsky)",
     compute = (_, cache, _) -> cache.precomputed.ᶜS_norm_h,
 )
-add_diagnostic_variable!(short_name = "strainv_smag", units = "s",
+add_diagnostic_variable!(short_name = "strainv_smag", units = "s^-1",
     long_name = "Vertical strain rate magnitude (for Smagorinsky)",
     compute = (_, cache, _) -> cache.precomputed.ᶜS_norm_v,
 )

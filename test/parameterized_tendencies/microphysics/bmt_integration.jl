@@ -113,6 +113,7 @@ import CloudMicrophysics.BulkMicrophysicsTendencies as BMT
                     thp,
                     ρ,
                     T,
+                    FT(0),
                     q_tot,
                     q_liq,
                     q_ice,
@@ -251,6 +252,7 @@ import CloudMicrophysics.BulkMicrophysicsTendencies as BMT
                     thp,
                     ρ,
                     T,
+                    FT(0),
                     q_tot,
                     q_liq,
                     q_ice,
@@ -289,6 +291,7 @@ import CloudMicrophysics.BulkMicrophysicsTendencies as BMT
                     thp,
                     FT(1.0),     # ρ
                     FT(290.0),   # T
+                    FT(0.0),     # w
                     FT(0.01),    # q_tot (vapor only)
                     FT(0.0),     # q_liq
                     FT(0.0),     # q_ice

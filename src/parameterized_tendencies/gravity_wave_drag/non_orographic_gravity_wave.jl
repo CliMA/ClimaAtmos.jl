@@ -11,7 +11,7 @@ import ClimaCore.Operators as Operator
 import CloudMicrophysics.BulkMicrophysicsTendencies as BMT
 
 """
-    _beres_latent_heating(mp, thp, ρ, T, q_tot, q_lcl, q_icl, q_rai, q_sno)
+    _beres_latent_heating(mp, thp, ρ, T, w, q_tot, q_lcl, q_icl, q_rai, q_sno)
 
 Return Beres' transport-free latent heating rate for one updraft [K/s]:
 
@@ -37,6 +37,7 @@ with reference-`T₀` constants `L_v` and `L_s`. Called from
     thp,
     ρ,
     T,
+    w,
     q_tot,
     q_lcl,
     q_icl,
@@ -50,6 +51,7 @@ with reference-`T₀` constants `L_v` and `L_s`. Called from
         thp,
         ρ,
         T,
+        w,
         q_tot,
         q_lcl,
         q_icl,
@@ -648,11 +650,14 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
             ᶜρaʲ = Y.c.sgsʲs.:($j).ρa
             ᶜρʲ = ᶜρʲs.:($j)
             ᶜTʲ = ᶜTʲs.:($j)
+            ᶜuʲ = ᶜuʲs.:($j)
             ᶜq_totʲ = ᶜq_tot_nonnegʲs.:($j)
             ᶜq_lclʲ = Y.c.sgsʲs.:($j).q_lcl
             ᶜq_iclʲ = Y.c.sgsʲs.:($j).q_icl
             ᶜq_raiʲ = Y.c.sgsʲs.:($j).q_rai
             ᶜq_snoʲ = Y.c.sgsʲs.:($j).q_sno
+            # physical draft vertical velocity [m/s] for the velocity-dependent autoconversion
+            ᶜwʲ_air = @. lazy(w_component(WVec(ᶜuʲ)))
             @. gw_Q_conv_ic += ifelse(
                 ᶜρʲ > eps(FT),
                 max(ᶜρaʲ, FT(0)) * _beres_latent_heating(
@@ -660,6 +665,7 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
                     thp,
                     ᶜρʲ,
                     ᶜTʲ,
+                    ᶜwʲ_air,
                     ᶜq_totʲ,
                     ᶜq_lclʲ,
                     ᶜq_iclʲ,
@@ -1427,6 +1433,7 @@ function waveforcing_column_accumulate!(
     source_mode::Val{MODE},
 ) where {nc, MODE}
     FT = eltype(waveforcing)
+    kwv = 2 * FT(π) / (30 * FT(10)^ink * 1000) # wave number of gravity waves
     # Here we use column_accumulate function to pass the variable B0 and mask through different levels, and calculate waveforcing at each level.
     Operators.column_accumulate!(
         waveforcing,
@@ -1469,7 +1476,6 @@ function waveforcing_column_accumulate!(
         N_val = MODE == :ad99 ? zero(FT1) : inp[12]
         beres_a_cover = MODE == :ad99 ? zero(FT1) : inp[16]
 
-        kwv = 2.0 * π / ((30.0 * (10.0^ink)) * 1.e3) # wave number of gravity waves
         k2 = kwv * kwv
 
         fac = FT1(0.5) * (ρ_kp1 / ρ_source_eff) * kwv / bf_kp1

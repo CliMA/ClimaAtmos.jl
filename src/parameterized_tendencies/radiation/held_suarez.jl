@@ -196,7 +196,7 @@ function held_suarez_forcing_tendency_ρe_tot(
 )
     forcing isa Nothing && return NullBroadcasted()
     ᶜspace = axes(ᶜρ)
-    (; ᶜz, ᶠz) = z_coordinate_fields(ᶜspace)
+    (; ᶠz) = z_coordinate_fields(ᶜspace)
     lat = Fields.coordinate_field(ᶜspace).lat
 
     # TODO: Don't need to enforce FT here, it should be done at param creation.
@@ -211,7 +211,6 @@ function held_suarez_forcing_tendency_ρe_tot(
     Δθ_z = FT(CAP.Δθ_z(params))
     T_min = FT(CAP.T_min_hs(params))
     σ_b = CAP.σ_b(params)
-    k_f = 1 / day
 
     z_surface = Fields.level(ᶠz, Fields.half)
 
@@ -259,12 +258,11 @@ function held_suarez_forcing_tendency_uₕ(
 )
     forcing isa Nothing && return NullBroadcasted()
     ᶜspace = axes(ᶜp)
-    (; ᶜz, ᶠz) = z_coordinate_fields(axes(ᶜp))
+    (; ᶠz) = z_coordinate_fields(axes(ᶜp))
     # TODO: Don't need to enforce FT here, it should be done at param creation.
     FT = Spaces.undertype(ᶜspace)
     R_d = FT(CAP.R_d(params))
     κ_d = FT(CAP.kappa_d(params))
-    cv_d = FT(CAP.cv_d(params))
     day = FT(CAP.day(params))
     MSLP = FT(CAP.MSLP(params))
     p_ref_theta = FT(CAP.p_ref_theta(params))
