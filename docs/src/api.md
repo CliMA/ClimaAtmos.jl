@@ -44,6 +44,7 @@ ClimaAtmos.Presets.aquaplanet
 ```@docs
 ClimaAtmos.SphereGrid
 ClimaAtmos.ColumnGrid
+ClimaAtmos.MultiColumnGrid
 ClimaAtmos.BoxGrid
 ClimaAtmos.PlaneGrid
 ClimaAtmos.get_z_mesh
