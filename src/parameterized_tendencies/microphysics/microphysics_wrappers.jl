@@ -236,6 +236,14 @@ quadrature points.
   - `nsubs`: Number of substeps in the tendency averaging.
   - `args`: Extra trailing arguments forwarded to the CloudMicrophysics call.
 """
+# `mp` and `tps` may arrive `Val`-wrapped. A `Val{p}()` is zero-size and carries
+# its value in its type, so the field costs nothing and the parameters fold to
+# literals instead of being read back from the struct -- worth 162 registers and
+# a doubling of occupancy in the SGS quadrature kernel, which is latency-bound
+# at the 255-register cap. `_unwrapped` is the identity for bare parameters.
+@inline _unwrapped(p) = p
+@inline _unwrapped(::Val{P}) where {P} = P
+
 struct Microphysics1MEvaluator{S, MP, TPS, FT, Args <: Tuple}
     scheme::S
     mp::MP
@@ -307,7 +315,7 @@ with `dq_lcl_dt`, `dq_icl_dt`, `dq_rai_dt`, `dq_sno_dt` [kg/kg/s].
     # to cloud-only q_c), and CloudMicrophysics subtracts q_rai/q_sno from
     # q_tot_hat when it diagnoses the local vapor. Subtracting them from the
     # cloud condensate as well would double-count them and break ⟨q_c^local⟩ = q_c.
-    q_sat_hat = TD.q_vap_saturation(eval.tps, T_hat, eval.ρ)
+    q_sat_hat = TD.q_vap_saturation(_unwrapped(eval.tps), T_hat, eval.ρ)
     S′_hat = q_tot_hat - q_sat_hat - eval.mu_S
     shifted_excess = max(FT(0), eval.λ_lagrange + eval.α * S′_hat)
     q_lcl_hat = eval.λ * shifted_excess
@@ -315,7 +323,8 @@ with `dq_lcl_dt`, `dq_icl_dt`, `dq_rai_dt`, `dq_sno_dt` [kg/kg/s].
 
     return BMT.bulk_microphysics_tendencies(
         BMT.LinearizedAverage(),
-        eval.scheme, eval.mp, eval.tps, eval.ρ, T_hat, q_tot_hat,
+        eval.scheme, _unwrapped(eval.mp), _unwrapped(eval.tps),
+        eval.ρ, T_hat, q_tot_hat,
         q_lcl_hat, q_icl_hat, eval.q_rai, eval.q_sno,
         eval.dt, eval.nsubs, eval.args...,
     )
@@ -378,7 +387,7 @@ positive when a source of the corresponding tracer.
 )
     local_tendency = BMT.bulk_microphysics_tendencies(
         BMT.LinearizedAverage(),
-        BMT.Microphysics1Moment(), cmp, thp, ρ, T,
+        BMT.Microphysics1Moment(), _unwrapped(cmp), _unwrapped(thp), ρ, T,
         q_tot_nonneg, q_lcl, q_icl, q_rai, q_sno, dt, nsubs,
     )
     return local_tendency
@@ -391,8 +400,10 @@ end
     # invariant across the quadrature. They default to being computed here from the
     # mean state; a caller evaluating this broadcast over many quadrature points can
     # precompute them once and pass them in to avoid recomputing them per point.
-    λ = TD.liquid_fraction(thp, T, max(zero(ρ), q_lcl), max(zero(ρ), q_icl)),
-    mu_S = q_tot_nonneg - TD.q_vap_saturation(thp, T, ρ),
+    λ = TD.liquid_fraction(
+        _unwrapped(thp), T, max(zero(ρ), q_lcl), max(zero(ρ), q_icl),
+    ),
+    mu_S = q_tot_nonneg - TD.q_vap_saturation(_unwrapped(thp), T, ρ),
     args...,
 )
     FT = typeof(ρ)
