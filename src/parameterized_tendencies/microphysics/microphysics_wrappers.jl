@@ -71,14 +71,17 @@ struct Microphysics0MEvaluator{CMP, SAE, FT}
     cm_params::CMP
     sat_eval::SAE
     Φ::FT
+    q_vap_sat_min::FT
 end
-function Microphysics0MEvaluator(cm_params, thermo_params, ρ, T_mean, Φ)
+function Microphysics0MEvaluator(
+    cm_params, thermo_params, ρ, T_mean, Φ, q_vap_sat_min = zero(Φ),
+)
     # Grid-mean liquid fraction, held fixed across quadrature points.
     # The 0M scheme has no prognostic phase memory, so we use a
     # temperature-based ramp at the grid mean.
     λ_mean = TD.liquid_fraction_ramp(thermo_params, T_mean)
     sat_eval = SaturationAdjustmentEvaluator(thermo_params, ρ, λ_mean)
-    return Microphysics0MEvaluator(cm_params, sat_eval, Φ)
+    return Microphysics0MEvaluator(cm_params, sat_eval, Φ, oftype(Φ, q_vap_sat_min))
 end
 
 """
@@ -100,9 +103,12 @@ that its SGS average is the true energy sink `E[dq·e]` (averaging `dq` and
     # Diagnose condensate via saturation adjustment
     sa = eval.sat_eval(T_hat, q_hat)
 
-    # Compute saturation specific humidity for supersaturation threshold
-    q_vap_sat = TD.q_vap_saturation(
-        eval.sat_eval.thermo_params, T_hat, eval.sat_eval.ρ,
+    # Saturation specific humidity for the supersaturation threshold
+    # `S_0 q_vap_sat`; flooring it at `q_vap_sat_min` floors the threshold at
+    # `S_0 q_vap_sat_min` (see `precipitation_threshold_floor`).
+    q_vap_sat = max(
+        TD.q_vap_saturation(eval.sat_eval.thermo_params, T_hat, eval.sat_eval.ρ),
+        eval.q_vap_sat_min,
     )
 
     # Compute 0M dq_tot_dt at this quadrature point
@@ -163,12 +169,13 @@ zero where nothing precipitates, which carries no energy because
 """
 @inline function microphysics_tendencies_0m(
     SG_quad, cmp, thp, ρ, T, q_tot_nonneg, T′T′, q′q′, corr_Tq, Φ, dt,
+    q_vap_sat_min = zero(ρ),
 )
     FT = typeof(ρ)
     # Create GPU-safe functor (Φ is constant within a grid cell)
     # The evaluator does saturation adjustment, computes saturation vapor pressure
     # and computes the total water sink and energy-flux product from 0M microphysics
-    evaluator = Microphysics0MEvaluator(cmp, thp, ρ, T, Φ)
+    evaluator = Microphysics0MEvaluator(cmp, thp, ρ, T, Φ, q_vap_sat_min)
     # Integrate over quadrature points; dq_tot_dt and the product dq·e are
     # averaged over the SGS distribution.
     (; dq_tot_dt, dq_e) = integrate_over_sgs(
@@ -186,12 +193,13 @@ zero where nothing precipitates, which carries no energy because
     return (; dq_tot_dt, e_tot_hlpr)
 end
 @inline function microphysics_tendencies_0m(
-    cmp, thp, ρ, T, q_tot_nonneg, q_liq, q_ice, Φ, dt,
+    cmp, thp, ρ, T, q_tot_nonneg, q_liq, q_ice, Φ, dt, q_vap_sat_min = zero(ρ),
 )
     # Computes saturation vapor pressure, total water sink and energy helper
     # based on provided mean temperature, total water, liquid and ice specific humidities.
-    # Does not take into account SGS fluctuations.
-    q_vap_sat = TD.q_vap_saturation(thp, T, ρ)
+    # Does not take into account SGS fluctuations. `q_vap_sat_min` floors the
+    # threshold `S_0 q_vap_sat` (see `precipitation_threshold_floor`).
+    q_vap_sat = max(TD.q_vap_saturation(thp, T, ρ), q_vap_sat_min)
     dq_tot_dt = BMT.bulk_microphysics_tendencies(
         BMT.Microphysics0Moment(), cmp, thp, T, q_liq, q_ice, q_vap_sat,
     )

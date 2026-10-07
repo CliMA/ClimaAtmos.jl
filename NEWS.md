@@ -20,6 +20,27 @@ main
   `sgs_variance_geometric_Ri_factor` parameter is removed.
 - ![][badge-🔥behavioralΔ] Update to ClimaParams with
   `sgs_variance_horizontal_scale_factor` default `3.0 → 1.0`.
+- ![][badge-✨feature/enhancement] With `EquilibriumMicrophysics0M` and
+  `PrognosticEDMFX`, updraft (convective) condensate can now precipitate with
+  its own timescale and supersaturation threshold, separately from the
+  environment (stratiform) condensate. They are set by the optional
+  ClimaAtmos TOML keys `precipitation_timescale_updraft` and
+  `supersaturation_precipitation_threshold_updraft` (`type = "float"`), which
+  default to `precipitation_timescale` and
+  `supersaturation_precipitation_threshold`, so results are unchanged unless
+  they are set. They only affect runs with `PrognosticEDMFX` (with 0M but no
+  EDMF updrafts they are read but have no effect), and are not read at all for
+  non-0M microphysics. Set values must be finite, with a positive timescale and
+  a non-negative threshold. They are stored as `microphysics_0m_updraft_params` in
+  `ClimaAtmosParameters` (a new type parameter after `MP0M`). A new 2D
+  diagnostic `prup` (kg m^-2 s^-1, same sign as `pr`) is the column-integrated
+  updraft precipitation sink, so `pr - prup` is the environment part.
+- ![][badge-✨feature/enhancement] Optional ClimaAtmos TOML key
+  `precipitation_threshold_floor` [kg/kg] (`type = "float"`, default 0) floors
+  the 0M precipitation threshold of the environment / grid mean at
+  `max(S_0 q_vap_sat, floor)`, so thin cirrus aloft (where `S_0 q_vap_sat` is
+  ~1e-6) is not removed. Updrafts are unaffected. Stored as the scalar
+  `precipitation_threshold_floor` in `ClimaAtmosParameters`.
 
 0.42.13
 -------

@@ -98,6 +98,15 @@ function ClimaAtmosParameters(
     MPC = typeof(microphysics_cloud_params)
 
     microphysics_0m_params = CM.Parameters.Microphysics0MParams(toml_dict)
+    # Only built (and its TOML keys only read and logged) when 0M can be used,
+    # so the keys are reported as unused overrides in 1M/2M runs.
+    microphysics_0m_updraft_params =
+        (
+            isnothing(microphysics_model) ||
+            microphysics_model isa EquilibriumMicrophysics0M
+        ) ?
+        microphysics_0m_updraft_parameters(toml_dict, microphysics_0m_params) :
+        nothing
     microphysics_1m_params = microphys_1m_parameters(
         toml_dict;
         microphysics_1m_options(microphysics_model)...,
@@ -120,6 +129,7 @@ function ClimaAtmosParameters(
             (microphysics_2mp3_params = nothing)
     end
     MP0M = typeof(microphysics_0m_params)
+    MP0MU = typeof(microphysics_0m_updraft_params)
     MP1M = typeof(microphysics_1m_params)
     MP2M = typeof(microphysics_2m_params)
     MP2MP3 = typeof(microphysics_2mp3_params)
@@ -146,6 +156,8 @@ function ClimaAtmosParameters(
 
     parameters =
         CP.get_parameter_values(toml_dict, atmos_name_map, "ClimaAtmos")
+    precipitation_threshold_floor =
+        precipitation_threshold_floor_parameter(toml_dict, microphysics_0m_params)
     return CAP.ClimaAtmosParameters{
         FT,
         TP,
@@ -154,6 +166,7 @@ function ClimaAtmosParameters(
         IP,
         MPC,
         MP0M,
+        MP0MU,
         MP1M,
         MP2M,
         MP2MP3,
@@ -169,12 +182,14 @@ function ClimaAtmosParameters(
         BSP,
     }(;
         parameters...,
+        precipitation_threshold_floor,
         thermodynamics_params,
         rrtmgp_params,
         trace_gas_params,
         insolation_params,
         microphysics_cloud_params,
         microphysics_0m_params,
+        microphysics_0m_updraft_params,
         microphysics_1m_params,
         microphysics_2m_params,
         microphysics_2mp3_params,
@@ -189,6 +204,111 @@ function ClimaAtmosParameters(
         orographic_gravity_wave_params,
         beres_source_params,
     )
+end
+
+"""
+    microphysics_0m_updraft_parameters(toml_dict, microphysics_0m_params)
+
+Build the 0-moment parameters used for the precipitation sink of
+`PrognosticEDMFX` updrafts (convective condensate).
+
+They are `microphysics_0m_params` with `τ_precip` and `S_0` replaced by the
+optional TOML keys `precipitation_timescale_updraft` [s] and
+`supersaturation_precipitation_threshold_updraft` [-]. Each key falls back to
+the grid-mean value (`precipitation_timescale`,
+`supersaturation_precipitation_threshold`) when the TOML does not define it,
+which reproduces the single-timescale scheme exactly. A key that is defined is
+logged as used by `"ClimaAtmos"`, so it appears in the parameter log file.
+
+The keys have no ClimaParams default, so a TOML entry must give
+`type = "float"` (an entry with only `value` raises an error naming the key).
+A key that is set is validated: `precipitation_timescale_updraft` must be
+finite and positive, `supersaturation_precipitation_threshold_updraft` finite
+and non-negative. Unset keys copy the grid-mean values unchanged.
+
+The parameters are used only by the `PrognosticEDMFX` updraft sink; with
+`EquilibriumMicrophysics0M` but no `PrognosticEDMFX` they are built and
+logged but have no effect. For non-0M microphysics models they are not built
+(see `ClimaAtmosParameters`).
+"""
+function microphysics_0m_updraft_parameters(toml_dict, microphysics_0m_params)
+    FT = CP.float_type(toml_dict)
+    (; τ_precip, qc_0, S_0) = microphysics_0m_params.precip
+    # Provisional parameters, not in ClimaParams' default toml: read from the
+    # run/calibration toml when defined there, otherwise use the grid-mean
+    # values (same idiom as `SGSQuadratureParameters`).
+    provisional_defaults = (;
+        precipitation_timescale_updraft = τ_precip,
+        supersaturation_precipitation_threshold_updraft = S_0,
+    )
+    provisional_present = filter(collect(keys(provisional_defaults))) do name
+        haskey(toml_dict.data, string(name))
+    end
+    for name in provisional_present
+        entry = toml_dict.data[string(name)]
+        haskey(entry, "type") || error(
+            "`$name` is a ClimaAtmos provisional parameter with no ClimaParams \
+             default; add `type = \"float\"` to its TOML entry",
+        )
+    end
+    provisional_params =
+        isempty(provisional_present) ? (;) :
+        CP.get_parameter_values(
+            toml_dict,
+            String.(provisional_present),
+            "ClimaAtmos",
+        )
+    parameters = merge(provisional_defaults, provisional_params)
+    τ_up = FT(parameters.precipitation_timescale_updraft)
+    S_0_up = FT(parameters.supersaturation_precipitation_threshold_updraft)
+    if :precipitation_timescale_updraft in provisional_present
+        isfinite(τ_up) && τ_up > 0 || error(
+            "precipitation_timescale_updraft must be finite and positive; \
+             got $τ_up",
+        )
+    end
+    if :supersaturation_precipitation_threshold_updraft in provisional_present
+        isfinite(S_0_up) && S_0_up >= 0 || error(
+            "supersaturation_precipitation_threshold_updraft must be finite \
+             and non-negative; got $S_0_up",
+        )
+    end
+    return CM.Parameters.Microphysics0MParams(;
+        precip = CM.Parameters.Parameters0M(; τ_precip = τ_up, qc_0, S_0 = S_0_up),
+    )
+end
+
+"""
+    precipitation_threshold_floor_parameter(toml_dict, microphysics_0m_params)
+
+Read the optional TOML key `precipitation_threshold_floor` [kg/kg], an absolute
+floor on the condensate threshold of the 0-moment precipitation sink in the
+environment / grid mean: the sink becomes
+`-max(0, q_liq + q_ice - max(S_0 q_vap_sat, floor)) / τ_precip`.
+Aloft `S_0 q_vap_sat` is ~1e-6 kg/kg, so without a floor all thin cirrus is
+removed at `1/τ_precip`; a floor of ~1e-5 (cf. IFS `q_i,crit = 2e-5`) keeps it.
+It does not apply to `PrognosticEDMFX` updrafts.
+
+Defaults to 0 (no floor; results unchanged). The key has no ClimaParams default,
+so its TOML entry must give `type = "float"`. It must be finite and
+non-negative, and a positive floor requires `S_0 > 0`.
+"""
+function precipitation_threshold_floor_parameter(toml_dict, microphysics_0m_params)
+    FT = CP.float_type(toml_dict)
+    name = "precipitation_threshold_floor"
+    haskey(toml_dict.data, name) || return FT(0)
+    haskey(toml_dict.data[name], "type") || error(
+        "`$name` is a ClimaAtmos provisional parameter with no ClimaParams \
+         default; add `type = \"float\"` to its TOML entry",
+    )
+    floor = FT(CP.get_parameter_values(toml_dict, [name], "ClimaAtmos")[Symbol(name)])
+    isfinite(floor) && floor >= 0 ||
+        error("$name must be finite and non-negative; got $floor")
+    if floor > 0 && !isnothing(microphysics_0m_params)
+        microphysics_0m_params.precip.S_0 > 0 ||
+            error("$name > 0 requires supersaturation_precipitation_threshold > 0")
+    end
+    return floor
 end
 
 """

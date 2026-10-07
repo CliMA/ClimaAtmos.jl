@@ -504,6 +504,13 @@ accessors generated at the bottom of this module, e.g.
     activation, and the aerosol-ML coefficients.
   - `microphysics_0m_params`: `CloudMicrophysics` 0-moment parameters, or
     `nothing`.
+  - `microphysics_0m_updraft_params`: `CloudMicrophysics` 0-moment parameters
+    used only for the precipitation sink of `PrognosticEDMFX` updrafts, or
+    `nothing`. Same as `microphysics_0m_params` except for `τ_precip` and
+    `S_0`, read from the optional TOML keys `precipitation_timescale_updraft`
+    and `supersaturation_precipitation_threshold_updraft`, which default to the
+    grid-mean `precipitation_timescale` and
+    `supersaturation_precipitation_threshold`.
   - `microphysics_1m_params`: `CloudMicrophysics` 1-moment parameters, or
     `nothing`.
   - `microphysics_2m_params`: `CloudMicrophysics` 2-moment warm-rain parameters,
@@ -578,6 +585,7 @@ Base.@kwdef struct ClimaAtmosParameters{
     IP,
     MPC,
     MP0M,
+    MP0MU,
     MP1M,
     MP2M,
     MP2MP3,
@@ -598,6 +606,7 @@ Base.@kwdef struct ClimaAtmosParameters{
     insolation_params::IP
     microphysics_cloud_params::MPC
     microphysics_0m_params::MP0M
+    microphysics_0m_updraft_params::MP0MU
     microphysics_1m_params::MP1M
     microphysics_2m_params::MP2M
     microphysics_2mp3_params::MP2MP3
@@ -645,6 +654,8 @@ Base.@kwdef struct ClimaAtmosParameters{
     fixed_cloud_ice_terminal_velocity::FT
     fixed_rain_terminal_velocity::FT
     fixed_snow_terminal_velocity::FT
+    # 0M environment / grid-mean precipitation threshold floor [kg/kg]
+    precipitation_threshold_floor::FT
 end
 
 Base.eltype(::ClimaAtmosParameters{FT}) where {FT} = FT

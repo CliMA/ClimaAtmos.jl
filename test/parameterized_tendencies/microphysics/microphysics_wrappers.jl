@@ -327,6 +327,61 @@ import ClimaAtmos:
         end
     end
 
+    @testset "0M updraft (convective) precipitation parameters" begin
+        import ClimaAtmos.Parameters as CAP
+        for FT in (Float32, Float64)
+            @testset "FT = $FT" begin
+                m0 = ClimaAtmos.EquilibriumMicrophysics0M()
+                thp = TD.Parameters.ThermodynamicsParameters(
+                    CP.create_toml_dict(FT),
+                )
+                T, ρ, Φ, dt = FT(280), FT(1), FT(1000), FT(1)
+                q_sat = TD.q_vap_saturation(thp, T, ρ)
+                q_liq, q_ice = FT(1e-3), FT(0)
+                q_tot = q_sat + q_liq
+                tend(cmp) = ClimaAtmos.microphysics_tendencies_0m(
+                    cmp, thp, ρ, T, q_tot, q_liq, q_ice, Φ, dt,
+                )
+
+                # Defaults: the updraft sink is identical to the grid-mean one.
+                params = ClimaAtmos.ClimaAtmosParameters(
+                    FT; microphysics_model = m0,
+                )
+                cm0 = CAP.microphysics_0m_params(params)
+                cm0_up = CAP.microphysics_0m_updraft_params(params)
+                @test tend(cm0_up) === tend(cm0)
+
+                # Shorter updraft timescale and zero threshold.
+                (; τ_precip, S_0) = cm0.precip
+                τ_up = τ_precip / 4
+                toml_dict = CP.create_toml_dict(
+                    FT;
+                    override_file = Dict(
+                        "precipitation_timescale_updraft" =>
+                            Dict("value" => τ_up, "type" => "float"),
+                        "supersaturation_precipitation_threshold_updraft" =>
+                            Dict("value" => 0, "type" => "float"),
+                    ),
+                )
+                params = ClimaAtmos.ClimaAtmosParameters(
+                    toml_dict; microphysics_model = m0,
+                )
+                cm0_env = CAP.microphysics_0m_params(params)
+                cm0_up = CAP.microphysics_0m_updraft_params(params)
+                r_env = @inferred tend(cm0_env)
+                r_up = @inferred tend(cm0_up)
+                # Environment (grid mean) keeps the base parameters ...
+                @test r_env === tend(cm0)
+                @test r_env.dq_tot_dt ≈ -(q_liq - S_0 * q_sat) / τ_precip
+                # ... the updraft uses its own τ and S_0.
+                @test r_up.dq_tot_dt ≈ -q_liq / τ_up
+                @test r_up.dq_tot_dt < r_env.dq_tot_dt < 0
+                # The energy of the removed condensate depends on phase only.
+                @test r_up.e_tot_hlpr == r_env.e_tot_hlpr
+            end
+        end
+    end
+
     @testset "Microphysics1MEvaluator Lagrange-Multiplier Logic" begin
         import CloudMicrophysics.Parameters as CMP
         import CloudMicrophysics.BulkMicrophysicsTendencies as BMT
@@ -549,6 +604,42 @@ import ClimaAtmos:
                     @test uni.dq_icl_dt != base.dq_icl_dt
                 end
             end
+        end
+    end
+
+    @testset "0M precipitation threshold floor (q_vap_sat_min)" begin
+        for FT in (Float32, Float64)
+            toml_dict = CP.create_toml_dict(FT)
+            mp = CMP.Microphysics0MParams(toml_dict)
+            thp = TD.Parameters.ThermodynamicsParameters(toml_dict)
+            S_0 = mp.precip.S_0
+            # Cold, thin-cirrus point: S_0 q_sat << q_ice < floor.
+            ρ, T, Φ, dt = FT(0.4), FT(220), FT(1e5), FT(40)
+            q_sat = TD.q_vap_saturation(thp, T, ρ)
+            q_ice = FT(5e-6)
+            @test S_0 * q_sat < q_ice
+            q_tot = q_sat + q_ice
+            base = ClimaAtmos.microphysics_tendencies_0m(
+                mp, thp, ρ, T, q_tot, FT(0), q_ice, Φ, dt,
+            )
+            zero_floor = ClimaAtmos.microphysics_tendencies_0m(
+                mp, thp, ρ, T, q_tot, FT(0), q_ice, Φ, dt, FT(0),
+            )
+            @test zero_floor === base               # no floor: unchanged
+            @test base.dq_tot_dt < 0                # thin cirrus removed
+            floored = ClimaAtmos.microphysics_tendencies_0m(
+                mp, thp, ρ, T, q_tot, FT(0), q_ice, Φ, dt, FT(1e-5) / S_0,
+            )
+            @test floored.dq_tot_dt == 0            # below the 1e-5 floor: kept
+            thick = ClimaAtmos.microphysics_tendencies_0m(
+                mp, thp, ρ, T, q_sat + FT(5e-5), FT(0), FT(5e-5), Φ, dt, FT(1e-5) / S_0,
+            )
+            @test thick.dq_tot_dt ≈ -(FT(5e-5) - FT(1e-5)) / mp.precip.τ_precip rtol = 1e-4
+            # Quadrature evaluator honours the floor too.
+            ev0 = ClimaAtmos.Microphysics0MEvaluator(mp, thp, ρ, T, Φ)
+            evf = ClimaAtmos.Microphysics0MEvaluator(mp, thp, ρ, T, Φ, FT(1e-5) / S_0)
+            @test ev0.q_vap_sat_min === FT(0)
+            @test evf(T, q_tot).dq_tot_dt >= ev0(T, q_tot).dq_tot_dt
         end
     end
 end
