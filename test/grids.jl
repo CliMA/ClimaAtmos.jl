@@ -53,4 +53,23 @@ import ClimaCore as CC
         linearorder = vec(collect(CC.Meshes.elements(mesh)))
         @test linearorder != spacefilling
     end
+
+    @testset "MultiColumnGrid" begin
+        n_columns = 3
+        grid = CA.MultiColumnGrid(Float64; n_columns, z_elem = 5)
+        (; center_space) = CA.get_spaces(grid)
+        @test center_space isa CC.Spaces.MultiColumnFiniteDifferenceSpace
+        @test CC.Spaces.ncolumns(center_space) == n_columns
+
+        coords = CC.Fields.coordinate_field(center_space)
+        # We assign each point the coordinates of zero for both latitude and
+        # longitude
+        @test all(iszero, parent(coords.lat))
+        @test all(iszero, parent(coords.long))
+        column_space = CA.get_spaces(CA.ColumnGrid(Float64; z_elem = 5)).center_space
+        @test vec(parent(CC.Fields.column(coords, 1, 1, n_columns).z)) ==
+              vec(parent(CC.Fields.coordinate_field(column_space).z))
+
+        @test_throws ErrorException CA.MultiColumnGrid(Float64; n_columns = 0)
+    end
 end
