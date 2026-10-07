@@ -474,6 +474,8 @@ VALID_CASES = [
     cases(("clwup", "cliup"), (:m0_pedmfx, :m1_pedmfx))...,
     # 0M+PrognosticEDMFX
     case("prup", :m0_pedmfx),
+    # 0M (grid mean), 0M+PrognosticEDMFX: below-cloud evaporation cache
+    cases(("prevap", "tnhusevp"), (:m0, :m0_pedmfx))...,
     # Union{1M,2M}+PrognosticEDMFX
     cases(("husraup", "hussnup"), :m1_pedmfx)...,
     # 0M+PrognosticEDMFX, NonEq+PrognosticEDMFX
@@ -602,6 +604,10 @@ end
         @testset "$name errors on dry model" begin
             @test_throws Exception compute_diag(getdiag(name), Y_dry, p_dry)
         end
+    end
+    @testset "$name errors without 0M" for name in ("prevap", "tnhusevp")
+        @test_throws ErrorException compute_diag(getdiag(name), Y_1m, p_1m)
+        @test_throws ErrorException compute_diag(getdiag(name), Y_dry, p_dry)
     end
     @testset "prup errors without 0M + PrognosticEDMFX" begin
         @test_throws ErrorException compute_diag(getdiag("prup"), Y_0m, p_0m)

@@ -158,6 +158,13 @@ function ClimaAtmosParameters(
         CP.get_parameter_values(toml_dict, atmos_name_map, "ClimaAtmos")
     precipitation_threshold_floor =
         precipitation_threshold_floor_parameter(toml_dict, microphysics_0m_params)
+    # Read (and logged) only when 0M can be used; defaults (off) otherwise.
+    precipitation_evaporation =
+        (
+            isnothing(microphysics_model) ||
+            microphysics_model isa EquilibriumMicrophysics0M
+        ) ? precipitation_evaporation_parameters(toml_dict) :
+        precipitation_evaporation_parameters(FT)
     return CAP.ClimaAtmosParameters{
         FT,
         TP,
@@ -183,6 +190,7 @@ function ClimaAtmosParameters(
     }(;
         parameters...,
         precipitation_threshold_floor,
+        precipitation_evaporation...,
         thermodynamics_params,
         rrtmgp_params,
         trace_gas_params,
@@ -309,6 +317,81 @@ function precipitation_threshold_floor_parameter(toml_dict, microphysics_0m_para
             error("$name > 0 requires supersaturation_precipitation_threshold > 0")
     end
     return floor
+end
+
+"""
+    precipitation_evaporation_parameters(toml_dict)
+    precipitation_evaporation_parameters(FT)
+
+Read the optional (provisional, not in ClimaParams) TOML keys of the 0-moment
+below-cloud evaporation / sublimation of the precipitation flux, a
+Kessler (1969) / Tiedtke (1989) deficit form (see
+`precipitation_evaporation_rate`):
+
+| key | symbol | default | constraint |
+|:--- |:------ |:------- |:---------- |
+| `precipitation_evaporation_coefficient` | `k_E` [s⁻¹] | 0 (off) | finite, ≥ 0 |
+| `precipitation_evaporation_rh_crit` | `RH_c` [-] | 0.9 | 0 < RH_c ≤ 1 |
+| `precipitation_evaporation_area_fraction` | `a_p` [-] | 0.5 | 0 < a_p ≤ 1 |
+| `precipitation_evaporation_flux_scale` | `α₂` [kg m⁻² s⁻¹] | 5.09e-3 | finite, > 0 |
+| `precipitation_evaporation_exponent` | `α₃` [-] | 0.5777 | finite, > 0 |
+
+The IFS value of `k_E` is 5.44e-4 s⁻¹. With `k_E = 0` the scheme is skipped
+entirely, so results are bit-for-bit unchanged. A set key must give
+`type = "float"` and is logged as used by `"ClimaAtmos"`. The `FT` method
+returns the defaults without reading anything.
+
+Returns a `NamedTuple` keyed by the TOML names, in `FT`.
+"""
+function precipitation_evaporation_parameters(::Type{FT}) where {FT}
+    return (;
+        precipitation_evaporation_coefficient = FT(0),
+        precipitation_evaporation_rh_crit = FT(0.9),
+        precipitation_evaporation_area_fraction = FT(0.5),
+        precipitation_evaporation_flux_scale = FT(5.09e-3),
+        precipitation_evaporation_exponent = FT(0.5777),
+    )
+end
+function precipitation_evaporation_parameters(toml_dict::CP.ParamDict)
+    FT = CP.float_type(toml_dict)
+    defaults = precipitation_evaporation_parameters(FT)
+    present = filter(collect(keys(defaults))) do name
+        haskey(toml_dict.data, string(name))
+    end
+    isempty(present) && return defaults
+    for name in present
+        haskey(toml_dict.data[string(name)], "type") || error(
+            "`$name` is a ClimaAtmos provisional parameter with no ClimaParams \
+             default; add `type = \"float\"` to its TOML entry",
+        )
+    end
+    overrides =
+        CP.get_parameter_values(toml_dict, String.(present), "ClimaAtmos")
+    values = map(v -> FT(v), merge(defaults, overrides))
+    k_E = values.precipitation_evaporation_coefficient
+    RH_c = values.precipitation_evaporation_rh_crit
+    a_p = values.precipitation_evaporation_area_fraction
+    α₂ = values.precipitation_evaporation_flux_scale
+    α₃ = values.precipitation_evaporation_exponent
+    isfinite(k_E) && k_E >= 0 || error(
+        "precipitation_evaporation_coefficient must be finite and \
+         non-negative; got $k_E",
+    )
+    isfinite(RH_c) && 0 < RH_c <= 1 || error(
+        "precipitation_evaporation_rh_crit must be in (0, 1]; got $RH_c",
+    )
+    isfinite(a_p) && 0 < a_p <= 1 || error(
+        "precipitation_evaporation_area_fraction must be in (0, 1]; got $a_p",
+    )
+    isfinite(α₂) && α₂ > 0 || error(
+        "precipitation_evaporation_flux_scale must be finite and positive; \
+         got $α₂",
+    )
+    isfinite(α₃) && α₃ > 0 || error(
+        "precipitation_evaporation_exponent must be finite and positive; \
+         got $α₃",
+    )
+    return values
 end
 
 """
