@@ -81,6 +81,11 @@ function set_covariance_cache_and_cloud_fraction!(Y, p)
     # ᶜtemp_scalar, ᶜtemp_scalar_2, ᶜtemp_scalar_3, ᶜtemp_scalar_5, ᶜtemp_scalar_6 might
     # change inside the functions that are called in picard_step!() and should not be used
     # here to store variables before calling picard_step!
+    # (`set_covariance_cache!` and the QuadratureCloud `set_cloud_fraction!` write them).
+    # Conversely, those callees and `set_sgs_moments_and_cloud_fraction!` must never write
+    # ᶜtemp_scalar_4 or ᶜtemp_scalar_7. c2 shares ᶜtemp_scalar, which is safe only
+    # because it is written after the last picard_step!() and consumed by the Aitken
+    # update before `set_sgs_moments_and_cloud_fraction!` overwrites it.
     c0 = p.scratch.ᶜtemp_scalar_4
     c1 = p.scratch.ᶜtemp_scalar_7
     c2 = p.scratch.ᶜtemp_scalar
@@ -918,6 +923,11 @@ Uses ONE quadrature pass via `_compute_sgs_moments` to fill
 `ᶜcloud_fraction` consistently with the augmented `σ_aug` closure (see
 `_compute_cloud_fraction`) from the grid-mean cloud condensate
 (`_grid_mean_cloud_condensate`).
+
+Overwrites `p.scratch.ᶜtemp_scalar`, `ᶜtemp_scalar_2`, `ᶜtemp_scalar_3`,
+`ᶜtemp_scalar_5`, and `ᶜtemp_scalar_6`. It must not touch `ᶜtemp_scalar_4` or
+`ᶜtemp_scalar_7`, which `set_covariance_cache_and_cloud_fraction!` reserves for
+the Picard iterates.
 """
 NVTX.@annotate function set_sgs_moments_and_cloud_fraction!(Y, p)
     hasproperty(p.precomputed, :ᶜsgs_moments) || return nothing
@@ -942,12 +952,15 @@ NVTX.@annotate function set_sgs_moments_and_cloud_fraction!(Y, p)
     floor = cloud_fraction_floor_params(p.params)
     (; ᶜT′T′, ᶜq′q′, ᶜsgs_moments, ᶜcloud_fraction) = p.precomputed
 
-    # Materialize lazy fields to pass to foreach_point
+    # Materialize lazy fields to pass to foreach_point. Only the scratch fields
+    # that the Picard step already clobbers (plus ᶜtemp_scalar_6) are used, so
+    # the iterates that `set_covariance_cache_and_cloud_fraction!` keeps in
+    # ᶜtemp_scalar_4 and ᶜtemp_scalar_7 are never overwritten.
     ᶜρ_env = (p.scratch.ᶜtemp_scalar .= ᶜρ_env_lazy)
     ᶜq_lcl = (p.scratch.ᶜtemp_scalar_2 .= ᶜq_lcl_lazy)
     ᶜq_icl = (p.scratch.ᶜtemp_scalar_3 .= ᶜq_icl_lazy)
-    ᶜq_lcl_cf = (p.scratch.ᶜtemp_scalar_4 .= ᶜq_lcl_cf_lazy)
-    ᶜq_icl_cf = (p.scratch.ᶜtemp_scalar_5 .= ᶜq_icl_cf_lazy)
+    ᶜq_lcl_cf = (p.scratch.ᶜtemp_scalar_5 .= ᶜq_lcl_cf_lazy)
+    ᶜq_icl_cf = (p.scratch.ᶜtemp_scalar_6 .= ᶜq_icl_cf_lazy)
 
     α_ft = FT(α)
 
@@ -1071,6 +1084,10 @@ NVTX.@annotate function set_cloud_fraction!(
     # Get environment density, temperature, and total specific humidity
     ᶜρ_env_lazy, ᶜT_mean, ᶜq_mean = _get_env_ρ_T_q(Y, p, thermo_params, turbconv_model)
 
+    # Materialize lazy fields to pass to foreach_point. This method runs inside
+    # the Picard step of `set_covariance_cache_and_cloud_fraction!`, so it may
+    # never ᶜtemp_scalar_4 or
+    # ᶜtemp_scalar_7, which hold the Picard iterates).
     ᶜρ_env = (p.scratch.ᶜtemp_scalar .= ᶜρ_env_lazy)
 
     # Grid-mean cloud condensate the cover is computed from (single-domain
