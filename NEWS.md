@@ -332,6 +332,10 @@ main
 - ![][badge-🔥behavioralΔ] Snow falls at the Chen et al. (2022) speed by default
   `toml/prognostic_edmfx_1M.toml` sets `snow_apparent_density` to 300 kg/m³.
    Rain falls at fixed terminal velocity.
+- ![][badge-✨feature/enhancement] A column configuration can run several independent
+  columns in one simulation: set `n_columns` with `config: "column"`, or use
+  `MultiColumnGrid(FT; n_columns)`.
+  NetCDF output gains a `column` dimension.
 - ![][badge-🔥behavioralΔ] The along-surface depth of the geometric SGS
   variance block is bounded by the height above the surface,
   `ℓ_a = min(H, z − z_sfc)`: in a neutral layer the along-surface
