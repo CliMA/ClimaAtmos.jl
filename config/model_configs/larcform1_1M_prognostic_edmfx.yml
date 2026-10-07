@@ -90,5 +90,3 @@ diagnostics:
   - short_name: [hfss, hfls]
     period: 1hours
     reduction_time: average
-
-
