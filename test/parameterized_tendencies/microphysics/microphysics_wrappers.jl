@@ -867,6 +867,27 @@ import ClimaAtmos:
                             atol = FT(1e-14),
                         ),
                     )
+                    # packed-options form equals the positional form (both modes)
+                    opts = (;
+                        α = FT(1), ξ_liq = FT(0), ξ_ice = FT(1), ice_ramp_T_low = FT(0),
+                        ice_ramp_T_high = FT(0), precip_incloud_fraction = FT(1),
+                        snow_incloud_fraction = FT(-1), precip_overlap_decay = FT(1),
+                        precip_shaft_random = FT(1), precip_frac_floor = FT(0.1),
+                    )
+                    packed = microphysics_tendencies_1m(
+                        BMT.Microphysics1Moment(), quad, mp, thp, ρ, T, w, q_tot,
+                        FT(0), q_icl, FT(2e-5), FT(3e-5), T′T′, q′q′, FT(0.6),
+                        m.λ_lagrange, dt, nsubs, λ_i, mu_S, FT(0.3), m.sigma_S, m.CF_d,
+                        opts,
+                    )
+                    @test packed == sub_thin
+                    opts_r = merge(opts, (; precip_shaft_random = FT(0)))
+                    @test microphysics_tendencies_1m(
+                        BMT.Microphysics1Moment(), quad, mp, thp, ρ, T, w, q_tot,
+                        FT(0), q_icl, FT(2e-5), FT(3e-5), T′T′, q′q′, FT(0.6),
+                        m.λ_lagrange, dt, nsubs, λ_i, mu_S, FT(0.3), m.sigma_S, m.CF_d,
+                        opts_r,
+                    ) == rank_thin
                     mixed = make_s(FT(0.5), conc2)(T, q̂_dry)
                     # shaft-width floor: a floor above a_p acts as that a_p (both
                     # modes), the default floor is inert

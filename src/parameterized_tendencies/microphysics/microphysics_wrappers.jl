@@ -851,6 +851,59 @@ end
     return sum_over_quadrature_points(evaluator, transform, sgs_quad)
 end
 
+"""
+    sgs_microphysics_options(params)
+
+The per-run scalar options of the 1M quadrature microphysics as one `NamedTuple`
+(`α`, `ξ_liq`, `ξ_ice`, the ξ_ice ramp, and the precipitation-placement keys), so
+the tendency broadcast passes one argument instead of ten: a broadcast with more
+than ~30 arguments falls off Julia's specialized `Broadcast._getindex` path and
+allocates inside the GPU kernel.
+"""
+function sgs_microphysics_options(params)
+    return (;
+        α = sgs_variance_fidelity(CAP.cloud_fraction_steepness_scale(params)),
+        ξ_liq = CAP.sgs_liquid_uniform_fraction(params),
+        ξ_ice = CAP.sgs_ice_uniform_fraction(params),
+        ice_ramp_T_low = CAP.sgs_ice_uniform_ramp_T_low(params),
+        ice_ramp_T_high = CAP.sgs_ice_uniform_ramp_T_high(params),
+        precip_incloud_fraction = CAP.sgs_precip_incloud_fraction(params),
+        snow_incloud_fraction = CAP.sgs_snow_incloud_fraction(params),
+        precip_overlap_decay = CAP.sgs_precip_overlap_decay(params),
+        precip_shaft_random = CAP.sgs_precip_shaft_random(params),
+        precip_frac_floor = CAP.sgs_precip_fraction_floor(params),
+    )
+end
+
+"""
+    microphysics_tendencies_1m(
+        scheme, sgs_quad, cmp, thp, ρ, T, w, q_tot_nonneg, q_lcl, q_icl, q_rai, q_sno,
+        T′T′, q′q′, corr_Tq, λ_lagrange, dt, nsubs, λ, mu_S, precip_frac, sigma_S, CF_d,
+        opts::NamedTuple,
+    )
+
+Packed form of the quadrature driver: the scalar options come as the `NamedTuple`
+of `sgs_microphysics_options`, the per-cell fields (`precip_frac`, `sigma_S`,
+`CF_d`) and the precomputed `λ`, `mu_S` positionally. Forwards to the positional
+form, so the two are identical.
+"""
+@inline function microphysics_tendencies_1m(
+    scheme, sgs_quad, cmp, thp, ρ, T, w, q_tot_nonneg,
+    q_lcl, q_icl, q_rai, q_sno, T′T′, q′q′, corr_Tq,
+    λ_lagrange, dt, nsubs, λ, mu_S, precip_frac, sigma_S, CF_d,
+    opts::NamedTuple,
+)
+    return microphysics_tendencies_1m(
+        scheme, sgs_quad, cmp, thp, ρ, T, w, q_tot_nonneg,
+        q_lcl, q_icl, q_rai, q_sno, T′T′, q′q′, corr_Tq,
+        λ_lagrange, opts.α, opts.ξ_liq, opts.ξ_ice, dt, nsubs, λ, mu_S,
+        opts.ice_ramp_T_low, opts.ice_ramp_T_high,
+        opts.precip_incloud_fraction, opts.snow_incloud_fraction,
+        opts.precip_overlap_decay, precip_frac, sigma_S, CF_d,
+        opts.precip_shaft_random, opts.precip_frac_floor,
+    )
+end
+
 ###
 ### 2 Moment Microphysics
 ###
