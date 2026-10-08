@@ -607,6 +607,12 @@ steps:
         agents:
           slurm_constraint: icelake|cascadelake|skylake|epyc
 
+      - label: ":package: Non-spherical: Multiple columns match single columns"
+        retry: *retry_policy
+        command: "julia --color=yes --project=.buildkite test/single_vs_multi_column.jl"
+        agents:
+          slurm_mem: 20GB
+
       - label: ":package: Non-spherical: 2D plane, non-hydrostatic density current"
         retry: *retry_policy
         command: >
