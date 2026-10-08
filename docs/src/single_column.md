@@ -197,3 +197,13 @@ n_columns: 3
 ```
 
 In a script, use `AtmosModel(MultiColumnGrid(FT; n_columns = 3); ...)`.
+
+With `initial_condition: "ForcingFromFile"`, `external_forcing_file` can list
+one file per column; column `h` is then initialized and forced from file `h`:
+
+```yaml
+config: "column"
+n_columns: 2
+initial_condition: "ForcingFromFile"
+external_forcing_file: [/path/to/site_a.nc, /path/to/site_b.nc]
+```
