@@ -737,6 +737,145 @@ import ClimaAtmos:
                         FT(0.3),
                         σ_S,
                     ) == uni
+
+                    # sub-population placement: per-cell constants, conservation
+                    # ⟨P⟩/A = 1 with the cloudy weight CF_d was accumulated with,
+                    # a_p = 1 is bitwise the uniform result, a thin shaft differs
+                    # from uniform and from the rank placement, flag ignored when
+                    # the overlap mode is off
+                    sp = ClimaAtmos.sgs_precip_subpopulation
+                    @test sp(FT(1), FT(0.3)) == (FT(1), FT(1))
+                    @test sp(FT(0.3), FT(1)) == (FT(0), FT(1))
+                    @test sp(FT(0.3), FT(0.3))[1] == FT(0)
+                    @test sp(FT(0.3), FT(0.3))[2] ≈ FT(1) / FT(0.3)
+                    @test sp(FT(0.5), FT(0.2))[1] ≈ FT(0.375)
+                    @test sp(FT(0.5), FT(0.2))[2] ≈ FT(2)
+                    @test sp(FT(0), FT(0))[2] ≈
+                          FT(1) / ClimaAtmos.sgs_precip_fraction_min(FT)
+                    m = ClimaAtmos._compute_sgs_moments(
+                        thp, ρ, T, q_tot, q_c, quad, T′T′, q′q′, FT(0.6), FT(1),
+                    )
+                    @test FT(0) < m.CF_d < FT(1)
+                    S′s = ClimaAtmos.quadrature_point_values(
+                        ClimaAtmos.SGSExcessEvaluator(thp, ρ, mu_S), transform, quad,
+                    )
+                    ε_w = ClimaAtmos.discrete_cloudy_weight_width(FT(1), m.sigma_S)
+                    s_c = ClimaAtmos.discrete_cloudy_weight.(m.λ_lagrange .+ S′s, ε_w)
+                    @test sum(ws .* s_c) ≈ m.CF_d rtol = FT(1e-5)
+                    for a_p in (FT(0.5), FT(0.2), FT(1))
+                        p_c, conc = sp(a_p, m.CF_d)
+                        @test sum(ws .* (s_c .+ (1 .- s_c) .* p_c)) * conc ≈ FT(1) rtol =
+                            FT(1e-5)
+                    end
+                    args_m = (BMT.Microphysics1Moment(), quad, mp, thp, ρ, T, w, q_tot,
+                        FT(0), q_icl, FT(2e-5), FT(3e-5), T′T′, q′q′, FT(0.6),
+                        m.λ_lagrange, FT(1), FT(0), FT(1), dt, nsubs, λ_i, mu_S, FT(0),
+                        FT(0))
+                    uni_m = microphysics_tendencies_1m(args_m..., FT(0))
+                    @test microphysics_tendencies_1m(
+                        args_m...,
+                        FT(1),
+                        FT(-1),
+                        FT(1),
+                        FT(1),
+                        m.sigma_S,
+                        m.CF_d,
+                        FT(1),
+                    ) == uni_m
+                    sub_thin = microphysics_tendencies_1m(
+                        args_m...,
+                        FT(1),
+                        FT(-1),
+                        FT(1),
+                        FT(0.3),
+                        m.sigma_S,
+                        m.CF_d,
+                        FT(1),
+                    )
+                    rank_thin = microphysics_tendencies_1m(
+                        args_m...,
+                        FT(1),
+                        FT(-1),
+                        FT(1),
+                        FT(0.3),
+                        m.sigma_S,
+                        m.CF_d,
+                        FT(0),
+                    )
+                    @test all(isfinite, values(sub_thin))
+                    @test sub_thin.dq_rai_dt != uni_m.dq_rai_dt
+                    @test sub_thin.dq_rai_dt != rank_thin.dq_rai_dt
+                    half_m = microphysics_tendencies_1m(args_m..., FT(1))
+                    @test microphysics_tendencies_1m(
+                        args_m...,
+                        FT(1),
+                        FT(-1),
+                        FT(-1),
+                        FT(0.3),
+                        m.sigma_S,
+                        m.CF_d,
+                        FT(1),
+                    ) == half_m
+                    # evaluator: a node fully in the shaft (p_clear = 1) equals the
+                    # concentrated single call; p_clear = 0 at a dry node equals the
+                    # precipitation-free call; in between is the mixture
+                    q_r, q_s = FT(2e-5), FT(3e-5)
+                    make_s(p_c, conc) = Microphysics1MEvaluator(
+                        BMT.Microphysics1Moment(), mp, thp, ρ, w, q_r, q_s, λ_i,
+                        FT(0), FT(1), FT(0), q_icl, q_c, mu_S, FT(1), dt, nsubs, (),
+                        FT(0), FT(0), FT(1), FT(1), FT(1), FT(0), FT(0), p_c, conc, ε_w,
+                    )
+                    q̂_dry = FT(0.9) * TD.q_vap_saturation(thp, T, ρ, TD.Ice())
+                    conc2 = FT(2)
+                    full_in = Microphysics1MEvaluator(
+                        BMT.Microphysics1Moment(), mp, thp, ρ, w, conc2 * q_r,
+                        conc2 * q_s, λ_i,
+                        FT(0), FT(1), FT(0), q_icl, q_c, mu_S + q_r + q_s, FT(1), dt,
+                        nsubs, (),
+                    )(
+                        T,
+                        q̂_dry + q_r + q_s,
+                    )
+                    @test all(
+                        isapprox.(
+                            values(make_s(FT(1), conc2)(T, q̂_dry)),
+                            values(full_in);
+                            rtol = FT(1e-5),
+                            atol = FT(1e-14),
+                        ),
+                    )
+                    none = Microphysics1MEvaluator(
+                        BMT.Microphysics1Moment(), mp, thp, ρ, w, FT(0), FT(0), λ_i,
+                        FT(0), FT(1), FT(0), q_icl, q_c, mu_S - q_r - q_s, FT(1), dt,
+                        nsubs, (),
+                    )(
+                        T,
+                        q̂_dry - q_r - q_s,
+                    )
+                    # the node's own cloudy weight: a subsaturated node is not
+                    # exactly clear under the smooth weight, so p_clear = 0 gives
+                    # the mixture P = s_c, and p_clear = 1/2 gives P = s_c + (1 − s_c)/2
+                    S′_dry = max(FT(0), q̂_dry) - TD.q_vap_saturation(thp, T, ρ) - mu_S
+                    s_dry = ClimaAtmos.discrete_cloudy_weight(q_c + S′_dry, ε_w)
+                    @test FT(0) <= s_dry < FT(1)
+                    mix(P) = P .* values(full_in) .+ (FT(1) - P) .* values(none)
+                    @test all(
+                        isapprox.(
+                            values(make_s(FT(0), conc2)(T, q̂_dry)),
+                            mix(s_dry);
+                            rtol = FT(1e-4),
+                            atol = FT(1e-14),
+                        ),
+                    )
+                    mixed = make_s(FT(0.5), conc2)(T, q̂_dry)
+                    @test all(
+                        isapprox.(
+                            values(mixed),
+                            mix(s_dry + (FT(1) - s_dry) / 2);
+                            rtol = FT(1e-4),
+                            atol = FT(1e-14),
+                        ),
+                    )
                 end
 
                 @testset "dry node: ice sublimates when uniform, absent when excess" begin

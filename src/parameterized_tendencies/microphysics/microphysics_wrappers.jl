@@ -298,6 +298,15 @@ struct Microphysics1MEvaluator{S, MP, TPS, FT, Args <: Tuple}
     # `a_p` of the PDF (`sgs_precip_shaft_threshold`).
     S_star::FT
     ε_S::FT
+    # Sub-population placement (`sgs_precip_shaft_random`): the shaft holds all
+    # cloudy nodes (smooth cloudy weight of width ε_w, the one `CF_d` was
+    # accumulated with) and a random share `p_clear` of the clear nodes, at the
+    # in-shaft concentration `conc = 1/A`, `A = CF_d + (1 − CF_d) p_clear`; the
+    # node tendency is the in-shaft/out-of-shaft mixture. `p_clear < 0`
+    # disables this mode (the rank/moist-half placement above applies).
+    p_clear::FT
+    conc::FT
+    ε_w::FT
 end
 # Ramp-free construction (ramp and placement disabled), the pre-existing
 # positional signature.
@@ -307,7 +316,7 @@ Microphysics1MEvaluator(
 ) = Microphysics1MEvaluator(
     scheme, mp, tps, ρ, w, q_rai, q_sno, λ, ξ_liq, ξ_ice, q_lcl, q_icl,
     λ_lagrange, mu_S, α, dt, nsubs, args, zero(ρ), zero(ρ),
-    zero(ρ), one(ρ), zero(ρ), zero(ρ), zero(ρ),
+    zero(ρ), one(ρ), zero(ρ), zero(ρ), zero(ρ), -one(ρ), one(ρ), zero(ρ),
 )
 # Ramp only (placement disabled).
 Microphysics1MEvaluator(
@@ -316,7 +325,7 @@ Microphysics1MEvaluator(
 ) = Microphysics1MEvaluator(
     scheme, mp, tps, ρ, w, q_rai, q_sno, λ, ξ_liq, ξ_ice, q_lcl, q_icl,
     λ_lagrange, mu_S, α, dt, nsubs, args, T_ramp_lo, T_ramp_hi,
-    zero(ρ), one(ρ), zero(ρ), zero(ρ), zero(ρ),
+    zero(ρ), one(ρ), zero(ρ), zero(ρ), zero(ρ), -one(ρ), one(ρ), zero(ρ),
 )
 # Rain and snow placed alike (β_snow = β_precip).
 Microphysics1MEvaluator(
@@ -325,7 +334,7 @@ Microphysics1MEvaluator(
 ) = Microphysics1MEvaluator(
     scheme, mp, tps, ρ, w, q_rai, q_sno, λ, ξ_liq, ξ_ice, q_lcl, q_icl,
     λ_lagrange, mu_S, α, dt, nsubs, args, T_ramp_lo, T_ramp_hi,
-    β_precip, cf_precip, β_precip, zero(ρ), zero(ρ),
+    β_precip, cf_precip, β_precip, zero(ρ), zero(ρ), -one(ρ), one(ρ), zero(ρ),
 )
 # Moist-half placement with a separate snow share (S_star = ε_S = 0).
 Microphysics1MEvaluator(
@@ -335,8 +344,44 @@ Microphysics1MEvaluator(
 ) = Microphysics1MEvaluator(
     scheme, mp, tps, ρ, w, q_rai, q_sno, λ, ξ_liq, ξ_ice, q_lcl, q_icl,
     λ_lagrange, mu_S, α, dt, nsubs, args, T_ramp_lo, T_ramp_hi,
-    β_precip, cf_precip, β_snow, zero(ρ), zero(ρ),
+    β_precip, cf_precip, β_snow, zero(ρ), zero(ρ), -one(ρ), one(ρ), zero(ρ),
 )
+# Rank placement with an explicit threshold and width (sub-population off).
+Microphysics1MEvaluator(
+    scheme, mp, tps, ρ, w, q_rai, q_sno, λ, ξ_liq, ξ_ice, q_lcl, q_icl,
+    λ_lagrange, mu_S, α, dt, nsubs, args, T_ramp_lo, T_ramp_hi, β_precip, cf_precip,
+    β_snow, S_star, ε_S,
+) = Microphysics1MEvaluator(
+    scheme, mp, tps, ρ, w, q_rai, q_sno, λ, ξ_liq, ξ_ice, q_lcl, q_icl,
+    λ_lagrange, mu_S, α, dt, nsubs, args, T_ramp_lo, T_ramp_hi,
+    β_precip, cf_precip, β_snow, S_star, ε_S, -one(ρ), one(ρ), zero(ρ),
+)
+
+"""
+    sgs_precip_subpopulation(a_p, CF_d)
+
+Per-cell constants of the sub-population placement: the random share
+`p_clear = (a_p − CF_d) / (1 − CF_d)` of the clear nodes inside the shaft and the
+in-shaft concentration factor `conc = 1 / A` with `A = CF_d + (1 − CF_d) p_clear`
+the shaft's weight under the discrete measure. Every cloudy node is in the shaft
+(maximum overlap: the precipitation falls through the cloud below it) and a clear
+node is in it with probability `p_clear`, independent of its humidity, so
+evaporation and sublimation are evaluated at the clear-sky humidity of the cell
+rather than at its moist tail; the in-shaft concentration `q / A` carries the
+sub-linear dependence of the rates on the precipitation content. The quadrature
+mean of the node precipitation `P·q/A` is `q` exactly whenever `CF_d` was
+accumulated with the same cloudy weight. `a_p` is floored at
+`sgs_precip_fraction_min`; `a_p ≥ 1` or `CF_d ≥ 1` give `(1, 1)`, the uniform
+limit.
+"""
+@inline function sgs_precip_subpopulation(a_p, CF_d)
+    FT = typeof(CF_d)
+    a = clamp(FT(a_p), sgs_precip_fraction_min(FT), one(FT))
+    c = clamp(CF_d, zero(FT), one(FT))
+    p_clear = clamp((a - c) / max(one(FT) - c, eps(FT)), zero(FT), one(FT))
+    A = c + (one(FT) - c) * p_clear
+    return (p_clear, one(FT) / max(A, sgs_precip_weight_min(FT)))
+end
 
 """
     sgs_ice_uniform_fraction_ramped(ξ_ice, T, T_lo, T_hi)
@@ -559,13 +604,57 @@ with `dq_lcl_dt`, `dq_icl_dt`, `dq_rai_dt`, `dq_sno_dt` [kg/kg/s].
     # cloud condensate as well would double-count them and break ⟨q_c^local⟩ = q_c.
     q_sat_hat = TD.q_vap_saturation(eval.tps, T_hat, eval.ρ)
     S′_hat = q_tot_hat - q_sat_hat - eval.mu_S
-    shifted_excess = max(FT(0), eval.λ_lagrange + eval.α * S′_hat)
+    shifted_excess_signed = eval.λ_lagrange + eval.α * S′_hat
+    shifted_excess = max(FT(0), shifted_excess_signed)
     ξ_ice = sgs_ice_uniform_fraction_ramped(
         eval.ξ_ice, T_hat, eval.T_ramp_lo, eval.T_ramp_hi,
     )
     q_lcl_hat, q_icl_hat = sgs_local_condensate(
         eval.λ, shifted_excess, eval.ξ_liq, ξ_ice, eval.q_lcl, eval.q_icl,
     )
+    # Sub-population placement: the node is in the shaft with probability P
+    # (1 if cloudy, `p_clear` if clear); its tendency is the mixture of the
+    # in-shaft state (precipitation at `conc` times the cell mean) and the
+    # precipitation-free state, both with the node total water shifted so that
+    # the node vapour is the same in either state.
+    if eval.p_clear >= zero(FT)
+        s_c = discrete_cloudy_weight(shifted_excess_signed, eval.ε_w)
+        P = s_c + (one(FT) - s_c) * eval.p_clear
+        q_p = eval.q_rai + eval.q_sno
+        q_tot_in = max(FT(0), q_tot_hat + (eval.conc - one(FT)) * q_p)
+        q_tot_out = max(FT(0), q_tot_hat - q_p)
+        if P >= one(FT) - eps(FT)
+            return BMT.bulk_microphysics_tendencies(
+                BMT.LinearizedAverage(),
+                eval.scheme, eval.mp, eval.tps, eval.ρ, T_hat, eval.w,
+                q_tot_in, q_lcl_hat, q_icl_hat,
+                eval.q_rai * eval.conc, eval.q_sno * eval.conc,
+                eval.dt, eval.nsubs, eval.args...,
+            )
+        elseif P <= eps(FT)
+            return BMT.bulk_microphysics_tendencies(
+                BMT.LinearizedAverage(),
+                eval.scheme, eval.mp, eval.tps, eval.ρ, T_hat, eval.w,
+                q_tot_out, q_lcl_hat, q_icl_hat, zero(FT), zero(FT),
+                eval.dt, eval.nsubs, eval.args...,
+            )
+        else
+            t_in = BMT.bulk_microphysics_tendencies(
+                BMT.LinearizedAverage(),
+                eval.scheme, eval.mp, eval.tps, eval.ρ, T_hat, eval.w,
+                q_tot_in, q_lcl_hat, q_icl_hat,
+                eval.q_rai * eval.conc, eval.q_sno * eval.conc,
+                eval.dt, eval.nsubs, eval.args...,
+            )
+            t_out = BMT.bulk_microphysics_tendencies(
+                BMT.LinearizedAverage(),
+                eval.scheme, eval.mp, eval.tps, eval.ρ, T_hat, eval.w,
+                q_tot_out, q_lcl_hat, q_icl_hat, zero(FT), zero(FT),
+                eval.dt, eval.nsubs, eval.args...,
+            )
+            return map((x, y) -> P * x + (one(FT) - P) * y, t_in, t_out)
+        end
+    end
     # Precipitation-fraction placement: the rain and snow this node sees are
     # the cell means scaled by φ_p (1 when disabled); the node total water is
     # shifted by the same amount so that the node vapour, and hence the
@@ -659,6 +748,11 @@ accretion.
     (`ᶜprecip_frac`, `set_precip_fraction!`) [-].
   - `sigma_S`: SGS saturation-excess standard deviation of the sampled PDF
     (`ᶜsgs_moments.sigma_S`), which scales the shaft threshold and width [kg/kg].
+  - `CF_d`: Discrete cloudy mass of the sampled PDF (`ᶜsgs_moments.CF_d`) [-].
+  - `precip_shaft_random`: `sgs_precip_shaft_random`; positive (with the overlap
+    mode on) selects the sub-population placement (`sgs_precip_subpopulation`):
+    all cloudy nodes plus a random share of the clear nodes carry the shaft at
+    the in-shaft concentration, instead of the moistest `precip_frac` [-].
   - `args...`: Extra trailing arguments forwarded to CloudMicrophysics.
 
 # Returns
@@ -693,6 +787,8 @@ end
     precip_overlap_decay = -one(ρ),
     precip_frac = one(ρ),
     sigma_S = zero(ρ),
+    CF_d = zero(ρ),
+    precip_shaft_random = zero(ρ),
     args...,
 )
     FT = typeof(ρ)
@@ -712,11 +808,21 @@ end
         FT(snow_incloud_fraction),
     )
     overlap_on = precip_overlap_decay >= zero(FT)
+    # Sub-population mode: cloudy nodes plus a random share of the clear nodes
+    # (`sgs_precip_subpopulation`); no node flag pass is needed, `CF_d` is the
+    # shaft's cloudy weight.
+    random_on =
+        overlap_on & (precip_shaft_random > zero(FT)) &
+        (precip_incloud_fraction > zero(FT))
+    p_clear, conc = sgs_precip_subpopulation(precip_frac, FT(CF_d))
+    p_clear = ifelse(random_on, p_clear, -one(FT))
+    ε_w = discrete_cloudy_weight_width(α, FT(sigma_S))
     S_star = ifelse(
         overlap_on, sgs_precip_shaft_threshold(precip_frac, FT(sigma_S)), zero(FT),
     )
     ε_S = ifelse(overlap_on, sgs_precip_shaft_width_coeff(FT) * FT(sigma_S), zero(FT))
-    cf_precip = if (precip_incloud_fraction > zero(FT)) | (β_snow > zero(FT))
+    cf_precip = if ((precip_incloud_fraction > zero(FT)) | (β_snow > zero(FT))) &
+       !random_on
         cf = sum_over_quadrature_points(
             SGSPrecipShaftFlag(thp, ρ, mu_S, S_star, ε_S), transform, sgs_quad,
         )
@@ -732,6 +838,7 @@ end
         λ_lagrange, mu_S, α, dt, nsubs, args,
         FT(ice_ramp_T_low), FT(ice_ramp_T_high),
         FT(precip_incloud_fraction), FT(cf_precip), β_snow, S_star, ε_S,
+        p_clear, conc, ε_w,
     )
     return sum_over_quadrature_points(evaluator, transform, sgs_quad)
 end

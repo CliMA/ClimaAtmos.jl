@@ -610,6 +610,9 @@ function SGSQuadratureParameters(
         # decay of the max-random overlap recursion; negative = off (moist-half
         # placement).
         sgs_precip_overlap_decay = FT(-1),
+        # Sub-population (random clear-node) placement under the overlap mode:
+        # 0 = rank placement.
+        sgs_precip_shaft_random = FT(0),
     )
     provisional_present = filter(collect(keys(provisional_defaults))) do name
         haskey(toml_dict.data, string(name))

@@ -284,6 +284,10 @@ not yet define.
     overlap. Non-negative values switch the placement from the moist half of the
     PDF to the moistest `a_p` of it (`sgs_precip_shaft_threshold`); a negative
     value (the default `-1`) keeps the moist-half placement [-].
+  - `sgs_precip_shaft_random`: With the overlap mode on, a positive value places
+    the shaft on all cloudy nodes plus a random share of the clear nodes at the
+    in-shaft concentration (`sgs_precip_subpopulation`) instead of on the
+    moistest `a_p` of the PDF; `0` (the default) keeps the rank placement [-].
   - `Tq_correlation_coefficient`: Correlation between `T'` and `q_tot'` in the
     SGS quadrature, in `[-1, 1]`. Used verbatim by `tq_correlation_model: constant`;
     used as the turbulent-block cross `ρ_turb` (and the fallback where all variance
@@ -324,6 +328,7 @@ Base.@kwdef struct SGSQuadratureParameters{FT} <: ASQP
     sgs_precip_incloud_fraction::FT
     sgs_snow_incloud_fraction::FT
     sgs_precip_overlap_decay::FT
+    sgs_precip_shaft_random::FT
     Tq_correlation_coefficient::FT
     cloud_fraction_steepness_scale::FT
     cloud_fraction_eps_rel::FT

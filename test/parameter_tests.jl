@@ -140,6 +140,7 @@ end
         @test CAP.sgs_precip_incloud_fraction(sq) == FT(0)
         @test CAP.sgs_snow_incloud_fraction(sq) == FT(-1)
         @test CAP.sgs_precip_overlap_decay(sq) == FT(-1)
+        @test CAP.sgs_precip_shaft_random(sq) == FT(0)
     end
     # A run toml overrides the defaults.
     mktemp() do path, io
