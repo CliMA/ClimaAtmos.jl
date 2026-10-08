@@ -868,7 +868,7 @@ import ClimaAtmos:
                         ),
                     )
                     # packed-options form equals the positional form (both modes)
-                    opts = (;
+                    opts = ClimaAtmos.SGSMicrophysicsOptions(;
                         α = FT(1), ξ_liq = FT(0), ξ_ice = FT(1), ice_ramp_T_low = FT(0),
                         ice_ramp_T_high = FT(0), precip_incloud_fraction = FT(1),
                         snow_incloud_fraction = FT(-1), precip_overlap_decay = FT(1),
@@ -881,7 +881,13 @@ import ClimaAtmos:
                         opts,
                     )
                     @test packed == sub_thin
-                    opts_r = merge(opts, (; precip_shaft_random = FT(0)))
+                    opts_r = ClimaAtmos.SGSMicrophysicsOptions(;
+                        (
+                            k =>
+                                (k == :precip_shaft_random ? FT(0) : getfield(opts, k))
+                            for k in fieldnames(typeof(opts))
+                        )...,
+                    )
                     @test microphysics_tendencies_1m(
                         BMT.Microphysics1Moment(), quad, mp, thp, ρ, T, w, q_tot,
                         FT(0), q_icl, FT(2e-5), FT(3e-5), T′T′, q′q′, FT(0.6),

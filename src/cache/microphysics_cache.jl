@@ -946,7 +946,7 @@ function set_microphysics_tendency_cache!(
             ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜsgs_moments.λ_lagrange, dt, nsubs_quad,
             TD.liquid_fraction(thp, ᶜT, max(0, ᶜq_lcl), max(0, ᶜq_icl)),
             ᶜq_tot_nonneg - TD.q_vap_saturation(thp, ᶜT, Y.c.ρ),
-            ᶜprecip_frac, ᶜsgs_moments.sigma_S, ᶜsgs_moments.CF_d, $(opts),
+            ᶜprecip_frac, ᶜsgs_moments.sigma_S, ᶜsgs_moments.CF_d, opts,
         )
     end
 
@@ -1021,7 +1021,7 @@ function set_microphysics_tendency_cache!(
             ᶜq_tot_nonneg⁰, ᶜq_lcl⁰, ᶜq_icl⁰, ᶜq_rai⁰, ᶜq_sno⁰,
             ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜsgs_moments.λ_lagrange, dt, nsubs_quad,
             ᶜλ⁰, ᶜmu_S⁰, ᶜprecip_frac, ᶜsgs_moments.sigma_S, ᶜsgs_moments.CF_d,
-            $(opts),
+            opts,
         )
     end
 

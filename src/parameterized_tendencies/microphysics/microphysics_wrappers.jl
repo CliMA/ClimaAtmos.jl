@@ -852,16 +852,36 @@ end
 end
 
 """
+    SGSMicrophysicsOptions{FT}
+
+Scalar options of the 1M quadrature microphysics, built by
+`sgs_microphysics_options` and broadcast as a scalar (see that function).
+"""
+Base.@kwdef struct SGSMicrophysicsOptions{FT}
+    α::FT
+    ξ_liq::FT
+    ξ_ice::FT
+    ice_ramp_T_low::FT
+    ice_ramp_T_high::FT
+    precip_incloud_fraction::FT
+    snow_incloud_fraction::FT
+    precip_overlap_decay::FT
+    precip_shaft_random::FT
+    precip_frac_floor::FT
+end
+Base.broadcastable(o::SGSMicrophysicsOptions) = tuple(o)
+
+"""
     sgs_microphysics_options(params)
 
-The per-run scalar options of the 1M quadrature microphysics as one `NamedTuple`
-(`α`, `ξ_liq`, `ξ_ice`, the ξ_ice ramp, and the precipitation-placement keys), so
-the tendency broadcast passes one argument instead of ten: a broadcast with more
-than ~30 arguments falls off Julia's specialized `Broadcast._getindex` path and
-allocates inside the GPU kernel.
+The per-run scalar options of the 1M quadrature microphysics as one
+`SGSMicrophysicsOptions` (`α`, `ξ_liq`, `ξ_ice`, the ξ_ice ramp, and the
+precipitation-placement keys), so the tendency broadcast passes one argument
+instead of ten: a broadcast with more than ~30 arguments falls off Julia's
+specialized `Broadcast._getindex` path and allocates inside the GPU kernel.
 """
 function sgs_microphysics_options(params)
-    return (;
+    return SGSMicrophysicsOptions(;
         α = sgs_variance_fidelity(CAP.cloud_fraction_steepness_scale(params)),
         ξ_liq = CAP.sgs_liquid_uniform_fraction(params),
         ξ_ice = CAP.sgs_ice_uniform_fraction(params),
@@ -879,11 +899,11 @@ end
     microphysics_tendencies_1m(
         scheme, sgs_quad, cmp, thp, ρ, T, w, q_tot_nonneg, q_lcl, q_icl, q_rai, q_sno,
         T′T′, q′q′, corr_Tq, λ_lagrange, dt, nsubs, λ, mu_S, precip_frac, sigma_S, CF_d,
-        opts::NamedTuple,
+        opts::SGSMicrophysicsOptions,
     )
 
-Packed form of the quadrature driver: the scalar options come as the `NamedTuple`
-of `sgs_microphysics_options`, the per-cell fields (`precip_frac`, `sigma_S`,
+Packed form of the quadrature driver: the scalar options come as the
+`SGSMicrophysicsOptions` of `sgs_microphysics_options`, the per-cell fields (`precip_frac`, `sigma_S`,
 `CF_d`) and the precomputed `λ`, `mu_S` positionally. Forwards to the positional
 form, so the two are identical.
 """
@@ -891,7 +911,7 @@ form, so the two are identical.
     scheme, sgs_quad, cmp, thp, ρ, T, w, q_tot_nonneg,
     q_lcl, q_icl, q_rai, q_sno, T′T′, q′q′, corr_Tq,
     λ_lagrange, dt, nsubs, λ, mu_S, precip_frac, sigma_S, CF_d,
-    opts::NamedTuple,
+    opts::SGSMicrophysicsOptions,
 )
     return microphysics_tendencies_1m(
         scheme, sgs_quad, cmp, thp, ρ, T, w, q_tot_nonneg,
