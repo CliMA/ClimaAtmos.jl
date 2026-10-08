@@ -1237,11 +1237,11 @@ Surface-temperature and insolation requirements are derived from the resolved
 
     ExternalDrivenTVForcing(dataset::ColumnDatasets.ColumnDataset; forcing, time_interpolation_method)
     ExternalDrivenTVForcing(path::String; kwargs...)
-    ExternalDrivenTVForcing(datasets::AbstractVector{<:ColumnDatasets.ColumnDataset}; kwargs...)
+    ExternalDrivenTVForcing(datasets::AbstractVector{<:ColumnDatasets.AbstractColumnData}; kwargs...)
 
 The `path` method opens the file as a `ColumnDataset` and forwards the keyword
-arguments. With a vector of `ColumnDataset`s, column `h` of a multi-column grid
-is forced from `datasets[h]`. `forcing` defaults to `default_forcing_terms()` and
+arguments. With a vector of column data sources, column `h` of a multi-column
+grid is forced from `datasets[h]`. `forcing` defaults to `default_forcing_terms()` and
 `time_interpolation_method` to the dataset format's own method. Runscripts
 typically call `ExternalDrivenTVForcing(path; forcing = (...,))`.
 """
@@ -1275,7 +1275,7 @@ function ExternalDrivenTVForcing(path::String; kwargs...)
     return ExternalDrivenTVForcing(ColumnDatasets.ColumnDataset(path); kwargs...)
 end
 ExternalDrivenTVForcing(
-    datasets::AbstractVector{<:ColumnDatasets.ColumnDataset};
+    datasets::AbstractVector{<:ColumnDatasets.AbstractColumnData};
     kwargs...,
 ) = ExternalDrivenTVForcing(ColumnDatasets.PerColumnDatasets(datasets); kwargs...)
 

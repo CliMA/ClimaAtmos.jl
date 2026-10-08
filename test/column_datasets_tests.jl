@@ -267,7 +267,15 @@ profiles and `(time,)` surface series, with `z` stored top-down as the real
 cfsite files are. `skip` names variables to leave out, for the missing-variable
 checks.
 """
-function write_test_cfsite_file(path, FT; site = "site23", nz = 8, nt = 5, skip = ())
+function write_test_cfsite_file(
+    path,
+    FT;
+    site = "site23",
+    nz = 8,
+    nt = 5,
+    skip = (),
+    mode = "c",
+)
     # descending heights, so the reader has to sort them
     zg = repeat(reverse(collect(range(FT(50), FT(15e3), nz))), 1, nt)
     # a few percent of time variation per sample, so time means are nontrivial
@@ -291,7 +299,7 @@ function write_test_cfsite_file(path, FT; site = "site23", nz = 8, nt = 5, skip 
         "coszen" => FT[0.4 + 0.05 * i for i in 1:nt],
         "rsdt" => FT[1300 * (0.4 + 0.05 * i) for i in 1:nt],
     )
-    NCDataset(path, "c") do ds
+    NCDataset(path, mode) do ds
         group = defGroup(ds, site)
         defDim(group, "z", nz)
         defDim(group, "time", nt)
@@ -749,5 +757,100 @@ end
                 model_kwargs...,
             ),
         )
+    end
+end
+
+@testset "One cfsite per column" begin
+    for FT in (Float32, Float64)
+        thermo_params =
+            CA.Parameters.thermodynamics_params(CA.ClimaAtmosParameters(FT))
+        path = joinpath(mktempdir(), "cfsites.nc")
+        write_test_cfsite_file(path, FT)
+        # Fewer samples give different time means
+        write_test_cfsite_file(path, FT; site = "site17", nt = 3, mode = "a")
+        sites = ["site23", "site17", "site23"]
+        datasets = CD.GCMColumnData.read_cfsite.(path, sites; thermo_params)
+        data = CD.PerColumnDatasets(datasets)
+        start_date = Dates.DateTime(2000, 5, 6)
+        @test CD.file_time_span(data, start_date) == Inf
+
+        grid_kwargs = (; z_elem = 8, z_max = FT(15e3), z_stretch = false)
+        multi = CA.get_spaces(CA.MultiColumnGrid(FT; n_columns = 3, grid_kwargs...))
+        single = CA.get_spaces(CA.ColumnGrid(FT; grid_kwargs...))
+        surface(spaces) =
+            ClimaCore.Spaces.level(spaces.face_space, ClimaCore.Utilities.half)
+        column(field, h) = parent(ClimaCore.Fields.column(field, 1, 1, h))
+
+        # Column h of the inputs equals the inputs of cfsite h
+        names, surface_names = (:ta, :wa), (:ts, :coszen)
+        column_inputs =
+            CD.column_timevaryinginputs(data, names, multi.center_space, start_date)
+        surface_inputs = CD.surface_timevaryinginputs(
+            data,
+            surface_names,
+            surface(multi),
+            start_date,
+        )
+        ᶜmulti = ClimaCore.Fields.zeros(multi.center_space)
+        ᶜsingle = ClimaCore.Fields.zeros(single.center_space)
+        sfc_multi = ClimaCore.Fields.zeros(surface(multi))
+        sfc_single = ClimaCore.Fields.zeros(surface(single))
+        for (h, d) in enumerate(datasets)
+            single_inputs = CD.column_timevaryinginputs(
+                d,
+                names,
+                single.center_space,
+                start_date,
+            )
+            for name in names
+                evaluate!(ᶜmulti, column_inputs[name], 0.0)
+                evaluate!(ᶜsingle, single_inputs[name], 0.0)
+                @test column(ᶜmulti, h) == parent(ᶜsingle)
+            end
+            single_surface = CD.surface_timevaryinginputs(
+                d,
+                surface_names,
+                surface(single),
+                start_date,
+            )
+            for name in surface_names
+                evaluate!(sfc_multi, surface_inputs[name], 0.0)
+                evaluate!(sfc_single, single_surface[name], 0.0)
+                @test column(sfc_multi, h) == parent(sfc_single)
+            end
+        end
+
+        # Column h starts from the initial state of a single column on cfsite h
+        model_kwargs = (; microphysics_model = CA.EquilibriumMicrophysics0M())
+        Y = CA.initial_state(
+            CA.AtmosModel(CA.MultiColumnGrid(FT; n_columns = 3, grid_kwargs...);
+                setup = CA.Setups.ForcingFromFile(datasets, "20000506"),
+                model_kwargs...,
+            ),
+        )
+        for (h, d) in enumerate(datasets)
+            Yʰ = CA.initial_state(
+                CA.AtmosModel(CA.ColumnGrid(FT; grid_kwargs...);
+                    setup = CA.Setups.ForcingFromFile(d, "20000506"),
+                    model_kwargs...,
+                ),
+            )
+            @test column(Y.c, h) == parent(Yʰ.c)
+            @test column(Y.f, h) == parent(Yʰ.f)
+        end
+        @test column(Y.c, 1) != column(Y.c, 2)
+
+        # The configuration takes a list of cfsites
+        parsed_args =
+            CA.AtmosConfig(
+                Dict(
+                    "initial_condition" => "GCM",
+                    "external_forcing_file" => path,
+                    "cfsite_number" => sites,
+                    "start_date" => "20000506",
+                ),
+            ).parsed_args
+        setup = CA.get_setup_type(parsed_args, thermo_params)
+        @test setup.dataset isa CD.PerColumnDatasets
     end
 end

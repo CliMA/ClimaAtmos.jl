@@ -108,10 +108,10 @@ main
   `MultiColumnGrid(FT; n_columns)`.
   NetCDF output gains a `column` dimension.
 - ![][badge-✨feature/enhancement] `ForcingFromFile` and `ExternalDrivenTVForcing` take a
-  vector of `ColumnDataset`s, one per column of a multi-column grid: each column is
-  initialized and forced from its own file. In the configuration, one value per column
-  can be given for `external_forcing_file` (with `initial_condition: "ForcingFromFile"`)
-  and for `site_latitude` and `site_longitude` (ERA5).
+  vector of column data sources, one per column of a multi-column grid: each column is
+  initialized and forced from its own source. In the configuration, one value per column
+  can be given for `external_forcing_file` (with `initial_condition: "ForcingFromFile"` or
+  `"GCM"`), `cfsite_number` (GCM), and `site_latitude` and `site_longitude` (ERA5).
 - ![][badge-💥breaking] The `ColumnDatasets.extrapolation_bc` hook of column file formats is
   removed: file-backed column forcing inputs always hold the profiles constant above and
   below the file's levels.
