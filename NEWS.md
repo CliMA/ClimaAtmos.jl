@@ -10,6 +10,8 @@ main
   `gᵀDg − (gᵀDn)²/(nᵀDn)` with `g = ∇q_tot`, `n = ∇θ_li`) and the part across
   it (the vertical uniform-box terms, with the q gradient taken across the
   surface).
+- ![][badge-🔥behavioralΔ] Update to CloudMicrophysics v0.45 and use joint
+  relaxation of the vapor-driven phase changes.
 - ![][badge-✨feature/enhancement] Add back CloudMicrophysics v0.43 to the
   compat.
 - ![][badge-🔥behavioralΔ] The horizontal resolved-gradient (geometric) SGS variance

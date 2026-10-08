@@ -330,6 +330,9 @@ cloud_ice_snow_accretion:
 rain_snow_accretion:
   help: "Rain-snow collision accretion option for 1M microphysics [`RainSnowAccretion` (default), ~]"
   value: "RainSnowAccretion"
+vapor_relaxation:
+  help: "Coupling of the vapor-driven phase changes in the 1M substep solver [`Joint` (default), `PerProcess`]"
+  value: "Joint"
 
 viscous_sponge:
   help: "Viscous sponge [`true`, `false` (default)]"
