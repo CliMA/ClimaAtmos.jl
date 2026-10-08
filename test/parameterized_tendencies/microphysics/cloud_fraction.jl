@@ -18,6 +18,8 @@ Tests cover:
 using Test
 using ClimaAtmos
 import ClimaAtmos as CA
+import ClimaCore: Fields, Spaces
+import ClimaCore.CommonSpaces
 
 floor_nt(
     ::Type{FT};
@@ -314,6 +316,56 @@ floor_nt(
                     v in (0, 1e-14, 1e-10, 1e-8, 1e-6)
                 )
                 @test cap(FT(1e-10), FT(3e-3), θz_min, Δx, Δz) isa FT
+            end
+        end
+    end
+
+    @testset "`_precip_fraction_sweep!`: max-random overlap down a column" begin
+        for FT in (Float32, Float64)
+            @testset "FT = $FT" begin
+                space = CommonSpaces.ColumnSpace(
+                    FT;
+                    z_min = 0, z_max = 10000, z_elem = 10,
+                    staggering = CommonSpaces.CellCenter(),
+                )
+                nz = Spaces.nlevels(space)
+                cf = Fields.zeros(space)
+                qp = Fields.zeros(space)
+                a_p = Fields.zeros(space)
+                setlev!(f, k, v) = (Fields.level(f, k) .= v)
+                col(f) = [Array(parent(Fields.level(f, k)))[1] for k in 1:nz]
+                q_min = FT(1e-10)
+                # cloud at levels 8 (cover 0.4) and 6 (cover 0.2), precipitation
+                # from level 8 down to level 3, none at 1-2 and above 8
+                for k in 1:nz
+                    setlev!(cf, k, k == 8 ? FT(0.4) : k == 6 ? FT(0.2) : FT(0))
+                    setlev!(qp, k, 3 <= k <= 8 ? FT(1e-5) : FT(0))
+                end
+                CA._precip_fraction_sweep!(a_p, cf, qp, FT(1), q_min)
+                a = col(a_p)
+                @test a[9:10] == [FT(0), FT(0)]            # no precipitation above the cloud
+                @test a[8] == FT(0.4)                       # seeded by its own cover
+                @test a[7] == FT(0.4)                       # inherited (max overlap)
+                @test a[6] == FT(0.4)                       # max(own 0.2, above 0.4)
+                @test all(a[3:5] .== FT(0.4))               # below cloud base, inherited
+                @test a[1:2] == [FT(0), FT(0)]              # shaft closed: no precipitation
+                @test all(col(a_p) .>= col(cf) .* (col(qp) .> q_min))
+                # decay shrinks the inherited fraction per level, own cover re-seeds
+                CA._precip_fraction_sweep!(a_p, cf, qp, FT(0.5), q_min)
+                a = col(a_p)
+                @test a[8] == FT(0.4) && a[7] == FT(0.2) && a[6] == FT(0.2)
+                @test a[5] == FT(0.1) && a[3] == FT(0.025)
+                # a precipitation-free level in the middle resets the recursion
+                setlev!(qp, 5, FT(0))
+                CA._precip_fraction_sweep!(a_p, cf, qp, FT(1), q_min)
+                a = col(a_p)
+                @test a[5] == FT(0) && a[4] == FT(0) && a[3] == FT(0)
+                @test a[6] == FT(0.4)
+                # an overcast layer caps the fraction at 1 and gives 1 below it
+                setlev!(cf, 8, FT(1));
+                setlev!(qp, 5, FT(1e-5))
+                CA._precip_fraction_sweep!(a_p, cf, qp, FT(1), q_min)
+                @test all(col(a_p)[3:8] .== FT(1))
             end
         end
     end

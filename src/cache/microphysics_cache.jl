@@ -936,7 +936,7 @@ function set_microphysics_tendency_cache!(
             ᶜT, ᶜw_air, cmp, thp, dt, nsubs,
         )
     else
-        (; ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜsgs_moments) = p.precomputed
+        (; ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜsgs_moments, ᶜprecip_frac) = p.precomputed
         α = sgs_variance_fidelity(CAP.cloud_fraction_steepness_scale(p.params))
         ξ_liq = CAP.sgs_liquid_uniform_fraction(p.params)
         ξ_ice = CAP.sgs_ice_uniform_fraction(p.params)
@@ -944,6 +944,7 @@ function set_microphysics_tendency_cache!(
         ice_T_hi = CAP.sgs_ice_uniform_ramp_T_high(p.params)
         precip_incloud = CAP.sgs_precip_incloud_fraction(p.params)
         snow_incloud = CAP.sgs_snow_incloud_fraction(p.params)
+        precip_overlap = CAP.sgs_precip_overlap_decay(p.params)
         @. ᶜmp_tendency = microphysics_tendencies_1m(
             BMT.Microphysics1Moment(), sgs_quad, cmp, thp, Y.c.ρ, ᶜT, ᶜw_air,
             ᶜq_tot_nonneg, ᶜq_lcl, ᶜq_icl, ᶜq_rai, ᶜq_sno,
@@ -952,6 +953,7 @@ function set_microphysics_tendency_cache!(
             TD.liquid_fraction(thp, ᶜT, max(0, ᶜq_lcl), max(0, ᶜq_icl)),
             ᶜq_tot_nonneg - TD.q_vap_saturation(thp, ᶜT, Y.c.ρ),
             ice_T_lo, ice_T_hi, precip_incloud, snow_incloud,
+            precip_overlap, ᶜprecip_frac, ᶜsgs_moments.sigma_S,
         )
     end
 
@@ -1009,7 +1011,7 @@ function set_microphysics_tendency_cache!(
             ᶜT⁰, ᶜw⁰_air, cmp, thp, dt, nsubs,
         )
     else
-        (; ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜsgs_moments) = p.precomputed
+        (; ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜsgs_moments, ᶜprecip_frac) = p.precomputed
         α = sgs_variance_fidelity(CAP.cloud_fraction_steepness_scale(p.params))
         ξ_liq = CAP.sgs_liquid_uniform_fraction(p.params)
         ξ_ice = CAP.sgs_ice_uniform_fraction(p.params)
@@ -1017,6 +1019,7 @@ function set_microphysics_tendency_cache!(
         ice_T_hi = CAP.sgs_ice_uniform_ramp_T_high(p.params)
         precip_incloud = CAP.sgs_precip_incloud_fraction(p.params)
         snow_incloud = CAP.sgs_snow_incloud_fraction(p.params)
+        precip_overlap = CAP.sgs_precip_overlap_decay(p.params)
         # The liquid fraction `λ` and the linearized SGS saturation-excess mean
         # `mu_S` are held fixed across the quadrature (they depend only on the mean
         # state), so compute them once here and pass them in, instead of recomputing
@@ -1029,7 +1032,9 @@ function set_microphysics_tendency_cache!(
             BMT.Microphysics1Moment(), sgs_quad, cmp, thp, ᶜρ⁰, ᶜT⁰, ᶜw⁰_air,
             ᶜq_tot_nonneg⁰, ᶜq_lcl⁰, ᶜq_icl⁰, ᶜq_rai⁰, ᶜq_sno⁰,
             ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜsgs_moments.λ_lagrange, α, ξ_liq, ξ_ice,
-            dt, nsubs_quad, ᶜλ⁰, ᶜmu_S⁰, ice_T_lo, ice_T_hi, precip_incloud, snow_incloud,
+            dt, nsubs_quad, ᶜλ⁰, ᶜmu_S⁰, ice_T_lo, ice_T_hi, precip_incloud,
+            snow_incloud,
+            precip_overlap, ᶜprecip_frac, ᶜsgs_moments.sigma_S,
         )
     end
 

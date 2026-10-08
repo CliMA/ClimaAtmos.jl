@@ -240,6 +240,29 @@ end
                     probe_dry, quad, q_tot_dry, T, FT(1e-6), FT(1), corr,
                 )
                 @test qc_dry ≈ q_c_tiny rtol = sqrt(eps(FT))
+
+                # Discrete cloudy mass CF_d: 0 without condensate, in (0, 1]
+                # with, 1 in the all-mass-at-the-mean and overcast limits,
+                # monotone in q_c at fixed width.
+                @test mz.CF_d == FT(0)
+                m1 = CA._compute_sgs_moments(
+                    thp, ρ, T, q_tot, q_c, quad, FT(1), FT(1e-6), corr, α,
+                )
+                @test FT(0) < m1.CF_d <= FT(1)
+                @test m1.CF_d isa FT
+                m2 = CA._compute_sgs_moments(
+                    thp, ρ, T, q_tot, 3q_c, quad, FT(1), FT(1e-6), corr, α,
+                )
+                @test m2.CF_d >= m1.CF_d
+                @test m0.CF_d ≈ FT(1) rtol = FT(1e-3)
+                for sq in (nothing, CA.GridMeanSGS())
+                    @test CA._compute_sgs_moments(
+                        thp, ρ, T, q_tot, q_c, sq, FT(1), FT(1e-6), corr, α,
+                    ).CF_d == FT(1)
+                    @test CA._compute_sgs_moments(
+                        thp, ρ, T, q_tot, FT(0), sq, FT(1), FT(1e-6), corr, α,
+                    ).CF_d == FT(0)
+                end
             end
         end
     end

@@ -606,6 +606,10 @@ function SGSQuadratureParameters(
         sgs_precip_incloud_fraction = FT(0),
         # Snow share of the precipitation placement: -1 = same as the rain/precip value.
         sgs_snow_incloud_fraction = FT(-1),
+        # Overlap precipitation fraction (`set_precip_fraction!`): per-level
+        # decay of the max-random overlap recursion; negative = off (moist-half
+        # placement).
+        sgs_precip_overlap_decay = FT(-1),
     )
     provisional_present = filter(collect(keys(provisional_defaults))) do name
         haskey(toml_dict.data, string(name))

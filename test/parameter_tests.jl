@@ -55,7 +55,8 @@ end
             Dict("microphysics_model" => "1M", "snow_deposition_sublimation" => name),
             job_id = "parameter_test_1m_snow_$(name)",
         )
-        @test CA.get_microphysics_model(cfg.parsed_args).processes.snow_deposition_sublimation isa T
+        @test CA.get_microphysics_model(cfg.parsed_args).processes.snow_deposition_sublimation isa
+              T
     end
 
     # Options set on the model select the parameters loaded for it
@@ -138,6 +139,7 @@ end
         @test CAP.sgs_ice_uniform_ramp_T_high(sq) == FT(0)
         @test CAP.sgs_precip_incloud_fraction(sq) == FT(0)
         @test CAP.sgs_snow_incloud_fraction(sq) == FT(-1)
+        @test CAP.sgs_precip_overlap_decay(sq) == FT(-1)
     end
     # A run toml overrides the defaults.
     mktemp() do path, io

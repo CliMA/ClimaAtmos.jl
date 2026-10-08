@@ -246,6 +246,9 @@ quadrature points.
     rain and snow onto the moist half of the PDF (`SGSMoistHalfFlag`) and that
     half's weight; `β_precip = 0` disables it.
   - `β_snow`: snow share of the placement (equal to `β_precip` unless set).
+  - `S_star`, `ε_S`: Threshold and width of the shaft weight on the centred
+    saturation excess (`sgs_precip_shaft_weight`); `(0, 0)` is the moist-half
+    mode, the overlap fraction sets them through `sgs_precip_shaft_threshold`.
 """
 struct Microphysics1MEvaluator{S, MP, TPS, FT, Args <: Tuple}
     scheme::S
@@ -288,6 +291,13 @@ struct Microphysics1MEvaluator{S, MP, TPS, FT, Args <: Tuple}
     # 22-argument constructor sets it equal to `β_precip` (rain and snow placed
     # alike), a separate value lets rain and snow be placed independently.
     β_snow::FT
+    # Shaft weight on the centred saturation excess (`sgs_precip_shaft_weight`):
+    # nodes with S′ ≥ S_star carry the placed precipitation, smoothed over the
+    # width ε_S. (0, 0) is the hard moist-half flag (S′ ≥ 0); the overlap
+    # precipitation fraction sets S_star so that the shaft covers the moistest
+    # `a_p` of the PDF (`sgs_precip_shaft_threshold`).
+    S_star::FT
+    ε_S::FT
 end
 # Ramp-free construction (ramp and placement disabled), the pre-existing
 # positional signature.
@@ -297,7 +307,7 @@ Microphysics1MEvaluator(
 ) = Microphysics1MEvaluator(
     scheme, mp, tps, ρ, w, q_rai, q_sno, λ, ξ_liq, ξ_ice, q_lcl, q_icl,
     λ_lagrange, mu_S, α, dt, nsubs, args, zero(ρ), zero(ρ),
-    zero(ρ), one(ρ), zero(ρ),
+    zero(ρ), one(ρ), zero(ρ), zero(ρ), zero(ρ),
 )
 # Ramp only (placement disabled).
 Microphysics1MEvaluator(
@@ -306,7 +316,7 @@ Microphysics1MEvaluator(
 ) = Microphysics1MEvaluator(
     scheme, mp, tps, ρ, w, q_rai, q_sno, λ, ξ_liq, ξ_ice, q_lcl, q_icl,
     λ_lagrange, mu_S, α, dt, nsubs, args, T_ramp_lo, T_ramp_hi,
-    zero(ρ), one(ρ), zero(ρ),
+    zero(ρ), one(ρ), zero(ρ), zero(ρ), zero(ρ),
 )
 # Rain and snow placed alike (β_snow = β_precip).
 Microphysics1MEvaluator(
@@ -315,7 +325,17 @@ Microphysics1MEvaluator(
 ) = Microphysics1MEvaluator(
     scheme, mp, tps, ρ, w, q_rai, q_sno, λ, ξ_liq, ξ_ice, q_lcl, q_icl,
     λ_lagrange, mu_S, α, dt, nsubs, args, T_ramp_lo, T_ramp_hi,
-    β_precip, cf_precip, β_precip,
+    β_precip, cf_precip, β_precip, zero(ρ), zero(ρ),
+)
+# Moist-half placement with a separate snow share (S_star = ε_S = 0).
+Microphysics1MEvaluator(
+    scheme, mp, tps, ρ, w, q_rai, q_sno, λ, ξ_liq, ξ_ice, q_lcl, q_icl,
+    λ_lagrange, mu_S, α, dt, nsubs, args, T_ramp_lo, T_ramp_hi, β_precip, cf_precip,
+    β_snow,
+) = Microphysics1MEvaluator(
+    scheme, mp, tps, ρ, w, q_rai, q_sno, λ, ξ_liq, ξ_ice, q_lcl, q_icl,
+    λ_lagrange, mu_S, α, dt, nsubs, args, T_ramp_lo, T_ramp_hi,
+    β_precip, cf_precip, β_snow, zero(ρ), zero(ρ),
 )
 
 """
@@ -340,24 +360,103 @@ while cold cirrus ice is detrained and long-lived, hence uniform.
 end
 
 """
-    SGSMoistHalfFlag(tps, ρ, mu_S)
+    sgs_precip_shaft_weight(S′, S_star, ε_S)
 
-Point-wise functor for the SGS quadrature: `1` at a node whose centred
-saturation excess `S′ = q_tot_hat − q_sat(T_hat, ρ) − mu_S` is non-negative (the
-node is at least as close to saturation as the cell mean), `0` otherwise. Its
-quadrature mean `cf_precip` is the weight of the moist half of the PDF, the part
-of the cell the precipitation is taken to fall through under the
-precipitation-fraction placement (`Microphysics1MEvaluator`).
+Weight in `[0, 1]` with which a quadrature node of centred saturation excess
+`S′` belongs to the precipitation shaft: the nodes with `S′ ≥ S_star`, smoothed
+over the width `ε_S`,
+
+    s = sigmoid((S′ − S_star) / ε_S)      (ε_S > 0)
+    s = 1[S′ ≥ S_star]                     (ε_S = 0, the hard flag)
+
+`(S_star, ε_S) = (0, 0)` is the moist-half flag (nodes at least as close to
+saturation as the cell mean). Its quadrature mean `cf_precip` is the weight of
+the shaft under the discrete measure, which normalizes the placement
+(`sgs_placement_factor`), so the cell-mean precipitation is conserved for any
+threshold and width.
 """
-struct SGSMoistHalfFlag{TPS, FT}
+@inline function sgs_precip_shaft_weight(S′, S_star, ε_S)
+    FT = typeof(S′)
+    return ifelse(
+        ε_S > zero(FT),
+        (one(FT) + tanh((S′ - S_star) / (2 * max(ε_S, eps(FT))))) / 2,
+        ifelse(S′ >= S_star, one(FT), zero(FT)),
+    )
+end
+
+"""
+    sgs_precip_shaft_width_coeff(FT)
+
+Width of the shaft weight (`sgs_precip_shaft_weight`) in units of the sampled
+PDF width `σ_S` under the overlap precipitation fraction: `0.25` keeps the
+transition narrow compared with the Gauss–Hermite node spacing (≈ 1.7 σ_S at
+order 3) while smoothing the node assignment as `a_p` changes between steps.
+"""
+@inline sgs_precip_shaft_width_coeff(::Type{FT}) where {FT} = FT(0.25)
+
+"""
+    sgs_precip_fraction_min(FT)
+
+Floor on the overlap precipitation fraction `a_p` seen by the quadrature
+(`sgs_precip_shaft_threshold`): a shaft is never taken narrower than this
+fraction of the cell. With `0.1` the moistest Gauss–Hermite node (weight 1/36
+at order 3) is always resolved as the shaft, so the in-shaft precipitation
+`q_precip / cf_precip` stays within the range the 1M closures are evaluated in.
+"""
+@inline sgs_precip_fraction_min(::Type{FT}) where {FT} = FT(0.1)
+
+"""
+    sgs_precip_weight_min(FT)
+
+Smallest discrete shaft weight `cf_precip` the placement resolves; below it the
+quadrature cannot represent the shaft and the precipitation is left uniform
+(`sgs_placement_factor` with `cf = 0`).
+"""
+@inline sgs_precip_weight_min(::Type{FT}) where {FT} = FT(0.02)
+
+"""
+    sgs_precip_shaft_threshold(a_p, sigma_S)
+
+Threshold `S_star` on the centred saturation excess such that the shaft covers
+the moistest fraction `a_p` of the sampled PDF, taken Gaussian with standard
+deviation `sigma_S` (the quadrature's own `Σᵢ wᵢ S′ᵢ²`):
+
+    S_star = σ_S · Φ⁻¹(1 − a_p)
+
+`a_p` is floored at `sgs_precip_fraction_min`; `a_p = 1` places the threshold
+far below every node (uniform precipitation). The discrete weight of the nodes
+above the threshold, not `a_p` itself, normalizes the placement, so the
+Gaussian rank is only used to order the nodes.
+"""
+@inline function sgs_precip_shaft_threshold(a_p, sigma_S)
+    FT = typeof(sigma_S)
+    a = clamp(FT(a_p), sgs_precip_fraction_min(FT), one(FT))
+    return sigma_S * normal_cdf_inv(one(FT) - a)
+end
+
+"""
+    SGSPrecipShaftFlag(tps, ρ, mu_S, S_star, ε_S)
+
+Point-wise functor for the SGS quadrature returning the shaft weight
+(`sgs_precip_shaft_weight`) of a node from its centred saturation excess
+`S′ = q_tot_hat − q_sat(T_hat, ρ) − mu_S`. Its quadrature mean `cf_precip` is
+the weight of the part of the cell the precipitation is taken to fall through
+under the precipitation-fraction placement (`Microphysics1MEvaluator`).
+`SGSMoistHalfFlag(tps, ρ, mu_S)` is the hard moist-half instance
+`(S_star, ε_S) = (0, 0)`.
+"""
+struct SGSPrecipShaftFlag{TPS, FT}
     tps::TPS
     ρ::FT
     mu_S::FT
+    S_star::FT
+    ε_S::FT
 end
-@inline function (f::SGSMoistHalfFlag)(T_hat, q_tot_hat)
+SGSMoistHalfFlag(tps, ρ, mu_S) = SGSPrecipShaftFlag(tps, ρ, mu_S, zero(ρ), zero(ρ))
+@inline function (f::SGSPrecipShaftFlag)(T_hat, q_tot_hat)
     FT = typeof(f.ρ)
     S′ = max(zero(FT), q_tot_hat) - TD.q_vap_saturation(f.tps, T_hat, f.ρ) - f.mu_S
-    return ifelse(S′ >= zero(FT), one(FT), zero(FT))
+    return sgs_precip_shaft_weight(S′, f.S_star, f.ε_S)
 end
 
 """
@@ -471,15 +570,16 @@ with `dq_lcl_dt`, `dq_icl_dt`, `dq_rai_dt`, `dq_sno_dt` [kg/kg/s].
     # the cell means scaled by φ_p (1 when disabled); the node total water is
     # shifted by the same amount so that the node vapour, and hence the
     # condensate reconstruction, is unchanged by the placement.
-    q_rai_node, q_sno_node, q_tot_node = if (eval.β_precip > zero(FT)) | (eval.β_snow > zero(FT))
-        flag_p = ifelse(S′_hat >= zero(FT), one(FT), zero(FT))
-        φ_r = sgs_placement_factor(eval.β_precip, flag_p, eval.cf_precip)
-        φ_s = sgs_placement_factor(eval.β_snow, flag_p, eval.cf_precip)
-        shift = (φ_r - one(FT)) * eval.q_rai + (φ_s - one(FT)) * eval.q_sno
-        (eval.q_rai * φ_r, eval.q_sno * φ_s, max(FT(0), q_tot_hat + shift))
-    else
-        (eval.q_rai, eval.q_sno, q_tot_hat)
-    end
+    q_rai_node, q_sno_node, q_tot_node =
+        if (eval.β_precip > zero(FT)) | (eval.β_snow > zero(FT))
+            flag_p = sgs_precip_shaft_weight(S′_hat, eval.S_star, eval.ε_S)
+            φ_r = sgs_placement_factor(eval.β_precip, flag_p, eval.cf_precip)
+            φ_s = sgs_placement_factor(eval.β_snow, flag_p, eval.cf_precip)
+            shift = (φ_r - one(FT)) * eval.q_rai + (φ_s - one(FT)) * eval.q_sno
+            (eval.q_rai * φ_r, eval.q_sno * φ_s, max(FT(0), q_tot_hat + shift))
+        else
+            (eval.q_rai, eval.q_sno, q_tot_hat)
+        end
 
     return BMT.bulk_microphysics_tendencies(
         BMT.LinearizedAverage(),
@@ -496,7 +596,10 @@ end
     microphysics_tendencies_1m(
         scheme, sgs_quad, cmp, thp, ρ, T, w, q_tot_nonneg,
         q_lcl, q_icl, q_rai, q_sno, T′T′, q′q′, corr_Tq,
-        λ_lagrange, α, ξ_liq, ξ_ice, dt, nsubs, λ = ..., mu_S = ..., args...,
+        λ_lagrange, α, ξ_liq, ξ_ice, dt, nsubs, λ = ..., mu_S = ...,
+        ice_ramp_T_low = 0, ice_ramp_T_high = 0, precip_incloud_fraction = 0,
+        snow_incloud_fraction = -1, precip_overlap_decay = -1, precip_frac = 1,
+        sigma_S = 0, args...,
     )
 
 Compute time-averaged 1-moment microphysics tendencies.
@@ -547,6 +650,15 @@ accretion.
     the default `0` disables the placement and its extra quadrature pass [-].
   - `snow_incloud_fraction`: Snow share of that placement (`sgs_snow_incloud_fraction`);
     a negative value (the default) means "same as `precip_incloud_fraction`" [-].
+  - `precip_overlap_decay`: `sgs_precip_overlap_decay`; non-negative selects the
+    overlap precipitation fraction, under which the placed precipitation is
+    confined to the moistest `precip_frac` of the PDF
+    (`sgs_precip_shaft_threshold`) instead of its moist half; negative (the
+    default) keeps the moist-half mode [-].
+  - `precip_frac`: Overlap precipitation fraction `a_p` of the cell
+    (`ᶜprecip_frac`, `set_precip_fraction!`) [-].
+  - `sigma_S`: SGS saturation-excess standard deviation of the sampled PDF
+    (`ᶜsgs_moments.sigma_S`), which scales the shaft threshold and width [kg/kg].
   - `args...`: Extra trailing arguments forwarded to CloudMicrophysics.
 
 # Returns
@@ -578,6 +690,9 @@ end
     ice_ramp_T_high = zero(ρ),
     precip_incloud_fraction = zero(ρ),
     snow_incloud_fraction = -one(ρ),
+    precip_overlap_decay = -one(ρ),
+    precip_frac = one(ρ),
+    sigma_S = zero(ρ),
     args...,
 )
     FT = typeof(ρ)
@@ -589,13 +704,24 @@ end
     # precipitation-fraction pass and the tendency pass.
     transform =
         build_physical_transform(sgs_quad, q_tot_nonneg, T, q′q′, T′T′, corr_Tq)
-    # Quadrature weight of the moist half of the PDF (S′ ≥ 0), which the
-    # precipitation-fraction placement confines the rain and snow to.
+    # Shaft weight on the nodes: the moist half of the PDF (S′ ≥ 0), or under
+    # the overlap precipitation fraction the moistest `a_p` of it, smoothed
+    # over `c_w σ_S`. Its quadrature weight `cf_precip` normalizes the placement.
     β_snow = ifelse(
-        snow_incloud_fraction < zero(FT), FT(precip_incloud_fraction), FT(snow_incloud_fraction),
+        snow_incloud_fraction < zero(FT), FT(precip_incloud_fraction),
+        FT(snow_incloud_fraction),
     )
+    overlap_on = precip_overlap_decay >= zero(FT)
+    S_star = ifelse(
+        overlap_on, sgs_precip_shaft_threshold(precip_frac, FT(sigma_S)), zero(FT),
+    )
+    ε_S = ifelse(overlap_on, sgs_precip_shaft_width_coeff(FT) * FT(sigma_S), zero(FT))
     cf_precip = if (precip_incloud_fraction > zero(FT)) | (β_snow > zero(FT))
-        sum_over_quadrature_points(SGSMoistHalfFlag(thp, ρ, mu_S), transform, sgs_quad)
+        cf = sum_over_quadrature_points(
+            SGSPrecipShaftFlag(thp, ρ, mu_S, S_star, ε_S), transform, sgs_quad,
+        )
+        # A shaft the quadrature cannot resolve is left uniform.
+        ifelse(cf < sgs_precip_weight_min(FT), zero(FT), cf)
     else
         one(FT)
     end
@@ -605,7 +731,7 @@ end
         FT(ξ_liq), FT(ξ_ice), max(zero(ρ), q_lcl), max(zero(ρ), q_icl),
         λ_lagrange, mu_S, α, dt, nsubs, args,
         FT(ice_ramp_T_low), FT(ice_ramp_T_high),
-        FT(precip_incloud_fraction), FT(cf_precip), β_snow,
+        FT(precip_incloud_fraction), FT(cf_precip), β_snow, S_star, ε_S,
     )
     return sum_over_quadrature_points(evaluator, transform, sgs_quad)
 end

@@ -278,6 +278,12 @@ not yet define.
   - `sgs_snow_incloud_fraction`: Snow share of the precipitation-fraction placement;
     a negative value (the default `-1`) means "same as `sgs_precip_incloud_fraction`";
     `0` leaves snow uniform while rain is placed [-].
+  - `sgs_precip_overlap_decay`: Per-level shrink factor `f_decay` of the
+    maximum-random overlap recursion that diagnoses the precipitation fraction
+    `a_p` from the cloud cover above (`set_precip_fraction!`); `1` is maximum
+    overlap. Non-negative values switch the placement from the moist half of the
+    PDF to the moistest `a_p` of it (`sgs_precip_shaft_threshold`); a negative
+    value (the default `-1`) keeps the moist-half placement [-].
   - `Tq_correlation_coefficient`: Correlation between `T'` and `q_tot'` in the
     SGS quadrature, in `[-1, 1]`. Used verbatim by `tq_correlation_model: constant`;
     used as the turbulent-block cross `ρ_turb` (and the fallback where all variance
@@ -317,6 +323,7 @@ Base.@kwdef struct SGSQuadratureParameters{FT} <: ASQP
     sgs_ice_uniform_ramp_T_high::FT
     sgs_precip_incloud_fraction::FT
     sgs_snow_incloud_fraction::FT
+    sgs_precip_overlap_decay::FT
     Tq_correlation_coefficient::FT
     cloud_fraction_steepness_scale::FT
     cloud_fraction_eps_rel::FT
