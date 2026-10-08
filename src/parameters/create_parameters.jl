@@ -568,8 +568,9 @@ function SGSQuadratureParameters(
         :sgs_variance_geometric_coeff => :sgs_variance_geometric_coeff,
         :sgs_variance_horizontal_scale_factor =>
             :sgs_variance_horizontal_scale_factor,
+        :sgs_variance_vertical_scale_factor =>
+            :sgs_variance_vertical_scale_factor,
         :sgs_variance_max_rel_std => :sgs_variance_max_rel_std,
-        :sgs_variance_geometric_Ri_factor => :sgs_variance_geometric_Ri_factor,
         :sgs_liquid_uniform_fraction => :sgs_liquid_uniform_fraction,
         :sgs_ice_uniform_fraction => :sgs_ice_uniform_fraction,
         :cloud_fraction_steepness_scale => :cloud_fraction_steepness_scale,

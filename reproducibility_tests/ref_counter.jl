@@ -1,4 +1,4 @@
-424
+425
 
 # **README**
 #
@@ -32,6 +32,9 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+425
+- Add SGS T–q correlation closure and resolved vertical-gradient variance block.
+
 424
 - Van Leer-limited centered vertical gradients for θ_li and q_tot
 

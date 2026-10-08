@@ -261,6 +261,9 @@ implicit_microphysics:
 use_sgs_quadrature:
   help: "Enable subgrid-scale quadrature integration for microphysics tendencies. When true, microphysics tendencies are integrated over the joint SGS PDF of (T, q_tot). [`true` (default), `false`]"
   value: true
+tq_correlation_model:
+  help: "Closure for the SGS T-q correlation that couples σ_T and σ_q in the sampled joint PDF. `constant` uses the prescribed `Tq_correlation_coefficient`. `diagnosed` builds T′q′ as the sum of three blocks consistent with the variance decomposition — turbulent (prescribed ρ_turb · σ_T,turb · σ_q,turb), horizontal geometric (c_g (c_Δx Δx_h)² ∇_h θ_li · ∇_h q_tot), and vertical uniform-box (Δz² ∂_z θ_li · ∂_z q_tot / 12) — then forms ρ = T′q′ / √(T′T′ q′q′), falling back to the prescribed value where the variances vanish. [`constant` (default), `diagnosed`]"
+  value: "constant"
 sgs_distribution:
   help: "Distribution type for SGS quadrature over microphysics. [`gaussian` (default), `lognormal`, `mean` (grid-mean only, no SGS sampling)]"
   value: "gaussian"
