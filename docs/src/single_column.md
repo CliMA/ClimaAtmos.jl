@@ -213,3 +213,13 @@ Likewise, the ERA5 cases (`ReanalysisTimeVarying` and
 `site_longitude`, one site per column, and the `GCM` case takes a list of
 `cfsite_number`s or of `external_forcing_file`s. A key given as a single value
 instead of a list applies to every column.
+
+A multi-column run reproduces the single-column run of the same configuration,
+except for:
+
+- all-sky radiation once clouds form, since RRTMGP samples cloud overlap with
+  random numbers drawn per column,
+- inputs and initial states read from gridded files, which a single column reads
+  at the file's middle grid point and a multi-column run interpolates at (0°,
+  0°),
+- random initial perturbations, such as ISDAC's `perturb_initstate`.
