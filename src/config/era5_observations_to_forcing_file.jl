@@ -699,6 +699,23 @@ function era5_dataset(parsed_args, ::Type{FT}; monthly::Bool = false) where {FT}
 end
 
 """
+    era5_datasets(parsed_args, FT; monthly = false)
+
+`era5_dataset` of every column: one `ColumnDataset` when `site_latitude`
+and `site_longitude` are numbers, and otherwise a vector with one per column,
+broadcasting the two keys against each other. Columns at the same site share a
+dataset.
+"""
+function era5_datasets(parsed_args, ::Type{FT}; monthly::Bool = false) where {FT}
+    by_site = Dict()
+    site_dataset(latitude, longitude) = get!(by_site, (latitude, longitude)) do
+        site = Dict("site_latitude" => latitude, "site_longitude" => longitude)
+        era5_dataset(merge(parsed_args, site), FT; monthly)
+    end
+    return site_dataset.(parsed_args["site_latitude"], parsed_args["site_longitude"])
+end
+
+"""
     smooth_4D_era5(data, variable, lon_index, lat_index; smooth_amount = 4)
 
 Average a 4D ERA5 variable (longitude, latitude, pressure level, time) over a box of

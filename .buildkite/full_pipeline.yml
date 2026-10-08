@@ -471,6 +471,17 @@ steps:
         agents:
           slurm_mem: 12GB
 
+      - label: ":genie: Prognostic EDMF: Time-varying ERA5 reanalysis forcing, one site per column"
+        retry: *retry_policy
+        command: >
+          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+          --config_file $COMMON_CONFIG_PATH/diagnostics_column_progedmf_0M.yml
+          --config_file $CONFIG_PATH/prognostic_edmfx_tv_era5driven_multicolumn.yml
+          --job_id prognostic_edmfx_tv_era5driven_multicolumn
+        artifact_paths: "prognostic_edmfx_tv_era5driven_multicolumn/output_active/*"
+        agents:
+          slurm_mem: 12GB
+
       - label: ":genie: Prognostic EDMF: ERA5 monthly averaged diurnal forcing"
         retry: *retry_policy
         command: >
