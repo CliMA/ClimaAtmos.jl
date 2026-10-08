@@ -83,7 +83,7 @@ const EXCEPTED_KEYS = Set([
 ])
 
 # Keys that take one value per column of a multi-column run, as a list
-const PER_COLUMN_KEYS = Set(["site_latitude", "site_longitude"])
+const PER_COLUMN_KEYS = Set(["site_latitude", "site_longitude", "cfsite_number"])
 
 """
     coerce_to_default(::Type{T}, v) -> T
