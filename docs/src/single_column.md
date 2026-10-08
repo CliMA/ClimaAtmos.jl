@@ -207,3 +207,9 @@ n_columns: 2
 initial_condition: "ForcingFromFile"
 external_forcing_file: [/path/to/site_a.nc, /path/to/site_b.nc]
 ```
+
+Likewise, the ERA5 cases (`ReanalysisTimeVarying` and
+`ReanalysisMonthlyAveragedDiurnal`) take lists of `site_latitude` and
+`site_longitude`, one site per column, and the `GCM` case takes a list of
+`cfsite_number`s or of `external_forcing_file`s. A key given as a single value
+instead of a list applies to every column.
