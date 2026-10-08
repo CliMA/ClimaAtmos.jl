@@ -4,8 +4,9 @@
 Generic file-driven single-column setup: initial condition, external forcing,
 surface temperature, and insolation are sourced from one column forcing file,
 read through the `ColumnDatasets` interface so any registered dataset format
-works. With a vector of `ColumnDataset`s, column `h` of a multi-column grid is
-initialized and forced from file `h`.
+works. With a vector of column data sources (`ColumnDataset`s or
+`InMemoryColumnData`), column `h` of a multi-column grid is initialized and
+forced from source `h`.
 
 The initial condition reads vertical profiles (`ta`, `ua`, `va`, `hus`,
 `rho`) at the file time closest to `start_date` and builds 1D interpolators
@@ -85,7 +86,7 @@ ForcingFromFile(path::String, start_date::String; kwargs...) =
     ForcingFromFile(ColumnDatasets.ColumnDataset(path), start_date; kwargs...)
 
 ForcingFromFile(
-    datasets::AbstractVector{<:ColumnDatasets.ColumnDataset},
+    datasets::AbstractVector{<:ColumnDatasets.AbstractColumnData},
     start_date::String;
     kwargs...,
 ) = ForcingFromFile(
@@ -102,7 +103,7 @@ column_profiles(data::ColumnDatasets.PerColumnDatasets, start_date) =
     [column_profiles(cd, start_date) for cd in data.datasets]
 
 # Columns cannot be told apart pointwise, so each column is initialized as a
-# single column of its own file
+# single column of its own source
 function initial_state(
     setup::ForcingFromFile{<:ColumnDatasets.PerColumnDatasets},
     params,

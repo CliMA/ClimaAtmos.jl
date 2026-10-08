@@ -176,8 +176,9 @@ function get_setup_type(parsed_args, thermo_params)
         # Read the cfsite group into steady in-memory profiles, then drive it
         # through the generic ForcingFromFile path. Defaults give an interactive
         # Monin-Obukhov surface with the file's `ts` and the constant insolation
-        # carried in the data (matching the former GCMDrivenInsolation).
-        data = ColumnDatasets.GCMColumnData.read_cfsite(
+        # carried in the data (matching the former GCMDrivenInsolation). Lists
+        # of files or cfsites give one group per column.
+        data = ColumnDatasets.GCMColumnData.read_cfsite.(
             parsed_args["external_forcing_file"],
             parsed_args["cfsite_number"];
             thermo_params,
