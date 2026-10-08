@@ -252,8 +252,8 @@ steady GCM-driven profiles). Both provide the same reader interface
 (`column_timevaryinginputs`, `surface_timevaryinginputs`,
 `read_surface_series`, `read_initial_profiles`, `require_forcing_variables`,
 `time_interpolation_method`, `site_location`) and expose `column_vars` and
-`surface_vars`. [`PerColumnDatasets`](@ref), one `ColumnDataset` per column,
-provides the inputs and the checks.
+`surface_vars`. [`PerColumnDatasets`](@ref), one source per column, provides the
+inputs and the checks.
 """
 abstract type AbstractColumnData end
 
@@ -326,12 +326,12 @@ source_name(cd::ColumnDataset) = "$(cd.path) ($(format_name(cd.format)) format)"
 """
     PerColumnDatasets(datasets)
 
-One [`ColumnDataset`](@ref) per column of a multi-column grid: column `h` reads
-`datasets[h]`. The files share a format, and `column_vars` and `surface_vars`
-are the variables that every file carries.
+One column data source per column of a multi-column grid. Column `h` reads
+`datasets[h]`, either [`ColumnDataset`](@ref)s of one `format` or
+[`InMemoryColumnData`](@ref) (`format` is `nothing`). `column_vars` and
+`surface_vars` are the variables that every source carries.
 """
-struct PerColumnDatasets{D <: ColumnDataset, F <: AbstractColumnFormat} <:
-       AbstractColumnData
+struct PerColumnDatasets{D <: AbstractColumnData, F} <: AbstractColumnData
     datasets::Vector{D}
     format::F
     column_vars::Vector{Symbol}
@@ -345,16 +345,18 @@ function PerColumnDatasets(datasets::AbstractVector{<:ColumnDataset})
         "The column forcing files $(join((cd.path for cd in datasets), ", ")) \
          have different formats",
     )
-    return PerColumnDatasets(
-        collect(datasets),
-        format,
-        intersect((cd.column_vars for cd in datasets)...),
-        intersect((cd.surface_vars for cd in datasets)...),
-    )
+    return PerColumnDatasets(datasets, format)
 end
 
+PerColumnDatasets(datasets, format) = PerColumnDatasets(
+    collect(datasets),
+    format,
+    mapreduce(d -> d.column_vars, intersect, datasets),
+    mapreduce(d -> d.surface_vars, intersect, datasets),
+)
+
 time_interpolation_method(data::PerColumnDatasets) =
-    time_interpolation_method(data.format)
+    time_interpolation_method(first(data.datasets))
 
 source_name(data::PerColumnDatasets) = join(source_name.(data.datasets), ", ")
 
@@ -526,7 +528,7 @@ non-height vertical coordinate — overrides this to build in-memory inputs
 instead.
 """
 function column_timevaryinginputs(
-    cd::Union{ColumnDataset, PerColumnDatasets},
+    cd::Union{ColumnDataset, PerColumnDatasets{<:ColumnDataset}},
     names,
     target_space,
     start_date;
@@ -595,8 +597,11 @@ function surface_timevaryinginputs(
     inputs = map(name -> TimeVaryingInput(times, FT.(read[name]); method), names)
     return NamedTuple{names}(inputs)
 end
-surface_timevaryinginputs(data::PerColumnDatasets, args...; kwargs...) =
-    column_timevaryinginputs(data, args...; kwargs...)
+surface_timevaryinginputs(
+    data::PerColumnDatasets{<:ColumnDataset},
+    args...;
+    kwargs...,
+) = column_timevaryinginputs(data, args...; kwargs...)
 
 # ============================================================================
 # In-memory column data
@@ -719,6 +724,60 @@ function read_surface_series(d::InMemoryColumnData, names, start_date)
     names = Tuple(names)
     series = map(name -> [Float64(d.surface[name])], names)
     return (; times = [0.0], NamedTuple{names}(series)...)
+end
+
+function PerColumnDatasets(datasets::AbstractVector{<:InMemoryColumnData})
+    isempty(datasets) && error("`PerColumnDatasets` needs at least one source")
+    return PerColumnDatasets(datasets, nothing)
+end
+
+# In-memory inputs fill one column per source
+check_ncolumns(data::PerColumnDatasets, space) =
+    length(data.datasets) == ClimaCore.Spaces.ncolumns(space) || error(
+        "$(length(data.datasets)) column forcing sources were given for \
+         $(ClimaCore.Spaces.ncolumns(space)) columns",
+    )
+
+# Column `h` holds the steady profiles of `data.datasets[h]`, interpolated as on
+# a single column
+function column_timevaryinginputs(
+    data::PerColumnDatasets{<:InMemoryColumnData},
+    names,
+    target_space,
+    start_date;
+    method = nothing,
+)
+    check_ncolumns(data, target_space)
+    names = Tuple(names)
+    inputs = map(names) do name
+        field = similar(ClimaCore.Fields.coordinate_field(target_space).z)
+        for (h, d) in enumerate(data.datasets)
+            column_space = ClimaCore.Spaces.column(target_space, 1, 1, h)
+            ClimaCore.Fields.column(field, 1, 1, h) .=
+                _interp_column(d.z, d.column[name], column_space)
+        end
+        TimeVaryingInput(Returns(field))
+    end
+    return NamedTuple{names}(inputs)
+end
+
+function surface_timevaryinginputs(
+    data::PerColumnDatasets{<:InMemoryColumnData},
+    names,
+    target_space,
+    start_date;
+    method = nothing,
+)
+    check_ncolumns(data, target_space)
+    names = Tuple(names)
+    FT = ClimaCore.Spaces.undertype(target_space)
+    inputs = map(names) do name
+        field = ClimaCore.Fields.Field(FT, target_space)
+        values = [FT(d.surface[name]) for d in data.datasets]
+        copyto!(ClimaCore.Fields.field2array(field), values)
+        TimeVaryingInput(Returns(field))
+    end
+    return NamedTuple{names}(inputs)
 end
 
 # ============================================================================
