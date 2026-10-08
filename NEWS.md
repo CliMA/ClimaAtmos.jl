@@ -3,6 +3,8 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- ![][badge-🔥behavioralΔ] Update to CloudMicrophysics v0.45 and use joint
+  relaxation of the vapor-driven phase changes.
 - ![][badge-✨feature/enhancement] Add back CloudMicrophysics v0.43 to the
   compat.
 - ![][badge-🔥behavioralΔ] The horizontal resolved-gradient (geometric) SGS variance
