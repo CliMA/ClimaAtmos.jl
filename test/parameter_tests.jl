@@ -136,7 +136,6 @@ end
         @test CAP.sgs_variance_isentropic_min_dtheta_dz(sq) == FT(1e-3)
         @test CAP.sgs_ice_uniform_ramp_T_low(sq) == FT(0)
         @test CAP.sgs_ice_uniform_ramp_T_high(sq) == FT(0)
-        @test CAP.sgs_ice_incloud_fraction(sq) == FT(0)
         @test CAP.sgs_precip_incloud_fraction(sq) == FT(0)
         @test CAP.sgs_snow_incloud_fraction(sq) == FT(-1)
     end

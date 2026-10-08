@@ -521,44 +521,6 @@ import ClimaAtmos:
                     @test make_r(FT(0), FT(0), FT(0))(T, q̂) == ev_e(T, q̂)    # disabled == 18-argument constructor
                 end
 
-                @testset "in-cloud ice placement" begin
-                    φ = ClimaAtmos.sgs_ice_incloud_factor
-                    @test φ(FT(0), FT(1), FT(0.3)) === FT(1)                 # off: exactly 1
-                    @test φ(FT(0), FT(0), FT(0.3)) === FT(1)
-                    @test φ(FT(1), FT(1), FT(0.25)) ≈ FT(4)                  # confined: 1/cf_ice
-                    @test φ(FT(1), FT(0), FT(0.25)) == FT(0)
-                    @test φ(FT(0.5), FT(1), FT(0.5)) ≈ FT(1.5)
-                    @test φ(FT(1), FT(0), FT(0)) === FT(1)                   # cf_ice = 0: uniform fallback
-                    # conservation: ⟨φ⟩ = 1 over a two-node measure
-                    cf = FT(0.3)
-                    @test cf * φ(FT(0.7), FT(1), cf) + (1 - cf) * φ(FT(0.7), FT(0), cf) ≈ FT(1)
-
-                    flag = ClimaAtmos.SGSIceSupersaturatedFlag(thp, ρ, FT(0))
-                    q_si = TD.q_vap_saturation(thp, T, ρ, TD.Ice())
-                    @test flag(T, FT(1.1) * q_si) === FT(1)                  # cold, ice-supersaturated
-                    @test flag(T, FT(0.9) * q_si) === FT(0)                  # cold, subsaturated
-                    @test flag(FT(280), FT(2) * q_si) === FT(0)              # warm
-                    flag_p = ClimaAtmos.SGSIceSupersaturatedFlag(thp, ρ, FT(0.2) * q_si)
-                    @test flag_p(T, FT(1.1) * q_si) === FT(0)                # precipitation does not count
-
-                    make_c(β, cf_ice, q_i) = Microphysics1MEvaluator(
-                        BMT.Microphysics1Moment(), mp, thp, ρ, w, FT(0), FT(0), λ_i,
-                        FT(0), FT(1), FT(0), q_i, q_c, mu_S, FT(1), dt, nsubs, (),
-                        FT(0), FT(0), β, cf_ice,
-                    )
-                    q̂_dry = FT(0.9) * q_si
-                    q̂_wet = q_sat + FT(2) * q_c   # water-saturated node, so ice-supersaturated
-                    # off == the 18- and 20-argument constructors (bitwise)
-                    @test make_c(FT(0), FT(1), q_icl)(T, q̂_wet) == ev_u(T, q̂_wet)
-                    @test make_c(FT(0), FT(0.3), q_icl)(T, q̂_dry) == ev_u(T, q̂_dry)
-                    # confined: no ice at the dry node (== excess evaluator there),
-                    # q_icl / cf_ice at the wet node (== uniform evaluator with that ice)
-                    @test make_c(FT(1), FT(0.5), q_icl)(T, q̂_dry) == ev_e(T, q̂_dry)
-                    @test make_c(FT(1), FT(0.5), q_icl)(T, q̂_wet) ==
-                          make_c(FT(0), FT(1), FT(2) * q_icl)(T, q̂_wet)
-                    @test make_c(FT(1), FT(0.5), q_icl)(T, q̂_wet) != ev_u(T, q̂_wet)
-                end
-
                 @testset "precipitation-fraction placement" begin
                     flag = ClimaAtmos.SGSMoistHalfFlag(thp, ρ, mu_S)
                     @test flag(T, q_tot) === FT(1)                           # the mean node: S′ = 0 counts as moist
@@ -568,7 +530,7 @@ import ClimaAtmos:
                     make_p(β_p, cf_p) = Microphysics1MEvaluator(
                         BMT.Microphysics1Moment(), mp, thp, ρ, w, q_r, q_s, λ_i,
                         FT(0), FT(1), FT(0), q_icl, q_c, mu_S, FT(1), dt, nsubs, (),
-                        FT(0), FT(0), FT(0), FT(1), β_p, cf_p,
+                        FT(0), FT(0), β_p, cf_p,
                     )
                     ref = Microphysics1MEvaluator(
                         BMT.Microphysics1Moment(), mp, thp, ρ, w, q_r, q_s, λ_i,
@@ -599,11 +561,11 @@ import ClimaAtmos:
                     )(T, q̂_moist + q_r + q_s)
                     @test all(isapprox.(values(moist_on), values(doubled); rtol = FT(1e-5), atol = FT(1e-14)))
                     @test moist_on != ref(T, q̂_moist)
-                    # rain-only placement: snow uniform, rain doubled at the moist node (25-argument constructor)
+                    # rain-only placement: snow uniform, rain doubled at the moist node (23-argument constructor)
                     rain_only = Microphysics1MEvaluator(
                         BMT.Microphysics1Moment(), mp, thp, ρ, w, q_r, q_s, λ_i,
                         FT(0), FT(1), FT(0), q_icl, q_c, mu_S, FT(1), dt, nsubs, (),
-                        FT(0), FT(0), FT(0), FT(1), FT(1), FT(0.5), FT(0),
+                        FT(0), FT(0), FT(1), FT(0.5), FT(0),
                     )(T, q̂_moist)
                     rain_doubled = Microphysics1MEvaluator(
                         BMT.Microphysics1Moment(), mp, thp, ρ, w, 2q_r, q_s, λ_i,
@@ -611,11 +573,11 @@ import ClimaAtmos:
                     )(T, q̂_moist + q_r)
                     @test all(isapprox.(values(rain_only), values(rain_doubled); rtol = FT(1e-5), atol = FT(1e-14)))
                     @test rain_only != moist_on
-                    # the 24-argument constructor places snow like rain
+                    # the 22-argument constructor places snow like rain
                     @test make_p(FT(1), FT(0.5))(T, q̂_moist) == Microphysics1MEvaluator(
                         BMT.Microphysics1Moment(), mp, thp, ρ, w, q_r, q_s, λ_i,
                         FT(0), FT(1), FT(0), q_icl, q_c, mu_S, FT(1), dt, nsubs, (),
-                        FT(0), FT(0), FT(0), FT(1), FT(1), FT(0.5), FT(1),
+                        FT(0), FT(0), FT(1), FT(0.5), FT(1),
                     )(T, q̂_moist)
                 end
 
@@ -664,35 +626,15 @@ import ClimaAtmos:
                     )
                     @test all(isfinite, values(uni))
                     @test uni.dq_icl_dt != base.dq_icl_dt
-                    # in-cloud placement: off is bitwise the uniform result; on is
-                    # finite and differs (ice confined to the supersaturated nodes)
-                    uni_off = microphysics_tendencies_1m(
-                        BMT.Microphysics1Moment(), quad, mp, thp, ρ, T, w, q_tot,
-                        FT(0), q_icl, FT(0), FT(0), T′T′, q′q′, FT(0.6),
-                        q_c, FT(1), FT(0), FT(1), dt, nsubs, λ_i, mu_S, FT(0), FT(0), FT(0),
-                    )
-                    @test uni_off == uni
-                    uni_in = microphysics_tendencies_1m(
-                        BMT.Microphysics1Moment(), quad, mp, thp, ρ, T, w, q_tot,
-                        FT(0), q_icl, FT(0), FT(0), T′T′, q′q′, FT(0.6),
-                        q_c, FT(1), FT(0), FT(1), dt, nsubs, λ_i, mu_S, FT(0), FT(0), FT(1),
-                    )
-                    @test all(isfinite, values(uni_in))
-                    @test uni_in.dq_icl_dt != uni.dq_icl_dt
-                    # the ice-cloud fraction of this cell lies in (0, 1]
                     transform = ClimaAtmos.build_physical_transform(
                         quad, q_tot, T, q′q′, T′T′, FT(0.6),
                     )
-                    cf_ice = ClimaAtmos.sum_over_quadrature_points(
-                        ClimaAtmos.SGSIceSupersaturatedFlag(thp, ρ, FT(0)), transform, quad,
-                    )
-                    @test FT(0) < cf_ice <= FT(1)
                     # precipitation-fraction placement through the driver: off is
                     # bitwise the base result, on is finite and differs when rain is present
                     base_r = microphysics_tendencies_1m(
                         BMT.Microphysics1Moment(), quad, mp, thp, ρ, T, w, q_tot,
                         FT(0), q_icl, FT(2e-5), FT(3e-5), T′T′, q′q′, FT(0.6),
-                        q_c, FT(1), FT(0), FT(1), dt, nsubs, λ_i, mu_S, FT(0), FT(0), FT(0), FT(0),
+                        q_c, FT(1), FT(0), FT(1), dt, nsubs, λ_i, mu_S, FT(0), FT(0), FT(0),
                     )
                     same_r = microphysics_tendencies_1m(
                         BMT.Microphysics1Moment(), quad, mp, thp, ρ, T, w, q_tot,
@@ -703,7 +645,7 @@ import ClimaAtmos:
                     on_r = microphysics_tendencies_1m(
                         BMT.Microphysics1Moment(), quad, mp, thp, ρ, T, w, q_tot,
                         FT(0), q_icl, FT(2e-5), FT(3e-5), T′T′, q′q′, FT(0.6),
-                        q_c, FT(1), FT(0), FT(1), dt, nsubs, λ_i, mu_S, FT(0), FT(0), FT(0), FT(1),
+                        q_c, FT(1), FT(0), FT(1), dt, nsubs, λ_i, mu_S, FT(0), FT(0), FT(1),
                     )
                     @test all(isfinite, values(on_r))
                     @test on_r.dq_rai_dt != base_r.dq_rai_dt
@@ -711,13 +653,13 @@ import ClimaAtmos:
                     rain_r = microphysics_tendencies_1m(
                         BMT.Microphysics1Moment(), quad, mp, thp, ρ, T, w, q_tot,
                         FT(0), q_icl, FT(2e-5), FT(3e-5), T′T′, q′q′, FT(0.6),
-                        q_c, FT(1), FT(0), FT(1), dt, nsubs, λ_i, mu_S, FT(0), FT(0), FT(0), FT(1), FT(0),
+                        q_c, FT(1), FT(0), FT(1), dt, nsubs, λ_i, mu_S, FT(0), FT(0), FT(1), FT(0),
                     )
                     @test all(isfinite, values(rain_r)) && rain_r != on_r && rain_r != base_r
                     same_on = microphysics_tendencies_1m(
                         BMT.Microphysics1Moment(), quad, mp, thp, ρ, T, w, q_tot,
                         FT(0), q_icl, FT(2e-5), FT(3e-5), T′T′, q′q′, FT(0.6),
-                        q_c, FT(1), FT(0), FT(1), dt, nsubs, λ_i, mu_S, FT(0), FT(0), FT(0), FT(1), FT(-1),
+                        q_c, FT(1), FT(0), FT(1), dt, nsubs, λ_i, mu_S, FT(0), FT(0), FT(1), FT(-1),
                     )
                     @test same_on == on_r
                     cf_p = ClimaAtmos.sum_over_quadrature_points(

@@ -601,9 +601,6 @@ function SGSQuadratureParameters(
         # (`sgs_ice_uniform_fraction_ramped`): disabled when T_high ≤ T_low.
         sgs_ice_uniform_ramp_T_low = FT(0),
         sgs_ice_uniform_ramp_T_high = FT(0),
-        # In-cloud placement of the uniform ice share over the quadrature
-        # (`sgs_ice_incloud_factor`): 0 = uniform (off).
-        sgs_ice_incloud_fraction = FT(0),
         # Precipitation-fraction placement of rain and snow over the quadrature
         # (moist half of the PDF): 0 = uniform (off).
         sgs_precip_incloud_fraction = FT(0),

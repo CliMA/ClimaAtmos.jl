@@ -242,9 +242,6 @@ quadrature points.
   - `args`: Extra trailing arguments forwarded to the CloudMicrophysics call.
   - `T_ramp_lo`, `T_ramp_hi`: Temperature ramp of `ξ_ice` at the nodes
     (`sgs_ice_uniform_fraction_ramped`); disabled when `T_ramp_hi ≤ T_ramp_lo`.
-  - `β_incloud`, `cf_ice`: In-cloud placement of the uniform ice share
-    (`sgs_ice_incloud_factor`) and the ice-cloud fraction it is confined to;
-    `β_incloud = 0` disables it.
   - `β_precip`, `cf_precip`: Precipitation-fraction placement of the cell-mean
     rain and snow onto the moist half of the PDF (`SGSMoistHalfFlag`) and that
     half's weight; `β_precip = 0` disables it.
@@ -278,13 +275,7 @@ struct Microphysics1MEvaluator{S, MP, TPS, FT, Args <: Tuple}
     # T ≥ T_ramp_hi, 1 at T ≤ T_ramp_lo; disabled when T_ramp_hi ≤ T_ramp_lo.
     T_ramp_lo::FT
     T_ramp_hi::FT
-    # In-cloud placement of the uniform ice share (`sgs_ice_incloud_factor`):
-    # the fraction `β_incloud` of that share is confined to the ice-supersaturated
-    # nodes, whose quadrature weight `cf_ice` the caller precomputes
-    # (`SGSIceSupersaturatedFlag`). `β_incloud = 0` disables the placement.
-    β_incloud::FT
-    cf_ice::FT
-    # Precipitation-fraction placement (`sgs_ice_incloud_factor` applied to
+    # Precipitation-fraction placement (`sgs_placement_factor` applied to
     # rain and snow): the fraction `β_precip` of the cell-mean rain and snow is
     # confined to the moist half of the PDF (nodes with centred saturation
     # excess S′ ≥ 0, quadrature weight `cf_precip`, precomputed by the caller
@@ -294,47 +285,37 @@ struct Microphysics1MEvaluator{S, MP, TPS, FT, Args <: Tuple}
     β_precip::FT
     cf_precip::FT
     # Snow share of the precipitation-fraction placement (`β_snow`); the
-    # 24-argument constructor sets it equal to `β_precip` (rain and snow placed
+    # 22-argument constructor sets it equal to `β_precip` (rain and snow placed
     # alike), a separate value lets rain and snow be placed independently.
     β_snow::FT
 end
-# Ramp-free construction (ramp and both placements disabled), the
-# pre-existing positional signature.
+# Ramp-free construction (ramp and placement disabled), the pre-existing
+# positional signature.
 Microphysics1MEvaluator(
     scheme, mp, tps, ρ, w, q_rai, q_sno, λ, ξ_liq, ξ_ice, q_lcl, q_icl,
     λ_lagrange, mu_S, α, dt, nsubs, args,
 ) = Microphysics1MEvaluator(
     scheme, mp, tps, ρ, w, q_rai, q_sno, λ, ξ_liq, ξ_ice, q_lcl, q_icl,
     λ_lagrange, mu_S, α, dt, nsubs, args, zero(ρ), zero(ρ),
-    zero(ρ), one(ρ), zero(ρ), one(ρ), zero(ρ),
+    zero(ρ), one(ρ), zero(ρ),
 )
-# Ramp only (placements disabled).
+# Ramp only (placement disabled).
 Microphysics1MEvaluator(
     scheme, mp, tps, ρ, w, q_rai, q_sno, λ, ξ_liq, ξ_ice, q_lcl, q_icl,
     λ_lagrange, mu_S, α, dt, nsubs, args, T_ramp_lo, T_ramp_hi,
 ) = Microphysics1MEvaluator(
     scheme, mp, tps, ρ, w, q_rai, q_sno, λ, ξ_liq, ξ_ice, q_lcl, q_icl,
     λ_lagrange, mu_S, α, dt, nsubs, args, T_ramp_lo, T_ramp_hi,
-    zero(ρ), one(ρ), zero(ρ), one(ρ), zero(ρ),
-)
-# Ramp and in-cloud ice placement (precipitation placement disabled).
-Microphysics1MEvaluator(
-    scheme, mp, tps, ρ, w, q_rai, q_sno, λ, ξ_liq, ξ_ice, q_lcl, q_icl,
-    λ_lagrange, mu_S, α, dt, nsubs, args, T_ramp_lo, T_ramp_hi, β_incloud, cf_ice,
-) = Microphysics1MEvaluator(
-    scheme, mp, tps, ρ, w, q_rai, q_sno, λ, ξ_liq, ξ_ice, q_lcl, q_icl,
-    λ_lagrange, mu_S, α, dt, nsubs, args, T_ramp_lo, T_ramp_hi,
-    β_incloud, cf_ice, zero(ρ), one(ρ), zero(ρ),
+    zero(ρ), one(ρ), zero(ρ),
 )
 # Rain and snow placed alike (β_snow = β_precip).
 Microphysics1MEvaluator(
     scheme, mp, tps, ρ, w, q_rai, q_sno, λ, ξ_liq, ξ_ice, q_lcl, q_icl,
-    λ_lagrange, mu_S, α, dt, nsubs, args, T_ramp_lo, T_ramp_hi, β_incloud, cf_ice,
-    β_precip, cf_precip,
+    λ_lagrange, mu_S, α, dt, nsubs, args, T_ramp_lo, T_ramp_hi, β_precip, cf_precip,
 ) = Microphysics1MEvaluator(
     scheme, mp, tps, ρ, w, q_rai, q_sno, λ, ξ_liq, ξ_ice, q_lcl, q_icl,
     λ_lagrange, mu_S, α, dt, nsubs, args, T_ramp_lo, T_ramp_hi,
-    β_incloud, cf_ice, β_precip, cf_precip, β_precip,
+    β_precip, cf_precip, β_precip,
 )
 
 """
@@ -359,29 +340,6 @@ while cold cirrus ice is detrained and long-lived, hence uniform.
 end
 
 """
-    SGSIceSupersaturatedFlag(tps, ρ, q_precip)
-
-Point-wise functor for the SGS quadrature: `1` at a node `(T_hat, q_tot_hat)`
-that is colder than freezing and whose non-precipitating water
-`q_tot_hat − q_precip` exceeds saturation over ice, `0` otherwise. Its quadrature
-mean is the ice-cloud fraction `cf_ice`: the weight of the nodes at which cloud
-ice can persist (deposition rather than sublimation), used by the in-cloud ice
-placement (`sgs_ice_incloud_factor`).
-"""
-struct SGSIceSupersaturatedFlag{TPS, FT}
-    tps::TPS
-    ρ::FT
-    q_precip::FT
-end
-@inline function (f::SGSIceSupersaturatedFlag)(T_hat, q_tot_hat)
-    FT = typeof(f.ρ)
-    q_avail = max(zero(FT), q_tot_hat) - f.q_precip
-    cold = T_hat < TD.Parameters.T_freeze(f.tps)
-    supersat = q_avail > TD.q_vap_saturation(f.tps, T_hat, f.ρ, TD.Ice())
-    return ifelse(cold & supersat, one(FT), zero(FT))
-end
-
-"""
     SGSMoistHalfFlag(tps, ρ, mu_S)
 
 Point-wise functor for the SGS quadrature: `1` at a node whose centred
@@ -403,24 +361,21 @@ end
 end
 
 """
-    sgs_ice_incloud_factor(β, flag, cf_ice)
+    sgs_placement_factor(β, flag, cf)
 
-Factor `φ` on the subdomain-mean cloud ice at a quadrature node under the
-in-cloud placement: a fraction `β` of the uniform ice share is confined to the
-ice-supersaturated nodes (`flag = 1`, total weight `cf_ice`), the rest stays
-uniform,
+Factor `φ` on a cell-mean quantity at a quadrature node when a fraction `β` of it
+is confined to the flagged nodes (`flag = 1`, total quadrature weight `cf`) and
+the rest stays uniform,
 
-    φ = (1 − β) + β · flag / cf_ice,
+    φ = (1 − β) + β · flag / cf,
 
-so that the quadrature mean of `φ` is 1 and the cell ice is conserved. `β = 0`
-returns exactly 1; `cf_ice = 0` (no node can hold ice) falls back to uniform.
-Physical reading: cloud ice sits in the cloudy part of the cell, where the
-Bergeron transfer from the liquid it coexists with can act on it, instead of
-being spread into the clear part where it sublimates.
+so that the quadrature mean of `φ` is 1 and the cell mean is conserved. `β = 0`
+returns exactly 1; `cf = 0` (no flagged node) falls back to uniform. Used by the
+precipitation-fraction placement of rain and snow (`Microphysics1MEvaluator`).
 """
-@inline function sgs_ice_incloud_factor(β, flag, cf_ice)
+@inline function sgs_placement_factor(β, flag, cf)
     FT = typeof(β)
-    φ_in = ifelse(cf_ice > zero(FT), flag / max(cf_ice, eps(FT)), one(FT))
+    φ_in = ifelse(cf > zero(FT), flag / max(cf, eps(FT)), one(FT))
     return (one(FT) - β) + β * φ_in
 end
 
@@ -509,19 +464,8 @@ with `dq_lcl_dt`, `dq_icl_dt`, `dq_rai_dt`, `dq_sno_dt` [kg/kg/s].
     ξ_ice = sgs_ice_uniform_fraction_ramped(
         eval.ξ_ice, T_hat, eval.T_ramp_lo, eval.T_ramp_hi,
     )
-    # In-cloud placement of the uniform ice share: the subdomain-mean ice this
-    # node draws on is scaled by φ (`sgs_ice_incloud_factor`; exactly q_icl when
-    # the placement is off, so the branch also skips the extra saturation call).
-    q_icl_node = if eval.β_incloud > zero(FT)
-        flag = SGSIceSupersaturatedFlag(
-            eval.tps, eval.ρ, eval.q_rai + eval.q_sno,
-        )(T_hat, q_tot_hat)
-        eval.q_icl * sgs_ice_incloud_factor(eval.β_incloud, flag, eval.cf_ice)
-    else
-        eval.q_icl
-    end
     q_lcl_hat, q_icl_hat = sgs_local_condensate(
-        eval.λ, shifted_excess, eval.ξ_liq, ξ_ice, eval.q_lcl, q_icl_node,
+        eval.λ, shifted_excess, eval.ξ_liq, ξ_ice, eval.q_lcl, eval.q_icl,
     )
     # Precipitation-fraction placement: the rain and snow this node sees are
     # the cell means scaled by φ_p (1 when disabled); the node total water is
@@ -529,8 +473,8 @@ with `dq_lcl_dt`, `dq_icl_dt`, `dq_rai_dt`, `dq_sno_dt` [kg/kg/s].
     # condensate reconstruction, is unchanged by the placement.
     q_rai_node, q_sno_node, q_tot_node = if (eval.β_precip > zero(FT)) | (eval.β_snow > zero(FT))
         flag_p = ifelse(S′_hat >= zero(FT), one(FT), zero(FT))
-        φ_r = sgs_ice_incloud_factor(eval.β_precip, flag_p, eval.cf_precip)
-        φ_s = sgs_ice_incloud_factor(eval.β_snow, flag_p, eval.cf_precip)
+        φ_r = sgs_placement_factor(eval.β_precip, flag_p, eval.cf_precip)
+        φ_s = sgs_placement_factor(eval.β_snow, flag_p, eval.cf_precip)
         shift = (φ_r - one(FT)) * eval.q_rai + (φ_s - one(FT)) * eval.q_sno
         (eval.q_rai * φ_r, eval.q_sno * φ_s, max(FT(0), q_tot_hat + shift))
     else
@@ -598,9 +542,6 @@ accretion.
     precomputed by the caller to avoid recomputing them at every point.
   - `ice_ramp_T_low`, `ice_ramp_T_high`: Temperature ramp of `ξ_ice` at the nodes
     (`sgs_ice_uniform_fraction_ramped`); the defaults `0, 0` disable it [K].
-  - `ice_incloud_fraction`: Fraction `β` of the uniform ice share confined to the
-    ice-supersaturated nodes (`sgs_ice_incloud_factor`, `sgs_ice_incloud_fraction`);
-    the default `0` disables the placement and its extra quadrature pass [-].
   - `precip_incloud_fraction`: Fraction `β_p` of the cell-mean rain and snow confined
     to the moist half of the PDF (`SGSMoistHalfFlag`, `sgs_precip_incloud_fraction`);
     the default `0` disables the placement and its extra quadrature pass [-].
@@ -635,7 +576,6 @@ end
     mu_S = q_tot_nonneg - TD.q_vap_saturation(thp, T, ρ),
     ice_ramp_T_low = zero(ρ),
     ice_ramp_T_high = zero(ρ),
-    ice_incloud_fraction = zero(ρ),
     precip_incloud_fraction = zero(ρ),
     snow_incloud_fraction = -one(ρ),
     args...,
@@ -646,20 +586,9 @@ end
     q_sno_nonneg = max(FT(0), q_sno)
 
     # Same transform `integrate_over_sgs` builds; shared by the (optional)
-    # ice-cloud-fraction pass and the tendency pass.
+    # precipitation-fraction pass and the tendency pass.
     transform =
         build_physical_transform(sgs_quad, q_tot_nonneg, T, q′q′, T′T′, corr_Tq)
-    # Quadrature weight of the ice-supersaturated nodes, which the in-cloud
-    # placement confines the uniform ice share to (one extra saturation pass,
-    # skipped when the placement is off).
-    cf_ice = if ice_incloud_fraction > zero(FT)
-        sum_over_quadrature_points(
-            SGSIceSupersaturatedFlag(thp, ρ, q_rai_nonneg + q_sno_nonneg),
-            transform, sgs_quad,
-        )
-    else
-        one(FT)
-    end
     # Quadrature weight of the moist half of the PDF (S′ ≥ 0), which the
     # precipitation-fraction placement confines the rain and snow to.
     β_snow = ifelse(
@@ -675,7 +604,7 @@ end
         q_rai_nonneg, q_sno_nonneg, λ,
         FT(ξ_liq), FT(ξ_ice), max(zero(ρ), q_lcl), max(zero(ρ), q_icl),
         λ_lagrange, mu_S, α, dt, nsubs, args,
-        FT(ice_ramp_T_low), FT(ice_ramp_T_high), FT(ice_incloud_fraction), FT(cf_ice),
+        FT(ice_ramp_T_low), FT(ice_ramp_T_high),
         FT(precip_incloud_fraction), FT(cf_precip), β_snow,
     )
     return sum_over_quadrature_points(evaluator, transform, sgs_quad)
