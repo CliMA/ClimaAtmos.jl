@@ -288,6 +288,10 @@ not yet define.
     the shaft on all cloudy nodes plus a random share of the clear nodes at the
     in-shaft concentration (`sgs_precip_subpopulation`) instead of on the
     moistest `a_p` of the PDF; `0` (the default) keeps the rank placement [-].
+  - `sgs_precip_fraction_floor`: Smallest precipitation fraction `a_p` the
+    quadrature placement uses (the shaft is never narrower than this fraction
+    of the cell), in `[0, 1]`; values below `sgs_precip_fraction_min` (0.1, the
+    default) are inert [-].
   - `Tq_correlation_coefficient`: Correlation between `T'` and `q_tot'` in the
     SGS quadrature, in `[-1, 1]`. Used verbatim by `tq_correlation_model: constant`;
     used as the turbulent-block cross `ρ_turb` (and the fallback where all variance
@@ -329,6 +333,7 @@ Base.@kwdef struct SGSQuadratureParameters{FT} <: ASQP
     sgs_snow_incloud_fraction::FT
     sgs_precip_overlap_decay::FT
     sgs_precip_shaft_random::FT
+    sgs_precip_fraction_floor::FT
     Tq_correlation_coefficient::FT
     cloud_fraction_steepness_scale::FT
     cloud_fraction_eps_rel::FT

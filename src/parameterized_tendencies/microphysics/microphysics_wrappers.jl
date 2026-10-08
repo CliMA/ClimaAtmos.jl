@@ -753,6 +753,10 @@ accretion.
     mode on) selects the sub-population placement (`sgs_precip_subpopulation`):
     all cloudy nodes plus a random share of the clear nodes carry the shaft at
     the in-shaft concentration, instead of the moistest `precip_frac` [-].
+  - `precip_frac_floor`: `sgs_precip_fraction_floor`; the shaft is never taken
+    narrower than this fraction of the cell (a wider shaft than the overlap of
+    the cover gives: fall-streak spreading and shear); defaults to
+    `sgs_precip_fraction_min` [-].
   - `args...`: Extra trailing arguments forwarded to CloudMicrophysics.
 
 # Returns
@@ -789,6 +793,7 @@ end
     sigma_S = zero(ρ),
     CF_d = zero(ρ),
     precip_shaft_random = zero(ρ),
+    precip_frac_floor = sgs_precip_fraction_min(typeof(ρ)),
     args...,
 )
     FT = typeof(ρ)
@@ -814,11 +819,14 @@ end
     random_on =
         overlap_on & (precip_shaft_random > zero(FT)) &
         (precip_incloud_fraction > zero(FT))
-    p_clear, conc = sgs_precip_subpopulation(precip_frac, FT(CF_d))
+    # The shaft is never taken narrower than `precip_frac_floor` of the cell
+    # (`sgs_precip_fraction_floor`; at least `sgs_precip_fraction_min`).
+    a_p = max(FT(precip_frac), FT(precip_frac_floor))
+    p_clear, conc = sgs_precip_subpopulation(a_p, FT(CF_d))
     p_clear = ifelse(random_on, p_clear, -one(FT))
     ε_w = discrete_cloudy_weight_width(α, FT(sigma_S))
     S_star = ifelse(
-        overlap_on, sgs_precip_shaft_threshold(precip_frac, FT(sigma_S)), zero(FT),
+        overlap_on, sgs_precip_shaft_threshold(a_p, FT(sigma_S)), zero(FT),
     )
     ε_S = ifelse(overlap_on, sgs_precip_shaft_width_coeff(FT) * FT(sigma_S), zero(FT))
     cf_precip = if ((precip_incloud_fraction > zero(FT)) | (β_snow > zero(FT))) &

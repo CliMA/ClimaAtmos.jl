@@ -613,6 +613,8 @@ function SGSQuadratureParameters(
         # Sub-population (random clear-node) placement under the overlap mode:
         # 0 = rank placement.
         sgs_precip_shaft_random = FT(0),
+        # Floor on the overlap precipitation fraction seen by the placement.
+        sgs_precip_fraction_floor = FT(0.1),
     )
     provisional_present = filter(collect(keys(provisional_defaults))) do name
         haskey(toml_dict.data, string(name))

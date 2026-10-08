@@ -868,6 +868,24 @@ import ClimaAtmos:
                         ),
                     )
                     mixed = make_s(FT(0.5), conc2)(T, q̂_dry)
+                    # shaft-width floor: a floor above a_p acts as that a_p (both
+                    # modes), the default floor is inert
+                    @test microphysics_tendencies_1m(
+                        args_m..., FT(1), FT(-1), FT(1), FT(0.3), m.sigma_S, m.CF_d, FT(1),
+                        FT(0.5),
+                    ) == microphysics_tendencies_1m(
+                        args_m..., FT(1), FT(-1), FT(1), FT(0.5), m.sigma_S, m.CF_d, FT(1),
+                    )
+                    @test microphysics_tendencies_1m(
+                        args_m..., FT(1), FT(-1), FT(1), FT(0.3), m.sigma_S, m.CF_d, FT(0),
+                        FT(0.5),
+                    ) == microphysics_tendencies_1m(
+                        args_m..., FT(1), FT(-1), FT(1), FT(0.5), m.sigma_S, m.CF_d, FT(0),
+                    )
+                    @test microphysics_tendencies_1m(
+                        args_m..., FT(1), FT(-1), FT(1), FT(0.3), m.sigma_S, m.CF_d, FT(1),
+                        FT(0.1),
+                    ) == sub_thin
                     @test all(
                         isapprox.(
                             values(mixed),
