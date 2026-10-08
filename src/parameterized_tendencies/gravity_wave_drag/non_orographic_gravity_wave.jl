@@ -1372,6 +1372,8 @@ Called from `compute_beres_convective_heating!` to fill the `gw_launch_flux` and
     return (s0, s1)
 end
 
+@inline _val_parameter(::Val{P}) where {P} = P
+
 """
     waveforcing_column_accumulate!(waveforcing, mask, input, c, c0, nk, ink, level_end,
                                    gw_ncval, beres_source, source_mode::Val{MODE})
@@ -1430,8 +1432,8 @@ function waveforcing_column_accumulate!(
     level_end,
     gw_ncval::Val{nc},
     beres_source,
-    source_mode::Val{MODE},
-) where {nc, MODE}
+    source_mode::Val,
+) where {nc}
     FT = eltype(waveforcing)
     kwv = 2 * FT(π) / (30 * FT(10)^ink * 1000) # wave number of gravity waves
     # Here we use column_accumulate function to pass the variable B0 and mask through different levels, and calculate waveforcing at each level.
@@ -1441,6 +1443,8 @@ function waveforcing_column_accumulate!(
         init = (FT(0.0), mask, FT(NaN), ntuple(i -> FT(NaN), Val(nc))),
         transform = first,
     ) do (wave_forcing, mask, Bsum_or_NaN, B0_or_NaNs), inp
+        # Adapt cannot rebuild a GPU closure whose type has a Symbol static parameter.
+        MODE = _val_parameter(source_mode)
         # Inputs are read by index, not destructured: the two source modes share
         # only slots 1–7; slots 8–16 hold different fields per mode. Selecting the
         # mode-specific fields under the compile-time `MODE` guard caps each
