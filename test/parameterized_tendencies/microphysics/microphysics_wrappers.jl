@@ -599,6 +599,24 @@ import ClimaAtmos:
                     )(T, q̂_moist + q_r + q_s)
                     @test all(isapprox.(values(moist_on), values(doubled); rtol = FT(1e-5), atol = FT(1e-14)))
                     @test moist_on != ref(T, q̂_moist)
+                    # rain-only placement: snow uniform, rain doubled at the moist node (25-argument constructor)
+                    rain_only = Microphysics1MEvaluator(
+                        BMT.Microphysics1Moment(), mp, thp, ρ, w, q_r, q_s, λ_i,
+                        FT(0), FT(1), FT(0), q_icl, q_c, mu_S, FT(1), dt, nsubs, (),
+                        FT(0), FT(0), FT(0), FT(1), FT(1), FT(0.5), FT(0),
+                    )(T, q̂_moist)
+                    rain_doubled = Microphysics1MEvaluator(
+                        BMT.Microphysics1Moment(), mp, thp, ρ, w, 2q_r, q_s, λ_i,
+                        FT(0), FT(1), FT(0), q_icl, q_c, mu_S + q_r, FT(1), dt, nsubs, (),
+                    )(T, q̂_moist + q_r)
+                    @test all(isapprox.(values(rain_only), values(rain_doubled); rtol = FT(1e-5), atol = FT(1e-14)))
+                    @test rain_only != moist_on
+                    # the 24-argument constructor places snow like rain
+                    @test make_p(FT(1), FT(0.5))(T, q̂_moist) == Microphysics1MEvaluator(
+                        BMT.Microphysics1Moment(), mp, thp, ρ, w, q_r, q_s, λ_i,
+                        FT(0), FT(1), FT(0), q_icl, q_c, mu_S, FT(1), dt, nsubs, (),
+                        FT(0), FT(0), FT(0), FT(1), FT(1), FT(0.5), FT(1),
+                    )(T, q̂_moist)
                 end
 
                 @testset "dry node: ice sublimates when uniform, absent when excess" begin
@@ -689,6 +707,19 @@ import ClimaAtmos:
                     )
                     @test all(isfinite, values(on_r))
                     @test on_r.dq_rai_dt != base_r.dq_rai_dt
+                    # snow override: rain-only placement differs from both-placed and from base; -1 = same as precip
+                    rain_r = microphysics_tendencies_1m(
+                        BMT.Microphysics1Moment(), quad, mp, thp, ρ, T, w, q_tot,
+                        FT(0), q_icl, FT(2e-5), FT(3e-5), T′T′, q′q′, FT(0.6),
+                        q_c, FT(1), FT(0), FT(1), dt, nsubs, λ_i, mu_S, FT(0), FT(0), FT(0), FT(1), FT(0),
+                    )
+                    @test all(isfinite, values(rain_r)) && rain_r != on_r && rain_r != base_r
+                    same_on = microphysics_tendencies_1m(
+                        BMT.Microphysics1Moment(), quad, mp, thp, ρ, T, w, q_tot,
+                        FT(0), q_icl, FT(2e-5), FT(3e-5), T′T′, q′q′, FT(0.6),
+                        q_c, FT(1), FT(0), FT(1), dt, nsubs, λ_i, mu_S, FT(0), FT(0), FT(0), FT(1), FT(-1),
+                    )
+                    @test same_on == on_r
                     cf_p = ClimaAtmos.sum_over_quadrature_points(
                         ClimaAtmos.SGSMoistHalfFlag(thp, ρ, mu_S), transform, quad,
                     )

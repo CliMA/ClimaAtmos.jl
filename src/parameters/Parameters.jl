@@ -279,6 +279,9 @@ not yet define.
     that is confined to the moist half of the quadrature PDF (nodes with
     non-negative centred saturation excess) instead of being spread over all
     nodes, in `[0, 1]`; `0` (the default) disables the placement [-].
+  - `sgs_snow_incloud_fraction`: Snow share of the precipitation-fraction placement;
+    a negative value (the default `-1`) means "same as `sgs_precip_incloud_fraction`";
+    `0` leaves snow uniform while rain is placed [-].
   - `Tq_correlation_coefficient`: Correlation between `T'` and `q_tot'` in the
     SGS quadrature, in `[-1, 1]`. Used verbatim by `tq_correlation_model: constant`;
     used as the turbulent-block cross `ρ_turb` (and the fallback where all variance
@@ -318,6 +321,7 @@ Base.@kwdef struct SGSQuadratureParameters{FT} <: ASQP
     sgs_ice_uniform_ramp_T_high::FT
     sgs_ice_incloud_fraction::FT
     sgs_precip_incloud_fraction::FT
+    sgs_snow_incloud_fraction::FT
     Tq_correlation_coefficient::FT
     cloud_fraction_steepness_scale::FT
     cloud_fraction_eps_rel::FT

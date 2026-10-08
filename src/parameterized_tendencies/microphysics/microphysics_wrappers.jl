@@ -248,6 +248,7 @@ quadrature points.
   - `β_precip`, `cf_precip`: Precipitation-fraction placement of the cell-mean
     rain and snow onto the moist half of the PDF (`SGSMoistHalfFlag`) and that
     half's weight; `β_precip = 0` disables it.
+  - `β_snow`: snow share of the placement (equal to `β_precip` unless set).
 """
 struct Microphysics1MEvaluator{S, MP, TPS, FT, Args <: Tuple}
     scheme::S
@@ -292,6 +293,10 @@ struct Microphysics1MEvaluator{S, MP, TPS, FT, Args <: Tuple}
     # `β_precip = 0` disables the placement.
     β_precip::FT
     cf_precip::FT
+    # Snow share of the precipitation-fraction placement (`β_snow`); the
+    # 24-argument constructor sets it equal to `β_precip` (rain and snow placed
+    # alike), a separate value lets rain and snow be placed independently.
+    β_snow::FT
 end
 # Ramp-free construction (ramp and both placements disabled), the
 # pre-existing positional signature.
@@ -301,7 +306,7 @@ Microphysics1MEvaluator(
 ) = Microphysics1MEvaluator(
     scheme, mp, tps, ρ, w, q_rai, q_sno, λ, ξ_liq, ξ_ice, q_lcl, q_icl,
     λ_lagrange, mu_S, α, dt, nsubs, args, zero(ρ), zero(ρ),
-    zero(ρ), one(ρ), zero(ρ), one(ρ),
+    zero(ρ), one(ρ), zero(ρ), one(ρ), zero(ρ),
 )
 # Ramp only (placements disabled).
 Microphysics1MEvaluator(
@@ -310,7 +315,7 @@ Microphysics1MEvaluator(
 ) = Microphysics1MEvaluator(
     scheme, mp, tps, ρ, w, q_rai, q_sno, λ, ξ_liq, ξ_ice, q_lcl, q_icl,
     λ_lagrange, mu_S, α, dt, nsubs, args, T_ramp_lo, T_ramp_hi,
-    zero(ρ), one(ρ), zero(ρ), one(ρ),
+    zero(ρ), one(ρ), zero(ρ), one(ρ), zero(ρ),
 )
 # Ramp and in-cloud ice placement (precipitation placement disabled).
 Microphysics1MEvaluator(
@@ -319,7 +324,17 @@ Microphysics1MEvaluator(
 ) = Microphysics1MEvaluator(
     scheme, mp, tps, ρ, w, q_rai, q_sno, λ, ξ_liq, ξ_ice, q_lcl, q_icl,
     λ_lagrange, mu_S, α, dt, nsubs, args, T_ramp_lo, T_ramp_hi,
-    β_incloud, cf_ice, zero(ρ), one(ρ),
+    β_incloud, cf_ice, zero(ρ), one(ρ), zero(ρ),
+)
+# Rain and snow placed alike (β_snow = β_precip).
+Microphysics1MEvaluator(
+    scheme, mp, tps, ρ, w, q_rai, q_sno, λ, ξ_liq, ξ_ice, q_lcl, q_icl,
+    λ_lagrange, mu_S, α, dt, nsubs, args, T_ramp_lo, T_ramp_hi, β_incloud, cf_ice,
+    β_precip, cf_precip,
+) = Microphysics1MEvaluator(
+    scheme, mp, tps, ρ, w, q_rai, q_sno, λ, ξ_liq, ξ_ice, q_lcl, q_icl,
+    λ_lagrange, mu_S, α, dt, nsubs, args, T_ramp_lo, T_ramp_hi,
+    β_incloud, cf_ice, β_precip, cf_precip, β_precip,
 )
 
 """
@@ -512,12 +527,12 @@ with `dq_lcl_dt`, `dq_icl_dt`, `dq_rai_dt`, `dq_sno_dt` [kg/kg/s].
     # the cell means scaled by φ_p (1 when disabled); the node total water is
     # shifted by the same amount so that the node vapour, and hence the
     # condensate reconstruction, is unchanged by the placement.
-    q_rai_node, q_sno_node, q_tot_node = if eval.β_precip > zero(FT)
-        φ_p = sgs_ice_incloud_factor(
-            eval.β_precip, ifelse(S′_hat >= zero(FT), one(FT), zero(FT)), eval.cf_precip,
-        )
-        q_p = eval.q_rai + eval.q_sno
-        (eval.q_rai * φ_p, eval.q_sno * φ_p, max(FT(0), q_tot_hat + (φ_p - one(FT)) * q_p))
+    q_rai_node, q_sno_node, q_tot_node = if (eval.β_precip > zero(FT)) | (eval.β_snow > zero(FT))
+        flag_p = ifelse(S′_hat >= zero(FT), one(FT), zero(FT))
+        φ_r = sgs_ice_incloud_factor(eval.β_precip, flag_p, eval.cf_precip)
+        φ_s = sgs_ice_incloud_factor(eval.β_snow, flag_p, eval.cf_precip)
+        shift = (φ_r - one(FT)) * eval.q_rai + (φ_s - one(FT)) * eval.q_sno
+        (eval.q_rai * φ_r, eval.q_sno * φ_s, max(FT(0), q_tot_hat + shift))
     else
         (eval.q_rai, eval.q_sno, q_tot_hat)
     end
@@ -589,6 +604,8 @@ accretion.
   - `precip_incloud_fraction`: Fraction `β_p` of the cell-mean rain and snow confined
     to the moist half of the PDF (`SGSMoistHalfFlag`, `sgs_precip_incloud_fraction`);
     the default `0` disables the placement and its extra quadrature pass [-].
+  - `snow_incloud_fraction`: Snow share of that placement (`sgs_snow_incloud_fraction`);
+    a negative value (the default) means "same as `precip_incloud_fraction`" [-].
   - `args...`: Extra trailing arguments forwarded to CloudMicrophysics.
 
 # Returns
@@ -620,6 +637,7 @@ end
     ice_ramp_T_high = zero(ρ),
     ice_incloud_fraction = zero(ρ),
     precip_incloud_fraction = zero(ρ),
+    snow_incloud_fraction = -one(ρ),
     args...,
 )
     FT = typeof(ρ)
@@ -644,7 +662,10 @@ end
     end
     # Quadrature weight of the moist half of the PDF (S′ ≥ 0), which the
     # precipitation-fraction placement confines the rain and snow to.
-    cf_precip = if precip_incloud_fraction > zero(FT)
+    β_snow = ifelse(
+        snow_incloud_fraction < zero(FT), FT(precip_incloud_fraction), FT(snow_incloud_fraction),
+    )
+    cf_precip = if (precip_incloud_fraction > zero(FT)) | (β_snow > zero(FT))
         sum_over_quadrature_points(SGSMoistHalfFlag(thp, ρ, mu_S), transform, sgs_quad)
     else
         one(FT)
@@ -655,7 +676,7 @@ end
         FT(ξ_liq), FT(ξ_ice), max(zero(ρ), q_lcl), max(zero(ρ), q_icl),
         λ_lagrange, mu_S, α, dt, nsubs, args,
         FT(ice_ramp_T_low), FT(ice_ramp_T_high), FT(ice_incloud_fraction), FT(cf_ice),
-        FT(precip_incloud_fraction), FT(cf_precip),
+        FT(precip_incloud_fraction), FT(cf_precip), β_snow,
     )
     return sum_over_quadrature_points(evaluator, transform, sgs_quad)
 end
