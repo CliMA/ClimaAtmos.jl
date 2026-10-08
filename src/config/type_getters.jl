@@ -236,7 +236,7 @@ function get_setup_type(parsed_args, thermo_params)
     elseif ic_name == "ReanalysisTimeVarying"
         FT = eltype(thermo_params)
         return Setups.ForcingFromFile(
-            era5_dataset(parsed_args, FT),
+            era5_datasets(parsed_args, FT),
             parsed_args["start_date"],
         )
     elseif ic_name == "ForcingFromFile"
