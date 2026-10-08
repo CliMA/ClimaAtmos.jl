@@ -189,6 +189,10 @@ function get_setup_type(parsed_args, thermo_params)
             "initial_condition `ARMVARANAL` requires `external_forcing_file` \
              to point at an ARM VARANAL file",
         )
+        varanal_file isa AbstractVector && error(
+            "`external_forcing_file` must be one path for ARMVARANAL. Only \
+             ForcingFromFile and GCM read one file per column",
+        )
         start_date = parsed_args["start_date"]
         FT = eltype(thermo_params)
         # Convert the pressure-level VARANAL file to the ClimaColumn schema, then
@@ -242,7 +246,7 @@ function get_setup_type(parsed_args, thermo_params)
              to point at a column forcing file",
         )
         return Setups.ForcingFromFile(
-            ColumnDatasets.ColumnDataset(external_forcing_file),
+            ColumnDatasets.ColumnDataset.(external_forcing_file),
             parsed_args["start_date"],
         )
     elseif ic_name == "WeatherModel"
