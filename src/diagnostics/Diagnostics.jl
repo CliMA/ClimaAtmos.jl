@@ -92,7 +92,6 @@ import ..ᶜcompute_eddy_diffusivity_coefficient
 import ..ρa⁰
 import ..specific
 import ..ᶜspecific_env_value
-import ..correlation_Tq
 
 
 # We need the abbreviations for symbols like curl, grad, and so on

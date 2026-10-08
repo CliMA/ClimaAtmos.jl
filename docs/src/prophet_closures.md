@@ -541,44 +541,74 @@ PROPHET uses the classical production–dissipation balance of
 a single isotropic intra-subdomain variance shared across subdomains, driven by
 the vertical grid-mean gradients with the grid-mean mixing length.
 
-An optional second term estimates the variance that the resolved horizontal
-field implies but the turbulence closure cannot represent, from the horizontal
-gradient and the horizontal grid scale alone,
+An optional second term adds the subgrid variance implied by the resolved
+horizontal field — the leading-order scale-similarity estimate from the
+horizontal gradient and the horizontal grid scale alone,
 
 ```math
-\sigma_{\psi,\mathrm{geo}}^2 = w \, c_g \, (c_{\Delta x} \Delta x_h)^2 \, |\nabla_h \psi|^2 ,
-\qquad
-w = \frac{\mathrm{Ri}_+^2}{\mathrm{Ri}_+^2 + \mathrm{Ri}_0^2} ,
-\quad
-\mathrm{Ri}_+ = \frac{\max(N^2, 0)}{2 \|\boldsymbol{\mathcal{E}}_D\|_F^2} ,
-\quad
-\mathrm{Ri}_0 = k_{\mathrm{Ri}} \, \mathrm{Ri}_c ,
+\sigma_{\psi,\mathrm{geo}}^2 = c_g \, (c_{\Delta x} \Delta x_h)^2 \, |\nabla_h \psi|^2 ,
 ```
 
-added to both the ``\theta_{li}`` and ``q_t`` variances. It is the
-leading-order scale-similarity estimate of subgrid variance, and the weight
-``w`` fades it out where the resolved flow is turbulent (``\mathrm{Ri} \lesssim \mathrm{Ri}_0``) and the mixing-length closure already carries the variance;
-``N^2`` is evaluated for saturated air. The term is off by default
-(``c_{\Delta x} = 0``), and ``k_{\mathrm{Ri}} = 0`` sets ``w = 1``. The
-total-water standard deviation is then bounded by ``\sigma_q \le r_{\max} q_t``
-(``r_{\max} = 0.5``), because a wider Gaussian places a quadrature node at
-negative total water, and condensing the clamped excess can drive the grid-mean
-vapor negative.
+added to both the ``\theta_{li}`` and ``q_t`` variances. The term is off by
+default (``c_{\Delta x} = 0``). It is not Richardson-weighted: this is a
+physical feature of the resolved mean field and is independent of whether the
+turbulent closure (above) is active, so the two blocks contribute additively
+without double-counting (they are not two estimates of the same quantity).
+The total-water standard deviation is then bounded by ``\sigma_q \le r_{\max} q_t`` (``r_{\max} = 0.5``), because a wider Gaussian places a quadrature node
+at negative total water, and condensing the clamped excess can drive the
+grid-mean vapor negative.
 
-The cross-covariance is set through a prescribed correlation,
+A resolved vertical-gradient block is also added,
 
 ```math
-\sigma_{\psi \phi} = r_{\psi \phi} \, \sigma_\psi \, \sigma_\phi ,
+\sigma_\psi^{2,\mathrm{v}} = c_g (c_{\Delta z} \Delta z)^2 (\partial_z \psi)^2 ,
 ```
 
-rather than the gradient-product form
-``c_\sigma l^2 \nabla \psi \cdot \nabla \phi``, which would give a singular
-covariance matrix whenever the two gradients are collinear, as they generically
-are at coarse horizontal resolution, where vertical gradients of opposite sign
-dominate. The implementation evaluates the gradient closure for
-``(\theta_{li}, q_t)``, converts to a temperature variance through the
-thermodynamic Jacobian ``\partial T / \partial \theta_{li}``, and prescribes the
-``T``–``q_t`` correlation as a constant (`Tq_correlation_coefficient`).
+independent of the mixing length. With the defaults ``c_g = 1/12`` and
+``c_{\Delta z} = 1`` this is the exact variance of a linear field under
+uniform position in a box of size ``\Delta z``. The scale factor
+``c_{\Delta z}`` (`sgs_variance_vertical_scale_factor`) acts as the on/off
+switch (``c_{\Delta z} = 0`` disables the term). This block keeps
+``\sigma_T^2``, ``\sigma_q^2`` non-zero where the turbulent closure collapses,
+so the quadrature integrand retains in-cell variability in laminar cells and
+single-column configurations. It is not Richardson-weighted — the resolved
+vertical gradient is a physical feature of the mean profile, not a turbulent
+property.
+
+The cross-covariance is set either as a prescribed correlation,
+
+```math
+\sigma_{\psi \phi} = r_{\psi \phi} \, \sigma_\psi \, \sigma_\phi
+\qquad (\texttt{tq\_correlation\_model: constant}, \text{default})
+```
+
+or as a diagnosed covariance that combines the three variance blocks with the
+correlation structure appropriate to each
+(``\texttt{tq\_correlation\_model: diagnosed}``):
+
+```math
+\langle T' q_t' \rangle
+  = r_{\mathrm{turb}} \sigma_{T,\mathrm{turb}} \sigma_{q,\mathrm{turb}}
+  + c_g (c_{\Delta x} \Delta x_h)^2 \, \nabla_h \theta_{li} \cdot \nabla_h q_t
+  + c_g (c_{\Delta z} \Delta z)^2 \, \partial_z \theta_{li} \, \partial_z q_t ,
+```
+
+followed by the thermodynamic Jacobian transform to ``T`` basis and
+``r = \langle T' q_t' \rangle / \sqrt{\sigma_T^2 \sigma_q^2}``, which is
+naturally in ``[-1, 1]`` because each variance block satisfies Cauchy-Schwarz
+and the sum does too. The turbulent block uses the prescribed
+`Tq_correlation_coefficient`
+``r_{\mathrm{turb}}`` because the gradient-direction product
+``\partial_z \theta_{li} \, \partial_z q_t`` would otherwise force
+``|r_{\mathrm{turb,eff}}| = 1`` with a sign tied to the gradient product and
+flip across every ``\partial_z \theta \cdot \partial_z q`` sign change (giving
+``r = -1`` in the stable boundary layer, where observations have
+``r \sim +0.5``). The horizontal and vertical resolved-gradient blocks keep the
+geometrically-correct gradient-direction correlation, which is the exact
+correlation of in-cell linear variability. Where all variance blocks vanish the
+diagnosed value falls back to the prescribed ``r_{\mathrm{turb}}``. The σ_q
+bound ``\sigma_q \le r_{\max} q_t`` rescales ``T′q′`` by the same factor so the
+diagnosed correlation is invariant under the clamp.
 
 The total grid-mean subgrid covariance adds the inter-subdomain spread to this
 intra-subdomain part [Lappen2001, Siebesma2007](@cite),
@@ -770,7 +800,6 @@ covariance, quadrature and cloud-fraction closures,
 | ``r_{T,q_t}``                                                       | `Tq_correlation_coefficient`                                                                      | `Tq_correlation_coefficient`                                                                            |
 | ``c_g``, ``c_{\Delta x}``                                           | `sgs_variance_geometric_coeff`, `sgs_variance_horizontal_scale_factor` (0 = term off)             | `sgs_variance_geometric_coeff`, `sgs_variance_horizontal_scale_factor`                                  |
 | ``r_{\max}``                                                        | `sgs_variance_max_rel_std` (bound ``\sigma_q \le r_{\max} q_t``)                                  | `sgs_variance_max_rel_std`                                                                              |
-| ``k_{\mathrm{Ri}}``                                                 | `sgs_variance_geometric_Ri_factor` (``\mathrm{Ri}_0 = k_{\mathrm{Ri}} \mathrm{Ri}_c``; 0 = off)   | `sgs_variance_geometric_Ri_factor`                                                                      |
 | ``A``                                                               | `interface_entr_efficiency`                                                                       | `EDMF_interface_entr_efficiency`                                                                        |
 
 The generated [Configuration Options](configuration_options.md) table lists the

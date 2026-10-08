@@ -108,6 +108,8 @@ function test_restart(test_dict; job_id, comms_ctx, more_ignore = Symbol[])
             # Covariance fields depend on scratch state
             :ᶜT′T′,
             :ᶜq′q′,
+            :ᶜcorr_Tq,
+            :ᶜT′q′,
             # Scratch fields for prognostic EDMF (uninitialized until tendencies run)
             :ᶠu₃_tendencyʲs,
             :ᶜρa_tendencyʲs,
@@ -170,6 +172,8 @@ function test_restart(test_dict; job_id, comms_ctx, more_ignore = Symbol[])
             # Covariance fields depend on scratch state
             :ᶜT′T′,
             :ᶜq′q′,
+            :ᶜcorr_Tq,
+            :ᶜT′q′,
             # The raw RRTMGP solver contains internal workspaces that are
             # uninitialized or only partially written by design; its
             # domain-masked outputs are compared through the public getters

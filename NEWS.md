@@ -3,6 +3,23 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- ![][badge-🔥behavioralΔ] Add a resolved vertical-gradient block
+  `c_g (c_Δz Δz)² (∂_z ψ)²` to `σ_T²`, `σ_q²` (uniform-box exact with the
+  defaults `c_g = 1/12`, `c_Δz = 1`; independent of `l_mix`), so the
+  microphysics quadrature sees non-zero variability where the turbulent
+  closure collapses. Set `sgs_variance_vertical_scale_factor = 0` to disable.
+- ![][badge-✨feature/enhancement] New `tq_correlation_model`. `constant`
+  (default) keeps the prescribed `Tq_correlation_coefficient`. `diagnosed`
+  builds `T′q′ = ρ_turb σ_T,turb σ_q,turb + c_g (c_Δx Δx_h)² ∇_h θ · ∇_h q
+  + c_g (c_Δz Δz)² ∂_z θ · ∂_z q` and forms
+  `ρ = clamp(T′q′ / √(T′T′ q′q′), -1, 1)`, falling back to the prescribed
+  value where the variances vanish. Reported via the existing
+  `env_q_tot_temperature_{covariance,correlation}` diagnostics.
+- ![][badge-🔥behavioralΔ] Remove the Richardson-number weight on the
+  horizontal geometric SGS variance term: The
+  `sgs_variance_geometric_Ri_factor` parameter is removed.
+- ![][badge-🔥behavioralΔ] Update to ClimaParams with
+  `sgs_variance_horizontal_scale_factor` default `3.0 → 1.0`.
 
 0.42.13
 -------
