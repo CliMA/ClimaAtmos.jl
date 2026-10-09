@@ -49,7 +49,6 @@ end
     for (name, T) in (
         ("DepositionAndSublimation", CMP.DepositionAndSublimation),
         ("SublimationOnly", CMP.SublimationOnly),
-        ("DepositionOnly", CMP.DepositionOnly),
     )
         cfg = CA.AtmosConfig(
             Dict("microphysics_model" => "1M", "snow_deposition_sublimation" => name),
