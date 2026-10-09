@@ -607,42 +607,6 @@ import ClimaAtmos:
         end
     end
 
-    @testset "0M precipitation threshold floor (q_vap_sat_min)" begin
-        for FT in (Float32, Float64)
-            toml_dict = CP.create_toml_dict(FT)
-            mp = CMP.Microphysics0MParams(toml_dict)
-            thp = TD.Parameters.ThermodynamicsParameters(toml_dict)
-            S_0 = mp.precip.S_0
-            # Cold, thin-cirrus point: S_0 q_sat << q_ice < floor.
-            ρ, T, Φ, dt = FT(0.4), FT(220), FT(1e5), FT(40)
-            q_sat = TD.q_vap_saturation(thp, T, ρ)
-            q_ice = FT(5e-6)
-            @test S_0 * q_sat < q_ice
-            q_tot = q_sat + q_ice
-            base = ClimaAtmos.microphysics_tendencies_0m(
-                mp, thp, ρ, T, q_tot, FT(0), q_ice, Φ, dt,
-            )
-            zero_floor = ClimaAtmos.microphysics_tendencies_0m(
-                mp, thp, ρ, T, q_tot, FT(0), q_ice, Φ, dt, FT(0),
-            )
-            @test zero_floor === base               # no floor: unchanged
-            @test base.dq_tot_dt < 0                # thin cirrus removed
-            floored = ClimaAtmos.microphysics_tendencies_0m(
-                mp, thp, ρ, T, q_tot, FT(0), q_ice, Φ, dt, FT(1e-5) / S_0,
-            )
-            @test floored.dq_tot_dt == 0            # below the 1e-5 floor: kept
-            thick = ClimaAtmos.microphysics_tendencies_0m(
-                mp, thp, ρ, T, q_sat + FT(5e-5), FT(0), FT(5e-5), Φ, dt, FT(1e-5) / S_0,
-            )
-            @test thick.dq_tot_dt ≈ -(FT(5e-5) - FT(1e-5)) / mp.precip.τ_precip rtol = 1e-4
-            # Quadrature evaluator honours the floor too.
-            ev0 = ClimaAtmos.Microphysics0MEvaluator(mp, thp, ρ, T, Φ)
-            evf = ClimaAtmos.Microphysics0MEvaluator(mp, thp, ρ, T, Φ, FT(1e-5) / S_0)
-            @test ev0.q_vap_sat_min === FT(0)
-            @test evf(T, q_tot).dq_tot_dt >= ev0(T, q_tot).dq_tot_dt
-        end
-    end
-
     @testset "0M below-cloud precipitation evaporation (pointwise)" begin
         rate = ClimaAtmos.precipitation_evaporation_rate
         step = ClimaAtmos.precipitation_evaporation_step

@@ -659,8 +659,6 @@ Base.@kwdef struct ClimaAtmosParameters{
     fixed_cloud_ice_terminal_velocity::FT
     fixed_rain_terminal_velocity::FT
     fixed_snow_terminal_velocity::FT
-    # 0M environment / grid-mean precipitation threshold floor [kg/kg]
-    precipitation_threshold_floor::FT
     # 0M below-cloud evaporation / sublimation of the precipitation flux
     # (Kessler-Tiedtke deficit form; see `precipitation_evaporation_parameters`).
     # A zero coefficient switches it off.

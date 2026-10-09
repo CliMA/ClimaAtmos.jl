@@ -25,9 +25,7 @@ main
   `precipitation_timescale_updraft` and
   `supersaturation_precipitation_threshold_updraft` (`type = "float"`), which
   default to the grid-mean values. Adds a new `ClimaAtmosParameters` type
-  parameter and the 2D diagnostic `prup` (updraft part of `pr`). Optional
-  `precipitation_threshold_floor` (default 0) floors the environment threshold
-  at `max(S_0 q_vap_sat, floor)`.
+  parameter and the 2D diagnostic `prup` (updraft part of `pr`).
 - ![][badge-✨feature/enhancement] 0M: optional below-cloud evaporation and
   sublimation of the precipitation flux (Kessler/Tiedtke deficit form, top-down
   column scan limited by the incoming flux and wet-bulb cooling to `RH_c`).

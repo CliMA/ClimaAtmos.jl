@@ -325,36 +325,6 @@ end
     end
 end
 
-@testset "0M precipitation threshold floor" begin
-    m0 = CA.EquilibriumMicrophysics0M()
-    for FT in (Float32, Float64)
-        toml_dict = CP.create_toml_dict(FT)
-        params = CA.ClimaAtmosParameters(toml_dict; microphysics_model = m0)
-        @test CAP.precipitation_threshold_floor(params) === FT(0)
-        @test CA.precipitation_q_vap_sat_min(params) === FT(0)
-        @test !haskey(toml_dict.data, "precipitation_threshold_floor")
-
-        mk(v) = CP.create_toml_dict(
-            FT;
-            override_file = Dict(
-                "precipitation_threshold_floor" => Dict("value" => v, "type" => "float"),
-            ),
-        )
-        toml_dict = mk(1e-5)
-        params = CA.ClimaAtmosParameters(toml_dict; microphysics_model = m0)
-        @test CAP.precipitation_threshold_floor(params) === FT(1e-5)
-        S_0 = CAP.microphysics_0m_params(params).precip.S_0
-        @test CA.precipitation_q_vap_sat_min(params) ≈ FT(1e-5) / S_0
-        @test "ClimaAtmos" in toml_dict.data["precipitation_threshold_floor"]["used_in"]
-        @test_throws ErrorException CA.ClimaAtmosParameters(mk(-1e-5); microphysics_model = m0)
-        @test_throws ErrorException CA.ClimaAtmosParameters(
-            CP.create_toml_dict(FT; override_file = Dict(
-                "precipitation_threshold_floor" => Dict("value" => 1e-5))),
-            microphysics_model = m0,
-        )
-    end
-end
-
 @testset "0M precipitation evaporation parameters" begin
     m0 = CA.EquilibriumMicrophysics0M()
     names = (

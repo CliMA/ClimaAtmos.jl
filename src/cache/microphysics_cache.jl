@@ -819,19 +819,6 @@ set_microphysics_tendency_cache!(Y, p, _, _) = nothing
 ###
 
 """
-    precipitation_q_vap_sat_min(params)
-
-Saturation humidity floor `floor / S_0` that makes the 0M threshold
-`S_0 q_vap_sat` at least `precipitation_threshold_floor`; zero when no floor
-is set (unchanged behaviour).
-"""
-function precipitation_q_vap_sat_min(params)
-    floor = CAP.precipitation_threshold_floor(params)
-    S_0 = CAP.microphysics_0m_params(params).precip.S_0
-    return iszero(floor) ? zero(floor) : floor / S_0
-end
-
-"""
     precipitation_evaporation_active(params)
 
 Whether 0M below-cloud precipitation evaporation is on, i.e.
@@ -970,7 +957,6 @@ function set_microphysics_tendency_cache!(Y, p, ::EquilibriumMicrophysics0M, _)
 
     cm0 = CAP.microphysics_0m_params(p.params)
     thp = CAP.thermodynamics_params(p.params)
-    q_vap_sat_min = precipitation_q_vap_sat_min(p.params)
 
     ### Grid-mean microphysics tendency with/without quadrature sampling.
     sgs_quad = p.atmos.sgs_quadrature
@@ -979,7 +965,6 @@ function set_microphysics_tendency_cache!(Y, p, ::EquilibriumMicrophysics0M, _)
         (; ᶜq_liq, ᶜq_ice) = p.precomputed
         @. ᶜmp_tendency = microphysics_tendencies_0m(
             cm0, thp, Y.c.ρ, ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice, ᶜΦ, dt,
-            q_vap_sat_min,
         )
     else
         # Evaluate over quadrature points. Both dq_tot_dt and e_tot_hlpr
@@ -988,7 +973,7 @@ function set_microphysics_tendency_cache!(Y, p, ::EquilibriumMicrophysics0M, _)
         (; ᶜT′T′, ᶜq′q′, ᶜcorr_Tq) = p.precomputed
         @. ᶜmp_tendency = microphysics_tendencies_0m(
             $(sgs_quad), cm0, thp, Y.c.ρ, ᶜT, ᶜq_tot_nonneg,
-            ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜΦ, dt, q_vap_sat_min,
+            ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜΦ, dt,
         )
     end
 
@@ -1018,8 +1003,6 @@ function set_microphysics_tendency_cache!(
     # Convective (updraft) condensate has its own precipitation timescale and
     # supersaturation threshold; the environment keeps the grid-mean ones.
     cm0_up = CAP.microphysics_0m_updraft_params(p.params)
-    # Floor on the environment threshold only (thin cirrus); not the updraft.
-    q_vap_sat_min = precipitation_q_vap_sat_min(p.params)
 
     n = n_mass_flux_subdomains(tm)
 
@@ -1040,14 +1023,13 @@ function set_microphysics_tendency_cache!(
         # Evaluate on the grid-mean.
         @. ᶜmp_tendency⁰ = microphysics_tendencies_0m(
             cm0, thp, ᶜρ⁰, ᶜT⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜΦ, dt,
-            q_vap_sat_min,
         )
     else
         # Evaluate over quadrature points.
         (; ᶜT′T′, ᶜq′q′, ᶜcorr_Tq) = p.precomputed
         @. ᶜmp_tendency⁰ = microphysics_tendencies_0m(
             $(sgs_quad), cm0, thp, ᶜρ⁰, ᶜT⁰, ᶜq_tot_nonneg⁰,
-            ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜΦ, dt, q_vap_sat_min,
+            ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜΦ, dt,
         )
     end
 
