@@ -275,6 +275,7 @@ import ClimaAtmos:
                     @test e_up.dq_rai_dt ≈ ref_up.dq_rai_dt rtol = FT(1e-5)
                 end
 
+                pkgversion(CM) < v"0.44" && continue
                 @testset "descending air is stratiform" begin
                     @test bmt(-w_up).dq_rai_dt == ref_rest.dq_rai_dt
                 end
