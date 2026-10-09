@@ -177,14 +177,15 @@ import ClimaAtmos:
     end
 
     @testset "BMT 1M vertical-velocity plumbing" begin
-        # CloudMicrophysics 0.41: the Kessler1M rain autoconversion blends its timescale
+        # CloudMicrophysics 0.44: the Kessler1M rain autoconversion blends its timescale
         # between a stratiform and a convective value with the subdomain vertical velocity
-        # (f(w) = w⁴ / (w⁴ + w₀⁴), w₀ = 1.5 m/s by default). The ClimaParams defaults set the
-        # two values equal (classic Kessler), so `w` must be made active here by giving the
-        # stratiform regime a longer timescale. The tests then check that `w` reaches
-        # CloudMicrophysics through every 1M wrapper: an updraft (w = 10 m/s) must convert
-        # cloud liquid to rain faster than quiescent air (w = 0), and each wrapper must agree
-        # with the direct BMT call made with the same `w`.
+        # (f(w) = w₊² / (w₊² + w₀²), w₊ = max(w, 0), w₀ = 1.5 m/s by default). The
+        # ClimaParams defaults set the two values equal (classic Kessler), so `w` must be
+        # made active here by giving the stratiform regime a longer timescale. The tests
+        # then check that `w` reaches CloudMicrophysics through every 1M wrapper: an
+        # updraft (w = 10 m/s) must convert cloud liquid to rain faster than quiescent air
+        # (w = 0), and each wrapper must agree with the direct BMT call made with the
+        # same `w`.
         for FT in (Float32, Float64)
             @testset "FT = $FT" begin
                 # Stratiform timescale = 1000 s · 10.0 = 10000 s (convective 1000 s).
@@ -274,8 +275,8 @@ import ClimaAtmos:
                     @test e_up.dq_rai_dt ≈ ref_up.dq_rai_dt rtol = FT(1e-5)
                 end
 
-                @testset "even in w" begin
-                    @test bmt(-w_up).dq_rai_dt == ref_up.dq_rai_dt
+                @testset "descending air is stratiform" begin
+                    @test bmt(-w_up).dq_rai_dt == ref_rest.dq_rai_dt
                 end
             end
         end

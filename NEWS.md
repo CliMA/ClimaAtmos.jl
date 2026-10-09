@@ -3,6 +3,9 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+
+0.42.14
+-------
 - ![][badge-🔥behavioralΔ] Add a resolved vertical-gradient block
   `c_g (c_Δz Δz)² (∂_z ψ)²` to `σ_T²`, `σ_q²` (uniform-box exact with the
   defaults `c_g = 1/12`, `c_Δz = 1`; independent of `l_mix`), so the
@@ -20,6 +23,7 @@ main
   `sgs_variance_geometric_Ri_factor` parameter is removed.
 - ![][badge-🔥behavioralΔ] Update to ClimaParams with
   `sgs_variance_horizontal_scale_factor` default `3.0 → 1.0`.
+- ![][badge-🔥behavioralΔ] Update to CloudMicrophysics v0.44 in compat and manifest.
 
 0.42.13
 -------
