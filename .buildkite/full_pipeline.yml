@@ -16,6 +16,8 @@ env:
   GPU_CONFIG_PATH: "config/gpu_configs"
   PERF_CONFIG_PATH: "config/perf_configs"
   MPI_CONFIG_PATH: "config/mpi_configs"
+  # Temporary, for testing multi col sims
+  UPSTREAM_PACKAGES: "ClimaUtilities#kp/ragged-data-intp ClimaDiagnostics#kp/multi-cols"
 
 # NOTE: this pipeline is uploaded by .buildkite/decide_pipeline.sh, which only
 # runs on non-`main` builds.
