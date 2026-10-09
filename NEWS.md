@@ -20,46 +20,21 @@ main
   `sgs_variance_geometric_Ri_factor` parameter is removed.
 - ![][badge-🔥behavioralΔ] Update to ClimaParams with
   `sgs_variance_horizontal_scale_factor` default `3.0 → 1.0`.
-- ![][badge-✨feature/enhancement] With `EquilibriumMicrophysics0M` and
-  `PrognosticEDMFX`, updraft (convective) condensate can now precipitate with
-  its own timescale and supersaturation threshold, separately from the
-  environment (stratiform) condensate. They are set by the optional
-  ClimaAtmos TOML keys `precipitation_timescale_updraft` and
+- ![][badge-✨feature/enhancement] 0M + `PrognosticEDMFX`: updraft condensate
+  can precipitate with its own timescale and threshold via the optional TOML keys
+  `precipitation_timescale_updraft` and
   `supersaturation_precipitation_threshold_updraft` (`type = "float"`), which
-  default to `precipitation_timescale` and
-  `supersaturation_precipitation_threshold`, so results are unchanged unless
-  they are set. They only affect runs with `PrognosticEDMFX` (with 0M but no
-  EDMF updrafts they are read but have no effect), and are not read at all for
-  non-0M microphysics. Set values must be finite, with a positive timescale and
-  a non-negative threshold. They are stored as `microphysics_0m_updraft_params` in
-  `ClimaAtmosParameters` (a new type parameter after `MP0M`). A new 2D
-  diagnostic `prup` (kg m^-2 s^-1, same sign as `pr`) is the column-integrated
-  updraft precipitation sink, so `pr - prup` is the environment part.
-- ![][badge-✨feature/enhancement] Optional ClimaAtmos TOML key
-  `precipitation_threshold_floor` [kg/kg] (`type = "float"`, default 0) floors
-  the 0M precipitation threshold of the environment / grid mean at
-  `max(S_0 q_vap_sat, floor)`, so thin cirrus aloft (where `S_0 q_vap_sat` is
-  ~1e-6) is not removed. Updrafts are unaffected. Stored as the scalar
-  `precipitation_threshold_floor` in `ClimaAtmosParameters`.
-- ![][badge-✨feature/enhancement] Optional below-cloud evaporation /
-  sublimation of the `EquilibriumMicrophysics0M` precipitation flux
-  (Kessler/Tiedtke deficit form
-  `E = a_p k_E max(0, RH_c q_sat - q_vap) [sqrt(p/p_s) (F/a_p) / α₂]^α₃`).
-  The rain and snow fluxes are scanned top-down through each column, limited
-  so that no more evaporates than falls in from above or than cools the air to
-  its wet-bulb `RH_c` saturation. The water and its energy are returned to the
-  grid mean `ρ`, `ρq_tot`, `ρe_tot` (so to the environment with
-  `PrognosticEDMFX`), and the surface rain/snow fluxes and column precipitation
-  energy are reduced to match, so column water and energy budgets close.
-  Evaporated water is returned with the phase (liquid or ice energy) it was
-  removed with. ClimaAtmos TOML keys (`type = "float"`):
-  `precipitation_evaporation_coefficient` (`k_E` [s⁻¹], default 0 = off and
-  bit-for-bit unchanged; IFS 5.44e-4), `precipitation_evaporation_rh_crit`
-  (0.9), `precipitation_evaporation_area_fraction` (0.5),
-  `precipitation_evaporation_flux_scale` (5.09e-3 kg m⁻² s⁻¹),
-  `precipitation_evaporation_exponent` (0.5777); read only for 0M. New
-  diagnostics `prevap` (2D, kg m⁻² s⁻¹, positive) and `tnhusevp` (3D,
-  kg kg⁻¹ s⁻¹).
+  default to the grid-mean values. Adds a new `ClimaAtmosParameters` type
+  parameter and the 2D diagnostic `prup` (updraft part of `pr`). Optional
+  `precipitation_threshold_floor` (default 0) floors the environment threshold
+  at `max(S_0 q_vap_sat, floor)`.
+- ![][badge-✨feature/enhancement] 0M: optional below-cloud evaporation and
+  sublimation of the precipitation flux (Kessler/Tiedtke deficit form, top-down
+  column scan limited by the incoming flux and wet-bulb cooling to `RH_c`).
+  Water and energy are returned to the grid mean, so column budgets close. Keys
+  `precipitation_evaporation_{coefficient,rh_crit,area_fraction,flux_scale,exponent}`
+  (`type = "float"`); off unless `precipitation_evaporation_coefficient > 0`.
+  New diagnostics `prevap` and `tnhusevp`.
 
 0.42.13
 -------
