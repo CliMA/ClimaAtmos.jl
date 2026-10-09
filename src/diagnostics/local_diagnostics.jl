@@ -75,10 +75,10 @@ add_diagnostic_variable!(
     standard_name = "tendency_of_atmosphere_mass_content_of_sea_salt_dry_aerosol_particles_due_to_wet_deposition",
     units = "kg m^-2 s^-1",
     comments = "Column-integrated wet-removal rate of prognostic sea salt \
-                (below-cloud washout), positive toward the surface. \
-                Integrates the per-step exponential sink actually applied \
-                by the tendency, so tracer mass budgets close against this \
-                flux.",
+                (in-cloud scavenging + below-cloud washout), positive toward \
+                the surface. Integrates the per-step exponential sink \
+                actually applied by the tendency, so tracer mass budgets \
+                close against this flux.",
     compute! = (out, u, p, t) ->
         compute_sslt_wetdep_column!(out, u, p, p.atmos.seasalt),
 )

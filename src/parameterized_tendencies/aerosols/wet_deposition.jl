@@ -1,4 +1,5 @@
 import CloudMicrophysics.Microphysics1M as CM1
+import CloudMicrophysics.BulkMicrophysicsTendencies as BMT
 
 """
     rain_swept_collection_rate(q_rai, ρ, rain, vel)
@@ -279,12 +280,118 @@ end
 
 The microphysics models under which sea salt wet removal is active and the
 rate cache is populated: `NonEquilibriumMicrophysics1M` (rain size
-distribution available) and `EquilibriumMicrophysics0M` (precipitation
-shadow only). Every other model leaves the rates unread and wet deposition
-off.
+distribution available) and `EquilibriumMicrophysics0M` (in-cloud driver from
+the 0M sink and equilibrium condensate; washout from the precipitation shadow).
+Every other model leaves the rates unread and wet deposition off.
 """
 const WetDepositionMicrophysics =
     Union{EquilibriumMicrophysics0M, NonEquilibriumMicrophysics1M}
+
+"""
+    cloud_precip_formation_rate(cmp, thp, ρ, T, q_tot, q_lcl, q_icl, q_rai, q_sno)
+
+Rate at which cloud condensate of either phase is converted to precipitation
+[kg kg⁻¹ s⁻¹, ≥ 0] on the given (subdomain) state: every sink of `q_lcl` and
+`q_icl` that lands in rain or snow, from a dedicated `InstantaneousVerbose`
+microphysics evaluation —
+
+    S_acnv_lcl_rai + S_accr_lcl_rai + S_accr_lcl_sno_warm + S_accr_lcl_sno_cold
+
+  - S_acnv_icl_sno + S_accr_icl_rai + S_accr_icl_sno
+
+Using individual process terms rather than net `dq_*_dt` tendencies keeps
+condensation/evaporation, melt/freeze bookkeeping, and rain evaporation out of
+the scavenging driver; `S_melt_icl_lcl` is excluded because it moves condensate
+within the cloud rather than into precipitation. Pairing this with the
+all-condensate divisor `q_lcl + q_icl` means a glaciated subdomain is
+scavenged at the rate its ice converts to snow, and matches the phase-blind
+cloud indicator and the 0-moment driver. Unused source terms are
+dead-code-eliminated inside the broadcast, as in the `mp1m_` diagnostics.
+"""
+@inline function cloud_precip_formation_rate(
+    cmp, thp, ρ, T, q_tot, q_lcl, q_icl, q_rai, q_sno,
+)
+    S = BMT.bulk_microphysics_tendencies(
+        BMT.InstantaneousVerbose(), BMT.Microphysics1Moment(),
+        cmp, thp, ρ, T, q_tot, q_lcl, q_icl, q_rai, q_sno,
+    )
+    formation =
+        S.S_acnv_lcl_rai + S.S_accr_lcl_rai +
+        S.S_accr_lcl_sno_warm + S.S_accr_lcl_sno_cold +
+        S.S_acnv_icl_sno + S.S_accr_icl_rai + S.S_accr_icl_sno
+    return max(formation, zero(formation))
+end
+
+"""
+    sslt_in_cloud_scavenging_rate(F, f_act, Q, q_cld, dt)
+
+In-cloud (nucleation) scavenging rate `F · f_act · min(Q/q_cld, 1/dt)` [s⁻¹]
+of one aerosol bin. Within the precipitating-area proxy `F`, the activated
+fraction `f_act` of the aerosol is dissolved in cloud condensate and leaves at
+the intensive rate at which that condensate converts to precipitation,
+`c₁ = Q/q_cld` (area dilution cancels in the ratio because `Q` and `q_cld` are
+diluted alike). Neither driver bounds `Q` against the condensate reservoir —
+`InstantaneousVerbose` applies no timestep limiter, and the 0-moment limiter
+bounds only against `q_tot` — so the `1/dt` cap is a real bound; the term is
+gated to zero where cloud condensate is negligible.
+"""
+function sslt_in_cloud_scavenging_rate(F, f_act, Q, q_cld, dt)
+    FT = typeof(F)
+    c₁ = ifelse(q_cld > ϵ_numerics(FT), min(Q / q_cld, 1 / dt), zero(FT))
+    return F * f_act * c₁
+end
+
+"""
+    sslt_below_cloud_scavenging_rate(F, f_act, Λ)
+
+Below-cloud (impaction) washout rate `(1 − F · f_act) · Λ` [s⁻¹] of one
+aerosol bin, at the unit-efficiency collection rate `Λ`. Washout acts on the
+aerosol that is *not* dissolved in cloud condensate: all of the cloud-free
+area `(1 − F)`, plus the interstitial fraction `F · (1 − f_act)` of the cloudy
+area. The droplet-borne remainder is already removed by
+[`sslt_in_cloud_scavenging_rate`](@ref), whose driver `Q` contains the
+rain-accretes-cloud-liquid arm, so weighting washout by the full area instead
+would count that channel twice. `f_act ≡ 1` for the shipped mass-only sea salt
+bins (all bins activate at marine supersaturations), which reduces the weight
+to `1 − F`; the argument is the seam for an activation-derived per-bin
+fraction.
+"""
+sslt_below_cloud_scavenging_rate(F, f_act, Λ) = (1 - F * f_act) * Λ
+
+"""
+    sslt_env_cloud_fraction!(ᶜa_cld, ᶜa⁰, Y, p, n)
+
+Environment cloud fraction `F⁰` (lazy) under `PrognosticEDMFX`, recovered
+from the area-weighted `ᶜcloud_fraction = a⁰F⁰ + Σⱼ aʲ·1[condʲ]` (see
+`_apply_edmf_cloud_weighting!`) by subtracting the binary updraft cloud
+areas, accumulated into the scratch `ᶜa_cld`, and dividing by the
+environment area `ᶜa⁰`. The binary updraft cloud check uses the cloud
+condensate only (`_updraft_cloud_condensate`: rain and snow are not cloud),
+exactly as the cloud fraction does, so a raining but cloud-free updraft
+washes out rather than nucleation-scavenges.
+"""
+function sslt_env_cloud_fraction!(ᶜa_cld, ᶜa⁰, Y, p, n)
+    FT = eltype(Y)
+    thp = CAP.thermodynamics_params(p.params)
+    (; ᶜρʲs, ᶜcloud_fraction) = p.precomputed
+    microphysics_model = p.atmos.microphysics_model
+    @. ᶜa_cld = zero(FT)
+    for j in 1:n
+        ᶜq_lclʲ, ᶜq_iclʲ = _updraft_cloud_condensate(Y, p, j, microphysics_model)
+        @. ᶜa_cld += ifelse(
+            TD.has_condensate(thp, max(zero(FT), ᶜq_lclʲ + ᶜq_iclʲ)),
+            draft_area(max(zero(FT), Y.c.sgsʲs.:($$j).ρa), ᶜρʲs.:($$j)),
+            zero(FT),
+        )
+    end
+    return @. lazy(
+        ifelse(
+            ᶜa⁰ > ϵ_numerics(FT),
+            min(max((ᶜcloud_fraction - ᶜa_cld) / ᶜa⁰, zero(FT)), one(FT)),
+            zero(FT),
+        ),
+    )
+end
 
 """
     set_sslt_wet_deposition_rates!(Y, p)
@@ -292,24 +399,35 @@ const WetDepositionMicrophysics =
 
 Fill the per-bin first-order wet-removal rates `k` [s⁻¹] in
 `p.tracers.sslt_wetdep_rates` for [`aerosol_wet_deposition_tendency!`](@ref)
-and the opt-in `wetss` diagnostic: each bin's below-cloud washout rate. Called from
-`set_explicit_precomputed_quantities!` after the microphysics cache and
-surface precipitation flux updates. No-op unless sea salt is prognostic and
-the microphysics is one of [`WetDepositionMicrophysics`](@ref); with any
-other microphysics the rates are never read and wet deposition is off.
+and the opt-in `wetss` diagnostic. Called from
+`set_explicit_precomputed_quantities!` after the microphysics cache update,
+so `ᶜcloud_fraction` and the subdomain thermodynamic states are current.
+No-op unless sea salt is prognostic and the microphysics is one of
+[`WetDepositionMicrophysics`](@ref); with any other microphysics the rates
+are never read and wet deposition is off.
 
-Under `NonEquilibriumMicrophysics1M` the rate is `k = E · Λ`
-([`sslt_bin_washout_rate`](@ref)): the Slinn (1984) collection efficiency
-[`slinn_collection_efficiency`](@ref) of the bin's wet settling radius (dry
-settling radius times the Lewis Eq. 34 growth factor at the subdomain's RH)
-by the representative raindrop [`rain_representative_drop`](@ref) of the
-subdomain's rain, times the unit-efficiency swept collection rate
-[`rain_swept_collection_rate`](@ref) `Λ` on that rain state. Prognostic sea
-salt requires `PrognosticEDMFX`, so everything is evaluated per subdomain —
-`E⁰Λ⁰` from the environment rain `q_rai⁰` (the residual
-`ᶜspecific_env_value`), density, temperature and air state, `EʲΛʲ` from each
-updraft's own — mirroring the subdomain split of the microphysics process
-rates. Two sets are cached:
+Every ingredient of the two scavenging rates is evaluated per
+subdomain, mirroring the subdomain split of the
+microphysics process rates: the environment uses the residual
+`ᶜspecific_env_value` water species, the environment cloud fraction `F⁰`
+recovered from the area-weighted `ᶜcloud_fraction` by subtracting the
+(binary) updraft cloud areas, and its own `Q⁰`, `Λ⁰`, temperature and air
+state; each updraft uses its own `q_*`, a binary cloud indicator
+(condensate present), `Qʲ`, `Λʲ`, temperature and air state. The
+environment `Q⁰` is a mean-state verbose call even when the environment
+microphysics uses SGS quadrature; the inconsistency is accepted and
+documented in `docs/sea_salt_wet_deposition_immediate_plan.md` (§3a,
+"Cache plumbing").
+
+Under `NonEquilibriumMicrophysics1M` the washout part of a subdomain's rate
+is [`sslt_bin_washout_rate`](@ref) evaluated on the below-cloud swept rate
+`Λ̃ = (1 − F) Λ` ([`sslt_below_cloud_scavenging_rate`](@ref) of
+[`rain_swept_collection_rate`](@ref)): the Slinn (1984) collection
+efficiency [`slinn_collection_efficiency`](@ref) of the bin's wet settling
+radius (dry settling radius times the Lewis Eq. 34 growth factor at the
+subdomain's RH) by the representative raindrop
+[`rain_representative_drop`](@ref) of the subdomain's rain, times `Λ̃`. Two
+sets of rates are cached:
 
   - `p.tracers.sslt_wetdep_rates[bin]`, the grid-mean rate
     `k = (ρa⁰χ⁰k⁰ + Σⱼ ρaʲχʲkʲ) / (ρa⁰χ⁰ + Σⱼ ρaʲχʲ)`, mass-weighted so the
@@ -319,15 +437,20 @@ rates. Two sets are cached:
     the tendency applies to the updraft tracer so precipitating updrafts
     scavenge their own aerosol rather than the grid-mean share.
 
-Under `EquilibriumMicrophysics0M` there is no rain state, so the rate is the
-per-bin power law [`power_law_washout_rate`](@ref) (`ssa_washout_a[bin]`,
-`ssa_washout_b[bin]`) in the rain rate of the column precipitation shadow
-from [`set_sslt_precipitation_shadow!`](@ref). The shadow is a property of
-the whole column — 0-moment precipitation is removed from the grid column
-the instant it forms, with no record of which subdomain it fell through —
-so under `PrognosticEDMFX` the same rate is written to the grid-mean and to
-every updraft slot; the mass-weighted composition then reduces to it
-identically.
+Under `EquilibriumMicrophysics0M` the same two-term rate is assembled from
+the 0-moment ingredients: the in-cloud driver is
+[`precipitation_conversion_rate_0m`](@ref) of the cached total-water sink
+over the equilibrium condensate `q_liq + q_ice` (all condensate, no phase
+resolution), and the washout is the per-bin power law
+[`power_law_washout_rate`](@ref) (`ssa_washout_a[bin]`, `ssa_washout_b[bin]`)
+in the rain rate of the column precipitation shadow from
+[`set_sslt_precipitation_shadow!`](@ref). The in-cloud term and the cloudy
+area are per subdomain exactly as for 1M (the
+environment from `ᶜmp_tendency⁰` and `ᶜq_liq⁰ + ᶜq_ice⁰`, each updraft from
+its own `ᶜmp_tendencyʲs` and `ᶜq_liqʲs + ᶜq_iceʲs`), while the shadow is a
+property of the whole column — 0-moment precipitation leaves the grid column
+the instant it forms, with no record of which subdomain it fell through — so
+every subdomain is washed at the same rain rate.
 """
 set_sslt_wet_deposition_rates!(Y, p) = set_sslt_wet_deposition_rates!(
     Y, p, p.atmos.seasalt, p.atmos.microphysics_model,
@@ -397,99 +520,169 @@ function set_sslt_wet_deposition_rates!(
     vel = cmp.terminal_velocity.rain
     grav = FT(CAP.grav(p.params))
     ρ_s = CAP.prescribed_aerosol_params(p.params).seasalt_density
-    (; ᶜp, ᶜT⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜTʲs, ᶜρʲs) = p.precomputed
+    (; ᶜp, ᶜT⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰) = p.precomputed
+    (; ᶜρʲs, ᶜTʲs, ᶜq_tot_nonnegʲs) = p.precomputed
     (; sslt_air_state⁰, sslt_air_stateʲs) = p.tracers
     rates = p.tracers.sslt_wetdep_rates
     ratesʲs = p.tracers.sslt_wetdep_ratesʲs
     n = n_mass_flux_subdomains(turbconv_model)
     dt = float(p.dt)
-
-    # Bin-independent environment quantities, hoisted: density and rain, plus
-    # the air state (RH, μ, λ) of every subdomain that the growth factor and
-    # the Brownian diffusivity read. The air-state cache is refilled here, not
-    # reused from the settling tendency: this runs in the precomputed update,
-    # before the tendencies, so that fill is a stage stale (unset at the first).
-    ᶜρ⁰ = p.scratch.ᶜtemp_scalar
-    ᶜq_rai⁰ = p.scratch.ᶜtemp_scalar_2
-    @. ᶜρ⁰ = TD.air_density(thp, ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰)
-    ᶜq_rai⁰ .= ᶜspecific_env_value(@name(q_rai), Y, p)
-    set_sslt_air_states!(Y, p, ᶜρ⁰)
+    microphysics_model = p.atmos.microphysics_model
     ᶜρa⁰ = @. lazy(max(zero(FT), ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model)))
-    # Scratch accumulators of the mass and the survived mass per bin.
-    ᶜρaχ = p.scratch.ᶜtemp_scalar_4
-    ᶜρaχE = p.scratch.ᶜtemp_scalar_5
-    # Unit-efficiency collection rate Λ and representative raindrop (radius,
-    # fall speed) of the subdomain being processed, hoisted out of its bin
-    # loop (the bins differ only through E). The updrafts go first so the
-    # environment's Λ⁰ and drop can then stay in place through the bin loop
-    # that composes the grid-mean rate.
-    ᶜΛ = p.scratch.ᶜtemp_scalar_3
-    ᶜr_D = p.scratch.ᶜtemp_scalar_6
-    ᶜV_D = p.scratch.ᶜtemp_scalar_7
+
+    # Each subdomain's rate is `c + E_bin · Λ̃`, with `c` the in-cloud part
+    # ([`sslt_in_cloud_scavenging_rate`](@ref)) and `Λ̃` the unit-efficiency
+    # washout part ([`sslt_below_cloud_scavenging_rate`](@ref)) — both
+    # bin-independent — and `E_bin` the per-cell Slinn collection efficiency
+    # inside [`sslt_bin_washout_rate`](@ref). The bin-independent fields
+    # (`c`, `Λ̃`, and the representative raindrop `r_D`, `V_D`) are hoisted
+    # out of each subdomain's bin loop. The updrafts go first so the
+    # environment's fields can then stay in place through the bin loop that
+    # composes the grid-mean rate.
+
+    # The air state (RH, μ, λ) of every subdomain, read by the growth factor
+    # and the Brownian diffusivity, is refilled here rather than reused from
+    # the settling tendency: this runs in the precomputed update, before the
+    # tendencies, so that fill is a stage stale (unset at the first).
+    ᶜρ⁰ = p.scratch.ᶜtemp_scalar
+    @. ᶜρ⁰ = TD.air_density(thp, ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰)
+    set_sslt_air_states!(Y, p, ᶜρ⁰)
 
     bins = sslt_settling_bin_props(p, sslt)
+
+    # 1. Updrafts: own state, binary cloud indicator, own rate per bin.
+    ᶜcʲ = p.scratch.ᶜtemp_scalar_2
+    ᶜΛ̃ʲ = p.scratch.ᶜtemp_scalar_3
+    ᶜr_Dʲ = p.scratch.ᶜtemp_scalar_4
+    ᶜV_Dʲ = p.scratch.ᶜtemp_scalar_5
     for j in 1:n
         ᶜρʲ = ᶜρʲs.:($j)
         ᶜTʲ = ᶜTʲs.:($j)
         ᶜairʲ = sslt_air_stateʲs[j]
         ᶜq_raiʲ = @. lazy(max(zero(FT), Y.c.sgsʲs.:($$j).q_rai))
-        @. ᶜΛ = rain_swept_collection_rate(ᶜq_raiʲ, ᶜρʲ, rain, vel)
-        @. ᶜr_D = rain_representative_drop_radius(ᶜq_raiʲ, ᶜρʲ, rain, vel)
-        @. ᶜV_D = rain_drop_fall_speed(ᶜr_D, ᶜρʲ, rain, vel)
+        ᶜq_lclʲ, ᶜq_iclʲ = _updraft_cloud_condensate(Y, p, j, microphysics_model)
+        ᶜFʲ = @. lazy(
+            ifelse(
+                TD.has_condensate(thp, max(zero(FT), ᶜq_lclʲ + ᶜq_iclʲ)),
+                one(FT),
+                zero(FT),
+            ),
+        )
+        @. ᶜcʲ = sslt_in_cloud_scavenging_rate(
+            ᶜFʲ,
+            one(FT),
+            cloud_precip_formation_rate(
+                cmp, thp, ᶜρʲ, ᶜTʲ, ᶜq_tot_nonnegʲs.:($$j),
+                Y.c.sgsʲs.:($$j).q_lcl, Y.c.sgsʲs.:($$j).q_icl,
+                Y.c.sgsʲs.:($$j).q_rai, Y.c.sgsʲs.:($$j).q_sno,
+            ),
+            Y.c.sgsʲs.:($$j).q_lcl + Y.c.sgsʲs.:($$j).q_icl,
+            dt,
+        )
+        @. ᶜΛ̃ʲ = sslt_below_cloud_scavenging_rate(
+            ᶜFʲ,
+            one(FT),
+            rain_swept_collection_rate(ᶜq_raiʲ, ᶜρʲ, rain, vel),
+        )
+        @. ᶜr_Dʲ = rain_representative_drop_radius(ᶜq_raiʲ, ᶜρʲ, rain, vel)
+        @. ᶜV_Dʲ = rain_drop_fall_speed(ᶜr_Dʲ, ᶜρʲ, rain, vel)
         MatrixFields.unrolled_foreach(bins) do (ρχ_name, r_settle, C_kelvin)
-            bin = MatrixFields.extract_first(ρχ_name)
-            @. ratesʲs[bin][j] = sslt_bin_washout_rate(
-                ᶜairʲ,
-                ᶜTʲ,
-                r_settle,
-                C_kelvin,
-                ρ_s,
-                ᶜρʲ,
-                ᶜr_D,
-                ᶜV_D,
-                ᶜΛ,
-                grav,
-                (ap,),
-            )
+            ᶜkʲ = ratesʲs[MatrixFields.extract_first(ρχ_name)][j]
+            @. ᶜkʲ =
+                ᶜcʲ + sslt_bin_washout_rate(
+                    ᶜairʲ,
+                    ᶜTʲ,
+                    r_settle,
+                    C_kelvin,
+                    ρ_s,
+                    ᶜρʲ,
+                    ᶜr_Dʲ,
+                    ᶜV_Dʲ,
+                    ᶜΛ̃ʲ,
+                    grav,
+                    (ap,),
+                )
         end
     end
 
-    @. ᶜΛ = rain_swept_collection_rate(ᶜq_rai⁰, ᶜρ⁰, rain, vel)
-    @. ᶜr_D = rain_representative_drop_radius(ᶜq_rai⁰, ᶜρ⁰, rain, vel)
-    @. ᶜV_D = rain_drop_fall_speed(ᶜr_D, ᶜρ⁰, rain, vel)
-    # Nothing reads q_rai⁰ past this point, so its scratch holds the
-    # environment rate k⁰ of the bin being composed.
-    ᶜk⁰ = ᶜq_rai⁰
+    # 2. Environment: residual water species, cloud fraction, and the
+    # bin-independent fields. Scratch is tight (seven slots), so each
+    # species slot is handed on as soon as its last reader has run.
+    ᶜq_lcl⁰ = p.scratch.ᶜtemp_scalar_2
+    ᶜq_icl⁰ = p.scratch.ᶜtemp_scalar_3
+    ᶜq_rai⁰ = p.scratch.ᶜtemp_scalar_4
+    ᶜq_sno⁰ = p.scratch.ᶜtemp_scalar_5
+    ᶜq_lcl⁰ .= ᶜspecific_env_value(@name(q_lcl), Y, p)
+    ᶜq_icl⁰ .= ᶜspecific_env_value(@name(q_icl), Y, p)
+    ᶜq_rai⁰ .= ᶜspecific_env_value(@name(q_rai), Y, p)
+    ᶜq_sno⁰ .= ᶜspecific_env_value(@name(q_sno), Y, p)
+    ᶜa_cld = p.scratch.ᶜtemp_scalar_6
+    ᶜa⁰ = @. lazy(draft_area(ᶜρa⁰, ᶜρ⁰))
+    ᶜF⁰ = sslt_env_cloud_fraction!(ᶜa_cld, ᶜa⁰, Y, p, n)
+    ᶜc⁰ = p.scratch.ᶜtemp_scalar_7
+    @. ᶜc⁰ = sslt_in_cloud_scavenging_rate(
+        ᶜF⁰,
+        one(FT),
+        cloud_precip_formation_rate(
+            cmp, thp, ᶜρ⁰, ᶜT⁰, ᶜq_tot_nonneg⁰,
+            ᶜq_lcl⁰, ᶜq_icl⁰, ᶜq_rai⁰, ᶜq_sno⁰,
+        ),
+        ᶜq_lcl⁰ + ᶜq_icl⁰,
+        dt,
+    )
+    # The cloud species are no longer needed, so their scratch takes Λ̃⁰ and
+    # the representative raindrop; then q_rai⁰ and the cloud area go too.
+    ᶜΛ̃⁰ = p.scratch.ᶜtemp_scalar_2
+    @. ᶜΛ̃⁰ = sslt_below_cloud_scavenging_rate(
+        ᶜF⁰,
+        one(FT),
+        rain_swept_collection_rate(ᶜq_rai⁰, ᶜρ⁰, rain, vel),
+    )
+    ᶜr_D⁰ = p.scratch.ᶜtemp_scalar_3
+    ᶜV_D⁰ = p.scratch.ᶜtemp_scalar_5
+    @. ᶜr_D⁰ = rain_representative_drop_radius(ᶜq_rai⁰, ᶜρ⁰, rain, vel)
+    @. ᶜV_D⁰ = rain_drop_fall_speed(ᶜr_D⁰, ᶜρ⁰, rain, vel)
+
+    # 3. Grid mean per bin: mass-weighted over the subdomains.
+    ᶜρaχ = p.scratch.ᶜtemp_scalar_4
+    ᶜρaχE = p.scratch.ᶜtemp_scalar_6
     MatrixFields.unrolled_foreach(bins) do (ρχ_name, r_settle, C_kelvin)
         bin = MatrixFields.extract_first(ρχ_name)
-        @. ᶜk⁰ = sslt_bin_washout_rate(
-            sslt_air_state⁰,
-            ᶜT⁰,
-            r_settle,
-            C_kelvin,
-            ρ_s,
-            ᶜρ⁰,
-            ᶜr_D,
-            ᶜV_D,
-            ᶜΛ,
-            grav,
-            (ap,),
+        ᶜk⁰ = @. lazy(
+            ᶜc⁰ + sslt_bin_washout_rate(
+                sslt_air_state⁰,
+                ᶜT⁰,
+                r_settle,
+                C_kelvin,
+                ρ_s,
+                ᶜρ⁰,
+                ᶜr_D⁰,
+                ᶜV_D⁰,
+                ᶜΛ̃⁰,
+                grav,
+                (ap,),
+            ),
         )
         sslt_mass_weighted_rate!(
-            rates[bin],
-            ᶜk⁰,
-            ratesʲs[bin],
-            specific_tracer_name(ρχ_name),
-            Y,
-            p,
-            ᶜρa⁰,
-            ᶜρaχ,
-            ᶜρaχE,
-            dt,
+            rates[bin], ᶜk⁰, ratesʲs[bin], specific_tracer_name(ρχ_name),
+            Y, p, ᶜρa⁰, ᶜρaχ, ᶜρaχE, dt,
         )
     end
     return nothing
 end
+
+"""
+    precipitation_conversion_rate_0m(dq_tot_dt)
+
+In-cloud driver `Q` [kg kg⁻¹ s⁻¹, ≥ 0] under 0-moment microphysics: the
+rate at which condensate is converted to precipitation is the (negative)
+total-water sink `dq_tot_dt` of the cached `MP0_NT`, sign-flipped. The
+0-moment scheme resolves no phase or process, so — unlike the liquid-only
+process-resolved arms of [`cloud_precip_formation_rate`](@ref) — the whole condensate
+(`q_liq + q_ice`, the equilibrium cloud water) is the reservoir it drains,
+and the activated aerosol share follows it regardless of phase.
+"""
+precipitation_conversion_rate_0m(dq_tot_dt) = max(zero(dq_tot_dt), -dq_tot_dt)
 
 function set_sslt_wet_deposition_rates!(
     Y,
@@ -497,29 +690,79 @@ function set_sslt_wet_deposition_rates!(
     sslt::PrognosticSeaSalt,
     microphysics_model::EquilibriumMicrophysics0M,
 )
+    turbconv_model = p.atmos.turbconv_model
     FT = eltype(Y)
     ap = CAP.prognostic_aerosol_params(p.params)
+    thp = CAP.thermodynamics_params(p.params)
+    (; ᶜp, ᶜT⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜmp_tendency⁰) =
+        p.precomputed
+    (; ᶜmp_tendencyʲs) = p.precomputed
     rates = p.tracers.sslt_wetdep_rates
     ratesʲs = p.tracers.sslt_wetdep_ratesʲs
-    n = n_mass_flux_subdomains(p.atmos.turbconv_model)
+    n = n_mass_flux_subdomains(turbconv_model)
+    dt = float(p.dt)
+    ᶜρa⁰ = @. lazy(max(zero(FT), ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model)))
 
-    # The precipitation shadow is a column quantity (0M rain leaves the
-    # column as it forms), so one rain rate washes every subdomain alike.
+    # The column shadow washes every subdomain at the same rain rate; only
+    # the in-cloud term and the cloudy area differ between subdomains.
     ᶜR = p.scratch.ᶜtemp_scalar
     set_sslt_precipitation_shadow!(ᶜR, Y, p)
     @. ᶜR = precipitation_rate_mm_h(ᶜR, ap.ρ_water)
+
+    # 1. Environment: equilibrium condensate, 0M sink, and cloud fraction.
+    ᶜρ⁰ = p.scratch.ᶜtemp_scalar_2
+    @. ᶜρ⁰ = TD.air_density(thp, ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰)
+    ᶜa_cld = p.scratch.ᶜtemp_scalar_3
+    ᶜa⁰ = @. lazy(draft_area(ᶜρa⁰, ᶜρ⁰))
+    ᶜF⁰ = p.scratch.ᶜtemp_scalar_4
+    ᶜF⁰ .= sslt_env_cloud_fraction!(ᶜa_cld, ᶜa⁰, Y, p, n)
+    ᶜQ⁰ = @. lazy(precipitation_conversion_rate_0m(ᶜmp_tendency⁰.dq_tot_dt))
+    ᶜq_cld⁰ = @. lazy(ᶜq_liq⁰ + ᶜq_ice⁰)
 
     ρχ_names = aerosol_state_names(sslt)
     bins = ntuple(Val(length(ρχ_names))) do i
         (ρχ_names[i], FT(ap.ssa_washout_a[i]), FT(ap.ssa_washout_b[i]))
     end
+
+    # 2. Updrafts: own condensate and sink, binary cloud indicator.
+    for j in 1:n
+        ᶜq_liqʲ, ᶜq_iceʲ = _updraft_cloud_condensate(Y, p, j, microphysics_model)
+        ᶜq_cldʲ = @. lazy(max(zero(FT), ᶜq_liqʲ + ᶜq_iceʲ))
+        ᶜFʲ = @. lazy(
+            ifelse(TD.has_condensate(thp, ᶜq_cldʲ), one(FT), zero(FT)),
+        )
+        ᶜQʲ = @. lazy(
+            precipitation_conversion_rate_0m(ᶜmp_tendencyʲs.:($$j).dq_tot_dt),
+        )
+        MatrixFields.unrolled_foreach(bins) do (ρχ_name, a, b)
+            ᶜkʲ = ratesʲs[MatrixFields.extract_first(ρχ_name)][j]
+            @. ᶜkʲ =
+                sslt_in_cloud_scavenging_rate(ᶜFʲ, one(FT), ᶜQʲ, ᶜq_cldʲ, dt) +
+                sslt_below_cloud_scavenging_rate(
+                    ᶜFʲ,
+                    one(FT),
+                    power_law_washout_rate(ᶜR, a, b),
+                )
+        end
+    end
+
+    # 3. Grid mean per bin: mass-weighted over the subdomains.
+    ᶜρaχ = p.scratch.ᶜtemp_scalar_5
+    ᶜρaχE = p.scratch.ᶜtemp_scalar_6
     MatrixFields.unrolled_foreach(bins) do (ρχ_name, a, b)
         bin = MatrixFields.extract_first(ρχ_name)
-        ᶜk = rates[bin]
-        @. ᶜk = power_law_washout_rate(ᶜR, a, b)
-        for j in 1:n
-            @. ratesʲs[bin][j] = ᶜk
-        end
+        ᶜk⁰ = @. lazy(
+            sslt_in_cloud_scavenging_rate(ᶜF⁰, one(FT), ᶜQ⁰, ᶜq_cld⁰, dt) +
+            sslt_below_cloud_scavenging_rate(
+                ᶜF⁰,
+                one(FT),
+                power_law_washout_rate(ᶜR, a, b),
+            ),
+        )
+        sslt_mass_weighted_rate!(
+            rates[bin], ᶜk⁰, ratesʲs[bin], specific_tracer_name(ρχ_name),
+            Y, p, ᶜρa⁰, ᶜρaχ, ᶜρaχE, dt,
+        )
     end
     return nothing
 end
