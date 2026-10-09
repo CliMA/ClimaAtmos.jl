@@ -19,7 +19,9 @@ The model supports four cloud microphysics and precipitation representations:
 The equilibrium 0-moment option does not introduce any microphysics variables beyond ``\rho q_{tot}``.
 The cloud condensate and phase partitioning are diagnosed using saturation adjustment
 and the 0-moment microphysics provides a sink on total water due to precipitation.
-Precipitation is immediately removed from the computational domain.
+Precipitation is immediately removed from the computational domain, unless the optional
+below-cloud evaporation (`precipitation_evaporation_coefficient > 0`) returns part of
+the falling flux to vapor in a top-down column scan.
 The nonequilibrium 1-moment option expands the state vector by four microphysics tracers:
 cloud liquid water, cloud ice, rain and snow ``(q_{liq}, q_{ice}, q_{rai}, q_{sno})``;
 in the state vector these are `ρq_lcl`, `ρq_icl`, `ρq_rai`, and `ρq_sno`.
