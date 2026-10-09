@@ -1,3 +1,4 @@
+import ClimaComms
 import Thermodynamics as TD
 import CloudMicrophysics.Parameters as CMP
 import CloudMicrophysics.BulkMicrophysicsTendencies as BMT
@@ -248,6 +249,12 @@ quadrature points.
 # at the 255-register cap. `_unwrapped` is the identity for bare parameters.
 @inline _unwrapped(p) = p
 @inline _unwrapped(::Val{P}) where {P} = P
+
+# Only on the device. A struct type parameter is boxed, so on the host each use
+# copies it back out and allocates per point; the device compiler has no heap
+# and folds it to a literal instead.
+@inline _fold(::ClimaComms.AbstractCPUDevice, p) = p
+@inline _fold(::ClimaComms.AbstractDevice, p) = Val(p)
 
 struct Microphysics1MEvaluator{S, MP, TPS, FT, Args <: Tuple}
     scheme::S

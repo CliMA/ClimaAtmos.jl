@@ -1055,7 +1055,7 @@ NVTX.@annotate function set_sgs_moments_and_cloud_fraction!(Y, p)
 
     α_ft = FT(α)
     # Carried in by type, so the parameters fold to literals in the kernel.
-    vthermo = Val(thermo_params)
+    vthermo = _fold(ClimaComms.device(Y.c), thermo_params)
 
     DataLayouts.foreach_point(
         ᶜsgs_moments, ᶜcloud_fraction, ᶜρ_env, ᶜT_mean, ᶜq_mean,
@@ -1199,7 +1199,7 @@ NVTX.@annotate function set_cloud_fraction!(
 
     ᶜcloud_fraction = p.precomputed.ᶜcloud_fraction
     α_ft = FT(α)
-    vthermo = Val(thermo_params)
+    vthermo = _fold(ClimaComms.device(Y.c), thermo_params)
 
     DataLayouts.foreach_point(
         ᶜcloud_fraction,

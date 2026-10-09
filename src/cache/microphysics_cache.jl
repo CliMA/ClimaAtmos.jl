@@ -963,7 +963,8 @@ function set_microphysics_tendency_cache!(
     cmp = CAP.microphysics_1m_params(p.params)
     # Carried into the two heavy kernels in the type, so the parameters fold to
     # literals there instead of being read from a struct per quadrature point.
-    vcmp, vthp = Val(cmp), Val(thp)
+    dev = ClimaComms.device(Y.c)
+    vcmp, vthp = _fold(dev, cmp), _fold(dev, thp)
 
     n = n_mass_flux_subdomains(tm)
     nsubs = mp1m.n_substeps
