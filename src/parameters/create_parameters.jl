@@ -156,8 +156,6 @@ function ClimaAtmosParameters(
 
     parameters =
         CP.get_parameter_values(toml_dict, atmos_name_map, "ClimaAtmos")
-    precipitation_threshold_floor =
-        precipitation_threshold_floor_parameter(toml_dict, microphysics_0m_params)
     # Read (and logged) only when 0M can be used; defaults (off) otherwise.
     precipitation_evaporation =
         (
@@ -189,7 +187,6 @@ function ClimaAtmosParameters(
         BSP,
     }(;
         parameters...,
-        precipitation_threshold_floor,
         precipitation_evaporation...,
         thermodynamics_params,
         rrtmgp_params,
@@ -284,39 +281,6 @@ function microphysics_0m_updraft_parameters(toml_dict, microphysics_0m_params)
     return CM.Parameters.Microphysics0MParams(;
         precip = CM.Parameters.Parameters0M(; τ_precip = τ_up, qc_0, S_0 = S_0_up),
     )
-end
-
-"""
-    precipitation_threshold_floor_parameter(toml_dict, microphysics_0m_params)
-
-Read the optional TOML key `precipitation_threshold_floor` [kg/kg], an absolute
-floor on the condensate threshold of the 0-moment precipitation sink in the
-environment / grid mean: the sink becomes
-`-max(0, q_liq + q_ice - max(S_0 q_vap_sat, floor)) / τ_precip`.
-Aloft `S_0 q_vap_sat` is ~1e-6 kg/kg, so without a floor all thin cirrus is
-removed at `1/τ_precip`; a floor of ~1e-5 (cf. IFS `q_i,crit = 2e-5`) keeps it.
-It does not apply to `PrognosticEDMFX` updrafts.
-
-Defaults to 0 (no floor; results unchanged). The key has no ClimaParams default,
-so its TOML entry must give `type = "float"`. It must be finite and
-non-negative, and a positive floor requires `S_0 > 0`.
-"""
-function precipitation_threshold_floor_parameter(toml_dict, microphysics_0m_params)
-    FT = CP.float_type(toml_dict)
-    name = "precipitation_threshold_floor"
-    haskey(toml_dict.data, name) || return FT(0)
-    haskey(toml_dict.data[name], "type") || error(
-        "`$name` is a ClimaAtmos provisional parameter with no ClimaParams \
-         default; add `type = \"float\"` to its TOML entry",
-    )
-    floor = FT(CP.get_parameter_values(toml_dict, [name], "ClimaAtmos")[Symbol(name)])
-    isfinite(floor) && floor >= 0 ||
-        error("$name must be finite and non-negative; got $floor")
-    if floor > 0 && !isnothing(microphysics_0m_params)
-        microphysics_0m_params.precip.S_0 > 0 ||
-            error("$name > 0 requires supersaturation_precipitation_threshold > 0")
-    end
-    return floor
 end
 
 """
