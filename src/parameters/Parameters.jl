@@ -504,6 +504,18 @@ accessors generated at the bottom of this module, e.g.
     activation, and the aerosol-ML coefficients.
   - `microphysics_0m_params`: `CloudMicrophysics` 0-moment parameters, or
     `nothing`.
+  - `microphysics_0m_updraft_params`: `CloudMicrophysics` 0-moment parameters
+    used only for the precipitation sink of `PrognosticEDMFX` updrafts, or
+    `nothing`. Same as `microphysics_0m_params` except for `τ_precip` and
+    `S_0`, read from the optional TOML keys `precipitation_timescale_updraft`
+    and `supersaturation_precipitation_threshold_updraft`, which default to the
+    grid-mean `precipitation_timescale` and
+    `supersaturation_precipitation_threshold`.
+  - `precipitation_evaporation_*`: below-cloud evaporation of the 0-moment
+    precipitation flux (coefficient `k_E` [s⁻¹], critical relative humidity
+    `RH_c`, precipitating area fraction `a_p`, flux scale `α₂`
+    [kg m⁻² s⁻¹] and exponent `α₃`), from optional ClimaAtmos TOML keys;
+    `k_E = 0` (the default) switches it off.
   - `microphysics_1m_params`: `CloudMicrophysics` 1-moment parameters, or
     `nothing`.
   - `microphysics_2m_params`: `CloudMicrophysics` 2-moment warm-rain parameters,
@@ -578,6 +590,7 @@ Base.@kwdef struct ClimaAtmosParameters{
     IP,
     MPC,
     MP0M,
+    MP0MU,
     MP1M,
     MP2M,
     MP2MP3,
@@ -598,6 +611,7 @@ Base.@kwdef struct ClimaAtmosParameters{
     insolation_params::IP
     microphysics_cloud_params::MPC
     microphysics_0m_params::MP0M
+    microphysics_0m_updraft_params::MP0MU
     microphysics_1m_params::MP1M
     microphysics_2m_params::MP2M
     microphysics_2mp3_params::MP2MP3
@@ -645,6 +659,14 @@ Base.@kwdef struct ClimaAtmosParameters{
     fixed_cloud_ice_terminal_velocity::FT
     fixed_rain_terminal_velocity::FT
     fixed_snow_terminal_velocity::FT
+    # 0M below-cloud evaporation / sublimation of the precipitation flux
+    # (Kessler-Tiedtke deficit form; see `precipitation_evaporation_parameters`).
+    # A zero coefficient switches it off.
+    precipitation_evaporation_coefficient::FT
+    precipitation_evaporation_rh_crit::FT
+    precipitation_evaporation_area_fraction::FT
+    precipitation_evaporation_flux_scale::FT
+    precipitation_evaporation_exponent::FT
 end
 
 Base.eltype(::ClimaAtmosParameters{FT}) where {FT} = FT

@@ -690,6 +690,9 @@ Dispatch on `microphysics_model` and `turbconv_model`:
   - `EquilibriumMicrophysics0M`: rewrites `ᶜρ_dq_tot_dt = ρ * ᶜmp_tendency.dq_tot_dt`
     and `ᶜρ_de_tot_dt = ᶜρ_dq_tot_dt * ᶜmp_tendency.e_tot_hlpr`, then updates the
     surface fluxes.
+    The below-cloud evaporation `ᶜprecip_evap` is frozen from the explicit stage
+    (no Jacobian term) and is added to the refreshed surface fluxes, which are
+    not clamped so the column budgets stay closed.
   - `EquilibriumMicrophysics0M` with `PrognosticEDMFX`: re-aggregates the frozen
     per-subdomain specific tendencies `ᶜmp_tendency⁰` and `ᶜmp_tendencyʲs` with the
     current `ρa⁰` and `Y.c.sgsʲs.:(j).ρa`, then updates the surface fluxes.
@@ -796,7 +799,10 @@ the environment dominates the grid-mean variance. The quadrature captures subgri
 fluctuations in temperature and moisture, which is important for threshold processes like
 condensation/evaporation at cloud edges.
 
-For `EquilibriumMicrophysics0M` under EDMF, the grid-mean source is the
+For `EquilibriumMicrophysics0M` under EDMF, the updraft sink uses
+`CAP.microphysics_0m_updraft_params` (convective precipitation timescale and
+supersaturation threshold), while the environment uses
+`CAP.microphysics_0m_params`. The grid-mean source is the
 area-weighted sum
 `ᶜρ_dq_tot_dt = ᶜmp_tendency⁰.dq_tot_dt * ρa⁰ + Σⱼ ᶜmp_tendencyʲs.:(j).dq_tot_dt * ρaʲ`.
 
@@ -811,6 +817,138 @@ set_microphysics_tendency_cache!(Y, p, _, _) = nothing
 ###
 ### 0 Moment Microphysics
 ###
+
+"""
+    precipitation_evaporation_active(params)
+
+Whether 0M below-cloud precipitation evaporation is on, i.e.
+`precipitation_evaporation_coefficient` is non-zero. When it is off, nothing is
+computed and the model is bit-for-bit unchanged.
+"""
+precipitation_evaporation_active(params) =
+    !iszero(CAP.precipitation_evaporation_coefficient(params))
+
+"""
+    precipitation_evaporation_params(params)
+
+The `(; k_E, RH_c, a_p, α₂, α₃)` of `precipitation_evaporation_step`.
+"""
+precipitation_evaporation_params(params) = (;
+    k_E = CAP.precipitation_evaporation_coefficient(params),
+    RH_c = CAP.precipitation_evaporation_rh_crit(params),
+    a_p = CAP.precipitation_evaporation_area_fraction(params),
+    α₂ = CAP.precipitation_evaporation_flux_scale(params),
+    α₃ = CAP.precipitation_evaporation_exponent(params),
+)
+
+"""
+    set_precipitation_evaporation_cache!(Y, p, turbconv_model)
+
+Below-cloud evaporation / sublimation of the 0-moment precipitation flux.
+Writes `p.precomputed.ᶜprecip_evap` (`ρ_evap_rai`, `ρ_evap_sno` [kg m⁻³ s⁻¹],
+`ρe_evap` [W m⁻³]); returns `nothing`. A no-op when
+`precipitation_evaporation_active` is false.
+
+Must run after the density-weighted 0M sinks `ᶜρ_dq_tot_dt`, `ᶜρ_de_tot_dt` are
+set. The column is scanned top-down (`Operators.column_accumulate!` with
+`reverse = true`): the rain and snow fluxes accumulate the 0M sink of each cell
+(partitioned by grid-mean `T ≥ T_freeze`, as in
+`set_precipitation_surface_fluxes!`), together with the part of it removed as
+liquid (`precipitation_source_liquid_fraction`), and lose what evaporates
+(`precipitation_evaporation_step`). The layer depth is the one
+`Operators.column_integral_definite!` uses, so the flux reaching the surface is
+the column integral of sink minus evaporation.
+
+Evaporation goes into the grid-mean air without EDMF, and into the environment
+with `PrognosticEDMFX` (its `T⁰`, vapor and density set the deficit, its mass
+`ρa⁰` the rate and the wet-bulb limit); the tendency is applied to the grid
+mean only, so the environment receives it.
+
+Overwrites `p.scratch.ᶜtemp_scalar` to `ᶜtemp_scalar_6`: the scan inputs are
+materialized there with ordinary (parallel) broadcasts, so the serial
+column kernel only reads plain center fields.
+"""
+set_precipitation_evaporation_cache!(Y, p, turbconv_model) =
+    precipitation_evaporation_active(p.params) ?
+    _set_precipitation_evaporation_cache!(
+        Y, p, precipitation_evaporation_air(Y, p, turbconv_model),
+    ) : nothing
+
+"""
+    precipitation_evaporation_air(Y, p, turbconv_model)
+
+`(ρ_env, ρa_env, T, q_vap)` of the air into which precipitation evaporates:
+the grid mean (`ρa_env = ρ`) without EDMF, the environment with
+`PrognosticEDMFX`. Fields; the vapor (and the environment density and mass)
+are written to `p.scratch.ᶜtemp_scalar_4` (`_5`, `_6`).
+"""
+function precipitation_evaporation_air(Y, p, _)
+    (; ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice) = p.precomputed
+    ᶜq_vap = p.scratch.ᶜtemp_scalar_4
+    @. ᶜq_vap = max(ᶜq_tot_nonneg - ᶜq_liq - ᶜq_ice, 0)
+    return (Y.c.ρ, Y.c.ρ, ᶜT, ᶜq_vap)
+end
+function precipitation_evaporation_air(Y, p, tm::PrognosticEDMFX)
+    (; ᶜp, ᶜT⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰) = p.precomputed
+    thp = CAP.thermodynamics_params(p.params)
+    ᶜq_vap⁰ = p.scratch.ᶜtemp_scalar_4
+    ᶜρ⁰ = p.scratch.ᶜtemp_scalar_5
+    ᶜρa⁰ = p.scratch.ᶜtemp_scalar_6
+    @. ᶜq_vap⁰ = max(ᶜq_tot_nonneg⁰ - ᶜq_liq⁰ - ᶜq_ice⁰, 0)
+    @. ᶜρ⁰ = TD.air_density(thp, ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰)
+    @. ᶜρa⁰ = ρa⁰(Y.c.ρ, Y.c.sgsʲs, tm)
+    return (ᶜρ⁰, ᶜρa⁰, ᶜT⁰, ᶜq_vap⁰)
+end
+
+function _set_precipitation_evaporation_cache!(Y, p, air)
+    (ᶜρ_env, ᶜρa_env, ᶜT_env, ᶜq_vap) = air
+    (; dt) = p
+    (; ᶜΦ) = p.core
+    (; ᶜT, ᶜp, ᶜρ_dq_tot_dt, ᶜρ_de_tot_dt, ᶜprecip_evap) = p.precomputed
+    FT = eltype(p.params)
+    thp = CAP.thermodynamics_params(p.params)
+    pe = precipitation_evaporation_params(p.params)
+    T_freeze = TD.Parameters.T_freeze(thp)
+
+    # Layer depth weighted as in `column_integral_definite!` (J / ΔA_bot), so
+    # the scanned flux at the surface equals the column integral.
+    ᶜΔz = p.scratch.ᶜtemp_scalar
+    ᶜJ = Fields.local_geometry_field(axes(Y.c)).J
+    ᶠJ_bot = Fields.level(Fields.local_geometry_field(axes(Y.f)).J, half)
+    ᶠΔz_bot = Fields.level(Fields.Δz_field(axes(Y.f)), half)
+    @. ᶜΔz = ᶜJ * ᶠΔz_bot / ᶠJ_bot
+    ᶜp_over_ps = p.scratch.ᶜtemp_scalar_2
+    ᶜp_sfc = Fields.level(ᶜp, 1)
+    @. ᶜp_over_ps = ᶜp / ᶜp_sfc
+    # Liquid fraction of the condensate removed by the 0M sink.
+    ᶜλ_src = p.scratch.ᶜtemp_scalar_3
+    @. ᶜλ_src = precipitation_source_liquid_fraction(
+        thp, ᶜρ_dq_tot_dt, ᶜρ_de_tot_dt, ᶜT, ᶜΦ,
+    )
+    # 0M precipitation produced in each cell (positive), by phase.
+    ᶜS_r = @. lazy(ifelse(ᶜT >= T_freeze, -(ᶜρ_dq_tot_dt), FT(0)))
+    ᶜS_s = @. lazy(ifelse(ᶜT < T_freeze, -(ᶜρ_dq_tot_dt), FT(0)))
+
+    input = @. lazy(
+        tuple(
+            ᶜS_r, ᶜS_s, ᶜλ_src, ᶜΔz, ᶜρ_env, ᶜρa_env, ᶜT_env, ᶜp_over_ps,
+            ᶜq_vap, ᶜΦ,
+        ),
+    )
+    Operators.column_accumulate!(
+        ᶜprecip_evap,
+        input;
+        init = ntuple(_ -> FT(0), Val(7)),
+        transform = precipitation_evaporation_output,
+        reverse = true,
+    ) do state, level_input
+        precipitation_evaporation_step(pe, thp, dt, state, level_input)
+    end
+    return nothing
+end
+
+precipitation_evaporation_output((_, _, _, _, ρE_r, ρE_s, ρe)) =
+    (; ρ_evap_rai = ρE_r, ρ_evap_sno = ρE_s, ρe_evap = ρe)
 
 function set_microphysics_tendency_cache!(Y, p, ::EquilibriumMicrophysics0M, _)
     (; dt) = p
@@ -844,6 +982,8 @@ function set_microphysics_tendency_cache!(Y, p, ::EquilibriumMicrophysics0M, _)
 
     @. ᶜρ_dq_tot_dt = Y.c.ρ * ᶜmp_tendency.dq_tot_dt
     @. ᶜρ_de_tot_dt = ᶜρ_dq_tot_dt * ᶜmp_tendency.e_tot_hlpr
+    # Below-cloud evaporation of the precipitation flux (no-op when off).
+    set_precipitation_evaporation_cache!(Y, p, nothing)
     return nothing
 end
 
@@ -860,13 +1000,16 @@ function set_microphysics_tendency_cache!(
 
     thp = CAP.thermodynamics_params(p.params)
     cm0 = CAP.microphysics_0m_params(p.params)
+    # Convective (updraft) condensate has its own precipitation timescale and
+    # supersaturation threshold; the environment keeps the grid-mean ones.
+    cm0_up = CAP.microphysics_0m_updraft_params(p.params)
 
     n = n_mass_flux_subdomains(tm)
 
     for j in 1:n
         # Point-wise evaluation of microphysics tendencies in the updraft
         @. ᶜmp_tendencyʲs.:($$j) = microphysics_tendencies_0m(
-            cm0, thp, ᶜρʲs.:($$j), ᶜTʲs.:($$j), ᶜq_tot_nonnegʲs.:($$j),
+            cm0_up, thp, ᶜρʲs.:($$j), ᶜTʲs.:($$j), ᶜq_tot_nonnegʲs.:($$j),
             ᶜq_liqʲs.:($$j), ᶜq_iceʲs.:($$j), ᶜΦ, dt,
         )
     end
@@ -901,6 +1044,9 @@ function set_microphysics_tendency_cache!(
             ᶜmp_tendencyʲs.:($$j).dq_tot_dt * Y.c.sgsʲs.:($$j).ρa *
             ᶜmp_tendencyʲs.:($$j).e_tot_hlpr
     end
+    # Below-cloud evaporation of the precipitation flux into the environment
+    # (no-op when off).
+    set_precipitation_evaporation_cache!(Y, p, tm)
 
     return nothing
 end
@@ -1254,7 +1400,11 @@ Dispatch on `microphysics_model`:
 
   - `EquilibriumMicrophysics0M`: the fluxes are column integrals of the
     density-weighted `q_tot` sink `ᶜρ_dq_tot_dt`, partitioned into rain and snow by
-    the freezing temperature.
+    the freezing temperature. With below-cloud evaporation on, the column
+    integrals of `ᶜprecip_evap` (rain, snow, energy) are added, so less
+    precipitation (and its energy) reaches the surface. They are not clamped,
+    so in fully evaporating columns a roundoff/Newton-drift-sized positive
+    (upward) value can occur; this keeps water and mass exactly conserved.
   - `NonEquilibriumMicrophysics1M` and `NonEquilibriumMicrophysics2M`: the fluxes
     are evaluated at the bottom cell face from the level-1 specific humidities and
     terminal velocities (`ᶜwᵣ`, `ᶜwₛ`, `ᶜwₗ`, `ᶜwᵢ`), with a Jacobian-weighted
@@ -1278,17 +1428,37 @@ function set_precipitation_surface_fluxes!(
     (; surface_rain_flux, surface_snow_flux) = p.precomputed
     (; col_integrated_precip_energy_tendency) = p.precomputed
 
+    thermo_params = CAP.thermodynamics_params(p.params)
+    T_freeze = TD.Parameters.T_freeze(thermo_params)
+    FT = eltype(p.params)
+    ᶜ3d_rain = @. lazy(ifelse(ᶜT >= T_freeze, ᶜρ_dq_tot_dt, FT(0)))
+    ᶜ3d_snow = @. lazy(ifelse(ᶜT < T_freeze, ᶜρ_dq_tot_dt, FT(0)))
+    if precipitation_evaporation_active(p.params)
+        # Below-cloud evaporation returns water (and its energy) to the air,
+        # so less reaches the surface; the column budgets close with these.
+        (; ᶜprecip_evap) = p.precomputed
+        ᶜ3d_energy = @. lazy(ᶜρ_de_tot_dt + ᶜprecip_evap.ρe_evap)
+        ᶜ3d_rain_net = @. lazy(ᶜ3d_rain + ᶜprecip_evap.ρ_evap_rai)
+        ᶜ3d_snow_net = @. lazy(ᶜ3d_snow + ᶜprecip_evap.ρ_evap_sno)
+        Operators.column_integral_definite!(
+            col_integrated_precip_energy_tendency,
+            ᶜ3d_energy,
+        )
+        Operators.column_integral_definite!(surface_rain_flux, ᶜ3d_rain_net)
+        Operators.column_integral_definite!(surface_snow_flux, ᶜ3d_snow_net)
+        # Not clamped: the scan keeps evaporation ≤ production, but in the
+        # implicit stage the sink is refreshed from the Newton iterate while
+        # `ᶜprecip_evap` stays frozen, so fully evaporating columns can give a
+        # roundoff/Newton-drift-sized upward flux. Clamping it would break the
+        # column water and mass budgets.
+        return nothing
+    end
     # update total column energy source for surface energy balance
     Operators.column_integral_definite!(
         col_integrated_precip_energy_tendency,
         ᶜρ_de_tot_dt,
     )
     # update surface precipitation fluxes in cache for coupler's use
-    thermo_params = CAP.thermodynamics_params(p.params)
-    T_freeze = TD.Parameters.T_freeze(thermo_params)
-    FT = eltype(p.params)
-    ᶜ3d_rain = @. lazy(ifelse(ᶜT >= T_freeze, ᶜρ_dq_tot_dt, FT(0)))
-    ᶜ3d_snow = @. lazy(ifelse(ᶜT < T_freeze, ᶜρ_dq_tot_dt, FT(0)))
     Operators.column_integral_definite!(surface_rain_flux, ᶜ3d_rain)
     Operators.column_integral_definite!(surface_snow_flux, ᶜ3d_snow)
     return nothing

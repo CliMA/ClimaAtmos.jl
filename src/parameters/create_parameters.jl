@@ -98,6 +98,15 @@ function ClimaAtmosParameters(
     MPC = typeof(microphysics_cloud_params)
 
     microphysics_0m_params = CM.Parameters.Microphysics0MParams(toml_dict)
+    # Only built (and its TOML keys only read and logged) when 0M can be used,
+    # so the keys are reported as unused overrides in 1M/2M runs.
+    microphysics_0m_updraft_params =
+        (
+            isnothing(microphysics_model) ||
+            microphysics_model isa EquilibriumMicrophysics0M
+        ) ?
+        microphysics_0m_updraft_parameters(toml_dict, microphysics_0m_params) :
+        nothing
     microphysics_1m_params = microphys_1m_parameters(
         toml_dict;
         microphysics_1m_options(microphysics_model)...,
@@ -120,6 +129,7 @@ function ClimaAtmosParameters(
             (microphysics_2mp3_params = nothing)
     end
     MP0M = typeof(microphysics_0m_params)
+    MP0MU = typeof(microphysics_0m_updraft_params)
     MP1M = typeof(microphysics_1m_params)
     MP2M = typeof(microphysics_2m_params)
     MP2MP3 = typeof(microphysics_2mp3_params)
@@ -146,6 +156,13 @@ function ClimaAtmosParameters(
 
     parameters =
         CP.get_parameter_values(toml_dict, atmos_name_map, "ClimaAtmos")
+    # Read (and logged) only when 0M can be used; defaults (off) otherwise.
+    precipitation_evaporation =
+        (
+            isnothing(microphysics_model) ||
+            microphysics_model isa EquilibriumMicrophysics0M
+        ) ? precipitation_evaporation_parameters(toml_dict) :
+        precipitation_evaporation_parameters(FT)
     return CAP.ClimaAtmosParameters{
         FT,
         TP,
@@ -154,6 +171,7 @@ function ClimaAtmosParameters(
         IP,
         MPC,
         MP0M,
+        MP0MU,
         MP1M,
         MP2M,
         MP2MP3,
@@ -169,12 +187,14 @@ function ClimaAtmosParameters(
         BSP,
     }(;
         parameters...,
+        precipitation_evaporation...,
         thermodynamics_params,
         rrtmgp_params,
         trace_gas_params,
         insolation_params,
         microphysics_cloud_params,
         microphysics_0m_params,
+        microphysics_0m_updraft_params,
         microphysics_1m_params,
         microphysics_2m_params,
         microphysics_2mp3_params,
@@ -189,6 +209,153 @@ function ClimaAtmosParameters(
         orographic_gravity_wave_params,
         beres_source_params,
     )
+end
+
+"""
+    microphysics_0m_updraft_parameters(toml_dict, microphysics_0m_params)
+
+Build the 0-moment parameters used for the precipitation sink of
+`PrognosticEDMFX` updrafts (convective condensate).
+
+They are `microphysics_0m_params` with `τ_precip` and `S_0` replaced by the
+optional TOML keys `precipitation_timescale_updraft` [s] and
+`supersaturation_precipitation_threshold_updraft` [-]. Each key falls back to
+the grid-mean value (`precipitation_timescale`,
+`supersaturation_precipitation_threshold`) when the TOML does not define it,
+which reproduces the single-timescale scheme exactly. A key that is defined is
+logged as used by `"ClimaAtmos"`, so it appears in the parameter log file.
+
+The keys have no ClimaParams default, so a TOML entry must give
+`type = "float"` (an entry with only `value` raises an error naming the key).
+A key that is set is validated: `precipitation_timescale_updraft` must be
+finite and positive, `supersaturation_precipitation_threshold_updraft` finite
+and non-negative. Unset keys copy the grid-mean values unchanged.
+
+The parameters are used only by the `PrognosticEDMFX` updraft sink; with
+`EquilibriumMicrophysics0M` but no `PrognosticEDMFX` they are built and
+logged but have no effect. For non-0M microphysics models they are not built
+(see `ClimaAtmosParameters`).
+"""
+function microphysics_0m_updraft_parameters(toml_dict, microphysics_0m_params)
+    FT = CP.float_type(toml_dict)
+    (; τ_precip, qc_0, S_0) = microphysics_0m_params.precip
+    # Provisional parameters, not in ClimaParams' default toml: read from the
+    # run/calibration toml when defined there, otherwise use the grid-mean
+    # values (same idiom as `SGSQuadratureParameters`).
+    provisional_defaults = (;
+        precipitation_timescale_updraft = τ_precip,
+        supersaturation_precipitation_threshold_updraft = S_0,
+    )
+    provisional_present = filter(collect(keys(provisional_defaults))) do name
+        haskey(toml_dict.data, string(name))
+    end
+    for name in provisional_present
+        entry = toml_dict.data[string(name)]
+        haskey(entry, "type") || error(
+            "`$name` is a ClimaAtmos provisional parameter with no ClimaParams \
+             default; add `type = \"float\"` to its TOML entry",
+        )
+    end
+    provisional_params =
+        isempty(provisional_present) ? (;) :
+        CP.get_parameter_values(
+            toml_dict,
+            String.(provisional_present),
+            "ClimaAtmos",
+        )
+    parameters = merge(provisional_defaults, provisional_params)
+    τ_up = FT(parameters.precipitation_timescale_updraft)
+    S_0_up = FT(parameters.supersaturation_precipitation_threshold_updraft)
+    if :precipitation_timescale_updraft in provisional_present
+        isfinite(τ_up) && τ_up > 0 || error(
+            "precipitation_timescale_updraft must be finite and positive; \
+             got $τ_up",
+        )
+    end
+    if :supersaturation_precipitation_threshold_updraft in provisional_present
+        isfinite(S_0_up) && S_0_up >= 0 || error(
+            "supersaturation_precipitation_threshold_updraft must be finite \
+             and non-negative; got $S_0_up",
+        )
+    end
+    return CM.Parameters.Microphysics0MParams(;
+        precip = CM.Parameters.Parameters0M(; τ_precip = τ_up, qc_0, S_0 = S_0_up),
+    )
+end
+
+"""
+    precipitation_evaporation_parameters(toml_dict)
+    precipitation_evaporation_parameters(FT)
+
+Read the optional (provisional, not in ClimaParams) TOML keys of the 0-moment
+below-cloud evaporation / sublimation of the precipitation flux, a
+Kessler (1969) / Tiedtke (1989) deficit form (see
+`precipitation_evaporation_rate`):
+
+| key | symbol | default | constraint |
+|:--- |:------ |:------- |:---------- |
+| `precipitation_evaporation_coefficient` | `k_E` [s⁻¹] | 0 (off) | finite, ≥ 0 |
+| `precipitation_evaporation_rh_crit` | `RH_c` [-] | 0.9 | 0 < RH_c ≤ 1 |
+| `precipitation_evaporation_area_fraction` | `a_p` [-] | 0.5 | 0 < a_p ≤ 1 |
+| `precipitation_evaporation_flux_scale` | `α₂` [kg m⁻² s⁻¹] | 5.09e-3 | finite, > 0 |
+| `precipitation_evaporation_exponent` | `α₃` [-] | 0.5777 | finite, > 0 |
+
+The IFS value of `k_E` is 5.44e-4 s⁻¹. With `k_E = 0` the scheme is skipped
+entirely, so results are bit-for-bit unchanged. A set key must give
+`type = "float"` and is logged as used by `"ClimaAtmos"`. The `FT` method
+returns the defaults without reading anything.
+
+Returns a `NamedTuple` keyed by the TOML names, in `FT`.
+"""
+function precipitation_evaporation_parameters(::Type{FT}) where {FT}
+    return (;
+        precipitation_evaporation_coefficient = FT(0),
+        precipitation_evaporation_rh_crit = FT(0.9),
+        precipitation_evaporation_area_fraction = FT(0.5),
+        precipitation_evaporation_flux_scale = FT(5.09e-3),
+        precipitation_evaporation_exponent = FT(0.5777),
+    )
+end
+function precipitation_evaporation_parameters(toml_dict::CP.ParamDict)
+    FT = CP.float_type(toml_dict)
+    defaults = precipitation_evaporation_parameters(FT)
+    present = filter(collect(keys(defaults))) do name
+        haskey(toml_dict.data, string(name))
+    end
+    isempty(present) && return defaults
+    for name in present
+        haskey(toml_dict.data[string(name)], "type") || error(
+            "`$name` is a ClimaAtmos provisional parameter with no ClimaParams \
+             default; add `type = \"float\"` to its TOML entry",
+        )
+    end
+    overrides =
+        CP.get_parameter_values(toml_dict, String.(present), "ClimaAtmos")
+    values = map(v -> FT(v), merge(defaults, overrides))
+    k_E = values.precipitation_evaporation_coefficient
+    RH_c = values.precipitation_evaporation_rh_crit
+    a_p = values.precipitation_evaporation_area_fraction
+    α₂ = values.precipitation_evaporation_flux_scale
+    α₃ = values.precipitation_evaporation_exponent
+    isfinite(k_E) && k_E >= 0 || error(
+        "precipitation_evaporation_coefficient must be finite and \
+         non-negative; got $k_E",
+    )
+    isfinite(RH_c) && 0 < RH_c <= 1 || error(
+        "precipitation_evaporation_rh_crit must be in (0, 1]; got $RH_c",
+    )
+    isfinite(a_p) && 0 < a_p <= 1 || error(
+        "precipitation_evaporation_area_fraction must be in (0, 1]; got $a_p",
+    )
+    isfinite(α₂) && α₂ > 0 || error(
+        "precipitation_evaporation_flux_scale must be finite and positive; \
+         got $α₂",
+    )
+    isfinite(α₃) && α₃ > 0 || error(
+        "precipitation_evaporation_exponent must be finite and positive; \
+         got $α₃",
+    )
+    return values
 end
 
 """

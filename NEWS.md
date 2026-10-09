@@ -20,6 +20,19 @@ main
   `sgs_variance_geometric_Ri_factor` parameter is removed.
 - ![][badge-🔥behavioralΔ] Update to ClimaParams with
   `sgs_variance_horizontal_scale_factor` default `3.0 → 1.0`.
+- ![][badge-✨feature/enhancement] 0M + `PrognosticEDMFX`: updraft condensate
+  can precipitate with its own timescale and threshold via the optional TOML keys
+  `precipitation_timescale_updraft` and
+  `supersaturation_precipitation_threshold_updraft` (`type = "float"`), which
+  default to the grid-mean values. Adds a new `ClimaAtmosParameters` type
+  parameter and the 2D diagnostic `prup` (updraft part of `pr`).
+- ![][badge-✨feature/enhancement] 0M: optional below-cloud evaporation and
+  sublimation of the precipitation flux (Kessler/Tiedtke deficit form, top-down
+  column scan limited by the incoming flux and wet-bulb cooling to `RH_c`).
+  Water and energy are returned to the grid mean, so column budgets close. Keys
+  `precipitation_evaporation_{coefficient,rh_crit,area_fraction,flux_scale,exponent}`
+  (`type = "float"`); off unless `precipitation_evaporation_coefficient > 0`.
+  New diagnostics `prevap` and `tnhusevp`.
 
 0.42.13
 -------

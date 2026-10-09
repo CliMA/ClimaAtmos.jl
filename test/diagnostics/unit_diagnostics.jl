@@ -81,7 +81,8 @@ import ClimaComms
 ClimaComms.@import_required_backends
 import ClimaAtmos as CA
 import ClimaAtmos.Parameters as CAP
-import ClimaCore: Fields, Spaces
+import ClimaCore: Fields, Spaces, Operators
+import ClimaParams as CP
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -471,6 +472,10 @@ VALID_CASES = [
     cases(("arup", "aren"), :m0_pedmfx)...,
     # 0M+PrognosticEDMFX, NonEq+PrognosticEDMFX
     cases(("clwup", "cliup"), (:m0_pedmfx, :m1_pedmfx))...,
+    # 0M+PrognosticEDMFX
+    case("prup", :m0_pedmfx),
+    # 0M (grid mean), 0M+PrognosticEDMFX: below-cloud evaporation cache
+    cases(("prevap", "tnhusevp"), (:m0, :m0_pedmfx))...,
     # Union{1M,2M}+PrognosticEDMFX
     cases(("husraup", "hussnup"), :m1_pedmfx)...,
     # 0M+PrognosticEDMFX, NonEq+PrognosticEDMFX
@@ -600,6 +605,17 @@ end
             @test_throws Exception compute_diag(getdiag(name), Y_dry, p_dry)
         end
     end
+    @testset "$name errors without 0M" for name in ("prevap", "tnhusevp")
+        @test_throws ErrorException compute_diag(getdiag(name), Y_1m, p_1m)
+        @test_throws ErrorException compute_diag(getdiag(name), Y_dry, p_dry)
+    end
+    @testset "prup errors without 0M + PrognosticEDMFX" begin
+        @test_throws ErrorException compute_diag(getdiag("prup"), Y_0m, p_0m)
+        @test_throws ErrorException compute_diag(
+            getdiag("prup"), Y_1m_pedmfx, p_1m_pedmfx,
+        )
+    end
+
     for name in ("edth", "evuh")
         @testset "$name errors without the horizontal-diffusivity cache" begin
             @test_throws Exception compute_diag(
@@ -607,6 +623,78 @@ end
             )
         end
     end
+end
+
+# ---------------------------------------------------------------------------
+# 0M + PrognosticEDMFX: updraft precipitation parameters reach the updraft
+# sink only, and `prup` is the column-integrated updraft sink.
+# ---------------------------------------------------------------------------
+
+@testset "0M updraft precipitation parameters and prup" begin
+    m0 = CA.EquilibriumMicrophysics0M()
+    cm0 = CAP.microphysics_0m_params(params)
+    toml_dict = CP.create_toml_dict(
+        FT;
+        override_file = Dict(
+            "precipitation_timescale_updraft" =>
+                Dict("value" => cm0.precip.τ_precip / 4, "type" => "float"),
+            "supersaturation_precipitation_threshold_updraft" =>
+                Dict("value" => 0, "type" => "float"),
+        ),
+    )
+    params_up = CA.ClimaAtmosParameters(toml_dict)
+    # Fresh caches (the shared fixture is left untouched), identical states.
+    (Y_def, p_def) = build_state_cache(FT, model_0m_pedmfx; grid = column)
+    (Y_up, p_up) =
+        build_state_cache(FT, model_0m_pedmfx; grid = column, params = params_up)
+    @test parent(Y_def) == parent(Y_up)
+    integral(f) = (out = similar(p_def.scratch.ᶠtemp_field_level);
+    Operators.column_integral_definite!(out, f);
+    out)
+    results = map(((Y_def, p_def), (Y_up, p_up))) do (Y, p)
+        # Give the updraft area and condensate, and the environment
+        # condensate, so that both precipitate. The environment uses the
+        # grid-mean (non-quadrature) path here, so its sink depends only on
+        # these precomputed fields and the base 0M parameters.
+        @. (Y.c.sgsʲs.:1).ρa = FT(0.1) * Y.c.ρ
+        (; ᶜq_liqʲs, ᶜq_tot_nonnegʲs, ᶜq_liq⁰, ᶜq_tot_nonneg⁰) = p.precomputed
+        @. ᶜq_liqʲs.:1 += FT(1e-3)
+        @. ᶜq_tot_nonnegʲs.:1 += FT(1e-3)
+        @. ᶜq_liq⁰ += FT(5e-4)
+        @. ᶜq_tot_nonneg⁰ += FT(5e-4)
+        tm = p.atmos.turbconv_model
+        CA.set_microphysics_tendency_cache!(Y, p, m0, tm)
+        CA.set_precipitation_surface_fluxes!(Y, p, m0)
+        (; ᶜmp_tendencyʲs, ᶜmp_tendency⁰) = p.precomputed
+        dqʲ = copy((ᶜmp_tendencyʲs.:1).dq_tot_dt)
+        dq⁰ = copy(ᶜmp_tendency⁰.dq_tot_dt)
+        prup = copy(Base.materialize(compute_diag(getdiag("prup"), Y, p)))
+        pr = copy(Base.materialize(compute_diag(getdiag("pr"), Y, p)))
+        prup_ref = integral(@. (Y.c.sgsʲs.:1).ρa * dqʲ)
+        pr_env = integral(@. CA.ρa⁰(Y.c.ρ, Y.c.sgsʲs, tm) * dq⁰)
+        (; dqʲ, dq⁰, prup, pr, prup_ref, pr_env)
+    end
+    r_def, r_up = results
+    # The environment precipitates, and its sink is unchanged by the updraft
+    # parameters (it would differ if it were given them); the updraft sink is
+    # stronger.
+    @test all(parent(r_def.dq⁰) .<= 0)
+    @test any(parent(r_def.dq⁰) .< 0)
+    @test parent(r_up.dq⁰) == parent(r_def.dq⁰)
+    @test all(parent(r_up.dqʲ) .<= parent(r_def.dqʲ))
+    @test any(parent(r_up.dqʲ) .< parent(r_def.dqʲ))
+    @test all(parent(r_def.dqʲ) .<= 0)
+    for r in results
+        # `prup` is the updraft column integral, with the sign of `pr`.
+        @test parent(r.prup) ≈ parent(r.prup_ref)
+        @test all(parent(r.prup) .< 0)
+        # `pr - prup` is the (non-zero) environment part: nothing is dropped
+        # or double counted.
+        @test all(parent(r.pr_env) .< 0)
+        @test parent(r.pr) .- parent(r.prup) ≈ parent(r.pr_env) rtol =
+            sqrt(eps(FT))
+    end
+    @test all(parent(r_up.prup) .< parent(r_def.prup))
 end
 
 @testset "COSP diagnostics expose persistent callback outputs" begin
