@@ -1087,9 +1087,9 @@ NVTX.@annotate function set_sgs_moments_and_cloud_fraction!(Y, p)
             ᶜq_lcl_cf + ᶜq_icl_cf,
             # μ_S recomputed analytically, matching `_sgs_saturation_moments`
             # (condensate-free q_sat, consistent with the linear excess S).
-            ᶜq_mean - TD.q_vap_saturation(thermo_params, ᶜT_mean, ᶜρ_env),
+            ᶜq_mean - _q_vap_saturation($(vthermo), ᶜT_mean, ᶜρ_env),
             ᶜsgs_moments.sigma_S,
-            TD.q_vap_saturation(thermo_params, ᶜT_mean, ᶜρ_env, ᶜq_lcl_cf, ᶜq_icl_cf),
+            _q_vap_saturation($(vthermo), ᶜT_mean, ᶜρ_env, ᶜq_lcl_cf, ᶜq_icl_cf),
             α_ft,
             $(floor),
         )

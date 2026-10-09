@@ -249,6 +249,11 @@ quadrature points.
 @inline _unwrapped(p) = p
 @inline _unwrapped(::Val{P}) where {P} = P
 
+# A bare `tps` at a call site inside a folded kernel puts the struct back in the
+# argument buffer. Unwrap at the use site instead.
+@inline _q_vap_saturation(vtps, args...) =
+    TD.q_vap_saturation(_unwrapped(vtps), args...)
+
 struct Microphysics1MEvaluator{S, MP, TPS, FT, Args <: Tuple}
     scheme::S
     mp::MP
