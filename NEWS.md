@@ -3,6 +3,8 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- ![][badge-✨feature/enhancement] Add back CloudMicrophysics v0.43 to the
+  compat.
 
 0.42.14
 -------
