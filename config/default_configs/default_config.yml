@@ -21,6 +21,9 @@ y_elem:
 y_max:
   help: "Model domain size, y direction. Default: 300km"
   value: 300000.0
+n_columns:
+  help: "Number of independent columns of a `column` configuration [`1` (default)]"
+  value: 1
 z_elem:
   help: "number of vertical elements"
   value: 10
@@ -378,16 +381,16 @@ external_forcing:
   help: "External forcing for single-column experiments. Leave `~` for almost every case: the forcing is then taken from the setup chosen by `initial_condition` (the preferred route). Set it only for `ReanalysisMonthlyAveragedDiurnal` (monthly-averaged diurnal ERA5 forcing, which has no `initial_condition` counterpart), paired with `initial_condition: ReanalysisTimeVarying`. [`~` (default), `ReanalysisMonthlyAveragedDiurnal`]"
   value: ~
 external_forcing_file:
-  help: "Path to a NetCDF forcing file you supply, read by the file-driven single-column cases `GCM`, `ARMVARANAL`, and `ForcingFromFile`. The `ReanalysisTimeVarying` / `ReanalysisMonthlyAveragedDiurnal` cases ignore this and instead generate/locate their file from `site_latitude`/`site_longitude`/`start_date`. [`nothing` (default), `path/to/file`]"
+  help: "Path to a NetCDF forcing file you supply, read by the file-driven single-column cases `GCM`, `ARMVARANAL`, and `ForcingFromFile`. `ForcingFromFile` and `GCM` also take a list with one path per column of a multi-column run. The `ReanalysisTimeVarying` / `ReanalysisMonthlyAveragedDiurnal` cases ignore this and instead generate/locate their file from `site_latitude`/`site_longitude`/`start_date`. [`nothing` (default), `path/to/file`, `[path/to/file1, path/to/file2, ...]`]"
   value: ~
 cfsite_number:
-  help: "Used only by the `GCM` case: selects which cfsite column to read from `external_forcing_file`, specified as siteN. For site details see Shen et al. 2022 `https://doi.org/10.1029/2021MS002631`. [`site23` (default), `siteN`]"
+  help: "Used only by the `GCM` case: selects which cfsite column to read from `external_forcing_file`, specified as siteN. A list gives one cfsite per column of a multi-column run. For site details see Shen et al. 2022 `https://doi.org/10.1029/2021MS002631`. [`site23` (default), `siteN`]"
   value: "site23"
 site_latitude:
-  help: "Used only by the `ReanalysisTimeVarying` / `ReanalysisMonthlyAveragedDiurnal` cases, which use it (with `site_longitude` and `start_date`) to generate and locate the ERA5 forcing file; other cases take location from `external_forcing_file` or `cfsite_number`. The ERA5 artifact currently covers only the tropical Pacific during the first five days of July 2007. [`17.0` (default)]"
+  help: "Used only by the `ReanalysisTimeVarying` / `ReanalysisMonthlyAveragedDiurnal` cases, which use it (with `site_longitude` and `start_date`) to generate and locate the ERA5 forcing file; other cases take location from `external_forcing_file` or `cfsite_number`. A list gives one site per column of a multi-column run. The ERA5 artifact currently covers only the tropical Pacific during the first five days of July 2007. [`17.0` (default)]"
   value: 17.0
 site_longitude:
-  help: "Used only by the `ReanalysisTimeVarying` / `ReanalysisMonthlyAveragedDiurnal` cases, which use it (with `site_latitude` and `start_date`) to generate and locate the ERA5 forcing file; other cases take location from `external_forcing_file` or `cfsite_number`. The ERA5 artifact currently covers only the tropical Pacific during the first five days of July 2007. [`-149.0` (default)]"
+  help: "Used only by the `ReanalysisTimeVarying` / `ReanalysisMonthlyAveragedDiurnal` cases, which use it (with `site_latitude` and `start_date`) to generate and locate the ERA5 forcing file; other cases take location from `external_forcing_file` or `cfsite_number`. A list gives one site per column of a multi-column run. The ERA5 artifact currently covers only the tropical Pacific during the first five days of July 2007. [`-149.0` (default)]"
   value: -149.0
 era5_diurnal_warming:
   help: Applies a warming scenario by adding a constant temperature offset (in Kelvin). Supported only by the `ReanalysisMonthlyAveragedDiurnal` forcing model. This affects the target surface temperature for the entire simulation, the initial atmospheric temperature profile, and the relaxation temperature profile above `gcmdriven_relaxation_minimum_height`. Specific humidity is increased to hold relative humidity constant in the initial and relaxation profiles.

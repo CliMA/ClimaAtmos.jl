@@ -449,9 +449,9 @@ struct Larcform1Insolation <: AbstractInsolation end
 
 Compute insolation from the orbital parameters at the current simulation date.
 
-When `latitude`/`longitude` are `nothing`, lat/lon are taken from the grid for
-`LatLongZPoint` coordinates and fall back to `(0, 0)` for flat-space columns
-(the default global behavior). When provided, the explicit lat/lon are used
+When `latitude`/`longitude` are `nothing`, lat/lon are taken from the grid on
+the sphere and fall back to `(0, 0)` on other grids (the default global
+behavior). When provided, the explicit lat/lon are used
 instead — useful for single-column setups whose coordinate system doesn't
 carry lat/lon (e.g. ARM VARANAL).
 
@@ -1237,9 +1237,11 @@ Surface-temperature and insolation requirements are derived from the resolved
 
     ExternalDrivenTVForcing(dataset::ColumnDatasets.ColumnDataset; forcing, time_interpolation_method)
     ExternalDrivenTVForcing(path::String; kwargs...)
+    ExternalDrivenTVForcing(datasets::AbstractVector{<:ColumnDatasets.AbstractColumnData}; kwargs...)
 
 The `path` method opens the file as a `ColumnDataset` and forwards the keyword
-arguments. `forcing` defaults to `default_forcing_terms()` and
+arguments. With a vector of column data sources, column `h` of a multi-column
+grid is forced from `datasets[h]`. `forcing` defaults to `default_forcing_terms()` and
 `time_interpolation_method` to the dataset format's own method. Runscripts
 typically call `ExternalDrivenTVForcing(path; forcing = (...,))`.
 """
@@ -1272,6 +1274,10 @@ end
 function ExternalDrivenTVForcing(path::String; kwargs...)
     return ExternalDrivenTVForcing(ColumnDatasets.ColumnDataset(path); kwargs...)
 end
+ExternalDrivenTVForcing(
+    datasets::AbstractVector{<:ColumnDatasets.AbstractColumnData};
+    kwargs...,
+) = ExternalDrivenTVForcing(ColumnDatasets.PerColumnDatasets(datasets); kwargs...)
 
 """
     ISDACForcing

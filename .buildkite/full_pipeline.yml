@@ -16,6 +16,8 @@ env:
   GPU_CONFIG_PATH: "config/gpu_configs"
   PERF_CONFIG_PATH: "config/perf_configs"
   MPI_CONFIG_PATH: "config/mpi_configs"
+  # Temporary, for testing multi col sims
+  UPSTREAM_PACKAGES: "ClimaUtilities#kp/ragged-data-intp ClimaDiagnostics#kp/multi-cols"
 
 # NOTE: this pipeline is uploaded by .buildkite/decide_pipeline.sh, which only
 # runs on non-`main` builds.
@@ -471,6 +473,17 @@ steps:
         agents:
           slurm_mem: 12GB
 
+      - label: ":genie: Prognostic EDMF: Time-varying ERA5 reanalysis forcing, one site per column"
+        retry: *retry_policy
+        command: >
+          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+          --config_file $COMMON_CONFIG_PATH/diagnostics_column_progedmf_0M.yml
+          --config_file $CONFIG_PATH/prognostic_edmfx_tv_era5driven_multicolumn.yml
+          --job_id prognostic_edmfx_tv_era5driven_multicolumn
+        artifact_paths: "prognostic_edmfx_tv_era5driven_multicolumn/output_active/*"
+        agents:
+          slurm_mem: 12GB
+
       - label: ":genie: Prognostic EDMF: ERA5 monthly averaged diurnal forcing"
         retry: *retry_policy
         command: >
@@ -595,6 +608,12 @@ steps:
         artifact_paths: "single_column_hydrostatic_balance_ft64/output_active/*"
         agents:
           slurm_constraint: icelake|cascadelake|skylake|epyc
+
+      - label: ":package: Non-spherical: Multiple columns match single columns"
+        retry: *retry_policy
+        command: "julia --color=yes --project=.buildkite test/single_vs_multi_column.jl"
+        agents:
+          slurm_mem: 20GB
 
       - label: ":package: Non-spherical: 2D plane, non-hydrostatic density current"
         retry: *retry_policy
@@ -858,7 +877,7 @@ steps:
           slurm_mem: 16G
 
       # `--manytests` runs one restart test per grid, and each grid compiles its
-      # own copy of the model. Running all three in a single step put the job
+      # own copy of the model. Running them all in a single step put the job
       # over the time limit, so they are split across agents with `--grid`. Keep
       # this list in sync with `available_grids` in test/restart.jl.
       - label: ":computer: Restart: Using manytests, sphere"
@@ -882,6 +901,14 @@ steps:
         command: >
           julia --color=yes --project=.buildkite test/restart.jl --manytests true
           --grid column
+        agents:
+          slurm_mem: 16GB
+
+      - label: ":computer: Restart: Using manytests, multicolumn"
+        retry: *retry_policy
+        command: >
+          julia --color=yes --project=.buildkite test/restart.jl --manytests true
+          --grid multicolumn
         agents:
           slurm_mem: 16GB
 

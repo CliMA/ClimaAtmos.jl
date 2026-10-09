@@ -185,3 +185,41 @@ nonstandard forcing in a runscript, generate ERA5 forcing files, or write
 your own datasets, see
 [Adding a Column Dataset](extending_column_datasets.md) in the Developer
 Guide.
+
+## Multiple independent columns
+
+A column configuration can run several independent columns in one simulation,
+for example an ensemble of columns. Set `n_columns` (default 1):
+
+```yaml
+config: "column"
+n_columns: 3
+```
+
+In a script, use `AtmosModel(MultiColumnGrid(FT; n_columns = 3); ...)`.
+
+With `initial_condition: "ForcingFromFile"`, `external_forcing_file` can list
+one file per column; column `h` is then initialized and forced from file `h`:
+
+```yaml
+config: "column"
+n_columns: 2
+initial_condition: "ForcingFromFile"
+external_forcing_file: [/path/to/site_a.nc, /path/to/site_b.nc]
+```
+
+Likewise, the ERA5 cases (`ReanalysisTimeVarying` and
+`ReanalysisMonthlyAveragedDiurnal`) take lists of `site_latitude` and
+`site_longitude`, one site per column, and the `GCM` case takes a list of
+`cfsite_number`s or of `external_forcing_file`s. A key given as a single value
+instead of a list applies to every column.
+
+A multi-column run reproduces the single-column run of the same configuration,
+except for:
+
+- all-sky radiation once clouds form, since RRTMGP samples cloud overlap with
+  random numbers drawn per column,
+- inputs and initial states read from gridded files, which a single column reads
+  at the file's middle grid point and a multi-column run interpolates at (0°,
+  0°),
+- random initial perturbations, such as ISDAC's `perturb_initstate`.

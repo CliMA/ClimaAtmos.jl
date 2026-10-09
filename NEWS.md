@@ -103,6 +103,18 @@ main
 - ![][badge-🔥behavioralΔ] `vert_diff` combined with `turbconv`, `amd_les`, or a vertically
   acting `smagorinsky_lilly` is rejected at model construction. The two AMD configurations
   set `hyperdiff: ~`, like the Smagorinsky ones.
+- ![][badge-✨feature/enhancement] A column configuration can run several independent
+  columns in one simulation: set `n_columns` with `config: "column"`, or use
+  `MultiColumnGrid(FT; n_columns)`.
+  NetCDF output gains a `column` dimension.
+- ![][badge-✨feature/enhancement] `ForcingFromFile` and `ExternalDrivenTVForcing` take a
+  vector of column data sources, one per column of a multi-column grid: each column is
+  initialized and forced from its own source. In the configuration, one value per column
+  can be given for `external_forcing_file` (with `initial_condition: "ForcingFromFile"` or
+  `"GCM"`), `cfsite_number` (GCM), and `site_latitude` and `site_longitude` (ERA5).
+- ![][badge-💥breaking] The `ColumnDatasets.extrapolation_bc` hook of column file formats is
+  removed: file-backed column forcing inputs always hold the profiles constant above and
+  below the file's levels.
 - ![][badge-🐛bugfix] The vertical Smagorinsky-Lilly diffusion follows `implicit_diffusion`:
   with `implicit_diffusion: true` it is part of the implicit tendency, with the eddy viscosity
   refreshed on every Newton iterate, matching the Jacobian block that already existed for it.

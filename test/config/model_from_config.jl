@@ -199,3 +199,30 @@ end
         mk(; γ = 0.5, h_frac = 0.1, α = 0.15),
     )
 end
+
+@testset "n_columns" begin
+    function center_space(n_columns)
+        config = CA.AtmosConfig(
+            Dict("config" => "column", "n_columns" => n_columns);
+            job_id = "test_n_columns",
+        )
+        grid = CA.get_grid(config, CA.ClimaAtmosParameters(config))
+        return CA.get_spaces(grid).center_space
+    end
+    @test center_space(1) isa CA.Spaces.FiniteDifferenceSpace
+    @test center_space(3) isa CA.Spaces.MultiColumnFiniteDifferenceSpace
+    @test CA.Spaces.ncolumns(center_space(3)) == 3
+end
+
+@testset "Per-column site keys" begin
+    parsed_args(config) =
+        CA.AtmosConfig(config; job_id = "test_per_column_keys").parsed_args
+    sites = parsed_args(
+        Dict("site_latitude" => [17, 17], "site_longitude" => [-149, -150.5]),
+    )
+    @test sites["site_latitude"] == [17.0, 17.0]
+    @test sites["site_longitude"] isa Vector{Float64}
+    @test parsed_args(Dict("site_latitude" => 17))["site_latitude"] == 17.0
+    # Other keys take one value
+    @test_throws ErrorException parsed_args(Dict("z_elem" => [10, 20]))
+end

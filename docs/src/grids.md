@@ -48,6 +48,20 @@ grid = ColumnGrid(
 )
 ```
 
+### MultiColumnGrid
+
+The [`MultiColumnGrid`](@ref) creates several independent single columns in one
+grid.
+
+```@example grids
+grid = MultiColumnGrid(
+    Float64;
+    n_columns = 3,
+    z_elem = 10,
+    z_max = 30000.0,
+)
+```
+
 ### PlaneGrid
 
 The [`PlaneGrid`](@ref) creates a 2D (x-z) plane grid.
