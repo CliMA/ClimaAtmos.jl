@@ -266,6 +266,27 @@ not yet define.
     `(1 − ξ)` times its liquid-fraction share of the reconstructed saturation
     excess plus `ξ` times its subdomain mean (`sgs_local_condensate`). `0`
     is the excess reconstruction; `1` treats the species uniform at every node [-].
+  - `sgs_precip_incloud_fraction`: Fraction `β_p` of the cell-mean rain and snow
+    that is confined to the moist half of the quadrature PDF (nodes with
+    non-negative centred saturation excess) instead of being spread over all
+    nodes, in `[0, 1]`; `0` (the default) disables the placement [-].
+  - `sgs_snow_incloud_fraction`: Snow share of the precipitation-fraction placement;
+    a negative value (the default `-1`) means "same as `sgs_precip_incloud_fraction`";
+    `0` leaves snow uniform while rain is placed [-].
+  - `sgs_precip_overlap_decay`: Per-level shrink factor `f_decay` of the
+    maximum-random overlap recursion that diagnoses the precipitation fraction
+    `a_p` from the cloud cover above (`set_precip_fraction!`); `1` is maximum
+    overlap. Non-negative values switch the placement from the moist half of the
+    PDF to the moistest `a_p` of it (`sgs_precip_shaft_threshold`); a negative
+    value (the default `-1`) keeps the moist-half placement [-].
+  - `sgs_precip_shaft_random`: With the overlap mode on, a positive value places
+    the shaft on all cloudy nodes plus a random share of the clear nodes at the
+    in-shaft concentration (`sgs_precip_subpopulation`) instead of on the
+    moistest `a_p` of the PDF; `0` (the default) keeps the rank placement [-].
+  - `sgs_precip_fraction_floor`: Smallest precipitation fraction `a_p` the
+    quadrature placement uses (the shaft is never narrower than this fraction
+    of the cell), in `[0, 1]`; values below `sgs_precip_fraction_min` (0.1, the
+    default) are inert [-].
   - `Tq_correlation_coefficient`: Correlation between `T'` and `q_tot'` in the
     SGS quadrature, in `[-1, 1]`. Used verbatim by `tq_correlation_model: constant`;
     used as the turbulent-block cross `ρ_turb` (and the fallback where all variance
@@ -301,6 +322,11 @@ Base.@kwdef struct SGSQuadratureParameters{FT} <: ASQP
     sgs_variance_max_rel_std::FT
     sgs_liquid_uniform_fraction::FT
     sgs_ice_uniform_fraction::FT
+    sgs_precip_incloud_fraction::FT
+    sgs_snow_incloud_fraction::FT
+    sgs_precip_overlap_decay::FT
+    sgs_precip_shaft_random::FT
+    sgs_precip_fraction_floor::FT
     Tq_correlation_coefficient::FT
     cloud_fraction_steepness_scale::FT
     cloud_fraction_eps_rel::FT

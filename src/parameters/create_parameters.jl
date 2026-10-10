@@ -597,6 +597,20 @@ function SGSQuadratureParameters(
         # Isentropic geometric variance term: floor on ∂θ_li/∂z [K/m] in the
         # slope ratio and in the cell-geometry bound.
         sgs_variance_isentropic_min_dtheta_dz = FT(1e-3),
+        # Precipitation-fraction placement of rain and snow over the quadrature
+        # (moist half of the PDF): 0 = uniform (off).
+        sgs_precip_incloud_fraction = FT(0),
+        # Snow share of the precipitation placement: -1 = same as the rain/precip value.
+        sgs_snow_incloud_fraction = FT(-1),
+        # Overlap precipitation fraction (`set_precip_fraction!`): per-level
+        # decay of the max-random overlap recursion; negative = off (moist-half
+        # placement).
+        sgs_precip_overlap_decay = FT(-1),
+        # Sub-population (random clear-node) placement under the overlap mode:
+        # 0 = rank placement.
+        sgs_precip_shaft_random = FT(0),
+        # Floor on the overlap precipitation fraction seen by the placement.
+        sgs_precip_fraction_floor = FT(0.1),
     )
     provisional_present = filter(collect(keys(provisional_defaults))) do name
         haskey(toml_dict.data, string(name))

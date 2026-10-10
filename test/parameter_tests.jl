@@ -45,6 +45,18 @@ end
         job_id = "parameter_test_1m_defaults",
     )
     @test CA.get_microphysics_model(default_config.parsed_args) == defaults
+    # The snow vapour-exchange variants are all selectable from the config
+    for (name, T) in (
+        ("DepositionAndSublimation", CMP.DepositionAndSublimation),
+        ("SublimationOnly", CMP.SublimationOnly),
+    )
+        cfg = CA.AtmosConfig(
+            Dict("microphysics_model" => "1M", "snow_deposition_sublimation" => name),
+            job_id = "parameter_test_1m_snow_$(name)",
+        )
+        @test CA.get_microphysics_model(cfg.parsed_args).processes.snow_deposition_sublimation isa
+              T
+    end
 
     # Options set on the model select the parameters loaded for it
     model = CA.NonEquilibriumMicrophysics1M(;
@@ -122,6 +134,11 @@ end
         @test CAP.sgs_liquid_uniform_fraction(sq) == FT(1)
         @test CAP.sgs_ice_uniform_fraction(sq) == FT(1)
         @test CAP.sgs_variance_isentropic_min_dtheta_dz(sq) == FT(1e-3)
+        @test CAP.sgs_precip_incloud_fraction(sq) == FT(0)
+        @test CAP.sgs_snow_incloud_fraction(sq) == FT(-1)
+        @test CAP.sgs_precip_overlap_decay(sq) == FT(-1)
+        @test CAP.sgs_precip_shaft_random(sq) == FT(0)
+        @test CAP.sgs_precip_fraction_floor(sq) == FT(0.1)
     end
     # A run toml overrides the defaults.
     mktemp() do path, io

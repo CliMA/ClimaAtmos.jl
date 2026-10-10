@@ -280,12 +280,16 @@ function precomputed_quantities(Y, atmos)
     uses_microphysics_quadrature_moments =
         atmos.microphysics_model isa
         Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M}
-    # `ᶜsgs_moments` caches `(sigma_S, λ_lagrange)` — the SGS standard
-    # deviation and the Lagrange multiplier used by `Microphysics1MEvaluator`.
-    #  Allocated only for 1M/2M schemes.
+    # `ᶜsgs_moments` caches `(sigma_S, λ_lagrange, CF_d)` — the SGS standard
+    # deviation, the Lagrange multiplier used by `Microphysics1MEvaluator`,
+    # and the discrete cloudy mass of the quadrature measure
+    # (`_discrete_cloud_fraction`). Allocated only for 1M/2M schemes, together
+    # with `ᶜprecip_frac`, the overlap precipitation fraction
+    # (`set_precip_fraction!`).
     SGSMomentsNT = @NamedTuple{
         sigma_S::FT,
         λ_lagrange::FT,
+        CF_d::FT,
     }
     covariance_quantities = if uses_sgs_quadrature
         base = (;
@@ -312,8 +316,11 @@ function precomputed_quantities(Y, atmos)
             )...,
         )
         uses_microphysics_quadrature_moments ?
-        (; base..., ᶜsgs_moments = similar(Y.c, SGSMomentsNT)) :
-        base
+        (;
+            base...,
+            ᶜsgs_moments = similar(Y.c, SGSMomentsNT),
+            ᶜprecip_frac = zeros(axes(Y.c)),
+        ) : base
     else
         (;)
     end
