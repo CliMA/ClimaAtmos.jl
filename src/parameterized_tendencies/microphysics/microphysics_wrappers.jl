@@ -240,6 +240,13 @@ quadrature points.
   - `dt`: Timestep used for the time-averaged process rates [s].
   - `nsubs`: Number of substeps in the tendency averaging.
   - `args`: Extra trailing arguments forwarded to the CloudMicrophysics call.
+  - `β_precip`, `cf_precip`: Precipitation-fraction placement of the cell-mean
+    rain and snow onto the moist half of the PDF (`SGSMoistHalfFlag`) and that
+    half's weight; `β_precip = 0` disables it.
+  - `β_snow`: snow share of the placement (equal to `β_precip` unless set).
+  - `S_star`, `ε_S`: Threshold and width of the shaft weight on the centred
+    saturation excess (`sgs_precip_shaft_weight`); `(0, 0)` is the moist-half
+    mode, the overlap fraction sets them through `sgs_precip_shaft_threshold`.
 """
 struct Microphysics1MEvaluator{S, MP, TPS, FT, Args <: Tuple}
     scheme::S
@@ -265,7 +272,220 @@ struct Microphysics1MEvaluator{S, MP, TPS, FT, Args <: Tuple}
     dt::FT
     nsubs::Int
     args::Args
+    # Precipitation-fraction placement (`sgs_placement_factor` applied to
+    # rain and snow): the fraction `β_precip` of the cell-mean rain and snow is
+    # confined to the moist half of the PDF (nodes with centred saturation
+    # excess S′ ≥ 0, quadrature weight `cf_precip`, precomputed by the caller
+    # with `SGSMoistHalfFlag`), so below-cloud evaporation and sublimation are
+    # evaluated with the humidity of the air the precipitation falls through.
+    # `β_precip = 0` disables the placement.
+    β_precip::FT
+    cf_precip::FT
+    # Snow share of the precipitation-fraction placement (`β_snow`); the
+    # 20-argument constructor sets it equal to `β_precip` (rain and snow placed
+    # alike), a separate value lets rain and snow be placed independently.
+    β_snow::FT
+    # Shaft weight on the centred saturation excess (`sgs_precip_shaft_weight`):
+    # nodes with S′ ≥ S_star carry the placed precipitation, smoothed over the
+    # width ε_S. (0, 0) is the hard moist-half flag (S′ ≥ 0); the overlap
+    # precipitation fraction sets S_star so that the shaft covers the moistest
+    # `a_p` of the PDF (`sgs_precip_shaft_threshold`).
+    S_star::FT
+    ε_S::FT
+    # Sub-population placement (`sgs_precip_shaft_random`): the shaft holds all
+    # cloudy nodes (smooth cloudy weight of width ε_w, the one `CF_d` was
+    # accumulated with) and a random share `p_clear` of the clear nodes, at the
+    # in-shaft concentration `conc = 1/A`, `A = CF_d + (1 − CF_d) p_clear`; the
+    # node tendency is the in-shaft/out-of-shaft mixture. `p_clear < 0`
+    # disables this mode (the rank/moist-half placement above applies).
+    p_clear::FT
+    conc::FT
+    ε_w::FT
 end
+# Placement-free construction, the pre-existing positional signature.
+Microphysics1MEvaluator(
+    scheme, mp, tps, ρ, w, q_rai, q_sno, λ, ξ_liq, ξ_ice, q_lcl, q_icl,
+    λ_lagrange, mu_S, α, dt, nsubs, args,
+) = Microphysics1MEvaluator(
+    scheme, mp, tps, ρ, w, q_rai, q_sno, λ, ξ_liq, ξ_ice, q_lcl, q_icl,
+    λ_lagrange, mu_S, α, dt, nsubs, args,
+    zero(ρ), one(ρ), zero(ρ), zero(ρ), zero(ρ), -one(ρ), one(ρ), zero(ρ),
+)
+# Rain and snow placed alike (β_snow = β_precip).
+Microphysics1MEvaluator(
+    scheme, mp, tps, ρ, w, q_rai, q_sno, λ, ξ_liq, ξ_ice, q_lcl, q_icl,
+    λ_lagrange, mu_S, α, dt, nsubs, args, β_precip, cf_precip,
+) = Microphysics1MEvaluator(
+    scheme, mp, tps, ρ, w, q_rai, q_sno, λ, ξ_liq, ξ_ice, q_lcl, q_icl,
+    λ_lagrange, mu_S, α, dt, nsubs, args,
+    β_precip, cf_precip, β_precip, zero(ρ), zero(ρ), -one(ρ), one(ρ), zero(ρ),
+)
+# Moist-half placement with a separate snow share (S_star = ε_S = 0).
+Microphysics1MEvaluator(
+    scheme, mp, tps, ρ, w, q_rai, q_sno, λ, ξ_liq, ξ_ice, q_lcl, q_icl,
+    λ_lagrange, mu_S, α, dt, nsubs, args, β_precip, cf_precip,
+    β_snow,
+) = Microphysics1MEvaluator(
+    scheme, mp, tps, ρ, w, q_rai, q_sno, λ, ξ_liq, ξ_ice, q_lcl, q_icl,
+    λ_lagrange, mu_S, α, dt, nsubs, args,
+    β_precip, cf_precip, β_snow, zero(ρ), zero(ρ), -one(ρ), one(ρ), zero(ρ),
+)
+# Rank placement with an explicit threshold and width (sub-population off).
+Microphysics1MEvaluator(
+    scheme, mp, tps, ρ, w, q_rai, q_sno, λ, ξ_liq, ξ_ice, q_lcl, q_icl,
+    λ_lagrange, mu_S, α, dt, nsubs, args, β_precip, cf_precip,
+    β_snow, S_star, ε_S,
+) = Microphysics1MEvaluator(
+    scheme, mp, tps, ρ, w, q_rai, q_sno, λ, ξ_liq, ξ_ice, q_lcl, q_icl,
+    λ_lagrange, mu_S, α, dt, nsubs, args,
+    β_precip, cf_precip, β_snow, S_star, ε_S, -one(ρ), one(ρ), zero(ρ),
+)
+
+"""
+    sgs_precip_subpopulation(a_p, CF_d)
+
+Per-cell constants of the sub-population placement: the random share
+`p_clear = (a_p − CF_d) / (1 − CF_d)` of the clear nodes inside the shaft and the
+in-shaft concentration factor `conc = 1 / A` with `A = CF_d + (1 − CF_d) p_clear`
+the shaft's weight under the discrete measure. Every cloudy node is in the shaft
+(maximum overlap: the precipitation falls through the cloud below it) and a clear
+node is in it with probability `p_clear`, independent of its humidity, so
+evaporation and sublimation are evaluated at the clear-sky humidity of the cell
+rather than at its moist tail; the in-shaft concentration `q / A` carries the
+sub-linear dependence of the rates on the precipitation content. The quadrature
+mean of the node precipitation `P·q/A` is `q` exactly whenever `CF_d` was
+accumulated with the same cloudy weight. `a_p` is floored at
+`sgs_precip_fraction_min`; `a_p ≥ 1` or `CF_d ≥ 1` give `(1, 1)`, the uniform
+limit.
+"""
+@inline function sgs_precip_subpopulation(a_p, CF_d)
+    FT = typeof(CF_d)
+    a = clamp(FT(a_p), sgs_precip_fraction_min(FT), one(FT))
+    c = clamp(CF_d, zero(FT), one(FT))
+    p_clear = clamp((a - c) / max(one(FT) - c, eps(FT)), zero(FT), one(FT))
+    A = c + (one(FT) - c) * p_clear
+    return (p_clear, one(FT) / max(A, sgs_precip_weight_min(FT)))
+end
+
+"""
+    sgs_precip_shaft_weight(S′, S_star, ε_S)
+
+Weight in `[0, 1]` with which a quadrature node of centred saturation excess
+`S′` belongs to the precipitation shaft: the nodes with `S′ ≥ S_star`, smoothed
+over the width `ε_S`,
+
+    s = sigmoid((S′ − S_star) / ε_S)      (ε_S > 0)
+    s = 1[S′ ≥ S_star]                     (ε_S = 0, the hard flag)
+
+`(S_star, ε_S) = (0, 0)` is the moist-half flag (nodes at least as close to
+saturation as the cell mean). Its quadrature mean `cf_precip` is the weight of
+the shaft under the discrete measure, which normalizes the placement
+(`sgs_placement_factor`), so the cell-mean precipitation is conserved for any
+threshold and width.
+"""
+@inline function sgs_precip_shaft_weight(S′, S_star, ε_S)
+    FT = typeof(S′)
+    return ifelse(
+        ε_S > zero(FT),
+        (one(FT) + tanh((S′ - S_star) / (2 * max(ε_S, eps(FT))))) / 2,
+        ifelse(S′ >= S_star, one(FT), zero(FT)),
+    )
+end
+
+"""
+    sgs_precip_shaft_width_coeff(FT)
+
+Width of the shaft weight (`sgs_precip_shaft_weight`) in units of the sampled
+PDF width `σ_S` under the overlap precipitation fraction: `0.25` keeps the
+transition narrow compared with the Gauss–Hermite node spacing (≈ 1.7 σ_S at
+order 3) while smoothing the node assignment as `a_p` changes between steps.
+"""
+@inline sgs_precip_shaft_width_coeff(::Type{FT}) where {FT} = FT(0.25)
+
+"""
+    sgs_precip_fraction_min(FT)
+
+Floor on the overlap precipitation fraction `a_p` seen by the quadrature
+(`sgs_precip_shaft_threshold`): a shaft is never taken narrower than this
+fraction of the cell. With `0.1` the moistest Gauss–Hermite node (weight 1/36
+at order 3) is always resolved as the shaft, so the in-shaft precipitation
+`q_precip / cf_precip` stays within the range the 1M closures are evaluated in.
+"""
+@inline sgs_precip_fraction_min(::Type{FT}) where {FT} = FT(0.1)
+
+"""
+    sgs_precip_weight_min(FT)
+
+Smallest discrete shaft weight `cf_precip` the placement resolves; below it the
+quadrature cannot represent the shaft and the precipitation is left uniform
+(`sgs_placement_factor` with `cf = 0`).
+"""
+@inline sgs_precip_weight_min(::Type{FT}) where {FT} = FT(0.02)
+
+"""
+    sgs_precip_shaft_threshold(a_p, sigma_S)
+
+Threshold `S_star` on the centred saturation excess such that the shaft covers
+the moistest fraction `a_p` of the sampled PDF, taken Gaussian with standard
+deviation `sigma_S` (the quadrature's own `Σᵢ wᵢ S′ᵢ²`):
+
+    S_star = σ_S · Φ⁻¹(1 − a_p)
+
+`a_p` is floored at `sgs_precip_fraction_min`; `a_p = 1` places the threshold
+far below every node (uniform precipitation). The discrete weight of the nodes
+above the threshold, not `a_p` itself, normalizes the placement, so the
+Gaussian rank is only used to order the nodes.
+"""
+@inline function sgs_precip_shaft_threshold(a_p, sigma_S)
+    FT = typeof(sigma_S)
+    a = clamp(FT(a_p), sgs_precip_fraction_min(FT), one(FT))
+    return sigma_S * normal_cdf_inv(one(FT) - a)
+end
+
+"""
+    SGSPrecipShaftFlag(tps, ρ, mu_S, S_star, ε_S)
+
+Point-wise functor for the SGS quadrature returning the shaft weight
+(`sgs_precip_shaft_weight`) of a node from its centred saturation excess
+`S′ = q_tot_hat − q_sat(T_hat, ρ) − mu_S`. Its quadrature mean `cf_precip` is
+the weight of the part of the cell the precipitation is taken to fall through
+under the precipitation-fraction placement (`Microphysics1MEvaluator`).
+`SGSMoistHalfFlag(tps, ρ, mu_S)` is the hard moist-half instance
+`(S_star, ε_S) = (0, 0)`.
+"""
+struct SGSPrecipShaftFlag{TPS, FT}
+    tps::TPS
+    ρ::FT
+    mu_S::FT
+    S_star::FT
+    ε_S::FT
+end
+SGSMoistHalfFlag(tps, ρ, mu_S) = SGSPrecipShaftFlag(tps, ρ, mu_S, zero(ρ), zero(ρ))
+@inline function (f::SGSPrecipShaftFlag)(T_hat, q_tot_hat)
+    FT = typeof(f.ρ)
+    S′ = max(zero(FT), q_tot_hat) - TD.q_vap_saturation(f.tps, T_hat, f.ρ) - f.mu_S
+    return sgs_precip_shaft_weight(S′, f.S_star, f.ε_S)
+end
+
+"""
+    sgs_placement_factor(β, flag, cf)
+
+Factor `φ` on a cell-mean quantity at a quadrature node when a fraction `β` of it
+is confined to the flagged nodes (`flag = 1`, total quadrature weight `cf`) and
+the rest stays uniform,
+
+    φ = (1 − β) + β · flag / cf,
+
+so that the quadrature mean of `φ` is 1 and the cell mean is conserved. `β = 0`
+returns exactly 1; `cf = 0` (no flagged node) falls back to uniform. Used by the
+precipitation-fraction placement of rain and snow (`Microphysics1MEvaluator`).
+"""
+@inline function sgs_placement_factor(β, flag, cf)
+    FT = typeof(β)
+    φ_in = ifelse(cf > zero(FT), flag / max(cf, eps(FT)), one(FT))
+    return (one(FT) - β) + β * φ_in
+end
+
 """
     sgs_local_condensate(λ, shifted_excess, ξ_liq, ξ_ice, q_lcl, q_icl)
 
@@ -347,15 +567,73 @@ with `dq_lcl_dt`, `dq_icl_dt`, `dq_rai_dt`, `dq_sno_dt` [kg/kg/s].
     # cloud condensate as well would double-count them and break ⟨q_c^local⟩ = q_c.
     q_sat_hat = TD.q_vap_saturation(eval.tps, T_hat, eval.ρ)
     S′_hat = q_tot_hat - q_sat_hat - eval.mu_S
-    shifted_excess = max(FT(0), eval.λ_lagrange + eval.α * S′_hat)
+    shifted_excess_signed = eval.λ_lagrange + eval.α * S′_hat
+    shifted_excess = max(FT(0), shifted_excess_signed)
     q_lcl_hat, q_icl_hat = sgs_local_condensate(
         eval.λ, shifted_excess, eval.ξ_liq, eval.ξ_ice, eval.q_lcl, eval.q_icl,
     )
+    # Sub-population placement: the node is in the shaft with probability P
+    # (1 if cloudy, `p_clear` if clear); its tendency is the mixture of the
+    # in-shaft state (precipitation at `conc` times the cell mean) and the
+    # precipitation-free state, both with the node total water shifted so that
+    # the node vapour is the same in either state.
+    if eval.p_clear >= zero(FT)
+        s_c = discrete_cloudy_weight(shifted_excess_signed, eval.ε_w)
+        P = s_c + (one(FT) - s_c) * eval.p_clear
+        q_p = eval.q_rai + eval.q_sno
+        q_tot_in = max(FT(0), q_tot_hat + (eval.conc - one(FT)) * q_p)
+        q_tot_out = max(FT(0), q_tot_hat - q_p)
+        if P >= one(FT) - eps(FT)
+            return BMT.bulk_microphysics_tendencies(
+                BMT.LinearizedAverage(),
+                eval.scheme, eval.mp, eval.tps, eval.ρ, T_hat, eval.w,
+                q_tot_in, q_lcl_hat, q_icl_hat,
+                eval.q_rai * eval.conc, eval.q_sno * eval.conc,
+                eval.dt, eval.nsubs, eval.args...,
+            )
+        elseif P <= eps(FT)
+            return BMT.bulk_microphysics_tendencies(
+                BMT.LinearizedAverage(),
+                eval.scheme, eval.mp, eval.tps, eval.ρ, T_hat, eval.w,
+                q_tot_out, q_lcl_hat, q_icl_hat, zero(FT), zero(FT),
+                eval.dt, eval.nsubs, eval.args...,
+            )
+        else
+            t_in = BMT.bulk_microphysics_tendencies(
+                BMT.LinearizedAverage(),
+                eval.scheme, eval.mp, eval.tps, eval.ρ, T_hat, eval.w,
+                q_tot_in, q_lcl_hat, q_icl_hat,
+                eval.q_rai * eval.conc, eval.q_sno * eval.conc,
+                eval.dt, eval.nsubs, eval.args...,
+            )
+            t_out = BMT.bulk_microphysics_tendencies(
+                BMT.LinearizedAverage(),
+                eval.scheme, eval.mp, eval.tps, eval.ρ, T_hat, eval.w,
+                q_tot_out, q_lcl_hat, q_icl_hat, zero(FT), zero(FT),
+                eval.dt, eval.nsubs, eval.args...,
+            )
+            return map((x, y) -> P * x + (one(FT) - P) * y, t_in, t_out)
+        end
+    end
+    # Precipitation-fraction placement: the rain and snow this node sees are
+    # the cell means scaled by φ_p (1 when disabled); the node total water is
+    # shifted by the same amount so that the node vapour, and hence the
+    # condensate reconstruction, is unchanged by the placement.
+    q_rai_node, q_sno_node, q_tot_node =
+        if (eval.β_precip > zero(FT)) | (eval.β_snow > zero(FT))
+            flag_p = sgs_precip_shaft_weight(S′_hat, eval.S_star, eval.ε_S)
+            φ_r = sgs_placement_factor(eval.β_precip, flag_p, eval.cf_precip)
+            φ_s = sgs_placement_factor(eval.β_snow, flag_p, eval.cf_precip)
+            shift = (φ_r - one(FT)) * eval.q_rai + (φ_s - one(FT)) * eval.q_sno
+            (eval.q_rai * φ_r, eval.q_sno * φ_s, max(FT(0), q_tot_hat + shift))
+        else
+            (eval.q_rai, eval.q_sno, q_tot_hat)
+        end
 
     return BMT.bulk_microphysics_tendencies(
         BMT.LinearizedAverage(),
         eval.scheme, eval.mp, eval.tps, eval.ρ, T_hat, eval.w,
-        q_tot_hat, q_lcl_hat, q_icl_hat, eval.q_rai, eval.q_sno,
+        q_tot_node, q_lcl_hat, q_icl_hat, q_rai_node, q_sno_node,
         eval.dt, eval.nsubs, eval.args...,
     )
 end
@@ -367,7 +645,10 @@ end
     microphysics_tendencies_1m(
         scheme, sgs_quad, cmp, thp, ρ, T, w, q_tot_nonneg,
         q_lcl, q_icl, q_rai, q_sno, T′T′, q′q′, corr_Tq,
-        λ_lagrange, α, ξ_liq, ξ_ice, dt, nsubs, λ = ..., mu_S = ..., args...,
+        λ_lagrange, α, ξ_liq, ξ_ice, dt, nsubs, λ = ..., mu_S = ...,
+        precip_incloud_fraction = 0,
+        snow_incloud_fraction = -1, precip_overlap_decay = -1, precip_frac = 1,
+        sigma_S = 0, args...,
     )
 
 Compute time-averaged 1-moment microphysics tendencies.
@@ -411,6 +692,29 @@ accretion.
   - `mu_S`: Linearized SGS mean saturation excess [kg/kg]; defaults to
     `q_tot_nonneg − q_sat(T, ρ)`. Both are quadrature invariants and may be
     precomputed by the caller to avoid recomputing them at every point.
+  - `precip_incloud_fraction`: Fraction `β_p` of the cell-mean rain and snow confined
+    to the moist half of the PDF (`SGSMoistHalfFlag`, `sgs_precip_incloud_fraction`);
+    the default `0` disables the placement and its extra quadrature pass [-].
+  - `snow_incloud_fraction`: Snow share of that placement (`sgs_snow_incloud_fraction`);
+    a negative value (the default) means "same as `precip_incloud_fraction`" [-].
+  - `precip_overlap_decay`: `sgs_precip_overlap_decay`; non-negative selects the
+    overlap precipitation fraction, under which the placed precipitation is
+    confined to the moistest `precip_frac` of the PDF
+    (`sgs_precip_shaft_threshold`) instead of its moist half; negative (the
+    default) keeps the moist-half mode [-].
+  - `precip_frac`: Overlap precipitation fraction `a_p` of the cell
+    (`ᶜprecip_frac`, `set_precip_fraction!`) [-].
+  - `sigma_S`: SGS saturation-excess standard deviation of the sampled PDF
+    (`ᶜsgs_moments.sigma_S`), which scales the shaft threshold and width [kg/kg].
+  - `CF_d`: Discrete cloudy mass of the sampled PDF (`ᶜsgs_moments.CF_d`) [-].
+  - `precip_shaft_random`: `sgs_precip_shaft_random`; positive (with the overlap
+    mode on) selects the sub-population placement (`sgs_precip_subpopulation`):
+    all cloudy nodes plus a random share of the clear nodes carry the shaft at
+    the in-shaft concentration, instead of the moistest `precip_frac` [-].
+  - `precip_frac_floor`: `sgs_precip_fraction_floor`; the shaft is never taken
+    narrower than this fraction of the cell (a wider shaft than the overlap of
+    the cover gives: fall-streak spreading and shear); defaults to
+    `sgs_precip_fraction_min` [-].
   - `args...`: Extra trailing arguments forwarded to CloudMicrophysics.
 
 # Returns
@@ -438,6 +742,14 @@ end
     # precompute them once and pass them in to avoid recomputing them per point.
     λ = TD.liquid_fraction(thp, T, max(zero(ρ), q_lcl), max(zero(ρ), q_icl)),
     mu_S = q_tot_nonneg - TD.q_vap_saturation(thp, T, ρ),
+    precip_incloud_fraction = zero(ρ),
+    snow_incloud_fraction = -one(ρ),
+    precip_overlap_decay = -one(ρ),
+    precip_frac = one(ρ),
+    sigma_S = zero(ρ),
+    CF_d = zero(ρ),
+    precip_shaft_random = zero(ρ),
+    precip_frac_floor = sgs_precip_fraction_min(typeof(ρ)),
     args...,
 )
     FT = typeof(ρ)
@@ -445,14 +757,120 @@ end
     q_rai_nonneg = max(FT(0), q_rai)
     q_sno_nonneg = max(FT(0), q_sno)
 
+    # Same transform `integrate_over_sgs` builds; shared by the (optional)
+    # precipitation-fraction pass and the tendency pass.
+    transform =
+        build_physical_transform(sgs_quad, q_tot_nonneg, T, q′q′, T′T′, corr_Tq)
+    # Shaft weight on the nodes: the moist half of the PDF (S′ ≥ 0), or under
+    # the overlap precipitation fraction the moistest `a_p` of it, smoothed
+    # over `c_w σ_S`. Its quadrature weight `cf_precip` normalizes the placement.
+    β_snow = ifelse(
+        snow_incloud_fraction < zero(FT), FT(precip_incloud_fraction),
+        FT(snow_incloud_fraction),
+    )
+    overlap_on = precip_overlap_decay >= zero(FT)
+    # Sub-population mode: cloudy nodes plus a random share of the clear nodes
+    # (`sgs_precip_subpopulation`); no node flag pass is needed, `CF_d` is the
+    # shaft's cloudy weight.
+    random_on =
+        overlap_on & (precip_shaft_random > zero(FT)) &
+        (precip_incloud_fraction > zero(FT))
+    # The shaft is never taken narrower than `precip_frac_floor` of the cell
+    # (`sgs_precip_fraction_floor`; at least `sgs_precip_fraction_min`).
+    a_p = max(FT(precip_frac), FT(precip_frac_floor))
+    p_clear, conc = sgs_precip_subpopulation(a_p, FT(CF_d))
+    p_clear = ifelse(random_on, p_clear, -one(FT))
+    ε_w = discrete_cloudy_weight_width(α, FT(sigma_S))
+    S_star = ifelse(
+        overlap_on, sgs_precip_shaft_threshold(a_p, FT(sigma_S)), zero(FT),
+    )
+    ε_S = ifelse(overlap_on, sgs_precip_shaft_width_coeff(FT) * FT(sigma_S), zero(FT))
+    cf_precip = if ((precip_incloud_fraction > zero(FT)) | (β_snow > zero(FT))) &
+       !random_on
+        cf = sum_over_quadrature_points(
+            SGSPrecipShaftFlag(thp, ρ, mu_S, S_star, ε_S), transform, sgs_quad,
+        )
+        # A shaft the quadrature cannot resolve is left uniform.
+        ifelse(cf < sgs_precip_weight_min(FT), zero(FT), cf)
+    else
+        one(FT)
+    end
     evaluator = Microphysics1MEvaluator(
         scheme, cmp, thp, ρ, w,
         q_rai_nonneg, q_sno_nonneg, λ,
         FT(ξ_liq), FT(ξ_ice), max(zero(ρ), q_lcl), max(zero(ρ), q_icl),
         λ_lagrange, mu_S, α, dt, nsubs, args,
+        FT(precip_incloud_fraction), FT(cf_precip), β_snow, S_star, ε_S,
+        p_clear, conc, ε_w,
     )
-    return integrate_over_sgs(
-        evaluator, sgs_quad, q_tot_nonneg, T, q′q′, T′T′, corr_Tq,
+    return sum_over_quadrature_points(evaluator, transform, sgs_quad)
+end
+
+"""
+    SGSMicrophysicsOptions{FT}
+
+Scalar options of the 1M quadrature microphysics, built by
+`sgs_microphysics_options` and broadcast as a scalar (see that function).
+"""
+Base.@kwdef struct SGSMicrophysicsOptions{FT}
+    α::FT
+    ξ_liq::FT
+    ξ_ice::FT
+    precip_incloud_fraction::FT
+    snow_incloud_fraction::FT
+    precip_overlap_decay::FT
+    precip_shaft_random::FT
+    precip_frac_floor::FT
+end
+Base.broadcastable(o::SGSMicrophysicsOptions) = tuple(o)
+
+"""
+    sgs_microphysics_options(params)
+
+The per-run scalar options of the 1M quadrature microphysics as one
+`SGSMicrophysicsOptions` (`α`, `ξ_liq`, `ξ_ice`, and the
+precipitation-placement keys), so the tendency broadcast passes one argument
+instead of eight: a broadcast with more than ~30 arguments falls off Julia's
+specialized `Broadcast._getindex` path and allocates inside the GPU kernel.
+"""
+function sgs_microphysics_options(params)
+    return SGSMicrophysicsOptions(;
+        α = sgs_variance_fidelity(CAP.cloud_fraction_steepness_scale(params)),
+        ξ_liq = CAP.sgs_liquid_uniform_fraction(params),
+        ξ_ice = CAP.sgs_ice_uniform_fraction(params),
+        precip_incloud_fraction = CAP.sgs_precip_incloud_fraction(params),
+        snow_incloud_fraction = CAP.sgs_snow_incloud_fraction(params),
+        precip_overlap_decay = CAP.sgs_precip_overlap_decay(params),
+        precip_shaft_random = CAP.sgs_precip_shaft_random(params),
+        precip_frac_floor = CAP.sgs_precip_fraction_floor(params),
+    )
+end
+
+"""
+    microphysics_tendencies_1m(
+        scheme, sgs_quad, cmp, thp, ρ, T, w, q_tot_nonneg, q_lcl, q_icl, q_rai, q_sno,
+        T′T′, q′q′, corr_Tq, λ_lagrange, dt, nsubs, λ, mu_S, precip_frac, sigma_S, CF_d,
+        opts::SGSMicrophysicsOptions,
+    )
+
+Packed form of the quadrature driver: the scalar options come as the
+`SGSMicrophysicsOptions` of `sgs_microphysics_options`, the per-cell fields (`precip_frac`, `sigma_S`,
+`CF_d`) and the precomputed `λ`, `mu_S` positionally. Forwards to the positional
+form, so the two are identical.
+"""
+@inline function microphysics_tendencies_1m(
+    scheme, sgs_quad, cmp, thp, ρ, T, w, q_tot_nonneg,
+    q_lcl, q_icl, q_rai, q_sno, T′T′, q′q′, corr_Tq,
+    λ_lagrange, dt, nsubs, λ, mu_S, precip_frac, sigma_S, CF_d,
+    opts::SGSMicrophysicsOptions,
+)
+    return microphysics_tendencies_1m(
+        scheme, sgs_quad, cmp, thp, ρ, T, w, q_tot_nonneg,
+        q_lcl, q_icl, q_rai, q_sno, T′T′, q′q′, corr_Tq,
+        λ_lagrange, opts.α, opts.ξ_liq, opts.ξ_ice, dt, nsubs, λ, mu_S,
+        opts.precip_incloud_fraction, opts.snow_incloud_fraction,
+        opts.precip_overlap_decay, precip_frac, sigma_S, CF_d,
+        opts.precip_shaft_random, opts.precip_frac_floor,
     )
 end
 
