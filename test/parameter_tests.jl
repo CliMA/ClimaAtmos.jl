@@ -122,6 +122,8 @@ end
         @test CAP.sgs_liquid_uniform_fraction(sq) == FT(1)
         @test CAP.sgs_ice_uniform_fraction(sq) == FT(1)
         @test CAP.sgs_variance_isentropic_min_dtheta_dz(sq) == FT(1e-3)
+        @test CAP.sgs_variance_isentropic_depth_max(sq) == FT(2000)
+        @test CAP.sgs_variance_isentropic_depth_N2_ref(sq) == FT(3e-5)
     end
     # A run toml overrides the defaults.
     mktemp() do path, io

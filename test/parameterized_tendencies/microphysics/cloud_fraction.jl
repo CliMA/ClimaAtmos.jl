@@ -283,7 +283,7 @@ floor_nt(
         end
     end
 
-    @testset "`isentropic_cell_cap`: along-surface segment bounded by the cell" begin
+    @testset "`isentropic_cell_cap`: along-surface segment bounded by the slab" begin
         for FT in (Float32, Float64)
             @testset "FT = $FT" begin
                 cap = CA.isentropic_cell_cap
@@ -314,6 +314,66 @@ floor_nt(
                     v in (0, 1e-14, 1e-10, 1e-8, 1e-6)
                 )
                 @test cap(FT(1e-10), FT(3e-3), θz_min, Δx, Δz) isa FT
+                # a deeper slab lengthens the segment; no slab removes the term
+                @test cap(inv_θ, FT(4e-3), θz_min, Δx, FT(2000)) >
+                      cap(inv_θ, FT(4e-3), θz_min, Δx, Δz)
+                @test cap(inv_θ, FT(4e-3), θz_min, Δx, FT(0)) === FT(0)
+                @test cap(FT(0), FT(4e-3), θz_min, Δx, FT(0)) === FT(0)
+                @test cap(inv_θ, FT(4e-3), θz_min, Δx, FT(0)) isa FT
+            end
+        end
+    end
+
+    @testset "`isentropic_slab_depth`: slab depth from the local saturated N²" begin
+        for FT in (Float32, Float64)
+            @testset "FT = $FT" begin
+                depth = CA.isentropic_slab_depth
+                H_max = FT(2000)
+                N²_ref = FT(3e-5)
+                @test depth(FT(0), H_max, N²_ref) === FT(0)          # moist-neutral: no slab
+                @test depth(FT(-1e-4), H_max, N²_ref) === FT(0)      # overturned: no slab
+                @test depth(N²_ref, H_max, N²_ref) ≈ H_max / 2        # half depth at the reference
+                @test depth(FT(3e-4), H_max, N²_ref) > FT(0.9) * H_max   # clearly stable: → H_max
+                @test depth(FT(1e-2), H_max, N²_ref) < H_max
+                @test depth(FT(1e-5), H_max, N²_ref) < depth(FT(1e-4), H_max, N²_ref)
+                @test depth(FT(1e-4), H_max, N²_ref) isa FT
+                @test depth(FT(0), H_max, FT(0)) === FT(0)          # guarded 0/0
+            end
+        end
+    end
+
+    @testset "`isentropic_vertical_partition`: across-surface share of the vertical excursion" begin
+        for FT in (Float32, Float64)
+            @testset "FT = $FT" begin
+                part = CA.isentropic_vertical_partition
+                cap = CA.isentropic_cell_cap
+                θz_min = FT(1e-3)
+                Δx = FT(2.5e5)
+                Δz = FT(500)
+                inv_flat = FT(0)
+                inv_mid = (FT(4e-3) * Δz / Δx)^2   # s Δx / Δz = 1
+                inv_steep = FT(1e-8)                # s Δx / Δz = 12.5
+                # with H = Δz the share equals the cap factor
+                for inv in (inv_flat, inv_mid, inv_steep)
+                    @test part(inv, FT(4e-3), θz_min, Δx, Δz, Δz) ≈
+                          cap(inv, FT(4e-3), θz_min, Δx, Δz)
+                end
+                # flat surface: the vertical block is whole
+                @test part(inv_flat, FT(4e-3), θz_min, Δx, Δz, FT(2000)) === FT(1)
+                # no slab: the horizontal block samples nothing, the vertical block is whole
+                @test part(inv_steep, FT(4e-3), θz_min, Δx, Δz, FT(0)) === FT(1)
+                # steep surface in a deep slab: the along-surface segment covers the
+                # whole vertical excursion, floored at zero
+                @test part(inv_steep, FT(4e-3), θz_min, Δx, Δz, FT(2000)) === FT(0)
+                # a deeper slab leaves less for the vertical block
+                @test part(inv_mid, FT(4e-3), θz_min, Δx, Δz, FT(2000)) <
+                      part(inv_mid, FT(4e-3), θz_min, Δx, Δz, Δz)
+                # bounded, type-stable
+                @test all(
+                    FT(0) <= part(FT(v), FT(3e-3), θz_min, Δx, Δz, FT(h)) <= FT(1)
+                    for v in (0, 1e-14, 1e-10, 1e-8, 1e-6), h in (0, 100, 500, 2000)
+                )
+                @test part(inv_mid, FT(3e-3), θz_min, Δx, Δz, FT(1200)) isa FT
             end
         end
     end

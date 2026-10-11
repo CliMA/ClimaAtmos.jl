@@ -597,6 +597,11 @@ function SGSQuadratureParameters(
         # Isentropic geometric variance term: floor on ∂θ_li/∂z [K/m] in the
         # slope ratio and in the cell-geometry bound.
         sgs_variance_isentropic_min_dtheta_dz = FT(1e-3),
+        # Depth of the stably stratified slab bounding the along-surface
+        # displacement: ceiling [m] (0 = the model layer Δz) and the saturated
+        # N² [s⁻²] at which the ramp reaches half of it.
+        sgs_variance_isentropic_depth_max = FT(2000),
+        sgs_variance_isentropic_depth_N2_ref = FT(3e-5),
     )
     provisional_present = filter(collect(keys(provisional_defaults))) do name
         haskey(toml_dict.data, string(name))

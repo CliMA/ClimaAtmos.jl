@@ -274,9 +274,16 @@ not yet define.
     the slope ratio `r = (∂q/∂z) / max(∂θ_li/∂z, θz_min)` of the isentropic geometric
     variance term; keeps `r` finite and bounded by `|∂q/∂z| / θz_min` in neutral and
     overturned layers, and enters the slope `s = |∇_h θ_li| / max(∂θ_li/∂z, θz_min)`
-    of the cell-geometry bound `ℓ² = Δx² / (1 + (s Δx / Δz)²)` on the along-surface
-    displacement (`isentropic_cell_cap`); must be positive (checked in
-    `get_sgs_quadrature`) [K m^-1].
+    of the bound `ℓ² = Δx² H² / (H² + (s Δx)²)` on the along-surface displacement
+    (`isentropic_cell_cap`); must be positive [K m^-1].
+  - `sgs_variance_isentropic_depth_max`: Ceiling `H_max` on the depth `H` of the stably
+    stratified slab that bounds the displacement along the `θ_li` surface in the
+    isentropic geometric variance term (`isentropic_slab_depth`, `isentropic_cell_cap`);
+    `0` bounds the displacement by the model layer `Δz` instead [m].
+  - `sgs_variance_isentropic_depth_N2_ref`: Reference saturated buoyancy frequency
+    squared of the slab-depth ramp `H = H_max N²₊ / (N²₊ + N²_ref)`; small compared
+    with the stability of clear stratified air so that only near-neutral cells are
+    shortened; must be positive [s^-2].
   - `cloud_fraction_steepness_scale`: Steepness scale `α` of the
     cloud-fraction/condensate relationship; 1 for exact Gaussian or lognormal SGS
     distributions [-].
@@ -310,6 +317,8 @@ Base.@kwdef struct SGSQuadratureParameters{FT} <: ASQP
     cloud_fraction_floor_release_sharpness::FT
     cloud_fraction_floor_residual::FT
     sgs_variance_isentropic_min_dtheta_dz::FT
+    sgs_variance_isentropic_depth_max::FT
+    sgs_variance_isentropic_depth_N2_ref::FT
 end
 
 """

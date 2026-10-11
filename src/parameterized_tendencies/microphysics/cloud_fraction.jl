@@ -224,36 +224,75 @@ function materialized_mixing_length!(Y, p)
 end
 
 """
-    isentropic_cell_cap(inv_θ, ∂θ∂z, θz_min, Δx, Δz)
+    isentropic_slab_depth(N²_sat, H_max, N²_ref)
 
-Geometric factor `ℓ²/Δx²` in `(0, 1]` that bounds the displacement along the
-`θ_li` surface by the grid cell. A surface of slope
-`s = |∇_h θ_li| / max(∂θ_li/∂z, θz_min)` leaves a layer of depth `Δz` after a
-horizontal distance `Δz / s`, so the along-surface segment inside the cell is
-`ℓ = min(Δx, Δz / s)`, smoothed here as `ℓ² = Δx² / (1 + (s Δx / Δz)²)`. For
+Depth `H` [m] of the stably stratified slab a parcel can traverse adiabatically,
+estimated from the local saturated buoyancy frequency `N²_sat` [s⁻²]:
+
+    H = H_max · N²₊ / (N²₊ + N²_ref),    N²₊ = max(N²_sat, 0).
+
+The edge of a stable slab is where `N²_sat` reaches zero, so a ramp in the local
+stability stands in for the distance to that edge without a column scan: `H = 0`
+in moist-neutral or overturned air, where there is no surface to slide along and
+the along-surface displacement vanishes; `H → H_max`
+(`sgs_variance_isentropic_depth_max`) where the air is clearly stable, with
+`N²_ref` (`sgs_variance_isentropic_depth_N2_ref`, positive) setting how clearly.
+`N²_ref` is small compared with the stability of clear stratified air, because
+frontal cloud is close to moist-neutral yet sits in a deep stable slab, so only
+near-neutral cells are shortened. `H` is a stability bound, not a thermodynamic
+one: saturation conserves `q_tot` and `θ_li` and does not stop the displacement.
+"""
+@inline function isentropic_slab_depth(N²_sat, H_max, N²_ref)
+    N²₊ = max(N²_sat, zero(N²_sat))
+    return H_max * N²₊ / max(N²₊ + N²_ref, eps(one(N²_sat)))
+end
+
+"""
+    isentropic_cell_cap(inv_θ, ∂θ∂z, θz_min, Δx, H)
+
+Geometric factor `ℓ²/Δx²` in `[0, 1]` that bounds the displacement along the
+`θ_li` surface by the stably stratified slab of depth `H` the parcel can
+traverse. A surface of slope `s = |∇_h θ_li| / max(∂θ_li/∂z, θz_min)` leaves
+the slab after a horizontal distance `H / s`, so the along-surface segment is
+`ℓ = min(Δx, H / s)`, smoothed here as `ℓ² = Δx² H² / (H² + (s Δx)²)`. For
 flat surfaces (strong stratification, small horizontal `θ_li` contrast) the
 factor is 1 and the term keeps its `(c_Δx Δx)²` scale; for steep surfaces
-(weak stratification) it falls like `(Δz θ_z / (|∇_h θ_li| Δx))²`, which
+(weak stratification) it falls like `(H θ_z / (|∇_h θ_li| Δx))²`, which
 turns the projected part `r² |∇_h θ_li|² Δx²` of the invariant into
-`(∂q/∂z Δz)²`.
-
-The same factor is the across-surface share of the cell's vertical excursion
-left for the `q′q′` part of the vertical uniform-box block: the along-surface
-segment `ℓ` already samples a vertical displacement `s ℓ`, and
-`Δz² − (s ℓ)² = Δz² / (1 + (s Δx / Δz)²)`, so the vertical `q′q′` term is scaled
-by it (`set_covariance_cache!`). Flat surfaces keep both blocks in full; steep
-surfaces keep only the along-surface `q` sample, so the two never count the
-same `q` excursion twice. The vertical `θ′q′` term carries the same factor
-(the block's Cauchy–Schwarz bound holds since `f² ≤ f`); the vertical `θ′θ′`
-term is left unchanged (the horizontal block carries no `θ′`). The diagnosed
-correlation is clamped to `[-1, 1]` downstream.
+`(∂q/∂z H)²`; `H = 0` (moist-neutral or overturned air,
+`isentropic_slab_depth`) removes the term. With `H = Δz` the slab is the
+model layer and the bound is the grid cell.
 
 # TODO: θ and q variances are not treated consistently.
 """
-@inline function isentropic_cell_cap(inv_θ, ∂θ∂z, θz_min, Δx, Δz)
+@inline function isentropic_cell_cap(inv_θ, ∂θ∂z, θz_min, Δx, H)
     s = sqrt(max(inv_θ, zero(inv_θ))) / max(∂θ∂z, θz_min)
-    x = s * Δx / Δz
-    return one(x) / (one(x) + x^2)
+    H² = H^2
+    return ifelse(H > zero(H), H² / (H² + (s * Δx)^2), zero(H²))
+end
+
+"""
+    isentropic_vertical_partition(inv_θ, ∂θ∂z, θz_min, Δx, Δz, H)
+
+Across-surface share, in `[0, 1]`, of the cell's vertical excursion left for the
+`q′q′` and `θ′q′` parts of the vertical uniform-box block once the horizontal
+block has sampled the along-surface segment `ℓ` (`isentropic_cell_cap`): that
+segment already carries a vertical displacement `s ℓ`, so the remainder is
+`(Δz² − (s ℓ)²) / Δz²`, floored at zero. Flat surfaces keep both blocks in
+full (independent directions); steep surfaces inside a deep slab keep only the
+along-surface `q` sample, so the two never count the same `q` excursion twice;
+`H = 0` leaves the vertical block whole. With `H = Δz` the share equals the
+cap factor `ℓ²/Δx²`. The vertical `θ′q′` term carries the same share (the
+block's Cauchy–Schwarz bound holds since `f² ≤ f`); the vertical `θ′θ′` term
+is left unchanged (the horizontal block carries no `θ′`). The diagnosed
+correlation is clamped to `[-1, 1]` downstream.
+"""
+@inline function isentropic_vertical_partition(inv_θ, ∂θ∂z, θz_min, Δx, Δz, H)
+    s = sqrt(max(inv_θ, zero(inv_θ))) / max(∂θ∂z, θz_min)
+    sΔx² = (s * Δx)^2
+    H² = H^2
+    sℓ² = ifelse(H > zero(H), sΔx² * H² / (H² + sΔx²), zero(H²))
+    return max(one(H) - sℓ² / Δz^2, zero(H))
 end
 
 """
@@ -381,13 +420,13 @@ Pipeline:
     the sign of `∂_z θ · ∂_z q`.
  3. Add the horizontal resolved-gradient (geometric) term, the isentropic form
     `|∇_h q_tot − r ∇_h θ_li|²` with the along-surface displacement bounded by the
-    cell (`isentropic_cell_cap`), to q′q′ only — no horizontal θ′θ′ and no
+    stably stratified slab (`isentropic_slab_depth`, `isentropic_cell_cap`), to q′q′ only — no horizontal θ′θ′ and no
     horizontal cross term (skipped when `sgs_variance_horizontal_scale_factor` is 0).
  4. Add the resolved vertical-gradient (uniform-box) term
     `c_g (c_Δz Δz)² (∂_z ψ)²` to both variances, and the exact cross
     `c_g (c_Δz Δz)² ∂_z θ · ∂_z q` to θ′q′; the q′q′ and θ′q′ terms are
-    scaled by the across-surface share `1/(1 + (s Δx/Δz)²)` of the excursion
-    not sampled by step 3, θ′θ′ is not (skipped when
+    scaled by the across-surface share of the excursion not sampled by step 3
+    (`isentropic_vertical_partition`), θ′θ′ is not (skipped when
     `sgs_variance_vertical_scale_factor` is 0; default `c_Δz = 1` with
     `c_g = 1/12` reproduces the uniform-box exact result).
  5. Transform θ→T using `compute_∂T_∂θ!`
@@ -482,7 +521,8 @@ function set_covariance_cache!(Y, p, thermo_params)
     #    isentrope carries the parcel down/up by r-weighted amounts, so aligned
     #    (warm = moist) gradients amplify and anti-aligned ones cancel the
     #    saturation variance. The displacement along the surface is bounded by
-    #    the cell (`isentropic_cell_cap`, ℓ = min(Δx, Δz / slope)).
+    #    the stably stratified slab (`isentropic_cell_cap`, ℓ = min(Δx, H / slope),
+    #    H from the local saturated N², `isentropic_slab_depth`).
     #    With the diagnosed T–q correlation this block adds nothing to T′q′
     #    (no θ′ along the surface), so the correlation is carried by the
     #    turbulent and vertical blocks. Scratch: `ᶜtemp_scalar_2` is free until
@@ -514,19 +554,47 @@ function set_covariance_cache!(Y, p, thermo_params)
                 θz_min,
             ),
         )
-        # Cell-geometry bound on the along-surface displacement
-        # (`ℓ ≤ Δx`, `ℓ ≤ Δz / slope`), kept in `ᶜpart` (over `ᶜinv_θq`, which
-        # is no longer needed) because the same factor is the across-surface
-        # share of the vertical excursion that the vertical block below may
-        # still sample.
-        @. ᶜpart = isentropic_cell_cap(
+        # Along-surface displacement bounded by the stratified slab,
+        # `ℓ² = Δx² H² / (H² + (s Δx)²)`, with the slab depth `H` from the local
+        # saturated N² (`isentropic_slab_depth`; the model layer Δz when
+        # `sgs_variance_isentropic_depth_max` is 0). `ᶜH` reuses the θ_li
+        # scratch, which the invariants above no longer need.
+        H_max = FT(CAP.sgs_variance_isentropic_depth_max(p.params))
+        N²_ref = FT(CAP.sgs_variance_isentropic_depth_N2_ref(p.params))
+        ᶜH = p.scratch.ᶜtemp_scalar_3
+        if H_max > 0
+            (; ᶜbg_coeffs) = p.precomputed
+            @. ᶜH = isentropic_slab_depth(
+                blended_N²(
+                    ᶜbg_coeffs,
+                    one(FT),
+                    projected_vector_data(C3, ᶜgradᵥ_θ_liq_ice, ᶜlg),
+                    projected_vector_data(C3, ᶜgradᵥ_q_tot, ᶜlg),
+                ),
+                H_max,
+                N²_ref,
+            )
+        else
+            @. ᶜH = ᶜΔz
+        end
+        @. ᶜinv_q *= isentropic_cell_cap(
+            ᶜinv_θ,
+            projected_vector_data(C3, ᶜgradᵥ_θ_liq_ice, ᶜlg),
+            θz_min,
+            Δx_h,
+            ᶜH,
+        )
+        # Across-surface share of the cell's vertical excursion left for the
+        # vertical block below (`isentropic_vertical_partition`), kept in
+        # `ᶜpart` (over `ᶜinv_θq`, which is no longer needed).
+        @. ᶜpart = isentropic_vertical_partition(
             ᶜinv_θ,
             projected_vector_data(C3, ᶜgradᵥ_θ_liq_ice, ᶜlg),
             θz_min,
             Δx_h,
             ᶜΔz,
+            ᶜH,
         )
-        @. ᶜinv_q *= ᶜpart
         @. ᶜq′q′ += geo_h * ᶜinv_q
     else
         @. ᶜpart = one(FT)
@@ -541,9 +609,10 @@ function set_covariance_cache!(Y, p, thermo_params)
     #    ρ = sign(∂_z θ · ∂_z q) of the resolved vertical direction.
     #    `c_Δz = 0` disables. The q′q′ term is scaled by
     #    `ᶜpart`, the share of the vertical excursion not already sampled
-    #    along the θ_li surface by the horizontal block (`isentropic_cell_cap`):
-    #    1 for flat surfaces, → 0 for steep ones, where the in-cell q excursion
-    #    is the along-surface one. The cross carries the same factor (the
+    #    along the θ_li surface by the horizontal block
+    #    (`isentropic_vertical_partition`): 1 for flat surfaces, → 0 for steep
+    #    ones inside a deep slab, where the in-cell q excursion is the
+    #    along-surface one. The cross carries the same factor (the
     #    block's bound holds, f² ≤ f); θ′θ′ keeps the full vertical sample
     #    (no θ′ along the surface, and the T-variance the cloud fraction sees
     #    is left as it was). The diagnosed correlation is clamped to [-1, 1].

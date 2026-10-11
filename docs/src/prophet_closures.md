@@ -561,12 +561,24 @@ variance or ``\theta_{li}``–``q_t`` covariance term. ``r`` is the slope ratio
 ``\theta_{z,\min}`` (`sgs_variance_isentropic_min_dtheta_dz`), which bounds ``|r|``
 by ``|\partial_z q_t| / \theta_{z,\min}`` and treats a neutral or overturned layer
 as one of minimal stable stratification rather than as a surface of opposite tilt.
-The displacement length ``\ell`` is bounded by the cell: a surface of slope
-``s = |\nabla_h \theta_{li}| / \partial_z \theta_{li}`` leaves a layer of depth
-``\Delta z`` after a horizontal distance ``\Delta z / s``, so
-``\ell^2 = \Delta x_h^2 / (1 + (s \Delta x_h / \Delta z)^2)``; for steep surfaces
+The displacement length ``\ell`` is bounded by the stably stratified slab the
+parcel can traverse adiabatically: a surface of slope
+``s = |\nabla_h \theta_{li}| / \partial_z \theta_{li}`` leaves a slab of depth ``H``
+after a horizontal distance ``H / s``, so
+``\ell^2 = \Delta x_h^2 H^2 / (H^2 + (s \Delta x_h)^2)``; for steep surfaces
 (weak stratification) the projected part ``r^2 |\nabla_h \theta_{li}|^2 \Delta x^2``
-then reduces to ``(\partial_z q_t \Delta z)^2``.
+then reduces to ``(\partial_z q_t H)^2``. The slab depth is estimated from the
+local saturated buoyancy frequency,
+``H = H_{\max} N^2_{+} / (N^2_{+} + N^2_{\mathrm{ref}})`` with
+``N^2_{+} = \max(N^2_{\mathrm{sat}}, 0)`` (`sgs_variance_isentropic_depth_max`,
+`sgs_variance_isentropic_depth_N2_ref`): the edge of a stable slab is where
+``N^2_{\mathrm{sat}}`` reaches zero, so moist-neutral and overturned air has no
+surface to slide along and the term vanishes there, while clearly stable air
+gets ``H \to H_{\max}``; ``H_{\max} = 0`` bounds the displacement by the model
+layer ``\Delta z`` instead. The ``q_t`` variance and ``\theta_{li}``–``q_t``
+covariance of the vertical block below are scaled by the across-surface share
+``(\Delta z^2 - (s \ell)^2)/\Delta z^2`` of the excursion not already sampled
+along the surface.
 
 A resolved vertical-gradient block is also added,
 

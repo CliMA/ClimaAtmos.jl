@@ -5,6 +5,15 @@ main
 ----
 - ![][badge-✨feature/enhancement] Add back CloudMicrophysics v0.43 to the
   compat.
+- ![][badge-🔥behavioralΔ] The displacement along the `θ_li` surface in the isentropic
+  geometric SGS variance term is bounded by the stably stratified slab the parcel can
+  traverse, `ℓ² = Δx² H² / (H² + (s Δx)²)`, with the slab depth estimated from the local
+  saturated buoyancy frequency, `H = H_max N²₊ / (N²₊ + N²_ref)` (provisional
+  `sgs_variance_isentropic_depth_max` = 2000 m, `sgs_variance_isentropic_depth_N2_ref` =
+  3e-5 s⁻²), instead of by the model layer `Δz`; the across-surface share of the vertical
+  block is `(Δz² − (sℓ)²)/Δz²`. Moist-neutral or overturned air gets no term; `H_max = 0`
+  restores the `Δz` bound. Changes every run with a nonzero
+  `sgs_variance_horizontal_scale_factor`.
 - ![][badge-🔥behavioralΔ] The horizontal resolved-gradient (geometric) SGS variance
   term is now the isentropic form: `q′q′` carries `|∇_h q_tot − r ∇_h θ_li|²`, the
   gradient of `q_tot` along the `θ_li` surface with `r = (∂q_tot/∂z)/(∂θ_li/∂z)`, the
