@@ -223,24 +223,48 @@ function sslt_bin_washout_rate(
 end
 
 """
-    precipitation_rate_mm_h(P, ρ_water)
+    rain_mixing_ratio_from_flux(P, ρ, rain, vel::CMP.Blk1MVelTypeRain)
 
-Rain rate `R` [mm h⁻¹] of a downward liquid precipitation mass flux `P`
-[kg m⁻² s⁻¹], the unit the washout power law is fitted in.
-"""
-precipitation_rate_mm_h(P, ρ_water) = P * 3600 * 1000 / ρ_water
+Rain mixing ratio `q_rai` [kg kg⁻¹] whose 1-moment Marshall–Palmer
+population carries the downward rain mass flux `P` [kg m⁻² s⁻¹] through air
+of density `ρ`, i.e. the inverse of `P = ρ · q · v_term(ρ, q)` with
+`v_term = CM1.terminal_velocity(rain, vel, ρ, q)`. Lets the 0-moment
+precipitation shadow ([`set_sslt_precipitation_shadow!`](@ref)), which has a
+rain flux but no rain state, drive the same washout chain as the 1-moment
+scheme.
 
-"""
-    power_law_washout_rate(R, a, b)
+With the power-law fall speed `v ∝ r^(ve+Δv)` and mass `m ∝ r^(me+Δm)`,
+`λ⁻¹ ∝ (ρq)^(1/(me+Δm+1))` and the mass-weighted fall speed scales as
+`λ⁻¹^(ve+Δv)`, so at fixed `ρ` the flux is an exact power law `P = C(ρ) · qⁿ`,
 
-Below-cloud scavenging coefficient `Λ = a · R^b` [s⁻¹] of one aerosol bin
-under the rain rate `R` [mm h⁻¹], the empirical form of Feng (2007) with the
-per-bin prefactor `a` [s⁻¹ at 1 mm h⁻¹] and exponent `b` (0.6–0.8 across
-the marine size range). Used where no rain size distribution exists to
-evaluate [`rain_swept_collection_rate`](@ref), i.e. under 0-moment
-microphysics. Negative rain rates (round-off) wash nothing out.
+    n = 1 + (ve + Δv) / (me + Δm + 1),
+
+and the inverse is closed form against a reference state evaluated with the
+same `terminal_velocity` call:
+
+    q = q_ref · (P / P_ref)^(1/n),   P_ref = ρ · q_ref · v_term(ρ, q_ref).
+
+`q_ref = 10⁻³` (a typical rain mixing ratio) only anchors the power law;
+the result does not depend on it beyond round-off. Zero for
+`P ≤ ϵ_numerics` (no rain, or a negative round-off flux from the shadow's
+partial integral).
 """
-power_law_washout_rate(R, a, b) = a * max(R, zero(R))^b
+function rain_mixing_ratio_from_flux(P, ρ, rain, vel::CMP.Blk1MVelTypeRain)
+    FT = typeof(P)
+    q_ref = FT(1e-3)
+    (; me, Δm) = rain.mass
+    (; ve, Δv) = vel
+    n = 1 + (ve + Δv) / (me + Δm + 1)
+    P_ref = ρ * q_ref * CM1.terminal_velocity(rain, vel, ρ, q_ref)
+    q = q_ref * (max(P, zero(FT)) / P_ref)^(1 / n)
+    return ifelse(P > ϵ_numerics(FT), q, zero(FT))
+end
+rain_mixing_ratio_from_flux(P, ρ, rain, vel) = error(
+    "rain_mixing_ratio_from_flux inverts the Blk1MVelTypeRain power-law rain \
+     flux in closed form, but got $(typeof(vel)). The sea-salt washout chain \
+     (rain_swept_collection_rate, rain_representative_drop_radius, \
+     rain_drop_fall_speed) already assumes the Blk1M rain velocity.",
+)
 
 """
     set_sslt_precipitation_shadow!(ᶜP, Y, p)
@@ -256,9 +280,9 @@ height `z` is the rain formed above it,
 built from the same per-cell integrand as `set_precipitation_surface_fluxes!`,
 whose `surface_rain_flux` (the whole column integral, upward-positive) must
 therefore already be current. Because the two share one integrand the partial
-integral is exact, so no clamp is needed here; a negative rain rate from a
-positive sink washes nothing out through the `max(R, 0)` of
-[`power_law_washout_rate`](@ref). The face flux is interpolated to cell
+integral is exact, so no clamp is needed here; a negative rain flux from a
+positive sink washes nothing out through the `P ≤ 0` gate of
+[`rain_mixing_ratio_from_flux`](@ref). The face flux is interpolated to cell
 centers.
 """
 function set_sslt_precipitation_shadow!(ᶜP, Y, p)
@@ -359,6 +383,43 @@ fraction.
 sslt_below_cloud_scavenging_rate(F, f_act, Λ) = (1 - F * f_act) * Λ
 
 """
+    set_sslt_washout_rain_fields!(ᶜΛ̃, ᶜr_D, ᶜV_D, ᶜF, ᶜq_rai, ᶜρ, rain, vel)
+
+Fill the bin-independent washout fields of one subdomain from its rain
+mixing ratio `ᶜq_rai` (a field or a lazy expression) and air density `ᶜρ`:
+the below-cloud swept rate `ᶜΛ̃ = (1 − F) Λ`
+([`sslt_below_cloud_scavenging_rate`](@ref) of
+[`rain_swept_collection_rate`](@ref)) and the representative raindrop
+`ᶜr_D` ([`rain_representative_drop_radius`](@ref)), `ᶜV_D`
+([`rain_drop_fall_speed`](@ref)) that [`sslt_bin_washout_rate`](@ref) then
+reads per bin. Shared by the 1-moment drivers (prognostic `q_rai`) and the
+0-moment drivers (`q_rai` inverted from the precipitation shadow by
+[`rain_mixing_ratio_from_flux`](@ref)) so both wash out through one chain.
+The three outputs must be distinct from every field `ᶜF`, `ᶜq_rai`, and
+`ᶜρ` read, and `ᶜr_D` is written before `ᶜV_D` reads it.
+"""
+function set_sslt_washout_rain_fields!(
+    ᶜΛ̃,
+    ᶜr_D,
+    ᶜV_D,
+    ᶜF,
+    ᶜq_rai,
+    ᶜρ,
+    rain,
+    vel,
+)
+    FT = eltype(ᶜΛ̃)
+    @. ᶜΛ̃ = sslt_below_cloud_scavenging_rate(
+        ᶜF,
+        one(FT),
+        rain_swept_collection_rate(ᶜq_rai, ᶜρ, rain, vel),
+    )
+    @. ᶜr_D = rain_representative_drop_radius(ᶜq_rai, ᶜρ, rain, vel)
+    @. ᶜV_D = rain_drop_fall_speed(ᶜr_D, ᶜρ, rain, vel)
+    return nothing
+end
+
+"""
     sslt_env_cloud_fraction!(ᶜa_cld, ᶜa⁰, Y, p, n)
 
 Environment cloud fraction `F⁰` (lazy) under `PrognosticEDMFX`, recovered
@@ -441,16 +502,18 @@ Under `EquilibriumMicrophysics0M` the same two-term rate is assembled from
 the 0-moment ingredients: the in-cloud driver is
 [`precipitation_conversion_rate_0m`](@ref) of the cached total-water sink
 over the equilibrium condensate `q_liq + q_ice` (all condensate, no phase
-resolution), and the washout is the per-bin power law
-[`power_law_washout_rate`](@ref) (`ssa_washout_a[bin]`, `ssa_washout_b[bin]`)
-in the rain rate of the column precipitation shadow from
-[`set_sslt_precipitation_shadow!`](@ref). The in-cloud term and the cloudy
-area are per subdomain exactly as for 1M (the
-environment from `ᶜmp_tendency⁰` and `ᶜq_liq⁰ + ᶜq_ice⁰`, each updraft from
-its own `ᶜmp_tendencyʲs` and `ᶜq_liqʲs + ᶜq_iceʲs`), while the shadow is a
-property of the whole column — 0-moment precipitation leaves the grid column
-the instant it forms, with no record of which subdomain it fell through — so
-every subdomain is washed at the same rain rate.
+resolution), and the washout is the same Slinn chain as for 1M
+([`set_sslt_washout_rain_fields!`](@ref), then
+[`sslt_bin_washout_rate`](@ref) per bin), evaluated on the rain mixing ratio
+[`rain_mixing_ratio_from_flux`](@ref) that carries the column precipitation
+shadow from [`set_sslt_precipitation_shadow!`](@ref) as a 1-moment
+Marshall–Palmer population. The in-cloud term and the cloudy area are per
+subdomain exactly as for 1M (the environment from `ᶜmp_tendency⁰` and
+`ᶜq_liq⁰ + ᶜq_ice⁰`, each updraft from its own `ᶜmp_tendencyʲs` and
+`ᶜq_liqʲs + ᶜq_iceʲs`), while the shadow is a property of the whole column —
+0-moment precipitation leaves the grid column the instant it forms, with no
+record of which subdomain it fell through — so every subdomain is washed by
+the same rain mass flux, inverted at its own air density.
 """
 set_sslt_wet_deposition_rates!(Y, p) = set_sslt_wet_deposition_rates!(
     Y, p, p.atmos.seasalt, p.atmos.microphysics_model,
@@ -579,13 +642,9 @@ function set_sslt_wet_deposition_rates!(
             Y.c.sgsʲs.:($$j).q_lcl + Y.c.sgsʲs.:($$j).q_icl,
             dt,
         )
-        @. ᶜΛ̃ʲ = sslt_below_cloud_scavenging_rate(
-            ᶜFʲ,
-            one(FT),
-            rain_swept_collection_rate(ᶜq_raiʲ, ᶜρʲ, rain, vel),
+        set_sslt_washout_rain_fields!(
+            ᶜΛ̃ʲ, ᶜr_Dʲ, ᶜV_Dʲ, ᶜFʲ, ᶜq_raiʲ, ᶜρʲ, rain, vel,
         )
-        @. ᶜr_Dʲ = rain_representative_drop_radius(ᶜq_raiʲ, ᶜρʲ, rain, vel)
-        @. ᶜV_Dʲ = rain_drop_fall_speed(ᶜr_Dʲ, ᶜρʲ, rain, vel)
         cache_sslth_updraft_exposure_rates!(p, j, ᶜcʲ, ᶜΛ̃ʲ, p.atmos.seasalt_history)
         MatrixFields.unrolled_foreach(bins) do (ρχ_name, r_settle, C_kelvin)
             ᶜkʲ = ratesʲs[MatrixFields.extract_first(ρχ_name)][j]
@@ -634,16 +693,12 @@ function set_sslt_wet_deposition_rates!(
     # The cloud species are no longer needed, so their scratch takes Λ̃⁰ and
     # the representative raindrop; then q_rai⁰ and the cloud area go too.
     ᶜΛ̃⁰ = p.scratch.ᶜtemp_scalar_2
-    @. ᶜΛ̃⁰ = sslt_below_cloud_scavenging_rate(
-        ᶜF⁰,
-        one(FT),
-        rain_swept_collection_rate(ᶜq_rai⁰, ᶜρ⁰, rain, vel),
-    )
-    cache_sslth_env_exposure_rates!(p, ᶜc⁰, ᶜΛ̃⁰, p.atmos.seasalt_history)
     ᶜr_D⁰ = p.scratch.ᶜtemp_scalar_3
     ᶜV_D⁰ = p.scratch.ᶜtemp_scalar_5
-    @. ᶜr_D⁰ = rain_representative_drop_radius(ᶜq_rai⁰, ᶜρ⁰, rain, vel)
-    @. ᶜV_D⁰ = rain_drop_fall_speed(ᶜr_D⁰, ᶜρ⁰, rain, vel)
+    set_sslt_washout_rain_fields!(
+        ᶜΛ̃⁰, ᶜr_D⁰, ᶜV_D⁰, ᶜF⁰, ᶜq_rai⁰, ᶜρ⁰, rain, vel,
+    )
+    cache_sslth_env_exposure_rates!(p, ᶜc⁰, ᶜΛ̃⁰, p.atmos.seasalt_history)
 
     # 3. Grid mean per bin: mass-weighted over the subdomains.
     ᶜρaχ = p.scratch.ᶜtemp_scalar_4
@@ -695,39 +750,53 @@ function set_sslt_wet_deposition_rates!(
     turbconv_model = p.atmos.turbconv_model
     FT = eltype(Y)
     ap = CAP.prognostic_aerosol_params(p.params)
+    # The 1M rain parameters describe the raindrop population the washout
+    # chain sweeps with; `ClimaAtmosParameters` keeps them under 0M whenever
+    # prognostic aerosols are on.
+    cmp = CAP.microphysics_1m_params(p.params)
     thp = CAP.thermodynamics_params(p.params)
+    rain = cmp.precip.rain
+    vel = cmp.terminal_velocity.rain
+    grav = FT(CAP.grav(p.params))
+    ρ_s = CAP.prescribed_aerosol_params(p.params).seasalt_density
     (; ᶜp, ᶜT⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜmp_tendency⁰) =
         p.precomputed
-    (; ᶜmp_tendencyʲs) = p.precomputed
+    (; ᶜρʲs, ᶜTʲs, ᶜmp_tendencyʲs) = p.precomputed
+    (; sslt_air_state⁰, sslt_air_stateʲs) = p.tracers
     rates = p.tracers.sslt_wetdep_rates
     ratesʲs = p.tracers.sslt_wetdep_ratesʲs
     n = n_mass_flux_subdomains(turbconv_model)
     dt = float(p.dt)
     ᶜρa⁰ = @. lazy(max(zero(FT), ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model)))
 
-    # The column shadow washes every subdomain at the same rain rate; only
-    # the in-cloud term and the cloudy area differ between subdomains.
-    ᶜR = p.scratch.ᶜtemp_scalar
-    set_sslt_precipitation_shadow!(ᶜR, Y, p)
-    @. ᶜR = precipitation_rate_mm_h(ᶜR, ap.ρ_water)
+    # Same structure as the 1M driver: each subdomain's rate is
+    # `c + E_bin · Λ̃`, with the bin-independent `c`, `Λ̃`, `r_D`, `V_D`
+    # hoisted out of the bin loop. The washout runs through the 1M chain on
+    # the rain mixing ratio that carries the column precipitation shadow
+    # (`rain_mixing_ratio_from_flux`); the shadow is a column quantity, so
+    # every subdomain sees the same flux `P`, but the inversion uses each
+    # subdomain's own density, so `q_rai`, `Λ̃` and the raindrop differ.
+    ᶜP = p.scratch.ᶜtemp_scalar
+    set_sslt_precipitation_shadow!(ᶜP, Y, p)
 
-    # 1. Environment: equilibrium condensate, 0M sink, and cloud fraction.
+    # The Slinn chain reads the air state (RH, μ, λ) of every subdomain;
+    # refilled here for the same staleness reason as in the 1M driver.
     ᶜρ⁰ = p.scratch.ᶜtemp_scalar_2
     @. ᶜρ⁰ = TD.air_density(thp, ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰)
-    ᶜa_cld = p.scratch.ᶜtemp_scalar_3
-    ᶜa⁰ = @. lazy(draft_area(ᶜρa⁰, ᶜρ⁰))
-    ᶜF⁰ = p.scratch.ᶜtemp_scalar_4
-    ᶜF⁰ .= sslt_env_cloud_fraction!(ᶜa_cld, ᶜa⁰, Y, p, n)
-    ᶜQ⁰ = @. lazy(precipitation_conversion_rate_0m(ᶜmp_tendency⁰.dq_tot_dt))
-    ᶜq_cld⁰ = @. lazy(ᶜq_liq⁰ + ᶜq_ice⁰)
+    set_sslt_air_states!(Y, p, ᶜρ⁰)
 
-    ρχ_names = aerosol_state_names(sslt)
-    bins = ntuple(Val(length(ρχ_names))) do i
-        (ρχ_names[i], FT(ap.ssa_washout_a[i]), FT(ap.ssa_washout_b[i]))
-    end
+    bins = sslt_settling_bin_props(p, sslt)
 
-    # 2. Updrafts: own condensate and sink, binary cloud indicator.
+    # 1. Updrafts: own condensate and sink, binary cloud indicator, own rain
+    # mixing ratio from the shadow at the updraft density.
+    ᶜq_raiʲ = p.scratch.ᶜtemp_scalar_3
+    ᶜΛ̃ʲ = p.scratch.ᶜtemp_scalar_4
+    ᶜr_Dʲ = p.scratch.ᶜtemp_scalar_5
+    ᶜV_Dʲ = p.scratch.ᶜtemp_scalar_6
     for j in 1:n
+        ᶜρʲ = ᶜρʲs.:($j)
+        ᶜTʲ = ᶜTʲs.:($j)
+        ᶜairʲ = sslt_air_stateʲs[j]
         ᶜq_liqʲ, ᶜq_iceʲ = _updraft_cloud_condensate(Y, p, j, microphysics_model)
         ᶜq_cldʲ = @. lazy(max(zero(FT), ᶜq_liqʲ + ᶜq_iceʲ))
         ᶜFʲ = @. lazy(
@@ -736,43 +805,74 @@ function set_sslt_wet_deposition_rates!(
         ᶜQʲ = @. lazy(
             precipitation_conversion_rate_0m(ᶜmp_tendencyʲs.:($$j).dq_tot_dt),
         )
-        cache_sslth_updraft_exposure_rates!(
-            p,
-            j,
-            (@. lazy(sslt_in_cloud_scavenging_rate(ᶜFʲ, one(FT), ᶜQʲ, ᶜq_cldʲ, dt))),
-            sslth_0m_washout_exposure_rate(ᶜFʲ, ᶜR, ap),
-            p.atmos.seasalt_history,
+        ᶜcʲ = @. lazy(
+            sslt_in_cloud_scavenging_rate(ᶜFʲ, one(FT), ᶜQʲ, ᶜq_cldʲ, dt),
         )
-        MatrixFields.unrolled_foreach(bins) do (ρχ_name, a, b)
+        @. ᶜq_raiʲ = rain_mixing_ratio_from_flux(ᶜP, ᶜρʲ, rain, vel)
+        set_sslt_washout_rain_fields!(
+            ᶜΛ̃ʲ, ᶜr_Dʲ, ᶜV_Dʲ, ᶜFʲ, ᶜq_raiʲ, ᶜρʲ, rain, vel,
+        )
+        cache_sslth_updraft_exposure_rates!(p, j, ᶜcʲ, ᶜΛ̃ʲ, p.atmos.seasalt_history)
+        MatrixFields.unrolled_foreach(bins) do (ρχ_name, r_settle, C_kelvin)
             ᶜkʲ = ratesʲs[MatrixFields.extract_first(ρχ_name)][j]
             @. ᶜkʲ =
-                sslt_in_cloud_scavenging_rate(ᶜFʲ, one(FT), ᶜQʲ, ᶜq_cldʲ, dt) +
-                sslt_below_cloud_scavenging_rate(
-                    ᶜFʲ,
-                    one(FT),
-                    power_law_washout_rate(ᶜR, a, b),
+                ᶜcʲ + sslt_bin_washout_rate(
+                    ᶜairʲ,
+                    ᶜTʲ,
+                    r_settle,
+                    C_kelvin,
+                    ρ_s,
+                    ᶜρʲ,
+                    ᶜr_Dʲ,
+                    ᶜV_Dʲ,
+                    ᶜΛ̃ʲ,
+                    grav,
+                    (ap,),
                 )
         end
     end
 
-    cache_sslth_env_exposure_rates!(
-        p,
-        (@. lazy(sslt_in_cloud_scavenging_rate(ᶜF⁰, one(FT), ᶜQ⁰, ᶜq_cld⁰, dt))),
-        sslth_0m_washout_exposure_rate(ᶜF⁰, ᶜR, ap),
-        p.atmos.seasalt_history,
+    # 2. Environment: equilibrium condensate, 0M sink, cloud fraction, and
+    # the bin-independent washout fields. The cloud-area accumulator is
+    # dead once `F⁰` is materialized, so its slot then takes `q_rai⁰`.
+    ᶜa_cld = p.scratch.ᶜtemp_scalar_3
+    ᶜa⁰ = @. lazy(draft_area(ᶜρa⁰, ᶜρ⁰))
+    ᶜF⁰ = p.scratch.ᶜtemp_scalar_4
+    ᶜF⁰ .= sslt_env_cloud_fraction!(ᶜa_cld, ᶜa⁰, Y, p, n)
+    ᶜQ⁰ = @. lazy(precipitation_conversion_rate_0m(ᶜmp_tendency⁰.dq_tot_dt))
+    ᶜq_cld⁰ = @. lazy(ᶜq_liq⁰ + ᶜq_ice⁰)
+    ᶜc⁰ = @. lazy(
+        sslt_in_cloud_scavenging_rate(ᶜF⁰, one(FT), ᶜQ⁰, ᶜq_cld⁰, dt),
     )
+    ᶜq_rai⁰ = p.scratch.ᶜtemp_scalar_3
+    @. ᶜq_rai⁰ = rain_mixing_ratio_from_flux(ᶜP, ᶜρ⁰, rain, vel)
+    ᶜΛ̃⁰ = p.scratch.ᶜtemp_scalar_5
+    ᶜr_D⁰ = p.scratch.ᶜtemp_scalar_6
+    ᶜV_D⁰ = p.scratch.ᶜtemp_scalar_7
+    set_sslt_washout_rain_fields!(
+        ᶜΛ̃⁰, ᶜr_D⁰, ᶜV_D⁰, ᶜF⁰, ᶜq_rai⁰, ᶜρ⁰, rain, vel,
+    )
+    cache_sslth_env_exposure_rates!(p, ᶜc⁰, ᶜΛ̃⁰, p.atmos.seasalt_history)
 
-    # 3. Grid mean per bin: mass-weighted over the subdomains.
-    ᶜρaχ = p.scratch.ᶜtemp_scalar_5
-    ᶜρaχE = p.scratch.ᶜtemp_scalar_6
-    MatrixFields.unrolled_foreach(bins) do (ρχ_name, a, b)
+    # 3. Grid mean per bin: mass-weighted over the subdomains. The shadow
+    # and q_rai⁰ have no readers left, so their slots take the accumulators.
+    ᶜρaχ = p.scratch.ᶜtemp_scalar
+    ᶜρaχE = p.scratch.ᶜtemp_scalar_3
+    MatrixFields.unrolled_foreach(bins) do (ρχ_name, r_settle, C_kelvin)
         bin = MatrixFields.extract_first(ρχ_name)
         ᶜk⁰ = @. lazy(
-            sslt_in_cloud_scavenging_rate(ᶜF⁰, one(FT), ᶜQ⁰, ᶜq_cld⁰, dt) +
-            sslt_below_cloud_scavenging_rate(
-                ᶜF⁰,
-                one(FT),
-                power_law_washout_rate(ᶜR, a, b),
+            ᶜc⁰ + sslt_bin_washout_rate(
+                sslt_air_state⁰,
+                ᶜT⁰,
+                r_settle,
+                C_kelvin,
+                ρ_s,
+                ᶜρ⁰,
+                ᶜr_D⁰,
+                ᶜV_D⁰,
+                ᶜΛ̃⁰,
+                grav,
+                (ap,),
             ),
         )
         sslt_mass_weighted_rate!(

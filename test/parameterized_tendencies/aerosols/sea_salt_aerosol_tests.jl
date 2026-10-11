@@ -406,27 +406,37 @@ end
     @test E32 isa Float32 && isfinite(E32) && 0 <= E32 <= 1
 end
 
-@testset "Power-law washout rate (0M)" begin
-    a, b = FT(2.2e-4), FT(0.79)
-    @test CA.power_law_washout_rate(FT(0), a, b) == 0
-    @test CA.power_law_washout_rate(FT(-1e-12), a, b) == 0   # round-off rain
-    @test CA.power_law_washout_rate(FT(1), a, b) ≈ a
-    @test CA.power_law_washout_rate(FT(4), a, b) ≈ a * 4^b
-    @test CA.power_law_washout_rate(FT(4), a, b) >
-          CA.power_law_washout_rate(FT(1), a, b)
-    # 1 kg m⁻² s⁻¹ of liquid water is 3600 mm h⁻¹.
-    @test CA.precipitation_rate_mm_h(FT(1), FT(1000)) ≈ 3600
-    @test CA.precipitation_rate_mm_h(FT(1) / 3600, FT(1000)) ≈ 1
+@testset "Rain mixing ratio from the 0M precipitation shadow" begin
+    # rain_mixing_ratio_from_flux inverts the 1M rain mass flux ρ q v_term
+    # exactly (it is a power law in q at fixed ρ), in either precision.
+    for FTp in (Float32, Float64)
+        toml = CA.CP.create_toml_dict(FTp)
+        cmp = CA.CM.Parameters.Microphysics1MParams(toml)
+        rain = cmp.precip.rain
+        vel = cmp.terminal_velocity.rain
+        rtol = FTp == Float32 ? 1e-4 : 1e-10
+        for ρ_air in FTp.((0.7, 1.2)), R_mm_h in (0.05, 0.5, 5.0, 50.0)
+            P = FTp(R_mm_h / 3600)   # kg m⁻² s⁻¹ of liquid water
+            q = CA.rain_mixing_ratio_from_flux(P, ρ_air, rain, vel)
+            @test q isa FTp && q > 0
+            flux = ρ_air * q * CA.CM1.terminal_velocity(rain, vel, ρ_air, q)
+            @test flux ≈ P rtol = rtol
+        end
+        # No rain, or a negative round-off flux from the shadow, is no rain.
+        @test CA.rain_mixing_ratio_from_flux(FTp(0), FTp(1.2), rain, vel) == 0
+        @test CA.rain_mixing_ratio_from_flux(FTp(-1e-12), FTp(1.2), rain, vel) == 0
+        # More flux, more rain. Per kilogram of air, thinner air needs a
+        # larger mixing ratio for the same flux (fewer kilograms of air per
+        # cubic metre outweigh the faster fall).
+        q_lo = CA.rain_mixing_ratio_from_flux(FTp(1e-4), FTp(1.2), rain, vel)
+        q_hi = CA.rain_mixing_ratio_from_flux(FTp(1e-3), FTp(1.2), rain, vel)
+        @test q_hi > q_lo
+        @test CA.rain_mixing_ratio_from_flux(FTp(1e-4), FTp(0.7), rain, vel) >
+              q_lo
+    end
 
     # 0M in-cloud driver: the sign-flipped total-water sink, never negative.
     @test CA.precipitation_conversion_rate_0m(FT(-1e-7)) == FT(1e-7)
     @test CA.precipitation_conversion_rate_0m(FT(0)) == 0
     @test CA.precipitation_conversion_rate_0m(FT(1e-7)) == 0
-
-    # Defaults: sub-Greenfield-gap accumulation bins wash out orders of
-    # magnitude slower than coarse bins; exponents in the 0.6–0.8 range.
-    @test length(AP.ssa_washout_a) == length(AP.ssa_washout_b) == NBINS
-    @test AP.ssa_washout_a[1] == AP.ssa_washout_a[2] <
-          AP.ssa_washout_a[3] == AP.ssa_washout_a[4] < AP.ssa_washout_a[5]
-    @test all(b -> 0.6 <= b <= 0.8, AP.ssa_washout_b)
 end

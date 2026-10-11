@@ -392,20 +392,39 @@ each cell recovered from the cached sink (`set_sslt_precipitation_shadow!`),
 P(z) = \int_z^{z_\mathrm{top}} \max\!\left(0, -\rho\,\partial_t q_\mathrm{tot}\right)\big|_{T \ge T_\mathrm{freeze}}\, dz',
 ```
 
-at the empirical power law of Feng (2007),
-``\Lambda_\mathrm{bin} = a_\mathrm{bin}\, R^{b_\mathrm{bin}}`` with ``R`` the
-rain rate in mm h⁻¹ (`power_law_washout_rate`; `ssa_washout_prefactor`,
-`ssa_washout_exponent`, exponents 0.6–0.8 across the marine size range):
+and the rain it carries is reconstructed as the 1-moment Marshall–Palmer
+population with that flux (`rain_mixing_ratio_from_flux`). With the
+power-law drop mass and fall speed of the 1-moment scheme, the flux
+``P = \rho\, q_\mathrm{rai}\, v_\mathrm{term}(\rho, q_\mathrm{rai})`` is an
+exact power law in ``q_\mathrm{rai}`` at fixed air density,
+``P \propto q_\mathrm{rai}^{\,n}`` with
+``n = 1 + (v_e + \Delta_v)/(m_e + \Delta_m + 1)`` (``n = 1.125`` for the
+default parameters), so it inverts in closed form against a reference state,
+
+```math
+q_\mathrm{rai} = q_\mathrm{ref} \left(\frac{P}{\rho\, q_\mathrm{ref}\, v_\mathrm{term}(\rho, q_\mathrm{ref})}\right)^{1/n},
+\qquad q_\mathrm{ref} = 10^{-3},
+```
+
+with ``q_\mathrm{ref}`` only anchoring the power law. That ``q_\mathrm{rai}``
+then runs through exactly the 1-moment washout chain above — the swept rate
+``\Lambda``, the representative raindrop ``(r_D, V_D)``, and the per-bin Slinn
+efficiency at the bin's wet radius — so both microphysics choices share one
+collection kernel:
 
 ```math
 k = F\, \min\!\left(\frac{Q}{q_\mathrm{liq} + q_\mathrm{ice}}, \frac{1}{\Delta t}\right)
-  + (1 - F)\, a_\mathrm{bin}\, R^{b_\mathrm{bin}}.
+  + (1 - F)\, E_\mathrm{bin}\, \Lambda(q_\mathrm{rai}(P)).
 ```
+
+The 1-moment rain parameters this needs are kept in the parameter set under
+0-moment microphysics whenever `prognostic_aerosols` is on.
 
 Under `PrognosticEDMFX` the in-cloud term and the cloudy area are per
 subdomain exactly as for 1M, from each subdomain's own 0-moment sink and
-condensate, while the shadow is a column quantity, so every subdomain is
-washed at the same rain rate.
+condensate, while the shadow is a column quantity, so every subdomain sees the
+same rain mass flux; it is inverted at each subdomain's own air density, and
+the Slinn efficiency uses each subdomain's own relative humidity.
 
 ## Adding a prognostic aerosol species
 

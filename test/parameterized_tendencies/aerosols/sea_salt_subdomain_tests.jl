@@ -353,6 +353,44 @@ end
     @test column_sink > 0
 end
 
+"""
+    sslt_0m_washout_reference(p, ᶜP, ᶜρ, ᶜT, ᶜair, r_settle, C_kelvin)
+
+Reference unit-area (cloud-free) washout rate of one bin in one subdomain
+under 0M, recomputed outside the rate setter: invert the column shadow `ᶜP`
+to the 1M rain mixing ratio at the subdomain density `ᶜρ`
+(`rain_mixing_ratio_from_flux`), then run the 1M chain (swept rate,
+representative drop, Slinn efficiency at the bin's wet radius on the
+subdomain air state `ᶜair`).
+"""
+function sslt_0m_washout_reference(p, ᶜP, ᶜρ, ᶜT, ᶜair, r_settle, C_kelvin)
+    FTc = eltype(ᶜP)
+    cmp = CA.CAP.microphysics_1m_params(p.params)
+    rain, vel = cmp.precip.rain, cmp.terminal_velocity.rain
+    ap = CA.CAP.prognostic_aerosol_params(p.params)
+    grav = FTc(CA.CAP.grav(p.params))
+    ρ_s = CA.CAP.prescribed_aerosol_params(p.params).seasalt_density
+    ᶜq_rai = @. CA.rain_mixing_ratio_from_flux(ᶜP, ᶜρ, rain, vel)
+    ᶜr_D = @. CA.rain_representative_drop_radius(ᶜq_rai, ᶜρ, rain, vel)
+    ᶜV_D = @. CA.rain_drop_fall_speed(ᶜr_D, ᶜρ, rain, vel)
+    ᶜΛ = @. CA.rain_swept_collection_rate(ᶜq_rai, ᶜρ, rain, vel)
+    return @. CA.sslt_bin_washout_rate(
+        ᶜair, ᶜT, r_settle, C_kelvin, ρ_s, ᶜρ, ᶜr_D, ᶜV_D, ᶜΛ, grav, (ap,),
+    )
+end
+
+"""
+    survival_weighted_rate(ᶜk⁰, ᶜkʲ, ᶜw⁰, dt)
+
+Grid-mean rate whose survival `e^{−kΔt}` is the `ᶜw⁰`-weighted mean of the
+environment and (single) updraft survivals, the definition
+`sslt_mass_weighted_rate!` implements, for a uniform concentration where the
+mass weights reduce to the subdomain air-mass fractions.
+"""
+survival_weighted_rate(ᶜk⁰, ᶜkʲ, ᶜw⁰, dt) = @. -log(
+    ᶜw⁰ * exp(-(ᶜk⁰ * dt)) + (1 - ᶜw⁰) * exp(-(ᶜkʲ * dt)),
+) / dt
+
 @testset "Subdomain washout under 0M (PrognosticEDMFX column)" begin
     (; Y, p) = generate_test_simulation(
         edmf_column_config("sslt_subdomain_washout_0m"; microphysics = "0M"),
@@ -386,14 +424,37 @@ end
     @. ᶜmp_tendencyʲs.:(1).dq_tot_dt = FTc(0)
 
     CA.set_sslt_wet_deposition_rates!(Y, p)
-    for name in CA.bin_names(sslt)
+    # Reference ingredients: the same column shadow for every subdomain,
+    # inverted at each subdomain's own density, on the air states the
+    # setter just refilled.
+    thp = CA.CAP.thermodynamics_params(p.params)
+    dt = float(p.dt)
+    (; ᶜp, ᶜT⁰, ᶜq_tot_nonneg⁰, ᶜρʲs, ᶜTʲs) = p.precomputed
+    (; sslt_air_state⁰, sslt_air_stateʲs, sslt_settling_radii, sslt_kelvin_coeffs) =
+        p.tracers
+    ᶜP = similar(ᶜT⁰)
+    CA.set_sslt_precipitation_shadow!(ᶜP, Y, p)
+    @test all(>(0), parent(ᶜP)[1:k_hi])
+    ᶜρ⁰ = @. TD.air_density(thp, ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰)
+    ᶜw⁰ = @. (Y.c.ρ - Y.c.sgsʲs.:(1).ρa) / Y.c.ρ
+    for (i, name) in enumerate(CA.bin_names(sslt))
+        r_settle, C_kelvin = sslt_settling_radii[i], sslt_kelvin_coeffs[i]
         ᶜk = getproperty(p.tracers.sslt_wetdep_rates, Symbol(:ρ, name))
         ᶜkʲ = getproperty(p.tracers.sslt_wetdep_ratesʲs, Symbol(:ρ, name))[1]
         k = vec(parent(ᶜk))
         @test all(x -> isfinite(x) && x >= 0, k)
         @test all(>(0), k[1:(k_lo - 1)]) && all(iszero, k[(k_hi + 1):end])
-        # Every subdomain sees the same column shadow.
-        @test parent(ᶜkʲ) ≈ parent(ᶜk)
+        # Cloud-free everywhere, so each subdomain's rate is its Slinn-chain
+        # washout of the shadow rain, and the grid mean is survival-weighted.
+        ᶜkʲ_ref = sslt_0m_washout_reference(
+            p, ᶜP, ᶜρʲs.:(1), ᶜTʲs.:(1), sslt_air_stateʲs[1], r_settle, C_kelvin,
+        )
+        ᶜk⁰_ref = sslt_0m_washout_reference(
+            p, ᶜP, ᶜρ⁰, ᶜT⁰, sslt_air_state⁰, r_settle, C_kelvin,
+        )
+        @test parent(ᶜkʲ) ≈ parent(ᶜkʲ_ref)
+        ᶜk_ref = survival_weighted_rate(ᶜk⁰_ref, ᶜkʲ_ref, ᶜw⁰, dt)
+        @test isapprox(parent(ᶜk), parent(ᶜk_ref); rtol = 1e-6)
     end
 
     # In-cloud phase: in the layer the updraft is cloudy and precipitating
@@ -412,28 +473,41 @@ end
         FTc(0),
     )
     CA.set_sslt_wet_deposition_rates!(Y, p)
-    ap = CA.CAP.prognostic_aerosol_params(p.params)
-    R_sfc = CA.precipitation_rate_mm_h(
-        -parent(surface_rain_flux)[1], FTc(ap.ρ_water),
+    # Environment ingredients as the setter recovers them: density from the
+    # (now cloudy) environment state, and the cloud fraction F⁰ from the
+    # area-weighted grid-mean value minus the binary updraft cloud area.
+    ᶜρ⁰ = @. TD.air_density(thp, ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰)
+    ᶜaʲ_cld = @. ifelse(
+        z_lo <= ᶜz <= z_hi,
+        CA.draft_area(Y.c.sgsʲs.:(1).ρa, ᶜρʲs.:(1)),
+        FTc(0),
     )
+    ᶜa⁰ = @. CA.draft_area(Y.c.ρ - Y.c.sgsʲs.:(1).ρa, ᶜρ⁰)
+    # Zero outside the layer, where ᶜcloud_fraction is zero.
+    ᶜF⁰ = @. min(max((ᶜcloud_fraction - ᶜaʲ_cld) / ᶜa⁰, FTc(0)), FTc(1))
+    ᶜc⁰ = @. ifelse(z_lo <= ᶜz <= z_hi, ᶜF⁰ * Q⁰ / q_cld⁰, FTc(0))
     for (i, name) in enumerate(CA.bin_names(sslt))
-        a, b = FTc(ap.ssa_washout_a[i]), FTc(ap.ssa_washout_b[i])
-        k = vec(parent(getproperty(p.tracers.sslt_wetdep_rates, Symbol(:ρ, name))))
-        kʲ = vec(parent(getproperty(p.tracers.sslt_wetdep_ratesʲs, Symbol(:ρ, name))[1]))
+        r_settle, C_kelvin = sslt_settling_radii[i], sslt_kelvin_coeffs[i]
+        ᶜk = getproperty(p.tracers.sslt_wetdep_rates, Symbol(:ρ, name))
+        ᶜkʲ = getproperty(p.tracers.sslt_wetdep_ratesʲs, Symbol(:ρ, name))[1]
+        k, kʲ = vec(parent(ᶜk)), vec(parent(ᶜkʲ))
         # Cloudy updraft: pure conversion rate, no washout.
         @test all(x -> x ≈ Qʲ / q_cldʲ, kʲ[k_lo:k_hi])
-        # Below the layer both subdomains are cloud-free under the shadow.
-        @test all(kʲ[1:(k_lo - 1)] .≈ k[1:(k_lo - 1)])
+        # Below the layer the updraft is cloud-free under the shadow.
+        ᶜwashʲ = sslt_0m_washout_reference(
+            p, ᶜP, ᶜρʲs.:(1), ᶜTʲs.:(1), sslt_air_stateʲs[1], r_settle, C_kelvin,
+        )
+        @test kʲ[1:(k_lo - 1)] ≈ vec(parent(ᶜwashʲ))[1:(k_lo - 1)]
         @test all(>(0), k[1:(k_lo - 1)])
-        # Grid mean inside the layer: uniform χ ⇒ area-weighted mean of the
-        # environment rate F⁰·Q⁰/q_cld⁰ + (1−F⁰)·Λ, with 0 ≤ Λ ≤ Λ(R_sfc),
-        # and the updraft rate.
-        Λ_sfc = CA.power_law_washout_rate(R_sfc, a, b)
-        k⁰_lo, k⁰_hi = F⁰ * Q⁰ / q_cld⁰, F⁰ * Q⁰ / q_cld⁰ + (1 - F⁰) * Λ_sfc
-        for level in k_lo:k_hi
-            k⁰_implied = (k[level] - a_updraft * kʲ[level]) / (1 - a_updraft)
-            @test k⁰_lo - eps(FTc) ≤ k⁰_implied ≤ k⁰_hi + eps(FTc)
-        end
+        # Grid mean: survival-weighted over the updraft's own rate and the
+        # environment rate F⁰·Q⁰/q_cld⁰ + (1−F⁰)·washout⁰, with the
+        # environment washout from the same shadow at the environment density.
+        ᶜwash⁰ = sslt_0m_washout_reference(
+            p, ᶜP, ᶜρ⁰, ᶜT⁰, sslt_air_state⁰, r_settle, C_kelvin,
+        )
+        ᶜk⁰_ref = @. ᶜc⁰ + (1 - ᶜF⁰) * ᶜwash⁰
+        ᶜk_ref = survival_weighted_rate(ᶜk⁰_ref, ᶜkʲ, ᶜw⁰, dt)
+        @test isapprox(parent(ᶜk), parent(ᶜk_ref); rtol = 1e-6)
         @test all(iszero, k[(k_hi + 1):end])
     end
 

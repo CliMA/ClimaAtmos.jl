@@ -256,9 +256,10 @@ const SSLT_HISTORY_DIAGNOSTICS = (
         :SSHWET,
         "Below-Cloud Washout Exposure",
         "",
-        "mass × unit-efficiency below-cloud washout exposure (1M: swept-\
-         volume rate integrated, dimensionless; 0M: cloud-free rain mass \
-         flux integrated, kg m^-2)",
+        "mass × unit-efficiency below-cloud washout exposure (the swept-\
+         volume rate over the cloud-free area integrated, dimensionless; \
+         under 0M the rain is the precipitation shadow inverted to a 1M \
+         rain mixing ratio)",
     ),
     (
         :SSHINC,
@@ -311,13 +312,13 @@ end
 add_diagnostic_variable!(
     short_name = "washrss",
     long_name = "Sea-Salt Below-Cloud Washout Exposure Rate",
-    # Units depend on the microphysics model (see comments), so the attribute
-    # is left empty rather than mislabelled for 0M runs.
-    units = "",
+    units = "s^-1",
     comments = "Unit-efficiency below-cloud washout exposure rate of the \
-                environment driving the SSHWET history tracer: under 1M the \
-                swept-volume collection rate over the cloud-free area \
-                [s^-1]; under 0M the cloud-free rain mass flux [kg m^-2 s^-1].",
+                environment driving the SSHWET history tracer: the swept-\
+                volume collection rate of the rain over the cloud-free area. \
+                Under 0M the rain is the precipitation shadow inverted to the \
+                1M rain mixing ratio that carries the same mass flux, so the \
+                rate has the same meaning under both microphysics.",
     compute! = (out, u, p, t) ->
         compute_tracer!(out, u, p, t, :sslt_washout_exposure_rate⁰),
 )

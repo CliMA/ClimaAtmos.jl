@@ -69,32 +69,6 @@ function settling_exposure_rate(air, T, ρ_air, grav, Δz, V_H, ap)
 end
 
 """
-    sslth_0m_washout_exposure_rate(ᶜF, ᶜR, ap)
-
-Below-cloud exposure rate of the `SSHWET` tracer under 0-moment
-microphysics, as a lazy field. The 1-moment path records the unit-efficiency
-swept-volume rate `Λ̃` [s⁻¹] of the rain spectrum, which 0M does not have
-(its per-bin washout is the Feng power law `a_i R^{b_i}` in the rain rate,
-with the collection efficiency folded into the fit). The kernel-free
-quantity that is bin-independent under 0M is the precipitation itself, so
-the exposure recorded is the downward rain mass flux `(1 − F) · P`
-[kg m⁻² s⁻¹] over the cloud-free area, converted back from the mm h⁻¹ rate
-`ᶜR` the power law is evaluated in. `SSHWET/M` is then the rain mass per
-area the population has sat under, rather than the sweep count it is under
-1M; the two are not directly comparable across microphysics choices.
-"""
-function sslth_0m_washout_exposure_rate(ᶜF, ᶜR, ap)
-    ρ_water = ap.ρ_water
-    return @. lazy(
-        sslt_below_cloud_scavenging_rate(
-            ᶜF,
-            one(ᶜF),
-            ᶜR * ρ_water / (3600 * 1000),
-        ),
-    )
-end
-
-"""
     cache_sslth_env_exposure_rates!(p, ᶜc⁰, ᶜΛ̃⁰, history_model)
     cache_sslth_updraft_exposure_rates!(p, j, ᶜcʲ, ᶜΛ̃ʲ, history_model)
 
@@ -102,7 +76,11 @@ Copy the bin-independent in-cloud rate `c` and below-cloud exposure rate `Λ̃`
 of the environment (or of updraft `j`) that [`set_sslt_wet_deposition_rates!`](@ref)
 holds in scratch into `p.tracers.sslt_in_cloud_exposure_rate⁰` /
 `sslt_washout_exposure_rate⁰` (`…ʲs[j]`), where the history source tendency
-reads them. No-op without the history tracers.
+reads them. `Λ̃` is the unit-efficiency below-cloud swept-volume rate
+`(1 − F) Λ` [s⁻¹] under both 1-moment and 0-moment microphysics (the latter
+on the rain mixing ratio inverted from the precipitation shadow), so
+`SSHWET/M` is the same dimensionless sweep count either way. No-op without
+the history tracers.
 """
 cache_sslth_env_exposure_rates!(p, ᶜc⁰, ᶜΛ̃⁰, ::Nothing) = nothing
 function cache_sslth_env_exposure_rates!(p, ᶜc⁰, ᶜΛ̃⁰, ::SeaSaltHistory)

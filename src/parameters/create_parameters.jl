@@ -110,8 +110,13 @@ function ClimaAtmosParameters(
     if !isnothing(microphysics_model)
         microphysics_model isa EquilibriumMicrophysics0M ||
             (microphysics_0m_params = nothing)
+        # Prognostic aerosols keep the 1M set under any microphysics: the
+        # sea-salt below-cloud washout sweeps with the 1M Marshall–Palmer
+        # rain population even under 0M, where the precipitation shadow is
+        # inverted to the 1M rain mixing ratio carrying the same flux.
         microphysics_model isa
         Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M} ||
+            has_prognostic_aerosols ||
             (microphysics_1m_params = nothing)
         microphysics_model isa
         Union{NonEquilibriumMicrophysics2M, NonEquilibriumMicrophysics2MP3} ||
@@ -455,15 +460,12 @@ function prognostic_aerosol_parameters(toml_dict)
         :ssa_settling_courant_max => :settling_courant_max,
         # below-cloud washout: the Slinn (1984) raindrop–aerosol collection
         # efficiency (Brownian, interception, impaction terms, as reproduced
-        # in Feng 2007) evaluated per bin on the 1M swept-volume rate, and the
-        # per-bin power-law prefactor [s⁻¹ at 1 mm/h] and exponent in rain
-        # rate for the 0M shadow, which has no rain state to evaluate E on
+        # in Feng 2007) evaluated per bin on the 1M swept-volume rate (under
+        # 0M, on the rain mixing ratio inverted from the precipitation shadow)
         :slinn_brownian_coefficients => :slinn_C_B,
         :slinn_critical_stokes_coefficients => :slinn_S_star_C,
         :slinn_impaction_exponent => :slinn_impaction_exp,
         :liquid_water_dynamic_viscosity => :μ_water,
-        :ssa_washout_prefactor => :ssa_washout_a,
-        :ssa_washout_exponent => :ssa_washout_b,
         # turbulent dry deposition (Zhang 2001 scheme with the Emerson 2020
         # revised parameters and functional forms, water/ocean category).
         # The superseded Zhang values are kept in ClimaParams (deprecated);
