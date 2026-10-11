@@ -1795,13 +1795,13 @@ struct QuasiMonotoneLimiter end # For dispatching to use the ClimaCore QuasiMono
     ZhangShuLimiter(; ρ_min, p_min)
 
 Marker selecting ClimaCore's Zhang–Shu (2010) `PositivityLimiter`: per RK
-stage, each element's grid-mean conserved vector (ρ, ρe_tot, ρuₕ[, ρq_tot])
-is scaled at every node toward the WJ-weighted element mean by one θ ∈ [0, 1]
-— a mean-preserving convex combination, not a pointwise clamp — chosen as the
-smallest θ enforcing ρ ≥ ρ_min, ρq_tot ≥ 0, and p ≥ p_min. Intended for DG
-horizontal discretizations, whose transport is not sign-preserving at nodes.
-Selected by `apply_zhang_shu_limiter: true`, with the floors from
-`zhang_shu_rho_min` and `zhang_shu_p_min`.
+stage, ρ and ρq_tot are each scaled at every node toward their WJ-weighted
+element mean to enforce ρ ≥ ρ_min and ρq_tot ≥ 0, then the grid-mean conserved
+vector (ρ, ρe_tot, ρuₕ[, ρq_tot]) is scaled toward its mean by one θ ∈ [0, 1]
+enforcing p ≥ p_min — mean-preserving convex combinations, not pointwise
+clamps. Intended for DG horizontal discretizations, whose transport is not
+sign-preserving at nodes. Selected by `apply_zhang_shu_limiter: true`, with the
+floors from `zhang_shu_rho_min` and `zhang_shu_p_min`.
 """
 struct ZhangShuLimiter{FT}
     ρ_min::FT
@@ -1841,7 +1841,7 @@ struct HardMinimumBlending <: AbstractScaleBlendingMethod end
 Base.broadcastable(x::AbstractScaleBlendingMethod) = tuple(x)
 
 """
-    AtmosNumerics{EN_UP, TR_UP, ED_UP, SG_UP, ED_TR_UP, LIM, DM, HD, VWB}
+    AtmosNumerics{EN_UP, TR_UP, ED_UP, SG_UP, ED_TR_UP, LIM, DM, HD, DGEF, DGVF, DGIF, VWB}
 
 Numerical options of an `AtmosModel`: upwinding schemes, limiter, diffusion
 timestepping mode, hyperdiffusion, and debugging switches.
@@ -1879,7 +1879,7 @@ symbols or strings.
     a `Tuple` of `Symbol`s naming the tracers that the vertical water borrowing
     limiter applies to.
 """
-struct AtmosNumerics{EN_UP, TR_UP, ED_UP, SG_UP, ED_TR_UP, TDC, RR, LIM, DM, HD, DGEF, DGVF, DGIF, VWB}
+struct AtmosNumerics{EN_UP, TR_UP, ED_UP, SG_UP, ED_TR_UP, LIM, DM, HD, DGEF, DGVF, DGIF, VWB}
     # Enable specific upwinding schemes for specific equations
     energy_q_tot_upwinding::EN_UP
     tracer_upwinding::TR_UP
@@ -2559,177 +2559,8 @@ end
 
 Base.broadcastable(x::AtmosModel) = tuple(x)
 
-"""
-    AtmosModel(; kwargs...)
-
-Create an `AtmosModel`, defaulting to a minimal dry atmosphere.
-
-Every keyword argument is either the name of an `AtmosModel` field (a whole
-group, `vertical_diffusion`, `cosp`, `prescribed_flow`, or
-`disable_surface_flux_tendency`) or the name of a field of one of the grouped
-sub-structs. Flattened names are routed to their owning group through
-`GROUPED_PROPERTY_MAP`, so
-
-```julia
-AtmosModel(; microphysics_model = EquilibriumMicrophysics0M())
-```
-
-is equivalent to passing `water = AtmosWater(; microphysics_model = ...)`.
-Passing a complete group object wins: any flattened keywords belonging to that
-group are then ignored. Unknown keywords raise an error listing every valid
-name.
-
-The resulting model can be read either way:
-
-```julia
-model = AtmosModel(; microphysics_model = EquilibriumMicrophysics0M())
-model.microphysics_model        # forwarded access
-model.water.microphysics_model  # grouped access
-```
-
-With no keyword arguments the model is a minimal dry atmosphere:
-
-  - Dry atmosphere: `DryModel()`, with `QuadratureCloud()` but no SGS quadrature.
-  - Surface: `AnalyticTemperature` with a zonally symmetric SST, fixed exchange
-    coefficients, and a constant albedo of 0.07.
-  - `IdealizedInsolation()`, and no radiation, turbulence-convection, gravity
-    wave, sponge, or forcing model.
-  - Numerics: Van Leer limited upwinding for `ρe_tot`, `ρq_tot`, and the
-    tracers, `Explicit()` diffusion, and CAM-SE-like `Float32` hyperdiffusion.
-
-# Keyword Arguments
-
-Grouped into the sub-struct that owns each name; see that struct's docstring
-for the full list of admissible values.
-
-  - [`AtmosWater`](@ref): `microphysics_model`, `cloud_model`,
-    `microphysics_tendency_timestepping`, `tracer_nonnegativity_method`,
-    `sgs_quadrature`, `terminal_velocity_mode`.
-  - `SCMSetup`: `subsidence`, `external_forcing`, `ls_adv`,
-    `advection_test`, `scm_coriolis`. Normally supplied by a `Setups` case.
-  - [`AtmosRadiation`](@ref): `radiation_mode`, `insolation`.
-  - [`AtmosTurbconv`](@ref): `edmfx_model`, `turbconv_model`,
-    `smagorinsky_lilly`, `amd_les`, `constant_horizontal_diffusion`.
-  - [`AtmosGravityWave`](@ref): `non_orographic_gravity_wave`,
-    `orographic_gravity_wave`.
-  - [`AtmosSponge`](@ref): `viscous_sponge`, `rayleigh_sponge`.
-  - [`AtmosSurface`](@ref): `flux_scheme`, `temperature`, `boundary_overrides`,
-    `surface_albedo`.
-  - `AtmosNumerics`: the five `*_upwinding` options,
-    `test_dycore_consistency`, `reproducible_restart`, `limiter`, `diff_mode`,
-    `hyperdiff`.
-  - [`AtmosChem`](@ref): `chemistry_model`.
-  - Ungrouped `AtmosModel` fields: `vertical_diffusion`, `prescribed_flow`,
-    `cosp`, and `disable_surface_flux_tendency`.
-
-# Examples
-
-```julia
-# Minimal dry model
-model = AtmosModel()
-
-# Dry model with Held-Suarez forcing and custom hyperdiffusion
-model = AtmosModel(;
-    radiation_mode = HeldSuarezForcing(),
-    hyperdiff = Hyperdiffusion(;
-        ν₄_vorticity_coeff = 1e15,
-        divergence_damping_factor = 1.0,
-        prandtl_number = 1.0,
-    ),
-)
-
-# Moist model with all-sky radiation
-model = AtmosModel(;
-    microphysics_model = EquilibriumMicrophysics0M(),
-    radiation_mode = RRTMGPI.AllSkyRadiation(),
-)
-```
-
-# Default Configuration
-
-The default AtmosModel provides:
-
-  - **Dry atmosphere**: DryModel()
-  - **Basic surface**: AnalyticTemperature (zonally-symmetric SST) with default exchange coefficients
-  - **Cloud model**: QuadratureCloud() with SGS quadrature
-  - **Idealized insolation**: IdealizedInsolation()
-  - **Conservative numerics**: First-order upwinding with Explicit() timestepping
-  - **No advanced physics**: No radiation, turbulence, or forcing by default
-
-# Available Structs
-
-## AtmosWater
-
-  - `microphysics_model`: DryModel(), EquilibriumMicrophysics0M(), NonEquilibriumMicrophysics1M(), NonEquilibriumMicrophysics2M(), NonEquilibriumMicrophysics2MP3()
-  - `cloud_model`: GridScaleCloud(), QuadratureCloud()
-  - `microphysics_tendency_timestepping`: Explicit(), Implicit()
-  - `sgs_quadrature`: nothing or SGSQuadrature (subgrid-scale quadrature for microphysics tendencies)
-  - `terminal_velocity_liquid`: FixedTerminalVelocity (default) or DiagnosticTerminalVelocity
-  - `terminal_velocity_ice`: FixedTerminalVelocity (default) or DiagnosticTerminalVelocity
-  - `terminal_velocity_rain`: FixedTerminalVelocity or DiagnosticTerminalVelocity (default)
-  - `terminal_velocity_snow`: FixedTerminalVelocity (default) or DiagnosticTerminalVelocity
-
-## SCMSetup (Single-Column Model & LES specific - accessed via model.subsidence, model.external_forcing, etc.)
-
-Internal testing and calibration components for single-column setups:
-
-  - `subsidence`: nothing or Bomex_subsidence, Rico_subsidence, DYCOMS_subsidence, etc
-  - `external_forcing`: nothing or external forcing objects (GCMForcing, ExternalDrivenTVForcing, ISDACForcing)
-  - `ls_adv`: nothing or LargeScaleAdvection()
-  - `advection_test`: Bool
-  - `scm_coriolis`: nothing or NamedTuple `(; prof_ug, prof_vg, coriolis_param)`
-
-## AtmosRadiation
-
-  - `radiation_mode`: Radiation and atmospheric forcing modes
-
-      + Global radiation: RRTMGPI.ClearSkyRadiation(), RRTMGPI.AllSkyRadiation()
-      + Atmospheric forcing: HeldSuarezForcing() (for idealized dynamics)
-      + SCM-specific: RadiationDYCOMS(), RadiationISDAC(), RadiationTRMM_LBA()
-
-  - `insolation`: IdealizedInsolation(), TimeVaryingInsolation(), etc.
-
-## AtmosTurbconv
-
-  - `edmfx_model`: EDMFXModel()
-  - `turbconv_model`: nothing, PrognosticEDMFX(), EDOnlyEDMFX()
-  - `smagorinsky_lilly`: nothing or SmagorinskyLilly()
-  - `amd_les`: nothing or AnisotropicMinimumDissipation()
-  - `constant_horizontal_diffusion`: nothing or ConstantHorizontalDiffusion()
-
-## AtmosGravityWave
-
-  - `non_orographic_gravity_wave`: nothing or NonOrographicGravityWave()
-  - `orographic_gravity_wave`: nothing or OrographicGravityWave()
-
-## AtmosSponge
-
-  - `viscous_sponge`: nothing or ViscousSponge()
-  - `rayleigh_sponge`: nothing or RayleighSponge()
-
-## AtmosSurface
-
-  - `flux_scheme`: SurfaceConditions.MoninObukhov, SurfaceConditions.ExchangeCoefficients, or a default marker (DefaultMoninObukhov/DefaultExchangeCoefficients), or `nothing` to disable.
-  - `temperature`: SurfaceConditions.AnalyticTemperature, ExternalTemperature, SlabOceanTemperature, or CoupledTemperature.
-  - `boundary_overrides`: SurfaceConditions.SurfaceBoundaryOverrides
-  - `surface_albedo`: ConstantAlbedo(), RegressionFunctionAlbedo(), CouplerAlbedo()
-
-## AtmosNumerics    # Create grouped structs - use provided complete objects or create from individual fields
-
-  - `energy_q_tot_upwinding`, `tracer_upwinding`, `edmfx_mse_q_tot_upwinding`, `edmfx_sgsflux_upwinding`, `edmfx_tracer_upwinding`: Val() upwinding schemes
-  - `test_dycore_consistency`: nothing or TestDycoreConsistency() for debugging
-  - `limiter`: nothing, QuasiMonotoneLimiter(), or ZhangShuLimiter(...)
-  - `vertical_water_borrowing_species`: internal value `nothing` (apply to all tracers; config default is `~`), empty tuple (apply to none; config `[]`), or Tuple{Symbol, ...} from config string/list (e.g. `["ρq_tot"]`) to apply only to those tracers. See config `vertical_water_borrowing_species` in default_config.yml for YAML options.
-    (Note: The vertical water borrowing limiter is created in the cache based on `AtmosWaterModel.tracer_nonnegativity_method`)
-  - `diff_mode`: Explicit(), Implicit() timestepping mode for diffusion
-  - `hyperdiff`: nothing or Hyperdiffusion()
-
-## Top-level Options
-
-  - `vertical_diffusion`: nothing, VerticalDiffusion(), DecayWithHeightDiffusion()
-  - `disable_surface_flux_tendency`: Bool
-"""
-function AtmosModel(; kwargs...)
+# Internal builder from fully resolved kwargs. Does not apply setup components
+function _atmos_model(; kwargs...)
     group_kwargs, atmos_model_kwargs = _partition_atmos_model_kwargs(kwargs)
 
     # Create grouped structs - use provided complete objects or create from individual fields

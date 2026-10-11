@@ -423,8 +423,9 @@ function DGModel(prob::DGProblem)
         (prob isa BaroclinicWaveFDDG && prob.moisture != :dry) ?
         Limiters.PositivityLimiter(
             FT;
-            ρ_min = FT(1e-6),
-            p_min = FT(1e-2),
+            floors = (; ρ = 1e-6, ρq_tot = 0),
+            g = ZSPressure(thermo_params),
+            g_min = 1e-2,
             maxiter = 10,
         ) : nothing
     fields = (; fields..., ν_div, thermo_params, positivity_limiter)

@@ -1,58 +1,67 @@
 import ClimaCore: Limiters
 
 """
+    ZhangShuDryPressure(R_d, cv_d, T_0)
+
+Pressure constraint `g(U, off)` of the Zhang–Shu limiter: a dry ideal-gas proxy
+of the EOS, `p = ρ R_d ((ρe_tot/ρ − Kₕ − off)/cv_d + T_0)`, on one node's
+conserved state `U = (; ρ, ρe_tot, ρu1, ρu2[, ρq_tot])`, with `off` the
+unscaled part of the specific energy. Moisture corrections to R and cv are
+irrelevant at floor magnitudes, and the proxy is a cheap closed form for the
+per-node bisection in θ (a saturation adjustment there would be prohibitive
+and is not needed for admissibility).
+"""
+struct ZhangShuDryPressure{FT}
+    R_d::FT
+    cv_d::FT
+    T_0::FT
+end
+@inline function (g::ZhangShuDryPressure)(U, off)
+    K_h = (U.ρu1^2 + U.ρu2^2) / (2 * U.ρ^2)
+    return U.ρ * g.R_d * ((U.ρe_tot / U.ρ - K_h - off) / g.cv_d + g.T_0)
+end
+
+"""
     zhang_shu_limiter_func!(Y, p, lim)
 
 Apply the Zhang–Shu (2010) positivity limiter (a ClimaCore
 `Limiters.PositivityLimiter`) to the grid-mean state, in place.
 
-The limiter interface takes a conserved vector, so the vector-invariant state
-is mapped to one: the prognostic densities (ρ, ρe_tot[, ρq_tot]) are passed
+The limiter acts on a conserved vector, so the vector-invariant state is
+mapped to one: the prognostic densities (ρ, ρe_tot[, ρq_tot]) are passed
 directly, the horizontal momentum is staged in scratch as the orthonormal
-components ρuE/ρuN (single-valued at cubed-sphere panel edges) and written
+components ρu1/ρu2 (single-valued at cubed-sphere panel edges) and written
 back to `uₕ` after limiting, and the face vertical velocity is left unscaled,
-its kinetic energy carried through the unscaled offset `off = w_c²/2 + Φ` (the
-same convention as the FDDG flux-form drivers). Each element's WJ-weighted
-means of ρ, ρe_tot, ρq_tot, and the orthonormal ρuₕ are preserved exactly.
+its kinetic energy carried in the auxiliary field `off = w_c²/2 + Φ` (the
+same convention as the FDDG flux-form drivers).
 
-The pressure floor is enforced on a dry ideal-gas proxy of the EOS,
-`p = ρ R_d ((ρe/ρ − Kₕ − off)/cv_d + T_0)` — moisture corrections to R and cv
-are irrelevant at floor magnitudes, and the proxy is a cheap closed form for
-the per-node bisection in θ (a saturation adjustment there would be
-prohibitive and is not needed for admissibility).
+In each element, ρ and ρq_tot are first each scaled toward their own
+WJ-weighted mean to meet `ρ ≥ ρ_min` and `ρq_tot ≥ 0`; the whole vector is
+then scaled toward its mean by one θ to meet `p ≥ p_min`, with `p` from
+[`ZhangShuDryPressure`](@ref). Each element's means of ρ, ρe_tot, ρq_tot, and
+the orthonormal ρuₕ are preserved exactly.
 
 Called from `limiters_func!` when `p.numerics.zhang_shu_limiter` is set (the
 `apply_zhang_shu_limiter` configuration option).
 """
 NVTX.@annotate function zhang_shu_limiter_func!(Y, p, lim)
-    (; params) = p
-    R_d = CAP.R_d(params)
-    cv_d = CAP.cv_d(params)
-    T_0 = CAP.T_0(params)
     ᶜΦ = p.core.ᶜΦ
     ᶜρu1 = p.scratch.ᶜtemp_scalar
     ᶜρu2 = p.scratch.ᶜtemp_scalar_2
-    ᶜρu3 = p.scratch.ᶜtemp_scalar_3
-    ᶜoff = p.scratch.ᶜtemp_scalar_4
+    ᶜoff = p.scratch.ᶜtemp_scalar_3
     ᶜinterp = Operators.InterpolateF2C()
 
     @. ᶜρu1 = Y.c.ρ * Geometry.UVVector(Y.c.uₕ).components.data.:1
     @. ᶜρu2 = Y.c.ρ * Geometry.UVVector(Y.c.uₕ).components.data.:2
-    fill!(parent(ᶜρu3), 0)
     @. ᶜoff =
         Geometry.WVector(ᶜinterp(Y.f.u₃)).components.data.:1^2 / 2 + ᶜΦ
 
-    pfn = let R_d = R_d, cv_d = cv_d, T_0 = T_0
-        (ρ, ρe, ρu1, ρu2, ρu3, ρq, off) -> begin
-            K_h = (ρu1^2 + ρu2^2 + ρu3^2) / (2 * ρ^2)
-            ρ * R_d * ((ρe / ρ - K_h - off) / cv_d + T_0)
-        end
-    end
+    (; ρ, ρe_tot) = Y.c
     states =
         hasproperty(Y.c, :ρq_tot) ?
-        (Y.c.ρ, Y.c.ρe_tot, ᶜρu1, ᶜρu2, ᶜρu3, Y.c.ρq_tot) :
-        (Y.c.ρ, Y.c.ρe_tot, ᶜρu1, ᶜρu2, ᶜρu3)
-    Limiters.apply_positivity_limiter!(lim, pfn, states, ᶜoff)
+        (; ρ, ρe_tot, ρu1 = ᶜρu1, ρu2 = ᶜρu2, Y.c.ρq_tot) :
+        (; ρ, ρe_tot, ρu1 = ᶜρu1, ρu2 = ᶜρu2)
+    Limiters.apply_limiter!(states, ᶜoff, lim)
 
     @. Y.c.uₕ = Geometry.Covariant12Vector(
         Geometry.UVVector(ᶜρu1 / Y.c.ρ, ᶜρu2 / Y.c.ρ),
@@ -133,8 +142,8 @@ NVTX.@annotate function limiters_func!(Y, p, t, ref_Y)
         p.numerics
 
     # Zhang–Shu positivity limiter (mutually exclusive with the quasimonotone
-    # limiter; enforced at configuration time). Scales the whole conserved
-    # vector by one θ, so no mass-energy consistency fixup is needed.
+    # limiter; enforced at configuration time). Preserves every element mean
+    # of ρ, ρe_tot, and ρq_tot, so no mass-energy consistency fixup is applied.
     if !isnothing(zhang_shu_limiter)
         zhang_shu_limiter_func!(Y, p, zhang_shu_limiter)
     end

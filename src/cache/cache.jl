@@ -205,10 +205,21 @@ function build_cache(
         end
 
     zhang_shu_limiter = if atmos.numerics.limiter isa ZhangShuLimiter
+        (; ρ_min, p_min) = atmos.numerics.limiter
+        # ClimaCore rejects floors on states that are not passed, so the
+        # tracer floor exists only when ρq_tot is prognostic.
+        floors =
+            hasproperty(Y.c, :ρq_tot) ? (; ρ = ρ_min, ρq_tot = FT(0)) :
+            (; ρ = ρ_min)
         Limiters.PositivityLimiter(
             FT;
-            ρ_min = atmos.numerics.limiter.ρ_min,
-            p_min = atmos.numerics.limiter.p_min,
+            floors,
+            g = ZhangShuDryPressure(
+                FT(CAP.R_d(params)),
+                FT(CAP.cv_d(params)),
+                FT(CAP.T_0(params)),
+            ),
+            g_min = p_min,
         )
     else
         nothing
