@@ -21,8 +21,15 @@ function get_jacobian(
     ode_algo, Y, atmos, jacobian::JacobianAlgorithm, debug_jacobian;
     verbose = false,
 )
-    ode_algo isa Union{CTS.IMEXAlgorithm, CTS.RosenbrockAlgorithm} ||
-        return nothing
+    # `CTS.ExplicitAlgorithm(name)` is an `IMEXAlgorithm` whose implicit
+    # tableau equals its explicit one, so the `isa IMEXAlgorithm` test alone
+    # would build (and keep in memory) a Jacobian that is never factorized.
+    is_explicit_imex =
+        ode_algo isa CTS.IMEXAlgorithm && ode_algo.name isa CTS.ERKAlgorithmName
+    (
+        ode_algo isa CTS.RosenbrockAlgorithm ||
+        (ode_algo isa CTS.IMEXAlgorithm && !is_explicit_imex)
+    ) || return nothing
     verbose && @info "Jacobian algorithm: $(summary_string(jacobian))"
     jac = Jacobian(jacobian, Y, atmos; verbose = debug_jacobian)
     if verbose && hasproperty(jac.cache, :derivative_flags)
