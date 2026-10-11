@@ -20,11 +20,13 @@ function compute_tracer!(out, state, cache, time, tracer_name)
     end
 end
 
-# A species "exists" when it has a prognostic model or at least one of its
-# bins is prescribed from the MERRA-2 climatology.
-species_exists(cache, bin_names, species_model) =
-    !isnothing(species_model) ||
-    any(name -> has_prescribed_aerosol_bin(cache, name), bin_names)
+# A species "exists" when its prognostic model carries every requested bin, or
+# (without a model) at least one of its bins is prescribed from the MERRA-2
+# climatology.
+species_exists(cache, names, ::Nothing) =
+    any(name -> has_prescribed_aerosol_bin(cache, name), names)
+species_exists(cache, names, model::AbstractPrognosticAerosol) =
+    all(name -> name in bin_names(model), names)
 
 function compute_species_bin_mmr!(out, state, cache, bin_name, species_model)
     species_exists(cache, (bin_name,), species_model) ||
@@ -111,7 +113,7 @@ add_diagnostic_variable!(
             out,
             u,
             p,
-            AEROSOL_SPECIES_BIN_NAMES.seasalt,
+            species_bin_names(p.atmos.seasalt, AEROSOL_SPECIES_BIN_NAMES.seasalt),
             p.atmos.seasalt,
             "Sea salt",
         ),
@@ -120,7 +122,12 @@ add_diagnostic_variable!(
 ###
 # Sea salt per-bin concentrations (3d)
 ###
-for (bin_index, bin_name) in enumerate(AEROSOL_SPECIES_BIN_NAMES.seasalt)
+# Registered up to `MAX_SSLT_DIAGNOSTIC_BINS` so that a prognostic run with more
+# bins than the 5 MERRA-2 ones (set by the ClimaParams arrays) can output each
+# of them; a bin that the active model does not carry is an error at output.
+const MAX_SSLT_DIAGNOSTIC_BINS = 12
+for bin_index in 1:MAX_SSLT_DIAGNOSTIC_BINS
+    bin_name = Symbol(:SSLT, lpad(bin_index, 2, '0'))
     add_diagnostic_variable!(
         short_name = "mmr$(lowercase(string(bin_name)))",
         long_name = "Sea-Salt Aerosol Mass Mixing Ratio, bin $bin_index",
@@ -208,7 +215,7 @@ add_diagnostic_variable!(
             out,
             u,
             p,
-            AEROSOL_SPECIES_BIN_NAMES.seasalt,
+            species_bin_names(p.atmos.seasalt, AEROSOL_SPECIES_BIN_NAMES.seasalt),
             p.atmos.seasalt,
             "Sea salt",
         ),

@@ -2236,13 +2236,47 @@ function AtmosAerosols(
     return AtmosAerosols(; models...)
 end
 
+"""
+    sslt_bin_count(ap)
+
+Number of prognostic sea-salt bins, `length(ap.bin_mass_flux)`, after checking
+that every per-bin ClimaParams array agrees: `N + 1` bin edges and `N` entries
+of the emission mass flux and the 0M washout pair. The bin count is set by the
+parameter arrays alone (no config key), so a mismatch between them would
+otherwise surface as a `BoundsError` at the first tendency evaluation or, worse,
+as a silent truncation of the longer arrays.
+"""
+function sslt_bin_count(ap)
+    n = length(ap.bin_mass_flux)
+    lengths = (;
+        ssa_size_bin_divisions = length(ap.ssa_bin_edges) - 1,
+        ssa_washout_prefactor = length(ap.ssa_washout_a),
+        ssa_washout_exponent = length(ap.ssa_washout_b),
+    )
+    all(==(n), values(lengths)) || error(
+        "Inconsistent sea-salt bin counts: ssa_gong_logfit_bin_3M_flux has $n \
+         bins but $(lengths) (edges counted as length - 1)",
+    )
+    return n
+end
+
 const AEROSOL_SPECIES = (;
-    seasalt = ("SSLT", ap -> PrognosticSeaSalt(length(ap.bin_mass_flux))),
+    seasalt = ("SSLT", ap -> PrognosticSeaSalt(sslt_bin_count(ap))),
     dust = ("DST", nothing),
     sulfate = ("SO4", nothing),
     black_carbon = ("CB", nothing),
     organic_carbon = ("OC", nothing),
 )
+
+"""
+    species_bin_names(species_model, default_names)
+
+Bin names of one species: those of its prognostic model when it has one
+(whose count comes from the parameter arrays, see [`sslt_bin_count`](@ref)),
+otherwise the MERRA-2 `default_names` entry of [`AEROSOL_SPECIES_BIN_NAMES`](@ref).
+"""
+species_bin_names(::Nothing, default_names) = default_names
+species_bin_names(model::AbstractPrognosticAerosol, _) = bin_names(model)
 
 """
     AEROSOL_SPECIES_BIN_NAMES
