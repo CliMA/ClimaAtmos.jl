@@ -244,6 +244,55 @@ function species_aerosol_cache(Y, params, sslt::PrognosticSeaSalt)
 end
 
 """
+    species_aerosol_cache(Y, params, sslth::SeaSaltHistory)
+
+Cache of the sea-salt history tracers (`history_tracers.jl`): per-tracer
+surface fluxes for the emission source (`ρSSHUEM` only is nonzero; written
+with the bins' emission fluxes by `set_sslth_emission_flux!`) and for dry
+deposition (`set_sslth_dry_deposition_fluxes!`), the bin-mass-weighted
+level-1 dry-deposition and settling fall speeds behind them (plus the level-1
+bin mass sum they are weighted with), the mass-weighted settling fall speed
+of each subdomain (`aerosol_settling_tendency!`), the mass-weighted
+wet-removal rate of the grid mean and of each updraft
+(`set_sslth_wet_deposition_rates!`), and the bin-independent exposure rates
+(in-cloud `c`, below-cloud `Λ̃`) of each subdomain copied out of
+`set_sslt_wet_deposition_rates!` for the history sources. Everything is
+zeroed so a read before the first fill is harmless.
+"""
+function species_aerosol_cache(Y, params, sslth::SeaSaltHistory)
+    FT = eltype(params)
+    state_names = map(n -> Symbol(:ρ, n), bin_names(sslth))
+    n_tracers = length(state_names)
+    n_updrafts = :sgsʲs in propertynames(Y.c) ? fieldcount(eltype(Y.c.sgsʲs)) : 0
+
+    zero_surface_fluxes() = NamedTuple{state_names}(
+        ntuple(n_tracers) do _
+            flux = similar(Spaces.level(Y.f, half), C3{FT})
+            fill!(flux, zero(C3{FT}))
+            flux
+        end,
+    )
+    zero_surface_scalar() = fill!(similar(Spaces.level(Y.f, half), FT), zero(FT))
+    zero_center_scalar() = fill!(similar(Y.c, FT), zero(FT))
+
+    return (;
+        sslth_sfc_fluxes = zero_surface_fluxes(),
+        sslth_drydep_fluxes = zero_surface_fluxes(),
+        sslth_drydep_velocity = zero_surface_scalar(),
+        sslth_settling_velocity_sfc = zero_surface_scalar(),
+        sslth_sfc_mass = zero_surface_scalar(),
+        sslth_settling_velocity⁰ = zero_center_scalar(),
+        sslth_settling_velocityʲs = ntuple(_ -> zero_center_scalar(), n_updrafts),
+        sslth_wetdep_rate = zero_center_scalar(),
+        sslth_wetdep_rateʲs = ntuple(_ -> zero_center_scalar(), n_updrafts),
+        sslt_in_cloud_exposure_rate⁰ = zero_center_scalar(),
+        sslt_in_cloud_exposure_rateʲs = ntuple(_ -> zero_center_scalar(), n_updrafts),
+        sslt_washout_exposure_rate⁰ = zero_center_scalar(),
+        sslt_washout_exposure_rateʲs = ntuple(_ -> zero_center_scalar(), n_updrafts),
+    )
+end
+
+"""
     tracer_cache(Y, params, prescribed_aerosol_names, time_varying_trace_gases, aerosols, start_date)
 
 Build `p.tracers`, the cache of prescribed and prognostic aerosol and trace-gas

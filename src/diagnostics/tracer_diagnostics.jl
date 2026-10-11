@@ -203,6 +203,137 @@ add_diagnostic_variable!(
 )
 
 ###
+# Sea salt emission wind of the standalone column driver (2d)
+###
+function compute_u10ss!(out, state, cache, time)
+    cache.atmos.column_emission || error(
+        "u10ss requires `prognostic_aerosol_column_emission: true` (in coupled \
+         runs the emission wind lives in ClimaCoupler)",
+    )
+    isnothing(out) && (out = zeros(axes(Fields.level(state.f, half))))
+    out .= sslt_column_u10(cache)
+    return out
+end
+
+add_diagnostic_variable!(
+    short_name = "u10ss",
+    long_name = "Sea-Salt Emission 10 m Wind Speed",
+    units = "m s^-1",
+    comments = "MOST 10 m wind speed diagnosed from the model's own surface \
+                conditions and fed to the sea-salt emission flux by the \
+                standalone column driver (`prognostic_aerosol_column_emission`).",
+    compute! = compute_u10ss!,
+)
+
+###
+# Sea salt history tracers (3d): grid mean, first updraft, and the cached
+# exposure rates of the environment. All `H/ρ` per kg of air; divide by
+# `mmrss` offline for the mass-weighted mean (e.g. age) of the population.
+###
+const SSLT_HISTORY_DIAGNOSTICS = (
+    (:SSHAGE, "Mass Age", "s", "mass × age: age of the population is this over mmrss"),
+    (
+        :SSHUEM,
+        "Emission Wind",
+        "m s^-1",
+        "mass × 10 m emission wind: mean emission wind is this over mmrss",
+    ),
+    (
+        :SSHSET,
+        "Settling Exposure",
+        "",
+        "mass × settling exposure (`settling_exposure_rate` integrated along \
+         the population's history)",
+    ),
+    (
+        :SSHSET2,
+        "Settling Exposure Squared",
+        "",
+        "mass × settling exposure squared; with mmrsshset gives the within-\
+         cell variance of the exposure",
+    ),
+    (
+        :SSHWET,
+        "Below-Cloud Washout Exposure",
+        "",
+        "mass × unit-efficiency below-cloud washout exposure (1M: swept-\
+         volume rate integrated, dimensionless; 0M: cloud-free rain mass \
+         flux integrated, kg m^-2)",
+    ),
+    (
+        :SSHINC,
+        "In-Cloud Scavenging Exposure",
+        "",
+        "mass × in-cloud (nucleation) scavenging exposure, the integrated \
+         condensate-to-precipitation conversion rate the population sat in",
+    ),
+)
+
+function compute_sslt_history_updraft!(out, state, cache, tracer_name)
+    isnothing(cache.atmos.seasalt_history) &&
+        error("$tracer_name requires \"SSLTH\" in `prognostic_aerosols`")
+    cache.atmos.turbconv_model isa PrognosticEDMFX || error(
+        "updraft $tracer_name requires `turbconv: prognostic_edmfx`",
+    )
+    isnothing(out) && (out = zeros(axes(state.c)))
+    out .= getproperty(state.c.sgsʲs.:1, tracer_name)
+    return out
+end
+
+for (tracer_name, label, units, description) in SSLT_HISTORY_DIAGNOSTICS
+    short = lowercase(string(tracer_name))
+    add_diagnostic_variable!(
+        short_name = "mmr$short",
+        long_name = "Sea-Salt History: $label",
+        units = isempty(units) ? "kg kg^-1" : "kg kg^-1 $units",
+        comments = "Sea-salt history tracer $tracer_name per unit air mass: \
+                    $description. Passive companion of the prognostic sea \
+                    salt bins (\"SSLTH\" in `prognostic_aerosols`).",
+        compute! = (out, u, p, t) -> compute_species_bin_mmr!(
+            out,
+            u,
+            p,
+            tracer_name,
+            p.atmos.seasalt_history,
+        ),
+    )
+    add_diagnostic_variable!(
+        short_name = "mmr$(short)up",
+        long_name = "Updraft Sea-Salt History: $label",
+        units = isempty(units) ? "kg kg^-1" : "kg kg^-1 $units",
+        comments = "Sea-salt history tracer $tracer_name of the first \
+                    updraft, per unit updraft air mass: $description.",
+        compute! = (out, u, p, t) ->
+            compute_sslt_history_updraft!(out, u, p, tracer_name),
+    )
+end
+
+add_diagnostic_variable!(
+    short_name = "washrss",
+    long_name = "Sea-Salt Below-Cloud Washout Exposure Rate",
+    # Units depend on the microphysics model (see comments), so the attribute
+    # is left empty rather than mislabelled for 0M runs.
+    units = "",
+    comments = "Unit-efficiency below-cloud washout exposure rate of the \
+                environment driving the SSHWET history tracer: under 1M the \
+                swept-volume collection rate over the cloud-free area \
+                [s^-1]; under 0M the cloud-free rain mass flux [kg m^-2 s^-1].",
+    compute! = (out, u, p, t) ->
+        compute_tracer!(out, u, p, t, :sslt_washout_exposure_rate⁰),
+)
+
+add_diagnostic_variable!(
+    short_name = "incrss",
+    long_name = "Sea-Salt In-Cloud Scavenging Exposure Rate",
+    units = "s^-1",
+    comments = "In-cloud (nucleation) scavenging rate of the environment \
+                driving the SSHINC history tracer: the cloud-fraction-\
+                weighted condensate-to-precipitation conversion rate.",
+    compute! = (out, u, p, t) ->
+        compute_tracer!(out, u, p, t, :sslt_in_cloud_exposure_rate⁰),
+)
+
+###
 # Sea salt column mass (2d)
 ###
 add_diagnostic_variable!(

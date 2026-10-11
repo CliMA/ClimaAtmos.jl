@@ -121,6 +121,9 @@ function set_sslt_surface_fluxes!(
             unit_basis_vector_data(C3, sfc_local_geometry),
         )
     end
+    # The emission-wind history tracer is emitted with the bins, at the
+    # same wind, by whichever driver (coupler or standalone) set them.
+    set_sslth_emission_flux!(Y, p, u₁₀_ocean, p.atmos.seasalt_history)
     return nothing
 end
 
@@ -219,12 +222,10 @@ function aerosol_settling_tendency!(Yₜ, Y, p, t, sslt::PrognosticSeaSalt)
     (; ᶜp, ᶜT⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜTʲs, ᶜρʲs) = p.precomputed
     grav = FT(CAP.grav(p.params))
     ρ_s = CAP.prescribed_aerosol_params(p.params).seasalt_density
-    α_lat = CAP.sedimentation_lateral_coeff(p.params)
     ᶜJ = Fields.local_geometry_field(Y.c).J
     ᶠJ = Fields.local_geometry_field(Y.f).J
     ᶜΔz = Fields.Δz_field(Y.c)
     dt = float(p.dt)
-    n = n_mass_flux_subdomains(turbconv_model)
 
 
     ᶜρ⁰ = p.scratch.ᶜtemp_scalar_5
@@ -236,21 +237,13 @@ function aerosol_settling_tendency!(Yₜ, Y, p, t, sslt::PrognosticSeaSalt)
     (; sslt_air_state⁰, sslt_air_stateʲs) = p.tracers
     set_sslt_air_states!(Y, p, ᶜρ⁰)
     ᶜair⁰ = sslt_air_state⁰
-    # Per-bin scratch, written and consumed within one bin iteration.
+    # Per-bin velocity scratch, written and consumed within one bin iteration
+    # (`settle_tracer!` owns `ᶜtemp_scalar_2/3/6`).
     ᶜw⁰ = p.scratch.ᶜtemp_scalar
-    ᶜρaχw = p.scratch.ᶜtemp_scalar_2
-    ᶜρaχ = p.scratch.ᶜtemp_scalar_3
     ᶜwʲ = p.scratch.ᶜtemp_scalar_4
-    ᶜvtt = p.scratch.ᶜtemp_scalar_6
 
     bins = sslt_settling_bin_props(p, sslt)
     MatrixFields.unrolled_foreach(bins) do (ρχ_name, r_settle, C_kelvin)
-        χ_name = specific_tracer_name(ρχ_name)
-        ᶜρχ = MatrixFields.get_field(Y.c, ρχ_name)
-        ᶜρχₜ = MatrixFields.get_field(Yₜ.c, ρχ_name)
-
-        # Environment
-        ᶜχ⁰ = ᶜspecific_env_value(χ_name, Y, p)
         @. ᶜw⁰ = min(
             bin_settling_velocity(
                 ᶜair⁰,
@@ -264,15 +257,9 @@ function aerosol_settling_tendency!(Yₜ, Y, p, t, sslt::PrognosticSeaSalt)
             ),
             ap.settling_courant_max * ᶜΔz / dt,
         )
-        @. ᶜρaχ = ᶜρa⁰ * max(zero(FT), ᶜχ⁰)
-        @. ᶜρaχw = ᶜρaχ * ᶜw⁰
-
-        for j in 1:n
-            ᶜρaʲ = Y.c.sgsʲs.:($j).ρa
-            ᶜρʲ = ᶜρʲs.:($j)
-            ᶜχʲ = MatrixFields.get_field(Y.c.sgsʲs.:($j), χ_name)
-            ᶜχʲₜ = MatrixFields.get_field(Yₜ.c.sgsʲs.:($j), χ_name)
-
+        # Each updraft's capped fall speed, evaluated on demand into the one
+        # scratch slot (`settle_tracer!` consumes it before asking for the next).
+        updraft_fall_speed = function (j)
             @. ᶜwʲ = min(
                 bin_settling_velocity(
                     sslt_air_stateʲs[$j],
@@ -280,48 +267,104 @@ function aerosol_settling_tendency!(Yₜ, Y, p, t, sslt::PrognosticSeaSalt)
                     r_settle,
                     C_kelvin,
                     ρ_s,
-                    ᶜρʲ,
+                    ᶜρʲs.:($$j),
                     grav,
                     (ap,),
                 ),
                 ap.settling_courant_max * ᶜΔz / dt,
             )
-            ᶜρaʲχʲ = @. lazy(max(zero(FT), ᶜρaʲ) * max(zero(FT), ᶜχʲ))
-            @. ᶜρaχ += ᶜρaʲχʲ
-            @. ᶜρaχw += ᶜρaʲχʲ * ᶜwʲ
-
-            # Within-updraft flux convergence with the lateral correction
-            # of the microphysics species; the environment flux density
-            # ρ⁰w⁰χ⁰ is known directly from the environment velocity.
-            ᶜa = @. lazy(draft_area(ᶜρaʲ, ᶜρʲ))
-            ᶜρ⁰w⁰χ⁰ = @. lazy(ᶜρ⁰ * ᶜw⁰ * ᶜχ⁰)
-            updraft_sedimentation!(
-                ᶜvtt,
-                p,
-                ᶜρʲ,
-                ᶜwʲ,
-                ᶜa,
-                ᶜχʲ,
-                ᶠJ,
-                ᶜρ⁰w⁰χ⁰,
-                α_lat,
-            )
-            @. ᶜχʲₜ +=
-                specific(FT(1), ᶜρaʲ, FT(0), ᶜρʲ, turbconv_model) * ᶜvtt
+            return ᶜwʲ
         end
-
-        # Mass-weighted grid mean
-        @. ᶜρaχw = ifelse(
-            ᶜρaχ > ϵ_numerics(FT),
-            max(ᶜρaχw / ᶜρaχ, zero(FT)),
-            ᶜw⁰,
-        )
-        @. ᶜρχₜ -= ᶜprecipdivᵥ(
-            ᶠρ * ᶠright_bias(
-                Geometry.WVector(-(ᶜρaχw)) * specific(ᶜρχ, Y.c.ρ),
-            ),
-        )
+        settle_tracer!(Yₜ, Y, p, ρχ_name, ᶜw⁰, updraft_fall_speed, ᶜρ⁰, ᶜρa⁰, ᶠρ)
     end
+    return nothing
+end
+
+"""
+    settle_tracer!(Yₜ, Y, p, ρχ_name, ᶜw⁰, updraft_fall_speed, ᶜρ⁰, ᶜρa⁰, ᶠρ)
+
+The settling operator of [`aerosol_settling_tendency!`](@ref) for one
+grid-mean tracer `Y.c.<ρχ_name>` and its updraft companions, given the
+(already Courant-capped) environment fall speed `ᶜw⁰` and a function
+`updraft_fall_speed(j)` returning updraft `j`'s capped fall speed field:
+each updraft receives its within-updraft flux convergence with the lateral
+correction of `updraft_sedimentation!`, and the grid mean settles at the
+subdomain-mass-weighted speed, so the grid-scale flux equals the sum of the
+subdomain fluxes. Factored out so that the sea-salt history tracers
+(`history_tracers.jl`) are settled by exactly the operator the mass bins
+use, with their own mass-weighted speeds. Uses scratch `ᶜtemp_scalar_2`,
+`ᶜtemp_scalar_3`, and `ᶜtemp_scalar_6`; `ᶜρ⁰`, `ᶜρa⁰`, and the face density
+`ᶠρ` are the caller's (shared across tracers).
+"""
+function settle_tracer!(
+    Yₜ,
+    Y,
+    p,
+    ρχ_name,
+    ᶜw⁰,
+    updraft_fall_speed,
+    ᶜρ⁰,
+    ᶜρa⁰,
+    ᶠρ,
+)
+    turbconv_model = p.atmos.turbconv_model
+    FT = eltype(Y)
+    (; ᶜρʲs) = p.precomputed
+    α_lat = CAP.sedimentation_lateral_coeff(p.params)
+    ᶠJ = Fields.local_geometry_field(Y.f).J
+    n = n_mass_flux_subdomains(turbconv_model)
+    ᶜρaχw = p.scratch.ᶜtemp_scalar_2
+    ᶜρaχ = p.scratch.ᶜtemp_scalar_3
+    ᶜvtt = p.scratch.ᶜtemp_scalar_6
+
+    χ_name = specific_tracer_name(ρχ_name)
+    ᶜρχ = MatrixFields.get_field(Y.c, ρχ_name)
+    ᶜρχₜ = MatrixFields.get_field(Yₜ.c, ρχ_name)
+
+    # Environment
+    ᶜχ⁰ = ᶜspecific_env_value(χ_name, Y, p)
+    @. ᶜρaχ = ᶜρa⁰ * max(zero(FT), ᶜχ⁰)
+    @. ᶜρaχw = ᶜρaχ * ᶜw⁰
+
+    for j in 1:n
+        ᶜρaʲ = Y.c.sgsʲs.:($j).ρa
+        ᶜρʲ = ᶜρʲs.:($j)
+        ᶜχʲ = MatrixFields.get_field(Y.c.sgsʲs.:($j), χ_name)
+        ᶜχʲₜ = MatrixFields.get_field(Yₜ.c.sgsʲs.:($j), χ_name)
+
+        ᶜwʲ = updraft_fall_speed(j)
+        ᶜρaʲχʲ = @. lazy(max(zero(FT), ᶜρaʲ) * max(zero(FT), ᶜχʲ))
+        @. ᶜρaχ += ᶜρaʲχʲ
+        @. ᶜρaχw += ᶜρaʲχʲ * ᶜwʲ
+
+        # Within-updraft flux convergence with the lateral correction
+        # of the microphysics species; the environment flux density
+        # ρ⁰w⁰χ⁰ is known directly from the environment velocity.
+        ᶜa = @. lazy(draft_area(ᶜρaʲ, ᶜρʲ))
+        ᶜρ⁰w⁰χ⁰ = @. lazy(ᶜρ⁰ * ᶜw⁰ * ᶜχ⁰)
+        updraft_sedimentation!(
+            ᶜvtt,
+            p,
+            ᶜρʲ,
+            ᶜwʲ,
+            ᶜa,
+            ᶜχʲ,
+            ᶠJ,
+            ᶜρ⁰w⁰χ⁰,
+            α_lat,
+        )
+        @. ᶜχʲₜ += specific(FT(1), ᶜρaʲ, FT(0), ᶜρʲ, turbconv_model) * ᶜvtt
+    end
+
+    # Mass-weighted grid mean
+    @. ᶜρaχw = ifelse(
+        ᶜρaχ > ϵ_numerics(FT),
+        max(ᶜρaχw / ᶜρaχ, zero(FT)),
+        ᶜw⁰,
+    )
+    @. ᶜρχₜ -= ᶜprecipdivᵥ(
+        ᶠρ * ᶠright_bias(Geometry.WVector(-(ᶜρaχw)) * specific(ᶜρχ, Y.c.ρ)),
+    )
     return nothing
 end
 

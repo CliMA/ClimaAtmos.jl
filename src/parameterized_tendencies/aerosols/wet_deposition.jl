@@ -586,6 +586,7 @@ function set_sslt_wet_deposition_rates!(
         )
         @. ᶜr_Dʲ = rain_representative_drop_radius(ᶜq_raiʲ, ᶜρʲ, rain, vel)
         @. ᶜV_Dʲ = rain_drop_fall_speed(ᶜr_Dʲ, ᶜρʲ, rain, vel)
+        cache_sslth_updraft_exposure_rates!(p, j, ᶜcʲ, ᶜΛ̃ʲ, p.atmos.seasalt_history)
         MatrixFields.unrolled_foreach(bins) do (ρχ_name, r_settle, C_kelvin)
             ᶜkʲ = ratesʲs[MatrixFields.extract_first(ρχ_name)][j]
             @. ᶜkʲ =
@@ -638,6 +639,7 @@ function set_sslt_wet_deposition_rates!(
         one(FT),
         rain_swept_collection_rate(ᶜq_rai⁰, ᶜρ⁰, rain, vel),
     )
+    cache_sslth_env_exposure_rates!(p, ᶜc⁰, ᶜΛ̃⁰, p.atmos.seasalt_history)
     ᶜr_D⁰ = p.scratch.ᶜtemp_scalar_3
     ᶜV_D⁰ = p.scratch.ᶜtemp_scalar_5
     @. ᶜr_D⁰ = rain_representative_drop_radius(ᶜq_rai⁰, ᶜρ⁰, rain, vel)
@@ -734,6 +736,13 @@ function set_sslt_wet_deposition_rates!(
         ᶜQʲ = @. lazy(
             precipitation_conversion_rate_0m(ᶜmp_tendencyʲs.:($$j).dq_tot_dt),
         )
+        cache_sslth_updraft_exposure_rates!(
+            p,
+            j,
+            (@. lazy(sslt_in_cloud_scavenging_rate(ᶜFʲ, one(FT), ᶜQʲ, ᶜq_cldʲ, dt))),
+            sslth_0m_washout_exposure_rate(ᶜFʲ, ᶜR, ap),
+            p.atmos.seasalt_history,
+        )
         MatrixFields.unrolled_foreach(bins) do (ρχ_name, a, b)
             ᶜkʲ = ratesʲs[MatrixFields.extract_first(ρχ_name)][j]
             @. ᶜkʲ =
@@ -745,6 +754,13 @@ function set_sslt_wet_deposition_rates!(
                 )
         end
     end
+
+    cache_sslth_env_exposure_rates!(
+        p,
+        (@. lazy(sslt_in_cloud_scavenging_rate(ᶜF⁰, one(FT), ᶜQ⁰, ᶜq_cld⁰, dt))),
+        sslth_0m_washout_exposure_rate(ᶜF⁰, ᶜR, ap),
+        p.atmos.seasalt_history,
+    )
 
     # 3. Grid mean per bin: mass-weighted over the subdomains.
     ᶜρaχ = p.scratch.ᶜtemp_scalar_5
@@ -797,11 +813,41 @@ aerosol_wet_deposition_tendency!(Yₜ, Y, p, t, ::PrognosticSeaSalt, _) = nothin
 function aerosol_wet_deposition_tendency!(
     Yₜ, Y, p, t, sslt::PrognosticSeaSalt, ::WetDepositionMicrophysics,
 )
-    FT = eltype(Y)
     rates = p.tracers.sslt_wetdep_rates
     ratesʲs = p.tracers.sslt_wetdep_ratesʲs
     velocities = p.tracers.sslt_drydep_velocities
     settling_velocities = p.tracers.sslt_settling_velocities
+
+    MatrixFields.unrolled_foreach(aerosol_state_names(sslt)) do ρχ_name
+        bin = MatrixFields.extract_first(ρχ_name)
+        wet_remove_tracer!(
+            Yₜ,
+            Y,
+            p,
+            ρχ_name,
+            rates[bin],
+            ratesʲs[bin],
+            velocities[bin],
+            settling_velocities[bin],
+        )
+    end
+    return nothing
+end
+
+"""
+    wet_remove_tracer!(Yₜ, Y, p, ρχ_name, ᶜk, ᶜkʲs, V_d, V_s)
+
+The wet-removal operator of [`aerosol_wet_deposition_tendency!`](@ref) for one
+grid-mean tracer `Y.c.<ρχ_name>` and its updraft companions: the exponential
+sink at the grid-mean rate `ᶜk` and at each updraft's own rate `ᶜkʲs[j]`,
+with level 1 scavenged only on the fraction that the dry-deposition (`V_d`)
+and gravitational-settling (`V_s`) surface fall speeds leave behind this
+stage. Factored out so the sea-salt history tracers (`history_tracers.jl`)
+are scavenged by exactly the operator the mass bins use, with their own
+mass-weighted rates and fall speeds. `V_d` and `V_s` are surface fields.
+"""
+function wet_remove_tracer!(Yₜ, Y, p, ρχ_name, ᶜk, ᶜkʲs, V_d, V_s)
+    FT = eltype(Y)
     dt = float(p.dt)
     n = n_mass_flux_subdomains(p.atmos.turbconv_model)
 
@@ -809,45 +855,40 @@ function aerosol_wet_deposition_tendency!(
     Δz1_values = level1(Fields.Δz_field(Y.c))
 
     # Grid mean at the mass-weighted rate, then each updraft at its own.
-    MatrixFields.unrolled_foreach(aerosol_state_names(sslt)) do ρχ_name
-        χ_name = specific_tracer_name(ρχ_name)
-        bin = MatrixFields.extract_first(ρχ_name)
-        ᶜρχ = MatrixFields.get_field(Y.c, ρχ_name)
-        ᶜρχₜ = MatrixFields.get_field(Yₜ.c, ρχ_name)
-        ᶜk = rates[bin]
-        @. ᶜρχₜ += ᶜρχ * expm1(-(ᶜk * dt)) / dt
-        for j in 1:n
-            ᶜχʲ = MatrixFields.get_field(Y.c.sgsʲs.:($j), χ_name)
-            ᶜχʲₜ = MatrixFields.get_field(Yₜ.c.sgsʲs.:($j), χ_name)
-            ᶜkʲ = ratesʲs[bin][j]
-            @. ᶜχʲₜ += ᶜχʲ * expm1(-(ᶜkʲ * dt)) / dt
-        end
+    χ_name = specific_tracer_name(ρχ_name)
+    ᶜρχ = MatrixFields.get_field(Y.c, ρχ_name)
+    ᶜρχₜ = MatrixFields.get_field(Yₜ.c, ρχ_name)
+    @. ᶜρχₜ += ᶜρχ * expm1(-(ᶜk * dt)) / dt
+    for j in 1:n
+        ᶜχʲ = MatrixFields.get_field(Y.c.sgsʲs.:($j), χ_name)
+        ᶜχʲₜ = MatrixFields.get_field(Yₜ.c.sgsʲs.:($j), χ_name)
+        ᶜkʲ = ᶜkʲs[j]
+        @. ᶜχʲₜ += ᶜχʲ * expm1(-(ᶜkʲ * dt)) / dt
+    end
 
-        # Level 1 is also drained by the dry-deposition AND gravitational-
-        # settling surface fluxes this stage, so scavenge only the fraction
-        # that survives both. Both are downward level-1 fall speeds, so their
-        # Courant numbers add. Every level view is hoisted out of the
-        # broadcasts below. (Settling reuses the grid-mean fall speed for the
-        # updraft correction too, matching how V_d is reused there.)
-        V_d_values = Fields.field_values(velocities[bin])
-        Vs_values = Fields.field_values(settling_velocities[bin])
-        k1_values = level1(ᶜk)
-        ρχ1_values = level1(ᶜρχ)
-        ρχ1ₜ_values = level1(ᶜρχₜ)
-        @. ρχ1ₜ_values -=
+    # Level 1 is also drained by the dry-deposition AND gravitational-
+    # settling surface fluxes this stage, so scavenge only the fraction
+    # that survives both. Both are downward level-1 fall speeds, so their
+    # Courant numbers add. Every level view is hoisted out of the
+    # broadcasts below. (Settling reuses the grid-mean fall speed for the
+    # updraft correction too, matching how V_d is reused there.)
+    V_d_values = Fields.field_values(V_d)
+    Vs_values = Fields.field_values(V_s)
+    k1_values = level1(ᶜk)
+    ρχ1_values = level1(ᶜρχ)
+    ρχ1ₜ_values = level1(ᶜρχₜ)
+    @. ρχ1ₜ_values -=
+        min((V_d_values + Vs_values) * dt / Δz1_values, one(FT)) *
+        ρχ1_values *
+        expm1(-(k1_values * dt)) / dt
+    for j in 1:n
+        χʲ1_values = level1(MatrixFields.get_field(Y.c.sgsʲs.:($j), χ_name))
+        χʲ1ₜ_values = level1(MatrixFields.get_field(Yₜ.c.sgsʲs.:($j), χ_name))
+        kʲ1_values = level1(ᶜkʲs[j])
+        @. χʲ1ₜ_values -=
             min((V_d_values + Vs_values) * dt / Δz1_values, one(FT)) *
-            ρχ1_values *
-            expm1(-(k1_values * dt)) / dt
-        for j in 1:n
-            χʲ1_values = level1(MatrixFields.get_field(Y.c.sgsʲs.:($j), χ_name))
-            χʲ1ₜ_values =
-                level1(MatrixFields.get_field(Yₜ.c.sgsʲs.:($j), χ_name))
-            kʲ1_values = level1(ratesʲs[bin][j])
-            @. χʲ1ₜ_values -=
-                min((V_d_values + Vs_values) * dt / Δz1_values, one(FT)) *
-                χʲ1_values *
-                expm1(-(kʲ1_values * dt)) / dt
-        end
+            χʲ1_values *
+            expm1(-(kʲ1_values * dt)) / dt
     end
     return nothing
 end

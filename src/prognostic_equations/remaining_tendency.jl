@@ -263,6 +263,8 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
     aerosol_emission_tendency!(Yₜ, Y, p, t)
     aerosol_settling_tendency!(Yₜ, Y, p, t)
     aerosol_deposition_tendency!(Yₜ, Y, p, t)
+    # After settling: the history sources read the fall speeds it caches.
+    aerosol_history_source_tendency!(Yₜ, Y, p, t)
 
     # NOTE: This will zero out all momentum tendencies in the EDMFX advection test,
     # where velocities do not evolve

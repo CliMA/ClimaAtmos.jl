@@ -10,7 +10,6 @@ import ..PrescribedCloudInRadiation
 import ..lazy
 import ..specific
 import ..NonEquilibriumMicrophysics
-import ..species_models
 import ..AEROSOL_SPECIES_BIN_NAMES
 import ..ᶜaerosol_bin_mmr, ..ᶜaerosol_species_mmr
 
@@ -259,10 +258,10 @@ function update_rrtmgp_aerosol_columns!((; u, p, t)::I) where {I}
     radiation_mode.aerosol_radiation || return nothing
     (; rrtmgp_solver) = p.radiation
 
-    unrolled_foreach(
-        values(species_models(p.atmos.aerosols)),
-        values(MERRA2_TO_RRTMGP_NAME),
-    ) do species_model, merra2_to_rrtmgp_name
+    # Iterate the radiatively active species of the name table rather than
+    # `species_models`: the latter also holds slots with no RRTMGP bins (the
+    # sea-salt history tracers), and the prognostic model is not read here.
+    unrolled_foreach(values(MERRA2_TO_RRTMGP_NAME)) do merra2_to_rrtmgp_name
         update_species_aerosol_columns!(
             rrtmgp_solver,
             u,

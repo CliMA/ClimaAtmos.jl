@@ -1405,5 +1405,6 @@ function AtmosAerosols(config::AtmosConfig, params)
     return AtmosAerosols(
         Tuple(pa["prognostic_aerosols"]);
         params.prognostic_aerosol_params,
+        column_emission = pa["prognostic_aerosol_column_emission"],
     )
 end

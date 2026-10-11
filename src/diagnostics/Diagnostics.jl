@@ -75,6 +75,7 @@ import ..AbstractPrognosticAerosol
 import ..species_bin_names
 import ..has_prescribed_aerosol_bin
 import ..ᶜaerosol_bin_mmr, ..ᶜaerosol_species_mmr
+import ..sslt_column_u10
 
 # surface temperature
 import ..SurfaceConditions

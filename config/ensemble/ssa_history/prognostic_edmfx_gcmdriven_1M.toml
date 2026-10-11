@@ -1,0 +1,82 @@
+# EDMF calibration for the sea-salt history ensemble: the GCM-driven column
+# calibration (toml/prognostic_edmfx_gcmdriven.toml, verbatim: sponge height
+# below the 40 km lid, entrainment, relaxation timescales) plus the keys that
+# only toml/prognostic_edmfx_1M.toml sets (1M microphysics timescales, sponge
+# tracer damping, limiter powers). The two repo files cannot both be listed
+# under `toml:` because `CP.merge_toml_files` rejects duplicate tables, and
+# listing only the 1M file put `zd_rayleigh` at `z_max`, i.e. no sponge.
+# Keep this file in sync with both sources when they change.
+
+[EDMF_max_surface_area]
+value = 0.1
+
+[EDMF_min_area]
+value = 1.0e-5
+
+[EDMF_max_area]
+value = 0.7
+
+[entr_coeff]
+value = 0.3
+
+[turb_entr_param_vec]
+value = [0.001, 1e5]
+
+[min_area_limiter_scale]
+value = 0.001
+
+[detr_coeff]
+value = 0
+
+[detr_buoy_coeff]
+value = 1
+
+[detr_vertdiv_coeff]
+value = 0
+
+[detr_massflux_vertdiv_coeff]
+value = 0.3
+
+[max_area_limiter_scale]
+value = 0
+
+[pressure_normalmode_drag_coeff]
+value = 8.0
+
+[gcmdriven_momentum_relaxation_timescale]
+value = 21600.0
+
+[gcmdriven_scalar_relaxation_timescale]
+value = 86400.0
+
+[gcmdriven_relaxation_minimum_height]
+value = 3000.0
+
+[gcmdriven_relaxation_maximum_height]
+value = 3500.0
+
+[zd_rayleigh]
+value = 20000.0
+
+# ---- keys only toml/prognostic_edmfx_1M.toml sets ----
+
+[zd_viscous]
+value = 40000.0
+
+[alpha_rayleigh_tracer]
+value = 0.001
+
+[entr_inv_tau]
+value = 0
+
+[min_area_limiter_power]
+value = 1
+
+[max_area_limiter_power]
+value = 1
+
+[condensation_evaporation_timescale]
+value = 100
+
+[sublimation_deposition_timescale]
+value = 100

@@ -856,6 +856,11 @@ NVTX.@annotate function set_explicit_precomputed_quantities!(Y, p, t)
     # Deposition velocities need the fresh surface conditions; the flux also
     # reads the lowest-level tracer state.
     set_sslt_dry_deposition_fluxes!(Y, p, p.atmos.seasalt)
+    # The history tracers reuse the bins' capped deposition velocities.
+    set_sslth_dry_deposition_fluxes!(Y, p, p.atmos.seasalt_history)
+    # Standalone runs have no coupler to set the emission fluxes; derive them
+    # here from the same fresh surface conditions the deposition velocity uses.
+    set_sslt_column_surface_fluxes!(Y, p)
 
     if turbconv_model isa PrognosticEDMFX
         set_prognostic_edmf_precomputed_quantities_explicit_closures!(Y, p, t)
@@ -915,6 +920,8 @@ NVTX.@annotate function set_explicit_precomputed_quantities!(Y, p, t)
 
     # Wet-removal rates need the fresh cloud fraction and subdomain states.
     set_sslt_wet_deposition_rates!(Y, p)
+    # Then the history tracers' mass-weighted rates from the bins' cached ones.
+    set_sslth_wet_deposition_rates!(Y, p, p.atmos.seasalt_history)
 
     set_smagorinsky_lilly_precomputed_quantities!(Y, p, p.atmos.smagorinsky_lilly)
 

@@ -2171,6 +2171,37 @@ struct PrognosticSeaSalt{names} <: AbstractPrognosticAerosol end
 PrognosticSeaSalt(n_bins::Integer) =
     PrognosticSeaSalt{ntuple(i -> Symbol(:SSLT, lpad(i, 2, '0')), n_bins)}()
 
+"""
+    SeaSaltHistory{names}
+
+Passive per-cell "history" tracers of the prognostic sea-salt population,
+carried alongside the [`PrognosticSeaSalt`](@ref) mass bins so the size
+distribution can later be regressed offline on what the population has
+experienced. Each tracer `H` is transported, diffused, and removed exactly
+like the total sea-salt mass `M = Σ_bins ρχ_i` (mass-weighted settling,
+dry-deposition, and wet-removal sinks; see `history_tracers.jl`) and has its
+own mass-proportional source, so `H/M` is the mass-weighted mean of the
+recorded quantity over the particles in the cell:
+
+  - `SSHAGE`  mass-age, source `ρM` (`H/M` in s);
+  - `SSHUEM`  emission wind, surface source `F_emission · U₁₀` (`H/M` in m s⁻¹);
+  - `SSHSET`  settling exposure, source `ρM · g_s` (`settling_exposure_rate`);
+  - `SSHSET2` settling exposure squared, source `2 ρα_s · g_s` with
+    `α_s = SSHSET`, so `SSHSET2/M − (SSHSET/M)²` is the within-cell variance;
+  - `SSHWET`  below-cloud washout exposure, source `ρM · Λ̃` at the cached
+    unit-efficiency washout rate of each subdomain;
+  - `SSHINC`  in-cloud scavenging exposure, source `ρM · c` at the cached
+    in-cloud rate of each subdomain.
+
+They never feed back on the bins. Selected by `"SSLTH"` in
+`prognostic_aerosols`, which requires `"SSLT"` as well. The name tuple is the
+type parameter for the same reason as in `PrognosticSeaSalt`: every
+per-tracer loop is unrolled on it.
+"""
+struct SeaSaltHistory{names} <: AbstractPrognosticAerosol end
+SeaSaltHistory() =
+    SeaSaltHistory{(:SSHAGE, :SSHUEM, :SSHSET, :SSHSET2, :SSHWET, :SSHINC)}()
+
 Base.broadcastable(x::AbstractPrognosticAerosol) = tuple(x)
 
 """
@@ -2182,6 +2213,7 @@ the prognostic state names.
 """
 bin_names(m::AbstractPrognosticAerosol) = bin_names(typeof(m))
 bin_names(::Type{PrognosticSeaSalt{names}}) where {names} = names
+bin_names(::Type{SeaSaltHistory{names}}) where {names} = names
 
 """
     AtmosAerosols
@@ -2192,23 +2224,32 @@ the MERRA-2 climatology) or an [`AbstractPrognosticAerosol`](@ref). Build
 with `AtmosAerosols(config::AtmosConfig, params)` (see `model_getters.jl`)
 from the `prognostic_aerosols` config.
 """
-@kwdef struct AtmosAerosols{SS, DU, SU, BC, OC}
+@kwdef struct AtmosAerosols{SS, DU, SU, BC, OC, SH}
     seasalt::SS = nothing
     dust::DU = nothing
     sulfate::SU = nothing
     black_carbon::BC = nothing
     organic_carbon::OC = nothing
+    # Passive history tracers of the sea-salt population (`"SSLTH"`), a
+    # species slot like the others so every per-species dispatch picks it up.
+    seasalt_history::SH = nothing
+    # Standalone emission driver (`prognostic_aerosol_column_emission`): set the
+    # sea-salt surface fluxes from the model's own surface conditions instead of
+    # waiting for ClimaCoupler to call `set_sslt_surface_fluxes!`.
+    column_emission::Bool = false
 end
 
 """
-    AtmosAerosols(prognostic_names; prognostic_aerosol_params)
+    AtmosAerosols(prognostic_names; prognostic_aerosol_params, column_emission)
 
 Resolve a tuple of species keys into prognostic aerosol models via
-[`AEROSOL_SPECIES`](@ref).
+[`AEROSOL_SPECIES`](@ref). `column_emission` enables the standalone
+emission driver (see [`set_sslt_column_surface_fluxes!`](@ref)).
 """
 function AtmosAerosols(
     prognostic_names::Tuple;
     prognostic_aerosol_params = nothing,
+    column_emission = false,
 )
     known_names = map(first, values(AEROSOL_SPECIES))
     unknown = setdiff(prognostic_names, known_names)
@@ -2222,6 +2263,15 @@ function AtmosAerosols(
             "`prognostic_aerosols` requires the `prognostic_aerosol_params` \
              bundle, which is unavailable",
         )
+    # The history tracers record what the sea-salt mass bins experience and
+    # take their sinks from the bins, so they are undefined without them.
+    "SSLTH" in prognostic_names &&
+        !("SSLT" in prognostic_names) &&
+        error(
+            "`prognostic_aerosols` lists the sea-salt history tracers \
+             (\"SSLTH\") without the sea-salt mass bins (\"SSLT\") they are \
+             defined on; add \"SSLT\"",
+        )
     models = map(AEROSOL_SPECIES) do (species, prognostic)
         if species in prognostic_names
             isnothing(prognostic) && error(
@@ -2233,7 +2283,7 @@ function AtmosAerosols(
             nothing
         end
     end
-    return AtmosAerosols(; models...)
+    return AtmosAerosols(; models..., column_emission)
 end
 
 """
@@ -2266,6 +2316,7 @@ const AEROSOL_SPECIES = (;
     sulfate = ("SO4", nothing),
     black_carbon = ("CB", nothing),
     organic_carbon = ("OC", nothing),
+    seasalt_history = ("SSLTH", _ -> SeaSaltHistory()),
 )
 
 """
@@ -2300,8 +2351,14 @@ const AEROSOL_SPECIES_BIN_NAMES = (;
 The species models as a `NamedTuple`, so consumers can fold or dispatch
 over the whole group without naming species.
 """
-species_models(a::AtmosAerosols) =
-    (; a.seasalt, a.dust, a.sulfate, a.black_carbon, a.organic_carbon)
+species_models(a::AtmosAerosols) = (;
+    a.seasalt,
+    a.dust,
+    a.sulfate,
+    a.black_carbon,
+    a.organic_carbon,
+    a.seasalt_history,
+)
 
 """
     AtmosWater{MM, CM, MTTS, TNM, SQ, TVM}(; microphysics_model = DryModel(), kwargs...)

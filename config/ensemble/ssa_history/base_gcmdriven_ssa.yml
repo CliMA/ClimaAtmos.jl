@@ -1,0 +1,92 @@
+# Base configuration of the sea-salt "instrumented truth run" ensemble.
+#
+# Derived from config/model_configs/prognostic_edmfx_gcmdriven_column.yml:
+# a steady cfsite-forced EDMF column, switched to 1M microphysics (the 0M
+# washout arrays are positional on the 5 MERRA-2 bins), 12 sea-salt bins from
+# the ClimaParams override, the passive history tracers (SSLTH), and the
+# standalone emission driver so the column emits without ClimaCoupler.
+#
+# Per-site files are generated from this one by
+# scripts/ssa_ensemble/make_site_configs.sh, which only sets `cfsite_number`
+# and `job_id`. Do not hand-edit the generated files.
+
+#== Case ==#
+initial_condition: "GCM"
+external_forcing_file: artifact"cfsite_gcm_forcing"/HadGEM2-A_amip.2004-2008.07.nc
+cfsite_number: "site23"   # overwritten per site by make_site_configs.sh
+job_id: "ssa_history_site23"   # overwritten per site by make_site_configs.sh
+config: "column"
+z_max: 40e3
+z_elem: 60
+z_stretch: true
+dz_bottom: 30
+perturb_initstate: false
+FLOAT_TYPE: "Float64"   # erfcx tails of thin bins
+
+#== EDMF ==#
+turbconv: "prognostic_edmfx"
+rayleigh_sponge: true
+edmfx_entr_model: "Generalized"
+edmfx_detr_model: "Generalized"
+edmfx_sgs_mass_flux: true
+edmfx_sgs_diffusive_flux: true
+edmfx_nh_pressure: true
+edmfx_vertical_diffusion: true
+edmfx_filter: true
+prognostic_tke: true
+
+#== Microphysics, clouds, radiation ==#
+microphysics_model: "1M"
+cloud_model: "quadrature"
+rad: allskywithclear
+dt_rad: "30mins"
+
+#== Prognostic sea salt + history tracers ==#
+prognostic_aerosols: ["SSLT", "SSLTH"]
+prognostic_aerosol_column_emission: true
+toml:
+  - config/ensemble/ssa_history/prognostic_edmfx_gcmdriven_1M.toml   # gcmdriven calibration + 1M-only keys (see file header)
+  - /home/zglaser/autodebug/bomex/ssa_12bin.toml   # 12-bin ClimaParams override (server path)
+
+#== Stepper (PLACEHOLDER: pick from the probe results) ==#
+# Variant A (active): implicit IMEX, the production column stepper.
+ode_algo: "ARS222"
+dt: "10secs"
+implicit_diffusion: true
+approximate_linear_solve_iters: 2
+# Variant B: fully explicit SSP (strong-stability-preserving for the sea-salt
+# sinks, no per-tracer Jacobian blocks). Comment out Variant A and enable:
+# ode_algo: "SSP33ShuOsher"
+# dt: "0.1secs"
+# implicit_diffusion: false
+
+#== Run length and output ==#
+t_end: "5days"
+dt_save_state_to_disk: "1days"
+netcdf_output_at_levels: true
+netcdf_interpolation_num_points: [2, 2, 60]
+output_default_diagnostics: false
+
+diagnostics:
+  #== Sea-salt bins, species sums ==#
+  - short_name: [mmrsslt01, mmrsslt02, mmrsslt03, mmrsslt04, mmrsslt05, mmrsslt06,
+                 mmrsslt07, mmrsslt08, mmrsslt09, mmrsslt10, mmrsslt11, mmrsslt12,
+                 mmrss, loadss]
+    period: 1hours
+    reduction_time: average
+  #== History tracers (registered by the SSLTH species; names per the plan) ==#
+  - short_name: [mmrsshage, mmrsshuem, mmrsshset, mmrsshset2, mmrsshwet, mmrsshinc]
+    period: 1hours
+    reduction_time: average
+  #== Cached exposure rates (grid-mean washout / in-cloud; names per the plan) ==#
+  - short_name: [washrss, incrss]
+    period: 1hours
+    reduction_time: average
+  #== Thermodynamics, clouds, winds ==#
+  - short_name: [ta, hus, hur, cl, clw, cli, ua, va, wa]
+    period: 1hours
+    reduction_time: average
+  #== Precipitation, surface ==#
+  - short_name: [pr, prra, prsn, husra, ts, tas, uas, vas, u10ss, hfls, hfss]
+    period: 1hours
+    reduction_time: average
