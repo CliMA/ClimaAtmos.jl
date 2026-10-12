@@ -224,60 +224,57 @@ function materialized_mixing_length!(Y, p)
 end
 
 """
-    isentropic_cell_cap(inv_θ, ∂θ∂z, θz_min, Δx, Δz)
+    along_surface_q_variance(inv_q, inv_θq, inv_θ, ∂q∂z, ∂θ∂z, ℓ_h, ℓ_v)
 
-Geometric factor `ℓ²/Δx²` in `(0, 1]` that bounds the displacement along the
-`θ_li` surface by the grid cell. A surface of slope
-`s = |∇_h θ_li| / max(∂θ_li/∂z, θz_min)` leaves a layer of depth `Δz` after a
-horizontal distance `Δz / s`, so the along-surface segment inside the cell is
-`ℓ = min(Δx, Δz / s)`, smoothed here as `ℓ² = Δx² / (1 + (s Δx / Δz)²)`. For
-flat surfaces (strong stratification, small horizontal `θ_li` contrast) the
-factor is 1 and the term keeps its `(c_Δx Δx)²` scale; for steep surfaces
-(weak stratification) it falls like `(Δz θ_z / (|∇_h θ_li| Δx))²`, which
-turns the projected part `r² |∇_h θ_li|² Δx²` of the invariant into
-`(∂q/∂z Δz)²`.
+Variance of `q_tot` from subgrid parcel displacements along the local `θ_li`
+surface, without the prefactor `c_g`.
 
-The same factor is the across-surface share of the cell's vertical excursion
-left for the `q′q′` part of the vertical uniform-box block: the along-surface
-segment `ℓ` already samples a vertical displacement `s ℓ`, and
-`Δz² − (s ℓ)² = Δz² / (1 + (s Δx / Δz)²)`, so the vertical `q′q′` term is scaled
-by it (`set_covariance_cache!`). Flat surfaces keep both blocks in full; steep
-surfaces keep only the along-surface `q` sample, so the two never count the
-same `q` excursion twice. The vertical `θ′q′` term carries the same factor
-(the block's Cauchy–Schwarz bound holds since `f² ≤ f`); the vertical `θ′θ′`
-term is left unchanged (the horizontal block carries no `θ′`). The diagnosed
-correlation is clamped to `[-1, 1]` downstream.
+A parcel moves by a Gaussian displacement `δ` with covariance
+`D = diag(ℓ_h², ℓ_h², ℓ_v²)` and stays on the surface, `δ · ∇θ_li = 0`. With
+`g = ∇q_tot` and `n = ∇θ_li` (3D gradients), the variance of `δ · g` under
+this condition is
 
-# TODO: θ and q variances are not treated consistently.
+    gᵀ D g − (gᵀ D n)² / (nᵀ D n).
+
+The inputs are the horizontal invariants `inv_q = |∇_h q|²`,
+`inv_θq = ∇_h q · ∇_h θ`, `inv_θ = |∇_h θ|²` and the vertical gradients. The
+result lies in `[0, gᵀ D g]` (Cauchy–Schwarz). For a flat surface it is
+`ℓ_h² |∇_h q|²`. For a vertical surface it is the horizontal gradient along
+the surface plus `ℓ_v² (∂q/∂z)²`. Where `∇θ_li = 0` there is no surface, and
+the result is the unconstrained `gᵀ D g`.
 """
-@inline function isentropic_cell_cap(inv_θ, ∂θ∂z, θz_min, Δx, Δz)
-    s = sqrt(max(inv_θ, zero(inv_θ))) / max(∂θ∂z, θz_min)
-    x = s * Δx / Δz
-    return one(x) / (one(x) + x^2)
+@inline function along_surface_q_variance(
+    inv_q,
+    inv_θq,
+    inv_θ,
+    ∂q∂z,
+    ∂θ∂z,
+    ℓ_h,
+    ℓ_v,
+)
+    G = ℓ_h^2 * inv_q + ℓ_v^2 * ∂q∂z^2
+    M = ℓ_h^2 * inv_θq + ℓ_v^2 * ∂q∂z * ∂θ∂z
+    N = ℓ_h^2 * inv_θ + ℓ_v^2 * ∂θ∂z^2
+    return ifelse(N > zero(N), max(G - M^2 / N, zero(G)), G)
 end
 
 """
-    isentropic_slope_ratio(∂q∂z, ∂θ∂z, θz_min)
+    across_surface_q_gradient(inv_θq, inv_θ, ∂q∂z, ∂θ∂z)
 
-Ratio `r = (∂q_tot/∂z) / max(∂θ_li/∂z, θz_min)` that converts the horizontal
-gradient of `θ_li` into the vertical displacement a horizontal excursion along a
-sloping `θ_li` surface implies, times the vertical `q_tot` gradient (the isentropic
-geometric variance term). The floor `θz_min` (`sgs_variance_isentropic_min_dtheta_dz`)
-on the stratification keeps the ratio finite and bounds it by `|∂q/∂z| / θz_min`: a
-neutral or overturned layer (`∂θ_li/∂z ≤ θz_min`) is treated as one of minimal stable
-stratification.
+Change of `q_tot` per unit vertical displacement across the local `θ_li`
+surface, `∂_z θ (∇q · ∇θ) / |∇θ|²` with 3D gradients. A vertical step has the
+component `∂_z θ / |∇θ|` along the surface normal, and `q_tot` changes along
+the normal at the rate `∇q · ∇θ / |∇θ|`. The result equals `∂q/∂z` for a flat
+surface and is zero for a vertical surface or where `∇θ_li = 0`. The vertical
+uniform-box block uses it in place of `∂q/∂z`, so that block samples the
+displacement across the surface and `along_surface_q_variance` the
+displacement along it.
 """
-@inline isentropic_slope_ratio(∂q∂z, ∂θ∂z, θz_min) = ∂q∂z / max(∂θ∂z, θz_min)
-
-"""
-    isentropic_gradient_invariant(inv_q, inv_θq, inv_θ, r)
-
-`|∇_h q_tot − r ∇_h θ_li|² = |∇_h q|² − 2 r (∇_h θ_li · ∇_h q) + r² |∇_h θ_li|²`, the
-squared horizontal gradient of `q_tot` along the `θ_li` surface; floored
-at zero against round-off.
-"""
-@inline isentropic_gradient_invariant(inv_q, inv_θq, inv_θ, r) =
-    max(inv_q - 2 * r * inv_θq + r^2 * inv_θ, zero(inv_q))
+@inline function across_surface_q_gradient(inv_θq, inv_θ, ∂q∂z, ∂θ∂z)
+    gn = inv_θq + ∂q∂z * ∂θ∂z
+    nn = inv_θ + ∂θ∂z^2
+    return ifelse(nn > zero(nn), ∂θ∂z * gn / nn, zero(gn))
+end
 
 """
     hgrad_invariant!(ᶜinv, ᶜψ, p)
@@ -321,7 +318,7 @@ Diagnosed SGS T–q correlation `clamp(T′q′ / √(T′T′ q′q′), -1, 1)
 
 In exact arithmetic each variance block satisfies its own Cauchy-Schwarz
 inequality and the Cauchy-Schwarz bound on the sum of the two (turbulent,
-vertical uniform-box) covariances also holds — the isentropic horizontal block
+across-surface) covariances also holds — the along-surface block
 contributes variance to q′q′ only and no covariance — so
 `|ρ| ≤ 1` by construction. The explicit clamp is a cheap safeguard against
 (a) Float32 roundoff at the Cauchy-Schwarz boundary (which can produce
@@ -379,31 +376,28 @@ Pipeline:
     `ρ_turb` scalar as `ρ_turb · σ_T,turb · σ_q,turb` (not the gradient-direction
     product), so the turbulent block carries a physical correlation independent of
     the sign of `∂_z θ · ∂_z q`.
- 3. Add the horizontal resolved-gradient (geometric) term, the isentropic form
-    `|∇_h q_tot − r ∇_h θ_li|²` with the along-surface displacement bounded by the
-    cell (`isentropic_cell_cap`), to q′q′ only — no horizontal θ′θ′ and no
-    horizontal cross term (skipped when `sgs_variance_horizontal_scale_factor` is 0).
- 4. Add the resolved vertical-gradient (uniform-box) term
-    `c_g (c_Δz Δz)² (∂_z ψ)²` to both variances, and the exact cross
-    `c_g (c_Δz Δz)² ∂_z θ · ∂_z q` to θ′q′; the q′q′ and θ′q′ terms are
-    scaled by the across-surface share `1/(1 + (s Δx/Δz)²)` of the excursion
-    not sampled by step 3, θ′θ′ is not (skipped when
-    `sgs_variance_vertical_scale_factor` is 0; default `c_Δz = 1` with
-    `c_g = 1/12` reproduces the uniform-box exact result).
- 5. Transform θ→T using `compute_∂T_∂θ!`
- 6. Add the horizontal resolved-gradient term to q′q′ (skipped together with
-    step 3)
- 7. Apply the closure-validity bound `σ_q ≤ sgs_variance_max_rel_std * q_tot`
- 8. Set the sampled T–q correlation (`set_tq_correlation!`; for the diagnosed
+ 3. Add the resolved-gradient (geometric) block, the variance from a subgrid
+    parcel displacement with covariance `c_g diag(ℓ_h², ℓ_h², ℓ_v²)`,
+    `ℓ_h = c_Δx Δx_h`, `ℓ_v = H`. The displacement along the `θ_li`
+    surface adds `along_surface_q_variance` to q′q′ only, since θ_li is
+    constant along the surface; its vertical scale is the depth `H` of the
+    unresolved slantwise motion (`sgs_variance_isentropic_depth`).
+    The displacement across the surface adds
+    the vertical uniform-box terms `c_g ℓ_v² (∂_z θ)²` to θ′θ′,
+    `c_g ℓ_v² q_n²` to q′q′ and `c_g ℓ_v² ∂_z θ q_n` to θ′q′, with `q_n` the
+    across-surface q gradient (`across_surface_q_gradient`). The block is
+    skipped when `c_Δx` and `c_Δz` are both 0, and the horizontal invariants
+    are computed only when `c_Δx` is nonzero. The defaults `c_g = 1/12`,
+    `c_Δz = 1` give the uniform-box result for a flat surface.
+ 4. Transform θ→T using `compute_∂T_∂θ!`
+ 5. Apply the closure-validity bound `σ_q ≤ sgs_variance_max_rel_std * q_tot`
+ 6. Set the sampled T–q correlation (`set_tq_correlation!`; for the diagnosed
     model the covariance is first rescaled with the bound so the correlation is
     invariant under it)
 
-Neither resolved-gradient block (horizontal or vertical) is Richardson-weighted
-— both represent in-cell variability of the resolved mean field and are
-independent of the turbulent closure's state. The turbulent block carries the
-prescribed `correlation_Tq` for its cross-covariance; the resolved horizontal
-and vertical blocks carry the geometrically-correct gradient-direction
-correlation.
+The turbulent block uses the prescribed `correlation_Tq` for its cross-covariance;
+the across-surface part of the resolved-gradient block uses the correlation set
+by the gradient directions.
 """
 function set_covariance_cache!(Y, p, thermo_params)
     # Covariance fields are only allocated when the configuration needs them.
@@ -420,21 +414,19 @@ function set_covariance_cache!(Y, p, thermo_params)
         ᶜq_tot_nonneg,
     ) = p.precomputed
 
-    # Resolved-gradient (geometric) variance coefficients. `c_g` is the shared
-    # uniform-box prefactor; `c_Δx` / `c_Δz` scale the grid lengths and act as
-    # on/off switches (0 disables the corresponding term).
+    # Resolved-gradient (geometric) displacement scales. `c_Δx` and `c_Δz`
+    # scale the grid lengths; the block is skipped when both are 0.
     c_g = CAP.sgs_variance_geometric_coeff(p.params)
     c_Δx = CAP.sgs_variance_horizontal_scale_factor(p.params)
     c_Δz = CAP.sgs_variance_vertical_scale_factor(p.params)
-    use_geometric = !iszero(c_Δx)
-    use_vertical_grad = !iszero(c_Δz)
-    geo_h = if use_geometric
-        Δx_h = FT(
+    use_horizontal = !iszero(c_Δx)
+    use_geometric = use_horizontal || !iszero(c_Δz)
+    ℓ_h = if use_horizontal
+        c_Δx * FT(
             Spaces.node_horizontal_length_scale(
                 Spaces.horizontal_space(axes(Y.c)),
             ),
         )
-        c_g * (c_Δx * Δx_h)^2
     else
         zero(FT)
     end
@@ -469,110 +461,50 @@ function set_covariance_cache!(Y, p, thermo_params)
     end
 
     # ----------------------------------------------------------------------
-    # 2. Horizontal resolved-gradient (geometric) block.
-    #    `geo_h |∇_h ψ|²`: leading-order scale-similarity estimate from the
-    #    resolved horizontal field. q′q′ is in native q basis so adding
-    #    here (before the θ→T transform) is equivalent to adding after.
-    #    The block is the isentropic form: no horizontal θ′θ′ term, because
-    #    θ_li is constant along the surface the excursion follows, so the whole
-    #    geometric variance is carried by q′q′ as the gradient of q_tot ALONG
-    #    the θ_li surface,
-    #    |∇_θ q|² = |∇_h q − r ∇_h θ_li|², r = (∂q/∂z)/max(∂θ_li/∂z, θz_min)
-    #    (`isentropic_slope_ratio`): a horizontal excursion δ on a sloping
-    #    isentrope carries the parcel down/up by r-weighted amounts, so aligned
-    #    (warm = moist) gradients amplify and anti-aligned ones cancel the
-    #    saturation variance. The displacement along the surface is bounded by
-    #    the cell (`isentropic_cell_cap`, ℓ = min(Δx, Δz / slope)).
-    #    With the diagnosed T–q correlation this block adds nothing to T′q′
-    #    (no θ′ along the surface), so the correlation is carried by the
-    #    turbulent and vertical blocks. Scratch: `ᶜtemp_scalar_2` is free until
-    #    the θ→T transform below, `_3` (θ_li), `_5` (|∇q|²), `_6` (cross term).
+    # 2. Resolved-gradient (geometric) block: a subgrid parcel displacement
+    #    with covariance c_g diag(ℓ_h², ℓ_h², ℓ_v²). Parcels keep θ_li and
+    #    q_tot, so the displacement along the θ_li surface changes q_tot
+    #    only (`along_surface_q_variance`). The displacement across the
+    #    surface is the vertical uniform-box block, with the q gradient
+    #    taken across the surface (`across_surface_q_gradient`). The two
+    #    parts are orthogonal. q′q′ is in the q basis, so adding it before
+    #    the θ→T transform is the same as adding it after. Scratch:
+    #    `ᶜtemp_scalar_2`, `_3`, `_5`, `_6` are free until the θ→T transform.
     # ----------------------------------------------------------------------
-    ᶜΔz = Fields.Δz_field(axes(Y.c))
-    ᶜpart = p.scratch.ᶜtemp_scalar_6  # across-surface share of the vertical excursion
     if use_geometric
-        (; ᶜT, ᶜq_liq, ᶜq_ice) = p.precomputed
-        ᶜθ_li = p.scratch.ᶜtemp_scalar_3
-        @. ᶜθ_li = TD.liquid_ice_pottemp(
-            thermo_params, ᶜT, Y.c.ρ, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice,
-        )
-        ᶜinv_q = p.scratch.ᶜtemp_scalar_5
-        ᶜinv_θ = p.scratch.ᶜtemp_scalar_2
-        ᶜinv_θq = p.scratch.ᶜtemp_scalar_6
-        hgrad_invariant!(ᶜinv_q, ᶜq_tot_nonneg, p)
-        hgrad_invariant!(ᶜinv_θ, ᶜθ_li, p)
-        hgrad_cross_invariant!(ᶜinv_θq, ᶜθ_li, ᶜq_tot_nonneg, p)
-        θz_min = CAP.sgs_variance_isentropic_min_dtheta_dz(p.params)
         ᶜlg = Fields.local_geometry_field(Y.c)
-        @. ᶜinv_q = isentropic_gradient_invariant(
-            ᶜinv_q,
-            ᶜinv_θq,
-            ᶜinv_θ,
-            isentropic_slope_ratio(
-                projected_vector_data(C3, ᶜgradᵥ_q_tot, ᶜlg),
-                projected_vector_data(C3, ᶜgradᵥ_θ_liq_ice, ᶜlg),
-                θz_min,
-            ),
-        )
-        # Cell-geometry bound on the along-surface displacement
-        # (`ℓ ≤ Δx`, `ℓ ≤ Δz / slope`), kept in `ᶜpart` (over `ᶜinv_θq`, which
-        # is no longer needed) because the same factor is the across-surface
-        # share of the vertical excursion that the vertical block below may
-        # still sample.
-        @. ᶜpart = isentropic_cell_cap(
-            ᶜinv_θ,
-            projected_vector_data(C3, ᶜgradᵥ_θ_liq_ice, ᶜlg),
-            θz_min,
-            Δx_h,
-            ᶜΔz,
-        )
-        @. ᶜinv_q *= ᶜpart
-        @. ᶜq′q′ += geo_h * ᶜinv_q
-    else
-        @. ᶜpart = one(FT)
-    end
-
-    # ----------------------------------------------------------------------
-    # 3. Resolved vertical-gradient (uniform-box) block.
-    #    `c_g (c_Δz Δz)² (∂_z ψ)²` — exact for an in-cell linear profile
-    #    with the defaults `c_g = 1/12`, `c_Δz = 1`. Independent of l_mix,
-    #    so σ² stays non-zero in laminar cells / single columns. The cross
-    #    `c_g (c_Δz Δz)² ∂_z θ · ∂_z q` carries the geometrically-correct
-    #    ρ = sign(∂_z θ · ∂_z q) of the resolved vertical direction.
-    #    `c_Δz = 0` disables. The q′q′ term is scaled by
-    #    `ᶜpart`, the share of the vertical excursion not already sampled
-    #    along the θ_li surface by the horizontal block (`isentropic_cell_cap`):
-    #    1 for flat surfaces, → 0 for steep ones, where the in-cell q excursion
-    #    is the along-surface one. The cross carries the same factor (the
-    #    block's bound holds, f² ≤ f); θ′θ′ keeps the full vertical sample
-    #    (no θ′ along the surface, and the T-variance the cloud fraction sees
-    #    is left as it was). The diagnosed correlation is clamped to [-1, 1].
-    # ----------------------------------------------------------------------
-    if use_vertical_grad
-        geo_v(Δz) = c_g * (c_Δz * Δz)^2                 # per-cell coefficient
-        @. ᶜq′q′ +=
-            geo_v(ᶜΔz) * ᶜpart *
-            dot(
-                Geometry.WVector(ᶜgradᵥ_q_tot),
-                Geometry.WVector(ᶜgradᵥ_q_tot),
+        ᶜΔz = Fields.Δz_field(axes(Y.c))
+        ᶜℓ_v = @. lazy(c_Δz * ᶜΔz)
+        ᶜ∂q∂z = @. lazy(projected_vector_data(C3, ᶜgradᵥ_q_tot, ᶜlg))
+        ᶜ∂θ∂z = @. lazy(projected_vector_data(C3, ᶜgradᵥ_θ_liq_ice, ᶜlg))
+        if use_horizontal
+            (; ᶜT, ᶜq_liq, ᶜq_ice) = p.precomputed
+            ᶜθ_li = p.scratch.ᶜtemp_scalar_3
+            @. ᶜθ_li = TD.liquid_ice_pottemp(
+                thermo_params, ᶜT, Y.c.ρ, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice,
             )
-        @. ᶜT′T′ +=
-            geo_v(ᶜΔz) * dot(
-                Geometry.WVector(ᶜgradᵥ_θ_liq_ice),
-                Geometry.WVector(ᶜgradᵥ_θ_liq_ice),
+            ᶜinv_q = p.scratch.ᶜtemp_scalar_5
+            ᶜinv_θ = p.scratch.ᶜtemp_scalar_2
+            ᶜinv_θq = p.scratch.ᶜtemp_scalar_6
+            hgrad_invariant!(ᶜinv_q, ᶜq_tot_nonneg, p)
+            hgrad_invariant!(ᶜinv_θ, ᶜθ_li, p)
+            hgrad_cross_invariant!(ᶜinv_θq, ᶜθ_li, ᶜq_tot_nonneg, p)
+            # Vertical scale of the along-surface displacement: the depth `H`
+            # of the unresolved slantwise motion.
+            H = CAP.sgs_variance_isentropic_depth(p.params)
+            add_resolved_gradient_block!(
+                p, ᶜinv_q, ᶜinv_θq, ᶜinv_θ, ᶜ∂q∂z, ᶜ∂θ∂z, ℓ_h, H, ᶜℓ_v, c_g, diag_corr,
             )
-        if diag_corr
-            @. p.precomputed.ᶜT′q′ +=
-                geo_v(ᶜΔz) * ᶜpart *
-                dot(
-                    Geometry.WVector(ᶜgradᵥ_θ_liq_ice),
-                    Geometry.WVector(ᶜgradᵥ_q_tot),
-                )
+        else
+            add_resolved_gradient_block!(
+                p, zero(FT), zero(FT), zero(FT), ᶜ∂q∂z, ᶜ∂θ∂z, ℓ_h, ᶜℓ_v, ᶜℓ_v, c_g,
+                diag_corr,
+            )
         end
     end
 
     # ----------------------------------------------------------------------
-    # 4. θ → T basis via the thermodynamic Jacobian ∂T/∂θ. q is unaffected.
+    # 3. θ → T basis via the thermodynamic Jacobian ∂T/∂θ. q is unaffected.
     # ----------------------------------------------------------------------
     ᶜ∂T_∂θ = p.scratch.ᶜtemp_scalar_2
     compute_∂T_∂θ!(ᶜ∂T_∂θ, Y, p, thermo_params)
@@ -582,7 +514,7 @@ function set_covariance_cache!(Y, p, thermo_params)
     end
 
     # ----------------------------------------------------------------------
-    # 5. Closure-validity bound `σ_q ≤ sgs_variance_max_rel_std · q_tot`
+    # 4. Closure-validity bound `σ_q ≤ sgs_variance_max_rel_std · q_tot`
     #    (default 0.5). A wider Gaussian puts a quadrature node at negative
     #    total water; the clamped quadrature then carries more total water
     #    than the grid mean holds, and condensing it can drive the grid-mean
@@ -600,12 +532,52 @@ function set_covariance_cache!(Y, p, thermo_params)
     @. ᶜq′q′ = min(ᶜq′q′, (r_max * ᶜq_tot_nonneg)^2)
 
     # ----------------------------------------------------------------------
-    # 6. Fill `ᶜcorr_Tq` with the correlation the quadrature samples.
+    # 5. Fill `ᶜcorr_Tq` with the correlation the quadrature samples.
     # ----------------------------------------------------------------------
     set_tq_correlation!(p, p.atmos.tq_correlation_model)
     return nothing
 end
 
+
+"""
+    add_resolved_gradient_block!(p, ᶜinv_q, ᶜinv_θq, ᶜinv_θ, ᶜ∂q∂z, ᶜ∂θ∂z,
+                                 ℓ_h, ᶜℓ_a, ᶜℓ_v, c_g, diag_corr)
+
+Add the resolved-gradient (geometric) block to `ᶜq′q′`, to `ᶜT′T′` (still in
+the θ basis) and, when `diag_corr`, to `ᶜT′q′`: the along-surface q variance
+with the vertical scale `ᶜℓ_a` (the depth `H`, or `ᶜℓ_v` when the horizontal
+displacement is off) plus the across-surface uniform-box terms with the
+vertical scale `ᶜℓ_v` (`set_covariance_cache!`, step 3). The horizontal
+invariants are fields, or the scalar 0 when the horizontal displacement is
+off.
+"""
+function add_resolved_gradient_block!(
+    p,
+    ᶜinv_q,
+    ᶜinv_θq,
+    ᶜinv_θ,
+    ᶜ∂q∂z,
+    ᶜ∂θ∂z,
+    ℓ_h,
+    ᶜℓ_a,
+    ᶜℓ_v,
+    c_g,
+    diag_corr,
+)
+    (; ᶜT′T′, ᶜq′q′) = p.precomputed
+    ᶜq_n = @. lazy(across_surface_q_gradient(ᶜinv_θq, ᶜinv_θ, ᶜ∂q∂z, ᶜ∂θ∂z))
+    @. ᶜq′q′ +=
+        c_g * (
+            along_surface_q_variance(
+                ᶜinv_q, ᶜinv_θq, ᶜinv_θ, ᶜ∂q∂z, ᶜ∂θ∂z, ℓ_h, ᶜℓ_a,
+            ) + ᶜℓ_v^2 * ᶜq_n^2
+        )
+    @. ᶜT′T′ += c_g * ᶜℓ_v^2 * ᶜ∂θ∂z^2
+    if diag_corr
+        @. p.precomputed.ᶜT′q′ += c_g * ᶜℓ_v^2 * ᶜ∂θ∂z * ᶜq_n
+    end
+    return nothing
+end
 
 # ============================================================================
 # SGS Moments — pre-pass quadrature
