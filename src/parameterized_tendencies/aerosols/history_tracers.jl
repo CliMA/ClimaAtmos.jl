@@ -10,27 +10,38 @@
 #   - settling and dry deposition at the bin-mass-weighted velocity
 #     `V_H = Σ_i V_i ρχ_i / Σ_i ρχ_i`, through `settle_tracer!` and
 #     `aerosol_surface_flux_tendency!` (the bins' own operators), and
-#   - wet removal at the rate `k_H = −log(Σ_i ρχ_i e^{−k_i Δt} / Σ_i ρχ_i) / Δt`
-#     through `wet_remove_tracer!`, so the removed FRACTION per step matches
-#     the bins' exactly (weighting the rate instead would over-remove, as
-#     `sslt_mass_weighted_rate!` explains).
+#   - wet removal at, in each subdomain, the survival-weighted rate
+#     `k_H,s = −log(Σ_i m_i,s e^{−k_i,s Δt} / Σ_i m_i,s) / Δt` over that
+#     subdomain's bin masses, so the removed FRACTION per step matches the
+#     bins' exactly (weighting the rate instead would over-remove, as
+#     `sslt_mass_weighted_rate!` explains); the grid-mean rate of each tracer
+#     then composes the subdomain rates with that tracer's OWN subdomain split
+#     (`sslt_mass_weighted_rate!` on `H⁰`, `Hʲ`), so the grid-mean removed
+#     amount equals the sum of the subdomain removed amounts for each history
+#     tracer, to the same approximation as the bins. Both go through
+#     `wet_remove_tracer!`.
 #
-# Both weightings are evaluated per cell and per subdomain (environment and
-# each updraft) from that subdomain's own bin masses; where a subdomain holds
-# no sea salt the first bin's value stands in, as the bins' grid-mean
-# weightings fall back to the environment. Every bin velocity or rate is the
-# Courant/budget-capped one the bins actually use (the settling cap inside the
-# bin loop, `sslt_drydep_velocities` for dry deposition, `sslt_wetdep_rates`
-# for wet removal), so the caps are applied once and reused rather than
-# re-derived on the mass-weighted value. The tracers never feed back.
+# Settling, dry deposition and the subdomain wet rates are evaluated per cell
+# and per subdomain (environment and each updraft) from that subdomain's own
+# bin masses; where a subdomain holds no sea salt the first bin's value
+# stands in, as the bins' grid-mean weightings fall back to the environment.
+# Every bin velocity or rate is the Courant/budget-capped one the bins
+# actually use (the settling cap inside the bin loop, `sslt_drydep_velocities`
+# for dry deposition, `sslt_wetdep_rates⁰`/`sslt_wetdep_ratesʲs` for wet
+# removal), so the caps are applied once and reused rather than re-derived on
+# the mass-weighted value. The tracers never feed back.
 #
 # Known approximation at level 1 under wet removal: the bins' lowest-level wet
 # sink is `Σ_i (1 − c_i) ρχ_i (1 − e^{−k_i Δt})` with the per-bin survivor
 # factor `c_i` of the surface sinks, whereas the history tracer applies the
 # separately mass-weighted `c_H` and `k_H`; the two agree exactly only when
 # `V_d,i`/`V_s,i` and `k_i` do not co-vary across bins. Interior levels match
-# exactly. Regressions that need level-1 parity should weight the bins' joint
-# level-1 removal directly.
+# per subdomain exactly, and the grid mean is the subdomain sum as above.
+# Regressions that need level-1 parity should weight the bins' joint level-1
+# removal directly. The grid-mean composition's no-tracer fallback compares
+# the `H` weights against `ϵ_numerics` in `H`'s own units (as the bins do in
+# mass units); below it the environment rate is used, which only matters
+# where `H` is negligible anyway.
 
 """
     settling_exposure_rate(air, T, ρ_air, grav, Δz, V_H, ap)
@@ -406,18 +417,42 @@ aerosol_dry_deposition_tendency!(Yₜ, Y, p, t, sslth::SeaSaltHistory) =
     set_sslth_wet_deposition_rates!(Y, p, history_model)
     set_sslth_wet_deposition_rates!(Y, p, history_model, microphysics_model)
 
-Bin-mass-weighted wet-removal rate of each subdomain, defined by the
-mass-weighted survival fraction over the bins (the bin-to-grid-mean
-definition of [`sslt_mass_weighted_rate!`](@ref), applied bin-to-history):
+Wet-removal rates of the history tracers, built in two stages so that each
+subdomain's history removal matches the bins' and the grid-mean removal is
+the sum of the subdomain removals.
 
-    e^{-k_H Δt} = Σ_i m_i e^{-k_i Δt} / Σ_i m_i
+ 1. Subdomain rates, shared by all history tracers (the bin rates do not
+    depend on the tracer): in each subdomain `s` the bin-mass-weighted
+    survival fraction (the definition of [`sslt_mass_weighted_rate!`](@ref),
+    applied bin-to-history)
 
-with the cached capped bin rates `p.tracers.sslt_wetdep_rates` (grid mean,
-weights `ρχ_i`) and `sslt_wetdep_ratesʲs[·][j]` (updraft `j`, weights
-`χʲ_i`), into `p.tracers.sslth_wetdep_rate` / `sslth_wetdep_rateʲs`. Must run
-after [`set_sslt_wet_deposition_rates!`](@ref); a no-op (rates stay zero)
-unless the microphysics is one of [`WetDepositionMicrophysics`](@ref), like
-the bins' rate cache.
+        e^{-k_H,s Δt} = Σ_i m_i,s e^{-k_i,s Δt} / Σ_i m_i,s
+
+    with the cached capped bin rates `p.tracers.sslt_wetdep_ratesʲs[·][j]` and
+    weights `χʲ_i` for updraft `j` (into `p.tracers.sslth_wetdep_rateʲs[j]`),
+    and the environment rates `sslt_wetdep_rates⁰` with the residual
+    environment masses `ρa⁰ max(χ⁰_i, 0)` for the environment (scratch only:
+    no tendency applies an environment rate). Where a subdomain holds no sea
+    salt the first bin's rate stands in.
+
+ 2. Grid-mean rate, per history tracer `H`: the subdomain rates composed
+    with `H`'s OWN subdomain split, `sslt_mass_weighted_rate!` with weights
+    `ρa⁰ max(H⁰, 0)` and `ρaʲ max(Hʲ, 0)`, into
+    `p.tracers.sslth_wetdep_rates[ρH_name]` (falling back to the
+    environment rate where `H` is absent, as the bins do).
+
+Composing the grid mean from the bins' grid-mean rates instead would mix the
+subdomain rates in proportion to sea-salt MASS, not to `H`; where `H/M`
+differs between the updrafts and the environment (e.g. `SSHINC`, whose
+source and sink both live in cloudy updrafts) the grid-mean removal would
+then differ from the sum of the subdomain removals and the diagnosed
+environment `ρH − Σⱼ ρaʲHʲ` would absorb the error. Must run after
+[`set_sslt_wet_deposition_rates!`](@ref); a no-op (rates stay zero) unless the
+microphysics is one of [`WetDepositionMicrophysics`](@ref), like the bins'
+rate cache.
+
+Scratch: `ᶜtemp_scalar` and `ᶜtemp_scalar_2` (survival accumulators, reused
+by step 2), `ᶜtemp_scalar_3` (the environment history rate `k_H⁰`).
 """
 set_sslth_wet_deposition_rates!(Y, p, sslth) =
     set_sslth_wet_deposition_rates!(Y, p, sslth, p.atmos.microphysics_model)
@@ -425,28 +460,31 @@ set_sslth_wet_deposition_rates!(Y, p, _, _) = nothing
 function set_sslth_wet_deposition_rates!(
     Y,
     p,
-    ::SeaSaltHistory,
+    sslth::SeaSaltHistory,
     ::WetDepositionMicrophysics,
 )
     FT = eltype(Y)
     sslt = p.atmos.seasalt
-    rates = p.tracers.sslt_wetdep_rates
+    turbconv_model = p.atmos.turbconv_model
+    rates⁰ = p.tracers.sslt_wetdep_rates⁰
     ratesʲs = p.tracers.sslt_wetdep_ratesʲs
-    ᶜk_H = p.tracers.sslth_wetdep_rate
+    ᶜk_Hs = p.tracers.sslth_wetdep_rates
     ᶜk_Hʲs = p.tracers.sslth_wetdep_rateʲs
     dt = float(p.dt)
-    n = n_mass_flux_subdomains(p.atmos.turbconv_model)
+    n = n_mass_flux_subdomains(turbconv_model)
     ρχ_names = aerosol_state_names(sslt)
     first_bin = MatrixFields.extract_first(first(ρχ_names))
     ᶜmass = p.scratch.ᶜtemp_scalar
     ᶜmassE = p.scratch.ᶜtemp_scalar_2
+    ᶜk_H⁰ = p.scratch.ᶜtemp_scalar_3
+    ᶜρa⁰ = @. lazy(max(zero(FT), ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model)))
 
-    # Grid mean, then each updraft; `survival_weighted_rate!` folds the bins.
+    # 1. One subdomain at a time; `survival_weighted_rate!` folds the bins.
     survival_weighted_rate!(ᶜk, bin_rate, bin_mass) = begin
         @. ᶜmass = zero(FT)
         @. ᶜmassE = zero(FT)
         MatrixFields.unrolled_foreach(ρχ_names) do ρχ_name
-            ᶜm = bin_mass(ρχ_name)
+            ᶜm = bin_mass(specific_tracer_name(ρχ_name))
             ᶜk_i = bin_rate(MatrixFields.extract_first(ρχ_name))
             @. ᶜmass += ᶜm
             @. ᶜmassE += ᶜm * expm1(-(ᶜk_i * dt))
@@ -458,21 +496,37 @@ function set_sslth_wet_deposition_rates!(
             ᶜk₁,
         )
     end
-    survival_weighted_rate!(
-        ᶜk_H,
-        bin -> rates[bin],
-        ρχ_name -> sslth_bin_mass(MatrixFields.get_field(Y.c, ρχ_name)),
-    )
+    # Environment weights are the residual bin masses, clamped like the
+    # settling weights (`env_bin_mass` in `aerosol_settling_tendency!`).
+    function env_bin_mass(χ_name)
+        ᶜχ⁰ = ᶜspecific_env_value(χ_name, Y, p)
+        return @. lazy(ᶜρa⁰ * max(zero(FT), ᶜχ⁰))
+    end
+    survival_weighted_rate!(ᶜk_H⁰, bin -> rates⁰[bin], env_bin_mass)
     for j in 1:n
         survival_weighted_rate!(
             ᶜk_Hʲs[j],
             bin -> ratesʲs[bin][j],
-            ρχ_name -> sslth_bin_mass(
-                MatrixFields.get_field(
-                    Y.c.sgsʲs.:($j),
-                    specific_tracer_name(ρχ_name),
-                ),
+            χ_name -> sslth_bin_mass(
+                MatrixFields.get_field(Y.c.sgsʲs.:($j), χ_name),
             ),
+        )
+    end
+
+    # 2. Grid mean per tracer, weighted by the tracer's own subdomain split.
+    # The step-1 accumulators are dead, so their slots are reused.
+    MatrixFields.unrolled_foreach(aerosol_state_names(sslth)) do ρH_name
+        sslt_mass_weighted_rate!(
+            ᶜk_Hs[MatrixFields.extract_first(ρH_name)],
+            ᶜk_H⁰,
+            ᶜk_Hʲs,
+            specific_tracer_name(ρH_name),
+            Y,
+            p,
+            ᶜρa⁰,
+            ᶜmass,
+            ᶜmassE,
+            dt,
         )
     end
     return nothing
@@ -486,7 +540,7 @@ aerosol_wet_deposition_tendency!(Yₜ, Y, p, t, ::SeaSaltHistory, _) = nothing
 function aerosol_wet_deposition_tendency!(
     Yₜ, Y, p, t, sslth::SeaSaltHistory, ::WetDepositionMicrophysics,
 )
-    (; sslth_wetdep_rate, sslth_wetdep_rateʲs) = p.tracers
+    (; sslth_wetdep_rates, sslth_wetdep_rateʲs) = p.tracers
     (; sslth_drydep_velocity, sslth_settling_velocity_sfc) = p.tracers
     MatrixFields.unrolled_foreach(aerosol_state_names(sslth)) do ρH_name
         wet_remove_tracer!(
@@ -494,7 +548,7 @@ function aerosol_wet_deposition_tendency!(
             Y,
             p,
             ρH_name,
-            sslth_wetdep_rate,
+            sslth_wetdep_rates[MatrixFields.extract_first(ρH_name)],
             sslth_wetdep_rateʲs,
             sslth_drydep_velocity,
             sslth_settling_velocity_sfc,

@@ -497,6 +497,11 @@ sets of rates are cached:
   - `p.tracers.sslt_wetdep_ratesʲs[bin][j]`, updraft `j`'s own rate, which
     the tendency applies to the updraft tracer so precipitating updrafts
     scavenge their own aerosol rather than the grid-mean share.
+  - `p.tracers.sslt_wetdep_rates⁰[bin]`, the environment's own rate `k⁰`
+    that enters the grid-mean composition. No tendency applies it (the
+    environment is diagnosed); it is kept so the sea-salt history tracers can
+    compose their own grid-mean rate with their own subdomain weights
+    ([`set_sslth_wet_deposition_rates!`](@ref)).
 
 Under `EquilibriumMicrophysics0M` the same two-term rate is assembled from
 the 0-moment ingredients: the in-cloud driver is
@@ -587,6 +592,7 @@ function set_sslt_wet_deposition_rates!(
     (; ᶜρʲs, ᶜTʲs, ᶜq_tot_nonnegʲs) = p.precomputed
     (; sslt_air_state⁰, sslt_air_stateʲs) = p.tracers
     rates = p.tracers.sslt_wetdep_rates
+    rates⁰ = p.tracers.sslt_wetdep_rates⁰
     ratesʲs = p.tracers.sslt_wetdep_ratesʲs
     n = n_mass_flux_subdomains(turbconv_model)
     dt = float(p.dt)
@@ -700,12 +706,18 @@ function set_sslt_wet_deposition_rates!(
     )
     cache_sslth_env_exposure_rates!(p, ᶜc⁰, ᶜΛ̃⁰, p.atmos.seasalt_history)
 
-    # 3. Grid mean per bin: mass-weighted over the subdomains.
+    # 3. Grid mean per bin: mass-weighted over the subdomains. The
+    # environment's own per-bin rate is materialized into its cache field
+    # `rates⁰[bin]` (no scratch slot) because the history tracers re-weight
+    # it with their own environment masses (`set_sslth_wet_deposition_rates!`).
+    # Slots live here: 1 (ρ⁰), 2 (Λ̃⁰), 3 (r_D⁰), 5 (V_D⁰), 7 (c⁰), and the
+    # accumulators 4 and 6.
     ᶜρaχ = p.scratch.ᶜtemp_scalar_4
     ᶜρaχE = p.scratch.ᶜtemp_scalar_6
     MatrixFields.unrolled_foreach(bins) do (ρχ_name, r_settle, C_kelvin)
         bin = MatrixFields.extract_first(ρχ_name)
-        ᶜk⁰ = @. lazy(
+        ᶜk⁰ = rates⁰[bin]
+        @. ᶜk⁰ =
             ᶜc⁰ + sslt_bin_washout_rate(
                 sslt_air_state⁰,
                 ᶜT⁰,
@@ -718,8 +730,7 @@ function set_sslt_wet_deposition_rates!(
                 ᶜΛ̃⁰,
                 grav,
                 (ap,),
-            ),
-        )
+            )
         sslt_mass_weighted_rate!(
             rates[bin], ᶜk⁰, ratesʲs[bin], specific_tracer_name(ρχ_name),
             Y, p, ᶜρa⁰, ᶜρaχ, ᶜρaχE, dt,
@@ -764,6 +775,7 @@ function set_sslt_wet_deposition_rates!(
     (; ᶜρʲs, ᶜTʲs, ᶜmp_tendencyʲs) = p.precomputed
     (; sslt_air_state⁰, sslt_air_stateʲs) = p.tracers
     rates = p.tracers.sslt_wetdep_rates
+    rates⁰ = p.tracers.sslt_wetdep_rates⁰
     ratesʲs = p.tracers.sslt_wetdep_ratesʲs
     n = n_mass_flux_subdomains(turbconv_model)
     dt = float(p.dt)
@@ -856,11 +868,17 @@ function set_sslt_wet_deposition_rates!(
 
     # 3. Grid mean per bin: mass-weighted over the subdomains. The shadow
     # and q_rai⁰ have no readers left, so their slots take the accumulators.
+    # The environment's per-bin rate goes into its cache field `rates⁰[bin]`
+    # (no scratch slot), which the history tracers re-weight with their own
+    # environment masses (`set_sslth_wet_deposition_rates!`). Slots live
+    # here: 2 (ρ⁰), 4 (F⁰, read by the lazy c⁰), 5 (Λ̃⁰), 6 (r_D⁰), 7 (V_D⁰),
+    # and the accumulators 1 and 3.
     ᶜρaχ = p.scratch.ᶜtemp_scalar
     ᶜρaχE = p.scratch.ᶜtemp_scalar_3
     MatrixFields.unrolled_foreach(bins) do (ρχ_name, r_settle, C_kelvin)
         bin = MatrixFields.extract_first(ρχ_name)
-        ᶜk⁰ = @. lazy(
+        ᶜk⁰ = rates⁰[bin]
+        @. ᶜk⁰ =
             ᶜc⁰ + sslt_bin_washout_rate(
                 sslt_air_state⁰,
                 ᶜT⁰,
@@ -873,8 +891,7 @@ function set_sslt_wet_deposition_rates!(
                 ᶜΛ̃⁰,
                 grav,
                 (ap,),
-            ),
-        )
+            )
         sslt_mass_weighted_rate!(
             rates[bin], ᶜk⁰, ratesʲs[bin], specific_tracer_name(ρχ_name),
             Y, p, ᶜρa⁰, ᶜρaχ, ᶜρaχE, dt,

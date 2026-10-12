@@ -203,6 +203,16 @@ function species_aerosol_cache(Y, params, sslt::PrognosticSeaSalt)
             rate
         end,
     )
+    # Per-bin environment wet-removal rates, cached next to the grid-mean ones
+    # so the history tracers can re-weight them with their own environment
+    # masses; not applied by any tendency (the environment is diagnosed).
+    sslt_wetdep_rates⁰ = NamedTuple{state_names}(
+        ntuple(n_bins) do _
+            rate = similar(Y.c, FT)
+            fill!(rate, zero(FT))
+            rate
+        end,
+    )
     # Per-updraft wet-removal rates for `PrognosticEDMFX` (empty per bin
     # without draft subdomains), filled next to the grid-mean rates.
     sslt_wetdep_ratesʲs = NamedTuple{state_names}(
@@ -234,6 +244,7 @@ function species_aerosol_cache(Y, params, sslt::PrognosticSeaSalt)
         sslt_settling_fluxes,
         sslt_settling_velocities,
         sslt_wetdep_rates,
+        sslt_wetdep_rates⁰,
         sslt_wetdep_ratesʲs,
         sslt_bin_moments = bin_moments,
         sslt_settling_radii = settling_radii,
@@ -252,9 +263,10 @@ with the bins' emission fluxes by `set_sslth_emission_flux!`) and for dry
 deposition (`set_sslth_dry_deposition_fluxes!`), the bin-mass-weighted
 level-1 dry-deposition and settling fall speeds behind them (plus the level-1
 bin mass sum they are weighted with), the mass-weighted settling fall speed
-of each subdomain (`aerosol_settling_tendency!`), the mass-weighted
-wet-removal rate of the grid mean and of each updraft
-(`set_sslth_wet_deposition_rates!`), and the bin-independent exposure rates
+of each subdomain (`aerosol_settling_tendency!`), the wet-removal rates
+(`set_sslth_wet_deposition_rates!`: one shared rate per updraft, and one
+grid-mean rate per tracer, composed with that tracer's own subdomain
+weights), and the bin-independent exposure rates
 (in-cloud `c`, below-cloud `Λ̃`) of each subdomain copied out of
 `set_sslt_wet_deposition_rates!` for the history sources. Everything is
 zeroed so a read before the first fill is harmless.
@@ -283,7 +295,9 @@ function species_aerosol_cache(Y, params, sslth::SeaSaltHistory)
         sslth_sfc_mass = zero_surface_scalar(),
         sslth_settling_velocity⁰ = zero_center_scalar(),
         sslth_settling_velocityʲs = ntuple(_ -> zero_center_scalar(), n_updrafts),
-        sslth_wetdep_rate = zero_center_scalar(),
+        sslth_wetdep_rates = NamedTuple{state_names}(
+            ntuple(_ -> zero_center_scalar(), n_tracers),
+        ),
         sslth_wetdep_rateʲs = ntuple(_ -> zero_center_scalar(), n_updrafts),
         sslt_in_cloud_exposure_rate⁰ = zero_center_scalar(),
         sslt_in_cloud_exposure_rateʲs = ntuple(_ -> zero_center_scalar(), n_updrafts),
