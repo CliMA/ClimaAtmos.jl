@@ -266,4 +266,56 @@ floor_nt(
         end
     end
 
+    @testset "`isentropic_slope_ratio`: plain ratio with a stratification floor" begin
+        for FT in (Float32, Float64)
+            @testset "FT = $FT" begin
+                r = CA.isentropic_slope_ratio
+                θz_min = FT(1e-3)
+                qz = FT(-2e-6)
+                @test r(qz, FT(4e-3), θz_min) == qz / FT(4e-3)          # stable: the true ratio
+                @test r(qz, θz_min, θz_min) == qz / θz_min               # at the floor
+                @test r(qz, FT(0), θz_min) == qz / θz_min                # neutral: floored, finite
+                @test r(qz, FT(-5e-3), θz_min) == qz / θz_min            # overturned: floored, same sign as q_z
+                @test sign(r(qz, FT(-5e-3), θz_min)) == sign(qz)
+                @test abs(r(qz, FT(1e-9), θz_min)) <= abs(qz) / θz_min
+                @test r(qz, FT(4e-3), θz_min) isa FT
+            end
+        end
+    end
+
+    @testset "`isentropic_cell_cap`: along-surface segment bounded by the cell" begin
+        for FT in (Float32, Float64)
+            @testset "FT = $FT" begin
+                cap = CA.isentropic_cell_cap
+                θz_min = FT(1e-3)
+                Δx = FT(2.5e5)
+                Δz = FT(500)
+                # flat surface: no horizontal θ contrast ⇒ full Δx scale
+                @test cap(FT(0), FT(4e-3), θz_min, Δx, Δz) === FT(1)
+                # slope s = |∇θ| / θ_z; s Δx / Δz = 1 ⇒ factor 1/2
+                inv_θ = (FT(4e-3) * Δz / Δx)^2
+                @test cap(inv_θ, FT(4e-3), θz_min, Δx, Δz) ≈ FT(0.5)
+                # steep limit (|∇θ| = 1e-4 K/m, s Δx / Δz = 12.5): factor → (Δz θ_z / (|∇θ| Δx))²
+                inv_θ = FT(1e-8)
+                x = sqrt(inv_θ) / FT(4e-3) * Δx / Δz
+                @test cap(inv_θ, FT(4e-3), θz_min, Δx, Δz) ≈ 1 / (1 + x^2)
+                @test cap(inv_θ, FT(4e-3), θz_min, Δx, Δz) < FT(0.01)
+                @test cap(inv_θ, FT(4e-3), θz_min, Δx, Δz) ≈ 1 / x^2 rtol = FT(0.01)
+                # weaker stratification ⇒ steeper surface ⇒ smaller factor; floored
+                @test cap(inv_θ, FT(2e-3), θz_min, Δx, Δz) <
+                      cap(inv_θ, FT(4e-3), θz_min, Δx, Δz)
+                @test cap(inv_θ, FT(0), θz_min, Δx, Δz) ==
+                      cap(inv_θ, FT(-1e-3), θz_min, Δx, Δz)
+                @test cap(inv_θ, FT(0), θz_min, Δx, Δz) ==
+                      cap(inv_θ, θz_min, θz_min, Δx, Δz)
+                # bounded in (0, 1], finite, type-stable
+                @test all(
+                    FT(0) < cap(FT(v), FT(3e-3), θz_min, Δx, Δz) <= FT(1) for
+                    v in (0, 1e-14, 1e-10, 1e-8, 1e-6)
+                )
+                @test cap(FT(1e-10), FT(3e-3), θz_min, Δx, Δz) isa FT
+            end
+        end
+    end
+
 end

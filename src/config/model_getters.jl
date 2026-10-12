@@ -1142,10 +1142,6 @@ function AtmosWater(config::AtmosConfig, params, ::Type{FT}) where {FT}
     microphysics_model = get_microphysics_model(pa)
     sgs_quadrature = get_sgs_quadrature(pa, params)
     tq_correlation_model = get_tq_correlation_model(pa)
-    # No horizontal-term requirement for `DiagnosedTqCorrelation`: the vertical
-    # resolved-gradient block (uniform-box, always on) and the prescribed-ρ_turb
-    # turbulent cross together give a well-defined T′q′ even in single-column
-    # configurations where `sgs_variance_horizontal_scale_factor = 0`.
 
     if microphysics_model isa DryModel
         @warn "Running simulations without any moisture present."

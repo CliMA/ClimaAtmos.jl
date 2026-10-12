@@ -542,21 +542,31 @@ a single isotropic intra-subdomain variance shared across subdomains, driven by
 the vertical grid-mean gradients with the grid-mean mixing length.
 
 An optional second term adds the subgrid variance implied by the resolved
-horizontal field — the leading-order scale-similarity estimate from the
-horizontal gradient and the horizontal grid scale alone,
+horizontal field. Large-scale stirring of the free troposphere is
+quasi-adiabatic, so parcels move along surfaces of ``\theta_{li}``; the
+moisture contrast a parcel brings to the cell's level is therefore the
+contrast *along the isentrope*, and after the adiabatic displacement to that
+level only ``q_t`` differs. The term is the leading-order scale-similarity
+estimate built on that gradient,
 
 ```math
-\sigma_{\psi,\mathrm{geo}}^2 = c_g \, (c_{\Delta x} \Delta x_h)^2 \, |\nabla_h \psi|^2 ,
+\sigma_{q,\mathrm{geo}}^2 = c_g \, c_{\Delta x}^2 \, \ell^2 \,
+  |\nabla_h q_t - r \nabla_h \theta_{li}|^2 ,
+\qquad r = \frac{\partial_z q_t}{\max(\partial_z \theta_{li}, \theta_{z,\min})} ,
 ```
 
-added to both the ``\theta_{li}`` and ``q_t`` variances. The term is off by
-default (``c_{\Delta x} = 0``). It is not Richardson-weighted: this is a
-physical feature of the resolved mean field and is independent of whether the
-turbulent closure (above) is active, so the two blocks contribute additively
-without double-counting (they are not two estimates of the same quantity).
-The total-water standard deviation is then bounded by ``\sigma_q \le r_{\max} q_t`` (``r_{\max} = 0.5``), because a wider Gaussian places a quadrature node
-at negative total water, and condensing the clamped excess can drive the
-grid-mean vapor negative.
+added to the ``q_t`` variance only; there is no horizontal ``\theta_{li}``
+variance or ``\theta_{li}``–``q_t`` covariance term. ``r`` is the slope ratio
+``(\partial_z q_t)/(\partial_z \theta_{li})`` with the stratification floored at
+``\theta_{z,\min}`` (`sgs_variance_isentropic_min_dtheta_dz`), which bounds ``|r|``
+by ``|\partial_z q_t| / \theta_{z,\min}`` and treats a neutral or overturned layer
+as one of minimal stable stratification rather than as a surface of opposite tilt.
+The displacement length ``\ell`` is bounded by the cell: a surface of slope
+``s = |\nabla_h \theta_{li}| / \partial_z \theta_{li}`` leaves a layer of depth
+``\Delta z`` after a horizontal distance ``\Delta z / s``, so
+``\ell^2 = \Delta x_h^2 / (1 + (s \Delta x_h / \Delta z)^2)``; for steep surfaces
+(weak stratification) the projected part ``r^2 |\nabla_h \theta_{li}|^2 \Delta x^2``
+then reduces to ``(\partial_z q_t \Delta z)^2``.
 
 A resolved vertical-gradient block is also added,
 
@@ -571,9 +581,11 @@ uniform position in a box of size ``\Delta z``. The scale factor
 switch (``c_{\Delta z} = 0`` disables the term). This block keeps
 ``\sigma_T^2``, ``\sigma_q^2`` non-zero where the turbulent closure collapses,
 so the quadrature integrand retains in-cell variability in laminar cells and
-single-column configurations. It is not Richardson-weighted — the resolved
-vertical gradient is a physical feature of the mean profile, not a turbulent
-property.
+single-column configurations.
+
+The total-water standard deviation is then bounded by ``\sigma_q \le r_{\max} q_t`` (``r_{\max} = 0.5``),
+because a wider Gaussian places a quadrature node at negative total water, and
+condensing the clamped excess can drive the grid-mean vapor negative.
 
 The cross-covariance is set either as a prescribed correlation,
 
@@ -582,16 +594,18 @@ The cross-covariance is set either as a prescribed correlation,
 \qquad (\texttt{tq\_correlation\_model: constant}, \text{default})
 ```
 
-or as a diagnosed covariance that combines the three variance blocks with the
+or as a diagnosed covariance that combines the variance blocks with the
 correlation structure appropriate to each
 (``\texttt{tq\_correlation\_model: diagnosed}``):
 
 ```math
 \langle T' q_t' \rangle
   = r_{\mathrm{turb}} \sigma_{T,\mathrm{turb}} \sigma_{q,\mathrm{turb}}
-  + c_g (c_{\Delta x} \Delta x_h)^2 \, \nabla_h \theta_{li} \cdot \nabla_h q_t
   + c_g (c_{\Delta z} \Delta z)^2 \, \partial_z \theta_{li} \, \partial_z q_t ,
 ```
+
+the isentropic horizontal block contributing nothing (no ``\theta_{li}'`` along
+the surface), so its ``q_t`` variance only dilutes the correlation,
 
 followed by the thermodynamic Jacobian transform to ``T`` basis and
 ``r = \langle T' q_t' \rangle / \sqrt{\sigma_T^2 \sigma_q^2}``, which is

@@ -5,6 +5,15 @@ main
 ----
 - ![][badge-✨feature/enhancement] Add back CloudMicrophysics v0.43 to the
   compat.
+- ![][badge-🔥behavioralΔ] The horizontal resolved-gradient (geometric) SGS variance
+  term is now the isentropic form: `q′q′` carries `|∇_h q_tot − r ∇_h θ_li|²`, the
+  gradient of `q_tot` along the `θ_li` surface with `r = (∂q_tot/∂z)/(∂θ_li/∂z)`, the
+  stratification floored at the provisional `sgs_variance_isentropic_min_dtheta_dz`,
+  there is no horizontal `θ′θ′` (or `θ′q′`) term, and the displacement along the surface
+  is bounded by the cell, `ℓ² = Δx² / (1 + (s Δx / Δz)²)` with the surface slope
+  `s = |∇_h θ_li| / ∂_z θ_li`. The `q′q′` and `θ′q′` terms of the vertical uniform-box block are
+  scaled by the same factor, the share of the cell's vertical excursion not already
+  sampled along the surface.
 
 0.42.14
 -------

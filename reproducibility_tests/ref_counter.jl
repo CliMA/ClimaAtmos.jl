@@ -1,4 +1,4 @@
-426
+427
 
 # **README**
 #
@@ -32,6 +32,9 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+427
+- Change the horizontal geometric SGS variance term to the isentropic form
+
 426
 - Update to CloudMicrophysics v0.44 from v0.43
 
