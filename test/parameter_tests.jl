@@ -75,6 +75,23 @@ end
     yaml_processes =
         CA.ClimaAtmosParameters(config).microphysics_1m_params.processes
     @test yaml_processes.rain_autoconversion isa CMP.PrescribedNd
+
+    # Khairoutdinov and Kogan (2000) warm-rain options
+    kk_config = CA.AtmosConfig(
+        Dict(
+            "microphysics_model" => "1M",
+            "rain_autoconversion" => "KK2000",
+            "cloud_liquid_rain_accretion" => "KK2000",
+        );
+        job_id = "kk2000_options",
+    )
+    kk_processes = CA.get_microphysics_model(kk_config.parsed_args).processes
+    @test kk_processes.rain_autoconversion isa CMP.KK2000Autoconversion
+    @test kk_processes.cloud_liquid_rain_accretion isa CMP.KK2000Accretion
+    kk_mp = CA.Parameters.microphysics_1m_params(CA.ClimaAtmosParameters(kk_config))
+    # the prescribed droplet number is the one the radiation effective radius uses
+    @test kk_mp.process_params.rain_autoconversion.Nc ==
+          CA.Parameters.microphysics_cloud_params(CA.ClimaAtmosParameters(kk_config)).N_cloud_liquid_droplets
     @test isnothing(yaml_processes.rain_snow_accretion)
 end
 
