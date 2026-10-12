@@ -1,4 +1,4 @@
-import UnrolledUtilities: unrolled_foreach
+import UnrolledUtilities: unrolled_filter, unrolled_flatmap, unrolled_foreach
 
 """
     has_prescribed_aerosol_bin(p, bin_name)
@@ -62,6 +62,23 @@ per-bin loops stay type stable.
 """
 @generated aerosol_state_names(::T) where {T <: AbstractPrognosticAerosol} =
     :($(map(n -> MatrixFields.FieldName(Symbol(:ρ, n)), bin_names(T))))
+
+"""
+    prognostic_aerosol_state_names(aerosols)
+
+The grid-mean `ρ<bin>` state names of every prognostic species in an
+[`AtmosAerosols`](@ref) group, concatenated in species order; `()` when there
+is no group or no prognostic species. Used by the implicit solver to drop the
+aerosol blocks from the Jacobian (`implicit_aerosol_jacobian: false`).
+"""
+prognostic_aerosol_state_names(::Nothing) = ()
+prognostic_aerosol_state_names(aerosols::AtmosAerosols) = unrolled_flatmap(
+    aerosol_state_names,
+    unrolled_filter(
+        model -> model isa AbstractPrognosticAerosol,
+        values(species_models(aerosols)),
+    ),
+)
 
 """
     aerosol_surface_flux_tendency!(Yₜ, Y, p, species_model, fluxes)

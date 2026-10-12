@@ -388,7 +388,8 @@ Build the `JacobianAlgorithm` selected by the config keys `use_dense_jacobian`
 (`AutoDenseJacobian`) and `use_auto_jacobian` (`AutoSparseJacobian`, with
 `padding_bands_per_block` from `auto_jacobian_padding_bands`), falling back to
 `ManualSparseJacobian`. The sparse algorithms take `approximate_solve_iters` from
-`approximate_linear_solve_iters`.
+`approximate_linear_solve_iters`; the manual one also takes `aerosol_blocks` from
+`implicit_aerosol_jacobian`.
 """
 function jacobian_from_parsed_args(parsed_args)
     approximate_solve_iters = parsed_args["approximate_linear_solve_iters"]
@@ -400,7 +401,10 @@ function jacobian_from_parsed_args(parsed_args)
             padding_bands_per_block = parsed_args["auto_jacobian_padding_bands"],
         )
     else
-        return ManualSparseJacobian(; approximate_solve_iters)
+        return ManualSparseJacobian(;
+            approximate_solve_iters,
+            aerosol_blocks = parsed_args["implicit_aerosol_jacobian"],
+        )
     end
 end
 

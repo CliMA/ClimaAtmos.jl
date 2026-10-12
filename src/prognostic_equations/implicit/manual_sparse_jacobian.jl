@@ -2,7 +2,8 @@ import LinearAlgebra: I, Adjoint
 
 using ClimaCore.MatrixFields
 import ClimaCore.MatrixFields: @name
-import UnrolledUtilities: unrolled_any, unrolled_filter, unrolled_map, unrolled_reduce
+import UnrolledUtilities:
+    unrolled_any, unrolled_filter, unrolled_flatmap, unrolled_map, unrolled_reduce
 
 """
     DerivativeFlag
@@ -43,7 +44,7 @@ use_derivative(::UseDerivative) = true
 use_derivative(::IgnoreDerivative) = false
 
 """
-    ManualSparseJacobian(; approximate_solve_iters = 1)
+    ManualSparseJacobian(; approximate_solve_iters = 1, aerosol_blocks = true)
 
 A [`JacobianAlgorithm`](@ref) that approximates the Jacobian using analytically
 derived tendency derivatives and inverts it using a specialized nested linear
@@ -60,33 +61,95 @@ functions; see the implicit Jacobian section of [Implicit Solver](@ref).
   - `approximate_solve_iters = 1`: Number of iterations to take for the
     approximate linear solve required when grid-scale diffusion is treated
     implicitly [-].
+  - `aerosol_blocks = true`: Whether the prognostic aerosol tracers (the
+    sea-salt bins and their history tracers) get Jacobian blocks. When `false`
+    they fall back to identity blocks, so their implicit tendencies (vertical
+    diffusion, updraft advection, entrainment relaxation) are still applied but
+    are no longer anticipated by the Newton step, which makes those terms
+    effectively explicit for the aerosols alone. The aerosols are passive, so
+    this does not change the dynamics; it trades their unconditional stability
+    for a smaller Jacobian in many-bin experiments (config key
+    `implicit_aerosol_jacobian`).
 
 # Fields
 
   - `approximate_solve_iters`: As above [-].
+  - `aerosol_blocks`: As above.
 """
 struct ManualSparseJacobian <: SparseJacobian
     approximate_solve_iters::Int
+    aerosol_blocks::Bool
 end
-ManualSparseJacobian(; approximate_solve_iters::Int = 1) =
-    ManualSparseJacobian(approximate_solve_iters)
+ManualSparseJacobian(;
+    approximate_solve_iters::Int = 1,
+    aerosol_blocks::Bool = true,
+) = ManualSparseJacobian(approximate_solve_iters, aerosol_blocks)
 
 """
-    _derivative_flags(atmos, Y)
+    _derivative_flags(alg, atmos, Y)
 
 Return the `DerivativeFlag`s that specialize the manual Jacobian cache
 at build time, as a `NamedTuple` with fields `topography_flag` (set from
-`has_topography(axes(Y.c))`) and `diffusion_flag` (set from `atmos.diff_mode`).
+`has_topography(axes(Y.c))`), `diffusion_flag` (set from `atmos.diff_mode`),
+and `aerosol_flag` (set from `alg.aerosol_blocks`).
 
 The SGS modes (advection, entrainment/detrainment, mass flux, nonhydrostatic
 pressure, and vertical diffusion) are always implicit, so they need no flags.
 Called from `jacobian_cache`.
 """
-function _derivative_flags(atmos, Y)
+function _derivative_flags(alg, atmos, Y)
     return (;
         topography_flag = DerivativeFlag(has_topography(axes(Y.c))),
         diffusion_flag = DerivativeFlag(atmos.diff_mode),
+        aerosol_flag = DerivativeFlag(alg.aerosol_blocks),
     )
+end
+
+# ============================================================================
+# Aerosol tracers excluded from the Jacobian
+# ============================================================================
+#
+# The prognostic aerosol tracers are passive: nothing in the dynamics depends
+# on them, so their only Jacobian entries are self-diagonal blocks (grid-mean
+# diffusion; updraft advection, diffusion, and entrainment relaxation). With
+# `aerosol_flag = IgnoreDerivative()` those blocks are dropped and the names
+# are routed to `fallback_identity_blocks` instead. The helpers below wrap the
+# process-based name lists of `utils/tracer_processes.jl` so every builder and
+# update function filters the same way.
+
+"""
+    jacobian_excluded_aerosol_names(atmos, aerosol_flag)
+
+`NamedTuple` `(; gs, sgs)` of the prognostic aerosol tracer names that receive
+no Jacobian blocks: grid-mean `ρ`-prefixed names relative to `Y.c` and specific
+names relative to `Y.c.sgsʲs.:(1)`. Both are empty for `UseDerivative()`.
+"""
+jacobian_excluded_aerosol_names(atmos, ::UseDerivative) = (; gs = (), sgs = ())
+function jacobian_excluded_aerosol_names(atmos, ::IgnoreDerivative)
+    gs = prognostic_aerosol_state_names(atmos.aerosols)
+    return (; gs, sgs = unrolled_map(specific_tracer_name, gs))
+end
+
+"""
+    jacobian_passive_gs_tracer_names(Y, atmos, aerosol_flag)
+    jacobian_passive_sgs_tracer_names(Y, atmos, aerosol_flag)
+    jacobian_advected_sgs_scalar_names(Y, atmos, aerosol_flag)
+
+The `passive_gs_tracer_names`, `passive_sgs_tracer_names`, and
+`advected_sgs_scalar_names` lists with the aerosol tracers of
+[`jacobian_excluded_aerosol_names`](@ref) removed.
+"""
+function jacobian_passive_gs_tracer_names(Y, atmos, aerosol_flag)
+    excluded = jacobian_excluded_aerosol_names(atmos, aerosol_flag).gs
+    return unrolled_filter(name -> !(name in excluded), passive_gs_tracer_names(Y))
+end
+function jacobian_passive_sgs_tracer_names(Y, atmos, aerosol_flag)
+    excluded = jacobian_excluded_aerosol_names(atmos, aerosol_flag).sgs
+    return unrolled_filter(name -> !(name in excluded), passive_sgs_tracer_names(Y))
+end
+function jacobian_advected_sgs_scalar_names(Y, atmos, aerosol_flag)
+    excluded = jacobian_excluded_aerosol_names(atmos, aerosol_flag).sgs
+    return unrolled_filter(name -> !(name in excluded), advected_sgs_scalar_names(Y))
 end
 
 # ============================================================================
@@ -187,7 +250,7 @@ function advection_jacobian_blocks(Y, atmos, topography_flag)
 end
 
 """
-    diffusion_jacobian_blocks(Y, atmos, diffusion_flag)
+    diffusion_jacobian_blocks(Y, atmos, diffusion_flag, aerosol_flag)
 
 Allocate the Jacobian blocks for implicit vertical diffusion of the grid-scale
 scalars (including `ρtke`) and of `uₕ`.
@@ -203,7 +266,7 @@ microphysics and passive tracers carry none.
 
 `Tuple` of `(row_name, col_name) => block` pairs.
 """
-function diffusion_jacobian_blocks(Y, atmos, diffusion_flag)
+function diffusion_jacobian_blocks(Y, atmos, diffusion_flag, aerosol_flag)
     use_derivative(diffusion_flag) || return ()
     FT = Spaces.undertype(axes(Y.c))
     (; TridiagonalRow) = jacobian_row_types(FT)
@@ -213,8 +276,10 @@ function diffusion_jacobian_blocks(Y, atmos, diffusion_flag)
     mass_names = unrolled_map(center_state_name, sedimenting_mass_names(Y))
     sedimenting_names =
         unrolled_map(center_state_name, sedimenting_tracer_names(Y))
-    passive_names =
-        unrolled_map(center_state_name, passive_gs_tracer_names(Y))
+    passive_names = unrolled_map(
+        center_state_name,
+        jacobian_passive_gs_tracer_names(Y, atmos, aerosol_flag),
+    )
     ρtke_if_available =
         is_in_Y(@name(c.ρtke)) ? (@name(c.ρtke),) : ()
     return (
@@ -321,7 +386,7 @@ function sedimentation_jacobian_blocks(Y, atmos)
 end
 
 """
-    sgs_advection_jacobian_blocks(Y, atmos)
+    sgs_advection_jacobian_blocks(Y, atmos, aerosol_flag)
 
 Allocate the diagonal Jacobian blocks of the advected updraft scalars, plus the
 couplings of the sedimenting SGS condensate masses to the updraft `q_tot`.
@@ -337,12 +402,14 @@ advection and sedimentation (`update_sgs_advection_jacobian!`), diffusion
 
 `Tuple` of `(row_name, col_name) => block` pairs.
 """
-function sgs_advection_jacobian_blocks(Y, atmos)
+function sgs_advection_jacobian_blocks(Y, atmos, aerosol_flag)
     atmos.turbconv_model isa PrognosticEDMFX || return ()
     FT = Spaces.undertype(axes(Y.c))
     (; TridiagonalRow) = jacobian_row_types(FT)
-    sgs_scalar_names =
-        unrolled_map(sgs_state_name, advected_sgs_scalar_names(Y))
+    sgs_scalar_names = unrolled_map(
+        sgs_state_name,
+        jacobian_advected_sgs_scalar_names(Y, atmos, aerosol_flag),
+    )
     sgs_mass_names =
         unrolled_map(sgs_state_name, sedimenting_sgs_mass_names(Y))
     return (
@@ -481,7 +548,7 @@ function fallback_identity_blocks(block_pairs, Y, FT)
 end
 
 """
-    jacobian_solver_algorithm(Y, atmos, diffusion_flag, approximate_solve_iters)
+    jacobian_solver_algorithm(Y, atmos, diffusion_flag, aerosol_flag, approximate_solve_iters)
 
 Return the nested `MatrixFields` solver algorithm used to invert the sparse
 Jacobian.
@@ -505,6 +572,7 @@ function jacobian_solver_algorithm(
     Y,
     atmos,
     diffusion_flag,
+    aerosol_flag,
     approximate_solve_iters,
 )
     is_in_Y(name) = MatrixFields.has_field(Y, name)
@@ -516,8 +584,13 @@ function jacobian_solver_algorithm(
         is_in_Y(@name(f.sgsʲs.:(1).u₃)) ? (@name(f.sgsʲs.:(1).u₃),) : ()
 
     mass_names = unrolled_map(center_state_name, sedimenting_mass_names(Y))
-    sgs_scalar_names =
-        unrolled_map(sgs_state_name, advected_sgs_scalar_names(Y))
+    # Excluded aerosol names are left out of the scalar block, like the passive
+    # grid-mean tracers: they then fall through to `alg₂`, where their identity
+    # blocks are inverted trivially.
+    sgs_scalar_names = unrolled_map(
+        sgs_state_name,
+        jacobian_advected_sgs_scalar_names(Y, atmos, aerosol_flag),
+    )
     sgs_sedimenting_names =
         unrolled_map(sgs_state_name, sedimenting_sgs_tracer_names(Y))
 
@@ -601,14 +674,14 @@ the solver comes from `jacobian_solver_algorithm`.
 `update_jacobian!` passes back to the process updates).
 """
 function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
-    derivative_flags = _derivative_flags(atmos, Y)
-    (; topography_flag, diffusion_flag) = derivative_flags
+    derivative_flags = _derivative_flags(alg, atmos, Y)
+    (; topography_flag, diffusion_flag, aerosol_flag) = derivative_flags
     FT = Spaces.undertype(axes(Y.c))
 
     process_block_pairs = merge_jacobian_blocks((
-        sgs_advection_jacobian_blocks(Y, atmos)...,
+        sgs_advection_jacobian_blocks(Y, atmos, aerosol_flag)...,
         advection_jacobian_blocks(Y, atmos, topography_flag)...,
-        diffusion_jacobian_blocks(Y, atmos, diffusion_flag)...,
+        diffusion_jacobian_blocks(Y, atmos, diffusion_flag, aerosol_flag)...,
         sedimentation_jacobian_blocks(Y, atmos)...,
         sgs_massflux_jacobian_blocks(Y, atmos)...,
     ))
@@ -622,6 +695,7 @@ function jacobian_cache(alg::ManualSparseJacobian, Y, atmos)
         Y,
         atmos,
         diffusion_flag,
+        aerosol_flag,
         alg.approximate_solve_iters,
     )
 
@@ -998,7 +1072,7 @@ function eddy_diffusivity_coefficients!(Y, p)
 end
 
 """
-    update_diffusion_jacobian!(matrix, Y, p, dtγ, diffusion_flag, eddy_diffusivities)
+    update_diffusion_jacobian!(matrix, Y, p, dtγ, diffusion_flag, aerosol_flag, eddy_diffusivities)
 
 Update the Jacobian blocks for implicit vertical diffusion of the grid-scale
 scalars (including TKE dissipation) and of `uₕ`.
@@ -1034,6 +1108,7 @@ function update_diffusion_jacobian!(
     p,
     dtγ,
     diffusion_flag,
+    aerosol_flag,
     eddy_diffusivities,
 )
     use_derivative(diffusion_flag) || return nothing
@@ -1192,7 +1267,9 @@ function update_diffusion_jacobian!(
     # vertical_diffusion_boundary_layer_tendency!) — both captured by
     # `ᶜdiffusion_h_matrix` above. Their diagonals receive no other
     # implicit contributions, so they are initialized here.
-    MatrixFields.unrolled_foreach(passive_gs_tracer_names(Y)) do ρχ_name
+    MatrixFields.unrolled_foreach(
+        jacobian_passive_gs_tracer_names(Y, p.atmos, aerosol_flag),
+    ) do ρχ_name
         ρχ_state_name = center_state_name(ρχ_name)
         ∂ᶜρχ_err_∂ᶜρχ = matrix[ρχ_state_name, ρχ_state_name]
         @. ∂ᶜρχ_err_∂ᶜρχ =
@@ -1295,7 +1372,7 @@ function sgs_upwinding_operators(FT, upwinding)
 end
 
 """
-    update_sgs_advection_jacobian!(matrix, Y, p, dtγ)
+    update_sgs_advection_jacobian!(matrix, Y, p, dtγ, aerosol_flag)
 
 Update the Jacobian blocks for implicit vertical advection of the updraft
 scalars with the updraft velocity, and for implicit sedimentation of the SGS
@@ -1315,7 +1392,7 @@ is a `PrognosticEDMFX`. Writes `ᶜtemp_scalar_7`, `ᶠsed_tracer_advection`, an
 `ᶜtridiagonal_matrix_scalar` in `p.scratch`, mutates `matrix`, and returns
 `nothing`.
 """
-function update_sgs_advection_jacobian!(matrix, Y, p, dtγ)
+function update_sgs_advection_jacobian!(matrix, Y, p, dtγ, aerosol_flag)
     p.atmos.turbconv_model isa PrognosticEDMFX || return nothing
     (; ᶜρʲs, ᶠu³ʲs) = p.precomputed
     FT = Spaces.undertype(axes(Y.c))
@@ -1351,7 +1428,9 @@ function update_sgs_advection_jacobian!(matrix, Y, p, dtγ)
     end
 
     # advection of passive tracers, e.g. chemistry tracers (no sedimentation)
-    MatrixFields.unrolled_foreach(passive_sgs_tracer_names(Y)) do χ_name
+    MatrixFields.unrolled_foreach(
+        jacobian_passive_sgs_tracer_names(Y, p.atmos, aerosol_flag),
+    ) do χ_name
         χ_state_name = sgs_state_name(χ_name)
         ∂ᶜχʲ_err_∂ᶜχʲ = matrix[χ_state_name, χ_state_name]
         @. ∂ᶜχʲ_err_∂ᶜχʲ =
@@ -1437,7 +1516,7 @@ function update_sgs_advection_jacobian!(matrix, Y, p, dtγ)
 end
 
 """
-    update_sgs_diffusion_jacobian!(matrix, Y, p, dtγ, diffusion_flag)
+    update_sgs_diffusion_jacobian!(matrix, Y, p, dtγ, diffusion_flag, aerosol_flag)
 
 Update the Jacobian blocks for implicit vertical diffusion of the updraft
 scalars under the unified grid-mean tendency.
@@ -1464,7 +1543,14 @@ still uses the true (grid-mean-derived) tendency; only the Jacobian is
 approximated. This gives implicit stability for the subdomain scalar
 diffusion without introducing off-triangular Jacobian entries.
 """
-function update_sgs_diffusion_jacobian!(matrix, Y, p, dtγ, diffusion_flag)
+function update_sgs_diffusion_jacobian!(
+    matrix,
+    Y,
+    p,
+    dtγ,
+    diffusion_flag,
+    aerosol_flag,
+)
     p.atmos.turbconv_model isa PrognosticEDMFX || return nothing
     use_derivative(diffusion_flag) || return nothing
     # Mirror the gate of the tendency this linearizes
@@ -1511,7 +1597,9 @@ function update_sgs_diffusion_jacobian!(matrix, Y, p, dtγ, diffusion_flag)
     end
 
     # Passive SGS tracers: unscaled ρ(K_h + K_entr), same as mseⱼ / q_totⱼ.
-    MatrixFields.unrolled_foreach(passive_sgs_tracer_names(Y)) do χ_name
+    MatrixFields.unrolled_foreach(
+        jacobian_passive_sgs_tracer_names(Y, p.atmos, aerosol_flag),
+    ) do χ_name
         χ_state_name = sgs_state_name(χ_name)
         ∂ᶜχʲ_err_∂ᶜχʲ = matrix[χ_state_name, χ_state_name]
         @. ∂ᶜχʲ_err_∂ᶜχʲ +=
@@ -1521,7 +1609,7 @@ function update_sgs_diffusion_jacobian!(matrix, Y, p, dtγ, diffusion_flag)
 end
 
 """
-    update_sgs_entr_detr_jacobian!(matrix, Y, p, dtγ)
+    update_sgs_entr_detr_jacobian!(matrix, Y, p, dtγ, aerosol_flag)
 
 Update the Jacobian blocks for the implicit entrainment relaxation of the
 updraft scalars.
@@ -1536,7 +1624,7 @@ No-op unless `p.atmos.turbconv_model` is a `PrognosticEDMFX`. Accumulates into
 the diagonals set by `update_sgs_advection_jacobian!`, mutates `matrix`, and
 returns `nothing`.
 """
-function update_sgs_entr_detr_jacobian!(matrix, Y, p, dtγ)
+function update_sgs_entr_detr_jacobian!(matrix, Y, p, dtγ, aerosol_flag)
     p.atmos.turbconv_model isa PrognosticEDMFX || return nothing
     (;
         ᶜturb_entrʲs,
@@ -1578,7 +1666,9 @@ function update_sgs_entr_detr_jacobian!(matrix, Y, p, dtγ)
     # All advected updraft scalars are entrained the same way: q_tot, mse,
     # sedimenting tracers (masses and number concentrations), and passive
     # tracers (e.g. chemistry tracers).
-    MatrixFields.unrolled_foreach(advected_sgs_scalar_names(Y)) do χ_name
+    MatrixFields.unrolled_foreach(
+        jacobian_advected_sgs_scalar_names(Y, p.atmos, aerosol_flag),
+    ) do χ_name
         χ_state_name = sgs_state_name(χ_name)
         ∂ᶜχʲ_err_∂ᶜχʲ = matrix[χ_state_name, χ_state_name]
         @. ∂ᶜχʲ_err_∂ᶜχʲ -= dtγ * DiagonalMatrixRow(ᶜrelax_rateʲ)
@@ -1848,7 +1938,7 @@ quantities set by `set_implicit_precomputed_quantities!`, mutates
 `cache.matrix` and `p.scratch`, and returns `nothing`.
 """
 function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
-    (; topography_flag, diffusion_flag) = cache.derivative_flags
+    (; topography_flag, diffusion_flag, aerosol_flag) = cache.derivative_flags
     (; matrix) = cache
 
     # Ordering contract between the process updates:
@@ -1875,11 +1965,19 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
         p,
         dtγ,
         diffusion_flag,
+        aerosol_flag,
         eddy_diffusivities,
     )
-    update_sgs_advection_jacobian!(matrix, Y, p, dtγ)
-    update_sgs_diffusion_jacobian!(matrix, Y, p, dtγ, diffusion_flag)
-    update_sgs_entr_detr_jacobian!(matrix, Y, p, dtγ)
+    update_sgs_advection_jacobian!(matrix, Y, p, dtγ, aerosol_flag)
+    update_sgs_diffusion_jacobian!(
+        matrix,
+        Y,
+        p,
+        dtγ,
+        diffusion_flag,
+        aerosol_flag,
+    )
+    update_sgs_entr_detr_jacobian!(matrix, Y, p, dtγ, aerosol_flag)
     update_sgs_boundary_condition_jacobian!(matrix, Y, p, dtγ)
     update_sgs_massflux_jacobian!(matrix, Y, p, dtγ, diffusion_flag)
 
