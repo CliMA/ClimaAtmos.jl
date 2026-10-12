@@ -1,0 +1,34 @@
+# OFFLINE forcing run for the offline-bin experiment: Bomex PrognosticEDMFX
+# column built with an EXPLICIT algorithm so no Jacobian is compiled; the
+# driver (offline_bins.jl) never calls the CTS solver: it copies the saved
+# online dynamics in every step and sub-steps only the aerosol fields with
+# the model's own tendencies. dt here is the aerosol SUB-step (it sets the
+# Courant and 1/dt caps inside the aerosol code).
+config: "column"
+initial_condition: "Bomex"
+turbconv: "prognostic_edmfx"
+edmfx_entr_model: "Generalized"
+edmfx_detr_model: "Generalized"
+edmfx_sgs_mass_flux: true
+edmfx_sgs_diffusive_flux: true
+edmfx_nh_pressure: true
+edmfx_vertical_diffusion: true
+edmfx_filter: true
+prognostic_tke: true
+microphysics_model: "1M"
+cloud_model: "quadrature"
+z_max: 4200
+z_elem: 60
+z_stretch: false
+perturb_initstate: false
+implicit_diffusion: true
+reproducible_restart: true
+hyperdiff: ~
+ode_algo: "RK4"
+dt: "2secs"
+t_end: "4secs"
+prognostic_aerosols: ["SSLT", "SSLTH"]
+prognostic_aerosol_column_emission: true
+toml: [toml/prognostic_edmfx_1M.toml, /home/zglaser/autodebug/bomex/ssa_24bin.toml]
+strict_params: false
+output_default_diagnostics: false

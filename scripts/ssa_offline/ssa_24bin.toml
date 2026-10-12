@@ -1,0 +1,14 @@
+# 24-bin sea-salt override (fallback for the offline truth column when the
+# 50-bin explicit build is too slow): 14 log-spaced bins from 0.03 to 1 um dry
+# radius and 10 from 1 to 10 um, nested inside the submicron/supermicron pair
+# of ssa_2bin_1um.toml (~10 bins per decade). Flux scales are bin moments of
+# the stored 3-mode lognormal Gong fit (bins_n.jl).
+[ssa_size_bin_divisions]
+value = [3.0e-8, 3.8538799999999994e-8, 4.9508e-8, 6.359929999999999e-8, 8.170139999999999e-8, 1.0495599999999999e-7, 1.34829e-7, 1.73205e-7, 2.22504e-7, 2.85835e-7, 3.6719099999999997e-7, 4.7170299999999995e-7, 6.05963e-7, 7.78436e-7, 1.0e-6, 1.2589300000000001e-6, 1.5848899999999998e-6, 1.99526e-6, 2.51189e-6, 3.1622799999999996e-6, 3.9810699999999995e-6, 5.01187e-6, 6.309569999999999e-6, 7.94328e-6, 9.999999999999999e-6]
+type = "float"
+[ssa_gong_logfit_bin_0M_flux]
+value = [3.938, 7.148, 10.93, 14.06, 15.2, 13.81, 10.56, 6.846, 3.87, 2.131, 1.473, 1.429, 1.533, 1.486, 1.133, 0.8074, 0.4934, 0.261, 0.1229, 0.05513, 0.0269, 0.01632, 0.01221, 0.01011]
+type = "float"
+[ssa_gong_logfit_bin_3M_flux]
+value = [1.502e-18, 5.72e-18, 1.835e-17, 4.95e-17, 1.122e-16, 2.139e-16, 3.431e-16, 4.667e-16, 5.557e-16, 6.525e-16, 9.774e-16, 2.042e-15, 4.634e-15, 9.431e-15, 1.461e-14, 2.059e-14, 2.489e-14, 2.607e-14, 2.437e-14, 2.183e-14, 2.146e-14, 2.635e-14, 3.966e-14, 6.573e-14]
+type = "float"

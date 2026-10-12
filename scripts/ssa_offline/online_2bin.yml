@@ -1,0 +1,43 @@
+# ONLINE forcing run (bins only, NO history tracers: cheaper build, same forcing).
+# ONLINE forcing run for the offline-bin experiment: Bomex PrognosticEDMFX
+# column, 1M microphysics, 2 sea-salt bins (submicron / supermicron,
+# ssa_2bin_1um.toml), standalone MOST-wind
+# emission, 10 s implicit step, 6 simulated hours, and the FULL prognostic
+# state written to HDF5 every step (dt_save_state_to_disk) so the offline
+# 50-bin column can be driven from it.
+config: "column"
+initial_condition: "Bomex"
+turbconv: "prognostic_edmfx"
+edmfx_entr_model: "Generalized"
+edmfx_detr_model: "Generalized"
+edmfx_sgs_mass_flux: true
+edmfx_sgs_diffusive_flux: true
+edmfx_nh_pressure: true
+edmfx_vertical_diffusion: true
+edmfx_filter: true
+prognostic_tke: true
+microphysics_model: "1M"
+cloud_model: "quadrature"
+z_max: 4200
+z_elem: 60
+z_stretch: false
+perturb_initstate: false
+implicit_diffusion: true
+reproducible_restart: true
+hyperdiff: ~
+approximate_linear_solve_iters: 2
+ode_algo: "ARS222"
+dt: "10secs"
+t_end: "6hours"
+dt_save_state_to_disk: "10secs"
+prognostic_aerosols: ["SSLT"]
+prognostic_aerosol_column_emission: true
+toml: [toml/prognostic_edmfx_1M.toml, /home/zglaser/autodebug/bomex/ssa_2bin_1um.toml]
+strict_params: false
+output_default_diagnostics: false
+diagnostics:
+  - short_name: [mmrsslt01, mmrsslt02, mmrss, loadss, u10ss,
+                 ta, hus, hur, husra, clw, cl, ua, va, wa, arup, waup, tke]
+    period: 1hours
+  - short_name: [mmrsslt01, mmrsslt02, loadss]
+    period: 10mins

@@ -1,0 +1,13 @@
+# 2-bin sea-salt override for the ONLINE forcing run of the offline-bin
+# experiment: submicron (0.03-1 um dry radius) and supermicron (1-10 um).
+# Flux scales are bin moments of the stored 3-mode lognormal Gong fit
+# (bins_n.jl); the total mass flux equals the 5-bin and 50-bin totals.
+[ssa_size_bin_divisions]
+value = [3.0e-8, 1.0e-6, 9.999999999999999e-6]
+type = "float"
+[ssa_gong_logfit_bin_0M_flux]
+value = [94.42, 2.938]
+type = "float"
+[ssa_gong_logfit_bin_3M_flux]
+value = [1.95e-14, 2.856e-13]
+type = "float"
