@@ -3,6 +3,11 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- ![][badge-✨feature/enhancement] 1M microphysics options `rain_autoconversion: KK2000` and
+  `cloud_liquid_rain_accretion: KK2000`. They are based on the 2M Khairoutdinov and Kogan (2000)
+  warm-rain autoconversion and accretion rates, with the cloud droplet number
+  prescribed by `prescribed_cloud_droplet_number_concentration` (CloudMicrophysics
+  `KK2000Autoconversion` / `KK2000Accretion`, PR #814). Defaults are unchanged.
 - ![][badge-🔥behavioralΔ] The part of the geometric SGS variance block that
   needs a vertical displacement (the along-surface variance beyond its
   along-contour part, plus the across-surface uniform-box terms) and the
