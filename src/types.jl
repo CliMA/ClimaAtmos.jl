@@ -2235,6 +2235,118 @@ struct EquilibriumVarianceFidelity <: AbstractVarianceFidelityModel end
 struct UpdraftVarianceFidelity <: AbstractVarianceFidelityModel end
 
 """
+    AbstractPrognosticAerosol
+
+Prognostic treatment of one aerosol species: bin mass mixing ratios are
+diagnosed from the prognostic densities `Y.c.ρ<bin>`. Each species slot of
+`AtmosAerosols` holds `nothing` or a subtype. Prognostic species are passive
+tracers: radiation and cloud microphysics read the prescribed climatology.
+"""
+abstract type AbstractPrognosticAerosol end
+
+struct PrognosticSeaSalt{names} <: AbstractPrognosticAerosol end
+PrognosticSeaSalt(n_bins::Integer) =
+    PrognosticSeaSalt{ntuple(i -> Symbol(:SSLT, lpad(i, 2, '0')), n_bins)}()
+
+Base.broadcastable(x::AbstractPrognosticAerosol) = tuple(x)
+
+"""
+    bin_names(aerosol_model)
+
+Size-bin `Symbol`s of one prognostic species, ordered smallest to largest dry
+radius. The names double as the MERRA-2 file variables and, `ρ`-prefixed, as
+the prognostic state names.
+"""
+bin_names(m::AbstractPrognosticAerosol) = bin_names(typeof(m))
+bin_names(::Type{PrognosticSeaSalt{names}}) where {names} = names
+
+"""
+    AtmosAerosols
+
+Struct containing the prognostic aerosol treatments: each species field is
+`nothing` (no prognostic model — the species is either off or prescribed from
+the MERRA-2 climatology) or an `AbstractPrognosticAerosol`. Build
+with `AtmosAerosols(config::AtmosConfig, params)` (see `model_getters.jl`)
+from the `prognostic_aerosols` config.
+"""
+@kwdef struct AtmosAerosols{SS, DU, SU, BC, OC}
+    seasalt::SS = nothing
+    dust::DU = nothing
+    sulfate::SU = nothing
+    black_carbon::BC = nothing
+    organic_carbon::OC = nothing
+end
+
+"""
+    AtmosAerosols(prognostic_names; prognostic_aerosol_params)
+
+Resolve a tuple of species keys into prognostic aerosol models via
+`AEROSOL_SPECIES`.
+"""
+function AtmosAerosols(
+    prognostic_names::Tuple;
+    prognostic_aerosol_params = nothing,
+)
+    known_names = map(first, values(AEROSOL_SPECIES))
+    unknown = setdiff(prognostic_names, known_names)
+    isempty(unknown) || error(
+        "Unknown aerosol name(s) $(Tuple(unknown)) in `prognostic_aerosols`. \
+         Known names: $known_names.",
+    )
+    isempty(prognostic_names) ||
+        !isnothing(prognostic_aerosol_params) ||
+        error(
+            "`prognostic_aerosols` requires the `prognostic_aerosol_params` \
+             bundle, which is unavailable",
+        )
+    models = map(AEROSOL_SPECIES) do (species, prognostic)
+        if species in prognostic_names
+            isnothing(prognostic) && error(
+                "`$species` is listed in `prognostic_aerosols`, but has no \
+                 prognostic implementation",
+            )
+            prognostic(prognostic_aerosol_params)
+        else
+            nothing
+        end
+    end
+    return AtmosAerosols(; models...)
+end
+
+const AEROSOL_SPECIES = (;
+    seasalt = ("SSLT", ap -> PrognosticSeaSalt(length(ap.bin_mass_flux))),
+    dust = ("DST", nothing),
+    sulfate = ("SO4", nothing),
+    black_carbon = ("CB", nothing),
+    organic_carbon = ("OC", nothing),
+)
+
+"""
+    AEROSOL_SPECIES_BIN_NAMES
+
+MERRA-2 size-bin names of each aerosol species, keyed by the species slots of
+`AtmosAerosols`. Prescribed bins take their names directly from the
+`prescribed_aerosols` config; this table is the species-level grouping used
+by radiation and the species-summed diagnostics.
+"""
+const AEROSOL_SPECIES_BIN_NAMES = (;
+    seasalt = (:SSLT01, :SSLT02, :SSLT03, :SSLT04, :SSLT05),
+    dust = (:DST01, :DST02, :DST03, :DST04, :DST05),
+    sulfate = (:SO4,),
+    black_carbon = (:CB1, :CB2),
+    organic_carbon = (:OC1, :OC2),
+)
+
+"""
+    species_models(aerosols::AtmosAerosols)
+
+The species models as a `NamedTuple`, so consumers can fold or dispatch
+over the whole group without naming species.
+"""
+species_models(a::AtmosAerosols) =
+    (; a.seasalt, a.dust, a.sulfate, a.black_carbon, a.organic_carbon)
+
+"""
     AtmosWater{MM, CM, MTTS, TNM, SQ, TQC, SVF, TVL, TVI, TVR, TVS}(; microphysics_model = DryModel(), kwargs...)
 
 Group of moisture, cloud, and microphysics choices inside an
@@ -2465,6 +2577,7 @@ end
 @inline _cosp_overlap(::Val{O}) where {O} = O
 
 # Add broadcastable for the new grouped types
+Base.broadcastable(x::AtmosAerosols) = tuple(x)
 Base.broadcastable(x::SCMSetup) = tuple(x)
 Base.broadcastable(x::AtmosWater) = tuple(x)
 Base.broadcastable(x::AtmosRadiation) = tuple(x)
@@ -2505,6 +2618,7 @@ names.
   - `surface`: An `AtmosSurface` group.
   - `numerics`: An `AtmosNumerics` group.
   - `chemistry`: An `AtmosChem` group.
+  - `aerosols`: An `AtmosAerosols` group.
   - `cosp`: `nothing`, or a `COSPModel` for the satellite simulator.
   - `disable_surface_flux_tendency`: Whether to skip applying the surface flux
     tendency, independently of whether surface conditions are computed.
@@ -2515,7 +2629,7 @@ names.
 See the constructor `AtmosModel(grid; params, setup, defaults, kwargs...)`
 below.
 """
-struct AtmosModel{W, SCM, R, TC, PF, GW, VD, SP, SU, NU, CM, COSP, G, P, SE}
+struct AtmosModel{W, SCM, R, TC, PF, GW, VD, SP, SU, NU, CM, AE, COSP, G, P, SE}
     water::W
     scm_setup::SCM
     radiation::R
@@ -2527,6 +2641,7 @@ struct AtmosModel{W, SCM, R, TC, PF, GW, VD, SP, SU, NU, CM, COSP, G, P, SE}
     surface::SU
     numerics::NU
     chemistry::CM
+    aerosols::AE
     cosp::COSP
 
     # Whether to apply surface flux tendency (independent of surface conditions)
@@ -2561,6 +2676,7 @@ const ATMOS_MODEL_GROUPS = (
     (AtmosNumerics, :numerics),
     (SCMSetup, :scm_setup),
     (AtmosChem, :chemistry),
+    (AtmosAerosols, :aerosols),
 )
 
 # Auto-generate map from property_name to group_field
@@ -2646,6 +2762,8 @@ function _atmos_model(; kwargs...)
         _create_grouped_struct(AtmosNumerics, atmos_model_kwargs, group_kwargs)
     chemistry =
         _create_grouped_struct(AtmosChem, atmos_model_kwargs, group_kwargs)
+    aerosols =
+        _create_grouped_struct(AtmosAerosols, atmos_model_kwargs, group_kwargs)
 
     vertical_diffusion = get(atmos_model_kwargs, :vertical_diffusion, nothing)
     cosp = get(atmos_model_kwargs, :cosp, nothing)
@@ -2662,7 +2780,7 @@ function _atmos_model(; kwargs...)
     # The default constructor infers the type parameters from the arguments.
     return AtmosModel(
         water, scm_setup, radiation, turbconv, prescribed_flow, gravity_wave,
-        vertical_diffusion, sponge, surface, numerics, chemistry, cosp,
+        vertical_diffusion, sponge, surface, numerics, chemistry, aerosols, cosp,
         disable_surface_flux_tendency, grid, params, setup,
     )
 end

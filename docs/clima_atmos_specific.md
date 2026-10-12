@@ -10,6 +10,7 @@ This file contains everything specific to the ClimaAtmos.jl repository: director
   - `src/cache/`: precomputed quantities allocated once per stage. Naming convention: `set_*_precomputed_quantities!(Y, p, t)` — never allocate inside these functions.
   - `src/prognostic_equations/`: tendency accumulation and implicit/explicit splitting.
   - `src/parameterized_tendencies/`: parameterization implementations.
+      + `aerosols/`: aerosol species dispatch (`aerosols.jl`) and prognostic sea salt emission/deposition (`sea_salt.jl`).
       + `microphysics/`: microphysics tendency orchestration, SGS quadrature, limiters, Jacobian.
       + `radiation/`: RRTMGP wrappers and idealized radiation (`held_suarez.jl`).
       + `gravity_wave_drag/`: non-orographic and orographic GWD.

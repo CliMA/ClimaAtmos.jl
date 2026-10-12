@@ -49,24 +49,27 @@ function update_surface_conditions!(Y, p, t)
     T_sfc_values = surface_temperature(atmos.surface.temperature, Y, p, t)
     flux_scheme = resolve_flux_scheme(atmos.surface.flux_scheme, t, eltype(params))
 
-    @. sfc_conditions_values = surface_state_to_conditions(
-        overrides,
-        flux_scheme,
-        T_sfc_values,
-        sfc_local_geometry_values,
-        int_T_values,
-        int_ρ_values,
-        int_q_tot_values,
-        int_q_liq_values,
-        int_q_ice_values,
-        projected_vector_data(CT1, int_u_values, int_local_geometry_values),
-        projected_vector_data(CT2, int_u_values, int_local_geometry_values),
-        int_z_values,
-        thermo_params,
-        surface_fluxes_params,
-        surface_temp_params,
-        atmos.microphysics_model,
-        t,
+    @. sfc_conditions_values = merge(
+        sfc_conditions_values,
+        surface_state_to_conditions(
+            overrides,
+            flux_scheme,
+            T_sfc_values,
+            sfc_local_geometry_values,
+            int_T_values,
+            int_ρ_values,
+            int_q_tot_values,
+            int_q_liq_values,
+            int_q_ice_values,
+            projected_vector_data(CT1, int_u_values, int_local_geometry_values),
+            projected_vector_data(CT2, int_u_values, int_local_geometry_values),
+            int_z_values,
+            thermo_params,
+            surface_fluxes_params,
+            surface_temp_params,
+            atmos.microphysics_model,
+            t,
+        ),
     )
     return nothing
 end
@@ -146,6 +149,9 @@ function init_sfc_conditions_zero!(p)
         @. sfc_conditions.ρ_flux_q_tot = C3(FT(0))
     end
     @. sfc_conditions.ρ_flux_h_tot = C3(FT(0))
+    for name in aerosol_surface_flux_names(atmos.aerosols)
+        fill!(getproperty(sfc_conditions, name), C3(FT(0)))
+    end
     c = p.scratch.ᶠtemp_scalar
     sfc_local_geometry = Fields.level(Fields.local_geometry_field(c), half)
     @. sfc_conditions.ρ_flux_uₕ = tensor_from_components(0, 0, sfc_local_geometry)
@@ -384,21 +390,25 @@ without evaluating it.
 
 Used to allocate `p.precomputed.sfc_conditions` before any surface update has
 run. `ρ_flux_q_tot` is included even for a `DryModel`, because `SurfaceFluxes`
-always returns an evaporation rate.
+always returns an evaporation rate. Prognostic aerosol bins add one
+`ρ_flux_<bin>` entry each, written by the coupler or by
+`init_aerosol_surface_fluxes!`.
 """
 function surface_conditions_type(atmos, ::Type{FT}) where {FT}
     energy_flux_names = (:ρ_flux_h_tot,)
     # NOTE: Technically ρ_flux_q_tot is not really needed for a dry model, but
     # SF always has evaporation
     moisture_flux_names = (:ρ_flux_q_tot,)
+    aerosol_flux_names = aerosol_surface_flux_names(atmos.aerosols)
     names = (:T_sfc, :q_vap_sfc, :ustar, :obukhov_length, :buoyancy_flux, :ρ_flux_uₕ,
-        energy_flux_names..., moisture_flux_names...,
+        energy_flux_names..., moisture_flux_names..., aerosol_flux_names...,
     )
     type_tuple = Tuple{
         FT, FT, FT, FT, FT,
         typeof(C3(FT(0)) ⊗ C12(FT(0), FT(0))),
         ntuple(_ -> C3{FT}, Val(length(energy_flux_names)))...,
         ntuple(_ -> C3{FT}, Val(length(moisture_flux_names)))...,
+        ntuple(_ -> C3{FT}, Val(length(aerosol_flux_names)))...,
     }
     return NamedTuple{names, type_tuple}
 end

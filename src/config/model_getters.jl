@@ -1561,3 +1561,11 @@ function COSPModel(config::AtmosConfig)
         overlap = Val(overlap),
     )
 end
+
+function AtmosAerosols(config::AtmosConfig, params)
+    pa = config.parsed_args
+    return AtmosAerosols(
+        Tuple(pa["prognostic_aerosols"]);
+        params.prognostic_aerosol_params,
+    )
+end

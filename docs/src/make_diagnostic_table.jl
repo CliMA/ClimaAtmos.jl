@@ -8,7 +8,10 @@ long_names = []
 units = []
 comments = []
 standard_names = []
-for d in values(CA.Diagnostics.ALL_DIAGNOSTICS)
+
+sorted_diagnostics =
+    sort!(collect(values(CA.Diagnostics.ALL_DIAGNOSTICS)); by = d -> d.short_name)
+for d in sorted_diagnostics
     push!(short_names, d.short_name)
     push!(long_names, d.long_name)
     push!(units, d.units)

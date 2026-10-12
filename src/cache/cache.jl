@@ -325,6 +325,7 @@ function build_cache(
     )
 
     precomputed = precomputed_quantities(Y, atmos)
+    tracers = tracer_cache(Y, aerosol_names, time_varying_trace_gas_names, start_date)
     precomputing_arguments = (;
         atmos,
         core,
@@ -337,12 +338,14 @@ function build_cache(
         mp_averaging,
         conservation_check,
         external_forcing,
+        tracers,
     )
 
     # When flux_scheme is nothing, the surface conditions are entirely
     # supplied by an external driver, so we pre-fill safe defaults
-    isnothing(atmos.surface.flux_scheme) &&
-        SurfaceConditions.init_sfc_conditions_zero!(precomputing_arguments)
+    isnothing(atmos.surface.flux_scheme) ?
+    SurfaceConditions.init_sfc_conditions_zero!(precomputing_arguments) :
+    init_aerosol_surface_fluxes!(precomputing_arguments)
 
     set_precomputed_quantities!(Y, precomputing_arguments, FT(0))
 
@@ -359,7 +362,6 @@ function build_cache(
     non_orographic_gravity_wave = non_orographic_gravity_wave_cache(Y, atmos)
     orographic_gravity_wave = orographic_gravity_wave_cache(Y, atmos)
     radiation = radiation_model_cache(Y, atmos, radiation_args...)
-    tracers = tracer_cache(Y, aerosol_names, time_varying_trace_gas_names, start_date)
 
     # `dt` and `dtγ` share `FT`; `mp_averaging`'s type is its own parameter.
     # The remaining 18 args supply the parametric slots of `AtmosCache`.
