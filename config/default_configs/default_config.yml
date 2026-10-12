@@ -52,6 +52,12 @@ dg_volume_flux:
 dg_interface_flux:
   help: "FDDG interface dissipation [`roe` (default), `es` (entropy-variable Lax-Friedrichs; requires dg_volume_flux: waruszewski — gives a discrete entropy inequality), `rusanov` (requires dg_volume_flux: kg_pert — stronger dissipation, e.g. to keep EDMFX TKE production bounded over terrain)]."
   value: "roe"
+dg_vi_velocity_penalty:
+  help: "Velocity jump penalty of the vector-invariant horizontal DG form [`rusanov` (default; uniform |u| + c on the horizontal velocity jump), `wave_selective` (|u_n| + c on the normal jump, max(|u_n|, dg_vi_shear_floor c) on the tangential and vertical-velocity jumps)]. Ignored unless dg_equation_form is vi."
+  value: "rusanov"
+dg_vi_shear_floor:
+  help: "Floor ε of the wave-selective shear speed max(|u_n|, ε c), as a fraction of the sound speed. Used only with dg_vi_velocity_penalty: wave_selective."
+  value: 0.05
 sleve_eta:
   help: "If SLEVE coordinates are chosen, sets the `ηₕ` parameter (if z/z_top > ηₕ, no warping is applied)"
   value: 0.7

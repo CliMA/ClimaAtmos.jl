@@ -65,6 +65,7 @@ end
 if TEST_GROUP in ("dynamics", "all")
     @safetestset "Prognostic equations" begin @time include("prognostic_equations.jl") end
     @safetestset "Advection operators" begin @time include("prognostic_equations/advection_tests.jl") end
+    @safetestset "DG velocity penalty" begin @time include("prognostic_equations/dg_velocity_penalty_tests.jl") end
     @safetestset "Hyperdiffusion" begin @time include("prognostic_equations/hyperdiffusion_tests.jl") end
     @safetestset "Tendency computations" begin @time include("prognostic_equations/tendency_tests.jl") end
     @safetestset "Tracer/mass transport consistency" begin @time include("prognostic_equations/tracer_mass_consistency_tests.jl") end

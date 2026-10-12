@@ -3,6 +3,16 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- ![][badge-✨feature/enhancement] Add the `dg_vi_velocity_penalty` config option
+  for the vector-invariant horizontal DG form (`dg_equation_form: vi`). The
+  default `rusanov` keeps the uniform `|u| + c` penalty on the horizontal
+  velocity jump. `wave_selective` damps the normal velocity jump at the
+  acoustic speed `max(|u_n| + c)` and the tangential and vertical-velocity
+  jumps at the shear speed `max(|{u_n}|, ε max(c))`, with the floor ε set by
+  `dg_vi_shear_floor` (default `0.05`). Both are sign-definite kinetic-energy
+  sinks that conserve momentum at each face node; `wave_selective` also adds a
+  horizontal jump penalty on the vertical velocity, which `rusanov` does not
+  damp.
 - ![][badge-✨feature/enhancement] Add the Zhang–Shu (2010) positivity limiter
   (ClimaCore's `Limiters.PositivityLimiter`), enabled by the opt-in
   `apply_zhang_shu_limiter` config option (default `false`, mutually exclusive

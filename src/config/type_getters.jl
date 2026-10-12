@@ -153,6 +153,18 @@ function get_numerics(parsed_args, FT; vertical_water_borrowing_species = nothin
         error("dg_interface_flux = es requires dg_volume_flux = waruszewski")
     (dg_interface_flux == :rusanov && dg_volume_flux != :kg_pert) &&
         error("dg_interface_flux = rusanov requires dg_volume_flux = kg_pert")
+    dg_vi_velocity_penalty =
+        Symbol(get(parsed_args, "dg_vi_velocity_penalty", "rusanov"))
+    dg_vi_velocity_penalty in (:rusanov, :wave_selective) || error(
+        "dg_vi_velocity_penalty must be rusanov or wave_selective, \
+         got $dg_vi_velocity_penalty",
+    )
+    dg_vi_shear_floor = FT(get(parsed_args, "dg_vi_shear_floor", 0.05))
+    dg_vi_shear_floor >= 0 ||
+        error("dg_vi_shear_floor must be nonnegative, got $dg_vi_shear_floor")
+    (dg_vi_velocity_penalty != :rusanov && dg_equation_form != :vi) &&
+        @warn "dg_vi_velocity_penalty only applies to dg_equation_form = vi; \
+               it is ignored with dg_equation_form = $dg_equation_form."
 
     numerics = AtmosNumerics(;
         energy_q_tot_upwinding,
@@ -168,6 +180,8 @@ function get_numerics(parsed_args, FT; vertical_water_borrowing_species = nothin
         dg_equation_form,
         dg_volume_flux,
         dg_interface_flux,
+        dg_vi_velocity_penalty,
+        dg_vi_shear_floor,
         vertical_water_borrowing_species,
     )
     @info "numerics $(summary(numerics))"
@@ -390,7 +404,7 @@ mesh warping; any other combination raises an error. Called through
 """
 function get_steady_state_velocity(params, Y, topo, initial_condition, mesh_warp_type)
     initial_condition == "ConstantBuoyancyFrequencyProfile" &&
-        mesh_warp_type == "Linear" ||
+    mesh_warp_type == "Linear" ||
         error("The steady-state velocity can currently be computed only for a \
                ConstantBuoyancyFrequencyProfile with Linear mesh warping")
     top_level = Spaces.nlevels(axes(Y.c)) + Fields.half

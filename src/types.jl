@@ -1875,11 +1875,30 @@ symbols or strings.
   - `diff_mode`: `Explicit()` or `Implicit()`, the timestepping mode for
     vertical diffusion.
   - `hyperdiff`: `nothing`, or a `Hyperdiffusion` model.
+  - `dg_vi_velocity_penalty`: `Val(:rusanov)` or `Val(:wave_selective)`, the
+    velocity jump penalty of the vector-invariant horizontal DG form.
+  - `dg_vi_shear_floor`: floor ε of the wave-selective shear speed
+    `max(|u_n|, ε c)`.
   - `vertical_water_borrowing_species`: `nothing` (all tracers), `()` (none), or
     a `Tuple` of `Symbol`s naming the tracers that the vertical water borrowing
     limiter applies to.
 """
-struct AtmosNumerics{EN_UP, TR_UP, ED_UP, SG_UP, ED_TR_UP, LIM, DM, HD, DGEF, DGVF, DGIF, VWB}
+struct AtmosNumerics{
+    EN_UP,
+    TR_UP,
+    ED_UP,
+    SG_UP,
+    ED_TR_UP,
+    LIM,
+    DM,
+    HD,
+    DGEF,
+    DGVF,
+    DGIF,
+    DGVP,
+    DGSF,
+    VWB,
+}
     # Enable specific upwinding schemes for specific equations
     energy_q_tot_upwinding::EN_UP
     tracer_upwinding::TR_UP
@@ -1907,6 +1926,13 @@ struct AtmosNumerics{EN_UP, TR_UP, ED_UP, SG_UP, ED_TR_UP, LIM, DM, HD, DGEF, DG
     # entropy variables — with the Waruszewski volume flux this gives a
     # discrete entropy inequality).
     dg_interface_flux::DGIF
+    # VI-form DG velocity jump penalty: Val(:rusanov) (uniform |u| + c on the
+    # horizontal velocity jump) or Val(:wave_selective) (|u_n| + c on the
+    # normal jump, max(|u_n|, ε c) on the tangential and vertical-velocity
+    # jumps).
+    dg_vi_velocity_penalty::DGVP
+    # Floor ε on the wave-selective shear speed, as a fraction of c.
+    dg_vi_shear_floor::DGSF
     # Tracers the vertical water borrowing limiter applies to:
     # `nothing` (all tracers), `()` (none), or a Tuple of Symbols
     vertical_water_borrowing_species::VWB
@@ -1947,6 +1973,10 @@ types for compile-time dispatch.
   - `hyperdiff`: Hyperdiffusion model; defaults to a `Float32` `Hyperdiffusion`
     with the CAM-SE vorticity coefficient, `divergence_damping_factor = 5`, and
     `prandtl_number = 1.0`. Pass `nothing` to disable hyperdiffusion.
+  - `dg_vi_velocity_penalty = :rusanov`: Velocity jump penalty of the
+    vector-invariant horizontal DG form, `:rusanov` or `:wave_selective`.
+  - `dg_vi_shear_floor = 0.05`: Floor ε of the wave-selective shear speed
+    `max(|u_n|, ε c)`.
 
 An unrecognized keyword, such as a misspelled option, raises a `MethodError`.
 
@@ -1974,6 +2004,8 @@ function AtmosNumerics(;
     dg_equation_form = :vi,
     dg_volume_flux = :waruszewski,
     dg_interface_flux = :roe,
+    dg_vi_velocity_penalty = :rusanov,
+    dg_vi_shear_floor = 0.05,
     vertical_water_borrowing_species = nothing,
     kwargs...,
 )
@@ -1995,6 +2027,8 @@ function AtmosNumerics(;
         Val(Symbol(dg_equation_form)),
         Val(Symbol(dg_volume_flux)),
         Val(Symbol(dg_interface_flux)),
+        Val(Symbol(dg_vi_velocity_penalty)),
+        dg_vi_shear_floor,
         vertical_water_borrowing_species,
     )
 end

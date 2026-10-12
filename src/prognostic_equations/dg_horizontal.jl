@@ -11,7 +11,10 @@ every function here is a no-op):
     is kinetic-energy-sign-indefinite under the vector-invariant pairing.
   - `gradₕ` PGF/K terms (uₕ): central gradient liftings of the same scalars.
   - uₕ stability: ρ-weighted λ-jump penalties on the orthonormal velocity
-    components (an exactly sign-definite KE sink).
+    components (an exactly sign-definite KE sink). With
+    `dg_vi_velocity_penalty = wave_selective`, the normal jump is damped at
+    the acoustic speed and the tangential and vertical-velocity jumps at the
+    shear speed (still a sign-definite KE sink).
   - Vorticities (`ᶜω³` and the `wcurlₕ(u₃)` part of `ᶠω¹²`): strong curl
     plus central curl lifting replaces the CG weak curl (gated in
     `explicit_vertical_advection_tendency!`).
@@ -62,6 +65,60 @@ central_curl12_lift(normal, (w⁻,), (w⁺,)) =
 rho_weighted_jump_penalty_lift(normal, (q⁻, ρ⁻, λ⁻), (q⁺, ρ⁺, λ⁺)) =
     max(λ⁻, λ⁺) / 2 * ((ρ⁻ + ρ⁺) / 2 / ρ⁻) * (q⁺ - q⁻)
 
+# Contact/shear speed of the wave-selective penalty: |{u_n}| with a Harten-type
+# floor ε c, so jumps at near-stagnant faces still decay. Symmetric under
+# (n̂, −, +) → (−n̂, +, −), so both sides of a face see the same speed.
+@inline dg_shear_speed(un⁻, un⁺, c⁻, c⁺, ε) =
+    max(abs(un⁻ + un⁺) / 2, ε * max(c⁻, c⁺))
+
+"""
+    wave_selective_jump_penalty_lift(normal, (uv⁻, ρ⁻, c⁻, ε), (uv⁺, ρ⁺, c⁺, _))
+
+ρ-weighted jump penalty on the orthonormal horizontal velocity with separate
+normal and tangential rates, ``({ρ}/2ρ⁻) Λ ⟦u⟧`` with
+``Λ = λ_n n̂n̂ᵀ + λ_t (I − n̂n̂ᵀ)``, ``λ_n = max(|u_n| + c)`` (acoustic) and
+``λ_t = max(|{u_n}|, ε max(c))`` (shear). Face kinetic-energy production is
+``−{ρ}(λ_n⟦u_n⟧² + λ_t⟦u_t⟧²)/2 ≤ 0`` and ``ρ⁻ℓ⁻ + ρ⁺ℓ⁺ = 0``. With
+``λ_n = λ_t`` it reduces to [`rho_weighted_jump_penalty_lift`](@ref).
+Returns a `UVVector`.
+"""
+function wave_selective_jump_penalty_lift(
+    normal,
+    (uv⁻, ρ⁻, c⁻, ε),
+    (uv⁺, ρ⁺, c⁺, _),
+)
+    n1 = normal.components.data.:1
+    n2 = normal.components.data.:2
+    un⁻ = uv⁻' * normal
+    un⁺ = uv⁺' * normal
+    λn = max(abs(un⁻) + c⁻, abs(un⁺) + c⁺)
+    λt = dg_shear_speed(un⁻, un⁺, c⁻, c⁺, oftype(ρ⁻, ε))
+    s = (ρ⁻ + ρ⁺) / 4 / ρ⁻
+    ΔE = uv⁺.components.data.:1 - uv⁻.components.data.:1
+    ΔN = uv⁺.components.data.:2 - uv⁻.components.data.:2
+    a = (λn - λt) * n1 * n2
+    return s * Geometry.UVVector(
+        (λn * n1^2 + λt * n2^2) * ΔE + a * ΔN,
+        a * ΔE + (λn * n2^2 + λt * n1^2) * ΔN,
+    )
+end
+
+"""
+    shear_jump_penalty_lift(normal, (w⁻, ρ⁻, uv⁻, c⁻, ε), (w⁺, ρ⁺, uv⁺, c⁺, _))
+
+ρ-weighted jump penalty on the vertical velocity `w` across a horizontal
+interface, where `w` is a tangential component and is damped at the shear
+speed ``λ_t = max(|{u_n}|, ε max(c))``: ``λ_t/2 ({ρ}/ρ⁻) ⟦w⟧``.
+"""
+function shear_jump_penalty_lift(
+    normal,
+    (w⁻, ρ⁻, uv⁻, c⁻, ε),
+    (w⁺, ρ⁺, uv⁺, c⁺, _),
+)
+    λt = dg_shear_speed(uv⁻' * normal, uv⁺' * normal, c⁻, c⁺, oftype(ρ⁻, ε))
+    return λt / 2 * ((ρ⁻ + ρ⁺) / 2 / ρ⁻) * (w⁺ - w⁻)
+end
+
 """
     dg_scalars_interface(normal, argvals⁻, argvals⁺)
 
@@ -90,18 +147,67 @@ function dg_tracer_interface(normal, (y⁻,), (y⁺,))
     return (; ρχ = Fρ * χ̄ - λ / 2 * (y⁺.ρ * y⁺.χ - y⁻.ρ * y⁻.χ))
 end
 
+# Dry-γ sound speed c_snd = sqrt(γ p / ρ), γ = cp_d / cv_d.
+function dg_sound_speed(Y, p)
+    (; ᶜp) = p.precomputed
+    thermo_params = CAP.thermodynamics_params(p.params)
+    γ = TD.Parameters.cp_d(thermo_params) / TD.Parameters.cv_d(thermo_params)
+    return @. sqrt(γ * ᶜp / Y.c.ρ)
+end
+
 # Orthonormal horizontal face velocity and Rusanov speed λ = |uv| + c_snd.
 # The face velocity is the horizontal physical projection of the FULL ᶜu,
 # matching the contravariant contraction of the split_divₕ volume flux: over
 # terrain-warped grids u₃ contributes through g¹³/g²³; on unwarped grids those
 # metric entries are exact zeros, so this reduces bitwise to UVVector(uₕ).
 function dg_face_velocity_and_λ(Y, p)
-    (; ᶜu, ᶜp) = p.precomputed
-    thermo_params = CAP.thermodynamics_params(p.params)
-    γ = TD.Parameters.cp_d(thermo_params) / TD.Parameters.cv_d(thermo_params)
+    (; ᶜu) = p.precomputed
     ᶜuv = Geometry.project.(Ref(Geometry.UVAxis()), ᶜu)
-    ᶜλ = @. sqrt(LinearAlgebra.norm_sqr(ᶜuv)) + sqrt(γ * ᶜp / Y.c.ρ)
+    ᶜc = dg_sound_speed(Y, p)
+    ᶜλ = @. sqrt(LinearAlgebra.norm_sqr(ᶜuv)) + ᶜc
     return (ᶜuv, ᶜλ)
+end
+
+"""
+    dg_wave_selective_velocity_penalty!(Yₜ, Y, p, ᶜuv)
+
+Wave-selective velocity jump penalties (`dg_vi_velocity_penalty = wave_selective`): [`wave_selective_jump_penalty_lift`](@ref) on uₕ and
+[`shear_jump_penalty_lift`](@ref) on the face vertical velocity, with the
+shear floor `p.atmos.numerics.dg_vi_shear_floor`.
+"""
+function dg_wave_selective_velocity_penalty!(Yₜ, Y, p, ᶜuv)
+    FT = Spaces.undertype(axes(Y.c))
+    ε = FT(p.atmos.numerics.dg_vi_shear_floor)
+    ᶜc = dg_sound_speed(Y, p)
+    pen_uv = Operators.lifting_correction(
+        wave_selective_jump_penalty_lift,
+        Geometry.UVVector{FT},
+        ᶜuv,
+        Y.c.ρ,
+        ᶜc,
+        ε,
+    )
+    @. Yₜ.c.uₕ += C12(Geometry.transform(Geometry.Covariant12Axis(), pen_uv))
+
+    ᶠlg = Fields.local_geometry_field(Y.f)
+    ᶠw = @. Geometry.WVector(Y.f.u₃).components.data.:1
+    ᶠρ = @. ᶠinterp(Y.c.ρ)
+    ᶠuv = @. ᶠinterp(ᶜuv)
+    ᶠc = @. ᶠinterp(ᶜc)
+    pen_w = Operators.lifting_correction(
+        shear_jump_penalty_lift,
+        FT,
+        ᶠw,
+        ᶠρ,
+        ᶠuv,
+        ᶠc,
+        ε,
+    )
+    # the surface and top-face w are set by the boundary conditions
+    Fields.level(pen_w, half) .= 0
+    Fields.level(pen_w, Spaces.nlevels(axes(Y.f)) - half) .= 0
+    @. Yₜ.f.u₃ += C3(Geometry.WVector(pen_w), ᶠlg)
+    return nothing
 end
 
 """
@@ -109,7 +215,9 @@ end
 
 Interface completion of `horizontal_dynamics_tendency!` on DG spaces: scalar
 (ρ, ρe_tot) interface fluxes, central liftings of the PGF/K `gradₕ` terms,
-and ρ-weighted λ-jump penalties on uₕ. No-op on CG spaces.
+and ρ-weighted velocity jump penalties — uniform λ on uₕ (`rusanov`), or
+wave-selective on uₕ and u₃ (`wave_selective`, see
+[`dg_wave_selective_velocity_penalty!`](@ref)). No-op on CG spaces.
 """
 NVTX.@annotate function dg_horizontal_dynamics_completion!(Yₜ, Y, p, t)
     is_dg_horizontal(axes(Y.c)) || return nothing
@@ -159,6 +267,10 @@ NVTX.@annotate function dg_horizontal_dynamics_completion!(Yₜ, Y, p, t)
         ),
     )
 
+    if p.atmos.numerics.dg_vi_velocity_penalty === Val(:wave_selective)
+        dg_wave_selective_velocity_penalty!(Yₜ, Y, p, ᶜuv)
+        return nothing
+    end
     # ρ-weighted λ-jump penalties on the orthonormal velocity components
     pen_u = Operators.lifting_correction(
         rho_weighted_jump_penalty_lift,
