@@ -64,3 +64,19 @@ cd $WT && CLIMACOMMS_DEVICE=CPU julia --project=$ENV .buildkite/ci_driver.jl \
   cached rate names (`washrss`, `incrss`) are owned by the SSLTH
   species implementation; adjust them here if that implementation registers
   different names.
+
+## Single-process run (preferred)
+
+Compile time dominates (hours per simulation type, ~quadratic in tracer count)
+while a 5-day column integrates in about a minute, so run all sites in one
+Julia process:
+
+    bash scripts/ssa_ensemble/make_site_configs.sh
+    sbatch --export=SHA=<sha> scripts/ssa_ensemble/submit_ensemble_serial.sh
+
+`run_ensemble_serial.jl` prints `ENSEMBLE_BUILD_SECONDS[1]` (the one-time
+compile) and `ENSEMBLE_SITE[i]=... status=...` per site; a failing site is
+logged and skipped so the rest still run. The array script
+`submit_ensemble.sh` is kept for reruns of individual sites.
+The stepper is implicit ARS222: explicit stepping was measured to be unstable
+with prognostic EDMF at dt = 0.1 s and ~4 wall-days per 5-day column.

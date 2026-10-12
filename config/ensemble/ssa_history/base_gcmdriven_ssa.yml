@@ -48,17 +48,14 @@ toml:
   - config/ensemble/ssa_history/prognostic_edmfx_gcmdriven_1M.toml   # gcmdriven calibration + 1M-only keys (see file header)
   - /home/zglaser/autodebug/bomex/ssa_12bin.toml   # 12-bin ClimaParams override (server path)
 
-#== Stepper (PLACEHOLDER: pick from the probe results) ==#
-# Variant A (active): implicit IMEX, the production column stepper.
+#== Stepper ==#
+# Implicit IMEX, the production column stepper. Explicit stepping was measured
+# to be unstable with prognostic EDMF at dt = 0.1 s and ~4 wall-days per
+# 5-day column, so it is not an option here.
 ode_algo: "ARS222"
 dt: "10secs"
 implicit_diffusion: true
 approximate_linear_solve_iters: 2
-# Variant B: fully explicit SSP (strong-stability-preserving for the sea-salt
-# sinks, no per-tracer Jacobian blocks). Comment out Variant A and enable:
-# ode_algo: "SSP33ShuOsher"
-# dt: "0.1secs"
-# implicit_diffusion: false
 
 #== Run length and output ==#
 t_end: "5days"
