@@ -245,17 +245,22 @@ not yet define.
 
   - `diagnostic_covariance_coeff`: Prefactor of the turbulent production term in
     the diagnostic covariance closure [-].
-  - `sgs_variance_geometric_coeff`: Coefficient `c_g` shared by the horizontal
-    and vertical resolved-gradient SGS variance terms, `variance += c_g (c_Δx Δx_h)^2 |∇_h ψ|^2` (horizontal) and `variance += c_g (c_Δz Δz)^2 (∂_z ψ)^2` (vertical), added to the diagnostic `θ′θ′` and `q′q′` that feed
-    the SGS quadrature. `1/12` is the variance of a linear field over a uniform
-    cell [-].
-  - `sgs_variance_horizontal_scale_factor`: Multiplier `c_Δx` on the horizontal grid
-    scale `Δx_h` in the geometric variance term; the effective horizontal
-    coefficient is `c_g c_Δx^2`. `0` disables the term [-].
+  - `sgs_variance_geometric_coeff`: Coefficient `c_g` of the resolved-gradient
+    SGS variance block, the variance from a subgrid parcel displacement with
+    covariance `c_g diag(ℓ_h², ℓ_h², ℓ_v²)` on the local `θ_li` surface, added
+    to the diagnostic `θ′θ′`, `q′q′` and `θ′q′` that feed the SGS quadrature.
+    `1/12` is the variance of a linear field over a uniform cell [-].
+  - `sgs_variance_horizontal_scale_factor`: Multiplier `c_Δx` on the horizontal
+    grid scale, `ℓ_h = c_Δx Δx_h`. `0` turns the horizontal displacement
+    off [-].
   - `sgs_variance_vertical_scale_factor`: Multiplier `c_Δz` on the vertical grid
-    scale `Δz` in the resolved vertical-gradient variance term; the effective
-    coefficient is `c_g c_Δz^2`. `1` reproduces the exact uniform-box result
-    `(Δz · ∂_z ψ)^2 / 12`; `0` disables the term [-].
+    scale, `ℓ_v = c_Δz Δz`. `1` gives the uniform-box result
+    `(Δz · ∂_z ψ)^2 / 12` for a flat surface; `0` turns the vertical
+    displacement off [-].
+  - `sgs_variance_isentropic_depth`: Depth `H` of the unresolved slantwise
+    motion, the vertical scale of the displacement along the `θ_li` surface in
+    the geometric variance block (`along_surface_q_variance`); must be
+    positive [m].
   - `sgs_variance_max_rel_std`: Upper bound on the SGS total-water standard
     deviation relative to the grid-mean total water, `σ_q ≤ sgs_variance_max_rel_std * q_tot`,
     applied to the diagnosed `q′q′` whatever closure produced it. A wider variance puts a quadrature node
@@ -270,13 +275,6 @@ not yet define.
     SGS quadrature, in `[-1, 1]`. Used verbatim by `tq_correlation_model: constant`;
     used as the turbulent-block cross `ρ_turb` (and the fallback where all variance
     blocks vanish) by `tq_correlation_model: diagnosed` [-].
-  - `sgs_variance_isentropic_min_dtheta_dz`: Floor `θz_min` on the stratification in
-    the slope ratio `r = (∂q/∂z) / max(∂θ_li/∂z, θz_min)` of the isentropic geometric
-    variance term; keeps `r` finite and bounded by `|∂q/∂z| / θz_min` in neutral and
-    overturned layers, and enters the slope `s = |∇_h θ_li| / max(∂θ_li/∂z, θz_min)`
-    of the cell-geometry bound `ℓ² = Δx² / (1 + (s Δx / Δz)²)` on the along-surface
-    displacement (`isentropic_cell_cap`); must be positive (checked in
-    `get_sgs_quadrature`) [K m^-1].
   - `cloud_fraction_steepness_scale`: Steepness scale `α` of the
     cloud-fraction/condensate relationship; 1 for exact Gaussian or lognormal SGS
     distributions [-].
@@ -298,6 +296,7 @@ Base.@kwdef struct SGSQuadratureParameters{FT} <: ASQP
     sgs_variance_geometric_coeff::FT
     sgs_variance_horizontal_scale_factor::FT
     sgs_variance_vertical_scale_factor::FT
+    sgs_variance_isentropic_depth::FT
     sgs_variance_max_rel_std::FT
     sgs_liquid_uniform_fraction::FT
     sgs_ice_uniform_fraction::FT
@@ -309,7 +308,6 @@ Base.@kwdef struct SGSQuadratureParameters{FT} <: ASQP
     cloud_fraction_floor_release_abs_margin::FT
     cloud_fraction_floor_release_sharpness::FT
     cloud_fraction_floor_residual::FT
-    sgs_variance_isentropic_min_dtheta_dz::FT
 end
 
 """

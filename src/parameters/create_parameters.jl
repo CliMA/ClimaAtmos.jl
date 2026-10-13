@@ -594,9 +594,9 @@ function SGSQuadratureParameters(
         cloud_fraction_floor_release_abs_margin = FT(1),
         cloud_fraction_floor_release_sharpness = FT(1),
         cloud_fraction_floor_residual = FT(1),
-        # Isentropic geometric variance term: floor on ∂θ_li/∂z [K/m] in the
-        # slope ratio and in the cell-geometry bound.
-        sgs_variance_isentropic_min_dtheta_dz = FT(1e-3),
+        # Depth [m] of the along-surface displacement of the geometric
+        # variance block.
+        sgs_variance_isentropic_depth = FT(1000),
     )
     provisional_present = filter(collect(keys(provisional_defaults))) do name
         haskey(toml_dict.data, string(name))

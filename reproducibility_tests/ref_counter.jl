@@ -1,4 +1,4 @@
-427
+428
 
 # **README**
 #
@@ -32,6 +32,11 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+428
+- Geometric SGS variance as a conditional parcel displacement on the
+  θ_li surface
+- Update to CloudMicrophysics v0.45 (joint relaxation of the vapor-driven phase changes is the default)
+
 427
 - Change the horizontal geometric SGS variance term to the isentropic form
 

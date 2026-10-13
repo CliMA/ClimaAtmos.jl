@@ -3,6 +3,15 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- ![][badge-🔥behavioralΔ] The resolved-gradient (geometric) SGS variance block
+  is the variance from a Gaussian subgrid parcel displacement with covariance
+  `c_g diag(ℓ_h², ℓ_h², ℓ_v²)`, `ℓ_h = c_Δx Δx_h`, `ℓ_v = H`, split into
+  the part along the local `θ_li` surface (q′q′ only, the conditional variance
+  `gᵀDg − (gᵀDn)²/(nᵀDn)` with `g = ∇q_tot`, `n = ∇θ_li`) and the part across
+  it (the vertical uniform-box terms, with the q gradient taken across the
+  surface).
+- ![][badge-🔥behavioralΔ] Update to CloudMicrophysics v0.45 and use joint
+  relaxation of the vapor-driven phase changes.
 - ![][badge-✨feature/enhancement] Add back CloudMicrophysics v0.43 to the
   compat.
 - ![][badge-🔥behavioralΔ] The horizontal resolved-gradient (geometric) SGS variance

@@ -71,6 +71,8 @@ the valid choices. Each option string names the `CM.Parameters` type it maps to:
   - `cloud_ice_rain_accretion`: `"CloudIceRainAccretion"`.
   - `cloud_ice_snow_accretion`: `"CloudIceSnowAccretion"`.
   - `rain_snow_accretion`: `"RainSnowAccretion"`.
+  - `vapor_relaxation`: `"Joint"` (default) or `"PerProcess"`, the coupling of the
+    vapor-driven phase changes in the `LinearizedAverage` substep solver (not a process; cannot be `~`).
 """
 function get_microphysics_1m_options(parsed_args)
     CMP = CM.Parameters
@@ -195,6 +197,14 @@ function get_microphysics_1m_options(parsed_args)
         "rain_snow_accretion",
     )
 
+    vapor_relaxation = parse_option(
+        parsed_args["vapor_relaxation"],
+        Dict(
+            "Joint" => CMP.JointVaporRelaxation(),
+            "PerProcess" => CMP.PerProcessVaporRelaxation(),
+        ),
+        "vapor_relaxation",
+    )
     return (;
         n_substeps,
         n_substeps_quad,
@@ -212,6 +222,7 @@ function get_microphysics_1m_options(parsed_args)
         cloud_ice_rain_accretion,
         cloud_ice_snow_accretion,
         rain_snow_accretion,
+        vapor_relaxation,
     )
 end
 
