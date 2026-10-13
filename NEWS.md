@@ -3,6 +3,20 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- ![][badge-🔥behavioralΔ] The along-surface depth of the geometric SGS
+  variance block is bounded by the height above the surface,
+  `ℓ_a = min(H, z − z_sfc)`: in a neutral layer the along-surface
+  displacement is the vertical eddy displacement, which cannot reach below
+  the ground.
+- ![][badge-🔥behavioralΔ] Make the SGS variance fidelity `α` a cached
+  per-cell field `α = α_Da · α_eq`, refreshed inside `set_covariance_cache!`:
+  Damköhler factor `α_Da = 1 / (1 + A · τ_mp · c_d · √TKE / max(l_mix, 1 m))`
+  (quiescent → 1, well-mixed → 0) and equilibrium-ratio modulator
+  `α_eq = r / (w + (1−w) r)` with `r = (q_c + q_min)/(q_c^eq + q_min)` and
+  new provisional parameter `sgs_fidelity_equilibrium_weight` (default 0.5).
+  CF uses `σ_aug = sqrt((α σ_S)² + σ_S_floor²)` — α scales only the
+  equilibrium part. Microphysics timescales reuse the ClimaParams
+  `condensation_evaporation_timescale` / `sublimation_deposition_timescale`.
 - ![][badge-🔥behavioralΔ] The resolved-gradient (geometric) SGS variance block
   is the variance from a Gaussian subgrid parcel displacement with covariance
   `c_g diag(ℓ_h², ℓ_h², ℓ_v²)`, `ℓ_h = c_Δx Δx_h`, `ℓ_v = H`, split into

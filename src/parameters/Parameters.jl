@@ -278,6 +278,12 @@ not yet define.
   - `cloud_fraction_steepness_scale`: Steepness scale `α` of the
     cloud-fraction/condensate relationship; 1 for exact Gaussian or lognormal SGS
     distributions [-].
+  - `condensation_evaporation_timescale`, `sublimation_deposition_timescale`:
+    Shared ClimaParams/CloudMicrophysics 1M relaxation timescales
+    `τ_cond`, `τ_sub` used by `sgs_microphysics_timescale` [s].
+  - `sgs_fidelity_equilibrium_weight`: Weight `w_eq ∈ (0, 1)` on the
+    equilibrium prediction in the SGS variance-fidelity modulator; default
+    `0.5` (see `sgs_variance_fidelity`) [-].
   - `cloud_fraction_eps_rel`: Residual fractional saturation variability
     `ε_rel` in the augmented-`σ` floor of the cloud-fraction closure [-].
   - `cloud_fraction_sigma_abs`: Absolute floor `σ_abs` on the augmented
@@ -302,6 +308,9 @@ Base.@kwdef struct SGSQuadratureParameters{FT} <: ASQP
     sgs_ice_uniform_fraction::FT
     Tq_correlation_coefficient::FT
     cloud_fraction_steepness_scale::FT
+    condensation_evaporation_timescale::FT
+    sublimation_deposition_timescale::FT
+    sgs_fidelity_equilibrium_weight::FT
     cloud_fraction_eps_rel::FT
     cloud_fraction_sigma_abs::FT
     cloud_fraction_floor_release_margin::FT
