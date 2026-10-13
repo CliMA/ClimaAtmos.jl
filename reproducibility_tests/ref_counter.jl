@@ -1,4 +1,4 @@
-429
+430
 
 # **README**
 #
@@ -32,6 +32,9 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+430
+- Snow falls at the Chen et al. (2022) speed by default; snow_apparent_density 300
+
 429
 - Local SGS variance fidelity α(TKE, l_mix, τ_mp, q_c/q_c^eq).
 

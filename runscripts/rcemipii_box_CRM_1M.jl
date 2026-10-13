@@ -79,6 +79,7 @@ model = CA.AtmosModel(
 
     # AtmosWater - Moisture, Precipitation & Clouds
     microphysics_model = CA.NonEquilibriumMicrophysics1M(),
+    terminal_velocity_snow = CA.FixedTerminalVelocity(),
     cloud_model = CA.GridScaleCloud(),
     microphysics_tendency_timestepping = CA.Explicit(),
     tracer_nonnegativity_method = CA.TracerNonnegativityMethod("elementwise_constraint"),
