@@ -171,7 +171,7 @@ model_dry = (;
 ## 2 m temperature diagnostic (`tas`); the default `model_dry` uses
 ## `ExchangeCoefficients`, which hits the lowest-model-level fallback instead.
 model_dry_mo =
-    CA.AtmosModel(;
+    (;
         microphysics_model = CA.DryModel(),
         temperature = CA.SurfaceConditions.SlabOceanTemperature{FT}(),
         flux_scheme = CA.SurfaceConditions.MoninObukhov(; z0 = FT(0.05)),
