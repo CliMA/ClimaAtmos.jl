@@ -22,6 +22,6 @@ dt: "10secs"
 t_end: "9hours"
 dt_save_state_to_disk: "30mins"
 perturb_initstate: false
-toml: [toml/prognostic_edmfx.toml]
+toml: [toml/prognostic_edmfx_1M.toml]
 netcdf_interpolation_num_points: [2, 2, 8]
 ode_algo: "ARS222"

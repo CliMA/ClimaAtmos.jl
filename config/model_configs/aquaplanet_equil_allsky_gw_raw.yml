@@ -3,10 +3,10 @@ implicit_diffusion: false
 approximate_linear_solve_iters: 1
 rad: "allskywithclear"
 dt_save_state_to_disk: "1days"
-ode_algo: "SSPKnoth"
 orographic_gravity_wave: "raw_topo"
 dt: "400secs"
 surface_setup: "DefaultMoninObukhov"
+time_varying_trace_gases: ["CO2", "O3"]
 t_end: "15hours"
 non_orographic_gravity_wave: true
 vert_diff: "VerticalDiffusion"

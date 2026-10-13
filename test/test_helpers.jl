@@ -21,7 +21,6 @@ import ClimaCore:
 # specialised test functions with multiple uses, define them here.)
 
 function generate_test_simulation(config)
-    parsed_args = config.parsed_args
     simulation = CA.get_simulation(config)
     (; integrator) = simulation
     Y = integrator.u
@@ -118,7 +117,7 @@ function make_horizontal_space(mesh, quad, comms_ctx, bubble)
     if mesh isa Meshes.AbstractMesh1D
         error("Distributed mode does not work with 1D horizontal spaces.")
     elseif mesh isa Meshes.AbstractMesh2D
-        topology = Topologies.DistributedTopology2D(
+        topology = Topologies.Topology2D(
             comms_ctx,
             mesh,
             Topologies.spacefillingcurve(mesh),
@@ -141,7 +140,6 @@ function get_spherical_spaces(; FT = Float32)
     mesh = Meshes.EquiangularCubedSphere(domain, ne)
     topology = Topologies.Topology2D(context, mesh)
     quad = Quadratures.GLL{Nq}()
-    space = Spaces.SpectralElementSpace2D(topology, quad)
     enable_bubble = false
     no_bubble_space =
         Spaces.SpectralElementSpace2D(topology, quad; enable_bubble)
@@ -274,7 +272,6 @@ function get_cartesian_spaces(; FT = Float32)
     helem = 5
     velem = 10
     npoly = 5
-    ndims = 3
     stretch = Meshes.Uniform()
     device = ClimaComms.CPUSingleThreaded()
     comms_context = ClimaComms.SingletonCommsContext(device)
@@ -305,13 +302,11 @@ function get_cartesian_spaces(; FT = Float32)
         boundary_names = (:bottom, :top),
     )
     vertmesh = Meshes.IntervalMesh(vertdomain, stretch, nelems = velem)
-    vert_face_space = Spaces.FaceFiniteDifferenceSpace(vertmesh)
     vert_topology = Topologies.IntervalTopology(
         ClimaComms.SingletonCommsContext(device),
         vertmesh,
     )
     vert_grid = Grids.FiniteDifferenceGrid(vert_topology)
-    ArrayType = ClimaComms.array_type(device)
     grid = Grids.ExtrudedFiniteDifferenceGrid(horz_grid, vert_grid)
     cent_space = Spaces.CenterExtrudedFiniteDifferenceSpace(grid)
     face_space = Spaces.FaceExtrudedFiniteDifferenceSpace(grid)
@@ -497,16 +492,20 @@ function create_mock_era5_datasets(
     tvforcing["clwc"][:, :, :, :] .= zeros(FT, size(tvforcing["clwc"]))
     tvforcing["ciwc"][:, :, :, :] .= zeros(FT, size(tvforcing["ciwc"]))
 
-    tvforcing["z"] .= reshape(
-        tvforcing["pressure_level"] .* 100,
-        (1, 1, length(tvforcing["pressure_level"]), 1),
+    # Build full (lon, lat, level, time) arrays in memory, then write them.
+    # A broadcasting RHS (e.g. a (1, 1, level, 1) profile) is not reliably
+    # written through a CFVariable view: it silently leaves most columns
+    # unfilled, so the site column ends up with a constant/garbage profile.
+    geopotential_profile = geopotential_from_pressure(
+        tvforcing["pressure_level"][:] .* 100;
+        R_d = CA.Parameters.R_d(params),
     )
-    tvforcing["z"] .=
-        geopotential_from_pressure(tvforcing["z"]; R_d = CA.Parameters.R_d(params))
-    tvforcing["t"][:, :, :, :] .=
-        temperature_from_geopotential(tvforcing["z"]; g = CA.Parameters.grav(params))
-    tvforcing["q"][:, :, :, :] .=
-        shum_from_geopotential(tvforcing["z"]; g = CA.Parameters.grav(params))
+    g = CA.Parameters.grav(params)
+    z_full = zeros(FT, num_lon, num_lat, num_pressure, hours)
+    z_full .= reshape(geopotential_profile, 1, 1, num_pressure, 1)
+    tvforcing["z"][:, :, :, :] .= z_full
+    tvforcing["t"][:, :, :, :] .= temperature_from_geopotential(z_full; g)
+    tvforcing["q"][:, :, :, :] .= shum_from_geopotential(z_full; g)
     close(tvforcing)
 
     # Create accumulated dataset (3D: lon, lat, time)

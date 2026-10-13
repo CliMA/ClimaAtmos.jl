@@ -1,0 +1,142 @@
+# Column Datasets
+
+Adding a new externally-driven column case in a supported format requires no
+source code: point the config at the file and the
+[`ForcingFromFile`](@ref ClimaAtmos.Setups.ForcingFromFile) setup builds the
+case (initial condition, external forcing, surface temperature, and insolation)
+from it.
+
+```yaml
+initial_condition: "ForcingFromFile"
+external_forcing_file: /path/to/my_case_forcing.nc
+start_date: "20200101"
+config: "column"
+```
+
+`initial_condition: "ForcingFromFile"` takes both the forcing and the initial
+state from the file, which must then contain the `ta`, `ua`, `va`, `hus`, and
+`rho` profiles in addition to the forcing variables. Each setup supplies its own
+forcing, so the only value the `external_forcing` key takes is
+`"ReanalysisMonthlyAveragedDiurnal"`.
+
+The reader uses one format: the native `ClimaColumn` schema (below),
+written by the ERA5 generator and the target for hand-made case files. A file
+that does not conform to the ClimaColumn schema raises an error at
+construction. A
+stale cached file (e.g. an ERA5 forcing file written by an older version in a
+different on-disk layout) is regenerated on demand from the source.
+
+The forcing is composed from explicit per-process terms
+([`HorizontalAdvection`](@ref ClimaAtmos.HorizontalAdvection),
+[`VerticalFluctuation`](@ref ClimaAtmos.VerticalFluctuation),
+[`Nudging`](@ref ClimaAtmos.Nudging),
+[`Subsidence`](@ref ClimaAtmos.Subsidence)). The default composition is all
+four. A runscript can narrow or reshape it directly:
+
+```julia
+forcing = ClimaAtmos.ExternalDrivenTVForcing(
+    forcing_file;
+    forcing = (ClimaAtmos.HorizontalAdvection(),),   # advection only
+)
+model = ClimaAtmos.AtmosModel(grid; setup, external_forcing = forcing)
+simulation = ClimaAtmos.AtmosSimulation(model)
+```
+
+When the same file also supplies the initial condition, pass the terms to the
+setup's `forcing` slot: `ForcingFromFile(...; forcing = (...,))`.
+
+Per-variable relaxation timescales and height-dependent masks compose as
+multiple `Nudging` terms (`Nudging(:ta; timescale, mask = z -> ...)`).
+
+Surface-temperature and insolation inputs are required only when the model uses
+them
+([`ExternalTemperature`](@ref ClimaAtmos.SurfaceConditions.ExternalTemperature)
+needs `ts`; [`ExternalTVInsolation`](@ref ClimaAtmos.ExternalTVInsolation) needs
+`coszen`/`rsdt`), so runscripts need not track those separately.
+
+The built-in file-driven cases wire these defaults (a runscript can override any
+slot):
+
+| Case                                                                          | Large-scale forcing (default)                                                                  | Surface / insolation (default)                                                                                                                |
+|:----------------------------------------------------------------------------- |:---------------------------------------------------------------------------------------------- |:--------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ForcingFromFile`, `ReanalysisTimeVarying` (ERA5 time-varying)                | `default_forcing_terms()`: HAdv + VertFluc + Nudge(`ta`,`hus`) + Nudge(`ua`,`va`) + Subsidence | MO (`z0 = 1e-4`); `ExternalTemperature` (file `ts`); `ExternalTVInsolation` (file `coszen`/`rsdt`)                                            |
+| `ReanalysisMonthlyAveragedDiurnal` (ERA5 monthly, set via `external_forcing`) | same terms, but periodic time interpolation (repeats the one-day file)                         | MO (`z0 = 1e-4`); `ExternalTemperature`; `ExternalTVInsolation`                                                                               |
+| `ARMVARANAL`                                                                  | HAdv + Nudge(`ta`,`hus`) + Nudge(`ua`,`va`) + Subsidence (no VertFluc)                         | MO (`z0 = 0.05`, `ustar = 0.28`) + `FileHeatFluxes` when `hfls`/`hfss` present; `ExternalTemperature`; `TimeVaryingInsolation` (site lat/lon) |
+| `GCM` (cfsite, see below)                                                     | `default_forcing_terms()`, steady in time                                                      | MO (`z0 = 1e-4`); `ExternalTemperature` (mean `ts`); `ExternalTVInsolation` (constant `coszen`/`rsdt`)                                        |
+
+```@docs
+ClimaAtmos.ExternalDrivenTVForcing
+ClimaAtmos.AbstractForcingTerm
+ClimaAtmos.HorizontalAdvection
+ClimaAtmos.VerticalFluctuation
+ClimaAtmos.Subsidence
+ClimaAtmos.Nudging
+```
+
+## GCM-driven (cfsite) runs
+
+A GCM-driven column is configured with `initial_condition: "GCM"`, the cfsite
+forcing file, and the site group inside it:
+
+```yaml
+initial_condition: "GCM"
+external_forcing_file: artifact"cfsite_gcm_forcing"/HadGEM2-A_amip.2004-2008.07.nc
+cfsite_number: "site23"
+config: "column"
+```
+
+Nothing else selects the case: the setup supplies the forcing, the surface, and
+the insolation. There is no `external_forcing: "GCM"` or
+`insolation: "gcmdriven"`; both raise an error.
+
+[`GCMColumnData.read_cfsite`](@ref ClimaAtmos.ColumnDatasets.GCMColumnData.read_cfsite)
+reads the cfsite subgroup into in-memory time-mean profiles, which then run
+through the same `ForcingFromFile` setup and per-term composition as any other
+column source, so a runscript can reshape it the same way:
+
+```julia
+data = ClimaAtmos.ColumnDatasets.GCMColumnData.read_cfsite(
+    forcing_file, "site23"; thermo_params,
+)
+setup = ClimaAtmos.Setups.ForcingFromFile(
+    data, "20040701"; forcing = (ClimaAtmos.HorizontalAdvection(),),
+)
+```
+
+The profiles are time means, so the forcing is constant in time and does not
+limit the run length.
+
+!!! note "Where the eddy vertical fluctuation is differenced"
+
+    The vertical-fluctuation term is `tntva + w̄ ∂T̄/∂z` (likewise for `hus`),
+    with the gradient differenced on the GCM grid. Interpolating to the model
+    grid before differencing would smooth the gradient, most noticeably at
+    sharp features such as the trade inversion.
+
+## The ClimaColumn schema
+
+A ClimaColumn file is self-describing, so the reader needs no per-file
+exceptions.
+
+  - Global attributes: `site_latitude` / `site_longitude` in degrees.
+  - Dimensions: column variables are pure 1D `(z, time)` and surface variables
+    are `(time,)`. `z` is height in meters, strictly ascending, with at least
+    two levels. `time` is a CF time coordinate (units plus calendar).
+  - Variables use CMIP short names with SI `units` attributes. Column:
+    `ta` [K], `hus` [kg kg⁻¹], `ua`/`va`/`wa` [m s⁻¹], `rho` [kg m⁻³],
+    `tntha`/`tntva` [K s⁻¹], `tnhusha`/`tnhusva` [kg kg⁻¹ s⁻¹]. Surface:
+    `ts` [K], `hfls`/`hfss` [W m⁻², upward positive], `coszen` [1],
+    `rsdt` [W m⁻²].
+
+Constructing a [`ColumnDataset`](@ref ClimaAtmos.ColumnDatasets.ColumnDataset)
+validates a native file against this schema, including exact canonical SI unit
+strings, and reports all violations.
+`ColumnDatasets.validate(ColumnDatasets.ClimaColumnFile(), path)` performs the
+same check explicitly;
+[`ClimaColumnFiles.write_column_forcing_file`](@ref ClimaAtmos.ColumnDatasets.ClimaColumnFiles.write_column_forcing_file)
+is the one producer implementation, used by the ERA5 generator.
+
+To extend this machinery (nonstandard forcing from a runscript, generating
+ERA5 forcing files, or a reader for a new file format), see
+[Adding a Column Dataset](extending_column_datasets.md) in the Developer
+Guide.

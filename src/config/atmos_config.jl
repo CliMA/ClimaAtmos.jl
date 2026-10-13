@@ -41,6 +41,13 @@ function normrelpath(file)
     end
 end
 
+"""
+    maybe_add_default(config_files, default_config_file)
+
+Prepend `default_config_file` to `config_files` unless it is already among them.
+
+Called from the file-based `AtmosConfig` constructor.
+"""
 function maybe_add_default(config_files, default_config_file)
     return if any(x -> samefile(x, default_config_file), config_files)
         config_files
@@ -50,22 +57,29 @@ function maybe_add_default(config_files, default_config_file)
 end
 
 """
-    AtmosConfig(
-        config_file::String = default_config_file;
-        job_id = nothing,
-        comms_ctx = nothing,
-    )
-    AtmosConfig(
-        config_files::Union{NTuple{<:Any, String} ,Vector{String}};
-        job_id = nothing,
-        comms_ctx = nothing,
-    )
+    AtmosConfig(config_file::String = default_config_file; job_id = nothing, comms_ctx = nothing)
+    AtmosConfig(config_files; job_id = nothing, comms_ctx = nothing)
 
-Helper function for the AtmosConfig constructor. Reads a YAML file into a Dict
-and passes it to the AtmosConfig constructor.
+Build an `AtmosConfig` from one or more YAML configuration files.
 
-When `job_id` is not passed explicitly, it is taken from the `job_id` key in the
-configuration (if present), and otherwise derived from the config file names.
+Each file is parsed into a `Dict`, and the results are merged (later files override
+earlier ones) on top of `default_config.yml`, which is prepended automatically when not
+already among `config_files`.
+
+# Keyword Arguments
+
+  - `job_id = nothing`: Run identifier. When `nothing`, it is taken from the `job_id` key
+    in the merged configuration (if present), and otherwise derived from the config file
+    names.
+  - `comms_ctx = nothing`: `ClimaComms` context. When `nothing`, it is inferred from the
+    `device` config key (see `get_comms_context`).
+
+# Examples
+
+```julia
+import ClimaAtmos as CA
+config = CA.AtmosConfig("config/model_configs/held_suarez.yml")
+```
 """
 AtmosConfig(
     config_file::String = default_config_file;
@@ -99,15 +113,26 @@ function AtmosConfig(
 end
 
 """
-    AtmosConfig(
-        configs::Union{NTuple{<:Any, Dict} ,Vector{Dict}};
-        comms_ctx = nothing,
-        config_files,
-        job_id
-    )
+    AtmosConfig(config::AbstractDict; comms_ctx = nothing, config_files = [default_config_file], job_id = nothing)
+    AtmosConfig(configs; comms_ctx = nothing, config_files = [default_config_file], job_id = nothing)
 
-Constructs the AtmosConfig from the Dicts passed in. This Dict overrides all of
-the default configurations set in `default_config_dict()`.
+Build an `AtmosConfig` from one or more configuration `Dict`s.
+
+The dicts are merged (later ones override earlier ones), and the result overrides the
+defaults from `default_config.yml` (see `override_default_config`). The float type `FT`
+is set by the `FLOAT_TYPE` key (`"Float64"` gives `Float64`; anything else gives
+`Float32`), the parameter files listed under the `toml` key are merged into the
+ClimaParams TOML dictionary, and `artifact"name"` strings in config values are resolved
+to local artifact paths.
+
+# Keyword Arguments
+
+  - `comms_ctx = nothing`: `ClimaComms` context. When `nothing`, it is inferred from the
+    `device` config key (see `get_comms_context`).
+  - `config_files = [default_config_file]`: File names recorded in the resulting config,
+    used for logging and for deriving `job_id`; the dicts themselves are the data source.
+  - `job_id = nothing`: Run identifier. Resolution order: this keyword if given, then the
+    `job_id` key in the merged dicts, then a name derived from `config_files`.
 """
 AtmosConfig(configs::AbstractDict; kwargs...) =
     AtmosConfig((configs,); kwargs...)

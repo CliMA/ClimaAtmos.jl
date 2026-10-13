@@ -1,3 +1,32 @@
+"""
+    ClimaAtmos
+
+The atmosphere model of the CliMA Earth system model.
+
+ClimaAtmos solves the fully compressible equations of motion for a deep
+atmosphere in a coordinate-independent formulation, with the same equation set
+in Cartesian geometries, for large-eddy and cloud-resolving simulation, and on
+the sphere, for global weather and climate simulation. Energy, air mass, and
+water are conserved to floating-point precision, and the model runs on CPUs and
+GPUs from one code base.
+
+A simulation is described by an `AtmosSimulation`, which wraps an `AtmosModel` (the
+physics, together with the grid, the parameters, and the case setup) and adds run
+control and an integrator. Constructing one sets everything up; `solve_atmos!`
+advances it to `t_end`. A case (its initial state, boundary conditions, and
+forcing) comes from the `Setups` submodule; common bundles of physics options
+come from the `Presets` submodule. See [Your First Simulation](@ref),
+[Governing Equations](@ref), and the [API](@ref) page of the documentation.
+
+# Examples
+
+```julia
+import ClimaAtmos as CA
+model = CA.AtmosModel(CA.SphereGrid(Float32))
+simulation = CA.AtmosSimulation(model; t_end = "1days")
+CA.solve_atmos!(simulation)
+```
+"""
 module ClimaAtmos
 
 using NVTX
@@ -12,7 +41,7 @@ import ClimaCore
 import ClimaCore.MatrixFields: @name
 
 import ClimaUtilities
-import ClimaCore: Domains, Spaces, Topologies
+import ClimaCore: Domains, Grids, Spaces, Topologies
 import ClimaDiagnostics
 import RRTMGP
 
@@ -21,7 +50,10 @@ import .Parameters as CAP
 
 include(joinpath("utils", "abbreviations.jl"))
 include(joinpath("utils", "gpu_compat.jl"))
-# Wall model types must be defined before types.jl (AtmosSurface references NoWallModel)
+include(joinpath("column_datasets", "ColumnDatasets.jl"))
+import .ColumnDatasets
+import .ColumnDatasets: ClimaColumnFiles
+include(joinpath("prognostic_equations", "forcing", "forcing_terms.jl"))
 include(joinpath("parameterized_tendencies", "wall_model", "WSODEWallModel.jl"))
 include("types.jl")
 include(joinpath("config", "atmos_config.jl"))
@@ -29,9 +61,10 @@ include(joinpath("config", "cli_options.jl"))
 include(joinpath("utils", "utilities.jl"))
 include(joinpath("utils", "debug_utils.jl"))
 include(joinpath("utils", "variable_manipulations.jl"))
-include(joinpath("utils", "read_gcm_driven_scm_data.jl"))
+include(joinpath("utils", "tracer_processes.jl"))
 include(joinpath("config", "era5_observations_to_forcing_file.jl"))
 include(joinpath("utils", "weather_model.jl"))
+include(joinpath("utils", "era5_model_levels.jl"))
 
 include(joinpath("utils", "AtmosArtifacts.jl"))
 import .AtmosArtifacts as AA
@@ -46,6 +79,7 @@ include(joinpath("parameterized_tendencies", "radiation", "radiation.jl"))
 include(joinpath("cache", "prognostic_edmf_precomputed_quantities.jl"))
 include(joinpath("cache", "edonly_precomputed_quantities.jl"))
 include(joinpath("cache", "microphysics_cache.jl"))
+include(joinpath("cosp", "cosp_quantities.jl"))
 include(joinpath("cache", "precomputed_quantities.jl"))
 include(joinpath("cache", "surface_albedo.jl"))
 
@@ -148,6 +182,7 @@ include(joinpath("cache", "eddy_diffusivity_coefficient.jl"))
 include(joinpath("prognostic_equations", "constrain_state.jl"))
 include(joinpath("prognostic_equations", "limited_tendencies.jl"))
 
+include(joinpath("cosp", "callbacks.jl"))
 include(joinpath("callbacks", "callbacks.jl"))
 
 include(joinpath("diagnostics", "Diagnostics.jl"))
@@ -171,5 +206,9 @@ include(joinpath("config", "type_getters.jl"))
 include(joinpath("config", "yaml_helper.jl"))
 
 include(joinpath("utils", "show.jl"))
+
+include(joinpath("cosp", "cosp.jl"))
+import .COSP
+include(joinpath("cosp", "cloudsat.jl"))
 
 end # module

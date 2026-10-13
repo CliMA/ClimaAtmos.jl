@@ -4,7 +4,7 @@
 The Soares setup described in [Soares2004](@cite), with a hydrostatically
 balanced pressure profile. Profiles are sourced from AtmosphericProfilesLibrary.
 
-## Example
+# Examples
 
 ```julia
 setup = Soares(; prognostic_tke = true, thermo_params)
@@ -53,6 +53,6 @@ function surface_condition(::Soares, params)
             ustar = FT(0.28),
         ),
         temperature = AnalyticTemperature(Returns(FT(300))),
-        overrides = SurfaceBoundaryOverrides(p = FT(1e5), q_vap = FT(5e-3)),
+        overrides = SurfaceBoundaryOverrides(q_vap = FT(5e-3)),
     )
 end

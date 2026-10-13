@@ -2,10 +2,6 @@
 value = 0.5507468907407347
 type = "float"
 
-[mixing_length_diss_coeff]
-value = 0.13515021886991527
-type = "float"
-
 [diagnostic_covariance_coeff]
 value = 1.858712542728056
 type = "float"
@@ -22,12 +18,8 @@ type = "float"
 value = 0.09964843547415161
 type = "float"
 
-[mixing_length_eddy_viscosity_coefficient]
-value = 0.12938179994984028
-type = "float"
-
 [turb_entr_param_vec]
-value = [0.026950324299085678, 3594.4850754174017]
+value = [0.001, 1e5]
 type = "float"
 
 [pressure_normalmode_drag_coeff]
@@ -53,7 +45,7 @@ value = 1.0e-5
 value = 0.7
 
 [min_area_limiter_scale]
-value = 0
+value = 0.001
 
 [detr_inv_tau]
 value = 0

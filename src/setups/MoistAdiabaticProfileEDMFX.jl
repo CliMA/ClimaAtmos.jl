@@ -7,7 +7,7 @@ Gaussian moisture and draft area profiles centered at z=4km.
 
 The face initial condition sets `w_draft = 1.0` (non-zero updraft velocity).
 
-## Example
+# Examples
 
 ```julia
 setup = MoistAdiabaticProfileEDMFX(; perturb = true)

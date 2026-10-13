@@ -13,10 +13,10 @@ Often, it is possible to compute certain diagnostics only for specific models
 
 1. Define a function for the case we know how to handle:
 
-function compute_hur(state, cache, time, ::MoistMicrophysics)
+function compute_hur(_, cache, _, ::MoistMicrophysics)
     tps = CAP.thermodynamics_params(cache.params)
-    (; ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice) = cache.precomputed
-    @. lazy(TD.relative_humidity(tps, ᶜT, state.c.ρ, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice))
+    (; ᶜT, ᶜp, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice) = cache.precomputed
+    return @. lazy(TD.relative_humidity(tps, ᶜT, ᶜp, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice))
 end
 
 2. Define a dispatch function with the correct signature:
@@ -30,7 +30,15 @@ compute_hur(state, cache, time, model) = error_diagnostic_variable("hur", model)
 
 =#
 
-# General helper functions for undefined diagnostics
+"""
+    error_diagnostic_variable(message = "Cannot compute variable")
+    error_diagnostic_variable(variable, model)
+
+Throw an error reporting that a diagnostic cannot be computed.
+
+The two-argument form is the fallback method of the `compute_*` dispatch chains: it names
+the `variable` that was requested and the type of the `model` that does not support it.
+"""
 error_diagnostic_variable(message = "Cannot compute variable") = error(message)
 error_diagnostic_variable(variable, ::T) where {T} =
     error_diagnostic_variable("Cannot compute $variable with model = $T")
@@ -194,24 +202,36 @@ add_diagnostic_variable!(short_name = "ke", units = "m^2 s^-2",
 ###
 # Mixing length (3d)
 ###
+"""
+    compute_lmix(state, cache, _)
+
+Compute the environment mixing length, `lmix`.
+
+Unlike most diagnostics here, this branches on `cache.atmos.turbconv_model` inside the
+function rather than by dispatch. With either EDMFX model the mixing-length closure has
+already been materialized into `cache.precomputed.ᶜl_mix` during the explicit update and
+is returned directly; without EDMFX the Smagorinsky-Lilly length is rebuilt lazily from
+the effective buoyancy frequency and strain rate.
+"""
 function compute_lmix(state, cache, _)
     turbconv_model = cache.atmos.turbconv_model
     # TODO: consolidate remaining mixing length types
     # (smagorinsky_lilly, dz) into a single function
     if isa(turbconv_model, PrognosticEDMFX) ||
        isa(turbconv_model, EDOnlyEDMFX)
-        return ᶜmixing_length(state, cache)
+        # Already materialized into the cache during the explicit update.
+        return cache.precomputed.ᶜl_mix
     end
     (; params) = cache
-    (; ᶜlinear_buoygrad, ᶜstrain_rate_norm) = cache.precomputed
+    (; ᶜbuoygrad, ᶜstrain_rate_norm) = cache.precomputed
     ᶜdz = Fields.Δz_field(axes(state.c))
     ᶜprandtl_nvec = @. lazy(turbulent_prandtl_number(
-        params, ᶜlinear_buoygrad, ᶜstrain_rate_norm,
+        params, ᶜbuoygrad, ᶜstrain_rate_norm,
     ))
     return @. lazy(
         smagorinsky_lilly_length(
             CAP.c_smag(params),
-            sqrt(max(ᶜlinear_buoygrad, 0)),   # N_eff
+            sqrt(max(ᶜbuoygrad, 0)),   # N_eff
             ᶜdz, ᶜprandtl_nvec, ᶜstrain_rate_norm,
         ),
     )
@@ -231,8 +251,8 @@ add_diagnostic_variable!(short_name = "lmix", units = "m",
 # Buoyancy gradient (3d)
 ###
 add_diagnostic_variable!(short_name = "bgrad", units = "s^-2",
-    long_name = "Linearized Buoyancy Gradient",
-    compute = (_, cache, _) -> cache.precomputed.ᶜlinear_buoygrad,
+    long_name = "Vertical Moist Buoyancy Gradient",
+    compute = (_, cache, _) -> cache.precomputed.ᶜbuoygrad,
 )
 
 ###
@@ -254,11 +274,11 @@ add_diagnostic_variable!(short_name = "Dv_smag", units = "m^2 s^-1",
     long_name = "Vertical smagorinsky diffusivity",
     compute = (_, cache, _) -> cache.precomputed.ᶜD_v,
 )
-add_diagnostic_variable!(short_name = "strainh_smag", units = "s",
+add_diagnostic_variable!(short_name = "strainh_smag", units = "s^-1",
     long_name = "Horizontal strain rate magnitude (for Smagorinsky)",
     compute = (_, cache, _) -> cache.precomputed.ᶜS_norm_h,
 )
-add_diagnostic_variable!(short_name = "strainv_smag", units = "s",
+add_diagnostic_variable!(short_name = "strainv_smag", units = "s^-1",
     long_name = "Vertical strain rate magnitude (for Smagorinsky)",
     compute = (_, cache, _) -> cache.precomputed.ᶜS_norm_v,
 )
@@ -282,6 +302,57 @@ add_diagnostic_variable!(short_name = "hur", units = "",
     comments = "Total amount of water vapor in the air relative to the amount \
                 achievable by saturation at the current temperature",
     compute = compute_hur,
+)
+
+###
+# Supersaturation over liquid and over ice (3d)
+###
+compute_ssatl(state, cache, time) =
+    compute_ssatl(state, cache, time, cache.atmos.microphysics_model)
+compute_ssatl(_, _, _, model) = error_diagnostic_variable("ssatl", model)
+
+function compute_ssatl(state, cache, _, ::MoistMicrophysics)
+    tps = CAP.thermodynamics_params(cache.params)
+    (; ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice) = cache.precomputed
+    return @. lazy(
+        TD.supersaturation(
+            tps,
+            ᶜq_tot_nonneg - ᶜq_liq - ᶜq_ice,
+            state.c.ρ,
+            ᶜT,
+            TD.Liquid(),
+        ),
+    )
+end
+
+add_diagnostic_variable!(short_name = "ssatl", units = "",
+    long_name = "Supersaturation over liquid water",
+    comments = "Water-vapor supersaturation with respect to liquid.",
+    compute = compute_ssatl,
+)
+
+compute_ssati(state, cache, time) =
+    compute_ssati(state, cache, time, cache.atmos.microphysics_model)
+compute_ssati(_, _, _, model) = error_diagnostic_variable("ssati", model)
+
+function compute_ssati(state, cache, _, ::MoistMicrophysics)
+    tps = CAP.thermodynamics_params(cache.params)
+    (; ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice) = cache.precomputed
+    return @. lazy(
+        TD.supersaturation(
+            tps,
+            ᶜq_tot_nonneg - ᶜq_liq - ᶜq_ice,
+            state.c.ρ,
+            ᶜT,
+            TD.Ice(),
+        ),
+    )
+end
+
+add_diagnostic_variable!(short_name = "ssati", units = "",
+    long_name = "Supersaturation over ice",
+    comments = "Water-vapor supersaturation with respect to ice.",
+    compute = compute_ssati,
 )
 
 ###
@@ -450,8 +521,7 @@ add_diagnostic_variable!(short_name = "tauv", units = "Pa",
 add_diagnostic_variable!(short_name = "ustar", units = "m s^-1",
     long_name = "Surface Friction Velocity",
     standard_name = "friction_velocity",
-    comments = "Surface friction velocity u* from MOST or WSODE wall model. \
-                When wall_model is active this is the WSODE u_tau.",
+    comments = "Surface friction velocity u*, from MOST or the wall model.",
     compute = (_, cache, _) -> cache.precomputed.sfc_conditions.ustar,
 )
 
@@ -461,8 +531,7 @@ add_diagnostic_variable!(short_name = "ustar", units = "m s^-1",
 add_diagnostic_variable!(short_name = "ob_len", units = "m",
     long_name = "Obukhov Length",
     standard_name = "obukhov_length",
-    comments = "Monin-Obukhov length L at the surface. Negative in unstable, \
-                positive in stable conditions. Updated by WSODE when active.",
+    comments = "Obukhov length at the surface, from MOST or the wall model.",
     compute = (_, cache, _) -> cache.precomputed.sfc_conditions.obukhov_length,
 )
 
@@ -472,51 +541,24 @@ add_diagnostic_variable!(short_name = "ob_len", units = "m",
 add_diagnostic_variable!(short_name = "bflxsfc", units = "m^2 s^-3",
     long_name = "Surface Buoyancy Flux",
     standard_name = "surface_buoyancy_flux",
-    comments = "Turbulent buoyancy flux at the surface (g/θ)*(SHF/ρ/cp + 0.608*LHF/ρ/Lv). \
-                Drives EDMFX updraft initialization when active.",
+    comments = "Turbulent buoyancy flux at the surface.",
     compute = (_, cache, _) -> cache.precomputed.sfc_conditions.buoyancy_flux,
 )
 
 ###
-# WSODE wall-model state [2d] — only populated when wall_model isa WSODEWallModel
+# WSODE friction temperature [2d]
 ###
-function compute_wsode_u_tau(_, cache, _)
-    wc = cache.precomputed.wsode_cache
-    isnothing(wc) && error_diagnostic_variable("wsode_utau: no WSODE wall model active")
-    return wc.u_tau
-end
-
 function compute_wsode_theta_tau(_, cache, _)
     wc = cache.precomputed.wsode_cache
-    isnothing(wc) && error_diagnostic_variable("wsode_thetatau: no WSODE wall model active")
+    isnothing(wc) &&
+        error_diagnostic_variable("wsode_thetatau requires the WSODE wall model")
     return wc.theta_tau
 end
 
-function compute_wsode_obukhov_L(_, cache, _)
-    wc = cache.precomputed.wsode_cache
-    isnothing(wc) && error_diagnostic_variable("wsode_oblen: no WSODE wall model active")
-    return wc.obukhov_L
-end
-
-add_diagnostic_variable!(short_name = "wsode_utau", units = "m s^-1",
-    long_name = "WSODE Friction Velocity (ODE State)",
-    comments = "The u_tau ODE state variable from the WSODE wall model. \
-                Equals sfc_conditions.ustar when wall model is active.",
-    compute = compute_wsode_u_tau,
-)
-
 add_diagnostic_variable!(short_name = "wsode_thetatau", units = "K",
-    long_name = "WSODE Thermal Scale (ODE State)",
-    comments = "The theta_tau ODE state variable from the WSODE wall model. \
-                Proportional to the surface kinematic heat flux via SHF = u_tau * theta_tau.",
+    long_name = "WSODE Friction Temperature",
+    comments = "Friction temperature theta_tau of the WSODE wall model.",
     compute = compute_wsode_theta_tau,
-)
-
-add_diagnostic_variable!(short_name = "wsode_oblen", units = "m",
-    long_name = "WSODE Obukhov Length (ODE State)",
-    comments = "Obukhov length computed from the WSODE ODE state (u_tau, theta_tau). \
-                Should match sfc_conditions.obukhov_length when wall model is active.",
-    compute = compute_wsode_obukhov_L,
 )
 
 ###
@@ -843,7 +885,7 @@ add_diagnostic_variable!(short_name = "clivi", units = "kg m^-2",
     long_name = "Ice Water Path",
     standard_name = "atmosphere_mass_content_of_cloud_ice",
     comments = "The total mass of ice in cloud per unit area. \
-                Does not include precipitating hydrometeors.",  # TODO: This comment is not correct for 2M
+                Includes snow for NonEquilibriumMicrophysics.",
     compute = compute_clivi,
 )
 
@@ -1169,14 +1211,15 @@ add_diagnostic_variable!(short_name = "swp", units = "kg m^-2",
 # Covariances (3d)
 ###
 function compute_covariance_diagnostics(_, cache, _, type)
-    (; ᶜT′T′, ᶜq′q′) = cache.precomputed
+    (; ᶜT′T′, ᶜq′q′, ᶜcorr_Tq) = cache.precomputed
     if type == :qt_qt
         return ᶜq′q′
     elseif type == :T_T
         return ᶜT′T′
     elseif type == :T_qt
-        corr = correlation_Tq(cache.params)
-        return @. lazy(corr * sqrt(max(0, ᶜT′T′)) * sqrt(max(0, ᶜq′q′)))
+        # covariance consistent with the correlation the quadrature samples
+        # (constant or diagnosed); see `set_tq_correlation!`
+        return @. lazy(ᶜcorr_Tq * sqrt(max(0, ᶜT′T′)) * sqrt(max(0, ᶜq′q′)))
     else
         error("Unknown variance type")
     end
@@ -1190,7 +1233,10 @@ compute_env_q_tot_temperature_covariance(state, cache, time) =
     compute_covariance_diagnostics(state, cache, time, :T_qt)
 
 function compute_env_q_tot_temperature_correlation(_, cache, _)
-    corr = correlation_Tq(cache.params)
+    # the sampled correlation lives in the cache only when SGS covariances are used;
+    # otherwise report the prescribed constant
+    hasproperty(cache.precomputed, :ᶜcorr_Tq) && return cache.precomputed.ᶜcorr_Tq
+    corr = CAP.Tq_correlation_coefficient(cache.params)
     (; ᶜtemp_scalar) = cache.scratch
     return @. lazy(one(ᶜtemp_scalar) * corr)
 end

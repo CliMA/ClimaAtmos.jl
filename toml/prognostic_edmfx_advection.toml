@@ -4,3 +4,6 @@ value = 0
 [EDMF_min_area]
 value = 1.0e-3
 description = "Minimum area fraction per updraft. Parameter not described in the literature."
+
+[entr_coeff]
+value = 0

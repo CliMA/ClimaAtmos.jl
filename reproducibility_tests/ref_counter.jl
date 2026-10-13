@@ -1,4 +1,4 @@
-368
+429
 
 # **README**
 #
@@ -32,6 +32,253 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+429
+- Local SGS variance fidelity α(TKE, l_mix, τ_mp, q_c/q_c^eq).
+
+428
+- Geometric SGS variance as a conditional parcel displacement on the
+  θ_li surface
+- Update to CloudMicrophysics v0.45 (joint relaxation of the vapor-driven phase changes is the default)
+
+427
+- Change the horizontal geometric SGS variance term to the isentropic form
+
+426
+- Update to CloudMicrophysics v0.44 from v0.43
+
+425
+- Add SGS T–q correlation closure and resolved vertical-gradient variance block.
+
+424
+- Van Leer-limited centered vertical gradients for θ_li and q_tot
+
+423
+- Update to SurfaceFluxes from 1.2.1 to 1.3.0
+
+422
+- Use LumpedRestriction for some horizontal gradients
+
+421
+- Change cloud fraction formulation and default ice depostion scheme
+
+420
+- Remove interface_effective_N² and interface_entrainment_diffusivity (fix GABLS)
+
+419
+- Add empirical l_TKE
+
+418
+- Compute the EDMF surface scalar coefficient and other constants in `FT`
+  instead of Float64, which changes Float32 results in the last bits
+
+417
+- Update to ClimaParams 1.1.16, which changes the default of some SGS quadrature parameters.
+
+416
+- Update to ClimaParams 1.1.14 from ClimaParams 1.1.13, which changes the default
+  `EDMF_interface_entr_efficiency` from 0.4 to 0.0 (2026-09-25)
+
+415
+- Share the pressure drag coefficient of the implicit updraft velocity solve with the
+  TKE source, split the LES enthalpy flux, correct the AMD viscosity denominator, and
+  turn hyperdiffusion off in the AMD configurations (2026-09-20)
+
+414
+- Changed the default N_ice number in vapor-ice transfer
+
+413
+- Changed solver in CloudMicrophysics.jl
+
+412
+- Add a bound for sgs variance
+
+411
+- Update to ClimaParams 1.1.9 from ClimaParams 1.1.6
+
+410
+- Add entr/detr shear-mixing source to the TKE budget and drop the stability-biased
+  ᶜN²_eff in favor of the unbiased ᶜbuoygrad for center l_N, Pr_t, and the Smag-Lilly
+  length scale.
+
+410
+- Update to ClimaCore 0.16
+
+409
+- Use vapor-ice timescale change, adding supercoole liquid freezing
+
+408
+- Guard against unphysical extrapolated ρa (u₃ is solved before ρa).
+
+407
+- Update dependencies: CloudMicrophysics v0.38.1 -> v0.38.3
+
+406
+- Add updraft pressure drag tke source
+
+405
+- SGS quadrature corrections: fit λ_lagrange to the discrete quadrature
+  measure and add a second Newton step to _compute_z; correct the 0M
+  energy sink by taking the covariance of dq_tot/dt and e_tot.
+
+404
+- SGS quadrature microphysics updates
+
+403
+- Viscous sponge: match hyperdiffusion and vertical diffusion. Energy is
+  diffused as a dry-static-energy + h_eff-weighted q_tot_eff split rather
+  than as total enthalpy. Water mass diffuses on q_tot_eff (rain and snow
+  excluded); the aggregate tendency is distributed to the suspended cloud
+  mass species (ρq_lcl, ρq_icl).
+
+402
+- Hyperdiffusion: subtract a hydrostatic reference state from the diffused
+  scalars (dry-static-energy `sd_r(p)` and total-water `q_tot_r(p)`. Removes
+  spurious mixing across topography from the coordinate-tilt part of `gradₕ`.
+
+401
+- Distribute the aggregate q_tot_eff diffusion of
+  `edmfx_sgs_diffusive_flux_tendency!` to the suspended cloud mass and
+  number species. The block was present but unreachable, so the species
+  received no share of the vertical water diffusion.
+
+400
+- Update to ClimaCore 0.15.1 and Thermodynamics 1.3.0
+
+399
+- Change entrainment formula, which results in floating point differences due to
+  changes in order of operations.
+
+398
+- Make rain sediment with non-constant velocity
+
+397
+- Change default ice formation to temperature dependent
+
+396
+- Make vertical water diffusion consistent: diffuse q_tot on q_tot_eff
+  (excluding rain/snow), distribute the aggregate q_tot diffusion to
+  suspended microphysics species (ρq_lcl, ρq_icl) via clipped ratio, and
+  scale their number densities proportionally. Enthalpy uses a single-
+  gradient h_eff-weighted form.
+
+395
+- Update to CloudMicrophysics 0.38.1
+
+394
+- Species-consistent hyperdiffusion.
+- Apply sgs microphyiscs constraints.
+
+393
+- Change min_area_limiter_scale and turb_entr_param_vec in EDMF TOMLs
+
+392
+- Integrate the hydrostatic pressure of the single-column setups on a
+  1000-element column instead of a 100-element column. Initial center
+  pressures change by about 2e-4 to 4e-4 relative to the previous profile.
+
+391
+- Update SurfaceFluxes 1.0.1 → 1.1.0
+
+390
+- Remove precipitation from cloud fraction and radiation
+
+389
+- Add a temporary parameter for lateral sedimentation mixing
+
+388
+- Unify SGS vertical diffusion with grid mean. Each PrognosticEDMFX
+  subdomain inherits the grid-mean specific tendency for mseⱼ, q_totⱼ,
+  and matching auto-discovered SGS tracers.
+
+387
+- Change some EDMF parameters
+
+386
+- Per-subdomain SGS hyperdiffusion with the dry-static-energy +
+  water-enthalpy split for mseʲ. Reverses the previous unification with
+  grid-mean tendencies.
+
+385
+- Change cloud fraction formulation
+
+384
+- Unify SGS hyperdiffusion with grid mean: each PrognosticEDMFX subdomain
+  inherits the grid-mean specific tendency (uniform hyperdiff in the grid
+  box). Split the total-enthalpy flux into dry-static-energy + water-species
+  contributions to avoid diffusing dry-air enthalpy along with water enthalpy.
+
+383
+- Add precipitation entrainment from environment into a widening updraft
+
+382
+- Update RRTMGP.jl
+
+381
+- EDMFX inversion reconstruction: harmonic-mean face interpolation of eddy
+  diffusivities, stability-biased N², interface-aware effective stability
+  with interfacial entrainment diffusivity, a face-native
+  stability/diffusivity pipeline (also used for updraft internal diffusion),
+  and the resolvability filter-scale cap max(Δx_h, Δz) on the mixing length.
+
+380
+- Reparameterize the TKE dissipation coefficient: c_d = c_m c_b / Ri_c with
+  Ri_c = mixing_length_Ri_crit (default 0.25). Configurations using the
+  repository TOMLs are preserved to within 1 ulp; at ClimaParams defaults
+  the derived c_d is 0.224 instead of 0.22.
+
+379
+- By default update the cache once per step and not stage
+
+378
+- Apply ρe_tot/ρq_tot upwind correction as a post-Newton hook (`T_post_imp!`
+  on `ClimaODEFunction`, requires ClimaTimeSteppers 0.10.4). Implicit vertical
+  advection reverts to central-only; the upwind correction is evaluated on
+  the Newton-solved velocity, so a sign flip of `ᶠu³` during the Newton step
+  no longer produces a wrong-cell upwind flux.
+
+377
+- Carry the energy of sedimenting water at each subdomain's own value under
+  PrognosticEDMFX: the grid-mean sedimentation energy flux equals the sum of
+  the updraft and environment fluxes, each carrying its subdomain internal
+  and kinetic energy.
+
+376
+- Implicit Jacobian only (tendencies unchanged): add the environment
+  feedback to the entrainment-relaxation diagonal, and include the
+  sedimentation velocity in the continuity-equation row. (The PGF Jacobian
+  stencils are unchanged: the complete Exner-form linearization collapses
+  analytically to the existing height-form blocks.)
+
+375
+- Remove coherent buoyancy production from TKE; decompose diffusive enthalpy
+  flux into dry static energy + water enthalpy; damp the cloud-fraction floor
+  as the subdomain mean saturates.
+
+374
+- Fix subsidence top BC (zero-gradient inflow at the lid instead of Extrapolate);
+  remove the external-forcing top-cell tendency-zeroing workaround.
+
+373
+- Route enforce_physical_constraints! through ClimaTimeSteppers' new
+  `constrain_state!` hook (per-step by default) and drop the separate
+  callback. Frequencies are configurable via `update_cache_every` /
+  `update_constrain_state_every`.
+
+372
+- Fix top boundary condition so total contravariant flux vanishes at the lid;
+  add SGS mass flux of q_tot to continuity equation; transport SGS tracers in difference form.
+
+371
+- Update Insolation.jl to v1.2.0
+
+370
+- Move ρe_tot/ρq_tot upwind correction into implicit advection (Wfact unchanged)
+
+369
+- Clamp implicit ρa stage value to `[0, ρ·a_max]` per-cell in the column
+  sweep so updraft area cannot exceed a_max when the explicit area
+  limiters fail to prevent overshoot.
+
 368
 - Apply upper-area limiter to the implicit mass-flux-divergence detrainment
   prefactor so updraft area cannot grow past a_max via advection.

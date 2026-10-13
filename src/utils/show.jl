@@ -1,14 +1,18 @@
-"""
-This file contains helper methods for adopting show methods for model structs.
-
-The main helper methods follow:
-- `verbose_show_type_and_fields(io::IO, ::MIME"text/plain", x)`
-- `parseable_show_with_fields_no_type_header(io::IO, x; with_kwargs = true)`
-
-Below these, there are implementations of `Base.show` and `Base.summary` for model structs.
-
-More reading: https://discourse.julialang.org/t/print-vs-two-argument-show-repr-vs-three-argument-show-repr-with-mime-text-plain/117790
-"""
+#####
+##### Show methods for model structs
+#####
+##### Two helpers do the work:
+##### - `verbose_show_type_and_fields(io, MIME"text/plain"(), x)` prints a
+#####   human-readable tree of the type and its fields.
+##### - `parseable_show_with_fields_no_type_header(io, x; ...)` prints a form
+#####   that can be pasted back into the REPL to recreate `x`.
+#####
+##### Below them are the `Base.show` and `Base.summary` implementations that
+##### dispatch the model structs onto one or the other.
+#####
+##### More reading:
+##### https://discourse.julialang.org/t/print-vs-two-argument-show-repr-vs-three-argument-show-repr-with-mime-text-plain/117790
+#####
 
 
 ### ----------------------- ###
@@ -18,11 +22,15 @@ More reading: https://discourse.julialang.org/t/print-vs-two-argument-show-repr-
 """
     verbose_show_type_and_fields(io::IO, ::MIME"text/plain", x)
 
-Print a verbose representation of the type and fields of `x` to `io`.
+Print the type name of `x` to `io`, followed by one line per field.
+
+The field list is drawn as a tree, unless `io` carries `:compact => true`, in
+which case the fields are printed inline in parentheses. Only the type name is
+printed, without its module prefix or type parameters.
 
 # Examples
 
-```julia-repl
+```julia
 julia> import ClimaAtmos as CA
 
 julia> CA.RRTMGPInterface.AllSkyRadiation()
@@ -58,27 +66,32 @@ function verbose_show_type_and_fields(io::IO, ::MIME"text/plain", x)
 end
 
 """
-    parseable_show_with_fields_no_type_header(io::IO, x; with_kwargs = ())
+    parseable_show_with_fields_no_type_header(
+        io::IO,
+        x;
+        with_kwargs = true,
+        skip_fields_by_value = (),
+    )
 
-Print a parseable representation of the type that allows reconstruction of `x`.
+Print a representation of `x` to `io` that can be pasted back into the REPL to
+reconstruct it.
 
-# Arguments
+The type is printed with its module prefix and without type parameters, followed
+by its fields in parentheses.
 
-  - `with_kwargs`: If true, print the fields as keyword arguments.
+# Keyword Arguments
 
-      + This is relevant for structs definitions prefixed with `@kwdef`
-
-  - `skip_fields_by_value`: A tuple of values that are not printed for any fields with those values.
-
-      + Note: Because the printed representation should reconstruct an equivalent instance,
-        the values provided here should be the default values for the fields.
-      + By default, no fields are skipped.
+  - `with_kwargs = true`: Print the fields as keyword arguments, as required by
+    structs defined with `@kwdef`.
+  - `skip_fields_by_value = ()`: Values whose fields are omitted. Because the
+    output must still reconstruct an equivalent instance, list only values that
+    are the corresponding fields' defaults.
 
 # Examples
 
-```julia-repl
+```julia
 julia> show(stdout, CA.AtmosRadiation())
-ClimaAtmos.AtmosRadiation(insolation = ClimaAtmos.IdealizedInsolation())
+ClimaAtmos.AtmosRadiation(insolation = ClimaAtmos.IdealizedInsolation(), aerosol_names = (), time_varying_trace_gases = ())
 ```
 """
 function parseable_show_with_fields_no_type_header(io::IO, x;
@@ -149,10 +162,38 @@ Base.show(io::IO, x::AtmosGravityWave) =
 Base.show(io::IO, x::AtmosSponge) =
     parseable_show_with_fields_no_type_header(io, x; skip_fields_by_value = (nothing,))
 Base.show(io::IO, x::AtmosSurface) = parseable_show_with_fields_no_type_header(io, x)
-Base.show(io::IO, x::AtmosModel) = parseable_show_with_fields_no_type_header(io, x)
 
-Base.show(io::IO, mime::MIME"text/plain", model::AtmosModel) =
-    verbose_show_type_and_fields(io, mime, model)
+function Base.show(io::IO, x::AtmosModel)
+    show(io, typeof(x).name.wrapper)
+    print(io, "(")
+    printed_first_arg = false
+    for (k, v) in pairs(_physics_fields(x))
+        v === nothing && continue
+        printed_first_arg && print(io, ", ")
+        print(io, "$k = ")
+        show(io, v)
+        printed_first_arg = true
+    end
+    print(io, ")")
+end
+
+# The REPL form: every field that is set, including `grid`, `params`, and `setup`
+function Base.show(io::IO, ::MIME"text/plain", model::AtmosModel)
+    # Physics fields, skipping nothing-valued (default/disabled) ones
+    entries =
+        Any[(k, v) for (k, v) in pairs(_physics_fields(model)) if !isnothing(v)]
+    # Summarize `grid`, `params`, and `setup` rather than dumping them
+    isnothing(model.grid) || push!(entries, (:grid, Base.summary(model.grid)))
+    isnothing(model.params) ||
+        push!(entries, (:params, "ClimaAtmosParameters{$(eltype(model.params))}"))
+    isnothing(model.setup) ||
+        push!(entries, (:setup, nameof(typeof(model.setup))))
+    print(io, "AtmosModel")
+    for (i, (k, v)) in enumerate(entries)
+        prefix = i == length(entries) ? "└─ " : "├─ "
+        print(io, "\n  " * prefix * "$k = ", v)
+    end
+end
 
 Base.show(io::IO, x::SpongeModel) = parseable_show_with_fields_no_type_header(io, x)
 
@@ -163,26 +204,8 @@ Base.show(io::IO, x::RRTMGPI.AbstractRRTMGPMode) =
     parseable_show_with_fields_no_type_header(io, x)
 
 # src/initial_conditions/initial_conditions.jl
-Base.show(io::IO, x::Setups.RCEMIPIIProfile) =
+Base.show(io::IO, x::Setups.RCEMIPProfile) =
     parseable_show_with_fields_no_type_header(io, x)
-
-import ClimaCore: Fields, Spaces
-function Base.show(
-    io::IO, ::MIME"text/plain", x::Setups.ColumnInterpolatableField,
-)
-    # Extract z grid from the wrapped column field
-    z = Fields.coordinate_field(x.f).z
-    nz = Spaces.nlevels(z)
-    zmin, zmax = extrema(z)
-    val_eltype = eltype(x.f)
-    # These are fixed by the constructor
-    interp_str = "Linear"
-    extrap_str = "Flat"
-    print(io,
-        "ColumnInterpolatableField(Nz=$nz, z∈[$zmin, $zmax], value_eltype=$val_eltype, ",
-        "interpolation=$interp_str, extrapolation=$extrap_str)",
-    )
-end
 
 # src/simulation/AtmosSimulations.jl
 import ClimaComms
@@ -231,6 +254,9 @@ function Base.summary(io::IO, numerics::AtmosNumerics)
     print(io, '\n')
     for pn in propertynames(numerics)
         prop = getproperty(numerics, pn)
+        # Most numerics options are encoded in the type, but the `Bool` switches
+        # carry their setting in the value, so print that instead.
+        shown = prop isa Bool ? prop : typeof(prop)
         s = string(
             "  ", # needed for some reason
             getproperty(bufs, pn),
@@ -239,13 +265,16 @@ function Base.summary(io::IO, numerics::AtmosNumerics)
             '`',
             "::",
             '`',
-            typeof(prop),
+            shown,
             '`',
             '\n',
         )
         print(io, s)
     end
 end
+
+summary_type(prop) = typeof(prop)
+summary_type(::NonEquilibriumMicrophysics1M) = NonEquilibriumMicrophysics1M
 
 function Base.summary(io::IO, atmos::AtmosModel)
     pns = string.(propertynames(atmos))
@@ -255,6 +284,8 @@ function Base.summary(io::IO, atmos::AtmosModel)
     bufs = (; zip(keys, vals)...)
     print(io, '\n')
     for pn in propertynames(atmos)
+        # These carry large types, and the model summary is about physics
+        pn in (:grid, :params, :setup) && continue
         prop = getproperty(atmos, pn)
         # Skip some data:
         prop isa Bool && continue
@@ -270,7 +301,7 @@ function Base.summary(io::IO, atmos::AtmosModel)
             '`',
             "::",
             '`',
-            typeof(prop),
+            summary_type(prop),
             '`',
             '\n',
         )
@@ -279,26 +310,32 @@ function Base.summary(io::IO, atmos::AtmosModel)
 end
 
 """
-    summary_microphysics(io::IO, microphysics_model, options)
+    summary_microphysics(io::IO, microphysics_model::NonEquilibriumMicrophysics1M)
 
-Print the microphysics settings that `summary(::AtmosModel)` does not surface:
-the substep counts of `NonEquilibriumMicrophysics1M` (struct fields, hidden by
-`typeof`) and the per-process option selections (e.g. which autoconversion or
-accretion scheme is active, or `disabled` when the option is `nothing`). The
-process options live in the parameter set, not in the `AtmosModel`.
+Print to `io` the 1-moment microphysics settings that `summary(::AtmosModel)`
+does not surface, because they are struct fields hidden by `typeof`: the substep
+counts and the per-process option selections (e.g. which autoconversion or
+accretion scheme is active, or `disabled` when the option is `nothing`).
+
+# Arguments
+
+  - `io`: Stream to print to.
+  - `microphysics_model`: Microphysics model whose substep counts and
+    per-process options are printed.
 """
-function summary_microphysics(io::IO, microphysics_model, options)
+function summary_microphysics(
+    io::IO,
+    microphysics_model::NonEquilibriumMicrophysics1M,
+)
+    options = microphysics_model.processes
     keys = collect(string.(propertynames(options)))
-    is_1m = microphysics_model isa NonEquilibriumMicrophysics1M
-    is_1m && append!(keys, ("n_substeps", "n_substeps_quad"))
+    append!(keys, ("n_substeps", "n_substeps_quad"))
     buf = maximum(length, keys)
     print(io, '\n')
     pad(k) = repeat(" ", buf - length(k) + 2)
     line(k, v) = print(io, "  ", pad(k), '`', k, '`', "::", '`', v, '`', '\n')
-    if is_1m
-        line("n_substeps", microphysics_model.n_substeps)
-        line("n_substeps_quad", microphysics_model.n_substeps_quad)
-    end
+    line("n_substeps", microphysics_model.n_substeps)
+    line("n_substeps_quad", microphysics_model.n_substeps_quad)
     for pn in propertynames(options)
         opt = getproperty(options, pn)
         label = isnothing(opt) ? "disabled" : string(nameof(typeof(opt)))

@@ -7,7 +7,7 @@ balanced pressure profile. Profiles are sourced from AtmosphericProfilesLibrary.
 Surface fluxes are time-varying: `shf` and `lhf` follow a cosine ramp over
 the first 5.25 hours.
 
-## Example
+# Examples
 
 ```julia
 setup = TRMM_LBA(; prognostic_tke = true, thermo_params)
@@ -39,13 +39,11 @@ function trmm_lba_profiles(thermo_params)
         q_v_sat = p_v_sat * (1 / Rv_over_Rd) / denominator
         return q_v_sat * measured_RH(z) / 100
     end
-    q_tot = Intp.extrapolate(
-        Intp.interpolate(
-            (measured_z_values,),
-            measured_q_tot_values,
-            Intp.Gridded(Intp.Linear()),
-        ),
-        Intp.Flat(),
+    n = length(measured_z_values)
+    q_tot = CI1D.Interpolate1D(
+        SA.SVector{n}(measured_z_values), SA.SVector{n}(measured_q_tot_values);
+        interpolationorder = CI1D.Linear(),
+        extrapolationorder = CI1D.Flat(),
     )
 
     p = hydrostatic_pressure_profile(; thermo_params, p_0, T = T_profile, q_tot)
@@ -86,7 +84,7 @@ function surface_condition(::TRMM_LBA, params)
             z0 = FT(1e-4), fluxes = trmm_lba_fluxes, ustar = FT(0.28),
         ),
         temperature = AnalyticTemperature(Returns(FT(296.85))),
-        overrides = SurfaceBoundaryOverrides(p = FT(99130), q_vap = FT(0.02245)),
+        overrides = SurfaceBoundaryOverrides(q_vap = FT(0.02245)),
     )
 end
 

@@ -1,3 +1,50 @@
+"""
+    AtmosCache
+
+Cache of preallocated fields and model settings passed as `p` to every tendency
+function, callback, and diagnostic.
+
+The cache is built once by `build_cache` and mutated in place thereafter: no
+`Field` may be allocated inside a tendency or cache setter (use `p.scratch` or
+lazy broadcasting instead). Entries of `p.precomputed` are refreshed from the
+current state `Y` by the `set_*_precomputed_quantities!` family of functions
+(see `set_precomputed_quantities!`); entries of `p.scratch` hold no persistent
+state and may be overwritten by any function.
+
+# Fields
+
+  - `dt`: Simulation timestep, also used by callbacks and tendencies [s].
+  - `atmos`: The physics of the `AtmosModel`. `build_cache` stores
+    `physics_only(atmos)` here, so the cached model carries no grid,
+    parameters, or setup.
+  - `numerics`: Limiters (quasi-monotone, tracer-nonnegativity, vertical water borrowing).
+  - `params`: The `ClimaAtmosParameters` used by the model.
+  - `core`: Generally used quantities, such as the geopotential `ᶜΦ`, its gradients,
+    the Coriolis fields `ᶜf³`/`ᶠf¹²`, and the surface unit basis vector.
+  - `sfc_setup`: Surface boundary overrides, used by `update_surface_conditions!`
+    and the coupler.
+  - `ghost_buffer`: Center and face ghost buffers used by DSS.
+  - `precomputed`: Quantities updated by `set_precomputed_quantities!`.
+  - `scratch`: Preallocated temporary fields with no persistent state.
+  - `hyperdiff`: Hyperdiffusion quantities for grid-scale and subgrid-scale
+    variables, potentially with ghost buffers for DSS.
+  - `external_forcing`: Parameters used by external-forcing tendencies.
+  - `non_orographic_gravity_wave`: Parameters used by the non-orographic gravity
+    wave tendency.
+  - `orographic_gravity_wave`: Parameters used by the orographic gravity wave tendency.
+  - `radiation`: Radiation model cache (e.g. the RRTMGP solver).
+  - `tracers`: Prescribed aerosol and trace-gas inputs.
+  - `net_energy_flux_toa`: Net radiative energy that has entered through the top of
+    the atmosphere, accumulated over the domain area and over time by the
+    `flux_accumulation!` callback. A one-element vector, so that it can be mutated
+    in place [J].
+  - `net_energy_flux_sfc`: The same accumulated energy at the surface; not
+    accumulated when the surface temperature is a `SlabOceanTemperature` [J].
+  - `steady_state_velocity`: Predicted steady-state velocity, if `check_steady_state`
+    is `true`; otherwise `nothing`.
+  - `conservation_check`: Column-integrated precipitation energy tendency, used for
+    the conservation check with a prognostic surface temperature.
+"""
 struct AtmosCache{
     FT,
     AM,
@@ -19,54 +66,52 @@ struct AtmosCache{
     SSV,
     CONSCHECK,
 }
-    """
-    Timestep of the simulation (in seconds). This is also used by callbacks and tendencies
-    """
+    # Timestep of the simulation (in seconds); also used by callbacks and tendencies
     dt::FT
 
-    """AtmosModel"""
+    # AtmosModel
     atmos::AM
 
-    """Limiter"""
+    # Limiter
     numerics::NUM
 
-    """ClimaAtmosParameters that have to be used"""
+    # ClimaAtmosParameters that have to be used
     params::CAP
 
-    """Variables that are used generally, such as ᶜΦ"""
+    # Variables that are used generally, such as ᶜΦ
     core::COR
 
-    """Used by update_surface_conditions! in set_precomputed_quantities! and coupler"""
+    # Used by update_surface_conditions! in set_precomputed_quantities! and coupler
     sfc_setup::SFC
 
-    """Center and face ghost buffers used by DSS"""
+    # Center and face ghost buffers used by DSS
     ghost_buffer::GHOST
 
-    """Quantities that are updated with set_precomputed_quantities!"""
+    # Quantities that are updated with set_precomputed_quantities!
     precomputed::PREC
 
-    """Pre-allocated areas of memory to store temporary values"""
+    # Pre-allocated areas of memory to store temporary values
     scratch::SCRA
 
-    """Hyperdiffision quantities for grid and subgrid scale quantities, potentially with
-       ghost buffers for DSS"""
+    # Hyperdiffision quantities for grid and subgrid scale quantities, potentially with
+    # ghost buffers for DSS
     hyperdiff::HYPE
 
-    """Additional parameters used by the various tendencies"""
+    # Additional parameters used by the various tendencies
     external_forcing::EXTFORCING
     non_orographic_gravity_wave::NONGW
     orographic_gravity_wave::ORGW
     radiation::RAD
     tracers::TRAC
 
-    """Net energy flux coming through top of atmosphere and surface"""
+    # Net energy flux coming through top of atmosphere and surface
     net_energy_flux_toa::NETFLUXTOA
     net_energy_flux_sfc::NETFLUXSFC
 
-    """Predicted steady-state velocity, if `check_steady_state` is `true`"""
+    # Predicted steady-state velocity, if `check_steady_state` is `true`
     steady_state_velocity::SSV
 
-    """Conservation check for prognostic surface temperature"""
+    # Conservation check for prognostic surface temperature
     conservation_check::CONSCHECK
 end
 
@@ -85,19 +130,49 @@ Adapt.@adapt_structure AtmosCache
 
 # The model also depends on f_plane_coriolis_frequency(params)
 # This is a constant Coriolis frequency that is only used if space is flat
+
+"""
+    build_cache(Y, atmos, params, dt, start_date, steady_state_velocity)
+
+Allocate and initialize the `AtmosCache` `p` for the initial state `Y` and model
+configuration `atmos`.
+
+All fields needed during time stepping are allocated here; subsequent code only
+mutates them in place. After allocating the precomputed quantities, this calls
+`set_precomputed_quantities!(Y, ..., 0)` once so that the cache is consistent
+with the initial state, and then builds the component caches (hyperdiffusion,
+gravity waves, radiation, tracers).
+
+# Arguments
+
+  - `Y`: Initial prognostic state, used for its spaces and element type.
+  - `atmos`: The `AtmosModel`. Only its physics is stored in the cache, see
+    `physics_only`.
+  - `params`: The `ClimaAtmosParameters`.
+  - `dt`: Simulation timestep [s].
+  - `start_date`: Simulation start date, used for time-varying inputs and radiation.
+  - `steady_state_velocity`: Predicted steady-state velocity for the
+    `check_steady_state` diagnostic, or `nothing`.
+
+# Returns
+
+A fully initialized `AtmosCache`.
+"""
 function build_cache(
     Y,
     atmos,
     params,
     dt,
     start_date,
-    aerosol_names,
-    time_varying_trace_gas_names,
     steady_state_velocity,
-    vwb_species = nothing,
 )
     FT = eltype(params)
     dt = FT(dt)
+
+    aerosol_names = atmos.radiation.aerosol_names
+    time_varying_trace_gas_names = atmos.radiation.time_varying_trace_gases
+
+    atmos = physics_only(atmos)
 
     ᶜcoord = Fields.local_geometry_field(Y.c).coordinates
     ᶠcoord = Fields.local_geometry_field(Y.f).coordinates
@@ -136,7 +211,8 @@ function build_cache(
     end
 
     vertical_water_borrowing_limiter = nothing
-    vertical_water_borrowing_species = vwb_species
+    vertical_water_borrowing_species =
+        atmos.numerics.vertical_water_borrowing_species
 
     if atmos.water.tracer_nonnegativity_method isa TracerNonnegativityVerticalWaterBorrowing
         vertical_water_borrowing_limiter = Limiters.VerticalMassBorrowingLimiter((FT(0.0),))
@@ -228,6 +304,16 @@ function build_cache(
 end
 
 
+"""
+    compute_coriolis(ᶜcoord, ᶠcoord, params) -> (; ᶜf³, ᶠf¹²)
+
+Compute the Coriolis parameter fields for the given coordinate fields.
+
+On a sphere, `ᶜf³` is the vertical Coriolis component `2Ω sin(lat)`; with deep
+spherical geometry, the horizontal component `ᶠf¹²` is also nonzero. On a plane,
+`ᶜf³` is the constant `f_plane_coriolis_frequency(params)` and `ᶠf¹²` is
+`nothing`. Called from `build_cache`.
+"""
 function compute_coriolis(ᶜcoord, ᶠcoord, params)
     if eltype(ᶜcoord) <: Geometry.LatLongZPoint
         Ω = CAP.Omega(params)

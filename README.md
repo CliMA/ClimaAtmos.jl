@@ -1,118 +1,94 @@
-<!-- Title -->
-<h1 align="center">
-  <img src="logo.svg" width="180px"> <br>
-ClimaAtmos.jl
-</h1>
+<div align="center">
+  <img src="docs/src/assets/logo.svg" alt="ClimaAtmos.jl Logo" width="140" height="140">
+</div>
 
-<!-- description -->
-<p align="center">
-  <strong>Atmosphere components of the CliMA software stack.</strong>
-</p>
+# ClimaAtmos.jl
 
-[![docsbuild][docs-bld-img]][docs-bld-url]
-[![dev][docs-dev-img]][docs-dev-url]
-[![ghaci][gha-ci-img]][gha-ci-url]
-[![buildkite][bk-ci-img]][bk-ci-url]
-[![codecov][codecov-img]][codecov-url]
-[![discussions][discussions-img]][discussions-url]
-[![col-prac][col-prac-img]][col-prac-url]
-[![downloads][downloads-img]][downloads-url]
+The atmosphere model of the CliMA Earth System Model: a GPU-capable global atmosphere model designed for calibration with data assimilation and machine learning.
 
-[docs-bld-img]: https://github.com/CliMA/ClimaAtmos.jl/workflows/Documentation/badge.svg
-[docs-bld-url]: https://github.com/CliMA/ClimaAtmos.jl/actions?query=workflow%3ADocumentation
+ClimaAtmos.jl solves the compressible equations of atmospheric motion on cubed-sphere and column grids, with physics parameterizations for turbulence and convection (PROPHET, an extended prognostic EDMF scheme), cloud microphysics, and radiation. It is built on [ClimaCore.jl](https://github.com/CliMA/ClimaCore.jl) and runs on CPUs and GPUs from a single codebase.
 
-[docs-dev-img]: https://img.shields.io/badge/docs-dev-blue.svg
-[docs-dev-url]: https://CliMA.github.io/ClimaAtmos.jl/dev/
-
-[gha-ci-img]: https://github.com/CliMA/ClimaAtmos.jl/actions/workflows/ci.yml/badge.svg
-[gha-ci-url]: https://github.com/CliMA/ClimaAtmos.jl/actions/workflows/ci.yml
-
-[bk-ci-img]: https://badge.buildkite.com/2a31b42d67409c27660a0dcce65b49294cd9c6b9f14c12f21e.svg/?branch=main
-[bk-ci-url]: https://buildkite.com/clima/climaatmos-ci
-
-[codecov-img]: https://codecov.io/gh/CliMA/ClimaAtmos.jl/branch/main/graph/badge.svg
-[codecov-url]: https://codecov.io/gh/CliMA/ClimaAtmos.jl
-
-[col-prac-img]: https://img.shields.io/badge/ColPrac-Contributor's%20Guide-blueviolet?style=flat-square
-[col-prac-url]: https://github.com/SciML/ColPrac
-
-[discussions-img]: https://img.shields.io/badge/Ask%20us-anything-1abc9c.svg?style=flat-square
-[discussions-url]: https://github.com/CliMA/ClimaAtmos.jl/discussions
-
-[downloads-img]: https://img.shields.io/badge/dynamic/json?url=http%3A%2F%2Fjuliapkgstats.com%2Fapi%2Fv1%2Ftotal_downloads%2FClimaAtmos&query=total_requests&suffix=%2Ftotal&label=Downloads
-[downloads-url]: http://juliapkgstats.com/pkg/ClimaAtmos
-
-ClimaAtmos.jl is the atmosphere components of the CliMA software stack. We strive for a user interface that makes ClimaAtmos.jl as friendly and intuitive to use as possible, allowing users to focus on the science.
+|                   |                                                                                                                                                                                                                                                                                                                                                                      |
+| -----------------:|:-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Documentation** | [![stable](https://img.shields.io/badge/docs-stable-blue.svg)](https://CliMA.github.io/ClimaAtmos.jl/stable/) [![dev](https://img.shields.io/badge/docs-dev-blue.svg)](https://CliMA.github.io/ClimaAtmos.jl/dev/)                                                                                                                                                   |
+| **Version**       | [![version](https://img.shields.io/github/v/release/CliMA/ClimaAtmos.jl?label=version)](https://github.com/CliMA/ClimaAtmos.jl/releases/latest)                                                                                                                                                                                                                      |
+| **License**       | [![license](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](https://github.com/CliMA/ClimaAtmos.jl/blob/main/LICENSE)                                                                                                                                                                                                                                   |
+| **Tests**         | [![gha ci](https://github.com/CliMA/ClimaAtmos.jl/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/CliMA/ClimaAtmos.jl/actions/workflows/ci.yml?query=branch%3Amain) [![buildkite](https://badge.buildkite.com/2a31b42d67409c27660a0dcce65b49294cd9c6b9f14c12f21e.svg?branch=main)](https://buildkite.com/clima/climaatmos-ci/builds?branch=main) |
+| **Code Coverage** | [![codecov](https://codecov.io/gh/CliMA/ClimaAtmos.jl/branch/main/graph/badge.svg)](https://codecov.io/gh/CliMA/ClimaAtmos.jl)                                                                                                                                                                                                                                       |
+| **Downloads**     | [![Downloads](https://img.shields.io/badge/dynamic/json?url=http%3A%2F%2Fjuliapkgstats.com%2Fapi%2Fv1%2Ftotal_downloads%2FClimaAtmos&query=total_requests&label=Downloads)](https://juliapkgstats.com/pkg/ClimaAtmos)                                                                                                                                                |
 
 <p align="center">
-  <img src="https://github.com/user-attachments/assets/778b0c14-a5d7-4907-82db-6d1f8a0c5b07" alt="animation (1)">
+  <img src="https://github.com/user-attachments/assets/778b0c14-a5d7-4907-82db-6d1f8a0c5b07" alt="Condensed water path from a global ClimaAtmos simulation">
 </p>
 
-Condensed water path from a global simulation using diagnostic EDMF and 0M microphysics, initialized with ERA5 on 8-31-25 00Z. Output every 30 minutes; ran for ~4 days.
+Condensed water path from a global simulation initialized with ERA5 on 8-31-25 00Z. Output every 30 minutes; ran for ~4 days.
 
-## Installation instructions
+## Features
 
-Recommended Julia: Stable release v1.11.6
+  - **Global and single-column configurations**: cubed-sphere grids with topography for global simulations; boxes, planes, and columns for process studies (BOMEX, DYCOMS, RICO, and other standard cases)
+  - **Turbulence and convection**: TKE-based eddy diffusion and the PROPHET scheme (an extended, prognostic eddy-diffusivity mass-flux (EDMF) scheme), designed for calibration with data assimilation and machine learning
+  - **Cloud microphysics**: 0-moment to 2-moment bulk schemes, plus the P3 ice scheme, via [CloudMicrophysics.jl](https://github.com/CliMA/CloudMicrophysics.jl)
+  - **Radiation**: RRTMGP radiative transfer
+  - **ERA5 and GCM-driven** initial conditions and forcing
+  - **Configurable diagnostics** with NetCDF and HDF5 output
+  - **Restarts and checkpointing** for long simulations
+  - **GPU support**: runs on CPUs and NVIDIA GPUs from the same codebase
+  - **Composable configuration**: script and YAML-config interfaces for every aspect of a simulation
 
-ClimaAtmos.jl is a [registered Julia package](https://julialang.org/packages/). To install
+## Installation
+
+ClimaAtmos.jl is a registered Julia package (recommended Julia: v1.11):
 
 ```julia
-julia> using Pkg
-
-julia> Pkg.add("ClimaAtmos")
+using Pkg
+Pkg.add("ClimaAtmos")
 ```
 
-Alternatively, download the `ClimaAtmos`
-[source](https://github.com/CliMA/ClimaAtmos.jl) with:
+## Quick Example
 
-```
-$ git clone https://github.com/CliMA/ClimaAtmos.jl.git
-```
+The simplest simulation uses all defaults: it solves the dry compressible equations on a global cubed-sphere grid from a hydrostatically balanced, slightly perturbed state:
 
-Now change into the `ClimaAtmos.jl` directory with
+```julia
+import ClimaAtmos as CA
 
-```
-$ cd ClimaAtmos.jl
-```
-
-To use ClimaAtmos, you need to instantiate all dependencies with:
-
-```
-$ julia --project
-julia> ]
-(ClimaAtmos) pkg> instantiate
+model = CA.AtmosModel(CA.SphereGrid(Float32))
+simulation = CA.AtmosSimulation(model; t_end = "1days")
+CA.solve_atmos!(simulation)
 ```
 
-## Running instructions
+The model owns the grid, the parameters, and the case setup, and chooses which
+parameterizations are active. The simulation adds run control: timestepping,
+output, diagnostics, and callbacks. For example, a single-column model:
 
-Currently, the simulations are stored in the `test` folder. Run all the test cases with the following commands.
-
-First, launch Julia from the `ClimaAtmos.jl/` directory with the project active:
-
-```
-$ julia --project
-```
-
-Then, in the Julia REPL, switch to the package manager by pressing `]` and run the tests:
-
-```pkg
-(ClimaAtmos) pkg> test
+```julia
+grid = CA.ColumnGrid(Float32; z_elem = 30, z_max = 30000.0)
+model = CA.AtmosModel(grid)
+simulation = CA.AtmosSimulation(model; t_end = "6hours")
 ```
 
-Or run from the command line:
+See [Your First Simulation](https://CliMA.github.io/ClimaAtmos.jl/dev/first_simulation/) in the documentation for a guided introduction.
 
-```
-$ julia --project -e 'using Pkg; Pkg.test()'
-```
+## Documentation
 
-If you run into issues when running the test suite this way, please open an issue.
+  - **[Stable docs](https://CliMA.github.io/ClimaAtmos.jl/stable/)**: the released version
+  - **[Dev docs](https://CliMA.github.io/ClimaAtmos.jl/dev/)**: the latest development version
+  - **[API reference](https://CliMA.github.io/ClimaAtmos.jl/dev/api/)**: types and functions users construct
+  - **[Configuration options](https://CliMA.github.io/ClimaAtmos.jl/dev/configuration_options/)**: every YAML key, generated from the schema
+  - **[Available diagnostics](https://CliMA.github.io/ClimaAtmos.jl/dev/available_diagnostics/)**: output variables
+
+## Integration with CliMA models
+
+ClimaAtmos.jl is a component of the [CliMA](https://github.com/CliMA) Earth System Model:
+
+  - [ClimaCore.jl](https://github.com/CliMA/ClimaCore.jl): dynamical core and discretization tools
+  - [ClimaCoupler.jl](https://github.com/CliMA/ClimaCoupler.jl): coupling to ocean, land, and sea ice components
+  - [Thermodynamics.jl](https://github.com/CliMA/Thermodynamics.jl): moist thermodynamics, shared across all CliMA components for energetic consistency
+  - [ClimaParams.jl](https://github.com/CliMA/ClimaParams.jl): the single source of truth for all model parameters
+
+See [The CliMA Ecosystem](https://CliMA.github.io/ClimaAtmos.jl/dev/ecosystem/) in the documentation for the full architectural overview, including [Insolation.jl](https://github.com/CliMA/Insolation.jl), [RRTMGP.jl](https://github.com/CliMA/RRTMGP.jl), [SurfaceFluxes.jl](https://github.com/CliMA/SurfaceFluxes.jl), and [CloudMicrophysics.jl](https://github.com/CliMA/CloudMicrophysics.jl).
 
 ## Contributing
 
-If you're interested in contributing to the development of ClimaAtmos we want your help no matter how big or small a contribution you make! It's always great to have new people look at the code with fresh eyes: you will see errors that other developers have missed.
+If you're interested in contributing to ClimaAtmos, we welcome contributions of any size! Let us know by [opening an issue](https://github.com/CliMA/ClimaAtmos.jl/issues/new) if you'd like to work on a new feature.
 
-Let us know by [opening an issue](https://github.com/CliMA/ClimaAtmos.jl/issues/new) if you'd like to work on a new feature.
-
-Here is the rule of thumb [coding style](https://clima.github.io/ClimateMachine.jl/latest/DevDocs/CodeStyle/) and [unicode usage restrictions](https://clima.github.io/ClimateMachine.jl/latest/DevDocs/AcceptableUnicode/).
-
-For more information, check out our [contributor's guide](https://clima.github.io/ClimaAtmos.jl/dev/contributor_guide/).
+Contributors should follow the shared CliMA engineering standards in [`docs/dev-guides/`](docs/dev-guides/), which cover architecture, performance, code quality, documentation, and workflows. These are vendored from [CliMA/DeveloperGuides](https://github.com/CliMA/DeveloperGuides). The repo's [`AGENTS.md`](AGENTS.md) is a starting point for AI agents with repo-specific guidance. See also the [contributor's guide](https://clima.github.io/ClimaAtmos.jl/dev/contributor_guide/).

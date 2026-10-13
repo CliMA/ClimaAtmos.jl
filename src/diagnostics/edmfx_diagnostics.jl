@@ -313,11 +313,13 @@ compute_entr(state, cache, time) =
 compute_entr(_, _, _, turbconv_model) = error_diagnostic_variable("entr", turbconv_model)
 
 function compute_entr(state, cache, _, ::PrognosticEDMFX)
-    (; ᶜentr_vel_scaleʲs, ᶜarea_bounding_entr_detrʲs, ᶜuʲs) = cache.precomputed
+    (; ᶜentr_vel_scaleʲs, ᶜentr_nonvel_rateʲs, ᶜarea_bounding_entr_detrʲs, ᶜuʲs) =
+        cache.precomputed
     ᶜlg = Fields.local_geometry_field(state.c)
     return @. lazy(
         compute_entrainment(
             ᶜentr_vel_scaleʲs.:1,
+            ᶜentr_nonvel_rateʲs.:1,
             ᶜarea_bounding_entr_detrʲs.:1,
             get_physical_w(ᶜuʲs.:1, ᶜlg),
         ),
@@ -355,12 +357,14 @@ function compute_detr(state, cache, _, ::PrognosticEDMFX)
     (; ᶜρ_diffʲs, ᶜρʲs, ᶜarea_bounding_entr_detrʲs) = cache.precomputed
     (; ᶠgradᵥ_ᶜΦ) = cache.core
     turbconv_params = CAP.turbconv_params(cache.params)
-    detr_buoy_inv_tau_max = CAP.detr_buoy_inv_tau_max(turbconv_params)
+    entr_detr_buoy_inv_tau_max = CAP.entr_detr_buoy_inv_tau_max(turbconv_params)
     detr_model = cache.atmos.edmfx_model.detr_model
     ᶠlg = Fields.local_geometry_field(state.f)
     ᶠdz = Fields.Δz_field(axes(state.f))
     ρaʲ = state.c.sgsʲs.:(1).ρa
     u₃ʲ = state.f.sgsʲs.:(1).u₃
+    # Use ᶠbottom_bias_zero_bot so that detrainment diagnostics are not NaN at the first cell
+    ᶠbottom_bias_zero_bot = Operators.BottomBiasedC2F(bottom = Operators.SetValue(0))
     # Evaluate the buoyancy inverse time scale at faces (where w and grad_Φ are
     # naturally defined) and interpolate to centers for smoother behaviour.
     ᶜbuoy_inv_time_scale = @. lazy(
@@ -372,7 +376,7 @@ function compute_detr(state, cache, _, ::PrognosticEDMFX)
                     ᶠgradᵥ_ᶜΦ,
                     ᶠlg,
                 ),
-                detr_buoy_inv_tau_max,
+                entr_detr_buoy_inv_tau_max,
             ),
         ),
     )
@@ -382,7 +386,7 @@ function compute_detr(state, cache, _, ::PrognosticEDMFX)
             draft_area(ρaʲ, ᶜρʲs.:1),
             ρaʲ,
             ᶜbuoy_inv_time_scale,
-            ᶜdivᵥ(ᶠleft_bias(ρaʲ) * u₃ʲ),
+            ᶜdivᵥ(ᶠbottom_bias_zero_bot(ρaʲ) * u₃ʲ),
             ᶜarea_bounding_entr_detrʲs.:1,
             detr_model,
         ),
@@ -779,6 +783,16 @@ add_diagnostic_variable!(short_name = "lmixb", units = "m",
 ###
 # Diffusivity of heat (3d)
 ###
+"""
+    compute_edt(state, cache, time)
+
+Compute the effective vertical eddy diffusivity for scalars, `edt`.
+
+Dispatches on the pair `(cache.atmos.vertical_diffusion, cache.atmos.turbconv_model)`,
+because the two are mutually exclusive: the standalone `VerticalDiffusion` and
+`DecayWithHeightDiffusion` schemes require `turbconv_model === nothing`, whereas the EDMFX
+methods require `vertical_diffusion === nothing`. Any other combination errors.
+"""
 compute_edt(state, cache, time) = compute_edt(
     state, cache, time, cache.atmos.vertical_diffusion, cache.atmos.turbconv_model,
 )
@@ -794,29 +808,33 @@ compute_edt(state, _, _, model::DecayWithHeightDiffusion, ::Nothing) =
 function compute_edt(state, cache, _,
     ::Nothing, ::Union{PrognosticEDMFX, EDOnlyEDMFX},
 )
-    turbconv_params = CAP.turbconv_params(cache.params)
-    (; ᶜlinear_buoygrad, ᶜstrain_rate_norm) = cache.precomputed
-    (; params) = cache
-
-    ᶜtke = @. lazy(specific(state.c.ρtke, state.c.ρ))
-    ᶜmixing_length_field = ᶜmixing_length(state, cache)
-    ᶜK_u = @. lazy(eddy_viscosity(turbconv_params, ᶜtke, ᶜmixing_length_field))
-    ᶜprandtl_nvec =
-        @. lazy(turbulent_prandtl_number(params, ᶜlinear_buoygrad, ᶜstrain_rate_norm))
-    ᶜK_h = @. lazy(eddy_diffusivity(ᶜK_u, ᶜprandtl_nvec))
-    return ᶜK_h
+    # The effective scalar diffusivity the model applies to the grid-mean
+    # fluxes: the face-native ᶠK_h (see set_face_diffusivities! and
+    # edmfx_sgs_diffusive_flux_tendency!), interpolated to centers for
+    # output.
+    (; ᶠK_h) = cache.precomputed
+    return @. lazy(ᶜinterp(ᶠK_h))
 end
 
 add_diagnostic_variable!(short_name = "edt", units = "m^2 s^-1",
     long_name = "Eddy Diffusivity Coefficient for Temperature",
     standard_name = "atmosphere_heat_diffusivity",
-    comments = "Vertical diffusion coefficient for temperature due to parameterized eddies",
+    comments = "Effective vertical diffusion coefficient for scalars due to parameterized eddies (for EDMFX, the face-native coefficient applied to the grid-mean fluxes, interpolated to cell centers)",
     compute = compute_edt,
 )
 
 ###
 # Diffusivity of momentum (3d)
 ###
+"""
+    compute_evu(state, cache, time)
+
+Compute the effective vertical eddy viscosity for momentum, `evu`.
+
+Dispatches on the pair `(cache.atmos.vertical_diffusion, cache.atmos.turbconv_model)` in
+the same mutually exclusive way as `compute_edt`. The standalone vertical-diffusion
+schemes assume `K_u = K_h`, so those methods return the same coefficient as `edt`.
+"""
 compute_evu(state, cache, time) = compute_evu(
     state, cache, time, cache.atmos.vertical_diffusion, cache.atmos.turbconv_model,
 )
@@ -837,18 +855,85 @@ function compute_evu(
     ::Nothing,
     ::Union{PrognosticEDMFX, EDOnlyEDMFX},
 )
-    turbconv_params = CAP.turbconv_params(cache.params)
-    ᶜtke = @. lazy(specific(state.c.ρtke, state.c.ρ))
-    ᶜmixing_length_field = ᶜmixing_length(state, cache)
-    ᶜK_u = @. lazy(eddy_viscosity(turbconv_params, ᶜtke, ᶜmixing_length_field))
-    return ᶜK_u
+    # The effective viscosity the model applies to the grid-mean momentum
+    # flux: the face-native ᶠK_u, interpolated to centers for output.
+    (; ᶠK_u) = cache.precomputed
+    return @. lazy(ᶜinterp(ᶠK_u))
 end
 
 add_diagnostic_variable!(short_name = "evu", units = "m^2 s^-1",
     long_name = "Eddy Viscosity Coefficient for Momentum",
     standard_name = "atmosphere_momentum_diffusivity",
-    comments = "Vertical diffusion coefficient for momentum due to parameterized eddies",
+    comments = "Effective vertical diffusion coefficient for momentum due to parameterized eddies (for EDMFX, the face-native coefficient applied to the grid-mean momentum flux, interpolated to cell centers)",
     compute = compute_evu,
+)
+
+###
+# Horizontal mixing length (3d)
+###
+compute_lmixh(state, cache, time) =
+    compute_lmixh(state, cache, time, cache.atmos.turbconv_model)
+compute_lmixh(_, _, _, turbconv_model) =
+    error_diagnostic_variable("lmixh", turbconv_model)
+
+function compute_lmixh(state, cache, _, ::Union{EDOnlyEDMFX, PrognosticEDMFX})
+    Δx_h = horizontal_filter_scale(axes(state.c))
+    return ᶜmixing_length(state, cache; grid_scale = Δx_h)
+end
+
+add_diagnostic_variable!(short_name = "lmixh", units = "m",
+    long_name = "Environment Horizontal Mixing Length",
+    comments = "Mixing length with the grid-scale limit set by the horizontal \
+                node spacing rather than the resolvability filter scale",
+    compute = compute_lmixh,
+)
+
+###
+# Horizontal diffusivity of heat (3d)
+###
+compute_edth(state, cache, time) =
+    compute_edth(state, cache, time, cache.atmos.turbconv_model)
+compute_edth(_, _, _, turbconv_model) =
+    error_diagnostic_variable("edth", turbconv_model)
+
+function compute_edth(state, cache, _, ::Union{EDOnlyEDMFX, PrognosticEDMFX})
+    hasproperty(cache.precomputed, :ᶜK_h_h) || error_diagnostic_variable(
+        "Can only compute the horizontal eddy diffusivity when \
+         `edmfx_sgs_horizontal_diffusive_flux` is enabled",
+    )
+    return cache.precomputed.ᶜK_h_h
+end
+
+add_diagnostic_variable!(short_name = "edth", units = "m^2 s^-1",
+    long_name = "Horizontal Eddy Diffusivity Coefficient for Temperature",
+    comments = "Horizontal diffusion coefficient for scalars in the EDMFX \
+                horizontal SGS diffusive flux, reported from the cached \
+                `ᶜK_h_h` applied by the tendency",
+    compute = compute_edth,
+)
+
+###
+# Horizontal diffusivity of momentum (3d)
+###
+compute_evuh(state, cache, time) =
+    compute_evuh(state, cache, time, cache.atmos.turbconv_model)
+compute_evuh(_, _, _, turbconv_model) =
+    error_diagnostic_variable("evuh", turbconv_model)
+
+function compute_evuh(state, cache, _, ::Union{EDOnlyEDMFX, PrognosticEDMFX})
+    hasproperty(cache.precomputed, :ᶜK_u_h) || error_diagnostic_variable(
+        "Can only compute the horizontal eddy viscosity when \
+         `edmfx_sgs_horizontal_diffusive_flux` is enabled",
+    )
+    return cache.precomputed.ᶜK_u_h
+end
+
+add_diagnostic_variable!(short_name = "evuh", units = "m^2 s^-1",
+    long_name = "Horizontal Eddy Viscosity Coefficient for Momentum",
+    comments = "Horizontal eddy viscosity from the TKE-based closure with the \
+                mixing length limited by the horizontal node spacing, reported \
+                from the cached `ᶜK_u_h` applied by the tendency",
+    compute = compute_evuh,
 )
 
 ###

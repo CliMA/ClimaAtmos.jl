@@ -7,7 +7,7 @@ region that rises.
 
 Handles both 2D (XZ) and 3D (XYZ) domains automatically.
 
-## Example
+# Examples
 
 ```julia
 setup = RisingThermalBubbleProfile()

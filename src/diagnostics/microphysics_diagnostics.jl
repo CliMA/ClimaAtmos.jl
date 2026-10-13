@@ -21,12 +21,21 @@ import CloudMicrophysics.BulkMicrophysicsTendencies as BMT
 # Because everything is @inline, the compiler can dead-code-eliminate unused
 # source terms inside the broadcast.
 # ---------------------------------------------------------------------------
+"""
+    _mp1m_source_term(::Val{F}, mp, tps, ρ, T, w, q_tot, q_lcl, q_icl, q_rai, q_sno)
+
+Evaluate the 1-moment verbose tendencies and return the single source term named `F`.
+
+Selecting the field by a `Val` type parameter keeps the choice at compile time, so that
+the other seventeen source terms are dead-code eliminated inside the broadcast and the
+diagnostic evaluates to a plain `Field{FT}` with no intermediate allocation.
+"""
 @inline function _mp1m_source_term(
-    ::Val{F}, mp, tps, ρ, T, q_tot, q_lcl, q_icl, q_rai, q_sno,
+    ::Val{F}, mp, tps, ρ, T, w, q_tot, q_lcl, q_icl, q_rai, q_sno,
 ) where {F}
     src = BMT.bulk_microphysics_tendencies(
         BMT.InstantaneousVerbose(), BMT.Microphysics1Moment(),
-        mp, tps, ρ, T, q_tot, q_lcl, q_icl, q_rai, q_sno,
+        mp, tps, ρ, T, w, q_tot, q_lcl, q_icl, q_rai, q_sno,
     )
     return getfield(src, F)
 end
@@ -35,6 +44,15 @@ end
 # The 18 source terms produced by _microphysics_source_terms.
 # Each entry: (field_symbol, human-readable description)
 # ---------------------------------------------------------------------------
+"""
+    MP1M_SOURCE_TERMS
+
+The eighteen 1-moment source terms exposed as diagnostics, as
+`(field_symbol, description)` pairs.
+
+Each entry is registered three times — for the grid mean, the first updraft, and the
+environment — under the `mp1m_`, `mp1mup_`, and `mp1men_` prefixes.
+"""
 const MP1M_SOURCE_TERMS = [
     (:S_phase_change_vap_lcl, "Vapor ↔ cloud liquid phase change"),
     (:S_phase_change_vap_icl, "Vapor ↔ cloud ice phase change"),
@@ -59,11 +77,23 @@ const MP1M_SOURCE_TERMS = [
 # ---------------------------------------------------------------------------
 # Grid-mean compute function
 # ---------------------------------------------------------------------------
+"""
+    compute_mp1m_source(state, cache, ::Val{F})
+    compute_mp1m_source(state, cache, time, F)
+
+Evaluate the 1-moment source term `F` on the grid-mean state.
+
+The four-argument form is the diagnostic entry point: it dispatches on
+`cache.atmos.microphysics_model` and errors for anything other than
+`NonEquilibriumMicrophysics1M`. Specific humidities are formed from the grid-mean
+prognostic densities.
+"""
 function compute_mp1m_source(state, cache, ::Val{F}) where {F}
     cmp = CAP.microphysics_1m_params(cache.params)
     thp = CAP.thermodynamics_params(cache.params)
     ᶜρ = state.c.ρ
     ᶜT = cache.precomputed.ᶜT
+    ᶜw = @. lazy(w_component(Geometry.WVector(cache.precomputed.ᶜu)))
     ᶜq_tot = @. lazy(specific(state.c.ρq_tot, ᶜρ))
     ᶜq_lcl = @. lazy(specific(state.c.ρq_lcl, ᶜρ))
     ᶜq_icl = @. lazy(specific(state.c.ρq_icl, ᶜρ))
@@ -71,7 +101,7 @@ function compute_mp1m_source(state, cache, ::Val{F}) where {F}
     ᶜq_sno = @. lazy(specific(state.c.ρq_sno, ᶜρ))
     return @. lazy(
         _mp1m_source_term(
-            Val(F), cmp, thp, ᶜρ, ᶜT, ᶜq_tot, ᶜq_lcl, ᶜq_icl, ᶜq_rai, ᶜq_sno,
+            $Val(F), cmp, thp, ᶜρ, ᶜT, ᶜw, ᶜq_tot, ᶜq_lcl, ᶜq_icl, ᶜq_rai, ᶜq_sno,
         ),
     )
 end
@@ -87,11 +117,23 @@ compute_mp1m_source(state, cache, _, F, ::NonEquilibriumMicrophysics1M) =
 # ---------------------------------------------------------------------------
 # Updraft compute function (PrognosticEDMFX, first subdomain)
 # ---------------------------------------------------------------------------
+"""
+    compute_mp1m_source_updraft(state, cache, ::Val{F})
+    compute_mp1m_source_updraft(state, cache, time, F)
+
+Evaluate the 1-moment source term `F` on the first updraft subdomain.
+
+The four-argument form dispatches jointly on `cache.atmos.microphysics_model` and
+`cache.atmos.turbconv_model`, and errors unless both `NonEquilibriumMicrophysics1M` and
+`PrognosticEDMFX` are active. Uses the updraft's own density, temperature, and specific
+humidities, so the tendencies are in-draft rather than area-weighted.
+"""
 function compute_mp1m_source_updraft(state, cache, ::Val{F}) where {F}
     cmp = CAP.microphysics_1m_params(cache.params)
     thp = CAP.thermodynamics_params(cache.params)
     ᶜρʲ = cache.precomputed.ᶜρʲs.:1
     ᶜTʲ = cache.precomputed.ᶜTʲs.:1
+    ᶜwʲ = @. lazy(w_component(Geometry.WVector(cache.precomputed.ᶜuʲs.:1)))
     ᶜq_totʲ = cache.precomputed.ᶜq_tot_nonnegʲs.:1
     ᶜq_lclʲ = (state.c.sgsʲs.:1).q_lcl
     ᶜq_iclʲ = (state.c.sgsʲs.:1).q_icl
@@ -99,8 +141,8 @@ function compute_mp1m_source_updraft(state, cache, ::Val{F}) where {F}
     ᶜq_snoʲ = (state.c.sgsʲs.:1).q_sno
     return @. lazy(
         _mp1m_source_term(
-            Val(F), cmp, thp,
-            ᶜρʲ, ᶜTʲ, ᶜq_totʲ, ᶜq_lclʲ, ᶜq_iclʲ, ᶜq_raiʲ, ᶜq_snoʲ,
+            $Val(F), cmp, thp,
+            ᶜρʲ, ᶜTʲ, ᶜwʲ, ᶜq_totʲ, ᶜq_lclʲ, ᶜq_iclʲ, ᶜq_raiʲ, ᶜq_snoʲ,
         ),
     )
 end
@@ -121,6 +163,18 @@ compute_mp1m_source_updraft(
 # ---------------------------------------------------------------------------
 # Environment compute function (PrognosticEDMFX)
 # ---------------------------------------------------------------------------
+"""
+    compute_mp1m_source_env(state, cache, ::Val{F})
+    compute_mp1m_source_env(state, cache, time, F)
+
+Evaluate the 1-moment source term `F` on the environment subdomain.
+
+The four-argument form dispatches jointly on `cache.atmos.microphysics_model` and
+`cache.atmos.turbconv_model`, and errors unless both `NonEquilibriumMicrophysics1M` and
+`PrognosticEDMFX` are active. The environment density is diagnosed from the environment
+temperature and the grid-mean pressure; the condensate and precipitation mixing ratios
+come from `ᶜspecific_env_value`.
+"""
 function compute_mp1m_source_env(state, cache, ::Val{F}) where {F}
     cmp = CAP.microphysics_1m_params(cache.params)
     thp = CAP.thermodynamics_params(cache.params)
@@ -128,14 +182,15 @@ function compute_mp1m_source_env(state, cache, ::Val{F}) where {F}
     ᶜρ⁰ = @. lazy(
         TD.air_density(thp, ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰),
     )
+    ᶜw⁰ = @. lazy(w_component(Geometry.WVector(cache.precomputed.ᶜu⁰)))
     ᶜq_lcl⁰ = ᶜspecific_env_value(@name(q_lcl), state, cache)
     ᶜq_icl⁰ = ᶜspecific_env_value(@name(q_icl), state, cache)
     ᶜq_rai⁰ = ᶜspecific_env_value(@name(q_rai), state, cache)
     ᶜq_sno⁰ = ᶜspecific_env_value(@name(q_sno), state, cache)
     return @. lazy(
         _mp1m_source_term(
-            Val(F), cmp, thp,
-            ᶜρ⁰, ᶜT⁰, ᶜq_tot_nonneg⁰, ᶜq_lcl⁰, ᶜq_icl⁰, ᶜq_rai⁰, ᶜq_sno⁰,
+            $Val(F), cmp, thp,
+            ᶜρ⁰, ᶜT⁰, ᶜw⁰, ᶜq_tot_nonneg⁰, ᶜq_lcl⁰, ᶜq_icl⁰, ᶜq_rai⁰, ᶜq_sno⁰,
         ),
     )
 end

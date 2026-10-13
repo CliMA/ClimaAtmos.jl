@@ -7,91 +7,33 @@
 import Thermodynamics as TD
 import ClimaCore.Spaces as Spaces
 import ClimaCore.Fields as Fields
-import NCDatasets as NC
-import Interpolations as Intp
-import Dates
-using Statistics: mean
-import ClimaUtilities.TimeVaryingInputs
-import ClimaUtilities.TimeVaryingInputs: LinearInterpolation, TimeVaryingInput, evaluate!
-
-"""
-    interp_vertical_prof(x, xp, fp)
-
-Interpolates a 1D vertical profile `fp` defined at points `xp` to new query points `x`.
-
-Uses linear interpolation between points in `xp` and flat extrapolation (using the
-value at the nearest boundary) for points `x` outside the range of `xp`.
-
-Arguments:
-
-  - `x`: Vector of query points (e.g., heights) at which to interpolate.
-  - `xp`: Vector of points at which the profile `fp` is defined.
-  - `fp`: Vector of profile values corresponding to `xp`.
-
-Returns:
-
-  - A vector of interpolated values at points `x`.
-"""
-function interp_vertical_prof(x, xp, fp)
-    spl = Intp.extrapolate(
-        Intp.interpolate((xp,), fp, Intp.Gridded(Intp.Linear())),
-        Intp.Flat(),
-    )
-    # Interpolate on a flattened view and reshape back to the original shape.
-    x_data = x isa Fields.Field ? parent(x) : x
-    return reshape(spl(vec(x_data)), size(x_data))
-end
-
-
-"""
-    gcm_vert_advection!(ᶜχₜ, ᶜχ, ᶜls_subsidence)
-
-Computes the vertical advection tendency term for a scalar quantity `χ` given the
-large-scale subsidence velocity This term arises from the decomposition of vertical
-eddy advection in GCM forcings, as described in Shen et al. (2022, e.g., Equations 9-10).
-
-The term calculated and added to `ᶜχₜ` is of the form:
-`tendency += <w̃> * ∂<χ̃>/∂z`
-where `<w̃>` is the large-scale mean subsidence velocity (`ᶜls_subsidence`) and
-`∂<χ̃>/∂z` is the vertical gradient of the GCM's time-mean profile of the scalar `χ`.
-
-This function assumes that `ᶜχₜ` already contains the total vertical eddy advection
-term (`-<w̃ ∂χ̃/∂z>`), and it subtracts the mean advection to obtain the eddy part.
-
-Arguments:
-
-  - `ᶜχₜ`: Field of tendencies for `χ`, modified in place.
-  - `ᶜχ`: Field representing the GCM's time-mean profile of the specific scalar `χ`.
-  - `ᶜls_subsidence`: Field of the GCM's large-scale mean subsidence velocity `<w̃>`.
-"""
-function gcm_vert_advection!(ᶜχₜ, ᶜχ, ᶜls_subsidence)
-    @. ᶜχₜ +=
-        Geometry.WVector(ᶜgradᵥ(ᶠinterp(ᶜχ))).components.data.:1 *
-        ᶜls_subsidence
-end
+import ClimaUtilities.TimeVaryingInputs: evaluate!
+import UnrolledUtilities: unrolled_map, unrolled_foreach
 
 """
     compute_gcm_driven_scalar_inv_τ(z::FT, params) where {FT}
 
-Calculates the height-dependent inverse relaxation timescale (Γᵣ(z)) for nudging
-scalar quantities (such as temperature and humidity) towards GCM profiles.
+Return the height-dependent inverse relaxation timescale `Γᵣ(z)` [1/s] for nudging
+scalars (temperature, humidity) toward target profiles.
 
-The formulation follows Shen et al. (2022, Equation 11):
+Follows Shen et al. (2022), Eq. 11: no relaxation below `zᵢ`, a raised-cosine ramp
+between `zᵢ` and `zᵣ`, and the full rate `1/τᵣ` above `zᵣ`,
 
-  - Γᵣ(z) = 0 for z < zᵢ (no relaxation below minimum height zᵢ)
-  - Γᵣ(z) = (0.5 / τᵣ) * (1 - cos(π * (z - zᵢ) / (zᵣ - zᵢ))) for zᵢ ≤ z ≤ zᵣ (smooth transition)
-  - Γᵣ(z) = 1 / τᵣ for z > zᵣ (full relaxation timescale τᵣ)
+```math
+Γ_r(z) = \\begin{cases}
+0, & z < z_i \\\\
+\\frac{1}{2τ_r}\\left[1 - \\cos\\!\\left(π \\frac{z - z_i}{z_r - z_i}\\right)\\right],
+  & z_i \\le z \\le z_r \\\\
+1/τ_r, & z > z_r
+\\end{cases}
+```
 
-Arguments:
+# Arguments
 
   - `z`: Height [m].
-  - `params`: Parameter set containing `CAP.gcmdriven_scalar_relaxation_timescale` (τᵣ),
-    `CAP.gcmdriven_relaxation_minimum_height` (zᵢ), and
-    `CAP.gcmdriven_relaxation_maximum_height` (zᵣ).
-
-Returns:
-
-  - The inverse relaxation timescale [s⁻¹] at height `z`.
+  - `params`: Parameter set supplying `gcmdriven_scalar_relaxation_timescale` (`τᵣ`)
+    [s], `gcmdriven_relaxation_minimum_height` (`zᵢ`) [m], and
+    `gcmdriven_relaxation_maximum_height` (`zᵣ`) [m].
 """
 function compute_gcm_driven_scalar_inv_τ(z::FT, params) where {FT}
     τᵣ = CAP.gcmdriven_scalar_relaxation_timescale(params)
@@ -111,19 +53,17 @@ end
 """
     compute_gcm_driven_momentum_inv_τ(z::FT, params) where {FT}
 
-Calculates the inverse relaxation timescale for nudging horizontal momentum
-toward GCM profiles.
+Return the inverse relaxation timescale [1/s] for nudging horizontal momentum
+toward target profiles.
 
-Following Shen et al. (2022), this is a constant timescale.
+Following Shen et al. (2022), this is height-independent: `1/τᵣ` with `τᵣ` the
+parameter `gcmdriven_momentum_relaxation_timescale`.
 
-Arguments:
+# Arguments
 
-  - `z`: Height [m] (often unused if timescale is constant).
-  - `params`: Parameter set containing `CAP.gcmdriven_momentum_relaxation_timescale`.
-
-Returns:
-
-  - The constant inverse relaxation timescale [s⁻¹].
+  - `z`: Height [m]; unused, present so this can be broadcast over a height field
+    like `compute_gcm_driven_scalar_inv_τ`.
+  - `params`: Parameter set supplying `gcmdriven_momentum_relaxation_timescale` [s].
 """
 function compute_gcm_driven_momentum_inv_τ(z::FT, params) where {FT}
     τᵣ = CAP.gcmdriven_momentum_relaxation_timescale(params)
@@ -132,262 +72,159 @@ end
 
 """
     external_forcing_cache(Y, atmos::AtmosModel, params, start_date)
-    external_forcing_cache(Y, external_forcing_type, params, start_date)
+    external_forcing_cache(Y, external_forcing, params, start_date)
 
-Sets up and returns a cache for external forcing data based on the specified
-`external_forcing_type`. This cache typically holds pre-interpolated GCM profiles,
-tendencies, and nudging parameters.
+Build the cache that `external_forcing_tendency!` reads as `p.external_forcing`,
+dispatching on the external forcing type.
 
-Dispatches to specific methods based on `atmos.external_forcing` or the explicit
-`external_forcing_type`.
+Together with `external_forcing_tendency!`, this is the complete extension
+interface for a custom single-column forcing: define a forcing type and add one
+method of each, as shown on the "Single Column Models" page of the docs
+(`docs/src/single_column.md`). The cache typically holds interpolated profiles,
+`TimeVaryingInput`s, working fields, and nudging timescales.
 
-Arguments:
+The `AtmosModel` method resolves which surface variables the rest of the model
+needs (`ts` for an `ExternalTemperature` surface, `coszen` and `rsdt` for
+`ExternalTVInsolation` under RRTMGP) and forwards them to the
+`ExternalDrivenTVForcing` method; for any other forcing it simply forwards
+`atmos.external_forcing`.
 
-  - `Y`: The initial state vector (used for defining field structures and coordinates).
-  - `atmos::AtmosModel` or `external_forcing_type`: The atmospheric model or specific
-    external forcing configuration object.
+# Arguments
+
+  - `Y`: Initial state vector, used for the field structure and coordinates.
+  - `atmos` or `external_forcing`: The model, or the external forcing object to
+    dispatch on.
   - `params`: Parameter set.
-  - `start_date`: Simulation start date, used for time-varying inputs.
+  - `start_date`: Simulation start date, used to anchor time-varying inputs.
 
-Returns:
+# Returns
 
-  - A `NamedTuple` containing cached fields for external forcing, or an empty
-    `NamedTuple` if `external_forcing_type` is `Nothing`.
+A `NamedTuple` of cached data, empty when `external_forcing` is `nothing`.
 """
-external_forcing_cache(Y, atmos::AtmosModel, params, start_date) =
-    external_forcing_cache(Y, atmos.external_forcing, params, start_date)
+function external_forcing_cache(Y, atmos::AtmosModel, params, start_date)
+    external_forcing = atmos.external_forcing
+    if external_forcing isa ExternalDrivenTVForcing
+        # Surface variables are required by the resolved model components that
+        # consume them, not by the forcing terms: `ts` by an `ExternalTemperature`
+        # surface, `coszen`/`rsdt` by `ExternalTVInsolation` under RRTMGP.
+        insolation_vars =
+            atmos.radiation_mode isa RRTMGPI.AbstractRRTMGPMode ?
+            required_surface_variables(atmos.insolation) : ()
+        surface_vars = (
+            required_surface_variables(atmos.surface.temperature)...,
+            insolation_vars...,
+        )
+        return external_forcing_cache(
+            Y,
+            external_forcing,
+            params,
+            start_date;
+            surface_vars,
+        )
+    end
+    return external_forcing_cache(Y, external_forcing, params, start_date)
+end
 
 external_forcing_cache(Y, external_forcing::Nothing, params, _) = (;)
 
 """
-    external_forcing_cache(Y, external_forcing::GCMForcing, params, _)
+    external_forcing_tendency!(Yₜ, Y, p, t, external_forcing)
 
-Prepares cached fields for GCM-driven single-column model experiments by reading
-forcing data from a NetCDF file specified in `external_forcing.external_forcing_file`.
+Add the tendencies of an external forcing (column forcing data, reanalysis, or an
+idealized case such as ISDAC), dispatching on the forcing type.
 
-This involves:
+Together with `external_forcing_cache`, this is the complete extension interface
+for a custom single-column forcing: define a forcing type and add one method of
+each, as shown on the "Single Column Models" page of the docs
+(`docs/src/single_column.md`). The method for `nothing` is a no-op.
 
-  - Reading time-mean vertical profiles of GCM tendencies (horizontal advection of
-    temperature and moisture, radiative heating, vertical eddy advection components)
-    and GCM state variables (temperature, moisture, winds) for a specified `cfsite_number`.
-  - Reading large-scale subsidence (`wap`).
-  - Reading TOA flux and cosine of solar zenith angle.
-  - Interpolating these profiles to the model's vertical grid using `interp_vertical_prof`.
-  - Computing inverse relaxation timescales for nudging.
-  - Calculating the full vertical eddy fluctuation term for temperature and moisture by
-    combining GCM-diagnosed terms with `gcm_vert_advection!`.
+Methods typically increment `Yₜ.c.uₕ` (momentum nudging), `Yₜ.c.ρe_tot`, and
+`Yₜ.c.ρq_tot`, the last two obtained from temperature and specific-humidity
+tendencies by `apply_Tq_forcing!`.
 
-The methodology is that described by Shen et al. (2022) for forcing LES or SCMs with
-GCM output.
+# Arguments
 
-Returns:
+  - `Yₜ`: Tendency state vector, modified in place.
+  - `Y`: Current state vector.
+  - `p`: Cache; the forcing data is in `p.external_forcing`, and the thermodynamic
+    state in `p.precomputed`.
+  - `t`: Current simulation time, at which time-varying inputs are evaluated.
+  - `external_forcing`: The external forcing object to dispatch on.
 
-  - A `NamedTuple` of `ClimaCore.Fields.Field`s containing the interpolated and
-    processed GCM forcing data.
-"""
-function external_forcing_cache(Y, external_forcing::GCMForcing, params, _)
-    FT = Spaces.undertype(axes(Y.c))
-    ᶜdTdt_fluc = similar(Y.c, FT)
-    ᶜdqtdt_fluc = similar(Y.c, FT)
-    ᶜdTdt_hadv = similar(Y.c, FT)
-    ᶜdqtdt_hadv = similar(Y.c, FT)
-    ᶜT_nudge = similar(Y.c, FT)
-    ᶜqt_nudge = similar(Y.c, FT)
-    ᶜu_nudge = similar(Y.c, FT)
-    ᶜv_nudge = similar(Y.c, FT)
-    ᶜinv_τ_wind = similar(Y.c, FT)
-    ᶜinv_τ_scalar = similar(Y.c, FT)
-    ᶜls_subsidence = similar(Y.c, FT)
-    toa_flux = similar(Fields.level(Y.c.ρ, 1), FT)
-    cos_zenith = similar(Fields.level(Y.c.ρ, 1), FT)
-
-    (; external_forcing_file, cfsite_number) = external_forcing
-
-    NC.Dataset(external_forcing_file, "r") do ds
-
-        function setvar!(cc_field, varname, zc_gcm, zc_forcing)
-            parent(cc_field) .= interp_vertical_prof(
-                zc_gcm,
-                zc_forcing,
-                gcm_driven_profile_tmean(ds.group[cfsite_number], varname),
-            )
-        end
-
-        function setvar_subsidence!(cc_field, varname, zc_gcm, zc_forcing, params)
-            # Computes subsidence velocity from the hydrostatic approximation
-            # w \approx - ω α / g, where ω is pressure velocity and α = 1/ρ is
-            # the specific volume
-            parent(cc_field) .= interp_vertical_prof(
-                zc_gcm,
-                zc_forcing,
-                gcm_driven_profile_tmean(ds.group[cfsite_number], varname) .* .-(
-                    gcm_driven_profile_tmean(ds.group[cfsite_number], "alpha"),
-                ) ./ CAP.grav(params),
-            )
-        end
-
-        function set_toa_flux!(cc_field)
-            # rsdt is TOA insolation. We need
-            # TOA flux and the solar zenith angle separately. So compute
-            #`toa_flux = rsdt/cos(SZA)`.
-            parent(cc_field) .= mean(
-                ds.group[cfsite_number]["rsdt"][:] ./
-                ds.group[cfsite_number]["coszen"][:],
-            )
-        end
-
-        function set_cos_zenith!(cc_field)
-            parent(cc_field) .= ds.group[cfsite_number]["coszen"][1]
-        end
-
-        zc_forcing = gcm_height(ds.group[cfsite_number])
-        zc_gcm = Fields.coordinate_field(Y.c).z
-
-        setvar!(ᶜdTdt_hadv, "tntha", zc_gcm, zc_forcing)
-        setvar!(ᶜdqtdt_hadv, "tnhusha", zc_gcm, zc_forcing)
-        setvar_subsidence!(ᶜls_subsidence, "wap", zc_gcm, zc_forcing, params)
-        # GCM states, used for nudging + vertical eddy advection
-        setvar!(ᶜT_nudge, "ta", zc_gcm, zc_forcing)
-        setvar!(ᶜqt_nudge, "hus", zc_gcm, zc_forcing)
-        setvar!(ᶜu_nudge, "ua", zc_gcm, zc_forcing)
-        setvar!(ᶜv_nudge, "va", zc_gcm, zc_forcing)
-
-        # Vertical eddy advection (Shen et al., 2022; eqn. 9,10)
-        # sum of two terms to give total tendency. First term:
-        setvar!(ᶜdTdt_fluc, "tntva", zc_gcm, zc_forcing)
-        setvar!(ᶜdqtdt_fluc, "tnhusva", zc_gcm, zc_forcing)
-
-        # subtract mean vertical advection to obtain eddy part:
-        gcm_vert_advection!(ᶜdTdt_fluc, ᶜT_nudge, ᶜls_subsidence)
-        gcm_vert_advection!(ᶜdqtdt_fluc, ᶜqt_nudge, ᶜls_subsidence)
-
-        set_toa_flux!(toa_flux)
-        set_cos_zenith!(cos_zenith)
-
-        @. ᶜinv_τ_wind = compute_gcm_driven_momentum_inv_τ(zc_gcm, params)
-        @. ᶜinv_τ_scalar = compute_gcm_driven_scalar_inv_τ(zc_gcm, params)
-    end
-
-    return (;
-        ᶜdTdt_fluc,
-        ᶜdqtdt_fluc,
-        ᶜdTdt_hadv,
-        ᶜdqtdt_hadv,
-        ᶜT_nudge,
-        ᶜqt_nudge,
-        ᶜu_nudge,
-        ᶜv_nudge,
-        ᶜinv_τ_wind,
-        ᶜinv_τ_scalar,
-        ᶜls_subsidence,
-        toa_flux,
-        cos_zenith,
-    )
-end
-
-"""
-    external_forcing_tendency!(Yₜ, Y, p, t, external_forcing_type)
-
-Applies pre-processed external forcings (e.g., from GCM data, reanalysis, or
-idealized case specifications like ISDAC) to the model tendencies.
-
-Dispatches to specific methods based on `external_forcing_type`.
-
-Arguments:
-
-  - `Yₜ`: The tendency state vector, modified in place.
-  - `Y`: The current state vector.
-  - `p`: Cache containing parameters, precomputed fields, and the external forcing cache
-    (`p.external_forcing`).
-  - `t`: Current simulation time (used by time-varying forcings).
-  - `external_forcing_type`: The specific external forcing configuration object.
+Called from `additional_tendency!`, i.e., treated explicitly. Returns `nothing`.
 """
 external_forcing_tendency!(Yₜ, Y, p, t, ::Nothing) = nothing
 
+# ============================================================================
+# Shared forcing-tendency kernels
+#
+# The wind/scalar nudging, the temperature-and-humidity → energy conversion,
+# and the large-scale subsidence math are common to the file-driven
+# (`ExternalDrivenTVForcing`) and ISDAC forcings. These kernels are the
+# single implementation; each forcing's tendency composes them.
+# ============================================================================
+
 """
-    external_forcing_tendency!(Yₜ, Y, p, t, ::Union{GCMForcing, ExternalDrivenTVForcing})
+    nudge_uv!(Yₜ, Y, p, ᶜu_nudge, ᶜv_nudge, ᶜinv_τ_wind)
 
-Applies tendencies from GCM or reanalysis-driven external forcings. This includes:
+Relax the horizontal momentum `Y.c.uₕ` toward the target `(ᶜu_nudge, ᶜv_nudge)`
+[m/s] with inverse timescale `ᶜinv_τ_wind` [1/s], adding the tendency
+`-(uₕ - uₕ_nudge) / τ` to `Yₜ.c.uₕ`.
 
-  - Horizontal advection tendencies for temperature (`ᶜdTdt_hadv`) and total specific
-    humidity (`ᶜdqtdt_hadv`).
-  - Vertical eddy fluctuation tendencies (`ᶜdTdt_fluc`, `ᶜdqtdt_fluc`).
-  - Nudging (relaxation) of horizontal winds (`uₕ`), temperature, and total specific
-    humidity (`q_tot`) towards prescribed GCM/reanalysis profiles (`ᶜu_nudge`,
-    `ᶜv_nudge`, `ᶜT_nudge`, `ᶜqt_nudge`) using precalculated inverse relaxation
-    timescales (`ᶜinv_τ_wind`, `ᶜinv_τ_scalar`).
-  - Subsidence effects on total energy and total specific humidity, using the
-    large-scale subsidence rate `ᶜls_subsidence`.
-
-The sum of horizontal advection, nudging, and vertical fluctuation tendencies for
-temperature and moisture are converted into tendencies for total energy (`ρe_tot`)
-and total specific humidity (`ρq_tot`).
-
-A top boundary condition is applied by zeroing out the `ρe_tot` and `ρq_tot`
-tendencies at the highest model level.
+Uses the scratch field `p.scratch.ᶜtemp_C12` to hold the target vector. Shared by
+the file-driven and per-term `Nudging` forcings. Returns `nothing`.
 """
-function external_forcing_tendency!(
-    Yₜ,
-    Y,
-    p,
-    t,
-    ::Union{GCMForcing, ExternalDrivenTVForcing},
-)
-    # horizontal advection, vertical fluctuation, nudging, subsidence (need to add),
-    (; params) = p
-    thermo_params = CAP.thermodynamics_params(params)
-    (; ᶜT) = p.precomputed
-    (;
-        ᶜdTdt_fluc,
-        ᶜdqtdt_fluc,
-        ᶜdTdt_hadv,
-        ᶜdqtdt_hadv,
-        ᶜT_nudge,
-        ᶜqt_nudge,
-        ᶜu_nudge,
-        ᶜv_nudge,
-        ᶜls_subsidence,
-        ᶜinv_τ_wind,
-        ᶜinv_τ_scalar,
-    ) = p.external_forcing
-
+function nudge_uv!(Yₜ, Y, p, ᶜu_nudge, ᶜv_nudge, ᶜinv_τ_wind)
     ᶜlg = Fields.local_geometry_field(Y.c)
     ᶜuₕ_nudge = p.scratch.ᶜtemp_C12
     @. ᶜuₕ_nudge = C12(Geometry.UVVector(ᶜu_nudge, ᶜv_nudge), ᶜlg)
     @. Yₜ.c.uₕ -= (Y.c.uₕ - ᶜuₕ_nudge) * ᶜinv_τ_wind
+    return nothing
+end
 
-    (; ᶜh_tot, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice) = p.precomputed
-    # nudging tendency
-    ᶜdTdt_nudging = p.scratch.ᶜtemp_scalar
-    ᶜdqtdt_nudging = p.scratch.ᶜtemp_scalar_2
-    @. ᶜdTdt_nudging =
-        -(ᶜT - ᶜT_nudge) * ᶜinv_τ_scalar
-    @. ᶜdqtdt_nudging =
-        -(specific(Y.c.ρq_tot, Y.c.ρ) - ᶜqt_nudge) * ᶜinv_τ_scalar
+"""
+    apply_Tq_forcing!(Yₜ, Y, p, ᶜdTdt, ᶜdqtdt)
 
-    ᶜdTdt_sum = p.scratch.ᶜtemp_scalar
-    ᶜdqtdt_sum = p.scratch.ᶜtemp_scalar_2
-    @. ᶜdTdt_sum = ᶜdTdt_hadv + ᶜdTdt_nudging + ᶜdTdt_fluc
-    @. ᶜdqtdt_sum = ᶜdqtdt_hadv + ᶜdqtdt_nudging + ᶜdqtdt_fluc
+Convert temperature (`ᶜdTdt` [K/s]) and total-specific-humidity (`ᶜdqtdt` [1/s])
+tendencies into total-energy and total-water tendencies, adding them to
+`Yₜ.c.ρe_tot` and `Yₜ.c.ρq_tot`.
 
+The energy conversion is `ρ [c_{v,m} dT/dt + (c_{v,v}(T - T₀) + L_{v,0} - R_v T₀) dq_tot/dt]`, i.e., the moist-mixture heat capacity times the temperature tendency
+plus the internal energy of the added vapor; no potential-energy term, since the
+water is added at constant height. Reads the thermodynamic state from
+`p.precomputed`. Shared by the file-driven and ISDAC forcings. Returns
+`nothing`.
+"""
+function apply_Tq_forcing!(Yₜ, Y, p, ᶜdTdt, ᶜdqtdt)
+    (; params) = p
+    thermo_params = CAP.thermodynamics_params(params)
+    (; ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice) = p.precomputed
     T_0 = TD.Parameters.T_0(thermo_params)
     Lv_0 = TD.Parameters.LH_v0(thermo_params)
     cv_v = TD.Parameters.cv_v(thermo_params)
     R_v = TD.Parameters.R_v(thermo_params)
-    # total energy
     @. Yₜ.c.ρe_tot +=
         Y.c.ρ * (
-            TD.cv_m(thermo_params, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice) *
-            ᶜdTdt_sum +
-            (
-                cv_v * (ᶜT - T_0) + Lv_0 -
-                R_v * T_0
-            ) * ᶜdqtdt_sum
+            TD.cv_m(thermo_params, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice) * ᶜdTdt +
+            (cv_v * (ᶜT - T_0) + Lv_0 - R_v * T_0) * ᶜdqtdt
         )
-    # total specific humidity
-    @. Yₜ.c.ρq_tot += Y.c.ρ * ᶜdqtdt_sum
+    @. Yₜ.c.ρq_tot += Y.c.ρ * ᶜdqtdt
+    return nothing
+end
 
-    ## subsidence -->
+"""
+    apply_subsidence_forcing!(Yₜ, Y, p, ᶜls_subsidence)
+
+Apply the large-scale subsidence velocity `ᶜls_subsidence` [m/s] to total energy
+and total water, adding the tendencies to `Yₜ.c.ρe_tot` and `Yₜ.c.ρq_tot`.
+
+Interpolates the velocity to faces and calls `subsidence!` with the first-order
+upwind scheme, advecting the total enthalpy `p.precomputed.ᶜh_tot` and the total
+specific humidity. Uses the scratch field `p.scratch.ᶠtemp_CT3`. Returns `nothing`.
+"""
+function apply_subsidence_forcing!(Yₜ, Y, p, ᶜls_subsidence)
+    (; ᶜh_tot) = p.precomputed
+    ᶜlg = Fields.local_geometry_field(Y.c)
     ᶠls_subsidence³ = p.scratch.ᶠtemp_CT3
     @. ᶠls_subsidence³ =
         ᶠinterp(ᶜls_subsidence * CT3(unit_basis_vector_data(CT3, ᶜlg)))
@@ -406,175 +243,360 @@ function external_forcing_tendency!(
         ᶜq_tot,
         Val{:first_order}(),
     )
-
-    # Hard set tendencies of ρe_tot and ρq_tot at the top to 0. Otherwise upper
-    # portion of domain is anomalously cold
-    ρe_tot_top = Fields.level(Yₜ.c.ρe_tot, Spaces.nlevels(axes(Y.c)))
-    @. ρe_tot_top = 0.0
-
-    ρq_tot_top = Fields.level(Yₜ.c.ρq_tot, Spaces.nlevels(axes(Y.c)))
-    @. ρq_tot_top = 0.0
-    # <-- subsidence
-
     return nothing
 end
 
+# ============================================================================
+# Per-term protocol for the composed file-driven forcing
+#
+# Each `AbstractForcingTerm` implements:
+#   - `required_surface_variables` (dispatched on the model components, not the
+#     terms): the surface variables the resolved model needs
+#   - `forcing_term_cache`: the build-time cache
+#   - `update_forcing_term!`: the per-step refresh from the `TimeVaryingInput`s
+#   - `accumulate_Tq_tendency!`: adds into the shared (dT, dq) buffers
+#   - `apply_direct_forcing!`: applies to the state, for momentum nudging and
+#     subsidence
+# ============================================================================
+
 """
-    external_forcing_cache(Y, external_forcing::ExternalDrivenTVForcing, params, start_date)
+    required_surface_variables(model_component)
 
-Sets up cache structures for time-varying external forcing, typically from reanalysis
-data such as ERA5, as specified in `external_forcing.external_forcing_file`.
+Return the tuple of surface file variables a resolved model component needs from a
+file-driven forcing dataset.
 
-This involves:
+Dispatches on the model component rather than on the forcing terms: an
+`ExternalTemperature` surface needs `(:ts,)` and an `ExternalTVInsolation` needs
+`(:coszen, :rsdt)`; anything else needs nothing. `external_forcing_cache` takes
+the union and requires the dataset to provide it.
+"""
+required_surface_variables(_) = ()
+required_surface_variables(::SurfaceConditions.ExternalTemperature) = (:ts,)
+required_surface_variables(::ExternalTVInsolation) = (:coszen, :rsdt)
 
-  - Creating `TimeVaryingInput` objects for various atmospheric column variables
-    (e.g., "ta", "hus", "wap") and surface variables (e.g., "coszen", "rsdt", "ts").
-    These objects handle on-the-fly reading and interpolation of time-dependent data.
-  - Allocating `ClimaCore.Fields.Field`s to store the instantaneous values of these
-    forcing fields at each timestep.
-  - Pre-calculating nudging timescale profiles.
+"""
+    materialize_inv_τ(term::Nudging, ᶜz, params)
 
-The cached `TimeVaryingInput` objects are updated during the simulation via callbacks.
-This cache does not load all data at once but prepares for its retrieval.
+Return the inverse relaxation timescale field [1/s] of a [`Nudging`](@ref) term,
+evaluated once at cache build.
+
+The rate follows `term.timescale`: `DefaultTimescale()` uses the Shen et al.
+(2022) profiles (`compute_gcm_driven_scalar_inv_τ` for `(:ta, :hus)`,
+`compute_gcm_driven_momentum_inv_τ` for `(:ua, :va)`), a `Number` is a constant
+relaxation timescale `τ` [s], and anything else is called as `z -> τ(z)`. The
+result is then multiplied by `term.mask`, which may be `nothing`, a `Number`, a
+`Field`, or a function of height.
+"""
+function materialize_inv_τ(term::Nudging, ᶜz, params)
+    FT = Spaces.undertype(axes(ᶜz))
+    ᶜinv_τ = similar(ᶜz, FT)
+    _set_inv_τ_rate!(ᶜinv_τ, term.timescale, term.variables, ᶜz, params)
+    _apply_inv_τ_mask!(ᶜinv_τ, term.mask, ᶜz)
+    return ᶜinv_τ
+end
+
+function _set_inv_τ_rate!(ᶜinv_τ, ::DefaultTimescale, variables, ᶜz, params)
+    if all(in(NUDGING_SCALAR_VARS), variables)
+        @. ᶜinv_τ = compute_gcm_driven_scalar_inv_τ(ᶜz, params)
+    else # momentum (mixed sets are rejected at `Nudging` construction)
+        @. ᶜinv_τ = compute_gcm_driven_momentum_inv_τ(ᶜz, params)
+    end
+    return nothing
+end
+_set_inv_τ_rate!(ᶜinv_τ, τ::Number, variables, ᶜz, params) =
+    (ᶜinv_τ .= 1 / τ; nothing)
+_set_inv_τ_rate!(ᶜinv_τ, f, variables, ᶜz, params) =
+    (@. ᶜinv_τ = 1 / f(ᶜz); nothing)
+
+_apply_inv_τ_mask!(ᶜinv_τ, ::Nothing, ᶜz) = nothing
+_apply_inv_τ_mask!(ᶜinv_τ, w::Number, ᶜz) = (ᶜinv_τ .*= w; nothing)
+_apply_inv_τ_mask!(ᶜinv_τ, m::Fields.Field, ᶜz) = (ᶜinv_τ .*= m; nothing)
+_apply_inv_τ_mask!(ᶜinv_τ, f, ᶜz) = (@. ᶜinv_τ *= f(ᶜz); nothing)
+
+# --- HorizontalAdvection / VerticalFluctuation: a (dT, dq) tendency pair ---
+function _tendency_pair_cache(Y, cd, start_date, method, dT_var, dq_var)
+    FT = Spaces.undertype(axes(Y.c))
+    inputs = ColumnDatasets.column_timevaryinginputs(
+        cd,
+        (dT_var, dq_var),
+        axes(Y.c),
+        start_date;
+        method,
+    )
+    return (;
+        input_dT = inputs[dT_var],
+        input_dq = inputs[dq_var],
+        ᶜdT = similar(Y.c, FT),
+        ᶜdq = similar(Y.c, FT),
+    )
+end
+"""
+    forcing_term_cache(term, Y, cd, start_date, method, params, ᶜz)
+
+Build the per-term cache of a file-driven forcing term: its `TimeVaryingInput`s,
+the fields they are evaluated into, and any quantity materialized once at build
+time.
+
+One method per concrete [`AbstractForcingTerm`](@ref):
+[`HorizontalAdvection`](@ref) and [`VerticalFluctuation`](@ref) each hold a
+`(dT, dq)` input pair, [`Subsidence`](@ref) holds the vertical velocity `wa`, and
+[`Nudging`](@ref) holds one target field per nudged variable (`nothing` for the
+others) plus the inverse timescale from `materialize_inv_τ`.
+
+# Arguments
+
+  - `term`: The forcing term to dispatch on.
+  - `Y`: Initial state vector, used for the field structure.
+  - `cd`: The `ColumnDataset` holding the forcing file.
+  - `start_date`: Simulation start date, anchoring the time axis.
+  - `method`: Time interpolation method for the `TimeVaryingInput`s.
+  - `params`: Parameter set.
+  - `ᶜz`: Cell-center height field [m].
+
+# Returns
+
+A `NamedTuple`, stored in `p.external_forcing.term_caches` alongside its term.
+"""
+forcing_term_cache(::HorizontalAdvection, Y, cd, start_date, method, params, ᶜz) =
+    _tendency_pair_cache(Y, cd, start_date, method, :tntha, :tnhusha)
+forcing_term_cache(::VerticalFluctuation, Y, cd, start_date, method, params, ᶜz) =
+    _tendency_pair_cache(Y, cd, start_date, method, :tntva, :tnhusva)
+
+"""
+    update_forcing_term!(cache, term, t)
+
+Refresh a forcing term's working fields from its `TimeVaryingInput`s at time `t`,
+in place.
+
+One method per concrete [`AbstractForcingTerm`](@ref). Called once per cache
+update, before the tendency hooks read the fields. Returns `nothing`.
+"""
+function update_forcing_term!(
+    cache,
+    ::Union{HorizontalAdvection, VerticalFluctuation},
+    t,
+)
+    evaluate!(cache.ᶜdT, cache.input_dT, t)
+    evaluate!(cache.ᶜdq, cache.input_dq, t)
+    return nothing
+end
+"""
+    accumulate_Tq_tendency!(ᶜdTdt, ᶜdqtdt, term, cache, Y, p)
+
+Add a forcing term's temperature [K/s] and total-specific-humidity [1/s]
+tendencies into the shared buffers `ᶜdTdt` and `ᶜdqtdt`.
+
+The buffers are accumulated across all terms of a composed forcing and converted
+once to `ρe_tot` and `ρq_tot` tendencies by `apply_Tq_forcing!`, so a term must
+never overwrite them. [`HorizontalAdvection`](@ref) and
+[`VerticalFluctuation`](@ref) add their prescribed tendencies directly, and
+[`Nudging`](@ref) adds `-(ψ - ψ_nudge) / τ` for whichever of `ta` and `hus` it
+nudges. Terms with no scalar contribution fall through to the no-op method for
+`::AbstractForcingTerm`. Returns `nothing`.
+"""
+function accumulate_Tq_tendency!(
+    ᶜdTdt,
+    ᶜdqtdt,
+    ::Union{HorizontalAdvection, VerticalFluctuation},
+    cache,
+    Y,
+    p,
+)
+    @. ᶜdTdt += cache.ᶜdT
+    @. ᶜdqtdt += cache.ᶜdq
+    return nothing
+end
+
+# --- Subsidence ---
+function forcing_term_cache(::Subsidence, Y, cd, start_date, method, params, ᶜz)
+    FT = Spaces.undertype(axes(Y.c))
+    inputs =
+        ColumnDatasets.column_timevaryinginputs(cd, (:wa,), axes(Y.c), start_date; method)
+    return (; input_wa = inputs.wa, ᶜls_subsidence = similar(Y.c, FT))
+end
+update_forcing_term!(cache, ::Subsidence, t) =
+    (evaluate!(cache.ᶜls_subsidence, cache.input_wa, t); nothing)
+"""
+    apply_direct_forcing!(Yₜ, Y, p, term, cache)
+
+Add a forcing term's contributions that do not go through the shared temperature
+and humidity buffers directly to `Yₜ`.
+
+Used for [`Subsidence`](@ref), which advects total energy and total water with
+`apply_subsidence_forcing!`, and for [`Nudging`](@ref) of `(:ua, :va)`, which
+relaxes `Yₜ.c.uₕ` with `nudge_uv!`. Terms with no direct contribution fall through
+to the no-op method for `::AbstractForcingTerm`. Returns `nothing`.
+"""
+apply_direct_forcing!(Yₜ, Y, p, ::Subsidence, cache) =
+    apply_subsidence_forcing!(Yₜ, Y, p, cache.ᶜls_subsidence)
+
+# --- Nudging: per-role target fields (field-or-nothing) + inverse timescale ---
+function forcing_term_cache(term::Nudging, Y, cd, start_date, method, params, ᶜz)
+    FT = Spaces.undertype(axes(Y.c))
+    vars = term.variables
+    inputs =
+        ColumnDatasets.column_timevaryinginputs(cd, vars, axes(Y.c), start_date; method)
+    slot(v) = v in term.variables ? similar(Y.c, FT) : nothing
+    input(v) = v in term.variables ? inputs[v] : nothing
+    return (;
+        ᶜinv_τ = materialize_inv_τ(term, ᶜz, params),
+        ᶜT_nudge = slot(:ta),
+        ᶜqt_nudge = slot(:hus),
+        ᶜu_nudge = slot(:ua),
+        ᶜv_nudge = slot(:va),
+        input_ta = input(:ta),
+        input_hus = input(:hus),
+        input_ua = input(:ua),
+        input_va = input(:va),
+    )
+end
+function update_forcing_term!(cache, ::Nudging, t)
+    isnothing(cache.ᶜT_nudge) || evaluate!(cache.ᶜT_nudge, cache.input_ta, t)
+    isnothing(cache.ᶜqt_nudge) || evaluate!(cache.ᶜqt_nudge, cache.input_hus, t)
+    isnothing(cache.ᶜu_nudge) || evaluate!(cache.ᶜu_nudge, cache.input_ua, t)
+    isnothing(cache.ᶜv_nudge) || evaluate!(cache.ᶜv_nudge, cache.input_va, t)
+    return nothing
+end
+function accumulate_Tq_tendency!(ᶜdTdt, ᶜdqtdt, ::Nudging, cache, Y, p)
+    (; ᶜT) = p.precomputed
+    ᶜinv_τ = cache.ᶜinv_τ
+    isnothing(cache.ᶜT_nudge) ||
+        @. ᶜdTdt += -(ᶜT - cache.ᶜT_nudge) * ᶜinv_τ
+    isnothing(cache.ᶜqt_nudge) || @. ᶜdqtdt +=
+        -(specific(Y.c.ρq_tot, Y.c.ρ) - cache.ᶜqt_nudge) * ᶜinv_τ
+    return nothing
+end
+function apply_direct_forcing!(Yₜ, Y, p, ::Nudging, cache)
+    isnothing(cache.ᶜu_nudge) ||
+        nudge_uv!(Yₜ, Y, p, cache.ᶜu_nudge, cache.ᶜv_nudge, cache.ᶜinv_τ)
+    return nothing
+end
+
+# Terms that implement only one hook fall through to these no-ops.
+accumulate_Tq_tendency!(ᶜdTdt, ᶜdqtdt, ::AbstractForcingTerm, cache, Y, p) =
+    nothing
+apply_direct_forcing!(Yₜ, Y, p, ::AbstractForcingTerm, cache) = nothing
+
+"""
+    external_forcing_cache(Y, external_forcing::ExternalDrivenTVForcing, params, start_date; surface_vars)
+
+Build the cache for the file-driven forcing.
+
+Consumes only the column variables its composed `forcing` terms require (the union
+over `required_column_variables`) plus the `surface_vars` the resolved model
+components need; missing data for any of them is a loud error.
+
+# Returns
+
+A `NamedTuple` with `forcing_terms` (the terms themselves), `term_caches` (one
+`forcing_term_cache` per term, holding `TimeVaryingInput`s, working
+fields, and materialized nudging timescales), and `surface_fields` and
+`surface_timevaryinginputs` for the `ExternalTemperature` and
+`ExternalTVInsolation` paths.
 """
 function external_forcing_cache(
     Y,
     external_forcing::ExternalDrivenTVForcing,
     params,
-    start_date,
+    start_date;
+    surface_vars = (),
 )
-    # current support is for time varying era5 data which does not require vertical advective tendencies
-    # or surface latent and sensible heat fluxes, i.e., the surface state is set with surface temperature
-    # only. This could be modified to include these terms if needed.
-    (; external_forcing_file) = external_forcing
+    cd = external_forcing.dataset
+    forcing = external_forcing.forcing
+    surface_vars = Tuple(surface_vars)
 
-    # generate forcing files
+    column_vars =
+        isempty(forcing) ? () :
+        Tuple(union(unrolled_map(required_column_variables, forcing)...))
+    ColumnDatasets.require_forcing_variables(cd, column_vars, surface_vars)
 
-    column_tendencies = [
-        "ta",
-        "hus",
-        "tntva",
-        "wa",
-        "tntha",
-        "tnhusha",
-        "ua",
-        "va",
-        "tnhusva",
-        "rho",
-        "wap",
-    ]
-    surface_tendencies = ["coszen", "rsdt", "hfls", "hfss", "ts"]
-    column_target_space = axes(Y.c)
+    method = external_forcing.time_interpolation_method
+    ᶜz = Fields.coordinate_field(Y.c).z
+    term_caches = unrolled_map(
+        term -> forcing_term_cache(term, Y, cd, start_date, method, params, ᶜz),
+        forcing,
+    )
+
     surface_target_space = axes(Fields.level(Y.f.u₃, ClimaCore.Utilities.half))
-
-    extrapolation_bc = (Intp.Flat(), Intp.Flat(), Intp.Linear())
-
-    column_timevaryinginputs = [
-        TimeVaryingInput(
-            external_forcing_file,
-            name,
-            column_target_space;
-            reference_date = start_date,
-            regridder_kwargs = (; extrapolation_bc),
-            # useful for monthly averaged diurnal data - does not affect hourly era5 case because of time bounds flag
-            method = TimeVaryingInputs.LinearInterpolation(
-                TimeVaryingInputs.PeriodicCalendar(),
-            ),
-        ) for name in column_tendencies
-    ]
-
-    surface_timevaryinginputs = [
-        TimeVaryingInput(
-            external_forcing_file,
-            name,
-            surface_target_space;
-            reference_date = start_date,
-            regridder_kwargs = (; extrapolation_bc),
-            method = TimeVaryingInputs.LinearInterpolation(
-                TimeVaryingInputs.PeriodicCalendar(),
-            ),
-        ) for name in surface_tendencies
-    ]
-
-    column_variable_names_as_symbols = Symbol.(column_tendencies)
-    surface_variable_names_as_symbols = Symbol.(surface_tendencies)
-
-    column_inputs = similar(
-        Y.c,
-        NamedTuple{
-            Tuple(column_variable_names_as_symbols),
-            NTuple{length(column_variable_names_as_symbols), eltype(Y.c.ρ)},
-        },
-    )
-
-    surface_inputs = similar(
-        Fields.level(Y.f.u₃, ClimaCore.Utilities.half),
-        NamedTuple{
-            Tuple(surface_variable_names_as_symbols),
-            NTuple{length(surface_variable_names_as_symbols), eltype(params)},
-        },
-    )
-
-    column_timevaryinginputs =
-        (; zip(column_variable_names_as_symbols, column_timevaryinginputs)...)
     surface_timevaryinginputs =
-        (; zip(surface_variable_names_as_symbols, surface_timevaryinginputs)...)
-
-    era5_tv_column_cache = (; column_inputs, column_timevaryinginputs)
-    era5_tv_surface_cache = (; surface_inputs, surface_timevaryinginputs)
-
-    # create cache for external forcing data that will be populated in callbacks
+        isempty(surface_vars) ?
+        (;) :
+        ColumnDatasets.surface_timevaryinginputs(
+            cd,
+            surface_vars,
+            surface_target_space,
+            start_date;
+            method,
+        )
     FT = Spaces.undertype(axes(Y.c))
-    era5_cache = (;
-        ᶜdTdt_fluc = similar(Y.c, FT),
-        ᶜdqtdt_fluc = similar(Y.c, FT),
-        ᶜdTdt_hadv = similar(Y.c, FT),
-        ᶜdqtdt_hadv = similar(Y.c, FT),
-        ᶜT_nudge = similar(Y.c, FT),
-        ᶜqt_nudge = similar(Y.c, FT),
-        ᶜu_nudge = similar(Y.c, FT),
-        ᶜv_nudge = similar(Y.c, FT),
-        ᶜinv_τ_wind = FT(1 / (6 * 3600)),  # TODO: consider making timescale configurable in params
-        # set relaxation profile toward reference state
-        ᶜinv_τ_scalar = compute_gcm_driven_scalar_inv_τ.(
-            Fields.coordinate_field(Y.c).z,
-            params,
-        ),
-        ᶜls_subsidence = similar(Y.c, FT),
-        toa_flux = similar(
+    surface_fields =
+        isempty(surface_vars) ?
+        (;) :
+        similar(
             Fields.level(Y.f.u₃, ClimaCore.Utilities.half),
-            FT,
-        ),
-        cos_zenith = similar(
-            Fields.level(Y.f.u₃, ClimaCore.Utilities.half),
-            FT,
-        ),
+            NamedTuple{surface_vars, NTuple{length(surface_vars), FT}},
+        )
+
+    return (;
+        forcing_terms = forcing,
+        term_caches,
+        surface_fields,
+        surface_timevaryinginputs,
     )
-    return (; era5_tv_column_cache..., era5_tv_surface_cache..., era5_cache...)
+end
+
+"""
+    external_forcing_tendency!(Yₜ, Y, p, t, ::ExternalDrivenTVForcing)
+
+Apply the composed file-driven forcing.
+
+Each term's `(dT, dq)` contribution is accumulated into two zeroed scratch buffers
+by `accumulate_Tq_tendency!` and converted once to `ρe_tot` and `ρq_tot`
+tendencies by `apply_Tq_forcing!`. Each term's direct contributions (momentum
+nudging, subsidence) are then added by `apply_direct_forcing!`. Returns `nothing`.
+"""
+function external_forcing_tendency!(Yₜ, Y, p, t, ::ExternalDrivenTVForcing)
+    (; forcing_terms, term_caches) = p.external_forcing
+
+    ᶜdTdt = p.scratch.ᶜtemp_scalar
+    ᶜdqtdt = p.scratch.ᶜtemp_scalar_2
+    ᶜdTdt .= 0
+    ᶜdqtdt .= 0
+    unrolled_foreach(forcing_terms, term_caches) do term, cache
+        accumulate_Tq_tendency!(ᶜdTdt, ᶜdqtdt, term, cache, Y, p)
+    end
+    apply_Tq_forcing!(Yₜ, Y, p, ᶜdTdt, ᶜdqtdt)
+
+    unrolled_foreach(forcing_terms, term_caches) do term, cache
+        apply_direct_forcing!(Yₜ, Y, p, term, cache)
+    end
+    return nothing
 end
 
 """
     external_forcing_cache(Y, external_forcing::ISDACForcing, params, _)
 
-Returns an empty cache for ISDAC (Indirect and Semi-Direct Aerosol Campaign)
-forcing. ISDAC forcing profiles are analytical functions of height, not requiring
-pre-loading from files into cached fields.
+Return an empty cache for ISDAC (Indirect and Semi-Direct Aerosol Campaign)
+forcing.
+
+The ISDAC profiles are analytic functions of height, evaluated directly in
+`external_forcing_tendency!`, so nothing needs to be pre-loaded.
 """
 external_forcing_cache(Y, external_forcing::ISDACForcing, params, _) = (;)  # Don't need to cache anything
 
 """
     external_forcing_tendency!(Yₜ, Y, p, t, ::ISDACForcing)
 
-Applies tendencies based on the ISDAC (Indirect and Semi-Direct Aerosol Campaign)
-case specifications. This involves nudging (relaxation) of horizontal winds,
-temperature, and total specific humidity towards idealized profiles defined by the
-`APL.ISDAC_...` functions.
+Apply the ISDAC (Indirect and Semi-Direct Aerosol Campaign) forcing: relaxation of
+the horizontal winds, temperature, and total specific humidity toward the analytic
+`APL.ISDAC_*` profiles.
 
-The nudging target temperature profile is derived from prescribed potential
-temperature (`θ`) and total specific humidity (`q_tot`) profiles, using the
-current model pressure. Tendencies for temperature and `q_tot` from nudging are
-then converted into tendencies for total energy (`ρe_tot`) and total specific
-humidity (`ρq_tot`).
+Increments `Yₜ.c.uₕ` directly and, through `apply_Tq_forcing!`, `Yₜ.c.ρe_tot` and
+`Yₜ.c.ρq_tot`. The target temperature is obtained by saturation adjustment of the
+prescribed liquid-ice potential temperature and total specific humidity at the
+current model pressure, and the two relaxation rates are the height-dependent
+`ISDAC_inv_τ_scalar` and `ISDAC_inv_τ_wind` [1/s]. `t` is unused, the profiles
+being steady.
 """
 function external_forcing_tendency!(Yₜ, Y, p, t, ::ISDACForcing)
     FT = Spaces.undertype(axes(Y.c))
@@ -618,464 +640,5 @@ function external_forcing_tendency!(Yₜ, Y, p, t, ::ISDACForcing)
     @. ᶜdqtdt_nudging =
         -(specific(Y.c.ρq_tot, Y.c.ρ) - q_tot(ᶜz)) * ᶜinv_τ_scalar(ᶜz)
 
-    T_0 = TD.Parameters.T_0(thermo_params)
-    Lv_0 = TD.Parameters.LH_v0(thermo_params)
-    cv_v = TD.Parameters.cv_v(thermo_params)
-    R_v = TD.Parameters.R_v(thermo_params)
-    # total energy
-    (; ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice) = p.precomputed
-    @. Yₜ.c.ρe_tot +=
-        Y.c.ρ * (
-            TD.cv_m(thermo_params, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice) *
-            ᶜdTdt_nudging +
-            (
-                cv_v * (ᶜT - T_0) + Lv_0 -
-                R_v * T_0
-            ) * ᶜdqtdt_nudging
-        )
-
-    # total specific humidity
-    @. Yₜ.c.ρq_tot += Y.c.ρ * ᶜdqtdt_nudging
-end
-
-################
-# ARM VARANAL Forcing Helpers
-
-"""
-    varanal_forcing_time_offset(ds, start_date)
-
-Compute the offset (in seconds) to add to simulation time so that
-`file_time = sim_time + offset` correctly indexes the forcing file's
-time axis as built by `varanal_2d_interpolator`.
-
-  - Numeric time with `base_time` attribute: axis is seconds since
-    `base_time`, so offset = `(start_date − base_time)`.
-  - DateTime time coordinate: axis is seconds since `time_raw[1]`,
-    so offset = `(start_date − time_raw[1])`.
-"""
-function varanal_forcing_time_offset(ds, start_date)
-    time_raw = vec(ds["time"][:])
-    if eltype(time_raw) <: Dates.DateTime
-        return Float64(Dates.value(start_date - time_raw[1]) / 1000)
-    elseif haskey(ds.attrib, "base_time")
-        base_time = Dates.unix2datetime(ds.attrib["base_time"])
-        return Float64(Dates.value(start_date - base_time) / 1000)
-    else
-        error(
-            "Cannot determine ARM VARANAL time offset: " *
-            "need either DateTime time coordinate or base_time attribute",
-        )
-    end
-end
-
-"""
-    varanal_forcing_time_seconds(t, forcing_time_offset)
-
-Convert simulation time to seconds on the ARM VARANAL file time axis.
-"""
-function varanal_forcing_time_seconds(t, forcing_time_offset)
-    FT = typeof(forcing_time_offset)
-    return FT(time_to_seconds(t)) + forcing_time_offset
-end
-
-"""
-    omega_to_w(omega_hPa_hr, p_hPa, T, q_gkg, params)
-
-Convert pressure vertical velocity (omega, hPa/hr) to geometric vertical velocity (w, m/s).
-
-Uses the hydrostatic approximation: w ≈ -ω / (ρg)
-where ω is in Pa/s and ρ is density.
-
-Arguments:
-
-  - omega_hPa_hr: Pressure vertical velocity in hPa/hr
-  - p_hPa: Pressure in hPa
-  - T: Temperature in K
-  - q_gkg: Water vapor mixing ratio in g/kg
-  - params: ClimaAtmos parameters (for physical constants)
-
-Returns vertical velocity w in m/s (positive upward).
-"""
-function omega_to_w(omega_hPa_hr, p_hPa, T, q_gkg, params)
-    g = CAP.grav(params)
-    R_d = CAP.R_d(params)
-    R_v = CAP.R_v(params)
-
-    omega_Pa_s = omega_hPa_hr .* 100.0 ./ 3600.0 #[hPa/hr] to [Pa/s]
-    p_Pa = p_hPa .* 100.0 #[hPa] to [Pa]
-    q_kgkg = q_gkg ./ 1000.0  #[g/kg] to [kg/kg]
-
-    Tv = T .* (1.0 .+ (R_v / R_d - 1.0) .* q_kgkg)
-    rho = p_Pa ./ (R_d .* Tv)
-
-    return -omega_Pa_s ./ (rho .* g)
-end
-
-"""
-    varanal_2d_interpolator(ds, varname, lev_hPa, params)
-
-Create a 2D (height, time) interpolator for an ARM VARANAL forcing field.
-Returns an interpolator that can be called as `interp(height, time)`.
-
-The VARANAL files have time and lev (pressure) dimensions.
-We convert pressure levels to height using the temperature and humidity profiles.
-
-Arguments:
-
-  - `ds`: NCDataset handle
-  - `varname`: Variable name in the file
-  - `lev_hPa`: Pressure levels in hPa
-  - `params`: ClimaAtmos parameters (for physical constants and FT)
-"""
-function varanal_2d_interpolator(ds, varname, lev_hPa, params)
-    FT = eltype(params)
-
-    # Read time coordinate - handle DateTime or numeric
-    time_raw = vec(ds["time"][:])
-    time_sec = if eltype(time_raw) <: Dates.DateTime
-        base_time = time_raw[1]
-        FT.([Float64(Dates.value(t - base_time)) / 1000.0 for t in time_raw])
-    else
-        FT.(time_raw)
-    end
-
-    data_lev_time = FT.(Array(ds[varname]))
-    T_lev_time = FT.(Array(ds["T"]))
-    q_lev_time = FT.(Array(ds["q"]))  # g/kg
-
-    # Use time-mean T and q profiles for height conversion (stable grid)
-    T_mean = vec(mean(T_lev_time, dims = 2))
-    q_mean = vec(mean(q_lev_time, dims = 2)) ./ 1000.0  # g/kg → kg/kg
-
-    # Convert pressure levels to height (expects Pa, K, kg/kg)
-    thermo_params = CAP.thermodynamics_params(params)
-    z_lev = pressure_to_height(lev_hPa .* 100.0, T_mean, q_mean, thermo_params)
-
-    # Sort by height (Interpolations.jl requires increasing order)
-    sort_idx = sortperm(z_lev)
-    z_sorted = z_lev[sort_idx]
-    data_sorted = data_lev_time[sort_idx, :]
-
-    # Create 2D interpolator (height, time) with flat extrapolation
-    Intp.extrapolate(
-        Intp.interpolate((z_sorted, time_sec), data_sorted, Intp.Gridded(Intp.Linear())),
-        Intp.Flat(),
-    )
-end
-
-"""
-    external_forcing_cache(Y, external_forcing::ARMVARANALForcing, params, start_date)
-
-Prepares cached fields and time interpolators for ARM VARANAL forcing.
-
-Unlike GCM-driven forcing which uses time-mean profiles, ARM VARANAL uses
-**time-varying** forcing that evolves throughout the simulation.
-
-Creates:
-
-  - 2D (height, time) interpolators for advection tendencies, vertical velocity,
-    and state profiles
-  - 1D time interpolators for surface temperature and fluxes
-  - Working fields updated at each timestep
-"""
-function external_forcing_cache(Y, external_forcing::ARMVARANALForcing, params, start_date)
-    FT = Spaces.undertype(axes(Y.c))
-
-    # Working fields - updated each timestep from interpolators
-    ᶜdTdt_hadv = similar(Y.c, FT)
-    ᶜdqtdt_hadv = similar(Y.c, FT)
-    ᶜT_nudge = similar(Y.c, FT)
-    ᶜqt_nudge = similar(Y.c, FT)
-    ᶜu_nudge = similar(Y.c, FT)
-    ᶜv_nudge = similar(Y.c, FT)
-    ᶜls_subsidence = similar(Y.c, FT)
-
-    # Nudging timescale fields (constant in time)
-    ᶜinv_τ_wind = similar(Y.c, FT)
-    ᶜinv_τ_scalar = similar(Y.c, FT)
-
-    # Surface fields: layout matches ERA5/InterpolatedColumnProfile so the
-    # generic `ExternalTemperature` path consumes `surface_inputs.ts` driven by
-    # `surface_timevaryinginputs.ts`.
-    surface_inputs = similar(
-        Fields.level(Y.f.u₃, ClimaCore.Utilities.half),
-        NamedTuple{(:ts,), Tuple{FT}},
-    )
-
-    (; external_forcing_file) = external_forcing
-
-    # Create all time interpolators from the forcing file
-    interpolators = NC.Dataset(external_forcing_file, "r") do ds
-        # Pressure levels in hPa
-        lev_hPa = Float64.(vec(ds["lev"][:]))
-        forcing_time_offset = varanal_forcing_time_offset(ds, start_date)
-
-        @info "VARANAL forcing" start_date forcing_time_offset_sec = forcing_time_offset
-
-        # Temperature advection tendencies (K/hr in file)
-        T_adv_h_interp = varanal_2d_interpolator(ds, "T_adv_h", lev_hPa, params)
-
-        # Moisture advection tendencies (g/kg/hr in file)
-        q_adv_h_interp = varanal_2d_interpolator(ds, "q_adv_h", lev_hPa, params)
-
-        # Vertical velocity (hPa/hr in file)
-        omega_interp = varanal_2d_interpolator(ds, "omega", lev_hPa, params)
-
-        # State profiles for nudging
-        T_interp = varanal_2d_interpolator(ds, "T", lev_hPa, params)
-        q_interp = varanal_2d_interpolator(ds, "q", lev_hPa, params)  # g/kg
-        u_interp = varanal_2d_interpolator(ds, "u", lev_hPa, params)
-        v_interp = varanal_2d_interpolator(ds, "v", lev_hPa, params)
-
-        # Surface skin temperature (degC in file → K)
-        sfc_temp_var = "T_skin" in keys(ds) ? "T_skin" : "T_srf"
-        T_sfc_raw = FT.(vec(ds[sfc_temp_var][:]))
-        T_sfc_data = replace(T_sfc_raw, FT(-9999) => FT(NaN)) .+ FT(273.15)
-        time_raw = vec(ds["time"][:])
-        T_sfc_time = if eltype(time_raw) <: Dates.DateTime
-            FT.([Float64(Dates.value(t - time_raw[1])) / 1000.0 for t in time_raw])
-        else
-            FT.(time_raw)
-        end
-        # Shift to simulation epoch (TimeVaryingInput from arrays has no reference_date)
-        T_sfc_time_sim = T_sfc_time .- forcing_time_offset
-        T_sfc_tvi = TimeVaryingInput(
-            T_sfc_time_sim,
-            T_sfc_data;
-            method = LinearInterpolation(),
-        )
-
-        # Store height coordinate for omega conversion
-        T_data = FT.(Array(ds["T"]))
-        q_data = FT.(Array(ds["q"]))  # g/kg
-        T_mean = vec(mean(T_data, dims = 2))
-        q_mean = vec(mean(q_data, dims = 2)) ./ 1000.0  # g/kg → kg/kg
-        thermo_params = CAP.thermodynamics_params(params)
-        z_lev = pressure_to_height(lev_hPa .* 100.0, T_mean, q_mean, thermo_params)
-        sort_idx = sortperm(z_lev)
-        z_sorted = z_lev[sort_idx]
-        lev_hPa_sorted = lev_hPa[sort_idx]
-
-        (;
-            forcing_time_offset,
-            T_adv_h_interp,
-            q_adv_h_interp,
-            omega_interp,
-            T_interp,
-            q_interp,
-            u_interp,
-            v_interp,
-            T_sfc_tvi,
-            z_sorted,
-            lev_hPa_sorted,
-        )
-    end
-
-    zc_model = Fields.coordinate_field(Y.c).z
-    @. ᶜinv_τ_scalar = compute_gcm_driven_scalar_inv_τ(zc_model, params)
-    @. ᶜinv_τ_wind = compute_gcm_driven_momentum_inv_τ(zc_model, params)
-
-    return (;
-        ᶜdTdt_hadv,
-        ᶜdqtdt_hadv,
-        ᶜT_nudge,
-        ᶜqt_nudge,
-        ᶜu_nudge,
-        ᶜv_nudge,
-        ᶜls_subsidence,
-        surface_inputs,
-        # Constant fields
-        ᶜinv_τ_wind,
-        ᶜinv_τ_scalar,
-        # Time interpolators
-        forcing_time_offset = interpolators.forcing_time_offset,
-        T_adv_h_interp = interpolators.T_adv_h_interp,
-        q_adv_h_interp = interpolators.q_adv_h_interp,
-        omega_interp = interpolators.omega_interp,
-        T_interp = interpolators.T_interp,
-        q_interp = interpolators.q_interp,
-        u_interp = interpolators.u_interp,
-        v_interp = interpolators.v_interp,
-        surface_timevaryinginputs = (; ts = interpolators.T_sfc_tvi),
-        z_sorted = interpolators.z_sorted,
-        lev_hPa_sorted = interpolators.lev_hPa_sorted,
-    )
-end
-
-"""
-    update_varanal_forcing_fields!(p, t)
-
-Update ARM VARANAL forcing fields by evaluating time interpolators at current time `t`.
-This is called at the start of each tendency evaluation.
-"""
-function update_varanal_forcing_fields!(p, t)
-    FT = eltype(p.params)
-    (;
-        forcing_time_offset,
-        ᶜdTdt_hadv,
-        ᶜdqtdt_hadv,
-        ᶜT_nudge,
-        ᶜqt_nudge,
-        ᶜu_nudge,
-        ᶜv_nudge,
-        ᶜls_subsidence,
-        T_adv_h_interp,
-        q_adv_h_interp,
-        omega_interp,
-        T_interp,
-        q_interp,
-        u_interp,
-        v_interp,
-        z_sorted,
-        lev_hPa_sorted,
-    ) = p.external_forcing
-
-    zc_field = Fields.coordinate_field(p.precomputed.ᶜT).z
-    zc_parent = parent(zc_field)
-    zc_vec = vec(zc_parent)
-    field_shape = size(zc_parent)
-    t_sec = varanal_forcing_time_seconds(t, forcing_time_offset)
-
-    # Evaluate advection tendencies at current time
-    # T_adv [K/hr] -> [K/s]
-    T_adv_h_at_t = [FT(T_adv_h_interp(z, t_sec) / 3600.0) for z in zc_vec]
-    parent(ᶜdTdt_hadv) .= reshape(T_adv_h_at_t, field_shape)
-
-    # q_adv [g/kg/hr] -> [kg/kg/s]
-    q_adv_h_at_t = [FT(q_adv_h_interp(z, t_sec) / 1000.0 / 3600.0) for z in zc_vec]
-    parent(ᶜdqtdt_hadv) .= reshape(q_adv_h_at_t, field_shape)
-
-    # Subsidence: omega [hPa/hr] -> w [m/s]
-    omega_at_t = [omega_interp(z, t_sec) for z in zc_vec]
-    T_at_t = [T_interp(z, t_sec) for z in zc_vec]
-    q_at_t = [q_interp(z, t_sec) for z in zc_vec]  # g/kg
-    # Estimate pressure from height using barometric formula
-    p_at_z = [pressure_from_height(z, z_sorted, lev_hPa_sorted) for z in zc_vec]
-    w_at_t = omega_to_w(omega_at_t, p_at_z, T_at_t, q_at_t, p.params)
-    parent(ᶜls_subsidence) .= reshape(FT.(w_at_t), field_shape)
-
-    # Nudging targets at current time
-    parent(ᶜT_nudge) .= reshape(FT.([T_interp(z, t_sec) for z in zc_vec]), field_shape)
-    # q [g/kg] -> [kg/kg] for nudging
-    parent(ᶜqt_nudge) .=
-        reshape(FT.([q_interp(z, t_sec) / 1000.0 for z in zc_vec]), field_shape)
-    parent(ᶜu_nudge) .= reshape(FT.([u_interp(z, t_sec) for z in zc_vec]), field_shape)
-    parent(ᶜv_nudge) .= reshape(FT.([v_interp(z, t_sec) for z in zc_vec]), field_shape)
-
-    return nothing
-end
-
-"""
-    pressure_from_height(z, z_ref, p_ref)
-
-Estimate pressure at height z given reference height and pressure arrays.
-Uses linear interpolation in log(p) vs z.
-"""
-function pressure_from_height(z, z_ref, p_ref_hPa)
-    # Create interpolator for log(p) vs z
-    log_p = log.(p_ref_hPa)
-    sort_idx = sortperm(z_ref)
-    interp = Intp.extrapolate(
-        Intp.interpolate((z_ref[sort_idx],), log_p[sort_idx], Intp.Gridded(Intp.Linear())),
-        Intp.Flat(),
-    )
-    return exp(interp(z))
-end
-
-"""
-    external_forcing_tendency!(Yₜ, Y, p, t, ::ARMVARANALForcing)
-
-Applies time-varying tendencies from ARM VARANAL external forcings.
-
-This includes:
-
-  - Time-varying horizontal advection tendencies for temperature and moisture
-  - Time-varying nudging towards observed profiles
-  - Time-varying subsidence (computed from omega, acting on the model's evolving profiles)
-
-The tendencies are converted into tendencies for total energy (`ρe_tot`)
-and total specific humidity (`ρq_tot`).
-"""
-function external_forcing_tendency!(Yₜ, Y, p, t, ::ARMVARANALForcing)
-    # Update forcing fields from time interpolators
-    update_varanal_forcing_fields!(p, t)
-
-    (; params) = p
-    thermo_params = CAP.thermodynamics_params(params)
-    (; ᶜT) = p.precomputed
-    (;
-        ᶜdTdt_hadv,
-        ᶜdqtdt_hadv,
-        ᶜT_nudge,
-        ᶜqt_nudge,
-        ᶜu_nudge,
-        ᶜv_nudge,
-        ᶜls_subsidence,
-        ᶜinv_τ_wind,
-        ᶜinv_τ_scalar,
-    ) = p.external_forcing
-
-    ᶜlg = Fields.local_geometry_field(Y.c)
-    ᶜuₕ_nudge = p.scratch.ᶜtemp_C12
-    @. ᶜuₕ_nudge = C12(Geometry.UVVector(ᶜu_nudge, ᶜv_nudge), ᶜlg)
-    @. Yₜ.c.uₕ -= (Y.c.uₕ - ᶜuₕ_nudge) * ᶜinv_τ_wind
-
-    (; ᶜh_tot, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice) = p.precomputed
-    # Nudging tendency
-    ᶜdTdt_nudging = p.scratch.ᶜtemp_scalar
-    ᶜdqtdt_nudging = p.scratch.ᶜtemp_scalar_2
-    @. ᶜdTdt_nudging = -(ᶜT - ᶜT_nudge) * ᶜinv_τ_scalar
-    @. ᶜdqtdt_nudging =
-        -(specific(Y.c.ρq_tot, Y.c.ρ) - ᶜqt_nudge) * ᶜinv_τ_scalar
-
-    # Horizontal advection + nudging
-    # Vertical advection is handled by subsidence!(omega, model_state) below,
-    # not by the file's T_adv_v / q_adv_v, to let subsidence act on the
-    # model's evolving profiles rather than prescribing a fixed tendency.
-    ᶜdTdt_sum = p.scratch.ᶜtemp_scalar
-    ᶜdqtdt_sum = p.scratch.ᶜtemp_scalar_2
-    @. ᶜdTdt_sum = ᶜdTdt_hadv + ᶜdTdt_nudging
-    @. ᶜdqtdt_sum = ᶜdqtdt_hadv + ᶜdqtdt_nudging
-
-    T_0 = TD.Parameters.T_0(thermo_params)
-    Lv_0 = TD.Parameters.LH_v0(thermo_params)
-    cv_v = TD.Parameters.cv_v(thermo_params)
-    R_v = TD.Parameters.R_v(thermo_params)
-    # Total energy
-    @. Yₜ.c.ρe_tot +=
-        Y.c.ρ * (
-            TD.cv_m(thermo_params, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice) *
-            ᶜdTdt_sum +
-            (cv_v * (ᶜT - T_0) + Lv_0 - R_v * T_0) * ᶜdqtdt_sum
-        )
-    # Total specific humidity
-    @. Yₜ.c.ρq_tot += Y.c.ρ * ᶜdqtdt_sum
-
-    # Subsidence tendency
-    ᶠls_subsidence³ = p.scratch.ᶠtemp_CT3
-    @. ᶠls_subsidence³ =
-        ᶠinterp(ᶜls_subsidence * CT3(unit_basis_vector_data(CT3, ᶜlg)))
-    subsidence!(
-        Yₜ.c.ρe_tot,
-        Y.c.ρ,
-        ᶠls_subsidence³,
-        ᶜh_tot,
-        Val{:first_order}(),
-    )
-    ᶜq_tot = @. lazy(specific(Y.c.ρq_tot, Y.c.ρ))
-    subsidence!(
-        Yₜ.c.ρq_tot,
-        Y.c.ρ,
-        ᶠls_subsidence³,
-        ᶜq_tot,
-        Val{:first_order}(),
-    )
-
-    ρe_tot_top = Fields.level(Yₜ.c.ρe_tot, Spaces.nlevels(axes(Y.c)))
-    @. ρe_tot_top = 0.0
-
-    ρq_tot_top = Fields.level(Yₜ.c.ρq_tot, Spaces.nlevels(axes(Y.c)))
-    @. ρq_tot_top = 0.0
-
-    return nothing
+    apply_Tq_forcing!(Yₜ, Y, p, ᶜdTdt_nudging, ᶜdqtdt_nudging)
 end

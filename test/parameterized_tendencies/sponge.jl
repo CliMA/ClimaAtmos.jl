@@ -34,7 +34,9 @@ using Base.Broadcast: materialize
     ᶠw = Fields.Field(Geometry.Covariant3Vector{FT}, ᶠspace)
     @. ᶠw = Geometry.Covariant3Vector(FT(1))
     ᶜρ = ones(ᶜspace)
-    ᶜh_tot = ones(ᶜspace)
+    ᶜs_d = ones(ᶜspace)
+    ᶜh_eff_plus_Φ = ones(ᶜspace)
+    ᶜq_tot_eff = ones(ᶜspace)
     ᶜχ = ones(ᶜspace)
     ᶜχʲ = 2 .* ones(ᶜspace)
 
@@ -153,9 +155,17 @@ using Base.Broadcast: materialize
             tendency_u₃ = CA.viscous_sponge_tendency_u₃(ᶠw, s)
             @test all(isfinite, parent(materialize(tendency_u₃)))
 
-            # Test viscous_sponge_tendency_ρe_tot returns finite values
-            tendency_ρe_tot = CA.viscous_sponge_tendency_ρe_tot(ᶜρ, ᶜh_tot, s)
-            @test all(isfinite, parent(materialize(tendency_ρe_tot)))
+            # Split-form energy tendency: dry static energy + water enthalpy
+            tendency_ρe_tot_dry =
+                CA.viscous_sponge_tendency_ρe_tot_dry(ᶜρ, ᶜs_d, s)
+            @test all(isfinite, parent(materialize(tendency_ρe_tot_dry)))
+            tendency_ρe_tot_water = CA.viscous_sponge_tendency_ρe_tot_water(
+                ᶜρ,
+                ᶜh_eff_plus_Φ,
+                ᶜq_tot_eff,
+                s,
+            )
+            @test all(isfinite, parent(materialize(tendency_ρe_tot_water)))
 
             # Test viscous_sponge_tendency_tracer returns finite values
             tendency_tracer = CA.viscous_sponge_tendency_tracer(ᶜρ, ᶜχ, s)
@@ -165,7 +175,17 @@ using Base.Broadcast: materialize
         @testset "No sponge (nothing) returns NullBroadcasted" begin
             @test CA.viscous_sponge_tendency_uₕ(ᶜuₕ, nothing) isa NullBroadcasted
             @test CA.viscous_sponge_tendency_u₃(ᶠw, nothing) isa NullBroadcasted
-            @test CA.viscous_sponge_tendency_ρe_tot(ᶜρ, ᶜh_tot, nothing) isa NullBroadcasted
+            @test CA.viscous_sponge_tendency_ρe_tot_dry(
+                ᶜρ,
+                ᶜs_d,
+                nothing,
+            ) isa NullBroadcasted
+            @test CA.viscous_sponge_tendency_ρe_tot_water(
+                ᶜρ,
+                ᶜh_eff_plus_Φ,
+                ᶜq_tot_eff,
+                nothing,
+            ) isa NullBroadcasted
             @test CA.viscous_sponge_tendency_tracer(ᶜρ, ᶜχ, nothing) isa NullBroadcasted
         end
     end

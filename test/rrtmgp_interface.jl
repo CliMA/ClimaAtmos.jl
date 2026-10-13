@@ -17,8 +17,8 @@ const RRTMGP_PARAMS = RRTMGPParameters(CP.create_toml_dict(Float64))
 @testset "Array <-> Field conversion" begin
     (; bubble_space) = get_spherical_spaces()
     test_field = ones(bubble_space)
-    idx = size(parent(test_field))  # IJFH layout
-    npts = idx[1] * idx[2] * idx[4]
+    idx = size(parent(test_field))
+    npts = idx[2] * idx[3] * idx[5] # Ni * Nj * Nh (for a VIJFH layout)
 
     # Field -> Array
     test_array = Fields.field2array(test_field)

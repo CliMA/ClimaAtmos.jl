@@ -1,13 +1,13 @@
 # Allocation Debugging Workflow
 
-Practical recipes for finding and fixing heap allocations in CliMA Julia code. The companion rules — what counts as a hot path and which patterns to use — live in [gpu_performance.md](gpu_performance.md). This guide is the *debug-loop* counterpart: what to do when `@allocated` is not zero.
+Practical recipes for finding and fixing heap allocations in CliMA Julia code. The companion rules (what counts as a hot path and which patterns to use) live in [gpu_performance.md](gpu_performance.md). This guide is the *debug-loop* counterpart: what to do when `@allocated` is not zero.
 
 ## 1. The standard regression test
 
 Every CliMA repo with a numerical hot path pins zero allocations with a unit test. The canonical pattern (warm up, then assert) appears in `Thermodynamics.test/type_stability.jl`, `ClimaTimeSteppers.test/...`, and the precomputed-quantity setters of every model repo:
 
 ```julia
-# Warm up — forces compilation, fills in any first-call caches
+# Warm up: forces compilation, fills in any first-call caches
 my_hot_function(args...)
 
 # Assert
@@ -16,7 +16,7 @@ my_hot_function(args...)
 
 Two things to know:
 
-- `@allocated` returns *bytes* allocated since the last call. The first invocation is dominated by compilation and is never zero — always warm up first.
+- `@allocated` returns *bytes* allocated since the last call. The first invocation is dominated by compilation and is never zero, so always warm up first.
 - `@allocated` ignores *stack* allocations and small inlined boxes; it counts genuine heap allocations. So `0` from `@allocated` is a strong signal.
 
 When the test fails, the next sections tell you how to localize the cause.
@@ -41,7 +41,7 @@ end
 Tips:
 
 - `sample_rate = 1` records *every* allocation; lower rates (e.g. `0.01`) are appropriate for longer runs.
-- The largest allocation is usually the most informative — sort by `.size` and start from the bottom.
+- The largest allocation is usually the most informative: sort by `.size` and start from the bottom.
 - The stack trace points at the *allocating line*, not the *root cause*. A boxed closure variable will show as an allocation in `Core.Box` deep inside the kernel; the fix is upstream, where the closure was constructed.
 
 ## 3. Localizing a *dispatch* allocation: `JET.@report_opt`
@@ -56,7 +56,7 @@ JET.@report_opt my_hot_function(args...)
 JET prints a list of `runtime dispatch detected` entries with the unresolved call and the failing argument type. Reading order:
 
 1. Find the deepest call that is yours (not a stdlib or third-party method).
-2. Look at the *argument types*: a `Union{...}`, `Any`, or `Function` is the giveaway. Track that argument back to where it lost type information (a struct field typed `::Function` instead of `::F`, a `Vector{Any}`, an `Union{Nothing, T}` field accessed without dispatch — see [SDP 6](../architecture/software_design_patterns.md) and [type_stability.md §3](type_stability.md)).
+2. Look at the *argument types*: a `Union{...}`, `Any`, or `Function` is the giveaway. Track that argument back to where it lost type information (a struct field typed `::Function` instead of `::F`, a `Vector{Any}`, an `Union{Nothing, T}` field accessed without dispatch; see [SDP 6](../code-quality/software_design_patterns.md) and [type_stability.md §3](type_stability.md)).
 3. Fix the upstream type instability; the JET entry disappears and the allocation goes with it.
 
 Use `JET.@test_opt my_hot_function(args...)` in a `@testset` for a CI-style regression gate.
@@ -69,7 +69,7 @@ When the suspect is a single function and you want to see what the compiler infe
 @code_warntype my_hot_function(args...)
 ```
 
-Read the `Body::T` line first — if `T` is `Any` or a `Union`, the return type is unstable. Then scan for red `Union{...}` annotations in the body.
+Read the `Body::T` line first: if `T` is `Any` or a `Union`, the return type is unstable. Then scan for red `Union{...}` annotations in the body.
 
 ## 5. Benchmarking: `BenchmarkTools.@benchmark`
 
@@ -78,9 +78,9 @@ Read the `Body::T` line first — if `T` is `Any` or a `Union`, the return type 
 ```julia
 using BenchmarkTools
 trial = @benchmark $(splat(my_hot_function))($args) samples = 100 evals = 100
-# trial.memory   — total bytes allocated per call
-# trial.allocs   — number of distinct allocations per call
-# minimum(trial) — most useful time estimate (resilient to GC noise)
+# trial.memory:   total bytes allocated per call
+# trial.allocs:   number of distinct allocations per call
+# minimum(trial): most useful time estimate (resilient to GC noise)
 ```
 
 Two pitfalls:
@@ -105,13 +105,13 @@ A model-repo equivalent (e.g. `perf/flame.jl` in ClimaAtmos) profiles a single t
 
 | Symptom (in `Profile.Allocs` stacktrace)         | Likely cause                                          | Fix |
 |:-------------------------------------------------|:------------------------------------------------------|:----|
-| `Core.Box` deep inside a kernel                  | Captured local variable in a closure                  | Convert closure to a functor ([SDP 18](../architecture/software_design_patterns.md)) |
-| `jl_apply_generic` with no obvious source        | Dynamic dispatch on a `Function`/`Any` field           | Parameterize the field ([SDP 6](../architecture/software_design_patterns.md)) |
-| Allocation inside a `@.` broadcast               | Non-`isbits` argument captured in the broadcast        | Extract parameters to locals ([SDP 20](../architecture/software_design_patterns.md)); or check `isbits(cudaconvert(...))` ([gpu_performance.md §8](gpu_performance.md)) |
+| `Core.Box` deep inside a kernel                  | Captured local variable in a closure                  | Convert closure to a functor ([SDP 18](../code-quality/software_design_patterns.md)) |
+| `jl_apply_generic` with no obvious source        | Dynamic dispatch on a `Function`/`Any` field           | Parameterize the field ([SDP 6](../code-quality/software_design_patterns.md)) |
+| Allocation inside a `@.` broadcast               | Non-`isbits` argument captured in the broadcast        | Extract parameters to locals ([SDP 20](../code-quality/software_design_patterns.md)); or check `isbits(cudaconvert(...))` ([gpu_performance.md §8](gpu_performance.md)) |
 | `Array{Float64}` allocation in a Float32 path    | A `Float64` literal promoting the result                | Track down the literal ([type_stability.md §1](type_stability.md)) |
 | `Union{T, Nothing}` access in a hot path         | Optional field forces a runtime check                  | Split the method by the field's type parameter ([type_stability.md §3](type_stability.md)) |
-| Allocation inside `ifelse`                       | A `begin...end` block or non-`isbits` branch result    | Pre-compute both branches outside `ifelse` ([SDP 17](../architecture/software_design_patterns.md)) |
-| Allocation only on GPU, not CPU                  | A kernel-incompatible operation (string interp, Dict)  | See [gpu_performance.md §7](gpu_performance.md) and [SDP 13](../architecture/software_design_patterns.md) |
+| Allocation inside `ifelse`                       | A `begin...end` block or non-`isbits` branch result    | Pre-compute both branches outside `ifelse` ([SDP 17](../code-quality/software_design_patterns.md)) |
+| Allocation only on GPU, not CPU                  | A kernel-incompatible operation (string interp, Dict)  | See [gpu_performance.md §7](gpu_performance.md) and [SDP 13](../code-quality/software_design_patterns.md) |
 
 ## 8. When `@allocated` says zero but you still suspect a leak
 

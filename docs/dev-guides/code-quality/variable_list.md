@@ -64,7 +64,7 @@ By convention, when all partitions of the phase of water are included, we use
 
 Terminal velocities are per-species:
 
-- `terminal_velocity_<spe>` = mass-weighted terminal fall speed of `<spe>` [m/s] — e.g. `terminal_velocity_rai`, `terminal_velocity_sno`
+- `terminal_velocity_<spe>` = mass-weighted terminal fall speed of `<spe>` [m/s]: e.g. `terminal_velocity_rai`, `terminal_velocity_sno`
 
 Microphysical tendencies [kg/kg/s]. Sign convention: positive means a *source* for the species in the *to*-position of the name.
 

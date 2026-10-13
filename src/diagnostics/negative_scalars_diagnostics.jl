@@ -5,7 +5,11 @@ import Statistics: mean
 """
     compute_min_per_level!(out, field)
 
-Computes the minimum value of a field at each vertical level and stores it in `out`.
+Reduce `field` to its minimum over each vertical level.
+
+Mutates and returns `out`, a single column holding one value per level. When `out` is
+`nothing`, a column is allocated and returned instead. Shared by the tracer diagnostics
+generated at the bottom of this file.
 """
 function compute_min_per_level!(out, field)
     out′ = isnothing(out) ? similar(Fields.column(field, 1, 1, 1)) : out
@@ -19,7 +23,10 @@ end
 """
     compute_max_per_level!(out, field)
 
-Computes the maximum value of a field at each vertical level and stores it in `out`.
+Reduce `field` to its maximum over each vertical level.
+
+Mutates and returns `out`, a single column holding one value per level. When `out` is
+`nothing`, a column is allocated and returned instead.
 """
 function compute_max_per_level!(out, field)
     out′ = isnothing(out) ? similar(Fields.column(field, 1, 1, 1)) : out
@@ -33,8 +40,12 @@ end
 """
     compute_negative_mean_per_level!(out, field)
 
-Computes the mean of negative values of a field at each vertical level.
-If no negative values exist at a level, result is 0.
+Reduce `field` to the mean of its negative values over each vertical level.
+
+The mean is taken over the negative points only, so it is not diluted by the positive
+ones; levels with no negative values give zero. Mutates and returns `out`, a single column
+holding one value per level. When `out` is `nothing`, a column is allocated and returned
+instead.
 """
 function compute_negative_mean_per_level!(out, field)
     out′ = isnothing(out) ? similar(Fields.column(field, 1, 1, 1)) : out
@@ -53,8 +64,11 @@ end
 """
     compute_positive_mean_per_level!(out, field)
 
-Computes the mean of positive values of a field at each vertical level.
-If no positive values exist at a level, result is 0.
+Reduce `field` to the mean of its positive values over each vertical level.
+
+The mean is taken over the positive points only; levels with no positive values give zero.
+Mutates and returns `out`, a single column holding one value per level. When `out` is
+`nothing`, a column is allocated and returned instead.
 """
 function compute_positive_mean_per_level!(out, field)
     out′ = isnothing(out) ? similar(Fields.column(field, 1, 1, 1)) : out
@@ -73,8 +87,11 @@ end
 """
     compute_negative_sum_per_level!(out, field)
 
-Computes the sum of negative values of a field at each vertical level.
-If no negative values exist at a level, result is 0.
+Reduce `field` to the sum of its negative values over each vertical level.
+
+Levels with no negative values give zero. Mutates and returns `out`, a single column
+holding one value per level. When `out` is `nothing`, a column is allocated and returned
+instead.
 """
 function compute_negative_sum_per_level!(out, field)
     out′ = isnothing(out) ? similar(Fields.column(field, 1, 1, 1)) : out
@@ -89,8 +106,11 @@ end
 """
     compute_positive_sum_per_level!(out, field)
 
-Computes the sum of positive values of a field at each vertical level.
-If no positive values exist at a level, result is 0.
+Reduce `field` to the sum of its positive values over each vertical level.
+
+Levels with no positive values give zero. Mutates and returns `out`, a single column
+holding one value per level. When `out` is `nothing`, a column is allocated and returned
+instead.
 """
 function compute_positive_sum_per_level!(out, field)
     out′ = isnothing(out) ? similar(Fields.column(field, 1, 1, 1)) : out
@@ -105,7 +125,10 @@ end
 """
     compute_negative_fraction_per_level!(out, field)
 
-Computes the fraction of the level where `field` is negative.
+Reduce `field` to the fraction of each vertical level at which it is negative.
+
+Mutates and returns `out`, a single column holding one value in [-] per level. When `out`
+is `nothing`, a column is allocated and returned instead.
 """
 function compute_negative_fraction_per_level!(out, field)
     out′ = isnothing(out) ? similar(Fields.column(field, 1, 1, 1)) : out
@@ -121,7 +144,10 @@ end
 """
     compute_positive_fraction_per_level!(out, field)
 
-Computes the fraction of the level where `field` is positive.
+Reduce `field` to the fraction of each vertical level at which it is positive.
+
+Mutates and returns `out`, a single column holding one value in [-] per level. When `out`
+is `nothing`, a column is allocated and returned instead.
 """
 function compute_positive_fraction_per_level!(out, field)
     out′ = isnothing(out) ? similar(Fields.column(field, 1, 1, 1)) : out

@@ -9,31 +9,29 @@ import ClimaCore.Geometry as Geometry
 """
     horizontal_dynamics_tendency!(Yₜ, Y, p, t)
 
-Computes tendencies due to horizontal advection for prognostic variables of the
-grid mean and EDMFX subdomains, and also applies horizontal pressure gradient and
-gravitational acceleration terms for horizontal momentum.
+Add the explicit horizontal dynamics tendencies: horizontal advection of grid-mean
+and EDMFX-subdomain prognostic variables, plus the horizontal pressure-gradient,
+kinetic-energy-gradient, and geopotential-gradient forces on `uₕ`.
 
-Specifically, this function calculates:
+Increments (all with a minus sign, i.e., flux divergences and gradients are sinks):
 
-  - Horizontal advection of density (`ρ`).
-  - Horizontal advection of EDMFX updraft density-area product (`ρaʲ`).
-  - Horizontal advection of total energy (`ρe_tot`) using total enthalpy flux.
-  - Horizontal advection of EDMFX updraft moist static energy (`mseʲ`).
-  - Horizontal advection of turbulent kinetic energy (`ρtke`) if used.
-  - Horizontal pressure gradient, kinetic energy gradient, and geopotential gradient
-    forces for horizontal momentum (`uₕ`).
+  - `Yₜ.c.ρ`: horizontal mass-flux divergence `∇ₕ⋅(ρu)`.
+  - `Yₜ.c.ρe_tot`: horizontal total-enthalpy-flux divergence `∇ₕ⋅(ρu h_tot)`.
+  - `Yₜ.c.ρtke`: horizontal TKE-flux divergence, when the turbulence-convection model
+    carries prognostic TKE.
+  - `Yₜ.c.uₕ`: gradients of kinetic energy and geopotential (relative to a reference
+    state) plus the pressure gradient in a split form,
+    `cp_d/2 [θᵥ′ ∇Π + ∇(θᵥ′ Π) - Π ∇θᵥ′]`, where `θᵥ′` is the virtual potential
+    temperature minus its reference profile and `Π` is the Exner function.
+  - `Yₜ.c.sgsʲs.:(j).ρa` and `Yₜ.c.sgsʲs.:(j).mse` for each updraft `j`, when
+    `p.atmos.turbconv_model isa PrognosticEDMFX` (advective form for `mse`).
 
-Arguments:
-
-  - `Yₜ`: The tendency state vector, modified in place.
-  - `Y`: The current state vector.
-  - `p`: Cache containing parameters, precomputed fields (e.g., velocities `ᶜu`,
-    `ᶜu⁰`, `ᶜuʲs`; pressure `ᶜp`; kinetic energy `ᶜK`; total enthalpy `ᶜh_tot`),
-    and core components (e.g., geopotential `ᶜΦ`).
-  - `t`: Current simulation time (not directly used in calculations).
-
-Modifies `Yₜ.c.ρ`, `Yₜ.c.ρe_tot`, `Yₜ.c.uₕ`, and EDMFX-related fields in
-`Yₜ.c.sgsʲs` and `Yₜ.c.ρtke` if applicable.
+Reads `Y.c` and, from the cache `p`, the precomputed fields `ᶜu`, `ᶜK`, `ᶜp`, `ᶜT`,
+`ᶜq_liq`, `ᶜq_ice`, `ᶜq_tot_nonneg`, `ᶜh_tot` (and `ᶜuʲs` for `PrognosticEDMFX`), the
+geopotential `ᶜΦ` from `p.core`, and scratch space. Called from
+`remaining_tendency!`, i.e., placed in the explicit part of the IMEX splitting.
+Returns `nothing`. The continuous-form equations are documented on the "Equations"
+page of the docs (`docs/src/equations.md`).
 """
 NVTX.@annotate function horizontal_dynamics_tendency!(Yₜ, Y, p, t)
     n = n_mass_flux_subdomains(p.atmos.turbconv_model)
@@ -95,27 +93,22 @@ end
 """
     horizontal_tracer_advection_tendency!(Yₜ, Y, p, t)
 
-Computes tendencies due to horizontal advection for tracers in the grid mean
-and for specific humidity species within EDMFX subdomains.
+Add the explicit horizontal advection tendencies for grid-mean tracers and for
+EDMFX-subdomain tracers.
 
-Specifically, this function calculates:
+Increments (with a minus sign on each flux divergence):
 
-  - Horizontal advection for all prognostic tracer variables (`ρχ_name`) in `Y.c`.
-  - Horizontal advection for EDMFX updraft total specific humidity (`q_totʲ`).
-  - Horizontal advection for other EDMFX updraft moisture species (`q_lclʲ`, `q_iclʲ`,
-    `q_raiʲ`, `q_snoʲ`) if using a `NonEquilibriumMicrophysics1M` or
-    `NonEquilibriumMicrophysics2M` microphysics model. If the `NonEquilibriumMicrophysics2M`
-    model is used instead, `n_liqʲ` and `n_raiʲ` are also advected.
+  - Every grid-mean tracer `Yₜ.c.ρχ`: flux-form advection `∇ₕ⋅(ρu χ)` for all
+    prognostic tracer variables in `Y.c` (identified by `is_tracer_var`).
+  - `Yₜ.c.sgsʲs.:(j).q_tot`, when `p.atmos.turbconv_model isa PrognosticEDMFX`:
+    advective-form advection with the updraft velocity `ᶜuʲs`.
+  - Every auto-discovered SGS tracer in `Yₜ.c.sgsʲs.:(j)` (microphysics species and
+    user-defined passive tracers, from `sgs_tracer_names`), also in advective form.
 
-Arguments:
-
-  - `Yₜ`: The tendency state vector, modified in place.
-  - `Y`: The current state vector.
-  - `p`: Cache containing parameters and precomputed fields (e.g., velocities `ᶜu`, `ᶜuʲs`).
-  - `t`: Current simulation time (not directly used in calculations).
-
-Modifies tracer fields in `Yₜ.c` (e.g., `Yₜ.c.ρq_tracer`) and EDMFX moisture fields
-in `Yₜ.c.sgsʲs` if applicable.
+Reads `Y.c`, the precomputed velocities `ᶜu` (and `ᶜuʲs` for `PrognosticEDMFX`) from
+`p`. `t` is unused. Called from `remaining_tendency!` with the limited tendency
+vector `Yₜ_lim`, so these tendencies pass through the tracer limiters. Returns
+`nothing`.
 """
 NVTX.@annotate function horizontal_tracer_advection_tendency!(Yₜ, Y, p, t)
     n = n_mass_flux_subdomains(p.atmos.turbconv_model)
@@ -152,23 +145,25 @@ end
 """
     ᶜρq_tot_vertical_transport_bc(flow, thermo_params, t, ᶠu³)
 
-Computes the vertical transport of `ρq_tot` at the surface due to prescribed flow.
+Return the `ρq_tot` tendency from the prescribed surface moisture flux of a
+`PrescribedFlow` configuration.
 
-If the flow is not prescribed, this has no effect.
+Builds a face divergence whose only nonzero contribution is the bottom-boundary
+flux `ρu₃qₜ` prescribed by `get_ρu₃qₜ_surface`, so only the cell adjacent to the
+surface is affected.
 
 # Arguments
 
-  - `flow`: The prescribed flow model, see [`PrescribedFlow`](@ref).
-
-      + If `flow` is `nothing`, this has no effect.
-
-  - `thermo_params`: The thermodynamic parameters, needed to compute surface air density.
-  - `t`: The current time.
-  - `ᶠu³`: The vertical velocity field.
+  - `flow`: The prescribed flow model (`PrescribedFlow`), or `nothing` for no effect.
+  - `thermo_params`: Thermodynamic parameters, needed to compute surface air density.
+  - `t`: Current simulation time.
+  - `ᶠu³`: Face contravariant vertical velocity field (used only for its space and
+    element type).
 
 # Returns
 
-  - The vertical transport of `ρq_tot` at the surface due to prescribed flow.
+A lazy broadcast with the surface vertical-transport tendency of `ρq_tot`, or a
+`NullBroadcasted()` when `flow` is `nothing`.
 """
 ᶜρq_tot_vertical_transport_bc(::Nothing, _, _, _) = NullBroadcasted()
 function ᶜρq_tot_vertical_transport_bc(flow::PrescribedFlow, thermo_params, t, ᶠu³)
@@ -180,32 +175,32 @@ end
 """
     explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
 
-Computes tendencies due to explicit vertical advection for various grid-mean
-prognostic variables, including passive tracers, energy, total water, momentum (using
-a vector invariant form), and optionally TKE.
+Add the explicitly treated vertical advection tendencies: vector-invariant momentum
+advection (with Coriolis and vorticity terms) and full vertical transport of
+tracers and, optionally, TKE.
 
-This function handles:
+Increments:
 
-  - Calculation of vorticity components (`ᶜω³`, `ᶠω¹²`).
-  - Vertical advection of passive tracers using `vertical_transport` with specified upwinding.
-  - Upwinding corrections for vertical advection of energy and total water, assuming
-    their central advection might be handled elsewhere or implicitly.
-  - Vertical advection terms for horizontal and vertical momentum, differing for
-    shallow and deep atmosphere approximations, incorporating Coriolis and vorticity effects.
-  - Vertical advection of grid-mean TKE (`ρtke`) if `use_prognostic_tke` is true.
+  - Every grid-mean tracer `Yₜ.c.ρχ` except `ρe_tot` and `ρq_tot` (those are advected
+    implicitly): flux-form `vertical_transport` with the grid-mean flow `ᶠu³` and the
+    `p.atmos.numerics.tracer_upwinding` scheme. When EDMFX SGS mass flux is active,
+    difference-form SGS corrections are added on top of this in
+    `edmfx_sgs_mass_flux_tendency!`.
+  - `Yₜ.c.ρq_tot`: the prescribed-flow surface flux from
+    `ᶜρq_tot_vertical_transport_bc`, when moisture is present.
+  - `Yₜ.c.uₕ` and `Yₜ.f.u₃`: vector-invariant vertical advection built from the
+    vorticities `ᶜω³` and `ᶠω¹²`, the Coriolis fields `ᶜf³` and `ᶠf¹²`, and the
+    kinetic-energy gradient `∇ᵥK`; the shallow-atmosphere branch (`ᶠf¹² === nothing`)
+    omits the horizontal Coriolis components.
+  - `Yₜ.f.sgsʲs.:(j).u₃` for each prognostic updraft: the analogous vector-invariant
+    terms with updraft vorticities and kinetic energies.
+  - `Yₜ.c.ρtke`: `vertical_transport` with the
+    `p.atmos.numerics.edmfx_mse_q_tot_upwinding` scheme, when the
+    turbulence-convection model carries prognostic TKE.
 
-Arguments:
-
-  - `Yₜ`: The tendency state vector, modified in place.
-  - `Y`: The current state vector.
-  - `p`: Cache containing parameters, core fields (e.g., `ᶜf³`, `ᶠf¹²`, `ᶜΦ`),
-    precomputed fields (e.g., `ᶜu`, `ᶠu³`, `ᶜK`, EDMF velocities/TKE if applicable),
-    atmospheric model settings (`p.atmos.numerics` for upwinding schemes),
-    and scratch space.
-  - `t`: Current simulation time (not directly used in calculations).
-
-Modifies `Yₜ.c` (various tracers, `ρe_tot`, `ρq_tot`, `uₕ`), `Yₜ.f.u₃`,
-`Yₜ.f.sgsʲs` (updraft `u₃`), and `Yₜ.c.ρtke` as applicable.
+Reads `Y`, the core fields `ᶜf³` and `ᶠf¹²`, the precomputed `ᶜu`, `ᶠu³`, `ᶜK` (and
+`ᶜuʲs`, `ᶜKʲs`, `ᶠKᵥʲs` for prognostic updrafts), and scratch space. Called from
+`remaining_tendency!`. Returns `nothing`.
 """
 NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     (; turbconv_model, prescribed_flow) = p.atmos
@@ -218,7 +213,7 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     (; ᶜu, ᶠu³, ᶜK) = p.precomputed
     (; edmfx_mse_q_tot_upwinding) = n > 0 || advect_tke ? p.atmos.numerics : all_nothing
     (; ᶜuʲs, ᶜKʲs, ᶠKᵥʲs) = n > 0 ? p.precomputed : all_nothing
-    (; energy_q_tot_upwinding, tracer_upwinding) = p.atmos.numerics
+    (; tracer_upwinding) = p.atmos.numerics
     thermo_params = CAP.thermodynamics_params(p.params)
 
     ᶜtke =
@@ -247,34 +242,18 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
 
     ᶜρ = Y.c.ρ
 
-    # Full vertical advection of passive tracers (like liq, rai, etc) ...
-    # If sgs_mass_flux is true, the advection term is computed from the sum of SGS fluxes
-    if !(
-        p.atmos.turbconv_model isa PrognosticEDMFX &&
-        p.atmos.edmfx_model.sgs_mass_flux isa Val{true}
-    )
-        foreach_gs_tracer(Yₜ, Y) do ᶜρχₜ, ᶜρχ, ρχ_name
-            if !(ρχ_name in (@name(ρe_tot), @name(ρq_tot)))
-                ᶜχ = @. lazy(specific(ᶜρχ, Y.c.ρ))
-                vtt = vertical_transport(ᶜρ, ᶠu³, ᶜχ, dt, tracer_upwinding)
-                @. ᶜρχₜ += vtt
-            end
+    # Full vertical advection of passive tracers (such as liq, rai, etc) with the
+    # grid-mean flow. When EDMFX sgs_mass_flux is active, difference-form SGS
+    # corrections ρᵏaᵏ(u³ᵏ - u³)(χᵏ - χ) are added on top of this in
+    # edmfx_sgs_mass_flux_tendency!.
+    foreach_gs_tracer(Yₜ, Y) do ᶜρχₜ, ᶜρχ, ρχ_name
+        if !(ρχ_name in (@name(ρe_tot), @name(ρq_tot)))
+            ᶜχ = @. lazy(specific(ᶜρχ, Y.c.ρ))
+            vtt = vertical_transport(ᶜρ, ᶠu³, ᶜχ, dt, tracer_upwinding)
+            @. ᶜρχₜ += vtt
         end
     end
-    # ... and upwinding correction of energy and total water.
-    # (The central advection of energy and total water is done implicitly.)
-    if energy_q_tot_upwinding != Val(:none)
-        (; ᶜh_tot) = p.precomputed
-        vtt = vertical_transport(ᶜρ, ᶠu³, ᶜh_tot, dt, energy_q_tot_upwinding)
-        vtt_central = vertical_transport(ᶜρ, ᶠu³, ᶜh_tot, dt, Val(:none))
-        @. Yₜ.c.ρe_tot += vtt - vtt_central
-    end
-
-    if !(p.atmos.microphysics_model isa DryModel) && energy_q_tot_upwinding != Val(:none)
-        ᶜq_tot = @. lazy(specific(Y.c.ρq_tot, Y.c.ρ))
-        vtt = vertical_transport(ᶜρ, ᶠu³, ᶜq_tot, dt, energy_q_tot_upwinding)
-        vtt_central = vertical_transport(ᶜρ, ᶠu³, ᶜq_tot, dt, Val(:none))
-        @. Yₜ.c.ρq_tot += vtt - vtt_central
+    if !(p.atmos.microphysics_model isa DryModel)
         vtt_bc =
             ᶜρq_tot_vertical_transport_bc(prescribed_flow, thermo_params, t, ᶠu³)
         @. Yₜ.c.ρq_tot += vtt_bc
@@ -311,32 +290,32 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
 end
 
 """
+    edmfx_sgs_vertical_advection_tendency!(Yₜ, Y, p, t, turbconv_model)
     edmfx_sgs_vertical_advection_tendency!(Yₜ, Y, p, t, turbconv_model::PrognosticEDMFX)
 
-Computes tendencies due to vertical advection and buoyancy for EDMFX subgrid-scale
-(SGS) updraft prognostic variables.
+Add the explicit vertical advection, buoyancy, and sedimentation tendencies for the
+EDMFX updraft prognostic variables.
 
-This function handles:
+The fallback method is a no-op for turbulence-convection models other than
+`PrognosticEDMFX`. For `PrognosticEDMFX`, this increments, for each updraft `j`:
 
-  - Vertical advection of updraft density-area product (`ρaʲ`).
-  - Vertical advection of updraft moist static energy (`mseʲ`) and total specific humidity (`q_totʲ`).
-  - Vertical advection of other updraft moisture species (`q_lclʲ`, `q_iclʲ`, `q_raiʲ`, `q_snoʲ`)
-    if using a `NonEquilibriumMicrophysics1M` or `NonEquilibriumMicrophysics2M` microphysics
-    model. If the `NonEquilibriumMicrophysics2M` model is used, `n_liqʲ` and `n_raiʲ` are also advected.
-  - Buoyancy source term in the updraft `mseʲ` equation (geopotential work done against
-    the density anomaly).
+  - `Yₜ.c.sgsʲs.:(j).mse`: the buoyancy source (geopotential gradient times the
+    updraft density anomaly `ᶜρ_diffʲs`) plus advective-form vertical advection with
+    the updraft velocity, using the `p.atmos.numerics.edmfx_mse_q_tot_upwinding`
+    scheme.
+  - `Yₜ.c.sgsʲs.:(j).q_tot`: advective-form vertical advection (same scheme), plus
+    the total-water contribution of condensate and precipitation sedimentation.
+  - Every auto-discovered SGS tracer (from `sgs_tracer_names`): advective-form
+    vertical advection with the `p.atmos.numerics.edmfx_tracer_upwinding` scheme.
+  - For `NonEquilibriumMicrophysics1M`/`NonEquilibriumMicrophysics2M`, the updraft
+    microphysics species (`q_lcl`, `q_icl`, `q_rai`, `q_sno`, and for 2M also `n_lcl`
+    and `n_rai`): within-updraft sedimentation with lateral entrainment corrections
+    via `updraft_sedimentation!`. This path currently supports a single updraft.
 
-Arguments:
-
-  - `Yₜ`: The tendency state vector, modified in place.
-  - `Y`: The current state vector.
-  - `p`: Cache containing parameters (`p.params`), time step `dt`, core fields (`ᶠgradᵥ_ᶜΦ`),
-    precomputed EDMF fields (e.g., `ᶠu³ʲs`, `ᶜρʲs`), atmospheric model settings
-    (`p.atmos.numerics.edmfx_mse_q_tot_upwinding`), and scratch space.
-  - `t`: Current simulation time (not directly used in calculations).
-  - `turbconv_model`: The `PrognosticEDMFX` turbulence convection model instance.
-
-Modifies EDMF updraft fields in `Yₜ.c.sgsʲs` and `Yₜ.f.sgsʲs`.
+Reads `Y`, the precomputed `ᶠu³ʲs`, `ᶜρʲs`, `ᶜρ_diffʲs`, and sedimentation
+velocities, the core field `ᶜgradᵥ_ᶠΦ`, and scratch space. `t` is unused. See the
+"PROPHET: Overview and Equations" page (`docs/src/prophet.md`) for the continuous
+equations. Returns `nothing`.
 """
 edmfx_sgs_vertical_advection_tendency!(Yₜ, Y, p, t, turbconv_model) = nothing
 
@@ -410,21 +389,31 @@ function edmfx_sgs_vertical_advection_tendency!(
             )
             # Sedimentation
             # TODO - lazify ᶜwₗʲs computation. No need to cache it.
+            # Tuples: (updraft Y-path, species name, updraft vel, GS vel)
             sgs_microphysics_tracers = (
-                (@name(c.sgsʲs.:(1).q_lcl), @name(q_lcl), @name(ᶜwₗʲs.:(1))),
-                (@name(c.sgsʲs.:(1).q_icl), @name(q_icl), @name(ᶜwᵢʲs.:(1))),
-                (@name(c.sgsʲs.:(1).q_rai), @name(q_rai), @name(ᶜwᵣʲs.:(1))),
-                (@name(c.sgsʲs.:(1).q_sno), @name(q_sno), @name(ᶜwₛʲs.:(1))),
+                (@name(c.sgsʲs.:(1).q_lcl), @name(q_lcl), @name(ᶜwₗʲs.:(1)), @name(ᶜwₗ)),
+                (@name(c.sgsʲs.:(1).q_icl), @name(q_icl), @name(ᶜwᵢʲs.:(1)), @name(ᶜwᵢ)),
+                (@name(c.sgsʲs.:(1).q_rai), @name(q_rai), @name(ᶜwᵣʲs.:(1)), @name(ᶜwᵣ)),
+                (@name(c.sgsʲs.:(1).q_sno), @name(q_sno), @name(ᶜwₛʲs.:(1)), @name(ᶜwₛ)),
             )
 
             MatrixFields.unrolled_foreach(
                 sgs_microphysics_tracers,
-            ) do (qʲ_name, name, wʲ_name)
+            ) do (qʲ_name, name, wʲ_name, w_gs_name)
                 MatrixFields.has_field(Y, qʲ_name) || return
 
                 ᶜqʲ = MatrixFields.get_field(Y, qʲ_name)
                 ᶜqʲₜ = MatrixFields.get_field(Yₜ, qʲ_name)
                 ᶜwʲ = MatrixFields.get_field(p.precomputed, wʲ_name)
+                # Environment sedimentation flux density: ρ⁰w⁰q⁰
+                # Reconstructed from grid-mean: ρ̂⁰w⁰q⁰ = w_GS·ρq_GS − ρ̂¹w¹q¹
+                # Then ρ⁰w⁰q⁰ = ρ̂⁰w⁰q⁰ / a⁰ = ρ̂⁰w⁰q⁰ / (1 − a)
+                ᶜw_gs = MatrixFields.get_field(p.precomputed, w_gs_name)
+                ᶜρq_gs = MatrixFields.get_field(Y.c, get_ρχ_name(name))
+                ᶜρ⁰w⁰χ⁰ = @. lazy(
+                    (ᶜw_gs * ᶜρq_gs - Y.c.sgsʲs.:($$j).ρa * ᶜwʲ * ᶜqʲ) /
+                    max(1 - ᶜa, eps(FT)),
+                )
 
                 # Flux form sedimentation of tracers
                 vtt = p.scratch.ᶜtemp_scalar_4
@@ -436,6 +425,7 @@ function edmfx_sgs_vertical_advection_tendency!(
                     ᶜa,
                     ᶜqʲ,
                     ᶠJ,
+                    ᶜρ⁰w⁰χ⁰,
                 )
                 @. ᶜqʲₜ += ᶜinv_ρ̂ * vtt
                 @. Yₜ.c.sgsʲs.:($$j).q_tot += ᶜinv_ρ̂ * vtt
@@ -453,19 +443,29 @@ function edmfx_sgs_vertical_advection_tendency!(
 
             # Sedimentation velocities for microphysics number concentrations
             # (or any tracers that does not directly participate in variations of q_tot and mse)
+            # Tuples: (updraft Y-path, species name, updraft vel, GS vel)
             sgs_microphysics_tracers = (
-                (@name(c.sgsʲs.:(1).n_lcl), @name(ᶜwₙₗʲs.:(1))),
-                (@name(c.sgsʲs.:(1).n_rai), @name(ᶜwₙᵣʲs.:(1))),
+                (@name(c.sgsʲs.:(1).n_lcl), @name(n_lcl), @name(ᶜwₙₗʲs.:(1)), @name(ᶜwₙₗ)),
+                (@name(c.sgsʲs.:(1).n_rai), @name(n_rai), @name(ᶜwₙᵣʲs.:(1)), @name(ᶜwₙᵣ)),
             )
 
             MatrixFields.unrolled_foreach(
                 sgs_microphysics_tracers,
-            ) do (χʲ_name, wʲ_name)
+            ) do (χʲ_name, name, wʲ_name, w_gs_name)
                 MatrixFields.has_field(Y, χʲ_name) || return
 
                 ᶜχʲ = MatrixFields.get_field(Y, χʲ_name)
                 ᶜχʲₜ = MatrixFields.get_field(Yₜ, χʲ_name)
                 ᶜwʲ = MatrixFields.get_field(p.precomputed, wʲ_name)
+                # Environment sedimentation flux density: ρ⁰w⁰χ⁰
+                # Reconstructed from grid-mean: ρ̂⁰w⁰χ⁰ = w_GS·ρχ_GS − ρ̂¹w¹χ¹
+                # Then ρ⁰w⁰χ⁰ = ρ̂⁰w⁰χ⁰ / a⁰ = ρ̂⁰w⁰χ⁰ / (1 − a)
+                ᶜw_gs = MatrixFields.get_field(p.precomputed, w_gs_name)
+                ᶜρχ_gs = MatrixFields.get_field(Y.c, get_ρχ_name(name))
+                ᶜρ⁰w⁰χ⁰ = @. lazy(
+                    (ᶜw_gs * ᶜρχ_gs - Y.c.sgsʲs.:($$j).ρa * ᶜwʲ * ᶜχʲ) /
+                    max(1 - ᶜa, eps(FT)),
+                )
 
                 # Flux form sedimentation of tracers
                 vtt = p.scratch.ᶜtemp_scalar_4
@@ -477,6 +477,7 @@ function edmfx_sgs_vertical_advection_tendency!(
                     ᶜa,
                     ᶜχʲ,
                     ᶠJ,
+                    ᶜρ⁰w⁰χ⁰,
                 )
                 @. ᶜχʲₜ += ᶜinv_ρ̂ * vtt
             end
@@ -485,42 +486,43 @@ function edmfx_sgs_vertical_advection_tendency!(
 end
 
 """
-    updraft_sedimentation!(vtt, p, ᶜρ, ᶜw, ᶜa, ᶜχ, ᶠJ)
+    updraft_sedimentation!(vtt, p, ᶜρ, ᶜw, ᶜa, ᶜχ, ᶠJ, ᶜρ⁰w⁰χ⁰)
 
-Compute the sedimentation tendency of tracer `χ` within an updraft, including lateral
-detrainment when the updraft area increases with height.
+Compute the sedimentation tendency of tracer `χ` within an updraft, including
+lateral transfer (detrainment and entrainment) across tilted updraft boundaries,
+and store it in `vtt`.
 
-# Description
+Sedimenting particles fall with velocity `w` through an updraft of fractional area
+`a(z)`. The base within-updraft tendency is `a · ∂_z(ρ w χ)`, the vertical flux
+convergence through the updraft cross-section with no lateral effects. When
+`∂a/∂z > 0` (updraft narrows downward), sedimenting mass exits laterally through
+the tilted boundary (detrainment); this is already excluded from `a · ∂_z(ρ w χ)`
+and is captured by the grid-scale residual. When `∂a/∂z < 0` (updraft widens
+downward), environment condensate enters through the tilted boundary (entrainment);
+following the upwind (donor-cell) principle, the entrained sedimentation flux has
+environment properties, not updraft properties. The combined tendency is
 
-Sedimenting particles fall with velocity `w` through an updraft of fractional area `a(z)`.
-The vertical flux divergence gives a tendency of ``∂(ρ w a χ)/∂z``.
-When `∂a/∂z > 0`, some sedimenting mass exits laterally through the expanding sides,
-producing a detrainment tendency of ``-ρ w χ ∂a/∂z``.
-The resulting net tendency in this case is ``a * ∂(ρ w χ)/∂z``.
+```math
+\\text{tend} = a \\, \\partial_z(\\rho^{(1)} w^{(1)} \\chi^{(1)})
+            + \\alpha_{lat} \\, \\min(\\partial_z a,\\, 0) \\,
+              (\\rho^{(1)} w^{(1)} \\chi^{(1)} - \\rho^{(0)} w^{(0)} \\chi^{(0)})
+```
 
-# Equation
-
-The lateral flux through the updraft side surface `S` within one grid column is
-``F_side = ∫_S (ρ χ (w · n)) dS ≈ ρ χ (w · n) A_side,``
-where `n` is the outward unit normal and `A_side` the side area.
-For predominantly vertical sedimentation,
-``w·n A_side ≈ w A_grid [a(z+Δz) - a(z)] = w A_grid Δa.``
-Dividing by the grid column volume `A_grid·Δz` gives the flux divergence (tendency):
-``tendency ≈ ρ χ w ∂a/∂z.``
-A negative sign is applied to represent the loss (detrainment) from the updraft:
-``Dₛ = -ρ w χ ∂a/∂z.``
+where the second term vanishes when `∂a/∂z ≥ 0` or when updraft and environment
+carry the same sedimentation flux.
 
 # Arguments
 
-  - `vtt` : output field
-  - `p`: cache containing scratch spaces
-  - `ᶜρ`: air density
-  - `ᶜw`: sedimentation velocity (positive downward)
-  - `ᶜa`: updraft area fraction
-  - `ᶜχ`: tracer mixing ratio
-  - `ᶠJ`: face Jacobian (grid geometry)
+  - `vtt`: Output field, overwritten with the tendency (also used as scratch).
+  - `p`: Cache providing scratch fields.
+  - `ᶜρ`: Updraft air density [kg/m³].
+  - `ᶜw`: Updraft sedimentation velocity, positive downward [m/s].
+  - `ᶜa`: Updraft area fraction [-].
+  - `ᶜχ`: Updraft tracer specific quantity.
+  - `ᶠJ`: Face Jacobian (grid geometry).
+  - `ᶜρ⁰w⁰χ⁰`: Environment sedimentation flux density `ρ⁰ w⁰ χ⁰`.
 
-`vtt` gets filled with Tracer tendency due to sedimentation and lateral detrainment.
+Called from `edmfx_sgs_vertical_advection_tendency!`. Returns `nothing`.
 """
 function updraft_sedimentation!(
     vtt,
@@ -530,17 +532,20 @@ function updraft_sedimentation!(
     ᶜa,
     ᶜχ,
     ᶠJ,
+    ᶜρ⁰w⁰χ⁰,
 )
     ᶜJ = Fields.local_geometry_field(axes(ᶜρ)).J
     # use output as a scratch field
     ∂a∂z = vtt
-    @. ∂a∂z = ᶜprecipdivᵥ(ᶠinterp(ᶜJ) / ᶠJ * ᶠright_bias(Geometry.WVector(ᶜa)))
+    @. ∂a∂z = ᶜprecipdivᵥ(ᶠinterp(ᶜJ) / ᶠJ * ᶠtop_bias(Geometry.WVector(ᶜa)))
     ᶠρ = @. p.scratch.ᶠtemp_scalar = ᶠinterp(ᶜρ * ᶜJ) / ᶠJ
-    ᶠwaχ = @. p.scratch.ᶠtemp_scalar_3 = ᶠright_bias(-(ᶜw) * ᶜa * ᶜχ)
-    ᶠwχ = @. p.scratch.ᶠtemp_scalar_2 = ᶠright_bias(-(ᶜw) * ᶜχ)
+    ᶠwχ = @. p.scratch.ᶠtemp_scalar_2 = ᶠtop_bias(-(ᶜw) * ᶜχ)
+    ᶠwaχ = @. p.scratch.ᶠtemp_scalar_3 = ᶠtop_bias(-(ᶜw) * ᶜa * ᶜχ)
+    # Base: within-updraft flux convergence a · ∂_z(ρ w χ)
+    # Lateral correction: min(∂a/∂z, 0) · ρ⁰w⁰χ⁰
     @. vtt = ifelse(
         ∂a∂z < 0,
-        -(ᶜprecipdivᵥ(ᶠρ * Geometry.WVector(ᶠwaχ))),
+        -(ᶜprecipdivᵥ(ᶠρ * Geometry.WVector(ᶠwaχ)) - ∂a∂z * ᶜρ⁰w⁰χ⁰),
         -(ᶜa * ᶜprecipdivᵥ(ᶠρ * Geometry.WVector(ᶠwχ))),
     )
     return

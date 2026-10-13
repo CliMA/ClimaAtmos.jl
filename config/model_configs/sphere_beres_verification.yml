@@ -1,0 +1,38 @@
+# Beres convective NOGW verification (per-PR regression guard): a coarse GPU
+# sphere spin-up rendered by the 9-panel plotter as a CI artifact.
+z_max: 30000.0
+z_elem: 10
+dz_bottom: 500.0
+rayleigh_sponge: false
+viscous_sponge: false
+dt: 20secs
+start_date: "20100701"
+initial_condition: "WeatherModel"
+surface_setup: DefaultMoninObukhov
+rad: clearsky
+turbconv: prognostic_edmfx
+prognostic_tke: true
+edmfx_entr_model: "Generalized"
+edmfx_detr_model: "Generalized"
+edmfx_nh_pressure: true
+edmfx_vertical_diffusion: true
+edmfx_filter: true
+edmfx_sgs_mass_flux: true
+edmfx_sgs_diffusive_flux: true
+implicit_diffusion: true
+approximate_linear_solve_iters: 2
+microphysics_model: "0M"
+non_orographic_gravity_wave: true
+nogw_beres_source: true
+nogw_beres_detailed_diagnostics: true
+dt_nogw: "400secs"
+t_end: "7days"
+dt_save_state_to_disk: "Inf"
+toml: [toml/prognostic_edmfx.toml, toml/nogw_verification_grid.toml]
+output_default_diagnostics: false
+diagnostics:
+  - short_name: [pr, nogw_Q0, nogw_h_heat, nogw_a_cover, nogw_zbot, nogw_ztop]
+    period: 6hours
+  - short_name: [arup, nogw_Q_conv_ic, nogw_halfsine, utendnogw, vtendnogw]
+    period: 6hours
+ode_algo: "ARS222"

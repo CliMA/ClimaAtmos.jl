@@ -7,12 +7,24 @@ A [`JacobianAlgorithm`](@ref) that computes the Jacobian using forward-mode
 automatic differentiation, assuming that the Jacobian's sparsity structure is
 given by `sparse_jacobian_alg`.
 
-Only entries that are exptected to be nonzero according to the sparsity
+Only entries that are expected to be nonzero according to the sparsity
 structure are updated, but any other entries that are nonzero can introduce
 errors to the updated entries. This issue can be avoided by adding padding bands
 to blocks that are likely to introduce errors. In cases where the default
 padding bands are insufficient, `padding_bands_per_block` can be specified to
 add a fixed number of padding bands to every block.
+
+The sparsity structure is colored with `SparseMatrixColorings`, so that one
+evaluation of `implicit_tendency!` per color suffices to fill every block. The
+same `sparse_jacobian_alg` also supplies the linear solver used by
+`invert_jacobian!`.
+
+# Fields
+
+  - `sparse_jacobian_alg`: The `SparseJacobian` algorithm whose sparsity
+    structure and linear solver are reused.
+  - `padding_bands_per_block`: Number of padding bands added to every block, or
+    `nothing` to use the per-block defaults [-].
 
 For more information about this algorithm, see [Implicit Solver](@ref).
 """
@@ -44,6 +56,32 @@ AutoSparseJacobian(;
     padding_bands_per_block,
 )
 
+"""
+    jacobian_cache(alg::AutoSparseJacobian, Y, atmos; verbose = true)
+
+Allocate the sparse `∂R/∂Y` matrix, its `∂Yₜ/∂Y` counterpart, and the
+dual-number state used by an [`AutoSparseJacobian`](@ref), and precompute the
+matrix coloring that drives the automatic differentiation.
+
+The sparsity structure comes from `alg.sparse_jacobian_alg`, expanded by
+padding bands (per-block defaults, or `alg.padding_bands_per_block` when
+specified) around blocks whose omitted entries would otherwise pollute
+important diagonal blocks. Every coloring order offered by
+`SparseMatrixColorings` is tried and the one with the fewest colors is kept.
+On GPUs the colors are split into as few partitions as fit in the currently
+free memory, one evaluation of `implicit_tendency!` per partition. Set
+`verbose = false` to suppress the `@info` messages about padding bands,
+coloring order, and partitioning.
+
+# Returns
+
+`NamedTuple` with the matrices `matrix` (``∂R/∂Y`` with its solver),
+`tendency_matrix` (``∂Yₜ/∂Y``), and `autodiff_matrix` (a scalar view of the
+non-constant blocks of `tendency_matrix`); the dual copies `precomputed_dual`,
+`scratch_dual`, `Y_dual`, and `Yₜ_dual`; `I_matrix_partitions`, the partitions
+of the seed matrix ``∂Y/∂Y``; and `band_matrix_row_index_to_colors_map`, which
+maps each band matrix row to the colors of its entries.
+"""
 function jacobian_cache(alg::AutoSparseJacobian, Y, atmos; verbose = true)
     (; sparse_jacobian_alg, padding_bands_per_block) = alg
 
@@ -428,6 +466,18 @@ function jacobian_cache(alg::AutoSparseJacobian, Y, atmos; verbose = true)
     )
 end
 
+"""
+    update_jacobian!(alg::AutoSparseJacobian, cache, Y, p, dtγ, t)
+
+Update the nonzero entries of `cache.matrix` with
+``∂R/∂Y = dtγ ∂Yₜ/∂Y - I``.
+
+For each partition of the matrix coloring, the corresponding seed matrix is
+added to `cache.Y_dual`, `set_implicit_precomputed_quantities!` and
+`implicit_tendency!` are evaluated on the dual state, and the `ε` coefficients
+of `cache.Yₜ_dual` are scattered into the band matrix rows of
+`cache.autodiff_matrix` according to their colors. Mutates `cache`.
+"""
 function update_jacobian!(::AutoSparseJacobian, cache, Y, p, dtγ, t)
     (; matrix, tendency_matrix, autodiff_matrix) = cache
     (; precomputed_dual, scratch_dual, Y_dual, Yₜ_dual) = cache
@@ -492,5 +542,11 @@ function update_jacobian!(::AutoSparseJacobian, cache, Y, p, dtγ, t)
     matrix .= dtγ .* tendency_matrix .- one(matrix)
 end
 
+"""
+    invert_jacobian!(alg::AutoSparseJacobian, cache, ΔY, R)
+
+Solve `(∂R/∂Y) ΔY = R` for `ΔY` with the linear solver of
+`alg.sparse_jacobian_alg`. Mutates `ΔY`.
+"""
 invert_jacobian!(alg::AutoSparseJacobian, cache, ΔY, R) =
     invert_jacobian!(alg.sparse_jacobian_alg, cache, ΔY, R)

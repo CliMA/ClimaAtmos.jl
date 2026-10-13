@@ -9,7 +9,7 @@ A moist baroclinic wave setup. Uses the same dynamical core as
 [`DryBaroclinicWave`](@ref), but adds a moisture profile and converts
 virtual temperature to temperature.
 
-## Example
+# Examples
 
 ```julia
 setup = MoistBaroclinicWave(; perturb = true, deep_atmosphere = false)
@@ -29,7 +29,7 @@ MoistBaroclinicWave(; perturb::Bool = true, deep_atmosphere::Bool = false) =
 The same setup as [`MoistBaroclinicWave`](@ref), but with an initial TKE of 0
 and an initial draft area fraction of 0.2.
 
-## Example
+# Examples
 
 ```julia
 setup = MoistBaroclinicWaveWithEDMF(; perturb = true, deep_atmosphere = false)

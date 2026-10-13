@@ -3,7 +3,7 @@
 
 A setup with a uniform temperature and barometric pressure profile.
 
-## Example
+# Examples
 
 ```julia
 setup = IsothermalProfile(; temperature = 300)

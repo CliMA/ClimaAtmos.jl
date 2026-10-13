@@ -49,8 +49,9 @@ function generate_perfect_model_data(interface::PerfectAtmosModelInterface; toml
     config_dict["output_dir"] = perfect_model_output_dir
     # We use all the diagnostics found in output_active to determine which
     # diagnostics to use for the observations, so we will not output the default
-    # diagnostics
+    # diagnostics or the debug tendency diagnostics
     config_dict["output_default_diagnostics"] = false
+    config_dict["debug_tendency_diagnostics"] = false
     replace_diagnostic_dicts!(config_dict, diagnostic_dicts)
 
     # Don't save state to speed up creating the observations

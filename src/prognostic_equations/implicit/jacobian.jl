@@ -1,27 +1,54 @@
 """
     JacobianAlgorithm
 
-A description of how to compute the matrix ``∂R/∂Y``, where ``R(Y)`` denotes the
-residual of an implicit step with the state ``Y``. Concrete implementations of
-this abstract type should define 3 methods:
+Strategy for computing the matrix ``∂R/∂Y``, where ``R(Y)`` denotes the
+residual of an implicit step with the state ``Y``.
 
-  - `jacobian_cache(alg::JacobianAlgorithm, Y, atmos; [verbose])`
-  - `update_jacobian!(alg::JacobianAlgorithm, cache, Y, p, dtγ, t)`
-  - `invert_jacobian!(alg::JacobianAlgorithm, cache, ΔY, R)`
-    To facilitate debugging, concrete implementations should also define
-  - `first_column_block_arrays(alg::JacobianAlgorithm, Y, p, dtγ, t)`
+Subtypes:
+
+  - [`ManualSparseJacobian`](@ref): sparse blocks from analytically derived
+    tendency derivatives.
+  - [`AutoDenseJacobian`](@ref): dense column matrices from forward-mode
+    automatic differentiation.
+  - [`AutoSparseJacobian`](@ref): sparse blocks from forward-mode automatic
+    differentiation with matrix coloring.
+
+Concrete implementations of this abstract type should define 3 methods:
+
+  - `jacobian_cache(alg::JacobianAlgorithm, Y, atmos; [verbose])`: allocate the
+    cache used to store and invert the Jacobian.
+  - `update_jacobian!(alg::JacobianAlgorithm, cache, Y, p, dtγ, t)`: update the
+    cached entries of ``∂R/∂Y = dtγ⋅∂Yₜ/∂Y − I``.
+  - `invert_jacobian!(alg::JacobianAlgorithm, cache, ΔY, R)`: solve
+    ``(∂R/∂Y)⋅ΔY = R`` for ``ΔY``.
+
+To facilitate debugging, concrete implementations should also define
+`first_column_block_arrays(alg::JacobianAlgorithm, Y, p, dtγ, t)`.
 
 See [Implicit Solver](@ref) for additional background information.
 """
 abstract type JacobianAlgorithm end
 
+"""
+    SparseJacobian
+
+Abstract subtype of [`JacobianAlgorithm`](@ref) for algorithms that store
+``∂R/∂Y`` as a sparse `MatrixFields.FieldMatrix`.
+
+Subtypes:
+
+  - [`ManualSparseJacobian`](@ref): entries from analytically derived derivatives.
+  - [`AutoSparseJacobian`](@ref): entries from automatic differentiation.
+"""
 abstract type SparseJacobian <: JacobianAlgorithm end
 
 """
     Jacobian(alg, Y, atmos; [verbose])
 
 Wrapper for a [`JacobianAlgorithm`](@ref) and its cache, which it uses to update
-and invert the Jacobian. The optional `verbose` flag specifies whether debugging
+and invert the Jacobian. ClimaTimeSteppers.jl interacts with it through
+`update_jacobian!` (before each linear solve) and `LinearAlgebra.ldiv!` (each
+linear solve). The optional `verbose` flag specifies whether debugging
 information should be printed during initialization.
 """
 struct Jacobian{A <: JacobianAlgorithm, C}
@@ -68,7 +95,16 @@ function LinearAlgebra.ldiv!(
     ΔY .= ΔY_krylov
 end
 
-# This defines a standardized format for comparing different types of Jacobians.
+"""
+    first_column_block_arrays(alg, Y, p, dtγ, t)
+
+Return a `Dict` that maps pairs of scalar field names `(row_name, col_name)` to
+the corresponding blocks of ``∂R/∂Y``, evaluated in the first column of `Y`.
+Only the blocks stored by the sparsity structure are included; band-matrix
+blocks are converted to dense arrays, while constant blocks (such as `-I`) are
+returned as-is. This defines a standardized format for comparing different
+types of Jacobians in tests and debugging plots.
+"""
 function first_column_block_arrays(alg::SparseJacobian, Y, p, dtγ, t)
     scalar_names = scalar_field_names(Y)
     column_Y = first_column_view(Y)
@@ -88,6 +124,14 @@ function first_column_block_arrays(alg::SparseJacobian, Y, p, dtγ, t)
     end
     return block_arrays
 end
+"""
+    first_column_rescaling_arrays(Y, p, t)
+
+Return a `Dict` that maps pairs of scalar field names `(row_name, col_name)` to
+arrays whose `(i, j)` entry is `Yₜ_col[j] / Yₜ_row[i]`, evaluated from the
+implicit tendency in the first column of `Y`. Used to rescale the block arrays
+from `first_column_block_arrays` into comparable relative units.
+"""
 function first_column_rescaling_arrays(Y, p, t)
     scalar_names = scalar_field_names(Y)
     column_Y = first_column_view(Y)

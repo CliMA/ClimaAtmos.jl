@@ -4,6 +4,16 @@ import ClimaUtilities.TimeVaryingInputs
 import ClimaUtilities.TimeVaryingInputs: TimeVaryingInput, LinearInterpolation
 import Interpolations as Intp
 
+"""
+    ozone_cache(Y, start_date) -> (; o3, prescribed_o3_timevaryinginput)
+
+Build the cache for prescribed ozone: a field `o3` holding the ozone volume
+mixing ratio [mol/mol] on the center space, and the `TimeVaryingInput` that
+regrids the `"vmro3"` variable of the ozone concentration file onto that space.
+Regridding extrapolates periodically in longitude and flatly in latitude and
+height, and interpolates linearly in time from `start_date`.
+Called from `tracer_cache`; `o3` is updated in the radiation callback.
+"""
 function ozone_cache(Y, start_date)
     o3 = similar(Y.c.ρ)
     extrapolation_bc = (Intp.Periodic(), Intp.Flat(), Intp.Flat())
@@ -19,6 +29,17 @@ function ozone_cache(Y, start_date)
     return (; o3, prescribed_o3_timevaryinginput)
 end
 
+"""
+    co2_cache(Y, start_date) -> (; co2, prescribed_co2_timevaryinginput)
+
+Build the cache for prescribed CO₂. Because CO₂ is treated as well mixed, `co2`
+is a one-element mutable array (not a field) holding the volume mixing ratio
+[mol/mol], updated in place by `evaluate!`.
+
+The monthly time series is read from the CO₂ concentration text file, converted
+from ppm to a mole fraction, and dated to the 15th of each month, since the file
+records only year and month. Called from `tracer_cache`.
+"""
 function co2_cache(Y, start_date)
     FT = Spaces.undertype(axes(Y.c))
     # ClimaUtilities < v0.1.21 can only write to Arrays that are on the same
@@ -55,6 +76,31 @@ function co2_cache(Y, start_date)
     return (; co2, prescribed_co2_timevaryinginput)
 end
 
+"""
+    tracer_cache(Y, prescribed_aerosol_names, time_varying_trace_gases, start_date)
+
+Build `p.tracers`, the cache of prescribed aerosol and trace-gas inputs.
+
+Each requested aerosol species contributes a `TimeVaryingInput` reading the
+matching variable from the aerosol concentration file; the concentrations
+themselves live in the single field `prescribed_aerosols_field`, a field of
+`NamedTuple`s keyed by species name and updated in the radiation callback. Ozone
+and CO₂ are added by `ozone_cache` and `co2_cache` when `"O3"` and `"CO2"` appear
+in `time_varying_trace_gases`.
+
+# Arguments
+
+  - `prescribed_aerosol_names`: Names of aerosol species; must match keys in the
+    aerosol concentration file, which has to be global lon-lat-z time series data.
+  - `time_varying_trace_gases`: Names of time-varying trace gases; only `"O3"` and
+    `"CO2"` are recognized.
+  - `start_date`: Reference date for the time-varying inputs.
+
+# Returns
+
+A `NamedTuple` that is empty when nothing is prescribed, and otherwise merges the
+aerosol, ozone, and CO₂ entries.
+"""
 function tracer_cache(Y, prescribed_aerosol_names, time_varying_trace_gases, start_date)
     if !isempty(prescribed_aerosol_names)
         target_space = axes(Y.c)

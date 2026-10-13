@@ -1,135 +1,130 @@
 # Your First Simulation
 
+This page walks through building, running, and inspecting a simulation. To
+configure each component in turn, see
+[Scripting Simulations](scripting_simulations.md); to run from a YAML file
+instead, see [Creating Custom Configurations](configuration.md), and for how
+the two interfaces relate, see [Script vs Config Interface](interfaces.md).
+
 ## Minimal example
 
-The simplest ClimaAtmos simulation uses all defaults -- it solves the dry
-compressible Euler equations on a global cubed-sphere grid, starting from a
-hydrostatically balanced state with a vertically decaying temperature profile:
+The simplest ClimaAtmos simulation uses all defaults. It solves the dry
+compressible equations (with hyperdiffusion and surface fluxes) on a global
+cubed-sphere grid, starting from a hydrostatically balanced, slightly perturbed
+state with a vertically decaying temperature profile:
 
 ```@example first_sim
 using Logging # hide
 Logging.disable_logging(Logging.Info) # hide
 import ClimaAtmos as CA
 
-simulation = CA.AtmosSimulation{Float32}(; t_end = "1days")
+model = CA.AtmosModel(CA.SphereGrid(Float32))
+simulation = CA.AtmosSimulation(model; t_end = "1days")
 nothing # hide
 ```
 
-This builds the simulation but does not run it. [Running the simulation](@ref)
-advances it in time.
+Construction has two steps: `AtmosModel(grid; ...)` defines the physical
+system -- it holds the grid, the parameters, and the case setup -- and
+`AtmosSimulation(model; ...)` defines how to run that system: the timestep, the
+duration, the callbacks, and the output.
 
-`AtmosSimulation{FT}(...)` accepts keyword arguments for every aspect of
-the simulation. When omitted, defaults are used (see
-[Script vs Config Interface](@ref) for the full list).
+`t_end` accepts a number of seconds or a duration string (`secs`, `mins`,
+`hours`, `days`, `weeks`), as does the timestep `dt`. See
+[`AtmosModel`](@ref ClimaAtmos.AtmosModel) and
+[`AtmosSimulation`](@ref ClimaAtmos.AtmosSimulation) for the full list of
+keyword arguments and their defaults.
 
-## Customizing the simulation
+The first construction and solve in a session compile a large amount of code
+and can take several minutes; later calls are fast.
 
-### Change the grid
-
-Run a single-column model instead of the default global cubed-sphere:
-
-```@example first_sim
-grid = CA.ColumnGrid(Float32; z_elem = 30, z_max = 30000.0)
-simulation = CA.AtmosSimulation{Float32}(; grid, t_end = "6hours")
-nothing # hide
-```
-
-See the [Grids](api.md#Grids) section of the API for all grid types and their options.
-
-### Change the timestep and duration
-
-`dt` is the timestep and `t_end` the total simulation time. Each accepts either a number
-of seconds, or a duration string with a unit (`secs`, `mins`, `hours`, `days`, `weeks`) --
-the same syntax used by the [config interface](@ref "Script vs Config Interface"):
-
-```@example first_sim
-simulation = CA.AtmosSimulation{Float32}(;
-    dt = "5mins",     # equivalently, dt = 300
-    t_end = "10days", # equivalently, t_end = 86400 * 10
-)
-nothing # hide
-```
-
-### Change the setup
-
-A *setup* defines the initial conditions, boundary conditions, and (optionally)
-forcing for a simulation case. For example, the BOMEX shallow cumulus case:
-
-```@example first_sim
-simulation = CA.AtmosSimulation{Float32}(;
-    grid = CA.ColumnGrid(Float32; z_elem = 60, z_max = 3000.0, z_stretch = false),
-    setup = CA.Setups.Bomex(),
-    dt = 5,
-    t_end = 3600,
-    job_id = "my_bomex",
-)
-nothing # hide
-```
-
-See the [Setups](@ref) page for the full list of available setups and how to create
-your own.
-
-
-## Presets
-
-Common configurations are available as one-line presets in `CA.Presets`:
-
-```@example first_sim
-simulation = CA.Presets.bomex(Float32; t_end = "10mins")
-nothing # hide
-```
-
-See the [Presets](api.md#Presets) section of the API for the full list of
-simulation and model presets.
-
-
-## Running the simulation
+## Inspecting the state
 
 Constructing an `AtmosSimulation` sets everything up but does not advance it in
-time. Call `solve_atmos!` to integrate the simulation forward to `t_end`:
-
-```julia
-CA.solve_atmos!(simulation)
-```
-
-This advances the model to `t_end`.
-
-
-## Inspecting results
-
-After a simulation completes, access the prognostic state through the
+time. Even before running, the initial state is available through the
 integrator:
+
+!!! note
+
+    `Y` is the state vector: `Y.c` holds the cell-center variables (such as
+    the density `ρ` and the total energy `ρe_tot`) and `Y.f` the cell-face
+    variables (such as the vertical velocity `u₃`). The `integrator` is the
+    ODE integrator, from ClimaTimeSteppers, that advances the state in time.
+    See the [Glossary](@ref) for these and other recurring terms.
 
 ```@example first_sim
 Y = simulation.integrator.u
 
 # Center (cell-center) variables
-propertynames(Y.c)  # e.g., (:ρ, :uₕ, :ρe_tot, :ρq_tot)
+propertynames(Y.c)  # (:ρ, :uₕ, :ρe_tot) for this dry default
 
 # Face (cell-interface) variables
 propertynames(Y.f)  # e.g., (:u₃,)
 ```
 
-Output is written to `simulation.output_dir` in two formats, each with a distinct role:
+## Running a case end to end
 
-- **NetCDF** (`.nc`) files hold the **diagnostics** -- derived (and often interpolated)
-  output variables such as temperature or precipitation. See
-  [Computing and saving diagnostics](@ref) for how to configure them.
-- **HDF5** (`.h5`) files hold full-resolution **model-state checkpoints**, written when
-  `checkpoint_frequency` is set. These are the files a simulation reads to
-  [restart](@ref "Restarting Simulations in ClimaAtmos").
+The default global simulation is slow to integrate on a laptop. A
+[setup](setups.md) supplies a case: its initial state, its boundary conditions,
+and its forcings. Here that is BOMEX, a shallow-cumulus column, paired with
+moist physics from a model preset. `solve_atmos!` integrates the simulation
+forward to `t_end`, and the integrator time confirms where the run stopped:
 
-## Terminology
+```@example first_sim
+grid = CA.ColumnGrid(Float32; z_elem = 60, z_max = 3000.0, z_stretch = false)
+params = CA.ClimaAtmosParameters(Float32)
+model = CA.AtmosModel(
+    grid;
+    params,
+    setup = CA.Setups.Bomex(; thermo_params = params.thermodynamics_params),
+    defaults = CA.Presets.equil_moist_0m(),
+)
+simulation = CA.AtmosSimulation(
+    model; dt = 10, t_end = "10mins", output_dir = mktempdir(),
+)
+CA.solve_atmos!(simulation)
+simulation.integrator.t
+```
 
-The state vector `Y`, the cache `p`, the simulation time `t`, and other recurring
-symbols and terms are defined in the [Glossary](@ref).
+(This page runs during the documentation build, so it writes to a temporary
+directory; drop `output_dir` to get the default location described below.)
 
-## Using the config-based interface
+The setup sets the initial state and the case forcings, while the
+parameterizations come from the rest of the model, so the two have to be chosen
+together. A setup can require prognostic variables that only some physics
+provide. BOMEX with the default dry model would have no moisture, which is why
+`equil_moist_0m` appears above. Model presets provide reasonable physics
+defaults for simulations scientists commonly run. The setup and your own keyword
+arguments override them. The one above enables moist physics but no
+turbulence-convection scheme. Pass `defaults = CA.Presets.prognostic_edmf(Float32)` instead to add convective transport, or run
+the corresponding YAML case config for the full published setup. See the
+[Presets](api.md#Presets) section of the API for the full list.
 
-The same simulation can be set up with a YAML file.
+## Where output goes
+
+Output is written to `simulation.output_dir`. The base directory defaults to
+`output/<job_id>` under the directory Julia was started in (just `<job_id>`
+when the `CI` environment variable is set); with the default `job_id` of
+`atmos_sim`, that is `output/atmos_sim`. Each run writes to a numbered
+subdirectory of the base directory — `simulation.output_dir` is that
+subdirectory, such as `output/atmos_sim/output_0000` — and
+`output/atmos_sim/output_active` links to the most recent one. Two formats
+appear there:
+
+  - **NetCDF** (`.nc`) files hold the diagnostics: derived (and often
+    interpolated) output variables such as temperature or precipitation. See
+    [Computing and saving diagnostics](@ref) for how to configure them.
+  - **HDF5** (`.hdf5`) files hold full-resolution model-state checkpoints,
+    written when `checkpoint_frequency` is set. These are the files a
+    simulation reads to [restart](@ref "Restarting and Checkpointing").
+
+[Loading and Visualizing Output](visualizing_output.md) covers reading the
+NetCDF files with ClimaAnalysis.
 
 ## Next steps
 
-- [Script vs Config Interface](@ref) -- detailed comparison of the two workflows
-- [Single Column Models](@ref) -- BOMEX, DYCOMS, RICO, and more
-- [Computing and saving diagnostics](@ref) -- configure output variables and formats
+  - [Scripting Simulations](@ref): configure the grid, model, setup, and
+    diagnostics from a script, and step the integrator interactively
+  - [Script vs Config Interface](@ref): the same runs configured from YAML files
+  - [Running Single-Column Cases](@ref): BOMEX, DYCOMS, RICO, and more
+  - [Computing and saving diagnostics](@ref): configure output variables and formats
+  - [Glossary](@ref): the state vector `Y`, the cache `p`, and other recurring symbols

@@ -27,6 +27,7 @@ if TEST_GROUP in ("infrastructure", "all")
     @safetestset "Grids" begin @time include("grids.jl") end
     @safetestset "Utilities" begin @time include("utilities.jl") end
     @safetestset "Variable manipulations" begin @time include("variable_manipulations_tests.jl") end
+    @safetestset "Tracer processes" begin @time include("tracer_processes_tests.jl") end
     @safetestset "Parameter tests" begin @time include("parameter_tests.jl") end
 
     @safetestset "Check TOML path" begin @time include("test_output_yaml_path.jl") end
@@ -38,8 +39,9 @@ if TEST_GROUP in ("infrastructure", "all")
     @safetestset "Larcform1 setup" begin @time include("larcform1.jl") end
 
     # Config tests
+    @safetestset "SlabOcean SST warning" begin @time include("slab_ocean_warning.jl") end
     @safetestset "Model getters" begin @time include("config/model_from_config.jl") end
-    @safetestset "AtmosModel Constructor" begin @time include("config/atmos_model_constructor.jl") end
+    @safetestset "AtmosModel" begin @time include("config/atmos_model.jl") end
     @safetestset "Presets" begin @time include("presets.jl") end
     @safetestset "Topography tests" begin @time include("topography.jl") end
 end
@@ -50,6 +52,11 @@ end
 if TEST_GROUP in ("diagnostics", "all")
     @safetestset "Diagnostics unit tests" begin @time include("diagnostics/unit_diagnostics.jl") end
     @safetestset "DiagnosticsConfig" begin @time include("diagnostics/diagnostics_config.jl") end
+    @safetestset "COSP subcolumn tests" begin @time include("cosp/subcol_test.jl") end
+    @safetestset "COSP CloudSat optics tests" begin @time include("cosp/cloudsat_optics_test.jl") end
+    @safetestset "COSP CloudSat reflectivity tests" begin @time include("cosp/cloudsat_reflectivity_test.jl") end
+    @safetestset "COSP CloudSat cloud fraction tests" begin @time include("cosp/cloudsat_cloud_fraction_test.jl") end
+    @safetestset "COSP CloudSat CFAD tests" begin @time include("cosp/cloudsat_cfad_test.jl") end
 end
 
 # ============================================================================
@@ -60,12 +67,24 @@ if TEST_GROUP in ("dynamics", "all")
     @safetestset "Advection operators" begin @time include("prognostic_equations/advection_tests.jl") end
     @safetestset "Hyperdiffusion" begin @time include("prognostic_equations/hyperdiffusion_tests.jl") end
     @safetestset "Tendency computations" begin @time include("prognostic_equations/tendency_tests.jl") end
-    @safetestset "Vertical water borrowing limiter" begin @time include("prognostic_equations/vertical_water_borrowing_tests.jl") end
-    @safetestset "Enforce physical constraints" begin @time include("prognostic_equations/enforce_physical_constraints_tests.jl") end
+    @safetestset "Tracer/mass transport consistency" begin @time include("prognostic_equations/tracer_mass_consistency_tests.jl") end
+    @safetestset "Post-Newton implicit-advection correction" begin @time include("prognostic_equations/correct_implicit_advection_tests.jl") end
+    @safetestset "Vertical diffusion tendency" begin @time include("prognostic_equations/vertical_diffusion_tests.jl") end
 
     # Conservation tests
     @safetestset "Mass conservation" begin @time include("conservation/mass_conservation.jl") end
     @safetestset "Energy conservation" begin @time include("conservation/energy_conservation.jl") end
+end
+
+# ============================================================================
+# Dynamics (EDMFX): SGS diffusion, limiters, and closures (split out for CI time)
+# ============================================================================
+if TEST_GROUP in ("dynamics_edmfx", "all")
+    @safetestset "EDMFX SGS diffusive flux" begin @time include("prognostic_equations/edmfx_sgs_diffusive_flux_tests.jl") end
+    @safetestset "EDMFX horizontal diffusive flux" begin @time include("prognostic_equations/edmfx_horizontal_diffusion_tests.jl") end
+    @safetestset "Vertical water borrowing limiter" begin @time include("prognostic_equations/vertical_water_borrowing_tests.jl") end
+    @safetestset "Enforce physical constraints" begin @time include("prognostic_equations/enforce_physical_constraints_tests.jl") end
+    @safetestset "Eddy diffusion closures" begin @time include("prognostic_equations/eddy_diffusion_closures_tests.jl") end
 end
 
 # ============================================================================
@@ -74,6 +93,7 @@ end
 if TEST_GROUP in ("parameterizations", "all")
     # Sponge layers (combined for shared space setup)
     @safetestset "Sponge layers" begin @time include("parameterized_tendencies/sponge.jl") end
+    @safetestset "LES energy flux split" begin @time include("parameterized_tendencies/les_energy_split_tests.jl") end
 
     # Microphysics tests
     @safetestset "Microphysics tendency tests" begin @time include("parameterized_tendencies/microphysics/tendency.jl") end
@@ -90,6 +110,14 @@ if TEST_GROUP in ("parameterizations", "all")
     # Chemistry tests
     @safetestset "Chemistry tendency tests" begin @time include("parameterized_tendencies/chemistry/chemistry_tendency.jl") end
 
+    # Full-physics sphere simulation
+    @safetestset "Checkbounds sphere simulation" begin @time include("checkbounds_sphere_simulation.jl") end
+
+    # Gravity wave: Beres convective NOGW pure-function unit tests (no simulation
+    # build). The simulation-based Beres tests (test_beres_single_column.jl,
+    # test_beres_sphere_integration.jl) run as standalone Buildkite steps.
+    @safetestset "Beres NOGW unit tests" begin @time include("parameterized_tendencies/gravity_wave/non_orographic_gravity_wave/test_beres_unit.jl") end
+
     # NOTE: Gravity wave visualization scripts (test_nogw_3d.jl, test_nogw_mima.jl,
     # test_nogw_single_column.jl, test_ogw_3d.jl, test_ogw_baseflux.jl) are not included
     # in the test suite because they have no @test assertions - they only generate
@@ -97,11 +125,10 @@ if TEST_GROUP in ("parameterizations", "all")
 end
 
 # ============================================================================
-# Restarts: Restart and reproducibility tests
+# Restarts: Initialization from file. restart.jl and
+# unit_reproducibility_infra.jl run as Buildkite steps.
 # ============================================================================
 if TEST_GROUP in ("restarts", "all")
-    @safetestset "Restarts" begin @time include("restart.jl") end
-    @safetestset "Reproducibility infra" begin @time include("unit_reproducibility_infra.jl") end
     @safetestset "Init with file" begin @time include("test_init_with_file.jl") end
 end
 
@@ -110,8 +137,9 @@ end
 # ============================================================================
 if TEST_GROUP in ("era5", "all")
     @safetestset "ERA5 forcing" begin @time include("era5_tests.jl") end
+    @safetestset "ERA5 model levels" begin @time include("era5_model_levels_tests.jl") end
+    @safetestset "Column datasets" begin @time include("column_datasets_tests.jl") end
 end
-
 #! format: on
 
 nothing

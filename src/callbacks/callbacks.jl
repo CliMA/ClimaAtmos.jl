@@ -1,7 +1,6 @@
 import ClimaCore.DataLayouts as DL
 import .RRTMGPInterface as RRTMGPI
 import Thermodynamics as TD
-import CloudMicrophysics as CM
 import LinearAlgebra
 import ClimaCore.Fields
 import ClimaComms
@@ -12,10 +11,24 @@ import ClimaCore: InputOutput
 using Dates
 
 import ClimaUtilities.TimeVaryingInputs: evaluate!
+import UnrolledUtilities: unrolled_foreach
 
 
 include("callback_helpers.jl")
 
+"""
+    flux_accumulation!(integrator)
+
+Accumulate the time-integrated net radiative energy flux through the model boundaries.
+
+Adds `Δt` times the horizontally integrated `ᶠradiation_flux` at the top of the atmosphere
+into `p.net_energy_flux_toa`, and likewise at the surface into `p.net_energy_flux_sfc`.
+The surface term is skipped for a slab ocean, which carries its own energy budget. Does
+nothing when radiation is disabled.
+
+Mutates the `Ref`s in `integrator.p` and returns `nothing`. Installed by
+`conservation_checking_callback` and read back by the conservation-check diagnostics.
+"""
 function flux_accumulation!(integrator)
     Y = integrator.u
     p = integrator.p
@@ -40,86 +53,61 @@ end
 """
     external_driven_single_column!(integrator)
 
-Evaluate external time-varying forcing inputs for a single-column atmospheric model onto
-objects in the cache.
+Refresh the external time-varying forcing of a single-column simulation.
 
-This callback function evaluates external forcing variables at the current simulation time and
-updates the corresponding fields in the model state. It handles various forcing components:
+Calls `update_forcing_term!` on each term in `p.external_forcing.forcing_terms`, which
+evaluates that term's time-varying inputs at the current time and writes them into its
+working cache fields. Depending on the configured terms, this covers temperature and
+specific-humidity tendencies, nudging targets for temperature, humidity, and horizontal
+wind, and large-scale subsidence.
 
-  - Temperature and specific humidity tendencies (vertical eddy terms, horizontal advection)
-  - Nudging fields for temperature, humidity, and horizontal wind components
-  - Large-scale subsidence computed from vertical velocity
+Mutates the term caches in `integrator.p` and returns `nothing`. Nothing is added to the
+state here: the refreshed terms are applied later, in `remaining_tendency!`.
 
 # Arguments
 
-  - `integrator`: The ODE integrator containing the current model state (`u`),
-    cache (`p`), and time (`t`)
-
-# Notes
-
-The function extracts time-varying inputs from the `column_timevaryinginputs` structure
-and evaluates them at the current time using the `evaluate!` function, which updates
-the corresponding model fields in place.
+  - `integrator`: The ODE integrator, holding the state (`u`), cache (`p`), and time (`t`).
 """
 function external_driven_single_column!(integrator)
-    Y = integrator.u
     p = integrator.p
     t = integrator.t
-
-    @assert p.atmos.surface.temperature isa SurfaceConditions.ExternalTemperature (
-        "SCM reanalysis timevarying setup requires `initial_condition` " *
-        "and `external_forcing` to be set to `ReanalysisTimeVarying`"
-    )
-
-    FT = Spaces.undertype(axes(Y.c))
-    (; params) = p
-    thermo_params = CAP.thermodynamics_params(params)
-    # unpack external forcing objects that we can directly set.
-    (;
-        ᶜdTdt_fluc,
-        ᶜdqtdt_fluc,
-        ᶜdTdt_hadv,
-        ᶜdqtdt_hadv,
-        ᶜT_nudge,
-        ᶜqt_nudge,
-        ᶜu_nudge,
-        ᶜv_nudge,
-        ᶜls_subsidence,
-    ) = p.external_forcing
-    # unpack tv inputs
-    (; hus, rho, ta, tnhusha, tnhusva, tntha, tntva, ua, va, wa, wap) =
-        p.external_forcing.column_timevaryinginputs
-
-    # set the external forcing variables; external tendency is updated in a remaining_tendency! call
-    evaluate!(ᶜdTdt_fluc, tntva, t)
-    evaluate!(ᶜdqtdt_fluc, tnhusva, t)
-    evaluate!(ᶜdTdt_hadv, tntha, t)
-    evaluate!(ᶜdqtdt_hadv, tnhusha, t)
-    evaluate!(ᶜT_nudge, ta, t)
-    evaluate!(ᶜqt_nudge, hus, t)
-    evaluate!(ᶜu_nudge, ua, t)
-    evaluate!(ᶜv_nudge, va, t)
-
-    # subsidence
-    evaluate!(ᶜls_subsidence, wa, t)
+    (; forcing_terms, term_caches) = p.external_forcing
+    unrolled_foreach(forcing_terms, term_caches) do term, cache
+        update_forcing_term!(cache, term, t)
+    end
+    return nothing
 end
 
-NVTX.@annotate function rrtmgp_model_callback!(integrator)
+import RRTMGP
+
+"""
+    rrtmgp_solver_callback!(integrator)
+
+Run the RRTMGP radiative transfer solve and store the resulting net flux.
+
+Pushes the current atmospheric state into the solver, refreshes the insolation
+(`set_insolation_variables!`) and the surface albedo (`set_surface_albedo!`), solves, and
+copies the net flux into `p.radiation.ᶠradiation_flux`. That field is then held fixed and
+reused by the tendencies until the next radiation call, which is why the `dt_rad` cadence
+is much longer than the timestep.
+
+Mutates the solver and `p.radiation` in `integrator.p`, and returns `nothing`. Installed
+by `radiation_callback` for RRTMGP radiation modes only.
+"""
+NVTX.@annotate function rrtmgp_solver_callback!(integrator)
     Y = integrator.u
     p = integrator.p
     t = integrator.t
     FT = eltype(Y)
-    (; params) = p
-    (; ᶠradiation_flux, rrtmgp_model) = p.radiation
-    (; radiation_mode) = p.atmos
+    (; ᶠradiation_flux, rrtmgp_solver) = p.radiation
 
     RRTMGPI.update_atmospheric_state!(integrator)
 
     set_insolation_variables!(Y, p, t, p.atmos.insolation)
     set_surface_albedo!(Y, p, t, p.atmos.surface_albedo)
 
-    RRTMGPI.update_fluxes!(rrtmgp_model, UInt32(floor(FT(t) / integrator.p.dt)))
-    Fields.field2array(ᶠradiation_flux) .= rrtmgp_model.face_flux
+    RRTMGP.update_fluxes!(rrtmgp_solver, UInt32(floor(FT(t) / integrator.p.dt)))
+    Fields.field2array(ᶠradiation_flux) .= RRTMGP.net_flux(rrtmgp_solver)
     return nothing
 end
 
@@ -135,6 +123,14 @@ NVTX.@annotate function nogw_model_callback!(integrator)
     return nothing
 end
 
+"""
+    ogw_model_callback!(integrator)
+
+Recompute the orographic gravity-wave drag tendency.
+
+Mutates the forcing fields in `integrator.p.orographic_gravity_wave` and returns
+`nothing`. Installed by `ogw_callback` on the `dt_ogw` cadence.
+"""
 NVTX.@annotate function ogw_model_callback!(integrator)
     Y = integrator.u
     p = integrator.p
@@ -147,35 +143,47 @@ NVTX.@annotate function ogw_model_callback!(integrator)
     return nothing
 end
 
-NVTX.@annotate function enforce_physical_constraints_callback!(integrator)
-    Y = integrator.u
-    p = integrator.p
-    t = integrator.t
-
-    enforce_physical_constraints!(Y, p, t, p.atmos)
-    return nothing
-end
-
 #Uniform insolation, magnitudes from Wing et al. (2018)
 #Note that the TOA downward shortwave fluxes won't be the same as the values in the paper if add_isothermal_boundary_layer is true
+"""
+    set_insolation_variables!(Y, p, t, insolation)
+
+Write the cosine of the solar zenith angle and the TOA flux into the RRTMGP solver.
+
+Called from `rrtmgp_solver_callback!` before each radiation solve, so the insolation is
+refreshed on the `dt_rad` cadence rather than every step. Mutates
+`RRTMGP.cos_zenith(p.radiation.rrtmgp_solver)` and `RRTMGP.toa_sw_flux_dn(...)`; the return
+value is unused.
+
+Dispatches on `p.atmos.insolation`:
+
+  - `RCEMIPIIInsolation`: uniform values prescribed by the RCEMIP-II protocol
+    [Wing2018](@cite).
+  - `IdealizedInsolation`: annual-mean insolation with no diurnal cycle, as a function of
+    latitude only [OGorman2008](@cite).
+  - `Larcform1Insolation`: perpetual polar night, with zero TOA flux.
+  - `TimeVaryingInsolation`: the full orbital calculation, via `Insolation.insolation` at
+    the current date. Uses the explicit `latitude`/`longitude` override when set, otherwise
+    the column coordinates, falling back to the equator on a flat space.
+  - `ExternalTVInsolation`: values read from the external forcing, with the TOA flux
+    reconstructed as `rsdt / coszen`.
+
+!!! note
+
+    RRTMGP requires a strictly positive cosine zenith angle, so the modes that can reach
+    zero clamp it to `eps(FT)` rather than letting it vanish.
+"""
 function set_insolation_variables!(Y, p, t, ::RCEMIPIIInsolation)
     FT = Spaces.undertype(axes(Y.c))
-    (; rrtmgp_model) = p.radiation
-    rrtmgp_model.cos_zenith .= cosd(FT(42.05))
-    rrtmgp_model.toa_flux .= FT(551.58)
-end
-
-function set_insolation_variables!(Y, p, t, ::GCMDrivenInsolation)
-    (; rrtmgp_model) = p.radiation
-    rrtmgp_model.cos_zenith .= Fields.field2array(p.external_forcing.cos_zenith)
-    rrtmgp_model.toa_flux .=
-        Fields.field2array(p.external_forcing.toa_flux)
+    (; rrtmgp_solver) = p.radiation
+    RRTMGP.cos_zenith(rrtmgp_solver) .= cosd(FT(42.05))
+    RRTMGP.toa_sw_flux_dn(rrtmgp_solver) .= FT(551.58)
 end
 
 function set_insolation_variables!(Y, p, t, ::ExternalTVInsolation)
     # unpack objects with time varying data
-    (; rrtmgp_model) = p.radiation
-    (; coszen, rsdt) = p.external_forcing.surface_inputs
+    (; rrtmgp_solver) = p.radiation
+    (; coszen, rsdt) = p.external_forcing.surface_fields
     coszen_tv = p.external_forcing.surface_timevaryinginputs.coszen
     rsdt_tv = p.external_forcing.surface_timevaryinginputs.rsdt
     # evaluate time varying data onto temporary fields
@@ -183,8 +191,8 @@ function set_insolation_variables!(Y, p, t, ::ExternalTVInsolation)
     evaluate!(rsdt, rsdt_tv, t)
 
     # set insolation variables from the values within the fields
-    rrtmgp_model.cos_zenith .= Fields.field2array(coszen)
-    rrtmgp_model.toa_flux .= Fields.field2array(rsdt ./ coszen)
+    RRTMGP.cos_zenith(rrtmgp_solver) .= Fields.field2array(coszen)
+    RRTMGP.toa_sw_flux_dn(rrtmgp_solver) .= Fields.field2array(rsdt ./ coszen)
 end
 
 function set_insolation_variables!(Y, p, t, ::IdealizedInsolation)
@@ -195,25 +203,29 @@ function set_insolation_variables!(Y, p, t, ::IdealizedInsolation)
     else
         latitude = Fields.field2array(zero(bottom_coords.z)) # flat space is on Equator
     end
-    (; rrtmgp_model) = p.radiation
+    (; rrtmgp_solver) = p.radiation
     # Approximate annual mean insolation without diurnal cycle
     # Reference: O'Gorman and Schneider (2008), J. Climate, 21, 3815-3832
-    rrtmgp_model.toa_flux .= 680
-    @. rrtmgp_model.cos_zenith = (1 + FT(0.3) * (1 - 3 * sind(latitude)^2)) * FT(0.5)
+    RRTMGP.toa_sw_flux_dn(rrtmgp_solver) .= 680
+    Δs = FT(1.2)  # equator-to-pole insolation contrast [-]
+    cos_zenith_mean = FT(0.5)
+    cos_zenith = RRTMGP.cos_zenith(rrtmgp_solver)
+    @. cos_zenith =
+        (1 + Δs / 4 * (1 - 3 * sind(latitude)^2)) * cos_zenith_mean
 end
 
 function set_insolation_variables!(Y, p, t, ::Larcform1Insolation)
     FT = Spaces.undertype(axes(Y.c))
-    (; rrtmgp_model) = p.radiation
-    rrtmgp_model.cos_zenith .= eps(FT) # polar night; keep μ>0 for RRTMGP
-    rrtmgp_model.toa_flux .= FT(0)
+    (; rrtmgp_solver) = p.radiation
+    RRTMGP.cos_zenith(rrtmgp_solver) .= eps(FT) # polar night; keep μ>0 for RRTMGP
+    RRTMGP.toa_sw_flux_dn(rrtmgp_solver) .= FT(0)
 end
 
 function set_insolation_variables!(Y, p, t, tvi::TimeVaryingInsolation)
     FT = Spaces.undertype(axes(Y.c))
     params = p.params
     insolation_params = CAP.insolation_params(params)
-    (; insolation_tuple, rrtmgp_model) = p.radiation
+    (; insolation_tuple, rrtmgp_solver) = p.radiation
 
     current_datetime = if !(t isa ITime) && !isnothing(tvi.start_date)
         tvi.start_date + Dates.Second(round(Int, t))
@@ -223,9 +235,9 @@ function set_insolation_variables!(Y, p, t, tvi::TimeVaryingInsolation)
 
     bottom_coords = Fields.coordinate_field(Spaces.level(Y.c, 1))
     cos_zenith =
-        Fields.array2field(rrtmgp_model.cos_zenith, axes(bottom_coords))
+        Fields.array2field(RRTMGP.cos_zenith(rrtmgp_solver), axes(bottom_coords))
     toa_flux = Fields.array2field(
-        rrtmgp_model.toa_flux,
+        RRTMGP.toa_sw_flux_dn(rrtmgp_solver),
         axes(bottom_coords),
     )
 
@@ -262,6 +274,19 @@ function set_insolation_variables!(Y, p, t, tvi::TimeVaryingInsolation)
     @. toa_flux = insolation_tuple.S
 end
 
+"""
+    save_state_to_disk_func(integrator, output_dir)
+
+Write a checkpoint of the prognostic state to an HDF5 file.
+
+The file is named `day\$day.\$sec.hdf5` from the elapsed simulation time, and the state is
+written under the field name `"Y"`. Two attributes are attached: `"time"`, the simulation
+time in seconds, and `"atmos_model_hash"`, a hash of `p.atmos` that a restart checks
+against so a checkpoint is not silently loaded into a different model configuration.
+
+Returns `nothing`. Installed by `checkpoint_callback` when `checkpoint_frequency` is
+finite.
+"""
 NVTX.@annotate function save_state_to_disk_func(integrator, output_dir)
     (; t, u, p) = integrator
     Y = u
@@ -280,13 +305,26 @@ NVTX.@annotate function save_state_to_disk_func(integrator, output_dir)
     InputOutput.HDF5.write_attribute(
         hdfwriter.file,
         "atmos_model_hash",
-        hash(p.atmos),
+        hash_physics(p.atmos),
     )
     InputOutput.write!(hdfwriter, Y, "Y")
     Base.close(hdfwriter)
     return nothing
 end
 
+"""
+    gc_func(integrator)
+
+Run an incremental garbage collection and log what it reclaimed.
+
+Emits a `@debug` record with the allocation since the previous collection, the live bytes
+before and after, the time spent, and the cumulative pause and full-sweep counts, all in
+MB, seconds, and counts. Returns `nothing`.
+
+Installed by `gc_callback`, which only adds it on distributed runs: uncoordinated
+collections across ranks stall the whole job at the next communication, so GC is instead
+forced on a fixed step cadence. See `gc_callback` for the cadence and how to change it.
+"""
 function gc_func(integrator)
     num_pre = Base.gc_num()
     alloc_since_last = (num_pre.allocd + num_pre.deferred_alloc) / 2^20
@@ -309,18 +347,21 @@ function gc_func(integrator)
 end
 
 """
-    maybe_graceful_exit(integrator)
+    maybe_graceful_exit(output_dir, integrator)
 
-This callback is called after every timestep
-to allow users to gracefully exit a running
-simulation. To do so, users can navigate to
-and open `{output_dir}/graceful_exit.dat`, change
-the file contents from 0 to 1, and the running
-simulation will gracefully exit with the integrator.
+Return whether the user has asked the running simulation to stop.
+
+Checked after every timestep. To request a stop, edit `{output_dir}/graceful_exit.dat` and
+change its contents from `0` to `1`; the simulation then terminates through the
+integrator, so the final state and diagnostics are still written. The file is created,
+holding `0`, on the first call if it does not exist, and reset to `0` if its contents
+cannot be parsed.
+
+Used as the condition of the callback built by `graceful_exit_callback`.
 
 !!! note
 
-    This may not be reliable for MPI jobs.
+    This may not be reliable for MPI jobs, where ranks poll the file independently.
 """
 function maybe_graceful_exit(output_dir, integrator)
     file = joinpath(output_dir, "graceful_exit.dat")
@@ -342,13 +383,49 @@ function maybe_graceful_exit(output_dir, integrator)
         open(io -> print(io, 0), file, "w")
     end
 end
+"""
+    reset_graceful_exit(output_dir)
+
+Write `0` to `{output_dir}/graceful_exit.dat`, creating the directory if needed.
+
+Clears any stop request left over from a previous run, so that a restart writing into the
+same output directory does not exit immediately. See `maybe_graceful_exit`.
+"""
 function reset_graceful_exit(output_dir)
     file = joinpath(output_dir, "graceful_exit.dat")
     ispath(output_dir) || mkpath(output_dir)
     open(io -> print(io, 0), file, "w")
 end
 
+"""
+    check_nans(integrator)
+
+Abort the simulation if any prognostic variable has gone to `NaN`.
+
+On failure, walks the state and logs which `Y.<subfield>.<variable>` contain `NaN` and how
+many elements of each, then errors. Naming the affected variables is the point of the
+extra pass: it usually identifies the guilty tendency without a rerun.
+
+Returns `nothing` when the state is clean. Installed by `nan_checking_callback`, whose
+`check_nan_every` cadence trades detection latency against the cost of scanning the whole
+state.
+"""
 function check_nans(integrator)
-    any(isnan, parent(integrator.u)) && error("Found NaN")
+    if any(isnan, parent(integrator.u))
+        # Identify which field(s) have NaN
+        Y = integrator.u
+        for pn in propertynames(Y)
+            sub = getproperty(Y, pn)
+            for fn in propertynames(sub)
+                field = getproperty(sub, fn)
+                if any(isnan, parent(field))
+                    n_nan = count(isnan, parent(field))
+                    n_tot = length(parent(field))
+                    @info "NaN found in Y.$pn.$fn: $n_nan / $n_tot elements"
+                end
+            end
+        end
+        error("Found NaN")
+    end
     return nothing
 end

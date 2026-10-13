@@ -10,15 +10,19 @@ import ClimaCore.Fields as Fields
 """
     buoyancy(ρ_ref, ρ, gradᵥ_Φ)
 
-    Compute the buoyancy acceleration vector.
+Compute the buoyancy acceleration vector `(ρ_ref - ρ) / ρ * gradᵥ_Φ`.
 
-    Arguments:
-    - `ρ_ref`: Reference density [kg/m^3].
-    - `ρ`: Density [kg/m^3].
-    - `gradᵥ_Φ`: Covariant3Vector — gradient of geopotential (i.e., gravitational acceleration) [m/s²]
+# Arguments
 
-    Returns:
-    - Buoyancy acceleration as a Covariant3Vector [m/s²]
+  - `ρ_ref`: Reference density [kg/m³].
+  - `ρ`: Air density [kg/m³].
+  - `gradᵥ_Φ`: Vertical gradient of geopotential (`Covariant3Vector`, i.e.
+    gravitational acceleration) [m/s²].
+
+# Returns
+
+The buoyancy acceleration as a `Covariant3Vector` [m/s²]; directed upward
+(along `gradᵥ_Φ`) when `ρ < ρ_ref`.
 """
 function buoyancy(ρ_ref, ρ, gradᵥ_Φ)
     result = (ρ_ref - ρ) / ρ * gradᵥ_Φ
@@ -29,20 +33,26 @@ end
     vertical_buoyancy_acceleration(ρ_ref, ρ, gradᵥ_Φ, local_geometry)
     vertical_buoyancy_acceleration(ρ_diff, gradᵥ_Φ, local_geometry)
 
-    Compute the signed vertical component of the buoyancy acceleration vector in physical units.
+Compute the signed vertical component of the buoyancy acceleration in
+physical units.
 
-    Calculates the buoyancy acceleration vector due to a density anomaly and then
-    projects it onto the local vertical direction using the model's covariant geometry.
+Form the buoyancy acceleration vector due to a density anomaly (`buoyancy`
+in the first method, `-ρ_diff * gradᵥ_Φ` in the second) and project it onto the
+local vertical direction.
 
-    Arguments:
-    - `ρ_ref`: Reference density [kg/m³]
-    - `ρ`: Density [kg/m³]
-    - `gradᵥ_Φ`: Covariant3Vector — gradient of geopotential (i.e., gravitational acceleration) [m/s²]
-    - `local_geometry`: Local geometry object for projecting onto vertical direction
-    - `ρ_diff`: Normalized density difference `(ρ - ρ_ref) / ρ` [-].
+# Arguments
 
-    Returns:
-    - Scalar acceleration in the vertical direction [m/s²], positive when buoyancy acts upward
+  - `ρ_ref`: Reference density [kg/m³].
+  - `ρ`: Air density [kg/m³].
+  - `gradᵥ_Φ`: Vertical gradient of geopotential (`Covariant3Vector`, i.e.
+    gravitational acceleration) [m/s²].
+  - `local_geometry`: Local geometry used to project onto the vertical direction.
+  - `ρ_diff`: Normalized density difference `(ρ - ρ_ref) / ρ` [-].
+
+# Returns
+
+Scalar acceleration in the vertical direction [m/s²], positive when buoyancy
+acts upward.
 """
 function vertical_buoyancy_acceleration(ρ_ref, ρ, gradᵥ_Φ, local_geometry)
     # Compute the full buoyancy acceleration vector (Covariant3Vector)
@@ -61,26 +71,37 @@ end
 """
     draft_area(ρa, ρ)
 
-    Calculates draft area fraction given ρa and ρ.
+Return the draft area fraction `a = ρa / ρ` [-].
 
-    Arguments:
-    - `ρa`: The product of air density `ρ` and area fraction `a`
-    - `ρ`: The air density
+# Arguments
 
-    Returns:
-    - The draft area fraction
+  - `ρa`: Area-weighted density of the subdomain, `ρ a` [kg/m³].
+  - `ρ`: Density of the same subdomain [kg/m³].
 """
 function draft_area(ρa, ρ)
     return ρa / ρ
 end
 
 """
-Return the virtual mass term of the pressure closure for updrafts [m/s2 * m]
+    ᶠupdraft_nh_pressure_buoyancy(params, ᶠbuoyʲ)
 
-Inputs (everything defined on cell faces):
+Return the virtual-mass (buoyancy) term `α_b ᶠbuoyʲ` of the non-hydrostatic
+pressure closure for updrafts, in the units of `ᶠbuoyʲ` (for a covariant3
+component, [m²/s²]).
 
-  - params - set with model parameters
-  - ᶠbuoyʲ - covariant3 or contravariant3 updraft buoyancy
+`α_b` is `pressure_normalmode_buoy_coeff1`, so the effective buoyancy retained
+in the updraft momentum equation is `(1 - α_b) ᶠbuoyʲ`.
+
+# Arguments
+
+  - `params`: Model parameter set.
+  - `ᶠbuoyʲ`: Updraft buoyancy at cell faces, as a covariant3 or contravariant3
+    component.
+
+# Notes
+
+Currently unused: the implicit updraft-momentum solve applies `α_b` directly
+(see `initialize_implicit_problem.jl`).
 """
 function ᶠupdraft_nh_pressure_buoyancy(params, ᶠbuoyʲ)
     turbconv_params = CAP.turbconv_params(params)
@@ -90,17 +111,54 @@ function ᶠupdraft_nh_pressure_buoyancy(params, ᶠbuoyʲ)
 end
 
 """
-Return the drag term of the pressure closure for updrafts [m/s2 * m].
-This is a simplified version where the length scale is fixed at scale height.
-This is only used in diagnostic EDMF.
+    pressure_drag_coefficient(α_d, scale_height, aʲ, a⁰, a_min, a_max)
 
-Inputs (everything defined on cell faces):
+Return the coefficient `d_c` [1/m] of the pairwise form drag between an updraft
+of area fraction `aʲ` and the environment of area fraction `a⁰`,
 
-  - params - set with model parameters
-  - ᶠlg - local geometry (needed to compute the norm inside a local function)
-  - ᶠu3ʲ, ᶠu3⁰ - covariant3 or contravariant3 velocity for updraft and environment.
-    covariant3 velocity is used in prognostic edmf, and contravariant3
-    velocity is used in diagnostic edmf.
+    d_c = α_d / (2 H) (1 / √clamp(aʲ, a_min, a_max) + 1 / √clamp(a⁰, 1 - a_max, 1)),
+
+so that the drag acceleration on the updraft is `a⁰ d_c (wʲ - w⁰) |wʲ - w⁰|`,
+with `a⁰ = ρ̂⁰/ρ` the environment weight of the pairwise form. The
+length scale of each subdomain is `H √a` with `H = scale_height`, and the
+harmonic mean of the two gives the sum of inverse square roots. The updraft
+radius may shrink to `a_min`; the environment is clamped from below at
+`1 - a_max`, which keeps the coefficient finite when the implicit velocity
+solve is handed an extrapolated `a⁰` outside `[0, 1]`.
+
+Shared by the implicit updraft momentum solve
+(`solve_sgs_u₃_implicit_stage_analytic!`) and the TKE return-to-isotropy source
+(`edmfx_pressure_drag_tke_source!`), so the kinetic energy the drag removes from
+the updraft is the energy the TKE budget receives.
+"""
+pressure_drag_coefficient(α_d, scale_height, aʲ, a⁰, a_min, a_max) =
+    α_d / (2 * scale_height) * (
+        1 / sqrt(clamp(aʲ, a_min, a_max)) +
+        1 / sqrt(clamp(a⁰, 1 - a_max, one(a⁰)))
+    )
+
+"""
+    ᶠupdraft_nh_pressure_drag(params, ᶠlg, ᶠu3ʲ, ᶠu3⁰)
+
+Return the drag term of the non-hydrostatic pressure closure for updrafts,
+
+    α_d (u₃ʲ - u₃⁰) ‖u₃ʲ - u₃⁰‖ / max(H, H_up_min),
+
+a simplified form in which the length scale is fixed at the reference scale
+height `H = R_d T_surf_ref / g`, floored by `min_updraft_top`. The result has
+the units of the velocity difference times an inverse length.
+
+# Arguments
+
+  - `params`: Model parameter set (`α_d` is `pressure_normalmode_drag_coeff`).
+  - `ᶠlg`: Face local geometry, used to take the norm of the velocity difference.
+  - `ᶠu3ʲ`, `ᶠu3⁰`: Updraft and environment vertical velocity at faces, as
+    covariant3 or contravariant3 components.
+
+# Notes
+
+Currently unused: the implicit updraft-momentum solve builds the equivalent
+quadratic drag sink directly (see `initialize_implicit_problem.jl`).
 """
 function ᶠupdraft_nh_pressure_drag(params, ᶠlg, ᶠu3ʲ, ᶠu3⁰)
     turbconv_params = CAP.turbconv_params(params)
@@ -128,7 +186,7 @@ buoyancy production in the blend (TOML key:
 interpolates smoothly between free convection (`a_s → a_s_max`) and
 shear-only conditions (`a_s → 0`). `a_s_max` is the asymptotic plume
 area fraction in the free-convection limit. Used both to set the
-surface mass flux magnitude (via [`surface_mass_flux`](@ref)) and to
+surface mass flux magnitude (via `surface_mass_flux`) and to
 specify the percentile range from which the high-tail buoyant scalar
 values are sampled at the surface.
 """
@@ -151,7 +209,7 @@ Surface EDMF updraft mass flux [kg/m²/s] entering the first cell:
 
     F_surf = a_s · ρ · w*,
 
-with `a_s` given by [`surface_mass_flux_coefficient`](@ref) and
+with `a_s` given by `surface_mass_flux_coefficient` and
 `w* = cbrt(max(z_i · ⟨w'b'⟩_s, 0))`. Returns zero in stable boundary
 layers (`⟨w'b'⟩_s ≤ 0`).
 """
@@ -162,100 +220,21 @@ layers (`⟨w'b'⟩_s ≤ 0`).
     return a_s * ρ * w_star
 end
 
-edmfx_vertical_diffusion_tendency!(Yₜ, Y, p, t, turbconv_model) = nothing
-
-function edmfx_vertical_diffusion_tendency!(
-    Yₜ,
-    Y,
-    p,
-    t,
-    turbconv_model::PrognosticEDMFX,
-)
-    if p.atmos.edmfx_model.vertical_diffusion isa Val{true}
-        (; params) = p
-        (; ᶜρʲs) = p.precomputed
-        FT = eltype(p.params)
-        turbconv_params = CAP.turbconv_params(params)
-        n = n_mass_flux_subdomains(turbconv_model)
-        ᶜdivᵥ_mse = Operators.DivergenceF2C(
-            top = Operators.SetValue(C3(0)),
-            bottom = Operators.SetValue(C3(0)),
-        )
-        ᶜdivᵥ_q_tot = Operators.DivergenceF2C(
-            top = Operators.SetValue(C3(0)),
-            bottom = Operators.SetValue(C3(0)),
-        )
-
-        (; ᶜlinear_buoygrad, ᶜstrain_rate_norm) = p.precomputed
-        ᶜtke = @. lazy(specific(Y.c.ρtke, Y.c.ρ))
-        # scratch to prevent GPU Kernel parameter memory error
-        ᶜmixing_length_field = p.scratch.ᶜtemp_scalar
-        ᶜmixing_length_field .= ᶜmixing_length(Y, p)
-        ᶜK_u = @. lazy(eddy_viscosity(turbconv_params, ᶜtke, ᶜmixing_length_field))
-        ᶜprandtl_nvec = @. lazy(
-            turbulent_prandtl_number(params, ᶜlinear_buoygrad, ᶜstrain_rate_norm),
-        )
-        ᶜK_h = @. lazy(eddy_diffusivity(ᶜK_u, ᶜprandtl_nvec))
-
-        for j in 1:n
-            ᶜρʲ = ᶜρʲs.:($j)
-            ᶜmseʲ = Y.c.sgsʲs.:($j).mse
-            ᶜq_totʲ = Y.c.sgsʲs.:($j).q_tot
-            # Note: For this and other diffusive tendencies, we should use ρaʲ instead of ρʲ,
-            # but it causes stability issues when ρaʲ is small
-            @. Yₜ.c.sgsʲs.:($$j).mse -=
-                ᶜdivᵥ_mse(-(ᶠinterp(ᶜρʲ) * ᶠinterp(ᶜK_h) * ᶠgradᵥ(ᶜmseʲ))) / ᶜρʲ
-            @. Yₜ.c.sgsʲs.:($$j).q_tot -=
-                ᶜdivᵥ_q_tot(-(ᶠinterp(ᶜρʲ) * ᶠinterp(ᶜK_h) * ᶠgradᵥ(ᶜq_totʲ))) / ᶜρʲ
-        end
-
-        if !isempty(sgs_tracer_names(Y))
-            α_vert_diff_microphysics = CAP.α_vert_diff_tracer(params)
-            ᶜρʲ = ᶜρʲs.:(1)
-            ᶜdivᵥ_q = Operators.DivergenceF2C(
-                top = Operators.SetValue(C3(FT(0))),
-                bottom = Operators.SetValue(C3(FT(0))),
-            )
-            for χ_name in sgs_tracer_names(Y)
-                ᶜχʲ = MatrixFields.get_field(Y.c.sgsʲs.:(1), χ_name)
-                ᶜχʲₜ = MatrixFields.get_field(Yₜ.c.sgsʲs.:(1), χ_name)
-                @. ᶜχʲₜ -=
-                    ᶜdivᵥ_q(
-                        -(
-                            ᶠinterp(ᶜρʲ) * ᶠinterp(ᶜK_h) * α_vert_diff_microphysics *
-                            ᶠgradᵥ(ᶜχʲ)
-                        ),
-                    ) / ᶜρʲ
-            end
-        end
-    end
-end
-
 """
-    enforce_physical_constraints!(Y, p, t, turbconv_model)
+    enforce_grid_mean_microphysics_constraints!(Y, p, t)
 
-Enforce physical constraints on the model state `Y` in-place.
+Clip the grid-mean condensate tracers to non-negative values and rescale them
+so their sum cannot exceed the available total moisture.
 
-This function is used as a callback and is not a tendency evaluation. It applies
-local corrective updates to keep prognostic variables in a physically admissible
-range.
+`ρq_lcl`, `ρq_icl`, `ρq_rai`, and `ρq_sno` are first floored at zero, then all
+four are multiplied by `ratio = min(1, ρq_tot / Σ ρq_cond)`; `ratio` is zero
+where either the condensate sum or `ρq_tot` is below `ϵ_numerics`, which
+removes condensate in cells with no (or negative) total water.
 
-Currently, this includes:
-- For prognostic EDMF, handling non-positive updraft area fractions by
-  immediately mixing the affected updraft state with the environment.
-- For one- and two-moment microphysics, enforcing non-negative condensate
-  masses.
-- When total moisture is positive, rescaling condensate masses so that their
-  sum does not exceed total moisture.
-
-These corrections are intended to prevent nonphysical states such as negative
-area fractions, negative condensate masses, or condensate mass exceeding the
-available total moisture. Ideally, the need for this correction is minimized
-by the numerical scheme.
+Mutates `Y.c` and uses `p.scratch`; returns `nothing`. Called from
+`enforce_physical_constraints!` for the 1M and 2M non-equilibrium
+microphysics models.
 """
-
-# Private helper: clips grid-mean condensate tracers to non-negative values and
-# rescales the condensate sum so it cannot exceed the available total moisture.
 function enforce_grid_mean_microphysics_constraints!(Y, p, t)
     FT = eltype(p.params)
     ρq_cond = p.scratch.ᶜtemp_scalar
@@ -278,12 +257,35 @@ function enforce_grid_mean_microphysics_constraints!(Y, p, t)
     return nothing
 end
 
-# Private helper: clips prognostic updraft area fraction and vertical velocity,
-# relaxes updraft mse/q_tot toward the grid mean when ρa is negligible, and
-# relaxes updraft microphysics tracers (q_lcl, q_icl, q_rai, q_sno, n_lcl, n_rai)
-# toward the grid mean while enforcing the subdomain mass conservation bound ρaχʲ < ρχ.
-# The microphysics tracer block is a no-op for 0M (has_field returns false).
-# No-op when n_prognostic_mass_flux_subdomains == 0 (EDOnlyEDMFX, etc.).
+"""
+    enforce_edmf_updraft_constraints!(Y, p, t, turbconv_model)
+
+Clip the prognostic PROPHET (`EDMFX` in code) updraft state to a physically
+admissible range and relax degenerate updrafts toward the grid mean.
+
+For each of the `n_prognostic_mass_flux_subdomains(turbconv_model)` updrafts:
+
+  - `Y.c.sgsʲs.:(j).ρa` is clamped to `[0, ᶜρʲ]`, i.e. the area fraction to
+    `[0, 1]`.
+  - The covariant³ component of `Y.f.sgsʲs.:(j).u₃` is clamped to be
+    non-negative (updrafts do not descend), and is set to zero where the
+    face-interpolated `ρa` is below `ϵ_numerics`.
+  - `mse` and `q_tot` are reset to their **grid-mean** values (`ᶜh_tot - ᶜK`
+    and `specific(Y.c.ρq_tot, Y.c.ρ)`) where `ρa < ϵ_numerics`; otherwise
+    `q_tot` is floored at zero and bounded by `ρq_tot / ρa`, which enforces the
+    subdomain mass bound `ρaʲ q_totʲ ≤ ρ q_tot`.
+  - Each auto-discovered SGS tracer (microphysics species and passive tracers)
+    is treated like `q_tot`: grid-mean value where `ρa` is negligible, else
+    floored at zero and bounded by `ρχ / ρa`. This block is a no-op for the 0M
+    microphysics model, where the grid-mean `ρχ` fields do not exist.
+  - The subdomain condensate species are finally rescaled by a common
+    factor so that `q_lclʲ + q_iclʲ + q_raiʲ + q_snoʲ ≤ q_totʲ`, mirroring
+    the grid-mean `enforce_grid_mean_microphysics_constraints!`.
+
+No-op when `n_prognostic_mass_flux_subdomains(turbconv_model) == 0` (e.g.
+`EDOnlyEDMFX`). Mutates `Y.c.sgsʲs` and `Y.f.sgsʲs`; returns `nothing`. Called
+from `enforce_physical_constraints!`.
+"""
 function enforce_edmf_updraft_constraints!(Y, p, t, turbconv_model)
     FT = eltype(p.params)
     n = n_prognostic_mass_flux_subdomains(turbconv_model)
@@ -323,7 +325,7 @@ function enforce_edmf_updraft_constraints!(Y, p, t, turbconv_model)
         for χ_name in sgs_tracer_names(Y)
             ρχ_name = get_ρχ_name(χ_name)
             MatrixFields.has_field(Y.c, ρχ_name) || continue
-            ᶜχʲ = MatrixFields.get_field(Y.c.sgsʲs.:(1), χ_name)
+            ᶜχʲ = MatrixFields.get_field(Y.c.sgsʲs.:($j), χ_name)
             ᶜρχ = MatrixFields.get_field(Y.c, ρχ_name)
             @. ᶜχʲ = ifelse(
                 Y.c.sgsʲs.:($$j).ρa < ϵ_numerics(FT),
@@ -332,6 +334,29 @@ function enforce_edmf_updraft_constraints!(Y, p, t, turbconv_model)
                 min(max(0, ᶜχʲ), max(0, ᶜρχ) / Y.c.sgsʲs.:($$j).ρa),
             )
         end
+
+        # Within-subdomain condensate rescaling: ensure
+        # q_lclʲ+q_iclʲ+q_raiʲ+q_snoʲ ≤ q_totʲ. The GM ↔ SGS bound above
+        # already clipped each χʲ ≥ 0, so we only need the ratio rescale.
+        # Multiplying by ratio ≤ 1 preserves the ρaχʲ ≤ ρχ bound.
+        if p.atmos.microphysics_model isa Union{NonEquilibriumMicrophysics1M,
+            NonEquilibriumMicrophysics2M}
+            q_cond = p.scratch.ᶜtemp_scalar
+            ratio = p.scratch.ᶜtemp_scalar_2
+            @. q_cond =
+                Y.c.sgsʲs.:($$j).q_lcl + Y.c.sgsʲs.:($$j).q_icl +
+                Y.c.sgsʲs.:($$j).q_rai + Y.c.sgsʲs.:($$j).q_sno
+            @. ratio = ifelse(
+                (q_cond > ϵ_numerics(FT)) &
+                (Y.c.sgsʲs.:($$j).q_tot > ϵ_numerics(FT)),
+                min(FT(1), Y.c.sgsʲs.:($$j).q_tot / q_cond),
+                FT(0),
+            )
+            @. Y.c.sgsʲs.:($$j).q_lcl *= ratio
+            @. Y.c.sgsʲs.:($$j).q_icl *= ratio
+            @. Y.c.sgsʲs.:($$j).q_rai *= ratio
+            @. Y.c.sgsʲs.:($$j).q_sno *= ratio
+        end
     end
     return nothing
 end
@@ -339,9 +364,18 @@ end
 """
     enforce_physical_constraints!(Y, p, t, atmos)
 
-Enforce physical consistency of the model state by calling the appropriate
-constraint helpers based on the active microphysics and turbulence-convection
-models. `set_precomputed_quantities!` is called exactly once at the end.
+Enforce physical consistency of the state `Y` by dispatching to the constraint
+helpers selected by the active microphysics and turbulence-convection models.
+
+  - `enforce_grid_mean_microphysics_constraints!` runs for
+    `NonEquilibriumMicrophysics1M` and `NonEquilibriumMicrophysics2M`.
+  - `enforce_edmf_updraft_constraints!` runs for `AbstractEDMF` when
+    the `edmfx_filter` configuration flag is enabled
+    (`atmos.edmfx_model.filter`); it is itself a no-op for models
+    without prognostic mass-flux subdomains, such as `EDOnlyEDMFX`.
+
+Mutates `Y`; returns `nothing`. Called from `constrain_state!` after each
+timestepper stage.
 """
 function enforce_physical_constraints!(Y, p, t, atmos::AtmosModel)
     # Grid-mean microphysics: non-negativity + condensate ≤ total moisture.
@@ -353,10 +387,9 @@ function enforce_physical_constraints!(Y, p, t, atmos::AtmosModel)
     # EDMF updraft constraints: only active when the filter flag is enabled.
     # Each helper is a no-op for EDOnlyEDMFX (n_prognostic_mass_flux_subdomains == 0).
     if atmos.turbconv_model isa AbstractEDMF &&
-       atmos.edmfx_model.filter isa Val{true}
+       atmos.edmfx_model.filter
         enforce_edmf_updraft_constraints!(Y, p, t, atmos.turbconv_model)
     end
 
-    set_precomputed_quantities!(Y, p, t)
     return nothing
 end

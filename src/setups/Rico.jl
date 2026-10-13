@@ -7,7 +7,7 @@ hydrostatically balanced pressure profile. Profiles are sourced from Atmospheric
 The `profiles` field stores precomputed atmospheric profile functions (computed
 at construction time before broadcasting).
 
-## Example
+# Examples
 
 ```julia
 import Thermodynamics as TD
@@ -75,7 +75,7 @@ function surface_condition(::Rico, params)
     return (;
         flux_scheme = MoninObukhov(; z0 = FT(1.5e-4)),
         temperature = AnalyticTemperature(Returns(T_surface)),
-        overrides = SurfaceBoundaryOverrides(p = p_surface, q_vap = FT(q_vap)),
+        overrides = SurfaceBoundaryOverrides(q_vap = FT(q_vap)),
     )
 end
 

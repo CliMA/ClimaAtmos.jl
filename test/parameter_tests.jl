@@ -13,6 +13,7 @@ import Thermodynamics as TD
         # Verify sub-components types
         @test params.thermodynamics_params isa CAP.TD.Parameters.ThermodynamicsParameters
         @test params.turbconv_params isa CAP.TurbulenceConvectionParameters
+        @test params.sgs_quadrature_params isa CAP.SGSQuadratureParameters
         @test params.microphysics_cloud_params isa NamedTuple
         @test params.microphysics_cloud_params.liquid isa CAP.CM.Parameters.CloudLiquid
 
@@ -23,6 +24,127 @@ import Thermodynamics as TD
         @test CAP.planet_radius(params) ≈ FT(6.371e6) rtol = 0.01
         # Gravity ~ 9.81 m/s^2
         @test CAP.grav(params) ≈ FT(9.81) rtol = 0.01
+    end
+end
+
+@testset "1-moment microphysics process options" begin
+    CMP = CAP.CM.Parameters
+
+    # Defaults come from CloudMicrophysics, except where `default_config.yml`
+    # picks another variant
+    defaults = CA.NonEquilibriumMicrophysics1M()
+    @test defaults.processes.rain_autoconversion isa CMP.Kessler1M
+    @test defaults.processes.cloud_ice_formation isa
+          CMP.TemperatureDependentIceNumber
+    # Unknown process names are rejected where they are written
+    @test_throws Exception CA.NonEquilibriumMicrophysics1M(; not_a_process = 1)
+
+    # Building the model directly and from an unmodified config agree
+    default_config = CA.AtmosConfig(
+        Dict("microphysics_model" => "1M"),
+        job_id = "parameter_test_1m_defaults",
+    )
+    @test CA.get_microphysics_model(default_config.parsed_args) == defaults
+
+    # Options set on the model select the parameters loaded for it
+    model = CA.NonEquilibriumMicrophysics1M(;
+        n_substeps = 3,
+        rain_autoconversion = CMP.PrescribedNd(),
+        cloud_ice_formation = CMP.TemperatureDependent(),
+        rain_snow_accretion = nothing,
+    )
+    @test model.n_substeps == 3
+    params = CA.ClimaAtmosParameters(Float64; microphysics_model = model)
+    processes = params.microphysics_1m_params.processes
+    @test processes.rain_autoconversion isa CMP.PrescribedNd
+    @test processes.cloud_ice_formation isa CMP.TemperatureDependent
+    @test isnothing(processes.rain_snow_accretion)
+    @test isnothing(
+        params.microphysics_1m_params.process_params.rain_snow_accretion,
+    )
+
+    # The YAML keys reach the same place
+    config = CA.AtmosConfig(
+        Dict(
+            "microphysics_model" => "1M",
+            "rain_autoconversion" => "PrescribedNd",
+            "rain_snow_accretion" => nothing,
+        ),
+        job_id = "parameter_test_1m_options",
+    )
+    yaml_processes =
+        CA.ClimaAtmosParameters(config).microphysics_1m_params.processes
+    @test yaml_processes.rain_autoconversion isa CMP.PrescribedNd
+    @test isnothing(yaml_processes.rain_snow_accretion)
+end
+
+@testset "TKE dissipation coefficient derived from Ri_crit" begin
+    for FT in (Float32, Float64)
+        params = CA.ClimaAtmosParameters(FT)
+        tc = params.turbconv_params
+        # ClimaParams default: Ri_c = 0.25 (mixing_length_Ri_crit)
+        @test CAP.Ri_crit(tc) == FT(0.25)
+        # c_d is derived, not independent: c_d = c_m c_b / Ri_c
+        @test CA.tke_dissipation_coefficient(tc) ==
+              CAP.tke_ed_coeff(tc) * CAP.static_stab_coeff(tc) /
+              CAP.Ri_crit(tc)
+    end
+
+    # A TOML override of mixing_length_Ri_crit propagates into the derived c_d
+    mktemp() do path, io
+        write(
+            io,
+            """
+  [mixing_length_Ri_crit]
+  value = 0.5
+  type = "float"
+  """,
+        )
+        flush(io)
+        config_dict = Dict("toml" => [path])
+        config = CA.AtmosConfig(config_dict, job_id = "parameter_test_ri_crit")
+        params = CA.ClimaAtmosParameters(config)
+        tc = params.turbconv_params
+        @test CAP.Ri_crit(tc) == 0.5
+        @test CA.tke_dissipation_coefficient(tc) ==
+              CAP.tke_ed_coeff(tc) * CAP.static_stab_coeff(tc) / 0.5
+    end
+end
+
+@testset "Geometric SGS variance parameters" begin
+    # The defaults come from ClimaParams.
+    for FT in (Float32, Float64)
+        sq = CA.ClimaAtmosParameters(FT).sgs_quadrature_params
+        @test CAP.sgs_variance_horizontal_scale_factor(sq) == FT(1)
+        @test CAP.sgs_variance_vertical_scale_factor(sq) == FT(1)
+        @test CAP.sgs_variance_geometric_coeff(sq) == FT(1 // 12)
+        @test CAP.sgs_variance_max_rel_std(sq) == FT(0.5)
+        @test CAP.sgs_variance_isentropic_depth(sq) == FT(1000)
+        @test CAP.sgs_liquid_uniform_fraction(sq) == FT(1)
+        @test CAP.sgs_ice_uniform_fraction(sq) == FT(1)
+    end
+    # A run toml overrides the defaults.
+    mktemp() do path, io
+        write(
+            io,
+            """
+  [sgs_variance_horizontal_scale_factor]
+  value = 2.0
+  type = "float"
+  [sgs_ice_uniform_fraction]
+  value = 0.5
+  type = "float"
+  """,
+        )
+        flush(io)
+        config = CA.AtmosConfig(
+            Dict("toml" => [path]),
+            job_id = "parameter_test_sgs_variance_scale_factor",
+        )
+        sq = CA.ClimaAtmosParameters(config).sgs_quadrature_params
+        @test CAP.sgs_variance_horizontal_scale_factor(sq) == 2.0
+        @test CAP.sgs_ice_uniform_fraction(sq) == 0.5
+        @test CAP.sgs_liquid_uniform_fraction(sq) == 1.0
     end
 end
 

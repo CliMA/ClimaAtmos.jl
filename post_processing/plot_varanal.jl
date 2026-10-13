@@ -142,11 +142,11 @@ const _FLUX_MAP = [
 # Cloud fraction: CLDRAD obs + model total cloud
 const _CLOUD_MAP = [
     (model = "clt", label = "Total Cloud Fraction", units = "%",
-        mfn = identity,
-        obs = [
-            (src = :cldrad, var = "tot_cld", ofn = x -> x .* 100, label = "CLDRAD ARSCL"),
-            (src = :cldrad, var = "tot_cld_tsi", ofn = x -> x .* 100, label = "CLDRAD TSI"),
-        ]),
+    mfn = identity,
+    obs = [
+        (src = :cldrad, var = "tot_cld", ofn = x -> x .* 100, label = "CLDRAD ARSCL"),
+        (src = :cldrad, var = "tot_cld_tsi", ofn = x -> x .* 100, label = "CLDRAD TSI"),
+    ]),
 ]
 
 # ────────────────────────────────────────────────────────────────────────────
@@ -168,24 +168,23 @@ end
 # ────────────────────────────────────────────────────────────────────────────
 
 function _slice_column(var)
-    haskey(var.dims, "x") && (var = slice(var, x = var.dims["x"][1]))
-    haskey(var.dims, "y") && (var = slice(var, y = var.dims["y"][1]))
+    haskey(var.dims, "x") && (var = slice(var, x = 1, by = ClimaAnalysis.Index()))
+    haskey(var.dims, "y") && (var = slice(var, y = 1, by = ClimaAnalysis.Index()))
     return var
 end
 
 function _extract_zt(var)
-    z_key = z_dim_name(var)
-    z_vals = Float64.(collect(var.dims[z_key]))
-    t_vals = Float64.(collect(var.dims["time"]))
+    z_vals = Float64.(ClimaAnalysis.altitudes(var))
+    t_vals = Float64.(ClimaAnalysis.times(var))
     raw = Float64.(var.data)
-    if var.index2dim[1] == "time"
+    if first(ClimaAnalysis.dim_names(var)) == ClimaAnalysis.time_name(var)
         raw = permutedims(raw)
     end
     return raw, z_vals, t_vals
 end
 
 function _extract_timeseries(var)
-    t_vals = Float64.(collect(var.dims["time"]))
+    t_vals = Float64.(ClimaAnalysis.times(var))
     return Float64.(vec(var.data)), t_vals
 end
 
@@ -216,7 +215,7 @@ function _load_arm_sonde(sonde_dir::String, start_date::Dates.Date, n_days::Int)
                     heights_km = _to_float_nan(ds["height"][:])
                 end
                 times = ds["time"][:]
-                for i in 1:length(times)
+                for i in eachindex(times)
                     push!(all_times, times[i])
                     for vn in obs_vars
                         haskey(ds, vn) || continue
@@ -558,7 +557,7 @@ function _fig_cloud_profile(
         title = "Model: Cloud Fraction (%)$zoom_tag",
         ylabel = "Height (km)",
     )
-    hm1 = CairoMakie.heatmap!(ax1, t_hrs, z_km, (mi .* 100)';
+    hm1 = CairoMakie.heatmap!(ax1, t_hrs, z_km, mi';
         colormap = :Blues, colorrange = (0, 100))
     CairoMakie.Colorbar(fig[1, 2], hm1; label = "%")
     CairoMakie.ylims!(ax1, ylims)
@@ -720,11 +719,10 @@ function _make_arm_obs_comparison(output_path::AbstractString)
     # no 3D variable is available yet.
     function _model_z_levels(simdir, reduction, period)
         for sn in ["ta", "thetaa", "hur", "hus", "ua"]
-            sn in keys(simdir.vars) || continue
+            sn in ClimaAnalysis.available_vars(simdir) || continue
             try
                 v = _slice_column(get(simdir; short_name = sn, reduction, period))
-                zk = z_dim_name(v)
-                return sort(Float64.(collect(v.dims[zk])))
+                return sort(Float64.(ClimaAnalysis.altitudes(v)))
             catch
             end
         end
@@ -744,7 +742,8 @@ function _make_arm_obs_comparison(output_path::AbstractString)
     obs_dirs = try
         _arm_varanal_obs_dirs()
     catch e
-        @warn "ARM VARANAL obs artifact unavailable; skipping obs comparison" exception = e
+        @warn "ARM VARANAL obs artifact unavailable; skipping obs comparison" exception =
+            e
         return
     end
     (; sonde, beatm, cldrad) = obs_dirs
@@ -777,7 +776,7 @@ function _make_arm_obs_comparison(output_path::AbstractString)
         ))[]
 
         for m in _SONDE_MAP
-            m.model in keys(simdir.vars) || continue
+            m.model in ClimaAnalysis.available_vars(simdir) || continue
             haskey(sonde.data, m.obs) || continue
             @info "  Sonde: $(m.label)"
 
@@ -835,7 +834,7 @@ function _make_arm_obs_comparison(output_path::AbstractString)
 
         # U and V wind: profile-only comparisons (mean + RMSE)
         for wp in _SONDE_WIND_PROFILES
-            wp.model in keys(simdir.vars) || continue
+            wp.model in ClimaAnalysis.available_vars(simdir) || continue
             haskey(sonde.data, wp.obs) || continue
             @info "  Sonde profiles: $(wp.label)"
 
@@ -880,7 +879,7 @@ function _make_arm_obs_comparison(output_path::AbstractString)
     # ── 2. CLDRAD cloud fraction profile ─────────────────────────────────
 
     if !isnothing(cldrad) && !isnothing(cldrad.heights_m) &&
-       haskey(cldrad.profiles, "cld_frac") && "cl" in keys(simdir.vars)
+       haskey(cldrad.profiles, "cld_frac") && "cl" in ClimaAnalysis.available_vars(simdir)
         @info "  CLDRAD cloud fraction profile"
         var = _slice_column(get(simdir; short_name = "cl", reduction, period))
         data_zt, mz, mt = _extract_zt(var)
@@ -912,7 +911,7 @@ function _make_arm_obs_comparison(output_path::AbstractString)
             )
         end
         isempty(entries) && continue
-        if m.model in keys(simdir.vars)
+        if m.model in ClimaAnalysis.available_vars(simdir)
             var = _slice_column(get(simdir; short_name = m.model, reduction, period))
             md, mt = _extract_timeseries(var)
             md = m.mfn(md)
@@ -941,7 +940,7 @@ function _make_arm_obs_comparison(output_path::AbstractString)
             )
         end
         isempty(entries) && continue
-        if m.model in keys(simdir.vars)
+        if m.model in ClimaAnalysis.available_vars(simdir)
             var = _slice_column(get(simdir; short_name = m.model, reduction, period))
             md, mt = _extract_timeseries(var)
             md = m.mfn(md)
@@ -970,7 +969,7 @@ function _make_arm_obs_comparison(output_path::AbstractString)
             )
         end
         isempty(entries) && continue
-        if m.model in keys(simdir.vars)
+        if m.model in ClimaAnalysis.available_vars(simdir)
             var = _slice_column(get(simdir; short_name = m.model, reduction, period))
             md, mt = _extract_timeseries(var)
             md = m.mfn(md)
@@ -1000,7 +999,7 @@ function _make_arm_obs_comparison(output_path::AbstractString)
             )
         end
         isempty(entries) && continue
-        if m.model in keys(simdir.vars)
+        if m.model in ClimaAnalysis.available_vars(simdir)
             var = _slice_column(get(simdir; short_name = m.model, reduction, period))
             md, mt = _extract_timeseries(var)
             md = m.mfn(md)

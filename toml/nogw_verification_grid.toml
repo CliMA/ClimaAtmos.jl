@@ -1,0 +1,7 @@
+# Coarse phase-speed grid (nc = 2*100/4 + 1 = 51) for the Beres verification job,
+# to cut the unrolled-kernel compile time. Grid only; other params keep defaults.
+[nogw_cmax]
+value = 100.0
+
+[nogw_dc]
+value = 4.0

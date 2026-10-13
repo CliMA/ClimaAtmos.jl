@@ -22,7 +22,7 @@ deps/src/
 # and running docs/make.jl
 docs/build/
 docs/site/
-docs/src/config.md
+docs/src/configuration_options.md
 
 /Manifest*.toml
 */Manifest*.toml  # docs, test
@@ -58,3 +58,7 @@ MEMORY.md
 .agents
 # Claude Code worktrees
 .claude/worktrees/
+
+# Python bytecode from the .dev/ helper scripts
+__pycache__/
+*.pyc

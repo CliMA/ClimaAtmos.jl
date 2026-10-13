@@ -6,18 +6,28 @@ import ClimaCore: Geometry, Fields, Spaces
 import ClimaCore.Utilities: half
 
 """
-    calc_orographic_tensor(elev, χ, lon, lat, earth_radius)
+    calc_orographic_tensor(elev, χ, lon, lat, earth_radius) -> (t11, t21, t12, t22)
 
-    Calculate orographic tensor (T) from
-    - elev: surface elevation
-    - χ: velocity potential
-    - lon: longitude
-    - lat: latitude
-    - earth_radius: radius of the Earth
+Compute the orographic tensor `T = −∇χ (∇h)ᵀ` on the lat-lon grid.
+
+Mutates `elev` in place, clipping ocean bathymetry to zero, then returns the four
+components with the code's index convention `tᵢⱼ = −∂χ/∂xⱼ · ∂h/∂xᵢ`, so the stored `tᵢⱼ`
+is the `(j,i)` entry of `−∇χ(∇h)ᵀ`. The leading minus reproduces Garner's sign convention,
+so the resulting drag opposes the low-level flow.
+
+Called from `compute_OGW_info` in the offline preprocessing pipeline.
+
+# Arguments
+
+  - `elev`: Surface elevation on the lon-lat grid [m]; clipped in place.
+  - `χ`: Velocity potential from `calc_velocity_potential`.
+  - `lon`, `lat`: Coordinate vectors [degrees].
+  - `earth_radius`: Sphere radius [m].
+
+Described in [garner2005](@cite) Eq. 6; see the *Orographic Gravity Waves* page.
 """
 function calc_orographic_tensor(elev, χ, lon, lat, earth_radius)
     @info "Computing T tensor..."
-    FT = eltype(elev)
 
     # compute ∇h
     @. elev = max(0, elev)
@@ -40,13 +50,25 @@ function calc_orographic_tensor(elev, χ, lon, lat, earth_radius)
 end
 
 """
-    calc_∇A(A, lon, lat, earth_radius)
+    calc_∇A(A, lon, lat, earth_radius) -> (dAdx, dAdy)
 
-    Calculate the horizontal gradient of scalar A on the Earth surface
-    - A: the scalar
-    - lon: longitude
-    - lat: latitude
-    - earth_radius: radius of the Earth
+Compute the horizontal gradient of a scalar on the spherical surface.
+
+Returns the zonal and meridional derivatives per unit physical distance, both the same
+shape as `A`, using centered differences in the interior and one-sided differences at the
+boundaries of each dimension.
+
+The zonal spacing shrinks as `cos(lat)`, so it is divided out; the factor is floored at
+`cos(60°)` to keep the gradient finite poleward of 60°, where the grid converges. Longitude
+is treated as non-periodic here, so the first and last columns use one-sided differences.
+
+Called from `calc_orographic_tensor` in the offline preprocessing pipeline.
+
+# Arguments
+
+  - `A`: Scalar field on the lon-lat grid, indexed `[lon, lat]`.
+  - `lon`, `lat`: Uniformly spaced coordinate vectors [degrees].
+  - `earth_radius`: Sphere radius [m].
 """
 function calc_∇A(A, lon, lat, earth_radius)
     FT = eltype(A)
@@ -78,31 +100,44 @@ end
 
 """
     calc_velocity_potential(elev, lon, lat, earth_radius;
-                           smoothing_length_scale=nothing,
-                           n_smoothing_cells=nothing,
-                           min_smoothing_cells=1.0)
+                            smoothing_length_scale = nothing,
+                            n_smoothing_cells = nothing)
 
-    Calculate velocity potential via optimized 2D Hilbert transform.
-    This implementation follows the Fortran strategy of pre-computing weights
-    once per latitude using offset-based indexing for significant performance gains.
+Compute the velocity potential `χ` as a windowed 2D Hilbert transform of the elevation.
 
-    Arguments:
-    - elev: surface elevation [nlon × nlat]
-    - lon: longitude array (degrees)
-    - lat: latitude array (degrees)
-    - earth_radius: radius of the Earth (meters)
-    - smoothing_length_scale: smoothing scale in meters (optional)
-                             Default: 100e3 (100 km), but enforces min_smoothing_cells
-                             Note: Some Fortran codes use 200e3 (200 km)
-    - n_smoothing_cells: number of grid cells for smoothing (optional, overrides smoothing_length_scale)
-    - min_smoothing_cells: minimum number of grid cells to smooth over (default: 1.0)
-                          Prevents physically meaningless smoothing for coarse grids
+`χ` captures the far-field influence of the surrounding topography on the low-level flow:
+a `1/d` great-circle kernel weighted by `cos(lat)` and tapered by a Blackman window that
+reaches zero at the smoothing scale, plus a Green's-function correction for the singular
+self-cell. Mutates `elev` in place, clipping ocean bathymetry to zero, and returns `χ` with
+the same `[nlon, nlat]` shape.
 
-    Returns:
-    - χ: velocity potential [nlon × nlat]
+Following the GFDL `get_velpot.f90`, the kernel weights are precomputed once per latitude
+row and reused across longitudes, and longitude wrapping is periodic. Great-circle
+distances use the Haversine form, which stays accurate for the short arcs that dominate.
+Rows with `|lat| > 89°` are skipped, matching the Fortran; this is a no-op in practice
+given the Antarctic mask and zero Arctic elevation.
 
-    Note: Either smoothing_length_scale OR n_smoothing_cells should be specified, not both.
-          If neither is specified, uses default 100 km with min_smoothing_cells=1.0 constraint.
+The smoothing scale is latitude-dependent, `sin(40°)/sin(max(20°, |lat|))` times the
+requested distance, divided by the Earth radius to give an angular scale, and is floored at
+one grid cell in each direction so the weights cannot blow up on a coarse grid.
+
+Called from `compute_OGW_info` in the offline preprocessing pipeline.
+
+# Arguments
+
+  - `elev`: Surface elevation on the lon-lat grid [m]; clipped in place.
+  - `lon`, `lat`: Uniformly spaced coordinate vectors [degrees].
+  - `earth_radius`: Sphere radius [m].
+
+# Keyword Arguments
+
+  - `smoothing_length_scale = nothing`: Physical smoothing scale [m].
+  - `n_smoothing_cells = nothing`: Smoothing scale in grid cells [-], measured against the
+    diagonal grid spacing.
+
+Exactly one of the two keywords must be given; supplying both or neither is an error.
+
+Described in [garner2005](@cite); see the *Orographic Gravity Waves* page.
 """
 function calc_velocity_potential(
     elev,
@@ -298,13 +333,34 @@ end
 
 """
     smooth_field_latlon(field, lon, lat, earth_radius;
-                        smoothing_length_scale=nothing,
-                        n_smoothing_cells=nothing,
-                        min_smoothing_cells=1.0)
+                        smoothing_length_scale = nothing,
+                        n_smoothing_cells = nothing,
+                        use_lat_factor = true)
 
-Smooth a 2D lat-lon field using distance-weighted inverse-quadratic kernel.
-Same kernel and scale computation as `calc_hpoz_latlon`: w = 1/(1 + arc²/scale²).
-Returns the weighted-mean smoothed field.
+Smooth a lat-lon field with the same Lorentzian kernel `calc_hpoz_latlon` uses.
+
+Returns a new array of the same shape holding the weighted mean of `field` over a
+latitude-dependent window, with weights `w = 1/(1 + arc²/scale²)` and `arc` the angular
+separation. `field` is not modified. Unlike `calc_velocity_potential`, the longitude window
+is clipped rather than wrapped.
+
+Available for optionally pre-smoothing the elevation before the tensor gradients are taken;
+`compute_OGW_info` leaves that off by default and passes the raw elevation instead.
+
+# Arguments
+
+  - `field`: Field on the lon-lat grid, indexed `[lon, lat]`.
+  - `lon`, `lat`: Uniformly spaced coordinate vectors [degrees].
+  - `earth_radius`: Sphere radius [m].
+
+# Keyword Arguments
+
+  - `smoothing_length_scale = nothing`: Physical smoothing scale [m].
+  - `n_smoothing_cells = nothing`: Smoothing scale in grid cells [-]. Exactly one of this and
+    `smoothing_length_scale` must be given.
+  - `use_lat_factor = true`: Use the `sin(40°)/sin(max(20°, |lat|))` latitude weighting that
+    matches the Fortran treatment of `χ` and `hmax`. When `false`, the scale is isotropic
+    with a `1/max(0.3, cos(lat))` polar compensation instead.
 """
 function smooth_field_latlon(
     field,
@@ -394,22 +450,38 @@ end
 
 """
     calc_hpoz_latlon(elev, lon, lat, earth_radius;
-                    smoothing_length_scale=nothing,
-                    n_smoothing_cells=nothing,
-                    min_smoothing_cells=1.0)
+                     smoothing_length_scale = nothing,
+                     n_smoothing_cells = nothing)
 
-    Calculated hmax used in orographic gravity wave parameterization.
-    Implements distance-weighted 4th moment calculation similar to Fortran get_hmax.
+Compute the raw subgrid height statistic `h₀` from a distance-weighted fourth moment.
 
-    Arguments:
-    - elev: surface elevation
-    - lon: longitude array (degrees)
-    - lat: latitude array (degrees)
-    - earth_radius: radius of the Earth (meters)
-    - smoothing_length_scale: smoothing scale in meters (optional)
-                             Default: 100e3 (100 km), but enforces min_smoothing_cells
-    - n_smoothing_cells: number of grid cells for smoothing (optional, overrides smoothing_length_scale)
-    - min_smoothing_cells: minimum number of grid cells to smooth over (default: 1.0)
+Returns an array shaped like `elev` holding
+
+    h₀ = (Σᵢ wᵢ (hᵢ − h̄)⁴ / Σᵢ wᵢ)^(1/4)    [m]
+
+with `h̄` the distance-weighted local mean elevation and Lorentzian weights
+`wᵢ = 1/(1 + arcᵢ²/s²)`, where `s` is the same latitude-dependent angular scale
+`calc_velocity_potential` uses. The fourth moment emphasizes the tallest peaks, which
+generate most of the wave drag, while still averaging over the subgrid terrain. Mutates
+`elev` in place, clipping ocean bathymetry to zero.
+
+This is only the raw statistic; the caller `compute_OGW_info` rescales it with the
+mountain height-width exponent `γ` and the height fraction `h_frac` to obtain the `hmax`
+and `hmin` the parameterization consumes. Ports the GFDL `get_hmax`.
+
+# Arguments
+
+  - `elev`: Surface elevation on the lon-lat grid [m]; clipped in place.
+  - `lon`, `lat`: Uniformly spaced coordinate vectors [degrees].
+  - `earth_radius`: Sphere radius [m].
+
+# Keyword Arguments
+
+  - `smoothing_length_scale = nothing`: Physical smoothing scale [m].
+  - `n_smoothing_cells = nothing`: Smoothing scale in grid cells [-]. Exactly one of this and
+    `smoothing_length_scale` must be given.
+
+Described in [garner2005](@cite); see the *Orographic Gravity Waves* page.
 """
 function calc_hpoz_latlon(
     elev,
@@ -521,6 +593,46 @@ function calc_hpoz_latlon(
     return hmax
 end
 
+"""
+    compute_OGW_info(Y, elev_data, earth_radius, γ, h_frac; α_smoothing = 0.15)
+
+Run the offline preprocessing pipeline that turns raw elevation into orographic drag input.
+
+Returns `(; hmax, hmin, t11, t12, t21, t22)` on the surface cell-center space of `Y`. This
+is the entry point of the offline path; the result is normally written to an HDF5 artifact
+by `write_computed_drag!` and loaded at runtime rather than recomputed.
+
+The smoothing scale is derived from the target grid: `α_smoothing` times the node
+horizontal length scale of `Y`, and the raw elevation is subsampled by
+`skip_pt = smoothing_length_scale/(4·Δ_raw)` so the source resolution matches. Less
+smoothing gives stronger drag.
+
+Steps, in order:
+
+ 1. `calc_hpoz_latlon` gives the raw fourth-moment statistic `h₀`, which is rescaled with
+    `γ` and `h_frac` into `hmax` and `hmin = h_frac·hmax`.
+ 2. `calc_velocity_potential` gives `χ`, smoothed at the same scale for numerical
+    stability.
+ 3. `calc_orographic_tensor` gives `t11`, `t21`, `t12`, `t22` from `χ` and the *unsmoothed*
+    elevation, so the tensor gradients keep the full terrain detail.
+ 4. The six fields are written to a temporary NetCDF file and regridded onto the model grid
+    by `regrid_OGW_info`, which reuses the GPU-capable `SpaceVaryingInput` path; the
+    temporary file is then removed.
+
+# Arguments
+
+  - `Y`: Prognostic state, used only for its spaces.
+  - `elev_data`: Path to a NetCDF file with `lon`, `lat`, and elevation `z`.
+  - `earth_radius`: Sphere radius [m].
+  - `γ`: Mountain height-width exponent [-].
+  - `h_frac`: Ratio of the minimum to the maximum obstacle height [-].
+
+# Keyword Arguments
+
+  - `α_smoothing = 0.15`: Smoothing scale as a fraction of the target grid spacing [-].
+
+See the *Orographic Gravity Waves* page for the pipeline diagram.
+"""
 function compute_OGW_info(
     Y,
     elev_data,
@@ -531,6 +643,7 @@ function compute_OGW_info(
 )
     # obtain lat, lon, elevation from the elev_data
     FT = Spaces.undertype(Spaces.axes(Y.c))
+    ctx = ClimaComms.context(Y.c)
 
     # Extract GCM grid resolution for grid-aware smoothing
     hspace = Spaces.horizontal_space(Spaces.axes(Y.c))
@@ -546,74 +659,90 @@ function compute_OGW_info(
     raw_data_resolution = FT(2 * π * earth_radius / 21600)  # ~10 km
     skip_pt = max(1, Int(round(smoothing_length_scale / (4 * raw_data_resolution))))
 
-    @info "Grid-aware OGWD preprocessing" Δh_GCM smoothing_length_scale skip_pt α_smoothing
+    ClimaComms.iamroot(ctx) &&
+        @info "Grid-aware OGWD preprocessing" Δh_GCM smoothing_length_scale skip_pt α_smoothing
 
     # Apply smoothing for hmax and chi, but not for elevation used in drag tensors
     smoothing_length_scale_chi = smoothing_length_scale  # Smooth chi for numerical stability
     smoothing_length_scale_elev = nothing  # No smoothing for tensor gradients (keep raw elevation)
-    # downsample to elev dims (3600×1800)
-    nt = NCDataset(elev_data, "r") do ds
-        lon = FT.(Array(ds["lon"]))[1:skip_pt:end]
-        lat = FT.(Array(ds["lat"]))[1:skip_pt:end]
-        elev = FT.(Array(ds["z"]))[1:skip_pt:end, 1:skip_pt:end]
-        (; lon, lat, elev)
-    end
-    (; lon, lat, elev) = nt
-    FT = eltype(elev)
 
-    # compute hmax and hmin (with grid-aware smoothing)
-    # The calc_hpoz_latlon function computes hmn (local mean) at smoothing_length_scale
-    # and subtracts it when computing hmax, effectively filtering out features > smoothing_length_scale
-    # less smoothing -> stronger drag
-    @info "skip_pt = $skip_pt"
-    @info "smoothing_length_scale for calc_hpoz_latlon = $smoothing_length_scale"
-    hpoz = calc_hpoz_latlon(
-        elev,
-        lon,
-        lat,
-        earth_radius;
-        smoothing_length_scale = smoothing_length_scale,
-    )
-    hpoz = @. max(FT(0), hpoz)^(FT(2) - γ)
-    hmax = @. (
-        abs(hpoz) * (γ + FT(2)) / (FT(2) * γ) * (FT(1) - h_frac^(FT(2) * γ)) /
-        (FT(1) - h_frac^(γ + FT(2)))
-    )^(FT(1) / (FT(2) - γ))
-    hmin = hmax .* h_frac
+    # The lat-lon preprocessing (elevation read + Hilbert transform + tensor) is
+    # identical on every rank, so run it once on root and broadcast the result. Each
+    # rank still writes its own temporary NetCDF and calls `regrid_OGW_info` below,
+    # which is a distributed operation that must run on all ranks.
+    latlon_info = if ClimaComms.iamroot(ctx)
+        # Strided read: slice the on-disk variables directly so only the subsampled
+        # elements are loaded.
+        nt = NCDataset(elev_data, "r") do ds
+            lon = FT.(ds["lon"][1:skip_pt:end])
+            lat = FT.(ds["lat"][1:skip_pt:end])
+            elev = FT.(ds["z"][1:skip_pt:end, 1:skip_pt:end])
+            (; lon, lat, elev)
+        end
+        (; lon, lat, elev) = nt
 
-    # compute χ (no smoothing if chi_length_scale is nothing)
-    # less smoothing -> stronger drag
-    chi_length_scale = smoothing_length_scale_chi
-    # If no length scale, use n_smoothing_cells = 0 (no smoothing)
-    chi_n_cells = chi_length_scale !== nothing ? nothing : 0.0
-    @info "chi smoothing: length_scale=$chi_length_scale, n_cells=$chi_n_cells"
-    χ = calc_velocity_potential(
-        elev,
-        lon,
-        lat,
-        earth_radius;
-        smoothing_length_scale = chi_length_scale,
-        n_smoothing_cells = chi_n_cells,
-    )
-
-    # Optionally smooth elevation for tensor gradient computation
-    # (matches effective resolution of coarser Fortran elevation data)
-    elev_for_tensor = if smoothing_length_scale_elev !== nothing
-        @info "Smoothing elevation for tensor gradients (scale=$(smoothing_length_scale_elev)m)"
-        smooth_field_latlon(
-            copy(elev),
+        # compute hmax and hmin (with grid-aware smoothing)
+        # The calc_hpoz_latlon function computes hmn (local mean) at smoothing_length_scale
+        # and subtracts it when computing hmax, effectively filtering out features > smoothing_length_scale
+        # less smoothing -> stronger drag
+        @info "skip_pt = $skip_pt"
+        @info "smoothing_length_scale for calc_hpoz_latlon = $smoothing_length_scale"
+        hpoz = calc_hpoz_latlon(
+            elev,
             lon,
             lat,
             earth_radius;
-            smoothing_length_scale = smoothing_length_scale_elev,
+            smoothing_length_scale = smoothing_length_scale,
         )
+        hpoz = @. max(FT(0), hpoz)^(FT(2) - γ)
+        hmax = @. (
+            abs(hpoz) * (γ + FT(2)) / (FT(2) * γ) * (FT(1) - h_frac^(FT(2) * γ)) /
+            (FT(1) - h_frac^(γ + FT(2)))
+        )^(FT(1) / (FT(2) - γ))
+        hmin = hmax .* h_frac
+
+        # compute χ (no smoothing if chi_length_scale is nothing)
+        # less smoothing -> stronger drag
+        chi_length_scale = smoothing_length_scale_chi
+        # If no length scale, use n_smoothing_cells = 0 (no smoothing)
+        chi_n_cells = chi_length_scale !== nothing ? nothing : 0.0
+        @info "chi smoothing: length_scale=$chi_length_scale, n_cells=$chi_n_cells"
+        χ = calc_velocity_potential(
+            elev,
+            lon,
+            lat,
+            earth_radius;
+            smoothing_length_scale = chi_length_scale,
+            n_smoothing_cells = chi_n_cells,
+        )
+
+        # Optionally smooth elevation for tensor gradient computation
+        # (matches effective resolution of coarser Fortran elevation data)
+        elev_for_tensor = if smoothing_length_scale_elev !== nothing
+            @info "Smoothing elevation for tensor gradients (scale=$(smoothing_length_scale_elev)m)"
+            smooth_field_latlon(
+                copy(elev),
+                lon,
+                lat,
+                earth_radius;
+                smoothing_length_scale = smoothing_length_scale_elev,
+            )
+        else
+            elev
+        end
+
+        # compute orographic tensor (t11, t21, t12, t22)
+        t11, t21, t12, t22 =
+            calc_orographic_tensor(elev_for_tensor, χ, lon, lat, earth_radius)
+
+        (; lon, lat, hmax, hmin, t11, t12, t21, t22)
     else
-        elev
+        nothing
     end
 
-    # compute orographic tensor (t11, t21, t12, t22)
-    t11, t21, t12, t22 =
-        calc_orographic_tensor(elev_for_tensor, χ, lon, lat, earth_radius)
+    # Broadcast the root-computed lat-lon fields to all ranks (no-op without MPI).
+    (; lon, lat, hmax, hmin, t11, t12, t21, t22) =
+        ClimaComms.bcast(ctx, latlon_info)
 
     # create ClimaCore.Fields
     topo_cg = fill(
@@ -681,6 +810,22 @@ function compute_OGW_info(
     return topo_cg
 end
 
+"""
+    regrid_OGW_info(Y, orographic_info_rll)
+
+Regrid orographic drag input from a lat-lon file onto the model's surface space.
+
+Returns `(; t11, t12, t21, t22, hmin, hmax)` as `Field`s on the surface cell-center space
+of `Y`. Called from `get_topo_info` for a GFDL restart, and from `compute_OGW_info` for
+freshly preprocessed data.
+
+The six variables are read by `get_topo_ll`, rewritten to a temporary two-dimensional
+NetCDF file, and interpolated with `SpaceVaryingInput`, which is GPU-capable. The
+round trip through a temporary file exists because GFDL restart files store the fields as
+three-dimensional arrays with a singleton dimension, which the underlying interpolation
+package rejects. Longitude is extrapolated periodically and latitude flat. The temporary
+file is removed before returning.
+"""
 function regrid_OGW_info(Y, orographic_info_rll)
     FT = Spaces.undertype(axes(Y.c))
 
@@ -789,10 +934,9 @@ function regrid_OGW_info(Y, orographic_info_rll)
         regridder_kwargs,
     )
 
-    # Create the output named tuple with the remapped fields
-    # Use identity broadcast to force evaluation of SpaceVaryingInput into concrete Fields
-    # The .+ 0 operation triggers the lazy wrapper to materialize into an actual Field
-    # which can then be serialized to HDF5
+    # Copy the remapped fields into the preallocated output. The broadcast
+    # materializes the SpaceVaryingInput results into concrete Fields, which is
+    # what can be serialized to HDF5.
     @. topo_cg.hmax = hmax_field
     @. topo_cg.hmin = hmin_field
     @. topo_cg.t11 = t11_field
@@ -806,6 +950,17 @@ function regrid_OGW_info(Y, orographic_info_rll)
     return topo_cg
 end
 
+"""
+    get_topo_ll(orographic_info_rll) -> (lon, lat, topo_ll)
+
+Read orographic drag input from a lat-lon NetCDF file.
+
+Returns the coordinate vectors and a `NamedTuple` `(; hmax, hmin, t11, t12, t21, t22)` of
+two-dimensional arrays. The variables are sliced at the first index of their trailing
+dimension, which drops the singleton dimension GFDL restart files carry.
+
+Called from `regrid_OGW_info`.
+"""
 function get_topo_ll(orographic_info_rll)
     nt = NCDataset(orographic_info_rll, "r") do ds
         lon = Array(ds["lon"])
@@ -824,6 +979,14 @@ function get_topo_ll(orographic_info_rll)
 end
 
 
+"""
+    move_topo_info_to_gpu(topo_info, ᶜtarget_space)
+
+Move the six orographic drag fields to the GPU and reattach them to a target space.
+
+Returns a `NamedTuple` of `Field`s on `ᶜtarget_space` backed by CUDA arrays. Used when the
+drag was preprocessed or read on the CPU but the run is on the GPU.
+"""
 function move_topo_info_to_gpu(topo_info, ᶜtarget_space)
     t11 = ClimaCore.to_device(ClimaComms.CUDADevice(), topo_info.t11)
     t12 = ClimaCore.to_device(ClimaComms.CUDADevice(), topo_info.t12)
@@ -838,6 +1001,17 @@ function move_topo_info_to_gpu(topo_info, ᶜtarget_space)
     )
 end
 
+"""
+    set_topo_info_target_space(topo_info, ᶜtarget_space)
+
+Reattach the six orographic drag fields to a different, layout-compatible space.
+
+Returns a `NamedTuple` of `Field`s on `ᶜtarget_space` sharing the input's data layout. This
+is how a drag tensor loaded from an artifact, whose space object is not the one the current
+run built, is made usable: only the space is swapped, the values are unchanged.
+
+Called from `compute_ogw_drag` and `move_topo_info_to_gpu`.
+"""
 function set_topo_info_target_space(topo_info, ᶜtarget_space)
     (; t11, t12, t21, t22, hmin, hmax) = topo_info
     FT = eltype(t11)
@@ -865,8 +1039,23 @@ end
 """
     generate_drag_filename(; topography, topo_smoothing, topography_damping_factor, h_elem)
 
-Build a unique filename and metadata NamedTuple identifying the
-preprocessed-drag output for a given topography configuration.
+Build the filename and metadata that identify a preprocessed-drag output.
+
+Returns `(; output_filename, topography, topo_smoothing, topo_damping_factor, h_elem)`,
+where `output_filename` is the extensionless
+`computed_drag_<topography>_<topo_smoothing>_<damping factor>_<h_elem>`. Every field of the
+topography configuration that changes the drag appears in the name, so two configurations
+cannot collide.
+
+Shared by `write_computed_drag!`, which writes the file and its attributes, and
+`load_preprocessed_topography`, which reads it back.
+
+# Keyword Arguments
+
+  - `topography`: Topography name.
+  - `topo_smoothing`: Whether topography smoothing was applied.
+  - `topography_damping_factor`: Damping factor applied to the topography.
+  - `h_elem`: Number of horizontal elements per panel direction [-].
 """
 function generate_drag_filename(;
     topography,
@@ -885,6 +1074,21 @@ function generate_drag_filename(;
 end
 
 
+"""
+    load_preprocessed_topography(; topography, topo_smoothing,
+                                 topography_damping_factor, h_elem)
+    load_preprocessed_topography(filename::String, comms_ctx = ClimaComms.SingletonCommsContext())
+
+Read a preprocessed orographic drag field from an HDF5 file in the package root.
+The optional `comms_ctx` must be the run's MPI context on distributed runs so the
+field is read correctly.
+
+Returns the `computed_drag` field written by `write_computed_drag!`. The keyword method
+derives the filename from the topography configuration via `generate_drag_filename` and
+reads on a single-threaded CPU context; the `String` method takes the extensionless
+filename directly and reads with the supplied `comms_ctx`. A GPU run has to move the
+result with `move_topo_info_to_gpu`.
+"""
 function load_preprocessed_topography(;
     topography,
     topo_smoothing,
@@ -906,12 +1110,14 @@ function load_preprocessed_topography(;
     return computed_drag
 end
 
-# For direct filename
-function load_preprocessed_topography(filename::String)
+function load_preprocessed_topography(
+    filename::String,
+    comms_ctx = ClimaComms.SingletonCommsContext(),
+)
     @info "loading topography drag vector: $(filename)"
     reader = InputOutput.HDF5Reader(
         joinpath(@__DIR__, "../../../$(filename).hdf5"),
-        ClimaComms.SingletonCommsContext(),
+        comms_ctx,
     )
     computed_drag = InputOutput.read_field(reader, "computed_drag")
 

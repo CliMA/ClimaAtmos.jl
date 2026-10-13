@@ -4,6 +4,25 @@ import ClimaUtilities.TimeManager: ITime
 import ClimaAtmos.Diagnostics as CAD
 import .Setups
 
+"""
+    AtmosSimulation
+
+A configured atmospheric simulation: an initialized time-stepping integrator together
+with the output bookkeeping needed to run it and write its diagnostics.
+
+Build one from an [`AtmosModel`](@ref) with `AtmosSimulation(model; ...)`, or from a
+configuration with `AtmosSimulation(config)`. Run it with `solve_atmos!`.
+
+# Fields
+
+  - `job_id`: Run identifier, also used to name the output directory.
+  - `output_dir`: Directory that receives diagnostics, checkpoints, and logs.
+  - `start_date`: Calendar date corresponding to the simulation start.
+  - `t_end`: End time of the simulation [s].
+  - `output_writers`: Diagnostic writers, closed by `solve_atmos!` when the run
+    finishes.
+  - `integrator`: The ClimaTimeSteppers integrator holding the state, cache, and callbacks.
+"""
 struct AtmosSimulation{TT, S1 <: AbstractString, S2 <: AbstractString, OW, OD}
     job_id::S1
     output_dir::S2
@@ -17,6 +36,25 @@ ClimaComms.context(sim::AtmosSimulation) =
     ClimaComms.context(sim.integrator.u.c)
 ClimaComms.device(sim::AtmosSimulation) = ClimaComms.device(sim.integrator.u.c)
 
+"""
+    setup_diagnostics_and_writers(diagnostics_config, model, Y, p, dt, t_start, t_end,
+                                  start_date, output_dir; verbose = false)
+
+Build the scheduled diagnostics and the writers they output to.
+
+The default diagnostics of `model` are added when `diagnostics_config.default` is set,
+and the entries of `diagnostics_config.additional` are added as well: those are either
+prebuilt `ScheduledDiagnostic`s or dictionary specifications, the latter translated by
+`scheduled_diagnostics_from_specs`. A NetCDF, an HDF5, and an in-memory dictionary
+writer are always created; a second NetCDF writer on pressure levels is added when a
+specification requests pressure coordinates.
+
+# Returns
+
+`(all_diagnostics, writers, periods_reductions)`: the scheduled diagnostics, the writers
+they bind to, and the accumulation periods used by
+`validate_checkpoint_diagnostics_consistency`.
+"""
 function setup_diagnostics_and_writers(
     diagnostics_config::CAD.DiagnosticsConfig,
     model,
@@ -26,10 +64,16 @@ function setup_diagnostics_and_writers(
     t_start,
     t_end,
     start_date,
-    output_dir,
+    output_dir;
+    verbose = false,
 )
-    (; default, additional, interpolation_num_points, output_at_levels) =
-        diagnostics_config
+    (;
+        default,
+        additional,
+        interpolation_num_points,
+        output_at_levels,
+        debug_tendency,
+    ) = diagnostics_config
 
     all_diagnostics = []
 
@@ -67,7 +111,22 @@ function setup_diagnostics_and_writers(
             topography = has_topography(axes(Y.c)),
         )
         append!(all_diagnostics, default_diag_list)
-        @info "Added $(length(default_diag_list)) default ClimaAtmos diagnostics"
+        verbose &&
+            @info "Added $(length(default_diag_list)) default ClimaAtmos diagnostics"
+    end
+
+    # Add debug tendency diagnostics if enabled
+    if debug_tendency
+        sim_duration = t_end - dt
+        tendency_diag_list = CAD.tendency_debug_default_diagnostics(
+            netcdf_writer,
+            sim_duration,
+            start_date,
+            t_start,
+        )
+        append!(all_diagnostics, tendency_diag_list)
+        verbose &&
+            @info "Added $(length(tendency_diag_list)) debug tendency diagnostics"
     end
 
     # Add user-provided diagnostics
@@ -78,7 +137,8 @@ function setup_diagnostics_and_writers(
 
         if !isempty(prebuilt)
             append!(all_diagnostics, prebuilt)
-            @info "Added $(length(prebuilt)) user-provided ScheduledDiagnostic objects"
+            verbose &&
+                @info "Added $(length(prebuilt)) user-provided ScheduledDiagnostic objects"
         end
 
         if !isempty(dict_specs)
@@ -108,7 +168,8 @@ function setup_diagnostics_and_writers(
                 dict_specs, Y, t_start, start_date, writers,
             )
             append!(all_diagnostics, user_scheduled_diagnostics)
-            @info "Added $(length(user_scheduled_diagnostics)) user-provided YAML-style diagnostics"
+            verbose &&
+                @info "Added $(length(user_scheduled_diagnostics)) user-provided YAML-style diagnostics"
         end
     end
 
@@ -116,7 +177,8 @@ function setup_diagnostics_and_writers(
     periods_reductions = CAD.extract_diagnostic_periods(all_diagnostics)
     if !isempty(periods_reductions)
         periods_str = join(promote_period.(periods_reductions), ", ")
-        @info "Saving accumulated diagnostics to disk with frequency: $(periods_str)"
+        verbose &&
+            @info "Saving accumulated diagnostics to disk with frequency: $(periods_str)"
     end
 
     return all_diagnostics, writers, periods_reductions
@@ -125,7 +187,11 @@ end
 """
     convert_time_args(dt, t_start, t_end, start_date)
 
-Convert dt, t_start, and t_end to ITime.
+Convert `dt`, `t_start`, and `t_end` to `ITime`s of a common type, with `start_date` as
+the epoch of the two times.
+
+Each input may be a number of seconds or a time string such as `"1hours"` (see
+`time_to_seconds`).
 """
 function convert_time_args(dt, t_start, t_end, start_date)
     dt = ITime(time_to_seconds(dt))
@@ -139,102 +205,111 @@ end
 """
     AtmosSimulation(config::AtmosConfig)
 
-Construct a simulation from a YAML-based configuration.
-Construct an atmospheric simulation with the default floating-point type `Float32`.
-Equivalent to `AtmosSimulation{Float32}(; kwargs...)`.
+Construct a simulation from a YAML-based configuration, with the float type taken
+from `config`.
+
+Equivalent to `get_simulation(config)`, which also writes the parameter manifest and
+config snapshot into the output directory.
 """
 AtmosSimulation(config::AtmosConfig) = get_simulation(config)
 
 """
-    AtmosSimulation(; kwargs...)
+    AtmosSimulation(model::AtmosModel; kwargs...)
 
-Construct an atmospheric simulation with the default floating-point type `Float32`.
-Equivalent to `AtmosSimulation{Float32}(; kwargs...)`.
-"""
-AtmosSimulation(; kwargs...) = AtmosSimulation{Float32}(; kwargs...)
+Construct an atmospheric simulation from an [`AtmosModel`](@ref).
 
-"""
-    AtmosSimulation{FT}(; kwargs...) where {FT}
+The model carries the grid, parameters, and setup, while the simulation adds run
+control (timestepping, callbacks, diagnostics, output, restarts). The initial
+state, float type, and `ClimaComms` context all come from the model.
 
-Construct an atmospheric simulation with floating-point type `FT` (default: Float32).
+Builds (or restarts) the state, the cache, the callbacks, the diagnostics, and the
+time-stepping integrator, and resolves the output directory. This is the primary
+entry point for simulations written as scripts; configuration-driven runs go through
+`get_simulation` instead.
 
-## Keyword Arguments
-
-### Model and domain
-
-  - `model::AtmosModel = AtmosModel()`: Physics and parameterization configuration.
-  - `params::ClimaAtmosParameters = ClimaAtmosParameters(FT)`: Physical parameters.
-  - `grid::AbstractGrid = SphereGrid(FT; ...)`: Computational grid.
-    Use [`ColumnGrid`](@ref), [`BoxGrid`](@ref), [`PlaneGrid`](@ref), or [`SphereGrid`](@ref).
-  - `setup = Setups.DecayingProfile(; perturb=true, params)`: Setup defining the
-    initial state. See [Setups](@ref "Setups") for available options.
+# Keyword Arguments
 
 ### Time
 
-  - `dt = 600`: Timestep in seconds.
-  - `t_start = 0`: Start time in seconds.
-  - `t_end = 864000`: End time in seconds (default: 10 days).
-  - `start_date = DateTime(2010, 1, 1)`: Calendar reference date.
+  - `dt = 600`: Timestep [s], or a string such as `"10mins"`.
+  - `start_date = DateTime(2010, 1, 1)`: Calendar date of the simulation start.
+  - `t_start = 0`: Start time [s]. Ignored, with a warning, when restarting.
+  - `t_end = 86400 * 10`: End time [s], 10 days by default.
 
 ### Output
 
-  - `job_id::String = "atmos_sim"`: Run identifier, used in output directory naming.
-  - `output_dir = nothing`: Output directory path. Auto-generated from `job_id` if `nothing`.
-  - `output_dir_style = "activelink"`: Output directory organization style.
-  - `checkpoint_frequency = Inf`: How often to save restart checkpoints (seconds).
-  - `log_to_file::Bool = false`: Write log output to a file in `output_dir`.
+  - `job_id = "atmos_sim"`: Run identifier, used in output directory naming.
+  - `output_dir = nothing`: Output directory. Defaults to `output/<job_id>`, or `<job_id>`
+    when the `CI` environment variable is set.
+  - `output_dir_style = "activelink"`: How the output directory is managed;
+    `"activelink"` keeps numbered directories with a symlink to the active one,
+    `"removepreexisting"` deletes previous output.
+  - `checkpoint_frequency = Inf`: How often to write restart checkpoints; a number of
+    seconds, a time string, or `"<N>months"`. `Inf` disables checkpointing.
+  - `log_to_file = false`: Send log output to a file in the output directory.
+  - `verbose = false`: Log progress while building the simulation (root process only).
 
 ### Diagnostics
 
-  - `diagnostics::DiagnosticsConfig = DiagnosticsConfig()`: Specification of which
-    diagnostics the simulation produces and how their NetCDF output is shaped.
-    See [`DiagnosticsConfig`](@ref).
+  - `diagnostics = DiagnosticsConfig()`: Which diagnostics to produce and how to write
+    them. See [`DiagnosticsConfig`](@ref).
 
 ### Callbacks
 
-  - `default_callbacks::Bool = true`: Enable common simulation callbacks.
-  - `callbacks = ()`: Additional user-provided callbacks.
-  - `callback_kwargs = ()`: Extra keyword arguments forwarded to default callbacks.
+  - `default_callbacks = true`: Add the default model and common callbacks. When `false`,
+    only `callbacks` is used.
+  - `callbacks = ()`: User-provided callbacks, used only when `default_callbacks` is
+    `false`.
+  - `callback_kwargs = ()`: Extra keyword arguments forwarded to the default callbacks.
 
 ### Restarts
 
-  - `restart_file = nothing`: Path to a restart file to resume from.
-  - `detect_restart_file::Bool = false`: Automatically detect the latest restart file in
-    a structured output directory.
+  - `restart_file = nothing`: Restart file to resume from. `model.grid` must match the
+    grid in the file, because the state is not interpolated. A mismatch is an error.
+  - `detect_restart_file = false`: Pick up the most recent restart file in the output
+    directory structure; only available with `output_dir_style = "activelink"`.
 
 ### Numerics
 
-  - `ode_config`: ODE solver algorithm. Default: `IMEXAlgorithm(ARS343(), NewtonsMethod(...))`.
-  - `jacobian::JacobianAlgorithm = ManualSparseJacobian(; approximate_solve_iters = 1)`:
-    Jacobian algorithm for the implicit solve. Use [`ManualSparseJacobian`](@ref),
+  - `ode_config`: Time-stepping algorithm. Defaults to `IMEXAlgorithm(ARS343(), NewtonsMethod(; max_iters = 1, update_j = UpdateEvery(NewNewtonIteration)))`.
+  - `jacobian = ManualSparseJacobian(; approximate_solve_iters = 1)`: Jacobian algorithm
+    for the implicit solve. Use [`ManualSparseJacobian`](@ref),
     [`AutoSparseJacobian`](@ref), or [`AutoDenseJacobian`](@ref).
-  - `debug_jacobian::Bool = false`: Enable Jacobian debugging output.
-  - `tracers = []`: Additional tracer species.
+  - `debug_jacobian = false`: Print Jacobian diagnostics while solving.
+  - `update_cache_every = "stage"`: When the cache is refreshed, `"stage"` or `"step"`.
+  - `update_constrain_state_every = "step"`: When state constraints are applied,
+    `"stage"`, `"step"`, or `"dss"`.
 
-## Example
+### Diagnostics helpers
+
+  - `steady_state_velocity = nothing`: Analytic steady-state velocity used by diagnostics,
+    either a precomputed field or a callable `(Y, params) -> velocity` evaluated once `Y`
+    exists.
+
+# Returns
+
+An [`AtmosSimulation`](@ref), ready to be passed to `solve_atmos!`.
+
+# Examples
 
 ```julia
 import ClimaAtmos as CA
 
 # Minimal: 1-day global simulation with defaults
-simulation = CA.AtmosSimulation{Float64}(; t_end = 86400)
+model = CA.AtmosModel(CA.SphereGrid(Float64))
+simulation = CA.AtmosSimulation(model; t_end = 86400)
 CA.solve_atmos!(simulation)
 
-# Single-column BOMEX case
-simulation = CA.AtmosSimulation{Float64}(;
-    grid = CA.ColumnGrid(Float64; z_elem = 60, z_max = 3000.0),
-    setup = CA.Setups.Bomex(),
-    dt = 5,
-    t_end = 3600 * 6,
+# Single-column BOMEX case: the setup supplies the case physics
+model = CA.AtmosModel(
+    CA.ColumnGrid(Float64; z_elem = 60, z_max = 3000.0);
+    setup = CA.Setups.Bomex(Float64),
 )
+simulation = CA.AtmosSimulation(model; dt = 5, t_end = 3600 * 6)
 ```
 """
-function AtmosSimulation{FT}(;
-    model = AtmosModel(),
-    params::Parameters.ClimaAtmosParameters = ClimaAtmosParameters(FT),
-    context::ClimaComms.AbstractCommsContext = ClimaComms.context(),
-    grid::Grids.AbstractGrid = SphereGrid(FT; radius = CAP.planet_radius(params), context),
-    setup = Setups.DecayingProfile(; perturb = true, params),
+function AtmosSimulation(
+    model::AtmosModel;
     dt = 600,
     start_date = DateTime(2010, 1, 1),
     t_start = 0,
@@ -252,9 +327,6 @@ function AtmosSimulation{FT}(;
     output_dir_style = "activelink",  # TODO: Should this be an actual type?
     restart_file = nothing,
     detect_restart_file = false,
-    aerosol_names = [], # TODO: set from the model
-    time_varying_trace_gases = (),
-    vertical_water_borrowing_species = nothing,
     # Callbacks
     default_callbacks = true,   # Enable common simulation callbacks
     callbacks = (),             # User-provided additional callbacks
@@ -264,10 +336,19 @@ function AtmosSimulation{FT}(;
     # Numerics
     jacobian::JacobianAlgorithm = ManualSparseJacobian(approximate_solve_iters = 1),
     debug_jacobian = false,
+    update_cache_every = "stage",
+    update_constrain_state_every = "step",
     # Misc
     checkpoint_frequency = Inf,
     log_to_file = false,
-) where {FT}
+    verbose = false,
+)
+    params = model.params
+    context = ClimaComms.context(model.grid)
+
+    # Log only on root process
+    verbose = ClimaComms.iamroot(context) && verbose
+
     # Set up output directory and restart file detection
     output_dir, restart_file = setup_output_dir(
         job_id, output_dir, output_dir_style,
@@ -276,9 +357,27 @@ function AtmosSimulation{FT}(;
 
     if !isnothing(restart_file)
         # Handle restart: validates t_start, loads state, logs info, extracts spaces
-        (Y, t_start, spaces) = handle_restart(
-            restart_file, t_start, start_date, model, context,
+        (Y, t_start, spaces) = @timed_log verbose "Loaded restart file" handle_restart(
+            restart_file, t_start, start_date, model, context; verbose,
         )
+        # Ensure grids match on restart: compare center coordinate field rather than
+        # the grids
+        model_coords = Fields.coordinate_field(get_spaces(model.grid).center_space)
+        ckpt_coords = Fields.coordinate_field(spaces.center_space)
+        model_points, ckpt_points = parent(model_coords), parent(ckpt_coords)
+        if size(model_points) != size(ckpt_points) || !isapprox(model_points, ckpt_points)
+            model_z = extrema(parent(model_coords.z))
+            ckpt_z = extrema(parent(ckpt_coords.z))
+            error(
+                """
+                The restart file's grid does not match `model.grid`. Restarts do not \
+                interpolate the state, so build the model with a grid that matches the \
+                checkpoint, or restart from a checkpoint that matches the grid.
+                  restart_file: $restart_file
+                  model.grid:   $(size(model_points)) points, z extent $model_z
+                  checkpoint:   $(size(ckpt_points)) points, z extent $ckpt_z""",
+            )
+        end
         # t_start is already converted from restart file, but we still need to convert dt and t_end
         dt = ITime(time_to_seconds(dt))
         t_end = ITime(time_to_seconds(t_end), epoch = start_date)
@@ -286,15 +385,7 @@ function AtmosSimulation{FT}(;
         (dt, t_start, t_end, _) = promote(dt, t_start, t_end, ITime(0))
     else
         dt, t_start, t_end = convert_time_args(dt, t_start, t_end, start_date)
-        spaces = get_spaces(grid)
-        Y = Setups.initial_state(
-            setup, params, model,
-            spaces.center_space,
-            spaces.face_space,
-        )
-        Setups.overwrite_initial_state!(
-            setup, Y, params.thermodynamics_params,
-        )
+        Y = @timed_log verbose "Initialized state" initial_state(model)
     end
 
     # Resolve steady_state_velocity: accept nothing, a precomputed velocity field,
@@ -303,14 +394,12 @@ function AtmosSimulation{FT}(;
         steady_state_velocity isa Function ? steady_state_velocity(Y, params) :
         steady_state_velocity
 
-    p = build_cache(
-        Y, model, params, dt, start_date, aerosol_names,
-        time_varying_trace_gases, resolved_steady_state_velocity,
-        vertical_water_borrowing_species,
+    p = @timed_log verbose "Built cache" build_cache(
+        Y, model, params, dt, start_date, resolved_steady_state_velocity,
     )
 
     # Combine all callbacks
-    discrete_callbacks = if default_callbacks
+    discrete_callbacks = @timed_log verbose "Assembled callbacks" if default_callbacks
         checkpoint_frequency = parse_checkpoint_frequency(checkpoint_frequency)
         (
             default_model_callbacks(
@@ -334,16 +423,24 @@ function AtmosSimulation{FT}(;
         jacobian, debug_jacobian,
         model.prescribed_flow,
         dt,
+        update_cache_every,
+        update_constrain_state_every;
+        verbose,
     )
 
-    integrator = CTS.init(integrator_args...; integrator_kwargs...)
-
-    all_diagnostics, writers, periods_reductions = setup_diagnostics_and_writers(
-        diagnostics, model,
-        Y, p, dt,
-        t_start, t_end, start_date,
-        output_dir,
+    integrator = @timed_log verbose "Initialized integrator" CTS.init(
+        integrator_args...;
+        integrator_kwargs...,
     )
+
+    all_diagnostics, writers, periods_reductions =
+        @timed_log verbose "Set up diagnostics" setup_diagnostics_and_writers(
+            diagnostics, model,
+            Y, p, dt,
+            t_start, t_end, start_date,
+            output_dir;
+            verbose,
+        )
 
     validate_checkpoint_diagnostics_consistency(
         checkpoint_frequency, periods_reductions,
@@ -355,7 +452,7 @@ function AtmosSimulation{FT}(;
             integrator,
             all_diagnostics,
         )
-        @info "Initialized $(length(all_diagnostics)) total diagnostics"
+        verbose && @info "Initialized $(length(all_diagnostics)) total diagnostics"
     end
 
     reset_graceful_exit(output_dir)

@@ -33,8 +33,12 @@ import ClimaCore as CC
         spacefilling = CC.Topologies.spacefillingcurve(mesh)
 
         # We can now verify the coordinates directly (add 1 to account for 1-based indexing)
-        coords_x = parent(grid.horizontal_grid.local_geometry.coordinates.x)[1, 1, 1, :]
-        coords_y = parent(grid.horizontal_grid.local_geometry.coordinates.y)[1, 1, 1, :]
+        # `Nh` is the last dimension of the parent array; the number of leading
+        # node/field dimensions depends on the ClimaCore data layout, so take
+        # the first index of each instead of hard-coding their count.
+        first_node(p) = p[ntuple(_ -> 1, ndims(p) - 1)..., :]
+        coords_x = first_node(parent(grid.horizontal_grid.local_geometry.coordinates.x))
+        coords_y = first_node(parent(grid.horizontal_grid.local_geometry.coordinates.y))
         coords = @. CartesianIndex(Int(coords_x + 1), Int(coords_y + 1))
 
         @test coords == spacefilling

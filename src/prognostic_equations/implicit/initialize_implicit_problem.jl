@@ -8,18 +8,27 @@ import ClimaCore: Fields, Spaces
 """
     initialize_implicit_stage_problem!(Y, p, dtγ)
 
-Initialize the state `Y` for the IMEX implicit stage.
+Initialize the state `Y` for an IMEX implicit stage with step fraction `dtγ`.
 
-Currently, this analytically solves SGS/updraft `u₃` and overwrites `Y`
-with the stage-consistent value. Since this value should not be modified
-by the subsequent ODE/Newton solve, we store the implied tendency
+Registered with ClimaTimeSteppers as the `initialize_imp!` hook of
+`ClimaODEFunction`, so it runs at the start of every implicit stage, before the
+Newton solve. For `PrognosticEDMFX` it overwrites the updraft vertical
+velocity `Y.f.sgsʲs.:(j).u₃` and area-weighted density `Y.c.sgsʲs.:(j).ρa` with
+the stage-consistent values obtained from the analytic solves
+`solve_sgs_u₃_implicit_stage_analytic!` and
+`solve_sgs_ρa_implicit_stage_analytic!`. Since these values should not be
+changed again by the Newton solve, the implied tendencies
 
-    (u₃_stage - u₃_old) / dtγ
+    (u₃_stage - u₃_old) / dtγ    and    (ρa_stage - ρa_old) / dtγ
 
-in `p.precomputed.ᶠu₃_tendencyʲs`, so that the solver preserves the
-updated state.
+are cached in `p.precomputed.ᶠu₃_tendencyʲs` and `p.precomputed.ᶜρa_tendencyʲs`,
+and are returned as the implicit tendencies of these variables by
+`sgs_u₃_implicit_tendency!` and `sgs_ρa_implicit_tendency!`, so that the solver
+reproduces the analytic stage state. For all other turbulence-convection models
+this is a no-op.
 
 This routine acts as a general hook for implicit-stage initialization.
+Returns `nothing`.
 """
 function initialize_implicit_stage_problem!(Y, p, dtγ)
 
@@ -50,7 +59,7 @@ end
 """
     sgs_u₃_implicit_tendency!(Yₜ, Y, p, t, turbconv_model)
 
-Set the cached SGS/updraft `u₃` tendency for the implicit stage.
+Write the cached SGS/updraft `u₃` tendency into `Yₜ.f.sgsʲs.:(j).u₃`.
 
 For `PrognosticEDMFX`, the implicit-stage value of `u₃` is computed
 analytically in `initialize_implicit_stage_problem!` and written directly
@@ -58,10 +67,12 @@ into `Y`. This routine then supplies the corresponding cached tendency,
 
     (u₃_stage - u₃_old) / dtγ,
 
-to the implicit ODE solve so that the analytically computed `u₃` value is
-preserved.
+read from `p.precomputed.ᶠu₃_tendencyʲs`, to the implicit ODE solve so that the
+analytically computed `u₃` value is preserved. Note that the tendency is
+assigned, not accumulated, so any earlier updraft `u₃` tendency is discarded.
 
-For other turbulence-convection models, this tendency is not applied.
+For all other `turbconv_model` subtypes this is a no-op. Mutates `Yₜ` and
+returns `nothing`.
 """
 sgs_u₃_implicit_tendency!(Yₜ, Y, p, t, _) = nothing
 
@@ -85,41 +96,49 @@ end
 """
     solve_sgs_u₃_implicit_stage_analytic!(Y, p, dtγ)
 
-Compute and set the IMEX/ARK implicit-stage solution for the SGS/updraft
-vertical velocity `u₃` in each EDMFX mass-flux subdomain.
+Solve the IMEX/ARK implicit-stage equation for the SGS/updraft vertical
+velocity `u₃` analytically, overwriting `Y.f.sgsʲs.:(j).u₃` in each EDMFX
+mass-flux subdomain `j`.
 
-This routine **analytically solves** the implicit stage equation for `u₃`
-and writes the stage-consistent value directly into `Y`. The result is
-intended to remain fixed during the subsequent ODE solve.
+The result is intended to remain fixed during the subsequent Newton solve; see
+`initialize_implicit_stage_problem!` for how it is held fixed. Returns early
+for any `turbconv_model` other than `PrognosticEDMFX`.
 
-The underlying evolution equation for the vertical velocity `w` is
+The underlying evolution equation for the physical vertical velocity `w` is
 
-    ∂w/∂t + ∂k/∂z = b + ε (w₀ − w) − (α/H) (w − w₀)²,
+    ∂w/∂t + ∂(w²/2)/∂z = (1 − α_b) b + E (w₀ − w) − a⁰ d_c (w − w₀) |w − w₀|,
 
-which, at an IMEX/ARK stage, becomes an algebraic equation for the new
-stage value. For a single updraft we use the approximation
+with `d_c` the coefficient of `pressure_drag_coefficient` and `a⁰ = ρ̂⁰/ρ` the
+environment weight of the pairwise form drag, which, at an IMEX/ARK stage,
+becomes an algebraic equation for the new stage value. The environment
+velocity is eliminated with the mass-flux constraint,
 
-    w₀ − w = (ρ / ρa⁰)(w_env − w) ≈ −(ρ / ρa⁰) w,
+    w₀ − w ≈ −w / a⁰,
 
-so that entrainment acts as a linear sink in `w` and pressure drag becomes
-a quadratic sink in `w²`. After rearrangement, the stage equation reduces to
+so that each velocity difference brings one factor of `1/a⁰`: the
+velocity-independent entrainment rates (background, the entrainment branch of
+the signed area-bounding rate, and turbulent) contribute the linear sink
+`E w / a⁰`; the velocity-proportional entrainment rate, which scales with the
+relative velocity `entr_vel_scale · |w − w₀|`, contributes the quadratic sink
+`entr_vel_scale w² / a⁰²`; and the drag contributes the quadratic sink
+`d_c w² / a⁰`, its weight `a⁰` cancelling one of the two factors. After
+rearrangement, the stage equation for face `i` reduces to
 
-    a w² + b w + c = 0,
+    a u₃² + b u₃ + c − (u₃[i−1] / Δz)² / 2 = 0,
 
-which is solved analytically using a numerically stable quadratic formula.
+where the prognostic variable is the covariant component `u₃ = w · Δz`, so the
+whole equation carries one factor of `Δz` relative to the equation for `w`.
+The coefficients `(a, b, c)` collect the implicit stage term `(w − w_old)/dtγ`,
+entrainment, nonhydrostatic pressure drag (only when `edmfx_model.nh_pressure`
+is `Val(true)`), the Rayleigh sponge damping rate (only when a sponge is
+configured), buoyancy reduced by the buoyancy-pressure coefficient
+`(1 − α_b)`, and the local part of the vertical advection of kinetic energy.
 
-The coefficients `(a, b, c)` include contributions from:
-
-  - the implicit stage term (`dtγ` scaling),
-  - entrainment/detrainment,
-  - nonhydrostatic pressure drag,
-  - optional Rayleigh damping,
-  - and (optionally) implicit vertical advection.
-
-In this discretization, the prognostic variable is the covariant vertical
-velocity component `u₃`. The physical vertical velocity `w` is obtained via
-a metric scaling (division by Δz), which is consistently applied when
-forming the quadratic coefficients.
+The equation is swept upward with `Operators.column_accumulate!`, which couples
+each face to the one below through `u₃[i−1]`, and each face takes the `+` root
+of the quadratic. Clamping the constant term with `min(0, ⋅)` keeps the
+discriminant non-negative and the root non-negative, so the solve can never
+produce a downward updraft velocity.
 """
 function solve_sgs_u₃_implicit_stage_analytic!(Y, p, dtγ)
 
@@ -129,19 +148,27 @@ function solve_sgs_u₃_implicit_stage_analytic!(Y, p, dtγ)
     (; turbconv_model, rayleigh_sponge) = p.atmos
     (; ᶜρ_diffʲs, ᶜρʲs) = p.precomputed
     (; ᶠgradᵥ_ᶜΦ) = p.core
-    (; ᶜturb_entrʲs, ᶜentr_vel_scaleʲs, ᶜarea_bounding_entr_detrʲs) = p.precomputed
+    (;
+        ᶜturb_entrʲs,
+        ᶜentr_vel_scaleʲs,
+        ᶜentr_nonvel_rateʲs,
+        ᶜarea_bounding_entr_detrʲs,
+    ) = p.precomputed
     FT = eltype(p.params)
 
     turbconv_params = CAP.turbconv_params(params)
     α_b = CAP.pressure_normalmode_buoy_coeff1(turbconv_params)
     α_d = CAP.pressure_normalmode_drag_coeff(turbconv_params)
     a_min = CAP.min_area(turbconv_params)
+    a_max = CAP.max_area(turbconv_params)
     scale_height = CAP.R_d(params) * CAP.T_surf_ref(params) / CAP.grav(params)
 
-    # Approximation factor used in w₀ - w ≈ -(ρ / ρa⁰) w (single-updraft case).
-    # For multiple updrafts we approximate ρ / ρa⁰ ≈ 1, which implies w₀ ≈ 0.
-    ᶜρ_over_ρa⁰ = p.scratch.ᶜtemp_scalar
-    @. ᶜρ_over_ρa⁰ = Y.c.ρ / ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model)
+    # Approximation factor used in w₀ - w ≈ -(1 / a⁰) w (single-updraft case).
+    # Guard against unphysical extrapolated areas (ρa is solved analytically
+    # AFTER u₃, so the u₃ solve sees a possibly out-of-range ρa). Clamp
+    # a⁰ ∈ [1−a_max, 1].
+    ᶜa⁰_inv = p.scratch.ᶜtemp_scalar
+    @. ᶜa⁰_inv = FT(1) / clamp(a⁰(Y.c.sgsʲs, ᶜρʲs, turbconv_model), 1 - a_max, FT(1))
 
     ᶠdz = Fields.Δz_field(axes(Y.f))
 
@@ -159,29 +186,41 @@ function solve_sgs_u₃_implicit_stage_analytic!(Y, p, dtγ)
         @. ᶠb = 1 / dtγ
         @. ᶠc = -1 * (Y.f.sgsʲs.:($$j).u₃.components.data.:1 / dtγ)
 
-        # Implicit entrainment: the velocity-dependent coefficient contributes a
-        # quadratic sink (∝ w²) and the background/turbulent entrainment contributes
-        # a linear sink (∝ w), after applying the approximation w₀ - w ≈ -(ρ/ρa⁰) w.
-        # The positive part of `area_bounding_entr_detr` is the entrainment branch
-        # of the signed area-bounding rate (see `area_bounding_entr_detr`).
-        @. ᶠa += ᶠinterp(ᶜentr_vel_scaleʲs.:($$j) * ᶜρ_over_ρa⁰ * ᶜρ_over_ρa⁰) / ᶠdz
+        # Implicit entrainment E (w₀ - w) ≈ -E w / a⁰. The velocity-dependent
+        # rate scales with the relative velocity, `entr_vel_scale · |w - w₀|`
+        # ≈ `entr_vel_scale · w / a⁰`, so it contributes a quadratic sink (∝ w²)
+        # with two factors of 1/a⁰; the velocity-independent rates contribute a
+        # linear sink (∝ w) with one. The ρa solve evaluates the same rate with
+        # w₀ ≈ 0 (`compute_entrainment`). The positive part of
+        # `area_bounding_entr_detr` is the entrainment branch of the signed
+        # area-bounding rate (see `area_bounding_entr_detr`). `entr_nonvel_rate`
+        # is included in the linear sink, with the assumption that the change
+        # in b/w is slow.
+        @. ᶠa += ᶠinterp(ᶜentr_vel_scaleʲs.:($$j) * ᶜa⁰_inv * ᶜa⁰_inv) / ᶠdz
         @. ᶠb +=
             ᶠinterp(
-                (max(FT(0), ᶜarea_bounding_entr_detrʲs.:($$j)) + ᶜturb_entrʲs.:($$j)) *
-                ᶜρ_over_ρa⁰,
+                (
+                    max(FT(0), ᶜarea_bounding_entr_detrʲs.:($$j)) +
+                    ᶜentr_nonvel_rateʲs.:($$j) +
+                    ᶜturb_entrʲs.:($$j)
+                ) * ᶜa⁰_inv,
             )
 
-        # Implicit NH pressure drag contributes a quadratic sink in w².
-        if p.atmos.edmfx_model.nh_pressure isa Val{true}
+        # Implicit NH pressure drag a⁰ d_c (w - w₀)|w - w₀| ≈ d_c w² / a⁰
+        # contributes a quadratic sink: two factors of 1/a⁰ from the velocity
+        # differences, one cancelled by the environment weight a⁰ of the
+        # pairwise form.
+        if p.atmos.edmfx_model.nh_pressure
             ᶜaʲ = @. lazy(draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j)))
-            ᶜa⁰ = @. lazy(a⁰(Y.c.sgsʲs, ᶜρʲs, turbconv_model))
             # Use a scratch scalar here as @lazy results in a large fused kernel
-            # that doesn't work on P100 GPUs.
+            # that doesn't work on P100 GPUs. `1 / ᶜa⁰_inv` is the clamped
+            # environment area, which keeps the subdomain sum out of this
+            # kernel; the clamp inside the coefficient is then idempotent.
             ᶜdrag_coeff = p.scratch.ᶜtemp_scalar_2
-            @. ᶜdrag_coeff =
-                α_d / (2 * scale_height) *
-                (1 / sqrt(max(ᶜaʲ, a_min)) + 1 / sqrt(max(ᶜa⁰, a_min)))
-            @. ᶠa += ᶠinterp(ᶜdrag_coeff * ᶜρ_over_ρa⁰ * ᶜρ_over_ρa⁰) / ᶠdz
+            @. ᶜdrag_coeff = pressure_drag_coefficient(
+                α_d, scale_height, ᶜaʲ, 1 / ᶜa⁰_inv, a_min, a_max,
+            )
+            @. ᶠa += ᶠinterp(ᶜdrag_coeff * ᶜa⁰_inv) / ᶠdz
         end
 
         # Optional Rayleigh sponge adds extra linear damping near the top.
@@ -221,7 +260,8 @@ end
 """
     sgs_ρa_implicit_tendency!(Yₜ, Y, p, t, turbconv_model)
 
-Set the cached updraft area tendency for the implicit stage.
+Write the cached updraft area-weighted density tendency into
+`Yₜ.c.sgsʲs.:(j).ρa`.
 
 For `PrognosticEDMFX`, the implicit-stage value of `ρa` is computed
 analytically in `initialize_implicit_stage_problem!` and written directly
@@ -229,8 +269,12 @@ into `Y`. This routine supplies the corresponding cached tendency,
 
     (ρa_stage - ρa_old) / dtγ,
 
-to the implicit ODE solve so that the analytically computed `ρa` value is
-preserved.
+read from `p.precomputed.ᶜρa_tendencyʲs`, to the implicit ODE solve so that the
+analytically computed `ρa` value is preserved. The tendency is assigned, not
+accumulated, so any earlier updraft `ρa` tendency is discarded.
+
+For all other `turbconv_model` subtypes this is a no-op. Mutates `Yₜ` and
+returns `nothing`.
 """
 sgs_ρa_implicit_tendency!(Yₜ, Y, p, t, _) = nothing
 
@@ -251,50 +295,44 @@ end
 """
     solve_sgs_ρa_implicit_stage_analytic!(Y, p, dtγ)
 
-Compute and set the IMEX/ARK implicit-stage solution for the updraft
-area-weighted density `ρa` in each EDMFX mass-flux subdomain.
+Solve the IMEX/ARK implicit-stage equation for the updraft area-weighted
+density `ρa` analytically, overwriting `Y.c.sgsʲs.:(j).ρa` in each EDMFX
+mass-flux subdomain `j`.
 
-The implicit stage equation for ρaʲ in flux form is
+Returns early for any `turbconv_model` other than `PrognosticEDMFX`; see
+`initialize_implicit_stage_problem!` for how the result is held fixed during
+the Newton solve.
 
-    ∂ρa/∂t + ∂(ρa · w) / ∂z = (ε − δ) · ρa,
+The flux-form stage equation `∂ρa/∂t + ∂(ρa·w)/∂z = (ε − δ)·ρa` reduces
+under first-order upwinding (for upward `ᶠu₃ʲ`) to the forward recurrence
 
-With first-order upwinding for upward ᶠu₃ʲ, the stage equation reduces to
-the forward recurrence
+    ρa_new[i] = (numerator[i] + α_bot[i] · ρa_new[i−1]) / denominator[i],
+    numerator[i] = ρa_old[i]/dtγ,
+    denominator[i] = max(0.1/dtγ, 1/dtγ + α_top[i] − (ε − δ)[i]),
+    α_face = (ᶠinterp(ρʲ·J)/ᶠJ · ᶠu₃ʲ/Δz_face) / (ρʲ_upwind · Δz[i]),
 
-    ρa_new[i] = (ρa_old[i]/dtγ + α_bot · ρa_new[i−1]) / denominator[i],
+evaluated bottom-to-top with `Operators.column_accumulate!`. The floor on the
+denominator caps the per-step growth at roughly a factor of ten.
 
-with
+`(ε − δ)` is assembled inline from area-bounding, velocity-scale, and
+buoyancy-driven pieces (see `detr_buoy_inv_time_scale`). The
+mass-flux-divergence component of detrainment is not part of `(ε − δ)`: it
+becomes a multiplicative prefactor on both `α_top` and `α_bot`, so that it is
+treated implicitly together with the flux divergence. In the first cell,
+`α_bot` is zeroed (the surface flux vanishes because `u₃ = 0` there, and the
+upwind density would otherwise read an undefined ghost cell), and the capped
+surface mass-flux source `F_sfc/Δz` from `p.precomputed.sfc_mass_flux_sourceʲs`
+is added to the numerator as an area-independent constant.
 
-    denominator[i] = 1/dtγ + α_top − (ε − δ)[i],
-    α_face         = (ρʲ_face · w_face) / (ρʲ_upwind · Δz[i])
-                   = (ᶠinterp(ρʲ·J)/ᶠJ · ᶠu₃ʲ/Δz_face) / (ρʲ_upwind · Δz[i]),
-
-evaluated at the top (i + ½) and bottom (i − ½) faces. The upwind density
-`ρʲ_upwind` is taken from the cell below each face for upward flow: ρʲ[i]
-at the top face and ρʲ[i−1] at the bottom face.
-
-The `(ε − δ)` piece of the recurrence is assembled inline from
-`ᶜarea_bounding_entr_detrʲs`, `ᶜentr_vel_scaleʲs`, and the buoyancy
-detrainment expression (see [`detr_buoy_inv_time_scale`](@ref)) using the
-freshly solved `u₃` from the preceding analytic solve; the
-mass-flux-divergence component of detrainment is folded into a
-multiplicative prefactor on the implicit advection term (so it is treated
-implicitly together with the flux divergence) rather than added to
-`(ε − δ)`.
-
-Surface boundary: at face ½, `u₃ = 0` (no-penetration), so the physical
-mass flux into cell 1 vanishes. To avoid NaN from `ᶠleft_bias(ᶜρʲ)`
-hitting the undefined ghost cell below the domain, `α_bot[1]` is explicitly
-overwritten to zero. The recurrence then reduces at cell 1 to
-`ρa_new[1] = ρa_old[1]/dtγ / denominator[1]`, i.e. the first cell evolves
-purely from its own forcing and from local entrainment/detrainment, with
-zero inflow from below.
-
-`denominator` is floored at `0.1/dtγ`, which is equivalent to bounding
-`(ε − δ) ≤ 0.9/dtγ` and has a similar effect as the protection previously
-provided by `limit_detrainment`. This caps the per-step growth at ≈ 10×.
-
-The sweep uses `Operators.column_accumulate!` for performance.
+The area limiters in `(ε − δ)` are evaluated at the previous-iterate area
+(explicit treatment), so they cannot guarantee `a ∈ [0, a_max]` at the
+implicit stage value. The sweep therefore clamps `ρa ∈ [0, ρʲ·a_max]`
+per-cell, using the updraft density `ρʲ` so that the cap acts on the draft
+area `a = ρa/ρʲ`. Clipping from above is mass-conserving — the excess `ρa` is
+absorbed by the environment automatically, acting like instantaneous
+detrainment. Clipping from below at `ρʲ·a_min` would *not* be conservative
+because it would create updraft mass out of nothing, so the lower bound is set
+to zero instead.
 """
 function solve_sgs_ρa_implicit_stage_analytic!(Y, p, dtγ)
 
@@ -303,7 +341,8 @@ function solve_sgs_ρa_implicit_stage_analytic!(Y, p, dtγ)
     (; turbconv_model) = p.atmos
     (; ᶜρ_diffʲs, ᶜρʲs) = p.precomputed
     (; ᶠgradᵥ_ᶜΦ) = p.core
-    (; ᶜentr_vel_scaleʲs, ᶜarea_bounding_entr_detrʲs) = p.precomputed
+    (; ᶜentr_vel_scaleʲs, ᶜentr_nonvel_rateʲs, ᶜarea_bounding_entr_detrʲs) =
+        p.precomputed
     FT = eltype(p.params)
 
     turbconv_params = CAP.turbconv_params(p.params)
@@ -313,9 +352,10 @@ function solve_sgs_ρa_implicit_stage_analytic!(Y, p, dtγ)
     ᶠdz = Fields.Δz_field(axes(Y.f))
     ᶠlg = Fields.local_geometry_field(Y.f)
     detr_buoy_coeff = CAP.detr_buoy_coeff(turbconv_params)
-    detr_buoy_inv_tau_max = CAP.detr_buoy_inv_tau_max(turbconv_params)
+    entr_detr_buoy_inv_tau_max = CAP.entr_detr_buoy_inv_tau_max(turbconv_params)
     detr_massflux_vertdiv_coeff =
         CAP.detr_massflux_vertdiv_coeff(turbconv_params)
+    a_max = CAP.max_area(turbconv_params)
 
     # Cell-centred coefficients of the recurrence:
     #   ᶜnumerator            = ρa_old[i] / dtγ
@@ -323,13 +363,11 @@ function solve_sgs_ρa_implicit_stage_analytic!(Y, p, dtγ)
     #   ᶜmass_flux_factor_bot = α_bot · (1 − implicit_detr_prefactor)
     # where α_face = (ᶠinterp(ρʲ·J)/ᶠJ · ᶠu₃ʲ/Δz_face) / (ρʲ_upwind · Δz).
     # For upward flow the upwind density at the bottom face is ρʲ[i−1], which we
-    # extract via `ᶠleft_bias(ᶜρʲs)`. The mass-flux-divergence component of the
+    # extract via `ᶠbottom_bias(ᶜρʲs)`. The mass-flux-divergence component of the
     # detrainment is folded into `ᶜone_minus_implicit_detr_prefactor` (a
     # multiplicative correction on the implicit advection term), leaving the
     # `(ε − δ)` term to carry only the area-bounding, velocity-scale
     # entrainment, and buoyancy-based detrainment pieces.
-    # `ᶠleft_bias`/`ᶠright_bias` (C2F) and `ᶜleft_bias`/`ᶜright_bias` (F2C) come
-    # from `abbreviations.jl`.
     ᶜnumerator = p.scratch.ᶜtemp_scalar
     ᶜdenominator = p.scratch.ᶜtemp_scalar_2
     ᶜmass_flux_factor_bot = p.scratch.ᶜtemp_scalar_3
@@ -353,31 +391,23 @@ function solve_sgs_ρa_implicit_stage_analytic!(Y, p, dtγ)
                 turbconv_params,
             ),
         )
-        # Effective mass-flux-divergence detrainment fraction (Lagrangian fraction
-        # of converging mass detrained at this level):
-        #
-        #     detr_coeff = 1 − U · (1 − L · C),
-        #
-        # where U = `upper_area_limiter_factor(a)` (→ 0 as a → a_max),
-        # L = `lower_area_limiter_factor(a)` (→ 0 as a → a_min), and
-        # C = `detr_massflux_vertdiv_coeff`. Endpoint behavior:
-        #   - U = 1 (a ≪ a_max): detr_coeff = L · C — standard regime.
-        #   - U = 0 (a → a_max): detr_coeff = 1 — implicit detrainment soaks up
-        #     100% of the converging mass regardless of C, capping area at a_max
-        #     even when advection alone would push it past.
-        # The recurrence consumes `one_minus_prefactor = 1 − detr_coeff
-        # = U · (1 − L · C)`.
+        # Mass-flux-divergence detrainment fraction:
+        #   detr_coeff = 1 − U · (1 − L · C)
+        # with U = upper limiter (→ 0 as a → a_max), L = lower limiter
+        # (→ 0 as a → a_min), C = detr_massflux_vertdiv_coeff.
+        # At U = 0 (a → a_max): detr_coeff = 1 — all converging mass is
+        # detrained, capping area at a_max regardless of C.
+        # The recurrence uses `one_minus_prefactor = U · (1 − L · C)`.
         ᶜone_minus_implicit_detr_prefactor = @. lazy(
             ifelse(
-                ᶜdivᵥ(ᶠleft_bias(Y.c.sgsʲs.:($$j).ρa) * Y.f.sgsʲs.:($$j).u₃) < 0,
+                ᶜdivᵥ(ᶠbottom_bias(Y.c.sgsʲs.:($$j).ρa) * Y.f.sgsʲs.:($$j).u₃) < 0,
                 ᶜupper_limiter_factor *
                 (FT(1) - ᶜlower_limiter_factor * detr_massflux_vertdiv_coeff),
                 FT(1),
             ),
         )
-        # Evaluate the inverse buoyancy time scale at faces (where w
-        # lives naturally) and interpolate to centers for smoother
-        # behaviour in the (ε − δ) term.
+        # Inverse buoyancy time-scale on faces (where w lives), interpolated
+        # to centers for a smoother (ε − δ).
         ᶜbuoy_inv_time_scale = @. lazy(
             ᶜinterp(
                 detr_buoy_inv_time_scale(
@@ -387,64 +417,65 @@ function solve_sgs_ρa_implicit_stage_analytic!(Y, p, dtγ)
                         ᶠgradᵥ_ᶜΦ,
                         ᶠlg,
                     ),
-                    detr_buoy_inv_tau_max,
+                    entr_detr_buoy_inv_tau_max,
                 ),
             ),
         )
         @. ᶜexplicit_entr_minus_detr =
             ᶜarea_bounding_entr_detrʲs.:($$j) +
-            ᶜentr_vel_scaleʲs.:($$j) * ᶜinterp(ᶠw) -
+            ᶜentr_vel_scaleʲs.:($$j) * ᶜinterp(ᶠw) +
+            ᶜentr_nonvel_rateʲs.:($$j) -
             ᶜlower_limiter_factor * detr_buoy_coeff * ᶜbuoy_inv_time_scale
 
         @. ᶜnumerator = Y.c.sgsʲs.:($$j).ρa / dtγ
-        # Floor at 0.1 / dtγ so (ε − δ) is effectively bounded by 0.9/dtγ,
-        # mirroring the protection that the previous `limit_detrainment` call
-        # provided.
+        # Floor at 0.1/dtγ ⇒ (ε − δ) ≤ 0.9/dtγ (≈10× per-step growth cap).
         @. ᶜdenominator =
             max(
                 FT(0.1) / dtγ,
                 1 / dtγ - ᶜexplicit_entr_minus_detr +
-                ᶜone_minus_implicit_detr_prefactor * ᶜright_bias(
+                ᶜone_minus_implicit_detr_prefactor * ᶜtop_bias(
                     ᶠinterp(ᶜρʲs.:($$j) * ᶜJ) / ᶠJ * ᶠw,
                 ) / ᶜρʲs.:($$j) / ᶜdz,
             )
         @. ᶜmass_flux_factor_bot =
-            ᶜone_minus_implicit_detr_prefactor * ᶜleft_bias(
-                ᶠinterp(ᶜρʲs.:($$j) * ᶜJ) / ᶠJ * ᶠw / ᶠleft_bias(ᶜρʲs.:($$j)),
+            ᶜone_minus_implicit_detr_prefactor * ᶜbottom_bias(
+                ᶠinterp(ᶜρʲs.:($$j) * ᶜJ) / ᶠJ * ᶠw / ᶠbottom_bias(ᶜρʲs.:($$j)),
             ) / ᶜdz
-        # At cell 1, `ᶠleft_bias(ᶜρʲ)` evaluates at the surface face where
-        # the cell below the domain is undefined → NaN. Physically the mass
-        # flux is zero there (u₃ = 0 at the surface), so we overwrite
-        # α_bot[1] with FT(0) to keep the recurrence well-defined.
+        # Cell 1: overwrite α_bot[1] with 0 to bypass the NaN from
+        # `ᶠbottom_bias(ᶜρʲ)` reading the undefined ghost cell below
+        # (physical flux is zero there: u₃ = 0 at the surface).
         ᶜmass_flux_factor_bot_first =
             Fields.field_values(Fields.level(ᶜmass_flux_factor_bot, 1))
         @. ᶜmass_flux_factor_bot_first = FT(0)
 
-        # Surface mass-flux boundary condition. The capped volumetric
-        # mass source rate (`F_sfc / dz`, equivalent to `div(F·ẑ)` at
-        # level 1) is precomputed and consumed here as a constant
-        # a-independent source in the first-cell numerator.
+        # Surface mass-flux BC: add the capped volumetric source `F_sfc/dz`
+        # (an a-independent constant, precomputed) to the cell-1 numerator.
         mass_flux_source_val = Fields.field_values(
             Fields.level(p.precomputed.sfc_mass_flux_sourceʲs.:($j), 1),
         )
         ᶜnumerator_first = Fields.field_values(Fields.level(ᶜnumerator, 1))
         @. ᶜnumerator_first += mass_flux_source_val
 
+        # ρʲ is in the input tuple so the per-cell cap `ρʲ·a_max` is available
+        # inside the closure.
         input = @. lazy(tuple(
             ᶜnumerator,
             ᶜdenominator,
             ᶜmass_flux_factor_bot,
+            ᶜρʲs.:($$j),
         ))
 
-        # Bottom-to-top sweep. The zero-flux boundary at the surface is
-        # imposed by `init = FT(0)` (zero ρa below the column), so the first
-        # cell sees no inflow from below and is free to evolve.
+        # Bottom-to-top sweep. `clamp` to `ρa ∈ [0, ρʲ·a_max]` per-cell.
         Operators.column_accumulate!(
             Y.c.sgsʲs.:($j).ρa,
             input;
             init = FT(0),
-        ) do ρa_prev, (num, den, mf_bot)
-            return (num + mf_bot * ρa_prev) / den
+        ) do ρa_prev, (num, den, mf_bot, ρ_cell)
+            return clamp(
+                (num + mf_bot * ρa_prev) / den,
+                zero(ρa_prev),
+                a_max * ρ_cell,
+            )
         end
     end
 end

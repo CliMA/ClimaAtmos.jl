@@ -7,7 +7,7 @@ balanced pressure profile. Profiles are sourced from AtmosphericProfilesLibrary.
 The `profiles` field stores precomputed atmospheric profile functions (computed
 at construction time before broadcasting).
 
-## Example
+# Examples
 
 ```julia
 setup = Bomex()                       # Float32 defaults
@@ -77,7 +77,7 @@ function surface_condition(::Bomex, params)
     return (;
         flux_scheme,
         temperature = AnalyticTemperature(Returns(FT(300.4))),
-        overrides = SurfaceBoundaryOverrides(p = FT(101500), q_vap = FT(0.02245)),
+        overrides = SurfaceBoundaryOverrides(q_vap = FT(0.02245)),
     )
 end
 

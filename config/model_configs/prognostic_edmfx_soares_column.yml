@@ -20,6 +20,6 @@ z_stretch: false
 perturb_initstate: false
 dt: "5secs"
 t_end: "8hours"
-toml: [toml/prognostic_edmfx.toml]
+toml: [toml/prognostic_edmfx_1M.toml]
 netcdf_interpolation_num_points: [2, 2, 100]
 ode_algo: "ARS222"

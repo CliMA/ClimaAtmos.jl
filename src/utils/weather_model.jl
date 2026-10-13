@@ -1,5 +1,7 @@
 using NCDatasets
 using Dates
+import ClimaComms
+import ClimaInitialConditions
 import ClimaInterpolations.Interpolation1D: interpolate1d!, Linear, Flat
 import ..parse_date
 
@@ -8,28 +10,53 @@ import ..parse_date
     weather_model_data_path(
         start_date,
         target_levels,
-        era5_initial_condition_dir=nothing;
-        kwargs...
+        era5_initial_condition_dir = nothing;
+        interp_w = false,
+        comms_ctx = ClimaComms.context(),
     )
 
-Get the path to the weather model data for a given start date and time.
-If the data is not found, will attempt to generate it from raw data. If
-the raw data is not found, throw an error.
+Return the path to the ERA5-derived initial-condition file for `start_date`.
 
-Args:
-- `start_date`: Start date as string yyyymmdd or yyyymmdd-HHMM
-- `target_levels`: Vector of target altitude levels (in meters)
-- `era5_initial_condition_dir`: Optional directory containing preprocessed ERA5
+Without `era5_initial_condition_dir`, the path is taken from the
+`wxquest_initial_conditions` artifact and returned without checking that the
+file exists.
 
-Keywords:
-- `interp_w::Bool=false`: If false, write w=0; if true, interpolate w (1D path)
+With `era5_initial_condition_dir`, a preprocessed file in that directory is
+used if present. Otherwise the raw ERA5 file is interpolated to
+`target_levels`, by `to_z_levels_3d_model` for model levels and
+`to_z_levels_1d` for pressure levels. A missing raw file is fetched from the
+Copernicus Climate Data Store by `ClimaInitialConditions.ERA5`.
+
+# Arguments
+
+  - `start_date`: Start date, as a string `yyyymmdd` or `yyyymmdd-HHMM`, or a
+    `DateTime`; parsed by `parse_date`.
+  - `target_levels`: Target altitude levels [m].
+  - `era5_initial_condition_dir = nothing`: Directory holding preprocessed or raw
+    ERA5 files; `nothing` selects the artifact path.
+  - `comms_ctx = ClimaComms.context()`: The download and the interpolation run
+    on the root rank only, with a barrier before the path is returned.
+
+# Keyword Arguments
+
+  - `interp_w = false`: Write `w = 0` when `false` and convert the ERA5
+    pressure velocity when `true`. ERA5 `w` is omega from a hydrostatic model,
+    and files from `ClimaInitialConditions.ERA5` do not carry it at all, in which
+    case `w = 0` regardless.
+
+# Notes
+
+The hour/minute (`HHMM`) of `start_date` is used in the inferred filenames on
+both the artifact and user-directory paths, so non-00Z initializations (e.g.
+`start_date = "20191231-1200"`) resolve to `..._1200.nc`. Date-only strings
+default to `0000`, matching the ClimaCoupler subseasonal naming convention.
 """
-
 function weather_model_data_path(
     start_date,
     target_levels,
     era5_initial_condition_dir = nothing;
     interp_w::Bool = false,
+    comms_ctx = ClimaComms.context(),
 )
     # Parse the date using the existing parse_date function
     dt = parse_date(start_date)
@@ -41,13 +68,12 @@ function weather_model_data_path(
     # Determine source/destination and whether generation is needed
     local raw_data_path::String
     local ic_data_path::String
-    local generate_needed::Bool
 
     if !isnothing(era5_initial_condition_dir)
         # User-provided directory
         ic_data_path = joinpath(
             era5_initial_condition_dir,
-            "era5_init_processed_internal_$(start_date_str)_0000.nc", # TODO: generalize for all times once Coupler supports HHMM specification
+            "era5_init_processed_internal_$(start_date_str)_$(start_time).nc",
         )
         if isfile(ic_data_path)
             @info "Using existing interpolated IC file: $ic_data_path"
@@ -55,14 +81,25 @@ function weather_model_data_path(
         end
         raw_data_path = joinpath(
             era5_initial_condition_dir,
-            "era5_raw_$(start_date_str)_0000.nc",
+            "era5_raw_$(start_date_str)_$(start_time).nc",
         )
         if !isfile(raw_data_path)
-            error(
-                "Neither preprocessed nor raw initial condition file exist in $(era5_initial_condition_dir).  Please run `python get_initial_conditions.py` in the WeatherQuest repository to download the data.",
+            # Downloads, processes, validates and caches all six files
+            if ClimaComms.iamroot(comms_ctx)
+                @info "No ERA5 initial condition found; fetching from CDS" (
+                    dir = era5_initial_condition_dir,
+                    date = dt,
+                )
+                ClimaInitialConditions.ERA5.fetch_initial_conditions(
+                    dt;
+                    dir = era5_initial_condition_dir,
+                )
+            end
+            ClimaComms.barrier(comms_ctx)
+            isfile(raw_data_path) || error(
+                "ClimaInitialConditions.ERA5 ran but produced no $(raw_data_path).",
             )
         end
-        generate_needed = true
     else
         # Artifact-based paths
         ic_data_path = joinpath(
@@ -72,23 +109,53 @@ function weather_model_data_path(
         return ic_data_path
     end
 
-    # Fallback: generate a 1D-interpolated IC file when processed_internal file absent
+    # No preprocessed file, so build one from the raw download. Which path
+    # applies depends on how the raw file was downloaded: `ClimaInitialConditions`
+    # and WeatherQuest both fetch the 137 native model levels, while an older
+    # pressure-level download takes the 1D path.
+    on_model_levels = NCDataset(raw_data_path) do ds
+        !haskey(ds, "pressure_level")
+    end
+
+    if on_model_levels
+        if ClimaComms.iamroot(comms_ctx)
+            @info "Interpolating ERA5 model levels onto the target altitudes" (
+                raw = raw_data_path,
+                dest = ic_data_path,
+                n_target_levels = length(target_levels),
+            )
+            to_z_levels_3d_model(
+                raw_data_path,
+                ic_data_path,
+                target_levels,
+                Float32;
+                interp_w,
+            )
+        end
+        ClimaComms.barrier(comms_ctx)
+        return ic_data_path
+    end
+
+    # Fallback: generate a 1D-interpolated IC file from a pressure-level file
     ic_data_path_1d = joinpath(
         era5_initial_condition_dir,
-        "era5_init_$(start_date_str)_0000.nc",
+        "era5_init_$(start_date_str)_$(start_time).nc",
     )
-    @info "Processed 3D IC not found; falling back to 1D interpolation" (
-        raw = raw_data_path,
-        dest = ic_data_path_1d,
-        n_target_levels = length(target_levels),
-    )
-    to_z_levels_1d(
-        raw_data_path,
-        ic_data_path_1d,
-        target_levels,
-        Float32;
-        interp_w = interp_w,
-    )
+    if ClimaComms.iamroot(comms_ctx)
+        @info "Processed 3D IC not found; falling back to 1D interpolation" (
+            raw = raw_data_path,
+            dest = ic_data_path_1d,
+            n_target_levels = length(target_levels),
+        )
+        to_z_levels_1d(
+            raw_data_path,
+            ic_data_path_1d,
+            target_levels,
+            Float32;
+            interp_w = interp_w,
+        )
+    end
+    ClimaComms.barrier(comms_ctx)
     return ic_data_path_1d
 end
 
@@ -99,21 +166,36 @@ end
         target_file,
         target_levels,
         FT;
-        interp_w=false,
+        interp_w = false,
     )
 
-Interpolate ERA5 data from native model levels to specified 1D z-levels, column-wise in z.
+Interpolate ERA5 pressure-level data onto a common set of altitude levels,
+column by column, and write the result to a new NetCDF file.
 
-Args:
+The source file must provide the dimensions `pressure_level`, `latitude`,
+`longitude`, and `valid_time`, and the variables `u`, `v`, `w`, `t`, `q`, `skt`,
+and `sp`; the cloud-water variables `crwc`, `cswc`, `clwc`, and `ciwc` are
+interpolated if present. Source heights come from the geopotential `z` divided
+by `g`. Pressure is interpolated in `log(p)` and written as the 3D field `p_3d`.
+Specific humidity is clipped at zero. Surface fields are broadcast over all
+levels, because the model reader does not yet accept 2D variables.
 
-  - source_file::String: Input ERA5 NetCDF path
-  - target_file::String: Output NetCDF path
-  - target_levels::AbstractVector: Target 1D z-levels
-  - FT::Type{<:AbstractFloat}: Floating-point element type
+# Arguments
 
-Keywords:
+  - `source_file`: Path of the input ERA5 NetCDF file.
+  - `target_file`: Path of the NetCDF file to create, overwriting any existing
+    one.
+  - `target_levels`: Target altitude levels [m].
+  - `FT`: Floating-point element type of the output.
 
-  - interp_w::Bool=false: If false, write w=0 everywhere; if true, interpolate w
+# Keyword Arguments
+
+  - `interp_w = false`: Write `w = 0` everywhere when `false`; interpolate the
+    ERA5 `w` when `true`. ERA5 `w` comes from a hydrostatic model and is not
+    meaningful for ClimaAtmos, hence the default.
+
+The return value is unused; the result of the call is the file written to
+`target_file`.
 """
 function to_z_levels_1d(
     source_file,
@@ -272,14 +354,19 @@ end
 """
     interpz_3d(ztarget, zsource, fsource)
 
-Interpolate 3D field `fsource` from 3D source levels `zsource` to 1D target levels `ztarget`.
+Interpolate the 3D field `fsource`, given on the 3D source heights `zsource`,
+onto the 1D target heights `ztarget`.
+
+Interpolation is linear in `z`, column by column, with flat extrapolation beyond
+the source range. All three arrays are indexed `(lon, lat, level)`, and the
+result has the same layout with `length(ztarget)` levels.
 """
 function interpz_3d(ztarget, zsource, fsource)
 
     # check the size of the input arrays
     @assert ndims(ztarget) == 1 && ndims(zsource) == 3 && ndims(fsource) == 3 "Input arrays must have expected dimensions"
 
-    nx, ny, nz = size(zsource)
+    nx, ny, _ = size(zsource)
     # permute dimensions from (nx, ny, nz) to (nz, nx, ny) if needed
     ztargetp = ndims(ztarget) == 1 ? ztarget : permutedims(ztarget, (3, 1, 2))
     zsourcep = ndims(zsource) == 1 ? zsource : permutedims(zsource, (3, 1, 2))

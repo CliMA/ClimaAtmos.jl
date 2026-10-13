@@ -4,7 +4,5 @@
 # To set your local git to use this file by default, run:
 # 'git config blame.ignoreRevsFile .git-blame-ignore-revs'
 ##########################################################
-# Formatting docstrings
-493f52f7c1367667cdd692ec41566a0f3a0da017
-# trimming whitespaces repo wide, all files expect lock files
-2b8910c166619cbe720771c5b6376de102dd0bae
+# Formatting docstrings and trimming whitespace repo wide, all files except lock files
+1ad5c782478df7532ec2438e8fbc0b8b714cdc83

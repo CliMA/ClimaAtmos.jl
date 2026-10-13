@@ -7,7 +7,17 @@ import ClimaCore: Fields
 """
     set_edonly_precomputed_quantities_env_closures!(Y, p, t)
 
-Updates the environment closures in precomputed quantities stored in `p` for diagnostic edmfx.
+Update the environment closures in `p.precomputed` for the eddy-diffusivity-only
+model `EDOnlyEDMFX`. Returns `nothing`.
+
+Mutates `p.precomputed.ᶜstrain_rate_norm`, the squared norm of the vertical
+strain rate [1/s²], and `p.precomputed.ρtke_flux`, the surface TKE flux. Reads
+`ᶠu³` and `sfc_conditions.ustar` from `p.precomputed`, and uses
+`p.scratch.ᶠtemp_C123`.
+
+!!! note
+
+    The shear production currently includes vertical gradients only.
 """
 NVTX.@annotate function set_edonly_precomputed_quantities_env_closures!(
     Y,

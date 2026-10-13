@@ -20,10 +20,14 @@ import ClimaParams as CP
 """
     get_external_daily_forcing_file_path(parsed_args; data_dir)
 
-Get the path to the external forcing file for a given site and start date.
-When using the BUILDKITE env, a temporary directory is used for the
-external forcing file. Otherwise, the file is expected to stored in the
-era5_hourly_atmos_processed artifact directory.
+Return the path of the daily ERA5 forcing file for the site and time range described by
+`parsed_args`.
+
+The name encodes the site latitude and longitude (rounded to the ERA5 quarter-degree
+grid, with a message when rounding changes them) and the start and end dates, the latter
+inferred from `start_date` and `t_end` (`"23hours"`, i.e. a single day, when `t_end` is
+absent). Under Buildkite `data_dir` defaults to a temporary directory, and otherwise to
+the `daily` subdirectory of the `era5_hourly_atmos_processed` artifact.
 """
 function get_external_daily_forcing_file_path(
     parsed_args;
@@ -33,10 +37,12 @@ function get_external_daily_forcing_file_path(
         "daily",
     ),
 )
-    start_date = parsed_args["start_date"]
+    # Force filenames to calendar dates (`yyyymmdd`); HHMM belongs in the
+    # DateTime arithmetic for the span, not in the path stamp.
+    start_time = parse_date(parsed_args["start_date"])
     t_end = get(parsed_args, "t_end", "23hours") # generate a single day file if t_end is not specified
-    end_time =
-        DateTime(start_date, "yyyymmdd") + Dates.Second(time_to_seconds(t_end))
+    end_time = start_time + Dates.Second(time_to_seconds(t_end))
+    start_date = Dates.format(start_time, "yyyymmdd")
     end_date = Dates.format(end_time, "yyyymmdd")
     # round to era5 quarter degree resolution for site selection
     site_latitude = round(parsed_args["site_latitude"] * 4) / 4
@@ -55,10 +61,14 @@ end
 """
     get_external_monthly_forcing_file_path(parsed_args; data_dir)
 
-Get the path to the external forcing file for a given site and start date.
-When using the BUILDKITE env, a temporary directory is used for the
-external forcing file. Otherwise, the file is expected to stored in the
-era5_hourly_atmos_processed artifact directory.
+Return the path of the monthly-averaged diurnal ERA5 forcing file for the site and
+month described by `parsed_args`.
+
+The name encodes the site latitude and longitude (rounded to the ERA5 quarter-degree
+grid, with a message when rounding changes them), the start date, and the
+`era5_diurnal_warming` offset [K] when one is set. Under Buildkite `data_dir` defaults
+to a temporary directory, and otherwise to the `monthly` subdirectory of the
+`era5_hourly_atmos_processed` artifact.
 """
 function get_external_monthly_forcing_file_path(
     parsed_args;
@@ -68,7 +78,9 @@ function get_external_monthly_forcing_file_path(
         "monthly",
     ),
 )
-    start_date = parsed_args["start_date"]
+    # Monthly diurnal files are keyed by calendar date only.
+    start_date =
+        Dates.format(parse_date(parsed_args["start_date"]), "yyyymmdd")
     warming_amount = parsed_args["era5_diurnal_warming"]
     warming_amount_str =
         (warming_amount isa Number) ? "_plus_$(float(warming_amount))K" : ""
@@ -90,13 +102,16 @@ end
 """
     check_daily_forcing_times(forcing_file_path, parsed_args)
 
-Check that the simulation start and end times are within the range of the external forcing file.
-Return true if the forcing file is valid, false otherwise.
+Return `true` when the run's start and end times, derived from `start_date` and `t_end`,
+lie within the time range of the forcing file, and `false` (with a warning) otherwise.
+
+The `do` block is the function's return value: `NCDataset(f, path)` returns whatever `f`
+returns, so a `return false` inside the block propagates to the caller.
 """
 function check_daily_forcing_times(forcing_file_path, parsed_args)
-    start = Dates.DateTime(parsed_args["start_date"], "yyyymmdd")
+    start = parse_date(parsed_args["start_date"])
     stop = start + Dates.Second(time_to_seconds(parsed_args["t_end"]))
-    NCDataset(forcing_file_path) do ds
+    return NCDataset(forcing_file_path) do ds
         if ds["time"][1] > start
             @warn "Start time $start is before the first time step in the forcing file"
             return false
@@ -105,21 +120,26 @@ function check_daily_forcing_times(forcing_file_path, parsed_args)
             @warn "End time $stop is after the last time step in the forcing file"
             return false
         end
+        return true
     end
-    return true
 end
 
 """
     check_monthly_forcing_times(path, parsed_args)
 
-Check the times for the 1 day monthly-averaged forcing file are correct. As we are using
-ClimaUtilities.TimeVaryingInputs.PeriodicCalendar we require the data to cover one day exactly.
-Return true if the forcing file is valid, false otherwise.
+Return `true` when the monthly-averaged diurnal forcing file covers exactly one day
+starting at `start_date`, and `false` (with a warning) otherwise.
+
+Exactly one day is required because the file is read with
+`ClimaUtilities.TimeVaryingInputs.PeriodicCalendar`, which wraps it in time. As in
+`check_daily_forcing_times`, the `do` block is the return value.
 """
 function check_monthly_forcing_times(path, parsed_args)
-    start = Dates.DateTime(parsed_args["start_date"], "yyyymmdd")
+    # Monthly diurnal files cover one calendar day from midnight; strip any
+    # HHMM from start_date, then promote back to DateTime for the comparison.
+    start = DateTime(Dates.Date(parse_date(parsed_args["start_date"])))
     stop = start + Dates.Day(1)
-    NCDataset(path) do ds
+    return NCDataset(path) do ds
         dt = ds["time"][2] - ds["time"][1]
         if ds["time"][1] > start
             @warn "Start time $start is before the first time step in the forcing file"
@@ -129,15 +149,25 @@ function check_monthly_forcing_times(path, parsed_args)
             @warn "Forcing should cover one day, following ClimaUtilities.TimeVaryingInputs.PeriodicCalendar indexing"
             return false
         end
+        return true
     end
-    return true
 end
 
 """
     get_horizontal_tendencies(lat, lon_index, lat_index, column_ds, external_tv_params)
 
-Calculate the horizontal advective tendencies for temperature and specific humidity
-using a second-order finite difference approximation.
+Compute the horizontal advective tendencies of temperature and specific humidity at the
+site, using centered differences of the smoothed fields at the four neighboring grid
+points.
+
+Grid spacings are derived from the longitude and latitude increments of `column_ds` and
+the planet radius in `external_tv_params`. The routine warns when the data are coarser
+than 2°.
+
+# Returns
+
+`(tntha, tnhusha)`: temperature [K/s] and specific humidity [kg/kg/s] tendencies, sign
+convention as right-hand-side forcing terms.
 """
 function get_horizontal_tendencies(
     lat,
@@ -194,11 +224,12 @@ end
 """
     get_vertical_tendencies(sim_forcing, var)
 
-Calculate the temperature and specific humidity vertical tendencies as a function of levels
-using vertical advection using second-order finite difference at interior points and
-first-order finite difference at the top and bottom levels.
+Compute the vertical advective tendency of the field `var` in `sim_forcing`, using
+centered differences at interior levels and one-sided differences at the top and bottom.
 
-This function is only used for for steady forcing, which is currently not supported.
+The result is negated, so that it can be added to the right-hand side of the prognostic
+equation. Currently unused: it applies to steady forcing, which is not supported (the
+time-varying path sets these tendencies to zero).
 """
 function get_vertical_tendencies(sim_forcing, var)
 
@@ -227,47 +258,47 @@ function get_vertical_tendencies(sim_forcing, var)
 end
 
 """
-    generate_external_era5_forcing_file(
-        lat,
-        lon,
-        start_date,
-        forcing_file_path,
-        FT;
-        input_data_dir,
-        smooth_amount = 4,
-        time_resolution = 3600,
-        data_strs = [
-            "forcing_and_cloud_hourly_profiles",
-            "hourly_inst",
-            "hourly_accum",
-        ],
-    )
+    generate_external_forcing_file(parsed_args, forcing_file_path, FT; input_data_dir,
+                                   smooth_amount = 4, time_resolution = FT(3600),
+                                   data_strs = ["forcing_and_cloud_hourly_profiles",
+                                                "hourly_inst", "hourly_accum"])
 
-Generate an external forcing file for the ClimaAtmos single column model.
+Write a single-column forcing file for one site and one raw-data period.
 
-# Input
+The site is taken from `site_latitude` and `site_longitude` in `parsed_args` (rounded to
+the ERA5 quarter-degree grid) and the period from `start_date`. Profiles are averaged
+over a box of `smooth_amount` points on each side, horizontal advective tendencies come
+from `get_horizontal_tendencies`, subsidence is derived from the pressure velocity, and
+insolation (`coszen`, `rsdt`) is computed with Insolation.jl. When
+`era5_diurnal_warming` is a number, air and surface temperatures are warmed by it and
+specific humidity is rescaled at fixed relative humidity.
 
-The reanalysis, e.g., ERA5, input data is expected to be in the `era5_hourly_atmos_raw` artifact directory
-and should contain 3 files:
+# Arguments
 
-  - Column profile dataset, named "forcing_and_cloud_hourly_profiles_"start_date".nc"
-  - Surface sensible and latent heat fluxes, named "hourly_accum_"start_date".nc"
-  - Surface temperature, named "hourly_inst_"start_date".nc"
-    The default file names can be overwritten by the `data_strs` argument. Parsed args should contain the site_latitude,
-    site_longitude, and start_date. The variables and specific naming convention for these files is better described
-    in the Single Column Model section of the documentation.
+  - `parsed_args`: Configuration entries; `site_latitude` [°], `site_longitude` [°],
+    `start_date` (`yyyymmdd`), and `era5_diurnal_warming` [K] are read.
+  - `forcing_file_path`: Path of the NetCDF file to write.
+  - `FT`: Floating-point type of the output.
 
-# Output
+# Keyword Arguments
 
-The output file is written to forcing file path, by default stored in the `era5_hourly_atmos_processed` artifact
-directory joined with `daily` or `monthly` depending on the simulation type. It contains all forcings required to
-drive the single column model.
+  - `input_data_dir`: Directory holding the three raw reanalysis files for `start_date`.
+  - `smooth_amount = 4`: Half-width, in grid points, of the box average around the site
+    (4 points is 1° per side at ERA5 quarter-degree resolution).
+  - `time_resolution = FT(3600)`: Accumulation period of the accumulated surface fields
+    [s]; 3600 for hourly data, 86400 for daily and monthly data.
+  - `data_strs`: Prefixes of the three input files, each completed as
+    `<prefix>_<start_date>.nc`: column profiles, instantaneous surface fields (surface
+    temperature), and accumulated surface fields (sensible and latent heat fluxes).
 
-Note:
+# Notes
 
-  - Single column runs are treated as boxes, so the dimensions of the variables are expanded to
-    `2x2x(pressure levels)x(time)` to be able to interpolate to the model grid.
-  - The end time of the simulation is inferred from the start date and the simulation time, `t_end`.
+  - Surface fluxes are negated, because CliMA defines them positive upwards, and divided
+    by `time_resolution` to convert accumulations to rates [W/m²].
+  - The output follows the ClimaColumn schema: 1D `(z, time)` column variables and
+    `(time,)` surface variables with CMIP names and SI units, sorted by ascending height
+    and made self-describing by the `site_latitude` and `site_longitude` global
+    attributes (written through `ClimaColumnFiles.write_column_forcing_file`).
 """
 function generate_external_forcing_file(
     parsed_args,
@@ -285,7 +316,9 @@ function generate_external_forcing_file(
     # unpack parsed args
     lat = parsed_args["site_latitude"]
     lon = parsed_args["site_longitude"]
-    start_date = parsed_args["start_date"]
+    # Raw ERA5 inputs are named by calendar date only (`yyyymmdd`).
+    start_date =
+        Dates.format(parse_date(parsed_args["start_date"]), "yyyymmdd")
 
     external_tv_params = CP.get_parameter_values(
         CP.create_toml_dict(FT),
@@ -410,91 +443,23 @@ function generate_external_forcing_file(
         external_tv_params,
     )
 
-    # create the dataset to store the forcing data - it needs to have expanded dimensions because
-    # in ClimaAtmos all column simulations are actually boxes
-    ds = NCDataset(forcing_file_path, "c")
-
-    # Define the dimensions
-    defDim(ds, "time", length(sim_forcing["time"]))
-    defDim(ds, "z", length(sim_forcing["pressure_level"]))
-
-    # expand dimensions for box
-    defDim(ds, "x", 2)
-    defDim(ds, "y", 2)
-
-    # define variables for x and y at 0.5
-    defVar(ds, "x", FT, ("x",))
-    ds["x"][:] = [0.0, 1.0]
-
-    defVar(ds, "y", FT, ("y",))
-    ds["y"][:] = [0.0, 1.0]
-
-    defVar(ds, "z", FT, ("z",))
-    ds["z"][:] = mean(sim_forcing["z"], dims = 2)[:]
-
-    # Define time variable with attributes
-    defVar(
-        ds,
-        "time",
-        sim_forcing["time"][:],
-        ("time",),
-        attrib = tvforcing["valid_time"].attrib,
-    )
-
-    # Define other variables
-    defVar(ds, "pressure_level", FT, ("x", "y", "z"))
-    # again repeating dimensions because single column model is a box
-    for z_index in 1:ds.dim["z"]
-        ds["pressure_level"][:, :, z_index] .=
-            sim_forcing["pressure_level"][z_index]
-    end
-
-    # Define the variables and add them to the ds
-    for (name, data) in sim_forcing
-        if name in [
-            "tnhusha",
-            "tntha",
-            "hus",
-            "tntva",
-            "zg",
-            "wa",
-            "ua",
-            "va",
-            "ta",
-            "tnhusva",
-            "wap",
-            "rho",
-            "clw",
-            "cli",
-        ]
-            defVar(ds, name, FT, ("x", "y", "z", "time"))
-            for x_ind in 1:ds.dim["x"], y_ind in 1:ds.dim["y"]
-                ds[name][x_ind, y_ind, :, :] .= data
-            end
-        elseif name ∉ ["time", "pressure_level", "z"]
-            # surface vars
-            defVar(ds, name, FT, ("x", "y", "time"))
-            for x_ind in 1:ds.dim["x"], y_ind in 1:ds.dim["y"]
-                ds[name][x_ind, y_ind, :] .= data
-            end
-        end
-    end
-
-    # add coszen
-    # Compute coszen and solar flux using Insolation.jl
-    coszen_list = map(tvforcing["valid_time"][:]) do date
-        F, S, μ, ζ = Insolation.insolation(
+    # Cosine of the solar zenith angle (`coszen`) and TOA incoming shortwave
+    # (`rsdt`), from Insolation
+    times = tvforcing["valid_time"][:]
+    coszen = Vector{FT}(undef, length(times))
+    rsdt = Vector{FT}(undef, length(times))
+    for (i, date) in enumerate(times)
+        F, _, μ, _ = Insolation.insolation(
             DateTime(date),
             FT(lat),
             FT(lon),
             IP.InsolationParameters(FT),
         )
-        return (μ, F)  # return (coszen, TOA_flux)
+        coszen[i] = μ
+        rsdt[i] = F
     end
-    defVar(ds, "coszen", FT, ("x", "y", "z", "time"))
-    defVar(ds, "rsdt", FT, ("x", "y", "z", "time"))
 
-    # add latent and sensitble heat fluxes (currently we just set surface conditions based on temperature)
+    # latent and sensible heat fluxes
     lon_index_surf = findfirst(tv_accum["longitude"][:] .== lon)
     lat_index_surf = findfirst(tv_accum["latitude"][:] .== lat)
     @assert !isnothing(lon_index_surf) "Longitude $lon not found in hourly_accum_$(start_date).nc"
@@ -506,8 +471,6 @@ function generate_external_forcing_file(
             lat_index_surf <
             length(tv_accum["latitude"][:]) - smooth_amount "Latitude $lat is not covered by accumulated forcing file with smoothing amount $smooth_amount"
 
-    defVar(ds, "hfls", FT, ("x", "y", "z", "time"))
-    defVar(ds, "hfss", FT, ("x", "y", "z", "time"))
     # sensible and latent heat fluxes are defined upwards in CliMA, also need to divide by the aggregation
     slhf =
         -smooth_3D_era5(
@@ -539,7 +502,6 @@ function generate_external_forcing_file(
             lat_index_surf2 <
             length(tv_inst["latitude"][:]) - smooth_amount "Latitude $lat is not covered by accumulated forcing file with smoothing amount $smooth_amount"
 
-    defVar(ds, "ts", FT, ("x", "y", "z", "time"))
     skt = smooth_3D_era5(
         tv_inst,
         "skt",
@@ -553,38 +515,78 @@ function generate_external_forcing_file(
         skt .+= warming_amount
     end
 
-    for time_ind in 1:ds.dim["time"]
-        ds["coszen"][:, :, :, time_ind] .= coszen_list[time_ind][1]
-        ds["rsdt"][:, :, :, time_ind] .= coszen_list[time_ind][2]
-        ds["ts"][:, :, :, time_ind] .= skt[time_ind]
-        ds["hfls"][:, :, :, time_ind] .= slhf[time_ind]
-        ds["hfss"][:, :, :, time_ind] .= sshf[time_ind]
-    end
+    # sort levels by ascending height, as required by the ClimaColumn schema
+    z_column = vec(mean(sim_forcing["z"], dims = 2))
+    z_order = sortperm(z_column)
 
-    # Close the datasets
-    close(ds)
+    column_var_names = [
+        "ta",
+        "hus",
+        "ua",
+        "va",
+        "wa",
+        "rho",
+        "tntha",
+        "tnhusha",
+        "tntva",
+        "tnhusva",
+        "clw",
+        "cli",
+    ]
+    ClimaColumnFiles.write_column_forcing_file(
+        forcing_file_path,
+        FT;
+        z = z_column[z_order],
+        time = sim_forcing["time"][:],
+        time_attrib = tvforcing["valid_time"].attrib,
+        column_vars = Dict(
+            name => sim_forcing[name][z_order, :] for name in column_var_names
+        ),
+        surface_vars = Dict(
+            "coszen" => coszen,
+            "rsdt" => rsdt,
+            "ts" => skt,
+            "hfls" => slhf,
+            "hfss" => sshf,
+        ),
+        site_latitude = lat,
+        site_longitude = lon,
+    )
+
     close(tvforcing)
     close(tv_inst)
     close(tv_accum)
 end
 
 """
-    generate_multiday_era5_external_forcing_file(parsed_args, forcing_file_path, FT; smooth_amount = 4, time_resolution = FT(3600), input_data_dir = @clima_artifact("era5_hourly_atmos_raw"), output_data_dir = @clima_artifact("era5_hourly_atmos_processed"))
+    generate_multiday_era5_external_forcing_file(parsed_args, forcing_file_path, FT;
+                                                 smooth_amount = 4,
+                                                 time_resolution = FT(3600),
+                                                 input_data_dir, output_data_dir)
 
-Generate an external forcing file for multi-day single column model runs, reusing daily forcing files if they already exist.
+Write a multi-day single-column forcing file by generating one daily file per day of the
+run with `generate_external_forcing_file` and concatenating them along time.
+
+A daily file is reused when it already exists and conforms to the ClimaColumn schema,
+and regenerated otherwise.
 
 # Arguments
 
-  - `parsed_args`: Dictionary containing simulation parameters including start_date, t_end, site_latitude, and site_longitude
-  - `forcing_file_path`: Path where the concatenated forcing file will be saved
-  - `FT`: Floating point type for the simulation
+  - `parsed_args`: Configuration entries; `start_date`, `t_end`, `site_latitude` [°],
+    `site_longitude` [°], and `era5_diurnal_warming` [K] are read.
+  - `forcing_file_path`: Path of the concatenated NetCDF file to write.
+  - `FT`: Floating-point type of the output.
 
 # Keyword Arguments
 
-  - `smooth_amount`: Amount of temporal smoothing to apply (default: 4 - 1° on each side)
-  - `time_resolution`: Time resolution in seconds for accumulated variables (defined in ERA5 docs; 3600 for hourly data; 86400 for daily and monthly data)
-  - `input_data_dir`: Directory containing raw ERA5 data files, artifact directory by default
-  - `output_data_dir`: Directory where individual daily forcing files are stored
+  - `smooth_amount = 4`: Half-width, in grid points, of the box average around the site
+    (4 points is 1° per side at ERA5 quarter-degree resolution).
+  - `time_resolution = FT(3600)`: Accumulation period of the accumulated surface fields
+    [s]; 3600 for hourly data, 86400 for daily and monthly data.
+  - `input_data_dir`: Directory with the raw ERA5 files; the `era5_hourly_atmos_raw`
+    artifact by default.
+  - `output_data_dir`: Directory holding the individual daily forcing files; a temporary
+    directory under Buildkite, and the `era5_hourly_atmos_processed` artifact otherwise.
 """
 function generate_multiday_era5_external_forcing_file(
     parsed_args,
@@ -598,15 +600,13 @@ function generate_multiday_era5_external_forcing_file(
 )
     # run generate_external_era5_forcing_file for each day if its processed data file not found
     # get range of starttimes and endtimes
-    start_date = DateTime(parsed_args["start_date"], "yyyymmdd")
+    start_date = parse_date(parsed_args["start_date"])
     end_time = start_date + Dates.Second(time_to_seconds(parsed_args["t_end"]))
-    end_date = Dates.format(end_time, "yyyymmdd")
+    # Calendar-date range: a DateTime:Day(1):DateTime span at a non-midnight
+    # clock time can drop the end calendar day (e.g. noon → next midnight).
+    start_dates = Date(start_date):Day(1):Date(end_time)
 
-    start_dates = start_date:Day(1):end_time
-
-    file_list = String[]
-    for dd in start_dates
-        # get forcing file path
+    daily_specs = map(start_dates) do dd
         single_parsed_args = Dict(
             "start_date" => Dates.format(dd, "yyyymmdd"),
             "site_latitude" => parsed_args["site_latitude"],
@@ -617,18 +617,28 @@ function generate_multiday_era5_external_forcing_file(
             single_parsed_args;
             data_dir = output_data_dir,
         )
-        push!(file_list, single_file_path)
-        # generate the external forcing file for this day
-        if !isfile(single_file_path)
-            generate_external_forcing_file(
-                single_parsed_args,
-                single_file_path,
-                FT;
-                time_resolution = time_resolution,
-                input_data_dir = input_data_dir,
-                smooth_amount = smooth_amount,
-            )
-        end
+        (; parsed_args = single_parsed_args, path = single_file_path)
+    end
+    file_list = [spec.path for spec in daily_specs]
+
+    # A daily file is (re)generated when it is missing, or when an older run
+    # wrote it in the previous ERA5 box layout rather than the current
+    # ClimaColumn `(z, time)` schema, so the concatenation below sees one
+    # layout.
+    for spec in daily_specs
+        isfile(spec.path) &&
+            ClimaColumnFiles.is_conforming(spec.path) &&
+            continue
+        isfile(spec.path) &&
+            @info "Regenerating $(spec.path): not a conforming ClimaColumn file (stale layout or failed schema validation)"
+        generate_external_forcing_file(
+            spec.parsed_args,
+            spec.path,
+            FT;
+            time_resolution = time_resolution,
+            input_data_dir = input_data_dir,
+            smooth_amount = smooth_amount,
+        )
     end
     # concatenate data and save
     concat_ds = Dataset(file_list; aggdim = "time")
@@ -636,12 +646,67 @@ function generate_multiday_era5_external_forcing_file(
 end
 
 """
+    era5_dataset(parsed_args, FT; monthly = false)
+
+Locate the ERA5 column forcing file for the configured site and dates, and
+return a `ColumnDataset` for it. The file is (re)generated from the
+`era5_hourly_atmos_raw` artifact when it is missing, does not cover the run, or
+is in a stale layout. `monthly = false` (default) selects the daily file used by
+the `ReanalysisTimeVarying` case; `monthly = true` selects the
+monthly-averaged-diurnal file (one repeating day) used by the
+`ReanalysisMonthlyAveragedDiurnal` forcing.
+
+The one ERA5 source, mirroring `VaranalFiles`/`GCMColumnData`: the config getters
+just call it and hand the result to `ForcingFromFile` / `ExternalDrivenTVForcing`.
+"""
+function era5_dataset(parsed_args, ::Type{FT}; monthly::Bool = false) where {FT}
+    path =
+        monthly ? get_external_monthly_forcing_file_path(parsed_args) :
+        get_external_daily_forcing_file_path(parsed_args)
+    times_cover = monthly ? check_monthly_forcing_times : check_daily_forcing_times
+    if !isfile(path) ||
+       !times_cover(path, parsed_args) ||
+       !ClimaColumnFiles.is_conforming(path)
+        @info "ERA5 forcing file $(path) is missing, does not cover the run, or is in a stale layout. Generating it now."
+        if monthly
+            generate_external_forcing_file(
+                parsed_args,
+                path,
+                FT,
+                input_data_dir = joinpath(
+                    @clima_artifact("era5_hourly_atmos_raw"),
+                    "monthly",
+                ),
+                data_strs = [
+                    "monthly_diurnal_profiles",
+                    "monthly_diurnal_inst",
+                    "monthly_diurnal_accum",
+                ],
+            )
+        else
+            generate_multiday_era5_external_forcing_file(
+                parsed_args,
+                path,
+                FT,
+                input_data_dir = joinpath(
+                    @clima_artifact("era5_hourly_atmos_raw"),
+                    "daily",
+                ),
+            )
+        end
+    end
+    return ColumnDatasets.ColumnDataset(path)
+end
+
+"""
     smooth_4D_era5(data, variable, lon_index, lat_index; smooth_amount = 4)
 
-data is an array from ERA5 data, which has dimension order longitude, latitude,
-pressure_level, and time. We want to return smoothed data by a certain amount.
-Here we choose 4 points on either side which corresponds to a 2° box total. we
-just average the points here, but something more creative could be done.
+Average a 4D ERA5 variable (longitude, latitude, pressure level, time) over a box of
+`smooth_amount` grid points on each side of the given horizontal index, returning a
+`(pressure_level, time)` array.
+
+The default half-width of 4 points spans a 2° box at ERA5 quarter-degree resolution.
+The box is averaged with equal weights; a more elaborate filter could be used instead.
 """
 function smooth_4D_era5(data, variable, lon_index, lat_index; smooth_amount = 4)
     # extract data in box around the center point
@@ -658,10 +723,12 @@ end
 """
     smooth_3D_era5(data, variable, lon_index, lat_index; smooth_amount = 4)
 
-data is an array from ERA5, which has dimension order longitude, latitude, and time.
-This function returns data smoothed by a certain amount. Here, we choose 4 points on
-either side which corresponds to a 2° box total. wejust average the points here, but
-something more creative could be done.
+Average a 3D ERA5 surface variable (longitude, latitude, time) over a box of
+`smooth_amount` grid points on each side of the given horizontal index, returning a
+`(time,)` vector.
+
+The default half-width of 4 points spans a 2° box at ERA5 quarter-degree resolution.
+The box is averaged with equal weights; a more elaborate filter could be used instead.
 """
 function smooth_3D_era5(data, variable, lon_index, lat_index; smooth_amount = 4)
     # extract data in box around the center point

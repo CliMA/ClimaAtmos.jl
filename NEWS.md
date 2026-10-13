@@ -3,6 +3,301 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- ![][badge-🔥behavioralΔ] The along-surface depth of the geometric SGS
+  variance block is bounded by the height above the surface,
+  `ℓ_a = min(H, z − z_sfc)`: in a neutral layer the along-surface
+  displacement is the vertical eddy displacement, which cannot reach below
+  the ground.
+- ![][badge-🔥behavioralΔ] Make the SGS variance fidelity `α` a cached
+  per-cell field `α = α_Da · α_eq`, refreshed inside `set_covariance_cache!`:
+  Damköhler factor `α_Da = 1 / (1 + A · τ_mp · c_d · √TKE / max(l_mix, 1 m))`
+  (quiescent → 1, well-mixed → 0) and equilibrium-ratio modulator
+  `α_eq = r / (w + (1−w) r)` with `r = (q_c + q_min)/(q_c^eq + q_min)` and
+  new provisional parameter `sgs_fidelity_equilibrium_weight` (default 0.5).
+  CF uses `σ_aug = sqrt((α σ_S)² + σ_S_floor²)` — α scales only the
+  equilibrium part. Microphysics timescales reuse the ClimaParams
+  `condensation_evaporation_timescale` / `sublimation_deposition_timescale`.
+- ![][badge-🔥behavioralΔ] The resolved-gradient (geometric) SGS variance block
+  is the variance from a Gaussian subgrid parcel displacement with covariance
+  `c_g diag(ℓ_h², ℓ_h², ℓ_v²)`, `ℓ_h = c_Δx Δx_h`, `ℓ_v = H`, split into
+  the part along the local `θ_li` surface (q′q′ only, the conditional variance
+  `gᵀDg − (gᵀDn)²/(nᵀDn)` with `g = ∇q_tot`, `n = ∇θ_li`) and the part across
+  it (the vertical uniform-box terms, with the q gradient taken across the
+  surface).
+- ![][badge-🔥behavioralΔ] Update to CloudMicrophysics v0.45 and use joint
+  relaxation of the vapor-driven phase changes.
+- ![][badge-✨feature/enhancement] Add back CloudMicrophysics v0.43 to the
+  compat.
+- ![][badge-🔥behavioralΔ] The horizontal resolved-gradient (geometric) SGS variance
+  term is now the isentropic form: `q′q′` carries `|∇_h q_tot − r ∇_h θ_li|²`, the
+  gradient of `q_tot` along the `θ_li` surface with `r = (∂q_tot/∂z)/(∂θ_li/∂z)`, the
+  stratification floored at the provisional `sgs_variance_isentropic_min_dtheta_dz`,
+  there is no horizontal `θ′θ′` (or `θ′q′`) term, and the displacement along the surface
+  is bounded by the cell, `ℓ² = Δx² / (1 + (s Δx / Δz)²)` with the surface slope
+  `s = |∇_h θ_li| / ∂_z θ_li`. The `q′q′` and `θ′q′` terms of the vertical uniform-box block are
+  scaled by the same factor, the share of the cell's vertical excursion not already
+  sampled along the surface.
+
+0.42.14
+-------
+- ![][badge-🔥behavioralΔ] Add a resolved vertical-gradient block
+  `c_g (c_Δz Δz)² (∂_z ψ)²` to `σ_T²`, `σ_q²` (uniform-box exact with the
+  defaults `c_g = 1/12`, `c_Δz = 1`; independent of `l_mix`), so the
+  microphysics quadrature sees non-zero variability where the turbulent
+  closure collapses. Set `sgs_variance_vertical_scale_factor = 0` to disable.
+- ![][badge-✨feature/enhancement] New `tq_correlation_model`. `constant`
+  (default) keeps the prescribed `Tq_correlation_coefficient`. `diagnosed`
+  builds `T′q′ = ρ_turb σ_T,turb σ_q,turb + c_g (c_Δx Δx_h)² ∇_h θ · ∇_h q
+  + c_g (c_Δz Δz)² ∂_z θ · ∂_z q` and forms
+  `ρ = clamp(T′q′ / √(T′T′ q′q′), -1, 1)`, falling back to the prescribed
+  value where the variances vanish. Reported via the existing
+  `env_q_tot_temperature_{covariance,correlation}` diagnostics.
+- ![][badge-🔥behavioralΔ] Remove the Richardson-number weight on the
+  horizontal geometric SGS variance term: The
+  `sgs_variance_geometric_Ri_factor` parameter is removed.
+- ![][badge-🔥behavioralΔ] Update to ClimaParams with
+  `sgs_variance_horizontal_scale_factor` default `3.0 → 1.0`.
+- ![][badge-🔥behavioralΔ] Update to CloudMicrophysics v0.44 in compat and manifest.
+
+0.42.13
+-------
+- ![][badge-🔥behavioralΔ] The horizontal-gradient invariants of the geometric SGS
+  variance term (`hgrad_invariant!`) and the TKE shear production from horizontal
+  gradients now use ClimaCore's `LumpedRestriction`: within each element the
+  invariant of the nodal spectral-element gradient is replaced by its lumped GLL{2}
+  restriction, which removes the systematic excess at element-boundary nodes
+  while conserving each element's integral of the invariant.
+- ![][badge-🔥behavioralΔ] Add empirical mixing length `l_TKE = l_0·sqrt(x)·(1+x)·exp(−x)`,
+  `x = TKE/(l_inf/tau_eps)^2`, to the mixing-length closure.
+- ![][badge-🔥behavioralΔ] Update to ClimaParams 1.1.16, which provides the
+  SGS-quadrature parameters and changes the defaults.
+  The SGS covariance, quadrature and cloud-fraction
+  closure parameters move from `TurbulenceConvectionParameters` to a new
+  `SGSQuadratureParameters` set, held as `sgs_quadrature_params`. `CAP.x(params)`
+  accessors and TOML names are unchanged; code that reads these fields from
+  `turbconv_params` must read them from `sgs_quadrature_params`.
+- ![][badge-✨feature/enhancement] Two parameters,
+  `sgs_liquid_uniform_fraction` and `sgs_ice_uniform_fraction`,
+  blend the SGS-quadrature condensate reconstruction of the 1-moment
+  microphysics between the excess split (a species sits only at supersaturated
+  nodes, in proportion to its excess) and a uniform distribution (the
+  subdomain mean at every node, like rain and snow).
+
+0.42.12
+-------
+- ![][badge-🔥behavioralΔ] The CI environment updates to ClimaParams 1.1.14, which sets the
+  default `EDMF_interface_entr_efficiency` to `0.0` (from `0.4`), turning off the interfacial
+  cloud-top entrainment closure by default.
+- ![][badge-🐛bugfix] File-based initial conditions (`WeatherModel`,
+  `MoistFromFile`, `AMIPFromERA5`) now interpolate the face pressure to cell
+  centers in log space (`exp(ᶜinterp(log(p)))`) when computing the initial
+  density, instead of the arithmetic mean `ᶜinterp(p)`, which overestimated
+  center pressure and left the initial column ~1 hPa too heavy.
+- ![][badge-✨feature/enhancement] `WeatherModel` ERA5 IC filenames now use the
+  `HHMM` of `start_date` (e.g. `start_date = "20191231-1200"` →  `..._1200.nc`),
+  matching the ClimaCoupler subseasonal / WeatherQuest naming; date-only strings
+  still default to `0000`.
+- ![][badge-🐛bugfix] With several PROPHET updrafts, the entrainment, the physical-constraint
+  clipping, the Rayleigh sponge, and the sedimentation cache act on the SGS tracers
+  (microphysics species and passive tracers) of the updraft they are called for; they acted
+  on updraft 1 throughout. The default single updraft is unaffected.
+- ![][badge-🐛bugfix] The pressure drag coefficient is computed by the function
+  `pressure_drag_coefficient` for the momentum equation and the TKE return-to-isotropy
+  source, with the environment area clamped to `[1 - a_max, 1]` in both; the TKE source
+  floored it at `a_min`.
+- ![][badge-🐛bugfix] The AMD eddy viscosity divides by the norm of the unscaled velocity
+  gradient. Its numerator and denominator shared one scratch tensor, so the denominator
+  was evaluated after the filter-scaled derivative had overwritten it, leaving a
+  viscosity smaller by roughly the square of the filter width (a factor of order `1e6`
+  in a 3.2 km box) and with the units of an inverse time.
+- ![][badge-🐛bugfix] The LES closures (Smagorinsky-Lilly, AMD, constant horizontal
+  diffusion) diffuse energy through the split enthalpy flux
+  `-ρ D [∇s_d + (h_eff + Φ) ∇q_tot_eff]` used by the other diffusive terms, in place of a
+  lumped `h_tot`. The horizontal AMD scalar diffusivity divides by the physical norm of
+  the gradient, as the vertical one already did.
+- ![][badge-🐛bugfix] Hyperdiffusion scales the P3 ice number `ρn_ice`, rime mass `ρq_rim`, and
+  rime volume `ρb_rim` with the cloud ice tendency; `ρn_ice` received that and a second
+  full-strength `∇⁴` tendency, and the rime species received the latter only.
+- ![][badge-🐛bugfix] The ERA5 forcing-file coverage checks report a file that does not
+  cover the run, so a stale cached file is regenerated; they always reported success.
+- ![][badge-🐛bugfix] `job_id_from_config_file` detects configuration files that share a base
+  name; the comparison never matched.
+- ![][badge-🐛bugfix] The ISDAC setup follows the shared convention `prognostic_tke ? 0 :
+  prescribed profile`; its operands were reversed. `Setups.Larcform1` drops the
+  `prognostic_tke` keyword it never read.
+- ![][badge-🐛bugfix] A `Setups.DecayingProfile()` constructed without parameters builds a
+  simulation, taking the thermodynamics parameters from the model.
+- ![][badge-💥breaking] `SurfaceBoundaryOverrides` drops the `p` and `beta` fields, which were
+  stored and never applied; the setups that set `p` no longer do. The `orographic_gravity_wave:
+  "linear"` option and `LinearOrographicGravityWave` are removed; the option errored at
+  runtime. `AtmosNumerics` and the `EDMFXModel` keyword constructor reject unrecognized
+  keywords with a `MethodError`; they absorbed them.
+- ![][badge-🔥behavioralΔ] `vert_diff` combined with `turbconv`, `amd_les`, or a vertically
+  acting `smagorinsky_lilly` is rejected at model construction. The two AMD configurations
+  set `hyperdiff: ~`, like the Smagorinsky ones.
+- ![][badge-🐛bugfix] The vertical Smagorinsky-Lilly diffusion follows `implicit_diffusion`:
+  with `implicit_diffusion: true` it is part of the implicit tendency, with the eddy viscosity
+  refreshed on every Newton iterate, matching the Jacobian block that already existed for it.
+  A vertically-acting Smagorinsky-Lilly closure now satisfies the implicit-diffusion
+  configuration check on its own. Running the closure under the autodiff Jacobians
+  (`use_auto_jacobian`, `use_dense_jacobian`) needs ClimaCore 1.0, whose tensor return
+  types keep Dual storage; the default manual sparse Jacobian works on any supported
+  ClimaCore.
+- ![][badge-🐛bugfix] The number-density redistribution in vertical diffusion, hyperdiffusion,
+  the viscous sponge, and the PROPHET diffusive flux looks up the P3 ice number field `ρn_ice`;
+  it looked up `ρn_icl`, which no configuration carries, so the ice-number branches never ran.
+- The four AMD precomputed fields that no tendency read are no longer allocated.
+
+- ![][badge-💥breaking]![][badge-🚀performance] `AtmosNumerics` stores
+  `test_dycore_consistency` and `reproducible_restart` as `Bool` fields instead
+  of type parameters, and the `TestDycoreConsistency` and `ReproducibleRestart`
+  marker types are removed. Pass `true`/`false` instead. Both switches reach the
+  tendencies through `p.atmos`, so lifting them to the type domain gave any run
+  that set them a private set of specializations; the restart tests, which set
+  both, shared no compiled code with the rest of CI.
+
+0.42.11
+-------
+
+- [#4802](https://github.com/CliMA/ClimaAtmos.jl/pull/4802) ![][badge-✨feature/enhancement] Horizontal resolved-gradient (geometric) SGS variance term
+  `c_g (c_Δx Δx_h)² |∇_h ψ|²` for the SGS quadrature (`sgs_variance_horizontal_scale_factor` switches it on), with a closure-validity bound on
+  σ_q (`sgs_variance_max_rel_std`); The new parameters default to the historical closure.
+- [#4828](https://github.com/CliMA/ClimaAtmos.jl/pull/4828) Update to ClimaTimeSteppers v1 and update benchmark test
+- [#4837](https://github.com/CliMA/ClimaAtmos.jl/pull/4837) ![][badge-✨feature/enhancement] Richardson-number stability weight on the geometric SGS
+  variance term (`sgs_variance_geometric_Ri_factor`, 0 = off), built on the saturated moist buoyancy gradient and the strain rate, fading the
+  term where the resolved flow is turbulent or conditionally unstable.
+
+0.42.10
+-------
+- [#4803](https://github.com/CliMA/ClimaAtmos.jl/pull/4803)
+  ![][badge-✨feature/enhancement] Generate comparison plots for the
+  reproducibility tests, so a failing job shows the reference and the candidate
+  side by side instead of only the RMSE table.
+- [#4800](https://github.com/CliMA/ClimaAtmos.jl/pull/4800)
+  ![][badge-🔥behavioralΔ] Add tke source due to entr/detr mixing; delete
+  stability-biased buoygrad at cell centers and use unbiased buoygrad instead.
+
+- [#4737](https://github.com/CliMA/ClimaAtmos.jl/pull/4737) ![][badge-💥breaking] `AtmosModel` is now built on a grid and owns the
+  parameters and case setup. `AtmosSimulation` wraps a model and carries only
+  run control:
+
+  ```julia
+  model = AtmosModel(grid; params, setup, microphysics_model = ..., ...)
+  sim   = AtmosSimulation(model; dt, t_end, ...)
+  ```
+
+0.42.9
+-------
+- Update to ClimaCore.jl v0.16 (support for v0.15 is dropped). The biased
+  interpolation operators are spelled `BottomBiased*`/`TopBiased*` instead of
+  `LeftBiased*`/`RightBiased*`, and the correspondingly renamed abbreviations
+  are `ᶠbottom_bias`, `ᶠtop_bias`, `ᶜbottom_bias` and `ᶜtop_bias`. The advection
+  operators' one-sided boundary conditions are replaced by the generalized
+  `Extrapolate{N}` ghost-point padding: `ᶠupwind3` uses `Extrapolate{1}` and
+  `ᶠlin_vanleer` uses `Extrapolate{0}`. Both change results at the two faces
+  nearest each boundary, so this is a behavioral change.
+
+0.42.8
+-------
+- [#4779](https://github.com/CliMA/ClimaAtmos.jl/pull/4779) ![][badge-🐛bugfix] ![][badge-🔥behavioralΔ] Fit the SGS quadrature Lagrange multiplier to the discrete quadrature rule instead of the continuous Gaussian, so the reconstructed condensate mass hits its target. Also correct the 0-moment energy sink for the covariance of `dq_tot/dt` and `e_tot`.
+- [#4751](https://github.com/CliMA/ClimaAtmos.jl/pull/4751) ![][badge-✨feature/enhancement] Move the 1-moment process selection into `NonEquilibriumMicrophysics1M`, so a model can be built in code rather than only from config keys. Constructor defaults are now `n_substeps = 3`, `n_substeps_quad = 2`.
+- [#4718](https://github.com/CliMA/ClimaAtmos.jl/pull/4718) ![][badge-✨feature/enhancement] Add a CloudSat radar simulator to the COSP workflow, with the diagnostics `cloudsat_tcc` and `cloudsat_tcc2`. The default `netcdf_interpolation_num_points` z value changed from 256 to 100.
+0.42.7
+-------
+- [#4702](https://github.com/CliMA/ClimaAtmos.jl/pull/4702) Add the shared helper `ᶜh_eff_plus_Φ!` for the mass-weighted water enthalpy of the single-gradient enthalpy flux, and the selectors `ᶜsuspended_water` and `ᶜdiffusing_water` for which water carries the enthalpy and which water diffuses, and use them in the EDMFX vertical and horizontal diffusive fluxes, the grid-mean and updraft hyperdiffusion, the vertical diffusion boundary layer, and the implicit Jacobian, which each assembled it separately. The EDMFX diffusive fluxes now also use the shared `ᶠgradᵥ`, `ᶜdiffdivᵥ` and `ᶜdiffusive_flux_divergenceᵥ` operators instead of local copies; the TKE flux keeps its dedicated divergence operator, since its bottom boundary has a nonzero surface TKE flux, but it now also uses the shared `ᶠgradᵥ`. Tendencies are unchanged.
+- [#4657](https://github.com/CliMA/ClimaAtmos.jl/pull/4657) ![][badge-✨feature/enhancement] Add a horizontal component to the EDMFX SGS diffusive flux, enabled by the opt-in `edmfx_sgs_horizontal_diffusive_flux` config option (default `false`), for high-resolution configurations: scalar and TKE fluxes, the momentum stress `τ = -2 K_{u,h} S` with the full strain rate, the corresponding TKE shear production from horizontal gradients, and diagnostics `lmixh`, `edth`, and `evuh`. The water and enthalpy fluxes follow the vertical convention of [#4753](https://github.com/CliMA/ClimaAtmos.jl/pull/4753): `q_tot_eff = q_tot - q_rai - q_sno` diffuses as a single substance with the enthalpy flux `ρ K_{h,h} (∇ₕs_d + (h_eff + Φ) ∇ₕq_tot_eff)`, suspended cloud mass and number species take a proportional share of it, and rain and snow receive no horizontal transport. With prognostic updrafts and the separate opt-in `edmfx_horizontal_diffusion` config option (default `false`, requires `edmfx_sgs_horizontal_diffusive_flux`), the grid-mean horizontal specific tendencies are also applied to the updraft scalars (moist static energy, total specific humidity, cloud species, and SGS tracers), so each subdomain inherits the grid-mean horizontal diffusion.
+
+0.42.6
+-------
+- [#4770](https://github.com/CliMA/ClimaAtmos.jl/pull/4770) ![][badge-🐛bugfix] ![][badge-🔥behavioralΔ] Distribute the aggregate `q_tot_eff` diffusion of `edmfx_sgs_diffusive_flux_tendency!` to the suspended cloud mass and number species. The distribution added in [#4753](https://github.com/CliMA/ClimaAtmos.jl/pull/4753) resolved its field names against `Y` rather than `Y.c`, so its guard was never satisfied and the block never ran: `ρq_tot` and `ρ` were tendencied while `ρq_lcl`, `ρq_icl` and their number densities were not. The hyperdiffusion and vertical-diffusion-boundary-layer paths already distributed correctly, so this removes an inconsistency between them.
+
+
+0.42.5
+-------
+- [#4762](https://github.com/CliMA/ClimaAtmos.jl/pull/4762) Include more terms in the `InvZEntrainment` closure.
+- [#4760](https://github.com/CliMA/ClimaAtmos.jl/pull/4760) Diffusion / hyperdiffusion cleanup after [#4753](https://github.com/CliMA/ClimaAtmos.jl/pull/4753) and [#4732](https://github.com/CliMA/ClimaAtmos.jl/pull/4732): remove the now-inert `α_vert_diff_tracer` parameter (and the corresponding `tracer_vertical_diffusion_factor` TOML entries in `longrun_aquaplanet_1M.toml`, `les_isdac.toml`, `prognostic_edmfx_1M.toml`, `prognostic_edmfx_1M_mlcloud.toml`, `single_column_precipitation_test.toml`), remove the also-inert `α_hyperdiff_tracer` parameter (no TOML entries were set), and delete the dead helper `ᶠtotal_enthalpy_gradientᵥ`.
+- [#4744](https://github.com/CliMA/ClimaAtmos.jl/pull/4744) ![][badge-🔥behavioralΔ] Make rain sediment with non-constant velocity
+
+0.42.4
+-------
+- [#4750](https://github.com/CliMA/ClimaAtmos.jl/pull/4750) ![][badge-✨feature/enhancement] Add the diagnostics `ssatl` and `ssati` (water-vapor supersaturation with respect to liquid and to ice), available for any moist microphysics model.
+- [#4732](https://github.com/CliMA/ClimaAtmos.jl/pull/4732) ![][badge-🔥behavioralΔ] Make water hyperdiffusion species-consistent and enforce the SGS microphysics constraints.
+
+0.42.3
+-------
+- [#4735](https://github.com/CliMA/ClimaAtmos.jl/pull/4735) ![][badge-🐛bugfix] Make the `topography_damping_factor` config default a float (`5.0` instead of `5`).
+- [#4734](https://github.com/CliMA/ClimaAtmos.jl/pull/4734) ![][badge-🔥behavioralΔ] Update to CloudMicrophysics v0.38.
+- [#4733](https://github.com/CliMA/ClimaAtmos.jl/pull/4733) ![][badge-🔥behavioralΔ] Change the min area limiter and turbulent entrainment parameters in the EDMFX TOML configs.
+- [#4731](https://github.com/CliMA/ClimaAtmos.jl/pull/4731) ![][badge-🔥behavioralΔ] Remove the Rayleigh sponge from grid-mean microphysics tracers.
+- [#4664](https://github.com/CliMA/ClimaAtmos.jl/pull/4664) ![][badge-🔥behavioralΔ] Initialize the AtmosphericProfilesLibrary single-column setups (Bomex, DYCOMS, GABLS, GATE_III, ISDAC, Larcform1, PrecipitatingColumn, Rico, Soares, ShipwayHill2012, TRMM_LBA) on GPU spaces. `hydrostatic_pressure_profile` integrates the hydrostatic initial value problem on a dedicated 1000-element column (previously 100) and returns a `ClimaInterpolations` interpolant over host arrays. Because the setup profiles are host-resident interpolants, the initial condition of these setups is evaluated on the host and copied to the device rather than broadcast on the device. Initial center pressures change by about `2e-4` to `4e-4` relative, dominated by the removed interpolation error of the coarser grid; the new profiles are within about `4e-6` relative of a reference solution on a 16 times finer grid. The `ShipwayHill2012` constructor now returns the setup type (its interface methods were previously unreachable).
+
+0.42.2
+-------
+- [#4722](https://github.com/CliMA/ClimaAtmos.jl/pull/4722) ![][badge-🔥behavioralΔ] Exclude precipitation in cloud fraction and radiation. Cloud fraction no longer counts precipitating but condensate-free air (e.g. below cloud base) as cloudy, and radiation no longer treats falling rain/snow as cloud droplets/ice.
+- [#4705](https://github.com/CliMA/ClimaAtmos.jl/pull/4705) ![][badge-✨feature/enhancement] Add a generic interface for driving single-column simulations from netCDF forcing files.
+  - Add `ColumnDatasets` for reading column forcing files.
+  - Compose external forcing from per-process terms (`HorizontalAdvection`, `VerticalFluctuation`, `Nudging`, `Subsidence`) assembled into `ExternalDrivenTVForcing`.
+  - Rename the old large-scale-subsidence forcing to `LargeScaleSubsidence`, freeing the name `Subsidence` for the new per-process forcing term.
+
+
+0.42.1
+-------
+- [#4693](https://github.com/CliMA/ClimaAtmos.jl/pull/4693) ![][badge-🔥behavioralΔ] Mix the sedimentation flux across subdomains under `PrognosticEDMFX`. The lateral transfer of each sedimenting updraft tracer across tilted updraft boundaries now includes both detrainment (where the updraft narrows with height) and entrainment of the environment sedimentation flux (where it widens), with the environment flux density `ρ⁰w⁰χ⁰` reconstructed from the grid-mean flux minus the updraft contribution. Applied to the condensate/precipitation masses and their number concentrations, with matching implicit-Jacobian updates.
+- [#4699](https://github.com/CliMA/ClimaAtmos.jl/pull/4699) ![][badge-🔥behavioralΔ] Select the tracers that receive the `α_vert_diff_tracer` eddy-diffusivity scaling in the boundary-layer vertical diffusion from the shared `gs_sedimenting_tracer_candidates` list instead of a hardcoded tuple of species. The tracer diffusivity scaling is now consistent across the boundary-layer diffusion, the EDMFX SGS flux, the EDMFX updraft vertical diffusion, and the implicit Jacobian.
+- [#4703](https://github.com/CliMA/ClimaAtmos.jl/pull/4703) ![][badge-🔥behavioralΔ] Unify SGS hyperdiffusion with the grid mean: each `PrognosticEDMFX` subdomain inherits the grid-mean specific tendency (uniform hyperdiffusion within the grid box). The total-enthalpy hyperdiffusive flux is split into dry-static-energy and water-species contributions so that dry-air enthalpy is no longer diffused along with water enthalpy.
+
+
+0.42.0
+-------
+- [#4624](https://github.com/CliMA/ClimaAtmos.jl/pull/4624) ![][badge-💥breaking] Migrated the radiation interface to RRTMGP 0.22's redesigned API.
+  The radiation cache now holds an `RRTMGP.RRTMGPSolver` (read/written through getters such as `RRTMGP.layer_temperature(solver)`)
+  instead of the removed `RRTMGPModel` wrapper; host aerosol tracers are mapped to RRTMGP's canonical names, and the
+  deep-atmosphere scaling is passed as `deep_atmosphere_inverse_scaling`. Radiation diagnostics now wrap the RRTMGP flux getters
+  with `array2field` directly instead of `copy(getter(solver))`.
+
+- [#4647](https://github.com/CliMA/ClimaAtmos.jl/pull/4647) ![][badge-🔥behavioralΔ] Make the EDMFX (PROPHET) boundary-layer representation less sensitive to vertical resolution by reconstructing subgrid inversion structure.
+  - Interpolate center-based eddy diffusivities to faces with a harmonic mean, `1/interp(1/max(K, ϵ))`, instead of an arithmetic mean, at the diffusion sites that use cell-center diffusivities: the boundary-layer `VerticalDiffusion`/`DecayWithHeightDiffusion` path and EDMFX updraft-internal diffusion (Smagorinsky keeps arithmetic interpolation to match its tendency; the EDMFX grid-mean diffusivities are evaluated natively at faces instead — see below). At a face separating a turbulent layer from quiescent stratified air — a stratocumulus-capping inversion — the arithmetic mean assigns `~K_bl/2` to exactly the face with the largest gradients, producing systematic spurious entrainment; the harmonic mean is controlled by the smaller adjacent value.
+  - Use a stability-biased buoyancy gradient (the more stable of the two one-sided gradients, `N²_stab = max(N²₋, N²₊)`) for the mixing length and turbulent Prandtl number, so a resolved inversion suppresses mixing from both sides.
+  - Make the stability closure interface-aware: an effective `N²_eff = N² + [(Δb)₊]²/(c_b·κ_iso)` senses unresolved buoyancy jumps across faces, and a gated interfacial entrainment diffusivity `K_e = γ·w_e·Δz` (with `w_e = A√κ/max(Ri_b, 1)`) restores the physical, finite entrainment across the reconstructed inversion; `A` is the new calibratable parameter `EDMF_interface_entr_efficiency` (ClimaParams default 0.4, so the closure is active by default; `A = 0` disables it). The closure targets strong, mixed-layer-capping inversions, where cloud cover and inversion height converge under vertical refinement (DYCOMS, BOMEX); at weak, moisture-dominated trade inversions on coarse grids, equilibrium cloud cover remains resolution-dependent for any `A` (see the validity-domain note in the `set_face_diffusivities!` docstring), so `A` should be calibrated against equilibrium (≳ 24 h) targets rather than spin-up snapshots.
+  - Evaluate the stability closure and eddy diffusivities natively at cell faces (`ᶠK_h`, `ᶠK_u`, `ᶠK_entr`, exact two-point differences) and cache the master mixing length (`ᶜl_mix`); factor the buoyancy-gradient thermodynamics into cloud-fraction-independent coefficients. The TKE budget uses the same face diffusivities as the fluxes. The `edt`/`evu` diagnostics now report these effective coefficients (including the interfacial entrainment contribution) instead of recomputing a center-based diffusivity, and the interfacial entrainment diffusivity is available on request as the new EDMFX diagnostic `kentr`.
+  - Replace the vertical-only grid cap on the EDMFX mixing length (`l ≤ Δz`) with the resolvability filter scale `l ≤ Δ_f = max(Δx_h, Δz)`, where `Δx_h` is the horizontal node length scale (`Inf` for single columns): an (isotropic) eddy can be handed to the resolved dynamics only if it is resolvable in every direction, so the cap is set by the coarsest one. Single columns and GCM resolutions are uncapped — the mixing length is purely physical and convergent under vertical refinement; in the gray zone, the cap binds at `Δx_h`, and the isotropic LES limit retains the Deardorff-type `l ≤ Δ`.
+  - Use the face-native `ᶠK_h` for the EDMFX updraft internal diffusion (tendency and Jacobian), replacing a separately evaluated center diffusivity with harmonic-mean face interpolation, so grid-mean and updraft diffusion share one diffusivity pipeline (`ᶠK_entr` remains excluded from updraft internal diffusion: interfacial entrainment of the updrafts is carried by the entrainment/detrainment closures). Use the EDMFX mixing length for the diagnostic covariance and ML-cloud closures under `EDOnlyEDMFX`, which previously fell back incorrectly to the Smagorinsky–Lilly grid-mean length.
+- [#4678](https://github.com/CliMA/ClimaAtmos.jl/pull/4678) ![][badge-🔥behavioralΔ] Reparameterize the TKE dissipation coefficient in terms of a critical Richardson number: `c_d = c_m·c_b/Ri_c`, with `Ri_c` read from the ClimaParams parameter `mixing_length_Ri_crit` (default 0.25). In the buoyancy-limited branch of the mixing-length closure, local TKE balance reduces to the threshold `Ri_c = c_m·c_b/c_d`, so `(c_m, c_b, Ri_c)` form a nearly orthogonal calibration basis (flux magnitude, buoyancy-length/TKE partition, stability cutoff) and `c_d` is derived. TOML overrides of `mixing_length_diss_coeff` no longer have any effect — set `mixing_length_Ri_crit` instead. At ClimaParams defaults the derived `c_d` is 0.224 instead of 0.22.
+
+0.41.3
+-------
+
+0.41.2
+-------
+
+- [#4648](https://github.com/CliMA/ClimaAtmos.jl/pull/4648) ![][badge-🔥behavioralΔ] Carry the energy of sedimenting water at each subdomain's own value under `PrognosticEDMFX`. Each sedimenting species transports its specific internal, potential, and kinetic energy `e_int(T) + Φ + Kin(w, u)`; the grid-mean sedimentation energy flux is set equal to the sum of the updraft and environment fluxes, each the subdomain sedimentation mass flux times its specific energy (with `Φ` common to all subdomains and the environment mass flux taken as the grid-mean residual `ρqw - ρaʲqʲwʲ`). The updraft kinetic energy uses the updraft velocities; the environment kinetic energy uses the grid-mean terminal velocity, since the environment terminal velocity is not stored separately.
+- [#4653](https://github.com/CliMA/ClimaAtmos.jl/pull/4653) ![][badge-🔥behavioralΔ] Improve the manual implicit Jacobian (the tendencies are unchanged; behavior changes only through the single-Newton-iteration implicit solve).
+  - Document that the existing height-form pressure-gradient-force Jacobian blocks are the exact linearization of the Exner-form tendency `cp_d θ_v ∇Π` (stencils unchanged): the thermal-buoyancy and pressure-buoyancy terms cancel via the equation-of-state identity `δρ/ρ = (1-κ_d) δp/p - δθ_v/θ_v`, leaving the acoustic operator `∇δp/ρ` in every column perturbed at fixed density plus a single buoyancy term in the `ρ` column, so sound and gravity waves are both treated fully implicitly.
+  - Add the neglected environment feedback `∂χ⁰/∂χʲ = -w·ρaʲ/ρa⁰` to the entrainment-relaxation diagonal, scaling it by `(1 + w·ρaʲ/ρa⁰)` (the exact derivative of the regularized `specific` that diagnoses the environment relaxation target, with `w = sgs_weight_function(ρa⁰/ρ, a_half)`).
+  - Include the sedimentation velocity in the continuity-equation (`ρ`-row) Jacobian, matching the SGS-water contribution to the moist-air-mass tendency; this required reordering the scalar solve (condensate masses precede `ρ`) and dropping the always-zero `(tracer, ρ)` diffusion blocks.
+  - Enumerate the EDMFX grid-mean tracer diffusion from the grid-mean state instead of the updraft state, so grid-mean microphysics tracers are also diffused under `EDOnlyEDMFX` (which carries no SGS tracers); diffuse passive (non-water) tracers — grid-mean and SGS — with the unscaled `K_h`, matching the boundary-layer diffusion path, and give them the matching implicit-Jacobian diagonals, which were previously missing.
+  - Gate the updraft-internal diffusion Jacobian on `edmfx_vertical_diffusion`, mirroring the tendency it linearizes (previously the updraft scalar diagonals could carry diffusion terms with no tendency counterpart when implicit diffusion was enabled without EDMFX vertical diffusion).
+  - Document the remaining frozen-coefficient approximations in the Jacobian ledger: the diffusive fluxes' `ρ`-dependence, the `∂l_mix/∂tke` chain term in the TKE dissipation derivative, and the explicitly-treated EDMFX subdomain sedimentation-energy corrections.
+- [#4644](https://github.com/CliMA/ClimaAtmos.jl/pull/4644) ![][badge-🔥behavioralΔ]
+  - Remove the coherent (mass-flux) buoyancy production from the EDMFX TKE budget; the coherent updraft/environment buoyancy flux belongs to the resolved SGS circulation, not the isotropic turbulence that TKE represents.
+  - Decompose the diffusive enthalpy flux into dry static energy + water enthalpy, `F_h = -K_h ∇s_d + Σ_μ h_tot,μ (-K_h ∇q_μ)` with unit turbulent Lewis number, at both diffusion sites; diffusing `h_tot` directly implied a spurious enthalpy flux carried by dry-air diffusion that systematically warmed entrained air across capping inversions. The implicit-Jacobian diffusion factors are updated to match.
+  - Damp the relative part of the cloud-fraction floor as the subdomain mean saturates (`D = x/√(1+x²)`, `x = max(-μ_S, 0)/(ε_rel·q_sat)`), so an equilibrated overcast deck is no longer capped below full cloud cover by the patchiness floor. No new parameters.
+- [#4638](https://github.com/CliMA/ClimaAtmos.jl/pull/4638) ![][badge-🔥behavioralΔ] Fix the subsidence top boundary condition: the advective-form subsidence operator now uses the zero-boundary-flux divergence (`ᶜadvdivᵥ`), which is equivalent to a zero-gradient inflow condition `χ = χ_top` above the lid, instead of `Extrapolate` (which copied the cell below into the top cell). Remove the two `external_forcing.jl` blocks that hard-zeroed the accumulated top-cell `ρe_tot`/`ρq_tot` tendencies to mask that defect; GCM/ERA5-driven top-cell tendencies (radiation, nudging, subsidence) are no longer discarded.
+- [#4637](https://github.com/CliMA/ClimaAtmos.jl/pull/4637) ![][badge-🔥behavioralΔ]
+  - Fix the spurious mass flux through the model top over sloped terrain-following coordinates: `set_velocity_at_top!` now cancels the contravariant projection of the horizontal wind (`u₃ = -uₕ³/g³³`, mirroring the surface treatment), and the continuity equation uses the same zero-boundary-flux divergence (`ᶜadvdivᵥ`) as the tracers, which also makes the `ρ`-row Jacobian exact.
+  - Transport auto-discovered EDMFX SGS tracers (`q_lcl`, `q_icl`, `q_rai`, `q_sno`, `n_*`) like `mse` and `q_tot`: grid-mean vertical advection plus difference-form SGS corrections `ρᵏaᵏ(u³ᵏ-u³)(χᵏ-χ)`, which vanish for uniform fields, instead of absolute subdomain fluxes. These corrections now use the same `edmfx_sgsflux_upwinding` reconstruction as the `mse`/`q_tot` fluxes (central by default, previously first-order upwind for the tracer fluxes), and their implicit Jacobian uses the matching central, updraft-only linearization (environment contributions, which are `O(aʲ²)`, are dropped).
+  - Add the moist-air-mass counterpart of the EDMFX SGS mass flux of `q_tot` to the continuity equation, mirroring the diffusive-flux treatment. A new tracer-mass consistency test asserts the `χ ≡ 1` identity for these transport pathways.
+
+0.41.1
+-------
+
+- [#4622](https://github.com/CliMA/ClimaAtmos.jl/pull/4622) ![][badge-🔥behavioralΔ] Move the `ρe_tot`/`ρq_tot` upwind correction into the implicit advection tendency (the Wfact Jacobian is unchanged).
+- [#4621](https://github.com/CliMA/ClimaAtmos.jl/pull/4621) ![][badge-🔥behavioralΔ] Clamp the implicit `ρa` stage value to `[0, ρ·a_max]` per-cell in the column sweep for stability, so updraft area cannot exceed `a_max` when the explicit area limiters fail to prevent overshoot.
+- [#4623](https://github.com/CliMA/ClimaAtmos.jl/pull/4623) Hotfix: replace a rational exponent (`^(1 // 4)`) with `sqrt(sqrt(...))` in the Smagorinsky–Lilly stratification correction.
+- [#4618](https://github.com/CliMA/ClimaAtmos.jl/pull/4618) Add a verbose logging option for `AtmosSimulation`.
+- [#4606](https://github.com/CliMA/ClimaAtmos.jl/pull/4606) ![][badge-✨feature/enhancement] Add ARM VARANAL SCM forcing support.
+- [#4615](https://github.com/CliMA/ClimaAtmos.jl/pull/4615) Add microphysics 1M tendency plots for the Larcform1 case.
+- [#4610](https://github.com/CliMA/ClimaAtmos.jl/pull/4610) Add LES comparison plots for EDMF post-processing.
 
 0.41.0
 -------

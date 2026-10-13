@@ -51,7 +51,7 @@ topo_smoothing:
   value: false
 topography_damping_factor:
   help: "Factor by which smallest resolved length-scale is to be damped"
-  value: 5
+  value: 5.0
 # ODE
 use_newton_rtol:
   help: "Whether to check if the current iteration of Newton's method has an error within a relative tolerance, instead of always taking the maximum number of iterations (only for ClimaTimeSteppers.jl)"
@@ -92,6 +92,12 @@ auto_jacobian_padding_bands:
 update_jacobian_every:
   help: "Frequency at which the Jacobian matrix should be updated (once per timestep, once per timestepper stage, or once per linear solve) [`dt`, `stage`, `solve` (default)]"
   value: "solve"
+update_cache_every:
+  help: "Frequency at which `set_precomputed_quantities!` is called by ClimaTimeSteppers [`step` (default), `stage`]"
+  value: "step"
+update_constrain_state_every:
+  help: "Frequency at which `constrain_state!` is called by ClimaTimeSteppers [`step` (default), `stage`, `dss`]"
+  value: "step"
 debug_jacobian:
   help: "Whether to print summary information about the Jacobian matrix, including comparisons of different algorithms evaluated on the first column of the final state against the exact Jacobian [`true`, `false` (default)]"
   value: false
@@ -105,6 +111,15 @@ idealized_h2o:
 dt_rad:
   help: "Time between calling radiation callback for sphere configurations. Only applies to RRTMGP modes, ignored for `held_suarez`, which is applied every stage."
   value: "6hours"
+dt_subcol:
+  help: "Time between calling the subcolumn cloud overlap. Set to `Inf` to disable."
+  value: "Inf"
+cosp_n_subcolumns:
+  help: "Number of COSP subcolumns."
+  value: 100
+cosp_overlap:
+  help: "COSP cloud overlap assumption [`maximum`, `random`, `maximum_random` (default)]."
+  value: "maximum_random"
 idealized_clouds:
   help: "Use idealized clouds in radiation model [`false` (default), `true`]"
   value: false
@@ -112,7 +127,7 @@ prescribe_clouds_in_radiation:
   help: "Use prescribed clouds in radiation model. Clouds are read from ERA5 data and updated every time radiation is called. The year 2010 is used and continuously repeated. This mode only affect radiation and is only relevant for the RRTGMP mode. [`false` (default), `true`]"
   value: false
 insolation:
-  help: "Insolation used in radiation model [`idealized` (default), `timevarying`, `rcemipii`]"
+  help: "Insolation used in radiation model [`idealized` (default), `timevarying`, `rcemipii`, `externaldriventv`, `larcform1`]"
   value: "idealized"
 add_isothermal_boundary_layer:
   help: "Add an isothermal boundary layer above the domain top for radiation [`false`, `true` (default)]"
@@ -170,7 +185,14 @@ constant_horizontal_diffusion:
   help: "Constant horizontal diffusion closure [`true`, `false` (default)]"
   value: false
 smagorinsky_lilly:
-  help: "Smagorinsky-Lilly diffusive closure [`nothing` (default), `UVW`, `UV`, `W`, `UV_W_decoupled`]"
+  help: |
+    Smagorinsky-Lilly diffusive closure. The value selects the axes the closure acts on:
+    - `UVW`: isotropic closure coupling all axes, with a single mixing length `c_smag ∛(Δx Δy Δz) fb`.
+    - `UV`: horizontal axes only.
+    - `W`: vertical axis only.
+    - `UV_W`: horizontal and vertical axes, treated separately (distinct horizontal and vertical mixing lengths).
+    - `~` (default): closure off.
+    The `W`, `UV_W`, and `UVW` options act on the vertical and can be paired with `implicit_diffusion: true`.
   value: ~
 tracer_nonnegativity_method:
   help: |
@@ -180,7 +202,7 @@ tracer_nonnegativity_method:
     - `vapor_tendency`: Weakly enforce nonnegativity by applying a tendency to each tracer to redistribute tracer mass between vapor (q_tot) and each tracer
     - `vertical_water_borrowing`: Enforce nonnegativity using VerticalMassBorrowingLimiter, which redistributes tracer mass vertically. Uses a single threshold (0.0) for all tracers to which the limiter is applied.
     - `~` (default): Do not enforce nonnegativity
-    Note: append `_qtot` to the method name to enforce nonnegativity of q_tot as well (not applicable to `vertical_water_borrowing`).
+    Note: append `_qtot` to `elementwise_constraint` to include q_tot among the constrained tracers. `vapor_constraint_qtot` is accepted but leaves q_tot unchanged; `vapor_tendency` and `vertical_water_borrowing` ignore the suffix with a warning.
   value: ~
 bubble:
   help: "Enable bubble correction for more accurate surface areas"
@@ -189,8 +211,11 @@ start_date:
   help: "Start date and time of the simulation. Specified as either yyyymmdd (defaults to midnight) or yyyymmdd-HHMM. Examples: [`20100101`, `20100101-0000`]"
   value: "20100101"
 era5_initial_condition_dir:
-  help: "Directory containing ERA5 initial condition files. Filenames inferred from start_date [none (default)]. Generated with `https://github.com/CliMA/WeatherQuest`."
+  help: "Directory containing ERA5 initial condition files. Filenames inferred from start_date [none (default)]. A missing raw file is fetched with ClimaInitialConditions."
   value: ~
+era5_ic_full_pressure:
+  help: "For `WeatherModel` initial conditions, read 3D pressure (`p_3d`) from the ERA5 file instead of integrating hydrostatically from surface pressure [`false` (default), `true`]"
+  value: false
 test_dycore_consistency:
   help: "Test dycore consistency [`false` (default), `true`]"
   value: false
@@ -210,31 +235,31 @@ disable_surface_flux_tendency:
   help: "(Bool) Whether to disable surface flux tendencies of momentum, energy, and tracers [`true`, `false` (default)]. When this flag is true, the surface flux tendency is not applied, no matter how surface conditions are computed."
   value: false
 surface_setup:
-  help: "Surface flux scheme [`DefaultExchangeCoefficients` (default), `DefaultMoninObukhov`]"
+  help: "Surface flux scheme [`DefaultExchangeCoefficients` (default), `DefaultMoninObukhov`, `PrescribedSurface`]"
   value: "DefaultExchangeCoefficients"
 wall_model:
-  help: "Wall model type [~ (default, use MOST bulk BCs), `wsode_stratified`]. When `wsode_stratified`, the coupled (u_tau, theta_tau) WSODE replaces the MOST bulk BCs for momentum and energy."
+  help: "Surface wall model [~ (MOST bulk fluxes), `wsode_stratified`]"
   value: ~
 wall_model_kappa:
-  help: "Von Kármán constant for momentum used by the WSODE wall model [default: 0.4]."
-  value: ~
+  help: "WSODE von Kármán constant for momentum [-]"
+  value: 0.4
 wall_model_kappa_theta:
-  help: "Von Kármán constant for heat used by the WSODE wall model [default: 0.4]."
-  value: ~
+  help: "WSODE von Kármán constant for heat [-]"
+  value: 0.4
 wall_model_k_s:
-  help: "Roughness parameter k_s for the WSODE wall model [default: 0.05]."
-  value: ~
+  help: "WSODE equivalent sand roughness height [m]"
+  value: 0.05
 wall_model_nu:
-  help: "Kinematic viscosity [m²/s] used by the WSODE wall model [default: 1.5e-5]."
-  value: ~
+  help: "WSODE kinematic viscosity [m²/s]"
+  value: 1.5e-5
 wall_model_u_tau_init:
-  help: "Initial friction velocity u_tau [m/s] for the WSODE wall model [default: 0.4]."
-  value: ~
+  help: "WSODE initial friction velocity [m/s]"
+  value: 0.4
 wall_model_theta_tau_init:
-  help: "Initial friction temperature theta_tau [K] for the WSODE wall model [default: 0.05]."
-  value: ~
+  help: "WSODE initial friction temperature [K]"
+  value: 0.05
 initial_condition:
-  help: "Initial condition [`DryBaroclinicWave`, `MoistBaroclinicWave`, `ConstantBuoyancyFrequencyProfile`, `DecayingProfile` (default), `IsothermalProfile`, `Bomex`, `DryDensityCurrentProfile`, `RisingThermalBubbleProfile`, `ISDAC`, `GCM`, `ARMVARANAL`, `Reanalysis`, `ReanalysisTimeVarying`], or a file path for a NetCDF file (read documentation about requirements)."
+  help: "Selects the simulation case/setup. Global/idealized options: `DryBaroclinicWave`, `MoistBaroclinicWave`, `ConstantBuoyancyFrequencyProfile`, `DecayingProfile` (default), `IsothermalProfile`, `Bomex`, `DryDensityCurrentProfile`, `RisingThermalBubbleProfile`, `ISDAC`, or a NetCDF file path (see docs). Externally-driven single-column cases: `GCM`, `ARMVARANAL`, `ForcingFromFile`, `ReanalysisTimeVarying`."
   value: "DecayingProfile"
 perturb_initstate:
   help: "Add a perturbation to the initial condition [`false`, `true` (default)]"
@@ -257,6 +282,9 @@ implicit_microphysics:
 use_sgs_quadrature:
   help: "Enable subgrid-scale quadrature integration for microphysics tendencies. When true, microphysics tendencies are integrated over the joint SGS PDF of (T, q_tot). [`true` (default), `false`]"
   value: true
+tq_correlation_model:
+  help: "Closure for the SGS T-q correlation that couples σ_T and σ_q in the sampled joint PDF. `constant` uses the prescribed `Tq_correlation_coefficient`. `diagnosed` builds T′q′ as the sum of the covariance blocks consistent with the variance decomposition — turbulent (prescribed ρ_turb · σ_T,turb · σ_q,turb) and vertical uniform-box (Δz² ∂_z θ_li · ∂_z q_tot / 12); the isentropic horizontal block carries no θ′ and contributes none — then forms ρ = T′q′ / √(T′T′ q′q′), falling back to the prescribed value where the variances vanish. [`constant` (default), `diagnosed`]"
+  value: "constant"
 sgs_distribution:
   help: "Distribution type for SGS quadrature over microphysics. [`gaussian` (default), `lognormal`, `mean` (grid-mean only, no SGS sampling)]"
   value: "gaussian"
@@ -269,20 +297,32 @@ microphysics_n_substeps:
 microphysics_n_substeps_quadrature:
   help: "Number of susbteps for time averaging bulk microphysics tendencies with subgrid-scale quadrature. Default: 2"
   value: 2
-fixed_terminal_velocity:
-  help: "Use fixed terminal velocities for microphysics tracers [`true` (default), `false`]"
+fixed_terminal_velocity_liquid:
+  help: "Use fixed terminal velocity for cloud liquid sedimentation [`true` (default), `false`]"
+  value: true
+fixed_terminal_velocity_ice:
+  help: "Use fixed terminal velocity for cloud ice sedimentation [`true` (default), `false`]"
+  value: true
+fixed_terminal_velocity_rain:
+  help: "Use fixed terminal velocity for rain sedimentation [`true`, `false` (default)]"
+  value: false
+fixed_terminal_velocity_snow:
+  help: "Use fixed terminal velocity for snow sedimentation [`true` (default), `false`]"
   value: true
 cloud_liquid_formation:
   help: "Cloud liquid formation option for 1M microphysics [`CloudLiquidFormation` (default), ~]"
   value: "CloudLiquidFormation"
 cloud_ice_formation:
-  help: "Cloud ice formation option for 1M microphysics [`ConstantTimescale` (default), `TemperatureDependent`, ~]"
-  value: "ConstantTimescale"
+  help: "Cloud ice formation option for 1M microphysics [`PrescribedIceNumber` (default), `TemperatureDependentIceNumber`, `ConstantTimescale`, `TemperatureDependent`, ~]"
+  value: "TemperatureDependentIceNumber"
 cloud_ice_melt:
   help: "Cloud ice melting option for 1M microphysics [`CloudIceMelt` (default), ~]"
   value: "CloudIceMelt"
+cloud_liquid_freezing:
+  help: "Cloud liquid freezing option for 1M microphysics [`HomogeneousAndHeterogeneous` (default), `Homogeneous`, `Heterogeneous`, ~]"
+  value: "HomogeneousAndHeterogeneous"
 rain_autoconversion:
-  help: "Rain autoconversion option for 1M microphysics [`Kessler1M` (default), `PrescribedNd`, ~]"
+  help: "Rain autoconversion option for 1M microphysics [`Kessler1M` (default), `PrescribedNd`, ~]. `Kessler1M` blends its timescale and threshold between the convective values and the stratiform values."
   value: "Kessler1M"
 snow_autoconversion:
   help: "Snow autoconversion option for 1M microphysics [`NoSupersaturation` (default), `WithSupersaturation`, ~]"
@@ -311,6 +351,9 @@ cloud_ice_snow_accretion:
 rain_snow_accretion:
   help: "Rain-snow collision accretion option for 1M microphysics [`RainSnowAccretion` (default), ~]"
   value: "RainSnowAccretion"
+vapor_relaxation:
+  help: "Coupling of the vapor-driven phase changes in the 1M substep solver [`Joint` (default), `PerProcess`]"
+  value: "Joint"
 
 viscous_sponge:
   help: "Viscous sponge [`true`, `false` (default)]"
@@ -322,10 +365,19 @@ energy_q_tot_upwinding:
   help: "Energy upwinding mode [`none`, `first_order` , `third_order`, `vanleer_limiter` (default)]"
   value: vanleer_limiter
 orographic_gravity_wave:
-  help: "Orographic drag on horizontal mean flow [`nothing` (default), `gfdl_restart`, `raw_topo`]"
+  help: "Orographic drag on horizontal mean flow [`nothing` (default), `gfdl_restart`, `raw_topo` (load preprocessed artifact), `raw_topo_online` (run preprocessing at initialization), `linear` (test path)]"
   value: ~
 non_orographic_gravity_wave:
   help: "Apply parameterization for convective gravity wave forcing on horizontal mean flow [`false` (default), `true`]"
+  value: false
+nogw_beres_source:
+  help: "Use Beres (2004) convective source spectrum for tropical non-orographic gravity waves (requires the eddy-diffusivity mass-flux scheme) [`false` (default), `true`]"
+  value: false
+nogw_beres_heating_latent:
+  help: "Source the Beres in-cloud heating from the canonical transport-free latent-heat sum instead of the DSE flux-divergence Q1. Requires microphysics_model=1M and turbconv=prognostic_edmfx. [`false` (default), `true`]"
+  value: false
+nogw_beres_detailed_diagnostics:
+  help: "Enable Beres convective-source verification diagnostics (the `nogw_*` source-internal fields: Q0, h_heat, z_bot/z_top, a_cover, Q_conv, Q_conv_ic, half-sine, launched-spectrum summaries) and the extra per-callback computations they require. Off by default: a GCM run only needs the net drag (utendnogw/vtendnogw). [`false` (default), `true`]"
   value: false
 dt_nogw:
   help: "Time between calling non-orographic gravity wave update"
@@ -345,20 +397,21 @@ check_conservation:
 check_steady_state:
   help: "Compare steady-state velocity to analytic solution; only available for certain choices of `topography` [`false` (default), `true`]"
   value: false
+# Single-column model (SCM) forcing
 external_forcing:
-  help: "External forcing for single column experiments [`nothing` (default), `GCM`, `ARMVARANAL`, `ISDAC`, `Reanalysis`, `ReanalysisTimeVarying`, `ReanalysisMonthlyAveragedDiurnal`]"
+  help: "External forcing for single-column experiments. Leave `~` for almost every case: the forcing is then taken from the setup chosen by `initial_condition` (the preferred route). Set it only for `ReanalysisMonthlyAveragedDiurnal` (monthly-averaged diurnal ERA5 forcing, which has no `initial_condition` counterpart), paired with `initial_condition: ReanalysisTimeVarying`. [`~` (default), `ReanalysisMonthlyAveragedDiurnal`]"
   value: ~
 external_forcing_file:
-  help: "External forcing file containing large-scale forcings, initial conditions, and boundary conditions. Used for GCM-driven SCM and ISDAC setup [`nothing` (default), `path/to/file`]"
+  help: "Path to a NetCDF forcing file you supply, read by the file-driven single-column cases `GCM`, `ARMVARANAL`, and `ForcingFromFile`. The `ReanalysisTimeVarying` / `ReanalysisMonthlyAveragedDiurnal` cases ignore this and instead generate/locate their file from `site_latitude`/`site_longitude`/`start_date`. [`nothing` (default), `path/to/file`]"
   value: ~
 cfsite_number:
-  help: "cfsite identifier for single column forcing from  `external_forcing_file`, specified as siteN. For site details see Shen et al. 2022 `https://doi.org/10.1029/2021MS002631`. [`site23` (default), `siteN`]"
+  help: "Used only by the `GCM` case: selects which cfsite column to read from `external_forcing_file`, specified as siteN. For site details see Shen et al. 2022 `https://doi.org/10.1029/2021MS002631`. [`site23` (default), `siteN`]"
   value: "site23"
 site_latitude:
-  help: "Site latitude for single column model. Used for externally driven time varying forcing model to generate the forcing file. Artifact support is currently for eastern Pacific region in July 2007 only. [`17.0` (default)]"
+  help: "Used only by the `ReanalysisTimeVarying` / `ReanalysisMonthlyAveragedDiurnal` cases, which use it (with `site_longitude` and `start_date`) to generate and locate the ERA5 forcing file; other cases take location from `external_forcing_file` or `cfsite_number`. The ERA5 artifact currently covers only the tropical Pacific during the first five days of July 2007. [`17.0` (default)]"
   value: 17.0
 site_longitude:
-  help: "Site longitude for single column model. Used for externally driven time varying forcing model to generate the forcing file. Artifact support is currently for eastern Pacific region in July 2007 only. [`-149.0` (default)]"
+  help: "Used only by the `ReanalysisTimeVarying` / `ReanalysisMonthlyAveragedDiurnal` cases, which use it (with `site_latitude` and `start_date`) to generate and locate the ERA5 forcing file; other cases take location from `external_forcing_file` or `cfsite_number`. The ERA5 artifact currently covers only the tropical Pacific during the first five days of July 2007. [`-149.0` (default)]"
   value: -149.0
 era5_diurnal_warming:
   help: Applies a warming scenario by adding a constant temperature offset (in Kelvin). Supported only by the `ReanalysisMonthlyAveragedDiurnal` forcing model. This affects the target surface temperature for the entire simulation, the initial atmospheric temperature profile, and the relaxation temperature profile above `gcmdriven_relaxation_minimum_height`. Specific humidity is increased to hold relative humidity constant in the initial and relaxation profiles.
@@ -390,6 +443,9 @@ approximate_linear_solve_iters:
 output_default_diagnostics:
   help: "Output the default diagnostics associated to the selected atmospheric model"
   value: true
+debug_tendency_diagnostics:
+  help: "Include ~96 per-process tendency-field diagnostics for debugging (3D center-space fields; short names of the form `tn_<field>_<process>`, plus the aggregate updraft ρa tendency `tn_sgsrhoa_aggregate`). Each sample runs one extra tendency evaluation into a persistent scratch FieldVector; enable only for debugging and use a coarse output cadence."
+  value: false
 enable_diagnostics:
   help: "Set to false to fully disable the diagnostics"
   value: true
@@ -412,7 +468,7 @@ deep_atmosphere:
   help: "If true, use deep atmosphere equations and metric terms, otherwise assume columns are cylindrical (shallow atmosphere) [`true` (default), `false`]"
   value: true
 restart_file:
-  help: "Path to HDF5 file to use as simulation starting point. Note that the simulation can only be restarted in a reproducible way when `reproducible_restart` is true."
+  help: "Path to HDF5 file to use as simulation starting point. The simulation can only be restarted in a reproducible way when `reproducible_restart` is true."
   value: ~
 detect_restart_file:
   help: "When true, try finding a restart file and use it to restart the simulation. Only works with ActiveLink."
@@ -430,52 +486,57 @@ chemistry_model:
   help: "Chemistry model [`~` (default, no passive tracers), `passive` (enables passive tracer A)]"
   value: ~
 
-# EDMF configuration
+# Eddy-diffusivity mass-flux (EDMF) configuration
 turbconv:
-  help: "Turbulence convection scheme [`nothing` (default), 'prognostic_edmfx']"
+  help: "Turbulence convection scheme [`nothing` (default), `prognostic_edmfx`, `edonly_edmfx`]"
   value: ~
 advection_test:
   help: "Switches off all grid-scale and subgrid-scale momentum tendencies [`false` (default), `true`]"
   value: false
 edmfx_scale_blending:
-  help: "Method for blending physical scales in EDMFX mixing length calculation. [`SmoothMinimum` (default), `HardMinimum`]"
+  help: "Method for blending physical scales in the eddy-diffusivity mass-flux mixing-length calculation. [`SmoothMinimum` (default), `HardMinimum`]"
   value: "SmoothMinimum"
 edmfx_filter:
-  help: "If set to true, it switches on the relaxation of negative velocity in EDMFX.  [`true`, `false` (default)]"
+  help: "If set to true, it switches on the relaxation of negative velocity in the eddy-diffusivity mass-flux scheme.  [`true`, `false` (default)]"
   value: false
 edmfx_nh_pressure:
-  help: "If set to true, it switches on EDMFX pressure drag closure.  For prognostic EDMF, this only controls the drag term
-  in the pressure closure. The buoyancy term is always applied. [`true`, `false` (default)]"
+  help: "If set to true, it switches on the eddy-diffusivity mass-flux pressure drag closure. For the prognostic scheme, this only controls the drag term in the pressure closure. The buoyancy term is always applied. [`true`, `false` (default)]"
   value: false
 edmfx_vertical_diffusion:
-  help: "If set to true, it switches on vertical diffusion of prognostic EDMFX updrafts. [`true`, `false` (default)]"
+  help: "If set to true, it switches on vertical diffusion of prognostic eddy-diffusivity mass-flux updrafts. [`true`, `false` (default)]"
+  value: false
+edmfx_horizontal_diffusion:
+  help: "If set to true, it applies the grid-mean horizontal diffusion tendencies to the prognostic EDMFX updrafts. Requires `edmfx_sgs_horizontal_diffusive_flux`. Intended for high-resolution runs.  [`true`, `false` (default)]"
   value: false
 edmfx_entr_model:
-  help: "EDMFX entrainment closure.  [`nothing` (default), `PiGroups`, `Generalized`]"
-  value: ~
+  help: "Eddy-diffusivity mass-flux entrainment closure. Only consulted by `prognostic_edmfx`. [`Generalized` (default), `PiGroups`]"
+  value: "Generalized"
 edmfx_detr_model:
-  help: "EDMFX detrainment closure.  [`nothing` (default), `PiGroups`, `Generalized`]"
-  value: ~
+  help: "Eddy-diffusivity mass-flux detrainment closure. Only consulted by `prognostic_edmfx`. This is a placeholder for new detrainment models. For now only supports `Generalized`. [`Generalized` (default)]"
+  value: "Generalized"
 edmfx_mse_q_tot_upwinding:
-  help: "EDMFX upwinding mode [`none`, `first_order` (default), `third_order`]"
+  help: "Eddy-diffusivity mass-flux upwinding mode [`none`, `first_order` (default), `third_order`]"
   value: first_order
 edmfx_tracer_upwinding:
-  help: "EDMFX tracer upwinding mode [`none`, `first_order` (default)]"
+  help: "Eddy-diffusivity mass-flux tracer upwinding mode [`none`, `first_order` (default)]"
   value: first_order
 edmfx_sgsflux_upwinding:
-  help: "EDMFX SGS mass flux upwinding mode [`none` (default), `first_order`, `third_order`]"
+  help: "Eddy-diffusivity mass-flux subgrid-scale mass flux upwinding mode [`none` (default), `first_order`, `third_order`]"
   value: none
 edmfx_sgs_mass_flux:
-  help: "If set to true, it switches on EDMFX SGS mass flux.  [`true`, `false` (default)]"
+  help: "If set to true, it switches on the eddy-diffusivity mass-flux subgrid-scale mass flux.  [`true`, `false` (default)]"
   value: false
 edmfx_sgs_diffusive_flux:
-  help: "If set to true, it switches on EDMFX SGS diffusive flux.  [`true`, `false` (default)]"
+  help: "If set to true, it switches on the eddy-diffusivity mass-flux subgrid-scale diffusive flux.  [`true`, `false` (default)]"
+  value: false
+edmfx_sgs_horizontal_diffusive_flux:
+  help: "If set to true, it switches on the horizontal component of the EDMFX SGS diffusive flux. Intended for high-resolution runs.  [`true`, `false` (default)]"
   value: false
 updraft_number:
-  help: "Sets the number of updrafts for the EDMF scheme"
+  help: "Sets the number of updrafts for the eddy-diffusivity mass-flux scheme"
   value: 1
 radiation_reset_rng_seed:
-  help: "Reset the RNG seed before calling RRTGMP to a known value (the timestep number). When modeling cloud optics, RRTGMP uses a random number generator. Resetting the seed every time RRTGMP is called to a deterministic value ensures that the simulation is fully reproducible and can be restarted in a reproducible way. Disable this option when running production runs. Please note that this flag is only used for `AllSkyRadiation` and `AllSkyRadiationWithClearSkyDiagnostics` radiation modes."
+  help: "Reset the RNG seed before calling RRTGMP to a known value (the timestep number). When modeling cloud optics, RRTGMP uses a random number generator. Resetting the seed every time RRTGMP is called to a deterministic value ensures that the simulation is fully reproducible and can be restarted in a reproducible way. Disable this option when running production runs. This flag is only used for `AllSkyRadiation` and `AllSkyRadiationWithClearSkyDiagnostics` radiation modes."
   value: false
 log_to_file:
   help: "Log to stdout and file simultaneously. The log file is saved within the output directory"

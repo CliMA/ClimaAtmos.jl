@@ -21,6 +21,7 @@ function ClimaCalibrate.forward_model(interface::PerfectAtmosModelInterface, ite
 
     # Only create diagnostics that are needed for calibration
     config_dict["output_default_diagnostics"] = false
+    config_dict["debug_tendency_diagnostics"] = false
     replace_diagnostic_dicts!(config_dict, diagnostic_dicts)
 
     # Don't save state to speed up forward model

@@ -40,14 +40,38 @@ with a maximum size of `max_simultaneous_derivatives`, and we call
 ``s``, then the first partition evaluates the coefficients of ``ε₁`` through
 ``εₛ``, the second evaluates the coefficients of ``εₛ₊₁`` through ``ε₂ₛ``, and so
 on until ``εₙ``. The default partition size is 32.
+
+# Arguments
+
+  - `max_simultaneous_derivatives = 32`: Number of dual number components per
+    evaluation of `implicit_tendency!`, stored as the type parameter `S` [-].
 """
 struct AutoDenseJacobian{S} <: JacobianAlgorithm end
 AutoDenseJacobian(max_simultaneous_derivatives = 32) =
     AutoDenseJacobian{max_simultaneous_derivatives}()
 
-# The number of derivatives computed simultaneously by AutoDenseJacobian.
+"""
+    max_simultaneous_derivatives(alg::AutoDenseJacobian)
+
+Return the number of derivatives computed simultaneously by `alg`, i.e. the
+number of dual number components per partition.
+"""
 max_simultaneous_derivatives(::AutoDenseJacobian{S}) where {S} = S
 
+"""
+    jacobian_cache(alg::AutoDenseJacobian, Y, atmos)
+
+Allocate the dual-number state and cache, the dense per-column matrices, and
+the LU workspace used by an [`AutoDenseJacobian`](@ref).
+
+# Returns
+
+`NamedTuple` with the dual copies `precomputed_dual`, `scratch_dual`, `Y_dual`,
+and `Yₜ_dual`; the `N × N × n_columns` arrays `column_matrices` and
+`column_lu_factors`; the `N × n_columns` array `column_lu_vectors`; the
+`N × N × 1` identity `I_matrix`; and `N_val`, the number of values in a column
+wrapped in a `Val` so that it is statically inferrable.
+"""
 function jacobian_cache(alg::AutoDenseJacobian, Y, atmos)
     FT = eltype(Y)
     DA = ClimaComms.array_type(Y)
@@ -86,6 +110,19 @@ function jacobian_cache(alg::AutoDenseJacobian, Y, atmos)
     )
 end
 
+"""
+    update_column_matrices!(alg::AutoDenseJacobian, cache, Y, p, t)
+
+Set `cache.column_matrices` to the dense per-column representation of
+``∂Yₜ/∂Y``, evaluated at the state `Y` and time `t`.
+
+Loops over partitions of at most `max_simultaneous_derivatives(alg)` dual
+number components. For each partition, a unique `ε` is added to the
+corresponding values of `cache.Y_dual`, `set_implicit_precomputed_quantities!`
+and `implicit_tendency!` are evaluated on the dual state, and the `ε`
+coefficients of `cache.Yₜ_dual` are copied into the matrix entries. Mutates
+`cache` and returns `nothing`.
+"""
 function update_column_matrices!(alg::AutoDenseJacobian, cache, Y, p, t)
     (; precomputed_dual, scratch_dual, Y_dual, Yₜ_dual, column_matrices) = cache
     device = ClimaComms.device(Y.c)
@@ -168,6 +205,16 @@ function update_column_matrices!(alg::AutoDenseJacobian, cache, Y, p, t)
     end
 end
 
+"""
+    update_jacobian!(alg::AutoDenseJacobian, cache, Y, p, dtγ, t)
+
+Set `cache.column_lu_factors` to the LU factorization of
+``∂R/∂Y = dtγ ∂Yₜ/∂Y - I`` in every column.
+
+Calls `update_column_matrices!` to obtain ``∂Yₜ/∂Y``, forms the residual
+Jacobian, and factorizes it in parallel across columns with
+[`parallel_lu_factorize!`](@ref). Mutates `cache`.
+"""
 function update_jacobian!(alg::AutoDenseJacobian, cache, Y, p, dtγ, t)
     (; column_matrices, column_lu_factors, I_matrix, N_val) = cache
     device = ClimaComms.device(Y.c)
@@ -183,6 +230,15 @@ function update_jacobian!(alg::AutoDenseJacobian, cache, Y, p, dtγ, t)
     parallel_lu_factorize!(device, column_lu_factors, N_val)
 end
 
+"""
+    invert_jacobian!(alg::AutoDenseJacobian, cache, ΔY, R)
+
+Solve `(∂R/∂Y) ΔY = R` for `ΔY` in every column.
+
+Copies the scalar values of `R` into `cache.column_lu_vectors`, runs
+[`parallel_lu_solve!`](@ref) with the factorization from `update_jacobian!`,
+and copies the result back into `ΔY`. Mutates `ΔY` and `cache`.
+"""
 function invert_jacobian!(::AutoDenseJacobian, cache, ΔY, R)
     (; column_lu_vectors, column_lu_factors, N_val) = cache
     device = ClimaComms.device(ΔY.c)
@@ -227,6 +283,14 @@ function invert_jacobian!(::AutoDenseJacobian, cache, ΔY, R)
     end
 end
 
+"""
+    first_column_block_arrays(alg::AutoDenseJacobian, Y, p, dtγ, t)
+
+Return a `Dict` that maps pairs of scalar field names `(row_name, col_name)` to
+dense arrays of the corresponding blocks of ``∂R/∂Y``, evaluated in the first
+column of `Y`. Uses a separate single-column cache, so it does not modify the
+cache used by `update_jacobian!`.
+"""
 function first_column_block_arrays(alg::AutoDenseJacobian, Y, p, dtγ, t)
     scalar_names = scalar_field_names(Y)
     field_vector_indices = field_vector_index_iterator(Y)
@@ -262,14 +326,17 @@ end
 """
     parallel_lu_factorize!(device, matrices, ::Val{N})
 
-Runs a parallel LU factorization algorithm on the specified `device`. If each
+Run a parallel LU factorization algorithm on the specified `device`. If each
 slice `matrices[1:N, 1:N, i]` represents a matrix ``Mᵢ``, this function
 overwrites it with the lower triangular matrix ``Lᵢ`` and the upper triangular
 matrix ``Uᵢ``, where ``Mᵢ = Lᵢ * Uᵢ``. The value of `N` must be wrapped in a
 `Val` to ensure that it is statically inferrable, which allows the LU
 factorization to avoid dynamic local memory allocations.
 
-The runtime of this algorithm scales as ``O(N^3)``.
+No pivoting is performed: a zero or `NaN` pivot throws an error rather than
+being reordered away. The runtime of this algorithm scales as ``O(N^3)``.
+
+See also [`parallel_lu_solve!`](@ref).
 """
 function parallel_lu_factorize!(device, matrices, ::Val{N}) where {N}
     n_matrices = size(matrices, 3)
@@ -305,7 +372,7 @@ end
 """
     parallel_lu_solve!(device, vectors, matrices, ::Val{N})
 
-Runs a parallel LU solver algorithm on the specified `device`. If each slice
+Run a parallel LU solver algorithm on the specified `device`. If each slice
 `vectors[1:N, i]` represents a vector ``vᵢ``, and if each slice
 `matrices[1:N, 1:N, i]` represents a matrix ``Lᵢ * Uᵢ`` that was factorized by
 [`parallel_lu_factorize!`](@ref), this function overwrites the slice

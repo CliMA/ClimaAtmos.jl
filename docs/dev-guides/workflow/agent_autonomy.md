@@ -7,7 +7,7 @@ This guide lists actions that an automated agent must **not** perform without an
 ### Git / GitHub
 
 - `git push` to any remote, including the agent's own branch.
-- `git push --force` (always — including on agent-owned branches).
+- `git push --force` (always, including on agent-owned branches).
 - `git commit --amend` on a commit that has already been pushed.
 - `git rebase` onto a different base, or any interactive rebase.
 - `git reset --hard`, `git checkout --`, `git restore .`, or `git clean -fd` when uncommitted changes exist.

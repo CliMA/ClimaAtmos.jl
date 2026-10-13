@@ -259,21 +259,23 @@ LES profiles since neither the resolved nor the SGS fluxes include contributions
 from the surface flux (otherwise flux goes to zero at the surface).
 
 Inputs:
- - `interpolated_var` :: Interpolated variable vector.
- - `var_name` :: Name of variable in the netcdf dataset.
- - `filename` :: nc filename
- - `z_scm` :: Vertical coordinate vector onto which var_name is interpolated.
-Output:
- - Flux profile with bottom cell set equal to surface flux.
- """
 
+  - `interpolated_var` :: Interpolated variable vector.
+  - `var_name` :: Name of variable in the netcdf dataset.
+  - `filename` :: nc filename
+  - `z_scm` :: Vertical coordinate vector onto which var_name is interpolated.
+
+Output:
+
+  - Flux profile with bottom cell set equal to surface flux.
+"""
 function rectify_surface_flux(
     interpolated_var::Array{FT},
     var_name::String,
     filename::String,
     z_scm::OptVec{<:Real},
 ) where {FT}
-    if z_scm != nothing
+    if !isnothing(z_scm)
         min_z_index = argmin(z_scm)
     else
         min_z_index = 1
@@ -476,7 +478,7 @@ function get_profile(
     is_profile = Bool[]
 
     # Check that times are contained in simulation output
-    Δt_start, ti_index = findmin(broadcast(abs, t .- ti))
+    _, ti_index = findmin(broadcast(abs, t .- ti))
     # If simulation does not contain values for ti or tf, return high value (penalization)
     if t[end] < ti
         @warn string(
@@ -484,21 +486,21 @@ function get_profile(
             "Requested t_start = $ti s. However, the last time available is $(t[end]) s.",
             "Defaulting to penalized profiles...",
         )
-        for i in 1:length(y_names)
+        for _ in 1:length(y_names)
             var_ = isnothing(z_scm) ? get_height(filename) : z_scm
             append!(y, 1.0e5 * ones(length(var_[:])))
         end
         return prof_ind ? (y, repeat([true], length(y_names))) : y
     end
     if !isnothing(tf)
-        Δt_end, tf_index = findmin(broadcast(abs, t .- tf))
+        _, tf_index = findmin(broadcast(abs, t .- tf))
         if t[end] < tf - dt
             @warn string(
                 "Note: t_end < tf - dt, which means that simulation stopped before reaching the requested t_end.",
                 "Requested t_end = $tf s. However, the last time available is $(t[end]) s.",
                 "Defaulting to penalized profiles...",
             )
-            for i in 1:length(y_names)
+            for _ in 1:length(y_names)
                 var_ = isnothing(z_scm) ? get_height(filename) : z_scm
                 append!(y, 1.0e5 * ones(length(var_[:])))
             end
@@ -622,7 +624,7 @@ function get_obs(
 
     if isnothing(Σ_const) & isnothing(Σ_scaling)
         # time covariance
-        Σ, pool_var = get_time_covariance(
+        Σ, _ = get_time_covariance(
             filename,
             y_names,
             z_scm,

@@ -8,26 +8,24 @@ import ClimaCore.Fields as Fields
 """
     scm_coriolis_tendency_uₕ(ᶜuₕ, scm_coriolis)
 
-Calculates the Coriolis tendency for the horizontal velocity (`ᶜuₕ`) within a
-single-column model (SCM) framework.
+Return the Coriolis tendency of the horizontal velocity in a single-column model.
 
-This function computes the Coriolis force acting on the difference between the
-current horizontal velocity (`ᶜuₕ`) and the geostrophic wind (`ᶜuₕ_g`). The
-geostrophic wind is determined from prescribed profiles (`prof_ug`, `prof_vg`)
-which are typically used in single-column model (SCM) configurations to represent
-large-scale forcing.
+Computes `-f k̂ × (uₕ - uₕ_g)`, the Coriolis acceleration relative to the
+geostrophic wind, and projects the result back onto the horizontal components. The
+geostrophic wind is read from the prescribed profiles `prof_ug` and `prof_vg`,
+which represent the large-scale forcing of a single-column configuration.
 
-Arguments:
+# Arguments
 
-  - `ᶜuₕ`: The cell-centered horizontal velocity field [m/s].
-  - `scm_coriolis`: A NamedTuple `(; prof_ug, prof_vg, coriolis_param)`, or
-    `nothing` for no Coriolis forcing.
+  - `ᶜuₕ`: Cell-center horizontal velocity [m/s].
+  - `scm_coriolis`: An object with fields `prof_ug`, `prof_vg`, and
+    `coriolis_param`, or `nothing` for no Coriolis forcing.
 
-Returns:
+# Returns
 
-  - A `ClimaCore.Fields.Field` (or a lazy broadcast over ClimaCore Fields)
-    representing the Coriolis tendency for `ᶜuₕ` [m/s²],
-    or `NullBroadcasted()` if `scm_coriolis` is nothing.
+A lazy broadcast with the Coriolis tendency of `ᶜuₕ` [m/s²], or a
+`NullBroadcasted()` when `scm_coriolis` is `nothing`. The caller
+(`additional_tendency!`) adds it to `Yₜ.c.uₕ`.
 """
 scm_coriolis_tendency_uₕ(ᶜuₕ, ::Nothing) = NullBroadcasted()
 function scm_coriolis_tendency_uₕ(ᶜuₕ, scm_coriolis)

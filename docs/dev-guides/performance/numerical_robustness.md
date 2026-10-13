@@ -10,7 +10,7 @@ Dividing by quantities that may approach zero has several reasonable handlings. 
 - whether downstream code can absorb `Inf` (or a large finite number) correctly,
 - whether you want to bound the magnitude or surface the invalid state.
 
-Float division does not raise an error: `a / 0.0` returns `Inf` (or `NaN` if `a` is also zero), and IEEE arithmetic propagates that through subsequent operations. You can sometimes deliberately allow `Inf` through, but only if downstream consumers are *known* to handle it — IEEE arithmetic does not take limits (`Inf * 0 = NaN`, `Inf - Inf = NaN`), so any later multiplication by a vanishing quantity silently produces `NaN` rather than the algebraic cancellation a mathematician would expect. Cases where allowing `Inf` is fine include a downstream `ifelse` or clamp that discards the singular branch, or operations where `Inf` results in well-defined behavior.
+Float division does not raise an error: `a / 0.0` returns `Inf` (or `NaN` if `a` is also zero), and IEEE arithmetic propagates that through subsequent operations. You can sometimes deliberately allow `Inf` through, but only if downstream consumers are *known* to handle it: IEEE arithmetic does not take limits (`Inf * 0 = NaN`, `Inf - Inf = NaN`), so any later multiplication by a vanishing quantity silently produces `NaN` rather than the algebraic cancellation a mathematician would expect. Cases where allowing `Inf` is fine include a downstream `ifelse` or clamp that discards the singular branch, or operations where `Inf` results in well-defined behavior.
 
 ```julia
 # Sometimes fine: downstream must tolerate Inf and any NaN cascade
@@ -52,7 +52,7 @@ ratio = ifelse(x > δ, a / x, sentinel)
 
 ## 2. Safe inputs to transcendental functions
 
-`log(x)` and `sqrt(x)` are undefined for strictly negative real `x`. On CPU, Julia raises `DomainError`; inside a GPU kernel that error cannot be caught and usually crashes the launch with hard-to-interpret error messages. Model state variables that should be non-negative — mixing ratios, cloud fractions, mass densities — routinely pick up small-magnitude negative values from round-off, advection limiters, or explicit-step over-shoots. A clip guard prevents the kernel error:
+`log(x)` and `sqrt(x)` are undefined for strictly negative real `x`. On CPU, Julia raises `DomainError`; inside a GPU kernel that error cannot be caught and usually crashes the launch with hard-to-interpret error messages. Model state variables that should be non-negative (mixing ratios, cloud fractions, mass densities) routinely pick up small-magnitude negative values from round-off, advection limiters, or explicit-step over-shoots. A clip guard prevents the kernel error:
 
 ```julia
 # ❌ Bad: DomainError on CPU / kernel crash or silent NaN on GPU when x < 0
@@ -67,37 +67,23 @@ result = sqrt(safe_x)
 
 A few practical notes:
 
-- `log(0)` is `-Inf` and `sqrt(0)` is `0` — both propagate through float arithmetic without erroring or crashing a kernel. If `-Inf` is unacceptable downstream, lift the floor from `zero(x)` to a physics-chosen `δ` (see §1).
+- `log(0)` is `-Inf` and `sqrt(0)` is `0`; both propagate through float arithmetic without erroring or crashing a kernel. If `-Inf` is unacceptable downstream, lift the floor from `zero(x)` to a physics-chosen `δ` (see §1).
 - `NaN` inputs do not need guarding at this layer: `log(NaN) = sqrt(NaN) = NaN`, propagating silently. The bug producing the `NaN` is upstream.
 - The intent of the clip is to absorb *round-off-level* negative values. If you are routinely clipping inputs whose magnitude is far above round-off, there is an upstream bug and the clip is hiding it.
 
-When `log`/`sqrt`/division appears inside an `ifelse`, the guard goes *before* the `ifelse` because both branches are always evaluated. See [SDP 17](../architecture/software_design_patterns.md) and [GPU Performance Guide §1](gpu_performance.md).
+When `log`/`sqrt`/division appears inside an `ifelse`, the guard goes *before* the `ifelse` because both branches are always evaluated. See [SDP 17](../code-quality/software_design_patterns.md), [GPU Performance Guide §1](gpu_performance.md), and the [Branchless Code Guide §3](branchless_code.md).
 
 ## 3. AD-compatible clamping
 
-Standard `clamp(x, low, high)` is generally safe for most uses. For zero-clamping, the canonical CliMA idiom is `max(zero(x), x)` (exported as `CloudMicrophysics.Utilities.clamp_to_nonneg`):
-
-```julia
-@inline clamp_to_nonneg(x) = max(zero(x), x)
-```
-
-`max` is differentiable in the active branch and propagates Dual partials through whichever argument wins. A branchless equivalent is `ifelse(x < zero(x), zero(x) * x, x)`, where `zero(x) * x` ensures the negative branch carries the same type (including Dual partials) as `x`.
+For zero-clamping, the canonical CliMA idiom is `max(zero(x), x)` (exported as `CloudMicrophysics.Utilities.clamp_to_nonneg`). See [ad_compatibility.md](ad_compatibility.md) for the full pattern and Dual-number rationale.
 
 ## 4. Conservation invariants
 
-Mass, energy, and tracer conservation are verified at integration scale, not in unit tests. When changing a tendency, source term, or limiter, name the conservation test that should catch a bug — and if no test exists, add one or flag the gap. Consult the repo-specific guide for the location of conservation tests and CI jobs.
+Mass, energy, and tracer conservation are verified at integration scale, not in unit tests. When changing a tendency, source term, or limiter, name the conservation test that should catch a bug. If no test exists, add one or flag the gap. Consult the repo-specific guide for the location of conservation tests and CI jobs.
 
 ## 5. Avoid `@assert` for runtime checks inside kernels
 
-Use `error("message")` instead of `@assert`. Do not capture runtime variables in the error message. See [SDP 11](../architecture/software_design_patterns.md).
-
-```julia
-# ❌ @assert allocates; string interpolation triggers dynamic dispatch
-@assert x > 0 "x must be positive, got $x"
-
-# ✅ Static error message
-x > 0 || error("x must be positive")
-```
+Use `error("static message")` instead. See [SDP 11](../code-quality/software_design_patterns.md).
 
 ## Self-correction
 
