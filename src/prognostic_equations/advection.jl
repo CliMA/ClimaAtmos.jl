@@ -83,6 +83,7 @@ NVTX.@annotate function horizontal_dynamics_tendency!(Yₜ, Y, p, t)
     if use_prognostic_tke(p.atmos.turbconv_model)
         ᶜtke = @. lazy(specific(Y.c.ρtke, Y.c.ρ))
         @. Yₜ.c.ρtke -= split_divₕ(Y.c.ρ * ᶜu, ᶜtke)
+        dg_ρtke_interface_completion!(Yₜ, Y, p)
     end
 
     (; ᶜq_tot_nonneg) = p.precomputed

@@ -3,6 +3,11 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- ![][badge-🐛bugfix] On DG horizontal spaces with `dg_equation_form: vi`,
+  prognostic TKE (`ρtke`, e.g. with `edonly_edmfx`) now receives the DG
+  interface flux of its horizontal advection, the same mass-consistent flux as
+  the grid-mean tracers. It previously had only the element-local volume term,
+  so TKE was not transported between elements.
 - ![][badge-✨feature/enhancement] Add the `dg_vi_velocity_penalty` config option
   for the vector-invariant horizontal DG form (`dg_equation_form: vi`). The
   default `rusanov` keeps the uniform `|u| + c` penalty on the horizontal

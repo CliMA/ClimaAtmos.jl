@@ -295,6 +295,25 @@ NVTX.@annotate function dg_horizontal_dynamics_completion!(Yₜ, Y, p, t)
     return nothing
 end
 
+# Add the `dg_tracer_interface` flux of the mass-weighted scalar `ᶜρχ`,
+# advected by the grid-mean mass flux, to `ᶜρχₜ`.
+function add_dg_tracer_interface_flux!(ᶜρχₜ, ᶜρχ, Y, ᶜuv, ᶜλ)
+    FT = Spaces.undertype(axes(Y.c))
+    ᶜWJ = Fields.local_geometry_field(Y.c).WJ
+    y = map(
+        (ρ, uv, λ, ρχ) -> (; ρ, uv, λ, χ = ρχ / ρ),
+        Y.c.ρ,
+        ᶜuv,
+        ᶜλ,
+        ᶜρχ,
+    )
+    dy = Fields.Field(NamedTuple{(:ρχ,), Tuple{FT}}, axes(Y.c))
+    fill!(parent(dy), 0)
+    Operators.add_numerical_flux_interior!(dg_tracer_interface, dy, y)
+    @. ᶜρχₜ += dy.ρχ / ᶜWJ
+    return nothing
+end
+
 """
     dg_horizontal_tracer_completion!(Yₜ_lim, Y, p, t)
 
@@ -303,22 +322,26 @@ the tracer interface flux for every grid-mean tracer. No-op on CG spaces.
 """
 NVTX.@annotate function dg_horizontal_tracer_completion!(Yₜ_lim, Y, p, t)
     is_dg_horizontal(axes(Y.c)) || return nothing
-    FT = Spaces.undertype(axes(Y.c))
-    ᶜWJ = Fields.local_geometry_field(Y.c).WJ
     (ᶜuv, ᶜλ) = dg_face_velocity_and_λ(Y, p)
     foreach_gs_tracer(Yₜ_lim, Y) do ᶜρχₜ, ᶜρχ, ρχ_name
-        y = map(
-            (ρ, uv, λ, ρχ) -> (; ρ, uv, λ, χ = ρχ / ρ),
-            Y.c.ρ,
-            ᶜuv,
-            ᶜλ,
-            ᶜρχ,
-        )
-        dy = Fields.Field(NamedTuple{(:ρχ,), Tuple{FT}}, axes(Y.c))
-        fill!(parent(dy), 0)
-        Operators.add_numerical_flux_interior!(dg_tracer_interface, dy, y)
-        @. ᶜρχₜ += dy.ρχ / ᶜWJ
+        add_dg_tracer_interface_flux!(ᶜρχₜ, ᶜρχ, Y, ᶜuv, ᶜλ)
     end
+    return nothing
+end
+
+"""
+    dg_ρtke_interface_completion!(Yₜ, Y, p)
+
+Interface completion of the element-local `split_divₕ` horizontal advection of
+prognostic TKE on DG spaces. `ρtke` is excluded from `is_tracer_var`, so the
+grid-mean tracer completion does not cover it; it is advected by the grid-mean
+mass flux with the same interface flux as the grid-mean tracers. No-op on CG
+spaces.
+"""
+function dg_ρtke_interface_completion!(Yₜ, Y, p)
+    is_dg_horizontal(axes(Y.c)) || return nothing
+    (ᶜuv, ᶜλ) = dg_face_velocity_and_λ(Y, p)
+    add_dg_tracer_interface_flux!(Yₜ.c.ρtke, Y.c.ρtke, Y, ᶜuv, ᶜλ)
     return nothing
 end
 
@@ -328,28 +351,14 @@ end
 Horizontal advection of prognostic TKE on DG spaces for the `:fddg` path.
 `horizontal_dynamics_tendency!` returns early for fddg (its `Yₜ.c.ρtke`
 split-divₕ term is skipped) and `dg_fddg_horizontal_dynamics!` only carries
-(ρ, ρe_tot, uₕ). `ρtke` is excluded from `is_tracer_var`, so the grid-mean
-tracer completion never sees it either — leaving TKE with NO horizontal
-transport in fddg mode, which lets the eddy-diffusivity closure accumulate
-TKE unboundedly over terrain. This restores it: `ρtke` is advected by the
-grid-mean mass flux exactly like a tracer (element-local `split_divₕ` volume
-term + `dg_tracer_interface` interface flux).
+(ρ, ρe_tot, uₕ), so this adds the element-local `split_divₕ` volume term and
+its interface completion ([`dg_ρtke_interface_completion!`](@ref)).
 """
 function dg_fddg_tke_advection!(Yₜ, Y, p)
-    FT = Spaces.undertype(axes(Y.c))
     (; ᶜu) = p.precomputed
-    ᶜWJ = Fields.local_geometry_field(Y.c).WJ
     ᶜtke = @. lazy(specific(Y.c.ρtke, Y.c.ρ))
-    @. Yₜ.c.ρtke -= split_divₕ(Y.c.ρ * ᶜu, ᶜtke)   # element-local volume divergence
-    (ᶜuv, ᶜλ) = dg_face_velocity_and_λ(Y, p)
-    y = map(
-        (ρ, uv, λ, ρχ) -> (; ρ, uv, λ, χ = ρχ / ρ),
-        Y.c.ρ, ᶜuv, ᶜλ, Y.c.ρtke,
-    )
-    dy = Fields.Field(NamedTuple{(:ρχ,), Tuple{FT}}, axes(Y.c))
-    fill!(parent(dy), 0)
-    Operators.add_numerical_flux_interior!(dg_tracer_interface, dy, y)
-    @. Yₜ.c.ρtke += dy.ρχ / ᶜWJ
+    @. Yₜ.c.ρtke -= split_divₕ(Y.c.ρ * ᶜu, ᶜtke)
+    dg_ρtke_interface_completion!(Yₜ, Y, p)
     return nothing
 end
 
