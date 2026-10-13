@@ -3,6 +3,16 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- ![][badge-🐛bugfix] ![][badge-🔥behavioralΔ] The duration used to pick the
+  default diagnostics cadence is the length of the run, `t_end - t_start`, rather than
+  `t_end - dt`. `frequency_averages` compares it against inclusive thresholds, so a run
+  ending exactly on a boundary was getting the next finer cadence: `t_end: "1days"` wrote
+  hourly averages instead of daily, `"30days"` daily instead of ten-daily, and `"3600secs"`
+  no default averages at all. Because the output period also selects the compute schedule
+  (`Day(1)` samples every step, `Day(10)` every six hours), the 30-day case was sampling
+  every default diagnostic once per step; `longrun_dry_baroclinic_wave_he60` and
+  `longrun_moist_baroclinic_wave_he60` were both in that case. Ignoring `t_start` also
+  bucketed a restart segment by the time it ends at rather than by how long it runs.
 - ![][badge-🔥behavioralΔ] The resolved-gradient (geometric) SGS variance block
   is the variance from a Gaussian subgrid parcel displacement with covariance
   `c_g diag(ℓ_h², ℓ_h², ℓ_v²)`, `ℓ_h = c_Δx Δx_h`, `ℓ_v = H`, split into
