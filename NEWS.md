@@ -3,6 +3,11 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- ![][badge-✨feature/enhancement] Precipitation-fraction placement of rain and
+  snow over the SGS quadrature: a fraction `sgs_precip_incloud_fraction` of
+  the cell-mean rain and snow is confined to the precipitation shaft, the moistest `a_p` of the PDF,
+  where `a_p` is the overlap precipitation fraction diagnosed from the cloud cover
+  above by a maximum-random overlap sweep.
 - ![][badge-🔥behavioralΔ] The part of the geometric SGS variance block that
   needs a vertical displacement (the along-surface variance beyond its
   along-contour part, plus the across-surface uniform-box terms) and the

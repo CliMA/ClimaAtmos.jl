@@ -679,9 +679,9 @@ using ClimaAtmos
                     q_rai, q_sno,
                     λ, FT(0), FT(0), FT(0), FT(0),
                     λ_lagrange, mu_S, FT(1),
+                    FT(0), FT(1), FT(0), FT(0),   # β_precip, shaft_frac, S_star, ε_S: no placement
                     dt, nsubs_quad,
-                    (),
-                )
+                    ())
 
                 # Verify it's a proper functor (not a closure)
                 @test evaluator isa Microphysics1MEvaluator
