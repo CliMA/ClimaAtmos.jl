@@ -56,7 +56,7 @@ function amip_target(context, output_dir)
     add_isothermal_boundary_layer = true
     aerosol_radiation = true
     reset_rng_seed = false
-    radiation_mode = CA.RRTMGPInterface.AllSkyRadiationWithClearSkyDiagnostics(
+    radiation_mode = CA.RRTMGPInterface.AllSkyRadiationWithClearSkyDiagnostics(;
         idealized_h2o,
         idealized_clouds,
         cloud,
