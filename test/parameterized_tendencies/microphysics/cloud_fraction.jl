@@ -369,4 +369,26 @@ floor_nt(
         end
     end
 
+    @testset "`geometric_vertical_q_variance`: the vertical-displacement part" begin
+        for FT in (Float32, Float64)
+            @testset "FT = $FT" begin
+                V = CA.geometric_vertical_q_variance
+                ℓ_h, ℓ_a, ℓ_v = FT(2e5), FT(1000), FT(150)
+                q_z, θ_z = FT(-2e-6), FT(4e-3)
+                a, b = FT(1e-8), FT(2e-5)        # |∇_h q|, |∇_h θ| (parallel)
+                inv_q, inv_θq, inv_θ = a^2, a * b, b^2
+                # flat surface (no horizontal gradients): only the across term
+                @test V(FT(0), FT(0), FT(0), q_z, θ_z, ℓ_h, ℓ_a, ℓ_v) ≈ ℓ_v^2 * q_z^2
+                # vertical surface (θ_z = 0): the along-surface vertical part only
+                @test V(inv_q, inv_θq, inv_θ, q_z, FT(0), ℓ_h, ℓ_a, ℓ_v) ≈ ℓ_a^2 * q_z^2 rtol =
+                    FT(1e-5)
+                # ∇θ = 0: unconstrained vertical displacement, no across term
+                @test V(inv_q, FT(0), FT(0), q_z, FT(0), ℓ_h, ℓ_a, ℓ_v) ≈ ℓ_a^2 * q_z^2
+                # no depth and no box: nothing needs a vertical displacement
+                @test V(inv_q, inv_θq, inv_θ, q_z, θ_z, ℓ_h, FT(0), FT(0)) == FT(0)
+                @test V(inv_q, inv_θq, inv_θ, q_z, θ_z, ℓ_h, ℓ_a, ℓ_v) isa FT
+            end
+        end
+    end
+
 end

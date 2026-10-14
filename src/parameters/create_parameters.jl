@@ -576,6 +576,11 @@ function SGSQuadratureParameters(
         :cloud_fraction_steepness_scale => :cloud_fraction_steepness_scale,
         :cloud_fraction_eps_rel => :cloud_fraction_eps_rel,
         :cloud_fraction_sigma_abs => :cloud_fraction_sigma_abs,
+        # Shared with CloudMicrophysics' 1M relaxation timescales.
+        :condensation_evaporation_timescale =>
+            :condensation_evaporation_timescale,
+        :sublimation_deposition_timescale =>
+            :sublimation_deposition_timescale,
     )
     parameters = CP.get_parameter_values(toml_dict, name_map, "ClimaAtmos")
     FT = CP.float_type(toml_dict)
@@ -597,6 +602,8 @@ function SGSQuadratureParameters(
         # Depth [m] of the along-surface displacement of the geometric
         # variance block.
         sgs_variance_isentropic_depth = FT(1000),
+        # Equilibrium-ratio modulator weight (see `sgs_variance_fidelity`).
+        sgs_fidelity_equilibrium_weight = FT(0.5),
     )
     provisional_present = filter(collect(keys(provisional_defaults))) do name
         haskey(toml_dict.data, string(name))

@@ -306,6 +306,9 @@ function precomputed_quantities(Y, atmos)
             # turbulent cross + horizontal geometric cross + vertical uniform-box
             # cross; see `set_covariance_cache!`).
             ᶜcorr_Tq = zeros(axes(Y.c)),
+            # Local SGS variance fidelity (see `sgs_variance_fidelity`),
+            # refreshed inside `set_covariance_cache!`.
+            ᶜα = zeros(axes(Y.c)),
             (
                 atmos.tq_correlation_model isa DiagnosedTqCorrelation ?
                 (; ᶜT′q′ = zeros(axes(Y.c))) : (;)

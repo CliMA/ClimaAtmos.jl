@@ -740,10 +740,14 @@ function update_implicit_microphysics_cache!(
     # Leaving updraft velocities at their explicit-stage values treats the
     # nonlinear part of the sedimentation flux explicitly.
     # No number of Newton iterations can correct a field that nothing updates.
-    if p.atmos.terminal_velocity_liquid isa DiagnosticTerminalVelocity ||
-       p.atmos.terminal_velocity_ice isa DiagnosticTerminalVelocity ||
-       p.atmos.terminal_velocity_rain isa DiagnosticTerminalVelocity ||
-       p.atmos.terminal_velocity_snow isa DiagnosticTerminalVelocity
+    # Every mode other than `FixedTerminalVelocity` depends on the state.
+    modes = (
+        p.atmos.terminal_velocity_liquid,
+        p.atmos.terminal_velocity_ice,
+        p.atmos.terminal_velocity_rain,
+        p.atmos.terminal_velocity_snow,
+    )
+    if !all(mode -> mode isa FixedTerminalVelocity, modes)
         set_precipitation_velocities!(Y, p, mm, tm)
     end
     set_precipitation_surface_fluxes!(Y, p, mm)
@@ -936,14 +940,13 @@ function set_microphysics_tendency_cache!(
             ᶜT, ᶜw_air, cmp, thp, dt, nsubs,
         )
     else
-        (; ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜsgs_moments) = p.precomputed
-        α = sgs_variance_fidelity(CAP.cloud_fraction_steepness_scale(p.params))
+        (; ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα, ᶜsgs_moments) = p.precomputed
         ξ_liq = CAP.sgs_liquid_uniform_fraction(p.params)
         ξ_ice = CAP.sgs_ice_uniform_fraction(p.params)
         @. ᶜmp_tendency = microphysics_tendencies_1m(
             BMT.Microphysics1Moment(), sgs_quad, cmp, thp, Y.c.ρ, ᶜT, ᶜw_air,
             ᶜq_tot_nonneg, ᶜq_lcl, ᶜq_icl, ᶜq_rai, ᶜq_sno,
-            ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜsgs_moments.λ_lagrange, α, ξ_liq, ξ_ice,
+            ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜsgs_moments.λ_lagrange, ᶜα, ξ_liq, ξ_ice,
             dt, nsubs_quad,
         )
     end
@@ -1002,8 +1005,7 @@ function set_microphysics_tendency_cache!(
             ᶜT⁰, ᶜw⁰_air, cmp, thp, dt, nsubs,
         )
     else
-        (; ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜsgs_moments) = p.precomputed
-        α = sgs_variance_fidelity(CAP.cloud_fraction_steepness_scale(p.params))
+        (; ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα, ᶜsgs_moments) = p.precomputed
         ξ_liq = CAP.sgs_liquid_uniform_fraction(p.params)
         ξ_ice = CAP.sgs_ice_uniform_fraction(p.params)
         # The liquid fraction `λ` and the linearized SGS saturation-excess mean
@@ -1017,7 +1019,7 @@ function set_microphysics_tendency_cache!(
         @. ᶜmp_tendency⁰ = microphysics_tendencies_1m(
             BMT.Microphysics1Moment(), sgs_quad, cmp, thp, ᶜρ⁰, ᶜT⁰, ᶜw⁰_air,
             ᶜq_tot_nonneg⁰, ᶜq_lcl⁰, ᶜq_icl⁰, ᶜq_rai⁰, ᶜq_sno⁰,
-            ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜsgs_moments.λ_lagrange, α, ξ_liq, ξ_ice,
+            ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜsgs_moments.λ_lagrange, ᶜα, ξ_liq, ξ_ice,
             dt, nsubs_quad, ᶜλ⁰, ᶜmu_S⁰,
         )
     end

@@ -2190,8 +2190,10 @@ Group of moisture, cloud, and microphysics choices inside an
   - `tq_correlation_model`: An `AbstractTqCorrelationModel`; `ConstantTqCorrelation()`
     by default (`DiagnosedTqCorrelation()` diagnoses the T–q correlation from the
     gradient covariance).
-  - `terminal_velocity_mode`: `DiagnosticTerminalVelocity()` (the default) or a
-    `FixedTerminalVelocity`.
+  - `terminal_velocity_liquid`, `terminal_velocity_ice`, `terminal_velocity_rain`,
+    `terminal_velocity_snow`: the `AbstractTerminalVelocityMode` of each species,
+    `FixedTerminalVelocity()` for cloud liquid, cloud ice and rain,
+    and `Chen2022TerminalVelocity()` for snow by default.
 
 # Examples
 
@@ -2211,8 +2213,8 @@ water = ClimaAtmos.AtmosWater(;
     tq_correlation_model::TQC = ConstantTqCorrelation()
     terminal_velocity_liquid::TVL = FixedTerminalVelocity()
     terminal_velocity_ice::TVI = FixedTerminalVelocity()
-    terminal_velocity_rain::TVR = DiagnosticTerminalVelocity()
-    terminal_velocity_snow::TVS = FixedTerminalVelocity()
+    terminal_velocity_rain::TVR = FixedTerminalVelocity()
+    terminal_velocity_snow::TVS = Chen2022TerminalVelocity()
 end
 
 """
