@@ -1,4 +1,4 @@
-430
+431
 
 # **README**
 #
@@ -32,6 +32,10 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+431
+- Fix sgs variance fidelity: estimate qc_eq by using the Gaussian approximation of eq condensate
+- Restore per-subdomain QuadratureCloud: env condensate + EDMF updraft weighting.
+
 430
 - Snow falls at the Chen et al. (2022) speed by default; snow_apparent_density 300
 

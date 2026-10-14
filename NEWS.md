@@ -3,6 +3,12 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- ![][badge-🔥behavioralΔ] Cloud fraction: restore the per-subdomain closure
+  for `PrognosticEDMFX`. The `QuadratureCloud` cover is again evaluated with
+  the environment condensate (`_get_condensate_means`, consistent with the
+  env-mean `(T⁰, ρ⁰, q⁰)` used throughout the SGS pipeline), weighted by the
+  environment area fraction, and binary updraft contributions are added
+  (`_apply_edmf_cloud_weighting!`).
 - ![][badge-🔥behavioralΔ] One config key per species selects the sedimentation velocity of the
   1M microphysics tracers. `DiagnosticTerminalVelocity` is replaced by the closure-named modes
   `StokesTerminalVelocity`, `Blk1MTerminalVelocity` and `Chen2022TerminalVelocity`.
