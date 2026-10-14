@@ -78,12 +78,12 @@ end
 
 @testset "Default diagnostics cadence at exact threshold boundaries" begin
     # `frequency_averages` thresholds are inclusive, so a run landing exactly on one
-    # must get the coarser cadence. Handing it anything other than the length of the
-    # run breaks that: `t_end - dt` put every boundary-exact run one bucket too fine.
+    # must get the coarser cadence. Reducing the duration before bucketing breaks
+    # that: `t_end - dt` put every boundary-exact run one bucket too fine.
     cadence(duration) = CAD.extract_diagnostic_periods(
         CAD.frequency_averages(duration)(
             "ta";
-            output_writer = nothing,
+            output_writer = CAD.DictWriter(),
             start_date = DateTime(2010, 1, 1),
             t_start = 0.0,
         ),
