@@ -279,6 +279,7 @@ function rrtmgp_solver_kwargs(
                 ),
             )
         else
+        else
             kwargs = (;
                 kwargs...,
                 center_cloud_liquid_water_path = NaN, # initialized in callback
@@ -287,6 +288,13 @@ function rrtmgp_solver_kwargs(
                 center_cloud_liquid_effective_radius = NaN, # initialized in callback
                 center_cloud_ice_effective_radius = NaN, # initialized in callback
             )
+            if radiation_mode.include_snow
+                kwargs = (;
+                    kwargs...,
+                    center_cloud_snow_water_path = NaN, # initialized in callback
+                    center_cloud_snow_effective_radius = NaN, # initialized in callback
+                )
+            end
         end
     end
 
