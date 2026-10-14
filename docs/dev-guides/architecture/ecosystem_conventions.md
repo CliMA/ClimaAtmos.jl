@@ -92,7 +92,7 @@ When a CI job is mentioned by name in a guide or review, it is almost always a B
 
 ## 6. Reproducibility tests (model repos)
 
-Some model repos (notably ClimaAtmos) maintain a `reproducibility_tests/` directory that pins the simulation output of canonical jobs to within bit tolerance, keyed off `reproducibility_tests/ref_counter.jl`. A code change that flips a reproducibility test is itself a finding: report it in the PR description with the job name and the MSE diff, not as a hidden side effect.
+Some model repos (ClimaAtmos in particular) maintain a `reproducibility_tests/` directory that pins the simulation output of canonical jobs to within bit tolerance, keyed off `reproducibility_tests/ref_counter.jl`. A code change that flips a reproducibility test is itself a finding: report it in the PR description with the job name and the MSE diff, not as a hidden side effect.
 
 Reference counters and MSE tolerance files must not be modified without explicit user instruction. See [agent_autonomy.md](../workflow/agent_autonomy.md) for the full rule.
 

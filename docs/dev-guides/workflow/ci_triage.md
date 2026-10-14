@@ -77,6 +77,19 @@ Buildkite jobs on shared CliMA clusters use a per-pipeline Julia [depot](https:/
 
 (Exact wording varies by Julia version; the consistent signal is a precompile/manifest failure during pipeline initialization, not in the test step itself.) When you see these on a fresh PR with no manifest changes, the depot is the suspect. Clearing it is a one-line maintainer action; the next pipeline run rebuilds the cache. The procedure is documented in the [CliMA slurm-buildkite wiki](https://github.com/CliMA/slurm-buildkite/wiki/Clearing-Shared-Depots).
 
+## 13. A README badge that disagrees with CI
+
+Not every red badge is a broken build. Before chasing a failure, confirm the badge is reporting what you think it is. The badge conventions themselves are in [documentation_policy.md §2.3](../code-quality/documentation_policy.md).
+
+- **GitHub Actions badge reads `failing` while `main` is green.** The badge has no `?branch=main` filter, so it shows the workflow's most recent run on *any* branch — typically a failing PR. Pin the badge, and check that the workflow has a `push: branches: [main]` trigger; without one there is no `main` run to report.
+- **GitHub Actions badge reads `no status`.** The badge is pinned to `main` but the workflow only triggers on `pull_request`. Add the push trigger; the first merge after that populates it.
+- **The last `main` run was `cancelled`.** GitHub renders a cancelled conclusion as `failing`. Repos set `concurrency: cancel-in-progress: true` keyed on the ref, so two pushes to `main` in quick succession cancel the first run — expected behavior, not a failure. Re-run it or wait for the next push.
+- **Buildkite badge reads `unknown`.** The `?branch=main` filter found no builds because that pipeline only builds PR branches. Either enable `main` builds in the Buildkite pipeline settings or drop the badge; do not leave a permanent `unknown`.
+- **Codecov badge reads `unknown` right after a merge.** Coverage is uploaded per matrix job *after* tests finish, so the tip commit has no report until the run completes. It resolves on its own.
+- **A Zenodo DOI badge renders broken intermittently.** GitHub's camo proxy does not cache Zenodo badges (`cache-control: no-cache`), so every page load refetches from Zenodo and a slow response shows as a broken image. Verify with `curl -I` before concluding the markdown is wrong.
+
+When a badge is genuinely reporting a real failure, say so rather than papering over it: relaxing a flaky threshold or dropping a badge to get green is a maintainer decision, not a cleanup.
+
 ## Self-correction
 
 If this guide is discovered to be stale or missing a pattern, update it.

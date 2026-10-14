@@ -18,7 +18,7 @@ After implementing or modifying hot-path code, verify zero allocations with the 
 
 All CliMA packages run `Aqua.jl` tests in CI. These checks catch common package quality issues:
 
-- `test_stale_deps`: fails if a package in `[deps]` is not used in source code. This is the most common failure, usually caused by adding a dev tool to `[deps]` instead of `[extras]` (see [Dependency Management](../architecture/dependency_management.md)).
+- `test_stale_deps`: fails if a package in `[deps]` is not used in source code. This is the most common failure, usually caused by adding a dev tool to `[deps]` instead of `test/Project.toml` or `[extras]` (see [Dependency Management](../architecture/dependency_management.md)).
 - `test_deps_compat`: fails if `[compat]` entries are missing for dependencies.
 - `test_undefined_exports`: fails if an exported symbol is not defined.
 - `test_unbound_args`: detects methods with unbound type parameters (can cause ambiguities).
