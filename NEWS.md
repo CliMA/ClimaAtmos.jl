@@ -3,6 +3,11 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- ![][badge-🔥behavioralΔ] The part of the geometric SGS variance block that
+  needs a vertical displacement (the along-surface variance beyond its
+  along-contour part, plus the across-surface uniform-box terms) and the
+  turbulent block's vertical-displacement variance are combined as the larger
+  of the two instead of their sum.
 - ![][badge-🔥behavioralΔ] Cloud fraction: restore the per-subdomain closure
   for `PrognosticEDMFX`. The `QuadratureCloud` cover is again evaluated with
   the environment condensate (`_get_condensate_means`, consistent with the

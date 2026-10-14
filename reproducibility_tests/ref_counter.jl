@@ -1,4 +1,4 @@
-431
+432
 
 # **README**
 #
@@ -32,6 +32,10 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+432
+- Combine the geometric vertical-displacement SGS variance with the turbulent block as a maximum
+  instead of their sum.
+
 431
 - Fix sgs variance fidelity: estimate qc_eq by using the Gaussian approximation of eq condensate
 - Restore per-subdomain QuadratureCloud: env condensate + EDMF updraft weighting.
