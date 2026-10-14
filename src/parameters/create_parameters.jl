@@ -602,6 +602,9 @@ function SGSQuadratureParameters(
         # Depth [m] of the along-surface displacement of the geometric
         # variance block.
         sgs_variance_isentropic_depth = FT(1000),
+        # Factor on the distance to saturation that caps the along-surface
+        # displacement of the geometric variance block.
+        sgs_variance_saturation_distance_factor = FT(0.5),
         # Equilibrium-ratio modulator weight (see `sgs_variance_fidelity`).
         sgs_fidelity_equilibrium_weight = FT(0.5),
     )

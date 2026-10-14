@@ -261,6 +261,12 @@ not yet define.
     motion, the vertical scale of the displacement along the `θ_li` surface in
     the geometric variance block (`along_surface_q_variance`); must be
     positive [m].
+  - `sgs_variance_saturation_distance_factor`: Factor `c_d` on the distance to
+    saturation that caps the displacement along the `θ_li` surface in the
+    geometric variance block (`along_surface_q_variance`): the along-surface
+    standard deviation of the origin's saturation excess is at most `c_d` times
+    the cell's saturation excess. `1/2` leaves 2 % of the along-surface mass
+    past saturation, `1` leaves 16 %; must be positive [-].
   - `sgs_variance_max_rel_std`: Upper bound on the SGS total-water standard
     deviation relative to the grid-mean total water, `σ_q ≤ sgs_variance_max_rel_std * q_tot`,
     applied to the diagnosed `q′q′` whatever closure produced it. A wider variance puts a quadrature node
@@ -303,6 +309,7 @@ Base.@kwdef struct SGSQuadratureParameters{FT} <: ASQP
     sgs_variance_horizontal_scale_factor::FT
     sgs_variance_vertical_scale_factor::FT
     sgs_variance_isentropic_depth::FT
+    sgs_variance_saturation_distance_factor::FT
     sgs_variance_max_rel_std::FT
     sgs_liquid_uniform_fraction::FT
     sgs_ice_uniform_fraction::FT
