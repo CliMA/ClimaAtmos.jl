@@ -41,6 +41,7 @@ AllSkyRadiation
   ├─ sw_cloud_inhomogeneity = true
   ├─ add_isothermal_boundary_layer = true
   ├─ aerosol_radiation = false
+  ├─ include_snow = false
   ├─ reset_rng_seed = false
   └─ deep_atmosphere = true
 ```

@@ -2257,9 +2257,9 @@ version = "1.11.0"
 
 [[deps.RRTMGP]]
 deps = ["Adapt", "Artifacts", "ClimaComms", "PrecompileTools", "Serialization"]
-git-tree-sha1 = "8f940d4adf4d8f29af50adc7d2a9f8bdf5a1af15"
+git-tree-sha1 = "b5a80f449e86516720c13c49299b04451cba657b"
 uuid = "a01a1ee8-cea4-48fc-987c-fc7878d79da1"
-version = "1.1.0"
+version = "1.1.1"
 weakdeps = ["CUDA", "ClimaParams", "NCDatasets"]
 
     [deps.RRTMGP.extensions]

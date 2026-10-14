@@ -230,6 +230,7 @@ end
         "rad" => "allsky",
         "idealized_h2o" => false,
         "idealized_clouds" => false,
+        "radiation_include_snow" => false,
         "prescribe_clouds_in_radiation" => false,
         "cloud_inhomogeneity_in_sw_radiation" => false,
         "add_isothermal_boundary_layer" => true,

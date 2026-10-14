@@ -8,6 +8,7 @@ import ..PrescribedCloudInRadiation
 import ..lazy
 import ..specific
 import ..NonEquilibriumMicrophysics
+import ..NonEquilibriumMicrophysics1M
 
 """
     update_atmospheric_state!(integrator)
@@ -297,6 +298,22 @@ Called from `update_cloud_properties!`.
 ᶜcloud_ice_water_content(microphysics_model, u, ᶜq_ice) = ᶜq_ice
 
 """
+    ᶜsnow_water_content(microphysics_model, u)
+
+Return the prognostic snow specific content seen by radiation [kg/kg].
+
+Only microphysics models that carry prognostic snow (`NonEquilibriumMicrophysics1M`) define a
+value; calling this on any other model errors, which is how `include_snow` is enforced
+against an incompatible scheme. Called from `update_cloud_properties!`.
+"""
+ᶜsnow_water_content(::NonEquilibriumMicrophysics1M, u) =
+    @. lazy(max(0, specific(u.c.ρq_sno, u.c.ρ)))
+ᶜsnow_water_content(microphysics_model, u) = error(
+    "include_snow is set but microphysics model $(typeof(microphysics_model)) has no \
+     prognostic snow (q_sno); use a 1-moment scheme or set include_snow = false",
+)
+
+"""
     update_cloud_properties!(integrator)
 
 Update the cloud inputs of the RRTMGP solver; return `nothing`.
@@ -308,7 +325,14 @@ effective radii through the `RRTMGP.cloud_liquid_water_path`, `RRTMGP.cloud_ice_
 the cloud fraction (floored at `eps`) to make them in-cloud values, and are converted to
 the units RRTMGP expects: g/m² for the paths and microns for the radii. The paths are
 the mean in-cloud values; the shortwave solve scales them by the subgrid inhomogeneity
-factor afterwards (`solve_fluxes!`).
+factor afterwards (`solve_fluxes!`). When `radiation_mode.include_snow` is set,
+the in-cloud snow water path (from the prognostic `q_sno` of a non-equilibrium
+microphysics scheme, via `ᶜsnow_water_content`) and a placeholder constant snow
+effective radius are additionally written through `RRTMGP.cloud_snow_water_path` and
+`RRTMGP.cloud_snow_effective_radius`. ** Note: the placeholder snow effective radius is
+currently too small, and snow is not currently included in cloud_fraction calculations,
+meaning that the way it is currently implemented in radiation is not physically correct
+and subject to change in the future.
 
 The liquid effective radius follows the Liu and Hallett (1997) parameterization, evaluated
 with a droplet number concentration diagnosed by `ml_N_cloud_liquid_droplets` from the
@@ -437,6 +461,37 @@ function update_cloud_properties!((; u, p, t)::I) where {I}
             m_to_um_factor,
             FT(0),
         )
+
+        # Snow (placeholder): write the in-cloud snow water path and a placeholder
+        # snow effective radius through the RRTMGP snow getters, gated on include_snow.
+        # RRTMGP reuses the ice optics and clamps the radius to the ice-table maximum
+        # (~90 µm), so the constant below only matters up to that ceiling. Snow is
+        # normalized to an in-cloud value and (via RRTMGP's cloud mask) radiates only in
+        # cloudy layers, matching the liquid/ice treatment.
+        # Additionally, snow is not currently included in cloud fraction, and therefore
+        # using cloud fraction here is erronous and should be changed in the future.
+        if radiation_mode.include_snow
+            ᶜswp = Fields.array2field(
+                RRTMGP.cloud_snow_water_path(rrtmgp_solver),
+                axes(u.c),
+            )
+            ᶜresno = Fields.array2field(
+                RRTMGP.cloud_snow_effective_radius(rrtmgp_solver),
+                axes(u.c),
+            )
+            snow_water_content =
+                ᶜsnow_water_content(p.atmos.microphysics_model, u)
+            # Placeholder constant snow effective radius [μm]; RRTMGP clamps to ~90 µm
+            snow_effective_radius_um = FT(90)
+            @. ᶜswp =
+                kg_to_g_factor * u.c.ρ * snow_water_content * ᶜΔz /
+                max(cloud_fraction, eps(FT))
+            @. ᶜresno = ifelse(
+                snow_water_content > FT(0),
+                snow_effective_radius_um,
+                FT(0),
+            )
+        end
     end
     return nothing
 end

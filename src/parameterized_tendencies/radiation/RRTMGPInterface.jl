@@ -94,7 +94,8 @@ end
                          cloud = InteractiveCloudInRadiation(),
                          sw_cloud_inhomogeneity = true,
                          add_isothermal_boundary_layer = true, aerosol_radiation = false,
-                         reset_rng_seed = false, deep_atmosphere = true)
+                         include_snow = false, reset_rng_seed = false,
+                         deep_atmosphere = true)
 
 Full RRTMGP correlated k-distribution radiation, including cloud optics.
 
@@ -115,6 +116,11 @@ Full RRTMGP correlated k-distribution radiation, including cloud optics.
   - `add_isothermal_boundary_layer`: Whether RRTMGP appends an isothermal layer above the
     model top.
   - `aerosol_radiation`: Whether prescribed aerosols contribute to the shortwave optics.
+  - `include_snow`: Whether snow is included in the cloud optics as an extra condensate
+    species — a placeholder that reuses the ice lookup table (see RRTMGP's precipitation
+    docs). When true, `center_cloud_snow_water_path` and
+    `center_cloud_snow_effective_radius` become required inputs to `rrtmgp_solver`. Rain is
+    not supported.
   - `reset_rng_seed`: Whether to reset the RNG seed to the timestep number before each RRTMGP
     call. The cloud-optics sampling is stochastic, so a deterministic seed makes runs and
     restarts bitwise reproducible. Leave disabled for production runs.
@@ -128,6 +134,7 @@ Full RRTMGP correlated k-distribution radiation, including cloud optics.
     sw_cloud_inhomogeneity::Bool = true
     add_isothermal_boundary_layer::Bool = true
     aerosol_radiation::Bool = false
+    include_snow::Bool = false
     reset_rng_seed::Bool = false
     deep_atmosphere::Bool = true
 end
@@ -148,6 +155,7 @@ The fields and their defaults are identical to `AllSkyRadiation`.
     sw_cloud_inhomogeneity::Bool = true
     add_isothermal_boundary_layer::Bool = true
     aerosol_radiation::Bool = false
+    include_snow::Bool = false
     reset_rng_seed::Bool = false
     deep_atmosphere::Bool = true
 end
@@ -299,6 +307,9 @@ Only for the all-sky modes:
   - `center_cloud_liquid_water_path`, `center_cloud_ice_water_path`: In-cloud liquid and ice
     water paths on cell centers [g/m²].
   - `center_cloud_fraction`: Cloud fraction on cell centers [-].
+  - `center_cloud_snow_water_path`, `center_cloud_snow_effective_radius`: In-cloud snow water
+    path [g/m²] and snow effective radius [μm] on cell centers. Required only when
+    `radiation_mode.include_snow` is true; must be omitted otherwise.
   - `ice_roughness`: Ice roughness class, 1, 2, or 3, with 3 the roughest. A constant that
     cannot be changed after construction.
 
@@ -506,6 +517,28 @@ function rrtmgp_solver(
                 domain_nlay,
                 dict,
             )
+            # Snow (optional placeholder): allocate and read snow inputs only when
+            # include_snow is set, otherwise leave them `nothing` so RRTMGP's CloudState
+            # is snow-off. Rain is never populated — RRTMGP errors if it is.
+            if radiation_mode.include_snow
+                cld_r_eff_sno = DA{FT}(undef, nlay, ncol)
+                set_input!(
+                    cld_r_eff_sno,
+                    "center_cloud_snow_effective_radius",
+                    domain_nlay,
+                    dict,
+                )
+                cld_path_sno = DA{FT}(undef, nlay, ncol)
+                set_input!(
+                    cld_path_sno,
+                    "center_cloud_snow_water_path",
+                    domain_nlay,
+                    dict,
+                )
+            else
+                cld_r_eff_sno = nothing
+                cld_path_sno = nothing
+            end
             cld_frac = DA{FT}(undef, nlay, ncol)
             set_input!(cld_frac, "center_cloud_fraction", domain_nlay, dict)
             cld_mask_lw = DA{Bool}(undef, nlay, ncol)
@@ -535,7 +568,9 @@ function rrtmgp_solver(
                 cld_mask_lw,
                 cld_mask_sw,
                 cld_overlap,
-                ice_rgh,
+                ice_rgh;
+                cld_r_eff_sno,
+                cld_path_sno,
             )
         end
 
