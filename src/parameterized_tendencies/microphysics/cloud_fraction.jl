@@ -345,6 +345,32 @@ displacement along it.
 end
 
 """
+    geometric_vertical_q_variance(inv_q, inv_θq, inv_θ, ∂q∂z, ∂θ∂z, ℓ_h, ℓ_a, ℓ_v)
+
+The part of the geometric (resolved-gradient) q variance that needs a
+vertical displacement, without the prefactor `c_g`: the along-surface
+variance beyond its along-contour part (the displacement with `ℓ_a = 0`,
+which stays on the surface without moving vertically) plus the across-surface
+uniform-box term,
+
+    V_v = max(V_along(ℓ_a) − V_along(0), 0) + ℓ_v² q_n².
+
+On a flat surface the along part vanishes and `V_v = ℓ_v² (∂_z q)²`; on a
+vertical surface, or where `∇θ_li = 0`, `q_n = 0` and `V_v = ℓ_a² (∂_z q)²`;
+on a tilted surface the two parts are orthogonal and add.
+"""
+@inline function geometric_vertical_q_variance(
+    inv_q, inv_θq, inv_θ, ∂q∂z, ∂θ∂z, ℓ_h, ℓ_a, ℓ_v,
+)
+    V_all = along_surface_q_variance(inv_q, inv_θq, inv_θ, ∂q∂z, ∂θ∂z, ℓ_h, ℓ_a)
+    V_h = along_surface_q_variance(
+        inv_q, inv_θq, inv_θ, ∂q∂z, ∂θ∂z, ℓ_h, zero(ℓ_a),
+    )
+    q_n = across_surface_q_gradient(inv_θq, inv_θ, ∂q∂z, ∂θ∂z)
+    return max(V_all - V_h, zero(V_all)) + ℓ_v^2 * q_n^2
+end
+
+"""
     hgrad_invariant!(ᶜinv, ᶜψ, p)
 
 Write the element-scale horizontal-gradient invariant `|∇_h ψ|²` of the center field `ᶜψ`
@@ -454,10 +480,14 @@ Pipeline:
     The displacement across the surface adds
     the vertical uniform-box terms `c_g ℓ_v² (∂_z θ)²` to θ′θ′,
     `c_g ℓ_v² q_n²` to q′q′ and `c_g ℓ_v² ∂_z θ q_n` to θ′q′, with `q_n` the
-    across-surface q gradient (`across_surface_q_gradient`). The block is
-    skipped when `c_Δx` and `c_Δz` are both 0, and the horizontal invariants
-    are computed only when `c_Δx` is nonzero. The defaults `c_g = 1/12`,
-    `c_Δz = 1` give the uniform-box result for a flat surface.
+    across-surface q gradient (`across_surface_q_gradient`). The part of the
+    geometric variance that needs a vertical displacement
+    (`geometric_vertical_q_variance`, and `c_g ℓ_v² (∂_z θ)²` for θ) and the
+    turbulent block's vertical-displacement variance are two estimates of
+    the same quantity, so the block takes the larger of the two instead of
+    adding them; the along-contour part of the along-surface variance adds.
+    The block is skipped when `c_Δx` and `c_Δz` are both 0,
+    and the horizontal invariants are computed only when `c_Δx` is nonzero.
  4. Transform θ→T using `compute_∂T_∂θ!`
  5. Apply the closure-validity bound `σ_q ≤ sgs_variance_max_rel_std * q_tot`
  6. Set the sampled T–q correlation (`set_tq_correlation!`; for the diagnosed
@@ -524,8 +554,8 @@ function set_covariance_cache!(Y, p, thermo_params)
         Geometry.WVector(ᶜgradᵥ_θ_liq_ice),
         Geometry.WVector(ᶜgradᵥ_θ_liq_ice),
     )
+    ρ_turb = FT(correlation_Tq(p.params))
     if diag_corr
-        ρ_turb = FT(correlation_Tq(p.params))
         @. p.precomputed.ᶜT′q′ = ρ_turb * sqrt(ᶜT′T′ * ᶜq′q′)
     end
 
@@ -569,12 +599,12 @@ function set_covariance_cache!(Y, p, thermo_params)
             ᶜℓ_a = @. lazy(min(H, ᶜz - z_sfc))
             add_resolved_gradient_block!(
                 p, ᶜinv_q, ᶜinv_θq, ᶜinv_θ, ᶜ∂q∂z, ᶜ∂θ∂z, ℓ_h, ᶜℓ_a, ᶜℓ_v, c_g,
-                diag_corr,
+                diag_corr, ρ_turb,
             )
         else
             add_resolved_gradient_block!(
                 p, zero(FT), zero(FT), zero(FT), ᶜ∂q∂z, ᶜ∂θ∂z, ℓ_h, ᶜℓ_v, ᶜℓ_v, c_g,
-                diag_corr,
+                diag_corr, ρ_turb,
             )
         end
     end
@@ -622,15 +652,22 @@ end
 
 """
     add_resolved_gradient_block!(p, ᶜinv_q, ᶜinv_θq, ᶜinv_θ, ᶜ∂q∂z, ᶜ∂θ∂z,
-                                 ℓ_h, ᶜℓ_a, ᶜℓ_v, c_g, diag_corr)
+                                 ℓ_h, ᶜℓ_a, ᶜℓ_v, c_g, diag_corr, ρ_turb)
 
-Add the resolved-gradient (geometric) block to `ᶜq′q′`, to `ᶜT′T′` (still in
-the θ basis) and, when `diag_corr`, to `ᶜT′q′`: the along-surface q variance
-with the vertical scale `ᶜℓ_a` (the depth `H`, or `ᶜℓ_v` when the horizontal
-displacement is off) plus the across-surface uniform-box terms with the
-vertical scale `ᶜℓ_v` (`set_covariance_cache!`, step 3). The horizontal
-invariants are fields, or the scalar 0 when the horizontal displacement is
-off.
+Combine the resolved-gradient (geometric) block with the turbulent block
+already held in `ᶜq′q′` and `ᶜT′T′` (θ basis). The along-contour part of the
+along-surface q variance (the displacement with no vertical excursion) adds;
+the part that needs a vertical displacement (`geometric_vertical_q_variance`,
+with the vertical scale `ᶜℓ_a` along the surface and `ᶜℓ_v` across it) and
+the turbulent block's vertical-displacement variance describe the same
+displacement with two closures, so the larger of the two is kept:
+
+    q′q′ = c_g V_h + max(c_g V_v, q′q′_turb),
+    θ′θ′ = max(c_g ℓ_v² (∂_z θ)², θ′θ′_turb).
+
+When `diag_corr`, the cross covariance of the vertical displacement is the
+prescribed `ρ_turb` on the combined vertical amplitudes; the along-surface
+variance adds no cross.
 """
 function add_resolved_gradient_block!(
     p,
@@ -644,19 +681,30 @@ function add_resolved_gradient_block!(
     ᶜℓ_v,
     c_g,
     diag_corr,
+    ρ_turb,
 )
     (; ᶜT′T′, ᶜq′q′) = p.precomputed
     ᶜq_n = @. lazy(across_surface_q_gradient(ᶜinv_θq, ᶜinv_θ, ᶜ∂q∂z, ᶜ∂θ∂z))
-    @. ᶜq′q′ +=
-        c_g * (
-            along_surface_q_variance(
-                ᶜinv_q, ᶜinv_θq, ᶜinv_θ, ᶜ∂q∂z, ᶜ∂θ∂z, ℓ_h, ᶜℓ_a,
-            ) + ᶜℓ_v^2 * ᶜq_n^2
-        )
-    @. ᶜT′T′ += c_g * ᶜℓ_v^2 * ᶜ∂θ∂z^2
+    ᶜV_h = @. lazy(
+        along_surface_q_variance(
+            ᶜinv_q, ᶜinv_θq, ᶜinv_θ, ᶜ∂q∂z, ᶜ∂θ∂z, ℓ_h, zero(ℓ_h),
+        ),
+    )
+    ᶜV_v = @. lazy(
+        geometric_vertical_q_variance(
+            ᶜinv_q, ᶜinv_θq, ᶜinv_θ, ᶜ∂q∂z, ᶜ∂θ∂z, ℓ_h, ᶜℓ_a, ᶜℓ_v,
+        ),
+    )
+    ᶜθθ_v = @. lazy(ᶜℓ_v^2 * ᶜ∂θ∂z^2)
     if diag_corr
-        @. p.precomputed.ᶜT′q′ += c_g * ᶜℓ_v^2 * ᶜ∂θ∂z * ᶜq_n
+        # Uses the turbulent values still in `ᶜT′T′`, `ᶜq′q′`.
+        @. p.precomputed.ᶜT′q′ =
+            ρ_turb * sqrt(
+                max(c_g * ᶜθθ_v, ᶜT′T′) * max(c_g * ᶜℓ_v^2 * ᶜq_n^2, ᶜq′q′),
+            )
     end
+    @. ᶜq′q′ = c_g * ᶜV_h + max(c_g * ᶜV_v, ᶜq′q′)
+    @. ᶜT′T′ = max(c_g * ᶜθθ_v, ᶜT′T′)
     return nothing
 end
 
