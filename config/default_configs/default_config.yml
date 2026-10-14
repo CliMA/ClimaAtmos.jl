@@ -108,6 +108,9 @@ rad:
 idealized_h2o:
   help: "Use idealized H2O in radiation model [`false` (default), `true`]"
   value: false
+radiation_include_snow:
+  help: "Include snow in RRTMGP cloud optics as a placeholder (reuses ice optics, clamped to the ice-table max radius ~90 µm). Requires rad=allsky/allskywithclear and 1M microphysics. [`false` (default), `true`]"
+  value: false
 dt_rad:
   help: "Time between calling radiation callback for sphere configurations. Only applies to RRTMGP modes, ignored for `held_suarez`, which is applied every stage."
   value: "6hours"
