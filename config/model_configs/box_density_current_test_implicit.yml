@@ -6,9 +6,9 @@ hyperdiff: ~
 x_max: 51200.0
 y_max: 51200.0
 z_max: 6400.0
-x_elem: 45
-y_elem: 45
-z_elem: 45
+x_elem: 10
+y_elem: 10
+z_elem: 20
 z_stretch: false
 dt: "0.25secs"
 t_end: "10secs"

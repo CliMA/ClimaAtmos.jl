@@ -29,31 +29,30 @@ if [ -n "$BASE" ] && [ -d "$BASE" ]; then
   # that dir is pruned three builds later, every consumer fails with
   # "versions/<old>/packages/...: No such file". Rebuilding `compiled/` in
   # $STAGING makes the baked paths point at the depot that gets published.
+  # Copied files get the current time as their timestamps, so the scratch purge
+  # counts their age from this build.
   find "$BASE" -mindepth 1 -maxdepth 1 ! -name compiled \
-    -exec cp -a -t "$STAGING" {} +
+    -exec cp -a --no-preserve=timestamps -t "$STAGING" {} +
   chmod -R u+w "$STAGING"                   # published copy is read-only
   # A corrupted depot (e.g. a version that was `rm -rf`'d while consumers had
-  # its files open on NFS) leaves empty artifact dirs. Pkg treats an existing
-  # artifact dir as installed and never re-downloads it, so every JLL would then
-  # fail at dlopen. Drop any artifact dir with no files in it.
+  # its files open on NFS, or one the scratch purge emptied) leaves empty
+  # artifact and package dirs. Pkg treats an existing artifact or package dir as
+  # installed and never re-downloads it, so loading it would then fail. Drop any
+  # artifact or package dir with no files in it.
   if [ -d "$STAGING/artifacts" ]; then
     find "$STAGING/artifacts" -mindepth 1 -maxdepth 1 -type d \
       -exec sh -c '[ -z "$(find "$1" -type f -print -quit)" ]' _ {} \; \
       -print -exec rm -rf {} + | sed 's/^/Removing hollow artifact: /'
   fi
+  if [ -d "$STAGING/packages" ]; then
+    find "$STAGING/packages" -mindepth 2 -maxdepth 2 -type d \
+      -exec sh -c '[ -z "$(find "$1" -type f -print -quit)" ]' _ {} \; \
+      -print -exec rm -rf {} + | sed 's/^/Removing hollow package: /'
+  fi
 fi
 
 echo "--- Instantiate + precompile"
 julia --project=.buildkite -e 'using Pkg; Pkg.Registry.update(); Pkg.instantiate(); Pkg.precompile(strict=true)'
-
-# Also bake --check-bounds=yes caches. The CI "Checkbounds" step runs
-# perf/benchmark.jl under --check-bounds=yes, Julia folds the check-bounds mode
-# into the precompile cache slug, so the default (auto) caches above are stale
-# for that step and it would otherwise recompile the whole tree into its
-# per-build depot. These caches use a distinct slug and coexist with the ones
-# above, letting that step read the shared depot instead of rebuilding it.
-echo "--- Precompile (--check-bounds=yes)"
-julia --check-bounds=yes --project=.buildkite -e 'using Pkg; Pkg.precompile(strict=true)'
 
 echo "--- Lock and publish (atomic symlink swap)"
 # Make everything readable before removing write access. Julia copies the

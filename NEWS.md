@@ -3,6 +3,47 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- ![][badge-🔥behavioralΔ] The part of the geometric SGS variance block that
+  needs a vertical displacement (the along-surface variance beyond its
+  along-contour part, plus the across-surface uniform-box terms) and the
+  turbulent block's vertical-displacement variance are combined as the larger
+  of the two instead of their sum.
+- ![][badge-🔥behavioralΔ] Cloud fraction: restore the per-subdomain closure
+  for `PrognosticEDMFX`. The `QuadratureCloud` cover is again evaluated with
+  the environment condensate (`_get_condensate_means`, consistent with the
+  env-mean `(T⁰, ρ⁰, q⁰)` used throughout the SGS pipeline), weighted by the
+  environment area fraction, and binary updraft contributions are added
+  (`_apply_edmf_cloud_weighting!`).
+- ![][badge-🔥behavioralΔ] One config key per species selects the sedimentation velocity of the
+  1M microphysics tracers. `DiagnosticTerminalVelocity` is replaced by the closure-named modes
+  `StokesTerminalVelocity`, `Blk1MTerminalVelocity` and `Chen2022TerminalVelocity`.
+- ![][badge-✨feature/enhancement] Adding Chen et al. (2022) fall speeds for rain and snow
+- ![][badge-🔥behavioralΔ] Snow falls at the Chen et al. (2022) speed by default
+  `toml/prognostic_edmfx_1M.toml` sets `snow_apparent_density` to 300 kg/m³.
+   Rain falls at fixed terminal velocity.
+- ![][badge-🔥behavioralΔ] The along-surface depth of the geometric SGS
+  variance block is bounded by the height above the surface,
+  `ℓ_a = min(H, z − z_sfc)`: in a neutral layer the along-surface
+  displacement is the vertical eddy displacement, which cannot reach below
+  the ground.
+- ![][badge-🔥behavioralΔ] Make the SGS variance fidelity `α` a cached
+  per-cell field `α = α_Da · α_eq`, refreshed inside `set_covariance_cache!`:
+  Damköhler factor `α_Da = 1 / (1 + A · τ_mp · c_d · √TKE / max(l_mix, 1 m))`
+  (quiescent → 1, well-mixed → 0) and equilibrium-ratio modulator
+  `α_eq = r / (w + (1−w) r)` with `r = (q_c + q_min)/(q_c^eq + q_min)` and
+  new provisional parameter `sgs_fidelity_equilibrium_weight` (default 0.5).
+  CF uses `σ_aug = sqrt((α σ_S)² + σ_S_floor²)` — α scales only the
+  equilibrium part. Microphysics timescales reuse the ClimaParams
+  `condensation_evaporation_timescale` / `sublimation_deposition_timescale`.
+- ![][badge-🔥behavioralΔ] The resolved-gradient (geometric) SGS variance block
+  is the variance from a Gaussian subgrid parcel displacement with covariance
+  `c_g diag(ℓ_h², ℓ_h², ℓ_v²)`, `ℓ_h = c_Δx Δx_h`, `ℓ_v = H`, split into
+  the part along the local `θ_li` surface (q′q′ only, the conditional variance
+  `gᵀDg − (gᵀDn)²/(nᵀDn)` with `g = ∇q_tot`, `n = ∇θ_li`) and the part across
+  it (the vertical uniform-box terms, with the q gradient taken across the
+  surface).
+- ![][badge-🔥behavioralΔ] Update to CloudMicrophysics v0.45 and use joint
+  relaxation of the vapor-driven phase changes.
 - ![][badge-✨feature/enhancement] Add back CloudMicrophysics v0.43 to the
   compat.
 - ![][badge-🔥behavioralΔ] The horizontal resolved-gradient (geometric) SGS variance

@@ -81,7 +81,8 @@ function set_covariance_cache_and_cloud_fraction!(Y, p)
     # ᶜtemp_scalar, ᶜtemp_scalar_2, ᶜtemp_scalar_3, ᶜtemp_scalar_5, ᶜtemp_scalar_6 might
     # change inside the functions that are called in picard_step!() and should not be used
     # here to store variables before calling picard_step!
-    # (`set_covariance_cache!` and the QuadratureCloud `set_cloud_fraction!` write them).
+    # (`set_covariance_cache!` writes _2, _3, _5, _6; the QuadratureCloud
+    # `set_cloud_fraction!` writes `ᶜtemp_scalar`, `_2`, `_3`).
     # Conversely, those callees and `set_sgs_moments_and_cloud_fraction!` must never write
     # ᶜtemp_scalar_4 or ᶜtemp_scalar_7. c2 shares ᶜtemp_scalar, which is safe only
     # because it is written after the last picard_step!() and consumed by the Aitken
@@ -224,60 +225,150 @@ function materialized_mixing_length!(Y, p)
 end
 
 """
-    isentropic_cell_cap(inv_θ, ∂θ∂z, θz_min, Δx, Δz)
+    materialized_variance_fidelity!(Y, p)
 
-Geometric factor `ℓ²/Δx²` in `(0, 1]` that bounds the displacement along the
-`θ_li` surface by the grid cell. A surface of slope
-`s = |∇_h θ_li| / max(∂θ_li/∂z, θz_min)` leaves a layer of depth `Δz` after a
-horizontal distance `Δz / s`, so the along-surface segment inside the cell is
-`ℓ = min(Δx, Δz / s)`, smoothed here as `ℓ² = Δx² / (1 + (s Δx / Δz)²)`. For
-flat surfaces (strong stratification, small horizontal `θ_li` contrast) the
-factor is 1 and the term keeps its `(c_Δx Δx)²` scale; for steep surfaces
-(weak stratification) it falls like `(Δz θ_z / (|∇_h θ_li| Δx))²`, which
-turns the projected part `r² |∇_h θ_li|² Δx²` of the invariant into
-`(∂q/∂z Δz)²`.
+Refresh `p.precomputed.ᶜα` from the current `ᶜl_mix`, TKE, and condensate
+state (see `sgs_variance_fidelity`). Called at the end of
+`set_covariance_cache!` so `ᶜα` tracks each Picard iterate.
 
-The same factor is the across-surface share of the cell's vertical excursion
-left for the `q′q′` part of the vertical uniform-box block: the along-surface
-segment `ℓ` already samples a vertical displacement `s ℓ`, and
-`Δz² − (s ℓ)² = Δz² / (1 + (s Δx / Δz)²)`, so the vertical `q′q′` term is scaled
-by it (`set_covariance_cache!`). Flat surfaces keep both blocks in full; steep
-surfaces keep only the along-surface `q` sample, so the two never count the
-same `q` excursion twice. The vertical `θ′q′` term carries the same factor
-(the block's Cauchy–Schwarz bound holds since `f² ≤ f`); the vertical `θ′θ′`
-term is left unchanged (the horizontal block carries no `θ′`). The diagnosed
-correlation is clamped to `[-1, 1]` downstream.
+`σ_S` is estimated with the Gaussian-linear analytic formula
+`σ_S² = σ_q² − 2γ Cov(T,q) + γ² σ_T²`, with `γ = ∂q_vap_sat_∂T`. This is
+the fast estimate; the downstream quadrature closures still compute their
+own `σ_S`.
 
-# TODO: θ and q variances are not treated consistently.
+Non-EDMF configurations without `ᶜl_mix` or TKE substitute `TKE = 0`,
+`l_mix = 1 m`, collapsing the Damköhler factor to 1.
 """
-@inline function isentropic_cell_cap(inv_θ, ∂θ∂z, θz_min, Δx, Δz)
-    s = sqrt(max(inv_θ, zero(inv_θ))) / max(∂θ∂z, θz_min)
-    x = s * Δx / Δz
-    return one(x) / (one(x) + x^2)
+function materialized_variance_fidelity!(Y, p)
+    hasproperty(p.precomputed, :ᶜα) || return nothing
+    (; ᶜT, ᶜq_tot_nonneg, ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα) = p.precomputed
+    FT = eltype(p.params)
+    A = FT(CAP.cloud_fraction_steepness_scale(p.params))
+
+    if p.atmos.microphysics_model isa EquilibriumMicrophysics0M
+        @. ᶜα = one(FT) / A
+        return nothing
+    end
+
+    τ_cond = FT(CAP.condensation_evaporation_timescale(p.params))
+    τ_sub = FT(CAP.sublimation_deposition_timescale(p.params))
+    w_eq = FT(CAP.sgs_fidelity_equilibrium_weight(p.params))
+    thp = CAP.thermodynamics_params(p.params)
+    q_min = FT(TD.Parameters.q_min(thp))
+    turbconv_params = CAP.turbconv_params(p.params)
+    c_d = tke_dissipation_coefficient(turbconv_params)
+    # Non-EDMF fallbacks: TKE → 0 drives α_Da → 1.
+    ᶜtke_or_zero =
+        hasproperty(Y.c, :ρtke) ?
+        (@. lazy(specific(Y.c.ρtke, Y.c.ρ))) : zero(FT)
+    ᶜl_mix_or_one =
+        hasproperty(p.precomputed, :ᶜl_mix) ? p.precomputed.ᶜl_mix : one(FT)
+    ᶜq_lcl, ᶜq_icl = _grid_mean_cloud_condensate(Y, p, p.atmos.microphysics_model)
+    # Linear σ_S² = σ_q² − 2γ Cov(T,q) + γ² σ_T², with Clausius-Clapeyron γ.
+    ᶜγ = @. lazy(TD.∂q_vap_sat_∂T(thp, ᶜT, Y.c.ρ))
+    ᶜsigma_S = @. lazy(
+        sqrt(
+            max(
+                ᶜq′q′ - 2 * ᶜγ * ᶜcorr_Tq * sqrt(max(ᶜT′T′ * ᶜq′q′, zero(FT))) +
+                ᶜγ^2 * ᶜT′T′,
+                zero(FT),
+            ),
+        ),
+    )
+    ᶜmu_S = @. lazy(ᶜq_tot_nonneg - TD.q_vap_saturation(thp, ᶜT, Y.c.ρ))
+    @. ᶜα = sgs_variance_fidelity(
+        A,
+        sgs_microphysics_timescale(thp, ᶜT, τ_cond, τ_sub),
+        c_d,
+        ᶜtke_or_zero,
+        ᶜl_mix_or_one,
+        w_eq,
+        ᶜq_lcl + ᶜq_icl,
+        ᶜmu_S,
+        ᶜsigma_S,
+        q_min,
+    )
+    return nothing
 end
 
 """
-    isentropic_slope_ratio(∂q∂z, ∂θ∂z, θz_min)
+    along_surface_q_variance(inv_q, inv_θq, inv_θ, ∂q∂z, ∂θ∂z, ℓ_h, ℓ_v)
 
-Ratio `r = (∂q_tot/∂z) / max(∂θ_li/∂z, θz_min)` that converts the horizontal
-gradient of `θ_li` into the vertical displacement a horizontal excursion along a
-sloping `θ_li` surface implies, times the vertical `q_tot` gradient (the isentropic
-geometric variance term). The floor `θz_min` (`sgs_variance_isentropic_min_dtheta_dz`)
-on the stratification keeps the ratio finite and bounds it by `|∂q/∂z| / θz_min`: a
-neutral or overturned layer (`∂θ_li/∂z ≤ θz_min`) is treated as one of minimal stable
-stratification.
+Variance of `q_tot` from subgrid parcel displacements along the local `θ_li`
+surface, without the prefactor `c_g`.
+
+A parcel moves by a Gaussian displacement `δ` with covariance
+`D = diag(ℓ_h², ℓ_h², ℓ_v²)` and stays on the surface, `δ · ∇θ_li = 0`. With
+`g = ∇q_tot` and `n = ∇θ_li` (3D gradients), the variance of `δ · g` under
+this condition is
+
+    gᵀ D g − (gᵀ D n)² / (nᵀ D n).
+
+The inputs are the horizontal invariants `inv_q = |∇_h q|²`,
+`inv_θq = ∇_h q · ∇_h θ`, `inv_θ = |∇_h θ|²` and the vertical gradients. The
+result lies in `[0, gᵀ D g]` (Cauchy–Schwarz). For a flat surface it is
+`ℓ_h² |∇_h q|²`. For a vertical surface it is the horizontal gradient along
+the surface plus `ℓ_v² (∂q/∂z)²`. Where `∇θ_li = 0` there is no surface, and
+the result is the unconstrained `gᵀ D g`.
 """
-@inline isentropic_slope_ratio(∂q∂z, ∂θ∂z, θz_min) = ∂q∂z / max(∂θ∂z, θz_min)
+@inline function along_surface_q_variance(
+    inv_q,
+    inv_θq,
+    inv_θ,
+    ∂q∂z,
+    ∂θ∂z,
+    ℓ_h,
+    ℓ_v,
+)
+    G = ℓ_h^2 * inv_q + ℓ_v^2 * ∂q∂z^2
+    M = ℓ_h^2 * inv_θq + ℓ_v^2 * ∂q∂z * ∂θ∂z
+    N = ℓ_h^2 * inv_θ + ℓ_v^2 * ∂θ∂z^2
+    return ifelse(N > zero(N), max(G - M^2 / N, zero(G)), G)
+end
 
 """
-    isentropic_gradient_invariant(inv_q, inv_θq, inv_θ, r)
+    across_surface_q_gradient(inv_θq, inv_θ, ∂q∂z, ∂θ∂z)
 
-`|∇_h q_tot − r ∇_h θ_li|² = |∇_h q|² − 2 r (∇_h θ_li · ∇_h q) + r² |∇_h θ_li|²`, the
-squared horizontal gradient of `q_tot` along the `θ_li` surface; floored
-at zero against round-off.
+Change of `q_tot` per unit vertical displacement across the local `θ_li`
+surface, `∂_z θ (∇q · ∇θ) / |∇θ|²` with 3D gradients. A vertical step has the
+component `∂_z θ / |∇θ|` along the surface normal, and `q_tot` changes along
+the normal at the rate `∇q · ∇θ / |∇θ|`. The result equals `∂q/∂z` for a flat
+surface and is zero for a vertical surface or where `∇θ_li = 0`. The vertical
+uniform-box block uses it in place of `∂q/∂z`, so that block samples the
+displacement across the surface and `along_surface_q_variance` the
+displacement along it.
 """
-@inline isentropic_gradient_invariant(inv_q, inv_θq, inv_θ, r) =
-    max(inv_q - 2 * r * inv_θq + r^2 * inv_θ, zero(inv_q))
+@inline function across_surface_q_gradient(inv_θq, inv_θ, ∂q∂z, ∂θ∂z)
+    gn = inv_θq + ∂q∂z * ∂θ∂z
+    nn = inv_θ + ∂θ∂z^2
+    return ifelse(nn > zero(nn), ∂θ∂z * gn / nn, zero(gn))
+end
+
+"""
+    geometric_vertical_q_variance(inv_q, inv_θq, inv_θ, ∂q∂z, ∂θ∂z, ℓ_h, ℓ_a, ℓ_v)
+
+The part of the geometric (resolved-gradient) q variance that needs a
+vertical displacement, without the prefactor `c_g`: the along-surface
+variance beyond its along-contour part (the displacement with `ℓ_a = 0`,
+which stays on the surface without moving vertically) plus the across-surface
+uniform-box term,
+
+    V_v = max(V_along(ℓ_a) − V_along(0), 0) + ℓ_v² q_n².
+
+On a flat surface the along part vanishes and `V_v = ℓ_v² (∂_z q)²`; on a
+vertical surface, or where `∇θ_li = 0`, `q_n = 0` and `V_v = ℓ_a² (∂_z q)²`;
+on a tilted surface the two parts are orthogonal and add.
+"""
+@inline function geometric_vertical_q_variance(
+    inv_q, inv_θq, inv_θ, ∂q∂z, ∂θ∂z, ℓ_h, ℓ_a, ℓ_v,
+)
+    V_all = along_surface_q_variance(inv_q, inv_θq, inv_θ, ∂q∂z, ∂θ∂z, ℓ_h, ℓ_a)
+    V_h = along_surface_q_variance(
+        inv_q, inv_θq, inv_θ, ∂q∂z, ∂θ∂z, ℓ_h, zero(ℓ_a),
+    )
+    q_n = across_surface_q_gradient(inv_θq, inv_θ, ∂q∂z, ∂θ∂z)
+    return max(V_all - V_h, zero(V_all)) + ℓ_v^2 * q_n^2
+end
 
 """
     hgrad_invariant!(ᶜinv, ᶜψ, p)
@@ -321,7 +412,7 @@ Diagnosed SGS T–q correlation `clamp(T′q′ / √(T′T′ q′q′), -1, 1)
 
 In exact arithmetic each variance block satisfies its own Cauchy-Schwarz
 inequality and the Cauchy-Schwarz bound on the sum of the two (turbulent,
-vertical uniform-box) covariances also holds — the isentropic horizontal block
+across-surface) covariances also holds — the along-surface block
 contributes variance to q′q′ only and no covariance — so
 `|ρ| ≤ 1` by construction. The explicit clamp is a cheap safeguard against
 (a) Float32 roundoff at the Cauchy-Schwarz boundary (which can produce
@@ -379,31 +470,33 @@ Pipeline:
     `ρ_turb` scalar as `ρ_turb · σ_T,turb · σ_q,turb` (not the gradient-direction
     product), so the turbulent block carries a physical correlation independent of
     the sign of `∂_z θ · ∂_z q`.
- 3. Add the horizontal resolved-gradient (geometric) term, the isentropic form
-    `|∇_h q_tot − r ∇_h θ_li|²` with the along-surface displacement bounded by the
-    cell (`isentropic_cell_cap`), to q′q′ only — no horizontal θ′θ′ and no
-    horizontal cross term (skipped when `sgs_variance_horizontal_scale_factor` is 0).
- 4. Add the resolved vertical-gradient (uniform-box) term
-    `c_g (c_Δz Δz)² (∂_z ψ)²` to both variances, and the exact cross
-    `c_g (c_Δz Δz)² ∂_z θ · ∂_z q` to θ′q′; the q′q′ and θ′q′ terms are
-    scaled by the across-surface share `1/(1 + (s Δx/Δz)²)` of the excursion
-    not sampled by step 3, θ′θ′ is not (skipped when
-    `sgs_variance_vertical_scale_factor` is 0; default `c_Δz = 1` with
-    `c_g = 1/12` reproduces the uniform-box exact result).
- 5. Transform θ→T using `compute_∂T_∂θ!`
- 6. Add the horizontal resolved-gradient term to q′q′ (skipped together with
-    step 3)
- 7. Apply the closure-validity bound `σ_q ≤ sgs_variance_max_rel_std * q_tot`
- 8. Set the sampled T–q correlation (`set_tq_correlation!`; for the diagnosed
+ 3. Add the resolved-gradient (geometric) block, the variance from a subgrid
+    parcel displacement with covariance `c_g diag(ℓ_h², ℓ_h², ℓ_v²)`,
+    `ℓ_h = c_Δx Δx_h`, `ℓ_v = H`. The displacement along the `θ_li`
+    surface adds `along_surface_q_variance` to q′q′ only, since θ_li is
+    constant along the surface; its vertical scale is the depth `H` of the
+    unresolved slantwise motion (`sgs_variance_isentropic_depth`), bounded
+    by the height above the surface, `min(H, z − z_sfc)`.
+    The displacement across the surface adds
+    the vertical uniform-box terms `c_g ℓ_v² (∂_z θ)²` to θ′θ′,
+    `c_g ℓ_v² q_n²` to q′q′ and `c_g ℓ_v² ∂_z θ q_n` to θ′q′, with `q_n` the
+    across-surface q gradient (`across_surface_q_gradient`). The part of the
+    geometric variance that needs a vertical displacement
+    (`geometric_vertical_q_variance`, and `c_g ℓ_v² (∂_z θ)²` for θ) and the
+    turbulent block's vertical-displacement variance are two estimates of
+    the same quantity, so the block takes the larger of the two instead of
+    adding them; the along-contour part of the along-surface variance adds.
+    The block is skipped when `c_Δx` and `c_Δz` are both 0,
+    and the horizontal invariants are computed only when `c_Δx` is nonzero.
+ 4. Transform θ→T using `compute_∂T_∂θ!`
+ 5. Apply the closure-validity bound `σ_q ≤ sgs_variance_max_rel_std * q_tot`
+ 6. Set the sampled T–q correlation (`set_tq_correlation!`; for the diagnosed
     model the covariance is first rescaled with the bound so the correlation is
     invariant under it)
 
-Neither resolved-gradient block (horizontal or vertical) is Richardson-weighted
-— both represent in-cell variability of the resolved mean field and are
-independent of the turbulent closure's state. The turbulent block carries the
-prescribed `correlation_Tq` for its cross-covariance; the resolved horizontal
-and vertical blocks carry the geometrically-correct gradient-direction
-correlation.
+The turbulent block uses the prescribed `correlation_Tq` for its cross-covariance;
+the across-surface part of the resolved-gradient block uses the correlation set
+by the gradient directions.
 """
 function set_covariance_cache!(Y, p, thermo_params)
     # Covariance fields are only allocated when the configuration needs them.
@@ -420,21 +513,19 @@ function set_covariance_cache!(Y, p, thermo_params)
         ᶜq_tot_nonneg,
     ) = p.precomputed
 
-    # Resolved-gradient (geometric) variance coefficients. `c_g` is the shared
-    # uniform-box prefactor; `c_Δx` / `c_Δz` scale the grid lengths and act as
-    # on/off switches (0 disables the corresponding term).
+    # Resolved-gradient (geometric) displacement scales. `c_Δx` and `c_Δz`
+    # scale the grid lengths; the block is skipped when both are 0.
     c_g = CAP.sgs_variance_geometric_coeff(p.params)
     c_Δx = CAP.sgs_variance_horizontal_scale_factor(p.params)
     c_Δz = CAP.sgs_variance_vertical_scale_factor(p.params)
-    use_geometric = !iszero(c_Δx)
-    use_vertical_grad = !iszero(c_Δz)
-    geo_h = if use_geometric
-        Δx_h = FT(
+    use_horizontal = !iszero(c_Δx)
+    use_geometric = use_horizontal || !iszero(c_Δz)
+    ℓ_h = if use_horizontal
+        c_Δx * FT(
             Spaces.node_horizontal_length_scale(
                 Spaces.horizontal_space(axes(Y.c)),
             ),
         )
-        c_g * (c_Δx * Δx_h)^2
     else
         zero(FT)
     end
@@ -463,116 +554,63 @@ function set_covariance_cache!(Y, p, thermo_params)
         Geometry.WVector(ᶜgradᵥ_θ_liq_ice),
         Geometry.WVector(ᶜgradᵥ_θ_liq_ice),
     )
+    ρ_turb = FT(correlation_Tq(p.params))
     if diag_corr
-        ρ_turb = FT(correlation_Tq(p.params))
         @. p.precomputed.ᶜT′q′ = ρ_turb * sqrt(ᶜT′T′ * ᶜq′q′)
     end
 
     # ----------------------------------------------------------------------
-    # 2. Horizontal resolved-gradient (geometric) block.
-    #    `geo_h |∇_h ψ|²`: leading-order scale-similarity estimate from the
-    #    resolved horizontal field. q′q′ is in native q basis so adding
-    #    here (before the θ→T transform) is equivalent to adding after.
-    #    The block is the isentropic form: no horizontal θ′θ′ term, because
-    #    θ_li is constant along the surface the excursion follows, so the whole
-    #    geometric variance is carried by q′q′ as the gradient of q_tot ALONG
-    #    the θ_li surface,
-    #    |∇_θ q|² = |∇_h q − r ∇_h θ_li|², r = (∂q/∂z)/max(∂θ_li/∂z, θz_min)
-    #    (`isentropic_slope_ratio`): a horizontal excursion δ on a sloping
-    #    isentrope carries the parcel down/up by r-weighted amounts, so aligned
-    #    (warm = moist) gradients amplify and anti-aligned ones cancel the
-    #    saturation variance. The displacement along the surface is bounded by
-    #    the cell (`isentropic_cell_cap`, ℓ = min(Δx, Δz / slope)).
-    #    With the diagnosed T–q correlation this block adds nothing to T′q′
-    #    (no θ′ along the surface), so the correlation is carried by the
-    #    turbulent and vertical blocks. Scratch: `ᶜtemp_scalar_2` is free until
-    #    the θ→T transform below, `_3` (θ_li), `_5` (|∇q|²), `_6` (cross term).
+    # 2. Resolved-gradient (geometric) block: a subgrid parcel displacement
+    #    with covariance c_g diag(ℓ_h², ℓ_h², ℓ_v²). Parcels keep θ_li and
+    #    q_tot, so the displacement along the θ_li surface changes q_tot
+    #    only (`along_surface_q_variance`). The displacement across the
+    #    surface is the vertical uniform-box block, with the q gradient
+    #    taken across the surface (`across_surface_q_gradient`). The two
+    #    parts are orthogonal. q′q′ is in the q basis, so adding it before
+    #    the θ→T transform is the same as adding it after. Scratch:
+    #    `ᶜtemp_scalar_2`, `_3`, `_5`, `_6` are free until the θ→T transform.
     # ----------------------------------------------------------------------
-    ᶜΔz = Fields.Δz_field(axes(Y.c))
-    ᶜpart = p.scratch.ᶜtemp_scalar_6  # across-surface share of the vertical excursion
     if use_geometric
-        (; ᶜT, ᶜq_liq, ᶜq_ice) = p.precomputed
-        ᶜθ_li = p.scratch.ᶜtemp_scalar_3
-        @. ᶜθ_li = TD.liquid_ice_pottemp(
-            thermo_params, ᶜT, Y.c.ρ, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice,
-        )
-        ᶜinv_q = p.scratch.ᶜtemp_scalar_5
-        ᶜinv_θ = p.scratch.ᶜtemp_scalar_2
-        ᶜinv_θq = p.scratch.ᶜtemp_scalar_6
-        hgrad_invariant!(ᶜinv_q, ᶜq_tot_nonneg, p)
-        hgrad_invariant!(ᶜinv_θ, ᶜθ_li, p)
-        hgrad_cross_invariant!(ᶜinv_θq, ᶜθ_li, ᶜq_tot_nonneg, p)
-        θz_min = CAP.sgs_variance_isentropic_min_dtheta_dz(p.params)
         ᶜlg = Fields.local_geometry_field(Y.c)
-        @. ᶜinv_q = isentropic_gradient_invariant(
-            ᶜinv_q,
-            ᶜinv_θq,
-            ᶜinv_θ,
-            isentropic_slope_ratio(
-                projected_vector_data(C3, ᶜgradᵥ_q_tot, ᶜlg),
-                projected_vector_data(C3, ᶜgradᵥ_θ_liq_ice, ᶜlg),
-                θz_min,
-            ),
-        )
-        # Cell-geometry bound on the along-surface displacement
-        # (`ℓ ≤ Δx`, `ℓ ≤ Δz / slope`), kept in `ᶜpart` (over `ᶜinv_θq`, which
-        # is no longer needed) because the same factor is the across-surface
-        # share of the vertical excursion that the vertical block below may
-        # still sample.
-        @. ᶜpart = isentropic_cell_cap(
-            ᶜinv_θ,
-            projected_vector_data(C3, ᶜgradᵥ_θ_liq_ice, ᶜlg),
-            θz_min,
-            Δx_h,
-            ᶜΔz,
-        )
-        @. ᶜinv_q *= ᶜpart
-        @. ᶜq′q′ += geo_h * ᶜinv_q
-    else
-        @. ᶜpart = one(FT)
-    end
-
-    # ----------------------------------------------------------------------
-    # 3. Resolved vertical-gradient (uniform-box) block.
-    #    `c_g (c_Δz Δz)² (∂_z ψ)²` — exact for an in-cell linear profile
-    #    with the defaults `c_g = 1/12`, `c_Δz = 1`. Independent of l_mix,
-    #    so σ² stays non-zero in laminar cells / single columns. The cross
-    #    `c_g (c_Δz Δz)² ∂_z θ · ∂_z q` carries the geometrically-correct
-    #    ρ = sign(∂_z θ · ∂_z q) of the resolved vertical direction.
-    #    `c_Δz = 0` disables. The q′q′ term is scaled by
-    #    `ᶜpart`, the share of the vertical excursion not already sampled
-    #    along the θ_li surface by the horizontal block (`isentropic_cell_cap`):
-    #    1 for flat surfaces, → 0 for steep ones, where the in-cell q excursion
-    #    is the along-surface one. The cross carries the same factor (the
-    #    block's bound holds, f² ≤ f); θ′θ′ keeps the full vertical sample
-    #    (no θ′ along the surface, and the T-variance the cloud fraction sees
-    #    is left as it was). The diagnosed correlation is clamped to [-1, 1].
-    # ----------------------------------------------------------------------
-    if use_vertical_grad
-        geo_v(Δz) = c_g * (c_Δz * Δz)^2                 # per-cell coefficient
-        @. ᶜq′q′ +=
-            geo_v(ᶜΔz) * ᶜpart *
-            dot(
-                Geometry.WVector(ᶜgradᵥ_q_tot),
-                Geometry.WVector(ᶜgradᵥ_q_tot),
+        ᶜΔz = Fields.Δz_field(axes(Y.c))
+        ᶜℓ_v = @. lazy(c_Δz * ᶜΔz)
+        ᶜ∂q∂z = @. lazy(projected_vector_data(C3, ᶜgradᵥ_q_tot, ᶜlg))
+        ᶜ∂θ∂z = @. lazy(projected_vector_data(C3, ᶜgradᵥ_θ_liq_ice, ᶜlg))
+        if use_horizontal
+            (; ᶜT, ᶜq_liq, ᶜq_ice) = p.precomputed
+            ᶜθ_li = p.scratch.ᶜtemp_scalar_3
+            @. ᶜθ_li = TD.liquid_ice_pottemp(
+                thermo_params, ᶜT, Y.c.ρ, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice,
             )
-        @. ᶜT′T′ +=
-            geo_v(ᶜΔz) * dot(
-                Geometry.WVector(ᶜgradᵥ_θ_liq_ice),
-                Geometry.WVector(ᶜgradᵥ_θ_liq_ice),
+            ᶜinv_q = p.scratch.ᶜtemp_scalar_5
+            ᶜinv_θ = p.scratch.ᶜtemp_scalar_2
+            ᶜinv_θq = p.scratch.ᶜtemp_scalar_6
+            hgrad_invariant!(ᶜinv_q, ᶜq_tot_nonneg, p)
+            hgrad_invariant!(ᶜinv_θ, ᶜθ_li, p)
+            hgrad_cross_invariant!(ᶜinv_θq, ᶜθ_li, ᶜq_tot_nonneg, p)
+            # Vertical scale of the along-surface displacement: the depth `H`
+            # of the unresolved slantwise motion, bounded by the height above
+            # the surface. In a neutral layer the θ_li surface is vertical and
+            # the along-surface displacement is the vertical eddy displacement,
+            # which cannot reach below the ground.
+            H = CAP.sgs_variance_isentropic_depth(p.params)
+            ᶜz = Fields.coordinate_field(Y.c).z
+            z_sfc = Fields.level(Fields.coordinate_field(Y.f).z, Fields.half)
+            ᶜℓ_a = @. lazy(min(H, ᶜz - z_sfc))
+            add_resolved_gradient_block!(
+                p, ᶜinv_q, ᶜinv_θq, ᶜinv_θ, ᶜ∂q∂z, ᶜ∂θ∂z, ℓ_h, ᶜℓ_a, ᶜℓ_v, c_g,
+                diag_corr, ρ_turb,
             )
-        if diag_corr
-            @. p.precomputed.ᶜT′q′ +=
-                geo_v(ᶜΔz) * ᶜpart *
-                dot(
-                    Geometry.WVector(ᶜgradᵥ_θ_liq_ice),
-                    Geometry.WVector(ᶜgradᵥ_q_tot),
-                )
+        else
+            add_resolved_gradient_block!(
+                p, zero(FT), zero(FT), zero(FT), ᶜ∂q∂z, ᶜ∂θ∂z, ℓ_h, ᶜℓ_v, ᶜℓ_v, c_g,
+                diag_corr, ρ_turb,
+            )
         end
     end
 
     # ----------------------------------------------------------------------
-    # 4. θ → T basis via the thermodynamic Jacobian ∂T/∂θ. q is unaffected.
+    # 3. θ → T basis via the thermodynamic Jacobian ∂T/∂θ. q is unaffected.
     # ----------------------------------------------------------------------
     ᶜ∂T_∂θ = p.scratch.ᶜtemp_scalar_2
     compute_∂T_∂θ!(ᶜ∂T_∂θ, Y, p, thermo_params)
@@ -582,7 +620,7 @@ function set_covariance_cache!(Y, p, thermo_params)
     end
 
     # ----------------------------------------------------------------------
-    # 5. Closure-validity bound `σ_q ≤ sgs_variance_max_rel_std · q_tot`
+    # 4. Closure-validity bound `σ_q ≤ sgs_variance_max_rel_std · q_tot`
     #    (default 0.5). A wider Gaussian puts a quadrature node at negative
     #    total water; the clamped quadrature then carries more total water
     #    than the grid mean holds, and condensing it can drive the grid-mean
@@ -600,12 +638,75 @@ function set_covariance_cache!(Y, p, thermo_params)
     @. ᶜq′q′ = min(ᶜq′q′, (r_max * ᶜq_tot_nonneg)^2)
 
     # ----------------------------------------------------------------------
-    # 6. Fill `ᶜcorr_Tq` with the correlation the quadrature samples.
+    # 5. Fill `ᶜcorr_Tq` with the correlation the quadrature samples.
     # ----------------------------------------------------------------------
     set_tq_correlation!(p, p.atmos.tq_correlation_model)
+
+    # ----------------------------------------------------------------------
+    # 7. Refresh `ᶜα` with the current `ᶜl_mix` and state.
+    # ----------------------------------------------------------------------
+    materialized_variance_fidelity!(Y, p)
     return nothing
 end
 
+
+"""
+    add_resolved_gradient_block!(p, ᶜinv_q, ᶜinv_θq, ᶜinv_θ, ᶜ∂q∂z, ᶜ∂θ∂z,
+                                 ℓ_h, ᶜℓ_a, ᶜℓ_v, c_g, diag_corr, ρ_turb)
+
+Combine the resolved-gradient (geometric) block with the turbulent block
+already held in `ᶜq′q′` and `ᶜT′T′` (θ basis). The along-contour part of the
+along-surface q variance (the displacement with no vertical excursion) adds;
+the part that needs a vertical displacement (`geometric_vertical_q_variance`,
+with the vertical scale `ᶜℓ_a` along the surface and `ᶜℓ_v` across it) and
+the turbulent block's vertical-displacement variance describe the same
+displacement with two closures, so the larger of the two is kept:
+
+    q′q′ = c_g V_h + max(c_g V_v, q′q′_turb),
+    θ′θ′ = max(c_g ℓ_v² (∂_z θ)², θ′θ′_turb).
+
+When `diag_corr`, the cross covariance of the vertical displacement is the
+prescribed `ρ_turb` on the combined vertical amplitudes; the along-surface
+variance adds no cross.
+"""
+function add_resolved_gradient_block!(
+    p,
+    ᶜinv_q,
+    ᶜinv_θq,
+    ᶜinv_θ,
+    ᶜ∂q∂z,
+    ᶜ∂θ∂z,
+    ℓ_h,
+    ᶜℓ_a,
+    ᶜℓ_v,
+    c_g,
+    diag_corr,
+    ρ_turb,
+)
+    (; ᶜT′T′, ᶜq′q′) = p.precomputed
+    ᶜq_n = @. lazy(across_surface_q_gradient(ᶜinv_θq, ᶜinv_θ, ᶜ∂q∂z, ᶜ∂θ∂z))
+    ᶜV_h = @. lazy(
+        along_surface_q_variance(
+            ᶜinv_q, ᶜinv_θq, ᶜinv_θ, ᶜ∂q∂z, ᶜ∂θ∂z, ℓ_h, zero(ℓ_h),
+        ),
+    )
+    ᶜV_v = @. lazy(
+        geometric_vertical_q_variance(
+            ᶜinv_q, ᶜinv_θq, ᶜinv_θ, ᶜ∂q∂z, ᶜ∂θ∂z, ℓ_h, ᶜℓ_a, ᶜℓ_v,
+        ),
+    )
+    ᶜθθ_v = @. lazy(ᶜℓ_v^2 * ᶜ∂θ∂z^2)
+    if diag_corr
+        # Uses the turbulent values still in `ᶜT′T′`, `ᶜq′q′`.
+        @. p.precomputed.ᶜT′q′ =
+            ρ_turb * sqrt(
+                max(c_g * ᶜθθ_v, ᶜT′T′) * max(c_g * ᶜℓ_v^2 * ᶜq_n^2, ᶜq′q′),
+            )
+    end
+    @. ᶜq′q′ = c_g * ᶜV_h + max(c_g * ᶜV_v, ᶜq′q′)
+    @. ᶜT′T′ = max(c_g * ᶜθθ_v, ᶜT′T′)
+    return nothing
+end
 
 # ============================================================================
 # SGS Moments — pre-pass quadrature
@@ -748,7 +849,7 @@ end
 # non-equilibrium floor `σ_S_floor` (defined inside
 # `_compute_cloud_fraction`):
 #
-#     σ_aug = α · sqrt(σ_S² + σ_S_floor²),
+#     σ_aug = sqrt((α · σ_S)² + σ_S_floor²),
 #
 # which keeps CF well-behaved in the singular limit (q_c, σ_S²) → 0.  CF is
 # always computed by solving the truncated-Gaussian closure with `σ_aug`,
@@ -772,33 +873,50 @@ end
 # 3. CF = Φ(z₂) via `normal_cdf` (A&S 26.2.17, max error ≈ 7.5×10⁻⁸).
 
 """
-    sgs_variance_fidelity(cf_steepness_coeff)
+    sgs_microphysics_timescale(thp, T, τ_cond, τ_sub)
 
-Return the variance fidelity parameter `α = 1 / cf_steepness_coeff`, where
-`cf_steepness_coeff = CAP.cloud_fraction_steepness_scale(params)`.
-
-`α` controls how much of the SGS saturation variance enters the local
-condensate computation:
-
-    E[max(0, λ + α·S′)] = q_c,
-
-where `S′ = S − μ_S ~ N(0, σ_S²)`.  The effective standard deviation used by
-the Lagrange-multiplier closure is `σ_S_eff = α · σ_S` (with `σ_S` clipped at
-`ϵ_numerics(FT)` inside `_sgs_saturation_moments`), so `C = q_c / σ_S_eff`
-and `λ = z · σ_S_eff`.
-
-With the default `cf_steepness_coeff = 1` this gives `α = 1` (full variance
-propagation). Increasing the steepness coefficient sharpens the CF transition
-and reduces `α`.
-
-!!! note "Preliminary approximation"
-
-    This is a first-order approximation that ties `α` to the existing
-    steepness parameter. Future calibrations may replace or extend this
-    relationship to account for the local turbulence state, grid resolution,
-    or other physical controls on subgrid variance propagation.
+Phase-blended microphysics relaxation timescale
+`τ_mp = λ_eq(T)·τ_cond + (1 − λ_eq(T))·τ_sub`, with `λ_eq` the equilibrium
+liquid-fraction ramp. Used by `sgs_variance_fidelity`.
 """
-sgs_variance_fidelity(cf_steepness_coeff::FT) where {FT} = one(FT) / cf_steepness_coeff
+@inline function sgs_microphysics_timescale(thp, T, τ_cond, τ_sub)
+    FT = typeof(T)
+    λ_eq = FT(TD.liquid_fraction_ramp(thp, T))
+    return λ_eq * FT(τ_cond) + (one(FT) - λ_eq) * FT(τ_sub)
+end
+
+"""
+    sgs_variance_fidelity(
+        A, τ_mp, c_d, tke, l_mix, w_eq, q_c_actual, mu_S, sigma_S, q_min,
+    )
+
+Local SGS variance fidelity `α = α_Da · α_eq` for the condensate
+reconstruction `E[max(0, λ + α·S′)] = q_c`.
+
+  - Damköhler factor
+    `α_Da = 1 / (1 + A · τ_mp · c_d · √TKE / max(l_mix, 1 m))`:
+    quiescent (TKE → 0) → 1, well-mixed → 0.
+  - Equilibrium-ratio modulator `α_eq = r / (w_eq + (1 − w_eq) r)` with
+    `r = (q_c_actual + q_min) / (q_c_eq + q_min)` and `q_c_eq` the
+    truncated-Gaussian expectation `μ_S Φ(z) + σ_S φ(z)`, `z = μ_S/σ_S` —
+    the expected saturation excess under the SGS PDF (always ≥ 0 even for
+    subsaturated means).
+"""
+@inline function sgs_variance_fidelity(
+    A, τ_mp, c_d, tke, l_mix, w_eq, q_c_actual, mu_S, sigma_S, q_min,
+)
+    FT = typeof(tke)
+    inv_τ_turb = FT(c_d) * sqrt(max(tke, zero(FT))) / max(l_mix, one(FT))
+    α_Da = one(FT) / (one(FT) + FT(A) * FT(τ_mp) * inv_τ_turb)
+    inv_sqrt2π = one(FT) / sqrt(FT(2) * FT(π))
+    z = FT(mu_S) / max(FT(sigma_S), ϵ_numerics(FT))
+    q_c_eq = FT(mu_S) * normal_cdf(z) + FT(sigma_S) * exp(-z * z / 2) * inv_sqrt2π
+    r = (FT(q_c_actual) + FT(q_min)) / (q_c_eq + FT(q_min))
+    w = FT(w_eq)
+    α_eq = r / (w + (one(FT) - w) * r)
+    return α_Da * α_eq
+end
+
 
 """
     _compute_z(C)
@@ -849,10 +967,10 @@ end
     _compute_cloud_fraction(q_c, mu_S, sigma_S, q_sat, α, floor)
 
 Cloud fraction `CF = Φ(z)`, where `z` solves the truncated-Gaussian condensate
-relation `q_c/σ_aug = z·Φ(z) + φ(z)` (see `_compute_z`) with the
-augmented standard deviation `σ_aug = α · sqrt(σ_S² + σ_S_floor²)`. The `floor`
-argument is a `CloudFractionFloorParams` bundling the floor magnitude and
-release-shape parameters (see `cloud_fraction_floor_params`).
+relation `q_c/σ_aug = z·Φ(z) + φ(z)` (see `_compute_z`) with
+`σ_aug = sqrt((α · σ_S)² + σ_S_floor²)`. `α` scales only the equilibrium
+part; the non-equilibrium floor adds in quadrature. `floor` is a
+`CloudFractionFloorParams` bundle (see `cloud_fraction_floor_params`).
 
 Scale-aware non-equilibrium floor. We assume the local condensate `q_c`
 fluctuates partly through the equilibrium variations of (T, q_tot) captured by
@@ -885,7 +1003,7 @@ The relative floor is therefore released only where the mean saturation
 excess `μ_S = q_tot − q_sat` is positive by a margin relative to the
 release width `w`:
 
-    w  = sqrt((c_w·α)²·(σ_S² + σ_abs²) + (c_a·ε_rel·q_sat)²),
+    w  = sqrt((c_w)²·((α·σ_S)² + σ_abs²) + (c_a·ε_rel·q_sat)²),
     x  = max(μ_S, 0) / w,
     D  = D_min + (1 − D_min) · (1 + x²)^(−s/2),
 
@@ -929,7 +1047,7 @@ The floor enters *only* the CF computation; the Lagrange multiplier `λ` (in
     # what drives the release in a quiescent deck, so it must not be floored
     # away.
     w = sqrt(
-        (margin * α)^2 * (sigma_S^2 + σ_abs^2) +
+        margin^2 * ((α * sigma_S)^2 + σ_abs^2) +
         (abs_margin * ε_rel * q_sat)^2,
     )
     x = max(mu_S, zero(FT)) / max(w, ϵ_numerics(FT))
@@ -939,7 +1057,8 @@ The floor enters *only* the CF computation; the Lagrange multiplier `λ` (in
         sharpness == one(FT) ? 1 / sqrt(1 + x^2) : (1 + x^2)^(-sharpness / 2)
     D = residual + (1 - residual) * D_shape
     σ_S_floor_sq = (D * ε_rel * q_sat)^2 + σ_abs^2
-    σ_aug = α * sqrt(sigma_S^2 + σ_S_floor_sq)
+    # α scales only the equilibrium part; the non-eq floor adds in quadrature.
+    σ_aug = sqrt((α * sigma_S)^2 + σ_S_floor_sq)
     C = q_c / σ_aug
     z = _compute_z(C)
     return normal_cdf(z)
@@ -1116,13 +1235,11 @@ Final post-Aitken update. No-op when `ᶜsgs_moments` is not allocated (dry / 0M
 Uses ONE quadrature pass via `_compute_sgs_moments` to fill
 `ᶜsgs_moments = (sigma_S, λ_lagrange)`, then computes
 `ᶜcloud_fraction` consistently with the augmented `σ_aug` closure (see
-`_compute_cloud_fraction`) from the grid-mean cloud condensate
-(`_grid_mean_cloud_condensate`).
+`_compute_cloud_fraction`) and applies EDMF updraft weighting.
 
-Overwrites `p.scratch.ᶜtemp_scalar`, `ᶜtemp_scalar_2`, `ᶜtemp_scalar_3`,
-`ᶜtemp_scalar_5`, and `ᶜtemp_scalar_6`. It must not touch `ᶜtemp_scalar_4` or
-`ᶜtemp_scalar_7`, which `set_covariance_cache_and_cloud_fraction!` reserves for
-the Picard iterates.
+Overwrites `p.scratch.ᶜtemp_scalar`, `ᶜtemp_scalar_2`, and `ᶜtemp_scalar_3`.
+It must not touch `ᶜtemp_scalar_4` or `ᶜtemp_scalar_7`, which
+`set_covariance_cache_and_cloud_fraction!` reserves for the Picard iterates.
 """
 NVTX.@annotate function set_sgs_moments_and_cloud_fraction!(Y, p)
     hasproperty(p.precomputed, :ᶜsgs_moments) || return nothing
@@ -1132,71 +1249,52 @@ NVTX.@annotate function set_sgs_moments_and_cloud_fraction!(Y, p)
     microphysics_model = p.atmos.microphysics_model
 
     ᶜρ_env_lazy, ᶜT_mean, ᶜq_mean = _get_env_ρ_T_q(Y, p, thermo_params, turbconv_model)
-    # Environment condensate for the microphysics reconstruction (the λ fit,
-    # conserved exactly under the quadrature measure) ...
     ᶜq_lcl_lazy, ᶜq_icl_lazy =
         _get_condensate_means(Y, p, turbconv_model, microphysics_model)
-    # ... and the grid-mean cloud condensate the cover is computed from
-    # (single-domain cover, see `_grid_mean_cloud_condensate`).
-    ᶜq_lcl_cf_lazy, ᶜq_icl_cf_lazy =
-        _grid_mean_cloud_condensate(Y, p, microphysics_model)
     sgs_quad = p.atmos.sgs_quadrature
-    FT = eltype(p.params)
-    α = sgs_variance_fidelity(CAP.cloud_fraction_steepness_scale(p.params))
     floor = cloud_fraction_floor_params(p.params)
-    (; ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜsgs_moments, ᶜcloud_fraction) = p.precomputed
+    (; ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα, ᶜsgs_moments, ᶜcloud_fraction) =
+        p.precomputed
 
     # Materialize lazy fields to pass to foreach_point. Only the scratch fields
-    # that the Picard step already clobbers (plus ᶜtemp_scalar_6) are used, so
-    # the iterates that `set_covariance_cache_and_cloud_fraction!` keeps in
-    # ᶜtemp_scalar_4 and ᶜtemp_scalar_7 are never overwritten.
+    # that the Picard step already clobbers are used, so the iterates that
+    # `set_covariance_cache_and_cloud_fraction!` keeps in ᶜtemp_scalar_4 and
+    # ᶜtemp_scalar_7 are never overwritten.
     ᶜρ_env = (p.scratch.ᶜtemp_scalar .= ᶜρ_env_lazy)
     ᶜq_lcl = (p.scratch.ᶜtemp_scalar_2 .= ᶜq_lcl_lazy)
     ᶜq_icl = (p.scratch.ᶜtemp_scalar_3 .= ᶜq_icl_lazy)
-    ᶜq_lcl_cf = (p.scratch.ᶜtemp_scalar_5 .= ᶜq_lcl_cf_lazy)
-    ᶜq_icl_cf = (p.scratch.ᶜtemp_scalar_6 .= ᶜq_icl_cf_lazy)
 
-    α_ft = FT(α)
     # Carried in by type, so the parameters fold to literals in the kernel.
     vthermo = _fold(ClimaComms.device(Y.c), thermo_params)
 
     DataLayouts.foreach_point(
         ᶜsgs_moments, ᶜcloud_fraction, ᶜρ_env, ᶜT_mean, ᶜq_mean,
-        ᶜq_lcl, ᶜq_icl, ᶜq_lcl_cf, ᶜq_icl_cf, ᶜT′T′, ᶜq′q′, ᶜcorr_Tq,
-    ) do ᶜsgs_moments,
-    ᶜcloud_fraction,
-    ᶜρ_env,
-    ᶜT_mean,
-    ᶜq_mean,
-    ᶜq_lcl,
-    ᶜq_icl,
-    ᶜq_lcl_cf,
-    ᶜq_icl_cf,
-    ᶜT′T′,
-    ᶜq′q′,
-    ᶜcorr_Tq
+        ᶜq_lcl, ᶜq_icl, ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα,
+    ) do ᶜsgs_moments, ᶜcloud_fraction, ᶜρ_env, ᶜT_mean, ᶜq_mean,
+    ᶜq_lcl, ᶜq_icl, ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα
 
-        # ONE quadrature pass → (sigma_S, λ_lagrange).
         @. ᶜsgs_moments = _compute_sgs_moments(
             $(vthermo), ᶜρ_env, ᶜT_mean, ᶜq_mean, ᶜq_lcl + ᶜq_icl,
-            $(sgs_quad), ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, α_ft,
+            $(sgs_quad), ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα,
         )
-        # Recompute CF from the grid-mean q_c and σ_S using the augmented-σ
-        # closure. We cannot use `Φ(λ/σ_aug)` because λ was computed with the
-        # equilibrium σ_S_eff, not σ_aug — `Φ(λ/σ_aug)` would not match the
-        # truncated-Gaussian closure for the augmented variance. This overwrites
-        # the Picard iterate with a value consistent with the final SGS moments.
+        # Recompute CF from q_c and σ_S using the augmented-σ closure. We cannot
+        # use `Φ(λ/σ_aug)` because λ was computed with the equilibrium σ_S_eff,
+        # not σ_aug — `Φ(λ/σ_aug)` would not match the truncated-Gaussian
+        # closure for the augmented variance. This overwrites the Picard iterate
+        # with a value consistent with the final SGS moments, so EDMF weighting
+        # must be re-applied below even though `set_cloud_fraction!` already
+        # applied it during Picard.
         @. ᶜcloud_fraction = _compute_cloud_fraction(
-            ᶜq_lcl_cf + ᶜq_icl_cf,
-            # μ_S recomputed analytically, matching `_sgs_saturation_moments`
-            # (condensate-free q_sat, consistent with the linear excess S).
+            ᶜq_lcl + ᶜq_icl,
             ᶜq_mean - TD.q_vap_saturation(thermo_params, ᶜT_mean, ᶜρ_env),
             ᶜsgs_moments.sigma_S,
-            TD.q_vap_saturation(thermo_params, ᶜT_mean, ᶜρ_env, ᶜq_lcl_cf, ᶜq_icl_cf),
-            α_ft,
+            TD.q_vap_saturation(thermo_params, ᶜT_mean, ᶜρ_env, ᶜq_lcl, ᶜq_icl),
+            ᶜα,
             $(floor),
         )
     end
+
+    _apply_edmf_cloud_weighting!(Y, p, turbconv_model, thermo_params)
 end
 
 
@@ -1219,11 +1317,9 @@ Dispatches on `microphysics_model` and `cloud_model`:
   - `MLCloud`: the neural-network prediction (see
     `set_ml_cloud_fraction!`).
 
-With `PrognosticEDMFX` the cloud fraction is a single-domain quantity: the
-`QuadratureCloud` cover is evaluated with the grid-mean cloud condensate
-(`_grid_mean_cloud_condensate`) and the `MLCloud` prediction is used as is; there
-is no separate updraft term. # TODO: Take into account area fraction as a
-skewness of the PDF.
+With `PrognosticEDMFX`, the environment value is weighted by the environment area
+fraction and binary updraft contributions are added
+(`_apply_edmf_cloud_weighting!`).
 
 Mutates `p.precomputed.ᶜcloud_fraction`; the return value is unused.
 """
@@ -1251,16 +1347,11 @@ end
 """
     _grid_mean_cloud_condensate(Y, p, microphysics_model)
 
-Grid-mean cloud condensate `(ᶜq_lcl, ᶜq_icl)`, used by `GridScaleCloud`, by
-the `QuadratureCloud` cover and, without EDMF, by `_get_condensate_means`.
-With non-equilibrium microphysics, uses the prognostic cloud condensate only;
-the precomputed `ᶜq_liq` / `ᶜq_ice` include precipitation (`q_rai` / `q_sno`),
-which should not count as cloud.
-
-The cloud fraction is a single-domain quantity: with PrognosticEDMFX the
-environment PDF inversion is applied to this grid-mean condensate
-`a⁰ q_c⁰ + Σⱼ aʲ q_cʲ`. The microphysics reconstruction (the λ fit) uses the
-environment condensate, `_get_condensate_means`.
+Grid-mean cloud condensate `(ᶜq_lcl, ᶜq_icl)`, used by `GridScaleCloud` and,
+without EDMF, by `_get_condensate_means`. With non-equilibrium
+microphysics, uses the prognostic cloud condensate only; the precomputed
+`ᶜq_liq` / `ᶜq_ice` include precipitation (`q_rai` / `q_sno`), which should
+not count as cloud.
 """
 _grid_mean_cloud_condensate(Y, p, ::NonEquilibriumMicrophysics) = (
     (@. lazy(max(0, specific(Y.c.ρq_lcl, Y.c.ρ)))),
@@ -1283,53 +1374,40 @@ NVTX.@annotate function set_cloud_fraction!(
 
     # Materialize lazy fields to pass to foreach_point. This method runs inside
     # the Picard step of `set_covariance_cache_and_cloud_fraction!`, so it may
-    # never ᶜtemp_scalar_4 or
-    # ᶜtemp_scalar_7, which hold the Picard iterates).
+    # never touch ᶜtemp_scalar_4 or ᶜtemp_scalar_7 (which hold the Picard
+    # iterates).
     ᶜρ_env = (p.scratch.ᶜtemp_scalar .= ᶜρ_env_lazy)
 
-    # Grid-mean cloud condensate the cover is computed from (single-domain
-    # cover, see `_grid_mean_cloud_condensate`)
-    ᶜq_lcl_lazy, ᶜq_icl_lazy = _grid_mean_cloud_condensate(Y, p, microphysics_model)
+    # Condensate of the domain that carries the SGS closure (env under
+    # PrognosticEDMFX, grid-mean otherwise). Updraft contributions are added
+    # separately by `_apply_edmf_cloud_weighting!`.
+    ᶜq_lcl_lazy, ᶜq_icl_lazy =
+        _get_condensate_means(Y, p, turbconv_model, microphysics_model)
     ᶜq_lcl = (p.scratch.ᶜtemp_scalar_2 .= ᶜq_lcl_lazy)
     ᶜq_icl = (p.scratch.ᶜtemp_scalar_3 .= ᶜq_icl_lazy)
 
     sgs_quad = p.atmos.sgs_quadrature
-    FT = eltype(p.params)
-    α = sgs_variance_fidelity(CAP.cloud_fraction_steepness_scale(p.params))
     floor = cloud_fraction_floor_params(p.params)
 
-    (; ᶜT′T′, ᶜq′q′, ᶜcorr_Tq) = p.precomputed
-
+    (; ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα) = p.precomputed
     ᶜcloud_fraction = p.precomputed.ᶜcloud_fraction
-    α_ft = FT(α)
+
+    # Carried in by type, so the parameters fold to literals in the kernel.
     vthermo = _fold(ClimaComms.device(Y.c), thermo_params)
 
     DataLayouts.foreach_point(
-        ᶜcloud_fraction,
-        ᶜT_mean,
-        ᶜρ_env,
-        ᶜq_mean,
-        ᶜq_lcl,
-        ᶜq_icl,
-        ᶜT′T′,
-        ᶜq′q′,
-        ᶜcorr_Tq,
-    ) do ᶜcloud_fraction, ᶜT_mean, ᶜρ_env, ᶜq_mean, ᶜq_lcl, ᶜq_icl, ᶜT′T′, ᶜq′q′, ᶜcorr_Tq
+        ᶜcloud_fraction, ᶜT_mean, ᶜρ_env, ᶜq_mean, ᶜq_lcl, ᶜq_icl,
+        ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα,
+    ) do ᶜcloud_fraction, ᶜT_mean, ᶜρ_env, ᶜq_mean, ᶜq_lcl, ᶜq_icl,
+    ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα
+
         @. ᶜcloud_fraction = _compute_cloud_fraction(
-            $(vthermo),
-            ᶜT_mean,
-            ᶜρ_env,
-            ᶜq_mean,
-            ᶜq_lcl,
-            ᶜq_icl,
-            $(sgs_quad),
-            ᶜT′T′,
-            ᶜq′q′,
-            ᶜcorr_Tq,
-            α_ft,
-            $(floor),
+            $(vthermo), ᶜT_mean, ᶜρ_env, ᶜq_mean, ᶜq_lcl, ᶜq_icl,
+            $(sgs_quad), ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα, $(floor),
         )
     end
+
+    _apply_edmf_cloud_weighting!(Y, p, turbconv_model, thermo_params)
 end
 
 NVTX.@annotate function set_cloud_fraction!(
@@ -1456,10 +1534,10 @@ end
     _get_condensate_means(Y, p, turbconv_model, microphysics_model)
 
 Mean cloud condensate `(ᶜq_lcl, ᶜq_icl)` of the domain that carries the SGS
-microphysics closure (the Lagrange-multiplier fit of `_compute_sgs_moments`):
-the environment for PrognosticEDMFX (`_env_cloud_condensate`), the grid mean
-otherwise (`_grid_mean_cloud_condensate`). The cover is evaluated with the
-grid-mean condensate instead.
+cloud closure: the environment for PrognosticEDMFX
+(`_env_cloud_condensate`), the grid mean otherwise
+(`_grid_mean_cloud_condensate`). Updraft contributions are added
+separately by `_apply_edmf_cloud_weighting!`.
 """
 _get_condensate_means(Y, p, turbconv_model, microphysics_model) =
     turbconv_model isa PrognosticEDMFX ?
@@ -1481,6 +1559,72 @@ _env_cloud_condensate(Y, p, ::NonEquilibriumMicrophysics) = (
 _env_cloud_condensate(Y, p, microphysics_model) =
     (p.precomputed.ᶜq_liq⁰, p.precomputed.ᶜq_ice⁰)
 
+"""
+    _apply_edmf_cloud_weighting!(Y, p, turbconv_model, thermo_params)
+
+Apply EDMF-specific adjustments to cloud diagnostics.
+
+For PrognosticEDMFX:
+
+ 1. Weights environment cloud diagnostics by environment area fraction
+ 2. Adds updraft contributions weighted by their respective area fractions
+
+Updraft cloud fraction is binary: 1 if updraft contains condensate, 0 otherwise.
+"""
+function _apply_edmf_cloud_weighting!(Y, p, turbconv_model, thermo_params)
+    (; ᶜp) = p.precomputed
+
+    # Weight by environment area fraction if using PrognosticEDMFX (assumed 1 otherwise)
+    if turbconv_model isa PrognosticEDMFX
+        ᶜρa⁰ = @. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model))
+        (; ᶜT⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰) = p.precomputed
+        ᶜρ⁰ = @. lazy(
+            TD.air_density(
+                thermo_params,
+                ᶜT⁰,
+                ᶜp,
+                ᶜq_tot_nonneg⁰,
+                ᶜq_liq⁰,
+                ᶜq_ice⁰,
+            ),
+        )
+        @. p.precomputed.ᶜcloud_fraction *= draft_area(ᶜρa⁰, ᶜρ⁰)
+
+        # Add contributions from the updrafts if using EDMF
+        n = n_mass_flux_subdomains(turbconv_model)
+        (; ᶜρʲs) = p.precomputed
+        microphysics_model = p.atmos.microphysics_model
+        for j in 1:n
+            ᶜρaʲ = Y.c.sgsʲs.:($j).ρa
+            ᶜq_liqʲ, ᶜq_iceʲ =
+                _updraft_cloud_condensate(Y, p, j, microphysics_model)
+
+            @. p.precomputed.ᶜcloud_fraction +=
+                ifelse(
+                    TD.has_condensate(
+                        thermo_params,
+                        max(0, ᶜq_liqʲ + ᶜq_iceʲ),
+                    ),
+                    draft_area(ᶜρaʲ, ᶜρʲs.:($$j)),
+                    0,
+                )
+        end
+    end
+end
+
+"""
+    _updraft_cloud_condensate(Y, p, j, microphysics_model)
+
+Cloud condensate of updraft `j`, used for the binary updraft cloud check.
+With non-equilibrium microphysics, uses the prognostic cloud condensate
+(`q_lclʲ`, `q_iclʲ`) only; the precomputed `ᶜq_liqʲs` / `ᶜq_iceʲs` include
+precipitation (`q_raiʲ` / `q_snoʲ`), which should not count as cloud.
+"""
+_updraft_cloud_condensate(Y, p, j, ::NonEquilibriumMicrophysics) =
+    (Y.c.sgsʲs.:($j).q_lcl, Y.c.sgsʲs.:($j).q_icl)
+_updraft_cloud_condensate(Y, p, j, microphysics_model) =
+    (p.precomputed.ᶜq_liqʲs.:($j), p.precomputed.ᶜq_iceʲs.:($j))
+
 # ============================================================================
 # Machine Learning Cloud Fraction
 # ============================================================================
@@ -1495,7 +1639,7 @@ The network is evaluated point-wise on non-dimensional π groups built from the
 thermodynamic state, the mixing length, and the vertical gradients of `q_tot` and
 `θ_liq_ice` (see `compute_ml_cloud_fraction`). Only cloud fraction is
 predicted; the condensate is left as diagnosed elsewhere. EDMF area weighting is
-applied by the caller.
+not applied in machine learning cloud fracrtion.
 
 # Arguments
 

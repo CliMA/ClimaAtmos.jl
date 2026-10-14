@@ -266,54 +266,127 @@ floor_nt(
         end
     end
 
-    @testset "`isentropic_slope_ratio`: plain ratio with a stratification floor" begin
+    @testset "`along_surface_q_variance`: displacement on the θ surface" begin
         for FT in (Float32, Float64)
             @testset "FT = $FT" begin
-                r = CA.isentropic_slope_ratio
-                θz_min = FT(1e-3)
-                qz = FT(-2e-6)
-                @test r(qz, FT(4e-3), θz_min) == qz / FT(4e-3)          # stable: the true ratio
-                @test r(qz, θz_min, θz_min) == qz / θz_min               # at the floor
-                @test r(qz, FT(0), θz_min) == qz / θz_min                # neutral: floored, finite
-                @test r(qz, FT(-5e-3), θz_min) == qz / θz_min            # overturned: floored, same sign as q_z
-                @test sign(r(qz, FT(-5e-3), θz_min)) == sign(qz)
-                @test abs(r(qz, FT(1e-9), θz_min)) <= abs(qz) / θz_min
-                @test r(qz, FT(4e-3), θz_min) isa FT
+                var = CA.along_surface_q_variance
+                ℓ_h = FT(1e5)
+                ℓ_v = FT(500)
+                q_z = FT(-1e-6)
+                θ_z = FT(4e-3)
+                a = FT(1e-8)                       # |∇_h q|
+                # flat surface: horizontal displacement only
+                @test var(a^2, FT(0), FT(0), q_z, θ_z, ℓ_h, ℓ_v) ≈ ℓ_h^2 * a^2
+                # no surface at all: the unconstrained box
+                @test var(a^2, FT(0), FT(0), q_z, FT(0), ℓ_h, ℓ_v) ≈
+                      ℓ_h^2 * a^2 + ℓ_v^2 * q_z^2
+                # vertical surface with ∇_h q ∥ ∇_h θ: q changes with the
+                # vertical displacement only
+                gθ = FT(1e-6)
+                @test var(a^2, a * gθ, gθ^2, q_z, FT(0), ℓ_h, ℓ_v) ≈
+                      ℓ_v^2 * q_z^2
+                # vertical surface with ∇_h q ⊥ ∇_h θ: horizontal gradient kept
+                @test var(a^2, FT(0), gθ^2, q_z, FT(0), ℓ_h, ℓ_v) ≈
+                      ℓ_h^2 * a^2 + ℓ_v^2 * q_z^2
+                # parallel horizontal gradients: the along-surface gradient
+                # |∇_h q − r ∇_h θ|², r = q_z / θ_z, times the displacement
+                # cap 1 / (1 + (s ℓ_h / ℓ_v)²), s = |∇_h θ| / θ_z
+                for s_ in (FT(1e-3), FT(3e-3), FT(1e-2))
+                    gθ = s_ * θ_z
+                    r = q_z / θ_z
+                    x = s_ * ℓ_h / ℓ_v
+                    expected = ℓ_h^2 * (a - r * gθ)^2 / (1 + x^2)
+                    @test var(a^2, a * gθ, gθ^2, q_z, θ_z, ℓ_h, ℓ_v) ≈ expected rtol =
+                        FT(1e-4)
+                end
+                # bounded by the unconstrained variance, non-negative, finite
+                for θz in (FT(-2e-3), FT(0), FT(1e-6), FT(4e-3)),
+                    gθ in (FT(0), FT(1e-9), FT(1e-6))
+
+                    v = var(a^2, a * gθ / 2, gθ^2, q_z, θz, ℓ_h, ℓ_v)
+                    @test FT(0) <= v <= ℓ_h^2 * a^2 + ℓ_v^2 * q_z^2
+                    @test isfinite(v)
+                end
+                # no horizontal displacement: zero on a tilted surface, the
+                # vertical step on a vertical one
+                @test var(a^2, FT(0), FT(0), q_z, θ_z, FT(0), ℓ_v) ≈ FT(0) atol =
+                    eps(FT) * ℓ_v^2 * q_z^2
+                @test var(a^2, FT(0), FT(0), q_z, FT(0), FT(0), ℓ_v) ≈ ℓ_v^2 * q_z^2
+                @test var(a^2, FT(0), FT(0), q_z, θ_z, ℓ_h, ℓ_v) isa FT
             end
         end
     end
 
-    @testset "`isentropic_cell_cap`: along-surface segment bounded by the cell" begin
+    @testset "`across_surface_q_gradient`: q change per vertical step" begin
         for FT in (Float32, Float64)
             @testset "FT = $FT" begin
-                cap = CA.isentropic_cell_cap
-                θz_min = FT(1e-3)
-                Δx = FT(2.5e5)
+                qn = CA.across_surface_q_gradient
+                q_z = FT(-1e-6)
+                θ_z = FT(4e-3)
+                a = FT(1e-8)
+                gθ = FT(1e-6)
+                @test qn(FT(0), FT(0), q_z, θ_z) ≈ q_z            # flat surface
+                @test qn(a * gθ, gθ^2, q_z, FT(0)) === FT(0)      # vertical surface
+                @test qn(FT(0), FT(0), q_z, FT(0)) === FT(0)      # no surface
+                # tilted surface, ∇_h q ⊥ ∇_h θ: same sign as q_z, smaller
+                v = qn(FT(0), gθ^2, q_z, θ_z)
+                @test abs(v) < abs(q_z)
+                @test sign(v) == sign(q_z)
+                @test qn(a * gθ, gθ^2, q_z, θ_z) isa FT
+            end
+        end
+    end
+
+
+    @testset "`along_surface_q_variance` with a constant depth H" begin
+        for FT in (Float32, Float64)
+            @testset "FT = $FT" begin
+                along = CA.along_surface_q_variance
+                ℓ_h = FT(2.5e5)
                 Δz = FT(500)
-                # flat surface: no horizontal θ contrast ⇒ full Δx scale
-                @test cap(FT(0), FT(4e-3), θz_min, Δx, Δz) === FT(1)
-                # slope s = |∇θ| / θ_z; s Δx / Δz = 1 ⇒ factor 1/2
-                inv_θ = (FT(4e-3) * Δz / Δx)^2
-                @test cap(inv_θ, FT(4e-3), θz_min, Δx, Δz) ≈ FT(0.5)
-                # steep limit (|∇θ| = 1e-4 K/m, s Δx / Δz = 12.5): factor → (Δz θ_z / (|∇θ| Δx))²
-                inv_θ = FT(1e-8)
-                x = sqrt(inv_θ) / FT(4e-3) * Δx / Δz
-                @test cap(inv_θ, FT(4e-3), θz_min, Δx, Δz) ≈ 1 / (1 + x^2)
-                @test cap(inv_θ, FT(4e-3), θz_min, Δx, Δz) < FT(0.01)
-                @test cap(inv_θ, FT(4e-3), θz_min, Δx, Δz) ≈ 1 / x^2 rtol = FT(0.01)
-                # weaker stratification ⇒ steeper surface ⇒ smaller factor; floored
-                @test cap(inv_θ, FT(2e-3), θz_min, Δx, Δz) <
-                      cap(inv_θ, FT(4e-3), θz_min, Δx, Δz)
-                @test cap(inv_θ, FT(0), θz_min, Δx, Δz) ==
-                      cap(inv_θ, FT(-1e-3), θz_min, Δx, Δz)
-                @test cap(inv_θ, FT(0), θz_min, Δx, Δz) ==
-                      cap(inv_θ, θz_min, θz_min, Δx, Δz)
-                # bounded in (0, 1], finite, type-stable
-                @test all(
-                    FT(0) < cap(FT(v), FT(3e-3), θz_min, Δx, Δz) <= FT(1) for
-                    v in (0, 1e-14, 1e-10, 1e-8, 1e-6)
-                )
-                @test cap(FT(1e-10), FT(3e-3), θz_min, Δx, Δz) isa FT
+                q_z = FT(-2e-6)
+                θ_z = FT(4e-3)
+                a = FT(2e-8)   # parallel horizontal gradients of q and θ
+                b = FT(1e-5)
+                inv_q, inv_θ, inv_θq = a^2, b^2, a * b
+                r = q_z / θ_z
+                s = b / θ_z
+                # with the depth H as ℓ_v the conditional variance is the
+                # invariant times the cap H² / (H² + (s ℓ_h)²)
+                for H in (FT(200), FT(1000), FT(2000))
+                    expected = ℓ_h^2 * (a - r * b)^2 / (1 + (s * ℓ_h / H)^2)
+                    @test along(inv_q, inv_θq, inv_θ, q_z, θ_z, ℓ_h, H) ≈ expected rtol =
+                        1e-3
+                end
+                # a deeper displacement samples more of the surface; the
+                # 1-km default keeps most of the uncapped value on this slope
+                @test along(inv_q, inv_θq, inv_θ, q_z, θ_z, ℓ_h, FT(1000)) >
+                      along(inv_q, inv_θq, inv_θ, q_z, θ_z, ℓ_h, Δz)
+                @test along(inv_q, inv_θq, inv_θ, q_z, θ_z, ℓ_h, FT(1000)) >
+                      FT(0.7) * ℓ_h^2 * (a - r * b)^2
+                @test along(inv_q, inv_θq, inv_θ, q_z, θ_z, ℓ_h, FT(1000)) isa FT
+            end
+        end
+    end
+
+    @testset "`geometric_vertical_q_variance`: the vertical-displacement part" begin
+        for FT in (Float32, Float64)
+            @testset "FT = $FT" begin
+                V = CA.geometric_vertical_q_variance
+                ℓ_h, ℓ_a, ℓ_v = FT(2e5), FT(1000), FT(150)
+                q_z, θ_z = FT(-2e-6), FT(4e-3)
+                a, b = FT(1e-8), FT(2e-5)        # |∇_h q|, |∇_h θ| (parallel)
+                inv_q, inv_θq, inv_θ = a^2, a * b, b^2
+                # flat surface (no horizontal gradients): only the across term
+                @test V(FT(0), FT(0), FT(0), q_z, θ_z, ℓ_h, ℓ_a, ℓ_v) ≈ ℓ_v^2 * q_z^2
+                # vertical surface (θ_z = 0): the along-surface vertical part only
+                @test V(inv_q, inv_θq, inv_θ, q_z, FT(0), ℓ_h, ℓ_a, ℓ_v) ≈ ℓ_a^2 * q_z^2 rtol =
+                    FT(1e-5)
+                # ∇θ = 0: unconstrained vertical displacement, no across term
+                @test V(inv_q, FT(0), FT(0), q_z, FT(0), ℓ_h, ℓ_a, ℓ_v) ≈ ℓ_a^2 * q_z^2
+                # no depth and no box: nothing needs a vertical displacement
+                @test V(inv_q, inv_θq, inv_θ, q_z, θ_z, ℓ_h, FT(0), FT(0)) == FT(0)
+                @test V(inv_q, inv_θq, inv_θ, q_z, θ_z, ℓ_h, ℓ_a, ℓ_v) isa FT
             end
         end
     end

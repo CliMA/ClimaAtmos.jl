@@ -1,4 +1,4 @@
-427
+432
 
 # **README**
 #
@@ -32,6 +32,25 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+432
+- Combine the geometric vertical-displacement SGS variance with the turbulent block as a maximum
+  instead of their sum.
+
+431
+- Fix sgs variance fidelity: estimate qc_eq by using the Gaussian approximation of eq condensate
+- Restore per-subdomain QuadratureCloud: env condensate + EDMF updraft weighting.
+
+430
+- Snow falls at the Chen et al. (2022) speed by default; snow_apparent_density 300
+
+429
+- Local SGS variance fidelity α(TKE, l_mix, τ_mp, q_c/q_c^eq).
+
+428
+- Geometric SGS variance as a conditional parcel displacement on the
+  θ_li surface
+- Update to CloudMicrophysics v0.45 (joint relaxation of the vapor-driven phase changes is the default)
+
 427
 - Change the horizontal geometric SGS variance term to the isentropic form
 
