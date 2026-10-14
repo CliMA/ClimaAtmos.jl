@@ -40,6 +40,7 @@ AllSkyRadiation
   ├─ cloud = ClimaAtmos.InteractiveCloudInRadiation()
   ├─ add_isothermal_boundary_layer = true
   ├─ aerosol_radiation = false
+  ├─ include_snow = false
   ├─ reset_rng_seed = false
   └─ deep_atmosphere = true
 ```
