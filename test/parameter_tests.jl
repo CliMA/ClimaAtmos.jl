@@ -120,6 +120,7 @@ end
         @test CAP.sgs_variance_geometric_coeff(sq) == FT(1 // 12)
         @test CAP.sgs_variance_max_rel_std(sq) == FT(0.5)
         @test CAP.sgs_variance_isentropic_depth(sq) == FT(1000)
+        @test CAP.sgs_variance_saturation_distance_factor(sq) == FT(0.5)
         @test CAP.sgs_liquid_uniform_fraction(sq) == FT(1)
         @test CAP.sgs_ice_uniform_fraction(sq) == FT(1)
     end

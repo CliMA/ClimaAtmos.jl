@@ -3,11 +3,21 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
-- ![][badge-🔥behavioralΔ] The part of the geometric SGS variance block that
-  needs a vertical displacement (the along-surface variance beyond its
-  along-contour part, plus the across-surface uniform-box terms) and the
-  turbulent block's vertical-displacement variance are combined as the larger
-  of the two instead of their sum.
+- ![][badge-🔥behavioralΔ] The displacement along the `θ_li` surface in the
+  resolved-gradient SGS variance block is capped at `c_d` times the distance to
+  saturation, the along-surface distance at which the extrapolated origin
+  state saturates: `σ²_along = V min(1, (c_d S)²/V′)`, with `V` the
+  along-surface `q_tot` variance, `V′` the same for the origin's saturation
+  excess (the vertical gradient reduced by the dry-adiabatic
+  `∂_z q_sat|_ad`, `adiabatic_q_sat_gradient`) and `S` the cell's saturation
+  excess. Stirring along humidity gradients keeps its variance where the air is
+  far from saturation, and parcels sliding up a sloped isentrope still arrive
+  supersaturated. New provisional parameter
+  `sgs_variance_saturation_distance_factor` (default 0.5).
+- ![][badge-🔥behavioralΔ] The geometric SGS variance block (the capped
+  along-surface variance plus the across-surface uniform-box terms) and the
+  turbulent block are combined as the larger of the two instead of their sum,
+  for `q′q′` and `θ′θ′` alike; `geometric_vertical_q_variance` is removed.
 - ![][badge-🔥behavioralΔ] Cloud fraction: restore the per-subdomain closure
   for `PrognosticEDMFX`. The `QuadratureCloud` cover is again evaluated with
   the environment condensate (`_get_condensate_means`, consistent with the

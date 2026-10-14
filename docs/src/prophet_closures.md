@@ -583,7 +583,35 @@ there is no surface and the unconstrained variance is used.
 
 The vertical scale of the along-surface displacement is the depth ``H`` of
 the unresolved slantwise motion (`sgs_variance_isentropic_depth`), used in
-place of ``\ell_v`` in the conditional variance above.
+place of ``\ell_v`` in the conditional variance above and in the bound
+below.
+
+The displacement is then capped at ``c_d`` times the distance to saturation
+(`sgs_variance_saturation_distance_factor`). In the advection–condensation
+model, the distance to saturation is the along-isentrope distance a parcel
+must travel before it saturates, and condensation scales with the probability
+that the displacement exceeds it. Here it is the local linear estimate: a
+parcel arrives with its origin's ``q_t`` and the cell's ``q_s``, so a clear
+origin, ``S_{\mathrm{origin}} = q_t - q_s \le 0``, bounds the saturation excess
+it can bring. On the surface ``\theta_{li}`` is constant and ``q_s`` changes
+with height alone, at the dry-adiabatic rate ``\partial_z q_s|_{\mathrm{ad}}``
+(about ``-6 \times 10^{-4} q_s`` per metre at 270 K), so the origin excess has
+the along-surface variance ``V'`` of the expression above with
+``\partial_z q_t - \partial_z q_s|_{\mathrm{ad}}`` in place of
+``\partial_z q_t``. With ``S`` the cell's saturation excess,
+
+```math
+\sigma_{q,\parallel}^2 = V \, \min\left(1, \frac{(c_d S)^2}{V'}\right) .
+```
+
+For a flat surface ``V' = V`` and the cap is ``(c_d S)^2``: stirring along
+humidity gradients keeps its variance until origins would saturate, so the
+dry subtropics keep the full variance and the humid tropics a reduced one.
+For a sloped surface along which the humidity is uniform ``V' = 0`` and there
+is no cap: every origin is clear by the same margin, yet parcels from below
+arrive with more ``q_t`` than the cell's ``q_s`` and condense, which is the
+isentropic condensation mechanism. The default ``c_d = 1/2`` leaves 2 % of the
+along-surface mass past saturation.
 
 Across the surface, the vertical displacement ``\ell_v`` has the component
 ``\ell_v \, \partial_z \theta_{li} / |\nabla \theta_{li}|`` along the surface
@@ -608,7 +636,13 @@ are orthogonal, so each displacement is counted once. The across-surface part
 keeps ``\sigma_T^2``, ``\sigma_q^2`` non-zero where the turbulent closure
 collapses, so the quadrature integrand retains in-cell variability in laminar
 cells and single-column configurations. ``c_{\Delta x} = 0`` removes the
-horizontal displacement and ``c_{\Delta z} = 0`` the vertical one.
+horizontal displacement and ``c_{\Delta z} = 0`` the vertical one. The
+geometric block and the turbulent block are two estimates of the variance
+from the vertical eddy displacement, so the larger of the two is kept for
+each of ``\sigma_q^2`` and ``\sigma_\theta^2``; in a neutral layer the
+``\theta_{li}`` surface is vertical and both describe the same motion, while
+in the stable free troposphere the mixing length is metres against the
+kilometre depth ``H`` and the geometric estimate is the larger.
 
 The total-water standard deviation is then bounded by ``\sigma_q \le r_{\max} q_t`` (``r_{\max} = 0.5``),
 because a wider Gaussian places a quadrature node at negative total water, and

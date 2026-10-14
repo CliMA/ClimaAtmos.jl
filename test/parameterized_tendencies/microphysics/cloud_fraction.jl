@@ -18,6 +18,8 @@ Tests cover:
 using Test
 using ClimaAtmos
 import ClimaAtmos as CA
+import ClimaAtmos.Parameters as CAP
+import Thermodynamics as TD
 
 floor_nt(
     ::Type{FT};
@@ -269,12 +271,14 @@ floor_nt(
     @testset "`along_surface_q_variance`: displacement on the θ surface" begin
         for FT in (Float32, Float64)
             @testset "FT = $FT" begin
-                var = CA.along_surface_q_variance
+                var0 = CA.along_surface_q_variance
                 ℓ_h = FT(1e5)
                 ℓ_v = FT(500)
                 q_z = FT(-1e-6)
                 θ_z = FT(4e-3)
                 a = FT(1e-8)                       # |∇_h q|
+                # a saturation excess of 1 leaves the cap inactive
+                var(args...) = var0(args[1:5]..., FT(0), FT(1), FT(1), args[6:7]...)
                 # flat surface: horizontal displacement only
                 @test var(a^2, FT(0), FT(0), q_z, θ_z, ℓ_h, ℓ_v) ≈ ℓ_h^2 * a^2
                 # no surface at all: the unconstrained box
@@ -317,6 +321,72 @@ floor_nt(
         end
     end
 
+    @testset "`along_surface_q_variance`: displacement capped at the distance to saturation" begin
+        for FT in (Float32, Float64)
+            @testset "FT = $FT" begin
+                var = CA.along_surface_q_variance
+                ℓ_h = FT(1e5)
+                ℓ_v = FT(500)
+                q_z = FT(-1e-6)
+                θ_z = FT(4e-3)
+                a = FT(1e-8)
+                q_sat_z = FT(-6e-6)               # 10 g/kg at −6e-4 /m
+                c_d = FT(0.5)
+                # flat surface: V = V′ = ℓ_h² a², capped at (c_d S)²
+                V = ℓ_h^2 * a^2
+                @test var(a^2, FT(0), FT(0), q_z, θ_z, q_sat_z, FT(-1e-4), c_d, ℓ_h, ℓ_v) ≈
+                      (c_d * FT(1e-4))^2
+                @test var(a^2, FT(0), FT(0), q_z, θ_z, q_sat_z, FT(1e-4), c_d, ℓ_h, ℓ_v) ≈
+                      (c_d * FT(1e-4))^2            # cloudy cell: |S|
+                @test var(a^2, FT(0), FT(0), q_z, θ_z, q_sat_z, FT(0), c_d, ℓ_h, ℓ_v) ===
+                      FT(0)                          # at saturation
+                @test var(a^2, FT(0), FT(0), q_z, θ_z, q_sat_z, FT(-1e-2), c_d, ℓ_h, ℓ_v) ≈
+                      V                              # far from saturation
+                # sloped surface, humidity uniform along it (∂_z q = q_sat_z,
+                # no horizontal q gradient): V′ = 0, no cap however small S
+                gθ = FT(1e-5)
+                v = var(FT(0), FT(0), gθ^2, q_sat_z, θ_z, q_sat_z, FT(-1e-9), c_d, ℓ_h, ℓ_v)
+                x = gθ / θ_z * ℓ_h / ℓ_v
+                @test v ≈ ℓ_v^2 * q_sat_z^2 * x^2 / (1 + x^2) rtol = FT(1e-4)
+                # the cap only lowers the variance
+                for S in (FT(-1e-3), FT(-1e-4), FT(-1e-5), FT(1e-5))
+                    v = var(a^2, a * gθ, gθ^2, q_z, θ_z, q_sat_z, S, c_d, ℓ_h, ℓ_v)
+                    @test FT(0) <= v <=
+                          var(a^2, a * gθ, gθ^2, q_z, θ_z, FT(0), FT(1), FT(1), ℓ_h, ℓ_v)
+                end
+                @test var(
+                    a^2,
+                    a * gθ,
+                    gθ^2,
+                    q_z,
+                    θ_z,
+                    q_sat_z,
+                    FT(-1e-4),
+                    c_d,
+                    ℓ_h,
+                    ℓ_v,
+                ) isa FT
+            end
+        end
+    end
+
+    @testset "`adiabatic_q_sat_gradient`: q_sat falls along a dry adiabat" begin
+        for FT in (Float32, Float64)
+            @testset "FT = $FT" begin
+                thermo_params = CAP.thermodynamics_params(CA.ClimaAtmosParameters(FT))
+                T = FT(270)
+                ρ = FT(1)
+                q_tot = FT(5e-3)
+                q_sat = TD.q_vap_saturation(thermo_params, T, ρ)
+                dq = CA.adiabatic_q_sat_gradient(thermo_params, T, ρ, q_tot, FT(0), FT(0))
+                @test dq < FT(0)
+                # about −6e-4 q_sat per metre at 270 K
+                @test -FT(8e-4) * q_sat < dq < -FT(4e-4) * q_sat
+                @test dq isa FT
+            end
+        end
+    end
+
     @testset "`across_surface_q_gradient`: q change per vertical step" begin
         for FT in (Float32, Float64)
             @testset "FT = $FT" begin
@@ -341,7 +411,10 @@ floor_nt(
     @testset "`along_surface_q_variance` with a constant depth H" begin
         for FT in (Float32, Float64)
             @testset "FT = $FT" begin
-                along = CA.along_surface_q_variance
+                along0 = CA.along_surface_q_variance
+                # a saturation excess of 1 leaves the cap inactive
+                along(args...) =
+                    along0(args[1:5]..., FT(0), FT(1), FT(1), args[6:7]...)
                 ℓ_h = FT(2.5e5)
                 Δz = FT(500)
                 q_z = FT(-2e-6)
@@ -365,28 +438,6 @@ floor_nt(
                 @test along(inv_q, inv_θq, inv_θ, q_z, θ_z, ℓ_h, FT(1000)) >
                       FT(0.7) * ℓ_h^2 * (a - r * b)^2
                 @test along(inv_q, inv_θq, inv_θ, q_z, θ_z, ℓ_h, FT(1000)) isa FT
-            end
-        end
-    end
-
-    @testset "`geometric_vertical_q_variance`: the vertical-displacement part" begin
-        for FT in (Float32, Float64)
-            @testset "FT = $FT" begin
-                V = CA.geometric_vertical_q_variance
-                ℓ_h, ℓ_a, ℓ_v = FT(2e5), FT(1000), FT(150)
-                q_z, θ_z = FT(-2e-6), FT(4e-3)
-                a, b = FT(1e-8), FT(2e-5)        # |∇_h q|, |∇_h θ| (parallel)
-                inv_q, inv_θq, inv_θ = a^2, a * b, b^2
-                # flat surface (no horizontal gradients): only the across term
-                @test V(FT(0), FT(0), FT(0), q_z, θ_z, ℓ_h, ℓ_a, ℓ_v) ≈ ℓ_v^2 * q_z^2
-                # vertical surface (θ_z = 0): the along-surface vertical part only
-                @test V(inv_q, inv_θq, inv_θ, q_z, FT(0), ℓ_h, ℓ_a, ℓ_v) ≈ ℓ_a^2 * q_z^2 rtol =
-                    FT(1e-5)
-                # ∇θ = 0: unconstrained vertical displacement, no across term
-                @test V(inv_q, FT(0), FT(0), q_z, FT(0), ℓ_h, ℓ_a, ℓ_v) ≈ ℓ_a^2 * q_z^2
-                # no depth and no box: nothing needs a vertical displacement
-                @test V(inv_q, inv_θq, inv_θ, q_z, θ_z, ℓ_h, FT(0), FT(0)) == FT(0)
-                @test V(inv_q, inv_θq, inv_θ, q_z, θ_z, ℓ_h, ℓ_a, ℓ_v) isa FT
             end
         end
     end
