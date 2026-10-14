@@ -100,12 +100,8 @@ function setup_diagnostics_and_writers(
 
     # Add default diagnostics if enabled
     if default
-        # `t_end` is relative to `start_date`, so this is the length of the whole
-        # experiment even on a restart segment. Do not reduce it: `frequency_averages`
-        # thresholds are inclusive, so `- dt` drops a run ending exactly on a boundary
-        # into the next finer bucket, and `- t_start` would make the cadence depend on
-        # where a run resumes, which accumulators carried across a checkpoint cannot
-        # absorb.
+        # Measured from `start_date`, so a restart segment is bucketed by the length
+        # of the whole experiment rather than by what is left of it.
         sim_duration = t_end
         default_diag_list = CAD.default_diagnostics(
             model,
@@ -122,7 +118,7 @@ function setup_diagnostics_and_writers(
 
     # Add debug tendency diagnostics if enabled
     if debug_tendency
-        sim_duration = t_end  # as above: relative to `start_date`, never reduced
+        sim_duration = t_end
         tendency_diag_list = CAD.tendency_debug_default_diagnostics(
             netcdf_writer,
             sim_duration,

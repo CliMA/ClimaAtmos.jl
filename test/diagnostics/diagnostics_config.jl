@@ -77,9 +77,8 @@ end
 end
 
 @testset "Default diagnostics cadence at exact threshold boundaries" begin
-    # `frequency_averages` thresholds are inclusive, so a run landing exactly on one
-    # must get the coarser cadence. Reducing the duration before bucketing breaks
-    # that: `t_end - dt` put every boundary-exact run one bucket too fine.
+    # `frequency_averages` thresholds are inclusive, so a duration landing exactly
+    # on one selects the coarser cadence.
     cadence(duration) = CAD.extract_diagnostic_periods(
         CAD.frequency_averages(duration)(
             "ta";
@@ -94,8 +93,7 @@ end
     @test cadence(86400.0) == Set([Day(1)])
     @test cadence(3600.0) == Set([Hour(1)])
 
-    # One timestep short of a boundary is the next bucket down, which is what a run
-    # ending exactly on the boundary used to be given.
+    # One timestep short of a boundary selects the next cadence down.
     @test cadence(30 * 86400.0 - 30) == Set([Day(1)])
     @test cadence(86400.0 - 30) == Set([Hour(1)])
     @test isempty(cadence(3600.0 - 30))
