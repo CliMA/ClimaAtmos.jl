@@ -99,9 +99,4 @@ end
     @test cadence(30 * 86400.0 - 30) == Set([Day(1)])
     @test cadence(86400.0 - 30) == Set([Hour(1)])
     @test isempty(cadence(3600.0 - 30))
-
-    # So the duration must be the length of the run, including for a restart segment
-    # that ends on a boundary but does not start at zero.
-    @test CAD.diagnostics_duration(0.0, 86400.0) == 86400.0
-    @test CAD.diagnostics_duration(85 * 86400.0, 90 * 86400.0) == 5 * 86400.0
 end

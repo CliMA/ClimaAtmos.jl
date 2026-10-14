@@ -225,19 +225,6 @@ end
 include("standard_diagnostic_frequencies.jl")
 
 """
-    diagnostics_duration(t_start, t_end)
-
-Length of the simulated window, for selecting a default diagnostics cadence.
-
-This is `t_end - t_start` and must stay that way. `frequency_averages` compares the
-result against inclusive thresholds, so subtracting anything else -- a timestep, say --
-drops a run that ends exactly on a boundary into the next finer bucket. Using `t_end`
-alone is also wrong: it buckets a restart segment by the date it stops at rather than by
-how long it runs.
-"""
-diagnostics_duration(t_start, t_end) = t_end - t_start
-
-"""
     frequency_averages(duration)
 
 Return the time-averaging helper appropriate to the total simulation length.
