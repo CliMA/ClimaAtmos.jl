@@ -106,8 +106,10 @@ Sedimentation and tracer positivity:
 
 ```@docs
 ClimaAtmos.AbstractTerminalVelocityMode
-ClimaAtmos.DiagnosticTerminalVelocity
 ClimaAtmos.FixedTerminalVelocity
+ClimaAtmos.StokesTerminalVelocity
+ClimaAtmos.Blk1MTerminalVelocity
+ClimaAtmos.Chen2022TerminalVelocity
 ClimaAtmos.TracerNonnegativityMethod
 ClimaAtmos.TracerNonnegativityElementConstraint
 ClimaAtmos.TracerNonnegativityVaporConstraint

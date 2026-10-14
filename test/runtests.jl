@@ -98,6 +98,7 @@ if TEST_GROUP in ("parameterizations", "all")
     # Microphysics tests
     @safetestset "Microphysics tendency tests" begin @time include("parameterized_tendencies/microphysics/tendency.jl") end
     @safetestset "Microphysics wrappers tests" begin @time include("parameterized_tendencies/microphysics/microphysics_wrappers.jl") end
+    @safetestset "Terminal velocity tests" begin @time include("parameterized_tendencies/microphysics/terminal_velocity.jl") end
     @safetestset "SGS quadrature tests" begin @time include("parameterized_tendencies/microphysics/sgs_quadrature.jl") end
     @safetestset "SGS moments tests" begin @time include("parameterized_tendencies/microphysics/sgs_moments.jl") end
     @safetestset "Tendency limiters tests" begin @time include("parameterized_tendencies/microphysics/tendency_limiters.jl") end

@@ -740,10 +740,14 @@ function update_implicit_microphysics_cache!(
     # Leaving updraft velocities at their explicit-stage values treats the
     # nonlinear part of the sedimentation flux explicitly.
     # No number of Newton iterations can correct a field that nothing updates.
-    if p.atmos.terminal_velocity_liquid isa DiagnosticTerminalVelocity ||
-       p.atmos.terminal_velocity_ice isa DiagnosticTerminalVelocity ||
-       p.atmos.terminal_velocity_rain isa DiagnosticTerminalVelocity ||
-       p.atmos.terminal_velocity_snow isa DiagnosticTerminalVelocity
+    # Every mode other than `FixedTerminalVelocity` depends on the state.
+    modes = (
+        p.atmos.terminal_velocity_liquid,
+        p.atmos.terminal_velocity_ice,
+        p.atmos.terminal_velocity_rain,
+        p.atmos.terminal_velocity_snow,
+    )
+    if !all(mode -> mode isa FixedTerminalVelocity, modes)
         set_precipitation_velocities!(Y, p, mm, tm)
     end
     set_precipitation_surface_fluxes!(Y, p, mm)

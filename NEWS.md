@@ -3,6 +3,13 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- ![][badge-🔥behavioralΔ] One config key per species selects the sedimentation velocity of the
+  1M microphysics tracers. `DiagnosticTerminalVelocity` is replaced by the closure-named modes
+  `StokesTerminalVelocity`, `Blk1MTerminalVelocity` and `Chen2022TerminalVelocity`.
+- ![][badge-✨feature/enhancement] Adding Chen et al. (2022) fall speeds for rain and snow
+- ![][badge-🔥behavioralΔ] Snow falls at the Chen et al. (2022) speed by default
+  `toml/prognostic_edmfx_1M.toml` sets `snow_apparent_density` to 300 kg/m³.
+   Rain falls at fixed terminal velocity.
 - ![][badge-🔥behavioralΔ] The along-surface depth of the geometric SGS
   variance block is bounded by the height above the surface,
   `ℓ_a = min(H, z − z_sfc)`: in a neutral layer the along-surface
