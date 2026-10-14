@@ -607,9 +607,11 @@ Otherwise:
 Any other value raises an error. The RRTMGP modes also read `idealized_h2o`,
 `idealized_clouds`, `prescribe_clouds_in_radiation` (through
 `get_cloud_in_radiation`), `add_isothermal_boundary_layer`, `aerosol_radiation`,
-`radiation_reset_rng_seed`, and `deep_atmosphere`; `idealized_clouds` and prescribed
-clouds are mutually exclusive, and the cloud-related keys warn when used with a
-non-all-sky mode.
+`radiation_reset_rng_seed`, `radiation_include_snow`, and `deep_atmosphere`;
+`idealized_clouds` and prescribed clouds are mutually exclusive, the cloud-related keys
+warn when used with a non-all-sky mode, and `radiation_include_snow` additionally requires
+an all-sky mode and a snow-carrying microphysics model (enforced in
+`check_case_consistency`).
 """
 function get_radiation_mode(parsed_args, ::Type{FT}; setup_components) where {FT}
     radiation_name = parsed_args["rad"]
@@ -629,8 +631,12 @@ function get_radiation_mode(parsed_args, ::Type{FT}; setup_components) where {FT
     aerosol_radiation = parsed_args["aerosol_radiation"]
     reset_rng_seed = parsed_args["radiation_reset_rng_seed"]
     deep_atmosphere = parsed_args["deep_atmosphere"]
+    include_snow = parsed_args["radiation_include_snow"]
     if !(radiation_name in ("allsky", "allskywithclear")) && reset_rng_seed
         @warn "reset_rng_seed does not have any effect with $radiation_name radiation option"
+    end
+    if !(radiation_name in ("allsky", "allskywithclear")) && include_snow
+        @warn "radiation_include_snow does not have any effect with $radiation_name radiation option"
     end
     if !(radiation_name in ("allsky", "allskywithclear")) &&
        (cloud isa PrescribedCloudInRadiation)
@@ -655,6 +661,7 @@ function get_radiation_mode(parsed_args, ::Type{FT}; setup_components) where {FT
             cloud,
             add_isothermal_boundary_layer,
             aerosol_radiation,
+            include_snow,
             reset_rng_seed,
             deep_atmosphere,
         )
@@ -665,6 +672,7 @@ function get_radiation_mode(parsed_args, ::Type{FT}; setup_components) where {FT
             cloud,
             add_isothermal_boundary_layer,
             aerosol_radiation,
+            include_snow,
             reset_rng_seed,
             deep_atmosphere,
         )
@@ -1086,6 +1094,27 @@ function check_case_consistency(parsed_args)
         @assert(
             microphysics != "dry",
             "ISDAC requires a moist microphysics model (got `microphysics_model = \"dry\"`)",
+        )
+    end
+
+    # Snow-in-radiation (radiation_include_snow) reuses the ice optics as a placeholder.
+    # It needs a microphysics scheme that carries prognostic snow (q_sno) and the all-sky
+    # radiation that computes cloud optics, and cannot draw snow from ERA5-prescribed
+    # clouds (which carry none).
+    if parsed_args["radiation_include_snow"]
+        @assert(
+            parsed_args["rad"] in ("allsky", "allskywithclear"),
+            "radiation_include_snow requires rad = \"allsky\" or \"allskywithclear\" \
+             (got $(repr(parsed_args["rad"])))"
+        )
+        @assert(
+            microphysics == ("1M", "2M"),
+            "radiation_include_snow needs a microphysics_model with prognostic snow; so
+            must be \"1M\" or \"2M\"
+        @assert(
+            parsed_args["prescribe_clouds_in_radiation"] != true,
+            "radiation_include_snow is not supported with prescribe_clouds_in_radiation \
+             (ERA5-prescribed clouds carry no snow)"
         )
     end
 
