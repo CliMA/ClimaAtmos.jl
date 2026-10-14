@@ -92,8 +92,10 @@ Build the `AtmosNumerics` group from the numerics config keys.
 
 Reads the upwinding schemes (`energy_q_tot_upwinding`, `tracer_upwinding`,
 `edmfx_mse_q_tot_upwinding`, `edmfx_sgsflux_upwinding`, `edmfx_tracer_upwinding`, each
-converted to a `Symbol`), the `apply_sem_quasimonotone_limiter`,
-`test_dycore_consistency`, and `reproducible_restart` switches, `implicit_diffusion`
+converted to a `Symbol`), the limiter (`apply_zhang_shu_limiter`, with its floors
+`zhang_shu_rho_min` and `zhang_shu_p_min`, or `apply_sem_quasimonotone_limiter`;
+the two are mutually exclusive), the `test_dycore_consistency` and
+`reproducible_restart` switches, `implicit_diffusion`
 (which selects `Implicit` or `Explicit` diffusion), and the hyperdiffusion model from
 `get_hyperdiffusion_model`. `vanleer_limiter` upwinding falls back to `:none` with a
 warning on ClimaCore versions older than 0.14.22.
@@ -404,7 +406,7 @@ mesh warping; any other combination raises an error. Called through
 """
 function get_steady_state_velocity(params, Y, topo, initial_condition, mesh_warp_type)
     initial_condition == "ConstantBuoyancyFrequencyProfile" &&
-    mesh_warp_type == "Linear" ||
+        mesh_warp_type == "Linear" ||
         error("The steady-state velocity can currently be computed only for a \
                ConstantBuoyancyFrequencyProfile with Linear mesh warping")
     top_level = Spaces.nlevels(axes(Y.c)) + Fields.half

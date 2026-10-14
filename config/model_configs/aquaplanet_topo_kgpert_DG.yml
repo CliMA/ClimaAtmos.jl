@@ -4,6 +4,7 @@ dg_volume_flux: "kg_pert"
 dg_interface_flux: "roe"
 hyperdiff: ~
 apply_zhang_shu_limiter: true
+update_constrain_state_every: "stage"
 config: "sphere"
 h_elem: 60
 z_elem: 63

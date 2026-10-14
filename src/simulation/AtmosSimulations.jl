@@ -278,7 +278,8 @@ entry point for simulations written as scripts; configuration-driven runs go thr
   - `debug_jacobian = false`: Print Jacobian diagnostics while solving.
   - `update_cache_every = "stage"`: When the cache is refreshed, `"stage"` or `"step"`.
   - `update_constrain_state_every = "step"`: When state constraints are applied,
-    `"stage"`, `"step"`, or `"dss"`.
+    `"stage"`, `"step"`, or `"dss"`. A model with a `ZhangShuLimiter` needs
+    `"stage"` or `"dss"`.
 
 ### Diagnostics helpers
 
@@ -348,6 +349,17 @@ function AtmosSimulation(
 
     # Log only on root process
     verbose = ClimaComms.iamroot(context) && verbose
+
+    # The Zhang–Shu limiter runs in `constrain_state!`; at the "step" cadence
+    # the intermediate stage values, on which the tendencies are evaluated,
+    # would go unlimited.
+    model.numerics.limiter isa ZhangShuLimiter &&
+        update_constrain_state_every == "step" &&
+        error(
+            "apply_zhang_shu_limiter requires update_constrain_state_every = \
+             \"stage\" or \"dss\", so that every stage value is limited; \
+             got \"step\"",
+        )
 
     # Set up output directory and restart file detection
     output_dir, restart_file = setup_output_dir(

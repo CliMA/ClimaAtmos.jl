@@ -1792,16 +1792,18 @@ neighborhood. Selected by `apply_sem_quasimonotone_limiter: true`.
 struct QuasiMonotoneLimiter end # For dispatching to use the ClimaCore QuasiMonotoneLimiter.
 
 """
-    ZhangShuLimiter(; ρ_min, p_min)
+    ZhangShuLimiter{FT}(ρ_min, p_min)
 
-Marker selecting ClimaCore's Zhang–Shu (2010) `PositivityLimiter`: per RK
-stage, ρ and ρq_tot are each scaled at every node toward their WJ-weighted
-element mean to enforce ρ ≥ ρ_min and ρq_tot ≥ 0, then the grid-mean conserved
-vector (ρ, ρe_tot, ρuₕ[, ρq_tot]) is scaled toward its mean by one θ ∈ [0, 1]
-enforcing p ≥ p_min — mean-preserving convex combinations, not pointwise
-clamps. Intended for DG horizontal discretizations, whose transport is not
-sign-preserving at nodes. Selected by `apply_zhang_shu_limiter: true`, with the
-floors from `zhang_shu_rho_min` and `zhang_shu_p_min`.
+Marker selecting ClimaCore's Zhang–Shu (2010) `PositivityLimiter`, applied in
+`constrain_state!` to every stage value: ρ and each grid-mean tracer are scaled
+at every node toward their WJ-weighted element mean to enforce ρ ≥ ρ_min and
+ρχ ≥ 0, then the grid-mean conserved vector (ρ, ρe_tot, ρuₕ, tracers) is scaled
+toward its mean by one θ ∈ [0, 1] enforcing p ≥ p_min — mean-preserving convex
+combinations, not pointwise clamps. Intended for DG horizontal discretizations,
+whose transport is not sign-preserving at nodes. Selected by
+`apply_zhang_shu_limiter: true` (with `update_constrain_state_every` `"stage"`
+or `"dss"`), with the floors from `zhang_shu_rho_min` [kg/m³] and
+`zhang_shu_p_min` [Pa].
 """
 struct ZhangShuLimiter{FT}
     ρ_min::FT
@@ -1967,7 +1969,7 @@ types for compile-time dispatch.
   - `test_dycore_consistency = false`: Pass `true` to fill the cache with `NaN`s.
   - `reproducible_restart = false`: Pass `true` for reproducible restarts.
   - `limiter = nothing`: Pass `QuasiMonotoneLimiter()` to limit horizontal tracer
-    transport, or `ZhangShuLimiter(...)` for per-stage positivity of the
+    transport, or `ZhangShuLimiter{FT}(ρ_min, p_min)` for per-stage positivity of the
     conserved vector.
   - `diff_mode = Explicit()`: Timestepping mode for vertical diffusion.
   - `hyperdiff`: Hyperdiffusion model; defaults to a `Float32` `Hyperdiffusion`

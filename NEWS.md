@@ -22,16 +22,17 @@ main
   (ClimaCore's `Limiters.PositivityLimiter`), enabled by the opt-in
   `apply_zhang_shu_limiter` config option (default `false`, mutually exclusive
   with `apply_sem_quasimonotone_limiter`), with floors `zhang_shu_rho_min`
-  (default `1e-6`) and `zhang_shu_p_min` (default `1e-2`). Once per RK stage,
-  ρ and ρq_tot are each scaled at every node toward their WJ-weighted element
-  mean to meet the density and tracer floors, then each element's conserved
-  vector (ρ, ρe_tot, orthonormal ρuₕ, and ρq_tot when present) is scaled toward
-  its mean by one θ ∈ [0, 1] meeting the pressure floor (on a dry ideal-gas
-  proxy of the EOS, via per-node bisection) — mean-preserving convex
-  combinations, not pointwise clamps.
+  (default `1e-6`) and `zhang_shu_p_min` (default `1e-2`). Applied in
+  `constrain_state!` to every complete stage value, so it requires
+  `update_constrain_state_every: "stage"` (or `"dss"`). ρ and each grid-mean
+  tracer are scaled at every node toward their WJ-weighted element mean to meet
+  the density and nonnegativity floors, then each element's conserved vector
+  (ρ, ρe_tot, orthonormal ρuₕ, and the tracers) is scaled toward its mean by one
+  θ ∈ [0, 1] meeting the pressure floor (on a concave lower bound of the moist
+  pressure, via per-node bisection) — mean-preserving convex combinations, not
+  pointwise clamps.
   Intended for DG horizontal discretizations, whose transport is not
-  sign-preserving at nodal values; enabled in `aquaplanet_dg.yml` and
-  `edonly_edmfx_aquaplanet_dg.yml`.
+  sign-preserving at nodal values; enabled in `aquaplanet_topo_kgpert_DG.yml`.
 
 0.42.13
 -------
