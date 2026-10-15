@@ -151,6 +151,60 @@ end
     end
 end
 
+@testset "0M updraft precipitation parameters" begin
+    m0 = CA.EquilibriumMicrophysics0M()
+    for FT in (Float32, Float64)
+        # The ClimaParams defaults give the updrafts the grid-mean parameters.
+        params = CA.ClimaAtmosParameters(
+            CP.create_toml_dict(FT);
+            microphysics_model = m0,
+        )
+        (; precip, precip_updraft) = CAP.microphysics_0m_params(params)
+        @test precip_updraft == precip
+        @test precip_updraft.τ_precip isa FT
+
+        # The updraft timescale is the ratio times the grid-mean timescale;
+        # the thresholds are shared.
+        toml_dict = CP.create_toml_dict(
+            FT;
+            override_file = Dict(
+                "precipitation_timescale_updraft_ratio" =>
+                    Dict("value" => 0.25, "type" => "float"),
+            ),
+        )
+        params = CA.ClimaAtmosParameters(toml_dict; microphysics_model = m0)
+        mp0 = CAP.microphysics_0m_params(params)
+        @test mp0.precip_updraft.τ_precip ≈ FT(0.25) * precip.τ_precip
+        @test mp0.precip_updraft.S_0 === mp0.precip.S_0
+        @test mp0.precip_updraft.qc_0 === mp0.precip.qc_0
+        @test mp0.precip == precip
+        @test "CloudMicrophysics" in
+              toml_dict.data["precipitation_timescale_updraft_ratio"]["used_in"]
+    end
+
+    # The key also reaches the parameters through a run toml.
+    mktemp() do path, io
+        write(
+            io,
+            """
+  [precipitation_timescale]
+  value = 1000.0
+
+  [precipitation_timescale_updraft_ratio]
+  value = 0.3
+  """,
+        )
+        flush(io)
+        config = CA.AtmosConfig(
+            Dict("toml" => [path], "microphysics_model" => "0M"),
+            job_id = "parameter_test_0m_updraft",
+        )
+        mp0 = CAP.microphysics_0m_params(CA.ClimaAtmosParameters(config))
+        @test mp0.precip.τ_precip == 1000
+        @test mp0.precip_updraft.τ_precip ≈ 300
+    end
+end
+
 @testset "AtmosConfig Parameter Overrides" begin
     # Test overriding a parameter via configuration logic
     # CA.AtmosConfig merges dicts into the parameters
@@ -194,5 +248,46 @@ end
         config = CA.AtmosConfig(config_dict, job_id = "parameter_test_toml_$(index)")
 
         @test CA.ClimaAtmosParameters(config) isa CAP.ClimaAtmosParameters
+    end
+end
+
+@testset "0M precipitation evaporation parameters" begin
+    m0 = CA.EquilibriumMicrophysics0M()
+    for FT in (Float32, Float64)
+        # The ClimaParams defaults switch evaporation off.
+        params = CA.ClimaAtmosParameters(
+            CP.create_toml_dict(FT);
+            microphysics_model = m0,
+        )
+        evaporation = CAP.microphysics_0m_params(params).evaporation
+        @test evaporation isa CAP.CM.Parameters.Evaporation0M{FT}
+        @test iszero(evaporation.k_E)
+        @test 0 < evaporation.RH_c <= 1
+        @test 0 < evaporation.a_p <= 1
+
+        override = Dict(
+            "precipitation_evaporation_coefficient" => 1.36e-4,
+            "precipitation_evaporation_rh_crit" => 0.85,
+            "precipitation_evaporation_area_fraction" => 0.5,
+            "precipitation_evaporation_flux_scale" => 4e-3,
+            "precipitation_evaporation_exponent" => 0.6,
+        )
+        toml_dict = CP.create_toml_dict(
+            FT;
+            override_file = Dict(
+                k => Dict("value" => v, "type" => "float") for
+                (k, v) in override
+            ),
+        )
+        params = CA.ClimaAtmosParameters(toml_dict; microphysics_model = m0)
+        evaporation = CAP.microphysics_0m_params(params).evaporation
+        @test evaporation.k_E === FT(1.36e-4)
+        @test evaporation.RH_c === FT(0.85)
+        @test evaporation.a_p === FT(0.5)
+        @test evaporation.α₂ === FT(4e-3)
+        @test evaporation.α₃ === FT(0.6)
+        for name in keys(override)
+            @test "CloudMicrophysics" in toml_dict.data[name]["used_in"]
+        end
     end
 end

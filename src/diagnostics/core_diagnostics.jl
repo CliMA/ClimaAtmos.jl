@@ -647,6 +647,56 @@ add_diagnostic_variable!(short_name = "prsn", units = "kg m^-2 s^-1",
 )
 
 ###
+# Below-cloud evaporation of 0M precipitation (2d and 3d)
+###
+compute_prevap(state, cache, time) =
+    compute_prevap(state, cache, time, cache.atmos.microphysics_model)
+compute_prevap(_, _, _, model) = error_diagnostic_variable("prevap", model)
+
+compute_prevap(_, cache, _, ::EquilibriumMicrophysics0M) = @. lazy(
+    cache.precomputed.precip_evap_scale_rai *
+    cache.precomputed.col_integrated_precip_evap_rai +
+    cache.precomputed.precip_evap_scale_sno *
+    cache.precomputed.col_integrated_precip_evap_sno,
+)
+
+add_diagnostic_variable!(short_name = "prevap", units = "kg m^-2 s^-1",
+    long_name = "Column-Integrated Evaporation of Precipitation",
+    comments = """
+    Column integral of the below-cloud evaporation and sublimation of the
+    0-moment precipitation flux (positive: water returned to the air). Zero when
+    `precipitation_evaporation_coefficient` is 0. `pr` is already net of it, so
+    `-pr + prevap` is the precipitation produced in the column.
+    """,
+    compute = compute_prevap,
+)
+
+compute_tnhusevp(state, cache, time) =
+    compute_tnhusevp(state, cache, time, cache.atmos.microphysics_model)
+compute_tnhusevp(_, _, _, model) = error_diagnostic_variable("tnhusevp", model)
+
+# The water is added to both ρq_tot and ρ, so d(ρq_tot/ρ)/dt = (1 - q_tot) ρE / ρ.
+compute_tnhusevp(state, cache, _, ::EquilibriumMicrophysics0M) = @. lazy(
+    (1 - specific(state.c.ρq_tot, state.c.ρ)) * (
+        cache.precomputed.precip_evap_scale_rai *
+        cache.precomputed.ᶜprecip_evap.ρ_evap_rai +
+        cache.precomputed.precip_evap_scale_sno *
+        cache.precomputed.ᶜprecip_evap.ρ_evap_sno
+    ) / state.c.ρ,
+)
+
+add_diagnostic_variable!(short_name = "tnhusevp", units = "kg kg^-1 s^-1",
+    long_name = "Tendency of Specific Humidity due to Evaporation of Precipitation",
+    comments = """
+    Tendency of the grid-mean specific total water, `(1 - q_tot) E / ρ`, from
+    below-cloud evaporation and sublimation of the 0-moment precipitation flux
+    (`E` [kg m^-3 s^-1], added to both `ρq_tot` and `ρ`). Zero when
+    `precipitation_evaporation_coefficient` is 0.
+    """,
+    compute = compute_tnhusevp,
+)
+
+###
 # Precipitation (3d)
 ###
 compute_husra(state, cache, time) =

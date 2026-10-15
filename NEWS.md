@@ -3,6 +3,14 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- ![][badge-✨feature/enhancement] 0M: optional below-cloud evaporation and
+  sublimation of the precipitation flux (CloudMicrophysics `Evaporation0M`, off
+  unless `precipitation_evaporation_coefficient > 0`), and, with
+  `PrognosticEDMFX`, a separate updraft precipitation timescale
+  `precipitation_timescale_updraft_ratio * precipitation_timescale` (ratio 1
+  by default, so behavior is unchanged). Requires ClimaParams 1.3.2 and
+  CloudMicrophysics 0.45.1. New diagnostics `prevap`, `tnhusevp` and `prup`.
+  The TRMM 0M EDMF column job turns evaporation on.
 - ![][badge-🔥behavioralΔ] The along-surface part of the resolved-gradient SGS
   variance is bounded by the variance of `q_sat` along the displacement,
   `(∂_z q_sat|_ad)² ẑᵀD_cẑ`, with `∂_z q_sat|_ad` the dry-adiabatic rate
