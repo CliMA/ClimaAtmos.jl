@@ -167,6 +167,11 @@ function get_numerics(parsed_args, FT; vertical_water_borrowing_species = nothin
     (dg_vi_velocity_penalty != :rusanov && dg_equation_form != :vi) &&
         @warn "dg_vi_velocity_penalty only applies to dg_equation_form = vi; \
                it is ignored with dg_equation_form = $dg_equation_form."
+    dg_vi_interface_flux =
+        Symbol(get(parsed_args, "dg_vi_interface_flux", "rusanov"))
+    dg_vi_interface_flux in (:rusanov, :es) || error(
+        "dg_vi_interface_flux must be rusanov or es, got $dg_vi_interface_flux",
+    )
 
     numerics = AtmosNumerics(;
         energy_q_tot_upwinding,
@@ -184,6 +189,7 @@ function get_numerics(parsed_args, FT; vertical_water_borrowing_species = nothin
         dg_interface_flux,
         dg_vi_velocity_penalty,
         dg_vi_shear_floor,
+        dg_vi_interface_flux,
         vertical_water_borrowing_species,
     )
     @info "numerics $(summary(numerics))"

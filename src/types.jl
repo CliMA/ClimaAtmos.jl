@@ -1881,6 +1881,9 @@ symbols or strings.
     velocity jump penalty of the vector-invariant horizontal DG form.
   - `dg_vi_shear_floor`: floor ε of the wave-selective shear speed
     `max(|u_n|, ε c)`.
+  - `dg_vi_interface_flux`: `Val(:rusanov)` or `Val(:es)`, the variables the
+    vector-invariant DG face penalties act on (conserved `ρe_tot` and `u`, or
+    the entropy variables).
   - `vertical_water_borrowing_species`: `nothing` (all tracers), `()` (none), or
     a `Tuple` of `Symbol`s naming the tracers that the vertical water borrowing
     limiter applies to.
@@ -1899,6 +1902,7 @@ struct AtmosNumerics{
     DGIF,
     DGVP,
     DGSF,
+    DGVIF,
     VWB,
 }
     # Enable specific upwinding schemes for specific equations
@@ -1935,6 +1939,9 @@ struct AtmosNumerics{
     dg_vi_velocity_penalty::DGVP
     # Floor ε on the wave-selective shear speed, as a fraction of c.
     dg_vi_shear_floor::DGSF
+    # VI-form DG face penalty variables: Val(:rusanov) (⟦ρe_tot⟧, ⟦u⟧) or
+    # Val(:es) (entropy-variable jumps ⟦−ρ/p⟧, ⟦βu⟧/{β}, β = ρ/p).
+    dg_vi_interface_flux::DGVIF
     # Tracers the vertical water borrowing limiter applies to:
     # `nothing` (all tracers), `()` (none), or a Tuple of Symbols
     vertical_water_borrowing_species::VWB
@@ -1979,6 +1986,8 @@ types for compile-time dispatch.
     vector-invariant horizontal DG form, `:rusanov` or `:wave_selective`.
   - `dg_vi_shear_floor = 0.05`: Floor ε of the wave-selective shear speed
     `max(|u_n|, ε c)`.
+  - `dg_vi_interface_flux = :rusanov`: Variables of the vector-invariant DG
+    face penalties, `:rusanov` (conserved) or `:es` (entropy variables).
 
 An unrecognized keyword, such as a misspelled option, raises a `MethodError`.
 
@@ -2008,6 +2017,7 @@ function AtmosNumerics(;
     dg_interface_flux = :roe,
     dg_vi_velocity_penalty = :rusanov,
     dg_vi_shear_floor = 0.05,
+    dg_vi_interface_flux = :rusanov,
     vertical_water_borrowing_species = nothing,
     kwargs...,
 )
@@ -2031,6 +2041,7 @@ function AtmosNumerics(;
         Val(Symbol(dg_interface_flux)),
         Val(Symbol(dg_vi_velocity_penalty)),
         dg_vi_shear_floor,
+        Val(Symbol(dg_vi_interface_flux)),
         vertical_water_borrowing_species,
     )
 end

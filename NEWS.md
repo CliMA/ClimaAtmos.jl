@@ -3,6 +3,15 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- ![][badge-✨feature/enhancement] Add the `dg_vi_interface_flux` config option
+  for the vector-invariant horizontal DG form (`dg_equation_form: vi`). The
+  default `rusanov` keeps the face penalties on the jumps of `ρe_tot` and the
+  velocity. `es` penalizes the jumps of the dry entropy variables instead
+  (`−ρ/p` for `ρe_tot`, `βu` with `β = ρ/p` for the velocity, with either
+  `dg_vi_velocity_penalty`), so every face penalty is a sink of the dry entropy
+  `−ρs/(γ−1)`; the mass flux stays central, and energy and momentum stay
+  conserved at each face node. The central part is not entropy-conservative,
+  so `es` does not give a discrete entropy inequality for the whole scheme.
 - ![][badge-🐛bugfix] On DG horizontal spaces with `dg_equation_form: vi`,
   prognostic TKE (`ρtke`, e.g. with `edonly_edmfx`) now receives the DG
   interface flux of its horizontal advection, the same mass-consistent flux as
