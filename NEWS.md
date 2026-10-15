@@ -3,6 +3,14 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- ![][badge-✨feature/enhancement] 0M: optional below-cloud evaporation and
+  sublimation of the precipitation flux (CloudMicrophysics `Evaporation0M`, off
+  unless `precipitation_evaporation_coefficient > 0`), and, with
+  `PrognosticEDMFX`, a separate updraft precipitation timescale
+  `precipitation_timescale_updraft_ratio * precipitation_timescale` (ratio 1
+  by default, so behavior is unchanged). Requires ClimaParams 1.3.2 and the
+  next CloudMicrophysics release (compat `0.46.1`). New diagnostics `prevap`,
+  `tnhusevp` and `prup`. The TRMM 0M EDMF column job turns evaporation on.
 - ![][badge-💥breaking] `sgs_variance_vertical_scale_factor` and the provisional
   `sgs_variance_isentropic_depth` are removed; with `strict_params: true` (the
   default) a run TOML that still sets either now stops with an unused-parameter

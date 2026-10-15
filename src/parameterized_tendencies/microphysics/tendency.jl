@@ -38,7 +38,8 @@ Dispatches on `(microphysics_model, turbconv_model)`:
 
   - `DryModel`: no-op.
   - `EquilibriumMicrophysics0M`: precipitation removal; sinks of `ρq_tot`, `ρ`,
-    and `ρe_tot`.
+    and `ρe_tot`, plus (when on) the grid-mean source from below-cloud
+    evaporation of the precipitation flux (`precipitation_evaporation_tendency!`).
   - `NonEquilibriumMicrophysics1M`: sources for `ρq_lcl`, `ρq_icl`, `ρq_rai`, `ρq_sno`.
   - `NonEquilibriumMicrophysics2M`: sources for `ρq_lcl`, `ρn_lcl`, `ρq_rai`,
     `ρn_rai`, and `ρq_icl`.
@@ -83,6 +84,7 @@ function microphysics_tendency!(Yₜ, Y, p, t,
     @. Yₜ.c.ρq_tot += ρ_dq_tot_dt
     @. Yₜ.c.ρ += ρ_dq_tot_dt
     @. Yₜ.c.ρe_tot += ρ_dq_tot_dt * ᶜmp_tendency.e_tot_hlpr
+    precipitation_evaporation_tendency!(Yₜ, p)
     return nothing
 end
 
@@ -129,6 +131,37 @@ function microphysics_tendency!(Yₜ, Y, p, t,
                 TD.internal_energy(thp, ᶜTʲs.:($$j))
             )
     end
+    # Below-cloud evaporation: grid mean only, so the environment receives it.
+    precipitation_evaporation_tendency!(Yₜ, p)
+    return nothing
+end
+
+"""
+    precipitation_evaporation_tendency!(Yₜ, p)
+
+Add the cached below-cloud evaporation and sublimation of the 0-moment
+precipitation flux, `p.precomputed.ᶜprecip_evap` (see
+`set_precipitation_evaporation_cache!`), rescaled per column by
+`precip_evap_scale_rai` and `precip_evap_scale_sno` (see
+`set_precipitation_surface_fluxes!`), to the grid-mean `ρq_tot`, `ρ` and
+`ρe_tot`. With `PrognosticEDMFX` the updraft prognostics are not touched, so
+the water and the evaporative cooling go to the environment. A no-op when the
+evaporation coefficient is zero.
+"""
+function precipitation_evaporation_tendency!(Yₜ, p)
+    iszero(CAP.microphysics_0m_params(p.params).evaporation.k_E) &&
+        return nothing
+    (; ᶜprecip_evap, precip_evap_scale_rai, precip_evap_scale_sno) =
+        p.precomputed
+    ᶜρ_evap = @. lazy(
+        precip_evap_scale_rai * ᶜprecip_evap.ρ_evap_rai +
+        precip_evap_scale_sno * ᶜprecip_evap.ρ_evap_sno,
+    )
+    @. Yₜ.c.ρq_tot += ᶜρ_evap
+    @. Yₜ.c.ρ += ᶜρ_evap
+    @. Yₜ.c.ρe_tot +=
+        precip_evap_scale_rai * ᶜprecip_evap.ρe_evap_rai +
+        precip_evap_scale_sno * ᶜprecip_evap.ρe_evap_sno
     return nothing
 end
 

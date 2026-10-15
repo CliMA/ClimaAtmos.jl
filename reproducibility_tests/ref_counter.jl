@@ -1,4 +1,4 @@
-435
+436
 
 # **README**
 #
@@ -32,6 +32,10 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+436
+- 0M: below-cloud evaporation of precipitation turned on in the TRMM 0M EDMF
+  column job (precipitation_evaporation_coefficient = 1.36e-4).
+
 435
 - Smooth harmonic buoyancy bound and `1 / √(2 c_σ)` normalization for the
   turbulent vertical displacement in `materialized_displacement_length!`, with

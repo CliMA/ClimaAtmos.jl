@@ -471,6 +471,10 @@ VALID_CASES = [
     cases(("arup", "aren"), :m0_pedmfx)...,
     # 0M+PrognosticEDMFX, NonEq+PrognosticEDMFX
     cases(("clwup", "cliup"), (:m0_pedmfx, :m1_pedmfx))...,
+    # 0M+PrognosticEDMFX
+    case("prup", :m0_pedmfx),
+    # 0M (grid mean), 0M+PrognosticEDMFX: below-cloud evaporation cache
+    cases(("prevap", "tnhusevp"), (:m0, :m0_pedmfx))...,
     # Union{1M,2M}+PrognosticEDMFX
     cases(("husraup", "hussnup"), :m1_pedmfx)...,
     # 0M+PrognosticEDMFX, NonEq+PrognosticEDMFX
