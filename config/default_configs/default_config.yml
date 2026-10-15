@@ -301,7 +301,7 @@ cloud_liquid_freezing:
   help: "Cloud liquid freezing option for 1M microphysics [`HomogeneousAndHeterogeneous` (default), `Homogeneous`, `Heterogeneous`, ~]"
   value: "HomogeneousAndHeterogeneous"
 rain_autoconversion:
-  help: "Rain autoconversion option for 1M microphysics [`Kessler1M` (default), `PrescribedNd`, ~]. `Kessler1M` blends its timescale and threshold between the convective values and the stratiform values."
+  help: "Rain autoconversion option for 1M microphysics [`Kessler1M` (default), `PrescribedNd`, `KK2000`, ~]. `Kessler1M` blends its timescale and threshold between the convective values and the stratiform values; `KK2000` is the Khairoutdinov and Kogan (2000) rate with the prescribed cloud droplet number concentration."
   value: "Kessler1M"
 snow_autoconversion:
   help: "Snow autoconversion option for 1M microphysics [`NoSupersaturation` (default), `WithSupersaturation`, ~]"
@@ -316,7 +316,7 @@ snow_melt:
   help: "Snow melting option for 1M microphysics [`SnowMelt` (default), ~]"
   value: "SnowMelt"
 cloud_liquid_rain_accretion:
-  help: "Cloud liquid + rain accretion option for 1M microphysics [`CloudLiquidRainAccretion` (default), ~]"
+  help: "Cloud liquid + rain accretion option for 1M microphysics [`CloudLiquidRainAccretion` (default, Marshall-Palmer kernel), `KK2000` (Khairoutdinov and Kogan 2000 rate), ~]"
   value: "CloudLiquidRainAccretion"
 cloud_liquid_snow_accretion:
   help: "Cloud liquid + snow accretion option for 1M microphysics [`CloudLiquidSnowAccretion` (default), ~]"
