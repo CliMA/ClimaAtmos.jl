@@ -77,8 +77,8 @@ end
 end
 
 @testset "Default diagnostics cadence at exact threshold boundaries" begin
-    # `frequency_averages` thresholds are inclusive, so a duration landing exactly
-    # on one selects the coarser cadence.
+    # Every bucket requires three of its own averaging windows, so a cadence is only
+    # selected once the run can produce more than one sample at it.
     cadence(duration) = CAD.extract_diagnostic_periods(
         CAD.frequency_averages(duration)(
             "ta";
@@ -90,11 +90,16 @@ end
 
     @test cadence(90 * 86400.0) == Set([Month(1)])
     @test cadence(30 * 86400.0) == Set([Day(10)])
-    @test cadence(86400.0) == Set([Day(1)])
-    @test cadence(3600.0) == Set([Hour(1)])
+    @test cadence(3 * 86400.0) == Set([Day(1)])
+    @test cadence(3 * 3600.0) == Set([Hour(1)])
 
     # One timestep short of a boundary selects the next cadence down.
     @test cadence(30 * 86400.0 - 30) == Set([Day(1)])
-    @test cadence(86400.0 - 30) == Set([Hour(1)])
-    @test isempty(cadence(3600.0 - 30))
+    @test cadence(3 * 86400.0 - 30) == Set([Hour(1)])
+    @test isempty(cadence(3 * 3600.0 - 30))
+
+    # A run lasting exactly one averaging window must not select it; 86400 and 3600
+    # are the lengths used by the CI column cases.
+    @test cadence(86400.0) == Set([Hour(1)])
+    @test isempty(cadence(3600.0))
 end

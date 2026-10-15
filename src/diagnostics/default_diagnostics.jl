@@ -232,9 +232,9 @@ Return the time-averaging helper appropriate to the total simulation length.
 The returned closure has the signature `(short_names...; kwargs...)`, forwarding to one of
 the `*_averages` helpers with `FT = eltype(duration)` already applied:
 
-  - `duration < 1 hour`: returns an empty tuple, i.e. no averaged diagnostics.
-  - `1 hour ≤ duration < 1 day`: `hourly_averages`.
-  - `1 day ≤ duration < 30 days`: `daily_averages`.
+  - `duration < 3 hours`: returns an empty tuple, i.e. no averaged diagnostics.
+  - `3 hours ≤ duration < 3 days`: `hourly_averages`.
+  - `3 days ≤ duration < 30 days`: `daily_averages`.
   - `30 days ≤ duration < 90 days`: `tendaily_averages`.
   - `duration ≥ 90 days`: `monthly_averages`.
 
@@ -243,15 +243,17 @@ the `*_averages` helpers with `FT = eltype(duration)` already applied:
   - `duration`: Expected duration of the simulation [s].
 """
 function frequency_averages(duration)
+    # Each bucket needs the run to span at least three of its averaging windows, so the
+    # selected cadence always yields more than one sample.
     FT = eltype(duration)
     duration = Float64(duration)
     if duration >= 90 * 86400
         return (args...; kwargs...) -> monthly_averages(FT, args...; kwargs...)
     elseif duration >= 30 * 86400
         return (args...; kwargs...) -> tendaily_averages(FT, args...; kwargs...)
-    elseif duration >= 86400
+    elseif duration >= 3 * 86400
         return (args...; kwargs...) -> daily_averages(FT, args...; kwargs...)
-    elseif duration >= 3600
+    elseif duration >= 3 * 3600
         return (args...; kwargs...) -> hourly_averages(FT, args...; kwargs...)
     else
         return (args...; kwargs...) -> ()
@@ -296,6 +298,7 @@ function core_default_diagnostics(output_writer, duration, start_date, t_start, 
     ]
 
     average_func = frequency_averages(duration)
+    # Thresholds here must match `frequency_averages` so min/max share the averages' cadence.
     FT = eltype(duration)
 
     duration = Float64(duration)
@@ -306,7 +309,7 @@ function core_default_diagnostics(output_writer, duration, start_date, t_start, 
     elseif duration >= 30 * 86400
         min_func = (args...; kwargs...) -> tendaily_min(FT, args...; kwargs...)
         max_func = (args...; kwargs...) -> tendaily_max(FT, args...; kwargs...)
-    elseif duration >= 86400
+    elseif duration >= 3 * 86400
         min_func = (args...; kwargs...) -> daily_min(FT, args...; kwargs...)
         max_func = (args...; kwargs...) -> daily_max(FT, args...; kwargs...)
     else
