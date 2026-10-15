@@ -18,6 +18,10 @@ Tests cover:
 using Test
 using ClimaAtmos
 import ClimaAtmos as CA
+import ClimaCore: Fields, Spaces
+import ClimaCore.CommonSpaces
+import ClimaAtmos.Parameters as CAP
+import Thermodynamics as TD
 
 floor_nt(
     ::Type{FT};
@@ -269,14 +273,14 @@ floor_nt(
     @testset "`along_surface_q_variance`: displacement on the θ surface" begin
         for FT in (Float32, Float64)
             @testset "FT = $FT" begin
-                var = CA.along_surface_q_variance
+                var0 = CA.along_surface_q_variance
                 ℓ_h = FT(1e5)
                 ℓ_v = FT(500)
                 q_z = FT(-1e-6)
                 θ_z = FT(4e-3)
                 a = FT(1e-8)                       # |∇_h q|
-                # flat surface: horizontal displacement only
-                @test var(a^2, FT(0), FT(0), q_z, θ_z, ℓ_h, ℓ_v) ≈ ℓ_h^2 * a^2
+                # a large adiabatic q_sat gradient leaves the bound inactive
+                var(args...) = var0(args[1:5]..., FT(1), args[6:7]...)
                 # no surface at all: the unconstrained box
                 @test var(a^2, FT(0), FT(0), q_z, FT(0), ℓ_h, ℓ_v) ≈
                       ℓ_h^2 * a^2 + ℓ_v^2 * q_z^2
@@ -317,6 +321,59 @@ floor_nt(
         end
     end
 
+    @testset "`along_surface_q_variance`: bounded by the q_sat variance" begin
+        for FT in (Float32, Float64)
+            @testset "FT = $FT" begin
+                var = CA.along_surface_q_variance
+                ℓ_h = FT(1e5)
+                ℓ_v = FT(500)
+                q_z = FT(-1e-6)
+                θ_z = FT(4e-3)
+                a = FT(1e-8)
+                q_sat_z = FT(-1e-6)               # 1.7 g/kg at −6e-4 /m
+                # flat surface: no vertical displacement along it, so no
+                # saturation excess and the term vanishes
+                @test var(a^2, FT(0), FT(0), q_z, θ_z, q_sat_z, ℓ_h, ℓ_v) ===
+                      FT(0)
+                # vertical surface and no surface: bounded by (q_sat_z ℓ_v)²
+                gθ = FT(1e-6)
+                @test var(a^2, FT(0), gθ^2, q_z, FT(0), q_sat_z, ℓ_h, ℓ_v) ≈
+                      (q_sat_z * ℓ_v)^2
+                @test var(a^2, FT(0), FT(0), q_z, FT(0), q_sat_z, ℓ_h, ℓ_v) ≈
+                      (q_sat_z * ℓ_v)^2
+                # tilted surface: the bound is the along-surface vertical
+                # variance ℓ_v² x² / (1 + x²), x = s ℓ_h / ℓ_v, times q_sat_z²
+                s_ = FT(3e-3)
+                gθ = s_ * θ_z
+                x = s_ * ℓ_h / ℓ_v
+                bound = q_sat_z^2 * ℓ_v^2 * x^2 / (1 + x^2)
+                v = var(a^2, a * gθ, gθ^2, q_z, θ_z, q_sat_z, ℓ_h, ℓ_v)
+                @test v ≈ bound
+                # the bound is inactive where the q_tot spread is smaller
+                @test var(a^2, a * gθ, gθ^2, q_z, θ_z, FT(1), ℓ_h, ℓ_v) ≈
+                      var(a^2, a * gθ, gθ^2, q_z, θ_z, FT(10), ℓ_h, ℓ_v)
+                @test v isa FT
+            end
+        end
+    end
+
+    @testset "`adiabatic_q_sat_gradient`: q_sat falls along a dry adiabat" begin
+        for FT in (Float32, Float64)
+            @testset "FT = $FT" begin
+                thermo_params = CAP.thermodynamics_params(CA.ClimaAtmosParameters(FT))
+                T = FT(270)
+                ρ = FT(1)
+                q_tot = FT(5e-3)
+                q_sat = TD.q_vap_saturation(thermo_params, T, ρ)
+                dq = CA.adiabatic_q_sat_gradient(thermo_params, T, ρ, q_tot, FT(0), FT(0))
+                @test dq < FT(0)
+                # about −6e-4 q_sat per metre at 270 K
+                @test -FT(8e-4) * q_sat < dq < -FT(4e-4) * q_sat
+                @test dq isa FT
+            end
+        end
+    end
+
     @testset "`across_surface_q_gradient`: q change per vertical step" begin
         for FT in (Float32, Float64)
             @testset "FT = $FT" begin
@@ -341,7 +398,9 @@ floor_nt(
     @testset "`along_surface_q_variance` with a constant depth H" begin
         for FT in (Float32, Float64)
             @testset "FT = $FT" begin
-                along = CA.along_surface_q_variance
+                along0 = CA.along_surface_q_variance
+                # a large adiabatic q_sat gradient leaves the bound inactive
+                along(args...) = along0(args[1:5]..., FT(1), args[6:7]...)
                 ℓ_h = FT(2.5e5)
                 Δz = FT(500)
                 q_z = FT(-2e-6)
@@ -369,24 +428,52 @@ floor_nt(
         end
     end
 
-    @testset "`geometric_vertical_q_variance`: the vertical-displacement part" begin
+    @testset "`_precip_fraction_sweep!`: max-random overlap down a column" begin
         for FT in (Float32, Float64)
             @testset "FT = $FT" begin
-                V = CA.geometric_vertical_q_variance
-                ℓ_h, ℓ_a, ℓ_v = FT(2e5), FT(1000), FT(150)
-                q_z, θ_z = FT(-2e-6), FT(4e-3)
-                a, b = FT(1e-8), FT(2e-5)        # |∇_h q|, |∇_h θ| (parallel)
-                inv_q, inv_θq, inv_θ = a^2, a * b, b^2
-                # flat surface (no horizontal gradients): only the across term
-                @test V(FT(0), FT(0), FT(0), q_z, θ_z, ℓ_h, ℓ_a, ℓ_v) ≈ ℓ_v^2 * q_z^2
-                # vertical surface (θ_z = 0): the along-surface vertical part only
-                @test V(inv_q, inv_θq, inv_θ, q_z, FT(0), ℓ_h, ℓ_a, ℓ_v) ≈ ℓ_a^2 * q_z^2 rtol =
-                    FT(1e-5)
-                # ∇θ = 0: unconstrained vertical displacement, no across term
-                @test V(inv_q, FT(0), FT(0), q_z, FT(0), ℓ_h, ℓ_a, ℓ_v) ≈ ℓ_a^2 * q_z^2
-                # no depth and no box: nothing needs a vertical displacement
-                @test V(inv_q, inv_θq, inv_θ, q_z, θ_z, ℓ_h, FT(0), FT(0)) == FT(0)
-                @test V(inv_q, inv_θq, inv_θ, q_z, θ_z, ℓ_h, ℓ_a, ℓ_v) isa FT
+                space = CommonSpaces.ColumnSpace(
+                    FT;
+                    z_min = 0, z_max = 10000, z_elem = 10,
+                    staggering = CommonSpaces.CellCenter(),
+                )
+                nz = Spaces.nlevels(space)
+                cf = Fields.zeros(space)
+                qp = Fields.zeros(space)
+                a_p = Fields.zeros(space)
+                setlev!(f, k, v) = (Fields.level(f, k) .= v)
+                col(f) = [Array(parent(Fields.level(f, k)))[1] for k in 1:nz]
+                q_min = FT(1e-10)
+                # cloud at levels 8 (cover 0.4) and 6 (cover 0.2), precipitation
+                # from level 8 down to level 3, none at 1-2 and above 8
+                for k in 1:nz
+                    setlev!(cf, k, k == 8 ? FT(0.4) : k == 6 ? FT(0.2) : FT(0))
+                    setlev!(qp, k, 3 <= k <= 8 ? FT(1e-5) : FT(0))
+                end
+                CA._precip_fraction_sweep!(a_p, cf, qp, FT(1), q_min)
+                a = col(a_p)
+                @test a[9:10] == [FT(0), FT(0)]            # no precipitation above the cloud
+                @test a[8] == FT(0.4)                       # seeded by its own cover
+                @test a[7] == FT(0.4)                       # inherited (max overlap)
+                @test a[6] == FT(0.4)                       # max(own 0.2, above 0.4)
+                @test all(a[3:5] .== FT(0.4))               # below cloud base, inherited
+                @test a[1:2] == [FT(0), FT(0)]              # shaft closed: no precipitation
+                @test all(col(a_p) .>= col(cf) .* (col(qp) .> q_min))
+                # decay shrinks the inherited fraction per level, own cover re-seeds
+                CA._precip_fraction_sweep!(a_p, cf, qp, FT(0.5), q_min)
+                a = col(a_p)
+                @test a[8] == FT(0.4) && a[7] == FT(0.2) && a[6] == FT(0.2)
+                @test a[5] == FT(0.1) && a[3] == FT(0.025)
+                # a precipitation-free level in the middle resets the recursion
+                setlev!(qp, 5, FT(0))
+                CA._precip_fraction_sweep!(a_p, cf, qp, FT(1), q_min)
+                a = col(a_p)
+                @test a[5] == FT(0) && a[4] == FT(0) && a[3] == FT(0)
+                @test a[6] == FT(0.4)
+                # an overcast layer caps the fraction at 1 and gives 1 below it
+                setlev!(cf, 8, FT(1));
+                setlev!(qp, 5, FT(1e-5))
+                CA._precip_fraction_sweep!(a_p, cf, qp, FT(1), q_min)
+                @test all(col(a_p)[3:8] .== FT(1))
             end
         end
     end
