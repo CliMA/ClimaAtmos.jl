@@ -139,20 +139,29 @@ end
 """
     precipitation_evaporation_tendency!(Yₜ, p)
 
-Add the cached below-cloud evaporation / sublimation of the 0-moment
+Add the cached below-cloud evaporation and sublimation of the 0-moment
 precipitation flux, `p.precomputed.ᶜprecip_evap` (see
-`set_precipitation_evaporation_cache!`), to the grid-mean `ρq_tot`, `ρ` and
-`ρe_tot`. With `PrognosticEDMFX` the updraft prognostics are not touched, so the
-water and the evaporative cooling go to the environment. A no-op (bit-for-bit)
-when `precipitation_evaporation_active` is false.
+`set_precipitation_evaporation_cache!`), rescaled per column by
+`precip_evap_scale_rai` and `precip_evap_scale_sno` (see
+`set_precipitation_surface_fluxes!`), to the grid-mean `ρq_tot`, `ρ` and
+`ρe_tot`. With `PrognosticEDMFX` the updraft prognostics are not touched, so
+the water and the evaporative cooling go to the environment. A no-op when the
+evaporation coefficient is zero.
 """
 function precipitation_evaporation_tendency!(Yₜ, p)
-    precipitation_evaporation_active(p.params) || return nothing
-    (; ᶜprecip_evap) = p.precomputed
-    ᶜρ_evap = @. lazy(ᶜprecip_evap.ρ_evap_rai + ᶜprecip_evap.ρ_evap_sno)
+    iszero(CAP.microphysics_0m_params(p.params).evaporation.k_E) &&
+        return nothing
+    (; ᶜprecip_evap, precip_evap_scale_rai, precip_evap_scale_sno) =
+        p.precomputed
+    ᶜρ_evap = @. lazy(
+        precip_evap_scale_rai * ᶜprecip_evap.ρ_evap_rai +
+        precip_evap_scale_sno * ᶜprecip_evap.ρ_evap_sno,
+    )
     @. Yₜ.c.ρq_tot += ᶜρ_evap
     @. Yₜ.c.ρ += ᶜρ_evap
-    @. Yₜ.c.ρe_tot += ᶜprecip_evap.ρe_evap
+    @. Yₜ.c.ρe_tot +=
+        precip_evap_scale_rai * ᶜprecip_evap.ρe_evap_rai +
+        precip_evap_scale_sno * ᶜprecip_evap.ρe_evap_sno
     return nothing
 end
 
