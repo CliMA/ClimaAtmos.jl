@@ -803,10 +803,10 @@ the environment dominates the grid-mean variance. The quadrature captures subgri
 fluctuations in temperature and moisture, which is important for threshold processes like
 condensation/evaporation at cloud edges.
 
-For `EquilibriumMicrophysics0M` under EDMF, the updraft sink uses
-`CAP.microphysics_0m_updraft_params` (convective precipitation timescale and
-supersaturation threshold), while the environment uses
-`CAP.microphysics_0m_params`. The grid-mean source is the
+For `EquilibriumMicrophysics0M` under EDMF, the updraft sink uses the
+`precip_updraft` parameters of `CAP.microphysics_0m_params` (convective
+precipitation timescale) and the environment its `precip` parameters. The
+grid-mean source is the
 area-weighted sum
 `ᶜρ_dq_tot_dt = ᶜmp_tendency⁰.dq_tot_dt * ρa⁰ + Σⱼ ᶜmp_tendencyʲs.:(j).dq_tot_dt * ρaʲ`.
 
@@ -1004,9 +1004,8 @@ function set_microphysics_tendency_cache!(
 
     thp = CAP.thermodynamics_params(p.params)
     cm0 = CAP.microphysics_0m_params(p.params)
-    # Convective (updraft) condensate has its own precipitation timescale and
-    # supersaturation threshold; the environment keeps the grid-mean ones.
-    cm0_up = CAP.microphysics_0m_updraft_params(p.params)
+    # Updraft (convective) condensate precipitates with its own timescale.
+    cm0_up = CMP.Microphysics0MParams(; precip = cm0.precip_updraft)
 
     n = n_mass_flux_subdomains(tm)
 

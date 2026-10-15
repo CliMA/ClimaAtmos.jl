@@ -48,3 +48,6 @@ value = 8.0
 
 [precipitation_timescale]
 value = 1200
+
+[precipitation_timescale_updraft]
+value = 1200
