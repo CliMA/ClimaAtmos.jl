@@ -1,4 +1,4 @@
-433
+434
 
 # **README**
 #
@@ -32,6 +32,10 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+434
+- 0M: below-cloud evaporation of precipitation turned on in the TRMM 0M EDMF
+  column job (precipitation_evaporation_coefficient = 1.36e-4).
+
 433
 - Bound the along-surface SGS q variance by the variance of q_sat along the displacement.
 

@@ -90,6 +90,7 @@ import ..turbulent_prandtl_number
 import ..smagorinsky_lilly_length
 import ..ᶜcompute_eddy_diffusivity_coefficient
 import ..ρa⁰
+import ..n_mass_flux_subdomains
 import ..specific
 import ..ᶜspecific_env_value
 

@@ -1,6 +1,7 @@
 import Thermodynamics as TD
 import CloudMicrophysics.Parameters as CMP
 import CloudMicrophysics.BulkMicrophysicsTendencies as BMT
+import CloudMicrophysics.Microphysics0M as CM0
 import CloudMicrophysics.AerosolModel as CMAM
 import CloudMicrophysics.AerosolActivation as CMAA
 
@@ -201,6 +202,125 @@ end
     dq_tot_dt = apply_0m_tendency_limit(dq_tot_dt, q_tot_nonneg, dt)
 
     return (; dq_tot_dt, e_tot_hlpr)
+end
+
+"""
+    precipitation_source_liquid_fraction(thp, ρ_dq_tot_dt, ρ_de_tot_dt, T, Φ)
+
+Liquid fraction `λ` of the 0-moment precipitation produced in a cell, recovered
+from the density-weighted sinks through
+`ρ_de_tot_dt / ρ_dq_tot_dt = λ I_liq(T) + (1 - λ) I_ice(T) + Φ`
+(see `e_tot_0M_precipitation_sources_helper`). Exact for a single subdomain;
+for EDMF or SGS-quadrature sums it is the mass-weighted liquid fraction, up to
+the spread of subdomain temperatures about `T`. Clamped to `[0, 1]`; `1` where
+nothing is produced.
+"""
+@inline function precipitation_source_liquid_fraction(
+    thp, ρ_dq_tot_dt, ρ_de_tot_dt, T, Φ,
+)
+    FT = typeof(T)
+    Iₗ = TD.internal_energy_liquid(thp, T)
+    Iᵢ = TD.internal_energy_ice(thp, T)
+    has_source = !iszero(ρ_dq_tot_dt)
+    e = ρ_de_tot_dt / ifelse(has_source, ρ_dq_tot_dt, one(FT))
+    λ = clamp((e - Φ - Iᵢ) / (Iₗ - Iᵢ), zero(FT), one(FT))
+    return ifelse(has_source, λ, one(FT))
+end
+
+"""
+    wet_bulb_vapor_deficit(thp, RH_c, q_sat, q_vap, L, T)
+
+Vapor [kg/kg] that evaporation into air at temperature `T` can add before the
+latent cooling (latent heat `L`) brings the air to `RH_c` times saturation,
+where `q_sat` is the saturation specific humidity over the evaporating phase:
+`max(RH_c q_sat - q_vap, 0) / (1 + RH_c L² q_sat / (c_p R_v T²))`.
+"""
+@inline function wet_bulb_vapor_deficit(thp, RH_c, q_sat, q_vap, L, T)
+    cp_d = TD.Parameters.cp_d(thp)
+    R_v = TD.Parameters.R_v(thp)
+    return max(RH_c * q_sat - q_vap, zero(q_sat)) /
+           (1 + RH_c * L^2 * q_sat / (cp_d * R_v * T^2))
+end
+
+"""
+    precipitation_evaporation_step(evaporation, thp, dt, state, input)
+
+One level of the top-down scan (`Operators.column_accumulate!` with
+`reverse = true`) of the 0-moment precipitation flux with below-cloud
+evaporation of rain and sublimation of snow.
+
+`state = (F_r, F_s, F_rl, F_sl, ρE_r, ρE_s, ρe_r, ρe_s)` holds the rain and
+snow fluxes [kg m⁻² s⁻¹] entering the cell from above (on output: leaving it at
+the bottom), the parts `F_rl ≤ F_r`, `F_sl ≤ F_s` of them that were removed
+from the air as liquid, and the evaporation rates [kg m⁻³ s⁻¹] and their
+energies [W m⁻³] of the cell above. `input` is the tuple
+`(S_r, S_s, λ_src, Δz, ρ_env, ρa_env, T, p_over_ps, q_vap, Φ)`: the rain and
+snow produced in the cell [kg m⁻³ s⁻¹], their liquid fraction (see
+`precipitation_source_liquid_fraction`), the column-integration layer depth,
+and the density, mass per unit volume of the grid box, temperature, vapor
+specific humidity and geopotential of the air into which precipitation
+evaporates.
+
+The incoming fluxes evaporate at `ρa_env` times
+`CloudMicrophysics.Microphysics0M.evaporate_precipitation`, rain with the
+deficit over liquid and snow with the deficit over ice (over liquid above
+freezing). Each rate is limited by the flux falling into the cell and by the
+wet-bulb vapor deficit of its phase (`wet_bulb_vapor_deficit`, over liquid with
+`L_v` for rain and over ice with `L_s` for snow below freezing); their sum is
+limited by the larger of the two wet-bulb deficits.
+
+The evaporated water carries the specific energy of the phase it was removed
+from the air with, `χ I_liq(T) + (1 - χ) I_ice(T) + Φ` with `χ = F_rl / F_r` for
+rain and `F_sl / F_s` for snow.
+"""
+@inline function precipitation_evaporation_step(
+    evaporation, thp, dt, state, input,
+)
+    (F_r, F_s, F_rl, F_sl) = state
+    (S_r, S_s, λ_src, Δz, ρ_env, ρa_env, T, p_over_ps, q_vap, Φ) = input
+    (; RH_c) = evaporation
+    FT = typeof(F_r)
+    ρa = max(ρa_env, zero(FT))
+    q_sat_liq = TD.q_vap_saturation(thp, T, ρ_env, TD.Liquid())
+    # Snow uses ice saturation below freezing and liquid saturation above it
+    # (where the extrapolated ice curve exceeds the liquid one).
+    q_sat_ice = TD.q_vap_saturation(thp, T, ρ_env, TD.Ice())
+    snow_over_ice = q_sat_ice < q_sat_liq
+    q_sat_sno = ifelse(snow_over_ice, q_sat_ice, q_sat_liq)
+    L_sno = ifelse(
+        snow_over_ice, TD.latent_heat_sublim(thp, T), TD.latent_heat_vapor(thp, T),
+    )
+    E_r = CM0.evaporate_precipitation(
+        evaporation, RH_c * q_sat_liq - q_vap, p_over_ps, F_r,
+    )
+    E_s = CM0.evaporate_precipitation(
+        evaporation, RH_c * q_sat_sno - q_vap, p_over_ps, F_s,
+    )
+    Δq_wb_liq = wet_bulb_vapor_deficit(
+        thp, RH_c, q_sat_liq, q_vap, TD.latent_heat_vapor(thp, T), T,
+    )
+    Δq_wb_sno = wet_bulb_vapor_deficit(thp, RH_c, q_sat_sno, q_vap, L_sno, T)
+    ρE_r = min(ρa * E_r, F_r / Δz, ρa * Δq_wb_liq / dt)
+    ρE_s = min(ρa * E_s, F_s / Δz, ρa * Δq_wb_sno / dt)
+    ρE_max = ρa * max(Δq_wb_liq, Δq_wb_sno) / dt
+    ρE = ρE_r + ρE_s
+    scale = ifelse(ρE > ρE_max, ρE_max / ρE, one(FT))
+    ρE_r *= scale
+    ρE_s *= scale
+    # Liquid fractions of the incoming fluxes (irrelevant where F = 0).
+    χ_r = clamp(F_rl / max(F_r, floatmin(FT)), zero(FT), one(FT))
+    χ_s = clamp(F_sl / max(F_s, floatmin(FT)), zero(FT), one(FT))
+    # Fluxes leaving the cell at its bottom face, kept non-negative against
+    # roundoff in `F - (F / Δz) Δz`.
+    F_r_out = max(F_r + (S_r - ρE_r) * Δz, zero(FT))
+    F_s_out = max(F_s + (S_s - ρE_s) * Δz, zero(FT))
+    F_rl_out = clamp(F_rl + (λ_src * S_r - χ_r * ρE_r) * Δz, zero(FT), F_r_out)
+    F_sl_out = clamp(F_sl + (λ_src * S_s - χ_s * ρE_s) * Δz, zero(FT), F_s_out)
+    Iₗ = TD.internal_energy_liquid(thp, T)
+    Iᵢ = TD.internal_energy_ice(thp, T)
+    ρe_r = ρE_r * (χ_r * Iₗ + (1 - χ_r) * Iᵢ + Φ)
+    ρe_s = ρE_s * (χ_s * Iₗ + (1 - χ_s) * Iᵢ + Φ)
+    return (F_r_out, F_s_out, F_rl_out, F_sl_out, ρE_r, ρE_s, ρe_r, ρe_s)
 end
 
 ###
