@@ -279,7 +279,6 @@ function rrtmgp_solver_kwargs(
                 ),
             )
         else
-        else
             kwargs = (;
                 kwargs...,
                 center_cloud_liquid_water_path = NaN, # initialized in callback
