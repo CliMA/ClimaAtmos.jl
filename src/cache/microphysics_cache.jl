@@ -922,6 +922,9 @@ function set_microphysics_tendency_cache!(
     thp = CAP.thermodynamics_params(p.params)
     cmp = CAP.microphysics_1m_params(p.params)
 
+    FT = eltype(p.params)
+    ᶜair_subsidence = @. lazy(FT(-1000) * w_component(WVec(ᶜu))) # in mm/s
+
     # Get specific humidities
     ᶜq_lcl = @. lazy(specific(Y.c.ρq_lcl, Y.c.ρ))
     ᶜq_icl = @. lazy(specific(Y.c.ρq_icl, Y.c.ρ))
@@ -933,11 +936,10 @@ function set_microphysics_tendency_cache!(
     sgs_quad = p.atmos.sgs_quadrature
     nsubs = mp1m.n_substeps
     nsubs_quad = mp1m.n_substeps_quad
-    ᶜw_air = @. lazy(w_component(WVec(ᶜu)))
     if not_quadrature(sgs_quad)
         @. ᶜmp_tendency = microphysics_tendencies_1m(
             Y.c.ρ, ᶜq_tot_nonneg, ᶜq_lcl, ᶜq_icl, ᶜq_rai, ᶜq_sno,
-            ᶜT, ᶜw_air, cmp, thp, dt, nsubs,
+            ᶜT, ᶜair_subsidence, cmp, thp, dt, nsubs,
         )
     else
         (; ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα, ᶜsgs_moments, ᶜprecip_frac) = p.precomputed
@@ -961,8 +963,8 @@ function set_microphysics_tendency_cache!(
     Y, p, mp1m::NonEquilibriumMicrophysics1M, tm::PrognosticEDMFX,
 )
     (; dt) = p
-    (; ᶜρʲs, ᶜTʲs, ᶜuʲs, ᶜq_tot_nonnegʲs) = p.precomputed
-    (; ᶜu⁰, ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰) = p.precomputed
+    (; ᶜρʲs, ᶜTʲs, ᶜq_tot_nonnegʲs) = p.precomputed
+    (; ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰) = p.precomputed
     (; ᶜmp_tendency⁰, ᶜmp_tendencyʲs) = p.precomputed
 
     thp = CAP.thermodynamics_params(p.params)
@@ -972,14 +974,16 @@ function set_microphysics_tendency_cache!(
     nsubs = mp1m.n_substeps
     nsubs_quad = mp1m.n_substeps_quad
 
+    FT = eltype(p.params)
+    ᶜair_subsidence = @. lazy(FT(-1000) * w_component(WVec(ᶜu))) # in mm/s
+
     ### Updraft contribution
     for j in 1:n
-        ᶜwʲ_air = @. lazy(w_component(WVec(ᶜuʲs.:($$j))))
         @. ᶜmp_tendencyʲs.:($$j) = microphysics_tendencies_1m(
             ᶜρʲs.:($$j), ᶜq_tot_nonnegʲs.:($$j),
             Y.c.sgsʲs.:($$j).q_lcl, Y.c.sgsʲs.:($$j).q_icl,
             Y.c.sgsʲs.:($$j).q_rai, Y.c.sgsʲs.:($$j).q_sno,
-            ᶜTʲs.:($$j), ᶜwʲ_air, cmp, thp, dt, nsubs,
+            ᶜTʲs.:($$j), ᶜair_subsidence, cmp, thp, dt, nsubs,
         )
     end
 
@@ -1001,11 +1005,10 @@ function set_microphysics_tendency_cache!(
     ᶜq_rai⁰ .= ᶜspecific_env_value(@name(q_rai), Y, p)
     ᶜq_sno⁰ .= ᶜspecific_env_value(@name(q_sno), Y, p)
     sgs_quad = p.atmos.sgs_quadrature
-    ᶜw⁰_air = @. lazy(w_component(WVec(ᶜu⁰)))
     if not_quadrature(sgs_quad)
         @. ᶜmp_tendency⁰ = microphysics_tendencies_1m(
             ᶜρ⁰, ᶜq_tot_nonneg⁰, ᶜq_lcl⁰, ᶜq_icl⁰, ᶜq_rai⁰, ᶜq_sno⁰,
-            ᶜT⁰, ᶜw⁰_air, cmp, thp, dt, nsubs,
+            ᶜT⁰, ᶜair_subsidence, cmp, thp, dt, nsubs,
         )
     else
         (; ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα, ᶜsgs_moments, ᶜprecip_frac) = p.precomputed
@@ -1021,7 +1024,7 @@ function set_microphysics_tendency_cache!(
         @. ᶜλ⁰ = TD.liquid_fraction(thp, ᶜT⁰, max(0, ᶜq_lcl⁰), max(0, ᶜq_icl⁰))
         @. ᶜmu_S⁰ = ᶜq_tot_nonneg⁰ - TD.q_vap_saturation(thp, ᶜT⁰, ᶜρ⁰)
         @. ᶜmp_tendency⁰ = microphysics_tendencies_1m(
-            BMT.Microphysics1Moment(), sgs_quad, cmp, thp, ᶜρ⁰, ᶜT⁰, ᶜw⁰_air,
+            BMT.Microphysics1Moment(), sgs_quad, cmp, thp, ᶜρ⁰, ᶜT⁰, ᶜair_subsidence,
             ᶜq_tot_nonneg⁰, ᶜq_lcl⁰, ᶜq_icl⁰, ᶜq_rai⁰, ᶜq_sno⁰,
             ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜsgs_moments.λ_lagrange, ᶜα, dt, nsubs_quad,
             ᶜλ⁰, ᶜmu_S⁰, ᶜprecip_frac, ᶜsgs_moments.sigma_S, opts,
