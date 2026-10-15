@@ -583,7 +583,31 @@ there is no surface and the unconstrained variance is used.
 
 The vertical scale of the along-surface displacement is the depth ``H`` of
 the unresolved slantwise motion (`sgs_variance_isentropic_depth`), used in
-place of ``\ell_v`` in the conditional variance above.
+place of ``\ell_v`` in the conditional variance above and in the bound
+below.
+
+This variance is bounded by the variance of ``q_s`` along the same
+displacement. A clear parcel has ``q_t \le q_s`` where it starts, so it can
+exceed saturation at the cell only by the amount ``q_s`` falls along its
+path. On the surface ``\theta_{li}`` is constant, so ``q_s`` changes with
+height alone, at the dry-adiabatic rate ``\partial_z q_s|_{\mathrm{ad}}``
+(about ``-6 \times 10^{-4} q_s`` per metre at 270 K), and
+
+```math
+\sigma_{q,\parallel}^2 \le
+  (\partial_z q_s|_{\mathrm{ad}})^2 \; \hat{\mathbf{z}}^\mathsf{T} \mathbf{D}_c \hat{\mathbf{z}} ,
+\qquad
+\hat{\mathbf{z}}^\mathsf{T} \mathbf{D}_c \hat{\mathbf{z}}
+  = c_g \, \frac{\ell_v^2 \ell_h^2 |\nabla_h \theta_{li}|^2}
+                 {\mathbf{n}^\mathsf{T} \mathbf{D} \mathbf{n}} ,
+```
+
+where ``\mathbf{D}_c`` is the conditional covariance and the right-hand factor
+is the vertical variance of the along-surface displacement. It is zero for a
+flat surface, so stirring along the flat isentropes of the tropics produces no
+saturation excess, in keeping with the advection–condensation picture in which
+condensation requires motion to lower ``q_s``; it is ``c_g \ell_v^2`` for a
+vertical surface.
 
 Across the surface, the vertical displacement ``\ell_v`` has the component
 ``\ell_v \, \partial_z \theta_{li} / |\nabla \theta_{li}|`` along the surface

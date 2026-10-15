@@ -271,6 +271,19 @@ not yet define.
     `(1 − ξ)` times its liquid-fraction share of the reconstructed saturation
     excess plus `ξ` times its subdomain mean (`sgs_local_condensate`). `0`
     is the excess reconstruction; `1` treats the species uniform at every node [-].
+  - `sgs_precip_incloud_fraction`: Fraction `β_p` of the cell-mean rain and snow
+    that is confined to the precipitation shaft of the quadrature PDF
+    (`sgs_precip_shaft_threshold`) instead of being
+    spread over all nodes, in `[0, 1]`; `0` disables the placement [-].
+  - `sgs_precip_overlap_decay`: Per-level shrink factor `f_decay` of the
+    maximum-random overlap recursion that diagnoses the precipitation fraction
+    `a_p` from the cloud cover above (`set_precip_fraction!`), in `[0, 1]`; `1`
+    is maximum overlap, `0` re-seeds the shaft from each level's own cover [-].
+  - `sgs_precip_fraction_floor`: Smallest precipitation fraction `a_p` the
+    quadrature placement uses, in `[0, 1]`; the default `0.5` keeps the shaft
+    at least half the cell. `0.1` is the thinnest shaft the order-3
+    quadrature resolves (one node of weight 1/36 at `a_p = 0.1`); a thinner
+    shaft concentrates the precipitation on a single node [-].
   - `Tq_correlation_coefficient`: Correlation between `T'` and `q_tot'` in the
     SGS quadrature, in `[-1, 1]`. Used verbatim by `tq_correlation_model: constant`;
     used as the turbulent-block cross `ρ_turb` (and the fallback where all variance
@@ -306,6 +319,9 @@ Base.@kwdef struct SGSQuadratureParameters{FT} <: ASQP
     sgs_variance_max_rel_std::FT
     sgs_liquid_uniform_fraction::FT
     sgs_ice_uniform_fraction::FT
+    sgs_precip_incloud_fraction::FT
+    sgs_precip_overlap_decay::FT
+    sgs_precip_fraction_floor::FT
     Tq_correlation_coefficient::FT
     cloud_fraction_steepness_scale::FT
     condensation_evaporation_timescale::FT

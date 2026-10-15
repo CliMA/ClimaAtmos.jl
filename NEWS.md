@@ -3,6 +3,16 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- ![][badge-🔥behavioralΔ] The along-surface part of the resolved-gradient SGS
+  variance is bounded by the variance of `q_sat` along the displacement,
+  `(∂_z q_sat|_ad)² ẑᵀD_cẑ`, with `∂_z q_sat|_ad` the dry-adiabatic rate
+  (`adiabatic_q_sat_gradient`) and `ẑᵀD_cẑ` the vertical variance of the
+  along-surface displacement.
+- ![][badge-✨feature/enhancement] Precipitation-fraction placement of rain and
+  snow over the SGS quadrature: a fraction `sgs_precip_incloud_fraction` of
+  the cell-mean rain and snow is confined to the precipitation shaft, the moistest `a_p` of the PDF,
+  where `a_p` is the overlap precipitation fraction diagnosed from the cloud cover
+  above by a maximum-random overlap sweep.
 - ![][badge-🔥behavioralΔ] The part of the geometric SGS variance block that
   needs a vertical displacement (the along-surface variance beyond its
   along-contour part, plus the across-surface uniform-box terms) and the

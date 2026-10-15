@@ -1,4 +1,4 @@
-432
+433
 
 # **README**
 #
@@ -32,6 +32,9 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+433
+- Bound the along-surface SGS q variance by the variance of q_sat along the displacement.
+
 432
 - Combine the geometric vertical-displacement SGS variance with the turbulent block as a maximum
   instead of their sum.
