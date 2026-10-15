@@ -375,7 +375,9 @@ struct SGSPrecipShaftFlag{TPS, FT}
 end
 @inline function (f::SGSPrecipShaftFlag)(T_hat, q_tot_hat)
     FT = typeof(f.ρ)
-    S′ = max(zero(FT), q_tot_hat) - TD.q_vap_saturation(f.tps, T_hat, f.ρ) - f.mu_S
+    S′ =
+        max(zero(FT), q_tot_hat) -
+        TD.q_vap_saturation(_unwrapped(f.tps), T_hat, f.ρ) - f.mu_S
     return sgs_precip_shaft_weight(S′, f.S_star, f.ε_S)
 end
 
