@@ -292,7 +292,9 @@ function materialized_variance_fidelity!(Y, p)
 end
 
 """
-    along_surface_q_variance(inv_q, inv_θq, inv_θ, ∂q∂z, ∂θ∂z, ℓ_h, ℓ_v)
+    along_surface_q_variance(
+        inv_q, inv_θq, inv_θ, ∂q∂z, ∂θ∂z, q_sat_z, ℓ_h, ℓ_v,
+    )
 
 Variance of `q_tot` from subgrid parcel displacements along the local `θ_li`
 surface, without the prefactor `c_g`.
@@ -309,7 +311,18 @@ The inputs are the horizontal invariants `inv_q = |∇_h q|²`,
 result lies in `[0, gᵀ D g]` (Cauchy–Schwarz). For a flat surface it is
 `ℓ_h² |∇_h q|²`. For a vertical surface it is the horizontal gradient along
 the surface plus `ℓ_v² (∂q/∂z)²`. Where `∇θ_li = 0` there is no surface, and
-the result is the unconstrained `gᵀ D g`.
+the conditional variance is the unconstrained `gᵀ D g`.
+
+The variance is then bounded by the variance of `q_sat` along the same
+displacement. A clear parcel has `q_tot ≤ q_sat` where it starts, so it can
+exceed saturation at the cell only by the amount `q_sat` falls along its
+path. On the surface `θ_li` is constant, so `q_sat` changes only with height,
+at the adiabatic rate `q_sat_z` (`adiabatic_q_sat_gradient`), and the bound is
+
+    q_sat_z² · ẑᵀ D_c ẑ,    ẑᵀ D_c ẑ = ℓ_v² ℓ_h² |∇_h θ|² / (nᵀ D n),
+
+the vertical variance of the along-surface displacement: zero for a flat
+surface, and `ℓ_v²` for a vertical surface or where there is no surface.
 """
 @inline function along_surface_q_variance(
     inv_q,
@@ -317,13 +330,50 @@ the result is the unconstrained `gᵀ D g`.
     inv_θ,
     ∂q∂z,
     ∂θ∂z,
+    q_sat_z,
     ℓ_h,
     ℓ_v,
 )
     G = ℓ_h^2 * inv_q + ℓ_v^2 * ∂q∂z^2
     M = ℓ_h^2 * inv_θq + ℓ_v^2 * ∂q∂z * ∂θ∂z
     N = ℓ_h^2 * inv_θ + ℓ_v^2 * ∂θ∂z^2
-    return ifelse(N > zero(N), max(G - M^2 / N, zero(G)), G)
+    has_surface = N > zero(N)
+    V = ifelse(has_surface, max(G - M^2 / N, zero(G)), G)
+    Z = ifelse(has_surface, ℓ_v^2 * ℓ_h^2 * inv_θ / N, ℓ_v^2)
+    return min(V, q_sat_z^2 * Z)
+end
+
+"""
+    adiabatic_q_sat_gradient(thermo_params, T, ρ, q_tot, q_liq, q_ice)
+
+Vertical derivative `dq_sat/dz` of the saturation specific humidity
+`q_sat(T, ρ)` along a dry adiabat, the path of a clear parcel displaced on a
+`θ_li` surface,
+
+    d ln q_sat / dz
+        = −(g / c_p) (L / (R_v T²) − 1 / T) + (c_v / c_p) g / (R_m T),
+
+with the moist-air `c_p`, `c_v`, `R_m` and the latent heat `L` of the local
+condensate mix.
+"""
+@inline function adiabatic_q_sat_gradient(
+    thermo_params,
+    T,
+    ρ,
+    q_tot,
+    q_liq,
+    q_ice,
+)
+    g = TD.Parameters.grav(thermo_params)
+    R_v = TD.Parameters.R_v(thermo_params)
+    lh = TD.latent_heat(thermo_params, T, q_liq, q_ice)
+    cp_m = TD.cp_m(thermo_params, q_tot, q_liq, q_ice)
+    cv_m = TD.cv_m(thermo_params, q_tot, q_liq, q_ice)
+    R_m = TD.gas_constant_air(thermo_params, q_tot, q_liq, q_ice)
+    q_sat = TD.q_vap_saturation(thermo_params, T, ρ, q_liq, q_ice)
+    return q_sat * (
+        -(g / cp_m) * (lh / (R_v * T^2) - 1 / T) + (cv_m / cp_m) * g / (R_m * T)
+    )
 end
 
 """
@@ -342,32 +392,6 @@ displacement along it.
     gn = inv_θq + ∂q∂z * ∂θ∂z
     nn = inv_θ + ∂θ∂z^2
     return ifelse(nn > zero(nn), ∂θ∂z * gn / nn, zero(gn))
-end
-
-"""
-    geometric_vertical_q_variance(inv_q, inv_θq, inv_θ, ∂q∂z, ∂θ∂z, ℓ_h, ℓ_a, ℓ_v)
-
-The part of the geometric (resolved-gradient) q variance that needs a
-vertical displacement, without the prefactor `c_g`: the along-surface
-variance beyond its along-contour part (the displacement with `ℓ_a = 0`,
-which stays on the surface without moving vertically) plus the across-surface
-uniform-box term,
-
-    V_v = max(V_along(ℓ_a) − V_along(0), 0) + ℓ_v² q_n².
-
-On a flat surface the along part vanishes and `V_v = ℓ_v² (∂_z q)²`; on a
-vertical surface, or where `∇θ_li = 0`, `q_n = 0` and `V_v = ℓ_a² (∂_z q)²`;
-on a tilted surface the two parts are orthogonal and add.
-"""
-@inline function geometric_vertical_q_variance(
-    inv_q, inv_θq, inv_θ, ∂q∂z, ∂θ∂z, ℓ_h, ℓ_a, ℓ_v,
-)
-    V_all = along_surface_q_variance(inv_q, inv_θq, inv_θ, ∂q∂z, ∂θ∂z, ℓ_h, ℓ_a)
-    V_h = along_surface_q_variance(
-        inv_q, inv_θq, inv_θ, ∂q∂z, ∂θ∂z, ℓ_h, zero(ℓ_a),
-    )
-    q_n = across_surface_q_gradient(inv_θq, inv_θ, ∂q∂z, ∂θ∂z)
-    return max(V_all - V_h, zero(V_all)) + ℓ_v^2 * q_n^2
 end
 
 """
@@ -476,16 +500,15 @@ Pipeline:
     surface adds `along_surface_q_variance` to q′q′ only, since θ_li is
     constant along the surface; its vertical scale is the depth `H` of the
     unresolved slantwise motion (`sgs_variance_isentropic_depth`), bounded
-    by the height above the surface, `min(H, z − z_sfc)`.
-    The displacement across the surface adds
+    by the height above the surface, `min(H, z − z_sfc)`. It is bounded by
+    the variance of `q_sat` along the displacement
+    (`adiabatic_q_sat_gradient`). The displacement across the surface adds
     the vertical uniform-box terms `c_g ℓ_v² (∂_z θ)²` to θ′θ′,
     `c_g ℓ_v² q_n²` to q′q′ and `c_g ℓ_v² ∂_z θ q_n` to θ′q′, with `q_n` the
-    across-surface q gradient (`across_surface_q_gradient`). The part of the
-    geometric variance that needs a vertical displacement
-    (`geometric_vertical_q_variance`, and `c_g ℓ_v² (∂_z θ)²` for θ) and the
-    turbulent block's vertical-displacement variance are two estimates of
-    the same quantity, so the block takes the larger of the two instead of
-    adding them; the along-contour part of the along-surface variance adds.
+    across-surface q gradient (`across_surface_q_gradient`). The geometric
+    block and the turbulent block are two estimates of the variance from
+    the vertical eddy displacement, so the larger of the two is kept
+    (`add_resolved_gradient_block!`).
     The block is skipped when `c_Δx` and `c_Δz` are both 0,
     and the horizontal invariants are computed only when `c_Δx` is nonzero.
  4. Transform θ→T using `compute_∂T_∂θ!`
@@ -576,8 +599,13 @@ function set_covariance_cache!(Y, p, thermo_params)
         ᶜℓ_v = @. lazy(c_Δz * ᶜΔz)
         ᶜ∂q∂z = @. lazy(projected_vector_data(C3, ᶜgradᵥ_q_tot, ᶜlg))
         ᶜ∂θ∂z = @. lazy(projected_vector_data(C3, ᶜgradᵥ_θ_liq_ice, ᶜlg))
+        (; ᶜT, ᶜq_liq, ᶜq_ice) = p.precomputed
+        ᶜq_sat_z = @. lazy(
+            adiabatic_q_sat_gradient(
+                thermo_params, ᶜT, Y.c.ρ, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice,
+            ),
+        )
         if use_horizontal
-            (; ᶜT, ᶜq_liq, ᶜq_ice) = p.precomputed
             ᶜθ_li = p.scratch.ᶜtemp_scalar_3
             @. ᶜθ_li = TD.liquid_ice_pottemp(
                 thermo_params, ᶜT, Y.c.ρ, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice,
@@ -598,13 +626,13 @@ function set_covariance_cache!(Y, p, thermo_params)
             z_sfc = Fields.level(Fields.coordinate_field(Y.f).z, Fields.half)
             ᶜℓ_a = @. lazy(min(H, ᶜz - z_sfc))
             add_resolved_gradient_block!(
-                p, ᶜinv_q, ᶜinv_θq, ᶜinv_θ, ᶜ∂q∂z, ᶜ∂θ∂z, ℓ_h, ᶜℓ_a, ᶜℓ_v, c_g,
-                diag_corr, ρ_turb,
+                p, ᶜinv_q, ᶜinv_θq, ᶜinv_θ, ᶜ∂q∂z, ᶜ∂θ∂z, ᶜq_sat_z,
+                ℓ_h, ᶜℓ_a, ᶜℓ_v, c_g, diag_corr, ρ_turb,
             )
         else
             add_resolved_gradient_block!(
-                p, zero(FT), zero(FT), zero(FT), ᶜ∂q∂z, ᶜ∂θ∂z, ℓ_h, ᶜℓ_v, ᶜℓ_v, c_g,
-                diag_corr, ρ_turb,
+                p, zero(FT), zero(FT), zero(FT), ᶜ∂q∂z, ᶜ∂θ∂z, ᶜq_sat_z,
+                ℓ_h, ᶜℓ_v, ᶜℓ_v, c_g, diag_corr, ρ_turb,
             )
         end
     end
@@ -652,17 +680,19 @@ end
 
 """
     add_resolved_gradient_block!(p, ᶜinv_q, ᶜinv_θq, ᶜinv_θ, ᶜ∂q∂z, ᶜ∂θ∂z,
-                                 ℓ_h, ᶜℓ_a, ᶜℓ_v, c_g, diag_corr, ρ_turb)
+                                 ᶜq_sat_z, ℓ_h, ᶜℓ_a, ᶜℓ_v, c_g, diag_corr,
+                                 ρ_turb)
 
 Combine the resolved-gradient (geometric) block with the turbulent block
-already held in `ᶜq′q′` and `ᶜT′T′` (θ basis). The along-contour part of the
-along-surface q variance (the displacement with no vertical excursion) adds;
-the part that needs a vertical displacement (`geometric_vertical_q_variance`,
-with the vertical scale `ᶜℓ_a` along the surface and `ᶜℓ_v` across it) and
-the turbulent block's vertical-displacement variance describe the same
-displacement with two closures, so the larger of the two is kept:
+already held in `ᶜq′q′` and `ᶜT′T′` (θ basis). The geometric q variance is
+the bounded along-surface variance (`along_surface_q_variance`, vertical
+scale `ᶜℓ_a`) plus the across-surface uniform-box term (vertical scale
+`ᶜℓ_v`). Under the `q_sat` bound a displacement with no vertical excursion
+changes `q_sat` by nothing, so the whole along-surface variance needs a
+vertical displacement; it and the turbulent block describe that displacement
+with two closures, so the larger of the two is kept:
 
-    q′q′ = c_g V_h + max(c_g V_v, q′q′_turb),
+    q′q′ = max(c_g (V_along + ℓ_v² q_n²), q′q′_turb),
     θ′θ′ = max(c_g ℓ_v² (∂_z θ)², θ′θ′_turb).
 
 When `diag_corr`, the cross covariance of the vertical displacement is the
@@ -676,6 +706,7 @@ function add_resolved_gradient_block!(
     ᶜinv_θ,
     ᶜ∂q∂z,
     ᶜ∂θ∂z,
+    ᶜq_sat_z,
     ℓ_h,
     ᶜℓ_a,
     ᶜℓ_v,
@@ -685,15 +716,10 @@ function add_resolved_gradient_block!(
 )
     (; ᶜT′T′, ᶜq′q′) = p.precomputed
     ᶜq_n = @. lazy(across_surface_q_gradient(ᶜinv_θq, ᶜinv_θ, ᶜ∂q∂z, ᶜ∂θ∂z))
-    ᶜV_h = @. lazy(
+    ᶜV_geo = @. lazy(
         along_surface_q_variance(
-            ᶜinv_q, ᶜinv_θq, ᶜinv_θ, ᶜ∂q∂z, ᶜ∂θ∂z, ℓ_h, zero(ℓ_h),
-        ),
-    )
-    ᶜV_v = @. lazy(
-        geometric_vertical_q_variance(
-            ᶜinv_q, ᶜinv_θq, ᶜinv_θ, ᶜ∂q∂z, ᶜ∂θ∂z, ℓ_h, ᶜℓ_a, ᶜℓ_v,
-        ),
+            ᶜinv_q, ᶜinv_θq, ᶜinv_θ, ᶜ∂q∂z, ᶜ∂θ∂z, ᶜq_sat_z, ℓ_h, ᶜℓ_a,
+        ) + ᶜℓ_v^2 * ᶜq_n^2,
     )
     ᶜθθ_v = @. lazy(ᶜℓ_v^2 * ᶜ∂θ∂z^2)
     if diag_corr
@@ -703,7 +729,7 @@ function add_resolved_gradient_block!(
                 max(c_g * ᶜθθ_v, ᶜT′T′) * max(c_g * ᶜℓ_v^2 * ᶜq_n^2, ᶜq′q′),
             )
     end
-    @. ᶜq′q′ = c_g * ᶜV_h + max(c_g * ᶜV_v, ᶜq′q′)
+    @. ᶜq′q′ = max(c_g * ᶜV_geo, ᶜq′q′)
     @. ᶜT′T′ = max(c_g * ᶜθθ_v, ᶜT′T′)
     return nothing
 end
