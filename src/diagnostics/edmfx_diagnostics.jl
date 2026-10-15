@@ -241,6 +241,42 @@ add_diagnostic_variable!(short_name = "cliup", units = "kg kg^-1",
 )
 
 ###
+# Updraft (convective) precipitation (2d)
+###
+compute_prup(state, cache, time) = compute_prup(state, cache, time,
+    cache.atmos.microphysics_model, cache.atmos.turbconv_model,
+)
+compute_prup(_, _, _, _, _) =
+    error_diagnostic_variable("Can only compute updraft precipitation \
+                               with 0M microphysics and with PrognosticEDMFX")
+
+function compute_prup(state, cache, _,
+    ::EquilibriumMicrophysics0M, turbconv_model::PrognosticEDMFX,
+)
+    (; ᶜmp_tendencyʲs) = cache.precomputed
+    ᶜρ_dq_tot_dtʲs = cache.scratch.ᶜtemp_scalar
+    @. ᶜρ_dq_tot_dtʲs = 0
+    for j in 1:n_mass_flux_subdomains(turbconv_model)
+        @. ᶜρ_dq_tot_dtʲs +=
+            state.c.sgsʲs.:($$j).ρa * ᶜmp_tendencyʲs.:($$j).dq_tot_dt
+    end
+    out = cache.scratch.ᶠtemp_field_level
+    Operators.column_integral_definite!(out, ᶜρ_dq_tot_dtʲs)
+    return out
+end
+
+add_diagnostic_variable!(short_name = "prup", units = "kg m^-2 s^-1",
+    long_name = "Updraft Precipitation",
+    comments = """
+    Column integral of the 0-moment precipitation sink of all updrafts,
+    sum over j of ρaʲ dq_totʲ/dt (the convective part of the precipitation).
+    Same sign convention as `pr` (upward-positive, so negative when it
+    precipitates); `pr - prup` is the environment (stratiform) part.
+    """,
+    compute = compute_prup,
+)
+
+###
 # Updraft rain water specific humidity and number mixing ratio (3d)
 ###
 compute_husraup(state, cache, time) = compute_husraup(state, cache, time,

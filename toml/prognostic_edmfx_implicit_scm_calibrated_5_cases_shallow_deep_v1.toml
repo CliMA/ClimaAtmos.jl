@@ -22,6 +22,9 @@ value = 0.7
 [precipitation_timescale]
 value = 1919.9324772692971
 
+[precipitation_evaporation_coefficient]
+value = 1.36e-4
+
 [entr_inv_tau]
 value = 0
 
