@@ -3,6 +3,13 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- ![][badge-✨feature/enhancement] 0M: optional below-cloud evaporation and
+  sublimation of the precipitation flux (CloudMicrophysics `Evaporation0M`, off
+  unless `precipitation_evaporation_coefficient > 0`), and, with
+  `PrognosticEDMFX`, a separate updraft precipitation timescale
+  `precipitation_timescale_updraft`. Requires ClimaParams 1.3.2 and
+  CloudMicrophysics 0.45.1. New diagnostics `prevap`, `tnhusevp` and `prup`.
+  The TRMM 0M EDMF column job turns evaporation on.
 - ![][badge-✨feature/enhancement] Precipitation-fraction placement of rain and
   snow over the SGS quadrature: a fraction `sgs_precip_incloud_fraction` of
   the cell-mean rain and snow is confined to the precipitation shaft, the moistest `a_p` of the PDF,
@@ -81,19 +88,6 @@ main
 - ![][badge-🔥behavioralΔ] Update to ClimaParams with
   `sgs_variance_horizontal_scale_factor` default `3.0 → 1.0`.
 - ![][badge-🔥behavioralΔ] Update to CloudMicrophysics v0.44 in compat and manifest.
-- ![][badge-✨feature/enhancement] 0M + `PrognosticEDMFX`: updraft condensate
-  can precipitate with its own timescale and threshold via the optional TOML keys
-  `precipitation_timescale_updraft` and
-  `supersaturation_precipitation_threshold_updraft` (`type = "float"`), which
-  default to the grid-mean values. Adds a new `ClimaAtmosParameters` type
-  parameter and the 2D diagnostic `prup` (updraft part of `pr`).
-- ![][badge-✨feature/enhancement] 0M: optional below-cloud evaporation and
-  sublimation of the precipitation flux (Kessler/Tiedtke deficit form, top-down
-  column scan limited by the incoming flux and wet-bulb cooling to `RH_c`).
-  Water and energy are returned to the grid mean, so column budgets close. Keys
-  `precipitation_evaporation_{coefficient,rh_crit,area_fraction,flux_scale,exponent}`
-  (`type = "float"`); off unless `precipitation_evaporation_coefficient > 0`.
-  New diagnostics `prevap` and `tnhusevp`.
 
 0.42.13
 -------
