@@ -1105,16 +1105,17 @@ function check_case_consistency(parsed_args)
         @assert(
             parsed_args["rad"] in ("allsky", "allskywithclear"),
             "radiation_include_snow requires rad = \"allsky\" or \"allskywithclear\" \
-             (got $(repr(parsed_args["rad"])))"
+            (got $(repr(parsed_args["rad"])))"
         )
         @assert(
-            microphysics == ("1M", "2M"),
-            "radiation_include_snow needs a microphysics_model with prognostic snow; so
-            must be \"1M\" or \"2M\"
+            microphysics in ("1M", "2M"),
+            "radiation_include_snow needs a microphysics_model with prognostic snow; \
+            must be \"1M\" or \"2M\""
+        )
         @assert(
             parsed_args["prescribe_clouds_in_radiation"] != true,
             "radiation_include_snow is not supported with prescribe_clouds_in_radiation \
-             (ERA5-prescribed clouds carry no snow)"
+            (ERA5-prescribed clouds carry no snow)"
         )
     end
 
