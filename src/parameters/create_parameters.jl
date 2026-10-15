@@ -604,6 +604,16 @@ function SGSQuadratureParameters(
         sgs_variance_isentropic_depth = FT(1000),
         # Equilibrium-ratio modulator weight (see `sgs_variance_fidelity`).
         sgs_fidelity_equilibrium_weight = FT(0.5),
+        # Precipitation-fraction placement of rain and snow over the quadrature:
+        # 0 = uniform (off).
+        sgs_precip_incloud_fraction = FT(0),
+        # Overlap precipitation fraction (`set_precip_fraction!`): per-level
+        # decay of the max-random overlap recursion; 1 = maximum overlap.
+        sgs_precip_overlap_decay = FT(1),
+        # Floor on the overlap precipitation fraction seen by the placement:
+        # the shaft is never narrower than half the cell (0.1 is the thinnest
+        # shaft the order-3 quadrature resolves).
+        sgs_precip_fraction_floor = FT(0.5),
     )
     provisional_present = filter(collect(keys(provisional_defaults))) do name
         haskey(toml_dict.data, string(name))

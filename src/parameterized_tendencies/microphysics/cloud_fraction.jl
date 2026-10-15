@@ -1234,7 +1234,10 @@ Final post-Aitken update. No-op when `ᶜsgs_moments` is not allocated (dry / 0M
 Uses ONE quadrature pass via `_compute_sgs_moments` to fill
 `ᶜsgs_moments = (sigma_S, λ_lagrange)`, then computes
 `ᶜcloud_fraction` consistently with the augmented `σ_aug` closure (see
-`_compute_cloud_fraction`) and applies EDMF updraft weighting.
+`_compute_cloud_fraction`) from the environment cloud condensate
+(`_get_condensate_means`) and applies EDMF updraft weighting. Finally
+runs `set_precip_fraction!`, the column overlap sweep that turns the fresh
+cover into the precipitation fraction `ᶜprecip_frac`.
 
 Overwrites `p.scratch.ᶜtemp_scalar`, `ᶜtemp_scalar_2`, and `ᶜtemp_scalar_3`.
 It must not touch `ᶜtemp_scalar_4` or `ᶜtemp_scalar_7`, which
@@ -1291,6 +1294,117 @@ NVTX.@annotate function set_sgs_moments_and_cloud_fraction!(Y, p)
     end
 
     _apply_edmf_cloud_weighting!(Y, p, turbconv_model, thermo_params)
+    set_precip_fraction!(Y, p)
+    return nothing
+end
+
+"""
+    set_precip_fraction!(Y, p)
+
+Fill `p.precomputed.ᶜprecip_frac` with the precipitation fraction `a_p`, the
+area fraction of the cell that precipitation falls through, by maximum-random
+overlap of the cloud cover swept from the model top down:
+
+    a_p(k) = max(CF(k), f_decay · a_p(k+1))   where q_rai + q_sno > q_min
+    a_p(k) = 0                                 otherwise
+
+with `f_decay = sgs_precip_overlap_decay` (`1` is pure maximum overlap; the
+shrink is applied per level). A precipitation-free level resets the recursion,
+so a shaft that evaporates completely does not seed the layers below it.
+
+The recursion is seeded with `ᶜcloud_fraction`, the single-domain cover of the
+cell; the precipitation mask uses the precipitation of the
+domain the quadrature integrates (the environment under `PrognosticEDMFX`).
+`a_p` enters the quadrature only as the fraction of the PDF that carries the
+shaft (`sgs_precip_shaft_threshold`); the per-point assignment is normalized
+by the discrete weight of the selected points, so no measure consistency
+between the cover and the quadrature is required for conservation.
+
+Mutates `p.precomputed.ᶜprecip_frac`.
+"""
+NVTX.@annotate function set_precip_fraction!(Y, p)
+    hasproperty(p.precomputed, :ᶜprecip_frac) || return nothing
+    FT = eltype(p.params)
+    f_decay = clamp(FT(CAP.sgs_precip_overlap_decay(p.params)), zero(FT), one(FT))
+    thermo_params = CAP.thermodynamics_params(p.params)
+    _precip_fraction_sweep!(
+        p.precomputed.ᶜprecip_frac,
+        p.precomputed.ᶜcloud_fraction,
+        _get_precip_mean(Y, p, p.atmos.turbconv_model),
+        f_decay,
+        FT(TD.Parameters.q_min(thermo_params)),
+    )
+    return nothing
+end
+
+"""
+    _precip_fraction_sweep!(ᶜprecip_frac, ᶜcf, ᶜq_precip, f_decay, q_precip_min)
+
+Run the maximum-random overlap recursion of `set_precip_fraction!` on plain
+fields, writing `a_p` into `ᶜprecip_frac`. Levels with
+`ᶜq_precip ≤ q_precip_min` carry no shaft; the cover is taken non-negative.
+
+Implemented as a loop of level broadcasts rather than with
+`Operators.column_accumulate!`: the two give the same result to the bit, but
+the CPU path of `column_accumulate!` materializes a level `Field` per level
+per column. The loop allocates per level independent of the number
+of columns; its cost on GPU is one kernel launch per level.
+"""
+function _precip_fraction_sweep!(ᶜprecip_frac, ᶜcf, ᶜq_precip, f_decay, q_precip_min)
+    FT = eltype(ᶜprecip_frac)
+    # A negative value is the sentinel for a precipitation-free level, so the
+    # seed takes the cover clamped non-negative.
+    @. ᶜprecip_frac =
+        ifelse(ᶜq_precip > q_precip_min, max(ᶜcf, zero(FT)), -one(FT))
+    # Level 1 is the bottom model level, so the recursion runs from the last
+    # level down. The top level has no shaft above it, so its sentinel just
+    # resolves to zero.
+    nz = Spaces.nlevels(axes(ᶜprecip_frac))
+    ᶜa_p_above = Fields.level(ᶜprecip_frac, nz)
+    @. ᶜa_p_above = max(ᶜa_p_above, zero(FT))
+    for level in (nz - 1):-1:1
+        ᶜa_p = Fields.level(ᶜprecip_frac, level)
+        @. ᶜa_p = ifelse(
+            ᶜa_p < zero(FT),
+            zero(FT),
+            min(one(FT), max(ᶜa_p, f_decay * ᶜa_p_above)),
+        )
+        ᶜa_p_above = ᶜa_p
+    end
+    return nothing
+end
+# `column_accumulate!` form of the same recursion (allocates on the CPU path,
+# see the docstring above):
+#     input = Base.broadcasted(tuple, ᶜcf, ᶜq_precip)
+#     Operators.column_accumulate!(
+#         ᶜprecip_frac, input; init = zero(FT), reverse = true,
+#     ) do a_p_above, (cf, q_precip)
+#         ifelse(
+#             q_precip > q_precip_min,
+#             min(one(FT), max(cf, f_decay * a_p_above)),
+#             zero(FT),
+#         )
+#     end
+
+"""
+    _get_precip_mean(Y, p, turbconv_model)
+
+Mean precipitation specific humidity `q_rai + q_sno` of the domain that carries
+the SGS closure: the environment for `PrognosticEDMFX`, the grid mean
+otherwise.
+"""
+function _get_precip_mean(Y, p, turbconv_model)
+    if turbconv_model isa PrognosticEDMFX
+        return @. lazy(
+            max(0, $(ᶜspecific_env_value(@name(q_rai), Y, p))) +
+            max(0, $(ᶜspecific_env_value(@name(q_sno), Y, p))),
+        )
+    else
+        return @. lazy(
+            max(0, specific(Y.c.ρq_rai, Y.c.ρ)) +
+            max(0, specific(Y.c.ρq_sno, Y.c.ρ)),
+        )
+    end
 end
 
 
