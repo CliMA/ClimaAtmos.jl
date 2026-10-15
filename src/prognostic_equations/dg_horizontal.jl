@@ -16,9 +16,11 @@ every function here is a no-op):
     the acoustic speed and the tangential and vertical-velocity jumps at the
     shear speed (still a sign-definite KE sink).
   - With `dg_vi_interface_flux = es`, the ⟦ρe⟧ penalty acts on the entropy
-    variable −ρ/p and the velocity penalties on ⟦βu⟧/{β}, β = ρ/p, so every
-    face penalty is a sink of the dry entropy S = −ρs/(γ−1) at fixed ρ (the
-    mass flux stays central). The central part is not entropy-conservative,
+    variable −ρ/p and the velocity penalties carry the own-side weight
+    {β}/β, β = ρ/p, so every face penalty is a sink of the dry entropy
+    S = −ρs/(γ−1) at fixed ρ (the mass flux stays central). The velocity
+    penalties stay Galilean invariant; they conserve momentum up to
+    O(⟦u⟧⟦1/β⟧). The central part is not entropy-conservative,
     so this is entropy-dissipative face dissipation, not a discrete entropy
     inequality for the whole scheme.
   - Vorticities (`ᶜω³` and the `wcurlₕ(u₃)` part of `ᶠω¹²`): strong curl
@@ -65,14 +67,14 @@ central_curl12_lift(normal, (w⁻,), (w⁺,)) =
 """
     rho_weighted_jump_penalty_lift(normal, (q⁻, ρ⁻, λ⁻, β⁻), (q⁺, ρ⁺, λ⁺, β⁺))
 
-λ-jump penalty on ``⟦βq⟧/{β}`` with own-side ρ weighting. With ``β ≡ 1`` the
-face kinetic-energy production is ``−max(λ)/2 {ρ}⟦u⟧² ≤ 0`` exactly; with
-``β = ρ/p`` (``ρβu`` is the entropy variable of ``u`` at fixed ρ, ρe_tot) the
-face entropy production is ``−max(λ)/2 ({ρ}/{β})⟦βu⟧² ≤ 0`` exactly.
+λ-jump penalty ``max(λ)/2 ({ρ}{β}/ρ⁻β⁻) ⟦q⟧`` with own-side ρβ weighting.
+With ``β ≡ 1`` the face kinetic-energy production is ``−max(λ)/2 {ρ}⟦u⟧² ≤ 0``
+and momentum is conserved exactly; with ``β = ρ/p`` (``ρβu`` is the entropy
+variable of ``u`` at fixed ρ, ρe_tot) the face entropy production is
+``−max(λ)/2 {ρ}{β}⟦u⟧² ≤ 0`` exactly.
 """
 rho_weighted_jump_penalty_lift(normal, (q⁻, ρ⁻, λ⁻, β⁻), (q⁺, ρ⁺, λ⁺, β⁺)) =
-    max(λ⁻, λ⁺) / 2 * ((ρ⁻ + ρ⁺) / 2 / ρ⁻) * (β⁺ * q⁺ - β⁻ * q⁻) /
-    ((β⁻ + β⁺) / 2)
+    max(λ⁻, λ⁺) / 2 * ((ρ⁻ + ρ⁺) / 2 / ρ⁻) * ((β⁻ + β⁺) / 2 / β⁻) * (q⁺ - q⁻)
 
 # Contact/shear speed of the wave-selective penalty: |{u_n}| with a Harten-type
 # floor ε c, so jumps at near-stagnant faces still decay. Symmetric under
@@ -84,12 +86,12 @@ rho_weighted_jump_penalty_lift(normal, (q⁻, ρ⁻, λ⁻, β⁻), (q⁺, ρ⁺
     wave_selective_jump_penalty_lift(normal, (uv⁻, ρ⁻, c⁻, β⁻, ε), (uv⁺, ρ⁺, c⁺, β⁺, _))
 
 ρ-weighted jump penalty on the orthonormal horizontal velocity with separate
-normal and tangential rates, ``({ρ}/2ρ⁻) Λ ⟦βu⟧/{β}`` with
+normal and tangential rates, ``({ρ}{β}/2ρ⁻β⁻) Λ ⟦u⟧`` with
 ``Λ = λ_n n̂n̂ᵀ + λ_t (I − n̂n̂ᵀ)``, ``λ_n = max(|u_n| + c)`` (acoustic) and
 ``λ_t = max(|{u_n}|, ε max(c))`` (shear). With ``β ≡ 1`` the face
-kinetic-energy production is ``−{ρ}(λ_n⟦u_n⟧² + λ_t⟦u_t⟧²)/2 ≤ 0``; with
-``β = ρ/p`` the face entropy production is ``−({ρ}/2{β})⟦βu⟧·Λ⟦βu⟧ ≤ 0``.
-``ρ⁻ℓ⁻ + ρ⁺ℓ⁺ = 0`` in both cases. Returns a `UVVector`.
+kinetic-energy production is ``−{ρ}(λ_n⟦u_n⟧² + λ_t⟦u_t⟧²)/2 ≤ 0`` and
+``ρ⁻ℓ⁻ + ρ⁺ℓ⁺ = 0``; with ``β = ρ/p`` the face entropy production is
+``−({ρ}{β}/2)⟦u⟧·Λ⟦u⟧ ≤ 0``. Returns a `UVVector`.
 """
 function wave_selective_jump_penalty_lift(
     normal,
@@ -102,9 +104,9 @@ function wave_selective_jump_penalty_lift(
     un⁺ = uv⁺' * normal
     λn = max(abs(un⁻) + c⁻, abs(un⁺) + c⁺)
     λt = dg_shear_speed(un⁻, un⁺, c⁻, c⁺, oftype(ρ⁻, ε))
-    s = (ρ⁻ + ρ⁺) / 4 / ρ⁻ / ((β⁻ + β⁺) / 2)
-    ΔE = β⁺ * uv⁺.components.data.:1 - β⁻ * uv⁻.components.data.:1
-    ΔN = β⁺ * uv⁺.components.data.:2 - β⁻ * uv⁻.components.data.:2
+    s = (ρ⁻ + ρ⁺) / 4 / ρ⁻ * ((β⁻ + β⁺) / 2 / β⁻)
+    ΔE = uv⁺.components.data.:1 - uv⁻.components.data.:1
+    ΔN = uv⁺.components.data.:2 - uv⁻.components.data.:2
     a = (λn - λt) * n1 * n2
     return s * Geometry.UVVector(
         (λn * n1^2 + λt * n2^2) * ΔE + a * ΔN,
@@ -117,7 +119,7 @@ end
 
 ρ-weighted jump penalty on the vertical velocity `w` across a horizontal
 interface, where `w` is a tangential component and is damped at the shear
-speed ``λ_t = max(|{u_n}|, ε max(c))``: ``λ_t/2 ({ρ}/ρ⁻) ⟦βw⟧/{β}``.
+speed ``λ_t = max(|{u_n}|, ε max(c))``: ``λ_t/2 ({ρ}{β}/ρ⁻β⁻) ⟦w⟧``.
 """
 function shear_jump_penalty_lift(
     normal,
@@ -125,8 +127,7 @@ function shear_jump_penalty_lift(
     (w⁺, ρ⁺, uv⁺, c⁺, β⁺, _),
 )
     λt = dg_shear_speed(uv⁻' * normal, uv⁺' * normal, c⁻, c⁺, oftype(ρ⁻, ε))
-    return λt / 2 * ((ρ⁻ + ρ⁺) / 2 / ρ⁻) * (β⁺ * w⁺ - β⁻ * w⁻) /
-           ((β⁻ + β⁺) / 2)
+    return λt / 2 * ((ρ⁻ + ρ⁺) / 2 / ρ⁻) * ((β⁻ + β⁺) / 2 / β⁻) * (w⁺ - w⁻)
 end
 
 """
@@ -202,7 +203,7 @@ end
 
 Wave-selective velocity jump penalties (`dg_vi_velocity_penalty = wave_selective`): [`wave_selective_jump_penalty_lift`](@ref) on uₕ and
 [`shear_jump_penalty_lift`](@ref) on the face vertical velocity, with the
-shear floor `p.atmos.numerics.dg_vi_shear_floor` and the jump weight `ᶜβ`
+shear floor `p.atmos.numerics.dg_vi_shear_floor` and the own-side weight `ᶜβ`
 (a center field, or `1`).
 """
 function dg_wave_selective_velocity_penalty!(Yₜ, Y, p, ᶜuv, ᶜβ)
@@ -251,8 +252,9 @@ Interface completion of `horizontal_dynamics_tendency!` on DG spaces: scalar
 and ρ-weighted velocity jump penalties — uniform λ on uₕ (`rusanov`), or
 wave-selective on uₕ and u₃ (`wave_selective`, see
 [`dg_wave_selective_velocity_penalty!`](@ref)). With
-`dg_vi_interface_flux = es` the penalties act on the entropy-variable jumps
-(see [`dg_scalars_es_interface`](@ref)). No-op on CG spaces.
+`dg_vi_interface_flux = es` the ρe_tot penalty acts on the entropy-variable
+jump (see [`dg_scalars_es_interface`](@ref)) and the velocity penalties carry
+the own-side weight {β}/β, β = ρ/p. No-op on CG spaces.
 """
 NVTX.@annotate function dg_horizontal_dynamics_completion!(Yₜ, Y, p, t)
     is_dg_horizontal(axes(Y.c)) || return nothing
@@ -264,7 +266,7 @@ NVTX.@annotate function dg_horizontal_dynamics_completion!(Yₜ, Y, p, t)
     ᶜWJ = Fields.local_geometry_field(Y.c).WJ
     (ᶜuv, ᶜλ) = dg_face_velocity_and_λ(Y, p)
     es = p.atmos.numerics.dg_vi_interface_flux === Val(:es)
-    # velocity jump weight β: ρ/p (entropy-variable jumps) for es, 1 otherwise
+    # own-side velocity penalty weight β: ρ/p (entropy sink) for es, 1 otherwise
     ᶜβ = es ? (@. Y.c.ρ / ᶜp) : one(FT)
 
     # (ρ, ρe_tot) interface fluxes
