@@ -191,9 +191,9 @@ const HOURLY_DIAGS = Set([
 
 Return the compute schedule to pair with an output `period` for `variable`.
 
-Short output periods — anything other than a month, a week, or several days, so including
-hourly and daily — are computed every timestep. Longer output periods subsample: variables
-in `HOURLY_DIAGS` are computed hourly, all others six-hourly.
+Sub-daily output periods are computed every timestep, because the subsampling below is no
+finer than the window they average over. Daily and longer periods subsample: variables in
+`HOURLY_DIAGS` are computed hourly, all others six-hourly.
 
 # Arguments
 
@@ -207,10 +207,7 @@ in `HOURLY_DIAGS` are computed hourly, all others six-hourly.
 An `EveryStepSchedule`, or an `EveryCalendarDtSchedule` of one or six hours.
 """
 function make_compute_schedule(variable, period, start_date, date_last)
-    if !(
-        period isa Dates.Month || period isa Dates.Week ||
-        (period isa Dates.Day && Dates.value(period) > 1)
-    )
+    if !(period isa Dates.Month || period isa Dates.Week || period isa Dates.Day)
         return EveryStepSchedule()
     end
     short_name = ClimaDiagnostics.DiagnosticVariables.short_name(variable)

@@ -45,17 +45,25 @@ main
   CF uses `σ_aug = sqrt((α σ_S)² + σ_S_floor²)` — α scales only the
   equilibrium part. Microphysics timescales reuse the ClimaParams
   `condensation_evaporation_timescale` / `sublimation_deposition_timescale`.
-- ![][badge-🐛bugfix] ![][badge-🔥behavioralΔ] The duration used to pick the
-  default diagnostics cadence is `t_end` rather than `t_end - dt`.
-  `frequency_averages` compares it against inclusive thresholds, so a run ending
-  exactly on a boundary was getting the next finer cadence: `t_end: "1days"` wrote
-  hourly averages instead of daily, `"30days"` daily instead of ten-daily, and
-  `"3600secs"` no default averages at all. Because the output period also selects
-  the compute schedule (`Day(1)` samples every step, `Day(10)` every six hours),
-  the 30-day case was sampling every default diagnostic once per step;
-  `longrun_dry_baroclinic_wave_he60` and `longrun_moist_baroclinic_wave_he60`
-  were both in that case. `t_end` is relative to `start_date`, so the cadence
-  stays the same across a restart.
+- ![][badge-🐛bugfix] ![][badge-🔥behavioralΔ] Default diagnostics pick their
+  cadence from `t_end` rather than `t_end - dt`, and every bucket now requires the
+  run to span at least three of its averaging windows. The monthly and ten-daily
+  buckets already required three, while daily and hourly required one, so a run
+  ending exactly on a boundary could select a window it was able to fill only
+  once. Subtracting `dt` masked that for the bottom two buckets but shifted the
+  top two down: `t_end: "30days"` selected daily averages instead of ten-daily,
+  and since the output period also selects the compute schedule (`Day(1)` samples
+  every step, `Day(10)` every six hours), it sampled every default diagnostic once
+  per timestep. `longrun_dry_baroclinic_wave_he60` and
+  `longrun_moist_baroclinic_wave_he60` were both in that case, at `dt: "30secs"`.
+  Because `t_end` is relative to `start_date`, the cadence is also now stable
+  across a restart.
+- ![][badge-🔥behavioralΔ] Daily default diagnostics are sampled six-hourly, or
+  hourly for `HOURLY_DIAGS`, rather than every timestep; this matches the
+  ten-daily and monthly cadences. Sub-daily output is still computed every step,
+  where subsampling would be coarser than the window being averaged. Runs of three
+  to thirty days are affected, among them `rcemipii_box_CRM_1M` (21 days at
+  `dt: "5secs"`) and `baroclinic_wave_equil`.
 - ![][badge-🔥behavioralΔ] The resolved-gradient (geometric) SGS variance block
   is the variance from a Gaussian subgrid parcel displacement with covariance
   `c_g diag(ℓ_h², ℓ_h², ℓ_v²)`, `ℓ_h = c_Δx Δx_h`, `ℓ_v = H`, split into
