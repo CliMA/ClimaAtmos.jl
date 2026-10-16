@@ -217,20 +217,53 @@ function materialized_mixing_length!(Y, p)
 end
 
 """
-    stable_displacement_length(κ_b, N², l_z, Δz)
+    floor_velocity(Δx_h, w_ref, Δx_ref, p)
 
-Vertical displacement `min(√κ_b / N, l_z, Δz)` of air with the
-buoyancy-weighted kinetic energy `κ_b = c_b κ` against the stratification
-`N²`, capped by the wall distance `l_z` and by the cell depth `Δz`, over
-which the gradients the displacement acts on are defined. Where the air is
-not stably stratified the result is `min(l_z, Δz)`. The buoyancy limit is the
-buoyancy scale `l_N` of the mixing length.
+Velocity scale `w_min = w_ref (Δx_h / Δx_ref)^p` of the unresolved vertical
+motions at the horizontal grid scale `Δx_h`. A single column has no
+horizontal grid scale (`Δx_h = Inf`) and stands for a cell of the reference
+size, so it gets `w_ref`.
+
+The exponent follows from the spectral slope. For a field with spectrum
+`E(k) ∝ k^(−s)`, the variance below the grid scale is
+`∫_{k > 2π/Δ} E dk ∝ Δ^(s−1)`. The horizontal term of the covariance,
+`ℓ_h² |∇_h ψ|²` with `ℓ_h ∝ Δ`, scales the same way by itself, because the
+variance of the coarse-grained gradient is
+`∫_{k < 2π/Δ} k² E dk ∝ Δ^(s−3)`; so its coefficient is independent of
+resolution. The vertical term `ℓ_v² (∂_z ψ)²` does not: the vertical
+gradient is a vertical coarse-graining and does not change with `Δx_h`, so
+the growth `Δ^(s−1)` of the sub-cell variance must be carried by the
+amplitude, `ℓ_v ∝ w_min ∝ Δx_h^((s−1)/2)`. A `−5/3` spectrum gives
+`p = 1/3`; the default `p = 2/3`, from the within-cell variances of
+kilometre-scale global simulations coarse-grained to 60, 120 and 240 km,
+corresponds to an effective slope near `−7/3`, between the mesoscale `−5/3`
+and the synoptic `−3`, which is where the spectra of temperature and
+humidity lie at those scales.
 """
-@inline function stable_displacement_length(κ_b, N², l_z, Δz)
+@inline function floor_velocity(Δx_h, w_ref, Δx_ref, p)
+    Δx = ifelse(isfinite(Δx_h), Δx_h, Δx_ref)
+    return w_ref * (Δx / Δx_ref)^p
+end
+
+"""
+    floor_displacement_length(κ_b, N², τ_L, l_z, Δz)
+
+Vertical displacement `√κ_b · min(1/N, τ_L)` of the unresolved vertical
+motions with buoyancy-weighted kinetic energy `κ_b = c_b κ_min` and
+Lagrangian time scale `τ_L`, capped by the wall distance `l_z` and by the
+cell depth `Δz`, over which the gradients the displacement acts on are
+defined. In stably stratified air the displacement is stopped by buoyancy
+after a time `1/N` and the result is the buoyancy scale `√κ_b / N` of the
+mixing length; where the air is not stably stratified it is stopped by the
+loss of velocity correlation after `τ_L`, so the result is `√κ_b τ_L`. This
+is the vertical dispersion of a stochastic Lagrangian model in stratified
+flow.
+"""
+@inline function floor_displacement_length(κ_b, N², τ_L, l_z, Δz)
     FT = typeof(N²)
     l_cap = min(max(l_z, zero(FT)), Δz)
-    l_N = sqrt(κ_b / max(N², eps(FT)))
-    return ifelse(N² > eps(FT), min(l_N, l_cap), l_cap)
+    τ = min(τ_L, inv(sqrt(max(N², eps(FT)))))
+    return min(sqrt(κ_b) * τ, l_cap)
 end
 
 """
@@ -251,17 +284,21 @@ Materialize the vertical displacement length `l_d` of the variance closure
 into `p.scratch.ᶜtemp_scalar` and return it. Also refreshes `p.precomputed.ᶜl_mix`
 for `AbstractEDMF` via `materialized_mixing_length!`.
 
-`l_d` combines the turbulent mixing length `l_mix` and the floored buoyancy
-displacement scale `stable_displacement_length(c_b κ_min, N², z − z_sfc, Δz)`
-in quadrature, with `κ_min = w_min² / (2 c_σ c_b)` and the velocity floor
-`w_min` (`sgs_variance_vertical_velocity_floor`). In turbulent layers `l_mix`
+`l_d` combines the turbulent mixing length `l_mix` and the floor
+displacement scale `floor_displacement_length` in quadrature, with
+`κ_min = w_min² / (2 c_σ c_b)`, the velocity scale `w_min` of the unresolved
+vertical motions at the horizontal grid scale (`floor_velocity`;
+`sgs_variance_vertical_velocity_floor`,
+`sgs_variance_floor_reference_resolution`,
+`sgs_variance_floor_resolution_exponent`) and their Lagrangian time scale
+`τ_L` (`sgs_variance_floor_time_scale`). In turbulent layers `l_mix`
 dominates and the closure is the production–dissipation balance. In stably
 stratified air without TKE, `l_d = w_min / (√(2 c_σ) N)`, so the vertical
 displacement variance `2 c_σ l_d²` is `(w_min / N)²`: the displacement of
 unresolved vertical motions (gravity waves, mesoscale circulations) with
-velocity scale `w_min`, which displace air without mixing it. In air that is
-not stably stratified the floored scale is the cell depth or the wall
-distance, whichever is smaller. The cell-depth cap applies to the floored
+velocity scale `w_min`, which displace air without mixing it. Where the air
+is not stably stratified the floor displacement is `w_min τ_L / √(2 c_σ)`,
+capped by the cell depth and the wall distance. The caps apply to the floor
 scale only; `l_mix` keeps its own limits, so `l_d` exceeds the cell depth
 wherever the mixing length does, as the turbulent variance
 `2 c_σ l_mix² (∂_z ψ)²` always has. The two scales are combined in quadrature
@@ -278,7 +315,13 @@ function materialized_displacement_length!(Y, p)
     turbconv_params = CAP.turbconv_params(p.params)
     c_b = FT(CAP.static_stab_coeff(turbconv_params))
     c_σ = FT(CAP.diagnostic_covariance_coeff(p.params))
-    w_min = FT(CAP.sgs_variance_vertical_velocity_floor(p.params))
+    w_min = floor_velocity(
+        horizontal_filter_scale(axes(Y.c)),
+        FT(CAP.sgs_variance_vertical_velocity_floor(p.params)),
+        FT(CAP.sgs_variance_floor_reference_resolution(p.params)),
+        FT(CAP.sgs_variance_floor_resolution_exponent(p.params)),
+    )
+    τ_L = FT(CAP.sgs_variance_floor_time_scale(p.params))
     κ_min = w_min^2 / (2 * c_σ * c_b)
     ᶜl_mix = materialized_mixing_length!(Y, p)
     (; ᶜbuoygrad) = p.precomputed
@@ -288,7 +331,9 @@ function materialized_displacement_length!(Y, p)
     ᶜl_d = p.scratch.ᶜtemp_scalar
     @. ᶜl_d = displacement_length(
         ᶜl_mix,
-        stable_displacement_length(c_b * κ_min, ᶜbuoygrad, ᶜz - z_sfc, ᶜΔz),
+        floor_displacement_length(
+            c_b * κ_min, ᶜbuoygrad, τ_L, ᶜz - z_sfc, ᶜΔz,
+        ),
         ᶜz - z_sfc,
     )
     return ᶜl_d

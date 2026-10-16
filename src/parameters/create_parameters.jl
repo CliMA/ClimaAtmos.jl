@@ -597,9 +597,14 @@ function SGSQuadratureParameters(
         cloud_fraction_floor_release_abs_margin = FT(1),
         cloud_fraction_floor_release_sharpness = FT(1),
         cloud_fraction_floor_residual = FT(1),
-        # Velocity scale [m/s] of the unresolved vertical motions in the
-        # variance closure (`materialized_displacement_length!`).
-        sgs_variance_vertical_velocity_floor = FT(1),
+        # Unresolved vertical motions in the variance closure
+        # (`materialized_displacement_length!`): velocity scale [m/s] at the
+        # reference horizontal grid scale [m], the exponent of its growth with
+        # the grid scale, and the Lagrangian time scale [s].
+        sgs_variance_vertical_velocity_floor = FT(0.6),
+        sgs_variance_floor_reference_resolution = FT(1.2e5),
+        sgs_variance_floor_resolution_exponent = FT(2 // 3),
+        sgs_variance_floor_time_scale = FT(100),
         # Equilibrium-ratio modulator weight (see `sgs_variance_fidelity`).
         sgs_fidelity_equilibrium_weight = FT(0.5),
         # Precipitation-fraction placement of rain and snow over the quadrature:

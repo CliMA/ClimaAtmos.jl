@@ -252,12 +252,23 @@ not yet define.
     a linear field over a uniform cell [-].
   - `sgs_variance_horizontal_scale_factor`: Multiplier `c_Δx` on the horizontal
     grid scale in `ℓ_h`. `0` turns the horizontal displacement off [-].
-  - `sgs_variance_vertical_velocity_floor`: Velocity scale `w_min` of the
-    unresolved vertical motions that displace air where the TKE vanishes; the
-    buoyancy displacement scale `min(w_min / (√(2 c_σ) N), z − z_sfc, Δz)` is
-    combined in quadrature with the mixing length, so the vertical displacement
-    in stably stratified air without TKE is `w_min / N`. Enters the variance
+  - `sgs_variance_vertical_velocity_floor`: Velocity scale `w_ref` of the
+    unresolved vertical motions that displace air where the TKE vanishes, at
+    the horizontal grid scale `sgs_variance_floor_reference_resolution`. The
+    floor displacement `w_min min(1/N, τ_L) / √(2 c_σ)`, capped by the wall
+    distance and the cell depth, is combined in quadrature with the mixing
+    length (`floor_displacement_length`), so the vertical displacement in
+    stably stratified air without TKE is `w_min / N`. Enters the variance
     only, not the diffusivity [m/s].
+  - `sgs_variance_floor_reference_resolution`: Horizontal grid scale `Δx_ref`
+    at which the velocity floor equals `sgs_variance_vertical_velocity_floor`;
+    single columns use it in place of their undefined grid scale [m].
+  - `sgs_variance_floor_resolution_exponent`: Exponent `p` of the velocity
+    floor `w_min = w_ref (Δx_h / Δx_ref)^p`, equal to `(s − 1)/2` for a
+    sub-grid spectrum `k^(−s)` of the displaced fields (`floor_velocity`) [-].
+  - `sgs_variance_floor_time_scale`: Lagrangian time scale `τ_L` of the
+    unresolved vertical motions, which bounds their displacement where
+    buoyancy does not [s].
   - `sgs_variance_max_rel_std`: Upper bound on the SGS total-water standard
     deviation relative to the grid-mean total water, `σ_q ≤ sgs_variance_max_rel_std * q_tot`,
     applied to the diagnosed `q′q′` whatever closure produced it. A wider variance puts a quadrature node
@@ -311,6 +322,9 @@ Base.@kwdef struct SGSQuadratureParameters{FT} <: ASQP
     sgs_variance_geometric_coeff::FT
     sgs_variance_horizontal_scale_factor::FT
     sgs_variance_vertical_velocity_floor::FT
+    sgs_variance_floor_reference_resolution::FT
+    sgs_variance_floor_resolution_exponent::FT
+    sgs_variance_floor_time_scale::FT
     sgs_variance_max_rel_std::FT
     sgs_liquid_uniform_fraction::FT
     sgs_ice_uniform_fraction::FT

@@ -290,20 +290,46 @@ floor_nt(
         end
     end
 
-    @testset "`stable_displacement_length` and buoyancy scale w_min / N" begin
+    @testset "`floor_velocity`: resolution dependence of the floor" begin
         for FT in (Float32, Float64)
             @testset "FT = $FT" begin
-                l0 = CA.stable_displacement_length
+                w = CA.floor_velocity
+                w_ref, Δx_ref, p = FT(0.6), FT(1.2e5), FT(2 // 3)
+                @test w(Δx_ref, w_ref, Δx_ref, p) == w_ref
+                # 60 / 120 / 240 km: 0.38 / 0.6 / 0.95 m/s
+                @test w(FT(6e4), w_ref, Δx_ref, p) ≈ FT(0.378) rtol = FT(1e-2)
+                @test w(FT(2.4e5), w_ref, Δx_ref, p) ≈ FT(0.952) rtol = FT(1e-2)
+                # a −5/3 spectrum: p = 1/3
+                @test w(FT(2.4e5), w_ref, Δx_ref, FT(1 // 3)) ≈ w_ref * 2^(1 / 3)
+                # a single column has no grid scale and gets the reference value
+                @test w(FT(Inf), w_ref, Δx_ref, p) == w_ref
+                # the LES limit vanishes
+                @test w(FT(100), w_ref, Δx_ref, p) < FT(0.01)
+                @test w(FT(6e4), w_ref, Δx_ref, p) isa FT
+            end
+        end
+    end
+
+    @testset "`floor_displacement_length` and `displacement_length`" begin
+        for FT in (Float32, Float64)
+            @testset "FT = $FT" begin
+                l0 = CA.floor_displacement_length
+                τ_L = FT(100)
                 Δz = FT(500)
-                l(κ_b, N², l_z) = l0(κ_b, N², l_z, Δz)
-                κ_b = FT(0.24)                     # c_b κ_min for w_min = 1 m/s
+                l(κ_b, N², l_z) = l0(κ_b, N², τ_L, l_z, Δz)
+                κ_b = FT(0.0857)                   # c_b κ_min for w_min = 0.6 m/s
                 l_z = FT(5000)
-                @test l(κ_b, FT(1e-4), l_z) ≈ sqrt(κ_b) / FT(1e-2)   # √κ_b / N
-                @test l(κ_b, FT(0), l_z) == Δz                       # neutral: cell depth
-                @test l(κ_b, FT(-1e-4), l_z) == Δz                   # unstable: cell depth
-                @test l(κ_b, FT(0), FT(100)) == FT(100)              # neutral near the wall
-                @test l(κ_b, FT(1e-8), FT(100)) == FT(100)           # wall cap
-                @test l(κ_b, FT(1e-4), FT(-1)) == FT(0)              # non-negative wall guard
+                # stable: √κ_b / N, below both caps
+                @test l(κ_b, FT(1e-4), l_z) ≈ sqrt(κ_b) / FT(1e-2)
+                # weakly stable: 1/N exceeds τ_L, so the time scale binds
+                @test l(κ_b, FT(1e-6), l_z) ≈ sqrt(κ_b) * τ_L
+                # neutral and unstable: √κ_b τ_L (29 m), below the cell depth
+                @test l(κ_b, FT(0), l_z) ≈ sqrt(κ_b) * τ_L
+                @test l(κ_b, FT(-1e-4), l_z) ≈ sqrt(κ_b) * τ_L
+                # caps: cell depth and wall distance
+                @test l0(κ_b, FT(0), FT(1e4), l_z, Δz) == Δz
+                @test l(κ_b, FT(0), FT(10)) == FT(10)
+                @test l(κ_b, FT(1e-4), FT(-1)) == FT(0)
                 @test l(κ_b, FT(1e-4), l_z) isa FT
 
                 params = CA.ClimaAtmosParameters(FT)
@@ -312,14 +338,16 @@ floor_nt(
                 vkc = CAP.von_karman_const(params)
                 c_b = FT(CAP.static_stab_coeff(turbconv_params))
                 c_σ = FT(CAP.diagnostic_covariance_coeff(params))
-                w_min = FT(
-                    CAP.sgs_variance_vertical_velocity_floor(
-                        params.sgs_quadrature_params,
-                    ),
+                sq = params.sgs_quadrature_params
+                w_min = CA.floor_velocity(
+                    FT(Inf),
+                    FT(CAP.sgs_variance_vertical_velocity_floor(sq)),
+                    FT(CAP.sgs_variance_floor_reference_resolution(sq)),
+                    FT(CAP.sgs_variance_floor_resolution_exponent(sq)),
                 )
                 κ_min = w_min^2 / (2 * c_σ * c_b)
                 N² = FT(1e-4)
-                l_b = l(c_b * κ_min, N², FT(5000))   # 49 m < Δz
+                l_b = l(c_b * κ_min, N², FT(5000))
                 # stably stratified, no resolved TKE: 2 c_σ l_b² N² = w_min²
                 @test 2 * c_σ * l_b^2 * N² ≈ w_min^2 rtol = FT(1e-5)
 

@@ -475,28 +475,61 @@ is the variance a cell holds because the resolved field varies across it, and
 it vanishes as the horizontal grid is refined.
 
 The vertical scale is a displacement length, ``\ell_v^2 = 2 c_\sigma l_d^2``,
-where ``l_d`` combines the [mixing length](@ref "Mixing-length scales") and the
-buoyancy displacement scale
-``\min(\sqrt{c_b \kappa_{\min}} / N, \; z - z_s, \; \Delta z)``
-in quadrature, capped by the wall distance, with
-``\kappa_{\min} = w_{\min}^2 / (2 c_\sigma c_b)``. In turbulent layers ``l_d`` is the mixing length and the closure is the
-production–dissipation balance of [Sommeria1977, Mellor1977](@cite),
-``\sigma_\psi^2 = 2 c_\sigma l^2 (\partial_z \psi)^2``, with the wall
-distance and the buoyancy scale inherited from the mixing length. In air that
-is not stably stratified the floored scale is the cell depth or the wall
-distance, whichever is smaller; the cell-depth cap applies to the floored
-scale only, and ``l_d`` exceeds ``\Delta z`` wherever the mixing length does,
-as the turbulent variance always has. In stably stratified air
-without TKE the buoyancy scale gives ``\ell_v = w_{\min} / N``: the vertical
-displacement of unresolved motions with velocity scale ``w_{\min}``
-(`sgs_variance_vertical_velocity_floor`), gravity waves, mesoscale
-circulations and convective remnants, which displace air by
-``w_{\min}/N`` without mixing it. A reversible displacement creates a
-fluctuation at a fixed point, and the fluctuation condenses if it crosses
-saturation, so the floor enters the variance and not the diffusivity, which
-keeps the unfloored mixing length. Comparison with the within-cell variance
-of kilometre-scale global simulations coarse-grained to 120 km gives
-``\ell_h \approx 0.5 \Delta x_h`` and ``w_{\min} \approx 1`` m s⁻¹.
+where ``l_d`` combines the [mixing length](@ref "Mixing-length scales") and
+the floor displacement scale
+
+```math
+l_b = \min\!\left( \sqrt{c_b \kappa_{\min}} \, \min(1/N, \tau_L), \;
+  z - z_s, \; \Delta z \right) ,
+\qquad \kappa_{\min} = \frac{w_{\min}^2}{2 c_\sigma c_b} ,
+```
+
+in quadrature, capped by the wall distance. In turbulent layers ``l_d`` is
+the mixing length and the closure is the production–dissipation balance of
+[Sommeria1977, Mellor1977](@cite),
+``\sigma_\psi^2 = 2 c_\sigma l^2 (\partial_z \psi)^2``, with the wall distance
+and the buoyancy scale inherited from the mixing length. The floor is the
+displacement of unresolved vertical motions with velocity scale ``w_{\min}``
+and Lagrangian time scale ``\tau_L`` (`sgs_variance_floor_time_scale`):
+gravity waves, mesoscale circulations and convective remnants, which in
+stably stratified air are stopped by buoyancy after a time ``1/N``, giving
+``\ell_v = w_{\min}/N``, and elsewhere by the loss of velocity correlation
+after ``\tau_L``, giving ``\ell_v = w_{\min} \tau_L``. This is the vertical
+dispersion of a stochastic Lagrangian model in stratified flow. The caps by
+the cell depth and the wall distance apply to the floor scale only; ``l_d``
+exceeds ``\Delta z`` wherever the mixing length does, as the turbulent
+variance always has. A reversible displacement creates a fluctuation at a
+fixed point, and the fluctuation condenses if it crosses saturation, so the
+floor enters the variance and not the diffusivity, which keeps the unfloored
+mixing length.
+
+The velocity scale grows with the horizontal grid scale,
+
+```math
+w_{\min} = w_{\mathrm{ref}} \left( \frac{\Delta x_h}{\Delta x_{\mathrm{ref}}} \right)^p ,
+```
+
+(`sgs_variance_vertical_velocity_floor`,
+`sgs_variance_floor_reference_resolution`,
+`sgs_variance_floor_resolution_exponent`; a single column has no horizontal
+grid scale and uses ``\Delta x_{\mathrm{ref}}``). The exponent follows from
+the spectral slope of the displaced fields. For a spectrum ``E(k) \propto k^{-s}``, the variance below the grid scale is
+``\int_{k > 2\pi/\Delta} E \, dk \propto \Delta^{s-1}``. The horizontal term
+``\ell_h^2 |\nabla_h \psi|^2`` scales this way by itself: the variance of the
+coarse-grained gradient is ``\int_{k < 2\pi/\Delta} k^2 E \, dk \propto \Delta^{s-3}``, and ``\ell_h^2 \propto \Delta^2``, so ``c_{\Delta x}`` is
+independent of resolution for any ``s < 3``. The vertical term
+``\ell_v^2 (\partial_z \psi)^2`` does not: the vertical gradient is a vertical
+coarse-graining and does not change with ``\Delta x_h``, so the growth of
+the sub-cell variance has to be carried by the amplitude,
+``\ell_v \propto w_{\min} \propto \Delta x_h^{(s-1)/2}``. A ``-5/3`` spectrum
+gives ``p = 1/3``. The within-cell variances of kilometre-scale global
+simulations coarse-grained to 60, 120 and 240 km give
+``c_{\Delta x} \approx 1.7``, ``w_{\min} \approx 0.38``, ``0.61`` and
+``0.96`` m s⁻¹, so ``p \approx 2/3``, an effective slope near ``-7/3``,
+between the mesoscale ``-5/3`` and the synoptic ``-3``, which is where the
+spectra of temperature and humidity lie at those scales; the two resolution
+pairs give the same exponent. In the large-eddy limit ``w_{\min}`` vanishes
+and the TKE closure carries the variance.
 
 The cross covariance follows from the same displacement, so the sampled
 correlation is
@@ -686,30 +719,30 @@ The full list of fields is in the docstrings of
 covariance, quadrature and cloud-fraction closures,
 [`ClimaAtmos.Parameters.SGSQuadratureParameters`](@ref).
 
-| Symbol                                                              | Accessor                                                                                                       | ClimaParams name                                                                                        |
-|:------------------------------------------------------------------- |:-------------------------------------------------------------------------------------------------------------- |:------------------------------------------------------------------------------------------------------- |
-| ``a_{\min}``, ``a_{\max}``                                          | `min_area`, `max_area`                                                                                         | `EDMF_min_area`, `EDMF_max_area`                                                                        |
-| ``a_{s,\max}``                                                      | `max_surface_area`                                                                                             | `EDMF_max_surface_area`                                                                                 |
-| ``c_u``, ``z_i``, ``\alpha``                                        | `sfc_mass_flux_ustar_coeff`, `convective_zi`, `sfc_mass_flux_cap_fraction`                                     | `EDMF_sfc_mass_flux_ustar_coeff`, `EDMF_convective_zi`, `EDMF_sfc_mass_flux_cap_fraction`               |
-| ``c_\varepsilon``, ``1/L_\varepsilon``                              | `entr_coeff`, `entr_inv_length`                                                                                | `entr_coeff`, `entr_inv_length`                                                                         |
-| ``c_{\varepsilon b}``, ``\tau_\varepsilon^{-1}``                    | `entr_buoy_coeff`, `entr_inv_tau`                                                                              | `entr_buoy_coeff`, `entr_inv_tau`                                                                       |
-| ``\tau_{\max}^{-1}``                                                | `entr_detr_buoy_inv_tau_max`                                                                                   | `entr_detr_buoy_inv_tau_max`                                                                            |
-| ``c_1 \dots c_6`` (Π groups)                                        | `entr_param_vec`                                                                                               | `entr_param_vec`                                                                                        |
-| ``\varepsilon_t``, ``c_t``                                          | `turb_entr_param_vec`                                                                                          | `turb_entr_param_vec`                                                                                   |
-| ``c_\delta``, ``c_{\delta \nabla}``                                 | `detr_buoy_coeff`, `detr_massflux_vertdiv_coeff`                                                               | `detr_buoy_coeff`, `detr_massflux_vertdiv_coeff`                                                        |
-| ``s_{\min}``, ``p_{\min}``                                          | `min_area_limiter_scale`, `min_area_limiter_power`                                                             | `min_area_limiter_scale`, `min_area_limiter_power`                                                      |
-| ``s_{\max}``, ``p_{\max}``                                          | `max_area_limiter_scale`, `max_area_limiter_power`                                                             | `max_area_limiter_scale`, `max_area_limiter_power`                                                      |
-| ``\alpha_b``, ``\alpha_d``                                          | `pressure_normalmode_buoy_coeff1`, `pressure_normalmode_drag_coeff`                                            | same                                                                                                    |
-| ``c_m``                                                             | `tke_ed_coeff`                                                                                                 | `mixing_length_eddy_viscosity_coefficient`                                                              |
-| ``c_b``                                                             | `static_stab_coeff`                                                                                            | `mixing_length_static_stab_coeff`                                                                       |
-| ``\mathrm{Ri}_c``                                                   | `Ri_crit`                                                                                                      | `mixing_length_Ri_crit`                                                                                 |
-| ``c_d``                                                             | `tke_dissipation_coefficient` (derived)                                                                        | —                                                                                                       |
-| ``\mathrm{Pr}_n``, ``\omega_{\mathrm{pr}}``, ``\mathrm{Pr}_{\max}`` | `Prandtl_number_0`, `Prandtl_number_scale`, `Pr_max`                                                           | `mixing_length_Prandtl_number_0`, `mixing_length_Prandtl_number_scale`, `mixing_length_Prandtl_maximum` |
-| ``c_k``                                                             | `tke_surf_flux_coeff`                                                                                          | `mixing_length_tke_surf_flux_coeff`                                                                     |
-| ``c_\sigma``                                                        | `diagnostic_covariance_coeff` (``\ell_v^2 = 2 c_\sigma l_d^2``)                                                | `diagnostic_covariance_coeff`                                                                           |
-| ``r_{T,q_t}``                                                       | `Tq_correlation_coefficient`                                                                                   | `Tq_correlation_coefficient`                                                                            |
-| ``c_g``, ``c_{\Delta x}``, ``w_{\min}``                             | `sgs_variance_geometric_coeff`, `sgs_variance_horizontal_scale_factor`, `sgs_variance_vertical_velocity_floor` | `sgs_variance_geometric_coeff`, `sgs_variance_horizontal_scale_factor`, —                               |
-| ``r_{\max}``                                                        | `sgs_variance_max_rel_std` (bound ``\sigma_q \le r_{\max} q_t``)                                               | `sgs_variance_max_rel_std`                                                                              |
+| Symbol                                                                                          | Accessor                                                                                                                                                                                                                             | ClimaParams name                                                                                        |
+|:----------------------------------------------------------------------------------------------- |:------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |:------------------------------------------------------------------------------------------------------- |
+| ``a_{\min}``, ``a_{\max}``                                                                      | `min_area`, `max_area`                                                                                                                                                                                                               | `EDMF_min_area`, `EDMF_max_area`                                                                        |
+| ``a_{s,\max}``                                                                                  | `max_surface_area`                                                                                                                                                                                                                   | `EDMF_max_surface_area`                                                                                 |
+| ``c_u``, ``z_i``, ``\alpha``                                                                    | `sfc_mass_flux_ustar_coeff`, `convective_zi`, `sfc_mass_flux_cap_fraction`                                                                                                                                                           | `EDMF_sfc_mass_flux_ustar_coeff`, `EDMF_convective_zi`, `EDMF_sfc_mass_flux_cap_fraction`               |
+| ``c_\varepsilon``, ``1/L_\varepsilon``                                                          | `entr_coeff`, `entr_inv_length`                                                                                                                                                                                                      | `entr_coeff`, `entr_inv_length`                                                                         |
+| ``c_{\varepsilon b}``, ``\tau_\varepsilon^{-1}``                                                | `entr_buoy_coeff`, `entr_inv_tau`                                                                                                                                                                                                    | `entr_buoy_coeff`, `entr_inv_tau`                                                                       |
+| ``\tau_{\max}^{-1}``                                                                            | `entr_detr_buoy_inv_tau_max`                                                                                                                                                                                                         | `entr_detr_buoy_inv_tau_max`                                                                            |
+| ``c_1 \dots c_6`` (Π groups)                                                                    | `entr_param_vec`                                                                                                                                                                                                                     | `entr_param_vec`                                                                                        |
+| ``\varepsilon_t``, ``c_t``                                                                      | `turb_entr_param_vec`                                                                                                                                                                                                                | `turb_entr_param_vec`                                                                                   |
+| ``c_\delta``, ``c_{\delta \nabla}``                                                             | `detr_buoy_coeff`, `detr_massflux_vertdiv_coeff`                                                                                                                                                                                     | `detr_buoy_coeff`, `detr_massflux_vertdiv_coeff`                                                        |
+| ``s_{\min}``, ``p_{\min}``                                                                      | `min_area_limiter_scale`, `min_area_limiter_power`                                                                                                                                                                                   | `min_area_limiter_scale`, `min_area_limiter_power`                                                      |
+| ``s_{\max}``, ``p_{\max}``                                                                      | `max_area_limiter_scale`, `max_area_limiter_power`                                                                                                                                                                                   | `max_area_limiter_scale`, `max_area_limiter_power`                                                      |
+| ``\alpha_b``, ``\alpha_d``                                                                      | `pressure_normalmode_buoy_coeff1`, `pressure_normalmode_drag_coeff`                                                                                                                                                                  | same                                                                                                    |
+| ``c_m``                                                                                         | `tke_ed_coeff`                                                                                                                                                                                                                       | `mixing_length_eddy_viscosity_coefficient`                                                              |
+| ``c_b``                                                                                         | `static_stab_coeff`                                                                                                                                                                                                                  | `mixing_length_static_stab_coeff`                                                                       |
+| ``\mathrm{Ri}_c``                                                                               | `Ri_crit`                                                                                                                                                                                                                            | `mixing_length_Ri_crit`                                                                                 |
+| ``c_d``                                                                                         | `tke_dissipation_coefficient` (derived)                                                                                                                                                                                              | —                                                                                                       |
+| ``\mathrm{Pr}_n``, ``\omega_{\mathrm{pr}}``, ``\mathrm{Pr}_{\max}``                             | `Prandtl_number_0`, `Prandtl_number_scale`, `Pr_max`                                                                                                                                                                                 | `mixing_length_Prandtl_number_0`, `mixing_length_Prandtl_number_scale`, `mixing_length_Prandtl_maximum` |
+| ``c_k``                                                                                         | `tke_surf_flux_coeff`                                                                                                                                                                                                                | `mixing_length_tke_surf_flux_coeff`                                                                     |
+| ``c_\sigma``                                                                                    | `diagnostic_covariance_coeff` (``\ell_v^2 = 2 c_\sigma l_d^2``)                                                                                                                                                                      | `diagnostic_covariance_coeff`                                                                           |
+| ``r_{T,q_t}``                                                                                   | `Tq_correlation_coefficient`                                                                                                                                                                                                         | `Tq_correlation_coefficient`                                                                            |
+| ``c_g``, ``c_{\Delta x}``, ``w_{\mathrm{ref}}``, ``\Delta x_{\mathrm{ref}}``, ``p``, ``\tau_L`` | `sgs_variance_geometric_coeff`, `sgs_variance_horizontal_scale_factor`, `sgs_variance_vertical_velocity_floor`, `sgs_variance_floor_reference_resolution`, `sgs_variance_floor_resolution_exponent`, `sgs_variance_floor_time_scale` | `sgs_variance_geometric_coeff`, `sgs_variance_horizontal_scale_factor`, —, —, —, —                      |
+| ``r_{\max}``                                                                                    | `sgs_variance_max_rel_std` (bound ``\sigma_q \le r_{\max} q_t``)                                                                                                                                                                     | `sgs_variance_max_rel_std`                                                                              |
 
 The generated [Configuration Options](configuration_options.md) table lists the
 YAML keys; [Configuring and Tuning PROPHET](prophet_howto.md) explains which of

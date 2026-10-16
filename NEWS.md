@@ -7,12 +7,19 @@ main
   Gaussian subgrid displacement with covariance `diag(ℓ_h², ℓ_h², ℓ_v²)` acting
   on the resolved gradients, `Σ_ψφ = ℓ_h² ∇_h ψ·∇_h φ + ℓ_v² ∂_z ψ ∂_z φ`
   (`displacement_covariance`). `ℓ_h² = c_g (c_Δx Δx_h)²`; `ℓ_v² = 2 c_σ l_d²`
-  with `l_d` combining the mixing length and the floored buoyancy displacement
-  scale (`κ_min = w_min² / (2 c_σ c_b)`) in quadrature
+  with `l_d` combining the mixing length and the floor displacement
+  `√(c_b κ_min) min(1/N, τ_L)`, `κ_min = w_min² / (2 c_σ c_b)`, in quadrature
   (`materialized_displacement_length!`), so that in stably stratified air
-  without TKE the vertical displacement is `w_min / N`. New provisional
-  parameter `sgs_variance_vertical_velocity_floor` (`w_min`, 1 m/s); the floor
-  enters the variance only. This replaces the separate turbulent and
+  without TKE the vertical displacement is `w_min / N` and elsewhere
+  `w_min τ_L`, capped by the cell depth and the wall distance. The velocity
+  scale grows with the horizontal grid scale,
+  `w_min = w_ref (Δx_h / Δx_ref)^p`, as the spectral slope of the displaced
+  fields requires. New provisional parameters
+  `sgs_variance_vertical_velocity_floor` (`w_ref`, 0.6 m/s),
+  `sgs_variance_floor_reference_resolution` (120 km),
+  `sgs_variance_floor_resolution_exponent` (`p`, 2/3) and
+  `sgs_variance_floor_time_scale` (`τ_L`, 100 s); the floor enters the
+  variance only. This replaces the separate turbulent and
   vertical uniform-box blocks; `sgs_variance_vertical_scale_factor` is no
   longer read. `tq_correlation_model` defaults to `diagnosed`, the covariance
   of the same displacement; `constant` keeps the prescribed value.
