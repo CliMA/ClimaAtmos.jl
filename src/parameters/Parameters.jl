@@ -254,7 +254,7 @@ not yet define.
     grid scale in `ℓ_h`. `0` turns the horizontal displacement off [-].
   - `sgs_variance_vertical_velocity_floor`: Velocity scale `w_min` of the
     unresolved vertical motions that displace air where the TKE vanishes; the
-    buoyancy displacement scale `min(w_min / (√(2 c_σ) N), z − z_sfc, Δ_f)` is
+    buoyancy displacement scale `min(w_min / (√(2 c_σ) N), z − z_sfc, Δz)` is
     combined in quadrature with the mixing length, so the vertical displacement
     in stably stratified air without TKE is `w_min / N`. Enters the variance
     only, not the diffusivity [m/s].

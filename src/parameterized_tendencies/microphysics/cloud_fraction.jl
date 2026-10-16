@@ -217,17 +217,20 @@ function materialized_mixing_length!(Y, p)
 end
 
 """
-    stable_displacement_length(κ_b, N², l_z)
+    stable_displacement_length(κ_b, N², l_z, Δz)
 
-Vertical displacement `min(√κ_b / N, l_z)` of air with the buoyancy-weighted
-kinetic energy `κ_b = c_b κ` against the stratification `N²`, capped by the
-wall distance `l_z`; the wall distance where the air is not stably stratified.
-The same limit is the buoyancy scale `l_N` of the mixing length.
+Vertical displacement `min(√κ_b / N, l_z, Δz)` of air with the
+buoyancy-weighted kinetic energy `κ_b = c_b κ` against the stratification
+`N²`, capped by the wall distance `l_z` and by the cell depth `Δz`, over
+which the gradients the displacement acts on are defined. Where the air is
+not stably stratified the result is `min(l_z, Δz)`. The buoyancy limit is the
+buoyancy scale `l_N` of the mixing length.
 """
-@inline function stable_displacement_length(κ_b, N², l_z)
+@inline function stable_displacement_length(κ_b, N², l_z, Δz)
     FT = typeof(N²)
+    l_cap = min(max(l_z, zero(FT)), Δz)
     l_N = sqrt(κ_b / max(N², eps(FT)))
-    return ifelse(N² > eps(FT), min(l_N, max(l_z, zero(FT))), max(l_z, zero(FT)))
+    return ifelse(N² > eps(FT), min(l_N, l_cap), l_cap)
 end
 
 """
@@ -238,20 +241,22 @@ into `p.scratch.ᶜtemp_scalar` and return it. Also refreshes `p.precomputed.ᶜ
 for `AbstractEDMF` via `materialized_mixing_length!`.
 
 `l_d` combines the turbulent mixing length `l_mix` and the floored buoyancy
-displacement scale `min(stable_displacement_length(c_b κ_min, N², z − z_sfc), Δ_f)`
+displacement scale `stable_displacement_length(c_b κ_min, N², z − z_sfc, Δz)`
 in quadrature, with `κ_min = w_min² / (2 c_σ c_b)` and the velocity floor
 `w_min` (`sgs_variance_vertical_velocity_floor`). In turbulent layers `l_mix`
 dominates and the closure is the production–dissipation balance. In stably
 stratified air without TKE, `l_d = w_min / (√(2 c_σ) N)`, so the vertical
 displacement variance `2 c_σ l_d²` is `(w_min / N)²`: the displacement of
 unresolved vertical motions (gravity waves, mesoscale circulations) with
-velocity scale `w_min`, which displace air without mixing it. Combining with
-`l_mix` in quadrature rather than passing `κ_min` into the surface-layer wall
-scale `l_W` prevents a small friction velocity `u_*` or stable surface-layer
-Obukhov length `L_MO` from collapsing `l_d` in the free troposphere. The floor
-enters the variance only, not `ᶜl_mix` or the diffusivity. Writes
-`p.scratch.ᶜtemp_scalar` (and the Prandtl-number scratch of the mixing-length
-closure).
+velocity scale `w_min`, which displace air without mixing it. In air that is
+not stably stratified the floored scale is the cell depth or the wall
+distance, whichever is smaller. The two scales are combined in quadrature,
+and the floor is kept out of the mixing length itself, because the
+surface-layer wall scale `l_W` of the mixing length vanishes with the
+friction velocity and in a stable surface layer, which would collapse `l_d`
+in the free troposphere. The floor enters the variance only, not `ᶜl_mix` or
+the diffusivity. Writes `p.scratch.ᶜtemp_scalar` (and the Prandtl-number
+scratch of the mixing-length closure).
 """
 function materialized_displacement_length!(Y, p)
     FT = eltype(p.params)
@@ -264,14 +269,11 @@ function materialized_displacement_length!(Y, p)
     (; ᶜbuoygrad) = p.precomputed
     ᶜz = Fields.coordinate_field(Y.c).z
     z_sfc = Fields.level(Fields.coordinate_field(Y.f).z, Fields.half)
-    ᶜΔ_f = resolvability_filter_scale(axes(Y.c))
+    ᶜΔz = Fields.Δz_field(axes(Y.c))
     ᶜl_d = p.scratch.ᶜtemp_scalar
     @. ᶜl_d = sqrt(
         ᶜl_mix^2 +
-        min(
-            stable_displacement_length(c_b * κ_min, ᶜbuoygrad, ᶜz - z_sfc),
-            ᶜΔ_f,
-        )^2,
+        stable_displacement_length(c_b * κ_min, ᶜbuoygrad, ᶜz - z_sfc, ᶜΔz)^2,
     )
     return ᶜl_d
 end

@@ -228,8 +228,7 @@ function precomputed_quantities(Y, atmos)
         ᶠ∂θli∂z = similar(Y.f, FT),
         ᶠ∂qt∂z = similar(Y.f, FT),
         # Face-native moist buoyancy gradient, face-native eddy diffusivity/
-        # viscosity, interfacial entrainment diffusivity K_e = γ w_e Δz, and
-        # the master mixing length at centers. Every consumer is an
+        # viscosity, and the master mixing length at centers. Every consumer is an
         # AbstractEDMF path, so they are allocated only for AbstractEDMF;
         # other closures use the center ᶜK_h/ᶜK_u instead.
         # Evaluating the stability closure at the faces, where the fluxes
@@ -889,9 +888,8 @@ NVTX.@annotate function set_explicit_precomputed_quantities!(Y, p, t)
 
     set_covariance_cache_and_cloud_fraction!(Y, p)
 
-    # Interfacial entrainment diffusivity K_e at faces (interface-aware stability
-    # closure). Needs the final cloud fraction from the covariance/cloud-fraction
-    # update above.
+    # Face-native diffusivities. Need the final cloud fraction from the
+    # covariance/cloud-fraction update above.
     set_face_diffusivities!(Y, p)
 
     if turbconv_model isa AbstractEDMF && (

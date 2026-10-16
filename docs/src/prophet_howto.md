@@ -137,10 +137,6 @@ the largest effect, roughly in order:
     off in stable stratification, and through
     ``c_d = c_m c_b / \mathrm{Ri}_c`` also the dissipation. It controls the
     sharpness of inversions and the stable-boundary-layer depth.
-  - `EDMF_interface_entr_efficiency` (``A``) sets cloud-top entrainment
-    across unresolved inversions. Calibrate it against *equilibrium* states (a
-    day or longer for trade-cumulus cases), because spin-up snapshots reward
-    values that fail at equilibrium.
   - `entr_coeff`, `entr_buoy_coeff`, `entr_inv_tau`,
     `detr_buoy_coeff`, `detr_massflux_vertdiv_coeff` set the mass-flux
     profile: how quickly drafts dilute with height and where they terminate.
@@ -181,11 +177,9 @@ against the hand-written one, and `prognostic_edmfx_bomex_fixtke_column.yml`
 runs BOMEX with `prognostic_tke: false`.
 
 A vertical-resolution sweep on DYCOMS and BOMEX is the discriminating test for
-the interface closure of
-[Closures](prophet_closures.md#Capping-inversions-as-unresolved-interfaces),
-since ``N_{e,\mathrm{eff}}^2`` and ``K_e`` act only when the inversion is
-unresolved: cloud cover and inversion height should be insensitive to
-``\Delta z``.
+the treatment of
+[unresolved inversions](prophet_closures.md#Unresolved-inversions): cloud
+cover and inversion height should be insensitive to ``\Delta z``.
 
 ## Diagnostics
 

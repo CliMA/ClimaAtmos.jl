@@ -21,8 +21,6 @@ where ``l_h`` is the horizontal mixing length (see [Mixing length](@ref)), ``\ka
 `set_horizontal_diffusivities!` evaluates ``K_{u,h}`` and ``K_{h,h}`` at cell centers on each update of the explicit precomputed cache, storing them in `ᶜK_u_h` and `ᶜK_h_h`.
 The horizontal tendencies and the `edth`/`evuh` diagnostics read these cached fields.
 
-The horizontal diffusivities omit the interfacial entrainment diffusivity ``K_e`` of the vertical face pipeline (`set_face_diffusivities!`): that term parameterizes vertical entrainment across an unresolved inversion face (``K_e = \gamma \, w_e \, \Delta z``) and has no horizontal analogue.
-
 ## Grid-mean flux
 
 The grid-mean tendencies from `edmfx_sgs_horizontal_diffusive_flux` are, on cell centers,
@@ -50,7 +48,7 @@ This form avoids the spurious enthalpy flux that diffusing ``h_\text{tot}`` dire
 
 The suspended cloud species ``q_\text{lcl}``, ``q_\text{icl}`` and their number concentrations have no flux of their own.
 Each takes a share of the aggregate water tendency, scaled by the clipped ratio ``\min(q_\mu / q_\text{tot}^\text{eff}, 1)``, and the number densities scale with it too, which preserves the mean particle mass.
-Rain and snow receive no horizontal transport: the vertical path gives them only the interfacial entrainment diffusivity ``K_e``, which has no horizontal analogue.
+Rain and snow receive no horizontal transport, as they receive none in the vertical.
 The tracer ``\chi`` therefore ranges over the passive tracers alone, diffused with the unscaled ``K_{h,h}``.
 
 The aggregate water flux additionally enters the moist-air-mass tendency,

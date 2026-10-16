@@ -322,7 +322,7 @@ the published expression corrected), as the positive root
 ```
 
 of the gradient Richardson number
-``\mathrm{Ri} = N_{e,\mathrm{eff}}^2 / (2 \|\boldsymbol{\mathcal{E}}_D\|_F^2)``,
+``\mathrm{Ri} = N_e^2 / (2 \|\boldsymbol{\mathcal{E}}_D\|_F^2)``,
 limited above by `Pr_max`. It approaches ``\mathrm{Pr}_n`` in neutral conditions
 and grows with stability, and the stability dependence applies throughout the
 column rather than only in the surface layer.
@@ -364,12 +364,9 @@ The mixing length is a smooth minimum (`edmfx_scale_blending`, default
     ``l_{\mathrm{TKE}} = \sqrt{c_d \kappa_{\mathrm{iso}}^{3/2} / a_{pd}}`` with
     ``a_{pd} = c_m (2\|\boldsymbol{\mathcal{E}}_D\|_F^2 - N_e^2/\mathrm{Pr}_t) \sqrt{\kappa_{\mathrm{iso}}}``,
     the scale at which production balances dissipation (dropped from the blend
-    where net production is non-positive). This balance uses the *un-augmented*
-    ``N_e^2``, not the interface-aware ``N_{e,\mathrm{eff}}^2`` below, so it
-    stays consistent with the TKE budget it parameterizes; the code passes the
-    two as separate arguments;
+    where net production is non-positive);
   - a **buoyancy** scale
-    ``l_N = \sqrt{c_b \kappa_{\mathrm{iso}}} / N_{e,\mathrm{eff}}``, used only
+    ``l_N = \sqrt{c_b \kappa_{\mathrm{iso}}} / N_e``, used only
     in stably stratified air.
 
 The blend is then capped by the wall distance and by the *resolvability filter
@@ -412,7 +409,7 @@ is derived from it (`tke_dissipation_coefficient`). The resulting basis
 magnitudes, ``c_b`` partitions TKE amplitude against buoyancy length, and
 ``\mathrm{Ri}_c`` sets the stable-regime cutoff.
 
-### Capping inversions as unresolved interfaces
+### Unresolved inversions
 
 The subdomain decomposition addresses the gray zone of *horizontal* resolution.
 The vertical direction has its own gray zone, and its canonical case is the
@@ -423,76 +420,11 @@ vertical gradient across such an interface averages the jump over a grid cell,
 biasing ``N_e^2`` low and hence ``l_N`` and ``K_h`` high exactly where the
 stability closure should shut mixing off. The bias weakens as ``\Delta z``
 shrinks, so it breaks the resolution adaptivity PROPHET otherwise maintains, and
-its integrated effect is a slow, spurious erosion of sharp inversions and the
+its integrated effect is a slow erosion of sharp inversions and the
 stratocumulus decks beneath them.
 
-PROPHET makes the stability closure interface-aware with two face-local terms.
-First, a face buoyancy jump ``\Delta b = N_e^2 \Delta z`` is compatible with any
-subgrid profile between a uniform gradient over ``\Delta z`` and a sheet
-interface at the face. The discrete data cannot distinguish the two, but the
-energetics of eddy excursions across the face can. Crossing a sheet requires
-work ``\Delta b \, \ell``, which caps excursions at a penetration depth
-``\ell_p \propto \kappa_{\mathrm{iso}} / \Delta b``. Traversing the same jump
-spread over ``\Delta z`` requires only ``N_e^2 \ell^2 / 2``, and gives the
-standard ``l_N``. A single effective frequency captures both limits:
-
-```math
-N_{e,\mathrm{eff}}^2 = N_e^2 + \frac{[(\Delta b)_+]^2}{c_b \kappa_{\mathrm{iso}}} ,
-```
-
-which replaces ``N_e^2`` in ``l_N`` and in the Richardson number that controls
-``\mathrm{Pr}_t``. In the jump-dominated limit, ``l_N \to \ell_p``, independent
-of ``\Delta z`` and of the unknown interface thickness. In smooth regions, the
-correction is relatively ``O((\Delta z / l_N)^2)``, so ``N_{e,\mathrm{eff}}^2``
-is a consistent, second-order-accurate discretization of the same continuum
-stability, and it acts as a smooth interface indicator with no mode switch. The
-positive part restricts it to stable jumps.
-
-Second, collapsing the down-gradient diffusivity at a sheet interface is correct
-for turbulent mixing but leaves interfacial *entrainment*, which proceeds at a
-finite velocity, unrepresented. Mixed-layer theory expresses that velocity
-through an efficiency law [Lilly1968](@cite); its local, TKE-based analog is
-
-```math
-w_e = A \frac{\sqrt{\kappa_{\mathrm{iso}}}}{\max(\mathrm{Ri}_b, 1)} ,
-\qquad
-\mathrm{Ri}_b = \frac{\ell_e \Delta b}{\kappa_{\mathrm{iso}}} ,
-```
-
-with ``\ell_e`` the energy-containing eddy scale, taken as the minimum of
-``l_W`` and ``l_{\mathrm{TKE}}``, which the interface leaves intact, in contrast to ``l_N``, and capped in turn by the grid scale ``\Delta_f``. The floor
-on ``\mathrm{Ri}_b`` restricts the efficiency law to the strong interfaces it
-describes and bounds ``w_e`` by the turbulent velocity scale. To express the
-entrainment flux ``-w_e \Delta \psi`` in the down-gradient form the model
-discretizes, it suffices to add a face diffusivity
-
-```math
-K_e = \gamma \, w_e \, \Delta z ,
-\qquad
-\gamma = 1 - \frac{N_e^2}{N_{e,\mathrm{eff}}^2} \in [0, 1] ,
-```
-
-since the discrete face flux is then
-``K_e \Delta \psi / \Delta z = \gamma w_e \Delta \psi``. The gate ``\gamma``,
-the fraction of the effective stability carried by the jump term, approaches one
-at sheet interfaces and vanishes as ``(\Delta z / l_N)^2`` where the
-stratification is resolved, so ``K_e \to 0`` doubly as ``\Delta z \to 0`` and
-the standard local closure is recovered. At coarse ``\Delta z`` over a sharp
-inversion, the entrainment flux is resolution-independent by construction.
-Setting the single new constant ``A`` (`EDMF_interface_entr_efficiency`) to zero
-recovers the pure stability closure.
-
-``K_e`` is added to the face diffusivities for all scalars and for momentum, so
-energy, water, and momentum transport stay conservative and mutually consistent.
-The TKE buoyancy term is evaluated from the same face diffusivities and face
-gradient, so the interfacial sink ``-\gamma w_e \Delta b`` per face is
-applied without a separate term. That sink is bounded by
-``A \kappa_{\mathrm{iso}}^{3/2} / \ell_e``, a fixed multiple of the dissipation,
-which is how the efficiency inherits the classical energetic bound on
-entrainment.
-
-**Face-native evaluation.** The whole stability pipeline is evaluated at the
-faces where the diffusive fluxes live. Vertical differences of cell means
+**Face-native evaluation.** The stability pipeline is evaluated at the faces
+where the diffusive fluxes live. Vertical differences of cell means
 (``\Delta h_s``, ``\Delta q_t``, and hence ``\Delta b``) come from the two-point
 face stencil with no interpolation and no loss of sharpness; pointwise factors
 (thermodynamic chain-rule coefficients, ``\kappa_{\mathrm{iso}}``, the strain
@@ -504,21 +436,16 @@ mixing on the boundary-layer side too. Meanwhile, the interpolation across the
 inversion hands about half the boundary-layer diffusivity to the face where the
 flux should vanish.
 
-!!! warning "Validity domain"
+!!! note "TODO: interface-aware stability"
 
-    This closure targets strong, mixed-layer-capping inversions, where the
-    buoyancy jump dominates the interface. In that regime, which covers
-    stratocumulus and shallow cumulus under a capping inversion, cloud cover
-    and inversion height converge under vertical refinement with the closure
-    active. It does not extend to weak, moisture-dominated interfaces: at a
-    trade-wind inversion with a small buoyancy jump but a large humidity jump,
-    the down-gradient form transports moisture up the jump faster than it warms
-    and dries the layer, and on a coarse grid the thick inversion-base cell can
-    saturate. Coarse-grid trade-cumulus cloud cover therefore remains
-    resolution-dependent for any ``A``. Entrainment at cumulus tops is localized to penetrating plumes and
-    belongs to the entrainment closures above, not to a grid-mean face
-    diffusivity. Calibrate ``A`` against equilibrium (a day or longer) targets;
-    spin-up snapshots reward values that fail at equilibrium.
+    The face-native evaluation confines the collapse of the diffusivity to the
+    interface face but leaves the centered estimate of ``N_e^2`` across it, so
+    a coarse grid still over-mixes a sharp inversion. An effective stability
+    that distinguishes a sheet interface from a uniform gradient over
+    ``\Delta z``, with an explicit interfacial entrainment velocity, is the
+    natural remedy; applied wherever the face buoyancy jump is positive it
+    over-mixes smoothly stratified stable boundary layers, so it needs an
+    indicator that separates sheet interfaces from resolved stratification.
 
 ## Variances and cloud fraction
 
@@ -549,13 +476,15 @@ it vanishes as the horizontal grid is refined.
 
 The vertical scale is a displacement length, ``\ell_v^2 = 2 c_\sigma l_d^2``,
 where ``l_d`` combines the [mixing length](@ref "Mixing-length scales") and the
-buoyancy displacement scale ``\min(\sqrt{c_b \kappa_{\min}} / N, z - z_s, \Delta_f)``
+buoyancy displacement scale
+``\min(\sqrt{c_b \kappa_{\min}} / N, \; z - z_s, \; \Delta z)``
 in quadrature, with ``\kappa_{\min} = w_{\min}^2 / (2 c_\sigma c_b)``. In
 turbulent layers ``l_d`` is the mixing length and the closure is the
 production–dissipation balance of [Sommeria1977, Mellor1977](@cite),
 ``\sigma_\psi^2 = 2 c_\sigma l^2 (\partial_z \psi)^2``, with the wall
-distance, the buoyancy scale, and at unresolved inversions the interface
-treatment, all inherited from the mixing length. In stably stratified air
+distance and the buoyancy scale inherited from the mixing length. In air that
+is not stably stratified the floored scale is the cell depth or the wall
+distance, whichever is smaller. In stably stratified air
 without TKE the buoyancy scale gives ``\ell_v = w_{\min} / N``: the vertical
 displacement of unresolved motions with velocity scale ``w_{\min}``
 (`sgs_variance_vertical_velocity_floor`), gravity waves, mesoscale
@@ -779,7 +708,6 @@ covariance, quadrature and cloud-fraction closures,
 | ``r_{T,q_t}``                                                       | `Tq_correlation_coefficient`                                                                                   | `Tq_correlation_coefficient`                                                                            |
 | ``c_g``, ``c_{\Delta x}``, ``w_{\min}``                             | `sgs_variance_geometric_coeff`, `sgs_variance_horizontal_scale_factor`, `sgs_variance_vertical_velocity_floor` | `sgs_variance_geometric_coeff`, `sgs_variance_horizontal_scale_factor`, —                               |
 | ``r_{\max}``                                                        | `sgs_variance_max_rel_std` (bound ``\sigma_q \le r_{\max} q_t``)                                               | `sgs_variance_max_rel_std`                                                                              |
-| ``A``                                                               | `interface_entr_efficiency`                                                                                    | `EDMF_interface_entr_efficiency`                                                                        |
 
 The generated [Configuration Options](configuration_options.md) table lists the
 YAML keys; [Configuring and Tuning PROPHET](prophet_howto.md) explains which of
@@ -787,14 +715,14 @@ these to change first.
 
 ## Where this is implemented
 
-| Closure                                                                                 | Source                                                                                                                                         |
-|:--------------------------------------------------------------------------------------- |:---------------------------------------------------------------------------------------------------------------------------------------------- |
-| Entrainment, detrainment, area limiters                                                 | [edmfx_entr_detr.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/prognostic_equations/edmfx_entr_detr.jl)                             |
-| Buoyancy, pressure drag, surface mass flux                                              | [mass_flux_closures.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/prognostic_equations/mass_flux_closures.jl)                       |
-| Mixing length, ``\mathrm{Pr}_t``, ``N^2_{e,\mathrm{eff}}``, ``K_e``, face diffusivities | [eddy_diffusion_closures.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/prognostic_equations/eddy_diffusion_closures.jl)             |
-| Grid-mean mixing length for non-EDMF paths                                              | [gm_sgs_closures.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/prognostic_equations/gm_sgs_closures.jl)                             |
-| TKE production, dissipation                                                             | [edmfx_tke.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/prognostic_equations/edmfx_tke.jl)                                         |
-| Variances, cloud fraction, Picard iteration                                             | [microphysics/cloud_fraction.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/parameterized_tendencies/microphysics/cloud_fraction.jl) |
-| SGS quadrature over ``(T, q_t)``                                                        | [microphysics/sgs_quadrature.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/parameterized_tendencies/microphysics/sgs_quadrature.jl) |
-| Surface conditions for the drafts                                                       | [edmfx_boundary_condition.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/prognostic_equations/edmfx_boundary_condition.jl)           |
-| Closure parameter set                                                                   | [parameters/Parameters.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/parameters/Parameters.jl)                                      |
+| Closure                                              | Source                                                                                                                                         |
+|:---------------------------------------------------- |:---------------------------------------------------------------------------------------------------------------------------------------------- |
+| Entrainment, detrainment, area limiters              | [edmfx_entr_detr.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/prognostic_equations/edmfx_entr_detr.jl)                             |
+| Buoyancy, pressure drag, surface mass flux           | [mass_flux_closures.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/prognostic_equations/mass_flux_closures.jl)                       |
+| Mixing length, ``\mathrm{Pr}_t``, face diffusivities | [eddy_diffusion_closures.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/prognostic_equations/eddy_diffusion_closures.jl)             |
+| Grid-mean mixing length for non-EDMF paths           | [gm_sgs_closures.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/prognostic_equations/gm_sgs_closures.jl)                             |
+| TKE production, dissipation                          | [edmfx_tke.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/prognostic_equations/edmfx_tke.jl)                                         |
+| Variances, cloud fraction, Picard iteration          | [microphysics/cloud_fraction.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/parameterized_tendencies/microphysics/cloud_fraction.jl) |
+| SGS quadrature over ``(T, q_t)``                     | [microphysics/sgs_quadrature.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/parameterized_tendencies/microphysics/sgs_quadrature.jl) |
+| Surface conditions for the drafts                    | [edmfx_boundary_condition.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/prognostic_equations/edmfx_boundary_condition.jl)           |
+| Closure parameter set                                | [parameters/Parameters.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/parameters/Parameters.jl)                                      |

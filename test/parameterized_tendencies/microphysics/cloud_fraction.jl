@@ -293,12 +293,15 @@ floor_nt(
     @testset "`stable_displacement_length` and buoyancy scale w_min / N" begin
         for FT in (Float32, Float64)
             @testset "FT = $FT" begin
-                l = CA.stable_displacement_length
+                l0 = CA.stable_displacement_length
+                Δz = FT(500)
+                l(κ_b, N², l_z) = l0(κ_b, N², l_z, Δz)
                 κ_b = FT(0.24)                     # c_b κ_min for w_min = 1 m/s
                 l_z = FT(5000)
                 @test l(κ_b, FT(1e-4), l_z) ≈ sqrt(κ_b) / FT(1e-2)   # √κ_b / N
-                @test l(κ_b, FT(0), l_z) == l_z                      # neutral: wall
-                @test l(κ_b, FT(-1e-4), l_z) == l_z                  # unstable: wall
+                @test l(κ_b, FT(0), l_z) == Δz                       # neutral: cell depth
+                @test l(κ_b, FT(-1e-4), l_z) == Δz                   # unstable: cell depth
+                @test l(κ_b, FT(0), FT(100)) == FT(100)              # neutral near the wall
                 @test l(κ_b, FT(1e-8), FT(100)) == FT(100)           # wall cap
                 @test l(κ_b, FT(1e-4), FT(-1)) == FT(0)              # non-negative wall guard
                 @test l(κ_b, FT(1e-4), l_z) isa FT
@@ -316,7 +319,7 @@ floor_nt(
                 )
                 κ_min = w_min^2 / (2 * c_σ * c_b)
                 N² = FT(1e-4)
-                l_b = l(c_b * κ_min, N², FT(5000))
+                l_b = l(c_b * κ_min, N², FT(5000))   # 49 m < Δz
                 # stably stratified, no resolved TKE: 2 c_σ l_b² N² = w_min²
                 @test 2 * c_σ * l_b^2 * N² ≈ w_min^2 rtol = FT(1e-5)
 
