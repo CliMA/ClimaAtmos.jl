@@ -20,7 +20,10 @@ every function here is a no-op):
     {β}/β, β = ρ/p, so every face penalty is a sink of the dry entropy
     S = −ρs/(γ−1) at fixed ρ (the mass flux stays central). The velocity
     penalties stay Galilean invariant; they conserve momentum up to
-    O(⟦u⟧⟦1/β⟧). The central part is not entropy-conservative,
+    O(⟦u⟧⟦1/β⟧).
+    The water-species penalties also move the mass and energy the water
+    carries (ρ for total water; the vapor, liquid or ice energy), so an
+    exchange of water across a face leaves T and u unchanged. The central part is not entropy-conservative,
     so this is entropy-dissipative face dissipation, not a discrete entropy
     inequality for the whole scheme.
   - Vorticities (`ᶜω³` and the `wcurlₕ(u₃)` part of `ᶠω¹²`): strong curl
@@ -175,6 +178,23 @@ function dg_tracer_interface(normal, (y⁻,), (y⁺,))
     χ̄ = (y⁻.χ + y⁺.χ) / 2
     λ = max(y⁻.λ, y⁺.λ)
     return (; ρχ = Fρ * χ̄ - λ / 2 * (y⁺.ρ * y⁺.χ - y⁻.ρ * y⁻.χ))
+end
+
+"""
+    dg_water_es_interface(normal, (y⁻, mass), (y⁺, _))
+
+[`dg_tracer_interface`](@ref) for a water species under
+`dg_vi_interface_flux = es`: the penalty `d = −(λ/2)⟦ρχ⟧` also moves the mass
+and energy the water carries, `F_ρ = mass · d` and `F_ρe = d {e}`, where `e`
+is the specific energy of the species and `mass` is `1` for total water
+(which is part of ρ) and `0` for a condensate species. State fields: `ρ`,
+`uv`, `λ`, `χ`, `e`.
+"""
+function dg_water_es_interface(normal, (y⁻, mass), (y⁺, _))
+    Fρ = (y⁻.ρ * (y⁻.uv' * normal) + y⁺.ρ * (y⁺.uv' * normal)) / 2
+    χ̄ = (y⁻.χ + y⁺.χ) / 2
+    d = -max(y⁻.λ, y⁺.λ) / 2 * (y⁺.ρ * y⁺.χ - y⁻.ρ * y⁻.χ)
+    return (; ρχ = Fρ * χ̄ + d, ρ = mass * d, ρe_tot = d * (y⁻.e + y⁺.e) / 2)
 end
 
 # Dry-γ sound speed c_snd = sqrt(γ p / ρ), γ = cp_d / cv_d.
@@ -371,17 +391,71 @@ function add_dg_tracer_interface_flux!(ᶜρχₜ, ᶜρχ, Y, ᶜuv, ᶜλ)
     return nothing
 end
 
+# Specific energies carried by the water penalties of `dg_water_es_interface`:
+# vapor added with ρ (`vap`), and liquid or ice exchanged for vapor (`liq`, `ice`).
+function dg_water_specific_energies(p)
+    thermo_params = CAP.thermodynamics_params(p.params)
+    (; ᶜT, ᶜK) = p.precomputed
+    (; ᶜΦ) = p.core
+    ᶜe_vap = @. TD.internal_energy_vapor(thermo_params, ᶜT)
+    return (;
+        vap = @.(ᶜe_vap + ᶜK + ᶜΦ),
+        liq = @.(TD.internal_energy_liquid(thermo_params, ᶜT) - ᶜe_vap),
+        ice = @.(TD.internal_energy_ice(thermo_params, ᶜT) - ᶜe_vap),
+    )
+end
+
+# Add the `dg_water_es_interface` flux of the water species `ᶜρχ`, carrying the
+# specific energy `ᶜe`, to `ᶜρχₜ`, `Yₜ.c.ρ` and `Yₜ.c.ρe_tot`.
+function add_dg_water_es_flux!(Yₜ, ᶜρχₜ, ᶜρχ, Y, ᶜuv, ᶜλ, ᶜe, mass)
+    FT = Spaces.undertype(axes(Y.c))
+    ᶜWJ = Fields.local_geometry_field(Y.c).WJ
+    y = map(
+        (ρ, uv, λ, ρχ, e) -> (; ρ, uv, λ, χ = ρχ / ρ, e),
+        Y.c.ρ,
+        ᶜuv,
+        ᶜλ,
+        ᶜρχ,
+        ᶜe,
+    )
+    dy = Fields.Field(NamedTuple{(:ρχ, :ρ, :ρe_tot), NTuple{3, FT}}, axes(Y.c))
+    fill!(parent(dy), 0)
+    Operators.add_numerical_flux_interior!(dg_water_es_interface, dy, y, FT(mass))
+    @. ᶜρχₜ += dy.ρχ / ᶜWJ
+    @. Yₜ.c.ρ += dy.ρ / ᶜWJ
+    @. Yₜ.c.ρe_tot += dy.ρe_tot / ᶜWJ
+    return nothing
+end
+
 """
     dg_horizontal_tracer_completion!(Yₜ_lim, Y, p, t)
 
 Interface completion of `horizontal_tracer_advection_tendency!` on DG spaces:
-the tracer interface flux for every grid-mean tracer. No-op on CG spaces.
+the tracer interface flux for every grid-mean tracer. With the VI form and
+`dg_vi_interface_flux = es`, the water species use
+[`dg_water_es_interface`](@ref): the total-water penalty also moves ρ and the
+energy `e_int,v(T) + K + Φ` of vapor, and each condensate penalty moves the
+energy `e_int,l(T) − e_int,v(T)` (cloud liquid, rain) or
+`e_int,i(T) − e_int,v(T)` (cloud ice, snow), so a water exchange leaves T and
+u unchanged to first order in the jumps. No-op on CG spaces.
 """
 NVTX.@annotate function dg_horizontal_tracer_completion!(Yₜ_lim, Y, p, t)
     is_dg_horizontal(axes(Y.c)) || return nothing
     (ᶜuv, ᶜλ) = dg_face_velocity_and_λ(Y, p)
+    es =
+        p.atmos.numerics.dg_equation_form === Val(:vi) &&
+        p.atmos.numerics.dg_vi_interface_flux === Val(:es)
+    water_e = es ? dg_water_specific_energies(p) : nothing
     foreach_gs_tracer(Yₜ_lim, Y) do ᶜρχₜ, ᶜρχ, ρχ_name
-        add_dg_tracer_interface_flux!(ᶜρχₜ, ᶜρχ, Y, ᶜuv, ᶜλ)
+        if es && ρχ_name == @name(ρq_tot)
+            add_dg_water_es_flux!(Yₜ_lim, ᶜρχₜ, ᶜρχ, Y, ᶜuv, ᶜλ, water_e.vap, 1)
+        elseif es && ρχ_name in (@name(ρq_lcl), @name(ρq_rai))
+            add_dg_water_es_flux!(Yₜ_lim, ᶜρχₜ, ᶜρχ, Y, ᶜuv, ᶜλ, water_e.liq, 0)
+        elseif es && ρχ_name in (@name(ρq_icl), @name(ρq_sno))
+            add_dg_water_es_flux!(Yₜ_lim, ᶜρχₜ, ᶜρχ, Y, ᶜuv, ᶜλ, water_e.ice, 0)
+        else
+            add_dg_tracer_interface_flux!(ᶜρχₜ, ᶜρχ, Y, ᶜuv, ᶜλ)
+        end
     end
     return nothing
 end
