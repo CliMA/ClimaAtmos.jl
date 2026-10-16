@@ -3,6 +3,10 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+
+0.42.15
+-------
+
 - ![][badge-🔥behavioralΔ] The along-surface part of the resolved-gradient SGS
   variance is bounded by the variance of `q_sat` along the displacement,
   `(∂_z q_sat|_ad)² ẑᵀD_cẑ`, with `∂_z q_sat|_ad` the dry-adiabatic rate
@@ -27,6 +31,11 @@ main
 - ![][badge-🔥behavioralΔ] One config key per species selects the sedimentation velocity of the
   1M microphysics tracers. `DiagnosticTerminalVelocity` is replaced by the closure-named modes
   `StokesTerminalVelocity`, `Blk1MTerminalVelocity` and `Chen2022TerminalVelocity`.
+- ![][badge-💥breaking] The `fixed_terminal_velocity_{liquid,ice,rain,snow}`
+  boolean config keys are removed. Use `cloud_liquid_terminal_velocity`
+  (`Fixed`, `Stokes`), `cloud_ice_terminal_velocity` (`Fixed`, `Chen2022`),
+  `rain_terminal_velocity` and `snow_terminal_velocity` (`Fixed`, `Blk1M`,
+  `Chen2022`). `ClimaAtmos.DiagnosticTerminalVelocity` is removed.
 - ![][badge-✨feature/enhancement] Adding Chen et al. (2022) fall speeds for rain and snow
 - ![][badge-🔥behavioralΔ] Snow falls at the Chen et al. (2022) speed by default
   `toml/prognostic_edmfx_1M.toml` sets `snow_apparent_density` to 300 kg/m³.
@@ -53,9 +62,10 @@ main
   it (the vertical uniform-box terms, with the q gradient taken across the
   surface).
 - ![][badge-🔥behavioralΔ] Update to CloudMicrophysics v0.45 and use joint
-  relaxation of the vapor-driven phase changes.
-- ![][badge-✨feature/enhancement] Add back CloudMicrophysics v0.43 to the
-  compat.
+  relaxation of the vapor-driven phase changes. The new `vapor_relaxation`
+  config key selects `Joint` (default) or `PerProcess`.
+- ![][badge-💥breaking] CloudMicrophysics compat is v0.45 only; v0.43 and
+  v0.44 are no longer supported.
 - ![][badge-🔥behavioralΔ] The horizontal resolved-gradient (geometric) SGS variance
   term is now the isentropic form: `q′q′` carries `|∇_h q_tot − r ∇_h θ_li|²`, the
   gradient of `q_tot` along the `θ_li` surface with `r = (∂q_tot/∂z)/(∂θ_li/∂z)`, the
