@@ -246,24 +246,36 @@ humidity lie at those scales.
 end
 
 """
-    floor_displacement_length(κ_b, N², τ_L, l_z, Δz)
+    floor_displacement_length(κ_b, N², τ_turb, τ_0, l_z, Δz)
 
-Vertical displacement `√κ_b · min(1/N, τ_L)` of the unresolved vertical
-motions with buoyancy-weighted kinetic energy `κ_b = c_b κ_min` and
-Lagrangian time scale `τ_L`, capped by the wall distance `l_z` and by the
-cell depth `Δz`, over which the gradients the displacement acts on are
-defined. In stably stratified air the displacement is stopped by buoyancy
-after a time `1/N` and the result is the buoyancy scale `√κ_b / N` of the
-mixing length; where the air is not stably stratified it is stopped by the
-loss of velocity correlation after `τ_L`, so the result is `√κ_b τ_L`. This
-is the vertical dispersion of a stochastic Lagrangian model in stratified
-flow.
+Vertical displacement `√κ_b · min(1/N, τ_turb, τ_0)` of the unresolved
+vertical motions with buoyancy-weighted kinetic energy `κ_b = c_b κ_min`,
+capped by the wall distance `l_z` and by the cell depth `Δz`, over which the
+gradients the displacement acts on are defined. The displacement lasts until
+the parcel's vertical velocity decorrelates: in stably stratified air after a
+time `1/N`, when buoyancy stops it, which gives the buoyancy scale
+`√κ_b / N` of the mixing length; in turbulent air after the Lagrangian time
+scale of the turbulence `τ_turb = l_mix / √κ_iso`, the eddy turnover time
+(`T_L = 2σ_w²/(C_0 ε)` with `ε = c_d κ_iso^(3/2) / l_mix`); and in quiescent
+neutral air after `τ_0`. This is the vertical dispersion of a stochastic
+Lagrangian model in stratified flow.
 """
-@inline function floor_displacement_length(κ_b, N², τ_L, l_z, Δz)
+@inline function floor_displacement_length(κ_b, N², τ_turb, τ_0, l_z, Δz)
     FT = typeof(N²)
     l_cap = min(max(l_z, zero(FT)), Δz)
-    τ = min(τ_L, inv(sqrt(max(N², eps(FT)))))
+    τ = min(τ_0, τ_turb, inv(sqrt(max(N², eps(FT)))))
     return min(sqrt(κ_b) * τ, l_cap)
+end
+
+"""
+    turbulent_lagrangian_time(l_mix, κ_iso)
+
+Lagrangian time scale `l_mix / √κ_iso` of the turbulence, the eddy turnover
+time; infinite where there is no TKE, so that it imposes no limit there.
+"""
+@inline function turbulent_lagrangian_time(l_mix, κ_iso)
+    FT = typeof(κ_iso)
+    return ifelse(κ_iso > eps(FT), l_mix / sqrt(max(κ_iso, eps(FT))), FT(Inf))
 end
 
 """
@@ -290,14 +302,17 @@ displacement scale `floor_displacement_length` in quadrature, with
 vertical motions at the horizontal grid scale (`floor_velocity`;
 `sgs_variance_vertical_velocity_floor`,
 `sgs_variance_floor_reference_resolution`,
-`sgs_variance_floor_resolution_exponent`) and their Lagrangian time scale
-`τ_L` (`sgs_variance_floor_time_scale`). In turbulent layers `l_mix`
-dominates and the closure is the production–dissipation balance. In stably
-stratified air without TKE, `l_d = w_min / (√(2 c_σ) N)`, so the vertical
-displacement variance `2 c_σ l_d²` is `(w_min / N)²`: the displacement of
-unresolved vertical motions (gravity waves, mesoscale circulations) with
-velocity scale `w_min`, which displace air without mixing it. Where the air
-is not stably stratified the floor displacement is `w_min τ_L / √(2 c_σ)`,
+`sgs_variance_floor_resolution_exponent`) and the time over which their
+displacement persists, the smallest of the buoyancy period `1/N`, the
+Lagrangian time scale of the turbulence `l_mix / √κ_iso`
+(`turbulent_lagrangian_time`) and the quiescent limit `τ_0`
+(`sgs_variance_floor_time_scale`). In turbulent layers `l_mix` dominates and
+the closure is the production–dissipation balance. In stably stratified air
+without TKE, `l_d = w_min / (√(2 c_σ) N)`, so the vertical displacement
+variance `2 c_σ l_d²` is `(w_min / N)²`: the displacement of unresolved
+vertical motions (gravity waves, mesoscale circulations) with velocity scale
+`w_min`, which displace air without mixing it. Where the air is not stably
+stratified the floor displacement is `w_min min(τ_turb, τ_0) / √(2 c_σ)`,
 capped by the cell depth and the wall distance. The caps apply to the floor
 scale only; `l_mix` keeps its own limits, so `l_d` exceeds the cell depth
 wherever the mixing length does, as the turbulent variance
@@ -321,9 +336,14 @@ function materialized_displacement_length!(Y, p)
         FT(CAP.sgs_variance_floor_reference_resolution(p.params)),
         FT(CAP.sgs_variance_floor_resolution_exponent(p.params)),
     )
-    τ_L = FT(CAP.sgs_variance_floor_time_scale(p.params))
+    τ_0 = FT(CAP.sgs_variance_floor_time_scale(p.params))
     κ_min = w_min^2 / (2 * c_σ * c_b)
     ᶜl_mix = materialized_mixing_length!(Y, p)
+    ᶜτ_turb =
+        hasproperty(Y.c, :ρtke) ?
+        (@. lazy(
+            turbulent_lagrangian_time(ᶜl_mix, specific(Y.c.ρtke, Y.c.ρ)),
+        )) : FT(Inf)
     (; ᶜbuoygrad) = p.precomputed
     ᶜz = Fields.coordinate_field(Y.c).z
     z_sfc = Fields.level(Fields.coordinate_field(Y.f).z, Fields.half)
@@ -332,7 +352,7 @@ function materialized_displacement_length!(Y, p)
     @. ᶜl_d = displacement_length(
         ᶜl_mix,
         floor_displacement_length(
-            c_b * κ_min, ᶜbuoygrad, τ_L, ᶜz - z_sfc, ᶜΔz,
+            c_b * κ_min, ᶜbuoygrad, ᶜτ_turb, τ_0, ᶜz - z_sfc, ᶜΔz,
         ),
         ᶜz - z_sfc,
     )

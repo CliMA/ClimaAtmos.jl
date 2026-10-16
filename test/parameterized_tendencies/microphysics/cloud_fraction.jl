@@ -314,23 +314,34 @@ floor_nt(
         for FT in (Float32, Float64)
             @testset "FT = $FT" begin
                 l0 = CA.floor_displacement_length
-                τ_L = FT(100)
+                τ_0 = FT(100)
                 Δz = FT(500)
-                l(κ_b, N², l_z) = l0(κ_b, N², τ_L, l_z, Δz)
+                l(κ_b, N², l_z) = l0(κ_b, N², FT(Inf), τ_0, l_z, Δz)
                 κ_b = FT(0.0857)                   # c_b κ_min for w_min = 0.6 m/s
                 l_z = FT(5000)
                 # stable: √κ_b / N, below both caps
                 @test l(κ_b, FT(1e-4), l_z) ≈ sqrt(κ_b) / FT(1e-2)
-                # weakly stable: 1/N exceeds τ_L, so the time scale binds
-                @test l(κ_b, FT(1e-6), l_z) ≈ sqrt(κ_b) * τ_L
-                # neutral and unstable: √κ_b τ_L (29 m), below the cell depth
-                @test l(κ_b, FT(0), l_z) ≈ sqrt(κ_b) * τ_L
-                @test l(κ_b, FT(-1e-4), l_z) ≈ sqrt(κ_b) * τ_L
+                # weakly stable: 1/N exceeds τ_0, so the quiescent limit binds
+                @test l(κ_b, FT(1e-6), l_z) ≈ sqrt(κ_b) * τ_0
+                # neutral and unstable: √κ_b τ_0 (29 m), below the cell depth
+                @test l(κ_b, FT(0), l_z) ≈ sqrt(κ_b) * τ_0
+                @test l(κ_b, FT(-1e-4), l_z) ≈ sqrt(κ_b) * τ_0
+                # turbulence decorrelates sooner than τ_0 or buoyancy
+                @test l0(κ_b, FT(0), FT(40), τ_0, l_z, Δz) ≈ sqrt(κ_b) * 40
+                @test l0(κ_b, FT(1e-4), FT(40), τ_0, l_z, Δz) ≈ sqrt(κ_b) * 40
+                @test l0(κ_b, FT(1e-4), FT(400), τ_0, l_z, Δz) ≈
+                      sqrt(κ_b) / FT(1e-2)
                 # caps: cell depth and wall distance
-                @test l0(κ_b, FT(0), FT(1e4), l_z, Δz) == Δz
+                @test l0(κ_b, FT(0), FT(Inf), FT(1e4), l_z, Δz) == Δz
                 @test l(κ_b, FT(0), FT(10)) == FT(10)
                 @test l(κ_b, FT(1e-4), FT(-1)) == FT(0)
                 @test l(κ_b, FT(1e-4), l_z) isa FT
+                # turbulent Lagrangian time: l_mix / √κ, infinite without TKE
+                τ = CA.turbulent_lagrangian_time
+                @test τ(FT(200), FT(1)) == FT(200)
+                @test τ(FT(0), FT(0)) == FT(Inf)
+                @test τ(FT(200), FT(0)) == FT(Inf)
+                @test τ(FT(200), FT(1)) isa FT
 
                 params = CA.ClimaAtmosParameters(FT)
                 turbconv_params = CAP.turbconv_params(params)

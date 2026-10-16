@@ -479,7 +479,8 @@ where ``l_d`` combines the [mixing length](@ref "Mixing-length scales") and
 the floor displacement scale
 
 ```math
-l_b = \min\!\left( \sqrt{c_b \kappa_{\min}} \, \min(1/N, \tau_L), \;
+l_b = \min\!\left( \sqrt{c_b \kappa_{\min}} \,
+  \min\!\left(\frac{1}{N}, \frac{l}{\sqrt{\kappa_{\mathrm{iso}}}}, \tau_0\right), \;
   z - z_s, \; \Delta z \right) ,
 \qquad \kappa_{\min} = \frac{w_{\min}^2}{2 c_\sigma c_b} ,
 ```
@@ -489,13 +490,21 @@ the mixing length and the closure is the production–dissipation balance of
 [Sommeria1977, Mellor1977](@cite),
 ``\sigma_\psi^2 = 2 c_\sigma l^2 (\partial_z \psi)^2``, with the wall distance
 and the buoyancy scale inherited from the mixing length. The floor is the
-displacement of unresolved vertical motions with velocity scale ``w_{\min}``
-and Lagrangian time scale ``\tau_L`` (`sgs_variance_floor_time_scale`):
-gravity waves, mesoscale circulations and convective remnants, which in
-stably stratified air are stopped by buoyancy after a time ``1/N``, giving
-``\ell_v = w_{\min}/N``, and elsewhere by the loss of velocity correlation
-after ``\tau_L``, giving ``\ell_v = w_{\min} \tau_L``. This is the vertical
-dispersion of a stochastic Lagrangian model in stratified flow. The caps by
+displacement of unresolved vertical motions with velocity scale ``w_{\min}``:
+gravity waves, mesoscale circulations and convective remnants. The
+displacement lasts until the parcel's vertical velocity decorrelates. In
+stably stratified air buoyancy stops it after a time ``1/N``, giving
+``\ell_v = w_{\min}/N``. In turbulent air the turbulence scrambles it after
+its Lagrangian time scale ``T_L = 2\sigma_w^2/(C_0 \varepsilon)``, which with
+the closure's dissipation ``\varepsilon = c_d \kappa_{\mathrm{iso}}^{3/2}/l``
+is the eddy turnover time ``l/\sqrt{\kappa_{\mathrm{iso}}}``; this reduces to
+``\sqrt{c_b}/N`` where the mixing length is the buoyancy scale and to the
+turnover time of the TKE-balance scale in convective air, so it is the same
+limit as ``1/N`` in stable air and shortens the displacement where the TKE is
+large. In quiescent neutral air, with neither buoyancy nor turbulence, the
+displacement persists for ``\tau_0`` (`sgs_variance_floor_time_scale`),
+giving ``\ell_v = w_{\min} \tau_0``. This is the vertical dispersion of a
+stochastic Lagrangian model in stratified flow. The caps by
 the cell depth and the wall distance apply to the floor scale only; ``l_d``
 exceeds ``\Delta z`` wherever the mixing length does, as the turbulent
 variance always has. A reversible displacement creates a fluctuation at a
@@ -741,7 +750,7 @@ covariance, quadrature and cloud-fraction closures,
 | ``c_k``                                                                                         | `tke_surf_flux_coeff`                                                                                                                                                                                                                | `mixing_length_tke_surf_flux_coeff`                                                                     |
 | ``c_\sigma``                                                                                    | `diagnostic_covariance_coeff` (``\ell_v^2 = 2 c_\sigma l_d^2``)                                                                                                                                                                      | `diagnostic_covariance_coeff`                                                                           |
 | ``r_{T,q_t}``                                                                                   | `Tq_correlation_coefficient`                                                                                                                                                                                                         | `Tq_correlation_coefficient`                                                                            |
-| ``c_g``, ``c_{\Delta x}``, ``w_{\mathrm{ref}}``, ``\Delta x_{\mathrm{ref}}``, ``p``, ``\tau_L`` | `sgs_variance_geometric_coeff`, `sgs_variance_horizontal_scale_factor`, `sgs_variance_vertical_velocity_floor`, `sgs_variance_floor_reference_resolution`, `sgs_variance_floor_resolution_exponent`, `sgs_variance_floor_time_scale` | `sgs_variance_geometric_coeff`, `sgs_variance_horizontal_scale_factor`, —, —, —, —                      |
+| ``c_g``, ``c_{\Delta x}``, ``w_{\mathrm{ref}}``, ``\Delta x_{\mathrm{ref}}``, ``p``, ``\tau_0`` | `sgs_variance_geometric_coeff`, `sgs_variance_horizontal_scale_factor`, `sgs_variance_vertical_velocity_floor`, `sgs_variance_floor_reference_resolution`, `sgs_variance_floor_resolution_exponent`, `sgs_variance_floor_time_scale` | `sgs_variance_geometric_coeff`, `sgs_variance_horizontal_scale_factor`, —, —, —, —                      |
 | ``r_{\max}``                                                                                    | `sgs_variance_max_rel_std` (bound ``\sigma_q \le r_{\max} q_t``)                                                                                                                                                                     | `sgs_variance_max_rel_std`                                                                              |
 
 The generated [Configuration Options](configuration_options.md) table lists the

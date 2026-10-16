@@ -142,7 +142,7 @@ the largest effect, roughly in order:
     profile: how quickly drafts dilute with height and where they terminate.
   - `diagnostic_covariance_coeff` (``c_\sigma``),
     `sgs_variance_vertical_velocity_floor` (``w_{\mathrm{ref}}``),
-    `sgs_variance_floor_time_scale` (``\tau_L``),
+    `sgs_variance_floor_time_scale` (``\tau_0``),
     `sgs_variance_horizontal_scale_factor` (``c_{\Delta x}``) and
     `cloud_fraction_eps_rel` control cloud fraction at fixed condensate.
   - `EDMF_min_area`, `EDMF_max_area`, `EDMF_max_surface_area` are

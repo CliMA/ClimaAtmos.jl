@@ -600,7 +600,7 @@ function SGSQuadratureParameters(
         # Unresolved vertical motions in the variance closure
         # (`materialized_displacement_length!`): velocity scale [m/s] at the
         # reference horizontal grid scale [m], the exponent of its growth with
-        # the grid scale, and the Lagrangian time scale [s].
+        # the grid scale, and the persistence time [s] in quiescent neutral air.
         sgs_variance_vertical_velocity_floor = FT(0.6),
         sgs_variance_floor_reference_resolution = FT(1.2e5),
         sgs_variance_floor_resolution_exponent = FT(2 // 3),

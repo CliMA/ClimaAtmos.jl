@@ -255,8 +255,8 @@ not yet define.
   - `sgs_variance_vertical_velocity_floor`: Velocity scale `w_ref` of the
     unresolved vertical motions that displace air where the TKE vanishes, at
     the horizontal grid scale `sgs_variance_floor_reference_resolution`. The
-    floor displacement `w_min min(1/N, τ_L) / √(2 c_σ)`, capped by the wall
-    distance and the cell depth, is combined in quadrature with the mixing
+    floor displacement `w_min min(1/N, l_mix/√κ_iso, τ_0) / √(2 c_σ)`, capped
+    by the wall distance and the cell depth, is combined in quadrature with the mixing
     length (`floor_displacement_length`), so the vertical displacement in
     stably stratified air without TKE is `w_min / N`. Enters the variance
     only, not the diffusivity [m/s].
@@ -266,9 +266,9 @@ not yet define.
   - `sgs_variance_floor_resolution_exponent`: Exponent `p` of the velocity
     floor `w_min = w_ref (Δx_h / Δx_ref)^p`, equal to `(s − 1)/2` for a
     sub-grid spectrum `k^(−s)` of the displaced fields (`floor_velocity`) [-].
-  - `sgs_variance_floor_time_scale`: Lagrangian time scale `τ_L` of the
-    unresolved vertical motions, which bounds their displacement where
-    buoyancy does not [s].
+  - `sgs_variance_floor_time_scale`: Time `τ_0` over which the displacement
+    of the unresolved vertical motions persists in quiescent neutral air,
+    where neither buoyancy nor turbulence decorrelates it [s].
   - `sgs_variance_max_rel_std`: Upper bound on the SGS total-water standard
     deviation relative to the grid-mean total water, `σ_q ≤ sgs_variance_max_rel_std * q_tot`,
     applied to the diagnosed `q′q′` whatever closure produced it. A wider variance puts a quadrature node
