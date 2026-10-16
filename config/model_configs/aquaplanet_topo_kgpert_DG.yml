@@ -1,7 +1,13 @@
 horizontal_discretization: "DG"
+# Horizontal DG formulation: keep exactly one block uncommented (with both
+# commented out, the defaults give vi with rusanov penalties).
+# --- FDDG: flux-form momentum, Kennedy-Gruber volume flux, Roe interface flux
+# dg_equation_form: "fddg"
+# dg_volume_flux: "kg_pert"
+# dg_interface_flux: "roe"
+# --- ES-VI: vector-invariant form with entropy-variable interface penalties
 dg_equation_form: "vi"
-dg_volume_flux: "kg_pert"
-dg_interface_flux: "roe"
+dg_vi_interface_flux: "es"
 hyperdiff: ~
 apply_zhang_shu_limiter: true
 update_constrain_state_every: "stage"
