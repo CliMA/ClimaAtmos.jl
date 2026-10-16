@@ -74,6 +74,8 @@ const wdivₕ = Operators.Divergence{Operators.WeakForm}()
 const split_divₕ = Operators.SplitDivergence()
 const gradₕ = Operators.Gradient()
 const lumpedₕ = Operators.LumpedRestriction()
+# WJ-weighted element mean, at every node of the element
+const element_meanₕ = Operators.LumpedRestriction(ClimaCore.Quadratures.GL{1}())
 const wgradₕ = Operators.Gradient{Operators.WeakForm}()
 const curlₕ = Operators.Curl()
 const wcurlₕ = Operators.Curl{Operators.WeakForm}()

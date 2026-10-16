@@ -1794,11 +1794,12 @@ struct QuasiMonotoneLimiter end # For dispatching to use the ClimaCore QuasiMono
 """
     ZhangShuLimiter{FT}(ρ_min, p_min)
 
-Marker selecting ClimaCore's Zhang–Shu (2010) `PositivityLimiter`, applied in
-`constrain_state!` to every stage value: ρ and each grid-mean tracer are scaled
-at every node toward their WJ-weighted element mean to enforce ρ ≥ ρ_min and
-ρχ ≥ 0, then the grid-mean conserved vector (ρ, ρe_tot, ρuₕ, tracers) is scaled
-toward its mean by one θ ∈ [0, 1] enforcing p ≥ p_min — mean-preserving convex
+Marker selecting the Zhang–Shu (2010) positivity limiter (`zhang_shu_limiter!`),
+applied in `constrain_state!` to every stage value: each grid-mean tracer is
+scaled at every node toward its WJ-weighted element mean to enforce ρχ ≥ 0, the
+mass and energy of the water this moves going with it, then the grid-mean
+conserved vector (ρ, ρe_tot, ρuₕ, tracers) is scaled toward its mean by one
+θ ∈ [0, 1] enforcing ρ ≥ ρ_min and p ≥ p_min — mean-preserving convex
 combinations, not pointwise clamps. Intended for DG horizontal discretizations,
 whose transport is not sign-preserving at nodes. Selected by
 `apply_zhang_shu_limiter: true` (with `update_constrain_state_every` `"stage"`

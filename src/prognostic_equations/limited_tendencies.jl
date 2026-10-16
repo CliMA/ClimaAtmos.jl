@@ -47,50 +47,124 @@ end
 end
 
 """
+    ZhangShuAdmissibility(pressure_bound, ρ_min, p_min)
+
+Concave constraint `g(U, off) ≥ 0` on one node's conserved state: the smaller
+of `ρ − ρ_min` and `pressure_bound(U, off) − p_min`, with `pressure_bound` a
+[`ZhangShuPressureBound`](@ref).
+"""
+struct ZhangShuAdmissibility{G, FT}
+    pressure_bound::G
+    ρ_min::FT
+    p_min::FT
+end
+@inline (g::ZhangShuAdmissibility)(U, off) =
+    min(U.ρ - g.ρ_min, g.pressure_bound(U, off) - g.p_min)
+
+"""
+    ZhangShuLimiterCache(Y, params, FT, ρ_min, p_min)
+
+Cache of `zhang_shu_limiter!` for the state `Y`: the ClimaCore
+`PositivityLimiter` of the tracer floors (`nothing` without tracers), the one
+of the density floor `ρ_min` [kg/m³] and pressure floor `p_min` [Pa], and one
+scratch field per water species (`ρq_prev`, keyed by species) for its value
+before the tracer floors.
+"""
+struct ZhangShuLimiterCache{L1, L2, W}
+    tracer_limiter::L1
+    admissibility_limiter::L2
+    ρq_prev::W
+end
+Adapt.@adapt_structure ZhangShuLimiterCache
+
+function ZhangShuLimiterCache(Y, params, ::Type{FT}, ρ_min, p_min) where {FT}
+    tracers = zhang_shu_tracers(Y)
+    tracer_limiter =
+        isempty(tracers) ? nothing :
+        Limiters.PositivityLimiter(FT; floors = map(_ -> FT(0), tracers))
+    g = ZhangShuAdmissibility(ZhangShuPressureBound(params, FT), FT(ρ_min), FT(p_min))
+    admissibility_limiter = Limiters.PositivityLimiter(FT; g, g_min = FT(0))
+    water = filter(in((:ρq_tot, :ρq_lcl, :ρq_rai, :ρq_icl, :ρq_sno)), keys(tracers))
+    ρq_prev = NamedTuple{water}(map(_ -> similar(Y.c.ρ), water))
+    return ZhangShuLimiterCache(tracer_limiter, admissibility_limiter, ρq_prev)
+end
+
+"""
     zhang_shu_limiter!(Y, p, lim)
 
-Apply the Zhang–Shu (2010) positivity limiter (a ClimaCore
-`Limiters.PositivityLimiter`) to the grid-mean state, in place; a no-op when
-`lim` is `nothing`.
+Apply the Zhang–Shu (2010) positivity limiter to the grid-mean state, in
+place; a no-op when `lim` is `nothing`.
 
-The limiter acts on a conserved vector, so the vector-invariant state is
-mapped to one: the prognostic densities (ρ, ρe_tot, and every grid-mean
-tracer) are passed directly, the horizontal momentum is staged in scratch as
-the orthonormal components ρu1/ρu2 and written back to `uₕ` after limiting,
-and the face vertical velocity is left unscaled. The auxiliary field
-`off = K − (u1² + u2²)/2 + Φ` carries the rest of the specific energy, with
-`K` the model's kinetic energy (`compute_kinetic`), so that at θ = 1 the
-constraint sees the same internal energy as the dynamics, including the
-vertical-velocity and terrain cross terms.
+In each element:
 
-In each element, ρ and each tracer are first scaled toward their own
-WJ-weighted mean to meet `ρ ≥ ρ_min` and `ρχ ≥ 0`; the whole vector is then
-scaled toward its mean by one θ to meet `p ≥ p_min`, with the pressure bound
-from [`ZhangShuPressureBound`](@ref). Each element's means of ρ, ρe_tot, the
-tracers, and the orthonormal ρuₕ are preserved exactly, so no mass-energy
-consistency fixup is needed.
+ 1. Each grid-mean tracer `ρχ` is scaled toward its WJ-weighted element mean
+    by the largest `θ₁ ∈ [0, 1]` with `ρχ ≥ 0` at every node. A `ρq_tot`
+    increment `δ` is also added to `ρ` and, times the element-mean velocity,
+    to `ρuₕ`; `ρe_tot` receives `δ` times the element mean of
+    `e_int,v(T) + K + Φ` for `ρq_tot` and of `e_int,l(T) − e_int,v(T)` or
+    `e_int,i(T) − e_int,v(T)` for a condensate species, with `T` and `K` from
+    `p.precomputed`.
+ 2. The conserved vector (ρ, ρe_tot, ρuₕ, tracers) is scaled toward its mean
+    by one `θ₂ ∈ [0, 1]` enforcing `ρ ≥ ρ_min` and `p ≥ p_min` at every node
+    ([`ZhangShuAdmissibility`](@ref)).
 
-Called from `constrain_state!`, which the timestepper runs on the complete
-stage value (after the explicit and implicit increments and the DSS). The
-`update_constrain_state_every` cadence must therefore be `"stage"` or `"dss"`;
-`AtmosSimulation` rejects `"step"`.
+The horizontal momentum is staged in scratch as the orthonormal components
+ρu1/ρu2 and written back to `uₕ`; the face vertical velocity is left unscaled.
+The auxiliary field `off = K − (u1² + u2²)/2 + Φ` carries the rest of the
+specific energy, with `K` the model's kinetic energy (`compute_kinetic`).
+
+Called from `constrain_state!` on every stage value, so
+`update_constrain_state_every` must be `"stage"` or `"dss"`.
 """
 zhang_shu_limiter!(Y, p, ::Nothing) = nothing
-NVTX.@annotate function zhang_shu_limiter!(Y, p, lim::Limiters.PositivityLimiter)
-    ᶜΦ = p.core.ᶜΦ
+NVTX.@annotate function zhang_shu_limiter!(Y, p, lim::ZhangShuLimiterCache)
+    thermo_params = CAP.thermodynamics_params(p.params)
+    (; ᶜT, ᶜK) = p.precomputed
+    (; ᶜΦ) = p.core
     ᶜρu1 = p.scratch.ᶜtemp_scalar
     ᶜρu2 = p.scratch.ᶜtemp_scalar_2
-    ᶜoff = p.scratch.ᶜtemp_scalar_3
-
+    ᶜaux = p.scratch.ᶜtemp_scalar_3
     @. ᶜρu1 = Y.c.ρ * Geometry.UVVector(Y.c.uₕ).components.data.:1
     @. ᶜρu2 = Y.c.ρ * Geometry.UVVector(Y.c.uₕ).components.data.:2
-    ᶜoff .= compute_kinetic(Y.c.uₕ, Y.f.u₃)
-    @. ᶜoff += ᶜΦ - (ᶜρu1^2 + ᶜρu2^2) / (2 * Y.c.ρ^2)
 
+    if !isnothing(lim.tracer_limiter)
+        for name in keys(lim.ρq_prev)
+            lim.ρq_prev[name] .= getproperty(Y.c, name)
+        end
+        Limiters.apply_limiter!(zhang_shu_tracers(Y), nothing, lim.tracer_limiter)
+        ᶜe_vap = @. lazy(TD.internal_energy_vapor(thermo_params, ᶜT))
+        for name in keys(lim.ρq_prev)
+            ᶜδ = lim.ρq_prev[name]
+            @. ᶜδ = Y.c.:($$name) - ᶜδ
+            if name == :ρq_tot
+                @. Y.c.ρe_tot += element_meanₕ(ᶜe_vap + ᶜK + ᶜΦ) * ᶜδ
+                @. ᶜaux = element_meanₕ(ᶜρu1 / Y.c.ρ)
+                @. ᶜρu1 += ᶜaux * ᶜδ
+                @. ᶜaux = element_meanₕ(ᶜρu2 / Y.c.ρ)
+                @. ᶜρu2 += ᶜaux * ᶜδ
+                @. Y.c.ρ += ᶜδ
+            elseif name in (:ρq_lcl, :ρq_rai)
+                @. Y.c.ρe_tot +=
+                    element_meanₕ(
+                        TD.internal_energy_liquid(thermo_params, ᶜT) - ᶜe_vap,
+                    ) * ᶜδ
+            else
+                @. Y.c.ρe_tot +=
+                    element_meanₕ(
+                        TD.internal_energy_ice(thermo_params, ᶜT) - ᶜe_vap,
+                    ) * ᶜδ
+            end
+        end
+        @. Y.c.uₕ = Geometry.Covariant12Vector(
+            Geometry.UVVector(ᶜρu1 / Y.c.ρ, ᶜρu2 / Y.c.ρ),
+        )
+    end
+
+    ᶜaux .= compute_kinetic(Y.c.uₕ, Y.f.u₃)
+    @. ᶜaux += ᶜΦ - (ᶜρu1^2 + ᶜρu2^2) / (2 * Y.c.ρ^2)
     (; ρ, ρe_tot) = Y.c
     states = (; ρ, ρe_tot, ρu1 = ᶜρu1, ρu2 = ᶜρu2, zhang_shu_tracers(Y)...)
-    Limiters.apply_limiter!(states, ᶜoff, lim)
-
+    Limiters.apply_limiter!(states, ᶜaux, lim.admissibility_limiter)
     @. Y.c.uₕ = Geometry.Covariant12Vector(
         Geometry.UVVector(ᶜρu1 / Y.c.ρ, ᶜρu2 / Y.c.ρ),
     )
