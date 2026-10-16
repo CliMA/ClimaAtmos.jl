@@ -287,22 +287,16 @@ function precomputed_quantities(Y, atmos)
     SGSMomentsNT = @NamedTuple{sigma_S::FT, λ_lagrange::FT}
     covariance_quantities = if uses_sgs_quadrature
         base = (;
-            # σ²_T and σ²_q accumulate three variance blocks in
-            # `set_covariance_cache!`: the turbulent closure
-            # (`2 c ℓ² |∇_z ψ|²`), the horizontal geometric term
-            # (`c_g (c_Δx Δx_h)² |∇_h ψ|²`, Richardson-weighted), and the
-            # resolved vertical uniform-box term
-            # (`c_g (c_Δz Δz)² (∂_z ψ)²`, exact for a linear profile when
-            # `c_g = 1/12` and `c_Δz = 1`).
+            # σ²_T and σ²_q of the subgrid displacement acting on the
+            # resolved gradients (`set_covariance_cache!`).
             ᶜT′T′ = zeros(axes(Y.c)),
             ᶜq′q′ = zeros(axes(Y.c)),
             # T–q correlation the quadrature actually samples (filled by
-            # `set_tq_correlation!`): the prescribed `Tq_correlation_coefficient`
-            # for `tq_correlation_model: constant`, or `T′q′ / √(T′T′ q′q′)` for
-            # `tq_correlation_model: diagnosed`. The gradient-based covariance
-            # `ᶜT′q′` is only allocated for the diagnosed model (prescribed-ρ_turb
-            # turbulent cross + horizontal geometric cross + vertical uniform-box
-            # cross; see `set_covariance_cache!`).
+            # `set_tq_correlation!`): `T′q′ / √(T′T′ q′q′)` for
+            # `tq_correlation_model: diagnosed`, or the prescribed
+            # `Tq_correlation_coefficient` for `tq_correlation_model: constant`.
+            # The displacement covariance `ᶜT′q′` is only allocated for the
+            # diagnosed model.
             ᶜcorr_Tq = zeros(axes(Y.c)),
             # Local SGS variance fidelity (see `sgs_variance_fidelity`),
             # refreshed inside `set_covariance_cache!`.

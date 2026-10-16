@@ -144,7 +144,9 @@ the largest effect, roughly in order:
   - `entr_coeff`, `entr_buoy_coeff`, `entr_inv_tau`,
     `detr_buoy_coeff`, `detr_massflux_vertdiv_coeff` set the mass-flux
     profile: how quickly drafts dilute with height and where they terminate.
-  - `diagnostic_covariance_coeff` (``c_\sigma / 2``) and
+  - `diagnostic_covariance_coeff` (``c_\sigma``),
+    `sgs_variance_vertical_velocity_floor` (``w_{\min}``),
+    `sgs_variance_horizontal_scale_factor` (``c_{\Delta x}``) and
     `cloud_fraction_eps_rel` control cloud fraction at fixed condensate.
   - `EDMF_min_area`, `EDMF_max_area`, `EDMF_max_surface_area` are
     bounds, not tuning knobs: moving them changes what the limiters do rather

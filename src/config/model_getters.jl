@@ -1123,11 +1123,12 @@ end
     get_tq_correlation_model(parsed_args)
 
 Return the `AbstractTqCorrelationModel` selected by the `tq_correlation_model` config
-key: `"constant"` → `ConstantTqCorrelation()` (default), `"diagnosed"` → `DiagnosedTqCorrelation()`.
+key: `"diagnosed"` → `DiagnosedTqCorrelation()` (default), `"constant"` →
+`ConstantTqCorrelation()`.
 """
 function get_tq_correlation_model(parsed_args)
     return parse_option(
-        get(parsed_args, "tq_correlation_model", "constant"),
+        get(parsed_args, "tq_correlation_model", "diagnosed"),
         Dict(
             "constant" => ConstantTqCorrelation(),
             "diagnosed" => DiagnosedTqCorrelation(),

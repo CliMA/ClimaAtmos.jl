@@ -3,21 +3,24 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
-- ![][badge-🔥behavioralΔ] The along-surface part of the resolved-gradient SGS
-  variance is bounded by the variance of `q_sat` along the displacement,
-  `(∂_z q_sat|_ad)² ẑᵀD_cẑ`, with `∂_z q_sat|_ad` the dry-adiabatic rate
-  (`adiabatic_q_sat_gradient`) and `ẑᵀD_cẑ` the vertical variance of the
-  along-surface displacement.
+- ![][badge-🔥behavioralΔ] The SGS covariance of `(θ_li, q_tot)` is that of one
+  Gaussian subgrid displacement with covariance `diag(ℓ_h², ℓ_h², ℓ_v²)` acting
+  on the resolved gradients, `Σ_ψφ = ℓ_h² ∇_h ψ·∇_h φ + ℓ_v² ∂_z ψ ∂_z φ`
+  (`displacement_covariance`). `ℓ_h² = c_g (c_Δx Δx_h)²`; `ℓ_v² = 2 c_σ l_d²`
+  with `l_d` combining the mixing length and the floored buoyancy displacement
+  scale (`κ_min = w_min² / (2 c_σ c_b)`) in quadrature
+  (`materialized_displacement_length!`), so that in stably stratified air
+  without TKE the vertical displacement is `w_min / N`. New provisional
+  parameter `sgs_variance_vertical_velocity_floor` (`w_min`, 1 m/s); the floor
+  enters the variance only. This replaces the separate turbulent and
+  vertical uniform-box blocks; `sgs_variance_vertical_scale_factor` is no
+  longer read. `tq_correlation_model` defaults to `diagnosed`, the covariance
+  of the same displacement; `constant` keeps the prescribed value.
 - ![][badge-✨feature/enhancement] Precipitation-fraction placement of rain and
   snow over the SGS quadrature: a fraction `sgs_precip_incloud_fraction` of
   the cell-mean rain and snow is confined to the precipitation shaft, the moistest `a_p` of the PDF,
   where `a_p` is the overlap precipitation fraction diagnosed from the cloud cover
   above by a maximum-random overlap sweep.
-- ![][badge-🔥behavioralΔ] The part of the geometric SGS variance block that
-  needs a vertical displacement (the along-surface variance beyond its
-  along-contour part, plus the across-surface uniform-box terms) and the
-  turbulent block's vertical-displacement variance are combined as the larger
-  of the two instead of their sum.
 - ![][badge-🔥behavioralΔ] Cloud fraction: restore the per-subdomain closure
   for `PrognosticEDMFX`. The `QuadratureCloud` cover is again evaluated with
   the environment condensate (`_get_condensate_means`, consistent with the
@@ -31,11 +34,6 @@ main
 - ![][badge-🔥behavioralΔ] Snow falls at the Chen et al. (2022) speed by default
   `toml/prognostic_edmfx_1M.toml` sets `snow_apparent_density` to 300 kg/m³.
    Rain falls at fixed terminal velocity.
-- ![][badge-🔥behavioralΔ] The along-surface depth of the geometric SGS
-  variance block is bounded by the height above the surface,
-  `ℓ_a = min(H, z − z_sfc)`: in a neutral layer the along-surface
-  displacement is the vertical eddy displacement, which cannot reach below
-  the ground.
 - ![][badge-🔥behavioralΔ] Make the SGS variance fidelity `α` a cached
   per-cell field `α = α_Da · α_eq`, refreshed inside `set_covariance_cache!`:
   Damköhler factor `α_Da = 1 / (1 + A · τ_mp · c_d · √TKE / max(l_mix, 1 m))`
@@ -45,26 +43,10 @@ main
   CF uses `σ_aug = sqrt((α σ_S)² + σ_S_floor²)` — α scales only the
   equilibrium part. Microphysics timescales reuse the ClimaParams
   `condensation_evaporation_timescale` / `sublimation_deposition_timescale`.
-- ![][badge-🔥behavioralΔ] The resolved-gradient (geometric) SGS variance block
-  is the variance from a Gaussian subgrid parcel displacement with covariance
-  `c_g diag(ℓ_h², ℓ_h², ℓ_v²)`, `ℓ_h = c_Δx Δx_h`, `ℓ_v = H`, split into
-  the part along the local `θ_li` surface (q′q′ only, the conditional variance
-  `gᵀDg − (gᵀDn)²/(nᵀDn)` with `g = ∇q_tot`, `n = ∇θ_li`) and the part across
-  it (the vertical uniform-box terms, with the q gradient taken across the
-  surface).
 - ![][badge-🔥behavioralΔ] Update to CloudMicrophysics v0.45 and use joint
   relaxation of the vapor-driven phase changes.
 - ![][badge-✨feature/enhancement] Add back CloudMicrophysics v0.43 to the
   compat.
-- ![][badge-🔥behavioralΔ] The horizontal resolved-gradient (geometric) SGS variance
-  term is now the isentropic form: `q′q′` carries `|∇_h q_tot − r ∇_h θ_li|²`, the
-  gradient of `q_tot` along the `θ_li` surface with `r = (∂q_tot/∂z)/(∂θ_li/∂z)`, the
-  stratification floored at the provisional `sgs_variance_isentropic_min_dtheta_dz`,
-  there is no horizontal `θ′θ′` (or `θ′q′`) term, and the displacement along the surface
-  is bounded by the cell, `ℓ² = Δx² / (1 + (s Δx / Δz)²)` with the surface slope
-  `s = |∇_h θ_li| / ∂_z θ_li`. The `q′q′` and `θ′q′` terms of the vertical uniform-box block are
-  scaled by the same factor, the share of the cell's vertical excursion not already
-  sampled along the surface.
 
 0.42.14
 -------
