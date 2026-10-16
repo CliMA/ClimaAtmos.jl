@@ -234,6 +234,17 @@ buoyancy scale `l_N` of the mixing length.
 end
 
 """
+    displacement_length(l_mix, l_b, l_z)
+
+Vertical displacement length `min(√(l_mix² + l_b²), l_z)`: the mixing length
+and the floored buoyancy displacement scale combined in quadrature, capped by
+the wall distance `l_z`, which bounds each of them and must bound their
+combination too, since air cannot be displaced below the ground.
+"""
+@inline displacement_length(l_mix, l_b, l_z) =
+    min(sqrt(l_mix^2 + l_b^2), max(l_z, zero(l_z)))
+
+"""
     materialized_displacement_length!(Y, p)
 
 Materialize the vertical displacement length `l_d` of the variance closure
@@ -253,8 +264,9 @@ not stably stratified the floored scale is the cell depth or the wall
 distance, whichever is smaller. The cell-depth cap applies to the floored
 scale only; `l_mix` keeps its own limits, so `l_d` exceeds the cell depth
 wherever the mixing length does, as the turbulent variance
-`2 c_σ l_mix² (∂_z ψ)²` always has. The two scales are combined in quadrature,
-and the floor is kept out of the mixing length itself, because the
+`2 c_σ l_mix² (∂_z ψ)²` always has. The two scales are combined in quadrature
+and the combination is capped by the wall distance (`displacement_length`).
+The floor is kept out of the mixing length itself, because the
 surface-layer wall scale `l_W` of the mixing length vanishes with the
 friction velocity and in a stable surface layer, which would collapse `l_d`
 in the free troposphere. The floor enters the variance only, not `ᶜl_mix` or
@@ -274,9 +286,10 @@ function materialized_displacement_length!(Y, p)
     z_sfc = Fields.level(Fields.coordinate_field(Y.f).z, Fields.half)
     ᶜΔz = Fields.Δz_field(axes(Y.c))
     ᶜl_d = p.scratch.ᶜtemp_scalar
-    @. ᶜl_d = sqrt(
-        ᶜl_mix^2 +
-        stable_displacement_length(c_b * κ_min, ᶜbuoygrad, ᶜz - z_sfc, ᶜΔz)^2,
+    @. ᶜl_d = displacement_length(
+        ᶜl_mix,
+        stable_displacement_length(c_b * κ_min, ᶜbuoygrad, ᶜz - z_sfc, ᶜΔz),
+        ᶜz - z_sfc,
     )
     return ᶜl_d
 end

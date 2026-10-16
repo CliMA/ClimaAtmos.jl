@@ -478,8 +478,8 @@ The vertical scale is a displacement length, ``\ell_v^2 = 2 c_\sigma l_d^2``,
 where ``l_d`` combines the [mixing length](@ref "Mixing-length scales") and the
 buoyancy displacement scale
 ``\min(\sqrt{c_b \kappa_{\min}} / N, \; z - z_s, \; \Delta z)``
-in quadrature, with ``\kappa_{\min} = w_{\min}^2 / (2 c_\sigma c_b)``. In
-turbulent layers ``l_d`` is the mixing length and the closure is the
+in quadrature, capped by the wall distance, with
+``\kappa_{\min} = w_{\min}^2 / (2 c_\sigma c_b)``. In turbulent layers ``l_d`` is the mixing length and the closure is the
 production–dissipation balance of [Sommeria1977, Mellor1977](@cite),
 ``\sigma_\psi^2 = 2 c_\sigma l^2 (\partial_z \psi)^2``, with the wall
 distance and the buoyancy scale inherited from the mixing length. In air that

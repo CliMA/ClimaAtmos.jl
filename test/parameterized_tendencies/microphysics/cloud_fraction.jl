@@ -332,9 +332,14 @@ floor_nt(
                         ustar, FT(5000), FT(0), FT(Inf), FT(0), N², FT(0),
                         L_MO, FT(1e-10), FT(1), CA.SmoothMinimumBlending(),
                     )
-                    l_d = sqrt(ml.master^2 + l_b^2)
+                    l_d = CA.displacement_length(ml.master, l_b, FT(5000))
                     @test 2 * c_σ * l_d^2 * N² ≈ w_min^2 rtol = FT(1e-5)
                 end
+                # the combination never exceeds the wall distance
+                @test CA.displacement_length(FT(50), FT(50), FT(50)) == FT(50)
+                @test CA.displacement_length(FT(30), FT(40), FT(5000)) ≈ FT(50)
+                @test CA.displacement_length(FT(30), FT(40), FT(-1)) == FT(0)
+                @test CA.displacement_length(FT(30), FT(40), FT(5000)) isa FT
             end
         end
     end
