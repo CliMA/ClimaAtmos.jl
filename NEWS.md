@@ -46,11 +46,11 @@ main
   equilibrium part. Microphysics timescales reuse the ClimaParams
   `condensation_evaporation_timescale` / `sublimation_deposition_timescale`.
 - ![][badge-🐛bugfix] ![][badge-🔥behavioralΔ] Default diagnostics pick their
-  cadence from `t_end` rather than `t_end - dt`, and every bucket now requires the
-  run to span at least three of its averaging windows. The monthly and ten-daily
-  buckets already required three, while daily and hourly required one, so a run
-  ending exactly on a boundary could select a window it was able to fill only
-  once. Subtracting `dt` masked that for the bottom two buckets but shifted the
+  cadence from `t_end` rather than `t_end - dt`, and the daily and hourly buckets
+  now require the run to span two of their averaging windows rather than one. The
+  monthly and ten-daily buckets already required three, so it was only daily and
+  hourly where a run ending exactly on a boundary could select a window it was
+  able to fill once. Subtracting `dt` masked that for the bottom two buckets but shifted the
   top two down: `t_end: "30days"` selected daily averages instead of ten-daily,
   and since the output period also selects the compute schedule (`Day(1)` samples
   every step, `Day(10)` every six hours), it sampled every default diagnostic once
@@ -61,7 +61,7 @@ main
 - ![][badge-🔥behavioralΔ] Daily default diagnostics are sampled six-hourly, or
   hourly for `HOURLY_DIAGS`, rather than every timestep; this matches the
   ten-daily and monthly cadences. Sub-daily output is still computed every step,
-  where subsampling would be coarser than the window being averaged. Runs of three
+  where subsampling would be coarser than the window being averaged. Runs of two
   to thirty days are affected, among them `rcemipii_box_CRM_1M` (21 days at
   `dt: "5secs"`) and `baroclinic_wave_equil`.
 - ![][badge-🔥behavioralΔ] The resolved-gradient (geometric) SGS variance block
