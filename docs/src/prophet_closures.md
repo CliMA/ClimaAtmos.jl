@@ -484,7 +484,9 @@ production–dissipation balance of [Sommeria1977, Mellor1977](@cite),
 ``\sigma_\psi^2 = 2 c_\sigma l^2 (\partial_z \psi)^2``, with the wall
 distance and the buoyancy scale inherited from the mixing length. In air that
 is not stably stratified the floored scale is the cell depth or the wall
-distance, whichever is smaller. In stably stratified air
+distance, whichever is smaller; the cell-depth cap applies to the floored
+scale only, and ``l_d`` exceeds ``\Delta z`` wherever the mixing length does,
+as the turbulent variance always has. In stably stratified air
 without TKE the buoyancy scale gives ``\ell_v = w_{\min} / N``: the vertical
 displacement of unresolved motions with velocity scale ``w_{\min}``
 (`sgs_variance_vertical_velocity_floor`), gravity waves, mesoscale

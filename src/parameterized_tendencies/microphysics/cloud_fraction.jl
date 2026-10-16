@@ -250,7 +250,10 @@ displacement variance `2 c_σ l_d²` is `(w_min / N)²`: the displacement of
 unresolved vertical motions (gravity waves, mesoscale circulations) with
 velocity scale `w_min`, which displace air without mixing it. In air that is
 not stably stratified the floored scale is the cell depth or the wall
-distance, whichever is smaller. The two scales are combined in quadrature,
+distance, whichever is smaller. The cell-depth cap applies to the floored
+scale only; `l_mix` keeps its own limits, so `l_d` exceeds the cell depth
+wherever the mixing length does, as the turbulent variance
+`2 c_σ l_mix² (∂_z ψ)²` always has. The two scales are combined in quadrature,
 and the floor is kept out of the mixing length itself, because the
 surface-layer wall scale `l_W` of the mixing length vanishes with the
 friction velocity and in a stable surface layer, which would collapse `l_d`
