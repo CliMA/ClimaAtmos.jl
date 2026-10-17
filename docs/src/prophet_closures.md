@@ -479,9 +479,12 @@ where ``l_d`` combines the [mixing length](@ref "Mixing-length scales") and
 the floor displacement scale
 
 ```math
-l_b = \min\!\left( \sqrt{c_b \kappa_{\min}} \,
-  \min\!\left(\frac{1}{N}, \frac{l}{\sqrt{\kappa_{\mathrm{iso}}}}, \tau_0\right), \;
-  z - z_s, \; \Delta z \right) ,
+l_b = \begin{cases}
+\min\!\left( \sqrt{c_b \kappa_{\min}} \,
+  \min\!\left(\dfrac{1}{N}, \dfrac{l}{\sqrt{\kappa_{\mathrm{iso}}}}, \tau_0\right), \;
+  z - z_s, \; \Delta z \right) , & N^2 > 0 , \\[6pt]
+0 , & N^2 \le 0 ,
+\end{cases}
 \qquad \kappa_{\min} = \frac{w_{\min}^2}{2 c_\sigma c_b} ,
 ```
 
@@ -490,10 +493,12 @@ the mixing length and the closure is the production–dissipation balance of
 [Sommeria1977, Mellor1977](@cite),
 ``\sigma_\psi^2 = 2 c_\sigma l^2 (\partial_z \psi)^2``, with the wall distance
 and the buoyancy scale inherited from the mixing length. The floor is the
-displacement of unresolved vertical motions with velocity scale ``w_{\min}``:
-gravity waves, mesoscale circulations and convective remnants. The
-displacement lasts until the parcel's vertical velocity decorrelates. In
-stably stratified air buoyancy stops it after a time ``1/N``, giving
+displacement of unresolved vertical motions with velocity scale ``w_{\min}``
+in stably stratified air: gravity waves, mesoscale circulations and
+convective remnants. Where the air is not stably stratified (``N^2 \le 0``)
+the floor vanishes and ``l_d`` reduces to ``l``. In stably stratified air the
+displacement lasts until the parcel's vertical velocity decorrelates.
+Buoyancy stops it after a time ``1/N``, giving
 ``\ell_v = w_{\min}/N``. In turbulent air the turbulence scrambles it after
 its Lagrangian time scale ``T_L = 2\sigma_w^2/(C_0 \varepsilon)``, which with
 the closure's dissipation ``\varepsilon = c_d \kappa_{\mathrm{iso}}^{3/2}/l``
@@ -501,10 +506,10 @@ is the eddy turnover time ``l/\sqrt{\kappa_{\mathrm{iso}}}``; this reduces to
 ``\sqrt{c_b}/N`` where the mixing length is the buoyancy scale and to the
 turnover time of the TKE-balance scale in convective air, so it is the same
 limit as ``1/N`` in stable air and shortens the displacement where the TKE is
-large. In quiescent neutral air, with neither buoyancy nor turbulence, the
-displacement persists for ``\tau_0`` (`sgs_variance_floor_time_scale`),
-giving ``\ell_v = w_{\min} \tau_0``. This is the vertical dispersion of a
-stochastic Lagrangian model in stratified flow. The caps by
+large. In weakly stratified quiescent air, where ``1/N`` exceeds ``\tau_0``
+(`sgs_variance_floor_time_scale`) and turbulence is weak, the displacement
+persists for ``\tau_0``, giving ``\ell_v = w_{\min} \tau_0``. This is the
+vertical dispersion of a stochastic Lagrangian model in stably stratified flow. The caps by
 the cell depth and the wall distance apply to the floor scale only; ``l_d``
 exceeds ``\Delta z`` wherever the mixing length does, as the turbulent
 variance always has. A reversible displacement creates a fluctuation at a

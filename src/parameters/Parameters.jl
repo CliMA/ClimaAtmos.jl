@@ -266,9 +266,9 @@ not yet define.
   - `sgs_variance_floor_resolution_exponent`: Exponent `p` of the velocity
     floor `w_min = w_ref (Δx_h / Δx_ref)^p`, equal to `(s − 1)/2` for a
     sub-grid spectrum `k^(−s)` of the displaced fields (`floor_velocity`) [-].
-  - `sgs_variance_floor_time_scale`: Time `τ_0` over which the displacement
-    of the unresolved vertical motions persists in quiescent neutral air,
-    where neither buoyancy nor turbulence decorrelates it [s].
+  - `sgs_variance_floor_time_scale`: Upper bound `τ_0` on the time over which
+    the displacement of the unresolved vertical motions persists in weakly
+    stratified quiescent air, before buoyancy or turbulence decorrelates it [s].
   - `sgs_variance_max_rel_std`: Upper bound on the SGS total-water standard
     deviation relative to the grid-mean total water, `σ_q ≤ sgs_variance_max_rel_std * q_tot`,
     applied to the diagnosed `q′q′` whatever closure produced it. A wider variance puts a quadrature node

@@ -249,22 +249,23 @@ end
     floor_displacement_length(κ_b, N², τ_turb, τ_0, l_z, Δz)
 
 Vertical displacement `√κ_b · min(1/N, τ_turb, τ_0)` of the unresolved
-vertical motions with buoyancy-weighted kinetic energy `κ_b = c_b κ_min`,
-capped by the wall distance `l_z` and by the cell depth `Δz`, over which the
-gradients the displacement acts on are defined. The displacement lasts until
-the parcel's vertical velocity decorrelates: in stably stratified air after a
+vertical motions with buoyancy-weighted kinetic energy `κ_b = c_b κ_min` in
+stably stratified air (`N² > 0`), capped by the wall distance `l_z` and by
+the cell depth `Δz`, over which the gradients the displacement acts on are
+defined, and zero where the air is not stably stratified (`N² ≤ 0`). The
+displacement lasts until the parcel's vertical velocity decorrelates: after a
 time `1/N`, when buoyancy stops it, which gives the buoyancy scale
-`√κ_b / N` of the mixing length; in turbulent air after the Lagrangian time
-scale of the turbulence `τ_turb = l_mix / √κ_iso`, the eddy turnover time
-(`T_L = 2σ_w²/(C_0 ε)` with `ε = c_d κ_iso^(3/2) / l_mix`); and in quiescent
-neutral air after `τ_0`. This is the vertical dispersion of a stochastic
-Lagrangian model in stratified flow.
+`√κ_b / N` of the mixing length; after the Lagrangian time scale of the
+turbulence `τ_turb = l_mix / √κ_iso`, the eddy turnover time
+(`T_L = 2σ_w²/(C_0 ε)` with `ε = c_d κ_iso^(3/2) / l_mix`); or in weakly
+stratified quiescent air after `τ_0`. This is the vertical dispersion of a
+stochastic Lagrangian model in stably stratified flow.
 """
 @inline function floor_displacement_length(κ_b, N², τ_turb, τ_0, l_z, Δz)
     FT = typeof(N²)
     l_cap = min(max(l_z, zero(FT)), Δz)
-    τ = min(τ_0, τ_turb, inv(sqrt(max(N², eps(FT)))))
-    return min(sqrt(κ_b) * τ, l_cap)
+    τ = min(τ_0, τ_turb, inv(sqrt(max(N², floatmin(FT)))))
+    return ifelse(N² > zero(FT), min(sqrt(κ_b) * τ, l_cap), zero(FT))
 end
 
 """
@@ -312,8 +313,8 @@ without TKE, `l_d = w_min / (√(2 c_σ) N)`, so the vertical displacement
 variance `2 c_σ l_d²` is `(w_min / N)²`: the displacement of unresolved
 vertical motions (gravity waves, mesoscale circulations) with velocity scale
 `w_min`, which displace air without mixing it. Where the air is not stably
-stratified the floor displacement is `w_min min(τ_turb, τ_0) / √(2 c_σ)`,
-capped by the cell depth and the wall distance. The caps apply to the floor
+stratified (`N² ≤ 0`) the floor displacement vanishes, so `l_d` reduces to
+`l_mix`. The caps apply to the floor
 scale only; `l_mix` keeps its own limits, so `l_d` exceeds the cell depth
 wherever the mixing length does, as the turbulent variance
 `2 c_σ l_mix² (∂_z ψ)²` always has. The two scales are combined in quadrature

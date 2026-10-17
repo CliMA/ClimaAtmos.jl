@@ -8,12 +8,13 @@ main
   on the resolved gradients, `Σ_ψφ = ℓ_h² ∇_h ψ·∇_h φ + ℓ_v² ∂_z ψ ∂_z φ`
   (`displacement_covariance`). `ℓ_h² = c_g (c_Δx Δx_h)²`; `ℓ_v² = 2 c_σ l_d²`
   with `l_d` combining the mixing length and the floor displacement
-  `√(c_b κ_min) min(1/N, l_mix/√κ_iso, τ_0)`, `κ_min = w_min² / (2 c_σ c_b)`,
-  in quadrature (`materialized_displacement_length!`): the displacement of
-  the unresolved vertical motions lasts until buoyancy, the turbulence
-  (its Lagrangian time scale, the eddy turnover time) or the quiescent
-  limit `τ_0` decorrelates it, so in stably stratified air without TKE it is
-  `w_min / N`; capped by the cell depth and the wall distance. The velocity
+  `√(c_b κ_min) min(1/N, l_mix/√κ_iso, τ_0)` for `N² > 0` (zero for `N² ≤ 0`),
+  `κ_min = w_min² / (2 c_σ c_b)`,
+  in quadrature (`materialized_displacement_length!`): in stably stratified air
+  the displacement of the unresolved vertical motions lasts until buoyancy, the
+  turbulence (its Lagrangian time scale, the eddy turnover time) or the
+  quiescent limit `τ_0` decorrelates it, so without TKE it is `w_min / N`;
+  capped by the cell depth and the wall distance. The velocity
   scale grows with the horizontal grid scale,
   `w_min = w_ref (Δx_h / Δx_ref)^p`, as the spectral slope of the displaced
   fields requires. New provisional parameters

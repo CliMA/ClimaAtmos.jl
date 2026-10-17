@@ -323,17 +323,17 @@ floor_nt(
                 @test l(κ_b, FT(1e-4), l_z) ≈ sqrt(κ_b) / FT(1e-2)
                 # weakly stable: 1/N exceeds τ_0, so the quiescent limit binds
                 @test l(κ_b, FT(1e-6), l_z) ≈ sqrt(κ_b) * τ_0
-                # neutral and unstable: √κ_b τ_0 (29 m), below the cell depth
-                @test l(κ_b, FT(0), l_z) ≈ sqrt(κ_b) * τ_0
-                @test l(κ_b, FT(-1e-4), l_z) ≈ sqrt(κ_b) * τ_0
-                # turbulence decorrelates sooner than τ_0 or buoyancy
-                @test l0(κ_b, FT(0), FT(40), τ_0, l_z, Δz) ≈ sqrt(κ_b) * 40
+                # neutral and unstable: no stable floor displacement
+                @test l(κ_b, FT(0), l_z) == FT(0)
+                @test l(κ_b, FT(-1e-4), l_z) == FT(0)
+                # turbulence decorrelates sooner than τ_0 or buoyancy in stable air
+                @test l0(κ_b, FT(1e-6), FT(40), τ_0, l_z, Δz) ≈ sqrt(κ_b) * 40
                 @test l0(κ_b, FT(1e-4), FT(40), τ_0, l_z, Δz) ≈ sqrt(κ_b) * 40
                 @test l0(κ_b, FT(1e-4), FT(400), τ_0, l_z, Δz) ≈
                       sqrt(κ_b) / FT(1e-2)
-                # caps: cell depth and wall distance
-                @test l0(κ_b, FT(0), FT(Inf), FT(1e4), l_z, Δz) == Δz
-                @test l(κ_b, FT(0), FT(10)) == FT(10)
+                # caps: cell depth and wall distance in weakly stable air
+                @test l0(κ_b, FT(1e-8), FT(Inf), FT(1e4), l_z, Δz) == Δz
+                @test l(κ_b, FT(1e-6), FT(10)) == FT(10)
                 @test l(κ_b, FT(1e-4), FT(-1)) == FT(0)
                 @test l(κ_b, FT(1e-4), l_z) isa FT
                 # turbulent Lagrangian time: l_mix / √κ, infinite without TKE
