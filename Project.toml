@@ -1,7 +1,7 @@
 name = "ClimaAtmos"
 uuid = "b2c96348-7fb7-4fe0-8da9-78d88439e717"
 authors = ["Climate Modeling Alliance"]
-version = "0.42.14"
+version = "0.42.15"
 
 [deps]
 Adapt = "79e6a3ab-5dfb-504d-930d-738a2a938a0e"
@@ -74,7 +74,7 @@ LazyArtifacts = "1"
 LazyBroadcast = "1"
 LinearAlgebra = "1"
 Logging = "1"
-Musica = "0.15, 0.16"
+Musica = "0.15, 0.16, 0.17"
 NCDatasets = "0.14.2"
 NVTX = "0.3, 1"
 NullBroadcasts = "0.1"
