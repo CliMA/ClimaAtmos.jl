@@ -37,7 +37,7 @@ ClimaComms.context(sim::AtmosSimulation) =
 ClimaComms.device(sim::AtmosSimulation) = ClimaComms.device(sim.integrator.u.c)
 
 """
-    setup_diagnostics_and_writers(diagnostics_config, model, Y, p, dt, t_start, t_end,
+    setup_diagnostics_and_writers(diagnostics_config, model, Y, p, t_start, t_end,
                                   start_date, output_dir; verbose = false)
 
 Build the scheduled diagnostics and the writers they output to.
@@ -60,7 +60,6 @@ function setup_diagnostics_and_writers(
     model,
     Y,
     p,
-    dt,
     t_start,
     t_end,
     start_date,
@@ -101,7 +100,9 @@ function setup_diagnostics_and_writers(
 
     # Add default diagnostics if enabled
     if default
-        sim_duration = t_end - dt
+        # Measured from `start_date`, so a restart segment is bucketed by the length
+        # of the whole experiment rather than by what is left of it.
+        sim_duration = t_end
         default_diag_list = CAD.default_diagnostics(
             model,
             sim_duration,
@@ -117,7 +118,7 @@ function setup_diagnostics_and_writers(
 
     # Add debug tendency diagnostics if enabled
     if debug_tendency
-        sim_duration = t_end - dt
+        sim_duration = t_end
         tendency_diag_list = CAD.tendency_debug_default_diagnostics(
             netcdf_writer,
             sim_duration,
@@ -436,7 +437,7 @@ function AtmosSimulation(
     all_diagnostics, writers, periods_reductions =
         @timed_log verbose "Set up diagnostics" setup_diagnostics_and_writers(
             diagnostics, model,
-            Y, p, dt,
+            Y, p,
             t_start, t_end, start_date,
             output_dir;
             verbose,

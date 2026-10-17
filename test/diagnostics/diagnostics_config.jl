@@ -1,6 +1,7 @@
 using Test
 import ClimaAtmos as CA
 import ClimaAtmos.Diagnostics as CAD
+using Dates
 
 @testset "DiagnosticsConfig defaults" begin
     cfg = CA.DiagnosticsConfig()
@@ -73,4 +74,48 @@ end
     @test_throws ErrorException CAD.normalize_diag_entry(42)
     @test_throws ErrorException CAD.normalize_diag_entry("just a string")
     @test_throws ErrorException CAD.normalize_diag_entry(:symbol_only)
+end
+
+@testset "Default diagnostics cadence at exact threshold boundaries" begin
+    # No bucket is selected until the run spans two of its averaging windows, so a
+    # cadence always yields more than one sample; monthly and ten-daily need three.
+    cadence(duration) = CAD.extract_diagnostic_periods(
+        CAD.frequency_averages(duration)(
+            "ta";
+            output_writer = CAD.DictWriter(),
+            start_date = DateTime(2010, 1, 1),
+            t_start = 0.0,
+        ),
+    )
+
+    @test cadence(90 * 86400.0) == Set([Month(1)])
+    @test cadence(30 * 86400.0) == Set([Day(10)])
+    @test cadence(2 * 86400.0) == Set([Day(1)])
+    @test cadence(2 * 3600.0) == Set([Hour(1)])
+
+    # One timestep short of a boundary selects the next cadence down.
+    @test cadence(30 * 86400.0 - 30) == Set([Day(1)])
+    @test cadence(2 * 86400.0 - 30) == Set([Hour(1)])
+    @test isempty(cadence(2 * 3600.0 - 30))
+
+    # A run lasting exactly one averaging window must not select it; 86400 and 3600
+    # are the lengths used by the CI column cases.
+    @test cadence(86400.0) == Set([Hour(1)])
+    @test isempty(cadence(3600.0))
+end
+
+@testset "Daily averages subsample rather than computing every step" begin
+    schedules(duration) = [
+        typeof(d.compute_schedule_func) for d in CAD.frequency_averages(duration)(
+            "ta";
+            output_writer = CAD.DictWriter(),
+            start_date = DateTime(2010, 1, 1),
+            t_start = 0.0,
+        )
+    ]
+
+    # Sampling is six-hourly for a daily window, but every step for an hourly one,
+    # where it would otherwise be coarser than the window being averaged.
+    @test all(t -> t <: CAD.EveryCalendarDtSchedule, schedules(6 * 86400.0))
+    @test all(t -> t === typeof(CAD.EveryStepSchedule()), schedules(86400.0))
 end
