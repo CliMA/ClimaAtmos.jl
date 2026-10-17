@@ -605,6 +605,11 @@ function SGSQuadratureParameters(
         sgs_variance_floor_reference_resolution = FT(1.2e5),
         sgs_variance_floor_resolution_exponent = FT(2 // 3),
         sgs_variance_floor_time_scale = FT(100),
+        # Per-variable displacement scale ratios (θ_li relative to q_tot) and
+        # horizontal displacement cross-correlation (`set_covariance_cache!`).
+        sgs_variance_theta_horizontal_scale_ratio = FT(0.875),
+        sgs_variance_theta_vertical_scale_ratio = FT(0.6),
+        sgs_variance_horizontal_cross_correlation = FT(0.38),
         # Equilibrium-ratio modulator weight (see `sgs_variance_fidelity`).
         sgs_fidelity_equilibrium_weight = FT(0.5),
         # Precipitation-fraction placement of rain and snow over the quadrature:

@@ -269,6 +269,13 @@ not yet define.
   - `sgs_variance_floor_time_scale`: Upper bound `τ_0` on the time over which
     the displacement of the unresolved vertical motions persists in weakly
     stratified quiescent air, before buoyancy or turbulence decorrelates it [s].
+  - `sgs_variance_theta_horizontal_scale_ratio`: Ratio `r_{Δx,θ} = ℓ_{h,θ} / ℓ_{h,q}`
+    of the horizontal displacement scale of `θ_li` to that of `q_tot` [-].
+  - `sgs_variance_theta_vertical_scale_ratio`: Ratio `r_{v,θ} = ℓ_{v,θ} / ℓ_{v,q}`
+    of the vertical displacement scale of `θ_li` to that of `q_tot` [-].
+  - `sgs_variance_horizontal_cross_correlation`: Cross-correlation factor
+    `r_{h,θq} ∈ [-1, 1]` between the horizontal subgrid displacements of `θ_li`
+    and `q_tot` in the `θ_li`–`q_tot` covariance [-].
   - `sgs_variance_max_rel_std`: Upper bound on the SGS total-water standard
     deviation relative to the grid-mean total water, `σ_q ≤ sgs_variance_max_rel_std * q_tot`,
     applied to the diagnosed `q′q′` whatever closure produced it. A wider variance puts a quadrature node
@@ -325,6 +332,9 @@ Base.@kwdef struct SGSQuadratureParameters{FT} <: ASQP
     sgs_variance_floor_reference_resolution::FT
     sgs_variance_floor_resolution_exponent::FT
     sgs_variance_floor_time_scale::FT
+    sgs_variance_theta_horizontal_scale_ratio::FT
+    sgs_variance_theta_vertical_scale_ratio::FT
+    sgs_variance_horizontal_cross_correlation::FT
     sgs_variance_max_rel_std::FT
     sgs_liquid_uniform_fraction::FT
     sgs_ice_uniform_fraction::FT

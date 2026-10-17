@@ -458,57 +458,73 @@ The distribution's *spread* comes from a diagnostic closure. Earlier EDMF
 formulations carried the environmental covariance prognostically
 [Cohen2020](@cite), with its own entrainment, detrainment, and source terms;
 PROPHET instead diagnoses it from the resolved gradients. A subgrid parcel is
-displaced by a Gaussian ``\boldsymbol{\delta}`` with covariance
-``\mathbf{D} = \mathrm{diag}(\ell_h^2, \ell_h^2, \ell_v^2)`` and keeps its
-``\theta_{li}`` and ``q_t``, so the covariance of the two scalars at a point is
+displaced by a Gaussian ``\boldsymbol{\delta}_\psi`` with covariance
+``\mathbf{D}_\psi = \mathrm{diag}(\ell_{h,\psi}^2, \ell_{h,\psi}^2, \ell_{v,\psi}^2)`` and keeps its
+``\theta_{li}`` and ``q_t``, so the variances and cross-covariance of the two scalars at a point are
 
 ```math
-\Sigma_{\psi \phi} = \ell_h^2 \, \nabla_h \psi \cdot \nabla_h \phi
-  + \ell_v^2 \, \partial_z \psi \, \partial_z \phi ,
-\qquad \psi, \phi \in \{\theta_{li}, q_t\} .
+\Sigma_{\psi \psi} = \ell_{h,\psi}^2 \, |\nabla_h \psi|^2
+  + \ell_{v,\psi}^2 \, (\partial_z \psi)^2 ,
+\qquad
+\Sigma_{\theta_{li} q_t} = r_{h,\theta q} \, \ell_{h,\theta} \ell_{h,q} \, \nabla_h \theta_{li} \cdot \nabla_h q_t
+  + \ell_{v,\theta} \ell_{v,q} \, \partial_z \theta_{li} \, \partial_z q_t ,
 ```
 
-The horizontal scale is set by the grid, ``\ell_h^2 = c_g (c_{\Delta x} \Delta x_h)^2``,
+with ``\psi \in \{\theta_{li}, q_t\}``. The moisture horizontal scale is set by
+the grid, ``\ell_{h,q}^2 = c_g (c_{\Delta x} \Delta x_h)^2``,
 with ``c_g = 1/12`` the variance of a linear field over a uniform cell and
-``c_{\Delta x}`` (`sgs_variance_horizontal_scale_factor`) the scale factor. It
+``c_{\Delta x}`` (`sgs_variance_horizontal_scale_factor`) the scale factor, and
+the potential-temperature horizontal scale is ``\ell_{h,\theta} = r_{\Delta x,\theta} \ell_{h,q}``
+(`sgs_variance_theta_horizontal_scale_ratio`), with horizontal displacement
+cross-correlation ``r_{h,\theta q} \in [-1, 1]``
+(`sgs_variance_horizontal_cross_correlation`). It
 is the variance a cell holds because the resolved field varies across it, and
 it vanishes as the horizontal grid is refined.
 
-The vertical scale is a displacement length, ``\ell_v^2 = 2 c_\sigma l_d^2``,
-where ``l_d`` combines the [mixing length](@ref "Mixing-length scales") and
-the floor displacement scale
+The moisture vertical scale is a displacement length, ``\ell_{v,q}^2 = 2 c_\sigma l_d^2``,
+with ``\ell_{v,\theta} = r_{v,\theta} \ell_{v,q}``
+(`sgs_variance_theta_vertical_scale_ratio`), where ``l_d`` combines the
+buoyancy-bounded [mixing length](@ref "Mixing-length scales")
+``l_{\mathrm{disp}} = \min(l, \sqrt{c_b \kappa_{\mathrm{iso}}}/N_{\mathrm{disp}})``
+and the floor displacement scale
 
 ```math
 l_b = \begin{cases}
 \min\!\left( \sqrt{c_b \kappa_{\min}} \,
-  \min\!\left(\dfrac{1}{N}, \dfrac{l}{\sqrt{\kappa_{\mathrm{iso}}}}, \tau_0\right), \;
-  z - z_s, \; \Delta z \right) , & N^2 > 0 , \\[6pt]
-0 , & N^2 \le 0 ,
+  \min\!\left(\dfrac{1}{N_{\mathrm{disp}}}, \dfrac{l_{\mathrm{disp}}}{\sqrt{\kappa_{\mathrm{iso}}}}, \tau_0\right), \;
+  z - z_s, \; \Delta z \right) , & N_{\mathrm{disp}}^2 > 0 , \\[6pt]
+0 , & N_{\mathrm{disp}}^2 \le 0 ,
 \end{cases}
 \qquad \kappa_{\min} = \frac{w_{\min}^2}{2 c_\sigma c_b} ,
 ```
 
-in quadrature, capped by the wall distance. In turbulent layers ``l_d`` is
+in quadrature, capped by the wall distance, with ``N_{\mathrm{disp}}^2`` the
+larger of the dry buoyancy gradients on the cell's lower and upper bounding
+faces. Evaluating ``N_{\mathrm{disp}}^2`` on the bounding faces rather than on
+the Van Leer harmonic-mean center gradients keeps the buoyancy barrier active in
+a cell immediately below a sharp capping inversion, and using the dry buoyancy
+coefficients keeps the moist latent-heat reduction at cloud base from weakening
+the stratification barrier. In turbulent layers ``l_d`` is
 the mixing length and the closure is the production–dissipation balance of
 [Sommeria1977, Mellor1977](@cite),
 ``\sigma_\psi^2 = 2 c_\sigma l^2 (\partial_z \psi)^2``, with the wall distance
 and the buoyancy scale inherited from the mixing length. The floor is the
 displacement of unresolved vertical motions with velocity scale ``w_{\min}``
 in stably stratified air: gravity waves, mesoscale circulations and
-convective remnants. Where the air is not stably stratified (``N^2 \le 0``)
+convective remnants. Where the air is not stably stratified (``N_{\mathrm{disp}}^2 \le 0``)
 the floor vanishes and ``l_d`` reduces to ``l``. In stably stratified air the
 displacement lasts until the parcel's vertical velocity decorrelates.
-Buoyancy stops it after a time ``1/N``, giving
-``\ell_v = w_{\min}/N``. In turbulent air the turbulence scrambles it after
+Buoyancy stops it after a time ``1/N_{\mathrm{disp}}``, giving
+``\ell_{v,q} = w_{\min}/N_{\mathrm{disp}}``. In turbulent air the turbulence scrambles it after
 its Lagrangian time scale ``T_L = 2\sigma_w^2/(C_0 \varepsilon)``, which with
 the closure's dissipation ``\varepsilon = c_d \kappa_{\mathrm{iso}}^{3/2}/l``
-is the eddy turnover time ``l/\sqrt{\kappa_{\mathrm{iso}}}``; this reduces to
-``\sqrt{c_b}/N`` where the mixing length is the buoyancy scale and to the
+is the eddy turnover time ``l_{\mathrm{disp}}/\sqrt{\kappa_{\mathrm{iso}}}``; this reduces to
+``\sqrt{c_b}/N_{\mathrm{disp}}`` where the mixing length is the buoyancy scale and to the
 turnover time of the TKE-balance scale in convective air, so it is the same
-limit as ``1/N`` in stable air and shortens the displacement where the TKE is
-large. In weakly stratified quiescent air, where ``1/N`` exceeds ``\tau_0``
+limit as ``1/N_{\mathrm{disp}}`` in stable air and shortens the displacement where the TKE is
+large. In weakly stratified quiescent air, where ``1/N_{\mathrm{disp}}`` exceeds ``\tau_0``
 (`sgs_variance_floor_time_scale`) and turbulence is weak, the displacement
-persists for ``\tau_0``, giving ``\ell_v = w_{\min} \tau_0``. This is the
+persists for ``\tau_0``, giving ``\ell_{v,q} = w_{\min} \tau_0``. This is the
 vertical dispersion of a stochastic Lagrangian model in stably stratified flow. The caps by
 the cell depth and the wall distance apply to the floor scale only; ``l_d``
 exceeds ``\Delta z`` wherever the mixing length does, as the turbulent
@@ -756,6 +772,7 @@ covariance, quadrature and cloud-fraction closures,
 | ``c_\sigma``                                                                                    | `diagnostic_covariance_coeff` (``\ell_v^2 = 2 c_\sigma l_d^2``)                                                                                                                                                                      | `diagnostic_covariance_coeff`                                                                           |
 | ``r_{T,q_t}``                                                                                   | `Tq_correlation_coefficient`                                                                                                                                                                                                         | `Tq_correlation_coefficient`                                                                            |
 | ``c_g``, ``c_{\Delta x}``, ``w_{\mathrm{ref}}``, ``\Delta x_{\mathrm{ref}}``, ``p``, ``\tau_0`` | `sgs_variance_geometric_coeff`, `sgs_variance_horizontal_scale_factor`, `sgs_variance_vertical_velocity_floor`, `sgs_variance_floor_reference_resolution`, `sgs_variance_floor_resolution_exponent`, `sgs_variance_floor_time_scale` | `sgs_variance_geometric_coeff`, `sgs_variance_horizontal_scale_factor`, —, —, —, —                      |
+| ``r_{\Delta x,\theta}``, ``r_{v,\theta}``, ``r_{h,\theta q}``                                   | `sgs_variance_theta_horizontal_scale_ratio`, `sgs_variance_theta_vertical_scale_ratio`, `sgs_variance_horizontal_cross_correlation`                                                                                                  | —, —, —                                                                                                 |
 | ``r_{\max}``                                                                                    | `sgs_variance_max_rel_std` (bound ``\sigma_q \le r_{\max} q_t``)                                                                                                                                                                     | `sgs_variance_max_rel_std`                                                                              |
 
 The generated [Configuration Options](configuration_options.md) table lists the

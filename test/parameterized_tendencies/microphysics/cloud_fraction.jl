@@ -379,6 +379,56 @@ floor_nt(
                 @test CA.displacement_length(FT(30), FT(40), FT(5000)) ≈ FT(50)
                 @test CA.displacement_length(FT(30), FT(40), FT(-1)) == FT(0)
                 @test CA.displacement_length(FT(30), FT(40), FT(5000)) isa FT
+
+                # buoyancy_bounded_mixing_length caps l_mix at √(κ_b / N²) when N² > 0 and κ_b > 0
+                bml = CA.buoyancy_bounded_mixing_length
+                @test bml(FT(200), FT(0.04), FT(1e-4)) ≈ FT(20)
+                @test bml(FT(10), FT(0.04), FT(1e-4)) == FT(10)
+                @test bml(FT(200), FT(0), FT(1e-4)) == FT(200)
+                @test bml(FT(200), FT(0.04), FT(0)) == FT(200)
+                @test bml(FT(200), FT(0.04), FT(-1e-4)) == FT(200)
+                @test bml(FT(200), FT(0.04), FT(1e-4)) isa FT
+            end
+        end
+    end
+
+    @testset "`set_displacement_buoyancy_gradient!`: dry face-maximum N² across an inversion" begin
+        for FT in (Float32, Float64)
+            @testset "FT = $FT" begin
+                cspace = CommonSpaces.ColumnSpace(
+                    FT;
+                    z_min = 0, z_max = 1000, z_elem = 4,
+                    staggering = CommonSpaces.CellCenter(),
+                )
+                fspace = Spaces.face_space(cspace)
+                thermo_params = CAP.thermodynamics_params(CA.ClimaAtmosParameters(FT))
+                coeffs_val = CA.buoyancy_gradient_coefficients(
+                    thermo_params, FT(290), FT(1), FT(0.01), FT(1e-4), FT(0),
+                )
+                ᶜbg_coeffs = Fields.Field(typeof(coeffs_val), cspace)
+                fill!(ᶜbg_coeffs, coeffs_val)
+                ᶠ∂θli∂z = Fields.zeros(fspace)
+                ᶠ∂qt∂z = Fields.zeros(fspace)
+                # Sharp inversion at face 2 + half (between cells 2 and 3):
+                # lower faces are neutral (0), face 2+half has a strong jump.
+                Fields.level(ᶠ∂θli∂z, 2 + Fields.half) .= FT(0.02)
+                Fields.level(ᶠ∂qt∂z, 2 + Fields.half) .= FT(-1e-5)
+                ᶜgrad_θ = Fields.zeros(CA.Geometry.Covariant3Vector{FT}, cspace)
+                ᶜgrad_q = Fields.zeros(CA.Geometry.Covariant3Vector{FT}, cspace)
+                CA.ᶜVanLeer_gradient!(ᶜgrad_θ, ᶠ∂θli∂z)
+                CA.ᶜVanLeer_gradient!(ᶜgrad_q, ᶠ∂qt∂z)
+                # Van Leer harmonic mean vanishes in cell 2 because its lower face is 0:
+                @test Array(parent(Fields.level(ᶜgrad_θ, 2)))[1] == FT(0)
+                # Face-maximum dry N² in cell 2 and cell 3 sees the full inversion jump:
+                ᶜN²_disp = Fields.zeros(cspace)
+                CA.set_displacement_buoyancy_gradient!(
+                    ᶜN²_disp, ᶜbg_coeffs, ᶠ∂θli∂z, ᶠ∂qt∂z,
+                )
+                N²_inv = CA.dry_N²(coeffs_val, FT(0.02), FT(-1e-5))
+                @test N²_inv > FT(0)
+                @test Array(parent(Fields.level(ᶜN²_disp, 2)))[1] ≈ N²_inv
+                @test Array(parent(Fields.level(ᶜN²_disp, 3)))[1] ≈ N²_inv
+                @test Array(parent(Fields.level(ᶜN²_disp, 1)))[1] == FT(0)
             end
         end
     end

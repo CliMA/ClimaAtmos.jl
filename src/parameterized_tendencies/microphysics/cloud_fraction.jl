@@ -280,6 +280,25 @@ time; infinite where there is no TKE, so that it imposes no limit there.
 end
 
 """
+    buoyancy_bounded_mixing_length(l_mix, κ_b, N²)
+
+Turbulent mixing length `l_mix` bounded by the buoyancy scale `√(κ_b / N²)`
+with `κ_b = c_b κ_iso` where `N² > 0` and `κ_b > 0`. Bounding `l_mix` with the
+same face-maximum dry `N²` used by `floor_displacement_length` ensures that a
+cell adjacent to a capping inversion does not displace parcels across the
+inversion over a distance larger than its face buoyancy scale allows when the
+Van Leer harmonic-mean center gradient vanishes on the neutral side of the cell.
+"""
+@inline function buoyancy_bounded_mixing_length(l_mix, κ_b, N²)
+    FT = typeof(N²)
+    return ifelse(
+        (N² > eps(FT)) & (κ_b > eps(FT)),
+        min(l_mix, sqrt(max(κ_b, zero(FT)) / max(N², eps(FT)))),
+        l_mix,
+    )
+end
+
+"""
     displacement_length(l_mix, l_b, l_z)
 
 Vertical displacement length `min(√(l_mix² + l_b²), l_z)`: the mixing length
@@ -297,24 +316,26 @@ Materialize the vertical displacement length `l_d` of the variance closure
 into `p.scratch.ᶜtemp_scalar` and return it. Also refreshes `p.precomputed.ᶜl_mix`
 for `AbstractEDMF` via `materialized_mixing_length!`.
 
-`l_d` combines the turbulent mixing length `l_mix` and the floor
-displacement scale `floor_displacement_length` in quadrature, with
-`κ_min = w_min² / (2 c_σ c_b)`, the velocity scale `w_min` of the unresolved
+`l_d` combines the buoyancy-bounded turbulent mixing length and the floor
+displacement scale `floor_displacement_length` in quadrature, evaluated with the
+face-maximum dry buoyancy gradient `N²_disp` (`set_displacement_buoyancy_gradient!`),
+with `κ_min = w_min² / (2 c_σ c_b)`, the velocity scale `w_min` of the unresolved
 vertical motions at the horizontal grid scale (`floor_velocity`;
 `sgs_variance_vertical_velocity_floor`,
 `sgs_variance_floor_reference_resolution`,
 `sgs_variance_floor_resolution_exponent`) and the time over which their
-displacement persists, the smallest of the buoyancy period `1/N`, the
+displacement persists, the smallest of the buoyancy period `1/N_disp`, the
 Lagrangian time scale of the turbulence `l_mix / √κ_iso`
 (`turbulent_lagrangian_time`) and the quiescent limit `τ_0`
 (`sgs_variance_floor_time_scale`). In turbulent layers `l_mix` dominates and
-the closure is the production–dissipation balance. In stably stratified air
-without TKE, `l_d = w_min / (√(2 c_σ) N)`, so the vertical displacement
-variance `2 c_σ l_d²` is `(w_min / N)²`: the displacement of unresolved
-vertical motions (gravity waves, mesoscale circulations) with velocity scale
-`w_min`, which displace air without mixing it. Where the air is not stably
-stratified (`N² ≤ 0`) the floor displacement vanishes, so `l_d` reduces to
-`l_mix`. The caps apply to the floor
+the closure is the production–dissipation balance, bounded by the face dry
+buoyancy scale `√(c_b κ_iso) / N_disp` (`buoyancy_bounded_mixing_length`). In
+stably stratified air without TKE, `l_d = w_min / (√(2 c_σ) N_disp)`, so the
+vertical displacement variance `2 c_σ l_d²` is `(w_min / N_disp)²`: the
+displacement of unresolved vertical motions (gravity waves, mesoscale
+circulations) with velocity scale `w_min`, which displace air without mixing it.
+Where the air is not stably stratified (`N²_disp ≤ 0`) the floor displacement
+vanishes, so `l_d` reduces to `l_mix`. The cell-depth cap applies to the floor
 scale only; `l_mix` keeps its own limits, so `l_d` exceeds the cell depth
 wherever the mixing length does, as the turbulent variance
 `2 c_σ l_mix² (∂_z ψ)²` always has. The two scales are combined in quadrature
@@ -323,8 +344,8 @@ The floor is kept out of the mixing length itself, because the
 surface-layer wall scale `l_W` of the mixing length vanishes with the
 friction velocity and in a stable surface layer, which would collapse `l_d`
 in the free troposphere. The floor enters the variance only, not `ᶜl_mix` or
-the diffusivity. Writes `p.scratch.ᶜtemp_scalar` (and the Prandtl-number
-scratch of the mixing-length closure).
+the diffusivity. Writes `p.scratch.ᶜtemp_scalar`, `p.scratch.ᶜtemp_scalar_2`,
+and the Prandtl-number scratch of the mixing-length closure.
 """
 function materialized_displacement_length!(Y, p)
     FT = eltype(p.params)
@@ -340,20 +361,27 @@ function materialized_displacement_length!(Y, p)
     τ_0 = FT(CAP.sgs_variance_floor_time_scale(p.params))
     κ_min = w_min^2 / (2 * c_σ * c_b)
     ᶜl_mix = materialized_mixing_length!(Y, p)
-    ᶜτ_turb =
-        hasproperty(Y.c, :ρtke) ?
-        (@. lazy(
-            turbulent_lagrangian_time(ᶜl_mix, specific(Y.c.ρtke, Y.c.ρ)),
-        )) : FT(Inf)
-    (; ᶜbuoygrad) = p.precomputed
+    (; ᶜbg_coeffs, ᶠ∂θli∂z, ᶠ∂qt∂z) = p.precomputed
+    ᶜN²_disp = p.scratch.ᶜtemp_scalar_2
+    set_displacement_buoyancy_gradient!(ᶜN²_disp, ᶜbg_coeffs, ᶠ∂θli∂z, ᶠ∂qt∂z)
+    if hasproperty(Y.c, :ρtke)
+        ᶜtke = @. lazy(max(specific(Y.c.ρtke, Y.c.ρ), zero(FT)))
+        ᶜl_mix_disp = @. lazy(
+            buoyancy_bounded_mixing_length(ᶜl_mix, c_b * ᶜtke, ᶜN²_disp),
+        )
+        ᶜτ_turb = @. lazy(turbulent_lagrangian_time(ᶜl_mix_disp, ᶜtke))
+    else
+        ᶜl_mix_disp = ᶜl_mix
+        ᶜτ_turb = FT(Inf)
+    end
     ᶜz = Fields.coordinate_field(Y.c).z
     z_sfc = Fields.level(Fields.coordinate_field(Y.f).z, Fields.half)
     ᶜΔz = Fields.Δz_field(axes(Y.c))
     ᶜl_d = p.scratch.ᶜtemp_scalar
     @. ᶜl_d = displacement_length(
-        ᶜl_mix,
+        ᶜl_mix_disp,
         floor_displacement_length(
-            c_b * κ_min, ᶜbuoygrad, ᶜτ_turb, τ_0, ᶜz - z_sfc, ᶜΔz,
+            c_b * κ_min, ᶜN²_disp, ᶜτ_turb, τ_0, ᶜz - z_sfc, ᶜΔz,
         ),
         ᶜz - z_sfc,
     )
@@ -527,11 +555,14 @@ computations (SGS quadrature, cloud fraction). Populates
 `p.precomputed.(ᶜT′T′, ᶜq′q′, ᶜcorr_Tq)` (and `ᶜT′q′` for the diagnosed correlation).
 
 The covariance of `(θ_li, q_tot)` is that of a Gaussian subgrid displacement
-with covariance `diag(ℓ_h², ℓ_h², ℓ_v²)` acting on the resolved gradients
-(`displacement_covariance`): `ℓ_h² = c_g (c_Δx Δx_h)²` from the horizontal
-grid scale, and `ℓ_v² = 2 c_σ l_d²` from the displacement length `l_d`, which
-combines the mixing length and the floored buoyancy displacement scale in
-quadrature (`materialized_displacement_length!`).
+acting on the resolved gradients (`displacement_covariance`), with moisture
+displacement scales `ℓ_{h,q}² = c_g (c_Δx Δx_h)²` from the horizontal grid
+scale and `ℓ_{v,q}² = 2 c_σ l_d²` from the displacement length `l_d`
+(`materialized_displacement_length!`), potential-temperature scale ratios
+`r_{Δx,θ} = ℓ_{h,θ} / ℓ_{h,q}` (`sgs_variance_theta_horizontal_scale_ratio`)
+and `r_{v,θ} = ℓ_{v,θ} / ℓ_{v,q}` (`sgs_variance_theta_vertical_scale_ratio`),
+and horizontal displacement cross-correlation `r_{h,θq}`
+(`sgs_variance_horizontal_cross_correlation`).
 
 Pipeline:
 
@@ -569,15 +600,22 @@ function set_covariance_cache!(Y, p, thermo_params)
     # 1. Displacement scales.
     c_g = FT(CAP.sgs_variance_geometric_coeff(p.params))
     c_Δx = FT(CAP.sgs_variance_horizontal_scale_factor(p.params))
+    r_Δx_θ = FT(CAP.sgs_variance_theta_horizontal_scale_ratio(p.params))
+    r_v_θ = FT(CAP.sgs_variance_theta_vertical_scale_ratio(p.params))
+    r_h_θq = FT(CAP.sgs_variance_horizontal_cross_correlation(p.params))
     Δx_h = FT(
         Spaces.node_horizontal_length_scale(
             Spaces.horizontal_space(axes(Y.c)),
         ),
     )
-    ℓ_h² = c_g * (c_Δx * Δx_h)^2
+    ℓ_h_q² = c_g * (c_Δx * Δx_h)^2
+    ℓ_h_θ² = r_Δx_θ^2 * ℓ_h_q²
+    ℓ_h_θq = r_h_θq * r_Δx_θ * ℓ_h_q²
     c_σ = FT(CAP.diagnostic_covariance_coeff(p.params))
     ᶜl_d = materialized_displacement_length!(Y, p)
-    ᶜℓ_v² = @. lazy(2 * c_σ * ᶜl_d^2)
+    ᶜℓ_v_q² = @. lazy(2 * c_σ * ᶜl_d^2)
+    ᶜℓ_v_θ² = @. lazy(r_v_θ^2 * ᶜℓ_v_q²)
+    ᶜℓ_v_θq = @. lazy(r_v_θ * ᶜℓ_v_q²)
 
     # 2. Horizontal gradient invariants.
     if iszero(c_Δx)
@@ -599,11 +637,11 @@ function set_covariance_cache!(Y, p, thermo_params)
     # 3. Covariances in the θ basis; ᶜT′T′ holds θ′θ′ until the transform.
     ᶜ∂q∂z = @. lazy(projected_vector_data(C3, ᶜgradᵥ_q_tot, ᶜlg))
     ᶜ∂θ∂z = @. lazy(projected_vector_data(C3, ᶜgradᵥ_θ_liq_ice, ᶜlg))
-    @. ᶜq′q′ = displacement_covariance(ℓ_h², ᶜℓ_v², ᶜinv_q, ᶜ∂q∂z, ᶜ∂q∂z)
-    @. ᶜT′T′ = displacement_covariance(ℓ_h², ᶜℓ_v², ᶜinv_θ, ᶜ∂θ∂z, ᶜ∂θ∂z)
+    @. ᶜq′q′ = displacement_covariance(ℓ_h_q², ᶜℓ_v_q², ᶜinv_q, ᶜ∂q∂z, ᶜ∂q∂z)
+    @. ᶜT′T′ = displacement_covariance(ℓ_h_θ², ᶜℓ_v_θ², ᶜinv_θ, ᶜ∂θ∂z, ᶜ∂θ∂z)
     if diag_corr
         @. p.precomputed.ᶜT′q′ =
-            displacement_covariance(ℓ_h², ᶜℓ_v², ᶜinv_θq, ᶜ∂θ∂z, ᶜ∂q∂z)
+            displacement_covariance(ℓ_h_θq, ᶜℓ_v_θq, ᶜinv_θq, ᶜ∂θ∂z, ᶜ∂q∂z)
     end
 
     # 4. θ → T basis via the thermodynamic Jacobian ∂T/∂θ. q is unaffected.
