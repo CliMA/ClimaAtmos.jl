@@ -146,11 +146,11 @@ function rrtmgp_solver_kwargs(
     ᶠspace = Spaces.face_space(space)
     ᶜz = Fields.coordinate_field(ᶜspace).z
     ᶠz = Fields.coordinate_field(ᶠspace).z
-    if ᶜspace.grid.global_geometry isa Geometry.AbstractSphericalGlobalGeometry
+    if issphere(ᶜspace)
         planet_radius = ᶜspace.grid.global_geometry.radius
     end
     bottom_coords = Fields.coordinate_field(Spaces.level(ᶜspace, 1))
-    latitude = if eltype(bottom_coords) <: Geometry.LatLongZPoint
+    latitude = if issphere(ᶜspace)
         Fields.field2array(bottom_coords.lat)
     else
         Fields.field2array(zero(bottom_coords.z)) # flat space is on Equator
@@ -161,7 +161,7 @@ function rrtmgp_solver_kwargs(
     optical_thickness_parameter =
         @. τ_equator + (τ_pole - τ_equator) * sind(latitude)^2
     kwargs = (; lapse_rate = FT(3.5), optical_thickness_parameter, latitude)
-    if ᶜspace.grid.global_geometry isa Geometry.AbstractSphericalGlobalGeometry
+    if issphere(ᶜspace)
         zkwargs = (;
             center_z = Fields.field2array(ᶜz),
             face_z = Fields.field2array(ᶠz),
@@ -193,10 +193,10 @@ function rrtmgp_solver_kwargs(
     ᶜΔz = Fields.Δz_field(ᶜspace)
     ᶜz = Fields.coordinate_field(ᶜspace).z
     ᶠz = Fields.coordinate_field(ᶠspace).z
-    if ᶜspace.grid.global_geometry isa Geometry.AbstractSphericalGlobalGeometry
+    if issphere(ᶜspace)
         planet_radius = ᶜspace.grid.global_geometry.radius
     end
-    latitude = if eltype(bottom_coords) <: Geometry.LatLongZPoint
+    latitude = if issphere(ᶜspace)
         Fields.field2array(bottom_coords.lat)
     else
         Fields.field2array(zero(bottom_coords.z)) # flat space is on Equator
@@ -325,8 +325,7 @@ function rrtmgp_solver_kwargs(
     end
 
     if include_z
-        if ᶜspace.grid.global_geometry isa
-           Geometry.AbstractSphericalGlobalGeometry
+        if issphere(ᶜspace)
             kwargs = (;
                 kwargs...,
                 center_z = Fields.field2array(ᶜz),
@@ -439,7 +438,7 @@ function radiation_model_cache(
         rrtmgp_params,
         context,
         radiation_mode;
-        ncol = length(Spaces.all_nodes(axes(Spaces.level(Y.c, 1)))),
+        ncol = Spaces.ncolumns(axes(Y.c)),
         domain_nlay = Spaces.nlevels(axes(Y.c)),
         interpolation,
         bottom_extrapolation,

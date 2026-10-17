@@ -40,6 +40,18 @@ main
 - ![][badge-🔥behavioralΔ] Snow falls at the Chen et al. (2022) speed by default
   `toml/prognostic_edmfx_1M.toml` sets `snow_apparent_density` to 300 kg/m³.
    Rain falls at fixed terminal velocity.
+- ![][badge-✨feature/enhancement] A column configuration can run several independent
+  columns in one simulation: set `n_columns` with `config: "column"`, or use
+  `MultiColumnGrid(FT; n_columns)`.
+  NetCDF output gains a `column` dimension.
+- ![][badge-✨feature/enhancement] `ForcingFromFile` and `ExternalDrivenTVForcing` take a
+  vector of column data sources, one per column of a multi-column grid: each column is
+  initialized and forced from its own source. In the configuration, one value per column
+  can be given for `external_forcing_file` (with `initial_condition: "ForcingFromFile"` or
+  `"GCM"`), `cfsite_number` (GCM), and `site_latitude` and `site_longitude` (ERA5).
+- ![][badge-💥breaking] The `ColumnDatasets.extrapolation_bc` hook of column file formats is
+  removed: file-backed column forcing inputs always hold the profiles constant above and
+  below the file's levels.
 - ![][badge-🔥behavioralΔ] The along-surface depth of the geometric SGS
   variance block is bounded by the height above the surface,
   `ℓ_a = min(H, z − z_sfc)`: in a neutral layer the along-surface

@@ -33,8 +33,9 @@ Parse the restart tests' command-line arguments into `(; manytests, grids)`.
   - `--manytests [true|false]`: run the full matrix of grids instead of the
     single default one. The value is optional and defaults to `true`.
   - `--grid <name>`: restrict `--manytests` to one grid (`"sphere"`, `"box"`, or
-    `"column"`, the values of the `config` key). Repeatable; no occurrence means
-    every grid available for the current context.
+    `"column"`, the values of the `config` key, or `"multicolumn"`, a column
+    configuration with two columns). Repeatable; no occurrence means every grid
+    available for the current context.
 """
 function parse_restart_args(args)
     manytests = false

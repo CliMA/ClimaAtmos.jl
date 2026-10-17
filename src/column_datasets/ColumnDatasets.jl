@@ -16,7 +16,7 @@ Define a singleton subtype of [`AbstractColumnFormat`](@ref) in a new module
 under `src/column_datasets/`, extend the three required methods
 ([`format_name`](@ref), [`format_variable_name`](@ref),
 [`height_profile`](@ref)) plus any optional ones (`open_dataset`, `preprocess`,
-`dates`, `read_profile`, `read_series`, `extrapolation_bc`,
+`dates`, `read_profile`, `read_series`,
 `time_interpolation_method`, `site_location`, `validate`), and pass it via the
 `format` keyword of [`ColumnDataset`](@ref).
 """
@@ -28,6 +28,7 @@ import Interpolations as Intp
 import ClimaCore
 import ClimaUtilities.TimeVaryingInputs
 import ClimaUtilities.TimeVaryingInputs: TimeVaryingInput
+import ClimaUtilities.FileReaders: DataSource
 import ClimaUtilities.Utils: period_to_seconds_float
 
 # ============================================================================
@@ -137,8 +138,8 @@ open_dataset(f, ::AbstractColumnFormat, path, options) =
 
 Elementwise function applied to every value of the canonical variable `name`
 read from this format (unit conversions, fill-value handling). Applied both by
-the direct `read_*` methods and, through the file reader's `preprocess_func`
-hook, by file-backed `TimeVaryingInput`s.
+the direct `read_*` methods and, as their `preprocess_func`, by file-backed
+`TimeVaryingInput`s.
 """
 preprocess(::AbstractColumnFormat, name::Symbol) = identity
 
@@ -189,14 +190,6 @@ applied.
 function read_series(d::AbstractColumnFormat, ds, name::Symbol)
     return preprocess(d, name).(vec(ds[format_variable_name(d, name)][:]))
 end
-
-"""
-    extrapolation_bc(format)
-
-Extrapolation setting for file-backed `TimeVaryingInput`s of this format,
-matching the dimensionality of its stored variables.
-"""
-extrapolation_bc(::AbstractColumnFormat) = (Intp.Flat(),)
 
 """
     time_interpolation_method(format)
@@ -259,7 +252,8 @@ steady GCM-driven profiles). Both provide the same reader interface
 (`column_timevaryinginputs`, `surface_timevaryinginputs`,
 `read_surface_series`, `read_initial_profiles`, `require_forcing_variables`,
 `time_interpolation_method`, `site_location`) and expose `column_vars` and
-`surface_vars`.
+`surface_vars`. [`PerColumnDatasets`](@ref), one source per column, provides the
+inputs and the checks.
 """
 abstract type AbstractColumnData end
 
@@ -328,6 +322,43 @@ time_interpolation_method(cd::ColumnDataset) =
     time_interpolation_method(cd.format)
 
 source_name(cd::ColumnDataset) = "$(cd.path) ($(format_name(cd.format)) format)"
+
+"""
+    PerColumnDatasets(datasets)
+
+One column data source per column of a multi-column grid. Column `h` reads
+`datasets[h]`, either [`ColumnDataset`](@ref)s of one `format` or
+[`InMemoryColumnData`](@ref) (`format` is `nothing`). `column_vars` and
+`surface_vars` are the variables that every source carries.
+"""
+struct PerColumnDatasets{D <: AbstractColumnData, F} <: AbstractColumnData
+    datasets::Vector{D}
+    format::F
+    column_vars::Vector{Symbol}
+    surface_vars::Vector{Symbol}
+end
+
+function PerColumnDatasets(datasets::AbstractVector{<:ColumnDataset})
+    isempty(datasets) && error("`PerColumnDatasets` needs at least one file")
+    format = first(datasets).format
+    all(cd -> cd.format == format, datasets) || error(
+        "The column forcing files $(join((cd.path for cd in datasets), ", ")) \
+         have different formats",
+    )
+    return PerColumnDatasets(datasets, format)
+end
+
+PerColumnDatasets(datasets, format) = PerColumnDatasets(
+    collect(datasets),
+    format,
+    mapreduce(d -> d.column_vars, intersect, datasets),
+    mapreduce(d -> d.surface_vars, intersect, datasets),
+)
+
+time_interpolation_method(data::PerColumnDatasets) =
+    time_interpolation_method(first(data.datasets))
+
+source_name(data::PerColumnDatasets) = join(source_name.(data.datasets), ", ")
 
 # ============================================================================
 # Generic machinery (shared by every `AbstractColumnData`)
@@ -423,6 +454,9 @@ file_time_span(cd::ColumnDataset, start_date) =
     open_dataset(cd) do ds
         maximum(simulation_times(cd.format, ds, start_date))
     end
+# The run errors once it passes the end of any column's file
+file_time_span(data::PerColumnDatasets, start_date) =
+    minimum(cd -> file_time_span(cd, start_date), data.datasets)
 
 """
     wraps_periodically(method)
@@ -486,14 +520,15 @@ read_initial_profiles(cd::ColumnDataset, start_date) =
 A `NamedTuple` of `TimeVaryingInput`s, one per requested column variable,
 targeting `target_space`, the model's center column space.
 
-The default builds file-backed inputs, applying the format's
-`extrapolation_bc` and `preprocess` hooks. A format whose
+The default builds file-backed inputs, applying the format's `preprocess`
+hook; the profiles are interpolated linearly onto the levels of `target_space`
+and held constant above and below the file's levels. A format whose
 on-disk layout the file readers cannot consume directly — a grouped file, or a
 non-height vertical coordinate — overrides this to build in-memory inputs
 instead.
 """
 function column_timevaryinginputs(
-    cd::ColumnDataset,
+    cd::Union{ColumnDataset, PerColumnDatasets{<:ColumnDataset}},
     names,
     target_space,
     start_date;
@@ -502,17 +537,15 @@ function column_timevaryinginputs(
     names = Tuple(names)
     d = cd.format
     inputs = map(names) do name
-        prep = preprocess(d, name)
-        file_reader_kwargs =
-            prep === identity ? (;) : (; preprocess_func = prep)
+        sources =
+            cd isa ColumnDataset ? DataSource(cd.path, format_variable_name(d, name)) :
+            [DataSource(c.path, format_variable_name(d, name)) for c in cd.datasets]
         TimeVaryingInput(
-            cd.path,
-            format_variable_name(d, name),
+            sources,
             target_space;
             start_date,
-            regridder_kwargs = (; extrapolation_bc = extrapolation_bc(d)),
-            file_reader_kwargs,
             method,
+            preprocess_func = preprocess(d, name),
         )
     end
     return NamedTuple{names}(inputs)
@@ -547,7 +580,8 @@ end
 
 A `NamedTuple` of `TimeVaryingInput`s, one per requested surface variable,
 read into in-memory inputs on the simulation time axis (`t = 0` at
-`start_date`) from a single file open.
+`start_date`) from a single file open. For [`PerColumnDatasets`](@ref), each
+column reads the series of its own source.
 """
 function surface_timevaryinginputs(
     cd::ColumnDataset,
@@ -563,6 +597,11 @@ function surface_timevaryinginputs(
     inputs = map(name -> TimeVaryingInput(times, FT.(read[name]); method), names)
     return NamedTuple{names}(inputs)
 end
+surface_timevaryinginputs(
+    data::PerColumnDatasets{<:ColumnDataset},
+    args...;
+    kwargs...,
+) = column_timevaryinginputs(data, args...; kwargs...)
 
 # ============================================================================
 # In-memory column data
@@ -685,6 +724,60 @@ function read_surface_series(d::InMemoryColumnData, names, start_date)
     names = Tuple(names)
     series = map(name -> [Float64(d.surface[name])], names)
     return (; times = [0.0], NamedTuple{names}(series)...)
+end
+
+function PerColumnDatasets(datasets::AbstractVector{<:InMemoryColumnData})
+    isempty(datasets) && error("`PerColumnDatasets` needs at least one source")
+    return PerColumnDatasets(datasets, nothing)
+end
+
+# In-memory inputs fill one column per source
+check_ncolumns(data::PerColumnDatasets, space) =
+    length(data.datasets) == ClimaCore.Spaces.ncolumns(space) || error(
+        "$(length(data.datasets)) column forcing sources were given for \
+         $(ClimaCore.Spaces.ncolumns(space)) columns",
+    )
+
+# Column `h` holds the steady profiles of `data.datasets[h]`, interpolated as on
+# a single column
+function column_timevaryinginputs(
+    data::PerColumnDatasets{<:InMemoryColumnData},
+    names,
+    target_space,
+    start_date;
+    method = nothing,
+)
+    check_ncolumns(data, target_space)
+    names = Tuple(names)
+    inputs = map(names) do name
+        field = similar(ClimaCore.Fields.coordinate_field(target_space).z)
+        for (h, d) in enumerate(data.datasets)
+            column_space = ClimaCore.Spaces.column(target_space, 1, 1, h)
+            ClimaCore.Fields.column(field, 1, 1, h) .=
+                _interp_column(d.z, d.column[name], column_space)
+        end
+        TimeVaryingInput(Returns(field))
+    end
+    return NamedTuple{names}(inputs)
+end
+
+function surface_timevaryinginputs(
+    data::PerColumnDatasets{<:InMemoryColumnData},
+    names,
+    target_space,
+    start_date;
+    method = nothing,
+)
+    check_ncolumns(data, target_space)
+    names = Tuple(names)
+    FT = ClimaCore.Spaces.undertype(target_space)
+    inputs = map(names) do name
+        field = ClimaCore.Fields.Field(FT, target_space)
+        values = [FT(d.surface[name]) for d in data.datasets]
+        copyto!(ClimaCore.Fields.field2array(field), values)
+        TimeVaryingInput(Returns(field))
+    end
+    return NamedTuple{names}(inputs)
 end
 
 # ============================================================================

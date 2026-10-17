@@ -53,6 +53,7 @@ All fixtures are built once at module load time and shared across all cases.
 The `states` dict maps symbol keys to (Y, p) tuples. Available keys:
 
   :dry            — DryModel + SlabOceanSST, column
+  :multicolumn    — DryModel + SlabOceanSST, multicolumn (three columns)
   :sphere         — DryModel + SlabOceanSST, sphere (also used for rv, orog, energyo)
   :ssv            — DryModel + steady-state velocity, plane grid
   :m0             — EquilibriumMicrophysics0M, column
@@ -157,6 +158,7 @@ params = CA.ClimaAtmosParameters(FT)
 
 sphere = CA.SphereGrid(FT; h_elem = 2)
 column = CA.ColumnGrid(FT)
+multicolumn = CA.MultiColumnGrid(FT; n_columns = 3)
 
 # Model configurations, state, cache
 
@@ -166,6 +168,9 @@ model_dry = (;
     temperature = CA.SurfaceConditions.SlabOceanTemperature{FT}(),
 )
 (Y_dry, p_dry) = build_state_cache(FT, model_dry; grid = column);
+
+## The column fixture on independent columns
+(Y_multicolumn, p_multicolumn) = build_state_cache(FT, model_dry; grid = multicolumn);
 
 ## Sphere with dry model
 (Y_sphere, p_sphere) = build_state_cache(FT, model_dry; grid = sphere);
@@ -351,6 +356,7 @@ model_dwh = (;
 #! format: off
 states = Dict(
     :dry            => (Y_dry,            p_dry),
+    :multicolumn    => (Y_multicolumn,    p_multicolumn),
     :sphere         => (Y_sphere,         p_sphere),
     :ssv            => (Y_ssv,            p_ssv),
     :m0             => (Y_0m,             p_0m),
@@ -394,8 +400,8 @@ VALID_CASES = [
     # ---------------------------------------------------------------------------
     # conservation_diagnostics.jl
     # ---------------------------------------------------------------------------
-    case("massa",   :dry),
-    case("energya", :dry),
+    case("massa",   (:dry, :multicolumn)),
+    case("energya", (:dry, :multicolumn)),
     case("watera",  :m0),             # MoistMicrophysics only
     case("energyo", :sphere),         # SlabOceanSST + SpectralElementSpace2D
     case("watero",  :m0_slab_sphere), # MoistMicrophysics + SlabOceanSST + sphere
@@ -409,7 +415,7 @@ VALID_CASES = [
         "bgrad", "strain", "cl", "ke", "ts", "tas", "uas", "vas", "tauu", "tauv",
         "hfes", "dsevi", "env_q_tot_variance", "env_temperature_variance",
         "env_q_tot_temperature_covariance", "env_q_tot_temperature_correlation",
-    ), :dry)...,
+    ), (:dry, :multicolumn))...,
     # sphere-only (DSS / hypsography)
     cases(("rv", "orog"), :sphere)...,
     # MoistMicrophysics, single path
@@ -418,13 +424,13 @@ VALID_CASES = [
         "clivi", "clwvi", "clvi", "prw", "hurvi", "cape", "mslp"
     ), :m0)...,
     # Union{DryModel, MoistMicrophysics}: single method
-    cases(("pr", "prra", "prsn"), :dry)...,
+    cases(("pr", "prra", "prsn"), (:dry, :multicolumn))...,
     # EquilibriumMicrophysics0M (precomputed cache), NonEquilibriumMicrophysics (state)
     cases(("clw", "cli", "lwp", "iwp", "ssatl", "ssati"), (:m0, :m1))...,
     # DryModel, MoistMicrophysics (different flux computation)
-    case("hfss",  (:dry, :m0)),
+    case("hfss",  (:dry, :multicolumn, :m0)),
     # Non-EDMF (Smagorinsky formula), EDMF (mixing-length closure)
-    case("lmix",  (:dry, :m0_pedmfx)),
+    case("lmix",  (:dry, :multicolumn, :m0_pedmfx)),
     # 1M / 2M microphysics
     cases(("husra", "hussn", "rwp", "swp"), :m1)...,  # Union{1M, 2M}, single method
     # "cdnc", "ncra" (2M only) DISABLED (CloudMicrophysics 0.37 compat) and
@@ -557,6 +563,23 @@ end
     diag = getdiag(c.name)
     result = compute_diag(diag, Y, p)
     @test all(isfinite, field_data(result))
+end
+
+# The `:multicolumn` fixture repeats the `:dry` column, so each of its columns gives the
+# single-column result
+@testset "$(c.name) [multicolumn columns match dry]" for c in filter(
+    c -> :dry in c.keys && :multicolumn in c.keys,
+    VALID_CASES,
+)
+    diag = getdiag(c.name)
+    single = Base.materialize(compute_diag(diag, states[:dry]...))
+    multi = Base.materialize(compute_diag(diag, states[:multicolumn]...))
+    n_columns = Spaces.ncolumns(axes(states[:multicolumn][1].c))
+    if multi isa Fields.Field
+        for h in 1:n_columns
+            @test vec(parent(Fields.column(multi, 1, 1, h))) == vec(parent(single))
+        end
+    end
 end
 
 # ---------------------------------------------------------------------------
