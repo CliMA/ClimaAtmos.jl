@@ -1,0 +1,3575 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>REPL scripts · ClimaAtmos.jl</title><meta name="title" content="REPL scripts · ClimaAtmos.jl"/><meta property="og:title" content="REPL scripts · ClimaAtmos.jl"/><meta property="twitter:title" content="REPL scripts · ClimaAtmos.jl"/><meta name="description" content="Documentation for ClimaAtmos.jl."/><meta property="og:description" content="Documentation for ClimaAtmos.jl."/><meta property="twitter:description" content="Documentation for ClimaAtmos.jl."/><script data-outdated-warner src="../assets/warner.js"></script><link href="https://cdnjs.cloudflare.com/ajax/libs/lato-font/3.0.0/css/lato-font.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/juliamono/0.050/juliamono.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.8/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL=".."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="../assets/documenter.js"></script><script src="../search_index.js"></script><script src="../siteinfo.js"></script><script src="../../versions.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-mocha.css" data-theme-name="catppuccin-mocha"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-macchiato.css" data-theme-name="catppuccin-macchiato"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-frappe.css" data-theme-name="catppuccin-frappe"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-latte.css" data-theme-name="catppuccin-latte"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/documenter-dark.css" data-theme-name="documenter-dark" data-theme-primary-dark/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="../assets/themeswap.js"></script></head><body><div id="documenter"><nav class="docs-sidebar"><a class="docs-logo" href="../"><img src="../assets/logo.svg" alt="ClimaAtmos.jl logo"/></a><div class="docs-package-name"><span class="docs-autofit"><a href="../">ClimaAtmos.jl</a></span></div><button class="docs-search-query input is-rounded is-small is-clickable my-2 mx-auto py-1 px-2" id="documenter-search-query">Search docs (Ctrl + /)</button><ul class="docs-menu"><li><a class="tocitem" href="../">Home</a></li><li><a class="tocitem" href="../installation_instructions/">Installation instructions</a></li><li><a class="tocitem" href="../contributor_guide/">Contributor Guide</a></li><li><a class="tocitem" href="../equations/">Equations</a></li><li><a class="tocitem" href="../edmf_equations/">EDMF Equations</a></li><li><a class="tocitem" href="../diagnostics/">Diagnostics</a></li><li><a class="tocitem" href="../available_diagnostics/">Available Diagnostics</a></li><li><a class="tocitem" href="../diagnostic_edmf_equations/">Diagnostic EDMF Equations</a></li><li><a class="tocitem" href="../gravity_wave/">Gravity Wave Drag Parameterizations</a></li><li><a class="tocitem" href="../surface_albedo/">Ocean Surface Albedo Parameterization</a></li><li><a class="tocitem" href="../tracers/">Tracers</a></li><li><a class="tocitem" href="../radiative_equilibrium/">Radiative Equilibrium</a></li><li><a class="tocitem" href="../restarts/">Restarts and checkpoints</a></li><li class="is-active"><a class="tocitem" href>REPL scripts</a></li><li><a class="tocitem" href="../config/">Configuration</a></li><li><a class="tocitem" href="../parameters/">Parameters</a></li><li><a class="tocitem" href="../longruns/">Longruns</a></li><li><a class="tocitem" href="../api/">API</a></li><li><a class="tocitem" href="../references/">References</a></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><a class="docs-sidebar-button docs-navbar-link fa-solid fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a><nav class="breadcrumb"><ul class="is-hidden-mobile"><li class="is-active"><a href>REPL scripts</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href>REPL scripts</a></li></ul></nav><div class="docs-right"><a class="docs-navbar-link" href="https://github.com/CliMA/ClimaAtmos.jl" title="View the repository on GitHub"><span class="docs-icon fa-brands"></span><span class="docs-label is-hidden-touch">GitHub</span></a><a class="docs-navbar-link" href="https://github.com/CliMA/ClimaAtmos.jl/blob/main/docs/src/repl_scripts.md" title="Edit source on GitHub"><span class="docs-icon fa-solid"></span></a><a class="docs-settings-button docs-navbar-link fa-solid fa-gear" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-article-toggle-button fa-solid fa-chevron-up" id="documenter-article-toggle-button" href="javascript:;" title="Collapse all docstrings"></a></div></header><article class="content" id="documenter-page"><h1 id="Julia-scripts-per-Buildkite-job"><a class="docs-heading-anchor" href="#Julia-scripts-per-Buildkite-job">Julia scripts per Buildkite job</a><a id="Julia-scripts-per-Buildkite-job-1"></a><a class="docs-heading-anchor-permalink" href="#Julia-scripts-per-Buildkite-job" title="Permalink"></a></h1><pre><code class="language-julia hljs">include(&quot;repl_scripts.jl&quot;)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">### Buildkite job `sphere_aquaplanet_rhoe_equilmoist_allsky_gw_raw_zonallyasymmetric`
+
+using Revise; import ClimaAtmos as CA;
+
+config_dict = Dict();
+config_dict[&quot;moist&quot;] = &quot;equil&quot;;
+config_dict[&quot;prescribed_aerosols&quot;] = [&quot;CB1&quot;, &quot;CB2&quot;, &quot;DST01&quot;, &quot;DST02&quot;, &quot;DST03&quot;, &quot;DST04&quot;, &quot;OC1&quot;, &quot;OC2&quot;, &quot;SO4&quot;];
+config_dict[&quot;rayleigh_sponge&quot;] = true;
+config_dict[&quot;cloud_model&quot;] = &quot;grid_scale&quot;;
+config_dict[&quot;orographic_gravity_wave&quot;] = &quot;raw_topo&quot;;
+config_dict[&quot;z_elem&quot;] = 31;
+config_dict[&quot;dt&quot;] = &quot;400secs&quot;;
+config_dict[&quot;surface_setup&quot;] = &quot;DefaultMoninObukhov&quot;;
+config_dict[&quot;t_end&quot;] = &quot;15hours&quot;;
+config_dict[&quot;insolation&quot;] = &quot;timevarying&quot;;
+config_dict[&quot;non_orographic_gravity_wave&quot;] = true;
+config_dict[&quot;albedo_model&quot;] = &quot;RegressionFunctionAlbedo&quot;;
+config_dict[&quot;dz_bottom&quot;] = 50.0;
+config_dict[&quot;vert_diff&quot;] = true;
+config_dict[&quot;dt_save_state_to_disk&quot;] = &quot;1days&quot;;
+config_dict[&quot;reproducibility_test&quot;] = true;
+config_dict[&quot;z_max&quot;] = 65000.0;
+config_dict[&quot;precip_model&quot;] = &quot;0M&quot;;
+config_dict[&quot;aerosol_radiation&quot;] = true;
+config_dict[&quot;toml&quot;] = [&quot;toml/sphere_aquaplanet.toml&quot;];
+config_dict[&quot;surface_temperature&quot;] = &quot;ZonallyAsymmetric&quot;;
+config_dict[&quot;rad&quot;] = &quot;allskywithclear&quot;;
+
+config = CA.AtmosConfig(config_dict);
+
+include(&quot;examples/hybrid/driver.jl&quot;)
+
+
+### Buildkite job `central_gpu_hs_rhoe_equil_55km_nz63_0M`
+
+using Revise; import ClimaAtmos as CA;
+
+config_dict = Dict();
+config_dict[&quot;rayleigh_sponge&quot;] = true;
+config_dict[&quot;output_default_diagnostics&quot;] = false;
+config_dict[&quot;z_elem&quot;] = 63;
+config_dict[&quot;dt&quot;] = &quot;150secs&quot;;
+config_dict[&quot;t_end&quot;] = &quot;2days&quot;;
+config_dict[&quot;dz_bottom&quot;] = 30.0;
+config_dict[&quot;vert_diff&quot;] = true;
+config_dict[&quot;h_elem&quot;] = 16;
+config_dict[&quot;dt_save_state_to_disk&quot;] = &quot;Inf&quot;;
+config_dict[&quot;forcing&quot;] = &quot;held_suarez&quot;;
+config_dict[&quot;z_max&quot;] = 55000.0;
+config_dict[&quot;precip_model&quot;] = &quot;0M&quot;;
+config_dict[&quot;toml&quot;] = [&quot;toml/longrun_aquaplanet.toml&quot;];
+config_dict[&quot;dt_save_to_sol&quot;] = &quot;Inf&quot;;
+config_dict[&quot;moist&quot;] = &quot;equil&quot;;
+
+config = CA.AtmosConfig(config_dict);
+
+include(&quot;examples/hybrid/driver.jl&quot;)
+
+
+### Buildkite job `longrun_dry_baroclinic_wave`
+
+using Revise; import ClimaAtmos as CA;
+
+config_dict = Dict();
+config_dict[&quot;dz_bottom&quot;] = 30.0;
+config_dict[&quot;h_elem&quot;] = 30;
+config_dict[&quot;initial_condition&quot;] = &quot;DryBaroclinicWave&quot;;
+config_dict[&quot;dt_save_state_to_disk&quot;] = &quot;10days&quot;;
+config_dict[&quot;t_end&quot;] = &quot;120days&quot;;
+config_dict[&quot;z_elem&quot;] = 63;
+config_dict[&quot;dt&quot;] = &quot;90secs&quot;;
+config_dict[&quot;diagnostics&quot;] = Dict{Any, Any}[Dict(&quot;short_name&quot; =&gt; [&quot;pfull&quot;, &quot;wa&quot;, &quot;va&quot;, &quot;rv&quot;, &quot;ke&quot;], &quot;period&quot; =&gt; &quot;1days&quot;)];
+
+config = CA.AtmosConfig(config_dict);
+
+include(&quot;examples/hybrid/driver.jl&quot;)
+
+
+### Buildkite job `test_env`
+
+using Revise; import ClimaAtmos as CA;
+
+config_dict = Dict();
+config_dict[&quot;moist&quot;] = &quot;equil&quot;;
+config_dict[&quot;dt_rad&quot;] = &quot;5secs&quot;;
+config_dict[&quot;z_elem&quot;] = 20;
+config_dict[&quot;dt&quot;] = &quot;1secs&quot;;
+config_dict[&quot;surface_setup&quot;] = &quot;DefaultExchangeCoefficients&quot;;
+config_dict[&quot;t_end&quot;] = &quot;10secs&quot;;
+config_dict[&quot;vert_diff&quot;] = true;
+config_dict[&quot;h_elem&quot;] = 8;
+config_dict[&quot;precip_model&quot;] = &quot;0M&quot;;
+config_dict[&quot;dt_save_to_sol&quot;] = &quot;Inf&quot;;
+config_dict[&quot;rad&quot;] = &quot;allskywithclear&quot;;
+
+config = CA.AtmosConfig(config_dict);
+
+include(&quot;examples/hybrid/driver.jl&quot;)
+
+
+### Buildkite job `mpi_make_restart`
+
+using Revise; import ClimaAtmos as CA;
+
+config_dict = Dict();
+config_dict[&quot;dt_save_state_to_disk&quot;] = &quot;5days&quot;;
+config_dict[&quot;initial_condition&quot;] = &quot;DryBaroclinicWave&quot;;
+
+config = CA.AtmosConfig(config_dict);
+
+include(&quot;examples/hybrid/driver.jl&quot;)
+
+
+### Buildkite job `sphere_aquaplanet_rhoe_nonequilmoist_allsky`
+
+using Revise; import ClimaAtmos as CA;
+
+config_dict = Dict();
+config_dict[&quot;rad&quot;] = &quot;allskywithclear&quot;;
+config_dict[&quot;cloud_model&quot;] = &quot;grid_scale&quot;;
+config_dict[&quot;rayleigh_sponge&quot;] = true;
+config_dict[&quot;implicit_diffusion&quot;] = true;
+config_dict[&quot;approximate_linear_solve_iters&quot;] = 2;
+config_dict[&quot;z_elem&quot;] = 31;
+config_dict[&quot;dt&quot;] = &quot;400secs&quot;;
+config_dict[&quot;surface_setup&quot;] = &quot;DefaultMoninObukhov&quot;;
+config_dict[&quot;t_end&quot;] = &quot;18hours&quot;;
+config_dict[&quot;insolation&quot;] = &quot;timevarying&quot;;
+config_dict[&quot;dz_bottom&quot;] = 50.0;
+config_dict[&quot;vert_diff&quot;] = &quot;FriersonDiffusion&quot;;
+config_dict[&quot;dt_save_state_to_disk&quot;] = &quot;18hours&quot;;
+config_dict[&quot;z_max&quot;] = 65000.0;
+config_dict[&quot;precip_model&quot;] = &quot;nothing&quot;;
+config_dict[&quot;toml&quot;] = [&quot;toml/sphere_aquaplanet.toml&quot;];
+config_dict[&quot;moist&quot;] = &quot;nonequil&quot;;
+
+config = CA.AtmosConfig(config_dict);
+
+include(&quot;examples/hybrid/driver.jl&quot;)
+
+
+### Buildkite job `cpu_implicit_barowave`
+
+using Revise; import ClimaAtmos as CA;
+
+config_dict = Dict();
+config_dict[&quot;rad&quot;] = &quot;allskywithclear&quot;;
+config_dict[&quot;initial_condition&quot;] = &quot;DryBaroclinicWave&quot;;
+config_dict[&quot;implicit_diffusion&quot;] = true;
+config_dict[&quot;approximate_linear_solve_iters&quot;] = 2;
+config_dict[&quot;z_elem&quot;] = 25;
+config_dict[&quot;dt&quot;] = &quot;1secs&quot;;
+config_dict[&quot;surface_setup&quot;] = &quot;DefaultExchangeCoefficients&quot;;
+config_dict[&quot;t_end&quot;] = &quot;1mins&quot;;
+config_dict[&quot;log_progress&quot;] = false;
+config_dict[&quot;vert_diff&quot;] = true;
+config_dict[&quot;h_elem&quot;] = 12;
+config_dict[&quot;forcing&quot;] = &quot;held_suarez&quot;;
+config_dict[&quot;apply_limiter&quot;] = true;
+config_dict[&quot;precip_model&quot;] = &quot;0M&quot;;
+config_dict[&quot;dt_save_to_sol&quot;] = &quot;Inf&quot;;
+config_dict[&quot;moist&quot;] = &quot;equil&quot;;
+
+config = CA.AtmosConfig(config_dict);
+
+include(&quot;examples/hybrid/driver.jl&quot;)
+
+
+### Buildkite job `longrun_moist_held_suarez_deepatmos`
+
+using Revise; import ClimaAtmos as CA;
+
+config_dict = Dict();
+config_dict[&quot;rayleigh_sponge&quot;] = true;
+config_dict[&quot;z_elem&quot;] = 63;
+config_dict[&quot;dt&quot;] = &quot;90secs&quot;;
+config_dict[&quot;t_end&quot;] = &quot;360days&quot;;
+config_dict[&quot;dz_bottom&quot;] = 30.0;
+config_dict[&quot;vert_diff&quot;] = true;
+config_dict[&quot;h_elem&quot;] = 30;
+config_dict[&quot;dt_save_state_to_disk&quot;] = &quot;10days&quot;;
+config_dict[&quot;forcing&quot;] = &quot;held_suarez&quot;;
+config_dict[&quot;deep_atmosphere&quot;] = true;
+config_dict[&quot;z_max&quot;] = 55000.0;
+config_dict[&quot;precip_model&quot;] = &quot;0M&quot;;
+config_dict[&quot;toml&quot;] = [&quot;toml/longrun_held_suarez.toml&quot;];
+config_dict[&quot;moist&quot;] = &quot;equil&quot;;
+
+config = CA.AtmosConfig(config_dict);
+
+include(&quot;examples/hybrid/driver.jl&quot;)
+
+
+### Buildkite job `longrun_moist_baroclinic_wave_he60`
+
+using Revise; import ClimaAtmos as CA;
+
+config_dict = Dict();
+config_dict[&quot;initial_condition&quot;] = &quot;MoistBaroclinicWave&quot;;
+config_dict[&quot;z_elem&quot;] = 63;
+config_dict[&quot;dt&quot;] = &quot;30secs&quot;;
+config_dict[&quot;t_end&quot;] = &quot;30days&quot;;
+config_dict[&quot;dz_bottom&quot;] = 30.0;
+config_dict[&quot;h_elem&quot;] = 60;
+config_dict[&quot;dt_save_state_to_disk&quot;] = &quot;10days&quot;;
+config_dict[&quot;netcdf_interpolation_num_points&quot;] = [360, 180, 2];
+config_dict[&quot;precip_model&quot;] = &quot;0M&quot;;
+config_dict[&quot;diagnostics&quot;] = Dict{Any, Any}[Dict(&quot;short_name&quot; =&gt; [&quot;pfull&quot;, &quot;wa&quot;, &quot;va&quot;, &quot;rv&quot;, &quot;hus&quot;, &quot;ke&quot;], &quot;period&quot; =&gt; &quot;1days&quot;)];
+config_dict[&quot;moist&quot;] = &quot;equil&quot;;
+
+config = CA.AtmosConfig(config_dict);
+
+include(&quot;examples/hybrid/driver.jl&quot;)
+
+
+### Buildkite job `diagnostic_edmfx_bomex_box`
+
+using Revise; import ClimaAtmos as CA;
+
+config_dict = Dict();
+config_dict[&quot;edmf_coriolis&quot;] = &quot;Bomex&quot;;
+config_dict[&quot;cloud_model&quot;] = &quot;quadrature_sgs&quot;;
+config_dict[&quot;initial_condition&quot;] = &quot;Bomex&quot;;
+config_dict[&quot;implicit_diffusion&quot;] = true;
+config_dict[&quot;edmfx_entr_model&quot;] = &quot;Generalized&quot;;
+config_dict[&quot;approximate_linear_solve_iters&quot;] = 2;
+config_dict[&quot;edmfx_sgs_mass_flux&quot;] = true;
+config_dict[&quot;edmfx_upwinding&quot;] = &quot;first_order&quot;;
+config_dict[&quot;prognostic_tke&quot;] = true;
+config_dict[&quot;surface_setup&quot;] = &quot;Bomex&quot;;
+config_dict[&quot;x_max&quot;] = 1.0e8;
+config_dict[&quot;z_elem&quot;] = 60;
+config_dict[&quot;dt&quot;] = &quot;100secs&quot;;
+config_dict[&quot;t_end&quot;] = &quot;6hours&quot;;
+config_dict[&quot;edmfx_sgs_diffusive_flux&quot;] = true;
+config_dict[&quot;y_max&quot;] = 1.0e8;
+config_dict[&quot;turbconv&quot;] = &quot;diagnostic_edmfx&quot;;
+config_dict[&quot;y_elem&quot;] = 2;
+config_dict[&quot;x_elem&quot;] = 2;
+config_dict[&quot;z_stretch&quot;] = false;
+config_dict[&quot;dt_save_state_to_disk&quot;] = &quot;10mins&quot;;
+config_dict[&quot;ode_algo&quot;] = &quot;ARS343&quot;;
+config_dict[&quot;subsidence&quot;] = &quot;Bomex&quot;;
+config_dict[&quot;config&quot;] = &quot;box&quot;;
+config_dict[&quot;netcdf_interpolation_num_points&quot;] = [8, 8, 60];
+config_dict[&quot;edmfx_nh_pressure&quot;] = true;
+config_dict[&quot;z_max&quot;] = 3000.0;
+config_dict[&quot;toml&quot;] = [&quot;toml/diagnostic_edmfx.toml&quot;];
+config_dict[&quot;call_cloud_diagnostics_per_stage&quot;] = true;
+config_dict[&quot;diagnostics&quot;] = Dict{Any, Any}[Dict(&quot;short_name&quot; =&gt; [&quot;ts&quot;, &quot;ta&quot;, &quot;thetaa&quot;, &quot;ha&quot;, &quot;pfull&quot;, &quot;rhoa&quot;, &quot;ua&quot;, &quot;va&quot;, &quot;wa&quot;, &quot;hur&quot;, &quot;hus&quot;, &quot;cl&quot;, &quot;clw&quot;, &quot;cli&quot;, &quot;hussfc&quot;, &quot;evspsbl&quot;, &quot;pr&quot;], &quot;period&quot; =&gt; &quot;10mins&quot;), Dict(&quot;short_name&quot; =&gt; [&quot;arup&quot;, &quot;waup&quot;, &quot;taup&quot;, &quot;thetaaup&quot;, &quot;haup&quot;, &quot;husup&quot;, &quot;hurup&quot;, &quot;clwup&quot;, &quot;cliup&quot;, &quot;waen&quot;, &quot;tke&quot;, &quot;lmix&quot;], &quot;period&quot; =&gt; &quot;10mins&quot;)];
+config_dict[&quot;edmfx_detr_model&quot;] = &quot;Generalized&quot;;
+config_dict[&quot;ls_adv&quot;] = &quot;Bomex&quot;;
+config_dict[&quot;moist&quot;] = &quot;equil&quot;;
+
+config = CA.AtmosConfig(config_dict);
+
+include(&quot;examples/hybrid/driver.jl&quot;)
+
+
+### Buildkite job `sphere_baroclinic_wave_rhoe_topography_dcmip_rs`
+
+using Revise; import ClimaAtmos as CA;
+
+config_dict = Dict();
+config_dict[&quot;netcdf_output_at_levels&quot;] = false;
+config_dict[&quot;topography&quot;] = &quot;DCMIP200&quot;;
+config_dict[&quot;rayleigh_sponge&quot;] = true;
+config_dict[&quot;dt_save_state_to_disk&quot;] = &quot;6days&quot;;
+config_dict[&quot;topo_smoothing&quot;] = true;
+config_dict[&quot;initial_condition&quot;] = &quot;DryBaroclinicWave&quot;;
+config_dict[&quot;t_end&quot;] = &quot;6days&quot;;
+config_dict[&quot;hyperdiff&quot;] = &quot;ClimaHyperdiffusion&quot;;
+config_dict[&quot;diagnostics&quot;] = Dict{Any, Any}[Dict(&quot;short_name&quot; =&gt; [&quot;pfull&quot;, &quot;wa&quot;, &quot;va&quot;, &quot;rv&quot;], &quot;period&quot; =&gt; &quot;1days&quot;)];
+config_dict[&quot;dt&quot;] = &quot;200secs&quot;;
+
+config = CA.AtmosConfig(config_dict);
+
+include(&quot;examples/hybrid/driver.jl&quot;)
+
+
+### Buildkite job `aquaplanet_rhoe_equil_clearsky_tvinsol_0M_slabocean`
+
+using Revise; import ClimaAtmos as CA;
+
+config_dict = Dict();
+config_dict[&quot;moist&quot;] = &quot;equil&quot;;
+config_dict[&quot;implicit_diffusion&quot;] = true;
+config_dict[&quot;approximate_linear_solve_iters&quot;] = 2;
+config_dict[&quot;dt_rad&quot;] = &quot;1hours&quot;;
+config_dict[&quot;surface_setup&quot;] = &quot;DefaultMoninObukhov&quot;;
+config_dict[&quot;t_end&quot;] = &quot;5days&quot;;
+config_dict[&quot;insolation&quot;] = &quot;timevarying&quot;;
+config_dict[&quot;vert_diff&quot;] = &quot;FriersonDiffusion&quot;;
+config_dict[&quot;bubble&quot;] = false;
+config_dict[&quot;dt_save_state_to_disk&quot;] = &quot;5days&quot;;
+config_dict[&quot;FLOAT_TYPE&quot;] = &quot;Float32&quot;;
+config_dict[&quot;precip_model&quot;] = &quot;0M&quot;;
+config_dict[&quot;check_conservation&quot;] = true;
+config_dict[&quot;prognostic_surface&quot;] = &quot;PrognosticSurfaceTemperature&quot;;
+config_dict[&quot;rad&quot;] = &quot;clearsky&quot;;
+
+config = CA.AtmosConfig(config_dict);
+
+include(&quot;examples/hybrid/driver.jl&quot;)
+
+
+### Buildkite job `sphere_baroclinic_wave_conservation`
+
+using Revise; import ClimaAtmos as CA;
+
+config_dict = Dict();
+config_dict[&quot;check_conservation&quot;] = true;
+config_dict[&quot;initial_condition&quot;] = &quot;MoistBaroclinicWave&quot;;
+config_dict[&quot;dt_save_state_to_disk&quot;] = &quot;5days&quot;;
+config_dict[&quot;t_end&quot;] = &quot;5days&quot;;
+config_dict[&quot;dt&quot;] = &quot;400secs&quot;;
+config_dict[&quot;moist&quot;] = &quot;equil&quot;;
+
+config = CA.AtmosConfig(config_dict);
+
+include(&quot;examples/hybrid/driver.jl&quot;)
+
+
+### Buildkite job `single_column_radiative_equilibrium_clearsky`
+
+using Revise; import ClimaAtmos as CA;
+
+config_dict = Dict();
+config_dict[&quot;initial_condition&quot;] = &quot;IsothermalProfile&quot;;
+config_dict[&quot;hyperdiff&quot;] = false;
+config_dict[&quot;z_elem&quot;] = 63;
+config_dict[&quot;dt&quot;] = &quot;3hours&quot;;
+config_dict[&quot;dt_rad&quot;] = &quot;3hours&quot;;
+config_dict[&quot;idealized_h2o&quot;] = true;
+config_dict[&quot;t_end&quot;] = &quot;654days&quot;;
+config_dict[&quot;dz_bottom&quot;] = 30.0;
+config_dict[&quot;dt_save_state_to_disk&quot;] = &quot;100days&quot;;
+config_dict[&quot;config&quot;] = &quot;column&quot;;
+config_dict[&quot;z_max&quot;] = 65000.0;
+config_dict[&quot;dt_save_to_sol&quot;] = &quot;30hours&quot;;
+config_dict[&quot;rad&quot;] = &quot;clearsky&quot;;
+
+config = CA.AtmosConfig(config_dict);
+
+include(&quot;examples/hybrid/driver.jl&quot;)
+
+
+### Buildkite job `prognostic_edmfx_trmm_column`
+
+using Revise; import ClimaAtmos as CA;
+
+config_dict = Dict();
+config_dict[&quot;moist&quot;] = &quot;equil&quot;;
+config_dict[&quot;cloud_model&quot;] = &quot;quadrature_sgs&quot;;
+config_dict[&quot;initial_condition&quot;] = &quot;TRMM_LBA&quot;;
+config_dict[&quot;implicit_diffusion&quot;] = true;
+config_dict[&quot;edmfx_entr_model&quot;] = &quot;Generalized&quot;;
+config_dict[&quot;approximate_linear_solve_iters&quot;] = 2;
+config_dict[&quot;edmfx_sgs_mass_flux&quot;] = true;
+config_dict[&quot;edmfx_upwinding&quot;] = &quot;first_order&quot;;
+config_dict[&quot;prognostic_tke&quot;] = true;
+config_dict[&quot;surface_setup&quot;] = &quot;TRMM_LBA&quot;;
+config_dict[&quot;z_elem&quot;] = 82;
+config_dict[&quot;dt&quot;] = &quot;10secs&quot;;
+config_dict[&quot;implicit_sgs_advection&quot;] = false;
+config_dict[&quot;t_end&quot;] = &quot;6hours&quot;;
+config_dict[&quot;edmfx_sgs_diffusive_flux&quot;] = true;
+config_dict[&quot;turbconv&quot;] = &quot;prognostic_edmfx&quot;;
+config_dict[&quot;y_elem&quot;] = 2;
+config_dict[&quot;x_elem&quot;] = 2;
+config_dict[&quot;z_stretch&quot;] = false;
+config_dict[&quot;dt_save_state_to_disk&quot;] = &quot;10mins&quot;;
+config_dict[&quot;ode_algo&quot;] = &quot;ARS343&quot;;
+config_dict[&quot;config&quot;] = &quot;column&quot;;
+config_dict[&quot;netcdf_interpolation_num_points&quot;] = [8, 8, 82];
+config_dict[&quot;edmfx_nh_pressure&quot;] = true;
+config_dict[&quot;FLOAT_TYPE&quot;] = &quot;Float64&quot;;
+config_dict[&quot;z_max&quot;] = 16400;
+config_dict[&quot;apply_limiter&quot;] = false;
+config_dict[&quot;precip_model&quot;] = &quot;1M&quot;;
+config_dict[&quot;toml&quot;] = [&quot;toml/prognostic_edmfx.toml&quot;];
+config_dict[&quot;call_cloud_diagnostics_per_stage&quot;] = true;
+config_dict[&quot;diagnostics&quot;] = Dict{Any, Any}[Dict(&quot;short_name&quot; =&gt; [&quot;ts&quot;, &quot;ta&quot;, &quot;thetaa&quot;, &quot;ha&quot;, &quot;pfull&quot;, &quot;rhoa&quot;, &quot;ua&quot;, &quot;va&quot;, &quot;wa&quot;, &quot;hur&quot;, &quot;hus&quot;, &quot;cl&quot;, &quot;clw&quot;, &quot;cli&quot;, &quot;hussfc&quot;, &quot;evspsbl&quot;, &quot;pr&quot;], &quot;period&quot; =&gt; &quot;10mins&quot;), Dict(&quot;short_name&quot; =&gt; [&quot;arup&quot;, &quot;waup&quot;, &quot;taup&quot;, &quot;thetaaup&quot;, &quot;haup&quot;, &quot;husup&quot;, &quot;hurup&quot;, &quot;clwup&quot;, &quot;cliup&quot;, &quot;waen&quot;, &quot;taen&quot;, &quot;thetaaen&quot;, &quot;haen&quot;, &quot;husen&quot;, &quot;huren&quot;, &quot;clwen&quot;, &quot;clien&quot;, &quot;tke&quot;], &quot;period&quot; =&gt; &quot;10mins&quot;), Dict(&quot;short_name&quot; =&gt; [&quot;entr&quot;, &quot;detr&quot;, &quot;lmix&quot;, &quot;bgrad&quot;, &quot;strain&quot;, &quot;edt&quot;, &quot;evu&quot;], &quot;period&quot; =&gt; &quot;10mins&quot;), Dict(&quot;short_name&quot; =&gt; [&quot;husra&quot;, &quot;hussn&quot;], &quot;period&quot; =&gt; &quot;10mins&quot;)];
+config_dict[&quot;edmfx_detr_model&quot;] = &quot;Generalized&quot;;
+config_dict[&quot;edmfx_filter&quot;] = true;
+config_dict[&quot;rad&quot;] = &quot;TRMM_LBA&quot;;
+
+config = CA.AtmosConfig(config_dict);
+
+include(&quot;examples/hybrid/driver.jl&quot;)
+
+
+### Buildkite job `diagnostic_edmfx_rico_box`
+
+using Revise; import ClimaAtmos as CA;
+
+config_dict = Dict();
+config_dict[&quot;cloud_model&quot;] = &quot;quadrature_sgs&quot;;
+config_dict[&quot;initial_condition&quot;] = &quot;Rico&quot;;
+config_dict[&quot;implicit_diffusion&quot;] = true;
+config_dict[&quot;edmfx_entr_model&quot;] = &quot;Generalized&quot;;
+config_dict[&quot;approximate_linear_solve_iters&quot;] = 2;
+config_dict[&quot;edmfx_sgs_mass_flux&quot;] = true;
+config_dict[&quot;edmfx_upwinding&quot;] = &quot;first_order&quot;;
+config_dict[&quot;prognostic_tke&quot;] = true;
+config_dict[&quot;surface_setup&quot;] = &quot;Rico&quot;;
+config_dict[&quot;x_max&quot;] = 1.0e8;
+config_dict[&quot;z_elem&quot;] = 100;
+config_dict[&quot;dt&quot;] = &quot;100secs&quot;;
+config_dict[&quot;t_end&quot;] = &quot;8hours&quot;;
+config_dict[&quot;edmfx_sgs_diffusive_flux&quot;] = true;
+config_dict[&quot;y_max&quot;] = 1.0e8;
+config_dict[&quot;turbconv&quot;] = &quot;diagnostic_edmfx&quot;;
+config_dict[&quot;y_elem&quot;] = 2;
+config_dict[&quot;x_elem&quot;] = 2;
+config_dict[&quot;z_stretch&quot;] = false;
+config_dict[&quot;dt_save_state_to_disk&quot;] = &quot;10mins&quot;;
+config_dict[&quot;ode_algo&quot;] = &quot;ARS343&quot;;
+config_dict[&quot;subsidence&quot;] = &quot;Rico&quot;;
+config_dict[&quot;config&quot;] = &quot;box&quot;;
+config_dict[&quot;netcdf_interpolation_num_points&quot;] = [8, 8, 100];
+config_dict[&quot;edmfx_nh_pressure&quot;] = true;
+config_dict[&quot;z_max&quot;] = 4000.0;
+config_dict[&quot;precip_model&quot;] = &quot;1M&quot;;
+config_dict[&quot;toml&quot;] = [&quot;toml/diagnostic_edmfx.toml&quot;];
+config_dict[&quot;call_cloud_diagnostics_per_stage&quot;] = true;
+config_dict[&quot;diagnostics&quot;] = Dict{Any, Any}[Dict(&quot;short_name&quot; =&gt; [&quot;ts&quot;, &quot;ta&quot;, &quot;thetaa&quot;, &quot;ha&quot;, &quot;pfull&quot;, &quot;rhoa&quot;, &quot;ua&quot;, &quot;va&quot;, &quot;wa&quot;, &quot;hur&quot;, &quot;hus&quot;, &quot;cl&quot;, &quot;clw&quot;, &quot;cli&quot;, &quot;hussfc&quot;, &quot;evspsbl&quot;, &quot;pr&quot;], &quot;period&quot; =&gt; &quot;10mins&quot;), Dict(&quot;short_name&quot; =&gt; [&quot;arup&quot;, &quot;waup&quot;, &quot;taup&quot;, &quot;thetaaup&quot;, &quot;haup&quot;, &quot;husup&quot;, &quot;hurup&quot;, &quot;clwup&quot;, &quot;cliup&quot;, &quot;waen&quot;, &quot;tke&quot;, &quot;lmix&quot;], &quot;period&quot; =&gt; &quot;10mins&quot;), Dict(&quot;short_name&quot; =&gt; [&quot;husra&quot;, &quot;hussn&quot;], &quot;period&quot; =&gt; &quot;10mins&quot;)];
+config_dict[&quot;edmfx_detr_model&quot;] = &quot;Generalized&quot;;
+config_dict[&quot;ls_adv&quot;] = &quot;Rico&quot;;
+config_dict[&quot;moist&quot;] = &quot;equil&quot;;
+
+config = CA.AtmosConfig(config_dict);
+
+include(&quot;examples/hybrid/driver.jl&quot;)
+
+
+### Buildkite job `single_column_radiative_equilibrium_clearsky_prognostic_surface_temp`
+
+using Revise; import ClimaAtmos as CA;
+
+config_dict = Dict();
+config_dict[&quot;initial_condition&quot;] = &quot;IsothermalProfile&quot;;
+config_dict[&quot;hyperdiff&quot;] = false;
+config_dict[&quot;z_elem&quot;] = 63;
+config_dict[&quot;dt&quot;] = &quot;3hours&quot;;
+config_dict[&quot;dt_rad&quot;] = &quot;3hours&quot;;
+config_dict[&quot;idealized_h2o&quot;] = true;
+config_dict[&quot;surface_setup&quot;] = &quot;DefaultExchangeCoefficients&quot;;
+config_dict[&quot;t_end&quot;] = &quot;654days&quot;;
+config_dict[&quot;dz_bottom&quot;] = 30.0;
+config_dict[&quot;dt_save_state_to_disk&quot;] = &quot;100days&quot;;
+config_dict[&quot;config&quot;] = &quot;column&quot;;
+config_dict[&quot;z_max&quot;] = 65000.0;
+config_dict[&quot;prognostic_surface&quot;] = true;
+config_dict[&quot;toml&quot;] = [&quot;toml/single_column_radiative_equilibrium_clearsky_prognostic_surface_temp.toml&quot;];
+config_dict[&quot;dt_save_to_sol&quot;] = &quot;30hours&quot;;
+config_dict[&quot;rad&quot;] = &quot;clearsky&quot;;
+
+config = CA.AtmosConfig(config_dict);
+
+include(&quot;examples/hybrid/driver.jl&quot;)
+
+
+### Buildkite job `prep_remap`
+
+using Revise; import ClimaAtmos as CA;
+
+config_dict = Dict();
+config_dict[&quot;dt_save_state_to_disk&quot;] = &quot;5days&quot;;
+
+config = CA.AtmosConfig(config_dict);
+
+include(&quot;examples/hybrid/driver.jl&quot;)
+
+
+### Buildkite job `longrun_aquaplanet_allsky_0M`
+
+using Revise; import ClimaAtmos as CA;
+
+config_dict = Dict();
+config_dict[&quot;rad&quot;] = &quot;allskywithclear&quot;;
+config_dict[&quot;rayleigh_sponge&quot;] = true;
+config_dict[&quot;implicit_diffusion&quot;] = true;
+config_dict[&quot;approximate_linear_solve_iters&quot;] = 2;
+config_dict[&quot;z_elem&quot;] = 63;
+config_dict[&quot;dt&quot;] = &quot;120secs&quot;;
+config_dict[&quot;dt_rad&quot;] = &quot;1hours&quot;;
+config_dict[&quot;dt_cloud_fraction&quot;] = &quot;1hours&quot;;
+config_dict[&quot;surface_setup&quot;] = &quot;DefaultMoninObukhov&quot;;
+config_dict[&quot;t_end&quot;] = &quot;360days&quot;;
+config_dict[&quot;dz_bottom&quot;] = 30.0;
+config_dict[&quot;vert_diff&quot;] = &quot;FriersonDiffusion&quot;;
+config_dict[&quot;h_elem&quot;] = 16;
+config_dict[&quot;dt_save_state_to_disk&quot;] = &quot;10days&quot;;
+config_dict[&quot;z_max&quot;] = 65000.0;
+config_dict[&quot;precip_model&quot;] = &quot;0M&quot;;
+config_dict[&quot;toml&quot;] = [&quot;toml/longrun_aquaplanet.toml&quot;];
+config_dict[&quot;viscous_sponge&quot;] = true;
+config_dict[&quot;moist&quot;] = &quot;equil&quot;;
+
+config = CA.AtmosConfig(config_dict);
+
+include(&quot;examples/hybrid/driver.jl&quot;)
+
+
+### Buildkite job `diagnostic_edmfx_gabls_box`
+
+using Revise; import ClimaAtmos as CA;
+
+config_dict = Dict();
+config_dict[&quot;edmf_coriolis&quot;] = &quot;GABLS&quot;;
+config_dict[&quot;cloud_model&quot;] = &quot;quadrature_sgs&quot;;
+config_dict[&quot;initial_condition&quot;] = &quot;GABLS&quot;;
+config_dict[&quot;implicit_diffusion&quot;] = true;
+config_dict[&quot;edmfx_entr_model&quot;] = &quot;Generalized&quot;;
+config_dict[&quot;approximate_linear_solve_iters&quot;] = 2;
+config_dict[&quot;edmfx_sgs_mass_flux&quot;] = true;
+config_dict[&quot;edmfx_upwinding&quot;] = &quot;first_order&quot;;
+config_dict[&quot;prognostic_tke&quot;] = true;
+config_dict[&quot;surface_setup&quot;] = &quot;GABLS&quot;;
+config_dict[&quot;x_max&quot;] = 1.0e8;
+config_dict[&quot;z_elem&quot;] = 8;
+config_dict[&quot;dt&quot;] = &quot;200secs&quot;;
+config_dict[&quot;t_end&quot;] = &quot;9hours&quot;;
+config_dict[&quot;edmfx_sgs_diffusive_flux&quot;] = true;
+config_dict[&quot;y_max&quot;] = 1.0e8;
+config_dict[&quot;turbconv&quot;] = &quot;diagnostic_edmfx&quot;;
+config_dict[&quot;y_elem&quot;] = 2;
+config_dict[&quot;x_elem&quot;] = 2;
+config_dict[&quot;z_stretch&quot;] = false;
+config_dict[&quot;dt_save_state_to_disk&quot;] = &quot;10mins&quot;;
+config_dict[&quot;ode_algo&quot;] = &quot;ARS343&quot;;
+config_dict[&quot;config&quot;] = &quot;box&quot;;
+config_dict[&quot;netcdf_interpolation_num_points&quot;] = [8, 8, 8];
+config_dict[&quot;edmfx_nh_pressure&quot;] = true;
+config_dict[&quot;z_max&quot;] = 400;
+config_dict[&quot;toml&quot;] = [&quot;toml/diagnostic_edmfx.toml&quot;];
+config_dict[&quot;call_cloud_diagnostics_per_stage&quot;] = true;
+config_dict[&quot;diagnostics&quot;] = Dict{Any, Any}[Dict(&quot;short_name&quot; =&gt; [&quot;ts&quot;, &quot;ta&quot;, &quot;thetaa&quot;, &quot;ha&quot;, &quot;pfull&quot;, &quot;rhoa&quot;, &quot;ua&quot;, &quot;va&quot;, &quot;wa&quot;, &quot;hur&quot;, &quot;hus&quot;, &quot;cl&quot;, &quot;clw&quot;, &quot;cli&quot;, &quot;hussfc&quot;, &quot;evspsbl&quot;, &quot;pr&quot;], &quot;period&quot; =&gt; &quot;10mins&quot;), Dict(&quot;short_name&quot; =&gt; [&quot;arup&quot;, &quot;waup&quot;, &quot;taup&quot;, &quot;thetaaup&quot;, &quot;haup&quot;, &quot;husup&quot;, &quot;hurup&quot;, &quot;clwup&quot;, &quot;cliup&quot;, &quot;waen&quot;, &quot;tke&quot;, &quot;lmix&quot;], &quot;period&quot; =&gt; &quot;10mins&quot;)];
+config_dict[&quot;edmfx_detr_model&quot;] = &quot;Generalized&quot;;
+config_dict[&quot;moist&quot;] = &quot;equil&quot;;
+
+config = CA.AtmosConfig(config_dict);
+
+include(&quot;examples/hybrid/driver.jl&quot;)
+
+
+### Buildkite job `prognostic_edmfx_aquaplanet`
+
+using Revise; import ClimaAtmos as CA;
+
+config_dict = Dict();
+config_dict[&quot;moist&quot;] = &quot;equil&quot;;
+config_dict[&quot;cloud_model&quot;] = &quot;quadrature_sgs&quot;;
+config_dict[&quot;output_default_diagnostics&quot;] = false;
+config_dict[&quot;edmfx_entr_model&quot;] = &quot;Generalized&quot;;
+config_dict[&quot;edmfx_sgs_mass_flux&quot;] = true;
+config_dict[&quot;edmfx_upwinding&quot;] = &quot;first_order&quot;;
+config_dict[&quot;prognostic_tke&quot;] = true;
+config_dict[&quot;surface_setup&quot;] = &quot;DefaultMoninObukhov&quot;;
+config_dict[&quot;dt&quot;] = &quot;10secs&quot;;
+config_dict[&quot;t_end&quot;] = &quot;1hours&quot;;
+config_dict[&quot;edmfx_sgs_diffusive_flux&quot;] = true;
+config_dict[&quot;turbconv&quot;] = &quot;prognostic_edmfx&quot;;
+config_dict[&quot;dt_save_state_to_disk&quot;] = &quot;600secs&quot;;
+config_dict[&quot;ode_algo&quot;] = &quot;ARS343&quot;;
+config_dict[&quot;edmfx_nh_pressure&quot;] = true;
+config_dict[&quot;precip_model&quot;] = &quot;1M&quot;;
+config_dict[&quot;toml&quot;] = [&quot;toml/prognostic_edmfx.toml&quot;];
+config_dict[&quot;diagnostics&quot;] = Dict{Any, Any}[Dict(&quot;reduction_time&quot; =&gt; &quot;average&quot;, &quot;short_name&quot; =&gt; [&quot;ts&quot;, &quot;ta&quot;, &quot;thetaa&quot;, &quot;ha&quot;, &quot;pfull&quot;, &quot;rhoa&quot;, &quot;ua&quot;, &quot;va&quot;, &quot;wa&quot;, &quot;hfes&quot;, &quot;hur&quot;, &quot;hus&quot;, &quot;cl&quot;, &quot;clw&quot;, &quot;cli&quot;, &quot;evspsbl&quot;, &quot;pr&quot;, &quot;rsd&quot;, &quot;rsu&quot;, &quot;rld&quot;, &quot;rlu&quot;], &quot;period&quot; =&gt; &quot;1hours&quot;), Dict(&quot;reduction_time&quot; =&gt; &quot;average&quot;, &quot;short_name&quot; =&gt; [&quot;arup&quot;, &quot;waup&quot;, &quot;taup&quot;, &quot;thetaaup&quot;, &quot;haup&quot;, &quot;husup&quot;, &quot;hurup&quot;, &quot;clwup&quot;, &quot;cliup&quot;, &quot;waen&quot;, &quot;tke&quot;, &quot;lmix&quot;], &quot;period&quot; =&gt; &quot;1hours&quot;)];
+config_dict[&quot;edmfx_filter&quot;] = true;
+config_dict[&quot;edmfx_detr_model&quot;] = &quot;Generalized&quot;;
+config_dict[&quot;rad&quot;] = &quot;clearsky&quot;;
+
+config = CA.AtmosConfig(config_dict);
+
+include(&quot;examples/hybrid/driver.jl&quot;)
+
+
+### Buildkite job `sphere_nonorographic_gravity_wave`
+
+using Revise; import ClimaAtmos as CA;
+
+config_dict = Dict();
+config_dict[&quot;t_end&quot;] = &quot;1500secs&quot;;
+config_dict[&quot;dt&quot;] = &quot;400secs&quot;;
+config_dict[&quot;non_orographic_gravity_wave&quot;] = true;
+
+config = CA.AtmosConfig(config_dict);
+
+include(&quot;examples/hybrid/driver.jl&quot;)
+
+
+### Buildkite job `sphere_held_suarez_rhoe_topography_dcmip`
+
+using Revise; import ClimaAtmos as CA;
+
+config_dict = Dict();
+config_dict[&quot;topography&quot;] = &quot;DCMIP200&quot;;
+config_dict[&quot;rayleigh_sponge&quot;] = true;
+config_dict[&quot;dt_save_state_to_disk&quot;] = &quot;3days&quot;;
+config_dict[&quot;topo_smoothing&quot;] = true;
+config_dict[&quot;t_end&quot;] = &quot;3days&quot;;
+config_dict[&quot;forcing&quot;] = &quot;held_suarez&quot;;
+config_dict[&quot;dt&quot;] = &quot;200secs&quot;;
+config_dict[&quot;viscous_sponge&quot;] = true;
+
+config = CA.AtmosConfig(config_dict);
+
+include(&quot;examples/hybrid/driver.jl&quot;)
+
+
+### Buildkite job `sphere_aquaplanet_rhoe_equilmoist_allsky_gw_res`
+
+using Revise; import ClimaAtmos as CA;
+
+config_dict = Dict();
+config_dict[&quot;rad&quot;] = &quot;allskywithclear&quot;;
+config_dict[&quot;prescribed_aerosols&quot;] = [&quot;CB1&quot;, &quot;CB2&quot;, &quot;SO4&quot;];
+config_dict[&quot;rayleigh_sponge&quot;] = true;
+config_dict[&quot;implicit_diffusion&quot;] = true;
+config_dict[&quot;orographic_gravity_wave&quot;] = &quot;gfdl_restart&quot;;
+config_dict[&quot;approximate_linear_solve_iters&quot;] = 2;
+config_dict[&quot;z_elem&quot;] = 31;
+config_dict[&quot;dt&quot;] = &quot;400secs&quot;;
+config_dict[&quot;surface_setup&quot;] = &quot;DefaultMoninObukhov&quot;;
+config_dict[&quot;t_end&quot;] = &quot;1days&quot;;
+config_dict[&quot;insolation&quot;] = &quot;timevarying&quot;;
+config_dict[&quot;non_orographic_gravity_wave&quot;] = true;
+config_dict[&quot;dz_bottom&quot;] = 50.0;
+config_dict[&quot;vert_diff&quot;] = &quot;FriersonDiffusion&quot;;
+config_dict[&quot;dt_save_state_to_disk&quot;] = &quot;24hours&quot;;
+config_dict[&quot;z_max&quot;] = 65000.0;
+config_dict[&quot;prescribe_ozone&quot;] = true;
+config_dict[&quot;precip_model&quot;] = &quot;1M&quot;;
+config_dict[&quot;aerosol_radiation&quot;] = true;
+config_dict[&quot;toml&quot;] = [&quot;toml/sphere_aquaplanet.toml&quot;];
+config_dict[&quot;diagnostics&quot;] = Dict{Any, Any}[Dict(&quot;reduction_time&quot; =&gt; &quot;average&quot;, &quot;short_name&quot; =&gt; [&quot;edt&quot;, &quot;evu&quot;, &quot;mmrso4&quot;, &quot;mmrbcpo&quot;, &quot;mmrbcpi&quot;, &quot;o3&quot;], &quot;period&quot; =&gt; &quot;1days&quot;)];
+config_dict[&quot;moist&quot;] = &quot;equil&quot;;
+
+config = CA.AtmosConfig(config_dict);
+
+include(&quot;examples/hybrid/driver.jl&quot;)
+
+
+### Buildkite job `prognostic_edmfx_bomex_fixtke_column`
+
+using Revise; import ClimaAtmos as CA;
+
+config_dict = Dict();
+config_dict[&quot;edmf_coriolis&quot;] = &quot;Bomex&quot;;
+config_dict[&quot;cloud_model&quot;] = &quot;quadrature_sgs&quot;;
+config_dict[&quot;initial_condition&quot;] = &quot;Bomex&quot;;
+config_dict[&quot;edmfx_entr_model&quot;] = &quot;Generalized&quot;;
+config_dict[&quot;edmfx_sgs_mass_flux&quot;] = true;
+config_dict[&quot;z_elem&quot;] = 60;
+config_dict[&quot;edmfx_upwinding&quot;] = &quot;first_order&quot;;
+config_dict[&quot;prognostic_tke&quot;] = false;
+config_dict[&quot;surface_setup&quot;] = &quot;Bomex&quot;;
+config_dict[&quot;perturb_initstate&quot;] = false;
+config_dict[&quot;dt&quot;] = &quot;5secs&quot;;
+config_dict[&quot;t_end&quot;] = &quot;6hours&quot;;
+config_dict[&quot;edmfx_sgs_diffusive_flux&quot;] = true;
+config_dict[&quot;turbconv&quot;] = &quot;prognostic_edmfx&quot;;
+config_dict[&quot;y_elem&quot;] = 2;
+config_dict[&quot;x_elem&quot;] = 2;
+config_dict[&quot;z_stretch&quot;] = false;
+config_dict[&quot;dt_save_state_to_disk&quot;] = &quot;10mins&quot;;
+config_dict[&quot;ode_algo&quot;] = &quot;ARS343&quot;;
+config_dict[&quot;subsidence&quot;] = &quot;Bomex&quot;;
+config_dict[&quot;config&quot;] = &quot;column&quot;;
+config_dict[&quot;netcdf_interpolation_num_points&quot;] = [2, 2, 60];
+config_dict[&quot;edmfx_nh_pressure&quot;] = true;
+config_dict[&quot;z_max&quot;] = 3000.0;
+config_dict[&quot;toml&quot;] = [&quot;toml/prognostic_edmfx_bomex.toml&quot;];
+config_dict[&quot;call_cloud_diagnostics_per_stage&quot;] = true;
+config_dict[&quot;diagnostics&quot;] = Dict{Any, Any}[Dict(&quot;short_name&quot; =&gt; [&quot;ts&quot;, &quot;ta&quot;, &quot;thetaa&quot;, &quot;ha&quot;, &quot;pfull&quot;, &quot;rhoa&quot;, &quot;ua&quot;, &quot;va&quot;, &quot;wa&quot;, &quot;hur&quot;, &quot;hus&quot;, &quot;cl&quot;, &quot;clw&quot;, &quot;cli&quot;, &quot;hussfc&quot;, &quot;evspsbl&quot;, &quot;pr&quot;], &quot;period&quot; =&gt; &quot;10mins&quot;), Dict(&quot;short_name&quot; =&gt; [&quot;arup&quot;, &quot;waup&quot;, &quot;taup&quot;, &quot;thetaaup&quot;, &quot;haup&quot;, &quot;husup&quot;, &quot;hurup&quot;, &quot;clwup&quot;, &quot;cliup&quot;, &quot;waen&quot;, &quot;taen&quot;, &quot;thetaaen&quot;, &quot;haen&quot;, &quot;husen&quot;, &quot;huren&quot;, &quot;clwen&quot;, &quot;clien&quot;, &quot;tke&quot;], &quot;period&quot; =&gt; &quot;10mins&quot;), Dict(&quot;short_name&quot; =&gt; [&quot;entr&quot;, &quot;detr&quot;, &quot;lmix&quot;, &quot;bgrad&quot;, &quot;strain&quot;, &quot;edt&quot;, &quot;evu&quot;], &quot;period&quot; =&gt; &quot;10mins&quot;)];
+config_dict[&quot;edmfx_detr_model&quot;] = &quot;Generalized&quot;;
+config_dict[&quot;edmfx_filter&quot;] = true;
+config_dict[&quot;ls_adv&quot;] = &quot;Bomex&quot;;
+config_dict[&quot;moist&quot;] = &quot;equil&quot;;
+
+config = CA.AtmosConfig(config_dict);
+
+include(&quot;examples/hybrid/driver.jl&quot;)
+
+
+### Buildkite job `mpi_sphere_aquaplanet_rhoe_equilmoist_clearsky`
+
+using Revise; import ClimaAtmos as CA;
+
+config_dict = Dict();
+config_dict[&quot;vert_diff&quot;] = true;
+config_dict[&quot;rad&quot;] = &quot;clearsky&quot;;
+config_dict[&quot;precip_model&quot;] = &quot;0M&quot;;
+config_dict[&quot;t_end&quot;] = &quot;4days&quot;;
+config_dict[&quot;diagnostics&quot;] = Dict{Any, Any}[Dict(&quot;short_name&quot; =&gt; [&quot;pfull&quot;, &quot;wa&quot;, &quot;va&quot;, &quot;rv&quot;], &quot;period&quot; =&gt; &quot;1days&quot;, &quot;writer&quot; =&gt; &quot;h5&quot;)];
+config_dict[&quot;dt&quot;] = &quot;400secs&quot;;
+config_dict[&quot;surface_setup&quot;] = &quot;DefaultExchangeCoefficients&quot;;
+config_dict[&quot;moist&quot;] = &quot;equil&quot;;
+
+config = CA.AtmosConfig(config_dict);
+
+include(&quot;examples/hybrid/driver.jl&quot;)
+
+
+### Buildkite job `flame_perf_target_prognostic_edmfx_aquaplanet`
+
+using Revise; import ClimaAtmos as CA;
+
+config_dict = Dict();
+config_dict[&quot;moist&quot;] = &quot;equil&quot;;
+config_dict[&quot;implicit_diffusion&quot;] = true;
+config_dict[&quot;edmfx_entr_model&quot;] = &quot;Generalized&quot;;
+config_dict[&quot;approximate_linear_solve_iters&quot;] = 2;
+config_dict[&quot;z_elem&quot;] = 25;
+config_dict[&quot;edmfx_upwinding&quot;] = &quot;first_order&quot;;
+config_dict[&quot;prognostic_tke&quot;] = true;
+config_dict[&quot;surface_setup&quot;] = &quot;DefaultExchangeCoefficients&quot;;
+config_dict[&quot;edmfx_sgs_mass_flux&quot;] = true;
+config_dict[&quot;dt&quot;] = &quot;10secs&quot;;
+config_dict[&quot;implicit_sgs_advection&quot;] = true;
+config_dict[&quot;t_end&quot;] = &quot;1hours&quot;;
+config_dict[&quot;edmfx_sgs_diffusive_flux&quot;] = true;
+config_dict[&quot;turbconv&quot;] = &quot;prognostic_edmfx&quot;;
+config_dict[&quot;log_progress&quot;] = false;
+config_dict[&quot;vert_diff&quot;] = false;
+config_dict[&quot;h_elem&quot;] = 12;
+config_dict[&quot;dt_save_state_to_disk&quot;] = &quot;600secs&quot;;
+config_dict[&quot;forcing&quot;] = &quot;held_suarez&quot;;
+config_dict[&quot;edmfx_nh_pressure&quot;] = true;
+config_dict[&quot;apply_limiter&quot;] = true;
+config_dict[&quot;precip_model&quot;] = &quot;0M&quot;;
+config_dict[&quot;toml&quot;] = [&quot;toml/prognostic_edmfx.toml&quot;];
+config_dict[&quot;edmfx_detr_model&quot;] = &quot;Generalized&quot;;
+config_dict[&quot;dt_save_to_sol&quot;] = &quot;Inf&quot;;
+config_dict[&quot;rad&quot;] = &quot;gray&quot;;
+
+config = CA.AtmosConfig(config_dict);
+
+include(&quot;examples/hybrid/driver.jl&quot;)
+
+
+### Buildkite job `longrun_dry_baroclinic_wave_he60`
+
+using Revise; import ClimaAtmos as CA;
+
+config_dict = Dict();
+config_dict[&quot;dz_bottom&quot;] = 30.0;
+config_dict[&quot;h_elem&quot;] = 60;
+config_dict[&quot;initial_condition&quot;] = &quot;DryBaroclinicWave&quot;;
+config_dict[&quot;dt_save_state_to_disk&quot;] = &quot;10days&quot;;
+config_dict[&quot;t_end&quot;] = &quot;10days&quot;;
+config_dict[&quot;netcdf_interpolation_num_points&quot;] = [360, 180, 2];
+config_dict[&quot;z_elem&quot;] = 63;
+config_dict[&quot;dt&quot;] = &quot;30secs&quot;;
+config_dict[&quot;diagnostics&quot;] = Dict{Any, Any}[Dict(&quot;short_name&quot; =&gt; [&quot;pfull&quot;, &quot;wa&quot;, &quot;va&quot;, &quot;rv&quot;, &quot;ke&quot;], &quot;period&quot; =&gt; &quot;1days&quot;)];
+
+config = CA.AtmosConfig(config_dict);
+
+include(&quot;examples/hybrid/driver.jl&quot;)
+
+
+### Buildkite job `longrun_aquaplanet_allsky_diagedmf_0M`
+
+using Revise; import ClimaAtmos as CA;
+
+config_dict = Dict();
+config_dict[&quot;rad&quot;] = &quot;allskywithclear&quot;;
+config_dict[&quot;rayleigh_sponge&quot;] = true;
+config_dict[&quot;cloud_model&quot;] = &quot;quadrature_sgs&quot;;
+config_dict[&quot;implicit_diffusion&quot;] = true;
+config_dict[&quot;edmfx_entr_model&quot;] = &quot;Generalized&quot;;
+config_dict[&quot;approximate_linear_solve_iters&quot;] = 2;
+config_dict[&quot;z_elem&quot;] = 63;
+config_dict[&quot;dt&quot;] = &quot;120secs&quot;;
+config_dict[&quot;dt_rad&quot;] = &quot;1hours&quot;;
+config_dict[&quot;dt_cloud_fraction&quot;] = &quot;1hours&quot;;
+config_dict[&quot;surface_setup&quot;] = &quot;DefaultMoninObukhov&quot;;
+config_dict[&quot;prognostic_tke&quot;] = true;
+config_dict[&quot;edmfx_upwinding&quot;] = &quot;first_order&quot;;
+config_dict[&quot;edmfx_sgs_mass_flux&quot;] = true;
+config_dict[&quot;override_τ_precip&quot;] = false;
+config_dict[&quot;t_end&quot;] = &quot;240days&quot;;
+config_dict[&quot;edmfx_sgs_diffusive_flux&quot;] = true;
+config_dict[&quot;turbconv&quot;] = &quot;diagnostic_edmfx&quot;;
+config_dict[&quot;dz_bottom&quot;] = 30.0;
+config_dict[&quot;h_elem&quot;] = 16;
+config_dict[&quot;ode_algo&quot;] = &quot;ARS343&quot;;
+config_dict[&quot;dt_save_state_to_disk&quot;] = &quot;30days&quot;;
+config_dict[&quot;edmfx_nh_pressure&quot;] = true;
+config_dict[&quot;z_max&quot;] = 65000.0;
+config_dict[&quot;precip_model&quot;] = &quot;0M&quot;;
+config_dict[&quot;toml&quot;] = [&quot;toml/longrun_aquaplanet_diagedmf.toml&quot;];
+config_dict[&quot;viscous_sponge&quot;] = true;
+config_dict[&quot;edmfx_detr_model&quot;] = &quot;Generalized&quot;;
+config_dict[&quot;moist&quot;] = &quot;equil&quot;;
+
+config = CA.AtmosConfig(config_dict);
+
+include(&quot;examples/hybrid/driver.jl&quot;)
+
+
+### Buildkite job `diagnostic_edmfx_trmm_box`
+
+using Revise; import ClimaAtmos as CA;
+
+config_dict = Dict();
+config_dict[&quot;moist&quot;] = &quot;equil&quot;;
+config_dict[&quot;cloud_model&quot;] = &quot;quadrature_sgs&quot;;
+config_dict[&quot;initial_condition&quot;] = &quot;TRMM_LBA&quot;;
+config_dict[&quot;implicit_diffusion&quot;] = true;
+config_dict[&quot;edmfx_entr_model&quot;] = &quot;Generalized&quot;;
+config_dict[&quot;approximate_linear_solve_iters&quot;] = 2;
+config_dict[&quot;edmfx_sgs_mass_flux&quot;] = true;
+config_dict[&quot;edmfx_upwinding&quot;] = &quot;first_order&quot;;
+config_dict[&quot;prognostic_tke&quot;] = true;
+config_dict[&quot;surface_setup&quot;] = &quot;TRMM_LBA&quot;;
+config_dict[&quot;x_max&quot;] = 1.0e8;
+config_dict[&quot;z_elem&quot;] = 82;
+config_dict[&quot;dt&quot;] = &quot;200secs&quot;;
+config_dict[&quot;t_end&quot;] = &quot;6hours&quot;;
+config_dict[&quot;edmfx_sgs_diffusive_flux&quot;] = true;
+config_dict[&quot;y_max&quot;] = 1.0e8;
+config_dict[&quot;turbconv&quot;] = &quot;diagnostic_edmfx&quot;;
+config_dict[&quot;y_elem&quot;] = 2;
+config_dict[&quot;x_elem&quot;] = 2;
+config_dict[&quot;z_stretch&quot;] = false;
+config_dict[&quot;dt_save_state_to_disk&quot;] = &quot;10mins&quot;;
+config_dict[&quot;ode_algo&quot;] = &quot;ARS343&quot;;
+config_dict[&quot;config&quot;] = &quot;box&quot;;
+config_dict[&quot;netcdf_interpolation_num_points&quot;] = [8, 8, 82];
+config_dict[&quot;edmfx_nh_pressure&quot;] = true;
+config_dict[&quot;FLOAT_TYPE&quot;] = &quot;Float64&quot;;
+config_dict[&quot;z_max&quot;] = 16400;
+config_dict[&quot;apply_limiter&quot;] = false;
+config_dict[&quot;precip_model&quot;] = &quot;1M&quot;;
+config_dict[&quot;toml&quot;] = [&quot;toml/diagnostic_edmfx.toml&quot;];
+config_dict[&quot;call_cloud_diagnostics_per_stage&quot;] = true;
+config_dict[&quot;diagnostics&quot;] = Dict{Any, Any}[Dict(&quot;short_name&quot; =&gt; [&quot;ts&quot;, &quot;ta&quot;, &quot;thetaa&quot;, &quot;ha&quot;, &quot;pfull&quot;, &quot;rhoa&quot;, &quot;ua&quot;, &quot;va&quot;, &quot;wa&quot;, &quot;hur&quot;, &quot;hus&quot;, &quot;cl&quot;, &quot;clw&quot;, &quot;cli&quot;, &quot;hussfc&quot;, &quot;evspsbl&quot;, &quot;pr&quot;], &quot;period&quot; =&gt; &quot;10mins&quot;), Dict(&quot;short_name&quot; =&gt; [&quot;arup&quot;, &quot;waup&quot;, &quot;taup&quot;, &quot;thetaaup&quot;, &quot;haup&quot;, &quot;husup&quot;, &quot;hurup&quot;, &quot;clwup&quot;, &quot;cliup&quot;, &quot;waen&quot;, &quot;tke&quot;, &quot;lmix&quot;], &quot;period&quot; =&gt; &quot;10mins&quot;), Dict(&quot;short_name&quot; =&gt; [&quot;husra&quot;, &quot;hussn&quot;], &quot;period&quot; =&gt; &quot;10mins&quot;)];
+config_dict[&quot;edmfx_detr_model&quot;] = &quot;Generalized&quot;;
+config_dict[&quot;rad&quot;] = &quot;TRMM_LBA&quot;;
+
+config = CA.AtmosConfig(config_dict);
+
+include(&quot;examples/hybrid/driver.jl&quot;)
+
+
+### Buildkite job `flame_perf_target_threaded`
+
+using Revise; import ClimaAtmos as CA;
+
+config_dict = Dict();
+config_dict[&quot;rad&quot;] = &quot;allskywithclear&quot;;
+config_dict[&quot;implicit_diffusion&quot;] = false;
+config_dict[&quot;approximate_linear_solve_iters&quot;] = 2;
+config_dict[&quot;z_elem&quot;] = 25;
+config_dict[&quot;dt&quot;] = &quot;1secs&quot;;
+config_dict[&quot;surface_setup&quot;] = &quot;DefaultExchangeCoefficients&quot;;
+config_dict[&quot;t_end&quot;] = &quot;10secs&quot;;
+config_dict[&quot;log_progress&quot;] = false;
+config_dict[&quot;vert_diff&quot;] = true;
+config_dict[&quot;h_elem&quot;] = 12;
+config_dict[&quot;forcing&quot;] = &quot;held_suarez&quot;;
+config_dict[&quot;apply_limiter&quot;] = true;
+config_dict[&quot;precip_model&quot;] = &quot;0M&quot;;
+config_dict[&quot;dt_save_to_sol&quot;] = &quot;Inf&quot;;
+config_dict[&quot;moist&quot;] = &quot;equil&quot;;
+
+config = CA.AtmosConfig(config_dict);
+
+include(&quot;examples/hybrid/driver.jl&quot;)
+
+
+### Buildkite job `sphere_hydrostatic_balance_rhoe_ft64`
+
+using Revise; import ClimaAtmos as CA;
+
+config_dict = Dict();
+config_dict[&quot;dt_save_state_to_disk&quot;] = &quot;8days&quot;;
+config_dict[&quot;t_end&quot;] = &quot;8days&quot;;
+config_dict[&quot;discrete_hydrostatic_balance&quot;] = true;
+config_dict[&quot;hyperdiff&quot;] = false;
+config_dict[&quot;perturb_initstate&quot;] = false;
+config_dict[&quot;FLOAT_TYPE&quot;] = &quot;Float64&quot;;
+config_dict[&quot;dt_save_to_sol&quot;] = &quot;600secs&quot;;
+
+config = CA.AtmosConfig(config_dict);
+
+include(&quot;examples/hybrid/driver.jl&quot;)
+
+
+### Buildkite job `sphere_held_suarez_rhoe_equilmoist_topography_dcmip`
+
+using Revise; import ClimaAtmos as CA;
+
+config_dict = Dict();
+config_dict[&quot;rayleigh_sponge&quot;] = true;
+config_dict[&quot;topo_smoothing&quot;] = true;
+config_dict[&quot;dt&quot;] = &quot;200secs&quot;;
+config_dict[&quot;t_end&quot;] = &quot;2days&quot;;
+config_dict[&quot;vert_diff&quot;] = true;
+config_dict[&quot;dt_save_state_to_disk&quot;] = &quot;2days&quot;;
+config_dict[&quot;forcing&quot;] = &quot;held_suarez&quot;;
+config_dict[&quot;precip_model&quot;] = &quot;0M&quot;;
+config_dict[&quot;topography&quot;] = &quot;DCMIP200&quot;;
+config_dict[&quot;diagnostics&quot;] = Dict{Any, Any}[Dict(&quot;short_name&quot; =&gt; [&quot;cl&quot;, &quot;cli&quot;, &quot;clw&quot;, &quot;ta&quot;, &quot;hus&quot;, &quot;hur&quot;, &quot;lmix&quot;], &quot;period&quot; =&gt; &quot;3hours&quot;)];
+config_dict[&quot;moist&quot;] = &quot;equil&quot;;
+
+config = CA.AtmosConfig(config_dict);
+
+include(&quot;examples/hybrid/driver.jl&quot;)
+
+
+### Buildkite job `diagnostic_edmfx_bomex_stretched_box`
+
+using Revise; import ClimaAtmos as CA;
+
+config_dict = Dict();
+config_dict[&quot;edmf_coriolis&quot;] = &quot;Bomex&quot;;
+config_dict[&quot;cloud_model&quot;] = &quot;quadrature_sgs&quot;;
+config_dict[&quot;initial_condition&quot;] = &quot;Bomex&quot;;
+config_dict[&quot;implicit_diffusion&quot;] = true;
+config_dict[&quot;edmfx_entr_model&quot;] = &quot;Generalized&quot;;
+config_dict[&quot;approximate_linear_solve_iters&quot;] = 2;
+config_dict[&quot;edmfx_sgs_mass_flux&quot;] = true;
+config_dict[&quot;edmfx_upwinding&quot;] = &quot;first_order&quot;;
+config_dict[&quot;prognostic_tke&quot;] = true;
+config_dict[&quot;surface_setup&quot;] = &quot;Bomex&quot;;
+config_dict[&quot;x_max&quot;] = 1.0e8;
+config_dict[&quot;z_elem&quot;] = 30;
+config_dict[&quot;dt&quot;] = &quot;200secs&quot;;
+config_dict[&quot;t_end&quot;] = &quot;6hours&quot;;
+config_dict[&quot;edmfx_sgs_diffusive_flux&quot;] = true;
+config_dict[&quot;y_max&quot;] = 1.0e8;
+config_dict[&quot;turbconv&quot;] = &quot;diagnostic_edmfx&quot;;
+config_dict[&quot;y_elem&quot;] = 2;
+config_dict[&quot;x_elem&quot;] = 2;
+config_dict[&quot;dz_bottom&quot;] = 50.0;
+config_dict[&quot;dt_save_state_to_disk&quot;] = &quot;10mins&quot;;
+config_dict[&quot;ode_algo&quot;] = &quot;ARS343&quot;;
+config_dict[&quot;subsidence&quot;] = &quot;Bomex&quot;;
+config_dict[&quot;config&quot;] = &quot;box&quot;;
+config_dict[&quot;netcdf_interpolation_num_points&quot;] = [8, 8, 30];
+config_dict[&quot;edmfx_nh_pressure&quot;] = true;
+config_dict[&quot;z_max&quot;] = 3000.0;
+config_dict[&quot;toml&quot;] = [&quot;toml/diagnostic_edmfx.toml&quot;];
+config_dict[&quot;call_cloud_diagnostics_per_stage&quot;] = true;
+config_dict[&quot;diagnostics&quot;] = Dict{Any, Any}[Dict(&quot;short_name&quot; =&gt; [&quot;ts&quot;, &quot;ta&quot;, &quot;thetaa&quot;, &quot;ha&quot;, &quot;pfull&quot;, &quot;rhoa&quot;, &quot;ua&quot;, &quot;va&quot;, &quot;wa&quot;, &quot;hur&quot;, &quot;hus&quot;, &quot;cl&quot;, &quot;clw&quot;, &quot;cli&quot;, &quot;hussfc&quot;, &quot;evspsbl&quot;, &quot;pr&quot;], &quot;period&quot; =&gt; &quot;10mins&quot;), Dict(&quot;short_name&quot; =&gt; [&quot;arup&quot;, &quot;waup&quot;, &quot;taup&quot;, &quot;thetaaup&quot;, &quot;haup&quot;, &quot;husup&quot;, &quot;hurup&quot;, &quot;clwup&quot;, &quot;cliup&quot;, &quot;waen&quot;, &quot;tke&quot;, &quot;lmix&quot;], &quot;period&quot; =&gt; &quot;10mins&quot;)];
+config_dict[&quot;edmfx_detr_model&quot;] = &quot;Generalized&quot;;
+config_dict[&quot;ls_adv&quot;] = &quot;Bomex&quot;;
+config_dict[&quot;moist&quot;] = &quot;equil&quot;;
+
+config = CA.AtmosConfig(config_dict);
+
+include(&quot;examples/hybrid/driver.jl&quot;)
+
+
+### Buildkite job `prognostic_edmfx_rico_column`
+
+using Revise; import ClimaAtmos as CA;
+
+config_dict = Dict();
+config_dict[&quot;cloud_model&quot;] = &quot;quadrature_sgs&quot;;
+config_dict[&quot;initial_condition&quot;] = &quot;Rico&quot;;
+config_dict[&quot;implicit_diffusion&quot;] = true;
+config_dict[&quot;edmfx_entr_model&quot;] = &quot;Generalized&quot;;
+config_dict[&quot;approximate_linear_solve_iters&quot;] = 2;
+config_dict[&quot;edmfx_sgs_mass_flux&quot;] = true;
+config_dict[&quot;edmfx_upwinding&quot;] = &quot;first_order&quot;;
+config_dict[&quot;prognostic_tke&quot;] = true;
+config_dict[&quot;surface_setup&quot;] = &quot;Rico&quot;;
+config_dict[&quot;z_elem&quot;] = 100;
+config_dict[&quot;perturb_initstate&quot;] = false;
+config_dict[&quot;dt&quot;] = &quot;10secs&quot;;
+config_dict[&quot;implicit_sgs_advection&quot;] = false;
+config_dict[&quot;t_end&quot;] = &quot;6hours&quot;;
+config_dict[&quot;edmfx_sgs_diffusive_flux&quot;] = true;
+config_dict[&quot;turbconv&quot;] = &quot;prognostic_edmfx&quot;;
+config_dict[&quot;y_elem&quot;] = 2;
+config_dict[&quot;x_elem&quot;] = 2;
+config_dict[&quot;z_stretch&quot;] = false;
+config_dict[&quot;dt_save_state_to_disk&quot;] = &quot;10mins&quot;;
+config_dict[&quot;ode_algo&quot;] = &quot;ARS343&quot;;
+config_dict[&quot;subsidence&quot;] = &quot;Rico&quot;;
+config_dict[&quot;config&quot;] = &quot;column&quot;;
+config_dict[&quot;netcdf_interpolation_num_points&quot;] = [8, 8, 100];
+config_dict[&quot;edmfx_nh_pressure&quot;] = true;
+config_dict[&quot;z_max&quot;] = 4000.0;
+config_dict[&quot;precip_model&quot;] = &quot;1M&quot;;
+config_dict[&quot;toml&quot;] = [&quot;toml/prognostic_edmfx.toml&quot;];
+config_dict[&quot;call_cloud_diagnostics_per_stage&quot;] = true;
+config_dict[&quot;diagnostics&quot;] = Dict{Any, Any}[Dict(&quot;short_name&quot; =&gt; [&quot;ts&quot;, &quot;ta&quot;, &quot;thetaa&quot;, &quot;ha&quot;, &quot;pfull&quot;, &quot;rhoa&quot;, &quot;ua&quot;, &quot;va&quot;, &quot;wa&quot;, &quot;hur&quot;, &quot;hus&quot;, &quot;cl&quot;, &quot;clw&quot;, &quot;cli&quot;, &quot;hussfc&quot;, &quot;evspsbl&quot;, &quot;pr&quot;], &quot;period&quot; =&gt; &quot;10mins&quot;), Dict(&quot;short_name&quot; =&gt; [&quot;arup&quot;, &quot;waup&quot;, &quot;taup&quot;, &quot;thetaaup&quot;, &quot;haup&quot;, &quot;husup&quot;, &quot;hurup&quot;, &quot;clwup&quot;, &quot;cliup&quot;, &quot;waen&quot;, &quot;taen&quot;, &quot;thetaaen&quot;, &quot;haen&quot;, &quot;husen&quot;, &quot;huren&quot;, &quot;clwen&quot;, &quot;clien&quot;, &quot;tke&quot;], &quot;period&quot; =&gt; &quot;10mins&quot;), Dict(&quot;short_name&quot; =&gt; [&quot;entr&quot;, &quot;detr&quot;, &quot;lmix&quot;, &quot;bgrad&quot;, &quot;strain&quot;, &quot;edt&quot;, &quot;evu&quot;], &quot;period&quot; =&gt; &quot;10mins&quot;), Dict(&quot;short_name&quot; =&gt; [&quot;husra&quot;, &quot;hussn&quot;], &quot;period&quot; =&gt; &quot;10mins&quot;)];
+config_dict[&quot;edmfx_detr_model&quot;] = &quot;Generalized&quot;;
+config_dict[&quot;edmfx_filter&quot;] = true;
+config_dict[&quot;ls_adv&quot;] = &quot;Rico&quot;;
+config_dict[&quot;moist&quot;] = &quot;equil&quot;;
+
+config = CA.AtmosConfig(config_dict);
+
+include(&quot;examples/hybrid/driver.jl&quot;)
+
+
+### Buildkite job `diagnostic_edmfx_dycoms_rf02_box`
+
+using Revise; import ClimaAtmos as CA;
+
+config_dict = Dict();
+config_dict[&quot;edmf_coriolis&quot;] = &quot;DYCOMS_RF02&quot;;
+config_dict[&quot;moist&quot;] = &quot;equil&quot;;
+config_dict[&quot;cloud_model&quot;] = &quot;quadrature_sgs&quot;;
+config_dict[&quot;initial_condition&quot;] = &quot;DYCOMS_RF02&quot;;
+config_dict[&quot;implicit_diffusion&quot;] = true;
+config_dict[&quot;edmfx_entr_model&quot;] = &quot;Generalized&quot;;
+config_dict[&quot;approximate_linear_solve_iters&quot;] = 2;
+config_dict[&quot;edmfx_sgs_mass_flux&quot;] = true;
+config_dict[&quot;edmfx_upwinding&quot;] = &quot;first_order&quot;;
+config_dict[&quot;prognostic_tke&quot;] = true;
+config_dict[&quot;surface_setup&quot;] = &quot;DYCOMS_RF02&quot;;
+config_dict[&quot;x_max&quot;] = 1.0e8;
+config_dict[&quot;z_elem&quot;] = 30;
+config_dict[&quot;dt&quot;] = &quot;100secs&quot;;
+config_dict[&quot;t_end&quot;] = &quot;6hours&quot;;
+config_dict[&quot;edmfx_sgs_diffusive_flux&quot;] = true;
+config_dict[&quot;y_max&quot;] = 1.0e8;
+config_dict[&quot;turbconv&quot;] = &quot;diagnostic_edmfx&quot;;
+config_dict[&quot;y_elem&quot;] = 2;
+config_dict[&quot;x_elem&quot;] = 2;
+config_dict[&quot;z_stretch&quot;] = false;
+config_dict[&quot;dt_save_state_to_disk&quot;] = &quot;10mins&quot;;
+config_dict[&quot;ode_algo&quot;] = &quot;ARS343&quot;;
+config_dict[&quot;subsidence&quot;] = &quot;DYCOMS&quot;;
+config_dict[&quot;config&quot;] = &quot;box&quot;;
+config_dict[&quot;netcdf_interpolation_num_points&quot;] = [8, 8, 30];
+config_dict[&quot;edmfx_nh_pressure&quot;] = true;
+config_dict[&quot;z_max&quot;] = 1500;
+config_dict[&quot;precip_model&quot;] = &quot;1M&quot;;
+config_dict[&quot;toml&quot;] = [&quot;toml/diagnostic_edmfx.toml&quot;];
+config_dict[&quot;call_cloud_diagnostics_per_stage&quot;] = true;
+config_dict[&quot;diagnostics&quot;] = Dict{Any, Any}[Dict(&quot;short_name&quot; =&gt; [&quot;ts&quot;, &quot;ta&quot;, &quot;thetaa&quot;, &quot;ha&quot;, &quot;pfull&quot;, &quot;rhoa&quot;, &quot;ua&quot;, &quot;va&quot;, &quot;wa&quot;, &quot;hur&quot;, &quot;hus&quot;, &quot;cl&quot;, &quot;clw&quot;, &quot;cli&quot;, &quot;hussfc&quot;, &quot;evspsbl&quot;, &quot;pr&quot;], &quot;period&quot; =&gt; &quot;10mins&quot;), Dict(&quot;short_name&quot; =&gt; [&quot;arup&quot;, &quot;waup&quot;, &quot;taup&quot;, &quot;thetaaup&quot;, &quot;haup&quot;, &quot;husup&quot;, &quot;hurup&quot;, &quot;clwup&quot;, &quot;cliup&quot;, &quot;waen&quot;, &quot;tke&quot;, &quot;lmix&quot;], &quot;period&quot; =&gt; &quot;10mins&quot;), Dict(&quot;short_name&quot; =&gt; [&quot;husra&quot;, &quot;hussn&quot;], &quot;period&quot; =&gt; &quot;10mins&quot;)];
+config_dict[&quot;edmfx_detr_model&quot;] = &quot;Generalized&quot;;
+config_dict[&quot;rad&quot;] = &quot;DYCOMS&quot;;
+
+config = CA.AtmosConfig(config_dict);
+
+include(&quot;examples/hybrid/driver.jl&quot;)
+
+
+### Buildkite job `prognostic_edmfx_gabls_column`
+
+using Revise; import ClimaAtmos as CA;
+
+config_dict = Dict();
+config_dict[&quot;edmf_coriolis&quot;] = &quot;GABLS&quot;;
+config_dict[&quot;initial_condition&quot;] = &quot;GABLS&quot;;
+config_dict[&quot;implicit_diffusion&quot;] = true;
+config_dict[&quot;edmfx_entr_model&quot;] = &quot;Generalized&quot;;
+config_dict[&quot;approximate_linear_solve_iters&quot;] = 2;
+config_dict[&quot;edmfx_sgs_mass_flux&quot;] = true;
+config_dict[&quot;edmfx_upwinding&quot;] = &quot;first_order&quot;;
+config_dict[&quot;prognostic_tke&quot;] = true;
+config_dict[&quot;surface_setup&quot;] = &quot;GABLS&quot;;
+config_dict[&quot;hyperdiff&quot;] = false;
+config_dict[&quot;z_elem&quot;] = 8;
+config_dict[&quot;dt&quot;] = &quot;10secs&quot;;
+config_dict[&quot;perturb_initstate&quot;] = false;
+config_dict[&quot;implicit_sgs_advection&quot;] = false;
+config_dict[&quot;t_end&quot;] = &quot;9hours&quot;;
+config_dict[&quot;edmfx_sgs_diffusive_flux&quot;] = true;
+config_dict[&quot;turbconv&quot;] = &quot;prognostic_edmfx&quot;;
+config_dict[&quot;y_elem&quot;] = 2;
+config_dict[&quot;x_elem&quot;] = 2;
+config_dict[&quot;z_stretch&quot;] = false;
+config_dict[&quot;dt_save_state_to_disk&quot;] = &quot;30mins&quot;;
+config_dict[&quot;ode_algo&quot;] = &quot;ARS343&quot;;
+config_dict[&quot;config&quot;] = &quot;column&quot;;
+config_dict[&quot;netcdf_interpolation_num_points&quot;] = [2, 2, 8];
+config_dict[&quot;edmfx_nh_pressure&quot;] = true;
+config_dict[&quot;z_max&quot;] = 400;
+config_dict[&quot;toml&quot;] = [&quot;toml/prognostic_edmfx.toml&quot;];
+config_dict[&quot;diagnostics&quot;] = Dict{Any, Any}[Dict(&quot;short_name&quot; =&gt; [&quot;ts&quot;, &quot;ta&quot;, &quot;thetaa&quot;, &quot;ha&quot;, &quot;pfull&quot;, &quot;rhoa&quot;, &quot;ua&quot;, &quot;va&quot;, &quot;wa&quot;, &quot;hur&quot;, &quot;hus&quot;, &quot;cl&quot;, &quot;clw&quot;, &quot;cli&quot;, &quot;hussfc&quot;, &quot;evspsbl&quot;, &quot;pr&quot;], &quot;period&quot; =&gt; &quot;10mins&quot;), Dict(&quot;short_name&quot; =&gt; [&quot;arup&quot;, &quot;waup&quot;, &quot;taup&quot;, &quot;thetaaup&quot;, &quot;haup&quot;, &quot;husup&quot;, &quot;hurup&quot;, &quot;clwup&quot;, &quot;cliup&quot;, &quot;waen&quot;, &quot;taen&quot;, &quot;thetaaen&quot;, &quot;haen&quot;, &quot;husen&quot;, &quot;huren&quot;, &quot;clwen&quot;, &quot;clien&quot;, &quot;tke&quot;], &quot;period&quot; =&gt; &quot;10mins&quot;), Dict(&quot;short_name&quot; =&gt; [&quot;entr&quot;, &quot;detr&quot;, &quot;lmix&quot;, &quot;bgrad&quot;, &quot;strain&quot;, &quot;edt&quot;, &quot;evu&quot;], &quot;period&quot; =&gt; &quot;10mins&quot;)];
+config_dict[&quot;edmfx_detr_model&quot;] = &quot;Generalized&quot;;
+config_dict[&quot;edmfx_filter&quot;] = true;
+config_dict[&quot;moist&quot;] = &quot;equil&quot;;
+
+config = CA.AtmosConfig(config_dict);
+
+include(&quot;examples/hybrid/driver.jl&quot;)
+
+
+### Buildkite job `rcemipii_sphere_diagnostic_edmfx`
+
+using Revise; import ClimaAtmos as CA;
+
+config_dict = Dict();
+config_dict[&quot;moist&quot;] = &quot;equil&quot;;
+config_dict[&quot;rayleigh_sponge&quot;] = true;
+config_dict[&quot;implicit_diffusion&quot;] = true;
+config_dict[&quot;edmfx_entr_model&quot;] = &quot;Generalized&quot;;
+config_dict[&quot;approximate_linear_solve_iters&quot;] = 2;
+config_dict[&quot;edmfx_sgs_mass_flux&quot;] = true;
+config_dict[&quot;edmfx_upwinding&quot;] = &quot;first_order&quot;;
+config_dict[&quot;prognostic_tke&quot;] = true;
+config_dict[&quot;surface_setup&quot;] = &quot;DefaultMoninObukhov&quot;;
+config_dict[&quot;override_τ_precip&quot;] = false;
+config_dict[&quot;dt&quot;] = &quot;100secs&quot;;
+config_dict[&quot;t_end&quot;] = &quot;12hours&quot;;
+config_dict[&quot;insolation&quot;] = &quot;rcemipii&quot;;
+config_dict[&quot;edmfx_sgs_diffusive_flux&quot;] = true;
+config_dict[&quot;turbconv&quot;] = &quot;diagnostic_edmfx&quot;;
+config_dict[&quot;dt_save_state_to_disk&quot;] = &quot;12hours&quot;;
+config_dict[&quot;ode_algo&quot;] = &quot;ARS343&quot;;
+config_dict[&quot;edmfx_nh_pressure&quot;] = true;
+config_dict[&quot;precip_model&quot;] = &quot;0M&quot;;
+config_dict[&quot;toml&quot;] = [&quot;toml/rcemipii_diagnostic_edmfx_0M.toml&quot;];
+config_dict[&quot;edmfx_detr_model&quot;] = &quot;Generalized&quot;;
+config_dict[&quot;surface_temperature&quot;] = &quot;RCEMIPII&quot;;
+config_dict[&quot;rad&quot;] = &quot;allskywithclear&quot;;
+
+config = CA.AtmosConfig(config_dict);
+
+include(&quot;examples/hybrid/driver.jl&quot;)
+
+
+### Buildkite job `sphere_baroclinic_wave_conservation_ft64`
+
+using Revise; import ClimaAtmos as CA;
+
+config_dict = Dict();
+config_dict[&quot;check_conservation&quot;] = true;
+config_dict[&quot;initial_condition&quot;] = &quot;MoistBaroclinicWave&quot;;
+config_dict[&quot;dt_save_state_to_disk&quot;] = &quot;5days&quot;;
+config_dict[&quot;t_end&quot;] = &quot;5days&quot;;
+config_dict[&quot;dt&quot;] = &quot;400secs&quot;;
+config_dict[&quot;FLOAT_TYPE&quot;] = &quot;Float64&quot;;
+config_dict[&quot;moist&quot;] = &quot;equil&quot;;
+
+config = CA.AtmosConfig(config_dict);
+
+include(&quot;examples/hybrid/driver.jl&quot;)
+
+
+### Buildkite job `checkbounds`
+
+using Revise; import ClimaAtmos as CA;
+
+config_dict = Dict();
+config_dict[&quot;rad&quot;] = &quot;allskywithclear&quot;;
+config_dict[&quot;implicit_diffusion&quot;] = true;
+config_dict[&quot;approximate_linear_solve_iters&quot;] = 2;
+config_dict[&quot;z_elem&quot;] = 25;
+config_dict[&quot;dt&quot;] = &quot;1secs&quot;;
+config_dict[&quot;surface_setup&quot;] = &quot;DefaultExchangeCoefficients&quot;;
+config_dict[&quot;t_end&quot;] = &quot;10secs&quot;;
+config_dict[&quot;log_progress&quot;] = false;
+config_dict[&quot;vert_diff&quot;] = true;
+config_dict[&quot;h_elem&quot;] = 12;
+config_dict[&quot;forcing&quot;] = &quot;held_suarez&quot;;
+config_dict[&quot;apply_limiter&quot;] = true;
+config_dict[&quot;precip_model&quot;] = &quot;0M&quot;;
+config_dict[&quot;dt_save_to_sol&quot;] = &quot;Inf&quot;;
+config_dict[&quot;moist&quot;] = &quot;equil&quot;;
+
+config = CA.AtmosConfig(config_dict);
+
+include(&quot;examples/hybrid/driver.jl&quot;)
+
+
+### Buildkite job `diagnostic_edmfx_test_box`
+
+using Revise; import ClimaAtmos as CA;
+
+config_dict = Dict();
+config_dict[&quot;x_max&quot;] = 10000.0;
+config_dict[&quot;z_elem&quot;] = 45;
+config_dict[&quot;dt&quot;] = &quot;1secs&quot;;
+config_dict[&quot;t_end&quot;] = &quot;100secs&quot;;
+config_dict[&quot;y_max&quot;] = 10000.0;
+config_dict[&quot;y_elem&quot;] = 2;
+config_dict[&quot;turbconv&quot;] = &quot;diagnostic_edmfx&quot;;
+config_dict[&quot;x_elem&quot;] = 2;
+config_dict[&quot;dz_bottom&quot;] = 30.0;
+config_dict[&quot;dt_save_state_to_disk&quot;] = &quot;10secs&quot;;
+config_dict[&quot;ode_algo&quot;] = &quot;ARS343&quot;;
+config_dict[&quot;config&quot;] = &quot;box&quot;;
+config_dict[&quot;netcdf_interpolation_num_points&quot;] = [8, 8, 45];
+config_dict[&quot;toml&quot;] = [&quot;toml/diagnostic_edmfx.toml&quot;];
+config_dict[&quot;diagnostics&quot;] = Dict{Any, Any}[Dict(&quot;short_name&quot; =&gt; [&quot;ts&quot;, &quot;ta&quot;, &quot;thetaa&quot;, &quot;ha&quot;, &quot;pfull&quot;, &quot;rhoa&quot;, &quot;ua&quot;, &quot;va&quot;, &quot;wa&quot;, &quot;hur&quot;, &quot;hus&quot;, &quot;cl&quot;, &quot;clw&quot;, &quot;cli&quot;, &quot;hussfc&quot;, &quot;evspsbl&quot;, &quot;pr&quot;], &quot;period&quot; =&gt; &quot;10mins&quot;), Dict(&quot;short_name&quot; =&gt; [&quot;arup&quot;, &quot;waup&quot;, &quot;taup&quot;, &quot;thetaaup&quot;, &quot;haup&quot;, &quot;husup&quot;, &quot;hurup&quot;, &quot;clwup&quot;, &quot;cliup&quot;, &quot;waen&quot;, &quot;tke&quot;, &quot;lmix&quot;], &quot;period&quot; =&gt; &quot;10mins&quot;)];
+config_dict[&quot;moist&quot;] = &quot;equil&quot;;
+
+config = CA.AtmosConfig(config_dict);
+
+include(&quot;examples/hybrid/driver.jl&quot;)
+
+
+### Buildkite job `plane_agnesi_mountain_test_uniform`
+
+using Revise; import ClimaAtmos as CA;
+
+config_dict = Dict();
+config_dict[&quot;rayleigh_sponge&quot;] = true;
+config_dict[&quot;initial_condition&quot;] = &quot;AgnesiHProfile&quot;;
+config_dict[&quot;x_max&quot;] = 240000.0;
+config_dict[&quot;hyperdiff&quot;] = false;
+config_dict[&quot;z_elem&quot;] = 90;
+config_dict[&quot;dt&quot;] = &quot;1.5secs&quot;;
+config_dict[&quot;t_end&quot;] = &quot;14400.0secs&quot;;
+config_dict[&quot;x_elem&quot;] = 80;
+config_dict[&quot;z_stretch&quot;] = false;
+config_dict[&quot;dt_save_state_to_disk&quot;] = &quot;3600secs&quot;;
+config_dict[&quot;config&quot;] = &quot;plane&quot;;
+config_dict[&quot;z_max&quot;] = 25000.0;
+config_dict[&quot;topography&quot;] = &quot;Agnesi&quot;;
+config_dict[&quot;toml&quot;] = [&quot;toml/plane_agnesi_mountain_test_uniform.toml&quot;];
+config_dict[&quot;diagnostics&quot;] = Dict{Any, Any}[Dict(&quot;short_name&quot; =&gt; &quot;wa&quot;, &quot;period&quot; =&gt; &quot;4hours&quot;)];
+
+config = CA.AtmosConfig(config_dict);
+
+include(&quot;examples/hybrid/driver.jl&quot;)
+
+
+### Buildkite job `prognostic_edmfx_adv_test_column`
+
+using Revise; import ClimaAtmos as CA;
+
+config_dict = Dict();
+config_dict[&quot;initial_condition&quot;] = &quot;MoistAdiabaticProfileEDMFX&quot;;
+config_dict[&quot;z_elem&quot;] = 63;
+config_dict[&quot;edmfx_upwinding&quot;] = &quot;first_order&quot;;
+config_dict[&quot;dt&quot;] = &quot;10secs&quot;;
+config_dict[&quot;t_end&quot;] = &quot;3600secs&quot;;
+config_dict[&quot;turbconv&quot;] = &quot;prognostic_edmfx&quot;;
+config_dict[&quot;y_elem&quot;] = 2;
+config_dict[&quot;x_elem&quot;] = 2;
+config_dict[&quot;dz_bottom&quot;] = 30.0;
+config_dict[&quot;ode_algo&quot;] = &quot;ARS343&quot;;
+config_dict[&quot;dt_save_state_to_disk&quot;] = &quot;100secs&quot;;
+config_dict[&quot;config&quot;] = &quot;column&quot;;
+config_dict[&quot;netcdf_interpolation_num_points&quot;] = [2, 2, 63];
+config_dict[&quot;advection_test&quot;] = true;
+config_dict[&quot;FLOAT_TYPE&quot;] = &quot;Float64&quot;;
+config_dict[&quot;z_max&quot;] = 55000.0;
+config_dict[&quot;toml&quot;] = [&quot;toml/prognostic_edmfx_advection.toml&quot;];
+config_dict[&quot;diagnostics&quot;] = Dict{Any, Any}[Dict(&quot;short_name&quot; =&gt; [&quot;ts&quot;, &quot;ta&quot;, &quot;thetaa&quot;, &quot;ha&quot;, &quot;pfull&quot;, &quot;rhoa&quot;, &quot;ua&quot;, &quot;va&quot;, &quot;wa&quot;, &quot;hur&quot;, &quot;hus&quot;, &quot;cl&quot;, &quot;clw&quot;, &quot;cli&quot;, &quot;hussfc&quot;, &quot;evspsbl&quot;, &quot;pr&quot;], &quot;period&quot; =&gt; &quot;10mins&quot;), Dict(&quot;short_name&quot; =&gt; [&quot;arup&quot;, &quot;waup&quot;, &quot;taup&quot;, &quot;thetaaup&quot;, &quot;haup&quot;, &quot;husup&quot;, &quot;hurup&quot;, &quot;clwup&quot;, &quot;cliup&quot;, &quot;waen&quot;, &quot;taen&quot;, &quot;thetaaen&quot;, &quot;haen&quot;, &quot;husen&quot;, &quot;huren&quot;, &quot;clwen&quot;, &quot;clien&quot;, &quot;tke&quot;, &quot;lmix&quot;], &quot;period&quot; =&gt; &quot;10mins&quot;)];
+config_dict[&quot;moist&quot;] = &quot;equil&quot;;
+
+config = CA.AtmosConfig(config_dict);
+
+include(&quot;examples/hybrid/driver.jl&quot;)
+
+
+### Buildkite job `restart_mpi_baroclinic_wave_rhoe`
+
+using Revise; import ClimaAtmos as CA;
+
+config_dict = Dict();
+config_dict[&quot;initial_condition&quot;] = &quot;DryBaroclinicWave&quot;;
+config_dict[&quot;t_end&quot;] = &quot;20days&quot;;
+config_dict[&quot;restart_file&quot;] = &quot;mpi_make_restart/output_active/day5.0.hdf5&quot;;
+
+config = CA.AtmosConfig(config_dict);
+
+include(&quot;examples/hybrid/driver.jl&quot;)
+
+
+### Buildkite job `invalidations`
+
+using Revise; import ClimaAtmos as CA;
+
+config_dict = Dict();
+config_dict[&quot;rad&quot;] = &quot;allskywithclear&quot;;
+config_dict[&quot;implicit_diffusion&quot;] = true;
+config_dict[&quot;approximate_linear_solve_iters&quot;] = 2;
+config_dict[&quot;z_elem&quot;] = 25;
+config_dict[&quot;dt&quot;] = &quot;1secs&quot;;
+config_dict[&quot;surface_setup&quot;] = &quot;DefaultExchangeCoefficients&quot;;
+config_dict[&quot;t_end&quot;] = &quot;10secs&quot;;
+config_dict[&quot;log_progress&quot;] = false;
+config_dict[&quot;vert_diff&quot;] = true;
+config_dict[&quot;h_elem&quot;] = 12;
+config_dict[&quot;forcing&quot;] = &quot;held_suarez&quot;;
+config_dict[&quot;apply_limiter&quot;] = true;
+config_dict[&quot;precip_model&quot;] = &quot;0M&quot;;
+config_dict[&quot;dt_save_to_sol&quot;] = &quot;Inf&quot;;
+config_dict[&quot;moist&quot;] = &quot;equil&quot;;
+
+config = CA.AtmosConfig(config_dict);
+
+include(&quot;examples/hybrid/driver.jl&quot;)
+
+
+### Buildkite job `flame_perf_target_diagnostic_edmfx`
+
+using Revise; import ClimaAtmos as CA;
+
+config_dict = Dict();
+config_dict[&quot;rad&quot;] = &quot;allskywithclear&quot;;
+config_dict[&quot;implicit_diffusion&quot;] = true;
+config_dict[&quot;edmfx_entr_model&quot;] = &quot;Generalized&quot;;
+config_dict[&quot;approximate_linear_solve_iters&quot;] = 2;
+config_dict[&quot;z_elem&quot;] = 25;
+config_dict[&quot;dt&quot;] = &quot;1secs&quot;;
+config_dict[&quot;edmfx_upwinding&quot;] = &quot;first_order&quot;;
+config_dict[&quot;surface_setup&quot;] = &quot;DefaultExchangeCoefficients&quot;;
+config_dict[&quot;prognostic_tke&quot;] = true;
+config_dict[&quot;t_end&quot;] = &quot;10secs&quot;;
+config_dict[&quot;turbconv&quot;] = &quot;diagnostic_edmfx&quot;;
+config_dict[&quot;log_progress&quot;] = false;
+config_dict[&quot;vert_diff&quot;] = false;
+config_dict[&quot;h_elem&quot;] = 12;
+config_dict[&quot;dt_save_state_to_disk&quot;] = &quot;600secs&quot;;
+config_dict[&quot;forcing&quot;] = &quot;held_suarez&quot;;
+config_dict[&quot;edmfx_nh_pressure&quot;] = true;
+config_dict[&quot;apply_limiter&quot;] = true;
+config_dict[&quot;precip_model&quot;] = &quot;0M&quot;;
+config_dict[&quot;edmfx_detr_model&quot;] = &quot;Generalized&quot;;
+config_dict[&quot;dt_save_to_sol&quot;] = &quot;Inf&quot;;
+config_dict[&quot;moist&quot;] = &quot;equil&quot;;
+
+config = CA.AtmosConfig(config_dict);
+
+include(&quot;examples/hybrid/driver.jl&quot;)
+
+
+### Buildkite job `bm_perf_target_threaded`
+
+using Revise; import ClimaAtmos as CA;
+
+config_dict = Dict();
+config_dict[&quot;rad&quot;] = &quot;allskywithclear&quot;;
+config_dict[&quot;implicit_diffusion&quot;] = true;
+config_dict[&quot;approximate_linear_solve_iters&quot;] = 2;
+config_dict[&quot;z_elem&quot;] = 25;
+config_dict[&quot;dt&quot;] = &quot;1secs&quot;;
+config_dict[&quot;surface_setup&quot;] = &quot;DefaultExchangeCoefficients&quot;;
+config_dict[&quot;t_end&quot;] = &quot;10secs&quot;;
+config_dict[&quot;log_progress&quot;] = false;
+config_dict[&quot;vert_diff&quot;] = true;
+config_dict[&quot;h_elem&quot;] = 12;
+config_dict[&quot;forcing&quot;] = &quot;held_suarez&quot;;
+config_dict[&quot;apply_limiter&quot;] = true;
+config_dict[&quot;precip_model&quot;] = &quot;0M&quot;;
+config_dict[&quot;perf_summary&quot;] = true;
+config_dict[&quot;dt_save_to_sol&quot;] = &quot;Inf&quot;;
+config_dict[&quot;moist&quot;] = &quot;equil&quot;;
+
+config = CA.AtmosConfig(config_dict);
+
+include(&quot;examples/hybrid/driver.jl&quot;)
+
+
+### Buildkite job `plane_density_current_test`
+
+using Revise; import ClimaAtmos as CA;
+
+config_dict = Dict();
+config_dict[&quot;initial_condition&quot;] = &quot;DryDensityCurrentProfile&quot;;
+config_dict[&quot;output_default_diagnostics&quot;] = false;
+config_dict[&quot;x_max&quot;] = 51200.0;
+config_dict[&quot;z_elem&quot;] = 90;
+config_dict[&quot;dt&quot;] = &quot;0.3secs&quot;;
+config_dict[&quot;t_end&quot;] = &quot;900.0secs&quot;;
+config_dict[&quot;discrete_hydrostatic_balance&quot;] = true;
+config_dict[&quot;x_elem&quot;] = 80;
+config_dict[&quot;z_stretch&quot;] = false;
+config_dict[&quot;dt_save_state_to_disk&quot;] = &quot;3600secs&quot;;
+config_dict[&quot;config&quot;] = &quot;plane&quot;;
+config_dict[&quot;z_max&quot;] = 6400.0;
+config_dict[&quot;diagnostics&quot;] = Dict{Any, Any}[Dict(&quot;short_name&quot; =&gt; &quot;thetaa&quot;, &quot;period&quot; =&gt; &quot;900secs&quot;)];
+
+config = CA.AtmosConfig(config_dict);
+
+include(&quot;examples/hybrid/driver.jl&quot;)
+
+
+### Buildkite job `sphere_baroclinic_wave_conservation_source`
+
+using Revise; import ClimaAtmos as CA;
+
+config_dict = Dict();
+config_dict[&quot;moist&quot;] = &quot;equil&quot;;
+config_dict[&quot;initial_condition&quot;] = &quot;MoistBaroclinicWave&quot;;
+config_dict[&quot;dt&quot;] = &quot;400secs&quot;;
+config_dict[&quot;surface_setup&quot;] = &quot;DefaultMoninObukhov&quot;;
+config_dict[&quot;t_end&quot;] = &quot;10days&quot;;
+config_dict[&quot;vert_diff&quot;] = true;
+config_dict[&quot;dt_save_state_to_disk&quot;] = &quot;5days&quot;;
+config_dict[&quot;precip_model&quot;] = &quot;0M&quot;;
+config_dict[&quot;check_conservation&quot;] = true;
+config_dict[&quot;prognostic_surface&quot;] = &quot;PrognosticSurfaceTemperature&quot;;
+config_dict[&quot;rad&quot;] = &quot;clearsky&quot;;
+
+config = CA.AtmosConfig(config_dict);
+
+include(&quot;examples/hybrid/driver.jl&quot;)
+
+
+### Buildkite job `les_isdac_box`
+
+using Revise; import ClimaAtmos as CA;
+
+config_dict = Dict();
+config_dict[&quot;rad&quot;] = &quot;ISDAC&quot;;
+config_dict[&quot;rayleigh_sponge&quot;] = true;
+config_dict[&quot;initial_condition&quot;] = &quot;ISDAC&quot;;
+config_dict[&quot;implicit_diffusion&quot;] = false;
+config_dict[&quot;x_max&quot;] = 3200.0;
+config_dict[&quot;approximate_linear_solve_iters&quot;] = 2;
+config_dict[&quot;hyperdiff&quot;] = &quot;false&quot;;
+config_dict[&quot;z_elem&quot;] = 15;
+config_dict[&quot;dt&quot;] = &quot;0.05secs&quot;;
+config_dict[&quot;surface_setup&quot;] = &quot;ISDAC&quot;;
+config_dict[&quot;smagorinsky_lilly&quot;] = true;
+config_dict[&quot;dt_cloud_fraction&quot;] = &quot;10mins&quot;;
+config_dict[&quot;external_forcing&quot;] = &quot;ISDAC&quot;;
+config_dict[&quot;t_end&quot;] = &quot;2mins&quot;;
+config_dict[&quot;y_max&quot;] = 3200.0;
+config_dict[&quot;y_elem&quot;] = 10;
+config_dict[&quot;x_elem&quot;] = 10;
+config_dict[&quot;z_stretch&quot;] = false;
+config_dict[&quot;ode_algo&quot;] = &quot;SSPKnoth&quot;;
+config_dict[&quot;c_smag&quot;] = 0.2;
+config_dict[&quot;subsidence&quot;] = &quot;ISDAC&quot;;
+config_dict[&quot;config&quot;] = &quot;box&quot;;
+config_dict[&quot;dt_save_state_to_disk&quot;] = &quot;1mins&quot;;
+config_dict[&quot;netcdf_interpolation_num_points&quot;] = [30, 30, 150];
+config_dict[&quot;z_max&quot;] = 2500.0;
+config_dict[&quot;apply_limiter&quot;] = false;
+config_dict[&quot;precip_model&quot;] = &quot;1M&quot;;
+config_dict[&quot;toml&quot;] = [&quot;toml/isdac_box.toml&quot;];
+config_dict[&quot;diagnostics&quot;] = Dict{Any, Any}[Dict(&quot;short_name&quot; =&gt; [&quot;ts&quot;, &quot;ta&quot;, &quot;thetaa&quot;, &quot;ha&quot;, &quot;pfull&quot;, &quot;rhoa&quot;, &quot;ua&quot;, &quot;va&quot;, &quot;wa&quot;, &quot;hur&quot;, &quot;hus&quot;, &quot;husra&quot;, &quot;cl&quot;, &quot;clw&quot;, &quot;cli&quot;, &quot;hussfc&quot;, &quot;evspsbl&quot;, &quot;hfes&quot;, &quot;pr&quot;], &quot;period&quot; =&gt; &quot;10mins&quot;), Dict(&quot;reduction_time&quot; =&gt; &quot;average&quot;, &quot;short_name&quot; =&gt; [&quot;ts&quot;, &quot;ta&quot;, &quot;thetaa&quot;, &quot;ha&quot;, &quot;pfull&quot;, &quot;rhoa&quot;, &quot;ua&quot;, &quot;va&quot;, &quot;wa&quot;, &quot;hur&quot;, &quot;hus&quot;, &quot;husra&quot;, &quot;cl&quot;, &quot;clw&quot;, &quot;cli&quot;, &quot;hussfc&quot;, &quot;evspsbl&quot;, &quot;hfes&quot;, &quot;pr&quot;], &quot;period&quot; =&gt; &quot;60mins&quot;)];
+config_dict[&quot;moist&quot;] = &quot;equil&quot;;
+
+config = CA.AtmosConfig(config_dict);
+
+include(&quot;examples/hybrid/driver.jl&quot;)
+
+
+### Buildkite job `longrun_aquaplanet_allsky_progedmf_diffonly_0M`
+
+using Revise; import ClimaAtmos as CA;
+
+config_dict = Dict();
+config_dict[&quot;rad&quot;] = &quot;allskywithclear&quot;;
+config_dict[&quot;rayleigh_sponge&quot;] = true;
+config_dict[&quot;implicit_diffusion&quot;] = true;
+config_dict[&quot;edmfx_entr_model&quot;] = &quot;Generalized&quot;;
+config_dict[&quot;approximate_linear_solve_iters&quot;] = 2;
+config_dict[&quot;z_elem&quot;] = 63;
+config_dict[&quot;dt&quot;] = &quot;120secs&quot;;
+config_dict[&quot;dt_rad&quot;] = &quot;1hours&quot;;
+config_dict[&quot;dt_cloud_fraction&quot;] = &quot;1hours&quot;;
+config_dict[&quot;surface_setup&quot;] = &quot;DefaultMoninObukhov&quot;;
+config_dict[&quot;prognostic_tke&quot;] = true;
+config_dict[&quot;edmfx_upwinding&quot;] = &quot;first_order&quot;;
+config_dict[&quot;edmfx_sgs_mass_flux&quot;] = false;
+config_dict[&quot;override_τ_precip&quot;] = false;
+config_dict[&quot;t_end&quot;] = &quot;240days&quot;;
+config_dict[&quot;edmfx_sgs_diffusive_flux&quot;] = true;
+config_dict[&quot;turbconv&quot;] = &quot;prognostic_edmfx&quot;;
+config_dict[&quot;dz_bottom&quot;] = 30.0;
+config_dict[&quot;h_elem&quot;] = 16;
+config_dict[&quot;ode_algo&quot;] = &quot;ARS343&quot;;
+config_dict[&quot;max_newton_iters_ode&quot;] = 3;
+config_dict[&quot;dt_save_state_to_disk&quot;] = &quot;30days&quot;;
+config_dict[&quot;edmfx_nh_pressure&quot;] = false;
+config_dict[&quot;z_max&quot;] = 65000.0;
+config_dict[&quot;precip_model&quot;] = &quot;0M&quot;;
+config_dict[&quot;toml&quot;] = [&quot;toml/longrun_aquaplanet_progedmf.toml&quot;];
+config_dict[&quot;viscous_sponge&quot;] = true;
+config_dict[&quot;edmfx_detr_model&quot;] = &quot;Generalized&quot;;
+config_dict[&quot;edmfx_filter&quot;] = true;
+config_dict[&quot;zero_tendency&quot;] = &quot;subgrid_scale&quot;;
+config_dict[&quot;moist&quot;] = &quot;equil&quot;;
+
+config = CA.AtmosConfig(config_dict);
+
+include(&quot;examples/hybrid/driver.jl&quot;)
+
+
+### Buildkite job `gpu_aquaplanet_dyamond`
+
+using Revise; import ClimaAtmos as CA;
+
+config_dict = Dict();
+config_dict[&quot;rad&quot;] = &quot;allskywithclear&quot;;
+config_dict[&quot;prescribed_aerosols&quot;] = [&quot;CB1&quot;, &quot;CB2&quot;, &quot;DST01&quot;, &quot;DST02&quot;, &quot;DST03&quot;, &quot;DST04&quot;, &quot;OC1&quot;, &quot;OC2&quot;, &quot;SO4&quot;, &quot;SOA&quot;, &quot;SSLT01&quot;, &quot;SSLT02&quot;, &quot;SSLT03&quot;, &quot;SSLT04&quot;];
+config_dict[&quot;rayleigh_sponge&quot;] = true;
+config_dict[&quot;implicit_diffusion&quot;] = true;
+config_dict[&quot;dt_rad&quot;] = &quot;1hours&quot;;
+config_dict[&quot;z_elem&quot;] = 63;
+config_dict[&quot;dt_cloud_fraction&quot;] = &quot;1hours&quot;;
+config_dict[&quot;approximate_linear_solve_iters&quot;] = 2;
+config_dict[&quot;surface_setup&quot;] = &quot;DefaultMoninObukhov&quot;;
+config_dict[&quot;dt&quot;] = &quot;90secs&quot;;
+config_dict[&quot;t_end&quot;] = &quot;8hours&quot;;
+config_dict[&quot;insolation&quot;] = &quot;timevarying&quot;;
+config_dict[&quot;dz_bottom&quot;] = 30.0;
+config_dict[&quot;vert_diff&quot;] = &quot;FriersonDiffusion&quot;;
+config_dict[&quot;h_elem&quot;] = 30;
+config_dict[&quot;dt_save_state_to_disk&quot;] = &quot;Inf&quot;;
+config_dict[&quot;z_max&quot;] = 55000.0;
+config_dict[&quot;prescribe_ozone&quot;] = true;
+config_dict[&quot;precip_model&quot;] = &quot;1M&quot;;
+config_dict[&quot;aerosol_radiation&quot;] = true;
+config_dict[&quot;toml&quot;] = [&quot;toml/longrun_aquaplanet.toml&quot;];
+config_dict[&quot;dt_save_to_sol&quot;] = &quot;Inf&quot;;
+config_dict[&quot;moist&quot;] = &quot;equil&quot;;
+
+config = CA.AtmosConfig(config_dict);
+
+include(&quot;examples/hybrid/driver.jl&quot;)
+
+
+### Buildkite job `aquaplanet_rhoe_equil_clearsky_tvinsol_0M_slabocean_ft64`
+
+using Revise; import ClimaAtmos as CA;
+
+config_dict = Dict();
+config_dict[&quot;moist&quot;] = &quot;equil&quot;;
+config_dict[&quot;implicit_diffusion&quot;] = true;
+config_dict[&quot;approximate_linear_solve_iters&quot;] = 2;
+config_dict[&quot;dt_rad&quot;] = &quot;1hours&quot;;
+config_dict[&quot;surface_setup&quot;] = &quot;DefaultMoninObukhov&quot;;
+config_dict[&quot;t_end&quot;] = &quot;5days&quot;;
+config_dict[&quot;insolation&quot;] = &quot;timevarying&quot;;
+config_dict[&quot;vert_diff&quot;] = &quot;FriersonDiffusion&quot;;
+config_dict[&quot;bubble&quot;] = false;
+config_dict[&quot;dt_save_state_to_disk&quot;] = &quot;5days&quot;;
+config_dict[&quot;FLOAT_TYPE&quot;] = &quot;Float64&quot;;
+config_dict[&quot;precip_model&quot;] = &quot;0M&quot;;
+config_dict[&quot;check_conservation&quot;] = true;
+config_dict[&quot;prognostic_surface&quot;] = &quot;PrognosticSurfaceTemperature&quot;;
+config_dict[&quot;rad&quot;] = &quot;clearsky&quot;;
+
+config = CA.AtmosConfig(config_dict);
+
+include(&quot;examples/hybrid/driver.jl&quot;)
+
+
+### Buildkite job `sphere_zalesak_upwind_tracer_energy_ssp_baroclinic_wave_rhoe_equilmoist`
+
+using Revise; import ClimaAtmos as CA;
+
+config_dict = Dict();
+config_dict[&quot;initial_condition&quot;] = &quot;MoistBaroclinicWave&quot;;
+config_dict[&quot;dt&quot;] = &quot;400secs&quot;;
+config_dict[&quot;tracer_upwinding&quot;] = &quot;zalesak&quot;;
+config_dict[&quot;t_end&quot;] = &quot;5days&quot;;
+config_dict[&quot;dt_save_state_to_disk&quot;] = &quot;5days&quot;;
+config_dict[&quot;max_newton_iters_ode&quot;] = 4;
+config_dict[&quot;ode_algo&quot;] = &quot;SSP333&quot;;
+config_dict[&quot;energy_upwinding&quot;] = &quot;zalesak&quot;;
+config_dict[&quot;apply_limiter&quot;] = true;
+config_dict[&quot;precip_model&quot;] = &quot;0M&quot;;
+config_dict[&quot;moist&quot;] = &quot;equil&quot;;
+
+config = CA.AtmosConfig(config_dict);
+
+include(&quot;examples/hybrid/driver.jl&quot;)
+
+
+### Buildkite job `longrun_aquaplanet_allsky_0M_earth`
+
+using Revise; import ClimaAtmos as CA;
+
+config_dict = Dict();
+config_dict[&quot;rad&quot;] = &quot;allskywithclear&quot;;
+config_dict[&quot;rayleigh_sponge&quot;] = true;
+config_dict[&quot;topo_smoothing&quot;] = true;
+config_dict[&quot;implicit_diffusion&quot;] = true;
+config_dict[&quot;approximate_linear_solve_iters&quot;] = 2;
+config_dict[&quot;z_elem&quot;] = 63;
+config_dict[&quot;dt&quot;] = &quot;120secs&quot;;
+config_dict[&quot;dt_rad&quot;] = &quot;1hours&quot;;
+config_dict[&quot;dt_cloud_fraction&quot;] = &quot;1hours&quot;;
+config_dict[&quot;surface_setup&quot;] = &quot;DefaultMoninObukhov&quot;;
+config_dict[&quot;t_end&quot;] = &quot;360days&quot;;
+config_dict[&quot;dz_bottom&quot;] = 30.0;
+config_dict[&quot;vert_diff&quot;] = &quot;FriersonDiffusion&quot;;
+config_dict[&quot;h_elem&quot;] = 16;
+config_dict[&quot;dt_save_state_to_disk&quot;] = &quot;30days&quot;;
+config_dict[&quot;z_max&quot;] = 65000.0;
+config_dict[&quot;topography&quot;] = &quot;Earth&quot;;
+config_dict[&quot;precip_model&quot;] = &quot;0M&quot;;
+config_dict[&quot;toml&quot;] = [&quot;toml/longrun_aquaplanet.toml&quot;];
+config_dict[&quot;viscous_sponge&quot;] = true;
+config_dict[&quot;moist&quot;] = &quot;equil&quot;;
+
+config = CA.AtmosConfig(config_dict);
+
+include(&quot;examples/hybrid/driver.jl&quot;)
+
+
+### Buildkite job `prognostic_edmfx_trmm_column_0M`
+
+using Revise; import ClimaAtmos as CA;
+
+config_dict = Dict();
+config_dict[&quot;moist&quot;] = &quot;equil&quot;;
+config_dict[&quot;cloud_model&quot;] = &quot;quadrature_sgs&quot;;
+config_dict[&quot;initial_condition&quot;] = &quot;TRMM_LBA&quot;;
+config_dict[&quot;implicit_diffusion&quot;] = true;
+config_dict[&quot;edmfx_entr_model&quot;] = &quot;Generalized&quot;;
+config_dict[&quot;approximate_linear_solve_iters&quot;] = 2;
+config_dict[&quot;edmfx_sgs_mass_flux&quot;] = true;
+config_dict[&quot;edmfx_upwinding&quot;] = &quot;first_order&quot;;
+config_dict[&quot;prognostic_tke&quot;] = true;
+config_dict[&quot;surface_setup&quot;] = &quot;TRMM_LBA&quot;;
+config_dict[&quot;z_elem&quot;] = 82;
+config_dict[&quot;dt&quot;] = &quot;10secs&quot;;
+config_dict[&quot;implicit_sgs_advection&quot;] = false;
+config_dict[&quot;t_end&quot;] = &quot;6hours&quot;;
+config_dict[&quot;edmfx_sgs_diffusive_flux&quot;] = true;
+config_dict[&quot;turbconv&quot;] = &quot;prognostic_edmfx&quot;;
+config_dict[&quot;y_elem&quot;] = 2;
+config_dict[&quot;x_elem&quot;] = 2;
+config_dict[&quot;z_stretch&quot;] = false;
+config_dict[&quot;dt_save_state_to_disk&quot;] = &quot;10mins&quot;;
+config_dict[&quot;ode_algo&quot;] = &quot;ARS343&quot;;
+config_dict[&quot;config&quot;] = &quot;column&quot;;
+config_dict[&quot;netcdf_interpolation_num_points&quot;] = [8, 8, 82];
+config_dict[&quot;edmfx_nh_pressure&quot;] = true;
+config_dict[&quot;FLOAT_TYPE&quot;] = &quot;Float64&quot;;
+config_dict[&quot;z_max&quot;] = 16400;
+config_dict[&quot;apply_limiter&quot;] = false;
+config_dict[&quot;precip_model&quot;] = &quot;0M&quot;;
+config_dict[&quot;toml&quot;] = [&quot;toml/prognostic_edmfx.toml&quot;];
+config_dict[&quot;call_cloud_diagnostics_per_stage&quot;] = true;
+config_dict[&quot;diagnostics&quot;] = Dict{Any, Any}[Dict(&quot;short_name&quot; =&gt; [&quot;ts&quot;, &quot;ta&quot;, &quot;thetaa&quot;, &quot;ha&quot;, &quot;pfull&quot;, &quot;rhoa&quot;, &quot;ua&quot;, &quot;va&quot;, &quot;wa&quot;, &quot;hur&quot;, &quot;hus&quot;, &quot;cl&quot;, &quot;clw&quot;, &quot;cli&quot;, &quot;hussfc&quot;, &quot;evspsbl&quot;, &quot;pr&quot;], &quot;period&quot; =&gt; &quot;10mins&quot;), Dict(&quot;short_name&quot; =&gt; [&quot;arup&quot;, &quot;waup&quot;, &quot;taup&quot;, &quot;thetaaup&quot;, &quot;haup&quot;, &quot;husup&quot;, &quot;hurup&quot;, &quot;clwup&quot;, &quot;cliup&quot;, &quot;waen&quot;, &quot;taen&quot;, &quot;thetaaen&quot;, &quot;haen&quot;, &quot;husen&quot;, &quot;huren&quot;, &quot;clwen&quot;, &quot;clien&quot;, &quot;tke&quot;, &quot;lmix&quot;], &quot;period&quot; =&gt; &quot;10mins&quot;)];
+config_dict[&quot;edmfx_detr_model&quot;] = &quot;Generalized&quot;;
+config_dict[&quot;edmfx_filter&quot;] = true;
+config_dict[&quot;rad&quot;] = &quot;TRMM_LBA&quot;;
+
+config = CA.AtmosConfig(config_dict);
+
+include(&quot;examples/hybrid/driver.jl&quot;)
+
+
+### Buildkite job `box_density_current_test`
+
+using Revise; import ClimaAtmos as CA;
+
+config_dict = Dict();
+config_dict[&quot;initial_condition&quot;] = &quot;DryDensityCurrentProfile&quot;;
+config_dict[&quot;x_max&quot;] = 51200.0;
+config_dict[&quot;z_elem&quot;] = 45;
+config_dict[&quot;dt&quot;] = &quot;0.1secs&quot;;
+config_dict[&quot;t_end&quot;] = &quot;10.0secs&quot;;
+config_dict[&quot;discrete_hydrostatic_balance&quot;] = true;
+config_dict[&quot;y_max&quot;] = 6400.0;
+config_dict[&quot;y_elem&quot;] = 15;
+config_dict[&quot;x_elem&quot;] = 45;
+config_dict[&quot;z_stretch&quot;] = false;
+config_dict[&quot;dt_save_state_to_disk&quot;] = &quot;10secs&quot;;
+config_dict[&quot;config&quot;] = &quot;box&quot;;
+config_dict[&quot;z_max&quot;] = 6400.0;
+config_dict[&quot;diagnostics&quot;] = Dict{Any, Any}[Dict(&quot;short_name&quot; =&gt; &quot;thetaa&quot;, &quot;period&quot; =&gt; &quot;10secs&quot;)];
+
+config = CA.AtmosConfig(config_dict);
+
+include(&quot;examples/hybrid/driver.jl&quot;)
+
+
+### Buildkite job `diagnostic_edmfx_aquaplanet_gpu`
+
+using Revise; import ClimaAtmos as CA;
+
+config_dict = Dict();
+config_dict[&quot;moist&quot;] = &quot;equil&quot;;
+config_dict[&quot;cloud_model&quot;] = &quot;quadrature_sgs&quot;;
+config_dict[&quot;implicit_diffusion&quot;] = true;
+config_dict[&quot;edmfx_entr_model&quot;] = &quot;Generalized&quot;;
+config_dict[&quot;approximate_linear_solve_iters&quot;] = 2;
+config_dict[&quot;z_elem&quot;] = 31;
+config_dict[&quot;edmfx_upwinding&quot;] = &quot;first_order&quot;;
+config_dict[&quot;prognostic_tke&quot;] = true;
+config_dict[&quot;surface_setup&quot;] = &quot;DefaultMoninObukhov&quot;;
+config_dict[&quot;edmfx_sgs_mass_flux&quot;] = true;
+config_dict[&quot;dt&quot;] = &quot;120secs&quot;;
+config_dict[&quot;t_end&quot;] = &quot;12hours&quot;;
+config_dict[&quot;edmfx_sgs_diffusive_flux&quot;] = true;
+config_dict[&quot;turbconv&quot;] = &quot;diagnostic_edmfx&quot;;
+config_dict[&quot;dz_bottom&quot;] = 50.0;
+config_dict[&quot;ode_algo&quot;] = &quot;ARS343&quot;;
+config_dict[&quot;edmfx_nh_pressure&quot;] = true;
+config_dict[&quot;z_max&quot;] = 65000.0;
+config_dict[&quot;precip_model&quot;] = &quot;1M&quot;;
+config_dict[&quot;toml&quot;] = [&quot;toml/diagnostic_edmfx.toml&quot;];
+config_dict[&quot;edmfx_detr_model&quot;] = &quot;Generalized&quot;;
+config_dict[&quot;rad&quot;] = &quot;clearsky&quot;;
+
+config = CA.AtmosConfig(config_dict);
+
+include(&quot;examples/hybrid/driver.jl&quot;)
+
+
+### Buildkite job `diagnostic_edmfx_dycoms_rf01_box`
+
+using Revise; import ClimaAtmos as CA;
+
+config_dict = Dict();
+config_dict[&quot;edmf_coriolis&quot;] = &quot;DYCOMS_RF01&quot;;
+config_dict[&quot;moist&quot;] = &quot;equil&quot;;
+config_dict[&quot;cloud_model&quot;] = &quot;quadrature_sgs&quot;;
+config_dict[&quot;initial_condition&quot;] = &quot;DYCOMS_RF01&quot;;
+config_dict[&quot;implicit_diffusion&quot;] = true;
+config_dict[&quot;edmfx_entr_model&quot;] = &quot;Generalized&quot;;
+config_dict[&quot;approximate_linear_solve_iters&quot;] = 2;
+config_dict[&quot;edmfx_sgs_mass_flux&quot;] = true;
+config_dict[&quot;edmfx_upwinding&quot;] = &quot;first_order&quot;;
+config_dict[&quot;prognostic_tke&quot;] = true;
+config_dict[&quot;surface_setup&quot;] = &quot;DYCOMS_RF01&quot;;
+config_dict[&quot;x_max&quot;] = 1.0e8;
+config_dict[&quot;z_elem&quot;] = 30;
+config_dict[&quot;dt&quot;] = &quot;100secs&quot;;
+config_dict[&quot;t_end&quot;] = &quot;4hours&quot;;
+config_dict[&quot;edmfx_sgs_diffusive_flux&quot;] = true;
+config_dict[&quot;y_max&quot;] = 1.0e8;
+config_dict[&quot;turbconv&quot;] = &quot;diagnostic_edmfx&quot;;
+config_dict[&quot;y_elem&quot;] = 2;
+config_dict[&quot;x_elem&quot;] = 2;
+config_dict[&quot;z_stretch&quot;] = false;
+config_dict[&quot;dt_save_state_to_disk&quot;] = &quot;10mins&quot;;
+config_dict[&quot;ode_algo&quot;] = &quot;ARS343&quot;;
+config_dict[&quot;subsidence&quot;] = &quot;DYCOMS&quot;;
+config_dict[&quot;config&quot;] = &quot;box&quot;;
+config_dict[&quot;netcdf_interpolation_num_points&quot;] = [8, 8, 30];
+config_dict[&quot;edmfx_nh_pressure&quot;] = true;
+config_dict[&quot;z_max&quot;] = 1500;
+config_dict[&quot;toml&quot;] = [&quot;toml/diagnostic_edmfx.toml&quot;];
+config_dict[&quot;call_cloud_diagnostics_per_stage&quot;] = true;
+config_dict[&quot;diagnostics&quot;] = Dict{Any, Any}[Dict(&quot;short_name&quot; =&gt; [&quot;ts&quot;, &quot;ta&quot;, &quot;thetaa&quot;, &quot;ha&quot;, &quot;pfull&quot;, &quot;rhoa&quot;, &quot;ua&quot;, &quot;va&quot;, &quot;wa&quot;, &quot;hur&quot;, &quot;hus&quot;, &quot;cl&quot;, &quot;clw&quot;, &quot;cli&quot;, &quot;hussfc&quot;, &quot;evspsbl&quot;, &quot;pr&quot;], &quot;period&quot; =&gt; &quot;10mins&quot;), Dict(&quot;short_name&quot; =&gt; [&quot;arup&quot;, &quot;waup&quot;, &quot;taup&quot;, &quot;thetaaup&quot;, &quot;haup&quot;, &quot;husup&quot;, &quot;hurup&quot;, &quot;clwup&quot;, &quot;cliup&quot;, &quot;waen&quot;, &quot;tke&quot;, &quot;lmix&quot;], &quot;period&quot; =&gt; &quot;10mins&quot;)];
+config_dict[&quot;edmfx_detr_model&quot;] = &quot;Generalized&quot;;
+config_dict[&quot;rad&quot;] = &quot;DYCOMS&quot;;
+
+config = CA.AtmosConfig(config_dict);
+
+include(&quot;examples/hybrid/driver.jl&quot;)
+
+
+### Buildkite job `gpu_aquaplanet_dyamond_ws_4process`
+
+using Revise; import ClimaAtmos as CA;
+
+config_dict = Dict();
+config_dict[&quot;rad&quot;] = &quot;allskywithclear&quot;;
+config_dict[&quot;prescribed_aerosols&quot;] = [&quot;CB1&quot;, &quot;CB2&quot;, &quot;DST01&quot;, &quot;OC1&quot;, &quot;OC2&quot;, &quot;SO4&quot;, &quot;SSLT01&quot;];
+config_dict[&quot;rayleigh_sponge&quot;] = true;
+config_dict[&quot;output_default_diagnostics&quot;] = false;
+config_dict[&quot;implicit_diffusion&quot;] = true;
+config_dict[&quot;dt_rad&quot;] = &quot;1hours&quot;;
+config_dict[&quot;z_elem&quot;] = 63;
+config_dict[&quot;dt_cloud_fraction&quot;] = &quot;1hours&quot;;
+config_dict[&quot;approximate_linear_solve_iters&quot;] = 2;
+config_dict[&quot;surface_setup&quot;] = &quot;DefaultMoninObukhov&quot;;
+config_dict[&quot;dt&quot;] = &quot;90secs&quot;;
+config_dict[&quot;t_end&quot;] = &quot;1days&quot;;
+config_dict[&quot;insolation&quot;] = &quot;timevarying&quot;;
+config_dict[&quot;dz_bottom&quot;] = 30.0;
+config_dict[&quot;vert_diff&quot;] = &quot;FriersonDiffusion&quot;;
+config_dict[&quot;h_elem&quot;] = 60;
+config_dict[&quot;dt_save_state_to_disk&quot;] = &quot;Inf&quot;;
+config_dict[&quot;z_max&quot;] = 65000.0;
+config_dict[&quot;prescribe_ozone&quot;] = true;
+config_dict[&quot;precip_model&quot;] = &quot;1M&quot;;
+config_dict[&quot;aerosol_radiation&quot;] = true;
+config_dict[&quot;toml&quot;] = [&quot;toml/longrun_aquaplanet.toml&quot;];
+config_dict[&quot;viscous_sponge&quot;] = true;
+config_dict[&quot;dt_save_to_sol&quot;] = &quot;Inf&quot;;
+config_dict[&quot;moist&quot;] = &quot;equil&quot;;
+
+config = CA.AtmosConfig(config_dict);
+
+include(&quot;examples/hybrid/driver.jl&quot;)
+
+
+### Buildkite job `diagnostic_edmfx_trmm_box_0M`
+
+using Revise; import ClimaAtmos as CA;
+
+config_dict = Dict();
+config_dict[&quot;moist&quot;] = &quot;equil&quot;;
+config_dict[&quot;cloud_model&quot;] = &quot;quadrature_sgs&quot;;
+config_dict[&quot;initial_condition&quot;] = &quot;TRMM_LBA&quot;;
+config_dict[&quot;implicit_diffusion&quot;] = true;
+config_dict[&quot;edmfx_entr_model&quot;] = &quot;Generalized&quot;;
+config_dict[&quot;approximate_linear_solve_iters&quot;] = 2;
+config_dict[&quot;edmfx_sgs_mass_flux&quot;] = true;
+config_dict[&quot;edmfx_upwinding&quot;] = &quot;first_order&quot;;
+config_dict[&quot;prognostic_tke&quot;] = true;
+config_dict[&quot;surface_setup&quot;] = &quot;TRMM_LBA&quot;;
+config_dict[&quot;override_τ_precip&quot;] = false;
+config_dict[&quot;x_max&quot;] = 1.0e8;
+config_dict[&quot;z_elem&quot;] = 82;
+config_dict[&quot;dt&quot;] = &quot;200secs&quot;;
+config_dict[&quot;netcdf_output_at_levels&quot;] = true;
+config_dict[&quot;t_end&quot;] = &quot;6hours&quot;;
+config_dict[&quot;edmfx_sgs_diffusive_flux&quot;] = true;
+config_dict[&quot;y_max&quot;] = 1.0e8;
+config_dict[&quot;turbconv&quot;] = &quot;diagnostic_edmfx&quot;;
+config_dict[&quot;y_elem&quot;] = 2;
+config_dict[&quot;x_elem&quot;] = 2;
+config_dict[&quot;z_stretch&quot;] = false;
+config_dict[&quot;dt_save_state_to_disk&quot;] = &quot;10mins&quot;;
+config_dict[&quot;ode_algo&quot;] = &quot;ARS343&quot;;
+config_dict[&quot;config&quot;] = &quot;box&quot;;
+config_dict[&quot;netcdf_interpolation_num_points&quot;] = [8, 8, 82];
+config_dict[&quot;edmfx_nh_pressure&quot;] = true;
+config_dict[&quot;FLOAT_TYPE&quot;] = &quot;Float64&quot;;
+config_dict[&quot;z_max&quot;] = 16400;
+config_dict[&quot;precip_model&quot;] = &quot;0M&quot;;
+config_dict[&quot;toml&quot;] = [&quot;toml/diagnostic_edmfx_0M.toml&quot;];
+config_dict[&quot;call_cloud_diagnostics_per_stage&quot;] = true;
+config_dict[&quot;diagnostics&quot;] = Dict{Any, Any}[Dict(&quot;short_name&quot; =&gt; [&quot;ts&quot;, &quot;ta&quot;, &quot;thetaa&quot;, &quot;ha&quot;, &quot;pfull&quot;, &quot;rhoa&quot;, &quot;ua&quot;, &quot;va&quot;, &quot;wa&quot;, &quot;hur&quot;, &quot;hus&quot;, &quot;cl&quot;, &quot;clw&quot;, &quot;cli&quot;, &quot;hussfc&quot;, &quot;evspsbl&quot;, &quot;pr&quot;], &quot;period&quot; =&gt; &quot;10mins&quot;), Dict(&quot;short_name&quot; =&gt; [&quot;arup&quot;, &quot;waup&quot;, &quot;taup&quot;, &quot;thetaaup&quot;, &quot;haup&quot;, &quot;husup&quot;, &quot;hurup&quot;, &quot;clwup&quot;, &quot;cliup&quot;, &quot;waen&quot;, &quot;tke&quot;, &quot;lmix&quot;], &quot;period&quot; =&gt; &quot;10mins&quot;)];
+config_dict[&quot;edmfx_detr_model&quot;] = &quot;Generalized&quot;;
+config_dict[&quot;rad&quot;] = &quot;TRMM_LBA&quot;;
+
+config = CA.AtmosConfig(config_dict);
+
+include(&quot;examples/hybrid/driver.jl&quot;)
+
+
+### Buildkite job `prognostic_edmfx_gcmdriven_column`
+
+using Revise; import ClimaAtmos as CA;
+
+config_dict = Dict();
+config_dict[&quot;external_forcing_file&quot;] = &quot;artifact&quot;cfsite_gcm_forcing&quot;/HadGEM2-A_amip.2004-2008.07.nc&quot;;
+config_dict[&quot;external_forcing_type&quot;] = &quot;shallow&quot;;
+config_dict[&quot;rad&quot;] = &quot;allskywithclear&quot;;
+config_dict[&quot;rayleigh_sponge&quot;] = true;
+config_dict[&quot;initial_condition&quot;] = &quot;GCM&quot;;
+config_dict[&quot;cloud_model&quot;] = &quot;quadrature_sgs&quot;;
+config_dict[&quot;implicit_diffusion&quot;] = true;
+config_dict[&quot;edmfx_entr_model&quot;] = &quot;Generalized&quot;;
+config_dict[&quot;approximate_linear_solve_iters&quot;] = 2;
+config_dict[&quot;edmfx_sgs_mass_flux&quot;] = true;
+config_dict[&quot;edmfx_upwinding&quot;] = &quot;first_order&quot;;
+config_dict[&quot;prognostic_tke&quot;] = true;
+config_dict[&quot;surface_setup&quot;] = &quot;GCM&quot;;
+config_dict[&quot;z_elem&quot;] = 60;
+config_dict[&quot;perturb_initstate&quot;] = false;
+config_dict[&quot;dt&quot;] = &quot;10secs&quot;;
+config_dict[&quot;dt_rad&quot;] = &quot;30mins&quot;;
+config_dict[&quot;implicit_sgs_advection&quot;] = false;
+config_dict[&quot;external_forcing&quot;] = &quot;GCM&quot;;
+config_dict[&quot;netcdf_output_at_levels&quot;] = true;
+config_dict[&quot;output_default_diagnostics&quot;] = false;
+config_dict[&quot;t_end&quot;] = &quot;6hours&quot;;
+config_dict[&quot;cfsite_number&quot;] = &quot;site23&quot;;
+config_dict[&quot;insolation&quot;] = &quot;gcmdriven&quot;;
+config_dict[&quot;edmfx_sgs_diffusive_flux&quot;] = true;
+config_dict[&quot;turbconv&quot;] = &quot;prognostic_edmfx&quot;;
+config_dict[&quot;z_stretch&quot;] = true;
+config_dict[&quot;dz_bottom&quot;] = 30;
+config_dict[&quot;dt_save_state_to_disk&quot;] = &quot;6hours&quot;;
+config_dict[&quot;ode_algo&quot;] = &quot;ARS343&quot;;
+config_dict[&quot;config&quot;] = &quot;column&quot;;
+config_dict[&quot;netcdf_interpolation_num_points&quot;] = [2, 2, 60];
+config_dict[&quot;edmfx_nh_pressure&quot;] = true;
+config_dict[&quot;z_max&quot;] = 40000.0;
+config_dict[&quot;toml&quot;] = [&quot;toml/prognostic_edmfx_gcmdriven.toml&quot;];
+config_dict[&quot;call_cloud_diagnostics_per_stage&quot;] = true;
+config_dict[&quot;diagnostics&quot;] = Dict{Any, Any}[Dict(&quot;short_name&quot; =&gt; [&quot;ts&quot;, &quot;ta&quot;, &quot;thetaa&quot;, &quot;ha&quot;, &quot;pfull&quot;, &quot;rhoa&quot;, &quot;ua&quot;, &quot;va&quot;, &quot;wa&quot;, &quot;hur&quot;, &quot;hus&quot;, &quot;cl&quot;, &quot;clw&quot;, &quot;cli&quot;, &quot;hussfc&quot;, &quot;evspsbl&quot;, &quot;pr&quot;], &quot;period&quot; =&gt; &quot;10mins&quot;), Dict(&quot;short_name&quot; =&gt; [&quot;arup&quot;, &quot;waup&quot;, &quot;taup&quot;, &quot;thetaaup&quot;, &quot;haup&quot;, &quot;husup&quot;, &quot;hurup&quot;, &quot;clwup&quot;, &quot;cliup&quot;, &quot;waen&quot;, &quot;taen&quot;, &quot;thetaaen&quot;, &quot;haen&quot;, &quot;husen&quot;, &quot;huren&quot;, &quot;clwen&quot;, &quot;clien&quot;, &quot;tke&quot;], &quot;period&quot; =&gt; &quot;10mins&quot;), Dict(&quot;short_name&quot; =&gt; [&quot;entr&quot;, &quot;detr&quot;, &quot;lmix&quot;, &quot;bgrad&quot;, &quot;strain&quot;, &quot;edt&quot;, &quot;evu&quot;], &quot;period&quot; =&gt; &quot;10mins&quot;), Dict(&quot;short_name&quot; =&gt; [&quot;rlut&quot;, &quot;rlutcs&quot;, &quot;rsut&quot;, &quot;rsutcs&quot;, &quot;clwvi&quot;, &quot;lwp&quot;, &quot;clivi&quot;, &quot;dsevi&quot;, &quot;clvi&quot;, &quot;prw&quot;, &quot;hurvi&quot;, &quot;husv&quot;], &quot;period&quot; =&gt; &quot;10mins&quot;), Dict(&quot;reduction_time&quot; =&gt; &quot;max&quot;, &quot;short_name&quot; =&gt; &quot;tke&quot;, &quot;period&quot; =&gt; &quot;10mins&quot;)];
+config_dict[&quot;edmfx_detr_model&quot;] = &quot;Generalized&quot;;
+config_dict[&quot;edmfx_filter&quot;] = true;
+config_dict[&quot;moist&quot;] = &quot;equil&quot;;
+
+config = CA.AtmosConfig(config_dict);
+
+include(&quot;examples/hybrid/driver.jl&quot;)
+
+
+### Buildkite job `single_column_precipitation_test`
+
+using Revise; import ClimaAtmos as CA;
+
+config_dict = Dict();
+config_dict[&quot;cloud_model&quot;] = &quot;grid_scale&quot;;
+config_dict[&quot;initial_condition&quot;] = &quot;PrecipitatingColumn&quot;;
+config_dict[&quot;implicit_diffusion&quot;] = true;
+config_dict[&quot;approximate_linear_solve_iters&quot;] = 2;
+config_dict[&quot;z_elem&quot;] = 200;
+config_dict[&quot;dt&quot;] = &quot;10secs&quot;;
+config_dict[&quot;dt_cloud_fraction&quot;] = &quot;60secs&quot;;
+config_dict[&quot;surface_setup&quot;] = &quot;DefaultMoninObukhov&quot;;
+config_dict[&quot;t_end&quot;] = &quot;1500secs&quot;;
+config_dict[&quot;z_stretch&quot;] = false;
+config_dict[&quot;vert_diff&quot;] = &quot;FriersonDiffusion&quot;;
+config_dict[&quot;dt_save_state_to_disk&quot;] = &quot;500secs&quot;;
+config_dict[&quot;config&quot;] = &quot;column&quot;;
+config_dict[&quot;reproducibility_test&quot;] = false;
+config_dict[&quot;z_max&quot;] = 10000.0;
+config_dict[&quot;precip_model&quot;] = &quot;1M&quot;;
+config_dict[&quot;toml&quot;] = [&quot;toml/single_column_precipitation_test.toml&quot;];
+config_dict[&quot;diagnostics&quot;] = Dict{Any, Any}[Dict(&quot;short_name&quot; =&gt; [&quot;hus&quot;, &quot;clw&quot;, &quot;cli&quot;, &quot;husra&quot;, &quot;hussn&quot;, &quot;ta&quot;, &quot;wa&quot;], &quot;period&quot; =&gt; &quot;500secs&quot;), Dict(&quot;short_name&quot; =&gt; [&quot;pr&quot;], &quot;period&quot; =&gt; &quot;10secs&quot;)];
+config_dict[&quot;moist&quot;] = &quot;nonequil&quot;;
+
+config = CA.AtmosConfig(config_dict);
+
+include(&quot;examples/hybrid/driver.jl&quot;)
+
+
+### Buildkite job `sphere_ssp_baroclinic_wave_rhoe_equilmoist_earth`
+
+using Revise; import ClimaAtmos as CA;
+
+config_dict = Dict();
+config_dict[&quot;rayleigh_sponge&quot;] = true;
+config_dict[&quot;topo_smoothing&quot;] = true;
+config_dict[&quot;initial_condition&quot;] = &quot;MoistBaroclinicWave&quot;;
+config_dict[&quot;dt&quot;] = &quot;450secs&quot;;
+config_dict[&quot;t_end&quot;] = &quot;450secs&quot;;
+config_dict[&quot;dt_save_state_to_disk&quot;] = &quot;1days&quot;;
+config_dict[&quot;ode_algo&quot;] = &quot;SSP333&quot;;
+config_dict[&quot;apply_limiter&quot;] = true;
+config_dict[&quot;precip_model&quot;] = &quot;0M&quot;;
+config_dict[&quot;topography&quot;] = &quot;Earth&quot;;
+config_dict[&quot;moist&quot;] = &quot;equil&quot;;
+
+config = CA.AtmosConfig(config_dict);
+
+include(&quot;examples/hybrid/driver.jl&quot;)
+
+
+### Buildkite job `sphere_baroclinic_wave_rhoe_equilmoist`
+
+using Revise; import ClimaAtmos as CA;
+
+config_dict = Dict();
+config_dict[&quot;precip_model&quot;] = &quot;0M&quot;;
+config_dict[&quot;dt_save_state_to_disk&quot;] = &quot;2days&quot;;
+config_dict[&quot;initial_condition&quot;] = &quot;MoistBaroclinicWave&quot;;
+config_dict[&quot;t_end&quot;] = &quot;10days&quot;;
+config_dict[&quot;diagnostics&quot;] = Dict{Any, Any}[Dict(&quot;short_name&quot; =&gt; [&quot;pfull&quot;, &quot;wa&quot;, &quot;va&quot;, &quot;rv&quot;, &quot;hus&quot;, &quot;ke&quot;], &quot;period&quot; =&gt; &quot;1days&quot;)];
+config_dict[&quot;dt&quot;] = &quot;450secs&quot;;
+config_dict[&quot;reproducibility_test&quot;] = true;
+config_dict[&quot;moist&quot;] = &quot;equil&quot;;
+
+config = CA.AtmosConfig(config_dict);
+
+include(&quot;examples/hybrid/driver.jl&quot;)
+
+
+### Buildkite job `longrun_moist_baroclinic_wave`
+
+using Revise; import ClimaAtmos as CA;
+
+config_dict = Dict();
+config_dict[&quot;dz_bottom&quot;] = 30.0;
+config_dict[&quot;precip_model&quot;] = &quot;0M&quot;;
+config_dict[&quot;h_elem&quot;] = 30;
+config_dict[&quot;initial_condition&quot;] = &quot;MoistBaroclinicWave&quot;;
+config_dict[&quot;dt_save_state_to_disk&quot;] = &quot;10days&quot;;
+config_dict[&quot;t_end&quot;] = &quot;120days&quot;;
+config_dict[&quot;z_elem&quot;] = 63;
+config_dict[&quot;dt&quot;] = &quot;90secs&quot;;
+config_dict[&quot;diagnostics&quot;] = Dict{Any, Any}[Dict(&quot;short_name&quot; =&gt; [&quot;pfull&quot;, &quot;wa&quot;, &quot;va&quot;, &quot;rv&quot;, &quot;hus&quot;, &quot;ke&quot;], &quot;period&quot; =&gt; &quot;1days&quot;)];
+config_dict[&quot;moist&quot;] = &quot;equil&quot;;
+
+config = CA.AtmosConfig(config_dict);
+
+include(&quot;examples/hybrid/driver.jl&quot;)
+
+
+### Buildkite job `longrun_moist_held_suarez`
+
+using Revise; import ClimaAtmos as CA;
+
+config_dict = Dict();
+config_dict[&quot;rayleigh_sponge&quot;] = true;
+config_dict[&quot;z_elem&quot;] = 63;
+config_dict[&quot;dt&quot;] = &quot;90secs&quot;;
+config_dict[&quot;t_end&quot;] = &quot;360days&quot;;
+config_dict[&quot;dz_bottom&quot;] = 30.0;
+config_dict[&quot;vert_diff&quot;] = true;
+config_dict[&quot;h_elem&quot;] = 30;
+config_dict[&quot;dt_save_state_to_disk&quot;] = &quot;10days&quot;;
+config_dict[&quot;forcing&quot;] = &quot;held_suarez&quot;;
+config_dict[&quot;z_max&quot;] = 55000.0;
+config_dict[&quot;precip_model&quot;] = &quot;0M&quot;;
+config_dict[&quot;toml&quot;] = [&quot;toml/longrun_held_suarez.toml&quot;];
+config_dict[&quot;moist&quot;] = &quot;equil&quot;;
+
+config = CA.AtmosConfig(config_dict);
+
+include(&quot;examples/hybrid/driver.jl&quot;)
+
+
+### Buildkite job `sphere_held_suarez_rhoe_hightop`
+
+using Revise; import ClimaAtmos as CA;
+
+config_dict = Dict();
+config_dict[&quot;dz_bottom&quot;] = 50.0;
+config_dict[&quot;deep_atmosphere&quot;] = true;
+config_dict[&quot;rayleigh_sponge&quot;] = true;
+config_dict[&quot;dt_save_state_to_disk&quot;] = &quot;4days&quot;;
+config_dict[&quot;t_end&quot;] = &quot;8days&quot;;
+config_dict[&quot;toml&quot;] = [&quot;toml/sphere_held_suarez.toml&quot;];
+config_dict[&quot;z_elem&quot;] = 31;
+config_dict[&quot;forcing&quot;] = &quot;held_suarez&quot;;
+config_dict[&quot;dt&quot;] = &quot;400secs&quot;;
+config_dict[&quot;z_max&quot;] = 55000.0;
+
+config = CA.AtmosConfig(config_dict);
+
+include(&quot;examples/hybrid/driver.jl&quot;)
+
+
+### Buildkite job `gpu_implicit_barowave`
+
+using Revise; import ClimaAtmos as CA;
+
+config_dict = Dict();
+config_dict[&quot;moist&quot;] = &quot;equil&quot;;
+config_dict[&quot;initial_condition&quot;] = &quot;DryBaroclinicWave&quot;;
+config_dict[&quot;implicit_diffusion&quot;] = true;
+config_dict[&quot;approximate_linear_solve_iters&quot;] = 2;
+config_dict[&quot;z_elem&quot;] = 25;
+config_dict[&quot;dt&quot;] = &quot;1secs&quot;;
+config_dict[&quot;surface_setup&quot;] = &quot;DefaultExchangeCoefficients&quot;;
+config_dict[&quot;t_end&quot;] = &quot;1mins&quot;;
+config_dict[&quot;log_progress&quot;] = false;
+config_dict[&quot;vert_diff&quot;] = true;
+config_dict[&quot;h_elem&quot;] = 12;
+config_dict[&quot;forcing&quot;] = &quot;held_suarez&quot;;
+config_dict[&quot;apply_limiter&quot;] = true;
+config_dict[&quot;precip_model&quot;] = &quot;0M&quot;;
+config_dict[&quot;dt_save_to_sol&quot;] = &quot;Inf&quot;;
+config_dict[&quot;rad&quot;] = &quot;allskywithclear&quot;;
+
+config = CA.AtmosConfig(config_dict);
+
+include(&quot;examples/hybrid/driver.jl&quot;)
+
+
+### Buildkite job `flame_perf_target_tracers`
+
+using Revise; import ClimaAtmos as CA;
+
+config_dict = Dict();
+config_dict[&quot;rad&quot;] = &quot;allskywithclear&quot;;
+config_dict[&quot;implicit_diffusion&quot;] = false;
+config_dict[&quot;approximate_linear_solve_iters&quot;] = 2;
+config_dict[&quot;z_elem&quot;] = 25;
+config_dict[&quot;dt&quot;] = &quot;1secs&quot;;
+config_dict[&quot;surface_setup&quot;] = &quot;DefaultExchangeCoefficients&quot;;
+config_dict[&quot;t_end&quot;] = &quot;10secs&quot;;
+config_dict[&quot;log_progress&quot;] = false;
+config_dict[&quot;vert_diff&quot;] = true;
+config_dict[&quot;h_elem&quot;] = 12;
+config_dict[&quot;forcing&quot;] = &quot;held_suarez&quot;;
+config_dict[&quot;apply_limiter&quot;] = true;
+config_dict[&quot;precip_model&quot;] = &quot;1M&quot;;
+config_dict[&quot;dt_save_to_sol&quot;] = &quot;Inf&quot;;
+config_dict[&quot;moist&quot;] = &quot;equil&quot;;
+
+config = CA.AtmosConfig(config_dict);
+
+include(&quot;examples/hybrid/driver.jl&quot;)
+
+
+### Buildkite job `flame_perf_target_callbacks`
+
+using Revise; import ClimaAtmos as CA;
+
+config_dict = Dict();
+config_dict[&quot;rad&quot;] = &quot;allskywithclear&quot;;
+config_dict[&quot;implicit_diffusion&quot;] = true;
+config_dict[&quot;approximate_linear_solve_iters&quot;] = 2;
+config_dict[&quot;z_elem&quot;] = 25;
+config_dict[&quot;dt&quot;] = &quot;1secs&quot;;
+config_dict[&quot;dt_rad&quot;] = &quot;1secs&quot;;
+config_dict[&quot;surface_setup&quot;] = &quot;DefaultExchangeCoefficients&quot;;
+config_dict[&quot;dt_cloud_fraction&quot;] = &quot;1secs&quot;;
+config_dict[&quot;t_end&quot;] = &quot;10secs&quot;;
+config_dict[&quot;log_progress&quot;] = false;
+config_dict[&quot;vert_diff&quot;] = true;
+config_dict[&quot;h_elem&quot;] = 12;
+config_dict[&quot;dt_save_state_to_disk&quot;] = &quot;1secs&quot;;
+config_dict[&quot;forcing&quot;] = &quot;held_suarez&quot;;
+config_dict[&quot;apply_limiter&quot;] = true;
+config_dict[&quot;precip_model&quot;] = &quot;0M&quot;;
+config_dict[&quot;dt_save_to_sol&quot;] = &quot;Inf&quot;;
+config_dict[&quot;moist&quot;] = &quot;equil&quot;;
+
+config = CA.AtmosConfig(config_dict);
+
+include(&quot;examples/hybrid/driver.jl&quot;)
+
+
+### Buildkite job `longrun_sphere_hydrostatic_balance_rhoe`
+
+using Revise; import ClimaAtmos as CA;
+
+config_dict = Dict();
+config_dict[&quot;dz_bottom&quot;] = 30.0;
+config_dict[&quot;h_elem&quot;] = 30;
+config_dict[&quot;dt_save_state_to_disk&quot;] = &quot;10days&quot;;
+config_dict[&quot;t_end&quot;] = &quot;360days&quot;;
+config_dict[&quot;discrete_hydrostatic_balance&quot;] = true;
+config_dict[&quot;z_elem&quot;] = 63;
+config_dict[&quot;dt&quot;] = &quot;90secs&quot;;
+config_dict[&quot;perturb_initstate&quot;] = false;
+config_dict[&quot;z_max&quot;] = 55000.0;
+
+config = CA.AtmosConfig(config_dict);
+
+include(&quot;examples/hybrid/driver.jl&quot;)
+
+
+### Buildkite job `single_column_radiative_equilibrium_allsky_idealized_clouds`
+
+using Revise; import ClimaAtmos as CA;
+
+config_dict = Dict();
+config_dict[&quot;initial_condition&quot;] = &quot;IsothermalProfile&quot;;
+config_dict[&quot;hyperdiff&quot;] = false;
+config_dict[&quot;z_elem&quot;] = 63;
+config_dict[&quot;dt&quot;] = &quot;3hours&quot;;
+config_dict[&quot;dt_rad&quot;] = &quot;3hours&quot;;
+config_dict[&quot;idealized_h2o&quot;] = true;
+config_dict[&quot;t_end&quot;] = &quot;654days&quot;;
+config_dict[&quot;insolation&quot;] = &quot;timevarying&quot;;
+config_dict[&quot;idealized_clouds&quot;] = true;
+config_dict[&quot;dz_bottom&quot;] = 30.0;
+config_dict[&quot;dt_save_state_to_disk&quot;] = &quot;100days&quot;;
+config_dict[&quot;config&quot;] = &quot;column&quot;;
+config_dict[&quot;z_max&quot;] = 65000.0;
+config_dict[&quot;diagnostics&quot;] = Dict{Any, Any}[Dict(&quot;reduction_time&quot; =&gt; &quot;average&quot;, &quot;short_name&quot; =&gt; &quot;rhoa&quot;, &quot;period&quot; =&gt; &quot;1months&quot;)];
+config_dict[&quot;dt_save_to_sol&quot;] = &quot;30hours&quot;;
+config_dict[&quot;rad&quot;] = &quot;allskywithclear&quot;;
+
+config = CA.AtmosConfig(config_dict);
+
+include(&quot;examples/hybrid/driver.jl&quot;)
+
+
+### Buildkite job `gpu_aquaplanet_dyamond_ss`
+
+using Revise; import ClimaAtmos as CA;
+
+config_dict = Dict();
+config_dict[&quot;rad&quot;] = &quot;allskywithclear&quot;;
+config_dict[&quot;prescribed_aerosols&quot;] = [&quot;CB1&quot;, &quot;CB2&quot;, &quot;DST01&quot;, &quot;OC1&quot;, &quot;OC2&quot;, &quot;SO4&quot;, &quot;SSLT01&quot;];
+config_dict[&quot;rayleigh_sponge&quot;] = true;
+config_dict[&quot;output_default_diagnostics&quot;] = false;
+config_dict[&quot;implicit_diffusion&quot;] = true;
+config_dict[&quot;dt_rad&quot;] = &quot;1hours&quot;;
+config_dict[&quot;z_elem&quot;] = 63;
+config_dict[&quot;dt_cloud_fraction&quot;] = &quot;1hours&quot;;
+config_dict[&quot;approximate_linear_solve_iters&quot;] = 2;
+config_dict[&quot;surface_setup&quot;] = &quot;DefaultMoninObukhov&quot;;
+config_dict[&quot;dt&quot;] = &quot;90secs&quot;;
+config_dict[&quot;t_end&quot;] = &quot;1days&quot;;
+config_dict[&quot;insolation&quot;] = &quot;timevarying&quot;;
+config_dict[&quot;dz_bottom&quot;] = 30.0;
+config_dict[&quot;vert_diff&quot;] = &quot;FriersonDiffusion&quot;;
+config_dict[&quot;h_elem&quot;] = 30;
+config_dict[&quot;dt_save_state_to_disk&quot;] = &quot;Inf&quot;;
+config_dict[&quot;z_max&quot;] = 65000.0;
+config_dict[&quot;prescribe_ozone&quot;] = true;
+config_dict[&quot;precip_model&quot;] = &quot;1M&quot;;
+config_dict[&quot;aerosol_radiation&quot;] = true;
+config_dict[&quot;toml&quot;] = [&quot;toml/longrun_aquaplanet.toml&quot;];
+config_dict[&quot;viscous_sponge&quot;] = true;
+config_dict[&quot;dt_save_to_sol&quot;] = &quot;Inf&quot;;
+config_dict[&quot;moist&quot;] = &quot;equil&quot;;
+
+config = CA.AtmosConfig(config_dict);
+
+include(&quot;examples/hybrid/driver.jl&quot;)
+
+
+### Buildkite job `central_cloud_diag_gpu_hs_rhoe_equil_55km_nz63_0M`
+
+using Revise; import ClimaAtmos as CA;
+
+config_dict = Dict();
+config_dict[&quot;rayleigh_sponge&quot;] = true;
+config_dict[&quot;output_default_diagnostics&quot;] = false;
+config_dict[&quot;z_elem&quot;] = 63;
+config_dict[&quot;dt&quot;] = &quot;150secs&quot;;
+config_dict[&quot;t_end&quot;] = &quot;2days&quot;;
+config_dict[&quot;dz_bottom&quot;] = 30.0;
+config_dict[&quot;vert_diff&quot;] = true;
+config_dict[&quot;h_elem&quot;] = 16;
+config_dict[&quot;dt_save_state_to_disk&quot;] = &quot;Inf&quot;;
+config_dict[&quot;forcing&quot;] = &quot;held_suarez&quot;;
+config_dict[&quot;z_max&quot;] = 55000.0;
+config_dict[&quot;precip_model&quot;] = &quot;0M&quot;;
+config_dict[&quot;toml&quot;] = [&quot;toml/longrun_aquaplanet.toml&quot;];
+config_dict[&quot;call_cloud_diagnostics_per_stage&quot;] = true;
+config_dict[&quot;dt_save_to_sol&quot;] = &quot;Inf&quot;;
+config_dict[&quot;moist&quot;] = &quot;equil&quot;;
+
+config = CA.AtmosConfig(config_dict);
+
+include(&quot;examples/hybrid/driver.jl&quot;)
+
+
+### Buildkite job `prognostic_edmfx_bomex_implicit_column`
+
+using Revise; import ClimaAtmos as CA;
+
+config_dict = Dict();
+config_dict[&quot;edmf_coriolis&quot;] = &quot;Bomex&quot;;
+config_dict[&quot;cloud_model&quot;] = &quot;quadrature_sgs&quot;;
+config_dict[&quot;initial_condition&quot;] = &quot;Bomex&quot;;
+config_dict[&quot;implicit_diffusion&quot;] = true;
+config_dict[&quot;edmfx_entr_model&quot;] = &quot;Generalized&quot;;
+config_dict[&quot;approximate_linear_solve_iters&quot;] = 2;
+config_dict[&quot;edmfx_sgs_mass_flux&quot;] = true;
+config_dict[&quot;edmfx_upwinding&quot;] = &quot;first_order&quot;;
+config_dict[&quot;prognostic_tke&quot;] = true;
+config_dict[&quot;surface_setup&quot;] = &quot;Bomex&quot;;
+config_dict[&quot;z_elem&quot;] = 60;
+config_dict[&quot;perturb_initstate&quot;] = false;
+config_dict[&quot;dt&quot;] = &quot;50secs&quot;;
+config_dict[&quot;implicit_sgs_advection&quot;] = true;
+config_dict[&quot;t_end&quot;] = &quot;6hours&quot;;
+config_dict[&quot;edmfx_sgs_diffusive_flux&quot;] = true;
+config_dict[&quot;turbconv&quot;] = &quot;prognostic_edmfx&quot;;
+config_dict[&quot;z_stretch&quot;] = false;
+config_dict[&quot;dt_save_state_to_disk&quot;] = &quot;10mins&quot;;
+config_dict[&quot;max_newton_iters_ode&quot;] = 3;
+config_dict[&quot;subsidence&quot;] = &quot;Bomex&quot;;
+config_dict[&quot;config&quot;] = &quot;column&quot;;
+config_dict[&quot;netcdf_interpolation_num_points&quot;] = [2, 2, 60];
+config_dict[&quot;edmfx_nh_pressure&quot;] = true;
+config_dict[&quot;ode_algo&quot;] = &quot;ARS343&quot;;
+config_dict[&quot;z_max&quot;] = 3000.0;
+config_dict[&quot;toml&quot;] = [&quot;toml/prognostic_edmfx_bomex.toml&quot;];
+config_dict[&quot;call_cloud_diagnostics_per_stage&quot;] = true;
+config_dict[&quot;diagnostics&quot;] = Dict{Any, Any}[Dict(&quot;short_name&quot; =&gt; [&quot;ts&quot;, &quot;ta&quot;, &quot;thetaa&quot;, &quot;ha&quot;, &quot;pfull&quot;, &quot;rhoa&quot;, &quot;ua&quot;, &quot;va&quot;, &quot;wa&quot;, &quot;hur&quot;, &quot;hus&quot;, &quot;cl&quot;, &quot;clw&quot;, &quot;cli&quot;, &quot;hussfc&quot;, &quot;evspsbl&quot;, &quot;pr&quot;], &quot;period&quot; =&gt; &quot;10mins&quot;), Dict(&quot;short_name&quot; =&gt; [&quot;arup&quot;, &quot;waup&quot;, &quot;taup&quot;, &quot;thetaaup&quot;, &quot;haup&quot;, &quot;husup&quot;, &quot;hurup&quot;, &quot;clwup&quot;, &quot;cliup&quot;, &quot;waen&quot;, &quot;taen&quot;, &quot;thetaaen&quot;, &quot;haen&quot;, &quot;husen&quot;, &quot;huren&quot;, &quot;clwen&quot;, &quot;clien&quot;, &quot;tke&quot;], &quot;period&quot; =&gt; &quot;10mins&quot;), Dict(&quot;short_name&quot; =&gt; [&quot;entr&quot;, &quot;detr&quot;, &quot;lmix&quot;, &quot;lmixw&quot;, &quot;lmixtke&quot;, &quot;lmixb&quot;, &quot;bgrad&quot;, &quot;strain&quot;, &quot;edt&quot;, &quot;evu&quot;], &quot;period&quot; =&gt; &quot;10mins&quot;)];
+config_dict[&quot;edmfx_detr_model&quot;] = &quot;Generalized&quot;;
+config_dict[&quot;edmfx_filter&quot;] = true;
+config_dict[&quot;ls_adv&quot;] = &quot;Bomex&quot;;
+config_dict[&quot;moist&quot;] = &quot;equil&quot;;
+
+config = CA.AtmosConfig(config_dict);
+
+include(&quot;examples/hybrid/driver.jl&quot;)
+
+
+### Buildkite job `prognostic_edmfx_bomex_stretched_column`
+
+using Revise; import ClimaAtmos as CA;
+
+config_dict = Dict();
+config_dict[&quot;edmf_coriolis&quot;] = &quot;Bomex&quot;;
+config_dict[&quot;cloud_model&quot;] = &quot;quadrature_sgs&quot;;
+config_dict[&quot;initial_condition&quot;] = &quot;Bomex&quot;;
+config_dict[&quot;implicit_diffusion&quot;] = true;
+config_dict[&quot;edmfx_entr_model&quot;] = &quot;Generalized&quot;;
+config_dict[&quot;approximate_linear_solve_iters&quot;] = 2;
+config_dict[&quot;edmfx_sgs_mass_flux&quot;] = true;
+config_dict[&quot;edmfx_upwinding&quot;] = &quot;first_order&quot;;
+config_dict[&quot;prognostic_tke&quot;] = true;
+config_dict[&quot;surface_setup&quot;] = &quot;Bomex&quot;;
+config_dict[&quot;hyperdiff&quot;] = false;
+config_dict[&quot;z_elem&quot;] = 30;
+config_dict[&quot;perturb_initstate&quot;] = false;
+config_dict[&quot;dt&quot;] = &quot;10secs&quot;;
+config_dict[&quot;implicit_sgs_advection&quot;] = false;
+config_dict[&quot;t_end&quot;] = &quot;6hours&quot;;
+config_dict[&quot;edmfx_sgs_diffusive_flux&quot;] = true;
+config_dict[&quot;turbconv&quot;] = &quot;prognostic_edmfx&quot;;
+config_dict[&quot;y_elem&quot;] = 2;
+config_dict[&quot;x_elem&quot;] = 2;
+config_dict[&quot;dz_bottom&quot;] = 50.0;
+config_dict[&quot;dt_save_state_to_disk&quot;] = &quot;10mins&quot;;
+config_dict[&quot;ode_algo&quot;] = &quot;ARS343&quot;;
+config_dict[&quot;subsidence&quot;] = &quot;Bomex&quot;;
+config_dict[&quot;config&quot;] = &quot;column&quot;;
+config_dict[&quot;netcdf_interpolation_num_points&quot;] = [2, 2, 30];
+config_dict[&quot;edmfx_nh_pressure&quot;] = true;
+config_dict[&quot;z_max&quot;] = 3000.0;
+config_dict[&quot;toml&quot;] = [&quot;toml/prognostic_edmfx_bomex.toml&quot;];
+config_dict[&quot;call_cloud_diagnostics_per_stage&quot;] = true;
+config_dict[&quot;diagnostics&quot;] = Dict{Any, Any}[Dict(&quot;short_name&quot; =&gt; [&quot;ts&quot;, &quot;ta&quot;, &quot;thetaa&quot;, &quot;ha&quot;, &quot;pfull&quot;, &quot;rhoa&quot;, &quot;ua&quot;, &quot;va&quot;, &quot;wa&quot;, &quot;hur&quot;, &quot;hus&quot;, &quot;cl&quot;, &quot;clw&quot;, &quot;cli&quot;, &quot;hussfc&quot;, &quot;evspsbl&quot;, &quot;pr&quot;], &quot;period&quot; =&gt; &quot;10mins&quot;), Dict(&quot;short_name&quot; =&gt; [&quot;arup&quot;, &quot;waup&quot;, &quot;taup&quot;, &quot;thetaaup&quot;, &quot;haup&quot;, &quot;husup&quot;, &quot;hurup&quot;, &quot;clwup&quot;, &quot;cliup&quot;, &quot;waen&quot;, &quot;taen&quot;, &quot;thetaaen&quot;, &quot;haen&quot;, &quot;husen&quot;, &quot;huren&quot;, &quot;clwen&quot;, &quot;clien&quot;, &quot;tke&quot;], &quot;period&quot; =&gt; &quot;10mins&quot;), Dict(&quot;short_name&quot; =&gt; [&quot;entr&quot;, &quot;detr&quot;, &quot;lmix&quot;, &quot;bgrad&quot;, &quot;strain&quot;, &quot;edt&quot;, &quot;evu&quot;], &quot;period&quot; =&gt; &quot;10mins&quot;)];
+config_dict[&quot;edmfx_detr_model&quot;] = &quot;Generalized&quot;;
+config_dict[&quot;edmfx_filter&quot;] = true;
+config_dict[&quot;ls_adv&quot;] = &quot;Bomex&quot;;
+config_dict[&quot;moist&quot;] = &quot;equil&quot;;
+
+config = CA.AtmosConfig(config_dict);
+
+include(&quot;examples/hybrid/driver.jl&quot;)
+
+
+### Buildkite job `sphere_held_suarez_rhoe_equilmoist_hightop_sponge`
+
+using Revise; import ClimaAtmos as CA;
+
+config_dict = Dict();
+config_dict[&quot;rayleigh_sponge&quot;] = true;
+config_dict[&quot;z_elem&quot;] = 31;
+config_dict[&quot;dt&quot;] = &quot;400secs&quot;;
+config_dict[&quot;t_end&quot;] = &quot;4days&quot;;
+config_dict[&quot;dz_bottom&quot;] = 50.0;
+config_dict[&quot;vert_diff&quot;] = true;
+config_dict[&quot;dt_save_state_to_disk&quot;] = &quot;4days&quot;;
+config_dict[&quot;forcing&quot;] = &quot;held_suarez&quot;;
+config_dict[&quot;reproducibility_test&quot;] = true;
+config_dict[&quot;z_max&quot;] = 55000.0;
+config_dict[&quot;precip_model&quot;] = &quot;0M&quot;;
+config_dict[&quot;toml&quot;] = [&quot;toml/sphere_held_suarez.toml&quot;];
+config_dict[&quot;viscous_sponge&quot;] = true;
+config_dict[&quot;moist&quot;] = &quot;equil&quot;;
+
+config = CA.AtmosConfig(config_dict);
+
+include(&quot;examples/hybrid/driver.jl&quot;)
+
+
+### Buildkite job `flame_perf_diagnostics`
+
+using Revise; import ClimaAtmos as CA;
+
+config_dict = Dict();
+config_dict[&quot;rad&quot;] = &quot;allskywithclear&quot;;
+config_dict[&quot;implicit_diffusion&quot;] = true;
+config_dict[&quot;approximate_linear_solve_iters&quot;] = 2;
+config_dict[&quot;z_elem&quot;] = 25;
+config_dict[&quot;dt&quot;] = &quot;1secs&quot;;
+config_dict[&quot;surface_setup&quot;] = &quot;DefaultExchangeCoefficients&quot;;
+config_dict[&quot;t_end&quot;] = &quot;10secs&quot;;
+config_dict[&quot;log_progress&quot;] = false;
+config_dict[&quot;vert_diff&quot;] = true;
+config_dict[&quot;h_elem&quot;] = 12;
+config_dict[&quot;forcing&quot;] = &quot;held_suarez&quot;;
+config_dict[&quot;apply_limiter&quot;] = true;
+config_dict[&quot;precip_model&quot;] = &quot;0M&quot;;
+config_dict[&quot;diagnostics&quot;] = Dict{Any, Any}[Dict(&quot;reduction_time&quot; =&gt; &quot;average&quot;, &quot;short_name&quot; =&gt; &quot;ua&quot;, &quot;period&quot; =&gt; &quot;1secs&quot;), Dict(&quot;reduction_time&quot; =&gt; &quot;max&quot;, &quot;short_name&quot; =&gt; &quot;va&quot;, &quot;period&quot; =&gt; &quot;1secs&quot;), Dict(&quot;reduction_time&quot; =&gt; &quot;max&quot;, &quot;short_name&quot; =&gt; &quot;ta&quot;, &quot;period&quot; =&gt; &quot;1secs&quot;)];
+config_dict[&quot;dt_save_to_sol&quot;] = &quot;Inf&quot;;
+config_dict[&quot;moist&quot;] = &quot;equil&quot;;
+
+config = CA.AtmosConfig(config_dict);
+
+include(&quot;examples/hybrid/driver.jl&quot;)
+
+
+### Buildkite job `flame_perf_target`
+
+using Revise; import ClimaAtmos as CA;
+
+config_dict = Dict();
+config_dict[&quot;rad&quot;] = &quot;allskywithclear&quot;;
+config_dict[&quot;implicit_diffusion&quot;] = true;
+config_dict[&quot;approximate_linear_solve_iters&quot;] = 2;
+config_dict[&quot;z_elem&quot;] = 25;
+config_dict[&quot;dt&quot;] = &quot;1secs&quot;;
+config_dict[&quot;surface_setup&quot;] = &quot;DefaultExchangeCoefficients&quot;;
+config_dict[&quot;t_end&quot;] = &quot;10secs&quot;;
+config_dict[&quot;log_progress&quot;] = false;
+config_dict[&quot;vert_diff&quot;] = true;
+config_dict[&quot;h_elem&quot;] = 12;
+config_dict[&quot;forcing&quot;] = &quot;held_suarez&quot;;
+config_dict[&quot;apply_limiter&quot;] = true;
+config_dict[&quot;precip_model&quot;] = &quot;0M&quot;;
+config_dict[&quot;dt_save_to_sol&quot;] = &quot;Inf&quot;;
+config_dict[&quot;moist&quot;] = &quot;equil&quot;;
+
+config = CA.AtmosConfig(config_dict);
+
+include(&quot;examples/hybrid/driver.jl&quot;)
+
+
+### Buildkite job `flame_sphere_baroclinic_wave_rhoe_equilmoist_expvdiff`
+
+using Revise; import ClimaAtmos as CA;
+
+config_dict = Dict();
+config_dict[&quot;moist&quot;] = &quot;equil&quot;;
+config_dict[&quot;initial_condition&quot;] = &quot;MoistBaroclinicWave&quot;;
+config_dict[&quot;implicit_diffusion&quot;] = true;
+config_dict[&quot;krylov_rtol&quot;] = 0.99;
+config_dict[&quot;approximate_linear_solve_iters&quot;] = 2;
+config_dict[&quot;z_elem&quot;] = 20;
+config_dict[&quot;dt&quot;] = &quot;40secs&quot;;
+config_dict[&quot;surface_setup&quot;] = &quot;DefaultExchangeCoefficients&quot;;
+config_dict[&quot;t_end&quot;] = &quot;12hours&quot;;
+config_dict[&quot;log_progress&quot;] = false;
+config_dict[&quot;vert_diff&quot;] = true;
+config_dict[&quot;dz_bottom&quot;] = 100;
+config_dict[&quot;h_elem&quot;] = 12;
+config_dict[&quot;dt_save_state_to_disk&quot;] = &quot;12hours&quot;;
+config_dict[&quot;use_krylov_method&quot;] = true;
+config_dict[&quot;use_dynamic_krylov_rtol&quot;] = false;
+config_dict[&quot;forcing&quot;] = &quot;held_suarez&quot;;
+config_dict[&quot;apply_limiter&quot;] = true;
+config_dict[&quot;precip_model&quot;] = &quot;0M&quot;;
+config_dict[&quot;dt_save_to_sol&quot;] = &quot;Inf&quot;;
+config_dict[&quot;rad&quot;] = &quot;allskywithclear&quot;;
+
+config = CA.AtmosConfig(config_dict);
+
+include(&quot;examples/hybrid/driver.jl&quot;)
+
+
+### Buildkite job `sphere_baroclinic_wave_rhoe`
+
+using Revise; import ClimaAtmos as CA;
+
+config_dict = Dict();
+config_dict[&quot;dt_save_state_to_disk&quot;] = &quot;2days&quot;;
+config_dict[&quot;initial_condition&quot;] = &quot;DryBaroclinicWave&quot;;
+config_dict[&quot;t_end&quot;] = &quot;10days&quot;;
+config_dict[&quot;diagnostics&quot;] = Dict{Any, Any}[Dict(&quot;short_name&quot; =&gt; [&quot;pfull&quot;, &quot;ua&quot;, &quot;wa&quot;, &quot;va&quot;, &quot;rv&quot;, &quot;ta&quot;, &quot;ke&quot;], &quot;period&quot; =&gt; &quot;1days&quot;), Dict(&quot;short_name&quot; =&gt; [&quot;pfull&quot;, &quot;ua&quot;, &quot;wa&quot;, &quot;va&quot;, &quot;rv&quot;, &quot;ta&quot;, &quot;ke&quot;], &quot;period&quot; =&gt; &quot;1days&quot;, &quot;writer&quot; =&gt; &quot;h5&quot;)];
+config_dict[&quot;dt&quot;] = &quot;400secs&quot;;
+config_dict[&quot;deep_atmosphere&quot;] = true;
+
+config = CA.AtmosConfig(config_dict);
+
+include(&quot;examples/hybrid/driver.jl&quot;)
+
+
+### Buildkite job `prognostic_edmfx_bomex_pigroup_column`
+
+using Revise; import ClimaAtmos as CA;
+
+config_dict = Dict();
+config_dict[&quot;edmf_coriolis&quot;] = &quot;Bomex&quot;;
+config_dict[&quot;cloud_model&quot;] = &quot;grid_scale&quot;;
+config_dict[&quot;initial_condition&quot;] = &quot;Bomex&quot;;
+config_dict[&quot;edmfx_entr_model&quot;] = &quot;PiGroups&quot;;
+config_dict[&quot;edmfx_sgs_mass_flux&quot;] = true;
+config_dict[&quot;z_elem&quot;] = 60;
+config_dict[&quot;edmfx_upwinding&quot;] = &quot;first_order&quot;;
+config_dict[&quot;prognostic_tke&quot;] = true;
+config_dict[&quot;surface_setup&quot;] = &quot;Bomex&quot;;
+config_dict[&quot;perturb_initstate&quot;] = false;
+config_dict[&quot;dt&quot;] = &quot;5secs&quot;;
+config_dict[&quot;t_end&quot;] = &quot;6hours&quot;;
+config_dict[&quot;edmfx_sgs_diffusive_flux&quot;] = true;
+config_dict[&quot;turbconv&quot;] = &quot;prognostic_edmfx&quot;;
+config_dict[&quot;z_stretch&quot;] = false;
+config_dict[&quot;dt_save_state_to_disk&quot;] = &quot;10mins&quot;;
+config_dict[&quot;ode_algo&quot;] = &quot;ARS343&quot;;
+config_dict[&quot;subsidence&quot;] = &quot;Bomex&quot;;
+config_dict[&quot;config&quot;] = &quot;column&quot;;
+config_dict[&quot;netcdf_interpolation_num_points&quot;] = [2, 2, 60];
+config_dict[&quot;edmfx_nh_pressure&quot;] = true;
+config_dict[&quot;z_max&quot;] = 3000.0;
+config_dict[&quot;toml&quot;] = [&quot;toml/prognostic_edmfx_bomex_pigroup.toml&quot;];
+config_dict[&quot;call_cloud_diagnostics_per_stage&quot;] = true;
+config_dict[&quot;diagnostics&quot;] = Dict{Any, Any}[Dict(&quot;short_name&quot; =&gt; [&quot;ts&quot;, &quot;ta&quot;, &quot;thetaa&quot;, &quot;ha&quot;, &quot;pfull&quot;, &quot;rhoa&quot;, &quot;ua&quot;, &quot;va&quot;, &quot;wa&quot;, &quot;hur&quot;, &quot;hus&quot;, &quot;cl&quot;, &quot;clw&quot;, &quot;cli&quot;, &quot;hussfc&quot;, &quot;evspsbl&quot;, &quot;pr&quot;], &quot;period&quot; =&gt; &quot;10mins&quot;), Dict(&quot;short_name&quot; =&gt; [&quot;arup&quot;, &quot;waup&quot;, &quot;taup&quot;, &quot;thetaaup&quot;, &quot;haup&quot;, &quot;husup&quot;, &quot;hurup&quot;, &quot;clwup&quot;, &quot;cliup&quot;, &quot;waen&quot;, &quot;taen&quot;, &quot;thetaaen&quot;, &quot;haen&quot;, &quot;husen&quot;, &quot;huren&quot;, &quot;clwen&quot;, &quot;clien&quot;, &quot;tke&quot;], &quot;period&quot; =&gt; &quot;10mins&quot;), Dict(&quot;short_name&quot; =&gt; [&quot;entr&quot;, &quot;detr&quot;, &quot;lmix&quot;, &quot;bgrad&quot;, &quot;strain&quot;, &quot;edt&quot;, &quot;evu&quot;], &quot;period&quot; =&gt; &quot;10mins&quot;)];
+config_dict[&quot;edmfx_detr_model&quot;] = &quot;PiGroups&quot;;
+config_dict[&quot;edmfx_filter&quot;] = true;
+config_dict[&quot;ls_adv&quot;] = &quot;Bomex&quot;;
+config_dict[&quot;moist&quot;] = &quot;equil&quot;;
+
+config = CA.AtmosConfig(config_dict);
+
+include(&quot;examples/hybrid/driver.jl&quot;)
+
+
+### Buildkite job `flame_gpu_implicit_barowave_moist`
+
+using Revise; import ClimaAtmos as CA;
+
+config_dict = Dict();
+config_dict[&quot;rad&quot;] = nothing;
+config_dict[&quot;initial_condition&quot;] = &quot;MoistBaroclinicWave&quot;;
+config_dict[&quot;implicit_diffusion&quot;] = true;
+config_dict[&quot;approximate_linear_solve_iters&quot;] = 2;
+config_dict[&quot;z_elem&quot;] = 25;
+config_dict[&quot;dt&quot;] = &quot;1secs&quot;;
+config_dict[&quot;surface_setup&quot;] = &quot;DefaultExchangeCoefficients&quot;;
+config_dict[&quot;t_end&quot;] = &quot;1mins&quot;;
+config_dict[&quot;log_progress&quot;] = false;
+config_dict[&quot;vert_diff&quot;] = true;
+config_dict[&quot;h_elem&quot;] = 12;
+config_dict[&quot;forcing&quot;] = &quot;held_suarez&quot;;
+config_dict[&quot;apply_limiter&quot;] = false;
+config_dict[&quot;precip_model&quot;] = &quot;0M&quot;;
+config_dict[&quot;dt_save_to_sol&quot;] = &quot;Inf&quot;;
+config_dict[&quot;moist&quot;] = &quot;equil&quot;;
+
+config = CA.AtmosConfig(config_dict);
+
+include(&quot;examples/hybrid/driver.jl&quot;)
+
+
+### Buildkite job `gpu_aquaplanet_dyamond_diag_1process`
+
+using Revise; import ClimaAtmos as CA;
+
+config_dict = Dict();
+config_dict[&quot;rad&quot;] = &quot;allskywithclear&quot;;
+config_dict[&quot;prescribed_aerosols&quot;] = [&quot;CB1&quot;, &quot;CB2&quot;, &quot;DST01&quot;, &quot;OC1&quot;, &quot;OC2&quot;, &quot;SO4&quot;, &quot;SSLT01&quot;];
+config_dict[&quot;rayleigh_sponge&quot;] = true;
+config_dict[&quot;output_default_diagnostics&quot;] = false;
+config_dict[&quot;implicit_diffusion&quot;] = true;
+config_dict[&quot;dt_rad&quot;] = &quot;1hours&quot;;
+config_dict[&quot;z_elem&quot;] = 63;
+config_dict[&quot;approximate_linear_solve_iters&quot;] = 2;
+config_dict[&quot;dt_cloud_fraction&quot;] = &quot;1hours&quot;;
+config_dict[&quot;surface_setup&quot;] = &quot;DefaultMoninObukhov&quot;;
+config_dict[&quot;dt&quot;] = &quot;90secs&quot;;
+config_dict[&quot;t_end&quot;] = &quot;1days&quot;;
+config_dict[&quot;dz_bottom&quot;] = 30.0;
+config_dict[&quot;vert_diff&quot;] = &quot;FriersonDiffusion&quot;;
+config_dict[&quot;h_elem&quot;] = 30;
+config_dict[&quot;dt_save_state_to_disk&quot;] = &quot;12hours&quot;;
+config_dict[&quot;idealized_insolation&quot;] = false;
+config_dict[&quot;z_max&quot;] = 65000.0;
+config_dict[&quot;prescribe_ozone&quot;] = true;
+config_dict[&quot;precip_model&quot;] = &quot;1M&quot;;
+config_dict[&quot;aerosol_radiation&quot;] = true;
+config_dict[&quot;toml&quot;] = [&quot;toml/longrun_aquaplanet.toml&quot;];
+config_dict[&quot;viscous_sponge&quot;] = true;
+config_dict[&quot;diagnostics&quot;] = Dict{Any, Any}[Dict(&quot;short_name&quot; =&gt; [&quot;pfull&quot;, &quot;wa&quot;, &quot;va&quot;, &quot;rv&quot;, &quot;ke&quot;], &quot;period&quot; =&gt; &quot;12hours&quot;)];
+config_dict[&quot;dt_save_to_sol&quot;] = &quot;12hours&quot;;
+config_dict[&quot;moist&quot;] = &quot;equil&quot;;
+
+config = CA.AtmosConfig(config_dict);
+
+include(&quot;examples/hybrid/driver.jl&quot;)
+
+
+### Buildkite job `single_column_nonorographic_gravity_wave`
+
+using Revise; import ClimaAtmos as CA;
+
+config_dict = Dict();
+config_dict[&quot;dt_save_state_to_disk&quot;] = &quot;400secs&quot;;
+config_dict[&quot;initial_condition&quot;] = &quot;IsothermalProfile&quot;;
+config_dict[&quot;t_end&quot;] = &quot;1500secs&quot;;
+config_dict[&quot;config&quot;] = &quot;column&quot;;
+config_dict[&quot;hyperdiff&quot;] = false;
+config_dict[&quot;dt&quot;] = &quot;400secs&quot;;
+config_dict[&quot;non_orographic_gravity_wave&quot;] = true;
+
+config = CA.AtmosConfig(config_dict);
+
+include(&quot;examples/hybrid/driver.jl&quot;)
+
+
+### Buildkite job `prognostic_edmfx_simpleplume_column`
+
+using Revise; import ClimaAtmos as CA;
+
+config_dict = Dict();
+config_dict[&quot;cloud_model&quot;] = &quot;quadrature_sgs&quot;;
+config_dict[&quot;initial_condition&quot;] = &quot;SimplePlume&quot;;
+config_dict[&quot;implicit_diffusion&quot;] = true;
+config_dict[&quot;edmfx_entr_model&quot;] = &quot;Generalized&quot;;
+config_dict[&quot;approximate_linear_solve_iters&quot;] = 2;
+config_dict[&quot;edmfx_sgs_mass_flux&quot;] = false;
+config_dict[&quot;edmfx_upwinding&quot;] = &quot;first_order&quot;;
+config_dict[&quot;prognostic_tke&quot;] = false;
+config_dict[&quot;surface_setup&quot;] = &quot;SimplePlume&quot;;
+config_dict[&quot;z_elem&quot;] = 80;
+config_dict[&quot;perturb_initstate&quot;] = false;
+config_dict[&quot;dt&quot;] = &quot;20secs&quot;&quot;;
+config_dict[&quot;implicit_sgs_advection&quot;] = true;
+config_dict[&quot;t_end&quot;] = &quot;12hours&quot;;
+config_dict[&quot;edmfx_sgs_diffusive_flux&quot;] = false;
+config_dict[&quot;turbconv&quot;] = &quot;prognostic_edmfx&quot;;
+config_dict[&quot;z_stretch&quot;] = false;
+config_dict[&quot;dt_save_state_to_disk&quot;] = &quot;10mins&quot;;
+config_dict[&quot;max_newton_iters_ode&quot;] = 3;
+config_dict[&quot;config&quot;] = &quot;column&quot;;
+config_dict[&quot;netcdf_interpolation_num_points&quot;] = [2, 2, 80];
+config_dict[&quot;ode_algo&quot;] = &quot;ARS343&quot;;
+config_dict[&quot;edmfx_nh_pressure&quot;] = true;
+config_dict[&quot;z_max&quot;] = 4000.0;
+config_dict[&quot;toml&quot;] = [&quot;toml/prognostic_edmfx_simpleplume.toml&quot;];
+config_dict[&quot;call_cloud_diagnostics_per_stage&quot;] = true;
+config_dict[&quot;diagnostics&quot;] = Dict{Any, Any}[Dict(&quot;short_name&quot; =&gt; [&quot;ts&quot;, &quot;ta&quot;, &quot;thetaa&quot;, &quot;ha&quot;, &quot;pfull&quot;, &quot;rhoa&quot;, &quot;ua&quot;, &quot;va&quot;, &quot;wa&quot;, &quot;hur&quot;, &quot;hus&quot;, &quot;cl&quot;, &quot;clw&quot;, &quot;cli&quot;, &quot;hussfc&quot;, &quot;evspsbl&quot;, &quot;pr&quot;], &quot;period&quot; =&gt; &quot;10mins&quot;), Dict(&quot;short_name&quot; =&gt; [&quot;arup&quot;, &quot;waup&quot;, &quot;taup&quot;, &quot;thetaaup&quot;, &quot;haup&quot;, &quot;husup&quot;, &quot;hurup&quot;, &quot;clwup&quot;, &quot;cliup&quot;, &quot;waen&quot;, &quot;taen&quot;, &quot;thetaaen&quot;, &quot;haen&quot;, &quot;husen&quot;, &quot;huren&quot;, &quot;clwen&quot;, &quot;clien&quot;, &quot;tke&quot;], &quot;period&quot; =&gt; &quot;10mins&quot;), Dict(&quot;short_name&quot; =&gt; [&quot;entr&quot;, &quot;detr&quot;, &quot;lmix&quot;, &quot;bgrad&quot;, &quot;strain&quot;, &quot;edt&quot;, &quot;evu&quot;], &quot;period&quot; =&gt; &quot;10mins&quot;)];
+config_dict[&quot;edmfx_detr_model&quot;] = &quot;Generalized&quot;;
+config_dict[&quot;edmfx_filter&quot;] = true;
+config_dict[&quot;zero_tendency&quot;] = &quot;grid_scale&quot;;
+config_dict[&quot;moist&quot;] = &quot;equil&quot;;
+
+config = CA.AtmosConfig(config_dict);
+
+include(&quot;examples/hybrid/driver.jl&quot;)
+
+
+### Buildkite job `rcemipii_box_diagnostic_edmfx`
+
+using Revise; import ClimaAtmos as CA;
+
+config_dict = Dict();
+config_dict[&quot;moist&quot;] = &quot;equil&quot;;
+config_dict[&quot;rayleigh_sponge&quot;] = true;
+config_dict[&quot;edmfx_entr_model&quot;] = &quot;Generalized&quot;;
+config_dict[&quot;implicit_diffusion&quot;] = true;
+config_dict[&quot;approximate_linear_solve_iters&quot;] = 2;
+config_dict[&quot;edmfx_sgs_mass_flux&quot;] = true;
+config_dict[&quot;edmfx_upwinding&quot;] = &quot;first_order&quot;;
+config_dict[&quot;prognostic_tke&quot;] = true;
+config_dict[&quot;surface_setup&quot;] = &quot;DefaultMoninObukhov&quot;;
+config_dict[&quot;override_τ_precip&quot;] = false;
+config_dict[&quot;dt&quot;] = &quot;30secs&quot;;
+config_dict[&quot;netcdf_output_at_levels&quot;] = true;
+config_dict[&quot;t_end&quot;] = &quot;3600secs&quot;;
+config_dict[&quot;insolation&quot;] = &quot;rcemipii&quot;;
+config_dict[&quot;edmfx_sgs_diffusive_flux&quot;] = true;
+config_dict[&quot;turbconv&quot;] = &quot;diagnostic_edmfx&quot;;
+config_dict[&quot;dt_save_state_to_disk&quot;] = &quot;12hours&quot;;
+config_dict[&quot;ode_algo&quot;] = &quot;ARS343&quot;;
+config_dict[&quot;config&quot;] = &quot;box&quot;;
+config_dict[&quot;netcdf_interpolation_num_points&quot;] = [8, 8, 60];
+config_dict[&quot;edmfx_nh_pressure&quot;] = true;
+config_dict[&quot;precip_model&quot;] = &quot;0M&quot;;
+config_dict[&quot;toml&quot;] = [&quot;toml/rcemipii_diagnostic_edmfx_0M.toml&quot;];
+config_dict[&quot;diagnostics&quot;] = Dict{Any, Any}[Dict(&quot;short_name&quot; =&gt; [&quot;ts&quot;, &quot;ta&quot;, &quot;thetaa&quot;, &quot;ha&quot;, &quot;pfull&quot;, &quot;rhoa&quot;, &quot;ua&quot;, &quot;va&quot;, &quot;wa&quot;, &quot;hur&quot;, &quot;hus&quot;, &quot;cl&quot;, &quot;clw&quot;, &quot;cli&quot;, &quot;hussfc&quot;, &quot;evspsbl&quot;, &quot;pr&quot;], &quot;period&quot; =&gt; &quot;5mins&quot;), Dict(&quot;short_name&quot; =&gt; [&quot;arup&quot;, &quot;waup&quot;, &quot;taup&quot;, &quot;thetaaup&quot;, &quot;haup&quot;, &quot;husup&quot;, &quot;hurup&quot;, &quot;clwup&quot;, &quot;cliup&quot;, &quot;waen&quot;, &quot;tke&quot;, &quot;lmix&quot;], &quot;period&quot; =&gt; &quot;5mins&quot;)];
+config_dict[&quot;surface_temperature&quot;] = &quot;RCEMIPII&quot;;
+config_dict[&quot;edmfx_detr_model&quot;] = &quot;Generalized&quot;;
+config_dict[&quot;rad&quot;] = &quot;allskywithclear&quot;;
+
+config = CA.AtmosConfig(config_dict);
+
+include(&quot;examples/hybrid/driver.jl&quot;)
+
+
+### Buildkite job `longrun_zalesak_tracer_energy_bw_rhoe_equil_highres`
+
+using Revise; import ClimaAtmos as CA;
+
+config_dict = Dict();
+config_dict[&quot;initial_condition&quot;] = &quot;MoistBaroclinicWave&quot;;
+config_dict[&quot;z_elem&quot;] = 45;
+config_dict[&quot;dt&quot;] = &quot;200secs&quot;;
+config_dict[&quot;tracer_upwinding&quot;] = &quot;zalesak&quot;;
+config_dict[&quot;t_end&quot;] = &quot;120days&quot;;
+config_dict[&quot;dz_bottom&quot;] = 30.0;
+config_dict[&quot;h_elem&quot;] = 16;
+config_dict[&quot;dt_save_state_to_disk&quot;] = &quot;10days&quot;;
+config_dict[&quot;energy_upwinding&quot;] = &quot;zalesak&quot;;
+config_dict[&quot;apply_limiter&quot;] = true;
+config_dict[&quot;precip_model&quot;] = &quot;0M&quot;;
+config_dict[&quot;diagnostics&quot;] = Dict{Any, Any}[Dict(&quot;short_name&quot; =&gt; [&quot;pfull&quot;, &quot;wa&quot;, &quot;va&quot;, &quot;rv&quot;, &quot;hus&quot;], &quot;period&quot; =&gt; &quot;1days&quot;)];
+config_dict[&quot;moist&quot;] = &quot;equil&quot;;
+
+config = CA.AtmosConfig(config_dict);
+
+include(&quot;examples/hybrid/driver.jl&quot;)
+
+
+### Buildkite job `prognostic_edmfx_bomex_column`
+
+using Revise; import ClimaAtmos as CA;
+
+config_dict = Dict();
+config_dict[&quot;edmf_coriolis&quot;] = &quot;Bomex&quot;;
+config_dict[&quot;cloud_model&quot;] = &quot;quadrature_sgs&quot;;
+config_dict[&quot;initial_condition&quot;] = &quot;Bomex&quot;;
+config_dict[&quot;implicit_diffusion&quot;] = true;
+config_dict[&quot;edmfx_entr_model&quot;] = &quot;Generalized&quot;;
+config_dict[&quot;approximate_linear_solve_iters&quot;] = 2;
+config_dict[&quot;edmfx_sgs_mass_flux&quot;] = true;
+config_dict[&quot;edmfx_upwinding&quot;] = &quot;first_order&quot;;
+config_dict[&quot;prognostic_tke&quot;] = true;
+config_dict[&quot;surface_setup&quot;] = &quot;Bomex&quot;;
+config_dict[&quot;z_elem&quot;] = 60;
+config_dict[&quot;perturb_initstate&quot;] = false;
+config_dict[&quot;dt&quot;] = &quot;10secs&quot;;
+config_dict[&quot;implicit_sgs_advection&quot;] = false;
+config_dict[&quot;t_end&quot;] = &quot;6hours&quot;;
+config_dict[&quot;edmfx_sgs_diffusive_flux&quot;] = true;
+config_dict[&quot;turbconv&quot;] = &quot;prognostic_edmfx&quot;;
+config_dict[&quot;z_stretch&quot;] = false;
+config_dict[&quot;dt_save_state_to_disk&quot;] = &quot;10mins&quot;;
+config_dict[&quot;ode_algo&quot;] = &quot;ARS343&quot;;
+config_dict[&quot;subsidence&quot;] = &quot;Bomex&quot;;
+config_dict[&quot;config&quot;] = &quot;column&quot;;
+config_dict[&quot;netcdf_interpolation_num_points&quot;] = [2, 2, 60];
+config_dict[&quot;edmfx_nh_pressure&quot;] = true;
+config_dict[&quot;z_max&quot;] = 3000.0;
+config_dict[&quot;toml&quot;] = [&quot;toml/prognostic_edmfx_bomex.toml&quot;];
+config_dict[&quot;call_cloud_diagnostics_per_stage&quot;] = true;
+config_dict[&quot;diagnostics&quot;] = Dict{Any, Any}[Dict(&quot;short_name&quot; =&gt; [&quot;ts&quot;, &quot;ta&quot;, &quot;thetaa&quot;, &quot;ha&quot;, &quot;pfull&quot;, &quot;rhoa&quot;, &quot;ua&quot;, &quot;va&quot;, &quot;wa&quot;, &quot;hur&quot;, &quot;hus&quot;, &quot;cl&quot;, &quot;clw&quot;, &quot;cli&quot;, &quot;hussfc&quot;, &quot;evspsbl&quot;, &quot;pr&quot;], &quot;period&quot; =&gt; &quot;10mins&quot;), Dict(&quot;short_name&quot; =&gt; [&quot;arup&quot;, &quot;waup&quot;, &quot;taup&quot;, &quot;thetaaup&quot;, &quot;haup&quot;, &quot;husup&quot;, &quot;hurup&quot;, &quot;clwup&quot;, &quot;cliup&quot;, &quot;waen&quot;, &quot;taen&quot;, &quot;thetaaen&quot;, &quot;haen&quot;, &quot;husen&quot;, &quot;huren&quot;, &quot;clwen&quot;, &quot;clien&quot;, &quot;tke&quot;], &quot;period&quot; =&gt; &quot;10mins&quot;), Dict(&quot;short_name&quot; =&gt; [&quot;entr&quot;, &quot;detr&quot;, &quot;lmix&quot;, &quot;lmixw&quot;, &quot;lmixtke&quot;, &quot;lmixb&quot;, &quot;bgrad&quot;, &quot;strain&quot;, &quot;edt&quot;, &quot;evu&quot;], &quot;period&quot; =&gt; &quot;10mins&quot;)];
+config_dict[&quot;edmfx_detr_model&quot;] = &quot;Generalized&quot;;
+config_dict[&quot;edmfx_filter&quot;] = true;
+config_dict[&quot;ls_adv&quot;] = &quot;Bomex&quot;;
+config_dict[&quot;moist&quot;] = &quot;equil&quot;;
+
+config = CA.AtmosConfig(config_dict);
+
+include(&quot;examples/hybrid/driver.jl&quot;)
+
+
+### Buildkite job `box_hydrostatic_balance_rhoe`
+
+using Revise; import ClimaAtmos as CA;
+
+config_dict = Dict();
+config_dict[&quot;t_end&quot;] = &quot;1days&quot;;
+config_dict[&quot;config&quot;] = &quot;box&quot;;
+config_dict[&quot;hyperdiff&quot;] = false;
+config_dict[&quot;diagnostics&quot;] = Dict{Any, Any}[Dict(&quot;short_name&quot; =&gt; [&quot;wa&quot;, &quot;ua&quot;], &quot;period&quot; =&gt; &quot;1days&quot;)];
+config_dict[&quot;dt&quot;] = &quot;20secs&quot;;
+config_dict[&quot;perturb_initstate&quot;] = false;
+
+config = CA.AtmosConfig(config_dict);
+
+include(&quot;examples/hybrid/driver.jl&quot;)
+
+
+### Buildkite job `target_gpu_implicit_baroclinic_wave`
+
+using Revise; import ClimaAtmos as CA;
+
+config_dict = Dict();
+config_dict[&quot;dz_bottom&quot;] = 30.0;
+config_dict[&quot;h_elem&quot;] = 30;
+config_dict[&quot;dt_save_state_to_disk&quot;] = &quot;Inf&quot;;
+config_dict[&quot;output_default_diagnostics&quot;] = false;
+config_dict[&quot;initial_condition&quot;] = &quot;DryBaroclinicWave&quot;;
+config_dict[&quot;t_end&quot;] = &quot;1days&quot;;
+config_dict[&quot;z_elem&quot;] = 63;
+config_dict[&quot;dt&quot;] = &quot;90secs&quot;;
+config_dict[&quot;dt_save_to_sol&quot;] = &quot;Inf&quot;;
+
+config = CA.AtmosConfig(config_dict);
+
+include(&quot;examples/hybrid/driver.jl&quot;)
+
+
+### Buildkite job `prognostic_edmfx_dycoms_rf01_column`
+
+using Revise; import ClimaAtmos as CA;
+
+config_dict = Dict();
+config_dict[&quot;edmf_coriolis&quot;] = &quot;DYCOMS_RF01&quot;;
+config_dict[&quot;moist&quot;] = &quot;equil&quot;;
+config_dict[&quot;cloud_model&quot;] = &quot;quadrature_sgs&quot;;
+config_dict[&quot;initial_condition&quot;] = &quot;DYCOMS_RF01&quot;;
+config_dict[&quot;implicit_diffusion&quot;] = true;
+config_dict[&quot;edmfx_entr_model&quot;] = &quot;Generalized&quot;;
+config_dict[&quot;approximate_linear_solve_iters&quot;] = 2;
+config_dict[&quot;edmfx_sgs_mass_flux&quot;] = true;
+config_dict[&quot;edmfx_upwinding&quot;] = &quot;first_order&quot;;
+config_dict[&quot;prognostic_tke&quot;] = true;
+config_dict[&quot;surface_setup&quot;] = &quot;DYCOMS_RF01&quot;;
+config_dict[&quot;hyperdiff&quot;] = false;
+config_dict[&quot;z_elem&quot;] = 30;
+config_dict[&quot;dt&quot;] = &quot;10secs&quot;;
+config_dict[&quot;edmfx_sgsflux_upwinding&quot;] = &quot;first_order&quot;;
+config_dict[&quot;implicit_sgs_advection&quot;] = false;
+config_dict[&quot;t_end&quot;] = &quot;4hours&quot;;
+config_dict[&quot;edmfx_sgs_diffusive_flux&quot;] = true;
+config_dict[&quot;turbconv&quot;] = &quot;prognostic_edmfx&quot;;
+config_dict[&quot;y_elem&quot;] = 2;
+config_dict[&quot;x_elem&quot;] = 2;
+config_dict[&quot;z_stretch&quot;] = false;
+config_dict[&quot;dt_save_state_to_disk&quot;] = &quot;10mins&quot;;
+config_dict[&quot;ode_algo&quot;] = &quot;ARS343&quot;;
+config_dict[&quot;subsidence&quot;] = &quot;DYCOMS&quot;;
+config_dict[&quot;config&quot;] = &quot;column&quot;;
+config_dict[&quot;netcdf_interpolation_num_points&quot;] = [2, 2, 30];
+config_dict[&quot;edmfx_nh_pressure&quot;] = true;
+config_dict[&quot;z_max&quot;] = 1500;
+config_dict[&quot;toml&quot;] = [&quot;toml/prognostic_edmfx.toml&quot;];
+config_dict[&quot;call_cloud_diagnostics_per_stage&quot;] = true;
+config_dict[&quot;diagnostics&quot;] = Dict{Any, Any}[Dict(&quot;short_name&quot; =&gt; [&quot;ts&quot;, &quot;ta&quot;, &quot;thetaa&quot;, &quot;ha&quot;, &quot;pfull&quot;, &quot;rhoa&quot;, &quot;ua&quot;, &quot;va&quot;, &quot;wa&quot;, &quot;hur&quot;, &quot;hus&quot;, &quot;cl&quot;, &quot;clw&quot;, &quot;cli&quot;, &quot;hussfc&quot;, &quot;evspsbl&quot;, &quot;pr&quot;], &quot;period&quot; =&gt; &quot;10mins&quot;), Dict(&quot;short_name&quot; =&gt; [&quot;arup&quot;, &quot;waup&quot;, &quot;taup&quot;, &quot;thetaaup&quot;, &quot;haup&quot;, &quot;husup&quot;, &quot;hurup&quot;, &quot;clwup&quot;, &quot;cliup&quot;, &quot;waen&quot;, &quot;taen&quot;, &quot;thetaaen&quot;, &quot;haen&quot;, &quot;husen&quot;, &quot;huren&quot;, &quot;clwen&quot;, &quot;clien&quot;, &quot;tke&quot;], &quot;period&quot; =&gt; &quot;10mins&quot;), Dict(&quot;short_name&quot; =&gt; [&quot;entr&quot;, &quot;detr&quot;, &quot;lmix&quot;, &quot;bgrad&quot;, &quot;strain&quot;, &quot;edt&quot;, &quot;evu&quot;], &quot;period&quot; =&gt; &quot;10mins&quot;)];
+config_dict[&quot;edmfx_detr_model&quot;] = &quot;Generalized&quot;;
+config_dict[&quot;edmfx_filter&quot;] = true;
+config_dict[&quot;rad&quot;] = &quot;DYCOMS&quot;;
+
+config = CA.AtmosConfig(config_dict);
+
+include(&quot;examples/hybrid/driver.jl&quot;)
+
+
+### Buildkite job `gpu_aquaplanet_dyamond_ws_1process`
+
+using Revise; import ClimaAtmos as CA;
+
+config_dict = Dict();
+config_dict[&quot;rad&quot;] = &quot;allskywithclear&quot;;
+config_dict[&quot;prescribed_aerosols&quot;] = [&quot;CB1&quot;, &quot;CB2&quot;, &quot;DST01&quot;, &quot;OC1&quot;, &quot;OC2&quot;, &quot;SO4&quot;, &quot;SSLT01&quot;];
+config_dict[&quot;rayleigh_sponge&quot;] = true;
+config_dict[&quot;output_default_diagnostics&quot;] = false;
+config_dict[&quot;implicit_diffusion&quot;] = true;
+config_dict[&quot;dt_rad&quot;] = &quot;1hours&quot;;
+config_dict[&quot;z_elem&quot;] = 63;
+config_dict[&quot;dt_cloud_fraction&quot;] = &quot;1hours&quot;;
+config_dict[&quot;approximate_linear_solve_iters&quot;] = 2;
+config_dict[&quot;surface_setup&quot;] = &quot;DefaultMoninObukhov&quot;;
+config_dict[&quot;dt&quot;] = &quot;90secs&quot;;
+config_dict[&quot;t_end&quot;] = &quot;1days&quot;;
+config_dict[&quot;insolation&quot;] = &quot;timevarying&quot;;
+config_dict[&quot;dz_bottom&quot;] = 30.0;
+config_dict[&quot;vert_diff&quot;] = &quot;FriersonDiffusion&quot;;
+config_dict[&quot;h_elem&quot;] = 30;
+config_dict[&quot;dt_save_state_to_disk&quot;] = &quot;Inf&quot;;
+config_dict[&quot;z_max&quot;] = 65000.0;
+config_dict[&quot;prescribe_ozone&quot;] = true;
+config_dict[&quot;precip_model&quot;] = &quot;1M&quot;;
+config_dict[&quot;aerosol_radiation&quot;] = true;
+config_dict[&quot;toml&quot;] = [&quot;toml/longrun_aquaplanet.toml&quot;];
+config_dict[&quot;viscous_sponge&quot;] = true;
+config_dict[&quot;dt_save_to_sol&quot;] = &quot;Inf&quot;;
+config_dict[&quot;moist&quot;] = &quot;equil&quot;;
+
+config = CA.AtmosConfig(config_dict);
+
+include(&quot;examples/hybrid/driver.jl&quot;)
+
+
+### Buildkite job `flame_perf_target_edmf`
+
+using Revise; import ClimaAtmos as CA;
+
+config_dict = Dict();
+config_dict[&quot;rad&quot;] = nothing;
+config_dict[&quot;implicit_diffusion&quot;] = true;
+config_dict[&quot;approximate_linear_solve_iters&quot;] = 2;
+config_dict[&quot;z_elem&quot;] = 25;
+config_dict[&quot;dt&quot;] = &quot;1secs&quot;;
+config_dict[&quot;surface_setup&quot;] = &quot;DefaultExchangeCoefficients&quot;;
+config_dict[&quot;t_end&quot;] = &quot;10secs&quot;;
+config_dict[&quot;turbconv&quot;] = &quot;edmf&quot;;
+config_dict[&quot;log_progress&quot;] = false;
+config_dict[&quot;z_stretch&quot;] = false;
+config_dict[&quot;vert_diff&quot;] = true;
+config_dict[&quot;h_elem&quot;] = 12;
+config_dict[&quot;dt_save_state_to_disk&quot;] = &quot;10secs&quot;;
+config_dict[&quot;forcing&quot;] = &quot;held_suarez&quot;;
+config_dict[&quot;FLOAT_TYPE&quot;] = &quot;Float64&quot;;
+config_dict[&quot;apply_limiter&quot;] = false;
+config_dict[&quot;precip_model&quot;] = nothing;
+config_dict[&quot;dt_save_to_sol&quot;] = &quot;Inf&quot;;
+config_dict[&quot;moist&quot;] = &quot;equil&quot;;
+
+config = CA.AtmosConfig(config_dict);
+
+include(&quot;examples/hybrid/driver.jl&quot;)
+
+
+### Buildkite job `longrun_dry_held_suarez`
+
+using Revise; import ClimaAtmos as CA;
+
+config_dict = Dict();
+config_dict[&quot;dz_bottom&quot;] = 30.0;
+config_dict[&quot;h_elem&quot;] = 30;
+config_dict[&quot;rayleigh_sponge&quot;] = true;
+config_dict[&quot;dt_save_state_to_disk&quot;] = &quot;10days&quot;;
+config_dict[&quot;t_end&quot;] = &quot;360days&quot;;
+config_dict[&quot;toml&quot;] = [&quot;toml/longrun_held_suarez.toml&quot;];
+config_dict[&quot;z_elem&quot;] = 63;
+config_dict[&quot;dt&quot;] = &quot;90secs&quot;;
+config_dict[&quot;forcing&quot;] = &quot;held_suarez&quot;;
+config_dict[&quot;z_max&quot;] = 55000.0;
+
+config = CA.AtmosConfig(config_dict);
+
+include(&quot;examples/hybrid/driver.jl&quot;)
+
+
+### Buildkite job `longrun_aquaplanet_allsky_1M`
+
+using Revise; import ClimaAtmos as CA;
+
+config_dict = Dict();
+config_dict[&quot;rad&quot;] = &quot;allskywithclear&quot;;
+config_dict[&quot;rayleigh_sponge&quot;] = true;
+config_dict[&quot;implicit_diffusion&quot;] = true;
+config_dict[&quot;approximate_linear_solve_iters&quot;] = 2;
+config_dict[&quot;z_elem&quot;] = 63;
+config_dict[&quot;dt&quot;] = &quot;120secs&quot;;
+config_dict[&quot;dt_rad&quot;] = &quot;1hours&quot;;
+config_dict[&quot;dt_cloud_fraction&quot;] = &quot;1hours&quot;;
+config_dict[&quot;surface_setup&quot;] = &quot;DefaultMoninObukhov&quot;;
+config_dict[&quot;t_end&quot;] = &quot;360days&quot;;
+config_dict[&quot;dz_bottom&quot;] = 30.0;
+config_dict[&quot;vert_diff&quot;] = &quot;FriersonDiffusion&quot;;
+config_dict[&quot;h_elem&quot;] = 16;
+config_dict[&quot;dt_save_state_to_disk&quot;] = &quot;10days&quot;;
+config_dict[&quot;z_max&quot;] = 65000.0;
+config_dict[&quot;precip_model&quot;] = &quot;1M&quot;;
+config_dict[&quot;toml&quot;] = [&quot;toml/longrun_aquaplanet.toml&quot;];
+config_dict[&quot;viscous_sponge&quot;] = true;
+config_dict[&quot;moist&quot;] = &quot;equil&quot;;
+
+config = CA.AtmosConfig(config_dict);
+
+include(&quot;examples/hybrid/driver.jl&quot;)
+
+
+### Buildkite job `jet_n_failures`
+
+using Revise; import ClimaAtmos as CA;
+
+config_dict = Dict();
+config_dict[&quot;rad&quot;] = &quot;allskywithclear&quot;;
+config_dict[&quot;implicit_diffusion&quot;] = false;
+config_dict[&quot;approximate_linear_solve_iters&quot;] = 2;
+config_dict[&quot;z_elem&quot;] = 25;
+config_dict[&quot;dt&quot;] = &quot;1secs&quot;;
+config_dict[&quot;surface_setup&quot;] = &quot;DefaultExchangeCoefficients&quot;;
+config_dict[&quot;t_end&quot;] = &quot;10secs&quot;;
+config_dict[&quot;log_progress&quot;] = false;
+config_dict[&quot;vert_diff&quot;] = true;
+config_dict[&quot;h_elem&quot;] = 12;
+config_dict[&quot;forcing&quot;] = &quot;held_suarez&quot;;
+config_dict[&quot;apply_limiter&quot;] = true;
+config_dict[&quot;precip_model&quot;] = &quot;0M&quot;;
+config_dict[&quot;dt_save_to_sol&quot;] = &quot;Inf&quot;;
+config_dict[&quot;moist&quot;] = &quot;equil&quot;;
+
+config = CA.AtmosConfig(config_dict);
+
+include(&quot;examples/hybrid/driver.jl&quot;)
+
+
+### Buildkite job `diagnostic_edmfx_trmm_stretched_box`
+
+using Revise; import ClimaAtmos as CA;
+
+config_dict = Dict();
+config_dict[&quot;moist&quot;] = &quot;equil&quot;;
+config_dict[&quot;cloud_model&quot;] = &quot;quadrature_sgs&quot;;
+config_dict[&quot;initial_condition&quot;] = &quot;TRMM_LBA&quot;;
+config_dict[&quot;implicit_diffusion&quot;] = true;
+config_dict[&quot;edmfx_entr_model&quot;] = &quot;Generalized&quot;;
+config_dict[&quot;approximate_linear_solve_iters&quot;] = 2;
+config_dict[&quot;edmfx_sgs_mass_flux&quot;] = true;
+config_dict[&quot;edmfx_upwinding&quot;] = &quot;first_order&quot;;
+config_dict[&quot;prognostic_tke&quot;] = true;
+config_dict[&quot;surface_setup&quot;] = &quot;TRMM_LBA&quot;;
+config_dict[&quot;override_τ_precip&quot;] = false;
+config_dict[&quot;x_max&quot;] = 1.0e8;
+config_dict[&quot;z_elem&quot;] = 30;
+config_dict[&quot;dt&quot;] = &quot;300secs&quot;;
+config_dict[&quot;t_end&quot;] = &quot;6hours&quot;;
+config_dict[&quot;edmfx_sgs_diffusive_flux&quot;] = true;
+config_dict[&quot;y_max&quot;] = 1.0e8;
+config_dict[&quot;turbconv&quot;] = &quot;diagnostic_edmfx&quot;;
+config_dict[&quot;y_elem&quot;] = 2;
+config_dict[&quot;x_elem&quot;] = 2;
+config_dict[&quot;dz_bottom&quot;] = 50;
+config_dict[&quot;dt_save_state_to_disk&quot;] = &quot;10mins&quot;;
+config_dict[&quot;ode_algo&quot;] = &quot;ARS343&quot;;
+config_dict[&quot;config&quot;] = &quot;box&quot;;
+config_dict[&quot;netcdf_interpolation_num_points&quot;] = [8, 8, 30];
+config_dict[&quot;edmfx_nh_pressure&quot;] = true;
+config_dict[&quot;FLOAT_TYPE&quot;] = &quot;Float64&quot;;
+config_dict[&quot;z_max&quot;] = 16400;
+config_dict[&quot;precip_model&quot;] = &quot;1M&quot;;
+config_dict[&quot;toml&quot;] = [&quot;toml/diagnostic_edmfx.toml&quot;];
+config_dict[&quot;call_cloud_diagnostics_per_stage&quot;] = true;
+config_dict[&quot;diagnostics&quot;] = Dict{Any, Any}[Dict(&quot;short_name&quot; =&gt; [&quot;ts&quot;, &quot;ta&quot;, &quot;thetaa&quot;, &quot;ha&quot;, &quot;pfull&quot;, &quot;rhoa&quot;, &quot;ua&quot;, &quot;va&quot;, &quot;wa&quot;, &quot;hur&quot;, &quot;hus&quot;, &quot;cl&quot;, &quot;clw&quot;, &quot;cli&quot;, &quot;hussfc&quot;, &quot;evspsbl&quot;, &quot;pr&quot;], &quot;period&quot; =&gt; &quot;10mins&quot;), Dict(&quot;short_name&quot; =&gt; [&quot;arup&quot;, &quot;waup&quot;, &quot;taup&quot;, &quot;thetaaup&quot;, &quot;haup&quot;, &quot;husup&quot;, &quot;hurup&quot;, &quot;clwup&quot;, &quot;cliup&quot;, &quot;waen&quot;, &quot;tke&quot;, &quot;lmix&quot;], &quot;period&quot; =&gt; &quot;10mins&quot;), Dict(&quot;short_name&quot; =&gt; [&quot;husra&quot;, &quot;hussn&quot;], &quot;period&quot; =&gt; &quot;10mins&quot;)];
+config_dict[&quot;edmfx_detr_model&quot;] = &quot;Generalized&quot;;
+config_dict[&quot;rad&quot;] = &quot;TRMM_LBA&quot;;
+
+config = CA.AtmosConfig(config_dict);
+
+include(&quot;examples/hybrid/driver.jl&quot;)
+
+
+### Buildkite job `single_column_radiative_equilibrium_gray`
+
+using Revise; import ClimaAtmos as CA;
+
+config_dict = Dict();
+config_dict[&quot;initial_condition&quot;] = &quot;IsothermalProfile&quot;;
+config_dict[&quot;hyperdiff&quot;] = false;
+config_dict[&quot;z_elem&quot;] = 50;
+config_dict[&quot;dt&quot;] = &quot;3hours&quot;;
+config_dict[&quot;dt_rad&quot;] = &quot;3hours&quot;;
+config_dict[&quot;t_end&quot;] = &quot;654days&quot;;
+config_dict[&quot;dz_bottom&quot;] = 30.0;
+config_dict[&quot;dt_save_state_to_disk&quot;] = &quot;3months&quot;;
+config_dict[&quot;config&quot;] = &quot;column&quot;;
+config_dict[&quot;netcdf_interpolation_num_points&quot;] = [2, 2, 80];
+config_dict[&quot;z_max&quot;] = 65000.0;
+config_dict[&quot;dt_save_to_sol&quot;] = &quot;30hours&quot;;
+config_dict[&quot;rad&quot;] = &quot;gray&quot;;
+
+config = CA.AtmosConfig(config_dict);
+
+include(&quot;examples/hybrid/driver.jl&quot;)
+
+
+### Buildkite job `bm_perf_target`
+
+using Revise; import ClimaAtmos as CA;
+
+config_dict = Dict();
+config_dict[&quot;rad&quot;] = &quot;allskywithclear&quot;;
+config_dict[&quot;implicit_diffusion&quot;] = true;
+config_dict[&quot;approximate_linear_solve_iters&quot;] = 2;
+config_dict[&quot;z_elem&quot;] = 25;
+config_dict[&quot;dt&quot;] = &quot;1secs&quot;;
+config_dict[&quot;surface_setup&quot;] = &quot;DefaultExchangeCoefficients&quot;;
+config_dict[&quot;t_end&quot;] = &quot;10secs&quot;;
+config_dict[&quot;log_progress&quot;] = false;
+config_dict[&quot;vert_diff&quot;] = true;
+config_dict[&quot;h_elem&quot;] = 12;
+config_dict[&quot;forcing&quot;] = &quot;held_suarez&quot;;
+config_dict[&quot;apply_limiter&quot;] = true;
+config_dict[&quot;precip_model&quot;] = &quot;0M&quot;;
+config_dict[&quot;perf_summary&quot;] = true;
+config_dict[&quot;dt_save_to_sol&quot;] = &quot;Inf&quot;;
+config_dict[&quot;moist&quot;] = &quot;equil&quot;;
+
+config = CA.AtmosConfig(config_dict);
+
+include(&quot;examples/hybrid/driver.jl&quot;)
+
+
+### Buildkite job `aquaplanet_diagedmf`
+
+using Revise; import ClimaAtmos as CA;
+
+config_dict = Dict();
+config_dict[&quot;rad&quot;] = &quot;allskywithclear&quot;;
+config_dict[&quot;rayleigh_sponge&quot;] = true;
+config_dict[&quot;cloud_model&quot;] = &quot;quadrature_sgs&quot;;
+config_dict[&quot;output_default_diagnostics&quot;] = false;
+config_dict[&quot;implicit_diffusion&quot;] = true;
+config_dict[&quot;edmfx_entr_model&quot;] = &quot;Generalized&quot;;
+config_dict[&quot;dt_rad&quot;] = &quot;1hours&quot;;
+config_dict[&quot;z_elem&quot;] = 63;
+config_dict[&quot;dt_cloud_fraction&quot;] = &quot;1hours&quot;;
+config_dict[&quot;approximate_linear_solve_iters&quot;] = 2;
+config_dict[&quot;surface_setup&quot;] = &quot;DefaultMoninObukhov&quot;;
+config_dict[&quot;prognostic_tke&quot;] = true;
+config_dict[&quot;edmfx_upwinding&quot;] = &quot;first_order&quot;;
+config_dict[&quot;edmfx_sgs_mass_flux&quot;] = true;
+config_dict[&quot;dt&quot;] = &quot;90secs&quot;;
+config_dict[&quot;t_end&quot;] = &quot;1days&quot;;
+config_dict[&quot;insolation&quot;] = &quot;timevarying&quot;;
+config_dict[&quot;edmfx_sgs_diffusive_flux&quot;] = true;
+config_dict[&quot;turbconv&quot;] = &quot;diagnostic_edmfx&quot;;
+config_dict[&quot;dz_bottom&quot;] = 30.0;
+config_dict[&quot;h_elem&quot;] = 30;
+config_dict[&quot;dt_save_state_to_disk&quot;] = &quot;Inf&quot;;
+config_dict[&quot;ode_algo&quot;] = &quot;ARS343&quot;;
+config_dict[&quot;edmfx_nh_pressure&quot;] = true;
+config_dict[&quot;z_max&quot;] = 65000.0;
+config_dict[&quot;precip_model&quot;] = &quot;0M&quot;;
+config_dict[&quot;toml&quot;] = [&quot;toml/diagnostic_edmfx.toml&quot;];
+config_dict[&quot;viscous_sponge&quot;] = true;
+config_dict[&quot;edmfx_detr_model&quot;] = &quot;Generalized&quot;;
+config_dict[&quot;dt_save_to_sol&quot;] = &quot;Inf&quot;;
+config_dict[&quot;moist&quot;] = &quot;equil&quot;;
+
+config = CA.AtmosConfig(config_dict);
+
+include(&quot;examples/hybrid/driver.jl&quot;)
+
+
+### Buildkite job `gpu_hs_rhoe_equil_55km_nz63_0M`
+
+using Revise; import ClimaAtmos as CA;
+
+config_dict = Dict();
+config_dict[&quot;rayleigh_sponge&quot;] = true;
+config_dict[&quot;output_default_diagnostics&quot;] = false;
+config_dict[&quot;z_elem&quot;] = 63;
+config_dict[&quot;dt&quot;] = &quot;90secs&quot;;
+config_dict[&quot;t_end&quot;] = &quot;1days&quot;;
+config_dict[&quot;dz_bottom&quot;] = 30.0;
+config_dict[&quot;vert_diff&quot;] = true;
+config_dict[&quot;h_elem&quot;] = 30;
+config_dict[&quot;dt_save_state_to_disk&quot;] = &quot;Inf&quot;;
+config_dict[&quot;forcing&quot;] = &quot;held_suarez&quot;;
+config_dict[&quot;z_max&quot;] = 55000.0;
+config_dict[&quot;precip_model&quot;] = &quot;0M&quot;;
+config_dict[&quot;toml&quot;] = [&quot;toml/longrun_held_suarez.toml&quot;];
+config_dict[&quot;dt_save_to_sol&quot;] = &quot;Inf&quot;;
+config_dict[&quot;moist&quot;] = &quot;equil&quot;;
+
+config = CA.AtmosConfig(config_dict);
+
+include(&quot;examples/hybrid/driver.jl&quot;)
+
+
+### Buildkite job `plane_agnesi_mountain_test_stretched`
+
+using Revise; import ClimaAtmos as CA;
+
+config_dict = Dict();
+config_dict[&quot;rayleigh_sponge&quot;] = true;
+config_dict[&quot;initial_condition&quot;] = &quot;AgnesiHProfile&quot;;
+config_dict[&quot;x_max&quot;] = 240000.0;
+config_dict[&quot;hyperdiff&quot;] = false;
+config_dict[&quot;z_elem&quot;] = 45;
+config_dict[&quot;dt&quot;] = &quot;1.5secs&quot;;
+config_dict[&quot;t_end&quot;] = &quot;14400.0secs&quot;;
+config_dict[&quot;x_elem&quot;] = 80;
+config_dict[&quot;dz_bottom&quot;] = 200.0;
+config_dict[&quot;dt_save_state_to_disk&quot;] = &quot;3600secs&quot;;
+config_dict[&quot;config&quot;] = &quot;plane&quot;;
+config_dict[&quot;z_max&quot;] = 25000.0;
+config_dict[&quot;topography&quot;] = &quot;Agnesi&quot;;
+config_dict[&quot;toml&quot;] = [&quot;toml/plane_agnesi_mountain_test_stretched.toml&quot;];
+config_dict[&quot;diagnostics&quot;] = Dict{Any, Any}[Dict(&quot;short_name&quot; =&gt; &quot;wa&quot;, &quot;period&quot; =&gt; &quot;4hours&quot;)];
+
+config = CA.AtmosConfig(config_dict);
+
+include(&quot;examples/hybrid/driver.jl&quot;)
+
+
+### Buildkite job `flame_perf_target_frierson`
+
+using Revise; import ClimaAtmos as CA;
+
+config_dict = Dict();
+config_dict[&quot;moist&quot;] = &quot;equil&quot;;
+config_dict[&quot;initial_condition&quot;] = &quot;MoistBaroclinicWave&quot;;
+config_dict[&quot;implicit_diffusion&quot;] = true;
+config_dict[&quot;krylov_rtol&quot;] = 0.99;
+config_dict[&quot;approximate_linear_solve_iters&quot;] = 2;
+config_dict[&quot;z_elem&quot;] = 20;
+config_dict[&quot;dt&quot;] = &quot;40secs&quot;;
+config_dict[&quot;surface_setup&quot;] = &quot;DefaultExchangeCoefficients&quot;;
+config_dict[&quot;t_end&quot;] = &quot;12hours&quot;;
+config_dict[&quot;log_progress&quot;] = false;
+config_dict[&quot;vert_diff&quot;] = &quot;FriersonDiffusion&quot;;
+config_dict[&quot;dz_bottom&quot;] = 100;
+config_dict[&quot;h_elem&quot;] = 12;
+config_dict[&quot;dt_save_state_to_disk&quot;] = &quot;12hours&quot;;
+config_dict[&quot;use_krylov_method&quot;] = true;
+config_dict[&quot;use_dynamic_krylov_rtol&quot;] = false;
+config_dict[&quot;forcing&quot;] = &quot;held_suarez&quot;;
+config_dict[&quot;apply_limiter&quot;] = true;
+config_dict[&quot;precip_model&quot;] = &quot;0M&quot;;
+config_dict[&quot;dt_save_to_sol&quot;] = &quot;Inf&quot;;
+config_dict[&quot;rad&quot;] = &quot;allskywithclear&quot;;
+
+config = CA.AtmosConfig(config_dict);
+
+include(&quot;examples/hybrid/driver.jl&quot;)
+
+
+### Buildkite job `gpu_aquaplanet_dyamond_ws_2process`
+
+using Revise; import ClimaAtmos as CA;
+
+config_dict = Dict();
+config_dict[&quot;rad&quot;] = &quot;allskywithclear&quot;;
+config_dict[&quot;prescribed_aerosols&quot;] = [&quot;CB1&quot;, &quot;CB2&quot;, &quot;DST01&quot;, &quot;OC1&quot;, &quot;OC2&quot;, &quot;SO4&quot;, &quot;SSLT01&quot;];
+config_dict[&quot;rayleigh_sponge&quot;] = true;
+config_dict[&quot;output_default_diagnostics&quot;] = false;
+config_dict[&quot;implicit_diffusion&quot;] = true;
+config_dict[&quot;dt_rad&quot;] = &quot;1hours&quot;;
+config_dict[&quot;z_elem&quot;] = 63;
+config_dict[&quot;dt_cloud_fraction&quot;] = &quot;1hours&quot;;
+config_dict[&quot;approximate_linear_solve_iters&quot;] = 2;
+config_dict[&quot;surface_setup&quot;] = &quot;DefaultMoninObukhov&quot;;
+config_dict[&quot;dt&quot;] = &quot;90secs&quot;;
+config_dict[&quot;t_end&quot;] = &quot;1days&quot;;
+config_dict[&quot;insolation&quot;] = &quot;timevarying&quot;;
+config_dict[&quot;dz_bottom&quot;] = 30.0;
+config_dict[&quot;vert_diff&quot;] = &quot;FriersonDiffusion&quot;;
+config_dict[&quot;h_elem&quot;] = 42;
+config_dict[&quot;dt_save_state_to_disk&quot;] = &quot;Inf&quot;;
+config_dict[&quot;z_max&quot;] = 65000.0;
+config_dict[&quot;prescribe_ozone&quot;] = true;
+config_dict[&quot;precip_model&quot;] = &quot;1M&quot;;
+config_dict[&quot;aerosol_radiation&quot;] = true;
+config_dict[&quot;toml&quot;] = [&quot;toml/longrun_aquaplanet.toml&quot;];
+config_dict[&quot;viscous_sponge&quot;] = true;
+config_dict[&quot;dt_save_to_sol&quot;] = &quot;Inf&quot;;
+config_dict[&quot;moist&quot;] = &quot;equil&quot;;
+
+config = CA.AtmosConfig(config_dict);
+
+include(&quot;examples/hybrid/driver.jl&quot;)
+
+
+### Buildkite job `flame_perf_gw`
+
+using Revise; import ClimaAtmos as CA;
+
+config_dict = Dict();
+config_dict[&quot;rad&quot;] = &quot;allskywithclear&quot;;
+config_dict[&quot;rayleigh_sponge&quot;] = true;
+config_dict[&quot;implicit_diffusion&quot;] = true;
+config_dict[&quot;orographic_gravity_wave&quot;] = &quot;raw_topo&quot;;
+config_dict[&quot;approximate_linear_solve_iters&quot;] = 2;
+config_dict[&quot;z_elem&quot;] = 25;
+config_dict[&quot;dt&quot;] = &quot;1secs&quot;;
+config_dict[&quot;surface_setup&quot;] = &quot;DefaultExchangeCoefficients&quot;;
+config_dict[&quot;t_end&quot;] = &quot;10secs&quot;;
+config_dict[&quot;insolation&quot;] = &quot;timevarying&quot;;
+config_dict[&quot;non_orographic_gravity_wave&quot;] = true;
+config_dict[&quot;log_progress&quot;] = false;
+config_dict[&quot;vert_diff&quot;] = true;
+config_dict[&quot;dz_bottom&quot;] = 300.0;
+config_dict[&quot;h_elem&quot;] = 12;
+config_dict[&quot;forcing&quot;] = &quot;held_suarez&quot;;
+config_dict[&quot;z_max&quot;] = 55000.0;
+config_dict[&quot;apply_limiter&quot;] = true;
+config_dict[&quot;precip_model&quot;] = &quot;0M&quot;;
+config_dict[&quot;toml&quot;] = [&quot;toml/flame_perf_gw.toml&quot;];
+config_dict[&quot;dt_save_to_sol&quot;] = &quot;Inf&quot;;
+config_dict[&quot;moist&quot;] = &quot;equil&quot;;
+
+config = CA.AtmosConfig(config_dict);
+
+include(&quot;examples/hybrid/driver.jl&quot;)
+
+
+### Buildkite job `longrun_aquaplanet_allsky_tvinsol_0M_slabocean`
+
+using Revise; import ClimaAtmos as CA;
+
+config_dict = Dict();
+config_dict[&quot;rad&quot;] = &quot;allskywithclear&quot;;
+config_dict[&quot;rayleigh_sponge&quot;] = true;
+config_dict[&quot;implicit_diffusion&quot;] = true;
+config_dict[&quot;approximate_linear_solve_iters&quot;] = 2;
+config_dict[&quot;z_elem&quot;] = 63;
+config_dict[&quot;dt&quot;] = &quot;120secs&quot;;
+config_dict[&quot;dt_rad&quot;] = &quot;1hours&quot;;
+config_dict[&quot;surface_setup&quot;] = &quot;DefaultMoninObukhov&quot;;
+config_dict[&quot;dt_cloud_fraction&quot;] = &quot;1hours&quot;;
+config_dict[&quot;t_end&quot;] = &quot;360days&quot;;
+config_dict[&quot;insolation&quot;] = &quot;timevarying&quot;;
+config_dict[&quot;albedo_model&quot;] = &quot;RegressionFunctionAlbedo&quot;;
+config_dict[&quot;dz_bottom&quot;] = 30.0;
+config_dict[&quot;vert_diff&quot;] = &quot;FriersonDiffusion&quot;;
+config_dict[&quot;h_elem&quot;] = 16;
+config_dict[&quot;dt_save_state_to_disk&quot;] = &quot;30days&quot;;
+config_dict[&quot;z_max&quot;] = 65000.0;
+config_dict[&quot;precip_model&quot;] = &quot;0M&quot;;
+config_dict[&quot;check_conservation&quot;] = true;
+config_dict[&quot;prognostic_surface&quot;] = &quot;PrognosticSurfaceTemperature&quot;;
+config_dict[&quot;toml&quot;] = [&quot;toml/longrun_aquaplanet.toml&quot;];
+config_dict[&quot;viscous_sponge&quot;] = true;
+config_dict[&quot;moist&quot;] = &quot;equil&quot;;
+
+config = CA.AtmosConfig(config_dict);
+
+include(&quot;examples/hybrid/driver.jl&quot;)
+
+
+### Buildkite job `prognostic_edmfx_bomex_box`
+
+using Revise; import ClimaAtmos as CA;
+
+config_dict = Dict();
+config_dict[&quot;edmf_coriolis&quot;] = &quot;Bomex&quot;;
+config_dict[&quot;cloud_model&quot;] = &quot;quadrature_sgs&quot;;
+config_dict[&quot;initial_condition&quot;] = &quot;Bomex&quot;;
+config_dict[&quot;implicit_diffusion&quot;] = true;
+config_dict[&quot;edmfx_entr_model&quot;] = &quot;Generalized&quot;;
+config_dict[&quot;approximate_linear_solve_iters&quot;] = 2;
+config_dict[&quot;edmfx_sgs_mass_flux&quot;] = true;
+config_dict[&quot;edmfx_upwinding&quot;] = &quot;first_order&quot;;
+config_dict[&quot;prognostic_tke&quot;] = true;
+config_dict[&quot;surface_setup&quot;] = &quot;Bomex&quot;;
+config_dict[&quot;x_max&quot;] = 1.0e8;
+config_dict[&quot;z_elem&quot;] = 60;
+config_dict[&quot;perturb_initstate&quot;] = false;
+config_dict[&quot;dt&quot;] = &quot;50secs&quot;;
+config_dict[&quot;implicit_sgs_advection&quot;] = true;
+config_dict[&quot;t_end&quot;] = &quot;6hours&quot;;
+config_dict[&quot;edmfx_sgs_diffusive_flux&quot;] = true;
+config_dict[&quot;y_max&quot;] = 1.0e8;
+config_dict[&quot;turbconv&quot;] = &quot;prognostic_edmfx&quot;;
+config_dict[&quot;y_elem&quot;] = 2;
+config_dict[&quot;x_elem&quot;] = 2;
+config_dict[&quot;z_stretch&quot;] = false;
+config_dict[&quot;dt_save_state_to_disk&quot;] = &quot;30mins&quot;;
+config_dict[&quot;max_newton_iters_ode&quot;] = 3;
+config_dict[&quot;subsidence&quot;] = &quot;Bomex&quot;;
+config_dict[&quot;config&quot;] = &quot;box&quot;;
+config_dict[&quot;netcdf_interpolation_num_points&quot;] = [8, 8, 60];
+config_dict[&quot;edmfx_nh_pressure&quot;] = true;
+config_dict[&quot;ode_algo&quot;] = &quot;ARS343&quot;;
+config_dict[&quot;z_max&quot;] = 3000.0;
+config_dict[&quot;toml&quot;] = [&quot;toml/prognostic_edmfx_bomex.toml&quot;];
+config_dict[&quot;call_cloud_diagnostics_per_stage&quot;] = true;
+config_dict[&quot;diagnostics&quot;] = Dict{Any, Any}[Dict(&quot;short_name&quot; =&gt; [&quot;ts&quot;, &quot;ta&quot;, &quot;thetaa&quot;, &quot;ha&quot;, &quot;pfull&quot;, &quot;rhoa&quot;, &quot;ua&quot;, &quot;va&quot;, &quot;wa&quot;, &quot;hur&quot;, &quot;hus&quot;, &quot;cl&quot;, &quot;clw&quot;, &quot;cli&quot;, &quot;hussfc&quot;, &quot;evspsbl&quot;, &quot;pr&quot;], &quot;period&quot; =&gt; &quot;10mins&quot;), Dict(&quot;short_name&quot; =&gt; [&quot;arup&quot;, &quot;waup&quot;, &quot;taup&quot;, &quot;thetaaup&quot;, &quot;haup&quot;, &quot;husup&quot;, &quot;hurup&quot;, &quot;clwup&quot;, &quot;cliup&quot;, &quot;waen&quot;, &quot;taen&quot;, &quot;thetaaen&quot;, &quot;haen&quot;, &quot;husen&quot;, &quot;huren&quot;, &quot;clwen&quot;, &quot;clien&quot;, &quot;tke&quot;], &quot;period&quot; =&gt; &quot;10mins&quot;), Dict(&quot;short_name&quot; =&gt; [&quot;entr&quot;, &quot;detr&quot;, &quot;lmix&quot;, &quot;bgrad&quot;, &quot;strain&quot;, &quot;edt&quot;, &quot;evu&quot;], &quot;period&quot; =&gt; &quot;10mins&quot;)];
+config_dict[&quot;edmfx_detr_model&quot;] = &quot;Generalized&quot;;
+config_dict[&quot;edmfx_filter&quot;] = true;
+config_dict[&quot;ls_adv&quot;] = &quot;Bomex&quot;;
+config_dict[&quot;moist&quot;] = &quot;equil&quot;;
+
+config = CA.AtmosConfig(config_dict);
+
+include(&quot;examples/hybrid/driver.jl&quot;)
+
+
+### Buildkite job `gpu_implicit_barowave_moist`
+
+using Revise; import ClimaAtmos as CA;
+
+config_dict = Dict();
+config_dict[&quot;moist&quot;] = &quot;equil&quot;;
+config_dict[&quot;initial_condition&quot;] = &quot;MoistBaroclinicWave&quot;;
+config_dict[&quot;implicit_diffusion&quot;] = true;
+config_dict[&quot;approximate_linear_solve_iters&quot;] = 2;
+config_dict[&quot;z_elem&quot;] = 25;
+config_dict[&quot;dt&quot;] = &quot;1secs&quot;;
+config_dict[&quot;surface_setup&quot;] = &quot;DefaultExchangeCoefficients&quot;;
+config_dict[&quot;t_end&quot;] = &quot;1mins&quot;;
+config_dict[&quot;log_progress&quot;] = false;
+config_dict[&quot;vert_diff&quot;] = true;
+config_dict[&quot;h_elem&quot;] = 12;
+config_dict[&quot;forcing&quot;] = &quot;held_suarez&quot;;
+config_dict[&quot;apply_limiter&quot;] = false;
+config_dict[&quot;precip_model&quot;] = &quot;0M&quot;;
+config_dict[&quot;dt_save_to_sol&quot;] = &quot;Inf&quot;;
+config_dict[&quot;rad&quot;] = &quot;allskywithclear&quot;;
+
+config = CA.AtmosConfig(config_dict);
+
+include(&quot;examples/hybrid/driver.jl&quot;)
+
+
+### Buildkite job `single_column_hydrostatic_balance_ft64`
+
+using Revise; import ClimaAtmos as CA;
+
+config_dict = Dict();
+config_dict[&quot;dz_bottom&quot;] = 30.0;
+config_dict[&quot;dt_save_state_to_disk&quot;] = &quot;5days&quot;;
+config_dict[&quot;initial_condition&quot;] = &quot;IsothermalProfile&quot;;
+config_dict[&quot;config&quot;] = &quot;column&quot;;
+config_dict[&quot;hyperdiff&quot;] = false;
+config_dict[&quot;z_elem&quot;] = 63;
+config_dict[&quot;dt&quot;] = &quot;3hours&quot;;
+config_dict[&quot;FLOAT_TYPE&quot;] = &quot;Float64&quot;;
+config_dict[&quot;dt_save_to_sol&quot;] = &quot;3hours&quot;;
+config_dict[&quot;z_max&quot;] = 65000.0;
+
+config = CA.AtmosConfig(config_dict);
+
+include(&quot;examples/hybrid/driver.jl&quot;)
+
+
+### Buildkite job `longrun_aquaplanet_dyamond`
+
+using Revise; import ClimaAtmos as CA;
+
+config_dict = Dict();
+config_dict[&quot;rad&quot;] = &quot;allskywithclear&quot;;
+config_dict[&quot;rayleigh_sponge&quot;] = true;
+config_dict[&quot;cloud_model&quot;] = &quot;grid_scale&quot;;
+config_dict[&quot;dt_rad&quot;] = &quot;1hours&quot;;
+config_dict[&quot;z_elem&quot;] = 63;
+config_dict[&quot;dt&quot;] = &quot;30secs&quot;;
+config_dict[&quot;dt_cloud_fraction&quot;] = &quot;1hours&quot;;
+config_dict[&quot;surface_setup&quot;] = &quot;DefaultMoninObukhov&quot;;
+config_dict[&quot;t_end&quot;] = &quot;10days&quot;;
+config_dict[&quot;insolation&quot;] = &quot;timevarying&quot;;
+config_dict[&quot;dz_bottom&quot;] = 30.0;
+config_dict[&quot;vert_diff&quot;] = &quot;FriersonDiffusion&quot;;
+config_dict[&quot;h_elem&quot;] = 60;
+config_dict[&quot;dt_save_state_to_disk&quot;] = &quot;10days&quot;;
+config_dict[&quot;z_max&quot;] = 65000.0;
+config_dict[&quot;precip_model&quot;] = &quot;0M&quot;;
+config_dict[&quot;toml&quot;] = [&quot;toml/longrun_aquaplanet.toml&quot;];
+config_dict[&quot;viscous_sponge&quot;] = true;
+config_dict[&quot;moist&quot;] = &quot;equil&quot;;
+
+config = CA.AtmosConfig(config_dict);
+
+include(&quot;examples/hybrid/driver.jl&quot;)
+
+
+### Buildkite job `sphere_ssp_baroclinic_wave_rhoe_equilmoist_dcmip200`
+
+using Revise; import ClimaAtmos as CA;
+
+config_dict = Dict();
+config_dict[&quot;rayleigh_sponge&quot;] = true;
+config_dict[&quot;topo_smoothing&quot;] = true;
+config_dict[&quot;initial_condition&quot;] = &quot;MoistBaroclinicWave&quot;;
+config_dict[&quot;dt&quot;] = &quot;450secs&quot;;
+config_dict[&quot;t_end&quot;] = &quot;450secs&quot;;
+config_dict[&quot;dt_save_state_to_disk&quot;] = &quot;1days&quot;;
+config_dict[&quot;ode_algo&quot;] = &quot;SSP333&quot;;
+config_dict[&quot;apply_limiter&quot;] = true;
+config_dict[&quot;precip_model&quot;] = &quot;0M&quot;;
+config_dict[&quot;topography&quot;] = &quot;DCMIP200&quot;;
+config_dict[&quot;moist&quot;] = &quot;equil&quot;;
+
+config = CA.AtmosConfig(config_dict);
+
+include(&quot;examples/hybrid/driver.jl&quot;)
+
+
+### Buildkite job `diagnostic_edmfx_aquaplanet`
+
+using Revise; import ClimaAtmos as CA;
+
+config_dict = Dict();
+config_dict[&quot;moist&quot;] = &quot;equil&quot;;
+config_dict[&quot;rayleigh_sponge&quot;] = true;
+config_dict[&quot;cloud_model&quot;] = &quot;quadrature_sgs&quot;;
+config_dict[&quot;implicit_diffusion&quot;] = true;
+config_dict[&quot;edmfx_entr_model&quot;] = &quot;Generalized&quot;;
+config_dict[&quot;approximate_linear_solve_iters&quot;] = 2;
+config_dict[&quot;z_elem&quot;] = 31;
+config_dict[&quot;edmfx_upwinding&quot;] = &quot;first_order&quot;;
+config_dict[&quot;prognostic_tke&quot;] = true;
+config_dict[&quot;surface_setup&quot;] = &quot;DefaultMoninObukhov&quot;;
+config_dict[&quot;edmfx_sgs_mass_flux&quot;] = true;
+config_dict[&quot;dt&quot;] = &quot;120secs&quot;;
+config_dict[&quot;t_end&quot;] = &quot;3hours&quot;;
+config_dict[&quot;edmfx_sgs_diffusive_flux&quot;] = true;
+config_dict[&quot;turbconv&quot;] = &quot;diagnostic_edmfx&quot;;
+config_dict[&quot;dz_bottom&quot;] = 50.0;
+config_dict[&quot;ode_algo&quot;] = &quot;ARS343&quot;;
+config_dict[&quot;edmfx_nh_pressure&quot;] = true;
+config_dict[&quot;reproducibility_test&quot;] = true;
+config_dict[&quot;z_max&quot;] = 65000.0;
+config_dict[&quot;precip_model&quot;] = &quot;1M&quot;;
+config_dict[&quot;toml&quot;] = [&quot;toml/diagnostic_edmfx.toml&quot;];
+config_dict[&quot;edmfx_detr_model&quot;] = &quot;Generalized&quot;;
+config_dict[&quot;rad&quot;] = &quot;clearsky&quot;;
+
+config = CA.AtmosConfig(config_dict);
+
+include(&quot;examples/hybrid/driver.jl&quot;)
+
+
+### Buildkite job `diagnostic_edmfx_dycoms_rf01_explicit_box`
+
+using Revise; import ClimaAtmos as CA;
+
+config_dict = Dict();
+config_dict[&quot;edmf_coriolis&quot;] = &quot;DYCOMS_RF01&quot;;
+config_dict[&quot;moist&quot;] = &quot;equil&quot;;
+config_dict[&quot;cloud_model&quot;] = &quot;quadrature_sgs&quot;;
+config_dict[&quot;initial_condition&quot;] = &quot;DYCOMS_RF01&quot;;
+config_dict[&quot;edmfx_entr_model&quot;] = &quot;Generalized&quot;;
+config_dict[&quot;edmfx_sgs_mass_flux&quot;] = true;
+config_dict[&quot;x_max&quot;] = 1.0e8;
+config_dict[&quot;z_elem&quot;] = 30;
+config_dict[&quot;edmfx_upwinding&quot;] = &quot;first_order&quot;;
+config_dict[&quot;prognostic_tke&quot;] = true;
+config_dict[&quot;surface_setup&quot;] = &quot;DYCOMS_RF01&quot;;
+config_dict[&quot;dt&quot;] = &quot;20secs&quot;;
+config_dict[&quot;t_end&quot;] = &quot;4hours&quot;;
+config_dict[&quot;edmfx_sgs_diffusive_flux&quot;] = true;
+config_dict[&quot;y_max&quot;] = 1.0e8;
+config_dict[&quot;turbconv&quot;] = &quot;diagnostic_edmfx&quot;;
+config_dict[&quot;y_elem&quot;] = 2;
+config_dict[&quot;x_elem&quot;] = 2;
+config_dict[&quot;z_stretch&quot;] = false;
+config_dict[&quot;dt_save_state_to_disk&quot;] = &quot;10mins&quot;;
+config_dict[&quot;ode_algo&quot;] = &quot;ARS343&quot;;
+config_dict[&quot;subsidence&quot;] = &quot;DYCOMS&quot;;
+config_dict[&quot;config&quot;] = &quot;box&quot;;
+config_dict[&quot;netcdf_interpolation_num_points&quot;] = [8, 8, 30];
+config_dict[&quot;edmfx_nh_pressure&quot;] = true;
+config_dict[&quot;z_max&quot;] = 1500;
+config_dict[&quot;toml&quot;] = [&quot;toml/diagnostic_edmfx.toml&quot;];
+config_dict[&quot;call_cloud_diagnostics_per_stage&quot;] = true;
+config_dict[&quot;diagnostics&quot;] = Dict{Any, Any}[Dict(&quot;short_name&quot; =&gt; [&quot;ts&quot;, &quot;ta&quot;, &quot;thetaa&quot;, &quot;ha&quot;, &quot;pfull&quot;, &quot;rhoa&quot;, &quot;ua&quot;, &quot;va&quot;, &quot;wa&quot;, &quot;hur&quot;, &quot;hus&quot;, &quot;cl&quot;, &quot;clw&quot;, &quot;cli&quot;, &quot;hussfc&quot;, &quot;evspsbl&quot;, &quot;pr&quot;], &quot;period&quot; =&gt; &quot;10mins&quot;), Dict(&quot;short_name&quot; =&gt; [&quot;arup&quot;, &quot;waup&quot;, &quot;taup&quot;, &quot;thetaaup&quot;, &quot;haup&quot;, &quot;husup&quot;, &quot;hurup&quot;, &quot;clwup&quot;, &quot;cliup&quot;, &quot;waen&quot;, &quot;tke&quot;, &quot;lmix&quot;], &quot;period&quot; =&gt; &quot;10mins&quot;)];
+config_dict[&quot;edmfx_detr_model&quot;] = &quot;Generalized&quot;;
+config_dict[&quot;rad&quot;] = &quot;DYCOMS&quot;;
+
+config = CA.AtmosConfig(config_dict);
+
+include(&quot;examples/hybrid/driver.jl&quot;)
+
+
+### Buildkite job `deep_sphere_baroclinic_wave_rhoe_equilmoist`
+
+using Revise; import ClimaAtmos as CA;
+
+config_dict = Dict();
+config_dict[&quot;moist&quot;] = &quot;equil&quot;;
+config_dict[&quot;precip_model&quot;] = &quot;0M&quot;;
+config_dict[&quot;dt_save_state_to_disk&quot;] = &quot;2days&quot;;
+config_dict[&quot;initial_condition&quot;] = &quot;MoistBaroclinicWave&quot;;
+config_dict[&quot;t_end&quot;] = &quot;10days&quot;;
+config_dict[&quot;diagnostics&quot;] = Dict{Any, Any}[Dict(&quot;short_name&quot; =&gt; [&quot;pfull&quot;, &quot;wa&quot;, &quot;va&quot;, &quot;rv&quot;, &quot;hus&quot;, &quot;ke&quot;], &quot;period&quot; =&gt; &quot;1days&quot;)];
+config_dict[&quot;dt&quot;] = &quot;450secs&quot;;
+config_dict[&quot;reproducibility_test&quot;] = true;
+config_dict[&quot;deep_atmosphere&quot;] = true;
+
+config = CA.AtmosConfig(config_dict);
+
+include(&quot;examples/hybrid/driver.jl&quot;)
+
+
+### Buildkite job `amip_target_diagedmf`
+
+using Revise; import ClimaAtmos as CA;
+
+config_dict = Dict();
+config_dict[&quot;rad&quot;] = &quot;allskywithclear&quot;;
+config_dict[&quot;prescribed_aerosols&quot;] = [&quot;CB1&quot;, &quot;CB2&quot;, &quot;DST01&quot;, &quot;OC1&quot;, &quot;OC2&quot;, &quot;SO4&quot;];
+config_dict[&quot;rayleigh_sponge&quot;] = true;
+config_dict[&quot;cloud_model&quot;] = &quot;quadrature_sgs&quot;;
+config_dict[&quot;implicit_diffusion&quot;] = true;
+config_dict[&quot;edmfx_entr_model&quot;] = &quot;Generalized&quot;;
+config_dict[&quot;dt_rad&quot;] = &quot;1hours&quot;;
+config_dict[&quot;z_elem&quot;] = 63;
+config_dict[&quot;override_τ_precip&quot;] = false;
+config_dict[&quot;dt_cloud_fraction&quot;] = &quot;1hours&quot;;
+config_dict[&quot;surface_setup&quot;] = &quot;DefaultMoninObukhov&quot;;
+config_dict[&quot;approximate_linear_solve_iters&quot;] = 2;
+config_dict[&quot;prognostic_tke&quot;] = true;
+config_dict[&quot;edmfx_upwinding&quot;] = &quot;first_order&quot;;
+config_dict[&quot;edmfx_sgs_mass_flux&quot;] = true;
+config_dict[&quot;dt&quot;] = &quot;120secs&quot;;
+config_dict[&quot;netcdf_output_at_levels&quot;] = true;
+config_dict[&quot;t_end&quot;] = &quot;120days&quot;;
+config_dict[&quot;insolation&quot;] = &quot;timevarying&quot;;
+config_dict[&quot;edmfx_sgs_diffusive_flux&quot;] = true;
+config_dict[&quot;turbconv&quot;] = &quot;diagnostic_edmfx&quot;;
+config_dict[&quot;dz_bottom&quot;] = 30.0;
+config_dict[&quot;h_elem&quot;] = 16;
+config_dict[&quot;dt_save_state_to_disk&quot;] = &quot;20days&quot;;
+config_dict[&quot;ode_algo&quot;] = &quot;ARS343&quot;;
+config_dict[&quot;edmfx_nh_pressure&quot;] = true;
+config_dict[&quot;z_max&quot;] = 65000.0;
+config_dict[&quot;prescribe_ozone&quot;] = true;
+config_dict[&quot;precip_model&quot;] = &quot;0M&quot;;
+config_dict[&quot;aerosol_radiation&quot;] = true;
+config_dict[&quot;toml&quot;] = [&quot;toml/longrun_aquaplanet_diagedmf.toml&quot;];
+config_dict[&quot;viscous_sponge&quot;] = true;
+config_dict[&quot;edmfx_detr_model&quot;] = &quot;Generalized&quot;;
+config_dict[&quot;diagnostics&quot;] = Dict{Any, Any}[Dict(&quot;reduction_time&quot; =&gt; &quot;average&quot;, &quot;short_name&quot; =&gt; [&quot;mmrso4&quot;, &quot;o3&quot;], &quot;period&quot; =&gt; &quot;1months&quot;)];
+config_dict[&quot;dt_save_to_sol&quot;] = &quot;10days&quot;;
+config_dict[&quot;moist&quot;] = &quot;equil&quot;;
+
+config = CA.AtmosConfig(config_dict);
+
+include(&quot;examples/hybrid/driver.jl&quot;)
+
+
+### Buildkite job `aquaplanet_progedmf`
+
+using Revise; import ClimaAtmos as CA;
+
+config_dict = Dict();
+config_dict[&quot;rad&quot;] = &quot;allskywithclear&quot;;
+config_dict[&quot;rayleigh_sponge&quot;] = true;
+config_dict[&quot;output_default_diagnostics&quot;] = false;
+config_dict[&quot;implicit_diffusion&quot;] = true;
+config_dict[&quot;edmfx_entr_model&quot;] = &quot;Generalized&quot;;
+config_dict[&quot;dt_rad&quot;] = &quot;1hours&quot;;
+config_dict[&quot;z_elem&quot;] = 63;
+config_dict[&quot;dt_cloud_fraction&quot;] = &quot;1hours&quot;;
+config_dict[&quot;approximate_linear_solve_iters&quot;] = 2;
+config_dict[&quot;surface_setup&quot;] = &quot;DefaultMoninObukhov&quot;;
+config_dict[&quot;prognostic_tke&quot;] = true;
+config_dict[&quot;edmfx_upwinding&quot;] = &quot;first_order&quot;;
+config_dict[&quot;edmfx_sgs_mass_flux&quot;] = true;
+config_dict[&quot;dt&quot;] = &quot;10secs&quot;;
+config_dict[&quot;implicit_sgs_advection&quot;] = true;
+config_dict[&quot;t_end&quot;] = &quot;3hours&quot;;
+config_dict[&quot;insolation&quot;] = &quot;timevarying&quot;;
+config_dict[&quot;edmfx_sgs_diffusive_flux&quot;] = true;
+config_dict[&quot;turbconv&quot;] = &quot;prognostic_edmfx&quot;;
+config_dict[&quot;dz_bottom&quot;] = 30.0;
+config_dict[&quot;h_elem&quot;] = 30;
+config_dict[&quot;dt_save_state_to_disk&quot;] = &quot;Inf&quot;;
+config_dict[&quot;max_newton_iters_ode&quot;] = 3;
+config_dict[&quot;ode_algo&quot;] = &quot;ARS343&quot;;
+config_dict[&quot;edmfx_nh_pressure&quot;] = true;
+config_dict[&quot;z_max&quot;] = 65000.0;
+config_dict[&quot;precip_model&quot;] = &quot;0M&quot;;
+config_dict[&quot;toml&quot;] = [&quot;toml/prognostic_edmfx.toml&quot;];
+config_dict[&quot;viscous_sponge&quot;] = true;
+config_dict[&quot;edmfx_detr_model&quot;] = &quot;Generalized&quot;;
+config_dict[&quot;edmfx_filter&quot;] = true;
+config_dict[&quot;dt_save_to_sol&quot;] = &quot;Inf&quot;;
+config_dict[&quot;moist&quot;] = &quot;equil&quot;;
+
+config = CA.AtmosConfig(config_dict);
+
+include(&quot;examples/hybrid/driver.jl&quot;)</code></pre></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../restarts/">« Restarts and checkpoints</a><a class="docs-footer-nextpage" href="../config/">Configuration »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.7.0 on <span class="colophon-date" title="Monday 7 October 2024 18:47">Monday 7 October 2024</span>. Using Julia version 1.10.5.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
