@@ -879,8 +879,9 @@ end
     ᶜh_ice_minus_vap!(ᶜout, thermo_params, ᶜT)
 
 Write a water-enthalpy coefficient of the diffusive enthalpy flux into the center
-field `ᶜout` and return it: the total specific enthalpy of vapor `h_v(T) + Φ`, or
-the phase differences `h_l(T) - h_v(T) = -L_v(T)` and `h_i(T) - h_v(T) = -L_s(T)`.
+field `ᶜout` (or allocate a column register field when `ᶜout` is `nothing`) and
+return it: the total specific enthalpy of vapor `h_v(T) + Φ`, or the phase
+differences `h_l(T) - h_v(T) = -L_v(T)` and `h_i(T) - h_v(T) = -L_s(T)`.
 
 These are the coefficients of `∇q_t`, `∇q_l`, and `∇q_i` in the flux
 `F_h = -ρ K [c_p ∇T + ∇Φ + Σ_μ (h_μ + Φ) ∇q_μ]` once the vapor specific humidity is
@@ -890,13 +891,20 @@ under a Kirchhoff-consistent shift of the reference temperature.
 """
 ᶜh_vap_plus_Φ!(ᶜout, thermo_params, ᶜT, ᶜΦ) =
     @. ᶜout = TD.enthalpy_vapor(thermo_params, ᶜT) + ᶜΦ
+ᶜh_vap_plus_Φ!(::Nothing, thermo_params, ᶜT, ᶜΦ) =
+    @. TD.enthalpy_vapor(thermo_params, ᶜT) + ᶜΦ
 ᶜh_liq_minus_vap!(ᶜout, thermo_params, ᶜT) =
     @. ᶜout =
         TD.enthalpy_liquid(thermo_params, ᶜT) -
         TD.enthalpy_vapor(thermo_params, ᶜT)
+ᶜh_liq_minus_vap!(::Nothing, thermo_params, ᶜT) =
+    @. TD.enthalpy_liquid(thermo_params, ᶜT) -
+       TD.enthalpy_vapor(thermo_params, ᶜT)
 ᶜh_ice_minus_vap!(ᶜout, thermo_params, ᶜT) =
     @. ᶜout =
         TD.enthalpy_ice(thermo_params, ᶜT) - TD.enthalpy_vapor(thermo_params, ᶜT)
+ᶜh_ice_minus_vap!(::Nothing, thermo_params, ᶜT) =
+    @. TD.enthalpy_ice(thermo_params, ᶜT) - TD.enthalpy_vapor(thermo_params, ᶜT)
 
 """
     maybe_materialize!(ᶜscratch, ᶜχ)
@@ -916,13 +924,14 @@ Write the isobaric specific heat capacity of the diffusing mixture,
 
     c_p = (1 - q_t) c_pd + (q_t - q_l - q_i) c_pv + q_l c_pl + q_i c_pi,
 
-into the center field `ᶜout` and return it, with `ᶜq_water = (q_t, q_l, q_i)`
-the specific humidities of the diffusing water (`ᶜdiffusing_water_phases`, or
-their values in a PROPHET subdomain). Mass that does not diffuse, rain and snow
-outside the LES closures, counts at `c_pd`, which makes `c_p` the coefficient of
-`∇T` in the gradient of the moist static energy that the PROPHET updrafts
-diffuse (`ᶜupdraft_diffusing_mse!`). In dry configurations
-(`ᶜq_water === nothing`), `c_p = c_pd`.
+into the center field `ᶜout` (or a column register field when `ᶜout` is
+`nothing`) and return it, with `ᶜq_water = (q_t, q_l, q_i)` the specific
+humidities of the diffusing water (`ᶜdiffusing_water_phases`, or their values in
+a PROPHET subdomain). Mass that does not diffuse, rain and snow outside the LES
+closures, counts at `c_pd`, which makes `c_p` the coefficient of `∇T` in the
+gradient of the moist static energy that the PROPHET updrafts diffuse
+(`ᶜupdraft_diffusing_mse!`). In dry configurations (`ᶜq_water === nothing`),
+`c_p = c_pd`.
 
 `c_p` is the coefficient of `∇T` in the sensible-heat part of the diffusive
 enthalpy flux (`add_sensible_heat_diffusionᵥ!`): turbulent eddies exchange
@@ -934,14 +943,23 @@ function ᶜcp_diffusing!(ᶜout, thermo_params, ᶜq_water)
     @. ᶜout = TD.cp_m(thermo_params, ᶜq_tot, ᶜq_liq, ᶜq_ice)
     return ᶜout
 end
+function ᶜcp_diffusing!(::Nothing, thermo_params, ᶜq_water)
+    ᶜq_tot, ᶜq_liq, ᶜq_ice = ᶜq_water
+    return @. TD.cp_m(thermo_params, ᶜq_tot, ᶜq_liq, ᶜq_ice)
+end
 function ᶜcp_diffusing!(ᶜout, thermo_params, ::Nothing)
     cp_d = TD.Parameters.cp_d(thermo_params)
     @. ᶜout = cp_d
     return ᶜout
 end
+ᶜcp_diffusing!(::Nothing, thermo_params, ::Nothing) =
+    TD.Parameters.cp_d(thermo_params)
 
 """
     add_sensible_heat_diffusionᵥ!(ᶜρe_totₜ, ᶠw, ᶜT, ᶜq_water, p, ᶜscratch)
+    add_sensible_heat_diffusionᵥ!(
+        ᶜρe_totₜ, ᶠw, ᶜT, ᶜq_water, thermo_params, ᶜΦ, ᶜscratch = nothing,
+    )
 
 Add to `ᶜρe_totₜ` the tendency `-∇·F` of the sensible-heat and geopotential
 part of the vertical diffusive enthalpy flux,
@@ -967,14 +985,35 @@ form with `∇s_d = c_pd ∇T + ∇Φ` omits the heat capacity of the water, a f
 `(c_p - c_pd) ∇T` of about 1% of the sensible-heat flux, directed down the
 temperature gradient in a moist-adiabatic layer.
 """
-function add_sensible_heat_diffusionᵥ!(ᶜρe_totₜ, ᶠw, ᶜT, ᶜq_water, p, ᶜscratch)
-    (; ᶜΦ) = p.core
-    thermo_params = CAP.thermodynamics_params(p.params)
-    ᶜcp = ᶜcp_diffusing!(ᶜscratch, thermo_params, ᶜq_water)
-    @. ᶜρe_totₜ -= ᶜdiffdivᵥ(-(ᶠw * ᶠinterp(ᶜcp) * ᶠgradᵥ(ᶜT)))
+@inline function add_sensible_heat_diffusionᵥ!(
+    ᶜρe_totₜ,
+    ᶠw,
+    ᶜT,
+    ᶜq_water,
+    thermo_params::TD.Parameters.ThermodynamicsParameters,
+    ᶜΦ,
+    ᶜscratch = nothing,
+)
+    if ᶜq_water === nothing
+        cp_d = TD.Parameters.cp_d(thermo_params)
+        @. ᶜρe_totₜ -= ᶜdiffdivᵥ(-(ᶠw * cp_d * ᶠgradᵥ(ᶜT)))
+    else
+        ᶜcp = ᶜcp_diffusing!(ᶜscratch, thermo_params, ᶜq_water)
+        @. ᶜρe_totₜ -= ᶜdiffdivᵥ(-(ᶠw * ᶠinterp(ᶜcp) * ᶠgradᵥ(ᶜT)))
+    end
     @. ᶜρe_totₜ -= ᶜdiffdivᵥ(-(ᶠw * ᶠgradᵥ(ᶜΦ)))
     return nothing
 end
+add_sensible_heat_diffusionᵥ!(ᶜρe_totₜ, ᶠw, ᶜT, ᶜq_water, p, ᶜscratch) =
+    add_sensible_heat_diffusionᵥ!(
+        ᶜρe_totₜ,
+        ᶠw,
+        ᶜT,
+        ᶜq_water,
+        CAP.thermodynamics_params(p.params),
+        p.core.ᶜΦ,
+        ᶜscratch,
+    )
 
 """
     add_sensible_heat_diffusionₕ!(ᶜρe_totₜ, ᶜw, ᶜT, ᶜq_water, p, ᶜscratch)
@@ -996,6 +1035,10 @@ end
     add_water_enthalpy_diffusionᵥ!(
         ᶜρe_totₜ, ᶠw, ᶜT, ᶜq_water, p, ᶜscratch; ᶜq_scratch = nothing,
     )
+    add_water_enthalpy_diffusionᵥ!(
+        ᶜρe_totₜ, ᶠw, ᶜT, ᶜq_water, thermo_params, ᶜΦ, ᶜscratch = nothing;
+        ᶜq_scratch = nothing,
+    )
 
 Add the tendency `-∇·F` of the water part of the vertical diffusive enthalpy flux
 of Yatunin et al. (2026, Eq. 33),
@@ -1011,17 +1054,16 @@ so that the flux factors into `Σ_μ (h_μ + Φ) F_qμ`. `ᶠw` is the face weig
 coefficient in turn, and `ᶜq_scratch` (see `maybe_materialize!`) each specific
 humidity.
 """
-function add_water_enthalpy_diffusionᵥ!(
+@inline function add_water_enthalpy_diffusionᵥ!(
     ᶜρe_totₜ,
     ᶠw,
     ᶜT,
     ᶜq_water,
-    p,
-    ᶜscratch;
+    thermo_params::TD.Parameters.ThermodynamicsParameters,
+    ᶜΦ,
+    ᶜscratch = nothing;
     ᶜq_scratch = nothing,
 )
-    thermo_params = CAP.thermodynamics_params(p.params)
-    (; ᶜΦ) = p.core
     ᶜq_tot, ᶜq_liq, ᶜq_ice = ᶜq_water
     ᶜh = ᶜh_vap_plus_Φ!(ᶜscratch, thermo_params, ᶜT, ᶜΦ)
     ᶜq = maybe_materialize!(ᶜq_scratch, ᶜq_tot)
@@ -1034,6 +1076,24 @@ function add_water_enthalpy_diffusionᵥ!(
     @. ᶜρe_totₜ -= ᶜdiffdivᵥ(-(ᶠw * ᶠinterp(ᶜh) * ᶠgradᵥ(ᶜq)))
     return nothing
 end
+add_water_enthalpy_diffusionᵥ!(
+    ᶜρe_totₜ,
+    ᶠw,
+    ᶜT,
+    ᶜq_water,
+    p,
+    ᶜscratch;
+    ᶜq_scratch = nothing,
+) = add_water_enthalpy_diffusionᵥ!(
+    ᶜρe_totₜ,
+    ᶠw,
+    ᶜT,
+    ᶜq_water,
+    CAP.thermodynamics_params(p.params),
+    p.core.ᶜΦ,
+    ᶜscratch;
+    ᶜq_scratch,
+)
 
 """
     add_water_enthalpy_diffusionₕ!(

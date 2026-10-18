@@ -143,13 +143,14 @@ temporaries and it must stay inlined.
         @. Yₜc.ρq_tot += vtt_q
         @. Yₜc.ρ += vtt_q  # Effect of SGS water flux on (moist) air mass
     end
-    ntuple(Val(length(ρχ_names))) do i
-        ᶜρχ = MatrixFields.get_field(Yc, ρχ_names[i])
-        ᶜρχₜ = MatrixFields.get_field(Yₜc, ρχ_names[i])
-        ᶜa_scalar_χ = @. (ᶜχ_subs[i] - specific(ᶜρχ, Yc.ρ)) * ᶜa
+    MatrixFields.unrolled_foreach(
+        _unrolled_zip(ρχ_names, ᶜχ_subs),
+    ) do (ρχ_name, ᶜχ_sub)
+        ᶜρχ = MatrixFields.get_field(Yc, ρχ_name)
+        ᶜρχₜ = MatrixFields.get_field(Yₜc, ρχ_name)
+        ᶜa_scalar_χ = @. (ᶜχ_sub - specific(ᶜρχ, Yc.ρ)) * ᶜa
         vtt_χ = vertical_transport(ᶜρ, ᶠu³_diff, ᶜa_scalar_χ, dt, upwinding)
         @. ᶜρχₜ += vtt_χ
-        return nothing
     end
     return nothing
 end
@@ -180,6 +181,37 @@ function ᶜenv_diffusing_water(Y, p)
     end
 end
 
+@inline function ᶜenv_diffusing_water(
+    Yc,
+    ᶜρa⁰,
+    ᶜq_liq⁰,
+    ᶜq_ice⁰,
+    turbconv_model,
+    microphysics_model,
+)
+    if microphysics_model isa NonEquilibriumMicrophysics
+        ᶜq_tot_eff⁰ = @. specific_env_value(
+            @name(q_tot), Yc.ρq_tot, Yc.ρ, Yc.sgsʲs, ᶜρa⁰, turbconv_model,
+        ) - specific_env_value(
+            @name(q_rai), Yc.ρq_rai, Yc.ρ, Yc.sgsʲs, ᶜρa⁰, turbconv_model,
+        ) - specific_env_value(
+            @name(q_sno), Yc.ρq_sno, Yc.ρ, Yc.sgsʲs, ᶜρa⁰, turbconv_model,
+        )
+        ᶜq_lcl⁰ = @. specific_env_value(
+            @name(q_lcl), Yc.ρq_lcl, Yc.ρ, Yc.sgsʲs, ᶜρa⁰, turbconv_model,
+        )
+        ᶜq_icl⁰ = @. specific_env_value(
+            @name(q_icl), Yc.ρq_icl, Yc.ρ, Yc.sgsʲs, ᶜρa⁰, turbconv_model,
+        )
+        return (ᶜq_tot_eff⁰, ᶜq_lcl⁰, ᶜq_icl⁰)
+    else
+        ᶜq_tot⁰ = @. specific_env_value(
+            @name(q_tot), Yc.ρq_tot, Yc.ρ, Yc.sgsʲs, ᶜρa⁰, turbconv_model,
+        )
+        return (ᶜq_tot⁰, ᶜq_liq⁰, ᶜq_ice⁰)
+    end
+end
+
 """
     ᶜupdraft_diffusing_water(Y, p, ::Val{j})
 
@@ -199,6 +231,20 @@ function ᶜupdraft_diffusing_water(Y, p, ::Val{j}) where {j}
     else
         (; ᶜq_liqʲs, ᶜq_iceʲs) = p.precomputed
         return (Y.c.sgsʲs.:($j).q_tot, ᶜq_liqʲs.:($j), ᶜq_iceʲs.:($j))
+    end
+end
+
+@inline function ᶜupdraft_diffusing_water(
+    ᶜsgsʲ,
+    ᶜq_liqʲ,
+    ᶜq_iceʲ,
+    microphysics_model,
+)
+    if microphysics_model isa NonEquilibriumMicrophysics
+        ᶜq_tot_effʲ = @. ᶜsgsʲ.q_tot - ᶜsgsʲ.q_rai - ᶜsgsʲ.q_sno
+        return (ᶜq_tot_effʲ, ᶜsgsʲ.q_lcl, ᶜsgsʲ.q_icl)
+    else
+        return (ᶜsgsʲ.q_tot, ᶜq_liqʲ, ᶜq_iceʲ)
     end
 end
 
@@ -236,6 +282,45 @@ function ᶜupdraft_diffusing_mse!(ᶜmse_eff, Y, p, ::Val{j}) where {j}
     end
 end
 
+@inline function ᶜupdraft_diffusing_mse!(
+    ᶜmse_eff,
+    ᶜsgsʲ,
+    ᶜTʲ,
+    thermo_params,
+    microphysics_model,
+)
+    ᶜmseʲ = ᶜsgsʲ.mse
+    if microphysics_model isa NonEquilibriumMicrophysics
+        ᶜq_raiʲ = ᶜsgsʲ.q_rai
+        ᶜq_snoʲ = ᶜsgsʲ.q_sno
+        if ᶜmse_eff === nothing
+            return @. ᶜmseʲ -
+                      (
+                TD.enthalpy_liquid(thermo_params, ᶜTʲ) -
+                TD.enthalpy_dry(thermo_params, ᶜTʲ)
+            ) * ᶜq_raiʲ -
+                      (
+                TD.enthalpy_ice(thermo_params, ᶜTʲ) -
+                TD.enthalpy_dry(thermo_params, ᶜTʲ)
+            ) * ᶜq_snoʲ
+        else
+            @. ᶜmse_eff =
+                ᶜmseʲ -
+                (
+                    TD.enthalpy_liquid(thermo_params, ᶜTʲ) -
+                    TD.enthalpy_dry(thermo_params, ᶜTʲ)
+                ) * ᶜq_raiʲ -
+                (
+                    TD.enthalpy_ice(thermo_params, ᶜTʲ) -
+                    TD.enthalpy_dry(thermo_params, ᶜTʲ)
+                ) * ᶜq_snoʲ
+            return ᶜmse_eff
+        end
+    else
+        return ᶜmseʲ
+    end
+end
+
 """
     edmfx_diffused_scalars(Y)
 
@@ -261,8 +346,8 @@ edmfx_diffused_scalars(Y) = (
 """
     ᶠupdraft_diffusion_weight!(ᶠwʲ, ᶜρaʲ, ᶠK_h, f_j)
 
-Write into `ᶠwʲ` and return the face weight of the vertical updraft diffusive
-flux `-ᶠwʲ ∇χʲ`,
+Write into `ᶠwʲ` (or allocate a column register field when `ᶠwʲ` is `nothing`)
+and return the face weight of the vertical updraft diffusive flux `-ᶠwʲ ∇χʲ`,
 
     ᶠwʲ = f_j K_h H(ρaʲ),    H(x, y) = 2 / (1/x + 1/y),
 
@@ -280,10 +365,14 @@ grid-mean diffusion at the same `K_h` for every value of `ρaʲ_c`, and the
 extensive flux through a face bounded by a draft-free cell vanishes. (An
 arithmetic face mean amplifies the intensive tendency by `ρaʲ_nb / ρaʲ_c`.)
 """
-function ᶠupdraft_diffusion_weight!(ᶠwʲ, ᶜρaʲ, ᶠK_h, f_j)
+@inline function ᶠupdraft_diffusion_weight!(ᶠwʲ, ᶜρaʲ, ᶠK_h, f_j)
     ϵ_FT = eps(eltype(ᶠwʲ))
     @. ᶠwʲ = f_j * ᶠK_h / ᶠinterp(1 / max(ᶜρaʲ, ϵ_FT))
     return ᶠwʲ
+end
+@inline function ᶠupdraft_diffusion_weight!(::Nothing, ᶜρaʲ, ᶠK_h, f_j)
+    ϵ_FT = eps(eltype(ᶠK_h))
+    return @. f_j * ᶠK_h / ᶠinterp(1 / max(ᶜρaʲ, ϵ_FT))
 end
 
 """

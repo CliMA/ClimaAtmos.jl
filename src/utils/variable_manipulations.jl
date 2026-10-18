@@ -386,38 +386,54 @@ A lazy center `Field` with the environment value `χ⁰`.
 """
 function ᶜspecific_env_value(χ_name, Y, p)
     turbconv_model = p.atmos.turbconv_model
-
-    # Grid-scale density-weighted variable name, e.g., ρq_tot
-    ρχ_name = get_ρχ_name(χ_name)
-
-    ᶜρχ = MatrixFields.get_field(Y.c, ρχ_name)
-
-    # environment density-area-weighted mse (`ρa⁰χ⁰`).
-    # Numerator: ρa⁰χ⁰ = ρχ - (Σ ρaʲ * χʲ)
     if turbconv_model isa PrognosticEDMFX
-        #Numerator: ρa⁰χ⁰ = ρχ - (Σ sgsʲ.ρa * sgsʲ.χ)
-
-        ᶜρaχ⁰ = ᶜenv_value(
-            ᶜρχ,
-            sgsʲ ->
-                MatrixFields.get_field(sgsʲ, @name(ρa)) *
-                MatrixFields.get_field(sgsʲ, χ_name),
-            Y.c.sgsʲs,
-        )
-        # Denominator: ρa⁰ = ρ - Σ ρaʲ
         ᶜρa⁰ = @. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model))
-
+        return ᶜspecific_env_value(χ_name, Y.c, ᶜρa⁰, turbconv_model)
     elseif turbconv_model isa EDOnlyEDMFX
         error("Not implemented. You should use grid mean values.")
     end
+end
 
+@inline function ᶜspecific_env_value(
+    χ_name,
+    Yc,
+    ᶜρa⁰,
+    turbconv_model::PrognosticEDMFX,
+)
+    ρχ_name = get_ρχ_name(χ_name)
+    ᶜρχ = MatrixFields.get_field(Yc, ρχ_name)
+    ᶜρaχ⁰ = ᶜenv_value(
+        ᶜρχ,
+        sgsʲ ->
+            MatrixFields.get_field(sgsʲ, @name(ρa)) *
+            MatrixFields.get_field(sgsʲ, χ_name),
+        Yc.sgsʲs,
+    )
     return @. lazy(specific(
         ᶜρaχ⁰,                      # ρaχ for environment
-        ᶜρa⁰,                   # ρa for environment
-        ᶜρχ,               # Fallback ρχ is the grid-mean value
-        Y.c.ρ,                      # Fallback ρ is the grid-mean value
+        ᶜρa⁰,                       # ρa for environment
+        ᶜρχ,                        # Fallback ρχ is the grid-mean value
+        Yc.ρ,                       # Fallback ρ is the grid-mean value
         turbconv_model,
     ))
+end
+
+@inline function ᶜcol_specific_env_value(
+    χ_name,
+    Yc,
+    ᶜρa⁰,
+    turbconv_model::PrognosticEDMFX,
+)
+    ρχ_name = get_ρχ_name(χ_name)
+    ᶜρχ = MatrixFields.get_field(Yc, ρχ_name)
+    ᶜρaχ⁰ = ᶜenv_value(
+        ᶜρχ,
+        sgsʲ ->
+            MatrixFields.get_field(sgsʲ, @name(ρa)) *
+            MatrixFields.get_field(sgsʲ, χ_name),
+        Yc.sgsʲs,
+    )
+    return @. specific(ᶜρaχ⁰, ᶜρa⁰, ᶜρχ, Yc.ρ, turbconv_model)
 end
 
 """
