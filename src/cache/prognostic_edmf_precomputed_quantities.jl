@@ -428,9 +428,13 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
     ᶜlg = Fields.local_geometry_field(Y.c)
     ᶜtke = @. lazy(specific(Y.c.ρtke, Y.c.ρ))
 
+    entr_model = p.atmos.edmfx_model.entr_model
+    zero_FT = FT(0) # (a scalar, not the type: loop bodies must capture isbits values only)
     for j in 1:n
         # Compute the entrainment velocity scale, non-velocity entrainment rate,
-        # and the signed area-bounding rate.
+        # and the signed area-bounding rate, in one fused column loop per draft
+        # (the draft area and buoyancy are loop temporaries shared by the
+        # closures).
         # The environment velocity is passed as w⁰ = 0 to the coefficient model;
         # using the true (ᶜwʲ - ᶜw⁰) difference would introduce residual forcing
         # when ᶜwʲ ≈ 0, which can spuriously grow the area fraction and destabilize
@@ -440,57 +444,66 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
         # implicit ρa solve) via `compute_entrainment` using the
         # (then-updated) updraft velocity |wʲ|, together with the
         # non-velocity-proportional rate computed just below.
-        @. ᶜentr_vel_scaleʲs.:($$j) = entrainment_velocity_scale(
-            thermo_params,
-            turbconv_params,
-            ᶜz,
-            z_sfc,
-            ᶜp,
-            Y.c.ρ,
-            draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j)),
-            get_physical_w(ᶜuʲs.:($$j), ᶜlg),
-            TD.relative_humidity(
+        DataLayouts.foreach_column(
+            ᶜentr_vel_scaleʲs.:($j), ᶜentr_nonvel_rateʲs.:($j), ᶜturb_entrʲs.:($j),
+            ᶜarea_bounding_entr_detrʲs.:($j), ᶜρ_diffʲs.:($j),
+            Y.c, Y.c.sgsʲs.:($j), ᶜz, z_sfc, ᶜp, ᶜρʲs.:($j), ᶜuʲs.:($j), ᶜlg,
+            ᶜTʲs.:($j), ᶜq_tot_nonnegʲs.:($j), ᶜq_liqʲs.:($j), ᶜq_iceʲs.:($j),
+            ᶜgradᵥ_ᶠΦ, ᶜT⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜtke,
+        ) do ᶜentr_vel_scaleʲ, ᶜentr_nonvel_rateʲ, ᶜturb_entrʲ,
+        ᶜarea_bounding_entr_detrʲ, ᶜρ_diffʲ,
+        Yc, ᶜsgsʲ, ᶜz, z_sfc, ᶜp, ᶜρʲ, ᶜuʲ, ᶜlg, ᶜTʲ, ᶜq_tot_nonnegʲ, ᶜq_liqʲ,
+        ᶜq_iceʲ, ᶜgradᵥ_ᶠΦ, ᶜT⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜtke
+            ᶜaʲ = @. draft_area(ᶜsgsʲ.ρa, ᶜρʲ)
+            ᶜwʲ = @. get_physical_w(ᶜuʲ, ᶜlg)
+            ᶜbuoyʲ = @. vertical_buoyancy_acceleration(Yc.ρ, ᶜρʲ, ᶜgradᵥ_ᶠΦ, ᶜlg)
+            @. ᶜentr_vel_scaleʲ = entrainment_velocity_scale(
                 thermo_params,
-                ᶜTʲs.:($$j),
+                turbconv_params,
+                ᶜz,
+                z_sfc,
                 ᶜp,
-                ᶜq_tot_nonnegʲs.:($$j),
-                ᶜq_liqʲs.:($$j),
-                ᶜq_iceʲs.:($$j),
-            ),
-            vertical_buoyancy_acceleration(Y.c.ρ, ᶜρʲs.:($$j), ᶜgradᵥ_ᶠΦ, ᶜlg),
-            FT(0),
-            TD.relative_humidity(
-                thermo_params,
-                ᶜT⁰,
-                ᶜp,
-                ᶜq_tot_nonneg⁰,
-                ᶜq_liq⁰,
-                ᶜq_ice⁰,
-            ),
-            FT(0),
-            max(ᶜtke, 0),
-            p.atmos.edmfx_model.entr_model,
-        )
-        @. ᶜentr_nonvel_rateʲs.:($$j) = entrainment_nonvel_rate(
-            turbconv_params,
-            draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j)),
-            get_physical_w(ᶜuʲs.:($$j), ᶜlg),
-            vertical_buoyancy_acceleration(Y.c.ρ, ᶜρʲs.:($$j), ᶜgradᵥ_ᶠΦ, ᶜlg),
-            FT(0),
-            FT(0),
-            p.atmos.edmfx_model.entr_model,
-        )
-        @. ᶜturb_entrʲs.:($$j) = turbulent_entrainment(
-            turbconv_params,
-            draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j)),
-        )
+                Yc.ρ,
+                ᶜaʲ,
+                ᶜwʲ,
+                TD.relative_humidity(
+                    thermo_params,
+                    ᶜTʲ,
+                    ᶜp,
+                    ᶜq_tot_nonnegʲ,
+                    ᶜq_liqʲ,
+                    ᶜq_iceʲ,
+                ),
+                ᶜbuoyʲ,
+                zero_FT,
+                TD.relative_humidity(
+                    thermo_params,
+                    ᶜT⁰,
+                    ᶜp,
+                    ᶜq_tot_nonneg⁰,
+                    ᶜq_liq⁰,
+                    ᶜq_ice⁰,
+                ),
+                zero_FT,
+                max(ᶜtke, 0),
+                entr_model,
+            )
+            @. ᶜentr_nonvel_rateʲ = entrainment_nonvel_rate(
+                turbconv_params,
+                ᶜaʲ,
+                ᶜwʲ,
+                ᶜbuoyʲ,
+                zero_FT,
+                zero_FT,
+                entr_model,
+            )
+            @. ᶜturb_entrʲ = turbulent_entrainment(turbconv_params, ᶜaʲ)
 
-        @. ᶜarea_bounding_entr_detrʲs.:($$j) = area_bounding_entr_detr(
-            turbconv_params,
-            draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j)),
-        )
+            @. ᶜarea_bounding_entr_detrʲ = area_bounding_entr_detr(turbconv_params, ᶜaʲ)
 
-        @. ᶜρ_diffʲs.:($$j) = (ᶜρʲs.:($$j) - Y.c.ρ) / ᶜρʲs.:($$j)
+            @. ᶜρ_diffʲ = (ᶜρʲ - Yc.ρ) / ᶜρʲ
+            return nothing
+        end
     end
 
     # Surface BC payload per updraft at level 1 (capped mass flux +
