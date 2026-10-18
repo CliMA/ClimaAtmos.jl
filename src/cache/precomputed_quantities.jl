@@ -617,6 +617,46 @@ velocity. Mutates `ᶠu₃` and returns `nothing`.
 Passing `u₃⁰` as `w_function` recovers the environment vertical velocity from the
 grid mean and the drafts.
 """
+
+"""
+    set_enthalpy_and_pressure!(ᶜh_tot, ᶜp, Yc, ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice, thermo_params)
+
+Set the total specific enthalpy `ᶜh_tot` and the pressure `ᶜp` from the state
+`Yc` (`ρ`, `ρe_tot`), the temperature, and the water species. Also runs inside
+the fused column loop of `set_implicit_precomputed_quantities!`, so it is
+inlined.
+"""
+@inline function set_enthalpy_and_pressure!(
+    ᶜh_tot,
+    ᶜp,
+    Yc,
+    ᶜT,
+    ᶜq_tot_nonneg,
+    ᶜq_liq,
+    ᶜq_ice,
+    thermo_params,
+)
+    ᶜe_tot = @. lazy(specific(Yc.ρe_tot, Yc.ρ))
+    @. ᶜh_tot =
+        TD.total_enthalpy(
+            thermo_params,
+            ᶜe_tot,
+            ᶜT,
+            ᶜq_tot_nonneg,
+            ᶜq_liq,
+            ᶜq_ice,
+        )
+    @. ᶜp = TD.air_pressure(
+        thermo_params,
+        ᶜT,
+        Yc.ρ,
+        ᶜq_tot_nonneg,
+        ᶜq_liq,
+        ᶜq_ice,
+    )
+    return nothing
+end
+
 set_sgs_ᶠu₃!(w_function, ᶠu₃, Y, turbconv_model) =
     set_sgs_ᶠu₃!(w_function, ᶠu₃, Y.c, Y.f, turbconv_model)
 # The (Yc, Yf) method also runs inside fused column loops on column slices of Y.c and Y.f.
@@ -752,9 +792,15 @@ NVTX.@annotate function set_implicit_precomputed_quantities!(Y, p, t)
         set_velocity_at_top!(Y, ᶠuₕ³, turbconv_model)
     end
 
-    set_velocity_quantities!(ᶜu, ᶠu³, ᶜK, Y.f.u₃, Y.c.uₕ, ᶠuₕ³)
     ᶜJ = Fields.local_geometry_field(Y.c).J
-    @. ᶠu = CT123(ᶠwinterp(Y.c.ρ * ᶜJ, CT12(ᶜu))) + CT123(ᶠu³)
+    # Grid-mean velocities and kinetic energy in one fused column loop.
+    DataLayouts.foreach_column(
+        ᶜu, ᶠu³, ᶜK, ᶠu, Y.c, Y.f.u₃, ᶠuₕ³, ᶜJ,
+    ) do ᶜu, ᶠu³, ᶜK, ᶠu, Yc, ᶠu₃, ᶠuₕ³, ᶜJ
+        set_velocity_quantities!(ᶜu, ᶠu³, ᶜK, ᶠu₃, Yc.uₕ, ᶠuₕ³)
+        @. ᶠu = CT123(ᶠwinterp(Yc.ρ * ᶜJ, CT12(ᶜu))) + CT123(ᶠu³)
+        return nothing
+    end
     if n > 0
         # TODO: In the following increments to ᶜK, we actually need to add
         # quantities of the form ᶜρaχ⁰ / ᶜρ⁰ and ᶜρaχʲ / ᶜρʲ to ᶜK, rather than
@@ -770,99 +816,103 @@ NVTX.@annotate function set_implicit_precomputed_quantities!(Y, p, t)
         # @. ᶜK += Y.c.ρtke / Y.c.ρ
         # TODO: We should think more about these increments before we use them.
     end
-    ᶜe_int = @. lazy(specific(Y.c.ρe_tot, Y.c.ρ) - ᶜK - ᶜΦ)
-    if microphysics_model isa EquilibriumMicrophysics0M
-        # Compute thermodynamic state variables using combined getter function.
-        # This avoids redundant saturation_adjustment calls for EquilibriumMicrophysics0M.
-        @. ᶜq_tot_nonneg = max(0, specific(Y.c.ρq_tot, Y.c.ρ))
-        (; ᶜsa_result) = p.precomputed
-        @. ᶜsa_result =
-            saturation_adjustment_tuple(
-                thermo_params,
-                TD.ρe(),
-                Y.c.ρ,
-                ᶜe_int,
-                ᶜq_tot_nonneg,
+    T_min_sgs = CAP.T_min_sgs(p.params)
+    if microphysics_model isa NonEquilibriumMicrophysics
+        # Thermodynamic state from the prognostic water species, total specific
+        # enthalpy, and pressure in one fused column loop.
+        DataLayouts.foreach_column(
+            ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice, ᶜh_tot, ᶜp, Y.c, ᶜK, ᶜΦ,
+        ) do ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice, ᶜh_tot, ᶜp, Yc, ᶜK, ᶜΦ
+            # (Named differently from the enclosing function's ᶜe_int: assigning
+            # a captured name inside the loop body would box it.)
+            ᶜe_int_col = @. lazy(specific(Yc.ρe_tot, Yc.ρ) - ᶜK - ᶜΦ)
+            @. ᶜq_liq =
+                max(0, specific(Yc.ρq_lcl, Yc.ρ) + specific(Yc.ρq_rai, Yc.ρ))
+            @. ᶜq_ice =
+                max(0, specific(Yc.ρq_icl, Yc.ρ) + specific(Yc.ρq_sno, Yc.ρ))
+            @. ᶜq_tot_nonneg =
+                max(ᶜq_liq + ᶜq_ice, specific(Yc.ρq_tot, Yc.ρ))
+            @. ᶜT = max(
+                T_min_sgs,
+                TD.air_temperature(
+                    thermo_params,
+                    ᶜe_int_col,
+                    ᶜq_tot_nonneg,
+                    ᶜq_liq,
+                    ᶜq_ice,
+                ),
             )
-        @. ᶜT = ᶜsa_result.T
-        @. ᶜq_liq = ᶜsa_result.q_liq
-        @. ᶜq_ice = ᶜsa_result.q_ice
-
-        # Two-pass SGS: recompute condensate using SGS quadrature over (T, q_tot)
-        sgs_quad = p.atmos.sgs_quadrature
-        if !isnothing(sgs_quad)
-            (; ᶜT′T′, ᶜq′q′, ᶜcorr_Tq) = p.precomputed
-            # Displacement coefficients of the curvature-aware condensate,
-            # zero where it is not configured.
-            ᶜlin, ᶜcurv = if p.atmos.sgs_variance_curvature
-                (p.precomputed.ᶜdisp_S.lin, p.precomputed.ᶜdisp_S.curv)
-            else
-                (zero(eltype(ᶜT)), zero(eltype(ᶜT)))
-            end
-            c_trunc = equilibrium_condensate_truncation(p)
-            @. ᶜsa_result = compute_sgs_saturation_adjustment(
-                thermo_params,
-                $(sgs_quad),
-                Y.c.ρ,
-                ᶜT,
-                ᶜq_tot_nonneg,
-                ᶜT′T′,
-                ᶜq′q′,
-                ᶜcorr_Tq,
-                ᶜlin,
-                ᶜcurv,
-                c_trunc,
+            set_enthalpy_and_pressure!(
+                ᶜh_tot, ᶜp, Yc, ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice, thermo_params,
             )
+            return nothing
+        end
+    else
+        ᶜe_int = @. lazy(specific(Y.c.ρe_tot, Y.c.ρ) - ᶜK - ᶜΦ)
+        if microphysics_model isa EquilibriumMicrophysics0M
+            # Compute thermodynamic state variables using combined getter function.
+            # This avoids redundant saturation_adjustment calls for EquilibriumMicrophysics0M.
+            @. ᶜq_tot_nonneg = max(0, specific(Y.c.ρq_tot, Y.c.ρ))
+            (; ᶜsa_result) = p.precomputed
+            @. ᶜsa_result =
+                saturation_adjustment_tuple(
+                    thermo_params,
+                    TD.ρe(),
+                    Y.c.ρ,
+                    ᶜe_int,
+                    ᶜq_tot_nonneg,
+                )
+            @. ᶜT = ᶜsa_result.T
             @. ᶜq_liq = ᶜsa_result.q_liq
             @. ᶜq_ice = ᶜsa_result.q_ice
-        end
-    else  # DryModel or NonEquilibriumMicrophysics
-        # For DryModel: q values are set to zero
-        # For NonEquilibriumMicrophysics: q values are computed from state variables
-        if microphysics_model isa DryModel
+
+            # Two-pass SGS: recompute condensate using SGS quadrature over (T, q_tot)
+            sgs_quad = p.atmos.sgs_quadrature
+            if !isnothing(sgs_quad)
+                (; ᶜT′T′, ᶜq′q′, ᶜcorr_Tq) = p.precomputed
+                # Displacement coefficients of the curvature-aware condensate,
+                # zero where it is not configured.
+                ᶜlin, ᶜcurv = if p.atmos.sgs_variance_curvature
+                    (p.precomputed.ᶜdisp_S.lin, p.precomputed.ᶜdisp_S.curv)
+                else
+                    (zero(eltype(ᶜT)), zero(eltype(ᶜT)))
+                end
+                c_trunc = equilibrium_condensate_truncation(p)
+                @. ᶜsa_result = compute_sgs_saturation_adjustment(
+                    thermo_params,
+                    $(sgs_quad),
+                    Y.c.ρ,
+                    ᶜT,
+                    ᶜq_tot_nonneg,
+                    ᶜT′T′,
+                    ᶜq′q′,
+                    ᶜcorr_Tq,
+                    ᶜlin,
+                    ᶜcurv,
+                    c_trunc,
+                )
+                @. ᶜq_liq = ᶜsa_result.q_liq
+                @. ᶜq_ice = ᶜsa_result.q_ice
+            end
+        else  # DryModel: q values are set to zero
             @. ᶜq_tot_nonneg = zero(eltype(ᶜT))
             @. ᶜq_liq = zero(eltype(ᶜT))
             @. ᶜq_ice = zero(eltype(ᶜT))
-        else  # NonEquilibriumMicrophysics
-            @. ᶜq_liq =
-                max(0, specific(Y.c.ρq_lcl, Y.c.ρ) + specific(Y.c.ρq_rai, Y.c.ρ))
-            @. ᶜq_ice =
-                max(0, specific(Y.c.ρq_icl, Y.c.ρ) + specific(Y.c.ρq_sno, Y.c.ρ))
-            # Clamp q_tot ≥ q_cond to ensure non-negative vapor (q_vap = q_tot - q_cond)
-            @. ᶜq_tot_nonneg =
-                max(ᶜq_liq + ᶜq_ice, specific(Y.c.ρq_tot, Y.c.ρ))
+            @. ᶜT = max(
+                T_min_sgs,
+                TD.air_temperature(
+                    thermo_params,
+                    ᶜe_int,
+                    ᶜq_tot_nonneg,
+                    ᶜq_liq,
+                    ᶜq_ice,
+                ),
+            )
         end
-        # Floor T to prevent negative pressure during implicit Newton iterations
-        T_min_sgs = CAP.T_min_sgs(p.params)
-        @. ᶜT = max(
-            T_min_sgs,
-            TD.air_temperature(
-                thermo_params,
-                ᶜe_int,
-                ᶜq_tot_nonneg,
-                ᶜq_liq,
-                ᶜq_ice,
-            ),
+        set_enthalpy_and_pressure!(
+            ᶜh_tot, ᶜp, Y.c, ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice, thermo_params,
         )
     end
-    ᶜe_tot = @. lazy(specific(Y.c.ρe_tot, Y.c.ρ))
-    @. ᶜh_tot =
-        TD.total_enthalpy(
-            thermo_params,
-            ᶜe_tot,
-            ᶜT,
-            ᶜq_tot_nonneg,
-            ᶜq_liq,
-            ᶜq_ice,
-        )
-    @. ᶜp = TD.air_pressure(
-        thermo_params,
-        ᶜT,
-        Y.c.ρ,
-        ᶜq_tot_nonneg,
-        ᶜq_liq,
-        ᶜq_ice,
-    )
 
     if turbconv_model isa PrognosticEDMFX
         set_prognostic_edmf_precomputed_quantities_draft!(Y, p, ᶠuₕ³, t)
