@@ -160,16 +160,108 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_draft!(
     t,
 )
     (; turbconv_model) = p.atmos
-    (; ᶜuʲs, ᶠu³ʲs, ᶜKʲs, ᶠKᵥʲs) = p.precomputed
+    n = n_mass_flux_subdomains(turbconv_model)
+    thermo_params = CAP.thermodynamics_params(p.params)
 
-    for j in 1:n_mass_flux_subdomains(turbconv_model)
+    (; ᶜΦ) = p.core
+    (;
+        ᶜp,
+        ᶜuʲs,
+        ᶠu³ʲs,
+        ᶜKʲs,
+        ᶠKᵥʲs,
+        ᶜTʲs,
+        ᶜq_tot_nonnegʲs,
+        ᶜq_liqʲs,
+        ᶜq_iceʲs,
+        ᶜρʲs,
+    ) = p.precomputed
+
+    T_min_sgs = CAP.T_min_sgs(p.params)
+    for j in 1:n
+        ᶜuʲ = ᶜuʲs.:($j)
+        ᶠu³ʲ = ᶠu³ʲs.:($j)
+        ᶜKʲ = ᶜKʲs.:($j)
+        ᶠKᵥʲ = ᶠKᵥʲs.:($j)
+        ᶜTʲ = ᶜTʲs.:($j)
+        ᶜq_tot_nonnegʲ = ᶜq_tot_nonnegʲs.:($j)
+        ᶜq_liqʲ = ᶜq_liqʲs.:($j)
+        ᶜq_iceʲ = ᶜq_iceʲs.:($j)
+        ᶜρʲ = ᶜρʲs.:($j)
+        ᶜsgsʲ = Y.c.sgsʲs.:($j)
         ᶠu₃ʲ = Y.f.sgsʲs.:($j).u₃
-        set_velocity_quantities!(
-            ᶜuʲs.:($j), ᶠu³ʲs.:($j), ᶜKʲs.:($j), ᶠu₃ʲ, Y.c.uₕ, ᶠuₕ³,
-        )
-        @. ᶠKᵥʲs.:($$j) = (adjoint(CT3(ᶠu₃ʲ)) * ᶠu₃ʲ) / 2
+
+        if p.atmos.microphysics_model isa Union{
+            NonEquilibriumMicrophysics1M,
+            NonEquilibriumMicrophysics2M,
+        }
+            # One fused column loop per draft: velocities and kinetic energies,
+            # then the draft thermodynamic state from the prognostic tracers.
+            DataLayouts.foreach_column(
+                ᶜuʲ, ᶠu³ʲ, ᶜKʲ, ᶠKᵥʲ, ᶜTʲ, ᶜq_tot_nonnegʲ, ᶜq_liqʲ, ᶜq_iceʲ, ᶜρʲ,
+                ᶜsgsʲ, ᶠu₃ʲ, Y.c.uₕ, ᶠuₕ³, ᶜΦ, ᶜp,
+            ) do ᶜuʲ, ᶠu³ʲ, ᶜKʲ, ᶠKᵥʲ, ᶜTʲ, ᶜq_tot_nonnegʲ, ᶜq_liqʲ, ᶜq_iceʲ, ᶜρʲ,
+            ᶜsgsʲ, ᶠu₃ʲ, ᶜuₕ, ᶠuₕ³, ᶜΦ, ᶜp
+                set_velocity_quantities!(ᶜuʲ, ᶠu³ʲ, ᶜKʲ, ᶠu₃ʲ, ᶜuₕ, ᶠuₕ³)
+                @. ᶠKᵥʲ = (adjoint(CT3(ᶠu₃ʲ)) * ᶠu₃ʲ) / 2
+                @. ᶜq_liqʲ = max(0, ᶜsgsʲ.q_lcl + ᶜsgsʲ.q_rai)
+                @. ᶜq_iceʲ = max(0, ᶜsgsʲ.q_icl + ᶜsgsʲ.q_sno)
+                # Clamp q_tot ≥ q_cond to ensure non-negative vapor (q_vap = q_tot - q_cond)
+                @. ᶜq_tot_nonnegʲ = max(ᶜq_liqʲ + ᶜq_iceʲ, ᶜsgsʲ.q_tot)
+                ᶜhʲ = @. lazy(ᶜsgsʲ.mse - ᶜΦ)
+                @. ᶜTʲ = max(
+                    T_min_sgs,
+                    TD.air_temperature(
+                        thermo_params,
+                        TD.ph(),
+                        ᶜhʲ,
+                        ᶜq_tot_nonnegʲ,
+                        ᶜq_liqʲ,
+                        ᶜq_iceʲ,
+                    ),
+                )
+                @. ᶜρʲ = TD.air_density(
+                    thermo_params,
+                    ᶜTʲ,
+                    ᶜp,
+                    ᶜq_tot_nonnegʲ,
+                    ᶜq_liqʲ,
+                    ᶜq_iceʲ,
+                )
+                return nothing
+            end
+        else
+            # EquilibriumMicrophysics0M: use saturation adjustment
+            DataLayouts.foreach_column(
+                ᶜuʲ, ᶠu³ʲ, ᶜKʲ, ᶠKᵥʲ, ᶜq_tot_nonnegʲ, ᶜsgsʲ, ᶠu₃ʲ, Y.c.uₕ, ᶠuₕ³,
+            ) do ᶜuʲ, ᶠu³ʲ, ᶜKʲ, ᶠKᵥʲ, ᶜq_tot_nonnegʲ, ᶜsgsʲ, ᶠu₃ʲ, ᶜuₕ, ᶠuₕ³
+                set_velocity_quantities!(ᶜuʲ, ᶠu³ʲ, ᶜKʲ, ᶠu₃ʲ, ᶜuₕ, ᶠuₕ³)
+                @. ᶠKᵥʲ = (adjoint(CT3(ᶠu₃ʲ)) * ᶠu₃ʲ) / 2
+                @. ᶜq_tot_nonnegʲ = max(0, ᶜsgsʲ.q_tot)
+                return nothing
+            end
+            (; ᶜsa_result) = p.precomputed
+            @. ᶜsa_result = saturation_adjustment_tuple(
+                thermo_params,
+                TD.ph(),
+                ᶜp,
+                ᶜsgsʲ.mse - ᶜΦ,
+                ᶜq_tot_nonnegʲ,
+            )
+            @. ᶜTʲ = ᶜsa_result.T
+            @. ᶜq_liqʲ = ᶜsa_result.q_liq
+            @. ᶜq_iceʲ = ᶜsa_result.q_ice
+            @. ᶜρʲ =
+                TD.air_density(
+                    thermo_params,
+                    ᶜTʲ,
+                    ᶜp,
+                    ᶜq_tot_nonnegʲ,
+                    ᶜq_liqʲ,
+                    ᶜq_iceʲ,
+                )
+        end
     end
-    set_prognostic_edmf_precomputed_quantities_draft_thermo!(Y, p)
     return nothing
 end
 
@@ -197,6 +289,7 @@ function set_prognostic_edmf_precomputed_quantities_draft_thermo!(Y, p)
     thermo_params = CAP.thermodynamics_params(p.params)
     (; ᶜΦ) = p.core
     (; ᶜp, ᶜTʲs, ᶜq_tot_nonnegʲs, ᶜq_liqʲs, ᶜq_iceʲs, ᶜρʲs) = p.precomputed
+    T_min_sgs = CAP.T_min_sgs(p.params)
 
     for j in 1:n_mass_flux_subdomains(turbconv_model)
         ᶜTʲ = ᶜTʲs.:($j)
@@ -204,44 +297,66 @@ function set_prognostic_edmf_precomputed_quantities_draft_thermo!(Y, p)
         ᶜq_liqʲ = ᶜq_liqʲs.:($j)
         ᶜq_iceʲ = ᶜq_iceʲs.:($j)
         ᶜρʲ = ᶜρʲs.:($j)
-        ᶜmseʲ = Y.c.sgsʲs.:($j).mse
-        ᶜq_totʲ = Y.c.sgsʲs.:($j).q_tot
+        ᶜsgsʲ = Y.c.sgsʲs.:($j)
 
-        @. ᶜq_tot_nonnegʲ = max(0, ᶜq_totʲ)
         if microphysics_model isa Union{
             NonEquilibriumMicrophysics1M,
             NonEquilibriumMicrophysics2M,
         }
-            @. ᶜq_liqʲ = max(
-                0, Y.c.sgsʲs.:($$j).q_lcl + Y.c.sgsʲs.:($$j).q_rai,
-            )
-            @. ᶜq_iceʲ = max(
-                0, Y.c.sgsʲs.:($$j).q_icl + Y.c.sgsʲs.:($$j).q_sno,
-            )
-            # Clamp q_tot ≥ q_cond to keep q_vap = q_tot - q_cond non-negative.
-            @. ᶜq_tot_nonnegʲ = max(ᶜq_liqʲ + ᶜq_iceʲ, ᶜq_totʲ)
-            T_min_sgs = CAP.T_min_sgs(p.params)
-            @. ᶜTʲ = max(
-                T_min_sgs,
-                TD.air_temperature(
-                    thermo_params, TD.ph(), ᶜmseʲ - ᶜΦ,
-                    ᶜq_tot_nonnegʲ, ᶜq_liqʲ, ᶜq_iceʲ,
-                ),
-            )
+            DataLayouts.foreach_column(
+                ᶜTʲ, ᶜq_tot_nonnegʲ, ᶜq_liqʲ, ᶜq_iceʲ, ᶜρʲ,
+                ᶜsgsʲ, ᶜΦ, ᶜp,
+            ) do ᶜTʲ, ᶜq_tot_nonnegʲ, ᶜq_liqʲ, ᶜq_iceʲ, ᶜρʲ,
+            ᶜsgsʲ, ᶜΦ, ᶜp
+                @. ᶜq_liqʲ = max(0, ᶜsgsʲ.q_lcl + ᶜsgsʲ.q_rai)
+                @. ᶜq_iceʲ = max(0, ᶜsgsʲ.q_icl + ᶜsgsʲ.q_sno)
+                # Clamp q_tot ≥ q_cond to keep q_vap = q_tot - q_cond non-negative.
+                @. ᶜq_tot_nonnegʲ = max(ᶜq_liqʲ + ᶜq_iceʲ, ᶜsgsʲ.q_tot)
+                ᶜhʲ = @. lazy(ᶜsgsʲ.mse - ᶜΦ)
+                @. ᶜTʲ = max(
+                    T_min_sgs,
+                    TD.air_temperature(
+                        thermo_params,
+                        TD.ph(),
+                        ᶜhʲ,
+                        ᶜq_tot_nonnegʲ,
+                        ᶜq_liqʲ,
+                        ᶜq_iceʲ,
+                    ),
+                )
+                @. ᶜρʲ = TD.air_density(
+                    thermo_params,
+                    ᶜTʲ,
+                    ᶜp,
+                    ᶜq_tot_nonnegʲ,
+                    ᶜq_liqʲ,
+                    ᶜq_iceʲ,
+                )
+                return nothing
+            end
         else
             # EquilibriumMicrophysics0M: pressure-enthalpy saturation adjustment.
+            @. ᶜq_tot_nonnegʲ = max(0, ᶜsgsʲ.q_tot)
             (; ᶜsa_result) = p.precomputed
             @. ᶜsa_result = saturation_adjustment_tuple(
-                thermo_params, TD.ph(), ᶜp, ᶜmseʲ - ᶜΦ, ᶜq_tot_nonnegʲ,
+                thermo_params,
+                TD.ph(),
+                ᶜp,
+                ᶜsgsʲ.mse - ᶜΦ,
+                ᶜq_tot_nonnegʲ,
             )
             @. ᶜTʲ = ᶜsa_result.T
             @. ᶜq_liqʲ = ᶜsa_result.q_liq
             @. ᶜq_iceʲ = ᶜsa_result.q_ice
+            @. ᶜρʲ = TD.air_density(
+                thermo_params,
+                ᶜTʲ,
+                ᶜp,
+                ᶜq_tot_nonnegʲ,
+                ᶜq_liqʲ,
+                ᶜq_iceʲ,
+            )
         end
-        @. ᶜρʲ = TD.air_density(
-            thermo_params, ᶜTʲ, ᶜp,
-            ᶜq_tot_nonnegʲ, ᶜq_liqʲ, ᶜq_iceʲ,
-        )
     end
     return nothing
 end
