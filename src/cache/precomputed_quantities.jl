@@ -2,7 +2,7 @@
 ##### Precomputed quantities
 #####
 import Thermodynamics as TD
-import ClimaCore: Spaces, Fields
+import ClimaCore: DataLayouts, Spaces, Fields
 
 """
     smagorinsky_lilly_fields(Y, model)
@@ -583,7 +583,7 @@ arguments and returns `nothing`.
 Used both for the grid-scale quantities (from `Y.f.u₃`) and for the EDMFX
 subdomain quantities (from `ᶠu₃⁰` and each `ᶠu₃ʲ`).
 """
-function set_velocity_quantities!(ᶜu, ᶠu³, ᶜK, ᶠu₃, ᶜuₕ, ᶠuₕ³)
+@inline function set_velocity_quantities!(ᶜu, ᶠu³, ᶜK, ᶠu₃, ᶜuₕ, ᶠuₕ³)
     @. ᶜu = C123(ᶜuₕ) + ᶜinterp(C123(ᶠu₃))
     @. ᶠu³ = ᶠuₕ³ + CT3(ᶠu₃)
     ᶜK .= compute_kinetic(ᶜuₕ, ᶠu₃)
@@ -601,14 +601,17 @@ velocity. Mutates `ᶠu₃` and returns `nothing`.
 Passing `u₃⁰` as `w_function` recovers the environment vertical velocity from the
 grid mean and the drafts.
 """
-function set_sgs_ᶠu₃!(w_function, ᶠu₃, Y, turbconv_model)
+set_sgs_ᶠu₃!(w_function, ᶠu₃, Y, turbconv_model) =
+    set_sgs_ᶠu₃!(w_function, ᶠu₃, Y.c, Y.f, turbconv_model)
+# The (Yc, Yf) method also runs inside fused column loops on column slices of Y.c and Y.f.
+@inline function set_sgs_ᶠu₃!(w_function, ᶠu₃, Yc, Yf, turbconv_model)
     ρaʲs(sgsʲs) = map(sgsʲ -> sgsʲ.ρa, sgsʲs)
     u₃ʲs(sgsʲs) = map(sgsʲ -> sgsʲ.u₃, sgsʲs)
     @. ᶠu₃ = w_function(
-        ᶠinterp(ρaʲs(Y.c.sgsʲs)),
-        u₃ʲs(Y.f.sgsʲs),
-        ᶠinterp(Y.c.ρ),
-        Y.f.u₃,
+        ᶠinterp(ρaʲs(Yc.sgsʲs)),
+        u₃ʲs(Yf.sgsʲs),
+        ᶠinterp(Yc.ρ),
+        Yf.u₃,
         turbconv_model,
     )
     return nothing
