@@ -3,7 +3,7 @@
 #####
 import NVTX
 import Thermodynamics as TD
-import ClimaCore: Spaces, Fields
+import ClimaCore: DataLayouts, Spaces, Fields
 
 """
     saturation_adjustment_tuple(thermo_params, ::TD.ph, p, h, q_tot)
@@ -72,13 +72,9 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_environment!(
     (; ᶠu₃⁰, ᶜu⁰, ᶠu³⁰, ᶜK⁰, ᶜT⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰) =
         p.precomputed
 
-    ᶜtke = @. lazy(specific(Y.c.ρtke, Y.c.ρ))
-    set_sgs_ᶠu₃!(u₃⁰, ᶠu₃⁰, Y, turbconv_model)
-    set_velocity_quantities!(ᶜu⁰, ᶠu³⁰, ᶜK⁰, ᶠu₃⁰, Y.c.uₕ, ᶠuₕ³)
-    # @. ᶜK⁰ += ᶜtke
     ᶜq_tot⁰ = ᶜspecific_env_value(@name(q_tot), Y, p)
-
     ᶜmse⁰ = ᶜspecific_env_mse(Y, p)
+    T_min_sgs = CAP.T_min_sgs(p.params)
 
     if p.atmos.microphysics_model isa
        Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M}
@@ -86,27 +82,43 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_environment!(
         ᶜq_icl⁰ = ᶜspecific_env_value(@name(q_icl), Y, p)
         ᶜq_rai⁰ = ᶜspecific_env_value(@name(q_rai), Y, p)
         ᶜq_sno⁰ = ᶜspecific_env_value(@name(q_sno), Y, p)
-        # Compute env thermodynamic state from primitives
-        @. ᶜq_liq⁰ = max(0, ᶜq_lcl⁰ + ᶜq_rai⁰)
-        @. ᶜq_ice⁰ = max(0, ᶜq_icl⁰ + ᶜq_sno⁰)
-        # Clamp q_tot ≥ q_cond to ensure non-negative vapor (q_vap = q_tot - q_cond)
-        @. ᶜq_tot_nonneg⁰ = max(ᶜq_liq⁰ + ᶜq_ice⁰, ᶜq_tot⁰)
-        ᶜh⁰ = @. lazy(ᶜmse⁰ - ᶜΦ)  # specific enthalpy
-        T_min_sgs = CAP.T_min_sgs(p.params)
-        @. ᶜT⁰ = max(
-            T_min_sgs,
-            TD.air_temperature(
-                thermo_params,
-                TD.ph(),
-                ᶜh⁰,
-                ᶜq_tot_nonneg⁰,
-                ᶜq_liq⁰,
-                ᶜq_ice⁰,
-            ),
-        )
+        # One fused column loop: environment velocities and kinetic energy,
+        # then the environment thermodynamic state from primitives.
+        DataLayouts.foreach_column(
+            ᶠu₃⁰, ᶜu⁰, ᶠu³⁰, ᶜK⁰, ᶜT⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰,
+            Y.c, Y.f, ᶠuₕ³, ᶜΦ, ᶜq_tot⁰, ᶜmse⁰, ᶜq_lcl⁰, ᶜq_icl⁰, ᶜq_rai⁰, ᶜq_sno⁰,
+        ) do ᶠu₃⁰, ᶜu⁰, ᶠu³⁰, ᶜK⁰, ᶜT⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰,
+        Yc, Yf, ᶠuₕ³, ᶜΦ, ᶜq_tot⁰, ᶜmse⁰, ᶜq_lcl⁰, ᶜq_icl⁰, ᶜq_rai⁰, ᶜq_sno⁰
+            set_sgs_ᶠu₃!(u₃⁰, ᶠu₃⁰, Yc, Yf, turbconv_model)
+            set_velocity_quantities!(ᶜu⁰, ᶠu³⁰, ᶜK⁰, ᶠu₃⁰, Yc.uₕ, ᶠuₕ³)
+            @. ᶜq_liq⁰ = max(0, ᶜq_lcl⁰ + ᶜq_rai⁰)
+            @. ᶜq_ice⁰ = max(0, ᶜq_icl⁰ + ᶜq_sno⁰)
+            # Clamp q_tot ≥ q_cond to ensure non-negative vapor (q_vap = q_tot - q_cond)
+            @. ᶜq_tot_nonneg⁰ = max(ᶜq_liq⁰ + ᶜq_ice⁰, ᶜq_tot⁰)
+            ᶜh⁰ = @. lazy(ᶜmse⁰ - ᶜΦ)  # specific enthalpy
+            @. ᶜT⁰ = max(
+                T_min_sgs,
+                TD.air_temperature(
+                    thermo_params,
+                    TD.ph(),
+                    ᶜh⁰,
+                    ᶜq_tot_nonneg⁰,
+                    ᶜq_liq⁰,
+                    ᶜq_ice⁰,
+                ),
+            )
+            return nothing
+        end
     else
         # EquilibriumMicrophysics0M: use saturation adjustment to get T and phase partition
-        @. ᶜq_tot_nonneg⁰ = max(0, ᶜq_tot⁰)
+        DataLayouts.foreach_column(
+            ᶠu₃⁰, ᶜu⁰, ᶠu³⁰, ᶜK⁰, ᶜq_tot_nonneg⁰, Y.c, Y.f, ᶠuₕ³, ᶜq_tot⁰,
+        ) do ᶠu₃⁰, ᶜu⁰, ᶠu³⁰, ᶜK⁰, ᶜq_tot_nonneg⁰, Yc, Yf, ᶠuₕ³, ᶜq_tot⁰
+            set_sgs_ᶠu₃!(u₃⁰, ᶠu₃⁰, Yc, Yf, turbconv_model)
+            set_velocity_quantities!(ᶜu⁰, ᶠu³⁰, ᶜK⁰, ᶠu₃⁰, Yc.uₕ, ᶠuₕ³)
+            @. ᶜq_tot_nonneg⁰ = max(0, ᶜq_tot⁰)
+            return nothing
+        end
         (; ᶜsa_result) = p.precomputed
         h⁰ = @. lazy(ᶜmse⁰ - ᶜΦ)
         @. ᶜsa_result =
