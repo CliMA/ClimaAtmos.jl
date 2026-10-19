@@ -59,7 +59,7 @@ dg_vi_shear_floor:
   help: "Floor ε of the wave-selective shear speed max(|u_n|, ε c), as a fraction of the sound speed. Used only with dg_vi_velocity_penalty: wave_selective."
   value: 0.05
 dg_vi_interface_flux:
-  help: "Variables of the vector-invariant DG face penalties [`rusanov` (default; jumps of ρe_tot and u), `es` (jumps of the dry entropy variables −ρ/p and βu, β = ρ/p — every face penalty is an entropy sink; the mass flux stays central)]. Ignored unless dg_equation_form is vi."
+  help: "Variables of the vector-invariant DG face penalties [`rusanov` (default; ρ-weighted jumps of e_tot and u), `es` (jumps of the entropy variables 1/T and βu, β = 1/T — every face penalty is an entropy sink at fixed ρ and composition, and total water carries its mass and the energy of its phases; the mass flux stays central)]. Ignored unless dg_equation_form is vi."
   value: "rusanov"
 sleve_eta:
   help: "If SLEVE coordinates are chosen, sets the `ηₕ` parameter (if z/z_top > ηₕ, no warping is applied)"

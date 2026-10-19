@@ -7,7 +7,9 @@ every function here is a no-op):
 
   - `split_divₕ(ρu, ψ)` (ρ, ρe_tot, tracers): interface flux with the
     SplitDivergence-matched central part `{ρ uv·n̂}{ψ}` plus a λ-Rusanov
-    penalty on ⟦ρe⟧ / ⟦ρχ⟧. The density flux stays central — a ⟦ρ⟧ penalty
+    penalty on the ρ-weighted jump of the specific quantity, `{ρ}⟦e_tot⟧` /
+    `{ρ}⟦χ⟧`, so a uniform ψ stays uniform across a density jump
+    (`F*_ρψ = ψ F*_ρ` exactly). The density flux stays central — a ⟦ρ⟧ penalty
     is kinetic-energy-sign-indefinite under the vector-invariant pairing.
   - `gradₕ` PGF/K terms (uₕ): central gradient liftings of the same scalars.
   - uₕ stability: ρ-weighted λ-jump penalties on the orthonormal velocity
@@ -15,17 +17,20 @@ every function here is a no-op):
     `dg_vi_velocity_penalty = wave_selective`, the normal jump is damped at
     the acoustic speed and the tangential and vertical-velocity jumps at the
     shear speed (still a sign-definite KE sink).
-  - With `dg_vi_interface_flux = es`, the ⟦ρe⟧ penalty acts on the entropy
-    variable −ρ/p and the velocity penalties carry the own-side weight
-    {β}/β, β = ρ/p, so every face penalty is a sink of the dry entropy
-    S = −ρs/(γ−1) at fixed ρ (the mass flux stays central). The velocity
-    penalties stay Galilean invariant; they conserve momentum up to
+  - With `dg_vi_interface_flux = es`, the energy penalty acts on the jump of
+    the entropy variable ∂(ρs)/∂(ρe) = 1/T of the physical entropy ρs, and the
+    velocity penalties carry the own-side weight {β}/β with β = 1/T, so every
+    face penalty is a sink of −ρs at fixed ρ and composition (the mass flux
+    stays central) and vanishes at uniform T whatever the humidity. The
+    velocity penalties stay Galilean invariant; they conserve momentum up to
     O(⟦u⟧⟦1/β⟧).
-    The water-species penalties also move the mass and energy the water
-    carries (ρ for total water; the vapor, liquid or ice energy), so an
-    exchange of water across a face leaves T and u unchanged. The central part is not entropy-conservative,
-    so this is entropy-dissipative face dissipation, not a discrete entropy
-    inequality for the whole scheme.
+    The total-water penalty also moves the mass and energy the water carries.
+    The energy is that of the water's actual phases, from the diagnostic
+    vapor/liquid/ice partition (saturation adjustment for 0M, the prognostic
+    condensates for 1M), so an exchange of water across a face leaves T and u
+    unchanged with either microphysics scheme. The central part is not
+    entropy-conservative, so this is entropy-dissipative face dissipation, not
+    a discrete entropy inequality for the whole scheme.
   - Vorticities (`ᶜω³` and the `wcurlₕ(u₃)` part of `ᶠω¹²`): strong curl
     plus central curl lifting replaces the CG weak curl (gated in
     `explicit_vertical_advection_tendency!`).
@@ -137,32 +142,37 @@ end
     dg_scalars_interface(normal, argvals⁻, argvals⁺)
 
 Interface flux for (ρ, ρe_tot): central part matched to `split_divₕ`
-(`F_ρ = {ρ uv·n̂}`, `F_ρe = F_ρ {h}`) plus a λ-Rusanov penalty on ⟦ρe⟧.
-State fields: `ρ`, `ρe`, `h`, `uv`, `λ`.
+(`F_ρ = {ρ uv·n̂}`, `F_ρe = F_ρ {h}`) plus a λ-Rusanov penalty on the
+ρ-weighted jump of the specific total energy, `−(λ/2) {ρ} ⟦e⟧`; a density
+jump at uniform `e` moves no energy. State fields: `ρ`, `e`, `h`, `uv`, `λ`.
 """
 function dg_scalars_interface(normal, (y⁻,), (y⁺,))
     Fρ = (y⁻.ρ * (y⁻.uv' * normal) + y⁺.ρ * (y⁺.uv' * normal)) / 2
     h̄ = (y⁻.h + y⁺.h) / 2
     λ = max(y⁻.λ, y⁺.λ)
-    return (; ρ = Fρ, ρe_tot = Fρ * h̄ - λ / 2 * (y⁺.ρe - y⁻.ρe))
+    ρ̄ = (y⁻.ρ + y⁺.ρ) / 2
+    return (; ρ = Fρ, ρe_tot = Fρ * h̄ - λ / 2 * ρ̄ * (y⁺.e - y⁻.e))
 end
 
 """
-    dg_scalars_es_interface(normal, (y⁻, γm1), (y⁺, _))
+    dg_scalars_es_interface(normal, (y⁻,), (y⁺,))
 
 Interface flux for (ρ, ρe_tot) with the central part of
 [`dg_scalars_interface`](@ref) and a λ-penalty on the jump of the entropy
-variable ``v = ∂S/∂(ρe)|_{ρ,u} = −ρ/p`` of ``S = −ρs/(γ−1)``:
-``F_ρe = F_ρ {h} − (λ/2) ŵ ⟦v⟧``, ``ŵ = {p}²/((γ−1){ρ})`` (``ŵ⟦v⟧ ≈ ⟦ρe⟧``).
-The face entropy production is ``−(λ/2) ŵ ⟦v⟧² ≤ 0``. State fields: `ρ`, `p`,
-`h`, `uv`, `λ`; `γm1 = γ − 1`.
+variable ``v = ∂(ρs)/∂(ρe)|_{ρ,u,q} = 1/T`` of the physical entropy ``ρs``:
+``F_ρe = F_ρ {h} − (λ/2) ŵ (1/T⁻ − 1/T⁺)``, ``ŵ = {ρ}{c_v}{T}²``, so that
+``ŵ (1/T⁻ − 1/T⁺) ≈ {ρ}{c_v}⟦T⟧ ≈ ⟦ρe⟧`` at fixed ρ, u and composition. The
+face production of ``ρs`` is ``+(λ/2) ŵ ⟦1/T⟧² ≥ 0``, and the penalty
+vanishes at uniform ``T`` whatever the humidity. State fields: `ρ`, `T`, `cv`
+(moist heat capacity ``c_{vm}``), `h`, `uv`, `λ`.
 """
-function dg_scalars_es_interface(normal, (y⁻, γm1), (y⁺, _))
+function dg_scalars_es_interface(normal, (y⁻,), (y⁺,))
     Fρ = (y⁻.ρ * (y⁻.uv' * normal) + y⁺.ρ * (y⁺.uv' * normal)) / 2
     h̄ = (y⁻.h + y⁺.h) / 2
     λ = max(y⁻.λ, y⁺.λ)
-    ŵ = ((y⁻.p + y⁺.p) / 2)^2 / (γm1 * (y⁻.ρ + y⁺.ρ) / 2)
-    Δv = y⁻.ρ / y⁻.p - y⁺.ρ / y⁺.p
+    T̄ = (y⁻.T + y⁺.T) / 2
+    ŵ = (y⁻.ρ + y⁺.ρ) / 2 * ((y⁻.cv + y⁺.cv) / 2) * T̄^2
+    Δv = 1 / y⁻.T - 1 / y⁺.T
     return (; ρ = Fρ, ρe_tot = Fρ * h̄ - λ / 2 * ŵ * Δv)
 end
 
@@ -170,31 +180,47 @@ end
     dg_tracer_interface(normal, argvals⁻, argvals⁺)
 
 Interface flux for a tracer ρχ advected by the same mass flux as continuity:
-`F_ρχ = {ρ uv·n̂}{χ}` plus a λ-Rusanov penalty on ⟦ρχ⟧. State fields: `ρ`,
-`uv`, `λ`, `χ`.
+`F_ρχ = {ρ uv·n̂}{χ}` plus a λ-Rusanov penalty on the ρ-weighted jump of the
+specific quantity, `−(λ/2) {ρ} ⟦χ⟧`. With χ uniform the penalty vanishes and
+`F_ρχ = χ F_ρ` exactly, so a uniform tracer stays uniform across a density
+jump. The flux is monotone in (χ⁻, χ⁺) for `λ ≥ |uv·n̂|` on both sides, as the
+Zhang–Shu positivity argument requires. State fields: `ρ`, `uv`, `λ`, `χ`.
 """
 function dg_tracer_interface(normal, (y⁻,), (y⁺,))
     Fρ = (y⁻.ρ * (y⁻.uv' * normal) + y⁺.ρ * (y⁺.uv' * normal)) / 2
     χ̄ = (y⁻.χ + y⁺.χ) / 2
     λ = max(y⁻.λ, y⁺.λ)
-    return (; ρχ = Fρ * χ̄ - λ / 2 * (y⁺.ρ * y⁺.χ - y⁻.ρ * y⁻.χ))
+    ρ̄ = (y⁻.ρ + y⁺.ρ) / 2
+    return (; ρχ = Fρ * χ̄ - λ / 2 * ρ̄ * (y⁺.χ - y⁻.χ))
 end
 
 """
-    dg_water_es_interface(normal, (y⁻, mass), (y⁺, _))
+    dg_water_es_interface(normal, (y⁻,), (y⁺,))
 
-[`dg_tracer_interface`](@ref) for a water species under
-`dg_vi_interface_flux = es`: the penalty `d = −(λ/2)⟦ρχ⟧` also moves the mass
-and energy the water carries, `F_ρ = mass · d` and `F_ρe = d {e}`, where `e`
-is the specific energy of the species and `mass` is `1` for total water
-(which is part of ρ) and `0` for a condensate species. State fields: `ρ`,
-`uv`, `λ`, `χ`, `e`.
+[`dg_tracer_interface`](@ref) for total water under
+`dg_vi_interface_flux = es`: the penalty `d = −(λ/2){ρ}⟦q_tot⟧` also moves
+the mass of the water, `F_ρ = d`, and the energy of the water's actual
+phases. With the diagnostic condensate partition `q_liq`, `q_ice` (so the
+vapor is `q_tot − q_liq − q_ice`) and the per-phase penalties
+`d_s = −(λ/2){ρ}⟦q_s⟧`, the energy flux is
+`F_ρe = d {e_vap} + d_liq {e_liq} + d_ice {e_ice}` with `e_vap = I_v + K + Φ`,
+`e_liq = I_l − I_v` and `e_ice = I_i − I_v`, which equals
+`Σ_s d_s {I_s} + d {K + Φ}` over vapor, liquid and ice: the moved water carries
+the energy of its phases. State fields: `ρ`, `uv`, `λ`, `χ` (= q_tot),
+`q_liq`, `q_ice`, `e_vap`, `e_liq`, `e_ice`.
 """
-function dg_water_es_interface(normal, (y⁻, mass), (y⁺, _))
+function dg_water_es_interface(normal, (y⁻,), (y⁺,))
     Fρ = (y⁻.ρ * (y⁻.uv' * normal) + y⁺.ρ * (y⁺.uv' * normal)) / 2
     χ̄ = (y⁻.χ + y⁺.χ) / 2
-    d = -max(y⁻.λ, y⁺.λ) / 2 * (y⁺.ρ * y⁺.χ - y⁻.ρ * y⁻.χ)
-    return (; ρχ = Fρ * χ̄ + d, ρ = mass * d, ρe_tot = d * (y⁻.e + y⁺.e) / 2)
+    s = -max(y⁻.λ, y⁺.λ) / 2 * (y⁻.ρ + y⁺.ρ) / 2
+    d = s * (y⁺.χ - y⁻.χ)
+    d_liq = s * (y⁺.q_liq - y⁻.q_liq)
+    d_ice = s * (y⁺.q_ice - y⁻.q_ice)
+    ρe_tot =
+        d * (y⁻.e_vap + y⁺.e_vap) / 2 +
+        d_liq * (y⁻.e_liq + y⁺.e_liq) / 2 +
+        d_ice * (y⁻.e_ice + y⁺.e_ice) / 2
+    return (; ρχ = Fρ * χ̄ + d, ρ = d, ρe_tot)
 end
 
 # Dry-γ sound speed c_snd = sqrt(γ p / ρ), γ = cp_d / cv_d.
@@ -273,8 +299,8 @@ and ρ-weighted velocity jump penalties — uniform λ on uₕ (`rusanov`), or
 wave-selective on uₕ and u₃ (`wave_selective`, see
 [`dg_wave_selective_velocity_penalty!`](@ref)). With
 `dg_vi_interface_flux = es` the ρe_tot penalty acts on the entropy-variable
-jump (see [`dg_scalars_es_interface`](@ref)) and the velocity penalties carry
-the own-side weight {β}/β, β = ρ/p. No-op on CG spaces.
+jump ⟦1/T⟧ (see [`dg_scalars_es_interface`](@ref)) and the velocity penalties
+carry the own-side weight {β}/β, β = 1/T. No-op on CG spaces.
 """
 NVTX.@annotate function dg_horizontal_dynamics_completion!(Yₜ, Y, p, t)
     is_dg_horizontal(axes(Y.c)) || return nothing
@@ -286,30 +312,31 @@ NVTX.@annotate function dg_horizontal_dynamics_completion!(Yₜ, Y, p, t)
     ᶜWJ = Fields.local_geometry_field(Y.c).WJ
     (ᶜuv, ᶜλ) = dg_face_velocity_and_λ(Y, p)
     es = p.atmos.numerics.dg_vi_interface_flux === Val(:es)
-    # own-side velocity penalty weight β: ρ/p (entropy sink) for es, 1 otherwise
-    ᶜβ = es ? (@. Y.c.ρ / ᶜp) : one(FT)
+    # own-side velocity penalty weight β for es: 1/T, since the entropy
+    # variable of ρu at fixed ρ, ρe and composition is −ρu/T; 1 otherwise
+    ᶜβ = es ? (@. 1 / ᶜT) : one(FT)
 
     # (ρ, ρe_tot) interface fluxes
     dy = Fields.Field(NamedTuple{(:ρ, :ρe_tot), Tuple{FT, FT}}, axes(Y.c))
     fill!(parent(dy), 0)
     if es
+        ᶜcv = @. TD.cv_m(thermo_params, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice)
         y = map(
-            (ρ, p_, h, uv, λ) -> (; ρ, p = p_, h, uv, λ),
+            (ρ, T, cv, h, uv, λ) -> (; ρ, T, cv, h, uv, λ),
             Y.c.ρ,
-            ᶜp,
+            ᶜT,
+            ᶜcv,
             ᶜh_tot,
             ᶜuv,
             ᶜλ,
         )
-        γm1 =
-            TD.Parameters.R_d(thermo_params) /
-            TD.Parameters.cv_d(thermo_params)
-        Operators.add_numerical_flux_interior!(dg_scalars_es_interface, dy, y, γm1)
+        Operators.add_numerical_flux_interior!(dg_scalars_es_interface, dy, y)
     else
+        ᶜe_tot = @. specific(Y.c.ρe_tot, Y.c.ρ)
         y = map(
-            (ρ, ρe, h, uv, λ) -> (; ρ, ρe, h, uv, λ),
+            (ρ, e, h, uv, λ) -> (; ρ, e, h, uv, λ),
             Y.c.ρ,
-            Y.c.ρe_tot,
+            ᶜe_tot,
             ᶜh_tot,
             ᶜuv,
             ᶜλ,
@@ -391,8 +418,9 @@ function add_dg_tracer_interface_flux!(ᶜρχₜ, ᶜρχ, Y, ᶜuv, ᶜλ)
     return nothing
 end
 
-# Specific energies carried by the water penalties of `dg_water_es_interface`:
-# vapor added with ρ (`vap`), and liquid or ice exchanged for vapor (`liq`, `ice`).
+# Specific energies carried by the total-water penalty of
+# `dg_water_es_interface`: vapor added with ρ (`vap`), and liquid or ice in
+# place of vapor (`liq`, `ice`).
 function dg_water_specific_energies(p)
     thermo_params = CAP.thermodynamics_params(p.params)
     (; ᶜT, ᶜK) = p.precomputed
@@ -405,23 +433,32 @@ function dg_water_specific_energies(p)
     )
 end
 
-# Add the `dg_water_es_interface` flux of the water species `ᶜρχ`, carrying the
-# specific energy `ᶜe`, to `ᶜρχₜ`, `Yₜ.c.ρ` and `Yₜ.c.ρe_tot`.
-function add_dg_water_es_flux!(Yₜ, ᶜρχₜ, ᶜρχ, Y, ᶜuv, ᶜλ, ᶜe, mass)
+# Add the `dg_water_es_interface` flux of total water `ᶜρq_tot` to `ᶜρq_totₜ`,
+# `Yₜ.c.ρ` and `Yₜ.c.ρe_tot`. The diagnostic condensate partition (`ᶜq_liq`,
+# `ᶜq_ice`, from saturation adjustment for 0M and the prognostic condensates
+# for 1M) sets the phases, and so the energy, of the water moved.
+function add_dg_water_es_flux!(Yₜ, ᶜρq_totₜ, ᶜρq_tot, Y, p, ᶜuv, ᶜλ)
     FT = Spaces.undertype(axes(Y.c))
     ᶜWJ = Fields.local_geometry_field(Y.c).WJ
+    (; ᶜq_liq, ᶜq_ice) = p.precomputed
+    (; vap, liq, ice) = dg_water_specific_energies(p)
     y = map(
-        (ρ, uv, λ, ρχ, e) -> (; ρ, uv, λ, χ = ρχ / ρ, e),
+        (ρ, uv, λ, ρq_tot, q_liq, q_ice, e_vap, e_liq, e_ice) ->
+            (; ρ, uv, λ, χ = ρq_tot / ρ, q_liq, q_ice, e_vap, e_liq, e_ice),
         Y.c.ρ,
         ᶜuv,
         ᶜλ,
-        ᶜρχ,
-        ᶜe,
+        ᶜρq_tot,
+        ᶜq_liq,
+        ᶜq_ice,
+        vap,
+        liq,
+        ice,
     )
     dy = Fields.Field(NamedTuple{(:ρχ, :ρ, :ρe_tot), NTuple{3, FT}}, axes(Y.c))
     fill!(parent(dy), 0)
-    Operators.add_numerical_flux_interior!(dg_water_es_interface, dy, y, FT(mass))
-    @. ᶜρχₜ += dy.ρχ / ᶜWJ
+    Operators.add_numerical_flux_interior!(dg_water_es_interface, dy, y)
+    @. ᶜρq_totₜ += dy.ρχ / ᶜWJ
     @. Yₜ.c.ρ += dy.ρ / ᶜWJ
     @. Yₜ.c.ρe_tot += dy.ρe_tot / ᶜWJ
     return nothing
@@ -432,12 +469,13 @@ end
 
 Interface completion of `horizontal_tracer_advection_tendency!` on DG spaces:
 the tracer interface flux for every grid-mean tracer. With the VI form and
-`dg_vi_interface_flux = es`, the water species use
-[`dg_water_es_interface`](@ref): the total-water penalty also moves ρ and the
-energy `e_int,v(T) + K + Φ` of vapor, and each condensate penalty moves the
-energy `e_int,l(T) − e_int,v(T)` (cloud liquid, rain) or
-`e_int,i(T) − e_int,v(T)` (cloud ice, snow), so a water exchange leaves T and
-u unchanged to first order in the jumps. No-op on CG spaces.
+`dg_vi_interface_flux = es`, total water uses [`dg_water_es_interface`](@ref):
+its penalty also moves ρ and the energy of the water's phases, taken from the
+diagnostic partition `ᶜq_liq`, `ᶜq_ice` (saturation adjustment for 0M; cloud
+liquid + rain and cloud ice + snow for 1M), so a water exchange leaves T and u
+unchanged to first order in the jumps with either scheme. The 1M condensate
+species are plain tracers; their energy enters through that partition. No-op
+on CG spaces.
 """
 NVTX.@annotate function dg_horizontal_tracer_completion!(Yₜ_lim, Y, p, t)
     is_dg_horizontal(axes(Y.c)) || return nothing
@@ -445,14 +483,9 @@ NVTX.@annotate function dg_horizontal_tracer_completion!(Yₜ_lim, Y, p, t)
     es =
         p.atmos.numerics.dg_equation_form === Val(:vi) &&
         p.atmos.numerics.dg_vi_interface_flux === Val(:es)
-    water_e = es ? dg_water_specific_energies(p) : nothing
     foreach_gs_tracer(Yₜ_lim, Y) do ᶜρχₜ, ᶜρχ, ρχ_name
         if es && ρχ_name == @name(ρq_tot)
-            add_dg_water_es_flux!(Yₜ_lim, ᶜρχₜ, ᶜρχ, Y, ᶜuv, ᶜλ, water_e.vap, 1)
-        elseif es && ρχ_name in (@name(ρq_lcl), @name(ρq_rai))
-            add_dg_water_es_flux!(Yₜ_lim, ᶜρχₜ, ᶜρχ, Y, ᶜuv, ᶜλ, water_e.liq, 0)
-        elseif es && ρχ_name in (@name(ρq_icl), @name(ρq_sno))
-            add_dg_water_es_flux!(Yₜ_lim, ᶜρχₜ, ᶜρχ, Y, ᶜuv, ᶜλ, water_e.ice, 0)
+            add_dg_water_es_flux!(Yₜ_lim, ᶜρχₜ, ᶜρχ, Y, p, ᶜuv, ᶜλ)
         else
             add_dg_tracer_interface_flux!(ᶜρχₜ, ᶜρχ, Y, ᶜuv, ᶜλ)
         end
