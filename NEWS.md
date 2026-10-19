@@ -22,8 +22,12 @@ main
   fields requires. New provisional parameters
   `sgs_variance_vertical_velocity_floor` (`w_ref`, 0.6 m/s),
   `sgs_variance_floor_reference_resolution` (120 km),
-  `sgs_variance_floor_resolution_exponent` (`p`, 2/3) and
-  `sgs_variance_floor_time_scale` (`τ_0`, 100 s); the floor enters the
+  `sgs_variance_floor_resolution_exponent` (`p`, 2/3),
+  `sgs_variance_floor_time_scale` (`τ_0`, 100 s),
+  `sgs_variance_theta_horizontal_scale_ratio` (`0.875`),
+  `sgs_variance_theta_vertical_scale_ratio` (`0.6`),
+  `sgs_variance_horizontal_cross_correlation` (`0.38`) and
+  `sgs_variance_moisture_bl_transition_scale` (`0.12`); the floor enters the
   variance only. This replaces the separate turbulent and
   vertical uniform-box blocks; `sgs_variance_vertical_scale_factor` is no
   longer read. `tq_correlation_model` defaults to `diagnosed`, the covariance

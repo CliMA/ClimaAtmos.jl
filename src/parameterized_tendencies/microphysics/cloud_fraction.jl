@@ -312,6 +312,68 @@ combination too, since air cannot be displaced below the ground.
     min(sqrt(l_mix^2 + l_b^2), max(l_z, zero(l_z)))
 
 """
+    boundary_layer_mixing_weight(l_mix, l_d, l_z, H_p, c_H)
+
+Boundary-layer mixing weight `w_bl = max(w_turb, w_z) ∈ [0, 1]` that relaxes
+the horizontal and vertical moisture displacement scales toward the
+potential-temperature displacement scales in the planetary boundary layer:
+
+    w_turb = min((l_mix / l_d)², 1),    w_z = exp(-l_z / (c_H H_p)),
+
+from the 3D turbulent mixing weight `w_turb` (`0` when `l_d ≤ 0`) and the
+surface-coupled scale-height taper `w_z` (`0` when `c_H H_p ≤ 0`), with wall
+distance `l_z = max(z - z_sfc, 0)`, local pressure scale height
+`H_p = R_d T / g`, and dimensionless scale-height fraction `c_H`
+(`sgs_variance_moisture_bl_transition_scale`).
+"""
+@inline function boundary_layer_mixing_weight(l_mix, l_d, l_z, H_p, c_H)
+    FT = typeof(l_d)
+    w_turb = ifelse(
+        l_d > eps(FT),
+        min((max(l_mix, zero(FT)) / max(l_d, eps(FT)))^2, one(FT)),
+        zero(FT),
+    )
+    h_bl = c_H * H_p
+    w_z = ifelse(
+        h_bl > eps(FT),
+        exp(-max(l_z, zero(FT)) / max(h_bl, eps(FT))),
+        zero(FT),
+    )
+    return max(w_turb, w_z)
+end
+
+"""
+    moisture_scale_ratio(r_θ, w_bl)
+
+Ratio `r_q = 1 - (1 - r_θ) w_bl` of the horizontal or vertical moisture
+displacement scale to its free-tropospheric value, relaxing from `1` in the
+free troposphere (`w_bl = 0`) to the potential-temperature scale ratio
+`r_θ ∈ {r_{Δx,θ}, r_{v,θ}}` in the boundary layer (`w_bl = 1`), where
+boundary-layer eddies mix moisture and potential temperature alike.
+"""
+@inline moisture_scale_ratio(r_θ, w_bl) =
+    one(w_bl) - (one(w_bl) - r_θ) * w_bl
+
+"""
+    horizontal_moisture_scale_ratio(r_Δx_θ, l_mix, l_d, l_z = Inf, H_p = 0, c_H = 0)
+
+Ratio `r_{h,q} = ℓ_{h,q} / (√c_g c_Δx Δx_h)` of the moisture horizontal
+displacement scale to its free-tropospheric value `√c_g c_Δx Δx_h`, evaluated
+from `moisture_scale_ratio` and `boundary_layer_mixing_weight`.
+"""
+@inline function horizontal_moisture_scale_ratio(
+    r_Δx_θ,
+    l_mix,
+    l_d,
+    l_z = oftype(l_d, Inf),
+    H_p = zero(l_d),
+    c_H = zero(l_d),
+)
+    w_bl = boundary_layer_mixing_weight(l_mix, l_d, l_z, H_p, c_H)
+    return moisture_scale_ratio(r_Δx_θ, w_bl)
+end
+
+"""
     materialized_displacement_length!(Y, p)
 
 Materialize the vertical displacement length `l_d` of the variance closure
@@ -581,11 +643,18 @@ computations (SGS quadrature, cloud fraction). Populates
 `p.precomputed.(ᶜT′T′, ᶜq′q′, ᶜcorr_Tq)` (and `ᶜT′q′` for the diagnosed correlation).
 
 The covariance of `(θ_li, q_tot)` is that of a Gaussian subgrid displacement
-with covariance `diag(ℓ_h², ℓ_h², ℓ_v²)` acting on the resolved gradients
-(`displacement_covariance`): `ℓ_h² = c_g (c_Δx Δx_h)²` from the horizontal
-grid scale, and `ℓ_v² = 2 c_σ l_d²` from the displacement length `l_d`, which
-combines the mixing length and the floored buoyancy displacement scale in
-quadrature (`materialized_displacement_length!`).
+acting on the resolved gradients (`displacement_covariance`), with
+free-tropospheric moisture horizontal scale `ℓ_{h,0}² = c_g (c_Δx Δx_h)²` from
+the horizontal grid scale, free-tropospheric moisture vertical displacement
+scale `ℓ_{v,0}² = 2 c_σ l_d²` from the displacement length `l_d`
+(`materialized_displacement_length!`), potential-temperature scale ratios
+`r_{Δx,θ} = ℓ_{h,θ} / ℓ_{h,0}` (`sgs_variance_theta_horizontal_scale_ratio`) and
+`r_{v,θ} = ℓ_{v,θ} / ℓ_{v,0}` (`sgs_variance_theta_vertical_scale_ratio`),
+moisture scale ratios `r_{h,q} = ℓ_{h,q} / ℓ_{h,0}` and
+`r_{v,q} = ℓ_{v,q} / ℓ_{v,0}` (`moisture_scale_ratio`, which relaxes `ℓ_{h,q}`
+to `ℓ_{h,θ}` and `ℓ_{v,q}` to `ℓ_{v,θ}` in the boundary layer with weight
+`boundary_layer_mixing_weight`), and horizontal displacement cross-correlation
+`r_{h,θq}` (`sgs_variance_horizontal_cross_correlation`).
 
 Pipeline:
 
@@ -624,15 +693,56 @@ function set_covariance_cache!(Y, p, thermo_params)
     # 1. Displacement scales.
     c_g = FT(CAP.sgs_variance_geometric_coeff(p.params))
     c_Δx = FT(CAP.sgs_variance_horizontal_scale_factor(p.params))
+    r_Δx_θ = FT(CAP.sgs_variance_theta_horizontal_scale_ratio(p.params))
+    r_v_θ = FT(CAP.sgs_variance_theta_vertical_scale_ratio(p.params))
+    r_h_θq = FT(CAP.sgs_variance_horizontal_cross_correlation(p.params))
+    c_H = FT(CAP.sgs_variance_moisture_bl_transition_scale(p.params))
+    R_d = FT(TD.Parameters.R_d(thermo_params))
+    grav = FT(TD.Parameters.grav(thermo_params))
+    (; ᶜT) = p.precomputed
+    ᶜz = Fields.coordinate_field(Y.c).z
+    z_sfc = Fields.level(Fields.coordinate_field(Y.f).z, Fields.half)
     Δx_h = FT(
         Spaces.node_horizontal_length_scale(
             Spaces.horizontal_space(axes(Y.c)),
         ),
     )
-    ℓ_h² = c_g * (c_Δx * Δx_h)^2
+    ℓ_h_0² = c_g * (c_Δx * Δx_h)^2
+    ℓ_h_θ² = r_Δx_θ^2 * ℓ_h_0²
     c_σ = FT(CAP.diagnostic_covariance_coeff(p.params))
     ᶜl_d = materialized_displacement_length!(Y, p)
-    ᶜℓ_v² = @. lazy(2 * c_σ * ᶜl_d^2)
+    if hasproperty(Y.c, :ρtke) && hasproperty(p.precomputed, :ᶜl_mix)
+        turbconv_params = CAP.turbconv_params(p.params)
+        c_b = FT(CAP.static_stab_coeff(turbconv_params))
+        ᶜtke = @. lazy(max(specific(Y.c.ρtke, Y.c.ρ), zero(FT)))
+        ᶜN²_disp = p.scratch.ᶜtemp_scalar_2
+        ᶜl_mix_disp = @. lazy(
+            buoyancy_bounded_mixing_length(
+                p.precomputed.ᶜl_mix,
+                c_b * ᶜtke,
+                ᶜN²_disp,
+            ),
+        )
+    else
+        ᶜl_mix_disp = zero(FT)
+    end
+    ᶜw_bl = @. lazy(
+        boundary_layer_mixing_weight(
+            ᶜl_mix_disp,
+            ᶜl_d,
+            ᶜz - z_sfc,
+            R_d * ᶜT / grav,
+            c_H,
+        ),
+    )
+    ᶜr_h_q = @. lazy(moisture_scale_ratio(r_Δx_θ, ᶜw_bl))
+    ᶜr_v_q = @. lazy(moisture_scale_ratio(r_v_θ, ᶜw_bl))
+    ᶜℓ_h_q² = @. lazy(ᶜr_h_q^2 * ℓ_h_0²)
+    ᶜℓ_h_θq = @. lazy(r_h_θq * r_Δx_θ * ᶜr_h_q * ℓ_h_0²)
+    ᶜℓ_v_0² = @. lazy(2 * c_σ * ᶜl_d^2)
+    ᶜℓ_v_q² = @. lazy(ᶜr_v_q^2 * ᶜℓ_v_0²)
+    ᶜℓ_v_θ² = @. lazy(r_v_θ^2 * ᶜℓ_v_0²)
+    ᶜℓ_v_θq = @. lazy(r_v_θ * ᶜr_v_q * ᶜℓ_v_0²)
 
     # 2. Horizontal gradient invariants.
     if iszero(c_Δx)
@@ -654,11 +764,11 @@ function set_covariance_cache!(Y, p, thermo_params)
     # 3. Covariances in the θ basis; ᶜT′T′ holds θ′θ′ until the transform.
     ᶜ∂q∂z = @. lazy(projected_vector_data(C3, ᶜgradᵥ_q_tot, ᶜlg))
     ᶜ∂θ∂z = @. lazy(projected_vector_data(C3, ᶜgradᵥ_θ_liq_ice, ᶜlg))
-    @. ᶜq′q′ = displacement_covariance(ℓ_h², ᶜℓ_v², ᶜinv_q, ᶜ∂q∂z, ᶜ∂q∂z)
-    @. ᶜT′T′ = displacement_covariance(ℓ_h², ᶜℓ_v², ᶜinv_θ, ᶜ∂θ∂z, ᶜ∂θ∂z)
+    @. ᶜq′q′ = displacement_covariance(ᶜℓ_h_q², ᶜℓ_v_q², ᶜinv_q, ᶜ∂q∂z, ᶜ∂q∂z)
+    @. ᶜT′T′ = displacement_covariance(ℓ_h_θ², ᶜℓ_v_θ², ᶜinv_θ, ᶜ∂θ∂z, ᶜ∂θ∂z)
     if diag_corr
         @. p.precomputed.ᶜT′q′ =
-            displacement_covariance(ℓ_h², ᶜℓ_v², ᶜinv_θq, ᶜ∂θ∂z, ᶜ∂q∂z)
+            displacement_covariance(ᶜℓ_h_θq, ᶜℓ_v_θq, ᶜinv_θq, ᶜ∂θ∂z, ᶜ∂q∂z)
     end
 
     # 4. θ → T basis via the thermodynamic Jacobian ∂T/∂θ. q is unaffected.

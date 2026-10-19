@@ -389,6 +389,27 @@ floor_nt(
                 @test bml(FT(200), FT(0.04), FT(-1e-4)) == FT(200)
                 @test bml(FT(200), FT(0.04), FT(1e-4)) isa FT
 
+                # horizontal_moisture_scale_ratio, boundary_layer_mixing_weight,
+                # and moisture_scale_ratio transition ℓ_{h,q} / ℓ_{h,0} and
+                # ℓ_{v,q} / ℓ_{v,0} from 1 in the free troposphere to r_θ in the BL
+                hmr = CA.horizontal_moisture_scale_ratio
+                blw = CA.boundary_layer_mixing_weight
+                msr = CA.moisture_scale_ratio
+                r_θ = FT(0.7)
+                r_vθ = FT(0.4)
+                @test hmr(r_θ, FT(0), FT(50)) == FT(1)
+                @test hmr(r_θ, FT(0), FT(0)) == FT(1)
+                @test hmr(r_θ, FT(50), FT(50)) ≈ r_θ
+                @test hmr(r_θ, FT(60), FT(50)) ≈ r_θ
+                @test hmr(r_θ, FT(30), FT(50)) ≈ FT(1) - (FT(1) - r_θ) * FT(0.36)
+                @test hmr(r_θ, FT(30), FT(50)) isa FT
+                @test blw(FT(0), FT(50), FT(0), FT(8000), FT(0.12)) == FT(1)
+                @test blw(FT(0), FT(50), FT(960), FT(8000), FT(0.12)) ≈ exp(FT(-1))
+                @test blw(FT(0), FT(50), FT(960), FT(8000), FT(0)) == FT(0)
+                @test msr(r_vθ, FT(0)) == FT(1)
+                @test msr(r_vθ, FT(1)) ≈ r_vθ
+                @test msr(r_vθ, FT(0.5)) ≈ FT(0.7)
+
                 # Where l_mix is at the buoyancy scale √(κ_b / N²),
                 # turbulent_lagrangian_time(l_mix, κ_b) equals 1 / N.
                 κ_b_test = FT(0.04)

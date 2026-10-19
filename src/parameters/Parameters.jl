@@ -255,8 +255,8 @@ not yet define.
   - `sgs_variance_vertical_velocity_floor`: Velocity scale `w_ref` of the
     unresolved vertical motions that displace air where the TKE vanishes, at
     the horizontal grid scale `sgs_variance_floor_reference_resolution`. The
-    floor displacement `w_min min(1/N, l_mix/√κ_iso, τ_0) / √(2 c_σ)`, capped
-    by the wall distance and the cell depth, is combined in quadrature with the mixing
+    floor displacement `w_min min(1/N, l_mix/√(c_b κ_iso), τ_0) / √(2 c_σ)`,
+    capped by the wall distance and the cell depth, is combined in quadrature with the mixing
     length (`floor_displacement_length`), so the vertical displacement in
     stably stratified air without TKE is `w_min / N`. Enters the variance
     only, not the diffusivity [m/s].
@@ -269,6 +269,20 @@ not yet define.
   - `sgs_variance_floor_time_scale`: Upper bound `τ_0` on the time over which
     the displacement of the unresolved vertical motions persists in weakly
     stratified quiescent air, before buoyancy or turbulence decorrelates it [s].
+  - `sgs_variance_theta_horizontal_scale_ratio`: Ratio `r_{Δx,θ} = ℓ_{h,θ} / ℓ_{h,0}`
+    of the horizontal displacement scale of `θ_li` to the free-tropospheric
+    horizontal displacement scale `ℓ_{h,0} = √c_g c_Δx Δx_h` of `q_tot` [-].
+  - `sgs_variance_theta_vertical_scale_ratio`: Ratio `r_{v,θ} = ℓ_{v,θ} / ℓ_{v,0}`
+    of the vertical displacement scale of `θ_li` to the free-tropospheric
+    vertical displacement scale `ℓ_{v,0} = √(2 c_σ) l_d` of `q_tot` [-].
+  - `sgs_variance_horizontal_cross_correlation`: Cross-correlation factor
+    `r_{h,θq} ∈ [-1, 1]` between the horizontal subgrid displacements of `θ_li`
+    and `q_tot` in the `θ_li`–`q_tot` covariance [-].
+  - `sgs_variance_moisture_bl_transition_scale`: Dimensionless fraction `c_H` of
+    the local pressure scale height `H_p = R_d T / g` over which the moisture
+    horizontal and vertical displacement scales relax from their
+    free-tropospheric values `ℓ_{h,0}, ℓ_{v,0}` toward `ℓ_{h,θ}, ℓ_{v,θ}` near
+    the surface (`boundary_layer_mixing_weight`) [-].
   - `sgs_variance_max_rel_std`: Upper bound on the SGS total-water standard
     deviation relative to the grid-mean total water, `σ_q ≤ sgs_variance_max_rel_std * q_tot`,
     applied to the diagnosed `q′q′` whatever closure produced it. A wider variance puts a quadrature node
@@ -325,6 +339,10 @@ Base.@kwdef struct SGSQuadratureParameters{FT} <: ASQP
     sgs_variance_floor_reference_resolution::FT
     sgs_variance_floor_resolution_exponent::FT
     sgs_variance_floor_time_scale::FT
+    sgs_variance_theta_horizontal_scale_ratio::FT
+    sgs_variance_theta_vertical_scale_ratio::FT
+    sgs_variance_horizontal_cross_correlation::FT
+    sgs_variance_moisture_bl_transition_scale::FT
     sgs_variance_max_rel_std::FT
     sgs_liquid_uniform_fraction::FT
     sgs_ice_uniform_fraction::FT
