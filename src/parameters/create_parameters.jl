@@ -597,6 +597,7 @@ function SGSQuadratureParameters(
         cloud_fraction_floor_release_abs_margin = FT(1),
         cloud_fraction_floor_release_sharpness = FT(1),
         cloud_fraction_floor_residual = FT(1),
+        cloud_fraction_floor_condensate_release = FT(0),
         # Unresolved vertical motions in the variance closure
         # (`materialized_displacement_length!`): velocity scale [m/s] at the
         # reference horizontal grid scale [m], the exponent of its growth with

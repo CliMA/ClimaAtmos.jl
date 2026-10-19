@@ -330,6 +330,9 @@ not yet define.
     transition; larger values approach a switch [-].
   - `cloud_fraction_floor_residual`: Fraction `D_min` of the relative floor
     retained deep inside a saturated deck; 1 (default) disables the release [-].
+  - `cloud_fraction_floor_condensate_release`: Weight `c_{qc} ≥ 0` on the
+    non-equilibrium condensate `q_c` in the saturation-margin floor release
+    `max(μ_S, c_{qc} q_c, 0) / w`; `0` (default) uses `max(μ_S, 0)` only [-].
 """
 Base.@kwdef struct SGSQuadratureParameters{FT} <: ASQP
     diagnostic_covariance_coeff::FT
@@ -360,6 +363,7 @@ Base.@kwdef struct SGSQuadratureParameters{FT} <: ASQP
     cloud_fraction_floor_release_abs_margin::FT
     cloud_fraction_floor_release_sharpness::FT
     cloud_fraction_floor_residual::FT
+    cloud_fraction_floor_condensate_release::FT
 end
 
 """

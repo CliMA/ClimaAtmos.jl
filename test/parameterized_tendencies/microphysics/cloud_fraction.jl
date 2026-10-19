@@ -235,6 +235,25 @@ floor_nt(
                         @test FT(0) <= cf <= FT(1)
                     end
                 end
+
+                @testset "condensate_release releases floor for subsaturated mean with condensate" begin
+                    floor_cr = CA.CloudFractionFloorParams(;
+                        ε_rel = FT(0.15),
+                        σ_abs = FT(1e-7),
+                        margin = FT(1),
+                        abs_margin = FT(0),
+                        sharpness = FT(1),
+                        residual = FT(0),
+                        condensate_release = FT(1),
+                    )
+                    cf_cr = CA._compute_cloud_fraction(
+                        q_c, μ_sub, σ_S, q_sat, α, floor_cr,
+                    )
+                    cf_sat = CA._compute_cloud_fraction(
+                        q_c, q_c, σ_S, q_sat, α, floor_sc,
+                    )
+                    @test cf_cr ≈ cf_sat rtol = sqrt(eps(FT))
+                end
             end
         end
     end

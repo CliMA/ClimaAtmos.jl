@@ -1129,21 +1129,21 @@ The floor enters *only* the CF computation; the Lagrange multiplier `λ` (in
 @inline function _compute_cloud_fraction(q_c, mu_S, sigma_S, q_sat, α, floor)
     FT = typeof(q_c)
     (; ε_rel, σ_abs, margin, abs_margin, sharpness, residual) = floor
-    # Release the relative floor only where the mean is saturated by a
-    # margin relative to the release width `w` — by default the
-    # *equilibrium* PDF width, so the floor is released where the unfloored
-    # closure already predicts overcast (x is then the unfloored normalized
-    # condensate when μ_S ≈ q_c). Subsaturated or marginally saturated means
-    # (μ_S ≤ 0: cumulus, cloud edges) keep the full floor for any parameter
-    # values. The denominator guard covers only the w → 0 limit: the
-    # smallness of the equilibrium width relative to ε_rel·q_sat is exactly
-    # what drives the release in a quiescent deck, so it must not be floored
-    # away.
+    c_qc =
+        hasproperty(floor, :condensate_release) ? floor.condensate_release :
+        zero(FT)
+    # Release the relative floor where the mean saturation excess `mu_S` or
+    # condensate margin `c_qc * q_c` exceeds the release width `w` — by default
+    # the *equilibrium* PDF width, so the floor is released where the unfloored
+    # closure already predicts overcast. The denominator guard covers only the
+    # w → 0 limit: the smallness of the equilibrium width relative to
+    # ε_rel·q_sat is what drives the release in a quiescent deck, so it must
+    # not be floored away.
     w = sqrt(
         margin^2 * ((α * sigma_S)^2 + σ_abs^2) +
         (abs_margin * ε_rel * q_sat)^2,
     )
-    x = max(mu_S, zero(FT)) / max(w, ϵ_numerics(FT))
+    x = max(mu_S, c_qc * q_c, zero(FT)) / max(w, ϵ_numerics(FT))
     # `sharpness == 1` is the default release profile; the fast path keeps
     # it identical to the plain saturation-margin release.
     D_shape =
@@ -1200,8 +1200,9 @@ Augmented-σ floor magnitude and release-shape parameters for
 (a struct rather than a NamedTuple, which Base reserves from broadcasting):
 
   - `ε_rel`, `σ_abs`: relative and absolute floor magnitudes,
-  - `margin`, `abs_margin`, `sharpness`, `residual`: release shape (see the
-    saturation-margin release section of `_compute_cloud_fraction`).
+  - `margin`, `abs_margin`, `sharpness`, `residual`, `condensate_release`:
+    release shape (see the saturation-margin release section of
+    `_compute_cloud_fraction`).
 """
 Base.@kwdef struct CloudFractionFloorParams{FT}
     ε_rel::FT
@@ -1210,6 +1211,7 @@ Base.@kwdef struct CloudFractionFloorParams{FT}
     abs_margin::FT
     sharpness::FT
     residual::FT
+    condensate_release::FT = FT(0)
 end
 Base.broadcastable(x::CloudFractionFloorParams) = tuple(x)
 
@@ -1226,6 +1228,7 @@ cloud_fraction_floor_params(params) = CloudFractionFloorParams(;
     abs_margin = CAP.cloud_fraction_floor_release_abs_margin(params),
     sharpness = CAP.cloud_fraction_floor_release_sharpness(params),
     residual = CAP.cloud_fraction_floor_residual(params),
+    condensate_release = CAP.cloud_fraction_floor_condensate_release(params),
 )
 
 """
