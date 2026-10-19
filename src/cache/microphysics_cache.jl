@@ -180,19 +180,7 @@ function set_precipitation_velocities!(
         TD.air_density(thp, ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰),
     )
     ᶜρa⁰ = @. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model))
-    n = n_mass_flux_subdomains(turbconv_model)
-
-    # scratch to compute env mass flux
-    ᶜimplied_env_mass_flux = p.scratch.ᶜtemp_scalar
-    # scratch to add positive masses of subdomains
-    # TODO use Y.c.ρq instead of ᶜρχ for computing gs velocities by averaging velocities
-    # over subdomains once negative subdomain mass issues are resolved
-    # We use positive masses for mass-weighted averaging gs terminal velocity. This ensures
-    # that the value remains between sgs terminal velocity values (important for stability).
-    ᶜρχ = p.scratch.ᶜtemp_scalar_2
-    # scratch for adding energy fluxes over subdomains
-    ᶜρwₕhₜ = p.scratch.ᶜtemp_scalar_3
-    @. ᶜρwₕhₜ = 0
+    n_val = Val(n_mass_flux_subdomains(turbconv_model))
 
     # Compute gs sedimentation velocity based on subdomain velocities
     # assuming grid-scale flux equals to the sum of sub-grid-scale fluxes.
@@ -208,55 +196,84 @@ function set_precipitation_velocities!(
         q,
     )
 
-    microphysics_tracers = (
-        (@name(q_lcl), @name(ᶜwₗʲs), @name(ᶜwₗ)),
-        (@name(q_icl), @name(ᶜwᵢʲs), @name(ᶜwᵢ)),
-        (@name(q_rai), @name(ᶜwᵣʲs), @name(ᶜwᵣ)),
-        (@name(q_sno), @name(ᶜwₛʲs), @name(ᶜwₛ)),
+    microphysics_tracers = unrolled_filter(
+        ((χ_name, _, _),) -> MatrixFields.has_field(Y.c.sgsʲs.:(1), χ_name),
+        (
+            (@name(q_lcl), @name(ᶜwₗʲs), @name(ᶜwₗ)),
+            (@name(q_icl), @name(ᶜwᵢʲs), @name(ᶜwᵢ)),
+            (@name(q_rai), @name(ᶜwᵣʲs), @name(ᶜwᵣ)),
+            (@name(q_sno), @name(ᶜwₛʲs), @name(ᶜwₛ)),
+        ),
     )
-    MatrixFields.unrolled_foreach(microphysics_tracers) do (χ_name, wʲs_name, w_name)
-        MatrixFields.has_field(Y.c.sgsʲs.:(1), χ_name) || return
+    χ_names = unrolled_map(first, microphysics_tracers)
+    ᶜws = unrolled_map(
+        ((_, _, w_name),) -> MatrixFields.get_field(p.precomputed, w_name),
+        microphysics_tracers,
+    )
+    ᶜwʲss = unrolled_map(
+        ((_, wʲs_name, _),) -> MatrixFields.get_field(p.precomputed, wʲs_name),
+        microphysics_tracers,
+    )
+    ᶜχ⁰s = unrolled_map(χ_name -> ᶜspecific_env_value(χ_name, Y, p), χ_names)
 
+    # One fused column loop per species (the terminal-velocity closures are
+    # large, so one kernel for all species would be too much code to compile):
+    # the positive subdomain masses used for mass-weighted averaging of the gs
+    # terminal velocity (which keeps the value between the sgs terminal
+    # velocities, important for stability) and the implied environment mass
+    # flux are loop temporaries; the energy flux summed over subdomains
+    # accumulates in scratch.
+    # TODO use Y.c.ρq instead of ᶜρχ for computing gs velocities by averaging velocities
+    # over subdomains once negative subdomain mass issues are resolved
+    ᶜρwₕhₜ = p.scratch.ᶜtemp_scalar_3
+    @. ᶜρwₕhₜ = 0
+    ntuple(Val(length(χ_names))) do i
+        χ_name = χ_names[i]
+        ᶜw = ᶜws[i]
+        ᶜwʲs = ᶜwʲss[i]
+        ᶜχ⁰ = ᶜχ⁰s[i]
         e_int_func = internal_energy_func(χ_name)
-        ᶜw = MatrixFields.get_field(p.precomputed, w_name)
-        ᶜwʲs = MatrixFields.get_field(p.precomputed, wʲs_name)
+        ᶜρχ_gs = MatrixFields.get_field(Y.c, get_ρχ_name(χ_name))
+        DataLayouts.foreach_column(
+            ᶜw, ᶜwʲs, ᶜρwₕhₜ, Y.c, ᶜρχ_gs, ᶜΦ, ᶜTʲs, ᶜρʲs, ᶜT⁰, ᶜρ⁰, ᶜρa⁰, ᶜχ⁰,
+        ) do ᶜw, ᶜwʲs, ᶜρwₕhₜ, Yc, ᶜρχ_gs, ᶜΦ, ᶜTʲs, ᶜρʲs, ᶜT⁰, ᶜρ⁰, ᶜρa⁰, ᶜχ⁰
+            ᶜρa⁰χ⁰ = @. max(zero(Yc.ρ), ᶜρa⁰) * max(zero(Yc.ρ), ᶜχ⁰)
+            ᶜρχ = @. ᶜρa⁰χ⁰
+            @. ᶜw = ᶜρa⁰χ⁰ * terminal_velocity_function(χ_name, ᶜρ⁰, ᶜχ⁰)
+            ᶜimplied_env_mass_flux = @. zero(Yc.ρ)
+            # add updraft contributions
+            ntuple(n_val) do j
+                ᶜsgsʲ = Yc.sgsʲs.:($j)
+                ᶜχʲ = MatrixFields.get_field(ᶜsgsʲ, χ_name)
+                ᶜwʲ = ᶜwʲs.:($j)
+                ᶜρʲ = ᶜρʲs.:($j)
+                ᶜTʲ = ᶜTʲs.:($j)
 
-        ᶜχ⁰ = ᶜspecific_env_value(χ_name, Y, p)
-        ᶜρa⁰χ⁰ = @. lazy(max(zero(Y.c.ρ), ᶜρa⁰) * max(zero(Y.c.ρ), ᶜχ⁰))
-        @. ᶜρχ = ᶜρa⁰χ⁰
-        @. ᶜw = ᶜρa⁰χ⁰ * terminal_velocity_function(χ_name, ᶜρ⁰, ᶜχ⁰)
-        @. ᶜimplied_env_mass_flux = 0
-        # add updraft contributions
-        for j in 1:n
-            ᶜχʲ = MatrixFields.get_field(Y.c.sgsʲs.:($j), χ_name)
-            ᶜwʲ = ᶜwʲs.:($j)
+                ᶜρaʲχʲ = @. max(zero(Yc.ρ), ᶜsgsʲ.ρa) * max(zero(Yc.ρ), ᶜχʲ)
+                @. ᶜρχ += ᶜρaʲχʲ
+                @. ᶜwʲ = terminal_velocity_function(χ_name, ᶜρʲ, max(zero(Yc.ρ), ᶜχʲ))
+                @. ᶜw += ᶜρaʲχʲ * ᶜwʲ
+                @. ᶜimplied_env_mass_flux -= ᶜsgsʲ.ρa * ᶜχʲ * ᶜwʲ
 
-            ᶜρaʲχʲ = @. lazy(
-                max(zero(Y.c.ρ), Y.c.sgsʲs.:($$j).ρa) *
-                max(zero(Y.c.ρ), ᶜχʲ),
+                # Add contributions to energy and total water advection
+                @. ᶜρwₕhₜ += ᶜsgsʲ.ρa * ᶜwʲ * ᶜχʲ * (e_int_func(thp, ᶜTʲ) + ᶜΦ)
+                return nothing
+            end
+            # average
+            @. ᶜw = gs_terminal_velocity(
+                microphysics_model,
+                velocity_mode(atmos, χ_name),
+                χ_name,
+                params,
+                ᶜw,
+                ᶜρχ,
             )
-            @. ᶜρχ += ᶜρaʲχʲ
-            @. ᶜwʲ = terminal_velocity_function(χ_name, ᶜρʲs.:($$j), max(zero(Y.c.ρ), ᶜχʲ))
-            @. ᶜw += ᶜρaʲχʲ * ᶜwʲ
-            @. ᶜimplied_env_mass_flux -=
-                Y.c.sgsʲs.:($$j).ρa * ᶜχʲ * ᶜwʲ
-
-            # Add contributions to energy and total water advection
-            @. ᶜρwₕhₜ +=
-                Y.c.sgsʲs.:($$j).ρa * ᶜwʲ * ᶜχʲ * (e_int_func(thp, ᶜTʲs.:($$j)) + ᶜΦ)
+            @. ᶜimplied_env_mass_flux += ᶜρχ_gs * ᶜw
+            # contribution of env sedimentation to htot
+            @. ᶜρwₕhₜ += ᶜimplied_env_mass_flux * (e_int_func(thp, ᶜT⁰) + ᶜΦ)
+            return nothing
         end
-        # average
-        @. ᶜw = gs_terminal_velocity(
-            microphysics_model,
-            velocity_mode(atmos, χ_name),
-            χ_name,
-            params,
-            ᶜw,
-            ᶜρχ,
-        )
-        @. ᶜimplied_env_mass_flux += MatrixFields.get_field(Y.c, get_ρχ_name(χ_name)) * ᶜw
-        # contribution of env sedimentation to htot
-        @. ᶜρwₕhₜ += ᶜimplied_env_mass_flux * (e_int_func(thp, ᶜT⁰) + ᶜΦ)
+        return nothing
     end
 
     @. ᶜwₕhₜ = WVec(ᶜρwₕhₜ) / Y.c.ρ

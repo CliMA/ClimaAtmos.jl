@@ -763,18 +763,27 @@ caller passes it to a divergence operator or a `DiagonalMatrixRow`, where the
 nested expression exceeds GPU kernel parameter limits.
 """
 function ᶜh_eff_plus_Φ!(ᶜout, thermo_params, ᶜT, ᶜΦ, ᶜq_vap, ᶜq_liq, ᶜq_ice)
-    FT = eltype(ᶜout)
-    ϵ_FT = eps(FT)
-    @. ᶜout =
-        (
-            TD.enthalpy_vapor(thermo_params, ᶜT) * max(FT(0), ᶜq_vap) +
-            TD.enthalpy_liquid(thermo_params, ᶜT) * max(FT(0), ᶜq_liq) +
-            TD.enthalpy_ice(thermo_params, ᶜT) * max(FT(0), ᶜq_ice)
-        ) / max(
-            max(FT(0), ᶜq_vap) + max(FT(0), ᶜq_liq) + max(FT(0), ᶜq_ice),
-            ϵ_FT,
-        ) + ᶜΦ
+    @. ᶜout = h_eff_plus_Φ(thermo_params, ᶜT, ᶜΦ, ᶜq_vap, ᶜq_liq, ᶜq_ice)
     return ᶜout
+end
+
+"""
+    h_eff_plus_Φ(thermo_params, T, Φ, q_vap, q_liq, q_ice)
+
+Pointwise `h_eff + Φ` of [`ᶜh_eff_plus_Φ!`](@ref), for use in broadcasts and
+fused column loops.
+"""
+function h_eff_plus_Φ(thermo_params, T, Φ, q_vap, q_liq, q_ice)
+    FT = typeof(T)
+    ϵ_FT = eps(FT)
+    return (
+        TD.enthalpy_vapor(thermo_params, T) * max(FT(0), q_vap) +
+        TD.enthalpy_liquid(thermo_params, T) * max(FT(0), q_liq) +
+        TD.enthalpy_ice(thermo_params, T) * max(FT(0), q_ice)
+    ) / max(
+        max(FT(0), q_vap) + max(FT(0), q_liq) + max(FT(0), q_ice),
+        ϵ_FT,
+    ) + Φ
 end
 
 """
