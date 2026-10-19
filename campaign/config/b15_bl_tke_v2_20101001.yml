@@ -1,0 +1,59 @@
+# Generated for campaign run_id: b15_bl_tke_v2_20101001 (start_date: 20100924)
+# Base config: /usr/local/google/home/tapio/Code/AMIP/config/amip_coarse_progedmf_1m_land_cond_m145_icethr2e5_strat2.yml
+FLOAT_TYPE: "Float32"
+albedo_model: "CouplerAlbedo"
+atmos_config_file: "config/atmos_configs/climaatmos_progedmf_1m.yml"
+checkpoint_dt: "20days"
+save_cache: false
+coupler_output_dir: "/usr/local/google/home/tapio/Code/AMIP/output/campaign/b15_bl_tke_v2_20101001/"
+coupler_toml: ["/usr/local/google/home/tapio/Code/ClimaAtmos.jl/campaign/toml/b15_bl_tke_v2_20101001.toml"]
+cloud_ice_formation: "TemperatureDependentIceNumber"
+tq_correlation_model: "diagnosed"
+dt: "180secs"
+dt_cpl: "180secs"
+h_elem: 12
+z_elem: 63
+dz_bottom: 30
+netcdf_interpolation_num_points: [144, 72, 31]
+energy_check: false
+check_nan_every: 1
+initial_condition: "WeatherModel"
+mode_name: "subseasonal"
+era5_initial_condition_dir: "/usr/local/google/home/tapio/Code/Artifacts/artifacts/wxquest_initial_conditions"
+land_temperature_anomaly: "nothing"
+land_fraction_source: "era5"
+binary_area_fraction: false
+lai_source: "modis_monthly_climatology"
+start_date: "20101001"
+t_end: "10days"
+land_model: "integrated"
+netcdf_output_at_levels: true
+output_default_diagnostics: false
+radiation_reset_rng_seed: true
+surface_setup: "PrescribedSurface"
+topo_smoothing: true
+topography: "Earth"
+rain_terminal_velocity: "Fixed"
+snow_terminal_velocity: "Fixed"
+cloud_ice_terminal_velocity: "Fixed"
+cloud_liquid_rain_accretion: "KK2000Accretion"
+extra_atmos_diagnostics:
+  - short_name: [ta, hus, hur, cl, clw, cli]
+    period: 1days
+    reduction_time: average
+    pressure_coordinates: true
+  - short_name: [rsdt, rsut, rsutcs, rlut, rlutcs, rsds, rsus, rlds, rlus, hfss, hfls, hfps, pr, clt, clwvi, clivi, lwp, iwp, rwp, swp, prw, epath, mpath]
+    period: 1days
+    reduction_time: average
+  - short_name: [prw, epath, mpath]
+    period: 1days
+    reduction_time: inst
+  - short_name: [pfull, lim_gm_frac, lim_sgs_frac, clw_neg_frac, cli_neg_frac, husra_neg_frac, hussn_neg_frac]
+    period: 1days
+    reduction_time: average
+  - short_name: [tnt_rad, tnt_mp, tnqv_mp, prflux_rai, prflux_sno, tn_rhoe_edmfdiff, tn_rhoe_edmfmflux, tn_rhoe_sediment, tn_rhoe_iva, tn_rhoqt_edmfdiff, tn_rhoqt_edmfmflux, tn_rhoqt_sediment, tn_rhoqt_iva]
+    period: 1days
+    reduction_time: average
+    compute_every: 15mins
+    max_time: 48hours
+    pressure_coordinates: true
