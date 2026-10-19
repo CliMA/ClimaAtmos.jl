@@ -407,14 +407,14 @@ VALID_CASES = [
     cases((
         "rhoa", "ua", "va", "wa", "ta", "thetaa", "ha", "msea", "pfull", "zg",
         "bgrad", "strain", "cl", "ke", "ts", "tas", "uas", "vas", "tauu", "tauv",
-        "hfes", "dsevi", "env_q_tot_variance", "env_temperature_variance",
+        "hfes", "dsevi", "mpath", "epath", "env_q_tot_variance", "env_temperature_variance",
         "env_q_tot_temperature_covariance", "env_q_tot_temperature_correlation",
     ), :dry)...,
     # sphere-only (DSS / hypsography)
     cases(("rv", "orog"), :sphere)...,
     # MoistMicrophysics, single path
     cases((
-        "hus", "hur", "husv", "hussfc", "evspsbl", "hfls",
+        "hus", "hur", "husv", "hussfc", "evspsbl", "hfls", "hfps",
         "clivi", "clwvi", "clvi", "prw", "hurvi", "cape", "mslp"
     ), :m0)...,
     # Union{DryModel, MoistMicrophysics}: single method
@@ -427,6 +427,9 @@ VALID_CASES = [
     case("lmix",  (:dry, :m0_pedmfx)),
     # 1M / 2M microphysics
     cases(("husra", "hussn", "rwp", "swp"), :m1)...,  # Union{1M, 2M}, single method
+    cases(("prflux_rai", "prflux_sno"), :m1)...,
+    cases(("tnt_mp", "tnqv_mp"), (:m1, :m1_pedmfx))...,
+    case("tnt_rad", :allsky),
     # "cdnc", "ncra" (2M only) DISABLED (CloudMicrophysics 0.37 compat) and
     # moved to SKIP_CASES below - see the `:m2` note near `states` above.
     # cases(("cdnc", "ncra"), :m2)...,  # 2M only
@@ -527,6 +530,7 @@ SKIP_CASES = Set([
     "husra_pos_frac", "husra_pos_mean", "husra_pos_sum",
     "hussn_max", "hussn_min", "hussn_neg_frac", "hussn_neg_mean", "hussn_neg_sum",
     "hussn_pos_frac", "hussn_pos_mean", "hussn_pos_sum",
+    "lim_gm_frac", "lim_sgs_frac",
     # tendency_diagnostics.jl — debug-only, expensive per-sample (each runs a
     # full tendency evaluation). Exercised in single-column runs when the
     # `debug_tendency_diagnostics` config flag is enabled.

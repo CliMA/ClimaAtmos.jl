@@ -1238,3 +1238,190 @@ add_diagnostic_variable!(
     comments = "Grid-mean specific concentration of passive gas tracer A",
     compute = compute_q_gas_A,
 )
+
+###
+# Column-integrated air mass, total energy, and surface precipitation energy tendency (2d)
+###
+function compute_mpath(state, cache, _)
+    out = cache.scratch.ᶠtemp_field_level
+    Operators.column_integral_definite!(out, state.c.ρ)
+    return out
+end
+
+add_diagnostic_variable!(
+    short_name = "mpath",
+    units = "kg m^-2",
+    long_name = "Column-Integrated Air Mass",
+    comments = "Vertically integrated total air density",
+    compute = compute_mpath,
+)
+
+function compute_epath(state, cache, _)
+    out = cache.scratch.ᶠtemp_field_level
+    Operators.column_integral_definite!(out, state.c.ρe_tot)
+    return out
+end
+
+add_diagnostic_variable!(
+    short_name = "epath",
+    units = "J m^-2",
+    long_name = "Column-Integrated Total Air Energy",
+    comments = "Vertically integrated total air energy density",
+    compute = compute_epath,
+)
+
+compute_hfps(state, cache, time) =
+    compute_hfps(state, cache, time, cache.atmos.microphysics_model)
+compute_hfps(_, _, _, model) = error_diagnostic_variable("hfps", model)
+compute_hfps(_, cache, _, ::MoistMicrophysics) =
+    cache.precomputed.col_integrated_precip_energy_tendency
+
+add_diagnostic_variable!(
+    short_name = "hfps",
+    units = "W m^-2",
+    long_name = "Column-Integrated Precipitation Energy Tendency",
+    comments = "Surface enthalpy flux carried by sedimenting precipitation (upward positive)",
+    compute = compute_hfps,
+)
+
+###
+# 3D precipitation sedimentation fluxes and cached radiative/microphysics heating & moisture tendencies
+###
+compute_prflux_rai(state, cache, time) =
+    compute_prflux_rai(state, cache, time, cache.atmos.microphysics_model)
+compute_prflux_rai(_, _, _, model) =
+    error_diagnostic_variable("prflux_rai", model)
+compute_prflux_rai(state, cache, _, ::NonEquilibriumMicrophysics1M) =
+    @. lazy(state.c.ρq_rai * cache.precomputed.ᶜwᵣ)
+
+add_diagnostic_variable!(
+    short_name = "prflux_rai",
+    units = "kg m^-2 s^-1",
+    long_name = "Downward Rain Sedimentation Flux",
+    comments = "3D downward mass flux of rain from terminal velocity",
+    compute = compute_prflux_rai,
+)
+
+compute_prflux_sno(state, cache, time) =
+    compute_prflux_sno(state, cache, time, cache.atmos.microphysics_model)
+compute_prflux_sno(_, _, _, model) =
+    error_diagnostic_variable("prflux_sno", model)
+compute_prflux_sno(state, cache, _, ::NonEquilibriumMicrophysics1M) =
+    @. lazy(state.c.ρq_sno * cache.precomputed.ᶜwₛ)
+
+add_diagnostic_variable!(
+    short_name = "prflux_sno",
+    units = "kg m^-2 s^-1",
+    long_name = "Downward Snow Sedimentation Flux",
+    comments = "3D downward mass flux of snow from terminal velocity",
+    compute = compute_prflux_sno,
+)
+
+compute_tnt_rad(state, cache, time) =
+    compute_tnt_rad(state, cache, time, cache.atmos.radiation_mode)
+compute_tnt_rad(_, _, _, mode) = error_diagnostic_variable("tnt_rad", mode)
+function compute_tnt_rad(state, cache, _, ::RRTMGPI.AbstractRRTMGPMode)
+    tps = CAP.thermodynamics_params(cache.params)
+    (; ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice) = cache.precomputed
+    (; ᶠradiation_flux) = cache.radiation
+    return @. lazy(
+        -(ᶜdivᵥ(ᶠradiation_flux)) /
+        (state.c.ρ * TD.cp_m(tps, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice)),
+    )
+end
+
+add_diagnostic_variable!(
+    short_name = "tnt_rad",
+    units = "K s^-1",
+    long_name = "Tendency of Air Temperature Due to Radiative Heating",
+    standard_name = "tendency_of_air_temperature_due_to_radiative_heating",
+    comments = "3D radiative heating rate",
+    compute = compute_tnt_rad,
+)
+
+function _gm_1m_rates(state, cache, turbconv_model::PrognosticEDMFX)
+    (; ᶜmp_tendencyʲs, ᶜmp_tendency⁰) = cache.precomputed
+    ᶜρ = state.c.ρ
+    ᶜρa_env = @. lazy(ρa⁰(ᶜρ, state.c.sgsʲs, turbconv_model))
+    ᶜρa_up = (state.c.sgsʲs.:1).ρa
+    mp_env = ᶜmp_tendency⁰
+    mp_up = ᶜmp_tendencyʲs.:1
+    dq_liq = @. lazy(
+        (
+            ᶜρa_env * (mp_env.dq_lcl_dt + mp_env.dq_rai_dt) +
+            ᶜρa_up * (mp_up.dq_lcl_dt + mp_up.dq_rai_dt)
+        ) / ᶜρ,
+    )
+    dq_ice = @. lazy(
+        (
+            ᶜρa_env * (mp_env.dq_icl_dt + mp_env.dq_sno_dt) +
+            ᶜρa_up * (mp_up.dq_icl_dt + mp_up.dq_sno_dt)
+        ) / ᶜρ,
+    )
+    return (dq_liq, dq_ice)
+end
+function _gm_1m_rates(_, cache, _)
+    mp = cache.precomputed.ᶜmp_tendency
+    dq_liq = @. lazy(mp.dq_lcl_dt + mp.dq_rai_dt)
+    dq_ice = @. lazy(mp.dq_icl_dt + mp.dq_sno_dt)
+    return (dq_liq, dq_ice)
+end
+
+compute_tnt_mp(state, cache, time) =
+    compute_tnt_mp(state, cache, time, cache.atmos.microphysics_model)
+compute_tnt_mp(_, _, _, model) = error_diagnostic_variable("tnt_mp", model)
+function compute_tnt_mp(state, cache, _, ::NonEquilibriumMicrophysics1M)
+    tps = CAP.thermodynamics_params(cache.params)
+    LH_v0 = TD.Parameters.LH_v0(tps)
+    LH_s0 = TD.Parameters.LH_s0(tps)
+    (; ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice) = cache.precomputed
+    dq_liq, dq_ice = _gm_1m_rates(state, cache, cache.atmos.turbconv_model)
+    return @. lazy(
+        (LH_v0 * dq_liq + LH_s0 * dq_ice) /
+        TD.cp_m(tps, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice),
+    )
+end
+
+add_diagnostic_variable!(
+    short_name = "tnt_mp",
+    units = "K s^-1",
+    long_name = "Tendency of Air Temperature Due to Microphysics Phase Changes",
+    comments = "3D latent heating rate from 1M microphysics",
+    compute = compute_tnt_mp,
+)
+
+compute_tnqv_mp(state, cache, time) =
+    compute_tnqv_mp(state, cache, time, cache.atmos.microphysics_model)
+compute_tnqv_mp(_, _, _, model) = error_diagnostic_variable("tnqv_mp", model)
+function compute_tnqv_mp(state, cache, _, ::NonEquilibriumMicrophysics1M)
+    dq_liq, dq_ice = _gm_1m_rates(state, cache, cache.atmos.turbconv_model)
+    return @. lazy(-(dq_liq + dq_ice))
+end
+
+add_diagnostic_variable!(
+    short_name = "tnqv_mp",
+    units = "kg kg^-1 s^-1",
+    long_name = "Tendency of Water Vapor Specific Humidity Due to Microphysics",
+    comments = "3D water vapor source/sink from 1M microphysics",
+    compute = compute_tnqv_mp,
+)
+
+compute_lim_gm_frac(_, cache, _) = @. lazy(cache.precomputed.ᶜgm_limiter_active)
+
+add_diagnostic_variable!(
+    short_name = "lim_gm_frac",
+    units = "1",
+    long_name = "Grid-Mean Non-Negativity / Condensate Limiter Active Fraction",
+    comments = "3D indicator (fraction when time-averaged) of where the grid-mean non-negativity or condensate rescaling constraint was active",
+    compute = compute_lim_gm_frac,
+)
+
+compute_lim_sgs_frac(_, cache, _) = @. lazy(cache.precomputed.ᶜsgs_filter_active)
+
+add_diagnostic_variable!(
+    short_name = "lim_sgs_frac",
+    units = "1",
+    long_name = "EDMF Updraft State Filter Active Fraction",
+    comments = "3D indicator (fraction when time-averaged) of where the EDMF updraft state filter was active",
+    compute = compute_lim_sgs_frac,
+)

@@ -39,6 +39,8 @@ import ..horizontal_tracer_advection_tendency!
 import ..explicit_vertical_advection_tendency!
 import ..hyperdiffusion_tendency!
 import ..additional_tendency!
+import ..radiation_tendency!
+import ..vertical_advection_of_water_tendency!
 import ..microphysics_tendency!
 import ..edmfx_sgs_vertical_advection_tendency!
 import ..vertical_diffusion_boundary_layer_tendency!
@@ -100,6 +102,14 @@ end
 
 _additional_wrap!(Yₜ, Y, p, t) = additional_tendency!(Yₜ, Y, p, t)
 
+_rad_wrap!(Yₜ, Y, p, t) = radiation_tendency!(
+    Yₜ, Y, p, t, p.atmos.radiation_mode,
+)
+
+_sediment_wrap!(Yₜ, Y, p, t) = vertical_advection_of_water_tendency!(
+    Yₜ, Y, p, t,
+)
+
 _microphys_wrap!(Yₜ, Y, p, t) = microphysics_tendency!(
     Yₜ, Y, p, t, p.atmos.microphysics_model, p.atmos.turbconv_model,
 )
@@ -149,6 +159,8 @@ const _PROCESS_WRAPPERS = (
     exp_vadv = _exp_vadv_wrap!,
     hdiff = _hdiff_wrap!,
     additional = _additional_wrap!,
+    rad = _rad_wrap!,
+    sediment = _sediment_wrap!,
     microphys = _microphys_wrap!,
     sgs_vadv = _sgs_vadv_wrap!,
     vdiff = _vdiff_wrap!,
@@ -187,7 +199,7 @@ function _process_tendency_field(
     if do_dss(axes(state.c))
         Spaces.weighted_dss!(field)
     end
-    return field
+    return @. lazy(identity(field))
 end
 
 # SGS variant: return the 3D `d(scalar)/dt` field for updraft `j = 1`.
@@ -204,7 +216,7 @@ function _sgs_process_tendency_field(
     if do_dss(axes(state.c))
         Spaces.weighted_dss!(field)
     end
-    return field
+    return @. lazy(identity(field))
 end
 
 # -- Field × process manifests ---------------------------------------------
@@ -215,16 +227,16 @@ end
 const _GRID_FIELDS = (
     (name = :ρ, short = "rho", units = "kg m^-3 s^-1",
         long = "air mass",
-        processes = (:iva, :hor_dyn, :vdiff, :edmf_diff, :edmf_mflux, :hdiff,
-            :additional)),
+        processes = (:iva, :sediment, :hor_dyn, :vdiff, :edmf_diff,
+            :edmf_mflux, :hdiff, :additional)),
     (name = :ρe_tot, short = "rhoe", units = "W m^-3",
         long = "total air energy",
-        processes = (:iva, :corrimp, :hor_dyn, :exp_vadv, :vdiff, :edmf_diff,
-            :edmf_mflux, :hdiff, :microphys, :additional)),
+        processes = (:iva, :sediment, :corrimp, :hor_dyn, :exp_vadv, :vdiff,
+            :edmf_diff, :edmf_mflux, :hdiff, :microphys, :rad, :additional)),
     (name = :ρq_tot, short = "rhoqt", units = "kg m^-3 s^-1",
         long = "total air water",
-        processes = (:iva, :corrimp, :hor_tracer_adv, :exp_vadv, :vdiff,
-            :edmf_diff, :edmf_mflux, :hdiff, :microphys, :additional)),
+        processes = (:iva, :sediment, :corrimp, :hor_tracer_adv, :exp_vadv,
+            :vdiff, :edmf_diff, :edmf_mflux, :hdiff, :microphys, :additional)),
     (name = :ρq_lcl, short = "rhoqlcl", units = "kg m^-3 s^-1",
         long = "cloud liquid mass",
         processes = (:iva, :hor_tracer_adv, :vdiff, :edmf_diff, :edmf_mflux,

@@ -261,6 +261,8 @@ function precomputed_quantities(Y, atmos)
         )...,
         ᶜstrain_rate_norm = similar(Y.c, FT),
         sfc_conditions = similar(Spaces.level(Y.f, half), SCT),
+        ᶜgm_limiter_active = zeros(axes(Y.c)),
+        ᶜsgs_filter_active = zeros(axes(Y.c)),
     )
     # Cloud fraction is used to calculate buoyancy gradient, so we initialize it to 0 here.
     ᶜcloud_fraction = similar(Y.c, FT)

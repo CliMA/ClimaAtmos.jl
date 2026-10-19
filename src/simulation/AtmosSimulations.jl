@@ -167,6 +167,14 @@ function setup_diagnostics_and_writers(
             user_scheduled_diagnostics = scheduled_diagnostics_from_specs(
                 dict_specs, Y, t_start, start_date, writers,
             )
+            user_keys = Set(
+                (d.output_short_name, objectid(d.output_writer)) for
+                d in user_scheduled_diagnostics
+            )
+            filter!(
+                d -> !((d.output_short_name, objectid(d.output_writer)) in user_keys),
+                all_diagnostics,
+            )
             append!(all_diagnostics, user_scheduled_diagnostics)
             verbose &&
                 @info "Added $(length(user_scheduled_diagnostics)) user-provided YAML-style diagnostics"
