@@ -913,6 +913,26 @@ end
 ### 1 Moment Microphysics
 ###
 
+"""
+    effective_autoconversion_velocity(w, tke, c_tke)
+
+Effective vertical velocity scale `[m/s]` for velocity-dependent rain
+autoconversion, combining the resolved upward velocity `max(w, 0)` and the
+turbulent velocity variance `c_tke * max(tke, 0)`:
+
+    w_eff = √(max(w, 0)² + c_tke · max(tke, 0)).
+
+When `c_tke = 0`, `w_eff = w` so the velocity blend `(w₊ / w_0)² / (1 + (w₊ / w_0)²)`
+in `CloudMicrophysics.Microphysics1M` uses the resolved vertical velocity only.
+For `c_tke > 0`, subgrid turbulent kinetic energy contributes `c_tke · tke` to `w₊²`.
+"""
+@inline function effective_autoconversion_velocity(w, tke, c_tke)
+    FT = typeof(w)
+    iszero(c_tke) && return w
+    w₊ = max(w, zero(FT))
+    return sqrt(w₊^2 + FT(c_tke) * max(FT(tke), zero(FT)))
+end
+
 function set_microphysics_tendency_cache!(
     Y, p, mp1m::NonEquilibriumMicrophysics1M, _,
 )
@@ -921,6 +941,8 @@ function set_microphysics_tendency_cache!(
 
     thp = CAP.thermodynamics_params(p.params)
     cmp = CAP.microphysics_1m_params(p.params)
+    FT = eltype(p.params)
+    c_tke = FT(CAP.rain_autoconversion_tke_coeff(p.params))
 
     # Get specific humidities
     ᶜq_lcl = @. lazy(specific(Y.c.ρq_lcl, Y.c.ρ))
@@ -933,7 +955,14 @@ function set_microphysics_tendency_cache!(
     sgs_quad = p.atmos.sgs_quadrature
     nsubs = mp1m.n_substeps
     nsubs_quad = mp1m.n_substeps_quad
-    ᶜw_air = @. lazy(w_component(WVec(ᶜu)))
+    ᶜtke_or_zero =
+        hasproperty(Y.c, :ρtke) ?
+        (@. lazy(max(specific(Y.c.ρtke, Y.c.ρ), zero(FT)))) : zero(FT)
+    ᶜw_air = @. lazy(
+        effective_autoconversion_velocity(
+            w_component(WVec(ᶜu)), ᶜtke_or_zero, c_tke,
+        ),
+    )
     if not_quadrature(sgs_quad)
         @. ᶜmp_tendency = microphysics_tendencies_1m(
             Y.c.ρ, ᶜq_tot_nonneg, ᶜq_lcl, ᶜq_icl, ᶜq_rai, ᶜq_sno,
@@ -967,6 +996,9 @@ function set_microphysics_tendency_cache!(
 
     thp = CAP.thermodynamics_params(p.params)
     cmp = CAP.microphysics_1m_params(p.params)
+    FT = eltype(p.params)
+    c_tke = FT(CAP.rain_autoconversion_tke_coeff(p.params))
+    ᶜtke = @. lazy(max(specific(Y.c.ρtke, Y.c.ρ), zero(FT)))
 
     n = n_mass_flux_subdomains(tm)
     nsubs = mp1m.n_substeps
@@ -974,7 +1006,11 @@ function set_microphysics_tendency_cache!(
 
     ### Updraft contribution
     for j in 1:n
-        ᶜwʲ_air = @. lazy(w_component(WVec(ᶜuʲs.:($$j))))
+        ᶜwʲ_air = @. lazy(
+            effective_autoconversion_velocity(
+                w_component(WVec(ᶜuʲs.:($$j))), ᶜtke, c_tke,
+            ),
+        )
         @. ᶜmp_tendencyʲs.:($$j) = microphysics_tendencies_1m(
             ᶜρʲs.:($$j), ᶜq_tot_nonnegʲs.:($$j),
             Y.c.sgsʲs.:($$j).q_lcl, Y.c.sgsʲs.:($$j).q_icl,
@@ -1001,7 +1037,11 @@ function set_microphysics_tendency_cache!(
     ᶜq_rai⁰ .= ᶜspecific_env_value(@name(q_rai), Y, p)
     ᶜq_sno⁰ .= ᶜspecific_env_value(@name(q_sno), Y, p)
     sgs_quad = p.atmos.sgs_quadrature
-    ᶜw⁰_air = @. lazy(w_component(WVec(ᶜu⁰)))
+    ᶜw⁰_air = @. lazy(
+        effective_autoconversion_velocity(
+            w_component(WVec(ᶜu⁰)), ᶜtke, c_tke,
+        ),
+    )
     if not_quadrature(sgs_quad)
         @. ᶜmp_tendency⁰ = microphysics_tendencies_1m(
             ᶜρ⁰, ᶜq_tot_nonneg⁰, ᶜq_lcl⁰, ᶜq_icl⁰, ᶜq_rai⁰, ᶜq_sno⁰,

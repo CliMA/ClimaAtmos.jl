@@ -254,6 +254,17 @@ floor_nt(
                     )
                     @test cf_cr ≈ cf_sat rtol = sqrt(eps(FT))
                 end
+
+                @testset "`effective_autoconversion_velocity`" begin
+                    eav = CA.effective_autoconversion_velocity
+                    # c_tke = 0 returns resolved vertical velocity unchanged
+                    @test eav(FT(-0.2), FT(0.5), FT(0)) == FT(-0.2)
+                    @test eav(FT(0.3), FT(0.5), FT(0)) == FT(0.3)
+                    # c_tke > 0 combines max(w, 0) and √(c_tke * tke) in quadrature
+                    @test eav(FT(-0.2), FT(0.25), FT(1)) ≈ FT(0.5)
+                    @test eav(FT(0.3), FT(0.16), FT(1)) ≈ FT(0.5)
+                    @test eav(FT(0.3), FT(0.16), FT(1)) isa FT
+                end
             end
         end
     end

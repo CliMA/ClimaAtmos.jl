@@ -112,6 +112,7 @@ function get_microphysics_1m_options(parsed_args)
         Dict(
             "Kessler1M" => CMP.Kessler1M(),
             "PrescribedNd" => CMP.PrescribedNd(),
+            "KK2000Autoconversion" => CMP.KK2000Autoconversion(),
         ),
         "rain_autoconversion",
     )
@@ -161,6 +162,8 @@ function get_microphysics_1m_options(parsed_args)
         Dict(
             "CloudLiquidRainAccretion" =>
                 CMP.CloudLiquidRainAccretion(),
+            "KK2000Accretion" =>
+                CMP.KK2000Accretion(),
         ),
         "cloud_liquid_rain_accretion",
     )
