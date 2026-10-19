@@ -3,6 +3,31 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- ![][badge-🔥behavioralΔ] The SGS covariance of `(θ_li, q_tot)` is that of one
+  Gaussian subgrid displacement with covariance `diag(ℓ_h², ℓ_h², ℓ_v²)` acting
+  on the resolved gradients, `Σ_ψφ = ℓ_h² ∇_h ψ·∇_h φ + ℓ_v² ∂_z ψ ∂_z φ`
+  (`displacement_covariance`). `ℓ_h² = c_g (c_Δx Δx_h)²`; `ℓ_v² = 2 c_σ l_d²`
+  with `l_d` combining the buoyancy-bounded mixing length
+  `l_disp = min(l_mix, √(c_b κ_iso) / N_disp)` and the floor displacement
+  `√(c_b κ_min) min(1/N_disp, l_disp/√(c_b κ_iso), τ_0)` for `N_disp² > 0`
+  (zero for `N_disp² ≤ 0`), `N_disp² = max(N_dry⁻², N_dry⁺²)`,
+  `κ_min = w_min² / (2 c_σ c_b)`,
+  in quadrature (`materialized_displacement_length!`): in stably stratified air
+  the displacement of the unresolved vertical motions lasts until buoyancy, the
+  turbulence (its Lagrangian time scale `l_disp / √(c_b κ_iso)`) or the
+  quiescent limit `τ_0` decorrelates it, so without TKE it is `w_min / N_disp`;
+  capped by the cell depth and the wall distance. The velocity
+  scale grows with the horizontal grid scale,
+  `w_min = w_ref (Δx_h / Δx_ref)^p`, as the spectral slope of the displaced
+  fields requires. New provisional parameters
+  `sgs_variance_vertical_velocity_floor` (`w_ref`, 0.6 m/s),
+  `sgs_variance_floor_reference_resolution` (120 km),
+  `sgs_variance_floor_resolution_exponent` (`p`, 2/3) and
+  `sgs_variance_floor_time_scale` (`τ_0`, 100 s); the floor enters the
+  variance only. This replaces the separate turbulent and
+  vertical uniform-box blocks; `sgs_variance_vertical_scale_factor` is no
+  longer read. `tq_correlation_model` defaults to `diagnosed`, the covariance
+  of the same displacement; `constant` keeps the prescribed value.
 
 0.42.15
 -------

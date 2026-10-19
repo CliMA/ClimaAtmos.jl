@@ -568,8 +568,6 @@ function SGSQuadratureParameters(
         :sgs_variance_geometric_coeff => :sgs_variance_geometric_coeff,
         :sgs_variance_horizontal_scale_factor =>
             :sgs_variance_horizontal_scale_factor,
-        :sgs_variance_vertical_scale_factor =>
-            :sgs_variance_vertical_scale_factor,
         :sgs_variance_max_rel_std => :sgs_variance_max_rel_std,
         :sgs_liquid_uniform_fraction => :sgs_liquid_uniform_fraction,
         :sgs_ice_uniform_fraction => :sgs_ice_uniform_fraction,
@@ -599,9 +597,14 @@ function SGSQuadratureParameters(
         cloud_fraction_floor_release_abs_margin = FT(1),
         cloud_fraction_floor_release_sharpness = FT(1),
         cloud_fraction_floor_residual = FT(1),
-        # Depth [m] of the along-surface displacement of the geometric
-        # variance block.
-        sgs_variance_isentropic_depth = FT(1000),
+        # Unresolved vertical motions in the variance closure
+        # (`materialized_displacement_length!`): velocity scale [m/s] at the
+        # reference horizontal grid scale [m], the exponent of its growth with
+        # the grid scale, and the persistence time [s] in quiescent neutral air.
+        sgs_variance_vertical_velocity_floor = FT(0.6),
+        sgs_variance_floor_reference_resolution = FT(1.2e5),
+        sgs_variance_floor_resolution_exponent = FT(2 // 3),
+        sgs_variance_floor_time_scale = FT(100),
         # Equilibrium-ratio modulator weight (see `sgs_variance_fidelity`).
         sgs_fidelity_equilibrium_weight = FT(0.5),
         # Precipitation-fraction placement of rain and snow over the quadrature:
