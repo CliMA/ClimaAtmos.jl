@@ -271,7 +271,7 @@ apply_sem_quasimonotone_limiter:
   help: "Apply a horizontal SEM quasi-monotone limiter to every tracer [`false` (default), `true`]"
   value: false
 apply_zhang_shu_limiter:
-  help: "Apply the Zhang-Shu (2010) positivity limiter per RK stage: scale each grid-mean tracer toward its element mean to enforce ρχ ≥ 0, moving the mass and energy of the water with it, then the conserved vector (ρ, ρe_tot, ρuₕ, tracers) toward its mean by one θ enforcing ρ ≥ zhang_shu_rho_min, p ≥ zhang_shu_p_min and ρq_tot ≥ Σ ρq_cond (replacing the pointwise grid-mean microphysics constraints). Applied in constrain_state!, so requires update_constrain_state_every `stage` or `dss`. Mean-preserving; intended for DG horizontal discretizations. Mutually exclusive with apply_sem_quasimonotone_limiter [`false` (default), `true`]"
+  help: "Apply the Zhang-Shu (2010) positivity limiter per RK stage: scale the vapor, each condensate species and each other grid-mean tracer toward its element mean to keep it nonnegative, moving the mass and energy of the water with it (replacing the pointwise grid-mean microphysics constraints), then the conserved vector (ρ, ρe_tot, ρuₕ, tracers) toward its mean by one θ enforcing ρ ≥ zhang_shu_rho_min and p ≥ zhang_shu_p_min. Applied in constrain_state!, so requires update_constrain_state_every `stage` or `dss`. Mean-preserving; intended for DG horizontal discretizations. Mutually exclusive with apply_sem_quasimonotone_limiter [`false` (default), `true`]"
   value: false
 zhang_shu_rho_min:
   help: "Density floor [kg/m³] enforced by the Zhang-Shu limiter"

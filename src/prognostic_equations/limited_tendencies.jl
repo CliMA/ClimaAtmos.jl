@@ -49,55 +49,62 @@ end
 """
     ZhangShuAdmissibility(pressure_bound, ρ_min, p_min)
 
-Concave constraint `g(U, off) ≥ 0` on one node's conserved state: the smallest
-of `ρ − ρ_min`, `pressure_bound(U, off) − p_min` (with `pressure_bound` a
-[`ZhangShuPressureBound`](@ref)) and the vapor density
-`ρq_tot − (ρq_lcl + ρq_rai + ρq_icl + ρq_sno)` over the condensate species
-present in `U`.
+Concave constraint `g(U, off) ≥ 0` on one node's conserved state: the smaller
+of `ρ − ρ_min` and `pressure_bound(U, off) − p_min`, with `pressure_bound` a
+[`ZhangShuPressureBound`](@ref).
 """
 struct ZhangShuAdmissibility{G, FT}
     pressure_bound::G
     ρ_min::FT
     p_min::FT
 end
-@inline function (g::ZhangShuAdmissibility)(U, off)
-    z = zero(U.ρ)
-    ρq_vap =
-        (haskey(U, :ρq_tot) ? U.ρq_tot : z) -
-        (haskey(U, :ρq_lcl) ? U.ρq_lcl : z) -
-        (haskey(U, :ρq_rai) ? U.ρq_rai : z) -
-        (haskey(U, :ρq_icl) ? U.ρq_icl : z) -
-        (haskey(U, :ρq_sno) ? U.ρq_sno : z)
-    return min(U.ρ - g.ρ_min, g.pressure_bound(U, off) - g.p_min, ρq_vap)
-end
+@inline (g::ZhangShuAdmissibility)(U, off) =
+    min(U.ρ - g.ρ_min, g.pressure_bound(U, off) - g.p_min)
 
 """
     ZhangShuLimiterCache(Y, params, FT, ρ_min, p_min)
 
 Cache of `zhang_shu_limiter!` for the state `Y`: the ClimaCore
-`PositivityLimiter` of the tracer floors (`nothing` without tracers), the one
-of the density floor `ρ_min` [kg/m³] and pressure floor `p_min` [Pa], and one
-scratch field per water species (`ρq_prev`, keyed by species) for its value
-before the tracer floors.
+`PositivityLimiter` of the species floors (`nothing` without tracers), the one
+of the density floor `ρ_min` [kg/m³] and pressure floor `p_min` [Pa], the
+vapor density `ρq_vap` (`nothing` without water), and one scratch field per
+water species (`ρq_prev`, keyed by species) for its value before the floors.
 """
-struct ZhangShuLimiterCache{L1, L2, W}
+struct ZhangShuLimiterCache{L1, L2, V, W}
     tracer_limiter::L1
     admissibility_limiter::L2
+    ρq_vap::V
     ρq_prev::W
 end
 Adapt.@adapt_structure ZhangShuLimiterCache
 
 function ZhangShuLimiterCache(Y, params, ::Type{FT}, ρ_min, p_min) where {FT}
-    tracers = zhang_shu_tracers(Y)
+    ρq_vap = hasproperty(Y.c, :ρq_tot) ? similar(Y.c.ρ) : nothing
+    floored = zhang_shu_floor_states(Y, ρq_vap)
     tracer_limiter =
-        isempty(tracers) ? nothing :
-        Limiters.PositivityLimiter(FT; floors = map(_ -> FT(0), tracers))
+        isempty(floored) ? nothing :
+        Limiters.PositivityLimiter(FT; floors = map(_ -> FT(0), floored))
     g = ZhangShuAdmissibility(ZhangShuPressureBound(params, FT), FT(ρ_min), FT(p_min))
     admissibility_limiter = Limiters.PositivityLimiter(FT; g, g_min = FT(0))
-    water = filter(in((:ρq_tot, :ρq_lcl, :ρq_rai, :ρq_icl, :ρq_sno)), keys(tracers))
-    ρq_prev = NamedTuple{water}(map(_ -> similar(Y.c.ρ), water))
-    return ZhangShuLimiterCache(tracer_limiter, admissibility_limiter, ρq_prev)
+    species = isnothing(ρq_vap) ? () : (:ρq_vap, condensate_names(Y)...)
+    ρq_prev = NamedTuple{species}(map(_ -> similar(Y.c.ρ), species))
+    return ZhangShuLimiterCache(tracer_limiter, admissibility_limiter, ρq_vap, ρq_prev)
 end
+
+# The condensate species present in the grid-mean state `Y.c`.
+condensate_names(Y) =
+    filter(in((:ρq_lcl, :ρq_rai, :ρq_icl, :ρq_sno)), propertynames(Y.c))
+
+"""
+    zhang_shu_floor_states(Y, ρq_vap)
+
+`NamedTuple` of the fields the Zhang–Shu floors act on: every grid-mean tracer
+of `Y.c`, with the total water replaced by the vapor density `ρq_vap`
+(`nothing` without water).
+"""
+zhang_shu_floor_states(Y, ρq_vap) =
+    isnothing(ρq_vap) ? zhang_shu_tracers(Y) :
+    (; Base.structdiff(zhang_shu_tracers(Y), NamedTuple{(:ρq_tot,)})..., ρq_vap)
 
 """
     zhang_shu_limiter!(Y, p, lim)
@@ -107,16 +114,16 @@ place; a no-op when `lim` is `nothing`.
 
 In each element:
 
- 1. Each grid-mean tracer `ρχ` is scaled toward its WJ-weighted element mean
-    by the largest `θ₁ ∈ [0, 1]` with `ρχ ≥ 0` at every node. A `ρq_tot`
-    increment `δ` is also added to `ρ` and, times the element-mean velocity,
-    to `ρuₕ`; `ρe_tot` receives `δ` times the element mean of
-    `e_int,v(T) + K + Φ` for `ρq_tot` and of `e_int,l(T) − e_int,v(T)` or
-    `e_int,i(T) − e_int,v(T)` for a condensate species, with `T` and `K` from
-    `p.precomputed`.
+ 1. The vapor density `ρq_tot − Σ ρq_cond`, each condensate species and each
+    other grid-mean tracer is scaled toward its WJ-weighted element mean by
+    the largest `θ₁ ∈ [0, 1]` keeping it nonnegative at every node. The
+    increment `δ` of each water species is added to `ρq_tot`, to `ρ` and,
+    times the element-mean velocity, to `ρuₕ`, and `ρe_tot` receives `δ` times
+    the element mean of
+    `I_s(T) + K + Φ`, with `I_s` the internal energy of vapor, liquid or ice
+    and `T`, `K` from `p.precomputed`.
  2. The conserved vector (ρ, ρe_tot, ρuₕ, tracers) is scaled toward its mean
-    by one `θ₂ ∈ [0, 1]` enforcing `ρ ≥ ρ_min`, `p ≥ p_min` and a nonnegative
-    vapor density `ρq_tot − Σ ρq_cond` at every node
+    by one `θ₂ ∈ [0, 1]` enforcing `ρ ≥ ρ_min` and `p ≥ p_min` at every node
     ([`ZhangShuAdmissibility`](@ref)).
 
 The horizontal momentum is staged in scratch as the orthonormal components
@@ -139,32 +146,41 @@ NVTX.@annotate function zhang_shu_limiter!(Y, p, lim::ZhangShuLimiterCache)
     @. ᶜρu2 = Y.c.ρ * Geometry.UVVector(Y.c.uₕ).components.data.:2
 
     if !isnothing(lim.tracer_limiter)
-        for name in keys(lim.ρq_prev)
-            lim.ρq_prev[name] .= getproperty(Y.c, name)
+        condensates = condensate_names(Y)
+        species(name) = name == :ρq_vap ? lim.ρq_vap : getproperty(Y.c, name)
+        if !isnothing(lim.ρq_vap)
+            lim.ρq_vap .= Y.c.ρq_tot
+            for name in condensates
+                @. lim.ρq_vap -= Y.c.:($$name)
+            end
         end
-        Limiters.apply_limiter!(zhang_shu_tracers(Y), nothing, lim.tracer_limiter)
-        ᶜe_vap = @. lazy(TD.internal_energy_vapor(thermo_params, ᶜT))
+        for name in keys(lim.ρq_prev)
+            lim.ρq_prev[name] .= species(name)
+        end
+        Limiters.apply_limiter!(
+            zhang_shu_floor_states(Y, lim.ρq_vap),
+            nothing,
+            lim.tracer_limiter,
+        )
+        # each water species moved carries its mass and the energy I_s + K + Φ;
+        # the total water changes by the sum of the species increments
         for name in keys(lim.ρq_prev)
             ᶜδ = lim.ρq_prev[name]
-            @. ᶜδ = Y.c.:($$name) - ᶜδ
-            if name == :ρq_tot
-                @. Y.c.ρe_tot += element_meanₕ(ᶜe_vap + ᶜK + ᶜΦ) * ᶜδ
-                @. ᶜaux = element_meanₕ(ᶜρu1 / Y.c.ρ)
-                @. ᶜρu1 += ᶜaux * ᶜδ
-                @. ᶜaux = element_meanₕ(ᶜρu2 / Y.c.ρ)
-                @. ᶜρu2 += ᶜaux * ᶜδ
-                @. Y.c.ρ += ᶜδ
-            elseif name in (:ρq_lcl, :ρq_rai)
-                @. Y.c.ρe_tot +=
-                    element_meanₕ(
-                        TD.internal_energy_liquid(thermo_params, ᶜT) - ᶜe_vap,
-                    ) * ᶜδ
-            else
-                @. Y.c.ρe_tot +=
-                    element_meanₕ(
-                        TD.internal_energy_ice(thermo_params, ᶜT) - ᶜe_vap,
-                    ) * ᶜδ
-            end
+            ᶜρq = species(name)
+            @. ᶜδ = ᶜρq - ᶜδ
+            @. Y.c.ρq_tot += ᶜδ
+            ᶜI =
+                name == :ρq_vap ?
+                (@. lazy(TD.internal_energy_vapor(thermo_params, ᶜT))) :
+                name in (:ρq_lcl, :ρq_rai) ?
+                (@. lazy(TD.internal_energy_liquid(thermo_params, ᶜT))) :
+                (@. lazy(TD.internal_energy_ice(thermo_params, ᶜT)))
+            @. Y.c.ρe_tot += element_meanₕ(ᶜI + ᶜK + ᶜΦ) * ᶜδ
+            @. ᶜaux = element_meanₕ(ᶜρu1 / Y.c.ρ)
+            @. ᶜρu1 += ᶜaux * ᶜδ
+            @. ᶜaux = element_meanₕ(ᶜρu2 / Y.c.ρ)
+            @. ᶜρu2 += ᶜaux * ᶜδ
+            @. Y.c.ρ += ᶜδ
         end
         @. Y.c.uₕ = Geometry.Covariant12Vector(
             Geometry.UVVector(ᶜρu1 / Y.c.ρ, ᶜρu2 / Y.c.ρ),
