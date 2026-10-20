@@ -81,8 +81,9 @@ function set_covariance_cache_and_cloud_fraction!(Y, p)
     # ᶜtemp_scalar, ᶜtemp_scalar_2, ᶜtemp_scalar_3, ᶜtemp_scalar_5, ᶜtemp_scalar_6 might
     # change inside the functions that are called in picard_step!() and should not be used
     # here to store variables before calling picard_step!
-    # (`set_covariance_cache!` writes _2, _3, _5, _6; the QuadratureCloud
-    # `set_cloud_fraction!` writes `ᶜtemp_scalar`, `_2`, `_3`).
+    # (`set_covariance_cache!` writes `ᶜtemp_scalar` (l_d), `_2` (N²_disp),
+    # `_3`, `_5`, `_6`; the QuadratureCloud `set_cloud_fraction!` writes
+    # `ᶜtemp_scalar`, `_2`, `_3`).
     # Conversely, those callees and `set_sgs_moments_and_cloud_fraction!` must never write
     # ᶜtemp_scalar_4 or ᶜtemp_scalar_7. c2 shares ᶜtemp_scalar, which is safe only
     # because it is written after the last picard_step!() and consumed by the Aitken
@@ -201,45 +202,236 @@ uses_covariances(atmos) =
 
 Materialize the SGS master mixing length into a center field and return it.
 For an `AbstractEDMF` this writes the persistent `ᶜl_mix` cache (computed once,
-reused by TKE dissipation, the covariance closure, and diagnostics); every
-`AbstractEDMF` carries `Y.c.ρtke`, so `ᶜmixing_length` is well defined. Otherwise
-it falls back to the grid-mean Smagorinsky-Lilly length, materialized in
-`p.scratch.ᶜtemp_scalar` by `compute_gm_mixing_length`. Always
-materializing (rather than passing the lazy `ᶜmixing_length` broadcast, which
-carries `mixing_length_lopez_gomez_2020` with its parameter structs) avoids
-recomputing the closure for each covariance and keeps GPU kernel parameters
-under the size limit.
+reused by TKE dissipation, the covariance closure, variance fidelity, and
+diagnostics); every `AbstractEDMF` carries `Y.c.ρtke`, so `ᶜmixing_length` is
+well defined. Otherwise it falls back to the grid-mean Smagorinsky-Lilly
+length, materialized in `p.scratch.ᶜtemp_scalar` by `compute_gm_mixing_length`.
 """
 function materialized_mixing_length!(Y, p)
-    turbconv_model = p.atmos.turbconv_model
-    if turbconv_model isa AbstractEDMF
-        # Every AbstractEDMF carries Y.c.ρtke, so ᶜmixing_length is well
-        # defined; materialize it into the persistent ᶜl_mix cache.
+    if p.atmos.turbconv_model isa AbstractEDMF
         ᶜl_mix = p.precomputed.ᶜl_mix
         ᶜl_mix .= ᶜmixing_length(Y, p)
         return ᶜl_mix
     else
-        # compute_gm_mixing_length materializes into p.scratch.ᶜtemp_scalar
         return compute_gm_mixing_length(Y, p)
     end
 end
 
 """
-    materialized_variance_fidelity!(Y, p)
+    floor_velocity(Δx_h, w_ref, Δx_ref, p)
 
-Refresh `p.precomputed.ᶜα` from the current `ᶜl_mix`, TKE, and condensate
-state (see `sgs_variance_fidelity`). Called at the end of
-`set_covariance_cache!` so `ᶜα` tracks each Picard iterate.
+Velocity scale `w_min = w_ref (Δx_h / Δx_ref)^p` of the unresolved vertical
+motions at the horizontal grid scale `Δx_h`. A single column has no
+horizontal grid scale (`Δx_h = Inf`) and stands for a cell of the reference
+size, so it gets `w_ref`.
+
+The exponent follows from the spectral slope. For a field with spectrum
+`E(k) ∝ k^(−s)`, the variance below the grid scale is
+`∫_{k > 2π/Δ} E dk ∝ Δ^(s−1)`. The horizontal term of the covariance,
+`ℓ_h² |∇_h ψ|²` with `ℓ_h ∝ Δ`, scales the same way by itself, because the
+variance of the coarse-grained gradient is
+`∫_{k < 2π/Δ} k² E dk ∝ Δ^(s−3)`; so its coefficient is independent of
+resolution. The vertical term `ℓ_v² (∂_z ψ)²` does not: the vertical
+gradient is a vertical coarse-graining and does not change with `Δx_h`, so
+the growth `Δ^(s−1)` of the sub-cell variance must be carried by the
+amplitude, `ℓ_v ∝ w_min ∝ Δx_h^((s−1)/2)`. A `−5/3` spectrum gives
+`p = 1/3`; the default `p = 2/3`, from the within-cell variances of
+kilometre-scale global simulations coarse-grained to 60, 120 and 240 km,
+corresponds to an effective slope near `−7/3`, between the mesoscale `−5/3`
+and the synoptic `−3`, which is where the spectra of temperature and
+humidity lie at those scales.
+"""
+@inline function floor_velocity(Δx_h, w_ref, Δx_ref, p)
+    Δx = ifelse(isfinite(Δx_h), Δx_h, Δx_ref)
+    return w_ref * (Δx / Δx_ref)^p
+end
+
+"""
+    floor_displacement_length(κ_b, N², τ_turb, τ_0, l_z, Δz)
+
+Vertical displacement `√κ_b · min(1/N, τ_turb, τ_0)` of the unresolved
+vertical motions with buoyancy-weighted kinetic energy `κ_b = c_b κ_min`,
+capped by the wall distance `l_z` and by the cell depth `Δz`, over which the
+gradients the displacement acts on are defined. The displacement lasts until
+the parcel's vertical velocity decorrelates: in stably stratified air
+(`N² > 0`) after a time `1/N`, when buoyancy stops it, which gives the
+buoyancy scale `√κ_b / N` of the mixing length; after the Lagrangian time
+scale of the turbulence `τ_turb = l_disp / √(c_b κ_iso)`
+(`turbulent_lagrangian_time`, with `l_disp` the buoyancy-bounded mixing
+length); or after the quiescent limit `τ_0`. Where the air is neutral or
+unstable (`N² ≤ 0`) buoyancy imposes no limit and the displacement is
+`√κ_b · min(τ_turb, τ_0)`, the limit the stable branch approaches as
+`N² → 0⁺`, so the closure is continuous in `N²`. This is the vertical
+dispersion of a stochastic Lagrangian model in stratified flow.
+"""
+@inline function floor_displacement_length(κ_b, N², τ_turb, τ_0, l_z, Δz)
+    FT = typeof(N²)
+    l_cap = min(max(l_z, zero(FT)), Δz)
+    τ_N = ifelse(N² > zero(FT), inv(sqrt(max(N², floatmin(FT)))), FT(Inf))
+    τ = min(τ_0, τ_turb, τ_N)
+    # Without a floor velocity (`κ_b = 0`) the displacement vanishes even where
+    # every decorrelation time is infinite, where `0 * Inf` would be NaN.
+    l_b = ifelse(κ_b > zero(FT), sqrt(max(κ_b, zero(FT))) * τ, zero(FT))
+    return min(l_b, l_cap)
+end
+
+"""
+    turbulent_lagrangian_time(l_mix, κ_b)
+
+Lagrangian time scale `l_mix / √κ_b` of the turbulence, with buoyancy-weighted
+vertical velocity variance `κ_b = c_b κ_iso`; infinite where there is no TKE
+(`κ_b ≤ 0`), so that it imposes no limit there. Where `l_mix` is at the
+buoyancy scale `√κ_b / N`, `turbulent_lagrangian_time` equals `1 / N`, matching
+the buoyancy period of `floor_displacement_length`.
+"""
+@inline function turbulent_lagrangian_time(l_mix, κ_b)
+    FT = typeof(κ_b)
+    return ifelse(κ_b > eps(FT), l_mix / sqrt(max(κ_b, eps(FT))), FT(Inf))
+end
+
+"""
+    buoyancy_bounded_mixing_length(l_mix, κ_b, N²)
+
+Turbulent mixing length `l_mix` bounded by the buoyancy scale `√(κ_b / N²)`
+with `κ_b = c_b κ_iso` where `N² > 0` and `κ_b > 0`. Bounding `l_mix` with the
+same face-maximum dry `N²` used by `floor_displacement_length` ensures that a
+cell adjacent to a capping inversion does not displace parcels across the
+inversion over a distance larger than its face buoyancy scale allows when the
+Van Leer harmonic-mean center gradient vanishes on the neutral side of the cell.
+"""
+@inline function buoyancy_bounded_mixing_length(l_mix, κ_b, N²)
+    FT = typeof(N²)
+    return ifelse(
+        (N² > eps(FT)) & (κ_b > eps(FT)),
+        min(l_mix, sqrt(max(κ_b, zero(FT)) / max(N², eps(FT)))),
+        l_mix,
+    )
+end
+
+"""
+    displacement_length(l_mix, l_b, l_z)
+
+Vertical displacement length `min(max(l_mix, l_b), l_z)`: the larger of the
+buoyancy-bounded mixing length `l_mix` and the floor displacement scale `l_b`,
+capped by the wall distance `l_z` since air cannot be displaced below the
+ground. Using `max(l_mix, l_b)` avoids double-counting turbulent and floor
+displacements in quadrature when both represent the vertical parcel excursion.
+"""
+@inline displacement_length(l_mix, l_b, l_z) =
+    min(max(l_mix, l_b), max(l_z, zero(l_z)))
+
+"""
+    materialized_displacement_length!(Y, p)
+
+Materialize the vertical displacement length `l_d` of the variance closure
+into `p.scratch.ᶜtemp_scalar` and return `(ᶜl_d, ᶜl_mix_disp)`, with
+`ᶜl_mix_disp` the buoyancy-bounded turbulent mixing length
+(`buoyancy_bounded_mixing_length`) that entered `l_d`, as a lazy broadcast.
+Also refreshes `p.precomputed.ᶜl_mix` for `AbstractEDMF` via
+`materialized_mixing_length!`.
+
+`l_d` takes the maximum of the buoyancy-bounded turbulent mixing length and the
+floor displacement scale `floor_displacement_length`, evaluated with the
+face-maximum dry buoyancy gradient `N²_disp` (`set_displacement_buoyancy_gradient!`),
+with `κ_min = w_min² / (2 c_σ c_b)`, the velocity scale `w_min` of the unresolved
+vertical motions at the horizontal grid scale (`floor_velocity`;
+`sgs_variance_vertical_velocity_floor`,
+`sgs_variance_floor_reference_resolution`,
+`sgs_variance_floor_resolution_exponent`) and the time over which their
+displacement persists, the smallest of the buoyancy period `1/N_disp`, the
+Lagrangian time scale of the turbulence `l_disp / √(c_b κ_iso)`
+(`turbulent_lagrangian_time`, with `l_disp` the buoyancy-bounded mixing
+length) and the quiescent limit `τ_0` (`sgs_variance_floor_time_scale`). In
+turbulent layers `l_disp` dominates and
+the closure is the production–dissipation balance, bounded by the face dry
+buoyancy scale `√(c_b κ_iso) / N_disp` (`buoyancy_bounded_mixing_length`). In
+stably stratified air without TKE, `l_d = w_min / (√(2 c_σ) N_disp)`, so the
+vertical displacement variance `2 c_σ l_d²` is `(w_min / N_disp)²`: the
+displacement of unresolved vertical motions (gravity waves, mesoscale
+circulations) with velocity scale `w_min`, which displace air without mixing it.
+Where the air is neutral or unstable (`N²_disp ≤ 0`) buoyancy imposes no
+limit and the floor displacement is `w_min min(τ_turb, τ_0) / √(2 c_σ)`, the
+limit of the stable branch as `N²_disp → 0⁺`, so `l_d` is continuous in
+`N²_disp`. The cell-depth cap applies to the floor
+scale only; `l_mix` keeps its own limits, so `l_d` exceeds the cell depth
+wherever the mixing length does, as the turbulent variance
+`2 c_σ l_mix² (∂_z ψ)²` always has. The two scales are combined via `max`
+and bounded by the wall distance (`displacement_length`).
+The floor is kept out of the mixing length itself, because the
+surface-layer wall scale `l_W` of the mixing length vanishes with the
+friction velocity and in a stable surface layer, which would collapse `l_d`
+in the free troposphere. The floor enters the variance only, not `ᶜl_mix` or
+the diffusivity. Writes `p.scratch.ᶜtemp_scalar`, `p.scratch.ᶜtemp_scalar_2`,
+and the Prandtl-number scratch of the mixing-length closure.
+"""
+function materialized_displacement_length!(Y, p)
+    FT = eltype(p.params)
+    turbconv_params = CAP.turbconv_params(p.params)
+    c_b = FT(CAP.static_stab_coeff(turbconv_params))
+    c_σ = FT(CAP.diagnostic_covariance_coeff(p.params))
+    w_min = floor_velocity(
+        horizontal_filter_scale(axes(Y.c)),
+        FT(CAP.sgs_variance_vertical_velocity_floor(p.params)),
+        FT(CAP.sgs_variance_floor_reference_resolution(p.params)),
+        FT(CAP.sgs_variance_floor_resolution_exponent(p.params)),
+    )
+    τ_0 = FT(CAP.sgs_variance_floor_time_scale(p.params))
+    κ_min = w_min^2 / (2 * c_σ * c_b)
+    ᶜl_mix = materialized_mixing_length!(Y, p)
+    (; ᶜbg_coeffs, ᶠ∂θli∂z, ᶠ∂qt∂z) = p.precomputed
+    ᶜN²_disp = p.scratch.ᶜtemp_scalar_2
+    set_displacement_buoyancy_gradient!(ᶜN²_disp, ᶜbg_coeffs, ᶠ∂θli∂z, ᶠ∂qt∂z)
+    ᶜz = Fields.coordinate_field(Y.c).z
+    z_sfc = Fields.level(Fields.coordinate_field(Y.f).z, Fields.half)
+    ᶜΔz = Fields.Δz_field(axes(Y.c))
+    ᶜl_d = p.scratch.ᶜtemp_scalar
+    if hasproperty(Y.c, :ρtke)
+        ᶜtke = @. lazy(max(specific(Y.c.ρtke, Y.c.ρ), zero(FT)))
+        ᶜl_mix_disp = @. lazy(
+            buoyancy_bounded_mixing_length(ᶜl_mix, c_b * ᶜtke, ᶜN²_disp),
+        )
+        ᶜτ_turb = @. lazy(turbulent_lagrangian_time(ᶜl_mix_disp, c_b * ᶜtke))
+        @. ᶜl_d = displacement_length(
+            ᶜl_mix_disp,
+            floor_displacement_length(
+                c_b * κ_min, ᶜN²_disp, ᶜτ_turb, τ_0, ᶜz - z_sfc, ᶜΔz,
+            ),
+            ᶜz - z_sfc,
+        )
+        return (ᶜl_d, ᶜl_mix_disp)
+    else
+        # Without prognostic TKE the grid-mean Smagorinsky length, materialized
+        # in `ᶜtemp_scalar` by `materialized_mixing_length!`, enters `l_d`
+        # pointwise in place (the broadcast reads and writes the same cell),
+        # and the turbulence imposes no decorrelation limit on the floor.
+        @. ᶜl_d = displacement_length(
+            ᶜl_mix,
+            floor_displacement_length(
+                c_b * κ_min, ᶜN²_disp, FT(Inf), τ_0, ᶜz - z_sfc, ᶜΔz,
+            ),
+            ᶜz - z_sfc,
+        )
+        return (ᶜl_d, zero(FT))
+    end
+end
+
+"""
+    materialized_variance_fidelity!(Y, p, ᶜl_mix_disp)
+
+Refresh `p.precomputed.ᶜα` from the current TKE, condensate state, and the
+buoyancy-bounded mixing length `ᶜl_mix_disp` returned by
+`materialized_displacement_length!` (see `sgs_variance_fidelity`). Called at
+the end of `set_covariance_cache!` so `ᶜα` tracks each Picard iterate.
 
 `σ_S` is estimated with the Gaussian-linear analytic formula
 `σ_S² = σ_q² − 2γ Cov(T,q) + γ² σ_T²`, with `γ = ∂q_vap_sat_∂T`. This is
 the fast estimate; the downstream quadrature closures still compute their
 own `σ_S`.
 
-Non-EDMF configurations without `ᶜl_mix` or TKE substitute `TKE = 0`,
-`l_mix = 1 m`, collapsing the Damköhler factor to 1.
+Non-EDMF configurations without TKE substitute `TKE = 0` and `l_mix = 1 m`,
+collapsing the Damköhler factor to 1.
 """
-function materialized_variance_fidelity!(Y, p)
+function materialized_variance_fidelity!(Y, p, ᶜl_mix_disp)
     hasproperty(p.precomputed, :ᶜα) || return nothing
     (; ᶜT, ᶜq_tot_nonneg, ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα) = p.precomputed
     FT = eltype(p.params)
@@ -257,12 +449,16 @@ function materialized_variance_fidelity!(Y, p)
     q_min = FT(TD.Parameters.q_min(thp))
     turbconv_params = CAP.turbconv_params(p.params)
     c_d = tke_dissipation_coefficient(turbconv_params)
-    # Non-EDMF fallbacks: TKE → 0 drives α_Da → 1.
-    ᶜtke_or_zero =
-        hasproperty(Y.c, :ρtke) ?
-        (@. lazy(specific(Y.c.ρtke, Y.c.ρ))) : zero(FT)
-    ᶜl_mix_or_one =
-        hasproperty(p.precomputed, :ᶜl_mix) ? p.precomputed.ᶜl_mix : one(FT)
+    # With prognostic TKE the eddy turnover rate `c_d √TKE / l_mix` uses the
+    # mixing length bounded by the face-maximum dry buoyancy scale, so it
+    # reflects the inversion-bounded eddy size; without TKE, α_Da → 1.
+    if hasproperty(Y.c, :ρtke) && hasproperty(p.precomputed, :ᶜl_mix)
+        ᶜtke_or_zero = @. lazy(max(specific(Y.c.ρtke, Y.c.ρ), zero(FT)))
+        ᶜl_mix_or_one = ᶜl_mix_disp
+    else
+        ᶜtke_or_zero = zero(FT)
+        ᶜl_mix_or_one = one(FT)
+    end
     ᶜq_lcl, ᶜq_icl = _grid_mean_cloud_condensate(Y, p, p.atmos.microphysics_model)
     # Linear σ_S² = σ_q² − 2γ Cov(T,q) + γ² σ_T², with Clausius-Clapeyron γ.
     ᶜγ = @. lazy(TD.∂q_vap_sat_∂T(thp, ᶜT, Y.c.ρ))
@@ -276,6 +472,13 @@ function materialized_variance_fidelity!(Y, p)
         ),
     )
     ᶜmu_S = @. lazy(ᶜq_tot_nonneg - TD.q_vap_saturation(thp, ᶜT, Y.c.ρ))
+    # The equilibrium target of the modulator is the one the condensate relaxes
+    # toward: curvature-aware where `ᶜdisp_S` is configured, Gaussian otherwise.
+    ᶜlin, ᶜcurv = if p.atmos.sgs_variance_curvature
+        (p.precomputed.ᶜdisp_S.lin, p.precomputed.ᶜdisp_S.curv)
+    else
+        (zero(FT), zero(FT))
+    end
     @. ᶜα = sgs_variance_fidelity(
         A,
         sgs_microphysics_timescale(thp, ᶜT, τ_cond, τ_sub),
@@ -287,111 +490,96 @@ function materialized_variance_fidelity!(Y, p)
         ᶜmu_S,
         ᶜsigma_S,
         q_min,
+        ᶜlin,
+        ᶜcurv,
     )
     return nothing
 end
 
 """
-    along_surface_q_variance(
-        inv_q, inv_θq, inv_θ, ∂q∂z, ∂θ∂z, q_sat_z, ℓ_h, ℓ_v,
-    )
+    displacement_covariance(ℓ_h², ℓ_v², inv_h, ∂ψ∂z, ∂φ∂z)
 
-Variance of `q_tot` from subgrid parcel displacements along the local `θ_li`
-surface, without the prefactor `c_g`.
-
-A parcel moves by a Gaussian displacement `δ` with covariance
-`D = diag(ℓ_h², ℓ_h², ℓ_v²)` and stays on the surface, `δ · ∇θ_li = 0`. With
-`g = ∇q_tot` and `n = ∇θ_li` (3D gradients), the variance of `δ · g` under
-this condition is
-
-    gᵀ D g − (gᵀ D n)² / (nᵀ D n).
-
-The inputs are the horizontal invariants `inv_q = |∇_h q|²`,
-`inv_θq = ∇_h q · ∇_h θ`, `inv_θ = |∇_h θ|²` and the vertical gradients. The
-result lies in `[0, gᵀ D g]` (Cauchy–Schwarz). For a flat surface it is
-`ℓ_h² |∇_h q|²`. For a vertical surface it is the horizontal gradient along
-the surface plus `ℓ_v² (∂q/∂z)²`. Where `∇θ_li = 0` there is no surface, and
-the conditional variance is the unconstrained `gᵀ D g`.
-
-The variance is then bounded by the variance of `q_sat` along the same
-displacement. A clear parcel has `q_tot ≤ q_sat` where it starts, so it can
-exceed saturation at the cell only by the amount `q_sat` falls along its
-path. On the surface `θ_li` is constant, so `q_sat` changes only with height,
-at the adiabatic rate `q_sat_z` (`adiabatic_q_sat_gradient`), and the bound is
-
-    q_sat_z² · ẑᵀ D_c ẑ,    ẑᵀ D_c ẑ = ℓ_v² ℓ_h² |∇_h θ|² / (nᵀ D n),
-
-the vertical variance of the along-surface displacement: zero for a flat
-surface, and `ℓ_v²` for a vertical surface or where there is no surface.
+Covariance `ℓ_h² ∇_h ψ · ∇_h φ + ℓ_v² ∂_z ψ ∂_z φ` of two scalars under a
+subgrid displacement with covariance `diag(ℓ_h², ℓ_h², ℓ_v²)`, from the
+horizontal invariant `inv_h = ∇_h ψ · ∇_h φ` and the vertical gradients.
 """
-@inline function along_surface_q_variance(
-    inv_q,
-    inv_θq,
-    inv_θ,
-    ∂q∂z,
-    ∂θ∂z,
-    q_sat_z,
-    ℓ_h,
-    ℓ_v,
+@inline displacement_covariance(ℓ_h², ℓ_v², inv_h, ∂ψ∂z, ∂φ∂z) =
+    ℓ_h² * inv_h + ℓ_v² * ∂ψ∂z * ∂φ∂z
+
+"""
+    displacement_curvature_coefficients(ℓ_v, χ, ∂q∂z, ∂θ∂z, ∂²q∂z², ∂²θ∂z²)
+
+Coefficients `(lin, curv)` of the saturation excess of a parcel displaced
+vertically by `δ = ℓ_v x`, `x` standard normal, to second order in `δ`,
+
+    S = μ_S + lin x + ½ curv (x² − 1) + h,
+    lin  = ℓ_v  (∂_z q_t − χ ∂_z θ_li),
+    curv = ℓ_v² (∂_z² q_t − χ ∂_z² θ_li),
+
+with `χ = r_{v,θ} γ ∂T/∂θ_li`, `γ = ∂q_sat/∂T`, the chain rule that maps the
+potential-temperature profile to the saturation humidity the parcel meets at
+the cell's pressure, with the `θ_li` displacement scaled by `r_{v,θ}` as in
+`set_covariance_cache!`, and `h` the horizontal displacement part. The
+quadratic term is centred so that the mean of `S` is `μ_S`; its variance
+`lin²` is the vertical part of `σ_S²` of the linear closure.
+"""
+@inline function displacement_curvature_coefficients(
+    ℓ_v, χ, ∂q∂z, ∂θ∂z, ∂²q∂z², ∂²θ∂z²,
 )
-    G = ℓ_h^2 * inv_q + ℓ_v^2 * ∂q∂z^2
-    M = ℓ_h^2 * inv_θq + ℓ_v^2 * ∂q∂z * ∂θ∂z
-    N = ℓ_h^2 * inv_θ + ℓ_v^2 * ∂θ∂z^2
-    has_surface = N > zero(N)
-    V = ifelse(has_surface, max(G - M^2 / N, zero(G)), G)
-    Z = ifelse(has_surface, ℓ_v^2 * ℓ_h^2 * inv_θ / N, ℓ_v^2)
-    return min(V, q_sat_z^2 * Z)
+    lin = ℓ_v * (∂q∂z - χ * ∂θ∂z)
+    curv = ℓ_v^2 * (∂²q∂z² - χ * ∂²θ∂z²)
+    return (; lin, curv)
 end
 
 """
-    adiabatic_q_sat_gradient(thermo_params, T, ρ, q_tot, q_liq, q_ice)
-
-Vertical derivative `dq_sat/dz` of the saturation specific humidity
-`q_sat(T, ρ)` along a dry adiabat, the path of a clear parcel displaced on a
-`θ_li` surface,
-
-    d ln q_sat / dz
-        = −(g / c_p) (L / (R_v T²) − 1 / T) + (c_v / c_p) g / (R_m T),
-
-with the moist-air `c_p`, `c_v`, `R_m` and the latent heat `L` of the local
-condensate mix.
-"""
-@inline function adiabatic_q_sat_gradient(
-    thermo_params,
-    T,
-    ρ,
-    q_tot,
-    q_liq,
-    q_ice,
-)
-    g = TD.Parameters.grav(thermo_params)
-    R_v = TD.Parameters.R_v(thermo_params)
-    lh = TD.latent_heat(thermo_params, T, q_liq, q_ice)
-    cp_m = TD.cp_m(thermo_params, q_tot, q_liq, q_ice)
-    cv_m = TD.cv_m(thermo_params, q_tot, q_liq, q_ice)
-    R_m = TD.gas_constant_air(thermo_params, q_tot, q_liq, q_ice)
-    q_sat = TD.q_vap_saturation(thermo_params, T, ρ, q_liq, q_ice)
-    return q_sat * (
-        -(g / cp_m) * (lh / (R_v * T^2) - 1 / T) + (cv_m / cp_m) * g / (R_m * T)
+    set_displacement_curvature!(
+        ᶜdisp_S, Y, p, thermo_params, ᶜl_d, ᶜ∂T_∂θ, ᶜ∂q∂z, ᶜ∂θ∂z,
     )
-end
 
-"""
-    across_surface_q_gradient(inv_θq, inv_θ, ∂q∂z, ∂θ∂z)
+Fill `ᶜdisp_S = (; lin, curv)` (`displacement_curvature_coefficients`) from
+the moisture vertical scale `ℓ_v = √(2 c_σ) l_d`, the Van Leer centre
+gradients `ᶜ∂q∂z`, `ᶜ∂θ∂z`, and the second derivatives
+`(∂ψ∂z⁺ − ∂ψ∂z⁻) / Δz` of the two bounding face gradients
+`p.precomputed.ᶠ∂qt∂z`, `p.precomputed.ᶠ∂θli∂z`. At the domain boundaries,
+the adjacent interior face gradient stands in for the boundary face, as in
+`ᶜVanLeer_gradient!`, so the curvature is zero in the bottom and top cells.
 
-Change of `q_tot` per unit vertical displacement across the local `θ_li`
-surface, `∂_z θ (∇q · ∇θ) / |∇θ|²` with 3D gradients. A vertical step has the
-component `∂_z θ / |∇θ|` along the surface normal, and `q_tot` changes along
-the normal at the rate `∇q · ∇θ / |∇θ|`. The result equals `∂q/∂z` for a flat
-surface and is zero for a vertical surface or where `∇θ_li = 0`. The vertical
-uniform-box block uses it in place of `∂q/∂z`, so that block samples the
-displacement across the surface and `along_surface_q_variance` the
-displacement along it.
+`lin` uses the harmonic-mean-limited centre gradient that the covariance
+uses, so `lin²` stays the vertical part of `σ_S²`; the limiter zeros it in
+a cell whose two face gradients differ in sign, where `curv` is at its
+largest and the whole vertical effect is the bound of the quadratic.
 """
-@inline function across_surface_q_gradient(inv_θq, inv_θ, ∂q∂z, ∂θ∂z)
-    gn = inv_θq + ∂q∂z * ∂θ∂z
-    nn = inv_θ + ∂θ∂z^2
-    return ifelse(nn > zero(nn), ∂θ∂z * gn / nn, zero(gn))
+function set_displacement_curvature!(
+    ᶜdisp_S, Y, p, thermo_params, ᶜl_d, ᶜ∂T_∂θ, ᶜ∂q∂z, ᶜ∂θ∂z,
+)
+    FT = eltype(p.params)
+    (; ᶜT, ᶠ∂θli∂z, ᶠ∂qt∂z) = p.precomputed
+    c_σ = FT(CAP.diagnostic_covariance_coeff(p.params))
+    r_v_θ = FT(CAP.sgs_variance_theta_vertical_scale_ratio(p.params))
+    nc = Spaces.nlevels(axes(Y.c))
+    ᶜθ_below = Operators.BottomBiasedF2C(
+        bottom = Operators.SetValue(Fields.level(ᶠ∂θli∂z, 1 + Fields.half)),
+    )
+    ᶜθ_above = Operators.TopBiasedF2C(
+        top = Operators.SetValue(Fields.level(ᶠ∂θli∂z, nc - Fields.half)),
+    )
+    ᶜq_below = Operators.BottomBiasedF2C(
+        bottom = Operators.SetValue(Fields.level(ᶠ∂qt∂z, 1 + Fields.half)),
+    )
+    ᶜq_above = Operators.TopBiasedF2C(
+        top = Operators.SetValue(Fields.level(ᶠ∂qt∂z, nc - Fields.half)),
+    )
+    ᶜΔz = Fields.Δz_field(axes(Y.c))
+    ᶜχ = @. lazy(r_v_θ * TD.∂q_vap_sat_∂T(thermo_params, ᶜT, Y.c.ρ) * ᶜ∂T_∂θ)
+    @. ᶜdisp_S = displacement_curvature_coefficients(
+        sqrt(2 * c_σ) * ᶜl_d,
+        ᶜχ,
+        ᶜ∂q∂z,
+        ᶜ∂θ∂z,
+        (ᶜq_above(ᶠ∂qt∂z) - ᶜq_below(ᶠ∂qt∂z)) / ᶜΔz,
+        (ᶜθ_above(ᶠ∂θli∂z) - ᶜθ_below(ᶠ∂θli∂z)) / ᶜΔz,
+    )
+    return nothing
 end
 
 """
@@ -429,27 +617,36 @@ function hgrad_cross_invariant!(ᶜinv, ᶜψ1, ᶜψ2, p)
 end
 
 """
-    sgs_correlation_Tq(T′T′, q′q′, T′q′, fallback)
+    sgs_correlation_Tq(T′T′, q′q′, T′q′, T, q_tot, fallback)
 
-Diagnosed SGS T–q correlation `clamp(T′q′ / √(T′T′ q′q′), -1, 1)`, or
-`fallback` where the product of the variances is at the round-off floor.
+Diagnosed SGS T–q correlation `clamp(T′q′ / (√T′T′ √q′q′), -1, 1)`, or
+`fallback` where either variance vanishes relative to its own mean, i.e. is at
+the round-off floor of the grid-mean value: `q′q′ ≤ (ε q_tot)²` or
+`T′T′ ≤ (ε T)²` with `ε = eps(FT)`. The test is relative so that it does not
+depend on the units or magnitude of the variables: an absolute floor on
+`T′T′ q′q′` (such as `eps(FT)²`) is crossed in the dry upper troposphere, where
+`q_tot` and hence `q′q′` are small but well resolved, and would replace a
+diagnosed (typically negative) correlation with the prescribed value there.
 
-In exact arithmetic each variance block satisfies its own Cauchy-Schwarz
-inequality and the Cauchy-Schwarz bound on the sum of the two (turbulent,
-across-surface) covariances also holds — the along-surface block
-contributes variance to q′q′ only and no covariance — so
+In exact arithmetic the covariance comes from correlated displacements of
+`θ_li` and `q_tot` whose cross-correlation lies in `[-1, 1]`
+(`set_covariance_cache!`), so it satisfies the Cauchy-Schwarz inequality and
 `|ρ| ≤ 1` by construction. The explicit clamp is a cheap safeguard against
-(a) Float32 roundoff at the Cauchy-Schwarz boundary (which can produce
+Float32 roundoff at the Cauchy-Schwarz boundary (which can produce
 `|ρ| = 1 + O(ε)` and feed NaN into downstream `√(1 − ρ²)` in the bivariate
-quadrature) and (b) a user-supplied `Tq_correlation_coefficient` outside
-`[-1, 1]` (which violates the turbulent-block CS before we even sum).
+quadrature) and a user-supplied `Tq_correlation_coefficient` outside `[-1, 1]`.
 """
-@inline function sgs_correlation_Tq(T′T′, q′q′, T′q′, fallback)
+@inline function sgs_correlation_Tq(T′T′, q′q′, T′q′, T, q_tot, fallback)
     FT = typeof(T′T′)
-    v = max(T′T′, zero(FT)) * max(q′q′, zero(FT))
+    vT = max(T′T′, zero(FT))
+    vq = max(q′q′, zero(FT))
+    resolved = (vT > (eps(FT) * T)^2) & (vq > (eps(FT) * q_tot)^2)
+    # √ of each variance separately, so the denominator does not underflow
+    # where q′q′ is tiny but well above its round-off floor.
+    σ = sqrt(vT) * sqrt(vq)
     return ifelse(
-        v > eps(FT)^2,
-        clamp(T′q′ / sqrt(max(v, eps(FT)^2)), -one(FT), one(FT)),
+        resolved & (σ > zero(FT)),
+        clamp(T′q′ / max(σ, floatmin(FT)), -one(FT), one(FT)),
         fallback,
     )
 end
@@ -461,8 +658,8 @@ Fill `p.precomputed.ᶜcorr_Tq` with the SGS T–q correlation the quadrature sa
 `ConstantTqCorrelation`: the prescribed `Tq_correlation_coefficient`.
 `DiagnosedTqCorrelation`: `T′q′ / √(T′T′ q′q′)` from the gradient covariance
 accumulated in `p.precomputed.ᶜT′q′` by `set_covariance_cache!` (see
-`sgs_correlation_Tq`); the fallback where the variances vanish is the
-prescribed value. `ᶜT′T′` and `ᶜq′q′` must already be in the T basis and
+`sgs_correlation_Tq`); the fallback where a variance vanishes relative to its
+grid mean is the prescribed value. `ᶜT′T′` and `ᶜq′q′` must already be in the T basis and
 bounded. The covariance diagnostic is formed lazily from `ᶜcorr_Tq` and the
 variances (`compute_covariance_diagnostics`).
 """
@@ -473,9 +670,10 @@ function set_tq_correlation!(p, ::ConstantTqCorrelation)
     return nothing
 end
 function set_tq_correlation!(p, ::DiagnosedTqCorrelation)
-    (; ᶜT′T′, ᶜq′q′, ᶜT′q′, ᶜcorr_Tq) = p.precomputed
+    (; ᶜT′T′, ᶜq′q′, ᶜT′q′, ᶜcorr_Tq, ᶜT, ᶜq_tot_nonneg) = p.precomputed
     fallback = correlation_Tq(p.params)
-    @. ᶜcorr_Tq = sgs_correlation_Tq(ᶜT′T′, ᶜq′q′, ᶜT′q′, fallback)
+    @. ᶜcorr_Tq =
+        sgs_correlation_Tq(ᶜT′T′, ᶜq′q′, ᶜT′q′, ᶜT, ᶜq_tot_nonneg, fallback)
     return nothing
 end
 
@@ -486,40 +684,38 @@ Materializes T-based SGS covariances into cached fields for use by downstream
 computations (SGS quadrature, cloud fraction). Populates
 `p.precomputed.(ᶜT′T′, ᶜq′q′, ᶜcorr_Tq)` (and `ᶜT′q′` for the diagnosed correlation).
 
+The covariance of `(θ_li, q_tot)` is that of a Gaussian subgrid displacement
+acting on the resolved gradients (`displacement_covariance`), with moisture
+horizontal scale `ℓ_{h,0}² = c_g (c_Δx Δx_h)²` from the horizontal grid scale,
+moisture vertical displacement scale `ℓ_{v,0}² = 2 c_σ l_d²` from the
+displacement length `l_d` (`materialized_displacement_length!`),
+potential-temperature scale ratios `r_{Δx,θ} = ℓ_{h,θ} / ℓ_{h,0}`
+(`sgs_variance_theta_horizontal_scale_ratio`) and
+`r_{v,θ} = ℓ_{v,θ} / ℓ_{v,0}` (`sgs_variance_theta_vertical_scale_ratio`), and
+horizontal displacement cross-correlation `r_{h,θq}`
+(`sgs_variance_horizontal_cross_correlation`); the vertical displacements of
+the two scalars are perfectly correlated. The resulting `2 × 2` covariance is
+positive semi-definite for `|r_{h,θq}| ≤ 1`, which `SGSQuadratureParameters`
+enforces.
+
 Pipeline:
 
- 1. Compute mixing length via `materialized_mixing_length!`
- 2. Materialize θ-based turbulent covariances from gradients (`2 c l_mix² |∇_z ψ|²`).
-    For the diagnosed T–q correlation the turbulent cross is set from the prescribed
-    `ρ_turb` scalar as `ρ_turb · σ_T,turb · σ_q,turb` (not the gradient-direction
-    product), so the turbulent block carries a physical correlation independent of
-    the sign of `∂_z θ · ∂_z q`.
- 3. Add the resolved-gradient (geometric) block, the variance from a subgrid
-    parcel displacement with covariance `c_g diag(ℓ_h², ℓ_h², ℓ_v²)`,
-    `ℓ_h = c_Δx Δx_h`, `ℓ_v = H`. The displacement along the `θ_li`
-    surface adds `along_surface_q_variance` to q′q′ only, since θ_li is
-    constant along the surface; its vertical scale is the depth `H` of the
-    unresolved slantwise motion (`sgs_variance_isentropic_depth`), bounded
-    by the height above the surface, `min(H, z − z_sfc)`. It is bounded by
-    the variance of `q_sat` along the displacement
-    (`adiabatic_q_sat_gradient`). The displacement across the surface adds
-    the vertical uniform-box terms `c_g ℓ_v² (∂_z θ)²` to θ′θ′,
-    `c_g ℓ_v² q_n²` to q′q′ and `c_g ℓ_v² ∂_z θ q_n` to θ′q′, with `q_n` the
-    across-surface q gradient (`across_surface_q_gradient`). The geometric
-    block and the turbulent block are two estimates of the variance from
-    the vertical eddy displacement, so the larger of the two is kept
-    (`add_resolved_gradient_block!`).
-    The block is skipped when `c_Δx` and `c_Δz` are both 0,
-    and the horizontal invariants are computed only when `c_Δx` is nonzero.
- 4. Transform θ→T using `compute_∂T_∂θ!`
- 5. Apply the closure-validity bound `σ_q ≤ sgs_variance_max_rel_std * q_tot`
+ 1. Materialize `l_d` (`materialized_displacement_length!`, which also refreshes
+    `ᶜl_mix` via `materialized_mixing_length!`).
+ 2. Horizontal gradient invariants of `θ_li` and `q_tot` (skipped when
+    `sgs_variance_horizontal_scale_factor` is 0).
+ 3. θ′θ′, q′q′ and, for the diagnosed correlation, θ′q′ from the displacement.
+ 4. Transform θ→T using `compute_∂T_∂θ!`; with `sgs_variance_curvature`,
+    the displacement coefficients `ᶜdisp_S` (`set_displacement_curvature!`).
+ 5. Apply the closure-validity bound `σ_q ≤ sgs_variance_max_rel_std * q_tot`.
  6. Set the sampled T–q correlation (`set_tq_correlation!`; for the diagnosed
     model the covariance is first rescaled with the bound so the correlation is
-    invariant under it)
+    invariant under it).
+ 7. Refresh the variance fidelity `ᶜα`.
 
-The turbulent block uses the prescribed `correlation_Tq` for its cross-covariance;
-the across-surface part of the resolved-gradient block uses the correlation set
-by the gradient directions.
+Scratch: `ᶜtemp_scalar` holds `l_d`, `ᶜtemp_scalar_2` `N²_disp`,
+`ᶜtemp_scalar_3` θ_li and then the θ→T Jacobian, `ᶜtemp_scalar_5` and `_6` the
+moisture and cross invariants (`ᶜT′T′` holds the θ_li invariant before Step 3).
 """
 function set_covariance_cache!(Y, p, thermo_params)
     # Covariance fields are only allocated when the configuration needs them.
@@ -535,127 +731,75 @@ function set_covariance_cache!(Y, p, thermo_params)
         ᶜgradᵥ_θ_liq_ice,
         ᶜq_tot_nonneg,
     ) = p.precomputed
+    ᶜlg = Fields.local_geometry_field(Y.c)
 
-    # Resolved-gradient (geometric) displacement scales. `c_Δx` and `c_Δz`
-    # scale the grid lengths; the block is skipped when both are 0.
-    c_g = CAP.sgs_variance_geometric_coeff(p.params)
-    c_Δx = CAP.sgs_variance_horizontal_scale_factor(p.params)
-    c_Δz = CAP.sgs_variance_vertical_scale_factor(p.params)
-    use_horizontal = !iszero(c_Δx)
-    use_geometric = use_horizontal || !iszero(c_Δz)
-    ℓ_h = if use_horizontal
-        c_Δx * FT(
-            Spaces.node_horizontal_length_scale(
-                Spaces.horizontal_space(axes(Y.c)),
-            ),
-        )
+    # 1. Displacement scales.
+    c_g = FT(CAP.sgs_variance_geometric_coeff(p.params))
+    c_Δx = FT(CAP.sgs_variance_horizontal_scale_factor(p.params))
+    r_Δx_θ = FT(CAP.sgs_variance_theta_horizontal_scale_ratio(p.params))
+    r_v_θ = FT(CAP.sgs_variance_theta_vertical_scale_ratio(p.params))
+    r_h_θq = FT(CAP.sgs_variance_horizontal_cross_correlation(p.params))
+    Δx_h = FT(
+        Spaces.node_horizontal_length_scale(
+            Spaces.horizontal_space(axes(Y.c)),
+        ),
+    )
+    ℓ_h_q² = c_g * (c_Δx * Δx_h)^2
+    ℓ_h_θ² = r_Δx_θ^2 * ℓ_h_q²
+    ℓ_h_θq = r_h_θq * r_Δx_θ * ℓ_h_q²
+    c_σ = FT(CAP.diagnostic_covariance_coeff(p.params))
+    ᶜl_d, ᶜl_mix_disp = materialized_displacement_length!(Y, p)
+    ᶜℓ_v_q² = @. lazy(2 * c_σ * ᶜl_d^2)
+    ᶜℓ_v_θ² = @. lazy(r_v_θ^2 * ᶜℓ_v_q²)
+    ᶜℓ_v_θq = @. lazy(r_v_θ * ᶜℓ_v_q²)
+
+    # 2. Horizontal gradient invariants.
+    if iszero(c_Δx)
+        ᶜinv_q = ᶜinv_θ = ᶜinv_θq = zero(FT)
     else
-        zero(FT)
-    end
-
-    ᶜl_mix = materialized_mixing_length!(Y, p)
-    coeff = CAP.diagnostic_covariance_coeff(p.params)
-    cov_from_grad(C, L, ∇Φ, ∇Ψ) = 2 * C * L^2 * dot(∇Φ, ∇Ψ)
-
-    # ----------------------------------------------------------------------
-    # 1. Turbulent block (θ basis).
-    #    The cross uses the *prescribed* `correlation_Tq` scalar `ρ_turb`,
-    #    not the gradient-direction product `cov_from_grad(c, L, ∇θ, ∇q)`,
-    #    which would pin |ρ_turb,eff| = 1 with sign tied to
-    #    `sign(∂_z θ · ∂_z q)` and flip across every gradient sign change
-    #    (giving ρ = −1 in the stable BL where ∂_z θ > 0, ∂_z q < 0, though
-    #    observed T–q correlation there is positive). The σ_T, σ_q amplitudes
-    #    still carry the l_mix² · |∇_z ψ|² scaling via the turbulent variances.
-    # ----------------------------------------------------------------------
-    @. ᶜq′q′ = cov_from_grad(
-        coeff, ᶜl_mix,
-        Geometry.WVector(ᶜgradᵥ_q_tot),
-        Geometry.WVector(ᶜgradᵥ_q_tot),
-    )
-    @. ᶜT′T′ = cov_from_grad(  # holds θ′θ′ until the ∂T/∂θ transform below.
-        coeff, ᶜl_mix,
-        Geometry.WVector(ᶜgradᵥ_θ_liq_ice),
-        Geometry.WVector(ᶜgradᵥ_θ_liq_ice),
-    )
-    ρ_turb = FT(correlation_Tq(p.params))
-    if diag_corr
-        @. p.precomputed.ᶜT′q′ = ρ_turb * sqrt(ᶜT′T′ * ᶜq′q′)
-    end
-
-    # ----------------------------------------------------------------------
-    # 2. Resolved-gradient (geometric) block: a subgrid parcel displacement
-    #    with covariance c_g diag(ℓ_h², ℓ_h², ℓ_v²). Parcels keep θ_li and
-    #    q_tot, so the displacement along the θ_li surface changes q_tot
-    #    only (`along_surface_q_variance`). The displacement across the
-    #    surface is the vertical uniform-box block, with the q gradient
-    #    taken across the surface (`across_surface_q_gradient`). The two
-    #    parts are orthogonal. q′q′ is in the q basis, so adding it before
-    #    the θ→T transform is the same as adding it after. Scratch:
-    #    `ᶜtemp_scalar_2`, `_3`, `_5`, `_6` are free until the θ→T transform.
-    # ----------------------------------------------------------------------
-    if use_geometric
-        ᶜlg = Fields.local_geometry_field(Y.c)
-        ᶜΔz = Fields.Δz_field(axes(Y.c))
-        ᶜℓ_v = @. lazy(c_Δz * ᶜΔz)
-        ᶜ∂q∂z = @. lazy(projected_vector_data(C3, ᶜgradᵥ_q_tot, ᶜlg))
-        ᶜ∂θ∂z = @. lazy(projected_vector_data(C3, ᶜgradᵥ_θ_liq_ice, ᶜlg))
         (; ᶜT, ᶜq_liq, ᶜq_ice) = p.precomputed
-        ᶜq_sat_z = @. lazy(
-            adiabatic_q_sat_gradient(
-                thermo_params, ᶜT, Y.c.ρ, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice,
-            ),
+        ᶜθ_li = p.scratch.ᶜtemp_scalar_3
+        @. ᶜθ_li = TD.liquid_ice_pottemp(
+            thermo_params, ᶜT, Y.c.ρ, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice,
         )
-        if use_horizontal
-            ᶜθ_li = p.scratch.ᶜtemp_scalar_3
-            @. ᶜθ_li = TD.liquid_ice_pottemp(
-                thermo_params, ᶜT, Y.c.ρ, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice,
-            )
-            ᶜinv_q = p.scratch.ᶜtemp_scalar_5
-            ᶜinv_θ = p.scratch.ᶜtemp_scalar_2
-            ᶜinv_θq = p.scratch.ᶜtemp_scalar_6
-            hgrad_invariant!(ᶜinv_q, ᶜq_tot_nonneg, p)
-            hgrad_invariant!(ᶜinv_θ, ᶜθ_li, p)
-            hgrad_cross_invariant!(ᶜinv_θq, ᶜθ_li, ᶜq_tot_nonneg, p)
-            # Vertical scale of the along-surface displacement: the depth `H`
-            # of the unresolved slantwise motion, bounded by the height above
-            # the surface. In a neutral layer the θ_li surface is vertical and
-            # the along-surface displacement is the vertical eddy displacement,
-            # which cannot reach below the ground.
-            H = CAP.sgs_variance_isentropic_depth(p.params)
-            ᶜz = Fields.coordinate_field(Y.c).z
-            z_sfc = Fields.level(Fields.coordinate_field(Y.f).z, Fields.half)
-            ᶜℓ_a = @. lazy(min(H, ᶜz - z_sfc))
-            add_resolved_gradient_block!(
-                p, ᶜinv_q, ᶜinv_θq, ᶜinv_θ, ᶜ∂q∂z, ᶜ∂θ∂z, ᶜq_sat_z,
-                ℓ_h, ᶜℓ_a, ᶜℓ_v, c_g, diag_corr, ρ_turb,
-            )
-        else
-            add_resolved_gradient_block!(
-                p, zero(FT), zero(FT), zero(FT), ᶜ∂q∂z, ᶜ∂θ∂z, ᶜq_sat_z,
-                ℓ_h, ᶜℓ_v, ᶜℓ_v, c_g, diag_corr, ρ_turb,
-            )
-        end
+        ᶜinv_q = p.scratch.ᶜtemp_scalar_5
+        ᶜinv_θ = ᶜT′T′
+        ᶜinv_θq = p.scratch.ᶜtemp_scalar_6
+        hgrad_invariant!(ᶜinv_q, ᶜq_tot_nonneg, p)
+        hgrad_invariant!(ᶜinv_θ, ᶜθ_li, p)
+        hgrad_cross_invariant!(ᶜinv_θq, ᶜθ_li, ᶜq_tot_nonneg, p)
     end
 
-    # ----------------------------------------------------------------------
-    # 3. θ → T basis via the thermodynamic Jacobian ∂T/∂θ. q is unaffected.
-    # ----------------------------------------------------------------------
-    ᶜ∂T_∂θ = p.scratch.ᶜtemp_scalar_2
+    # 3. Covariances in the θ basis; ᶜT′T′ holds θ′θ′ until the transform.
+    ᶜ∂q∂z = @. lazy(projected_vector_data(C3, ᶜgradᵥ_q_tot, ᶜlg))
+    ᶜ∂θ∂z = @. lazy(projected_vector_data(C3, ᶜgradᵥ_θ_liq_ice, ᶜlg))
+    @. ᶜq′q′ = displacement_covariance(ℓ_h_q², ᶜℓ_v_q², ᶜinv_q, ᶜ∂q∂z, ᶜ∂q∂z)
+    @. ᶜT′T′ = displacement_covariance(ℓ_h_θ², ᶜℓ_v_θ², ᶜinv_θ, ᶜ∂θ∂z, ᶜ∂θ∂z)
+    if diag_corr
+        @. p.precomputed.ᶜT′q′ =
+            displacement_covariance(ℓ_h_θq, ᶜℓ_v_θq, ᶜinv_θq, ᶜ∂θ∂z, ᶜ∂q∂z)
+    end
+
+    # 4. θ → T basis via the thermodynamic Jacobian ∂T/∂θ. q is unaffected.
+    ᶜ∂T_∂θ = p.scratch.ᶜtemp_scalar_3
     compute_∂T_∂θ!(ᶜ∂T_∂θ, Y, p, thermo_params)
     @. ᶜT′T′ = ᶜ∂T_∂θ^2 * ᶜT′T′
     if diag_corr
         @. p.precomputed.ᶜT′q′ = ᶜ∂T_∂θ * p.precomputed.ᶜT′q′
     end
+    if p.atmos.sgs_variance_curvature
+        set_displacement_curvature!(
+            p.precomputed.ᶜdisp_S, Y, p, thermo_params,
+            ᶜl_d, ᶜ∂T_∂θ, ᶜ∂q∂z, ᶜ∂θ∂z,
+        )
+    end
 
-    # ----------------------------------------------------------------------
-    # 4. Closure-validity bound `σ_q ≤ sgs_variance_max_rel_std · q_tot`
+    # 5. Closure-validity bound `σ_q ≤ sgs_variance_max_rel_std · q_tot`
     #    (default 0.5). A wider Gaussian puts a quadrature node at negative
     #    total water; the clamped quadrature then carries more total water
     #    than the grid mean holds, and condensing it can drive the grid-mean
-    #    vapour negative. For the diagnosed path we rescale T′q′ by the same
-    #    factor as σ_q so the diagnosed correlation is invariant under the
-    #    bound.
-    # ----------------------------------------------------------------------
+    #    vapour negative. T′q′ is rescaled by the same factor as σ_q so the
+    #    diagnosed correlation is invariant under the bound.
     r_max = CAP.sgs_variance_max_rel_std(p.params)
     if diag_corr
         @. p.precomputed.ᶜT′q′ *= sqrt(min(
@@ -665,72 +809,11 @@ function set_covariance_cache!(Y, p, thermo_params)
     end
     @. ᶜq′q′ = min(ᶜq′q′, (r_max * ᶜq_tot_nonneg)^2)
 
-    # ----------------------------------------------------------------------
-    # 5. Fill `ᶜcorr_Tq` with the correlation the quadrature samples.
-    # ----------------------------------------------------------------------
+    # 6. The correlation the quadrature samples.
     set_tq_correlation!(p, p.atmos.tq_correlation_model)
 
-    # ----------------------------------------------------------------------
-    # 7. Refresh `ᶜα` with the current `ᶜl_mix` and state.
-    # ----------------------------------------------------------------------
-    materialized_variance_fidelity!(Y, p)
-    return nothing
-end
-
-
-"""
-    add_resolved_gradient_block!(p, ᶜinv_q, ᶜinv_θq, ᶜinv_θ, ᶜ∂q∂z, ᶜ∂θ∂z,
-                                 ᶜq_sat_z, ℓ_h, ᶜℓ_a, ᶜℓ_v, c_g, diag_corr,
-                                 ρ_turb)
-
-Combine the resolved-gradient (geometric) block with the turbulent block
-already held in `ᶜq′q′` and `ᶜT′T′` (θ basis). The geometric q variance is
-the bounded along-surface variance (`along_surface_q_variance`, vertical
-scale `ᶜℓ_a`) plus the across-surface uniform-box term (vertical scale
-`ᶜℓ_v`). Under the `q_sat` bound a displacement with no vertical excursion
-changes `q_sat` by nothing, so the whole along-surface variance needs a
-vertical displacement; it and the turbulent block describe that displacement
-with two closures, so the larger of the two is kept:
-
-    q′q′ = max(c_g (V_along + ℓ_v² q_n²), q′q′_turb),
-    θ′θ′ = max(c_g ℓ_v² (∂_z θ)², θ′θ′_turb).
-
-When `diag_corr`, the cross covariance of the vertical displacement is the
-prescribed `ρ_turb` on the combined vertical amplitudes; the along-surface
-variance adds no cross.
-"""
-function add_resolved_gradient_block!(
-    p,
-    ᶜinv_q,
-    ᶜinv_θq,
-    ᶜinv_θ,
-    ᶜ∂q∂z,
-    ᶜ∂θ∂z,
-    ᶜq_sat_z,
-    ℓ_h,
-    ᶜℓ_a,
-    ᶜℓ_v,
-    c_g,
-    diag_corr,
-    ρ_turb,
-)
-    (; ᶜT′T′, ᶜq′q′) = p.precomputed
-    ᶜq_n = @. lazy(across_surface_q_gradient(ᶜinv_θq, ᶜinv_θ, ᶜ∂q∂z, ᶜ∂θ∂z))
-    ᶜV_geo = @. lazy(
-        along_surface_q_variance(
-            ᶜinv_q, ᶜinv_θq, ᶜinv_θ, ᶜ∂q∂z, ᶜ∂θ∂z, ᶜq_sat_z, ℓ_h, ᶜℓ_a,
-        ) + ᶜℓ_v^2 * ᶜq_n^2,
-    )
-    ᶜθθ_v = @. lazy(ᶜℓ_v^2 * ᶜ∂θ∂z^2)
-    if diag_corr
-        # Uses the turbulent values still in `ᶜT′T′`, `ᶜq′q′`.
-        @. p.precomputed.ᶜT′q′ =
-            ρ_turb * sqrt(
-                max(c_g * ᶜθθ_v, ᶜT′T′) * max(c_g * ᶜℓ_v^2 * ᶜq_n^2, ᶜq′q′),
-            )
-    end
-    @. ᶜq′q′ = max(c_g * ᶜV_geo, ᶜq′q′)
-    @. ᶜT′T′ = max(c_g * ᶜθθ_v, ᶜT′T′)
+    # 7. Refresh `ᶜα` with the current bounded `ᶜl_mix` and state.
+    materialized_variance_fidelity!(Y, p, ᶜl_mix_disp)
     return nothing
 end
 
@@ -849,7 +932,8 @@ end
 #     E[max(0, λ + α·S′)] = q_c,                                     (*)
 #
 # where α = `sgs_variance_fidelity` controls how much of the SGS variance is
-# propagated into the local condensate (currently α = 1). The effective
+# propagated into the local condensate (α = α_Da·α_eq ∈ (0, 1]; the
+# equilibrium multiplier λ_eq is fitted separately with α = 1). The effective
 # scale `σ_S_eff = α · σ_S` uses the standard deviation returned by
 # `_sgs_saturation_moments` (already floored at `ϵ_numerics(FT)` to keep
 # the normalised problem well-conditioned for tiny variances).
@@ -911,8 +995,259 @@ liquid-fraction ramp. Used by `sgs_variance_fidelity`.
 end
 
 """
+    truncated_gaussian_condensate(mu_S, sigma_S)
+
+Expected saturation excess `E[max(0, S)] = μ_S Φ(z) + σ_S φ(z)` with
+`z = μ_S / σ_S` for a Gaussian saturation excess `S ~ N(μ_S, σ_S²)`.
+"""
+@inline function truncated_gaussian_condensate(mu_S, sigma_S)
+    FT = typeof(mu_S)
+    inv_sqrt2π = one(FT) / sqrt(FT(2) * FT(π))
+    σ = max(FT(sigma_S), ϵ_numerics(FT))
+    z = mu_S / σ
+    return max(zero(FT), mu_S * normal_cdf(z) + σ * exp(-z * z / 2) * inv_sqrt2π)
+end
+
+"""
+    _gaussian_interval_moments(a, b)
+
+Moments `(I₀, I₁, I₂) = ∫ₐᵇ (1, x, x²) φ(x) dx` of the standard normal
+density over `[a, b]`, `a ≤ b`, with `I₁ = φ(a) − φ(b)` and
+`I₂ = I₀ + a φ(a) − b φ(b)`; the products `x φ(x)` are taken as zero at
+infinite limits.
+"""
+@inline function _gaussian_interval_moments(a, b)
+    FT = typeof(a)
+    inv_sqrt2π = one(FT) / sqrt(FT(2) * FT(π))
+    φa = ifelse(isfinite(a), exp(-a * a / 2) * inv_sqrt2π, zero(FT))
+    φb = ifelse(isfinite(b), exp(-b * b / 2) * inv_sqrt2π, zero(FT))
+    I₀ = normal_cdf(b) - normal_cdf(a)
+    I₁ = φa - φb
+    I₂ = I₀ + ifelse(isfinite(a), a * φa, zero(FT)) -
+         ifelse(isfinite(b), b * φb, zero(FT))
+    return (I₀, I₁, I₂)
+end
+
+"""
+    quadratic_condensate(mu_S, lin, curv)
+
+Expected positive part `E[max(0, S)]` of the quadratic displacement model
+without horizontal part, `S = μ_S + lin x + ½ curv (x² − 1)` with `x`
+standard normal, in closed form. `S` is positive between the roots of the
+quadratic for `curv < 0`, which bounds `S` by
+`μ_S + (lin² + curv²)/(2|curv|)`, and outside them for `curv > 0`; a
+curvature below `√ε (|lin| + |μ_S|)` is taken as zero, where the expectation
+is `truncated_gaussian_condensate(μ_S, |lin|)`.
+"""
+@inline function quadratic_condensate(mu_S, lin, curv)
+    FT = typeof(mu_S)
+    l = FT(lin)
+    c = FT(curv)
+    small = abs(c) <= sqrt(eps(FT)) * (abs(l) + abs(mu_S))
+    linear = truncated_gaussian_condensate(mu_S, abs(l))
+    # Roots of ½ c x² + l x + m₀, with the stable form that keeps the root
+    # that stays finite as c → 0 free of cancellation.
+    m₀ = mu_S - c / 2
+    D = l * l - 2 * c * m₀
+    s = sqrt(max(D, zero(FT)))
+    r = -(l + copysign(s, l)) / 2
+    r_safe = ifelse(r == zero(FT), one(FT), r)
+    c_safe = ifelse(c == zero(FT), one(FT), c)
+    x_lo = min(2 * r_safe / c_safe, m₀ / r_safe)
+    x_hi = max(2 * r_safe / c_safe, m₀ / r_safe)
+    (I₀, I₁, I₂) = _gaussian_interval_moments(x_lo, x_hi)
+    inner = c / 2 * I₂ + l * I₁ + m₀ * I₀
+    # Without real roots, the quadratic keeps one sign: nonnegative
+    # everywhere for c > 0, so the expectation is the mean, and nonpositive
+    # for c < 0.
+    no_roots = ifelse(c > zero(FT), max(zero(FT), mu_S), zero(FT))
+    quadratic = ifelse(
+        D <= zero(FT),
+        no_roots,
+        max(zero(FT), ifelse(c < zero(FT), inner, mu_S - inner)),
+    )
+    return ifelse(small, linear, quadratic)
+end
+
+"""
+    _gauss_hermite_10(FT)
+
+Positive nodes `x_k` and weights `w_k`, `k = 1:5`, of the probabilists'
+Gauss–Hermite rule of order 10, `∫ g(x) φ(x) dx ≈ Σ_k w_k (g(x_k) + g(−x_k))`.
+"""
+@inline function _gauss_hermite_10(::Type{FT}) where {FT}
+    nodes = (
+        FT(0.48493570751549964),
+        FT(1.4659890943911615),
+        FT(2.484325841638953),
+        FT(3.5818234835519265),
+        FT(4.859462828332313),
+    )
+    weights = (
+        FT(0.34464233493201735),
+        FT(0.13548370298026768),
+        FT(0.01911158050077044),
+        FT(0.0007580709343122166),
+        FT(4.3106526307182725e-6),
+    )
+    return (nodes, weights)
+end
+
+"""
+    _gauss_hermite_10_sum(g, FT)
+
+`Σ_k w_k (g(x_k) + g(−x_k))` over the rule of `_gauss_hermite_10`, an
+estimate of `E[g(x)]` for standard normal `x`.
+"""
+@inline function _gauss_hermite_10_sum(g::G, ::Type{FT}) where {G, FT}
+    (nodes, weights) = _gauss_hermite_10(FT)
+    return sum(ntuple(k -> weights[k] * (g(nodes[k]) + g(-nodes[k])), Val(5)))
+end
+
+"""
+    _smoothing_bump(m, σ_h)
+
+`truncated_gaussian_condensate(m, σ_h) − max(0, m)`: the change a Gaussian
+part of width `σ_h` makes to the positive part of a mean excess `m`, a bump
+of height `σ_h/√(2π)` around `m = 0` that decays like a Gaussian in `m/σ_h`.
+"""
+@inline _smoothing_bump(m, σ_h) =
+    truncated_gaussian_condensate(m, σ_h) - max(zero(m), m)
+
+"""
+    VerticalCurvatureChange(mu_S, σ_h, lin, curv)
+
+Functor `y ↦ Q(μ_S + σ_h y, lin, curv) − Q(μ_S + σ_h y, lin, 0)`, with `Q`
+`quadratic_condensate`: the change the curvature makes to the closed-form
+vertical model at the mean excess shifted by the horizontal part `σ_h y`.
+"""
+struct VerticalCurvatureChange{FT}
+    mu_S::FT
+    σ_h::FT
+    lin::FT
+    curv::FT
+end
+@inline function (f::VerticalCurvatureChange)(y)
+    m = f.mu_S + f.σ_h * y
+    return quadratic_condensate(m, f.lin, f.curv) -
+           quadratic_condensate(m, f.lin, zero(m))
+end
+
+"""
+    SmoothingBumpChange(mu_S, σ_h, lin, curv)
+
+Functor `x ↦ b(μ_S + lin x + ½ curv (x² − 1)) − b(μ_S + lin x)`, with `b`
+`_smoothing_bump` at width `σ_h`: the change the curvature makes to the
+horizontal smoothing of the vertical model at the displacement `x`.
+"""
+struct SmoothingBumpChange{FT}
+    mu_S::FT
+    σ_h::FT
+    lin::FT
+    curv::FT
+end
+@inline function (f::SmoothingBumpChange)(x)
+    m_lin = f.mu_S + f.lin * x
+    m_curv = m_lin + f.curv * (x * x - 1) / 2
+    return _smoothing_bump(m_curv, f.σ_h) - _smoothing_bump(m_lin, f.σ_h)
+end
+
+"""
+    _curvature_correction(mu_S, lin, curv, σ_h)
+
+Change `E[max(0, S_curv)] − E[max(0, S_lin)]` of the expected positive part
+between the quadratic `S_curv = μ_S + lin x + ½ curv (x² − 1) + h` and the
+linear `S_lin = μ_S + lin x + h`, `x ~ N(0, 1)`, `h ~ N(0, σ_h²)`, by a
+10-point Gauss–Hermite rule in whichever of the two variables has the
+narrower spread, so that the integrand it samples is smooth on the scale of
+the rule:
+
+  - vertical part dominant (`σ_h ≤ |lin|`): the rule runs over `h`, and the
+    `x` integral is the closed form `quadratic_condensate(μ_S + h, lin, curv)`
+    (`VerticalCurvatureChange`);
+  - horizontal part dominant (`σ_h ≥ 3 |lin|`): the rule runs over `x`, on the
+    change of the smoothing `_smoothing_bump` that `h` adds to the closed-form
+    vertical model (`SmoothingBumpChange`);
+
+with a linear blend of the two between. Both estimates vanish identically
+for `curv = 0`, and the first is exact for `σ_h = 0`. Against brute-force
+integration over means from `−2.5 σ_S` to `σ_S` and `|curv|` up to `3 σ_S`,
+the error of the expectation is below 0.1 % in the median and below 3 % for
+nine states in ten; the largest, about 25 %, lie in the subsaturated tail
+where the linear vertical part vanishes and the curvature term holds half of
+the variance.
+"""
+@inline function _curvature_correction(mu_S, lin, curv, σ_h)
+    FT = typeof(mu_S)
+    ratio = σ_h / max(abs(lin), ϵ_numerics(FT))
+    w_x = clamp((ratio - 1) / 2, zero(FT), one(FT))
+    # Each branch skips the ten closed-form evaluations of a rule whose
+    # weight is zero.
+    over_h = if w_x < one(FT)
+        _gauss_hermite_10_sum(VerticalCurvatureChange(mu_S, σ_h, lin, curv), FT)
+    else
+        zero(FT)
+    end
+    over_x = if w_x > zero(FT)
+        quadratic_condensate(mu_S, lin, curv) -
+        quadratic_condensate(mu_S, lin, zero(FT)) +
+        _gauss_hermite_10_sum(SmoothingBumpChange(mu_S, σ_h, lin, curv), FT)
+    else
+        zero(FT)
+    end
+    return w_x * over_x + (one(FT) - w_x) * over_h
+end
+
+"""
+    displacement_condensate(mu_S, sigma_S, lin, curv)
+
+Expected saturation excess `E[max(0, S)]` under the vertical displacement
+acting on the curved profile of the saturation excess,
+
+    S = μ_S + lin x + ½ curv (x² − 1) + h,   x ~ N(0, 1),  h ~ N(0, σ_h²),
+
+with `(lin, curv)` from `displacement_curvature_coefficients` and the
+horizontal part `σ_h² = σ_S² − lin² − curv²/2`, so that the variance of `S`
+is the `σ_S²` of the covariance closure, which the cloud fraction and the
+Lagrange multiplier of the actual condensate use. Where the vertical part
+alone, `lin² + curv²/2`, exceeds `σ_S²` (the σ_q bound of
+`set_covariance_cache!`), the displacement is shortened by the factor `s`
+with `s² lin² + s⁴ curv²/2 = σ_S²`, which scales `lin` by `s` and `curv` by
+`s²` and leaves no horizontal part.
+
+The result is the truncated-Gaussian expectation of the linear model,
+`truncated_gaussian_condensate(μ_S, √(lin² + σ_h²))`, plus the change the
+curvature makes to it (`_curvature_correction`, with the vertical model in
+closed form, `quadratic_condensate`), so `curv = 0` returns
+`truncated_gaussian_condensate(μ_S, σ_S)` exactly, and for `curv < 0` with
+`σ_h = 0` the moist tail is bounded by the maximum
+`μ_S + (lin² + curv²)/(2|curv|)` of the quadratic, the largest saturation
+excess the displaced profile reaches.
+"""
+@inline function displacement_condensate(mu_S, sigma_S, lin, curv)
+    FT = typeof(mu_S)
+    σ = max(FT(sigma_S), ϵ_numerics(FT))
+    gaussian = truncated_gaussian_condensate(mu_S, σ)
+    # The Gaussian expectation is the exact result without curvature, and the
+    # early return skips the two Gauss–Hermite rules there.
+    curv == zero(FT) && return gaussian
+    v_lin = FT(lin)^2
+    v_curv = FT(curv)^2 / 2
+    # `s² = u` solves `v_curv u² + v_lin u = σ²`, in the form that stays
+    # finite as either coefficient vanishes.
+    u = 2 * σ^2 / (v_lin + sqrt(v_lin^2 + 4 * v_curv * σ^2))
+    s² = min(one(FT), u)
+    l = sqrt(s²) * FT(lin)
+    c = s² * FT(curv)
+    σ_h = sqrt(max(σ^2 - l^2 - c^2 / 2, zero(FT)))
+    linear = truncated_gaussian_condensate(mu_S, sqrt(l^2 + σ_h^2))
+    return max(zero(FT), linear + _curvature_correction(mu_S, l, c, σ_h))
+end
+
+"""
     sgs_variance_fidelity(
         A, τ_mp, c_d, tke, l_mix, w_eq, q_c_actual, mu_S, sigma_S, q_min,
+        lin = 0, curv = 0,
     )
 
 Local SGS variance fidelity `α = α_Da · α_eq` for the condensate
@@ -922,20 +1257,21 @@ reconstruction `E[max(0, λ + α·S′)] = q_c`.
     `α_Da = 1 / (1 + A · τ_mp · c_d · √TKE / max(l_mix, 1 m))`:
     quiescent (TKE → 0) → 1, well-mixed → 0.
   - Equilibrium-ratio modulator `α_eq = r / (w_eq + (1 − w_eq) r)` with
-    `r = (q_c_actual + q_min) / (q_c_eq + q_min)` and `q_c_eq` the
-    truncated-Gaussian expectation `μ_S Φ(z) + σ_S φ(z)`, `z = μ_S/σ_S` —
-    the expected saturation excess under the SGS PDF (always ≥ 0 even for
-    subsaturated means).
+    `r = (q_c_actual + q_min) / (q_c_eq + q_min)` and `q_c_eq` the expected
+    saturation excess under the SGS PDF (always ≥ 0 even for subsaturated
+    means): the truncated-Gaussian expectation `μ_S Φ(z) + σ_S φ(z)`,
+    `z = μ_S/σ_S`, or, with nonzero displacement coefficients `lin`, `curv`,
+    the curvature-aware `displacement_condensate(μ_S, σ_S, lin, curv)`, the
+    same target the condensate relaxes toward.
 """
 @inline function sgs_variance_fidelity(
     A, τ_mp, c_d, tke, l_mix, w_eq, q_c_actual, mu_S, sigma_S, q_min,
+    lin = zero(mu_S), curv = zero(mu_S),
 )
     FT = typeof(tke)
     inv_τ_turb = FT(c_d) * sqrt(max(tke, zero(FT))) / max(l_mix, one(FT))
     α_Da = one(FT) / (one(FT) + FT(A) * FT(τ_mp) * inv_τ_turb)
-    inv_sqrt2π = one(FT) / sqrt(FT(2) * FT(π))
-    z = FT(mu_S) / max(FT(sigma_S), ϵ_numerics(FT))
-    q_c_eq = FT(mu_S) * normal_cdf(z) + FT(sigma_S) * exp(-z * z / 2) * inv_sqrt2π
+    q_c_eq = displacement_condensate(FT(mu_S), FT(sigma_S), FT(lin), FT(curv))
     r = (FT(q_c_actual) + FT(q_min)) / (q_c_eq + FT(q_min))
     w = FT(w_eq)
     α_eq = r / (w + (one(FT) - w) * r)
@@ -1208,9 +1544,12 @@ uses the same quadrature points.
 end
 
 """
-    _compute_sgs_moments(thp, ρ, T, q_tot, q_c, sgs_quad, T′T′, q′q′, corr_Tq, α)
+    _compute_sgs_moments(
+        thp, ρ, T, q_tot, q_c, sgs_quad, T′T′, q′q′, corr_Tq, α,
+        q_tot_cloud = q_tot, lin = 0, curv = 0,
+    )
 
-Single quadrature pass returning `(sigma_S, λ_lagrange)`:
+Single quadrature pass returning `(sigma_S, λ_lagrange, λ_eq)`:
 
   - `sigma_S = sqrt(Σᵢ wᵢ·S′ᵢ²)`: SGS standard deviation of the sampled
     centred excess, clipped at `ϵ_numerics(FT)`.
@@ -1219,24 +1558,48 @@ Single quadrature pass returning `(sigma_S, λ_lagrange)`:
     quadrature measure — the same points and weights the microphysics
     evaluator integrates over (see `_fit_discrete_lagrange`; the analytic
     truncated-Gaussian inverse `_compute_z` provides the seed).
+  - `λ_eq`: Lagrange multiplier satisfying the equilibrium condensate
+    constraint `Σᵢ wᵢ·max(0, λ_eq + S′ᵢ) = q_c_eq` under the same discrete
+    quadrature measure, with the unattenuated node fluctuations `S′ᵢ`: the
+    fidelity `α` attenuates the actual condensate, which lags equilibrium,
+    while the equilibrium condensate has the full fluctuation of its
+    continuous target. Here,
+    `q_c_eq = truncated_gaussian_condensate(μ_{S,cloud}, σ_S)` is the
+    expected saturation excess of the continuous Gaussian PDF with
+    cloud-available mean excess `μ_{S,cloud} = q_tot_cloud − q_sat(T, ρ)`
+    (`q_tot_cloud = q_tot − q_rai − q_sno`), or, with nonzero displacement
+    coefficients `(lin, curv)` (`displacement_curvature_coefficients`), the
+    curvature-aware expectation `displacement_condensate(μ_{S,cloud}, σ_S, lin, curv)`.
+    Used by `Microphysics1MEvaluator` so that condensation and evaporation
+    relax toward `q_c_eq` without the discrete 3-point Gauss–Hermite support
+    cutoff at `μ_S < −√3 σ_S`.
 
 The SGS mean `μ_S = q_tot − q_sat(T, ρ)` is analytic under the closure's
 linearization (see `_sgs_saturation_moments`) and is recomputed on demand
 wherever it is needed downstream.
 
 Without SGS sampling (`nothing`, `GridMeanSGS`), all mass sits at the mean:
-`sigma_S = ϵ_numerics(FT)` and the constraint gives `λ_lagrange = q_c`
+`sigma_S = ϵ_numerics(FT)`, `λ_lagrange = q_c`, and `λ_eq = max(0, μ_{S,cloud})`
 directly, matching the σ_S → 0 limit of the sampled branch.
 """
 @inline function _compute_sgs_moments(
     thp, ρ, T, q_tot, q_c,
     sgs_quad, T′T′, q′q′, corr_Tq, α,
+    q_tot_cloud = q_tot,
+    lin = zero(ρ),
+    curv = zero(ρ),
 )
     FT = typeof(ρ)
+    q_sat = TD.q_vap_saturation(thp, T, ρ)
+    mu_S_cloud = q_tot_cloud - q_sat
     not_quadrature(sgs_quad) &&
-        return (; sigma_S = ϵ_numerics(FT), λ_lagrange = q_c)
+        return (;
+            sigma_S = ϵ_numerics(FT),
+            λ_lagrange = q_c,
+            λ_eq = max(zero(FT), mu_S_cloud),
+        )
 
-    mu_S = q_tot - TD.q_vap_saturation(thp, T, ρ)
+    mu_S = q_tot - q_sat
     transform =
         build_physical_transform(sgs_quad, q_tot, T, q′q′, T′T′, corr_Tq)
     S′s = quadrature_point_values(
@@ -1245,11 +1608,19 @@ directly, matching the σ_S → 0 limit of the sampled branch.
     ws = quadrature_prob_weights(sgs_quad)
     sigma_S = max(sqrt(sum(ws .* S′s .* S′s)), ϵ_numerics(FT))
 
-    # Analytic truncated-Gaussian seed, then the exact discrete fit.
-    σ_S_eff = α * sigma_S
+    # Analytic truncated-Gaussian seed, then the exact discrete fit. The
+    # floor keeps `q_c / σ_S_eff` finite where both `q_c` and `α` vanish.
+    σ_S_eff = max(α * sigma_S, ϵ_numerics(FT))
     λ0 = _compute_z(q_c / σ_S_eff) * σ_S_eff
     λ_lagrange = _fit_discrete_lagrange(λ0, q_c, α, S′s, ws)
-    return (; sigma_S, λ_lagrange)
+
+    # Equilibrium Lagrange multiplier matching the continuous equilibrium
+    # condensate `q_c_eq = E[max(0, S_cloud)]`: truncated Gaussian, or the
+    # curvature-aware displacement expectation where `curv ≠ 0`. The fit
+    # uses the unattenuated `S′ᵢ`, the fluctuations `q_c_eq` is evaluated with.
+    q_c_eq = displacement_condensate(mu_S_cloud, sigma_S, lin, curv)
+    λ_eq = _fit_discrete_lagrange(mu_S_cloud, q_c_eq, one(FT), S′s, ws)
+    return (; sigma_S, λ_lagrange, λ_eq)
 end
 
 """
@@ -1258,15 +1629,15 @@ end
 Final post-Aitken update. No-op when `ᶜsgs_moments` is not allocated (dry / 0M).
 
 Uses ONE quadrature pass via `_compute_sgs_moments` to fill
-`ᶜsgs_moments = (sigma_S, λ_lagrange)`, then computes
+`ᶜsgs_moments = (sigma_S, λ_lagrange, λ_eq)`, then computes
 `ᶜcloud_fraction` consistently with the augmented `σ_aug` closure (see
 `_compute_cloud_fraction`) from the environment cloud condensate
 (`_get_condensate_means`) and applies EDMF updraft weighting. Finally
 runs `set_precip_fraction!`, the column overlap sweep that turns the fresh
 cover into the precipitation fraction `ᶜprecip_frac`.
 
-Overwrites `p.scratch.ᶜtemp_scalar`, `ᶜtemp_scalar_2`, and `ᶜtemp_scalar_3`.
-It must not touch `ᶜtemp_scalar_4` or `ᶜtemp_scalar_7`, which
+Overwrites `p.scratch.ᶜtemp_scalar`, `ᶜtemp_scalar_2`, `ᶜtemp_scalar_3`, and
+`ᶜtemp_scalar_5`. It must not touch `ᶜtemp_scalar_4` or `ᶜtemp_scalar_7`, which
 `set_covariance_cache_and_cloud_fraction!` reserves for the Picard iterates.
 """
 NVTX.@annotate function set_sgs_moments_and_cloud_fraction!(Y, p)
@@ -1279,6 +1650,8 @@ NVTX.@annotate function set_sgs_moments_and_cloud_fraction!(Y, p)
     ᶜρ_env_lazy, ᶜT_mean, ᶜq_mean = _get_env_ρ_T_q(Y, p, thermo_params, turbconv_model)
     ᶜq_lcl_lazy, ᶜq_icl_lazy =
         _get_condensate_means(Y, p, turbconv_model, microphysics_model)
+    ᶜq_rai_lazy, ᶜq_sno_lazy =
+        _get_precip_means(Y, p, turbconv_model, microphysics_model)
     sgs_quad = p.atmos.sgs_quadrature
     floor = cloud_fraction_floor_params(p.params)
     (; ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα, ᶜsgs_moments, ᶜcloud_fraction) =
@@ -1291,36 +1664,87 @@ NVTX.@annotate function set_sgs_moments_and_cloud_fraction!(Y, p)
     ᶜρ_env = (p.scratch.ᶜtemp_scalar .= ᶜρ_env_lazy)
     ᶜq_lcl = (p.scratch.ᶜtemp_scalar_2 .= ᶜq_lcl_lazy)
     ᶜq_icl = (p.scratch.ᶜtemp_scalar_3 .= ᶜq_icl_lazy)
+    ᶜq_cloud = p.scratch.ᶜtemp_scalar_5
+    @. ᶜq_cloud = max(0, ᶜq_mean - (ᶜq_rai_lazy + ᶜq_sno_lazy))
 
-    DataLayouts.foreach_point(
-        ᶜsgs_moments, ᶜcloud_fraction, ᶜρ_env, ᶜT_mean, ᶜq_mean,
-        ᶜq_lcl, ᶜq_icl, ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα,
-    ) do ᶜsgs_moments, ᶜcloud_fraction, ᶜρ_env, ᶜT_mean, ᶜq_mean,
-    ᶜq_lcl, ᶜq_icl, ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα
+    # The displacement coefficients enter the loop as a field only when the
+    # curvature-aware condensate is configured; otherwise as zeros, for which
+    # `displacement_condensate` is the truncated-Gaussian expectation.
+    FT = eltype(p.params)
+    if p.atmos.sgs_variance_curvature
+        ᶜdisp_S = p.precomputed.ᶜdisp_S
+        DataLayouts.foreach_point(
+            ᶜsgs_moments, ᶜcloud_fraction, ᶜρ_env, ᶜT_mean, ᶜq_mean,
+            ᶜq_cloud, ᶜq_lcl, ᶜq_icl, ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα, ᶜdisp_S,
+        ) do ᶜsgs_moments, ᶜcloud_fraction, ᶜρ_env, ᶜT_mean, ᶜq_mean,
+        ᶜq_cloud, ᶜq_lcl, ᶜq_icl, ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα, ᶜdisp_S
 
-        @. ᶜsgs_moments = _compute_sgs_moments(
-            thermo_params, ᶜρ_env, ᶜT_mean, ᶜq_mean, ᶜq_lcl + ᶜq_icl,
-            $(sgs_quad), ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα,
-        )
-        # Recompute CF from q_c and σ_S using the augmented-σ closure. We cannot
-        # use `Φ(λ/σ_aug)` because λ was computed with the equilibrium σ_S_eff,
-        # not σ_aug — `Φ(λ/σ_aug)` would not match the truncated-Gaussian
-        # closure for the augmented variance. This overwrites the Picard iterate
-        # with a value consistent with the final SGS moments, so EDMF weighting
-        # must be re-applied below even though `set_cloud_fraction!` already
-        # applied it during Picard.
-        @. ᶜcloud_fraction = _compute_cloud_fraction(
-            ᶜq_lcl + ᶜq_icl,
-            ᶜq_mean - TD.q_vap_saturation(thermo_params, ᶜT_mean, ᶜρ_env),
-            ᶜsgs_moments.sigma_S,
-            TD.q_vap_saturation(thermo_params, ᶜT_mean, ᶜρ_env, ᶜq_lcl, ᶜq_icl),
-            ᶜα,
-            $(floor),
-        )
+            _sgs_moments_and_cloud_fraction_point!(
+                ᶜsgs_moments, ᶜcloud_fraction, ᶜρ_env, ᶜT_mean, ᶜq_mean,
+                ᶜq_cloud, ᶜq_lcl, ᶜq_icl, ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα,
+                ᶜdisp_S.lin, ᶜdisp_S.curv, thermo_params, sgs_quad, floor,
+            )
+        end
+    else
+        # The closure captures the zero coefficients as values: a captured
+        # `FT` is a `Type`, which is not isbits and cannot enter the GPU kernel.
+        lin₀ = zero(FT)
+        curv₀ = zero(FT)
+        DataLayouts.foreach_point(
+            ᶜsgs_moments, ᶜcloud_fraction, ᶜρ_env, ᶜT_mean, ᶜq_mean,
+            ᶜq_cloud, ᶜq_lcl, ᶜq_icl, ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα,
+        ) do ᶜsgs_moments, ᶜcloud_fraction, ᶜρ_env, ᶜT_mean, ᶜq_mean,
+        ᶜq_cloud, ᶜq_lcl, ᶜq_icl, ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα
+
+            _sgs_moments_and_cloud_fraction_point!(
+                ᶜsgs_moments, ᶜcloud_fraction, ᶜρ_env, ᶜT_mean, ᶜq_mean,
+                ᶜq_cloud, ᶜq_lcl, ᶜq_icl, ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα,
+                lin₀, curv₀, thermo_params, sgs_quad, floor,
+            )
+        end
     end
 
     _apply_edmf_cloud_weighting!(Y, p, turbconv_model, thermo_params)
     set_precip_fraction!(Y, p)
+    return nothing
+end
+
+"""
+    _sgs_moments_and_cloud_fraction_point!(
+        ᶜsgs_moments, ᶜcloud_fraction, ᶜρ_env, ᶜT_mean, ᶜq_mean, ᶜq_cloud,
+        ᶜq_lcl, ᶜq_icl, ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα, lin, curv,
+        thermo_params, sgs_quad, floor,
+    )
+
+Body of the `foreach_point` loop of `set_sgs_moments_and_cloud_fraction!`:
+fill the SGS moments (`_compute_sgs_moments`) and the cloud fraction
+(`_compute_cloud_fraction`) of one point. `lin` and `curv` are the
+displacement coefficients, a point of `ᶜdisp_S` or zeros.
+"""
+@inline function _sgs_moments_and_cloud_fraction_point!(
+    ᶜsgs_moments, ᶜcloud_fraction, ᶜρ_env, ᶜT_mean, ᶜq_mean, ᶜq_cloud,
+    ᶜq_lcl, ᶜq_icl, ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα, lin, curv,
+    thermo_params, sgs_quad, floor,
+)
+    @. ᶜsgs_moments = _compute_sgs_moments(
+        thermo_params, ᶜρ_env, ᶜT_mean, ᶜq_mean, ᶜq_lcl + ᶜq_icl,
+        $(sgs_quad), ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα, ᶜq_cloud, lin, curv,
+    )
+    # Recompute CF from q_c and σ_S using the augmented-σ closure. `Φ(λ/σ_aug)`
+    # is not usable because λ was computed with the equilibrium σ_S_eff, not
+    # σ_aug, so it would not match the truncated-Gaussian closure for the
+    # augmented variance. This overwrites the Picard iterate
+    # with a value consistent with the final SGS moments, so EDMF weighting
+    # must be re-applied by the caller even though `set_cloud_fraction!`
+    # already applied it during Picard.
+    @. ᶜcloud_fraction = _compute_cloud_fraction(
+        ᶜq_lcl + ᶜq_icl,
+        ᶜq_mean - TD.q_vap_saturation(thermo_params, ᶜT_mean, ᶜρ_env),
+        ᶜsgs_moments.sigma_S,
+        TD.q_vap_saturation(thermo_params, ᶜT_mean, ᶜρ_env, ᶜq_lcl, ᶜq_icl),
+        ᶜα,
+        $(floor),
+    )
     return nothing
 end
 
@@ -1691,6 +2115,32 @@ _env_cloud_condensate(Y, p, ::NonEquilibriumMicrophysics) = (
 )
 _env_cloud_condensate(Y, p, microphysics_model) =
     (p.precomputed.ᶜq_liq⁰, p.precomputed.ᶜq_ice⁰)
+
+"""
+    _get_precip_means(Y, p, turbconv_model, microphysics_model)
+
+Non-negative mean rain and snow `(ᶜq_rai, ᶜq_sno)` of the domain that carries
+the SGS cloud closure, as lazy fields: the environment for PrognosticEDMFX,
+the grid mean otherwise. Only non-equilibrium microphysics carries `ρq_rai`
+and `ρq_sno`, and only those configurations allocate `ᶜsgs_moments`. The
+clamp matches the `q_rai_nonneg`, `q_sno_nonneg` that
+`microphysics_tendencies_1m` hands to `Microphysics1MEvaluator`, so the
+cloud-available excess `μ_{S,cloud}` of `_compute_sgs_moments` and the node
+excess `S_raw_cloud` of the evaluator subtract the same precipitation.
+"""
+function _get_precip_means(Y, p, turbconv_model, ::NonEquilibriumMicrophysics)
+    if turbconv_model isa PrognosticEDMFX
+        return (
+            (@. lazy(max(0, $(ᶜspecific_env_value(@name(q_rai), Y, p))))),
+            (@. lazy(max(0, $(ᶜspecific_env_value(@name(q_sno), Y, p))))),
+        )
+    else
+        return (
+            (@. lazy(max(0, specific(Y.c.ρq_rai, Y.c.ρ)))),
+            (@. lazy(max(0, specific(Y.c.ρq_sno, Y.c.ρ)))),
+        )
+    end
+end
 
 """
     _apply_edmf_cloud_weighting!(Y, p, turbconv_model, thermo_params)

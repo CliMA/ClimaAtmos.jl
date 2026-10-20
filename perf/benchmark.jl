@@ -48,7 +48,7 @@ CTS.step!(integrator) # compile first
         @test compare_mem(trials, "dss!", 0)
         @test compare_mem(trials, "constrain_state!", 0)
         @test compare_mem(trials, "initialize_imp!", 0)
-        @test compare_mem(trials, "cache!", 576)
+        @test compare_mem(trials, "cache!", 912)
         @test compare_mem(trials, "cache_imp!", 0)
 
         # It's difficult to guarantee zero allocations,

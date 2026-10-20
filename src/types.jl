@@ -2157,16 +2157,14 @@ end
 Closure for the SGS T–q correlation sampled by the joint-PDF quadrature.
 Selected by the YAML key `tq_correlation_model`.
 
-  - `ConstantTqCorrelation` (`"constant"`, default): the prescribed
-    `Tq_correlation_coefficient` everywhere.
-  - `DiagnosedTqCorrelation` (`"diagnosed"`): `ρ = T′q′ / √(T′T′ q′q′)` from
-    the gradient-based covariance `T′q′`, summed over the three variance
-    blocks — turbulent `ρ_turb · σ_T,turb · σ_q,turb` (prescribed `ρ_turb`),
-    horizontal geometric `c_g (c_Δx Δx_h)² ∇_h θ_li · ∇_h q_tot`, and vertical
-    uniform-box `c_g (c_Δz Δz)² ∂_z θ_li · ∂_z q_tot` — transformed to T basis
-    and rescaled under the σ_q bound so `ρ` is clamp-invariant. Falls back to
-    the prescribed value where all blocks vanish, and is clamped to `[-1, 1]`
+  - `DiagnosedTqCorrelation` (`"diagnosed"`, default): `ρ = T′q′ / √(T′T′ q′q′)`
+    from the covariance `T′q′` of the subgrid displacement that produces the
+    variances (`displacement_covariance`), transformed to T basis and rescaled
+    under the σ_q bound so `ρ` is clamp-invariant. Falls back to the
+    prescribed value where the variances vanish, and is clamped to `[-1, 1]`
     to absorb Float32 roundoff at the Cauchy-Schwarz boundary.
+  - `ConstantTqCorrelation` (`"constant"`): the prescribed
+    `Tq_correlation_coefficient` everywhere.
 """
 abstract type AbstractTqCorrelationModel end
 struct ConstantTqCorrelation <: AbstractTqCorrelationModel end
@@ -2187,13 +2185,18 @@ Group of moisture, cloud, and microphysics choices inside an
   - `tracer_nonnegativity_method`: `nothing`, or a `TracerNonnegativityMethod`.
   - `sgs_quadrature`: `nothing`, or an `SGSQuadrature` used to integrate cloud
     and microphysics quantities over the subgrid-scale distribution.
-  - `tq_correlation_model`: An `AbstractTqCorrelationModel`; `ConstantTqCorrelation()`
-    by default (`DiagnosedTqCorrelation()` diagnoses the T–q correlation from the
-    gradient covariance).
+  - `tq_correlation_model`: An `AbstractTqCorrelationModel`;
+    `DiagnosedTqCorrelation()` by default (`ConstantTqCorrelation()`
+    prescribes the T–q correlation).
+  - `sgs_variance_curvature`: `true` evaluates the equilibrium SGS condensate
+    under the vertical displacement acting on the curved profile of the
+    saturation excess (`displacement_condensate`), which bounds the moist tail
+    by the largest excess the displaced (quadratic) profile reaches; `false`
+    (default) keeps
+    the truncated-Gaussian expectation.
   - `terminal_velocity_liquid`, `terminal_velocity_ice`, `terminal_velocity_rain`,
     `terminal_velocity_snow`: the `AbstractTerminalVelocityMode` of each species,
-    `FixedTerminalVelocity()` for cloud liquid, cloud ice and rain,
-    and `Chen2022TerminalVelocity()` for snow by default.
+    `FixedTerminalVelocity()` for every species by default.
 
 # Examples
 
@@ -2210,11 +2213,12 @@ water = ClimaAtmos.AtmosWater(;
     microphysics_tendency_timestepping::MTTS = nothing
     tracer_nonnegativity_method::TNM = nothing
     sgs_quadrature::SQ = nothing
-    tq_correlation_model::TQC = ConstantTqCorrelation()
+    tq_correlation_model::TQC = DiagnosedTqCorrelation()
+    sgs_variance_curvature::Bool = false
     terminal_velocity_liquid::TVL = FixedTerminalVelocity()
     terminal_velocity_ice::TVI = FixedTerminalVelocity()
     terminal_velocity_rain::TVR = FixedTerminalVelocity()
-    terminal_velocity_snow::TVS = Chen2022TerminalVelocity()
+    terminal_velocity_snow::TVS = FixedTerminalVelocity()
 end
 
 """
@@ -2658,8 +2662,9 @@ struct's docstring for the full list of admissible values.
 
   - [`AtmosWater`](@ref): `microphysics_model`, `cloud_model`,
     `microphysics_tendency_timestepping`, `tracer_nonnegativity_method`,
-    `sgs_quadrature`, `terminal_velocity_liquid`, `terminal_velocity_ice`,
-    `terminal_velocity_rain`, `terminal_velocity_snow`.
+    `sgs_quadrature`, `tq_correlation_model`, `sgs_variance_curvature`,
+    `terminal_velocity_liquid`, `terminal_velocity_ice`, `terminal_velocity_rain`,
+    `terminal_velocity_snow`.
   - `SCMSetup`: `subsidence`, `external_forcing`, `ls_adv`,
     `advection_test`, `scm_coriolis`. Normally supplied by a `Setups` case.
   - [`AtmosRadiation`](@ref): `radiation_mode`, `insolation`, `aerosol_names`,

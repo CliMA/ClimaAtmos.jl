@@ -1101,15 +1101,12 @@ function update_diffusion_jacobian!(
     end
 
     # Jacobian of the diffusive enthalpy flux
-    #   K_h piece: F_h = -K_h [∇s_d + (h_eff + Φ) ∇q_tot_eff]  (spurious-safe)
-    #   K_e piece: F_h = -K_e ρ ∇h_tot                          (bodily, SGS only)
+    #   F_h = -K_h [∇s_d + (h_eff + Φ) ∇q_tot_eff]  (spurious-safe)
     # (see edmfx_sgs_diffusive_flux_tendency! and
     # vertical_diffusion_boundary_layer_tendency!). The Jacobian uses the
     # frozen-coefficient approximation `F_h ≈ (h_eff + Φ) ᶜdiffusion_h_matrix`
-    # for the (ρe_tot, ρq_tot) cross-term — this captures the dominant K_h
-    # water-enthalpy transport; the additional K_e·∇h_tot piece has the same
-    # ∂s_d/∂e_tot = cp_d/cv_m dependence and is folded into the diagonal
-    # (ρe_tot, ρe_tot) block through ᶜdiffusion_h_matrix. h_eff and
+    # for the (ρe_tot, ρq_tot) cross-term, which captures the dominant
+    # water-enthalpy transport. h_eff and
     # q_tot_eff's rain/snow terms are treated as frozen. The SGS mass-flux
     # enthalpy Jacobian (update_sgs_massflux_jacobian!) is separate and
     # transports whole parcels at h_tot without decomposition.

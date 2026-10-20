@@ -3,6 +3,77 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- ![][badge-💥breaking] `sgs_variance_vertical_scale_factor` and the provisional
+  `sgs_variance_isentropic_depth` are removed; with `strict_params: true` (the
+  default) a run TOML that still sets either now stops with an unused-parameter
+  error. Remove them from run TOMLs.
+- ![][badge-🔥behavioralΔ] Snow falls at its fixed terminal velocity by default
+  (`snow_terminal_velocity: Fixed`); `Chen2022` remains available.
+- ![][badge-✨feature/enhancement] CloudMicrophysics 0.46 is supported (compat `0.45, 0.46`).
+- ![][badge-✨feature/enhancement] The equilibrium SGS condensate
+  `E[max(0, S)]` can be evaluated under the vertical displacement acting on
+  the curved profile of the saturation excess,
+  `S = μ_S + lin x + ½ curv (x² − 1) + h` with `x` standard normal,
+  `lin = ℓ_v ∂_z S̃`, `curv = ℓ_v² ∂_z² S̃` from the two bounding face gradients
+  of `q_tot` and `θ_li` (`∂_z S̃ = ∂_z q_tot − r_{v,θ} γ ∂T/∂θ_li ∂_z θ_li`), and `h` the horizontal displacement part, with the
+  variance of `S` matched to the `σ_S²` of the covariance closure
+  (`displacement_curvature_coefficients`, `displacement_condensate`). For
+  negative curvature, as at the cloud-base maximum of the mean saturation
+  excess, the moist tail is bounded by the maximum the displaced profile
+  reaches. Opt-in with `sgs_variance_curvature: true` (default `false`); it
+  enters the 0M equilibrium condensate, the 1M relaxation target `λ_eq` and
+  the equilibrium-ratio factor of the variance fidelity, and the cloud
+  fraction keeps its truncated-Gaussian closure.
+- ![][badge-🔥behavioralΔ] The SGS covariance of `(θ_li, q_tot)` is that of
+  Gaussian subgrid displacements of the two scalars acting on the resolved
+  gradients, `Σ_ψφ = ℓ_h² ∇_h ψ·∇_h φ + ℓ_v² ∂_z ψ ∂_z φ`
+  (`displacement_covariance`), with per-variable scales `ℓ_{h,ψ}`, `ℓ_{v,ψ}`,
+  horizontal cross-correlation `r_{h,θq}` and perfectly correlated vertical
+  displacements. `ℓ_h² = c_g (c_Δx Δx_h)²`; `ℓ_v² = 2 c_σ l_d²`
+  with `l_d = min(max(l_disp, l_b), z - z_s)` taking the larger of the
+  buoyancy-bounded mixing length
+  `l_disp = min(l_mix, √(c_b κ_iso) / N_disp)` and the floor displacement
+  `l_b = √(c_b κ_min) min(τ_N, l_disp/√(c_b κ_iso), τ_0)` with `τ_N = 1/N_disp` for
+  `N_disp² > 0` and `∞` otherwise (continuous at `N_disp² = 0`),
+  `N_disp² = max(N_dry⁻², N_dry⁺²)`,
+  `κ_min = w_min² / (2 c_σ c_b)`
+  (`materialized_displacement_length!`): in stably stratified air
+  the displacement of the unresolved vertical motions lasts until buoyancy, the
+  turbulence (its Lagrangian time scale `l_disp / √(c_b κ_iso)`) or the
+  quiescent limit `τ_0` decorrelates it, so without TKE it is `w_min / N_disp`;
+  capped by the cell depth and the wall distance. The velocity
+  scale grows with the horizontal grid scale,
+  `w_min = w_ref (Δx_h / Δx_ref)^p`, as the spectral slope of the displaced
+  fields requires. New provisional parameters
+  `sgs_variance_vertical_velocity_floor` (`w_ref`, 1.6 m/s),
+  `sgs_variance_floor_reference_resolution` (120 km),
+  `sgs_variance_floor_resolution_exponent` (`p`, 2/3),
+  `sgs_variance_floor_time_scale` (`τ_0`, 300 s),
+  `sgs_variance_theta_horizontal_scale_ratio` (`0.7`),
+  `sgs_variance_theta_vertical_scale_ratio` (`0.36`) and
+  `sgs_variance_horizontal_cross_correlation` (`0.5`);
+  the floor enters the variance only. These defaults are calibrated against
+  the within-cell moments (`var q_tot`, `var θ_li`, their correlation) of
+  3.75 km global MPAS (DYAMOND) simulations coarse-grained to 60–240 km, with
+  `sgs_variance_horizontal_scale_factor` `c_Δx ≈ 2.1` (set it in the TOML: the
+  ClimaParams default of 1 gives about half the SGS standard deviation), and
+  cross-checked on 4 km WRF (CONUS404); `τ_0` is constrained only from below.
+  This replaces the turbulent block and the geometric block (the along-surface
+  (isentropic) part with its `q_sat`-variance bound, and the vertical
+  uniform-box part). `tq_correlation_model` defaults to `diagnosed`, the covariance
+  of the same displacements; `constant` keeps the prescribed value. The
+  variance-fidelity Damköhler rate uses the same buoyancy-bounded mixing
+  length `l_disp` as the displacement length. Equilibrium SGS saturation
+  adjustment (`compute_sgs_saturation_adjustment`) and 1-moment non-equilibrium
+  condensation (`Microphysics1MEvaluator`) evaluate equilibrium condensate via
+  the analytic truncated-Gaussian expectation `truncated_gaussian_condensate`
+  (mapped onto the quadrature nodes via `λ_eq` in `_compute_sgs_moments`),
+  eliminating the discrete 3-point Gauss–Hermite support cutoff at
+  `μ_S < −√3 σ_S`. The diagnosed T–q correlation (`sgs_correlation_Tq`) falls
+  back to `Tq_correlation_coefficient` only where a variance vanishes relative
+  to its grid mean (`q′q′ ≤ (ε q_tot)²` or `T′T′ ≤ (ε T)²`, `ε = eps(FT)`)
+  instead of where `T′T′ q′q′ ≤ eps(FT)²`; the absolute floor replaced the
+  diagnosed (negative) correlation by `+0.6` in the dry upper troposphere.
 
 0.42.15
 -------

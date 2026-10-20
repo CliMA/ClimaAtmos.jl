@@ -158,7 +158,6 @@ end
             @testset "FT = $FT" begin
                 toml_dict = CP.create_toml_dict(FT)
                 thp = TD.Parameters.ThermodynamicsParameters(toml_dict)
-                α = FT(1)
                 corr = FT(0.6)
                 ρ = FT(1.1)
                 # (T, saturation offset, q_c, T′T′, q′q′)
@@ -168,7 +167,9 @@ end
                     (FT(233), FT(1e-4), FT(2e-5), FT(1), FT(1e-7)),
                     (FT(288), FT(0), FT(2e-4), FT(9), FT(4e-6)),
                 )
-                for order in (1, 3, 5), (T, dq, q_c, T′T′, q′q′) in regimes
+                for order in (1, 3, 5), α in (FT(0.3), FT(0.7), FT(1)),
+                    (T, dq, q_c, T′T′, q′q′) in regimes
+
                     quad = CA.SGSQuadrature(FT; quadrature_order = order)
                     q_tot = TD.q_vap_saturation(thp, T, ρ) + dq
                     m = CA._compute_sgs_moments(
@@ -180,6 +181,20 @@ end
                         probe, quad, q_tot, T, q′q′, T′T′, corr,
                     )
                     @test qc_mean ≈ q_c rtol = sqrt(eps(FT))
+
+                    # Equilibrium Lagrange multiplier λ_eq must reconstruct
+                    # the continuous truncated-Gaussian equilibrium condensate
+                    # q_c_eq under the same quadrature measure with the
+                    # unattenuated node fluctuations (α = 1 in the probe, for
+                    # every fidelity α of the actual condensate), including in
+                    # the subsaturated tail μ_S < -√3 σ_S where raw 3-point
+                    # Gauss–Hermite quadrature has zero support.
+                    q_c_eq = CA.truncated_gaussian_condensate(mu_S, m.sigma_S)
+                    probe_eq = CondensateMeanProbe(thp, ρ, mu_S, m.λ_eq, one(FT))
+                    qc_eq_mean = CA.integrate_over_sgs(
+                        probe_eq, quad, q_tot, T, q′q′, T′T′, corr,
+                    )
+                    @test qc_eq_mean ≈ q_c_eq rtol = sqrt(eps(FT))
                 end
             end
         end

@@ -85,6 +85,6 @@ include("../test_helpers.jl")
     end
 
     # Rain and snow are excluded from the aggregate and get no K_h transport of
-    # their own, so their only tendency here is the K_e entrainment term.
+    # their own.
     @test maximum(abs, parent(Y.c.ρq_rai)) > 0
 end

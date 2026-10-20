@@ -631,12 +631,15 @@ import ClimaAtmos:
                         ξ_liq = FT(0), ξ_ice = FT(1),
                         precip_incloud_fraction = FT(1), precip_frac_floor = FT(0.1),
                     )
+                    # The packed form forwards `sgs_moments.λ_eq`, so it equals
+                    # the positional form with the same `λ_eq` passed explicitly.
                     @test microphysics_tendencies_1m(
                         BMT.Microphysics1Moment(), quad, mp, thp, ρ, T, w, q_tot,
                         FT(0), q_icl, FT(2e-5), FT(3e-5), T′T′, q′q′, FT(0.6),
-                        m.λ_lagrange, FT(1), dt, nsubs, λ_i, mu_S, FT(0.3), m.sigma_S,
-                        opts,
-                    ) == rank_thin
+                        m, FT(1), dt, nsubs, λ_i, mu_S, FT(0.3), opts,
+                    ) == microphysics_tendencies_1m(
+                        args_m..., FT(1), FT(0.3), m.sigma_S, FT(0.1), m.λ_eq,
+                    )
                     @test microphysics_tendencies_1m(
                         args_m..., FT(1), FT(0.3), m.sigma_S, FT(0.5),
                     ) == microphysics_tendencies_1m(

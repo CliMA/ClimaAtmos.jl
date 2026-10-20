@@ -490,6 +490,32 @@ using ClimaAtmos
                     @test isfinite(result_no_var.dq_lcl_dt)
                 end
 
+                # Test 4b: Subsaturated tail (μ_S < -√3 σ_S) with λ_eq from
+                # _compute_sgs_moments condenses toward q_c_eq > 0 when q_c = 0,
+                # eliminating the discrete 3-point GH support cutoff.
+                @testset "Subsaturated Tail Condensation (μ_S < -√3 σ_S)" begin
+                    quad = ClimaAtmos.SGSQuadrature(FT; quadrature_order = 3)
+                    σ_q = FT(1e-3)
+                    q_tot_sub = q_sat_mean - FT(2) * σ_q
+                    m_sub = ClimaAtmos._compute_sgs_moments(
+                        tps, ρ, T_mean, q_tot_sub, FT(0),
+                        quad, FT(0), σ_q^2, FT(0), FT(1),
+                    )
+                    @test q_tot_sub - q_sat_mean < -sqrt(FT(3)) * m_sub.sigma_S
+                    @test m_sub.λ_eq > FT(-sqrt(FT(3))) * m_sub.sigma_S
+                    opts = ClimaAtmos.SGSMicrophysicsOptions(
+                        FT(0), FT(0), FT(0), FT(0.5),
+                    )
+                    res_sub = microphysics_tendencies_1m(
+                        BMT.Microphysics1Moment(),
+                        quad, mp, tps, ρ,
+                        T_mean, FT(0), q_tot_sub, FT(0), FT(0), FT(0), FT(0),
+                        FT(0), σ_q^2, FT(0), m_sub, FT(1), dt, nsubs_quad,
+                        FT(1), q_tot_sub - q_sat_mean, FT(1), opts,
+                    )
+                    @test res_sub.dq_lcl_dt + res_sub.dq_icl_dt > FT(0)
+                end
+
                 # Test 5: Non-quadrature (direct) evaluation
                 @testset "Direct (non-quadrature) evaluation" begin
                     result_direct_wrapper = microphysics_tendencies_1m(
