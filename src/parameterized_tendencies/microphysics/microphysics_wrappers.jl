@@ -208,6 +208,20 @@ end
 ### 1 Moment Microphysics
 ###
 
+# `mp` and `tps` may arrive `Val`-wrapped. A `Val{p}()` is zero-size and carries
+# its value in its type, so the field costs nothing and the parameters fold to
+# literals instead of being read back from the struct -- worth 162 registers and
+# a doubling of occupancy in the SGS quadrature kernel, which is latency-bound
+# at the 255-register cap. `_unwrapped` is the identity for bare parameters.
+@inline _unwrapped(p) = p
+@inline _unwrapped(::Val{P}) where {P} = P
+
+# Only on the device. A struct type parameter is boxed, so on the host each use
+# copies it back out and allocates per point; the device compiler has no heap
+# and folds it to a literal instead.
+@inline _fold(::ClimaComms.AbstractCPUDevice, p) = p
+@inline _fold(::ClimaComms.AbstractDevice, p) = Val(p)
+
 """
     Microphysics1MEvaluator{S, MP, TPS, FT, Args}
 
@@ -249,20 +263,6 @@ quadrature points.
   - `nsubs`: Number of substeps in the tendency averaging.
   - `args`: Extra trailing arguments forwarded to the CloudMicrophysics call.
 """
-# `mp` and `tps` may arrive `Val`-wrapped. A `Val{p}()` is zero-size and carries
-# its value in its type, so the field costs nothing and the parameters fold to
-# literals instead of being read back from the struct -- worth 162 registers and
-# a doubling of occupancy in the SGS quadrature kernel, which is latency-bound
-# at the 255-register cap. `_unwrapped` is the identity for bare parameters.
-@inline _unwrapped(p) = p
-@inline _unwrapped(::Val{P}) where {P} = P
-
-# Only on the device. A struct type parameter is boxed, so on the host each use
-# copies it back out and allocates per point; the device compiler has no heap
-# and folds it to a literal instead.
-@inline _fold(::ClimaComms.AbstractCPUDevice, p) = p
-@inline _fold(::ClimaComms.AbstractDevice, p) = Val(p)
-
 struct Microphysics1MEvaluator{S, MP, TPS, FT, Args <: Tuple}
     scheme::S
     mp::MP
