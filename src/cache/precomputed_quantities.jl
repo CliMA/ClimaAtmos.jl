@@ -69,7 +69,8 @@ velocity and thermodynamic quantities (`ᶜp` is shared across all subdomains):
 
 For implicit microphysics, Dual-compatible copies are also allocated: the
 density-weighted 0M sources `ᶜρ_dq_tot_dt` and `ᶜρ_de_tot_dt`, and (for all
-non-dry models) `surface_rain_flux`, `surface_snow_flux`, and
+non-dry models) `surface_rain_flux`, `surface_snow_flux`,
+`surface_rain_energy_flux`, `surface_snow_energy_flux`, and
 `col_integrated_precip_energy_tendency`, which are rewritten from the current
 Newton iterate during the implicit solve.
 """
@@ -156,6 +157,8 @@ function implicit_precomputed_quantities(Y, atmos)
             (;
                 surface_rain_flux = zeros(axes(Fields.level(Y.f, half))),
                 surface_snow_flux = zeros(axes(Fields.level(Y.f, half))),
+                surface_rain_energy_flux = zeros(axes(Fields.level(Y.f, half))),
+                surface_snow_energy_flux = zeros(axes(Fields.level(Y.f, half))),
                 col_integrated_precip_energy_tendency = zeros(
                     axes(Fields.level(Geometry.WVector.(Y.f.u₃), half)),
                 ),
@@ -220,6 +223,9 @@ function precomputed_quantities(Y, atmos)
     gs_quantities = (;
         ᶜwₜqₜ = similar(Y.c, Geometry.WVector{FT}),
         ᶜwₕhₜ = similar(Y.c, Geometry.WVector{FT}),
+        # Liquid-phase (cloud liquid + rain) part of ᶜwₕhₜ, used to split the
+        # surface precipitation energy flux into rain and snow
+        ᶜwₕhₗ = similar(Y.c, Geometry.WVector{FT}),
         # Moist buoyancy gradient N² at centers; same physical quantity as the
         # face-native `ᶠK`-pipeline `ᶠbuoygrad`, built from the centered
         # (cloud-fraction-blended) vertical gradient instead of the two-point
@@ -340,6 +346,8 @@ function precomputed_quantities(Y, atmos)
     surface_precip_fluxes = (;
         surface_rain_flux = zeros(axes(Fields.level(Y.f, half))),
         surface_snow_flux = zeros(axes(Fields.level(Y.f, half))),
+        surface_rain_energy_flux = zeros(axes(Fields.level(Y.f, half))),
+        surface_snow_energy_flux = zeros(axes(Fields.level(Y.f, half))),
     )
     sedimentation_quantities =
         atmos.microphysics_model isa NonEquilibriumMicrophysics ?
