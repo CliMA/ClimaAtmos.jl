@@ -262,14 +262,17 @@ use_sgs_quadrature:
   help: "Enable subgrid-scale quadrature integration for microphysics tendencies. When true, microphysics tendencies are integrated over the joint SGS PDF of (T, q_tot). [`true` (default), `false`]"
   value: true
 tq_correlation_model:
-  help: "Closure for the SGS T-q correlation that couples σ_T and σ_q in the sampled joint PDF. `constant` uses the prescribed `Tq_correlation_coefficient`. `diagnosed` builds T′q′ as the sum of the covariance blocks consistent with the variance decomposition — turbulent (prescribed ρ_turb · σ_T,turb · σ_q,turb) and vertical uniform-box (Δz² ∂_z θ_li · ∂_z q_tot / 12); the isentropic horizontal block carries no θ′ and contributes none — then forms ρ = T′q′ / √(T′T′ q′q′), falling back to the prescribed value where the variances vanish. [`constant` (default), `diagnosed`]"
-  value: "constant"
+  help: "Closure for the SGS T-q correlation that couples σ_T and σ_q in the sampled joint PDF. `diagnosed` uses the covariance of the subgrid displacement that produces the variances, ρ = T′q′ / √(T′T′ q′q′), falling back to the prescribed `Tq_correlation_coefficient` where the variances vanish. `constant` uses the prescribed coefficient everywhere. [`diagnosed` (default), `constant`]"
+  value: "diagnosed"
 sgs_distribution:
   help: "Distribution type for SGS quadrature over microphysics. [`gaussian` (default), `lognormal`, `mean` (grid-mean only, no SGS sampling)]"
   value: "gaussian"
 quadrature_order:
   help: "Quadrature order for SGS integration (1-5). Higher orders are more accurate but slower. Default: 3"
   value: 3
+sgs_variance_curvature:
+  help: "Evaluate the equilibrium SGS condensate E[max(0, S)] under the vertical displacement acting on the curved profile of the saturation excess, S = μ_S + lin x + ½ curv (x² − 1) + h with x standard normal, so that the moist tail is bounded by the largest excess the displaced (quadratic) profile reaches, μ_S + (lin² + curv²)/(2|curv|) for curv < 0. `false` keeps the truncated-Gaussian expectation. [`false` (default), `true`]"
+  value: false
 microphysics_n_substeps:
   help: "Number of susbteps for time averaging bulk microphysics tendencies without subgrid-scale quadrature. Default: 3"
   value: 3
@@ -286,8 +289,8 @@ rain_terminal_velocity:
   help: "Rain sedimentation velocity for 1M microphysics [`Fixed` (default), `Blk1M` (1-moment power law), `Chen2022`]"
   value: "Fixed"
 snow_terminal_velocity:
-  help: "Snow sedimentation velocity for 1M microphysics [`Fixed`, `Blk1M` (1-moment power law), `Chen2022` (default, Chen et al. 2022 large ice)]"
-  value: "Chen2022"
+  help: "Snow sedimentation velocity for 1M microphysics [`Fixed` (default), `Blk1M` (1-moment power law), `Chen2022` (Chen et al. 2022 large ice)]"
+  value: "Fixed"
 cloud_liquid_formation:
   help: "Cloud liquid formation option for 1M microphysics [`CloudLiquidFormation` (default), ~]"
   value: "CloudLiquidFormation"

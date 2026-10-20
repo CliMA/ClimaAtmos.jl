@@ -93,6 +93,18 @@ and `q_tot` [1/m], for physical scalars:
     (coeffs.Cq_unsat + cf * coeffs.ΔCq) * ∂qt∂z
 
 """
+    dry_N²(coeffs, ∂θli∂z, ∂qt∂z)
+
+Return the unsaturated (dry) buoyancy gradient `N²_dry = ∂b/∂z|_{cf=0}` [1/s²]
+from precomputed chain-rule coefficients (`buoyancy_gradient_coefficients`) and
+the projected vertical gradients of `θ_li` [K/m] and `q_tot` [1/m]:
+
+    ∂b/∂z|_{cf=0} = Cθ_unsat ∂θli/∂z + Cq_unsat ∂qt/∂z.
+"""
+@inline dry_N²(coeffs, ∂θli∂z, ∂qt∂z) =
+    coeffs.Cθ_unsat * ∂θli∂z + coeffs.Cq_unsat * ∂qt∂z
+
+"""
     buoyancy_gradients(ebgc::AbstractEnvBuoyGradClosure, thermo_params,
                        bg_model::EnvBuoyGradVars)
 
@@ -534,6 +546,51 @@ grids) do not underflow through the intermediate `a*b`.
                 ((a < zero(a)) & (b < zero(b)))
     denom = ifelse(same_sign, a + b, one(a))
     return ifelse(same_sign, 2 * a * (b / denom), zero(a))
+end
+
+"""
+    set_displacement_buoyancy_gradient!(ᶜN²_disp, ᶜbg_coeffs, ᶠ∂θli∂z, ᶠ∂qt∂z)
+
+Write the dry face-maximum buoyancy gradient `N²_disp` [1/s²] for the vertical
+displacement scale `l_d` into the center scalar field `ᶜN²_disp`, from the
+precomputed chain-rule coefficients `ᶜbg_coeffs` and the physical face gradients
+`ᶠ∂θli∂z` and `ᶠ∂qt∂z`:
+
+    N²_disp = max(dry_N²(coeffs, ∂θli∂z⁻, ∂qt∂z⁻), dry_N²(coeffs, ∂θli∂z⁺, ∂qt∂z⁺)).
+
+Evaluating the buoyancy barrier on the bounding faces rather than on the
+Van Leer harmonic-mean center gradients keeps `N²_disp` at the face stratification
+in a cell adjacent to a sharp capping inversion (where one bounding face is
+nearly neutral and the other carries the inversion jump), while using the dry
+coefficients keeps the moist latent-heat reduction (`cf ΔCθ < 0`) at cloud base
+from weakening the stratification barrier. At the domain boundaries, where
+`ᶠgradᵥ` imposes a zero-gradient BC, the adjacent interior face gradient is used
+via `SetValue`, matching `ᶜVanLeer_gradient!`.
+"""
+function set_displacement_buoyancy_gradient!(
+    ᶜN²_disp,
+    ᶜbg_coeffs,
+    ᶠ∂θli∂z,
+    ᶠ∂qt∂z,
+)
+    nc = Spaces.nlevels(axes(ᶜN²_disp))
+    ᶜθ_below = Operators.BottomBiasedF2C(
+        bottom = Operators.SetValue(Fields.level(ᶠ∂θli∂z, 1 + Fields.half)),
+    )
+    ᶜθ_above = Operators.TopBiasedF2C(
+        top = Operators.SetValue(Fields.level(ᶠ∂θli∂z, nc - Fields.half)),
+    )
+    ᶜq_below = Operators.BottomBiasedF2C(
+        bottom = Operators.SetValue(Fields.level(ᶠ∂qt∂z, 1 + Fields.half)),
+    )
+    ᶜq_above = Operators.TopBiasedF2C(
+        top = Operators.SetValue(Fields.level(ᶠ∂qt∂z, nc - Fields.half)),
+    )
+    @. ᶜN²_disp = max(
+        dry_N²(ᶜbg_coeffs, ᶜθ_below(ᶠ∂θli∂z), ᶜq_below(ᶠ∂qt∂z)),
+        dry_N²(ᶜbg_coeffs, ᶜθ_above(ᶠ∂θli∂z), ᶜq_above(ᶠ∂qt∂z)),
+    )
+    return ᶜN²_disp
 end
 
 """

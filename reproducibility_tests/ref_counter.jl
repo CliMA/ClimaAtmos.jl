@@ -34,6 +34,10 @@
 #=
 434
 - New version of SurfaceFluxes.jl v1.4.0 -> v1.5.1
+- SGS (θ_li, q_tot) covariance from subgrid displacements (per-variable scales,
+  floored buoyancy displacement), replacing the turbulent and geometric blocks;
+  diagnosed T–q correlation by default; equilibrium condensate target λ_eq;
+  snow falls at its fixed terminal velocity by default.
 
 433
 - Bound the along-surface SGS q variance by the variance of q_sat along the displacement.

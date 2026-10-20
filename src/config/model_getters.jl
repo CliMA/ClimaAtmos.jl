@@ -1123,11 +1123,12 @@ end
     get_tq_correlation_model(parsed_args)
 
 Return the `AbstractTqCorrelationModel` selected by the `tq_correlation_model` config
-key: `"constant"` → `ConstantTqCorrelation()` (default), `"diagnosed"` → `DiagnosedTqCorrelation()`.
+key: `"diagnosed"` → `DiagnosedTqCorrelation()` (default), `"constant"` →
+`ConstantTqCorrelation()`.
 """
 function get_tq_correlation_model(parsed_args)
     return parse_option(
-        get(parsed_args, "tq_correlation_model", "constant"),
+        get(parsed_args, "tq_correlation_model", "diagnosed"),
         Dict(
             "constant" => ConstantTqCorrelation(),
             "diagnosed" => DiagnosedTqCorrelation(),
@@ -1143,7 +1144,8 @@ Assemble the `AtmosWater` group from a configuration.
 
 Combines `get_microphysics_model`, `get_cloud_model`, `get_sgs_quadrature`, and
 `get_tracer_nonnegativity_method`, and reads `implicit_microphysics` (which selects
-`Implicit` or `Explicit` microphysics timestepping) and the four terminal velocity
+`Implicit` or `Explicit` microphysics timestepping), `sgs_variance_curvature`
+(the curvature-aware equilibrium condensate) and the four terminal velocity
 keys, each mapped to its `AbstractTerminalVelocityMode` with `parse_option`:
 `cloud_liquid_terminal_velocity` (`Fixed`, `Stokes`), `cloud_ice_terminal_velocity`
 (`Fixed`, `Chen2022`), `rain_terminal_velocity` and `snow_terminal_velocity` (`Fixed`,
@@ -1156,6 +1158,7 @@ function AtmosWater(config::AtmosConfig, params, ::Type{FT}) where {FT}
     microphysics_model = get_microphysics_model(pa)
     sgs_quadrature = get_sgs_quadrature(pa, params)
     tq_correlation_model = get_tq_correlation_model(pa)
+    sgs_variance_curvature = pa["sgs_variance_curvature"]
 
     if microphysics_model isa DryModel
         @warn "Running simulations without any moisture present."
@@ -1199,6 +1202,7 @@ function AtmosWater(config::AtmosConfig, params, ::Type{FT}) where {FT}
         tracer_nonnegativity_method = get_tracer_nonnegativity_method(pa),
         sgs_quadrature,
         tq_correlation_model,
+        sgs_variance_curvature,
         terminal_velocity_liquid,
         terminal_velocity_ice,
         terminal_velocity_rain,

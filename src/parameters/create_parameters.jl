@@ -568,8 +568,6 @@ function SGSQuadratureParameters(
         :sgs_variance_geometric_coeff => :sgs_variance_geometric_coeff,
         :sgs_variance_horizontal_scale_factor =>
             :sgs_variance_horizontal_scale_factor,
-        :sgs_variance_vertical_scale_factor =>
-            :sgs_variance_vertical_scale_factor,
         :sgs_variance_max_rel_std => :sgs_variance_max_rel_std,
         :sgs_liquid_uniform_fraction => :sgs_liquid_uniform_fraction,
         :sgs_ice_uniform_fraction => :sgs_ice_uniform_fraction,
@@ -599,9 +597,24 @@ function SGSQuadratureParameters(
         cloud_fraction_floor_release_abs_margin = FT(1),
         cloud_fraction_floor_release_sharpness = FT(1),
         cloud_fraction_floor_residual = FT(1),
-        # Depth [m] of the along-surface displacement of the geometric
-        # variance block.
-        sgs_variance_isentropic_depth = FT(1000),
+        # Unresolved vertical motions in the variance closure
+        # (`materialized_displacement_length!`): velocity scale [m/s] at the
+        # reference horizontal grid scale [m], the exponent of its growth with
+        # the grid scale, and the persistence time [s] in quiescent neutral air.
+        # Calibrated (with the per-variable scales below and
+        # `sgs_variance_horizontal_scale_factor` ≈ 2.1) against the within-cell
+        # moments of 3.75 km global MPAS (DYAMOND) coarse-grained to 60–240 km,
+        # cross-checked on 4 km WRF (CONUS404); τ_0 is bounded below (≳ 300 s)
+        # but not above by these data.
+        sgs_variance_vertical_velocity_floor = FT(1.6),
+        sgs_variance_floor_reference_resolution = FT(1.2e5),
+        sgs_variance_floor_resolution_exponent = FT(2 // 3),
+        sgs_variance_floor_time_scale = FT(300),
+        # Per-variable displacement scale ratios (θ_li relative to q_tot) and
+        # horizontal displacement cross-correlation (`set_covariance_cache!`).
+        sgs_variance_theta_horizontal_scale_ratio = FT(0.7),
+        sgs_variance_theta_vertical_scale_ratio = FT(0.36),
+        sgs_variance_horizontal_cross_correlation = FT(0.5),
         # Equilibrium-ratio modulator weight (see `sgs_variance_fidelity`).
         sgs_fidelity_equilibrium_weight = FT(0.5),
         # Precipitation-fraction placement of rain and snow over the quadrature:
@@ -627,6 +640,13 @@ function SGSQuadratureParameters(
         )
     parameters =
         merge(parameters, provisional_defaults, provisional_params, overrides)
+    r_h_θq = parameters.sgs_variance_horizontal_cross_correlation
+    -1 <= r_h_θq <= 1 || throw(
+        ArgumentError(
+            "sgs_variance_horizontal_cross_correlation must lie in [-1, 1] " *
+            "for the SGS covariance to be positive semi-definite; got $r_h_θq",
+        ),
+    )
     CAP.SGSQuadratureParameters{FT}(; parameters...)
 end
 

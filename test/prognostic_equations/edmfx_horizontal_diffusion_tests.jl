@@ -121,8 +121,8 @@ box_config_dict(; extra...) = bomex_edmfx_config_dict(;
     # The moist air mass tendency matches the ρq_tot tendency bitwise.
     @test parent(Yₜ.c.ρ) == parent(Yₜ.c.ρq_tot)
 
-    # Rain and snow get no horizontal transport, even when perturbed: the
-    # vertical path gives them only K_e, which has no horizontal analogue.
+    # Rain and snow get no horizontal transport, even when perturbed, as they
+    # get none in the vertical.
     @test maximum(abs, parent(Y.c.ρq_rai)) > 0
     @test perturbed_max[:ρq_rai] == 0
 

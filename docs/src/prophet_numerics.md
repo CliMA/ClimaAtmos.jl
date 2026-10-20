@@ -160,9 +160,9 @@ enthalpy is subtracted; the ``q_t`` flux also increments ``\rho``,
 because subgrid moisture transport moves moist air mass.
 
 The diffusive fluxes are evaluated at faces from the face-native diffusivities
-``K_h``, ``K_u``, ``K_e`` (see
-[Closures](prophet_closures.md#Capping-inversions-as-unresolved-interfaces)).
-Two structural details matter for reading the code:
+``K_h``, ``K_u`` (see
+[Closures](prophet_closures.md#Unresolved-inversions)).
+One structural detail matters for reading the code:
 
   - The turbulent-mixing component ``K_h`` acts on
     ``q_{t,\mathrm{eff}} = q_t - q_r - q_s``, the suspended water, distributed
@@ -171,10 +171,6 @@ Two structural details matter for reading the code:
     Energy diffuses as
     ``-K_h [\nabla s_d + (h_{\mathrm{eff}} + \Phi) \nabla q_{t,\mathrm{eff}}]``,
     the dry-static-energy-plus-water-enthalpy decomposition.
-  - The interfacial-entrainment component ``K_e`` acts per species on each
-    species' own gradient, and on ``\nabla h_{\mathrm{tot}}`` for energy,
-    because interfacial entrainment transports every constituent bodily with the
-    parcel.
 
 When `edmfx_vertical_diffusion` is enabled, each draft receives the same
 *specific* tendency the grid mean receives, which is the discrete form of the
@@ -364,7 +360,7 @@ structure, in a fixed order because they accumulate into shared blocks:
 | Update                                    | Covers                                                                                                                                                         |
 |:----------------------------------------- |:-------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `update_sgs_advection_jacobian!`          | vertical advection of the draft scalars (assigns the diagonals, including the ``-I`` residual term) and draft sedimentation with its lateral-mixing correction |
-| `update_sgs_diffusion_jacobian!`          | the diffusive coupling between the grid mean and the drafts, including ``K_e``                                                                                 |
+| `update_sgs_diffusion_jacobian!`          | the diffusive coupling between the grid mean and the drafts                                                                                                    |
 | `update_sgs_entr_detr_jacobian!`          | the entrainment relaxation, including the feedback through the environment residual                                                                            |
 | `update_sgs_boundary_condition_jacobian!` | the surface mass-source relaxation in the first cell                                                                                                           |
 | `update_sgs_massflux_jacobian!`           | the mass-flux contributions to the grid-mean scalars                                                                                                           |
@@ -468,7 +464,7 @@ order matters because the closures depend on each other:
     microphysics tendency cache. Called before every explicit tendency evaluation.
 
 The face diffusivities are computed *after* the cloud fraction because the
-buoyancy gradient that enters ``N_{e,\mathrm{eff}}^2`` depends on it; the
+buoyancy gradient that enters ``N_e^2`` depends on it; the
 mixing length is materialized inside the Picard iteration when the configuration
 uses covariances, and separately otherwise, with `uses_covariances` as the
 shared predicate that keeps the two paths from disagreeing.
