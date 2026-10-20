@@ -49,17 +49,27 @@ end
 """
     ZhangShuAdmissibility(pressure_bound, ρ_min, p_min)
 
-Concave constraint `g(U, off) ≥ 0` on one node's conserved state: the smaller
-of `ρ − ρ_min` and `pressure_bound(U, off) − p_min`, with `pressure_bound` a
-[`ZhangShuPressureBound`](@ref).
+Concave constraint `g(U, off) ≥ 0` on one node's conserved state: the smallest
+of `ρ − ρ_min`, `pressure_bound(U, off) − p_min` (with `pressure_bound` a
+[`ZhangShuPressureBound`](@ref)) and the vapor density
+`ρq_tot − (ρq_lcl + ρq_rai + ρq_icl + ρq_sno)` over the condensate species
+present in `U`.
 """
 struct ZhangShuAdmissibility{G, FT}
     pressure_bound::G
     ρ_min::FT
     p_min::FT
 end
-@inline (g::ZhangShuAdmissibility)(U, off) =
-    min(U.ρ - g.ρ_min, g.pressure_bound(U, off) - g.p_min)
+@inline function (g::ZhangShuAdmissibility)(U, off)
+    z = zero(U.ρ)
+    ρq_vap =
+        (haskey(U, :ρq_tot) ? U.ρq_tot : z) -
+        (haskey(U, :ρq_lcl) ? U.ρq_lcl : z) -
+        (haskey(U, :ρq_rai) ? U.ρq_rai : z) -
+        (haskey(U, :ρq_icl) ? U.ρq_icl : z) -
+        (haskey(U, :ρq_sno) ? U.ρq_sno : z)
+    return min(U.ρ - g.ρ_min, g.pressure_bound(U, off) - g.p_min, ρq_vap)
+end
 
 """
     ZhangShuLimiterCache(Y, params, FT, ρ_min, p_min)
@@ -105,7 +115,8 @@ In each element:
     `e_int,i(T) − e_int,v(T)` for a condensate species, with `T` and `K` from
     `p.precomputed`.
  2. The conserved vector (ρ, ρe_tot, ρuₕ, tracers) is scaled toward its mean
-    by one `θ₂ ∈ [0, 1]` enforcing `ρ ≥ ρ_min` and `p ≥ p_min` at every node
+    by one `θ₂ ∈ [0, 1]` enforcing `ρ ≥ ρ_min`, `p ≥ p_min` and a nonnegative
+    vapor density `ρq_tot − Σ ρq_cond` at every node
     ([`ZhangShuAdmissibility`](@ref)).
 
 The horizontal momentum is staged in scratch as the orthonormal components

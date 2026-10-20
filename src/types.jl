@@ -1799,8 +1799,9 @@ applied in `constrain_state!` to every stage value: each grid-mean tracer is
 scaled at every node toward its WJ-weighted element mean to enforce ρχ ≥ 0, the
 mass and energy of the water this moves going with it, then the grid-mean
 conserved vector (ρ, ρe_tot, ρuₕ, tracers) is scaled toward its mean by one
-θ ∈ [0, 1] enforcing ρ ≥ ρ_min and p ≥ p_min — mean-preserving convex
-combinations, not pointwise clamps. Intended for DG horizontal discretizations,
+θ ∈ [0, 1] enforcing ρ ≥ ρ_min, p ≥ p_min and ρq_tot ≥ Σ ρq_cond —
+mean-preserving convex combinations, not pointwise clamps; the pointwise
+grid-mean microphysics constraints are skipped. Intended for DG horizontal discretizations,
 whose transport is not sign-preserving at nodes. Selected by
 `apply_zhang_shu_limiter: true` (with `update_constrain_state_every` `"stage"`
 or `"dss"`), with the floors from `zhang_shu_rho_min` [kg/m³] and

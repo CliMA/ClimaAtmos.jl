@@ -368,7 +368,8 @@ Enforce physical consistency of the state `Y` by dispatching to the constraint
 helpers selected by the active microphysics and turbulence-convection models.
 
   - `enforce_grid_mean_microphysics_constraints!` runs for
-    `NonEquilibriumMicrophysics1M` and `NonEquilibriumMicrophysics2M`.
+    `NonEquilibriumMicrophysics1M` and `NonEquilibriumMicrophysics2M` unless
+    the Zhang–Shu limiter is active, which then enforces the same bounds.
   - `enforce_edmf_updraft_constraints!` runs for `AbstractEDMF` when
     the `edmfx_filter` configuration flag is enabled
     (`atmos.edmfx_model.filter`); it is itself a no-op for models
@@ -380,7 +381,8 @@ timestepper stage.
 function enforce_physical_constraints!(Y, p, t, atmos::AtmosModel)
     # Grid-mean microphysics: non-negativity + condensate ≤ total moisture.
     if atmos.microphysics_model isa
-       Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M}
+       Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M} &&
+       isnothing(p.numerics.zhang_shu_limiter)
         enforce_grid_mean_microphysics_constraints!(Y, p, t)
     end
 
