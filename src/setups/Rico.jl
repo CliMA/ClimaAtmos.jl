@@ -89,9 +89,11 @@ large_scale_advection_forcing(::Rico, ::Type{FT}) where {FT} =
     (; prof_dTdt = APL.Rico_dTdt(FT), prof_dqtdt = APL.Rico_dqtdt(FT))
 
 
-coriolis_forcing(::Rico, ::Type{FT}) where {FT} =
-    (;
+function coriolis_forcing(::Rico, params)
+    FT = eltype(params)
+    return (;
         prof_ug = APL.Rico_geostrophic_ug(FT),
         prof_vg = APL.Rico_geostrophic_vg(FT),
         coriolis_param = FT(4.5e-5),
     )
+end

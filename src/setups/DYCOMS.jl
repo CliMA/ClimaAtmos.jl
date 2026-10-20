@@ -100,9 +100,11 @@ subsidence_forcing(::DYCOMS, ::Type{FT}) where {FT} =
         z -> -z * D
     end
 
-coriolis_forcing(setup::DYCOMS, ::Type{FT}) where {FT} =
-    (;
+function coriolis_forcing(setup::DYCOMS, params)
+    FT = eltype(params)
+    return (;
         prof_ug = Returns(setup.ug),
         prof_vg = Returns(FT(-5.5)),
         coriolis_param = FT(0), # TODO: check this
     )
+end

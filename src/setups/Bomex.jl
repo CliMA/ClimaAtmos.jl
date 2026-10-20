@@ -91,9 +91,11 @@ subsidence_forcing(::Bomex, ::Type{FT}) where {FT} =
 large_scale_advection_forcing(::Bomex, ::Type{FT}) where {FT} =
     (; prof_dTdt = APL.Bomex_dTdt(FT), prof_dqtdt = APL.Bomex_dqtdt(FT))
 
-coriolis_forcing(::Bomex, ::Type{FT}) where {FT} =
-    (;
+function coriolis_forcing(::Bomex, params)
+    FT = eltype(params)
+    return (;
         prof_ug = APL.Bomex_geostrophic_u(FT),
         prof_vg = z -> FT(0),
         coriolis_param = FT(0.376e-4),
     )
+end

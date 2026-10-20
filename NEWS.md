@@ -4,6 +4,12 @@ ClimaAtmos.jl Release Notes
 main
 ----
 
+- ![][badge-🔥behavioralΔ] Larcform1 computes its Coriolis parameter as
+  `2Ω sin(80°)` with `Ω = CAP.Omega(params)` from ClimaParams
+  (`angular_velocity_planet_rotation`), giving `f ≈ 1.4363e-4 s⁻¹` instead
+  of the hardcoded `1.432e-4 s⁻¹`. The `Setups.coriolis_forcing` hook now takes
+  `(setup, params)` instead of `(setup, FT)`.
+
 0.42.15
 -------
 

@@ -126,10 +126,11 @@ key for them.
 large_scale_advection_forcing(setup, ::Type{FT}) where {FT} = nothing
 
 """
-    coriolis_forcing(setup, ::Type{FT})
+    coriolis_forcing(setup, params)
 
 Return the single-column Coriolis forcing of `setup`, or `nothing` for none
-(the default).
+(the default). `params` is the ClimaAtmos parameter set, so a setup can derive
+its Coriolis parameter from planetary constants such as `CAP.Omega(params)`.
 
 # Returns
 
@@ -138,7 +139,7 @@ Return the single-column Coriolis forcing of `setup`, or `nothing` for none
 `atmos.scm_coriolis` by the model construction layer; there is no config key
 for it.
 """
-coriolis_forcing(setup, ::Type{FT}) where {FT} = nothing
+coriolis_forcing(setup, params) = nothing
 
 """
     surface_condition(setup, params)
@@ -263,7 +264,7 @@ function model_components(setup, params, ::Type{FT}) where {FT}
     return (;
         subsidence = subsidence_forcing(setup, FT),
         ls_adv = large_scale_advection_forcing(setup, FT),
-        scm_coriolis = coriolis_forcing(setup, FT),
+        scm_coriolis = coriolis_forcing(setup, params),
         external_forcing = external_forcing(setup, FT),
         insolation = insolation_model(setup),
         radiation_mode = radiation_model(setup, FT),

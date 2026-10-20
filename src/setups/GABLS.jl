@@ -56,9 +56,11 @@ function surface_condition(::GABLS, params)
     )
 end
 
-coriolis_forcing(::GABLS, ::Type{FT}) where {FT} =
-    (;
+function coriolis_forcing(::GABLS, params)
+    FT = eltype(params)
+    return (;
         prof_ug = APL.GABLS_geostrophic_ug(FT),
         prof_vg = APL.GABLS_geostrophic_vg(FT),
         coriolis_param = FT(1.39e-4),
     )
+end

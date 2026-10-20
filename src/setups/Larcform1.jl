@@ -97,8 +97,15 @@ function surface_condition(::Larcform1, params)
     )
 end
 
-coriolis_forcing(::Larcform1, ::Type{FT}) where {FT} = (;
-    prof_ug = APL.Larcform1_geostrophic_u(FT),
-    prof_vg = APL.Larcform1_geostrophic_v(FT),
-    coriolis_param = FT(1.432e-4),  # 2Ω sin(80°N)
-)
+const LARCFORM1_LATITUDE = 80  # Pithan 2016, Section 2 (degrees north)
+
+function coriolis_forcing(::Larcform1, params)
+    FT = eltype(params)
+    # f = 2Ω sin(φ), with the planetary rotation rate Ω from ClimaParams
+    coriolis_param = 2 * CAP.Omega(params) * sind(FT(LARCFORM1_LATITUDE))
+    return (;
+        prof_ug = APL.Larcform1_geostrophic_u(FT),
+        prof_vg = APL.Larcform1_geostrophic_v(FT),
+        coriolis_param,
+    )
+end

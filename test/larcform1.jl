@@ -42,9 +42,11 @@ import Thermodynamics as TD
     @test profs.u(FT(LC.z_tropopause) + 500) ≈ FT(0)
     @test profs.v(0) ≈ FT(0)
 
-    # Coriolis: 2Ω sin(80°N)
-    cf = Setups.coriolis_forcing(setup, FT)
-    @test cf.coriolis_param ≈ FT(1.432e-4) rtol = 1e-3
+    # Coriolis: 2Ω sin(80°N), with Ω from ClimaParams
+    params = simulation.integrator.p.params
+    cf = Setups.coriolis_forcing(setup, params)
+    @test cf.coriolis_param ≈ 2 * CAP.Omega(params) * sind(FT(80))
+    @test cf.coriolis_param ≈ FT(1.4363e-4) rtol = 1e-3
     @test cf.prof_ug(0) ≈ FT(5)
 
     # Surface condition: temperature initialized to 250 K
