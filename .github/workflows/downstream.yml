@@ -6,9 +6,7 @@ on:
     tags: '*'
   pull_request:
 
-# Needed to allow julia-actions/cache to delete old caches that it has created
 permissions:
-  actions: write
   contents: read
 
 concurrency:
@@ -26,17 +24,26 @@ jobs:
           - '1.11'
     steps:
       - uses: actions/checkout@v7
-      - uses: julia-actions/setup-julia@v3
-        with:
-          version: ${{ matrix.version }}
-      - uses: julia-actions/cache@v3
-
-      - uses: julia-actions/julia-buildpkg@v1
       - uses: actions/checkout@v7
         with:
           repository: 'CliMA/ClimaCoupler.jl'
           path: ClimaCoupler.jl
+      - uses: julia-actions/setup-julia@v3
+        with:
+          version: ${{ matrix.version }}
+      - id: depot
+        uses: ./.github/actions/julia-depot-restore
+        with:
+          prefix: downstream-julia${{ matrix.version }}-${{ runner.os }}
+          hash: ${{ hashFiles('Project.toml', 'ClimaCoupler.jl/experiments/AMIP/*.toml') }}
+
+      - uses: julia-actions/julia-buildpkg@v1
       - run: |
           julia --color=yes --project=ClimaCoupler.jl/experiments/AMIP/ -e 'using Pkg; Pkg.instantiate()'
           julia --color=yes --project=ClimaCoupler.jl/experiments/AMIP/ -e 'using Pkg; Pkg.develop(; path = ".")'
           julia --color=yes --project=ClimaCoupler.jl/experiments/AMIP/ ClimaCoupler.jl/experiments/test/runtests.jl
+      - uses: ./.github/actions/julia-depot-save
+        if: ${{ !cancelled() }}
+        with:
+          key: ${{ steps.depot.outputs.key }}
+          cache-hit: ${{ steps.depot.outputs.cache-hit }}

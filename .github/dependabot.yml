@@ -1,7 +1,9 @@
 # https://docs.github.com/github/administering-a-repository/configuration-options-for-dependency-updates
 # Julia support: https://discourse.julialang.org/t/psa-github-dependabot-now-supports-julia/134997
 updates:
-- directory: /
+- directories:
+  - /
+  - /.github/actions/*
   ignore:
   - dependency-name: "github/gh-aw-actions/**" # Managed by gh aw compile. Version-locked to the gh-aw compiler; do not bump.
   exclude-paths:
