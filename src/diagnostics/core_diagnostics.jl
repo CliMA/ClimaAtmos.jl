@@ -158,8 +158,17 @@ add_diagnostic_variable!(short_name = "pfull", units = "Pa",
 ###
 # Vorticity (3d)
 ###
-function compute_rv(_, cache, _)
-    vort = @. w_component(WVec(wcurlₕ(cache.precomputed.ᶜu)))  # TODO: Allocates
+function compute_rv(state, cache, _)
+    ᶜu = cache.precomputed.ᶜu
+    if is_dg_horizontal(axes(ᶜu))
+        # `wcurlₕ` is only the volume term of the integrated-by-parts curl; the
+        # interface term is supplied by DSS, which is a no-op on DG spaces. Use
+        # the model's ω³ instead: strong curl plus the central interface lifting.
+        ᶜω³ = similar(ᶜu, CT3{Spaces.undertype(axes(ᶜu))})  # TODO: Allocates
+        dg_ω³!(ᶜω³, state)
+        return @. lazy(w_component(WVec(ᶜω³)))
+    end
+    vort = @. w_component(WVec(wcurlₕ(ᶜu)))  # TODO: Allocates
     # We need to ensure smoothness, so we call DSS
     Spaces.weighted_dss!(vort)
     return vort
