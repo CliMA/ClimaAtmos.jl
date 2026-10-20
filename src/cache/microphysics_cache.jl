@@ -735,6 +735,12 @@ function update_implicit_microphysics_cache!(
     mm::NonEquilibriumMicrophysics1M,
     tm,
 )
+    # Experimental (TRMM dt-sensitivity test): with `CA_MP_NEWTON_REFRESH=1`, the
+    # 1M process rates are recomputed from the Newton iterate, so that the
+    # condensation responds to the supersaturation produced within the step.
+    if get(ENV, "CA_MP_NEWTON_REFRESH", "") == "1"
+        set_microphysics_tendency_cache!(Y, p, mm, tm)
+    end
     # Recompute the sedimentation velocities from the current implicit-solver state.
     # This is expecially important for PrognosticEDMFX `ᶜwᵣʲs`.
     # Leaving updraft velocities at their explicit-stage values treats the
@@ -913,10 +919,16 @@ end
 ### 1 Moment Microphysics
 ###
 
+# Experimental (TRMM dt-sensitivity test): the environment variable `CA_MP_AVG_DT`
+# [s] caps the window over which the 1M tendencies are time-averaged, so that the
+# window can be held fixed while the model timestep varies. Unset, the window is dt.
+microphysics_averaging_window(dt) =
+    min(dt, oftype(dt, parse(Float64, get(ENV, "CA_MP_AVG_DT", "Inf"))))
+
 function set_microphysics_tendency_cache!(
     Y, p, mp1m::NonEquilibriumMicrophysics1M, _,
 )
-    (; dt) = p
+    dt = microphysics_averaging_window(p.dt)
     (; ᶜT, ᶜu, ᶜq_tot_nonneg, ᶜmp_tendency) = p.precomputed
 
     thp = CAP.thermodynamics_params(p.params)
@@ -960,7 +972,7 @@ end
 function set_microphysics_tendency_cache!(
     Y, p, mp1m::NonEquilibriumMicrophysics1M, tm::PrognosticEDMFX,
 )
-    (; dt) = p
+    dt = microphysics_averaging_window(p.dt)
     (; ᶜρʲs, ᶜTʲs, ᶜuʲs, ᶜq_tot_nonnegʲs) = p.precomputed
     (; ᶜu⁰, ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰) = p.precomputed
     (; ᶜmp_tendency⁰, ᶜmp_tendencyʲs) = p.precomputed

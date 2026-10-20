@@ -34,6 +34,9 @@ function initialize_implicit_stage_problem!(Y, p, dtγ)
 
     if p.atmos.turbconv_model isa PrognosticEDMFX
 
+        edmf_newton_resolve() &&
+            (edmf_newton_resolve_stage[] = (; Y_stage_start = copy(Y), dtγ))
+
         (; ᶠu₃_tendencyʲs, ᶜρa_tendencyʲs) = p.precomputed
         n = n_mass_flux_subdomains(p.atmos.turbconv_model)
 
@@ -54,6 +57,45 @@ function initialize_implicit_stage_problem!(Y, p, dtγ)
             @. ᶜρa_tendencyʲs.:($$j) += Y.c.sgsʲs.:($$j).ρa / dtγ
         end
     end
+end
+
+# Experimental (TRMM dt-sensitivity test): with `CA_EDMF_NEWTON_RESOLVE=1`, the
+# analytic u₃ and ρa stage solves are repeated on every Newton iterate, using the
+# updraft buoyancy of the iterate instead of the buoyancy of the explicit closures.
+const edmf_newton_resolve_stage = Ref{Any}(nothing)
+edmf_newton_resolve() = get(ENV, "CA_EDMF_NEWTON_RESOLVE", "") == "1"
+
+"""
+    resolve_sgs_u₃_ρa_stage!(Y, p)
+
+Refresh `ᶜρ_diffʲs` from the draft density of the iterate `Y`, repeat the
+analytic u₃ and ρa solves from the stage-start state stored by
+`initialize_implicit_stage_problem!`, and overwrite the cached stage tendencies
+`ᶠu₃_tendencyʲs` and `ᶜρa_tendencyʲs`. No-op before the first implicit stage.
+"""
+function resolve_sgs_u₃_ρa_stage!(Y, p)
+    stage = edmf_newton_resolve_stage[]
+    isnothing(stage) && return nothing
+    (; Y_stage_start, dtγ) = stage
+    (; ᶠu₃_tendencyʲs, ᶜρa_tendencyʲs, ᶜρʲs, ᶜρ_diffʲs) = p.precomputed
+    n = n_mass_flux_subdomains(p.atmos.turbconv_model)
+    for j in 1:n
+        @. ᶜρ_diffʲs.:($$j) = (ᶜρʲs.:($$j) - Y.c.ρ) / ᶜρʲs.:($$j)
+    end
+    Y_solve = copy(Y)
+    for j in 1:n
+        Y_solve.f.sgsʲs.:($j).u₃ .= Y_stage_start.f.sgsʲs.:($j).u₃
+        Y_solve.c.sgsʲs.:($j).ρa .= Y_stage_start.c.sgsʲs.:($j).ρa
+    end
+    solve_sgs_u₃_implicit_stage_analytic!(Y_solve, p, dtγ)
+    solve_sgs_ρa_implicit_stage_analytic!(Y_solve, p, dtγ)
+    for j in 1:n
+        @. ᶠu₃_tendencyʲs.:($$j) =
+            (Y_solve.f.sgsʲs.:($$j).u₃ - Y_stage_start.f.sgsʲs.:($$j).u₃) / dtγ
+        @. ᶜρa_tendencyʲs.:($$j) =
+            (Y_solve.c.sgsʲs.:($$j).ρa - Y_stage_start.c.sgsʲs.:($$j).ρa) / dtγ
+    end
+    return nothing
 end
 
 """
