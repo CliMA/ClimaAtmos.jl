@@ -23,6 +23,8 @@ CA.solve_atmos!(simulation)
 
 Customize it through the [grid](grids.md) (`SphereGrid`), the
 [setup](setups.md), and the `AtmosModel` components.
+[Example: Moist Baroclinic Wave](moist_baroclinic_wave.md) builds a global
+case piece by piece and plots the result.
 
 ## Choosing a horizontal resolution
 

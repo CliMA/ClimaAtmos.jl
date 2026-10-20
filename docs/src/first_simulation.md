@@ -122,6 +122,8 @@ NetCDF files with ClimaAnalysis.
 
 ## Next steps
 
+  - [Example: Moist Baroclinic Wave](@ref): a global run small enough for a
+    laptop, from building the model to plotting the output
   - [Scripting Simulations](@ref): configure the grid, model, setup, and
     diagnostics from a script, and step the integrator interactively
   - [Script vs Config Interface](@ref): the same runs configured from YAML files
