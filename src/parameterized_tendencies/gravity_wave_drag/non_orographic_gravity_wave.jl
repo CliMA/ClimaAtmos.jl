@@ -1397,9 +1397,17 @@ order and removed from the mask when it fails:
  3. Breaking, `B₀[n]/ĉ³ ≥ ½(ρ_{k+1}/ρ_source)·k/N`, or a sign change of `ĉ` relative to its
     launch-level value (critical-level absorption).
 
-A bin removed at or above the launch level adds its `B₀[n]` to the level's flux sum `fm`;
-at the top level every surviving bin is removed and deposited there, so the flux escaping
-the model top is available to `gw_deposit`. The drag is then
+A bin removed by test 1 or 3 adds its `B₀[n]` to the layer's flux sum `fm`; a reflected
+bin (test 2) is removed without depositing anything, which is the only way the kernel
+discards launched flux. At the top level every surviving bin is removed and deposited
+there, so the flux escaping the model top is available to `gw_deposit`.
+
+No test is applied at the launch level itself: the first one uses the level above it, so a
+bin already unstable at launch deposits into the layer between the launch level and the
+next level. This departs from [alexander1999](@cite), whose Eq. (22) instead removes such
+waves from the launch spectrum; the *Non-orographic Gravity Waves* page gives the reasons.
+
+The drag is then
 `(ρ_source/√(ρ_k·ρ_{k+1}))·fm·ε/(z_{k+1} - z_k)`, zero below the launch level, where the
 intermittency `ε` is `calc_intermitency` for AD99 and the convective coverage
 `a_cover/(ρ_source·nk)` for Beres.
@@ -1516,9 +1524,13 @@ function waveforcing_column_accumulate!(
             ) do (mask, fm), (n)
                 if (mask[n]) == true
                     c_hat = c[n] - u_kp1 # c0mu
-                    # f phase speed matches the wind speed, remove c(n) from the set of propagating waves.
+                    # The phase speed matches the wind at this level: this is the wave's
+                    # critical level, so it is absorbed in the layer below and deposits
+                    # its flux there, like the sign-change test further down (which is
+                    # skipped here because the reflection test needs `c_hat ≠ 0`).
                     if c_hat == 0.0
                         mask = Base.setindex(mask, false, n)
+                        fm = fm + B0[n]
                     else
                         c_hat0 = c[n] - u_source_eff
                         # define the criterion which determines if wave is reflected at this level (test).

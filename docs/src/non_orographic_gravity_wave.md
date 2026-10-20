@@ -59,12 +59,20 @@ Q(z,c) = \frac{\rho_0}{\rho(z)} \frac{2N(z)B_0(c)}{k[c-u(z)]^3}
 
 $Q(z,c)$ determines whether the monochromatic wave of phase speed $c$ becomes unstable at height $z$.
 
-The test is applied to every layer from the launch level upward, i.e., at levels $z_n \geq z_0$, starting with the layer between the launch level and the level above it. Within each layer the surviving waves are tested in order:
+The tests are applied to every layer from the launch level upward. The first layer is the one between the launch level $z_0$ and the level above it, $z_1$, and its tests use the values at $z_1$. Within each layer the surviving waves are tested in order:
 
-  - **Reflection:** waves with $|\omega(z_n)| = k|c - u(z_n)| \geq \omega_r(z_n)$ would have undergone total internal reflection and are removed from the spectrum. So are waves whose intrinsic phase speed $c - u(z_n)$ is exactly zero. Neither case deposits momentum, so these are the only two cases by which the scheme discards flux.
-  - **Breaking:** among the remaining waves, those that become convectively unstable, i.e., $Q(z_n, c) \geq 1$, or encounter a critical level, i.e., where the intrinsic phase speed has changed sign relative to the source $(c - u_0)(c - u(z_n)) \leq 0$, break between levels $z_n$ and $z_{n+1}$, and their momentum flux is deposited entirely into that layer.
+  - **Reflection:** waves with $|\omega(z_n)| = k|c - u(z_n)| \geq \omega_r(z_n)$ undergo total internal reflection and are removed from the spectrum without depositing momentum. This is the only way the scheme discards launched flux. It needs $|c - u| \gtrsim N/\sqrt{k^2 + \alpha^2}$, about 135 m/s for $N = 0.01\ \mathrm{s^{-1}}$ and the 300 km band, so it is rare.
+  - **Breaking:** among the remaining waves, those that become convectively unstable, i.e., $Q(z_n, c) \geq 1$, or reach a critical level, i.e., where the intrinsic phase speed is zero or has changed sign relative to the source, $(c - u_0)(c - u(z_n)) \leq 0$, break between levels $z_{n-1}$ and $z_n$, and their momentum flux is deposited entirely into that layer.
 
-The breaking criteria starts at the launch level, so a wave that is already unstable at its own launch level deposits into the first layer rather than being discarded.
+#### Waves that are unstable at the launch level
+
+[alexander1999](@cite) apply the reflection and stability tests once more at the launch level itself (their Eqs. 20–22), with $u_0$ and $N(z_0)$, and remove the waves that fail from the launch spectrum: "the remaining waves that are propagating and stable define the input momentum flux spectrum at the source level". This scheme instead skips that launch-level test, so a wave with $Q(z_0, c) \geq 1$ is kept and, since $Q$ grows with height as $\rho_0/\rho$, it almost always breaks in the first layer and deposits its flux there. The reasons are:
+
+ 1. **The flux is generated.** A wave too strong to be stable at its launch level breaks right away, near its source, and decelerates the flow there. Removing it would treat the source as if it never emitted that flux. This matters most for the Beres source, whose spectrum is computed from the convective heating rather than prescribed.
+ 2. **For the AD99 source, the launched flux then equals $F_{S0}$.** The intermittency $\epsilon$ below is normalized by the full spectrum $\sum |B_0|$. Removing waves at launch would make the flux that actually leaves the source $F_{S0}$ times the surviving share, a fraction that varies with the source-level wind and stability. With the waves kept, the only gap between $F_{S0}$ and the deposited flux is the rare reflection above.
+ 3. **It is the all-or-nothing form of saturation.** Saturation schemes (e.g. [lindzen1981](@cite), as used in CAM/WACCM) keep such a wave, cap its flux at the saturation value, and deposit the excess just above the source. In this scheme a wave either keeps all its flux or deposits all of it. A wave capped exactly at the stability limit would break in the next layer anyway, because $Q$ grows with height, so depositing the whole wave in the first layer is the consistent analogue.
+
+The cost is a departure from [alexander1999](@cite): the drag just above the launch level is slightly larger than in the published scheme, and in exchange no launched momentum is lost.
 
 The gravity wave drag at half-levels is then
 
@@ -80,7 +88,7 @@ The drag at full levels is obtained by averaging adjacent half-levels:
 X(z_{n}) = \frac{1}{2} \left[ X(z_{n-1/2}) + X(z_{n+1/2}) \right].
 ```
 
-This averaging is what makes the deposition conservative: the kernel divides each layer's flux by the mass of the layer between two cell centres, and the average then gives half of that layer's drag to the cell below and half to the cell above.
+The kernel converts each layer's flux into a drag by dividing by an estimate of the layer mass, $\sqrt{\rho(z_{n-1})\rho(z_n)}\,\Delta z$, and the averaging then gives half of that drag to the cell below and half to the cell above. Those halves do not land on cells of exactly the mass that was divided by, so the column-integrated drag matches the deposited flux only to second order in the grid spacing. For a uniform grid and density falling off as $e^{-z/H}$ the deposited momentum is exactly $\cosh(\Delta z / 2H)$ times the flux, e.g. $1.003$ for $\Delta z = 1$ km and $H = 7$ km. A stretched grid adds a term of the same order, proportional to the product of the density change and the spacing change between adjacent cells.
 
 Any momentum flux that reaches the model top without breaking is force-broken there and redistributed as a uniform acceleration over the levels at and above the damping level (defined by `nogw_damp_pressure`). The redistribution is mass-weighted, so it deposits exactly the momentum that escaped:
 

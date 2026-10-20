@@ -35,11 +35,14 @@
 #    the levels that receive the momentum) for the budget to close exactly.
 #
 # 3. Source level. A wave can be unstable already at its own launch level. The
-#    old code (inherited from MiMA's `cg_drag.f90`) started checking one level
-#    below the launch level but only recorded deposits at or above it, so such
-#    a wave was dropped and its momentum discarded — a few per cent of the
-#    launched momentum in the extratropics. The fix starts the check AT the
-#    launch level; the test would catch a regression to the old behaviour.
+#    old code (as in MiMA's `cg_drag.f90`) ran the AD99 launch-level test
+#    (Alexander & Dunkerton 1999, Eqs. 20-22): its loop step
+#    `source_level - 1` tests the values at `source_level` and removes the
+#    waves that fail without depositing them, a few per cent of the launched
+#    momentum in the extratropics. The scheme now deliberately skips that test
+#    and deposits these waves in the first layer above the launch level (see
+#    the "Waves that are unstable at the launch level" section of the docs for
+#    why); the test would catch a return to the old behaviour.
 #
 # Each test runs twice: on a single column, and on a cubed sphere where
 # `damp_level` differs from column to column. The sphere case matters because
@@ -585,9 +588,9 @@ end
 # the layer just above the launch; the budget then closes at cosh(Δz/2H)
 # exactly as in test 1.
 #
-# Why this deserves its own test: a past bug made the kernel start its checks
-# one level below the launch (`source_level - 1`), which threw these waves'
-# momentum away entirely. `launch_level_saturated_flux` is a setup check, not
+# Why this deserves its own test: the kernel used to start its loop at
+# `source_level - 1`, which applies the AD99 launch-level test and throws these
+# waves' momentum away entirely. `launch_level_saturated_flux` is a setup check, not
 # a prediction: it computes how much momentum rides on these launch-saturated
 # waves, and the test requires that to be large, proving this case really does
 # exercise the launch level. If `waveforcing_column_accumulate!` ever slips

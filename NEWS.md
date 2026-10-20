@@ -3,6 +3,18 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- ![][badge-💥breaking] The `linear` orographic gravity-wave option and the
+  `LinearOrographicGravityWave` type are removed; they were unreachable (no cache fields,
+  no tendency method). Use `raw_topo`, `raw_topo_online`, or `gfdl_restart`.
+- ![][badge-🔥behavioralΔ] Non-orographic gravity waves (AD99 and Beres) no longer drop
+  waves that are unstable at their launch level: these now deposit their momentum in the
+  first layer above it, a deliberate departure from Alexander & Dunkerton (1999, Eq. 22)
+  explained in the docs. Waves that meet a critical level exactly (`c = u`) now deposit
+  their momentum instead of losing it.
+- ![][badge-🐛bugfix] Non-orographic gravity-wave momentum that escapes through the model
+  top is redistributed over the damping layer as a mass-weighted uniform acceleration, so
+  it is deposited exactly; the old divisor spread one level more than the layer had and
+  ignored the level masses.
 - ![][badge-🐛bugfix] The orographic gravity-wave blocked (non-propagating) drag
   now matches GFDL `topo_drag`: the WKB phase is accumulated layer by layer
   (`Σ Δz·N/V_τ`) and the column weight sum is `Σ Δp·weight`, where each cell's
@@ -940,7 +952,6 @@ main
 - [#4762](https://github.com/CliMA/ClimaAtmos.jl/pull/4762) Include more terms in the `InvZEntrainment` closure.
 - [#4760](https://github.com/CliMA/ClimaAtmos.jl/pull/4760) Diffusion / hyperdiffusion cleanup after [#4753](https://github.com/CliMA/ClimaAtmos.jl/pull/4753) and [#4732](https://github.com/CliMA/ClimaAtmos.jl/pull/4732): remove the now-inert `α_vert_diff_tracer` parameter (and the corresponding `tracer_vertical_diffusion_factor` TOML entries in `longrun_aquaplanet_1M.toml`, `les_isdac.toml`, `prognostic_edmfx_1M.toml`, `prognostic_edmfx_1M_mlcloud.toml`, `single_column_precipitation_test.toml`), remove the also-inert `α_hyperdiff_tracer` parameter (no TOML entries were set), and delete the dead helper `ᶠtotal_enthalpy_gradientᵥ`.
 - [#4744](https://github.com/CliMA/ClimaAtmos.jl/pull/4744) ![][badge-🔥behavioralΔ] Make rain sediment with non-constant velocity
-- [#4754](https://github.com/CliMA/ClimaAtmos.jl/pull/4754) ![][badge-🐛bugfix] Remove the `linear` orographic gravity wave option and the `LinearOrographicGravityWave` type. Fix the non-orographic gravity wave momentum budget, so that the column deposits exactly the momentum the scheme launches.
 
 0.42.4
 -------
