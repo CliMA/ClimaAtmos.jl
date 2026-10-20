@@ -94,6 +94,10 @@ import ..specific
 import ..ᶜspecific_env_value
 import ..correlation_Tq
 
+# DG horizontal discretization helpers (used by the vorticity diagnostic)
+import ..is_dg_horizontal
+import ..dg_ω³!
+
 
 # We need the abbreviations for symbols like curl, grad, and so on
 include(joinpath("..", "utils", "abbreviations.jl"))
