@@ -321,6 +321,9 @@ center_z = Array(Fields.field2array(ᶜz))[:, 1]
             gw_beres_active,
             gw_a_cover,
             gw_flag,
+            gw_zbot,
+            gw_ztop,
+            gw_w_obstacle,
         ) = p.non_orographic_gravity_wave
 
         center_space = axes(Y.c)
@@ -367,6 +370,16 @@ center_z = Array(Fields.field2array(ᶜz))[:, 1]
         # The coverage scaling itself is tested below.
         fill!(gw_a_cover, FT(1.0))
         fill!(gw_flag, FT(0.0))         # tropics flag (AD99 Doppler frame; no effect on Beres)
+        # Envelope consistent with h_heat, and no obstacle updraft. With the
+        # default half-sine shape and the mechanical source off these do not
+        # change the spectrum, but they must be finite.
+        fill!(gw_zbot, FT(2000.0))
+        fill!(gw_ztop, FT(7000.0))
+        fill!(gw_w_obstacle, FT(0.0))
+        # The forcing kernel reads the precomputed launch spectra
+        # gw_beres_B0_u/v, not the scalar source fields above, so rebuild them
+        # from the values just set.
+        CA._beres_precompute_launch_spectra!(p.non_orographic_gravity_wave)
 
         # ------------------------------------------------------------------
         # Call forcing
@@ -492,6 +505,10 @@ center_z = Array(Fields.field2array(ᶜz))[:, 1]
                 p.non_orographic_gravity_wave,
                 (; gw_beres_source = bs_off),
             )
+            # The steady term is folded into the precomputed spectra, so rebuild
+            # them with the steady-OFF parameters (nogw_off shares the B0 arrays
+            # with the original cache; they are restored below).
+            CA._beres_precompute_launch_spectra!(nogw_off)
             # Current src no longer supports merge(::AtmosCache); build a lightweight
             # cache NamedTuple with just the fields the GW forcing path reads.
             p_off = (;
@@ -524,6 +541,7 @@ center_z = Array(Fields.field2array(ᶜz))[:, 1]
                 p_off,
             )
             uf_off = Array(Fields.field2array(uforcing))[:, 1]
+            CA._beres_precompute_launch_spectra!(p.non_orographic_gravity_wave)
             @test all(isfinite, uf_off)
 
             # Steady contribution = (steady ON) − (steady OFF), identical inputs.

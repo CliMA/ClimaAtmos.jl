@@ -983,8 +983,86 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
         return d < d_best ? (w_up, d) : (w_best, d_best)
     end
 
-    # (3) Precompute the per-column launch spectra (u and v azimuths). Zeros for
-    # non-convecting columns; half-sine or Beres-G transient bins per the shape
+    # (3) Precompute the per-column launch spectra (u and v azimuths); see
+    # `_beres_precompute_launch_spectra!`.
+    _beres_precompute_launch_spectra!(p.non_orographic_gravity_wave)
+
+    # --- Diagnostics for source-shape & launched-spectrum ---
+    gw_beres_source.detailed_diagnostics || return
+
+    # Build the launched half-sine Q0·sin(π(z−z_bot)/h) natively, IN the column
+    # where (Q0, z_bot, h) are mutually consistent, so the offline comparison to
+    # Q_conv_ic is a single linear remap rather than a nonlinear reconstruction
+    # from three independently-remapped 2D fields.
+    @. gw_halfsine = ifelse(
+        (ᶜz >= gw_zbot) & (ᶜz <= gw_zbot + gw_h_heat),
+        gw_beres_active *
+        gw_Q0 *
+        sin(FT(π) * (ᶜz - gw_zbot) / max(gw_h_heat, eps(FT))),
+        FT(0),
+    )
+
+    # Launched-spectrum summaries reduced from the SAME precomputed launch spectrum
+    # gw_beres_B0_u the forcing kernel deposits (so they are Beres-G / mechanical
+    # aware, not a recomputed half-sine):
+    # - total launched flux magnitude Σ|B0| (× a_cover deposition factor),
+    # - the flux-weighted phase-speed centroid ⟨c⟩ = Σ c|B0| / Σ|B0|,
+    # both in the zonal direction.
+    let cgrid = gw_c
+        cen(b0) = _beres_b0_centroid(b0, cgrid)
+        @. gw_launch_flux = ifelse(
+            gw_beres_active > FT(0.5),
+            gw_a_cover * _beres_b0_fluxmag(gw_beres_B0_u),
+            FT(0),
+        )
+        @. gw_c_centroid = ifelse(
+            gw_beres_active > FT(0.5),
+            cen(gw_beres_B0_u),
+            FT(0),
+        )
+    end
+
+    # Mechanical (Ext 3) c≈0 launched flux β_mech, zonal direction — the
+    # band-resolved Ext-3 export. β_mech is deposited only in the c≈0 (low-`c`)
+    # bin and its sign carries the E/W deceleration direction (opposes U).
+    let beres = gw_beres_source
+        mech(active, u, N, w) = _beres_mech_flux_value(active, u, N, w, beres)
+        @. gw_beres_mech_flux =
+            mech(gw_beres_active, gw_u_heat, gw_N_source, gw_w_obstacle)
+    end
+end
+
+"""
+    _beres_precompute_launch_spectra!(nogw)
+
+Fill the per-column Beres launch spectra `gw_beres_B0_u` and `gw_beres_B0_v` of the NOGW
+cache `nogw` from the source fields already in it (`gw_beres_active`, `gw_u_heat`,
+`gw_v_heat`, `gw_Q0`, `gw_h_heat`, `gw_N_source`, `gw_zbot`, `gw_ztop`,
+`gw_beres_gprofile`, `gw_w_obstacle`) and the source parameters `gw_beres_source`.
+
+Called at the end of `compute_beres_convective_heating!`. It is a separate function so that
+tests and offline drivers that set the source fields by hand, or swap `gw_beres_source`,
+can rebuild the spectrum the propagation kernel reads.
+"""
+function _beres_precompute_launch_spectra!(nogw)
+    (;
+        gw_beres_source,
+        gw_c,
+        gw_ncval,
+        gw_beres_active,
+        gw_u_heat,
+        gw_v_heat,
+        gw_Q0,
+        gw_h_heat,
+        gw_N_source,
+        gw_zbot,
+        gw_ztop,
+        gw_beres_gprofile,
+        gw_w_obstacle,
+        gw_beres_B0_u,
+        gw_beres_B0_v,
+    ) = nogw
+    # Zeros for non-convecting columns; half-sine or Beres-G transient bins per the shape
     # mode, plus the steady c≈0 bin (β_therm + β_mech). The phase-speed grid
     # `cgrid`, `ncv`, and `beres` are CAPTURED in the closure (plain tuples/Val
     # would be iterated if passed as broadcast args); only fields are broadcast.
@@ -1037,50 +1115,7 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
             )
         end
     end
-
-    # --- Diagnostics for source-shape & launched-spectrum ---
-    gw_beres_source.detailed_diagnostics || return
-
-    # Build the launched half-sine Q0·sin(π(z−z_bot)/h) natively, IN the column
-    # where (Q0, z_bot, h) are mutually consistent, so the offline comparison to
-    # Q_conv_ic is a single linear remap rather than a nonlinear reconstruction
-    # from three independently-remapped 2D fields.
-    @. gw_halfsine = ifelse(
-        (ᶜz >= gw_zbot) & (ᶜz <= gw_zbot + gw_h_heat),
-        gw_beres_active *
-        gw_Q0 *
-        sin(FT(π) * (ᶜz - gw_zbot) / max(gw_h_heat, eps(FT))),
-        FT(0),
-    )
-
-    # Launched-spectrum summaries reduced from the SAME precomputed launch spectrum
-    # gw_beres_B0_u the forcing kernel deposits (so they are Beres-G / mechanical
-    # aware, not a recomputed half-sine):
-    # - total launched flux magnitude Σ|B0| (× a_cover deposition factor),
-    # - the flux-weighted phase-speed centroid ⟨c⟩ = Σ c|B0| / Σ|B0|,
-    # both in the zonal direction.
-    let cgrid = gw_c
-        cen(b0) = _beres_b0_centroid(b0, cgrid)
-        @. gw_launch_flux = ifelse(
-            gw_beres_active > FT(0.5),
-            gw_a_cover * _beres_b0_fluxmag(gw_beres_B0_u),
-            FT(0),
-        )
-        @. gw_c_centroid = ifelse(
-            gw_beres_active > FT(0.5),
-            cen(gw_beres_B0_u),
-            FT(0),
-        )
-    end
-
-    # Mechanical (Ext 3) c≈0 launched flux β_mech, zonal direction — the
-    # band-resolved Ext-3 export. β_mech is deposited only in the c≈0 (low-`c`)
-    # bin and its sign carries the E/W deceleration direction (opposes U).
-    let beres = gw_beres_source
-        mech(active, u, N, w) = _beres_mech_flux_value(active, u, N, w, beres)
-        @. gw_beres_mech_flux =
-            mech(gw_beres_active, gw_u_heat, gw_N_source, gw_w_obstacle)
-    end
+    return nothing
 end
 
 """

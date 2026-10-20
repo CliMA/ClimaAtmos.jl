@@ -112,12 +112,14 @@ end
 
 # --- 4. forcing-only re-evaluation (mirrors the tail of compute_tendency!) ---
 # The full compute_tendency! call below leaves every input the deposition
-# kernel needs in the cache (N^2, source/damp levels, Beres source fields);
+# kernel needs in the cache (N, source/damp levels, Beres source fields);
 # only B0 is modified between rebuild and deposition. The additivity gate
 # asserts this mirror stays faithful to production.
 function run_forcing!()
-    ᶜbf_sq = gw.ᶜbuoyancy_frequency   # cache holds N^2 after compute_tendency!
-    ᶜbf = @. ifelse(ᶜbf_sq < FT(2.5e-5), FT(sqrt(2.5e-5)), sqrt(abs(ᶜbf_sq)))
+    # compute_tendency! overwrites the cache field in place with the floored N
+    # (not N^2), so it is passed to the forcing as is. Taking the square root
+    # again here would feed sqrt(N) to the deposition kernel.
+    ᶜbf = gw.ᶜbuoyancy_frequency
     ᶜu = Geometry.UVVector.(Y.c.uₕ).components.data.:1
     ᶜv = Geometry.UVVector.(Y.c.uₕ).components.data.:2
     src = gw.source_p_ρ_z_u_v_level

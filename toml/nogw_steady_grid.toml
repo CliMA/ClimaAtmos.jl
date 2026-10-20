@@ -1,0 +1,15 @@
+# Phase-speed grid override for runs that enable the steady (nu=0) Beres source.
+# The steady component deposits into the c=0 phase-speed bin, so it requires an
+# exact c=0 grid point, i.e. cmax/dc must be an integer (c[n] = (n-1)*dc - cmax).
+# The ClimaParams defaults cmax=99.6, dc=0.8 give 124.5 -> no c=0 bin.
+# cmax=100.0, dc=0.8 -> 125 -> c=0 exists (n=126); nc = 2*cmax/dc + 1 = 251
+# (was 250): negligible spectral change and still within the GPU kernel
+# parameter-memory budget (<256 bins).
+#
+# Apply this to BOTH the AD99-only and the Beres runs so the phase-speed grid is
+# identical across the comparison (only the source differs).
+[nogw_cmax]
+value = 100.0
+
+[nogw_dc]
+value = 0.8
