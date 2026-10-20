@@ -10,14 +10,19 @@
 # up its momentum in exactly one place: where it breaks (saturation), where it
 # hits a critical level, or — if it reaches the model top without breaking —
 # it is broken there by force and its momentum is spread over the levels at
-# and above `damp_level`. Because every wave deposits exactly once, the
-# column-integrated drag must equal the launched flux:
+# and above `damp_level`. The one exception is a wave removed by total internal
+# reflection, whose momentum is discarded; the setup below keeps every wave far
+# from reflection. Because every other wave deposits exactly once, the
+# column-integrated drag equals the launched flux,
 #
-#     Σ_k ρ_k·Δz_k·a_k  =  F_launch  =  source_ampl · Σ_n B0[n] / Σ_n |B0[n]|
+#     Σ_k ρ_k·Δz_k·a_k  =  F_launch  =  source_ampl · Σ_n B0[n] / Σ_n |B0[n]|,
 #
-# and this must hold for ANY density profile, wind profile, grid, or number of
-# phase-speed bins. There are three independent ways the code could break this
-# budget, so there are three tests:
+# apart from one small, known effect of how the scheme shares each layer's drag
+# between its two neighbouring cells (test 1 below). These tests use a uniform
+# grid and density falling off exponentially, where that effect is the exact
+# factor cosh(Δz/2H) ≈ 1.0026, so each budget is checked against an exact
+# target. There are four independent ways the code could break this budget, so
+# there are four tests:
 #
 # 1. Interior deposition. When a wave breaks between two cell centres, the
 #    code converts its flux into a drag by dividing by that layer's mass
@@ -44,10 +49,17 @@
 #    the "Waves that are unstable at the launch level" section of the docs for
 #    why); the test would catch a return to the old behaviour.
 #
+# 4. Exact critical level. When the wind at a level equals a wave's phase speed
+#    exactly, `c - u = 0` and the kernel takes a separate branch (the
+#    reflection test cannot be evaluated there). That branch used to remove the
+#    wave without depositing it; it now deposits the flux like any other
+#    critical level.
+#
 # Each test runs twice: on a single column, and on a cubed sphere where
-# `damp_level` differs from column to column. The sphere case matters because
-# it is the only setup (and the production one) where `damp_level` and `M_R`
-# are per-column fields rather than single numbers.
+# `damp_level` differs from column to column. Only test 2 sends momentum through
+# `damp_level` and `M_R`, so only there does the sphere check the per-column
+# hand-back, the production setup; in tests 1, 3 and 4 every column is the same
+# and the sphere run checks that the kernel works on the sphere's data layout.
 #
 # What is deliberately NOT tested: the model later clips each drag component
 # to ±3e-3 m/s² in `non_orographic_gravity_wave_apply_tendency!`. These tests
@@ -138,7 +150,7 @@ per_column(level_field) = copy(vec(Array(parent(level_field))))
 # Everything `non_orographic_gravity_wave_forcing` needs for `kind` (`:column`
 # or `:sphere`), with no simulation: the cache, a minimal `p`, the imposed-state
 # scratch fields, and the grid geometry as plain arrays. The sphere is
-# deliberately tiny (2 elements per panel edge, 96 columns) and
+# deliberately tiny (2 elements per panel edge) and
 # shallow-atmosphere, so the measure `column_integral_definite!` uses is the
 # plain mesh spacing.
 function build_state(kind::Symbol)
@@ -226,8 +238,9 @@ function build_state(kind::Symbol)
 end
 
 # ----------------------------------------------------------------------------
-# Spectrum helpers. These reimplement the launch algebra in plain Julia, so the
-# targets below are independent of the kernel being tested.
+# Spectrum helpers. These redo the launch algebra in plain Julia, reusing only
+# the kernel's spectrum function `CA.wave_source`, so the launched-flux target
+# does not depend on how the kernel moves momentum.
 # ----------------------------------------------------------------------------
 
 const GW = build_gw()
@@ -267,19 +280,20 @@ function launched_flux(u_source, Bw)
     )
 end
 
-# Signed momentum flux (Pa) of the waves that are already too strong to be
-# stable at the launch level. They break at once and deposit their momentum in
-# the first layer above the launch; test 1 requires this flux to be exactly
-# zero, and test 3 requires it to be large. A wave with phase speed `c[n]` and
-# amplitude `B0[n]` breaks (saturates) when `B0[n]/(c[n] - u_source)³ ≥ fac`.
-# The kernel's threshold, `fac = 0.5·(ρ_kp1/ρ_source)·kwv/bf_kp1`, reduces at
-# the launch level to exactly `0.5·kwv/N`: `ρ_kp1` there is the source density
-# itself, and the test's buoyancy frequency is constant, so `bf_kp1 = N`. This helper checks only saturation, yet
-# still predicts exactly which bins the kernel removes at the launch level
-# (and hence the flux deposited in the first layer above it), because the
-# kernel's other two ways of removing a wave cannot trigger there: a critical
-# level requires `c - u` to have changed sign since launch (it hasn't yet),
-# and reflection requires |c - u| near 400 m/s (no bin comes close).
+# Signed momentum flux (Pa) of the waves that are too strong to be stable at
+# the launch level itself, i.e. the waves the old code removed there without
+# depositing them. Test 1 requires this flux to be exactly zero, and test 3
+# requires it to be large. A wave with phase speed `c[n]` and amplitude `B0[n]`
+# breaks (saturates) when `B0[n]/(c[n] - u_source)³ ≥ fac`. The kernel's
+# threshold is `fac = 0.5·(ρ_kp1/ρ_source)·kwv/bf_kp1`; the old code's first
+# step took `kp1` at the launch level, where this reduces to `0.5·kwv/N` (the
+# test's buoyancy frequency is constant), which is what this helper uses. At
+# that step the kernel's other two ways of removing a wave cannot trigger: a
+# critical level requires `c - u` to have changed sign since launch, and
+# reflection requires |c - u| near 400 m/s. So the helper gives the old code's
+# loss exactly. It is a setup check, not a prediction of the new code: the new
+# kernel's first step takes `kp1` one level higher, with a lower density and a
+# different wind, so the waves it removes in the first layer can differ.
 # `nk == 1`, so `kwv` is a single wavenumber.
 function launch_level_saturated_flux(u_source, Bw)
     B0 = spectrum(u_source, Bw)
@@ -313,7 +327,8 @@ const U_SOURCE = FT(24)
 # inside the domain — eastward bins are absorbed on the rising branch,
 # westward bins on the falling branch — and nothing reaches the model top.
 # Neither endpoint sits exactly on a bin, which would send that bin down the
-# flux-discarding `c_hat == 0` branch (see `winds_above_source` below).
+# separate `c_hat == 0` branch (see `winds_above_source` below); test 4 covers
+# that branch on its own.
 const Z_MID = FT(30500)
 const U_HI = FT(48.3)
 const U_LO = FT(-49.7)
@@ -328,13 +343,30 @@ reversing_wind(z, z_src, z_top) = ifelse(
     ),
 )
 
+# Steps through the phase-speed bins exactly, one bin per level: up by `dc` from
+# the source wind to +48 m/s, then down by `dc` to -48 m/s, then constant. Every
+# bin with nonzero flux therefore meets a level where `c - u` is exactly zero,
+# which sends it down the `c_hat == 0` branch of the kernel (test 4). Indexed by
+# level so the hits are exact in floating point; the grid is uniform with
+# centres at (k - 1/2)·Δz.
+function on_bin_wind(z)
+    j = round(Int, z / (Z_MAX / Z_ELEM) + FT(0.5)) - SOURCE_LEVEL
+    step = FT(4)
+    return j <= 0 ? U_SOURCE :
+           j <= 6 ? U_SOURCE + step * j :
+           j <= 30 ? U_SOURCE + step * 6 - step * (j - 6) : FT(-48)
+end
+
 # The winds the kernel sees above the launch level, including the ghost level it
 # extrapolates above the model top. An exact coincidence with a phase-speed bin
-# sends that bin down the `c_hat == 0` branch, which discards its flux.
-function winds_above_source(st)
+# sends that bin down the `c_hat == 0` branch.
+function winds_above_source(st; wind = :reversing)
     z_src = st.center_z[SOURCE_LEVEL]
     z_top = st.center_z[end]
-    u = map(z -> reversing_wind(z, z_src, z_top), st.center_z)
+    u = map(
+        z -> wind == :reversing ? reversing_wind(z, z_src, z_top) : on_bin_wind(z),
+        st.center_z,
+    )
     return vcat(u[(SOURCE_LEVEL + 1):end], 2 * u[end] - u[end - 1])
 end
 
@@ -400,6 +432,8 @@ function run_case!(st; Bw, wind::Symbol, damp_spec)
         @. ᶜu_t = reversing_wind(ᶜz, z_src, z_top)
     elseif wind == :constant
         fill!(ᶜu_t, U_SOURCE)
+    elseif wind == :on_bins
+        @. ᶜu_t = on_bin_wind(ᶜz)
     else
         error("unknown wind $wind")
     end
@@ -447,10 +481,19 @@ function run_case!(st; Bw, wind::Symbol, damp_spec)
     Operators.column_integral_definite!(deposited_field, ᶜmom)
     deposited_v = per_column(deposited_field)
 
+    # Drag profiles as a level-by-column matrix, for checks of where the drag goes.
+    nlev = Spaces.nlevels(axes(gwc.uforcing))
+    profile(f) = permutedims(reduce(hcat, (per_column(Fields.level(f, k)) for k in 1:nlev)))
+
     return (;
         deposited_u,
         deposited_v,
-        escaped = per_column(gwc.u_waveforcing_top) .* ghost_layer_mass(st),
+        forcing_u = profile(gwc.uforcing),
+        forcing_v = profile(gwc.vforcing),
+        # `postprocess_and_accumulate!` leaves the escaped flux, as an acceleration,
+        # in the top level of `u_waveforcing`.
+        escaped = per_column(Fields.level(gwc.u_waveforcing, st.nlev)) .*
+                  ghost_layer_mass(st),
         damp_level = round.(Int, per_column(gwc.damp_level)),
     )
 end
@@ -572,7 +615,19 @@ end
 
         # The requirement: the redistribution deposits exactly the flux it was
         # handed, in every column.
-        @test all(isapprox.(ratios, 1; atol = 1e-3))
+        @test all(isapprox.(ratios, 1; atol = 1e-4))
+
+        # The hand-back is one uniform acceleration over the receiving levels,
+        # as `gw_deposit` documents.
+        uniform = all(eachindex(res.damp_level)) do col
+            received = res.forcing_u[res.damp_level[col]:end, col]
+            all(isapprox.(received, received[1]; rtol = 1e-6))
+        end
+        @test uniform
+
+        # The sphere case checks the per-column hand-back only if the receiving
+        # layer really differs between columns.
+        startswith(name, "sphere") && @test length(unique(res.damp_level)) > 1
 
         @test maximum(abs, res.deposited_v) < 1e-6 * abs(lf.F_launch)
     end
@@ -595,7 +650,9 @@ end
 # waves, and the test requires that to be large, proving this case really does
 # exercise the launch level. If `waveforcing_column_accumulate!` ever slips
 # back to `source_level - 1`, this test fails instead of quietly
-# becoming a copy of test 1.
+# becoming a copy of test 1: the budget drops by that flux if the waves are
+# dropped again, and drag appears below the launch level if they are deposited
+# there instead.
 # ============================================================================
 @testset "AD99 column momentum budget — saturation at the launch level" begin
     Bw = GW.Bw           # the ClimaParams default, i.e. what production runs use
@@ -622,6 +679,46 @@ end
         @test all(isapprox.(ratios, INTERIOR_EXPECTED; rtol = RTOL_CLOSURE))
         @test all(isapprox.(ratios, 1; atol = 0.01))
 
+        # The launch-saturated waves go into the first layer above the launch
+        # level, so no drag lands below it. Moving the loop start back to
+        # `source_level - 1` without the old code's guards would deposit them
+        # below the launch level and still close the budget; this catches that.
+        @test all(iszero, res.forcing_u[1:(SOURCE_LEVEL - 1), :])
+        @test all(iszero, res.forcing_v[1:(SOURCE_LEVEL - 1), :])
+
+        @test maximum(abs, res.deposited_v) < 1e-6 * abs(lf.F_launch)
+    end
+end
+
+# ============================================================================
+# Test 4 — waves that meet their critical level exactly (c = u)
+#
+# Same as test 1 (small amplitude, nothing escapes, nothing saturates at the
+# launch level), but the wind steps through the phase-speed bins exactly, so
+# every wave is absorbed through the `c_hat == 0` branch rather than the
+# sign-change test. A version of that branch that dropped the flux would give a
+# ratio far below 1; the deposit must close at the same cosh(Δz/2H) as test 1.
+# ============================================================================
+@testset "AD99 column momentum budget — exact critical levels (c = u)" begin
+    Bw = FT(1e-4)
+    lf = launched_flux(U_SOURCE, Bw)
+    @test launch_level_saturated_flux(U_SOURCE, Bw) == 0
+
+    for (name, st, damp_spec) in (
+        ("column", COLUMN_STATE, NLEV),
+        ("sphere, per-column damp_level", SPHERE_STATE, Val(:varying)),
+    )
+        # Setup guard: every bin is hit exactly by some wind above the source.
+        u_above = winds_above_source(st; wind = :on_bins)
+        @test all(c -> any(==(c), u_above), GW_C)
+
+        res = run_case!(st; Bw, wind = :on_bins, damp_spec)
+        ratios = res.deposited_u ./ lf.F_launch
+
+        @info "Test 4 ($name): deposited / F_launch = $(round(ratios[1]; digits = 6)), cosh(Δz/2H) = $(round(INTERIOR_EXPECTED; digits = 6))"
+
+        @test maximum(abs, res.escaped ./ lf.F_launch) < MAX_ESCAPED_FRAC
+        @test all(isapprox.(ratios, INTERIOR_EXPECTED; rtol = RTOL_CLOSURE))
         @test maximum(abs, res.deposited_v) < 1e-6 * abs(lf.F_launch)
     end
 end

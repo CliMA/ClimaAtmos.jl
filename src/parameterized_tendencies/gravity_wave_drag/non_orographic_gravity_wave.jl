@@ -1242,8 +1242,8 @@ The top level of the half-level drag left by the upward march holds the momentum
 escaped through the model top. The rest of the drag is moved to full levels by averaging
 adjacent half-levels, `½(X[k-1/2] + X[k+1/2])` with zero below the bottom level and at the
 top level, and the escaped flux is spread over the levels at and above `damp_level` by
-`gw_deposit`, scaled by the per-column `deposit_scale`, so momentum is conserved. On a sphere `damp_level` is a field of level
-indices; single-column tests pass one level index.
+`gw_deposit`, scaled by the per-column `deposit_scale`, so momentum is conserved. On a
+sphere `damp_level` is a field of level indices; single-column tests pass one level index.
 """
 function postprocess_and_accumulate!(
     uforcing, vforcing, u_waveforcing, v_waveforcing,
