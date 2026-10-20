@@ -864,6 +864,7 @@ NVTX.@annotate function set_implicit_precomputed_quantities!(Y, p, t)
     if turbconv_model isa PrognosticEDMFX
         set_prognostic_edmf_precomputed_quantities_draft!(Y, p, ᶠuₕ³, t)
         set_prognostic_edmf_precomputed_quantities_environment!(Y, p, ᶠuₕ³, t)
+        edmf_newton_resolve() && resolve_sgs_u₃_ρa_stage!(Y, p)
     elseif !(isnothing(turbconv_model))
         # Do nothing for other turbconv models for now
     end
