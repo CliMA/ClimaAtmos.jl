@@ -33,8 +33,9 @@ For `PrognosticEDMFX`:
 For every model it also records `dtγ` in `p.precomputed.implicit_stage_dtγ`,
 which `microphysics_averaging_window` and `resolve_sgs_u₃_ρa_stage!` read. With
 `edmfx_model.newton_resolve`, it stores the stage-start `u₃ʲ` and `ρaʲ` in
-`p.precomputed.ᶠu₃_stage_startʲs` and `p.precomputed.ᶜρa_stage_startʲs`, from
-which `resolve_sgs_u₃_ρa_stage!` repeats the solves on every Newton iterate.
+`p.precomputed.ᶠu₃_stage_startʲs` and `p.precomputed.ᶜρa_stage_startʲs`
+(before the Picard rounds) and skips step 2: `resolve_sgs_u₃_ρa_stage!` solves
+for `u₃` and `ρa` from them on every Newton iterate instead.
 """
 function initialize_implicit_stage_problem!(Y, p, dtγ)
 
@@ -48,7 +49,8 @@ function initialize_implicit_stage_problem!(Y, p, dtγ)
     n = n_mass_flux_subdomains(turbconv_model)
     n_picard = edmfx_model.updraft_picard_rounds
 
-    if edmfx_model.newton_resolve isa Val{true}
+    newton_resolve = edmfx_model.newton_resolve isa Val{true}
+    if newton_resolve
         (; ᶠu₃_stage_startʲs, ᶜρa_stage_startʲs) = p.precomputed
         for j in 1:n
             @. ᶠu₃_stage_startʲs.:($$j) = Y.f.sgsʲs.:($$j).u₃
@@ -61,9 +63,11 @@ function initialize_implicit_stage_problem!(Y, p, dtγ)
     # `Float32`).
     dtγ = eltype(p.params)(dtγ)
 
-    for j in 1:n
-        @. ᶠu₃_tendencyʲs.:($$j) = -Y.f.sgsʲs.:($$j).u₃ / dtγ
-        @. ᶜρa_tendencyʲs.:($$j) = -Y.c.sgsʲs.:($$j).ρa / dtγ
+    if !newton_resolve
+        for j in 1:n
+            @. ᶠu₃_tendencyʲs.:($$j) = -Y.f.sgsʲs.:($$j).u₃ / dtγ
+            @. ᶜρa_tendencyʲs.:($$j) = -Y.c.sgsʲs.:($$j).ρa / dtγ
+        end
     end
 
     if n_picard > 0
@@ -100,6 +104,11 @@ function initialize_implicit_stage_problem!(Y, p, dtγ)
             end
         end
     end
+
+    # With `newton_resolve`, `resolve_sgs_u₃_ρa_stage!` solves for `u₃` and `ρa`
+    # on every Newton iterate, with the iterate's buoyancy, and writes them
+    # into `Y`; a solve here would only be overwritten.
+    newton_resolve && return nothing
 
     solve_sgs_u₃_implicit_stage_analytic!(Y, p, dtγ)
     solve_sgs_ρa_implicit_stage_analytic!(Y, p, dtγ)
@@ -152,6 +161,8 @@ function resolve_sgs_u₃_ρa_stage!(Y, p)
             (ᶠsgsʲs_newton.:($$j).u₃ - ᶠu₃_stage_startʲs.:($$j)) / dtγ
         @. ᶜρa_tendencyʲs.:($$j) =
             (ᶜsgsʲs_newton.:($$j).ρa - ᶜρa_stage_startʲs.:($$j)) / dtγ
+        @. Y.f.sgsʲs.:($$j).u₃ = ᶠsgsʲs_newton.:($$j).u₃
+        @. Y.c.sgsʲs.:($$j).ρa = ᶜsgsʲs_newton.:($$j).ρa
     end
     return nothing
 end
@@ -173,7 +184,39 @@ function set_newton_iterate_precomputed_quantities!(Y, p, t)
     if p.atmos.turbconv_model isa PrognosticEDMFX &&
        p.atmos.edmfx_model.newton_resolve isa Val{true}
         resolve_sgs_u₃_ρa_stage!(Y, p)
+        refresh_sgs_quantities_after_resolve!(Y, p)
     end
+    p.atmos.microphysics_newton_refresh && set_microphysics_tendency_cache!(
+        Y, p, p.atmos.microphysics_model, p.atmos.turbconv_model,
+    )
+    return nothing
+end
+
+"""
+    refresh_sgs_quantities_after_resolve!(Y, p)
+
+Refresh the EDMFX velocity and kinetic-energy fields that depend on the updraft
+`u₃ʲ` and `ρaʲ` just written by `resolve_sgs_u₃_ρa_stage!`: per-updraft
+`ᶜuʲs`/`ᶠu³ʲs`/`ᶜKʲs`/`ᶠKᵥʲs`, and the environment `ᶠu₃⁰`/`ᶜu⁰`/`ᶠu³⁰`/`ᶜK⁰`.
+Thermodynamic fields (`ᶜρʲs`, `ᶜTʲs`, `ᶜq_*ʲs`, env versions) are not refreshed
+because `resolve_sgs_u₃_ρa_stage!` does not change them, so no update is needed.
+Returns `nothing`.
+"""
+function refresh_sgs_quantities_after_resolve!(Y, p)
+    turbconv_model = p.atmos.turbconv_model
+    turbconv_model isa PrognosticEDMFX || return nothing
+    ᶠuₕ³ = p.scratch.ᶠtemp_CT3
+    (; ᶜuʲs, ᶠu³ʲs, ᶜKʲs, ᶠKᵥʲs, ᶠu₃⁰, ᶜu⁰, ᶠu³⁰, ᶜK⁰) = p.precomputed
+    n = n_mass_flux_subdomains(turbconv_model)
+    for j in 1:n
+        ᶠu₃ʲ = Y.f.sgsʲs.:($j).u₃
+        set_velocity_quantities!(
+            ᶜuʲs.:($j), ᶠu³ʲs.:($j), ᶜKʲs.:($j), ᶠu₃ʲ, Y.c.uₕ, ᶠuₕ³,
+        )
+        @. ᶠKᵥʲs.:($$j) = (adjoint(CT3(ᶠu₃ʲ)) * ᶠu₃ʲ) / 2
+    end
+    set_sgs_ᶠu₃!(u₃⁰, ᶠu₃⁰, Y, turbconv_model)
+    set_velocity_quantities!(ᶜu⁰, ᶠu³⁰, ᶜK⁰, ᶠu₃⁰, Y.c.uₕ, ᶠuₕ³)
     return nothing
 end
 

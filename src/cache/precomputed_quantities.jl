@@ -978,18 +978,16 @@ NVTX.@annotate function set_explicit_precomputed_quantities!(Y, p, t)
         p.atmos.microphysics_model,
         p.atmos.turbconv_model,
     )
-    # Compute microphysics sources from grid mean and sub-domains.
-    # Always compute ᶜmp_tendency (and, for 0M, ᶜρ_dq_tot_dt / ᶜρ_de_tot_dt)
-    # here so both are fresh. When microphysics is implicit, the implicit stage
-    # will additionally refresh ᶜρ_dq_tot_dt / ᶜρ_de_tot_dt from the (now-fresh)
-    # ᶜmp_tendency using the current Newton-iterate Y, avoiding the allocating
-    # BMT broadcast.
-    set_microphysics_tendency_cache!(
-        Y,
-        p,
-        p.atmos.microphysics_model,
-        p.atmos.turbconv_model,
-    )
+    # When `microphysics_newton_refresh` is on, the microphysics tendency cache
+    # is refreshed per Newton iterate from `set_newton_iterate_precomputed_quantities!`.
+    if !p.atmos.microphysics_newton_refresh
+        set_microphysics_tendency_cache!(
+            Y,
+            p,
+            p.atmos.microphysics_model,
+            p.atmos.turbconv_model,
+        )
+    end
     # Compute surface precipitation fluxes (has to be after microphysics_sources_cache
     # because for the 0 moment microphysics it's an integral of the q_tot sink).
     set_precipitation_surface_fluxes!(Y, p, p.atmos.microphysics_model)

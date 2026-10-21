@@ -735,12 +735,6 @@ function update_implicit_microphysics_cache!(
     mm::NonEquilibriumMicrophysics1M,
     tm,
 )
-    # With `microphysics_newton_refresh`, the 1M process rates follow the Newton
-    # iterate, so that condensation responds to the supersaturation that the
-    # implicit vertical transport produces within the stage. Otherwise they are
-    # the rates of the last cache update.
-    p.atmos.microphysics_newton_refresh &&
-        set_microphysics_tendency_cache!(Y, p, mm, tm)
     # Recompute the sedimentation velocities from the current implicit-solver state.
     # This is expecially important for PrognosticEDMFX `ᶜwᵣʲs`.
     # Leaving updraft velocities at their explicit-stage values treats the
