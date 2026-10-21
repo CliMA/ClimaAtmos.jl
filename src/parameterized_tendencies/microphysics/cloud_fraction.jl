@@ -854,7 +854,7 @@ struct SGSVarianceEvaluator{TPS, FT}
 end
 
 @inline function (eval::SGSVarianceEvaluator)(T_hat, q_tot_hat)
-    q_sat_hat = TD.q_vap_saturation(eval.tps, T_hat, eval.ρ)
+    q_sat_hat = TD.q_vap_saturation(_unwrapped(eval.tps), T_hat, eval.ρ)
     s = q_tot_hat - q_sat_hat
     return (s - eval.mu_S)^2
 end
@@ -875,7 +875,8 @@ struct SGSExcessEvaluator{TPS, FT}
 end
 
 @inline (eval::SGSExcessEvaluator)(T_hat, q_tot_hat) =
-    q_tot_hat - TD.q_vap_saturation(eval.tps, T_hat, eval.ρ) - eval.mu_S
+    q_tot_hat - TD.q_vap_saturation(_unwrapped(eval.tps), T_hat, eval.ρ) -
+    eval.mu_S
 
 
 """
@@ -905,7 +906,7 @@ Returns `(; mu_S, sigma_S)`.
     sgs_quad, T′T′, q′q′, corr_Tq,
 )
     FT = typeof(ρ)
-    mu_S = q_tot_mean - TD.q_vap_saturation(thp, T_mean, ρ)
+    mu_S = q_tot_mean - TD.q_vap_saturation(_unwrapped(thp), T_mean, ρ)
     sgs_quad_eff = isnothing(sgs_quad) ? GridMeanSGS() : sgs_quad
     evaluator = SGSVarianceEvaluator(thp, ρ, mu_S)
     sigma_S_sq = integrate_over_sgs(
@@ -1454,7 +1455,7 @@ materialized to a Field.
     moments = _sgs_saturation_moments(
         thermo_params, ρ, T, q_tot, sgs_quad, T′T′, q′q′, corr_Tq,
     )
-    q_sat = TD.q_vap_saturation(thermo_params, T, ρ, q_liq, q_ice)
+    q_sat = TD.q_vap_saturation(_unwrapped(thermo_params), T, ρ, q_liq, q_ice)
     return _compute_cloud_fraction(
         q_liq + q_ice, moments.mu_S, moments.sigma_S, q_sat, α, floor,
     )
@@ -1590,7 +1591,7 @@ directly, matching the σ_S → 0 limit of the sampled branch.
     curv = zero(ρ),
 )
     FT = typeof(ρ)
-    q_sat = TD.q_vap_saturation(thp, T, ρ)
+    q_sat = TD.q_vap_saturation(_unwrapped(thp), T, ρ)
     mu_S_cloud = q_tot_cloud - q_sat
     not_quadrature(sgs_quad) &&
         return (;
@@ -1671,6 +1672,8 @@ NVTX.@annotate function set_sgs_moments_and_cloud_fraction!(Y, p)
     # curvature-aware condensate is configured; otherwise as zeros, for which
     # `displacement_condensate` is the truncated-Gaussian expectation.
     FT = eltype(p.params)
+    # Carried in by type, so the parameters fold to literals in the kernel.
+    vthermo = _fold(ClimaComms.device(Y.c), thermo_params)
     if p.atmos.sgs_variance_curvature
         ᶜdisp_S = p.precomputed.ᶜdisp_S
         DataLayouts.foreach_point(
@@ -1682,7 +1685,7 @@ NVTX.@annotate function set_sgs_moments_and_cloud_fraction!(Y, p)
             _sgs_moments_and_cloud_fraction_point!(
                 ᶜsgs_moments, ᶜcloud_fraction, ᶜρ_env, ᶜT_mean, ᶜq_mean,
                 ᶜq_cloud, ᶜq_lcl, ᶜq_icl, ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα,
-                ᶜdisp_S.lin, ᶜdisp_S.curv, thermo_params, sgs_quad, floor,
+                ᶜdisp_S.lin, ᶜdisp_S.curv, vthermo, thermo_params, sgs_quad, floor,
             )
         end
     else
@@ -1699,7 +1702,7 @@ NVTX.@annotate function set_sgs_moments_and_cloud_fraction!(Y, p)
             _sgs_moments_and_cloud_fraction_point!(
                 ᶜsgs_moments, ᶜcloud_fraction, ᶜρ_env, ᶜT_mean, ᶜq_mean,
                 ᶜq_cloud, ᶜq_lcl, ᶜq_icl, ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα,
-                lin₀, curv₀, thermo_params, sgs_quad, floor,
+                lin₀, curv₀, vthermo, thermo_params, sgs_quad, floor,
             )
         end
     end
@@ -1713,21 +1716,24 @@ end
     _sgs_moments_and_cloud_fraction_point!(
         ᶜsgs_moments, ᶜcloud_fraction, ᶜρ_env, ᶜT_mean, ᶜq_mean, ᶜq_cloud,
         ᶜq_lcl, ᶜq_icl, ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα, lin, curv,
-        thermo_params, sgs_quad, floor,
+        vthermo, thermo_params, sgs_quad, floor,
     )
 
 Body of the `foreach_point` loop of `set_sgs_moments_and_cloud_fraction!`:
 fill the SGS moments (`_compute_sgs_moments`) and the cloud fraction
 (`_compute_cloud_fraction`) of one point. `lin` and `curv` are the
-displacement coefficients, a point of `ᶜdisp_S` or zeros.
+displacement coefficients, a point of `ᶜdisp_S` or zeros. `vthermo` carries the
+thermodynamics parameters in its type, so they fold to literals in the quadrature
+kernel; `thermo_params` is the same parameters as a value, for the saturation
+calls beside it.
 """
 @inline function _sgs_moments_and_cloud_fraction_point!(
     ᶜsgs_moments, ᶜcloud_fraction, ᶜρ_env, ᶜT_mean, ᶜq_mean, ᶜq_cloud,
     ᶜq_lcl, ᶜq_icl, ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα, lin, curv,
-    thermo_params, sgs_quad, floor,
+    vthermo, thermo_params, sgs_quad, floor,
 )
     @. ᶜsgs_moments = _compute_sgs_moments(
-        thermo_params, ᶜρ_env, ᶜT_mean, ᶜq_mean, ᶜq_lcl + ᶜq_icl,
+        vthermo, ᶜρ_env, ᶜT_mean, ᶜq_mean, ᶜq_lcl + ᶜq_icl,
         $(sgs_quad), ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα, ᶜq_cloud, lin, curv,
     )
     # Recompute CF from q_c and σ_S using the augmented-σ closure. `Φ(λ/σ_aug)`
@@ -1952,6 +1958,9 @@ NVTX.@annotate function set_cloud_fraction!(
     (; ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα) = p.precomputed
     ᶜcloud_fraction = p.precomputed.ᶜcloud_fraction
 
+    # Carried in by type, so the parameters fold to literals in the kernel.
+    vthermo = _fold(ClimaComms.device(Y.c), thermo_params)
+
     DataLayouts.foreach_point(
         ᶜcloud_fraction, ᶜT_mean, ᶜρ_env, ᶜq_mean, ᶜq_lcl, ᶜq_icl,
         ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα,
@@ -1959,7 +1968,7 @@ NVTX.@annotate function set_cloud_fraction!(
     ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα
 
         @. ᶜcloud_fraction = _compute_cloud_fraction(
-            thermo_params, ᶜT_mean, ᶜρ_env, ᶜq_mean, ᶜq_lcl, ᶜq_icl,
+            $(vthermo), ᶜT_mean, ᶜρ_env, ᶜq_mean, ᶜq_lcl, ᶜq_icl,
             $(sgs_quad), ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα, $(floor),
         )
     end
