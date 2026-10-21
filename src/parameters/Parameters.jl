@@ -306,6 +306,11 @@ ClimaParams does not yet define or whose ClimaParams default it supersedes.
   - `sgs_precip_fraction_floor`: Smallest precipitation fraction `a_p` the
     placement uses, in `(0, 1]`; the default `0.5` keeps the shaft at least
     half the cell. It must be positive when `sgs_precip_incloud_fraction > 0` [-].
+  - `edmf_tail_entr_weight`: Weight `w` in `[0, 1]` with which the air drawn in
+    by the dynamical EDMF entrainment is taken from the upper half of the
+    environment's subgrid `(T, q_tot)` distribution, ranked by moist static
+    energy, instead of the environment mean (`tail_entrainment_increments`);
+    `0` (default) entrains the mean [-].
   - `Tq_correlation_coefficient`: Correlation between `T'` and `q_tot'` in the
     SGS quadrature, in `[-1, 1]`. Used verbatim by `tq_correlation_model: constant`; the fallback where the variances vanish for
     `tq_correlation_model: diagnosed` [-].
@@ -359,6 +364,7 @@ Base.@kwdef struct SGSQuadratureParameters{FT} <: ASQP
     cloud_fraction_floor_release_abs_margin::FT
     cloud_fraction_floor_release_sharpness::FT
     cloud_fraction_floor_residual::FT
+    edmf_tail_entr_weight::FT
 end
 
 """

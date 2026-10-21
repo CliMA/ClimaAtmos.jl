@@ -3,6 +3,13 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- ![][badge-✨feature/enhancement] Tail entrainment for the prognostic EDMF
+  updraft (provisional parameter `edmf_tail_entr_weight`, default 0 = off): the
+  air drawn in by the dynamical entrainment comes from the upper half, in moist
+  static energy, of the environment's Gaussian subgrid `(T, q_tot)`
+  distribution instead of the environment mean
+  (`tail_entrainment_increments`). The environment is diagnosed as grid mean
+  minus updraft, so total water and energy are unchanged.
 - ![][badge-🔥behavioralΔ] The EDMF TKE shear production matches the resolved
   kinetic energy removed by the SGS stresses. The vertical production uses the
   vertical shear of the horizontal wind, `|∂_z uₕ|²/2`
