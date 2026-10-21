@@ -107,6 +107,35 @@ CloudMicrophysics.jl, in which sink terms are locally linearized and folded
 into the time integration scheme; see the [CloudMicrophysics.jl bulk-tendency
 documentation](https://clima.github.io/CloudMicrophysics.jl/dev/BulkTendencies/).
 
+### Averaging window and Newton-iterate refresh
+
+The 1M tendencies are the average, over a window, of the microphysics integrated
+forward from the current state with the forcing held fixed. By default the
+window is the timestep and the rates are computed once per cache update, from
+the state at the start of the step. Two consequences grow with the timestep:
+
+  - the supersaturation produced by vertical transport within the step is
+    condensed only at the next step, and
+  - the effective condensation and deposition rate falls as the window grows
+    relative to their relaxation timescales (for a 100 s timescale, to about
+    0.83/τ at a 30 s window and 0.42/τ at 180 s).
+
+In a rising updraft both leave the condensate and its latent heating behind the
+ascent. `microphysics_averaging_window` sets the window to a number of seconds
+(capped at the timestep) or to `stage`, the step fraction ``\gamma \Delta t`` of
+the current implicit stage. `microphysics_newton_refresh: true` recomputes the
+process rates on every Newton iterate (with `implicit_microphysics: true` and
+`max_newton_iters_ode` of at least 2), so condensation responds to the
+supersaturation produced within the stage. With the refresh, the rates are
+evaluated at the end-of-stage state, so a window short compared with the
+relaxation timescales (about 10 s) is consistent with the stage solve; much
+shorter windows weaken the limiters of the averaged tendencies. Together with
+`edmfx_newton_resolve` (see the PROPHET numerics page), these options remove
+most of the timestep dependence of moist convection with prognostic EDMF.
+The refreshed rates are not part of the Jacobian, so their Newton iteration is a
+fixed-point iteration: mixed-phase processes in deep convection may need three
+iterations, and the options have been validated with `ARS222`.
+
 ### Enforcing physical constraints
 
 Additional corrections are applied through the state-constraint hook
