@@ -38,7 +38,9 @@ Each piece sets one part of the case:
 
   - `SphereGrid(FT; h_elem = 6, z_elem = 10)` is a cubed sphere with 6
     elements along each panel edge, about 550 km between grid points, and 10
-    levels up to 30 km. [Running Global Simulations](global_simulations.md)
+    levels up to 30 km. The levels are stretched by default
+    (`z_stretch = true`): the lowest is 500 m thick (`dz_bottom`), and they
+    thicken with height. [Running Global Simulations](global_simulations.md)
     explains how `h_elem` sets the resolution.
   - [`MoistBaroclinicWave`](@ref ClimaAtmos.Setups.MoistBaroclinicWave) sets
     the initial state. `deep_atmosphere = true` builds it for the
@@ -84,15 +86,15 @@ CA.solve_atmos!(simulation)
 nothing # hide
 ```
 
-The 1200 s timestep is longer than the 450 s that the CI configuration uses at
-this resolution, which keeps the run to a few minutes. If a change to the case
-makes the run unstable, return to 450 s. `update_cache_every = "step"`
-recomputes derived quantities such as pressure and temperature once per
-timestep instead of at every stage of the time integrator, as the tested YAML
-configurations do. The first run in a session spends a few minutes compiling
-before it starts stepping, and the log reports progress as it runs. The output
-goes to `output/moist_baroclinic_wave/output_active`; see
-[Where output goes](@ref) for the layout.
+The 1200 s timestep is pushing the timestep limit at this resolution. If a
+change to the case makes the run unstable, reduce the timestep.
+`update_cache_every = "step"` recomputes derived quantities such as pressure
+and temperature once per timestep instead of at every stage of the time
+integrator, as the tested YAML configurations do. The first run in a session
+spends a few minutes compiling before it starts stepping, and the log reports
+progress as it runs. The output goes to
+`output/moist_baroclinic_wave/output_active`. See [Where output goes](@ref) for
+the layout.
 
 ## Plotting the wave
 
