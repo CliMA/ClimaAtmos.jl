@@ -51,6 +51,35 @@ function kennedy_gruber_cartesian_flux(nvec_a, nvec_b, y_a, y_b)
 end
 
 """
+    kennedy_gruber_advective_cartesian_flux(nvec_a, nvec_b, y_a, y_b)
+
+[`kennedy_gruber_cartesian_flux`](@ref) without the momentum pressure flux
+`{p_m}{ê_c ⋅ nvec}`: mass and enthalpy fluxes are unchanged, the momentum
+flux is the advective part `{ρ}{u_c}{u_n}` only. For `dg_volume_flux = kg_exner`, where the horizontal pressure force is the Exner-split gradient
+of the vector-invariant form: a gradient of scalars is pointwise exact on
+constants, so the terrain metric identity `Σ_k ∂_ξk(Ja^k ⋅ ê_c) = 0` that
+the two-point pressure flux needs, and that the horizontal collocation
+derivative and the vertical FD operator do not satisfy jointly, is never
+invoked. Same state fields.
+"""
+function kennedy_gruber_advective_cartesian_flux(nvec_a, nvec_b, y_a, y_b)
+    ρ̄ = (y_a.ρ + y_b.ρ) / 2
+    ē = (y_a.e + y_b.e) / 2
+    p̄ = (y_a.p + y_b.p) / 2
+    ūn = (y_a.uv' * nvec_a + y_b.uv' * nvec_b) / 2
+    ū1 = (y_a.u1 + y_b.u1) / 2
+    ū2 = (y_a.u2 + y_b.u2) / 2
+    ū3 = (y_a.u3 + y_b.u3) / 2
+    return (
+        ρ = ρ̄ * ūn,
+        ρe = (ρ̄ * ē + p̄) * ūn,
+        ρu1 = ρ̄ * ū1 * ūn,
+        ρu2 = ρ̄ * ū2 * ūn,
+        ρu3 = ρ̄ * ū3 * ūn,
+    )
+end
+
+"""
     ln_mean(x, y)
 
 Numerically-stable logarithmic mean ``(x-y)/(\\log x - \\log y)`` (Ismail & Roe
@@ -142,14 +171,45 @@ penalty scaled by the state field `λ` (jumps of the conserved variables;
 momentum jumps via `ρ * u_c`). Additional state fields: `ρe`, `λ`.
 """
 function kennedy_gruber_rusanov_cartesian(normal, (y⁻,), (y⁺,))
-    λ = max(y⁻.λ, y⁺.λ)
     F = kennedy_gruber_cartesian_flux(normal, normal, y⁻, y⁺)
+    D = rusanov_dissipation_cartesian(y⁻, y⁺)
     return (
-        ρ = F.ρ - λ / 2 * (y⁺.ρ - y⁻.ρ),
-        ρe = F.ρe - λ / 2 * (y⁺.ρe - y⁻.ρe),
-        ρu1 = F.ρu1 - λ / 2 * (y⁺.ρ * y⁺.u1 - y⁻.ρ * y⁻.u1),
-        ρu2 = F.ρu2 - λ / 2 * (y⁺.ρ * y⁺.u2 - y⁻.ρ * y⁻.u2),
-        ρu3 = F.ρu3 - λ / 2 * (y⁺.ρ * y⁺.u3 - y⁻.ρ * y⁻.u3),
+        ρ = F.ρ - D.ρ / 2,
+        ρe = F.ρe - D.ρe / 2,
+        ρu1 = F.ρu1 - D.ρu1 / 2,
+        ρu2 = F.ρu2 - D.ρu2 / 2,
+        ρu3 = F.ρu3 - D.ρu3 / 2,
+    )
+end
+
+"""
+    kennedy_gruber_advective_rusanov_cartesian(normal, argvals⁻, argvals⁺)
+
+[`kennedy_gruber_advective_cartesian_flux`](@ref) as the central part plus
+the Rusanov penalty of [`kennedy_gruber_rusanov_cartesian`](@ref).
+"""
+function kennedy_gruber_advective_rusanov_cartesian(normal, (y⁻,), (y⁺,))
+    F = kennedy_gruber_advective_cartesian_flux(normal, normal, y⁻, y⁺)
+    D = rusanov_dissipation_cartesian(y⁻, y⁺)
+    return (
+        ρ = F.ρ - D.ρ / 2,
+        ρe = F.ρe - D.ρe / 2,
+        ρu1 = F.ρu1 - D.ρu1 / 2,
+        ρu2 = F.ρu2 - D.ρu2 / 2,
+        ρu3 = F.ρu3 - D.ρu3 / 2,
+    )
+end
+
+# Rusanov dissipation `λ ⟦q⟧` of the conserved variables, λ = max(λ⁻, λ⁺)
+# (momentum jumps via `ρ * u_c`). The interface flux subtracts half of it.
+function rusanov_dissipation_cartesian(y⁻, y⁺)
+    λ = max(y⁻.λ, y⁺.λ)
+    return (
+        ρ = λ * (y⁺.ρ - y⁻.ρ),
+        ρe = λ * (y⁺.ρe - y⁻.ρe),
+        ρu1 = λ * (y⁺.ρ * y⁺.u1 - y⁻.ρ * y⁻.u1),
+        ρu2 = λ * (y⁺.ρ * y⁺.u2 - y⁻.ρ * y⁻.u2),
+        ρu3 = λ * (y⁺.ρ * y⁺.u3 - y⁻.ρ * y⁻.u3),
     )
 end
 
@@ -171,6 +231,42 @@ with `p`/`e` (dry ideal gas).
 """
 function kennedy_gruber_roe_cartesian(normal, (y⁻,), (y⁺,))
     F = kennedy_gruber_cartesian_flux(normal, normal, y⁻, y⁺)
+    D = roe_dissipation_cartesian(normal, y⁻, y⁺)
+    return (
+        ρ = F.ρ - D.ρ / 2,
+        ρe = F.ρe - D.ρe / 2,
+        ρu1 = F.ρu1 - D.ρu1 / 2,
+        ρu2 = F.ρu2 - D.ρu2 / 2,
+        ρu3 = F.ρu3 - D.ρu3 / 2,
+    )
+end
+
+"""
+    kennedy_gruber_advective_roe_cartesian(normal, argvals⁻, argvals⁺)
+
+[`kennedy_gruber_advective_cartesian_flux`](@ref) as the central part plus
+the Roe-type dissipation of [`kennedy_gruber_roe_cartesian`](@ref). The
+dissipation is a penalty on the jumps and does not depend on the central
+part, so the acoustic waves are still damped at ``|û_n ± ĉ|`` through
+their pressure and normal-velocity components even though the pressure
+force itself is the Exner-split gradient.
+"""
+function kennedy_gruber_advective_roe_cartesian(normal, (y⁻,), (y⁺,))
+    F = kennedy_gruber_advective_cartesian_flux(normal, normal, y⁻, y⁺)
+    D = roe_dissipation_cartesian(normal, y⁻, y⁺)
+    return (
+        ρ = F.ρ - D.ρ / 2,
+        ρe = F.ρe - D.ρe / 2,
+        ρu1 = F.ρu1 - D.ρu1 / 2,
+        ρu2 = F.ρu2 - D.ρu2 / 2,
+        ρu3 = F.ρu3 - D.ρu3 / 2,
+    )
+end
+
+# Roe-type dissipation `Σ_k |λ_k| α_k r_k` of (ρ, ρe, ρu⃗-Cartesian) across
+# the face (see [`kennedy_gruber_roe_cartesian`](@ref)). The interface flux
+# subtracts half of it.
+function roe_dissipation_cartesian(normal, y⁻, y⁺)
     # keep the working precision of the state (Float32 fields stay Float32)
     γd = oftype(y⁻.ρ, γ_dry)
     # face normal in Cartesian components (E_c single-valued at the node)
@@ -232,13 +328,7 @@ function kennedy_gruber_roe_cartesian(normal, (y⁻,), (y⁺,))
     Dρe =
         s₊ * α₊ * (Ĥ + ĉ * ûn) + s₋ * α₋ * (Ĥ - ĉ * ûn) +
         s₀ * (α₀ * B + ρ̂ * (û1 * Δut1 + û2 * Δut2 + û3 * Δut3))
-    return (
-        ρ = F.ρ - Dρ / 2,
-        ρe = F.ρe - Dρe / 2,
-        ρu1 = F.ρu1 - Dρu1 / 2,
-        ρu2 = F.ρu2 - Dρu2 / 2,
-        ρu3 = F.ρu3 - Dρu3 / 2,
-    )
+    return (ρ = Dρ, ρe = Dρe, ρu1 = Dρu1, ρu2 = Dρu2, ρu3 = Dρu3)
 end
 
 function waruszewski_roe_cartesian(normal, (y⁻,), (y⁺,))

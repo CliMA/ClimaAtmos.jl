@@ -1798,8 +1798,8 @@ Marker selecting the Zhang–Shu (2010) positivity limiter (`zhang_shu_limiter!`
 applied in `constrain_state!` to every stage value: the vapor and each
 grid-mean tracer other than the water species is scaled at every node toward
 its WJ-weighted element mean to keep it nonnegative, the mass and energy of the
-vapor this moves going with it; a negative condensate is raised to zero at its
-node with the mass and energy of the added condensate; then the grid-mean conserved vector
+vapor this moves going with it; a negative condensate, which the
+thermodynamics diagnoses as zero, is raised to zero at its node; then the grid-mean conserved vector
 (ρ, ρe_tot, ρuₕ, tracers) is scaled toward its mean by one θ ∈ [0, 1]
 enforcing ρ ≥ ρ_min and p ≥ p_min — mean-preserving convex combinations, not pointwise clamps; the pointwise
 grid-mean microphysics constraints are skipped. Intended for DG horizontal discretizations,
@@ -1887,6 +1887,8 @@ symbols or strings.
   - `dg_vi_interface_flux`: `Val(:rusanov)` or `Val(:es)`, the variables the
     vector-invariant DG face penalties act on (conserved `ρe_tot` and `u`, or
     the entropy variables).
+  - `dg_tracer_penalty`: `Val(:acoustic)` or `Val(:advective)`, the rate of
+    the DG tracer jump penalties, `|u| + c` or `max(|u|, ε c)`.
   - `vertical_water_borrowing_species`: `nothing` (all tracers), `()` (none), or
     a `Tuple` of `Symbol`s naming the tracers that the vertical water borrowing
     limiter applies to.
@@ -1906,6 +1908,7 @@ struct AtmosNumerics{
     DGVP,
     DGSF,
     DGVIF,
+    DGTP,
     VWB,
 }
     # Enable specific upwinding schemes for specific equations
@@ -1928,8 +1931,10 @@ struct AtmosNumerics{
     # AtmosNumerics rides into GPU kernels via the AtmosModel.
     dg_equation_form::DGEF
     # FDDG volume/interface flux family: Val(:waruszewski)
-    # (entropy-conservative; full-p momentum flux) or Val(:kg_pert)
-    # (Kennedy-Gruber carrying pm = p − p_ref — well-balanced over terrain).
+    # (entropy-conservative; full-p momentum flux), Val(:kg_pert)
+    # (Kennedy-Gruber carrying pm = p − p_ref in the momentum flux), or
+    # Val(:kg_exner) (Kennedy-Gruber advection only; the pressure force is
+    # the Exner-split gradient of the vector-invariant form).
     dg_volume_flux::DGVF
     # FDDG interface dissipation: Val(:roe) or Val(:es) (Lax-Friedrichs in
     # entropy variables — with the Waruszewski volume flux this gives a
@@ -1945,6 +1950,9 @@ struct AtmosNumerics{
     # VI-form DG face penalty variables: Val(:rusanov) (⟦ρe_tot⟧, ⟦u⟧) or
     # Val(:es) (entropy-variable jumps ⟦−ρ/p⟧, ⟦βu⟧/{β}, β = ρ/p).
     dg_vi_interface_flux::DGVIF
+    # Rate of the DG tracer jump penalties: Val(:acoustic) (|u| + c) or
+    # Val(:advective) (max(|u|, ε c), ε = dg_vi_shear_floor).
+    dg_tracer_penalty::DGTP
     # Tracers the vertical water borrowing limiter applies to:
     # `nothing` (all tracers), `()` (none), or a Tuple of Symbols
     vertical_water_borrowing_species::VWB
@@ -1991,6 +1999,8 @@ types for compile-time dispatch.
     `max(|u_n|, ε c)`.
   - `dg_vi_interface_flux = :rusanov`: Variables of the vector-invariant DG
     face penalties, `:rusanov` (conserved) or `:es` (entropy variables).
+  - `dg_tracer_penalty = :acoustic`: Rate of the DG tracer jump penalties,
+    `:acoustic` (`|u| + c`) or `:advective` (`max(|u|, ε c)`).
 
 An unrecognized keyword, such as a misspelled option, raises a `MethodError`.
 
@@ -2021,6 +2031,7 @@ function AtmosNumerics(;
     dg_vi_velocity_penalty = :rusanov,
     dg_vi_shear_floor = 0.05,
     dg_vi_interface_flux = :rusanov,
+    dg_tracer_penalty = :acoustic,
     vertical_water_borrowing_species = nothing,
     kwargs...,
 )
@@ -2045,6 +2056,7 @@ function AtmosNumerics(;
         Val(Symbol(dg_vi_velocity_penalty)),
         dg_vi_shear_floor,
         Val(Symbol(dg_vi_interface_flux)),
+        Val(Symbol(dg_tracer_penalty)),
         vertical_water_borrowing_species,
     )
 end

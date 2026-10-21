@@ -7,6 +7,12 @@ horizontal_discretization: "DG"
 # dg_volume_flux: "kg_pert"
 # dg_interface_flux: "roe"
 #
+# --- FDDG with the vi pressure treatment: Kennedy-Gruber advection only,
+# Exner-split gradient PGF (no two-point pressure flux over terrain)
+# dg_equation_form: "fddg"
+# dg_volume_flux: "kg_exner"
+# dg_interface_flux: "roe"
+#
 # --- ES-VI: vector-invariant form with entropy-variable interface penalties
 dg_equation_form: "vi"
 dg_vi_interface_flux: "es"

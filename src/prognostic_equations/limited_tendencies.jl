@@ -125,17 +125,17 @@ place; a no-op when `lim` is `nothing`.
 
 In each element:
 
- 1. The vapor density `ρq_tot − Σ ρq_cond` and each grid-mean tracer other
+ 1. Each negative condensate density is raised to zero at its node. The
+    thermodynamics diagnoses a negative condensate as zero
+    (`set_precomputed_quantities!`), so this changes no diagnosed quantity
+    and nothing else is changed: total water, energy, `T` and `u` are
+    untouched, and the condensate mass as a species grows by the undershoot.
+ 2. The vapor density `ρq_tot − Σ ρq_cond` and each grid-mean tracer other
     than the water species is scaled toward its WJ-weighted element mean by
     the largest `θ₁ ∈ [0, 1]` keeping it nonnegative at every node. The vapor
     increment `δ` is added to `ρq_tot`, to `ρ` and, times the element-mean
     velocity, to `ρuₕ`, and `ρe_tot` receives `δ` times the element mean of
     `I_v(T) + K + Φ`, with `T`, `K` from `p.precomputed`.
- 2. Each negative condensate density is raised to zero at its node, and the
-    mass, momentum and energy `I_s(T) + K + Φ` of the added condensate at the
-    node's own `T`, `u` are added to `ρq_tot`, `ρ`, `ρuₕ` and `ρe_tot`, so `T`
-    and `u` are unchanged there. The condensate mass this creates is the
-    undershoot; the element means of the condensates are not preserved.
  3. The conserved vector (ρ, ρe_tot, ρuₕ, tracers) is scaled toward its mean
     by one `θ₂ ∈ [0, 1]` enforcing `ρ ≥ ρ_min` and `p ≥ p_min` at every node
     ([`ZhangShuAdmissibility`](@ref)).
@@ -161,9 +161,13 @@ NVTX.@annotate function zhang_shu_limiter!(Y, p, lim::ZhangShuLimiterCache)
 
     if !isnothing(lim.tracer_limiter)
         if !isnothing(lim.ρq_vap)
+            # a negative condensate is diagnosed as zero, so zeroing it
+            # changes nothing else
             lim.ρq_vap .= Y.c.ρq_tot
             for name in condensate_names(Y)
-                @. lim.ρq_vap -= Y.c.:($$name)
+                ᶜρq = getproperty(Y.c, name)
+                @. ᶜρq = max(zero(ᶜρq), ᶜρq)
+                @. lim.ρq_vap -= ᶜρq
             end
             lim.ρq_vap_prev .= lim.ρq_vap
         end
@@ -187,23 +191,6 @@ NVTX.@annotate function zhang_shu_limiter!(Y, p, lim::ZhangShuLimiterCache)
             @. ᶜaux = element_meanₕ(ᶜρu2 / Y.c.ρ)
             @. ᶜρu2 += ᶜaux * ᶜδ
             @. Y.c.ρ += ᶜδ
-            # a negative condensate is raised to zero at its node, with the
-            # mass, momentum and energy of the added condensate at the node's
-            # own T and u
-            for name in condensate_names(Y)
-                ᶜρq = getproperty(Y.c, name)
-                ᶜI =
-                    name in (:ρq_lcl, :ρq_rai) ?
-                    (@. lazy(TD.internal_energy_liquid(thermo_params, ᶜT))) :
-                    (@. lazy(TD.internal_energy_ice(thermo_params, ᶜT)))
-                @. ᶜδ = max(zero(ᶜρq), -(ᶜρq))
-                @. ᶜρq += ᶜδ
-                @. Y.c.ρq_tot += ᶜδ
-                @. Y.c.ρe_tot += (ᶜI + ᶜK + ᶜΦ) * ᶜδ
-                @. ᶜρu1 += ᶜρu1 / Y.c.ρ * ᶜδ
-                @. ᶜρu2 += ᶜρu2 / Y.c.ρ * ᶜδ
-                @. Y.c.ρ += ᶜδ
-            end
         end
         @. Y.c.uₕ = Geometry.Covariant12Vector(
             Geometry.UVVector(ᶜρu1 / Y.c.ρ, ᶜρu2 / Y.c.ρ),

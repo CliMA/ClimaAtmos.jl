@@ -231,8 +231,9 @@ function dg_sound_speed(Y, p)
     return @. sqrt(γ * ᶜp / Y.c.ρ)
 end
 
-# Orthonormal horizontal face velocity and Rusanov speed λ = |uv| + c_snd.
-# The face velocity is the horizontal physical projection of the FULL ᶜu,
+# Orthonormal horizontal face velocity, Rusanov speed λ = |uv| + c_snd, and the
+# tracer penalty rate (λ, or max(|uv|, ε c_snd) with `dg_tracer_penalty =
+# advective`). The face velocity is the horizontal physical projection of the FULL ᶜu,
 # matching the contravariant contraction of the split_divₕ volume flux: over
 # terrain-warped grids u₃ contributes through g¹³/g²³; on unwarped grids those
 # metric entries are exact zeros, so this reduces bitwise to UVVector(uₕ).
@@ -241,7 +242,15 @@ function dg_face_velocity_and_λ(Y, p)
     ᶜuv = Geometry.project.(Ref(Geometry.UVAxis()), ᶜu)
     ᶜc = dg_sound_speed(Y, p)
     ᶜλ = @. sqrt(LinearAlgebra.norm_sqr(ᶜuv)) + ᶜc
-    return (ᶜuv, ᶜλ)
+    # tracer penalty rate: acoustic |u| + c, or advective max(|u|, ε c)
+    (; dg_tracer_penalty, dg_vi_shear_floor) = p.atmos.numerics
+    ᶜλ_tracer = if dg_tracer_penalty === Val(:advective)
+        ε = Spaces.undertype(axes(Y.c))(dg_vi_shear_floor)
+        @. max(sqrt(LinearAlgebra.norm_sqr(ᶜuv)), ε * ᶜc)
+    else
+        ᶜλ
+    end
+    return (ᶜuv, ᶜλ, ᶜλ_tracer)
 end
 
 """
@@ -348,26 +357,8 @@ NVTX.@annotate function dg_horizontal_dynamics_completion!(Yₜ, Y, p, t)
 
     # central liftings of the strong PGF/K gradients (the same scalars as the
     # gradₕ volume terms in horizontal_dynamics_tendency!)
-    ᶜΠ = @. TD.exner_given_pressure(thermo_params, ᶜp)
-    ᶜθ_v_diff = @. theta_v(thermo_params, ᶜT, ᶜp, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice) -
-       theta_vr(thermo_params, ᶜp)
     ᶜKΦ = @. ᶜK + ᶜΦ - phi_r(thermo_params, ᶜp)
-    ᶜθΠ = @. ᶜθ_v_diff * ᶜΠ
-    lift(q) = Operators.lifting_correction(
-        Operators.central_gradient_lift,
-        Geometry.UVVector{FT},
-        q,
-    )
-    L_KΦ = lift(ᶜKΦ)
-    L_Π = lift(ᶜΠ)
-    L_θΠ = lift(ᶜθΠ)
-    L_θ = lift(ᶜθ_v_diff)
-    @. Yₜ.c.uₕ -= C12(
-        Geometry.transform(
-            Geometry.Covariant12Axis(),
-            L_KΦ + cp_d * (ᶜθ_v_diff * L_Π + L_θΠ - ᶜΠ * L_θ) / 2,
-        ),
-    )
+    dg_exner_split_pgf_lift!(Yₜ, Y, p, ᶜKΦ)
 
     if p.atmos.numerics.dg_vi_velocity_penalty === Val(:wave_selective)
         dg_wave_selective_velocity_penalty!(Yₜ, Y, p, ᶜuv, ᶜβ)
@@ -394,6 +385,42 @@ NVTX.@annotate function dg_horizontal_dynamics_completion!(Yₜ, Y, p, t)
         Geometry.transform(
             Geometry.Covariant12Axis(),
             Geometry.UVVector(pen_u, pen_v),
+        ),
+    )
+    return nothing
+end
+
+"""
+    dg_exner_split_pgf_lift!(Yₜ, Y, p, ᶜKΦ)
+
+Central interface liftings of the Exner-split horizontal pressure-gradient
+force, `gradₕ(ᶜKΦ) + cp_d (θ_v′ gradₕ Π + gradₕ(θ_v′ Π) − Π gradₕ θ_v′) / 2`
+with `θ_v′ = θ_v − θ_vr(p)`: the same scalars as the `gradₕ` volume terms,
+with `ᶜKΦ` the scalar of the plain gradient (`K + Φ − Φ_r` for the
+vector-invariant form, `Φ − Φ_r` when the flux-form advection carries ∇K).
+"""
+function dg_exner_split_pgf_lift!(Yₜ, Y, p, ᶜKΦ)
+    FT = Spaces.undertype(axes(Y.c))
+    (; ᶜp, ᶜT, ᶜq_liq, ᶜq_ice, ᶜq_tot_nonneg) = p.precomputed
+    thermo_params = CAP.thermodynamics_params(p.params)
+    cp_d = thermo_params.cp_d
+    ᶜΠ = @. TD.exner_given_pressure(thermo_params, ᶜp)
+    ᶜθ_v_diff = @. theta_v(thermo_params, ᶜT, ᶜp, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice) -
+       theta_vr(thermo_params, ᶜp)
+    ᶜθΠ = @. ᶜθ_v_diff * ᶜΠ
+    lift(q) = Operators.lifting_correction(
+        Operators.central_gradient_lift,
+        Geometry.UVVector{FT},
+        q,
+    )
+    L_KΦ = lift(ᶜKΦ)
+    L_Π = lift(ᶜΠ)
+    L_θΠ = lift(ᶜθΠ)
+    L_θ = lift(ᶜθ_v_diff)
+    @. Yₜ.c.uₕ -= C12(
+        Geometry.transform(
+            Geometry.Covariant12Axis(),
+            L_KΦ + cp_d * (ᶜθ_v_diff * L_Π + L_θΠ - ᶜΠ * L_θ) / 2,
         ),
     )
     return nothing
@@ -479,7 +506,7 @@ on CG spaces.
 """
 NVTX.@annotate function dg_horizontal_tracer_completion!(Yₜ_lim, Y, p, t)
     is_dg_horizontal(axes(Y.c)) || return nothing
-    (ᶜuv, ᶜλ) = dg_face_velocity_and_λ(Y, p)
+    (ᶜuv, _, ᶜλ) = dg_face_velocity_and_λ(Y, p)
     es =
         p.atmos.numerics.dg_equation_form === Val(:vi) &&
         p.atmos.numerics.dg_vi_interface_flux === Val(:es)
@@ -504,7 +531,7 @@ spaces.
 """
 function dg_ρtke_interface_completion!(Yₜ, Y, p)
     is_dg_horizontal(axes(Y.c)) || return nothing
-    (ᶜuv, ᶜλ) = dg_face_velocity_and_λ(Y, p)
+    (ᶜuv, _, ᶜλ) = dg_face_velocity_and_λ(Y, p)
     add_dg_tracer_interface_flux!(Yₜ.c.ρtke, Y.c.ρtke, Y, ᶜuv, ᶜλ)
     return nothing
 end
@@ -640,7 +667,10 @@ end
 # the ½ρ̂⟦φ⟧ fluctuation), Roe interface dissipation, perturbation pressure
 # pm = p − p_ref in the momentum slot. The Cartesian-component momentum
 # tendency is built in the tangential (E, N) frame and converted to the
-# velocity state: duₕ = (d(ρu) − uₕ dρ)/ρ.
+# velocity state: duₕ = (d(ρu) − uₕ dρ)/ρ. With `dg_volume_flux = kg_exner`
+# the two-point momentum flux is advective only and the pressure force is
+# the Exner-split gradient of the vector-invariant form (volume gradₕ terms
+# plus central liftings), added to uₕ directly.
 # ---------------------------------------------------------------------------
 
 """
@@ -651,6 +681,16 @@ Flux-form horizontal dynamics on DG spaces: replaces the split_divₕ (ρ,
 of `horizontal_dynamics_tendency!` with Waruszewski flux-differencing volume
 terms + Roe interface fluxes over (ρ, ρe, ρu⃗) in global Cartesian momentum
 components. Coriolis, all vertical terms, and tracer advection are unchanged.
+
+With `dg_volume_flux = kg_exner` only the advection is in flux form
+([`kennedy_gruber_advective_cartesian_flux`](@ref) with Roe or Rusanov
+interface dissipation); the horizontal pressure force is the Exner-split
+gradient of the vector-invariant form, `gradₕ(Φ − Φ_r) + cp_d [θ_v′ ∇Π]`
+with its central liftings ([`dg_exner_split_pgf_lift!`](@ref)). Gradients
+of scalars are pointwise exact on constants, so over terrain this form
+does not depend on the discrete metric identity that the two-point
+pressure flux `{p_m}{ê_c ⋅ Ja^k}` fails to satisfy across the horizontal
+collocation and vertical FD operators.
 """
 NVTX.@annotate function dg_fddg_horizontal_dynamics!(Yₜ, Y, p, t)
     FT = Spaces.undertype(axes(Y.c))
@@ -705,7 +745,42 @@ NVTX.@annotate function dg_fddg_horizontal_dynamics!(Yₜ, Y, p, t)
         axes(Y.c),
     )
     fill!(parent(dy), 0)
-    if p.atmos.numerics.dg_volume_flux === Val(:kg_pert)
+    if p.atmos.numerics.dg_volume_flux === Val(:kg_exner)
+        Operators.add_flux_differencing_divergence!(
+            kennedy_gruber_advective_cartesian_flux,
+            dy,
+            y,
+        )
+        kg_adv_interface =
+            p.atmos.numerics.dg_interface_flux === Val(:rusanov) ?
+            kennedy_gruber_advective_rusanov_cartesian :
+            kennedy_gruber_advective_roe_cartesian
+        Operators.add_numerical_flux_interior!(kg_adv_interface, dy, y)
+        # Exner-split horizontal PGF of the vector-invariant form (as in
+        # horizontal_dynamics_tendency!) without the ∇K part, which the
+        # flux-form advection above carries.
+        (; ᶜT, ᶜq_liq, ᶜq_ice, ᶜq_tot_nonneg) = p.precomputed
+        cp_d = thermo_params.cp_d
+        ᶜΦ_r = @. phi_r(thermo_params, ᶜp)
+        ᶜΦ_diff = @. ᶜΦ - ᶜΦ_r
+        ᶜθ_v_diff = @. theta_v(
+            thermo_params,
+            ᶜT,
+            ᶜp,
+            ᶜq_tot_nonneg,
+            ᶜq_liq,
+            ᶜq_ice,
+        ) - theta_vr(thermo_params, ᶜp)
+        ᶜΠ = @. TD.exner_given_pressure(thermo_params, ᶜp)
+        @. Yₜ.c.uₕ -= C12(
+            gradₕ(ᶜΦ_diff) +
+            cp_d * (
+                ᶜθ_v_diff * gradₕ(ᶜΠ) + gradₕ(ᶜθ_v_diff * ᶜΠ) -
+                ᶜΠ * gradₕ(ᶜθ_v_diff)
+            ) / 2,
+        )
+        dg_exner_split_pgf_lift!(Yₜ, Y, p, ᶜΦ_diff)
+    elseif p.atmos.numerics.dg_volume_flux === Val(:kg_pert)
         Operators.add_flux_differencing_divergence!(
             kennedy_gruber_cartesian_flux,
             dy,

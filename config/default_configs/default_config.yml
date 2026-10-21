@@ -47,10 +47,10 @@ dg_equation_form:
   help: "Horizontal DG equation form [`vi` (vector-invariant, default), `fddg` (flux-form Cartesian momentum: Waruszewski volume flux + Roe interface + perturbation-pressure momentum flux)]. Ignored on CG."
   value: "vi"
 dg_volume_flux:
-  help: "FDDG flux family [`waruszewski` (entropy-conservative, default), `kg_pert` (Kennedy-Gruber with perturbation-pressure momentum flux — better-balanced over terrain)]. Ignored unless dg_equation_form is fddg."
+  help: "FDDG flux family [`waruszewski` (entropy-conservative, default), `kg_pert` (Kennedy-Gruber with perturbation-pressure momentum flux — better-balanced over terrain), `kg_exner` (Kennedy-Gruber advection only; the horizontal pressure force is the Exner-split gradient of the vector-invariant form with central liftings, which needs no discrete metric identity over terrain)]. Ignored unless dg_equation_form is fddg."
   value: "waruszewski"
 dg_interface_flux:
-  help: "FDDG interface dissipation [`roe` (default), `es` (entropy-variable Lax-Friedrichs; requires dg_volume_flux: waruszewski — gives a discrete entropy inequality), `rusanov` (requires dg_volume_flux: kg_pert — stronger dissipation, e.g. to keep EDMFX TKE production bounded over terrain)]."
+  help: "FDDG interface dissipation [`roe` (default), `es` (entropy-variable Lax-Friedrichs; requires dg_volume_flux: waruszewski — gives a discrete entropy inequality), `rusanov` (requires dg_volume_flux: kg_pert or kg_exner — stronger dissipation, e.g. to keep EDMFX TKE production bounded over terrain)]."
   value: "roe"
 dg_vi_velocity_penalty:
   help: "Velocity jump penalty of the vector-invariant horizontal DG form [`rusanov` (default; uniform |u| + c on the horizontal velocity jump), `wave_selective` (|u_n| + c on the normal jump, max(|u_n|, dg_vi_shear_floor c) on the tangential and vertical-velocity jumps)]. Ignored unless dg_equation_form is vi."
@@ -61,6 +61,9 @@ dg_vi_shear_floor:
 dg_vi_interface_flux:
   help: "Variables of the vector-invariant DG face penalties [`rusanov` (default; ρ-weighted jumps of e_tot and u), `es` (jumps of the entropy variables 1/T and βu, β = 1/T — every face penalty is an entropy sink at fixed ρ and composition, and total water carries its mass and the energy of its phases; the mass flux stays central)]. Ignored unless dg_equation_form is vi."
   value: "rusanov"
+dg_tracer_penalty:
+  help: "Rate of the DG tracer jump penalties (total water, condensates, TKE, passive tracers) [`acoustic` (default; |u| + c), `advective` (max(|u|, dg_vi_shear_floor c), the rate of the wave-selective shear penalty)]. The energy and velocity penalties are unchanged."
+  value: "acoustic"
 sleve_eta:
   help: "If SLEVE coordinates are chosen, sets the `ηₕ` parameter (if z/z_top > ηₕ, no warping is applied)"
   value: 0.7
@@ -271,7 +274,7 @@ apply_sem_quasimonotone_limiter:
   help: "Apply a horizontal SEM quasi-monotone limiter to every tracer [`false` (default), `true`]"
   value: false
 apply_zhang_shu_limiter:
-  help: "Apply the Zhang-Shu (2010) positivity limiter per RK stage: scale the vapor and each grid-mean tracer other than the water species toward its element mean to keep it nonnegative, moving the mass and energy of the vapor with it; raise each negative condensate to zero at its node with the mass and energy of the added condensate (replacing the pointwise grid-mean microphysics constraints); then scale the conserved vector (ρ, ρe_tot, ρuₕ, tracers) toward its mean by one θ enforcing ρ ≥ zhang_shu_rho_min and p ≥ zhang_shu_p_min. Applied in constrain_state!, so requires update_constrain_state_every `stage` or `dss`. Mean-preserving; intended for DG horizontal discretizations. Mutually exclusive with apply_sem_quasimonotone_limiter [`false` (default), `true`]"
+  help: "Apply the Zhang-Shu (2010) positivity limiter per RK stage: scale the vapor and each grid-mean tracer other than the water species toward its element mean to keep it nonnegative, moving the mass and energy of the vapor with it; raise each negative condensate (diagnosed as zero by the thermodynamics) to zero at its node (replacing the pointwise grid-mean microphysics constraints); then scale the conserved vector (ρ, ρe_tot, ρuₕ, tracers) toward its mean by one θ enforcing ρ ≥ zhang_shu_rho_min and p ≥ zhang_shu_p_min. Applied in constrain_state!, so requires update_constrain_state_every `stage` or `dss`. Mean-preserving; intended for DG horizontal discretizations. Mutually exclusive with apply_sem_quasimonotone_limiter [`false` (default), `true`]"
   value: false
 zhang_shu_rho_min:
   help: "Density floor [kg/m³] enforced by the Zhang-Shu limiter"

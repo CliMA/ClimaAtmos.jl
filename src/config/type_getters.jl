@@ -146,15 +146,18 @@ function get_numerics(parsed_args, FT; vertical_water_borrowing_species = nothin
     dg_equation_form in (:vi, :fddg) ||
         error("dg_equation_form must be vi or fddg, got $dg_equation_form")
     dg_volume_flux = Symbol(get(parsed_args, "dg_volume_flux", "waruszewski"))
-    dg_volume_flux in (:waruszewski, :kg_pert) ||
-        error("dg_volume_flux must be waruszewski or kg_pert, got $dg_volume_flux")
+    dg_volume_flux in (:waruszewski, :kg_pert, :kg_exner) || error(
+        "dg_volume_flux must be waruszewski, kg_pert, or kg_exner, got $dg_volume_flux",
+    )
     dg_interface_flux = Symbol(get(parsed_args, "dg_interface_flux", "roe"))
     dg_interface_flux in (:roe, :es, :rusanov) ||
         error("dg_interface_flux must be roe, es, or rusanov, got $dg_interface_flux")
     (dg_interface_flux == :es && dg_volume_flux != :waruszewski) &&
         error("dg_interface_flux = es requires dg_volume_flux = waruszewski")
-    (dg_interface_flux == :rusanov && dg_volume_flux != :kg_pert) &&
-        error("dg_interface_flux = rusanov requires dg_volume_flux = kg_pert")
+    (dg_interface_flux == :rusanov && dg_volume_flux == :waruszewski) &&
+        error(
+            "dg_interface_flux = rusanov requires dg_volume_flux = kg_pert or kg_exner",
+        )
     dg_vi_velocity_penalty =
         Symbol(get(parsed_args, "dg_vi_velocity_penalty", "rusanov"))
     dg_vi_velocity_penalty in (:rusanov, :wave_selective) || error(
@@ -171,6 +174,10 @@ function get_numerics(parsed_args, FT; vertical_water_borrowing_species = nothin
         Symbol(get(parsed_args, "dg_vi_interface_flux", "rusanov"))
     dg_vi_interface_flux in (:rusanov, :es) || error(
         "dg_vi_interface_flux must be rusanov or es, got $dg_vi_interface_flux",
+    )
+    dg_tracer_penalty = Symbol(get(parsed_args, "dg_tracer_penalty", "acoustic"))
+    dg_tracer_penalty in (:acoustic, :advective) || error(
+        "dg_tracer_penalty must be acoustic or advective, got $dg_tracer_penalty",
     )
 
     numerics = AtmosNumerics(;
@@ -190,6 +197,7 @@ function get_numerics(parsed_args, FT; vertical_water_borrowing_species = nothin
         dg_vi_velocity_penalty,
         dg_vi_shear_floor,
         dg_vi_interface_flux,
+        dg_tracer_penalty,
         vertical_water_borrowing_species,
     )
     @info "numerics $(summary(numerics))"
