@@ -1334,6 +1334,9 @@ function AtmosTurbconv(config::AtmosConfig, params, ::Type{FT}) where {FT}
         pa["turbconv"] == "prognostic_edmfx" || error(
             "`edmfx_newton_resolve: true` requires `turbconv: prognostic_edmfx`",
         )
+        pa["update_cache_every"] == "stage" || error(
+            "`edmfx_newton_resolve: true` requires `update_cache_every: stage`",
+        )
         warn_newton_iterate_option(pa, "edmfx_newton_resolve")
     end
 
