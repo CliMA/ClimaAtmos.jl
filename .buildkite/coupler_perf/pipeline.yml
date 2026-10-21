@@ -10,7 +10,7 @@ env:
   GKSwstype: 100
   SLURM_KILL_BAD_EXIT: 1
   COUPLER_PATH: ".buildkite/perf/ClimaCoupler.jl"
-  COUPLER_COMMIT: "d657499f862f56f9bfd569992590283789db6bcf"
+  COUPLER_COMMIT: "97e24f95a29bcdcb1d08e7e31feef0b9a1e1e631"
   CONFIG_PATH: "$COUPLER_PATH/config/nightly_configs"
   BENCHMARK_CONFIG_PATH: "$COUPLER_PATH/config/benchmark_configs"
   # Packages whose [compat] bounds are dropped from the coupler projects at
@@ -26,6 +26,8 @@ steps:
     key: "init_gpu_env"
     command:
       - git clone https://github.com/CliMA/ClimaCoupler.jl.git $COUPLER_PATH && bash -c "cd $COUPLER_PATH && git checkout $COUPLER_COMMIT"
+      # Warn instead of erroring when the pinned coupler TOML sets parameters ClimaAtmos no longer uses
+      - "echo 'strict_params: false' >> $BENCHMARK_CONFIG_PATH/amip_progedmf_1m_land_he16.yml"
       - "echo $$JULIA_DEPOT_PATH"
       # Remove compat entries for packages in UPSTREAM_PACKAGES
       - |
