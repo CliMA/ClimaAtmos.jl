@@ -1,3 +1,4 @@
+import ClimaComms
 import Thermodynamics as TD
 import CloudMicrophysics.Parameters as CMP
 import CloudMicrophysics.BulkMicrophysicsTendencies as BMT
@@ -207,6 +208,20 @@ end
 ### 1 Moment Microphysics
 ###
 
+# `mp` and `tps` may arrive `Val`-wrapped. A `Val{p}()` is zero-size and carries
+# its value in its type, so the field costs nothing and the parameters fold to
+# literals instead of being read back from the struct -- worth 162 registers and
+# a doubling of occupancy in the SGS quadrature kernel, which is latency-bound
+# at the 255-register cap. `_unwrapped` is the identity for bare parameters.
+@inline _unwrapped(p) = p
+@inline _unwrapped(::Val{P}) where {P} = P
+
+# Only on the device. A struct type parameter is boxed, so on the host each use
+# copies it back out and allocates per point; the device compiler has no heap
+# and folds it to a literal instead.
+@inline _fold(::ClimaComms.AbstractCPUDevice, p) = p
+@inline _fold(::ClimaComms.AbstractDevice, p) = Val(p)
+
 """
     Microphysics1MEvaluator{S, MP, TPS, FT, Args}
 
@@ -380,7 +395,9 @@ struct SGSPrecipShaftFlag{TPS, FT}
 end
 @inline function (f::SGSPrecipShaftFlag)(T_hat, q_tot_hat)
     FT = typeof(f.ρ)
-    S′ = max(zero(FT), q_tot_hat) - TD.q_vap_saturation(f.tps, T_hat, f.ρ) - f.mu_S
+    S′ =
+        max(zero(FT), q_tot_hat) -
+        TD.q_vap_saturation(_unwrapped(f.tps), T_hat, f.ρ) - f.mu_S
     return sgs_precip_shaft_weight(S′, f.S_star, f.ε_S)
 end
 
@@ -483,7 +500,7 @@ with `dq_lcl_dt`, `dq_icl_dt`, `dq_rai_dt`, `dq_sno_dt` [kg/kg/s].
     # to cloud-only q_c), and CloudMicrophysics subtracts q_rai/q_sno from
     # q_tot_hat when it diagnoses the local vapor. Subtracting them from the
     # cloud condensate as well would double-count them and break ⟨q_c^local⟩ = q_c.
-    q_sat_hat = TD.q_vap_saturation(eval.tps, T_hat, eval.ρ)
+    q_sat_hat = TD.q_vap_saturation(_unwrapped(eval.tps), T_hat, eval.ρ)
     S′_hat = q_tot_hat - q_sat_hat - eval.mu_S
     αS′_hat = eval.α * S′_hat
     shifted_excess = max(FT(0), eval.λ_lagrange + αS′_hat)
@@ -524,7 +541,8 @@ with `dq_lcl_dt`, `dq_icl_dt`, `dq_rai_dt`, `dq_sno_dt` [kg/kg/s].
 
     return BMT.bulk_microphysics_tendencies(
         BMT.LinearizedAverage(),
-        eval.scheme, eval.mp, eval.tps, eval.ρ, T_hat, eval.w,
+        eval.scheme, _unwrapped(eval.mp), _unwrapped(eval.tps),
+        eval.ρ, T_hat, eval.w,
         q_tot_node, q_lcl_hat, q_icl_hat, q_rai_node, q_sno_node,
         eval.dt, eval.nsubs, eval.args...,
     )
@@ -605,7 +623,7 @@ positive when a source of the corresponding tracer.
 )
     local_tendency = BMT.bulk_microphysics_tendencies(
         BMT.LinearizedAverage(),
-        BMT.Microphysics1Moment(), cmp, thp, ρ, T, w,
+        BMT.Microphysics1Moment(), _unwrapped(cmp), _unwrapped(thp), ρ, T, w,
         q_tot_nonneg, q_lcl, q_icl, q_rai, q_sno, dt, nsubs,
     )
     return local_tendency
@@ -618,8 +636,10 @@ end
     # invariant across the quadrature. They default to being computed here from the
     # mean state; a caller evaluating this broadcast over many quadrature points can
     # precompute them once and pass them in to avoid recomputing them per point.
-    λ = TD.liquid_fraction(thp, T, max(zero(ρ), q_lcl), max(zero(ρ), q_icl)),
-    mu_S = q_tot_nonneg - TD.q_vap_saturation(thp, T, ρ),
+    λ = TD.liquid_fraction(
+        _unwrapped(thp), T, max(zero(ρ), q_lcl), max(zero(ρ), q_icl),
+    ),
+    mu_S = q_tot_nonneg - TD.q_vap_saturation(_unwrapped(thp), T, ρ),
     precip_incloud_fraction = zero(ρ),
     precip_frac = one(ρ),
     sigma_S = zero(ρ),
