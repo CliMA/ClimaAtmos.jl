@@ -159,6 +159,12 @@ end
         Float64,
         (; sgs_displacement_truncation = 0.5),
     )
+    for w in (-0.1, 1.5)
+        @test_throws ArgumentError CA.SGSQuadratureParameters(
+            Float64,
+            (; edmf_tail_entr_weight = w),
+        )
+    end
     # A run toml overrides the defaults.
     mktemp() do path, io
         write(

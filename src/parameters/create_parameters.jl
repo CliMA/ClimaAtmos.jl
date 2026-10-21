@@ -741,6 +741,9 @@ function SGSQuadratureParameters(
         # the liquid water path of overcast marine stratocumulus. Applied to all
         # cloud types; ice and convective clouds are likely more inhomogeneous.
         cloud_condensate_relative_variance_floor = FT(0.25),
+        # Tail entrainment (`tail_entrainment_increments`): weight 0 = the
+        # dynamical entrainment draws environment-mean air.
+        edmf_tail_entr_weight = FT(0),
     )
     # A run toml defines a parameter that ClimaParams also defines when it
     # appears in the override dictionary or, for a `toml_dict` assembled
@@ -799,6 +802,12 @@ function SGSQuadratureParameters(
             "cloud_condensate_relative_variance_floor must be non-negative; " *
             "got $rv_floor",
         ),
+    )
+    w_tail = parameters.edmf_tail_entr_weight
+    # The entrained air mixes the environment's upper half and its mean; a
+    # weight outside [0, 1] asks for air the environment does not hold.
+    0 <= w_tail <= 1 || throw(
+        ArgumentError("edmf_tail_entr_weight must lie in [0, 1]; got $w_tail"),
     )
     CAP.SGSQuadratureParameters{FT}(; parameters...)
 end

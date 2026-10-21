@@ -943,15 +943,19 @@ cell 1 for `mse` and `q_tot`, the surface mass-flux relaxation at the rate
 `χ_sfc`,
 
     (χ_new - χ_old) / dtγ + α · (χ_new - χ_new[i-1])
-        = ε_tot · (χ⁰ - χ_new) + δ_{i,1} r_sfc · (χ_sfc - χ_new),
+        = ε_tot · (χ⁰ - χ_new) + ε · Δχ_tail + δ_{i,1} r_sfc · (χ_sfc - χ_new),
     α = ᶜbottom_bias(ᶠw) / ᶜdz,
 
 is swept bottom-to-top with `Operators.column_accumulate!` as
 
     χ_new[i] =
-        (χ_old[i]/dtγ + ε_tot[i] · χ⁰[i]
+        (χ_old[i]/dtγ + ε_tot[i] · χ⁰[i] + ε[i] · Δχ_tail[i]
             + δ_{i,1} r_sfc · χ_sfc + α[i] · χ_new[i-1]) /
-        (1/dtγ + α[i] + ε_tot[i] + δ_{i,1} r_sfc).
+        (1/dtγ + α[i] + ε_tot[i] + δ_{i,1} r_sfc),
+
+with the tail-entrainment increment `Δχ_tail` of `mse` and `q_tot`
+(`tail_entrainment_increments`), zero unless `edmf_tail_entr_weight > 0`. It
+does not depend on the draft scalar, so the recurrence stays linear in it.
 
 `α[1]` is zero: the bottom face of cell 1 is the surface, through which there
 is no flow, while the covariant `u₃` there is nonzero over sloped terrain
@@ -1129,6 +1133,10 @@ function _sweep_sgs_updraft_tracers!(
     FT = eltype(p.params)
     (zero_FT, one_FT) = (zero(FT), one(FT))
     a_min = CAP.min_area(CAP.turbconv_params(p.params))
+    thermo_params = CAP.thermodynamics_params(p.params)
+    w_tail = FT(CAP.edmf_tail_entr_weight(p.params))
+    (; dt) = p
+    tail_fields = tail_entrainment_fields(p, w_tail)
     χ_names = unrolled_filter(
         χ_name -> MatrixFields.has_field(Y.c.sgsʲs.:(1), χ_name),
         sgs_tracers,
@@ -1145,9 +1153,9 @@ function _sweep_sgs_updraft_tracers!(
         )
         DataLayouts.foreach_column(
             Y.c.sgsʲs.:($j), Y.c, ᶜenv_sgsʲs, Y.f.sgsʲs.:($j).u₃, ᶜρʲs.:($j),
-            ᶜadvection_factor, ᶜdz, ᶠdz, ᶜK, ᶜh_tot, rates, sfc,
+            ᶜadvection_factor, ᶜdz, ᶠdz, ᶜK, ᶜh_tot, rates, sfc, tail_fields,
         ) do ᶜsgsʲ, Yc, ᶜenv_sgsʲs, ᶠu₃ʲ, ᶜρʲ, ᶜadvection_factor, ᶜdz, ᶠdz, ᶜK,
-        ᶜh_tot, rates, (mass_flux_source, mse_sfc, q_tot_sfc)
+        ᶜh_tot, rates, (mass_flux_source, mse_sfc, q_tot_sfc), tail_fields
             (ᶜentr_vel_scaleʲ, ᶜentr_nonvel_rateʲ, ᶜarea_bounding_entr_detrʲ, ᶜturb_entrʲ) =
                 rates
             ᶠw = @. ᶠu₃ʲ.components.data.:1 / ᶠdz
@@ -1161,10 +1169,30 @@ function _sweep_sgs_updraft_tracers!(
             ᶜα = @. ᶜzero_first_cell(ᶜbottom_bias(ᶠw) / ᶜdz)
             ᶜr_sfc = @. ᶜone_first_cell(zero_FT * ᶜdz) *
                edmfx_sfc_relaxation_rate(mass_flux_source, ᶜsgsʲ.ρa, ᶜρʲ, a_min)
-            ᶜentr_tot = @. compute_entrainment(
+            ᶜentrʲ = @. compute_entrainment(
                 ᶜentr_vel_scaleʲ, ᶜentr_nonvel_rateʲ, ᶜarea_bounding_entr_detrʲ,
                 ᶜinterp(ᶠw),
-            ) + ᶜturb_entrʲ
+            )
+            ᶜentr_tot = @. ᶜentrʲ + ᶜturb_entrʲ
+            # Tail-entrainment sources `ε Δχ_tail` of `mse` and `q_tot`, as in
+            # `edmfx_entr_detr_tendency!`; zero when tail entrainment is off.
+            (ᶜtail_mse, ᶜtail_q_tot) = if isempty(tail_fields)
+                (zero_FT, zero_FT)
+            else
+                (ᶜT⁰, ᶜq_tot⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜT′T′, ᶜq′q′, ᶜcorr_Tq) = tail_fields
+                ᶜρa⁰ = @. ρa⁰(Yc.ρ, Yc.sgsʲs, turbconv_model)
+                ᶜρaʲ = ᶜsgsʲ.ρa
+                (
+                    (@. ᶜentrʲ * tail_entrainment_Δmse(
+                        thermo_params, w_tail, ᶜT⁰, ᶜq_tot⁰, ᶜq_liq⁰, ᶜq_ice⁰,
+                        ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜρa⁰, ᶜρaʲ, ᶜentrʲ, dt,
+                    )),
+                    (@. ᶜentrʲ * tail_entrainment_Δq_tot(
+                        thermo_params, w_tail, ᶜT⁰, ᶜq_tot⁰, ᶜq_liq⁰, ᶜq_ice⁰,
+                        ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜρa⁰, ᶜρaʲ, ᶜentrʲ, dt,
+                    )),
+                )
+            end
             ᶜden = @. 1 / dtγ + ᶜα + ᶜentr_tot
             @. ᶜadvection_factor = ᶜα / ᶜden
             # The grid-mean density of each solved scalar (for mse, ρ (h_tot - K))
@@ -1173,7 +1201,8 @@ function _sweep_sgs_updraft_tracers!(
                 MatrixFields.get_field(Yc, get_ρχ_name(χ_name))
             end
             # The state of draft `j` at each point, with each solved scalar replaced by the
-            # offset `b = num / den` of its recurrence, with `num = χ_old / dtγ + ε_tot χ⁰`,
+            # offset `b = num / den` of its recurrence, with `num = χ_old / dtγ + ε_tot χ⁰`
+            # (plus the tail-entrainment source `ε Δχ_tail` for `mse` and `q_tot`),
             # where the environment value `χ⁰` is diagnosed from the grid-mean densities
             # `ρχs` of the solved scalars and the draft states `env_sgsʲs` (as by
             # `specific_env_value` and `specific_env_mse`), and where `χ_old` and `χ⁰` of
@@ -1191,6 +1220,8 @@ function _sweep_sgs_updraft_tracers!(
                     r_sfc,
                     mse_sfc,
                     q_tot_sfc,
+                    tail_mse,
+                    tail_q_tot,
                 ) -> begin
                     sgsʲ = drop_auto_broadcasters(sgsʲs)[j]
                     ρa⁰_val = ρa⁰(ρ, env_sgsʲs, turbconv_model)
@@ -1206,9 +1237,10 @@ function _sweep_sgs_updraft_tracers!(
                             max(zero_FT, χ_old) / dtγ + entr_tot * max(zero_FT, χ⁰)
                         b =
                             χ_name === @name(mse) ?
-                            (num + r_sfc * mse_sfc) / (den + r_sfc) :
+                            (num + tail_mse + r_sfc * mse_sfc) / (den + r_sfc) :
                             χ_name === @name(q_tot) ?
-                            (num + r_sfc * q_tot_sfc) / (den + r_sfc) : num / den
+                            (num + tail_q_tot + r_sfc * q_tot_sfc) / (den + r_sfc) :
+                            num / den
                         merge(
                             sgs_offsets,
                             NamedTuple{(MatrixFields.extract_first(χ_name),)}((b,)),
@@ -1224,6 +1256,8 @@ function _sweep_sgs_updraft_tracers!(
                     ᶜr_sfc,
                     mse_sfc,
                     q_tot_sfc,
+                    ᶜtail_mse,
+                    ᶜtail_q_tot,
                 )
         end
         MatrixFields.unrolled_foreach(χ_names) do χ_name
