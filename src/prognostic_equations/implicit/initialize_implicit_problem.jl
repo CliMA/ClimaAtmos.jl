@@ -32,6 +32,8 @@ For `PrognosticEDMFX`:
 """
 function initialize_implicit_stage_problem!(Y, p, dtγ)
 
+    implicit_stage_dtγ[] = float(dtγ)
+
     p.atmos.turbconv_model isa PrognosticEDMFX || return nothing
 
     (; microphysics_model, turbconv_model, edmfx_model) = p.atmos
