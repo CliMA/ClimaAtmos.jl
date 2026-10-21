@@ -947,10 +947,10 @@ function set_microphysics_tendency_cache!(
         @. ᶜmp_tendency = microphysics_tendencies_1m(
             BMT.Microphysics1Moment(), sgs_quad, cmp, thp, Y.c.ρ, ᶜT, ᶜw_air,
             ᶜq_tot_nonneg, ᶜq_lcl, ᶜq_icl, ᶜq_rai, ᶜq_sno,
-            ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜsgs_moments.λ_lagrange, ᶜα, dt, nsubs_quad,
+            ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜsgs_moments, ᶜα, dt, nsubs_quad,
             TD.liquid_fraction(thp, ᶜT, max(0, ᶜq_lcl), max(0, ᶜq_icl)),
             ᶜq_tot_nonneg - TD.q_vap_saturation(thp, ᶜT, Y.c.ρ),
-            ᶜprecip_frac, ᶜsgs_moments.sigma_S, opts,
+            ᶜprecip_frac, opts,
         )
     end
 
@@ -1027,8 +1027,8 @@ function set_microphysics_tendency_cache!(
         @. ᶜmp_tendency⁰ = microphysics_tendencies_1m(
             BMT.Microphysics1Moment(), sgs_quad, vcmp, vthp, ᶜρ⁰, ᶜT⁰, ᶜw⁰_air,
             ᶜq_tot_nonneg⁰, ᶜq_lcl⁰, ᶜq_icl⁰, ᶜq_rai⁰, ᶜq_sno⁰,
-            ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜsgs_moments.λ_lagrange, ᶜα, dt, nsubs_quad,
-            ᶜλ⁰, ᶜmu_S⁰, ᶜprecip_frac, ᶜsgs_moments.sigma_S, opts,
+            ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜsgs_moments, ᶜα, dt, nsubs_quad,
+            ᶜλ⁰, ᶜmu_S⁰, ᶜprecip_frac, opts,
         )
     end
 

@@ -18,8 +18,8 @@ import Thermodynamics as TD
 GPU-safe functor diagnosing the saturation-adjusted state at an SGS quadrature
 point, for use with [`integrate_over_sgs`](@ref).
 
-Used both by `compute_sgs_saturation_adjustment` and, as a component, by
-`Microphysics0MEvaluator`.
+Used as a component by `Microphysics0MEvaluator`; `compute_sgs_saturation_adjustment`
+evaluates the analytic equilibrium expectation instead.
 
 # Fields
 
@@ -91,24 +91,27 @@ end
 """
     compute_sgs_saturation_adjustment(
         thermo_params, SG_quad, ρ, T_mean, q_mean, T′T′, q′q′, corr_Tq,
+        lin = 0, curv = 0,
     )
 
-Compute SGS-averaged saturation adjustment by integrating over the joint PDF of
-`(T, q_tot)`.
+Compute SGS-averaged saturation adjustment over the joint PDF of `(T, q_tot)`.
 
-Condensate is diagnosed from the saturation excess at each quadrature point (see
-`SaturationAdjustmentEvaluator`), giving a subgrid-aware cloud condensate.
+The mean saturation excess `μ_S = q_mean − q_sat(T_mean, ρ)` and variance
+`σ_S² = E[(S − μ_S)²]` are accumulated over the quadrature points via
+`_sgs_saturation_moments`, and the expected equilibrium condensate is evaluated
+from the analytic truncated-Gaussian integral
+`q_cond = μ_S Φ(μ_S / σ_S) + σ_S φ(μ_S / σ_S)` (`truncated_gaussian_condensate`),
+or, with nonzero displacement coefficients `lin`, `curv`
+(`displacement_curvature_coefficients`), from the curvature-aware expectation
+`displacement_condensate(μ_S, σ_S, lin, curv)`. The continuous expectation
+has none of the discrete 3-point Gauss–Hermite support cutoff at
+`μ_S < −√3 σ_S` and keeps the equilibrium condensate smooth; with
+`lin = curv = 0` it is the same truncated-Gaussian expectation the
+cloud-fraction closure uses.
 Called from `set_precomputed_quantities!` as a second pass that overwrites the
 grid-mean saturation-adjustment condensate `ᶜq_liq`, `ᶜq_ice` whenever an
 equilibrium moisture model is run with an SGS quadrature configured, so that
 condensate and cloud fraction follow the same distribution.
-
-Quadrature points whose sampled `q_tot` falls in the negative tail are clamped to
-zero, which makes the integrated mean `q̃_mean` exceed `q_mean`. Reweighting the
-surviving points by `ratio = q_mean / q̃_mean` restores `q_mean`, and because
-condensate vanishes wherever `q_hat = 0`, that reweighting is equivalent to scaling
-the integrated condensate by `ratio`. The ratio is clamped at 1 so only downward
-correction is applied, and it is a no-op for a lognormal `q` distribution.
 
 The returned temperature is `T_mean` unchanged. Recomputing `T` from
 `(e_int, q_tot, q_liq, q_ice)` with the SGS condensate would give a temperature
@@ -124,6 +127,9 @@ inconsistent with saturation equilibrium and degrade the Jacobian approximations
   - `T′T′`: Temperature variance [K²].
   - `q′q′`: Total-water variance [(kg/kg)²].
   - `corr_Tq`: Correlation coefficient corr(T′, q′) [-].
+  - `lin`, `curv`: Linear and curvature coefficients of the saturation excess
+    under the vertical displacement [kg/kg]; zero for the truncated-Gaussian
+    expectation.
 
 # Returns
 
@@ -139,31 +145,22 @@ NamedTuple with `T` [K] and the SGS-averaged condensate `q_liq` and `q_ice`
     T′T′,
     q′q′,
     corr_Tq,
+    lin = zero(ρ),
+    curv = zero(ρ),
 )
     FT = typeof(T_mean)
-    q_min = TD.Parameters.q_min(thermo_params)
-    # Grid-mean liquid fraction, held fixed across all quadrature points.
     λ_mean = TD.liquid_fraction_ramp(thermo_params, T_mean)
-    # Create GPU-safe functor (not a closure)
-    evaluator = SaturationAdjustmentEvaluator(thermo_params, ρ, λ_mean)
-
-    # Integrate over quadrature points
-    result =
-        integrate_over_sgs(evaluator, SG_quad, q_mean, T_mean, q′q′, T′T′, corr_Tq)
-
-    # Weight adjustment for truncated distribution (correct for any q distribution
-    # but will be no-op for lognormal q distribution):
-    # When q_hat is clamped to 0, the integrated q̃_mean exceeds q_mean.
-    # Adjusting weights of valid points by ratio = q_mean / q̃_mean preserves
-    # q_mean. Since q_cond = 0 whenever q_hat = 0, this is equivalent to
-    # scaling the integrated condensate by ratio.
-    # Clamp ratio ≤ 1: only correct downward (lower-bound truncation).
-    ratio = min(one(FT), q_mean / max(result.q_tot_quad, q_min))
-    q_liq = result.q_liq * ratio
-    q_ice = result.q_ice * ratio
-
-    # Return the equilibrium-adjusted T_mean unchanged. Recomputing T from
-    # (e_int, q_tot, q_liq_sgs, q_ice_sgs) would yield a temperature
-    # inconsistent with saturation equilibrium (causing problems in Jacobian approximations).
+    (; mu_S, sigma_S) = _sgs_saturation_moments(
+        thermo_params, ρ, T_mean, q_mean, SG_quad, T′T′, q′q′, corr_Tq,
+    )
+    # The Gaussian tail of `q_tot` extends below zero, so the analytic
+    # expectation can exceed the total water the cell holds; the condensate is
+    # bounded by `q_mean` to keep the grid-mean vapor non-negative.
+    q_cond = min(
+        displacement_condensate(mu_S, sigma_S, lin, curv),
+        max(q_mean, zero(FT)),
+    )
+    q_liq = λ_mean * q_cond
+    q_ice = (one(FT) - λ_mean) * q_cond
     return (; T = T_mean, q_liq, q_ice)
 end

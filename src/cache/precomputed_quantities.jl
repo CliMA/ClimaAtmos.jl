@@ -228,8 +228,7 @@ function precomputed_quantities(Y, atmos)
         ᶠ∂θli∂z = similar(Y.f, FT),
         ᶠ∂qt∂z = similar(Y.f, FT),
         # Face-native moist buoyancy gradient, face-native eddy diffusivity/
-        # viscosity, interfacial entrainment diffusivity K_e = γ w_e Δz, and
-        # the master mixing length at centers. Every consumer is an
+        # viscosity, and the master mixing length at centers. Every consumer is an
         # AbstractEDMF path, so they are allocated only for AbstractEDMF;
         # other closures use the center ᶜK_h/ᶜK_u instead.
         # Evaluating the stability closure at the faces, where the fluxes
@@ -280,29 +279,24 @@ function precomputed_quantities(Y, atmos)
     uses_microphysics_quadrature_moments =
         atmos.microphysics_model isa
         Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M}
-    # `ᶜsgs_moments` caches `(sigma_S, λ_lagrange)` — the SGS standard
-    # deviation and the Lagrange multiplier used by `Microphysics1MEvaluator`.
-    # Allocated only for 1M/2M schemes, together with `ᶜprecip_frac`, the
-    # overlap precipitation fraction (`set_precip_fraction!`).
-    SGSMomentsNT = @NamedTuple{sigma_S::FT, λ_lagrange::FT}
+    # `ᶜsgs_moments` caches `(sigma_S, λ_lagrange, λ_eq)` — the SGS standard
+    # deviation and the actual and equilibrium Lagrange multipliers used by
+    # `Microphysics1MEvaluator`. Allocated only for 1M/2M schemes, together
+    # with `ᶜprecip_frac`, the overlap precipitation fraction
+    # (`set_precip_fraction!`).
+    SGSMomentsNT = @NamedTuple{sigma_S::FT, λ_lagrange::FT, λ_eq::FT}
     covariance_quantities = if uses_sgs_quadrature
         base = (;
-            # σ²_T and σ²_q accumulate three variance blocks in
-            # `set_covariance_cache!`: the turbulent closure
-            # (`2 c ℓ² |∇_z ψ|²`), the horizontal geometric term
-            # (`c_g (c_Δx Δx_h)² |∇_h ψ|²`, Richardson-weighted), and the
-            # resolved vertical uniform-box term
-            # (`c_g (c_Δz Δz)² (∂_z ψ)²`, exact for a linear profile when
-            # `c_g = 1/12` and `c_Δz = 1`).
+            # σ²_T and σ²_q of the subgrid displacement acting on the
+            # resolved gradients (`set_covariance_cache!`).
             ᶜT′T′ = zeros(axes(Y.c)),
             ᶜq′q′ = zeros(axes(Y.c)),
             # T–q correlation the quadrature actually samples (filled by
-            # `set_tq_correlation!`): the prescribed `Tq_correlation_coefficient`
-            # for `tq_correlation_model: constant`, or `T′q′ / √(T′T′ q′q′)` for
-            # `tq_correlation_model: diagnosed`. The gradient-based covariance
-            # `ᶜT′q′` is only allocated for the diagnosed model (prescribed-ρ_turb
-            # turbulent cross + horizontal geometric cross + vertical uniform-box
-            # cross; see `set_covariance_cache!`).
+            # `set_tq_correlation!`): `T′q′ / √(T′T′ q′q′)` for
+            # `tq_correlation_model: diagnosed`, or the prescribed
+            # `Tq_correlation_coefficient` for `tq_correlation_model: constant`.
+            # The displacement covariance `ᶜT′q′` is only allocated for the
+            # diagnosed model.
             ᶜcorr_Tq = zeros(axes(Y.c)),
             # Local SGS variance fidelity (see `sgs_variance_fidelity`),
             # refreshed inside `set_covariance_cache!`.
@@ -310,6 +304,20 @@ function precomputed_quantities(Y, atmos)
             (
                 atmos.tq_correlation_model isa DiagnosedTqCorrelation ?
                 (; ᶜT′q′ = zeros(axes(Y.c))) : (;)
+            )...,
+            # Linear and curvature coefficients `(lin, curv)` of the saturation
+            # excess under the vertical displacement, `S = μ_S + lin x +
+            # ½ curv (x² − 1) + h` with `x` standard normal
+            # (`set_displacement_curvature!`); only for the curvature-aware
+            # equilibrium condensate (`sgs_variance_curvature`).
+            (
+                atmos.sgs_variance_curvature ?
+                (;
+                    ᶜdisp_S = fill!(
+                        similar(Y.c, @NamedTuple{lin::FT, curv::FT}),
+                        (; lin = zero(FT), curv = zero(FT)),
+                    ),
+                ) : (;)
             )...,
         )
         uses_microphysics_quadrature_moments ?
@@ -773,6 +781,13 @@ NVTX.@annotate function set_implicit_precomputed_quantities!(Y, p, t)
         sgs_quad = p.atmos.sgs_quadrature
         if !isnothing(sgs_quad)
             (; ᶜT′T′, ᶜq′q′, ᶜcorr_Tq) = p.precomputed
+            # Displacement coefficients of the curvature-aware condensate,
+            # zero where it is not configured.
+            ᶜlin, ᶜcurv = if p.atmos.sgs_variance_curvature
+                (p.precomputed.ᶜdisp_S.lin, p.precomputed.ᶜdisp_S.curv)
+            else
+                (zero(eltype(ᶜT)), zero(eltype(ᶜT)))
+            end
             @. ᶜsa_result = compute_sgs_saturation_adjustment(
                 thermo_params,
                 $(sgs_quad),
@@ -782,6 +797,8 @@ NVTX.@annotate function set_implicit_precomputed_quantities!(Y, p, t)
                 ᶜT′T′,
                 ᶜq′q′,
                 ᶜcorr_Tq,
+                ᶜlin,
+                ᶜcurv,
             )
             @. ᶜq_liq = ᶜsa_result.q_liq
             @. ᶜq_ice = ᶜsa_result.q_ice
@@ -895,9 +912,8 @@ NVTX.@annotate function set_explicit_precomputed_quantities!(Y, p, t)
 
     set_covariance_cache_and_cloud_fraction!(Y, p)
 
-    # Interfacial entrainment diffusivity K_e at faces (interface-aware stability
-    # closure). Needs the final cloud fraction from the covariance/cloud-fraction
-    # update above.
+    # Face-native diffusivities. Need the final cloud fraction from the
+    # covariance/cloud-fraction update above.
     set_face_diffusivities!(Y, p)
 
     if turbconv_model isa AbstractEDMF && (

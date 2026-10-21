@@ -511,10 +511,8 @@ function edmfx_sgs_horizontal_diffusive_flux_tendency!(
     end
 
     # Grid-mean tracers. The water tracers are handled above: `ρq_tot` and the
-    # cloud species through the aggregate flux, rain and snow not at all. The
-    # vertical path gives them only the interfacial-entrainment `K_e`, which
-    # has no horizontal analogue, so they receive no horizontal transport.
-    # Passive tracers use the unscaled `K_h`.
+    # cloud species through the aggregate flux, rain and snow not at all, as in
+    # the vertical. Passive tracers use the unscaled `K_h`.
     foreach_gs_tracer(Yₜ, Y) do ᶜρχₜ, ᶜρχ, ρχ_name
         ρχ_name in microphysics_tracer_names(Y) && return
         ᶜχ = @. lazy(specific(ᶜρχ, ᶜρ))

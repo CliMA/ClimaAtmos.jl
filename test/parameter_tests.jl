@@ -112,14 +112,20 @@ end
 end
 
 @testset "Geometric SGS variance parameters" begin
-    # The defaults come from ClimaParams.
+    # Defaults from ClimaParams (name_map) or the provisional block of
+    # `SGSQuadratureParameters`.
     for FT in (Float32, Float64)
         sq = CA.ClimaAtmosParameters(FT).sgs_quadrature_params
         @test CAP.sgs_variance_horizontal_scale_factor(sq) == FT(1)
-        @test CAP.sgs_variance_vertical_scale_factor(sq) == FT(1)
         @test CAP.sgs_variance_geometric_coeff(sq) == FT(1 // 12)
         @test CAP.sgs_variance_max_rel_std(sq) == FT(0.5)
-        @test CAP.sgs_variance_isentropic_depth(sq) == FT(1000)
+        @test CAP.sgs_variance_vertical_velocity_floor(sq) == FT(1.6)
+        @test CAP.sgs_variance_floor_reference_resolution(sq) == FT(1.2e5)
+        @test CAP.sgs_variance_floor_resolution_exponent(sq) == FT(2 // 3)
+        @test CAP.sgs_variance_floor_time_scale(sq) == FT(300)
+        @test CAP.sgs_variance_theta_horizontal_scale_ratio(sq) == FT(0.7)
+        @test CAP.sgs_variance_theta_vertical_scale_ratio(sq) == FT(0.36)
+        @test CAP.sgs_variance_horizontal_cross_correlation(sq) == FT(0.5)
         @test CAP.sgs_liquid_uniform_fraction(sq) == FT(1)
         @test CAP.sgs_ice_uniform_fraction(sq) == FT(1)
         @test CAP.sgs_precip_incloud_fraction(sq) == FT(0)
