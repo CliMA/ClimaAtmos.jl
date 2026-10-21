@@ -439,6 +439,7 @@ function precomputed_quantities(Y, atmos)
             ᶜρ_diffʲs = similar(Y.c, NTuple{n, FT}),
             ᶠu₃_tendencyʲs = similar(Y.f, NTuple{n, C3{FT}}),
             ᶜρa_tendencyʲs = similar(Y.c, NTuple{n, FT}),
+            newton_resolve_quantities(Y, n, atmos.edmfx_model.newton_resolve)...,
             # Per-updraft surface conditions at level 1.
             sfc_mass_flux_sourceʲs = similar(Fields.level(Y.c, 1), NTuple{n, FT}),
             sfc_mse_buoyantʲs = similar(Fields.level(Y.c, 1), NTuple{n, FT}),
@@ -475,7 +476,33 @@ function precomputed_quantities(Y, atmos)
         ᶜcloud_fraction,
         cosp_quantities...,
         covariance_quantities...,
-        smagorinsky_lilly_quantities...)
+        smagorinsky_lilly_quantities...,
+        # Step fraction of the current implicit stage, recorded by
+        # `initialize_implicit_stage_problem!`; NaN before the first stage. Kept in
+        # Float64 so that it holds the `dtγ` of the timestepper exactly, and the
+        # repeated stage solves use the same `dtγ` as the first.
+        implicit_stage_dtγ = Ref(NaN),
+    )
+end
+
+"""
+    newton_resolve_quantities(Y, n, newton_resolve)
+
+Fields used to repeat the analytic stage solves of the `n` updrafts on every
+Newton iterate (`resolve_sgs_u₃_ρa_stage!`), allocated only when `newton_resolve`
+is `Val(true)`: the stage-start `u₃ʲ` and `ρaʲ` (`ᶠu₃_stage_startʲs`,
+`ᶜρa_stage_startʲs`) and work copies of the updraft states that the solves
+read and overwrite (`ᶠsgsʲs_newton`, `ᶜsgsʲs_newton`).
+"""
+newton_resolve_quantities(Y, n, ::Val{false}) = (;)
+function newton_resolve_quantities(Y, n, ::Val{true})
+    FT = Spaces.undertype(axes(Y.c))
+    return (;
+        ᶠu₃_stage_startʲs = similar(Y.f, NTuple{n, C3{FT}}),
+        ᶜρa_stage_startʲs = similar(Y.c, NTuple{n, FT}),
+        ᶠsgsʲs_newton = similar(Y.f.sgsʲs),
+        ᶜsgsʲs_newton = similar(Y.c.sgsʲs),
+    )
 end
 
 """
@@ -837,7 +864,6 @@ NVTX.@annotate function set_implicit_precomputed_quantities!(Y, p, t)
     if turbconv_model isa PrognosticEDMFX
         set_prognostic_edmf_precomputed_quantities_draft!(Y, p, ᶠuₕ³, t)
         set_prognostic_edmf_precomputed_quantities_environment!(Y, p, ᶠuₕ³, t)
-        edmf_newton_resolve() && resolve_sgs_u₃_ρa_stage!(Y, p)
     elseif !(isnothing(turbconv_model))
         # Do nothing for other turbconv models for now
     end

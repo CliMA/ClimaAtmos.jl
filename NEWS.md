@@ -4,6 +4,15 @@ ClimaAtmos.jl Release Notes
 main
 ----
 
+- ![][badge-✨feature/enhancement] Options to reduce the timestep dependence of
+  moist convection with prognostic EDMF and 1M microphysics, all off by default:
+  `microphysics_averaging_window` (window over which the 1M tendencies are
+  time-averaged: the timestep, a number of seconds, or `stage`),
+  `microphysics_newton_refresh` (recompute the 1M process rates on every Newton
+  iterate), and `edmfx_newton_resolve` (repeat the analytic updraft `u₃`/`ρa`
+  stage solves on every Newton iterate with the iterate's buoyancy). The Newton
+  options need `max_newton_iters_ode >= 2` and have been validated with `ARS222`.
+
 0.42.15
 -------
 

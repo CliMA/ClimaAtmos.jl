@@ -354,6 +354,29 @@ ways that are easy to misread:
     ``\rho^j a_{\min}`` would not be, since it would create draft mass out of
     nothing, so the lower bound is zero.
 
+### Repeating the solves on Newton iterates
+
+Both solves use the draft buoyancy ``\rho^j_{\mathrm{diff}}`` and the
+buoyancy-driven detrainment of the last cache update, and run once, before the
+Newton solve. The draft velocity and area therefore respond to condensation and
+latent heating within a stage only at the next stage. With moist convection
+this lag is a first-order time-truncation error that grows with the timestep:
+near a marginally buoyant cloud base it delays the deepening of convection.
+
+With `edmfx_newton_resolve: true`, `initialize_implicit_stage_problem!` stores
+the stage-start ``u_3^j`` and ``\hat{\rho}^j``, and on every Newton iterate
+`resolve_sgs_u₃_ρa_stage!` refreshes ``\rho^j_{\mathrm{diff}}`` from the
+iterate, repeats both solves from the stage-start values in work copies of the
+draft states, and replaces the cached tendencies. The Newton solve then
+converges to the stage values consistent with the buoyancy of the solution.
+The first iterate is the explicit prediction of the stage, so the option needs
+`max_newton_iters_ode` of at least 2. It is most effective together with the
+Newton-iterate refresh of the microphysics rates
+(`microphysics_newton_refresh`, see [Microphysics](microphysics.md)), which
+makes the iterate's buoyancy include the latent heating of the stage. Neither
+is part of the Jacobian, so the iterates converge as a fixed-point iteration;
+the options have been validated with `ARS222`.
+
 ## Jacobian
 
 The implicit residual is linearized by the Jacobian algorithms of

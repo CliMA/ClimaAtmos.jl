@@ -258,6 +258,12 @@ cloud_nn_architecture:
 implicit_microphysics:
   help: "Whether to treat microphysics tendencies implicitly [`true` (default), `false`]"
   value: true
+microphysics_averaging_window:
+  help: "Window over which the 1M microphysics tendencies are time-averaged: `~` uses the timestep (default), a number gives a fixed window in seconds (capped at the timestep), and `stage` uses the step fraction `dtγ` of the current implicit stage"
+  value: ~
+microphysics_newton_refresh:
+  help: "Recompute the 1M microphysics process rates on every Newton iterate of an implicit stage, instead of once per cache update. Requires `implicit_microphysics: true`, and `max_newton_iters_ode >= 2` to have an effect [`true`, `false` (default)]"
+  value: false
 use_sgs_quadrature:
   help: "Enable subgrid-scale quadrature integration for microphysics tendencies. When true, microphysics tendencies are integrated over the joint SGS PDF of (T, q_tot). [`true` (default), `false`]"
   value: true
@@ -477,6 +483,9 @@ edmfx_scale_blending:
   value: "SmoothMinimum"
 edmfx_filter:
   help: "If set to true, it switches on the relaxation of negative velocity in the eddy-diffusivity mass-flux scheme.  [`true`, `false` (default)]"
+  value: false
+edmfx_newton_resolve:
+  help: "Repeat the analytic updraft u₃ and ρa stage solves on every Newton iterate of an implicit stage, using the updraft buoyancy of the iterate. Only for `prognostic_edmfx`; needs `max_newton_iters_ode >= 2` to have an effect [`true`, `false` (default)]"
   value: false
 edmfx_nh_pressure:
   help: "If set to true, it switches on the eddy-diffusivity mass-flux pressure drag closure. For the prognostic scheme, this only controls the drag term in the pressure closure. The buoyancy term is always applied. [`true`, `false` (default)]"

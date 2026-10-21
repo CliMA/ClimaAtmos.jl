@@ -27,20 +27,31 @@ and are returned as the implicit tendencies of these variables by
 reproduces the analytic stage state. For all other turbulence-convection models
 this is a no-op.
 
+For every model it also records `dtγ` in `p.precomputed.implicit_stage_dtγ`,
+which `microphysics_averaging_window` and `resolve_sgs_u₃_ρa_stage!` read. With
+`edmfx_model.newton_resolve`, it stores the stage-start `u₃ʲ` and `ρaʲ` in
+`p.precomputed.ᶠu₃_stage_startʲs` and `p.precomputed.ᶜρa_stage_startʲs`, from
+which `resolve_sgs_u₃_ρa_stage!` repeats the solves on every Newton iterate.
+
 This routine acts as a general hook for implicit-stage initialization.
 Returns `nothing`.
 """
 function initialize_implicit_stage_problem!(Y, p, dtγ)
 
-    implicit_stage_dtγ[] = float(dtγ)
+    p.precomputed.implicit_stage_dtγ[] = dtγ
 
     if p.atmos.turbconv_model isa PrognosticEDMFX
 
-        edmf_newton_resolve() &&
-            (edmf_newton_resolve_stage[] = (; Y_stage_start = copy(Y), dtγ))
-
         (; ᶠu₃_tendencyʲs, ᶜρa_tendencyʲs) = p.precomputed
         n = n_mass_flux_subdomains(p.atmos.turbconv_model)
+
+        if p.atmos.edmfx_model.newton_resolve isa Val{true}
+            (; ᶠu₃_stage_startʲs, ᶜρa_stage_startʲs) = p.precomputed
+            for j in 1:n
+                @. ᶠu₃_stage_startʲs.:($$j) = Y.f.sgsʲs.:($$j).u₃
+                @. ᶜρa_stage_startʲs.:($$j) = Y.c.sgsʲs.:($$j).ρa
+            end
+        end
 
         # store -u₃_old / dtγ and -ρa_old / dtγ
         for j in 1:n
@@ -61,41 +72,68 @@ function initialize_implicit_stage_problem!(Y, p, dtγ)
     end
 end
 
-# Experimental (TRMM dt-sensitivity test): with `CA_EDMF_NEWTON_RESOLVE=1`, the
-# analytic u₃ and ρa stage solves are repeated on every Newton iterate, using the
-# updraft buoyancy of the iterate instead of the buoyancy of the explicit closures.
-const edmf_newton_resolve_stage = Ref{Any}(nothing)
-edmf_newton_resolve() = get(ENV, "CA_EDMF_NEWTON_RESOLVE", "") == "1"
-
 """
     resolve_sgs_u₃_ρa_stage!(Y, p)
 
-Refresh `ᶜρ_diffʲs` from the draft density of the iterate `Y`, repeat the
-analytic u₃ and ρa solves from the stage-start state stored by
-`initialize_implicit_stage_problem!`, and overwrite the cached stage tendencies
-`ᶠu₃_tendencyʲs` and `ᶜρa_tendencyʲs`. No-op before the first implicit stage.
+Repeat the analytic `u₃` and `ρa` stage solves with the updraft buoyancy of the
+Newton iterate `Y`, and overwrite the cached stage tendencies
+`p.precomputed.ᶠu₃_tendencyʲs` and `p.precomputed.ᶜρa_tendencyʲs`. Returns
+`nothing`.
+
+`initialize_implicit_stage_problem!` solves for `u₃` and `ρa` once, before the
+Newton solve, with the buoyancy `ᶜρ_diffʲs` and buoyancy-driven detrainment of
+the last cache update, so the updraft velocity and area respond to condensation
+and latent heating within the stage only at the next stage. Here `ᶜρ_diffʲs` is
+refreshed from the draft density of the iterate, the stage-start `u₃ʲ` and `ρaʲ`
+(`ᶠu₃_stage_startʲs`, `ᶜρa_stage_startʲs`) are copied into the work states
+`ᶠsgsʲs_newton` and `ᶜsgsʲs_newton`, both solves are repeated there, and the
+tendencies are set to `(stage value - stage start) / dtγ`, so that the Newton
+solve converges to the stage values consistent with the iterate.
+
+Called on every Newton iterate by `set_newton_iterate_precomputed_quantities!`
+when `edmfx_model.newton_resolve` is `Val(true)`; a no-op before the first
+implicit stage.
 """
 function resolve_sgs_u₃_ρa_stage!(Y, p)
-    stage = edmf_newton_resolve_stage[]
-    isnothing(stage) && return nothing
-    (; Y_stage_start, dtγ) = stage
+    dtγ = p.precomputed.implicit_stage_dtγ[]
+    isnan(dtγ) && return nothing
     (; ᶠu₃_tendencyʲs, ᶜρa_tendencyʲs, ᶜρʲs, ᶜρ_diffʲs) = p.precomputed
+    (; ᶠu₃_stage_startʲs, ᶜρa_stage_startʲs, ᶠsgsʲs_newton, ᶜsgsʲs_newton) =
+        p.precomputed
     n = n_mass_flux_subdomains(p.atmos.turbconv_model)
     for j in 1:n
         @. ᶜρ_diffʲs.:($$j) = (ᶜρʲs.:($$j) - Y.c.ρ) / ᶜρʲs.:($$j)
+        @. ᶠsgsʲs_newton.:($$j).u₃ = ᶠu₃_stage_startʲs.:($$j)
+        @. ᶜsgsʲs_newton.:($$j).ρa = ᶜρa_stage_startʲs.:($$j)
     end
-    Y_solve = copy(Y)
-    for j in 1:n
-        Y_solve.f.sgsʲs.:($j).u₃ .= Y_stage_start.f.sgsʲs.:($j).u₃
-        Y_solve.c.sgsʲs.:($j).ρa .= Y_stage_start.c.sgsʲs.:($j).ρa
-    end
-    solve_sgs_u₃_implicit_stage_analytic!(Y_solve, p, dtγ)
-    solve_sgs_ρa_implicit_stage_analytic!(Y_solve, p, dtγ)
+    solve_sgs_u₃_implicit_stage_analytic!(ᶠsgsʲs_newton, ᶜsgsʲs_newton, p, dtγ)
+    solve_sgs_ρa_implicit_stage_analytic!(ᶜsgsʲs_newton, ᶠsgsʲs_newton, p, dtγ)
     for j in 1:n
         @. ᶠu₃_tendencyʲs.:($$j) =
-            (Y_solve.f.sgsʲs.:($$j).u₃ - Y_stage_start.f.sgsʲs.:($$j).u₃) / dtγ
+            (ᶠsgsʲs_newton.:($$j).u₃ - ᶠu₃_stage_startʲs.:($$j)) / dtγ
         @. ᶜρa_tendencyʲs.:($$j) =
-            (Y_solve.c.sgsʲs.:($$j).ρa - Y_stage_start.c.sgsʲs.:($$j).ρa) / dtγ
+            (ᶜsgsʲs_newton.:($$j).ρa - ᶜρa_stage_startʲs.:($$j)) / dtγ
+    end
+    return nothing
+end
+
+"""
+    set_newton_iterate_precomputed_quantities!(Y, p, t)
+
+Update the precomputed quantities for a Newton iterate `Y` of an implicit stage.
+Registered with ClimaTimeSteppers as the `cache_imp!` hook of `ClimaODEFunction`.
+
+Calls `set_implicit_precomputed_quantities!` and, when
+`edmfx_model.newton_resolve` is `Val(true)`, `resolve_sgs_u₃_ρa_stage!`. The
+repeated stage solves are kept out of `set_implicit_precomputed_quantities!`,
+which also runs as part of the full cache update outside the implicit solve.
+Returns `nothing`.
+"""
+function set_newton_iterate_precomputed_quantities!(Y, p, t)
+    set_implicit_precomputed_quantities!(Y, p, t)
+    if p.atmos.turbconv_model isa PrognosticEDMFX &&
+       p.atmos.edmfx_model.newton_resolve isa Val{true}
+        resolve_sgs_u₃_ρa_stage!(Y, p)
     end
     return nothing
 end
@@ -139,14 +177,20 @@ end
 
 """
     solve_sgs_u₃_implicit_stage_analytic!(Y, p, dtγ)
+    solve_sgs_u₃_implicit_stage_analytic!(ᶠsgsʲs, ᶜsgsʲs, p, dtγ)
 
 Solve the IMEX/ARK implicit-stage equation for the SGS/updraft vertical
-velocity `u₃` analytically, overwriting `Y.f.sgsʲs.:(j).u₃` in each EDMFX
-mass-flux subdomain `j`.
+velocity `u₃` analytically in each EDMFX mass-flux subdomain `j`.
+
+The second form reads the stage-start `u₃` from the face updraft states
+`ᶠsgsʲs` and the area-weighted densities `ρa` from the center updraft states
+`ᶜsgsʲs`, and overwrites `ᶠsgsʲs.:(j).u₃` with the stage value. The first form
+applies it to `Y.f.sgsʲs` and `Y.c.sgsʲs`, and returns early for any
+`turbconv_model` other than `PrognosticEDMFX`.
 
 The result is intended to remain fixed during the subsequent Newton solve; see
-`initialize_implicit_stage_problem!` for how it is held fixed. Returns early
-for any `turbconv_model` other than `PrognosticEDMFX`.
+`initialize_implicit_stage_problem!` for how it is held fixed, and
+`resolve_sgs_u₃_ρa_stage!` for repeating the solve on every Newton iterate.
 
 The underlying evolution equation for the physical vertical velocity `w` is
 
@@ -184,9 +228,11 @@ of the quadratic. Clamping the constant term with `min(0, ⋅)` keeps the
 discriminant non-negative and the root non-negative, so the solve can never
 produce a downward updraft velocity.
 """
-function solve_sgs_u₃_implicit_stage_analytic!(Y, p, dtγ)
+solve_sgs_u₃_implicit_stage_analytic!(Y, p, dtγ) =
+    p.atmos.turbconv_model isa PrognosticEDMFX ?
+    solve_sgs_u₃_implicit_stage_analytic!(Y.f.sgsʲs, Y.c.sgsʲs, p, dtγ) : nothing
 
-    p.atmos.turbconv_model isa PrognosticEDMFX || return
+function solve_sgs_u₃_implicit_stage_analytic!(ᶠsgsʲs, ᶜsgsʲs, p, dtγ)
 
     (; params) = p
     (; turbconv_model, rayleigh_sponge) = p.atmos
@@ -212,9 +258,9 @@ function solve_sgs_u₃_implicit_stage_analytic!(Y, p, dtγ)
     # AFTER u₃, so the u₃ solve sees a possibly out-of-range ρa). Clamp
     # a⁰ ∈ [1−a_max, 1].
     ᶜa⁰_inv = p.scratch.ᶜtemp_scalar
-    @. ᶜa⁰_inv = FT(1) / clamp(a⁰(Y.c.sgsʲs, ᶜρʲs, turbconv_model), 1 - a_max, FT(1))
+    @. ᶜa⁰_inv = FT(1) / clamp(a⁰(ᶜsgsʲs, ᶜρʲs, turbconv_model), 1 - a_max, FT(1))
 
-    ᶠdz = Fields.Δz_field(axes(Y.f))
+    ᶠdz = Fields.Δz_field(axes(ᶠsgsʲs))
 
     # Face-local coefficients of the rearranged quadratic equation
     #     a w² + b w + c = 0.
@@ -228,7 +274,7 @@ function solve_sgs_u₃_implicit_stage_analytic!(Y, p, dtγ)
         # Start from the implicit stage term (w - wᵢ) / (γ Δt).
         @. ᶠa = 0
         @. ᶠb = 1 / dtγ
-        @. ᶠc = -1 * (Y.f.sgsʲs.:($$j).u₃.components.data.:1 / dtγ)
+        @. ᶠc = -1 * (ᶠsgsʲs.:($$j).u₃.components.data.:1 / dtγ)
 
         # Implicit entrainment E (w₀ - w) ≈ -E w / a⁰. The velocity-dependent
         # rate scales with the relative velocity, `entr_vel_scale · |w - w₀|`
@@ -255,7 +301,7 @@ function solve_sgs_u₃_implicit_stage_analytic!(Y, p, dtγ)
         # differences, one cancelled by the environment weight a⁰ of the
         # pairwise form.
         if p.atmos.edmfx_model.nh_pressure
-            ᶜaʲ = @. lazy(draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j)))
+            ᶜaʲ = @. lazy(draft_area(ᶜsgsʲs.:($$j).ρa, ᶜρʲs.:($$j)))
             # Use a scratch scalar here as @lazy results in a large fused kernel
             # that doesn't work on P100 GPUs. `1 / ᶜa⁰_inv` is the clamped
             # environment area, which keeps the subdomain sum out of this
@@ -269,7 +315,7 @@ function solve_sgs_u₃_implicit_stage_analytic!(Y, p, dtγ)
 
         # Optional Rayleigh sponge adds extra linear damping near the top.
         if !isnothing(rayleigh_sponge)
-            ᶠz = Fields.coordinate_field(Y.f.u₃).z
+            ᶠz = Fields.coordinate_field(axes(ᶠsgsʲs)).z
             zmax = Spaces.z_max(axes(ᶠz))
             @. ᶠb += β_rayleigh_u₃(rayleigh_sponge, ᶠz, zmax)
         end
@@ -281,7 +327,7 @@ function solve_sgs_u₃_implicit_stage_analytic!(Y, p, dtγ)
 
         input = @. lazy(tuple(ᶠa, ᶠb, ᶠc, ᶠdz))
         Operators.column_accumulate!(
-            Y.f.sgsʲs.:($j).u₃,
+            ᶠsgsʲs.:($j).u₃,
             input;
             init = C3(FT(0)),
         ) do u₃_prev_face, (a_face, b_face, c_face, dz_face)
@@ -338,14 +384,17 @@ end
 
 """
     solve_sgs_ρa_implicit_stage_analytic!(Y, p, dtγ)
+    solve_sgs_ρa_implicit_stage_analytic!(ᶜsgsʲs, ᶠsgsʲs, p, dtγ)
 
 Solve the IMEX/ARK implicit-stage equation for the updraft area-weighted
-density `ρa` analytically, overwriting `Y.c.sgsʲs.:(j).ρa` in each EDMFX
-mass-flux subdomain `j`.
+density `ρa` analytically in each EDMFX mass-flux subdomain `j`.
 
-Returns early for any `turbconv_model` other than `PrognosticEDMFX`; see
-`initialize_implicit_stage_problem!` for how the result is held fixed during
-the Newton solve.
+The second form reads the stage-start `ρa` from the center updraft states
+`ᶜsgsʲs` and the stage value of `u₃` from the face updraft states `ᶠsgsʲs`, and
+overwrites `ᶜsgsʲs.:(j).ρa` with the stage value. The first form applies it to
+`Y.c.sgsʲs` and `Y.f.sgsʲs`, and returns early for any `turbconv_model` other
+than `PrognosticEDMFX`. See `initialize_implicit_stage_problem!` for how the
+result is held fixed during the Newton solve.
 
 The flux-form stage equation `∂ρa/∂t + ∂(ρa·w)/∂z = (ε − δ)·ρa` reduces
 under first-order upwinding (for upward `ᶠu₃ʲ`) to the forward recurrence
@@ -378,9 +427,11 @@ detrainment. Clipping from below at `ρʲ·a_min` would *not* be conservative
 because it would create updraft mass out of nothing, so the lower bound is set
 to zero instead.
 """
-function solve_sgs_ρa_implicit_stage_analytic!(Y, p, dtγ)
+solve_sgs_ρa_implicit_stage_analytic!(Y, p, dtγ) =
+    p.atmos.turbconv_model isa PrognosticEDMFX ?
+    solve_sgs_ρa_implicit_stage_analytic!(Y.c.sgsʲs, Y.f.sgsʲs, p, dtγ) : nothing
 
-    p.atmos.turbconv_model isa PrognosticEDMFX || return
+function solve_sgs_ρa_implicit_stage_analytic!(ᶜsgsʲs, ᶠsgsʲs, p, dtγ)
 
     (; turbconv_model) = p.atmos
     (; ᶜρ_diffʲs, ᶜρʲs) = p.precomputed
@@ -390,11 +441,11 @@ function solve_sgs_ρa_implicit_stage_analytic!(Y, p, dtγ)
     FT = eltype(p.params)
 
     turbconv_params = CAP.turbconv_params(p.params)
-    ᶜJ = Fields.local_geometry_field(Y.c).J
-    ᶠJ = Fields.local_geometry_field(Y.f).J
-    ᶜdz = Fields.Δz_field(axes(Y.c))
-    ᶠdz = Fields.Δz_field(axes(Y.f))
-    ᶠlg = Fields.local_geometry_field(Y.f)
+    ᶜJ = Fields.local_geometry_field(axes(ᶜsgsʲs)).J
+    ᶠJ = Fields.local_geometry_field(axes(ᶠsgsʲs)).J
+    ᶜdz = Fields.Δz_field(axes(ᶜsgsʲs))
+    ᶠdz = Fields.Δz_field(axes(ᶠsgsʲs))
+    ᶠlg = Fields.local_geometry_field(axes(ᶠsgsʲs))
     detr_buoy_coeff = CAP.detr_buoy_coeff(turbconv_params)
     entr_detr_buoy_inv_tau_max = CAP.entr_detr_buoy_inv_tau_max(turbconv_params)
     detr_massflux_vertdiv_coeff =
@@ -420,18 +471,18 @@ function solve_sgs_ρa_implicit_stage_analytic!(Y, p, dtγ)
 
     n = n_mass_flux_subdomains(turbconv_model)
     for j in 1:n
-        @. ᶠw = Y.f.sgsʲs.:($$j).u₃.components.data.:1 / ᶠdz
+        @. ᶠw = ᶠsgsʲs.:($$j).u₃.components.data.:1 / ᶠdz
 
         # entr and detr
         ᶜlower_limiter_factor = @. lazy(
             lower_area_limiter_factor(
-                draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j)),
+                draft_area(ᶜsgsʲs.:($$j).ρa, ᶜρʲs.:($$j)),
                 turbconv_params,
             ),
         )
         ᶜupper_limiter_factor = @. lazy(
             upper_area_limiter_factor(
-                draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j)),
+                draft_area(ᶜsgsʲs.:($$j).ρa, ᶜρʲs.:($$j)),
                 turbconv_params,
             ),
         )
@@ -444,7 +495,7 @@ function solve_sgs_ρa_implicit_stage_analytic!(Y, p, dtγ)
         # The recurrence uses `one_minus_prefactor = U · (1 − L · C)`.
         ᶜone_minus_implicit_detr_prefactor = @. lazy(
             ifelse(
-                ᶜdivᵥ(ᶠbottom_bias(Y.c.sgsʲs.:($$j).ρa) * Y.f.sgsʲs.:($$j).u₃) < 0,
+                ᶜdivᵥ(ᶠbottom_bias(ᶜsgsʲs.:($$j).ρa) * ᶠsgsʲs.:($$j).u₃) < 0,
                 ᶜupper_limiter_factor *
                 (FT(1) - ᶜlower_limiter_factor * detr_massflux_vertdiv_coeff),
                 FT(1),
@@ -471,7 +522,7 @@ function solve_sgs_ρa_implicit_stage_analytic!(Y, p, dtγ)
             ᶜentr_nonvel_rateʲs.:($$j) -
             ᶜlower_limiter_factor * detr_buoy_coeff * ᶜbuoy_inv_time_scale
 
-        @. ᶜnumerator = Y.c.sgsʲs.:($$j).ρa / dtγ
+        @. ᶜnumerator = ᶜsgsʲs.:($$j).ρa / dtγ
         # Floor at 0.1/dtγ ⇒ (ε − δ) ≤ 0.9/dtγ (≈10× per-step growth cap).
         @. ᶜdenominator =
             max(
@@ -511,7 +562,7 @@ function solve_sgs_ρa_implicit_stage_analytic!(Y, p, dtγ)
 
         # Bottom-to-top sweep. `clamp` to `ρa ∈ [0, ρʲ·a_max]` per-cell.
         Operators.column_accumulate!(
-            Y.c.sgsʲs.:($j).ρa,
+            ᶜsgsʲs.:($j).ρa,
             input;
             init = FT(0),
         ) do ρa_prev, (num, den, mf_bot, ρ_cell)

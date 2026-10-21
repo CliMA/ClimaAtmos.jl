@@ -735,12 +735,12 @@ function update_implicit_microphysics_cache!(
     mm::NonEquilibriumMicrophysics1M,
     tm,
 )
-    # Experimental (TRMM dt-sensitivity test): with `CA_MP_NEWTON_REFRESH=1`, the
-    # 1M process rates are recomputed from the Newton iterate, so that the
-    # condensation responds to the supersaturation produced within the step.
-    if get(ENV, "CA_MP_NEWTON_REFRESH", "") == "1"
+    # With `microphysics_newton_refresh`, the 1M process rates follow the Newton
+    # iterate, so that condensation responds to the supersaturation that the
+    # implicit vertical transport produces within the stage. Otherwise they are
+    # the rates of the last cache update.
+    p.atmos.microphysics_newton_refresh &&
         set_microphysics_tendency_cache!(Y, p, mm, tm)
-    end
     # Recompute the sedimentation velocities from the current implicit-solver state.
     # This is expecially important for PrognosticEDMFX `ᶜwᵣʲs`.
     # Leaving updraft velocities at their explicit-stage values treats the
@@ -919,22 +919,37 @@ end
 ### 1 Moment Microphysics
 ###
 
-# Experimental (TRMM dt-sensitivity test): the environment variable `CA_MP_AVG_DT`
-# caps the window over which the 1M tendencies are time-averaged. A number [s] holds
-# the window fixed while the model timestep varies; `stage` uses the step fraction
-# `dtγ` of the latest implicit stage (`implicit_stage_dtγ`). Unset, the window is dt.
-const implicit_stage_dtγ = Ref(NaN)
-function microphysics_averaging_window(dt)
-    window = get(ENV, "CA_MP_AVG_DT", "Inf")
-    window == "stage" &&
-        return isnan(implicit_stage_dtγ[]) ? dt : min(dt, oftype(dt, implicit_stage_dtγ[]))
-    return min(dt, oftype(dt, parse(Float64, window)))
+"""
+    microphysics_averaging_window(p)
+
+Return the window [s] over which the 1M microphysics tendencies are time-averaged,
+set by `p.atmos.microphysics_averaging_window`:
+
+  - `nothing`: the timestep `p.dt`;
+  - a number: that many seconds, capped at `p.dt`;
+  - `StageAveragingWindow()`: the step fraction `dtγ` of the current implicit stage
+    (`p.precomputed.implicit_stage_dtγ`, recorded by
+    `initialize_implicit_stage_problem!`), capped at `p.dt`; `p.dt` before the first
+    implicit stage.
+
+The averaged tendency relaxes the supersaturation present at the start of the
+window with the forcing held fixed, so its effective rate decreases as the window
+grows. A window short compared with the condensation and deposition timescales
+keeps the effective rate close to the instantaneous one.
+"""
+microphysics_averaging_window(p) =
+    microphysics_averaging_window(p.atmos.microphysics_averaging_window, p)
+microphysics_averaging_window(::Nothing, p) = p.dt
+microphysics_averaging_window(window::Real, p) = min(p.dt, oftype(p.dt, window))
+function microphysics_averaging_window(::StageAveragingWindow, p)
+    dtγ = p.precomputed.implicit_stage_dtγ[]
+    return isnan(dtγ) ? p.dt : min(p.dt, oftype(p.dt, dtγ))
 end
 
 function set_microphysics_tendency_cache!(
     Y, p, mp1m::NonEquilibriumMicrophysics1M, _,
 )
-    dt = microphysics_averaging_window(p.dt)
+    dt = microphysics_averaging_window(p)
     (; ᶜT, ᶜu, ᶜq_tot_nonneg, ᶜmp_tendency) = p.precomputed
 
     thp = CAP.thermodynamics_params(p.params)
@@ -978,7 +993,7 @@ end
 function set_microphysics_tendency_cache!(
     Y, p, mp1m::NonEquilibriumMicrophysics1M, tm::PrognosticEDMFX,
 )
-    dt = microphysics_averaging_window(p.dt)
+    dt = microphysics_averaging_window(p)
     (; ᶜρʲs, ᶜTʲs, ᶜuʲs, ᶜq_tot_nonnegʲs) = p.precomputed
     (; ᶜu⁰, ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰) = p.precomputed
     (; ᶜmp_tendency⁰, ᶜmp_tendencyʲs) = p.precomputed

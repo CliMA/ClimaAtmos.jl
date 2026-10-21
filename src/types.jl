@@ -1970,18 +1970,19 @@ domain so that it can be dispatched on at compile time.
 const ValTF = Union{Val{true}, Val{false}}
 
 """
-    EDMFXModel{EEM, EDM, ESDFH, EHD, SBM}
+    EDMFXModel{EEM, EDM, ESDFH, EHD, ENR, SBM}
 
 Switches and closures of the EDMF scheme, kept separate from the
 turbulence-convection model itself (`PrognosticEDMFX` or `EDOnlyEDMFX`) so that
 the individual terms can be enabled independently.
 
 Most switches are plain `Bool` fields, so that flipping one does not create a
-new `EDMFXModel` type and force the whole EDMF stack to recompile. Two stay in
-the type domain as `Val{true}`/`Val{false}` (see `ValTF`):
-`sgs_diffusive_flux_horizontal` and `horizontal_diffusion` decide whether
-`build_cache` allocates `ᶜK_u_h`/`ᶜK_h_h`, so the cache type depends on their
-value. The keyword constructor accepts plain `Bool`s for all of them.
+new `EDMFXModel` type and force the whole EDMF stack to recompile. Three stay in
+the type domain as `Val{true}`/`Val{false}` (see `ValTF`), because `build_cache`
+allocates fields depending on their value: `sgs_diffusive_flux_horizontal` and
+`horizontal_diffusion` (`ᶜK_u_h`/`ᶜK_h_h`), and `newton_resolve` (the stage-start
+and work fields of the repeated stage solves). The keyword constructor accepts
+plain `Bool`s for all of them.
 
 # Fields
 
@@ -1997,11 +1998,14 @@ value. The keyword constructor accepts plain `Bool`s for all of them.
     (`edmfx_vertical_diffusion`).
   - `filter`: Whether negative updraft vertical velocities are relaxed away
     (`edmfx_filter`).
+  - `newton_resolve`: `Val(true)` to repeat the analytic updraft `u₃` and `ρa`
+    stage solves on every Newton iterate, with the updraft buoyancy of the
+    iterate (`edmfx_newton_resolve`); see `resolve_sgs_u₃_ρa_stage!`.
   - `scale_blending_method`: `AbstractScaleBlendingMethod` used to blend the
     mixing-length scales (`edmfx_scale_blending`).
 """
 struct EDMFXModel{
-    EEM, EDM, ESDFH <: ValTF, EHD <: ValTF,
+    EEM, EDM, ESDFH <: ValTF, EHD <: ValTF, ENR <: ValTF,
     SBM <: AbstractScaleBlendingMethod,
 }
     entr_model::EEM
@@ -2013,6 +2017,7 @@ struct EDMFXModel{
     vertical_diffusion::Bool
     horizontal_diffusion::EHD
     filter::Bool
+    newton_resolve::ENR
     scale_blending_method::SBM
 end
 
@@ -2022,9 +2027,10 @@ end
     EDMFXModel(; entr_model = nothing, detr_model = nothing, sgs_mass_flux = false,
                sgs_diffusive_flux = false, sgs_diffusive_flux_horizontal = false,
                nh_pressure = false, vertical_diffusion = false,
-               horizontal_diffusion = false, filter = false, scale_blending_method)
+               horizontal_diffusion = false, filter = false, newton_resolve = false,
+               scale_blending_method)
 
-Create an `EDMFXModel`, lifting the two cache-shaping switches to `Val` types
+Create an `EDMFXModel`, lifting the three cache-shaping switches to `Val` types
 and storing the rest as plain `Bool`s.
 
 # Keyword Arguments
@@ -2040,6 +2046,8 @@ and storing the rest as plain `Bool`s.
   - `horizontal_diffusion = false`: Apply the grid-mean horizontal diffusion
     tendencies to the updraft scalars.
   - `filter = false`: Enable relaxation of negative updraft velocities.
+  - `newton_resolve = false`: Repeat the analytic updraft `u₃` and `ρa` stage
+    solves on every Newton iterate.
   - `scale_blending_method`: Required; an `AbstractScaleBlendingMethod`.
 
 Each switch may also be given as an already-wrapped `Val{true}`/`Val{false}`.
@@ -2067,6 +2075,7 @@ function EDMFXModel(;
     vertical_diffusion::Union{Bool, ValTF} = false,
     horizontal_diffusion::Union{Bool, ValTF} = false,
     filter::Union{Bool, ValTF} = false,
+    newton_resolve::Union{Bool, ValTF} = false,
     scale_blending_method,
 )
     parse_val_tf(x::Bool) = Val(x)
@@ -2083,6 +2092,7 @@ function EDMFXModel(;
         parse_bool(vertical_diffusion),
         parse_val_tf(horizontal_diffusion),
         parse_bool(filter),
+        parse_val_tf(newton_resolve),
         scale_blending_method,
     )
 end
@@ -2173,7 +2183,16 @@ struct ConstantTqCorrelation <: AbstractTqCorrelationModel end
 struct DiagnosedTqCorrelation <: AbstractTqCorrelationModel end
 
 """
-    AtmosWater{MM, CM, MTTS, TNM, SQ, TQC, TVL, TVI, TVR, TVS}(; microphysics_model = DryModel(), kwargs...)
+    StageAveragingWindow()
+
+Selects the step fraction `dtγ` of the current implicit stage as the window over
+which the 1M microphysics tendencies are time-averaged
+(`microphysics_averaging_window: stage`); see `microphysics_averaging_window`.
+"""
+struct StageAveragingWindow end
+
+"""
+    AtmosWater{MM, CM, MTTS, MAW, TNM, SQ, TQC, TVL, TVI, TVR, TVS}(; microphysics_model = DryModel(), kwargs...)
 
 Group of moisture, cloud, and microphysics choices inside an
 `AtmosModel`.
@@ -2184,6 +2203,13 @@ Group of moisture, cloud, and microphysics choices inside an
   - `cloud_model`: An `AbstractCloudModel`; `QuadratureCloud()` by default.
   - `microphysics_tendency_timestepping`: `Explicit()`, `Implicit()`, or
     `nothing` when there is no microphysics.
+  - `microphysics_averaging_window`: Window over which the 1M microphysics
+    tendencies are time-averaged: `nothing` for the timestep (default), a number
+    of seconds (capped at the timestep), or `StageAveragingWindow()`; see
+    `microphysics_averaging_window`.
+  - `microphysics_newton_refresh`: Whether the 1M process rates are recomputed on
+    every Newton iterate of an implicit stage (with `Implicit()` timestepping);
+    `false` by default, in which case they are computed once per cache update.
   - `tracer_nonnegativity_method`: `nothing`, or a `TracerNonnegativityMethod`.
   - `sgs_quadrature`: `nothing`, or an `SGSQuadrature` used to integrate cloud
     and microphysics quantities over the subgrid-scale distribution.
@@ -2204,10 +2230,12 @@ water = ClimaAtmos.AtmosWater(;
 )
 ```
 """
-@kwdef struct AtmosWater{MM, CM, MTTS, TNM, SQ, TQC, TVL, TVI, TVR, TVS}
+@kwdef struct AtmosWater{MM, CM, MTTS, MAW, TNM, SQ, TQC, TVL, TVI, TVR, TVS}
     microphysics_model::MM = DryModel()
     cloud_model::CM = QuadratureCloud()
     microphysics_tendency_timestepping::MTTS = nothing
+    microphysics_averaging_window::MAW = nothing
+    microphysics_newton_refresh::Bool = false
     tracer_nonnegativity_method::TNM = nothing
     sgs_quadrature::SQ = nothing
     tq_correlation_model::TQC = ConstantTqCorrelation()
