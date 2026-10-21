@@ -651,6 +651,11 @@ function SGSQuadratureParameters(
         # Floor on the overlap precipitation fraction seen by the placement:
         # the shaft is never narrower than half the cell.
         sgs_precip_fraction_floor = FT(0.5),
+        # Tail entrainment (`tail_entrainment_increments`): weight 0 = the
+        # dynamical entrainment draws environment-mean air; selector 1 = moist
+        # static energy, 0 = virtual buoyancy.
+        edmf_tail_entr_weight = FT(0),
+        edmf_tail_entr_selector = FT(1),
     )
     # A run toml defines a parameter that ClimaParams also defines when it
     # appears in the override dictionary or, for a `toml_dict` assembled
