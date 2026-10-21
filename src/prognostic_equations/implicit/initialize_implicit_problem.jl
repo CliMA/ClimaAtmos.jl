@@ -32,6 +32,8 @@ Returns `nothing`.
 """
 function initialize_implicit_stage_problem!(Y, p, dtγ)
 
+    implicit_stage_dtγ[] = float(dtγ)
+
     if p.atmos.turbconv_model isa PrognosticEDMFX
 
         edmf_newton_resolve() &&

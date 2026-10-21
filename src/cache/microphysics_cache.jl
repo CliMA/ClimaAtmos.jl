@@ -920,10 +920,16 @@ end
 ###
 
 # Experimental (TRMM dt-sensitivity test): the environment variable `CA_MP_AVG_DT`
-# [s] caps the window over which the 1M tendencies are time-averaged, so that the
-# window can be held fixed while the model timestep varies. Unset, the window is dt.
-microphysics_averaging_window(dt) =
-    min(dt, oftype(dt, parse(Float64, get(ENV, "CA_MP_AVG_DT", "Inf"))))
+# caps the window over which the 1M tendencies are time-averaged. A number [s] holds
+# the window fixed while the model timestep varies; `stage` uses the step fraction
+# `dtγ` of the latest implicit stage (`implicit_stage_dtγ`). Unset, the window is dt.
+const implicit_stage_dtγ = Ref(NaN)
+function microphysics_averaging_window(dt)
+    window = get(ENV, "CA_MP_AVG_DT", "Inf")
+    window == "stage" &&
+        return isnan(implicit_stage_dtγ[]) ? dt : min(dt, oftype(dt, implicit_stage_dtγ[]))
+    return min(dt, oftype(dt, parse(Float64, window)))
+end
 
 function set_microphysics_tendency_cache!(
     Y, p, mp1m::NonEquilibriumMicrophysics1M, _,
