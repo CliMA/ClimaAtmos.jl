@@ -681,26 +681,34 @@ grid mean minus updrafts, loses what the updraft gains.
 end
 
 """
-    satinst_source_increments(thermo_params, T⁰, ρ⁰, q_tot⁰, q_liq⁰, q_ice⁰, T′T′, q′q′, corr_Tq, f⁰)
+    satinst_source_increments(thermo_params, T⁰, ρ⁰, q_tot⁰, q_liq⁰, q_ice⁰, T′T′, q′q′, corr_Tq, f⁰, selector)
 
 Increments `(Δmse, Δq_tot)`, relative to the environment mean, of the air moved
-by the saturated-instability source: the mean of the saturated part of the
-environment's Gaussian subgrid `(T, q_tot)` distribution, i.e. of its top
-fraction `f⁰` in the saturation excess `s′ = q′ − (∂q_sat/∂T) T′`. For a
+by the saturated-instability source: the mean of the top fraction `f⁰` of the
+environment's Gaussian subgrid `(T, q_tot)` distribution in the selector `s′`.
+For `selector < 0` this is the saturation excess `s′ = q′ − (∂q_sat/∂T) T′`, so
+the moved air is the saturated part; otherwise the selector of
+`tail_selector_coefficients` (`0` virtual buoyancy, `1` moist static energy), so
+the moved air is the equally large part that is most buoyant or has the highest
+moist static energy. For a
 Gaussian the conditional mean of the top fraction `f` is
 `D(f) Cov(x′, s′)/σ_s` with `D(f) = φ(Φ⁻¹(1 − f))/f` (the factor of the surface
 buoyant-air value, `percentile_bounds_mean_norm`). The increments vanish with
 the subgrid variance and as `f⁰ → 1`.
 """
 @inline function satinst_source_increments(
-    thermo_params, T⁰, ρ⁰, q_tot⁰, q_liq⁰, q_ice⁰, T′T′, q′q′, corr_Tq, f⁰,
+    thermo_params, T⁰, ρ⁰, q_tot⁰, q_liq⁰, q_ice⁰, T′T′, q′q′, corr_Tq, f⁰, selector,
 )
     FT = typeof(T⁰)
     L_v = FT(TDP.LH_v0(thermo_params))
     R_v = FT(TDP.R_v(thermo_params))
     q_sat = TD.q_vap_saturation(thermo_params, T⁰, ρ⁰, q_liq⁰, q_ice⁰)
     ∂qsat∂T = q_sat * L_v / (R_v * T⁰^2)
-    ΔT½, Δq½ = environment_tail_shift(T′T′, q′q′, corr_Tq, -∂qsat∂T, one(FT))
+    α_T_sel, α_q_sel = tail_selector_coefficients(thermo_params, selector, T⁰)
+    use_saturation = selector < 0
+    α_T = ifelse(use_saturation, -∂qsat∂T, α_T_sel)
+    α_q = ifelse(use_saturation, one(FT), α_q_sel)
+    ΔT½, Δq½ = environment_tail_shift(T′T′, q′q′, corr_Tq, α_T, α_q)
     f = clamp(f⁰, FT(0.01), one(FT) - FT(1e-4))
     D = percentile_bounds_mean_norm(one(FT) - f, one(FT)) / sqrt(FT(2) / FT(π))
     q_tot_e = max(q_tot⁰ + D * Δq½, zero(FT))
@@ -738,6 +746,7 @@ function set_edmf_satinst_source!(Y, p)
     (; dt) = p
     (; ᶜsatinst_source, ᶜsatinst_Δmse, ᶜsatinst_Δq_tot, ᶜsatinst_Δw) = p.precomputed
     r_w = FT(CAP.edmf_satinst_w_corr(p.params))
+    selector = FT(CAP.edmf_satinst_selector(p.params))
     (; ᶜbg_coeffs, ᶜgradᵥ_θ_liq_ice, ᶜgradᵥ_q_tot, ᶜcloud_fraction, ᶜρʲs) = p.precomputed
     (; ᶜT⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜp) = p.precomputed
     ᶜlg = Fields.local_geometry_field(Y.c)
@@ -760,10 +769,10 @@ function set_edmf_satinst_source!(Y, p)
     ))
     @. ᶜsatinst_source = satinst_source_rate(c_s, ᶜN²_sat, ᶜρa⁰, ᶜf⁰, ᶜaʲ, turbconv_params, dt)
     @. ᶜsatinst_Δmse = first(satinst_source_increments(
-        thermo_params, ᶜT⁰, ᶜρ⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜf⁰,
+        thermo_params, ᶜT⁰, ᶜρ⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜf⁰, selector,
     ))
     @. ᶜsatinst_Δq_tot = last(satinst_source_increments(
-        thermo_params, ᶜT⁰, ᶜρ⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜf⁰,
+        thermo_params, ᶜT⁰, ᶜρ⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜf⁰, selector,
     ))
     @. ᶜsatinst_Δw =
         r_w * percentile_bounds_mean_norm(1 - clamp(ᶜf⁰, FT(0.01), 1 - FT(1e-4)), one(FT)) *
