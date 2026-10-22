@@ -30,34 +30,37 @@ main
   (`displacement_covariance`), with per-variable scales `ℓ_{h,ψ}`, `ℓ_{v,ψ}`,
   horizontal cross-correlation `r_{h,θq}` and perfectly correlated vertical
   displacements. `ℓ_h² = c_g (c_Δx Δx_h)²`; `ℓ_v² = 2 c_σ l_d²`
-  with `l_d = min(max(l_disp, l_b), z - z_s)` taking the larger of the
-  buoyancy-bounded mixing length
-  `l_disp = min(l_mix, √(c_b κ_iso) / N_disp)` and the floor displacement
-  `l_b = √(c_b κ_min) min(τ_N, l_disp/√(c_b κ_iso), τ_0)` with `τ_N = 1/N_disp` for
+  with `l_d = min(max(l_disp, l_b), z - z_s)` taking the larger of
+  the buoyancy-bounded mixing length
+  `l_disp = l_mix / √(1 + 2 c_σ max(N_disp², 0) l_mix² / (c_b κ_iso))` and the floor
+  displacement
+  `l_b = √(c_b κ_min) min(τ_N, l_disp/√(c_b κ_iso / (2 c_σ)), τ_0)` with `τ_N = 1/N_disp` for
   `N_disp² > 0` and `∞` otherwise (continuous at `N_disp² = 0`),
   `N_disp² = max(N_dry⁻², N_dry⁺²)`,
   `κ_min = w_min² / (2 c_σ c_b)`
   (`materialized_displacement_length!`): in stably stratified air
   the displacement of the unresolved vertical motions lasts until buoyancy, the
-  turbulence (its Lagrangian time scale `l_disp / √(c_b κ_iso)`) or the
+  turbulence (its Lagrangian time scale `l_disp / √(c_b κ_iso / (2 c_σ))`) or the
   quiescent limit `τ_0` decorrelates it, so without TKE it is `w_min / N_disp`;
   capped by the cell depth and the wall distance. The velocity
   scale grows with the horizontal grid scale,
   `w_min = w_ref (Δx_h / Δx_ref)^p`, as the spectral slope of the displaced
-  fields requires. New provisional parameters
-  `sgs_variance_vertical_velocity_floor` (`w_ref`, 1.6 m/s),
-  `sgs_variance_floor_reference_resolution` (120 km),
-  `sgs_variance_floor_resolution_exponent` (`p`, 2/3),
-  `sgs_variance_floor_time_scale` (`τ_0`, 300 s),
-  `sgs_variance_theta_horizontal_scale_ratio` (`0.7`),
-  `sgs_variance_theta_vertical_scale_ratio` (`0.36`) and
-  `sgs_variance_horizontal_cross_correlation` (`0.5`);
-  the floor enters the variance only. These defaults are calibrated against
-  the within-cell moments (`var q_tot`, `var θ_li`, their correlation) of
-  3.75 km global MPAS (DYAMOND) simulations coarse-grained to 60–240 km, with
-  `sgs_variance_horizontal_scale_factor` `c_Δx ≈ 2.1` (set it in the TOML: the
-  ClimaParams default of 1 gives about half the SGS standard deviation), and
-  cross-checked on 4 km WRF (CONUS404); `τ_0` is constrained only from below.
+  fields requires. Defaults calibrated against the within-cell moments
+  (`var q_tot`, `var θ_li`, their covariance) of 3.75 km global MPAS (DYAMOND)
+  aggregated onto the model's cubed-sphere nodes, with the closure inputs from
+  the model's own operators on the MPAS native levels (one set for ne16–ne60
+  and the 130- and 63-level grids; `c_Δx` is specific to the model's gradient
+  operator): `sgs_variance_horizontal_scale_factor` (`c_Δx`, `1.24`; this
+  code default supersedes the ClimaParams value of `1`, and a run TOML that
+  sets the parameter still wins),
+  `sgs_variance_vertical_velocity_floor` (`w_ref`, `1.08` m/s),
+  `sgs_variance_floor_reference_resolution` (`120` km),
+  `sgs_variance_floor_resolution_exponent` (`p`, `2/3`),
+  `sgs_variance_floor_time_scale` (`τ_0`, `300` s; bounded only from below),
+  `sgs_variance_theta_horizontal_scale_ratio` (`0.88`),
+  `sgs_variance_theta_vertical_scale_ratio` (`0.38`) and
+  `sgs_variance_horizontal_cross_correlation` (`0.74`);
+  the floor enters the variance only.
   This replaces the turbulent block and the geometric block (the along-surface
   (isentropic) part with its `q_sat`-variance bound, and the vertical
   uniform-box part). `tq_correlation_model` defaults to `diagnosed`, the covariance

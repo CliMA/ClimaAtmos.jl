@@ -388,14 +388,42 @@ floor_nt(
                 @test CA.displacement_length(FT(30), FT(40), FT(-1)) == FT(0)
                 @test CA.displacement_length(FT(30), FT(40), FT(5000)) isa FT
 
-                # buoyancy_bounded_mixing_length caps l_mix at √(κ_b / N²) when N² > 0 and κ_b > 0
+                # buoyancy_bounded_mixing_length bounds l_mix smoothly by
+                # √(κ_b / N²) when N² > 0 and κ_b > 0, and is continuous down
+                # to N² = 0 (including across N² = eps(Float32)).
                 bml = CA.buoyancy_bounded_mixing_length
-                @test bml(FT(200), FT(0.04), FT(1e-4)) ≈ FT(20)
-                @test bml(FT(10), FT(0.04), FT(1e-4)) == FT(10)
+                @test bml(FT(200), FT(0.04), FT(1e-4)) ≈
+                      FT(200) / sqrt(FT(101))
+                @test bml(FT(20), FT(0.04), FT(1e-4)) ≈ FT(20) / sqrt(FT(2))
+                @test bml(FT(2000), FT(0.04), FT(1e-4)) < FT(20)
+                @test bml(FT(10), FT(0.04), FT(1e-4)) ≈
+                      FT(10) / sqrt(FT(1.25))
                 @test bml(FT(200), FT(0), FT(1e-4)) == FT(200)
                 @test bml(FT(200), FT(0.04), FT(0)) == FT(200)
                 @test bml(FT(200), FT(0.04), FT(-1e-4)) == FT(200)
+                @test bml(FT(500), FT(4e-3), eps(FT)) ≈
+                      FT(500) / sqrt(one(FT) + eps(FT) * FT(500)^2 / FT(4e-3))
+                @test bml(FT(200), FT(1), FT(1e-8)) ≈ FT(200) rtol = FT(1e-3)
                 @test bml(FT(200), FT(0.04), FT(1e-4)) isa FT
+
+                # With κ_b = (c_b / (2 c_σ)) tke:
+                # 1) in neutral turbulence (N² ≤ 0), 2 c_σ l_d² = 2 c_σ l_mix²
+                #    so diagnostic_covariance_coeff (c_σ) remains active;
+                # 2) in a strong capping inversion (2 c_σ N² l_mix² ≫ c_b tke),
+                #    2 c_σ l_disp² → c_b tke / N² (the adiabatic excursion).
+                tke = FT(0.5)
+                l_mix = FT(300)
+                κ_b_turb = (c_b / (2 * c_σ)) * tke
+                l_disp_neutral = bml(l_mix, κ_b_turb, FT(0))
+                l_d_neutral = CA.displacement_length(
+                    l_disp_neutral,
+                    l(c_b * κ_min, FT(0), FT(5000)),
+                    FT(5000),
+                )
+                @test 2 * c_σ * l_d_neutral^2 ≈ 2 * c_σ * l_mix^2
+                N²_inv = FT(1e-2)
+                l_disp_inv = bml(l_mix, κ_b_turb, N²_inv)
+                @test 2 * c_σ * l_disp_inv^2 ≈ c_b * tke / N²_inv rtol = FT(1e-2)
 
                 # The composed 2×2 covariance with per-variable scales and a
                 # horizontal cross-correlation is positive semi-definite
@@ -467,12 +495,15 @@ floor_nt(
                     FT(1e-5), FT(0.6),
                 ) == FT(0.6)
 
-                # Where l_mix is at the buoyancy scale √(κ_b / N²),
-                # turbulent_lagrangian_time(l_mix, κ_b) equals 1 / N.
+                # In the buoyancy-dominated limit l_mix ≫ √(κ_b / N²),
+                # turbulent_lagrangian_time(l_disp, κ_b) approaches 1 / N.
                 κ_b_test = FT(0.04)
                 N²_test = FT(1e-4)
                 l_buoy_test = bml(FT(200), κ_b_test, N²_test)
-                @test τ(l_buoy_test, κ_b_test) ≈ inv(sqrt(N²_test))
+                @test τ(l_buoy_test, κ_b_test) ≈
+                      inv(sqrt(N²_test)) / sqrt(FT(1.01))
+                @test τ(bml(FT(2000), κ_b_test, N²_test), κ_b_test) ≈
+                      inv(sqrt(N²_test)) rtol = FT(1e-4)
             end
         end
     end

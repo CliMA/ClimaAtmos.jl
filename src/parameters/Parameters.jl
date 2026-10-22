@@ -238,8 +238,8 @@ covariances, with or without an EDMF scheme.
 
 Most values come from ClimaParams; see the `SGSQuadratureParameters`
 constructor in `create_parameters.jl` for the mapping from ClimaParams names to
-the fields below, and for the defaults of the few fields that ClimaParams does
-not yet define.
+the fields below, and for the defaults of the provisional fields that
+ClimaParams does not yet define or whose ClimaParams default it supersedes.
 
 # Fields
 
@@ -255,7 +255,8 @@ not yet define.
   - `sgs_variance_vertical_velocity_floor`: Velocity scale `w_ref` of the
     unresolved vertical motions that displace air where the TKE vanishes, at
     the horizontal grid scale `sgs_variance_floor_reference_resolution`. The
-    floor displacement `w_min min(1/N_disp, l_disp/√(c_b κ_iso), τ_0) / √(2 c_σ)`,
+    floor displacement
+    `w_min min(1/N_disp, l_disp/√(c_b κ_iso / (2 c_σ)), τ_0) / √(2 c_σ)`,
     with `l_disp` the buoyancy-bounded mixing length,
     capped by the wall distance and the cell depth, is combined via `max` with the
     buoyancy-bounded mixing length (`displacement_length`), so the vertical displacement in
