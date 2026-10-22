@@ -325,6 +325,11 @@ ClimaParams does not yet define or whose ClimaParams default it supersedes.
     the saturated-instability source: `−1` (default) saturation excess
     `q′ − (∂q_sat/∂T) T′` (the saturated part), `0` virtual buoyancy, `1` moist
     static energy (the part that accelerates first; `tail_selector_coefficients`) [-].
+  - `edmf_satinst_fraction`: Saturated fraction `f⁰` of the environment used by
+    the saturated-instability source: `0` (default) the environment cloud
+    fraction; `1` the fraction of the SGS distribution that carries condensate,
+    `Φ(λ/(α σ_S))` from the cached moments, i.e. without the non-equilibrium
+    patchiness floor that enters only the cloud-fraction diagnostic [-].
   - `Tq_correlation_coefficient`: Correlation between `T'` and `q_tot'` in the
     SGS quadrature, in `[-1, 1]`. Used verbatim by `tq_correlation_model: constant`; the fallback where the variances vanish for
     `tq_correlation_model: diagnosed` [-].
@@ -383,6 +388,7 @@ Base.@kwdef struct SGSQuadratureParameters{FT} <: ASQP
     edmf_satinst_source_coeff::FT
     edmf_satinst_w_corr::FT
     edmf_satinst_selector::FT
+    edmf_satinst_fraction::FT
 end
 
 """

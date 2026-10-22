@@ -720,6 +720,23 @@ the subgrid variance and as `f⁰ → 1`.
 end
 
 """
+    condensate_carrying_fraction(λ, α, σ_S)
+
+Fraction of a Gaussian SGS distribution whose local condensate
+`max(0, λ + α S′)`, `S′ ~ N(0, σ_S²)`, is positive: `Φ(λ / (α σ_S))`, with the
+limits `1` (`λ > 0`) and `0` (`λ ≤ 0`) for a vanishing width.
+"""
+@inline function condensate_carrying_fraction(λ, α, σ_S)
+    FT = typeof(λ)
+    width = max(α, zero(FT)) * max(σ_S, zero(FT))
+    return ifelse(
+        width > floatmin(FT),
+        normal_cdf(λ / max(width, floatmin(FT))),
+        ifelse(λ > 0, one(FT), zero(FT)),
+    )
+end
+
+"""
     set_edmf_satinst_source!(Y, p)
 
 Fill `p.precomputed.ᶜsatinst_source` [kg/m³/s] (`satinst_source_rate`) and the
@@ -756,12 +773,20 @@ function set_edmf_satinst_source!(Y, p)
     ᶜq_liqʲ, ᶜq_iceʲ = _updraft_cloud_condensate(Y, p, 1, p.atmos.microphysics_model)
     # Environment cloud fraction: the grid-mean cloud fraction minus the
     # (binary) updraft cloud cover, per unit environment area.
-    ᶜf⁰ = @. lazy(clamp(
+    ᶜf⁰_cf = @. lazy(clamp(
         (ᶜcloud_fraction - ifelse(
             TD.has_condensate(thermo_params, max(0, ᶜq_liqʲ + ᶜq_iceʲ)), ᶜaʲ, zero(ᶜaʲ),
         )) / max(1 - ᶜaʲ, eps(FT)),
         zero(FT), one(FT),
     ))
+    # Alternatively the fraction of the environment's SGS distribution that
+    # carries condensate, `Φ(λ/(α σ_S))` (local condensate `max(0, λ + α S′)`).
+    ᶜf⁰ = if CAP.edmf_satinst_fraction(p.params) >= FT(0.5) && hasproperty(p.precomputed, :ᶜsgs_moments)
+        (; ᶜsgs_moments, ᶜα) = p.precomputed
+        @. lazy(condensate_carrying_fraction(ᶜsgs_moments.λ_lagrange, ᶜα, ᶜsgs_moments.sigma_S))
+    else
+        ᶜf⁰_cf
+    end
     ᶜN²_sat = @. lazy(blended_N²(
         ᶜbg_coeffs, one(FT),
         projected_vector_data(C3, ᶜgradᵥ_θ_liq_ice, ᶜlg),
