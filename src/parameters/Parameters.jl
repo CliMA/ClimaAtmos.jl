@@ -340,6 +340,11 @@ ClimaParams does not yet define or whose ClimaParams default it supersedes.
     equals the updraft's (`buoyancy_sorted_fraction`), capped by the saturated
     fraction, and the moved air is selected by buoyancy; `0` (default) moves the
     saturated fraction regardless of the updraft's buoyancy [-].
+  - `edmf_satinst_trigger_only`: `1` makes the saturated-instability source a
+    trigger: it is weighted by `a_min / (aʲ + a_min)` (`a_min` the minimum
+    updraft area), so it starts updrafts where none exist and fades where an
+    updraft is established, which is then fed only by its own inflow
+    (surface source and entrainment); `0` (default) applies it at any area [-].
   - `Tq_correlation_coefficient`: Correlation between `T'` and `q_tot'` in the
     SGS quadrature, in `[-1, 1]`. Used verbatim by `tq_correlation_model: constant`; the fallback where the variances vanish for
     `tq_correlation_model: diagnosed` [-].
@@ -401,6 +406,7 @@ Base.@kwdef struct SGSQuadratureParameters{FT} <: ASQP
     edmf_satinst_fraction::FT
     edmf_satinst_liquid_weight::FT
     edmf_satinst_buoyancy_sorting::FT
+    edmf_satinst_trigger_only::FT
 end
 
 """

@@ -877,6 +877,12 @@ function set_edmf_satinst_source!(Y, p)
         projected_vector_data(C3, ᶜgradᵥ_q_tot, ᶜlg),
     ))
     @. ᶜsatinst_source = satinst_source_rate(c_s, ᶜN²_sat, ᶜρa⁰, ᶜf_move, ᶜaʲ, turbconv_params, dt)
+    # Optional trigger weight: the source starts updrafts where none exist and
+    # fades as the updraft area grows beyond the minimum area.
+    if CAP.edmf_satinst_trigger_only(p.params) >= FT(0.5)
+        a_min = FT(CAP.min_area(turbconv_params))
+        @. ᶜsatinst_source *= a_min / (max(ᶜaʲ, zero(FT)) + a_min)
+    end
     # Optional phase weight: liquid fraction of the environment condensate
     # (1 where it holds no condensate, where the source vanishes with f⁰).
     w_liq = FT(CAP.edmf_satinst_liquid_weight(p.params))

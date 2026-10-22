@@ -669,6 +669,8 @@ function SGSQuadratureParameters(
         edmf_satinst_liquid_weight = FT(0),
         # Buoyancy sorting of the moved air (1 = only air as buoyant as the updraft).
         edmf_satinst_buoyancy_sorting = FT(0),
+        # Trigger-only source (weight a_min / (a + a_min)); 0 = any area.
+        edmf_satinst_trigger_only = FT(0),
     )
     # A run toml defines a parameter that ClimaParams also defines when it
     # appears in the override dictionary or, for a `toml_dict` assembled
