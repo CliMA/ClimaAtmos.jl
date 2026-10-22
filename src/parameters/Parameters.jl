@@ -317,6 +317,10 @@ ClimaParams does not yet define or whose ClimaParams default it supersedes.
     the environment is transferred to the updraft at the rate
     `c_s √max(0, −N²_sat)`, with `N²_sat` the saturated (moist-adiabatic) buoyancy
     gradient; `0` (default) disables it [-].
+  - `edmf_satinst_w_corr`: Correlation `r` in `[0, 1]` between the vertical
+    velocity and the saturation excess in the environment: the air moved by the
+    saturated-instability source carries `w⁰ + r D(f⁰) σ_w`, with
+    `σ_w = √(2 tke/3)`; `0` (default) moves it with the environment-mean velocity [-].
   - `Tq_correlation_coefficient`: Correlation between `T'` and `q_tot'` in the
     SGS quadrature, in `[-1, 1]`. Used verbatim by `tq_correlation_model: constant`; the fallback where the variances vanish for
     `tq_correlation_model: diagnosed` [-].
@@ -373,6 +377,7 @@ Base.@kwdef struct SGSQuadratureParameters{FT} <: ASQP
     edmf_tail_entr_weight::FT
     edmf_tail_entr_selector::FT
     edmf_satinst_source_coeff::FT
+    edmf_satinst_w_corr::FT
 end
 
 """

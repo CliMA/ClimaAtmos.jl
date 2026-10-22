@@ -716,7 +716,10 @@ end
 
 Fill `p.precomputed.ᶜsatinst_source` [kg/m³/s] (`satinst_source_rate`) and the
 increments `ᶜsatinst_Δmse`, `ᶜsatinst_Δq_tot` of the moved air
-(`satinst_source_increments`) for the single updraft. Requires the cloud
+(`satinst_source_increments`) for the single updraft, and its vertical-velocity
+excess over the environment mean `ᶜsatinst_Δw = r D(f⁰) √(2 tke/3)` [m/s]: the
+saturated top fraction is also the rising part of the environment, to the degree
+`r = edmf_satinst_w_corr` that velocity and saturation are correlated. Requires the cloud
 fraction and the buoyancy-gradient coefficients of the current state, so it is
 called after `set_covariance_cache_and_cloud_fraction!`. No-op (fields stay
 zero) unless `edmf_satinst_source_coeff > 0`.
@@ -733,7 +736,8 @@ function set_edmf_satinst_source!(Y, p)
     turbconv_params = CAP.turbconv_params(p.params)
     turbconv_model = p.atmos.turbconv_model
     (; dt) = p
-    (; ᶜsatinst_source, ᶜsatinst_Δmse, ᶜsatinst_Δq_tot) = p.precomputed
+    (; ᶜsatinst_source, ᶜsatinst_Δmse, ᶜsatinst_Δq_tot, ᶜsatinst_Δw) = p.precomputed
+    r_w = FT(CAP.edmf_satinst_w_corr(p.params))
     (; ᶜbg_coeffs, ᶜgradᵥ_θ_liq_ice, ᶜgradᵥ_q_tot, ᶜcloud_fraction, ᶜρʲs) = p.precomputed
     (; ᶜT⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜp) = p.precomputed
     ᶜlg = Fields.local_geometry_field(Y.c)
@@ -761,6 +765,9 @@ function set_edmf_satinst_source!(Y, p)
     @. ᶜsatinst_Δq_tot = last(satinst_source_increments(
         thermo_params, ᶜT⁰, ᶜρ⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜf⁰,
     ))
+    @. ᶜsatinst_Δw =
+        r_w * percentile_bounds_mean_norm(1 - clamp(ᶜf⁰, FT(0.01), 1 - FT(1e-4)), one(FT)) *
+        sqrt(2 * max(specific(Y.c.ρtke, Y.c.ρ), 0) / 3)
     return nothing
 end
 

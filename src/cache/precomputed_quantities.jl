@@ -456,6 +456,7 @@ function precomputed_quantities(Y, atmos)
             ᶜsatinst_source = zeros(axes(Y.c)),
             ᶜsatinst_Δmse = zeros(axes(Y.c)),
             ᶜsatinst_Δq_tot = zeros(axes(Y.c)),
+            ᶜsatinst_Δw = zeros(axes(Y.c)),
             precipitation_sgs_quantities...,
         ) : (;)
 
