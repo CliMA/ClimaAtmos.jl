@@ -793,6 +793,17 @@ function set_edmf_satinst_source!(Y, p)
         projected_vector_data(C3, ᶜgradᵥ_q_tot, ᶜlg),
     ))
     @. ᶜsatinst_source = satinst_source_rate(c_s, ᶜN²_sat, ᶜρa⁰, ᶜf⁰, ᶜaʲ, turbconv_params, dt)
+    # Optional phase weight: liquid fraction of the environment condensate
+    # (1 where it holds no condensate, where the source vanishes with f⁰).
+    w_liq = FT(CAP.edmf_satinst_liquid_weight(p.params))
+    if w_liq > 0
+        @. ᶜsatinst_source *=
+            1 - w_liq * (1 - ifelse(
+                ᶜq_liq⁰ + ᶜq_ice⁰ > eps(FT),
+                max(ᶜq_liq⁰, 0) / max(ᶜq_liq⁰ + ᶜq_ice⁰, eps(FT)),
+                one(FT),
+            ))
+    end
     @. ᶜsatinst_Δmse = first(satinst_source_increments(
         thermo_params, ᶜT⁰, ᶜρ⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜf⁰, selector,
     ))

@@ -665,6 +665,8 @@ function SGSQuadratureParameters(
         edmf_satinst_selector = FT(-1),
         # Saturated fraction: 0 = cloud fraction, 1 = condensate-carrying fraction.
         edmf_satinst_fraction = FT(0),
+        # Weight of the source by the environment condensate's liquid fraction.
+        edmf_satinst_liquid_weight = FT(0),
     )
     # A run toml defines a parameter that ClimaParams also defines when it
     # appears in the override dictionary or, for a `toml_dict` assembled

@@ -330,6 +330,10 @@ ClimaParams does not yet define or whose ClimaParams default it supersedes.
     fraction; `1` the fraction of the SGS distribution that carries condensate,
     `Φ(λ/(α σ_S))` from the cached moments, i.e. without the non-equilibrium
     patchiness floor that enters only the cloud-fraction diagnostic [-].
+  - `edmf_satinst_liquid_weight`: `1` weights the saturated-instability source
+    by the liquid fraction of the environment's condensate, so that it acts in
+    liquid and mixed-phase layers and not in ice-only (cirrus, anvil) layers;
+    `0` (default) applies it regardless of phase [-].
   - `Tq_correlation_coefficient`: Correlation between `T'` and `q_tot'` in the
     SGS quadrature, in `[-1, 1]`. Used verbatim by `tq_correlation_model: constant`; the fallback where the variances vanish for
     `tq_correlation_model: diagnosed` [-].
@@ -389,6 +393,7 @@ Base.@kwdef struct SGSQuadratureParameters{FT} <: ASQP
     edmf_satinst_w_corr::FT
     edmf_satinst_selector::FT
     edmf_satinst_fraction::FT
+    edmf_satinst_liquid_weight::FT
 end
 
 """
