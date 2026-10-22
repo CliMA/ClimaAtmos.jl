@@ -1943,9 +1943,11 @@ struct AtmosNumerics{
     dg_volume_flux::DGVF
     # FDDG interface dissipation: Val(:roe) (dry-gas eigenstructure),
     # Val(:roe_eos) (eigenstructure from the model's equation of state by
-    # autodiff of the Thermodynamics pressure), Val(:rusanov), or Val(:es)
-    # (Lax-Friedrichs in entropy variables — with the Waruszewski volume flux
-    # this gives a discrete entropy inequality).
+    # autodiff of the Thermodynamics pressure), Val(:rusanov), Val(:es)
+    # (Lax-Friedrichs in dry entropy variables — with the Waruszewski volume
+    # flux this gives a discrete entropy inequality for dry air), or
+    # Val(:moist_es) (Lax-Friedrichs on the conserved vector with total
+    # water: a sink of every convex entropy, the moist one included).
     dg_interface_flux::DGIF
     # VI-form DG velocity jump penalty: Val(:rusanov) (uniform |u| + c on the
     # horizontal velocity jump) or Val(:wave_selective) (|u_n| + c on the

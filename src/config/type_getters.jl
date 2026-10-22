@@ -150,8 +150,8 @@ function get_numerics(parsed_args, FT; vertical_water_borrowing_species = nothin
         "dg_volume_flux must be waruszewski, kg_pert, or kg_exner, got $dg_volume_flux",
     )
     dg_interface_flux = Symbol(get(parsed_args, "dg_interface_flux", "roe"))
-    dg_interface_flux in (:roe, :roe_eos, :es, :rusanov) || error(
-        "dg_interface_flux must be roe, roe_eos, es, or rusanov, got $dg_interface_flux",
+    dg_interface_flux in (:roe, :roe_eos, :es, :moist_es, :rusanov) || error(
+        "dg_interface_flux must be roe, roe_eos, es, moist_es, or rusanov, got $dg_interface_flux",
     )
     (dg_interface_flux == :es && dg_volume_flux != :waruszewski) &&
         error("dg_interface_flux = es requires dg_volume_flux = waruszewski")

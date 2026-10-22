@@ -498,6 +498,122 @@ function (f::RoeEOSInterface)(normal, (y⁻,), (y⁺,))
     )
 end
 
+# Floor on the total specific humidity inside the moist entropy: the vapor
+# mixing entropy has a `q ln q` term whose derivative diverges as q → 0, and
+# `0 ⋅ ln 0` is NaN. Only the entropy evaluation is floored; the state is not.
+const moist_entropy_q_min = 1e-10
+
+"""
+    moist_math_entropy(thermo_params, q, q_liq, q_ice, Φ)
+
+Mathematical entropy ``U = −ρ s`` of the moist equation of state as a
+function of the conserved vector `q = (ρ, ρu₁, ρu₂, ρu₃, ρe, [ρq_tot])`
+(`SVector` of length 5 or 6), with the condensate partition `(q_liq, q_ice)`
+and the geopotential `Φ` held fixed. `s` is Thermodynamics.jl's
+`entropy` at the pressure and temperature the model diagnoses from
+`(ρ, e_int, q)`. Thermodynamic stability makes `U` convex in `q`, so the
+entropy variables ``v = ∂U/∂q`` and the Hessian ``∂²U/∂q²`` (symmetric
+positive definite) exist and can be taken by forward-mode autodiff. Used to
+verify the entropy-sink property of [`MoistESDissipation`](@ref).
+"""
+@inline function moist_math_entropy(
+    thermo_params,
+    q::SA.SVector{N},
+    q_liq,
+    q_ice,
+    Φ,
+) where {N}
+    ρ = q[1]
+    u1 = q[2] / ρ
+    u2 = q[3] / ρ
+    u3 = q[4] / ρ
+    e = q[5] / ρ
+    q_tot = N == 6 ? max(q[6] / ρ, oftype(ρ, moist_entropy_q_min)) : zero(ρ)
+    e_int = e - (u1^2 + u2^2 + u3^2) / 2 - Φ
+    T = TD.air_temperature(thermo_params, e_int, q_tot, q_liq, q_ice)
+    p = TD.air_pressure(thermo_params, T, ρ, q_tot, q_liq, q_ice)
+    s = TD.entropy(thermo_params, p, T, q_tot, q_liq, q_ice)
+    return -ρ * s
+end
+
+"""
+    MoistESDissipation{N}(thermo_params)
+
+Callable `(normal, y⁻, y⁺) -> D` giving the Lax-Friedrichs dissipation
+``D = λ Δq`` on the conserved vector `q = (ρ, ρu⃗, ρe[, ρq_tot])` of the moist
+system (`N = 5` dry, `N = 6` with total water). For any convex entropy
+``U(q)`` with entropy variables ``v = ∂U/∂q``, monotonicity of the gradient
+gives ``Δvᵀ D = λ Δvᵀ Δq ≥ 0``, so every face is a sink of every convex
+entropy of the system at once, in particular of the moist physical entropy
+[`moist_math_entropy`](@ref) with its latent heat and vapor mixing terms
+(verified with autodiff entropy variables in
+`test/prognostic_equations/dg_moist_es_tests.jl`). Because ρ, ρe and ρq_tot
+are dissipated at one rate, a humidity front at uniform temperature,
+pressure and velocity is damped toward the mixture of the two states, which
+has the same temperature and pressure: the water mass and the energy it
+carries cross the face together. The ρq_tot slot replaces the generic
+tracer penalty of total water; the condensates keep theirs.
+
+The entropy-variable form ``λ H Δv`` with ``H = (∂²U/∂q²)⁻¹`` (the dry `es`
+form) is sign-definite for the same reason but needs the inverse Hessian,
+which is singular in the water direction as ``q_tot → 0`` (the mixing
+entropy has infinite curvature there) and cannot be solved in `Float32`;
+the two agree to second order in the jump.
+"""
+struct MoistESDissipation{N, TP}
+    thermo_params::TP
+end
+MoistESDissipation{N}(thermo_params::TP) where {N, TP} =
+    MoistESDissipation{N, TP}(thermo_params)
+
+@inline conserved_vector(::Val{5}, y) =
+    SA.SVector(y.ρ, y.ρ * y.u1, y.ρ * y.u2, y.ρ * y.u3, y.ρe)
+@inline conserved_vector(::Val{6}, y) =
+    SA.SVector(y.ρ, y.ρ * y.u1, y.ρ * y.u2, y.ρ * y.u3, y.ρe, y.ρ * y.q_tot)
+
+function (d::MoistESDissipation{N})(normal, y⁻, y⁺) where {N}
+    λ = max(y⁻.λ, y⁺.λ)
+    D = λ * (conserved_vector(Val(N), y⁺) - conserved_vector(Val(N), y⁻))
+    return N == 6 ?
+           (ρ = D[1], ρe = D[5], ρu1 = D[2], ρu2 = D[3], ρu3 = D[4], ρq_tot = D[6]) :
+           (ρ = D[1], ρe = D[5], ρu1 = D[2], ρu2 = D[3], ρu3 = D[4])
+end
+
+"""
+    MoistESInterface{N}(central, thermo_params)
+
+Interface flux `central − D/2` with `D` the [`MoistESDissipation`](@ref);
+with `N = 6` the returned tuple has a `ρq_tot` slot holding the water
+dissipation alone (its central flux stays in the tracer completion).
+Selected by `dg_interface_flux = moist_es`.
+"""
+struct MoistESInterface{N, C, TP}
+    central::C
+    dissipation::MoistESDissipation{N, TP}
+end
+MoistESInterface{N}(central::C, thermo_params::TP) where {N, C, TP} =
+    MoistESInterface{N, C, TP}(central, MoistESDissipation{N}(thermo_params))
+
+function (f::MoistESInterface{N})(normal, (y⁻,), (y⁺,)) where {N}
+    F = f.central(normal, normal, y⁻, y⁺)
+    D = f.dissipation(normal, y⁻, y⁺)
+    base = (
+        ρ = F.ρ - D.ρ / 2,
+        ρe = F.ρe - D.ρe / 2,
+        ρu1 = F.ρu1 - D.ρu1 / 2,
+        ρu2 = F.ρu2 - D.ρu2 / 2,
+        ρu3 = F.ρu3 - D.ρu3 / 2,
+    )
+    return N == 6 ? merge(base, (; ρq_tot = -D.ρq_tot / 2)) : base
+end
+
+# Two-point volume flux with a zero `ρq_tot` slot, so that it writes into the
+# six-slot residual of the `moist_es` path (the water volume term is the
+# tracer split divergence).
+with_water_slot(volume_flux) =
+    (nvec_a, nvec_b, y_a, y_b) ->
+        merge(volume_flux(nvec_a, nvec_b, y_a, y_b), (; ρq_tot = zero(y_a.ρ)))
+
 function waruszewski_roe_cartesian(normal, (y⁻,), (y⁺,))
     Fw = waruszewski_cartesian_flux(normal, normal, y⁻, y⁺)
     Fkg = kennedy_gruber_cartesian_flux(normal, normal, y⁻, y⁺)

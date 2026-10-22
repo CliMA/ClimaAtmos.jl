@@ -510,9 +510,18 @@ NVTX.@annotate function dg_horizontal_tracer_completion!(Yₜ_lim, Y, p, t)
     es =
         p.atmos.numerics.dg_equation_form === Val(:vi) &&
         p.atmos.numerics.dg_vi_interface_flux === Val(:es)
+    # fddg moist_es: total water is dissipated with the (ρ, ρu, ρe, ρq_tot)
+    # entropy system in dg_fddg_horizontal_dynamics!; keep only the central
+    # flux here
+    moist_es =
+        p.atmos.numerics.dg_equation_form === Val(:fddg) &&
+        p.atmos.numerics.dg_interface_flux === Val(:moist_es)
+    ᶜλ_zero = @. zero(ᶜλ)
     foreach_gs_tracer(Yₜ_lim, Y) do ᶜρχₜ, ᶜρχ, ρχ_name
         if es && ρχ_name == @name(ρq_tot)
             add_dg_water_es_flux!(Yₜ_lim, ᶜρχₜ, ᶜρχ, Y, p, ᶜuv, ᶜλ)
+        elseif moist_es && ρχ_name == @name(ρq_tot)
+            add_dg_tracer_interface_flux!(ᶜρχₜ, ᶜρχ, Y, ᶜuv, ᶜλ_zero)
         else
             add_dg_tracer_interface_flux!(ᶜρχₜ, ᶜρχ, Y, ᶜuv, ᶜλ)
         end
@@ -767,31 +776,58 @@ NVTX.@annotate function dg_fddg_horizontal_dynamics!(Yₜ, Y, p, t)
         Y.c.ρ, Y.c.ρe_tot, e, ᶜp, pm, ρm, ᶜuv, u1, u2, u3, E1, E2, E3, ᶜλ, ᶜΦ,
         ᶜe_int, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice, ᶜλq, ᶜλqc,
     )
-    roe_eos = p.atmos.numerics.dg_interface_flux === Val(:roe_eos)
-    dy = Fields.Field(
-        NamedTuple{(:ρ, :ρe, :ρu1, :ρu2, :ρu3), NTuple{5, FT}},
-        axes(Y.c),
-    )
-    fill!(parent(dy), 0)
-    if p.atmos.numerics.dg_volume_flux === Val(:kg_exner)
-        Operators.add_flux_differencing_divergence!(
-            kennedy_gruber_advective_cartesian_flux,
-            dy,
-            y,
+    # volume flux family and interface dissipation
+    (; dg_volume_flux, dg_interface_flux) = p.atmos.numerics
+    volume_flux =
+        dg_volume_flux === Val(:kg_exner) ?
+        kennedy_gruber_advective_cartesian_flux :
+        dg_volume_flux === Val(:kg_pert) ? kennedy_gruber_cartesian_flux :
+        waruszewski_cartesian_flux
+    moist_es = dg_interface_flux === Val(:moist_es)
+    # moist_es dissipates total water with the system (6 slots) unless dry
+    Nslots = moist_es && !(microphysics_model isa DryModel) ? 6 : 5
+    interface = if dg_interface_flux === Val(:rusanov)
+        # rusanov = full |u|+c interface dissipation (stronger grid-scale noise
+        # control than roe's ~5% contact floor — needed when no hyperdiffusion
+        # is present, e.g. to keep EDMFX TKE production bounded over terrain).
+        dg_volume_flux === Val(:kg_exner) ?
+        kennedy_gruber_advective_rusanov_cartesian :
+        kennedy_gruber_rusanov_cartesian
+    elseif dg_interface_flux === Val(:roe_eos)
+        RoeEOSInterface(volume_flux, thermo_params)
+    elseif moist_es
+        MoistESInterface{Nslots}(volume_flux, thermo_params)
+    elseif dg_interface_flux === Val(:es)
+        waruszewski_es_cartesian
+    else
+        dg_volume_flux === Val(:kg_exner) ?
+        kennedy_gruber_advective_roe_cartesian :
+        dg_volume_flux === Val(:kg_pert) ? kennedy_gruber_roe_cartesian :
+        waruszewski_roe_cartesian
+    end
+    dy = if Nslots == 6
+        Fields.Field(
+            NamedTuple{(:ρ, :ρe, :ρu1, :ρu2, :ρu3, :ρq_tot), NTuple{6, FT}},
+            axes(Y.c),
         )
-        kg_adv_interface =
-            p.atmos.numerics.dg_interface_flux === Val(:rusanov) ?
-            kennedy_gruber_advective_rusanov_cartesian :
-            roe_eos ?
-            RoeEOSInterface(
-                kennedy_gruber_advective_cartesian_flux,
-                thermo_params,
-            ) : kennedy_gruber_advective_roe_cartesian
-        Operators.add_numerical_flux_interior!(kg_adv_interface, dy, y)
+    else
+        Fields.Field(
+            NamedTuple{(:ρ, :ρe, :ρu1, :ρu2, :ρu3), NTuple{5, FT}},
+            axes(Y.c),
+        )
+    end
+    fill!(parent(dy), 0)
+    Operators.add_flux_differencing_divergence!(
+        Nslots == 6 ? with_water_slot(volume_flux) : volume_flux,
+        dy,
+        y,
+    )
+    Operators.add_numerical_flux_interior!(interface, dy, y)
+    if dg_volume_flux === Val(:kg_exner)
         # Exner-split horizontal PGF of the vector-invariant form (as in
         # horizontal_dynamics_tendency!) without the ∇K part, which the
         # flux-form advection above carries.
-        (; ᶜT, ᶜq_liq, ᶜq_ice, ᶜq_tot_nonneg) = p.precomputed
+        (; ᶜT) = p.precomputed
         cp_d = thermo_params.cp_d
         ᶜΦ_r = @. phi_r(thermo_params, ᶜp)
         ᶜΦ_diff = @. ᶜΦ - ᶜΦ_r
@@ -812,47 +848,11 @@ NVTX.@annotate function dg_fddg_horizontal_dynamics!(Yₜ, Y, p, t)
             ) / 2,
         )
         dg_exner_split_pgf_lift!(Yₜ, Y, p, ᶜΦ_diff)
-    elseif p.atmos.numerics.dg_volume_flux === Val(:kg_pert)
-        Operators.add_flux_differencing_divergence!(
-            kennedy_gruber_cartesian_flux,
-            dy,
-            y,
-        )
-        # rusanov = full |u|+c interface dissipation (stronger grid-scale noise
-        # control than roe's ~5% contact floor — needed when no hyperdiffusion
-        # is present, e.g. to keep EDMFX TKE production bounded over terrain).
-        kg_interface =
-            p.atmos.numerics.dg_interface_flux === Val(:rusanov) ?
-            kennedy_gruber_rusanov_cartesian :
-            roe_eos ?
-            RoeEOSInterface(kennedy_gruber_cartesian_flux, thermo_params) :
-            kennedy_gruber_roe_cartesian
-        Operators.add_numerical_flux_interior!(kg_interface, dy, y)
-    else
-        Operators.add_flux_differencing_divergence!(
-            waruszewski_cartesian_flux,
-            dy,
-            y,
-        )
-        if p.atmos.numerics.dg_interface_flux === Val(:es)
-            Operators.add_numerical_flux_interior!(
-                waruszewski_es_cartesian,
-                dy,
-                y,
-            )
-        elseif roe_eos
-            Operators.add_numerical_flux_interior!(
-                RoeEOSInterface(waruszewski_cartesian_flux, thermo_params),
-                dy,
-                y,
-            )
-        else
-            Operators.add_numerical_flux_interior!(
-                waruszewski_roe_cartesian,
-                dy,
-                y,
-            )
-        end
+    end
+    if Nslots == 6
+        # water dissipation of the moist entropy system; its central flux and
+        # volume term are in the tracer completion, whose penalty is off
+        @. Yₜ.c.ρq_tot += dy.ρq_tot / ᶜWJ
     end
 
     @. Yₜ.c.ρ += dy.ρ / ᶜWJ
