@@ -783,31 +783,11 @@ Gaussian `(T′, q′)` with variances `T′T′`, `q′q′` and correlation `c
 end
 
 """
-    condensate_carrying_fraction(λ, α, σ_S)
-
-Fraction of a Gaussian SGS distribution whose local condensate
-`max(0, λ + α S′)`, `S′ ~ N(0, σ_S²)`, is positive: `Φ(λ / (α σ_S))`, with the
-limits `1` (`λ > 0`) and `0` (`λ ≤ 0`) for a vanishing width.
-"""
-@inline function condensate_carrying_fraction(λ, α, σ_S)
-    FT = typeof(λ)
-    width = max(α, zero(FT)) * max(σ_S, zero(FT))
-    return ifelse(
-        width > floatmin(FT),
-        normal_cdf(λ / max(width, floatmin(FT))),
-        ifelse(λ > 0, one(FT), zero(FT)),
-    )
-end
-
-"""
     set_edmf_satinst_source!(Y, p)
 
 Fill `p.precomputed.ᶜsatinst_source` [kg/m³/s] (`satinst_source_rate`) and the
 increments `ᶜsatinst_Δmse`, `ᶜsatinst_Δq_tot` of the moved air
-(`satinst_source_increments`) for the single updraft, and its vertical-velocity
-excess over the environment mean `ᶜsatinst_Δw = r D(f⁰) √(2 tke/3)` [m/s]: the
-saturated top fraction is also the rising part of the environment, to the degree
-`r = edmf_satinst_w_corr` that velocity and saturation are correlated. Requires the cloud
+(`satinst_source_increments`) for the single updraft. Requires the cloud
 fraction and the buoyancy-gradient coefficients of the current state, so it is
 called after `set_covariance_cache_and_cloud_fraction!`. No-op (fields stay
 zero) unless `edmf_satinst_source_coeff > 0`.
@@ -824,9 +804,7 @@ function set_edmf_satinst_source!(Y, p)
     turbconv_params = CAP.turbconv_params(p.params)
     turbconv_model = p.atmos.turbconv_model
     (; dt) = p
-    (; ᶜsatinst_source, ᶜsatinst_Δmse, ᶜsatinst_Δq_tot, ᶜsatinst_Δw) = p.precomputed
-    r_w = FT(CAP.edmf_satinst_w_corr(p.params))
-    selector = FT(CAP.edmf_satinst_selector(p.params))
+    (; ᶜsatinst_source, ᶜsatinst_Δmse, ᶜsatinst_Δq_tot) = p.precomputed
     (; ᶜbg_coeffs, ᶜgradᵥ_θ_liq_ice, ᶜgradᵥ_q_tot, ᶜcloud_fraction, ᶜρʲs) = p.precomputed
     (; ᶜT⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜp) = p.precomputed
     ᶜlg = Fields.local_geometry_field(Y.c)
@@ -836,20 +814,12 @@ function set_edmf_satinst_source!(Y, p)
     ᶜq_liqʲ, ᶜq_iceʲ = _updraft_cloud_condensate(Y, p, 1, p.atmos.microphysics_model)
     # Environment cloud fraction: the grid-mean cloud fraction minus the
     # (binary) updraft cloud cover, per unit environment area.
-    ᶜf⁰_cf = @. lazy(clamp(
+    ᶜf⁰ = @. lazy(clamp(
         (ᶜcloud_fraction - ifelse(
             TD.has_condensate(thermo_params, max(0, ᶜq_liqʲ + ᶜq_iceʲ)), ᶜaʲ, zero(ᶜaʲ),
         )) / max(1 - ᶜaʲ, eps(FT)),
         zero(FT), one(FT),
     ))
-    # Alternatively the fraction of the environment's SGS distribution that
-    # carries condensate, `Φ(λ/(α σ_S))` (local condensate `max(0, λ + α S′)`).
-    ᶜf⁰ = if CAP.edmf_satinst_fraction(p.params) >= FT(0.5) && hasproperty(p.precomputed, :ᶜsgs_moments)
-        (; ᶜsgs_moments, ᶜα) = p.precomputed
-        @. lazy(condensate_carrying_fraction(ᶜsgs_moments.λ_lagrange, ᶜα, ᶜsgs_moments.sigma_S))
-    else
-        ᶜf⁰_cf
-    end
     # Buoyancy sorting (optional): only environment air at least as buoyant as
     # the updraft joins it. Updraft excess over the environment
     # Δb = g (ρ⁰ − ρʲ)/ρ⁰; environment buoyancy spread from the virtual
@@ -868,7 +838,9 @@ function set_edmf_satinst_source!(Y, p)
         selector = zero(FT)
         f_min = FT(1e-4)
     else
+        # the saturated part: top fraction f⁰ in the saturation excess
         ᶜf_move = ᶜf⁰
+        selector = -one(FT)
         f_min = FT(0.01)
     end
     ᶜN²_sat = @. lazy(blended_N²(
@@ -900,9 +872,6 @@ function set_edmf_satinst_source!(Y, p)
     @. ᶜsatinst_Δq_tot = last(satinst_source_increments(
         thermo_params, ᶜT⁰, ᶜρ⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜf_move, selector, f_min,
     ))
-    @. ᶜsatinst_Δw =
-        r_w * percentile_bounds_mean_norm(1 - clamp(ᶜf_move, FT(0.01), 1 - FT(1e-4)), one(FT)) *
-        sqrt(2 * max(specific(Y.c.ρtke, Y.c.ρ), 0) / 3)
     return nothing
 end
 

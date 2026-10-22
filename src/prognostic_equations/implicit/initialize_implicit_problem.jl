@@ -205,18 +205,15 @@ function solve_sgs_u₃_implicit_stage_analytic!(Y, p, dtγ)
                     ᶜturb_entrʲs.:($$j)
                 ) * ᶜa⁰_inv,
             )
-        # The saturated-instability source brings the moved air's momentum,
-        # S (w₀ + Δw − w)/ρa ≈ (S/ρa)(Δw − w / a⁰), at the specific rate of
-        # `satinst_specific_rate` (`Δw = ᶜsatinst_Δw`): a linear sink and a
-        # constant forcing (one factor of Δz, as the buoyancy term).
-        ᶜsatinst_rateʲ = @. lazy(
+        # The saturated-instability source brings environment momentum,
+        # S (w₀ − w)/ρa ≈ −(S/ρa) w / a⁰, at the specific rate of
+        # `satinst_specific_rate`.
+        @. ᶠb += ᶠinterp(
             satinst_specific_rate(
                 p.precomputed.ᶜsatinst_source, Y.c.sgsʲs.:($$j).ρa,
                 ᶜρʲs.:($$j), a_min,
-            ),
+            ) * ᶜa⁰_inv,
         )
-        @. ᶠb += ᶠinterp(ᶜsatinst_rateʲ * ᶜa⁰_inv)
-        @. ᶠc -= ᶠinterp(ᶜsatinst_rateʲ * p.precomputed.ᶜsatinst_Δw) * ᶠdz
 
         # Implicit NH pressure drag a⁰ d_c (w - w₀)|w - w₀| ≈ d_c w² / a⁰
         # contributes a quadratic sink: two factors of 1/a⁰ from the velocity

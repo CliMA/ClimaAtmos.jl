@@ -317,19 +317,6 @@ ClimaParams does not yet define or whose ClimaParams default it supersedes.
     the environment is transferred to the updraft at the rate
     `c_s √max(0, −N²_sat)`, with `N²_sat` the saturated (moist-adiabatic) buoyancy
     gradient; `0` (default) disables it [-].
-  - `edmf_satinst_w_corr`: Correlation `r` in `[0, 1]` between the vertical
-    velocity and the saturation excess in the environment: the air moved by the
-    saturated-instability source carries `w⁰ + r D(f⁰) σ_w`, with
-    `σ_w = √(2 tke/3)`; `0` (default) moves it with the environment-mean velocity [-].
-  - `edmf_satinst_selector`: Selector of the environment fraction `f⁰` moved by
-    the saturated-instability source: `−1` (default) saturation excess
-    `q′ − (∂q_sat/∂T) T′` (the saturated part), `0` virtual buoyancy, `1` moist
-    static energy (the part that accelerates first; `tail_selector_coefficients`) [-].
-  - `edmf_satinst_fraction`: Saturated fraction `f⁰` of the environment used by
-    the saturated-instability source: `0` (default) the environment cloud
-    fraction; `1` the fraction of the SGS distribution that carries condensate,
-    `Φ(λ/(α σ_S))` from the cached moments, i.e. without the non-equilibrium
-    patchiness floor that enters only the cloud-fraction diagnostic [-].
   - `edmf_satinst_liquid_weight`: `1` weights the saturated-instability source
     by the liquid fraction of the environment's condensate, so that it acts in
     liquid and mixed-phase layers and not in ice-only (cirrus, anvil) layers;
@@ -401,9 +388,6 @@ Base.@kwdef struct SGSQuadratureParameters{FT} <: ASQP
     edmf_tail_entr_weight::FT
     edmf_tail_entr_selector::FT
     edmf_satinst_source_coeff::FT
-    edmf_satinst_w_corr::FT
-    edmf_satinst_selector::FT
-    edmf_satinst_fraction::FT
     edmf_satinst_liquid_weight::FT
     edmf_satinst_buoyancy_sorting::FT
     edmf_satinst_trigger_only::FT
