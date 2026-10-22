@@ -334,6 +334,12 @@ ClimaParams does not yet define or whose ClimaParams default it supersedes.
     by the liquid fraction of the environment's condensate, so that it acts in
     liquid and mixed-phase layers and not in ice-only (cirrus, anvil) layers;
     `0` (default) applies it regardless of phase [-].
+  - `edmf_satinst_buoyancy_sorting`: `1` lets only environment air at least as
+    buoyant as the updraft join it: the moved fraction is the top fraction of
+    the environment's buoyancy distribution whose conditional mean buoyancy
+    equals the updraft's (`buoyancy_sorted_fraction`), capped by the saturated
+    fraction, and the moved air is selected by buoyancy; `0` (default) moves the
+    saturated fraction regardless of the updraft's buoyancy [-].
   - `Tq_correlation_coefficient`: Correlation between `T'` and `q_tot'` in the
     SGS quadrature, in `[-1, 1]`. Used verbatim by `tq_correlation_model: constant`; the fallback where the variances vanish for
     `tq_correlation_model: diagnosed` [-].
@@ -394,6 +400,7 @@ Base.@kwdef struct SGSQuadratureParameters{FT} <: ASQP
     edmf_satinst_selector::FT
     edmf_satinst_fraction::FT
     edmf_satinst_liquid_weight::FT
+    edmf_satinst_buoyancy_sorting::FT
 end
 
 """

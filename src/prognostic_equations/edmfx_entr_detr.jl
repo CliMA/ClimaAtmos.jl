@@ -698,6 +698,7 @@ the subgrid variance and as `f⁰ → 1`.
 """
 @inline function satinst_source_increments(
     thermo_params, T⁰, ρ⁰, q_tot⁰, q_liq⁰, q_ice⁰, T′T′, q′q′, corr_Tq, f⁰, selector,
+    f_min = oftype(T⁰, 0.01),
 )
     FT = typeof(T⁰)
     L_v = FT(TDP.LH_v0(thermo_params))
@@ -709,7 +710,7 @@ the subgrid variance and as `f⁰ → 1`.
     α_T = ifelse(use_saturation, -∂qsat∂T, α_T_sel)
     α_q = ifelse(use_saturation, one(FT), α_q_sel)
     ΔT½, Δq½ = environment_tail_shift(T′T′, q′q′, corr_Tq, α_T, α_q)
-    f = clamp(f⁰, FT(0.01), one(FT) - FT(1e-4))
+    f = clamp(f⁰, FT(f_min), one(FT) - FT(1e-4))
     D = percentile_bounds_mean_norm(one(FT) - f, one(FT)) / sqrt(FT(2) / FT(π))
     q_tot_e = max(q_tot⁰ + D * Δq½, zero(FT))
     T_e = T⁰ + D * ΔT½
@@ -717,6 +718,68 @@ the subgrid variance and as `f⁰ → 1`.
         TD.enthalpy(thermo_params, T_e, q_tot_e, q_liq⁰, q_ice⁰) -
         TD.enthalpy(thermo_params, T⁰, q_tot⁰, q_liq⁰, q_ice⁰)
     return (Δmse, q_tot_e - q_tot⁰)
+end
+
+"""
+    inverse_mills_threshold(x)
+
+Threshold `t` of a standard normal whose upper tail has conditional mean `x`,
+i.e. the root of the inverse Mills ratio `φ(t)/(1 − Φ(t)) = x` (`x > 0`;
+increasing in `t`). Seeded piecewise (`t ≈ x − 1/x` for large `x`, the
+linearization about `t = 0`, and `φ(t) ≈ x` for small `x`) and refined with a
+fixed number of Newton steps on `λ(t) = x` with `λ′(t) = λ(λ − t)`; clamped to
+`|t| ≤ 8`. GPU-safe.
+"""
+@inline function inverse_mills_threshold(x)
+    FT = typeof(x)
+    xs = max(x, FT(1e-6))
+    sqrt2π = sqrt(2 * FT(π))
+    t_large = xs - 1 / xs
+    t_mid = (xs - sqrt(2 / FT(π))) / (2 / FT(π))
+    t_small = -sqrt(max(-2 * log(xs * sqrt2π), zero(FT)))
+    t = ifelse(xs > FT(1.5), t_large, ifelse(xs > FT(0.3), t_mid, t_small))
+    t = clamp(t, -FT(8), FT(8))
+    for _ in 1:6
+        φ = exp(-t^2 / 2) / sqrt2π
+        Q = max(normal_cdf(-t), floatmin(FT))
+        λ = φ / Q
+        t = clamp(t - (λ - xs) / max(λ * (λ - t), FT(1e-6)), -FT(8), FT(8))
+    end
+    return t
+end
+
+"""
+    buoyancy_sorted_fraction(Δb, σ_b)
+
+Largest top fraction `f` of a Gaussian buoyancy distribution (standard deviation
+`σ_b`) whose conditional mean exceeds the distribution mean by `Δb`:
+`f = 1 − Φ(t)` with `φ(t)/(1 − Φ(t)) = Δb/σ_b` (`inverse_mills_threshold`).
+`f = 1` for `Δb ≤ 0` (any air is as buoyant as the target), `f → 0` for
+`Δb ≫ σ_b` or a vanishing `σ_b`.
+"""
+@inline function buoyancy_sorted_fraction(Δb, σ_b)
+    FT = typeof(Δb)
+    has_spread = σ_b > floatmin(FT)
+    x = max(Δb, zero(FT)) / max(σ_b, floatmin(FT))
+    f = normal_cdf(-inverse_mills_threshold(x))
+    return ifelse(Δb <= 0, one(FT), ifelse(has_spread, f, zero(FT)))
+end
+
+"""
+    selector_std(T′T′, q′q′, corr_Tq, α_T, α_q)
+
+Standard deviation of the linear selector `s′ = α_T T′ + α_q q′` for the
+Gaussian `(T′, q′)` with variances `T′T′`, `q′q′` and correlation `corr_Tq`.
+"""
+@inline function selector_std(T′T′, q′q′, corr_Tq, α_T, α_q)
+    FT = typeof(T′T′)
+    σ_T = sqrt(max(T′T′, zero(FT)))
+    σ_q = sqrt(max(q′q′, zero(FT)))
+    r = clamp(corr_Tq, -one(FT), one(FT))
+    return sqrt(max(
+        (α_T * σ_T)^2 + 2 * α_T * α_q * r * σ_T * σ_q + (α_q * σ_q)^2,
+        zero(FT),
+    ))
 end
 
 """
@@ -787,12 +850,33 @@ function set_edmf_satinst_source!(Y, p)
     else
         ᶜf⁰_cf
     end
+    # Buoyancy sorting (optional): only environment air at least as buoyant as
+    # the updraft joins it. Updraft excess over the environment
+    # Δb = g (ρ⁰ − ρʲ)/ρ⁰; environment buoyancy spread from the virtual
+    # selector (`tail_selector_coefficients(…, 0, …)`); moved air selected by
+    # buoyancy.
+    sorting = CAP.edmf_satinst_buoyancy_sorting(p.params) >= FT(0.5)
+    if sorting
+        grav = FT(CAP.grav(p.params))
+        ᶜσ_b = @. lazy(grav * selector_std(
+            ᶜT′T′, ᶜq′q′, ᶜcorr_Tq,
+            first(tail_selector_coefficients(thermo_params, zero(FT), ᶜT⁰)),
+            last(tail_selector_coefficients(thermo_params, zero(FT), ᶜT⁰)),
+        ))
+        ᶜΔb = @. lazy(grav * (ᶜρ⁰ - ᶜρʲs.:(1)) / ᶜρ⁰)
+        ᶜf_move = @. lazy(min(ᶜf⁰, buoyancy_sorted_fraction(ᶜΔb, ᶜσ_b)))
+        selector = zero(FT)
+        f_min = FT(1e-4)
+    else
+        ᶜf_move = ᶜf⁰
+        f_min = FT(0.01)
+    end
     ᶜN²_sat = @. lazy(blended_N²(
         ᶜbg_coeffs, one(FT),
         projected_vector_data(C3, ᶜgradᵥ_θ_liq_ice, ᶜlg),
         projected_vector_data(C3, ᶜgradᵥ_q_tot, ᶜlg),
     ))
-    @. ᶜsatinst_source = satinst_source_rate(c_s, ᶜN²_sat, ᶜρa⁰, ᶜf⁰, ᶜaʲ, turbconv_params, dt)
+    @. ᶜsatinst_source = satinst_source_rate(c_s, ᶜN²_sat, ᶜρa⁰, ᶜf_move, ᶜaʲ, turbconv_params, dt)
     # Optional phase weight: liquid fraction of the environment condensate
     # (1 where it holds no condensate, where the source vanishes with f⁰).
     w_liq = FT(CAP.edmf_satinst_liquid_weight(p.params))
@@ -805,13 +889,13 @@ function set_edmf_satinst_source!(Y, p)
             ))
     end
     @. ᶜsatinst_Δmse = first(satinst_source_increments(
-        thermo_params, ᶜT⁰, ᶜρ⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜf⁰, selector,
+        thermo_params, ᶜT⁰, ᶜρ⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜf_move, selector, f_min,
     ))
     @. ᶜsatinst_Δq_tot = last(satinst_source_increments(
-        thermo_params, ᶜT⁰, ᶜρ⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜf⁰, selector,
+        thermo_params, ᶜT⁰, ᶜρ⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜf_move, selector, f_min,
     ))
     @. ᶜsatinst_Δw =
-        r_w * percentile_bounds_mean_norm(1 - clamp(ᶜf⁰, FT(0.01), 1 - FT(1e-4)), one(FT)) *
+        r_w * percentile_bounds_mean_norm(1 - clamp(ᶜf_move, FT(0.01), 1 - FT(1e-4)), one(FT)) *
         sqrt(2 * max(specific(Y.c.ρtke, Y.c.ρ), 0) / 3)
     return nothing
 end
