@@ -293,11 +293,22 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
         @. Yₜ.c.ρq_tot += vtt_bc
     end
 
+    # With `dg_fddg_vertical = flux` the vertical transport of uₕ is the
+    # staggered flux form in dg_fddg_vertical_flux!, so the ω¹² × u³ term
+    # is dropped here; the u₃ equation keeps its vector-invariant form.
+    fddg_vflux =
+        is_dg_horizontal(axes(Y.c)) &&
+        p.atmos.numerics.dg_equation_form === Val(:fddg) &&
+        p.atmos.numerics.dg_fddg_vertical === Val(:flux)
     if isnothing(ᶠf¹²)
         # shallow atmosphere
-        @. Yₜ.c.uₕ -=
-            ᶜinterp(ᶠω¹² × (ᶠinterp(Y.c.ρ * ᶜJ) * ᶠu³)) / (Y.c.ρ * ᶜJ) +
-            (ᶜf³ + ᶜω³) × CT12(ᶜu)
+        if fddg_vflux
+            @. Yₜ.c.uₕ -= (ᶜf³ + ᶜω³) × CT12(ᶜu)
+        else
+            @. Yₜ.c.uₕ -=
+                ᶜinterp(ᶠω¹² × (ᶠinterp(Y.c.ρ * ᶜJ) * ᶠu³)) / (Y.c.ρ * ᶜJ) +
+                (ᶜf³ + ᶜω³) × CT12(ᶜu)
+        end
         @. Yₜ.f.u₃ -= ᶠω¹² × ᶠinterp(CT12(ᶜu)) + ᶠgradᵥ(ᶜK)
         for j in 1:n
             @. Yₜ.f.sgsʲs.:($$j).u₃ -=
@@ -306,9 +317,15 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
         end
     else
         # deep atmosphere
-        @. Yₜ.c.uₕ -=
-            ᶜinterp((ᶠf¹² + ᶠω¹²) × (ᶠinterp(Y.c.ρ * ᶜJ) * ᶠu³)) /
-            (Y.c.ρ * ᶜJ) + (ᶜf³ + ᶜω³) × CT12(ᶜu)
+        if fddg_vflux
+            @. Yₜ.c.uₕ -=
+                ᶜinterp(ᶠf¹² × (ᶠinterp(Y.c.ρ * ᶜJ) * ᶠu³)) / (Y.c.ρ * ᶜJ) +
+                (ᶜf³ + ᶜω³) × CT12(ᶜu)
+        else
+            @. Yₜ.c.uₕ -=
+                ᶜinterp((ᶠf¹² + ᶠω¹²) × (ᶠinterp(Y.c.ρ * ᶜJ) * ᶠu³)) /
+                (Y.c.ρ * ᶜJ) + (ᶜf³ + ᶜω³) × CT12(ᶜu)
+        end
         @. Yₜ.f.u₃ -= (ᶠf¹² + ᶠω¹²) × ᶠinterp(CT12(ᶜu)) + ᶠgradᵥ(ᶜK)
         for j in 1:n
             @. Yₜ.f.sgsʲs.:($$j).u₃ -=

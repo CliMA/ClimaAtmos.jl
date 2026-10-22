@@ -64,6 +64,9 @@ dg_vi_interface_flux:
 dg_tracer_penalty:
   help: "Rate of the DG tracer jump penalties (total water, condensates, TKE, passive tracers) [`acoustic` (default; |u| + c), `advective` (max(|u|, dg_vi_shear_floor c), the rate of the wave-selective shear penalty)]. The energy and velocity penalties are unchanged."
   value: "acoustic"
+dg_fddg_vertical:
+  help: "Vertical transport of the horizontal momentum in the flux-form DG dynamics [`vi` (default; the ω¹² × u³ vector-invariant term), `flux` (staggered flux form: the face mass flux of the continuity equation times the interpolated Cartesian velocity, so the vertical advection is kinetic-energy preserving like the horizontal flux differencing; with a flux-form pressure family (waruszewski, kg_pert) the vertical two-point pressure flux ∂_ξ3({p_m}{ê_c ⋅ Ja³}) is added, which carries the terrain tilt of the horizontal pressure force that the horizontal flux differencing alone omits)]. Ignored unless dg_equation_form is fddg."
+  value: "vi"
 sleve_eta:
   help: "If SLEVE coordinates are chosen, sets the `ηₕ` parameter (if z/z_top > ηₕ, no warping is applied)"
   value: 0.7

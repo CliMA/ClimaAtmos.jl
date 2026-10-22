@@ -682,6 +682,17 @@ of `horizontal_dynamics_tendency!` with Waruszewski flux-differencing volume
 terms + Roe interface fluxes over (ρ, ρe, ρu⃗) in global Cartesian momentum
 components. Coriolis, all vertical terms, and tracer advection are unchanged.
 
+With `dg_fddg_vertical = flux` the vertical transport of the horizontal
+momentum is also in flux form ([`dg_fddg_vertical_flux!`](@ref)): the face
+mass flux of the continuity equation times the interpolated Cartesian
+velocity, which is kinetic-energy preserving on the staggered grid for the
+same reason the horizontal two-point flux is, plus, for the flux-form
+pressure families, the vertical two-point pressure flux
+`∂_ξ3({p_m}{ê_c ⋅ Ja³})` through the horizontal part of `Ja³`. That term is
+the terrain tilt of the horizontal pressure force; the horizontal flux
+differencing alone carries only `Σ_{k=1,2} ∂_ξk(p_m Ja^k)`, which over sloped
+surfaces is the along-surface gradient and not the horizontal one.
+
 With `dg_volume_flux = kg_exner` only the advection is in flux form
 ([`kennedy_gruber_advective_cartesian_flux`](@ref) with Roe or Rusanov
 interface dissipation); the horizontal pressure force is the Exner-split
@@ -829,13 +840,98 @@ NVTX.@annotate function dg_fddg_horizontal_dynamics!(Yₜ, Y, p, t)
             Geometry.UVVector(duE, duN),
         ),
     )
+    if p.atmos.numerics.dg_fddg_vertical === Val(:flux)
+        dg_fddg_vertical_flux!(
+            Yₜ,
+            Y,
+            p,
+            pm,
+            (u1, u2, u3),
+            (eE1, eE2, eE3),
+            (eN1, eN2, eN3),
+        )
+        return nothing
+    end
     # Metric-exact KE-gradient split. The flux-form advects the physical
     # horizontal velocity ᶜuv, so it carries only gradₕ(½|uᵥ|²); the vertical
     # ᶠgradᵥ(ᶜK) uses the full ᶜK. Add the missing horizontal gradient of the
     # vertical kinetic energy, gradₕ(ᶜK − ½|uᵥ|²) = gradₕ(½w²), so uₕ and u₃ see
     # the two components of one ∇ᶜK (as in CG). Zero at rest and negligible where
-    # w is small (flat); nonzero only for vertical motion over terrain.
+    # w is small (flat); nonzero only for vertical motion over terrain. (With
+    # the vector-invariant vertical term for uₕ this cancels its w ∇ₕw part;
+    # the flux-form vertical transport has no such part.)
     @. Yₜ.c.uₕ -=
         C12(gradₕ(ᶜK - FT(1 // 2) * LinearAlgebra.norm_sqr(ᶜuv)))
+    return nothing
+end
+
+"""
+    dg_fddg_vertical_flux!(Yₜ, Y, p, pm, (u1, u2, u3), (eE1, eE2, eE3), (eN1, eN2, eN3))
+
+Staggered flux-form vertical terms of the Cartesian horizontal momentum for
+`dg_fddg_vertical = flux` (replacing the `ω¹² × u³` term of
+`explicit_vertical_advection_tendency!`):
+
+  - advection by the face mass flux of the continuity equation,
+    `m = ᶠinterp(ρJ) u³` (zero through the surface and the top), in velocity
+    form `du_c = −(δ(m {u_c}) − u_c δ(m)) / (ρJ)`, with `{u_c} = ᶠinterp(u_c)`.
+    This is the two-point Kennedy-Gruber momentum flux `{ρ}{u_c}{u³}` on the
+    two-point vertical stencil, so the vertical advection produces no
+    spurious kinetic energy (the summand `½ u_k·u_{k+1} m_{k+½}` telescopes);
+  - for the flux-form pressure families (not `kg_exner`), the vertical
+    two-point pressure flux `du_c = −δ({J p_m ê_c³}) / (ρJ)` with
+    `ê_c³ = ∇ξ³ ⋅ ê_c` the contravariant vertical component of the Cartesian
+    unit vector. On unwarped grids `J ê_c³ ∝ r̂ ⋅ ê_c`, so the tangential
+    projection of the term vanishes pointwise; over terrain `∇ξ³` tilts and
+    the term carries the slope part of the horizontal pressure force.
+
+The Cartesian tendencies are projected onto the tangential (E, N) frame and
+converted to the covariant `uₕ` state like the horizontal flux-form terms.
+"""
+function dg_fddg_vertical_flux!(
+    Yₜ,
+    Y,
+    p,
+    pm,
+    (u1, u2, u3),
+    (eE1, eE2, eE3),
+    (eN1, eN2, eN3),
+)
+    (; ᶠu³) = p.precomputed
+    ᶜlg = Fields.local_geometry_field(Y.c)
+    ᶜJ = ᶜlg.J
+    ᶠJ = Fields.local_geometry_field(Y.f).J
+    coords = Fields.coordinate_field(axes(Y.c))
+    # face mass flux of the continuity equation (J-weighted contravariant)
+    ᶠm = @. ᶠinterp(Y.c.ρ * ᶜJ) / ᶠJ * ᶠu³
+    ᶜdivm = @. ᶜadvdivᵥ(ᶠm)
+    # advection of u_c in velocity form; the own-side mass-flux correction
+    # makes this the flux-form transport (d(ρu) − u dρ)/ρ
+    adv(uc) = @. (ᶜadvdivᵥ(ᶠm * ᶠinterp(uc)) - uc * ᶜdivm) / Y.c.ρ
+    du1 = adv(u1)
+    du2 = adv(u2)
+    du3 = adv(u3)
+    if p.atmos.numerics.dg_volume_flux !== Val(:kg_exner)
+        # radial components of the Cartesian unit vectors
+        eR1 = @. cosd(coords.lat) * cosd(coords.long)
+        eR2 = @. cosd(coords.lat) * sind(coords.long)
+        eR3 = @. sind(coords.lat)
+        tilt(eE, eN, eR) = begin
+            ê³ = @. Geometry.contravariant3(Geometry.UVWVector(eE, eN, eR), ᶜlg)
+            X = @. ᶜJ * pm * ê³
+            @. ᶜdivᵥ(CT3(ᶠinterp(X) / ᶠJ)) / Y.c.ρ
+        end
+        du1 .+= tilt(eE1, eN1, eR1)
+        du2 .+= tilt(eE2, eN2, eR2)
+        du3 .+= tilt(eE3, eN3, eR3)
+    end
+    duE = @. du1 * eE1 + du2 * eE2 + du3 * eE3
+    duN = @. du1 * eN1 + du2 * eN2 + du3 * eN3
+    @. Yₜ.c.uₕ -= C12(
+        Geometry.transform(
+            Geometry.Covariant12Axis(),
+            Geometry.UVVector(duE, duN),
+        ),
+    )
     return nothing
 end

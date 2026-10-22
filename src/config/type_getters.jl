@@ -179,6 +179,9 @@ function get_numerics(parsed_args, FT; vertical_water_borrowing_species = nothin
     dg_tracer_penalty in (:acoustic, :advective) || error(
         "dg_tracer_penalty must be acoustic or advective, got $dg_tracer_penalty",
     )
+    dg_fddg_vertical = Symbol(get(parsed_args, "dg_fddg_vertical", "vi"))
+    dg_fddg_vertical in (:vi, :flux) ||
+        error("dg_fddg_vertical must be vi or flux, got $dg_fddg_vertical")
 
     numerics = AtmosNumerics(;
         energy_q_tot_upwinding,
@@ -198,6 +201,7 @@ function get_numerics(parsed_args, FT; vertical_water_borrowing_species = nothin
         dg_vi_shear_floor,
         dg_vi_interface_flux,
         dg_tracer_penalty,
+        dg_fddg_vertical,
         vertical_water_borrowing_species,
     )
     @info "numerics $(summary(numerics))"
