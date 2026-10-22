@@ -1197,11 +1197,18 @@ function AtmosWater(config::AtmosConfig, params, ::Type{FT}) where {FT}
     microphysics_averaging_window =
         get_microphysics_averaging_window(pa["microphysics_averaging_window"], FT)
     microphysics_newton_refresh = pa["microphysics_newton_refresh"]
+    microphysics_newton_relaxation_factor =
+        Float64(pa["microphysics_newton_relaxation_factor"])
+    (0 < microphysics_newton_relaxation_factor <= 1) || error(
+        "`microphysics_newton_relaxation_factor` must be in `(0, 1]`; got $microphysics_newton_relaxation_factor",
+    )
     if microphysics_newton_refresh
         implicit_microphysics || error(
             "`microphysics_newton_refresh: true` requires `implicit_microphysics: true`",
         )
         warn_newton_iterate_option(pa, "microphysics_newton_refresh")
+    elseif microphysics_newton_relaxation_factor < 1
+        @warn "`microphysics_newton_relaxation_factor` < 1 has no effect without `microphysics_newton_refresh: true`."
     end
     if !(microphysics_model isa NonEquilibriumMicrophysics1M) && (
         microphysics_newton_refresh || !isnothing(microphysics_averaging_window)
@@ -1217,6 +1224,7 @@ function AtmosWater(config::AtmosConfig, params, ::Type{FT}) where {FT}
                                              Explicit(),
         microphysics_averaging_window,
         microphysics_newton_refresh,
+        microphysics_newton_relaxation_factor,
         tracer_nonnegativity_method = get_tracer_nonnegativity_method(pa),
         sgs_quadrature,
         tq_correlation_model,

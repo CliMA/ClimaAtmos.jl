@@ -413,6 +413,8 @@ function precomputed_quantities(Y, atmos)
     elseif atmos.microphysics_model isa NonEquilibriumMicrophysics1M
         precipitation_sgs_quantities = (;
             ᶜmp_tendencyʲs = similar(Y.c, NTuple{n, MP1_NT}),
+            ᶜmp_tendency_prevʲs = similar(Y.c, NTuple{n, MP1_NT}),
+            mp_tendency_prev_valid = Ref(false),
             ᶜwₗʲs = similar(Y.c, NTuple{n, FT}),
             ᶜwᵢʲs = similar(Y.c, NTuple{n, FT}),
             ᶜwᵣʲs = similar(Y.c, NTuple{n, FT}),
@@ -422,6 +424,7 @@ function precomputed_quantities(Y, atmos)
             precipitation_sgs_quantities = (;
                 precipitation_sgs_quantities...,
                 ᶜmp_tendency⁰ = similar(Y.c, MP1_NT),
+                ᶜmp_tendency_prev⁰ = similar(Y.c, MP1_NT),
             )
         end
     elseif atmos.microphysics_model isa NonEquilibriumMicrophysics2M

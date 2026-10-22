@@ -264,6 +264,9 @@ microphysics_averaging_window:
 microphysics_newton_refresh:
   help: "Recompute the 1M microphysics process rates on every Newton iterate of an implicit stage, instead of once per cache update. Requires `implicit_microphysics: true`, and `max_newton_iters_ode >= 2` to have an effect [`true`, `false` (default)]"
   value: false
+microphysics_newton_relaxation_factor:
+  help: "Under-relaxation factor `ω` on the Newton-iterate microphysics tendency refresh when `microphysics_newton_refresh: true`: the fresh tendency is blended with the previous iterate's as `(1-ω)·prev + ω·fresh`. `1` (default) recovers the un-damped refresh; `0.5` damps a period-2 oscillation to one-step convergence; must be in `(0, 1]`"
+  value: 1.0
 use_sgs_quadrature:
   help: "Enable subgrid-scale quadrature integration for microphysics tendencies. When true, microphysics tendencies are integrated over the joint SGS PDF of (T, q_tot). [`true` (default), `false`]"
   value: true

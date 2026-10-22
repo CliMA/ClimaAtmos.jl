@@ -2219,6 +2219,10 @@ Group of moisture, cloud, and microphysics choices inside an
   - `microphysics_newton_refresh`: Whether the 1M process rates are recomputed on
     every Newton iterate of an implicit stage (with `Implicit()` timestepping);
     `false` by default, in which case they are computed once per cache update.
+  - `microphysics_newton_relaxation_factor`: Under-relaxation factor `ω` applied
+    to the Newton-iterate microphysics refresh — the fresh tendency is blended
+    with the previous iterate's as `(1-ω)·prev + ω·fresh`. `1.0` (default) is
+    no damping; smaller values damp iterate oscillations; must be in `(0, 1]`.
   - `tracer_nonnegativity_method`: `nothing`, or a `TracerNonnegativityMethod`.
   - `sgs_quadrature`: `nothing`, or an `SGSQuadrature` used to integrate cloud
     and microphysics quantities over the subgrid-scale distribution.
@@ -2250,6 +2254,7 @@ water = ClimaAtmos.AtmosWater(;
     microphysics_tendency_timestepping::MTTS = nothing
     microphysics_averaging_window::MAW = nothing
     microphysics_newton_refresh::Bool = false
+    microphysics_newton_relaxation_factor::Float64 = 1.0
     tracer_nonnegativity_method::TNM = nothing
     sgs_quadrature::SQ = nothing
     tq_correlation_model::TQC = DiagnosedTqCorrelation()
