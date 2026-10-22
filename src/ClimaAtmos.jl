@@ -32,6 +32,7 @@ module ClimaAtmos
 using NVTX
 import Adapt
 import LinearAlgebra
+import ForwardDiff
 import NullBroadcasts: NullBroadcasted
 import LazyBroadcast
 import LazyBroadcast: lazy

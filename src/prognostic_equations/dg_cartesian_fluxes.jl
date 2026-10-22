@@ -331,6 +331,173 @@ function roe_dissipation_cartesian(normal, y⁻, y⁺)
     return (ρ = Dρ, ρe = Dρe, ρu1 = Dρu1, ρu2 = Dρu2, ρu3 = Dρu3)
 end
 
+"""
+    eos_pressure(thermo_params, ρ, e_int, q_tot, q_liq, q_ice)
+
+Pressure of the moist equation of state from Thermodynamics.jl at a fixed
+phase partition, `p = ρ R_m(q) T(e_int, q)`. Differentiable in every argument.
+"""
+@inline function eos_pressure(thermo_params, ρ, e_int, q_tot, q_liq, q_ice)
+    T = TD.air_temperature(thermo_params, e_int, q_tot, q_liq, q_ice)
+    return TD.air_pressure(thermo_params, T, ρ, q_tot, q_liq, q_ice)
+end
+
+"""
+    eos_pressure_derivatives(thermo_params, ρ, e_int, q_tot, q_liq, q_ice)
+
+`(; p, p_ρ, p_e, p_qt, p_ql, p_qi)`: [`eos_pressure`](@ref) and its partial
+derivatives with respect to density, specific internal energy, and the three
+water species at fixed phase partition, by forward-mode automatic
+differentiation (one dual-number evaluation per derivative). These are the
+only equation-of-state inputs the Roe eigenstructure needs: the sound speed
+is ``c² = p_ρ + p p_e / ρ²`` and ``κ = p_e / ρ`` replaces ``γ − 1`` in the
+energy component of the contact wave. For dry air with constant specific
+heats this recovers ``c² = γ p / ρ`` and ``κ = γ − 1``.
+"""
+@inline function eos_pressure_derivatives(thermo_params, ρ, e_int, q_tot, q_liq, q_ice)
+    p = eos_pressure(thermo_params, ρ, e_int, q_tot, q_liq, q_ice)
+    p_ρ = ForwardDiff.derivative(
+        x -> eos_pressure(thermo_params, x, e_int, q_tot, q_liq, q_ice),
+        ρ,
+    )
+    p_e = ForwardDiff.derivative(
+        x -> eos_pressure(thermo_params, ρ, x, q_tot, q_liq, q_ice),
+        e_int,
+    )
+    p_qt = ForwardDiff.derivative(
+        x -> eos_pressure(thermo_params, ρ, e_int, x, q_liq, q_ice),
+        q_tot,
+    )
+    p_ql = ForwardDiff.derivative(
+        x -> eos_pressure(thermo_params, ρ, e_int, q_tot, x, q_ice),
+        q_liq,
+    )
+    p_qi = ForwardDiff.derivative(
+        x -> eos_pressure(thermo_params, ρ, e_int, q_tot, q_liq, x),
+        q_ice,
+    )
+    return (; p, p_ρ, p_e, p_qt, p_ql, p_qi)
+end
+
+"""
+    RoeEOSDissipation(thermo_params)
+
+Callable `(normal, y⁻, y⁺) -> D` giving the Roe-type dissipation of
+[`roe_dissipation_cartesian`](@ref) with the dry-gas constants replaced by the
+equation of state of the model: the sound speed, the contact-wave energy
+component ``B = Ĥ − ĉ²/κ̂``, and the species waves come from
+[`eos_pressure_derivatives`](@ref) at the √ρ-averaged state and phase
+partition. A jump of a water species at fixed `ρ`, `p`, `u` changes the
+internal energy by ``−(p_q/p_e) Δq``; that energy, ``−ρ̂ (p_q/p_e) Δq`` per
+species, is dissipated in the `ρe` slot at the rate `λq` (the rate of the
+tracer penalty that moves the species mass, `λqc` for the prognostic
+condensates, zero when they are diagnostic), so the species mass and its
+energy move together across the face and a humidity front does not generate
+spurious temperature jumps. Additional state fields: `e_int`, `q_tot`,
+`q_liq`, `q_ice`, `λq`, `λqc`.
+
+The derivatives are taken at the face's diagnosed phase partition, so the
+sound speed is the frozen-composition one. Not a Roe-average in the sense of
+``ΔF = Â Δq``; for a dissipation term only consistency and the sign of ``|Â|``
+matter, and both hold at the averaged state.
+"""
+struct RoeEOSDissipation{TP}
+    thermo_params::TP
+end
+
+function (d::RoeEOSDissipation)(normal, y⁻, y⁺)
+    tp = d.thermo_params
+    n1 = y⁻.E1' * normal
+    n2 = y⁻.E2' * normal
+    n3 = y⁻.E3' * normal
+    s⁻ = sqrt(y⁻.ρ)
+    s⁺ = sqrt(y⁺.ρ)
+    ρ̂ = s⁻ * s⁺
+    a⁻ = s⁻ / (s⁻ + s⁺)
+    a⁺ = 1 - a⁻
+    û1 = a⁻ * y⁻.u1 + a⁺ * y⁺.u1
+    û2 = a⁻ * y⁻.u2 + a⁺ * y⁺.u2
+    û3 = a⁻ * y⁻.u3 + a⁺ * y⁺.u3
+    Ĥ = a⁻ * (y⁻.e + y⁻.p / y⁻.ρ) + a⁺ * (y⁺.e + y⁺.p / y⁺.ρ)
+    # averaged thermodynamic state and its pressure derivatives
+    ê = a⁻ * y⁻.e_int + a⁺ * y⁺.e_int
+    q̂t = a⁻ * y⁻.q_tot + a⁺ * y⁺.q_tot
+    q̂l = a⁻ * y⁻.q_liq + a⁺ * y⁺.q_liq
+    q̂i = a⁻ * y⁻.q_ice + a⁺ * y⁺.q_ice
+    (; p, p_ρ, p_e, p_qt, p_ql, p_qi) =
+        eos_pressure_derivatives(tp, ρ̂, ê, q̂t, q̂l, q̂i)
+    ĉ = sqrt(p_ρ + p * p_e / ρ̂^2)
+    κ̂ = p_e / ρ̂
+    ûn = û1 * n1 + û2 * n2 + û3 * n3
+    Δρ = y⁺.ρm - y⁻.ρm
+    Δp = y⁺.pm - y⁻.pm
+    Δu1 = y⁺.u1 - y⁻.u1
+    Δu2 = y⁺.u2 - y⁻.u2
+    Δu3 = y⁺.u3 - y⁻.u3
+    Δun = Δu1 * n1 + Δu2 * n2 + Δu3 * n3
+    α₊ = (Δp + ρ̂ * ĉ * Δun) / (2 * ĉ^2)
+    α₋ = (Δp - ρ̂ * ĉ * Δun) / (2 * ĉ^2)
+    α₀ = Δρ - Δp / ĉ^2
+    s₊ = abs(ûn + ĉ)
+    s₋ = abs(ûn - ĉ)
+    s₀ = max(abs(ûn), ĉ / 20)
+    Δut1 = Δu1 - Δun * n1
+    Δut2 = Δu2 - Δun * n2
+    Δut3 = Δu3 - Δun * n3
+    B = Ĥ - ĉ^2 / κ̂
+    # species waves: energy carried by the water the tracer penalties move
+    λq = max(y⁻.λq, y⁺.λq)
+    λqc = max(y⁻.λqc, y⁺.λqc)
+    Dρe_q =
+        -(ρ̂ / p_e) * (
+            λq * p_qt * (y⁺.q_tot - y⁻.q_tot) +
+            λqc * (
+                p_ql * (y⁺.q_liq - y⁻.q_liq) + p_qi * (y⁺.q_ice - y⁻.q_ice)
+            )
+        )
+    Dρ = s₊ * α₊ + s₋ * α₋ + s₀ * α₀
+    Dρu1 =
+        s₊ * α₊ * (û1 + ĉ * n1) + s₋ * α₋ * (û1 - ĉ * n1) +
+        s₀ * (α₀ * û1 + ρ̂ * Δut1)
+    Dρu2 =
+        s₊ * α₊ * (û2 + ĉ * n2) + s₋ * α₋ * (û2 - ĉ * n2) +
+        s₀ * (α₀ * û2 + ρ̂ * Δut2)
+    Dρu3 =
+        s₊ * α₊ * (û3 + ĉ * n3) + s₋ * α₋ * (û3 - ĉ * n3) +
+        s₀ * (α₀ * û3 + ρ̂ * Δut3)
+    Dρe =
+        s₊ * α₊ * (Ĥ + ĉ * ûn) + s₋ * α₋ * (Ĥ - ĉ * ûn) +
+        s₀ * (α₀ * B + ρ̂ * (û1 * Δut1 + û2 * Δut2 + û3 * Δut3)) + Dρe_q
+    return (ρ = Dρ, ρe = Dρe, ρu1 = Dρu1, ρu2 = Dρu2, ρu3 = Dρu3)
+end
+
+"""
+    RoeEOSInterface(central, thermo_params)
+
+Interface flux `central(normal, normal, y⁻, y⁺) − D/2` with `D` the
+[`RoeEOSDissipation`](@ref); `central` is one of the two-point volume fluxes
+(`kennedy_gruber_cartesian_flux`, `kennedy_gruber_advective_cartesian_flux`,
+`waruszewski_cartesian_flux`). Selected by `dg_interface_flux = roe_eos`.
+"""
+struct RoeEOSInterface{C, TP}
+    central::C
+    dissipation::RoeEOSDissipation{TP}
+end
+RoeEOSInterface(central, thermo_params) =
+    RoeEOSInterface(central, RoeEOSDissipation(thermo_params))
+
+function (f::RoeEOSInterface)(normal, (y⁻,), (y⁺,))
+    F = f.central(normal, normal, y⁻, y⁺)
+    D = f.dissipation(normal, y⁻, y⁺)
+    return (
+        ρ = F.ρ - D.ρ / 2,
+        ρe = F.ρe - D.ρe / 2,
+        ρu1 = F.ρu1 - D.ρu1 / 2,
+        ρu2 = F.ρu2 - D.ρu2 / 2,
+        ρu3 = F.ρu3 - D.ρu3 / 2,
+    )
+end
+
 function waruszewski_roe_cartesian(normal, (y⁻,), (y⁺,))
     Fw = waruszewski_cartesian_flux(normal, normal, y⁻, y⁺)
     Fkg = kennedy_gruber_cartesian_flux(normal, normal, y⁻, y⁺)

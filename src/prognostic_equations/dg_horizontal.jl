@@ -724,7 +724,7 @@ NVTX.@annotate function dg_fddg_horizontal_dynamics!(Yₜ, Y, p, t)
     E2 = @. Geometry.UVVector(eE2, eN2)
     E3 = @. Geometry.UVVector(eE3, eN3)
 
-    (ᶜuv, ᶜλ) = dg_face_velocity_and_λ(Y, p)
+    (ᶜuv, ᶜλ, ᶜλ_tracer) = dg_face_velocity_and_λ(Y, p)
     uE = ᶜuv.components.data.:1
     uN = ᶜuv.components.data.:2
     u1 = @. uE * eE1 + uN * eN1
@@ -742,15 +742,32 @@ NVTX.@annotate function dg_fddg_horizontal_dynamics!(Yₜ, Y, p, t)
     R_d = TD.Parameters.R_d(thermo_params)
     ᶜρ_ref = @. ᶜp_ref / (R_d * air_temperature_reference(thermo_params, ᶜp_ref))
     ρm = @. Y.c.ρ - ᶜρ_ref
+    # equation-of-state inputs of the `roe_eos` dissipation: specific
+    # internal energy, the water species at the diagnosed partition, and the
+    # rates at which the tracer penalties move the species (q_tot for any
+    # moist model, the condensates only when they are prognostic)
+    (; ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice) = p.precomputed
+    (; microphysics_model) = p.atmos
+    ᶜe_int = @. e - ᶜK - ᶜΦ
+    ᶜλq = microphysics_model isa DryModel ? (@. zero(ᶜλ)) : ᶜλ_tracer
+    ᶜλqc =
+        microphysics_model isa NonEquilibriumMicrophysics1M ? ᶜλ_tracer :
+        (@. zero(ᶜλ))
 
     y = map(
-        (ρ, ρe, e, p_, pm_, ρm_, uv, u1_, u2_, u3_, E1_, E2_, E3_, λ, φ) -> (;
+        (
+            ρ, ρe, e, p_, pm_, ρm_, uv, u1_, u2_, u3_, E1_, E2_, E3_, λ, φ,
+            e_int, q_tot, q_liq, q_ice, λq, λqc,
+        ) -> (;
             ρ, ρe, e, p = p_, pm = pm_, ρm = ρm_, uv,
             u1 = u1_, u2 = u2_, u3 = u3_,
             E1 = E1_, E2 = E2_, E3 = E3_, λ, φ,
+            e_int, q_tot, q_liq, q_ice, λq, λqc,
         ),
         Y.c.ρ, Y.c.ρe_tot, e, ᶜp, pm, ρm, ᶜuv, u1, u2, u3, E1, E2, E3, ᶜλ, ᶜΦ,
+        ᶜe_int, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice, ᶜλq, ᶜλqc,
     )
+    roe_eos = p.atmos.numerics.dg_interface_flux === Val(:roe_eos)
     dy = Fields.Field(
         NamedTuple{(:ρ, :ρe, :ρu1, :ρu2, :ρu3), NTuple{5, FT}},
         axes(Y.c),
@@ -765,7 +782,11 @@ NVTX.@annotate function dg_fddg_horizontal_dynamics!(Yₜ, Y, p, t)
         kg_adv_interface =
             p.atmos.numerics.dg_interface_flux === Val(:rusanov) ?
             kennedy_gruber_advective_rusanov_cartesian :
-            kennedy_gruber_advective_roe_cartesian
+            roe_eos ?
+            RoeEOSInterface(
+                kennedy_gruber_advective_cartesian_flux,
+                thermo_params,
+            ) : kennedy_gruber_advective_roe_cartesian
         Operators.add_numerical_flux_interior!(kg_adv_interface, dy, y)
         # Exner-split horizontal PGF of the vector-invariant form (as in
         # horizontal_dynamics_tendency!) without the ∇K part, which the
@@ -802,7 +823,10 @@ NVTX.@annotate function dg_fddg_horizontal_dynamics!(Yₜ, Y, p, t)
         # is present, e.g. to keep EDMFX TKE production bounded over terrain).
         kg_interface =
             p.atmos.numerics.dg_interface_flux === Val(:rusanov) ?
-            kennedy_gruber_rusanov_cartesian : kennedy_gruber_roe_cartesian
+            kennedy_gruber_rusanov_cartesian :
+            roe_eos ?
+            RoeEOSInterface(kennedy_gruber_cartesian_flux, thermo_params) :
+            kennedy_gruber_roe_cartesian
         Operators.add_numerical_flux_interior!(kg_interface, dy, y)
     else
         Operators.add_flux_differencing_divergence!(
@@ -813,6 +837,12 @@ NVTX.@annotate function dg_fddg_horizontal_dynamics!(Yₜ, Y, p, t)
         if p.atmos.numerics.dg_interface_flux === Val(:es)
             Operators.add_numerical_flux_interior!(
                 waruszewski_es_cartesian,
+                dy,
+                y,
+            )
+        elseif roe_eos
+            Operators.add_numerical_flux_interior!(
+                RoeEOSInterface(waruszewski_cartesian_flux, thermo_params),
                 dy,
                 y,
             )

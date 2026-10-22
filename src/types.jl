@@ -1941,9 +1941,11 @@ struct AtmosNumerics{
     # Val(:kg_exner) (Kennedy-Gruber advection only; the pressure force is
     # the Exner-split gradient of the vector-invariant form).
     dg_volume_flux::DGVF
-    # FDDG interface dissipation: Val(:roe) or Val(:es) (Lax-Friedrichs in
-    # entropy variables — with the Waruszewski volume flux this gives a
-    # discrete entropy inequality).
+    # FDDG interface dissipation: Val(:roe) (dry-gas eigenstructure),
+    # Val(:roe_eos) (eigenstructure from the model's equation of state by
+    # autodiff of the Thermodynamics pressure), Val(:rusanov), or Val(:es)
+    # (Lax-Friedrichs in entropy variables — with the Waruszewski volume flux
+    # this gives a discrete entropy inequality).
     dg_interface_flux::DGIF
     # VI-form DG velocity jump penalty: Val(:rusanov) (uniform |u| + c on the
     # horizontal velocity jump) or Val(:wave_selective) (|u_n| + c on the
