@@ -878,12 +878,15 @@ Staggered flux-form vertical terms of the Cartesian horizontal momentum for
     This is the two-point Kennedy-Gruber momentum flux `{ρ}{u_c}{u³}` on the
     two-point vertical stencil, so the vertical advection produces no
     spurious kinetic energy (the summand `½ u_k·u_{k+1} m_{k+½}` telescopes);
-  - for the flux-form pressure families (not `kg_exner`), the vertical
-    two-point pressure flux `du_c = −δ({J p_m ê_c³}) / (ρJ)` with
-    `ê_c³ = ∇ξ³ ⋅ ê_c` the contravariant vertical component of the Cartesian
-    unit vector. On unwarped grids `J ê_c³ ∝ r̂ ⋅ ê_c`, so the tangential
-    projection of the term vanishes pointwise; over terrain `∇ξ³` tilts and
-    the term carries the slope part of the horizontal pressure force.
+  - for `dg_volume_flux = kg_pert`, the vertical two-point pressure flux
+    `du_c = −δ({J p_m ê_c³}) / (ρJ)` with `ê_c³ = ∇ξ³ ⋅ ê_c` the
+    contravariant vertical component of the Cartesian unit vector. On
+    unwarped grids `J ê_c³ ∝ r̂ ⋅ ê_c`, so the tangential projection of the
+    term vanishes pointwise; over terrain `∇ξ³` tilts and the term carries
+    the slope part of the horizontal pressure force. The horizontal two-point
+    flux keeps its `{p_m}{ê_c ⋅ Ja^k}` part; the two stencils satisfy the
+    metric identity only to truncation, so a terrain rest residual of that
+    order remains (the vector-invariant Exner gradient has none).
 
 The Cartesian tendencies are projected onto the tangential (E, N) frame and
 converted to the covariant `uₕ` state like the horizontal flux-form terms.
@@ -911,7 +914,21 @@ function dg_fddg_vertical_flux!(
     du1 = adv(u1)
     du2 = adv(u2)
     du3 = adv(u3)
-    if p.atmos.numerics.dg_volume_flux !== Val(:kg_exner)
+    if p.atmos.numerics.dg_volume_flux === Val(:kg_pert)
+        # Perturbation-pressure family only: with p_m = p − p_ref(Φ) the
+        # tangential part of −∇p − ρ∇Φ is exactly −(∇p_m)_t, so the 3D
+        # divergence of p_m ê_c needs no gravity term. The Waruszewski flux
+        # carries full p with the ½ρ̂⟦φ⟧ gravity fluctuation in its horizontal
+        # momentum slot; its vertical counterpart (p* plus the own-side
+        # fluctuation, which cancels at hydrostatic rest) is not implemented,
+        # so that family gets the flux-form advection only.
+        # Boundary faces: the surface pressure force on the sloped ground is
+        # the first-order (linear) extrapolation of the flux, since the
+        # zero-order value misses the half-cell hydrostatic increment.
+        ᶠinterp_lin = Operators.InterpolateC2F(;
+            bottom = Operators.Extrapolate{1}(),
+            top = Operators.Extrapolate{1}(),
+        )
         # radial components of the Cartesian unit vectors
         eR1 = @. cosd(coords.lat) * cosd(coords.long)
         eR2 = @. cosd(coords.lat) * sind(coords.long)
@@ -919,7 +936,7 @@ function dg_fddg_vertical_flux!(
         tilt(eE, eN, eR) = begin
             ê³ = @. Geometry.contravariant3(Geometry.UVWVector(eE, eN, eR), ᶜlg)
             X = @. ᶜJ * pm * ê³
-            @. ᶜdivᵥ(CT3(ᶠinterp(X) / ᶠJ)) / Y.c.ρ
+            @. ᶜdivᵥ(CT3(ᶠinterp_lin(X) / ᶠJ)) / Y.c.ρ
         end
         du1 .+= tilt(eE1, eN1, eR1)
         du2 .+= tilt(eE2, eN2, eR2)

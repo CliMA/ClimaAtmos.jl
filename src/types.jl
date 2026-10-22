@@ -1891,7 +1891,8 @@ symbols or strings.
     the DG tracer jump penalties, `|u| + c` or `max(|u|, ε c)`.
   - `dg_fddg_vertical`: `Val(:vi)` or `Val(:flux)`, the vertical transport
     of the horizontal momentum in the flux-form DG dynamics (vector-invariant
-    `ω¹² × u³`, or the staggered flux form with the vertical pressure flux).
+    `ω¹² × u³`, or the staggered flux form with the two-point vertical
+    pressure flux).
   - `vertical_water_borrowing_species`: `nothing` (all tracers), `()` (none), or
     a `Tuple` of `Symbol`s naming the tracers that the vertical water borrowing
     limiter applies to.
@@ -1958,10 +1959,10 @@ struct AtmosNumerics{
     # Val(:advective) (max(|u|, ε c), ε = dg_vi_shear_floor).
     dg_tracer_penalty::DGTP
     # FDDG vertical transport of the horizontal momentum: Val(:vi) (the
-    # ω¹² × u³ vector-invariant term) or Val(:flux) (flux form on the
+    # ω¹² × u³ vector-invariant term), Val(:flux) (flux form on the
     # staggered grid: the face mass flux times the interpolated Cartesian
-    # velocity, plus the vertical two-point pressure flux through the
-    # horizontal part of Ja³ for the flux-form pressure families).
+    # velocity, plus, for kg_pert, the vertical two-point pressure flux
+    # through the horizontal part of Ja³).
     dg_fddg_vertical::DGFV
     # Tracers the vertical water borrowing limiter applies to:
     # `nothing` (all tracers), `()` (none), or a Tuple of Symbols
