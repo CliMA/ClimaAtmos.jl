@@ -49,6 +49,17 @@ import Thermodynamics as TD
     @test cf.coriolis_param ≈ FT(1.4363e-4) rtol = 1e-3
     @test cf.prof_ug(0) ≈ FT(5)
 
+    # Reference atmosphere: hypsometric exponent from ClimaParams R_d and grav
+    ref = Setups.larcform1_reference_atmosphere(thermo_params)
+    α = TD.Parameters.R_d(thermo_params) * FT(LC.γ) / TD.Parameters.grav(thermo_params)
+    @test ref.z_trop ≈ FT(LC.T_0 / LC.γ) * (1 - FT(LC.P_tropopause / LC.P_0)^α)
+    @test ref.z_trop ≈ FT(LC.z_tropopause) atol = 1
+    @test ref.p(0) ≈ FT(LC.P_0)
+    @test ref.p(ref.z_trop) ≈ FT(LC.P_tropopause) rtol = 1e-5
+    @test ref.T(ref.z_trop + 1000) ≈ FT(LC.T_0) - FT(LC.γ) * ref.z_trop
+    @test profs.u(ref.z_trop) ≈ FT(5)
+    @test profs.u(ref.z_trop + 1) ≈ FT(0)
+
     # Surface condition: temperature initialized to 250 K
     surf_cond = Setups.surface_condition(setup, simulation.integrator.p.params)
     T_surface = surf_cond.temperature.f()  # Returns(250) function

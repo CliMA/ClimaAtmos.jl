@@ -9,6 +9,11 @@ main
   (`angular_velocity_planet_rotation`), giving `f ≈ 1.4363e-4 s⁻¹` instead
   of the hardcoded `1.432e-4 s⁻¹`. The `Setups.coriolis_forcing` hook now takes
   `(setup, params)` instead of `(setup, FT)`.
+- ![][badge-🔥behavioralΔ] Larcform1 builds its reference atmosphere (tropopause
+  height, temperature, and the analytic pressure that sets RH and q_tot) in
+  `Setups.larcform1_reference_atmosphere` with `R_d` and `grav` from ClimaParams,
+  instead of the AtmosphericProfilesLibrary profiles with `R = 287`, `g = 9.81`.
+  The tropopause moves by under 10 cm; the geostrophic-wind step follows it.
 
 0.42.15
 -------
