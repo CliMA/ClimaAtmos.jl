@@ -1458,6 +1458,20 @@ function pair_edmf_names(short_names)
     return grouped_vars
 end
 
+"""
+    shortest_period(simdir, short_name, reduction)
+
+Shortest output period `simdir` holds for `short_name` at `reduction`.
+
+Resolved per simdir and per variable, because two bundles being compared need not
+share a diagnostics cadence.
+"""
+function shortest_period(simdir, short_name, reduction)
+    periods =
+        collect(ClimaAnalysis.available_periods(simdir; short_name, reduction))
+    return periods[argmin(CA.time_to_seconds.(periods))]
+end
+
 function make_plots(
     sim_type::Union{
         EDMFColumnPlots,
@@ -1495,26 +1509,6 @@ function make_plots(
     reduction_avg = "average"
     reduction_inst = "inst"
 
-    available_periods_avg = collect(
-        ClimaAnalysis.available_periods(
-            simdirs[1];
-            short_name = short_names[1],
-            reduction = reduction_avg,
-        ),
-    )
-    period_avg =
-        available_periods_avg[argmin(CA.time_to_seconds.(available_periods_avg))]
-
-    available_periods_inst = collect(
-        ClimaAnalysis.available_periods(
-            simdirs[1];
-            short_name = short_names[1],
-            reduction = reduction_inst,
-        ),
-    )
-    period_inst =
-        available_periods_inst[argmin(CA.time_to_seconds.(available_periods_inst))]
-
     short_name_tuples = pair_edmf_names(short_names)
     var_groups_zt =
         map_comparison(simdirs, short_name_tuples) do simdir, name_tuple
@@ -1524,7 +1518,11 @@ function make_plots(
                         simdir;
                         short_name,
                         reduction = reduction_inst,
-                        period = period_inst,
+                        period = shortest_period(
+                            simdir,
+                            short_name,
+                            reduction_inst,
+                        ),
                     ),
                 name_tuple,
             )
@@ -1535,7 +1533,16 @@ function make_plots(
         map_comparison(simdirs, short_name_tuples) do simdir, name_tuple
             vars = map(
                 short_name ->
-                    get(simdir; short_name, reduction = reduction_avg, period = period_avg),
+                    get(
+                        simdir;
+                        short_name,
+                        reduction = reduction_avg,
+                        period = shortest_period(
+                            simdir,
+                            short_name,
+                            reduction_avg,
+                        ),
+                    ),
                 name_tuple,
             )
             return vars
@@ -1608,7 +1615,7 @@ function make_plots(
                     simdir;
                     short_name = sn,
                     reduction = reduction_inst,
-                    period = period_inst,
+                    period = shortest_period(simdir, sn, reduction_inst),
                 )
                 return var
             end
@@ -1646,7 +1653,7 @@ function make_plots(
                 simdir;
                 short_name,
                 reduction = reduction_inst,
-                period = period_inst,
+                period = shortest_period(simdir, short_name, reduction_inst),
             )
             return var
         end
@@ -1970,15 +1977,6 @@ function make_plots(sim_type::Larcform1Plots, output_paths::Vector{<:AbstractStr
             mp1m_simdirs = simdirs[1:1]
             mp1m_output_paths = output_paths[1:1]
             reduction_inst = "inst"
-            available_periods_inst = collect(
-                ClimaAnalysis.available_periods(
-                    mp1m_simdirs[1];
-                    short_name = mp1m_all_names[1],
-                    reduction = reduction_inst,
-                ),
-            )
-            period_inst =
-                available_periods_inst[argmin(CA.time_to_seconds.(available_periods_inst))]
 
             mp1m_vars_zt =
                 map_comparison(mp1m_simdirs, mp1m_all_names) do simdir, sn
@@ -1986,7 +1984,7 @@ function make_plots(sim_type::Larcform1Plots, output_paths::Vector{<:AbstractStr
                         simdir;
                         short_name = sn,
                         reduction = reduction_inst,
-                        period = period_inst,
+                        period = shortest_period(simdir, sn, reduction_inst),
                     )
                     return var
                 end

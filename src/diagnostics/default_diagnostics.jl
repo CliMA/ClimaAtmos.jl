@@ -191,9 +191,9 @@ const HOURLY_DIAGS = Set([
 
 Return the compute schedule to pair with an output `period` for `variable`.
 
-Short output periods — anything other than a month, a week, or several days, so including
-hourly and daily — are computed every timestep. Longer output periods subsample: variables
-in `HOURLY_DIAGS` are computed hourly, all others six-hourly.
+Sub-daily output periods are computed every timestep, because the subsampling below is no
+finer than the window they average over. Daily and longer periods subsample: variables in
+`HOURLY_DIAGS` are computed hourly, all others six-hourly.
 
 # Arguments
 
@@ -207,10 +207,7 @@ in `HOURLY_DIAGS` are computed hourly, all others six-hourly.
 An `EveryStepSchedule`, or an `EveryCalendarDtSchedule` of one or six hours.
 """
 function make_compute_schedule(variable, period, start_date, date_last)
-    if !(
-        period isa Dates.Month || period isa Dates.Week ||
-        (period isa Dates.Day && Dates.value(period) > 1)
-    )
+    if !(period isa Dates.Month || period isa Dates.Week || period isa Dates.Day)
         return EveryStepSchedule()
     end
     short_name = ClimaDiagnostics.DiagnosticVariables.short_name(variable)
@@ -232,9 +229,9 @@ Return the time-averaging helper appropriate to the total simulation length.
 The returned closure has the signature `(short_names...; kwargs...)`, forwarding to one of
 the `*_averages` helpers with `FT = eltype(duration)` already applied:
 
-  - `duration < 1 hour`: returns an empty tuple, i.e. no averaged diagnostics.
-  - `1 hour ≤ duration < 1 day`: `hourly_averages`.
-  - `1 day ≤ duration < 30 days`: `daily_averages`.
+  - `duration < 2 hours`: returns an empty tuple, i.e. no averaged diagnostics.
+  - `2 hours ≤ duration < 2 days`: `hourly_averages`.
+  - `2 days ≤ duration < 30 days`: `daily_averages`.
   - `30 days ≤ duration < 90 days`: `tendaily_averages`.
   - `duration ≥ 90 days`: `monthly_averages`.
 
@@ -243,15 +240,17 @@ the `*_averages` helpers with `FT = eltype(duration)` already applied:
   - `duration`: Expected duration of the simulation [s].
 """
 function frequency_averages(duration)
+    # Each bucket needs the run to span at least two of its averaging windows, so the
+    # selected cadence always yields more than one sample.
     FT = eltype(duration)
     duration = Float64(duration)
     if duration >= 90 * 86400
         return (args...; kwargs...) -> monthly_averages(FT, args...; kwargs...)
     elseif duration >= 30 * 86400
         return (args...; kwargs...) -> tendaily_averages(FT, args...; kwargs...)
-    elseif duration >= 86400
+    elseif duration >= 2 * 86400
         return (args...; kwargs...) -> daily_averages(FT, args...; kwargs...)
-    elseif duration >= 3600
+    elseif duration >= 2 * 3600
         return (args...; kwargs...) -> hourly_averages(FT, args...; kwargs...)
     else
         return (args...; kwargs...) -> ()
@@ -296,6 +295,7 @@ function core_default_diagnostics(output_writer, duration, start_date, t_start, 
     ]
 
     average_func = frequency_averages(duration)
+    # Thresholds match `frequency_averages`; unlike it, there is no bucket below hourly.
     FT = eltype(duration)
 
     duration = Float64(duration)
@@ -306,7 +306,7 @@ function core_default_diagnostics(output_writer, duration, start_date, t_start, 
     elseif duration >= 30 * 86400
         min_func = (args...; kwargs...) -> tendaily_min(FT, args...; kwargs...)
         max_func = (args...; kwargs...) -> tendaily_max(FT, args...; kwargs...)
-    elseif duration >= 86400
+    elseif duration >= 2 * 86400
         min_func = (args...; kwargs...) -> daily_min(FT, args...; kwargs...)
         max_func = (args...; kwargs...) -> daily_max(FT, args...; kwargs...)
     else
