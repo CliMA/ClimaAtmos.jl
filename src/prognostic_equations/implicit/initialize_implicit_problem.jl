@@ -40,6 +40,12 @@ function initialize_implicit_stage_problem!(Y, p, dtγ)
 
     p.precomputed.implicit_stage_dtγ[] = dtγ
 
+    # Reset the microphysics-tendency under-relaxation flag so the first
+    # cache_imp! of a new stage does not blend with the previous stage's
+    # final tendency; only within-stage Newton iterates do.
+    hasproperty(p.precomputed, :mp_tendency_prev_valid) &&
+        (p.precomputed.mp_tendency_prev_valid[] = false)
+
     if p.atmos.turbconv_model isa PrognosticEDMFX
 
         n = n_mass_flux_subdomains(p.atmos.turbconv_model)
@@ -132,10 +138,76 @@ function set_newton_iterate_precomputed_quantities!(Y, p, t)
         resolve_sgs_u₃_ρa_stage!(Y, p)
         refresh_sgs_quantities_after_resolve!(Y, p)
     end
-    p.atmos.microphysics_newton_refresh && set_microphysics_tendency_cache!(
-        Y, p, p.atmos.microphysics_model, p.atmos.turbconv_model,
-    )
+    if p.atmos.microphysics_newton_refresh
+        ω = eltype(p.params)(p.atmos.microphysics_newton_relaxation_factor)
+        if ω < one(ω) && hasproperty(p.precomputed, :mp_tendency_prev_valid)
+            # Under-relaxed: snapshot the previous iterate's tendency, compute
+            # fresh, then blend to damp Newton-iterate oscillations.
+            had_valid = p.precomputed.mp_tendency_prev_valid[]
+            snapshot_mp_tendency!(p)
+            set_microphysics_tendency_cache!(
+                Y, p, p.atmos.microphysics_model, p.atmos.turbconv_model,
+            )
+            had_valid && blend_mp_tendency!(p, ω)
+        else
+            set_microphysics_tendency_cache!(
+                Y, p, p.atmos.microphysics_model, p.atmos.turbconv_model,
+            )
+        end
+    end
     return nothing
+end
+
+"""
+    snapshot_mp_tendency!(p)
+
+Copy `ᶜmp_tendencyʲs`/`ᶜmp_tendency⁰` into their `_prev` counterparts before
+a fresh refresh so the under-relaxation blend in `blend_mp_tendency!` can
+damp Newton-iterate oscillations. Sets `mp_tendency_prev_valid[] = true` so
+subsequent calls use the blend.
+"""
+function snapshot_mp_tendency!(p)
+    hasproperty(p.precomputed, :ᶜmp_tendency_prevʲs) || return nothing
+    (; ᶜmp_tendency_prevʲs, ᶜmp_tendencyʲs) = p.precomputed
+    @. ᶜmp_tendency_prevʲs = ᶜmp_tendencyʲs
+    if hasproperty(p.precomputed, :ᶜmp_tendency_prev⁰)
+        (; ᶜmp_tendency_prev⁰, ᶜmp_tendency⁰) = p.precomputed
+        @. ᶜmp_tendency_prev⁰ = ᶜmp_tendency⁰
+    end
+    p.precomputed.mp_tendency_prev_valid[] = true
+    return nothing
+end
+
+"""
+    blend_mp_tendency!(p, ω)
+
+Under-relaxed update of the microphysics tendency after a Newton-iterate
+refresh:
+
+    ᶜmp_tendency = (1-ω) · ᶜmp_tendency_prev + ω · ᶜmp_tendency
+
+for both the env (`⁰`) and per-updraft (`ʲs`) tendencies. `ω = 1` recovers the
+no-damping behavior; smaller `ω` damps oscillations. Callers must guard against
+the first call where `ᶜmp_tendency_prev` is uninitialized.
+"""
+function blend_mp_tendency!(p, ω)
+    hasproperty(p.precomputed, :ᶜmp_tendency_prevʲs) || return nothing
+    (; ᶜmp_tendency_prevʲs, ᶜmp_tendencyʲs) = p.precomputed
+    @. ᶜmp_tendencyʲs = blend_tendency_tuple(ω, ᶜmp_tendency_prevʲs, ᶜmp_tendencyʲs)
+    if hasproperty(p.precomputed, :ᶜmp_tendency_prev⁰)
+        (; ᶜmp_tendency_prev⁰, ᶜmp_tendency⁰) = p.precomputed
+        @. ᶜmp_tendency⁰ = blend_tendency(ω, ᶜmp_tendency_prev⁰, ᶜmp_tendency⁰)
+    end
+    return nothing
+end
+
+@inline function blend_tendency(ω, prev::T, new::T) where {T<:NamedTuple}
+    return T(ntuple(i -> (one(ω) - ω) * getfield(prev, i) + ω * getfield(new, i),
+                    fieldcount(T)))
+end
+
+@inline function blend_tendency_tuple(ω, prev::NTuple{n, T}, new::NTuple{n, T}) where {n, T}
+    return ntuple(j -> blend_tendency(ω, prev[j], new[j]), n)
 end
 
 """
