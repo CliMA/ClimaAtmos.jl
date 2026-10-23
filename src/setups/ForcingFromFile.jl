@@ -4,7 +4,9 @@
 Generic file-driven single-column setup: initial condition, external forcing,
 surface temperature, and insolation are sourced from one column forcing file,
 read through the `ColumnDatasets` interface so any registered dataset format
-works.
+works. With a vector of column data sources (`ColumnDataset`s or
+`InMemoryColumnData`), column `h` of a multi-column grid is initialized and
+forced from source `h`.
 
 The initial condition reads vertical profiles (`ta`, `ua`, `va`, `hus`,
 `rho`) at the file time closest to `start_date` and builds 1D interpolators
@@ -32,6 +34,12 @@ setup = ForcingFromFile(
     "20070701";
     forcing = (HorizontalAdvection(),),
 )
+
+# one file per column
+setup = ForcingFromFile(
+    ColumnDatasets.ColumnDataset.(["site_a.nc", "site_b.nc"]),
+    "20070701",
+)
 ```
 """
 struct ForcingFromFile{
@@ -40,7 +48,7 @@ struct ForcingFromFile{
     FS,
     ST,
     I,
-    P <: ColumnProfiles,
+    P <: Union{ColumnProfiles, AbstractVector{<:ColumnProfiles}},
 }
     dataset::CD
     start_date::Dates.DateTime
@@ -63,9 +71,6 @@ function ForcingFromFile(
     external_forcing =
         forcing isa ExternalDrivenTVForcing ? forcing :
         ExternalDrivenTVForcing(dataset; forcing)
-    prof = ColumnDatasets.read_initial_profiles(dataset, start_date_dt)
-    profiles =
-        ColumnProfiles(prof.z, prof.ta, prof.ua, prof.va, prof.hus, prof.rho)
     return ForcingFromFile(
         dataset,
         start_date_dt,
@@ -73,12 +78,73 @@ function ForcingFromFile(
         flux_scheme,
         surface_temperature,
         insolation,
-        profiles,
+        column_profiles(dataset, start_date_dt),
     )
 end
 
 ForcingFromFile(path::String, start_date::String; kwargs...) =
     ForcingFromFile(ColumnDatasets.ColumnDataset(path), start_date; kwargs...)
+
+ForcingFromFile(
+    datasets::AbstractVector{<:ColumnDatasets.AbstractColumnData},
+    start_date::String;
+    kwargs...,
+) = ForcingFromFile(
+    ColumnDatasets.PerColumnDatasets(datasets),
+    start_date;
+    kwargs...,
+)
+
+function column_profiles(dataset, start_date)
+    prof = ColumnDatasets.read_initial_profiles(dataset, start_date)
+    return ColumnProfiles(prof.z, prof.ta, prof.ua, prof.va, prof.hus, prof.rho)
+end
+column_profiles(data::ColumnDatasets.PerColumnDatasets, start_date) =
+    [column_profiles(cd, start_date) for cd in data.datasets]
+
+# Columns cannot be told apart pointwise, so each column is initialized as a
+# single column of its own source
+function initial_state(
+    setup::ForcingFromFile{<:ColumnDatasets.PerColumnDatasets},
+    params,
+    atmos_model,
+    center_space,
+    face_space,
+)
+    n_columns = Spaces.ncolumns(center_space)
+    length(setup.profiles) == n_columns || error(
+        "$(length(setup.profiles)) column forcing sources were given for \
+         $n_columns columns",
+    )
+    Y = initial_state(
+        column_setup(setup, 1),
+        params,
+        atmos_model,
+        center_space,
+        face_space,
+    )
+    for h in 1:n_columns
+        Fields.column(Y, 1, 1, h) .= initial_state(
+            column_setup(setup, h),
+            params,
+            atmos_model,
+            Spaces.column(center_space, 1, 1, h),
+            Spaces.column(face_space, 1, 1, h),
+        )
+    end
+    return Y
+end
+
+# The single-column setup of column `h`
+column_setup(setup::ForcingFromFile, h) = ForcingFromFile(
+    setup.dataset.datasets[h],
+    setup.start_date,
+    setup.forcing,
+    setup.flux_scheme,
+    setup.surface_temperature,
+    setup.insolation,
+    setup.profiles[h],
+)
 
 center_initial_condition(setup::ForcingFromFile, local_geometry, params) =
     column_profiles_ic(setup.profiles, local_geometry)
