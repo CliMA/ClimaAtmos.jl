@@ -1223,7 +1223,8 @@ function dg_fddg_w_flux!(Yₜ, Y, p, y, volume_flux, interface, ᶜdyρ, ᶜuv)
     # momentum and moves no mass (the KPEP gravity pairing is unchanged); the
     # removed kinetic energy reappears as internal energy since E is fixed
     ε = FT(p.atmos.numerics.dg_vi_shear_floor)
-    ᶠρ_dual = @. ᶠρJ / Fields.local_geometry_field(Y.f).J
+    ᶠJ = Fields.local_geometry_field(Y.f).J
+    ᶠρ_dual = @. ᶠρJ / ᶠJ
     pen_w = Operators.lifting_correction(
         shear_jump_penalty_lift,
         FT,
