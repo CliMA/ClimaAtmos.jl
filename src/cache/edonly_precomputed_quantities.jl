@@ -11,13 +11,9 @@ Update the environment closures in `p.precomputed` for the eddy-diffusivity-only
 model `EDOnlyEDMFX`. Returns `nothing`.
 
 Mutates `p.precomputed.ᶜstrain_rate_norm`, the squared norm of the vertical
-strain rate [1/s²], and `p.precomputed.ρtke_flux`, the surface TKE flux. Reads
-`ᶠu³` and `sfc_conditions.ustar` from `p.precomputed`, and uses
-`p.scratch.ᶠtemp_C123`.
-
-!!! note
-
-    The shear production currently includes vertical gradients only.
+strain rate [1/s²] (`set_strain_rate_norm!`), and
+`p.precomputed.ρtke_flux`, the surface TKE flux. Reads `ᶠu³` and
+`sfc_conditions.ustar` from `p.precomputed`, and uses `p.scratch.ᶠtemp_C123`.
 """
 NVTX.@annotate function set_edonly_precomputed_quantities_env_closures!(
     Y,
@@ -25,17 +21,11 @@ NVTX.@annotate function set_edonly_precomputed_quantities_env_closures!(
     t,
 )
     (; params) = p
-    (; ᶠu³) = p.precomputed
     (; ustar) = p.precomputed.sfc_conditions
-    (; ᶜstrain_rate_norm) = p.precomputed
     (; ρtke_flux) = p.precomputed
     turbconv_params = CAP.turbconv_params(params)
 
-    # TODO: Currently the shear production only includes vertical gradients
-    ᶠu = p.scratch.ᶠtemp_C123
-    @. ᶠu = C123(ᶠinterp(Y.c.uₕ)) + C123(ᶠu³)
-    ᶜstrain_rate = compute_strain_rate_center_vertical(ᶠu)
-    @. ᶜstrain_rate_norm = norm_sqr(ᶜstrain_rate)
+    set_strain_rate_norm!(Y, p)
 
     ρtke_flux_values = Fields.field_values(ρtke_flux)
     ρ_sfc_values = Fields.field_values(Fields.level(Y.c.ρ, 1)) # TODO: replace by surface value

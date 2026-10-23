@@ -214,6 +214,14 @@ i.e. from `Y.c.uₕ` and `Y.f.u₃`.
 compute_kinetic(Y::Fields.FieldVector) = compute_kinetic(Y.c.uₕ, Y.f.u₃)
 
 """
+    symmetric_part(G)
+
+Return the symmetric part `(G + Gᵀ) / 2` of a `UVW × UVW` tensor `G`, the strain
+rate of a velocity gradient.
+"""
+symmetric_part(G) = (G + adjoint(G)) / 2
+
+"""
     compute_strain_rate_center_vertical(ᶠu)
 
 Compute the strain rate at cell centers from the face velocity `ᶠu`, keeping
@@ -225,13 +233,8 @@ A lazy center `Field` with the symmetric `UVW × UVW` strain-rate tensor
 `(∇ᵥu + (∇ᵥu)ᵀ) / 2` [1/s].
 """
 function compute_strain_rate_center_vertical(ᶠu)
-    axis_uvw = Geometry.UVWAxis()
-    return @. lazy(
-        (
-            Geometry.project((axis_uvw,), ᶜgradᵥ(UVW(ᶠu))) +
-            adjoint(Geometry.project((axis_uvw,), ᶜgradᵥ(UVW(ᶠu))))
-        ) / 2,
-    )
+    axis_uvw = (Geometry.UVWAxis(),)
+    return @. lazy(symmetric_part(Geometry.project(axis_uvw, ᶜgradᵥ(UVW(ᶠu)))))
 end
 
 """
@@ -252,13 +255,8 @@ function compute_strain_rate_face_vertical(ᶜu)
     ∇ᵥuvw_boundary = Geometry.outer(Geometry.WVector(0), Geometry.UVWVector(0, 0, 0))
     ∇bc = Operators.SetGradient(∇ᵥuvw_boundary)
     ᶠgradᵥ = Operators.GradientC2F(bottom = ∇bc, top = ∇bc)
-    axis_uvw = Geometry.UVWAxis()
-    return @. lazy(
-        (
-            Geometry.project((axis_uvw,), ᶠgradᵥ(UVW(ᶜu))) +
-            adjoint(Geometry.project((axis_uvw,), ᶠgradᵥ(UVW(ᶜu))))
-        ) / 2,
-    )
+    axis_uvw = (Geometry.UVWAxis(),)
+    return @. lazy(symmetric_part(Geometry.project(axis_uvw, ᶠgradᵥ(UVW(ᶜu)))))
 end
 
 """
@@ -267,13 +265,8 @@ end
 Compute the strain rate at cell centers from velocity at cell centers, with horizontal gradients only.
 """
 function compute_strain_rate_center_horizontal(ᶜu)
-    axis_uvw = Geometry.UVWAxis()
-    return @. lazy(
-        (
-            Geometry.project((axis_uvw,), gradₕ(UVW(ᶜu))) +
-            adjoint(Geometry.project((axis_uvw,), gradₕ(UVW(ᶜu))))
-        ) / 2,
-    )
+    axis_uvw = (Geometry.UVWAxis(),)
+    return @. lazy(symmetric_part(Geometry.project(axis_uvw, gradₕ(UVW(ᶜu)))))
 end
 
 """
@@ -309,7 +302,7 @@ function compute_strain_rate_center_full!(ᶜε, ᶜu, ᶠu)
     axis_uvw = (Geometry.UVWAxis(),)
     @. ᶜε = Geometry.project(axis_uvw, ᶜgradᵥ(UVW(ᶠu)))  # vertical component
     @. ᶜε += Geometry.project(axis_uvw, gradₕ(UVW(ᶜu)))  # horizontal component
-    @. ᶜε = (ᶜε + adjoint(ᶜε)) / 2
+    @. ᶜε = symmetric_part(ᶜε)
     return ᶜε
 end
 
@@ -351,7 +344,7 @@ function compute_strain_rate_face_full!(ᶠε, ᶜu, ᶠu)
     axis_uvw = (Geometry.UVWAxis(),)
     @. ᶠε = Geometry.project(axis_uvw, ᶠgradᵥ(UVW(ᶜu)))  # vertical component
     @. ᶠε += Geometry.project(axis_uvw, gradₕ(UVW(ᶠu)))  # horizontal component
-    @. ᶠε = (ᶠε + adjoint(ᶠε)) / 2
+    @. ᶠε = symmetric_part(ᶠε)
     return ᶠε
 end
 
