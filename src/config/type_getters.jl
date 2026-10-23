@@ -146,8 +146,8 @@ function get_numerics(parsed_args, FT; vertical_water_borrowing_species = nothin
     dg_equation_form in (:vi, :fddg) ||
         error("dg_equation_form must be vi or fddg, got $dg_equation_form")
     dg_volume_flux = Symbol(get(parsed_args, "dg_volume_flux", "waruszewski"))
-    dg_volume_flux in (:waruszewski, :kg_pert, :kg_exner) || error(
-        "dg_volume_flux must be waruszewski, kg_pert, or kg_exner, got $dg_volume_flux",
+    dg_volume_flux in (:waruszewski, :kg_pert, :kg_exner, :div_exner, :kg_kpep) || error(
+        "dg_volume_flux must be waruszewski, kg_pert, kg_exner, div_exner, or kg_kpep, got $dg_volume_flux",
     )
     dg_interface_flux = Symbol(get(parsed_args, "dg_interface_flux", "roe"))
     dg_interface_flux in (:roe, :roe_eos, :es, :moist_es, :rusanov) || error(
@@ -157,7 +157,7 @@ function get_numerics(parsed_args, FT; vertical_water_borrowing_species = nothin
         error("dg_interface_flux = es requires dg_volume_flux = waruszewski")
     (dg_interface_flux == :rusanov && dg_volume_flux == :waruszewski) &&
         error(
-            "dg_interface_flux = rusanov requires dg_volume_flux = kg_pert or kg_exner",
+            "dg_interface_flux = rusanov requires dg_volume_flux = kg_pert, kg_exner, div_exner, or kg_kpep",
         )
     dg_vi_velocity_penalty =
         Symbol(get(parsed_args, "dg_vi_velocity_penalty", "rusanov"))
@@ -173,8 +173,8 @@ function get_numerics(parsed_args, FT; vertical_water_borrowing_species = nothin
                it is ignored with dg_equation_form = $dg_equation_form."
     dg_vi_interface_flux =
         Symbol(get(parsed_args, "dg_vi_interface_flux", "rusanov"))
-    dg_vi_interface_flux in (:rusanov, :es) || error(
-        "dg_vi_interface_flux must be rusanov or es, got $dg_vi_interface_flux",
+    dg_vi_interface_flux in (:rusanov, :rusanov_moist, :es) || error(
+        "dg_vi_interface_flux must be rusanov, rusanov_moist, or es, got $dg_vi_interface_flux",
     )
     dg_tracer_penalty = Symbol(get(parsed_args, "dg_tracer_penalty", "acoustic"))
     dg_tracer_penalty in (:acoustic, :advective) || error(

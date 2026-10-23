@@ -17,6 +17,13 @@ every function here is a no-op):
     `dg_vi_velocity_penalty = wave_selective`, the normal jump is damped at
     the acoustic speed and the tangential and vertical-velocity jumps at the
     shear speed (still a sign-definite KE sink).
+  - With `dg_vi_interface_flux = rusanov_moist`, the energy penalty acts on
+    the energy jump at fixed composition, `{ρ}({c_v,m}⟦T⟧ + ⟦K⟧)`, which is
+    `{ρ}⟦e_tot⟧` for dry air and vanishes across a humidity front at uniform
+    temperature and velocity; the total-water penalty moves the water's mass
+    and the energy of its phases as under `es`, so such a front is damped
+    without temperature jumps. The velocity penalties stay ρ-weighted (an
+    exact kinetic-energy sink). The Rusanov rate uses the moist sound speed.
   - With `dg_vi_interface_flux = es`, the energy penalty acts on the jump of
     the entropy variable ∂(ρs)/∂(ρe) = 1/T of the physical entropy ρs, and the
     velocity penalties carry the own-side weight {β}/β with β = 1/T, so every
@@ -177,6 +184,30 @@ function dg_scalars_es_interface(normal, (y⁻,), (y⁺,))
 end
 
 """
+    dg_scalars_moist_interface(normal, argvals⁻, argvals⁺)
+
+Interface flux for (ρ, ρe_tot) of `dg_vi_interface_flux = rusanov_moist`:
+the central part of [`dg_scalars_interface`](@ref) and a λ-penalty on the
+ρ-weighted jump of the specific total energy at fixed composition,
+``{ρ}({c_v,m}⟦T⟧ + ⟦K⟧)`` (Φ is single-valued at the face). For dry air
+``c_v,d ⟦T⟧ + ⟦K⟧ = ⟦e_tot⟧`` exactly, so this is the `rusanov` penalty;
+across a humidity front at uniform temperature and velocity it vanishes,
+whereas ``⟦e_tot⟧`` carries the latent and heat-capacity difference of the
+water, which the water flux moves together with the water's mass
+([`dg_water_es_interface`](@ref)). State fields: `ρ`, `T`, `cv`, `K`, `h`,
+`uv`, `λ`.
+"""
+function dg_scalars_moist_interface(normal, (y⁻,), (y⁺,))
+    Fρ = (y⁻.ρ * (y⁻.uv' * normal) + y⁺.ρ * (y⁺.uv' * normal)) / 2
+    h̄ = (y⁻.h + y⁺.h) / 2
+    λ = max(y⁻.λ, y⁺.λ)
+    ρ̄ = (y⁻.ρ + y⁺.ρ) / 2
+    c̄v = (y⁻.cv + y⁺.cv) / 2
+    Δe = c̄v * (y⁺.T - y⁻.T) + (y⁺.K - y⁻.K)
+    return (; ρ = Fρ, ρe_tot = Fρ * h̄ - λ / 2 * ρ̄ * Δe)
+end
+
+"""
     dg_tracer_interface(normal, argvals⁻, argvals⁺)
 
 Interface flux for a tracer ρχ advected by the same mass flux as continuity:
@@ -223,12 +254,33 @@ function dg_water_es_interface(normal, (y⁻,), (y⁺,))
     return (; ρχ = Fρ * χ̄ + d, ρ = d, ρe_tot)
 end
 
-# Dry-γ sound speed c_snd = sqrt(γ p / ρ), γ = cp_d / cv_d.
+"""
+    moist_sound_speed(thermo_params, ρ, p, q_tot, q_liq, q_ice)
+
+Sound speed ``sqrt(γ_m p / ρ)`` with ``γ_m = c_p,m / c_v,m`` at the given
+composition (the frozen-composition value, equal to
+`Thermodynamics.soundspeed_air` since ``p = ρ R_m T``); reduces to
+``sqrt(γ_d p / ρ)`` for dry air.
+"""
+@inline function moist_sound_speed(thermo_params, ρ, p, q_tot, q_liq, q_ice)
+    γ =
+        TD.cp_m(thermo_params, q_tot, q_liq, q_ice) /
+        TD.cv_m(thermo_params, q_tot, q_liq, q_ice)
+    return sqrt(γ * p / ρ)
+end
+
+# Sound speed at the diagnosed composition, c_snd = sqrt(γ_m p / ρ).
 function dg_sound_speed(Y, p)
-    (; ᶜp) = p.precomputed
+    (; ᶜp, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice) = p.precomputed
     thermo_params = CAP.thermodynamics_params(p.params)
-    γ = TD.Parameters.cp_d(thermo_params) / TD.Parameters.cv_d(thermo_params)
-    return @. sqrt(γ * ᶜp / Y.c.ρ)
+    return @. moist_sound_speed(
+        thermo_params,
+        Y.c.ρ,
+        ᶜp,
+        ᶜq_tot_nonneg,
+        ᶜq_liq,
+        ᶜq_ice,
+    )
 end
 
 # Orthonormal horizontal face velocity, Rusanov speed λ = |uv| + c_snd, and the
@@ -309,7 +361,9 @@ wave-selective on uₕ and u₃ (`wave_selective`, see
 [`dg_wave_selective_velocity_penalty!`](@ref)). With
 `dg_vi_interface_flux = es` the ρe_tot penalty acts on the entropy-variable
 jump ⟦1/T⟧ (see [`dg_scalars_es_interface`](@ref)) and the velocity penalties
-carry the own-side weight {β}/β, β = 1/T. No-op on CG spaces.
+carry the own-side weight {β}/β, β = 1/T; with `rusanov_moist` it acts on
+the energy jump at fixed composition (see
+[`dg_scalars_moist_interface`](@ref)). No-op on CG spaces.
 """
 NVTX.@annotate function dg_horizontal_dynamics_completion!(Yₜ, Y, p, t)
     is_dg_horizontal(axes(Y.c)) || return nothing
@@ -321,6 +375,8 @@ NVTX.@annotate function dg_horizontal_dynamics_completion!(Yₜ, Y, p, t)
     ᶜWJ = Fields.local_geometry_field(Y.c).WJ
     (ᶜuv, ᶜλ) = dg_face_velocity_and_λ(Y, p)
     es = p.atmos.numerics.dg_vi_interface_flux === Val(:es)
+    rusanov_moist =
+        p.atmos.numerics.dg_vi_interface_flux === Val(:rusanov_moist)
     # own-side velocity penalty weight β for es: 1/T, since the entropy
     # variable of ρu at fixed ρ, ρe and composition is −ρu/T; 1 otherwise
     ᶜβ = es ? (@. 1 / ᶜT) : one(FT)
@@ -328,7 +384,24 @@ NVTX.@annotate function dg_horizontal_dynamics_completion!(Yₜ, Y, p, t)
     # (ρ, ρe_tot) interface fluxes
     dy = Fields.Field(NamedTuple{(:ρ, :ρe_tot), Tuple{FT, FT}}, axes(Y.c))
     fill!(parent(dy), 0)
-    if es
+    if rusanov_moist
+        ᶜcv = @. TD.cv_m(thermo_params, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice)
+        y = map(
+            (ρ, T, cv, K, h, uv, λ) -> (; ρ, T, cv, K, h, uv, λ),
+            Y.c.ρ,
+            ᶜT,
+            ᶜcv,
+            ᶜK,
+            ᶜh_tot,
+            ᶜuv,
+            ᶜλ,
+        )
+        Operators.add_numerical_flux_interior!(
+            dg_scalars_moist_interface,
+            dy,
+            y,
+        )
+    elseif es
         ᶜcv = @. TD.cv_m(thermo_params, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice)
         y = map(
             (ρ, T, cv, h, uv, λ) -> (; ρ, T, cv, h, uv, λ),
@@ -507,9 +580,12 @@ on CG spaces.
 NVTX.@annotate function dg_horizontal_tracer_completion!(Yₜ_lim, Y, p, t)
     is_dg_horizontal(axes(Y.c)) || return nothing
     (ᶜuv, _, ᶜλ) = dg_face_velocity_and_λ(Y, p)
+    # vi es / rusanov_moist: total water moves its mass and phase energies
     es =
-        p.atmos.numerics.dg_equation_form === Val(:vi) &&
-        p.atmos.numerics.dg_vi_interface_flux === Val(:es)
+        p.atmos.numerics.dg_equation_form === Val(:vi) && (
+            p.atmos.numerics.dg_vi_interface_flux === Val(:es) ||
+            p.atmos.numerics.dg_vi_interface_flux === Val(:rusanov_moist)
+        )
     # fddg moist_es: total water is dissipated with the (ρ, ρu, ρe, ρq_tot)
     # entropy system in dg_fddg_horizontal_dynamics!; keep only the central
     # flux here
@@ -702,6 +778,14 @@ the terrain tilt of the horizontal pressure force; the horizontal flux
 differencing alone carries only `Σ_{k=1,2} ∂_ξk(p_m Ja^k)`, which over sloped
 surfaces is the along-surface gradient and not the horizontal one.
 
+With `dg_volume_flux = div_exner` the two-point flux is the divergence form
+[`divergence_cartesian_flux`](@ref): the mass flux is the average of the
+nodal mass fluxes, as in the vector-invariant form, so the nodal gradients of
+`κ` and `Φ` exchange kinetic with potential energy exactly. With
+`dg_fddg_vertical = vi` this makes the scheme kinetic- and potential-energy
+preserving (KPEP); `flux` breaks the deep-atmosphere metric pair of the
+vertical exchange.
+
 With `dg_volume_flux = kg_exner` only the advection is in flux form
 ([`kennedy_gruber_advective_cartesian_flux`](@ref) with Roe or Rusanov
 interface dissipation); the horizontal pressure force is the Exner-split
@@ -763,26 +847,60 @@ NVTX.@annotate function dg_fddg_horizontal_dynamics!(Yₜ, Y, p, t)
         microphysics_model isa NonEquilibriumMicrophysics1M ? ᶜλ_tracer :
         (@. zero(ᶜλ))
 
+    # potential of the two-point gravity of kg_kpep: Φ − Φ_r(p), the same
+    # combination as the nodal gradient of the Exner split (so ψ ≡ 0 at the
+    # reference state and the rest state stays balanced), plus the
+    # non-horizontal kinetic energy when the vertical exchange is VI (its
+    # gradient pairs with the mass flux like Φ). The pairing is linear in ψ,
+    # so the work of Φ alone is exchanged with the potential energy exactly.
+    kpep = p.atmos.numerics.dg_volume_flux === Val(:kg_kpep)
+    cp_d = thermo_params.cp_d
+    ᶜθ_v_diff = @. theta_v(
+        thermo_params,
+        p.precomputed.ᶜT,
+        ᶜp,
+        ᶜq_tot_nonneg,
+        ᶜq_liq,
+        ᶜq_ice,
+    ) - theta_vr(thermo_params, ᶜp)
+    ᶜΠ = @. TD.exner_given_pressure(thermo_params, ᶜp)
+    vertical_vi = p.atmos.numerics.dg_fddg_vertical === Val(:vi)
+    ᶜψ_kpep =
+        vertical_vi ?
+        (@. ᶜΦ - phi_r(thermo_params, ᶜp) + ᶜK -
+            FT(1 // 2) * LinearAlgebra.norm_sqr(ᶜuv)) :
+        (@. ᶜΦ - phi_r(thermo_params, ᶜp))
     y = map(
         (
             ρ, ρe, e, p_, pm_, ρm_, uv, u1_, u2_, u3_, E1_, E2_, E3_, λ, φ,
-            e_int, q_tot, q_liq, q_ice, λq, λqc,
+            e_int, q_tot, q_liq, q_ice, λq, λqc, ψ, θ, Π,
         ) -> (;
             ρ, ρe, e, p = p_, pm = pm_, ρm = ρm_, uv,
             u1 = u1_, u2 = u2_, u3 = u3_,
             E1 = E1_, E2 = E2_, E3 = E3_, λ, φ,
-            e_int, q_tot, q_liq, q_ice, λq, λqc,
+            e_int, q_tot, q_liq, q_ice, λq, λqc, ψ, θ, Π,
         ),
         Y.c.ρ, Y.c.ρe_tot, e, ᶜp, pm, ρm, ᶜuv, u1, u2, u3, E1, E2, E3, ᶜλ, ᶜΦ,
-        ᶜe_int, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice, ᶜλq, ᶜλqc,
+        ᶜe_int, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice, ᶜλq, ᶜλqc, ᶜψ_kpep,
+        ᶜθ_v_diff, ᶜΠ,
     )
     # volume flux family and interface dissipation
     (; dg_volume_flux, dg_interface_flux) = p.atmos.numerics
+    # the Exner-gradient families carry no pressure in the two-point flux
+    exner_pgf =
+        dg_volume_flux === Val(:kg_exner) ||
+        dg_volume_flux === Val(:div_exner) || kpep
+    kg_advective = dg_volume_flux === Val(:kg_exner) || kpep
     volume_flux =
+        dg_volume_flux === Val(:div_exner) ? divergence_cartesian_flux :
+        kpep ? KennedyGruberKPEPFlux(cp_d) :
         dg_volume_flux === Val(:kg_exner) ?
         kennedy_gruber_advective_cartesian_flux :
         dg_volume_flux === Val(:kg_pert) ? kennedy_gruber_cartesian_flux :
         waruszewski_cartesian_flux
+    # the gravity fluctuation of kg_kpep is not an antisymmetric face flux;
+    # its face part is the lifting KPEPFaceLift below
+    iface_central = kpep ? kennedy_gruber_advective_cartesian_flux : volume_flux
     moist_es = dg_interface_flux === Val(:moist_es)
     # moist_es dissipates total water with the system (6 slots) unless dry
     Nslots = moist_es && !(microphysics_model isa DryModel) ? 6 : 5
@@ -790,17 +908,21 @@ NVTX.@annotate function dg_fddg_horizontal_dynamics!(Yₜ, Y, p, t)
         # rusanov = full |u|+c interface dissipation (stronger grid-scale noise
         # control than roe's ~5% contact floor — needed when no hyperdiffusion
         # is present, e.g. to keep EDMFX TKE production bounded over terrain).
-        dg_volume_flux === Val(:kg_exner) ?
+        dg_volume_flux === Val(:div_exner) ?
+        CentralMinusDissipation(iface_central, rusanov_dissipation_cartesian) :
+        kg_advective ?
         kennedy_gruber_advective_rusanov_cartesian :
         kennedy_gruber_rusanov_cartesian
     elseif dg_interface_flux === Val(:roe_eos)
-        RoeEOSInterface(volume_flux, thermo_params)
+        RoeEOSInterface(iface_central, thermo_params)
     elseif moist_es
-        MoistESInterface{Nslots}(volume_flux, thermo_params)
+        MoistESInterface{Nslots}(iface_central, thermo_params)
     elseif dg_interface_flux === Val(:es)
         waruszewski_es_cartesian
     else
-        dg_volume_flux === Val(:kg_exner) ?
+        dg_volume_flux === Val(:div_exner) ?
+        CentralMinusDissipation(iface_central, roe_dissipation_cartesian) :
+        kg_advective ?
         kennedy_gruber_advective_roe_cartesian :
         dg_volume_flux === Val(:kg_pert) ? kennedy_gruber_roe_cartesian :
         waruszewski_roe_cartesian
@@ -823,23 +945,25 @@ NVTX.@annotate function dg_fddg_horizontal_dynamics!(Yₜ, Y, p, t)
         y,
     )
     Operators.add_numerical_flux_interior!(interface, dy, y)
-    if dg_volume_flux === Val(:kg_exner)
+    if kpep
+        L_kpep = Operators.lifting_correction(
+            KPEPFaceLift(cp_d),
+            Geometry.UVVector{FT},
+            ᶜψ_kpep,
+            ᶜθ_v_diff,
+            ᶜΠ,
+            Y.c.ρ,
+        )
+        @. Yₜ.c.uₕ -= C12(
+            Geometry.transform(Geometry.Covariant12Axis(), L_kpep / Y.c.ρ),
+        )
+    end
+    if exner_pgf && !kpep
         # Exner-split horizontal PGF of the vector-invariant form (as in
         # horizontal_dynamics_tendency!) without the ∇K part, which the
-        # flux-form advection above carries.
-        (; ᶜT) = p.precomputed
-        cp_d = thermo_params.cp_d
-        ᶜΦ_r = @. phi_r(thermo_params, ᶜp)
-        ᶜΦ_diff = @. ᶜΦ - ᶜΦ_r
-        ᶜθ_v_diff = @. theta_v(
-            thermo_params,
-            ᶜT,
-            ᶜp,
-            ᶜq_tot_nonneg,
-            ᶜq_liq,
-            ᶜq_ice,
-        ) - theta_vr(thermo_params, ᶜp)
-        ᶜΠ = @. TD.exner_given_pressure(thermo_params, ᶜp)
+        # flux-form advection above carries. kg_kpep carries the whole Exner
+        # force in its two-point form instead.
+        ᶜΦ_diff = @. ᶜΦ - phi_r(thermo_params, ᶜp)
         @. Yₜ.c.uₕ -= C12(
             gradₕ(ᶜΦ_diff) +
             cp_d * (
@@ -890,8 +1014,20 @@ NVTX.@annotate function dg_fddg_horizontal_dynamics!(Yₜ, Y, p, t)
     # w is small (flat); nonzero only for vertical motion over terrain. (With
     # the vector-invariant vertical term for uₕ this cancels its w ∇ₕw part;
     # the flux-form vertical transport has no such part.)
+    # kg_kpep carries this gradient in its two-point gravity
+    kpep && return nothing
+    # The DG strong gradient is completed by its central lift, so that this
+    # term pairs with the mass flux like the other gradients (exactly for
+    # the divergence-form mass flux of `div_exner`).
+    ᶜψ = @. ᶜK - FT(1 // 2) * LinearAlgebra.norm_sqr(ᶜuv)
+    L_ψ = Operators.lifting_correction(
+        Operators.central_gradient_lift,
+        Geometry.UVVector{FT},
+        ᶜψ,
+    )
     @. Yₜ.c.uₕ -=
-        C12(gradₕ(ᶜK - FT(1 // 2) * LinearAlgebra.norm_sqr(ᶜuv)))
+        C12(gradₕ(ᶜψ)) +
+        C12(Geometry.transform(Geometry.Covariant12Axis(), L_ψ))
     return nothing
 end
 

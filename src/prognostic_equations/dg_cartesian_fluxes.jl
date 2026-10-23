@@ -80,6 +80,120 @@ function kennedy_gruber_advective_cartesian_flux(nvec_a, nvec_b, y_a, y_b)
 end
 
 """
+    divergence_cartesian_flux(nvec_a, nvec_b, y_a, y_b)
+
+Divergence-form two-point flux for `dg_volume_flux = div_exner`: the mass
+flux is the average of the nodal contravariant mass fluxes,
+``F_ρ = {ρ u^ξ}`` (the scalar flux of the vector-invariant form, Ducros
+et al. 2000), and the momentum and energy ride it,
+``F_{ρu_c} = F_ρ {u_c}`` and ``F_E = F_ρ {h_{tot}}``. The momentum flux is
+``{u_c}`` times a symmetric mass flux, so the advection is
+kinetic-energy preserving; and because the mass flux is an average of
+nodal fluxes, the nodal gradients of ``κ`` and ``Φ`` with their central
+lifts exchange kinetic with potential energy exactly (the gradient--mass
+pairing of docs/dg_vi_entropy_interface.tex), which the Kennedy--Gruber
+mass flux ``{ρ}{u^ξ}`` does not. No pressure terms: the pressure force is
+the Exner-split gradient, as for `kg_exner`. Same state fields as
+[`kennedy_gruber_cartesian_flux`](@ref).
+"""
+function divergence_cartesian_flux(nvec_a, nvec_b, y_a, y_b)
+    F = (y_a.ρ * (y_a.uv' * nvec_a) + y_b.ρ * (y_b.uv' * nvec_b)) / 2
+    h̄ = (y_a.e + y_a.p / y_a.ρ + y_b.e + y_b.p / y_b.ρ) / 2
+    return (
+        ρ = F,
+        ρe = F * h̄,
+        ρu1 = F * (y_a.u1 + y_b.u1) / 2,
+        ρu2 = F * (y_a.u2 + y_b.u2) / 2,
+        ρu3 = F * (y_a.u3 + y_b.u3) / 2,
+    )
+end
+
+"""
+    KennedyGruberKPEPFlux(cp_d)
+
+Two-point flux of `dg_volume_flux = kg_kpep`, a callable
+`(nvec_a, nvec_b, y_a, y_b)`: [`kennedy_gruber_advective_cartesian_flux`](@ref)
+plus, in the momentum slots, the whole Exner force in the two-point form of
+Souza et al. (2023),
+
+    {ρ} [ (ψ_b − ψ_a)/2 + c_pd {θ_v′} (Π_b − Π_a)/2 ] (ê_c ⋅ J∇ξ)_a,
+
+with the own-node metric. `ψ` is `Φ − Φ_r(p)`, plus the non-horizontal
+kinetic energy when the vertical exchange is vector-invariant; `θ` is
+`θ_v − θ_vr(p)` and `Π` the Exner function (state fields `ψ`, `θ`, `Π`).
+Per unit mass the pressure part is the split Exner gradient of the
+vector-invariant form. With the Kennedy--Gruber mass flux `{ρ}{u^ξ}` the
+geopotential part exchanges kinetic and potential energy exactly (KPEP),
+which the nodal gradient `−ρ_a ∇ψ_a` does not; weighting the pressure part
+by the same `{ρ}` keeps its cancellation with the geopotential part at the
+hydrostatic reference, so the rest state stays balanced. The term vanishes
+for `y_a == y_b`, so the boundary lifts of the flux-differencing kernel are
+unchanged; the interface part is [`KPEPFaceLift`](@ref), not the
+antisymmetric numerical flux.
+"""
+struct KennedyGruberKPEPFlux{FT}
+    cp_d::FT
+end
+function (f::KennedyGruberKPEPFlux)(nvec_a, nvec_b, y_a, y_b)
+    F = kennedy_gruber_advective_cartesian_flux(nvec_a, nvec_b, y_a, y_b)
+    g =
+        (y_a.ρ + y_b.ρ) / 2 * (
+            (y_b.ψ - y_a.ψ) / 2 +
+            f.cp_d * (y_a.θ + y_b.θ) / 2 * (y_b.Π - y_a.Π) / 2
+        )
+    return (
+        ρ = F.ρ,
+        ρe = F.ρe,
+        ρu1 = F.ρu1 + g * (y_a.E1' * nvec_a),
+        ρu2 = F.ρu2 + g * (y_a.E2' * nvec_a),
+        ρu3 = F.ρu3 + g * (y_a.E3' * nvec_a),
+    )
+end
+
+"""
+    KPEPFaceLift(cp_d)
+
+Face part of [`KennedyGruberKPEPFlux`](@ref), a callable
+`(normal, (ψ⁻, θ⁻, Π⁻, ρ⁻), (ψ⁺, θ⁺, Π⁺, ρ⁺))` applied on each side as a
+lifting: `{ρ} [ (ψ⁺ − ψ⁻)/2 + c_pd {θ} (Π⁺ − Π⁻)/2 ] n̂`, the central gradient
+lift of the vector-invariant form with `{ρ}` in place of the own-side
+density. Returns a `UVVector`.
+"""
+struct KPEPFaceLift{FT}
+    cp_d::FT
+end
+(f::KPEPFaceLift)(normal, (ψ⁻, θ⁻, Π⁻, ρ⁻), (ψ⁺, θ⁺, Π⁺, ρ⁺)) =
+    (
+        (ρ⁻ + ρ⁺) / 2 *
+        ((ψ⁺ - ψ⁻) / 2 + f.cp_d * (θ⁻ + θ⁺) / 2 * (Π⁺ - Π⁻) / 2)
+    ) * normal
+
+"""
+    CentralMinusDissipation(central, dissipation)
+
+Interface flux `central(normal, normal, y⁻, y⁺) − dissipation(normal, y⁻, y⁺)/2`
+for a two-point `central` flux and a dissipation `(normal, y⁻, y⁺) -> D`
+over the slots (ρ, ρe, ρu1, ρu2, ρu3).
+"""
+struct CentralMinusDissipation{C, D}
+    central::C
+    dissipation::D
+end
+function (f::CentralMinusDissipation)(normal, (y⁻,), (y⁺,))
+    F = f.central(normal, normal, y⁻, y⁺)
+    D = f.dissipation(normal, y⁻, y⁺)
+    return (
+        ρ = F.ρ - D.ρ / 2,
+        ρe = F.ρe - D.ρe / 2,
+        ρu1 = F.ρu1 - D.ρu1 / 2,
+        ρu2 = F.ρu2 - D.ρu2 / 2,
+        ρu3 = F.ρu3 - D.ρu3 / 2,
+    )
+end
+rusanov_dissipation_cartesian(normal, y⁻, y⁺) =
+    rusanov_dissipation_cartesian(y⁻, y⁺)
+
+"""
     ln_mean(x, y)
 
 Numerically-stable logarithmic mean ``(x-y)/(\\log x - \\log y)`` (Ismail & Roe

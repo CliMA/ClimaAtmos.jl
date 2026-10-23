@@ -1884,9 +1884,10 @@ symbols or strings.
     velocity jump penalty of the vector-invariant horizontal DG form.
   - `dg_vi_shear_floor`: floor ε of the wave-selective shear speed
     `max(|u_n|, ε c)`.
-  - `dg_vi_interface_flux`: `Val(:rusanov)` or `Val(:es)`, the variables the
-    vector-invariant DG face penalties act on (conserved `ρe_tot` and `u`, or
-    the entropy variables).
+  - `dg_vi_interface_flux`: `Val(:rusanov)`, `Val(:rusanov_moist)`, or
+    `Val(:es)`, the variables the vector-invariant DG face penalties act on
+    (conserved `ρe_tot` and `u`; the energy at fixed composition with the
+    water flux carrying its mass and energy; or the entropy variables).
   - `dg_tracer_penalty`: `Val(:acoustic)` or `Val(:advective)`, the rate of
     the DG tracer jump penalties, `|u| + c` or `max(|u|, ε c)`.
   - `dg_fddg_vertical`: `Val(:vi)` or `Val(:flux)`, the vertical transport
@@ -1939,7 +1940,12 @@ struct AtmosNumerics{
     # (entropy-conservative; full-p momentum flux), Val(:kg_pert)
     # (Kennedy-Gruber carrying pm = p − p_ref in the momentum flux), or
     # Val(:kg_exner) (Kennedy-Gruber advection only; the pressure force is
-    # the Exner-split gradient of the vector-invariant form).
+    # the Exner-split gradient of the vector-invariant form), or
+    # Val(:div_exner) (as kg_exner with the divergence-form mass flux
+    # {ρu^ξ}, which makes the gravity and kinetic-energy gradients exchange
+    # kinetic and potential energy exactly: KPEP with dg_fddg_vertical = vi),
+    # or Val(:kg_kpep) (Kennedy-Gruber mass flux with the two-point gravity
+    # of Souza et al. 2023: KPEP).
     dg_volume_flux::DGVF
     # FDDG interface dissipation: Val(:roe) (dry-gas eigenstructure),
     # Val(:roe_eos) (eigenstructure from the model's equation of state by
@@ -1956,8 +1962,9 @@ struct AtmosNumerics{
     dg_vi_velocity_penalty::DGVP
     # Floor ε on the wave-selective shear speed, as a fraction of c.
     dg_vi_shear_floor::DGSF
-    # VI-form DG face penalty variables: Val(:rusanov) (⟦ρe_tot⟧, ⟦u⟧) or
-    # Val(:es) (entropy-variable jumps ⟦−ρ/p⟧, ⟦βu⟧/{β}, β = ρ/p).
+    # VI-form DG face penalty variables: Val(:rusanov) (⟦ρe_tot⟧, ⟦u⟧),
+    # Val(:rusanov_moist) ({c_v,m}⟦T⟧ + ⟦K⟧ with the water flux carrying
+    # mass and phase energies), or Val(:es) (entropy-variable jumps).
     dg_vi_interface_flux::DGVIF
     # Rate of the DG tracer jump penalties: Val(:acoustic) (|u| + c) or
     # Val(:advective) (max(|u|, ε c), ε = dg_vi_shear_floor).
@@ -2013,7 +2020,8 @@ types for compile-time dispatch.
   - `dg_vi_shear_floor = 0.05`: Floor ε of the wave-selective shear speed
     `max(|u_n|, ε c)`.
   - `dg_vi_interface_flux = :rusanov`: Variables of the vector-invariant DG
-    face penalties, `:rusanov` (conserved) or `:es` (entropy variables).
+    face penalties, `:rusanov` (conserved), `:rusanov_moist` (energy at fixed
+    composition) or `:es` (entropy variables).
   - `dg_tracer_penalty = :acoustic`: Rate of the DG tracer jump penalties,
     `:acoustic` (`|u| + c`) or `:advective` (`max(|u|, ε c)`).
   - `dg_fddg_vertical = :vi`: Vertical transport of the horizontal momentum
