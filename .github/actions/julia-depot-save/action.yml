@@ -1,9 +1,11 @@
 name: Save Julia depot
 description: >-
-  Save the Julia depot under `key` on a push to main when no cache with that
-  key exists. Runs on other events do nothing. Caches saved by pull requests
-  are readable only by the same pull request, and they fill the repository's
-  10 GB cache limit and evict the main caches that every run restores.
+  Save the Julia depot under `key` on a push to main, then delete the older
+  main caches for the same workflow, Julia version, and CPU target. Runs on
+  other events do nothing. Caches saved by pull requests are readable only by
+  the same pull request, and they fill the repository's 10 GB cache limit and
+  evict the main caches that every run restores. Deleting caches needs the
+  `actions: write` permission.
 inputs:
   key:
     description: Full cache key, the `key` output of `julia-depot-restore`.
@@ -33,3 +35,25 @@ runs:
           ~/.julia/registries
           ~/.julia/scratchspaces
         key: ${{ inputs.key }}
+    - if: >-
+        github.event_name == 'push' && github.ref == 'refs/heads/main' &&
+        inputs.cache-hit != 'true'
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+        KEY: ${{ inputs.key }}
+      run: |
+        # Keys are `prefix-cpu-target-hash-run_id`, so dropping the last two
+        # parts leaves the prefix shared by every main cache of this job.
+        key_prefix="${KEY%-*}"
+        key_prefix="${key_prefix%-*}-"
+        caches=$(gh cache list --repo "$GITHUB_REPOSITORY" --ref refs/heads/main \
+          --key "$key_prefix" --limit 100 --json id,key,createdAt)
+        # Another job of this run may still be saving the same key. That job
+        # deletes the older caches once its save finishes.
+        created=$(jq -r --arg key "$KEY" '.[] | select(.key == $key) | .createdAt' <<< "$caches")
+        [ -n "$created" ] || exit 0
+        for id in $(jq -r --arg key "$KEY" --arg created "$created" \
+          '.[] | select(.key != $key and .createdAt < $created) | .id' <<< "$caches"); do
+          gh cache delete --repo "$GITHUB_REPOSITORY" "$id" || true
+        done
