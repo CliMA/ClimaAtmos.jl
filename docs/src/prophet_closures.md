@@ -656,6 +656,33 @@ at each quadrature point and aggregated linearly, which preserves total water
 and total energy at the subdomain level because the bulk rates preserve them
 pointwise.
 
+With `sgs_distribution: "conditional"` the microphysics nodes are not the
+fixed Gauss–Hermite tensor nodes but are placed from the conditional moments
+of the Gaussian. Every quantity the one-moment evaluator reads at a node is a
+function of the centred saturation excess ``S' \sim N(0, \sigma_S^2)`` alone
+(the temperature is regressed on it), and three thresholds partition ``S'``:
+the edge of the actual condensate, ``-\lambda/\alpha``, the edge of the
+equilibrium condensate, ``-\lambda_{\mathrm{eq}}``, and the edge of the
+precipitation shaft. On each of the at most four intervals between them both
+condensates are linear in ``S'`` and the shaft flag is constant, so one node at
+the conditional mean of the interval integrates them exactly for any cloud
+fraction, and the intervals that carry condensate receive the two-point Gauss
+rule of the truncated distribution, which reproduces the conditional mean,
+variance and third moment that a power-law collision rate responds to. The
+Lagrange multipliers are then the continuous ones, ``\lambda_{\mathrm{eq}}``
+being the mean cloud excess itself. The temperature also varies at fixed
+``S'``, with the part ``\sigma_\perp`` of its spread that the regression does not
+carry; the rates respond to it mainly at the freezing point, so a node whose
+temperature spread straddles ``T_{\mathrm{freeze}}`` is split there into the
+conditional means of the two half-normals, and every other node keeps one
+temperature. The width
+``\sigma_S`` is the linearized one,
+``\sigma_S^2 = \sigma_q^2 - 2\gamma\rho_{Tq}\sigma_q\sigma_T + \gamma^2\sigma_T^2``
+with ``\gamma = \partial q_{\mathrm{sat}}/\partial T``, so neither the nodes nor
+the cloud fraction need a quadrature pass. The fixed tensor rule places the whole
+condensate of a cell whose cloud fraction is below the weight of its moistest
+corner node (``1/36`` at order 3) on that node, and the rates with it.
+
 Because the variance depends on the mixing length, the mixing length on the
 buoyancy gradient, and the buoyancy gradient on the cloud fraction, the closure
 is solved as a fixed point at each timestep. Two Picard iterations are followed

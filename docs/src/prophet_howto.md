@@ -70,7 +70,7 @@ mass-flux contribution, and as a lighter boundary-layer scheme.
 | `edmfx_horizontal_diffusion`          | `false`           | Diffuse each draft scalar down its own horizontal gradient, and include the draft horizontal diffusive fluxes in the grid-mean flux. Requires the flag above.                  |
 | `cloud_model`                         | `"quadrature"`    | `grid_scale` evaluates cloud fraction at the mean state; `quadrature` integrates over the SGS distribution; `MLCloud` uses a network.                                          |
 | `use_sgs_quadrature`                  | `true`            | Integrate microphysical rates over the SGS distribution rather than at the mean state.                                                                                         |
-| `sgs_distribution`                    | `"gaussian"`      | Assumed SGS distribution of ``(T, q_t)``: `gaussian`, `lognormal`, or `mean`.                                                                                                  |
+| `sgs_distribution`                    | `"gaussian"`      | Assumed SGS distribution of ``(T, q_t)``: `gaussian`, `conditional` (Gaussian with the conditional-moment node rule for the 1M microphysics), `lognormal`, or `mean`.          |
 | `quadrature_order`                    | `3`               | Gauss–Hermite order per dimension, 1–5.                                                                                                                                        |
 | `sgs_variance_curvature`              | `false`           | Evaluate the equilibrium condensate under the vertical displacement of the curved saturation-excess profile, which bounds the moist tail. See [Closures](prophet_closures.md). |
 

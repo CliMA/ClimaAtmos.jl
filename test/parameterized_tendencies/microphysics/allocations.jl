@@ -227,6 +227,32 @@ function _allocs_sgs_moments_curvature(thp, quad, ::Type{FT}) where {FT}
     )
 end
 
+function _allocs_conditional_1m(thp, cmp, quad, ::Type{FT}, T = FT(285)) where {FT}
+    ρ = FT(1.1)
+    q_sat = TD.q_vap_saturation(thp, T, ρ)
+    mu_S = FT(-1.5) * FT(4e-4)
+    q_tot = q_sat + mu_S
+    q_lcl = FT(3e-5)
+    q_rai = FT(1e-5)
+    mom = ClimaAtmos._compute_sgs_moments(
+        thp, ρ, T, q_tot, q_lcl, quad, FT(0.25), FT(2.5e-7), FT(0.5), FT(0.7),
+        q_tot - q_rai,
+    )
+    args = (
+        BMT.Microphysics1Moment(), quad, cmp, thp, ρ, T, FT(0.1), q_tot, q_lcl,
+        FT(0), q_rai, FT(0), FT(0.25), FT(2.5e-7), FT(0.5), mom.λ_lagrange,
+        FT(0.7), FT(0.1), FT(0.1), FT(180), 2, FT(1), mu_S, FT(0.5), FT(0.4),
+        mom.sigma_S, FT(0.1), mom.λ_eq,
+    )
+    ClimaAtmos.microphysics_tendencies_1m(args...)
+    a_mom = @allocated ClimaAtmos._compute_sgs_moments(
+        thp, ρ, T, q_tot, q_lcl, quad, FT(0.25), FT(2.5e-7), FT(0.5), FT(0.7),
+        q_tot - q_rai,
+    )
+    a_tend = @allocated ClimaAtmos.microphysics_tendencies_1m(args...)
+    return a_mom + a_tend
+end
+
 # NOTE: closure-based tests are omitted here because Julia closures inherently
 # allocate ~352 bytes from closure capture. In production, integrate_over_sgs
 # is always called with functors (e.g. Microphysics1MEvaluator), which are
@@ -301,6 +327,26 @@ end
                         CP.create_toml_dict(FTi),
                     )
                     @test _allocs_sgs_moments_curvature(thpi, qi, FTi) == 0
+                end
+            end
+        end
+
+        @testset "ConditionalMomentSGS moments and 1M tendencies" begin
+            for FTi in (Float32, Float64)
+                @testset "FT = $FTi" begin
+                    tomli = CP.create_toml_dict(FTi)
+                    thpi = TD.Parameters.ThermodynamicsParameters(tomli)
+                    cmpi = CMP.Microphysics1MParams(tomli)
+                    qi = ClimaAtmos.SGSQuadrature(
+                        FTi;
+                        quadrature_order = 3,
+                        distribution = ClimaAtmos.ConditionalMomentSGS(),
+                    )
+                    # 285 K: no temperature split; 273.4 K: the spread straddles freezing
+                    for Ti in FTi.((285, 273.4))
+                        _allocs_conditional_1m(thpi, cmpi, qi, FTi, Ti)
+                        @test _allocs_conditional_1m(thpi, cmpi, qi, FTi, Ti) == 0
+                    end
                 end
             end
         end

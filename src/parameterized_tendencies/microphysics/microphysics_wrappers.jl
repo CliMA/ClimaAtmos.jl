@@ -457,9 +457,13 @@ end
 # meaningfully sized, so the late inliner won't undo it.
 """
     (eval::Microphysics1MEvaluator)(T_hat, q_tot_hat)
+    (eval::Microphysics1MEvaluator)(T_hat, q_tot_hat, flag_p)
 
 Evaluate the 1-moment tendencies at one quadrature point `(T_hat, q_tot_hat)`
-[K, kg/kg].
+[K, kg/kg]. The three-argument form takes the shaft flag `flag_p` of the node
+as given (the conditional-moment rule, whose intervals lie entirely inside or
+outside the shaft); the two-argument form derives it from the node's centred
+saturation excess (`sgs_precip_shaft_weight`).
 
 The local cloud condensate is obtained from the centred saturation excess
 `S′_hat = (q_tot_hat − q_sat(T_hat, ρ)) − mu_S`:
@@ -487,7 +491,10 @@ local vapor.
 NamedTuple from `BMT.bulk_microphysics_tendencies(BMT.LinearizedAverage(), ...)`
 with `dq_lcl_dt`, `dq_icl_dt`, `dq_rai_dt`, `dq_sno_dt` [kg/kg/s].
 """
-@noinline function (eval::Microphysics1MEvaluator)(T_hat, q_tot_hat)
+@inline (eval::Microphysics1MEvaluator)(T_hat, q_tot_hat) =
+    eval(T_hat, q_tot_hat, nothing)
+
+@noinline function (eval::Microphysics1MEvaluator)(T_hat, q_tot_hat, flag_p)
     FT = typeof(eval.ρ)
     q_tot_hat = max(FT(0), q_tot_hat)
 
@@ -531,8 +538,8 @@ with `dq_lcl_dt`, `dq_icl_dt`, `dq_rai_dt`, `dq_sno_dt` [kg/kg/s].
     # condensate reconstruction, is unchanged by the placement.
     q_rai_node, q_sno_node, q_tot_node =
         if eval.β_precip > zero(FT)
-            flag_p = sgs_precip_shaft_weight(S′_hat, eval.S_star, eval.ε_S)
-            φ_p = sgs_placement_factor(eval.β_precip, flag_p, eval.shaft_frac)
+            flag = _shaft_flag(flag_p, S′_hat, eval.S_star, eval.ε_S)
+            φ_p = sgs_placement_factor(eval.β_precip, flag, eval.shaft_frac)
             shift = (φ_p - one(FT)) * q_precip
             (eval.q_rai * φ_p, eval.q_sno * φ_p, max(FT(0), q_tot_eff + shift))
         else
@@ -547,6 +554,17 @@ with `dq_lcl_dt`, `dq_icl_dt`, `dq_rai_dt`, `dq_sno_dt` [kg/kg/s].
         eval.dt, eval.nsubs, eval.args...,
     )
 end
+
+"""
+    _shaft_flag(flag_p, S′, S_star, ε_S)
+
+Shaft weight of a node: `flag_p` where the caller supplies it, otherwise the
+weight `sgs_precip_shaft_weight(S′, S_star, ε_S)` of the node's centred
+saturation excess.
+"""
+@inline _shaft_flag(::Nothing, S′, S_star, ε_S) =
+    sgs_precip_shaft_weight(S′, S_star, ε_S)
+@inline _shaft_flag(flag_p, S′, S_star, ε_S) = flag_p
 
 """
     microphysics_tendencies_1m(
@@ -652,20 +670,66 @@ end
     q_rai_nonneg = max(FT(0), q_rai)
     q_sno_nonneg = max(FT(0), q_sno)
 
-    # Same transform `integrate_over_sgs` builds; shared by the (optional)
-    # precipitation-fraction pass and the tendency pass.
-    transform =
-        build_physical_transform(sgs_quad, q_tot_nonneg, T, q′q′, T′T′, corr_Tq)
-    # Shaft weight on the nodes: the moistest `a_p` of the PDF, smoothed over
-    # `c_w σ_S`. Its quadrature fraction `shaft_frac` normalizes the placement.
-    # The shaft is never taken narrower than `precip_frac_floor` of the cell
+    # Shaft threshold on the centred excess: the moistest `a_p` of the PDF,
+    # smoothed over `c_w σ_S` on the Gauss–Hermite nodes. The shaft is never
+    # taken narrower than `precip_frac_floor` of the cell
     # (`sgs_precip_fraction_floor`).
     a_p = max(FT(precip_frac), FT(precip_frac_floor))
     # A caller that passes no `sigma_S` gets the narrowest resolvable PDF.
     σ_S = max(FT(sigma_S), ϵ_numerics(FT))
     S_star = sgs_precip_shaft_threshold(a_p, σ_S)
     ε_S = sgs_precip_shaft_width_coeff(FT) * σ_S
-    shaft_frac = if precip_incloud_fraction > zero(FT)
+    return _sum_1m_over_sgs(
+        sgs_quad.dist, scheme, sgs_quad, cmp, thp, ρ, T, w, q_tot_nonneg,
+        max(zero(ρ), q_lcl), max(zero(ρ), q_icl), q_rai_nonneg, q_sno_nonneg,
+        T′T′, q′q′, corr_Tq, λ_lagrange, α, FT(ξ_liq), FT(ξ_ice), dt, nsubs, λ,
+        mu_S, FT(precip_incloud_fraction), σ_S, S_star, ε_S, FT(λ_eq), args,
+    )
+end
+
+"""
+    _sum_1m_over_sgs(dist, scheme, sgs_quad, cmp, thp, ρ, T, w, q_tot_nonneg,
+                     q_lcl, q_icl, q_rai, q_sno, T′T′, q′q′, corr_Tq,
+                     λ_lagrange, α, ξ_liq, ξ_ice, dt, nsubs, λ, mu_S,
+                     β_precip, σ_S, S_star, ε_S, λ_eq, args)
+
+Integrate the `Microphysics1MEvaluator` over the SGS PDF for the distribution
+`dist` (the arguments are those of `microphysics_tendencies_1m`, with the
+precipitation clamped non-negative and the shaft threshold `S_star` and width
+`ε_S` already set).
+
+For the Gauss–Hermite sampled distributions the shaft fraction is the
+quadrature mean of the smoothed shaft weight (`SGSPrecipShaftFlag`); a shaft
+the nodes cannot resolve (`sgs_precip_shaft_frac_min`) is left uniform.
+
+For `ConditionalMomentSGS` the nodes are placed by `conditional_rule` at the
+conditional moments of `S′` on the intervals between the cloud edges
+`−λ_lagrange/α` and `−λ_eq` and the shaft edge `S_star`, with the temperature
+regressed on `S′`
+(`sgs_temperature_regression`) and split at the freezing point where its
+spread at fixed `S′` straddles it
+(`sum_over_conditional_nodes`). The rule integrates the
+piecewise-linear condensates exactly; the multiplier and slope of the actual
+condensate are scaled by the common factor that makes the node mean of
+`max(0, λ + α S′)` equal `q_c` to rounding, which leaves the cloud edge
+`−λ/α` and the cloud fraction unchanged. The shaft fraction is the node
+weight of the shaft from the nodes' own flags
+(`conditional_rule_shaft_fraction`), so the placement conserves the cell-mean
+precipitation exactly for any `a_p` (the shaft is bounded below by
+`precip_frac_floor`).
+"""
+@inline function _sum_1m_over_sgs(
+    ::AbstractSGSDistribution, scheme, sgs_quad, cmp, thp, ρ, T, w, q_tot_nonneg,
+    q_lcl, q_icl, q_rai, q_sno, T′T′, q′q′, corr_Tq,
+    λ_lagrange, α, ξ_liq, ξ_ice, dt, nsubs, λ, mu_S,
+    β_precip, σ_S, S_star, ε_S, λ_eq, args,
+)
+    FT = typeof(ρ)
+    # Same transform `integrate_over_sgs` builds; shared by the (optional)
+    # precipitation-fraction pass and the tendency pass.
+    transform =
+        build_physical_transform(sgs_quad, q_tot_nonneg, T, q′q′, T′T′, corr_Tq)
+    shaft_frac = if β_precip > zero(FT)
         frac = sum_over_quadrature_points(
             SGSPrecipShaftFlag(thp, ρ, mu_S, S_star, ε_S), transform, sgs_quad,
         )
@@ -676,12 +740,55 @@ end
     end
     evaluator = Microphysics1MEvaluator(
         scheme, cmp, thp, ρ, w,
-        q_rai_nonneg, q_sno_nonneg, λ,
-        FT(ξ_liq), FT(ξ_ice), max(zero(ρ), q_lcl), max(zero(ρ), q_icl),
-        λ_lagrange, FT(λ_eq), mu_S, α,
-        FT(precip_incloud_fraction), FT(shaft_frac), S_star, ε_S, dt, nsubs, args,
+        q_rai, q_sno, λ,
+        ξ_liq, ξ_ice, q_lcl, q_icl,
+        λ_lagrange, λ_eq, mu_S, α,
+        β_precip, shaft_frac, S_star, ε_S, dt, nsubs, args,
     )
     return sum_over_quadrature_points(evaluator, transform, sgs_quad)
+end
+
+@inline function _sum_1m_over_sgs(
+    ::ConditionalMomentSGS, scheme, sgs_quad, cmp, thp, ρ, T, w, q_tot_nonneg,
+    q_lcl, q_icl, q_rai, q_sno, T′T′, q′q′, corr_Tq,
+    λ_lagrange, α, ξ_liq, ξ_ice, dt, nsubs, λ, mu_S,
+    β_precip, σ_S, S_star, ε_S, λ_eq, args,
+)
+    FT = typeof(ρ)
+    q_c = q_lcl + q_icl
+    α_safe = max(FT(α), ϵ_numerics(FT))
+    t_a = -FT(λ_lagrange) / α_safe
+    t_e = -FT(λ_eq)
+    t_p = ifelse(β_precip > zero(FT), S_star, FT(Inf))
+    β_T = sgs_temperature_regression(thp, T, ρ, σ_S, T′T′, q′q′, corr_Tq)
+    rule = conditional_rule(
+        thp, ρ, T, mu_S, σ_S, β_T, t_a, t_e, t_p, sgs_quad.T_min, sgs_quad.q_max,
+    )
+    # Scale (λ, α) together so the node mean of the actual condensate is q_c
+    # to rounding; the cloud edge −λ/α is unchanged by a common factor.
+    g = conditional_rule_mean(NodeCondensate(FT(λ_lagrange), α_safe), rule)
+    s = ifelse(
+        q_c > zero(FT),
+        ifelse(g > zero(FT), q_c / max(g, floatmin(FT)), one(FT)),
+        zero(FT),
+    )
+    shaft_frac = ifelse(
+        β_precip > zero(FT),
+        conditional_rule_shaft_fraction(rule),
+        one(FT),
+    )
+    evaluator = Microphysics1MEvaluator(
+        scheme, cmp, thp, ρ, w,
+        q_rai, q_sno, λ,
+        ξ_liq, ξ_ice, q_lcl, q_icl,
+        s * FT(λ_lagrange), λ_eq, mu_S, s * α_safe,
+        β_precip, shaft_frac, S_star, ε_S, dt, nsubs, args,
+    )
+    spread = TemperatureSpread(
+        thp, ρ, mu_S, sgs_temperature_spread_at_fixed_excess(T′T′, β_T, σ_S),
+        FT(TD.Parameters.T_freeze(_unwrapped(thp))), sgs_quad.T_min, sgs_quad.q_max,
+    )
+    return sum_over_conditional_nodes(evaluator, rule, spread)
 end
 
 """

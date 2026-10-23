@@ -33,6 +33,14 @@ main
 - ![][badge-🔥behavioralΔ] Snow falls at its fixed terminal velocity by default
   (`snow_terminal_velocity: Fixed`); `Chen2022` remains available.
 - ![][badge-✨feature/enhancement] CloudMicrophysics 0.46 is supported (compat `0.45, 0.46`).
+- ![][badge-✨feature/enhancement] `sgs_distribution: "conditional"` selects
+  `ConditionalMomentSGS`: the 1M microphysics is integrated over the Gaussian
+  SGS distribution by a conditional-moment node rule (`conditional_rule`)
+  instead of the 3×3 Gauss–Hermite nodes. The nodes sit between the cloud,
+  equilibrium-cloud and precipitation-shaft edges of the saturation excess, so
+  the condensate means and the shaft fraction are integrated exactly for any
+  cloud fraction; nodes whose temperature spread straddles the freezing point
+  are split there. `σ_S` is the linearized width, without a quadrature pass.
 - ![][badge-✨feature/enhancement] The equilibrium SGS condensate
   `E[max(0, S)]` can be evaluated under the vertical displacement acting on
   the curved profile of the saturation excess,

@@ -936,7 +936,9 @@ Gaussian closure. Using this analytic μ_S lets us accumulate σ_S² as
 `E[(S − μ_S)²]` in a single pass.
 
 `σ_S` is floored at `ϵ_numerics(FT)` so the normalised closure
-`C = q_c / (α·σ_S)` stays well-conditioned.
+`C = q_c / (α·σ_S)` stays well-conditioned. A `ConditionalMomentSGS` takes
+the linearized `σ_S` instead (`_sgs_linear_sigma_S`), without a quadrature
+pass.
 
 Returns `(; mu_S, sigma_S)`.
 """
@@ -944,17 +946,48 @@ Returns `(; mu_S, sigma_S)`.
     thp, ρ, T_mean, q_tot_mean,
     sgs_quad, T′T′, q′q′, corr_Tq,
 )
-    FT = typeof(ρ)
     mu_S = q_tot_mean - TD.q_vap_saturation(_unwrapped(thp), T_mean, ρ)
+    sigma_S = _sgs_sigma_S(
+        sgs_quad, thp, ρ, T_mean, q_tot_mean, mu_S, T′T′, q′q′, corr_Tq,
+    )
+    return (; mu_S, sigma_S)
+end
+
+# An `SGSQuadrature` of `ConditionalMomentSGS`, which takes the linearized `σ_S`.
+const ConditionalMomentQuadrature =
+    SGSQuadrature{N, A, W, <:ConditionalMomentSGS} where {N, A, W}
+
+# `σ_S` of `_sgs_saturation_moments`: `E[(S − μ_S)²]` over the quadrature points,
+# or the linearized width for `ConditionalMomentSGS`.
+@inline function _sgs_sigma_S(
+    sgs_quad, thp, ρ, T_mean, q_tot_mean, mu_S, T′T′, q′q′, corr_Tq,
+)
+    FT = typeof(ρ)
     sgs_quad_eff = isnothing(sgs_quad) ? GridMeanSGS() : sgs_quad
     evaluator = SGSVarianceEvaluator(thp, ρ, mu_S)
     sigma_S_sq = integrate_over_sgs(
         evaluator, sgs_quad_eff, q_tot_mean, T_mean, q′q′, T′T′, corr_Tq,
     )
-    return (;
-        mu_S,
-        sigma_S = max(sqrt(sigma_S_sq), ϵ_numerics(FT)),
-    )
+    return max(sqrt(sigma_S_sq), ϵ_numerics(FT))
+end
+@inline _sgs_sigma_S(
+    ::ConditionalMomentQuadrature, thp, ρ, T_mean, q_tot_mean, mu_S,
+    T′T′, q′q′, corr_Tq,
+) = _sgs_linear_sigma_S(thp, ρ, T_mean, T′T′, q′q′, corr_Tq)
+
+"""
+    _sgs_linear_sigma_S(thp, ρ, T, T′T′, q′q′, corr_Tq)
+
+Linearized Clausius–Clapeyron saturation-excess standard deviation
+`σ_S = sqrt(max(σ_q² − 2 γ corr_Tq σ_T σ_q + γ² σ_T², 0))` with
+`γ = ∂q_sat/∂T(T, ρ)`, floored at `ϵ_numerics(FT)`.
+"""
+@inline function _sgs_linear_sigma_S(thp, ρ, T, T′T′, q′q′, corr_Tq)
+    FT = typeof(ρ)
+    (σ_q, σ_T, corr) = sgs_stddevs_and_correlation(q′q′, T′T′, corr_Tq)
+    γ = FT(TD.∂q_vap_sat_∂T(_unwrapped(thp), T, ρ))
+    var_S = σ_q^2 - 2 * γ * corr * σ_T * σ_q + γ^2 * σ_T^2
+    return max(sqrt(max(var_S, zero(FT))), ϵ_numerics(FT))
 end
 
 # ============================================================================
@@ -1472,8 +1505,9 @@ end
     )
 
 Fused production overload: compute the hybrid cloud fraction in a single
-inlined call that runs the `σ_S²` quadrature pass and the truncated-Gaussian
-approximate closure in one broadcast kernel. Used by
+inlined call that obtains `σ_S` (`_sgs_saturation_moments`: a quadrature pass,
+or the linearized width for `ConditionalMomentSGS`) and evaluates the
+truncated-Gaussian approximate closure in one broadcast kernel. Used by
 `set_cloud_fraction!(QuadratureCloud)` so the moments are never
 materialized to a Field.
 """
@@ -1592,7 +1626,8 @@ end
 Single quadrature pass returning `(sigma_S, λ_lagrange, λ_eq)`:
 
   - `sigma_S = sqrt(Σᵢ wᵢ·S′ᵢ²)`: SGS standard deviation of the sampled
-    centred excess, clipped at `ϵ_numerics(FT)`.
+    centred excess, clipped at `ϵ_numerics(FT)`; for a `ConditionalMomentSGS`,
+    the linearized `_sgs_linear_sigma_S`, without a quadrature pass.
   - `λ_lagrange`: Lagrange multiplier satisfying the mass-conservation
     constraint `Σᵢ wᵢ·max(0, λ + α·S′ᵢ) = q_c` exactly under the discrete
     quadrature measure — the same points and weights the microphysics
@@ -1613,6 +1648,11 @@ Single quadrature pass returning `(sigma_S, λ_lagrange, λ_eq)`:
     Used by `Microphysics1MEvaluator` so that condensation and evaporation
     relax toward `q_c_eq` without the discrete 3-point Gauss–Hermite support
     cutoff at `μ_S < −√3 σ_S`.
+
+Both multipliers come from `_sgs_lagrange_multipliers`, which dispatches on
+the distribution: the discrete fits above for the Gauss–Hermite sampled
+distributions, the continuous multipliers for `ConditionalMomentSGS`, whose
+node rule integrates the condensates exactly.
 
 The SGS mean `μ_S = q_tot − q_sat(T, ρ)` is analytic under the closure's
 linearization (see `_sgs_saturation_moments`) and is recomputed on demand
@@ -1640,6 +1680,27 @@ directly, matching the σ_S → 0 limit of the sampled branch.
         )
 
     mu_S = q_tot - q_sat
+    (sigma_S, S′s, ws) = _sgs_excess_samples(
+        sgs_quad, thp, ρ, T, q_tot, mu_S, T′T′, q′q′, corr_Tq,
+    )
+
+    # Equilibrium condensate `q_c_eq = E[max(0, S_cloud)]`: truncated Gaussian,
+    # or the curvature-aware displacement expectation where `curv ≠ 0`.
+    q_c_eq = displacement_condensate(mu_S_cloud, sigma_S, lin, curv)
+    (λ_lagrange, λ_eq) = _sgs_lagrange_multipliers(
+        sgs_quad.dist, q_c, α, sigma_S, mu_S_cloud, q_c_eq, curv, S′s, ws,
+    )
+    return (; sigma_S, λ_lagrange, λ_eq)
+end
+
+# `(σ_S, S′s, ws)` of `_compute_sgs_moments`: the centred excesses `S′s` at the
+# quadrature points with their probability weights `ws`, which the discrete
+# Lagrange fits need, and `σ_S` from them; `ConditionalMomentSGS` takes the
+# linearized `σ_S` and needs no samples.
+@inline function _sgs_excess_samples(
+    sgs_quad, thp, ρ, T, q_tot, mu_S, T′T′, q′q′, corr_Tq,
+)
+    FT = typeof(ρ)
     transform =
         build_physical_transform(sgs_quad, q_tot, T, q′q′, T′T′, corr_Tq)
     S′s = quadrature_point_values(
@@ -1647,20 +1708,55 @@ directly, matching the σ_S → 0 limit of the sampled branch.
     )
     ws = quadrature_prob_weights(sgs_quad)
     sigma_S = max(sqrt(sum(ws .* S′s .* S′s)), ϵ_numerics(FT))
+    return (sigma_S, S′s, ws)
+end
+@inline _sgs_excess_samples(
+    ::ConditionalMomentQuadrature, thp, ρ, T, q_tot, mu_S, T′T′, q′q′, corr_Tq,
+) = (_sgs_linear_sigma_S(thp, ρ, T, T′T′, q′q′, corr_Tq), nothing, nothing)
 
-    # Analytic truncated-Gaussian seed, then the exact discrete fit. The
-    # floor keeps `q_c / σ_S_eff` finite where both `q_c` and `α` vanish.
+"""
+    _sgs_lagrange_multipliers(dist, q_c, α, sigma_S, mu_S_cloud, q_c_eq, curv, S′s, ws)
+
+The Lagrange multipliers `(λ_lagrange, λ_eq)` of `_compute_sgs_moments` for the
+SGS distribution `dist`.
+
+For the Gauss–Hermite sampled distributions both are fitted to the discrete
+quadrature measure (`_fit_discrete_lagrange`), `λ_lagrange` from the analytic
+truncated-Gaussian seed (`_compute_z`, with `σ_S_eff = α σ_S` floored so the
+seed stays finite where `q_c` and `α` both vanish) and `λ_eq` with the
+unattenuated `S′ᵢ`, the fluctuations `q_c_eq` is evaluated with.
+
+For `ConditionalMomentSGS` the node rule integrates the piecewise-linear
+condensates exactly, so both are the continuous multipliers:
+`λ_lagrange` solves `E[max(0, λ + α S′)] = q_c` under the Gaussian
+(`_continuous_lagrange`), and `λ_eq = μ_{S,cloud}` is the mean cloud excess
+itself, whose truncated-Gaussian expectation is `q_c_eq`; with curvature,
+`λ_eq` is the mean of the Gaussian whose expectation matches the
+curvature-aware `q_c_eq`.
+"""
+@inline function _sgs_lagrange_multipliers(
+    ::AbstractSGSDistribution, q_c, α, sigma_S, mu_S_cloud, q_c_eq, curv, S′s, ws,
+)
+    FT = typeof(q_c)
     σ_S_eff = max(α * sigma_S, ϵ_numerics(FT))
     λ0 = _compute_z(q_c / σ_S_eff) * σ_S_eff
     λ_lagrange = _fit_discrete_lagrange(λ0, q_c, α, S′s, ws)
-
-    # Equilibrium Lagrange multiplier matching the continuous equilibrium
-    # condensate `q_c_eq = E[max(0, S_cloud)]`: truncated Gaussian, or the
-    # curvature-aware displacement expectation where `curv ≠ 0`. The fit
-    # uses the unattenuated `S′ᵢ`, the fluctuations `q_c_eq` is evaluated with.
-    q_c_eq = displacement_condensate(mu_S_cloud, sigma_S, lin, curv)
     λ_eq = _fit_discrete_lagrange(mu_S_cloud, q_c_eq, one(FT), S′s, ws)
-    return (; sigma_S, λ_lagrange, λ_eq)
+    return (λ_lagrange, λ_eq)
+end
+
+@inline function _sgs_lagrange_multipliers(
+    ::ConditionalMomentSGS, q_c, α, sigma_S, mu_S_cloud, q_c_eq, curv, S′s, ws,
+)
+    FT = typeof(q_c)
+    σ_S_eff = max(α * sigma_S, ϵ_numerics(FT))
+    λ_lagrange = _continuous_lagrange(q_c, σ_S_eff)
+    λ_eq = ifelse(
+        curv == zero(FT),
+        mu_S_cloud,
+        _continuous_lagrange(q_c_eq, sigma_S),
+    )
+    return (λ_lagrange, λ_eq)
 end
 
 """

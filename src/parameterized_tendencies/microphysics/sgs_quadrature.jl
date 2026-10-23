@@ -161,7 +161,26 @@ falls back to the mean humidity.
 """
 struct LogNormalSGS <: AbstractSGSDistribution end
 
+"""
+    ConditionalMomentSGS()
 
+Bivariate Gaussian SGS distribution of `(T, q)` whose 1M microphysics
+tendencies are integrated by the conditional-moment node rule
+(`conditional_rule`): the nodes sit at the
+conditional moments of the saturation excess on the intervals between the
+cloud edges of the actual and the equilibrium condensate and the edge of the
+precipitation shaft, so that the condensate means are integrated exactly for
+any cloud fraction, and every interval that carries cloud gets the two-point
+Gauss rule of the truncated distribution for the in-cloud spread. A node whose
+temperature spread at fixed saturation excess straddles the freezing point is
+split there into the conditional means of the two sides
+(`sum_over_conditional_nodes`). The Lagrange multipliers of
+`_compute_sgs_moments` are the continuous ones (no discrete fit). `σ_S`, which
+sets the nodes, the multipliers and the cloud fraction, is the linearized
+width `_sgs_linear_sigma_S`, without a quadrature pass; the 0M tendencies are
+still sampled by the Gauss–Hermite rule.
+"""
+struct ConditionalMomentSGS <: AbstractSGSDistribution end
 
 """
     GridMeanSGS <: AbstractSGSDistribution
@@ -272,6 +291,8 @@ Return the quadrature nodes and weights appropriate to the SGS distribution `dis
 Called from the [`SGSQuadrature`](@ref) constructor.
 """
 @inline get_quadrature_nodes_weights(::GaussianSGS, FT, N) = gauss_hermite(FT, N)
+@inline get_quadrature_nodes_weights(::ConditionalMomentSGS, FT, N) =
+    gauss_hermite(FT, N)
 
 @inline function get_quadrature_nodes_weights(::LogNormalSGS, FT, N)
     # Log-normal uses Gauss-Hermite in log-space
@@ -578,7 +599,8 @@ keep the quadrature allocation-free on GPU.
 Called from [`integrate_over_sgs`](@ref).
 """
 @inline function create_physical_transform(
-    ::GaussianSGS, μ_q::FT, μ_T::FT, σ_q::FT, σ_T::FT, corr::FT, T_min::FT, q_max::FT,
+    ::Union{GaussianSGS, ConditionalMomentSGS},
+    μ_q::FT, μ_T::FT, σ_q::FT, σ_T::FT, corr::FT, T_min::FT, q_max::FT,
 ) where {FT}
     σ_c = sqrt(max(one(FT) - corr^2, zero(FT))) * σ_T
     fac = corr * σ_T / max(σ_q, ϵ_numerics(FT))

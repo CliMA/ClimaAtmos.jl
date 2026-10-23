@@ -693,6 +693,8 @@ Build the subgrid-scale distribution selected by the `sgs_distribution` config k
 
   - `"lognormal"`: `LogNormalSGS`.
   - `"gaussian"`: `GaussianSGS`.
+  - `"conditional"`: `ConditionalMomentSGS`, the Gaussian with the
+    conditional-moment node rule for the 1M microphysics.
   - `"mean"`: `GridMeanSGS`, grid-mean values only, no SGS sampling.
 
 Any other value raises an error. Called from `get_sgs_quadrature`.
@@ -703,10 +705,14 @@ function get_sgs_distribution(parsed_args)
         LogNormalSGS()
     elseif dist_name == "gaussian"
         GaussianSGS()
+    elseif dist_name == "conditional"
+        ConditionalMomentSGS()
     elseif dist_name == "mean"
         GridMeanSGS()
     else
-        error("Invalid sgs_distribution $(dist_name). Use: lognormal, gaussian, mean")
+        error(
+            "Invalid sgs_distribution $(dist_name). Use: lognormal, gaussian, conditional, mean",
+        )
     end
 end
 
