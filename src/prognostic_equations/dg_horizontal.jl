@@ -994,7 +994,10 @@ NVTX.@annotate function dg_fddg_horizontal_dynamics!(Yₜ, Y, p, t)
             Geometry.UVVector(duE, duN),
         ),
     )
-    if p.atmos.numerics.dg_fddg_vertical === Val(:flux)
+    if p.atmos.numerics.dg_fddg_vertical === Val(:full_flux)
+        dg_fddg_w_flux!(Yₜ, Y, p, y, volume_flux, interface, dy.ρ, ᶜuv)
+    end
+    if p.atmos.numerics.dg_fddg_vertical !== Val(:vi)
         dg_fddg_vertical_flux!(
             Yₜ,
             Y,
@@ -1028,6 +1031,193 @@ NVTX.@annotate function dg_fddg_horizontal_dynamics!(Yₜ, Y, p, t)
     @. Yₜ.c.uₕ -=
         C12(gradₕ(ᶜψ)) +
         C12(Geometry.transform(Geometry.Covariant12Axis(), L_ψ))
+    return nothing
+end
+
+# Center field holding, at level k, the face value above (k + 1/2) or below
+# (k − 1/2).
+function dg_face_to_center_shift(ᶠx, ᶜspace, upper::Bool)
+    ᶜy = Fields.Field(eltype(ᶠx), ᶜspace)
+    for k in 1:Spaces.nlevels(ᶜspace)
+        parent(Fields.level(ᶜy, k)) .=
+            parent(Fields.level(ᶠx, upper ? k + half : k - half))
+    end
+    return ᶜy
+end
+
+# Face field equal to (ᶜa[k] + ᶜb[k + 1]) / 2 on the interior faces and zero on
+# the bottom and top faces.
+function dg_centers_to_interior_faces(ᶜa, ᶜb, ᶠspace)
+    ᶠy = Fields.Field(eltype(ᶜa), ᶠspace)
+    fill!(parent(ᶠy), 0)
+    for k in 1:(Spaces.nlevels(axes(ᶜa)) - 1)
+        parent(Fields.level(ᶠy, k + half)) .=
+            (parent(Fields.level(ᶜa, k)) .+ parent(Fields.level(ᶜb, k + 1))) ./ 2
+    end
+    return ᶠy
+end
+
+# Zero a face field on the bottom and top faces.
+function dg_zero_boundary_faces!(ᶠx)
+    nf = Spaces.nlevels(axes(ᶠx))
+    fill!(parent(Fields.level(ᶠx, half)), 0)
+    fill!(parent(Fields.level(ᶠx, nf - half)), 0)
+    return ᶠx
+end
+
+"""
+    dg_carried_scalar_residual(volume_flux, interface, y, ᶜχa, ᶜχb)
+
+Mass-weighted center residuals of two scalars `χa`, `χb` carried by the mass
+flux of the flux-form DG family: the volume flux `F_ρ(i, i'){χ}` with `F_ρ`
+the density slot of `volume_flux`, and the interface flux `F*_ρ {χ}` with
+`F*_ρ` the density slot of `interface`, including its mass dissipation. This
+is the transport that makes `χ` kinetic-energy consistent with the density
+(the horizontal kinetic-energy lemma with `F_{ρχ} = {χ} F_ρ`).
+"""
+function dg_carried_scalar_residual(volume_flux, interface, y, ᶜχa, ᶜχb)
+    FT = Spaces.undertype(axes(ᶜχa))
+    yχ = map((yy, ca, cb) -> merge(yy, (; χa = ca, χb = cb)), y, ᶜχa, ᶜχb)
+    vol(na, nb, ya, yb) =
+        let F = volume_flux(na, nb, ya, yb).ρ
+            (; a = F * (ya.χa + yb.χa) / 2, b = F * (ya.χb + yb.χb) / 2)
+        end
+    ifc(n, (ym,), (yp,)) =
+        let F = interface(n, (ym,), (yp,)).ρ
+            (; a = F * (ym.χa + yp.χa) / 2, b = F * (ym.χb + yp.χb) / 2)
+        end
+    dy = Fields.Field(NamedTuple{(:a, :b), NTuple{2, FT}}, axes(ᶜχa))
+    fill!(parent(dy), 0)
+    Operators.add_flux_differencing_divergence!(vol, dy, yχ)
+    Operators.add_numerical_flux_interior!(ifc, dy, yχ)
+    return dy
+end
+
+"""
+    dg_w_horizontal_tendency(volume_flux, interface, y, ᶜdyρ, ᶠw, ᶜρWJ)
+
+Horizontal flux-form advection of the face vertical velocity `w` on the dual
+grid: the face two-point mass flux is the average of the two adjacent
+center-level ones, so the face residual of `ρ_f w` is
+`(R_k(w_{k+1/2}) + R_{k+1}(w_{k+1/2})) / 2` with `R_k(χ)` the carried-scalar
+residual of center level `k`, and the face mass residual is the average of
+the center ones, `ᶜdyρ`. Returns `ẇ` on the interior faces (zero on the
+bottom and top faces) in velocity form, `(R_{ρw} − w R_ρ) / I_f(ρ WJ)`.
+"""
+function dg_w_horizontal_tendency(volume_flux, interface, y, ᶜdyρ, ᶠw, ᶜρWJ)
+    ᶜspace = axes(ᶜdyρ)
+    ᶠspace = axes(ᶠw)
+    ᶜw_above = dg_face_to_center_shift(ᶠw, ᶜspace, true)
+    ᶜw_below = dg_face_to_center_shift(ᶠw, ᶜspace, false)
+    R = dg_carried_scalar_residual(volume_flux, interface, y, ᶜw_above, ᶜw_below)
+    ᶠRρw = dg_centers_to_interior_faces(R.a, R.b, ᶠspace)
+    ᶠRρ = dg_centers_to_interior_faces(ᶜdyρ, ᶜdyρ, ᶠspace)
+    ᶠρWJ = dg_centers_to_interior_faces(ᶜρWJ, ᶜρWJ, ᶠspace)
+    ẇ = @. (ᶠRρw - ᶠw * ᶠRρ) / ifelse(ᶠρWJ == 0, one(ᶠρWJ), ᶠρWJ)
+    return dg_zero_boundary_faces!(ẇ)
+end
+
+"""
+    dg_w_vertical_tendency(ᶠw, ᶠG, ᶠρJ)
+
+Vertical flux-form advection of `w` on the dual grid, with
+`G = I_f(ρJ) u³` the face mass flux of the continuity equation (zero on the
+bottom and top faces): the dual-cell flux at center `k` is
+`I_c(G)_k I_c(w)_k`, and
+`I_f(ρJ) ẇ = −δ(I_c(G) I_c(w)) + w δ(I_c(G))`. Because
+`I_f(ρJ)` evolves by `−δ(I_c(G))` under the continuity equation, this is the
+two-point flux `{w} I_c(G)` on the dual grid and conserves `½ I_f(ρJ) w²`.
+Returns `ẇ` on the interior faces.
+"""
+function dg_w_vertical_tendency(ᶠw, ᶠG, ᶠρJ)
+    δ = Operators.GradientC2F(;
+        bottom = Operators.SetGradient(Geometry.Covariant3Vector(0)),
+        top = Operators.SetGradient(Geometry.Covariant3Vector(0)),
+    )
+    ᶜG = @. ᶜinterp(ᶠG)
+    ᶜGw = @. ᶜG * ᶜinterp(ᶠw)
+    ᶠδGw = (@. δ(ᶜGw)).components.data.:1
+    ᶠδG = (@. δ(ᶜG)).components.data.:1
+    ẇ = @. (ᶠw * ᶠδG - ᶠδGw) / ᶠρJ
+    return dg_zero_boundary_faces!(ẇ)
+end
+
+"""
+    dg_fddg_w_flux!(Yₜ, Y, p, y, volume_flux, interface, ᶜdyρ, ᶜuv)
+
+Flux-form momentum for the vertical velocity with
+`dg_fddg_vertical = full_flux`, replacing the vector-invariant advection
+`ω¹² × uₕ + ∇ᵥκ` of the `u₃` equation (the Coriolis term stays):
+
+  - the physical vertical velocity `w = u₃ / J_v` on faces is advected in
+    flux form on the dual grid, horizontally by
+    [`dg_w_horizontal_tendency`](@ref) and vertically by
+    [`dg_w_vertical_tendency`](@ref), both with mass fluxes whose dual-cell
+    divergence is the face average of the center mass tendency, so the
+    advection conserves `½ ρ_f w²`;
+  - on the deep-atmosphere grid, the metric pair of the momentum equation
+    in a radial frame, `−w uₕ / r` on centers and `+|uₕ|² / r` on faces, with
+    the face-to-center weights the adjoint of the center-to-face average, so
+    the pair exchanges kinetic energy exactly.
+
+The physical vertical acceleration `a` is applied as `u₃ += J_v a` with the
+covariant horizontal compensation `uₕ += (I_c(J_v a) / J_v) e_z ⋅ e_i`, which
+cancels the horizontal velocity the `u₃` increment induces through the
+terrain tilt (zero on unwarped grids). The bottom and top faces are left to
+the impenetrability condition.
+"""
+function dg_fddg_w_flux!(Yₜ, Y, p, y, volume_flux, interface, ᶜdyρ, ᶜuv)
+    FT = Spaces.undertype(axes(Y.c))
+    ᶜlg = Fields.local_geometry_field(Y.c)
+    ᶜJ = ᶜlg.J
+    ᶜWJ = ᶜlg.WJ
+    (; ᶠu³) = p.precomputed
+    ᶜz = Fields.coordinate_field(axes(Y.c)).z
+    ᶠz = Fields.coordinate_field(axes(Y.f)).z
+    gradᵥ_c2f = Operators.GradientC2F(;
+        bottom = Operators.SetGradient(Geometry.WVector(FT(1))),
+        top = Operators.SetGradient(Geometry.WVector(FT(1))),
+    )
+    gradᵥ_f2c = Operators.GradientF2C()
+    ᶠJv = (@. gradᵥ_c2f(ᶜz)).components.data.:1
+    ᶜJv = (@. gradᵥ_f2c(ᶠz)).components.data.:1
+    ᶠw = @. Y.f.u₃.components.data.:1 / ᶠJv
+    ᶠρJ = @. ᶠinterp(Y.c.ρ * ᶜJ)
+    ᶠG = dg_zero_boundary_faces!(@. ᶠρJ * ᶠu³.components.data.:1)
+
+    ẇ_h = dg_w_horizontal_tendency(
+        volume_flux,
+        interface,
+        y,
+        ᶜdyρ,
+        ᶠw,
+        @. Y.c.ρ * ᶜWJ
+    )
+    ẇ = @. ẇ_h + $(dg_w_vertical_tendency(ᶠw, ᶠG, ᶠρJ))
+
+    if !isnothing(p.core.ᶠf¹²)
+        # deep-atmosphere metric pair −w uₕ / r ↔ +|uₕ|² / r
+        R = FT(CAP.planet_radius(p.params))
+        ᶜr = @. R + ᶜz
+        ᶠρJw = dg_zero_boundary_faces!(@. ᶠρJ * ᶠw)
+        ᶜs = @. ᶜinterp(ᶠρJw) / (ᶜr * Y.c.ρ * ᶜJ)
+        @. Yₜ.c.uₕ -= C12(
+            Geometry.transform(Geometry.Covariant12Axis(), ᶜs * ᶜuv),
+        )
+        ᶠcentripetal =
+            dg_zero_boundary_faces!(@. ᶠinterp(LinearAlgebra.norm_sqr(ᶜuv) / ᶜr))
+        @. ẇ += ᶠcentripetal
+    end
+
+    @. Yₜ.f.u₃ += Geometry.Covariant3Vector(ᶠJv * ẇ)
+    # cancel the horizontal velocity the u₃ increment induces through the
+    # terrain tilt
+    ᶜa = @. ᶜinterp(ᶠJv * ẇ) / ᶜJv
+    @. Yₜ.c.uₕ += Geometry.project(
+        Geometry.Covariant12Axis(),
+        Geometry.WVector(ᶜa),
+        ᶜlg,
+    )
     return nothing
 end
 

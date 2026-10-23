@@ -1973,7 +1973,8 @@ struct AtmosNumerics{
     # ω¹² × u³ vector-invariant term), Val(:flux) (flux form on the
     # staggered grid: the face mass flux times the interpolated Cartesian
     # velocity, plus, for kg_pert, the vertical two-point pressure flux
-    # through the horizontal part of Ja³).
+    # through the horizontal part of Ja³), or Val(:full_flux) (as :flux,
+    # with the vertical velocity in flux form on the dual grid as well).
     dg_fddg_vertical::DGFV
     # Tracers the vertical water borrowing limiter applies to:
     # `nothing` (all tracers), `()` (none), or a Tuple of Symbols
@@ -2025,7 +2026,7 @@ types for compile-time dispatch.
   - `dg_tracer_penalty = :acoustic`: Rate of the DG tracer jump penalties,
     `:acoustic` (`|u| + c`) or `:advective` (`max(|u|, ε c)`).
   - `dg_fddg_vertical = :vi`: Vertical transport of the horizontal momentum
-    in the flux-form DG dynamics, `:vi` or `:flux`.
+    in the flux-form DG dynamics, `:vi`, `:flux`, or `:full_flux`.
 
 An unrecognized keyword, such as a misspelled option, raises a `MethodError`.
 

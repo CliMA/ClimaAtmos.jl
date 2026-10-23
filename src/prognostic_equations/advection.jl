@@ -293,13 +293,17 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
         @. Yₜ.c.ρq_tot += vtt_bc
     end
 
-    # With `dg_fddg_vertical = flux` the vertical transport of uₕ is the
-    # staggered flux form in dg_fddg_vertical_flux!, so the ω¹² × u³ term
-    # is dropped here; the u₃ equation keeps its vector-invariant form.
+    # With `dg_fddg_vertical = flux` or `full_flux` the vertical transport of
+    # uₕ is the staggered flux form in dg_fddg_vertical_flux!, so the ω¹² × u³
+    # term is dropped here. With `flux` the u₃ equation keeps its
+    # vector-invariant form; with `full_flux` its advection is the dual-grid
+    # flux form of dg_fddg_w_flux!, and only the Coriolis term stays here.
     fddg_vflux =
         is_dg_horizontal(axes(Y.c)) &&
         p.atmos.numerics.dg_equation_form === Val(:fddg) &&
-        p.atmos.numerics.dg_fddg_vertical === Val(:flux)
+        p.atmos.numerics.dg_fddg_vertical !== Val(:vi)
+    fddg_wflux =
+        fddg_vflux && p.atmos.numerics.dg_fddg_vertical === Val(:full_flux)
     if isnothing(ᶠf¹²)
         # shallow atmosphere
         if fddg_vflux
@@ -309,7 +313,7 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
                 ᶜinterp(ᶠω¹² × (ᶠinterp(Y.c.ρ * ᶜJ) * ᶠu³)) / (Y.c.ρ * ᶜJ) +
                 (ᶜf³ + ᶜω³) × CT12(ᶜu)
         end
-        @. Yₜ.f.u₃ -= ᶠω¹² × ᶠinterp(CT12(ᶜu)) + ᶠgradᵥ(ᶜK)
+        fddg_wflux || @. Yₜ.f.u₃ -= ᶠω¹² × ᶠinterp(CT12(ᶜu)) + ᶠgradᵥ(ᶜK)
         for j in 1:n
             @. Yₜ.f.sgsʲs.:($$j).u₃ -=
                 ᶠω¹²ʲs.:($$j) × ᶠinterp(CT12(ᶜuʲs.:($$j))) +
@@ -326,7 +330,11 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
                 ᶜinterp((ᶠf¹² + ᶠω¹²) × (ᶠinterp(Y.c.ρ * ᶜJ) * ᶠu³)) /
                 (Y.c.ρ * ᶜJ) + (ᶜf³ + ᶜω³) × CT12(ᶜu)
         end
-        @. Yₜ.f.u₃ -= (ᶠf¹² + ᶠω¹²) × ᶠinterp(CT12(ᶜu)) + ᶠgradᵥ(ᶜK)
+        if fddg_wflux
+            @. Yₜ.f.u₃ -= ᶠf¹² × ᶠinterp(CT12(ᶜu))
+        else
+            @. Yₜ.f.u₃ -= (ᶠf¹² + ᶠω¹²) × ᶠinterp(CT12(ᶜu)) + ᶠgradᵥ(ᶜK)
+        end
         for j in 1:n
             @. Yₜ.f.sgsʲs.:($$j).u₃ -=
                 (ᶠf¹² + ᶠω¹²ʲs.:($$j)) × ᶠinterp(CT12(ᶜuʲs.:($$j))) +
