@@ -17,13 +17,53 @@ value = 1.0e-5
 value = 0.7
 
 [turb_entr_param_vec]
-value = [0.001, 1e5]
+value = [0.001, 100000.0]
 
 [entr_inv_tau]
 value = 0
 
 [entr_coeff]
-value = 0.1
+value = 0.19
+
+[entr_inv_length]
+value = 2.5e-5
+type = "float"
+
+[entr_z_min]
+value = 150.0
+type = "float"
+
+[entr_z_max]
+value = 1.0e6
+type = "float"
+
+[entr_functional_form]
+value = 5.0
+type = "float"
+
+[entr_buoy_w_min]
+value = 0.35
+type = "float"
+
+[entr_buoyancy_sorting_coeff]
+value = 0.72
+type = "float"
+
+[entr_tke_coeff]
+value = 0.03
+type = "float"
+
+[edmf_tail_entr_weight]
+value = 0.0
+type = "float"
+
+[edmf_tail_entr_selector]
+value = 1.0
+type = "float"
+
+[entr_param_vec]
+value = [0.1, 0.01, 0.05, 0.45, -0.06, 0.03, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+type = "float"
 
 [min_area_limiter_scale]
 value = 0.001
@@ -31,17 +71,40 @@ value = 0.001
 [min_area_limiter_power]
 value = 1
 
+[detr_inv_tau]
+value = 0
+
+[entr_detr_limit_inv_tau]
+value = 0
+
 [detr_coeff]
 value = 0
 
 [detr_buoy_coeff]
-value = 1
+value = 0.42
+type = "float"
+
+[detr_buoy_w_min]
+value = 0.55
+type = "float"
 
 [detr_vertdiv_coeff]
 value = 0
 
 [detr_massflux_vertdiv_coeff]
 value = 0.3
+
+[detr_rh_coeff]
+value = 1.2
+type = "float"
+
+[detr_shell_coeff]
+value = 0.14
+type = "float"
+
+[detr_massflux_buoy_coeff]
+value = 0.6
+type = "float"
 
 [max_area_limiter_scale]
 value = 0.001
@@ -50,13 +113,74 @@ value = 0.001
 value = 1
 
 [pressure_normalmode_drag_coeff]
-value = 8.0
+value = 7.0
+type = "float"
+
+[pressure_normalmode_drag_area_min]
+value = 0.025
+type = "float"
+
+[edmfx_updraft_kh_diffusion_factor]
+value = 0.25
+type = "float"
+
+[mixing_length_Prandtl_maximum]
+value = 21.5
+type = "float"
+
+[mixing_length_static_stab_coeff]
+value = 0.56
+type = "float"
+
+[cloud_fraction_eps_rel]
+value = 0.215
+type = "float"
+
+[cloud_fraction_sigma_abs]
+value = 2.5e-6
+type = "float"
+
+[cloud_fraction_steepness_scale]
+value = 1.6
+type = "float"
+
+[cloud_fraction_ice_sigma_abs_scale]
+value = 3.5
+type = "float"
+
+[cloud_fraction_ice_eps_rel_scale]
+value = 1.38
+type = "float"
+
+[sgs_liquid_uniform_fraction]
+value = 0.04
+type = "float"
+
+[sgs_ice_uniform_fraction]
+value = 0.0
+
+[sgs_precip_incloud_fraction]
+value = 0.9
+type = "float"
+
+[sgs_precip_overlap_decay]
+value = 1.0
+type = "float"
+
+[sgs_precip_fraction_floor]
+value = 0.05
+type = "float"
+
+[rain_autoconversion_tke_coeff]
+value = 0.55
+type = "float"
 
 [condensation_evaporation_timescale]
-value = 100
+value = 100.0
 
 [sublimation_deposition_timescale]
-value = 100
+value = 300.0
 
 [snow_apparent_density]
-value = 300.0
+value = 260.0
+type = "float"

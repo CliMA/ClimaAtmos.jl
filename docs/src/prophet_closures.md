@@ -56,15 +56,19 @@ supply ``\varepsilon_w`` and ``\varepsilon_r``, selected by
 
     ```math
     \varepsilon_w = \Lambda_{\max} \left( \frac{1}{L_\varepsilon}
-      + \frac{c_\varepsilon}{z - z_s} \right) ,
+      + \frac{c_\varepsilon}{z_{\mathrm{eff}}} \right) ,
     \qquad
     \varepsilon_r = \Lambda_{\max} \left( c_{\varepsilon b} \,
       \tau_{\mathrm{buoy}}^{-1} + \tau_\varepsilon^{-1} \right) ,
     ```
 
-    with ``\tau_{\mathrm{buoy}}^{-1} = \min(\tau_{\max}^{-1}, (\Delta b^j)_+ / |\Delta w^j|)``
+    with ``z_{\mathrm{eff}} = \min(\max(z - z_s, z_{\min}), z_{\max})`` the
+    effective plume height (`effective_plume_height`, controlled by `entr_z_min`
+    and `entr_z_max` when ``z_{\max} > 0``),
+    ``\tau_{\mathrm{buoy}}^{-1} = \min(\tau_{\max}^{-1}, (\Delta b^j)_+ / \max(w_{\min,b}, |\Delta w^j|))``
     the clipped inverse buoyancy timescale built from the draft–environment
-    buoyancy and velocity contrasts, and ``\Lambda_{\max}`` the upper-area
+    buoyancy and velocity contrasts (regularized at small ``|\Delta w^j|`` by
+    ``w_{\min,b}`` = `entr_buoy_w_min`), and ``\Lambda_{\max}`` the upper-area
     limiter.
 
   - **`"PiGroups"`** ([`PiGroupsEntrainment`](@ref
@@ -73,7 +77,7 @@ supply ``\varepsilon_w`` and ``\varepsilon_r``, selected by
     of [Cohen2020, Christopoulos2024](@cite):
 
     ```math
-    \varepsilon_w = \frac{\Lambda_{\max}}{z - z_s}
+    \varepsilon_w = \frac{\Lambda_{\max}}{z_{\mathrm{eff}}}
       \max\!\left(0, \; \sum_{i=1}^{5} c_i |\Pi_i| + c_6 \right) ,
     ```
 
@@ -85,7 +89,10 @@ supply ``\varepsilon_w`` and ``\varepsilon_r``, selected by
     ``\Pi_5 = z / H`` with ``H`` the pressure scale height. ``\Pi_1`` and
     ``\Pi_2`` are rescaled to ``O(1)`` and clipped to ``[-1, 1]``. The
     coefficients are `entr_param_vec` and are the natural target of calibration
-    or of a learned closure.
+    or of a learned closure. When `entr_functional_form > 0.5`, the prefactor
+    includes the constant background `entr_inv_length`, a TKE-driven inverse
+    length scale controlled by `entr_tke_coeff`, and a smooth 2D Gaussian-process
+    regime modulator in ``(\tanh(\Pi_{1,\mathrm{loc}}), 1 - \mathrm{RH}^0)``.
 
 A separate *turbulent* entrainment rate, which does not scale with the draft
 velocity and decays as the draft fills the cell,
@@ -96,22 +103,39 @@ E_{\mathrm{turb}}^j = \varepsilon_{t} \exp(-c_t a^j) ,
 
 is added to the dynamical rate in the scalar tendencies
 (`turbulent_entrainment`; ``(\varepsilon_t, c_t)`` are the two entries of
-`turb_entr_param_vec`).
+`turb_entr_param_vec`). For updraft ``h_s^j`` and ``q_t^j``, when
+`entr_buoyancy_sorting_coeff` (`c_sort`) is positive, lateral dilution by drier
+or cooler environmental air (`\chi^0 < \chi^j`) is modulated by the environmental
+subgrid spread (`buoyancy_sorted_entrainment_deficit`); alternatively, when
+`c_sort = 0` and `edmf_tail_entr_weight > 0`, dynamical entrainment samples the
+upper half of the bivariate Gaussian environmental `(T, q_tot)` distribution
+(`tail_entrainment_increments`, selected by `edmf_tail_entr_selector`).
 
 Detrainment (`edmfx_detr_model: "Generalized"`,
 [`BuoyancyVelocityDetrainment`](@ref ClimaAtmos.BuoyancyVelocityDetrainment))
-combines a negative-buoyancy timescale with a converging mass flux:
+combines a negative-buoyancy timescale, an evaporative-shell lateral mixing term
+(`buoyancy_and_shell_detrainment_rate`), and a converging mass flux:
 
 ```math
 \Delta^j = \max\!\left(0, \; \Lambda_{\min} \left[
-    c_\delta \, \tau_{\mathrm{buoy}}^{-1}
-    - c_{\delta \nabla} \frac{\min(0, \nabla \cdot (\hat{\rho}^j \boldsymbol{w}^j))}{\hat{\rho}^j}
+    c_\delta \left(1 + c_{\delta,\mathrm{RH}} (1 - \mathrm{RH}^0)_+\right) \tau_{\mathrm{buoy}}^{-1}
+    + c_{\delta,\mathrm{sh}} \frac{w_+^j}{z_{\mathrm{eff}}}
+      \frac{(\mathrm{RH}^j - \mathrm{RH}^0)_+ (1 - \mathrm{RH}^0)_+}{1 + (\Pi_{1,\mathrm{loc}})_+}
+    - c_{\delta \nabla,\mathrm{eff}} \frac{\min(0, \nabla \cdot (\hat{\rho}^j \boldsymbol{w}^j))}{\hat{\rho}^j}
   \right] \right) + \max(0, -\Lambda_a) ,
 ```
 
-with ``\tau_{\mathrm{buoy}}^{-1}`` now built from the *negative* part of the
-buoyancy contrast, and ``\Lambda_{\min}`` the lower-area limiter. Only a
-converging (negative) mass-flux divergence detrains.
+with ``\tau_{\mathrm{buoy}}^{-1}`` built from the *negative* part of the
+buoyancy contrast, ``c_{\delta,\mathrm{RH}}`` = `detr_rh_coeff` and
+``c_{\delta,\mathrm{sh}}`` = `detr_shell_coeff` controlling the environmental
+subsaturation amplification and the lateral shell detrainment of moist updrafts
+in dry environments (where ``\Pi_{1,\mathrm{loc}} = \Delta b^j z_{\mathrm{eff}} / ((w_+^j)^2 + w_{\min,b}^2)``
+suppresses shell shedding in strongly buoyant cores),
+``c_{\delta\nabla,\mathrm{eff}} = \mathrm{clamp}(c_{\delta\nabla} + c_{\delta\nabla,b} \, b_{\mathrm{nd}} / (b_{\mathrm{nd}} + 1), 0, 1)``
+with ``b_{\mathrm{nd}} = \tau_{\mathrm{buoy}}^{-1} / \tau_{\max}^{-1}`` and
+``c_{\delta\nabla,b}`` = `detr_massflux_buoy_coeff`
+(`massflux_divergence_detrainment_coeff`), and ``\Lambda_{\min}``
+the lower-area limiter. Only a converging (negative) mass-flux divergence detrains.
 
 **Area limiters.** Two mechanisms keep the draft area fraction inside
 ``[a_{\min}, a_{\max}]``. Multiplicative limiters damp the rate that would push
@@ -187,17 +211,19 @@ form drag,
 ```math
 d^j = a^0 \, d_c^j \, (w^j - w^0) |w^j - w^0| , \qquad
 d_c^j = \frac{\alpha_d}{2 H}
-  \left( \frac{1}{\sqrt{\mathrm{clamp}(a^j, a_{\min}, a_{\max})}}
+  \left( \frac{1}{\sqrt{\mathrm{clamp}(a^j, a_{\mathrm{drag},\min}, a_{\max})}}
        + \frac{1}{\sqrt{\mathrm{clamp}(a^0, 1 - a_{\max}, 1)}} \right) ,
 ```
 
-with ``\alpha_d`` = `pressure_normalmode_drag_coeff` and
+with ``\alpha_d`` = `pressure_normalmode_drag_coeff`,
+``a_{\mathrm{drag},\min} = \max(a_{\min}, a_{\mathrm{drag},0})`` with
+``a_{\mathrm{drag},0}`` = `pressure_normalmode_drag_area_min`, and
 ``H = R_d T_{s,\mathrm{ref}} / g`` a fixed reference scale height, is gated on
 `edmfx_nh_pressure` and contributes a quadratic sink to the stage equation for
 ``w^j``. This is the pairwise form above for the draft–environment pair with
 ``r^m = H \sqrt{a^m}``, so the harmonic mean gives the sum of ``1/\sqrt{a}``
 terms. The two subdomains are floored differently: the draft radius may shrink
-to ``a_{\min}``, so ``r^j \to 0`` and the drag on a vanishing draft diverges,
+to ``a_{\mathrm{drag},\min}`` (reducing to ``a_{\min}`` when ``a_{\mathrm{drag},0} = 0``),
 but the environment is clamped from below at ``1 - a_{\max}``. Because the
 vertical-velocity solve runs before the area solve, it can be handed an
 extrapolated ``a^0`` outside ``[0, 1]``, and the clamp keeps the drag finite
@@ -822,15 +848,15 @@ covariance, quadrature and cloud-fraction closures,
 | ``a_{\min}``, ``a_{\max}``                                                                      | `min_area`, `max_area`                                                                                                                                                                                                               | `EDMF_min_area`, `EDMF_max_area`                                                                        |
 | ``a_{s,\max}``                                                                                  | `max_surface_area`                                                                                                                                                                                                                   | `EDMF_max_surface_area`                                                                                 |
 | ``c_u``, ``z_i``, ``\alpha``                                                                    | `sfc_mass_flux_ustar_coeff`, `convective_zi`, `sfc_mass_flux_cap_fraction`                                                                                                                                                           | `EDMF_sfc_mass_flux_ustar_coeff`, `EDMF_convective_zi`, `EDMF_sfc_mass_flux_cap_fraction`               |
-| ``c_\varepsilon``, ``1/L_\varepsilon``                                                          | `entr_coeff`, `entr_inv_length`                                                                                                                                                                                                      | `entr_coeff`, `entr_inv_length`                                                                         |
-| ``c_{\varepsilon b}``, ``\tau_\varepsilon^{-1}``                                                | `entr_buoy_coeff`, `entr_inv_tau`                                                                                                                                                                                                    | `entr_buoy_coeff`, `entr_inv_tau`                                                                       |
+| ``c_\varepsilon``, ``1/L_\varepsilon``, ``z_{\min}``, ``z_{\max}``                              | `entr_coeff`, `entr_inv_length`, `entr_z_min`, `entr_z_max`                                                                                                                                                                          | `entr_coeff`, `entr_inv_length`, —, —                                                                   |
+| ``c_{\varepsilon b}``, ``\tau_\varepsilon^{-1}``, ``w_{\min,b}``                                | `entr_buoy_coeff`, `entr_inv_tau`, `entr_buoy_w_min`                                                                                                                                                                                 | `entr_buoy_coeff`, `entr_inv_tau`, —                                                                    |
 | ``\tau_{\max}^{-1}``                                                                            | `entr_detr_buoy_inv_tau_max`                                                                                                                                                                                                         | `entr_detr_buoy_inv_tau_max`                                                                            |
 | ``c_1 \dots c_6`` (Π groups)                                                                    | `entr_param_vec`                                                                                                                                                                                                                     | `entr_param_vec`                                                                                        |
 | ``\varepsilon_t``, ``c_t``                                                                      | `turb_entr_param_vec`                                                                                                                                                                                                                | `turb_entr_param_vec`                                                                                   |
-| ``c_\delta``, ``c_{\delta \nabla}``                                                             | `detr_buoy_coeff`, `detr_massflux_vertdiv_coeff`                                                                                                                                                                                     | `detr_buoy_coeff`, `detr_massflux_vertdiv_coeff`                                                        |
+| ``c_\delta``, ``c_{\delta,\mathrm{RH}}``, ``c_{\delta,\mathrm{sh}}``, ``c_{\delta \nabla}``, ``c_{\delta \nabla,b}`` | `detr_buoy_coeff`, `detr_rh_coeff`, `detr_shell_coeff`, `detr_massflux_vertdiv_coeff`, `detr_massflux_buoy_coeff` | `detr_buoy_coeff`, —, —, `detr_massflux_vertdiv_coeff`, —                                               |
 | ``s_{\min}``, ``p_{\min}``                                                                      | `min_area_limiter_scale`, `min_area_limiter_power`                                                                                                                                                                                   | `min_area_limiter_scale`, `min_area_limiter_power`                                                      |
 | ``s_{\max}``, ``p_{\max}``                                                                      | `max_area_limiter_scale`, `max_area_limiter_power`                                                                                                                                                                                   | `max_area_limiter_scale`, `max_area_limiter_power`                                                      |
-| ``\alpha_b``, ``\alpha_d``                                                                      | `pressure_normalmode_buoy_coeff1`, `pressure_normalmode_drag_coeff`                                                                                                                                                                  | same                                                                                                    |
+| ``\alpha_b``, ``\alpha_d``, ``a_{\mathrm{drag},0}``                                             | `pressure_normalmode_buoy_coeff1`, `pressure_normalmode_drag_coeff`, `pressure_normalmode_drag_area_min`                                                                                                                             | same, same, —                                                                                           |
 | ``c_m``                                                                                         | `tke_ed_coeff`                                                                                                                                                                                                                       | `mixing_length_eddy_viscosity_coefficient`                                                              |
 | ``c_b``                                                                                         | `static_stab_coeff`                                                                                                                                                                                                                  | `mixing_length_static_stab_coeff`                                                                       |
 | ``\mathrm{Ri}_c``                                                                               | `Ri_crit`                                                                                                                                                                                                                            | `mixing_length_Ri_crit`                                                                                 |

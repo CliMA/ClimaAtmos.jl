@@ -527,7 +527,20 @@ function TurbulenceConvectionParameters(
     parameters = CP.get_parameter_values(toml_dict, name_map, "ClimaAtmos")
     FT = CP.float_type(toml_dict)
     provisional_defaults = (;
+        pressure_normalmode_drag_area_min = FT(0),
+        entr_z_min = FT(0),
+        entr_z_max = FT(0),
+        entr_functional_form = FT(0),
+        entr_tke_coeff = FT(0),
+        entr_buoy_w_min = FT(0.25),
+        detr_buoy_w_min = FT(0),
         edmfx_updraft_kh_diffusion_factor = FT(1),
+        entr_buoyancy_sorting_coeff = FT(0),
+        detr_rh_coeff = FT(0),
+        detr_shell_coeff = FT(0),
+        detr_massflux_buoy_coeff = FT(0),
+        edmf_tail_entr_weight = FT(0),
+        edmf_tail_entr_selector = FT(1),
     )
     provisional_present = filter(collect(keys(provisional_defaults))) do name
         haskey(toml_dict.data, string(name))
@@ -605,15 +618,6 @@ function SGSQuadratureParameters(
     # TODO: promote each default to ClimaParams (and the name_map above) once
     # it has been calibrated, and remove it from this block.
     provisional_defaults = (;
-        # Cloud-fraction floor release (see `_compute_cloud_fraction`):
-        # residual = 1 keeps the relative floor fully active everywhere (no
-        # release, D ≡ 1). margin = abs_margin = sharpness = 1 are the release
-        # shape used when residual < 1: a one-width saturation margin guarded
-        # by an absolute margin of one floor width.
-        cloud_fraction_floor_release_margin = FT(1),
-        cloud_fraction_floor_release_abs_margin = FT(1),
-        cloud_fraction_floor_release_sharpness = FT(1),
-        cloud_fraction_floor_residual = FT(1),
         # Unresolved vertical motions and horizontal scale factor in the
         # variance closure (`materialized_displacement_length!`,
         # `set_covariance_cache!`): horizontal grid scale multiplier [-],
@@ -654,6 +658,10 @@ function SGSQuadratureParameters(
         # the shaft is never narrower than half the cell (0.1 is the thinnest
         # shaft the order-3 quadrature resolves).
         sgs_precip_fraction_floor = FT(0.5),
+        # Ice-phase scaling multipliers on the absolute and relative
+        # subsaturation-deficit floor widths in `_sgs_augmented_sigma`.
+        cloud_fraction_ice_sigma_abs_scale = FT(1),
+        cloud_fraction_ice_eps_rel_scale = FT(1),
     )
     # A run toml defines a parameter that ClimaParams also defines when it
     # appears in the override dictionary or, for a `toml_dict` assembled

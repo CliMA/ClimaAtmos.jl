@@ -92,7 +92,10 @@ function edmfx_pressure_drag_tke_source!(
 
     turbconv_params = CAP.turbconv_params(p.params)
     α_d = CAP.pressure_normalmode_drag_coeff(turbconv_params)
-    a_min = CAP.min_area(turbconv_params)
+    a_min = max(
+        CAP.min_area(turbconv_params),
+        CAP.pressure_normalmode_drag_area_min(turbconv_params),
+    )
     a_max = CAP.max_area(turbconv_params)
     scale_height = CAP.R_d(p.params) * CAP.T_surf_ref(p.params) / CAP.grav(p.params)
     (; ᶜρʲs, ᶜuʲs, ᶜu⁰) = p.precomputed
@@ -133,6 +136,7 @@ function edmfx_entr_detr_tke_source!(
     turbconv_params = CAP.turbconv_params(p.params)
     entr_detr_buoy_inv_tau_max =
         CAP.entr_detr_buoy_inv_tau_max(turbconv_params)
+    detr_buoy_w_min = CAP.detr_buoy_w_min(turbconv_params)
     detr_model = p.atmos.edmfx_model.detr_model
     ᶜlg = Fields.local_geometry_field(Y.c)
     ᶠlg = Fields.local_geometry_field(Y.f)
@@ -141,18 +145,32 @@ function edmfx_entr_detr_tke_source!(
 
     for j in 1:n
         ᶜaʲ = @. lazy(draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j)))
-        ᶜbuoy_inv_time_scale = @. lazy(
-            ᶜinterp(
-                detr_buoy_inv_time_scale(
-                    get_physical_w(ᶠu³ʲs.:($$j), ᶠlg),
-                    vertical_buoyancy_acceleration(
-                        ᶠinterp(ᶜρ_diffʲs.:($$j)),
-                        ᶠgradᵥ_ᶜΦ,
-                        ᶠlg,
-                    ),
-                    entr_detr_buoy_inv_tau_max,
+        ᶜlower_limiter_factor = @. lazy(
+            lower_area_limiter_factor(ᶜaʲ, turbconv_params),
+        )
+        ᶜwʲ = p.scratch.ᶜtemp_scalar
+        @. ᶜwʲ = get_physical_w(ᶜuʲs.:($$j), ᶜlg)
+        ᶜbuoy_inv_time_scale = p.scratch.ᶜtemp_scalar_2
+        @. ᶜbuoy_inv_time_scale = ᶜinterp(
+            detr_buoy_inv_time_scale(
+                get_physical_w(ᶠu³ʲs.:($$j), ᶠlg),
+                vertical_buoyancy_acceleration(
+                    ᶠinterp(ᶜρ_diffʲs.:($$j)),
+                    ᶠgradᵥ_ᶜΦ,
+                    ᶠlg,
                 ),
+                entr_detr_buoy_inv_tau_max,
+                detr_buoy_w_min,
             ),
+        )
+        ᶜbuoy_shell_detr = compute_buoyancy_and_shell_detrainment_rate!(
+            p.scratch.ᶜtemp_scalar_3,
+            Y,
+            p,
+            Val(j),
+            ᶜwʲ,
+            ᶜbuoy_inv_time_scale,
+            ᶜlower_limiter_factor,
         )
         ᶜdetr = @. lazy(
             compute_detrainment(
@@ -163,6 +181,7 @@ function edmfx_entr_detr_tke_source!(
                 ᶜdivᵥ(ᶠbottom_bias_zero_bot(Y.c.sgsʲs.:($$j).ρa) * ᶠu³ʲs.:($$j)),
                 ᶜarea_bounding_entr_detrʲs.:($$j),
                 detr_model,
+                ᶜbuoy_shell_detr,
             ),
         )
 

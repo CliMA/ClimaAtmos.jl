@@ -354,41 +354,59 @@ compute_detr(state, cache, time) =
 compute_detr(_, _, _, turbconv_model) = error_diagnostic_variable("detr", turbconv_model)
 
 function compute_detr(state, cache, _, ::PrognosticEDMFX)
-    (; ᶜρ_diffʲs, ᶜρʲs, ᶜarea_bounding_entr_detrʲs) = cache.precomputed
+    (; ᶜρ_diffʲs, ᶜρʲs, ᶜarea_bounding_entr_detrʲs, ᶜuʲs) = cache.precomputed
     (; ᶠgradᵥ_ᶜΦ) = cache.core
     turbconv_params = CAP.turbconv_params(cache.params)
     entr_detr_buoy_inv_tau_max = CAP.entr_detr_buoy_inv_tau_max(turbconv_params)
+    detr_buoy_w_min = CAP.detr_buoy_w_min(turbconv_params)
     detr_model = cache.atmos.edmfx_model.detr_model
+    ᶜlg = Fields.local_geometry_field(state.c)
     ᶠlg = Fields.local_geometry_field(state.f)
     ᶠdz = Fields.Δz_field(axes(state.f))
     ρaʲ = state.c.sgsʲs.:(1).ρa
     u₃ʲ = state.f.sgsʲs.:(1).u₃
+    ᶜaʲ = @. lazy(draft_area(ρaʲ, ᶜρʲs.:1))
+    ᶜlower_limiter_factor = @. lazy(
+        lower_area_limiter_factor(ᶜaʲ, turbconv_params),
+    )
     # Use ᶠbottom_bias_zero_bot so that detrainment diagnostics are not NaN at the first cell
     ᶠbottom_bias_zero_bot = Operators.BottomBiasedC2F(bottom = Operators.SetValue(0))
     # Evaluate the buoyancy inverse time scale at faces (where w and grad_Φ are
     # naturally defined) and interpolate to centers for smoother behaviour.
-    ᶜbuoy_inv_time_scale = @. lazy(
-        ᶜinterp(
-            detr_buoy_inv_time_scale(
-                u₃ʲ.components.data.:1 / ᶠdz,
-                vertical_buoyancy_acceleration(
-                    ᶠinterp(ᶜρ_diffʲs.:1),
-                    ᶠgradᵥ_ᶜΦ,
-                    ᶠlg,
-                ),
-                entr_detr_buoy_inv_tau_max,
+    ᶜwʲ = cache.scratch.ᶜtemp_scalar
+    @. ᶜwʲ = get_physical_w(ᶜuʲs.:1, ᶜlg)
+    ᶜbuoy_inv_time_scale = cache.scratch.ᶜtemp_scalar_2
+    @. ᶜbuoy_inv_time_scale = ᶜinterp(
+        detr_buoy_inv_time_scale(
+            u₃ʲ.components.data.:1 / ᶠdz,
+            vertical_buoyancy_acceleration(
+                ᶠinterp(ᶜρ_diffʲs.:1),
+                ᶠgradᵥ_ᶜΦ,
+                ᶠlg,
             ),
+            entr_detr_buoy_inv_tau_max,
+            detr_buoy_w_min,
         ),
+    )
+    ᶜbuoy_shell_detr = compute_buoyancy_and_shell_detrainment_rate!(
+        cache.scratch.ᶜtemp_scalar_3,
+        state,
+        cache,
+        Val(1),
+        ᶜwʲ,
+        ᶜbuoy_inv_time_scale,
+        ᶜlower_limiter_factor,
     )
     return @. lazy(
         compute_detrainment(
             turbconv_params,
-            draft_area(ρaʲ, ᶜρʲs.:1),
+            ᶜaʲ,
             ρaʲ,
             ᶜbuoy_inv_time_scale,
             ᶜdivᵥ(ᶠbottom_bias_zero_bot(ρaʲ) * u₃ʲ),
             ᶜarea_bounding_entr_detrʲs.:1,
             detr_model,
+            ᶜbuoy_shell_detr,
         ),
     )
 end

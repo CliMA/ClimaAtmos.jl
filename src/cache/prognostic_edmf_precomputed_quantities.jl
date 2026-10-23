@@ -347,12 +347,34 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
             p.atmos.edmfx_model.entr_model,
         )
         @. ᶜentr_nonvel_rateʲs.:($$j) = entrainment_nonvel_rate(
+            thermo_params,
             turbconv_params,
+            ᶜz,
+            z_sfc,
+            ᶜp,
+            Y.c.ρ,
             draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j)),
             get_physical_w(ᶜuʲs.:($$j), ᶜlg),
+            TD.relative_humidity(
+                thermo_params,
+                ᶜTʲs.:($$j),
+                ᶜp,
+                ᶜq_tot_nonnegʲs.:($$j),
+                ᶜq_liqʲs.:($$j),
+                ᶜq_iceʲs.:($$j),
+            ),
             vertical_buoyancy_acceleration(Y.c.ρ, ᶜρʲs.:($$j), ᶜgradᵥ_ᶠΦ, ᶜlg),
             FT(0),
+            TD.relative_humidity(
+                thermo_params,
+                ᶜT⁰,
+                ᶜp,
+                ᶜq_tot_nonneg⁰,
+                ᶜq_liq⁰,
+                ᶜq_ice⁰,
+            ),
             FT(0),
+            max(ᶜtke, 0),
             p.atmos.edmfx_model.entr_model,
         )
         @. ᶜturb_entrʲs.:($$j) = turbulent_entrainment(

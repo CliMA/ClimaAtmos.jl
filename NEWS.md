@@ -26,6 +26,25 @@ main
   (`update_sgs_diffusion_jacobian!`). Updraft `mseʲ` hyperdiffusion weights the
   diffusing water flux by `h_effʲ - h_d(Tʲ)` (`ᶜh_eff_minus_h_d!`), preserving
   Kirchhoff reference-temperature shift invariance for intensive `mseʲ`.
+- ![][badge-✨feature/enhancement] EDMF/PROPHET entrainment, detrainment, drag,
+  and non-equilibrium cloud-fraction floor closures:
+  `buoyancy_and_shell_detrainment_rate` adds environmental-subsaturation scaling
+  (`detr_rh_coeff`) and lateral evaporative-shell detrainment (`detr_shell_coeff`)
+  to negative-buoyancy detrainment, and `massflux_divergence_detrainment_coeff`
+  (`detr_massflux_buoy_coeff`) amplifies mass-flux convergence detrainment when
+  the draft is negatively buoyant; `effective_plume_height` bounds the
+  inverse-height entrainment length scale (`entr_z_min`, `entr_z_max`) and
+  `entr_buoy_w_min` regularizes the velocity denominator of
+  `buoyancy_inv_time_scale`; `buoyancy_sorted_entrainment_deficit`
+  (`entr_buoyancy_sorting_coeff`) and `tail_entrainment_increments`
+  (`edmf_tail_entr_weight`, `edmf_tail_entr_selector`) parameterize selective
+  lateral entrainment in heterogeneous environments;
+  `pressure_drag_coefficient` floors the drag area fraction at
+  `max(min_area, pressure_normalmode_drag_area_min)`; and `_sgs_augmented_sigma`
+  exposes configurable relative and absolute subsaturation-deficit floor parameters
+  (`cloud_fraction_eps_rel`, `cloud_fraction_sigma_abs`) along with ice-phase
+  scaling factors (`cloud_fraction_ice_sigma_abs_scale`,
+  `cloud_fraction_ice_eps_rel_scale`) weighted by the ice condensate fraction.
 - ![][badge-💥breaking] `sgs_variance_vertical_scale_factor` and the provisional
   `sgs_variance_isentropic_depth` are removed; with `strict_params: true` (the
   default) a run TOML that still sets either now stops with an unused-parameter
@@ -118,6 +137,34 @@ main
   to its grid mean (`q′q′ ≤ (ε q_tot)²` or `T′T′ ≤ (ε T)²`, `ε = eps(FT)`)
   instead of where `T′T′ q′q′ ≤ eps(FT)²`; the absolute floor replaced the
   diagnosed (negative) correlation by `+0.6` in the dry upper troposphere.
+- ![][badge-✨feature/enhancement] Diagnostics: a `max_time` key on a
+  diagnostic specification stops computing and writing it after that absolute
+  simulation time (`BoundedSchedule`). New 3D diagnostics `tnt_rad`, `tnt_mp`,
+  `tnqv_mp` (temperature and vapour tendencies from radiation and 1M
+  microphysics), `prflux_rai`, `prflux_sno` (1M precipitation mass fluxes),
+  `tn_rhoe_*`/`tn_rhoqt_*` budget tendencies for EDMF diffusion, mass flux,
+  sedimentation and vertical advection, `clw_neg_frac`, `cli_neg_frac`,
+  `husra_neg_frac`, `hussn_neg_frac` (negative-condensate clipping indicators),
+  and `lim_gm_frac`, `lim_sgs_frac` (tracer-limiter activity flags, which
+  require the new `limiter_diagnostics: true` config key). Default diagnostics
+  whose output name and writer coincide with a user-requested diagnostic are
+  no longer added a second time.
+- ![][badge-✨feature/enhancement] Cloud-fraction floor: the provisional
+  parameter `cloud_fraction_floor_condensate_release` (`c_qc`, default 0) adds
+  the condensate margin `c_qc q_c` as an alternative to the saturation excess
+  `μ_S` in the floor release (`_compute_cloud_fraction`), so a non-equilibrium
+  cell that holds condensate while its mean is subsaturated releases the floor
+  as if it were saturated by `q_c`. Default behavior is unchanged.
+- ![][badge-✨feature/enhancement] 1M microphysics: `rain_autoconversion:
+  KK2000Autoconversion` and `cloud_liquid_rain_accretion: KK2000Accretion`
+  select the Khairoutdinov–Kogan (2000) warm-rain rates of CloudMicrophysics
+  0.46 (requires ClimaParams 1.3.3). The provisional parameter
+  `rain_autoconversion_tke_coeff` (`c_tke`, default 0) adds `c_tke · TKE` to the
+  squared vertical velocity that the `Kessler1M` and `KK2000Autoconversion`
+  closures read (`effective_autoconversion_velocity`); a nonzero value with any
+  other autoconversion option is rejected at setup.
+- ![][badge-💥breaking] CloudMicrophysics compat is `0.46` and ClimaParams
+  `1.3.3`.
 
 0.42.15
 -------

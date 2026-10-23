@@ -155,12 +155,164 @@ Extracted as a helper so it can be reused by `detrainment_rate` (the
 explicit detrainment closure) and the implicit ρa solve (where the same
 buoyancy-detrainment piece appears in the `(ε − δ)` denominator).
 """
-@inline function detr_buoy_inv_time_scale(Δwʲ, Δbuoyʲ, entr_detr_buoy_inv_tau_max)
+@inline function detr_buoy_inv_time_scale(
+    Δwʲ,
+    Δbuoyʲ,
+    entr_detr_buoy_inv_tau_max,
+    w_min = zero(Δwʲ),
+)
     FT = typeof(Δwʲ)
     return min(
         entr_detr_buoy_inv_tau_max,
-        abs(min(Δbuoyʲ, FT(0))) / max(eps(FT), abs(Δwʲ)),
+        abs(min(Δbuoyʲ, FT(0))) / max(eps(FT), w_min, abs(Δwʲ)),
     )
+end
+
+"""
+    effective_plume_height(elev_above_sfc, turbconv_params)
+
+Effective plume height `z_eff` above the surface, floored at `entr_z_min` and
+optionally capped at `entr_z_max` when `entr_z_max > 0`.
+"""
+@inline function effective_plume_height(elev_above_sfc, turbconv_params)
+    FT = typeof(elev_above_sfc)
+    z_min = CAP.entr_z_min(turbconv_params)
+    z_max = CAP.entr_z_max(turbconv_params)
+    z_eff = max(elev_above_sfc, z_min)
+    return ifelse(z_max > FT(0), min(z_eff, z_max), z_eff)
+end
+
+"""
+    buoyancy_and_shell_detrainment_rate(
+        thermo_params, turbconv_params, ᶜz, z_sfc, ᶜp,
+        ᶜT⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰,
+        ᶜTʲ, ᶜq_tot_nonnegʲ, ᶜq_liqʲ, ᶜq_iceʲ,
+        ᶜwʲ, ᶜbuoyʲ, ᶜbuoy_inv_time_scale, ᶜlower_limiter_factor,
+    )
+
+Buoyancy and evaporative-shell detrainment rate `[1/s]`. Combines negative-buoyancy
+detrainment amplified by environmental subsaturation `1 - RH⁰` (`detr_rh_coeff`)
+with lateral shell detrainment (`detr_shell_coeff`) driven by the draft–environment
+relative-humidity contrast `max(0, RHʲ - RH⁰)` and environmental subsaturation,
+damped by the local nondimensional buoyancy-to-kinetic-energy ratio `Π₁_local`.
+"""
+@inline function buoyancy_and_shell_detrainment_rate(
+    thermo_params,
+    turbconv_params,
+    ᶜz,
+    z_sfc,
+    ᶜp,
+    ᶜT⁰,
+    ᶜq_tot_nonneg⁰,
+    ᶜq_liq⁰,
+    ᶜq_ice⁰,
+    ᶜTʲ,
+    ᶜq_tot_nonnegʲ,
+    ᶜq_liqʲ,
+    ᶜq_iceʲ,
+    ᶜwʲ,
+    ᶜbuoyʲ,
+    ᶜbuoy_inv_time_scale,
+    ᶜlower_limiter_factor,
+)
+    FT = eltype(thermo_params)
+    detr_buoy_coeff = CAP.detr_buoy_coeff(turbconv_params)
+    detr_rh_coeff = CAP.detr_rh_coeff(turbconv_params)
+    detr_shell_coeff = CAP.detr_shell_coeff(turbconv_params)
+
+    RH⁰ = TD.relative_humidity(
+        thermo_params,
+        ᶜT⁰,
+        ᶜp,
+        ᶜq_tot_nonneg⁰,
+        ᶜq_liq⁰,
+        ᶜq_ice⁰,
+    )
+    subsat⁰ = clamp(FT(1) - RH⁰, FT(0), FT(1))
+    buoy_detr =
+        detr_buoy_coeff * (FT(1) + detr_rh_coeff * subsat⁰) * ᶜbuoy_inv_time_scale
+
+    elev_above_sfc = ᶜz - z_sfc
+    if detr_shell_coeff <= FT(0) || elev_above_sfc <= eps(FT)
+        return ᶜlower_limiter_factor * buoy_detr
+    end
+
+    RHʲ = TD.relative_humidity(
+        thermo_params,
+        ᶜTʲ,
+        ᶜp,
+        ᶜq_tot_nonnegʲ,
+        ᶜq_liqʲ,
+        ᶜq_iceʲ,
+    )
+    ΔRH_pos = clamp(RHʲ - RH⁰, FT(0), FT(1))
+    z_eff = effective_plume_height(elev_above_sfc, turbconv_params)
+    w_min = max(eps(FT), CAP.entr_buoy_w_min(turbconv_params))
+    w_pos = max(ᶜwʲ, FT(0))
+    Π₁_local = ᶜbuoyʲ * z_eff / (w_pos^2 + w_min^2)
+
+    Φ_shell = ΔRH_pos * subsat⁰ / (FT(1) + max(FT(0), Π₁_local))
+    shell_detr = detr_shell_coeff * (w_pos / z_eff) * Φ_shell
+    return ᶜlower_limiter_factor * (buoy_detr + shell_detr)
+end
+
+function compute_buoyancy_and_shell_detrainment_rate!(
+    ᶜbuoy_shell_detr,
+    Y,
+    p,
+    ::Val{j},
+    ᶜw,
+    ᶜbuoy_inv_time_scale,
+    ᶜlower_limiter_factor,
+) where {j}
+    FT = Spaces.undertype(axes(Y.c))
+    turbconv_params = CAP.turbconv_params(p.params)
+    detr_buoy_coeff = CAP.detr_buoy_coeff(turbconv_params)
+    detr_rh_coeff = CAP.detr_rh_coeff(turbconv_params)
+    detr_shell_coeff = CAP.detr_shell_coeff(turbconv_params)
+    if (detr_rh_coeff > FT(0) || detr_shell_coeff > FT(0)) &&
+       !(p.atmos.microphysics_model isa DryModel)
+        thermo_params = CAP.thermodynamics_params(p.params)
+        (; ᶜgradᵥ_ᶠΦ) = p.core
+        (;
+            ᶜp,
+            ᶜρ_diffʲs,
+            ᶜT⁰,
+            ᶜq_tot_nonneg⁰,
+            ᶜq_liq⁰,
+            ᶜq_ice⁰,
+            ᶜTʲs,
+            ᶜq_tot_nonnegʲs,
+            ᶜq_liqʲs,
+            ᶜq_iceʲs,
+        ) = p.precomputed
+        ᶜlg = Fields.local_geometry_field(Y.c)
+        ᶜz = Fields.coordinate_field(Y.c).z
+        z_sfc = Fields.level(Fields.coordinate_field(Y.f).z, half)
+        @. ᶜbuoy_shell_detr = buoyancy_and_shell_detrainment_rate(
+            thermo_params,
+            turbconv_params,
+            ᶜz,
+            z_sfc,
+            ᶜp,
+            ᶜT⁰,
+            ᶜq_tot_nonneg⁰,
+            ᶜq_liq⁰,
+            ᶜq_ice⁰,
+            ᶜTʲs.:($$j),
+            ᶜq_tot_nonnegʲs.:($$j),
+            ᶜq_liqʲs.:($$j),
+            ᶜq_iceʲs.:($$j),
+            ᶜw,
+            vertical_buoyancy_acceleration(ᶜρ_diffʲs.:($$j), ᶜgradᵥ_ᶠΦ, ᶜlg),
+            ᶜbuoy_inv_time_scale,
+            ᶜlower_limiter_factor,
+        )
+    else
+        @. ᶜbuoy_shell_detr =
+            ᶜlower_limiter_factor * detr_buoy_coeff * ᶜbuoy_inv_time_scale
+    end
+    return ᶜbuoy_shell_detr
 end
 
 """
@@ -274,9 +426,10 @@ function entrainment_velocity_scale(
 
     g = TDP.grav(thermo_params)
     ref_H = ᶜp / (ᶜρ * g) # Pressure scale height
+    z_eff = effective_plume_height(elev_above_sfc, turbconv_params)
 
     Π₁, Π₂, Π₃, Π₄, Π₅ = calculate_pi_groups(
-        elev_above_sfc,
+        z_eff,
         ref_H,
         ᶜaʲ,
         ᶜwʲ,
@@ -289,6 +442,10 @@ function entrainment_velocity_scale(
     )
 
     entr_param_vec = CAP.entr_param_vec(turbconv_params)
+    entr_inv_length = CAP.entr_inv_length(turbconv_params)
+    form = CAP.entr_functional_form(turbconv_params)
+    area_limiter_factor = upper_area_limiter_factor(ᶜaʲ, turbconv_params)
+
     pi_sum =
         entr_param_vec[1] * abs(Π₁) +
         entr_param_vec[2] * abs(Π₂) +
@@ -297,9 +454,32 @@ function entrainment_velocity_scale(
         entr_param_vec[5] * abs(Π₅) +
         entr_param_vec[6]
 
-    area_limiter_factor = upper_area_limiter_factor(ᶜaʲ, turbconv_params)
-    entr_vel_scale = area_limiter_factor * max(0, pi_sum) / elev_above_sfc
-    return max(0, entr_vel_scale)
+    if form < FT(0.5)
+        entr_vel_scale = area_limiter_factor * (max(FT(0), pi_sum) / z_eff)
+        return max(FT(0), entr_vel_scale)
+    else
+        w_min = max(eps(FT), CAP.entr_buoy_w_min(turbconv_params))
+        Π₁_local = (ᶜbuoyʲ - ᶜbuoy⁰) * z_eff / ((ᶜwʲ - ᶜw⁰)^2 + w_min^2)
+        π1 = tanh(Π₁_local)
+        π2 = clamp(FT(1) - ᶜRH⁰, FT(0), FT(1))
+        d2_core = ((π1 - FT(0.50)) / FT(0.30))^2 + ((π2 - FT(0.20)) / FT(0.25))^2
+        d2_cong = ((π1 - FT(0.10)) / FT(0.22))^2 + ((π2 - FT(0.45)) / FT(0.25))^2
+        d2_over = ((π1 - FT(-0.15)) / FT(0.25))^2 + ((π2 - FT(0.55)) / FT(0.25))^2
+        gp2d_corr =
+            FT(-0.30) * exp(FT(-0.5) * d2_core) +
+            FT(-0.15) * exp(FT(-0.5) * d2_cong) +
+            FT(0.40) * exp(FT(-0.5) * d2_over)
+        c_tke = CAP.entr_tke_coeff(turbconv_params)
+        tke_pos = max(ᶜtke, FT(0))
+        tke_scale =
+            c_tke * sqrt(tke_pos / ((ᶜwʲ - ᶜw⁰)^2 + FT(2) * tke_pos + w_min^2)) /
+            z_eff
+        base_scale = entr_inv_length + max(FT(0), pi_sum) / z_eff + tke_scale
+        return max(
+            FT(0),
+            area_limiter_factor * base_scale * max(FT(0.35), FT(1) + gp2d_corr),
+        )
+    end
 end
 
 function entrainment_velocity_scale(
@@ -379,6 +559,54 @@ function entrainment_nonvel_rate(
     return area_limiter_factor * (buoy_rate + entr_inv_tau)
 end
 
+function entrainment_nonvel_rate(
+    thermo_params,
+    turbconv_params,
+    ᶜz,
+    z_sfc,
+    ᶜp,
+    ᶜρ,
+    ᶜaʲ,
+    ᶜwʲ,
+    ᶜRHʲ,
+    ᶜbuoyʲ,
+    ᶜw⁰,
+    ᶜRH⁰,
+    ᶜbuoy⁰,
+    ᶜtke,
+    model_option::AbstractEntrainmentModel,
+)
+    return entrainment_nonvel_rate(
+        turbconv_params,
+        ᶜaʲ,
+        ᶜwʲ,
+        ᶜbuoyʲ,
+        ᶜw⁰,
+        ᶜbuoy⁰,
+        model_option,
+    )
+end
+
+function entrainment_nonvel_rate(
+    thermo_params,
+    turbconv_params,
+    ᶜz,
+    z_sfc,
+    ᶜp,
+    ᶜρ,
+    ᶜaʲ,
+    ᶜwʲ,
+    ᶜRHʲ,
+    ᶜbuoyʲ,
+    ᶜw⁰,
+    ᶜRH⁰,
+    ᶜbuoy⁰,
+    ᶜtke,
+    ::PiGroupsEntrainment,
+)
+    return zero(ᶜaʲ)
+end
+
 """
     area_bounding_entr_detr(turbconv_params, a)
 
@@ -451,6 +679,22 @@ Arguments:
 
 Returns the total detrainment rate [1/s].
 """
+@inline function massflux_divergence_detrainment_coeff(
+    turbconv_params,
+    ᶜbuoy_inv_time_scale,
+)
+    FT = typeof(ᶜbuoy_inv_time_scale)
+    c_div = CAP.detr_massflux_vertdiv_coeff(turbconv_params)
+    c_div_buoy = CAP.detr_massflux_buoy_coeff(turbconv_params)
+    inv_tau_max = CAP.entr_detr_buoy_inv_tau_max(turbconv_params)
+    b_nondim = max(FT(0), ᶜbuoy_inv_time_scale) / max(inv_tau_max, eps(FT))
+    return clamp(
+        c_div + c_div_buoy * b_nondim / (b_nondim + FT(1)),
+        FT(0),
+        FT(1),
+    )
+end
+
 function compute_detrainment(
     turbconv_params,
     aʲ,
@@ -459,6 +703,9 @@ function compute_detrainment(
     massflux_vert_div,
     area_bounding_entr_detr,
     detr_model,
+    buoy_and_shell_detr_rate = lower_area_limiter_factor(aʲ, turbconv_params) *
+                               CAP.detr_buoy_coeff(turbconv_params) *
+                               buoy_inv_time_scale,
 )
 
     detr = detrainment_rate(
@@ -468,6 +715,7 @@ function compute_detrainment(
         buoy_inv_time_scale,
         massflux_vert_div,
         detr_model,
+        buoy_and_shell_detr_rate,
     )
 
     return detr + max(zero(area_bounding_entr_detr), -area_bounding_entr_detr)
@@ -475,20 +723,26 @@ end
 
 """
     detrainment_rate(turbconv_params, ᶜaʲ, ᶜρaʲ, ᶜbuoy_inv_time_scale,
-                     ᶜmassflux_vert_div, detr_model::AbstractDetrainmentModel)
+                     ᶜmassflux_vert_div, detr_model::AbstractDetrainmentModel,
+                     [ᶜbuoy_and_shell_detr_rate])
     detrainment_rate(turbconv_params, ᶜaʲ, ᶜρaʲ, ᶜbuoy_inv_time_scale,
-                     ᶜmassflux_vert_div, detr_model::BuoyancyVelocityDetrainment)
+                     ᶜmassflux_vert_div, detr_model::BuoyancyVelocityDetrainment,
+                     [ᶜbuoy_and_shell_detr_rate])
 
 Model-specific detrainment rate [1/s] for a given detrainment model.
 
 The `AbstractDetrainmentModel` fallback returns zero. For
-`BuoyancyVelocityDetrainment` the rate is
+`BuoyancyVelocityDetrainment` the rate combines `ᶜbuoy_and_shell_detr_rate`
+(which defaults to `lower_area_limiter_factor(aʲ) · c_buoy τ⁻¹_buoy` and may
+include relative-humidity and shell detrainment from
+`buoyancy_and_shell_detrainment_rate`) with mass-flux convergence detrainment
+scaled by `massflux_divergence_detrainment_coeff`:
 
-    detr = max(0, lower_area_limiter_factor(aʲ) ·
-                  (c_buoy τ⁻¹_buoy − c_div min(massflux_vert_div, 0) / ρaʲ)),
+    detr = max(0, buoy_and_shell_detr_rate
+                  − lower_area_limiter_factor(aʲ) · c_div_eff ·
+                    min(massflux_vert_div, 0) / ρaʲ).
 
-with `c_buoy = detr_buoy_coeff` and `c_div = detr_massflux_vertdiv_coeff`. Only
-a converging (negative) mass-flux divergence detrains, and
+Only a converging (negative) mass-flux divergence detrains, and
 `lower_area_limiter_factor` damps the rate as `a → a_min`.
 
 # Arguments
@@ -514,6 +768,7 @@ function detrainment_rate(
     ᶜbuoy_inv_time_scale,
     ᶜmassflux_vert_div,
     ::AbstractDetrainmentModel,
+    ᶜbuoy_and_shell_detr_rate = zero(eltype(ᶜρaʲ)),
 )
     return zero(eltype(ᶜρaʲ))
 end
@@ -525,19 +780,21 @@ function detrainment_rate(
     ᶜbuoy_inv_time_scale,
     ᶜmassflux_vert_div,
     ::BuoyancyVelocityDetrainment,
+    ᶜbuoy_and_shell_detr_rate = lower_area_limiter_factor(ᶜaʲ, turbconv_params) *
+                                CAP.detr_buoy_coeff(turbconv_params) *
+                                ᶜbuoy_inv_time_scale,
 )
     FT = eltype(ᶜρaʲ)
-    detr_buoy_coeff = CAP.detr_buoy_coeff(turbconv_params)
-    detr_massflux_vertdiv_coeff =
-        CAP.detr_massflux_vertdiv_coeff(turbconv_params)
+    c_div_eff = massflux_divergence_detrainment_coeff(
+        turbconv_params,
+        ᶜbuoy_inv_time_scale,
+    )
 
     area_limiter_factor = lower_area_limiter_factor(ᶜaʲ, turbconv_params)
     detr =
-        area_limiter_factor *
-        (
-            detr_buoy_coeff * ᶜbuoy_inv_time_scale -
-            detr_massflux_vertdiv_coeff * min(ᶜmassflux_vert_div, 0) / max(eps(FT), ᶜρaʲ)
-        )
+        ᶜbuoy_and_shell_detr_rate -
+        area_limiter_factor * c_div_eff * min(ᶜmassflux_vert_div, 0) /
+        max(eps(FT), ᶜρaʲ)
 
     return max(0, detr)
 end
@@ -584,40 +841,303 @@ The generic method is a no-op; the `PrognosticEDMFX` method mutates
 `Yₜ.c.sgsʲs` and returns `nothing`. See the "PROPHET: Closures" page
 (`docs/src/prophet_closures.md`).
 """
+@inline function buoyancy_sorted_entrainment_deficit(χ⁰, χʲ, σ_χ)
+    FT = typeof(σ_χ)
+    Δχ = χʲ - χ⁰
+    σ_pos = max(σ_χ, FT(0))
+    f_dilute = ifelse(
+        (Δχ > FT(0)) & (σ_pos > FT(0)),
+        Δχ / max(Δχ + σ_pos, eps(FT)),
+        FT(1),
+    )
+    return -f_dilute * Δχ
+end
+
+"""
+    environment_tail_shift(
+        thermo_params, T_0, q_tot_0, q_liq_0, q_ice_0, T_var, q_var, corr_Tq,
+        selector,
+    )
+
+Return the half-normal conditional shifts `(ΔT, Δq_tot)` from the environment
+mean `(T_0, q_tot_0)` to the upper half `s' > 0` of a bivariate Gaussian
+subgrid `(T, q_tot)` distribution with variances `(T_var, q_var)` and
+correlation `corr_Tq`, conditioned on the linear selector
+`s' = α_T T' + α_q q' > 0`:
+
+    ΔT     = √(2/π) · (α_T σ_T² + α_q r σ_T σ_q) / σ_s,
+    Δq_tot = √(2/π) · (α_q σ_q² + α_T r σ_T σ_q) / σ_s,
+
+with `σ_s = √(α_T² σ_T² + 2 α_T α_q r σ_T σ_q + α_q² σ_q²)`.
+
+When `selector > 0.5`, `(α_T, α_q) = (c_pm, L_v0)` selects high-MSE air;
+otherwise `(α_T, α_q) = (1/T_0, ε_vi - 1)` selects positively buoyant air.
+"""
+@inline function environment_tail_shift(
+    thermo_params,
+    T_0::FT,
+    q_tot_0::FT,
+    q_liq_0::FT,
+    q_ice_0::FT,
+    T_var::FT,
+    q_var::FT,
+    corr_Tq::FT,
+    selector::FT,
+) where {FT}
+    cpm = TD.cp_m(thermo_params, q_tot_0, q_liq_0, q_ice_0)
+    LH_v0 = TDP.LH_v0(thermo_params)
+    ε_vi = TDP.Rv_over_Rd(thermo_params)
+
+    α_T = ifelse(selector > FT(0.5), cpm, FT(1) / max(T_0, eps(FT)))
+    α_q = ifelse(selector > FT(0.5), LH_v0, ε_vi - FT(1))
+
+    σ_T = sqrt(max(T_var, zero(FT)))
+    σ_q = sqrt(max(q_var, zero(FT)))
+    r = clamp(corr_Tq, -one(FT), one(FT))
+
+    σ_s_sq = α_T^2 * σ_T^2 + 2 * α_T * α_q * r * σ_T * σ_q + α_q^2 * σ_q^2
+    σ_s = sqrt(max(σ_s_sq, zero(FT)))
+
+    c_tail = sqrt(FT(2) / FT(π))
+    ΔT = ifelse(
+        σ_s > zero(FT),
+        c_tail * (α_T * σ_T^2 + α_q * r * σ_T * σ_q) / σ_s,
+        zero(FT),
+    )
+    Δq_tot = ifelse(
+        σ_s > zero(FT),
+        c_tail * (α_q * σ_q^2 + α_T * r * σ_T * σ_q) / σ_s,
+        zero(FT),
+    )
+    return (ΔT, Δq_tot)
+end
+
+@inline function tail_entrainment_Δmse(
+    thermo_params,
+    T_0::FT,
+    q_tot_0::FT,
+    q_liq_0::FT,
+    q_ice_0::FT,
+    Φ::FT,
+    mse_0::FT,
+    T_var::FT,
+    q_var::FT,
+    corr_Tq::FT,
+    w::FT,
+    selector::FT,
+    ρa_0::FT,
+    ρa_j::FT,
+    entr_phys_j::FT,
+    dt::FT,
+) where {FT}
+    ΔT, Δq_tot = environment_tail_shift(
+        thermo_params,
+        T_0,
+        q_tot_0,
+        q_liq_0,
+        q_ice_0,
+        T_var,
+        q_var,
+        corr_Tq,
+        selector,
+    )
+    w_cap = max(ρa_0, zero(FT)) / (2 * max(entr_phys_j * ρa_j * dt, eps(FT)))
+    w_eff = w * min(one(FT), w_cap)
+    T_e = T_0 + w_eff * ΔT
+    q_tot_e = min(q_tot_0 + w_eff * Δq_tot, one(FT))
+    mse_e = TD.moist_static_energy(
+        thermo_params,
+        T_e,
+        Φ,
+        q_tot_e,
+        q_liq_0,
+        q_ice_0,
+    )
+    return mse_e - mse_0
+end
+
+@inline function tail_entrainment_Δq_tot(
+    thermo_params,
+    T_0::FT,
+    q_tot_0::FT,
+    q_liq_0::FT,
+    q_ice_0::FT,
+    T_var::FT,
+    q_var::FT,
+    corr_Tq::FT,
+    w::FT,
+    selector::FT,
+    ρa_0::FT,
+    ρa_j::FT,
+    entr_phys_j::FT,
+    dt::FT,
+) where {FT}
+    _, Δq_tot = environment_tail_shift(
+        thermo_params,
+        T_0,
+        q_tot_0,
+        q_liq_0,
+        q_ice_0,
+        T_var,
+        q_var,
+        corr_Tq,
+        selector,
+    )
+    w_cap = max(ρa_0, zero(FT)) / (2 * max(entr_phys_j * ρa_j * dt, eps(FT)))
+    w_eff = w * min(one(FT), w_cap)
+    return min(w_eff * Δq_tot, one(FT) - q_tot_0)
+end
+
+function tail_entrainment_increments(Y, p, ᶜmse⁰, ᶜentr_physʲ, ᶜρaʲ, ᶜρa⁰)
+    (; params, dt) = p
+    FT = eltype(params)
+    turbconv_params = CAP.turbconv_params(params)
+    w = CAP.edmf_tail_entr_weight(turbconv_params)
+    if w == zero(FT) || !hasproperty(p.precomputed, :ᶜT′T′)
+        return (zero(FT), zero(FT))
+    end
+    thermo_params = CAP.thermodynamics_params(params)
+    selector = CAP.edmf_tail_entr_selector(turbconv_params)
+    (; ᶜT⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜT′T′, ᶜq′q′, ᶜcorr_Tq) =
+        p.precomputed
+    (; ᶜΦ) = p.core
+
+    ᶜΔmse = @. lazy(
+        tail_entrainment_Δmse(
+            thermo_params,
+            ᶜT⁰,
+            ᶜq_tot_nonneg⁰,
+            ᶜq_liq⁰,
+            ᶜq_ice⁰,
+            ᶜΦ,
+            ᶜmse⁰,
+            ᶜT′T′,
+            ᶜq′q′,
+            ᶜcorr_Tq,
+            w,
+            selector,
+            ᶜρa⁰,
+            ᶜρaʲ,
+            ᶜentr_physʲ,
+            FT(dt),
+        ),
+    )
+    ᶜΔq_tot = @. lazy(
+        tail_entrainment_Δq_tot(
+            thermo_params,
+            ᶜT⁰,
+            ᶜq_tot_nonneg⁰,
+            ᶜq_liq⁰,
+            ᶜq_ice⁰,
+            ᶜT′T′,
+            ᶜq′q′,
+            ᶜcorr_Tq,
+            w,
+            selector,
+            ᶜρa⁰,
+            ᶜρaʲ,
+            ᶜentr_physʲ,
+            FT(dt),
+        ),
+    )
+    return (ᶜΔmse, ᶜΔq_tot)
+end
+
 edmfx_entr_detr_tendency!(Yₜ, Y, p, t, turbconv_model) = nothing
 
 function edmfx_entr_detr_tendency!(Yₜ, Y, p, t, turbconv_model::PrognosticEDMFX)
 
     n = n_mass_flux_subdomains(turbconv_model)
+    (; params) = p
+    FT = eltype(params)
+    turbconv_params = CAP.turbconv_params(params)
+    c_sort = CAP.entr_buoyancy_sorting_coeff(params)
+    Lv0 = CAP.LH_v0(params)
+    cp_d = CAP.cp_d(params)
     (;
         ᶜturb_entrʲs,
         ᶜentr_vel_scaleʲs,
         ᶜentr_nonvel_rateʲs,
         ᶜarea_bounding_entr_detrʲs,
         ᶜuʲs,
+        ᶜρʲs,
     ) = p.precomputed
 
     ᶜmse⁰ = ᶜspecific_env_mse(Y, p)
     ᶜq_tot⁰ = ᶜspecific_env_value(@name(q_tot), Y, p)
+    ᶜρa⁰ = @. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model))
     ᶜlg = Fields.local_geometry_field(Y.c)
 
     for j in 1:n
+        ᶜwʲ = @. lazy(get_physical_w(ᶜuʲs.:($$j), ᶜlg))
+        ᶜentr_physʲ = @. lazy(
+            ᶜentr_vel_scaleʲs.:($$j) * abs(ᶜwʲ) + ᶜentr_nonvel_rateʲs.:($$j),
+        )
         ᶜentrʲ = @. lazy(
             compute_entrainment(
                 ᶜentr_vel_scaleʲs.:($$j),
                 ᶜentr_nonvel_rateʲs.:($$j),
                 ᶜarea_bounding_entr_detrʲs.:($$j),
-                get_physical_w(ᶜuʲs.:($$j), ᶜlg),
+                ᶜwʲ,
             ),
         )
         ᶜturb_entrʲ = ᶜturb_entrʲs.:($j)
         ᶜmseʲ = Y.c.sgsʲs.:($j).mse
         ᶜq_totʲ = Y.c.sgsʲs.:($j).q_tot
+        ᶜρaʲ = Y.c.sgsʲs.:($j).ρa
+        a_max = CAP.max_area(turbconv_params)
+        ᶜρa⁰_safe = @. lazy(max(ᶜρa⁰, Y.c.ρ * (1 - a_max), eps(FT)))
 
-        @. Yₜ.c.sgsʲs.:($$j).mse += (ᶜentrʲ .+ ᶜturb_entrʲ) * (ᶜmse⁰ - ᶜmseʲ)
+        if c_sort > FT(0) && hasproperty(p.precomputed, :ᶜq′q′)
+            (; ᶜT′T′, ᶜq′q′, ᶜcorr_Tq) = p.precomputed
+            @. Yₜ.c.sgsʲs.:($$j).mse +=
+                (ᶜentrʲ .+ ᶜturb_entrʲ) *
+                buoyancy_sorted_entrainment_deficit(
+                    ᶜmse⁰,
+                    ᶜmseʲ,
+                    c_sort * (
+                        Lv0 * sqrt(max(FT(0), ᶜq′q′)) +
+                        cp_d * max(FT(0), ᶜcorr_Tq) * sqrt(max(FT(0), ᶜT′T′))
+                    ),
+                )
 
-        @. Yₜ.c.sgsʲs.:($$j).q_tot +=
-            (ᶜentrʲ .+ ᶜturb_entrʲ) * (ᶜq_tot⁰ - ᶜq_totʲ)
+            @. Yₜ.c.sgsʲs.:($$j).q_tot +=
+                (ᶜentrʲ .+ ᶜturb_entrʲ) *
+                buoyancy_sorted_entrainment_deficit(
+                    ᶜq_tot⁰,
+                    ᶜq_totʲ,
+                    c_sort * sqrt(max(FT(0), ᶜq′q′)),
+                )
+        elseif CAP.edmf_tail_entr_weight(turbconv_params) > FT(0) &&
+               hasproperty(p.precomputed, :ᶜT′T′)
+            # Bivariate Gaussian tail shifts (Δmse, Δq_tot) for physical
+            # dynamical entrainment when `c_sort == 0`. The factor `1 + ρaʲ/ρa⁰`
+            # accounts for the opposite shift of the residual environment at
+            # fixed grid-mean scalar, and the shift is bounded by
+            # `max(0, χʲ - χ⁰)` when `χ⁰ < χʲ` so entraining cooler/drier
+            # environmental air never increases updraft `mseʲ` or `q_totʲ`.
+            ᶜΔmse, ᶜΔq_tot =
+                tail_entrainment_increments(Y, p, ᶜmse⁰, ᶜentr_physʲ, ᶜρaʲ, ᶜρa⁰)
+            @. Yₜ.c.sgsʲs.:($$j).mse +=
+                (ᶜentrʲ .+ ᶜturb_entrʲ) * (ᶜmse⁰ - ᶜmseʲ) +
+                ᶜentr_physʲ * min(
+                    (1 + ᶜρaʲ / ᶜρa⁰_safe) * ᶜΔmse,
+                    max(FT(0), ᶜmseʲ - ᶜmse⁰),
+                )
+
+            @. Yₜ.c.sgsʲs.:($$j).q_tot +=
+                (ᶜentrʲ .+ ᶜturb_entrʲ) * (ᶜq_tot⁰ - ᶜq_totʲ) +
+                ᶜentr_physʲ * min(
+                    (1 + ᶜρaʲ / ᶜρa⁰_safe) * ᶜΔq_tot,
+                    max(FT(0), ᶜq_totʲ - ᶜq_tot⁰),
+                )
+        else
+            @. Yₜ.c.sgsʲs.:($$j).mse +=
+                (ᶜentrʲ .+ ᶜturb_entrʲ) * (ᶜmse⁰ - ᶜmseʲ)
+
+            @. Yₜ.c.sgsʲs.:($$j).q_tot +=
+                (ᶜentrʲ .+ ᶜturb_entrʲ) * (ᶜq_tot⁰ - ᶜq_totʲ)
+        end
 
         # Auto-discovered SGS tracers (microphysics species and any
         # user-defined passive tracers)

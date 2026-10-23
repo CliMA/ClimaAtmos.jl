@@ -159,7 +159,11 @@ function solve_sgs_u₃_implicit_stage_analytic!(Y, p, dtγ)
     turbconv_params = CAP.turbconv_params(params)
     α_b = CAP.pressure_normalmode_buoy_coeff1(turbconv_params)
     α_d = CAP.pressure_normalmode_drag_coeff(turbconv_params)
-    a_min = CAP.min_area(turbconv_params)
+    a_min_raw = CAP.min_area(turbconv_params)
+    a_min = max(
+        a_min_raw,
+        CAP.pressure_normalmode_drag_area_min(turbconv_params),
+    )
     a_max = CAP.max_area(turbconv_params)
     scale_height = CAP.R_d(params) * CAP.T_surf_ref(params) / CAP.grav(params)
 
@@ -341,20 +345,22 @@ function solve_sgs_ρa_implicit_stage_analytic!(Y, p, dtγ)
     (; turbconv_model) = p.atmos
     (; ᶜρ_diffʲs, ᶜρʲs) = p.precomputed
     (; ᶠgradᵥ_ᶜΦ) = p.core
-    (; ᶜentr_vel_scaleʲs, ᶜentr_nonvel_rateʲs, ᶜarea_bounding_entr_detrʲs) =
-        p.precomputed
+    (;
+        ᶜentr_vel_scaleʲs,
+        ᶜentr_nonvel_rateʲs,
+        ᶜarea_bounding_entr_detrʲs,
+    ) = p.precomputed
     FT = eltype(p.params)
 
     turbconv_params = CAP.turbconv_params(p.params)
-    ᶜJ = Fields.local_geometry_field(Y.c).J
+    ᶜlg = Fields.local_geometry_field(Y.c)
+    ᶜJ = ᶜlg.J
     ᶠJ = Fields.local_geometry_field(Y.f).J
     ᶜdz = Fields.Δz_field(axes(Y.c))
     ᶠdz = Fields.Δz_field(axes(Y.f))
     ᶠlg = Fields.local_geometry_field(Y.f)
-    detr_buoy_coeff = CAP.detr_buoy_coeff(turbconv_params)
     entr_detr_buoy_inv_tau_max = CAP.entr_detr_buoy_inv_tau_max(turbconv_params)
-    detr_massflux_vertdiv_coeff =
-        CAP.detr_massflux_vertdiv_coeff(turbconv_params)
+    detr_buoy_w_min = CAP.detr_buoy_w_min(turbconv_params)
     a_max = CAP.max_area(turbconv_params)
 
     # Cell-centred coefficients of the recurrence:
@@ -391,41 +397,59 @@ function solve_sgs_ρa_implicit_stage_analytic!(Y, p, dtγ)
                 turbconv_params,
             ),
         )
+        # Inverse buoyancy time-scale on faces (where w lives), interpolated
+        # to centers for a smoother (ε − δ). Materialize ᶜw and
+        # ᶜbuoy_inv_time_scale into scratch fields before broadcasting with
+        # `z_sfc` so 1D PointSpace columns do not enter a StencilBroadcasted
+        # expression.
+        ᶜw = ᶜnumerator
+        @. ᶜw = ᶜinterp(ᶠw)
+        ᶜbuoy_inv_time_scale = p.scratch.ᶜtemp_scalar_5
+        @. ᶜbuoy_inv_time_scale = ᶜinterp(
+            detr_buoy_inv_time_scale(
+                ᶠw,
+                vertical_buoyancy_acceleration(
+                    ᶠinterp(ᶜρ_diffʲs.:($$j)),
+                    ᶠgradᵥ_ᶜΦ,
+                    ᶠlg,
+                ),
+                entr_detr_buoy_inv_tau_max,
+                detr_buoy_w_min,
+            ),
+        )
         # Mass-flux-divergence detrainment fraction:
-        #   detr_coeff = 1 − U · (1 − L · C)
+        #   detr_coeff = 1 − U · (1 − L · C_eff)
         # with U = upper limiter (→ 0 as a → a_max), L = lower limiter
-        # (→ 0 as a → a_min), C = detr_massflux_vertdiv_coeff.
+        # (→ 0 as a → a_min), and C_eff = massflux_divergence_detrainment_coeff.
         # At U = 0 (a → a_max): detr_coeff = 1 — all converging mass is
-        # detrained, capping area at a_max regardless of C.
-        # The recurrence uses `one_minus_prefactor = U · (1 − L · C)`.
+        # detrained, capping area at a_max regardless of C_eff.
+        # The recurrence uses `one_minus_prefactor = U · (1 − L · C_eff)`.
         ᶜone_minus_implicit_detr_prefactor = @. lazy(
             ifelse(
                 ᶜdivᵥ(ᶠbottom_bias(Y.c.sgsʲs.:($$j).ρa) * Y.f.sgsʲs.:($$j).u₃) < 0,
-                ᶜupper_limiter_factor *
-                (FT(1) - ᶜlower_limiter_factor * detr_massflux_vertdiv_coeff),
+                ᶜupper_limiter_factor * (
+                    FT(1) -
+                    ᶜlower_limiter_factor * massflux_divergence_detrainment_coeff(
+                        turbconv_params,
+                        ᶜbuoy_inv_time_scale,
+                    )
+                ),
                 FT(1),
             ),
         )
-        # Inverse buoyancy time-scale on faces (where w lives), interpolated
-        # to centers for a smoother (ε − δ).
-        ᶜbuoy_inv_time_scale = @. lazy(
-            ᶜinterp(
-                detr_buoy_inv_time_scale(
-                    ᶠw,
-                    vertical_buoyancy_acceleration(
-                        ᶠinterp(ᶜρ_diffʲs.:($$j)),
-                        ᶠgradᵥ_ᶜΦ,
-                        ᶠlg,
-                    ),
-                    entr_detr_buoy_inv_tau_max,
-                ),
-            ),
+        compute_buoyancy_and_shell_detrainment_rate!(
+            ᶜdenominator,
+            Y,
+            p,
+            Val(j),
+            ᶜw,
+            ᶜbuoy_inv_time_scale,
+            ᶜlower_limiter_factor,
         )
         @. ᶜexplicit_entr_minus_detr =
             ᶜarea_bounding_entr_detrʲs.:($$j) +
-            ᶜentr_vel_scaleʲs.:($$j) * ᶜinterp(ᶠw) +
-            ᶜentr_nonvel_rateʲs.:($$j) -
-            ᶜlower_limiter_factor * detr_buoy_coeff * ᶜbuoy_inv_time_scale
+            ᶜentr_vel_scaleʲs.:($$j) * ᶜw +
+            ᶜentr_nonvel_rateʲs.:($$j) - ᶜdenominator
 
         @. ᶜnumerator = Y.c.sgsʲs.:($$j).ρa / dtγ
         # Floor at 0.1/dtγ ⇒ (ε − δ) ≤ 0.9/dtγ (≈10× per-step growth cap).

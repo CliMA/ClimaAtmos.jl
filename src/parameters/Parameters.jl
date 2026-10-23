@@ -185,6 +185,35 @@ parameters are in `SGSQuadratureParameters`. `FT` is the float type; `VFT1`, `VF
   - `edmfx_updraft_kh_diffusion_factor`: Multiplier `f_j` on the environmental
     eddy diffusivity `K_h` (and `K_h_h`) applied to updraft vertical and
     horizontal scalar diffusion (`1` by default) [-].
+  - `pressure_normalmode_drag_area_min`: Minimum updraft area fraction
+    `a_drag,min` in the `1/√max(aʲ, a_drag,min)` scaling of the
+    perturbation-pressure form drag [-].
+  - `entr_z_min`, `entr_z_max`: Lower floor and upper cap on the effective plume
+    height `z_eff` in `effective_plume_height`; `entr_z_max = 0` disables the
+    upper cap [m].
+  - `entr_functional_form`: Entrainment closure selector (`0` = standard
+    `Π`-group linear combination; `> 0` = hybrid buoyancy-sorting and
+    environmental-subsaturation modulated `Π`-group closure) [-].
+  - `entr_tke_coeff`: Coefficient `c_tke` of the TKE-driven entrainment velocity
+    scale [-].
+  - `entr_buoy_w_min`, `detr_buoy_w_min`: Velocity regularizers `w_min` in the
+    local buoyancy `Π₁` group and inverse buoyancy detrainment timescale [m/s].
+  - `entr_buoyancy_sorting_coeff`: Buoyancy-sorting lateral dilution coefficient
+    `c_sort` in `buoyancy_sorted_entrainment_deficit`; `0` disables
+    buoyancy-sorted lateral dilution [-].
+  - `detr_rh_coeff`: Environmental subsaturation coefficient `c_rh` scaling
+    buoyancy detrainment by `1 + c_rh (1 - RH⁰)` [-].
+  - `detr_shell_coeff`: Evaporative shell detrainment coefficient `c_shell` in
+    `buoyancy_and_shell_detrainment_rate` [-].
+  - `detr_massflux_buoy_coeff`: Negative-buoyancy amplification coefficient
+    `c_div_buoy` for mass-flux-divergence detrainment in
+    `c_div_eff = clamp(c_div + c_div_buoy * b_nondim / (b_nondim + 1), 0, 1)`,
+    where `b_nondim = τ⁻¹_buoy / entr_detr_buoy_inv_tau_max` [-].
+  - `edmf_tail_entr_weight`: Weight `w_tail ∈ [0, 1]` shifting entrained air
+    toward the upper half of the environmental subgrid `(T, q_tot)`
+    distribution (`tail_entrainment_increments`) [-].
+  - `edmf_tail_entr_selector`: Linear selector for `environment_tail_shift`
+    (`> 0.5` selects high-MSE air; `≤ 0.5` selects positively buoyant air) [-].
 """
 Base.@kwdef struct TurbulenceConvectionParameters{FT, VFT1, VFT2, VTF3} <: ATCP
     max_surface_area::FT
@@ -229,7 +258,22 @@ Base.@kwdef struct TurbulenceConvectionParameters{FT, VFT1, VFT2, VTF3} <: ATCP
     sfc_mass_flux_ustar_coeff::FT
     convective_zi::FT
     sfc_mass_flux_cap_fraction::FT
+    # Provisional updraft drag, entrainment, detrainment, and scalar diffusion
+    # parameters.
+    pressure_normalmode_drag_area_min::FT
+    entr_z_min::FT
+    entr_z_max::FT
+    entr_functional_form::FT
+    entr_tke_coeff::FT
+    entr_buoy_w_min::FT
+    detr_buoy_w_min::FT
     edmfx_updraft_kh_diffusion_factor::FT
+    entr_buoyancy_sorting_coeff::FT
+    detr_rh_coeff::FT
+    detr_shell_coeff::FT
+    detr_massflux_buoy_coeff::FT
+    edmf_tail_entr_weight::FT
+    edmf_tail_entr_selector::FT
 end
 
 """
@@ -328,18 +372,14 @@ ClimaParams does not yet define or whose ClimaParams default it supersedes.
     `Kessler1M` and `KK2000Autoconversion` autoconversion options read the
     velocity; a nonzero value with another option is rejected at setup
     (`check_rain_autoconversion_velocity_options`) [-].
-  - `cloud_fraction_eps_rel`: Residual fractional saturation variability
-    `ε_rel` in the augmented-`σ` floor of the cloud-fraction closure [-].
+  - `cloud_fraction_eps_rel`: Subsaturation-deficit scaling `ε_rel` in the
+    augmented-`σ` floor `σ_S_floor² = (ε_rel max(0, −μ_S))² + σ_abs²` of the
+    non-equilibrium condensate closure [-].
   - `cloud_fraction_sigma_abs`: Absolute floor `σ_abs` on the augmented
     saturation-deficit standard deviation [kg/kg].
-  - `cloud_fraction_floor_release_margin`: Saturation margin `c_w`, in
-    equilibrium PDF widths, at which the relative floor is released [-].
-  - `cloud_fraction_floor_release_abs_margin`: Absolute margin `c_a`, in floor
-    units, added in quadrature to the release width [-].
-  - `cloud_fraction_floor_release_sharpness`: Exponent `s` of the release
-    transition; larger values approach a switch [-].
-  - `cloud_fraction_floor_residual`: Fraction `D_min` of the relative floor
-    retained deep inside a saturated deck; 1 (default) disables the release [-].
+  - `cloud_fraction_ice_sigma_abs_scale`, `cloud_fraction_ice_eps_rel_scale`:
+    Multipliers on `σ_abs` and `ε_rel` for the ice-phase share `(1 − λ_liq_eq)²`
+    of the non-equilibrium cloud-fraction floor [-].
 """
 Base.@kwdef struct SGSQuadratureParameters{FT} <: ASQP
     diagnostic_covariance_coeff::FT
@@ -366,10 +406,8 @@ Base.@kwdef struct SGSQuadratureParameters{FT} <: ASQP
     rain_autoconversion_tke_coeff::FT
     cloud_fraction_eps_rel::FT
     cloud_fraction_sigma_abs::FT
-    cloud_fraction_floor_release_margin::FT
-    cloud_fraction_floor_release_abs_margin::FT
-    cloud_fraction_floor_release_sharpness::FT
-    cloud_fraction_floor_residual::FT
+    cloud_fraction_ice_sigma_abs_scale::FT
+    cloud_fraction_ice_eps_rel_scale::FT
 end
 
 """
