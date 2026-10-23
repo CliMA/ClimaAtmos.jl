@@ -89,17 +89,24 @@ snow:
 The water vapor tendency follows implicitly, since its specific humidity is
 diagnosed from the total and the condensate specific humidities.
 
-The implementation adds two details to the expression above. The share each
-cloud species receives is clipped to the interval ``[0, 1]``, so a species'
-specific humidity exceeding the suspended total through limiter or round-off
-effects cannot produce a share above one. The quantities attached to a cloud
-mass species follow it in proportion: the cloud droplet and ice number densities
-of the two-moment schemes, which keeps the mean particle mass, and the rime mass
-and rime volume of the P3 ice scheme, which keeps the rime fraction and rime
-density. Rain number density, like rain and snow mass, receives no
-hyperdiffusion. With the microphysics species covered by the distribution
-above, the generic ``\nabla^4`` tendency applies to the passive tracers that
-remain.
+The implementation adds two details to the expression above. First, unlike
+second-order [Diffusion](diffusion.md), which diffuses each suspended cloud
+species down its own gradient, fourth-order hyperdiffusion is a non-monotone
+biharmonic operator (``\nabla_h^4``) that creates dispersive overshoots at sharp
+cloud boundaries where ``q_l^{\mathrm{cl}}`` or ``q_i^{\mathrm{cl}}`` vanishes;
+scaling a single ``\nabla_h^4 q_t^{\mathrm{eff}}`` tendency by the local
+suspended mass fraction ``q_\mu^{\mathrm{cl}} / q_t^{\mathrm{cl}}`` vanishes
+identically outside cloud and avoids four extra cached Laplacian fields and DSS
+passes. The share each cloud species receives is clipped to the interval
+``[0, 1]``, so a species' specific humidity exceeding the suspended total
+through limiter or round-off effects cannot produce a share above one. Second,
+the quantities attached to a cloud mass species follow it in proportion: the
+cloud droplet and ice number densities of the two-moment schemes, which keeps
+the mean particle mass, and the rime mass and rime volume of the P3 ice scheme,
+which keeps the rime fraction and rime density. Rain number density, like rain
+and snow mass, receives no hyperdiffusion. With the microphysics species covered
+by the distribution above, the generic ``\nabla^4`` tendency applies to the
+passive tracers that remain.
 
 ## Energy: an enthalpy-consistent flux
 
@@ -129,7 +136,12 @@ Given the water partitioning above, this expression for the water-enthalpy flux
 is exact. In the code, these are the cache fields `ᶜ∇²s_d` and `ᶜ∇²q_tot_eff`,
 with the weighting held in `ᶜh_eff_plus_Φ` (the average
 ``h_{\mathrm{tot,cl}}`` includes the geopotential); energy hyperdiffusion does
-not act on a lumped `h_tot`.
+not act on a lumped `h_tot`. For intensive updraft moist static energy ``h_s^j``,
+changing ``q_t^j`` at fixed temperature and phase partitioning substitutes water
+for dry air (`∂h_s^j/\partial q_{v,l,i}^j|_T = h_{v,l,i}(T^j) - h_d(T^j)`), so
+the updraft water-enthalpy hyperdiffusion term weights ``\boldsymbol{\mathcal{H}}_{q_t^j}``
+by ``h_{\mathrm{tot,cl}}^j - h_d(T^j) - \Phi`` (`ᶜh_eff_minus_h_d!`), preserving
+exact invariance under a Kirchhoff reference-temperature shift ``T_0 \to T_0 + \Delta T_0``.
 
 The decomposition allows total energy and water to be conserved together.
 Hyperdiffusing potential temperature or another intensive thermodynamic variable

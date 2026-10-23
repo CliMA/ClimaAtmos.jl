@@ -80,17 +80,19 @@ function viscous_sponge_tendency_ρe_tot_dry(ᶜρ, ᶜs_d, s)
 end
 
 """
-    viscous_sponge_tendency_ρe_tot_water(ᶜρ, ᶜh_eff_plus_Φ, ᶜq_tot_eff, s)
+    viscous_sponge_tendency_ρe_tot_water(ᶜρ, ᶜh, ᶜq, s)
 
-Return a lazy broadcast of the water-enthalpy piece of the viscous sponge
+Return a lazy broadcast of a water-enthalpy piece of the viscous sponge
 tendency for total energy density,
-`β_viscous(s, z, zmax) * ∇ₕ·(ρ (h_eff + Φ) ∇ₕq_tot_eff)`, or a `NullBroadcasted`
+`β_viscous(s, z, zmax) * ∇ₕ·(ρ h ∇ₕq)` (with `h` a specific-enthalpy coefficient
+such as `h_v + Φ`, `h_l - h_v`, or `h_i - h_v` and `q` the corresponding water
+specific humidity `q_tot_eff`, `q_lcl`, or `q_icl`), or a `NullBroadcasted`
 when `s isa Nothing`.
 """
 function viscous_sponge_tendency_ρe_tot_water(
     ᶜρ,
-    ᶜh_eff_plus_Φ,
-    ᶜq_tot_eff,
+    ᶜh,
+    ᶜq,
     s,
 )
     s isa Nothing && return NullBroadcasted()
@@ -98,7 +100,7 @@ function viscous_sponge_tendency_ρe_tot_water(
     zmax = Spaces.z_max(axes(ᶠz))
     return @. lazy(
         β_viscous(s, ᶜz, zmax) *
-        wdivₕ(ᶜρ * ᶜh_eff_plus_Φ * gradₕ(ᶜq_tot_eff)),
+        wdivₕ(ᶜρ * ᶜh * gradₕ(ᶜq)),
     )
 end
 
@@ -124,14 +126,15 @@ Accumulate the full viscous-sponge tendency into `Yₜ` in-place. No-op when
 
   - Horizontal (`c.uₕ`) and vertical (`f.u₃`) velocities of the grid mean,
     and — under `PrognosticEDMFX` — the per-updraft `sgsʲ.u₃`.
-  - `c.ρe_tot`: split-form diffusion of dry static energy plus the
-    h_eff-weighted diffusion of `q_tot_eff = q_tot - q_rai - q_sno` (rain
-    and snow excluded from both `q_tot_eff` and the enthalpy weighting),
-    matching the hyperdiffusion and vertical-diffusion energy treatments.
-  - Total-water mass: diffuse `q_tot_eff`; apply the aggregate tendency to
-    `c.ρq_tot` and `c.ρ`; distribute it proportionally to the suspended
-    cloud mass species (`ρq_lcl`, `ρq_icl`).
-  - Rain and snow are not sponge-diffused.
+  - `c.ρe_tot`: dry-static-energy diffusion plus the water-enthalpy fluxes of
+    Yatunin et al. (2026, Eq. 33),
+    `(h_v + Φ) ∇ₕq_tot_eff + (h_l - h_v) ∇ₕq_lcl + (h_i - h_v) ∇ₕq_icl`,
+    with `q_tot_eff = q_tot - q_rai - q_sno`, matching the second-order
+    diffusion closures.
+  - Total-water and suspended cloud species: diffuse `q_tot_eff` (applied to
+    `c.ρq_tot` and `c.ρ`), and diffuse each prognostic suspended cloud species
+    (`ρq_lcl`, `ρq_icl`, `ρn_lcl`, `ρn_ice`) down its own horizontal gradient.
+  - Rain and snow do not diffuse.
   - Passive (non-microphysics) grid-scale tracers: full independent
     diffusion.
 """
@@ -163,61 +166,61 @@ NVTX.@annotate function viscous_sponge_tendency!(Yₜ, Y, p)
         viscous_sponge_tendency_ρe_tot_dry(ᶜρ, ᶜs_d, viscous_sponge)
     @. Yₜ.c.ρe_tot += vst_ρe_tot_dry
 
-    # Water pieces: energy water-enthalpy flux + q_tot_eff mass diffusion +
-    # proportional distribution to suspended cloud species. Reuse the shared
-    # `ᶜdiffusing_water` / `ᶜsuspended_water` / `ᶜh_eff_plus_Φ!` helpers so
-    # the split matches the vertical-diffusion and hyperdiffusion tendencies.
+    # Water pieces: energy water-enthalpy flux (Yatunin et al. 2026, Eq. 33) +
+    # q_tot_eff mass diffusion + independent diffusion of suspended cloud
+    # species, matching the second-order diffusion closures.
     if !(microphysics_model isa DryModel)
-        FT = eltype(Y)
-        ϵ_FT = eps(FT)
         ᶜq_tot_eff = ᶜdiffusing_water(Y, p)
-        ᶜq_vap, ᶜq_lcl, ᶜq_icl = ᶜsuspended_water(Y, p)
-        ᶜh_eff_plus_Φ = ᶜh_eff_plus_Φ!(
-            p.scratch.ᶜtemp_scalar,
-            thermo_params,
-            ᶜT,
-            ᶜΦ,
-            ᶜq_vap,
-            ᶜq_lcl,
-            ᶜq_icl,
-        )
-        vst_ρe_tot_water = viscous_sponge_tendency_ρe_tot_water(
+        _, ᶜq_lcl, ᶜq_icl = ᶜsuspended_water(Y, p)
+        ᶜscratch = p.scratch.ᶜtemp_scalar
+        ᶜh_vap_plus_Φ = ᶜh_vap_plus_Φ!(ᶜscratch, Y, p)
+        vst_ρe_tot_vap = viscous_sponge_tendency_ρe_tot_water(
             ᶜρ,
-            ᶜh_eff_plus_Φ,
+            ᶜh_vap_plus_Φ,
             ᶜq_tot_eff,
             viscous_sponge,
         )
-        @. Yₜ.c.ρe_tot += vst_ρe_tot_water
+        @. Yₜ.c.ρe_tot += vst_ρe_tot_vap
+        ᶜh_lv = ᶜh_liq_minus_vap!(ᶜscratch, Y, p)
+        vst_ρe_tot_liq = viscous_sponge_tendency_ρe_tot_water(
+            ᶜρ,
+            ᶜh_lv,
+            ᶜq_lcl,
+            viscous_sponge,
+        )
+        @. Yₜ.c.ρe_tot += vst_ρe_tot_liq
+        ᶜh_iv = ᶜh_ice_minus_vap!(ᶜscratch, Y, p)
+        vst_ρe_tot_ice = viscous_sponge_tendency_ρe_tot_water(
+            ᶜρ,
+            ᶜh_iv,
+            ᶜq_icl,
+            viscous_sponge,
+        )
+        @. Yₜ.c.ρe_tot += vst_ρe_tot_ice
 
-        # Aggregate water mass tendency; reuse the generic tracer sponge on
-        # `q_tot_eff`. Applied to `ρq_tot` and `ρ`, then distributed to
-        # suspended cloud species (and matching number densities).
+        # Aggregate water mass tendency on `q_tot_eff` (applied to `ρq_tot` and
+        # `ρ`), and independent damping of suspended cloud species (`ρq_lcl`,
+        # `ρq_icl`, `ρn_lcl`, `ρn_ice`) down their own horizontal gradients.
         ᶜρq_tot_diff = p.scratch.ᶜtemp_scalar_2
-        vst_ρq_tot =
+        vst_q_tot =
             viscous_sponge_tendency_tracer(ᶜρ, ᶜq_tot_eff, viscous_sponge)
-        @. ᶜρq_tot_diff = vst_ρq_tot
+        @. ᶜρq_tot_diff = vst_q_tot
         @. Yₜ.c.ρq_tot += ᶜρq_tot_diff
         @. Yₜ.c.ρ += ᶜρq_tot_diff
-        ᶜratio = p.scratch.ᶜtemp_scalar_3
-        for (ρq_name, ρn_name) in (
-            (@name(c.ρq_lcl), @name(c.ρn_lcl)),
-            (@name(c.ρq_icl), @name(c.ρn_ice)),
-        )
-            MatrixFields.has_field(Y, ρq_name) || continue
-            ᶜρq = MatrixFields.get_field(Y, ρq_name)
-            ᶜρqₜ = MatrixFields.get_field(Yₜ, ρq_name)
-            @. ᶜratio = max(
-                FT(0),
-                min(FT(1), specific(ᶜρq, Y.c.ρ) / max(ᶜq_tot_eff, ϵ_FT)),
-            )
-            @. ᶜρqₜ += ᶜratio * ᶜρq_tot_diff
-            if MatrixFields.has_field(Y, ρn_name)
-                ᶜρn = MatrixFields.get_field(Y, ρn_name)
-                ᶜρnₜ = MatrixFields.get_field(Yₜ, ρn_name)
-                @. ᶜρnₜ +=
-                    ᶜratio * max(FT(0), ᶜρn) / max(ᶜρq, ϵ_FT) *
-                    ᶜρq_tot_diff
-            end
+        MatrixFields.unrolled_foreach(
+            (
+            @name(c.ρq_lcl),
+            @name(c.ρq_icl),
+            @name(c.ρn_lcl),
+            @name(c.ρn_ice),
+        ),
+        ) do ρχ_name
+            MatrixFields.has_field(Y, ρχ_name) || return
+            ᶜρχ = MatrixFields.get_field(Y, ρχ_name)
+            ᶜρχₜ = MatrixFields.get_field(Yₜ, ρχ_name)
+            ᶜχ = @. lazy(specific(ᶜρχ, ᶜρ))
+            vst_cloud = viscous_sponge_tendency_tracer(ᶜρ, ᶜχ, viscous_sponge)
+            @. ᶜρχₜ += vst_cloud
         end
     end
 

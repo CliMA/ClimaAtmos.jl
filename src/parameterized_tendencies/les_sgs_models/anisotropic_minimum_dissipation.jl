@@ -46,12 +46,13 @@ Dₜ = \\max(0, -c \\, (∂̂ₖuᵢ)(∂̂ₖχ) ∂ᵢχ / (∂ₗχ)(∂ₗχ
 
 with `c = les.c_amd` [-] and a separate `Dₜ` for each diffused scalar
 (`amd_scalar_diffusivity`). Momentum receives `-∇ₕ·(ρ τ)/ρ` with the SGS momentum flux
-tensor `τ = -2 νₜ S`. Total energy receives the divergence of the split enthalpy flux
-`-ρ [Dₜ(s_d) ∇ₕs_d + Dₜ(q_tot_eff) (h_eff + Φ) ∇ₕq_tot_eff]` (see `ᶜh_eff_plus_Φ!`), each
-part with the diffusivity of the scalar whose gradient it acts on and the water part absent
-in dry configurations. Each grid-scale tracer `χ` receives `+∇ₕ·(ρ Dₜ ∇ₕχ)`, and the
-`ρq_tot` diffusion is also added to `Yₜ.c.ρ` so that moisture diffusion conserves mass.
-Reads `ᶜu`, `ᶠu³`, and `ᶜT` from `p.precomputed` and uses several `p.scratch` fields.
+tensor `τ = -2 νₜ S`. Total energy receives the divergence of the enthalpy flux
+`-ρ [Dₜ(s_d) ∇ₕs_d + Dₜ(q_tot_eff) ((h_v + Φ) ∇ₕq_tot_eff + (h_l - h_v) ∇ₕq_lcl + (h_i - h_v) ∇ₕq_icl)]`,
+whose water terms are absent in dry configurations. Total water diffuses on `q_tot_eff`
+with `Dₜ(q_tot_eff)` (mirrored to `Yₜ.c.ρ` for mass conservation while suspended cloud
+species diffuse down their own gradients with the same diffusivity and rain and snow do
+not diffuse), and each passive grid-scale tracer `χ` receives `+∇ₕ·(ρ Dₜ(χ) ∇ₕχ)`. Reads
+`ᶜu`, `ᶠu³`, and `ᶜT` from `p.precomputed` and uses several `p.scratch` fields.
 
 This tendency is always applied explicitly, from `remaining_tendency!`. To remove it in
 debugging workflows, comment out the call in `remaining_tendency.jl`. See also
@@ -126,33 +127,32 @@ function horizontal_amd_tendency!(Yₜ, Y, p, t, les::AnisotropicMinimumDissipat
     @. Yₜ.c.uₕ -= C12(wdivₕ(Y.c.ρ * ᶜτ_amd) / Y.c.ρ)
     @. Yₜ.f.u₃ -= C3(wdivₕ(ᶠρ * ᶠτ_amd) / ᶠρ)
 
-    ## Total energy tendency: the dry-static-energy part of the enthalpy flux,
-    ## then the enthalpy carried by the diffusing water, each with the AMD
-    ## diffusivity of its own gradient
+    ## Total energy tendency: dry static energy with D(∇s_d), plus the water
+    ## enthalpy flux with D(∇q_tot_eff)
     ᶜs_d = ᶜdry_static_energy(p)
     ∇s_d = @. lazy(Geometry.project(axis_uvw, gradₕ(ᶜs_d)))
     ᶜD_amd = @. ᶜtemp_scalar = amd_scalar_diffusivity(c_amd, ᶜ∂̂u_uvw, Δ_h, ∇s_d)
     @. Yₜ.c.ρe_tot += wdivₕ(Y.c.ρ * ᶜD_amd * gradₕ(ᶜs_d))
     if !(atmos.microphysics_model isa DryModel)
-        ᶜh_eff_plus_Φ = ᶜh_eff_plus_Φ!(ᶜtemp_scalar_2, Y, p)
         ᶜq_tot_eff = ᶜdiffusing_water(Y, p)
         ∇q_tot_eff = @. lazy(Geometry.project(axis_uvw, gradₕ(ᶜq_tot_eff)))
         @. ᶜD_amd = amd_scalar_diffusivity(c_amd, ᶜ∂̂u_uvw, Δ_h, ∇q_tot_eff)
-        @. Yₜ.c.ρe_tot +=
-            wdivₕ(Y.c.ρ * ᶜD_amd * ᶜh_eff_plus_Φ * gradₕ(ᶜq_tot_eff))
+        ᶜρD_q = @. lazy(Y.c.ρ * ᶜD_amd)
+        ᶜρq_tot_diff = ᶜtemp_scalar_2
+        @. ᶜρq_tot_diff = wdivₕ(ᶜρD_q * gradₕ(ᶜq_tot_eff))
+        @. Yₜ.c.ρq_tot += ᶜρq_tot_diff
+        @. Yₜ.c.ρ += ᶜρq_tot_diff
+        add_water_enthalpy_diffusionₕ!(Yₜ.c.ρe_tot, ᶜρD_q, Y, p, ᶜtemp_scalar_3)
+        diffuse_suspended_cloud_speciesₕ!(Yₜ, Y, ᶜρD_q)
     end
 
-    # Tracer diffusion and associated mass changes
+    # Passive (non-microphysics) grid-scale tracers
     foreach_gs_tracer(Yₜ, Y) do ᶜρχₜ, ᶜρχ, ρχ_name
+        ρχ_name in microphysics_tracer_names(Y) && return
         ᶜχ = @. lazy(specific(ᶜρχ, Y.c.ρ))
         ∇ᶜχ = @. lazy(Geometry.project(axis_uvw, gradₕ(ᶜχ)))
         @. ᶜD_amd = amd_scalar_diffusivity(c_amd, ᶜ∂̂u_uvw, Δ_h, ∇ᶜχ)
-        ᶜρχₜ_diffusion = @. lazy(wdivₕ(Y.c.ρ * ᶜD_amd * gradₕ(ᶜχ)))
-        @. ᶜρχₜ += ᶜρχₜ_diffusion
-        # Rain and snow does not affect the mass
-        if ρχ_name == @name(ρq_tot)
-            @. Yₜ.c.ρ += ᶜρχₜ_diffusion
-        end
+        @. ᶜρχₜ += wdivₕ(Y.c.ρ * ᶜD_amd * gradₕ(ᶜχ))
     end
 end
 
@@ -169,13 +169,14 @@ Computes the same [Akbar2016](@cite) eddy viscosity `νₜ` and scalar diffusivi
 `horizontal_amd_tendency!` (see that docstring for the formulas), with the scalar
 diffusivities evaluated on cell faces from vertical gradients. Momentum receives
 `-∇ᵥ·(ρ τ)/ρ` with the SGS momentum flux tensor `τ = -2 νₜ S`. Total energy receives the
-divergence of the split enthalpy flux
-`-ρ [Dₜ(s_d) ∇ᵥs_d + Dₜ(q_tot_eff) (h_eff + Φ) ∇ᵥq_tot_eff]`, whose water part is absent
-in dry configurations, and each grid-scale tracer
-receives the vertical diffusive-flux divergence `ᶜdiffusive_flux_divergenceᵥ` with face
-diffusivity `ᶠρ Dₜ` (subtracted, since it is a flux divergence); the `ρq_tot` diffusion is
-also applied to `Yₜ.c.ρ` so that moisture diffusion conserves mass. Reads `ᶜu`, `ᶠu³`, and
-`ᶜT` from `p.precomputed` and uses several `p.scratch` fields.
+divergence of the enthalpy flux
+`-ρ [Dₜ(s_d) ∇ᵥs_d + Dₜ(q_tot_eff) ((h_v + Φ) ∇ᵥq_tot_eff + (h_l - h_v) ∇ᵥq_lcl + (h_i - h_v) ∇ᵥq_icl)]`,
+whose water terms are absent in dry configurations. Total water diffuses on
+`q_tot_eff` with `Dₜ(q_tot_eff)` (mirrored to `Yₜ.c.ρ` for mass conservation while
+suspended cloud species diffuse down their own gradients with the same diffusivity and
+rain and snow do not diffuse), and each passive grid-scale tracer receives the vertical
+diffusive-flux divergence `ᶜdiffusive_flux_divergenceᵥ` with face diffusivity `ᶠρ Dₜ`.
+Reads `ᶜu`, `ᶠu³`, and `ᶜT` from `p.precomputed` and uses several `p.scratch` fields.
 
 This tendency is always applied explicitly, from `remaining_tendency!`; it is not part of
 the implicit solver. To remove it in debugging workflows, comment out the call in
@@ -263,36 +264,33 @@ function vertical_amd_tendency!(Yₜ, Y, p, t, les::AnisotropicMinimumDissipatio
     ## Vertical momentum tendency
     @. Yₜ.f.u₃ -= C3(ᶠdiffdivᵥ_u₃(Y.c.ρ * ᶜτ_amd) / ᶠρ)
 
-    ## Total energy tendency: the dry-static-energy part of the enthalpy flux,
-    ## then the enthalpy carried by the diffusing water, each with the AMD
-    ## diffusivity of its own gradient
+    ## Total energy tendency: dry static energy with D(∇s_d), plus the water
+    ## enthalpy flux with D(∇q_tot_eff)
     ᶜs_d = ᶜdry_static_energy(p)
     ∇s_d = @. lazy(Geometry.project(axis_uvw, ᶠgradᵥ_scalar(ᶜs_d)))
     ᶠD_amd = @. ᶠtemp_scalar = amd_scalar_diffusivity(c_amd, ᶠ∂̂u_uvw, ᶠΔ_z, ∇s_d)
     ᶠρD = @. lazy(ᶠρ * ᶠD_amd)
-    ᶜ∇ᵥρD∇s_dₜ = ᶜdiffusive_flux_divergenceᵥ(ᶠρD, ᶜs_d)
-    @. Yₜ.c.ρe_tot -= ᶜ∇ᵥρD∇s_dₜ
+    @. Yₜ.c.ρe_tot -= $(ᶜdiffusive_flux_divergenceᵥ(ᶠρD, ᶜs_d))
     if !(p.atmos.microphysics_model isa DryModel)
-        ᶜh_eff_plus_Φ = ᶜh_eff_plus_Φ!(ᶜtemp_scalar_2, Y, p)
         ᶜq_tot_eff = ᶜdiffusing_water(Y, p)
         ∇q_tot_eff = @. lazy(Geometry.project(axis_uvw, ᶠgradᵥ_scalar(ᶜq_tot_eff)))
         @. ᶠD_amd = amd_scalar_diffusivity(c_amd, ᶠ∂̂u_uvw, ᶠΔ_z, ∇q_tot_eff)
-        ᶠρD_h_eff = @. lazy(ᶠρ * ᶠD_amd * ᶠinterp(ᶜh_eff_plus_Φ))
-        ᶜ∇ᵥρDh_eff∇q_totₜ = ᶜdiffusive_flux_divergenceᵥ(ᶠρD_h_eff, ᶜq_tot_eff)
-        @. Yₜ.c.ρe_tot -= ᶜ∇ᵥρDh_eff∇q_totₜ
+        ᶠρD_q = @. lazy(ᶠρ * ᶠD_amd)
+        ᶜρq_tot_diff = ᶜtemp_scalar_2
+        @. ᶜρq_tot_diff = -($(ᶜdiffusive_flux_divergenceᵥ(ᶠρD_q, ᶜq_tot_eff)))
+        @. Yₜ.c.ρq_tot += ᶜρq_tot_diff
+        @. Yₜ.c.ρ += ᶜρq_tot_diff
+        add_water_enthalpy_diffusionᵥ!(Yₜ.c.ρe_tot, ᶠρD_q, Y, p, ᶜtemp_scalar_3)
+        diffuse_suspended_cloud_speciesᵥ!(Yₜ, Y, ᶠρD_q)
     end
 
-    ## Tracer diffusion and associated mass changes
+    ## Passive (non-microphysics) grid-scale tracers
     foreach_gs_tracer(Yₜ, Y) do ᶜρχₜ, ᶜρχ, ρχ_name
+        ρχ_name in microphysics_tracer_names(Y) && return
         ᶜχ = @. lazy(specific(ᶜρχ, Y.c.ρ))
         ∇ᶜχ = @. lazy(Geometry.project(axis_uvw, ᶠgradᵥ_scalar(ᶜχ)))
         @. ᶠD_amd = amd_scalar_diffusivity(c_amd, ᶠ∂̂u_uvw, ᶠΔ_z, ∇ᶜχ)
         ᶠρD_tracer = @. lazy(ᶠρ * ᶠD_amd)
-        ᶜ∇ᵥρD∇χₜ = ᶜdiffusive_flux_divergenceᵥ(ᶠρD_tracer, ᶜχ)
-        @. ᶜρχₜ -= ᶜ∇ᵥρD∇χₜ
-        # Rain and snow does not affect the mass
-        if ρχ_name == @name(ρq_tot)
-            @. Yₜ.c.ρ -= ᶜ∇ᵥρD∇χₜ
-        end
+        @. ᶜρχₜ -= $(ᶜdiffusive_flux_divergenceᵥ(ᶠρD_tracer, ᶜχ))
     end
 end

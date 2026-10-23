@@ -526,7 +526,21 @@ function TurbulenceConvectionParameters(
     )
     parameters = CP.get_parameter_values(toml_dict, name_map, "ClimaAtmos")
     FT = CP.float_type(toml_dict)
-    parameters = merge(parameters, overrides)
+    provisional_defaults = (;
+        edmfx_updraft_kh_diffusion_factor = FT(1),
+    )
+    provisional_present = filter(collect(keys(provisional_defaults))) do name
+        haskey(toml_dict.data, string(name))
+    end
+    provisional_params =
+        isempty(provisional_present) ? (;) :
+        CP.get_parameter_values(
+            toml_dict,
+            String.(provisional_present),
+            "ClimaAtmos",
+        )
+    parameters =
+        merge(parameters, provisional_defaults, provisional_params, overrides)
     parameters = to_svec(parameters)
     VFT1 = typeof(parameters.entr_param_vec)
     VFT2 = typeof(parameters.turb_entr_param_vec)

@@ -72,7 +72,7 @@ The subgrid-scale and numerical terms follow the same rule.
 coordinate surfaces, so it redistributes without creating or destroying
 anything; its enthalpy flux is decomposed to account for the energy carried by
 the hyperdiffusive water flux, so total energy and water are conserved together.
-The same decomposition governs the turbulent enthalpy flux and the
+The same principle governs the [turbulent enthalpy flux](diffusion.md) and the
 [sponge layer](sponge.md).
 
 ## What is not conserved

@@ -1056,8 +1056,9 @@ function check_case_consistency(parsed_args)
        !parsed_args["edmfx_sgs_horizontal_diffusive_flux"]
         error(
             "`edmfx_horizontal_diffusion` requires \
-             `edmfx_sgs_horizontal_diffusive_flux`: the updraft scalars \
-             inherit the grid-mean horizontal diffusion tendencies",
+             `edmfx_sgs_horizontal_diffusive_flux`: updraft horizontal \
+             diffusion uses the horizontal eddy diffusivity and feeds into \
+             the grid-mean horizontal diffusive flux",
         )
     end
 
