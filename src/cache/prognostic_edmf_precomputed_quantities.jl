@@ -249,7 +249,8 @@ non-velocity entrainment rate `ᶜentr_nonvel_rateʲs` [1/s], the turbulent
 entrainment rate `ᶜturb_entrʲs` [1/s], the signed area-bounding
 entrainment/detrainment rate
 `ᶜarea_bounding_entr_detrʲs` [1/s], and the relative density excess `ᶜρ_diffʲs`
-[-]. It also writes the squared strain-rate norm `ᶜstrain_rate_norm` [1/s²], the
+[-]. It also writes the squared strain-rate norm `ᶜstrain_rate_norm` [1/s²]
+(`set_strain_rate_norm!`), the
 surface TKE flux `ρtke_flux`, and (via `set_edmfx_surface_conditions!`) the
 per-updraft surface payload at level 1.
 
@@ -280,9 +281,9 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
     FT = eltype(params)
     n = n_mass_flux_subdomains(turbconv_model)
 
-    (; ᶜp, ᶠu³) = p.precomputed
+    (; ᶜp) = p.precomputed
     (; ᶜT⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰) = p.precomputed
-    (; ᶜstrain_rate_norm, ρtke_flux) = p.precomputed
+    (; ρtke_flux) = p.precomputed
     (;
         ᶜuʲs,
         ᶜTʲs,
@@ -372,12 +373,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
     # buoyant-air mse/q_tot values).
     set_edmfx_surface_conditions!(Y, p)
 
-    # TODO: Make strain_rate_norm calculation a function in eddy_diffusion_closures
-    # TODO: Currently the shear production only includes vertical gradients
-    ᶠu = p.scratch.ᶠtemp_C123
-    @. ᶠu = C123(ᶠinterp(Y.c.uₕ)) + C123(ᶠu³)
-    ᶜstrain_rate = compute_strain_rate_center_vertical(ᶠu)
-    @. ᶜstrain_rate_norm = norm_sqr(ᶜstrain_rate)
+    set_strain_rate_norm!(Y, p)
 
     ρtke_flux_values = Fields.field_values(ρtke_flux)
     ρ_sfc_values = Fields.field_values(Fields.level(Y.c.ρ, 1)) # TODO: replace by surface value

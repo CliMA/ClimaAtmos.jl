@@ -52,7 +52,7 @@ Used when no EDMFX model with prognostic TKE is active. Steps:
     buoyancy gradient (`blended_N²`, using the chain-rule coefficients
     and face gradients materialized by `set_buoyancy_gradient_inputs!`).
  2. Fill `p.precomputed.ᶜstrain_rate_norm` with the squared strain-rate norm
-    of the resolved velocity.
+    of the resolved velocity (`set_strain_rate_norm!`).
  3. Evaluate the turbulent Prandtl number and
     `smagorinsky_lilly_length` with the vertical grid scale `ᶜdz`.
 
@@ -65,7 +65,7 @@ NVTX.@annotate function compute_gm_mixing_length(Y, p)
 
     ᶜdz = Fields.Δz_field(axes(Y.c))
     ᶜlg = Fields.local_geometry_field(Y.c)
-    (; ᶠu³, ᶜbuoygrad, ᶜstrain_rate_norm, ᶜcloud_fraction) = p.precomputed
+    (; ᶜbuoygrad, ᶜstrain_rate_norm, ᶜcloud_fraction) = p.precomputed
 
     # Chain-rule coefficients and face gradients are materialized once per
     # update by `set_buoyancy_gradient_inputs!` (called before the
@@ -78,11 +78,7 @@ NVTX.@annotate function compute_gm_mixing_length(Y, p)
         projected_vector_data(C3, p.precomputed.ᶜgradᵥ_q_tot, ᶜlg),
     )
 
-    # TODO: move strain rate calculation to separate function
-    ᶠu = p.scratch.ᶠtemp_C123
-    @. ᶠu = C123(ᶠinterp(Y.c.uₕ)) + C123(ᶠu³)
-    ᶜstrain_rate = compute_strain_rate_center_vertical(ᶠu)
-    @. ᶜstrain_rate_norm = norm_sqr(ᶜstrain_rate)
+    set_strain_rate_norm!(Y, p)
 
     ᶜprandtl_nvec = p.scratch.ᶜtemp_scalar_2
     @. ᶜprandtl_nvec =

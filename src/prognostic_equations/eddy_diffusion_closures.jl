@@ -594,6 +594,26 @@ function set_displacement_buoyancy_gradient!(
 end
 
 """
+    set_strain_rate_norm!(Y, p)
+
+Fill `p.precomputed.ᶜstrain_rate_norm` with the squared Frobenius norm
+`SᵢⱼSᵢⱼ` of the vertical-gradient strain rate of the face velocity
+`ᶠinterp(uₕ) + u³`. This is the shear term of the TKE budget, `Ri`, `Pr_t`,
+and the mixing lengths for both the EDMF and the grid-mean closures.
+
+Reads `ᶠu³` from `p.precomputed` and uses `p.scratch.ᶠtemp_C123`; returns
+`nothing`.
+"""
+function set_strain_rate_norm!(Y, p)
+    (; ᶠu³, ᶜstrain_rate_norm) = p.precomputed
+    ᶠu = p.scratch.ᶠtemp_C123
+    @. ᶠu = C123(ᶠinterp(Y.c.uₕ)) + C123(ᶠu³)
+    ᶜstrain_rate = compute_strain_rate_center_vertical(ᶠu)
+    @. ᶜstrain_rate_norm = norm_sqr(ᶜstrain_rate)
+    return nothing
+end
+
+"""
     set_face_diffusivities!(Y, p)
 
 Fill the face-native turbulence pipeline: at the cell faces where the
