@@ -155,11 +155,12 @@ function rrtmgp_solver_kwargs(
     else
         Fields.field2array(zero(bottom_coords.z)) # flat space is on Equator
     end
-    kwargs = (;
-        lapse_rate = 3.5,
-        optical_thickness_parameter = (@. 7.2 + (1.8 - 7.2) * sind(latitude)^2),
-        latitude,
-    )
+    FT = Spaces.undertype(space)
+    τ_equator = FT(7.2)
+    τ_pole = FT(1.8)
+    optical_thickness_parameter =
+        @. τ_equator + (τ_pole - τ_equator) * sind(latitude)^2
+    kwargs = (; lapse_rate = FT(3.5), optical_thickness_parameter, latitude)
     if ᶜspace.grid.global_geometry isa Geometry.AbstractSphericalGlobalGeometry
         zkwargs = (;
             center_z = Fields.field2array(ᶜz),
@@ -381,7 +382,6 @@ function radiation_model_cache(
     bottom_extrapolation = RRTMGPI.SameAsInterpolation(),
 )
     context = ClimaComms.context(axes(Y.c))
-    device = context.device
     if !(radiation_mode isa RRTMGPI.GrayRadiation)
         (; aerosol_radiation) = radiation_mode
         if aerosol_radiation && !(any(
@@ -751,7 +751,7 @@ explicitly at every stage. No cache is allocated; the flux is built in `p.scratc
 """
 function radiation_tendency!(Yₜ, Y, p, t, radiation_mode::RadiationISDAC)
     (; F₀, F₁, κ) = radiation_mode
-    (; params, precomputed) = p
+    (; precomputed) = p
     (; ᶜq_liq) = precomputed
 
     ᶜρq = p.scratch.ᶜtemp_scalar

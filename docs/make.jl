@@ -64,11 +64,13 @@ makedocs(;
         "Getting Started" => [
             "Installation" => "installation.md",
             "Your First Simulation" => "first_simulation.md",
+            "Example: Moist Baroclinic Wave" => "moist_baroclinic_wave.md",
             "Script vs Config Interface" => "interfaces.md",
         ],
         "How-to Guides" => [
             "Running Simulations" => [
                 "Running Single-Column Cases" => "single_column.md",
+                "Running Box Simulations" => "box_simulations.md",
                 "Running Global Simulations" => "global_simulations.md",
                 "Restarting and Checkpointing" => "restarts.md",
                 "Running on GPUs and MPI" => "gpu_and_mpi.md",
@@ -101,8 +103,12 @@ makedocs(;
                     "Discretization and Time Stepping" => "prophet_numerics.md",
                     "Horizontal Diffusion" => "prophet_horizontal_diffusion.md",
                 ],
+                "Diffusion" => "diffusion.md",
+                "Large-Eddy Simulation Closures" => "les_sgs.md",
                 "Microphysics" => "microphysics.md",
                 "Radiation" => "radiation.md",
+                "COSP Satellite Simulator" => "cosp.md",
+                "Forcings and Idealized Cases" => "forcings.md",
                 "Gravity Wave Drag" => [
                     "Non-orographic Gravity Waves" => "non_orographic_gravity_wave.md",
                     "Orographic Gravity Waves" => "orographic_gravity_wave.md",

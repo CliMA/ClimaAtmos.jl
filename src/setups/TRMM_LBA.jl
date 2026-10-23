@@ -84,7 +84,7 @@ function surface_condition(::TRMM_LBA, params)
             z0 = FT(1e-4), fluxes = trmm_lba_fluxes, ustar = FT(0.28),
         ),
         temperature = AnalyticTemperature(Returns(FT(296.85))),
-        overrides = SurfaceBoundaryOverrides(p = FT(99130), q_vap = FT(0.02245)),
+        overrides = SurfaceBoundaryOverrides(q_vap = FT(0.02245)),
     )
 end
 

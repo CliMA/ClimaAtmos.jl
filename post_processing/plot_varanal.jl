@@ -215,7 +215,7 @@ function _load_arm_sonde(sonde_dir::String, start_date::Dates.Date, n_days::Int)
                     heights_km = _to_float_nan(ds["height"][:])
                 end
                 times = ds["time"][:]
-                for i in 1:length(times)
+                for i in eachindex(times)
                     push!(all_times, times[i])
                     for vn in obs_vars
                         haskey(ds, vn) || continue

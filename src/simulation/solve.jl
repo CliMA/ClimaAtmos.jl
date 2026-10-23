@@ -56,7 +56,6 @@ the throughput in simulated years per day, and the walltime per timestep.
 """
 function timed_solve!(integrator)
     device = ClimaComms.device(integrator.u.c)
-    comms_ctx = ClimaComms.context(device)
     local sol
     walltime = ClimaComms.elapsed(device) do
         sol = CTS.solve!(integrator)
@@ -111,7 +110,7 @@ output directory first. The diagnostic writers are closed on every path.
 
 ```julia
 import ClimaAtmos as CA
-simulation = CA.AtmosSimulation{Float64}(; t_end = 86400)
+simulation = CA.AtmosSimulation(CA.AtmosModel(CA.SphereGrid(Float64)); t_end = 86400)
 results = CA.solve_atmos!(simulation)
 results.ret_code == :success
 ```

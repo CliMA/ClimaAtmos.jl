@@ -7,7 +7,7 @@ Three methods are available to specify the ocean albedo, selected by the
 
 ## 1) `ConstantAlbedo`
 
-A constant albedo, used for idealized experiments. In YAML configurations the
+A constant albedo, used for idealized experiments. In YAML configurations, the
 value comes from the ClimaParams key `idealized_ocean_albedo`, default 0.38
 (following [OGorman2008](@cite)); the `AtmosModel` script-API default is 0.07.
 
@@ -21,11 +21,11 @@ This is an empirical parameterization of the direct and diffuse surface albedo o
 
 where:
 
-  - $λ$ is the wavelength (currently unused).
-  - $μ$ is the cosine of the solar zenith angle.
-  - $u$ is the surface wind speed.
-  - $σ(u)$ is the mean wave slope distribution width following [CoxMunk1954](@cite), with $\sigma^2 = 0.003 + 0.00512u$.
-  - $r_{f}(n, μ)$ is the Fresnel reflectance (e.g., see [Warren2019](@cite)):
+  - the wavelength $λ$ (currently unused).
+  - the cosine of the solar zenith angle $μ$.
+  - the surface wind speed $u$.
+  - the mean wave slope distribution width $σ(u)$ following [CoxMunk1954](@cite), with $\sigma^2 = 0.003 + 0.00512u$.
+  - the Fresnel reflectance $r_{f}(n, μ)$ (e.g., see [Warren2019](@cite)):
 
 ```math
     r_{f_p}(n, θ) = \left(\frac{n^2 \cos(θ) - \sqrt{n^2 - \sin^2(θ)}}{n^2 \cos(θ) + \sqrt{n^2 - \sin^2(θ)}}\right)^2
@@ -37,9 +37,9 @@ where:
 
 where we assume an equal contribution from the p and s polarizations, so that $r_{f}(n, θ) = 0.5(r_{f_p}(n, θ) + r_{f_s}(n, θ))$, and the perfect dielectric medium approximation.
 
-  - $n_0=1.34$ is the refractive index of water for visible light.
-  - $n$ is the relative refractive index of water and air ($n = n_w/n_a$), and is assumed to be equal to $n_0$ for the broadband representation.
-  - $f(μ, σ)$ is the regression function, defined as:
+  - the refractive index of water for visible light, $n_0=1.34$.
+  - the relative refractive index of water and air $n$ ($n = n_w/n_a$), assumed equal to $n_0$ for the broadband representation.
+  - the regression function $f(μ, σ)$, defined as:
 
 ```math
 f(μ, σ) = (p_1 + p_2μ + p_3μ^2 + p_4μ^3 + p_5σ + p_6σμ)  \exp(p_7 + p_8μ + p_9μ^2 + p_{10}σ + p_{11}σμ)
@@ -73,7 +73,7 @@ for clear sky, and
 α_{diff}(λ, μ, u) = -0.1479 + 0.1502n - 0.016nσ(u)
 ```
 
-for cloudy sky. In the current implementation we assume clear skies everywhere.
+for cloudy sky. In the current implementation, we assume clear skies everywhere.
 
 In the code, both the direct and the diffuse albedo are clamped to the
 interval ``[0, 1]``, since the diffuse regression can otherwise go negative,

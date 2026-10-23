@@ -12,9 +12,7 @@ concurrency:
   # so that the workflow badge does not report a cancellation as "failing".
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
-# Needed to allow julia-actions/cache to delete old caches that it has created
 permissions:
-  actions: write
   contents: read
 
 jobs:
@@ -60,7 +58,6 @@ jobs:
       fail-fast: false
       matrix:
         version:
-          - '1.10'
           - '1.11'
         # Ubuntu only. `main` then exercises the required jobs that gate a 
         # pull request, so the workflow badge means "the required checks are 
@@ -71,24 +68,47 @@ jobs:
           - infrastructure
           - diagnostics
           - dynamics
+          - dynamics_edmfx
           - parameterizations
           - restarts
           - era5
+        include:
+          - version: '1.10'
+            os: ubuntu-latest
+            test_group: infrastructure
     env:
       TEST_GROUP: ${{ matrix.test_group }}
+      # EDMFX simulation tests are compile-bound, coverage instrumentation
+      # increases their wall time
+      COVERAGE: ${{ matrix.test_group != 'dynamics_edmfx' }}
     steps:
       - uses: actions/checkout@v7
       - uses: julia-actions/setup-julia@v3
         with:
           version: ${{ matrix.version }}
-      - uses: julia-actions/cache@v3
+      # One depot per Julia version, shared by the test groups, which have the
+      # same dependencies.
+      - id: depot
+        uses: ./.github/actions/julia-depot-restore
+        with:
+          prefix: ci-julia${{ matrix.version }}-${{ runner.os }}
+          hash: ${{ hashFiles('Project.toml') }}
       - uses: julia-actions/julia-buildpkg@v1
       - uses: julia-actions/julia-runtest@v1
+        with:
+          coverage: ${{ env.COVERAGE }}
       - uses: julia-actions/julia-processcoverage@v1
+        if: env.COVERAGE == 'true'
       - uses: codecov/codecov-action@v7
+        if: env.COVERAGE == 'true'
         with:
           file: lcov.info
           token: ${{secrets.CODECOV_TOKEN}}
+      - uses: ./.github/actions/julia-depot-save
+        if: ${{ !cancelled() }}
+        with:
+          key: ${{ steps.depot.outputs.key }}
+          cache-hit: ${{ steps.depot.outputs.cache-hit }}
 
   # Single required status check for branch protection / the merge queue. Set
   # THIS ("ci-required") as the required check instead of the individual matrix

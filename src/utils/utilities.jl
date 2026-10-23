@@ -380,7 +380,7 @@ end
     g³³_field(space)
 
 Extract `g³³` from `space`, the `(3, 3)` component of the metric tensor `gⁱʲ`
-that converts covariant to contravariant `AxisTensor`s.
+that converts covariant to contravariant `Tensor`s.
 
 The component is the last one of `gⁱʲ` in both 2D (4 components) and 3D (9
 components) spaces.
@@ -449,7 +449,7 @@ end
     g³³(gⁱʲ)
 
 Extract the `g³³` sub-tensor of the metric tensor `gⁱʲ`, reshaped as a
-`Contravariant3Axis × Contravariant3Axis` `AxisTensor`.
+`Contravariant3Axis × Contravariant3Axis` `Tensor`.
 """
 g³³(gⁱʲ) = reshape(
     gⁱʲ,
@@ -464,14 +464,14 @@ Extract the `g³ʰ` sub-tensor of the metric tensor `gⁱʲ`, the coupling betwe
 the vertical and horizontal contravariant directions that is non-zero over
 sloped terrain.
 
-The result is always a `Contravariant3Axis × Contravariant12Axis` `AxisTensor`;
+The result is always a `Contravariant3Axis × Contravariant12Axis` `Tensor`;
 in 2D spaces the missing horizontal component is filled with zero. Throws if
 `gⁱʲ` has no vertical or no horizontal sub-axis.
 """
 function g³ʰ(gⁱʲ)
     full_CT_axis = axes(gⁱʲ)[1]
     N = length(full_CT_axis)
-    gⁱʲ_components = Geometry.components(gⁱʲ)
+    gⁱʲ_components = parent(gⁱʲ)
     FT = eltype(gⁱʲ_components)
     g³ʰ_components = if full_CT_axis == Geometry.Contravariant123Axis()
         @inbounds SMatrix{1, 2, FT, 2}(
@@ -488,7 +488,7 @@ function g³ʰ(gⁱʲ)
         error("$full_CT_axis is missing either vertical or horizontal sub-axes")
     end
     axes_tuple = (Geometry.Contravariant3Axis(), Geometry.Contravariant12Axis())
-    return Geometry.AxisTensor(axes_tuple, g³ʰ_components)
+    return Geometry.Tensor(g³ʰ_components, axes_tuple)
 end
 
 """

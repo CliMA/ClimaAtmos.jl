@@ -274,11 +274,11 @@ add_diagnostic_variable!(short_name = "Dv_smag", units = "m^2 s^-1",
     long_name = "Vertical smagorinsky diffusivity",
     compute = (_, cache, _) -> cache.precomputed.ᶜD_v,
 )
-add_diagnostic_variable!(short_name = "strainh_smag", units = "s",
+add_diagnostic_variable!(short_name = "strainh_smag", units = "s^-1",
     long_name = "Horizontal strain rate magnitude (for Smagorinsky)",
     compute = (_, cache, _) -> cache.precomputed.ᶜS_norm_h,
 )
-add_diagnostic_variable!(short_name = "strainv_smag", units = "s",
+add_diagnostic_variable!(short_name = "strainv_smag", units = "s^-1",
     long_name = "Vertical strain rate magnitude (for Smagorinsky)",
     compute = (_, cache, _) -> cache.precomputed.ᶜS_norm_v,
 )
@@ -1165,14 +1165,15 @@ add_diagnostic_variable!(short_name = "swp", units = "kg m^-2",
 # Covariances (3d)
 ###
 function compute_covariance_diagnostics(_, cache, _, type)
-    (; ᶜT′T′, ᶜq′q′) = cache.precomputed
+    (; ᶜT′T′, ᶜq′q′, ᶜcorr_Tq) = cache.precomputed
     if type == :qt_qt
         return ᶜq′q′
     elseif type == :T_T
         return ᶜT′T′
     elseif type == :T_qt
-        corr = correlation_Tq(cache.params)
-        return @. lazy(corr * sqrt(max(0, ᶜT′T′)) * sqrt(max(0, ᶜq′q′)))
+        # covariance consistent with the correlation the quadrature samples
+        # (constant or diagnosed); see `set_tq_correlation!`
+        return @. lazy(ᶜcorr_Tq * sqrt(max(0, ᶜT′T′)) * sqrt(max(0, ᶜq′q′)))
     else
         error("Unknown variance type")
     end
@@ -1186,7 +1187,10 @@ compute_env_q_tot_temperature_covariance(state, cache, time) =
     compute_covariance_diagnostics(state, cache, time, :T_qt)
 
 function compute_env_q_tot_temperature_correlation(_, cache, _)
-    corr = correlation_Tq(cache.params)
+    # the sampled correlation lives in the cache only when SGS covariances are used;
+    # otherwise report the prescribed constant
+    hasproperty(cache.precomputed, :ᶜcorr_Tq) && return cache.precomputed.ᶜcorr_Tq
+    corr = CAP.Tq_correlation_coefficient(cache.params)
     (; ᶜtemp_scalar) = cache.scratch
     return @. lazy(one(ᶜtemp_scalar) * corr)
 end

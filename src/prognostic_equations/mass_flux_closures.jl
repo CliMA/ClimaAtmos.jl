@@ -111,6 +111,33 @@ function ᶠupdraft_nh_pressure_buoyancy(params, ᶠbuoyʲ)
 end
 
 """
+    pressure_drag_coefficient(α_d, scale_height, aʲ, a⁰, a_min, a_max)
+
+Return the coefficient `d_c` [1/m] of the pairwise form drag between an updraft
+of area fraction `aʲ` and the environment of area fraction `a⁰`,
+
+    d_c = α_d / (2 H) (1 / √clamp(aʲ, a_min, a_max) + 1 / √clamp(a⁰, 1 - a_max, 1)),
+
+so that the drag acceleration on the updraft is `a⁰ d_c (wʲ - w⁰) |wʲ - w⁰|`,
+with `a⁰ = ρ̂⁰/ρ` the environment weight of the pairwise form. The
+length scale of each subdomain is `H √a` with `H = scale_height`, and the
+harmonic mean of the two gives the sum of inverse square roots. The updraft
+radius may shrink to `a_min`; the environment is clamped from below at
+`1 - a_max`, which keeps the coefficient finite when the implicit velocity
+solve is handed an extrapolated `a⁰` outside `[0, 1]`.
+
+Shared by the implicit updraft momentum solve
+(`solve_sgs_u₃_implicit_stage_analytic!`) and the TKE return-to-isotropy source
+(`edmfx_pressure_drag_tke_source!`), so the kinetic energy the drag removes from
+the updraft is the energy the TKE budget receives.
+"""
+pressure_drag_coefficient(α_d, scale_height, aʲ, a⁰, a_min, a_max) =
+    α_d / (2 * scale_height) * (
+        1 / sqrt(clamp(aʲ, a_min, a_max)) +
+        1 / sqrt(clamp(a⁰, 1 - a_max, one(a⁰)))
+    )
+
+"""
     ᶠupdraft_nh_pressure_drag(params, ᶠlg, ᶠu3ʲ, ᶠu3⁰)
 
 Return the drag term of the non-hydrostatic pressure closure for updrafts,
@@ -258,11 +285,6 @@ For each of the `n_prognostic_mass_flux_subdomains(turbconv_model)` updrafts:
 No-op when `n_prognostic_mass_flux_subdomains(turbconv_model) == 0` (e.g.
 `EDOnlyEDMFX`). Mutates `Y.c.sgsʲs` and `Y.f.sgsʲs`; returns `nothing`. Called
 from `enforce_physical_constraints!`.
-
-# Notes
-
-The tracer branch reads and writes `Y.c.sgsʲs.:(1)` rather than subdomain `j`,
-so with more than one updraft only the first is corrected.
 """
 function enforce_edmf_updraft_constraints!(Y, p, t, turbconv_model)
     FT = eltype(p.params)
@@ -303,7 +325,7 @@ function enforce_edmf_updraft_constraints!(Y, p, t, turbconv_model)
         for χ_name in sgs_tracer_names(Y)
             ρχ_name = get_ρχ_name(χ_name)
             MatrixFields.has_field(Y.c, ρχ_name) || continue
-            ᶜχʲ = MatrixFields.get_field(Y.c.sgsʲs.:(1), χ_name)
+            ᶜχʲ = MatrixFields.get_field(Y.c.sgsʲs.:($j), χ_name)
             ᶜρχ = MatrixFields.get_field(Y.c, ρχ_name)
             @. ᶜχʲ = ifelse(
                 Y.c.sgsʲs.:($$j).ρa < ϵ_numerics(FT),
@@ -349,7 +371,7 @@ helpers selected by the active microphysics and turbulence-convection models.
     `NonEquilibriumMicrophysics1M` and `NonEquilibriumMicrophysics2M`.
   - `enforce_edmf_updraft_constraints!` runs for `AbstractEDMF` when
     the `edmfx_filter` configuration flag is enabled
-    (`atmos.edmfx_model.filter isa Val{true}`); it is itself a no-op for models
+    (`atmos.edmfx_model.filter`); it is itself a no-op for models
     without prognostic mass-flux subdomains, such as `EDOnlyEDMFX`.
 
 Mutates `Y`; returns `nothing`. Called from `constrain_state!` after each
@@ -365,7 +387,7 @@ function enforce_physical_constraints!(Y, p, t, atmos::AtmosModel)
     # EDMF updraft constraints: only active when the filter flag is enabled.
     # Each helper is a no-op for EDOnlyEDMFX (n_prognostic_mass_flux_subdomains == 0).
     if atmos.turbconv_model isa AbstractEDMF &&
-       atmos.edmfx_model.filter isa Val{true}
+       atmos.edmfx_model.filter
         enforce_edmf_updraft_constraints!(Y, p, t, atmos.turbconv_model)
     end
 

@@ -10,9 +10,8 @@ import .Setups
 A configured atmospheric simulation: an initialized time-stepping integrator together
 with the output bookkeeping needed to run it and write its diagnostics.
 
-Build one with the keyword constructor `AtmosSimulation{FT}(; ...)` (or
-`AtmosSimulation(; ...)` for `Float32`), or from a configuration with
-`AtmosSimulation(config)`. Run it with `solve_atmos!`.
+Build one from an [`AtmosModel`](@ref) with `AtmosSimulation(model; ...)`, or from a
+configuration with `AtmosSimulation(config)`. Run it with `solve_atmos!`.
 
 # Fields
 
@@ -206,7 +205,8 @@ end
 """
     AtmosSimulation(config::AtmosConfig)
 
-Construct a simulation from a configuration, with the float type taken from `config`.
+Construct a simulation from a YAML-based configuration, with the float type taken
+from `config`.
 
 Equivalent to `get_simulation(config)`, which also writes the parameter manifest and
 config snapshot into the output directory.
@@ -214,18 +214,13 @@ config snapshot into the output directory.
 AtmosSimulation(config::AtmosConfig) = get_simulation(config)
 
 """
-    AtmosSimulation(; kwargs...)
+    AtmosSimulation(model::AtmosModel; kwargs...)
 
-Construct an atmospheric simulation with the default float type `Float32`.
+Construct an atmospheric simulation from an [`AtmosModel`](@ref).
 
-Equivalent to `AtmosSimulation{Float32}(; kwargs...)`.
-"""
-AtmosSimulation(; kwargs...) = AtmosSimulation{Float32}(; kwargs...)
-
-"""
-    AtmosSimulation{FT}(; kwargs...) where {FT}
-
-Construct an atmospheric simulation with float type `FT`.
+The model carries the grid, parameters, and setup, while the simulation adds run
+control (timestepping, callbacks, diagnostics, output, restarts). The initial
+state, float type, and `ClimaComms` context all come from the model.
 
 Builds (or restarts) the state, the cache, the callbacks, the diagnostics, and the
 time-stepping integrator, and resolves the output directory. This is the primary
@@ -234,45 +229,49 @@ entry point for simulations written as scripts; configuration-driven runs go thr
 
 # Keyword Arguments
 
-  - `model = AtmosModel()`: Physics and parameterization configuration.
-  - `params = ClimaAtmosParameters(FT; microphysics_model = model.microphysics_model)`:
-    Physical parameters. Built from `model` by default, so only the parameter sets
-    the model needs are loaded and the microphysics process options set on the
-    model take effect.
-  - `context = ClimaComms.context()`: Communications context (device and MPI).
-  - `grid = SphereGrid(FT; radius = CAP.planet_radius(params), context)`: Computational
-    grid. Use [`ColumnGrid`](@ref), [`BoxGrid`](@ref), [`PlaneGrid`](@ref), or
-    [`SphereGrid`](@ref).
-  - `setup = Setups.DecayingProfile(; perturb = true, params)`: Setup defining the initial
-    state, and, for single-column cases, the forcings. See [Setups](@ref "Setups").
+### Time
+
   - `dt = 600`: Timestep [s], or a string such as `"10mins"`.
   - `start_date = DateTime(2010, 1, 1)`: Calendar date of the simulation start.
   - `t_start = 0`: Start time [s]. Ignored, with a warning, when restarting.
   - `t_end = 86400 * 10`: End time [s], 10 days by default.
-  - `ode_config`: Time-stepping algorithm. Defaults to `IMEXAlgorithm(ARS343(), NewtonsMethod(; max_iters = 1, update_j = UpdateEvery(NewNewtonIteration)))`.
-  - `steady_state_velocity = nothing`: Analytic steady-state velocity used by diagnostics,
-    either a precomputed field or a callable `(Y, params) -> velocity` evaluated once `Y`
-    exists.
+
+### Output
+
   - `job_id = "atmos_sim"`: Run identifier, used in output directory naming.
   - `output_dir = nothing`: Output directory. Defaults to `output/<job_id>`, or `<job_id>`
     when the `CI` environment variable is set.
   - `output_dir_style = "activelink"`: How the output directory is managed;
     `"activelink"` keeps numbered directories with a symlink to the active one,
     `"removepreexisting"` deletes previous output.
-  - `restart_file = nothing`: Restart file to resume from.
-  - `detect_restart_file = false`: Pick up the most recent restart file in the output
-    directory structure; only available with `output_dir_style = "activelink"`.
-  - `aerosol_names = []`: Prescribed aerosol species to read from file.
-  - `time_varying_trace_gases = ()`: Trace gases read from a time-varying file.
-  - `vertical_water_borrowing_species = nothing`: Species the vertical water borrowing
-    constraint may draw from.
+  - `checkpoint_frequency = Inf`: How often to write restart checkpoints; a number of
+    seconds, a time string, or `"<N>months"`. `Inf` disables checkpointing.
+  - `log_to_file = false`: Send log output to a file in the output directory.
+  - `verbose = false`: Log progress while building the simulation (root process only).
+
+### Diagnostics
+
+  - `diagnostics = DiagnosticsConfig()`: Which diagnostics to produce and how to write
+    them. See [`DiagnosticsConfig`](@ref).
+
+### Callbacks
+
   - `default_callbacks = true`: Add the default model and common callbacks. When `false`,
     only `callbacks` is used.
   - `callbacks = ()`: User-provided callbacks, used only when `default_callbacks` is
     `false`.
   - `callback_kwargs = ()`: Extra keyword arguments forwarded to the default callbacks.
-  - `diagnostics = DiagnosticsConfig()`: Which diagnostics to produce and how to write
-    them. See [`DiagnosticsConfig`](@ref).
+
+### Restarts
+
+  - `restart_file = nothing`: Restart file to resume from. `model.grid` must match the
+    grid in the file, because the state is not interpolated. A mismatch is an error.
+  - `detect_restart_file = false`: Pick up the most recent restart file in the output
+    directory structure; only available with `output_dir_style = "activelink"`.
+
+### Numerics
+
+  - `ode_config`: Time-stepping algorithm. Defaults to `IMEXAlgorithm(ARS343(), NewtonsMethod(; max_iters = 1, update_j = UpdateEvery(NewNewtonIteration)))`.
   - `jacobian = ManualSparseJacobian(; approximate_solve_iters = 1)`: Jacobian algorithm
     for the implicit solve. Use [`ManualSparseJacobian`](@ref),
     [`AutoSparseJacobian`](@ref), or [`AutoDenseJacobian`](@ref).
@@ -280,10 +279,12 @@ entry point for simulations written as scripts; configuration-driven runs go thr
   - `update_cache_every = "stage"`: When the cache is refreshed, `"stage"` or `"step"`.
   - `update_constrain_state_every = "step"`: When state constraints are applied,
     `"stage"`, `"step"`, or `"dss"`.
-  - `checkpoint_frequency = Inf`: How often to write restart checkpoints; a number of
-    seconds, a time string, or `"<N>months"`. `Inf` disables checkpointing.
-  - `log_to_file = false`: Send log output to a file in the output directory.
-  - `verbose = false`: Log progress while building the simulation (root process only).
+
+### Diagnostics helpers
+
+  - `steady_state_velocity = nothing`: Analytic steady-state velocity used by diagnostics,
+    either a precomputed field or a callable `(Y, params) -> velocity` evaluated once `Y`
+    exists.
 
 # Returns
 
@@ -295,26 +296,20 @@ An [`AtmosSimulation`](@ref), ready to be passed to `solve_atmos!`.
 import ClimaAtmos as CA
 
 # Minimal: 1-day global simulation with defaults
-simulation = CA.AtmosSimulation{Float64}(; t_end = 86400)
+model = CA.AtmosModel(CA.SphereGrid(Float64))
+simulation = CA.AtmosSimulation(model; t_end = 86400)
 CA.solve_atmos!(simulation)
 
-# Single-column BOMEX case
-simulation = CA.AtmosSimulation{Float64}(;
-    grid = CA.ColumnGrid(Float64; z_elem = 60, z_max = 3000.0),
-    setup = CA.Setups.Bomex(),
-    dt = 5,
-    t_end = 3600 * 6,
+# Single-column BOMEX case: the setup supplies the case physics
+model = CA.AtmosModel(
+    CA.ColumnGrid(Float64; z_elem = 60, z_max = 3000.0);
+    setup = CA.Setups.Bomex(Float64),
 )
+simulation = CA.AtmosSimulation(model; dt = 5, t_end = 3600 * 6)
 ```
 """
-function AtmosSimulation{FT}(;
-    model = AtmosModel(),
-    params::Parameters.ClimaAtmosParameters = ClimaAtmosParameters(
-        FT; model.microphysics_model,
-    ),
-    context::ClimaComms.AbstractCommsContext = ClimaComms.context(),
-    grid::Grids.AbstractGrid = SphereGrid(FT; radius = CAP.planet_radius(params), context),
-    setup = Setups.DecayingProfile(; perturb = true, params),
+function AtmosSimulation(
+    model::AtmosModel;
     dt = 600,
     start_date = DateTime(2010, 1, 1),
     t_start = 0,
@@ -332,9 +327,6 @@ function AtmosSimulation{FT}(;
     output_dir_style = "activelink",  # TODO: Should this be an actual type?
     restart_file = nothing,
     detect_restart_file = false,
-    aerosol_names = [], # TODO: set from the model
-    time_varying_trace_gases = (),
-    vertical_water_borrowing_species = nothing,
     # Callbacks
     default_callbacks = true,   # Enable common simulation callbacks
     callbacks = (),             # User-provided additional callbacks
@@ -350,7 +342,10 @@ function AtmosSimulation{FT}(;
     checkpoint_frequency = Inf,
     log_to_file = false,
     verbose = false,
-) where {FT}
+)
+    params = model.params
+    context = ClimaComms.context(model.grid)
+
     # Log only on root process
     verbose = ClimaComms.iamroot(context) && verbose
 
@@ -365,6 +360,24 @@ function AtmosSimulation{FT}(;
         (Y, t_start, spaces) = @timed_log verbose "Loaded restart file" handle_restart(
             restart_file, t_start, start_date, model, context; verbose,
         )
+        # Ensure grids match on restart: compare center coordinate field rather than
+        # the grids
+        model_coords = Fields.coordinate_field(get_spaces(model.grid).center_space)
+        ckpt_coords = Fields.coordinate_field(spaces.center_space)
+        model_points, ckpt_points = parent(model_coords), parent(ckpt_coords)
+        if size(model_points) != size(ckpt_points) || !isapprox(model_points, ckpt_points)
+            model_z = extrema(parent(model_coords.z))
+            ckpt_z = extrema(parent(ckpt_coords.z))
+            error(
+                """
+                The restart file's grid does not match `model.grid`. Restarts do not \
+                interpolate the state, so build the model with a grid that matches the \
+                checkpoint, or restart from a checkpoint that matches the grid.
+                  restart_file: $restart_file
+                  model.grid:   $(size(model_points)) points, z extent $model_z
+                  checkpoint:   $(size(ckpt_points)) points, z extent $ckpt_z""",
+            )
+        end
         # t_start is already converted from restart file, but we still need to convert dt and t_end
         dt = ITime(time_to_seconds(dt))
         t_end = ITime(time_to_seconds(t_end), epoch = start_date)
@@ -372,17 +385,7 @@ function AtmosSimulation{FT}(;
         (dt, t_start, t_end, _) = promote(dt, t_start, t_end, ITime(0))
     else
         dt, t_start, t_end = convert_time_args(dt, t_start, t_end, start_date)
-        spaces = get_spaces(grid)
-        @timed_log verbose "Initialized state" begin
-            Y = Setups.initial_state(
-                setup, params, model,
-                spaces.center_space,
-                spaces.face_space,
-            )
-            Setups.overwrite_initial_state!(
-                setup, Y, params.thermodynamics_params,
-            )
-        end
+        Y = @timed_log verbose "Initialized state" initial_state(model)
     end
 
     # Resolve steady_state_velocity: accept nothing, a precomputed velocity field,
@@ -392,9 +395,7 @@ function AtmosSimulation{FT}(;
         steady_state_velocity
 
     p = @timed_log verbose "Built cache" build_cache(
-        Y, model, params, dt, start_date, aerosol_names,
-        time_varying_trace_gases, resolved_steady_state_velocity,
-        vertical_water_borrowing_species,
+        Y, model, params, dt, start_date, resolved_steady_state_velocity,
     )
 
     # Combine all callbacks

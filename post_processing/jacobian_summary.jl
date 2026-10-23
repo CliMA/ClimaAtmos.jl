@@ -135,7 +135,6 @@ function print_jacobian_summary(integrator)
     if jacobian.alg isa CA.AutoSparseJacobian
         sparse_difference_relative_rms_values = map(block_keys) do block_key
             (; manual, auto) = all_sparse_blocks
-            rescaling = block_rescalings[block_key]
             sparse_difference_rms_value =
                 haskey(manual, block_key) &&
                 !(manual[block_key] isa UniformScaling) ?

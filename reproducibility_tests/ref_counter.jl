@@ -1,4 +1,4 @@
-410
+435
 
 # **README**
 #
@@ -32,6 +32,96 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+435
+- Smooth harmonic buoyancy bound and `1 / √(2 c_σ)` normalization for the
+  turbulent vertical displacement in `materialized_displacement_length!`, with
+  SGS displacement covariance defaults calibrated to MPAS DYAMOND moments on the
+  model's own grid and operators (c_Δx 1.24, w_ref 1.08, τ_0 300 s, r 0.88/0.38/0.74).
+
+434
+- New version of SurfaceFluxes.jl v1.4.0 -> v1.5.1
+- SGS (θ_li, q_tot) covariance from subgrid displacements (per-variable scales,
+  floored buoyancy displacement), replacing the turbulent and geometric blocks;
+  diagnosed T–q correlation by default; equilibrium condensate target λ_eq;
+  snow falls at its fixed terminal velocity by default.
+
+433
+- Bound the along-surface SGS q variance by the variance of q_sat along the displacement.
+
+432
+- Combine the geometric vertical-displacement SGS variance with the turbulent block as a maximum
+  instead of their sum.
+
+431
+- Fix sgs variance fidelity: estimate qc_eq by using the Gaussian approximation of eq condensate
+- Restore per-subdomain QuadratureCloud: env condensate + EDMF updraft weighting.
+
+430
+- Snow falls at the Chen et al. (2022) speed by default; snow_apparent_density 300
+
+429
+- Local SGS variance fidelity α(TKE, l_mix, τ_mp, q_c/q_c^eq).
+
+428
+- Geometric SGS variance as a conditional parcel displacement on the
+  θ_li surface
+- Update to CloudMicrophysics v0.45 (joint relaxation of the vapor-driven phase changes is the default)
+
+427
+- Change the horizontal geometric SGS variance term to the isentropic form
+
+426
+- Update to CloudMicrophysics v0.44 from v0.43
+
+425
+- Add SGS T–q correlation closure and resolved vertical-gradient variance block.
+
+424
+- Van Leer-limited centered vertical gradients for θ_li and q_tot
+
+423
+- Update to SurfaceFluxes from 1.2.1 to 1.3.0
+
+422
+- Use LumpedRestriction for some horizontal gradients
+
+421
+- Change cloud fraction formulation and default ice depostion scheme
+
+420
+- Remove interface_effective_N² and interface_entrainment_diffusivity (fix GABLS)
+
+419
+- Add empirical l_TKE
+
+418
+- Compute the EDMF surface scalar coefficient and other constants in `FT`
+  instead of Float64, which changes Float32 results in the last bits
+
+417
+- Update to ClimaParams 1.1.16, which changes the default of some SGS quadrature parameters.
+
+416
+- Update to ClimaParams 1.1.14 from ClimaParams 1.1.13, which changes the default
+  `EDMF_interface_entr_efficiency` from 0.4 to 0.0 (2026-09-25)
+
+415
+- Share the pressure drag coefficient of the implicit updraft velocity solve with the
+  TKE source, split the LES enthalpy flux, correct the AMD viscosity denominator, and
+  turn hyperdiffusion off in the AMD configurations (2026-09-20)
+
+414
+- Changed the default N_ice number in vapor-ice transfer
+
+413
+- Changed solver in CloudMicrophysics.jl
+
+412
+- Add a bound for sgs variance
+
+411
+- Update to ClimaParams 1.1.9 from ClimaParams 1.1.6
+
 410
 - Add entr/detr shear-mixing source to the TKE budget and drop the stability-biased
   ᶜN²_eff in favor of the unbiased ᶜbuoygrad for center l_N, Pr_t, and the Smag-Lilly

@@ -5,6 +5,33 @@ import Thermodynamics as TD
 import ClimaCore: Spaces, Fields
 
 """
+    smagorinsky_lilly_fields(Y, model)
+
+Allocate the precomputed fields of the Smagorinsky-Lilly closure: the center and
+face strain-rate tensors `ᶜS`/`ᶠS`, the horizontal and vertical strain-rate norms,
+mixing lengths, eddy viscosities, and eddy diffusivities. Return an empty
+`NamedTuple` when `model` is `nothing`.
+
+The fields live with the implicit precomputed quantities when the vertical
+tendency is implicit (`diff_mode == Implicit()`) and with the explicit ones
+otherwise, so that autodiff gets Dual-typed copies exactly when the implicit
+stage writes to them.
+"""
+smagorinsky_lilly_fields(Y, ::Nothing) = (;)
+function smagorinsky_lilly_fields(Y, ::SmagorinskyLilly)
+    FT = eltype(Y)
+    uvw_vec = UVW(FT(0), FT(0), FT(0))
+    return (;
+        ᶜS = similar(Y.c, typeof(uvw_vec * uvw_vec')),
+        ᶠS = similar(Y.f, typeof(uvw_vec * uvw_vec')),
+        ᶜS_norm_h = similar(Y.c, FT), ᶜS_norm_v = similar(Y.c, FT),
+        ᶜL_h = similar(Y.c, FT), ᶜL_v = similar(Y.c, FT),
+        ᶜνₜ_h = similar(Y.c, FT), ᶜνₜ_v = similar(Y.c, FT),
+        ᶜD_h = similar(Y.c, FT), ᶜD_v = similar(Y.c, FT),
+    )
+end
+
+"""
     implicit_precomputed_quantities(Y, atmos)
 
 Allocate the precomputed quantities that are treated implicitly, i.e., updated
@@ -128,6 +155,13 @@ function implicit_precomputed_quantities(Y, atmos)
         else
             (;)
         end
+    # The Smagorinsky-Lilly eddy viscosity is refreshed by the implicit stage
+    # when its vertical tendency is implicit, so autodiff needs Dual-typed
+    # copies of these fields in that case (and only in that case).
+    implicit_smagorinsky_quantities =
+        atmos.diff_mode == Implicit() ?
+        smagorinsky_lilly_fields(Y, atmos.smagorinsky_lilly) : (;)
+
     return (;
         gs_quantities...,
         moist_gs_quantities...,
@@ -135,6 +169,7 @@ function implicit_precomputed_quantities(Y, atmos)
         prognostic_sgs_quantities...,
         implicit_mp_quantities...,
         implicit_sfc_precip_quantities...,
+        implicit_smagorinsky_quantities...,
     )
 end
 
@@ -169,7 +204,6 @@ function precomputed_quantities(Y, atmos)
             !(atmos.turbconv_model isa PrognosticEDMFX)
     @assert isnothing(atmos.turbconv_model) ||
             isnothing(atmos.vertical_diffusion)
-    sa_result_type = @NamedTuple{T::FT, q_liq::FT, q_ice::FT}
     SCT = SurfaceConditions.surface_conditions_type(atmos, FT)
     cspace = axes(Y.c)
     n = n_mass_flux_subdomains(atmos.turbconv_model)
@@ -194,17 +228,15 @@ function precomputed_quantities(Y, atmos)
         ᶠ∂θli∂z = similar(Y.f, FT),
         ᶠ∂qt∂z = similar(Y.f, FT),
         # Face-native moist buoyancy gradient, face-native eddy diffusivity/
-        # viscosity, interfacial entrainment diffusivity K_e = γ w_e Δz, and
-        # the master mixing length at centers. Every consumer is an
+        # viscosity, and the master mixing length at centers. Every consumer is an
         # AbstractEDMF path, so they are allocated only for AbstractEDMF;
         # other closures use the center ᶜK_h/ᶜK_u instead.
         # Evaluating the stability closure at the faces, where the fluxes
         # live, keeps the collapse of K at an unresolved inversion from
         # leaking to the adjacent interior face.
         #
-        # All four face fields are written by `set_face_diffusivities!` on
-        # every explicit update (ᶠK_entr is zeroed there when the interface
-        # entrainment closure is off), and ᶜl_mix by `materialized_mixing_length!`,
+        # All three face fields are written by `set_face_diffusivities!` on
+        # every explicit update, and ᶜl_mix by `materialized_mixing_length!`,
         # before any read, so `similar` is safe.
         (
             atmos.turbconv_model isa AbstractEDMF ?
@@ -212,7 +244,6 @@ function precomputed_quantities(Y, atmos)
                 ᶠbuoygrad = similar(Y.f, FT),
                 ᶠK_h = similar(Y.f, FT),
                 ᶠK_u = similar(Y.f, FT),
-                ᶠK_entr = similar(Y.f, FT),
                 ᶜl_mix = similar(Y.c, FT),
                 # Horizontal eddy viscosity/diffusivity of the TKE-based
                 # closure, with the mixing length limited by the horizontal
@@ -248,21 +279,53 @@ function precomputed_quantities(Y, atmos)
     uses_microphysics_quadrature_moments =
         atmos.microphysics_model isa
         Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M}
-    # `ᶜsgs_moments` caches `(sigma_S, λ_lagrange)` — the SGS standard
-    # deviation and the Lagrange multiplier used by `Microphysics1MEvaluator`.
-    #  Allocated only for 1M/2M schemes.
-    SGSMomentsNT = @NamedTuple{
-        sigma_S::FT,
-        λ_lagrange::FT,
-    }
+    # `ᶜsgs_moments` caches `(sigma_S, λ_lagrange, λ_eq)` — the SGS standard
+    # deviation and the actual and equilibrium Lagrange multipliers used by
+    # `Microphysics1MEvaluator`. Allocated only for 1M/2M schemes, together
+    # with `ᶜprecip_frac`, the overlap precipitation fraction
+    # (`set_precip_fraction!`).
+    SGSMomentsNT = @NamedTuple{sigma_S::FT, λ_lagrange::FT, λ_eq::FT}
     covariance_quantities = if uses_sgs_quadrature
         base = (;
+            # σ²_T and σ²_q of the subgrid displacement acting on the
+            # resolved gradients (`set_covariance_cache!`).
             ᶜT′T′ = zeros(axes(Y.c)),
             ᶜq′q′ = zeros(axes(Y.c)),
+            # T–q correlation the quadrature actually samples (filled by
+            # `set_tq_correlation!`): `T′q′ / √(T′T′ q′q′)` for
+            # `tq_correlation_model: diagnosed`, or the prescribed
+            # `Tq_correlation_coefficient` for `tq_correlation_model: constant`.
+            # The displacement covariance `ᶜT′q′` is only allocated for the
+            # diagnosed model.
+            ᶜcorr_Tq = zeros(axes(Y.c)),
+            # Local SGS variance fidelity (see `sgs_variance_fidelity`),
+            # refreshed inside `set_covariance_cache!`.
+            ᶜα = zeros(axes(Y.c)),
+            (
+                atmos.tq_correlation_model isa DiagnosedTqCorrelation ?
+                (; ᶜT′q′ = zeros(axes(Y.c))) : (;)
+            )...,
+            # Linear and curvature coefficients `(lin, curv)` of the saturation
+            # excess under the vertical displacement, `S = μ_S + lin x +
+            # ½ curv (x² − 1) + h` with `x` standard normal
+            # (`set_displacement_curvature!`); only for the curvature-aware
+            # equilibrium condensate (`sgs_variance_curvature`).
+            (
+                atmos.sgs_variance_curvature ?
+                (;
+                    ᶜdisp_S = fill!(
+                        similar(Y.c, @NamedTuple{lin::FT, curv::FT}),
+                        (; lin = zero(FT), curv = zero(FT)),
+                    ),
+                ) : (;)
+            )...,
         )
         uses_microphysics_quadrature_moments ?
-        (; base..., ᶜsgs_moments = similar(Y.c, SGSMomentsNT)) :
-        base
+        (;
+            base...,
+            ᶜsgs_moments = similar(Y.c, SGSMomentsNT),
+            ᶜprecip_frac = zeros(axes(Y.c)),
+        ) : base
     else
         (;)
     end
@@ -401,42 +464,13 @@ function precomputed_quantities(Y, atmos)
         ᶜgradᵥ_θ_liq_ice = Fields.Field(C3{FT}, cspace),
     )
 
-    diagnostic_precipitation_sgs_quantities =
-        atmos.microphysics_model isa NonEquilibriumMicrophysics1M ?
-        (;
-            ᶜq_lclʲs = similar(Y.c, NTuple{n, FT}),
-            ᶜq_iclʲs = similar(Y.c, NTuple{n, FT}),
-            ᶜq_raiʲs = similar(Y.c, NTuple{n, FT}),
-            ᶜq_snoʲs = similar(Y.c, NTuple{n, FT}),
-        ) : (;)
-
+    # Allocated here only when the vertical Smagorinsky-Lilly tendency is
+    # explicit; with `diff_mode == Implicit()` these fields are written by
+    # `set_implicit_precomputed_quantities!` and so are allocated alongside the
+    # other implicit quantities, which autodiff duplicates as Dual-typed copies.
     smagorinsky_lilly_quantities =
-        if atmos.smagorinsky_lilly isa SmagorinskyLilly
-            uvw_vec = UVW(FT(0), FT(0), FT(0))
-            (;
-                ᶜS = similar(Y.c, typeof(uvw_vec * uvw_vec')),
-                ᶠS = similar(Y.f, typeof(uvw_vec * uvw_vec')),
-                ᶜS_norm_h = similar(Y.c, FT), ᶜS_norm_v = similar(Y.c, FT),
-                ᶜL_h = similar(Y.c, FT), ᶜL_v = similar(Y.c, FT),
-                ᶜνₜ_h = similar(Y.c, FT), ᶜνₜ_v = similar(Y.c, FT),
-                ᶜD_h = similar(Y.c, FT), ᶜD_v = similar(Y.c, FT),
-            )
-        else
-            (;)
-        end
-    amd_les_quantities =
-        if atmos.amd_les isa AnisotropicMinimumDissipation
-            uvw_vec = UVW(FT(0), FT(0), FT(0))
-            (;
-                ᶜτ_amd = similar(Y.c, typeof(uvw_vec * uvw_vec')),
-                ᶠτ_amd = similar(Y.f, typeof(uvw_vec * uvw_vec')),
-                ᶜD_amd = similar(Y.c, FT),
-                ᶠD_amd = similar(Y.f, FT),
-            )
-        else
-            (;)
-        end
-
+        atmos.diff_mode == Explicit() ?
+        smagorinsky_lilly_fields(Y, atmos.smagorinsky_lilly) : (;)
     return (;
         implicit_precomputed_quantities(Y, atmos)...,
         gs_quantities...,
@@ -449,8 +483,7 @@ function precomputed_quantities(Y, atmos)
         ᶜcloud_fraction,
         cosp_quantities...,
         covariance_quantities...,
-        smagorinsky_lilly_quantities...,
-        amd_les_quantities...)
+        smagorinsky_lilly_quantities...)
 end
 
 """
@@ -680,7 +713,9 @@ thermodynamic fields (`ᶜT`, `ᶜq_tot_nonneg`, `ᶜq_liq`, `ᶜq_ice`, `ᶜh_t
 `ᶜp`), plus their EDMFX subdomain versions when the `turbconv_model` is
 `PrognosticEDMFX`. When microphysics is timestepped implicitly, it also
 refreshes the density-weighted microphysics sources and surface precipitation
-fluxes via `update_implicit_microphysics_cache!`.
+fluxes via `update_implicit_microphysics_cache!`. When
+`p.atmos.diff_mode == Implicit()`, it also refreshes the Smagorinsky-Lilly eddy
+viscosity and diffusivity, whose vertical tendency is then implicit.
 
 This function also applies a "filter" to `Y` in order to ensure that `ᶠu³` is 0
 at the surface and at the model top (i.e., to enforce the impenetrable boundary
@@ -745,8 +780,14 @@ NVTX.@annotate function set_implicit_precomputed_quantities!(Y, p, t)
         # Two-pass SGS: recompute condensate using SGS quadrature over (T, q_tot)
         sgs_quad = p.atmos.sgs_quadrature
         if !isnothing(sgs_quad)
-            (; ᶜT′T′, ᶜq′q′) = p.precomputed
-            corr_Tq = correlation_Tq(p.params)
+            (; ᶜT′T′, ᶜq′q′, ᶜcorr_Tq) = p.precomputed
+            # Displacement coefficients of the curvature-aware condensate,
+            # zero where it is not configured.
+            ᶜlin, ᶜcurv = if p.atmos.sgs_variance_curvature
+                (p.precomputed.ᶜdisp_S.lin, p.precomputed.ᶜdisp_S.curv)
+            else
+                (zero(eltype(ᶜT)), zero(eltype(ᶜT)))
+            end
             @. ᶜsa_result = compute_sgs_saturation_adjustment(
                 thermo_params,
                 $(sgs_quad),
@@ -755,7 +796,9 @@ NVTX.@annotate function set_implicit_precomputed_quantities!(Y, p, t)
                 ᶜq_tot_nonneg,
                 ᶜT′T′,
                 ᶜq′q′,
-                corr_Tq,
+                ᶜcorr_Tq,
+                ᶜlin,
+                ᶜcurv,
             )
             @. ᶜq_liq = ᶜsa_result.q_liq
             @. ᶜq_ice = ᶜsa_result.q_ice
@@ -822,6 +865,17 @@ NVTX.@annotate function set_implicit_precomputed_quantities!(Y, p, t)
     if p.atmos.microphysics_tendency_timestepping == Implicit()
         update_implicit_microphysics_cache!(Y, p, microphysics_model, turbconv_model)
     end
+
+    # With implicit vertical diffusion, the vertical Smagorinsky-Lilly tendency
+    # is part of `implicit_tendency!`, so its eddy viscosity has to follow the
+    # Newton iterate rather than the stage-initial state.
+    if p.atmos.diff_mode == Implicit()
+        set_smagorinsky_lilly_precomputed_quantities!(
+            Y,
+            p,
+            p.atmos.smagorinsky_lilly,
+        )
+    end
 end
 
 """
@@ -835,8 +889,9 @@ current state `Y`. This is only called before each evaluation of
 Updates, in order: surface conditions, EDMFX explicit closures, SGS covariances
 and cloud fraction, face diffusivities, the master mixing length `ᶜl_mix`,
 precipitation terminal velocities, the microphysics tendency cache, surface
-precipitation fluxes, and the Smagorinsky-Lilly and AMD LES quantities (each
-step only when the corresponding model component is active). Returns `nothing`.
+precipitation fluxes, and, when `p.atmos.diff_mode == Explicit()`, the
+Smagorinsky-Lilly quantities (each step only when the corresponding model
+component is active). Returns `nothing`.
 """
 NVTX.@annotate function set_explicit_precomputed_quantities!(Y, p, t)
     (; turbconv_model) = p.atmos
@@ -857,9 +912,8 @@ NVTX.@annotate function set_explicit_precomputed_quantities!(Y, p, t)
 
     set_covariance_cache_and_cloud_fraction!(Y, p)
 
-    # Interfacial entrainment diffusivity K_e at faces (interface-aware stability
-    # closure). Needs the final cloud fraction from the covariance/cloud-fraction
-    # update above.
+    # Face-native diffusivities. Need the final cloud fraction from the
+    # covariance/cloud-fraction update above.
     set_face_diffusivities!(Y, p)
 
     if turbconv_model isa AbstractEDMF && (
@@ -903,10 +957,16 @@ NVTX.@annotate function set_explicit_precomputed_quantities!(Y, p, t)
     # because for the 0 moment microphysics it's an integral of the q_tot sink).
     set_precipitation_surface_fluxes!(Y, p, p.atmos.microphysics_model)
 
-    set_smagorinsky_lilly_precomputed_quantities!(Y, p, p.atmos.smagorinsky_lilly)
-
-    if p.atmos.amd_les isa AnisotropicMinimumDissipation
-        set_amd_precomputed_quantities!(Y, p)
+    # The Smagorinsky-Lilly quantities are set here only when the vertical
+    # tendency is explicit; with `diff_mode == Implicit()` they are set in
+    # `set_implicit_precomputed_quantities!`, which runs on every Newton
+    # iterate, so recomputing them here would be redundant.
+    if p.atmos.diff_mode == Explicit()
+        set_smagorinsky_lilly_precomputed_quantities!(
+            Y,
+            p,
+            p.atmos.smagorinsky_lilly,
+        )
     end
 
     return nothing

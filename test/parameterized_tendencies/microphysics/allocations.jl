@@ -210,6 +210,23 @@ function _allocs_sgs_sat_adj(thp, quad)
     )
 end
 
+function _allocs_displacement_condensate(::Type{FT}) where {FT}
+    σ = FT(1e-3)
+    args = (FT(-1.4e-3), σ, FT(0.8) * σ, FT(-0.5) * σ)
+    ClimaAtmos.displacement_condensate(args...)
+    return @allocated ClimaAtmos.displacement_condensate(args...)
+end
+
+function _allocs_sgs_moments_curvature(thp, quad, ::Type{FT}) where {FT}
+    ρ, T = FT(1.1), FT(288)
+    q_tot = TD.q_vap_saturation(thp, T, ρ) - FT(3e-4)
+    args = (thp, ρ, T, q_tot, FT(5e-5), quad, FT(0.25), FT(2.5e-7), FT(0.6), FT(1))
+    ClimaAtmos._compute_sgs_moments(args..., q_tot, FT(4e-4), FT(-3e-4))
+    return @allocated ClimaAtmos._compute_sgs_moments(
+        args..., q_tot, FT(4e-4), FT(-3e-4),
+    )
+end
+
 # NOTE: closure-based tests are omitted here because Julia closures inherently
 # allocate ~352 bytes from closure capture. In production, integrate_over_sgs
 # is always called with functors (e.g. Microphysics1MEvaluator), which are
@@ -273,6 +290,19 @@ end
 
         @testset "compute_sgs_saturation_adjustment" begin
             @test _allocs_sgs_sat_adj(thp, quad) == 0
+        end
+
+        @testset "displacement_condensate and curvature moments" begin
+            for FTi in (Float32, Float64)
+                @testset "FT = $FTi" begin
+                    @test _allocs_displacement_condensate(FTi) == 0
+                    qi = ClimaAtmos.SGSQuadrature(FTi; quadrature_order = 3)
+                    thpi = TD.Parameters.ThermodynamicsParameters(
+                        CP.create_toml_dict(FTi),
+                    )
+                    @test _allocs_sgs_moments_curvature(thpi, qi, FTi) == 0
+                end
+            end
         end
 
         @testset "integrate_over_sgs (functor)" begin

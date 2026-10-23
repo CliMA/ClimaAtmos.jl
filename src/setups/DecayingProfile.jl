@@ -48,7 +48,9 @@ _temperature_perturbation(::Geometry.AbstractPoint{FT}) where {FT} =
 
 function center_initial_condition(setup::DecayingProfile, local_geometry, params)
     FT = eltype(params)
-    thermo_params = setup.thermo_params
+    # A setup constructed without `params` or `thermo_params` stores `nothing`
+    # and takes the thermodynamics parameters of the simulation.
+    thermo_params = something(setup.thermo_params, CAP.thermodynamics_params(params))
     temp_profile = DecayingTemperatureProfile{FT}(
         thermo_params,
         FT(290),

@@ -9,7 +9,7 @@ map_components(f::F, x) where {F} =
     typeof(x).name.wrapper(unrolled_map(f, components(x))...)
 
 # Determines whether there is at least one DataLayout within an object.
-contains_data_layout(::DataLayouts.AbstractData) = true
+contains_data_layout(::DataLayouts.DataLayout) = true
 contains_data_layout(x) = unrolled_any(contains_data_layout, components(x))
 
 """
@@ -19,7 +19,7 @@ Return the total memory required to allocate all `DataLayout`s within `x`
 [bytes], or `0` if it contains none. Used to size the automatic differentiation
 partitions in `jacobian_cache`.
 """
-parent_memory(x::DataLayouts.AbstractData) = sizeof(parent(x))
+parent_memory(x::DataLayouts.DataLayout) = sizeof(parent(x))
 parent_memory(x) =
     contains_data_layout(x) ? unrolled_sum(parent_memory, components(x)) : 0
 
@@ -33,7 +33,7 @@ non-field components unchanged.
 needed in a single column. Used to build single-column states and caches for
 the Jacobian debugging utilities.
 """
-first_column_view(x::DataLayouts.AbstractData) = Fields.column(x, 1, 1, 1)
+first_column_view(x::DataLayouts.DataLayout) = Fields.column(x, 1, 1, 1)
 first_column_view(x::Fields.Field) = Fields.column(x, 1, 1, 1)
 first_column_view(x::Fields.FieldVector) = Fields.column(x, 1, 1, 1)
 first_column_view(x::Topologies.DSSBuffer) = nothing
@@ -47,7 +47,7 @@ Return a copy of `x` in which `T` is the parent array element type of every
 `DataLayout`, leaving non-field components unchanged. Used to create the
 dual-number copies of `Y`, `p.precomputed`, and `p.scratch`.
 """
-replace_parent_eltype(x::DataLayouts.AbstractData, ::Type{T}) where {T} =
+replace_parent_eltype(x::DataLayouts.DataLayout, ::Type{T}) where {T} =
     DataLayouts.replace_basetype(x, T)
 replace_parent_eltype(x::Fields.Field, ::Type{T}) where {T} =
     Fields.Field(replace_parent_eltype(Fields.field_values(x), T), axes(x))

@@ -896,13 +896,14 @@ end
         ref_counter_file_PR = joinpath(computed_dir, "ref_counter.jl")
         open(io -> println(io, 7), ref_counter_file_PR, "w")
 
-        # Each job dir holds output_active/<repro_folder>/prog_state.hdf5, as a
-        # PR build's working directory does.
+        # Each job dir holds output_active/<repro_folder>/prog_state.hdf5 and
+        # output_active/nc_files.tar, as a PR build's working directory does.
         job_ids = String[]
         for job in ("job_id_1", "job_id_2")
-            bundle =
-                mkpath(joinpath(computed_dir, job, "output_active", repro_folder))
+            out_dir = joinpath(computed_dir, job, "output_active")
+            bundle = mkpath(joinpath(out_dir, repro_folder))
             open(io -> println(io, 1), joinpath(bundle, "prog_state.hdf5"), "w")
+            open(io -> println(io, 2), joinpath(out_dir, "nc_files.tar"), "w")
             push!(job_ids, joinpath(computed_dir, job))
         end
 
@@ -919,6 +920,9 @@ end
         @test isfile(joinpath(staged, "job_id_1", "prog_state.hdf5"))
         @test isfile(joinpath(staged, "job_id_2", "prog_state.hdf5"))
         @test isfile(joinpath(staged, "ref_counter.jl"))
+        # The diagnostics tarball rides along, for the comparison plots.
+        @test isfile(joinpath(staged, "job_id_1", "nc_files.tar"))
+        @test isfile(joinpath(staged, "job_id_2", "nc_files.tar"))
 
         # A later push for the same PR overwrites: only the latest bundle is kept.
         stage_pr_data(;

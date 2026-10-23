@@ -1,0 +1,49 @@
+name: Restore Julia depot
+description: >-
+  Restore the cached Julia depot for `prefix-cpu-target-hash`, or the most
+  recent one whose key starts with `prefix-cpu-target-`, and set
+  `JULIA_CPU_TARGET` for the rest of the job. Pair with `julia-depot-save`,
+  which saves only from pushes to main, so every run reads the cache that main
+  wrote.
+inputs:
+  prefix:
+    description: Key prefix, unique per workflow, Julia version, and runner OS.
+    required: true
+  hash:
+    description: Hash of the files that set the dependencies, from `hashFiles`.
+    required: true
+  cpu-target:
+    description: >-
+      CPU target that precompiled packages are compiled for. Julia rejects a
+      cached package compiled for features the runner's CPU lacks, and the
+      default `native` target differs between GitHub runners. `haswell` runs
+      on every x86-64 GitHub runner. Code compiled during the run still targets
+      the runner's own CPU.
+    default: haswell
+outputs:
+  key:
+    description: Full cache key, `prefix-cpu-target-hash`.
+    value: ${{ steps.restore.outputs.cache-primary-key }}
+  cache-hit:
+    description: Whether a cache with the full key was restored.
+    value: ${{ steps.restore.outputs.cache-hit }}
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        CPU_TARGET: ${{ inputs.cpu-target }}
+      run: echo "JULIA_CPU_TARGET=$CPU_TARGET" >> "$GITHUB_ENV"
+    - id: restore
+      uses: actions/cache/restore@v6
+      with:
+        # Keep in sync with the path list in julia-depot-save.
+        path: |
+          ~/.julia/artifacts
+          ~/.julia/compiled
+          ~/.julia/logs
+          ~/.julia/packages
+          ~/.julia/registries
+          ~/.julia/scratchspaces
+        key: ${{ inputs.prefix }}-${{ inputs.cpu-target }}-${{ inputs.hash }}
+        restore-keys: ${{ inputs.prefix }}-${{ inputs.cpu-target }}-

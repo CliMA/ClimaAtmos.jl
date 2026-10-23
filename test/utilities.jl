@@ -81,8 +81,38 @@ end
 @testset "parse_date" begin
     @test CA.parse_date("20000506") == Dates.DateTime(2000, 5, 6)
     @test CA.parse_date("20000506-0000") == Dates.DateTime(2000, 5, 6, 0, 0)
+    @test CA.parse_date("20191231-1200") == Dates.DateTime(2019, 12, 31, 12, 0)
+    # A DateTime is passed through unchanged
+    @test CA.parse_date(Dates.DateTime(2019, 12, 31, 12)) ==
+          Dates.DateTime(2019, 12, 31, 12)
     @test_throws ErrorException CA.parse_date("20000506-00000")
     @test_throws ErrorException CA.parse_date("")
+end
+
+@testset "weather_model_data_path uses HHMM from start_date" begin
+    # When a preprocessed IC file exists in the user directory, its path is
+    # returned directly, with HHMM taken from start_date (matching the
+    # ClimaCoupler / WeatherQuest naming convention).
+    mktempdir() do dir
+        target_levels = collect(0.0:300.0:3000.0)
+
+        # Non-00Z initialization resolves to the _HHMM stamped file.
+        noon_file =
+            joinpath(dir, "era5_init_processed_internal_20191231_1200.nc")
+        touch(noon_file)
+        @test CA.weather_model_data_path(
+            "20191231-1200",
+            target_levels,
+            dir,
+        ) == noon_file
+
+        # Date-only start_date still resolves to the _0000 file.
+        midnight_file =
+            joinpath(dir, "era5_init_processed_internal_20200101_0000.nc")
+        touch(midnight_file)
+        @test CA.weather_model_data_path("20200101", target_levels, dir) ==
+              midnight_file
+    end
 end
 
 #####

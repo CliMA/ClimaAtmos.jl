@@ -13,7 +13,6 @@ import ClimaCore.Utilities: half
 const z0m = 1e-3
 const z0b = 1e-5
 const gustiness = 1
-const beta = 1
 const T1 = 300
 const T2 = 290
 
@@ -49,13 +48,13 @@ const T2 = 290
 
     # Coupler pattern: build an AtmosSurface with a CoupledTemperature whose
     # field the driver writes into between steps, plus per-cell boundary
-    # overrides for gustiness/beta. Re-build the atmos with this surface and
+    # overrides for gustiness. Re-build the atmos with this surface and
     # overwrite p.atmos / p.sfc_setup.
     sfc_space = Spaces.level(Y.f, half)
     T_field = similar(sfc_space, FT)
     @. T_field = FT(NaN)
     overrides = CA.SurfaceConditions.SurfaceBoundaryOverrides(;
-        gustiness = FT(gustiness), beta = FT(beta),
+        gustiness = FT(gustiness),
     )
     overrides_field = similar(sfc_space, typeof(overrides))
     @. overrides_field = (overrides,)
@@ -66,20 +65,9 @@ const T2 = 290
         overrides_field,
         p.atmos.surface.surface_albedo,
     )
-    # AtmosModel is immutable, so swapping in `new_surface` requires rebuilding
-    # the whole struct positionally — the kwarg form would reset every other
-    # field (microphysics, radiation, ...) to its default and lose the config.
-    a = p.atmos
-    new_atmos = CA.AtmosModel{
-        typeof(a.water), typeof(a.scm_setup), typeof(a.radiation),
-        typeof(a.turbconv), typeof(a.prescribed_flow), typeof(a.gravity_wave),
-        typeof(a.vertical_diffusion), typeof(a.sponge), typeof(new_surface),
-        typeof(a.numerics), typeof(a.chemistry), typeof(a.cosp),
-    }(
-        a.water, a.scm_setup, a.radiation, a.turbconv, a.prescribed_flow,
-        a.gravity_wave, a.vertical_diffusion, a.sponge, new_surface, a.numerics,
-        a.chemistry, a.cosp, a.disable_surface_flux_tendency,
-    )
+    # Swap in `new_surface` with the copy-with-changes constructor: untouched
+    # fields (microphysics, radiation, cosp, ...) are preserved, not reset.
+    new_atmos = CA.AtmosModel(p.atmos; surface = new_surface)
     p_overwritten = CA.AtmosCache(
         p.dt,
         new_atmos,

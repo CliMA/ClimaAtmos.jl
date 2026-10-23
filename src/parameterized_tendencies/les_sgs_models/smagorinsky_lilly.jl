@@ -85,7 +85,6 @@ See also `horizontal_smagorinsky_lilly_tendency!` and
 function set_smagorinsky_lilly_precomputed_quantities!(Y, p, model)
     (; ᶜu, ᶠu, ᶜS, ᶠS, ᶜL_h, ᶜL_v, ᶜS_norm_h, ᶜS_norm_v, ᶜνₜ_h, ᶜνₜ_v, ᶜD_h, ᶜD_v) =
         p.precomputed
-    (; ᶜtemp_scalar) = p.scratch
     c_smag = CAP.c_smag(p.params)
 
     # Precompute 3D strain rate tensor
@@ -134,10 +133,12 @@ Add the horizontal Smagorinsky-Lilly subgrid-scale flux divergences to `Yₜ` in
 return `nothing`.
 
 Momentum receives `-∇ₕ·(ρ τ)/ρ` with the SGS momentum flux tensor `τ = -2 νₜ_h S`; total
-energy receives `+∇ₕ·(ρ D_h ∇ₕh_tot)`; each grid-scale tracer `χ` receives
-`+∇ₕ·(ρ D_h ∇ₕχ)`, and the `ρq_tot` diffusion is also added to `Yₜ.c.ρ` so that moisture
-diffusion conserves mass. Reads `ᶜS`, `ᶠS`, `ᶜνₜ_h`, `ᶜD_h`, and `ᶜh_tot` from
-`p.precomputed` (set by `set_smagorinsky_lilly_precomputed_quantities!`).
+energy receives the divergence of the split enthalpy flux
+`-ρ D_h [∇ₕs_d + (h_eff + Φ) ∇ₕq_tot_eff]` (see `ᶜh_eff_plus_Φ!`), whose water part is
+absent in dry configurations; each grid-scale tracer `χ` receives `+∇ₕ·(ρ D_h ∇ₕχ)`, and
+the `ρq_tot` diffusion is also added to `Yₜ.c.ρ` so that moisture diffusion conserves
+mass. Reads `ᶜS`, `ᶠS`, `ᶜνₜ_h`, `ᶜD_h`, and `ᶜT` from `p.precomputed` (set by
+`set_smagorinsky_lilly_precomputed_quantities!`) and writes `p.scratch.ᶜtemp_scalar`.
 
 This tendency is always applied explicitly. It is a no-op unless the model's axes include
 the horizontal directions (`is_smagorinsky_horizontal`); the `::Nothing` method is a
@@ -147,7 +148,6 @@ function horizontal_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, model::Smagorinsk
     is_smagorinsky_horizontal(model) || return nothing
     (; ᶜS, ᶠS, ᶜνₜ_h, ᶜD_h) = p.precomputed
     (; ᶜtemp_UVWxUVW, ᶠtemp_UVWxUVW, ᶜtemp_scalar, ᶠtemp_scalar) = p.scratch
-    thermo_params = CAP.thermodynamics_params(p.params)
     ᶜρ = Y.c.ρ
     ᶠρ = @. ᶠtemp_scalar = ᶠinterp(ᶜρ)
 
@@ -162,9 +162,15 @@ function horizontal_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, model::Smagorinsk
     ## Vertical momentum tendency
     @. Yₜ.f.u₃ -= C3(wdivₕ(ᶠρ * ᶠτ_smag) / ᶠρ)
 
-    ## Total energy tendency
-    (; ᶜh_tot) = p.precomputed
-    @. Yₜ.c.ρe_tot += wdivₕ(ᶜρ * ᶜD_h * gradₕ(ᶜh_tot))
+    ## Total energy tendency: the dry-static-energy part of the enthalpy flux,
+    ## then the enthalpy carried by the diffusing water
+    ᶜs_d = ᶜdry_static_energy(p)
+    @. Yₜ.c.ρe_tot += wdivₕ(ᶜρ * ᶜD_h * gradₕ(ᶜs_d))
+    if !(p.atmos.microphysics_model isa DryModel)
+        ᶜh_eff_plus_Φ = ᶜh_eff_plus_Φ!(ᶜtemp_scalar, Y, p)
+        ᶜq_tot_eff = ᶜdiffusing_water(Y, p)
+        @. Yₜ.c.ρe_tot += wdivₕ(ᶜρ * ᶜD_h * ᶜh_eff_plus_Φ * gradₕ(ᶜq_tot_eff))
+    end
 
     ## Tracer diffusion and associated mass changes
     foreach_gs_tracer(Yₜ, Y) do ᶜρχₜ, ᶜρχ, ρχ_name
@@ -184,21 +190,31 @@ end
 Add the vertical Smagorinsky-Lilly subgrid-scale flux divergences to `Yₜ` in place;
 return `nothing`.
 
-Momentum receives `-∇ᵥ·(ρ τ)/ρ` with the SGS momentum flux tensor `τ = -2 νₜ_v S`; total
-energy and each grid-scale tracer receive the vertical diffusive-flux divergence
-`ᶜdiffusive_flux_divergenceᵥ` with face diffusivity `ᶠρ D_v` (subtracted, since it is a
-flux divergence), and the `ρq_tot` diffusion is also applied to `Yₜ.c.ρ` so that moisture
-diffusion conserves mass. Reads `ᶜS`, `ᶠS`, `ᶜνₜ_v`, and `ᶜh_tot` from `p.precomputed`.
+Momentum receives `-∇ᵥ·(ρ τ)/ρ` with the SGS momentum flux tensor `τ = -2 νₜ_v S`. Total
+energy receives the divergence of the split enthalpy flux
+`-ρ D_v [∇ᵥs_d + (h_eff + Φ) ∇ᵥq_tot_eff]` (see `ᶜh_eff_plus_Φ!`), whose water part is
+absent in dry configurations, and each grid-scale tracer receives the vertical
+diffusive-flux divergence `ᶜdiffusive_flux_divergenceᵥ` with face diffusivity `ᶠρ D_v`
+(subtracted, since it is a flux divergence); the `ρq_tot` diffusion is also applied to
+`Yₜ.c.ρ` so that moisture diffusion conserves mass. Reads `ᶜS`, `ᶠS`, `ᶜνₜ_v`, and `ᶜT`
+from `p.precomputed` and writes `p.scratch.ᶜtemp_scalar`.
 
-This tendency is always applied explicitly, including the vertical diffusion; it is not
-part of the implicit solver. It is a no-op unless the model's axes include the vertical
-direction (`is_smagorinsky_vertical`); the `::Nothing` method is a no-op. See also
+Applied from `additional_tendency!` when `p.atmos.diff_mode == Explicit()`, and from
+`implicit_tendency!` when it is `Implicit()`. In the implicit case the Jacobian
+(`update_diffusion_jacobian!`) linearizes the enthalpy flux in the same split form, and
+the tracer and `uₕ` flux divergences, with a frozen eddy viscosity; the `u₃` term, the
+horizontal-gradient part of `τ`, and the per-species condensate diagonals are carried
+without a Jacobian contribution, which affects the Newton convergence rate but not the
+tendency.
+
+It is a no-op unless the model's axes include the vertical direction
+(`is_smagorinsky_vertical`); the `::Nothing` method is a no-op. See also
 `horizontal_smagorinsky_lilly_tendency!`.
 """
 function vertical_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, model::SmagorinskyLilly)
     is_smagorinsky_vertical(model) || return nothing
     (; ᶜS, ᶠS, ᶜνₜ_v) = p.precomputed
-    (; ᶜtemp_UVWxUVW, ᶠtemp_UVWxUVW, ᶠtemp_scalar, ᶠtemp_scalar_2) = p.scratch
+    (; ᶜtemp_UVWxUVW, ᶠtemp_UVWxUVW, ᶠtemp_scalar) = p.scratch
     Pr_t = CAP.Prandtl_number_0(CAP.turbconv_params(p.params))
     ᶜρ = Y.c.ρ
     ᶠρ = @. ᶠtemp_scalar = ᶠinterp(ᶜρ)
@@ -218,10 +234,17 @@ function vertical_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, model::SmagorinskyL
     ## Vertical momentum tendency
     @. Yₜ.f.u₃ -= C3(ᶠdiffdivᵥ_u₃(ᶜρ * ᶜτ_smag) / ᶠρ)
 
-    ## Total energy tendency
-    (; ᶜh_tot) = p.precomputed
-    ᶜ∇ᵥρD∇h_totₜ = ᶜdiffusive_flux_divergenceᵥ(ᶠρD, ᶜh_tot)
-    @. Yₜ.c.ρe_tot -= ᶜ∇ᵥρD∇h_totₜ
+    ## Total energy tendency: the dry-static-energy part of the enthalpy flux,
+    ## then the enthalpy carried by the diffusing water
+    ᶜ∇ᵥρD∇s_dₜ = ᶜdiffusive_flux_divergenceᵥ(ᶠρD, ᶜdry_static_energy(p))
+    @. Yₜ.c.ρe_tot -= ᶜ∇ᵥρD∇s_dₜ
+    if !(p.atmos.microphysics_model isa DryModel)
+        ᶜh_eff_plus_Φ = ᶜh_eff_plus_Φ!(p.scratch.ᶜtemp_scalar, Y, p)
+        ᶠρD_h_eff = @. lazy(ᶠρD * ᶠinterp(ᶜh_eff_plus_Φ))
+        ᶜ∇ᵥρDh_eff∇q_totₜ =
+            ᶜdiffusive_flux_divergenceᵥ(ᶠρD_h_eff, ᶜdiffusing_water(Y, p))
+        @. Yₜ.c.ρe_tot -= ᶜ∇ᵥρDh_eff∇q_totₜ
+    end
 
     ## Tracer diffusion and associated mass changes
     foreach_gs_tracer(Yₜ, Y) do ᶜρχₜ, ᶜρχ, ρχ_name

@@ -78,7 +78,7 @@ If you're interested in working on something, let us know by commenting on exist
 by opening a new issue. This is to make sure no one else is working on the same issue and so
 we can help and guide you in case there is anything you need to know beforehand.
 
-## Ground Rules
+## Ground rules
 
   - Each pull request should consist of a logical collection of changes. You can
     include multiple bug fixes in a single pull request, but they should be related.
@@ -142,7 +142,7 @@ tests, and resolving stuck environments, follow the shared
 the layout of this repository's environments is described in the
 [dependency management guide](https://github.com/CliMA/ClimaAtmos.jl/blob/main/docs/dev-guides/architecture/dependency_management.md).
 
-## Pull Requests
+## Pull requests
 
 We follow the [ColPrac guide](https://github.com/SciML/ColPrac) for collaborative practices.
 We ask that new contributors read that guide before submitting a pull request.
@@ -172,7 +172,7 @@ are all specified in the shared
 follow it for every docstring and documentation page you touch.
 
 You can preview how the documentation will look after merging by building the documentation
-locally. From the main directory of your local repository call
+locally. From the main directory of your local repository, call
 
 ```bash
 julia --project=docs -e 'using Pkg; Pkg.develop(Pkg.PackageSpec(path = ".")); Pkg.instantiate()'

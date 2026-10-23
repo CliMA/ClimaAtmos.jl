@@ -1,0 +1,35 @@
+name: Save Julia depot
+description: >-
+  Save the Julia depot under `key` on a push to main when no cache with that
+  key exists. Runs on other events do nothing. Caches saved by pull requests
+  are readable only by the same pull request, and they fill the repository's
+  10 GB cache limit and evict the main caches that every run restores.
+inputs:
+  key:
+    description: Full cache key, the `key` output of `julia-depot-restore`.
+    required: true
+  cache-hit:
+    description: The `cache-hit` output of `julia-depot-restore`.
+    required: true
+runs:
+  using: composite
+  steps:
+    - if: >-
+        github.event_name == 'push' && github.ref == 'refs/heads/main' &&
+        inputs.cache-hit != 'true'
+      shell: bash
+      run: julia --startup-file=no -e 'using Pkg; Pkg.gc()'
+    - if: >-
+        github.event_name == 'push' && github.ref == 'refs/heads/main' &&
+        inputs.cache-hit != 'true'
+      uses: actions/cache/save@v6
+      with:
+        # Keep in sync with the path list in julia-depot-restore.
+        path: |
+          ~/.julia/artifacts
+          ~/.julia/compiled
+          ~/.julia/logs
+          ~/.julia/packages
+          ~/.julia/registries
+          ~/.julia/scratchspaces
+        key: ${{ inputs.key }}

@@ -75,7 +75,7 @@ function surface_condition(::Rico, params)
     return (;
         flux_scheme = MoninObukhov(; z0 = FT(1.5e-4)),
         temperature = AnalyticTemperature(Returns(T_surface)),
-        overrides = SurfaceBoundaryOverrides(p = p_surface, q_vap = FT(q_vap)),
+        overrides = SurfaceBoundaryOverrides(q_vap = FT(q_vap)),
     )
 end
 

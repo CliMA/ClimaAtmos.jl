@@ -3,6 +3,300 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- ![][badge-💥breaking] `sgs_variance_vertical_scale_factor` and the provisional
+  `sgs_variance_isentropic_depth` are removed; with `strict_params: true` (the
+  default) a run TOML that still sets either now stops with an unused-parameter
+  error. Remove them from run TOMLs.
+- ![][badge-🔥behavioralΔ] Snow falls at its fixed terminal velocity by default
+  (`snow_terminal_velocity: Fixed`); `Chen2022` remains available.
+- ![][badge-✨feature/enhancement] CloudMicrophysics 0.46 is supported (compat `0.45, 0.46`).
+- ![][badge-✨feature/enhancement] The equilibrium SGS condensate
+  `E[max(0, S)]` can be evaluated under the vertical displacement acting on
+  the curved profile of the saturation excess,
+  `S = μ_S + lin x + ½ curv (x² − 1) + h` with `x` standard normal,
+  `lin = ℓ_v ∂_z S̃`, `curv = ℓ_v² ∂_z² S̃` from the two bounding face gradients
+  of `q_tot` and `θ_li` (`∂_z S̃ = ∂_z q_tot − r_{v,θ} γ ∂T/∂θ_li ∂_z θ_li`), and `h` the horizontal displacement part, with the
+  variance of `S` matched to the `σ_S²` of the covariance closure
+  (`displacement_curvature_coefficients`, `displacement_condensate`). For
+  negative curvature, as at the cloud-base maximum of the mean saturation
+  excess, the moist tail is bounded by the maximum the displaced profile
+  reaches. Opt-in with `sgs_variance_curvature: true` (default `false`); it
+  enters the 0M equilibrium condensate, the 1M relaxation target `λ_eq` and
+  the equilibrium-ratio factor of the variance fidelity, and the cloud
+  fraction keeps its truncated-Gaussian closure.
+- ![][badge-🔥behavioralΔ] The SGS covariance of `(θ_li, q_tot)` is that of
+  Gaussian subgrid displacements of the two scalars acting on the resolved
+  gradients, `Σ_ψφ = ℓ_h² ∇_h ψ·∇_h φ + ℓ_v² ∂_z ψ ∂_z φ`
+  (`displacement_covariance`), with per-variable scales `ℓ_{h,ψ}`, `ℓ_{v,ψ}`,
+  horizontal cross-correlation `r_{h,θq}` and perfectly correlated vertical
+  displacements. `ℓ_h² = c_g (c_Δx Δx_h)²`; `ℓ_v² = 2 c_σ l_d²`
+  with `l_d = min(max(l_disp, l_b), z - z_s)` taking the larger of
+  the buoyancy-bounded mixing length
+  `l_disp = l_mix / √(1 + 2 c_σ max(N_disp², 0) l_mix² / (c_b κ_iso))` and the floor
+  displacement
+  `l_b = √(c_b κ_min) min(τ_N, l_disp/√(c_b κ_iso / (2 c_σ)), τ_0)` with `τ_N = 1/N_disp` for
+  `N_disp² > 0` and `∞` otherwise (continuous at `N_disp² = 0`),
+  `N_disp² = max(N_dry⁻², N_dry⁺²)`,
+  `κ_min = w_min² / (2 c_σ c_b)`
+  (`materialized_displacement_length!`): in stably stratified air
+  the displacement of the unresolved vertical motions lasts until buoyancy, the
+  turbulence (its Lagrangian time scale `l_disp / √(c_b κ_iso / (2 c_σ))`) or the
+  quiescent limit `τ_0` decorrelates it, so without TKE it is `w_min / N_disp`;
+  capped by the cell depth and the wall distance. The velocity
+  scale grows with the horizontal grid scale,
+  `w_min = w_ref (Δx_h / Δx_ref)^p`, as the spectral slope of the displaced
+  fields requires. Defaults calibrated against the within-cell moments
+  (`var q_tot`, `var θ_li`, their covariance) of 3.75 km global MPAS (DYAMOND)
+  aggregated onto the model's cubed-sphere nodes, with the closure inputs from
+  the model's own operators on the MPAS native levels (one set for ne16–ne60
+  and the 130- and 63-level grids; `c_Δx` is specific to the model's gradient
+  operator): `sgs_variance_horizontal_scale_factor` (`c_Δx`, `1.24`; this
+  code default supersedes the ClimaParams value of `1`, and a run TOML that
+  sets the parameter still wins),
+  `sgs_variance_vertical_velocity_floor` (`w_ref`, `1.08` m/s),
+  `sgs_variance_floor_reference_resolution` (`120` km),
+  `sgs_variance_floor_resolution_exponent` (`p`, `2/3`),
+  `sgs_variance_floor_time_scale` (`τ_0`, `300` s; bounded only from below),
+  `sgs_variance_theta_horizontal_scale_ratio` (`0.88`),
+  `sgs_variance_theta_vertical_scale_ratio` (`0.38`) and
+  `sgs_variance_horizontal_cross_correlation` (`0.74`);
+  the floor enters the variance only.
+  This replaces the turbulent block and the geometric block (the along-surface
+  (isentropic) part with its `q_sat`-variance bound, and the vertical
+  uniform-box part). `tq_correlation_model` defaults to `diagnosed`, the covariance
+  of the same displacements; `constant` keeps the prescribed value. The
+  variance-fidelity Damköhler rate uses the same buoyancy-bounded mixing
+  length `l_disp` as the displacement length. Equilibrium SGS saturation
+  adjustment (`compute_sgs_saturation_adjustment`) and 1-moment non-equilibrium
+  condensation (`Microphysics1MEvaluator`) evaluate equilibrium condensate via
+  the analytic truncated-Gaussian expectation `truncated_gaussian_condensate`
+  (mapped onto the quadrature nodes via `λ_eq` in `_compute_sgs_moments`),
+  eliminating the discrete 3-point Gauss–Hermite support cutoff at
+  `μ_S < −√3 σ_S`. The diagnosed T–q correlation (`sgs_correlation_Tq`) falls
+  back to `Tq_correlation_coefficient` only where a variance vanishes relative
+  to its grid mean (`q′q′ ≤ (ε q_tot)²` or `T′T′ ≤ (ε T)²`, `ε = eps(FT)`)
+  instead of where `T′T′ q′q′ ≤ eps(FT)²`; the absolute floor replaced the
+  diagnosed (negative) correlation by `+0.6` in the dry upper troposphere.
+
+0.42.15
+-------
+
+- ![][badge-🔥behavioralΔ] The along-surface part of the resolved-gradient SGS
+  variance is bounded by the variance of `q_sat` along the displacement,
+  `(∂_z q_sat|_ad)² ẑᵀD_cẑ`, with `∂_z q_sat|_ad` the dry-adiabatic rate
+  (`adiabatic_q_sat_gradient`) and `ẑᵀD_cẑ` the vertical variance of the
+  along-surface displacement.
+- ![][badge-✨feature/enhancement] Precipitation-fraction placement of rain and
+  snow over the SGS quadrature: a fraction `sgs_precip_incloud_fraction` of
+  the cell-mean rain and snow is confined to the precipitation shaft, the moistest `a_p` of the PDF,
+  where `a_p` is the overlap precipitation fraction diagnosed from the cloud cover
+  above by a maximum-random overlap sweep.
+- ![][badge-🔥behavioralΔ] The part of the geometric SGS variance block that
+  needs a vertical displacement (the along-surface variance beyond its
+  along-contour part, plus the across-surface uniform-box terms) and the
+  turbulent block's vertical-displacement variance are combined as the larger
+  of the two instead of their sum.
+- ![][badge-🔥behavioralΔ] Cloud fraction: restore the per-subdomain closure
+  for `PrognosticEDMFX`. The `QuadratureCloud` cover is again evaluated with
+  the environment condensate (`_get_condensate_means`, consistent with the
+  env-mean `(T⁰, ρ⁰, q⁰)` used throughout the SGS pipeline), weighted by the
+  environment area fraction, and binary updraft contributions are added
+  (`_apply_edmf_cloud_weighting!`).
+- ![][badge-🔥behavioralΔ] One config key per species selects the sedimentation velocity of the
+  1M microphysics tracers. `DiagnosticTerminalVelocity` is replaced by the closure-named modes
+  `StokesTerminalVelocity`, `Blk1MTerminalVelocity` and `Chen2022TerminalVelocity`.
+- ![][badge-💥breaking] The `fixed_terminal_velocity_{liquid,ice,rain,snow}`
+  boolean config keys are removed. Use `cloud_liquid_terminal_velocity`
+  (`Fixed`, `Stokes`), `cloud_ice_terminal_velocity` (`Fixed`, `Chen2022`),
+  `rain_terminal_velocity` and `snow_terminal_velocity` (`Fixed`, `Blk1M`,
+  `Chen2022`). `ClimaAtmos.DiagnosticTerminalVelocity` is removed.
+- ![][badge-✨feature/enhancement] Adding Chen et al. (2022) fall speeds for rain and snow
+- ![][badge-🔥behavioralΔ] Snow falls at the Chen et al. (2022) speed by default
+  `toml/prognostic_edmfx_1M.toml` sets `snow_apparent_density` to 300 kg/m³.
+   Rain falls at fixed terminal velocity.
+- ![][badge-🔥behavioralΔ] The along-surface depth of the geometric SGS
+  variance block is bounded by the height above the surface,
+  `ℓ_a = min(H, z − z_sfc)`: in a neutral layer the along-surface
+  displacement is the vertical eddy displacement, which cannot reach below
+  the ground.
+- ![][badge-🔥behavioralΔ] Make the SGS variance fidelity `α` a cached
+  per-cell field `α = α_Da · α_eq`, refreshed inside `set_covariance_cache!`:
+  Damköhler factor `α_Da = 1 / (1 + A · τ_mp · c_d · √TKE / max(l_mix, 1 m))`
+  (quiescent → 1, well-mixed → 0) and equilibrium-ratio modulator
+  `α_eq = r / (w + (1−w) r)` with `r = (q_c + q_min)/(q_c^eq + q_min)` and
+  new provisional parameter `sgs_fidelity_equilibrium_weight` (default 0.5).
+  CF uses `σ_aug = sqrt((α σ_S)² + σ_S_floor²)` — α scales only the
+  equilibrium part. Microphysics timescales reuse the ClimaParams
+  `condensation_evaporation_timescale` / `sublimation_deposition_timescale`.
+- ![][badge-🔥behavioralΔ] The resolved-gradient (geometric) SGS variance block
+  is the variance from a Gaussian subgrid parcel displacement with covariance
+  `c_g diag(ℓ_h², ℓ_h², ℓ_v²)`, `ℓ_h = c_Δx Δx_h`, `ℓ_v = H`, split into
+  the part along the local `θ_li` surface (q′q′ only, the conditional variance
+  `gᵀDg − (gᵀDn)²/(nᵀDn)` with `g = ∇q_tot`, `n = ∇θ_li`) and the part across
+  it (the vertical uniform-box terms, with the q gradient taken across the
+  surface).
+- ![][badge-🔥behavioralΔ] Update to CloudMicrophysics v0.45 and use joint
+  relaxation of the vapor-driven phase changes. The new `vapor_relaxation`
+  config key selects `Joint` (default) or `PerProcess`.
+- ![][badge-💥breaking] CloudMicrophysics compat is v0.45 only; v0.43 and
+  v0.44 are no longer supported.
+- ![][badge-🔥behavioralΔ] The horizontal resolved-gradient (geometric) SGS variance
+  term is now the isentropic form: `q′q′` carries `|∇_h q_tot − r ∇_h θ_li|²`, the
+  gradient of `q_tot` along the `θ_li` surface with `r = (∂q_tot/∂z)/(∂θ_li/∂z)`, the
+  stratification floored at the provisional `sgs_variance_isentropic_min_dtheta_dz`,
+  there is no horizontal `θ′θ′` (or `θ′q′`) term, and the displacement along the surface
+  is bounded by the cell, `ℓ² = Δx² / (1 + (s Δx / Δz)²)` with the surface slope
+  `s = |∇_h θ_li| / ∂_z θ_li`. The `q′q′` and `θ′q′` terms of the vertical uniform-box block are
+  scaled by the same factor, the share of the cell's vertical excursion not already
+  sampled along the surface.
+
+0.42.14
+-------
+- ![][badge-🔥behavioralΔ] Add a resolved vertical-gradient block
+  `c_g (c_Δz Δz)² (∂_z ψ)²` to `σ_T²`, `σ_q²` (uniform-box exact with the
+  defaults `c_g = 1/12`, `c_Δz = 1`; independent of `l_mix`), so the
+  microphysics quadrature sees non-zero variability where the turbulent
+  closure collapses. Set `sgs_variance_vertical_scale_factor = 0` to disable.
+- ![][badge-✨feature/enhancement] New `tq_correlation_model`. `constant`
+  (default) keeps the prescribed `Tq_correlation_coefficient`. `diagnosed`
+  builds `T′q′ = ρ_turb σ_T,turb σ_q,turb + c_g (c_Δx Δx_h)² ∇_h θ · ∇_h q
+  + c_g (c_Δz Δz)² ∂_z θ · ∂_z q` and forms
+  `ρ = clamp(T′q′ / √(T′T′ q′q′), -1, 1)`, falling back to the prescribed
+  value where the variances vanish. Reported via the existing
+  `env_q_tot_temperature_{covariance,correlation}` diagnostics.
+- ![][badge-🔥behavioralΔ] Remove the Richardson-number weight on the
+  horizontal geometric SGS variance term: The
+  `sgs_variance_geometric_Ri_factor` parameter is removed.
+- ![][badge-🔥behavioralΔ] Update to ClimaParams with
+  `sgs_variance_horizontal_scale_factor` default `3.0 → 1.0`.
+- ![][badge-🔥behavioralΔ] Update to CloudMicrophysics v0.44 in compat and manifest.
+
+0.42.13
+-------
+- ![][badge-🔥behavioralΔ] The horizontal-gradient invariants of the geometric SGS
+  variance term (`hgrad_invariant!`) and the TKE shear production from horizontal
+  gradients now use ClimaCore's `LumpedRestriction`: within each element the
+  invariant of the nodal spectral-element gradient is replaced by its lumped GLL{2}
+  restriction, which removes the systematic excess at element-boundary nodes
+  while conserving each element's integral of the invariant.
+- ![][badge-🔥behavioralΔ] Add empirical mixing length `l_TKE = l_0·sqrt(x)·(1+x)·exp(−x)`,
+  `x = TKE/(l_inf/tau_eps)^2`, to the mixing-length closure.
+- ![][badge-🔥behavioralΔ] Update to ClimaParams 1.1.16, which provides the
+  SGS-quadrature parameters and changes the defaults.
+  The SGS covariance, quadrature and cloud-fraction
+  closure parameters move from `TurbulenceConvectionParameters` to a new
+  `SGSQuadratureParameters` set, held as `sgs_quadrature_params`. `CAP.x(params)`
+  accessors and TOML names are unchanged; code that reads these fields from
+  `turbconv_params` must read them from `sgs_quadrature_params`.
+- ![][badge-✨feature/enhancement] Two parameters,
+  `sgs_liquid_uniform_fraction` and `sgs_ice_uniform_fraction`,
+  blend the SGS-quadrature condensate reconstruction of the 1-moment
+  microphysics between the excess split (a species sits only at supersaturated
+  nodes, in proportion to its excess) and a uniform distribution (the
+  subdomain mean at every node, like rain and snow).
+
+0.42.12
+-------
+- ![][badge-🔥behavioralΔ] The CI environment updates to ClimaParams 1.1.14, which sets the
+  default `EDMF_interface_entr_efficiency` to `0.0` (from `0.4`), turning off the interfacial
+  cloud-top entrainment closure by default.
+- ![][badge-🐛bugfix] File-based initial conditions (`WeatherModel`,
+  `MoistFromFile`, `AMIPFromERA5`) now interpolate the face pressure to cell
+  centers in log space (`exp(ᶜinterp(log(p)))`) when computing the initial
+  density, instead of the arithmetic mean `ᶜinterp(p)`, which overestimated
+  center pressure and left the initial column ~1 hPa too heavy.
+- ![][badge-✨feature/enhancement] `WeatherModel` ERA5 IC filenames now use the
+  `HHMM` of `start_date` (e.g. `start_date = "20191231-1200"` →  `..._1200.nc`),
+  matching the ClimaCoupler subseasonal / WeatherQuest naming; date-only strings
+  still default to `0000`.
+- ![][badge-🐛bugfix] With several PROPHET updrafts, the entrainment, the physical-constraint
+  clipping, the Rayleigh sponge, and the sedimentation cache act on the SGS tracers
+  (microphysics species and passive tracers) of the updraft they are called for; they acted
+  on updraft 1 throughout. The default single updraft is unaffected.
+- ![][badge-🐛bugfix] The pressure drag coefficient is computed by the function
+  `pressure_drag_coefficient` for the momentum equation and the TKE return-to-isotropy
+  source, with the environment area clamped to `[1 - a_max, 1]` in both; the TKE source
+  floored it at `a_min`.
+- ![][badge-🐛bugfix] The AMD eddy viscosity divides by the norm of the unscaled velocity
+  gradient. Its numerator and denominator shared one scratch tensor, so the denominator
+  was evaluated after the filter-scaled derivative had overwritten it, leaving a
+  viscosity smaller by roughly the square of the filter width (a factor of order `1e6`
+  in a 3.2 km box) and with the units of an inverse time.
+- ![][badge-🐛bugfix] The LES closures (Smagorinsky-Lilly, AMD, constant horizontal
+  diffusion) diffuse energy through the split enthalpy flux
+  `-ρ D [∇s_d + (h_eff + Φ) ∇q_tot_eff]` used by the other diffusive terms, in place of a
+  lumped `h_tot`. The horizontal AMD scalar diffusivity divides by the physical norm of
+  the gradient, as the vertical one already did.
+- ![][badge-🐛bugfix] Hyperdiffusion scales the P3 ice number `ρn_ice`, rime mass `ρq_rim`, and
+  rime volume `ρb_rim` with the cloud ice tendency; `ρn_ice` received that and a second
+  full-strength `∇⁴` tendency, and the rime species received the latter only.
+- ![][badge-🐛bugfix] The ERA5 forcing-file coverage checks report a file that does not
+  cover the run, so a stale cached file is regenerated; they always reported success.
+- ![][badge-🐛bugfix] `job_id_from_config_file` detects configuration files that share a base
+  name; the comparison never matched.
+- ![][badge-🐛bugfix] The ISDAC setup follows the shared convention `prognostic_tke ? 0 :
+  prescribed profile`; its operands were reversed. `Setups.Larcform1` drops the
+  `prognostic_tke` keyword it never read.
+- ![][badge-🐛bugfix] A `Setups.DecayingProfile()` constructed without parameters builds a
+  simulation, taking the thermodynamics parameters from the model.
+- ![][badge-💥breaking] `SurfaceBoundaryOverrides` drops the `p` and `beta` fields, which were
+  stored and never applied; the setups that set `p` no longer do. The `orographic_gravity_wave:
+  "linear"` option and `LinearOrographicGravityWave` are removed; the option errored at
+  runtime. `AtmosNumerics` and the `EDMFXModel` keyword constructor reject unrecognized
+  keywords with a `MethodError`; they absorbed them.
+- ![][badge-🔥behavioralΔ] `vert_diff` combined with `turbconv`, `amd_les`, or a vertically
+  acting `smagorinsky_lilly` is rejected at model construction. The two AMD configurations
+  set `hyperdiff: ~`, like the Smagorinsky ones.
+- ![][badge-🐛bugfix] The vertical Smagorinsky-Lilly diffusion follows `implicit_diffusion`:
+  with `implicit_diffusion: true` it is part of the implicit tendency, with the eddy viscosity
+  refreshed on every Newton iterate, matching the Jacobian block that already existed for it.
+  A vertically-acting Smagorinsky-Lilly closure now satisfies the implicit-diffusion
+  configuration check on its own. Running the closure under the autodiff Jacobians
+  (`use_auto_jacobian`, `use_dense_jacobian`) needs ClimaCore 1.0, whose tensor return
+  types keep Dual storage; the default manual sparse Jacobian works on any supported
+  ClimaCore.
+- ![][badge-🐛bugfix] The number-density redistribution in vertical diffusion, hyperdiffusion,
+  the viscous sponge, and the PROPHET diffusive flux looks up the P3 ice number field `ρn_ice`;
+  it looked up `ρn_icl`, which no configuration carries, so the ice-number branches never ran.
+- The four AMD precomputed fields that no tendency read are no longer allocated.
+
+- ![][badge-💥breaking]![][badge-🚀performance] `AtmosNumerics` stores
+  `test_dycore_consistency` and `reproducible_restart` as `Bool` fields instead
+  of type parameters, and the `TestDycoreConsistency` and `ReproducibleRestart`
+  marker types are removed. Pass `true`/`false` instead. Both switches reach the
+  tendencies through `p.atmos`, so lifting them to the type domain gave any run
+  that set them a private set of specializations; the restart tests, which set
+  both, shared no compiled code with the rest of CI.
+
+0.42.11
+-------
+
+- [#4802](https://github.com/CliMA/ClimaAtmos.jl/pull/4802) ![][badge-✨feature/enhancement] Horizontal resolved-gradient (geometric) SGS variance term
+  `c_g (c_Δx Δx_h)² |∇_h ψ|²` for the SGS quadrature (`sgs_variance_horizontal_scale_factor` switches it on), with a closure-validity bound on
+  σ_q (`sgs_variance_max_rel_std`); The new parameters default to the historical closure.
+- [#4828](https://github.com/CliMA/ClimaAtmos.jl/pull/4828) Update to ClimaTimeSteppers v1 and update benchmark test
+- [#4837](https://github.com/CliMA/ClimaAtmos.jl/pull/4837) ![][badge-✨feature/enhancement] Richardson-number stability weight on the geometric SGS
+  variance term (`sgs_variance_geometric_Ri_factor`, 0 = off), built on the saturated moist buoyancy gradient and the strain rate, fading the
+  term where the resolved flow is turbulent or conditionally unstable.
+
+0.42.10
+-------
+- [#4803](https://github.com/CliMA/ClimaAtmos.jl/pull/4803)
+  ![][badge-✨feature/enhancement] Generate comparison plots for the
+  reproducibility tests, so a failing job shows the reference and the candidate
+  side by side instead of only the RMSE table.
+- [#4800](https://github.com/CliMA/ClimaAtmos.jl/pull/4800)
+  ![][badge-🔥behavioralΔ] Add tke source due to entr/detr mixing; delete
+  stability-biased buoygrad at cell centers and use unbiased buoygrad instead.
+
+- [#4737](https://github.com/CliMA/ClimaAtmos.jl/pull/4737) ![][badge-💥breaking] `AtmosModel` is now built on a grid and owns the
+  parameters and case setup. `AtmosSimulation` wraps a model and carries only
+  run control:
+
+  ```julia
+  model = AtmosModel(grid; params, setup, microphysics_model = ..., ...)
+  sim   = AtmosSimulation(model; dt, t_end, ...)
+  ```
 
 - [#4798](https://github.com/CliMA/ClimaAtmos.jl/pull/4798) ![][badge-🐛bugfix] ![][badge-🔥behavioralΔ] Made command-line runs without `--job_id` use the `job_id` from the selected configuration, or derive it from the selected config file names, instead of always using `default_config`.
 

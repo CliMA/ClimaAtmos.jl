@@ -47,19 +47,27 @@ jobs:
     needs: decide
     if: needs.decide.outputs.skip != 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v7
       - uses: julia-actions/setup-julia@v3
         with:
           version: '1.11'
-      - uses: julia-actions/cache@v3
+      - id: depot
+        uses: ./.github/actions/julia-depot-restore
+        with:
+          prefix: docs-julia1.11-${{ runner.os }}
+          hash: ${{ hashFiles('Project.toml', 'docs/Project.toml') }}
       - name: Install dependencies
         shell: julia --project=docs {0}
         run: |
           using Pkg
           Pkg.develop(PackageSpec(path="."))
           Pkg.instantiate()
+      - uses: ./.github/actions/julia-depot-save
+        with:
+          key: ${{ steps.depot.outputs.key }}
+          cache-hit: ${{ steps.depot.outputs.cache-hit }}
       - name: Build and deploy
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # For authentication with GitHub Actions token

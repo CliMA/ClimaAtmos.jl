@@ -18,7 +18,7 @@ which replaces radiation altogether in the dry dynamical-core benchmark. The
 The radiative transfer itself, and the derivations behind the
 correlated-``k`` method, belong to RRTMGP.jl and to
 [Pincus2019](@cite). This page states what ClimaAtmos hands to the solver, how
-often, and what it does with the answer. For the configuration surface, see
+often, and what it does with the answer. For the configuration options, see
 [Running with Radiation](radiation_howto.md).
 
 ## The radiation callback
@@ -42,8 +42,8 @@ is not. A shorter `dt_rad` resolves the diurnal cycle better and calls the
 solver more often; see
 [Choosing the cadence](radiation_howto.md#Choosing-the-cadence).
 
-Radiation is always explicit. It never enters the implicit solve, and the flux
-divergence is applied with `ᶜdivᵥ`, so flux convergence heats the layer.
+Radiation is always explicit, and the flux divergence is applied with `ᶜdivᵥ`,
+so flux convergence heats the layer.
 
 !!! note "TODO: not yet implemented"
 
@@ -55,7 +55,7 @@ divergence is applied with `ᶜdivᵥ`, so flux convergence heats the layer.
 
 ## What RRTMGP is given
 
-RRTMGP works on columns of layers, and it wants the layer state, the boundary
+RRTMGP works on columns of layers, and it needs the layer state, the boundary
 conditions, and the optical properties of whatever absorbs and scatters. The
 wrapper in
 [RRTMGPInterface.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/parameterized_tendencies/radiation/RRTMGPInterface.jl)
@@ -65,15 +65,14 @@ callback.
 **Layer state.** Pressure and temperature come from the model's cell centers.
 RRTMGP needs them on cell faces too, and reconstructs the face values itself
 with the interpolation scheme the solver was built with (`BestFit()`, with
-`SameAsInterpolation()` at the bottom face). Nothing in ClimaAtmos interpolates
-the thermodynamic state for radiation.
+`SameAsInterpolation()` at the bottom face).
 
 **The isothermal boundary layer.** RRTMGP integrates to negligible pressure, but
 the model top is at a finite height, 30 km by default and 60 km in the global
 production configurations. With `add_isothermal_boundary_layer` (the default),
 RRTMGP appends one extra layer above the model top, isothermal and reaching
 effectively zero pressure, and fills it internally. Without it, the atmosphere
-above the model top is simply absent from the calculation, and the
+above the model top is absent from the calculation, and the
 top-of-atmosphere fluxes are the fluxes at the model top rather than at the top
 of the real atmosphere.
 
@@ -159,7 +158,7 @@ is distributed within the layer, and how large the particles are.
 model as the cloud liquid and cloud ice water contents, and the cloud fraction
 from the cloud model (see
 [PROPHET: Closures](prophet_closures.md#Variances-and-cloud-fraction) and
-[Microphysics](microphysics.md)). RRTMGP wants *in-cloud* water paths, so
+[Microphysics](microphysics.md)). RRTMGP needs *in-cloud* water paths, so
 `update_cloud_properties!` converts the grid-mean contents to in-cloud values by
 dividing by the cloud fraction,
 
@@ -198,7 +197,7 @@ mode:
     fraction read from an ERA5 monthly climatology, with the year 2010 repeated
     indefinitely. The model's own clouds still form and precipitate; they just
     do not radiate. This breaks the cloud-radiative feedback deliberately, which
-    is what makes it useful for attributing circulation changes.
+    makes it useful for attributing circulation changes.
   - `idealized_clouds: true`: two fixed cloud layers, liquid between 1 and
     1.5 km and ice between 4 and 5 km, prescribed once at construction and never
     updated.
@@ -211,7 +210,7 @@ the dust and sea-salt bins, fixed radii. The aerosol concentrations themselves
 are read from a prescribed dataset through the `prescribed_aerosols` key, which
 also feeds the droplet-number closure above and, with two-moment microphysics,
 aerosol activation. Enabling `aerosol_radiation` without any aerosol species in
-`prescribed_aerosols` raises an error rather than silently doing nothing.
+`prescribed_aerosols` raises an error.
 
 ## Insolation
 
@@ -229,9 +228,9 @@ everything else.
 | [`Larcform1Insolation`](@ref ClimaAtmos.Larcform1Insolation)     | `larcform1`        | Perpetual polar night: zero incoming solar flux                                                                                                          |
 | [`ExternalTVInsolation`](@ref ClimaAtmos.ExternalTVInsolation)   | `externaldriventv` | Values from a column forcing file, time-varying or constant depending on the file                                                                        |
 
-Removing the diurnal cycle is not a small approximation for the boundary layer,
-but it removes the constraint that `dt_rad` be short enough to resolve a day,
-and it is the conventional choice for aquaplanet climate runs.
+Removing the diurnal cycle is a large approximation for the boundary layer, but
+it lifts the constraint that `dt_rad` be short enough to resolve a day, and it
+is the conventional choice for aquaplanet climate runs.
 `TimeVaryingInsolation` also accepts an explicit `latitude` and `longitude`,
 which pins a single-column run to a real site.
 
@@ -239,8 +238,8 @@ which pins a single-column run to a real site.
 
 Three modes replace radiative transfer with a prescribed profile tuned to a
 specific case. All three are applied at every stage rather than through a
-callback, since each is a handful of column integrals rather than a radiative
-transfer solve, and all three require moist microphysics.
+callback, since each is a handful of column integrals, and all three require
+moist microphysics.
 
 [`RadiationDYCOMS`](@ref ClimaAtmos.RadiationDYCOMS) (`rad: DYCOMS`) is the
 longwave parameterization of [Stevens2005](@cite) for the DYCOMS RF01 and RF02
@@ -257,10 +256,10 @@ F(z) = F_0 \, e^{-Q(z, \infty)} + F_1 \, e^{-Q(0, z)}
 with ``Q(z_1, z_2) = \int \kappa \rho q_l \, dz`` the liquid-water optical path,
 ``D`` the large-scale divergence, and the last term active only above the
 inversion height ``z_i``, taken as the level whose ``q_t`` is closest to 0.008
-kg kg⁻¹. Two departures from the reference are deliberate and documented in the
-source: the optical path uses the specific liquid water content rather than the
-mixing ratio, and the third term uses the dry ``c_{pd}``. Both match the
-original TurbulenceConvection implementation.
+kg kg⁻¹. The implementation differs from the reference in three respects, each documented in the source: the optical path uses the specific liquid water content rather than
+the mixing ratio, the third term uses the dry ``c_{pd}``, and that term is
+clipped to zero below ``z_i``, where the reference lets it act. All three match
+the original TurbulenceConvection implementation.
 
 [`RadiationISDAC`](@ref ClimaAtmos.RadiationISDAC) (`rad: ISDAC`) is the
 two-stream liquid-water-path form used for the ISDAC mixed-phase Arctic
@@ -301,7 +300,9 @@ it is radiation. Two consequences follow: it is applied from
 ignored; and none of the radiation diagnostics are available. The
 equator-to-pole contrast and equatorial equilibrium temperature take different
 values for dry and moist microphysics (`ΔT_y_dry`/`ΔT_y_wet` and
-`T_equator_dry`/`T_equator_wet`).
+`T_equator_dry`/`T_equator_wet`). The relaxation rates, the equilibrium
+temperature profile, and the friction ramp are given in
+[Forcings and Idealized Cases](forcings.md).
 
 ## Diagnostics
 
@@ -325,7 +326,7 @@ the shortwave and longwave McICA sampling respectively. Those last two are not
 the model's own cloud fraction: they are what the stochastic overlap sampling
 produced, and the shortwave and longwave values need not agree. Requesting any
 of these in a mode that does not compute them raises an error naming the
-variable and the mode, rather than writing zeros. See
+variable and the mode. See
 [Available Diagnostics](available_diagnostics.md).
 
 ## Where this is implemented

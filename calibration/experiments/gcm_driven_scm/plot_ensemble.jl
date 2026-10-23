@@ -81,7 +81,7 @@ for iteration in iterations
         eki = JLD2.load_object(eki_filepath)
 
         plot(legend = false)
-        for i in 1:size(data, 2)
+        for i in axes(data, 2)
 
             y_var = data[:, i]
             Plots.plot!(y_var, zc_model)

@@ -62,21 +62,10 @@ intermediates.
 """
 NVTX.@annotate function compute_gm_mixing_length(Y, p)
     (; params) = p
-    thermo_params = CAP.thermodynamics_params(params)
 
     ᶜdz = Fields.Δz_field(axes(Y.c))
     ᶜlg = Fields.local_geometry_field(Y.c)
-    (;
-        ᶜT,
-        ᶜq_tot_nonneg,
-        ᶜq_liq,
-        ᶜq_ice,
-        ᶠu³,
-        ᶜbuoygrad,
-        ᶜstrain_rate_norm,
-        ᶜcloud_fraction,
-    ) =
-        p.precomputed
+    (; ᶠu³, ᶜbuoygrad, ᶜstrain_rate_norm, ᶜcloud_fraction) = p.precomputed
 
     # Chain-rule coefficients and face gradients are materialized once per
     # update by `set_buoyancy_gradient_inputs!` (called before the

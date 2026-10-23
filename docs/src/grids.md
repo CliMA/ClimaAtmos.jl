@@ -1,8 +1,10 @@
 # Grids
 
-`ClimaAtmos.jl` provides several grid constructors to set up the domain layout for simulations. These grids create the underlying `ClimaCore` meshes, topologies, and spaces, including optional topography.
+`ClimaAtmos.jl` provides several grid constructors that set up the domain
+layout for a simulation. They create the underlying `ClimaCore` meshes,
+topologies, and spaces, including optional topography.
 
-## Available Grids
+## Available grids
 
 ### SphereGrid
 
@@ -36,7 +38,7 @@ grid = BoxGrid(
 
 ### ColumnGrid
 
-The [`ColumnGrid`](@ref) creates a single column grid, used for Single Column Models (SCM).
+The [`ColumnGrid`](@ref) creates a single-column grid, used for single-column models (SCM).
 
 ```@example grids
 grid = ColumnGrid(
@@ -60,43 +62,9 @@ grid = PlaneGrid(
 )
 ```
 
-## Mesh Ordering
+## Mesh ordering
 
-When constructing grids, `ClimaAtmos` uses a space-filling curve to order the elements. This improves memory locality.
-
-Here is an example visualizing the space-filling curve for a small `BoxGrid`:
-
-```@setup boxgrid_curve
-import ClimaAtmos as CA
-CC = CA.CC
-using CairoMakie
-
-# Create a small grid for visualization
-grid = CA.BoxGrid(Float64; nh_poly=1, x_elem=3, y_elem=6, x_max=100, y_max=100)
-
-# Extract the space-filling curve from the topology's mesh
-spacefilling = CC.Topologies.spacefillingcurve(grid.horizontal_grid.topology.mesh)
-
-# Extract coordinates for plotting
-# `Nh` (the element index) is the last dimension of the parent array; the
-# leading dimensions are node and field indices, whose count depends on the
-# ClimaCore data layout, so take the first of each rather than hard-coding them.
-first_node(p) = p[ntuple(_ -> 1, ndims(p) - 1)..., :]
-coords = tuple.(
-   first_node(parent(grid.horizontal_grid.local_geometry.coordinates.x)),
-   first_node(parent(grid.horizontal_grid.local_geometry.coordinates.y))
-)
-
-# Plot the ordering index vs coordinate index
-fig = Figure(size = (800, 400))
-ax = Axis(fig[1, 1]; title = "Element Traversal Order")
-sc = scatterlines!(ax, getfield.(spacefilling, :I); markersize = (1:length(coords)) .* 2, label = "Order")
-
-# Plot the physical coordinates and the path
-ax2 = Axis(fig[1, 2]; title = "Physical Coordinates Path")
-scatterlines!(ax2, coords; markersize = (1:length(coords)) .* 2)
-
-save("grid_order.png", fig); nothing # hide
-```
-
-![Grid Order](grid_order.png)
+Elements are numbered along a space-filling curve so that spatial neighbors
+are memory neighbors and each MPI rank owns a compact patch; ClimaCore's
+[Run distributed with MPI](@extref ClimaCore Run-distributed-with-MPI) shows
+the curve and how it is cut across ranks.

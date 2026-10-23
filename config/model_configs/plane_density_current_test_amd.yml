@@ -14,3 +14,4 @@ output_default_diagnostics: false
 diagnostics:
   - short_name: thetaa
     period: 900secs
+hyperdiff: ~

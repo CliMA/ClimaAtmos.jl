@@ -546,3 +546,62 @@ center_z = Array(Fields.field2array(ᶜz))[:, 1]
         end
     end
 end
+
+# ---------------------------------------------------------------------------
+# Latent in-cloud heating source (1M + PrognosticEDMFX + heating_latent).
+# Second, separate build: the latent source needs 1-moment microphysics and is
+# selected at construction. The synthetic draft is saturated and cloudy in a
+# band, so the canonical latent heating Q_lat = (1/cp) Σ L_p R_p is nonzero
+# there. This exercises the per-draft evaluation of the 1M tendencies with
+# the draft vertical velocity (CloudMicrophysics ≥ 0.41).
+# ---------------------------------------------------------------------------
+@testset "Beres latent in-cloud heating (1M + heating_latent, second build)" begin
+    config_latent = CA.AtmosConfig(
+        joinpath(
+            @__DIR__,
+            "../../../../config/model_configs/single_column_beres_nogw_latent_test.yml",
+        );
+        job_id = "beres_single_column_latent",
+        comms_ctx,
+    )
+    sim_latent = CA.get_simulation(config_latent)
+    p_l = sim_latent.integrator.p
+    Y_l = sim_latent.integrator.u
+    FT_l = eltype(Y_l.c.ρ)
+    @test p_l.non_orographic_gravity_wave.gw_beres_source.heating_latent
+
+    thp_l = CA.CAP.thermodynamics_params(p_l.params)
+    (; ᶜρʲs, ᶜTʲs, ᶜT, ᶜq_tot_nonnegʲs) = p_l.precomputed
+    ᶜz_l = Fields.coordinate_field(Y_l.c).z
+    ᶜρ_l = Y_l.c.ρ
+    a0 = FT_l(0.05)
+    z_lo = FT_l(3000)
+    z_hi = FT_l(10000)
+    in_band = @. (ᶜz_l >= z_lo) & (ᶜz_l <= z_hi)
+
+    # Saturated, cloudy, slightly supersaturated draft in the band; the draft
+    # density and temperature follow the grid mean.
+    parent(ᶜρʲs.:(1)) .= parent(ᶜρ_l)
+    @. ᶜTʲs.:(1) = ᶜT
+    @. ᶜq_tot_nonnegʲs.:(1) =
+        CA.TD.q_vap_saturation(thp_l, ᶜT, ᶜρ_l) + FT_l(1e-3) + FT_l(2e-4)
+    @. Y_l.c.sgsʲs.:(1).ρa = ifelse(in_band, a0 * ᶜρ_l, FT_l(0))
+    @. Y_l.c.sgsʲs.:(1).q_lcl = ifelse(in_band, FT_l(1e-3), FT_l(0))
+    @. Y_l.c.sgsʲs.:(1).q_icl = FT_l(0)
+    @. Y_l.c.sgsʲs.:(1).q_rai = FT_l(0)
+    @. Y_l.c.sgsʲs.:(1).q_sno = FT_l(0)
+
+    ᶜN_l = p_l.non_orographic_gravity_wave.ᶜbuoyancy_frequency
+    fill!(ᶜN_l, FT_l(0.012))
+
+    CA.compute_beres_convective_heating!(Y_l, p_l, ᶜN_l)
+
+    Q_ic = Array(Fields.field2array(p_l.non_orographic_gravity_wave.gw_Q_conv_ic))[:, 1]
+    z_l = Array(Fields.field2array(ᶜz_l))[:, 1]
+    band = (z_l .>= z_lo) .& (z_l .<= z_hi)
+    @testset "finite, nonzero in the band, zero outside" begin
+        @test all(isfinite, Q_ic)
+        @test any(!=(0), Q_ic[band])
+        @test all(==(0), Q_ic[.!band])
+    end
+end

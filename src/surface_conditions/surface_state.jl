@@ -30,11 +30,12 @@ Base.broadcastable(p::SurfaceParameterization) = tuple(p)
 float_type(::Type{<:SurfaceParameterization{FT}}) where {FT} = FT
 
 """
-    SurfaceBoundaryOverrides(; p, q_vap, u, v, gustiness, beta)
+    SurfaceBoundaryOverrides(; q_vap, u, v, gustiness)
 
-Per-point overrides for surface boundary values consumed by
+Per-point overrides for surface boundary values read by
 [`surface_state_to_conditions`](@ref). Fields default to `nothing`, in which
-case a default is used.
+case a default is used. The surface density is always the hydrostatic
+extrapolation of `SurfaceFluxes.surface_density`.
 
 # Fields
 
@@ -42,22 +43,16 @@ case a default is used.
     humidity over liquid water at `T_sfc` and the surface density.
   - `u`, `v`: Surface horizontal wind components [m/s]. Default: 0.
   - `gustiness`: Additional gustiness wind speed [m/s]. Default: 1.
-  - `p`, `beta`: Stored but currently *not applied*: `surface_state_to_conditions`
-    only reads `q_vap`, `u`, `v`, and `gustiness`. The surface pressure/density
-    always come from `SurfaceFluxes.surface_density`, and no moisture-availability
-    factor is applied. These fields exist for interface compatibility.
 
 For the coupler use case, a `Fields.Field{<:SurfaceBoundaryOverrides}` may be
 stored on the cache (`p.sfc_setup`) so that an external driver can set
 per-cell values; see [`update_surface_conditions!`](@ref).
 """
-Base.@kwdef struct SurfaceBoundaryOverrides{PN, QN, UN, VN, GN, BN}
-    p::PN = nothing
+Base.@kwdef struct SurfaceBoundaryOverrides{QN, UN, VN, GN}
     q_vap::QN = nothing
     u::UN = nothing
     v::VN = nothing
     gustiness::GN = nothing
-    beta::BN = nothing
 end
 
 """

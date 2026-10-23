@@ -209,25 +209,16 @@ end
 """
     is_unique_basename(file, bname = first(splitext(basename(file))))
 
-Return `true` if no other configuration file under `config/` shares the base name
-`bname`. Called from `job_id_from_config_file`.
-
-# Notes
-
-`bname` has its extension stripped while the file names it is compared against do not,
-so the comparison currently never matches and the result is always `true`.
+Return `true` if no configuration file under `config/` other than `file` itself has the
+extension-stripped base name `bname`. Called from `job_id_from_config_file`.
 """
 function is_unique_basename(file, bname = first(splitext(basename(file))))
-    is_unique = true
-    for (root, _, files) in walkdir(config_path)
-        for f in files
-            file = joinpath(root, f)
-            if basename(f) == bname
-                is_unique = false
-            end
-        end
+    for (root, _, files) in walkdir(config_path), f in files
+        endswith(f, ".yml") || continue
+        first(splitext(f)) == bname || continue
+        abspath(joinpath(root, f)) == abspath(file) || return false
     end
-    return is_unique
+    return true
 end
 
 """
@@ -246,7 +237,9 @@ function job_id_from_config_file(config_file::String)
     if is_unique_basename(config_file, bname)
         return bname
     else
-        return replace(config_file, path_sep => "_")
+        return String(
+            lstrip(replace(config_file, Base.Filesystem.path_separator => "_"), '_'),
+        )
     end
 end
 

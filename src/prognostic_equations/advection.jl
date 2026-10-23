@@ -332,7 +332,6 @@ function edmfx_sgs_vertical_advection_tendency!(
     (; ᶜgradᵥ_ᶠΦ) = p.core
 
     FT = eltype(p.params)
-    α_lat = CAP.sedimentation_lateral_coeff(p.params)
     ᶠJ = Fields.local_geometry_field(axes(Y.f)).J
 
     for j in 1:n
@@ -427,7 +426,6 @@ function edmfx_sgs_vertical_advection_tendency!(
                     ᶜqʲ,
                     ᶠJ,
                     ᶜρ⁰w⁰χ⁰,
-                    α_lat,
                 )
                 @. ᶜqʲₜ += ᶜinv_ρ̂ * vtt
                 @. Yₜ.c.sgsʲs.:($$j).q_tot += ᶜinv_ρ̂ * vtt
@@ -480,7 +478,6 @@ function edmfx_sgs_vertical_advection_tendency!(
                     ᶜχʲ,
                     ᶠJ,
                     ᶜρ⁰w⁰χ⁰,
-                    α_lat,
                 )
                 @. ᶜχʲₜ += ᶜinv_ρ̂ * vtt
             end
@@ -489,7 +486,7 @@ function edmfx_sgs_vertical_advection_tendency!(
 end
 
 """
-    updraft_sedimentation!(vtt, p, ᶜρ, ᶜw, ᶜa, ᶜχ, ᶠJ, ᶜρ⁰w⁰χ⁰, α_lat)
+    updraft_sedimentation!(vtt, p, ᶜρ, ᶜw, ᶜa, ᶜχ, ᶠJ, ᶜρ⁰w⁰χ⁰)
 
 Compute the sedimentation tendency of tracer `χ` within an updraft, including
 lateral transfer (detrainment and entrainment) across tilted updraft boundaries,
@@ -524,7 +521,6 @@ carry the same sedimentation flux.
   - `ᶜχ`: Updraft tracer specific quantity.
   - `ᶠJ`: Face Jacobian (grid geometry).
   - `ᶜρ⁰w⁰χ⁰`: Environment sedimentation flux density `ρ⁰ w⁰ χ⁰`.
-  - `α_lat`: Lateral correction scaling; 0 disables, 1 is the full correction [-].
 
 Called from `edmfx_sgs_vertical_advection_tendency!`. Returns `nothing`.
 """
@@ -537,7 +533,6 @@ function updraft_sedimentation!(
     ᶜχ,
     ᶠJ,
     ᶜρ⁰w⁰χ⁰,
-    α_lat,
 )
     ᶜJ = Fields.local_geometry_field(axes(ᶜρ)).J
     # use output as a scratch field
@@ -547,10 +542,10 @@ function updraft_sedimentation!(
     ᶠwχ = @. p.scratch.ᶠtemp_scalar_2 = ᶠtop_bias(-(ᶜw) * ᶜχ)
     ᶠwaχ = @. p.scratch.ᶠtemp_scalar_3 = ᶠtop_bias(-(ᶜw) * ᶜa * ᶜχ)
     # Base: within-updraft flux convergence a · ∂_z(ρ w χ)
-    # Lateral correction: α_lat · min(∂a/∂z, 0) · ρ⁰w⁰χ⁰
+    # Lateral correction: min(∂a/∂z, 0) · ρ⁰w⁰χ⁰
     @. vtt = ifelse(
         ∂a∂z < 0,
-        -(ᶜprecipdivᵥ(ᶠρ * Geometry.WVector(ᶠwaχ)) - α_lat * ∂a∂z * ᶜρ⁰w⁰χ⁰),
+        -(ᶜprecipdivᵥ(ᶠρ * Geometry.WVector(ᶠwaχ)) - ∂a∂z * ᶜρ⁰w⁰χ⁰),
         -(ᶜa * ᶜprecipdivᵥ(ᶠρ * Geometry.WVector(ᶠwχ))),
     )
     return

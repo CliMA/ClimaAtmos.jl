@@ -89,7 +89,7 @@ function surface_condition(setup::DYCOMS, params)
             z0 = FT(1e-4), shf = setup.shf, lhf = setup.lhf, ustar = FT(0.25),
         ),
         temperature = AnalyticTemperature(Returns(FT(292.5))),
-        overrides = SurfaceBoundaryOverrides(p = FT(101780), q_vap = FT(0.01384)),
+        overrides = SurfaceBoundaryOverrides(q_vap = FT(0.01384)),
     )
 end
 

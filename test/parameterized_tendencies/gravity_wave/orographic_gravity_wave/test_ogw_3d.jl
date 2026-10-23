@@ -23,7 +23,7 @@ mkpath(output_dir)
 
 # Column-wise vertical interpolation using Interpolations.jl
 function interpz_3d(ztarget, zsource, fsource)
-    nx, ny, nz = size(zsource)
+    nx, ny, _ = size(zsource)
     nt = length(ztarget)
     ftarget = similar(fsource, nx, ny, nt)
     for j in 1:ny, i in 1:nx
@@ -54,7 +54,7 @@ function preprocess_gfdl_to_ca_levels(source_file, target_file, target_levels, F
 
         # Compute p_center on GFDL levels
         p_half = zeros(FT, size(ps, 1), size(ps, 2), length(bk))
-        for k in 1:length(bk)
+        for k in eachindex(bk)
             p_half[:, :, k] .= bk[k] .* ps .+ pk[k]
         end
         p_center_gfdl = FT(0.5) .* (p_half[:, :, 1:(end - 1)] .+ p_half[:, :, 2:end])

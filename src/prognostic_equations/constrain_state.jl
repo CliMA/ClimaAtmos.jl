@@ -79,8 +79,11 @@ is `true`, `ρq_tot`. Two variants:
   - `TracerNonnegativityVaporConstraint`: sets negative `ρq` to zero pointwise
     wherever `ρq_tot > 0`, i.e., takes the deficit out of the vapor.
 
-When `ρq_tot` itself is clipped, the induced increment is passed to
-`enforce_mass_energy_consistency!` so density and total energy stay consistent.
+Only the element constraint acts on `ρq_tot` itself: when it clips `ρq_tot`, the
+induced increment is passed to `enforce_mass_energy_consistency!` so density and
+total energy stay consistent. For the vapor constraint the `ρq_tot` pass leaves the
+field unchanged, since a negative total water has no vapor to borrow from, so
+`constrain_qtot` has no effect on that variant.
 Reads `p.numerics` and `p.scratch`; `t` is unused. Called from `constrain_state!`.
 """
 tracer_nonnegativity_constraint!(Y, p, t, _) = nothing

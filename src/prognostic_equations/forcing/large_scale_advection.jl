@@ -49,7 +49,7 @@ function large_scale_advection_tendency_ρq_tot(
     ls_adv,
 )
     ls_adv isa LargeScaleAdvection || return NullBroadcasted()
-    (; prof_dTdt, prof_dqtdt) = ls_adv
+    (; prof_dqtdt) = ls_adv
     ᶜz = Fields.coordinate_field(axes(ᶜρ)).z
     ᶜdqtdt_hadv = @. lazy(prof_dqtdt(thermo_params, ᶜp, t, ᶜz))
     return @. lazy(ᶜρ * ᶜdqtdt_hadv)
