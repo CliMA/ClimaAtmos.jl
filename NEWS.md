@@ -3,6 +3,29 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- ![][badge-🔥behavioralΔ] All second-order turbulent diffusion closures
+  (`vertical_diffusion_boundary_layer_tendency!`,
+  `edmfx_sgs_diffusive_flux_tendency!`,
+  `edmfx_sgs_horizontal_diffusive_flux_tendency!`,
+  `smagorinsky_lilly_tendency!`, `vertical_smagorinsky_lilly_tendency!`,
+  `anisotropic_minimum_dissipation_tendency!`,
+  `constant_horizontal_diffusion_tendency!`, and `viscous_sponge_tendency!`)
+  evaluate the water-enthalpy flux of Yatunin et al. (2026, Eqs. 30 and 33),
+  `F_h = -ρ K [∇s_d + (h_v + Φ) ∇q_tot_eff + (h_l - h_v) ∇q_lcl + (h_i - h_v) ∇q_icl]`
+  (`add_water_enthalpy_diffusionᵥ!`, `add_water_enthalpy_diffusionₕ!`), and
+  diffuse the prognostic 1M/2M suspended cloud species (`ρq_lcl`, `ρq_icl`,
+  `ρn_lcl`, `ρn_ice`) down their own specific gradients with the same `ρ K`
+  (`diffuse_suspended_cloud_speciesᵥ!`, `diffuse_suspended_cloud_speciesₕ!`,
+  with self-diagonals in `update_diffusion_jacobian!`). Under
+  `PrognosticEDMFX`, the grid-mean diffusive flux is assembled as the sum of the
+  environment and draft diffusive fluxes (`w⁰ = ρa⁰ K_h` and harmonic-mean face
+  weight `wʲ = f_j K_h / interp(1 / max(ρaʲ, ε))`, `f_j =`
+  `edmfx_updraft_kh_diffusion_factor`), and when `edmfx_vertical_diffusion` or
+  `edmfx_horizontal_diffusion` is enabled each draft scalar (`mse`, `q_tot`,
+  suspended cloud species, and passive tracers) diffuses down its own gradient
+  (`update_sgs_diffusion_jacobian!`). Updraft `mseʲ` hyperdiffusion weights the
+  diffusing water flux by `h_effʲ - h_d(Tʲ)` (`ᶜh_eff_minus_h_d!`), preserving
+  Kirchhoff reference-temperature shift invariance for intensive `mseʲ`.
 - ![][badge-💥breaking] `sgs_variance_vertical_scale_factor` and the provisional
   `sgs_variance_isentropic_depth` are removed; with `strict_params: true` (the
   default) a run TOML that still sets either now stops with an unused-parameter

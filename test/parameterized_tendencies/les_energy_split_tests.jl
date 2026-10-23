@@ -1,13 +1,13 @@
 #=
-The LES closures diffuse energy through the split enthalpy flux
-`-ρ D [∇s_d + (h_eff + Φ) ∇q_tot_eff]`: for the horizontal and vertical
-Smagorinsky-Lilly tendencies and the constant horizontal diffusion, the ρe_tot
-tendency equals the two parts assembled independently and differs from
-diffusing h_tot. The AMD tendencies are finite and nonzero on a moist state
-whose wind varies in all three directions. AMD is built from products of the
-velocity gradient, so its scalar diffusivity vanishes identically for a wind
-that depends on height alone, and its vertical part vanishes again wherever
-the vertical velocity is uniform in height, whatever the scalar gradients are.
+The LES closures diffuse energy through the enthalpy flux
+`-ρ D [∇s_d + (h_l - h_v) ∇q_lcl + (h_i - h_v) ∇q_icl + (h_v + Φ) ∇q_tot_eff]`:
+for the horizontal and vertical Smagorinsky-Lilly tendencies and the constant
+horizontal diffusion, the ρe_tot tendency equals the three parts assembled
+independently and differs from diffusing h_tot. Water diffuses on
+`q_tot_eff = q_tot - q_rai - q_sno`, with suspended cloud species diffusing
+down their own gradients and rain and snow receiving no diffusion. The AMD
+tendencies are finite and nonzero on a moist state whose wind varies in all
+three directions.
 =#
 using Test
 import ClimaComms
@@ -67,36 +67,45 @@ function perturb!(Y, p, t; velocity = false)
     return nothing
 end
 
-# The two parts of the split enthalpy flux and the lumped h_tot flux, for a
-# horizontal (`gradₕ`) or a vertical diffusivity, assembled without the source's
-# helpers.
+# The three parts of the enthalpy flux and the diffusing water,
+# assembled directly from the thermodynamic state.
 function reference_fluxes(Y, p)
-    FT = eltype(Y)
     thermo_params = CA.CAP.thermodynamics_params(p.params)
     (; ᶜΦ) = p.core
-    (; ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice) = p.precomputed
-    ᶜq_vap = @. CA.TD.vapor_specific_humidity(ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice)
+    (; ᶜT) = p.precomputed
     ᶜq_lcl = @. Y.c.ρq_lcl / Y.c.ρ
     ᶜq_icl = @. Y.c.ρq_icl / Y.c.ρ
-    ᶜh_eff_plus_Φ = @. (
-        CA.TD.enthalpy_vapor(thermo_params, ᶜT) * max(FT(0), ᶜq_vap) +
-        CA.TD.enthalpy_liquid(thermo_params, ᶜT) * max(FT(0), ᶜq_lcl) +
-        CA.TD.enthalpy_ice(thermo_params, ᶜT) * max(FT(0), ᶜq_icl)
-    ) / max(max(FT(0), ᶜq_vap) + max(FT(0), ᶜq_lcl) + max(FT(0), ᶜq_icl), eps(FT)) +
-       ᶜΦ
+    ᶜh_lv = @. CA.TD.enthalpy_liquid(thermo_params, ᶜT) -
+       CA.TD.enthalpy_vapor(thermo_params, ᶜT)
+    ᶜh_iv = @. CA.TD.enthalpy_ice(thermo_params, ᶜT) -
+       CA.TD.enthalpy_vapor(thermo_params, ᶜT)
+    ᶜh_vap_plus_Φ = @. CA.TD.enthalpy_vapor(thermo_params, ᶜT) + ᶜΦ
     ᶜs_d = @. CA.TD.dry_static_energy(thermo_params, ᶜT, ᶜΦ)
     ᶜq_tot_eff = @. (Y.c.ρq_tot - Y.c.ρq_rai - Y.c.ρq_sno) / Y.c.ρ
-    return (; ᶜs_d, ᶜh_eff_plus_Φ, ᶜq_tot_eff)
+    return (; ᶜs_d, ᶜh_lv, ᶜh_iv, ᶜq_lcl, ᶜq_icl, ᶜh_vap_plus_Φ, ᶜq_tot_eff)
 end
 
-function check_split(ᶜρe_totₜ, ᶜflux_dse, ᶜflux_water, ᶜflux_h_tot)
+function check_split(ᶜρe_totₜ, ᶜflux_dse, ᶜflux_cond, ᶜflux_water, ᶜflux_h_tot)
     FT = eltype(ᶜρe_totₜ)
     @test maximum(abs, parent(ᶜflux_dse)) > 0
+    @test maximum(abs, parent(ᶜflux_cond)) > 0
     @test maximum(abs, parent(ᶜflux_water)) > 0
-    ᶜflux_total = @. ᶜflux_dse + ᶜflux_water
+    ᶜflux_total = @. ᶜflux_dse + ᶜflux_cond + ᶜflux_water
     @test parent(ᶜρe_totₜ) ≈ parent(ᶜflux_total) rtol = FT(1e-10)
     ᶜdiff = @. ᶜflux_h_tot - ᶜflux_total
     @test maximum(abs, parent(ᶜdiff)) > FT(1e-6) * maximum(abs, parent(ᶜflux_total))
+end
+
+function check_water_distribution(Yₜ, Y, ᶜρq_lcl_ref = nothing)
+    FT = eltype(Y)
+    @test maximum(abs, parent(Yₜ.c.ρq_tot)) > 0
+    @test parent(Yₜ.c.ρ) == parent(Yₜ.c.ρq_tot)
+    @test all(iszero, parent(Yₜ.c.ρq_rai))
+    @test all(iszero, parent(Yₜ.c.ρq_sno))
+    @test maximum(abs, parent(Yₜ.c.ρq_lcl)) > 0
+    if !isnothing(ᶜρq_lcl_ref)
+        @test parent(Yₜ.c.ρq_lcl) ≈ parent(ᶜρq_lcl_ref) rtol = FT(1e-10)
+    end
 end
 
 @testset "Smagorinsky-Lilly energy flux is split" begin
@@ -104,7 +113,8 @@ end
     (; Y, p, simulation) = generate_test_simulation(config)
     t = simulation.integrator.t
     perturb!(Y, p, t)
-    (; ᶜs_d, ᶜh_eff_plus_Φ, ᶜq_tot_eff) = reference_fluxes(Y, p)
+    (; ᶜs_d, ᶜh_lv, ᶜh_iv, ᶜq_lcl, ᶜq_icl, ᶜh_vap_plus_Φ, ᶜq_tot_eff) =
+        reference_fluxes(Y, p)
     ᶜh_tot = p.precomputed.ᶜh_tot
     model = p.atmos.smagorinsky_lilly
 
@@ -113,19 +123,27 @@ end
     CA.horizontal_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, model)
     (; ᶜD_h) = p.precomputed
     ᶜflux_dse = @. CA.wdivₕ(Y.c.ρ * ᶜD_h * CA.gradₕ(ᶜs_d))
-    ᶜflux_water = @. CA.wdivₕ(Y.c.ρ * ᶜD_h * ᶜh_eff_plus_Φ * CA.gradₕ(ᶜq_tot_eff))
+    ᶜflux_cond = @. CA.wdivₕ(Y.c.ρ * ᶜD_h * ᶜh_lv * CA.gradₕ(ᶜq_lcl)) +
+       CA.wdivₕ(Y.c.ρ * ᶜD_h * ᶜh_iv * CA.gradₕ(ᶜq_icl))
+    ᶜflux_water = @. CA.wdivₕ(Y.c.ρ * ᶜD_h * ᶜh_vap_plus_Φ * CA.gradₕ(ᶜq_tot_eff))
     ᶜflux_h_tot = @. CA.wdivₕ(Y.c.ρ * ᶜD_h * CA.gradₕ(ᶜh_tot))
-    check_split(Yₜ.c.ρe_tot, ᶜflux_dse, ᶜflux_water, ᶜflux_h_tot)
+    ᶜρq_lcl_ref = @. CA.wdivₕ(Y.c.ρ * ᶜD_h * CA.gradₕ(ᶜq_lcl))
+    check_split(Yₜ.c.ρe_tot, ᶜflux_dse, ᶜflux_cond, ᶜflux_water, ᶜflux_h_tot)
+    check_water_distribution(Yₜ, Y, ᶜρq_lcl_ref)
 
     Yₜ .= zero(eltype(Yₜ))
     CA.vertical_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, model)
     Pr_t = CA.CAP.Prandtl_number_0(CA.CAP.turbconv_params(p.params))
     ᶠρD = @. CA.ᶠinterp(Y.c.ρ) * CA.ᶠinterp(p.precomputed.ᶜνₜ_v) / Pr_t
     ᶜflux_dse = @. -CA.ᶜdiffdivᵥ(-(ᶠρD * CA.ᶠgradᵥ(ᶜs_d)))
+    ᶜflux_cond = @. -CA.ᶜdiffdivᵥ(-(ᶠρD * CA.ᶠinterp(ᶜh_lv) * CA.ᶠgradᵥ(ᶜq_lcl))) -
+       CA.ᶜdiffdivᵥ(-(ᶠρD * CA.ᶠinterp(ᶜh_iv) * CA.ᶠgradᵥ(ᶜq_icl)))
     ᶜflux_water =
-        @. -CA.ᶜdiffdivᵥ(-(ᶠρD * CA.ᶠinterp(ᶜh_eff_plus_Φ) * CA.ᶠgradᵥ(ᶜq_tot_eff)))
+        @. -CA.ᶜdiffdivᵥ(-(ᶠρD * CA.ᶠinterp(ᶜh_vap_plus_Φ) * CA.ᶠgradᵥ(ᶜq_tot_eff)))
     ᶜflux_h_tot = @. -CA.ᶜdiffdivᵥ(-(ᶠρD * CA.ᶠgradᵥ(ᶜh_tot)))
-    check_split(Yₜ.c.ρe_tot, ᶜflux_dse, ᶜflux_water, ᶜflux_h_tot)
+    ᶜρq_lcl_ref = @. -CA.ᶜdiffdivᵥ(-(ᶠρD * CA.ᶠgradᵥ(ᶜq_lcl)))
+    check_split(Yₜ.c.ρe_tot, ᶜflux_dse, ᶜflux_cond, ᶜflux_water, ᶜflux_h_tot)
+    check_water_distribution(Yₜ, Y, ᶜρq_lcl_ref)
 end
 
 @testset "Constant horizontal diffusion energy flux is split" begin
@@ -133,7 +151,8 @@ end
     (; Y, p, simulation) = generate_test_simulation(config)
     t = simulation.integrator.t
     perturb!(Y, p, t)
-    (; ᶜs_d, ᶜh_eff_plus_Φ, ᶜq_tot_eff) = reference_fluxes(Y, p)
+    (; ᶜs_d, ᶜh_lv, ᶜh_iv, ᶜq_lcl, ᶜq_icl, ᶜh_vap_plus_Φ, ᶜq_tot_eff) =
+        reference_fluxes(Y, p)
     ᶜh_tot = p.precomputed.ᶜh_tot
     D = p.atmos.constant_horizontal_diffusion.D
 
@@ -143,9 +162,13 @@ end
         Yₜ, Y, p, t, p.atmos.constant_horizontal_diffusion,
     )
     ᶜflux_dse = @. CA.wdivₕ(Y.c.ρ * D * CA.gradₕ(ᶜs_d))
-    ᶜflux_water = @. CA.wdivₕ(Y.c.ρ * D * ᶜh_eff_plus_Φ * CA.gradₕ(ᶜq_tot_eff))
+    ᶜflux_cond = @. CA.wdivₕ(Y.c.ρ * D * ᶜh_lv * CA.gradₕ(ᶜq_lcl)) +
+       CA.wdivₕ(Y.c.ρ * D * ᶜh_iv * CA.gradₕ(ᶜq_icl))
+    ᶜflux_water = @. CA.wdivₕ(Y.c.ρ * D * ᶜh_vap_plus_Φ * CA.gradₕ(ᶜq_tot_eff))
     ᶜflux_h_tot = @. CA.wdivₕ(Y.c.ρ * D * CA.gradₕ(ᶜh_tot))
-    check_split(Yₜ.c.ρe_tot, ᶜflux_dse, ᶜflux_water, ᶜflux_h_tot)
+    ᶜρq_lcl_ref = @. CA.wdivₕ(Y.c.ρ * D * CA.gradₕ(ᶜq_lcl))
+    check_split(Yₜ.c.ρe_tot, ᶜflux_dse, ᶜflux_cond, ᶜflux_water, ᶜflux_h_tot)
+    check_water_distribution(Yₜ, Y, ᶜρq_lcl_ref)
 end
 
 @testset "AMD energy tendency is finite and nonzero" begin
@@ -162,5 +185,6 @@ end
         @test all(isfinite, parent(Yₜ.c.ρq_tot))
         @test maximum(abs, parent(Yₜ.c.ρe_tot)) > 0
         @test maximum(abs, parent(Yₜ.c.ρq_tot)) > 0
+        check_water_distribution(Yₜ, Y)
     end
 end

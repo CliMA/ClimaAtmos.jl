@@ -34,31 +34,39 @@ three-dimensional velocity gradient, and its norm is
 ``|\boldsymbol{S}| = \sqrt{2 \boldsymbol{S} : \boldsymbol{S}}``, evaluated after
 projection onto whichever axes the closure uses.
 
-The energy flux is split, as in the other diffusive terms of the model (the
-[prescribed vertical diffusion](diffusion.md), the PROPHET fluxes,
-[hyperdiffusion](hyperdiffusion.md), and the [viscous sponge](sponge.md)), into
-a dry-static-energy part and the enthalpy carried by the diffusing water,
+The energy flux uses the dry-static-energy and water-enthalpy decomposition of
+[Yatunin2026](@cite) (Eqs. 30 and 33), shared with the
+[prescribed vertical diffusion](diffusion.md) and the [PROPHET](prophet.md)
+diffusive fluxes,
 
 ```math
-\boldsymbol{\mathcal{F}}_h = -\rho D \left( \nabla s_d
-  + (h_{\mathrm{eff}} + \Phi) \nabla q_t^{\mathrm{eff}} \right) ,
+\boldsymbol{\mathcal{F}}_h = -\rho D \left[ \nabla s_d
+  + (h_v + \Phi) \nabla q_t^{\mathrm{eff}}
+  + (h_l - h_v) \nabla q_l^{\mathrm{cl}}
+  + (h_i - h_v) \nabla q_i^{\mathrm{cl}} \right] ,
 ```
 
-with ``h_{\mathrm{eff}}`` the mass-weighted enthalpy of the suspended water and
-``q_t^{\mathrm{eff}}`` the total water less rain and snow. The split makes the
-flux invariant to the reference temperature ``T_0`` and ties the energy the
-water flux carries to the water flux itself (see
-[Thermodynamics and the Working Fluid](thermodynamics.md)). Anisotropic minimum
-dissipation forms a diffusivity per scalar, so the two parts of the split use
-the diffusivity of the gradient each acts on. Smagorinsky–Lilly and the
-constant horizontal diffusion use a single scalar diffusivity for both parts of
-the split and for all grid-scale tracers: Smagorinsky–Lilly divides its eddy
-viscosity by the turbulent Prandtl number (below), and the constant horizontal
-diffusion prescribes the diffusivity outright. Because total water is part of
-the working fluid, its diffusive tendency is also added to the density tendency.
-All water species, precipitation included, diffuse with the same diffusivity and
-keep their own tendencies; the enthalpy that rain and snow carry is left out of
-the energy flux, since ``q_t^{\mathrm{eff}}`` excludes them.
+with ``q_t^{\mathrm{eff}} = q_t - q_{\mathrm{rai}} - q_{\mathrm{sno}}`` the
+suspended water that diffuses and ``q_l^{\mathrm{cl}}``, ``q_i^{\mathrm{cl}}``
+the suspended cloud liquid and cloud ice specific humidities. The decomposition
+is invariant to the reference temperature ``T_0``, matches the enthalpy carried
+by each diffusing water phase to the phase flux itself, and cancels the positive
+``\nabla s_d`` of a saturated moist-adiabatic layer up to the dry-air-frame
+specific-heat residual ``-(c_{pm} - c_{pd}) \nabla T`` (see
+[Diffusion](diffusion.md) and
+[Thermodynamics and the Working Fluid](thermodynamics.md)). Smagorinsky–Lilly
+and the constant horizontal diffusion use a single scalar diffusivity ``D`` for
+``s_d``, all water-enthalpy terms, and all diffusing tracers: Smagorinsky–Lilly
+divides its eddy viscosity by the turbulent Prandtl number (below), and the
+constant horizontal diffusion prescribes the diffusivity outright. Anisotropic
+minimum dissipation forms a diffusivity per scalar, using ``D_{s_d}`` for the
+dry-static-energy gradient and ``D_{q_t^{\mathrm{eff}}}`` for all three
+water-enthalpy terms and the suspended cloud species so that each species flux
+and its enthalpy share the same diffusivity. Because total water is part of the
+working fluid, the ``q_t^{\mathrm{eff}}`` diffusive tendency is also added to
+the density tendency. In the non-equilibrium 1-moment and 2-moment schemes, the
+suspended cloud species (`ρq_lcl`, `ρq_icl`, `ρn_lcl`, `ρn_ice`) diffuse down
+their own gradients with ``\rho D``, while rain and snow do not diffuse.
 
 ## Smagorinsky–Lilly
 
@@ -183,12 +191,10 @@ LES closure is active; see [Surface Conditions](surface_conditions.md).
 ## Relation to the other diffusion schemes
 
 **Prescribed vertical diffusion** (`vert_diff`) is a boundary-layer closure with
-a prescribed diffusivity profile, and it differs in
-two ways beyond the diffusivity itself: it interpolates the diffusivity to faces
-as a harmonic rather than an arithmetic mean, and it diffuses the effective
-total water ``q_t - q_{rai} - q_{sno}`` and redistributes the resulting mass
-among the cloud species. See [Diffusion](diffusion.md) for both closures and
-the water-species bookkeeping.
+a prescribed diffusivity profile. It uses the same water-enthalpy decomposition
+and suspended-species diffusion as the LES closures, and interpolates the
+diffusivity to faces by the harmonic mean. See
+[Diffusion](diffusion.md).
 
 **PROPHET.** The LES closures and the PROPHET horizontal diffusive flux both
 apply horizontal subgrid-scale diffusion to the same fields, so combining
@@ -205,11 +211,11 @@ left to the configuration. The Smagorinsky and AMD configurations set
 **Implicit vertical diffusion.** With `implicit_diffusion: true`, the vertical
 Smagorinsky–Lilly tendency moves into the implicit tendency, and the eddy
 viscosity is refreshed on every Newton iterate so that it follows the current
-state. The Jacobian linearizes the enthalpy, tracer, and horizontal-momentum
-flux divergences with the eddy viscosity frozen; the ``u_3`` term, the
-horizontal-gradient part of ``\boldsymbol{\mathcal{T}}``, and the per-species
-condensate diagonals have no Jacobian contribution, which slows Newton
-convergence but leaves the tendency exact. A vertically acting Smagorinsky
+state. The Jacobian linearizes the enthalpy, total-water, suspended
+cloud-species, passive-tracer, and horizontal-momentum flux divergences with the
+eddy viscosity frozen; the ``u_3`` term and the horizontal-gradient part of
+``\boldsymbol{\mathcal{T}}`` have no Jacobian contribution, which slows Newton
+convergence while leaving the tendency exact. A vertically acting Smagorinsky
 closure satisfies the configuration check for implicit diffusion on its own;
 the AMD closure has no Jacobian block and stays explicit. See
 [Implicit Solver](implicit_solver.md).

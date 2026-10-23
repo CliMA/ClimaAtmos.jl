@@ -169,9 +169,11 @@ inside a flux divergence is numerically fragile [Weller2019](@cite).
       - the sedimentation mass flux ``-\nabla \cdot [\hat{\rho}^m W_{q_t}^m \hat{\boldsymbol{k}}]``. The grid mean does receive its counterpart, so
         draft and grid-mean mass budgets treat falling condensate differently;
       - the turbulent-diffusive part of ``\hat{S}_{q_t}^m``. The draft
-        ``q_t^m`` receives the diffusion, but the matching ``\hat{\rho}^m``
-        correction is deliberately omitted, matching the treatment of the
-        subdomain diffusive flux.
+        ``q_t^m`` receives the subdomain diffusive flux while ``\hat{\rho}^m``
+        is held fixed across the diffusive step, so that the net moist-air mass
+        tendency ``\partial_t \rho = \partial_t (\rho q_t)|_{\mathrm{diff}}``
+        is absorbed by the environment residual
+        ``\hat{\rho}^0 = \rho - \sum_j \hat{\rho}^j``.
 
 **Momentum.** The shared horizontal velocity reduces this to a single equation
 for ``u_3^m``:
@@ -195,9 +197,10 @@ for ``u_3^m``:
     - \boldsymbol{u}^m \cdot \left( - \frac{1}{\rho^m} \nabla p^\dagger
       + \boldsymbol{b}^m + \boldsymbol{S}_u^m \right)
     + Q_R^m
+    - \frac{1}{\hat{\rho}^m} \nabla \cdot
+      \left( \hat{\rho}^m \boldsymbol{\mathcal{F}}_{h_s}^{\mathrm{diff},m} \right)
     - \frac{1}{\rho} \nabla \cdot
-      \left[ \rho (\boldsymbol{\mathcal{F}}_h^{\mathrm{diff}}
-        + \boldsymbol{\mathcal{H}}_h) \right]
+      \left( \rho \boldsymbol{\mathcal{H}}_h \right)
     + \sum_{n \ne m} E^{mn} (h_s^n - h_s^m)
     + D_{h_s}^m
 ```
@@ -208,9 +211,10 @@ for ``u_3^m``:
 \frac{\partial q_t^m}{\partial t}
   + \boldsymbol{u}^m \cdot \nabla q_t^m
   = (1 - q_t^m) S_{q_t}^m
+    - \frac{1}{\hat{\rho}^m} \nabla \cdot
+      \left( \hat{\rho}^m \boldsymbol{\mathcal{F}}_{q_t}^{\mathrm{diff},m} \right)
     - \frac{1}{\rho} \nabla \cdot
-      \left[ \rho (\boldsymbol{\mathcal{F}}_{q_t}^{\mathrm{diff}}
-        + \boldsymbol{\mathcal{H}}_{q_t}) \right]
+      \left( \rho \boldsymbol{\mathcal{H}}_{q_t} \right)
     + \sum_{n \ne m} E^{mn} (q_t^n - q_t^m)
     + D_{q_t}^m
 ```
@@ -223,9 +227,10 @@ requires:
 \frac{\partial q_\mu^{\sigma m}}{\partial t}
   + \boldsymbol{u}^m \cdot \nabla q_\mu^{\sigma m}
   = S_{q_\mu^\sigma,\mathrm{eff}}^m
+    - \frac{1}{\hat{\rho}^m} \nabla \cdot
+      \left( \hat{\rho}^m \boldsymbol{\mathcal{F}}_{q_\mu^\sigma}^{\mathrm{diff},m} \right)
     - \frac{1}{\rho} \nabla \cdot
-      \left[ \rho (\boldsymbol{\mathcal{F}}_{q_\mu^\sigma}^{\mathrm{diff}}
-        + \boldsymbol{\mathcal{H}}_{q_\mu^\sigma}) \right]
+      \left( \rho \boldsymbol{\mathcal{H}}_{q_\mu^\sigma} \right)
     + \sum_{n \ne m} E^{mn} (q_\mu^{\sigma n} - q_\mu^{\sigma m})
     + D_{q_\mu^\sigma}^m
 ```
@@ -236,9 +241,10 @@ requires:
 \frac{\partial \chi^m}{\partial t}
   + \boldsymbol{u}^m \cdot \nabla \chi^m
   = S_{\chi,\mathrm{eff}}^m
+    - \frac{1}{\hat{\rho}^m} \nabla \cdot
+      \left( \hat{\rho}^m \boldsymbol{\mathcal{F}}_\chi^{\mathrm{diff},m} \right)
     - \frac{1}{\rho} \nabla \cdot
-      \left[ \rho (\boldsymbol{\mathcal{F}}_\chi^{\mathrm{diff}}
-        + \boldsymbol{\mathcal{H}}_\chi) \right]
+      \left( \rho \boldsymbol{\mathcal{H}}_\chi \right)
     + \sum_{n \ne m} E^{mn} (\chi^n - \chi^m)
     + D_\chi^m
 ```
@@ -320,9 +326,10 @@ and the total-water equation uses the equivalent form
 
 ```math
 \hat{S}_{q_t}^m = S_{q_t}^m
+  - \frac{1}{\hat{\rho}^m} \nabla \cdot
+    \left( \hat{\rho}^m \boldsymbol{\mathcal{F}}_{q_t}^{\mathrm{diff},m} \right)
   - \frac{1}{\rho} \nabla \cdot
-    \left[ \rho (\boldsymbol{\mathcal{F}}_{q_t}^{\mathrm{diff}}
-      + \boldsymbol{\mathcal{H}}_{q_t}) \right] ,
+    \left( \rho \boldsymbol{\mathcal{H}}_{q_t} \right) ,
 ```
 
 the subdomain counterpart of the grid-mean ``\hat{S}_{q_t}``: subgrid-scale
@@ -352,17 +359,40 @@ code implements it two-directionally, for a single draft exchanging with the
 environment, in `updraft_sedimentation!`; the second (``\psi^m``-weighted) term
 of ``D_\psi^m`` is neglected as small compared with the leading-order dynamics.
 
-**Diffusive fluxes are grid-mean.** The diffusive flux
-divergences in the draft equations are the *grid-mean* divergences, applied
-uniformly to every subdomain, not per-subdomain divergences. This is the
-conservative-exchange consistency condition of [Thuburn2022](@cite): taking the
-divergence of ``\hat{\rho}^m``-weighted fluxes inside a material tendency would
-make gradients of the volume fraction act as spurious sources, so that two
-materially identical drafts with different area gradients would evolve
-differently. With the grid-mean form, the ``\hat{\rho}^m`` factors cancel
-algebraically and the subdomain sum collapses to the grid-mean flux divergence.
-Consequently, when `edmfx_vertical_diffusion` is enabled, each draft receives
-the same *specific* diffusive tendency as the grid mean.
+**Subdomain diffusive fluxes.** When `edmfx_vertical_diffusion` is enabled, each
+draft scalar ``\psi^m \in \{h_s^m, q_t^m, q_l^{\mathrm{cl},m}, q_i^{\mathrm{cl},m}, n_l^{\mathrm{cl},m}, n_i^{\mathrm{cl},m}, \chi^m\}``
+diffuses down its own intensive vertical gradient ``\nabla \psi^m``
+[Thuburn2022](@cite) (with non-equilibrium microphysics, draft water and moist
+static energy diffuse on the suspended components
+``q_{t,\mathrm{eff}}^m = q_t^m - q_{\mathrm{rai}}^m - q_{\mathrm{sno}}^m`` and
+``h_{s,\mathrm{eff}}^m = h_s^m - (h_l^m - h_d^m) q_{\mathrm{rai}}^m - (h_i^m - h_d^m) q_{\mathrm{sno}}^m``,
+excluding non-diffusing rain and snow):
+
+```math
+\left[ \frac{\partial \psi^m}{\partial t} \right]_{\mathrm{diff}}
+  = \frac{1}{\hat{\rho}^m} \nabla \cdot
+    \left( \widehat{\hat{\rho}^m} \, f_m K_h \nabla \psi^m \right) ,
+```
+
+where ``f_m`` is `edmfx_updraft_kh_diffusion_factor` (default 1) and
+``\widehat{\hat{\rho}^m}`` is the harmonic face mean of ``\hat{\rho}^m``. The
+draft mass ``\hat{\rho}^m`` evolves only through advection, entrainment, and
+detrainment, and the moist-mass change from ``q_t`` diffusion is absorbed by the
+environment residual, so dividing the extensive flux divergence by
+``\hat{\rho}^m`` is the exact intensive tendency. The harmonic mean is the
+series conductance of the two adjacent cells [Patankar1980](@cite): because
+``\widehat{\hat{\rho}^m} / \hat{\rho}^m_c = 2 \hat{\rho}^m_{\mathrm{nb}} / (\hat{\rho}^m_c + \hat{\rho}^m_{\mathrm{nb}}) \le 2``,
+the division cancels against it, and the intensive tendency is a three-point
+diffusion of ``\psi^m`` with effective face diffusivities between ``0`` and
+``2 f_m K_h``. The draft relaxes toward its vertical neighbors at most twice as
+fast as grid-mean diffusion at the same ``K_h`` for every value of
+``\hat{\rho}^m``, and the extensive flux across a face adjacent to a draft-free
+cell vanishes. (An arithmetic face mean amplifies the tendency of a thin draft
+cell by the area ratio to its neighbors.) Diffusing ``\psi^m`` down its own
+gradient has a fixed point at vertically uniform draft properties and
+homogenizes internal draft anomalies toward a moist adiabat while keeping the
+sharp environmental jumps of ``\bar{s}_d`` and ``\bar{q}_t`` at trade inversions
+or cloud tops out of the draft tendency.
 
 **Energy.** The prognostic thermodynamic variable of a draft is the specific
 moist static energy
@@ -382,18 +412,18 @@ macroscopic kinetic energy into turbulence in the surroundings rather than
 changing the parcel's thermodynamic state, so energy consistency requires it to
 reappear as a return-to-isotropy source in the turbulence kinetic energy budget.
 
-The subgrid-scale turbulent and hyperdiffusive fluxes of moist static energy are
-approximated by the grid-mean fluxes of specific total enthalpy,
-``\boldsymbol{\mathcal{F}}_{h_s}^{\mathrm{diff}} \approx \boldsymbol{\mathcal{F}}_h^{\mathrm{diff}}``
-and ``\boldsymbol{\mathcal{H}}_{h_s} \approx \boldsymbol{\mathcal{H}}_h``. The
-two differ by the kinetic energy, whose gradients are smaller than those of
-thermal and potential energy by two orders of magnitude or more, so the
-diffusive transport of kinetic energy is negligible. This lets the draft
-equations reuse the grid-mean enthalpy fluxes unchanged, including their
-decomposition into a dry-static-energy term and a water-enthalpy term, which
-[Yatunin2026](@cite) adopt to avoid a spurious enthalpy flux carried by dry-air
-diffusion. See [Governing Equations](equations.md) and
-[Hyperdiffusion](hyperdiffusion.md).
+Because ``\hat{\rho}^m`` is held fixed across the diffusive step, water diffusing
+into a draft displaces an equal mass of dry air and changes the draft's specific
+enthalpy by ``(h_{\mathrm{tot},\mu}^m - h_{\mathrm{tot},d}^m) \, \delta q_\mu^m``.
+Combining the thermal diffusion ``c_{pm} \nabla T^m + \nabla \Phi`` with
+``\sum_\mu (h_\mu^m - h_d^m) \nabla q_\mu^m`` gives the moist-static-energy
+gradient ``\nabla h_s^m`` directly. Under a reference-temperature shift
+``T_0 \to T_0 + \delta T_0``, ``h_s^m`` shifts by
+``-(1 - q_t^m) c_{pd} \delta T_0 - q_t^m c_{pl} \delta T_0``, so
+``\delta(\partial_t h_s^m) = (c_{pd} - c_{pl}) \delta T_0 \, \partial_t q_t^m``,
+which holds identically when ``h_s^m`` and ``q_t^m`` diffuse down their own
+gradients with the same operator. For hyperdiffusion, the draft energy equation
+uses the dry-static-energy and water-enthalpy split of [Hyperdiffusion](hyperdiffusion.md).
 
 !!! note "TODO: not yet implemented"
 
@@ -421,7 +451,28 @@ The first term is the coherent transport by the inter-subdomain circulation, the
 *mass-flux* contribution. Only vertical-velocity differences appear, because the
 horizontal velocity is shared. The second is the transport by intra-subdomain
 isotropic turbulence, closed by the grid-mean eddy diffusivity of
-[Closures](prophet_closures.md).
+[Turbulence kinetic energy and eddy diffusivity](prophet_closures.md#Turbulence-kinetic-energy-and-eddy-diffusivity).
+For `PrognosticEDMFX`, the grid-mean diffusive
+flux is the sum of the environment and draft diffusive fluxes,
+
+```math
+\rho \boldsymbol{\mathcal{F}}_\psi^{\mathrm{diff}}
+  = -\hat{\rho}^0 K_h \nabla \psi^0
+    - \sum_{j=1}^{M} \widehat{\hat{\rho}^j} \, f_j K_h \nabla \psi^j ,
+```
+
+for ``\psi \in \{q_t^{\mathrm{eff}}, q_l^{\mathrm{cl}}, q_i^{\mathrm{cl}}, n_l^{\mathrm{cl}}, n_i^{\mathrm{cl}}, \chi\}``,
+while the grid-mean diffusive enthalpy flux sums the extensive
+[Yatunin2026](@cite) Eq. (33) brackets evaluated with each subdomain's
+thermodynamic state. Because
+``\nabla \psi = a^0 \nabla \psi^0 + \sum_j a^j \nabla \psi^j + \sum_j (\psi^j - \psi^0) \nabla a^j``,
+assembling the grid-mean diffusive flux from the subdomain gradients omits the
+cross-area term ``-\rho K_h \sum_j (\psi^j - \psi^0) \nabla a^j`` (transport
+associated with ``\nabla a^j`` is already carried by the coherent mass flux and
+detrainment); when `edmfx_vertical_diffusion: false`, the draft terms are omitted
+from both the draft and grid-mean equations so the diagnosed environment
+receives ``-\nabla \cdot (\hat{\rho}^0 K_h \nabla \psi^0)`` in either case. For
+`EDOnlyEDMFX`, the grid mean uses ``-\rho K_h \nabla \psi``.
 
 The consistency constraints make three algebraically equivalent forms of the
 mass-flux term available,

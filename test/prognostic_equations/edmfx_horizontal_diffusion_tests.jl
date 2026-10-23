@@ -3,14 +3,17 @@ Tests for the horizontal component of the EDMFX SGS diffusive flux
 (`edmfx_sgs_horizontal_diffusive_flux_tendency!`): tendencies vanish for
 horizontally uniform states and on single-column geometry, the moist air mass
 tendency matches the `ρq_tot` tendency bitwise, the total-enthalpy tendency
-equals the dry-static-energy flux plus the aggregate `h_eff` water flux and
-differs from diffusing `h_tot` directly, cloud species take a proportional
-share of the aggregate water flux while rain and snow get no horizontal
-transport, the TKE and horizontal-wind tendencies match directly assembled
-references, the
-mixing-length grid-scale limit is controlled by the `grid_scale` keyword and
-attained, the flux is wired into `additional_tendency!`, and incompatible
-option combinations are rejected at model construction.
+equals the dry-static-energy flux plus the Yatunin et al. (2026, Eq. 33)
+water-enthalpy fluxes and differs from diffusing `h_tot` directly, suspended
+cloud species (`ρq_lcl`, `ρq_icl`, `ρn_lcl`, `ρn_ice`) diffuse down their own
+horizontal gradients while rain and snow receive no horizontal transport,
+updraft scalars (`mse`, `q_tot`, suspended cloud species, and passive tracers)
+diffuse down their own horizontal gradients and add to the grid-mean flux under
+`edmfx_horizontal_diffusion`, the TKE and horizontal-wind tendencies match
+directly assembled references, the mixing-length grid-scale limit is controlled
+by the `grid_scale` keyword and attained, the flux is wired into
+`additional_tendency!`, and incompatible option combinations are rejected at
+model construction.
 =#
 using Test
 import ClimaComms
@@ -93,6 +96,7 @@ box_config_dict(; extra...) = bomex_edmfx_config_dict(;
     @. Y.c.ρq_lcl = FT(2e-5) * Y.c.ρ * ᶜpert
     @. Y.c.ρtke *= ᶜpert
     @. p.precomputed.ᶜT *= 1 + FT(1e-3) * sin(FT(2π) * ᶜx / FT(6400))
+    @. p.precomputed.ᶜT⁰ *= 1 + FT(1e-3) * sin(FT(2π) * ᶜx / FT(6400))
     @. p.precomputed.ᶜu *= ᶜpert
     @. p.precomputed.ᶠu *= 1 + FT(0.1) * sin(FT(2π) * ᶠx / FT(6400))
     CA.set_horizontal_diffusivities!(Y, p)
@@ -126,24 +130,28 @@ box_config_dict(; extra...) = bomex_edmfx_config_dict(;
     @test maximum(abs, parent(Y.c.ρq_rai)) > 0
     @test perturbed_max[:ρq_rai] == 0
 
-    # The aggregate water flux is built from q_tot_eff, excluding rain and snow.
+    # The aggregate water flux is built from q_tot_eff⁰, excluding rain and
+    # snow.
+    ᶜρa⁰ = similar(Y.c.ρ)
+    @. ᶜρa⁰ = CA.ρa⁰(Y.c.ρ, Y.c.sgsʲs, p.atmos.turbconv_model)
+    ᶜq_tot⁰ = CA.ᶜspecific_env_value(CA.MatrixFields.@name(q_tot), Y, p)
+    ᶜq_rai⁰ = CA.ᶜspecific_env_value(CA.MatrixFields.@name(q_rai), Y, p)
+    ᶜq_sno⁰ = CA.ᶜspecific_env_value(CA.MatrixFields.@name(q_sno), Y, p)
     ᶜq_tot_eff = similar(Y.c.ρ)
-    @. ᶜq_tot_eff = (Y.c.ρq_tot - Y.c.ρq_rai - Y.c.ρq_sno) / Y.c.ρ
+    @. ᶜq_tot_eff = ᶜq_tot⁰ - ᶜq_rai⁰ - ᶜq_sno⁰
     ᶜρq_tot_ref = similar(Y.c.ρ)
     @. ᶜρq_tot_ref =
-        CA.wdivₕ(Y.c.ρ * p.precomputed.ᶜK_h_h * CA.gradₕ(ᶜq_tot_eff))
+        CA.wdivₕ(ᶜρa⁰ * p.precomputed.ᶜK_h_h * CA.gradₕ(ᶜq_tot_eff))
     @test parent(Yₜ.c.ρq_tot) ≈ parent(ᶜρq_tot_ref) rtol = FT(1e-10)
 
-    # Cloud liquid takes a clipped proportional share of that flux rather than
-    # a flux of its own.
-    ᶜratio = similar(Y.c.ρ)
-    @. ᶜratio = max(
-        FT(0),
-        min(FT(1), (Y.c.ρq_lcl / Y.c.ρ) / max(ᶜq_tot_eff, eps(FT))),
-    )
-    @test maximum(parent(ᶜratio)) > 0
+    # Suspended cloud liquid diffuses down its own horizontal subdomain
+    # gradient.
+    ᶜq_lcl⁰ = CA.ᶜspecific_env_value(CA.MatrixFields.@name(q_lcl), Y, p)
+    ᶜq_lcl⁰_buf = similar(Y.c.ρ)
+    @. ᶜq_lcl⁰_buf = ᶜq_lcl⁰
     ᶜρq_lcl_ref = similar(Y.c.ρ)
-    @. ᶜρq_lcl_ref = ᶜratio * ᶜρq_tot_ref
+    @. ᶜρq_lcl_ref =
+        CA.wdivₕ(ᶜρa⁰ * p.precomputed.ᶜK_h_h * CA.gradₕ(ᶜq_lcl⁰_buf))
     @test parent(Yₜ.c.ρq_lcl) ≈ parent(ᶜρq_lcl_ref) rtol = FT(1e-10)
 
     # The horizontal-wind tendency matches an independently assembled stress
@@ -255,7 +263,7 @@ end
     # and in the phase partition, so the dry and water parts of the flux are
     # separately identifiable and h_eff is not spatially constant.
     ᶜx = Fields.coordinate_field(Y.c).x
-    @. p.precomputed.ᶜT += FT(2) * sin(FT(2π) * ᶜx / FT(6400))
+    @. p.precomputed.ᶜT⁰ += FT(2) * sin(FT(2π) * ᶜx / FT(6400))
     @. Y.c.ρq_tot *= 1 + FT(1e-3) * sin(FT(2π) * ᶜx / FT(6400) + FT(0.5))
     @. Y.c.ρq_lcl = FT(2e-4) * Y.c.ρ * (1 + sin(FT(2π) * ᶜx / FT(6400) + FT(1)))
     @. Y.c.ρq_icl = FT(2e-4) * Y.c.ρ * (1 + sin(FT(2π) * ᶜx / FT(6400) + FT(2)))
@@ -273,47 +281,55 @@ end
 
     thermo_params = CA.CAP.thermodynamics_params(p.params)
     (; ᶜΦ) = p.core
-    (; ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice) = p.precomputed
-    ᶜq_vap = similar(Y.c.ρ)
-    @. ᶜq_vap = CA.TD.vapor_specific_humidity(ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice)
+    (; ᶜT⁰) = p.precomputed
+    ᶜρa⁰ = similar(Y.c.ρ)
+    @. ᶜρa⁰ = CA.ρa⁰(Y.c.ρ, Y.c.sgsʲs, p.atmos.turbconv_model)
+    ᶜq_lcl⁰ = CA.ᶜspecific_env_value(CA.MatrixFields.@name(q_lcl), Y, p)
+    ᶜq_icl⁰ = CA.ᶜspecific_env_value(CA.MatrixFields.@name(q_icl), Y, p)
+    ᶜq_tot⁰ = CA.ᶜspecific_env_value(CA.MatrixFields.@name(q_tot), Y, p)
+    ᶜq_rai⁰ = CA.ᶜspecific_env_value(CA.MatrixFields.@name(q_rai), Y, p)
+    ᶜq_sno⁰ = CA.ᶜspecific_env_value(CA.MatrixFields.@name(q_sno), Y, p)
     ᶜq_lcl = similar(Y.c.ρ)
     ᶜq_icl = similar(Y.c.ρ)
-    @. ᶜq_lcl = Y.c.ρq_lcl / Y.c.ρ
-    @. ᶜq_icl = Y.c.ρq_icl / Y.c.ρ
+    @. ᶜq_lcl = ᶜq_lcl⁰
+    @. ᶜq_icl = ᶜq_icl⁰
 
-    # Reference h_eff + Φ and q_tot_eff, assembled independently of the source.
-    ᶜh_eff_plus_Φ = similar(Y.c.ρ)
-    @. ᶜh_eff_plus_Φ =
-        (
-            CA.TD.enthalpy_vapor(thermo_params, ᶜT) * max(FT(0), ᶜq_vap) +
-            CA.TD.enthalpy_liquid(thermo_params, ᶜT) * max(FT(0), ᶜq_lcl) +
-            CA.TD.enthalpy_ice(thermo_params, ᶜT) * max(FT(0), ᶜq_icl)
-        ) / max(
-            max(FT(0), ᶜq_vap) + max(FT(0), ᶜq_lcl) + max(FT(0), ᶜq_icl),
-            eps(FT),
-        ) + ᶜΦ
+    # Reference condensate enthalpy differences, vapor enthalpy + Φ, and
+    # q_tot_eff, assembled independently of the source.
+    ᶜh_lv = similar(Y.c.ρ)
+    ᶜh_iv = similar(Y.c.ρ)
+    @. ᶜh_lv =
+        CA.TD.enthalpy_liquid(thermo_params, ᶜT⁰) -
+        CA.TD.enthalpy_vapor(thermo_params, ᶜT⁰)
+    @. ᶜh_iv =
+        CA.TD.enthalpy_ice(thermo_params, ᶜT⁰) -
+        CA.TD.enthalpy_vapor(thermo_params, ᶜT⁰)
+    ᶜh_vap_plus_Φ = similar(Y.c.ρ)
+    @. ᶜh_vap_plus_Φ = CA.TD.enthalpy_vapor(thermo_params, ᶜT⁰) + ᶜΦ
     ᶜq_tot_eff = similar(Y.c.ρ)
-    @. ᶜq_tot_eff = (Y.c.ρq_tot - Y.c.ρq_rai - Y.c.ρq_sno) / Y.c.ρ
+    @. ᶜq_tot_eff = ᶜq_tot⁰ - ᶜq_rai⁰ - ᶜq_sno⁰
 
     ᶜflux_dse = similar(Y.c.ρ)
+    ᶜflux_cond = similar(Y.c.ρ)
     ᶜflux_water = similar(Y.c.ρ)
     @. ᶜflux_dse = CA.wdivₕ(
-        Y.c.ρ * ᶜK_h * CA.gradₕ(CA.TD.dry_static_energy(thermo_params, ᶜT, ᶜΦ)),
+        ᶜρa⁰ * ᶜK_h * CA.gradₕ(CA.TD.dry_static_energy(thermo_params, ᶜT⁰, ᶜΦ)),
     )
+    @. ᶜflux_cond =
+        CA.wdivₕ(ᶜρa⁰ * ᶜK_h * ᶜh_lv * CA.gradₕ(ᶜq_lcl)) +
+        CA.wdivₕ(ᶜρa⁰ * ᶜK_h * ᶜh_iv * CA.gradₕ(ᶜq_icl))
     @. ᶜflux_water =
-        CA.wdivₕ(Y.c.ρ * ᶜK_h * ᶜh_eff_plus_Φ * CA.gradₕ(ᶜq_tot_eff))
+        CA.wdivₕ(ᶜρa⁰ * ᶜK_h * ᶜh_vap_plus_Φ * CA.gradₕ(ᶜq_tot_eff))
 
-    # Both parts are nonzero, so neither assertion below passes trivially, and
-    # h_eff genuinely varies, so the aggregate form is not a constant-coefficient
-    # restatement of the vapor-only flux.
+    # All three parts are nonzero, so no assertion below passes trivially.
     @test maximum(abs, parent(ᶜflux_dse)) > 0
+    @test maximum(abs, parent(ᶜflux_cond)) > 0
     @test maximum(abs, parent(ᶜflux_water)) > 0
-    @test maximum(parent(ᶜh_eff_plus_Φ)) > minimum(parent(ᶜh_eff_plus_Φ))
 
-    # The ρe_tot tendency is the dry static energy flux plus the aggregate
-    # water flux, and nothing else.
+    # The ρe_tot tendency is the dry static energy flux plus the condensate
+    # latent-enthalpy flux plus the vapor water flux.
     ᶜflux_total = similar(Y.c.ρ)
-    @. ᶜflux_total = ᶜflux_dse + ᶜflux_water
+    @. ᶜflux_total = ᶜflux_dse + ᶜflux_cond + ᶜflux_water
     @test parent(Yₜ.c.ρe_tot) ≈ parent(ᶜflux_total) rtol = FT(1e-10)
 
     # Diffusing h_tot directly is a different tendency: the difference is the
@@ -347,10 +363,17 @@ end
         maximum(abs, parent(Yₜ.c.sgsʲs.:(1).q_tot)),
     )
 
-    # The updraft scalars receive the grid-mean specific tendencies, so
-    # updraft-internal variation alone produces no updraft tendency.
+    turbconv_params = CA.CAP.turbconv_params(p.params)
+    updraft_kh_factor =
+        CA.CAP.edmfx_updraft_kh_diffusion_factor(turbconv_params)
+
+    # Horizontally uniform updraft scalars produce zero updraft tendency even
+    # when the grid-mean state varies horizontally.
     ᶜx = Fields.coordinate_field(Y.c).x
-    @. Y.c.sgsʲs.:(1).q_tot *= 1 + FT(0.1) * sin(FT(2π) * ᶜx / FT(6400))
+    @. p.precomputed.ᶜT⁰ += FT(2) * sin(FT(2π) * ᶜx / FT(6400))
+    @. Y.c.ρq_tot *= 1 + FT(1e-3) * sin(FT(2π) * ᶜx / FT(6400) + FT(0.5))
+    @. Y.c.ρq_lcl =
+        FT(2e-5) * Y.c.ρ * (1 + FT(0.1) * sin(FT(2π) * ᶜx / FT(6400)))
     Yₜ = similar(Y)
     Yₜ .= zero(eltype(Yₜ))
     CA.edmfx_sgs_horizontal_diffusive_flux_tendency!(
@@ -358,12 +381,12 @@ end
     )
     uniform_mse, uniform_q_tot = up_row_max(Yₜ)
 
-    # Horizontal variation in the grid-mean state drives the updraft
-    # tendencies.
-    @. p.precomputed.ᶜT += FT(2) * sin(FT(2π) * ᶜx / FT(6400))
-    @. Y.c.ρq_tot *= 1 + FT(1e-3) * sin(FT(2π) * ᶜx / FT(6400) + FT(0.5))
-    @. Y.c.ρq_lcl =
-        FT(2e-5) * Y.c.ρ * (1 + FT(0.1) * sin(FT(2π) * ᶜx / FT(6400)))
+    # Horizontal variation in the updraft scalars drives own-gradient updraft
+    # diffusion.
+    @. Y.c.sgsʲs.:(1).mse += FT(1.5e3) * sin(FT(2π) * ᶜx / FT(6400))
+    @. Y.c.sgsʲs.:(1).q_tot *= 1 + FT(0.1) * sin(FT(2π) * ᶜx / FT(6400))
+    @. Y.c.sgsʲs.:(1).q_lcl =
+        FT(3e-5) * (1 + FT(0.2) * sin(FT(2π) * ᶜx / FT(6400) + FT(0.4)))
     Yₜ .= zero(eltype(Yₜ))
     CA.edmfx_sgs_horizontal_diffusive_flux_tendency!(
         Yₜ, Y, p, t, p.atmos.turbconv_model,
@@ -374,27 +397,43 @@ end
     @test uniform_mse <= FT(1e-10) * perturbed_mse
     @test uniform_q_tot <= FT(1e-10) * perturbed_q_tot
 
-    # The updraft tendencies are the grid-mean specific tendencies: in this
-    # isolated call, Yₜ.c.ρe_tot and Yₜ.c.ρq_tot hold exactly the grid-mean
-    # diffusion terms.
+    # Updraft scalars diffuse down their own horizontal gradients with the
+    # grid-mean weight `ᶜρ * updraft_kh_factor * ᶜK_h_h` divided by `ᶜρ`, so
+    # the intensive updraft tendency is independent of `ρa¹`.
+    ᶜw_int = similar(Y.c.ρ)
+    @. ᶜw_int = Y.c.ρ * updraft_kh_factor * p.precomputed.ᶜK_h_h
     ᶜexpected = similar(Y.c.ρ)
-    @. ᶜexpected = Yₜ.c.ρe_tot / Y.c.ρ
+    @. ᶜexpected = CA.wdivₕ(ᶜw_int * CA.gradₕ(Y.c.sgsʲs.:(1).mse)) / Y.c.ρ
     @test parent(Yₜ.c.sgsʲs.:(1).mse) ≈ parent(ᶜexpected) rtol = FT(1e-12)
-    @. ᶜexpected = Yₜ.c.ρq_tot / Y.c.ρ
+    @. ᶜexpected = CA.wdivₕ(ᶜw_int * CA.gradₕ(Y.c.sgsʲs.:(1).q_tot)) / Y.c.ρ
     @test parent(Yₜ.c.sgsʲs.:(1).q_tot) ≈ parent(ᶜexpected) rtol = FT(1e-12)
 
     # The ρa dry-mass counterpart is omitted, matching the vertical path.
     @test maximum(abs, parent(Yₜ.c.sgsʲs.:(1).ρa)) == 0
 
-    # The updraft cloud species receive the grid-mean specific share of the
-    # aggregate water tendency.
+    # Updraft cloud species also diffuse down their own horizontal gradients.
     @test maximum(abs, parent(Yₜ.c.ρq_lcl)) > 0
-    @. ᶜexpected = Yₜ.c.ρq_lcl / Y.c.ρ
+    @. ᶜexpected = CA.wdivₕ(ᶜw_int * CA.gradₕ(Y.c.sgsʲs.:(1).q_lcl)) / Y.c.ρ
     @test parent(Yₜ.c.sgsʲs.:(1).q_lcl) ≈ parent(ᶜexpected) rtol = FT(1e-12)
 
     # Rain has no horizontal transport, in the grid mean or the updraft.
     @test maximum(abs, parent(Yₜ.c.ρq_rai)) == 0
     @test maximum(abs, parent(Yₜ.c.sgsʲs.:(1).q_rai)) == 0
+
+    # The intensive updraft tendency is unchanged where the updraft area
+    # collapses to zero next to nodes with finite area, while the grid mean
+    # receives the area-weighted updraft flux.
+    Yₜ_ref = deepcopy(Yₜ)
+    ᶜy = Fields.coordinate_field(Y.c).y
+    @. Y.c.sgsʲs.:(1).ρa = ifelse(ᶜy < FT(3200), FT(0.1) * Y.c.ρ, FT(0))
+    Yₜ .= zero(eltype(Yₜ))
+    CA.edmfx_sgs_horizontal_diffusive_flux_tendency!(
+        Yₜ, Y, p, t, p.atmos.turbconv_model,
+    )
+    @test parent(Yₜ.c.sgsʲs.:(1).mse) ≈ parent(Yₜ_ref.c.sgsʲs.:(1).mse) rtol =
+        FT(1e-12)
+    @test maximum(abs, parent(Yₜ.c.ρq_tot)) > 0
+    @test !(parent(Yₜ.c.ρq_tot) ≈ parent(Yₜ_ref.c.ρq_tot))
 end
 
 @testset "EDMFX horizontal diffusive flux vanishes on a column" begin

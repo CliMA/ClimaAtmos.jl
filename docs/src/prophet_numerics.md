@@ -161,20 +161,32 @@ because subgrid moisture transport moves moist air mass.
 
 The diffusive fluxes are evaluated at faces from the face-native diffusivities
 ``K_h``, ``K_u`` (see
-[Closures](prophet_closures.md#Unresolved-inversions)).
-One structural detail matters for reading the code:
+[Closures](prophet_closures.md#Unresolved-inversions)):
 
-  - The turbulent-mixing component ``K_h`` acts on
-    ``q_{t,\mathrm{eff}} = q_t - q_r - q_s``, the suspended water, distributed
-    to the cloud species by tendency scaling; rain and snow receive no turbulent
+  - The turbulent-mixing component ``K_h`` acts on the suspended water
+    ``q_{t,\mathrm{eff}} = q_t - q_{\mathrm{rai}} - q_{\mathrm{sno}}`` and on
+    the suspended cloud species (`ρq_lcl`, `ρq_icl`, `ρn_lcl`, `ρn_ice`), which
+    diffuse down their own gradients; rain and snow receive no turbulent
     transport, so that rain shafts dominated by sedimentation are not smeared.
-    Energy diffuses as
-    ``-K_h [\nabla s_d + (h_{\mathrm{eff}} + \Phi) \nabla q_{t,\mathrm{eff}}]``,
-    the dry-static-energy-plus-water-enthalpy decomposition.
-
-When `edmfx_vertical_diffusion` is enabled, each draft receives the same
-*specific* tendency the grid mean receives, which is the discrete form of the
-grid-mean-divergence requirement of [Thuburn2022](@cite).
+    Energy diffuses through the [Yatunin2026](@cite) Eq. (33) bracket,
+    ``\mathcal{B} = \nabla s_d + (h_v + \Phi) \nabla q_{t,\mathrm{eff}} + (h_l - h_v) \nabla q_l^{\mathrm{cl}} + (h_i - h_v) \nabla q_i^{\mathrm{cl}}``,
+    with each thermodynamic coefficient evaluated at centers and interpolated to
+    faces.
+  - For `PrognosticEDMFX`, the grid-mean diffusive flux sums the environment and
+    draft contributions with face weights ``w^0 = I^f(\hat{\rho}^0) K_h`` and
+    ``w^j = f_j K_h / I^f(1/\max(\hat{\rho}^j, \epsilon))``
+    (``f_j =`` `edmfx_updraft_kh_diffusion_factor`), and when
+    `edmfx_vertical_diffusion` is enabled each draft scalar
+    ``\chi^j \in \{h_s^j, q_t^j, q_l^{\mathrm{cl},j}, q_i^{\mathrm{cl},j}, n_l^{\mathrm{cl},j}, n_i^{\mathrm{cl},j}\}``
+    receives ``-\max(\hat{\rho}^j, \epsilon)^{-1} D^c[-w^j G^f[\chi_{\mathrm{eff}}^j]]``,
+    where ``q_{t,\mathrm{eff}}^j = q_t^j - q_r^j - q_s^j`` and
+    ``h_{s,\mathrm{eff}}^j`` excludes non-diffusing rain and snow enthalpy. The
+    harmonic face mean in ``w^j`` is the series conductance of the adjacent
+    cells, so ``w^j / \hat{\rho}^j_c \le 2 f_j K_h`` and the intensive tendency
+    is a bounded three-point diffusion of ``\chi^j`` for every value of
+    ``\hat{\rho}^j_c`` (see [PROPHET](prophet.md)).
+    When `edmfx_vertical_diffusion` is `false`, `PrognosticEDMFX` reduces to the
+    environment diffusive flux ``-D^c[-w^0 G^f[\chi^0]]``.
 
 ### Hyperdiffusion
 
@@ -360,7 +372,7 @@ structure, in a fixed order because they accumulate into shared blocks:
 | Update                                    | Covers                                                                                                                                                         |
 |:----------------------------------------- |:-------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `update_sgs_advection_jacobian!`          | vertical advection of the draft scalars (assigns the diagonals, including the ``-I`` residual term) and draft sedimentation with its lateral-mixing correction |
-| `update_sgs_diffusion_jacobian!`          | the diffusive coupling between the grid mean and the drafts                                                                                                    |
+| `update_sgs_diffusion_jacobian!`          | vertical diffusion of the draft scalars down their own gradients                                                                                               |
 | `update_sgs_entr_detr_jacobian!`          | the entrainment relaxation, including the feedback through the environment residual                                                                            |
 | `update_sgs_boundary_condition_jacobian!` | the surface mass-source relaxation in the first cell                                                                                                           |
 | `update_sgs_massflux_jacobian!`           | the mass-flux contributions to the grid-mean scalars                                                                                                           |

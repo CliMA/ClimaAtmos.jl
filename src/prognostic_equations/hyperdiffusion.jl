@@ -230,13 +230,14 @@ grid-scale noise):
     second term is applied only when `ρq_tot` is prognostic. Here `q_tot_eff` is
     the water that actually hyperdiffuses, vapor plus cloud liquid plus cloud ice
     with rain and snow excluded, and `h_eff = (h_v q_v + h_l q_lcl + h_i q_icl) / q_tot_eff` is its aggregate specific enthalpy; because the phase shares sum
-    to one, the geopotential collapses into the single `+ Φ`. This mirrors the
-    vertical boundary-layer flux in
-    `vertical_diffusion_boundary_layer_tendency!`.
+    to one, the geopotential collapses into the single `+ Φ`.
   - `Yₜ.c.ρtke`: `ν₄_vorticity` times `∇⋅(ρ ∇∇²tke)`, when prognostic TKE is active.
   - For `PrognosticEDMFX`, `Yₜ.f.sgsʲs.:(j).u₃` (curl-curl part only) and
-    `Yₜ.c.sgsʲs.:(j).mse` (same energy split, with subdomain thermodynamics and no
-    density weighting).
+    `Yₜ.c.sgsʲs.:(j).mse`: `ν₄_scalar` times
+    `∇⋅∇∇²s_dʲ + ∇⋅((h_effʲ - h_d(Tʲ)) ∇∇²q_tot_effʲ)`, using the intensive
+    water-enthalpy difference `h_effʲ - h_d(Tʲ) = (h_effʲ + Φ) - s_dʲ` (since
+    diffusing water replaces dry air at constant specific mass in the intensive
+    `mseʲ` equation).
 
 The two coefficients come from `ν₄`: `ν₄_vorticity` for momentum and TKE, and
 `ν₄_scalar = ν₄_vorticity / prandtl_number` for scalars. Requires DSS to have been
@@ -250,7 +251,6 @@ NVTX.@annotate function apply_hyperdiffusion_tendency!(Yₜ, Y, p, t)
 
     (; params) = p
     thermo_params = CAP.thermodynamics_params(params)
-    (; ᶜΦ) = p.core
     (; divergence_damping_factor) = hyperdiff
     (; ν₄_scalar, ν₄_vorticity) = ν₄(hyperdiff, Y)
 
@@ -259,7 +259,6 @@ NVTX.@annotate function apply_hyperdiffusion_tendency!(Yₜ, Y, p, t)
     ᶜρ = Y.c.ρ
     ᶜJ = Fields.local_geometry_field(Y.c).J
     point_type = eltype(Fields.coordinate_field(Y.c))
-    (; ᶜT) = p.precomputed
     (; ᶜ∇²u, ᶜ∇²s_d, ᶜ∇²q_tot_eff) = p.hyperdiff
     if turbconv_model isa PrognosticEDMFX
         (; ᶜ∇²uʲs, ᶜ∇²s_dʲs, ᶜ∇²q_tot_effʲs) = p.hyperdiff
@@ -292,16 +291,7 @@ NVTX.@annotate function apply_hyperdiffusion_tendency!(Yₜ, Y, p, t)
     # Water enthalpy contribution — only when ρq_tot is prognostic (dry
     # configurations skip this entirely).
     if MatrixFields.has_field(Y, @name(c.ρq_tot))
-        ᶜq_vap, ᶜq_lcl, ᶜq_icl = ᶜsuspended_water(Y, p)
-        ᶜh_eff_plus_Φ = ᶜh_eff_plus_Φ!(
-            p.scratch.ᶜtemp_scalar_2,
-            thermo_params,
-            ᶜT,
-            ᶜΦ,
-            ᶜq_vap,
-            ᶜq_lcl,
-            ᶜq_icl,
-        )
+        ᶜh_eff_plus_Φ = ᶜh_eff_plus_Φ!(p.scratch.ᶜtemp_scalar_2, Y, p)
         @. ᶜh_flux_div += wdivₕ(ᶜρ * ᶜh_eff_plus_Φ * gradₕ(ᶜ∇²q_tot_eff))
     end
     @. Yₜ.c.ρe_tot -= ν₄_scalar * ᶜh_flux_div
@@ -321,11 +311,12 @@ NVTX.@annotate function apply_hyperdiffusion_tendency!(Yₜ, Y, p, t)
                 @. Yₜ.f.sgsʲs.:($$j).u₃ -=
                     ν₄_vorticity * ᶠwinterp(ᶜJ * ᶜρ, C3(ᶜ∇⁴uⱼ))
             end
-            # SGS mse hyperdiff — matches the grid-mean expression above,
-            # using SGS thermodynamics (Tʲ, q_μʲ). No density weighting:
-            # hyperdiff on the specific mseʲ [J/kg/s], symmetric with the
-            # SGS q_totʲ hyperdiff below. q_tot_effⱼ excludes rain/snow;
-            # h_effⱼ is built from vapor + cloud only.
+            # SGS mse hyperdiffusion: in the intensive equation for specific
+            # mseʲ = s_dʲ + Σ_μ q_μʲ (h_μ(Tʲ) - h_d(Tʲ)), diffusing suspended
+            # water q_tot_effʲ replaces dry air at constant specific mass and
+            # carries the intensive enthalpy difference h_effʲ - h_d(Tʲ)
+            # (where geopotential Φ cancels and reference-temperature shifts
+            # shift the coefficient by C_water - C_d).
             ᶜq_vapʲ = @. lazy(
                 TD.vapor_specific_humidity(
                     ᶜq_tot_nonnegʲs.:($$j),
@@ -340,18 +331,17 @@ NVTX.@annotate function apply_hyperdiffusion_tendency!(Yₜ, Y, p, t)
                     (@. lazy(Y.c.sgsʲs.:($$j).q_lcl)),
                     (@. lazy(Y.c.sgsʲs.:($$j).q_icl)),
                 ) : (ᶜq_liqʲs.:($j), ᶜq_iceʲs.:($j))
-            ᶜh_effⱼ_plus_Φ = ᶜh_eff_plus_Φ!(
+            ᶜh_effⱼ_minus_h_d = ᶜh_eff_minus_h_d!(
                 p.scratch.ᶜtemp_scalar_2,
                 thermo_params,
                 ᶜTʲs.:($j),
-                ᶜΦ,
                 ᶜq_vapʲ,
                 ᶜq_lclʲ,
                 ᶜq_iclʲ,
             )
             @. ᶜh_flux_div = wdivₕ(gradₕ(ᶜ∇²s_dʲs.:($$j)))
             @. ᶜh_flux_div +=
-                wdivₕ(ᶜh_effⱼ_plus_Φ * gradₕ(ᶜ∇²q_tot_effʲs.:($$j)))
+                wdivₕ(ᶜh_effⱼ_minus_h_d * gradₕ(ᶜ∇²q_tot_effʲs.:($$j)))
             @. Yₜ.c.sgsʲs.:($$j).mse -= ν₄_scalar * ᶜh_flux_div
         end
     end

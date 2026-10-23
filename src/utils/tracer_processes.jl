@@ -329,9 +329,11 @@ that are neither `ρq_tot` nor sedimenting microphysics species, e.g. passive
 chemistry tracers such as `ρq_gas_A`.
 
 These are diffused with the eddy diffusivity `K_h`, both in the tendencies and
-in the implicit Jacobian. The sedimenting species are handled separately: cloud
-condensate takes a share of the aggregate water tendency, and rain and snow are
-not diffused at all.
+in the implicit Jacobian. The sedimenting species are handled separately:
+suspended cloud species (`ρq_lcl`, `ρq_icl`, `ρn_lcl`, `ρn_ice`) diffuse down
+their own specific gradients in second-order diffusion and take a proportional
+share of the aggregate water tendency in fourth-order hyperdiffusion, while
+rain and snow do not diffuse.
 """
 passive_gs_tracer_names(Y) =
     unrolled_filter(
