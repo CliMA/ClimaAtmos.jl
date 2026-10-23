@@ -1,4 +1,4 @@
-434
+435
 
 # **README**
 #
@@ -32,6 +32,12 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+435
+- Smooth harmonic buoyancy bound and `1 / √(2 c_σ)` normalization for the
+  turbulent vertical displacement in `materialized_displacement_length!`, with
+  SGS displacement covariance defaults calibrated to MPAS DYAMOND moments on the
+  model's own grid and operators (c_Δx 1.24, w_ref 1.08, τ_0 300 s, r 0.88/0.38/0.74).
+
 434
 - New version of SurfaceFluxes.jl v1.4.0 -> v1.5.1
 - SGS (θ_li, q_tot) covariance from subgrid displacements (per-variable scales,

@@ -484,14 +484,14 @@ it vanishes as the horizontal grid is refined.
 The moisture vertical scale is a displacement length,
 ``\ell_{v,q}^2 = \ell_{v,0}^2 = 2 c_\sigma l_d^2``, with potential-temperature vertical scale
 ``\ell_{v,\theta} = r_{v,\theta} \ell_{v,0}``
-(`sgs_variance_theta_vertical_scale_ratio`). Here ``l_d = \min(\max(l_{\mathrm{disp}}, l_b), z - z_s)`` takes the larger of the
+(`sgs_variance_theta_vertical_scale_ratio`). Here, ``l_d = \min(\max(l_{\mathrm{disp}}, l_b), z - z_s)`` takes the larger of the
 buoyancy-bounded [mixing length](@ref "Mixing-length scales")
-``l_{\mathrm{disp}} = \min(l, \sqrt{c_b \kappa_{\mathrm{iso}}}/N_{\mathrm{disp}})``
-and the floor displacement scale
+``l_{\mathrm{disp}} = l / \sqrt{1 + 2 c_\sigma \max(N_{\mathrm{disp}}^2, 0) \, l^2 / (c_b \kappa_{\mathrm{iso}})}``
+(``l_{\mathrm{disp}} = l`` without TKE) and the floor displacement scale
 
 ```math
 l_b = \min\!\left( \sqrt{c_b \kappa_{\min}} \,
-  \min\!\left(\tau_N, \dfrac{l_{\mathrm{disp}}}{\sqrt{c_b \kappa_{\mathrm{iso}}}}, \tau_0\right), \;
+  \min\!\left(\tau_N, \dfrac{l_{\mathrm{disp}}}{\sqrt{c_b \kappa_{\mathrm{iso}} / (2 c_\sigma)}}, \tau_0\right), \;
   z - z_s, \; \Delta z \right) ,
 \qquad
 \tau_N = \begin{cases} 1/N_{\mathrm{disp}} , & N_{\mathrm{disp}}^2 > 0 , \\[4pt] \infty , & N_{\mathrm{disp}}^2 \le 0 , \end{cases}
@@ -504,21 +504,21 @@ faces. Evaluating ``N_{\mathrm{disp}}^2`` on the bounding faces rather than on
 the Van Leer harmonic-mean center gradients keeps the buoyancy barrier active in
 a cell immediately below a sharp capping inversion, and using the dry buoyancy
 coefficients keeps the moist latent-heat reduction at cloud base from weakening
-the stratification barrier. In turbulent layers ``l_d`` is
-the mixing length and the closure is the production–dissipation balance of
-[Sommeria1977, Mellor1977](@cite),
-``\sigma_\psi^2 = 2 c_\sigma l^2 (\partial_z \psi)^2``, with the wall distance
-and the buoyancy scale inherited from the mixing length. The floor is the
+the stratification barrier. In neutral turbulent layers, ``l_{\mathrm{disp}} = l``
+sets ``l_d`` and the vertical displacement variance ``\ell_{v,0}^2 = 2 c_\sigma l^2``
+follows the production–dissipation balance of [Sommeria1977, Mellor1977](@cite),
+while in stably stratified layers ``\ell_{v,0}^2 = 2 c_\sigma l_{\mathrm{disp}}^2``
+is smoothly bounded by the adiabatic buoyancy excursion ``c_b \kappa_{\mathrm{iso}} / N_{\mathrm{disp}}^2``. The floor is the
 displacement of unresolved vertical motions with velocity scale ``w_{\min}``:
 gravity waves, mesoscale circulations and
 convective remnants. The
 displacement lasts until the parcel's vertical velocity decorrelates.
 In stably stratified air buoyancy stops it after a time ``1/N_{\mathrm{disp}}``, giving
 ``\ell_{v,0} = w_{\min}/N_{\mathrm{disp}}``. In turbulent air the turbulence scrambles it after
-its Lagrangian time scale ``l_{\mathrm{disp}}/\sqrt{c_b \kappa_{\mathrm{iso}}}``; this reduces to
-``1/N_{\mathrm{disp}}`` where the mixing length is the buoyancy scale and to the
-turnover time of the wall or TKE-balance scale where those are smaller, so it is the same
-limit as ``1/N_{\mathrm{disp}}`` in stable air and shortens the displacement where the mixing length is
+its Lagrangian time scale ``l_{\mathrm{disp}}/\sqrt{c_b \kappa_{\mathrm{iso}} / (2 c_\sigma)}``; this approaches
+``1/N_{\mathrm{disp}}`` where the mixing length exceeds the buoyancy scale and reduces to the
+turnover time of the wall or TKE-balance scale where those are smaller, so it matches the
+``1/N_{\mathrm{disp}}`` limit in strongly stratified air and shortens the displacement where the mixing length is
 constrained below the buoyancy scale. In weakly stratified quiescent air, where ``1/N_{\mathrm{disp}}`` exceeds ``\tau_0``
 (`sgs_variance_floor_time_scale`) and turbulence is weak, the displacement
 persists for ``\tau_0``, giving ``\ell_{v,0} = w_{\min} \tau_0``; where the air
@@ -528,8 +528,7 @@ is continuous across ``N_{\mathrm{disp}}^2 = 0``. This is the
 vertical dispersion of a stochastic Lagrangian model in stratified flow. The cap by
 the cell depth applies to the floor scale only, and the wall distance bounds
 ``l_d`` as a whole; ``l_d``
-exceeds ``\Delta z`` wherever the mixing length does, as the turbulent
-variance always has. A reversible displacement creates a fluctuation at a
+exceeds ``\Delta z`` wherever ``l_{\mathrm{disp}}`` does. A reversible displacement creates a fluctuation at a
 fixed point, and the fluctuation condenses if it crosses saturation, so the
 floor enters the variance and not the diffusivity, which keeps the unfloored
 mixing length.
@@ -553,21 +552,27 @@ independent of resolution for any ``s < 3``. The vertical term
 coarse-graining and does not change with ``\Delta x_h``, so the growth of
 the sub-cell variance has to be carried by the amplitude,
 ``\ell_v \propto w_{\min} \propto \Delta x_h^{(s-1)/2}``. A ``-5/3`` spectrum
-gives ``p = 1/3``. The within-cell moments (``\overline{q_t'^2}``,
-``\overline{\theta_{li}'^2}`` and their correlation) of 3.75 km global
-simulations (MPAS, DYAMOND) coarse-grained to 60, 120 and 240 km give
-``c_{\Delta x} \approx 2.1`` and ``w_{\mathrm{ref}} \approx 1.6`` m s⁻¹ at
-all three resolutions, ``r_{\Delta x,\theta} \approx 0.7``,
-``r_{v,\theta} \approx 0.36``, ``r_{h,\theta q} \approx 0.5``, and only a
-lower bound ``\tau_0 \gtrsim 300`` s (a 4 km WRF simulation, CONUS404, gives
-the same constants within about 10 %, 13 % for ``r_{h,\theta q}``). The
-ClimaParams default of `sgs_variance_horizontal_scale_factor` is 1; set it to
-2.1 in the run TOML to use this calibration (the other constants above are the
-code defaults). A joint fit gives ``p \approx 2/3``, an effective slope near ``-7/3``,
+gives ``p = 1/3``. The code defaults ``c_{\Delta x} = 1.24``,
+``w_{\mathrm{ref}} = 1.08`` m s⁻¹, ``r_{\Delta x,\theta} = 0.88``,
+``r_{v,\theta} = 0.38``, ``r_{h,\theta q} = 0.74`` and ``\tau_0 = 300`` s
+are a fit to the within-cell moments (``\overline{q_t'^2}``,
+``\overline{\theta_{li}'^2}`` and their covariance) of 3.75 km global
+simulations (MPAS, DYAMOND) aggregated onto the model's own cubed-sphere
+nodes, with every closure input computed by the model's operators (the
+spectral-element horizontal gradient invariant, the Van Leer vertical
+gradient and ``N^2_{\mathrm{disp}}``) on the MPAS native levels, and with
+the turbulent term from the model's own TKE climatology. ``c_{\Delta x}``
+multiplies a specific discrete gradient, so it is only meaningful with that
+operator. One set fits ne16 to ne60 and both the
+130- and 63-level vertical grids within 1 % in cost of the per-grid fits.
+``\tau_0`` is bounded only from below (``\gtrsim 100`` s): in the stratified
+free troposphere ``1/N_{\mathrm{disp}}`` binds first. The exponent is held
+at ``p = 2/3``, which joint fits across 60, 120 and 240 km give (the two
+resolution pairs give the same exponent): an effective slope near ``-7/3``,
 between the mesoscale ``-5/3`` and the synoptic ``-3``, which is where the
-spectra of temperature and humidity lie at those scales; the two resolution
-pairs give the same exponent. In the large-eddy limit ``w_{\min}`` vanishes
-and the TKE closure carries the variance.
+spectra of temperature and humidity lie at those scales.
+In the large-eddy limit ``w_{\min}`` vanishes and the TKE closure carries the
+variance.
 
 The cross covariance follows from the same pair of displacements: the
 horizontal displacements of ``\theta_{li}`` and ``q_t`` are correlated with

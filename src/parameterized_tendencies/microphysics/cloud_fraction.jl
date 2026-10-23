@@ -256,13 +256,23 @@ gradients the displacement acts on are defined. The displacement lasts until
 the parcel's vertical velocity decorrelates: in stably stratified air
 (`N² > 0`) after a time `1/N`, when buoyancy stops it, which gives the
 buoyancy scale `√κ_b / N` of the mixing length; after the Lagrangian time
-scale of the turbulence `τ_turb = l_disp / √(c_b κ_iso)`
+scale of the turbulence `τ_turb = l_disp / √(c_b κ_iso / (2 c_σ))`
 (`turbulent_lagrangian_time`, with `l_disp` the buoyancy-bounded mixing
 length); or after the quiescent limit `τ_0`. Where the air is neutral or
 unstable (`N² ≤ 0`) buoyancy imposes no limit and the displacement is
 `√κ_b · min(τ_turb, τ_0)`, the limit the stable branch approaches as
 `N² → 0⁺`, so the closure is continuous in `N²`. This is the vertical
 dispersion of a stochastic Lagrangian model in stratified flow.
+
+`l_b` is a displacement scale in the normalization of the mixing length,
+`ℓ_v² = 2 c_σ l²`: with `κ_b = w_min² / (2 c_σ)` the physical standard
+deviation of the displacement is `√(2 c_σ) l_b = w_min · min(1/N, τ_turb, τ_0)`.
+The caps bound `l_b` in that normalization, so that `max(l_mix, l_b)` in
+`displacement_length` compares like with like (the wall limit `κ z` of the
+mixing length is in it too), and the physical displacement is bounded by
+`√(2 c_σ)` times the cell depth and the wall distance. A cap on the standard
+deviation is loose in any normalization, since the Gaussian tails extend
+beyond it, and the calibrated `w_ref` and `τ_0` assume the caps as written.
 """
 @inline function floor_displacement_length(κ_b, N², τ_turb, τ_0, l_z, Δz)
     FT = typeof(N²)
@@ -279,31 +289,44 @@ end
     turbulent_lagrangian_time(l_mix, κ_b)
 
 Lagrangian time scale `l_mix / √κ_b` of the turbulence, with buoyancy-weighted
-vertical velocity variance `κ_b = c_b κ_iso`; infinite where there is no TKE
-(`κ_b ≤ 0`), so that it imposes no limit there. Where `l_mix` is at the
-buoyancy scale `√κ_b / N`, `turbulent_lagrangian_time` equals `1 / N`, matching
-the buoyancy period of `floor_displacement_length`.
+vertical velocity variance `κ_b = c_b κ_iso / (2 c_σ)`; infinite where there is
+no TKE (`κ_b ≤ 0`), so that it imposes no limit there. Where `l_mix` exceeds
+the buoyancy scale `√κ_b / N`, `turbulent_lagrangian_time(l_disp, κ_b)`
+approaches `1 / N`, matching the buoyancy period of `floor_displacement_length`.
 """
 @inline function turbulent_lagrangian_time(l_mix, κ_b)
     FT = typeof(κ_b)
-    return ifelse(κ_b > eps(FT), l_mix / sqrt(max(κ_b, eps(FT))), FT(Inf))
+    return ifelse(
+        κ_b > floatmin(FT),
+        l_mix / sqrt(max(κ_b, floatmin(FT))),
+        FT(Inf),
+    )
 end
 
 """
     buoyancy_bounded_mixing_length(l_mix, κ_b, N²)
 
-Turbulent mixing length `l_mix` bounded by the buoyancy scale `√(κ_b / N²)`
-with `κ_b = c_b κ_iso` where `N² > 0` and `κ_b > 0`. Bounding `l_mix` with the
-same face-maximum dry `N²` used by `floor_displacement_length` ensures that a
-cell adjacent to a capping inversion does not displace parcels across the
-inversion over a distance larger than its face buoyancy scale allows when the
-Van Leer harmonic-mean center gradient vanishes on the neutral side of the cell.
+Turbulent mixing length `l_mix` bounded smoothly by the buoyancy scale
+`√(κ_b / N²)`, as the harmonic combination
+`l_disp = l_mix / √(1 + N² l_mix² / κ_b)`, so that
+`1/l_disp² = 1/l_mix² + N²/κ_b`, where `N² > 0` and `κ_b > 0`; elsewhere
+`l_disp = l_mix`. With the vertical velocity variance
+`κ_b = c_b κ_iso / (2 c_σ)` of the displacing eddies, the vertical
+displacement variance `2 c_σ l_disp²` stays within the adiabatic buoyancy
+excursion `c_b κ_iso / N²`. The same face-maximum dry `N²` as in
+`floor_displacement_length` keeps that bound active in a cell adjacent to a
+capping inversion, where the Van Leer harmonic-mean center gradient vanishes
+on the neutral side of the cell.
 """
 @inline function buoyancy_bounded_mixing_length(l_mix, κ_b, N²)
     FT = typeof(N²)
     return ifelse(
-        (N² > eps(FT)) & (κ_b > eps(FT)),
-        min(l_mix, sqrt(max(κ_b, zero(FT)) / max(N², eps(FT)))),
+        (N² > zero(FT)) & (κ_b > floatmin(FT)),
+        l_mix /
+        sqrt(
+            one(FT) +
+            max(N², zero(FT)) * l_mix^2 / max(κ_b, floatmin(FT)),
+        ),
         l_mix,
     )
 end
@@ -314,7 +337,10 @@ end
 Vertical displacement length `min(max(l_mix, l_b), l_z)`: the larger of the
 buoyancy-bounded mixing length `l_mix` and the floor displacement scale `l_b`,
 capped by the wall distance `l_z` since air cannot be displaced below the
-ground. Using `max(l_mix, l_b)` avoids double-counting turbulent and floor
+ground. The cap, like `l_mix` and `l_b`, is in the normalization of the
+mixing length, so the physical standard deviation `√(2 c_σ) l_d` of the
+displacement is bounded by `√(2 c_σ) l_z` (see `floor_displacement_length`).
+Using `max(l_mix, l_b)` avoids double-counting turbulent and floor
 displacements in quadrature when both represent the vertical parcel excursion.
 """
 @inline displacement_length(l_mix, l_b, l_z) =
@@ -326,37 +352,37 @@ displacements in quadrature when both represent the vertical parcel excursion.
 Materialize the vertical displacement length `l_d` of the variance closure
 into `p.scratch.ᶜtemp_scalar` and return `(ᶜl_d, ᶜl_mix_disp)`, with
 `ᶜl_mix_disp` the buoyancy-bounded turbulent mixing length
-(`buoyancy_bounded_mixing_length`) that entered `l_d`, as a lazy broadcast.
-Also refreshes `p.precomputed.ᶜl_mix` for `AbstractEDMF` via
-`materialized_mixing_length!`.
+(`buoyancy_bounded_mixing_length`) as a lazy broadcast. Also refreshes
+`p.precomputed.ᶜl_mix` for `AbstractEDMF` via `materialized_mixing_length!`.
 
-`l_d` takes the maximum of the buoyancy-bounded turbulent mixing length and the
-floor displacement scale `floor_displacement_length`, evaluated with the
-face-maximum dry buoyancy gradient `N²_disp` (`set_displacement_buoyancy_gradient!`),
-with `κ_min = w_min² / (2 c_σ c_b)`, the velocity scale `w_min` of the unresolved
+`l_d` takes the maximum of `l_disp` (the mixing length `l_mix` bounded by
+`buoyancy_bounded_mixing_length` with `κ_b = c_b κ_iso / (2 c_σ)`) and the floor
+displacement scale `floor_displacement_length`, evaluated with the face-maximum
+dry buoyancy gradient `N²_disp` (`set_displacement_buoyancy_gradient!`), with
+`κ_min = w_min² / (2 c_σ c_b)`, the velocity scale `w_min` of the unresolved
 vertical motions at the horizontal grid scale (`floor_velocity`;
 `sgs_variance_vertical_velocity_floor`,
 `sgs_variance_floor_reference_resolution`,
 `sgs_variance_floor_resolution_exponent`) and the time over which their
 displacement persists, the smallest of the buoyancy period `1/N_disp`, the
-Lagrangian time scale of the turbulence `l_disp / √(c_b κ_iso)`
+Lagrangian time scale of the turbulence `l_disp / √(c_b κ_iso / (2 c_σ))`
 (`turbulent_lagrangian_time`, with `l_disp` the buoyancy-bounded mixing
 length) and the quiescent limit `τ_0` (`sgs_variance_floor_time_scale`). In
-turbulent layers `l_disp` dominates and
-the closure is the production–dissipation balance, bounded by the face dry
-buoyancy scale `√(c_b κ_iso) / N_disp` (`buoyancy_bounded_mixing_length`). In
-stably stratified air without TKE, `l_d = w_min / (√(2 c_σ) N_disp)`, so the
-vertical displacement variance `2 c_σ l_d²` is `(w_min / N_disp)²`: the
-displacement of unresolved vertical motions (gravity waves, mesoscale
-circulations) with velocity scale `w_min`, which displace air without mixing it.
-Where the air is neutral or unstable (`N²_disp ≤ 0`) buoyancy imposes no
-limit and the floor displacement is `w_min min(τ_turb, τ_0) / √(2 c_σ)`, the
-limit of the stable branch as `N²_disp → 0⁺`, so `l_d` is continuous in
-`N²_disp`. The cell-depth cap applies to the floor
-scale only; `l_mix` keeps its own limits, so `l_d` exceeds the cell depth
-wherever the mixing length does, as the turbulent variance
-`2 c_σ l_mix² (∂_z ψ)²` always has. The two scales are combined via `max`
-and bounded by the wall distance (`displacement_length`).
+neutral turbulent layers, `l_disp = l_mix` dominates and the vertical
+displacement variance `2 c_σ l_d²` is `2 c_σ l_mix²` (the production–dissipation
+balance), while in stably stratified layers `2 c_σ l_disp²` is smoothly bounded
+by the adiabatic buoyancy excursion `c_b κ_iso / N²_disp`
+(`buoyancy_bounded_mixing_length`). In stably stratified air without TKE,
+`l_d = w_min / (√(2 c_σ) N_disp)`, so the vertical displacement variance
+`2 c_σ l_d²` is `(w_min / N_disp)²`: the displacement of unresolved vertical
+motions (gravity waves, mesoscale circulations) with velocity scale `w_min`,
+which displace air without mixing it. Where the air is neutral or unstable
+(`N²_disp ≤ 0`) buoyancy imposes no limit and the floor displacement is
+`w_min min(τ_turb, τ_0) / √(2 c_σ)`, the limit of the stable branch as
+`N²_disp → 0⁺`, so `l_d` is continuous in `N²_disp`. The cell-depth cap applies
+to the floor scale only; `l_disp` keeps its own limits, so `l_d` exceeds the
+cell depth wherever `l_disp` does. The two scales are combined via `max` and
+bounded by the wall distance (`displacement_length`).
 The floor is kept out of the mixing length itself, because the
 surface-layer wall scale `l_W` of the mixing length vanishes with the
 friction velocity and in a stable surface layer, which would collapse `l_d`
@@ -369,6 +395,12 @@ function materialized_displacement_length!(Y, p)
     turbconv_params = CAP.turbconv_params(p.params)
     c_b = FT(CAP.static_stab_coeff(turbconv_params))
     c_σ = FT(CAP.diagnostic_covariance_coeff(p.params))
+    # `κ_b = κ_b_per_tke tke` is the vertical velocity variance of the
+    # displacing eddies in the normalization of `l_disp`: the turbulent
+    # displacement variance is `2 c_σ l_disp² = c_b tke τ_turb²`, and the
+    # buoyancy bound `κ_b / N²` on `l_disp²` is the adiabatic excursion
+    # `c_b tke / N²` of `2 c_σ l_disp²`.
+    κ_b_per_tke = c_b / (2 * c_σ)
     w_min = floor_velocity(
         horizontal_filter_scale(axes(Y.c)),
         FT(CAP.sgs_variance_vertical_velocity_floor(p.params)),
@@ -388,9 +420,15 @@ function materialized_displacement_length!(Y, p)
     if hasproperty(Y.c, :ρtke)
         ᶜtke = @. lazy(max(specific(Y.c.ρtke, Y.c.ρ), zero(FT)))
         ᶜl_mix_disp = @. lazy(
-            buoyancy_bounded_mixing_length(ᶜl_mix, c_b * ᶜtke, ᶜN²_disp),
+            buoyancy_bounded_mixing_length(
+                ᶜl_mix,
+                κ_b_per_tke * ᶜtke,
+                ᶜN²_disp,
+            ),
         )
-        ᶜτ_turb = @. lazy(turbulent_lagrangian_time(ᶜl_mix_disp, c_b * ᶜtke))
+        ᶜτ_turb = @. lazy(
+            turbulent_lagrangian_time(ᶜl_mix_disp, κ_b_per_tke * ᶜtke),
+        )
         @. ᶜl_d = displacement_length(
             ᶜl_mix_disp,
             floor_displacement_length(
@@ -450,8 +488,9 @@ function materialized_variance_fidelity!(Y, p, ᶜl_mix_disp)
     turbconv_params = CAP.turbconv_params(p.params)
     c_d = tke_dissipation_coefficient(turbconv_params)
     # With prognostic TKE the eddy turnover rate `c_d √TKE / l_mix` uses the
-    # mixing length bounded by the face-maximum dry buoyancy scale, so it
-    # reflects the inversion-bounded eddy size; without TKE, α_Da → 1.
+    # mixing length bounded by the face-maximum dry buoyancy excursion of the
+    # displacement closure (`buoyancy_bounded_mixing_length`), so it reflects
+    # the inversion-bounded eddy size; without TKE, α_Da → 1.
     if hasproperty(Y.c, :ρtke) && hasproperty(p.precomputed, :ᶜl_mix)
         ᶜtke_or_zero = @. lazy(max(specific(Y.c.ρtke, Y.c.ρ), zero(FT)))
         ᶜl_mix_or_one = ᶜl_mix_disp

@@ -541,13 +541,15 @@ end
 Build the SGS covariance, quadrature and cloud-fraction parameter set.
 
 Most values come from ClimaParams through an explicit name map. The
-cloud-fraction floor release-shape parameters are not yet in ClimaParams'
-default TOML: they fall back to the defaults set here, and are read from
-`toml_dict` only when a run or calibration TOML defines them. The default
-`residual = 1` keeps the relative floor fully active everywhere (no
-saturation-margin release); `margin = abs_margin = sharpness = 1` describe the
-release shape that a `residual < 1` would turn on (a one-width saturation margin
-guarded by an absolute margin of one floor width).
+provisional parameters (the cloud-fraction floor release shape, the
+displacement-closure scales and the precipitation placement) take the defaults
+set here and are read from `toml_dict` only when a run or calibration TOML
+defines them; the provisional default of `sgs_variance_horizontal_scale_factor`
+supersedes its ClimaParams value the same way. The default `residual = 1` keeps
+the relative floor fully active everywhere (no saturation-margin release);
+`margin = abs_margin = sharpness = 1` describe the release shape that a
+`residual < 1` would turn on (a one-width saturation margin guarded by an
+absolute margin of one floor width).
 
 `overrides` is merged last, so it wins over both the TOML values and the
 defaults above.
@@ -566,8 +568,6 @@ function SGSQuadratureParameters(
         :diagnostic_covariance_coeff => :diagnostic_covariance_coeff,
         :Tq_correlation_coefficient => :Tq_correlation_coefficient,
         :sgs_variance_geometric_coeff => :sgs_variance_geometric_coeff,
-        :sgs_variance_horizontal_scale_factor =>
-            :sgs_variance_horizontal_scale_factor,
         :sgs_variance_max_rel_std => :sgs_variance_max_rel_std,
         :sgs_liquid_uniform_fraction => :sgs_liquid_uniform_fraction,
         :sgs_ice_uniform_fraction => :sgs_ice_uniform_fraction,
@@ -582,11 +582,14 @@ function SGSQuadratureParameters(
     )
     parameters = CP.get_parameter_values(toml_dict, name_map, "ClimaAtmos")
     FT = CP.float_type(toml_dict)
-    # Provisional parameters: not yet in ClimaParams' default toml. Each is
+    # Provisional parameters: defaults set here ahead of ClimaParams. Each is
     # read from the run/calibration toml when defined there and otherwise
-    # falls back to the default below.
-    # TODO: promote each to ClimaParams (and the name_map above) once it has
-    # been calibrated, and remove it from this block.
+    # falls back to the default below, which for a parameter that ClimaParams
+    # already defines (`sgs_variance_horizontal_scale_factor`) supersedes the
+    # ClimaParams default. Such a parameter is kept out of `name_map`, so the
+    # parameter log does not record the superseded ClimaParams value.
+    # TODO: promote each default to ClimaParams (and the name_map above) once
+    # it has been calibrated, and remove it from this block.
     provisional_defaults = (;
         # Cloud-fraction floor release (see `_compute_cloud_fraction`):
         # residual = 1 keeps the relative floor fully active everywhere (no
@@ -597,24 +600,32 @@ function SGSQuadratureParameters(
         cloud_fraction_floor_release_abs_margin = FT(1),
         cloud_fraction_floor_release_sharpness = FT(1),
         cloud_fraction_floor_residual = FT(1),
-        # Unresolved vertical motions in the variance closure
-        # (`materialized_displacement_length!`): velocity scale [m/s] at the
-        # reference horizontal grid scale [m], the exponent of its growth with
-        # the grid scale, and the persistence time [s] in quiescent neutral air.
-        # Calibrated (with the per-variable scales below and
-        # `sgs_variance_horizontal_scale_factor` ≈ 2.1) against the within-cell
-        # moments of 3.75 km global MPAS (DYAMOND) coarse-grained to 60–240 km,
-        # cross-checked on 4 km WRF (CONUS404); τ_0 is bounded below (≳ 300 s)
-        # but not above by these data.
-        sgs_variance_vertical_velocity_floor = FT(1.6),
+        # Unresolved vertical motions and horizontal scale factor in the
+        # variance closure (`materialized_displacement_length!`,
+        # `set_covariance_cache!`): horizontal grid scale multiplier [-],
+        # velocity scale [m/s] at the reference horizontal grid scale [m], the
+        # exponent of its growth with the grid scale, and the persistence time
+        # [s] in quiescent neutral air. Calibrated against the within-cell
+        # moments of 3.75 km global MPAS (DYAMOND) aggregated onto the model's
+        # own cubed-sphere nodes (ne16/30/60), with the closure inputs computed
+        # by the model's operators (`hgrad_invariant!`, Van Leer `∂z`, `N²_disp`)
+        # on the MPAS native levels; `c_Δx` is specific to that horizontal
+        # gradient operator. One set fits ne16–ne60 and both the 130- and
+        # 63-level vertical grids; `τ_0` is bounded only from below (≳ 100 s).
+        # TODO: ClimaParams defines `sgs_variance_horizontal_scale_factor`
+        # with default 1, which this entry supersedes; move this default, and
+        # the other provisional defaults of this block, to ClimaParams in one
+        # go (see https://github.com/CliMA/ClimaAtmos.jl/pull/4913).
+        sgs_variance_horizontal_scale_factor = FT(1.24),
+        sgs_variance_vertical_velocity_floor = FT(1.08),
         sgs_variance_floor_reference_resolution = FT(1.2e5),
         sgs_variance_floor_resolution_exponent = FT(2 // 3),
         sgs_variance_floor_time_scale = FT(300),
         # Per-variable displacement scale ratios (θ_li relative to q_tot) and
         # horizontal displacement cross-correlation (`set_covariance_cache!`).
-        sgs_variance_theta_horizontal_scale_ratio = FT(0.7),
-        sgs_variance_theta_vertical_scale_ratio = FT(0.36),
-        sgs_variance_horizontal_cross_correlation = FT(0.5),
+        sgs_variance_theta_horizontal_scale_ratio = FT(0.88),
+        sgs_variance_theta_vertical_scale_ratio = FT(0.38),
+        sgs_variance_horizontal_cross_correlation = FT(0.74),
         # Equilibrium-ratio modulator weight (see `sgs_variance_fidelity`).
         sgs_fidelity_equilibrium_weight = FT(0.5),
         # Precipitation-fraction placement of rain and snow over the quadrature:
@@ -628,8 +639,22 @@ function SGSQuadratureParameters(
         # shaft the order-3 quadrature resolves).
         sgs_precip_fraction_floor = FT(0.5),
     )
+    # A run toml defines a parameter that ClimaParams also defines when it
+    # appears in the override dictionary or, for a `toml_dict` assembled
+    # without one, when its value differs from the ClimaParams default:
+    # `toml_dict.data` holds the merged values and alone cannot tell the two
+    # sources apart.
+    default_toml_dict = CP.create_toml_dict(FT)
     provisional_present = filter(collect(keys(provisional_defaults))) do name
-        haskey(toml_dict.data, string(name))
+        key = string(name)
+        haskey(default_toml_dict.data, key) ?
+        (
+            (!isnothing(toml_dict.override_dict) &&
+                haskey(toml_dict.override_dict, key)) ||
+            toml_dict.data[key]["value"] !=
+            default_toml_dict.data[key]["value"]
+        ) :
+        haskey(toml_dict.data, key)
     end
     provisional_params =
         isempty(provisional_present) ? (;) :
