@@ -392,7 +392,10 @@ cell by the area ratio to its neighbors.) Diffusing ``\psi^m`` down its own
 gradient has a fixed point at vertically uniform draft properties and
 homogenizes internal draft anomalies toward a moist adiabat while keeping the
 sharp environmental jumps of ``\bar{s}_d`` and ``\bar{q}_t`` at trade inversions
-or cloud tops out of the draft tendency.
+or cloud tops out of the draft tendency. The horizontal counterpart
+(`edmfx_horizontal_diffusion`) replaces the harmonic face mean by an
+element-wise power mean of the draft area, which bounds the relaxation rate in
+the same way; see [PROPHET Horizontal Diffusion](prophet_horizontal_diffusion.md).
 
 **Energy.** The prognostic thermodynamic variable of a draft is the specific
 moist static energy
@@ -469,10 +472,14 @@ thermodynamic state. Because
 assembling the grid-mean diffusive flux from the subdomain gradients omits the
 cross-area term ``-\rho K_h \sum_j (\psi^j - \psi^0) \nabla a^j`` (transport
 associated with ``\nabla a^j`` is already carried by the coherent mass flux and
-detrainment); when `edmfx_vertical_diffusion: false`, the draft terms are omitted
-from both the draft and grid-mean equations so the diagnosed environment
-receives ``-\nabla \cdot (\hat{\rho}^0 K_h \nabla \psi^0)`` in either case. For
-`EDOnlyEDMFX`, the grid mean uses ``-\rho K_h \nabla \psi``.
+detrainment); when `edmfx_vertical_diffusion: false`, the default, the draft
+terms are omitted from both the draft and grid-mean equations so the diagnosed
+environment receives ``-\nabla \cdot (\hat{\rho}^0 K_h \nabla \psi^0)`` in either
+case. The grid-mean diffusive flux is then the environment flux alone, smaller
+than ``-\rho K_h \nabla \bar{\psi}`` by the draft area fraction and without the
+draft-interior and cross-area transport. Grid-scale species that the drafts do
+not carry (the P3 ice number and rime quantities) diffuse with
+``-\rho K_h \nabla \psi``, and so does every scalar for `EDOnlyEDMFX`.
 
 The consistency constraints make three algebraically equivalent forms of the
 mass-flux term available,

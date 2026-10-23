@@ -72,9 +72,10 @@ changes are needed when adding a new tracer:
 | Updraft constraint enforcement                  | `mass_flux_closures.jl` | `for χ_name in sgs_tracer_names(Y)` |
 | Rayleigh sponge damping                         | `remaining_tendency.jl` | `for χ_name in sgs_tracer_names(Y)` |
 
-Rain and snow (`ρq_rai`, `ρq_sno`, `ρn_rai`) do not diffuse. Suspended cloud
-species (`ρq_lcl`, `ρq_icl`, `ρn_lcl`, `ρn_ice`) diffuse down their own
-specific gradients in second-order diffusion ([Diffusion](diffusion.md)) and
+Rain and snow (`ρq_rai`, `ρq_sno`, `ρn_rai`) diffuse only under the LES
+closures. Suspended cloud species (`ρq_lcl`, `ρq_icl`, `ρn_lcl`, `ρn_ice`, and
+the P3 `ρq_rim` and `ρb_rim`) diffuse down their own specific gradients in
+second-order diffusion ([Diffusion](diffusion.md)) and
 take a proportional share of the aggregate `ρq_tot` tendency in fourth-order
 [hyperdiffusion](hyperdiffusion.md). Passive tracers diffuse independently with
 the full `K_h`.

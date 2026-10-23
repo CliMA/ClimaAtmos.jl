@@ -41,14 +41,15 @@ diffusive fluxes,
 
 ```math
 \boldsymbol{\mathcal{F}}_h = -\rho D \left[ \nabla s_d
-  + (h_v + \Phi) \nabla q_t^{\mathrm{eff}}
-  + (h_l - h_v) \nabla q_l^{\mathrm{cl}}
-  + (h_i - h_v) \nabla q_i^{\mathrm{cl}} \right] ,
+  + (h_v + \Phi) \nabla q_t
+  + (h_l - h_v) \nabla q_l
+  + (h_i - h_v) \nabla q_i \right] ,
 ```
 
-with ``q_t^{\mathrm{eff}} = q_t - q_{\mathrm{rai}} - q_{\mathrm{sno}}`` the
-suspended water that diffuses and ``q_l^{\mathrm{cl}}``, ``q_i^{\mathrm{cl}}``
-the suspended cloud liquid and cloud ice specific humidities. The decomposition
+with ``q_t`` the total water and ``q_l = q_l^{\mathrm{cl}} + q_{\mathrm{rai}}``,
+``q_i = q_i^{\mathrm{cl}} + q_{\mathrm{sno}}`` the liquid and ice water,
+precipitation included: the subgrid eddies of an LES carry falling precipitation
+as they carry cloud, so every microphysics species diffuses. The decomposition
 is invariant to the reference temperature ``T_0``, matches the enthalpy carried
 by each diffusing water phase to the phase flux itself, and cancels the positive
 ``\nabla s_d`` of a saturated moist-adiabatic layer up to the dry-air-frame
@@ -60,13 +61,15 @@ and the constant horizontal diffusion use a single scalar diffusivity ``D`` for
 divides its eddy viscosity by the turbulent Prandtl number (below), and the
 constant horizontal diffusion prescribes the diffusivity outright. Anisotropic
 minimum dissipation forms a diffusivity per scalar, using ``D_{s_d}`` for the
-dry-static-energy gradient and ``D_{q_t^{\mathrm{eff}}}`` for all three
-water-enthalpy terms and the suspended cloud species so that each species flux
-and its enthalpy share the same diffusivity. Because total water is part of the
-working fluid, the ``q_t^{\mathrm{eff}}`` diffusive tendency is also added to
-the density tendency. In the non-equilibrium 1-moment and 2-moment schemes, the
-suspended cloud species (`ρq_lcl`, `ρq_icl`, `ρn_lcl`, `ρn_ice`) diffuse down
-their own gradients with ``\rho D``, while rain and snow do not diffuse.
+dry-static-energy gradient and ``D_{q_t}`` for all three water-enthalpy terms
+and the microphysics species so that each species flux and its enthalpy share
+the same diffusivity. Because total water is part of the working fluid, the
+``q_t`` diffusive tendency is also added to the density tendency. In the
+non-equilibrium schemes, the cloud species (`ρq_lcl`, `ρq_icl`, `ρn_lcl`,
+`ρn_ice`, `ρq_rim`, `ρb_rim`) and the precipitation species (`ρq_rai`, `ρq_sno`,
+`ρn_rai`) diffuse down their own gradients with ``\rho D``
+(`add_moisture_diffusionᵥ!` and `add_moisture_diffusionₕ!` with
+`precipitation = true`).
 
 ## Smagorinsky–Lilly
 
@@ -211,8 +214,8 @@ left to the configuration. The Smagorinsky and AMD configurations set
 **Implicit vertical diffusion.** With `implicit_diffusion: true`, the vertical
 Smagorinsky–Lilly tendency moves into the implicit tendency, and the eddy
 viscosity is refreshed on every Newton iterate so that it follows the current
-state. The Jacobian linearizes the enthalpy, total-water, suspended
-cloud-species, passive-tracer, and horizontal-momentum flux divergences with the
+state. The Jacobian linearizes the enthalpy, total-water, microphysics-species,
+passive-tracer, and horizontal-momentum flux divergences with the
 eddy viscosity frozen; the ``u_3`` term and the horizontal-gradient part of
 ``\boldsymbol{\mathcal{T}}`` have no Jacobian contribution, which slows Newton
 convergence while leaving the tendency exact. A vertically acting Smagorinsky

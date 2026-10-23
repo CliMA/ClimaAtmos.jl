@@ -36,9 +36,9 @@ Increments:
   - `Yₜ.c.ρq_tot` and `Yₜ.c.ρ`: the total-water flux `F = -ρ K_h ∇ᵥq_tot_eff`,
     applied to both with the same sign, so that diffusing water carries the
     corresponding moist-air mass.
-  - `Yₜ.c.ρq_lcl`, `Yₜ.c.ρq_icl`, `Yₜ.c.ρn_lcl`, and `Yₜ.c.ρn_ice`: each
-    suspended cloud species diffuses down its own vertical gradient
-    `F_μ = -ρ K_h ∇ᵥq_μ` (and `F_n = -ρ K_h ∇ᵥn_μ`).
+  - Suspended cloud species (`suspended_cloud_species`: `ρq_lcl`, `ρq_icl`,
+    `ρn_lcl`, `ρn_ice`, and the P3 `ρq_rim` and `ρb_rim`): each diffuses down its
+    own vertical gradient, `F_χ = -ρ K_h ∇ᵥχ` (`add_moisture_diffusionᵥ!`).
   - Rain, snow, and rain number density (`ρq_rai`, `ρq_sno`, `ρn_rai`) are not
     diffused, since they sediment rather than mix.
   - Passive (non-microphysics) grid-mean tracers: divergence of
@@ -102,25 +102,17 @@ function vertical_diffusion_boundary_layer_tendency!(
     @. Yₜ.c.ρe_tot -=
         ᶜdiffdivᵥ(-(ᶠρK * ᶠgradᵥ(TD.dry_static_energy(thermo_params, ᶜT, ᶜΦ))))
 
-    # Water diffusion on q_tot_eff = q_tot - q_rai - q_sno (rain and snow do not
-    # diffuse). Suspended cloud species diffuse down their own gradients with
-    # the same ρ K_h, and the enthalpy equation carries the flux of Eq. (33) of
-    # Yatunin et al. (2026).
-    if !(p.atmos.microphysics_model isa DryModel)
-        ᶜq_tot_eff = ᶜdiffusing_water(Y, p)
-        ᶜρq_tot_diff = p.scratch.ᶜtemp_scalar_2
-        @. ᶜρq_tot_diff = -(ᶜdiffdivᵥ(-(ᶠρK * ᶠgradᵥ(ᶜq_tot_eff))))
-        @. Yₜ.c.ρq_tot += ᶜρq_tot_diff
-        @. Yₜ.c.ρ += ᶜρq_tot_diff
-        add_water_enthalpy_diffusionᵥ!(
-            Yₜ.c.ρe_tot,
-            ᶠρK,
-            Y,
-            p,
-            p.scratch.ᶜtemp_scalar_3,
-        )
-        diffuse_suspended_cloud_speciesᵥ!(Yₜ, Y, ᶠρK)
-    end
+    # Water diffusion on q_tot_eff = q_tot - q_rai - q_sno, with the suspended
+    # cloud species diffusing down their own gradients and the enthalpy flux of
+    # Eq. (33) of Yatunin et al. (2026); rain and snow do not diffuse.
+    add_moisture_diffusionᵥ!(
+        Yₜ,
+        Y,
+        p,
+        ᶠρK,
+        p.scratch.ᶜtemp_scalar_3,
+        p.scratch.ᶜtemp_scalar_2,
+    )
 
     # Passive (non-microphysics) grid-scale tracers: independent diffusion at
     # full K_h. Skip microphysics species (handled above or no diffusion).

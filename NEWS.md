@@ -11,21 +11,40 @@ main
   `anisotropic_minimum_dissipation_tendency!`,
   `constant_horizontal_diffusion_tendency!`, and `viscous_sponge_tendency!`)
   evaluate the water-enthalpy flux of Yatunin et al. (2026, Eqs. 30 and 33),
-  `F_h = -ρ K [∇s_d + (h_v + Φ) ∇q_tot_eff + (h_l - h_v) ∇q_lcl + (h_i - h_v) ∇q_icl]`
+  `F_h = -ρ K [∇s_d + (h_v + Φ) ∇q_t + (h_l - h_v) ∇q_l + (h_i - h_v) ∇q_i]`
   (`add_water_enthalpy_diffusionᵥ!`, `add_water_enthalpy_diffusionₕ!`), and
-  diffuse the prognostic 1M/2M suspended cloud species (`ρq_lcl`, `ρq_icl`,
-  `ρn_lcl`, `ρn_ice`) down their own specific gradients with the same `ρ K`
-  (`diffuse_suspended_cloud_speciesᵥ!`, `diffuse_suspended_cloud_speciesₕ!`,
-  with self-diagonals in `update_diffusion_jacobian!`). Under
-  `PrognosticEDMFX`, the grid-mean diffusive flux is assembled as the sum of the
-  environment and draft diffusive fluxes (`w⁰ = ρa⁰ K_h` and harmonic-mean face
-  weight `wʲ = f_j K_h / interp(1 / max(ρaʲ, ε))`, `f_j =`
-  `edmfx_updraft_kh_diffusion_factor`), and when `edmfx_vertical_diffusion` or
-  `edmfx_horizontal_diffusion` is enabled each draft scalar (`mse`, `q_tot`,
-  suspended cloud species, and passive tracers) diffuses down its own gradient
-  (`update_sgs_diffusion_jacobian!`). Updraft `mseʲ` hyperdiffusion weights the
-  diffusing water flux by `h_effʲ - h_d(Tʲ)` (`ᶜh_eff_minus_h_d!`), preserving
-  Kirchhoff reference-temperature shift invariance for intensive `mseʲ`.
+  diffuse each prognostic suspended cloud species (`ρq_lcl`, `ρq_icl`,
+  `ρn_lcl`, `ρn_ice`, and the P3 `ρq_rim` and `ρb_rim`) down its own specific
+  gradient with the same `ρ K` (`add_moisture_diffusionᵥ!`,
+  `add_moisture_diffusionₕ!`, with self-diagonals in
+  `update_diffusion_jacobian!`). The boundary-layer, PROPHET, and sponge
+  closures diffuse `q_t = q_tot - q_rai - q_sno`, and rain and snow do not
+  diffuse there; the LES closures (Smagorinsky–Lilly, AMD, and constant
+  horizontal diffusion) diffuse `q_t = q_tot` and also diffuse rain, snow, and
+  rain number down their own gradients, with rain and snow entering the
+  enthalpy flux as liquid and ice. The `2MP3` microphysics model takes the same
+  non-equilibrium path as `1M` and `2M` in all diffusion and hyperdiffusion
+  tendencies (rain and snow excluded from the diffusing water).
+- ![][badge-🔥behavioralΔ] Under `PrognosticEDMFX`, the grid-mean diffusive flux
+  is assembled as the sum of the environment and draft diffusive fluxes
+  (`w⁰ = ρa⁰ K_h`, and `wʲ = f_j K_h / interp(1 / max(ρaʲ, ε))` in the
+  vertical, with `f_j = edmfx_updraft_kh_diffusion_factor`). With the default
+  `edmfx_vertical_diffusion: false`, the grid mean therefore receives only the
+  environment flux `-∇·(ρa⁰ K_h ∇χ⁰)`: weaker than the grid-mean flux
+  `-∇·(ρ K_h ∇χ̄)` by the draft area fraction, and without the draft-interior
+  and cross-area (`∇aʲ`) transport. This changes every PrognosticEDMFX
+  configuration, and its calibrated parameters may need retuning. When
+  `edmfx_vertical_diffusion` or `edmfx_horizontal_diffusion` is enabled, each
+  draft scalar (`mse`, `q_tot`, suspended cloud species, and passive tracers)
+  diffuses down its own gradient (`update_sgs_diffusion_jacobian!`), and the
+  grid mean receives the same flux divergence; the horizontal draft weight
+  `ρ f_j K_h_h âʲ` uses an element-wise power mean `âʲ` of the draft area
+  (`ᶜupdraft_horizontal_diffusion_weight!`), which bounds the draft relaxation
+  rate. Grid-scale species that the drafts do not carry, such as the P3 ice
+  number and rime, diffuse down their grid-mean gradients. Updraft `mseʲ`
+  hyperdiffusion weights the diffusing water flux by `h_effʲ - h_d(Tʲ)`
+  (`ᶜh_eff_minus_h_d!`), preserving Kirchhoff reference-temperature shift
+  invariance for intensive `mseʲ`.
 - ![][badge-💥breaking] `sgs_variance_vertical_scale_factor` and the provisional
   `sgs_variance_isentropic_depth` are removed; with `strict_params: true` (the
   default) a run TOML that still sets either now stops with an unused-parameter

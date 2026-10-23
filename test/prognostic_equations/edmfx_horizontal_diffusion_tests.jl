@@ -8,8 +8,10 @@ water-enthalpy fluxes and differs from diffusing `h_tot` directly, suspended
 cloud species (`ρq_lcl`, `ρq_icl`, `ρn_lcl`, `ρn_ice`) diffuse down their own
 horizontal gradients while rain and snow receive no horizontal transport,
 updraft scalars (`mse`, `q_tot`, suspended cloud species, and passive tracers)
-diffuse down their own horizontal gradients and add to the grid-mean flux under
-`edmfx_horizontal_diffusion`, the TKE and horizontal-wind tendencies match
+diffuse down their own horizontal gradients under `edmfx_horizontal_diffusion`
+with the element-wise power-mean area weight, add the same flux divergence to the
+grid mean (no environment residual), and stay bounded where the draft area
+collapses, the TKE and horizontal-wind tendencies match
 directly assembled references, the mixing-length grid-scale limit is controlled
 by the `grid_scale` keyword and attained, the flux is wired into
 `additional_tendency!`, and incompatible option combinations are rejected at
@@ -397,41 +399,64 @@ end
     @test uniform_mse <= FT(1e-10) * perturbed_mse
     @test uniform_q_tot <= FT(1e-10) * perturbed_q_tot
 
-    # Updraft scalars diffuse down their own horizontal gradients with the
-    # grid-mean weight `ᶜρ * updraft_kh_factor * ᶜK_h_h` divided by `ᶜρ`, so
-    # the intensive updraft tendency is independent of `ρa¹`.
-    ᶜw_int = similar(Y.c.ρ)
-    @. ᶜw_int = Y.c.ρ * updraft_kh_factor * p.precomputed.ᶜK_h_h
+    # With a uniform draft area, the element-wise power mean is the area
+    # itself, so the updraft weight is `ρ f K_h_h a¹` and the intensive
+    # tendency is the flux divergence divided by `ρa¹`.
+    ᶜρa¹ = Y.c.sgsʲs.:(1).ρa
+    ᶜwʲ = similar(Y.c.ρ)
+    CA.ᶜupdraft_horizontal_diffusion_weight!(
+        ᶜwʲ, Y.c.ρ, ᶜρa¹, p.precomputed.ᶜK_h_h, updraft_kh_factor,
+    )
+    ᶜw_ref = similar(Y.c.ρ)
+    @. ᶜw_ref = ᶜρa¹ * updraft_kh_factor * p.precomputed.ᶜK_h_h
+    @test parent(ᶜwʲ) ≈ parent(ᶜw_ref) rtol = FT(1e-12)
     ᶜexpected = similar(Y.c.ρ)
-    @. ᶜexpected = CA.wdivₕ(ᶜw_int * CA.gradₕ(Y.c.sgsʲs.:(1).mse)) / Y.c.ρ
-    @test parent(Yₜ.c.sgsʲs.:(1).mse) ≈ parent(ᶜexpected) rtol = FT(1e-12)
-    @. ᶜexpected = CA.wdivₕ(ᶜw_int * CA.gradₕ(Y.c.sgsʲs.:(1).q_tot)) / Y.c.ρ
-    @test parent(Yₜ.c.sgsʲs.:(1).q_tot) ≈ parent(ᶜexpected) rtol = FT(1e-12)
+    @. ᶜexpected = CA.wdivₕ(ᶜw_ref * CA.gradₕ(Y.c.sgsʲs.:(1).mse)) / ᶜρa¹
+    @test parent(Yₜ.c.sgsʲs.:(1).mse) ≈ parent(ᶜexpected) rtol = FT(1e-10)
+    @. ᶜexpected = CA.wdivₕ(ᶜw_ref * CA.gradₕ(Y.c.sgsʲs.:(1).q_tot)) / ᶜρa¹
+    @test parent(Yₜ.c.sgsʲs.:(1).q_tot) ≈ parent(ᶜexpected) rtol = FT(1e-10)
 
     # The ρa dry-mass counterpart is omitted, matching the vertical path.
     @test maximum(abs, parent(Yₜ.c.sgsʲs.:(1).ρa)) == 0
 
     # Updraft cloud species also diffuse down their own horizontal gradients.
     @test maximum(abs, parent(Yₜ.c.ρq_lcl)) > 0
-    @. ᶜexpected = CA.wdivₕ(ᶜw_int * CA.gradₕ(Y.c.sgsʲs.:(1).q_lcl)) / Y.c.ρ
-    @test parent(Yₜ.c.sgsʲs.:(1).q_lcl) ≈ parent(ᶜexpected) rtol = FT(1e-12)
+    @. ᶜexpected = CA.wdivₕ(ᶜw_ref * CA.gradₕ(Y.c.sgsʲs.:(1).q_lcl)) / ᶜρa¹
+    @test parent(Yₜ.c.sgsʲs.:(1).q_lcl) ≈ parent(ᶜexpected) rtol = FT(1e-10)
+
+    # The grid mean receives the environment flux plus exactly the extensive
+    # updraft tendency, so the diagnosed environment receives no residual.
+    ᶜρa⁰ = similar(Y.c.ρ)
+    @. ᶜρa⁰ = CA.ρa⁰(Y.c.ρ, Y.c.sgsʲs, p.atmos.turbconv_model)
+    ᶜq_lcl⁰ = similar(Y.c.ρ)
+    ᶜq_lcl⁰ .= CA.ᶜspecific_env_value(CA.MatrixFields.@name(q_lcl), Y, p)
+    @. ᶜexpected =
+        CA.wdivₕ(ᶜρa⁰ * p.precomputed.ᶜK_h_h * CA.gradₕ(ᶜq_lcl⁰)) +
+        ᶜρa¹ * Yₜ.c.sgsʲs.:(1).q_lcl
+    @test parent(Yₜ.c.ρq_lcl) ≈ parent(ᶜexpected) rtol = FT(1e-10)
 
     # Rain has no horizontal transport, in the grid mean or the updraft.
     @test maximum(abs, parent(Yₜ.c.ρq_rai)) == 0
     @test maximum(abs, parent(Yₜ.c.sgsʲs.:(1).q_rai)) == 0
 
-    # The intensive updraft tendency is unchanged where the updraft area
-    # collapses to zero next to nodes with finite area, while the grid mean
-    # receives the area-weighted updraft flux.
+    # Where the updraft area collapses to zero next to nodes with finite area,
+    # an element containing a draft-free node carries almost no updraft flux,
+    # and the intensive updraft tendency stays bounded instead of growing with
+    # the area ratio between nodes (about 0.1 / 1e-8 here).
     Yₜ_ref = deepcopy(Yₜ)
     ᶜy = Fields.coordinate_field(Y.c).y
     @. Y.c.sgsʲs.:(1).ρa = ifelse(ᶜy < FT(3200), FT(0.1) * Y.c.ρ, FT(0))
+    CA.ᶜupdraft_horizontal_diffusion_weight!(
+        ᶜwʲ, Y.c.ρ, Y.c.sgsʲs.:(1).ρa, p.precomputed.ᶜK_h_h, updraft_kh_factor,
+    )
+    @test maximum(parent(ᶜwʲ)) <=
+          FT(4e-8) * maximum(parent(Y.c.ρ .* p.precomputed.ᶜK_h_h))
     Yₜ .= zero(eltype(Yₜ))
     CA.edmfx_sgs_horizontal_diffusive_flux_tendency!(
         Yₜ, Y, p, t, p.atmos.turbconv_model,
     )
-    @test parent(Yₜ.c.sgsʲs.:(1).mse) ≈ parent(Yₜ_ref.c.sgsʲs.:(1).mse) rtol =
-        FT(1e-12)
+    @test maximum(abs, parent(Yₜ.c.sgsʲs.:(1).mse)) <=
+          4 * maximum(abs, parent(Yₜ_ref.c.sgsʲs.:(1).mse))
     @test maximum(abs, parent(Yₜ.c.ρq_tot)) > 0
     @test !(parent(Yₜ.c.ρq_tot) ≈ parent(Yₜ_ref.c.ρq_tot))
 end

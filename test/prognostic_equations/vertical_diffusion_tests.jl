@@ -1,7 +1,7 @@
 # Verify the vertical diffusion tendency (Eqs. 30 and 33, Yatunin et al. 2026):
 # - ρq_tot diffuses on q_tot_eff = q_tot - q_rai - q_sno (rain/snow excluded)
-# - Suspended cloud species (ρq_lcl, ρq_icl, ρn_lcl, ρn_ice) diffuse down their
-#   own vertical gradients with ρ K_h
+# - Suspended cloud species (ρq_lcl, ρq_icl, ρn_lcl, ρn_ice, and with 2MP3 the
+#   rime mass and volume) diffuse down their own vertical gradients with ρ K_h
 # - ρq_rai, ρq_sno, ρn_rai receive no diffusion tendency
 # - Passive (non-microphysics) grid-scale tracers diffuse with the full K_h
 # - Eq. (30) enthalpy-species identity, reversible 0M moist-adiabatic residual,
@@ -111,7 +111,7 @@ include("../test_helpers.jl")
     # Passive (non-microphysics) grid-scale tracer diffuses with full K_h.
     @test maximum(abs, parent(Yₜ.c.ρq_gas_A)) > 0
 
-    # Test 2: Eq. (30) identity (1M) — Yₜ.c.ρe_tot equals the s_d diffusion plus
+    # Eq. (30) identity (1M) — Yₜ.c.ρe_tot equals the s_d diffusion plus
     # the divergence of Σ_μ (face-interpolated h_tot,μ) * F_qμ for vapor,
     # liquid, and ice, where F_qv = F_qt_eff - F_qlcl - F_qicl.
     ᶠF_qt = @. -(ᶠρK * CA.ᶠgradᵥ((Yc.ρq_tot - Yc.ρq_rai - Yc.ρq_sno) / Yc.ρ))
@@ -132,7 +132,7 @@ include("../test_helpers.jl")
         )
     @test parent(Yₜ.c.ρe_tot) ≈ parent(ᶜρe_totₜ_eq30) rtol = FT(1e-12)
 
-    # Test 3: Kirchhoff T_0 reference-state invariance — shifting T_0 by δT_0
+    # Kirchhoff T_0 reference-state invariance — shifting T_0 by δT_0
     # (with Kirchhoff-adjusted e_int_v0 and e_int_i0) shifts ∂_t(ρe_tot) by
     # δh_water * ∂_t(ρq_tot) pointwise.
     δT_0 = FT(25.0)
@@ -171,7 +171,7 @@ include("../test_helpers.jl")
     @test maximum(abs, parent(ᶜexpected_lcl)) <=
           FT(1e-11) * maximum(abs, parent(Yₜ.c.ρe_tot))
 
-    # Test 1a (1M): With uniform q_tot_eff and vertically varying q_lcl,
+    # 1M: with uniform q_tot_eff and vertically varying q_lcl,
     # Yₜ.c.ρq_tot == 0 while Yₜ.c.ρq_lcl ≈ +∇·(ρK∇q_lcl) (nonzero).
     @. Yc.ρq_rai = FT(0)
     @. Yc.ρq_sno = FT(0)
@@ -185,7 +185,7 @@ include("../test_helpers.jl")
     @test maximum(abs, parent(ᶜexpected_lcl)) > 0
     @test parent(Yₜ_1m.c.ρq_lcl) ≈ parent(ᶜexpected_lcl) rtol = FT(1e-12)
 
-    # Test 1b (0M): Reversible saturated warm-cloud moist adiabat with uniform
+    # 0M: a reversible saturated warm-cloud moist adiabat with uniform
     # MSE and q_tot — Yₜ.c.ρq_tot == 0 and
     # |Yₜ.c.ρe_tot| <= 0.03 * |Yₜ.c.ρe_tot from s_d alone|.
     q_tot_0 = FT(1.55e-2)
@@ -237,4 +237,125 @@ include("../test_helpers.jl")
     @test maximum(abs, parent(Yₜ_0m.c.ρq_tot)) <= FT(1e-15)
     @test maximum(abs, parent(Yₜ_0m.c.ρe_tot)) <=
           FT(0.03) * maximum(abs, parent(ᶜs_d_only))
+end
+
+@testset "Vertical diffusion tendency with 2MP3 microphysics" begin
+    # P3 takes the non-equilibrium path: rain and snow are excluded from the
+    # diffusing water, and cloud ice carries its number and rime quantities,
+    # which diffuse down their own gradients with the same ρ K_h.
+    FT = Float64
+    params = CA.ClimaAtmosParameters(CP.create_toml_dict(FT))
+    thermo_params = CAP.thermodynamics_params(params)
+
+    (; cent_space, face_space) = get_cartesian_spaces(; FT)
+    coords = Fields.coordinate_field(cent_space)
+    ᶜz = coords.z
+
+    tracer_names = (
+        :ρq_tot,
+        :ρq_lcl,
+        :ρq_icl,
+        :ρq_rai,
+        :ρq_sno,
+        :ρn_lcl,
+        :ρn_rai,
+        :ρn_ice,
+        :ρq_rim,
+        :ρb_rim,
+    )
+    NT = NamedTuple{
+        (:ρ, :ρe_tot, tracer_names...),
+        NTuple{2 + length(tracer_names), FT},
+    }
+    Yc = similar(coords, NT)
+    @. Yc.ρ = FT(1.2)
+    @. Yc.ρe_tot = Yc.ρ * FT(2.5e5)
+    @. Yc.ρq_tot = Yc.ρ * (FT(1e-2) + FT(2e-3) * cos(ᶜz))
+    @. Yc.ρq_lcl = Yc.ρ * (FT(2e-4) + FT(1e-4) * cos(ᶜz))
+    @. Yc.ρq_icl = Yc.ρ * (FT(1e-4) + FT(5e-5) * cos(ᶜz + FT(1)))
+    @. Yc.ρq_rai = Yc.ρ * (FT(1e-5) + FT(5e-6) * cos(ᶜz + FT(2)))
+    @. Yc.ρq_sno = Yc.ρ * (FT(5e-6) + FT(2e-6) * cos(ᶜz + FT(3)))
+    @. Yc.ρn_lcl = Yc.ρ * (FT(1e6) + FT(1e5) * cos(ᶜz))
+    @. Yc.ρn_rai = Yc.ρ * (FT(1e3) + FT(1e2) * cos(ᶜz))
+    @. Yc.ρn_ice = Yc.ρ * (FT(1e5) + FT(1e4) * cos(ᶜz + FT(1)))
+    @. Yc.ρq_rim = Yc.ρ * (FT(3e-5) + FT(1e-5) * cos(ᶜz + FT(0.5)))
+    @. Yc.ρb_rim = Yc.ρ * (FT(5e-8) + FT(2e-8) * cos(ᶜz + FT(0.5)))
+    Y = Fields.FieldVector(; c = Yc)
+
+    ᶜu = @. Geometry.UVWVector(zero(ᶜz), zero(ᶜz), zero(ᶜz))
+    ᶜp = @. FT(1e5) - FT(1e3) * ᶜz
+    ᶜT = @. FT(280) - FT(20) * (ᶜz / FT(π))
+    ᶜq_liq = @. (Yc.ρq_lcl + Yc.ρq_rai) / Yc.ρ
+    ᶜq_ice = @. (Yc.ρq_icl + Yc.ρq_sno) / Yc.ρ
+    ᶜq_tot_nonneg = @. Yc.ρq_tot / Yc.ρ
+    p = (;
+        atmos = (;
+            vertical_diffusion = CA.DecayWithHeightDiffusion{FT}(;
+                disable_momentum_vertical_diffusion = true,
+                H = FT(1),
+                D₀ = FT(1),
+            ),
+            microphysics_model = CA.NonEquilibriumMicrophysics2MP3(),
+        ),
+        params,
+        precomputed = (; ᶜu, ᶜp, ᶜT, ᶜq_liq, ᶜq_ice, ᶜq_tot_nonneg),
+        core = (; ᶜΦ = (@. CAP.grav(params) * ᶜz)),
+        scratch = (;
+            ᶜtemp_scalar = similar(ᶜz),
+            ᶜtemp_scalar_2 = similar(ᶜz),
+            ᶜtemp_scalar_3 = similar(ᶜz),
+            ᶜtemp_scalar_4 = similar(ᶜz),
+        ),
+    )
+
+    Yₜ = Fields.FieldVector(; c = zero(Yc))
+    CA.vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, FT(0))
+
+    ᶜK_h = similar(ᶜz)
+    ᶜK_h .= CA.ᶜcompute_eddy_diffusivity_coefficient(
+        Yc.ρ,
+        p.atmos.vertical_diffusion,
+    )
+    ᶠρK = similar(Fields.coordinate_field(face_space).z)
+    @. ᶠρK = CA.ᶠinterp(Yc.ρ) / CA.ᶠinterp(1 / max(ᶜK_h, eps(FT)))
+    ᶜexpected = similar(ᶜz)
+
+    # Total water diffuses on q_tot - q_rai - q_sno.
+    @. ᶜexpected =
+        -CA.ᶜdiffdivᵥ(
+            -(ᶠρK * CA.ᶠgradᵥ((Yc.ρq_tot - Yc.ρq_rai - Yc.ρq_sno) / Yc.ρ)),
+        )
+    @test parent(Yₜ.c.ρq_tot) ≈ parent(ᶜexpected) rtol = FT(1e-12)
+
+    # Each cloud species, the ice number and rime quantities included,
+    # diffuses down its own gradient; precipitation does not diffuse.
+    for name in (:ρq_lcl, :ρq_icl, :ρn_lcl, :ρn_ice, :ρq_rim, :ρb_rim)
+        ᶜρχ = getproperty(Yc, name)
+        @. ᶜexpected = -CA.ᶜdiffdivᵥ(-(ᶠρK * CA.ᶠgradᵥ(ᶜρχ / Yc.ρ)))
+        @test maximum(abs, parent(ᶜexpected)) > 0
+        @test parent(getproperty(Yₜ.c, name)) ≈ parent(ᶜexpected) rtol =
+            FT(1e-12)
+    end
+    for name in (:ρq_rai, :ρq_sno, :ρn_rai)
+        @test all(iszero, parent(getproperty(Yₜ.c, name)))
+    end
+
+    # The enthalpy flux carries the cloud liquid and cloud ice, not rain and
+    # snow, as condensate.
+    ᶠF_qt = @. -(ᶠρK * CA.ᶠgradᵥ((Yc.ρq_tot - Yc.ρq_rai - Yc.ρq_sno) / Yc.ρ))
+    ᶠF_ql = @. -(ᶠρK * CA.ᶠgradᵥ(Yc.ρq_lcl / Yc.ρ))
+    ᶠF_qi = @. -(ᶠρK * CA.ᶠgradᵥ(Yc.ρq_icl / Yc.ρ))
+    ᶠF_qv = @. ᶠF_qt - ᶠF_ql - ᶠF_qi
+    ᶜh_tot_v = @. TD.enthalpy_vapor(thermo_params, ᶜT) + p.core.ᶜΦ
+    ᶜh_tot_l = @. TD.enthalpy_liquid(thermo_params, ᶜT) + p.core.ᶜΦ
+    ᶜh_tot_i = @. TD.enthalpy_ice(thermo_params, ᶜT) + p.core.ᶜΦ
+    ᶜs_d = @. TD.dry_static_energy(thermo_params, ᶜT, p.core.ᶜΦ)
+    @. ᶜexpected =
+        -CA.ᶜdiffdivᵥ(
+            -(ᶠρK * CA.ᶠgradᵥ(ᶜs_d)) +
+            CA.ᶠinterp(ᶜh_tot_v) * ᶠF_qv +
+            CA.ᶠinterp(ᶜh_tot_l) * ᶠF_ql +
+            CA.ᶠinterp(ᶜh_tot_i) * ᶠF_qi,
+        )
+    @test parent(Yₜ.c.ρe_tot) ≈ parent(ᶜexpected) rtol = FT(1e-12)
 end

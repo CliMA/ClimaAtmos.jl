@@ -146,8 +146,7 @@ NVTX.@annotate function prep_hyperdiffusion_tendency!(Yₜ, Y, p, t)
         ),
     )
     if MatrixFields.has_field(Y, @name(c.ρq_tot))
-        if p.atmos.microphysics_model isa Union{NonEquilibriumMicrophysics1M,
-            NonEquilibriumMicrophysics2M}
+        if p.atmos.microphysics_model isa NonEquilibriumMicrophysics
             @. ᶜ∇²q_tot_eff = wdivₕ(
                 gradₕ(
                     specific(Y.c.ρq_tot - Y.c.ρq_rai - Y.c.ρq_sno, Y.c.ρ) -
@@ -193,8 +192,7 @@ NVTX.@annotate function prep_hyperdiffusion_tendency!(Yₜ, Y, p, t)
                     sd_r(thermo_params, ᶜp),
                 ),
             )
-            if p.atmos.microphysics_model isa Union{NonEquilibriumMicrophysics1M,
-                NonEquilibriumMicrophysics2M}
+            if p.atmos.microphysics_model isa NonEquilibriumMicrophysics
                 @. ᶜ∇²q_tot_effʲs.:($$j) = wdivₕ(
                     gradₕ(
                         Y.c.sgsʲs.:($$j).q_tot -
@@ -325,8 +323,7 @@ NVTX.@annotate function apply_hyperdiffusion_tendency!(Yₜ, Y, p, t)
                 ),
             )
             ᶜq_lclʲ, ᶜq_iclʲ =
-                p.atmos.microphysics_model isa Union{NonEquilibriumMicrophysics1M,
-                    NonEquilibriumMicrophysics2M} ?
+                p.atmos.microphysics_model isa NonEquilibriumMicrophysics ?
                 (
                     (@. lazy(Y.c.sgsʲs.:($$j).q_lcl)),
                     (@. lazy(Y.c.sgsʲs.:($$j).q_icl)),
@@ -491,8 +488,7 @@ NVTX.@annotate function apply_tracer_hyperdiffusion_tendency!(Yₜ, Y, p, t)
         # fraction and rime density of the ice.
         ᶜratio = p.scratch.ᶜtemp_scalar_2
         ᶜρq_tot_eff =
-            p.atmos.microphysics_model isa Union{NonEquilibriumMicrophysics1M,
-                NonEquilibriumMicrophysics2M} ?
+            p.atmos.microphysics_model isa NonEquilibriumMicrophysics ?
             (@. lazy(Y.c.ρq_tot - Y.c.ρq_rai - Y.c.ρq_sno)) : (@. lazy(Y.c.ρq_tot))
         for (ρq_name, attached_names) in (
             (@name(c.ρq_lcl), (@name(c.ρn_lcl),)),
@@ -541,8 +537,7 @@ NVTX.@annotate function apply_tracer_hyperdiffusion_tendency!(Yₜ, Y, p, t)
             # the grid mean above.
             ᶜratioⱼ = p.scratch.ᶜtemp_scalar_2
             ᶜq_tot_effⱼ =
-                p.atmos.microphysics_model isa Union{NonEquilibriumMicrophysics1M,
-                    NonEquilibriumMicrophysics2M} ?
+                p.atmos.microphysics_model isa NonEquilibriumMicrophysics ?
                 (@. lazy(
                     Y.c.sgsʲs.:($$j).q_tot -
                     Y.c.sgsʲs.:($$j).q_rai -

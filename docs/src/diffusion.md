@@ -132,17 +132,21 @@ Three physical and mathematical properties determine this form:
 **Water** diffuses through the effective total water
 ``q_t^{\mathrm{eff}} = q_t - q_{\mathrm{rai}} - q_{\mathrm{sno}}``. The same
 flux increments both ``\rho q_t`` and ``\rho``, so diffusing water carries the
-corresponding moist-air mass. In the non-equilibrium 1-moment and 2-moment
-schemes, the prognostic suspended cloud species (`ρq_lcl`, `ρq_icl`, `ρn_lcl`,
-`ρn_ice`) diffuse down their own specific gradients with the same ``\rho K_h``,
+corresponding moist-air mass. In the non-equilibrium schemes (`1M`, `2M`, and
+`2MP3`), the prognostic suspended cloud species (`ρq_lcl`, `ρq_icl`, `ρn_lcl`,
+`ρn_ice`, and the rime mass `ρq_rim` and rime volume `ρb_rim` that P3 cloud ice
+carries) diffuse down their own specific gradients with the same ``\rho K_h``,
 matching the species fluxes ``\boldsymbol{\mathcal{F}}_{q_l^{\mathrm{cl}}}`` and
 ``\boldsymbol{\mathcal{F}}_{q_i^{\mathrm{cl}}}`` whose latent enthalpy the
-energy equation carries (`diffuse_suspended_cloud_speciesᵥ!`). In the
-equilibrium 0-moment scheme, ``q_l^{\mathrm{cl}}`` and ``q_i^{\mathrm{cl}}`` are
+energy equation carries (`add_moisture_diffusionᵥ!`). Because the rime fields
+diffuse with the same linear operator as cloud ice, the rime mass stays within
+the ice mass. In the equilibrium 0-moment scheme, ``q_l^{\mathrm{cl}}`` and ``q_i^{\mathrm{cl}}`` are
 diagnostic (`ᶜq_liq` and `ᶜq_ice`) and have no separate prognostic equations.
 
-**Rain, snow, and rain number density** do not diffuse. They evolve through
-sedimentation and microphysical sources; see [Microphysics](microphysics.md).
+**Rain, snow, and rain number density** do not diffuse under the prescribed and
+PROPHET closures. They evolve through sedimentation and microphysical sources;
+see [Microphysics](microphysics.md). The LES closures, whose subgrid eddies carry
+falling precipitation, diffuse them as well (see below).
 
 **Passive grid-mean tracers** diffuse independently with the full ``K_h``.
 
@@ -173,16 +177,23 @@ optional PROPHET horizontal diffusive flux. All of them are explicit. See
 [PROPHET Horizontal Diffusion](prophet_horizontal_diffusion.md).
 
 All four horizontal closures (as well as the second-order horizontal
-[viscous sponge](sponge.md)) use the same water-enthalpy decomposition and
-species treatment as the vertical closures (`add_water_enthalpy_diffusionₕ!` and
-`diffuse_suspended_cloud_speciesₕ!`): ``q_t^{\mathrm{eff}}`` and the suspended
-cloud species diffuse down their own horizontal gradients while rain and snow do
-not diffuse. Smagorinsky–Lilly, constant horizontal diffusion, PROPHET
-horizontal diffusion, and the viscous sponge use a single scalar diffusivity for
-``s_d`` and all water terms, while anisotropic minimum dissipation evaluates
-``D(\nabla_h s_d)`` for the dry static energy term and
-``D(\nabla_h q_t^{\mathrm{eff}})`` for the water terms and suspended cloud
-species so that each species flux and its enthalpy use the same diffusivity.
+[viscous sponge](sponge.md)) use the same water-enthalpy decomposition as the
+vertical closures (`add_water_enthalpy_diffusionₕ!` and
+`add_moisture_diffusionₕ!`). PROPHET horizontal diffusion and the viscous sponge
+diffuse ``q_t^{\mathrm{eff}}`` and the suspended cloud species down their own
+horizontal gradients while rain and snow do not diffuse. The LES closures,
+horizontal and vertical (Smagorinsky–Lilly, anisotropic minimum dissipation, and
+constant horizontal diffusion), diffuse the total water ``q_t`` and every
+microphysics species, rain, snow, and rain number included, down its own
+gradient; in the enthalpy bracket, rain enters with the liquid water and snow
+with the ice, ``q_l = q_l^{\mathrm{cl}} + q_{\mathrm{rai}}`` and
+``q_i = q_i^{\mathrm{cl}} + q_{\mathrm{sno}}`` (`ᶜdiffusing_water_phases` with
+`precipitation = true`). Smagorinsky–Lilly, constant horizontal diffusion,
+PROPHET horizontal diffusion, and the viscous sponge use a single scalar
+diffusivity for ``s_d`` and all water terms, while anisotropic minimum
+dissipation evaluates ``D(\nabla_h s_d)`` for the dry static energy term and
+``D(\nabla_h q_t)`` for the water terms and microphysics species so that each
+species flux and its enthalpy use the same diffusivity.
 
 ## Where this is implemented
 

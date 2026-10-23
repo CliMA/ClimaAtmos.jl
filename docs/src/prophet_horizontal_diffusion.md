@@ -59,8 +59,10 @@ parameter limits on extruded spaces with warped topography.
 
 For `PrognosticEDMFX`, the grid-mean horizontal diffusive flux is the subdomain
 sum with center weights ``w^0 = \hat{\rho}^0 K_{h,h}`` and
-``w^j = \hat{\rho}^j f_j K_{h,h}`` (``f_j =`` `edmfx_updraft_kh_diffusion_factor`,
-included when `edmfx_horizontal_diffusion` is enabled):
+``w^j = \rho f_j K_{h,h} \hat{a}^j`` (``f_j =`` `edmfx_updraft_kh_diffusion_factor`,
+included when `edmfx_horizontal_diffusion` is enabled, and ``\hat{a}^j`` the
+element-wise draft area of the section on
+[updraft horizontal diffusion](#Updraft-horizontal-diffusion)):
 
 ```math
 \partial_t (\rho e_{\mathrm{tot}}) \mathrel{+}=
@@ -81,11 +83,13 @@ included when `edmfx_horizontal_diffusion` is enabled):
 For `EDOnlyEDMFX`, the grid mean uses ``w = \rho K_{h,h}`` on the grid-mean
 fields.
 
-In the non-equilibrium 1-moment and 2-moment schemes, the suspended cloud
-species ``q_{\mathrm{lcl}}``, ``q_{\mathrm{icl}}`` and their number
-concentrations ``n_{\mathrm{lcl}}``, ``n_{\mathrm{ice}}`` diffuse down their own
-horizontal gradients with the same weights, matching the phase-enthalpy fluxes
-in ``\mathcal{B}_h``. Rain and snow do not diffuse horizontally, as they do not
+In the non-equilibrium schemes, the suspended cloud species
+``q_{\mathrm{lcl}}``, ``q_{\mathrm{icl}}`` and their number concentrations
+``n_{\mathrm{lcl}}``, ``n_{\mathrm{ice}}`` diffuse down their own horizontal
+gradients with the same weights, matching the phase-enthalpy fluxes in
+``\mathcal{B}_h``. Grid-scale species that the updrafts do not carry, such as the
+P3 ice number and rime quantities, diffuse down their grid-mean gradients with
+``\rho K_{h,h}``. Rain and snow do not diffuse horizontally, as they do not
 diffuse in the vertical. Passive tracers diffuse with the same weights.
 
 The aggregate water flux additionally enters the moist-air-mass tendency,
@@ -152,27 +156,40 @@ specific humidity ``q_{\mathrm{tot}}^j``, the suspended cloud species
 their own horizontal gradients:
 
 ```math
-\partial_t \chi^j \mathrel{+}= \frac{1}{\rho}
-  \nabla_h \cdot \left( \rho f_j K_{h,h} \, \nabla_h \chi_{\mathrm{eff}}^j \right) ,
+\partial_t \chi^j \mathrel{+}= \frac{1}{\hat{\rho}^j}
+  \nabla_h \cdot \left( \rho f_j K_{h,h} \, \hat{a}^j \nabla_h \chi_{\mathrm{eff}}^j \right) ,
+\qquad
+\hat{a}^j = \left\langle \max(a^j, a_\epsilon)^{-4} \right\rangle_e^{-1/4} ,
 ```
 
 with
 ``q_{\mathrm{tot},\mathrm{eff}}^j = q_{\mathrm{tot}}^j - q_{\mathrm{rai}}^j - q_{\mathrm{sno}}^j``
 and ``\mathrm{mse}_{\mathrm{eff}}^j`` excluding non-diffusing rain and snow
-enthalpy, as in the vertical treatment of `edmfx_vertical_diffusion`. The
-intensive updraft equation uses the grid-mean weight ``\rho f_j K_{h,h}``. In
-the spectral-element weak divergence, the flux at a node draws on
-``\hat{\rho}^j`` at every node of the element, so dividing the area-weighted
-divergence by the local ``\hat{\rho}^j`` amplifies the tendency at draft edges
-by up to the area ratio between nodes (in the vertical, the harmonic face mean
-bounds that ratio). With the grid-mean weight the updraft relaxes toward its
-horizontal neighbors at the rate of grid-mean diffusion. The grid mean receives
-the conservative area-weighted flux ``w^j \nabla_h \chi^j`` above; the
-difference between the two,
-``\approx \rho f_j K_{h,h} \nabla_h a^j \cdot \nabla_h \chi^j`` at draft edges,
-is absorbed by the environment residual, in the same way as the cross-area
-terms of the vertical decomposition. The area-weighted density ``\hat{\rho}^j``
-receives no tendency, matching `edmfx_sgs_diffusive_flux_tendency!`.
+enthalpy, as in the vertical treatment of `edmfx_vertical_diffusion`. Here
+``a^j = \hat{\rho}^j / \rho`` is the draft area fraction, ``\langle \cdot \rangle_e``
+the ``WJ``-weighted mean over the spectral element (`element_meanₕ`), and
+``a_\epsilon = 10^{-8}`` a floor that keeps ``a_\epsilon^{-4}`` finite in single
+precision (`ᶜupdraft_horizontal_diffusion_weight!`); the division by
+``\hat{\rho}^j`` uses the same floor.
+
+The power mean ``\hat{a}^j`` is a smooth element-wise minimum of the draft area,
+the spectral-element counterpart of the harmonic face mean that bounds the
+vertical updraft diffusion. In the weak divergence, the tendency at a node draws
+on the flux at every node of its element, so a flux carrying the nodal area
+``a^j``, divided by the local ``\hat{\rho}^j``, would amplify the intensive
+tendency at draft edges by the area ratio between nodes. Since
+``\langle a^{-4} \rangle_e \ge \omega_i a_i^{-4}`` at every node ``i``, with
+``\omega_i`` the node's share of the element's ``WJ``,
+``\hat{a}^j \le \omega_i^{-1/4} a_i^j``: the draft relaxes toward its horizontal
+neighbors at most ``\omega_{\min}^{-1/4}`` times as fast as grid-mean diffusion
+at the same ``f_j K_{h,h}`` (about 3.5 for the default fourth-order elements),
+whatever its area, and an element containing a draft-free node carries almost
+no draft flux. The grid mean receives the same flux divergence
+``\nabla_h \cdot (w^j \nabla_h \chi^j)`` as the draft equation before the
+division by ``\hat{\rho}^j``, so the diffusion conserves each scalar and leaves
+the diagnosed environment unchanged. The area-weighted density
+``\hat{\rho}^j`` receives no tendency, matching
+`edmfx_sgs_diffusive_flux_tendency!`.
 
 ## Mixing length
 

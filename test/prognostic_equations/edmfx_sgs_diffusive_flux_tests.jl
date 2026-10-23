@@ -5,7 +5,7 @@ and its implicit Jacobian (`update_diffusion_jacobian!`, `update_sgs_diffusion_j
   and snow receive no `K_h` transport.
 - Updraft homogenization: uniform `mseʲ` gives zero updraft tendency; perturbed
   `mseʲ` diffuses down its own vertical gradient `∇mseʲ`.
-- Area-gradient signature (`U-c`): uniform environment and updraft scalars with
+- Area-gradient signature: uniform environment and updraft scalars with
   vertically varying draft area `aʲ(z)` produce zero grid-mean moisture and
   cloud-species diffusive tendencies.
 - Kirchhoff `T_0` reference-state invariance holds for both grid-mean `ρe_tot`
@@ -146,7 +146,7 @@ include("../test_helpers.jl")
     @test all(iszero, parent(Yₜ.c.ρq_rai))
     @test all(iszero, parent(Yₜ.c.ρq_sno))
 
-    # Test 4: Updraft homogenization — own-gradient mse¹ diffusion matches
+    # Updraft homogenization — own-gradient mse¹ diffusion matches
     # -(1/ρa¹) ∇·(-ᶠw¹ ∇mse¹) in the absence of updraft precipitation, and
     # vanishes when mse¹ is vertically uniform even though grid-mean ρe_tot has
     # strong vertical gradients.
@@ -182,7 +182,7 @@ include("../test_helpers.jl")
     @test maximum(abs, parent(Yₜ.c.ρe_tot)) > 0
     @test maximum(abs, parent(Yₜ.c.sgsʲs.:(1).mse)) <= FT(1e-12)
 
-    # Test 3: Kirchhoff T_0 reference-state invariance for both grid-mean ρe_tot
+    # Kirchhoff T_0 reference-state invariance for both grid-mean ρe_tot
     # and updraft mse¹ (with nonzero rain in both subdomains).
     @. Y.c.sgsʲs.:(1).q_rai =
         FT(2e-5) * (1 + sin(FT(2π) * ᶜz / FT(3000) + FT(1.2)))
@@ -245,7 +245,7 @@ include("../test_helpers.jl")
     @test maximum(abs, parent(ᶜexpected_up)) <=
           FT(1e-10) * maximum(abs, parent(Yₜ.c.sgsʲs.:(1).mse))
 
-    # Test 5: Area-gradient signature (U-c) — when environment χ⁰ and updraft χ¹
+    # Area-gradient signature: when environment χ⁰ and updraft χ¹
     # are each vertically uniform (with χ¹ ≠ χ⁰) while draft area a¹(z) varies
     # vertically so that grid-mean χ̄ = a⁰ χ⁰ + a¹ χ¹ has a nonzero vertical
     # gradient, the subdomain-decomposed diffusive tendencies of ρq_tot, ρq_lcl,
@@ -283,7 +283,7 @@ include("../test_helpers.jl")
     @test maximum(abs, parent(Yₜ.c.sgsʲs.:(1).q_lcl)) <= FT(1e-15)
 
     # When `edmfx_vertical_diffusion = false`, `PrognosticEDMFX` reduces to the
-    # textbook environment-only diffusive flux
+    # environment-only diffusive flux
     # (`-ᶜdiffdivᵥ(-(ᶠw⁰ * ᶠgradᵥ(ᶜχ⁰)))`) with zero updraft diffusive
     # tendencies.
     @. Y.c.ρq_lcl = Y.c.ρ * FT(2e-4) * (1 + sin(FT(2π) * ᶜz / FT(3000)))
@@ -339,7 +339,7 @@ include("../test_helpers.jl")
     @test all(iszero, parent(Yₜ_no_up.c.sgsʲs.:(1).q_tot))
     @test all(iszero, parent(Yₜ_no_up.c.sgsʲs.:(1).q_lcl))
 
-    # Test 6: Finite-difference verification of the new Jacobian diagonals for
+    # Finite-difference verification of the new Jacobian diagonals for
     # suspended cloud species (`c.ρq_lcl`) and updraft own-gradient diffusion
     # (`c.sgsʲs.:(1).mse`, `c.sgsʲs.:(1).q_tot`, `c.sgsʲs.:(1).q_lcl`).
     # Use a vertically uniform draft area fraction so that the `(1 - a¹)`
@@ -419,7 +419,7 @@ include("../test_helpers.jl")
         @test parent(jac_col) ≈ fd_col rtol = FT(1e-6)
     end
 
-    # Test 7: The intensive updraft tendency stays bounded as ρa¹ collapses.
+    # The intensive updraft tendency stays bounded as ρa¹ collapses.
     # With the harmonic face weight, (1/ρa¹_c) ∇·(ᶠw¹ ∇mse¹) is a three-point
     # diffusion of mse¹ with effective face diffusivities ≤ 2 f K_h, so the
     # tendency in a cell whose area is 1e-12 of its neighbors' is bounded by

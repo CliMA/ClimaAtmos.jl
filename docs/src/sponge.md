@@ -45,9 +45,9 @@ the passive grid-scale tracers. As in the second-order
 [diffusion closures](diffusion.md), the precipitating species are exempt:
 total water is damped through the effective total water
 ``q_t^{\mathrm{eff}} = q_t - q_{rai} - q_{sno}`` (mirrored to ``\rho`` for moist
-mass conservation), and in the non-equilibrium 1-moment and 2-moment schemes the
-suspended cloud species (`ρq_lcl`, `ρq_icl`, `ρn_lcl`, `ρn_ice`) are damped down
-their own specific gradients. Turbulence kinetic
+mass conservation), and in the non-equilibrium schemes the suspended cloud
+species (`ρq_lcl`, `ρq_icl`, `ρn_lcl`, `ρn_ice`, and the P3 `ρq_rim` and
+`ρb_rim`) are damped down their own specific gradients. Turbulence kinetic
 energy and the PROPHET subdomain scalars are also exempt; they receive only the
 Rayleigh tracer damping described below. For a scalar ``\psi``, the tendency is
 

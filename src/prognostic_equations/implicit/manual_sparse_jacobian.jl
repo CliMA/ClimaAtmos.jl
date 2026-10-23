@@ -1014,10 +1014,13 @@ The blocks accumulate into the diagonals initialized by
 `update_sedimentation_jacobian!`, except for the passive tracer diagonals, the
 `(ρe_tot, ρ)` and `(ρq_tot, ρ)` columns, the `ρtke` blocks, the `(uₕ, uₕ)`
 block, and — in dry configurations — the `ρe_tot` diagonal, which are assigned
-here. The diffusive enthalpy flux is differentiated in its moist-adiabatic
-form `F_h = -ρ K_h [∇s_d + ∇((h_l - h_v) q_lcl + (h_i - h_v) q_icl) + (h_v + Φ) ∇q_tot_eff]`,
-holding the rain and snow contributions to `q_tot_eff`, the equilibrium
-condensate partition, and the diffusivities fixed. The
+here. The diffusive enthalpy flux
+`F_h = -ρ K_h [∇s_d + (h_v + Φ) ∇q_t + (h_l - h_v) ∇q_l + (h_i - h_v) ∇q_i]`
+(`add_water_enthalpy_diffusionᵥ!`) is differentiated with its enthalpy
+coefficients frozen, holding the rain and snow contributions to
+`q_t = q_tot_eff`, the equilibrium condensate partition, and the diffusivities
+fixed; under the vertical LES closure, rain and snow diffuse and enter as liquid
+and ice water. The
 ρ-dependence of the diffusive fluxes and the `∂l_mix/∂tke` chain term in the
 TKE dissipation derivative are likewise neglected; these are convergence-rate
 approximations only, since the tendencies themselves are exact.
@@ -1157,43 +1160,44 @@ function update_diffusion_jacobian!(
             dtγ * ᶜdiffusion_h_matrix * DiagonalMatrixRow(1 / ᶜρ)
     end
 
-    if p.atmos.microphysics_model isa Union{
-        NonEquilibriumMicrophysics1M,
-        NonEquilibriumMicrophysics2M,
-    }
+    if p.atmos.microphysics_model isa NonEquilibriumMicrophysics
+        # The vertical LES closure also diffuses precipitation, as liquid and
+        # ice water in the enthalpy flux (see ᶜdiffusing_water_phases).
+        precipitation = is_smagorinsky_vertical(p.atmos.smagorinsky_lilly)
+        condensate_names =
+            precipitation ? gs_sedimenting_mass_candidates :
+            (@name(ρq_lcl), @name(ρq_icl))
         ᶜdq_cond_coeff = p.scratch.ᶜtemp_scalar_4
-        MatrixFields.unrolled_foreach((@name(ρq_lcl), @name(ρq_icl))) do ρq_name
-            if MatrixFields.has_field(Y.c, ρq_name)
-                phase = condensate_phase(ρq_name)
-                e_int_q = condensate_e_int_offset(phase, params)
-                ∂cv∂q = condensate_cv_difference(phase, params)
-                h_cond_func = enthalpy_function(phase)
-                ∂ᶜρe_tot_err_∂ᶜρq =
-                    matrix[@name(c.ρe_tot), center_state_name(ρq_name)]
-                # ∂F/∂q_cond at fixed q_tot: vapor→condensate conversion
-                # changes T (latent heating enters s_d) and moves
-                # water-gradient enthalpy from h_tot,v to h_tot,cond (the Φ
-                # parts cancel).
-                @. ᶜdq_cond_coeff =
-                    (
-                        cp_d * (e_int_q - ∂cv∂q * (ᶜT - T_0)) / ᶜcv_m +
-                        h_cond_func(thermo_params, ᶜT) -
-                        TD.enthalpy_vapor(thermo_params, ᶜT)
-                    ) / ᶜρ
-                @. ∂ᶜρe_tot_err_∂ᶜρq +=
-                    dtγ * ᶜdiffusion_h_matrix *
-                    DiagonalMatrixRow(ᶜdq_cond_coeff)
-            end
+        MatrixFields.unrolled_foreach(condensate_names) do ρq_name
+            MatrixFields.has_field(Y.c, ρq_name) || return
+            phase = condensate_phase(ρq_name)
+            e_int_q = condensate_e_int_offset(phase, params)
+            ∂cv∂q = condensate_cv_difference(phase, params)
+            h_cond_func = enthalpy_function(phase)
+            ∂ᶜρe_tot_err_∂ᶜρq =
+                matrix[@name(c.ρe_tot), center_state_name(ρq_name)]
+            # ∂F/∂q_cond at fixed q_tot: vapor→condensate conversion changes T
+            # (latent heating enters s_d) and moves water-gradient enthalpy
+            # from h_tot,v to h_tot,cond (the Φ parts cancel).
+            @. ᶜdq_cond_coeff =
+                (
+                    cp_d * (e_int_q - ∂cv∂q * (ᶜT - T_0)) / ᶜcv_m +
+                    h_cond_func(thermo_params, ᶜT) -
+                    TD.enthalpy_vapor(thermo_params, ᶜT)
+                ) / ᶜρ
+            @. ∂ᶜρe_tot_err_∂ᶜρq +=
+                dtγ * ᶜdiffusion_h_matrix * DiagonalMatrixRow(ᶜdq_cond_coeff)
         end
 
-        # Suspended cloud species diffuse down their own gradients with ρ·K_h
-        # (see diffuse_suspended_cloud_speciesᵥ!); accumulate onto the diagonals
-        # initialized by update_sedimentation_jacobian!.
+        # The diffusing microphysics species diffuse down their own gradients
+        # with ρ·K_h (see add_moisture_diffusionᵥ!); accumulate onto the
+        # diagonals initialized by update_sedimentation_jacobian!.
         MatrixFields.unrolled_foreach(
-            (@name(c.ρq_lcl), @name(c.ρq_icl), @name(c.ρn_lcl), @name(c.ρn_ice)),
-        ) do ρχ_name
-            MatrixFields.has_field(Y, ρχ_name) || return
-            ∂ᶜρχ_err_∂ᶜρχ = matrix[ρχ_name, ρχ_name]
+            diffused_water_species(precipitation),
+        ) do (_, ρχ_name)
+            MatrixFields.has_field(Y.c, ρχ_name) || return
+            ρχ_state_name = center_state_name(ρχ_name)
+            ∂ᶜρχ_err_∂ᶜρχ = matrix[ρχ_state_name, ρχ_state_name]
             @. ∂ᶜρχ_err_∂ᶜρχ +=
                 dtγ * ᶜdiffusion_h_matrix * DiagonalMatrixRow(1 / ᶜρ)
         end
@@ -1466,8 +1470,8 @@ is `UseDerivative()`, and both `edmfx_model.sgs_diffusive_flux` and
 `edmfx_model.vertical_diffusion` are enabled — matching the gates in
 `edmfx_sgs_diffusive_flux_tendency!`.
 
-Each updraft scalar `χʲ` (`mse`, `q_tot`, suspended 1M/2M cloud species, and
-passive SGS tracers) diffuses down its own vertical gradient with the harmonic
+Each updraft scalar `χʲ` (`mse`, `q_tot`, the `suspended_cloud_species` it
+carries, and passive SGS tracers) diffuses down its own vertical gradient with the harmonic
 face weight of `ᶠupdraft_diffusion_weight!` divided by `max(ρaʲ, ε)`, the same
 operator as the tendency. Mutates `matrix` and returns `nothing`.
 """
@@ -1505,11 +1509,9 @@ function update_sgs_diffusion_jacobian!(matrix, Y, p, dtγ, diffusion_flag)
         @. ∂ᶜq_totʲ_err_∂ᶜq_totʲ += dtγ * ᶜsgs_diff_op
     end
 
-    # Suspended 1M/2M cloud species in the updraft diffuse down their own
-    # gradients with the same operator.
-    MatrixFields.unrolled_foreach(
-        (@name(q_lcl), @name(q_icl), @name(n_lcl), @name(n_ice)),
-    ) do χ_name
+    # Suspended cloud species in the updraft diffuse down their own gradients
+    # with the same operator.
+    MatrixFields.unrolled_foreach(suspended_cloud_species) do (χ_name, _)
         MatrixFields.has_field(Y.c.sgsʲs.:(1), χ_name) || return
         χ_state_name = sgs_state_name(χ_name)
         ∂ᶜχʲ_err_∂ᶜχʲ = matrix[χ_state_name, χ_state_name]

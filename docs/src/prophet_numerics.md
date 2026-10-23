@@ -166,7 +166,8 @@ The diffusive fluxes are evaluated at faces from the face-native diffusivities
   - The turbulent-mixing component ``K_h`` acts on the suspended water
     ``q_{t,\mathrm{eff}} = q_t - q_{\mathrm{rai}} - q_{\mathrm{sno}}`` and on
     the suspended cloud species (`ρq_lcl`, `ρq_icl`, `ρn_lcl`, `ρn_ice`), which
-    diffuse down their own gradients; rain and snow receive no turbulent
+    diffuse down their own gradients (species the drafts do not carry, such as
+    the P3 ice number and rime quantities, down their grid-mean gradients); rain and snow receive no turbulent
     transport, so that rain shafts dominated by sedimentation are not smeared.
     Energy diffuses through the [Yatunin2026](@cite) Eq. (33) bracket,
     ``\mathcal{B} = \nabla s_d + (h_v + \Phi) \nabla q_{t,\mathrm{eff}} + (h_l - h_v) \nabla q_l^{\mathrm{cl}} + (h_i - h_v) \nabla q_i^{\mathrm{cl}}``,

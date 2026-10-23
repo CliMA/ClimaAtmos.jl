@@ -134,11 +134,12 @@ return `nothing`.
 
 Momentum receives `-∇ₕ·(ρ τ)/ρ` with the SGS momentum flux tensor `τ = -2 νₜ_h S`; total
 energy receives the divergence of the enthalpy flux
-`-ρ D_h [∇ₕs_d + (h_v + Φ) ∇ₕq_tot_eff + (h_l - h_v) ∇ₕq_lcl + (h_i - h_v) ∇ₕq_icl]`,
-whose water terms are absent in dry configurations. Total water diffuses on `q_tot_eff`
-(with the tendency mirrored to `Yₜ.c.ρ` for mass conservation while suspended cloud
-species diffuse down their own gradients and rain and snow do not diffuse), and each
-passive grid-scale tracer `χ` receives `+∇ₕ·(ρ D_h ∇ₕχ)`. Reads `ᶜS`, `ᶠS`, `ᶜνₜ_h`,
+`-ρ D_h [∇ₕs_d + (h_v + Φ) ∇ₕq_tot + (h_l - h_v) ∇ₕq_liq + (h_i - h_v) ∇ₕq_ice]`, where
+`q_liq` and `q_ice` include rain and snow; its water terms are absent in dry
+configurations. Total water diffuses into `Yₜ.c.ρq_tot` and, for mass conservation,
+`Yₜ.c.ρ`; each cloud and precipitation species diffuses down its own gradient
+(`add_moisture_diffusionₕ!` with `precipitation = true`); and each passive grid-scale
+tracer `χ` receives `+∇ₕ·(ρ D_h ∇ₕχ)`. Reads `ᶜS`, `ᶠS`, `ᶜνₜ_h`,
 `ᶜD_h`, and `ᶜT` from `p.precomputed` (set by
 `set_smagorinsky_lilly_precomputed_quantities!`) and writes `p.scratch` scalar fields.
 
@@ -164,21 +165,20 @@ function horizontal_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, model::Smagorinsk
     ## Vertical momentum tendency
     @. Yₜ.f.u₃ -= C3(wdivₕ(ᶠρ * ᶠτ_smag) / ᶠρ)
 
-    ## Total energy tendency: dry static energy plus the moisture enthalpy flux
-    ## -ρ D_h [(h_v + Φ) ∇ₕq_tot_eff + (h_l - h_v) ∇ₕq_lcl +
-    ##         (h_i - h_v) ∇ₕq_icl]
+    ## Total energy tendency: dry static energy, then the water enthalpy flux
+    ## with the water species, precipitation included
     ᶜs_d = ᶜdry_static_energy(p)
     ᶜρD_h = @. lazy(ᶜρ * ᶜD_h)
     @. Yₜ.c.ρe_tot += wdivₕ(ᶜρD_h * gradₕ(ᶜs_d))
-    if !(p.atmos.microphysics_model isa DryModel)
-        ᶜq_tot_eff = ᶜdiffusing_water(Y, p)
-        ᶜρq_tot_diff = p.scratch.ᶜtemp_scalar_2
-        @. ᶜρq_tot_diff = wdivₕ(ᶜρD_h * gradₕ(ᶜq_tot_eff))
-        @. Yₜ.c.ρq_tot += ᶜρq_tot_diff
-        @. Yₜ.c.ρ += ᶜρq_tot_diff
-        add_water_enthalpy_diffusionₕ!(Yₜ.c.ρe_tot, ᶜρD_h, Y, p, ᶜtemp_scalar)
-        diffuse_suspended_cloud_speciesₕ!(Yₜ, Y, ᶜρD_h)
-    end
+    add_moisture_diffusionₕ!(
+        Yₜ,
+        Y,
+        p,
+        ᶜρD_h,
+        ᶜtemp_scalar,
+        p.scratch.ᶜtemp_scalar_2;
+        precipitation = true,
+    )
 
     ## Passive (non-microphysics) grid-scale tracers
     foreach_gs_tracer(Yₜ, Y) do ᶜρχₜ, ᶜρχ, ρχ_name
@@ -196,18 +196,19 @@ return `nothing`.
 
 Momentum receives `-∇ᵥ·(ρ τ)/ρ` with the SGS momentum flux tensor `τ = -2 νₜ_v S`. Total
 energy receives the divergence of the enthalpy flux
-`-ρ D_v [∇ᵥs_d + (h_v + Φ) ∇ᵥq_tot_eff + (h_l - h_v) ∇ᵥq_lcl + (h_i - h_v) ∇ᵥq_icl]`,
-whose water terms are absent in dry configurations. Total water diffuses on `q_tot_eff`
-(with the tendency mirrored to `Yₜ.c.ρ` for mass conservation while suspended cloud
-species diffuse down their own gradients and rain and snow do not diffuse), and each
-passive grid-scale tracer receives the vertical diffusive-flux divergence
-`ᶜdiffusive_flux_divergenceᵥ` with face diffusivity `ᶠρ D_v`. Reads `ᶜS`, `ᶠS`, `ᶜνₜ_v`,
+`-ρ D_v [∇ᵥs_d + (h_v + Φ) ∇ᵥq_tot + (h_l - h_v) ∇ᵥq_liq + (h_i - h_v) ∇ᵥq_ice]`, where
+`q_liq` and `q_ice` include rain and snow; its water terms are absent in dry
+configurations. Total water diffuses into `Yₜ.c.ρq_tot` and, for mass conservation,
+`Yₜ.c.ρ`; each cloud and precipitation species diffuses down its own gradient
+(`add_moisture_diffusionᵥ!` with `precipitation = true`); and each passive grid-scale
+tracer receives the vertical diffusive-flux divergence `ᶜdiffusive_flux_divergenceᵥ`
+with face diffusivity `ᶠρ D_v`. Reads `ᶜS`, `ᶠS`, `ᶜνₜ_v`,
 and `ᶜT` from `p.precomputed` and writes `p.scratch` scalar fields.
 
 Applied from `additional_tendency!` when `p.atmos.diff_mode == Explicit()`, and from
 `implicit_tendency!` when it is `Implicit()`. In the implicit case the Jacobian
 (`update_diffusion_jacobian!`) linearizes the enthalpy flux in the same form, and the
-tracer and `uₕ` flux divergences, with a frozen eddy viscosity; the `u₃` term and the
+water-species, tracer, and `uₕ` flux divergences, with a frozen eddy viscosity; the `u₃` term and the
 horizontal-gradient part of `τ` are omitted from the Jacobian, which
 affects the Newton convergence rate but not the tendency.
 
@@ -238,26 +239,19 @@ function vertical_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, model::SmagorinskyL
     ## Vertical momentum tendency
     @. Yₜ.f.u₃ -= C3(ᶠdiffdivᵥ_u₃(ᶜρ * ᶜτ_smag) / ᶠρ)
 
-    ## Total energy tendency: dry static energy plus the moisture enthalpy flux
-    ## -ρ D_v [(h_v + Φ) ∇ᵥq_tot_eff + (h_l - h_v) ∇ᵥq_lcl +
-    ##         (h_i - h_v) ∇ᵥq_icl]
+    ## Total energy tendency: dry static energy, then the water enthalpy flux
+    ## with the water species, precipitation included
     ᶜ∇ᵥρD∇s_dₜ = ᶜdiffusive_flux_divergenceᵥ(ᶠρD, ᶜdry_static_energy(p))
     @. Yₜ.c.ρe_tot -= ᶜ∇ᵥρD∇s_dₜ
-    if !(p.atmos.microphysics_model isa DryModel)
-        ᶜq_tot_eff = ᶜdiffusing_water(Y, p)
-        ᶜρq_tot_diff = p.scratch.ᶜtemp_scalar_2
-        @. ᶜρq_tot_diff = -($(ᶜdiffusive_flux_divergenceᵥ(ᶠρD, ᶜq_tot_eff)))
-        @. Yₜ.c.ρq_tot += ᶜρq_tot_diff
-        @. Yₜ.c.ρ += ᶜρq_tot_diff
-        add_water_enthalpy_diffusionᵥ!(
-            Yₜ.c.ρe_tot,
-            ᶠρD,
-            Y,
-            p,
-            p.scratch.ᶜtemp_scalar,
-        )
-        diffuse_suspended_cloud_speciesᵥ!(Yₜ, Y, ᶠρD)
-    end
+    add_moisture_diffusionᵥ!(
+        Yₜ,
+        Y,
+        p,
+        ᶠρD,
+        p.scratch.ᶜtemp_scalar,
+        p.scratch.ᶜtemp_scalar_2;
+        precipitation = true,
+    )
 
     ## Passive (non-microphysics) grid-scale tracers
     foreach_gs_tracer(Yₜ, Y) do ᶜρχₜ, ᶜρχ, ρχ_name
