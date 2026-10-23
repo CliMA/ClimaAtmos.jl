@@ -1155,10 +1155,18 @@ Flux-form momentum for the vertical velocity with
     [`dg_w_vertical_tendency`](@ref), both with mass fluxes whose dual-cell
     divergence is the face average of the center mass tendency, so the
     advection conserves `½ ρ_f w²`;
+
   - on the deep-atmosphere grid, the metric pair of the momentum equation
     in a radial frame, `−w uₕ / r` on centers and `+|uₕ|² / r` on faces, with
     the face-to-center weights the adjoint of the center-to-face average, so
     the pair exchanges kinetic energy exactly.
+  - a face dissipation of `w`, the `ρ_f`-weighted jump penalty
+    [`shear_jump_penalty_lift`](@ref) at the shear speed `max(|{u_n}|, ε c)`
+    with `ρ_f` the dual density: an exact kinetic-energy sink that conserves
+    momentum and moves no mass, so the KPEP gravity pairing is unchanged and
+    the removed kinetic energy is returned as internal energy. Without it
+    `w` has no face dissipation, since its advection no longer exchanges
+    energy with the Roe-damped `uₕ` through the vector-invariant terms.
 
 The physical vertical acceleration `a` is applied as `u₃ += J_v a` with the
 covariant horizontal compensation `uₕ += (I_c(J_v a) / J_v) e_z ⋅ e_i`, which
@@ -1208,6 +1216,25 @@ function dg_fddg_w_flux!(Yₜ, Y, p, y, volume_flux, interface, ᶜdyρ, ᶜuv)
             dg_zero_boundary_faces!(@. ᶠinterp(LinearAlgebra.norm_sqr(ᶜuv) / ᶜr))
         @. ẇ += ᶠcentripetal
     end
+
+    # face dissipation of w: ρ_f-weighted jump penalty at the shear speed
+    # max(|{u_n}|, ε c), with ρ_f the dual density of the kinetic energy
+    # ½ ρ_f w², so it is an exact kinetic-energy sink that conserves
+    # momentum and moves no mass (the KPEP gravity pairing is unchanged); the
+    # removed kinetic energy reappears as internal energy since E is fixed
+    ε = FT(p.atmos.numerics.dg_vi_shear_floor)
+    ᶠρ_dual = @. ᶠρJ / Fields.local_geometry_field(Y.f).J
+    pen_w = Operators.lifting_correction(
+        shear_jump_penalty_lift,
+        FT,
+        ᶠw,
+        ᶠρ_dual,
+        (@. ᶠinterp(ᶜuv)),
+        (@. ᶠinterp($(dg_sound_speed(Y, p)))),
+        one(FT),
+        ε,
+    )
+    @. ẇ += $(dg_zero_boundary_faces!(pen_w))
 
     @. Yₜ.f.u₃ += Geometry.Covariant3Vector(ᶠJv * ẇ)
     # cancel the horizontal velocity the u₃ increment induces through the
