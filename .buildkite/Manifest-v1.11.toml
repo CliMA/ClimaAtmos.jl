@@ -2,7 +2,7 @@
 
 julia_version = "1.11.9"
 manifest_format = "2.0"
-project_hash = "e4a78683fa43d7cea2f000aac81ab0ae5ea1edb2"
+project_hash = "9527983a4eea6246ea59b44020a7734adace7a76"
 
 [[deps.ADTypes]]
 deps = ["PrecompileTools"]
@@ -362,9 +362,9 @@ version = "1.0.0"
 
 [[deps.ClimaAnalysis]]
 deps = ["Artifacts", "Dates", "Interpolations", "NCDatasets", "NaNStatistics", "OrderedCollections", "Reexport", "Statistics", "Unitful"]
-git-tree-sha1 = "eb6f8f854a785f037862f21083f96c2f88b946ef"
+git-tree-sha1 = "d7ef84ce609fa8af281f74fb40f1cba0aca1ee1e"
 uuid = "29b5916a-a76c-4e73-9657-3c8fd22e65e6"
-version = "0.5.24"
+version = "0.5.25"
 
     [deps.ClimaAnalysis.extensions]
     ClimaAnalysisGeoMakieExt = "GeoMakie"
@@ -429,9 +429,9 @@ version = "0.3.21"
 
 [[deps.ClimaDiagnostics]]
 deps = ["Accessors", "ClimaComms", "ClimaCore", "ClimaTimeSteppers", "ClimaUtilities", "Dates", "NCDatasets", "NVTX", "OrderedCollections"]
-git-tree-sha1 = "15e521fc314e7059b4304c9777aa9bebeff4f46b"
+git-tree-sha1 = "e880cd6e85382bea2247bec89dd288a5b04c8ab3"
 uuid = "1ecacbb8-0713-4841-9a07-eb5aa8a2d53f"
-version = "0.3.11"
+version = "0.4.0"
 
 [[deps.ClimaInitialConditions]]
 deps = ["CDSAPI", "Dates", "FileWatching", "NCDatasets", "Scratch"]
