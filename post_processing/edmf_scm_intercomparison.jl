@@ -150,7 +150,8 @@ if has_ref
             if isfile(p)
                 try
                     ds = NCDataset(p)
-                    t = ds["time"][end]
+                    # `.var` reads seconds since the start date instead of decoded dates
+                    t = ds["time"].var[end]
                     close(ds)
                     return Float64(t)
                 catch
@@ -262,7 +263,7 @@ if !has_ref && has_sim
         if isfile(p)
             try
                 ds = NCDataset(p)
-                global ref_t_avg_end = Float64(ds["time"][end])
+                global ref_t_avg_end = Float64(ds["time"].var[end])
                 global ref_t_start_avg = ref_t_avg_end - LAST_N_HOURS * 3600.0
                 close(ds)
                 break
@@ -287,7 +288,7 @@ function load_and_avg(short_name; scale = 1.0)
     isfile(path) || return nothing, nothing, nothing
     try
         ds = NCDataset(path)
-        t_ax = ds["time"][:]
+        t_ax = ds["time"].var[:]
         z_ax = ds["z"][:]
         data = ds[short_name][:, :] .* scale
         close(ds)
@@ -309,7 +310,7 @@ function load_ts(short_name; scale = 1.0)
     isfile(path) || return nothing, nothing
     try
         ds = NCDataset(path)
-        t = ds["time"][:]
+        t = ds["time"].var[:]
         data = ds[short_name][:] .* scale
         close(ds)
         mask = t .<= ref_t_avg_end

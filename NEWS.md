@@ -3,6 +3,11 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- ![][badge-💥breaking] Update to ClimaDiagnostics v0.4. NetCDF diagnostics no
+  longer have `date` and `date_bnds`, and `time` is in seconds since
+  `start_date`. Time-reduced diagnostics no longer include the initial state,
+  and the times saved for the `DictWriter` and `HDF5Writer` are saved at the
+  start of the output window.
 - ![][badge-💥breaking] `sgs_variance_vertical_scale_factor` and the provisional
   `sgs_variance_isentropic_depth` are removed; with `strict_params: true` (the
   default) a run TOML that still sets either now stops with an unused-parameter
