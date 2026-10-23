@@ -57,16 +57,19 @@ the valid choices. Each option string names the `CM.Parameters` type it maps to:
     `"ConstantTimescale"`, `"TemperatureDependent"`.
   - `cloud_ice_melt`: `"CloudIceMelt"`.
   - `cloud_liquid_freezing`: `"HomogeneousAndHeterogeneous"`, `"Homogeneous"`, `"Heterogeneous"`.
-  - `rain_autoconversion`: `"Kessler1M"`, `"PrescribedNd"`. `Kessler1M` is the Kessler scheme
+  - `rain_autoconversion`: `"Kessler1M"`, `"PrescribedNd"`, `"KK2000Autoconversion"`.
+    `Kessler1M` is the Kessler scheme
     whose timescale and threshold blend between convective and stratiform values with the vertical
     velocity of the subdomain being evaluated (grid mean, updraft, or environment). The stratiform
     values are the convective ones times the dimensionless scales (both
     default 1.0, giving the classic velocity-independent scheme).
+    `KK2000Autoconversion` is the Khairoutdinov–Kogan (2000) power law in cloud
+    liquid and the prescribed droplet number concentration.
   - `snow_autoconversion`: `"NoSupersaturation"`, `"WithSupersaturation"`.
   - `rain_condensation_evaporation`: `"RainEvaporation"`.
   - `snow_deposition_sublimation`: `"SublimationOnly"`, `"DepositionAndSublimation"`.
   - `snow_melt`: `"SnowMelt"`.
-  - `cloud_liquid_rain_accretion`: `"CloudLiquidRainAccretion"`.
+  - `cloud_liquid_rain_accretion`: `"CloudLiquidRainAccretion"`, `"KK2000Accretion"`.
   - `cloud_liquid_snow_accretion`: `"CloudLiquidSnowAccretion"`.
   - `cloud_ice_rain_accretion`: `"CloudIceRainAccretion"`.
   - `cloud_ice_snow_accretion`: `"CloudIceSnowAccretion"`.
@@ -112,6 +115,7 @@ function get_microphysics_1m_options(parsed_args)
         Dict(
             "Kessler1M" => CMP.Kessler1M(),
             "PrescribedNd" => CMP.PrescribedNd(),
+            "KK2000Autoconversion" => CMP.KK2000Autoconversion(),
         ),
         "rain_autoconversion",
     )
@@ -161,6 +165,8 @@ function get_microphysics_1m_options(parsed_args)
         Dict(
             "CloudLiquidRainAccretion" =>
                 CMP.CloudLiquidRainAccretion(),
+            "KK2000Accretion" =>
+                CMP.KK2000Accretion(),
         ),
         "cloud_liquid_rain_accretion",
     )

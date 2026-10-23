@@ -261,6 +261,15 @@ function precomputed_quantities(Y, atmos)
         )...,
         ᶜstrain_rate_norm = similar(Y.c, FT),
         sfc_conditions = similar(Spaces.level(Y.f, half), SCT),
+        # Per-cell flags recording where the tracer limiters acted in the
+        # last `constrain_state!` call (`lim_gm_frac`, `lim_sgs_frac`).
+        (
+            atmos.numerics.limiter_diagnostics ?
+            (;
+                ᶜgm_limiter_active = zeros(axes(Y.c)),
+                ᶜsgs_filter_active = zeros(axes(Y.c)),
+            ) : (;)
+        )...,
     )
     # Cloud fraction is used to calculate buoyancy gradient, so we initialize it to 0 here.
     ᶜcloud_fraction = similar(Y.c, FT)

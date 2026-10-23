@@ -128,6 +128,12 @@ function scheduled_diagnostics_from_specs(
                 )
             end
 
+            if haskey(spec, "max_time") && !isnothing(spec["max_time"])
+                max_t = Float64(time_to_seconds(spec["max_time"]))
+                output_schedule = CAD.BoundedSchedule(output_schedule, max_t)
+                compute_every = CAD.BoundedSchedule(compute_every, max_t)
+            end
+
             CAD.ScheduledDiagnostic(
                 variable = CAD.get_diagnostic_variable(short_name),
                 output_schedule_func = output_schedule,

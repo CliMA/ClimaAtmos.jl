@@ -34,7 +34,11 @@ identifies the name of the output file. The `compute_every` keyword identifies
 how often the field should be computed; it applies only when a
 `reduction_time` is specified, and **defaults to every timestep**, so it is
 what to change when a reduced diagnostic is expensive to compute. Without a
-reduction, the field is computed on the output schedule.
+reduction, the field is computed on the output schedule. The optional
+`max_time` keyword (e.g. `max_time: 48hours`) stops computing and writing the
+diagnostic once the simulation time exceeds that value; it is measured in
+absolute simulation time (not relative to the start of a restarted run), and a
+reduction window that would end after `max_time` is not written.
 
 For multiple diagnostics with the same specs, you can also pass a vector of
 `short_names` directly, as in

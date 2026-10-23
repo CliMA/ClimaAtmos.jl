@@ -320,6 +320,14 @@ ClimaParams does not yet define or whose ClimaParams default it supersedes.
   - `sgs_fidelity_equilibrium_weight`: Weight `w_eq ∈ (0, 1)` on the
     equilibrium prediction in the SGS variance-fidelity modulator; default
     `0.5` (see `sgs_variance_fidelity`) [-].
+  - `rain_autoconversion_tke_coeff`: Weight `c_tke ≥ 0` on turbulent kinetic
+    energy `e` in the effective vertical velocity
+    `w_eff = sqrt(max(w, 0)² + c_tke max(e, 0))` passed to velocity-dependent
+    rain autoconversion (`effective_autoconversion_velocity`); `0` (default)
+    uses resolved/updraft vertical velocity `max(w, 0)` only. Only the
+    `Kessler1M` and `KK2000Autoconversion` autoconversion options read the
+    velocity; a nonzero value with another option is rejected at setup
+    (`check_rain_autoconversion_velocity_options`) [-].
   - `cloud_fraction_eps_rel`: Residual fractional saturation variability
     `ε_rel` in the augmented-`σ` floor of the cloud-fraction closure [-].
   - `cloud_fraction_sigma_abs`: Absolute floor `σ_abs` on the augmented
@@ -355,6 +363,7 @@ Base.@kwdef struct SGSQuadratureParameters{FT} <: ASQP
     condensation_evaporation_timescale::FT
     sublimation_deposition_timescale::FT
     sgs_fidelity_equilibrium_weight::FT
+    rain_autoconversion_tke_coeff::FT
     cloud_fraction_eps_rel::FT
     cloud_fraction_sigma_abs::FT
     cloud_fraction_floor_release_margin::FT

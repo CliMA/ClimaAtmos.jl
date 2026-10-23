@@ -103,6 +103,7 @@ warning on ClimaCore versions older than 0.14.22.
 function get_numerics(parsed_args, FT; vertical_water_borrowing_species = nothing)
     test_dycore_consistency = parsed_args["test_dycore_consistency"]::Bool
     reproducible_restart = parsed_args["reproducible_restart"]::Bool
+    limiter_diagnostics = parsed_args["limiter_diagnostics"]::Bool
 
     energy_q_tot_upwinding = Symbol(parsed_args["energy_q_tot_upwinding"])
     tracer_upwinding = Symbol(parsed_args["tracer_upwinding"])
@@ -127,6 +128,7 @@ function get_numerics(parsed_args, FT; vertical_water_borrowing_species = nothin
         limiter,
         test_dycore_consistency,
         reproducible_restart,
+        limiter_diagnostics,
         diff_mode,
         hyperdiff,
         vertical_water_borrowing_species,

@@ -30,8 +30,19 @@ at the cadence set by the `update_constrain_state_every` configuration option
 (`"stage"`, `"step"`, or `"dss"`; see `update_constrain_state_signal_handler`).
 The `dss!` and `set_precomputed_quantities!` calls are not part of this — the
 timestepper runs them through its own `dss!` and `cache!` hooks. Returns `nothing`.
+
+With `limiter_diagnostics: true`, the flags `p.precomputed.ᶜgm_limiter_active`
+and `ᶜsgs_filter_active` are reset to zero at the start of every call and set by
+`enforce_physical_constraints!` where it changed the state, so they record the
+limiter activity of the most recent call only (the last stage of a multi-stage
+step) and exclude `tracer_nonnegativity_constraint!`.
 """
 NVTX.@annotate function constrain_state!(Y, p, t)
+    if hasproperty(p, :precomputed) &&
+       hasproperty(p.precomputed, :ᶜgm_limiter_active)
+        p.precomputed.ᶜgm_limiter_active .= 0
+        p.precomputed.ᶜsgs_filter_active .= 0
+    end
     prescribe_flow!(Y, p, t, p.atmos.prescribed_flow)
     tracer_nonnegativity_constraint!(Y, p, t, p.atmos.water.tracer_nonnegativity_method)
     enforce_physical_constraints!(Y, p, t, p.atmos)

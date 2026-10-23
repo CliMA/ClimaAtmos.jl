@@ -231,7 +231,10 @@ four are multiplied by `ratio = min(1, ρq_tot / Σ ρq_cond)`; `ratio` is zero
 where either the condensate sum or `ρq_tot` is below `ϵ_numerics`, which
 removes condensate in cells with no (or negative) total water.
 
-Mutates `Y.c` and uses `p.scratch`; returns `nothing`. Called from
+Mutates `Y.c` and uses `p.scratch`; when `p.precomputed.ᶜgm_limiter_active`
+exists (`limiter_diagnostics: true`) it is set to one in cells where any of
+these corrections changed the state, as a flag for the `lim_gm_frac`
+diagnostic. Returns `nothing`. Called from
 `enforce_physical_constraints!` for the 1M and 2M non-equilibrium
 microphysics models.
 """
@@ -239,12 +242,33 @@ function enforce_grid_mean_microphysics_constraints!(Y, p, t)
     FT = eltype(p.params)
     ρq_cond = p.scratch.ᶜtemp_scalar
     ratio = p.scratch.ᶜtemp_scalar_2
+    if hasproperty(p, :precomputed) &&
+       hasproperty(p.precomputed, :ᶜgm_limiter_active)
+        @. p.precomputed.ᶜgm_limiter_active = ifelse(
+            (Y.c.ρq_tot < -ϵ_numerics(FT)) |
+            (Y.c.ρq_lcl < -ϵ_numerics(FT)) |
+            (Y.c.ρq_icl < -ϵ_numerics(FT)) |
+            (Y.c.ρq_rai < -ϵ_numerics(FT)) |
+            (Y.c.ρq_sno < -ϵ_numerics(FT)),
+            FT(1),
+            p.precomputed.ᶜgm_limiter_active,
+        )
+    end
     @. Y.c.ρq_lcl = max(FT(0), Y.c.ρq_lcl)
     @. Y.c.ρq_icl = max(FT(0), Y.c.ρq_icl)
     @. Y.c.ρq_rai = max(FT(0), Y.c.ρq_rai)
     @. Y.c.ρq_sno = max(FT(0), Y.c.ρq_sno)
 
     @. ρq_cond = Y.c.ρq_lcl + Y.c.ρq_icl + Y.c.ρq_rai + Y.c.ρq_sno
+    if hasproperty(p, :precomputed) &&
+       hasproperty(p.precomputed, :ᶜgm_limiter_active)
+        @. p.precomputed.ᶜgm_limiter_active = ifelse(
+            (ρq_cond > ϵ_numerics(FT)) &
+            (ρq_cond > max(FT(0), Y.c.ρq_tot) + ϵ_numerics(FT)),
+            FT(1),
+            p.precomputed.ᶜgm_limiter_active,
+        )
+    end
     @. ratio = ifelse(
         (ρq_cond > ϵ_numerics(FT)) & (Y.c.ρq_tot > ϵ_numerics(FT)),
         min(FT(1), Y.c.ρq_tot / ρq_cond),
@@ -283,7 +307,10 @@ For each of the `n_prognostic_mass_flux_subdomains(turbconv_model)` updrafts:
     the grid-mean `enforce_grid_mean_microphysics_constraints!`.
 
 No-op when `n_prognostic_mass_flux_subdomains(turbconv_model) == 0` (e.g.
-`EDOnlyEDMFX`). Mutates `Y.c.sgsʲs` and `Y.f.sgsʲs`; returns `nothing`. Called
+`EDOnlyEDMFX`). Mutates `Y.c.sgsʲs` and `Y.f.sgsʲs`; when
+`p.precomputed.ᶜsgs_filter_active` exists (`limiter_diagnostics: true`) it is
+set to one in cells where any updraft correction changed the state, as a flag
+for the `lim_sgs_frac` diagnostic. Returns `nothing`. Called
 from `enforce_physical_constraints!`.
 """
 function enforce_edmf_updraft_constraints!(Y, p, t, turbconv_model)
@@ -291,7 +318,26 @@ function enforce_edmf_updraft_constraints!(Y, p, t, turbconv_model)
     n = n_prognostic_mass_flux_subdomains(turbconv_model)
     n == 0 && return nothing
     (; ᶜh_tot, ᶜK, ᶜρʲs) = p.precomputed
+    track_sgs =
+        hasproperty(p, :precomputed) &&
+        hasproperty(p.precomputed, :ᶜsgs_filter_active)
     for j in 1:n
+        if track_sgs
+            @. p.precomputed.ᶜsgs_filter_active = ifelse(
+                (Y.c.sgsʲs.:($$j).ρa < -ϵ_numerics(FT)) |
+                (Y.c.sgsʲs.:($$j).ρa > ᶜρʲs.:($$j) + ϵ_numerics(FT)) |
+                (
+                    (Y.c.sgsʲs.:($$j).ρa >= ϵ_numerics(FT)) & (
+                        (Y.c.sgsʲs.:($$j).q_tot < -ϵ_numerics(FT)) | (
+                            Y.c.sgsʲs.:($$j).q_tot * Y.c.sgsʲs.:($$j).ρa >
+                            max(FT(0), Y.c.ρq_tot) + ϵ_numerics(FT)
+                        )
+                    )
+                ),
+                FT(1),
+                p.precomputed.ᶜsgs_filter_active,
+            )
+        end
         # clip updraft area fraction and vertical velocity to non-negative values
         @. Y.c.sgsʲs.:($$j).ρa = max(0, min(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j)))
         @. Y.f.sgsʲs.:($$j).u₃ =
@@ -327,6 +373,18 @@ function enforce_edmf_updraft_constraints!(Y, p, t, turbconv_model)
             MatrixFields.has_field(Y.c, ρχ_name) || continue
             ᶜχʲ = MatrixFields.get_field(Y.c.sgsʲs.:($j), χ_name)
             ᶜρχ = MatrixFields.get_field(Y.c, ρχ_name)
+            if track_sgs
+                @. p.precomputed.ᶜsgs_filter_active = ifelse(
+                    (Y.c.sgsʲs.:($$j).ρa >= ϵ_numerics(FT)) & (
+                        (ᶜχʲ < -ϵ_numerics(FT)) | (
+                            ᶜχʲ * Y.c.sgsʲs.:($$j).ρa >
+                            max(FT(0), ᶜρχ) + ϵ_numerics(FT)
+                        )
+                    ),
+                    FT(1),
+                    p.precomputed.ᶜsgs_filter_active,
+                )
+            end
             @. ᶜχʲ = ifelse(
                 Y.c.sgsʲs.:($$j).ρa < ϵ_numerics(FT),
                 specific(ᶜρχ, Y.c.ρ),
@@ -346,6 +404,18 @@ function enforce_edmf_updraft_constraints!(Y, p, t, turbconv_model)
             @. q_cond =
                 Y.c.sgsʲs.:($$j).q_lcl + Y.c.sgsʲs.:($$j).q_icl +
                 Y.c.sgsʲs.:($$j).q_rai + Y.c.sgsʲs.:($$j).q_sno
+            if track_sgs
+                @. p.precomputed.ᶜsgs_filter_active = ifelse(
+                    (Y.c.sgsʲs.:($$j).ρa >= ϵ_numerics(FT)) &
+                    (q_cond > ϵ_numerics(FT)) &
+                    (
+                        q_cond >
+                        max(FT(0), Y.c.sgsʲs.:($$j).q_tot) + ϵ_numerics(FT)
+                    ),
+                    FT(1),
+                    p.precomputed.ᶜsgs_filter_active,
+                )
+            end
             @. ratio = ifelse(
                 (q_cond > ϵ_numerics(FT)) &
                 (Y.c.sgsʲs.:($$j).q_tot > ϵ_numerics(FT)),

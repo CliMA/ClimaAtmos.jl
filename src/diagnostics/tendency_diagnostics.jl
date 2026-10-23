@@ -39,6 +39,8 @@ import ..horizontal_tracer_advection_tendency!
 import ..explicit_vertical_advection_tendency!
 import ..hyperdiffusion_tendency!
 import ..additional_tendency!
+import ..radiation_tendency!
+import ..vertical_advection_of_water_tendency!
 import ..microphysics_tendency!
 import ..edmfx_sgs_vertical_advection_tendency!
 import ..vertical_diffusion_boundary_layer_tendency!
@@ -100,6 +102,14 @@ end
 
 _additional_wrap!(Yₜ, Y, p, t) = additional_tendency!(Yₜ, Y, p, t)
 
+_rad_wrap!(Yₜ, Y, p, t) = radiation_tendency!(
+    Yₜ, Y, p, t, p.atmos.radiation_mode,
+)
+
+_sediment_wrap!(Yₜ, Y, p, t) = vertical_advection_of_water_tendency!(
+    Yₜ, Y, p, t,
+)
+
 _microphys_wrap!(Yₜ, Y, p, t) = microphysics_tendency!(
     Yₜ, Y, p, t, p.atmos.microphysics_model, p.atmos.turbconv_model,
 )
@@ -149,6 +159,8 @@ const _PROCESS_WRAPPERS = (
     exp_vadv = _exp_vadv_wrap!,
     hdiff = _hdiff_wrap!,
     additional = _additional_wrap!,
+    rad = _rad_wrap!,
+    sediment = _sediment_wrap!,
     microphys = _microphys_wrap!,
     sgs_vadv = _sgs_vadv_wrap!,
     vdiff = _vdiff_wrap!,
@@ -163,10 +175,11 @@ const _PROCESS_WRAPPERS = (
 # -- Column-integration helpers --------------------------------------------
 
 # Run `process_wrapper!` on the persistent scratch Yₜ and return the
-# tendency field at `field_path` as a 3D center-space Field. Returns a lazy
-# zero field on center space if the field is not present in the current
-# config. Downstream (e.g. NetCDFWriter) copies the values before the next
-# diagnostic call overwrites the scratch.
+# tendency at `field_path` as a lazy broadcast over the 3D center-space
+# scratch field, so that the caller materializes a copy into its own storage
+# instead of holding a reference to the shared scratch view, which the next
+# diagnostic call overwrites. Returns a lazy zero field on center space if
+# the field is not present in the current config.
 #
 # Horizontal tendencies (`hor_dyn`, `hor_tracer_adv`, `hdiff`, and some
 # sub-terms of `additional`) leave the field discontinuous across spectral
@@ -187,7 +200,7 @@ function _process_tendency_field(
     if do_dss(axes(state.c))
         Spaces.weighted_dss!(field)
     end
-    return field
+    return @. lazy(identity(field))
 end
 
 # SGS variant: return the 3D `d(scalar)/dt` field for updraft `j = 1`.
@@ -204,7 +217,7 @@ function _sgs_process_tendency_field(
     if do_dss(axes(state.c))
         Spaces.weighted_dss!(field)
     end
-    return field
+    return @. lazy(identity(field))
 end
 
 # -- Field × process manifests ---------------------------------------------
@@ -215,16 +228,16 @@ end
 const _GRID_FIELDS = (
     (name = :ρ, short = "rho", units = "kg m^-3 s^-1",
         long = "air mass",
-        processes = (:iva, :hor_dyn, :vdiff, :edmf_diff, :edmf_mflux, :hdiff,
-            :additional)),
+        processes = (:iva, :sediment, :hor_dyn, :vdiff, :edmf_diff,
+            :edmf_mflux, :hdiff, :additional)),
     (name = :ρe_tot, short = "rhoe", units = "W m^-3",
         long = "total air energy",
-        processes = (:iva, :corrimp, :hor_dyn, :exp_vadv, :vdiff, :edmf_diff,
-            :edmf_mflux, :hdiff, :microphys, :additional)),
+        processes = (:iva, :sediment, :corrimp, :hor_dyn, :exp_vadv, :vdiff,
+            :edmf_diff, :edmf_mflux, :hdiff, :microphys, :rad, :additional)),
     (name = :ρq_tot, short = "rhoqt", units = "kg m^-3 s^-1",
         long = "total air water",
-        processes = (:iva, :corrimp, :hor_tracer_adv, :exp_vadv, :vdiff,
-            :edmf_diff, :edmf_mflux, :hdiff, :microphys, :additional)),
+        processes = (:iva, :sediment, :corrimp, :hor_tracer_adv, :exp_vadv,
+            :vdiff, :edmf_diff, :edmf_mflux, :hdiff, :microphys, :additional)),
     (name = :ρq_lcl, short = "rhoqlcl", units = "kg m^-3 s^-1",
         long = "cloud liquid mass",
         processes = (:iva, :hor_tracer_adv, :vdiff, :edmf_diff, :edmf_mflux,

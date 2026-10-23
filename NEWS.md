@@ -41,6 +41,16 @@ main
   the condensate means and the shaft fraction are integrated exactly for any
   cloud fraction; nodes whose temperature spread straddles the freezing point
   are split there. `σ_S` is the linearized width, without a quadrature pass.
+- ![][badge-✨feature/enhancement] 1M microphysics: `rain_autoconversion:
+  KK2000Autoconversion` and `cloud_liquid_rain_accretion: KK2000Accretion`
+  select the Khairoutdinov–Kogan (2000) warm-rain rates of CloudMicrophysics
+  0.46 (requires ClimaParams 1.3.3). The provisional parameter
+  `rain_autoconversion_tke_coeff` (`c_tke`, default 0) adds `c_tke · TKE` to the
+  squared vertical velocity that the `Kessler1M` and `KK2000Autoconversion`
+  closures read (`effective_autoconversion_velocity`); a nonzero value with any
+  other autoconversion option is rejected at setup.
+- ![][badge-💥breaking] CloudMicrophysics compat is `0.46` and ClimaParams
+  `1.3.3`.
 - ![][badge-✨feature/enhancement] The equilibrium SGS condensate
   `E[max(0, S)]` can be evaluated under the vertical displacement acting on
   the curved profile of the saturation excess,

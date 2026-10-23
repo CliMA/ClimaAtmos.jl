@@ -76,6 +76,81 @@ end
         CA.ClimaAtmosParameters(config).microphysics_1m_params.processes
     @test yaml_processes.rain_autoconversion isa CMP.PrescribedNd
     @test isnothing(yaml_processes.rain_snow_accretion)
+
+    # KK2000 options and TKE-modulated autoconversion velocity
+    kk_config = CA.AtmosConfig(
+        Dict(
+            "microphysics_model" => "1M",
+            "rain_autoconversion" => "KK2000Autoconversion",
+            "cloud_liquid_rain_accretion" => "KK2000Accretion",
+        ),
+        job_id = "parameter_test_1m_kk2000",
+    )
+    kk_params = CA.ClimaAtmosParameters(kk_config)
+    kk_processes = kk_params.microphysics_1m_params.processes
+    @test kk_processes.rain_autoconversion isa CMP.KK2000Autoconversion
+    @test kk_processes.cloud_liquid_rain_accretion isa CMP.KK2000Accretion
+    kk_atmos = (;
+        microphysics_model = CA.get_microphysics_model(kk_config.parsed_args),
+    )
+    @test isnothing(
+        CA.check_rain_autoconversion_velocity_options(kk_atmos, kk_params),
+    )
+    mktemp() do path, io
+        write(
+            io,
+            """
+  [rain_autoconversion_tke_coeff]
+  value = 1.0
+  type = "float"
+  """,
+        )
+        flush(io)
+        kk_ctke_cfg = CA.AtmosConfig(
+            Dict(
+                "microphysics_model" => "1M",
+                "rain_autoconversion" => "KK2000Autoconversion",
+                "toml" => [path],
+            ),
+            job_id = "parameter_test_1m_kk2000_ctke",
+        )
+        kk_ctke_params = CA.ClimaAtmosParameters(kk_ctke_cfg)
+        @test isnothing(
+            CA.check_rain_autoconversion_velocity_options(
+                kk_atmos,
+                kk_ctke_params,
+            ),
+        )
+        bad_cfg = CA.AtmosConfig(
+            Dict(
+                "microphysics_model" => "1M",
+                "rain_autoconversion" => "PrescribedNd",
+                "toml" => [path],
+            ),
+            job_id = "parameter_test_1m_pnd_ctke",
+        )
+        bad_atmos = (;
+            microphysics_model = CA.get_microphysics_model(bad_cfg.parsed_args),
+        )
+        bad_params = CA.ClimaAtmosParameters(bad_cfg)
+        @test_throws ArgumentError CA.check_rain_autoconversion_velocity_options(
+            bad_atmos,
+            bad_params,
+        )
+    end
+    for FT in (Float32, Float64)
+        @test CA.effective_autoconversion_velocity(FT(-1), FT(0.5), FT(2)) ≈
+              FT(1)
+        @test CA.effective_autoconversion_velocity(FT(0.6), FT(0.16), FT(4)) ≈
+              FT(1)
+        @test CA.effective_autoconversion_velocity(FT(-1), FT(-0.5), FT(0)) ==
+              FT(0)
+        @test CA.effective_autoconversion_velocity(
+            FT(0.6),
+            FT(0.16),
+            FT(4),
+        ) isa FT
+    end
 end
 
 @testset "TKE dissipation coefficient derived from Ri_crit" begin

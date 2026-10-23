@@ -1852,6 +1852,10 @@ symbols or strings.
     reconstructing cache state that would otherwise depend on the previous step
     (the cloud fraction is first recomputed with `GridScaleCloud` before the
     Picard iteration). Should be disabled for production runs.
+  - `limiter_diagnostics`: Whether to allocate and update the per-cell flags
+    that record where the grid-mean and updraft tracer limiters acted in the
+    last `constrain_state!` call, which the `lim_gm_frac` and `lim_sgs_frac`
+    diagnostics output.
   - `limiter`: `nothing`, or `QuasiMonotoneLimiter` for horizontal tracer
     transport.
   - `diff_mode`: `Explicit()` or `Implicit()`, the timestepping mode for
@@ -1872,6 +1876,9 @@ struct AtmosNumerics{EN_UP, TR_UP, ED_UP, SG_UP, ED_TR_UP, LIM, DM, HD, VWB}
     test_dycore_consistency::Bool
     # Whether the simulation is reproducible when restarting from a restart file
     reproducible_restart::Bool
+    # Whether to track where the tracer limiters acted, for the `lim_gm_frac`
+    # and `lim_sgs_frac` diagnostics
+    limiter_diagnostics::Bool
     limiter::LIM
     # Timestepping mode for diffusion: Explicit() or Implicit()
     diff_mode::DM
@@ -1910,6 +1917,8 @@ types for compile-time dispatch.
     tracers.
   - `test_dycore_consistency = false`: Pass `true` to fill the cache with `NaN`s.
   - `reproducible_restart = false`: Pass `true` for reproducible restarts.
+  - `limiter_diagnostics = false`: Pass `true` to track limiter activity for
+    the `lim_gm_frac` and `lim_sgs_frac` diagnostics.
   - `limiter = nothing`: Pass `QuasiMonotoneLimiter()` to limit horizontal tracer
     transport.
   - `diff_mode = Explicit()`: Timestepping mode for vertical diffusion.
@@ -1933,6 +1942,7 @@ function AtmosNumerics(;
     edmfx_tracer_upwinding = :first_order,
     test_dycore_consistency = false,
     reproducible_restart = false,
+    limiter_diagnostics = false,
     limiter = nothing,
     diff_mode = Explicit(),
     hyperdiff = Hyperdiffusion{Float32}(;
@@ -1954,6 +1964,7 @@ function AtmosNumerics(;
         parse_upwinding(edmfx_tracer_upwinding),
         test_dycore_consistency,
         reproducible_restart,
+        limiter_diagnostics,
         limiter,
         diff_mode,
         hyperdiff,

@@ -219,6 +219,9 @@ era5_ic_full_pressure:
 test_dycore_consistency:
   help: "Test dycore consistency [`false` (default), `true`]"
   value: false
+limiter_diagnostics:
+  help: "Track where the grid-mean and updraft tracer limiters acted in the last `constrain_state!` call, for the `lim_gm_frac` and `lim_sgs_frac` diagnostics; adds two 3D fields and a few kernels per stage [`false` (default), `true`]"
+  value: false
 dt_save_state_to_disk:
   help: "Time between saving the state to disk. Examples: [`10secs`, `1hours`, `1months`, `Inf` (do not save, default)]"
   value: "Inf"
@@ -304,7 +307,7 @@ cloud_liquid_freezing:
   help: "Cloud liquid freezing option for 1M microphysics [`HomogeneousAndHeterogeneous` (default), `Homogeneous`, `Heterogeneous`, ~]"
   value: "HomogeneousAndHeterogeneous"
 rain_autoconversion:
-  help: "Rain autoconversion option for 1M microphysics [`Kessler1M` (default), `PrescribedNd`, ~]. `Kessler1M` blends its timescale and threshold between the convective values and the stratiform values."
+  help: "Rain autoconversion option for 1M microphysics [`Kessler1M` (default), `PrescribedNd`, `KK2000Autoconversion`, ~]. `Kessler1M` blends its timescale and threshold between the convective values and the stratiform values with the vertical velocity; `KK2000Autoconversion` is the Khairoutdinov–Kogan (2000) power law in cloud liquid and the prescribed droplet number."
   value: "Kessler1M"
 snow_autoconversion:
   help: "Snow autoconversion option for 1M microphysics [`NoSupersaturation` (default), `WithSupersaturation`, ~]"
@@ -319,7 +322,7 @@ snow_melt:
   help: "Snow melting option for 1M microphysics [`SnowMelt` (default), ~]"
   value: "SnowMelt"
 cloud_liquid_rain_accretion:
-  help: "Cloud liquid + rain accretion option for 1M microphysics [`CloudLiquidRainAccretion` (default), ~]"
+  help: "Cloud liquid + rain accretion option for 1M microphysics [`CloudLiquidRainAccretion` (default), `KK2000Accretion`, ~]"
   value: "CloudLiquidRainAccretion"
 cloud_liquid_snow_accretion:
   help: "Cloud liquid + snow accretion option for 1M microphysics [`CloudLiquidSnowAccretion` (default), ~]"

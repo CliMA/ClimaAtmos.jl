@@ -640,8 +640,10 @@ function SGSQuadratureParameters(
         sgs_variance_theta_horizontal_scale_ratio = FT(0.88),
         sgs_variance_theta_vertical_scale_ratio = FT(0.38),
         sgs_variance_horizontal_cross_correlation = FT(0.74),
-        # Equilibrium-ratio modulator weight (see `sgs_variance_fidelity`).
+        # Equilibrium-ratio modulator weight (see `sgs_variance_fidelity`) and
+        # TKE contribution to velocity-dependent rain autoconversion.
         sgs_fidelity_equilibrium_weight = FT(0.5),
+        rain_autoconversion_tke_coeff = FT(0),
         # Precipitation-fraction placement of rain and snow over the quadrature:
         # 0 = uniform (off).
         sgs_precip_incloud_fraction = FT(0),

@@ -168,6 +168,7 @@ function build_cache(
 )
     FT = eltype(params)
     dt = FT(dt)
+    check_rain_autoconversion_velocity_options(atmos, params)
 
     aerosol_names = atmos.radiation.aerosol_names
     time_varying_trace_gas_names = atmos.radiation.time_varying_trace_gases

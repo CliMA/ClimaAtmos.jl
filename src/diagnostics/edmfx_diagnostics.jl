@@ -400,6 +400,73 @@ add_diagnostic_variable!(short_name = "detr", units = "s^-1",
 )
 
 ###
+# Subdomain microphysics heating tendencies (3d, 1M)
+###
+@inline function mp_1m_heating_rate(
+    thermo_params,
+    T,
+    q_tot,
+    q_liq,
+    q_ice,
+    mp_t,
+)
+    c_pm = TD.cp_m(thermo_params, q_tot, q_liq, q_ice)
+    LH_v0 = TD.Parameters.LH_v0(thermo_params)
+    LH_s0 = TD.Parameters.LH_s0(thermo_params)
+    dq_liq_dt = mp_t.dq_lcl_dt + mp_t.dq_rai_dt
+    dq_ice_dt = mp_t.dq_icl_dt + mp_t.dq_sno_dt
+    return (LH_v0 * dq_liq_dt + LH_s0 * dq_ice_dt) / c_pm
+end
+
+function compute_tnt_mp_env(_, cache, _)
+    thermo_params = CAP.thermodynamics_params(cache.params)
+    (; ᶜT⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜmp_tendency⁰) =
+        cache.precomputed
+    return @. lazy(
+        mp_1m_heating_rate(
+            thermo_params,
+            ᶜT⁰,
+            ᶜq_tot_nonneg⁰,
+            ᶜq_liq⁰,
+            ᶜq_ice⁰,
+            ᶜmp_tendency⁰,
+        ),
+    )
+end
+
+add_diagnostic_variable!(
+    short_name = "tnt_mp_env",
+    units = "K s^-1",
+    long_name = "Environment microphysics temperature tendency",
+    comments = "Latent heating rate in the EDMFX environment from 1M phase changes",
+    compute = compute_tnt_mp_env,
+)
+
+function compute_tnt_mp_up(_, cache, _)
+    thermo_params = CAP.thermodynamics_params(cache.params)
+    (; ᶜTʲs, ᶜq_tot_nonnegʲs, ᶜq_liqʲs, ᶜq_iceʲs, ᶜmp_tendencyʲs) =
+        cache.precomputed
+    return @. lazy(
+        mp_1m_heating_rate(
+            thermo_params,
+            ᶜTʲs.:1,
+            ᶜq_tot_nonnegʲs.:1,
+            ᶜq_liqʲs.:1,
+            ᶜq_iceʲs.:1,
+            ᶜmp_tendencyʲs.:1,
+        ),
+    )
+end
+
+add_diagnostic_variable!(
+    short_name = "tnt_mp_up",
+    units = "K s^-1",
+    long_name = "Updraft microphysics temperature tendency",
+    comments = "Latent heating rate in the first updraft from 1M phase changes",
+    compute = compute_tnt_mp_up,
+)
+
+###
 # Environment area fraction (3d)
 ###
 compute_aren(state, cache, time) =
