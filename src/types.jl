@@ -1999,6 +1999,10 @@ value. The keyword constructor accepts plain `Bool`s for all of them.
     (`edmfx_filter`).
   - `scale_blending_method`: `AbstractScaleBlendingMethod` used to blend the
     mixing-length scales (`edmfx_scale_blending`).
+  - `updraft_picard_rounds`: Number of velocity ↔ buoyancy-affecting-tracers
+    Picard rounds inside `initialize_implicit_stage_problem!` before the final
+    `u₃` and `ρa` analytic solves. `0` reproduces the single-pass behavior
+    (`edmfx_updraft_picard_rounds`).
 """
 struct EDMFXModel{
     EEM, EDM, ESDFH <: ValTF, EHD <: ValTF,
@@ -2014,6 +2018,7 @@ struct EDMFXModel{
     horizontal_diffusion::EHD
     filter::Bool
     scale_blending_method::SBM
+    updraft_picard_rounds::Int
 end
 
 
@@ -2040,6 +2045,8 @@ and storing the rest as plain `Bool`s.
   - `horizontal_diffusion = false`: Enable horizontal diffusion of the updrafts.
   - `filter = false`: Enable relaxation of negative updraft velocities.
   - `scale_blending_method`: Required; an `AbstractScaleBlendingMethod`.
+  - `updraft_picard_rounds = 0`: Picard rounds for the velocity ↔ tracer
+    sub-solve at implicit-stage initialization; `0` disables the loop.
 
 Each switch may also be given as an already-wrapped `Val{true}`/`Val{false}`.
 An unrecognized keyword, such as a misspelled switch, raises a `MethodError`.
@@ -2067,11 +2074,15 @@ function EDMFXModel(;
     horizontal_diffusion::Union{Bool, ValTF} = false,
     filter::Union{Bool, ValTF} = false,
     scale_blending_method,
+    updraft_picard_rounds::Integer = 0,
 )
     parse_val_tf(x::Bool) = Val(x)
     parse_val_tf(x::ValTF) = x
     parse_bool(x::Bool) = x
     parse_bool(::Val{B}) where {B} = B
+    updraft_picard_rounds ≥ 0 || error(
+        "`updraft_picard_rounds` must be non-negative, got $updraft_picard_rounds",
+    )
     return EDMFXModel(
         entr_model,
         detr_model,
@@ -2083,6 +2094,7 @@ function EDMFXModel(;
         parse_val_tf(horizontal_diffusion),
         parse_bool(filter),
         scale_blending_method,
+        Int(updraft_picard_rounds),
     )
 end
 

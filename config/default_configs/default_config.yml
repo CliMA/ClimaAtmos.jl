@@ -514,6 +514,9 @@ edmfx_sgs_diffusive_flux:
 edmfx_sgs_horizontal_diffusive_flux:
   help: "If set to true, it switches on the horizontal component of the EDMFX SGS diffusive flux. Intended for high-resolution runs.  [`true`, `false` (default)]"
   value: false
+edmfx_updraft_picard_rounds:
+  help: "Number of velocity ↔ buoyancy-affecting-tracers Picard rounds inside `initialize_implicit_stage_problem!` before the final u₃/ρa analytic solves. `0` reproduces the single-pass behavior.  [non-negative integer; default `2`]"
+  value: 2
 updraft_number:
   help: "Sets the number of updrafts for the eddy-diffusivity mass-flux scheme"
   value: 1

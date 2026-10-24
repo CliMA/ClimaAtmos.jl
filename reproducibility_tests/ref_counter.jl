@@ -1,4 +1,4 @@
-437
+438
 
 # **README**
 #
@@ -32,6 +32,11 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+438
+- Enable the EDMFX implicit-stage Picard sub-iteration by default
+  (`edmfx_updraft_picard_rounds: 2`), and raise the TRMM reproducibility
+  `dt` from 120 s to 180 s.
+
 437
 - The 1M microphysics is integrated over the Gaussian SGS distribution by the
   conditional-moment node rule; σ_S is the linearized width for the nodes, multipliers,

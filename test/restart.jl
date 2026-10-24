@@ -113,6 +113,9 @@ function test_restart(test_dict; job_id, comms_ctx, more_ignore = Symbol[])
             # Scratch fields for prognostic EDMF (uninitialized until tendencies run)
             :ᶠu₃_tendencyʲs,
             :ᶜρa_tendencyʲs,
+            # Picard snapshots written each stage by `initialize_implicit_stage_problem!`
+            :ᶠsgsʲs_picard_snapshot,
+            :ᶜsgsʲs_picard_snapshot,
             # The raw RRTMGP solver contains internal workspaces that are
             # uninitialized or only partially written by design; its
             # domain-masked outputs are compared through the public getters
@@ -174,6 +177,9 @@ function test_restart(test_dict; job_id, comms_ctx, more_ignore = Symbol[])
             :ᶜq′q′,
             :ᶜcorr_Tq,
             :ᶜT′q′,
+            # Picard snapshots written each stage by `initialize_implicit_stage_problem!`
+            :ᶠsgsʲs_picard_snapshot,
+            :ᶜsgsʲs_picard_snapshot,
             # The raw RRTMGP solver contains internal workspaces that are
             # uninitialized or only partially written by design; its
             # domain-masked outputs are compared through the public getters

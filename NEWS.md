@@ -147,6 +147,16 @@ main
   instead of where `T′T′ q′q′ ≤ eps(FT)²`; the absolute floor replaced the
   diagnosed (negative) correlation by `+0.6` in the dry upper troposphere.
 
+- ![][badge-🔥behavioralΔ] Added a Picard sub-iteration for the EDMFX
+  implicit stage, enabled by default (`edmfx_updraft_picard_rounds: 2`;
+  set to `0` for the previous single-pass behavior). Each round cycles
+  `u₃` ↔ draft scalars ↔ buoyancy/microphysics at the same stage-initial
+  state, tightening the within-stage coupling so the final analytic
+  `u₃`/`ρa` solves run with Picard-converged inputs.
+- ![][badge-🔥behavioralΔ] Bump the TRMM reproducibility-test `dt` from
+  `120 s` to `180 s`. The short-`dt` TRMM variant moved to the new
+  `prognostic_edmfx_trmm_column_short_dt` configuration.
+
 0.42.15
 -------
 

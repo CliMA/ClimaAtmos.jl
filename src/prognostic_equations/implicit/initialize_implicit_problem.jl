@@ -8,52 +8,90 @@ import ClimaCore: Fields, Spaces
 """
     initialize_implicit_stage_problem!(Y, p, dtγ)
 
-Initialize the state `Y` for an IMEX implicit stage with step fraction `dtγ`.
+Prepare the state `Y` for an IMEX implicit stage with step fraction `dtγ`,
+registered as the `initialize_imp!` hook of `ClimaODEFunction`. A no-op
+unless `p.atmos.turbconv_model isa PrognosticEDMFX`.
 
-Registered with ClimaTimeSteppers as the `initialize_imp!` hook of
-`ClimaODEFunction`, so it runs at the start of every implicit stage, before the
-Newton solve. For `PrognosticEDMFX` it overwrites the updraft vertical
-velocity `Y.f.sgsʲs.:(j).u₃` and area-weighted density `Y.c.sgsʲs.:(j).ρa` with
-the stage-consistent values obtained from the analytic solves
-`solve_sgs_u₃_implicit_stage_analytic!` and
-`solve_sgs_ρa_implicit_stage_analytic!`. Since these values should not be
-changed again by the Newton solve, the implied tendencies
+For `PrognosticEDMFX`:
 
-    (u₃_stage - u₃_old) / dtγ    and    (ρa_stage - ρa_old) / dtγ
+ 1. Run `edmfx_model.updraft_picard_rounds` Picard rounds that alternate
+    the analytic `u₃` solve with the semi-implicit tracer sweep, each
+    round starting from the stage-initial `Y.(f,c).sgsʲs` (snapshotted
+    into pre-allocated scratch) and refreshing the draft thermodynamic
+    variables, buoyancy, and updraft microphysics tendencies at the new
+    iterate.
 
-are cached in `p.precomputed.ᶠu₃_tendencyʲs` and `p.precomputed.ᶜρa_tendencyʲs`,
-and are returned as the implicit tendencies of these variables by
-`sgs_u₃_implicit_tendency!` and `sgs_ρa_implicit_tendency!`, so that the solver
-reproduces the analytic stage state. For all other turbulence-convection models
-this is a no-op.
-
-This routine acts as a general hook for implicit-stage initialization.
-Returns `nothing`.
+ 2. Solve `u₃` and `ρa` analytically with the stage-initial values as
+    `*_old` and the Picard-converged buoyancy/mp inputs, then cache the
+    implied tendencies `(u₃_stage - u₃_old) / dtγ` and
+    `(ρa_stage - ρa_old) / dtγ` in `p.precomputed.ᶠu₃_tendencyʲs` and
+    `p.precomputed.ᶜρa_tendencyʲs`. The matching `sgs_*_implicit_tendency!`
+    routines feed these to the Newton solve so it reproduces the analytic
+    values exactly. `ᶜmp_tendencyʲs` is held fixed through Newton so the
+    Jacobian — which does not include its derivatives — stays consistent.
 """
 function initialize_implicit_stage_problem!(Y, p, dtγ)
 
-    if p.atmos.turbconv_model isa PrognosticEDMFX
+    p.atmos.turbconv_model isa PrognosticEDMFX || return nothing
 
-        (; ᶠu₃_tendencyʲs, ᶜρa_tendencyʲs) = p.precomputed
-        n = n_mass_flux_subdomains(p.atmos.turbconv_model)
+    (; microphysics_model, turbconv_model, edmfx_model) = p.atmos
+    (; ᶠu₃_tendencyʲs, ᶜρa_tendencyʲs) = p.precomputed
+    (; ᶜρ_diffʲs, ᶜρʲs) = p.precomputed
+    n = n_mass_flux_subdomains(turbconv_model)
+    n_picard = edmfx_model.updraft_picard_rounds
+    # Cast `dtγ` to the parameter float type so broadcasts stay type-stable
+    # (ClimaTimeSteppers passes `dtγ` as `Float64` even when the state is
+    # `Float32`).
+    dtγ = eltype(p.params)(dtγ)
 
-        # store -u₃_old / dtγ and -ρa_old / dtγ
+    for j in 1:n
+        @. ᶠu₃_tendencyʲs.:($$j) = -Y.f.sgsʲs.:($$j).u₃ / dtγ
+        @. ᶜρa_tendencyʲs.:($$j) = -Y.c.sgsʲs.:($$j).ρa / dtγ
+    end
+
+    if n_picard > 0
+        ᶠsnapshot = p.precomputed.ᶠsgsʲs_picard_snapshot
+        ᶜsnapshot = p.precomputed.ᶜsgsʲs_picard_snapshot
         for j in 1:n
-            @. ᶠu₃_tendencyʲs.:($$j) = -Y.f.sgsʲs.:($$j).u₃ / dtγ
-            @. ᶜρa_tendencyʲs.:($$j) = -Y.c.sgsʲs.:($$j).ρa / dtγ
+            @. ᶠsnapshot.:($$j) = Y.f.sgsʲs.:($$j)
+            @. ᶜsnapshot.:($$j) = Y.c.sgsʲs.:($$j)
+            @. ᶜρ_diffʲs.:($$j) = (ᶜρʲs.:($$j) - Y.c.ρ) / ᶜρʲs.:($$j)
         end
-
-        # analytic stage solves (overwrite Y)
-        solve_sgs_u₃_implicit_stage_analytic!(Y, p, dtγ)
-        solve_sgs_ρa_implicit_stage_analytic!(Y, p, dtγ)
-
-        # add +u₃_stage / dtγ → (u₃_stage - u₃_old) / dtγ
-        # add +ρa_stage / dtγ → (ρa_stage - ρa_old) / dtγ
-        for j in 1:n
-            @. ᶠu₃_tendencyʲs.:($$j) += Y.f.sgsʲs.:($$j).u₃ / dtγ
-            @. ᶜρa_tendencyʲs.:($$j) += Y.c.sgsʲs.:($$j).ρa / dtγ
+        update_updraft_microphysics_tendency_cache!(
+            Y, p, microphysics_model, turbconv_model, dtγ,
+        )
+        for round in 1:n_picard
+            solve_sgs_u₃_implicit_stage_analytic!(Y, p, dtγ)
+            solve_sgs_updraft_tracers_implicit_stage_analytic!(Y, p, dtγ)
+            # Refresh the buoyancy inputs for the next u₃ solve, then update
+            # the per-updraft microphysics tendency at the round-converged
+            # iterate — Y.c.sgsʲs condensates and ᶜρʲs/ᶜTʲs must agree, so
+            # the restore must come after. ᶜρ_diffʲs is only read by the
+            # next u₃ solve, so it is safe to fuse into the restore loop.
+            set_prognostic_edmf_precomputed_quantities_draft_thermo!(Y, p)
+            update_updraft_microphysics_tendency_cache!(
+                Y, p, microphysics_model, turbconv_model, dtγ,
+            )
+            # Restore for the next round (or for the final u₃ solve).
+            # Faces: always, so u₃_old = stage u₃. Centers: only between
+            # rounds — the last round leaves the Picard-converged draft
+            # scalars as a warm start for the Newton solve.
+            for j in 1:n
+                @. ᶜρ_diffʲs.:($$j) = (ᶜρʲs.:($$j) - Y.c.ρ) / ᶜρʲs.:($$j)
+                @. Y.f.sgsʲs.:($$j) = ᶠsnapshot.:($$j)
+                round == n_picard || @. Y.c.sgsʲs.:($$j) = ᶜsnapshot.:($$j)
+            end
         end
     end
+
+    solve_sgs_u₃_implicit_stage_analytic!(Y, p, dtγ)
+    solve_sgs_ρa_implicit_stage_analytic!(Y, p, dtγ)
+
+    for j in 1:n
+        @. ᶠu₃_tendencyʲs.:($$j) += Y.f.sgsʲs.:($$j).u₃ / dtγ
+        @. ᶜρa_tendencyʲs.:($$j) += Y.c.sgsʲs.:($$j).ρa / dtγ
+    end
+    return nothing
 end
 
 """
@@ -478,4 +516,84 @@ function solve_sgs_ρa_implicit_stage_analytic!(Y, p, dtγ)
             )
         end
     end
+end
+
+"""
+    solve_sgs_updraft_tracers_implicit_stage_analytic!(Y, p, dtγ)
+
+Advance the buoyancy-affecting SGS/updraft specific tracers over the implicit
+stage by a semi-implicit first-order upwind sweep, overwriting
+`Y.c.sgsʲs.:(j).χ` in each EDMFX mass-flux subdomain `j`. A no-op for any
+`turbconv_model` other than `PrognosticEDMFX`.
+
+Solved: `mse`, `q_tot`, and, for 1M microphysics, `q_lcl`, `q_icl`, `q_rai`,
+`q_sno`. The advective form
+
+    (q_new - q_old) / dtγ + w · (q_new - q_new[i-1]) / Δz = S_mp(q),
+                 ᶜbottom_bias(ᶠw) / ᶜdz           = α,
+
+is swept bottom-to-top with `Operators.column_accumulate!` as
+
+    q_new[i] = (q_old[i]/dtγ + S_mp[i] + α · q_new[i-1]) / (1/dtγ + α).
+
+Called from the Picard loop in `initialize_implicit_stage_problem!` as a
+predictor between successive `u₃` solves; the result is not held fixed
+through the Newton solve. Entrainment, detrainment, and surface tracer
+fluxes are intentionally dropped — Newton applies them, and the
+entrainment time-scale (`~10⁴ s`) is slow against both advection and
+microphysics, so the predictor error is small. For 1M, `mse` and `q_tot`
+are source-free and `S_mp` for the condensate / precipitation tracers is
+read from the cached `ᶜmp_tendencyʲs`.
+"""
+function solve_sgs_updraft_tracers_implicit_stage_analytic!(Y, p, dtγ)
+    p.atmos.turbconv_model isa PrognosticEDMFX || return
+
+    ᶜdz = Fields.Δz_field(axes(Y.c))
+    ᶠdz = Fields.Δz_field(axes(Y.f))
+    ᶜnumerator = p.scratch.ᶜtemp_scalar
+    ᶜdenominator = p.scratch.ᶜtemp_scalar_2
+    ᶜadvection_factor = p.scratch.ᶜtemp_scalar_3
+    ᶠw = p.scratch.ᶠtemp_scalar
+
+    # (χ_name, S_name): S_name = nothing for source-free tracers; otherwise it
+    # names the matching entry in `p.precomputed.ᶜmp_tendencyʲs.:(j)`. Each
+    # pair whose χ_name is missing from the SGS schema (e.g. 1M condensate
+    # under 0M) is skipped by `has_field` below.
+    sgs_tracers = (
+        (@name(mse), nothing),
+        (@name(q_tot), nothing),
+        (@name(q_lcl), @name(dq_lcl_dt)),
+        (@name(q_icl), @name(dq_icl_dt)),
+        (@name(q_rai), @name(dq_rai_dt)),
+        (@name(q_sno), @name(dq_sno_dt)),
+    )
+
+    for j in 1:n_mass_flux_subdomains(p.atmos.turbconv_model)
+        sgsʲ = Y.c.sgsʲs.:($j)
+        @. ᶠw = Y.f.sgsʲs.:($$j).u₃.components.data.:1 / ᶠdz
+        @. ᶜadvection_factor = ᶜbottom_bias(ᶠw) / ᶜdz
+        @. ᶜdenominator = 1 / dtγ + ᶜadvection_factor
+        MatrixFields.unrolled_foreach(sgs_tracers) do (χ_name, S_name)
+            MatrixFields.has_field(sgsʲ, χ_name) || return
+            χ = MatrixFields.get_field(sgsʲ, χ_name)
+            if isnothing(S_name)
+                @. ᶜnumerator = χ / dtγ
+            else
+                S = MatrixFields.get_field(
+                    p.precomputed.ᶜmp_tendencyʲs.:($j), S_name,
+                )
+                @. ᶜnumerator = χ / dtγ + S
+            end
+            # Sweep bottom-to-top:
+            #   χ_new[i] = (num[i] + α[i] · χ_new[i-1]) / den[i]
+            # with num = χ_old/dtγ + S_mp and den = 1/dtγ + α.
+            input = @. lazy(tuple(ᶜnumerator, ᶜdenominator, ᶜadvection_factor))
+            Operators.column_accumulate!(
+                χ, input; init = zero(eltype(χ)),
+            ) do χ_prev, (num, den, α)
+                return (num + α * χ_prev) / den
+            end
+        end
+    end
+    return nothing
 end
