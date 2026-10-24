@@ -461,17 +461,24 @@ buoyancy-bounded mixing length `ᶜl_mix_disp` returned by
 `materialized_displacement_length!` (see `sgs_variance_fidelity`). Called at
 the end of `set_covariance_cache!` so `ᶜα` tracks each Picard iterate.
 
+The thermodynamic state, condensate, and precipitation are those of the domain
+that carries the SGS closure, as in `set_sgs_moments_and_cloud_fraction!`: the
+environment for PrognosticEDMFX, the grid mean otherwise.
+
 `σ_S` is estimated with the Gaussian-linear analytic formula
 `σ_S² = σ_q² − 2γ Cov(T,q) + γ² σ_T²`, with `γ = ∂q_vap_sat_∂T`. This is
 the fast estimate; the downstream quadrature closures still compute their
-own `σ_S`.
+own `σ_S`. The variances `σ_q²`, `σ_T²` and the correlation are the
+grid-mean ones of `set_covariance_cache!`, so under PrognosticEDMFX `σ_S`
+combines these grid-mean variances with `γ` at the environment state. The
+cloud closure pairs the same variances with environment means.
 
 Non-EDMF configurations without TKE substitute `TKE = 0` and `l_mix = 1 m`,
 collapsing the Damköhler factor to 1.
 """
 function materialized_variance_fidelity!(Y, p, ᶜl_mix_disp)
     hasproperty(p.precomputed, :ᶜα) || return nothing
-    (; ᶜT, ᶜq_tot_nonneg, ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα) = p.precomputed
+    (; ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα) = p.precomputed
     FT = eltype(p.params)
     A = FT(CAP.cloud_fraction_steepness_scale(p.params))
 
@@ -498,9 +505,12 @@ function materialized_variance_fidelity!(Y, p, ᶜl_mix_disp)
         ᶜtke_or_zero = zero(FT)
         ᶜl_mix_or_one = one(FT)
     end
-    ᶜq_lcl, ᶜq_icl = _grid_mean_cloud_condensate(Y, p, p.atmos.microphysics_model)
+    (; turbconv_model, microphysics_model) = p.atmos
+    ᶜρ_env, ᶜT_mean, ᶜq_mean = _get_env_ρ_T_q(Y, p, thp, turbconv_model)
+    ᶜq_lcl, ᶜq_icl =
+        _get_condensate_means(Y, p, turbconv_model, microphysics_model)
     # Linear σ_S² = σ_q² − 2γ Cov(T,q) + γ² σ_T², with Clausius-Clapeyron γ.
-    ᶜγ = @. lazy(TD.∂q_vap_sat_∂T(thp, ᶜT, Y.c.ρ))
+    ᶜγ = @. lazy(TD.∂q_vap_sat_∂T(thp, ᶜT_mean, ᶜρ_env))
     ᶜsigma_S = @. lazy(
         sqrt(
             max(
@@ -510,7 +520,12 @@ function materialized_variance_fidelity!(Y, p, ᶜl_mix_disp)
             ),
         ),
     )
-    ᶜmu_S = @. lazy(ᶜq_tot_nonneg - TD.q_vap_saturation(thp, ᶜT, Y.c.ρ))
+    # Rain and snow are not in equilibrium with vapor, so the excess that the
+    # cloud condensate relaxes toward is `q_tot − q_rai − q_sno − q_sat`.
+    ᶜq_precip = _get_precip_mean(Y, p, turbconv_model, microphysics_model)
+    ᶜmu_S = @. lazy(
+        ᶜq_mean - ᶜq_precip - TD.q_vap_saturation(thp, ᶜT_mean, ᶜρ_env),
+    )
     # The equilibrium target of the modulator is the one the condensate relaxes
     # toward: curvature-aware where `ᶜdisp_S` is configured, Gaussian otherwise.
     ᶜlin, ᶜcurv = if p.atmos.sgs_variance_curvature
@@ -520,7 +535,7 @@ function materialized_variance_fidelity!(Y, p, ᶜl_mix_disp)
     end
     @. ᶜα = sgs_variance_fidelity(
         A,
-        sgs_microphysics_timescale(thp, ᶜT, τ_cond, τ_sub),
+        sgs_microphysics_timescale(thp, ᶜT_mean, τ_cond, τ_sub),
         c_d,
         ᶜtke_or_zero,
         ᶜl_mix_or_one,
@@ -1573,8 +1588,8 @@ NVTX.@annotate function set_sgs_moments_and_cloud_fraction!(Y, p)
     ᶜρ_env_lazy, ᶜT_mean, ᶜq_mean = _get_env_ρ_T_q(Y, p, thermo_params, turbconv_model)
     ᶜq_lcl_lazy, ᶜq_icl_lazy =
         _get_condensate_means(Y, p, turbconv_model, microphysics_model)
-    ᶜq_rai_lazy, ᶜq_sno_lazy =
-        _get_precip_means(Y, p, turbconv_model, microphysics_model)
+    ᶜq_precip_lazy =
+        _get_precip_mean(Y, p, turbconv_model, microphysics_model)
     sgs_quad = p.atmos.sgs_quadrature
     floor = cloud_fraction_floor_params(p.params)
     (; ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα, ᶜsgs_moments, ᶜcloud_fraction) =
@@ -1588,7 +1603,7 @@ NVTX.@annotate function set_sgs_moments_and_cloud_fraction!(Y, p)
     ᶜq_lcl = (p.scratch.ᶜtemp_scalar_2 .= ᶜq_lcl_lazy)
     ᶜq_icl = (p.scratch.ᶜtemp_scalar_3 .= ᶜq_icl_lazy)
     ᶜq_cloud = p.scratch.ᶜtemp_scalar_5
-    @. ᶜq_cloud = max(0, ᶜq_mean - (ᶜq_rai_lazy + ᶜq_sno_lazy))
+    @. ᶜq_cloud = max(0, ᶜq_mean - ᶜq_precip_lazy)
 
     # The displacement coefficients enter the loop as a field only when the
     # curvature-aware condensate is configured; otherwise as zeros, for which
@@ -1708,7 +1723,7 @@ NVTX.@annotate function set_precip_fraction!(Y, p)
     _precip_fraction_sweep!(
         p.precomputed.ᶜprecip_frac,
         p.precomputed.ᶜcloud_fraction,
-        _get_precip_mean(Y, p, p.atmos.turbconv_model),
+        _get_precip_mean(Y, p, p.atmos.turbconv_model, p.atmos.microphysics_model),
         f_decay,
         FT(TD.Parameters.q_min(thermo_params)),
     )
@@ -1763,27 +1778,6 @@ end
 #             zero(FT),
 #         )
 #     end
-
-"""
-    _get_precip_mean(Y, p, turbconv_model)
-
-Mean precipitation specific humidity `q_rai + q_sno` of the domain that carries
-the SGS closure: the environment for `PrognosticEDMFX`, the grid mean
-otherwise.
-"""
-function _get_precip_mean(Y, p, turbconv_model)
-    if turbconv_model isa PrognosticEDMFX
-        return @. lazy(
-            max(0, $(ᶜspecific_env_value(@name(q_rai), Y, p))) +
-            max(0, $(ᶜspecific_env_value(@name(q_sno), Y, p))),
-        )
-    else
-        return @. lazy(
-            max(0, specific(Y.c.ρq_rai, Y.c.ρ)) +
-            max(0, specific(Y.c.ρq_sno, Y.c.ρ)),
-        )
-    end
-end
 
 
 # ============================================================================
@@ -1847,6 +1841,18 @@ _grid_mean_cloud_condensate(Y, p, ::NonEquilibriumMicrophysics) = (
 )
 _grid_mean_cloud_condensate(Y, p, microphysics_model) =
     (p.precomputed.ᶜq_liq, p.precomputed.ᶜq_ice)
+
+"""
+    _grid_mean_precipitation(Y, p, microphysics_model)
+
+Grid-mean non-negative precipitation `q_rai + q_sno`: a lazy field for
+non-equilibrium microphysics, which carries `ρq_rai` and `ρq_sno`, and zero
+for models without prognostic precipitation (dry, 0M).
+"""
+_grid_mean_precipitation(Y, p, ::NonEquilibriumMicrophysics) = @. lazy(
+    max(0, specific(Y.c.ρq_rai, Y.c.ρ)) + max(0, specific(Y.c.ρq_sno, Y.c.ρ)),
+)
+_grid_mean_precipitation(Y, p, microphysics_model) = zero(eltype(p.params))
 NVTX.@annotate function set_cloud_fraction!(
     Y,
     p,
@@ -2048,30 +2054,33 @@ _env_cloud_condensate(Y, p, microphysics_model) =
     (p.precomputed.ᶜq_liq⁰, p.precomputed.ᶜq_ice⁰)
 
 """
-    _get_precip_means(Y, p, turbconv_model, microphysics_model)
+    _get_precip_mean(Y, p, turbconv_model, microphysics_model)
 
-Non-negative mean rain and snow `(ᶜq_rai, ᶜq_sno)` of the domain that carries
-the SGS cloud closure, as lazy fields: the environment for PrognosticEDMFX,
-the grid mean otherwise. Only non-equilibrium microphysics carries `ρq_rai`
-and `ρq_sno`, and only those configurations allocate `ᶜsgs_moments`. The
-clamp matches the `q_rai_nonneg`, `q_sno_nonneg` that
+Non-negative mean precipitation `q_rai + q_sno` of the domain that carries the
+SGS cloud closure: the environment for PrognosticEDMFX
+(`_env_precipitation`), the grid mean otherwise (`_grid_mean_precipitation`).
+Each species is clamped as in the `q_rai_nonneg`, `q_sno_nonneg` that
 `microphysics_tendencies_1m` hands to `Microphysics1MEvaluator`, so the
 cloud-available excess `μ_{S,cloud}` of `_compute_sgs_moments` and the node
 excess `S_raw_cloud` of the evaluator subtract the same precipitation.
 """
-function _get_precip_means(Y, p, turbconv_model, ::NonEquilibriumMicrophysics)
-    if turbconv_model isa PrognosticEDMFX
-        return (
-            (@. lazy(max(0, $(ᶜspecific_env_value(@name(q_rai), Y, p))))),
-            (@. lazy(max(0, $(ᶜspecific_env_value(@name(q_sno), Y, p))))),
-        )
-    else
-        return (
-            (@. lazy(max(0, specific(Y.c.ρq_rai, Y.c.ρ)))),
-            (@. lazy(max(0, specific(Y.c.ρq_sno, Y.c.ρ)))),
-        )
-    end
-end
+_get_precip_mean(Y, p, turbconv_model, microphysics_model) =
+    turbconv_model isa PrognosticEDMFX ?
+    _env_precipitation(Y, p, microphysics_model) :
+    _grid_mean_precipitation(Y, p, microphysics_model)
+
+"""
+    _env_precipitation(Y, p, microphysics_model)
+
+Environment non-negative precipitation `q_rai⁰ + q_sno⁰` for PrognosticEDMFX:
+a lazy field for non-equilibrium microphysics, which carries `q_rai` and
+`q_sno`, and zero for models without prognostic precipitation (dry, 0M).
+"""
+_env_precipitation(Y, p, ::NonEquilibriumMicrophysics) = @. lazy(
+    max(0, $(ᶜspecific_env_value(@name(q_rai), Y, p))) +
+    max(0, $(ᶜspecific_env_value(@name(q_sno), Y, p))),
+)
+_env_precipitation(Y, p, microphysics_model) = zero(eltype(p.params))
 
 """
     _apply_edmf_cloud_weighting!(Y, p, turbconv_model, thermo_params)
