@@ -122,16 +122,14 @@ end
 """
     AbstractSGSDistribution
 
-Joint subgrid-scale distribution of `(T, q)` assumed by the quadrature.
-
-The distribution type selects how specific humidity is sampled from the quadrature
-nodes; temperature is always Gaussian. Each subtype has a corresponding transform
-functor built by [`create_physical_transform`](@ref).
+Joint subgrid-scale distribution of `(T, q)` assumed by the SGS closures.
+Each subtype has a corresponding transform functor built by
+[`create_physical_transform`](@ref) for the Gauss–Hermite quadrature of the 0M
+microphysics.
 
 Subtypes:
 
   - [`GaussianSGS`](@ref): correlated bivariate Gaussian.
-  - [`LogNormalSGS`](@ref): log-normal `q`, Gaussian `T`.
   - [`GridMeanSGS`](@ref): degenerate, grid-mean-only.
 """
 abstract type AbstractSGSDistribution end
@@ -141,27 +139,26 @@ abstract type AbstractSGSDistribution end
 
 Bivariate Gaussian SGS distribution of `(T, q)`.
 
-Humidity is sampled first, and temperature is drawn from its distribution
-conditional on the sampled humidity, which reproduces the requested correlation.
-Sampled `q` is clamped to `[0, q_max]` and sampled `T` is floored at `T_min`, so
-extreme nodes cannot leave the physical domain.
+The 1M microphysics tendencies are integrated over it by the conditional-moment
+node rule (`conditional_rule`): the nodes sit at the conditional moments of the
+saturation excess on the intervals between the cloud edges of the actual and
+the equilibrium condensate and the edge of the precipitation shaft, so that the
+condensate means are integrated exactly for any cloud fraction, and every
+interval that carries cloud gets the two-point Gauss rule of the truncated
+distribution for the in-cloud spread. A node whose temperature spread at fixed
+saturation excess straddles the freezing point is split there into the
+conditional means of the two sides (`sum_over_conditional_nodes`). The
+Lagrange multipliers of `_compute_sgs_moments` are the continuous ones, and
+`σ_S`, which sets the nodes, the multipliers and the cloud fraction, is the
+linearized width `_sgs_linear_sigma_S`.
+
+The 0M tendencies are integrated by the Gauss–Hermite quadrature: humidity is
+sampled first, and temperature is drawn from its distribution conditional on the
+sampled humidity, which reproduces the requested correlation. Sampled `q` is
+clamped to `[0, q_max]` and sampled `T` is floored at `T_min`, so extreme nodes
+cannot leave the physical domain; the 1M nodes are bounded the same way.
 """
 struct GaussianSGS <: AbstractSGSDistribution end
-
-"""
-    LogNormalSGS <: AbstractSGSDistribution
-
-Log-normal SGS distribution for specific humidity, Gaussian for temperature.
-
-Sampling `q` in log space makes it positive-definite by construction, so the
-lower-tail truncation of `GaussianSGS` does not arise. The `T`-`q` correlation is
-imposed with a Gaussian copula on the underlying normal variates. The log-normal
-parameters degenerate for a vanishing mean or variance, in which case sampling
-falls back to the mean humidity.
-"""
-struct LogNormalSGS <: AbstractSGSDistribution end
-
-
 
 """
     GridMeanSGS <: AbstractSGSDistribution
@@ -263,8 +260,6 @@ Return the quadrature order `N`, so that the two-dimensional rule uses `N²` poi
 Return the quadrature nodes and weights appropriate to the SGS distribution `dist`.
 
   - `GaussianSGS`: Gauss-Hermite of order `N`.
-  - `LogNormalSGS`: Gauss-Hermite of order `N`; the log-space transform is applied
-    later, in the transform functor built by [`create_physical_transform`](@ref).
   - `GridMeanSGS`: the single node at the origin with weight ``\\sqrt{\\pi}``,
     which cancels the ``1/\\pi`` normalization in
     `sum_over_quadrature_points`.
@@ -272,12 +267,6 @@ Return the quadrature nodes and weights appropriate to the SGS distribution `dis
 Called from the [`SGSQuadrature`](@ref) constructor.
 """
 @inline get_quadrature_nodes_weights(::GaussianSGS, FT, N) = gauss_hermite(FT, N)
-
-@inline function get_quadrature_nodes_weights(::LogNormalSGS, FT, N)
-    # Log-normal uses Gauss-Hermite in log-space
-    # Transformation is applied in get_physical_point
-    gauss_hermite(FT, N)
-end
 
 @inline function get_quadrature_nodes_weights(::GridMeanSGS, FT, N)
     # Grid-mean-only: single point at origin with weight sqrt(π)
@@ -429,10 +418,9 @@ state `(T_hat, q_hat)` [K, kg/kg].
 
 One transform is built per grid cell by [`create_physical_transform`](@ref), which
 precomputes every loop-invariant constant so the `N²` inner evaluations avoid
-repeated `sqrt`, `log`, and division. Subtypes correspond one-to-one to the
+repeated `sqrt` and division. Subtypes correspond one-to-one to the
 [`AbstractSGSDistribution`](@ref) subtypes:
-`GaussianPhysicalPointTransform`, `LogNormalPhysicalPointTransform`, and
-`GridMeanPhysicalPointTransform`.
+`GaussianPhysicalPointTransform` and `GridMeanPhysicalPointTransform`.
 """
 abstract type AbstractPhysicalPointTransform end
 
@@ -482,60 +470,6 @@ weight ``e^{-x^2}``, into standard normal deviates. `q_hat` is clamped to
 end
 
 """
-    LogNormalPhysicalPointTransform{FT} <: AbstractPhysicalPointTransform
-
-Transform for [`LogNormalSGS`](@ref). Samples `q` in log space and `T` from a
-Gaussian correlated with it through a copula.
-
-# Fields
-
-  - `μ_T`, `μ_q`: Means of temperature [K] and specific humidity [kg/kg].
-  - `σ_T`: Standard deviation of temperature [K].
-  - `μ_ln`, `σ_ln`: Location and scale of the underlying normal in log space,
-    matched to `μ_q` and `σ_q` [log kg/kg].
-  - `c1`, `c2`: Copula coefficients ``\\rho`` and ``\\sqrt{1 - \\rho^2}`` [-].
-  - `use_lognormal`: `false` where `μ_q` or `σ_q` is too small for the log-normal
-    parameters to be meaningful; sampling then returns `μ_q`.
-  - `T_min`, `q_max`: Sampling bounds [K] and [kg/kg].
-"""
-struct LogNormalPhysicalPointTransform{FT} <: AbstractPhysicalPointTransform
-    μ_T::FT
-    μ_q::FT
-    σ_T::FT
-    μ_ln::FT
-    σ_ln::FT
-    c1::FT       # corr
-    c2::FT       # sqrt(1 - corr^2)
-    use_lognormal::Bool
-    T_min::FT
-    q_max::FT
-end
-
-"""
-    (t::LogNormalPhysicalPointTransform)(χ1, χ2)
-
-Map Gauss-Hermite nodes `(χ1, χ2)` to `(T_hat, q_hat)` [K, kg/kg].
-
-The node `χ1` drives the log-normal humidity; the temperature deviate is the copula
-combination `c1·χ1 + c2·χ2`, which carries the requested correlation. `q_hat` is
-capped at `q_max` and `T_hat` floored at `T_min`; no lower clamp on `q_hat` is
-needed because the log-normal is positive by construction.
-"""
-@inline function (t::LogNormalPhysicalPointTransform)(χ1, χ2)
-    FT = typeof(t.μ_q)
-    sqrt2 = sqrt(FT(2))
-
-    z_q = χ1
-    z_T = t.c1 * χ1 + t.c2 * χ2
-
-    q_lognormal = exp(t.μ_ln + sqrt2 * t.σ_ln * z_q)
-    q_hat = clamp(ifelse(t.use_lognormal, q_lognormal, t.μ_q), zero(FT), t.q_max)
-    T_hat = max(t.T_min, t.μ_T + sqrt2 * t.σ_T * z_T)
-
-    return (T_hat, q_hat)
-end
-
-"""
     GridMeanPhysicalPointTransform{FT} <: AbstractPhysicalPointTransform
 
 Transform for [`GridMeanSGS`](@ref): returns `(μ_T, μ_q)` [K, kg/kg] for any node,
@@ -562,9 +496,9 @@ end
 Build the [`AbstractPhysicalPointTransform`](@ref) functor for SGS distribution
 `dist`.
 
-All loop-invariant constants (conditional standard deviations, regression slopes,
-log-space parameters) are computed here, so the `N²` inner evaluations avoid
-repeated `sqrt`, `log`, and division. A functor rather than a closure is used to
+All loop-invariant constants (conditional standard deviations, regression
+slopes) are computed here, so the `N²` inner evaluations avoid
+repeated `sqrt` and division. A functor rather than a closure is used to
 keep the quadrature allocation-free on GPU.
 
 # Arguments
@@ -578,28 +512,12 @@ keep the quadrature allocation-free on GPU.
 Called from [`integrate_over_sgs`](@ref).
 """
 @inline function create_physical_transform(
-    ::GaussianSGS, μ_q::FT, μ_T::FT, σ_q::FT, σ_T::FT, corr::FT, T_min::FT, q_max::FT,
+    ::GaussianSGS,
+    μ_q::FT, μ_T::FT, σ_q::FT, σ_T::FT, corr::FT, T_min::FT, q_max::FT,
 ) where {FT}
     σ_c = sqrt(max(one(FT) - corr^2, zero(FT))) * σ_T
     fac = corr * σ_T / max(σ_q, ϵ_numerics(FT))
     return GaussianPhysicalPointTransform(μ_T, μ_q, σ_q, σ_c, fac, T_min, q_max)
-end
-
-@inline function create_physical_transform(
-    ::LogNormalSGS, μ_q::FT, μ_T::FT, σ_q::FT, σ_T::FT, corr::FT, T_min::FT, q_max::FT,
-) where {FT}
-    ε = ϵ_numerics(FT)
-    c1 = corr
-    c2 = sqrt(max(zero(FT), one(FT) - corr^2))
-
-    ratio = σ_q / max(μ_q, ε)
-    σ_ln = sqrt(log(one(FT) + ratio^2))
-    μ_ln = log(max(μ_q, ε)) - σ_ln^2 / 2
-    use_lognormal = (μ_q > ε) & (σ_q > zero(FT))
-
-    return LogNormalPhysicalPointTransform(
-        μ_T, μ_q, σ_T, μ_ln, σ_ln, c1, c2, use_lognormal, T_min, q_max,
-    )
 end
 
 @inline function create_physical_transform(
@@ -719,9 +637,7 @@ end
 Build the [`AbstractPhysicalPointTransform`](@ref) for `quad` from the mean
 state and (co)variances, converting variances to standard deviations and
 clamping the correlation on the way (see `sgs_stddevs_and_correlation`).
-Factored out of [`integrate_over_sgs`](@ref) so callers that need the
-individual quadrature-point values (see `quadrature_point_values`)
-sample from exactly the same transform.
+Factored out of [`integrate_over_sgs`](@ref).
 """
 @inline function build_physical_transform(quad, μ_q, μ_T, q′q′, T′T′, corr_Tq)
     σ_q, σ_T, corr = sgs_stddevs_and_correlation(q′q′, T′T′, corr_Tq)
@@ -739,46 +655,6 @@ sample from exactly the same transform.
         oftype(μ_T_p, quad.T_min),
         oftype(μ_T_p, quad.q_max),
     )
-end
-
-"""
-    quadrature_point_values(f, get_x_hat, quad)
-
-Evaluate `f(T_hat, q_hat)` at each of the `N²` quadrature points and return
-the values as an `SVector{N²}`, in the same point order as
-`quadrature_prob_weights`. Unlike `sum_over_quadrature_points`,
-which only accumulates the weighted sum, this materializes the individual
-point values (in registers — `N` is a compile-time constant), for closures
-that need the sampled distribution itself, such as the discrete
-Lagrange-multiplier fit in `_compute_sgs_moments`.
-"""
-@inline function quadrature_point_values(
-    f,
-    get_x_hat,
-    quad::SGSQuadrature{N},
-) where {N}
-    χ = quad.a
-    return SA.SVector{N * N}(ntuple(Val(N * N)) do k
-        j, i = fldmod1(k, N)
-        f(get_x_hat(χ[i], χ[j])...)
-    end)
-end
-
-"""
-    quadrature_prob_weights(quad)
-
-Return the `N²` probability weights of the two-dimensional quadrature rule as
-an `SVector{N²}` in the same point order as `quadrature_point_values`:
-the tensor products `wᵢ·wⱼ/π`, which sum to 1 for the Gauss-Hermite rule.
-"""
-@inline function quadrature_prob_weights(quad::SGSQuadrature{N}) where {N}
-    w = quad.w
-    FT = eltype(w)
-    inv_pi = one(FT) / FT(π)
-    return SA.SVector{N * N}(ntuple(Val(N * N)) do k
-        j, i = fldmod1(k, N)
-        w[i] * w[j] * inv_pi
-    end)
 end
 
 """

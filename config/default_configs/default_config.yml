@@ -265,10 +265,10 @@ tq_correlation_model:
   help: "Closure for the SGS T-q correlation that couples σ_T and σ_q in the sampled joint PDF. `diagnosed` uses the covariance of the subgrid displacement that produces the variances, ρ = T′q′ / √(T′T′ q′q′), falling back to the prescribed `Tq_correlation_coefficient` where the variances vanish. `constant` uses the prescribed coefficient everywhere. [`diagnosed` (default), `constant`]"
   value: "diagnosed"
 sgs_distribution:
-  help: "Distribution type for SGS quadrature over microphysics. [`gaussian` (default), `lognormal`, `mean` (grid-mean only, no SGS sampling)]"
+  help: "Distribution of the SGS fluctuations over which the microphysics is integrated. `gaussian`: the bivariate Gaussian (`GaussianSGS`); the 1M microphysics nodes sit at the conditional moments of the saturation excess between the cloud and shaft edges, and the 0M microphysics uses Gauss–Hermite quadrature. [`gaussian` (default), `mean` (grid-mean only, no SGS sampling)]"
   value: "gaussian"
 quadrature_order:
-  help: "Quadrature order for SGS integration (1-5). Higher orders are more accurate but slower. Default: 3"
+  help: "Gauss–Hermite quadrature order for the SGS integration of the 0M microphysics (1-5). Higher orders are more accurate but slower. The 1M microphysics places its own nodes and ignores it. Default: 3"
   value: 3
 sgs_variance_curvature:
   help: "Evaluate the equilibrium SGS condensate E[max(0, S)] under the vertical displacement acting on the curved profile of the saturation excess, S = μ_S + lin x + ½ curv (x² − 1) + h with x standard normal, so that the moist tail is bounded by the largest excess the displaced (quadratic) profile reaches, μ_S + (lin² + curv²)/(2|curv|) for curv < 0. `false` keeps the truncated-Gaussian expectation. [`false` (default), `true`]"

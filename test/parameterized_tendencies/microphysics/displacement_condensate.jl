@@ -40,21 +40,6 @@ function reference_condensate(mu_S, sigma_S, lin, curv; n = 40001)
     )
 end
 
-# Functor computing E[max(0, λ + α·S′)] over the quadrature, replicating the
-# condensate diagnosis of `Microphysics1MEvaluator`.
-struct EquilibriumProbe{TPS, FT}
-    tps::TPS
-    ρ::FT
-    mu_S::FT
-    λ::FT
-    α::FT
-end
-function (p::EquilibriumProbe)(T_hat, q_hat)
-    FT = typeof(p.ρ)
-    S′ = max(FT(0), q_hat) - TD.q_vap_saturation(p.tps, T_hat, p.ρ) - p.mu_S
-    return max(FT(0), p.λ + p.α * S′)
-end
-
 @testset "Curvature-aware displacement condensate" begin
 
     @testset "displacement_curvature_coefficients" begin
@@ -211,11 +196,13 @@ end
                 @test m.λ_lagrange == m0.λ_lagrange
                 mu_S = q_tot - q_sat
                 q_c_eq = CA.displacement_condensate(mu_S, m.sigma_S, lin, curv)
-                probe = EquilibriumProbe(thp, ρ, mu_S, m.λ_eq, one(FT))
-                # The discrete fit resolves targets down to the roundoff of
-                # the multiplier, of the order of `eps(FT) σ_S`.
-                @test CA.integrate_over_sgs(probe, quad, q_tot, T, q′q′, T′T′, corr) ≈
-                      q_c_eq rtol = sqrt(eps(FT)) atol = 100 * eps(FT) * m.sigma_S
+                # λ_eq is the continuous multiplier: the truncated-Gaussian
+                # expectation E[max(0, λ_eq + S′)] is the curvature-aware q_c_eq,
+                # to the accuracy of the Newton inversion. Its residual is
+                # absolute in σ_S: the two Newton steps leave ~1e-8 σ_S in the
+                # deep tail (q_c_eq / σ_S ~ 3e-3), and q_c_eq may vanish.
+                @test CA.truncated_gaussian_condensate(m.λ_eq, m.sigma_S) ≈ q_c_eq atol =
+                    (FT == Float32 ? 1e-6 : 1e-7) * m.sigma_S
                 # Negative curvature with a subsaturated mean lowers the
                 # equilibrium condensate below the Gaussian value.
                 fc < 0 && dq < 0 &&
