@@ -282,7 +282,10 @@ The non-propagating drag is confined to a finite layer above the PBL top, bounde
 \mathrm{phase} \mathrel{+}= ({}^fz[k] - {}^fz[k-1]) \cdot \frac{\max(N_{\mathrm{min}}, \min(N_{\mathrm{max}}, {}^fN[k]))}{\max(vvmin, {}^fV_{\tau}[k])},
 ```
 
+with ${}^fz[k-1]$ replaced by $z_{\text{pbl}}$ for the first face above the PBL top, and
 setting $z_{\mathrm{ref}} = {}^fz[k]$ at the first face where $\mathrm{phase} > \pi$. Here $N_{\mathrm{min}} = 0.7 \times 10^{-2}\,\mathrm{s^{-1}}$, $N_{\mathrm{max}} = 1.7 \times 10^{-2}\,\mathrm{s^{-1}}$, $vvmin = 1.0\,\mathrm{m/s}$, and $({}^fN, {}^fV_{\tau})$ are obtained from the saturation-profile calculation. If $\mathrm{phase}$ never exceeds $\pi$ in the column, $z_{\mathrm{ref}}$ falls back to the model top. The pressure weighting below still concentrates most of the drag near the surface.
+
+In this section $z_{\text{pbl}}$ is the bottom face of the PBL-top cell, the highest face at or below the PBL-top cell center found above. The first layer in the phase sum is therefore the PBL-top cell itself, which is also the lowest cell of the blocked layer, as in GFDL `topo_drag`, which sums the phase layer by layer from the PBL-top level. Each layer uses ${}^fN$ and ${}^fV_{\tau}$ at its upper face.
 
 Here, $N / V_\tau$ is the vertical wavenumber of a stationary hydrostatic gravity wave, so summing it over height accumulates the wave's vertical phase. Reaching $\pi$ means the flow has turned through half a vertical wavelength. This marks the top of the blocked/deflected low-level layer, which sets $z_{\mathrm{ref}}$. Half a wavelength is the natural cutoff because the wave wiggles up and down as $\sin(mz)$: over the first half-wavelength it makes a single bump, which is the air piling up and overturning right against the mountain. Past that point the wave flips to the other sign and starts behaving like the free wave traveling upward, not the air trapped and blocked near the surface, so that is where the blocked layer ends. The clamps on $N$ and $V_\tau$ keep the wavenumber physical so the layer depth stays sensible.
 
@@ -292,13 +295,15 @@ The drag forcing due to the non-propagating component is confined between the PB
 \mathrm{weight}[k] = \overline{{}^f p - {}^f p_{\mathrm{ref}}}^c,
 ```
 
-where ${}^f p_{\mathrm{ref}}$ is the face pressure at $z_{\mathrm{ref}}$, and the overbar denotes interpolation to cell centers. The pressure layer thickness is similarly interpolated:
+where ${}^f p_{\mathrm{ref}}$ is the face pressure at $z_{\mathrm{ref}}$, and the overbar denotes interpolation to cell centers. The pressure thickness of each cell is the pressure difference across its own two faces, as in GFDL `topo_drag`:
 
 ```math
-\mathrm{diff}[k] = \overline{{}^f p[k-1] - {}^f p[k]}^c,
+\mathrm{diff}[k] = {}^f p_{\mathrm{lower}}[k] - {}^f p_{\mathrm{upper}}[k],
 ```
 
-and the column stress sum is
+where the subscripts denote the lower and upper faces of cell $k$. Interior face pressures are the mean of the two adjacent cell-center pressures. The bottom and top face pressures are integrated hydrostatically over the half cell from the adjacent center, ${}^f p_{\mathrm{bottom}} = p[1] + \rho[1]\, g\, (z[1] - {}^f z_{\mathrm{bottom}})$ and ${}^f p_{\mathrm{top}} = p[N] - \rho[N]\, g\, ({}^f z_{\mathrm{top}} - z[N])$, because copying the nearest center pressure onto a boundary face would give the lowest and highest cells only about half their pressure thickness. The model keeps no surface pressure, so this half-cell integral is used instead.
+
+The column stress sum is
 
 ```math
 wtsum = \sum_{k \in \mathrm{mask}} \mathrm{diff}[k] \cdot \mathrm{weight}[k],
@@ -457,7 +462,7 @@ TOFD input, at initialization when a_tofd > 0 (Earth orography only):
 Every dt_ogw seconds:
   ogw_model_callback!
     └─ orographic_gravity_wave_compute_tendency!
-        ├─ Compute N(z), find z_pbl
+        ├─ Compute N(z) and face pressure, find z_pbl
         ├─ calc_base_flux!              → τ_x, τ_y, τ_l, τ_p, τ_np
         ├─ calc_saturation_profile!     → τ_sat(z)
         ├─ calc_propagate_forcing!      → propagating tendency
