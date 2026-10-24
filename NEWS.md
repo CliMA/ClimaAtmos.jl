@@ -3,6 +3,17 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- ![][badge-✨feature/enhancement] Saturated-instability mass source of the
+  prognostic EDMF updraft (provisional parameter `edmf_satinst_source_coeff`,
+  default 0 = off). Where the saturated (moist-adiabatic) buoyancy gradient
+  `N²_sat` is negative, the environment air that is saturated and at least as
+  buoyant as the updraft moves into the updraft at
+  `c_s ρa⁰ f √(−N²_sat) · a_min/(aʲ + a_min)` (`set_edmf_satinst_source!`), with
+  `f` the saturated environment fraction capped by buoyancy selection
+  (`buoyancy_selected_fraction`); the moved air is the most buoyant part of the
+  environment's subgrid distribution. The source is an exchange between
+  environment and updraft, so grid-mean tendencies are unchanged. Diagnostic
+  `satinst_src`.
 - ![][badge-✨feature/enhancement] Tail entrainment for the prognostic EDMF
   updraft (provisional parameter `edmf_tail_entr_weight`, default 0 = off): the
   air drawn in by the dynamical entrainment comes from the upper half, in moist

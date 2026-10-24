@@ -654,6 +654,9 @@ function SGSQuadratureParameters(
         # Tail entrainment (`tail_entrainment_increments`): weight 0 = the
         # dynamical entrainment draws environment-mean air.
         edmf_tail_entr_weight = FT(0),
+        # Saturated-instability mass source of the updraft
+        # (`satinst_source_rate`); 0 = off.
+        edmf_satinst_source_coeff = FT(0),
     )
     # A run toml defines a parameter that ClimaParams also defines when it
     # appears in the override dictionary or, for a `toml_dict` assembled
