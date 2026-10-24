@@ -2,10 +2,14 @@ using Test
 import ClimaComms
 ClimaComms.@import_required_backends
 import ClimaAtmos as CA
+import ClimaAtmos.Parameters as CAP
+import ClimaParams as CP
 using NullBroadcasts: NullBroadcasted
 using ClimaCore: Spaces, Fields, Geometry
 using ClimaCore.CommonSpaces
 using Base.Broadcast: materialize
+
+include("../test_helpers.jl")
 
 @testset "Sponge Layers" begin
     FT = Float64
@@ -33,10 +37,6 @@ using Base.Broadcast: materialize
     @. ᶜuₕ = Geometry.Covariant12Vector(FT(1), FT(1))
     ᶠw = Fields.Field(Geometry.Covariant3Vector{FT}, ᶠspace)
     @. ᶠw = Geometry.Covariant3Vector(FT(1))
-    ᶜρ = ones(ᶜspace)
-    ᶜs_d = ones(ᶜspace)
-    ᶜh_eff_plus_Φ = ones(ᶜspace)
-    ᶜq_tot_eff = ones(ᶜspace)
     ᶜχ = ones(ᶜspace)
     ᶜχʲ = 2 .* ones(ᶜspace)
 
@@ -154,39 +154,172 @@ using Base.Broadcast: materialize
             # Test viscous_sponge_tendency_u₃ returns finite values
             tendency_u₃ = CA.viscous_sponge_tendency_u₃(ᶠw, s)
             @test all(isfinite, parent(materialize(tendency_u₃)))
-
-            # Split-form energy tendency: dry static energy + water enthalpy
-            tendency_ρe_tot_dry =
-                CA.viscous_sponge_tendency_ρe_tot_dry(ᶜρ, ᶜs_d, s)
-            @test all(isfinite, parent(materialize(tendency_ρe_tot_dry)))
-            tendency_ρe_tot_water = CA.viscous_sponge_tendency_ρe_tot_water(
-                ᶜρ,
-                ᶜh_eff_plus_Φ,
-                ᶜq_tot_eff,
-                s,
-            )
-            @test all(isfinite, parent(materialize(tendency_ρe_tot_water)))
-
-            # Test viscous_sponge_tendency_tracer returns finite values
-            tendency_tracer = CA.viscous_sponge_tendency_tracer(ᶜρ, ᶜχ, s)
-            @test all(isfinite, parent(materialize(tendency_tracer)))
         end
 
         @testset "No sponge (nothing) returns NullBroadcasted" begin
             @test CA.viscous_sponge_tendency_uₕ(ᶜuₕ, nothing) isa NullBroadcasted
             @test CA.viscous_sponge_tendency_u₃(ᶠw, nothing) isa NullBroadcasted
-            @test CA.viscous_sponge_tendency_ρe_tot_dry(
-                ᶜρ,
-                ᶜs_d,
-                nothing,
-            ) isa NullBroadcasted
-            @test CA.viscous_sponge_tendency_ρe_tot_water(
-                ᶜρ,
-                ᶜh_eff_plus_Φ,
-                ᶜq_tot_eff,
-                nothing,
-            ) isa NullBroadcasted
-            @test CA.viscous_sponge_tendency_tracer(ᶜρ, ᶜχ, nothing) isa NullBroadcasted
+        end
+
+        # The scalar part of the sponge is horizontal diffusion with the
+        # coefficient β(z) ρ: energy through the enthalpy bracket with the heat
+        # capacity of the diffusing mixture, q_tot_eff into ρq_tot and ρ, and
+        # each suspended cloud species and passive tracer down its own gradient.
+        @testset "viscous_sponge_tendency! scalars" begin
+            s = CA.ViscousSponge(; zd = z_damping, κ₂ = κ₂)
+            params = CA.ClimaAtmosParameters(CP.create_toml_dict(FT))
+            thermo_params = CAP.thermodynamics_params(params)
+
+            coords = Fields.coordinate_field(ᶜspace)
+            ᶜlat = coords.lat
+            ᶜlon = coords.long
+
+            tracer_names = (
+                :ρq_tot,
+                :ρq_lcl,
+                :ρq_icl,
+                :ρq_rai,
+                :ρq_sno,
+                :ρn_lcl,
+                :ρn_rai,
+                :ρq_gas_A,
+            )
+            NTc = NamedTuple{
+                (:ρ, :ρe_tot, :uₕ, tracer_names...),
+                Tuple{
+                    FT,
+                    FT,
+                    Geometry.Covariant12Vector{FT},
+                    ntuple(_ -> FT, length(tracer_names))...,
+                },
+            }
+            Yc = similar(coords, NTc)
+            Yf = similar(
+                Fields.coordinate_field(ᶠspace),
+                NamedTuple{(:u₃,), Tuple{Geometry.Covariant3Vector{FT}}},
+            )
+            ᶜpattern = @. cosd(ᶜlat) * sind(ᶜlon)
+            @. Yc.ρ = FT(1.2)
+            @. Yc.ρe_tot = Yc.ρ * FT(2.5e5)
+            @. Yc.uₕ = Geometry.Covariant12Vector(FT(1), FT(1))
+            @. Yf.u₃ = Geometry.Covariant3Vector(FT(0.5))
+            @. Yc.ρq_tot = Yc.ρ * (FT(1e-2) + FT(2e-3) * ᶜpattern)
+            @. Yc.ρq_lcl = Yc.ρ * (FT(2e-4) + FT(1e-4) * ᶜpattern)
+            @. Yc.ρq_icl = Yc.ρ * (FT(1e-4) - FT(5e-5) * ᶜpattern)
+            @. Yc.ρq_rai = Yc.ρ * (FT(1e-5) + FT(5e-6) * ᶜpattern)
+            @. Yc.ρq_sno = Yc.ρ * (FT(5e-6) - FT(2e-6) * ᶜpattern)
+            @. Yc.ρn_lcl = Yc.ρ * (FT(1e6) + FT(1e5) * ᶜpattern)
+            @. Yc.ρn_rai = Yc.ρ * (FT(1e3) + FT(1e2) * ᶜpattern)
+            @. Yc.ρq_gas_A = Yc.ρ * (FT(1) + FT(0.1) * ᶜpattern)
+            Y = Fields.FieldVector(; c = Yc, f = Yf)
+
+            ᶜT = @. FT(270) + FT(5) * ᶜpattern - FT(10) * ᶜz
+            ᶜΦ = @. CAP.grav(params) * ᶜz
+            ᶜq_liq = @. Yc.ρq_lcl / Yc.ρ
+            ᶜq_ice = @. Yc.ρq_icl / Yc.ρ
+            ᶜq_tot_nonneg = @. Yc.ρq_tot / Yc.ρ
+            p = (;
+                atmos = (;
+                    viscous_sponge = s,
+                    microphysics_model = CA.NonEquilibriumMicrophysics1M(),
+                    turbconv_model = nothing,
+                ),
+                params,
+                precomputed = (; ᶜT, ᶜq_liq, ᶜq_ice, ᶜq_tot_nonneg),
+                core = (; ᶜΦ),
+                scratch = (;
+                    ᶜtemp_scalar = similar(ᶜz),
+                    ᶜtemp_scalar_2 = similar(ᶜz),
+                ),
+            )
+
+            Yₜ = similar(Y)
+            Yₜ .= zero(FT)
+            CA.viscous_sponge_tendency!(Yₜ, Y, p)
+
+            ᶜβρ = @. CA.β_viscous(s, ᶜz, z_max) * Yc.ρ
+            ᶜexpected = similar(ᶜz)
+            sponge_diffusion(ᶜχ) = @. ᶜexpected = CA.wdivₕ(ᶜβρ * CA.gradₕ(ᶜχ))
+
+            # Mass conservation: ρ tendency equals ρq_tot tendency on q_tot_eff.
+            ᶜq_tot_eff_expected =
+                @. (Yc.ρq_tot - Yc.ρq_rai - Yc.ρq_sno) / Yc.ρ
+            sponge_diffusion(ᶜq_tot_eff_expected)
+            @test maximum(abs, parent(Yₜ.c.ρq_tot)) > 0
+            @test parent(Yₜ.c.ρ) == parent(Yₜ.c.ρq_tot)
+            @test parent(Yₜ.c.ρq_tot) ≈ parent(ᶜexpected)
+
+            # Suspended cloud species diffuse down their own gradients.
+            sponge_diffusion(ᶜq_liq)
+            @test parent(Yₜ.c.ρq_lcl) ≈ parent(ᶜexpected)
+            sponge_diffusion(ᶜq_ice)
+            @test parent(Yₜ.c.ρq_icl) ≈ parent(ᶜexpected)
+            sponge_diffusion((@. Yc.ρn_lcl / Yc.ρ))
+            @test parent(Yₜ.c.ρn_lcl) ≈ parent(ᶜexpected)
+
+            # Rain, snow, and rain number density do not diffuse.
+            @test all(iszero, parent(Yₜ.c.ρq_rai))
+            @test all(iszero, parent(Yₜ.c.ρq_sno))
+            @test all(iszero, parent(Yₜ.c.ρn_rai))
+
+            # Passive tracer diffuses independently.
+            sponge_diffusion((@. Yc.ρq_gas_A / Yc.ρ))
+            @test parent(Yₜ.c.ρq_gas_A) ≈ parent(ᶜexpected)
+
+            # Energy matches the enthalpy bracket with the heat capacity of the
+            # diffusing mixture and the Yatunin et al. (2026, Eq. 33) water
+            # terms, assembled independently of the model helpers.
+            (; ᶜcp, ᶜh_vap_plus_Φ, ᶜh_lv, ᶜh_iv) = enthalpy_flux_coefficients(
+                thermo_params,
+                ᶜT,
+                ᶜΦ,
+                (ᶜq_tot_eff_expected, ᶜq_liq, ᶜq_ice),
+            )
+            expected_ρe_tot = similar(ᶜz)
+            @. expected_ρe_tot =
+                CA.wdivₕ(ᶜβρ * ᶜcp * CA.gradₕ(ᶜT)) +
+                CA.wdivₕ(ᶜβρ * CA.gradₕ(ᶜΦ)) +
+                CA.wdivₕ(ᶜβρ * ᶜh_vap_plus_Φ * CA.gradₕ(ᶜq_tot_eff_expected)) +
+                CA.wdivₕ(ᶜβρ * ᶜh_lv * CA.gradₕ(ᶜq_liq)) +
+                CA.wdivₕ(ᶜβρ * ᶜh_iv * CA.gradₕ(ᶜq_ice))
+            @test parent(Yₜ.c.ρe_tot) ≈ parent(expected_ρe_tot)
+
+            # Kirchhoff reference-temperature shift invariance.
+            δT₀ = FT(25)
+            toml_shifted = CP.create_toml_dict(FT)
+            toml_shifted.data["thermodynamics_temperature_reference"]["value"] +=
+                δT₀
+            toml_shifted.data["latent_heat_vaporization_at_reference"]["value"] +=
+                (CAP.cp_v(params) - CAP.cp_l(params)) * δT₀
+            toml_shifted.data["latent_heat_sublimation_at_reference"]["value"] +=
+                (CAP.cp_v(params) - CAP.cp_i(params)) * δT₀
+            params_shifted = CA.ClimaAtmosParameters(toml_shifted)
+            p_shifted = merge(p, (; params = params_shifted))
+            Yₜ_shifted = similar(Y)
+            Yₜ_shifted .= zero(FT)
+            CA.viscous_sponge_tendency!(Yₜ_shifted, Y, p_shifted)
+            tp_s = CAP.thermodynamics_params(params_shifted)
+            δh_water =
+                CA.TD.enthalpy_vapor(tp_s, FT(280)) -
+                CA.TD.enthalpy_vapor(thermo_params, FT(280))
+            ᶜresidual = similar(ᶜz)
+            @. ᶜresidual =
+                (Yₜ_shifted.c.ρe_tot - Yₜ.c.ρe_tot) - δh_water * Yₜ.c.ρq_tot
+            @test maximum(abs, parent(ᶜresidual)) <=
+                  FT(1e-11) * maximum(abs, parent(Yₜ.c.ρe_tot))
+
+            # At horizontally uniform q_tot_eff, ρq_tot and ρ tendencies vanish
+            # while suspended cloud species still diffuse down their own
+            # horizontal gradients and drive latent enthalpy transport.
+            @. Yc.ρq_tot = Yc.ρ * FT(1e-2) + Yc.ρq_rai + Yc.ρq_sno
+            @. ᶜq_tot_nonneg = Yc.ρq_tot / Yc.ρ
+            @. ᶜT = FT(270) - FT(10) * ᶜz
+            Yₜ .= zero(FT)
+            CA.viscous_sponge_tendency!(Yₜ, Y, p)
+            @test maximum(abs, parent(Yₜ.c.ρq_tot)) < FT(1e-15)
+            @test maximum(abs, parent(Yₜ.c.ρq_lcl)) > 0
+            @test maximum(abs, parent(Yₜ.c.ρq_icl)) > 0
+            @test maximum(abs, parent(Yₜ.c.ρe_tot)) > 0
         end
     end
 end

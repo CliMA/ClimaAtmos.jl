@@ -1,74 +1,121 @@
 # PROPHET: Horizontal Diffusion
 
-The PROPHET (`EDMFX` in code) subgrid-scale (SGS) diffusive closure is, by default, vertical only: it parameterizes turbulent transport along the column with an eddy-diffusivity closure and applies the resulting tendency to the grid mean (and, under `edmfx_vertical_diffusion`, applies the grid-mean tendencies to the prognostic updraft scalars).
-Two opt-in configuration options add the analogous horizontal down-gradient terms, both defaulting to `false`:
+The PROPHET (`EDMFX` in code) subgrid-scale (SGS) diffusive closure is, by
+default, vertical only: it parameterizes turbulent transport along the column
+with an eddy-diffusivity closure and applies the resulting tendency to the grid
+mean (and, under `edmfx_vertical_diffusion`, diffuses the prognostic updraft
+scalars down their own vertical gradients). Two opt-in configuration options add
+the analogous horizontal down-gradient terms, both defaulting to `false`:
 
-  - `edmfx_sgs_horizontal_diffusive_flux` adds the horizontal component of the grid-mean environment SGS diffusive flux;
-  - `edmfx_horizontal_diffusion` applies the grid-mean horizontal diffusion tendencies to the prognostic EDMFX updrafts, and requires `edmfx_sgs_horizontal_diffusive_flux`.
+  - `edmfx_sgs_horizontal_diffusive_flux` adds the horizontal component of the
+    grid-mean SGS diffusive flux;
+  - `edmfx_horizontal_diffusion` diffuses the prognostic EDMFX updraft scalars
+    down their own horizontal gradients, and requires
+    `edmfx_sgs_horizontal_diffusive_flux`.
 
-Both terms are always explicit: they are applied in the explicit remainder tendency, independently of `diff_mode`.
-Each requires a horizontal discretization, so both return immediately on single columns.
+Both terms are always explicit: they are applied in the explicit remainder
+tendency, independently of `diff_mode`. Each requires a horizontal
+discretization, so both return immediately on single columns.
 
 ## Horizontal eddy diffusivity
 
-The horizontal eddy viscosity and diffusivity use the same TKE-based closure as the vertical flux,
+The horizontal eddy viscosity and diffusivity use the same TKE-based closure as
+the vertical flux,
 
 ```math
 K_{u,h} = c_m \, l_h \, \sqrt{\kappa_{\mathrm{iso}}}, \qquad K_{h,h} = K_{u,h} \,/\, \mathrm{Pr}_t ,
 ```
 
-where ``l_h`` is the horizontal mixing length (see [Mixing length](@ref)), ``\kappa_{\mathrm{iso}}`` is the isotropic subgrid turbulent kinetic energy (`Y.c.ρtke`, written ``e`` in some of the code comments), ``c_m`` is the eddy-diffusivity coefficient, and ``\mathrm{Pr}_t`` the turbulent Prandtl number.
-`set_horizontal_diffusivities!` evaluates ``K_{u,h}`` and ``K_{h,h}`` at cell centers on each update of the explicit precomputed cache, storing them in `ᶜK_u_h` and `ᶜK_h_h`.
-The horizontal tendencies and the `edth`/`evuh` diagnostics read these cached fields.
+where ``l_h`` is the horizontal mixing length (see [Mixing length](@ref)),
+``\kappa_{\mathrm{iso}}`` is the isotropic subgrid turbulent kinetic energy
+(`Y.c.ρtke`, written ``e`` in some of the code comments), ``c_m`` is the
+eddy-diffusivity coefficient, and ``\mathrm{Pr}_t`` the turbulent Prandtl
+number. `set_horizontal_diffusivities!` evaluates ``K_{u,h}`` and ``K_{h,h}`` at
+cell centers on each update of the explicit precomputed cache, storing them in
+`ᶜK_u_h` and `ᶜK_h_h`. The horizontal tendencies and the `edth`/`evuh`
+diagnostics read these cached fields.
 
 ## Grid-mean flux
 
-The grid-mean tendencies from `edmfx_sgs_horizontal_diffusive_flux` are, on cell centers,
+The horizontal enthalpy and species fluxes mirror the vertical closure
+([Diffusion](diffusion.md)): the enthalpy bracket is
 
 ```math
-\partial_t (\rho e_\text{tot}) \mathrel{+}= \nabla_h \cdot \left[ \rho \, K_{h,h} \left( \nabla_h s_\text{d} + (h_\text{eff} + \Phi) \, \nabla_h q_\text{tot}^\text{eff} \right) \right],
+\mathcal{B}_h(T, q_{\mathrm{tot}}^{\mathrm{eff}}, q_{\mathrm{lcl}}, q_{\mathrm{icl}})
+  = c_p \nabla_h T + \nabla_h \Phi
+  + (h_{\mathrm{v}} + \Phi) \, \nabla_h q_{\mathrm{tot}}^{\mathrm{eff}}
+  + (h_{\mathrm{l}} - h_{\mathrm{v}}) \, \nabla_h q_{\mathrm{lcl}}
+  + (h_{\mathrm{i}} - h_{\mathrm{v}}) \, \nabla_h q_{\mathrm{icl}} ,
+```
+
+where ``\nabla_h`` and ``\nabla_h\cdot`` are the horizontal gradient and weak
+divergence, ``c_p`` is the heat capacity of the diffusing mixture, ``\Phi`` is
+the geopotential, the water terms are those of [Yatunin2026](@cite) (Eq. 33),
+and ``q_{\mathrm{tot}}^{\mathrm{eff}} = q_{\mathrm{tot}} - q_{\mathrm{rai}} - q_{\mathrm{sno}}``
+is the suspended water that diffuses. Each thermodynamic coefficient is
+materialized into a center scratch scalar before the weak divergence, because
+feeding the nested expression into ``\nabla_h\cdot`` exceeds GPU kernel
+parameter limits on extruded spaces with warped topography.
+
+For `PrognosticEDMFX`, the grid-mean horizontal diffusive flux is the subdomain
+sum with center weights ``w^0 = \hat{\rho}^0 K_{h,h}`` and
+``w^j = \rho f_j K_{h,h} \hat{a}^j`` (``f_j =`` `edmfx_updraft_kh_diffusion_factor`,
+included when `edmfx_horizontal_diffusion` is enabled, and ``\hat{a}^j`` the
+element-wise draft area of the section on
+[updraft horizontal diffusion](#Updraft-horizontal-diffusion)):
+
+```math
+\partial_t (\rho e_{\mathrm{tot}}) \mathrel{+}=
+  \nabla_h \cdot \left[ w^0 \, \mathcal{B}_h^0
+    + \sum_{j=1}^{M} w^j \, \mathcal{B}_h^j \right] ,
 ```
 
 ```math
-\partial_t (\rho q_\text{tot}) \mathrel{+}= \nabla_h \cdot (\rho \, K_{h,h} \, \nabla_h q_\text{tot}^\text{eff}),
+\partial_t (\rho q_{\mathrm{tot}}) \mathrel{+}=
+  \nabla_h \cdot \left( w^0 \, \nabla_h q_{\mathrm{tot}}^{\mathrm{eff},0}
+    + \sum_{j=1}^{M} w^j \, \nabla_h q_{\mathrm{tot}}^{\mathrm{eff},j} \right) ,
 \qquad
-\partial_t (\rho \chi) \mathrel{+}= \nabla_h \cdot (\rho \, K_{h,h} \, \nabla_h \chi),
+\partial_t (\rho \chi) \mathrel{+}=
+  \nabla_h \cdot \left( w^0 \, \nabla_h \chi^0
+    + \sum_{j=1}^{M} w^j \, \nabla_h \chi^j \right) .
 ```
 
-where ``\nabla_h`` and ``\nabla_h\cdot`` are the horizontal gradient and weak divergence, ``s_\text{d}`` is the dry static energy, and ``\Phi`` is the geopotential.
-Water diffuses as a single substance, matching the vertical flux: ``q_\text{tot}^\text{eff} = q_\text{tot} - q_\text{rai} - q_\text{sno}`` is the water that actually diffuses, and
+For `EDOnlyEDMFX`, the grid mean uses ``w = \rho K_{h,h}`` on the grid-mean
+fields.
 
-```math
-h_\text{eff} = \frac{h_\text{v} q_\text{v} + h_\text{l} q_\text{lcl} + h_\text{i} q_\text{icl}}{\max(q_\text{v} + q_\text{lcl} + q_\text{icl}, \, \epsilon)}
-```
-
-is its mass-weighted specific enthalpy, built from clipped inputs.
-This form avoids the spurious enthalpy flux that diffusing ``h_\text{tot}`` directly would produce through the dry-air-mass gradient.
-``h_\text{eff} + \Phi`` is materialized into a scratch scalar before the weak divergence, because feeding the nested expression directly into ``\nabla_h\cdot`` exceeds GPU kernel parameter limits on extruded spaces with warped topography.
-
-The suspended cloud species ``q_\text{lcl}``, ``q_\text{icl}`` and their number concentrations have no flux of their own.
-Each takes a share of the aggregate water tendency, scaled by the clipped ratio ``\min(q_\mu / q_\text{tot}^\text{eff}, 1)``, and the number densities scale with it too, which preserves the mean particle mass.
-Rain and snow receive no horizontal transport, as they receive none in the vertical.
-The tracer ``\chi`` therefore ranges over the passive tracers alone, diffused with the unscaled ``K_{h,h}``.
+In the non-equilibrium schemes, the suspended cloud species
+``q_{\mathrm{lcl}}``, ``q_{\mathrm{icl}}`` and their number concentrations
+``n_{\mathrm{lcl}}``, ``n_{\mathrm{ice}}`` diffuse down their own horizontal
+gradients with the same weights, matching the phase-enthalpy fluxes in
+``\mathcal{B}_h``. Grid-scale species that the updrafts do not carry, such as the
+P3 ice number and rime quantities, diffuse down their grid-mean gradients with
+``\rho K_{h,h}``. Rain and snow do not diffuse horizontally, as they do not
+diffuse in the vertical. Passive tracers diffuse with the same weights.
 
 The aggregate water flux additionally enters the moist-air-mass tendency,
 
 ```math
-\partial_t \rho \mathrel{+}= \nabla_h \cdot (\rho \, K_{h,h} \, \nabla_h q_\text{tot}^\text{eff}),
+\partial_t \rho \mathrel{+}= \partial_t (\rho q_{\mathrm{tot}})\big|_{\mathrm{diff},h} ,
 ```
 
-while the species shares do not.
+while the suspended cloud-species fluxes do not.
 
-When prognostic TKE is active, the horizontal flux transports TKE and adds the horizontal shear production,
+When prognostic TKE is active, the horizontal flux transports TKE and adds the
+horizontal shear production,
 
 ```math
 \partial_t (\rho \kappa_{\mathrm{iso}}) \mathrel{+}= \nabla_h \cdot (\rho \, K_{u,h} \, \nabla_h \kappa_{\mathrm{iso}}) + 2 \rho \, K_{u,h} \, \mathcal{S}_h : \mathcal{S}_h ,
 ```
 
-with ``\mathcal{S}_h`` the strain rate built from horizontal gradients only (the tensor written ``\boldsymbol{\mathcal{E}}_D`` on the [Closures](prophet_closures.md) page).
-The shear production is positive definite; the production from vertical gradients and its stencil are applied by the vertical TKE tendency.
+with ``\mathcal{S}_h`` the strain rate built from horizontal gradients only (the
+tensor written ``\boldsymbol{\mathcal{E}}_D`` in
+[Turbulence kinetic energy and eddy diffusivity](prophet_closures.md#Turbulence-kinetic-energy-and-eddy-diffusivity)).
+The shear production is positive definite; the production from vertical
+gradients and its stencil are applied by the vertical TKE tendency.
 
-The momentum tendency is the horizontal weak divergence of the SGS stress ``\tau = -2 K_{u,h} \mathcal{S}``, with ``\mathcal{S}`` the full three-dimensional strain rate of the grid-mean velocity,
+The momentum tendency is the horizontal weak divergence of the SGS stress
+``\tau = -2 K_{u,h} \mathcal{S}``, with ``\mathcal{S}`` the full
+three-dimensional strain rate of the grid-mean velocity,
 
 ```math
 \partial_t u_h \mathrel{-}= \frac{1}{\rho} \nabla_h \cdot (\rho \, \tau),
@@ -76,29 +123,77 @@ The momentum tendency is the horizontal weak divergence of the SGS stress ``\tau
 \partial_t u_3 \mathrel{-}= \frac{1}{\rho} \nabla_h \cdot (\rho \, \tau),
 ```
 
-evaluated on cell centers for the horizontal wind and on cell faces for the vertical wind.
-The vertical wind is included because the horizontal flux of vertical momentum ``\overline{u_h' w'}`` is a covariance, which the TKE (the half-trace of the velocity covariance) does not carry, so the down-gradient stress is its only representation.
-The vertical flux ``\overline{w' w'}`` is a variance represented by the TKE, the mass flux, and the pressure closure, so it is not applied as down-gradient diffusion of the vertical wind; the vertical stress divergence on the horizontal wind is handled by the vertical diffusion pathway.
+evaluated on cell centers for the horizontal wind and on cell faces for the
+vertical wind. The vertical wind is included because the horizontal flux of
+vertical momentum ``\overline{u_h' w'}`` is a covariance, which the TKE (the
+half-trace of the velocity covariance) does not carry, so the down-gradient
+stress is its only representation. The vertical flux ``\overline{w' w'}`` is a
+variance represented by the TKE, the mass flux, and the pressure closure, so it
+is not applied as down-gradient diffusion of the vertical wind; the vertical
+stress divergence on the horizontal wind is handled by the vertical diffusion
+pathway.
 
-The stress and the shear production are not energetically consistent with each other.
-The work done by the stress on the resolved flow is ``\tau : \nabla_h u``, which includes cross terms such as ``\mathcal{S}_{13} \, \partial_x w``, whereas the TKE receives only ``2 \rho \, K_{u,h} \, \mathcal{S}_h : \mathcal{S}_h``.
-The difference is exactly those cross terms.
-Each form is chosen for a property the other lacks: the stress uses the full strain rate because ``\mathcal{S}_{13}`` and ``\mathcal{S}_{23}`` are what represent ``\overline{u_h' w'}``, and the production uses ``\mathcal{S}_h`` because ``2 \rho \, K_{u,h} \, \mathcal{S}_h : \mathcal{S}_h`` is positive definite while ``\tau : \nabla_h u`` is sign-indefinite and can drive the TKE negative.
+The stress and the shear production are not energetically consistent with each
+other. The work done by the stress on the resolved flow is
+``\tau : \nabla_h u``, which includes cross terms such as
+``\mathcal{S}_{13} \, \partial_x w``, whereas the TKE receives only
+``2 \rho \, K_{u,h} \, \mathcal{S}_h : \mathcal{S}_h``. The difference is
+exactly those cross terms. Each form is chosen for a property the other lacks:
+the stress uses the full strain rate because ``\mathcal{S}_{13}`` and
+``\mathcal{S}_{23}`` are what represent ``\overline{u_h' w'}``, and the
+production uses ``\mathcal{S}_h`` because
+``2 \rho \, K_{u,h} \, \mathcal{S}_h : \mathcal{S}_h`` is positive definite
+while ``\tau : \nabla_h u`` is sign-indefinite and can drive the TKE negative.
 This is one of the reasons the option is off by default.
 
 ## Updraft horizontal diffusion
 
-The option `edmfx_horizontal_diffusion` switches on horizontal diffusion of the prognostic updraft variables.
-It requires `edmfx_sgs_horizontal_diffusive_flux`: each subdomain scalar receives the specific tendency of the corresponding grid-mean flux, so all subdomains inherit the grid box's horizontal diffusion, matching the uniform vertical treatment of `edmfx_vertical_diffusion`.
-For each updraft ``j``, the total specific humidity, the cloud species shares, and the SGS tracers receive
+The option `edmfx_horizontal_diffusion` switches on horizontal diffusion of the
+prognostic updraft variables and requires `edmfx_sgs_horizontal_diffusive_flux`.
+For each updraft ``j``, the moist static energy ``\mathrm{mse}^j``, the total
+specific humidity ``q_{\mathrm{tot}}^j``, the suspended cloud species
+(`q_lcl`, `q_icl`, `n_lcl`, `n_ice`), and the passive SGS tracers diffuse down
+their own horizontal gradients:
 
 ```math
-\partial_t \chi^j \mathrel{+}= \frac{1}{\rho} \nabla_h \cdot (\rho \, K_{h,h} \, \nabla_h \chi),
+\partial_t \chi^j \mathrel{+}= \frac{1}{\hat{\rho}^j}
+  \nabla_h \cdot \left( \rho f_j K_{h,h} \, \hat{a}^j \nabla_h \chi_{\mathrm{eff}}^j \right) ,
+\qquad
+\hat{a}^j = \left\langle \max(a^j, a_\epsilon)^{-4} \right\rangle_e^{-1/4} ,
 ```
 
-with the same species treatment as the grid mean, and the moist static energy receives the grid-mean total-enthalpy tendency, ``\partial_t \mathrm{mse}^j \mathrel{+}= \partial_t(\rho e_\text{tot}) \, / \, \rho``.
-The area-weighted density ``\rho a^j`` receives no tendency, matching `edmfx_sgs_diffusive_flux_tendency!`.
-Diffusing each subdomain's own scalars instead would erode the updraft-environment contrasts that the mass-flux decomposition maintains.
+with
+``q_{\mathrm{tot},\mathrm{eff}}^j = q_{\mathrm{tot}}^j - q_{\mathrm{rai}}^j - q_{\mathrm{sno}}^j``
+and ``\mathrm{mse}_{\mathrm{eff}}^j`` excluding non-diffusing rain and snow
+enthalpy, as in the vertical treatment of `edmfx_vertical_diffusion`. Here
+``a^j = \hat{\rho}^j / \rho`` is the draft area fraction, ``\langle \cdot \rangle_e``
+the ``WJ``-weighted mean over the spectral element (`element_meanₕ`), and
+``a_\epsilon = 10^{-8}`` a floor that keeps ``a_\epsilon^{-4}`` finite in single
+precision (`ᶜupdraft_horizontal_diffusion_weight!`); the division by
+``\hat{\rho}^j`` uses the same floor.
+
+The power mean ``\hat{a}^j`` is a smooth element-wise minimum of the draft area,
+the spectral-element counterpart of the harmonic face mean that bounds the
+vertical updraft diffusion. In the weak divergence, the tendency at a node draws
+on the flux at every node of its element, so a flux carrying the nodal area
+``a^j``, divided by the local ``\hat{\rho}^j``, would amplify the intensive
+tendency at draft edges by the area ratio between nodes. Since
+``\langle a^{-4} \rangle_e \ge \omega_i a_i^{-4}`` at every node ``i``, with
+``\omega_i`` the node's share of the element's ``WJ``,
+``\hat{a}^j \le \omega_i^{-1/4} a_i^j``: the draft relaxes toward its horizontal
+neighbors at most ``\omega_{\min}^{-1/4}`` times as fast as grid-mean diffusion
+at the same ``f_j K_{h,h}`` (about 3.5 for the default fourth-order elements),
+whatever its area, and an element containing a draft-free node carries almost
+no draft flux. The grid mean receives the same flux divergence
+``\nabla_h \cdot (w^j \nabla_h \chi^j)`` as the draft equation before the
+division by ``\hat{\rho}^j``, so the diffusion conserves each scalar and leaves
+the diagnosed environment's scalars unchanged. The area-weighted density
+``\hat{\rho}^j`` receives no tendency, matching
+`edmfx_sgs_diffusive_flux_tendency!`, so, as in the vertical, the moist mass
+that ``q_t^j`` diffusion adds and the enthalpy
+``(h_d^j + \Phi) \nabla_h q_{t,\mathrm{eff}}^j`` of the dry air it displaces go
+to the environment (see
+[Coupling to the resolved equations](prophet.md#Coupling-to-the-resolved-equations)).
 
 ## Mixing length
 

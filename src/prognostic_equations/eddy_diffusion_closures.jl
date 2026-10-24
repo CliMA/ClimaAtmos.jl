@@ -789,116 +789,468 @@ function set_horizontal_diffusivities!(Y, p)
 end
 
 """
-    ᶜdiffusive_flux_divergenceᵥ(ᶠcoef, ᶜχ)
+    ᶜh_eff_plus_Φ!(ᶜout, thermo_params, ᶜT, ᶜΦ, ᶜq_water)
+    ᶜh_eff_minus_h_d!(ᶜout, thermo_params, ᶜT, ᶜq_water)
 
-Return the lazy vertical divergence of the diffusive scalar flux
-`F = -ᶠcoef ∇χ`, with zero-flux top and bottom boundaries.
-
-`ᶠcoef` must be a face field or a `lazy` broadcast, not a bare `Field * Field`
-product. Fold `ρ`, `K`, and any scaling factor into `ᶠcoef` in left-to-right order.
-"""
-ᶜdiffusive_flux_divergenceᵥ(ᶠcoef, ᶜχ) = @. lazy(ᶜdiffdivᵥ(-(ᶠcoef * ᶠgradᵥ(ᶜχ))))
-
-"""
-    ᶜh_eff_plus_Φ!(ᶜout, thermo_params, ᶜT, ᶜΦ, ᶜq_vap, ᶜq_liq, ᶜq_ice)
-
-Write `h_eff + Φ` into the center field `ᶜout` and return it, where
+Write `h_eff + Φ` or `h_eff - h_d(T)` into the center field `ᶜout` and return
+it, where
 
     h_eff = (h_v q_v + h_l q_l + h_i q_i) / max(q_v + q_l + q_i, ε)
 
-is the mass-weighted specific enthalpy of the suspended water. Every specific
+is the mass-weighted specific enthalpy of the diffusing water
+`ᶜq_water = (q_t, q_l, q_i)` (`ᶜdiffusing_water_phases`, or its value in a
+PROPHET subdomain), with the vapor `q_v = q_t - q_l - q_i`. Every specific
 humidity is clipped at zero, so a limiter undershoot cannot change the sign of
 the weights or of the denominator.
 
-`h_eff + Φ` is the coefficient of the aggregate water gradient in the
-single-gradient enthalpy flux `F_h = -K [∇s_d + (h_eff + Φ) ∇q_tot_eff]` shared
-by vertical diffusion, horizontal diffusion and hyperdiffusion, and it is the
-same coefficient the implicit Jacobian holds frozen.
+`h_eff + Φ` is the coefficient of the aggregate water Laplacian gradient in the
+fourth-order enthalpy hyperdiffusion flux
+`F_h = ν₄ ρ [c_p ∇(∇²T) + ∇(∇²Φ) + (h_eff + Φ) ∇(∇²q_tot_eff)]`, where only
+`∇²T`, `∇²Φ`, and `∇²q_tot_eff` are DSSed. `h_eff - h_d(T)` is its intensive
+counterpart in the hyperdiffusion of updraft moist static energy `mseʲ`, where
+diffusing water replaces dry air at constant specific mass, so the geopotential
+cancels and a reference-temperature shift shifts the coefficient by
+`C_water - C_d`.
 
 The result is written into a field rather than returned lazily because every
-caller passes it to a divergence operator or a `DiagonalMatrixRow`, where the
-nested expression exceeds GPU kernel parameter limits.
+caller passes it to a divergence operator, where the nested expression exceeds
+GPU kernel parameter limits.
 """
-function ᶜh_eff_plus_Φ!(ᶜout, thermo_params, ᶜT, ᶜΦ, ᶜq_vap, ᶜq_liq, ᶜq_ice)
-    FT = eltype(ᶜout)
-    ϵ_FT = eps(FT)
-    @. ᶜout =
-        (
-            TD.enthalpy_vapor(thermo_params, ᶜT) * max(FT(0), ᶜq_vap) +
-            TD.enthalpy_liquid(thermo_params, ᶜT) * max(FT(0), ᶜq_liq) +
-            TD.enthalpy_ice(thermo_params, ᶜT) * max(FT(0), ᶜq_ice)
-        ) / max(
-            max(FT(0), ᶜq_vap) + max(FT(0), ᶜq_liq) + max(FT(0), ᶜq_ice),
-            ϵ_FT,
-        ) + ᶜΦ
+function ᶜh_eff_plus_Φ!(ᶜout, thermo_params, ᶜT, ᶜΦ, ᶜq_water)
+    ᶜh_eff!(ᶜout, thermo_params, ᶜT, ᶜq_water)
+    @. ᶜout += ᶜΦ
+    return ᶜout
+end
+function ᶜh_eff_minus_h_d!(ᶜout, thermo_params, ᶜT, ᶜq_water)
+    ᶜh_eff!(ᶜout, thermo_params, ᶜT, ᶜq_water)
+    @. ᶜout -= TD.enthalpy_dry(thermo_params, ᶜT)
     return ᶜout
 end
 
 """
-    ᶜh_eff_plus_Φ!(ᶜout, Y, p)
+    ᶜh_eff!(ᶜout, thermo_params, ᶜT, ᶜq_water)
 
-Write `h_eff + Φ` into `ᶜout` and return it, taking the temperature and
-geopotential from the cache and the suspended water from `ᶜsuspended_water`.
+Write the mass-weighted specific enthalpy `h_eff` of the diffusing water into
+`ᶜout` and return it. Called from `ᶜh_eff_plus_Φ!` and `ᶜh_eff_minus_h_d!`.
 """
-function ᶜh_eff_plus_Φ!(ᶜout, Y, p)
-    thermo_params = CAP.thermodynamics_params(p.params)
-    (; ᶜT) = p.precomputed
-    (; ᶜΦ) = p.core
-    ᶜq_vap, ᶜq_lcl, ᶜq_icl = ᶜsuspended_water(Y, p)
-    return ᶜh_eff_plus_Φ!(ᶜout, thermo_params, ᶜT, ᶜΦ, ᶜq_vap, ᶜq_lcl, ᶜq_icl)
+function ᶜh_eff!(ᶜout, thermo_params, ᶜT, ᶜq_water)
+    FT = eltype(ᶜout)
+    ϵ_FT = eps(FT)
+    ᶜq_tot, ᶜq_liq, ᶜq_ice = ᶜq_water
+    @. ᶜout =
+        (
+            TD.enthalpy_vapor(thermo_params, ᶜT) *
+            max(FT(0), ᶜq_tot - ᶜq_liq - ᶜq_ice) +
+            TD.enthalpy_liquid(thermo_params, ᶜT) * max(FT(0), ᶜq_liq) +
+            TD.enthalpy_ice(thermo_params, ᶜT) * max(FT(0), ᶜq_ice)
+        ) / max(
+            max(FT(0), ᶜq_tot - ᶜq_liq - ᶜq_ice) +
+            max(FT(0), ᶜq_liq) +
+            max(FT(0), ᶜq_ice),
+            ϵ_FT,
+        )
+    return ᶜout
 end
 
 """
-    ᶜdry_static_energy(p)
+    ᶜh_vap_plus_Φ!(ᶜout, thermo_params, ᶜT, ᶜΦ)
+    ᶜh_liq_minus_vap!(ᶜout, thermo_params, ᶜT)
+    ᶜh_ice_minus_vap!(ᶜout, thermo_params, ᶜT)
 
-Return the lazy dry static energy `s_d = h_d + Φ` from the cached temperature
-and geopotential, the scalar whose gradient the diffusive enthalpy flux
-`F_h = -K [∇s_d + (h_eff + Φ) ∇q_tot_eff]` acts on besides the diffusing water.
+Write a water-enthalpy coefficient of the diffusive enthalpy flux into the center
+field `ᶜout` and return it: the total specific enthalpy of vapor `h_v(T) + Φ`, or
+the phase differences `h_l(T) - h_v(T) = -L_v(T)` and `h_i(T) - h_v(T) = -L_s(T)`.
+
+These are the coefficients of `∇q_t`, `∇q_l`, and `∇q_i` in the flux
+`F_h = -ρ K [c_p ∇T + ∇Φ + Σ_μ (h_μ + Φ) ∇q_μ]` once the vapor specific humidity is
+eliminated with `q_v = q_t - q_l - q_i`. The phase differences carry the latent
+enthalpy of condensate diffusing one way and vapor the other; they are invariant
+under a Kirchhoff-consistent shift of the reference temperature.
 """
-function ᶜdry_static_energy(p)
-    thermo_params = CAP.thermodynamics_params(p.params)
-    (; ᶜT) = p.precomputed
-    (; ᶜΦ) = p.core
-    return @. lazy(TD.dry_static_energy(thermo_params, ᶜT, ᶜΦ))
+ᶜh_vap_plus_Φ!(ᶜout, thermo_params, ᶜT, ᶜΦ) =
+    @. ᶜout = TD.enthalpy_vapor(thermo_params, ᶜT) + ᶜΦ
+ᶜh_liq_minus_vap!(ᶜout, thermo_params, ᶜT) =
+    @. ᶜout =
+        TD.enthalpy_liquid(thermo_params, ᶜT) -
+        TD.enthalpy_vapor(thermo_params, ᶜT)
+ᶜh_ice_minus_vap!(ᶜout, thermo_params, ᶜT) =
+    @. ᶜout =
+        TD.enthalpy_ice(thermo_params, ᶜT) - TD.enthalpy_vapor(thermo_params, ᶜT)
+
+"""
+    maybe_materialize!(ᶜscratch, ᶜχ)
+
+Copy `ᶜχ` into `ᶜscratch` and return it, or return `ᶜχ` itself when `ᶜscratch`
+is `nothing`. Subdomain values such as `ᶜspecific_env_value` are lazy expressions
+too large to nest inside a gradient within GPU kernel parameter limits, so their
+callers pass a scratch field.
+"""
+maybe_materialize!(::Nothing, ᶜχ) = ᶜχ
+maybe_materialize!(ᶜscratch, ᶜχ) = @. ᶜscratch = ᶜχ
+
+"""
+    ᶜcp_diffusing!(ᶜout, thermo_params, ᶜq_water)
+
+Write the isobaric specific heat capacity of the diffusing mixture,
+
+    c_p = (1 - q_t) c_pd + (q_t - q_l - q_i) c_pv + q_l c_pl + q_i c_pi,
+
+into the center field `ᶜout` and return it, with `ᶜq_water = (q_t, q_l, q_i)`
+the specific humidities of the diffusing water (`ᶜdiffusing_water_phases`, or
+their values in a PROPHET subdomain). Mass that does not diffuse, rain and snow
+outside the LES closures, counts at `c_pd`, which makes `c_p` the coefficient of
+`∇T` in the gradient of the moist static energy that the PROPHET updrafts
+diffuse (`ᶜupdraft_diffusing_mse!`). In dry configurations
+(`ᶜq_water === nothing`), `c_p = c_pd`.
+
+`c_p` is the coefficient of `∇T` in the sensible-heat part of the diffusive
+enthalpy flux (`add_sensible_heat_diffusionᵥ!`): turbulent eddies exchange
+parcels of the diffusing mixture at fixed composition, and each parcel has the
+heat capacity of that mixture.
+"""
+function ᶜcp_diffusing!(ᶜout, thermo_params, ᶜq_water)
+    ᶜq_tot, ᶜq_liq, ᶜq_ice = ᶜq_water
+    @. ᶜout = TD.cp_m(thermo_params, ᶜq_tot, ᶜq_liq, ᶜq_ice)
+    return ᶜout
+end
+function ᶜcp_diffusing!(ᶜout, thermo_params, ::Nothing)
+    cp_d = TD.Parameters.cp_d(thermo_params)
+    @. ᶜout = cp_d
+    return ᶜout
 end
 
 """
-    ᶜsuspended_water(Y, p)
+    add_sensible_heat_diffusionᵥ!(ᶜρe_totₜ, ᶠw, ᶜT, ᶜq_water, p, ᶜscratch)
 
-Return the lazy specific humidities `(q_vap, q_lcl, q_icl)` of the suspended
-water: vapor, cloud liquid and cloud ice. With a non-equilibrium scheme the
-cloud species are prognostic and are read from `Y`; otherwise they are the
-diagnostic `ᶜq_liq` and `ᶜq_ice` of the equilibrium partition.
+Add to `ᶜρe_totₜ` the tendency `-∇·F` of the sensible-heat and geopotential
+part of the vertical diffusive enthalpy flux,
 
-These are the weights of `ᶜh_eff_plus_Φ!` and, together with
-`ᶜdiffusing_water`, define which water the diffusive and hyperdiffusive
-fluxes act on.
+    F = -ᶠw (c_p ∇T + ∇Φ),
+
+with `c_p` the heat capacity of the diffusing mixture (`ᶜcp_diffusing!`,
+evaluated at cell centers and interpolated to faces outside the gradient). `ᶠw`
+is the face weight: `ρ K` for a grid-mean closure, or a subdomain weight.
+
+Together with the water part of `add_water_enthalpy_diffusionᵥ!`, the flux is
+
+    F_h = -ᶠw [c_p ∇T + ∇Φ + (h_v + Φ) ∇q_t + (h_l - h_v) ∇q_l + (h_i - h_v) ∇q_i]
+        = -ᶠw [∇(h + Φ) + (h_d + Φ) ∇q_t],
+
+the gradient of the moist static energy of the diffusing mixture plus the
+enthalpy of the moist mass that the water flux adds. The flux vanishes in a
+layer that is well mixed in `(h + Φ, q_t)`, so a moist adiabat, saturated or
+unsaturated, is a fixed point of diffusion; and because `c_p` depends on the
+reference temperature `T_0` only through `T`, the flux keeps the Kirchhoff
+`T_0`-shift invariance of the energy equation. The Yatunin et al. (2026, Eq. 33)
+form with `∇s_d = c_pd ∇T + ∇Φ` omits the heat capacity of the water, a flux
+`(c_p - c_pd) ∇T` of about 1% of the sensible-heat flux, directed down the
+temperature gradient in a moist-adiabatic layer.
 """
-function ᶜsuspended_water(Y, p)
-    (; ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice) = p.precomputed
-    ᶜq_vap = @. lazy(TD.vapor_specific_humidity(ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice))
-    return p.atmos.microphysics_model isa
-           Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M} ?
+function add_sensible_heat_diffusionᵥ!(ᶜρe_totₜ, ᶠw, ᶜT, ᶜq_water, p, ᶜscratch)
+    (; ᶜΦ) = p.core
+    thermo_params = CAP.thermodynamics_params(p.params)
+    ᶜcp = ᶜcp_diffusing!(ᶜscratch, thermo_params, ᶜq_water)
+    @. ᶜρe_totₜ -= ᶜdiffdivᵥ(-(ᶠw * ᶠinterp(ᶜcp) * ᶠgradᵥ(ᶜT)))
+    @. ᶜρe_totₜ -= ᶜdiffdivᵥ(-(ᶠw * ᶠgradᵥ(ᶜΦ)))
+    return nothing
+end
+
+"""
+    add_sensible_heat_diffusionₕ!(ᶜρe_totₜ, ᶜw, ᶜT, ᶜq_water, p, ᶜscratch)
+
+Horizontal counterpart of `add_sensible_heat_diffusionᵥ!`: add the weak
+divergence `wdivₕ(ᶜw (c_p ∇ₕT + ∇ₕΦ))` to `ᶜρe_totₜ`, with the center weight
+`ᶜw`.
+"""
+function add_sensible_heat_diffusionₕ!(ᶜρe_totₜ, ᶜw, ᶜT, ᶜq_water, p, ᶜscratch)
+    (; ᶜΦ) = p.core
+    thermo_params = CAP.thermodynamics_params(p.params)
+    ᶜcp = ᶜcp_diffusing!(ᶜscratch, thermo_params, ᶜq_water)
+    @. ᶜρe_totₜ += wdivₕ(ᶜw * ᶜcp * gradₕ(ᶜT))
+    @. ᶜρe_totₜ += wdivₕ(ᶜw * gradₕ(ᶜΦ))
+    return nothing
+end
+
+"""
+    add_water_enthalpy_diffusionᵥ!(
+        ᶜρe_totₜ, ᶠw, ᶜT, ᶜq_water, p, ᶜscratch; ᶜq_scratch = nothing,
+    )
+
+Add the tendency `-∇·F` of the water part of the vertical diffusive enthalpy flux
+of Yatunin et al. (2026, Eq. 33),
+
+    F = -ᶠw [(h_v + Φ) ∇q_t + (h_l - h_v) ∇q_l + (h_i - h_v) ∇q_i],
+
+to `ᶜρe_totₜ`. `ᶜq_water = (q_t, q_l, q_i)` are the specific humidities of the
+diffusing total, liquid, and ice water (`ᶜdiffusing_water_phases`, or their
+values in a PROPHET subdomain), and the coefficients are evaluated at the
+temperature `ᶜT` at cell centers and interpolated to faces outside the gradient,
+so that the flux factors into `Σ_μ (h_μ + Φ) F_qμ`. `ᶠw` is the face weight:
+`ρ K` for a grid-mean closure, or a subdomain weight. `ᶜscratch` holds each
+coefficient in turn, and `ᶜq_scratch` (see `maybe_materialize!`) each specific
+humidity.
+"""
+function add_water_enthalpy_diffusionᵥ!(
+    ᶜρe_totₜ,
+    ᶠw,
+    ᶜT,
+    ᶜq_water,
+    p,
+    ᶜscratch;
+    ᶜq_scratch = nothing,
+)
+    thermo_params = CAP.thermodynamics_params(p.params)
+    (; ᶜΦ) = p.core
+    ᶜq_tot, ᶜq_liq, ᶜq_ice = ᶜq_water
+    ᶜh = ᶜh_vap_plus_Φ!(ᶜscratch, thermo_params, ᶜT, ᶜΦ)
+    ᶜq = maybe_materialize!(ᶜq_scratch, ᶜq_tot)
+    @. ᶜρe_totₜ -= ᶜdiffdivᵥ(-(ᶠw * ᶠinterp(ᶜh) * ᶠgradᵥ(ᶜq)))
+    ᶜh = ᶜh_liq_minus_vap!(ᶜscratch, thermo_params, ᶜT)
+    ᶜq = maybe_materialize!(ᶜq_scratch, ᶜq_liq)
+    @. ᶜρe_totₜ -= ᶜdiffdivᵥ(-(ᶠw * ᶠinterp(ᶜh) * ᶠgradᵥ(ᶜq)))
+    ᶜh = ᶜh_ice_minus_vap!(ᶜscratch, thermo_params, ᶜT)
+    ᶜq = maybe_materialize!(ᶜq_scratch, ᶜq_ice)
+    @. ᶜρe_totₜ -= ᶜdiffdivᵥ(-(ᶠw * ᶠinterp(ᶜh) * ᶠgradᵥ(ᶜq)))
+    return nothing
+end
+
+"""
+    add_water_enthalpy_diffusionₕ!(
+        ᶜρe_totₜ, ᶜw, ᶜT, ᶜq_water, p, ᶜscratch; ᶜq_scratch = nothing,
+    )
+
+Horizontal counterpart of `add_water_enthalpy_diffusionᵥ!`: add the weak
+divergence `wdivₕ(ᶜw [(h_v + Φ) ∇ₕq_t + (h_l - h_v) ∇ₕq_l + (h_i - h_v) ∇ₕq_i])`
+to `ᶜρe_totₜ`, with the center weight `ᶜw`.
+"""
+function add_water_enthalpy_diffusionₕ!(
+    ᶜρe_totₜ,
+    ᶜw,
+    ᶜT,
+    ᶜq_water,
+    p,
+    ᶜscratch;
+    ᶜq_scratch = nothing,
+)
+    thermo_params = CAP.thermodynamics_params(p.params)
+    (; ᶜΦ) = p.core
+    ᶜq_tot, ᶜq_liq, ᶜq_ice = ᶜq_water
+    ᶜh = ᶜh_vap_plus_Φ!(ᶜscratch, thermo_params, ᶜT, ᶜΦ)
+    ᶜq = maybe_materialize!(ᶜq_scratch, ᶜq_tot)
+    @. ᶜρe_totₜ += wdivₕ(ᶜw * ᶜh * gradₕ(ᶜq))
+    ᶜh = ᶜh_liq_minus_vap!(ᶜscratch, thermo_params, ᶜT)
+    ᶜq = maybe_materialize!(ᶜq_scratch, ᶜq_liq)
+    @. ᶜρe_totₜ += wdivₕ(ᶜw * ᶜh * gradₕ(ᶜq))
+    ᶜh = ᶜh_ice_minus_vap!(ᶜscratch, thermo_params, ᶜT)
+    ᶜq = maybe_materialize!(ᶜq_scratch, ᶜq_ice)
+    @. ᶜρe_totₜ += wdivₕ(ᶜw * ᶜh * gradₕ(ᶜq))
+    return nothing
+end
+
+"""
+    diffused_water_species(precipitation)
+
+Return the `(χ_name, ρχ_name)` pairs of the microphysics species that diffuse
+down their own gradients: `suspended_cloud_species`, followed by
+`precipitation_species` when `precipitation` is `true`.
+"""
+diffused_water_species(precipitation) =
+    precipitation ? (suspended_cloud_species..., precipitation_species...) :
+    suspended_cloud_species
+
+"""
+    add_moisture_diffusionᵥ!(
+        Yₜ, Y, p, ᶠρK, ᶜscratch, ᶜscratch_2; precipitation = false,
+    )
+
+Add the vertical diffusion of water shared by the grid-mean second-order closures,
+with the face coefficient `ᶠρK`, to `Yₜ`; return `nothing`.
+
+The diffusing total water `q_t` of `ᶜdiffusing_water_phases` enters
+`Yₜ.c.ρq_tot` and, as moist-air mass, `Yₜ.c.ρ`; `Yₜ.c.ρe_tot` receives the
+water-enthalpy flux of `add_water_enthalpy_diffusionᵥ!`; and each prognostic
+microphysics species of `diffused_water_species(precipitation)` diffuses down
+its own gradient with the same `ᶠρK`, so that the phase fluxes match the
+enthalpy the energy equation carries. Species without such a flux do not
+diffuse, and with an equilibrium scheme only `ρq_tot` diffuses. `ᶜscratch` and
+`ᶜscratch_2` are center scalar fields. No-op in dry configurations.
+"""
+function add_moisture_diffusionᵥ!(
+    Yₜ,
+    Y,
+    p,
+    ᶠρK,
+    ᶜscratch,
+    ᶜscratch_2;
+    precipitation = false,
+)
+    p.atmos.microphysics_model isa DryModel && return nothing
+    (; ᶜT) = p.precomputed
+    ᶜρ = Y.c.ρ
+    ᶜq_water = ᶜdiffusing_water_phases(Y, p; precipitation)
+    ᶜq_tot = ᶜq_water[1]
+    ᶜρq_totₜ = ᶜscratch_2
+    @. ᶜρq_totₜ = -(ᶜdiffdivᵥ(-(ᶠρK * ᶠgradᵥ(ᶜq_tot))))
+    @. Yₜ.c.ρq_tot += ᶜρq_totₜ
+    @. Yₜ.c.ρ += ᶜρq_totₜ
+    add_water_enthalpy_diffusionᵥ!(Yₜ.c.ρe_tot, ᶠρK, ᶜT, ᶜq_water, p, ᶜscratch)
+    MatrixFields.unrolled_foreach(
+        diffused_water_species(precipitation),
+    ) do (_, ρχ_name)
+        MatrixFields.has_field(Y.c, ρχ_name) || return
+        ᶜρχ = MatrixFields.get_field(Y.c, ρχ_name)
+        ᶜρχₜ = MatrixFields.get_field(Yₜ.c, ρχ_name)
+        @. ᶜρχₜ -= ᶜdiffdivᵥ(-(ᶠρK * ᶠgradᵥ(specific(ᶜρχ, ᶜρ))))
+    end
+    return nothing
+end
+
+"""
+    add_moisture_diffusionₕ!(
+        Yₜ, Y, p, ᶜρD, ᶜscratch, ᶜscratch_2; precipitation = false,
+    )
+
+Horizontal counterpart of `add_moisture_diffusionᵥ!`, with the center coefficient
+`ᶜρD` and the weak divergence `wdivₕ`.
+"""
+function add_moisture_diffusionₕ!(
+    Yₜ,
+    Y,
+    p,
+    ᶜρD,
+    ᶜscratch,
+    ᶜscratch_2;
+    precipitation = false,
+)
+    p.atmos.microphysics_model isa DryModel && return nothing
+    (; ᶜT) = p.precomputed
+    ᶜρ = Y.c.ρ
+    ᶜq_water = ᶜdiffusing_water_phases(Y, p; precipitation)
+    ᶜq_tot = ᶜq_water[1]
+    ᶜρq_totₜ = ᶜscratch_2
+    @. ᶜρq_totₜ = wdivₕ(ᶜρD * gradₕ(ᶜq_tot))
+    @. Yₜ.c.ρq_tot += ᶜρq_totₜ
+    @. Yₜ.c.ρ += ᶜρq_totₜ
+    add_water_enthalpy_diffusionₕ!(Yₜ.c.ρe_tot, ᶜρD, ᶜT, ᶜq_water, p, ᶜscratch)
+    MatrixFields.unrolled_foreach(
+        diffused_water_species(precipitation),
+    ) do (_, ρχ_name)
+        MatrixFields.has_field(Y.c, ρχ_name) || return
+        ᶜρχ = MatrixFields.get_field(Y.c, ρχ_name)
+        ᶜρχₜ = MatrixFields.get_field(Yₜ.c, ρχ_name)
+        @. ᶜρχₜ += wdivₕ(ᶜρD * gradₕ(specific(ᶜρχ, ᶜρ)))
+    end
+    return nothing
+end
+
+"""
+    add_scalar_diffusionᵥ!(Yₜ, Y, p, ᶠρK, ᶜscratch, ᶜscratch_2; precipitation = false)
+
+Add the vertical diffusion of every grid-mean scalar with the face coefficient
+`ᶠρK` to `Yₜ`; return `nothing`. This is the scalar part shared by the
+grid-mean second-order closures: the sensible-heat and geopotential flux
+(`add_sensible_heat_diffusionᵥ!`) in every configuration, the water and its
+enthalpy (`add_moisture_diffusionᵥ!`) in moist ones, and each passive
+grid-scale tracer down its own gradient. `precipitation` selects whether rain,
+snow, and rain number diffuse (`ᶜdiffusing_water_phases`).
+"""
+function add_scalar_diffusionᵥ!(
+    Yₜ,
+    Y,
+    p,
+    ᶠρK,
+    ᶜscratch,
+    ᶜscratch_2;
+    precipitation = false,
+)
+    (; ᶜT) = p.precomputed
+    ᶜρ = Y.c.ρ
+    add_sensible_heat_diffusionᵥ!(
+        Yₜ.c.ρe_tot,
+        ᶠρK,
+        ᶜT,
+        ᶜdiffusing_water_phases(Y, p; precipitation),
+        p,
+        ᶜscratch,
+    )
+    add_moisture_diffusionᵥ!(Yₜ, Y, p, ᶠρK, ᶜscratch, ᶜscratch_2; precipitation)
+    foreach_gs_tracer(Yₜ, Y) do ᶜρχₜ, ᶜρχ, ρχ_name
+        ρχ_name in microphysics_tracer_names(Y) && return
+        @. ᶜρχₜ -= ᶜdiffdivᵥ(-(ᶠρK * ᶠgradᵥ(specific(ᶜρχ, ᶜρ))))
+    end
+    return nothing
+end
+
+"""
+    add_scalar_diffusionₕ!(Yₜ, Y, p, ᶜρD, ᶜscratch, ᶜscratch_2; precipitation = false)
+
+Horizontal counterpart of `add_scalar_diffusionᵥ!`, with the center coefficient
+`ᶜρD` and the weak divergence `wdivₕ`.
+"""
+function add_scalar_diffusionₕ!(
+    Yₜ,
+    Y,
+    p,
+    ᶜρD,
+    ᶜscratch,
+    ᶜscratch_2;
+    precipitation = false,
+)
+    (; ᶜT) = p.precomputed
+    ᶜρ = Y.c.ρ
+    add_sensible_heat_diffusionₕ!(
+        Yₜ.c.ρe_tot,
+        ᶜρD,
+        ᶜT,
+        ᶜdiffusing_water_phases(Y, p; precipitation),
+        p,
+        ᶜscratch,
+    )
+    add_moisture_diffusionₕ!(Yₜ, Y, p, ᶜρD, ᶜscratch, ᶜscratch_2; precipitation)
+    foreach_gs_tracer(Yₜ, Y) do ᶜρχₜ, ᶜρχ, ρχ_name
+        ρχ_name in microphysics_tracer_names(Y) && return
+        @. ᶜρχₜ += wdivₕ(ᶜρD * gradₕ(specific(ᶜρχ, ᶜρ)))
+    end
+    return nothing
+end
+
+"""
+    ᶜdiffusing_water_phases(Y, p; precipitation = false)
+
+Return the lazy specific humidities `(q_t, q_l, q_i)` of the total, liquid, and
+ice water that second-order turbulent diffusion transports, the vapor being the
+remainder `q_t - q_l - q_i`.
+
+With a non-equilibrium scheme, these are `(q_tot - q_rai - q_sno, q_lcl, q_icl)`,
+since rain and snow sediment rather than follow the turbulent flow at the scales
+of the boundary-layer and PROPHET closures; the same tuple weights the
+fourth-order hyperdiffusive water enthalpy (`ᶜh_eff_plus_Φ!`). With `precipitation = true`, used by
+the LES closures, whose subgrid eddies carry falling precipitation as well, they
+are `(q_tot, q_lcl + q_rai, q_icl + q_sno)`. With an equilibrium scheme, they
+are `q_tot` and the diagnostic `ᶜq_liq` and `ᶜq_ice` in either case. In dry
+configurations, returns `nothing`.
+"""
+function ᶜdiffusing_water_phases(Y, p; precipitation = false)
+    p.atmos.microphysics_model isa DryModel && return nothing
+    p.atmos.microphysics_model isa NonEquilibriumMicrophysics ||
+        return (
+            (@. lazy(specific(Y.c.ρq_tot, Y.c.ρ))),
+            p.precomputed.ᶜq_liq,
+            p.precomputed.ᶜq_ice,
+        )
+    ᶜρ = Y.c.ρ
+    return precipitation ?
            (
-        ᶜq_vap,
-        (@. lazy(specific(Y.c.ρq_lcl, Y.c.ρ))),
-        (@. lazy(specific(Y.c.ρq_icl, Y.c.ρ))),
-    ) : (ᶜq_vap, ᶜq_liq, ᶜq_ice)
+        (@. lazy(specific(Y.c.ρq_tot, ᶜρ))),
+        (@. lazy(specific(Y.c.ρq_lcl + Y.c.ρq_rai, ᶜρ))),
+        (@. lazy(specific(Y.c.ρq_icl + Y.c.ρq_sno, ᶜρ))),
+    ) :
+           (
+        (@. lazy(specific(Y.c.ρq_tot - Y.c.ρq_rai - Y.c.ρq_sno, ᶜρ))),
+        (@. lazy(specific(Y.c.ρq_lcl, ᶜρ))),
+        (@. lazy(specific(Y.c.ρq_icl, ᶜρ))),
+    )
 end
-
-"""
-    ᶜdiffusing_water(Y, p)
-
-Return the lazy specific humidity of the water that diffuses,
-`q_tot_eff = q_tot - q_rai - q_sno`. Rain and snow are excluded because they
-sediment rather than follow the turbulent flow; with an equilibrium scheme
-there is no separate precipitation mass and this is `q_tot`.
-"""
-ᶜdiffusing_water(Y, p) =
-    p.atmos.microphysics_model isa
-    Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M} ?
-    (@. lazy(specific(Y.c.ρq_tot - Y.c.ρq_rai - Y.c.ρq_sno, Y.c.ρ))) :
-    (@. lazy(specific(Y.c.ρq_tot, Y.c.ρ)))
 
 """
     gradient_richardson_number(params, ᶜN², ᶜstrain_rate_norm)
