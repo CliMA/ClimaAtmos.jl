@@ -296,28 +296,22 @@ end
     @. ᶜq_lcl = ᶜq_lcl⁰
     @. ᶜq_icl = ᶜq_icl⁰
 
-    # Reference condensate enthalpy differences, vapor enthalpy + Φ, and
-    # q_tot_eff, assembled independently of the source.
-    ᶜh_lv = similar(Y.c.ρ)
-    ᶜh_iv = similar(Y.c.ρ)
-    @. ᶜh_lv =
-        CA.TD.enthalpy_liquid(thermo_params, ᶜT⁰) -
-        CA.TD.enthalpy_vapor(thermo_params, ᶜT⁰)
-    @. ᶜh_iv =
-        CA.TD.enthalpy_ice(thermo_params, ᶜT⁰) -
-        CA.TD.enthalpy_vapor(thermo_params, ᶜT⁰)
-    ᶜh_vap_plus_Φ = similar(Y.c.ρ)
-    @. ᶜh_vap_plus_Φ = CA.TD.enthalpy_vapor(thermo_params, ᶜT⁰) + ᶜΦ
+    # Reference enthalpy-flux coefficients and q_tot_eff, assembled
+    # independently of the source.
     ᶜq_tot_eff = similar(Y.c.ρ)
     @. ᶜq_tot_eff = ᶜq_tot⁰ - ᶜq_rai⁰ - ᶜq_sno⁰
+    (; ᶜcp, ᶜh_vap_plus_Φ, ᶜh_lv, ᶜh_iv) = enthalpy_flux_coefficients(
+        thermo_params,
+        ᶜT⁰,
+        ᶜΦ,
+        (ᶜq_tot_eff, ᶜq_lcl, ᶜq_icl),
+    )
 
     ᶜflux_dse = similar(Y.c.ρ)
     ᶜflux_cond = similar(Y.c.ρ)
     ᶜflux_water = similar(Y.c.ρ)
-    ᶜcp⁰ = similar(Y.c.ρ)
-    @. ᶜcp⁰ = CA.TD.cp_m(thermo_params, ᶜq_tot_eff, ᶜq_lcl, ᶜq_icl)
     @. ᶜflux_dse =
-        CA.wdivₕ(ᶜρa⁰ * ᶜK_h * ᶜcp⁰ * CA.gradₕ(ᶜT⁰)) +
+        CA.wdivₕ(ᶜρa⁰ * ᶜK_h * ᶜcp * CA.gradₕ(ᶜT⁰)) +
         CA.wdivₕ(ᶜρa⁰ * ᶜK_h * CA.gradₕ(ᶜΦ))
     @. ᶜflux_cond =
         CA.wdivₕ(ᶜρa⁰ * ᶜK_h * ᶜh_lv * CA.gradₕ(ᶜq_lcl)) +
@@ -443,8 +437,9 @@ end
 
     # Where the updraft area collapses to zero next to nodes with finite area,
     # an element containing a draft-free node carries almost no updraft flux,
-    # and the intensive updraft tendency stays bounded instead of growing with
-    # the area ratio between nodes (about 0.1 / 1e-8 here).
+    # and the intensive updraft tendency stays bounded (the nodal area in the
+    # weight would amplify it by the area ratio between nodes, about
+    # 0.1 / 1e-8 here).
     Yₜ_ref = deepcopy(Yₜ)
     ᶜy = Fields.coordinate_field(Y.c).y
     @. Y.c.sgsʲs.:(1).ρa = ifelse(ᶜy < FT(3200), FT(0.1) * Y.c.ρ, FT(0))

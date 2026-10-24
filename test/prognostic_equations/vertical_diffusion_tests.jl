@@ -125,11 +125,11 @@ include("../test_helpers.jl")
     ᶜh_tot_v = @. TD.enthalpy_vapor(thermo_params, ᶜT) + p.core.ᶜΦ
     ᶜh_tot_l = @. TD.enthalpy_liquid(thermo_params, ᶜT) + p.core.ᶜΦ
     ᶜh_tot_i = @. TD.enthalpy_ice(thermo_params, ᶜT) + p.core.ᶜΦ
-    ᶜcp = @. TD.cp_m(
+    (; ᶜcp) = enthalpy_flux_coefficients(
         thermo_params,
-        ᶜq_tot_eff,
-        Yc.ρq_lcl / Yc.ρ,
-        Yc.ρq_icl / Yc.ρ,
+        ᶜT,
+        p.core.ᶜΦ,
+        (ᶜq_tot_eff, (@. Yc.ρq_lcl / Yc.ρ), (@. Yc.ρq_icl / Yc.ρ)),
     )
     ᶜρe_totₜ_eq30 = similar(ᶜz)
     @. ᶜρe_totₜ_eq30 =
@@ -384,11 +384,15 @@ end
     ᶜh_tot_v = @. TD.enthalpy_vapor(thermo_params, ᶜT) + p.core.ᶜΦ
     ᶜh_tot_l = @. TD.enthalpy_liquid(thermo_params, ᶜT) + p.core.ᶜΦ
     ᶜh_tot_i = @. TD.enthalpy_ice(thermo_params, ᶜT) + p.core.ᶜΦ
-    ᶜcp = @. TD.cp_m(
+    (; ᶜcp) = enthalpy_flux_coefficients(
         thermo_params,
-        (Yc.ρq_tot - Yc.ρq_rai - Yc.ρq_sno) / Yc.ρ,
-        Yc.ρq_lcl / Yc.ρ,
-        Yc.ρq_icl / Yc.ρ,
+        ᶜT,
+        p.core.ᶜΦ,
+        (
+            (@. (Yc.ρq_tot - Yc.ρq_rai - Yc.ρq_sno) / Yc.ρ),
+            (@. Yc.ρq_lcl / Yc.ρ),
+            (@. Yc.ρq_icl / Yc.ρ),
+        ),
     )
     @. ᶜexpected =
         -CA.ᶜdiffdivᵥ(

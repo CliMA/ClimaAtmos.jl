@@ -187,9 +187,13 @@ whatever its area, and an element containing a draft-free node carries almost
 no draft flux. The grid mean receives the same flux divergence
 ``\nabla_h \cdot (w^j \nabla_h \chi^j)`` as the draft equation before the
 division by ``\hat{\rho}^j``, so the diffusion conserves each scalar and leaves
-the diagnosed environment unchanged. The area-weighted density
+the diagnosed environment's scalars unchanged. The area-weighted density
 ``\hat{\rho}^j`` receives no tendency, matching
-`edmfx_sgs_diffusive_flux_tendency!`.
+`edmfx_sgs_diffusive_flux_tendency!`, so, as in the vertical, the moist mass
+that ``q_t^j`` diffusion adds and the enthalpy
+``(h_d^j + \Phi) \nabla_h q_{t,\mathrm{eff}}^j`` of the dry air it displaces go
+to the environment (see
+[Coupling to the resolved equations](prophet.md#Coupling-to-the-resolved-equations)).
 
 ## Mixing length
 

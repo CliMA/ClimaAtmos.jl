@@ -156,11 +156,12 @@ Three physical and mathematical properties determine this form:
     uncompensated ``c_{pd} \delta T_0 \, \partial_t (\rho q_t)|_{\mathrm{diff}}``
     residual).
 
-The heat capacity ``c_p`` counts rain and snow mass at ``c_{pd}`` rather than
-at zero so that it equals the coefficient of ``\nabla T^j`` in the gradient of
-the moist static energy that the [PROPHET](prophet.md) updrafts diffuse, which
-makes the energy the diagnosed environment absorbs from updraft diffusion
-exactly the enthalpy of the displaced dry air (see
+The heat capacity ``c_p`` counts rain and snow mass at ``c_{pd}`` (a
+``10^{-4}`` relative effect) so that it equals the coefficient of
+``\nabla T^j`` in the gradient of the moist static energy that the
+[PROPHET](prophet.md) updrafts diffuse, which makes the energy the diagnosed
+environment absorbs from updraft diffusion exactly the enthalpy of the
+displaced dry air (see
 [Coupling to the resolved equations](prophet.md#Coupling-to-the-resolved-equations)).
 In the LES closures, which diffuse precipitation as well, ``c_p`` is the heat
 capacity of the full moist mixture.
@@ -179,8 +180,8 @@ diffuse with the same linear operator as cloud ice, the rime mass stays within
 the ice mass. In the equilibrium 0-moment scheme, ``q_l^{\mathrm{cl}}`` and ``q_i^{\mathrm{cl}}`` are
 diagnostic (`ᶜq_liq` and `ᶜq_ice`) and have no separate prognostic equations.
 
-**Rain, snow, and rain number density** do not diffuse under the prescribed and
-PROPHET closures. They evolve through sedimentation and microphysical sources;
+**Rain, snow, and rain number density** do not diffuse under the prescribed
+and PROPHET closures or the viscous sponge. They evolve through sedimentation and microphysical sources;
 see [Microphysics](microphysics.md). The LES closures, whose subgrid eddies carry
 falling precipitation, diffuse them as well (see below).
 
@@ -213,11 +214,13 @@ optional PROPHET horizontal diffusive flux. All of them are explicit. See
 [PROPHET Horizontal Diffusion](prophet_horizontal_diffusion.md).
 
 All four horizontal closures (as well as the second-order horizontal
-[viscous sponge](sponge.md)) use the same water-enthalpy decomposition as the
-vertical closures (`add_water_enthalpy_diffusionₕ!` and
-`add_moisture_diffusionₕ!`). PROPHET horizontal diffusion and the viscous sponge
-diffuse ``q_t^{\mathrm{eff}}`` and the suspended cloud species down their own
-horizontal gradients while rain and snow do not diffuse. The LES closures,
+[viscous sponge](sponge.md)) use the same enthalpy decomposition and species
+treatment as the vertical closures, through the shared
+`add_scalar_diffusionₕ!` for the grid mean and `add_sensible_heat_diffusionₕ!`
+and `add_water_enthalpy_diffusionₕ!` for the PROPHET subdomains. PROPHET
+horizontal diffusion and the viscous sponge diffuse ``q_t^{\mathrm{eff}}`` and
+the suspended cloud species down their own horizontal gradients while rain and
+snow do not diffuse. The LES closures,
 horizontal and vertical (Smagorinsky–Lilly, anisotropic minimum dissipation, and
 constant horizontal diffusion), diffuse the total water ``q_t`` and every
 microphysics species, rain, snow, and rain number included, down its own

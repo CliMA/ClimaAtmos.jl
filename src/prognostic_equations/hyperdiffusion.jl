@@ -258,6 +258,8 @@ NVTX.@annotate function apply_hyperdiffusion_tendency!(Yₜ, Y, p, t)
     thermo_params = CAP.thermodynamics_params(params)
     (; divergence_damping_factor) = hyperdiff
     (; ν₄_scalar, ν₄_vorticity) = ν₄(hyperdiff, Y)
+    (; ᶜΦ) = p.core
+    (; ᶜT) = p.precomputed
 
     n = n_mass_flux_subdomains(turbconv_model)
     diffuse_tke = use_prognostic_tke(turbconv_model)
@@ -267,7 +269,7 @@ NVTX.@annotate function apply_hyperdiffusion_tendency!(Yₜ, Y, p, t)
     (; ᶜ∇²u, ᶜ∇²T, ᶜ∇²Φ, ᶜ∇²q_tot_eff) = p.hyperdiff
     if turbconv_model isa PrognosticEDMFX
         (; ᶜ∇²uʲs, ᶜ∇²Tʲs, ᶜ∇²q_tot_effʲs) = p.hyperdiff
-        (; ᶜTʲs, ᶜq_tot_nonnegʲs, ᶜq_liqʲs, ᶜq_iceʲs) = p.precomputed
+        (; ᶜTʲs) = p.precomputed
     end
     if use_prognostic_tke(turbconv_model)
         (; ᶜ∇²tke) = p.hyperdiff
@@ -293,15 +295,13 @@ NVTX.@annotate function apply_hyperdiffusion_tendency!(Yₜ, Y, p, t)
     # the vapor/cloud shares sum to 1, the Φ per phase collapses to a single
     # +Φ term in the flux. The geopotential term is always applied.
     ᶜh_flux_div = p.scratch.ᶜtemp_scalar
-    @. ᶜh_flux_div = wdivₕ(ᶜρ * gradₕ(ᶜ∇²Φ))
+    ᶜcoefficient = p.scratch.ᶜtemp_scalar_2
     ᶜq_water = ᶜdiffusing_water_phases(Y, p)
-    if isnothing(ᶜq_water)
-        cp_d = CAP.cp_d(params)
-        @. ᶜh_flux_div += wdivₕ(ᶜρ * cp_d * gradₕ(ᶜ∇²T))
-    else
-        ᶜcp = ᶜcp_diffusing!(p.scratch.ᶜtemp_scalar_2, thermo_params, ᶜq_water)
-        @. ᶜh_flux_div += wdivₕ(ᶜρ * ᶜcp * gradₕ(ᶜ∇²T))
-        ᶜh_eff_plus_Φ = ᶜh_eff_plus_Φ!(p.scratch.ᶜtemp_scalar_2, Y, p)
+    ᶜcp = ᶜcp_diffusing!(ᶜcoefficient, thermo_params, ᶜq_water)
+    @. ᶜh_flux_div = wdivₕ(ᶜρ * ᶜcp * gradₕ(ᶜ∇²T)) + wdivₕ(ᶜρ * gradₕ(ᶜ∇²Φ))
+    if !isnothing(ᶜq_water)
+        ᶜh_eff_plus_Φ =
+            ᶜh_eff_plus_Φ!(ᶜcoefficient, thermo_params, ᶜT, ᶜΦ, ᶜq_water)
         @. ᶜh_flux_div += wdivₕ(ᶜρ * ᶜh_eff_plus_Φ * gradₕ(ᶜ∇²q_tot_eff))
     end
     @. Yₜ.c.ρe_tot -= ν₄_scalar * ᶜh_flux_div
@@ -329,38 +329,18 @@ NVTX.@annotate function apply_hyperdiffusion_tendency!(Yₜ, Y, p, t)
             # h_effʲ - h_d(Tʲ) (where geopotential Φ cancels and
             # reference-temperature shifts shift the coefficient by
             # C_water - C_d).
-            ᶜq_vapʲ = @. lazy(
-                TD.vapor_specific_humidity(
-                    ᶜq_tot_nonnegʲs.:($$j),
-                    ᶜq_liqʲs.:($$j),
-                    ᶜq_iceʲs.:($$j),
-                ),
-            )
-            ᶜq_lclʲ, ᶜq_iclʲ =
-                p.atmos.microphysics_model isa NonEquilibriumMicrophysics ?
-                (
-                    (@. lazy(Y.c.sgsʲs.:($$j).q_lcl)),
-                    (@. lazy(Y.c.sgsʲs.:($$j).q_icl)),
-                ) : (ᶜq_liqʲs.:($j), ᶜq_iceʲs.:($j))
+            ᶜq_waterʲ = ᶜupdraft_diffusing_water(Y, p, Val(j))
+            ᶜcpʲ = ᶜcp_diffusing!(ᶜcoefficient, thermo_params, ᶜq_waterʲ)
+            @. ᶜh_flux_div =
+                wdivₕ(ᶜcpʲ * gradₕ(ᶜ∇²Tʲs.:($$j))) + wdivₕ(gradₕ(ᶜ∇²Φ))
             ᶜh_effⱼ_minus_h_d = ᶜh_eff_minus_h_d!(
-                p.scratch.ᶜtemp_scalar_2,
+                ᶜcoefficient,
                 thermo_params,
                 ᶜTʲs.:($j),
-                ᶜq_vapʲ,
-                ᶜq_lclʲ,
-                ᶜq_iclʲ,
+                ᶜq_waterʲ,
             )
-            @. ᶜh_flux_div = wdivₕ(gradₕ(ᶜ∇²Φ))
             @. ᶜh_flux_div +=
                 wdivₕ(ᶜh_effⱼ_minus_h_d * gradₕ(ᶜ∇²q_tot_effʲs.:($$j)))
-            ᶜcpʲ = p.scratch.ᶜtemp_scalar_2
-            @. ᶜcpʲ = TD.cp_m(
-                thermo_params,
-                ᶜq_vapʲ + ᶜq_lclʲ + ᶜq_iclʲ,
-                ᶜq_lclʲ,
-                ᶜq_iclʲ,
-            )
-            @. ᶜh_flux_div += wdivₕ(ᶜcpʲ * gradₕ(ᶜ∇²Tʲs.:($$j)))
             @. Yₜ.c.sgsʲs.:($$j).mse -= ν₄_scalar * ᶜh_flux_div
         end
     end

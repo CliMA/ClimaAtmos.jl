@@ -190,7 +190,7 @@ configurations. Total water diffuses with `Dₜ(q_tot)` (mirrored to `Yₜ.c.ρ`
 conservation), each cloud and precipitation species diffuses down its own gradient with
 the same diffusivity (`add_moisture_diffusionᵥ!` with `precipitation = true`), and each
 passive grid-scale tracer receives the vertical diffusive-flux divergence
-`ᶜdiffusive_flux_divergenceᵥ` with face diffusivity `ᶠρ Dₜ`.
+`-∇ᵥ·(-ρ Dₜ(χ) ∇ᵥχ)` with face diffusivity `ᶠρ Dₜ`.
 Reads `ᶜu`, `ᶠu³`, and `ᶜT` from `p.precomputed` and uses several `p.scratch` fields.
 
 This tendency is always applied explicitly, from `remaining_tendency!`; it is not part of
@@ -310,6 +310,6 @@ function vertical_amd_tendency!(Yₜ, Y, p, t, les::AnisotropicMinimumDissipatio
         ∇ᶜχ = @. lazy(Geometry.project(axis_uvw, ᶠgradᵥ_scalar(ᶜχ)))
         @. ᶠD_amd = amd_scalar_diffusivity(c_amd, ᶠ∂̂u_uvw, ᶠΔ_z, ∇ᶜχ)
         ᶠρD_tracer = @. lazy(ᶠρ * ᶠD_amd)
-        @. ᶜρχₜ -= $(ᶜdiffusive_flux_divergenceᵥ(ᶠρD_tracer, ᶜχ))
+        @. ᶜρχₜ -= ᶜdiffdivᵥ(-(ᶠρD_tracer * ᶠgradᵥ(ᶜχ)))
     end
 end

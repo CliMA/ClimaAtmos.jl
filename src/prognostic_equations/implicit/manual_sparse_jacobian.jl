@@ -1093,20 +1093,15 @@ function update_diffusion_jacobian!(
     # The sensible-heat operator ∇·(ρ K_h c_p ∇·), with c_p the heat capacity of
     # the diffusing mixture (ᶜcp_diffusing!; under the vertical LES closure
     # the mixture includes rain and snow) interpolated to faces as in
-    # add_sensible_heat_diffusionᵥ!, and c_pd in dry configurations.
+    # add_sensible_heat_diffusionᵥ!.
     thermo_params = CAP.thermodynamics_params(params)
     precipitation = is_smagorinsky_vertical(p.atmos.smagorinsky_lilly)
     ᶜq_water = ᶜdiffusing_water_phases(Y, p; precipitation)
     ᶜdiffusion_T_matrix = p.scratch.ᶜtridiagonal_matrix_scalar
-    if isnothing(ᶜq_water)
-        cp_d = FT(CAP.cp_d(params))
-        @. ᶜdiffusion_T_matrix = cp_d * ᶜdiffusion_h_matrix
-    else
-        ᶜcp = ᶜcp_diffusing!(p.scratch.ᶜtemp_scalar_4, thermo_params, ᶜq_water)
-        @. ᶜdiffusion_T_matrix =
-            ᶜadvdivᵥ_matrix() *
-            (DiagonalMatrixRow(ᶠinterp(ᶜcp)) * ∂ᶠρχ_dif_flux_∂ᶜχ)
-    end
+    ᶜcp = ᶜcp_diffusing!(p.scratch.ᶜtemp_scalar_4, thermo_params, ᶜq_water)
+    @. ᶜdiffusion_T_matrix =
+        ᶜadvdivᵥ_matrix() *
+        (DiagonalMatrixRow(ᶠinterp(ᶜcp)) * ∂ᶠρχ_dif_flux_∂ᶜχ)
 
     if (
         MatrixFields.has_field(Y, @name(c.ρtke)) ||

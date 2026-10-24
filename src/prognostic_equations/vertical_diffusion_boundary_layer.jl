@@ -39,7 +39,7 @@ Increments:
     corresponding moist-air mass.
   - Suspended cloud species (`suspended_cloud_species`: `ρq_lcl`, `ρq_icl`,
     `ρn_lcl`, `ρn_ice`, and the P3 `ρq_rim` and `ρb_rim`): each diffuses down its
-    own vertical gradient, `F_χ = -ρ K_h ∇ᵥχ` (`add_moisture_diffusionᵥ!`).
+    own vertical gradient, `F_χ = -ρ K_h ∇ᵥχ` (`add_scalar_diffusionᵥ!`).
   - Rain, snow, and rain number density (`ρq_rai`, `ρq_sno`, `ρn_rai`) are not
     diffused, since they sediment rather than mix.
   - Passive (non-microphysics) grid-mean tracers: divergence of
@@ -71,7 +71,7 @@ function vertical_diffusion_boundary_layer_tendency!(
     FT = eltype(Y)
     ϵ_FT = eps(FT)
     (; vertical_diffusion) = p.atmos
-    (; ᶜu, ᶜp, ᶜT) = p.precomputed
+    (; ᶜu, ᶜp) = p.precomputed
     ᶜK_h = p.scratch.ᶜtemp_scalar
     if vertical_diffusion isa DecayWithHeightDiffusion
         ᶜK_h .= ᶜcompute_eddy_diffusivity_coefficient(Y.c.ρ, vertical_diffusion)
@@ -95,22 +95,8 @@ function vertical_diffusion_boundary_layer_tendency!(
         ) # assumes ᶜK_u = ᶜK_h
     end
 
-    # Enthalpy diffusion: the sensible-heat and geopotential flux
-    # -ρ K_h (c_p ∇T + ∇Φ) applies in all configurations (including dry); the
-    # water enthalpy flux is added below when ρq_tot is prognostic.
-    add_sensible_heat_diffusionᵥ!(
-        Yₜ.c.ρe_tot,
-        ᶠρK,
-        ᶜT,
-        ᶜdiffusing_water_phases(Y, p),
-        p,
-        p.scratch.ᶜtemp_scalar_3,
-    )
-
-    # Water diffusion on q_tot_eff = q_tot - q_rai - q_sno, with the suspended
-    # cloud species diffusing down their own gradients and the water-enthalpy
-    # flux of Eq. (33) of Yatunin et al. (2026); rain and snow do not diffuse.
-    add_moisture_diffusionᵥ!(
+    # Energy, water, and passive tracers; rain and snow do not diffuse.
+    add_scalar_diffusionᵥ!(
         Yₜ,
         Y,
         p,
@@ -118,11 +104,4 @@ function vertical_diffusion_boundary_layer_tendency!(
         p.scratch.ᶜtemp_scalar_3,
         p.scratch.ᶜtemp_scalar_2,
     )
-
-    # Passive (non-microphysics) grid-scale tracers: independent diffusion at
-    # full K_h. Skip microphysics species (handled above or no diffusion).
-    foreach_gs_tracer(Yₜ, Y) do ᶜρχₜ, ᶜρχ, ρχ_name
-        ρχ_name in microphysics_tracer_names(Y) && return
-        @. ᶜρχₜ -= ᶜdiffdivᵥ(-(ᶠρK * ᶠgradᵥ(specific(ᶜρχ, Y.c.ρ))))
-    end
 end

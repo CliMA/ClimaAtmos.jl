@@ -7,9 +7,10 @@ main
   (`vertical_diffusion_boundary_layer_tendency!`,
   `edmfx_sgs_diffusive_flux_tendency!`,
   `edmfx_sgs_horizontal_diffusive_flux_tendency!`,
-  `smagorinsky_lilly_tendency!`, `vertical_smagorinsky_lilly_tendency!`,
-  `anisotropic_minimum_dissipation_tendency!`,
-  `constant_horizontal_diffusion_tendency!`, and `viscous_sponge_tendency!`)
+  `horizontal_smagorinsky_lilly_tendency!`,
+  `vertical_smagorinsky_lilly_tendency!`, `horizontal_amd_tendency!`,
+  `vertical_amd_tendency!`, `horizontal_constant_diffusion_tendency!`, and
+  `viscous_sponge_tendency!`)
   evaluate the enthalpy flux
   `F_h = -ρ K [c_p ∇T + ∇Φ + (h_v + Φ) ∇q_t + (h_l - h_v) ∇q_l + (h_i - h_v) ∇q_i]`
   (`add_sensible_heat_diffusionᵥ!`, `add_water_enthalpy_diffusionᵥ!`, and
@@ -22,7 +23,11 @@ main
   is a fixed point of diffusion; the neutral unsaturated lapse rate is
   `g / c_p`. Fourth-order hyperdiffusion uses the same split, with the cached
   Laplacians `ᶜ∇²T` and `ᶜ∇²Φ` (of the perturbations from the hydrostatic
-  reference) replacing `ᶜ∇²s_d`. The closures also
+  reference) replacing `ᶜ∇²s_d`. The grid-mean closures and the viscous sponge
+  assemble their scalar diffusion through the shared
+  `add_scalar_diffusion{ᵥ,ₕ}!`; the sponge's own energy, water, and tracer
+  kernels (`viscous_sponge_tendency_ρe_tot_*`, `viscous_sponge_tendency_tracer`)
+  are removed. The closures also
   diffuse each prognostic suspended cloud species (`ρq_lcl`, `ρq_icl`,
   `ρn_lcl`, `ρn_ice`, and the P3 `ρq_rim` and `ρb_rim`) down its own specific
   gradient with the same `ρ K` (`add_moisture_diffusionᵥ!`,

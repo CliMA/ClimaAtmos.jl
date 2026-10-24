@@ -16,7 +16,7 @@ where `c_p` is the heat capacity of the diffusing mixture (`add_sensible_heat_di
 `q_liq` and `q_ice` include rain and snow; its water terms are absent in dry
 configurations. Total water diffuses into `Yₜ.c.ρq_tot` and, for mass conservation,
 `Yₜ.c.ρ`; each cloud and precipitation species diffuses down its own gradient
-(`add_moisture_diffusionₕ!` with `precipitation = true`); and each passive grid-scale
+(`add_scalar_diffusionₕ!` with `precipitation = true`); and each passive grid-scale
 tracer `χ` receives `+∇ₕ·(ρ D ∇ₕχ)`, with the constant diffusivity `D = chd.D`
 [m²/s]. This model diffuses scalars only.
 
@@ -37,17 +37,8 @@ function horizontal_constant_diffusion_tendency!(
     ᶜD = @. ᶜtemp_scalar = FT(chd.D)
     ᶜρD = @. lazy(ᶜρ * ᶜD)
 
-    # Total energy diffusion: sensible heat, then the water enthalpy flux
-    # with the water species, precipitation included
-    add_sensible_heat_diffusionₕ!(
-        Yₜ.c.ρe_tot,
-        ᶜρD,
-        p.precomputed.ᶜT,
-        ᶜdiffusing_water_phases(Y, p; precipitation = true),
-        p,
-        ᶜtemp_scalar_3,
-    )
-    add_moisture_diffusionₕ!(
+    # Energy, water (precipitation included), and passive tracers
+    add_scalar_diffusionₕ!(
         Yₜ,
         Y,
         p,
@@ -56,11 +47,4 @@ function horizontal_constant_diffusion_tendency!(
         ᶜtemp_scalar_2;
         precipitation = true,
     )
-
-    # Passive (non-microphysics) grid-scale tracers
-    foreach_gs_tracer(Yₜ, Y) do ᶜρχₜ, ᶜρχ, ρχ_name
-        ρχ_name in microphysics_tracer_names(Y) && return
-        ᶜχ = @. lazy(specific(ᶜρχ, ᶜρ))
-        @. ᶜρχₜ += wdivₕ(ᶜρ * ᶜD * gradₕ(ᶜχ))
-    end
 end

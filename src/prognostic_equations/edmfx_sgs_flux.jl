@@ -499,16 +499,7 @@ function edmfx_sgs_diffusive_flux_tendency!(
                 end
             end
         else
-            (; ᶜT) = p.precomputed
-            add_sensible_heat_diffusionᵥ!(
-                Yₜ.c.ρe_tot,
-                ᶠρK_h,
-                ᶜT,
-                ᶜdiffusing_water_phases(Y, p),
-                p,
-                p.scratch.ᶜtemp_scalar_3,
-            )
-            add_moisture_diffusionᵥ!(
+            add_scalar_diffusionᵥ!(
                 Yₜ,
                 Y,
                 p,
@@ -516,10 +507,6 @@ function edmfx_sgs_diffusive_flux_tendency!(
                 p.scratch.ᶜtemp_scalar_3,
                 p.scratch.ᶜtemp_scalar,
             )
-            foreach_gs_tracer(Yₜ, Y) do ᶜρχₜ, ᶜρχ, ρχ_name
-                ρχ_name in microphysics_tracer_names(Y) && return
-                @. ᶜρχₜ -= ᶜdiffdivᵥ(-(ᶠρK_h * ᶠgradᵥ(specific(ᶜρχ, ᶜρ))))
-            end
         end
 
         ᶠρaK_u = p.scratch.ᶠtemp_scalar_2
@@ -606,13 +593,16 @@ computed with the horizontal node spacing `Δx_h`:
   - **Momentum (`uₕ`, `u₃`)** and **TKE (`ρtke`)**: diffused on the grid mean
     with `ᶜK_u_h`.
   - **Thermodynamics, water, and tracers**: for `EDOnlyEDMFX`, diffused on the
-    grid mean via `add_moisture_diffusionₕ!`; for `PrognosticEDMFX`, assembled
+    grid mean via `add_scalar_diffusionₕ!`; for `PrognosticEDMFX`, assembled
     from the environment (`ρa⁰ K_h_h ∇ₕψ⁰`) plus, when
     `edmfx_model.horizontal_diffusion` is active, the updraft fluxes
     `ᶜwʲ ∇ₕψʲ` with the weight of `ᶜupdraft_horizontal_diffusion_weight!`. Each
     updraft equation receives its flux divergence divided by `ρaʲ` and the
-    grid mean the flux divergence itself, so the environment receives no
-    residual. Grid-scale scalars that the updrafts do not carry diffuse down
+    grid mean the flux divergence itself, so the environment's scalars receive
+    no residual; as in `edmfx_sgs_diffusive_flux_tendency!`, the moist mass
+    that `q_tot` diffusion adds and the enthalpy `(h_d + Φ) ∇ₕq_tot_effʲ` of
+    the dry air it displaces go to the environment. Grid-scale scalars that
+    the updrafts do not carry diffuse down
     their grid-mean gradients with `ρ K_h_h`. Rain and snow do not diffuse.
 
 Always explicit; applied in the explicit remainder independently of `diff_mode`.
@@ -754,16 +744,7 @@ function edmfx_sgs_horizontal_diffusive_flux_tendency!(
             end
         end
     else
-        (; ᶜT) = p.precomputed
-        add_sensible_heat_diffusionₕ!(
-            Yₜ.c.ρe_tot,
-            ᶜρK_h_h,
-            ᶜT,
-            ᶜdiffusing_water_phases(Y, p),
-            p,
-            p.scratch.ᶜtemp_scalar_6,
-        )
-        add_moisture_diffusionₕ!(
+        add_scalar_diffusionₕ!(
             Yₜ,
             Y,
             p,
@@ -771,10 +752,6 @@ function edmfx_sgs_horizontal_diffusive_flux_tendency!(
             p.scratch.ᶜtemp_scalar_6,
             p.scratch.ᶜtemp_scalar_3,
         )
-        foreach_gs_tracer(Yₜ, Y) do ᶜρχₜ, ᶜρχ, ρχ_name
-            ρχ_name in microphysics_tracer_names(Y) && return
-            @. ᶜρχₜ += wdivₕ(ᶜρK_h_h * gradₕ(specific(ᶜρχ, ᶜρ)))
-        end
     end
 
     (; ᶜu, ᶠu) = p.precomputed

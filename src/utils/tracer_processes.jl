@@ -263,7 +263,7 @@ internal_energy_function(::TD.Ice) = TD.internal_energy_ice
 Return the `Thermodynamics` function that computes the specific enthalpy [J/kg]
 of a condensate with the given phase, `TD.Liquid()` or `TD.Ice()`.
 
-Used by the dry-static-energy plus water-enthalpy decomposition of the diffusive
+Used by the water-enthalpy part of the diffusive
 enthalpy flux and of its Jacobian.
 """
 enthalpy_function(::TD.Liquid) = TD.enthalpy_liquid

@@ -85,15 +85,15 @@ snow:
 The water vapor tendency follows implicitly, since its specific humidity is
 diagnosed from the total and the condensate specific humidities.
 
-The implementation adds two details to the expression above. First, unlike
-second-order [Diffusion](diffusion.md), which diffuses each suspended cloud
-species down its own gradient, fourth-order hyperdiffusion is a non-monotone
-biharmonic operator (``\nabla_h^4``) that creates dispersive overshoots at sharp
-cloud boundaries where ``q_l^{\mathrm{cl}}`` or ``q_i^{\mathrm{cl}}`` vanishes;
-scaling a single ``\nabla_h^4 q_t^{\mathrm{eff}}`` tendency by the local
-suspended mass fraction ``q_\mu^{\mathrm{cl}} / q_t^{\mathrm{cl}}`` vanishes
-identically outside cloud and avoids four extra cached Laplacian fields and DSS
-passes. The share each cloud species receives is clipped to the interval
+The implementation adds two details to the expression above. First, the
+proportional partition takes the place of the own-gradient species diffusion of
+second-order [Diffusion](diffusion.md): the biharmonic operator
+(``\nabla_h^4``) is non-monotone and creates dispersive overshoots at sharp
+cloud boundaries where ``q_l^{\mathrm{cl}}`` or ``q_i^{\mathrm{cl}}`` vanishes,
+whereas scaling a single ``\nabla_h^4 q_t^{\mathrm{eff}}`` tendency by the
+local suspended mass fraction ``q_\mu^{\mathrm{cl}} / q_t^{\mathrm{cl}}``
+vanishes identically outside cloud and avoids four extra cached Laplacian fields
+and DSS passes. The share each cloud species receives is clipped to the interval
 ``[0, 1]``, so a species' specific humidity exceeding the suspended total
 through limiter or round-off effects cannot produce a share above one. Second,
 the quantities attached to a cloud mass species follow it in proportion: the

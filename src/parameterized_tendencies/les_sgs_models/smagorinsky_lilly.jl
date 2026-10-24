@@ -139,7 +139,7 @@ where `c_p` is the heat capacity of the diffusing mixture
 (`add_sensible_heat_diffusionₕ!`) and `q_liq` and `q_ice` include rain and snow; its
 water terms are absent in dry configurations. Total water diffuses into `Yₜ.c.ρq_tot` and, for mass conservation,
 `Yₜ.c.ρ`; each cloud and precipitation species diffuses down its own gradient
-(`add_moisture_diffusionₕ!` with `precipitation = true`); and each passive grid-scale
+(`add_scalar_diffusionₕ!` with `precipitation = true`); and each passive grid-scale
 tracer `χ` receives `+∇ₕ·(ρ D_h ∇ₕχ)`. Reads `ᶜS`, `ᶠS`, `ᶜνₜ_h`,
 `ᶜD_h`, and `ᶜT` from `p.precomputed` (set by
 `set_smagorinsky_lilly_precomputed_quantities!`) and writes `p.scratch` scalar fields.
@@ -166,18 +166,9 @@ function horizontal_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, model::Smagorinsk
     ## Vertical momentum tendency
     @. Yₜ.f.u₃ -= C3(wdivₕ(ᶠρ * ᶠτ_smag) / ᶠρ)
 
-    ## Total energy tendency: sensible heat, then the water enthalpy flux
-    ## with the water species, precipitation included
+    ## Energy, water (precipitation included), and passive tracers
     ᶜρD_h = @. lazy(ᶜρ * ᶜD_h)
-    add_sensible_heat_diffusionₕ!(
-        Yₜ.c.ρe_tot,
-        ᶜρD_h,
-        p.precomputed.ᶜT,
-        ᶜdiffusing_water_phases(Y, p; precipitation = true),
-        p,
-        ᶜtemp_scalar,
-    )
-    add_moisture_diffusionₕ!(
+    add_scalar_diffusionₕ!(
         Yₜ,
         Y,
         p,
@@ -186,13 +177,6 @@ function horizontal_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, model::Smagorinsk
         p.scratch.ᶜtemp_scalar_2;
         precipitation = true,
     )
-
-    ## Passive (non-microphysics) grid-scale tracers
-    foreach_gs_tracer(Yₜ, Y) do ᶜρχₜ, ᶜρχ, ρχ_name
-        ρχ_name in microphysics_tracer_names(Y) && return
-        ᶜχ = @. lazy(specific(ᶜρχ, ᶜρ))
-        @. ᶜρχₜ += wdivₕ(ᶜρ * ᶜD_h * gradₕ(ᶜχ))
-    end
 end
 
 """
@@ -208,9 +192,8 @@ where `c_p` is the heat capacity of the diffusing mixture
 (`add_sensible_heat_diffusionᵥ!`) and `q_liq` and `q_ice` include rain and snow; its
 water terms are absent in dry configurations. Total water diffuses into `Yₜ.c.ρq_tot` and, for mass conservation,
 `Yₜ.c.ρ`; each cloud and precipitation species diffuses down its own gradient
-(`add_moisture_diffusionᵥ!` with `precipitation = true`); and each passive grid-scale
-tracer receives the vertical diffusive-flux divergence `ᶜdiffusive_flux_divergenceᵥ`
-with face diffusivity `ᶠρ D_v`. Reads `ᶜS`, `ᶠS`, `ᶜνₜ_v`,
+(`add_scalar_diffusionᵥ!` with `precipitation = true`); and each passive grid-scale
+tracer `χ` receives `-∇ᵥ·(-ρ D_v ∇ᵥχ)`. Reads `ᶜS`, `ᶠS`, `ᶜνₜ_v`,
 and `ᶜT` from `p.precomputed` and writes `p.scratch` scalar fields.
 
 Applied from `additional_tendency!` when `p.atmos.diff_mode == Explicit()`, and from
@@ -247,17 +230,8 @@ function vertical_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, model::SmagorinskyL
     ## Vertical momentum tendency
     @. Yₜ.f.u₃ -= C3(ᶠdiffdivᵥ_u₃(ᶜρ * ᶜτ_smag) / ᶠρ)
 
-    ## Total energy tendency: sensible heat, then the water enthalpy flux
-    ## with the water species, precipitation included
-    add_sensible_heat_diffusionᵥ!(
-        Yₜ.c.ρe_tot,
-        ᶠρD,
-        p.precomputed.ᶜT,
-        ᶜdiffusing_water_phases(Y, p; precipitation = true),
-        p,
-        p.scratch.ᶜtemp_scalar,
-    )
-    add_moisture_diffusionᵥ!(
+    ## Energy, water (precipitation included), and passive tracers
+    add_scalar_diffusionᵥ!(
         Yₜ,
         Y,
         p,
@@ -266,11 +240,4 @@ function vertical_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, model::SmagorinskyL
         p.scratch.ᶜtemp_scalar_2;
         precipitation = true,
     )
-
-    ## Passive (non-microphysics) grid-scale tracers
-    foreach_gs_tracer(Yₜ, Y) do ᶜρχₜ, ᶜρχ, ρχ_name
-        ρχ_name in microphysics_tracer_names(Y) && return
-        ᶜχ = @. lazy(specific(ᶜρχ, ᶜρ))
-        @. ᶜρχₜ -= $(ᶜdiffusive_flux_divergenceᵥ(ᶠρD, ᶜχ))
-    end
 end

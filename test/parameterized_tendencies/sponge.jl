@@ -9,6 +9,8 @@ using ClimaCore: Spaces, Fields, Geometry
 using ClimaCore.CommonSpaces
 using Base.Broadcast: materialize
 
+include("../test_helpers.jl")
+
 @testset "Sponge Layers" begin
     FT = Float64
     z_max = FT(1)
@@ -35,12 +37,6 @@ using Base.Broadcast: materialize
     @. ᶜuₕ = Geometry.Covariant12Vector(FT(1), FT(1))
     ᶠw = Fields.Field(Geometry.Covariant3Vector{FT}, ᶠspace)
     @. ᶠw = Geometry.Covariant3Vector(FT(1))
-    ᶜρ = ones(ᶜspace)
-    ᶜcp = ones(ᶜspace)
-    ᶜT = ones(ᶜspace)
-    ᶜΦ_test = ones(ᶜspace)
-    ᶜh_vap_plus_Φ = ones(ᶜspace)
-    ᶜq_tot_eff = ones(ᶜspace)
     ᶜχ = ones(ᶜspace)
     ᶜχʲ = 2 .* ones(ᶜspace)
 
@@ -158,44 +154,18 @@ using Base.Broadcast: materialize
             # Test viscous_sponge_tendency_u₃ returns finite values
             tendency_u₃ = CA.viscous_sponge_tendency_u₃(ᶠw, s)
             @test all(isfinite, parent(materialize(tendency_u₃)))
-
-            # Split-form energy tendency: sensible heat + water enthalpy
-            tendency_ρe_tot_sensible =
-                CA.viscous_sponge_tendency_ρe_tot_sensible(ᶜρ, ᶜcp, ᶜT, ᶜΦ_test, s)
-            @test all(isfinite, parent(materialize(tendency_ρe_tot_sensible)))
-            tendency_ρe_tot_water = CA.viscous_sponge_tendency_ρe_tot_water(
-                ᶜρ,
-                ᶜh_vap_plus_Φ,
-                ᶜq_tot_eff,
-                s,
-            )
-            @test all(isfinite, parent(materialize(tendency_ρe_tot_water)))
-
-            # Test viscous_sponge_tendency_tracer returns finite values
-            tendency_tracer = CA.viscous_sponge_tendency_tracer(ᶜρ, ᶜχ, s)
-            @test all(isfinite, parent(materialize(tendency_tracer)))
         end
 
         @testset "No sponge (nothing) returns NullBroadcasted" begin
             @test CA.viscous_sponge_tendency_uₕ(ᶜuₕ, nothing) isa NullBroadcasted
             @test CA.viscous_sponge_tendency_u₃(ᶠw, nothing) isa NullBroadcasted
-            @test CA.viscous_sponge_tendency_ρe_tot_sensible(
-                ᶜρ,
-                ᶜcp,
-                ᶜT,
-                ᶜΦ_test,
-                nothing,
-            ) isa NullBroadcasted
-            @test CA.viscous_sponge_tendency_ρe_tot_water(
-                ᶜρ,
-                ᶜh_vap_plus_Φ,
-                ᶜq_tot_eff,
-                nothing,
-            ) isa NullBroadcasted
-            @test CA.viscous_sponge_tendency_tracer(ᶜρ, ᶜχ, nothing) isa NullBroadcasted
         end
 
-        @testset "viscous_sponge_tendency! water enthalpy and cloud species" begin
+        # The scalar part of the sponge is horizontal diffusion with the
+        # coefficient β(z) ρ: energy through the enthalpy bracket with the heat
+        # capacity of the diffusing mixture, q_tot_eff into ρq_tot and ρ, and
+        # each suspended cloud species and passive tracer down its own gradient.
+        @testset "viscous_sponge_tendency! scalars" begin
             s = CA.ViscousSponge(; zd = z_damping, κ₂ = κ₂)
             params = CA.ClimaAtmosParameters(CP.create_toml_dict(FT))
             thermo_params = CAP.thermodynamics_params(params)
@@ -267,36 +237,25 @@ using Base.Broadcast: materialize
             Yₜ .= zero(FT)
             CA.viscous_sponge_tendency!(Yₜ, Y, p)
 
+            ᶜβρ = @. CA.β_viscous(s, ᶜz, z_max) * Yc.ρ
+            ᶜexpected = similar(ᶜz)
+            sponge_diffusion(ᶜχ) = @. ᶜexpected = CA.wdivₕ(ᶜβρ * CA.gradₕ(ᶜχ))
+
             # Mass conservation: ρ tendency equals ρq_tot tendency on q_tot_eff.
             ᶜq_tot_eff_expected =
                 @. (Yc.ρq_tot - Yc.ρq_rai - Yc.ρq_sno) / Yc.ρ
-            expected_ρq_tot = materialize(
-                CA.viscous_sponge_tendency_tracer(Yc.ρ, ᶜq_tot_eff_expected, s),
-            )
+            sponge_diffusion(ᶜq_tot_eff_expected)
             @test maximum(abs, parent(Yₜ.c.ρq_tot)) > 0
             @test parent(Yₜ.c.ρ) == parent(Yₜ.c.ρq_tot)
-            @test parent(Yₜ.c.ρq_tot) ≈ parent(expected_ρq_tot)
+            @test parent(Yₜ.c.ρq_tot) ≈ parent(ᶜexpected)
 
             # Suspended cloud species diffuse down their own gradients.
-            @test parent(Yₜ.c.ρq_lcl) ≈ parent(
-                materialize(
-                    CA.viscous_sponge_tendency_tracer(Yc.ρ, ᶜq_liq, s),
-                ),
-            )
-            @test parent(Yₜ.c.ρq_icl) ≈ parent(
-                materialize(
-                    CA.viscous_sponge_tendency_tracer(Yc.ρ, ᶜq_ice, s),
-                ),
-            )
-            @test parent(Yₜ.c.ρn_lcl) ≈ parent(
-                materialize(
-                    CA.viscous_sponge_tendency_tracer(
-                        Yc.ρ,
-                        (@. Yc.ρn_lcl / Yc.ρ),
-                        s,
-                    ),
-                ),
-            )
+            sponge_diffusion(ᶜq_liq)
+            @test parent(Yₜ.c.ρq_lcl) ≈ parent(ᶜexpected)
+            sponge_diffusion(ᶜq_ice)
+            @test parent(Yₜ.c.ρq_icl) ≈ parent(ᶜexpected)
+            sponge_diffusion((@. Yc.ρn_lcl / Yc.ρ))
+            @test parent(Yₜ.c.ρn_lcl) ≈ parent(ᶜexpected)
 
             # Rain, snow, and rain number density do not diffuse.
             @test all(iszero, parent(Yₜ.c.ρq_rai))
@@ -304,60 +263,25 @@ using Base.Broadcast: materialize
             @test all(iszero, parent(Yₜ.c.ρn_rai))
 
             # Passive tracer diffuses independently.
-            @test parent(Yₜ.c.ρq_gas_A) ≈ parent(
-                materialize(
-                    CA.viscous_sponge_tendency_tracer(
-                        Yc.ρ,
-                        (@. Yc.ρq_gas_A / Yc.ρ),
-                        s,
-                    ),
-                ),
-            )
+            sponge_diffusion((@. Yc.ρq_gas_A / Yc.ρ))
+            @test parent(Yₜ.c.ρq_gas_A) ≈ parent(ᶜexpected)
 
-            # Energy matches the sensible-heat flux with the heat capacity of
-            # the diffusing mixture plus the Yatunin et al. (2026, Eq. 33)
-            # water-enthalpy terms.
-            ᶜcp_expected =
-                @. CA.TD.cp_m(thermo_params, ᶜq_tot_eff_expected, ᶜq_liq, ᶜq_ice)
-            ᶜh_v_Φ = @. CA.TD.enthalpy_vapor(thermo_params, ᶜT) + ᶜΦ
-            ᶜh_lv = @. CA.TD.enthalpy_liquid(thermo_params, ᶜT) -
-               CA.TD.enthalpy_vapor(thermo_params, ᶜT)
-            ᶜh_iv = @. CA.TD.enthalpy_ice(thermo_params, ᶜT) -
-               CA.TD.enthalpy_vapor(thermo_params, ᶜT)
-            expected_ρe_tot =
-                materialize(
-                    CA.viscous_sponge_tendency_ρe_tot_sensible(
-                        Yc.ρ,
-                        ᶜcp_expected,
-                        ᶜT,
-                        ᶜΦ,
-                        s,
-                    ),
-                ) .+
-                materialize(
-                    CA.viscous_sponge_tendency_ρe_tot_water(
-                        Yc.ρ,
-                        ᶜh_v_Φ,
-                        ᶜq_tot_eff_expected,
-                        s,
-                    ),
-                ) .+
-                materialize(
-                    CA.viscous_sponge_tendency_ρe_tot_water(
-                        Yc.ρ,
-                        ᶜh_lv,
-                        ᶜq_liq,
-                        s,
-                    ),
-                ) .+
-                materialize(
-                    CA.viscous_sponge_tendency_ρe_tot_water(
-                        Yc.ρ,
-                        ᶜh_iv,
-                        ᶜq_ice,
-                        s,
-                    ),
-                )
+            # Energy matches the enthalpy bracket with the heat capacity of the
+            # diffusing mixture and the Yatunin et al. (2026, Eq. 33) water
+            # terms, assembled independently of the model helpers.
+            (; ᶜcp, ᶜh_vap_plus_Φ, ᶜh_lv, ᶜh_iv) = enthalpy_flux_coefficients(
+                thermo_params,
+                ᶜT,
+                ᶜΦ,
+                (ᶜq_tot_eff_expected, ᶜq_liq, ᶜq_ice),
+            )
+            expected_ρe_tot = similar(ᶜz)
+            @. expected_ρe_tot =
+                CA.wdivₕ(ᶜβρ * ᶜcp * CA.gradₕ(ᶜT)) +
+                CA.wdivₕ(ᶜβρ * CA.gradₕ(ᶜΦ)) +
+                CA.wdivₕ(ᶜβρ * ᶜh_vap_plus_Φ * CA.gradₕ(ᶜq_tot_eff_expected)) +
+                CA.wdivₕ(ᶜβρ * ᶜh_lv * CA.gradₕ(ᶜq_liq)) +
+                CA.wdivₕ(ᶜβρ * ᶜh_iv * CA.gradₕ(ᶜq_ice))
             @test parent(Yₜ.c.ρe_tot) ≈ parent(expected_ρe_tot)
 
             # Kirchhoff reference-temperature shift invariance.

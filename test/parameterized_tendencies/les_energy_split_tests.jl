@@ -78,15 +78,11 @@ function reference_fluxes(Y, p)
     ᶜq_rai = @. Y.c.ρq_rai / Y.c.ρ
     ᶜq_liq = @. (Y.c.ρq_lcl + Y.c.ρq_rai) / Y.c.ρ
     ᶜq_ice = @. (Y.c.ρq_icl + Y.c.ρq_sno) / Y.c.ρ
-    ᶜh_lv = @. CA.TD.enthalpy_liquid(thermo_params, ᶜT) -
-       CA.TD.enthalpy_vapor(thermo_params, ᶜT)
-    ᶜh_iv = @. CA.TD.enthalpy_ice(thermo_params, ᶜT) -
-       CA.TD.enthalpy_vapor(thermo_params, ᶜT)
-    ᶜh_vap_plus_Φ = @. CA.TD.enthalpy_vapor(thermo_params, ᶜT) + ᶜΦ
     ᶜq_tot = @. Y.c.ρq_tot / Y.c.ρ
     # The LES closures diffuse all water, so the sensible heat carries the
     # heat capacity of the full moist mixture.
-    ᶜcp = @. CA.TD.cp_m(thermo_params, ᶜq_tot, ᶜq_liq, ᶜq_ice)
+    (; ᶜcp, ᶜh_vap_plus_Φ, ᶜh_lv, ᶜh_iv) =
+        enthalpy_flux_coefficients(thermo_params, ᶜT, ᶜΦ, (ᶜq_tot, ᶜq_liq, ᶜq_ice))
     return (;
         ᶜcp,
         ᶜT,
