@@ -649,8 +649,7 @@ function SGSQuadratureParameters(
         # decay of the max-random overlap recursion; 1 = maximum overlap.
         sgs_precip_overlap_decay = FT(1),
         # Floor on the overlap precipitation fraction seen by the placement:
-        # the shaft is never narrower than half the cell (0.1 is the thinnest
-        # shaft the order-3 quadrature resolves).
+        # the shaft is never narrower than half the cell.
         sgs_precip_fraction_floor = FT(0.5),
     )
     # A run toml defines a parameter that ClimaParams also defines when it

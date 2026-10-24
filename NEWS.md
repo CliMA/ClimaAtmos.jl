@@ -3,6 +3,15 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- ![][badge-🔥behavioralΔ] The 1M microphysics is integrated over the Gaussian
+  SGS distribution (`sgs_distribution: "gaussian"`) by a conditional-moment
+  node rule (`conditional_rule`) instead of the 3×3 Gauss–Hermite nodes. The
+  nodes sit between the cloud, equilibrium-cloud and precipitation-shaft edges
+  of the saturation excess, so the condensate means and the shaft fraction are
+  integrated exactly for any cloud fraction; nodes whose temperature spread
+  straddles the freezing point are split there.
+- ![][badge-💥breaking] The lognormal SGS distribution, `LogNormalSGS` with
+  `sgs_distribution: "lognormal"`, is removed.
 - ![][badge-🔥behavioralΔ] All second-order turbulent diffusion closures
   (`vertical_diffusion_boundary_layer_tendency!`,
   `edmfx_sgs_diffusive_flux_tendency!`,

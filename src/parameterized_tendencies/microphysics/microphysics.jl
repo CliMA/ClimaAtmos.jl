@@ -19,6 +19,8 @@ include("tendency_limiters.jl")
 
 # Cloud diagnostics
 include("cloud_fraction.jl")
+# Conditional-moment node rule of the 1M SGS microphysics
+include("conditional_nodes.jl")
 
 # Microphysics processes
 include("microphysics_wrappers.jl")

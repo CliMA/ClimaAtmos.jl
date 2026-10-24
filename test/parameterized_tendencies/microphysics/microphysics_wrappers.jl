@@ -267,10 +267,10 @@ import ClimaAtmos:
                         BMT.Microphysics1Moment(), mp, thp, ρ, w,
                         q_rai, q_sno, λ, FT(0), FT(0), FT(0), FT(0),
                         λ_lagrange, mu_S, α,
-                        FT(0), FT(1), FT(0), FT(0),   # β_precip, shaft_frac, S_star, ε_S: no placement
+                        FT(0), FT(1),   # β_precip, shaft_frac: no placement
                         dt, nsubs, ())
-                    e_rest = evaluator(w_rest)(T, q_tot)
-                    e_up = evaluator(w_up)(T, q_tot)
+                    e_rest = evaluator(w_rest)(T, q_tot, FT(0))
+                    e_up = evaluator(w_up)(T, q_tot, FT(0))
                     @test e_up.dq_rai_dt > e_rest.dq_rai_dt
                     @test e_rest.dq_rai_dt ≈ ref_rest.dq_rai_dt rtol = FT(1e-5)
                     @test e_up.dq_rai_dt ≈ ref_up.dq_rai_dt rtol = FT(1e-5)
@@ -361,10 +361,10 @@ import ClimaAtmos:
                         FT(0), FT(0),           # q_rai, q_sno
                         FT(1), FT(0), FT(0), FT(0), FT(0),  # λ, ξ_liq, ξ_ice, q_lcl, q_icl
                         FT(-1), mu_S, FT(1),   # λ_lagrange, mu_S, α
-                        FT(0), FT(1), FT(0), FT(0),   # β_precip, shaft_frac, S_star, ε_S: no placement
+                        FT(0), FT(1),   # β_precip, shaft_frac: no placement
                         dt, nsubs, ())
                     # At the grid-mean point S′_hat = 0, so shifted_excess = max(0,-1) = 0.
-                    result = eval_clear(T_mean, q_tot_mean)
+                    result = eval_clear(T_mean, q_tot_mean, FT(0))
                     ref = BMT.bulk_microphysics_tendencies(
                         BMT.LinearizedAverage(),
                         BMT.Microphysics1Moment(), mp, thp, ρ, T_mean, FT(0),
@@ -384,9 +384,9 @@ import ClimaAtmos:
                         FT(0), FT(0),            # q_rai, q_sno
                         FT(1), FT(0), FT(0), FT(0), FT(0),  # λ, ξ_liq, ξ_ice, q_lcl, q_icl
                         q_c, mu_S, FT(1),   # λ_lagrange, mu_S, α
-                        FT(0), FT(1), FT(0), FT(0),   # β_precip, shaft_frac, S_star, ε_S: no placement
+                        FT(0), FT(1),   # β_precip, shaft_frac: no placement
                         dt, nsubs, ())
-                    result = eval_cloud(T_mean, q_tot_mean)
+                    result = eval_cloud(T_mean, q_tot_mean, FT(0))
                     ref = BMT.bulk_microphysics_tendencies(
                         BMT.LinearizedAverage(),
                         BMT.Microphysics1Moment(), mp, thp, ρ, T_mean, FT(0),
@@ -421,9 +421,9 @@ import ClimaAtmos:
                         q_rai, q_sno,               # q_rai, q_sno
                         λ_mix, FT(0), FT(0), FT(0), FT(0),  # λ, ξ_liq, ξ_ice, q_lcl, q_icl
                         q_c, mu_S_mix, FT(1),   # λ_lagrange, mu_S, α
-                        FT(0), FT(1), FT(0), FT(0),   # β_precip, shaft_frac, S_star, ε_S: no placement
+                        FT(0), FT(1),   # β_precip, shaft_frac: no placement
                         dt, nsubs, ())
-                    result = eval_precip(T_mix, q_tot_mix)
+                    result = eval_precip(T_mix, q_tot_mix, FT(0))
                     # Reference: the condensate the closure must reconstruct at
                     # the mean point, plus the true precipitation.
                     ref = BMT.bulk_microphysics_tendencies(
@@ -444,9 +444,9 @@ import ClimaAtmos:
                         FT(0), FT(0),
                         FT(1), FT(0), FT(0), FT(0), FT(0),
                         FT(5e-4), mu_S, FT(1),
-                        FT(0), FT(1), FT(0), FT(0),   # β_precip, shaft_frac, S_star, ε_S: no placement
+                        FT(0), FT(1),   # β_precip, shaft_frac: no placement
                         dt, nsubs, ())
-                    result = eval(T_mean, q_tot_mean)
+                    result = eval(T_mean, q_tot_mean, FT(0))
                     @test result isa NamedTuple
                     @test isfinite(result.dq_lcl_dt)
                     @test isfinite(result.dq_icl_dt)
@@ -500,30 +500,28 @@ import ClimaAtmos:
                 make(ξ_l, ξ_i) = Microphysics1MEvaluator(
                     BMT.Microphysics1Moment(), mp, thp, ρ, w, FT(0), FT(0), λ_i,
                     ξ_l, ξ_i, FT(0), q_icl, q_c, mu_S, FT(1),
-                    FT(0), FT(1), FT(0), FT(0),   # β_precip, shaft_frac, S_star, ε_S: no placement
+                    FT(0), FT(1),   # β_precip, shaft_frac: no placement
                     dt, nsubs, ())
                 ev_e = make(FT(0), FT(0))
                 ev_u = make(FT(0), FT(1))
                 ev_h = make(FT(0), FT(0.5))
 
                 @testset "precipitation-fraction placement" begin
-                    flag = ClimaAtmos.SGSPrecipShaftFlag(thp, ρ, mu_S, FT(0), FT(0))   # hard threshold at the cell mean
-                    @test flag(T, q_tot) === FT(1)                           # the mean node: S′ = 0 is in the shaft
-                    @test flag(T, q_tot + FT(1e-4)) === FT(1)
-                    @test flag(T, q_tot - FT(1e-4)) === FT(0)
                     q_r, q_s = FT(2e-5), FT(3e-5)
                     # evaluator with the precipitation `q_r`, `q_s`, the mean `μ` and the
-                    # placement `β_p`, `frac_p` (hard flag at the cell mean)
+                    # placement `β_p`, `frac_p`; the dry node lies outside the shaft
+                    # (flag 0), the moist node inside it (flag 1)
                     ev(q_r, q_s, μ, β_p, frac_p) = Microphysics1MEvaluator(
                         BMT.Microphysics1Moment(), mp, thp, ρ, w, q_r, q_s, λ_i,
                         FT(0), FT(1), FT(0), q_icl, q_c, μ, FT(1),
-                        β_p, frac_p, FT(0), FT(0), dt, nsubs, (),
+                        β_p, frac_p, dt, nsubs, (),
                     )
                     ref = ev(q_r, q_s, mu_S, FT(0), FT(1))
                     q̂_dry = FT(0.9) * TD.q_vap_saturation(thp, T, ρ, TD.Ice())   # S′ < 0
                     q̂_moist = q_tot + FT(2e-4)                                     # S′ > 0
                     # off == no placement
-                    @test ev(q_r, q_s, mu_S, FT(0), FT(0.5))(T, q̂_moist) == ref(T, q̂_moist)
+                    @test ev(q_r, q_s, mu_S, FT(0), FT(0.5))(T, q̂_moist, FT(1)) ==
+                          ref(T, q̂_moist, FT(1))
                     # on: no precipitation at the dry node (no rain evaporation / snow
                     # sublimation there), doubled precipitation at the moist node, with
                     # the node total water shifted so that the node vapour is unchanged
@@ -533,8 +531,8 @@ import ClimaAtmos:
                     noprecip = ev(FT(0), FT(0), mu_S - q_r - q_s, FT(0), FT(1))
                     @test all(
                         isapprox.(
-                            values(on(T, q̂_dry)),
-                            values(noprecip(T, q̂_dry - q_r - q_s));
+                            values(on(T, q̂_dry, FT(0))),
+                            values(noprecip(T, q̂_dry - q_r - q_s, FT(0)));
                             rtol = FT(1e-5),
                             atol = FT(1e-14),
                         ),
@@ -542,28 +540,16 @@ import ClimaAtmos:
                     doubled = ev(2q_r, 2q_s, mu_S + q_r + q_s, FT(0), FT(1))
                     @test all(
                         isapprox.(
-                            values(on(T, q̂_moist)),
-                            values(doubled(T, q̂_moist + q_r + q_s));
+                            values(on(T, q̂_moist, FT(1))),
+                            values(doubled(T, q̂_moist + q_r + q_s, FT(1)));
                             rtol = FT(1e-5),
                             atol = FT(1e-14),
                         ),
                     )
-                    @test on(T, q̂_moist) != ref(T, q̂_moist)
+                    @test on(T, q̂_moist, FT(1)) != ref(T, q̂_moist, FT(1))
                 end
 
-                @testset "overlap precipitation fraction: shaft weight and threshold" begin
-                    sw = ClimaAtmos.sgs_precip_shaft_weight
-                    # hard flag at ε_S = 0, threshold inclusive
-                    @test sw(FT(0), FT(0), FT(0)) === FT(1)
-                    @test sw(FT(-1e-6), FT(0), FT(0)) === FT(0)
-                    @test sw(FT(2e-4), FT(1e-4), FT(0)) === FT(1)
-                    # smooth flag: 1/2 at the threshold, monotone, saturating
-                    @test sw(FT(1e-4), FT(1e-4), FT(2e-5)) ≈ FT(0.5)
-                    @test sw(FT(1e-4) + FT(1e-3), FT(1e-4), FT(2e-5)) ≈ FT(1)
-                    @test sw(FT(1e-4) - FT(1e-3), FT(1e-4), FT(2e-5)) ≈ FT(0) atol =
-                        FT(1e-6)
-                    @test sw(FT(1.2e-4), FT(1e-4), FT(2e-5)) >
-                          sw(FT(1.1e-4), FT(1e-4), FT(2e-5))
+                @testset "overlap precipitation fraction: shaft threshold and fraction" begin
                     # threshold: a_p = 1 puts it far below the nodes, a_p = 0.5 at the median,
                     # a_p below the floor is floored, larger a_p ⇒ lower threshold
                     σ = FT(1e-4)
@@ -575,26 +561,27 @@ import ClimaAtmos:
                     @test st(FT(0.16), σ) ≈ σ rtol = FT(0.02)      # Φ⁻¹(0.84) ≈ 1
                     @test st(FT(0.3), σ) isa FT
 
-                    # conservation of the placement under the quadrature for any
-                    # threshold/width: ⟨φ⟩ = 1 with φ = (1 − β) + β s / f, f = ⟨s⟩ (shaft_frac)
+                    # the shaft edge is an edge of the node rule: the node weight of the
+                    # shaft is a_p, and the placement conserves the cell mean, ⟨φ⟩ = 1 with
+                    # φ = (1 − β) + β flag / f, f the node weight of the shaft
                     quad = ClimaAtmos.SGSQuadrature(FT; quadrature_order = 3)
                     T′T′ = FT(1)
                     q′q′ = (FT(0.1) * q_tot)^2
-                    transform = ClimaAtmos.build_physical_transform(
-                        quad, q_tot, T, q′q′, T′T′, FT(0.6),
-                    )
-                    ws = ClimaAtmos.quadrature_prob_weights(quad)
                     for (a_p, σ_S) in
                         ((FT(0.3), FT(2e-4)), (FT(0.15), FT(5e-5)), (FT(1), FT(1e-4)))
-                        S_star = st(a_p, σ_S)
-                        ε_S = ClimaAtmos.sgs_precip_shaft_width_coeff(FT) * σ_S
-                        flag = ClimaAtmos.SGSPrecipShaftFlag(thp, ρ, mu_S, S_star, ε_S)
-                        s = ClimaAtmos.quadrature_point_values(flag, transform, quad)
-                        frac = sum(ws .* s)
-                        @test FT(0) < frac <= FT(1) + eps(FT)
-                        φ = ClimaAtmos.sgs_placement_factor.(FT(1), s, frac)
-                        @test sum(ws .* φ) ≈ FT(1) rtol = FT(1e-4)
-                        a_p == FT(1) && @test frac ≈ FT(1) rtol = FT(1e-4)   # overcast above ⇒ uniform
+                        rule = ClimaAtmos.conditional_rule(
+                            thp, ρ, T, mu_S, σ_S, FT(0), -q_c, -mu_S, st(a_p, σ_S),
+                            FT(150), FT(0.05),
+                        )
+                        frac = ClimaAtmos.conditional_rule_shaft_fraction(rule)
+                        # exact up to the quantile approximation of the threshold:
+                        # |δz| < 4.5e-4 in `normal_cdf_inv`, so |frac − a_p| ≤ φ(0)·4.5e-4 < 2e-4
+                        @test frac ≈ a_p atol = FT(2e-4)
+                        φ_mean = sum(
+                            n.w * ClimaAtmos.sgs_placement_factor(FT(1), n.shaft, frac)
+                            for n in rule.nodes
+                        )
+                        @test φ_mean ≈ FT(1) rtol = FT(1e-4)
                     end
                     # driver: off is bitwise the uniform result, a_p = 1 is the uniform
                     # result to rounding, a thin shaft differs from it, the
@@ -653,9 +640,9 @@ import ClimaAtmos:
                 @testset "dry node: ice sublimates when uniform, absent when excess" begin
                     q̂ = FT(0.9) * TD.q_vap_saturation(thp, T, ρ, TD.Ice())
                     @test q_c + q̂ - q_tot < 0   # shifted_excess = 0 at this node
-                    out_e = ev_e(T, q̂)
-                    out_u = ev_u(T, q̂)
-                    out_h = ev_h(T, q̂)
+                    out_e = ev_e(T, q̂, FT(0))
+                    out_u = ev_u(T, q̂, FT(0))
+                    out_h = ev_h(T, q̂, FT(0))
                     @test out_e.dq_icl_dt == 0
                     @test out_u.dq_icl_dt < 0
                     @test out_h.dq_icl_dt < 0 && out_h.dq_icl_dt > out_u.dq_icl_dt
@@ -668,7 +655,7 @@ import ClimaAtmos:
                         q_tot, FT(0), q_icl, FT(0), FT(0), dt, nsubs,
                     )
                     for ev in (ev_e, ev_u, ev_h)
-                        out = ev(T, q_tot)
+                        out = ev(T, q_tot, FT(0))
                         @test out.dq_icl_dt ≈ ref.dq_icl_dt rtol = FT(1e-4)
                     end
                 end

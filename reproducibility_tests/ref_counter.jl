@@ -1,4 +1,4 @@
-436
+437
 
 # **README**
 #
@@ -32,6 +32,11 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+437
+- The 1M microphysics is integrated over the Gaussian SGS distribution by the
+  conditional-moment node rule; σ_S is the linearized width for the nodes, multipliers,
+  cloud fraction and SGS saturation adjustment.
+
 436
 - Turbulent diffusion carries the enthalpy of each diffusing water phase
   (Yatunin et al. 2026, Eqs. 30 and 33), with the sensible heat at the heat

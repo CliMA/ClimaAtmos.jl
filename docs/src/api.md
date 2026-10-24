@@ -130,11 +130,9 @@ ClimaAtmos.SGSQuadrature
 ClimaAtmos.AbstractSGSDistribution
 ClimaAtmos.GridMeanSGS
 ClimaAtmos.GaussianSGS
-ClimaAtmos.LogNormalSGS
 ClimaAtmos.AbstractPhysicalPointTransform
 ClimaAtmos.GridMeanPhysicalPointTransform
 ClimaAtmos.GaussianPhysicalPointTransform
-ClimaAtmos.LogNormalPhysicalPointTransform
 ClimaAtmos.create_physical_transform
 ClimaAtmos.integrate_over_sgs
 ```

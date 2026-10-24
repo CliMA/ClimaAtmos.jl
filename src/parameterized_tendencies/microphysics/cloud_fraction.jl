@@ -55,7 +55,7 @@ function set_covariance_cache_and_cloud_fraction!(Y, p)
     # One Picard step: use the current cloud fraction to update buoyancy
     # gradient and covariance cache, then recompute cloud fraction.
     #
-    # The hybrid cloud fraction fuses the σ_S² quadrature pass inline inside
+    # The hybrid cloud fraction computes the linearized σ_S inline inside
     # the CF broadcast (see `_compute_cloud_fraction`) — no separate moments
     # materialization during Picard. CF, μ_S, and λ are all written once after
     # Picard converges, in the final `set_sgs_moments_and_cloud_fraction!` call.
@@ -111,7 +111,7 @@ function set_covariance_cache_and_cloud_fraction!(Y, p)
     )
     set_covariance_cache!(Y, p, thermo_params)
 
-    # Final post-Aitken update: one quadrature pass refreshes both CF and the
+    # Final post-Aitken update: one pass refreshes both CF and the
     # microphysics SGS moments (σ_S, λ_lagrange) using the final covariance.
     set_sgs_moments_and_cloud_fraction!(Y, p)
 
@@ -857,85 +857,27 @@ function set_covariance_cache!(Y, p, thermo_params)
 end
 
 # ============================================================================
-# SGS Moments — pre-pass quadrature
+# SGS Moments — linearized saturation-excess moments
 # ============================================================================
 #
-# A Gauss-Hermite pass over the SGS PDF computes σ_S via `_sgs_saturation_moments`,
-# which drives the truncated-Gaussian cloud-fraction and λ_lagrange closures.
+# The saturation variable is the linear excess S = q_tot − q_sat, linearized
+# about the subdomain mean (T_mean, ρ) with the Clausius–Clapeyron slope
+# γ = ∂q_sat/∂T:
 #
-# The saturation variable is ALWAYS defined as the linear excess
+#     μ_S = q_tot_mean − q_sat(T_mean, ρ),
+#     σ_S = sqrt(σ_q² − 2 γ ρ_{Tq} σ_T σ_q + γ² σ_T²).
 #
-#     S = q_tot − q_sat
-#
-# regardless of whether the SGS distribution of (T, q_tot) is Gaussian or
-# lognormal.  The distribution type (GaussianSGS / LogNormalSGS) controls only
-# how the quadrature points (T̂, q̂_tot) are sampled from the joint SGS PDF —
-# it does not change the definition of S.  This ensures consistency with the
-# Lagrange-multiplier evaluator, which always uses the centred linear excess
-# S′ = q_tot_hat − q_sat_hat − μ_S.
-#
-# (A lognormal closure for S = log(q_tot/q_sat) has no clean closed-form
-# inversion for the Lagrange multiplier, so the linear S is used universally.)
-
-"""
-    SGSVarianceEvaluator(tps, ρ, mu_S)
-
-GPU-safe functor returning `(S(ξ) − μ_S)²` at each quadrature point, where
-S = q_tot_hat − q_sat_hat is the linear saturation excess and `μ_S` is the
-linearized SGS mean of S (see `_sgs_saturation_moments`). Used to
-accumulate σ_S² = E[(S − μ_S)²] in one quadrature pass; avoids catastrophic
-cancellation in `E[S²] − (E[S])²` in Float32 when Var[S] ≪ (E[S])².
-"""
-struct SGSVarianceEvaluator{TPS, FT}
-    tps::TPS
-    ρ::FT
-    mu_S::FT
-end
-
-@inline function (eval::SGSVarianceEvaluator)(T_hat, q_tot_hat)
-    q_sat_hat = TD.q_vap_saturation(_unwrapped(eval.tps), T_hat, eval.ρ)
-    s = q_tot_hat - q_sat_hat
-    return (s - eval.mu_S)^2
-end
-
-"""
-    SGSExcessEvaluator(tps, ρ, mu_S)
-
-GPU-safe functor returning the centred saturation excess
-`S′ = q_tot_hat − q_sat(T_hat, ρ) − μ_S` at each quadrature point. This is the
-quantity from which the `Microphysics1MEvaluator` reconstructs condensate. It is
-used with `quadrature_point_values` to materialize the sampled S′ distribution for
-the discrete Lagrange-multiplier fit in `_compute_sgs_moments`.
-"""
-struct SGSExcessEvaluator{TPS, FT}
-    tps::TPS
-    ρ::FT
-    mu_S::FT
-end
-
-@inline (eval::SGSExcessEvaluator)(T_hat, q_tot_hat) =
-    q_tot_hat - TD.q_vap_saturation(_unwrapped(eval.tps), T_hat, eval.ρ) -
-    eval.mu_S
-
+# They drive the truncated-Gaussian cloud fraction, the Lagrange multipliers of
+# the 1M condensate closures and the conditional-moment node rule.
 
 """
     _sgs_saturation_moments(thp, ρ, T_mean, q_tot_mean,
                             sgs_quad, T′T′, q′q′, corr_Tq)
 
-Compute μ_S and σ_S of the linear saturation excess S = q_tot − q_sat over
-the SGS PDF.
-
-The mean is set analytically to the linearized value
-
-    μ_S = q_tot_mean − q_sat(T_mean, ρ),
-
-which is exact under the same linearization of `q_sat(T)` that makes S
-Gaussian to begin with: any difference from `E[S]` evaluated by quadrature
-is the q_sat-curvature term that is already discarded in the truncated-
-Gaussian closure. Using this analytic μ_S lets us accumulate σ_S² as
-`E[(S − μ_S)²]` in a single pass.
-
-`σ_S` is floored at `ϵ_numerics(FT)` so the normalised closure
+μ_S and σ_S of the linear saturation excess S = q_tot − q_sat, from the
+subdomain mean state and the SGS (co)variances (`_sgs_linear_sigma_S`).
+Without SGS sampling (`nothing`, `GridMeanSGS`) all mass sits at the mean and
+`σ_S = ϵ_numerics(FT)`; σ_S is floored there so the normalised closure
 `C = q_c / (α·σ_S)` stays well-conditioned.
 
 Returns `(; mu_S, sigma_S)`.
@@ -946,15 +888,25 @@ Returns `(; mu_S, sigma_S)`.
 )
     FT = typeof(ρ)
     mu_S = q_tot_mean - TD.q_vap_saturation(_unwrapped(thp), T_mean, ρ)
-    sgs_quad_eff = isnothing(sgs_quad) ? GridMeanSGS() : sgs_quad
-    evaluator = SGSVarianceEvaluator(thp, ρ, mu_S)
-    sigma_S_sq = integrate_over_sgs(
-        evaluator, sgs_quad_eff, q_tot_mean, T_mean, q′q′, T′T′, corr_Tq,
-    )
-    return (;
-        mu_S,
-        sigma_S = max(sqrt(sigma_S_sq), ϵ_numerics(FT)),
-    )
+    sigma_S =
+        not_quadrature(sgs_quad) ? ϵ_numerics(FT) :
+        _sgs_linear_sigma_S(thp, ρ, T_mean, T′T′, q′q′, corr_Tq)
+    return (; mu_S, sigma_S)
+end
+
+"""
+    _sgs_linear_sigma_S(thp, ρ, T, T′T′, q′q′, corr_Tq)
+
+Linearized Clausius–Clapeyron saturation-excess standard deviation
+`σ_S = sqrt(max(σ_q² − 2 γ corr_Tq σ_T σ_q + γ² σ_T², 0))` with
+`γ = ∂q_sat/∂T(T, ρ)`, floored at `ϵ_numerics(FT)`.
+"""
+@inline function _sgs_linear_sigma_S(thp, ρ, T, T′T′, q′q′, corr_Tq)
+    FT = typeof(ρ)
+    (σ_q, σ_T, corr) = sgs_stddevs_and_correlation(q′q′, T′T′, corr_Tq)
+    γ = FT(TD.∂q_vap_sat_∂T(_unwrapped(thp), T, ρ))
+    var_S = σ_q^2 - 2 * γ * corr * σ_T * σ_q + γ^2 * σ_T^2
+    return max(sqrt(max(var_S, zero(FT))), ϵ_numerics(FT))
 end
 
 # ============================================================================
@@ -964,8 +916,9 @@ end
 # **Physical model**: the subgrid saturation excess S = q_tot − q_sat is
 # assumed Gaussian: S ~ N(μ_S, σ_S²), with μ_S set analytically to the
 # linearized mean μ_S = q_tot_mean − q_sat(T_mean, ρ) (exact under the
-# same linearization that justifies Gaussianity of S) and σ_S accumulated
-# in one pass as E[(S − μ_S)²] (see `_sgs_saturation_moments`).
+# same linearization that justifies Gaussianity of S) and σ_S the linearized
+# width, σ_S² = σ_q² − 2 γ corr_Tq σ_T σ_q + γ² σ_T² with γ = ∂q_sat/∂T
+# (`_sgs_linear_sigma_S`).
 # Working with the centred excess S′ = S − μ_S ~ N(0, σ_S²), we seek a
 # Lagrange multiplier λ that enforces mass conservation:
 #
@@ -973,7 +926,7 @@ end
 #
 # where α = `sgs_variance_fidelity` controls how much of the SGS variance is
 # propagated into the local condensate (α = α_Da·α_eq ∈ (0, 1]; the
-# equilibrium multiplier λ_eq is fitted separately with α = 1). The effective
+# equilibrium multiplier λ_eq has α = 1 and is the mean cloud excess). The effective
 # scale `σ_S_eff = α · σ_S` uses the standard deviation returned by
 # `_sgs_saturation_moments` (already floored at `ϵ_numerics(FT)` to keep
 # the normalised problem well-conditioned for tiny variances).
@@ -985,14 +938,10 @@ end
 #
 # where Φ is the standard normal CDF and φ is its PDF.
 #
-# The microphysics, however, uses (*) via the N²-point quadrature
-# rule (not the continuous Gaussian), and the discrete rule represents the
-# kinked integrand max(0, ·) imperfectly (and samples the q ≥ 0 clamp).
-# The analytic inverse of C = z·Φ(z) + φ(z) therefore only *seeds*
-# `λ_lagrange`; the multiplier is then fitted to the discrete constraint
-# Σᵢ wᵢ·max(0, λ + α·S′ᵢ) = q_c  over the same sampled points the
-# microphysics evaluator integrates (see `_fit_discrete_lagrange`),
-# so mass conservation holds exactly under the quadrature measure.
+# `λ_lagrange` is the solution of this continuous constraint
+# (`_continuous_lagrange`): the conditional-moment node rule of the 1M
+# microphysics integrates the kinked integrand max(0, ·) exactly, so the
+# continuous multiplier conserves the condensate at its nodes.
 #
 # For the *cloud fraction* we use an augmented variance with a fixed
 # non-equilibrium floor `σ_S_floor` (defined inside
@@ -1005,7 +954,7 @@ end
 # i.e. `C_aug = q_c / σ_aug`, `z_aug = _compute_z(C_aug)`, `CF = Φ(z_aug)`;
 # it is a probability under the continuous Gaussian model. `λ_lagrange` is
 # *not* used to recover CF (the natural shortcut `Φ(λ/σ_aug)` would be
-# inconsistent because `λ` is fitted with the equilibrium `σ_S_eff`, not `σ_aug`).
+# inconsistent because `λ` is solved with `σ_S_eff`, not `σ_aug`).
 #
 # Inverting C = z·Φ(z)+φ(z) for z uses Newton iteration on
 # F(z) = z·Φ(z)+φ(z)−C with F′(z) = Φ(z):
@@ -1472,8 +1421,9 @@ end
     )
 
 Fused production overload: compute the hybrid cloud fraction in a single
-inlined call that runs the `σ_S²` quadrature pass and the truncated-Gaussian
-approximate closure in one broadcast kernel. Used by
+inlined call that obtains `σ_S` (`_sgs_saturation_moments`, the linearized
+width) and evaluates the truncated-Gaussian approximate closure in one
+broadcast kernel. Used by
 `set_cloud_fraction!(QuadratureCloud)` so the moments are never
 materialized to a Field.
 """
@@ -1537,90 +1487,33 @@ cloud_fraction_floor_params(params) = CloudFractionFloorParams(;
 )
 
 """
-    _fit_discrete_lagrange(λ0, q_c, α, S′s, ws)
-
-Solve the mass-conservation constraint under the discrete quadrature measure,
-
-    g(λ) = Σᵢ wᵢ · max(0, λ + α·S′ᵢ) = q_c,
-
-for the Lagrange multiplier `λ`, given the sampled centred excesses `S′s` and
-probability weights `ws` (summing to 1). `g` is convex, piecewise linear, and
-nondecreasing, with kinks at `λ = −α·S′ᵢ`; Newton with the exact one-sided
-slope solves the active segment exactly, and, by convexity, subsequent iterates
-lie on the root's side, so the iteration reaches the root within
-`length(S′s) + 2` fixed trips (GPU-safe: no data-dependent loop bound).
-
-`λ0` is the analytic truncated-Gaussian seed (see `_compute_z`); `q_c ≤ 0`
-returns the largest `λ` with `g(λ) = 0`.
-
-Fitting `λ` to the discrete rule rather than the continuous Gaussian makes
-`⟨q_c^local⟩ = q_c` hold exactly for the microphysics evaluator, which
-uses the same quadrature points.
-"""
-@inline function _fit_discrete_lagrange(λ0, q_c, α, S′s, ws)
-    FT = typeof(q_c)
-    λ_max_inactive = -α * maximum(S′s)  # largest λ with g(λ) = 0
-    q_c <= zero(FT) && return λ_max_inactive
-    λ = λ0
-    for _ in 1:(length(S′s) + 2)
-        g = zero(FT)
-        dg = zero(FT)
-        @inbounds for i in eachindex(S′s)
-            r = λ + α * S′s[i]
-            g += ifelse(r > zero(FT), ws[i] * r, zero(FT))
-            dg += ifelse(r > zero(FT), ws[i], zero(FT))
-        end
-        if dg == zero(FT)
-            # Below every kink (g = 0, slope 0): jump into the first active
-            # segment; the point with the largest S′ then has r = q_c > 0.
-            λ = λ_max_inactive + q_c
-        else
-            λ_new = λ + (q_c - g) / dg
-            λ_new == λ && return λ
-            λ = λ_new
-        end
-    end
-    return λ
-end
-
-"""
     _compute_sgs_moments(
         thp, ρ, T, q_tot, q_c, sgs_quad, T′T′, q′q′, corr_Tq, α,
         q_tot_cloud = q_tot, lin = 0, curv = 0,
     )
 
-Single quadrature pass returning `(sigma_S, λ_lagrange, λ_eq)`:
+The SGS moments `(sigma_S, λ_lagrange, λ_eq)` of the 1M condensate closures:
 
-  - `sigma_S = sqrt(Σᵢ wᵢ·S′ᵢ²)`: SGS standard deviation of the sampled
-    centred excess, clipped at `ϵ_numerics(FT)`.
-  - `λ_lagrange`: Lagrange multiplier satisfying the mass-conservation
-    constraint `Σᵢ wᵢ·max(0, λ + α·S′ᵢ) = q_c` exactly under the discrete
-    quadrature measure — the same points and weights the microphysics
-    evaluator integrates over (see `_fit_discrete_lagrange`; the analytic
-    truncated-Gaussian inverse `_compute_z` provides the seed).
-  - `λ_eq`: Lagrange multiplier satisfying the equilibrium condensate
-    constraint `Σᵢ wᵢ·max(0, λ_eq + S′ᵢ) = q_c_eq` under the same discrete
-    quadrature measure, with the unattenuated node fluctuations `S′ᵢ`: the
-    fidelity `α` attenuates the actual condensate, which lags equilibrium,
-    while the equilibrium condensate has the full fluctuation of its
-    continuous target. Here,
-    `q_c_eq = truncated_gaussian_condensate(μ_{S,cloud}, σ_S)` is the
-    expected saturation excess of the continuous Gaussian PDF with
-    cloud-available mean excess `μ_{S,cloud} = q_tot_cloud − q_sat(T, ρ)`
-    (`q_tot_cloud = q_tot − q_rai − q_sno`), or, with nonzero displacement
-    coefficients `(lin, curv)` (`displacement_curvature_coefficients`), the
-    curvature-aware expectation `displacement_condensate(μ_{S,cloud}, σ_S, lin, curv)`.
-    Used by `Microphysics1MEvaluator` so that condensation and evaporation
-    relax toward `q_c_eq` without the discrete 3-point Gauss–Hermite support
-    cutoff at `μ_S < −√3 σ_S`.
+  - `sigma_S`: the linearized width of the centred saturation excess
+    (`_sgs_linear_sigma_S`), clipped at `ϵ_numerics(FT)`.
+  - `λ_lagrange`: the Lagrange multiplier of the actual condensate
+    `max(0, λ + α S′)`, solving the continuous truncated-Gaussian constraint
+    `E[max(0, λ + α S′)] = q_c` (`_continuous_lagrange`, with
+    `σ_S_eff = α σ_S` floored so it stays finite where `q_c` and `α` both
+    vanish).
+  - `λ_eq`: the multiplier of the equilibrium condensate `max(0, λ_eq + S′)`,
+    whose expectation is `q_c_eq`: the mean cloud excess
+    `μ_{S,cloud} = q_tot_cloud − q_sat(T, ρ)` (`q_tot_cloud = q_tot − q_rai − q_sno`) itself, since `q_c_eq = truncated_gaussian_condensate(μ_{S,cloud}, σ_S)`, or, with nonzero displacement coefficients `(lin, curv)`
+    (`displacement_curvature_coefficients`), the mean of the Gaussian whose
+    expectation matches the curvature-aware
+    `displacement_condensate(μ_{S,cloud}, σ_S, lin, curv)`.
 
-The SGS mean `μ_S = q_tot − q_sat(T, ρ)` is analytic under the closure's
-linearization (see `_sgs_saturation_moments`) and is recomputed on demand
-wherever it is needed downstream.
+The conditional-moment node rule integrates both piecewise-linear condensates
+exactly, so these continuous multipliers conserve the condensate at its nodes.
 
 Without SGS sampling (`nothing`, `GridMeanSGS`), all mass sits at the mean:
 `sigma_S = ϵ_numerics(FT)`, `λ_lagrange = q_c`, and `λ_eq = max(0, μ_{S,cloud})`
-directly, matching the σ_S → 0 limit of the sampled branch.
+directly, matching the σ_S → 0 limit.
 """
 @inline function _compute_sgs_moments(
     thp, ρ, T, q_tot, q_c,
@@ -1639,27 +1532,17 @@ directly, matching the σ_S → 0 limit of the sampled branch.
             λ_eq = max(zero(FT), mu_S_cloud),
         )
 
-    mu_S = q_tot - q_sat
-    transform =
-        build_physical_transform(sgs_quad, q_tot, T, q′q′, T′T′, corr_Tq)
-    S′s = quadrature_point_values(
-        SGSExcessEvaluator(thp, ρ, mu_S), transform, sgs_quad,
+    sigma_S = _sgs_linear_sigma_S(thp, ρ, T, T′T′, q′q′, corr_Tq)
+    λ_lagrange = _continuous_lagrange(q_c, max(α * sigma_S, ϵ_numerics(FT)))
+    # Equilibrium condensate `q_c_eq = E[max(0, S_cloud)]`: truncated Gaussian,
+    # whose multiplier is exactly the mean cloud excess, or the curvature-aware
+    # displacement expectation where `curv ≠ 0`. Both are computed and one is
+    # selected, so cells with and without curvature cost the same.
+    λ_eq_curv = _continuous_lagrange(
+        displacement_condensate(mu_S_cloud, sigma_S, lin, curv),
+        sigma_S,
     )
-    ws = quadrature_prob_weights(sgs_quad)
-    sigma_S = max(sqrt(sum(ws .* S′s .* S′s)), ϵ_numerics(FT))
-
-    # Analytic truncated-Gaussian seed, then the exact discrete fit. The
-    # floor keeps `q_c / σ_S_eff` finite where both `q_c` and `α` vanish.
-    σ_S_eff = max(α * sigma_S, ϵ_numerics(FT))
-    λ0 = _compute_z(q_c / σ_S_eff) * σ_S_eff
-    λ_lagrange = _fit_discrete_lagrange(λ0, q_c, α, S′s, ws)
-
-    # Equilibrium Lagrange multiplier matching the continuous equilibrium
-    # condensate `q_c_eq = E[max(0, S_cloud)]`: truncated Gaussian, or the
-    # curvature-aware displacement expectation where `curv ≠ 0`. The fit
-    # uses the unattenuated `S′ᵢ`, the fluctuations `q_c_eq` is evaluated with.
-    q_c_eq = displacement_condensate(mu_S_cloud, sigma_S, lin, curv)
-    λ_eq = _fit_discrete_lagrange(mu_S_cloud, q_c_eq, one(FT), S′s, ws)
+    λ_eq = curv == zero(FT) ? mu_S_cloud : λ_eq_curv
     return (; sigma_S, λ_lagrange, λ_eq)
 end
 
@@ -1668,7 +1551,7 @@ end
 
 Final post-Aitken update. No-op when `ᶜsgs_moments` is not allocated (dry / 0M).
 
-Uses ONE quadrature pass via `_compute_sgs_moments` to fill
+Uses `_compute_sgs_moments` to fill
 `ᶜsgs_moments = (sigma_S, λ_lagrange, λ_eq)`, then computes
 `ᶜcloud_fraction` consistently with the augmented `σ_aug` closure (see
 `_compute_cloud_fraction`) from the environment cloud condensate
@@ -1810,10 +1693,10 @@ so a shaft that evaporates completely does not seed the layers below it.
 The recursion is seeded with `ᶜcloud_fraction`, the single-domain cover of the
 cell; the precipitation mask uses the precipitation of the
 domain the quadrature integrates (the environment under `PrognosticEDMFX`).
-`a_p` enters the quadrature only as the fraction of the PDF that carries the
-shaft (`sgs_precip_shaft_threshold`); the per-point assignment is normalized
-by the discrete weight of the selected points, so no measure consistency
-between the cover and the quadrature is required for conservation.
+`a_p` enters the node rule only as the fraction of the PDF that carries the
+shaft (`sgs_precip_shaft_threshold`); the per-node assignment is normalized
+by the weight of the shaft nodes, so no measure consistency between the cover
+and the node rule is required for conservation.
 
 Mutates `p.precomputed.ᶜprecip_frac`.
 """
@@ -1917,8 +1800,8 @@ Dispatches on `microphysics_model` and `cloud_model`:
 
   - `DryModel`: cloud fraction is zero everywhere.
   - `GridScaleCloud`: 1 where grid-scale condensate is present, 0 otherwise.
-  - `QuadratureCloud`: the truncated-Gaussian closure with the fused `σ_S²`
-    quadrature pass (see `_compute_cloud_fraction`).
+  - `QuadratureCloud`: the truncated-Gaussian closure with the linearized
+    `σ_S` (see `_compute_cloud_fraction`).
   - `MLCloud`: the neural-network prediction (see
     `set_ml_cloud_fraction!`).
 

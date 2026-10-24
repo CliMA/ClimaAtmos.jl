@@ -652,9 +652,45 @@ subdomain mean saturates. That floor keeps the cloud fraction from being driven
 to one by a vanishing equilibrium variance, and loosely parallels the
 critical-relative-humidity scaling of
 statistical cloud schemes [Quaas2012](@cite). Microphysical rates are evaluated
-at each quadrature point and aggregated linearly, which preserves total water
-and total energy at the subdomain level because the bulk rates preserve them
-pointwise.
+at each node and aggregated linearly, which preserves total water and total
+energy at the subdomain level because the bulk rates preserve them pointwise.
+
+The one-moment microphysics nodes are placed from the conditional moments of
+the Gaussian. Every quantity the one-moment evaluator reads at a node is a
+function of the centred saturation excess ``S' \sim N(0, \sigma_S^2)`` alone
+(the temperature is regressed on it), and three thresholds partition ``S'``:
+the edge of the actual condensate, ``-\lambda/\alpha``, the edge of the
+equilibrium condensate, ``-\lambda_{\mathrm{eq}}``, and the edge of the
+precipitation shaft. On each of the at most four intervals between them, both
+condensates are linear in ``S'`` and the shaft flag is constant, so one node at
+the conditional mean of the interval integrates them exactly for any cloud
+fraction, and the intervals that carry condensate receive the two-point Gauss
+rule of the truncated distribution, which reproduces the conditional mean,
+variance, and third moment that a power-law collision rate responds to. The
+Lagrange multipliers are then the continuous ones, ``\lambda_{\mathrm{eq}}``
+being the mean cloud excess itself. The temperature also varies at fixed
+``S'``, with the part ``\sigma_\perp`` of its spread that the regression does not
+carry; the rates respond to it mainly at the freezing point, so a node whose
+temperature spread straddles ``T_{\mathrm{freeze}}`` is split there into the
+conditional means of the two half-normals, and every other node keeps one
+temperature. The width ``\sigma_S`` is the linearized one,
+``\sigma_S^2 = \sigma_q^2 - 2\gamma\rho_{Tq}\sigma_q\sigma_T + \gamma^2\sigma_T^2``,
+with ``\gamma = \partial q_{\mathrm{sat}}/\partial T``, so neither the nodes nor
+the cloud fraction need a quadrature pass.
+The zero-moment microphysics is integrated with the Gauss–Hermite tensor rule.
+
+The rule follows from the shape of the integrand: the
+node evaluator is piecewise linear in ``S'`` between the three edges, so the
+edges set where the nodes go. It was developed offline
+against a ``24 \times 24`` Gauss–Hermite reference on the instantaneous states
+and subgrid covariances of a coarse AMIP simulation, and each variant
+was scored by its liquid, ice, rain, and snow tendency errors per latitude band
+and pressure layer. The freezing split entered there, because the cells near
+the freezing point carried most of the rain and snow error of a rule with one
+temperature per node; a rule with the Gauss pair only in the highest cloudy
+interval lost the in-cloud spread below it, and a rule with a Gauss pair on each
+side of freezing cost about as much as the tensor rule. The linearized
+``\sigma_S`` scored as well as the width sampled at the Gauss–Hermite points.
 
 Because the variance depends on the mixing length, the mixing length on the
 buoyancy gradient, and the buoyancy gradient on the cloud fraction, the closure

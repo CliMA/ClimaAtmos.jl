@@ -6,7 +6,6 @@ microphysics_model: "1M"
 cloud_model: "grid_scale" # quadrature
 implicit_microphysics: false
 use_sgs_quadrature: false
-#sgs_distribution: "lognormal"
 #quadrature_order: 3
 config: "column"
 hyperdiff: ~

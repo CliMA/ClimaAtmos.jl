@@ -296,7 +296,7 @@ ClimaParams does not yet define or whose ClimaParams default it supersedes.
     excess plus `ξ` times its subdomain mean (`sgs_local_condensate`). `0`
     is the excess reconstruction; `1` treats the species uniform at every node [-].
   - `sgs_precip_incloud_fraction`: Fraction `β_p` of the cell-mean rain and snow
-    that is confined to the precipitation shaft of the quadrature PDF
+    that is confined to the precipitation shaft of the SGS PDF
     (`sgs_precip_shaft_threshold`) instead of being
     spread over all nodes, in `[0, 1]`; `0` disables the placement [-].
   - `sgs_precip_overlap_decay`: Per-level shrink factor `f_decay` of the
@@ -304,16 +304,14 @@ ClimaParams does not yet define or whose ClimaParams default it supersedes.
     `a_p` from the cloud cover above (`set_precip_fraction!`), in `[0, 1]`; `1`
     is maximum overlap, `0` re-seeds the shaft from each level's own cover [-].
   - `sgs_precip_fraction_floor`: Smallest precipitation fraction `a_p` the
-    quadrature placement uses, in `[0, 1]`; the default `0.5` keeps the shaft
-    at least half the cell. `0.1` is the thinnest shaft the order-3
-    quadrature resolves (one node of weight 1/36 at `a_p = 0.1`); a thinner
-    shaft concentrates the precipitation on a single node [-].
+    placement uses, in `(0, 1]`; the default `0.5` keeps the shaft at least
+    half the cell. It must be positive when `sgs_precip_incloud_fraction > 0` [-].
   - `Tq_correlation_coefficient`: Correlation between `T'` and `q_tot'` in the
     SGS quadrature, in `[-1, 1]`. Used verbatim by `tq_correlation_model: constant`; the fallback where the variances vanish for
     `tq_correlation_model: diagnosed` [-].
   - `cloud_fraction_steepness_scale`: Steepness scale `α` of the
-    cloud-fraction/condensate relationship; 1 for exact Gaussian or lognormal SGS
-    distributions [-].
+    cloud-fraction/condensate relationship; 1 for an exact Gaussian SGS
+    distribution [-].
   - `condensation_evaporation_timescale`, `sublimation_deposition_timescale`:
     Shared ClimaParams/CloudMicrophysics 1M relaxation timescales
     `τ_cond`, `τ_sub` used by `sgs_microphysics_timescale` [s].
