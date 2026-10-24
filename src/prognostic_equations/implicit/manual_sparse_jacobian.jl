@@ -1991,9 +1991,12 @@ function update_sgs_entr_detr_jacobian!(matrix, Y, p, dtγ)
         ᶜentr_nonvel_rateʲs,
         ᶜarea_bounding_entr_detrʲs,
         ᶜuʲs,
+        ᶜsatinst_source,
+        ᶜρʲs,
     ) = p.precomputed
     ᶜlg = Fields.local_geometry_field(Y.c)
     turbconv_model = p.atmos.turbconv_model
+    a_min = CAP.min_area(CAP.turbconv_params(p.params))
 
     # Entrainment relaxation of updraft scalars: the implicit tendency
     # (edmfx_entr_detr_tendency!) applies (ε + ε_turb) * (χ⁰ - χʲ) to each
@@ -2017,6 +2020,8 @@ function update_sgs_entr_detr_jacobian!(matrix, Y, p, dtγ)
         ᶜentr_nonvel_rateʲs.:(1),
         ᶜarea_bounding_entr_detrʲs.:(1),
         ᶜuʲs.:(1),
+        ᶜsatinst_source,
+        ᶜρʲs.:(1),
         ∂ᶜχʲ_diags,
     ) do Yc,
     ᶜlg_col,
@@ -2025,6 +2030,8 @@ function update_sgs_entr_detr_jacobian!(matrix, Y, p, dtγ)
     ᶜentr_nonvel_rateʲ,
     ᶜarea_bounding_entr_detrʲ,
     ᶜuʲ,
+    ᶜsatinst_source_col,
+    ᶜρʲ_col,
     ∂ᶜχʲ_diags
         ᶜentrʲ = @. lazy(
             compute_entrainment(
@@ -2036,7 +2043,11 @@ function update_sgs_entr_detr_jacobian!(matrix, Y, p, dtγ)
         )
         ᶜrelax_row = @. DiagonalMatrixRow(
             dtγ * (
-                (ᶜentrʲ + ᶜturb_entrʲ) * (
+                (
+                    ᶜentrʲ + ᶜturb_entrʲ + satinst_specific_rate(
+                        ᶜsatinst_source_col, Yc.sgsʲs.:(1).ρa, ᶜρʲ_col, a_min,
+                    )
+                ) * (
                     1 + env_relaxation_feedback(
                         Yc.sgsʲs.:(1).ρa,
                         ρa⁰(Yc.ρ, Yc.sgsʲs, turbconv_model),
