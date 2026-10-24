@@ -701,10 +701,9 @@ the subgrid variance and as `f⁰ → 1`.
     f_min = oftype(T⁰, 0.01),
 )
     FT = typeof(T⁰)
-    L_v = FT(TDP.LH_v0(thermo_params))
-    R_v = FT(TDP.R_v(thermo_params))
-    q_sat = TD.q_vap_saturation(thermo_params, T⁰, ρ⁰, q_liq⁰, q_ice⁰)
-    ∂qsat∂T = q_sat * L_v / (R_v * T⁰^2)
+    # the slope of the linearized saturation excess that sets the cloud
+    # fraction (`_sgs_linear_sigma_S`), so the moved part is the cloudy part
+    ∂qsat∂T = FT(TD.∂q_vap_sat_∂T(thermo_params, T⁰, ρ⁰))
     α_T_sel, α_q_sel = tail_selector_coefficients(thermo_params, selector, T⁰)
     use_saturation = selector < 0
     α_T = ifelse(use_saturation, -∂qsat∂T, α_T_sel)
