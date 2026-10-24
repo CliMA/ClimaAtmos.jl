@@ -531,9 +531,16 @@ function edmfx_sgs_horizontal_diffusive_flux_tendency!(
     end
 
     (; ᶜu, ᶠu) = p.precomputed
+    ᶜS = compute_strain_rate_center_full!(p.scratch.ᶜtemp_UVWxUVW, ᶜu, ᶠu)
 
-    # Turbulent TKE transport, and shear production from horizontal gradients;
-    # the production from vertical gradients is applied in the TKE tendency.
+    # Turbulent TKE transport, and the shear production of the horizontal SGS
+    # stress `τ = -2 K_u S`: the resolved kinetic energy it removes,
+    # `-τ : ∇ₕu = 2 K_u S : Sₕ`, with `Sₕ` the strain rate of the horizontal
+    # gradients alone. Its cross terms `K_u ∂ₓw ∂_z u` are sign-indefinite; the
+    # total production, including `K_u,v |∂_z uₕ|²` from the TKE tendency, is
+    # non-negative where `K_u,v ≥ K_u,h / 4`, which holds up to interpolation
+    # because the vertical mixing length is capped at `max(Δx_h, Δz)` and the
+    # horizontal one at `Δx_h`.
     # The strain-rate invariant of the nodal spectral-element gradient is too
     # large at element-boundary nodes and too small inside (the rectified
     # end-of-interval error of polynomial differentiation), so it is replaced
@@ -542,14 +549,14 @@ function edmfx_sgs_horizontal_diffusive_flux_tendency!(
     if use_prognostic_tke(turbconv_model)
         @. Yₜ.c.ρtke += wdivₕ(ᶜρ * ᶜK_u_h * gradₕ(ᶜtke))
         ᶜS_h = compute_strain_rate_center_horizontal(ᶜu)
-        @. Yₜ.c.ρtke += 2 * ᶜρ * ᶜK_u_h * lumpedₕ(norm_sqr(ᶜS_h))
+        @. Yₜ.c.ρtke += 2 * ᶜρ * ᶜK_u_h * lumpedₕ(strain_rate_inner(ᶜS, ᶜS_h))
     end
 
     # Momentum: horizontal weak divergence of the SGS stress `τ = -2 K_u S`
     # with the full strain rate. The vertical stress divergence is handled by
     # the vertical diffusion pathway.
     ᶠρ = @. p.scratch.ᶠtemp_scalar = ᶠinterp(ᶜρ)
-    ᶜτ_h = compute_strain_rate_center_full!(p.scratch.ᶜtemp_UVWxUVW, ᶜu, ᶠu)
+    ᶜτ_h = ᶜS
     @. ᶜτ_h = -2 * ᶜK_u_h * ᶜτ_h
     @. Yₜ.c.uₕ -= C12(wdivₕ(ᶜρ * ᶜτ_h) / ᶜρ)
     ᶠτ_h = compute_strain_rate_face_full!(p.scratch.ᶠtemp_UVWxUVW, ᶜu, ᶠu)

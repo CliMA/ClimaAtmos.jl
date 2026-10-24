@@ -1,4 +1,4 @@
-435
+436
 
 # **README**
 #
@@ -32,6 +32,14 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+436
+- TKE shear production matches the work of the SGS stresses: the vertical
+  production uses `|∂_z uₕ|²/2` (no `(∂_z w)²`), and the horizontal production
+  is `2 K_u,h S : Sₕ`, including the `∂ₓw ∂_z u` cross terms. The vertical
+  production is the face product `2 ᶠK_u ‖𝔈‖²` interpolated to centers. The
+  same shear norm enters `Ri` on the grid-mean (non-EDMF) Smagorinsky-Lilly
+  path.
+
 435
 - Smooth harmonic buoyancy bound and `1 / √(2 c_σ)` normalization for the
   turbulent vertical displacement in `materialized_displacement_length!`, with

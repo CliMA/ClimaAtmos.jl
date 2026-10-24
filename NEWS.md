@@ -3,6 +3,19 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- ![][badge-🔥behavioralΔ] The EDMF TKE shear production matches the resolved
+  kinetic energy removed by the SGS stresses. The vertical production uses the
+  vertical shear of the horizontal wind, `|∂_z uₕ|²/2`
+  (`vertical_shear_norm_sqr`), without the `(∂_z w)²` term, since the vertical
+  flux acts on the horizontal wind only; the same norm enters `Ri`, `Pr_t`, and
+  the TKE-balance mixing length, and the Lilly stability factor of the
+  grid-mean Smagorinsky-Lilly length without EDMF. The production is formed
+  at the faces from `ᶠK_u` and the face strain rate of the momentum flux and
+  interpolated to the centers, like the buoyancy production, so its column
+  sum equals the kinetic energy the flux removes. With
+  `edmfx_sgs_horizontal_diffusive_flux`, the horizontal production is
+  `2 K_u,h S : Sₕ`, which adds the cross terms `K_u,h ∂ₓw ∂_z u` of the
+  horizontal stress on `w`.
 - ![][badge-💥breaking] `sgs_variance_vertical_scale_factor` and the provisional
   `sgs_variance_isentropic_depth` are removed; with `strict_params: true` (the
   default) a run TOML that still sets either now stops with an unused-parameter

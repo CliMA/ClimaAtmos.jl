@@ -62,11 +62,11 @@ while the species shares do not.
 When prognostic TKE is active, the horizontal flux transports TKE and adds the horizontal shear production,
 
 ```math
-\partial_t (\rho \kappa_{\mathrm{iso}}) \mathrel{+}= \nabla_h \cdot (\rho \, K_{u,h} \, \nabla_h \kappa_{\mathrm{iso}}) + 2 \rho \, K_{u,h} \, \mathcal{S}_h : \mathcal{S}_h ,
+\partial_t (\rho \kappa_{\mathrm{iso}}) \mathrel{+}= \nabla_h \cdot (\rho \, K_{u,h} \, \nabla_h \kappa_{\mathrm{iso}}) + 2 \rho \, K_{u,h} \, \mathcal{S} : \mathcal{S}_h ,
 ```
 
-with ``\mathcal{S}_h`` the strain rate built from horizontal gradients only (the tensor written ``\boldsymbol{\mathcal{E}}_D`` on the [Closures](prophet_closures.md) page).
-The shear production is positive definite; the production from vertical gradients and its stencil are applied by the vertical TKE tendency.
+with ``\mathcal{S}`` the full three-dimensional strain rate of the grid-mean velocity and ``\mathcal{S}_h`` the strain rate built from horizontal gradients only (the tensors written ``\boldsymbol{\mathcal{E}}_D`` on the [Closures](prophet_closures.md) page).
+The production from vertical gradients and its stencil are applied by the vertical TKE tendency.
 
 The momentum tendency is the horizontal weak divergence of the SGS stress ``\tau = -2 K_{u,h} \mathcal{S}``, with ``\mathcal{S}`` the full three-dimensional strain rate of the grid-mean velocity,
 
@@ -78,13 +78,12 @@ The momentum tendency is the horizontal weak divergence of the SGS stress ``\tau
 
 evaluated on cell centers for the horizontal wind and on cell faces for the vertical wind.
 The vertical wind is included because the horizontal flux of vertical momentum ``\overline{u_h' w'}`` is a covariance, which the TKE (the half-trace of the velocity covariance) does not carry, so the down-gradient stress is its only representation.
-The vertical flux ``\overline{w' w'}`` is a variance represented by the TKE, the mass flux, and the pressure closure, so it is not applied as down-gradient diffusion of the vertical wind; the vertical stress divergence on the horizontal wind is handled by the vertical diffusion pathway.
+The vertical flux ``\overline{w' w'}`` is a variance represented by the TKE, the mass flux, and the pressure closure, so it is not applied as down-gradient diffusion of the vertical wind, and ``\partial_z w`` contributes no shear production; the vertical stress divergence on the horizontal wind is handled by the vertical diffusion pathway.
 
-The stress and the shear production are not energetically consistent with each other.
-The work done by the stress on the resolved flow is ``\tau : \nabla_h u``, which includes cross terms such as ``\mathcal{S}_{13} \, \partial_x w``, whereas the TKE receives only ``2 \rho \, K_{u,h} \, \mathcal{S}_h : \mathcal{S}_h``.
-The difference is exactly those cross terms.
-Each form is chosen for a property the other lacks: the stress uses the full strain rate because ``\mathcal{S}_{13}`` and ``\mathcal{S}_{23}`` are what represent ``\overline{u_h' w'}``, and the production uses ``\mathcal{S}_h`` because ``2 \rho \, K_{u,h} \, \mathcal{S}_h : \mathcal{S}_h`` is positive definite while ``\tau : \nabla_h u`` is sign-indefinite and can drive the TKE negative.
-This is one of the reasons the option is off by default.
+The shear production is the resolved kinetic energy the stress removes, ``-\tau : \nabla_h u = 2 K_{u,h} \, \mathcal{S} : \mathcal{S}_h``, so the stress and the production are energetically consistent in the continuous limit; discretely, the production uses the lumped nodal gradient at cell centers while the momentum tendency uses the weak divergence, with the face strain rate for the vertical wind.
+Besides the positive-definite ``2 K_{u,h} \, \mathcal{S}_h : \mathcal{S}_h``, it contains the sign-indefinite cross terms ``K_{u,h} \, \partial_x w \, \partial_z u`` and ``K_{u,h} \, \partial_y w \, \partial_z v`` of the stress on the vertical wind.
+Added to the vertical shear production ``K_{u,v} \, |\partial_z u_h|^2``, with ``K_{u,v}`` the vertical eddy viscosity, each pair forms the quadratic form ``K_{u,v} a^2 + K_{u,h} a b + K_{u,h} b^2`` in ``a = \partial_z u``, ``b = \partial_x w``, which is non-negative where ``K_{u,v} \ge K_{u,h} / 4``.
+That holds up to interpolation, because the vertical mixing length is capped at ``\max(\Delta x_h, \Delta z)`` and the horizontal one at ``\Delta x_h``, with the same physical scales and TKE.
 
 ## Updraft horizontal diffusion
 

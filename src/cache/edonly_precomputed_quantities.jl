@@ -11,7 +11,7 @@ Update the environment closures in `p.precomputed` for the eddy-diffusivity-only
 model `EDOnlyEDMFX`. Returns `nothing`.
 
 Mutates `p.precomputed.ᶜstrain_rate_norm`, the squared norm of the vertical
-strain rate [1/s²] (`set_strain_rate_norm!`), and
+shear of the horizontal wind [1/s²], set by `set_strain_rate_norm!`, and
 `p.precomputed.ρtke_flux`, the surface TKE flux. Reads `ᶠu³` and
 `sfc_conditions.ustar` from `p.precomputed`, and uses `p.scratch.ᶠtemp_C123`.
 """

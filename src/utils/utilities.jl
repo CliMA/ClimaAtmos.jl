@@ -238,6 +238,34 @@ function compute_strain_rate_center_vertical(ᶠu)
 end
 
 """
+    vertical_shear_norm_sqr(S)
+
+Return `2 (S₁₃² + S₂₃²) = |∂uₕ/∂z|² / 2` [1/s²] for a vertical-gradient strain
+rate `S` (`compute_strain_rate_center_vertical`): the squared Frobenius norm
+`SᵢⱼSᵢⱼ` without the `S₃₃² = (∂w/∂z)²` term.
+
+This is the part of `S` on which the vertical SGS momentum flux acts: the flux
+is applied to the horizontal wind only (`w'w'` is represented by the TKE, the
+mass flux, and the pressure closure), so `2 K_u` times this norm is the
+resolved kinetic energy the flux removes. The two components are summed
+directly; the difference `SᵢⱼSᵢⱼ - S₃₃²` cancels catastrophically where
+`|∂w/∂z| ≫ |∂uₕ/∂z|`.
+"""
+function vertical_shear_norm_sqr(S)
+    c = parent(S)
+    return 2 * (abs2(c[1, 3]) + abs2(c[2, 3]))
+end
+
+"""
+    strain_rate_inner(S₁, S₂)
+
+Return the Frobenius inner product `S₁ : S₂ = Σᵢⱼ S₁ᵢⱼ S₂ᵢⱼ` [1/s²] of two
+`UVW × UVW` strain-rate tensors.
+"""
+strain_rate_inner(S₁, S₂) =
+    LinearAlgebra.dot(parent(S₁), parent(S₂))
+
+"""
     compute_strain_rate_face_vertical(ᶜu)
 
 Compute the strain rate at cell faces from the center velocity `ᶜu`, keeping
