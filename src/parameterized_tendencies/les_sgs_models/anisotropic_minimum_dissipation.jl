@@ -95,8 +95,8 @@ function horizontal_amd_tendency!(Yₜ, Y, p, t, les::AnisotropicMinimumDissipat
     @. ∇ᶠu_uvw += Geometry.project(axis_uvw, gradₕ(ᶠu_uvw))  # horizontal component
 
     # Strain rate tensor
-    ᶜS = @. ᶜtemp_strain = (∇ᶜu_uvw + adjoint(∇ᶜu_uvw)) / 2
-    ᶠS = @. ᶠtemp_strain = (∇ᶠu_uvw + adjoint(∇ᶠu_uvw)) / 2
+    ᶜS = @. ᶜtemp_strain = symmetric_part(∇ᶜu_uvw)
+    ᶠS = @. ᶠtemp_strain = symmetric_part(∇ᶠu_uvw)
 
     # The viscosity denominator (∂ₗuₘ)(∂ₗuₘ), evaluated here because
     # `∇ᶜu_uvw` and the scaled derivative below share `ᶜtemp_UVWxUVW`.
@@ -240,8 +240,8 @@ function vertical_amd_tendency!(Yₜ, Y, p, t, les::AnisotropicMinimumDissipatio
     @. ∇ᶠu_uvw += Geometry.project(axis_uvw, gradₕ(ᶠu_uvw))  # horizontal component
 
     # Strain rate tensor
-    ᶜS = @. ᶜtemp_strain = (∇ᶜu_uvw + adjoint(∇ᶜu_uvw)) / 2
-    ᶠS = @. ᶠtemp_strain = (∇ᶠu_uvw + adjoint(∇ᶠu_uvw)) / 2
+    ᶜS = @. ᶜtemp_strain = symmetric_part(∇ᶜu_uvw)
+    ᶠS = @. ᶠtemp_strain = symmetric_part(∇ᶠu_uvw)
 
     # The viscosity denominator (∂ₗuₘ)(∂ₗuₘ), evaluated here because
     # `∇ᶜu_uvw` and the scaled derivative below share `ᶜtemp_UVWxUVW`.

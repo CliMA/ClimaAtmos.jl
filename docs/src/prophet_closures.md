@@ -336,18 +336,22 @@ column rather than only in the surface layer.
     ``\kappa_{\mathrm{iso}}`` ↔ ``e_{\mathrm{tot}}`` chain exactly.
     ``\kappa_{\mathrm{coh}}`` is also not currently diagnosed.
 
-    The strain rate itself is not the deviatoric one either, and on the default
-    path it is built from vertical gradients only
-    (`compute_strain_rate_center_vertical`), so
-    ``\|\boldsymbol{\mathcal{E}}_D\|_F^2`` above is in practice the vertical
-    shear. Horizontal shear production is added only under
+    The strain rate itself is not the deviatoric one either. On the default
+    path, the shear production is the work of the vertical momentum flux, which
+    acts on the horizontal wind only, so
+    ``\|\boldsymbol{\mathcal{E}}_D\|_F^2`` above (and in ``\mathrm{Ri}``) is
+    the vertical shear ``\tfrac{1}{2} |\partial_z \boldsymbol{u}_h|^2``
+    (`vertical_shear_norm_sqr`). Horizontal shear production is added only under
     `edmfx_sgs_horizontal_diffusive_flux`; see
     [Horizontal Diffusion](prophet_horizontal_diffusion.md).
 
     What *is* implemented, in `edmfx_tke_sources!`, is shear and buoyancy
-    production evaluated from the same face diffusivities and face buoyancy
-    gradient as the fluxes they parameterize, so the discrete conversions mirror
-    the discrete fluxes. Transport and dissipation are applied in
+    production evaluated at the faces from the same face diffusivities, face
+    strain rate, and face buoyancy gradient as the fluxes they parameterize,
+    and then interpolated to the centers, so the discrete conversions mirror
+    the discrete fluxes: summed over a column, the shear production equals the
+    kinetic energy the momentum flux removes from the horizontal wind, up to
+    the interpolation of ``\rho``. Transport and dissipation are applied in
     `edmfx_sgs_diffusive_flux_tendency!`.
 
 ### Mixing-length scales

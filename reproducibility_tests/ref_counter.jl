@@ -1,4 +1,4 @@
-436
+437
 
 # **README**
 #
@@ -32,6 +32,14 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+437
+- TKE shear production matches the work of the SGS stresses: the vertical
+  production uses `|∂_z uₕ|²/2` (no `(∂_z w)²`), and the horizontal production
+  is `2 K_u,h S : Sₕ`, including the `∂ₓw ∂_z u` cross terms. The vertical
+  production is the face product `2 ᶠK_u ‖𝔈‖²` interpolated to centers. The
+  same shear norm enters `Ri` on the grid-mean (non-EDMF) Smagorinsky-Lilly
+  path.
+
 436
 - Turbulent diffusion carries the enthalpy of each diffusing water phase
   (Yatunin et al. 2026, Eqs. 30 and 33), with the sensible heat at the heat

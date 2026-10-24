@@ -256,10 +256,15 @@ add_diagnostic_variable!(short_name = "bgrad", units = "s^-2",
 )
 
 ###
-# Strain rate magnitude (3d)
+# Vertical shear of the horizontal wind (3d)
 ###
 add_diagnostic_variable!(short_name = "strain", units = "s^-2",
-    long_name = "String Rate Magnitude",
+    long_name = "Squared Vertical Shear of the Horizontal Wind",
+    comments = """
+    |∂uₕ/∂z|² / 2, the squared strain-rate norm of the vertical gradient of
+    the horizontal wind (`vertical_shear_norm_sqr`); twice this quantity is
+    the shear term of the gradient Richardson number.
+    """,
     compute = (_, cache, _) -> cache.precomputed.ᶜstrain_rate_norm,
 )
 

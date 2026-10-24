@@ -297,8 +297,8 @@ The same closure is evaluated at cell centers (`ᶜmixing_length`) and at faces
     balance for `l_TKE` and the buoyancy-limited length `l_N` [1/s²].
   - `tke`: Turbulent kinetic energy at the evaluation point [m²/s²].
   - `obukhov_length`: Surface Monin-Obukhov length [m].
-  - `strain_rate_norm`: Squared Frobenius norm of the strain-rate tensor,
-    `SᵢⱼSᵢⱼ` [1/s²].
+  - `strain_rate_norm`: Squared norm of the vertical shear of the horizontal
+    wind, `|∂uₕ/∂z|² / 2` (`vertical_shear_norm_sqr`) [1/s²].
   - `Pr`: Turbulent Prandtl number [-].
   - `scale_blending_method`: Blending method for the physical scales
     (`blend_scales`).
@@ -591,6 +591,27 @@ function set_displacement_buoyancy_gradient!(
         dry_N²(ᶜbg_coeffs, ᶜθ_above(ᶠ∂θli∂z), ᶜq_above(ᶠ∂qt∂z)),
     )
     return ᶜN²_disp
+end
+
+"""
+    set_strain_rate_norm!(Y, p)
+
+Fill `p.precomputed.ᶜstrain_rate_norm` with the squared norm of the vertical
+shear of the horizontal wind, `|∂uₕ/∂z|² / 2` (`vertical_shear_norm_sqr`),
+from the vertical-gradient strain rate of the face velocity
+`ᶠinterp(uₕ) + u³`. This is the shear term of the TKE budget, `Ri`, `Pr_t`,
+and the mixing lengths for both the EDMF and the grid-mean closures.
+
+Reads `ᶠu³` from `p.precomputed` and uses `p.scratch.ᶠtemp_C123`; returns
+`nothing`.
+"""
+function set_strain_rate_norm!(Y, p)
+    (; ᶠu³, ᶜstrain_rate_norm) = p.precomputed
+    ᶠu = p.scratch.ᶠtemp_C123
+    @. ᶠu = C123(ᶠinterp(Y.c.uₕ)) + C123(ᶠu³)
+    ᶜstrain_rate = compute_strain_rate_center_vertical(ᶠu)
+    @. ᶜstrain_rate_norm = vertical_shear_norm_sqr(ᶜstrain_rate)
+    return nothing
 end
 
 """
@@ -1258,14 +1279,14 @@ end
 Compute the gradient Richardson number, the ratio of the buoyancy to the shear
 term in the TKE budget:
 
-    Ri = ᶜN² / max(2 SᵢⱼSᵢⱼ, eps).
+    Ri = ᶜN² / max(2 ᶜstrain_rate_norm, eps) = ᶜN² / |∂uₕ/∂z|².
 
 # Arguments
 
   - `params`: Parameter set; used only for the floating-point type.
   - `ᶜN²`: Effective squared buoyancy frequency [1/s²].
-  - `ᶜstrain_rate_norm`: Squared Frobenius norm of the strain-rate tensor,
-    `SᵢⱼSᵢⱼ` [1/s²].
+  - `ᶜstrain_rate_norm`: Squared norm of the vertical shear of the horizontal
+    wind, `|∂uₕ/∂z|² / 2` (`vertical_shear_norm_sqr`) [1/s²].
 
 # Returns
 
@@ -1274,8 +1295,7 @@ The gradient Richardson number [-].
 function gradient_richardson_number(params, ᶜN², ᶜstrain_rate_norm)
     FT = eltype(params)
 
-    # Calculate the denominator term for Ri, ensuring it's not zero
-    # Based on the formulation Ri = N^2 / max(2*|S|, eps)
+    # Shear term `|∂uₕ/∂z|²`, floored at `eps` so that `Ri` stays finite
     ᶜshear_term_safe = max(2 * ᶜstrain_rate_norm, eps(FT))
     ᶜRi_grad = ᶜN² / ᶜshear_term_safe
 
@@ -1304,8 +1324,8 @@ with `X = Pr_n + ω_pr Ri`, the neutral Prandtl number `Pr_n`
 
   - `params`: Parameter set.
   - `ᶜN²`: Effective squared buoyancy frequency [1/s²].
-  - `ᶜstrain_rate_norm`: Squared Frobenius norm of the strain-rate tensor,
-    `SᵢⱼSᵢⱼ` [1/s²].
+  - `ᶜstrain_rate_norm`: Squared norm of the vertical shear of the horizontal
+    wind, `|∂uₕ/∂z|² / 2` (`vertical_shear_norm_sqr`) [1/s²].
 
 # Returns
 
@@ -1368,7 +1388,8 @@ stratified air, where the mixing length is buoyancy-limited,
     2 K_u S² - K_h N² = c_d e^{3/2} / l,
     K_u = c_m l √e,   K_h = K_u / Pr,
 
-with `S² = SᵢⱼSᵢⱼ` the squared strain-rate norm. Substituting `l = l_N` makes
+with `S² = |∂uₕ/∂z|² / 2` the squared norm of the vertical shear of the
+horizontal wind (`vertical_shear_norm_sqr`). Substituting `l = l_N` makes
 every term linear in `e`,
 
     c_m √c_b (2S² - N²/Pr) e / N = c_d e N / √c_b,

@@ -6,6 +6,7 @@ using Random
 Random.seed!(1234)
 import ClimaAtmos as CA
 using NCDatasets
+import LinearAlgebra
 import LinearAlgebra: norm_sqr
 
 include("test_helpers.jl")
@@ -414,6 +415,76 @@ end
     @test maximum(abs, ᶠε.components.data.:7 .- ᶠε_ref.components.data.:7) < tol
     @test maximum(abs, ᶠε.components.data.:8 .- ᶠε_ref.components.data.:8) < tol
     @test maximum(abs, ᶠε.components.data.:9 .- ᶠε_ref.components.data.:9) < tol
+end
+
+@testset "shear production norms" begin
+    # Velocity gradients ∂_z(u, v, w) = (a, b, c) and ∂_x, ∂_y of (u, v, w)
+    FT = Float64
+    UVW = Geometry.UVWVector
+    sym = CA.symmetric_part
+    a, b, c = FT(0.3), FT(-0.2), FT(0.5)
+    ∂ₓu, ∂ₓv, ∂ₓw = FT(0.1), FT(-0.4), FT(0.7)
+    ∂ᵧu, ∂ᵧv, ∂ᵧw = FT(0.25), FT(0.05), FT(-0.6)
+    Gᵥ = Geometry.outer(UVW(0, 0, 1), UVW(a, b, c))
+    Gₕ =
+        Geometry.outer(UVW(1, 0, 0), UVW(∂ₓu, ∂ₓv, ∂ₓw)) +
+        Geometry.outer(UVW(0, 1, 0), UVW(∂ᵧu, ∂ᵧv, ∂ᵧw))
+    Sᵥ, Sₕ = sym(Gᵥ), sym(Gₕ)
+    S = Sᵥ + Sₕ
+
+    # Vertical shear of the horizontal wind only
+    @test CA.vertical_shear_norm_sqr(Sᵥ) ≈ (a^2 + b^2) / 2
+    @test CA.vertical_shear_norm_sqr(sym(Geometry.outer(UVW(0, 0, 1), UVW(0, 0, c)))) == 0
+
+    # S : Sₕ is the work of the horizontal stress, S : ∇ₕu, and adds the
+    # cross terms ∂_z uₕ · ∇ₕw to Sₕ : Sₕ
+    @test CA.strain_rate_inner(S, Sₕ) ≈
+          sum(parent(S) .* parent(Gₕ))
+    @test CA.strain_rate_inner(S, Sₕ) ≈
+          CA.strain_rate_inner(Sₕ, Sₕ) + (a * ∂ₓw + b * ∂ᵧw) / 2
+    @test CA.strain_rate_inner(Sₕ, Sₕ) ≈ norm_sqr(Sₕ)
+end
+
+@testset "face shear production equals the momentum flux work" begin
+    # The TKE shear production `ρ ᶜinterp(2 ᶠK_u ‖𝔈‖²)` is the kinetic energy
+    # the vertical momentum flux `-2 ρ K_u 𝔈` removes from the horizontal wind
+    # (`edmfx_tke_sources!`). With uniform `ρ` and `Δz`, the column sums of the
+    # production and of `-uₕ · ∂ₜuₕ` agree to roundoff by summation by parts,
+    # for any face viscosity profile; the zero-gradient boundary faces carry no
+    # flux and no production.
+    (; cent_space, face_space) = get_cartesian_spaces(; FT = Float64)
+    ccoords, fcoords = get_coords(cent_space, face_space)
+    FT = eltype(ccoords.x)
+    UVW = Geometry.UVWVector
+    C12, C123 = Geometry.Covariant12Vector, Geometry.Covariant123Vector
+
+    (; x, y, z) = ccoords
+    ᶜu = @. C123(
+        UVW(sin(x) * cos(2z) + z^2, cos(y) * sin(z), FT(0.3) * sin(z)),
+    )
+    ᶠK_u = @. FT(0.1) + FT(0.05) * fcoords.z + FT(0.2) * (fcoords.z > FT(1.5))
+    ᶠS = CA.compute_strain_rate_face_vertical(ᶜu)
+
+    # Work of the flux on the horizontal wind, as the momentum tendency applies it
+    ᶜuₕₜ = @. -C12(CA.ᶜdivᵥ(-(2 * ᶠK_u * ᶠS)))
+    ᶜwork = @. LinearAlgebra.dot(UVW(ᶜuₕₜ), UVW(ᶜu))
+
+    ᶜproduction = @. CA.ᶜinterp(2 * ᶠK_u * CA.vertical_shear_norm_sqr(ᶠS))
+
+    # Column sums at every horizontal node
+    column_sum(ᶜf) = sum(parent(ᶜf); dims = 1)
+    work, production = column_sum(ᶜwork), column_sum(ᶜproduction)
+    @test maximum(abs, production .+ work) < 1e-12 * maximum(abs, production)
+    @test all(>(0), production)
+
+    # The center form `2 ᶜinterp(ᶠK_u) ‖Sᶜ‖²` with the wide stencil of
+    # `compute_strain_rate_center_vertical` is not the flux work
+    ᶠu = @. CA.ᶠinterp(ᶜu)
+    ᶜSᶜ = CA.compute_strain_rate_center_vertical(ᶠu)
+    ᶜproduction_center =
+        @. 2 * CA.ᶜinterp(ᶠK_u) * CA.vertical_shear_norm_sqr(ᶜSᶜ)
+    @test maximum(abs, column_sum(ᶜproduction_center) .+ work) >
+          1e-2 * maximum(abs, production)
 end
 
 @testset "compute_strain_rate (spherical geometry)" begin

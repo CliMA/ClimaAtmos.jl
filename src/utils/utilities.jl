@@ -214,6 +214,14 @@ i.e. from `Y.c.uₕ` and `Y.f.u₃`.
 compute_kinetic(Y::Fields.FieldVector) = compute_kinetic(Y.c.uₕ, Y.f.u₃)
 
 """
+    symmetric_part(G)
+
+Return the symmetric part `(G + Gᵀ) / 2` of a `UVW × UVW` tensor `G`, the strain
+rate of a velocity gradient.
+"""
+symmetric_part(G) = (G + adjoint(G)) / 2
+
+"""
     compute_strain_rate_center_vertical(ᶠu)
 
 Compute the strain rate at cell centers from the face velocity `ᶠu`, keeping
@@ -225,14 +233,37 @@ A lazy center `Field` with the symmetric `UVW × UVW` strain-rate tensor
 `(∇ᵥu + (∇ᵥu)ᵀ) / 2` [1/s].
 """
 function compute_strain_rate_center_vertical(ᶠu)
-    axis_uvw = Geometry.UVWAxis()
-    return @. lazy(
-        (
-            Geometry.project((axis_uvw,), ᶜgradᵥ(UVW(ᶠu))) +
-            adjoint(Geometry.project((axis_uvw,), ᶜgradᵥ(UVW(ᶠu))))
-        ) / 2,
-    )
+    axis_uvw = (Geometry.UVWAxis(),)
+    return @. lazy(symmetric_part(Geometry.project(axis_uvw, ᶜgradᵥ(UVW(ᶠu)))))
 end
+
+"""
+    vertical_shear_norm_sqr(S)
+
+Return `2 (S₁₃² + S₂₃²) = |∂uₕ/∂z|² / 2` [1/s²] for a vertical-gradient strain
+rate `S` (`compute_strain_rate_center_vertical`): the squared Frobenius norm
+`SᵢⱼSᵢⱼ` without the `S₃₃² = (∂w/∂z)²` term.
+
+This is the part of `S` on which the vertical SGS momentum flux acts: the flux
+is applied to the horizontal wind only (`w'w'` is represented by the TKE, the
+mass flux, and the pressure closure), so `2 K_u` times this norm is the
+resolved kinetic energy the flux removes. The two components are summed
+directly; the difference `SᵢⱼSᵢⱼ - S₃₃²` cancels catastrophically where
+`|∂w/∂z| ≫ |∂uₕ/∂z|`.
+"""
+function vertical_shear_norm_sqr(S)
+    c = parent(S)
+    return 2 * (abs2(c[1, 3]) + abs2(c[2, 3]))
+end
+
+"""
+    strain_rate_inner(S₁, S₂)
+
+Return the Frobenius inner product `S₁ : S₂ = Σᵢⱼ S₁ᵢⱼ S₂ᵢⱼ` [1/s²] of two
+`UVW × UVW` strain-rate tensors.
+"""
+strain_rate_inner(S₁, S₂) =
+    LinearAlgebra.dot(parent(S₁), parent(S₂))
 
 """
     compute_strain_rate_face_vertical(ᶜu)
@@ -252,13 +283,8 @@ function compute_strain_rate_face_vertical(ᶜu)
     ∇ᵥuvw_boundary = Geometry.outer(Geometry.WVector(0), Geometry.UVWVector(0, 0, 0))
     ∇bc = Operators.SetGradient(∇ᵥuvw_boundary)
     ᶠgradᵥ = Operators.GradientC2F(bottom = ∇bc, top = ∇bc)
-    axis_uvw = Geometry.UVWAxis()
-    return @. lazy(
-        (
-            Geometry.project((axis_uvw,), ᶠgradᵥ(UVW(ᶜu))) +
-            adjoint(Geometry.project((axis_uvw,), ᶠgradᵥ(UVW(ᶜu))))
-        ) / 2,
-    )
+    axis_uvw = (Geometry.UVWAxis(),)
+    return @. lazy(symmetric_part(Geometry.project(axis_uvw, ᶠgradᵥ(UVW(ᶜu)))))
 end
 
 """
@@ -267,13 +293,8 @@ end
 Compute the strain rate at cell centers from velocity at cell centers, with horizontal gradients only.
 """
 function compute_strain_rate_center_horizontal(ᶜu)
-    axis_uvw = Geometry.UVWAxis()
-    return @. lazy(
-        (
-            Geometry.project((axis_uvw,), gradₕ(UVW(ᶜu))) +
-            adjoint(Geometry.project((axis_uvw,), gradₕ(UVW(ᶜu))))
-        ) / 2,
-    )
+    axis_uvw = (Geometry.UVWAxis(),)
+    return @. lazy(symmetric_part(Geometry.project(axis_uvw, gradₕ(UVW(ᶜu)))))
 end
 
 """
@@ -309,7 +330,7 @@ function compute_strain_rate_center_full!(ᶜε, ᶜu, ᶠu)
     axis_uvw = (Geometry.UVWAxis(),)
     @. ᶜε = Geometry.project(axis_uvw, ᶜgradᵥ(UVW(ᶠu)))  # vertical component
     @. ᶜε += Geometry.project(axis_uvw, gradₕ(UVW(ᶜu)))  # horizontal component
-    @. ᶜε = (ᶜε + adjoint(ᶜε)) / 2
+    @. ᶜε = symmetric_part(ᶜε)
     return ᶜε
 end
 
@@ -351,7 +372,7 @@ function compute_strain_rate_face_full!(ᶠε, ᶜu, ᶠu)
     axis_uvw = (Geometry.UVWAxis(),)
     @. ᶠε = Geometry.project(axis_uvw, ᶠgradᵥ(UVW(ᶜu)))  # vertical component
     @. ᶠε += Geometry.project(axis_uvw, gradₕ(UVW(ᶠu)))  # horizontal component
-    @. ᶠε = (ᶠε + adjoint(ᶠε)) / 2
+    @. ᶠε = symmetric_part(ᶠε)
     return ᶠε
 end
 
