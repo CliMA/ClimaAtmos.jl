@@ -1,4 +1,4 @@
-438
+439
 
 # **README**
 #
@@ -32,6 +32,11 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+439
+- Enable the EDMFX implicit-stage Picard sub-iteration by default
+  (`edmfx_updraft_picard_rounds: 2`), and raise the TRMM reproducibility
+  `dt` from 120 s to 180 s.
+
 438
 - TKE shear production matches the work of the SGS stresses: the vertical
   production uses `|∂_z uₕ|²/2` (no `(∂_z w)²`), and the horizontal production

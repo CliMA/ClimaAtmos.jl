@@ -257,6 +257,19 @@ and leaves them alone. The result is less general than a Newton solve but
 cannot fail: each solve is exact, needs one sweep through the column, and is
 constructed so that it cannot produce a negative area or a downward updraft.
 
+`u_3^j` enters the buoyancy-affecting draft scalars (``h_s^j``, ``q_t^j``, 1M
+condensates) through the upwind-advection sweep, and those scalars in turn
+drive the buoyancy that closes the next ``u_3^j`` solve. To tighten the
+within-stage coupling, `initialize_implicit_stage_problem!` runs
+`edmfx_updraft_picard_rounds` Picard rounds (default `2`; ``0`` reproduces
+the single-pass behavior) that alternate the analytic ``u_3^j`` solve with
+the semi-implicit draft-scalar sweep, each round starting from the
+stage-initial `Y.(f,c).sgsʲs` and refreshing the draft thermodynamics and
+`ᶜmp_tendencyʲs` at the new iterate. The final analytic ``u_3^j`` and
+``\hat{\rho}^j`` solves then run with Picard-converged buoyancy and
+microphysics inputs; `ᶜmp_tendencyʲs` is frozen through the Newton solve
+so the Jacobian stays consistent.
+
 ### Vertical velocity
 
 The evolution equation for the physical vertical velocity of a draft, retaining
