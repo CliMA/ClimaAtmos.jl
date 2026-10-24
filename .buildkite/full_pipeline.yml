@@ -425,6 +425,17 @@ steps:
           slurm_mem: 8GB
         soft_fail: true
 
+      - label: ":genie: Prognostic EDMF: Deep tropical convection (TRMM), short dt"
+        retry: *retry_policy
+        command: >
+          julia --color=yes --project=.buildkite .buildkite/ci_driver.jl
+          --config_file $COMMON_CONFIG_PATH/diagnostics_column_progedmf_1M.yml
+          --config_file $CONFIG_PATH/prognostic_edmfx_trmm_column_short_dt.yml
+          --job_id prognostic_edmfx_trmm_column_short_dt
+        artifact_paths: "prognostic_edmfx_trmm_column_short_dt/output_active/*"
+        agents:
+          slurm_mem: 35GB
+
       - label: ":genie: Prognostic EDMF: Deep tropical convection (TRMM), 0M"
         retry: *retry_policy
         command: >
