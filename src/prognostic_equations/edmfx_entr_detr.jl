@@ -562,6 +562,319 @@ function turbulent_entrainment(turbconv_params, ᶜaʲ)
 end
 
 """
+    environment_tail_shift(T′T′, q′q′, corr_Tq, α_T, α_q)
+
+Shift `(ΔT, Δq)` of the mean of the upper half `s′ > 0` of the environment's
+Gaussian subgrid `(T′, q′)` distribution relative to its mean, for the linear
+selector `s′ = α_T T′ + α_q q′`:
+
+    Δx = √(2/π) Cov(x′, s′) / σ_s,
+    σ_s² = α_T² σ_T² + 2 α_T α_q r σ_T σ_q + α_q² σ_q²,
+
+with `r` the T–q correlation (the conditional mean of a jointly Gaussian
+variable over a half-space). Returns zeros where the subgrid variance vanishes,
+so the environment mean is recovered as the variance goes to zero (fine grids).
+"""
+@inline function environment_tail_shift(T′T′, q′q′, corr_Tq, α_T, α_q)
+    FT = typeof(T′T′)
+    σ_T = sqrt(max(T′T′, zero(FT)))
+    σ_q = sqrt(max(q′q′, zero(FT)))
+    r = clamp(corr_Tq, -one(FT), one(FT))
+    cov_Ts = α_T * σ_T^2 + α_q * r * σ_T * σ_q
+    cov_qs = α_q * σ_q^2 + α_T * r * σ_T * σ_q
+    σ_s² = α_T * cov_Ts + α_q * cov_qs
+    has_variance = σ_s² > floatmin(FT)
+    k = sqrt(FT(2) / FT(π)) / sqrt(max(σ_s², floatmin(FT)))
+    return (
+        ifelse(has_variance, k * cov_Ts, zero(FT)),
+        ifelse(has_variance, k * cov_qs, zero(FT)),
+    )
+end
+
+"""
+    tail_selector_coefficients(thermo_params, selector, T⁰)
+
+Coefficients `(α_T, α_q)` of the tail selector `s′ = α_T T′ + α_q q′`:
+`selector ≥ 0.5` selects by moist static energy (`c_p`, `L_v`); otherwise by
+virtual buoyancy (`1/T⁰`, `R_v/R_d − 1`, condensate loading neglected).
+"""
+@inline function tail_selector_coefficients(thermo_params, selector, T⁰)
+    FT = typeof(T⁰)
+    use_mse = selector >= FT(0.5)
+    α_T = ifelse(use_mse, FT(TDP.cp_d(thermo_params)), one(FT) / max(T⁰, one(FT)))
+    α_q = ifelse(
+        use_mse,
+        FT(TDP.LH_v0(thermo_params)),
+        FT(TDP.R_v(thermo_params)) / FT(TDP.R_d(thermo_params)) - one(FT),
+    )
+    return (α_T, α_q)
+end
+
+"""
+    tail_entrainment_increments(
+        thermo_params, w, selector, T⁰, q_tot⁰, q_liq⁰, q_ice⁰,
+        T′T′, q′q′, corr_Tq, ρa⁰, ρaʲ, entr, dt,
+    )
+
+Increments `(Δmse, Δq_tot)` of the air drawn in by the dynamical entrainment
+`entr` [1/s], relative to the environment mean, when a fraction `w` of it comes
+from the upper half of the environment's subgrid distribution
+(`environment_tail_shift`, selector from `tail_selector_coefficients`).
+
+Both increments come from the same tail state `(T⁰ + w ΔT, q_tot⁰ + w Δq)`, and
+the moist static energy uses the model's enthalpy with the environment's
+condensate, so the entrained air is one realizable parcel. Realizability: the
+mass entrained in one step, `entr ρaʲ dt`, cannot exceed the tail's mass
+`ρa⁰ / 2`; beyond that the weight is reduced. Because the environment is
+diagnosed as grid mean minus updrafts, the environment gives up exactly what the
+updraft entrains and total water and energy are unchanged. The environment's
+diagnosed subgrid variance does not account for its tail being removed
+preferentially (second order at small updraft area).
+"""
+@inline function tail_entrainment_increments(
+    thermo_params, w, selector, T⁰, q_tot⁰, q_liq⁰, q_ice⁰,
+    T′T′, q′q′, corr_Tq, ρa⁰, ρaʲ, entr, dt,
+)
+    FT = typeof(T⁰)
+    α_T, α_q = tail_selector_coefficients(thermo_params, selector, T⁰)
+    ΔT, Δq = environment_tail_shift(T′T′, q′q′, corr_Tq, α_T, α_q)
+    entrained_per_step = max(entr, zero(FT)) * max(ρaʲ, zero(FT)) * FT(dt)
+    w_eff =
+        FT(w) * min(
+            one(FT),
+            FT(0.5) * max(ρa⁰, zero(FT)) / max(entrained_per_step, floatmin(FT)),
+        )
+    q_tot_e = max(q_tot⁰ + w_eff * Δq, zero(FT))
+    T_e = T⁰ + w_eff * ΔT
+    Δmse =
+        TD.enthalpy(thermo_params, T_e, q_tot_e, q_liq⁰, q_ice⁰) -
+        TD.enthalpy(thermo_params, T⁰, q_tot⁰, q_liq⁰, q_ice⁰)
+    return (Δmse, q_tot_e - q_tot⁰)
+end
+@inline tail_entrainment_Δmse(args...) = tail_entrainment_increments(args...)[1]
+@inline tail_entrainment_Δq_tot(args...) = tail_entrainment_increments(args...)[2]
+
+"""
+    satinst_source_rate(c_s, N²_sat, ρa⁰, f⁰, aʲ, turbconv_params, dt)
+
+Volumetric mass source [kg/m³/s] of the updraft from the saturated part of the
+environment where that part is unstable to moist-adiabatic displacement,
+
+    S = c_s ρa⁰ f⁰ √max(0, −N²_sat) · Λ(aʲ),
+
+with `ρa⁰` the environment's effective density, `f⁰` its cloud fraction,
+`N²_sat` the saturated buoyancy gradient of the grid mean (the growth rate of
+the moist instability is `√(−N²_sat)`), and `Λ` the upper area limiter
+(`upper_area_limiter_factor`). Saturated environment air in a moist-unstable
+layer would accelerate away from the environment as soon as it is displaced;
+the source moves it into the updraft before the resolved flow releases the
+instability. The mass moved in one step is capped at half of the environment's
+saturated part. The source is a pairwise exchange: the environment, diagnosed as
+grid mean minus updrafts, loses what the updraft gains.
+"""
+@inline function satinst_source_rate(c_s, N²_sat, ρa⁰, f⁰, aʲ, turbconv_params, dt)
+    FT = typeof(N²_sat)
+    ρa⁰_cld = max(ρa⁰, zero(FT)) * clamp(f⁰, zero(FT), one(FT))
+    S = FT(c_s) * ρa⁰_cld * sqrt(max(-N²_sat, zero(FT))) *
+        upper_area_limiter_factor(aʲ, turbconv_params)
+    return min(S, FT(0.5) * ρa⁰_cld / FT(dt))
+end
+
+"""
+    satinst_source_increments(thermo_params, T⁰, ρ⁰, q_tot⁰, q_liq⁰, q_ice⁰, T′T′, q′q′, corr_Tq, f⁰, selector)
+
+Increments `(Δmse, Δq_tot)`, relative to the environment mean, of the air moved
+by the saturated-instability source: the mean of the top fraction `f⁰` of the
+environment's Gaussian subgrid `(T, q_tot)` distribution in the selector `s′`.
+For `selector < 0` this is the saturation excess `s′ = q′ − (∂q_sat/∂T) T′`, so
+the moved air is the saturated part; otherwise the selector of
+`tail_selector_coefficients` (`0` virtual buoyancy, `1` moist static energy), so
+the moved air is the equally large part that is most buoyant or has the highest
+moist static energy. For a
+Gaussian the conditional mean of the top fraction `f` is
+`D(f) Cov(x′, s′)/σ_s` with `D(f) = φ(Φ⁻¹(1 − f))/f` (the factor of the surface
+buoyant-air value, `percentile_bounds_mean_norm`). The increments vanish with
+the subgrid variance and as `f⁰ → 1`.
+"""
+@inline function satinst_source_increments(
+    thermo_params, T⁰, ρ⁰, q_tot⁰, q_liq⁰, q_ice⁰, T′T′, q′q′, corr_Tq, f⁰, selector,
+    f_min = oftype(T⁰, 0.01),
+)
+    FT = typeof(T⁰)
+    # the slope of the linearized saturation excess that sets the cloud
+    # fraction (`_sgs_linear_sigma_S`), so the moved part is the cloudy part
+    ∂qsat∂T = FT(TD.∂q_vap_sat_∂T(thermo_params, T⁰, ρ⁰))
+    α_T_sel, α_q_sel = tail_selector_coefficients(thermo_params, selector, T⁰)
+    use_saturation = selector < 0
+    α_T = ifelse(use_saturation, -∂qsat∂T, α_T_sel)
+    α_q = ifelse(use_saturation, one(FT), α_q_sel)
+    ΔT½, Δq½ = environment_tail_shift(T′T′, q′q′, corr_Tq, α_T, α_q)
+    f = clamp(f⁰, FT(f_min), one(FT) - FT(1e-4))
+    D = percentile_bounds_mean_norm(one(FT) - f, one(FT)) / sqrt(FT(2) / FT(π))
+    q_tot_e = max(q_tot⁰ + D * Δq½, zero(FT))
+    T_e = T⁰ + D * ΔT½
+    Δmse =
+        TD.enthalpy(thermo_params, T_e, q_tot_e, q_liq⁰, q_ice⁰) -
+        TD.enthalpy(thermo_params, T⁰, q_tot⁰, q_liq⁰, q_ice⁰)
+    return (Δmse, q_tot_e - q_tot⁰)
+end
+
+"""
+    inverse_mills_threshold(x)
+
+Threshold `t` of a standard normal whose upper tail has conditional mean `x`,
+i.e. the root of the inverse Mills ratio `φ(t)/(1 − Φ(t)) = x` (`x > 0`;
+increasing in `t`). Seeded piecewise (`t ≈ x − 1/x` for large `x`, the
+linearization about `t = 0`, and `φ(t) ≈ x` for small `x`) and refined with a
+fixed number of Newton steps on `λ(t) = x` with `λ′(t) = λ(λ − t)`; clamped to
+`|t| ≤ 8`. GPU-safe.
+"""
+@inline function inverse_mills_threshold(x)
+    FT = typeof(x)
+    xs = max(x, FT(1e-6))
+    sqrt2π = sqrt(2 * FT(π))
+    t_large = xs - 1 / xs
+    t_mid = (xs - sqrt(2 / FT(π))) / (2 / FT(π))
+    t_small = -sqrt(max(-2 * log(xs * sqrt2π), zero(FT)))
+    t = ifelse(xs > FT(1.5), t_large, ifelse(xs > FT(0.3), t_mid, t_small))
+    t = clamp(t, -FT(8), FT(8))
+    for _ in 1:6
+        φ = exp(-t^2 / 2) / sqrt2π
+        Q = max(normal_cdf(-t), floatmin(FT))
+        λ = φ / Q
+        t = clamp(t - (λ - xs) / max(λ * (λ - t), FT(1e-6)), -FT(8), FT(8))
+    end
+    return t
+end
+
+"""
+    buoyancy_sorted_fraction(Δb, σ_b)
+
+Largest top fraction `f` of a Gaussian buoyancy distribution (standard deviation
+`σ_b`) whose conditional mean exceeds the distribution mean by `Δb`:
+`f = 1 − Φ(t)` with `φ(t)/(1 − Φ(t)) = Δb/σ_b` (`inverse_mills_threshold`).
+`f = 1` for `Δb ≤ 0` (any air is as buoyant as the target), `f → 0` for
+`Δb ≫ σ_b` or a vanishing `σ_b`.
+"""
+@inline function buoyancy_sorted_fraction(Δb, σ_b)
+    FT = typeof(Δb)
+    has_spread = σ_b > floatmin(FT)
+    x = max(Δb, zero(FT)) / max(σ_b, floatmin(FT))
+    f = normal_cdf(-inverse_mills_threshold(x))
+    return ifelse(Δb <= 0, one(FT), ifelse(has_spread, f, zero(FT)))
+end
+
+"""
+    selector_std(T′T′, q′q′, corr_Tq, α_T, α_q)
+
+Standard deviation of the linear selector `s′ = α_T T′ + α_q q′` for the
+Gaussian `(T′, q′)` with variances `T′T′`, `q′q′` and correlation `corr_Tq`.
+"""
+@inline function selector_std(T′T′, q′q′, corr_Tq, α_T, α_q)
+    FT = typeof(T′T′)
+    σ_T = sqrt(max(T′T′, zero(FT)))
+    σ_q = sqrt(max(q′q′, zero(FT)))
+    r = clamp(corr_Tq, -one(FT), one(FT))
+    return sqrt(max(
+        (α_T * σ_T)^2 + 2 * α_T * α_q * r * σ_T * σ_q + (α_q * σ_q)^2,
+        zero(FT),
+    ))
+end
+
+"""
+    set_edmf_satinst_source!(Y, p)
+
+Fill `p.precomputed.ᶜsatinst_source` [kg/m³/s] (`satinst_source_rate`) and the
+increments `ᶜsatinst_Δmse`, `ᶜsatinst_Δq_tot` of the moved air
+(`satinst_source_increments`) for the single updraft. Requires the cloud
+fraction and the buoyancy-gradient coefficients of the current state, so it is
+called after `set_covariance_cache_and_cloud_fraction!`. No-op (fields stay
+zero) unless `edmf_satinst_source_coeff > 0`.
+"""
+function set_edmf_satinst_source!(Y, p)
+    p.atmos.turbconv_model isa PrognosticEDMFX || return nothing
+    FT = eltype(p.params)
+    c_s = FT(CAP.edmf_satinst_source_coeff(p.params))
+    c_s > 0 || return nothing
+    hasproperty(p.precomputed, :ᶜT′T′) || error("edmf_satinst_source_coeff > 0 needs the SGS quadrature")
+    n_mass_flux_subdomains(p.atmos.turbconv_model) == 1 ||
+        error("edmf_satinst_source_coeff > 0 is implemented for one updraft")
+    thermo_params = CAP.thermodynamics_params(p.params)
+    turbconv_params = CAP.turbconv_params(p.params)
+    turbconv_model = p.atmos.turbconv_model
+    (; dt) = p
+    (; ᶜsatinst_source, ᶜsatinst_Δmse, ᶜsatinst_Δq_tot) = p.precomputed
+    (; ᶜbg_coeffs, ᶜgradᵥ_θ_liq_ice, ᶜgradᵥ_q_tot, ᶜcloud_fraction, ᶜρʲs) = p.precomputed
+    (; ᶜT⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜp) = p.precomputed
+    ᶜlg = Fields.local_geometry_field(Y.c)
+    ᶜρ⁰ = @. lazy(TD.air_density(thermo_params, ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰))
+    ᶜρa⁰ = @. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model))
+    ᶜaʲ = @. lazy(draft_area(Y.c.sgsʲs.:(1).ρa, ᶜρʲs.:(1)))
+    ᶜq_liqʲ, ᶜq_iceʲ = _updraft_cloud_condensate(Y, p, 1, p.atmos.microphysics_model)
+    # Environment cloud fraction: the grid-mean cloud fraction minus the
+    # (binary) updraft cloud cover, per unit environment area.
+    ᶜf⁰ = @. lazy(clamp(
+        (ᶜcloud_fraction - ifelse(
+            TD.has_condensate(thermo_params, max(0, ᶜq_liqʲ + ᶜq_iceʲ)), ᶜaʲ, zero(ᶜaʲ),
+        )) / max(1 - ᶜaʲ, eps(FT)),
+        zero(FT), one(FT),
+    ))
+    # Buoyancy sorting (optional): only environment air at least as buoyant as
+    # the updraft joins it. Updraft excess over the environment
+    # Δb = g (ρ⁰ − ρʲ)/ρ⁰; environment buoyancy spread from the virtual
+    # selector (`tail_selector_coefficients(…, 0, …)`); moved air selected by
+    # buoyancy.
+    sorting = CAP.edmf_satinst_buoyancy_sorting(p.params) >= FT(0.5)
+    if sorting
+        grav = FT(CAP.grav(p.params))
+        ᶜσ_b = @. lazy(grav * selector_std(
+            ᶜT′T′, ᶜq′q′, ᶜcorr_Tq,
+            first(tail_selector_coefficients(thermo_params, zero(FT), ᶜT⁰)),
+            last(tail_selector_coefficients(thermo_params, zero(FT), ᶜT⁰)),
+        ))
+        ᶜΔb = @. lazy(grav * (ᶜρ⁰ - ᶜρʲs.:(1)) / ᶜρ⁰)
+        ᶜf_move = @. lazy(min(ᶜf⁰, buoyancy_sorted_fraction(ᶜΔb, ᶜσ_b)))
+        selector = zero(FT)
+        f_min = FT(1e-4)
+    else
+        # the saturated part: top fraction f⁰ in the saturation excess
+        ᶜf_move = ᶜf⁰
+        selector = -one(FT)
+        f_min = FT(0.01)
+    end
+    ᶜN²_sat = @. lazy(blended_N²(
+        ᶜbg_coeffs, one(FT),
+        projected_vector_data(C3, ᶜgradᵥ_θ_liq_ice, ᶜlg),
+        projected_vector_data(C3, ᶜgradᵥ_q_tot, ᶜlg),
+    ))
+    @. ᶜsatinst_source = satinst_source_rate(c_s, ᶜN²_sat, ᶜρa⁰, ᶜf_move, ᶜaʲ, turbconv_params, dt)
+    # Optional trigger weight: the source starts updrafts where none exist and
+    # fades as the updraft area grows beyond the minimum area.
+    if CAP.edmf_satinst_trigger_only(p.params) >= FT(0.5)
+        a_min = FT(CAP.min_area(turbconv_params))
+        @. ᶜsatinst_source *= a_min / (max(ᶜaʲ, zero(FT)) + a_min)
+    end
+    # Optional phase weight: liquid fraction of the environment condensate
+    # (1 where it holds no condensate, where the source vanishes with f⁰).
+    w_liq = FT(CAP.edmf_satinst_liquid_weight(p.params))
+    if w_liq > 0
+        @. ᶜsatinst_source *=
+            1 - w_liq * (1 - ifelse(
+                ᶜq_liq⁰ + ᶜq_ice⁰ > eps(FT),
+                max(ᶜq_liq⁰, 0) / max(ᶜq_liq⁰ + ᶜq_ice⁰, eps(FT)),
+                one(FT),
+            ))
+    end
+    @. ᶜsatinst_Δmse = first(satinst_source_increments(
+        thermo_params, ᶜT⁰, ᶜρ⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜf_move, selector, f_min,
+    ))
+    @. ᶜsatinst_Δq_tot = last(satinst_source_increments(
+        thermo_params, ᶜT⁰, ᶜρ⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜf_move, selector, f_min,
+    ))
+    return nothing
+end
+
+"""
     edmfx_entr_detr_tendency!(Yₜ, Y, p, t, turbconv_model)
 
 Add the entrainment contribution to the EDMF scalar tendencies (`mse`,
@@ -600,6 +913,19 @@ function edmfx_entr_detr_tendency!(Yₜ, Y, p, t, turbconv_model::PrognosticEDMF
     ᶜmse⁰ = ᶜspecific_env_mse(Y, p)
     ᶜq_tot⁰ = ᶜspecific_env_value(@name(q_tot), Y, p)
     ᶜlg = Fields.local_geometry_field(Y.c)
+    FT = eltype(p.params)
+    w_tail = FT(CAP.edmf_tail_entr_weight(p.params))
+    use_tail_entr = w_tail > 0 && hasproperty(p.precomputed, :ᶜT′T′)
+    if use_tail_entr
+        thermo_params = CAP.thermodynamics_params(p.params)
+        tail_selector = FT(CAP.edmf_tail_entr_selector(p.params))
+        (; dt) = p
+        (; ᶜT⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜT′T′, ᶜq′q′, ᶜcorr_Tq) =
+            p.precomputed
+    end
+
+    use_satinst = CAP.edmf_satinst_source_coeff(p.params) > 0
+    a_min = FT(CAP.min_area(CAP.turbconv_params(p.params)))
 
     for j in 1:n
         ᶜentrʲ = @. lazy(
@@ -614,10 +940,36 @@ function edmfx_entr_detr_tendency!(Yₜ, Y, p, t, turbconv_model::PrognosticEDMF
         ᶜmseʲ = Y.c.sgsʲs.:($j).mse
         ᶜq_totʲ = Y.c.sgsʲs.:($j).q_tot
 
-        @. Yₜ.c.sgsʲs.:($$j).mse += (ᶜentrʲ .+ ᶜturb_entrʲ) * (ᶜmse⁰ - ᶜmseʲ)
+        if use_tail_entr
+            # Dynamical entrainment draws from the environment's tail
+            # (`tail_entrainment_increments`); turbulent entrainment, a two-way
+            # exchange outside the ρa equation, keeps the environment mean.
+            ᶜρa⁰ = @. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model))
+            ᶜρaʲ = Y.c.sgsʲs.:($j).ρa
+            @. Yₜ.c.sgsʲs.:($$j).mse +=
+                ᶜentrʲ * (
+                    ᶜmse⁰ +
+                    tail_entrainment_Δmse(
+                        thermo_params, w_tail, tail_selector, ᶜT⁰,
+                        ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜT′T′, ᶜq′q′,
+                        ᶜcorr_Tq, ᶜρa⁰, ᶜρaʲ, ᶜentrʲ, dt,
+                    ) - ᶜmseʲ
+                ) + ᶜturb_entrʲ * (ᶜmse⁰ - ᶜmseʲ)
+            @. Yₜ.c.sgsʲs.:($$j).q_tot +=
+                ᶜentrʲ * (
+                    ᶜq_tot⁰ +
+                    tail_entrainment_Δq_tot(
+                        thermo_params, w_tail, tail_selector, ᶜT⁰,
+                        ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜT′T′, ᶜq′q′,
+                        ᶜcorr_Tq, ᶜρa⁰, ᶜρaʲ, ᶜentrʲ, dt,
+                    ) - ᶜq_totʲ
+                ) + ᶜturb_entrʲ * (ᶜq_tot⁰ - ᶜq_totʲ)
+        else
+            @. Yₜ.c.sgsʲs.:($$j).mse += (ᶜentrʲ .+ ᶜturb_entrʲ) * (ᶜmse⁰ - ᶜmseʲ)
 
-        @. Yₜ.c.sgsʲs.:($$j).q_tot +=
-            (ᶜentrʲ .+ ᶜturb_entrʲ) * (ᶜq_tot⁰ - ᶜq_totʲ)
+            @. Yₜ.c.sgsʲs.:($$j).q_tot +=
+                (ᶜentrʲ .+ ᶜturb_entrʲ) * (ᶜq_tot⁰ - ᶜq_totʲ)
+        end
 
         # Auto-discovered SGS tracers (microphysics species and any
         # user-defined passive tracers)
@@ -627,9 +979,36 @@ function edmfx_entr_detr_tendency!(Yₜ, Y, p, t, turbconv_model::PrognosticEDMF
             ᶜχʲₜ = MatrixFields.get_field(Yₜ.c.sgsʲs.:($j), χ_name)
             @. ᶜχʲₜ += (ᶜentrʲ .+ ᶜturb_entrʲ) * (ᶜχ⁰ - ᶜχʲ)
         end
+
+        # Saturated-instability mass source (`set_edmf_satinst_source!`): the
+        # moved air carries the saturated part's mse and q_tot and the
+        # environment-mean tracers; its mass enters the implicit ρa solve.
+        if use_satinst
+            (; ᶜsatinst_source, ᶜsatinst_Δmse, ᶜsatinst_Δq_tot, ᶜρʲs) = p.precomputed
+            ᶜrateʲ = @. lazy(satinst_specific_rate(
+                ᶜsatinst_source, Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j), a_min,
+            ))
+            @. Yₜ.c.sgsʲs.:($$j).mse += ᶜrateʲ * (ᶜmse⁰ + ᶜsatinst_Δmse - ᶜmseʲ)
+            @. Yₜ.c.sgsʲs.:($$j).q_tot += ᶜrateʲ * (ᶜq_tot⁰ + ᶜsatinst_Δq_tot - ᶜq_totʲ)
+            for χ_name in sgs_tracer_names(Y)
+                ᶜχ⁰ = ᶜspecific_env_value(χ_name, Y, p)
+                ᶜχʲ = MatrixFields.get_field(Y.c.sgsʲs.:($j), χ_name)
+                ᶜχʲₜ = MatrixFields.get_field(Yₜ.c.sgsʲs.:($j), χ_name)
+                @. ᶜχʲₜ += ᶜrateʲ * (ᶜχ⁰ - ᶜχʲ)
+            end
+        end
     end
     return nothing
 end
+
+"""
+    satinst_specific_rate(S, ρaʲ, ρʲ, a_min)
+
+Specific relaxation rate [1/s] of the updraft's intensive variables toward the
+air moved by the volumetric source `S` [kg/m³/s]: `S / max(ρaʲ, ρʲ a_min)`
+(the same floor as the surface mass-flux source).
+"""
+@inline satinst_specific_rate(S, ρaʲ, ρʲ, a_min) = S / max(ρaʲ, ρʲ * a_min)
 
 # Stability limiters that cap entrainment and detrainment rates below the
 # inverse timescales w/dz and 1/dt. Written for the (since removed) diagnostic

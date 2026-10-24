@@ -205,6 +205,15 @@ function solve_sgs_u₃_implicit_stage_analytic!(Y, p, dtγ)
                     ᶜturb_entrʲs.:($$j)
                 ) * ᶜa⁰_inv,
             )
+        # The saturated-instability source brings environment momentum,
+        # S (w₀ − w)/ρa ≈ −(S/ρa) w / a⁰, at the specific rate of
+        # `satinst_specific_rate`.
+        @. ᶠb += ᶠinterp(
+            satinst_specific_rate(
+                p.precomputed.ᶜsatinst_source, Y.c.sgsʲs.:($$j).ρa,
+                ᶜρʲs.:($$j), a_min,
+            ) * ᶜa⁰_inv,
+        )
 
         # Implicit NH pressure drag a⁰ d_c (w - w₀)|w - w₀| ≈ d_c w² / a⁰
         # contributes a quadratic sink: two factors of 1/a⁰ from the velocity
@@ -455,6 +464,9 @@ function solve_sgs_ρa_implicit_stage_analytic!(Y, p, dtγ)
         )
         ᶜnumerator_first = Fields.field_values(Fields.level(ᶜnumerator, 1))
         @. ᶜnumerator_first += mass_flux_source_val
+        # Saturated-instability source (`set_edmf_satinst_source!`): an
+        # area-independent volumetric source at every level (zero when off).
+        @. ᶜnumerator += p.precomputed.ᶜsatinst_source
 
         # ρʲ is in the input tuple so the per-cell cap `ρʲ·a_max` is available
         # inside the closure.

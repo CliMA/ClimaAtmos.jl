@@ -451,6 +451,11 @@ function precomputed_quantities(Y, atmos)
             sfc_mass_flux_sourceʲs = similar(Fields.level(Y.c, 1), NTuple{n, FT}),
             sfc_mse_buoyantʲs = similar(Fields.level(Y.c, 1), NTuple{n, FT}),
             sfc_q_tot_buoyantʲs = similar(Fields.level(Y.c, 1), NTuple{n, FT}),
+            # Saturated-instability mass source of the (single) updraft and the
+            # increments of the moved air (`set_edmf_satinst_source!`).
+            ᶜsatinst_source = zeros(axes(Y.c)),
+            ᶜsatinst_Δmse = zeros(axes(Y.c)),
+            ᶜsatinst_Δq_tot = zeros(axes(Y.c)),
             precipitation_sgs_quantities...,
         ) : (;)
 
@@ -911,6 +916,7 @@ NVTX.@annotate function set_explicit_precomputed_quantities!(Y, p, t)
     end
 
     set_covariance_cache_and_cloud_fraction!(Y, p)
+    turbconv_model isa PrognosticEDMFX && set_edmf_satinst_source!(Y, p)
 
     # Face-native diffusivities. Need the final cloud fraction from the
     # covariance/cloud-fraction update above.
