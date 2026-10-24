@@ -1347,6 +1347,7 @@ EDMFColumnPlotsWithPrecip = Union{
     Val{:prognostic_edmfx_rico_column},
     Val{:prognostic_edmfx_rico_column_2M},
     Val{:prognostic_edmfx_trmm_column},
+    Val{:prognostic_edmfx_trmm_column_short_dt},
     Val{:prognostic_edmfx_bomex_tracerA_column},
 }
 

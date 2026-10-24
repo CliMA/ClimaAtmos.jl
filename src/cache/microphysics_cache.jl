@@ -812,6 +812,60 @@ See also `set_precipitation_velocities!` and `set_precipitation_surface_fluxes!`
 """
 set_microphysics_tendency_cache!(Y, p, _, _) = nothing
 
+"""
+    update_updraft_microphysics_tendency_cache!(
+        Y, p, microphysics_model, turbconv_model, dtγ,
+    )
+
+Refresh the per-updraft microphysics tendency `ᶜmp_tendencyʲs` against the
+current `Y`, using `dtγ` as the integration window. The expensive
+SGS-quadrature environment tendency `ᶜmp_tendency⁰` is left at its last
+`cache!` value.
+
+Called from the Picard sub-iteration in `initialize_implicit_stage_problem!`
+so the within-stage iterate sees a fresh source; the result is then frozen
+through the Newton solve, keeping it consistent with the Jacobian (which
+does not include derivatives of `ᶜmp_tendencyʲs`). A no-op for any
+combination not covered by a specialization.
+"""
+update_updraft_microphysics_tendency_cache!(Y, p, _, _, dtγ) = nothing
+
+function update_updraft_microphysics_tendency_cache!(
+    Y, p, ::EquilibriumMicrophysics0M, tm::PrognosticEDMFX, dtγ,
+)
+    (; ᶜΦ) = p.core
+    (; ᶜmp_tendencyʲs, ᶜρʲs, ᶜTʲs,
+        ᶜq_tot_nonnegʲs, ᶜq_liqʲs, ᶜq_iceʲs) = p.precomputed
+    thp = CAP.thermodynamics_params(p.params)
+    cm0 = CAP.microphysics_0m_params(p.params)
+    for j in 1:n_mass_flux_subdomains(tm)
+        @. ᶜmp_tendencyʲs.:($$j) = microphysics_tendencies_0m(
+            cm0, thp, ᶜρʲs.:($$j), ᶜTʲs.:($$j), ᶜq_tot_nonnegʲs.:($$j),
+            ᶜq_liqʲs.:($$j), ᶜq_iceʲs.:($$j), ᶜΦ, dtγ,
+        )
+    end
+    return nothing
+end
+
+function update_updraft_microphysics_tendency_cache!(
+    Y, p, mp1m::NonEquilibriumMicrophysics1M, tm::PrognosticEDMFX, dtγ,
+)
+    (; ᶜmp_tendencyʲs, ᶜρʲs, ᶜTʲs, ᶜuʲs, ᶜq_tot_nonnegʲs) = p.precomputed
+    thp = CAP.thermodynamics_params(p.params)
+    cmp = CAP.microphysics_1m_params(p.params)
+    nsubs = mp1m.n_substeps
+    for j in 1:n_mass_flux_subdomains(tm)
+        ᶜwʲ_air = @. lazy(w_component(WVec(ᶜuʲs.:($$j))))
+        @. ᶜmp_tendencyʲs.:($$j) = microphysics_tendencies_1m(
+            ᶜρʲs.:($$j), ᶜq_tot_nonnegʲs.:($$j),
+            Y.c.sgsʲs.:($$j).q_lcl, Y.c.sgsʲs.:($$j).q_icl,
+            Y.c.sgsʲs.:($$j).q_rai, Y.c.sgsʲs.:($$j).q_sno,
+            ᶜTʲs.:($$j), ᶜwʲ_air, cmp, thp, dtγ, nsubs,
+        )
+    end
+    return nothing
+end
+
 ###
 ### 0 Moment Microphysics
 ###
