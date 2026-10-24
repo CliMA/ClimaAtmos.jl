@@ -182,6 +182,9 @@ parameters are in `SGSQuadratureParameters`. `FT` is the float type; `VFT1`, `VF
     surface mass-flux closure [m].
   - `sfc_mass_flux_cap_fraction`: Fraction `α` of the surface scalar flux that
     the updraft may transport, so the environment retains at least `1 - α` [-].
+  - `edmfx_updraft_kh_diffusion_factor`: Multiplier `f_j` on the environmental
+    eddy diffusivity `K_h` (and `K_h_h`) applied to updraft vertical and
+    horizontal scalar diffusion (`1` by default) [-].
 """
 Base.@kwdef struct TurbulenceConvectionParameters{FT, VFT1, VFT2, VTF3} <: ATCP
     max_surface_area::FT
@@ -226,6 +229,7 @@ Base.@kwdef struct TurbulenceConvectionParameters{FT, VFT1, VFT2, VTF3} <: ATCP
     sfc_mass_flux_ustar_coeff::FT
     convective_zi::FT
     sfc_mass_flux_cap_fraction::FT
+    edmfx_updraft_kh_diffusion_factor::FT
 end
 
 """

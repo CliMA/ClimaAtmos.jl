@@ -175,33 +175,180 @@ function edmfx_sgs_mass_flux_tendency!(
 end
 
 """
+    ᶜenv_diffusing_water(Y, p)
+
+Return `(q_tot_eff⁰, q_lcl⁰, q_icl⁰)`, the diffusing total, liquid, and ice water
+of the EDMFX environment (the subdomain counterpart of
+`ᶜdiffusing_water_phases`). With non-equilibrium microphysics,
+`q_tot_eff⁰ = q_tot⁰ - q_rai⁰ - q_sno⁰` and the suspended cloud species are the
+diagnosed environment specific humidities; with an equilibrium scheme,
+`q_tot_eff⁰ = q_tot⁰` and the cloud species are the cached diagnostic `ᶜq_liq⁰`
+and `ᶜq_ice⁰`.
+"""
+function ᶜenv_diffusing_water(Y, p)
+    if p.atmos.microphysics_model isa NonEquilibriumMicrophysics
+        ᶜq_tot⁰ = ᶜspecific_env_value(@name(q_tot), Y, p)
+        ᶜq_rai⁰ = ᶜspecific_env_value(@name(q_rai), Y, p)
+        ᶜq_sno⁰ = ᶜspecific_env_value(@name(q_sno), Y, p)
+        ᶜq_tot_eff⁰ = @. lazy(ᶜq_tot⁰ - ᶜq_rai⁰ - ᶜq_sno⁰)
+        ᶜq_lcl⁰ = ᶜspecific_env_value(@name(q_lcl), Y, p)
+        ᶜq_icl⁰ = ᶜspecific_env_value(@name(q_icl), Y, p)
+        return (ᶜq_tot_eff⁰, ᶜq_lcl⁰, ᶜq_icl⁰)
+    else
+        (; ᶜq_liq⁰, ᶜq_ice⁰) = p.precomputed
+        return (ᶜspecific_env_value(@name(q_tot), Y, p), ᶜq_liq⁰, ᶜq_ice⁰)
+    end
+end
+
+"""
+    ᶜupdraft_diffusing_water(Y, p, ::Val{j})
+
+Return `(q_tot_effʲ, q_lclʲ, q_iclʲ)`, the diffusing total, liquid, and ice water
+of updraft `j`. With non-equilibrium microphysics,
+`q_tot_effʲ = q_totʲ - q_raiʲ - q_snoʲ` and the suspended cloud species are read
+from `Y.c.sgsʲs.:(j)`; with an equilibrium scheme, `q_tot_effʲ = q_totʲ` and the
+cloud species are the cached diagnostic `ᶜq_liqʲs.:(j)` and `ᶜq_iceʲs.:(j)`.
+"""
+function ᶜupdraft_diffusing_water(Y, p, ::Val{j}) where {j}
+    if p.atmos.microphysics_model isa NonEquilibriumMicrophysics
+        ᶜq_tot_effʲ = @. lazy(
+            Y.c.sgsʲs.:($$j).q_tot - Y.c.sgsʲs.:($$j).q_rai -
+            Y.c.sgsʲs.:($$j).q_sno,
+        )
+        return (ᶜq_tot_effʲ, Y.c.sgsʲs.:($j).q_lcl, Y.c.sgsʲs.:($j).q_icl)
+    else
+        (; ᶜq_liqʲs, ᶜq_iceʲs) = p.precomputed
+        return (Y.c.sgsʲs.:($j).q_tot, ᶜq_liqʲs.:($j), ᶜq_iceʲs.:($j))
+    end
+end
+
+"""
+    ᶜupdraft_diffusing_mse!(ᶜmse_eff, Y, p, ::Val{j})
+
+Return the moist static energy of updraft `j` with the enthalpy of the
+non-diffusing precipitation replaced by that of dry air,
+
+    mse_effʲ = mseʲ - (h_l(Tʲ) - h_d(Tʲ)) q_raiʲ - (h_i(Tʲ) - h_d(Tʲ)) q_snoʲ,
+
+written into `ᶜmse_eff` with non-equilibrium microphysics. With an equilibrium
+scheme, return `Y.c.sgsʲs.:(j).mse` itself.
+"""
+function ᶜupdraft_diffusing_mse!(ᶜmse_eff, Y, p, ::Val{j}) where {j}
+    ᶜmseʲ = Y.c.sgsʲs.:($j).mse
+    if p.atmos.microphysics_model isa NonEquilibriumMicrophysics
+        thermo_params = CAP.thermodynamics_params(p.params)
+        ᶜTʲ = p.precomputed.ᶜTʲs.:($j)
+        ᶜq_raiʲ = Y.c.sgsʲs.:($j).q_rai
+        ᶜq_snoʲ = Y.c.sgsʲs.:($j).q_sno
+        @. ᶜmse_eff =
+            ᶜmseʲ -
+            (
+                TD.enthalpy_liquid(thermo_params, ᶜTʲ) -
+                TD.enthalpy_dry(thermo_params, ᶜTʲ)
+            ) * ᶜq_raiʲ -
+            (
+                TD.enthalpy_ice(thermo_params, ᶜTʲ) -
+                TD.enthalpy_dry(thermo_params, ᶜTʲ)
+            ) * ᶜq_snoʲ
+        return ᶜmse_eff
+    else
+        return ᶜmseʲ
+    end
+end
+
+"""
+    edmfx_diffused_scalars(Y)
+
+Return the `(χ_name, ρχ_name)` pairs of the grid-scale scalars that the PROPHET
+diffusive fluxes transport down their own gradients besides energy and total
+water: the `suspended_cloud_species` present in `Y`, then the passive tracers.
+
+A scalar that the updrafts carry diffuses down its subdomain gradients; one that
+they do not (such as the P3 ice number and rime quantities) diffuses down its
+grid-mean gradient.
+"""
+edmfx_diffused_scalars(Y) = (
+    unrolled_filter(
+        pair -> MatrixFields.has_field(Y.c, pair[2]),
+        suspended_cloud_species,
+    )...,
+    unrolled_map(
+        ρχ_name -> (specific_tracer_name(ρχ_name), ρχ_name),
+        passive_gs_tracer_names(Y),
+    )...,
+)
+
+"""
+    ᶠupdraft_diffusion_weight!(ᶠwʲ, ᶜρaʲ, ᶠK_h, f_j)
+
+Write into `ᶠwʲ` and return the face weight of the vertical updraft diffusive
+flux `-ᶠwʲ ∇χʲ`,
+
+    ᶠwʲ = f_j K_h H(ρaʲ),    H(x, y) = 2 / (1/x + 1/y),
+
+where `H` is the harmonic (series-conductance) face mean of the updraft mass
+`ρaʲ` floored at `eps` and `f_j` is `edmfx_updraft_kh_diffusion_factor`.
+
+The intensive updraft equation divides the flux divergence by the cell value
+`ρaʲ_c`, which is exact because `ρaʲ` evolves only through advection,
+entrainment, and detrainment. Since
+`H(ρaʲ_c, ρaʲ_nb) / ρaʲ_c = 2 ρaʲ_nb / (ρaʲ_c + ρaʲ_nb) ≤ 2`, that division
+cancels against the series conductance: the intensive tendency is a three-point
+diffusion of `χʲ` with effective face diffusivities between `0` and `2 f_j K_h`,
+so the updraft relaxes toward its vertical neighbors at most twice as fast as
+grid-mean diffusion at the same `K_h` for every value of `ρaʲ_c`, and the
+extensive flux through a face bounded by a draft-free cell vanishes. (An
+arithmetic face mean amplifies the intensive tendency by `ρaʲ_nb / ρaʲ_c`.)
+"""
+function ᶠupdraft_diffusion_weight!(ᶠwʲ, ᶜρaʲ, ᶠK_h, f_j)
+    ϵ_FT = eps(eltype(ᶠwʲ))
+    @. ᶠwʲ = f_j * ᶠK_h / ᶠinterp(1 / max(ᶜρaʲ, ϵ_FT))
+    return ᶠwʲ
+end
+
+"""
     edmfx_sgs_diffusive_flux_tendency!(Yₜ, Y, p, t, turbconv_model)
 
 Apply the divergence of the SGS diffusive (K-theory) fluxes of the PROPHET
-scheme (`EDMFX` in code) to the grid-mean state.
+scheme (`EDMFX` in code) to the grid-mean and updraft states.
 
 All fluxes use the face-native eddy diffusivity/viscosity `ᶠK_h`/`ᶠK_u`
 from `set_face_diffusivities!`:
 
-  - Total enthalpy: the single-gradient form
-    `F_h = -K_h [∇s_d + (h_eff + Φ) ∇q_tot_eff]`, where
-    `q_tot_eff = q_tot - q_rai - q_sno` is the water that diffuses and
-    `h_eff = (h_v q_v + h_l q_lcl + h_i q_icl) / max(q_water_nonneg, ε)` is its
-    mass-weighted enthalpy, applied to `Yₜ.c.ρe_tot`.
-  - Total water: the `q_tot_eff` flux applied to `Yₜ.c.ρq_tot` and mirrored to
-    `Yₜ.c.ρ` (moisture diffusion moves moist air mass). Cloud species take a
-    share of it by tendency scaling rather than a flux of their own; rain and
+  - Total enthalpy: the flux
+    `F_h = -ρ K_h [c_p ∇T + ∇Φ + (h_v + Φ) ∇q_tot_eff + (h_l - h_v) ∇q_lcl + (h_i - h_v) ∇q_icl]`
+    (`add_sensible_heat_diffusionᵥ!`, `add_water_enthalpy_diffusionᵥ!`), with
+    `c_p` the heat capacity of the diffusing mixture and
+    `q_tot_eff = q_tot - q_rai - q_sno` the water that diffuses, applied to
+    `Yₜ.c.ρe_tot`.
+  - Total water and suspended cloud species: `q_tot_eff` diffuses with `K_h`
+    (mirrored to `Yₜ.c.ρ` for moist mass conservation), while the
+    `suspended_cloud_species` diffuse down their own gradients and rain and
     snow do not diffuse.
-  - Other grid-scale tracers: passive tracers diffuse with `K_h`.
+  - Other grid-scale tracers: passive tracers diffuse down their own gradients
+    with `K_h`.
   - Momentum: `-2 ρ K_u 𝔈` with the vertical strain rate, applied to `Yₜ.c.uₕ`.
   - TKE (when prognostic): turbulent transport plus dissipation
     (`tke_dissipation`), applied to `Yₜ.c.ρtke`; negative TKE is relaxed to
     zero within one time step.
 
-When `p.atmos.edmfx_model.vertical_diffusion` is enabled for
-`PrognosticEDMFX`, the same specific tendencies are additionally applied to
-each updraft's `mse`, `q_tot`, and tracers (uniform vertical diffusion across
-the grid box).
+For `PrognosticEDMFX`, the grid-mean diffusive flux is the subdomain sum
+`a⁰ F⁰ + Σⱼ aʲ Fʲ`, and when `p.atmos.edmfx_model.vertical_diffusion` is
+enabled each updraft scalar `χʲ` (`mse`, `q_tot`, suspended cloud species, and
+passive tracers) diffuses down its own vertical gradient (using
+`q_tot_effʲ = q_totʲ - q_raiʲ - q_snoʲ` for `q_totʲ`, matching the updraft
+contribution to `Yₜ.c.ρq_tot`). The updraft mass `ρaʲ` evolves only through
+advection, entrainment, and detrainment, so the intensive updraft tendency is
+the extensive flux divergence divided by `ρaʲ`, with the harmonic face weight of
+`ᶠupdraft_diffusion_weight!` bounding the intensive relaxation rate by
+`2 f_j K_h / Δz²` for every value of `ρaʲ`. The grid mean receives the draft
+flux with each subdomain's `c_p` and `(h_μ + Φ) ∇q_μʲ`, which exceeds `∇mse_effʲ`
+by `(h_d + Φ) ∇q_tot_effʲ`: the moist mass that `q_tot` diffusion adds and the
+enthalpy of the dry air it displaces are both absorbed by the environment
+residual. When
+`p.atmos.edmfx_model.vertical_diffusion` is `false`, `PrognosticEDMFX` reduces
+to the environment diffusive flux `a⁰ F⁰`. Grid-scale scalars that the updrafts
+do not carry diffuse down their grid-mean gradients with `ρ K_h`.
 
 Methods: generic no-op, and `Union{EDOnlyEDMFX, PrognosticEDMFX}` gated on
 `p.atmos.edmfx_model.sgs_diffusive_flux`. Mutates `Yₜ.c`; returns `nothing`.
@@ -222,49 +369,156 @@ function edmfx_sgs_diffusive_flux_tendency!(
     turbconv_params = CAP.turbconv_params(params)
     (; ᶜu) = p.precomputed
     n = n_mass_flux_subdomains(turbconv_model)
-    # The SGS-updraft branches below apply the same specific tendency the grid
-    # mean receives to each subdomain scalar (uniform vertical diffusion across
-    # the grid box). Gated on `edmfx_model.vertical_diffusion` so configs can
-    # opt in/out just like the old subdomain-native diffusion did.
     apply_sgs_updraft =
         turbconv_model isa PrognosticEDMFX &&
         p.atmos.edmfx_model.vertical_diffusion
+    updraft_kh_factor = CAP.edmfx_updraft_kh_diffusion_factor(turbconv_params)
+    moist = !(p.atmos.microphysics_model isa DryModel)
 
     if p.atmos.edmfx_model.sgs_diffusive_flux
 
-        # Face-native eddy diffusivity/viscosity, evaluated at the faces
-        # where the fluxes live (see `set_face_diffusivities!`).
         (; ᶠK_h, ᶠK_u, ᶜl_mix) = p.precomputed
-        ᶠρK_h = p.scratch.ᶠtemp_scalar
-        @. ᶠρK_h = ᶠinterp(Y.c.ρ) * ᶠK_h
+        ᶜρ = Y.c.ρ
+        ᶠρK_h = p.scratch.ᶠtemp_scalar_3
+        @. ᶠρK_h = ᶠinterp(ᶜρ) * ᶠK_h
+
+        if turbconv_model isa PrognosticEDMFX
+            (; ᶜT⁰, ᶜTʲs) = p.precomputed
+            ᶜρa⁰ = @. lazy(ρa⁰(ᶜρ, Y.c.sgsʲs, turbconv_model))
+            ᶠw⁰ = p.scratch.ᶠtemp_scalar
+            @. ᶠw⁰ = ᶠinterp(ᶜρa⁰) * ᶠK_h
+            ᶠwʲ = p.scratch.ᶠtemp_scalar_2
+            ᶜρχₜ_diffusion = p.scratch.ᶜtemp_scalar
+            ᶜscratch = p.scratch.ᶜtemp_scalar_3
+            ᶜq_scratch = p.scratch.ᶜtemp_scalar_4
+
+            # Environment: sensible heat, water enthalpy, and total water down
+            # their environmental gradients
+            ᶜq_water⁰ = moist ? ᶜenv_diffusing_water(Y, p) : nothing
+            add_sensible_heat_diffusionᵥ!(
+                Yₜ.c.ρe_tot,
+                ᶠw⁰,
+                ᶜT⁰,
+                ᶜq_water⁰,
+                p,
+                ᶜscratch,
+            )
+            if moist
+                add_water_enthalpy_diffusionᵥ!(
+                    Yₜ.c.ρe_tot,
+                    ᶠw⁰,
+                    ᶜT⁰,
+                    ᶜq_water⁰,
+                    p,
+                    ᶜscratch;
+                    ᶜq_scratch,
+                )
+                ᶜq_tot⁰ = maybe_materialize!(ᶜq_scratch, ᶜq_water⁰[1])
+                @. ᶜρχₜ_diffusion = -(ᶜdiffdivᵥ(-(ᶠw⁰ * ᶠgradᵥ(ᶜq_tot⁰))))
+                @. Yₜ.c.ρq_tot += ᶜρχₜ_diffusion
+                @. Yₜ.c.ρ += ᶜρχₜ_diffusion
+            end
+
+            # Environment: the other scalars down their environmental
+            # gradients, or their grid-mean gradients if the updrafts do not
+            # carry them
+            MatrixFields.unrolled_foreach(
+                edmfx_diffused_scalars(Y),
+            ) do (χ_name, ρχ_name)
+                ᶜρχₜ = MatrixFields.get_field(Yₜ.c, ρχ_name)
+                if MatrixFields.has_field(Y.c.sgsʲs.:(1), χ_name)
+                    ᶜχ⁰ = maybe_materialize!(
+                        ᶜq_scratch,
+                        ᶜspecific_env_value(χ_name, Y, p),
+                    )
+                    @. ᶜρχₜ -= ᶜdiffdivᵥ(-(ᶠw⁰ * ᶠgradᵥ(ᶜχ⁰)))
+                else
+                    ᶜρχ = MatrixFields.get_field(Y.c, ρχ_name)
+                    @. ᶜρχₜ -=
+                        ᶜdiffdivᵥ(-(ᶠρK_h * ᶠgradᵥ(specific(ᶜρχ, ᶜρ))))
+                end
+            end
+
+            # Updrafts: each scalar down its own gradient, with the extensive
+            # flux divergence added to the grid mean
+            if apply_sgs_updraft
+                for j in 1:n
+                    ᶜρaʲ = Y.c.sgsʲs.:($j).ρa
+                    ᶠupdraft_diffusion_weight!(
+                        ᶠwʲ,
+                        ᶜρaʲ,
+                        ᶠK_h,
+                        updraft_kh_factor,
+                    )
+                    ᶜinv_ρaʲ = @. lazy(1 / max(ᶜρaʲ, ϵ_FT))
+                    ᶜTʲ = ᶜTʲs.:($j)
+                    ᶜq_waterʲ =
+                        moist ? ᶜupdraft_diffusing_water(Y, p, Val(j)) : nothing
+                    add_sensible_heat_diffusionᵥ!(
+                        Yₜ.c.ρe_tot,
+                        ᶠwʲ,
+                        ᶜTʲ,
+                        ᶜq_waterʲ,
+                        p,
+                        ᶜscratch,
+                    )
+                    ᶜmse_effʲ = ᶜupdraft_diffusing_mse!(ᶜscratch, Y, p, Val(j))
+                    @. Yₜ.c.sgsʲs.:($$j).mse -=
+                        ᶜinv_ρaʲ * ᶜdiffdivᵥ(-(ᶠwʲ * ᶠgradᵥ(ᶜmse_effʲ)))
+
+                    if moist
+                        add_water_enthalpy_diffusionᵥ!(
+                            Yₜ.c.ρe_tot,
+                            ᶠwʲ,
+                            ᶜTʲ,
+                            ᶜq_waterʲ,
+                            p,
+                            ᶜscratch;
+                            ᶜq_scratch,
+                        )
+                        ᶜq_totʲ = maybe_materialize!(ᶜq_scratch, ᶜq_waterʲ[1])
+                        @. ᶜρχₜ_diffusion =
+                            -(ᶜdiffdivᵥ(-(ᶠwʲ * ᶠgradᵥ(ᶜq_totʲ))))
+                        @. Yₜ.c.ρq_tot += ᶜρχₜ_diffusion
+                        @. Yₜ.c.ρ += ᶜρχₜ_diffusion
+                        @. Yₜ.c.sgsʲs.:($$j).q_tot += ᶜinv_ρaʲ * ᶜρχₜ_diffusion
+                    end
+
+                    MatrixFields.unrolled_foreach(
+                        edmfx_diffused_scalars(Y),
+                    ) do (χ_name, ρχ_name)
+                        MatrixFields.has_field(Y.c.sgsʲs.:($j), χ_name) ||
+                            return
+                        ᶜχʲ = MatrixFields.get_field(Y.c.sgsʲs.:($j), χ_name)
+                        ᶜχʲₜ = MatrixFields.get_field(Yₜ.c.sgsʲs.:($j), χ_name)
+                        ᶜρχₜ = MatrixFields.get_field(Yₜ.c, ρχ_name)
+                        @. ᶜρχₜ_diffusion = -(ᶜdiffdivᵥ(-(ᶠwʲ * ᶠgradᵥ(ᶜχʲ))))
+                        @. ᶜρχₜ += ᶜρχₜ_diffusion
+                        @. ᶜχʲₜ += ᶜinv_ρaʲ * ᶜρχₜ_diffusion
+                    end
+                end
+            end
+        else
+            add_scalar_diffusionᵥ!(
+                Yₜ,
+                Y,
+                p,
+                ᶠρK_h,
+                p.scratch.ᶜtemp_scalar_3,
+                p.scratch.ᶜtemp_scalar,
+            )
+        end
+
         ᶠρaK_u = p.scratch.ᶠtemp_scalar_2
         @. ᶠρaK_u = ᶠinterp(Y.c.ρ) * ᶠK_u
-
-        # Total enthalpy diffusion. Uses the spurious-transport-safe
-        # decomposition (∇s_d + h_eff·∇q_tot_eff, moisture part added below
-        # when non-dry).
-        #   q_tot_eff = q_tot - q_rai - q_sno,
-        #   h_eff = (h_v·q_v + h_l·q_lcl + h_i·q_icl) / max(q_water_nonneg, ε)
-        # See `hyperdiffusion.jl` for the clipped-input protection.
-        thermo_params = CAP.thermodynamics_params(params)
-        (; ᶜΦ) = p.core
-        (; ᶜT) = p.precomputed
-        ᶜρe_totₜ_diffusion = p.scratch.ᶜtemp_scalar_2
-        @. ᶜρe_totₜ_diffusion =
-            ᶜdiffdivᵥ(
-                -(ᶠρK_h * ᶠgradᵥ(TD.dry_static_energy(thermo_params, ᶜT, ᶜΦ))),
-            )
 
         if use_prognostic_tke(turbconv_model)
             (; ρtke_flux) = p.precomputed
             ᶜtke = @. lazy(specific(Y.c.ρtke, Y.c.ρ))
-            # Turbulent TKE transport (diffusion)
             ᶜdivᵥ_ρtke = Operators.DivergenceF2C(
                 top = Operators.SetValue(C3(FT(0))),
                 bottom = Operators.SetValue(ρtke_flux),
             )
-            # Add flux divergence and dissipation term, relaxing TKE to zero
-            # in one time step if tke < 0
             @. Yₜ.c.ρtke -=
                 ᶜdivᵥ_ρtke(-(ᶠρaK_u * ᶠgradᵥ(ᶜtke))) + ifelse(
                     ᶜtke >= FT(0),
@@ -278,108 +532,6 @@ function edmfx_sgs_diffusive_flux_tendency!(
                 )
         end
 
-        if !(p.atmos.microphysics_model isa DryModel)
-            # Moisture contribution to the enthalpy K_h flux: adds
-            # -ρK_h · (h_eff+Φ) · ∇q_tot_eff to the dry-part tendency
-            # computed above.
-            ᶜq_vap, ᶜq_lcl, ᶜq_icl = ᶜsuspended_water(Y, p)
-            ᶜh_eff_plus_Φ = ᶜh_eff_plus_Φ!(
-                p.scratch.ᶜtemp_scalar_3,
-                thermo_params,
-                ᶜT,
-                ᶜΦ,
-                ᶜq_vap,
-                ᶜq_lcl,
-                ᶜq_icl,
-            )
-            ᶜq_tot_eff = ᶜdiffusing_water(Y, p)
-            @. ᶜρe_totₜ_diffusion +=
-                ᶜdiffdivᵥ(-(ᶠρK_h * ᶠinterp(ᶜh_eff_plus_Φ) * ᶠgradᵥ(ᶜq_tot_eff)))
-
-            # K_h water diffusion on q_tot_eff. Cloud species inherit via
-            # clipped ratio; rain/snow/n_rai get no diffusion.
-            ᶜρχₜ_diffusion = p.scratch.ᶜtemp_scalar
-            ᶜ∇ᵥρK∇q_tot = ᶜdiffusive_flux_divergenceᵥ(ᶠρK_h, ᶜq_tot_eff)
-            @. ᶜρχₜ_diffusion = ᶜ∇ᵥρK∇q_tot
-            @. Yₜ.c.ρq_tot -= ᶜρχₜ_diffusion
-            @. Yₜ.c.ρ -= ᶜρχₜ_diffusion  # Effect of moisture diffusion on (moist) air mass
-            if apply_sgs_updraft
-                for j in 1:n
-                    @. Yₜ.c.sgsʲs.:($$j).q_tot -= ᶜρχₜ_diffusion / Y.c.ρ
-                end
-                # The corresponding ρaⱼ dry-mass correction is deliberately neglected.
-            end
-
-            # Distribute K_h q_tot diffusion to cloud mass and number species.
-            ᶜratio = p.scratch.ᶜtemp_scalar_4
-            for (q_name, n_name) in (
-                (@name(q_lcl), @name(n_lcl)),
-                (@name(q_icl), @name(n_ice)),
-            )
-                ρq_name = get_ρχ_name(q_name)
-                ρn_name = get_ρχ_name(n_name)
-                MatrixFields.has_field(Y.c, ρq_name) || continue
-                ᶜρq = MatrixFields.get_field(Y.c, ρq_name)
-                ᶜρqₜ = MatrixFields.get_field(Yₜ.c, ρq_name)
-                @. ᶜratio =
-                    max(FT(0), min(FT(1), specific(ᶜρq, Y.c.ρ) / max(ᶜq_tot_eff, ϵ_FT)))
-                @. ᶜρqₜ -= ᶜratio * ᶜρχₜ_diffusion
-                if apply_sgs_updraft
-                    for j in 1:n
-                        if MatrixFields.has_field(Y.c.sgsʲs.:($j), q_name)
-                            ᶜqⱼₜ = MatrixFields.get_field(Yₜ.c.sgsʲs.:($j), q_name)
-                            @. ᶜqⱼₜ -= ᶜratio * ᶜρχₜ_diffusion / Y.c.ρ
-                        end
-                    end
-                end
-                if MatrixFields.has_field(Y.c, ρn_name)
-                    ᶜρn = MatrixFields.get_field(Y.c, ρn_name)
-                    ᶜρnₜ = MatrixFields.get_field(Yₜ.c, ρn_name)
-                    @. ᶜρnₜ -= ᶜratio * max(FT(0), ᶜρn) / max(ᶜρq, ϵ_FT) * ᶜρχₜ_diffusion
-                    if apply_sgs_updraft
-                        for j in 1:n
-                            ᶜnⱼₜ = MatrixFields.get_field(Yₜ.c.sgsʲs.:($j), n_name)
-                            @. ᶜnⱼₜ -=
-                                ᶜratio * max(FT(0), ᶜρn) / max(ᶜρq, ϵ_FT) *
-                                ᶜρχₜ_diffusion / Y.c.ρ
-                        end
-                    end
-                end
-            end
-        end
-
-        # Apply the accumulated enthalpy tendency (dry parts + moisture
-        # contribution added above in the moist branch). Every subdomain
-        # sees the grid-mean specific-enthalpy tendency.
-        @. Yₜ.c.ρe_tot -= ᶜρe_totₜ_diffusion
-        if apply_sgs_updraft
-            for j in 1:n
-                @. Yₜ.c.sgsʲs.:($$j).mse -= ᶜρe_totₜ_diffusion / Y.c.ρ
-            end
-        end
-
-        # Passive (non-microphysics) grid-scale tracers diffuse with ρ·K_h.
-        # Microphysics species (cloud mass/number) already picked up their
-        # share above via the q_tot_eff distribution; precipitation species
-        # get no vertical diffusion here.
-        ᶜρχₜ_diffusion = p.scratch.ᶜtemp_scalar
-        foreach_gs_tracer(Yₜ, Y) do ᶜρχₜ, ᶜρχ, ρχ_name
-            ρχ_name in microphysics_tracer_names(Y) && return
-            ᶜχ = (@. lazy(specific(ᶜρχ, Y.c.ρ)))
-            ᶜ∇ᵥρK∇χ = ᶜdiffusive_flux_divergenceᵥ(ᶠρK_h, ᶜχ)
-            @. ᶜρχₜ_diffusion = ᶜ∇ᵥρK∇χ
-            @. ᶜρχₜ -= ᶜρχₜ_diffusion
-            # Uniform vertical diffusion: apply the same grid-mean specific
-            # tendency to the matching subdomain field in each updraft.
-            if apply_sgs_updraft
-                χ_name = specific_tracer_name(ρχ_name)
-                for j in 1:n
-                    ᶜχⱼₜ = MatrixFields.get_field(Yₜ.c.sgsʲs.:($j), χ_name)
-                    @. ᶜχⱼₜ -= ᶜρχₜ_diffusion / Y.c.ρ
-                end
-            end
-        end
-
         # Momentum diffusion
         ᶠstrain_rate = compute_strain_rate_face_vertical(ᶜu)
         @. Yₜ.c.uₕ -= C12(ᶜdivᵥ(-(2 * ᶠρaK_u * ᶠstrain_rate)) / Y.c.ρ)
@@ -389,16 +541,71 @@ function edmfx_sgs_diffusive_flux_tendency!(
 end
 
 """
+    ᶜupdraft_horizontal_diffusion_weight!(ᶜwʲ, ᶜρ, ᶜρaʲ, ᶜK_h_h, f_j)
+
+Write into `ᶜwʲ` and return the center weight of the horizontal updraft
+diffusive flux `-ᶜwʲ ∇ₕχʲ`,
+
+    ᶜwʲ = ρ f_j K_h_h âʲ,    âʲ = ⟨max(aʲ, a_ε)⁻⁴⟩ₑ^(-1/4),
+
+where `aʲ = ρaʲ / ρ` is the draft area fraction, `⟨·⟩ₑ` is the `WJ`-weighted
+element mean (`element_meanₕ`), `a_ε = horizontal_draft_area_floor(FT)`, and
+`f_j` is `edmfx_updraft_kh_diffusion_factor`.
+
+The power mean `âʲ` is a smooth element-wise minimum of the draft area, the
+spectral-element counterpart of the harmonic face mean of
+`ᶠupdraft_diffusion_weight!`. The weak divergence at a node draws on the flux at
+every node of its element, so with the nodal area `aʲ` in the weight, dividing
+the flux divergence by the local `ρaʲ` would amplify the intensive tendency by
+the area ratio between nodes. Since `⟨a⁻⁴⟩ₑ ≥ ωᵢ aᵢ⁻⁴` at every node `i`, with
+`ωᵢ` the node's share of the element's `WJ`, `âʲ ≤ ωᵢ^(-1/4) aᵢʲ`: the updraft
+relaxes toward its horizontal neighbors at most `ω_min^(-1/4)` times as fast as
+grid-mean diffusion at the same `f_j K_h_h` (about 3.5 for `GLL{4}`) for every
+value of `ρaʲ`, and an element containing a draft-free node carries almost no
+updraft flux. The grid mean receives the same flux divergence as the updraft,
+so the environment receives no residual.
+"""
+function ᶜupdraft_horizontal_diffusion_weight!(ᶜwʲ, ᶜρ, ᶜρaʲ, ᶜK_h_h, f_j)
+    a_ε = horizontal_draft_area_floor(eltype(ᶜwʲ))
+    @. ᶜwʲ =
+        ᶜρ * f_j * ᶜK_h_h /
+        sqrt(sqrt(element_meanₕ(1 / max(ᶜρaʲ / ᶜρ, a_ε)^4)))
+    return ᶜwʲ
+end
+
+"""
+    horizontal_draft_area_floor(FT)
+
+Return the draft area fraction `a_ε = 10⁻⁸` below which a node counts as
+draft-free in horizontal updraft diffusion, small enough to leave the updraft
+fluxes unaffected and large enough that `a_ε⁻⁴` stays finite in single
+precision.
+"""
+horizontal_draft_area_floor(FT) = FT(1e-8)
+
+"""
     edmfx_sgs_horizontal_diffusive_flux_tendency!(Yₜ, Y, p, t, turbconv_model)
 
-Apply the tendency from the horizontal component of the EDMFX environment SGS
-diffusive flux, using the TKE-based eddy diffusivity with the mixing length
-limited by the horizontal node spacing rather than the resolvability filter
-scale.
-With prognostic updrafts and `edmfx_model.horizontal_diffusion` enabled, the
-grid-mean specific tendencies are also applied to the subdomain scalars.
+Apply the horizontal component of the PROPHET (`EDMFX`) SGS diffusive flux
+tendency using the horizontal eddy viscosity `ᶜK_u_h` and diffusivity `ᶜK_h_h`
+computed with the horizontal node spacing `Δx_h`:
 
-Always explicit; applied in the explicit remainder, independently of `diff_mode`.
+  - **Momentum (`uₕ`, `u₃`)** and **TKE (`ρtke`)**: diffused on the grid mean
+    with `ᶜK_u_h`.
+  - **Thermodynamics, water, and tracers**: for `EDOnlyEDMFX`, diffused on the
+    grid mean via `add_scalar_diffusionₕ!`; for `PrognosticEDMFX`, assembled
+    from the environment (`ρa⁰ K_h_h ∇ₕψ⁰`) plus, when
+    `edmfx_model.horizontal_diffusion` is active, the updraft fluxes
+    `ᶜwʲ ∇ₕψʲ` with the weight of `ᶜupdraft_horizontal_diffusion_weight!`. Each
+    updraft equation receives its flux divergence divided by `ρaʲ` and the
+    grid mean the flux divergence itself, so the environment's scalars receive
+    no residual; as in `edmfx_sgs_diffusive_flux_tendency!`, the moist mass
+    that `q_tot` diffusion adds and the enthalpy `(h_d + Φ) ∇ₕq_tot_effʲ` of
+    the dry air it displaces go to the environment. Grid-scale scalars that
+    the updrafts do not carry diffuse down
+    their grid-mean gradients with `ρ K_h_h`. Rain and snow do not diffuse.
+
+Always explicit; applied in the explicit remainder independently of `diff_mode`.
 """
 edmfx_sgs_horizontal_diffusive_flux_tendency!(Yₜ, Y, p, t, turbconv_model) =
     nothing
@@ -409,125 +616,142 @@ function edmfx_sgs_horizontal_diffusive_flux_tendency!(
     p.atmos.edmfx_model.sgs_diffusive_flux_horizontal isa Val{true} ||
         return nothing
     iscolumn(axes(Y.c)) && return nothing
-    FT = Spaces.undertype(axes(Y.c))
-    ϵ_FT = eps(FT)
     (; params) = p
+    turbconv_params = CAP.turbconv_params(params)
     (; ᶜK_u_h, ᶜK_h_h) = p.precomputed
     ᶜρ = Y.c.ρ
     ᶜtke = @. lazy(specific(Y.c.ρtke, ᶜρ))
 
     n = n_mass_flux_subdomains(turbconv_model)
-    # With `edmfx_model.horizontal_diffusion`, each subdomain scalar receives
-    # the same specific tendency as the grid mean (uniform horizontal diffusion
-    # across the grid box).
     apply_sgs_updraft =
         turbconv_model isa PrognosticEDMFX &&
         p.atmos.edmfx_model.horizontal_diffusion isa Val{true}
+    updraft_kh_factor = CAP.edmfx_updraft_kh_diffusion_factor(turbconv_params)
+    moist = !(p.atmos.microphysics_model isa DryModel)
 
-    # Total enthalpy in the spurious-transport-safe form
-    # `F_h = -ρ K_h [∇ₕs_d + (h_eff + Φ) ∇ₕq_tot_eff]`, matching the vertical
-    # term in `edmfx_sgs_diffusive_flux_tendency!`. The dry static energy is
-    # diffused in every configuration; the water contribution is added below
-    # when `ρq_tot` is prognostic.
-    thermo_params = CAP.thermodynamics_params(params)
-    (; ᶜΦ) = p.core
-    (; ᶜT) = p.precomputed
-    ᶜρe_totₜ_diffusion = p.scratch.ᶜtemp_scalar_2
-    @. ᶜρe_totₜ_diffusion =
-        wdivₕ(ᶜρ * ᶜK_h_h * gradₕ(TD.dry_static_energy(thermo_params, ᶜT, ᶜΦ)))
+    ᶜρK_h_h = @. lazy(ᶜρ * ᶜK_h_h)
 
-    if !(p.atmos.microphysics_model isa DryModel)
-        ᶜq_vap, ᶜq_lcl, ᶜq_icl = ᶜsuspended_water(Y, p)
-        ᶜh_eff_plus_Φ = ᶜh_eff_plus_Φ!(
+    if turbconv_model isa PrognosticEDMFX
+        (; ᶜT⁰, ᶜTʲs) = p.precomputed
+        ᶜρa⁰ = @. lazy(ρa⁰(ᶜρ, Y.c.sgsʲs, turbconv_model))
+        ᶜw⁰ = @. lazy(ᶜρa⁰ * ᶜK_h_h)
+        ᶜρχₜ_diffusion = p.scratch.ᶜtemp_scalar_3
+        ᶜq_scratch = p.scratch.ᶜtemp_scalar_4
+        ᶜscratch = p.scratch.ᶜtemp_scalar_6
+
+        # Environment: sensible heat, water enthalpy, and total water down
+        # their environmental gradients
+        ᶜq_water⁰ = moist ? ᶜenv_diffusing_water(Y, p) : nothing
+        add_sensible_heat_diffusionₕ!(
+            Yₜ.c.ρe_tot,
+            ᶜw⁰,
+            ᶜT⁰,
+            ᶜq_water⁰,
+            p,
+            ᶜscratch,
+        )
+        if moist
+            add_water_enthalpy_diffusionₕ!(
+                Yₜ.c.ρe_tot,
+                ᶜw⁰,
+                ᶜT⁰,
+                ᶜq_water⁰,
+                p,
+                ᶜscratch;
+                ᶜq_scratch,
+            )
+            ᶜq_tot⁰ = maybe_materialize!(ᶜq_scratch, ᶜq_water⁰[1])
+            @. ᶜρχₜ_diffusion = wdivₕ(ᶜw⁰ * gradₕ(ᶜq_tot⁰))
+            @. Yₜ.c.ρq_tot += ᶜρχₜ_diffusion
+            @. Yₜ.c.ρ += ᶜρχₜ_diffusion
+        end
+
+        # Environment: the other scalars down their environmental gradients, or
+        # their grid-mean gradients if the updrafts do not carry them
+        MatrixFields.unrolled_foreach(
+            edmfx_diffused_scalars(Y),
+        ) do (χ_name, ρχ_name)
+            ᶜρχₜ = MatrixFields.get_field(Yₜ.c, ρχ_name)
+            if MatrixFields.has_field(Y.c.sgsʲs.:(1), χ_name)
+                ᶜχ⁰ = maybe_materialize!(
+                    ᶜq_scratch,
+                    ᶜspecific_env_value(χ_name, Y, p),
+                )
+                @. ᶜρχₜ += wdivₕ(ᶜw⁰ * gradₕ(ᶜχ⁰))
+            else
+                ᶜρχ = MatrixFields.get_field(Y.c, ρχ_name)
+                @. ᶜρχₜ += wdivₕ(ᶜρK_h_h * gradₕ(specific(ᶜρχ, ᶜρ)))
+            end
+        end
+
+        # Updrafts: each scalar down its own gradient, with the flux divergence
+        # added to the grid mean
+        if apply_sgs_updraft
+            a_ε = horizontal_draft_area_floor(eltype(Y))
+            for j in 1:n
+                ᶜρaʲ = Y.c.sgsʲs.:($j).ρa
+                ᶜwʲ = ᶜupdraft_horizontal_diffusion_weight!(
+                    p.scratch.ᶜtemp_scalar_5,
+                    ᶜρ,
+                    ᶜρaʲ,
+                    ᶜK_h_h,
+                    updraft_kh_factor,
+                )
+                ᶜinv_ρaʲ = @. lazy(1 / max(ᶜρaʲ, a_ε * ᶜρ))
+                ᶜTʲ = ᶜTʲs.:($j)
+                ᶜq_waterʲ =
+                    moist ? ᶜupdraft_diffusing_water(Y, p, Val(j)) : nothing
+                add_sensible_heat_diffusionₕ!(
+                    Yₜ.c.ρe_tot,
+                    ᶜwʲ,
+                    ᶜTʲ,
+                    ᶜq_waterʲ,
+                    p,
+                    ᶜscratch,
+                )
+                ᶜmse_effʲ = ᶜupdraft_diffusing_mse!(ᶜscratch, Y, p, Val(j))
+                @. Yₜ.c.sgsʲs.:($$j).mse +=
+                    ᶜinv_ρaʲ * wdivₕ(ᶜwʲ * gradₕ(ᶜmse_effʲ))
+
+                if moist
+                    add_water_enthalpy_diffusionₕ!(
+                        Yₜ.c.ρe_tot,
+                        ᶜwʲ,
+                        ᶜTʲ,
+                        ᶜq_waterʲ,
+                        p,
+                        ᶜscratch;
+                        ᶜq_scratch,
+                    )
+                    ᶜq_totʲ = maybe_materialize!(ᶜq_scratch, ᶜq_waterʲ[1])
+                    @. ᶜρχₜ_diffusion = wdivₕ(ᶜwʲ * gradₕ(ᶜq_totʲ))
+                    @. Yₜ.c.ρq_tot += ᶜρχₜ_diffusion
+                    @. Yₜ.c.ρ += ᶜρχₜ_diffusion
+                    @. Yₜ.c.sgsʲs.:($$j).q_tot += ᶜinv_ρaʲ * ᶜρχₜ_diffusion
+                end
+
+                MatrixFields.unrolled_foreach(
+                    edmfx_diffused_scalars(Y),
+                ) do (χ_name, ρχ_name)
+                    MatrixFields.has_field(Y.c.sgsʲs.:($j), χ_name) || return
+                    ᶜχʲ = MatrixFields.get_field(Y.c.sgsʲs.:($j), χ_name)
+                    ᶜχʲₜ = MatrixFields.get_field(Yₜ.c.sgsʲs.:($j), χ_name)
+                    ᶜρχₜ = MatrixFields.get_field(Yₜ.c, ρχ_name)
+                    @. ᶜρχₜ_diffusion = wdivₕ(ᶜwʲ * gradₕ(ᶜχʲ))
+                    @. ᶜρχₜ += ᶜρχₜ_diffusion
+                    @. ᶜχʲₜ += ᶜinv_ρaʲ * ᶜρχₜ_diffusion
+                end
+            end
+        end
+    else
+        add_scalar_diffusionₕ!(
+            Yₜ,
+            Y,
+            p,
+            ᶜρK_h_h,
             p.scratch.ᶜtemp_scalar_6,
-            thermo_params,
-            ᶜT,
-            ᶜΦ,
-            ᶜq_vap,
-            ᶜq_lcl,
-            ᶜq_icl,
+            p.scratch.ᶜtemp_scalar_3,
         )
-        ᶜq_tot_eff = ᶜdiffusing_water(Y, p)
-        @. ᶜρe_totₜ_diffusion +=
-            wdivₕ(ᶜρ * ᶜK_h_h * ᶜh_eff_plus_Φ * gradₕ(ᶜq_tot_eff))
-
-        # Water diffusion on `q_tot_eff`, and its effect on the moist air mass.
-        # Cloud species inherit their share below; rain and snow get no
-        # horizontal transport.
-        ᶜρχₜ_diffusion = p.scratch.ᶜtemp_scalar_3
-        @. ᶜρχₜ_diffusion = wdivₕ(ᶜρ * ᶜK_h_h * gradₕ(ᶜq_tot_eff))
-        @. Yₜ.c.ρq_tot += ᶜρχₜ_diffusion
-        @. Yₜ.c.ρ += ᶜρχₜ_diffusion
-        if apply_sgs_updraft
-            for j in 1:n
-                @. Yₜ.c.sgsʲs.:($$j).q_tot += ᶜρχₜ_diffusion / ᶜρ
-            end
-            # The corresponding ρaⱼ dry-mass correction is omitted, matching
-            # `edmfx_sgs_diffusive_flux_tendency!`.
-        end
-
-        # Distribute the q_tot_eff diffusion to cloud mass and number species.
-        ᶜratio = p.scratch.ᶜtemp_scalar_4
-        for (q_name, n_name, ρq_name, ρn_name) in (
-            (@name(q_lcl), @name(n_lcl), @name(c.ρq_lcl), @name(c.ρn_lcl)),
-            (@name(q_icl), @name(n_ice), @name(c.ρq_icl), @name(c.ρn_ice)),
-        )
-            MatrixFields.has_field(Y, ρq_name) || continue
-            ᶜρq = MatrixFields.get_field(Y, ρq_name)
-            ᶜρqₜ = MatrixFields.get_field(Yₜ, ρq_name)
-            @. ᶜratio =
-                max(FT(0), min(FT(1), specific(ᶜρq, ᶜρ) / max(ᶜq_tot_eff, ϵ_FT)))
-            @. ᶜρqₜ += ᶜratio * ᶜρχₜ_diffusion
-            if apply_sgs_updraft
-                for j in 1:n
-                    if MatrixFields.has_field(Y.c.sgsʲs.:($j), q_name)
-                        ᶜqⱼₜ = MatrixFields.get_field(Yₜ.c.sgsʲs.:($j), q_name)
-                        @. ᶜqⱼₜ += ᶜratio * ᶜρχₜ_diffusion / ᶜρ
-                    end
-                end
-            end
-            if MatrixFields.has_field(Y, ρn_name)
-                ᶜρn = MatrixFields.get_field(Y, ρn_name)
-                ᶜρnₜ = MatrixFields.get_field(Yₜ, ρn_name)
-                @. ᶜρnₜ +=
-                    ᶜratio * max(FT(0), ᶜρn) / max(ᶜρq, ϵ_FT) * ᶜρχₜ_diffusion
-                if apply_sgs_updraft
-                    for j in 1:n
-                        ᶜnⱼₜ = MatrixFields.get_field(Yₜ.c.sgsʲs.:($j), n_name)
-                        @. ᶜnⱼₜ +=
-                            ᶜratio * max(FT(0), ᶜρn) / max(ᶜρq, ϵ_FT) *
-                            ᶜρχₜ_diffusion / ᶜρ
-                    end
-                end
-            end
-        end
-    end
-
-    @. Yₜ.c.ρe_tot += ᶜρe_totₜ_diffusion
-    if apply_sgs_updraft
-        for j in 1:n
-            @. Yₜ.c.sgsʲs.:($$j).mse += ᶜρe_totₜ_diffusion / ᶜρ
-        end
-    end
-
-    # Grid-mean tracers. The water tracers are handled above: `ρq_tot` and the
-    # cloud species through the aggregate flux, rain and snow not at all, as in
-    # the vertical. Passive tracers use the unscaled `K_h`.
-    foreach_gs_tracer(Yₜ, Y) do ᶜρχₜ, ᶜρχ, ρχ_name
-        ρχ_name in microphysics_tracer_names(Y) && return
-        ᶜχ = @. lazy(specific(ᶜρχ, ᶜρ))
-        ᶜρχₜ_diffusion = p.scratch.ᶜtemp_scalar_3
-        @. ᶜρχₜ_diffusion = wdivₕ(ᶜρ * ᶜK_h_h * gradₕ(ᶜχ))
-        @. ᶜρχₜ += ᶜρχₜ_diffusion
-        if apply_sgs_updraft
-            χ_name = specific_tracer_name(ρχ_name)
-            for j in 1:n
-                if MatrixFields.has_field(Y.c.sgsʲs.:($j), χ_name)
-                    ᶜχⱼₜ = MatrixFields.get_field(Yₜ.c.sgsʲs.:($j), χ_name)
-                    @. ᶜχⱼₜ += ᶜρχₜ_diffusion / ᶜρ
-                end
-            end
-        end
     end
 
     (; ᶜu, ᶠu) = p.precomputed

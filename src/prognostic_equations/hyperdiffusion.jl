@@ -35,11 +35,13 @@ Allocate the cache fields that hold the DSSed Laplacians (`∇²`) used by the
 hyperdiffusion tendencies.
 
 Returns an empty `NamedTuple` when `atmos.hyperdiff` is `nothing`. Otherwise
-allocates `ᶜ∇²u`, the energy-split fields `ᶜ∇²s_d` and `ᶜ∇²q_tot_eff` (energy
-hyperdiffusion acts on dry static energy plus an enthalpy-weighted effective
-total water, never on a lumped `h_tot`), `ᶜ∇²specific_tracers`, the corresponding
-per-updraft fields for `PrognosticEDMFX` (`ᶜ∇²uʲs`, `ᶜ∇²s_dʲs`, and
-`ᶜ∇²q_tot_effʲs`, plus `ᶜ∇²sgs_tracerʲs` when the state carries SGS tracers),
+allocates `ᶜ∇²u`, the energy-split fields `ᶜ∇²T`, `ᶜ∇²Φ`, and `ᶜ∇²q_tot_eff`
+(energy hyperdiffusion acts on the sensible heat `c_p ∇∇²T`, the geopotential,
+and an enthalpy-weighted effective total water, never on a lumped `h_tot`),
+`ᶜ∇²specific_tracers`, the corresponding per-updraft fields for
+`PrognosticEDMFX` (`ᶜ∇²uʲs`, `ᶜ∇²Tʲs`, and `ᶜ∇²q_tot_effʲs`, plus
+`ᶜ∇²sgs_tracerʲs` when the state carries SGS tracers; the updrafts share
+`ᶜ∇²Φ`),
 `ᶜ∇²tke` when the turbulence-convection model carries prognostic TKE, and DSS
 ghost buffers when the space requires DSS.
 """
@@ -54,13 +56,16 @@ function hyperdiffusion_cache(Y, ::Hyperdiffusion, turbconv_model)
     n = n_mass_flux_subdomains(turbconv_model)
 
     # Grid-scale hyperdiffusion inputs. Energy hyperdiffusion is applied as
-    # dry static energy plus a total-water enthalpy contribution weighted
-    # by the aggregate enthalpy `h_eff = (h_v·q_v + h_l·q_liq + h_i·q_ice) /
-    # q_tot_eff`, so only `∇²s_d` and `∇²q_tot_eff` are DSSed. `q_tot_eff`
-    # is the effective total-water field that undergoes hyperdiffusion
+    # the sensible heat `c_p ∇²T` and geopotential `∇²Φ` plus a total-water
+    # enthalpy contribution weighted by the aggregate enthalpy
+    # `h_eff = (h_v·q_v + h_l·q_liq + h_i·q_ice) / q_tot_eff`, so only `∇²T`,
+    # `∇²Φ`, and `∇²q_tot_eff` are DSSed; the heat-capacity and enthalpy
+    # coefficients multiply the DSSed Laplacian gradients. `q_tot_eff` is the
+    # effective total-water field that undergoes hyperdiffusion.
     gs_quantities = (;
         ᶜ∇²u = similar(Y.c, C123{FT}),
-        ᶜ∇²s_d = similar(Y.c, FT),
+        ᶜ∇²T = similar(Y.c, FT),
+        ᶜ∇²Φ = similar(Y.c, FT),
         ᶜ∇²q_tot_eff = similar(Y.c, FT),
         ᶜ∇²specific_tracers = Base.materialize(ᶜspecific_gs_tracers(Y)),
     )
@@ -77,7 +82,7 @@ function hyperdiffusion_cache(Y, ::Hyperdiffusion, turbconv_model)
         turbconv_model isa PrognosticEDMFX ?
         (;
             ᶜ∇²uʲs = similar(Y.c, NTuple{n, C123{FT}}),
-            ᶜ∇²s_dʲs = similar(Y.c, NTuple{n, FT}),
+            ᶜ∇²Tʲs = similar(Y.c, NTuple{n, FT}),
             ᶜ∇²q_tot_effʲs = similar(Y.c, NTuple{n, FT}),
             sgs_tracer_hyperdiff...,
         ) : (;)
@@ -101,12 +106,12 @@ Compute the horizontal Laplacians that feed the dynamics/energy hyperdiffusion a
 store them in `p.hyperdiff`, ready to be DSSed.
 
 Fills `ᶜ∇²u` (grad-div minus curl-curl vector Laplacian), the energy-split fields
-`ᶜ∇²s_d` and `ᶜ∇²q_tot_eff`, `ᶜ∇²tke` when prognostic TKE is active, and the
-analogous per-updraft fields for `PrognosticEDMFX`. The dry static energy and the
-effective total water are diffused separately (rather than a lumped `h_tot`) so
-the `∇⁴` operator never mixes dry-air enthalpy with water enthalpy;
+`ᶜ∇²T`, `ᶜ∇²Φ`, and `ᶜ∇²q_tot_eff`, `ᶜ∇²tke` when prognostic TKE is active, and
+the analogous per-updraft fields for `PrognosticEDMFX`. Temperature, geopotential,
+and effective total water are diffused separately (rather than a lumped `h_tot`)
+so the `∇⁴` operator never mixes sensible heat with water enthalpy;
 `apply_hyperdiffusion_tendency!` reassembles the pieces into a total enthalpy
-flux.
+flux with the heat-capacity and enthalpy coefficients outside the operator.
 
 Does nothing when `p.atmos.hyperdiff` is `nothing`. `Yₜ` and `t` are unused. The
 fields written here must be DSSed (see `dss_hyperdiffusion_tendency_pairs`) before
@@ -124,30 +129,26 @@ NVTX.@annotate function prep_hyperdiffusion_tendency!(Yₜ, Y, p, t)
     n = n_mass_flux_subdomains(turbconv_model)
     diffuse_tke = use_prognostic_tke(turbconv_model)
     (; ᶜu, ᶜT, ᶜp) = p.precomputed
-    (; ᶜ∇²u, ᶜ∇²s_d, ᶜ∇²q_tot_eff) = p.hyperdiff
+    (; ᶜ∇²u, ᶜ∇²T, ᶜ∇²Φ, ᶜ∇²q_tot_eff) = p.hyperdiff
     if turbconv_model isa PrognosticEDMFX
-        (; ᶜ∇²uʲs, ᶜ∇²s_dʲs, ᶜ∇²q_tot_effʲs) = p.hyperdiff
+        (; ᶜ∇²uʲs, ᶜ∇²Tʲs, ᶜ∇²q_tot_effʲs) = p.hyperdiff
         (; ᶜuʲs, ᶜTʲs) = p.precomputed
     end
 
     # Grid scale hyperdiffusion. Scalars are hyperdiffused as perturbations
     # from a smooth hydrostatic reference profile: on tilted terrain-following
-    # surfaces, `gradₕ` of a horizontally uniform `s_d(z)` or `q_tot(z)` is
-    # nonzero purely from the coordinate tilt (dominated by `Φ` for `s_d`), so
-    # `∇⁴` on the raw field would spuriously mix scalars across topography.
-    # The reference-state pair `(sd_r, q_tot_r)` cancels this leading-order
-    # geometric term, matching the split-form pressure-gradient treatment in
-    # `advection.jl`.
+    # surfaces, `gradₕ` of a horizontally uniform `T(z)`, `Φ(z)`, or `q_tot(z)`
+    # is nonzero purely from the coordinate tilt, so `∇⁴` on the raw field
+    # would spuriously mix scalars across topography. The reference profiles
+    # `T_r(p)`, `Φ_r(p)`, and `q_tot_r(p)` cancel this leading-order geometric
+    # term, matching the split-form pressure-gradient treatment in
+    # `advection.jl`. `Φ - Φ_r(p)` is recomputed every step because `Φ_r`
+    # follows the evolving pressure.
     @. ᶜ∇²u = C123(wgradₕ(divₕ(ᶜu))) - C123(wcurlₕ(C123(curlₕ(ᶜu))))
-    @. ᶜ∇²s_d = wdivₕ(
-        gradₕ(
-            TD.dry_static_energy(thermo_params, ᶜT, ᶜΦ) -
-            sd_r(thermo_params, ᶜp),
-        ),
-    )
+    @. ᶜ∇²T = wdivₕ(gradₕ(ᶜT - air_temperature_reference(thermo_params, ᶜp)))
+    @. ᶜ∇²Φ = wdivₕ(gradₕ(ᶜΦ - phi_r(thermo_params, ᶜp)))
     if MatrixFields.has_field(Y, @name(c.ρq_tot))
-        if p.atmos.microphysics_model isa Union{NonEquilibriumMicrophysics1M,
-            NonEquilibriumMicrophysics2M}
+        if p.atmos.microphysics_model isa NonEquilibriumMicrophysics
             @. ᶜ∇²q_tot_eff = wdivₕ(
                 gradₕ(
                     specific(Y.c.ρq_tot - Y.c.ρq_rai - Y.c.ρq_sno, Y.c.ρ) -
@@ -171,8 +172,9 @@ NVTX.@annotate function prep_hyperdiffusion_tendency!(Yₜ, Y, p, t)
     end
 
     # Sub-grid scale hyperdiffusion. SGS mseⱼ uses the same
-    # dry-static-energy + q_tot_eff split as the grid mean (assembled with
-    # subdomain thermodynamics in `apply_hyperdiffusion_tendency!`).
+    # temperature + geopotential + q_tot_eff split as the grid mean (assembled
+    # with subdomain thermodynamics in `apply_hyperdiffusion_tendency!`); the
+    # geopotential Laplacian `ᶜ∇²Φ` is shared.
     if turbconv_model isa PrognosticEDMFX
         # Config-level (not per-j) check: all subdomains carry the same
         # prognostic fields, so hoist the has_field lookup.
@@ -185,16 +187,14 @@ NVTX.@annotate function prep_hyperdiffusion_tendency!(Yₜ, Y, p, t)
                 C123(wgradₕ(divₕ(ᶜuʲs.:($$j)))) -
                 C123(wcurlₕ(C123(curlₕ(ᶜuʲs.:($$j)))))
             # Same reference-state subtraction as grid mean. Updrafts share
-            # the grid-mean pressure, so `sd_r(ᶜp)` and `q_tot_r(ᶜp)` reuse the
+            # the grid-mean pressure, so `T_r(ᶜp)` and `q_tot_r(ᶜp)` reuse the
             # same profiles.
-            @. ᶜ∇²s_dʲs.:($$j) = wdivₕ(
+            @. ᶜ∇²Tʲs.:($$j) = wdivₕ(
                 gradₕ(
-                    TD.dry_static_energy(thermo_params, ᶜTʲs.:($$j), ᶜΦ) -
-                    sd_r(thermo_params, ᶜp),
+                    ᶜTʲs.:($$j) - air_temperature_reference(thermo_params, ᶜp),
                 ),
             )
-            if p.atmos.microphysics_model isa Union{NonEquilibriumMicrophysics1M,
-                NonEquilibriumMicrophysics2M}
+            if p.atmos.microphysics_model isa NonEquilibriumMicrophysics
                 @. ᶜ∇²q_tot_effʲs.:($$j) = wdivₕ(
                     gradₕ(
                         Y.c.sgsʲs.:($$j).q_tot -
@@ -226,17 +226,23 @@ grid-scale noise):
   - `Yₜ.c.uₕ` and `Yₜ.f.u₃`: `ν₄_vorticity` times the vector `∇⁴u`, with the grad-div
     part scaled by `hyperdiff.divergence_damping_factor`.
   - `Yₜ.c.ρe_tot`: `ν₄_scalar` times the divergence of the total enthalpy
-    hyperdiffusion flux, `∇⋅(ρ ∇∇²s_d) + ∇⋅(ρ (h_eff + Φ) ∇∇²q_tot_eff)`. The
-    second term is applied only when `ρq_tot` is prognostic. Here `q_tot_eff` is
-    the water that actually hyperdiffuses, vapor plus cloud liquid plus cloud ice
-    with rain and snow excluded, and `h_eff = (h_v q_v + h_l q_lcl + h_i q_icl) / q_tot_eff` is its aggregate specific enthalpy; because the phase shares sum
-    to one, the geopotential collapses into the single `+ Φ`. This mirrors the
-    vertical boundary-layer flux in
-    `vertical_diffusion_boundary_layer_tendency!`.
+    hyperdiffusion flux,
+    `∇⋅(ρ c_p ∇∇²T) + ∇⋅(ρ ∇∇²Φ) + ∇⋅(ρ (h_eff + Φ) ∇∇²q_tot_eff)`, with `c_p`
+    the heat capacity of the suspended mixture (`ᶜcp_diffusing!`; `c_pd` in dry
+    configurations). The water term is applied only when `ρq_tot` is prognostic.
+    Here `q_tot_eff` is the water that hyperdiffuses, vapor plus cloud
+    liquid plus cloud ice with rain and snow excluded, and
+    `h_eff = (h_v q_v + h_l q_lcl + h_i q_icl) / q_tot_eff` is its aggregate
+    specific enthalpy; because the phase shares sum to one, the geopotential
+    collapses into the single `+ Φ`.
   - `Yₜ.c.ρtke`: `ν₄_vorticity` times `∇⋅(ρ ∇∇²tke)`, when prognostic TKE is active.
   - For `PrognosticEDMFX`, `Yₜ.f.sgsʲs.:(j).u₃` (curl-curl part only) and
-    `Yₜ.c.sgsʲs.:(j).mse` (same energy split, with subdomain thermodynamics and no
-    density weighting).
+    `Yₜ.c.sgsʲs.:(j).mse`: `ν₄_scalar` times
+    `∇⋅(c_pʲ ∇∇²Tʲ) + ∇⋅∇∇²Φ + ∇⋅((h_effʲ - h_d(Tʲ)) ∇∇²q_tot_effʲ)`, the
+    decomposition of `∇mseʲ = c_pʲ ∇Tʲ + ∇Φ + Σ_μ (h_μ - h_d) ∇q_μʲ` with the
+    intensive water-enthalpy difference `h_effʲ - h_d(Tʲ)` (diffusing water
+    replaces dry air at constant specific mass in the intensive `mseʲ`
+    equation).
 
 The two coefficients come from `ν₄`: `ν₄_vorticity` for momentum and TKE, and
 `ν₄_scalar = ν₄_vorticity / prandtl_number` for scalars. Requires DSS to have been
@@ -250,20 +256,20 @@ NVTX.@annotate function apply_hyperdiffusion_tendency!(Yₜ, Y, p, t)
 
     (; params) = p
     thermo_params = CAP.thermodynamics_params(params)
-    (; ᶜΦ) = p.core
     (; divergence_damping_factor) = hyperdiff
     (; ν₄_scalar, ν₄_vorticity) = ν₄(hyperdiff, Y)
+    (; ᶜΦ) = p.core
+    (; ᶜT) = p.precomputed
 
     n = n_mass_flux_subdomains(turbconv_model)
     diffuse_tke = use_prognostic_tke(turbconv_model)
     ᶜρ = Y.c.ρ
     ᶜJ = Fields.local_geometry_field(Y.c).J
     point_type = eltype(Fields.coordinate_field(Y.c))
-    (; ᶜT) = p.precomputed
-    (; ᶜ∇²u, ᶜ∇²s_d, ᶜ∇²q_tot_eff) = p.hyperdiff
+    (; ᶜ∇²u, ᶜ∇²T, ᶜ∇²Φ, ᶜ∇²q_tot_eff) = p.hyperdiff
     if turbconv_model isa PrognosticEDMFX
-        (; ᶜ∇²uʲs, ᶜ∇²s_dʲs, ᶜ∇²q_tot_effʲs) = p.hyperdiff
-        (; ᶜTʲs, ᶜq_tot_nonnegʲs, ᶜq_liqʲs, ᶜq_iceʲs) = p.precomputed
+        (; ᶜ∇²uʲs, ᶜ∇²Tʲs, ᶜ∇²q_tot_effʲs) = p.hyperdiff
+        (; ᶜTʲs) = p.precomputed
     end
     if use_prognostic_tke(turbconv_model)
         (; ᶜ∇²tke) = p.hyperdiff
@@ -276,32 +282,26 @@ NVTX.@annotate function apply_hyperdiffusion_tendency!(Yₜ, Y, p, t)
     @. Yₜ.c.uₕ -= ν₄_vorticity * C12(ᶜ∇⁴u)
     @. Yₜ.f.u₃ -= ν₄_vorticity * ᶠwinterp(ᶜJ * ᶜρ, C3(ᶜ∇⁴u))
 
-    # Total enthalpy hyperdiffusion. The flux has two pieces:
+    # Total enthalpy hyperdiffusion. The flux has three pieces:
     #
-    #   F_h_dry   = ν · ρ · grad(∇²s_d)                       (dry static)
-    #   F_h_water = ν · ρ · (h_eff + Φ) · grad(∇²q_tot_eff)   (water)
+    #   F_h_sensible = ν · ρ · c_p · grad(∇²T)                  (sensible heat)
+    #   F_h_Φ        = ν · ρ · grad(∇²Φ)                        (geopotential)
+    #   F_h_water    = ν · ρ · (h_eff + Φ) · grad(∇²q_tot_eff)  (water)
     #
-    # where `h_eff = (h_v·q_v + h_l·q_lcl + h_i·q_icl) / q_tot_eff` is the
-    # local aggregate specific enthalpy of the water that actually
-    # hyperdiffuses (vapor + cloud liquid + cloud ice; rain and snow are
-    # excluded). Since the vapor/cloud shares sum to 1, the Φ per phase
-    # collapses to a single +Φ term in the flux.
-    # Dry static energy contribution (always applied).
+    # where `c_p` is the heat capacity of the suspended mixture and
+    # `h_eff = (h_v·q_v + h_l·q_lcl + h_i·q_icl) / q_tot_eff` is the local
+    # aggregate specific enthalpy of the water that hyperdiffuses
+    # (vapor + cloud liquid + cloud ice; rain and snow are excluded). Since
+    # the vapor/cloud shares sum to 1, the Φ per phase collapses to a single
+    # +Φ term in the flux. The geopotential term is always applied.
     ᶜh_flux_div = p.scratch.ᶜtemp_scalar
-    @. ᶜh_flux_div = wdivₕ(ᶜρ * gradₕ(ᶜ∇²s_d))
-    # Water enthalpy contribution — only when ρq_tot is prognostic (dry
-    # configurations skip this entirely).
-    if MatrixFields.has_field(Y, @name(c.ρq_tot))
-        ᶜq_vap, ᶜq_lcl, ᶜq_icl = ᶜsuspended_water(Y, p)
-        ᶜh_eff_plus_Φ = ᶜh_eff_plus_Φ!(
-            p.scratch.ᶜtemp_scalar_2,
-            thermo_params,
-            ᶜT,
-            ᶜΦ,
-            ᶜq_vap,
-            ᶜq_lcl,
-            ᶜq_icl,
-        )
+    ᶜcoefficient = p.scratch.ᶜtemp_scalar_2
+    ᶜq_water = ᶜdiffusing_water_phases(Y, p)
+    ᶜcp = ᶜcp_diffusing!(ᶜcoefficient, thermo_params, ᶜq_water)
+    @. ᶜh_flux_div = wdivₕ(ᶜρ * ᶜcp * gradₕ(ᶜ∇²T)) + wdivₕ(ᶜρ * gradₕ(ᶜ∇²Φ))
+    if !isnothing(ᶜq_water)
+        ᶜh_eff_plus_Φ =
+            ᶜh_eff_plus_Φ!(ᶜcoefficient, thermo_params, ᶜT, ᶜΦ, ᶜq_water)
         @. ᶜh_flux_div += wdivₕ(ᶜρ * ᶜh_eff_plus_Φ * gradₕ(ᶜ∇²q_tot_eff))
     end
     @. Yₜ.c.ρe_tot -= ν₄_scalar * ᶜh_flux_div
@@ -321,37 +321,26 @@ NVTX.@annotate function apply_hyperdiffusion_tendency!(Yₜ, Y, p, t)
                 @. Yₜ.f.sgsʲs.:($$j).u₃ -=
                     ν₄_vorticity * ᶠwinterp(ᶜJ * ᶜρ, C3(ᶜ∇⁴uⱼ))
             end
-            # SGS mse hyperdiff — matches the grid-mean expression above,
-            # using SGS thermodynamics (Tʲ, q_μʲ). No density weighting:
-            # hyperdiff on the specific mseʲ [J/kg/s], symmetric with the
-            # SGS q_totʲ hyperdiff below. q_tot_effⱼ excludes rain/snow;
-            # h_effⱼ is built from vapor + cloud only.
-            ᶜq_vapʲ = @. lazy(
-                TD.vapor_specific_humidity(
-                    ᶜq_tot_nonnegʲs.:($$j),
-                    ᶜq_liqʲs.:($$j),
-                    ᶜq_iceʲs.:($$j),
-                ),
-            )
-            ᶜq_lclʲ, ᶜq_iclʲ =
-                p.atmos.microphysics_model isa Union{NonEquilibriumMicrophysics1M,
-                    NonEquilibriumMicrophysics2M} ?
-                (
-                    (@. lazy(Y.c.sgsʲs.:($$j).q_lcl)),
-                    (@. lazy(Y.c.sgsʲs.:($$j).q_icl)),
-                ) : (ᶜq_liqʲs.:($j), ᶜq_iceʲs.:($j))
-            ᶜh_effⱼ_plus_Φ = ᶜh_eff_plus_Φ!(
-                p.scratch.ᶜtemp_scalar_2,
+            # SGS mse hyperdiffusion: the intensive equation for specific
+            # mseʲ = h_dʲ + Φ + Σ_μ q_μʲ (h_μ(Tʲ) - h_d(Tʲ)) splits as
+            # ∇mseʲ = c_pʲ ∇Tʲ + ∇Φ + Σ_μ (h_μ - h_d) ∇q_μʲ; diffusing
+            # suspended water q_tot_effʲ replaces dry air at constant specific
+            # mass and carries the intensive enthalpy difference
+            # h_effʲ - h_d(Tʲ) (where geopotential Φ cancels and
+            # reference-temperature shifts shift the coefficient by
+            # C_water - C_d).
+            ᶜq_waterʲ = ᶜupdraft_diffusing_water(Y, p, Val(j))
+            ᶜcpʲ = ᶜcp_diffusing!(ᶜcoefficient, thermo_params, ᶜq_waterʲ)
+            @. ᶜh_flux_div =
+                wdivₕ(ᶜcpʲ * gradₕ(ᶜ∇²Tʲs.:($$j))) + wdivₕ(gradₕ(ᶜ∇²Φ))
+            ᶜh_effⱼ_minus_h_d = ᶜh_eff_minus_h_d!(
+                ᶜcoefficient,
                 thermo_params,
                 ᶜTʲs.:($j),
-                ᶜΦ,
-                ᶜq_vapʲ,
-                ᶜq_lclʲ,
-                ᶜq_iclʲ,
+                ᶜq_waterʲ,
             )
-            @. ᶜh_flux_div = wdivₕ(gradₕ(ᶜ∇²s_dʲs.:($$j)))
             @. ᶜh_flux_div +=
-                wdivₕ(ᶜh_effⱼ_plus_Φ * gradₕ(ᶜ∇²q_tot_effʲs.:($$j)))
+                wdivₕ(ᶜh_effⱼ_minus_h_d * gradₕ(ᶜ∇²q_tot_effʲs.:($$j)))
             @. Yₜ.c.sgsʲs.:($$j).mse -= ν₄_scalar * ᶜh_flux_div
         end
     end
@@ -363,9 +352,9 @@ end
 Return the tuple of `field => ghost_buffer` pairs that must be DSSed between the
 `prep_*` and `apply_*` stages of the hyperdiffusion tendencies.
 
-Covers the dynamics fields (`ᶜ∇²u`, the energy-split `ᶜ∇²s_d` and
+Covers the dynamics fields (`ᶜ∇²u`, the energy-split `ᶜ∇²T`, `ᶜ∇²Φ`, and
 `ᶜ∇²q_tot_eff`, `ᶜ∇²tke` when active, and the per-updraft counterparts `ᶜ∇²uʲs`,
-`ᶜ∇²s_dʲs`, and `ᶜ∇²q_tot_effʲs` for `PrognosticEDMFX`) and the grid-scale tracer
+`ᶜ∇²Tʲs`, and `ᶜ∇²q_tot_effʲs` for `PrognosticEDMFX`) and the grid-scale tracer
 field `ᶜ∇²specific_tracers`.
 Called from `hyperdiffusion_tendency!`, which passes the pairs to
 `ClimaCore.Spaces.weighted_dss!`.
@@ -373,10 +362,10 @@ Called from `hyperdiffusion_tendency!`, which passes the pairs to
 function dss_hyperdiffusion_tendency_pairs(p)
     (; turbconv_model) = p.atmos
     buffer = p.hyperdiff.hyperdiffusion_ghost_buffer
-    (; ᶜ∇²u, ᶜ∇²s_d, ᶜ∇²q_tot_eff) = p.hyperdiff
+    (; ᶜ∇²u, ᶜ∇²T, ᶜ∇²Φ, ᶜ∇²q_tot_eff) = p.hyperdiff
     diffuse_tke = use_prognostic_tke(turbconv_model)
     if turbconv_model isa PrognosticEDMFX
-        (; ᶜ∇²uʲs, ᶜ∇²s_dʲs, ᶜ∇²q_tot_effʲs) = p.hyperdiff
+        (; ᶜ∇²uʲs, ᶜ∇²Tʲs, ᶜ∇²q_tot_effʲs) = p.hyperdiff
     end
     if use_prognostic_tke(turbconv_model)
         (; ᶜ∇²tke) = p.hyperdiff
@@ -384,7 +373,8 @@ function dss_hyperdiffusion_tendency_pairs(p)
 
     core_dynamics_pairs = (
         ᶜ∇²u => buffer.ᶜ∇²u,
-        ᶜ∇²s_d => buffer.ᶜ∇²s_d,
+        ᶜ∇²T => buffer.ᶜ∇²T,
+        ᶜ∇²Φ => buffer.ᶜ∇²Φ,
         ᶜ∇²q_tot_eff => buffer.ᶜ∇²q_tot_eff,
         (diffuse_tke ? (ᶜ∇²tke => buffer.ᶜ∇²tke,) : ())...,
     )
@@ -392,7 +382,7 @@ function dss_hyperdiffusion_tendency_pairs(p)
         turbconv_model isa PrognosticEDMFX ?
         (
             ᶜ∇²uʲs => buffer.ᶜ∇²uʲs,
-            ᶜ∇²s_dʲs => buffer.ᶜ∇²s_dʲs,
+            ᶜ∇²Tʲs => buffer.ᶜ∇²Tʲs,
             ᶜ∇²q_tot_effʲs => buffer.ᶜ∇²q_tot_effʲs,
         ) : ()
     dynamics_pairs = (core_dynamics_pairs..., tc_dynamics_pairs...)
@@ -501,8 +491,7 @@ NVTX.@annotate function apply_tracer_hyperdiffusion_tendency!(Yₜ, Y, p, t)
         # fraction and rime density of the ice.
         ᶜratio = p.scratch.ᶜtemp_scalar_2
         ᶜρq_tot_eff =
-            p.atmos.microphysics_model isa Union{NonEquilibriumMicrophysics1M,
-                NonEquilibriumMicrophysics2M} ?
+            p.atmos.microphysics_model isa NonEquilibriumMicrophysics ?
             (@. lazy(Y.c.ρq_tot - Y.c.ρq_rai - Y.c.ρq_sno)) : (@. lazy(Y.c.ρq_tot))
         for (ρq_name, attached_names) in (
             (@name(c.ρq_lcl), (@name(c.ρn_lcl),)),
@@ -551,8 +540,7 @@ NVTX.@annotate function apply_tracer_hyperdiffusion_tendency!(Yₜ, Y, p, t)
             # the grid mean above.
             ᶜratioⱼ = p.scratch.ᶜtemp_scalar_2
             ᶜq_tot_effⱼ =
-                p.atmos.microphysics_model isa Union{NonEquilibriumMicrophysics1M,
-                    NonEquilibriumMicrophysics2M} ?
+                p.atmos.microphysics_model isa NonEquilibriumMicrophysics ?
                 (@. lazy(
                     Y.c.sgsʲs.:($$j).q_tot -
                     Y.c.sgsʲs.:($$j).q_rai -

@@ -2037,8 +2037,7 @@ and storing the rest as plain `Bool`s.
     diffusive flux.
   - `nh_pressure = false`: Enable the non-hydrostatic pressure drag.
   - `vertical_diffusion = false`: Enable vertical diffusion of the updrafts.
-  - `horizontal_diffusion = false`: Apply the grid-mean horizontal diffusion
-    tendencies to the updraft scalars.
+  - `horizontal_diffusion = false`: Enable horizontal diffusion of the updrafts.
   - `filter = false`: Enable relaxation of negative updraft velocities.
   - `scale_blending_method`: Required; an `AbstractScaleBlendingMethod`.
 

@@ -79,6 +79,16 @@ const curlₕ = Operators.Curl()
 const wcurlₕ = Operators.Curl{Operators.WeakForm}()
 
 """
+    element_meanₕ
+
+`WJ`-weighted mean over each spectral element, returned at every node of the
+element (ClimaCore's `LumpedRestriction` onto a single Gauss point). The result
+is constant within each element and discontinuous across element boundaries.
+"""
+const element_meanₕ =
+    Operators.LumpedRestriction(ClimaCore.Quadratures.GL{1}())
+
+"""
     ᶜinterp
     ᶜdivᵥ
     ᶜgradᵥ
