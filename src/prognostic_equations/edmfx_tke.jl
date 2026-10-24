@@ -40,20 +40,23 @@ buoyancy production for every EDMF model, plus the pressure-drag
 return-to-isotropy source (when `edmfx_nh_pressure` is on) and the detrainment
 shear-mixing source for `PrognosticEDMFX`.
 
-Both terms use the same face diffusivities and face buoyancy gradient as the
-diffusive fluxes they parameterize (`set_face_diffusivities!`):
+Both terms are formed at the faces from the same factors as the diffusive
+fluxes they parameterize (`set_face_diffusivities!`) and only then
+interpolated to the centers, so each is the interpolated energy content of
+its flux:
 
-  - Buoyancy production/destruction `−ρ interp(ᶠK_h ᶠbuoygrad)` is
-    stencil-exact: the product is formed at the faces from the same factors
-    as the scalar fluxes and only then interpolated, so it is exactly the
-    (interpolated) buoyancy content of those fluxes.
-  - Shear production `+2 ρ interp(ᶠK_u) ‖S‖²` corresponds to the momentum
-    flux `−2 ρ K_u 𝔈` at the adjacent faces, but only approximately at the
-    stencil level: the viscosity is interpolated separately and multiplied
-    by the *center* strain-rate norm (the face norm is not precomputed),
-    rather than interpolating the face-local product. The two agree to
-    second order in smooth flow and differ by an O(1) factor only where `K`
-    or `‖S‖²` jumps between adjacent faces.
+  - Buoyancy production/destruction `−ρ interp(ᶠK_h ᶠbuoygrad)`, with the
+    face buoyancy gradient of the scalar fluxes.
+  - Shear production `+2 ρ interp(ᶠK_u ‖𝔈‖²)`, with the face strain rate `𝔈`
+    of the momentum flux `−2 ρ K_u 𝔈` (`compute_strain_rate_face_vertical`
+    of the grid-mean `ᶜu`, as in `edmfx_sgs_vertical_diffusive_flux_tendency!`).
+    That flux acts on the horizontal wind only, so `‖𝔈‖² = |∂_z uₕ|² / 2`
+    (`vertical_shear_norm_sqr`), and `2 K_u ‖𝔈‖² Δz` at a face is the
+    resolved kinetic energy the flux removes between the two adjacent
+    centers; summed over a column, the production equals the kinetic energy
+    loss up to the interpolation of `ρ` between centers and faces. The
+    center norm `ᶜstrain_rate_norm` is the shear in `Ri` and the mixing
+    lengths, with a wider stencil.
 
 Only the diffusive (intra-subdomain) piece of the Favre-averaged buoyancy
 flux enters this budget. The coherent (mass-flux) piece
@@ -63,15 +66,18 @@ prognostic subdomain velocities already carry; adding it here would
 double-count buoyancy production and spuriously inflate K near cloud tops
 with active drafts.
 
-Reads `ᶜstrain_rate_norm`, `ᶠbuoygrad`, `ᶠK_h`, and `ᶠK_u` from
-`p.precomputed`; mutates `Yₜ.c.ρtke` and returns `nothing`.
+Reads `ᶜu`, `ᶠbuoygrad`, `ᶠK_h`, and `ᶠK_u` from `p.precomputed` and uses
+`p.scratch.ᶠtemp_scalar`; mutates `Yₜ.c.ρtke` and returns `nothing`.
 """
 function edmfx_tke_sources!(Yₜ, Y, p)
-    (; ᶜstrain_rate_norm) = p.precomputed
-    (; ᶠbuoygrad, ᶠK_h, ᶠK_u) = p.precomputed
+    (; ᶜu, ᶠbuoygrad, ᶠK_h, ᶠK_u) = p.precomputed
 
-    # shear production (face viscosities brought to centers)
-    @. Yₜ.c.ρtke += 2 * Y.c.ρ * ᶜinterp(ᶠK_u) * ᶜstrain_rate_norm
+    # shear production: the face-local work of the momentum flux on the
+    # horizontal wind, brought to centers
+    ᶠstrain_rate = compute_strain_rate_face_vertical(ᶜu)
+    ᶠshear_production = p.scratch.ᶠtemp_scalar
+    @. ᶠshear_production = 2 * ᶠK_u * vertical_shear_norm_sqr(ᶠstrain_rate)
+    @. Yₜ.c.ρtke += Y.c.ρ * ᶜinterp(ᶠshear_production)
     # buoyancy production/destruction (face-flux consistent)
     @. Yₜ.c.ρtke -= Y.c.ρ * ᶜinterp(ᶠK_h * ᶠbuoygrad)
 

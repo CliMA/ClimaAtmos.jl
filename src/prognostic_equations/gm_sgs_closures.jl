@@ -24,7 +24,10 @@ the shear production.
   - `N_eff`: Effective buoyancy frequency [s⁻¹], equal to `sqrt(max(ᶜbuoygrad, 0))`.
   - `dz`: Vertical grid scale [m].
   - `Pr`: Turbulent Prandtl number [-].
-  - `ϵ_st`: Squared Frobenius norm of the strain-rate tensor, `SᵢⱼSᵢⱼ` [s⁻²].
+  - `ϵ_st`: Squared norm of the vertical shear of the horizontal wind,
+    `|∂uₕ/∂z|² / 2` (`vertical_shear_norm_sqr`) [s⁻²], so that
+    `N_eff² / (2 Pr ϵ_st)` is the flux Richardson number of the vertical
+    momentum flux, which acts on the horizontal wind only.
 
 # Returns
 
@@ -51,8 +54,9 @@ Used when no EDMFX model with prognostic TKE is active. Steps:
  1. Fill `p.precomputed.ᶜbuoygrad` with the cloud-fraction-blended moist
     buoyancy gradient (`blended_N²`, using the chain-rule coefficients
     and face gradients materialized by `set_buoyancy_gradient_inputs!`).
- 2. Fill `p.precomputed.ᶜstrain_rate_norm` with the squared strain-rate norm
-    of the resolved velocity (`set_strain_rate_norm!`).
+ 2. Fill `p.precomputed.ᶜstrain_rate_norm` with the squared norm of the
+    vertical shear of the horizontal wind, `|∂uₕ/∂z|² / 2`
+    (`set_strain_rate_norm!`).
  3. Evaluate the turbulent Prandtl number and
     `smagorinsky_lilly_length` with the vertical grid scale `ᶜdz`.
 

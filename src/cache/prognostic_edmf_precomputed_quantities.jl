@@ -249,8 +249,8 @@ non-velocity entrainment rate `ᶜentr_nonvel_rateʲs` [1/s], the turbulent
 entrainment rate `ᶜturb_entrʲs` [1/s], the signed area-bounding
 entrainment/detrainment rate
 `ᶜarea_bounding_entr_detrʲs` [1/s], and the relative density excess `ᶜρ_diffʲs`
-[-]. It also writes the squared strain-rate norm `ᶜstrain_rate_norm` [1/s²]
-(`set_strain_rate_norm!`), the
+[-]. It also writes the squared norm of the vertical shear of the horizontal
+wind `ᶜstrain_rate_norm` [1/s²], set by `set_strain_rate_norm!`, the
 surface TKE flux `ρtke_flux`, and (via `set_edmfx_surface_conditions!`) the
 per-updraft surface payload at level 1.
 
