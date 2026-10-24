@@ -1,4 +1,4 @@
-439
+440
 
 # **README**
 #
@@ -32,6 +32,11 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+440
+- The SGS variance fidelity `ᶜα` is evaluated on the domain that carries the
+  SGS closure (the environment under PrognosticEDMFX), and its equilibrium
+  condensate uses the cloud-available excess `q_tot − q_rai − q_sno − q_sat`.
+
 439
 - Enable the EDMFX implicit-stage Picard sub-iteration by default
   (`edmfx_updraft_picard_rounds: 2`), and raise the TRMM reproducibility
