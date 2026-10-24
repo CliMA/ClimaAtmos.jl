@@ -4,8 +4,9 @@
 #   rime mass and volume) diffuse down their own vertical gradients with ρ K_h
 # - ρq_rai, ρq_sno, ρn_rai receive no diffusion tendency
 # - Passive (non-microphysics) grid-scale tracers diffuse with the full K_h
-# - Eq. (30) enthalpy-species identity, reversible 0M moist-adiabatic residual,
-#   and Kirchhoff T_0 reference-state invariance hold.
+# - Eq. (30) enthalpy-species identity with the heat capacity of the diffusing
+#   mixture, the reversible 0M moist adiabat as a fixed point, and Kirchhoff
+#   T_0 reference-state invariance hold.
 using Test
 import ClimaComms
 ClimaComms.@import_required_backends
@@ -111,26 +112,51 @@ include("../test_helpers.jl")
     # Passive (non-microphysics) grid-scale tracer diffuses with full K_h.
     @test maximum(abs, parent(Yₜ.c.ρq_gas_A)) > 0
 
-    # Eq. (30) identity (1M) — Yₜ.c.ρe_tot equals the s_d diffusion plus
-    # the divergence of Σ_μ (face-interpolated h_tot,μ) * F_qμ for vapor,
-    # liquid, and ice, where F_qv = F_qt_eff - F_qlcl - F_qicl.
-    ᶠF_qt = @. -(ᶠρK * CA.ᶠgradᵥ((Yc.ρq_tot - Yc.ρq_rai - Yc.ρq_sno) / Yc.ρ))
+    # Eq. (30) identity (1M) — Yₜ.c.ρe_tot equals the sensible-heat and
+    # geopotential diffusion, with the heat capacity of the diffusing mixture
+    # (rain and snow counted at c_pd), plus the divergence of
+    # Σ_μ (face-interpolated h_tot,μ) * F_qμ for vapor, liquid, and ice, where
+    # F_qv = F_qt_eff - F_qlcl - F_qicl.
+    ᶜq_tot_eff = @. (Yc.ρq_tot - Yc.ρq_rai - Yc.ρq_sno) / Yc.ρ
+    ᶠF_qt = @. -(ᶠρK * CA.ᶠgradᵥ(ᶜq_tot_eff))
     ᶠF_ql = @. -(ᶠρK * CA.ᶠgradᵥ(Yc.ρq_lcl / Yc.ρ))
     ᶠF_qi = @. -(ᶠρK * CA.ᶠgradᵥ(Yc.ρq_icl / Yc.ρ))
     ᶠF_qv = @. ᶠF_qt - ᶠF_ql - ᶠF_qi
     ᶜh_tot_v = @. TD.enthalpy_vapor(thermo_params, ᶜT) + p.core.ᶜΦ
     ᶜh_tot_l = @. TD.enthalpy_liquid(thermo_params, ᶜT) + p.core.ᶜΦ
     ᶜh_tot_i = @. TD.enthalpy_ice(thermo_params, ᶜT) + p.core.ᶜΦ
-    ᶜs_d = @. TD.dry_static_energy(thermo_params, ᶜT, p.core.ᶜΦ)
+    ᶜcp = @. TD.cp_m(
+        thermo_params,
+        ᶜq_tot_eff,
+        Yc.ρq_lcl / Yc.ρ,
+        Yc.ρq_icl / Yc.ρ,
+    )
     ᶜρe_totₜ_eq30 = similar(ᶜz)
     @. ᶜρe_totₜ_eq30 =
+        -CA.ᶜdiffdivᵥ(
+            -(ᶠρK * (CA.ᶠinterp(ᶜcp) * CA.ᶠgradᵥ(ᶜT) + CA.ᶠgradᵥ(p.core.ᶜΦ))) +
+            CA.ᶠinterp(ᶜh_tot_v) * ᶠF_qv +
+            CA.ᶠinterp(ᶜh_tot_l) * ᶠF_ql +
+            CA.ᶠinterp(ᶜh_tot_i) * ᶠF_qi,
+        )
+    @test parent(Yₜ.c.ρe_tot) ≈ parent(ᶜρe_totₜ_eq30) rtol = FT(1e-12)
+
+    # The sensible-heat flux carries the heat capacity of the diffusing
+    # mixture: the tendency differs from the Eq. (33) form with ∇s_d by the
+    # divergence of ρ K (c_p - c_pd) ∇T.
+    ᶜs_d = @. TD.dry_static_energy(thermo_params, ᶜT, p.core.ᶜΦ)
+    ᶜρe_totₜ_sd = similar(ᶜz)
+    @. ᶜρe_totₜ_sd =
         -CA.ᶜdiffdivᵥ(
             -(ᶠρK * CA.ᶠgradᵥ(ᶜs_d)) +
             CA.ᶠinterp(ᶜh_tot_v) * ᶠF_qv +
             CA.ᶠinterp(ᶜh_tot_l) * ᶠF_ql +
             CA.ᶠinterp(ᶜh_tot_i) * ᶠF_qi,
         )
-    @test parent(Yₜ.c.ρe_tot) ≈ parent(ᶜρe_totₜ_eq30) rtol = FT(1e-12)
+    cp_d = CAP.cp_d(params)
+    @. ᶜρe_totₜ_sd -=
+        CA.ᶜdiffdivᵥ(-(ᶠρK * CA.ᶠinterp(ᶜcp - cp_d) * CA.ᶠgradᵥ(ᶜT)))
+    @test parent(Yₜ.c.ρe_tot) ≈ parent(ᶜρe_totₜ_sd) rtol = FT(1e-12)
 
     # Kirchhoff T_0 reference-state invariance — shifting T_0 by δT_0
     # (with Kirchhoff-adjusted e_int_v0 and e_int_i0) shifts ∂_t(ρe_tot) by
@@ -186,8 +212,10 @@ include("../test_helpers.jl")
     @test parent(Yₜ_1m.c.ρq_lcl) ≈ parent(ᶜexpected_lcl) rtol = FT(1e-12)
 
     # 0M: a reversible saturated warm-cloud moist adiabat with uniform
-    # MSE and q_tot — Yₜ.c.ρq_tot == 0 and
-    # |Yₜ.c.ρe_tot| <= 0.03 * |Yₜ.c.ρe_tot from s_d alone|.
+    # MSE and q_tot is a fixed point: Yₜ.c.ρq_tot == 0, and Yₜ.c.ρe_tot
+    # vanishes to the accuracy of the saturation adjustment, since the flux
+    # bracket equals ∇(h + Φ) + (h_d + Φ) ∇q_tot and the discrete product
+    # rule with face-interpolated coefficients is exact.
     q_tot_0 = FT(1.55e-2)
     mse_0 = TD.moist_static_energy(
         thermo_params,
@@ -229,14 +257,21 @@ include("../test_helpers.jl")
     )
     Yₜ_0m = Fields.FieldVector(; c = zero(Yc))
     CA.vertical_diffusion_boundary_layer_tendency!(Yₜ_0m, Y, p_0m, FT(0))
-    ᶜs_d_only = similar(ᶜz)
-    @. ᶜs_d_only =
+    ᶜsensible_only = similar(ᶜz)
+    ᶜcp_0m = @. TD.cp_m(thermo_params, q_tot_0, ᶜq_liq, ᶜq_ice)
+    @. ᶜsensible_only =
         -CA.ᶜdiffdivᵥ(
-            -(ᶠρK * CA.ᶠgradᵥ(TD.dry_static_energy(thermo_params, ᶜT, p.core.ᶜΦ))),
+            -(
+                ᶠρK * (
+                    CA.ᶠinterp(ᶜcp_0m) * CA.ᶠgradᵥ(ᶜT) +
+                    CA.ᶠgradᵥ(p.core.ᶜΦ)
+                )
+            ),
         )
     @test maximum(abs, parent(Yₜ_0m.c.ρq_tot)) <= FT(1e-15)
+    @test maximum(abs, parent(ᶜsensible_only)) > 0
     @test maximum(abs, parent(Yₜ_0m.c.ρe_tot)) <=
-          FT(0.03) * maximum(abs, parent(ᶜs_d_only))
+          FT(1e-6) * maximum(abs, parent(ᶜsensible_only))
 end
 
 @testset "Vertical diffusion tendency with 2MP3 microphysics" begin
@@ -349,10 +384,15 @@ end
     ᶜh_tot_v = @. TD.enthalpy_vapor(thermo_params, ᶜT) + p.core.ᶜΦ
     ᶜh_tot_l = @. TD.enthalpy_liquid(thermo_params, ᶜT) + p.core.ᶜΦ
     ᶜh_tot_i = @. TD.enthalpy_ice(thermo_params, ᶜT) + p.core.ᶜΦ
-    ᶜs_d = @. TD.dry_static_energy(thermo_params, ᶜT, p.core.ᶜΦ)
+    ᶜcp = @. TD.cp_m(
+        thermo_params,
+        (Yc.ρq_tot - Yc.ρq_rai - Yc.ρq_sno) / Yc.ρ,
+        Yc.ρq_lcl / Yc.ρ,
+        Yc.ρq_icl / Yc.ρ,
+    )
     @. ᶜexpected =
         -CA.ᶜdiffdivᵥ(
-            -(ᶠρK * CA.ᶠgradᵥ(ᶜs_d)) +
+            -(ᶠρK * (CA.ᶠinterp(ᶜcp) * CA.ᶠgradᵥ(ᶜT) + CA.ᶠgradᵥ(p.core.ᶜΦ))) +
             CA.ᶠinterp(ᶜh_tot_v) * ᶠF_qv +
             CA.ᶠinterp(ᶜh_tot_l) * ᶠF_ql +
             CA.ᶠinterp(ᶜh_tot_i) * ᶠF_qi,

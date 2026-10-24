@@ -34,13 +34,12 @@ three-dimensional velocity gradient, and its norm is
 ``|\boldsymbol{S}| = \sqrt{2 \boldsymbol{S} : \boldsymbol{S}}``, evaluated after
 projection onto whichever axes the closure uses.
 
-The energy flux uses the dry-static-energy and water-enthalpy decomposition of
-[Yatunin2026](@cite) (Eqs. 30 and 33), shared with the
-[prescribed vertical diffusion](diffusion.md) and the [PROPHET](prophet.md)
-diffusive fluxes,
+The energy flux uses the sensible-heat and water-enthalpy decomposition of
+[Diffusion](diffusion.md), shared with the prescribed vertical diffusion and
+the [PROPHET](prophet.md) diffusive fluxes,
 
 ```math
-\boldsymbol{\mathcal{F}}_h = -\rho D \left[ \nabla s_d
+\boldsymbol{\mathcal{F}}_h = -\rho D \left[ c_{pm} \nabla T + \nabla \Phi
   + (h_v + \Phi) \nabla q_t
   + (h_l - h_v) \nabla q_l
   + (h_i - h_v) \nabla q_i \right] ,
@@ -49,19 +48,21 @@ diffusive fluxes,
 with ``q_t`` the total water and ``q_l = q_l^{\mathrm{cl}} + q_{\mathrm{rai}}``,
 ``q_i = q_i^{\mathrm{cl}} + q_{\mathrm{sno}}`` the liquid and ice water,
 precipitation included: the subgrid eddies of an LES carry falling precipitation
-as they carry cloud, so every microphysics species diffuses. The decomposition
-is invariant to the reference temperature ``T_0``, matches the enthalpy carried
-by each diffusing water phase to the phase flux itself, and cancels the positive
-``\nabla s_d`` of a saturated moist-adiabatic layer up to the dry-air-frame
-specific-heat residual ``-(c_{pm} - c_{pd}) \nabla T`` (see
+as they carry cloud, so every microphysics species diffuses, and the sensible
+heat carries the heat capacity ``c_{pm}`` of the full moist mixture. The
+decomposition is invariant to the reference temperature ``T_0``, matches the
+enthalpy carried by each diffusing water phase to the phase flux itself, and
+vanishes in a layer that is well mixed in moist static energy and total water,
+so a moist adiabat is a fixed point of the closure (see
 [Diffusion](diffusion.md) and
 [Thermodynamics and the Working Fluid](thermodynamics.md)). Smagorinsky–Lilly
 and the constant horizontal diffusion use a single scalar diffusivity ``D`` for
-``s_d``, all water-enthalpy terms, and all diffusing tracers: Smagorinsky–Lilly
-divides its eddy viscosity by the turbulent Prandtl number (below), and the
-constant horizontal diffusion prescribes the diffusivity outright. Anisotropic
-minimum dissipation forms a diffusivity per scalar, using ``D_{s_d}`` for the
-dry-static-energy gradient and ``D_{q_t}`` for all three water-enthalpy terms
+the sensible heat, all water-enthalpy terms, and all diffusing tracers:
+Smagorinsky–Lilly divides its eddy viscosity by the turbulent Prandtl number
+(below), and the constant horizontal diffusion prescribes the diffusivity
+outright. Anisotropic minimum dissipation forms a diffusivity per scalar, using
+``D_T`` for the sensible-heat and geopotential terms and ``D_{q_t}`` for all
+three water-enthalpy terms
 and the microphysics species so that each species flux and its enthalpy share
 the same diffusivity. Because total water is part of the working fluid, the
 ``q_t`` diffusive tendency is also added to the density tendency. In the

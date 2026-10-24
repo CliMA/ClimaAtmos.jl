@@ -10,6 +10,9 @@ and its implicit Jacobian (`update_diffusion_jacobian!`, `update_sgs_diffusion_j
   cloud-species diffusive tendencies.
 - Kirchhoff `T_0` reference-state invariance holds for both grid-mean `ρe_tot`
   and updraft `mseʲ`.
+- The intensive updraft tendency stays bounded as the draft area collapses, and
+  the energy the environment absorbs from updraft diffusion is the enthalpy of
+  the dry air that the diffusing water displaces.
 - Implicit Jacobian blocks for `ρq_lcl`, `mseʲ`, `q_totʲ`, and `q_lclʲ` match
   finite differences.
 =#
@@ -465,4 +468,63 @@ include("../test_helpers.jl")
     @test uniform_tendency > 0
     @test thin_tendency <= bound
     @test thin_tendency <= 2 * uniform_tendency + FT(1e-10) * bound
+
+    # The energy the diagnosed environment absorbs from updraft diffusion is
+    # the enthalpy of the dry air that diffusing water displaces. The grid mean
+    # receives the updraft flux divergence with the sensible heat at the heat
+    # capacity of the diffusing mixture, c_p¹ ∇T¹ + ∇Φ + Σ_μ (h_μ + Φ) ∇q_μ¹,
+    # while ρa¹ times the intensive mse¹ tendency is the divergence of
+    # w¹ ∇mse_eff¹ = w¹ [c_p¹ ∇T¹ + ∇Φ + Σ_μ (h_μ - h_d) ∇q_μ¹]; with
+    # face-interpolated coefficients the discrete product rule is exact, so
+    # the difference is the divergence of w¹ (h_d¹ + Φ) ∇q_tot_eff¹ to
+    # round-off, and the grid mean (and so the environment) gains that energy
+    # with the moist mass ∇·(w¹ ∇q_tot_eff¹) that the updraft does not keep.
+    @. Y.c.sgsʲs.:(1).ρa = FT(0.08) * Y.c.ρ
+    CA.set_precomputed_quantities!(Y, p, t)
+    Yₜ_full = similar(Y)
+    Yₜ_full .= zero(eltype(Yₜ_full))
+    CA.edmfx_sgs_diffusive_flux_tendency!(
+        Yₜ_full,
+        Y,
+        p,
+        t,
+        p.atmos.turbconv_model,
+    )
+    Yₜ_env = similar(Y)
+    Yₜ_env .= zero(eltype(Yₜ_env))
+    CA.edmfx_sgs_diffusive_flux_tendency!(
+        Yₜ_env,
+        Y,
+        p_no_up,
+        t,
+        p_no_up.atmos.turbconv_model,
+    )
+    ᶠw¹ = similar(p.precomputed.ᶠK_h)
+    CA.ᶠupdraft_diffusion_weight!(
+        ᶠw¹,
+        Y.c.sgsʲs.:(1).ρa,
+        p.precomputed.ᶠK_h,
+        updraft_kh_factor,
+    )
+    thermo_params = CAP.thermodynamics_params(p.params)
+    ᶜh_d_plus_Φ = similar(Y.c.ρ)
+    @. ᶜh_d_plus_Φ =
+        TD.enthalpy_dry(thermo_params, p.precomputed.ᶜTʲs.:(1)) + p.core.ᶜΦ
+    ᶜq_tot_eff¹ = similar(Y.c.ρ)
+    @. ᶜq_tot_eff¹ =
+        Y.c.sgsʲs.:(1).q_tot - Y.c.sgsʲs.:(1).q_rai - Y.c.sgsʲs.:(1).q_sno
+    ᶜresidual = similar(Y.c.ρ)
+    @. ᶜresidual =
+        Yₜ_full.c.ρe_tot - Yₜ_env.c.ρe_tot -
+        Y.c.sgsʲs.:(1).ρa * Yₜ_full.c.sgsʲs.:(1).mse
+    ᶜdisplaced_dry_air = similar(Y.c.ρ)
+    @. ᶜdisplaced_dry_air =
+        -CA.ᶜdiffdivᵥ(-(ᶠw¹ * CA.ᶠinterp(ᶜh_d_plus_Φ) * CA.ᶠgradᵥ(ᶜq_tot_eff¹)))
+    @test maximum(abs, parent(ᶜdisplaced_dry_air)) > 0
+    @test parent(ᶜresidual) ≈ parent(ᶜdisplaced_dry_air) rtol = FT(1e-7)
+    ᶜmass = similar(Y.c.ρ)
+    @. ᶜmass = -CA.ᶜdiffdivᵥ(-(ᶠw¹ * CA.ᶠgradᵥ(ᶜq_tot_eff¹)))
+    ᶜmass_residual = similar(Y.c.ρ)
+    @. ᶜmass_residual = Yₜ_full.c.ρq_tot - Yₜ_env.c.ρq_tot
+    @test parent(ᶜmass_residual) ≈ parent(ᶜmass) rtol = FT(1e-9)
 end

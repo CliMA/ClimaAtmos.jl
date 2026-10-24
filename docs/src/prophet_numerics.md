@@ -169,10 +169,10 @@ The diffusive fluxes are evaluated at faces from the face-native diffusivities
     diffuse down their own gradients (species the drafts do not carry, such as
     the P3 ice number and rime quantities, down their grid-mean gradients); rain and snow receive no turbulent
     transport, so that rain shafts dominated by sedimentation are not smeared.
-    Energy diffuses through the [Yatunin2026](@cite) Eq. (33) bracket,
-    ``\mathcal{B} = \nabla s_d + (h_v + \Phi) \nabla q_{t,\mathrm{eff}} + (h_l - h_v) \nabla q_l^{\mathrm{cl}} + (h_i - h_v) \nabla q_i^{\mathrm{cl}}``,
-    with each thermodynamic coefficient evaluated at centers and interpolated to
-    faces.
+    Energy diffuses through the bracket of [Diffusion](diffusion.md),
+    ``\mathcal{B} = c_p \nabla T + \nabla \Phi + (h_v + \Phi) \nabla q_{t,\mathrm{eff}} + (h_l - h_v) \nabla q_l^{\mathrm{cl}} + (h_i - h_v) \nabla q_i^{\mathrm{cl}}``,
+    with ``c_p`` the heat capacity of the diffusing mixture and each
+    thermodynamic coefficient evaluated at centers and interpolated to faces.
   - For `PrognosticEDMFX`, the grid-mean diffusive flux sums the environment and
     draft contributions with face weights ``w^0 = I^f(\hat{\rho}^0) K_h`` and
     ``w^j = f_j K_h / I^f(1/\max(\hat{\rho}^j, \epsilon))``
@@ -193,9 +193,10 @@ The diffusive fluxes are evaluated at faces from the face-native diffusivities
 
 Draft variables are hyperdiffused for numerical stability, along
 terrain-following coordinate surfaces, using the decomposed and unweighted
-subdomain fields, with the energy and moisture contributions split into a
-dry-static-energy term and a water term as in the grid mean. See [Hyperdiffusion](hyperdiffusion.md) for the
-operator and the reference-state subtraction.
+subdomain fields, with the energy and moisture contributions split into
+sensible-heat, geopotential, and water terms as in the grid mean. See
+[Hyperdiffusion](hyperdiffusion.md) for the operator and the reference-state
+subtraction.
 
 ## The implicit–explicit split
 

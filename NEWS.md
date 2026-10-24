@@ -10,9 +10,19 @@ main
   `smagorinsky_lilly_tendency!`, `vertical_smagorinsky_lilly_tendency!`,
   `anisotropic_minimum_dissipation_tendency!`,
   `constant_horizontal_diffusion_tendency!`, and `viscous_sponge_tendency!`)
-  evaluate the water-enthalpy flux of Yatunin et al. (2026, Eqs. 30 and 33),
-  `F_h = -ρ K [∇s_d + (h_v + Φ) ∇q_t + (h_l - h_v) ∇q_l + (h_i - h_v) ∇q_i]`
-  (`add_water_enthalpy_diffusionᵥ!`, `add_water_enthalpy_diffusionₕ!`), and
+  evaluate the enthalpy flux
+  `F_h = -ρ K [c_p ∇T + ∇Φ + (h_v + Φ) ∇q_t + (h_l - h_v) ∇q_l + (h_i - h_v) ∇q_i]`
+  (`add_sensible_heat_diffusionᵥ!`, `add_water_enthalpy_diffusionᵥ!`, and
+  their horizontal counterparts): the water terms of Yatunin et al. (2026,
+  Eqs. 30 and 33) with the sensible heat carried at the heat capacity `c_p` of
+  the diffusing mixture (`ᶜcp_diffusing!`) in place of the dry-static-energy
+  gradient `∇s_d = c_pd ∇T + ∇Φ`. The flux then equals the gradient of the
+  moist static energy of the diffusing mixture plus the enthalpy of the moist
+  mass that the water flux adds, so a moist adiabat, saturated or unsaturated,
+  is a fixed point of diffusion; the neutral unsaturated lapse rate is
+  `g / c_p`. Fourth-order hyperdiffusion uses the same split, with the cached
+  Laplacians `ᶜ∇²T` and `ᶜ∇²Φ` (of the perturbations from the hydrostatic
+  reference) replacing `ᶜ∇²s_d`. The closures also
   diffuse each prognostic suspended cloud species (`ρq_lcl`, `ρq_icl`,
   `ρn_lcl`, `ρn_ice`, and the P3 `ρq_rim` and `ρb_rim`) down its own specific
   gradient with the same `ρ K` (`add_moisture_diffusionᵥ!`,
@@ -44,7 +54,10 @@ main
   number and rime, diffuse down their grid-mean gradients. Updraft `mseʲ`
   hyperdiffusion weights the diffusing water flux by `h_effʲ - h_d(Tʲ)`
   (`ᶜh_eff_minus_h_d!`), preserving Kirchhoff reference-temperature shift
-  invariance for intensive `mseʲ`.
+  invariance for intensive `mseʲ`. Because the grid-mean sensible-heat term
+  uses the same heat capacity as the gradient of the draft moist static energy,
+  the energy the diagnosed environment absorbs from draft diffusion is exactly
+  the enthalpy of the dry air that the diffusing water displaces.
 - ![][badge-💥breaking] `sgs_variance_vertical_scale_factor` and the provisional
   `sgs_variance_isentropic_depth` are removed; with `strict_params: true` (the
   default) a run TOML that still sets either now stops with an unused-parameter

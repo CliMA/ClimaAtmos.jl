@@ -66,11 +66,11 @@ Viscous damping of all variables absorbs waves without applying the zonal-mean
 torque that Rayleigh damping of horizontal velocities produces
 [Shepherd1996](@cite).
 
-Energy is damped through the dry-static-energy and water-enthalpy decomposition
-of [Yatunin2026](@cite) (Eqs. 30 and 33) shared with the second-order
-[diffusion closures](diffusion.md): a dry-static-energy flux
-``\rho \nabla_h s_d``, which applies in every configuration, plus the
-water-enthalpy flux
+Energy is damped through the sensible-heat and water-enthalpy decomposition
+shared with the second-order [diffusion closures](diffusion.md): a
+sensible-heat and geopotential flux ``\rho (c_p \nabla_h T + \nabla_h \Phi)``,
+with ``c_p`` the heat capacity of the diffusing mixture, which applies in every
+configuration, plus the water-enthalpy flux of [Yatunin2026](@cite) (Eq. 33)
 ``\rho \left[ (h_v + \Phi) \nabla_h q_t^{\mathrm{eff}} + (h_l - h_v) \nabla_h q_l^{\mathrm{cl}} + (h_i - h_v) \nabla_h q_i^{\mathrm{cl}} \right]``
 in moist configurations. Damping these terms separately keeps the sponge
 consistent with the [enthalpy-based formulation](thermodynamics.md) used

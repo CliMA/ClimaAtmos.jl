@@ -1,8 +1,8 @@
 #=
 The LES closures diffuse energy through the enthalpy flux
-`-ρ D [∇s_d + (h_l - h_v) ∇q_liq + (h_i - h_v) ∇q_ice + (h_v + Φ) ∇q_tot]`,
-where the liquid and ice water `q_liq = q_lcl + q_rai` and `q_ice = q_icl + q_sno`
-include precipitation: for the horizontal and vertical Smagorinsky-Lilly
+`-ρ D [c_p ∇T + ∇Φ + (h_l - h_v) ∇q_liq + (h_i - h_v) ∇q_ice + (h_v + Φ) ∇q_tot]`,
+where `c_p` is the heat capacity of the moist mixture and the liquid and ice
+water `q_liq = q_lcl + q_rai` and `q_ice = q_icl + q_sno` include precipitation: for the horizontal and vertical Smagorinsky-Lilly
 tendencies and the constant horizontal diffusion, the ρe_tot tendency equals the
 three parts assembled independently and differs from diffusing h_tot. Total
 water diffuses on `q_tot`, and every microphysics species, rain included,
@@ -67,7 +67,8 @@ function perturb!(Y, p, t; velocity = false)
     return nothing
 end
 
-# The three parts of the enthalpy flux and the diffusing water,
+# The three parts of the enthalpy flux (sensible heat with the heat capacity
+# of the diffusing mixture, condensate, and water) and the diffusing water,
 # assembled directly from the thermodynamic state.
 function reference_fluxes(Y, p)
     thermo_params = CA.CAP.thermodynamics_params(p.params)
@@ -82,10 +83,22 @@ function reference_fluxes(Y, p)
     ᶜh_iv = @. CA.TD.enthalpy_ice(thermo_params, ᶜT) -
        CA.TD.enthalpy_vapor(thermo_params, ᶜT)
     ᶜh_vap_plus_Φ = @. CA.TD.enthalpy_vapor(thermo_params, ᶜT) + ᶜΦ
-    ᶜs_d = @. CA.TD.dry_static_energy(thermo_params, ᶜT, ᶜΦ)
     ᶜq_tot = @. Y.c.ρq_tot / Y.c.ρ
+    # The LES closures diffuse all water, so the sensible heat carries the
+    # heat capacity of the full moist mixture.
+    ᶜcp = @. CA.TD.cp_m(thermo_params, ᶜq_tot, ᶜq_liq, ᶜq_ice)
     return (;
-        ᶜs_d, ᶜh_lv, ᶜh_iv, ᶜq_lcl, ᶜq_rai, ᶜq_liq, ᶜq_ice, ᶜh_vap_plus_Φ, ᶜq_tot,
+        ᶜcp,
+        ᶜT,
+        ᶜΦ,
+        ᶜh_lv,
+        ᶜh_iv,
+        ᶜq_lcl,
+        ᶜq_rai,
+        ᶜq_liq,
+        ᶜq_ice,
+        ᶜh_vap_plus_Φ,
+        ᶜq_tot,
     )
 end
 
@@ -121,8 +134,9 @@ end
     (; Y, p, simulation) = generate_test_simulation(config)
     t = simulation.integrator.t
     perturb!(Y, p, t)
-    (; ᶜs_d, ᶜh_lv, ᶜh_iv, ᶜq_lcl, ᶜq_rai, ᶜq_liq, ᶜq_ice, ᶜh_vap_plus_Φ, ᶜq_tot) =
-        reference_fluxes(Y, p)
+    ref = reference_fluxes(Y, p)
+    (; ᶜcp, ᶜT, ᶜΦ, ᶜh_lv, ᶜh_iv, ᶜq_lcl, ᶜq_rai, ᶜq_liq, ᶜq_ice) = ref
+    (; ᶜh_vap_plus_Φ, ᶜq_tot) = ref
     ᶜh_tot = p.precomputed.ᶜh_tot
     model = p.atmos.smagorinsky_lilly
 
@@ -130,7 +144,8 @@ end
     Yₜ .= zero(eltype(Yₜ))
     CA.horizontal_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, model)
     (; ᶜD_h) = p.precomputed
-    ᶜflux_dse = @. CA.wdivₕ(Y.c.ρ * ᶜD_h * CA.gradₕ(ᶜs_d))
+    ᶜflux_dse = @. CA.wdivₕ(Y.c.ρ * ᶜD_h * ᶜcp * CA.gradₕ(ᶜT)) +
+       CA.wdivₕ(Y.c.ρ * ᶜD_h * CA.gradₕ(ᶜΦ))
     ᶜflux_cond = @. CA.wdivₕ(Y.c.ρ * ᶜD_h * ᶜh_lv * CA.gradₕ(ᶜq_liq)) +
        CA.wdivₕ(Y.c.ρ * ᶜD_h * ᶜh_iv * CA.gradₕ(ᶜq_ice))
     ᶜflux_water = @. CA.wdivₕ(Y.c.ρ * ᶜD_h * ᶜh_vap_plus_Φ * CA.gradₕ(ᶜq_tot))
@@ -144,7 +159,8 @@ end
     CA.vertical_smagorinsky_lilly_tendency!(Yₜ, Y, p, t, model)
     Pr_t = CA.CAP.Prandtl_number_0(CA.CAP.turbconv_params(p.params))
     ᶠρD = @. CA.ᶠinterp(Y.c.ρ) * CA.ᶠinterp(p.precomputed.ᶜνₜ_v) / Pr_t
-    ᶜflux_dse = @. -CA.ᶜdiffdivᵥ(-(ᶠρD * CA.ᶠgradᵥ(ᶜs_d)))
+    ᶜflux_dse = @. -CA.ᶜdiffdivᵥ(-(ᶠρD * CA.ᶠinterp(ᶜcp) * CA.ᶠgradᵥ(ᶜT))) -
+       CA.ᶜdiffdivᵥ(-(ᶠρD * CA.ᶠgradᵥ(ᶜΦ)))
     ᶜflux_cond = @. -CA.ᶜdiffdivᵥ(-(ᶠρD * CA.ᶠinterp(ᶜh_lv) * CA.ᶠgradᵥ(ᶜq_liq))) -
        CA.ᶜdiffdivᵥ(-(ᶠρD * CA.ᶠinterp(ᶜh_iv) * CA.ᶠgradᵥ(ᶜq_ice)))
     ᶜflux_water =
@@ -161,8 +177,9 @@ end
     (; Y, p, simulation) = generate_test_simulation(config)
     t = simulation.integrator.t
     perturb!(Y, p, t)
-    (; ᶜs_d, ᶜh_lv, ᶜh_iv, ᶜq_lcl, ᶜq_rai, ᶜq_liq, ᶜq_ice, ᶜh_vap_plus_Φ, ᶜq_tot) =
-        reference_fluxes(Y, p)
+    ref = reference_fluxes(Y, p)
+    (; ᶜcp, ᶜT, ᶜΦ, ᶜh_lv, ᶜh_iv, ᶜq_lcl, ᶜq_rai, ᶜq_liq, ᶜq_ice) = ref
+    (; ᶜh_vap_plus_Φ, ᶜq_tot) = ref
     ᶜh_tot = p.precomputed.ᶜh_tot
     D = p.atmos.constant_horizontal_diffusion.D
 
@@ -171,7 +188,8 @@ end
     CA.horizontal_constant_diffusion_tendency!(
         Yₜ, Y, p, t, p.atmos.constant_horizontal_diffusion,
     )
-    ᶜflux_dse = @. CA.wdivₕ(Y.c.ρ * D * CA.gradₕ(ᶜs_d))
+    ᶜflux_dse = @. CA.wdivₕ(Y.c.ρ * D * ᶜcp * CA.gradₕ(ᶜT)) +
+       CA.wdivₕ(Y.c.ρ * D * CA.gradₕ(ᶜΦ))
     ᶜflux_cond = @. CA.wdivₕ(Y.c.ρ * D * ᶜh_lv * CA.gradₕ(ᶜq_liq)) +
        CA.wdivₕ(Y.c.ρ * D * ᶜh_iv * CA.gradₕ(ᶜq_ice))
     ᶜflux_water = @. CA.wdivₕ(Y.c.ρ * D * ᶜh_vap_plus_Φ * CA.gradₕ(ᶜq_tot))

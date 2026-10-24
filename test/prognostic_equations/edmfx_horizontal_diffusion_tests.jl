@@ -314,9 +314,11 @@ end
     ᶜflux_dse = similar(Y.c.ρ)
     ᶜflux_cond = similar(Y.c.ρ)
     ᶜflux_water = similar(Y.c.ρ)
-    @. ᶜflux_dse = CA.wdivₕ(
-        ᶜρa⁰ * ᶜK_h * CA.gradₕ(CA.TD.dry_static_energy(thermo_params, ᶜT⁰, ᶜΦ)),
-    )
+    ᶜcp⁰ = similar(Y.c.ρ)
+    @. ᶜcp⁰ = CA.TD.cp_m(thermo_params, ᶜq_tot_eff, ᶜq_lcl, ᶜq_icl)
+    @. ᶜflux_dse =
+        CA.wdivₕ(ᶜρa⁰ * ᶜK_h * ᶜcp⁰ * CA.gradₕ(ᶜT⁰)) +
+        CA.wdivₕ(ᶜρa⁰ * ᶜK_h * CA.gradₕ(ᶜΦ))
     @. ᶜflux_cond =
         CA.wdivₕ(ᶜρa⁰ * ᶜK_h * ᶜh_lv * CA.gradₕ(ᶜq_lcl)) +
         CA.wdivₕ(ᶜρa⁰ * ᶜK_h * ᶜh_iv * CA.gradₕ(ᶜq_icl))
@@ -328,8 +330,8 @@ end
     @test maximum(abs, parent(ᶜflux_cond)) > 0
     @test maximum(abs, parent(ᶜflux_water)) > 0
 
-    # The ρe_tot tendency is the dry static energy flux plus the condensate
-    # latent-enthalpy flux plus the vapor water flux.
+    # The ρe_tot tendency is the sensible-heat and geopotential flux plus the
+    # condensate latent-enthalpy flux plus the vapor water flux.
     ᶜflux_total = similar(Y.c.ρ)
     @. ᶜflux_total = ᶜflux_dse + ᶜflux_cond + ᶜflux_water
     @test parent(Yₜ.c.ρe_tot) ≈ parent(ᶜflux_total) rtol = FT(1e-10)

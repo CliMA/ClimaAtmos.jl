@@ -1015,20 +1015,21 @@ The blocks accumulate into the diagonals initialized by
 `(ρe_tot, ρ)` and `(ρq_tot, ρ)` columns, the `ρtke` blocks, the `(uₕ, uₕ)`
 block, and — in dry configurations — the `ρe_tot` diagonal, which are assigned
 here. The diffusive enthalpy flux
-`F_h = -ρ K_h [∇s_d + (h_v + Φ) ∇q_t + (h_l - h_v) ∇q_l + (h_i - h_v) ∇q_i]`
-(`add_water_enthalpy_diffusionᵥ!`) is differentiated with its enthalpy
-coefficients frozen, holding the rain and snow contributions to
-`q_t = q_tot_eff`, the equilibrium condensate partition, and the diffusivities
-fixed; under the vertical LES closure, rain and snow diffuse and enter as liquid
-and ice water. The
+`F_h = -ρ K_h [c_p ∇T + ∇Φ + (h_v + Φ) ∇q_t + (h_l - h_v) ∇q_l + (h_i - h_v) ∇q_i]`
+(`add_sensible_heat_diffusionᵥ!`, `add_water_enthalpy_diffusionᵥ!`) is
+differentiated with its heat-capacity and enthalpy coefficients frozen, holding
+the rain and snow contributions to `q_t = q_tot_eff`, the equilibrium condensate
+partition, and the diffusivities fixed; under the vertical LES closure, rain and
+snow diffuse and enter as liquid and ice water. The
 ρ-dependence of the diffusive fluxes and the `∂l_mix/∂tke` chain term in the
 TKE dissipation derivative are likewise neglected; these are convergence-rate
 approximations only, since the tendencies themselves are exact.
 
 Reuses `ᶠp_grad_matrix` as scratch space, so it must run after
 `update_advection_jacobian!`. Also writes `ᶜdiffusion_h_matrix`,
-`ᶜdiffusion_u_matrix`, and (under EDMF) `ᶜtridiagonal_matrix_scalar` in
-`p.scratch`. Mutates `matrix` and returns `nothing`.
+`ᶜdiffusion_u_matrix`, and `ᶜtridiagonal_matrix_scalar` (the sensible-heat
+operator `∇·(ρ K_h c_p ∇·)`) in `p.scratch`. Mutates `matrix` and returns
+`nothing`.
 """
 function update_diffusion_jacobian!(
     matrix,
@@ -1088,6 +1089,25 @@ function update_diffusion_jacobian!(
             ᶠgradᵥ_matrix()
     end
     @. ᶜdiffusion_h_matrix = ᶜadvdivᵥ_matrix() * ∂ᶠρχ_dif_flux_∂ᶜχ
+
+    # The sensible-heat operator ∇·(ρ K_h c_p ∇·), with c_p the heat capacity of
+    # the diffusing mixture (ᶜcp_diffusing!; under the vertical LES closure
+    # the mixture includes rain and snow) interpolated to faces as in
+    # add_sensible_heat_diffusionᵥ!, and c_pd in dry configurations.
+    thermo_params = CAP.thermodynamics_params(params)
+    precipitation = is_smagorinsky_vertical(p.atmos.smagorinsky_lilly)
+    ᶜq_water = ᶜdiffusing_water_phases(Y, p; precipitation)
+    ᶜdiffusion_T_matrix = p.scratch.ᶜtridiagonal_matrix_scalar
+    if isnothing(ᶜq_water)
+        cp_d = FT(CAP.cp_d(params))
+        @. ᶜdiffusion_T_matrix = cp_d * ᶜdiffusion_h_matrix
+    else
+        ᶜcp = ᶜcp_diffusing!(p.scratch.ᶜtemp_scalar_4, thermo_params, ᶜq_water)
+        @. ᶜdiffusion_T_matrix =
+            ᶜadvdivᵥ_matrix() *
+            (DiagonalMatrixRow(ᶠinterp(ᶜcp)) * ∂ᶠρχ_dif_flux_∂ᶜχ)
+    end
+
     if (
         MatrixFields.has_field(Y, @name(c.ρtke)) ||
         !isnothing(p.atmos.turbconv_model) ||
@@ -1110,20 +1130,19 @@ function update_diffusion_jacobian!(
     end
 
     # Jacobian of the diffusive enthalpy flux
-    #   F_h = -ρ K_h [∇s_d + (h_v + Φ) ∇q_tot_eff + (h_l - h_v) ∇q_lcl +
+    #   F_h = -ρ K_h [c_p ∇T + ∇Φ + (h_v + Φ) ∇q_tot_eff + (h_l - h_v) ∇q_lcl +
     #                 (h_i - h_v) ∇q_icl]
     # (see edmfx_sgs_diffusive_flux_tendency!,
     # vertical_diffusion_boundary_layer_tendency!, and
     # vertical_smagorinsky_lilly_tendency!). The Jacobian includes the
     # (ρe_tot, ρq_tot) and (ρe_tot, ρq_lcl / ρq_icl) cross-terms from both
-    # the temperature sensitivity of s_d at fixed e_tot and the water-phase
-    # enthalpy transport, while treating q_tot_eff's rain/snow terms as frozen.
-    # The SGS mass-flux enthalpy Jacobian (update_sgs_massflux_jacobian!) is
-    # separate and transports whole parcels at h_tot.
-    thermo_params = CAP.thermodynamics_params(params)
+    # the temperature sensitivity at fixed e_tot (through the sensible-heat
+    # operator ᶜdiffusion_T_matrix) and the water-phase enthalpy transport,
+    # while treating c_p and q_tot_eff's rain/snow terms as frozen. The SGS
+    # mass-flux enthalpy Jacobian (update_sgs_massflux_jacobian!) is separate
+    # and transports whole parcels at h_tot.
     (; ᶜΦ) = p.core
     (; ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice) = p.precomputed
-    cp_d = FT(CAP.cp_d(params))
     Δcv_v = FT(CAP.cv_v(params)) - FT(CAP.cv_d(params))
     e_int_v0 = FT(CAP.e_int_v0(params))
     ᶜcv_m = @. lazy(TD.cv_m(thermo_params, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice))
@@ -1137,7 +1156,7 @@ function update_diffusion_jacobian!(
     ∂ᶜρe_tot_err_∂ᶜρ = matrix[@name(c.ρe_tot), @name(c.ρ)]
     @. ∂ᶜρe_tot_err_∂ᶜρ = zero(typeof(∂ᶜρe_tot_err_∂ᶜρ))
     @. ∂ᶜρe_tot_err_∂ᶜρe_tot +=
-        dtγ * ᶜdiffusion_h_matrix * DiagonalMatrixRow(cp_d / (ᶜcv_m * ᶜρ))
+        dtγ * ᶜdiffusion_T_matrix * DiagonalMatrixRow(1 / (ᶜcv_m * ᶜρ))
 
     if MatrixFields.has_field(Y, @name(c.ρq_tot))
         ∂ᶜρe_tot_err_∂ᶜρq_tot = matrix[@name(c.ρe_tot), @name(c.ρq_tot)]
@@ -1148,12 +1167,11 @@ function update_diffusion_jacobian!(
         ᶜh_vap_plus_Φ = p.scratch.ᶜtemp_scalar_4
         @. ᶜh_vap_plus_Φ = TD.enthalpy_vapor(thermo_params, ᶜT) + ᶜΦ
         @. ∂ᶜρe_tot_err_∂ᶜρq_tot +=
-            dtγ * ᶜdiffusion_h_matrix *
-            DiagonalMatrixRow(
-                (
-                    ᶜh_vap_plus_Φ -
-                    cp_d * (e_int_v0 + Δcv_v * (ᶜT - T_0)) / ᶜcv_m
-                ) / ᶜρ,
+            dtγ * (
+                ᶜdiffusion_h_matrix * DiagonalMatrixRow(ᶜh_vap_plus_Φ / ᶜρ) -
+                ᶜdiffusion_T_matrix * DiagonalMatrixRow(
+                    (e_int_v0 + Δcv_v * (ᶜT - T_0)) / (ᶜcv_m * ᶜρ),
+                )
             )
         @. ∂ᶜρq_tot_err_∂ᶜρ = zero(typeof(∂ᶜρq_tot_err_∂ᶜρ))
         @. ∂ᶜρq_tot_err_∂ᶜρq_tot +=
@@ -1163,7 +1181,6 @@ function update_diffusion_jacobian!(
     if p.atmos.microphysics_model isa NonEquilibriumMicrophysics
         # The vertical LES closure also diffuses precipitation, as liquid and
         # ice water in the enthalpy flux (see ᶜdiffusing_water_phases).
-        precipitation = is_smagorinsky_vertical(p.atmos.smagorinsky_lilly)
         condensate_names =
             precipitation ? gs_sedimenting_mass_candidates :
             (@name(ρq_lcl), @name(ρq_icl))
@@ -1177,16 +1194,21 @@ function update_diffusion_jacobian!(
             ∂ᶜρe_tot_err_∂ᶜρq =
                 matrix[@name(c.ρe_tot), center_state_name(ρq_name)]
             # ∂F/∂q_cond at fixed q_tot: vapor→condensate conversion changes T
-            # (latent heating enters s_d) and moves water-gradient enthalpy
-            # from h_tot,v to h_tot,cond (the Φ parts cancel).
+            # (latent heating enters the sensible-heat flux) and moves
+            # water-gradient enthalpy from h_tot,v to h_tot,cond (the Φ parts
+            # cancel).
             @. ᶜdq_cond_coeff =
                 (
-                    cp_d * (e_int_q - ∂cv∂q * (ᶜT - T_0)) / ᶜcv_m +
                     h_cond_func(thermo_params, ᶜT) -
                     TD.enthalpy_vapor(thermo_params, ᶜT)
                 ) / ᶜρ
             @. ∂ᶜρe_tot_err_∂ᶜρq +=
-                dtγ * ᶜdiffusion_h_matrix * DiagonalMatrixRow(ᶜdq_cond_coeff)
+                dtγ * (
+                    ᶜdiffusion_h_matrix * DiagonalMatrixRow(ᶜdq_cond_coeff) +
+                    ᶜdiffusion_T_matrix * DiagonalMatrixRow(
+                        (e_int_q - ∂cv∂q * (ᶜT - T_0)) / (ᶜcv_m * ᶜρ),
+                    )
+                )
         end
 
         # The diffusing microphysics species diffuse down their own gradients

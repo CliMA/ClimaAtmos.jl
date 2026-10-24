@@ -65,18 +65,22 @@ function viscous_sponge_tendency_u₃(u₃, s)
 end
 
 """
-    viscous_sponge_tendency_ρe_tot_dry(ᶜρ, ᶜs_d, s)
+    viscous_sponge_tendency_ρe_tot_sensible(ᶜρ, ᶜcp, ᶜT, ᶜΦ, s)
 
-Return a lazy broadcast of the dry-static-energy piece of the viscous sponge
-tendency for total energy density,
-`β_viscous(s, z, zmax) * ∇ₕ·(ρ ∇ₕs_d)`, or a `NullBroadcasted` when
-`s isa Nothing`.
+Return a lazy broadcast of the sensible-heat and geopotential piece of the
+viscous sponge tendency for total energy density,
+`β_viscous(s, z, zmax) * ∇ₕ·(ρ (c_p ∇ₕT + ∇ₕΦ))`, with `ᶜcp` the heat capacity
+of the diffusing mixture (`ᶜcp_diffusing!`, or the scalar `c_pd` in dry
+configurations), or a `NullBroadcasted` when `s isa Nothing`.
 """
-function viscous_sponge_tendency_ρe_tot_dry(ᶜρ, ᶜs_d, s)
+function viscous_sponge_tendency_ρe_tot_sensible(ᶜρ, ᶜcp, ᶜT, ᶜΦ, s)
     s isa Nothing && return NullBroadcasted()
     (; ᶜz, ᶠz) = z_coordinate_fields(axes(ᶜρ))
     zmax = Spaces.z_max(axes(ᶠz))
-    return @. lazy(β_viscous(s, ᶜz, zmax) * wdivₕ(ᶜρ * gradₕ(ᶜs_d)))
+    return @. lazy(
+        β_viscous(s, ᶜz, zmax) *
+        (wdivₕ(ᶜρ * ᶜcp * gradₕ(ᶜT)) + wdivₕ(ᶜρ * gradₕ(ᶜΦ))),
+    )
 end
 
 """
@@ -126,11 +130,12 @@ Accumulate the full viscous-sponge tendency into `Yₜ` in-place. No-op when
 
   - Horizontal (`c.uₕ`) and vertical (`f.u₃`) velocities of the grid mean,
     and — under `PrognosticEDMFX` — the per-updraft `sgsʲ.u₃`.
-  - `c.ρe_tot`: dry-static-energy diffusion plus the water-enthalpy fluxes of
-    Yatunin et al. (2026, Eq. 33),
+  - `c.ρe_tot`: the sensible-heat and geopotential flux `c_p ∇ₕT + ∇ₕΦ`, with
+    `c_p` the heat capacity of the diffusing mixture, plus the water-enthalpy
+    fluxes of Yatunin et al. (2026, Eq. 33),
     `(h_v + Φ) ∇ₕq_tot_eff + (h_l - h_v) ∇ₕq_lcl + (h_i - h_v) ∇ₕq_icl`,
     with `q_tot_eff = q_tot - q_rai - q_sno`, matching the second-order
-    diffusion closures.
+    diffusion closures (`add_sensible_heat_diffusionₕ!`).
   - Total-water and suspended cloud species: diffuse `q_tot_eff` (applied to
     `c.ρq_tot` and `c.ρ`), and diffuse each prognostic suspended cloud species
     (`suspended_cloud_species`: `ρq_lcl`, `ρq_icl`, `ρn_lcl`, `ρn_ice`, and the
@@ -161,18 +166,27 @@ NVTX.@annotate function viscous_sponge_tendency!(Yₜ, Y, p)
         end
     end
 
-    # Energy: dry-static-energy piece (applies in all configurations).
-    ᶜs_d = @. lazy(TD.dry_static_energy(thermo_params, ᶜT, ᶜΦ))
-    vst_ρe_tot_dry =
-        viscous_sponge_tendency_ρe_tot_dry(ᶜρ, ᶜs_d, viscous_sponge)
-    @. Yₜ.c.ρe_tot += vst_ρe_tot_dry
+    # Energy: sensible-heat and geopotential piece, with the heat capacity of
+    # the diffusing mixture (applies in all configurations).
+    ᶜscratch = p.scratch.ᶜtemp_scalar
+    ᶜq_water = ᶜdiffusing_water_phases(Y, p)
+    ᶜcp =
+        isnothing(ᶜq_water) ? CAP.cp_d(p.params) :
+        ᶜcp_diffusing!(ᶜscratch, thermo_params, ᶜq_water)
+    vst_ρe_tot_sensible = viscous_sponge_tendency_ρe_tot_sensible(
+        ᶜρ,
+        ᶜcp,
+        ᶜT,
+        ᶜΦ,
+        viscous_sponge,
+    )
+    @. Yₜ.c.ρe_tot += vst_ρe_tot_sensible
 
     # Water pieces: energy water-enthalpy flux (Yatunin et al. 2026, Eq. 33) +
     # q_tot_eff mass diffusion + independent diffusion of suspended cloud
     # species, matching the second-order diffusion closures.
     if !(microphysics_model isa DryModel)
-        ᶜq_tot_eff, ᶜq_lcl, ᶜq_icl = ᶜdiffusing_water_phases(Y, p)
-        ᶜscratch = p.scratch.ᶜtemp_scalar
+        ᶜq_tot_eff, ᶜq_lcl, ᶜq_icl = ᶜq_water
         ᶜh_vap_plus_Φ = ᶜh_vap_plus_Φ!(ᶜscratch, thermo_params, ᶜT, ᶜΦ)
         vst_ρe_tot_vap = viscous_sponge_tendency_ρe_tot_water(
             ᶜρ,

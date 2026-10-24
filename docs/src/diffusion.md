@@ -57,22 +57,37 @@ horizontal.
 
 ### What each variable receives
 
-**Energy** diffuses through the enthalpy flux of [Yatunin2026](@cite) (Eqs. 30
-and 33),
+**Energy** diffuses through the enthalpy flux
 
 ```math
-\boldsymbol{\mathcal{F}}_E = -\rho K_h \left[ \nabla_v s_d
+\boldsymbol{\mathcal{F}}_E = -\rho K_h \left[ c_p \nabla_v T + \nabla_v \Phi
   + (h_v + \Phi) \nabla_v q_t^{\mathrm{eff}}
   + (h_l - h_v) \nabla_v q_l^{\mathrm{cl}}
   + (h_i - h_v) \nabla_v q_i^{\mathrm{cl}} \right] ,
 ```
 
-with ``s_d = h_d + \Phi`` the dry static energy, ``q_t^{\mathrm{eff}} = q_t - q_{\mathrm{rai}} - q_{\mathrm{sno}}``
-the suspended water that diffuses, ``q_l^{\mathrm{cl}}`` and
-``q_i^{\mathrm{cl}}`` the suspended cloud liquid and cloud ice specific
-humidities, and ``h_\mu(T)`` the specific enthalpy of water phase
-``\mu \in \{v, l, i\}``. The dry term applies in every configuration, the water
-terms when ``\rho q_t`` is prognostic.
+with ``q_t^{\mathrm{eff}} = q_t - q_{\mathrm{rai}} - q_{\mathrm{sno}}`` the
+suspended water that diffuses, ``q_l^{\mathrm{cl}}`` and ``q_i^{\mathrm{cl}}``
+the suspended cloud liquid and cloud ice specific humidities, ``h_\mu(T)`` the
+specific enthalpy of water phase ``\mu \in \{v, l, i\}``, and
+
+```math
+c_p = (1 - q_t^{\mathrm{eff}}) c_{pd} + q_v c_{pv} + q_l^{\mathrm{cl}} c_{pl} + q_i^{\mathrm{cl}} c_{pi}
+```
+
+the isobaric heat capacity of the diffusing mixture (rain and snow mass counts
+at ``c_{pd}``; see below). The sensible-heat and geopotential terms apply in
+every configuration (with ``c_p = c_{pd}`` in dry runs), the water terms when
+``\rho q_t`` is prognostic.
+
+!!! note "Departure from the formulation"
+
+    The water terms are those of [Yatunin2026](@cite) (Eqs. 30 and 33). That
+    formulation writes the sensible-heat term as the dry-static-energy gradient
+    ``\nabla_v s_d = c_{pd} \nabla_v T + \nabla_v \Phi``; the code uses the heat
+    capacity ``c_p`` of the diffusing mixture, which adds the heat capacity of
+    the water carried by the eddies and makes a moist adiabat an exact fixed
+    point of diffusion (second bullet below).
 
 Three physical and mathematical properties determine this form:
 
@@ -85,41 +100,53 @@ Three physical and mathematical properties determine this form:
     ``q_v = q_t^{\mathrm{eff}} - q_l^{\mathrm{cl}} - q_i^{\mathrm{cl}}`` and
     closing each suspended phase flux down its own gradient,
     ``\boldsymbol{\mathcal{F}}_{q_\mu} = -\rho K_h \nabla_v q_\mu``, yields the
-    bracket above: ``(h_v + \Phi) \nabla_v q_t^{\mathrm{eff}}`` is the enthalpy
-    carried by the net suspended-water flux, and
+    water terms above: ``(h_v + \Phi) \nabla_v q_t^{\mathrm{eff}}`` is the
+    enthalpy carried by the net suspended-water flux, and
     ``(h_l - h_v) \nabla_v q_l^{\mathrm{cl}} = -L_v(T) \nabla_v q_l^{\mathrm{cl}}``
     and
     ``(h_i - h_v) \nabla_v q_i^{\mathrm{cl}} = -L_s(T) \nabla_v q_i^{\mathrm{cl}}``
     carry the latent enthalpy of condensate diffusing one way and vapor the
-    other at fixed ``q_t^{\mathrm{eff}}``. Each thermodynamic coefficient is
-    evaluated at cell centers and interpolated to faces outside the gradient so
-    that the flux factors into ``\sum_\mu h_{\mathrm{tot},\mu} \boldsymbol{\mathcal{F}}_{q_\mu}``.
-    Diffusing total moist enthalpy ``-\rho K_h \nabla_v (h + \Phi)`` instead
-    would differentiate ``-h_d q_t^{\mathrm{eff}}`` as if diffusing water
-    displaced dry air rather than adding moist mass
+    other at fixed ``q_t^{\mathrm{eff}}``. The sensible-heat term is the eddy
+    flux of enthalpy at fixed composition, ``\rho c_p \overline{w'T'}``: eddies
+    displace parcels of the diffusing mixture, and each parcel has the heat
+    capacity of that mixture, so the mass that does not diffuse (rain and snow
+    outside the LES closures) contributes no heat capacity to the flux. Each
+    thermodynamic coefficient is evaluated at cell centers and interpolated to
+    faces outside the gradient so that the flux factors into
+    ``\sum_\mu h_{\mathrm{tot},\mu} \boldsymbol{\mathcal{F}}_{q_\mu}`` plus the
+    sensible-heat flux. Diffusing total moist enthalpy
+    ``-\rho K_h \nabla_v (h + \Phi)`` instead would differentiate
+    ``-h_d q_t^{\mathrm{eff}}`` as if diffusing water displaced dry air rather
+    than adding moist mass
     ``\partial_t \rho = -\nabla_v \cdot (\rho \boldsymbol{\mathcal{F}}_{q_t})``,
     and would differentiate ``h_\mu(T)`` inside the gradient.
   - **Moist-adiabatic neutrality.** Turbulent eddies exchange parcels that
-    conserve ``q_t`` and moist static energy
-    ``h + \Phi = s_d + q_t (h_v - h_d) - L_v(T) q_l^{\mathrm{cl}} - L_s(T) q_i^{\mathrm{cl}}``
-    during reversible adiabatic displacements. In a saturated cloud layer that
-    is well mixed in ``(h + \Phi, q_t)``, temperature decreases with height while
-    condensate increases with height so that
-    ``\nabla_v s_d \approx L_v \nabla_v q_l^{\mathrm{cl}} + L_s \nabla_v q_i^{\mathrm{cl}} > 0``.
-    The phase-exchange terms ``(h_l - h_v) \nabla_v q_l^{\mathrm{cl}}`` and
-    ``(h_i - h_v) \nabla_v q_i^{\mathrm{cl}}`` cancel ``\nabla_v s_d`` up to the
-    dry-air-frame specific-heat residual ``-(c_{pm} - c_{pd}) \nabla_v T``
-    (about ``1\%`` of ``\nabla_v s_d``), leaving a moist-adiabatic cloud layer
-    near diffusive equilibrium. Weighting ``\nabla_v q_t^{\mathrm{eff}}`` by a
-    single phase-averaged enthalpy ``h_{\mathrm{eff}} + \Phi`` (as in
-    fourth-order [Hyperdiffusion](hyperdiffusion.md)) would omit those latent
-    phase-exchange fluxes when condensate and vapor counter-diffuse at uniform
+    conserve ``q_t`` and the moist static energy ``\tilde h + \Phi`` of the
+    diffusing mixture during reversible adiabatic displacements, where
+    ``\nabla_v (\tilde h + \Phi) = c_p \nabla_v T + \nabla_v \Phi + (h_v - h_d) \nabla_v q_t^{\mathrm{eff}} + (h_l - h_v) \nabla_v q_l^{\mathrm{cl}} + (h_i - h_v) \nabla_v q_i^{\mathrm{cl}}``.
+    The bracket above therefore equals
+    ``\nabla_v (\tilde h + \Phi) + (h_d + \Phi) \nabla_v q_t^{\mathrm{eff}}``,
+    and vanishes identically in a layer that is well mixed in
+    ``(\tilde h + \Phi, q_t)``: a moist adiabat, saturated or unsaturated, is a
+    fixed point of diffusion, with temperature decreasing and condensate
+    increasing with height while the latent phase-exchange fluxes balance the
+    sensible-heat flux exactly. The neutral unsaturated profile is
+    ``dT/dz = -g / c_p``, the moist-air adiabatic lapse rate. With the
+    dry-static-energy gradient ``c_{pd} \nabla_v T`` in place of
+    ``c_p \nabla_v T``, a moist-adiabatic layer carries a residual flux
+    ``-(c_p - c_{pd}) \nabla_v T`` of about ``1\%`` of the sensible-heat flux,
+    directed down the temperature gradient. Weighting
+    ``\nabla_v q_t^{\mathrm{eff}}`` by a single phase-averaged enthalpy
+    ``h_{\mathrm{eff}} + \Phi`` (as in fourth-order
+    [Hyperdiffusion](hyperdiffusion.md)) would omit the latent phase-exchange
+    fluxes when condensate and vapor counter-diffuse at uniform
     ``q_t^{\mathrm{eff}}``.
   - **Reference-temperature invariance.** Under a shift
     ``T_0 \to T_0 + \delta T_0`` with Kirchhoff-consistent reference latent
     heats, all three water-phase enthalpies shift by the same constant
     ``-c_{pl} \delta T_0`` (see
-    [Thermodynamics and the Working Fluid](thermodynamics.md)). The phase
+    [Thermodynamics and the Working Fluid](thermodynamics.md)). The
+    sensible-heat term depends on ``T_0`` only through ``T`` and the phase
     differences ``h_l - h_v`` and ``h_i - h_v`` are invariant, and the shift of
     ``(h_v + \Phi) \nabla_v q_t^{\mathrm{eff}}`` cancels the shift of
     ``\partial_t (\rho e_{\mathrm{tot}})`` through the moist-mass continuity
@@ -128,6 +155,15 @@ Three physical and mathematical properties determine this form:
     ``(c_{pd} - c_{pl}) \delta T_0 \nabla_v q_t^{\mathrm{eff}}``, leaving an
     uncompensated ``c_{pd} \delta T_0 \, \partial_t (\rho q_t)|_{\mathrm{diff}}``
     residual).
+
+The heat capacity ``c_p`` counts rain and snow mass at ``c_{pd}`` rather than
+at zero so that it equals the coefficient of ``\nabla T^j`` in the gradient of
+the moist static energy that the [PROPHET](prophet.md) updrafts diffuse, which
+makes the energy the diagnosed environment absorbs from updraft diffusion
+exactly the enthalpy of the displaced dry air (see
+[Coupling to the resolved equations](prophet.md#Coupling-to-the-resolved-equations)).
+In the LES closures, which diffuse precipitation as well, ``c_p`` is the heat
+capacity of the full moist mixture.
 
 **Water** diffuses through the effective total water
 ``q_t^{\mathrm{eff}} = q_t - q_{\mathrm{rai}} - q_{\mathrm{sno}}``. The same
@@ -190,8 +226,8 @@ with the ice, ``q_l = q_l^{\mathrm{cl}} + q_{\mathrm{rai}}`` and
 ``q_i = q_i^{\mathrm{cl}} + q_{\mathrm{sno}}`` (`ᶜdiffusing_water_phases` with
 `precipitation = true`). Smagorinsky–Lilly, constant horizontal diffusion,
 PROPHET horizontal diffusion, and the viscous sponge use a single scalar
-diffusivity for ``s_d`` and all water terms, while anisotropic minimum
-dissipation evaluates ``D(\nabla_h s_d)`` for the dry static energy term and
+diffusivity for the sensible heat and all water terms, while anisotropic minimum
+dissipation evaluates ``D(\nabla_h T)`` for the sensible-heat and geopotential terms and
 ``D(\nabla_h q_t)`` for the water terms and microphysics species so that each
 species flux and its enthalpy use the same diffusivity.
 

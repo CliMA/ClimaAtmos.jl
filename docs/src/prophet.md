@@ -418,15 +418,24 @@ reappear as a return-to-isotropy source in the turbulence kinetic energy budget.
 Because ``\hat{\rho}^m`` is held fixed across the diffusive step, water diffusing
 into a draft displaces an equal mass of dry air and changes the draft's specific
 enthalpy by ``(h_{\mathrm{tot},\mu}^m - h_{\mathrm{tot},d}^m) \, \delta q_\mu^m``.
-Combining the thermal diffusion ``c_{pm} \nabla T^m + \nabla \Phi`` with
+Combining the sensible-heat diffusion ``c_p^m \nabla T^m + \nabla \Phi`` with
 ``\sum_\mu (h_\mu^m - h_d^m) \nabla q_\mu^m`` gives the moist-static-energy
-gradient ``\nabla h_s^m`` directly. Under a reference-temperature shift
-``T_0 \to T_0 + \delta T_0``, ``h_s^m`` shifts by
-``-(1 - q_t^m) c_{pd} \delta T_0 - q_t^m c_{pl} \delta T_0``, so
+gradient ``\nabla h_s^m`` directly, with ``c_p^m`` the heat capacity of the
+diffusing mixture that the grid-mean flux also uses (see
+[Diffusion](diffusion.md)). The grid mean receives the same subdomain flux
+with ``(h_\mu^m + \Phi) \nabla q_\mu^m`` in place of
+``(h_\mu^m - h_d^m) \nabla q_\mu^m``, since diffusing water adds moist mass to
+the grid mean; the difference, ``(h_d^m + \Phi) \nabla q_t^m``, is the enthalpy
+of the displaced dry air and goes to the environment residual together with
+the displaced mass (see
+[Coupling to the resolved equations](#Coupling-to-the-resolved-equations)).
+Under a reference-temperature shift ``T_0 \to T_0 + \delta T_0``, ``h_s^m``
+shifts by ``-(1 - q_t^m) c_{pd} \delta T_0 - q_t^m c_{pl} \delta T_0``, so
 ``\delta(\partial_t h_s^m) = (c_{pd} - c_{pl}) \delta T_0 \, \partial_t q_t^m``,
 which holds identically when ``h_s^m`` and ``q_t^m`` diffuse down their own
 gradients with the same operator. For hyperdiffusion, the draft energy equation
-uses the dry-static-energy and water-enthalpy split of [Hyperdiffusion](hyperdiffusion.md).
+uses the sensible-heat, geopotential, and water-enthalpy split of
+[Hyperdiffusion](hyperdiffusion.md).
 
 !!! note "TODO: not yet implemented"
 
@@ -465,9 +474,17 @@ flux is the sum of the environment and draft diffusive fluxes,
 ```
 
 for ``\psi \in \{q_t^{\mathrm{eff}}, q_l^{\mathrm{cl}}, q_i^{\mathrm{cl}}, n_l^{\mathrm{cl}}, n_i^{\mathrm{cl}}, \chi\}``,
-while the grid-mean diffusive enthalpy flux sums the extensive
-[Yatunin2026](@cite) Eq. (33) brackets evaluated with each subdomain's
-thermodynamic state. Because
+while the grid-mean diffusive enthalpy flux sums the extensive brackets of
+[Diffusion](diffusion.md),
+``c_p^m \nabla T^m + \nabla \Phi + \sum_\mu (h_\mu^m + \Phi) \nabla q_\mu^m``,
+evaluated with each subdomain's thermodynamic state. For a draft, that bracket
+exceeds the gradient ``\nabla h_{s}^m`` of the moist static energy the draft
+diffuses by ``(h_d^m + \Phi) \nabla q_t^m``, so the energy the environment
+absorbs from draft diffusion is the enthalpy of the dry air that the diffusing
+water displaces, accompanying the displaced mass
+``-\nabla \cdot (\widehat{\hat{\rho}^j} f_j K_h \nabla q_t^j)`` that the
+environment also absorbs; with face-interpolated coefficients the discrete
+product rule is exact, so this holds to round-off. Because
 ``\nabla \psi = a^0 \nabla \psi^0 + \sum_j a^j \nabla \psi^j + \sum_j (\psi^j - \psi^0) \nabla a^j``,
 assembling the grid-mean diffusive flux from the subdomain gradients omits the
 cross-area term ``-\rho K_h \sum_j (\psi^j - \psi^0) \nabla a^j`` (transport
@@ -518,7 +535,7 @@ is what the resolved advective flux carries:
 ```
 
 The mass-flux part carries ``h_{\mathrm{tot}}^m`` directly rather than the
-dry-static-energy-plus-water-enthalpy decomposition used for the diffusive part:
+sensible-heat-plus-water-enthalpy decomposition used for the diffusive part:
 it represents bodily motion of whole moist parcels, each at its own composition,
 so the dry-air-diffusion artifact that motivates the decomposition does not
 arise. Adding the grid-mean ``\kappa_{\mathrm{iso}}`` uniformly to every

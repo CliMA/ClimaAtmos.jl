@@ -34,7 +34,8 @@
 #=
 436
 - Turbulent diffusion carries the enthalpy of each diffusing water phase
-  (Yatunin et al. 2026, Eqs. 30 and 33) and diffuses suspended cloud species
+  (Yatunin et al. 2026, Eqs. 30 and 33), with the sensible heat at the heat
+  capacity of the diffusing mixture, and diffuses suspended cloud species
   down their own gradients in all second-order closures and the viscous sponge;
   PROPHET grid-mean diffusive fluxes are assembled from environment and draft
   subdomain gradients; updraft mse diffusion and hyperdiffusion are invariant

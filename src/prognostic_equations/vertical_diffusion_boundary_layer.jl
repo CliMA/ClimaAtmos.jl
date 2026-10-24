@@ -26,13 +26,14 @@ Increments:
     rate. Skipped when momentum vertical diffusion is disabled. The default
     (zero-flux) boundary conditions apply, because the surface stress is added by
     `surface_flux_tendency!`.
-  - `Yₜ.c.ρe_tot`: divergence of the enthalpy flux of Eq. (33) of Yatunin et al.
-    (2026),
-    `F_E = -ρ K_h [∇ᵥs_d + (h_l - h_v) ∇ᵥq_lcl + (h_i - h_v) ∇ᵥq_icl + (h_v + Φ) ∇ᵥq_tot_eff]`,
-    where `s_d = h_d + Φ` is the dry static energy and
-    `q_tot_eff = q_tot - q_rai - q_sno` is the water that diffuses. The dry term
-    is added for every configuration; the water terms only when `ρq_tot` is
-    prognostic.
+  - `Yₜ.c.ρe_tot`: divergence of the enthalpy flux
+    `F_E = -ρ K_h [c_p ∇ᵥT + ∇ᵥΦ + (h_l - h_v) ∇ᵥq_lcl + (h_i - h_v) ∇ᵥq_icl + (h_v + Φ) ∇ᵥq_tot_eff]`,
+    the water part of Eq. (33) of Yatunin et al. (2026) with the sensible heat
+    carried at the heat capacity `c_p` of the diffusing mixture
+    (`add_sensible_heat_diffusionᵥ!`), where
+    `q_tot_eff = q_tot - q_rai - q_sno` is the water that diffuses. The
+    sensible-heat term is added for every configuration; the water terms only
+    when `ρq_tot` is prognostic.
   - `Yₜ.c.ρq_tot` and `Yₜ.c.ρ`: the total-water flux `F = -ρ K_h ∇ᵥq_tot_eff`,
     applied to both with the same sign, so that diffusing water carries the
     corresponding moist-air mass.
@@ -70,7 +71,6 @@ function vertical_diffusion_boundary_layer_tendency!(
     FT = eltype(Y)
     ϵ_FT = eps(FT)
     (; vertical_diffusion) = p.atmos
-    thermo_params = CAP.thermodynamics_params(p.params)
     (; ᶜu, ᶜp, ᶜT) = p.precomputed
     ᶜK_h = p.scratch.ᶜtemp_scalar
     if vertical_diffusion isa DecayWithHeightDiffusion
@@ -95,16 +95,21 @@ function vertical_diffusion_boundary_layer_tendency!(
         ) # assumes ᶜK_u = ᶜK_h
     end
 
-    # Enthalpy diffusion. Dry static energy piece applies in all
-    # configurations (including dry); the water enthalpy piece is added
-    # below when ρq_tot is prognostic.
-    (; ᶜΦ) = p.core
-    @. Yₜ.c.ρe_tot -=
-        ᶜdiffdivᵥ(-(ᶠρK * ᶠgradᵥ(TD.dry_static_energy(thermo_params, ᶜT, ᶜΦ))))
+    # Enthalpy diffusion: the sensible-heat and geopotential flux
+    # -ρ K_h (c_p ∇T + ∇Φ) applies in all configurations (including dry); the
+    # water enthalpy flux is added below when ρq_tot is prognostic.
+    add_sensible_heat_diffusionᵥ!(
+        Yₜ.c.ρe_tot,
+        ᶠρK,
+        ᶜT,
+        ᶜdiffusing_water_phases(Y, p),
+        p,
+        p.scratch.ᶜtemp_scalar_3,
+    )
 
     # Water diffusion on q_tot_eff = q_tot - q_rai - q_sno, with the suspended
-    # cloud species diffusing down their own gradients and the enthalpy flux of
-    # Eq. (33) of Yatunin et al. (2026); rain and snow do not diffuse.
+    # cloud species diffusing down their own gradients and the water-enthalpy
+    # flux of Eq. (33) of Yatunin et al. (2026); rain and snow do not diffuse.
     add_moisture_diffusionᵥ!(
         Yₜ,
         Y,

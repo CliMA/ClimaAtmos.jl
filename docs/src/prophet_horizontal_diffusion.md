@@ -37,21 +37,21 @@ diagnostics read these cached fields.
 
 ## Grid-mean flux
 
-The horizontal water-enthalpy and species fluxes mirror the vertical closure
-([Diffusion](diffusion.md)): the enthalpy bracket of [Yatunin2026](@cite) (Eq.
-33) is
+The horizontal enthalpy and species fluxes mirror the vertical closure
+([Diffusion](diffusion.md)): the enthalpy bracket is
 
 ```math
 \mathcal{B}_h(T, q_{\mathrm{tot}}^{\mathrm{eff}}, q_{\mathrm{lcl}}, q_{\mathrm{icl}})
-  = \nabla_h s_{\mathrm{d}}
+  = c_p \nabla_h T + \nabla_h \Phi
   + (h_{\mathrm{v}} + \Phi) \, \nabla_h q_{\mathrm{tot}}^{\mathrm{eff}}
   + (h_{\mathrm{l}} - h_{\mathrm{v}}) \, \nabla_h q_{\mathrm{lcl}}
   + (h_{\mathrm{i}} - h_{\mathrm{v}}) \, \nabla_h q_{\mathrm{icl}} ,
 ```
 
 where ``\nabla_h`` and ``\nabla_h\cdot`` are the horizontal gradient and weak
-divergence, ``s_{\mathrm{d}}`` is the dry static energy, ``\Phi`` is the
-geopotential, and ``q_{\mathrm{tot}}^{\mathrm{eff}} = q_{\mathrm{tot}} - q_{\mathrm{rai}} - q_{\mathrm{sno}}``
+divergence, ``c_p`` is the heat capacity of the diffusing mixture, ``\Phi`` is
+the geopotential, the water terms are those of [Yatunin2026](@cite) (Eq. 33),
+and ``q_{\mathrm{tot}}^{\mathrm{eff}} = q_{\mathrm{tot}} - q_{\mathrm{rai}} - q_{\mathrm{sno}}``
 is the suspended water that diffuses. Each thermodynamic coefficient is
 materialized into a center scratch scalar before the weak divergence, because
 feeding the nested expression into ``\nabla_h\cdot`` exceeds GPU kernel

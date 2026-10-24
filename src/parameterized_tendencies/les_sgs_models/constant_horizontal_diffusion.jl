@@ -11,7 +11,8 @@ Add horizontal diffusion of total energy and tracers with a spatially uniform di
 to `Yₜ` in place; return `nothing`.
 
 Total energy receives the divergence of the enthalpy flux
-`-ρ D [∇ₕs_d + (h_v + Φ) ∇ₕq_tot + (h_l - h_v) ∇ₕq_liq + (h_i - h_v) ∇ₕq_ice]`, where
+`-ρ D [c_p ∇ₕT + ∇ₕΦ + (h_v + Φ) ∇ₕq_tot + (h_l - h_v) ∇ₕq_liq + (h_i - h_v) ∇ₕq_ice]`,
+where `c_p` is the heat capacity of the diffusing mixture (`add_sensible_heat_diffusionₕ!`),
 `q_liq` and `q_ice` include rain and snow; its water terms are absent in dry
 configurations. Total water diffuses into `Yₜ.c.ρq_tot` and, for mass conservation,
 `Yₜ.c.ρ`; each cloud and precipitation species diffuses down its own gradient
@@ -36,10 +37,16 @@ function horizontal_constant_diffusion_tendency!(
     ᶜD = @. ᶜtemp_scalar = FT(chd.D)
     ᶜρD = @. lazy(ᶜρ * ᶜD)
 
-    # Total energy diffusion: dry static energy, then the water enthalpy flux
+    # Total energy diffusion: sensible heat, then the water enthalpy flux
     # with the water species, precipitation included
-    ᶜs_d = ᶜdry_static_energy(p)
-    @. Yₜ.c.ρe_tot += wdivₕ(ᶜρD * gradₕ(ᶜs_d))
+    add_sensible_heat_diffusionₕ!(
+        Yₜ.c.ρe_tot,
+        ᶜρD,
+        p.precomputed.ᶜT,
+        ᶜdiffusing_water_phases(Y, p; precipitation = true),
+        p,
+        ᶜtemp_scalar_3,
+    )
     add_moisture_diffusionₕ!(
         Yₜ,
         Y,

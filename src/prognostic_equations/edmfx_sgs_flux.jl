@@ -315,10 +315,12 @@ scheme (`EDMFX` in code) to the grid-mean and updraft states.
 All fluxes use the face-native eddy diffusivity/viscosity `ᶠK_h`/`ᶠK_u`
 from `set_face_diffusivities!`:
 
-  - Total enthalpy: the flux of Eq. (33) of Yatunin et al. (2026),
-    `F_h = -ρ K_h [∇s_d + (h_v + Φ) ∇q_tot_eff + (h_l - h_v) ∇q_lcl + (h_i - h_v) ∇q_icl]`,
-    where `q_tot_eff = q_tot - q_rai - q_sno` is the water that diffuses,
-    applied to `Yₜ.c.ρe_tot`.
+  - Total enthalpy: the flux
+    `F_h = -ρ K_h [c_p ∇T + ∇Φ + (h_v + Φ) ∇q_tot_eff + (h_l - h_v) ∇q_lcl + (h_i - h_v) ∇q_icl]`
+    (`add_sensible_heat_diffusionᵥ!`, `add_water_enthalpy_diffusionᵥ!`), with
+    `c_p` the heat capacity of the diffusing mixture and
+    `q_tot_eff = q_tot - q_rai - q_sno` the water that diffuses, applied to
+    `Yₜ.c.ρe_tot`.
   - Total water and suspended cloud species: `q_tot_eff` diffuses with `K_h`
     (mirrored to `Yₜ.c.ρ` for moist mass conservation), while the
     `suspended_cloud_species` diffuse down their own gradients and rain and
@@ -339,8 +341,11 @@ contribution to `Yₜ.c.ρq_tot`). The updraft mass `ρaʲ` evolves only through
 advection, entrainment, and detrainment, so the intensive updraft tendency is
 the extensive flux divergence divided by `ρaʲ`, with the harmonic face weight of
 `ᶠupdraft_diffusion_weight!` bounding the intensive relaxation rate by
-`2 f_j K_h / Δz²` for every value of `ρaʲ`; the moist-mass change from `q_tot`
-diffusion is absorbed by the environment residual. When
+`2 f_j K_h / Δz²` for every value of `ρaʲ`. The grid mean receives the draft
+flux with each subdomain's `c_p` and `(h_μ + Φ) ∇q_μʲ`, which exceeds `∇mse_effʲ`
+by `(h_d + Φ) ∇q_tot_effʲ`: the moist mass that `q_tot` diffusion adds and the
+enthalpy of the dry air it displaces are both absorbed by the environment
+residual. When
 `p.atmos.edmfx_model.vertical_diffusion` is `false`, `PrognosticEDMFX` reduces
 to the environment diffusive flux `a⁰ F⁰`. Grid-scale scalars that the updrafts
 do not carry diffuse down their grid-mean gradients with `ρ K_h`.
@@ -373,8 +378,6 @@ function edmfx_sgs_diffusive_flux_tendency!(
     if p.atmos.edmfx_model.sgs_diffusive_flux
 
         (; ᶠK_h, ᶠK_u, ᶜl_mix) = p.precomputed
-        thermo_params = CAP.thermodynamics_params(params)
-        (; ᶜΦ) = p.core
         ᶜρ = Y.c.ρ
         ᶠρK_h = p.scratch.ᶠtemp_scalar_3
         @. ᶠρK_h = ᶠinterp(ᶜρ) * ᶠK_h
@@ -389,13 +392,18 @@ function edmfx_sgs_diffusive_flux_tendency!(
             ᶜscratch = p.scratch.ᶜtemp_scalar_3
             ᶜq_scratch = p.scratch.ᶜtemp_scalar_4
 
-            # Environment: dry static energy, water enthalpy, and total water
-            # down their environmental gradients
-            @. Yₜ.c.ρe_tot -= ᶜdiffdivᵥ(
-                -(ᶠw⁰ * ᶠgradᵥ(TD.dry_static_energy(thermo_params, ᶜT⁰, ᶜΦ))),
+            # Environment: sensible heat, water enthalpy, and total water down
+            # their environmental gradients
+            ᶜq_water⁰ = moist ? ᶜenv_diffusing_water(Y, p) : nothing
+            add_sensible_heat_diffusionᵥ!(
+                Yₜ.c.ρe_tot,
+                ᶠw⁰,
+                ᶜT⁰,
+                ᶜq_water⁰,
+                p,
+                ᶜscratch,
             )
             if moist
-                ᶜq_water⁰ = ᶜenv_diffusing_water(Y, p)
                 add_water_enthalpy_diffusionᵥ!(
                     Yₜ.c.ρe_tot,
                     ᶠw⁰,
@@ -444,18 +452,21 @@ function edmfx_sgs_diffusive_flux_tendency!(
                     )
                     ᶜinv_ρaʲ = @. lazy(1 / max(ᶜρaʲ, ϵ_FT))
                     ᶜTʲ = ᶜTʲs.:($j)
-                    @. Yₜ.c.ρe_tot -= ᶜdiffdivᵥ(
-                        -(
-                            ᶠwʲ *
-                            ᶠgradᵥ(TD.dry_static_energy(thermo_params, ᶜTʲ, ᶜΦ))
-                        ),
+                    ᶜq_waterʲ =
+                        moist ? ᶜupdraft_diffusing_water(Y, p, Val(j)) : nothing
+                    add_sensible_heat_diffusionᵥ!(
+                        Yₜ.c.ρe_tot,
+                        ᶠwʲ,
+                        ᶜTʲ,
+                        ᶜq_waterʲ,
+                        p,
+                        ᶜscratch,
                     )
                     ᶜmse_effʲ = ᶜupdraft_diffusing_mse!(ᶜscratch, Y, p, Val(j))
                     @. Yₜ.c.sgsʲs.:($$j).mse -=
                         ᶜinv_ρaʲ * ᶜdiffdivᵥ(-(ᶠwʲ * ᶠgradᵥ(ᶜmse_effʲ)))
 
                     if moist
-                        ᶜq_waterʲ = ᶜupdraft_diffusing_water(Y, p, Val(j))
                         add_water_enthalpy_diffusionᵥ!(
                             Yₜ.c.ρe_tot,
                             ᶠwʲ,
@@ -489,8 +500,13 @@ function edmfx_sgs_diffusive_flux_tendency!(
             end
         else
             (; ᶜT) = p.precomputed
-            @. Yₜ.c.ρe_tot -= ᶜdiffdivᵥ(
-                -(ᶠρK_h * ᶠgradᵥ(TD.dry_static_energy(thermo_params, ᶜT, ᶜΦ))),
+            add_sensible_heat_diffusionᵥ!(
+                Yₜ.c.ρe_tot,
+                ᶠρK_h,
+                ᶜT,
+                ᶜdiffusing_water_phases(Y, p),
+                p,
+                p.scratch.ᶜtemp_scalar_3,
             )
             add_moisture_diffusionᵥ!(
                 Yₜ,
@@ -623,8 +639,6 @@ function edmfx_sgs_horizontal_diffusive_flux_tendency!(
     updraft_kh_factor = CAP.edmfx_updraft_kh_diffusion_factor(turbconv_params)
     moist = !(p.atmos.microphysics_model isa DryModel)
 
-    thermo_params = CAP.thermodynamics_params(params)
-    (; ᶜΦ) = p.core
     ᶜρK_h_h = @. lazy(ᶜρ * ᶜK_h_h)
 
     if turbconv_model isa PrognosticEDMFX
@@ -635,12 +649,18 @@ function edmfx_sgs_horizontal_diffusive_flux_tendency!(
         ᶜq_scratch = p.scratch.ᶜtemp_scalar_4
         ᶜscratch = p.scratch.ᶜtemp_scalar_6
 
-        # Environment: dry static energy, water enthalpy, and total water down
+        # Environment: sensible heat, water enthalpy, and total water down
         # their environmental gradients
-        @. Yₜ.c.ρe_tot +=
-            wdivₕ(ᶜw⁰ * gradₕ(TD.dry_static_energy(thermo_params, ᶜT⁰, ᶜΦ)))
+        ᶜq_water⁰ = moist ? ᶜenv_diffusing_water(Y, p) : nothing
+        add_sensible_heat_diffusionₕ!(
+            Yₜ.c.ρe_tot,
+            ᶜw⁰,
+            ᶜT⁰,
+            ᶜq_water⁰,
+            p,
+            ᶜscratch,
+        )
         if moist
-            ᶜq_water⁰ = ᶜenv_diffusing_water(Y, p)
             add_water_enthalpy_diffusionₕ!(
                 Yₜ.c.ρe_tot,
                 ᶜw⁰,
@@ -689,14 +709,21 @@ function edmfx_sgs_horizontal_diffusive_flux_tendency!(
                 )
                 ᶜinv_ρaʲ = @. lazy(1 / max(ᶜρaʲ, a_ε * ᶜρ))
                 ᶜTʲ = ᶜTʲs.:($j)
-                @. Yₜ.c.ρe_tot +=
-                    wdivₕ(ᶜwʲ * gradₕ(TD.dry_static_energy(thermo_params, ᶜTʲ, ᶜΦ)))
+                ᶜq_waterʲ =
+                    moist ? ᶜupdraft_diffusing_water(Y, p, Val(j)) : nothing
+                add_sensible_heat_diffusionₕ!(
+                    Yₜ.c.ρe_tot,
+                    ᶜwʲ,
+                    ᶜTʲ,
+                    ᶜq_waterʲ,
+                    p,
+                    ᶜscratch,
+                )
                 ᶜmse_effʲ = ᶜupdraft_diffusing_mse!(ᶜscratch, Y, p, Val(j))
                 @. Yₜ.c.sgsʲs.:($$j).mse +=
                     ᶜinv_ρaʲ * wdivₕ(ᶜwʲ * gradₕ(ᶜmse_effʲ))
 
                 if moist
-                    ᶜq_waterʲ = ᶜupdraft_diffusing_water(Y, p, Val(j))
                     add_water_enthalpy_diffusionₕ!(
                         Yₜ.c.ρe_tot,
                         ᶜwʲ,
@@ -728,8 +755,14 @@ function edmfx_sgs_horizontal_diffusive_flux_tendency!(
         end
     else
         (; ᶜT) = p.precomputed
-        @. Yₜ.c.ρe_tot +=
-            wdivₕ(ᶜρK_h_h * gradₕ(TD.dry_static_energy(thermo_params, ᶜT, ᶜΦ)))
+        add_sensible_heat_diffusionₕ!(
+            Yₜ.c.ρe_tot,
+            ᶜρK_h_h,
+            ᶜT,
+            ᶜdiffusing_water_phases(Y, p),
+            p,
+            p.scratch.ᶜtemp_scalar_6,
+        )
         add_moisture_diffusionₕ!(
             Yₜ,
             Y,

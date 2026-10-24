@@ -36,7 +36,9 @@ using Base.Broadcast: materialize
     ᶠw = Fields.Field(Geometry.Covariant3Vector{FT}, ᶠspace)
     @. ᶠw = Geometry.Covariant3Vector(FT(1))
     ᶜρ = ones(ᶜspace)
-    ᶜs_d = ones(ᶜspace)
+    ᶜcp = ones(ᶜspace)
+    ᶜT = ones(ᶜspace)
+    ᶜΦ_test = ones(ᶜspace)
     ᶜh_vap_plus_Φ = ones(ᶜspace)
     ᶜq_tot_eff = ones(ᶜspace)
     ᶜχ = ones(ᶜspace)
@@ -157,10 +159,10 @@ using Base.Broadcast: materialize
             tendency_u₃ = CA.viscous_sponge_tendency_u₃(ᶠw, s)
             @test all(isfinite, parent(materialize(tendency_u₃)))
 
-            # Split-form energy tendency: dry static energy + water enthalpy
-            tendency_ρe_tot_dry =
-                CA.viscous_sponge_tendency_ρe_tot_dry(ᶜρ, ᶜs_d, s)
-            @test all(isfinite, parent(materialize(tendency_ρe_tot_dry)))
+            # Split-form energy tendency: sensible heat + water enthalpy
+            tendency_ρe_tot_sensible =
+                CA.viscous_sponge_tendency_ρe_tot_sensible(ᶜρ, ᶜcp, ᶜT, ᶜΦ_test, s)
+            @test all(isfinite, parent(materialize(tendency_ρe_tot_sensible)))
             tendency_ρe_tot_water = CA.viscous_sponge_tendency_ρe_tot_water(
                 ᶜρ,
                 ᶜh_vap_plus_Φ,
@@ -177,9 +179,11 @@ using Base.Broadcast: materialize
         @testset "No sponge (nothing) returns NullBroadcasted" begin
             @test CA.viscous_sponge_tendency_uₕ(ᶜuₕ, nothing) isa NullBroadcasted
             @test CA.viscous_sponge_tendency_u₃(ᶠw, nothing) isa NullBroadcasted
-            @test CA.viscous_sponge_tendency_ρe_tot_dry(
+            @test CA.viscous_sponge_tendency_ρe_tot_sensible(
                 ᶜρ,
-                ᶜs_d,
+                ᶜcp,
+                ᶜT,
+                ᶜΦ_test,
                 nothing,
             ) isa NullBroadcasted
             @test CA.viscous_sponge_tendency_ρe_tot_water(
@@ -310,9 +314,11 @@ using Base.Broadcast: materialize
                 ),
             )
 
-            # Energy matches the Yatunin et al. (2026, Eq. 33) 4-term split.
-            ᶜs_d_expected =
-                @. CA.TD.dry_static_energy(thermo_params, ᶜT, ᶜΦ)
+            # Energy matches the sensible-heat flux with the heat capacity of
+            # the diffusing mixture plus the Yatunin et al. (2026, Eq. 33)
+            # water-enthalpy terms.
+            ᶜcp_expected =
+                @. CA.TD.cp_m(thermo_params, ᶜq_tot_eff_expected, ᶜq_liq, ᶜq_ice)
             ᶜh_v_Φ = @. CA.TD.enthalpy_vapor(thermo_params, ᶜT) + ᶜΦ
             ᶜh_lv = @. CA.TD.enthalpy_liquid(thermo_params, ᶜT) -
                CA.TD.enthalpy_vapor(thermo_params, ᶜT)
@@ -320,9 +326,11 @@ using Base.Broadcast: materialize
                CA.TD.enthalpy_vapor(thermo_params, ᶜT)
             expected_ρe_tot =
                 materialize(
-                    CA.viscous_sponge_tendency_ρe_tot_dry(
+                    CA.viscous_sponge_tendency_ρe_tot_sensible(
                         Yc.ρ,
-                        ᶜs_d_expected,
+                        ᶜcp_expected,
+                        ᶜT,
+                        ᶜΦ,
                         s,
                     ),
                 ) .+
