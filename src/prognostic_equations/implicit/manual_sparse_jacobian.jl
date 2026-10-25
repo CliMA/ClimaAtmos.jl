@@ -1588,8 +1588,12 @@ function update_sgs_entr_detr_jacobian!(matrix, Y, p, dtγ)
     # diagonal by (1 + w ρaʲ/ρa⁰). Only the entrainment rates themselves are
     # treated explicitly.
     turbconv_model = p.atmos.turbconv_model
+    a_min = CAP.min_area(CAP.turbconv_params(p.params))
     ᶜrelax_rateʲ = @. lazy(
-        (ᶜentrʲ + ᶜturb_entrʲs.:(1)) * (
+        (ᶜentrʲ + ᶜturb_entrʲs.:(1) + satinst_specific_rate(
+            p.precomputed.ᶜsatinst_source, Y.c.sgsʲs.:(1).ρa,
+            p.precomputed.ᶜρʲs.:(1), a_min,
+        )) * (
             1 + env_relaxation_feedback(
                 Y.c.sgsʲs.:(1).ρa,
                 ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model),

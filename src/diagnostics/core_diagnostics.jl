@@ -1243,3 +1243,44 @@ add_diagnostic_variable!(
     comments = "Grid-mean specific concentration of passive gas tracer A",
     compute = compute_q_gas_A,
 )
+
+###
+# Subdomain split of the 1M latent heating (PrognosticEDMFX only)
+###
+# Environment (grid-scale) and updraft contributions, each area-weighted and normalized by the
+# grid-mean density, so that their sum is the grid-mean 1M latent heating rate.
+function _subdomain_tnt_mp(state, cache, which::Symbol)
+    tps = CAP.thermodynamics_params(cache.params)
+    LH_v0 = TD.Parameters.LH_v0(tps)
+    LH_s0 = TD.Parameters.LH_s0(tps)
+    (; ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice, ᶜmp_tendencyʲs, ᶜmp_tendency⁰) = cache.precomputed
+    ᶜρ = state.c.ρ
+    turbconv_model = cache.atmos.turbconv_model
+    ᶜρa = which === :env ? (@. lazy(ρa⁰(ᶜρ, state.c.sgsʲs, turbconv_model))) : (state.c.sgsʲs.:1).ρa
+    mp = which === :env ? ᶜmp_tendency⁰ : ᶜmp_tendencyʲs.:1
+    return @. lazy(
+        ᶜρa * (LH_v0 * (mp.dq_lcl_dt + mp.dq_rai_dt) + LH_s0 * (mp.dq_icl_dt + mp.dq_sno_dt)) / ᶜρ /
+        TD.cp_m(tps, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice),
+    )
+end
+compute_tnt_mp_env(state, cache, time) = compute_tnt_mp_env(state, cache, time, cache.atmos.turbconv_model)
+compute_tnt_mp_env(_, _, _, model) = error_diagnostic_variable("tnt_mp_env", model)
+compute_tnt_mp_env(state, cache, _, ::PrognosticEDMFX) = _subdomain_tnt_mp(state, cache, :env)
+compute_tnt_mp_up(state, cache, time) = compute_tnt_mp_up(state, cache, time, cache.atmos.turbconv_model)
+compute_tnt_mp_up(_, _, _, model) = error_diagnostic_variable("tnt_mp_up", model)
+compute_tnt_mp_up(state, cache, _, ::PrognosticEDMFX) = _subdomain_tnt_mp(state, cache, :up)
+
+add_diagnostic_variable!(
+    short_name = "tnt_mp_env",
+    units = "K s^-1",
+    long_name = "Tendency of Air Temperature Due to Environment Microphysics Phase Changes",
+    comments = "3D latent heating rate from 1M microphysics in the EDMF environment (grid-scale), ρa⁰-weighted",
+    compute = compute_tnt_mp_env,
+)
+add_diagnostic_variable!(
+    short_name = "tnt_mp_up",
+    units = "K s^-1",
+    long_name = "Tendency of Air Temperature Due to Updraft Microphysics Phase Changes",
+    comments = "3D latent heating rate from 1M microphysics in the EDMF updraft, ρa-weighted",
+    compute = compute_tnt_mp_up,
+)

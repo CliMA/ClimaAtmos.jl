@@ -651,6 +651,20 @@ function SGSQuadratureParameters(
         # Floor on the overlap precipitation fraction seen by the placement:
         # the shaft is never narrower than half the cell.
         sgs_precip_fraction_floor = FT(0.5),
+        # Tail entrainment (`tail_entrainment_increments`): weight 0 = the
+        # dynamical entrainment draws environment-mean air; selector 1 = moist
+        # static energy, 0 = virtual buoyancy.
+        edmf_tail_entr_weight = FT(0),
+        edmf_tail_entr_selector = FT(1),
+        # Saturated-instability mass source of the updraft
+        # (`satinst_source_rate`); 0 = off.
+        edmf_satinst_source_coeff = FT(0),
+        # Weight of the source by the environment condensate's liquid fraction.
+        edmf_satinst_liquid_weight = FT(0),
+        # Buoyancy sorting of the moved air (1 = only air as buoyant as the updraft).
+        edmf_satinst_buoyancy_sorting = FT(0),
+        # Trigger-only source (weight a_min / (a + a_min)); 0 = any area.
+        edmf_satinst_trigger_only = FT(0),
     )
     # A run toml defines a parameter that ClimaParams also defines when it
     # appears in the override dictionary or, for a `toml_dict` assembled

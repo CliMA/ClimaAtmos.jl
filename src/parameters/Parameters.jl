@@ -306,6 +306,32 @@ ClimaParams does not yet define or whose ClimaParams default it supersedes.
   - `sgs_precip_fraction_floor`: Smallest precipitation fraction `a_p` the
     placement uses, in `(0, 1]`; the default `0.5` keeps the shaft at least
     half the cell. It must be positive when `sgs_precip_incloud_fraction > 0` [-].
+  - `edmf_tail_entr_weight`: Weight `w` in `[0, 1]` with which the air drawn in
+    by the dynamical EDMF entrainment is taken from the upper half of the
+    environment's subgrid `(T, q_tot)` distribution instead of the environment
+    mean (`tail_entrainment_increments`); `0` (default) entrains the mean [-].
+  - `edmf_tail_entr_selector`: Selector of that upper half: `1` (default) moist
+    static energy `c_p T′ + L_v q′`, `0` virtual buoyancy `T′/T + (R_v/R_d − 1) q′` [-].
+  - `edmf_satinst_source_coeff`: Coefficient `c_s` of the saturated-instability
+    mass source of the EDMF updraft (`satinst_source_rate`): the saturated part of
+    the environment is transferred to the updraft at the rate
+    `c_s √max(0, −N²_sat)`, with `N²_sat` the saturated (moist-adiabatic) buoyancy
+    gradient; `0` (default) disables it [-].
+  - `edmf_satinst_liquid_weight`: `1` weights the saturated-instability source
+    by the liquid fraction of the environment's condensate, so that it acts in
+    liquid and mixed-phase layers and not in ice-only (cirrus, anvil) layers;
+    `0` (default) applies it regardless of phase [-].
+  - `edmf_satinst_buoyancy_sorting`: `1` lets only environment air at least as
+    buoyant as the updraft join it: the moved fraction is the top fraction of
+    the environment's buoyancy distribution whose conditional mean buoyancy
+    equals the updraft's (`buoyancy_sorted_fraction`), capped by the saturated
+    fraction, and the moved air is selected by buoyancy; `0` (default) moves the
+    saturated fraction regardless of the updraft's buoyancy [-].
+  - `edmf_satinst_trigger_only`: `1` makes the saturated-instability source a
+    trigger: it is weighted by `a_min / (aʲ + a_min)` (`a_min` the minimum
+    updraft area), so it starts updrafts where none exist and fades where an
+    updraft is established, which is then fed only by its own inflow
+    (surface source and entrainment); `0` (default) applies it at any area [-].
   - `Tq_correlation_coefficient`: Correlation between `T'` and `q_tot'` in the
     SGS quadrature, in `[-1, 1]`. Used verbatim by `tq_correlation_model: constant`; the fallback where the variances vanish for
     `tq_correlation_model: diagnosed` [-].
@@ -359,6 +385,12 @@ Base.@kwdef struct SGSQuadratureParameters{FT} <: ASQP
     cloud_fraction_floor_release_abs_margin::FT
     cloud_fraction_floor_release_sharpness::FT
     cloud_fraction_floor_residual::FT
+    edmf_tail_entr_weight::FT
+    edmf_tail_entr_selector::FT
+    edmf_satinst_source_coeff::FT
+    edmf_satinst_liquid_weight::FT
+    edmf_satinst_buoyancy_sorting::FT
+    edmf_satinst_trigger_only::FT
 end
 
 """
