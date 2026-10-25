@@ -81,6 +81,7 @@ end
 # ============================================================================
 if TEST_GROUP in ("dynamics_edmfx", "all")
     @safetestset "EDMFX SGS diffusive flux" begin @time include("prognostic_equations/edmfx_sgs_diffusive_flux_tests.jl") end
+    @safetestset "EDMFX implicit-stage tracer predictor" begin @time include("prognostic_equations/edmfx_implicit_stage_tracer_predictor_tests.jl") end
     @safetestset "EDMFX horizontal diffusive flux" begin @time include("prognostic_equations/edmfx_horizontal_diffusion_tests.jl") end
     @safetestset "Vertical water borrowing limiter" begin @time include("prognostic_equations/vertical_water_borrowing_tests.jl") end
     @safetestset "Enforce physical constraints" begin @time include("prognostic_equations/enforce_physical_constraints_tests.jl") end

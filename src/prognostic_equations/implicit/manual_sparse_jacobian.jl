@@ -1618,9 +1618,9 @@ the first interior level.
 
 The boundary condition contributes
 `∂F_BC/∂mse[1] = ∂F_BC/∂q_tot[1] = -mass_flux_source/ρa_floor`, where
-`ρa_floor = max(ρa, ρʲ·a_min)`. A level-1-only rate field (zero elsewhere) is
-built in `p.scratch.ᶜtemp_scalar` and subtracted from the updraft `mse` and
-`q_tot` diagonals.
+`ρa_floor = max(ρa, ρʲ·a_min)` (`edmfx_sfc_relaxation_rate`). A level-1-only
+rate field (zero elsewhere) is built in `p.scratch.ᶜtemp_scalar` and
+subtracted from the updraft `mse` and `q_tot` diagonals.
 
 No-op unless `p.atmos.turbconv_model` is a `PrognosticEDMFX`. Mutates `matrix`
 and returns `nothing`.
@@ -1645,9 +1645,9 @@ function update_sgs_boundary_condition_jacobian!(matrix, Y, p, dtγ)
     mass_flux_source_val = Fields.field_values(
         Fields.level(p.precomputed.sfc_mass_flux_sourceʲs.:(1), 1),
     )
-    @. ᶜsfc_bc_rate_first =
-        mass_flux_source_val /
-        max(ρaʲ_int_val, ρʲ_int_val * FT(a_min))
+    @. ᶜsfc_bc_rate_first = edmfx_sfc_relaxation_rate(
+        mass_flux_source_val, ρaʲ_int_val, ρʲ_int_val, a_min,
+    )
 
     ∂ᶜmseʲ_err_∂ᶜmseʲ =
         matrix[@name(c.sgsʲs.:(1).mse), @name(c.sgsʲs.:(1).mse)]

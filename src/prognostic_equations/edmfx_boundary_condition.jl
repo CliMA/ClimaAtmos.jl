@@ -296,6 +296,23 @@ The non-negative volumetric mass source rate [kg/m³/s].
 end
 
 """
+    edmfx_sfc_relaxation_rate(mass_flux_source, ρaʲ, ρʲ, a_min)
+
+Return the rate [1/s] at which the surface mass-flux source relaxes the
+first-cell updraft `mse` and `q_tot` toward their buoyant surface values,
+
+    mass_flux_source / max(ρaʲ, ρʲ a_min).
+
+The floor `ρʲ a_min` keeps the rate finite for a vanishing updraft area.
+Called from the explicit tendency (`edmfx_boundary_condition_tendency!`),
+its Jacobian diagonal (`update_sgs_boundary_condition_jacobian!`), and the
+implicit-stage tracer predictor
+(`solve_sgs_updraft_tracers_implicit_stage_analytic!`).
+"""
+@inline edmfx_sfc_relaxation_rate(mass_flux_source, ρaʲ, ρʲ, a_min) =
+    mass_flux_source / max(ρaʲ, ρʲ * oftype(ρʲ, a_min))
+
+"""
     edmfx_boundary_condition_tendency!(Yₜ, Y, p, t, turbconv_model)
 
 Apply the surface mass-flux boundary condition to the PROPHET (`EDMFX` in
@@ -313,12 +330,13 @@ high-tail (buoyant) values `mse_buoyant`, `q_tot_buoyant` from
 `sgs_scalar_first_interior_bc`. For the specific (intensive)
 updraft variables this gives a flux-form tendency at the first cell:
 
-    d(val)/dt += mass_flux_source · (val_buoyant − val) / max(ρa, ρ·a_min),
+    d(val)/dt += mass_flux_source · (val_buoyant − val) / max(ρa, ρʲ·a_min),
 
 where `mass_flux_source` already includes the env-positivity cap and
 the `upper_area_limiter_factor(a)` that smoothly shuts the source
-off as the plume area approaches `a_max`. The `max(ρa, ρ·a_min)` floor
-keeps the divisor finite when the updraft is small.
+off as the plume area approaches `a_max`. The rate
+`mass_flux_source / max(ρa, ρʲ·a_min)` is `edmfx_sfc_relaxation_rate`; its
+floor keeps the divisor finite when the updraft is small.
 
 The corresponding `ρa` source is injected in the implicit ρa solve
 (`solve_sgs_ρa_implicit_stage_analytic!`).
@@ -349,9 +367,9 @@ function edmfx_boundary_condition_tendency!(
         sfc_mse_buoyantʲs,
         sfc_q_tot_buoyantʲs,
     ) = p.precomputed
-    FT = eltype(params)
     n = n_mass_flux_subdomains(p.atmos.turbconv_model)
     a_min = CAP.min_area(CAP.turbconv_params(params))
+    sfc_rate_val = p.scratch.temp_data_level
 
     for j in 1:n
         ρ_val = Fields.field_values(Fields.level(ᶜρʲs.:($j), 1))
@@ -370,15 +388,13 @@ function edmfx_boundary_condition_tendency!(
             Fields.level(sfc_q_tot_buoyantʲs.:($j), 1),
         )
 
-        # `mass_flux_source · (val_buoyant − val) / max(ρa, ρ·a_min)`
-        # The `max(ρa, ρ·a_min)` floor keeps the divisor finite while
-        # the updraft is just starting to grow.
-        @. mseₜ_val +=
-            mass_flux_source_val * (mse_buoyant_val - mse_val) /
-            max(ρa_val, ρ_val * FT(a_min))
-        @. q_totₜ_val +=
-            mass_flux_source_val * (q_tot_buoyant_val - q_tot_val) /
-            max(ρa_val, ρ_val * FT(a_min))
+        # `r_sfc · (val_buoyant − val)` with `r_sfc` from
+        # `edmfx_sfc_relaxation_rate`.
+        @. sfc_rate_val = edmfx_sfc_relaxation_rate(
+            mass_flux_source_val, ρa_val, ρ_val, a_min,
+        )
+        @. mseₜ_val += sfc_rate_val * (mse_buoyant_val - mse_val)
+        @. q_totₜ_val += sfc_rate_val * (q_tot_buoyant_val - q_tot_val)
     end
     return nothing
 end

@@ -527,33 +527,57 @@ stage by a semi-implicit first-order upwind sweep, overwriting
 `turbconv_model` other than `PrognosticEDMFX`.
 
 Solved: `mse`, `q_tot`, and, for 1M microphysics, `q_lcl`, `q_icl`, `q_rai`,
-`q_sno`. The advective form
+`q_sno`. The advective form with lateral and turbulent entrainment
+`ε_tot = ε + ε_turb` toward the environment value `χ⁰` and, in cell 1 for `mse`
+and `q_tot`, the surface mass-flux relaxation at the rate `r_sfc`
+(`edmfx_sfc_relaxation_rate`) toward the buoyant surface value `χ_sfc`,
 
-    (q_new - q_old) / dtγ + w · (q_new - q_new[i-1]) / Δz = S_mp(q),
-                 ᶜbottom_bias(ᶠw) / ᶜdz           = α,
+    (χ_new - χ_old) / dtγ + α · (χ_new - χ_new[i-1])
+        = S_mp(χ) + ε_tot · (χ⁰ - χ_new) + δ_{i,1} r_sfc · (χ_sfc - χ_new),
+    α = ᶜbottom_bias(ᶠw) / ᶜdz,
 
 is swept bottom-to-top with `Operators.column_accumulate!` as
 
-    q_new[i] = (q_old[i]/dtγ + S_mp[i] + α · q_new[i-1]) / (1/dtγ + α).
+    χ_new[i] =
+        (χ_old[i]/dtγ + S_mp[i] + ε_tot[i] · χ⁰[i]
+            + δ_{i,1} r_sfc · χ_sfc + α[i] · χ_new[i-1]) /
+        (1/dtγ + α[i] + ε_tot[i] + δ_{i,1} r_sfc).
+
+`α[1]` is zero: the bottom face of cell 1 is the surface, through which there
+is no flow, while the covariant `u₃` there is nonzero over sloped terrain
+(`set_velocity_at_surface!`). The entrainment rate uses the `u₃` iterate of
+the current Picard round, which is the velocity the Newton solve's entrainment
+tendency sees once `ᶜuʲs` is refreshed from the stage `u₃`. `χ⁰` is diagnosed
+from `Y` before the sweep overwrites the draft scalar.
 
 Called from the Picard loop in `initialize_implicit_stage_problem!` as a
-predictor between successive `u₃` solves; the result is not held fixed
-through the Newton solve. Entrainment, detrainment, and surface tracer
-fluxes are intentionally dropped — Newton applies them, and the
-entrainment time-scale (`~10⁴ s`) is slow against both advection and
-microphysics, so the predictor error is small. For 1M, `mse` and `q_tot`
-are source-free and `S_mp` for the condensate / precipitation tracers is
-read from the cached `ᶜmp_tendencyʲs`.
+predictor between successive `u₃` solves. The final analytic `u₃` and `ρa`
+solves at the end of `initialize_implicit_stage_problem!` evaluate buoyancy and
+`ᶜmp_tendencyʲs` at the final predictor iterate, which is also the initial
+guess for the Newton solve. Detrainment does not enter the intensive tracer
+equation because it removes updraft mass at the updraft's own scalar value.
+For 1M, `S_mp = 0` for `mse` and `q_tot`, and `S_mp` for the condensate and
+precipitation tracers is read from the cached `ᶜmp_tendencyʲs`.
 """
 function solve_sgs_updraft_tracers_implicit_stage_analytic!(Y, p, dtγ)
     p.atmos.turbconv_model isa PrognosticEDMFX || return
 
+    FT = eltype(p.params)
+    a_min = CAP.min_area(CAP.turbconv_params(p.params))
     ᶜdz = Fields.Δz_field(axes(Y.c))
     ᶠdz = Fields.Δz_field(axes(Y.f))
     ᶜnumerator = p.scratch.ᶜtemp_scalar
     ᶜdenominator = p.scratch.ᶜtemp_scalar_2
     ᶜadvection_factor = p.scratch.ᶜtemp_scalar_3
+    ᶜentr_tot = p.scratch.ᶜtemp_scalar_4
     ᶠw = p.scratch.ᶠtemp_scalar
+    # Cell-1 views: the surface relaxation rate `r_sfc` and the entries it
+    # modifies.
+    sfc_rate_val = p.scratch.temp_data_level
+    num_first = Fields.field_values(Fields.level(ᶜnumerator, 1))
+    den_first = Fields.field_values(Fields.level(ᶜdenominator, 1))
+    advection_factor_first =
+        Fields.field_values(Fields.level(ᶜadvection_factor, 1))
 
     # (χ_name, S_name): S_name = nothing for source-free tracers; otherwise it
     # names the matching entry in `p.precomputed.ᶜmp_tendencyʲs.:(j)`. Each
@@ -572,27 +596,65 @@ function solve_sgs_updraft_tracers_implicit_stage_analytic!(Y, p, dtγ)
         sgsʲ = Y.c.sgsʲs.:($j)
         @. ᶠw = Y.f.sgsʲs.:($$j).u₃.components.data.:1 / ᶠdz
         @. ᶜadvection_factor = ᶜbottom_bias(ᶠw) / ᶜdz
-        @. ᶜdenominator = 1 / dtγ + ᶜadvection_factor
+        # Cell 1: no flow through the surface, whatever the covariant `u₃`
+        # there; with α[1] = 0 the sweep's `init` value drops out.
+        @. advection_factor_first = FT(0)
+        @. ᶜentr_tot =
+            compute_entrainment(
+                p.precomputed.ᶜentr_vel_scaleʲs.:($$j),
+                p.precomputed.ᶜentr_nonvel_rateʲs.:($$j),
+                p.precomputed.ᶜarea_bounding_entr_detrʲs.:($$j),
+                ᶜinterp(ᶠw),
+            ) + p.precomputed.ᶜturb_entrʲs.:($$j)
+        @. ᶜdenominator = 1 / dtγ + ᶜadvection_factor + ᶜentr_tot
+
+        ρʲ_int_val =
+            Fields.field_values(Fields.level(p.precomputed.ᶜρʲs.:($j), 1))
+        ρaʲ_int_val = Fields.field_values(Fields.level(sgsʲ.ρa, 1))
+        mass_flux_source_val = Fields.field_values(
+            Fields.level(p.precomputed.sfc_mass_flux_sourceʲs.:($j), 1),
+        )
+        @. sfc_rate_val = edmfx_sfc_relaxation_rate(
+            mass_flux_source_val, ρaʲ_int_val, ρʲ_int_val, a_min,
+        )
+
         MatrixFields.unrolled_foreach(sgs_tracers) do (χ_name, S_name)
             MatrixFields.has_field(sgsʲ, χ_name) || return
             χ = MatrixFields.get_field(sgsʲ, χ_name)
+            ᶜχ⁰ =
+                χ_name === @name(mse) ? ᶜspecific_env_mse(Y, p) :
+                ᶜspecific_env_value(χ_name, Y, p)
             if isnothing(S_name)
-                @. ᶜnumerator = χ / dtγ
+                @. ᶜnumerator = χ / dtγ + ᶜentr_tot * ᶜχ⁰
             else
                 S = MatrixFields.get_field(
                     p.precomputed.ᶜmp_tendencyʲs.:($j), S_name,
                 )
-                @. ᶜnumerator = χ / dtγ + S
+                @. ᶜnumerator = χ / dtγ + S + ᶜentr_tot * ᶜχ⁰
+            end
+            # Cell 1 of `mse` and `q_tot` relaxes toward the buoyant surface
+            # value; the denominator includes `r_sfc` only while one of them
+            # is swept.
+            sfc_forced = χ_name === @name(mse) || χ_name === @name(q_tot)
+            if sfc_forced
+                sfc_buoyant_field =
+                    χ_name === @name(mse) ?
+                    p.precomputed.sfc_mse_buoyantʲs.:($j) :
+                    p.precomputed.sfc_q_tot_buoyantʲs.:($j)
+                buoyant_val =
+                    Fields.field_values(Fields.level(sfc_buoyant_field, 1))
+                @. num_first += sfc_rate_val * buoyant_val
+                @. den_first += sfc_rate_val
             end
             # Sweep bottom-to-top:
             #   χ_new[i] = (num[i] + α[i] · χ_new[i-1]) / den[i]
-            # with num = χ_old/dtγ + S_mp and den = 1/dtγ + α.
             input = @. lazy(tuple(ᶜnumerator, ᶜdenominator, ᶜadvection_factor))
             Operators.column_accumulate!(
                 χ, input; init = zero(eltype(χ)),
             ) do χ_prev, (num, den, α)
                 return (num + α * χ_prev) / den
             end
+            sfc_forced && (@. den_first -= sfc_rate_val)
         end
     end
     return nothing

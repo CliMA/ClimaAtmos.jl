@@ -3,6 +3,16 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- ![][badge-🔥behavioralΔ] The implicit-stage Picard updraft tracer predictor
+  (`solve_sgs_updraft_tracers_implicit_stage_analytic!`) includes lateral and
+  turbulent entrainment `(ε + ε_turb) (χ⁰ − χʲ)` and the first-cell surface
+  mass-flux source `F_sfc (χ_sfc − χʲ[1]) / max(ρa[1], ρʲ[1] a_min)` alongside
+  upwind advection and 1M microphysics, so that the updraft buoyancy and
+  microphysics tendencies passed to the final analytic `u₃` and `ρa` solves
+  reflect entrainment dilution and surface injection over the stage. The
+  predictor's cell-1 advection factor is zero, so the covariant `u₃` that
+  `set_velocity_at_surface!` leaves at the surface over sloped terrain does
+  not advect the first cell.
 - ![][badge-🔥behavioralΔ] The equilibrium SGS condensate that the 1M
   condensate relaxes toward (`λ_eq`), the 0M SGS saturation adjustment, and the
   variance fidelity evaluate `E[max(0, S)]` under the Gaussian displacement

@@ -263,11 +263,13 @@ drive the buoyancy that closes the next ``u_3^j`` solve. To tighten the
 within-stage coupling, `initialize_implicit_stage_problem!` runs
 `edmfx_updraft_picard_rounds` Picard rounds (default `2`; ``0`` reproduces
 the single-pass behavior) that alternate the analytic ``u_3^j`` solve with
-the semi-implicit draft-scalar sweep, each round starting from the
-stage-initial `Y.(f,c).sgsʲs` and refreshing the draft thermodynamics and
-`ᶜmp_tendencyʲs` at the new iterate. The final analytic ``u_3^j`` and
-``\hat{\rho}^j`` solves then run with Picard-converged buoyancy and
-microphysics inputs; `ᶜmp_tendencyʲs` is frozen through the Newton solve
+the semi-implicit draft-scalar sweep (upwind vertical advection, lateral and
+turbulent entrainment toward the environment, first-cell surface mass-source
+relaxation of ``h_s^j`` and ``q_t^j``, and 1M microphysics), each round
+starting from the stage-initial `Y.(f,c).sgsʲs` and refreshing the draft
+thermodynamics and `ᶜmp_tendencyʲs` at the new iterate. The final analytic
+``u_3^j`` and ``\hat{\rho}^j`` solves then run with Picard-converged buoyancy
+and microphysics inputs; `ᶜmp_tendencyʲs` is frozen through the Newton solve
 so the Jacobian stays consistent.
 
 ### Vertical velocity
