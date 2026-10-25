@@ -67,35 +67,43 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_environment!(
 
     thermo_params = CAP.thermodynamics_params(p.params)
     (; turbconv_model) = p.atmos
-    (; ᶜΦ,) = p.core
-    (; ᶜp) = p.precomputed
+    (; ᶜΦ) = p.core
+    (; ᶜp, ᶜK, ᶜh_tot) = p.precomputed
     (; ᶠu₃⁰, ᶜu⁰, ᶠu³⁰, ᶜK⁰, ᶜT⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰) =
         p.precomputed
 
-    ᶜq_tot⁰ = ᶜspecific_env_value(@name(q_tot), Y, p)
-    ᶜmse⁰ = ᶜspecific_env_mse(Y, p)
     T_min_sgs = CAP.T_min_sgs(p.params)
 
     if p.atmos.microphysics_model isa
        Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M}
-        ᶜq_lcl⁰ = ᶜspecific_env_value(@name(q_lcl), Y, p)
-        ᶜq_icl⁰ = ᶜspecific_env_value(@name(q_icl), Y, p)
-        ᶜq_rai⁰ = ᶜspecific_env_value(@name(q_rai), Y, p)
-        ᶜq_sno⁰ = ᶜspecific_env_value(@name(q_sno), Y, p)
         # One fused column loop: environment velocities and kinetic energy,
         # then the environment thermodynamic state from primitives.
         DataLayouts.foreach_column(
             ᶠu₃⁰, ᶜu⁰, ᶠu³⁰, ᶜK⁰, ᶜT⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰,
-            Y.c, Y.f, ᶠuₕ³, ᶜΦ, ᶜq_tot⁰, ᶜmse⁰, ᶜq_lcl⁰, ᶜq_icl⁰, ᶜq_rai⁰, ᶜq_sno⁰,
+            Y.c, Y.f, ᶠuₕ³, ᶜΦ, ᶜK, ᶜh_tot,
         ) do ᶠu₃⁰, ᶜu⁰, ᶠu³⁰, ᶜK⁰, ᶜT⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰,
-        Yc, Yf, ᶠuₕ³, ᶜΦ, ᶜq_tot⁰, ᶜmse⁰, ᶜq_lcl⁰, ᶜq_icl⁰, ᶜq_rai⁰, ᶜq_sno⁰
+        Yc, Yf, ᶠuₕ³, ᶜΦ, ᶜK, ᶜh_tot
             set_sgs_ᶠu₃!(u₃⁰, ᶠu₃⁰, Yc, Yf, turbconv_model)
             set_velocity_quantities!(ᶜu⁰, ᶠu³⁰, ᶜK⁰, ᶠu₃⁰, Yc.uₕ, ᶠuₕ³)
-            @. ᶜq_liq⁰ = max(0, ᶜq_lcl⁰ + ᶜq_rai⁰)
-            @. ᶜq_ice⁰ = max(0, ᶜq_icl⁰ + ᶜq_sno⁰)
+            ᶜρa⁰ = @. ρa⁰(Yc.ρ, Yc.sgsʲs, turbconv_model)
+            @. ᶜq_liq⁰ = max(
+                0,
+                specific_env_value(@name(q_lcl), Yc.ρq_lcl, Yc.ρ, Yc.sgsʲs, ᶜρa⁰, turbconv_model) +
+                specific_env_value(@name(q_rai), Yc.ρq_rai, Yc.ρ, Yc.sgsʲs, ᶜρa⁰, turbconv_model),
+            )
+            @. ᶜq_ice⁰ = max(
+                0,
+                specific_env_value(@name(q_icl), Yc.ρq_icl, Yc.ρ, Yc.sgsʲs, ᶜρa⁰, turbconv_model) +
+                specific_env_value(@name(q_sno), Yc.ρq_sno, Yc.ρ, Yc.sgsʲs, ᶜρa⁰, turbconv_model),
+            )
             # Clamp q_tot ≥ q_cond to ensure non-negative vapor (q_vap = q_tot - q_cond)
-            @. ᶜq_tot_nonneg⁰ = max(ᶜq_liq⁰ + ᶜq_ice⁰, ᶜq_tot⁰)
-            ᶜh⁰ = @. lazy(ᶜmse⁰ - ᶜΦ)  # specific enthalpy
+            @. ᶜq_tot_nonneg⁰ = max(
+                ᶜq_liq⁰ + ᶜq_ice⁰,
+                specific_env_value(@name(q_tot), Yc.ρq_tot, Yc.ρ, Yc.sgsʲs, ᶜρa⁰, turbconv_model),
+            )
+            ᶜh⁰ = @. lazy(
+                specific_env_mse(Yc.ρ, Yc.sgsʲs, ᶜh_tot, ᶜK, ᶜρa⁰, turbconv_model) - ᶜΦ,
+            )
             @. ᶜT⁰ = max(
                 T_min_sgs,
                 TD.air_temperature(
@@ -110,6 +118,8 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_environment!(
             return nothing
         end
     else
+        ᶜq_tot⁰ = ᶜspecific_env_value(@name(q_tot), Y, p)
+        ᶜmse⁰ = ᶜspecific_env_mse(Y, p)
         # EquilibriumMicrophysics0M: use saturation adjustment to get T and phase partition
         DataLayouts.foreach_column(
             ᶠu₃⁰, ᶜu⁰, ᶠu³⁰, ᶜK⁰, ᶜq_tot_nonneg⁰, Y.c, Y.f, ᶠuₕ³, ᶜq_tot⁰,
@@ -405,7 +415,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
     FT = eltype(params)
     n = n_mass_flux_subdomains(turbconv_model)
 
-    (; ᶜp) = p.precomputed
+    (; ᶜp, ᶠu³, ᶜstrain_rate_norm) = p.precomputed
     (; ᶜT⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰) = p.precomputed
     (; ρtke_flux) = p.precomputed
     (;
@@ -430,29 +440,20 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
 
     entr_model = p.atmos.edmfx_model.entr_model
     zero_FT = FT(0) # (a scalar, not the type: loop bodies must capture isbits values only)
-    for j in 1:n
+    _unrolled_ntuple(Val(n)) do j
         # Compute the entrainment velocity scale, non-velocity entrainment rate,
         # and the signed area-bounding rate, in one fused column loop per draft
         # (the draft area and buoyancy are loop temporaries shared by the
-        # closures).
-        # The environment velocity is passed as w⁰ = 0 to the coefficient model;
-        # using the true (ᶜwʲ - ᶜw⁰) difference would introduce residual forcing
-        # when ᶜwʲ ≈ 0, which can spuriously grow the area fraction and destabilize
-        # otherwise trivial updrafts. The environment buoyancy is passed as b⁰ = 0.
-        # The total entrainment rate is then assembled
-        # at every tendency call site (`edmfx_entr_detr_tendency!` and the
-        # implicit ρa solve) via `compute_entrainment` using the
-        # (then-updated) updraft velocity |wʲ|, together with the
-        # non-velocity-proportional rate computed just below.
+        # closures). For j == 1, also fuse the vertical strain-rate norm.
         DataLayouts.foreach_column(
             ᶜentr_vel_scaleʲs.:($j), ᶜentr_nonvel_rateʲs.:($j), ᶜturb_entrʲs.:($j),
-            ᶜarea_bounding_entr_detrʲs.:($j), ᶜρ_diffʲs.:($j),
-            Y.c, Y.c.sgsʲs.:($j), ᶜz, z_sfc, ᶜp, ᶜρʲs.:($j), ᶜuʲs.:($j), ᶜlg,
+            ᶜarea_bounding_entr_detrʲs.:($j), ᶜρ_diffʲs.:($j), ᶜstrain_rate_norm,
+            Y.c, Y.c.sgsʲs.:($j), ᶜz, z_sfc, ᶜp, ᶜρʲs.:($j), ᶜuʲs.:($j), ᶠu³, ᶜlg,
             ᶜTʲs.:($j), ᶜq_tot_nonnegʲs.:($j), ᶜq_liqʲs.:($j), ᶜq_iceʲs.:($j),
             ᶜgradᵥ_ᶠΦ, ᶜT⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜtke,
         ) do ᶜentr_vel_scaleʲ, ᶜentr_nonvel_rateʲ, ᶜturb_entrʲ,
-        ᶜarea_bounding_entr_detrʲ, ᶜρ_diffʲ,
-        Yc, ᶜsgsʲ, ᶜz, z_sfc, ᶜp, ᶜρʲ, ᶜuʲ, ᶜlg, ᶜTʲ, ᶜq_tot_nonnegʲ, ᶜq_liqʲ,
+        ᶜarea_bounding_entr_detrʲ, ᶜρ_diffʲ, ᶜstrain_rate_norm,
+        Yc, ᶜsgsʲ, ᶜz, z_sfc, ᶜp, ᶜρʲ, ᶜuʲ, ᶠu³, ᶜlg, ᶜTʲ, ᶜq_tot_nonnegʲ, ᶜq_liqʲ,
         ᶜq_iceʲ, ᶜgradᵥ_ᶠΦ, ᶜT⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜtke
             ᶜaʲ = @. draft_area(ᶜsgsʲ.ρa, ᶜρʲ)
             ᶜwʲ = @. get_physical_w(ᶜuʲ, ᶜlg)
@@ -502,15 +503,24 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
             @. ᶜarea_bounding_entr_detrʲ = area_bounding_entr_detr(turbconv_params, ᶜaʲ)
 
             @. ᶜρ_diffʲ = (ᶜρʲ - Yc.ρ) / ᶜρʲ
+
+            if j == 1
+                ᶠu_col = @. C123(ᶠinterp(Yc.uₕ)) + C123(ᶠu³)
+                ᶜstrain_rate_col = compute_strain_rate_center_vertical(ᶠu_col)
+                @. ᶜstrain_rate_norm = vertical_shear_norm_sqr(ᶜstrain_rate_col)
+            end
             return nothing
         end
+        return nothing
+    end
+
+    if n == 0
+        set_strain_rate_norm!(Y, p)
     end
 
     # Surface BC payload per updraft at level 1 (capped mass flux +
     # buoyant-air mse/q_tot values).
     set_edmfx_surface_conditions!(Y, p)
-
-    set_strain_rate_norm!(Y, p)
 
     ρtke_flux_values = Fields.field_values(ρtke_flux)
     ρ_sfc_values = Fields.field_values(Fields.level(Y.c.ρ, 1)) # TODO: replace by surface value
