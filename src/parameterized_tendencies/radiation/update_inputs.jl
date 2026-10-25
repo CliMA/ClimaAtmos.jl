@@ -8,6 +8,7 @@ import ..PrescribedCloudInRadiation
 import ..lazy
 import ..specific
 import ..NonEquilibriumMicrophysics
+import ..normal_cdf
 
 """
     update_atmospheric_state!(integrator)
@@ -297,6 +298,101 @@ Called from `update_cloud_properties!`.
 ᶜcloud_ice_water_content(microphysics_model, u, ᶜq_ice) = ᶜq_ice
 
 """
+    _digamma_gt1(x)
+
+Evaluate the digamma function ``\\psi(x) = \\Gamma'(x) / \\Gamma(x)`` for ``x \\ge 1``.
+
+Shifts ``x`` upward to ``y \\ge 6`` using the recurrence ``\\psi(y) = \\psi(y + 1) - 1/y``
+and evaluates the asymptotic Bernoulli expansion at ``y``.
+"""
+@inline function _digamma_gt1(x::FT) where {FT <: AbstractFloat}
+    acc = zero(FT)
+    y = x
+    while y < FT(6)
+        acc -= inv(y)
+        y += one(FT)
+    end
+    inv_y = inv(y)
+    inv_y2 = inv_y * inv_y
+    return acc + log(y) - FT(0.5) * inv_y -
+           inv_y2 *
+           (FT(1 / 12) - inv_y2 * (FT(1 / 120) - inv_y2 * FT(1 / 252)))
+end
+
+"""
+    _truncated_gaussian_nu(cf_in)
+
+Return the inverse relative variance ``\\nu = \\mu_{\\text{in}}^2 / \\sigma_{\\text{in}}^2``
+of the positive tail ``S > 0`` of a Gaussian saturation-excess distribution with cloud
+fraction `cf_in` ``= \\Phi(z)``.
+
+With inverse Mills ratio ``r = \\phi(z) / \\Phi(z)``, the conditional mean and variance
+of the positive tail are ``m = z + r`` and ``v = 1 - z r - r^2``, giving
+``\\nu = m^2 / v \\ge 1``.
+"""
+@inline function _truncated_gaussian_nu(cf_in::FT) where {FT <: AbstractFloat}
+    cf = clamp(cf_in, FT(1e-4), one(FT) - FT(1e-4))
+    u = cf - FT(0.5)
+    r_abs = abs(u)
+    z_central =
+        u * (
+            FT(2.506628274631) +
+            r_abs *
+            (FT(3.158889) + r_abs * (FT(-8.724726) + r_abs * FT(29.89959)))
+        ) / (
+            one(FT) +
+            r_abs * (
+                FT(1.260295) +
+                r_abs * (
+                    FT(-3.793684) +
+                    r_abs * (FT(12.66899) - r_abs * FT(2.020106))
+                )
+            )
+        )
+    p_tail = min(cf, one(FT) - cf)
+    t_tail = sqrt(-FT(2) * log(max(p_tail, FT(1e-12))))
+    z_tail_mag =
+        t_tail -
+        (FT(2.515517) + t_tail * (FT(0.802853) + t_tail * FT(0.010328))) / (
+            one(FT) +
+            t_tail *
+            (FT(1.432788) + t_tail * (FT(0.189269) + t_tail * FT(0.001308)))
+        )
+    z0 = ifelse(r_abs <= FT(0.42), z_central, copysign(z_tail_mag, u))
+    inv_sqrt2pi = FT(0.3989422804014327)
+    Phi0 = normal_cdf(z0)
+    phi0 = inv_sqrt2pi * exp(-FT(0.5) * z0 * z0)
+    z = clamp(z0 - (Phi0 - cf) / max(phi0, FT(1e-7)), FT(-6), FT(6))
+    Phi = clamp(normal_cdf(z), FT(1e-6), one(FT))
+    phi = inv_sqrt2pi * exp(-FT(0.5) * z * z)
+    r = phi / Phi
+    m = max(z + r, FT(1e-4))
+    v = clamp(one(FT) - z * r - r * r, FT(1e-4), one(FT))
+    return max(m * m / v, one(FT))
+end
+
+"""
+    _truncated_gaussian_inhomogeneity_factor(cf_in)
+
+Return the plane-parallel radiative optical-depth reduction factor
+``\\chi(\\text{CF}) = \\exp(\\psi(\\nu)) / \\nu \\in (e^{-\\gamma_E}, 1]`` implied by a
+Gamma distribution matching the mean and variance of the truncated-Gaussian in-cloud
+condensate distribution at cloud fraction `cf_in`.
+"""
+@inline function _truncated_gaussian_inhomogeneity_factor(
+    cf_in::FT,
+) where {FT <: AbstractFloat}
+    cf = clamp(cf_in, zero(FT), one(FT))
+    nu = _truncated_gaussian_nu(cf)
+    chi = exp(_digamma_gt1(nu)) / nu
+    return ifelse(
+        cf <= FT(1e-4),
+        one(FT),
+        ifelse(cf >= one(FT) - FT(1e-4), one(FT), clamp(chi, FT(0.5), one(FT))),
+    )
+end
+
+"""
     update_cloud_properties!(integrator)
 
 Update the cloud inputs of the RRTMGP solver; return `nothing`.
@@ -305,8 +401,9 @@ Writes the in-cloud liquid and ice water paths, the cloud fraction, and the liqu
 effective radii through the `RRTMGP.cloud_liquid_water_path`, `RRTMGP.cloud_ice_water_path`,
 `RRTMGP.cloud_fraction`, `RRTMGP.cloud_liquid_effective_radius`, and
 `RRTMGP.cloud_ice_effective_radius` getters. Water paths are grid-mean `ρ q Δz` divided by
-the cloud fraction (floored at `eps`) to make them in-cloud values, and are converted to
-the units RRTMGP expects: g/m² for the paths and microns for the radii.
+the cloud fraction (floored at `eps`) to make them in-cloud values, scaled by the
+subgrid inhomogeneity factor `_truncated_gaussian_inhomogeneity_factor(cloud_fraction)`,
+and converted to the units RRTMGP expects: g/m² for the paths and microns for the radii.
 
 The liquid effective radius follows the Liu and Hallett (1997) parameterization, evaluated
 with a droplet number concentration diagnosed by `ml_N_cloud_liquid_droplets` from the
@@ -369,10 +466,18 @@ function update_cloud_properties!((; u, p, t)::I) where {I}
             radiation_mode.cloud isa PrescribedCloudInRadiation ?
             p.radiation.prescribed_clouds_field.cc : ᶜcloud_fraction
         @. ᶜlwp =
-            kg_to_g_factor * u.c.ρ * cloud_liquid_water_content * ᶜΔz /
+            kg_to_g_factor *
+            u.c.ρ *
+            cloud_liquid_water_content *
+            ᶜΔz *
+            _truncated_gaussian_inhomogeneity_factor(cloud_fraction) /
             max(cloud_fraction, eps(FT))
         @. ᶜiwp =
-            kg_to_g_factor * u.c.ρ * cloud_ice_water_content * ᶜΔz /
+            kg_to_g_factor *
+            u.c.ρ *
+            cloud_ice_water_content *
+            ᶜΔz *
+            _truncated_gaussian_inhomogeneity_factor(cloud_fraction) /
             max(cloud_fraction, eps(FT))
         @. ᶜfrac = cloud_fraction
         # RRTMGP needs effective radius in microns
