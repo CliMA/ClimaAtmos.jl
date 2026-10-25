@@ -640,6 +640,9 @@ function SGSQuadratureParameters(
         sgs_variance_theta_horizontal_scale_ratio = FT(0.88),
         sgs_variance_theta_vertical_scale_ratio = FT(0.38),
         sgs_variance_horizontal_cross_correlation = FT(0.74),
+        # Truncation, in standard deviations, of the Gaussian displacement in
+        # the equilibrium condensate (`truncated_displacement_condensate`).
+        sgs_displacement_truncation = FT(3),
         # Equilibrium-ratio modulator weight (see `sgs_variance_fidelity`).
         sgs_fidelity_equilibrium_weight = FT(0.5),
         # Precipitation-fraction placement of rain and snow over the quadrature:
@@ -683,6 +686,14 @@ function SGSQuadratureParameters(
         ArgumentError(
             "sgs_variance_horizontal_cross_correlation must lie in [-1, 1] " *
             "for the SGS covariance to be positive semi-definite; got $r_h_θq",
+        ),
+    )
+    c = parameters.sgs_displacement_truncation
+    # The variance-preserving stretch divides by the truncated variance
+    # `1 − 2c φ(c) / Z = O(c²)`, which `normal_cdf` resolves for `c ≥ 1`.
+    c >= 1 || throw(
+        ArgumentError(
+            "sgs_displacement_truncation must be at least 1; got $c",
         ),
     )
     CAP.SGSQuadratureParameters{FT}(; parameters...)

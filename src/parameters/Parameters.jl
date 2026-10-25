@@ -285,6 +285,12 @@ ClimaParams does not yet define or whose ClimaParams default it supersedes.
     `r_{h,θq} ∈ [-1, 1]` between the horizontal subgrid displacements of `θ_li`
     and `q_tot` in the `θ_li`–`q_tot` covariance; the vertical displacements
     are taken perfectly correlated [-].
+  - `sgs_displacement_truncation`: Number of standard deviations `c` at which
+    the Gaussian subgrid displacement is truncated in the equilibrium
+    condensate (`truncated_displacement_condensate`); the truncated
+    distribution is rescaled to keep the variance of the covariance closure, so
+    its support is `±s c σ` with `s ≥ 1`, and `Inf` restores the untruncated
+    Gaussian. Must be at least 1 [-].
   - `sgs_variance_max_rel_std`: Upper bound on the SGS total-water standard
     deviation relative to the grid-mean total water, `σ_q ≤ sgs_variance_max_rel_std * q_tot`,
     applied to the diagnosed `q′q′` whatever closure produced it. A wider variance puts a quadrature node
@@ -343,6 +349,7 @@ Base.@kwdef struct SGSQuadratureParameters{FT} <: ASQP
     sgs_variance_theta_vertical_scale_ratio::FT
     sgs_variance_horizontal_cross_correlation::FT
     sgs_variance_max_rel_std::FT
+    sgs_displacement_truncation::FT
     sgs_liquid_uniform_fraction::FT
     sgs_ice_uniform_fraction::FT
     sgs_precip_incloud_fraction::FT

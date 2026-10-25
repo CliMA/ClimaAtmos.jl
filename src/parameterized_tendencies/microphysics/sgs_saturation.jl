@@ -91,7 +91,7 @@ end
 """
     compute_sgs_saturation_adjustment(
         thermo_params, SG_quad, ρ, T_mean, q_mean, T′T′, q′q′, corr_Tq,
-        lin = 0, curv = 0,
+        lin = 0, curv = 0, c = Inf32,
     )
 
 Compute SGS-averaged saturation adjustment over the joint PDF of `(T, q_tot)`.
@@ -99,15 +99,12 @@ Compute SGS-averaged saturation adjustment over the joint PDF of `(T, q_tot)`.
 The mean saturation excess `μ_S = q_mean − q_sat(T_mean, ρ)` and variance
 `σ_S² = E[(S − μ_S)²]` are accumulated over the quadrature points via
 `_sgs_saturation_moments`, and the expected equilibrium condensate is evaluated
-from the analytic truncated-Gaussian integral
-`q_cond = μ_S Φ(μ_S / σ_S) + σ_S φ(μ_S / σ_S)` (`truncated_gaussian_condensate`),
-or, with nonzero displacement coefficients `lin`, `curv`
-(`displacement_curvature_coefficients`), from the curvature-aware expectation
-`displacement_condensate(μ_S, σ_S, lin, curv)`. The continuous expectation
-has none of the discrete 3-point Gauss–Hermite support cutoff at
-`μ_S < −√3 σ_S` and keeps the equilibrium condensate smooth; with
-`lin = curv = 0` it is the same truncated-Gaussian expectation the
-cloud-fraction closure uses.
+analytically under the displacement truncated at `c` standard deviations
+(`truncated_displacement_condensate`; for `c = Inf` the truncated-Gaussian
+integral `q_cond = μ_S Φ(μ_S / σ_S) + σ_S φ(μ_S / σ_S)`), or, with nonzero
+displacement coefficients `lin`, `curv` (`displacement_curvature_coefficients`),
+from the curvature-aware expectation `displacement_condensate(μ_S, σ_S, lin, curv)`
+(`equilibrium_condensate`). The expectation is continuous in `μ_S` and `σ_S`.
 Called from `set_precomputed_quantities!` as a second pass that overwrites the
 grid-mean saturation-adjustment condensate `ᶜq_liq`, `ᶜq_ice` whenever an
 equilibrium moisture model is run with an SGS quadrature configured, so that
@@ -128,8 +125,11 @@ inconsistent with saturation equilibrium and degrade the Jacobian approximations
   - `q′q′`: Total-water variance [(kg/kg)²].
   - `corr_Tq`: Correlation coefficient corr(T′, q′) [-].
   - `lin`, `curv`: Linear and curvature coefficients of the saturation excess
-    under the vertical displacement [kg/kg]; zero for the truncated-Gaussian
-    expectation.
+    under the vertical displacement [kg/kg]; zero for the truncated
+    displacement.
+  - `c`: Truncation of the displacement in standard deviations
+    (`sgs_displacement_truncation`) [-]; `Inf` (the default, as `Inf32`, which
+    promotes to the state's float type) for the untruncated Gaussian.
 
 # Returns
 
@@ -147,6 +147,7 @@ NamedTuple with `T` [K] and the SGS-averaged condensate `q_liq` and `q_ice`
     corr_Tq,
     lin = zero(ρ),
     curv = zero(ρ),
+    c = Inf32,
 )
     FT = typeof(T_mean)
     λ_mean = TD.liquid_fraction_ramp(thermo_params, T_mean)
@@ -157,7 +158,7 @@ NamedTuple with `T` [K] and the SGS-averaged condensate `q_liq` and `q_ice`
     # expectation can exceed the total water the cell holds; the condensate is
     # bounded by `q_mean` to keep the grid-mean vapor non-negative.
     q_cond = min(
-        displacement_condensate(mu_S, sigma_S, lin, curv),
+        equilibrium_condensate(mu_S, sigma_S, lin, curv, c),
         max(q_mean, zero(FT)),
     )
     q_liq = λ_mean * q_cond

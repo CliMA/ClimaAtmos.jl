@@ -3,6 +3,21 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- ![][badge-🔥behavioralΔ] The equilibrium SGS condensate that the 1M
+  condensate relaxes toward (`λ_eq`), the 0M SGS saturation adjustment, and the
+  variance fidelity evaluate `E[max(0, S)]` under the Gaussian displacement
+  truncated at `c` standard deviations and stretched to keep the variance of the
+  covariance closure (`truncated_displacement_condensate`,
+  `equilibrium_condensate`), with the new provisional parameter
+  `sgs_displacement_truncation` (`c`, default 3, at least 1; `Inf` restores the
+  Gaussian).
+  The untruncated tail condensed traces of cloud at the capping inversion of
+  dry convective boundary layers (Soares: LWP up to 1e-3 g m⁻², cloud fraction
+  up to 1e-5), where the one-cell inversion makes `σ_q` up to three times the
+  LES value and `μ_S ≈ −3.6 σ_S`; the truncation removes them and changes the
+  equilibrium condensate of the moist SCM cases by 2 % or less, with LWP and
+  RWP changes within the spread of a time-step perturbation. The
+  curvature-aware condensate (`sgs_variance_curvature`) is unchanged.
 - ![][badge-🔥behavioralΔ] The EDMF TKE shear production matches the resolved
   kinetic energy removed by the SGS stresses. The vertical production uses the
   vertical shear of the horizontal wind, `|∂_z uₕ|²/2`
