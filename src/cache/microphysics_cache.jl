@@ -175,15 +175,7 @@ function set_precipitation_velocities!(
     cmc = CAP.microphysics_cloud_params(params)
     cmp = CAP.microphysics_1m_params(params)
     thp = CAP.thermodynamics_params(params)
-
-    ᶜρ⁰ = @. lazy(
-        TD.air_density(thp, ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰),
-    )
-    ᶜρa⁰ = @. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model))
     n_val = Val(n_mass_flux_subdomains(turbconv_model))
-
-    # Compute gs sedimentation velocity based on subdomain velocities
-    # assuming grid-scale flux equals to the sum of sub-grid-scale fluxes.
 
     terminal_velocity_function(name, ρ, q) = terminal_velocity(
         microphysics_model,
@@ -196,53 +188,45 @@ function set_precipitation_velocities!(
         q,
     )
 
-    microphysics_tracers = unrolled_filter(
-        ((χ_name, _, _),) -> MatrixFields.has_field(Y.c.sgsʲs.:(1), χ_name),
-        (
-            (@name(q_lcl), @name(ᶜwₗʲs), @name(ᶜwₗ)),
-            (@name(q_icl), @name(ᶜwᵢʲs), @name(ᶜwᵢ)),
-            (@name(q_rai), @name(ᶜwᵣʲs), @name(ᶜwᵣ)),
-            (@name(q_sno), @name(ᶜwₛʲs), @name(ᶜwₛ)),
-        ),
-    )
-    χ_names = unrolled_map(first, microphysics_tracers)
-    ᶜws = unrolled_map(
-        ((_, _, w_name),) -> MatrixFields.get_field(p.precomputed, w_name),
-        microphysics_tracers,
-    )
-    ᶜwʲss = unrolled_map(
-        ((_, wʲs_name, _),) -> MatrixFields.get_field(p.precomputed, wʲs_name),
-        microphysics_tracers,
-    )
-    ᶜχ⁰s = unrolled_map(χ_name -> ᶜspecific_env_value(χ_name, Y, p), χ_names)
+    χ_names = (@name(q_lcl), @name(q_icl), @name(q_rai), @name(q_sno))
+    ρχ_names = unrolled_map(get_ρχ_name, χ_names)
 
-    # One fused column loop per species (the terminal-velocity closures are
-    # large, so one kernel for all species would be too much code to compile):
-    # the positive subdomain masses used for mass-weighted averaging of the gs
-    # terminal velocity (which keeps the value between the sgs terminal
-    # velocities, important for stability) and the implied environment mass
-    # flux are loop temporaries; the energy flux summed over subdomains
-    # accumulates in scratch.
-    # TODO use Y.c.ρq instead of ᶜρχ for computing gs velocities by averaging velocities
-    # over subdomains once negative subdomain mass issues are resolved
-    ᶜρwₕhₜ = p.scratch.ᶜtemp_scalar_3
-    @. ᶜρwₕhₜ = 0
-    ntuple(Val(length(χ_names))) do i
-        χ_name = χ_names[i]
-        ᶜw = ᶜws[i]
-        ᶜwʲs = ᶜwʲss[i]
-        ᶜχ⁰ = ᶜχ⁰s[i]
-        e_int_func = internal_energy_func(χ_name)
-        ᶜρχ_gs = MatrixFields.get_field(Y.c, get_ρχ_name(χ_name))
-        DataLayouts.foreach_column(
-            ᶜw, ᶜwʲs, ᶜρwₕhₜ, Y.c, ᶜρχ_gs, ᶜΦ, ᶜTʲs, ᶜρʲs, ᶜT⁰, ᶜρ⁰, ᶜρa⁰, ᶜχ⁰,
-        ) do ᶜw, ᶜwʲs, ᶜρwₕhₜ, Yc, ᶜρχ_gs, ᶜΦ, ᶜTʲs, ᶜρʲs, ᶜT⁰, ᶜρ⁰, ᶜρa⁰, ᶜχ⁰
-            ᶜρa⁰χ⁰ = @. max(zero(Yc.ρ), ᶜρa⁰) * max(zero(Yc.ρ), ᶜχ⁰)
+    # Fuse the column loop across all 4 species and the final WVec outputs so
+    # `ᶜρ⁰`, `ᶜρa⁰`, and `ᶜρwₕhₜ` stay in registers across species.
+    # TODO: use Y.c.ρq instead of ᶜρχ for computing gs velocities by averaging
+    # velocities over subdomains once negative subdomain mass issues are
+    # resolved
+    DataLayouts.foreach_column(
+        ᶜwₗ, ᶜwᵢ, ᶜwᵣ, ᶜwₛ, ᶜwₗʲs, ᶜwᵢʲs, ᶜwᵣʲs, ᶜwₛʲs, ᶜwₜqₜ, ᶜwₕhₜ,
+        Y.c, ᶜΦ, ᶜTʲs, ᶜρʲs, ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰,
+    ) do ᶜwₗ, ᶜwᵢ, ᶜwᵣ, ᶜwₛ, ᶜwₗʲs, ᶜwᵢʲs, ᶜwᵣʲs, ᶜwₛʲs, ᶜwₜqₜ, ᶜwₕhₜ,
+    Yc, ᶜΦ, ᶜTʲs, ᶜρʲs, ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰
+        ᶜρ⁰ = @. TD.air_density(thp, ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰)
+        ᶜρa⁰ = @. ρa⁰(Yc.ρ, Yc.sgsʲs, turbconv_model)
+        ᶜρa⁰_pos = @. max(zero(Yc.ρ), ᶜρa⁰)
+        ᶜρwₕhₜ = @. zero(Yc.ρ)
+
+        species_tuples = (
+            (@name(q_lcl), @name(ρq_lcl), ᶜwₗ, ᶜwₗʲs),
+            (@name(q_icl), @name(ρq_icl), ᶜwᵢ, ᶜwᵢʲs),
+            (@name(q_rai), @name(ρq_rai), ᶜwᵣ, ᶜwᵣʲs),
+            (@name(q_sno), @name(ρq_sno), ᶜwₛ, ᶜwₛʲs),
+        )
+        MatrixFields.unrolled_foreach(
+            species_tuples,
+        ) do (χ_name, ρχ_name, ᶜw, ᶜwʲs)
+            e_int_func = internal_energy_func(χ_name)
+            ᶜρχ_gs = MatrixFields.get_field(Yc, ρχ_name)
+            ᶜχ⁰ = @. specific_env_value(
+                χ_name, ᶜρχ_gs, Yc.ρ, Yc.sgsʲs, ᶜρa⁰, turbconv_model,
+            )
+
+            ᶜρa⁰χ⁰ = @. ᶜρa⁰_pos * max(zero(Yc.ρ), ᶜχ⁰)
             ᶜρχ = @. ᶜρa⁰χ⁰
             @. ᶜw = ᶜρa⁰χ⁰ * terminal_velocity_function(χ_name, ᶜρ⁰, ᶜχ⁰)
             ᶜimplied_env_mass_flux = @. zero(Yc.ρ)
-            # add updraft contributions
-            ntuple(n_val) do j
+
+            _unrolled_ntuple(n_val) do j
                 ᶜsgsʲ = Yc.sgsʲs.:($j)
                 ᶜχʲ = MatrixFields.get_field(ᶜsgsʲ, χ_name)
                 ᶜwʲ = ᶜwʲs.:($j)
@@ -254,12 +238,10 @@ function set_precipitation_velocities!(
                 @. ᶜwʲ = terminal_velocity_function(χ_name, ᶜρʲ, max(zero(Yc.ρ), ᶜχʲ))
                 @. ᶜw += ᶜρaʲχʲ * ᶜwʲ
                 @. ᶜimplied_env_mass_flux -= ᶜsgsʲ.ρa * ᶜχʲ * ᶜwʲ
-
-                # Add contributions to energy and total water advection
                 @. ᶜρwₕhₜ += ᶜsgsʲ.ρa * ᶜwʲ * ᶜχʲ * (e_int_func(thp, ᶜTʲ) + ᶜΦ)
                 return nothing
             end
-            # average
+
             @. ᶜw = gs_terminal_velocity(
                 microphysics_model,
                 velocity_mode(atmos, χ_name),
@@ -269,22 +251,20 @@ function set_precipitation_velocities!(
                 ᶜρχ,
             )
             @. ᶜimplied_env_mass_flux += ᶜρχ_gs * ᶜw
-            # contribution of env sedimentation to htot
             @. ᶜρwₕhₜ += ᶜimplied_env_mass_flux * (e_int_func(thp, ᶜT⁰) + ᶜΦ)
             return nothing
         end
+
+        @. ᶜwₕhₜ = WVec(ᶜρwₕhₜ) / Yc.ρ
+        @. ᶜwₜqₜ =
+            WVec(
+                ᶜwₗ * Yc.ρq_lcl +
+                ᶜwᵢ * Yc.ρq_icl +
+                ᶜwᵣ * Yc.ρq_rai +
+                ᶜwₛ * Yc.ρq_sno,
+            ) / Yc.ρ
         return nothing
     end
-
-    @. ᶜwₕhₜ = WVec(ᶜρwₕhₜ) / Y.c.ρ
-    @. ᶜwₜqₜ =
-        WVec(
-            ᶜwₗ * Y.c.ρq_lcl +
-            ᶜwᵢ * Y.c.ρq_icl +
-            ᶜwᵣ * Y.c.ρq_rai +
-            ᶜwₛ * Y.c.ρq_sno,
-        ) / Y.c.ρ
-
     return nothing
 end
 function set_precipitation_velocities!(
@@ -870,6 +850,8 @@ function update_updraft_microphysics_tendency_cache!(
     (; ᶜmp_tendencyʲs, ᶜρʲs, ᶜTʲs, ᶜuʲs, ᶜq_tot_nonnegʲs) = p.precomputed
     thp = CAP.thermodynamics_params(p.params)
     cmp = CAP.microphysics_1m_params(p.params)
+    dev = ClimaComms.device(Y.c)
+    vcmp, vthp = _fold(dev, cmp), _fold(dev, thp)
     nsubs = mp1m.n_substeps
     for j in 1:n_mass_flux_subdomains(tm)
         ᶜwʲ_air = @. lazy(w_component(WVec(ᶜuʲs.:($$j))))
@@ -877,7 +859,7 @@ function update_updraft_microphysics_tendency_cache!(
             ᶜρʲs.:($$j), ᶜq_tot_nonnegʲs.:($$j),
             Y.c.sgsʲs.:($$j).q_lcl, Y.c.sgsʲs.:($$j).q_icl,
             Y.c.sgsʲs.:($$j).q_rai, Y.c.sgsʲs.:($$j).q_sno,
-            ᶜTʲs.:($$j), ᶜwʲ_air, cmp, thp, dtγ, nsubs,
+            ᶜTʲs.:($$j), ᶜwʲ_air, vcmp, vthp, dtγ, nsubs,
         )
     end
     return nothing
@@ -1059,42 +1041,47 @@ function set_microphysics_tendency_cache!(
     end
 
     ### Environment contribution
-    # Materialize the environment inputs into scratch fields so the SGS-quadrature
-    # microphysics kernel below reads them instead of recomputing them inline at
-    # every grid point. `air_density` and the `specific_env_value` reconstructions
-    # (grid mean minus updrafts) are otherwise fused into that broadcast and inflate
-    # its fixed, per-point cost; hoisting them into cheap separate kernels is
-    # numerically identical and materially faster for this register-bound kernel.
+    # Materialize the environment inputs, the liquid fraction `λ`, and the
+    # linearized SGS saturation-excess mean `mu_S` in one column loop so the
+    # SGS-quadrature microphysics kernel reads them without recomputing them at
+    # every quadrature node.
     ᶜρ⁰ = p.scratch.ᶜtemp_scalar
     ᶜq_lcl⁰ = p.scratch.ᶜtemp_scalar_2
     ᶜq_icl⁰ = p.scratch.ᶜtemp_scalar_3
     ᶜq_rai⁰ = p.scratch.ᶜtemp_scalar_4
     ᶜq_sno⁰ = p.scratch.ᶜtemp_scalar_5
-    @. ᶜρ⁰ = TD.air_density(thp, ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰)
-    ᶜq_lcl⁰ .= ᶜspecific_env_value(@name(q_lcl), Y, p)
-    ᶜq_icl⁰ .= ᶜspecific_env_value(@name(q_icl), Y, p)
-    ᶜq_rai⁰ .= ᶜspecific_env_value(@name(q_rai), Y, p)
-    ᶜq_sno⁰ .= ᶜspecific_env_value(@name(q_sno), Y, p)
+    ᶜλ⁰ = p.scratch.ᶜtemp_scalar_6
+    ᶜmu_S⁰ = p.scratch.ᶜtemp_scalar_7
     sgs_quad = p.atmos.sgs_quadrature
+    is_quad = !not_quadrature(sgs_quad)
+
+    DataLayouts.foreach_column(
+        ᶜρ⁰, ᶜq_lcl⁰, ᶜq_icl⁰, ᶜq_rai⁰, ᶜq_sno⁰, ᶜλ⁰, ᶜmu_S⁰,
+        Y.c, ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰,
+    ) do ᶜρ⁰, ᶜq_lcl⁰, ᶜq_icl⁰, ᶜq_rai⁰, ᶜq_sno⁰, ᶜλ⁰, ᶜmu_S⁰,
+    Yc, ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰
+        @. ᶜρ⁰ = TD.air_density(thp, ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰)
+        ᶜρa⁰ = @. ρa⁰(Yc.ρ, Yc.sgsʲs, tm)
+        @. ᶜq_lcl⁰ = specific_env_value(@name(q_lcl), Yc.ρq_lcl, Yc.ρ, Yc.sgsʲs, ᶜρa⁰, tm)
+        @. ᶜq_icl⁰ = specific_env_value(@name(q_icl), Yc.ρq_icl, Yc.ρ, Yc.sgsʲs, ᶜρa⁰, tm)
+        @. ᶜq_rai⁰ = specific_env_value(@name(q_rai), Yc.ρq_rai, Yc.ρ, Yc.sgsʲs, ᶜρa⁰, tm)
+        @. ᶜq_sno⁰ = specific_env_value(@name(q_sno), Yc.ρq_sno, Yc.ρ, Yc.sgsʲs, ᶜρa⁰, tm)
+        if !not_quadrature(sgs_quad)
+            @. ᶜλ⁰ = TD.liquid_fraction(thp, ᶜT⁰, max(0, ᶜq_lcl⁰), max(0, ᶜq_icl⁰))
+            @. ᶜmu_S⁰ = ᶜq_tot_nonneg⁰ - TD.q_vap_saturation(thp, ᶜT⁰, ᶜρ⁰)
+        end
+        return nothing
+    end
+
     ᶜw⁰_air = @. lazy(w_component(WVec(ᶜu⁰)))
-    if not_quadrature(sgs_quad)
+    if !is_quad
         @. ᶜmp_tendency⁰ = microphysics_tendencies_1m(
             ᶜρ⁰, ᶜq_tot_nonneg⁰, ᶜq_lcl⁰, ᶜq_icl⁰, ᶜq_rai⁰, ᶜq_sno⁰,
             ᶜT⁰, ᶜw⁰_air, vcmp, vthp, dt, nsubs,
         )
     else
         (; ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα, ᶜsgs_moments, ᶜprecip_frac) = p.precomputed
-        # One packed scalar-options argument keeps the broadcast short enough
-        # for the GPU kernel (see `sgs_microphysics_options`).
         opts = sgs_microphysics_options(p.params)
-        # The liquid fraction `λ` and the linearized SGS saturation-excess mean
-        # `mu_S` are held fixed across the quadrature (they depend only on the mean
-        # state), so compute them once here and pass them in, instead of recomputing
-        # them inside every quadrature evaluation.
-        ᶜλ⁰ = p.scratch.ᶜtemp_scalar_6
-        ᶜmu_S⁰ = p.scratch.ᶜtemp_scalar_7
-        @. ᶜλ⁰ = TD.liquid_fraction(thp, ᶜT⁰, max(0, ᶜq_lcl⁰), max(0, ᶜq_icl⁰))
-        @. ᶜmu_S⁰ = ᶜq_tot_nonneg⁰ - TD.q_vap_saturation(thp, ᶜT⁰, ᶜρ⁰)
         @. ᶜmp_tendency⁰ = microphysics_tendencies_1m(
             BMT.Microphysics1Moment(), sgs_quad, vcmp, vthp, ᶜρ⁰, ᶜT⁰, ᶜw⁰_air,
             ᶜq_tot_nonneg⁰, ᶜq_lcl⁰, ᶜq_icl⁰, ᶜq_rai⁰, ᶜq_sno⁰,
@@ -1393,37 +1380,27 @@ function set_precipitation_surface_fluxes!(
         Fields.Field(Fields.field_values(Fields.level(x, 1)), sfc_space)
     int_J = sfc_lev(ᶜJ)
     int_ρ = sfc_lev(Y.c.ρ)
+    int_ρq_rai = sfc_lev(Y.c.ρq_rai)
+    int_ρq_sno = sfc_lev(Y.c.ρq_sno)
+    int_ρq_lcl = sfc_lev(Y.c.ρq_lcl)
+    int_ρq_icl = sfc_lev(Y.c.ρq_icl)
+    sfc_wᵣ = sfc_lev(ᶜwᵣ)
+    sfc_wₛ = sfc_lev(ᶜwₛ)
+    sfc_wₗ = sfc_lev(ᶜwₗ)
+    sfc_wᵢ = sfc_lev(ᶜwᵢ)
+    sfc_wₕhₜ = sfc_lev(ᶜwₕhₜ.components.data.:1)
     sfc_ρ = @. lazy(int_ρ * int_J / sfc_J)
 
-    # Constant extrapolation to surface, consistent with simple downwinding
-    # Temporary scratch variables are used here until CC.field_values supports <lazy> fields
-    ᶜq_rai = p.scratch.ᶜtemp_scalar
-    ᶜq_sno = p.scratch.ᶜtemp_scalar_2
-    ᶜq_lcl = p.scratch.ᶜtemp_scalar_3
-    ᶜq_icl = p.scratch.ᶜtemp_scalar_4
-    @. ᶜq_rai = specific(Y.c.ρq_rai, Y.c.ρ)
-    @. ᶜq_sno = specific(Y.c.ρq_sno, Y.c.ρ)
-    @. ᶜq_lcl = specific(Y.c.ρq_lcl, Y.c.ρ)
-    @. ᶜq_icl = specific(Y.c.ρq_icl, Y.c.ρ)
-    sfc_qᵣ =
-        Fields.Field(Fields.field_values(Fields.level(ᶜq_rai, 1)), sfc_space)
-    sfc_qₛ =
-        Fields.Field(Fields.field_values(Fields.level(ᶜq_sno, 1)), sfc_space)
-    sfc_qₗ =
-        Fields.Field(Fields.field_values(Fields.level(ᶜq_lcl, 1)), sfc_space)
-    sfc_qᵢ =
-        Fields.Field(Fields.field_values(Fields.level(ᶜq_icl, 1)), sfc_space)
-    sfc_wᵣ = Fields.Field(Fields.field_values(Fields.level(ᶜwᵣ, 1)), sfc_space)
-    sfc_wₛ = Fields.Field(Fields.field_values(Fields.level(ᶜwₛ, 1)), sfc_space)
-    sfc_wₗ = Fields.Field(Fields.field_values(Fields.level(ᶜwₗ, 1)), sfc_space)
-    sfc_wᵢ = Fields.Field(Fields.field_values(Fields.level(ᶜwᵢ, 1)), sfc_space)
-    sfc_wₕhₜ = Fields.Field(
-        Fields.field_values(Fields.level(ᶜwₕhₜ.components.data.:1, 1)),
-        sfc_space,
-    )
-
-    @. surface_rain_flux = sfc_ρ * (sfc_qᵣ * (-sfc_wᵣ) + sfc_qₗ * (-sfc_wₗ))
-    @. surface_snow_flux = sfc_ρ * (sfc_qₛ * (-sfc_wₛ) + sfc_qᵢ * (-sfc_wᵢ))
+    @. surface_rain_flux =
+        sfc_ρ * (
+            specific(int_ρq_rai, int_ρ) * (-sfc_wᵣ) +
+            specific(int_ρq_lcl, int_ρ) * (-sfc_wₗ)
+        )
+    @. surface_snow_flux =
+        sfc_ρ * (
+            specific(int_ρq_sno, int_ρ) * (-sfc_wₛ) +
+            specific(int_ρq_icl, int_ρ) * (-sfc_wᵢ)
+        )
     @. col_integrated_precip_energy_tendency = sfc_ρ * (-sfc_wₕhₜ)
 
     return nothing

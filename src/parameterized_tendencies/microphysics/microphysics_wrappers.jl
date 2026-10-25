@@ -466,6 +466,28 @@ with `dq_lcl_dt`, `dq_icl_dt`, `dq_rai_dt`, `dq_sno_dt` [kg/kg/s].
             (eval.q_rai, eval.q_sno, q_tot_eff)
         end
 
+    # When a quadrature node has zero condensate and precipitation and lies
+    # below both liquid and ice saturation, all 1M microphysics rates vanish;
+    # return zero directly instead of running the 5-substep 4x4 linear solver.
+    if isempty(eval.args) &&
+       (q_lcl_hat <= zero(FT)) & (q_icl_hat <= zero(FT)) &
+       (q_rai_node <= zero(FT)) & (q_sno_node <= zero(FT))
+        tps = _unwrapped(eval.tps)
+        T_freeze = TD.Parameters.T_freeze(tps)
+        T_icenuc = TD.Parameters.T_icenuc(tps)
+        q_smin =
+            (T_hat >= T_freeze) | (T_hat <= T_icenuc) ? q_sat_hat :
+            TD.q_vap_saturation(tps, T_hat, eval.ρ, TD.Ice())
+        if q_tot_node <= q_smin
+            return (;
+                dq_lcl_dt = zero(FT),
+                dq_icl_dt = zero(FT),
+                dq_rai_dt = zero(FT),
+                dq_sno_dt = zero(FT),
+            )
+        end
+    end
+
     return BMT.bulk_microphysics_tendencies(
         BMT.LinearizedAverage(),
         eval.scheme, _unwrapped(eval.mp), _unwrapped(eval.tps),
@@ -552,6 +574,26 @@ positive when a source of the corresponding tracer.
 @inline function microphysics_tendencies_1m( #compute_1m_precipitation_tendencies!(
     ρ, q_tot_nonneg, q_lcl, q_icl, q_rai, q_sno, T, w, cmp, thp, dt, nsubs,
 )
+    FT = typeof(ρ)
+    # Fast-path dry subsaturated cells so inactive updraft or grid-mean points
+    # return zero without running the substepped 4x4 linear solver.
+    if (q_lcl <= zero(FT)) & (q_icl <= zero(FT)) &
+       (q_rai <= zero(FT)) & (q_sno <= zero(FT))
+        tps = _unwrapped(thp)
+        q_smin = ifelse(
+            T >= TD.Parameters.T_freeze(tps),
+            TD.q_vap_saturation(tps, T, ρ, TD.Liquid()),
+            TD.q_vap_saturation(tps, T, ρ, TD.Ice()),
+        )
+        if q_tot_nonneg < q_smin * (one(FT) - 2 * eps(FT))
+            return (;
+                dq_lcl_dt = zero(FT),
+                dq_icl_dt = zero(FT),
+                dq_rai_dt = zero(FT),
+                dq_sno_dt = zero(FT),
+            )
+        end
+    end
     local_tendency = BMT.bulk_microphysics_tendencies(
         BMT.LinearizedAverage(),
         BMT.Microphysics1Moment(), _unwrapped(cmp), _unwrapped(thp), ρ, T, w,
@@ -628,6 +670,28 @@ precipitation exactly for any `a_p` (the shaft is bounded below by
     β_precip, σ_S, S_star, λ_eq, args,
 )
     FT = typeof(ρ)
+    # In a condensate- and precipitation-free cell with no equilibrium cloud
+    # (`λ_eq = -Inf`), every node has `q_c_eq_hat = 0` and `q_tot_node ≤ q_sat_hat`.
+    # Outside the mixed-phase temperature band (`T_icenuc < T_hat < T_freeze`),
+    # `q_smin = q_sat_hat`, so all 1M microphysics rates vanish at every node;
+    # return zero before building the 8-node conditional rule.
+    if isempty(args) &&
+       (q_lcl <= zero(FT)) & (q_icl <= zero(FT)) &
+       (q_rai <= zero(FT)) & (q_sno <= zero(FT)) &
+       !isfinite(FT(λ_eq))
+        tps = _unwrapped(thp)
+        T_freeze = FT(TD.Parameters.T_freeze(tps))
+        T_icenuc = FT(TD.Parameters.T_icenuc(tps))
+        ΔT_max = 8 * sqrt(max(FT(T′T′), zero(FT)))
+        if (T - ΔT_max >= T_freeze) | (T + ΔT_max <= T_icenuc)
+            return (;
+                dq_lcl_dt = zero(FT),
+                dq_icl_dt = zero(FT),
+                dq_rai_dt = zero(FT),
+                dq_sno_dt = zero(FT),
+            )
+        end
+    end
     q_c = q_lcl + q_icl
     α_safe = max(FT(α), ϵ_numerics(FT))
     t_a = -FT(λ_lagrange) / α_safe
