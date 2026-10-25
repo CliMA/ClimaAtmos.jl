@@ -3,6 +3,14 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- ![][badge-🔥behavioralΔ] Updraft condensate and precipitation sedimentation in
+  `edmfx_sgs_vertical_advection_tendency!` (`q_lcl`, `q_icl`, `q_rai`, `q_sno`)
+  adds the specific internal energy carried by the sedimenting water species,
+  `ᶜinv_ρ̂ * vtt * e_int_func(thp, ᶜTʲs.:(j))`, to `Yₜ.c.sgsʲs.:(j).mse`, matching
+  the grid-mean sedimentation energy flux in
+  `vertical_advection_of_water_tendency!` so that sedimentation of condensate or
+  precipitation at temperature `ᶜTʲ` does not induce spurious latent heating or
+  cooling in the updraft and environment `mse` budgets.
 - ![][badge-🔥behavioralΔ] The non-equilibrium cloud-fraction floor
 (`_sgs_augmented_sigma`, `_compute_cloud_fraction`) scales with the
 subsaturation deficit `δ_sub = max(0, −μ_S)` of the cloud-available water

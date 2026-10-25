@@ -300,9 +300,10 @@ The fallback method is a no-op for turbulence-convection models other than
 `PrognosticEDMFX`. For `PrognosticEDMFX`, this increments, for each updraft `j`:
 
   - `Yₜ.c.sgsʲs.:(j).mse`: the buoyancy source (geopotential gradient times the
-    updraft density anomaly `ᶜρ_diffʲs`) plus advective-form vertical advection with
-    the updraft velocity, using the `p.atmos.numerics.edmfx_mse_q_tot_upwinding`
-    scheme.
+    updraft density anomaly `ᶜρ_diffʲs`), advective-form vertical advection with
+    the updraft velocity using the `p.atmos.numerics.edmfx_mse_q_tot_upwinding`
+    scheme, and the enthalpy contribution of condensate and precipitation
+    sedimentation.
   - `Yₜ.c.sgsʲs.:(j).q_tot`: advective-form vertical advection (same scheme), plus
     the total-water contribution of condensate and precipitation sedimentation.
   - Every auto-discovered SGS tracer (from `sgs_tracer_names`): advective-form
@@ -312,7 +313,7 @@ The fallback method is a no-op for turbulence-convection models other than
     and `n_rai`): within-updraft sedimentation with lateral entrainment corrections
     via `updraft_sedimentation!`. This path currently supports a single updraft.
 
-Reads `Y`, the precomputed `ᶠu³ʲs`, `ᶜρʲs`, `ᶜρ_diffʲs`, and sedimentation
+Reads `Y`, the precomputed `ᶠu³ʲs`, `ᶜρʲs`, `ᶜρ_diffʲs`, `ᶜTʲs`, and sedimentation
 velocities, the core field `ᶜgradᵥ_ᶠΦ`, and scratch space. `t` is unused. See the
 "PROPHET: Overview and Equations" page (`docs/src/prophet.md`) for the continuous
 equations. Returns `nothing`.
@@ -328,7 +329,7 @@ function edmfx_sgs_vertical_advection_tendency!(
 )
     n = n_prognostic_mass_flux_subdomains(turbconv_model)
     (; edmfx_mse_q_tot_upwinding, edmfx_tracer_upwinding) = p.atmos.numerics
-    (; ᶠu³ʲs, ᶜρʲs, ᶜρ_diffʲs) = p.precomputed
+    (; ᶠu³ʲs, ᶜρʲs, ᶜρ_diffʲs, ᶜTʲs) = p.precomputed
     (; ᶜgradᵥ_ᶠΦ) = p.core
 
     FT = eltype(p.params)
@@ -387,6 +388,12 @@ function edmfx_sgs_vertical_advection_tendency!(
                 ᶜρʲs.:($$j),
                 turbconv_model,
             )
+            thp = CAP.thermodynamics_params(p.params)
+            internal_energy_func(name) =
+                (name == @name(q_lcl) || name == @name(q_rai)) ?
+                TD.internal_energy_liquid :
+                (name == @name(q_icl) || name == @name(q_sno)) ?
+                TD.internal_energy_ice : nothing
             # Sedimentation
             # TODO - lazify ᶜwₗʲs computation. No need to cache it.
             # Tuples: (updraft Y-path, species name, updraft vel, GS vel)
@@ -429,6 +436,9 @@ function edmfx_sgs_vertical_advection_tendency!(
                 )
                 @. ᶜqʲₜ += ᶜinv_ρ̂ * vtt
                 @. Yₜ.c.sgsʲs.:($$j).q_tot += ᶜinv_ρ̂ * vtt
+                e_int_func = internal_energy_func(name)
+                @. Yₜ.c.sgsʲs.:($$j).mse +=
+                    ᶜinv_ρ̂ * vtt * e_int_func(thp, ᶜTʲs.:($$j))
             end
         end
 
