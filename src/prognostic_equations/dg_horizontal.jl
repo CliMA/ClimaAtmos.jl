@@ -627,14 +627,21 @@ end
 Horizontal advection of prognostic TKE on DG spaces for the `:fddg` path.
 `horizontal_dynamics_tendency!` returns early for fddg (its `Yₜ.c.ρtke`
 split-divₕ term is skipped) and `dg_fddg_horizontal_dynamics!` only carries
-(ρ, ρe_tot, uₕ), so this adds the element-local `split_divₕ` volume term and
-its interface completion ([`dg_ρtke_interface_completion!`](@ref)).
+(ρ, ρe_tot, uₕ), so this adds the transport of `ρtke` by the density flux of
+the dynamics ([`dg_carried_tracer_residual`](@ref)), like the grid-mean
+tracers ([`dg_fddg_tracer_transport!`](@ref)).
 """
 function dg_fddg_tke_advection!(Yₜ, Y, p)
-    (; ᶜu) = p.precomputed
-    ᶜtke = @. lazy(specific(Y.c.ρtke, Y.c.ρ))
-    @. Yₜ.c.ρtke -= split_divₕ(Y.c.ρ * ᶜu, ᶜtke)
-    dg_ρtke_interface_completion!(Yₜ, Y, p)
+    ᶜWJ = Fields.local_geometry_field(Y.c).WJ
+    (; y, volume_flux, interface, ᶜλ_tracer) = dg_fddg_flux_setup(Y, p)
+    r = dg_carried_tracer_residual(
+        volume_flux,
+        interface,
+        y,
+        (@. Y.c.ρtke / Y.c.ρ),
+        ᶜλ_tracer,
+    )
+    @. Yₜ.c.ρtke += r / ᶜWJ
     return nothing
 end
 
@@ -759,50 +766,23 @@ end
 # ---------------------------------------------------------------------------
 
 """
-    dg_fddg_horizontal_dynamics!(Yₜ, Y, p, t)
+    dg_fddg_flux_setup(Y, p)
 
-Flux-form horizontal dynamics on DG spaces: replaces the split_divₕ (ρ,
-ρe_tot) terms, the Exner-split PGF, and the ω³ horizontal momentum advection
-of `horizontal_dynamics_tendency!` with Waruszewski flux-differencing volume
-terms + Roe interface fluxes over (ρ, ρe, ρu⃗) in global Cartesian momentum
-components. Coriolis, all vertical terms, and tracer advection are unchanged.
-
-With `dg_fddg_vertical = flux` the vertical transport of the horizontal
-momentum is also in flux form ([`dg_fddg_vertical_flux!`](@ref)): the face
-mass flux of the continuity equation times the interpolated Cartesian
-velocity, which is kinetic-energy preserving on the staggered grid for the
-same reason the horizontal two-point flux is, plus, for the flux-form
-pressure families, the vertical two-point pressure flux
-`∂_ξ3({p_m}{ê_c ⋅ Ja³})` through the horizontal part of `Ja³`. That term is
-the terrain tilt of the horizontal pressure force; the horizontal flux
-differencing alone carries only `Σ_{k=1,2} ∂_ξk(p_m Ja^k)`, which over sloped
-surfaces is the along-surface gradient and not the horizontal one.
-
-With `dg_volume_flux = div_exner` the two-point flux is the divergence form
-[`divergence_cartesian_flux`](@ref): the mass flux is the average of the
-nodal mass fluxes, as in the vector-invariant form, so the nodal gradients of
-`κ` and `Φ` exchange kinetic with potential energy exactly. With
-`dg_fddg_vertical = vi` this makes the scheme kinetic- and potential-energy
-preserving (KPEP); `flux` breaks the deep-atmosphere metric pair of the
-vertical exchange.
-
-With `dg_volume_flux = kg_exner` only the advection is in flux form
-([`kennedy_gruber_advective_cartesian_flux`](@ref) with Roe or Rusanov
-interface dissipation); the horizontal pressure force is the Exner-split
-gradient of the vector-invariant form, `gradₕ(Φ − Φ_r) + cp_d [θ_v′ ∇Π]`
-with its central liftings ([`dg_exner_split_pgf_lift!`](@ref)). Gradients
-of scalars are pointwise exact on constants, so over terrain this form
-does not depend on the discrete metric identity that the two-point
-pressure flux `{p_m}{ê_c ⋅ Ja^k}` fails to satisfy across the horizontal
-collocation and vertical FD operators.
+State tuple and flux functions of the flux-form DG family selected by
+`dg_volume_flux` and `dg_interface_flux`, shared by the dynamics
+([`dg_fddg_horizontal_dynamics!`](@ref)) and the tracer transport
+([`dg_fddg_tracer_transport!`](@ref)), so the tracers ride exactly the
+density flux of the dynamics. Returns a `NamedTuple` of the state tuple `y`,
+the two-point `volume_flux`, the `interface` flux (with its mass
+dissipation), its central part `iface_central`, and the fields the dynamics
+reuses.
 """
-NVTX.@annotate function dg_fddg_horizontal_dynamics!(Yₜ, Y, p, t)
+function dg_fddg_flux_setup(Y, p)
     FT = Spaces.undertype(axes(Y.c))
     (; ᶜΦ) = p.core
     (; ᶜp, ᶜK) = p.precomputed
     thermo_params = CAP.thermodynamics_params(p.params)
     coords = Fields.coordinate_field(axes(Y.c))
-    ᶜWJ = Fields.local_geometry_field(Y.c).WJ
 
     # Geographic components of the Cartesian unit vectors (position-dependent,
     # state-independent) and their tangential projections as UVVectors.
@@ -927,6 +907,188 @@ NVTX.@annotate function dg_fddg_horizontal_dynamics!(Yₜ, Y, p, t)
         dg_volume_flux === Val(:kg_pert) ? kennedy_gruber_roe_cartesian :
         waruszewski_roe_cartesian
     end
+    return (;
+        eE1,
+        eE2,
+        eE3,
+        eN1,
+        eN2,
+        eN3,
+        E1,
+        E2,
+        E3,
+        ᶜuv,
+        ᶜλ,
+        ᶜλ_tracer,
+        uE,
+        uN,
+        u1,
+        u2,
+        u3,
+        e,
+        pm,
+        y,
+        kpep,
+        cp_d,
+        ᶜθ_v_diff,
+        ᶜΠ,
+        vertical_vi,
+        ᶜψ_kpep,
+        exner_pgf,
+        kg_advective,
+        volume_flux,
+        iface_central,
+        moist_es,
+        Nslots,
+        interface,
+    )
+end
+
+"""
+    dg_carried_tracer_residual(volume_flux, mass_interface, y, ᶜχ, ᶜλχ)
+
+Mass-weighted residual of `ρχ` for a specific quantity `χ` carried by the
+mass flux of the flux-form DG family: the volume flux `F_ρ(i, i'){χ}` with
+`F_ρ` the density slot of `volume_flux`, and the interface flux
+`F*_ρ {χ} − (λχ/2){ρ}(χ⁺ − χ⁻)` with `F*_ρ` the density slot of
+`mass_interface` (its mass dissipation included) and the ρ-weighted tracer
+penalty at the rate `λχ`. For uniform `χ` the residual is `χ` times the
+density residual, so a uniform specific quantity stays uniform.
+"""
+function dg_carried_tracer_residual(volume_flux, mass_interface, y, ᶜχ, ᶜλχ)
+    FT = Spaces.undertype(axes(ᶜχ))
+    yχ = map((yy, c, l) -> merge(yy, (; χ = c, λχ = l)), y, ᶜχ, ᶜλχ)
+    vol(na, nb, ya, yb) =
+        (; ρχ = volume_flux(na, nb, ya, yb).ρ * (ya.χ + yb.χ) / 2)
+    ifc(n, (ym,), (yp,)) = (;
+        ρχ = mass_interface(n, (ym,), (yp,)).ρ * (ym.χ + yp.χ) / 2 -
+             max(ym.λχ, yp.λχ) / 2 * (ym.ρ + yp.ρ) / 2 * (yp.χ - ym.χ)
+    )
+    dy = Fields.Field(NamedTuple{(:ρχ,), Tuple{FT}}, axes(ᶜχ))
+    fill!(parent(dy), 0)
+    Operators.add_flux_differencing_divergence!(vol, dy, yχ)
+    Operators.add_numerical_flux_interior!(ifc, dy, yχ)
+    return dy.ρχ
+end
+
+"""
+    dg_fddg_tracer_transport!(Yₜ_lim, Y, p)
+
+Horizontal transport of the grid-mean tracers (into `Yₜ_lim`) on the
+flux-form DG path, with every tracer
+carried by the density flux of the dynamics
+([`dg_carried_tracer_residual`](@ref) with the volume and interface fluxes of
+[`dg_fddg_flux_setup`](@ref)), so that `F_{ρχ} = F_ρ {χ}` in the volume and
+`F*_{ρχ} = F*_ρ {χ} − λ_χ {ρ} ⟦χ⟧` at faces. The vector-invariant split
+divergence and central interface flux that tracers otherwise use carry
+`{ρ u^ξ}` and `{ρ u_n}`, which differ from the Kennedy--Gruber volume mass flux
+and from the dissipative interface mass flux, so a uniform specific quantity
+would not stay uniform across a density jump. With `moist_es`, total water
+is dissipated with the density in the moist system, so it rides the central
+part of the interface mass flux without a penalty.
+"""
+function dg_fddg_tracer_transport!(Yₜ_lim, Y, p)
+    ᶜWJ = Fields.local_geometry_field(Y.c).WJ
+    (; y, volume_flux, interface, iface_central, Nslots, ᶜλ_tracer) =
+        dg_fddg_flux_setup(Y, p)
+    central(n, (ym,), (yp,)) = iface_central(n, n, ym, yp)
+    ᶜλ_zero = @. zero(ᶜλ_tracer)
+    foreach_gs_tracer(Yₜ_lim, Y) do ᶜρχₜ, ᶜρχ, ρχ_name
+        water_in_system = Nslots == 6 && ρχ_name == @name(ρq_tot)
+        r = dg_carried_tracer_residual(
+            volume_flux,
+            water_in_system ? central : interface,
+            y,
+            (@. ᶜρχ / Y.c.ρ),
+            water_in_system ? ᶜλ_zero : ᶜλ_tracer,
+        )
+        @. ᶜρχₜ += r / ᶜWJ
+    end
+    return nothing
+end
+
+"""
+    dg_fddg_horizontal_dynamics!(Yₜ, Y, p, t)
+
+Flux-form horizontal dynamics on DG spaces: replaces the split_divₕ (ρ,
+ρe_tot) terms, the Exner-split PGF, and the ω³ horizontal momentum advection
+of `horizontal_dynamics_tendency!` with Waruszewski flux-differencing volume
+terms + Roe interface fluxes over (ρ, ρe, ρu⃗) in global Cartesian momentum
+components. Coriolis, all vertical terms, and tracer advection are unchanged.
+
+With `dg_fddg_vertical = flux` the vertical transport of the horizontal
+momentum is also in flux form ([`dg_fddg_vertical_flux!`](@ref)): the face
+mass flux of the continuity equation times the interpolated Cartesian
+velocity, which is kinetic-energy preserving on the staggered grid for the
+same reason the horizontal two-point flux is, plus, for the flux-form
+pressure families, the vertical two-point pressure flux
+`∂_ξ3({p_m}{ê_c ⋅ Ja³})` through the horizontal part of `Ja³`. That term is
+the terrain tilt of the horizontal pressure force; the horizontal flux
+differencing alone carries only `Σ_{k=1,2} ∂_ξk(p_m Ja^k)`, which over sloped
+surfaces is the along-surface gradient and not the horizontal one.
+
+With `dg_volume_flux = div_exner` the two-point flux is the divergence form
+[`divergence_cartesian_flux`](@ref): the mass flux is the average of the
+nodal mass fluxes, as in the vector-invariant form, so the nodal gradients of
+`κ` and `Φ` exchange kinetic with potential energy exactly. With
+`dg_fddg_vertical = vi` this makes the scheme kinetic- and potential-energy
+preserving (KPEP); `flux` breaks the deep-atmosphere metric pair of the
+vertical exchange.
+
+With `dg_volume_flux = kg_exner` only the advection is in flux form
+([`kennedy_gruber_advective_cartesian_flux`](@ref) with Roe or Rusanov
+interface dissipation); the horizontal pressure force is the Exner-split
+gradient of the vector-invariant form, `gradₕ(Φ − Φ_r) + cp_d [θ_v′ ∇Π]`
+with its central liftings ([`dg_exner_split_pgf_lift!`](@ref)). Gradients
+of scalars are pointwise exact on constants, so over terrain this form
+does not depend on the discrete metric identity that the two-point
+pressure flux `{p_m}{ê_c ⋅ Ja^k}` fails to satisfy across the horizontal
+collocation and vertical FD operators.
+"""
+NVTX.@annotate function dg_fddg_horizontal_dynamics!(Yₜ, Y, p, t)
+    FT = Spaces.undertype(axes(Y.c))
+    (; ᶜΦ) = p.core
+    (; ᶜp, ᶜK) = p.precomputed
+    thermo_params = CAP.thermodynamics_params(p.params)
+    coords = Fields.coordinate_field(axes(Y.c))
+    ᶜWJ = Fields.local_geometry_field(Y.c).WJ
+
+    (;
+        eE1,
+        eE2,
+        eE3,
+        eN1,
+        eN2,
+        eN3,
+        E1,
+        E2,
+        E3,
+        ᶜuv,
+        ᶜλ,
+        ᶜλ_tracer,
+        uE,
+        uN,
+        u1,
+        u2,
+        u3,
+        e,
+        pm,
+        y,
+        kpep,
+        cp_d,
+        ᶜθ_v_diff,
+        ᶜΠ,
+        vertical_vi,
+        ᶜψ_kpep,
+        exner_pgf,
+        kg_advective,
+        volume_flux,
+        iface_central,
+        moist_es,
+        Nslots,
+        interface,
+    ) =
+        dg_fddg_flux_setup(Y, p)
     dy = if Nslots == 6
         Fields.Field(
             NamedTuple{(:ρ, :ρe, :ρu1, :ρu2, :ρu3, :ρq_tot), NTuple{6, FT}},

@@ -42,8 +42,8 @@ NVTX.@annotate function horizontal_dynamics_tendency!(Yₜ, Y, p, t)
         )
         dg_fddg_horizontal_dynamics!(Yₜ, Y, p, t)
         # ρtke is excluded from is_tracer_var and the split_divₕ term below is
-        # skipped by this early return, so TKE would have no horizontal
-        # transport in fddg mode — restore it (volume + DG interface flux).
+        # skipped by this early return; it rides the density flux of the
+        # dynamics like the grid-mean tracers (dg_fddg_tracer_transport!)
         use_prognostic_tke(p.atmos.turbconv_model) &&
             dg_fddg_tke_advection!(Yₜ, Y, p)
         return nothing
@@ -136,6 +136,12 @@ NVTX.@annotate function horizontal_tracer_advection_tendency!(Yₜ, Y, p, t)
         (; ᶜuʲs) = p.precomputed
     end
 
+    # flux-form DG: every tracer rides the density flux of the dynamics
+    if is_dg_horizontal(axes(Y.c)) &&
+       p.atmos.numerics.dg_equation_form === Val(:fddg)
+        dg_fddg_tracer_transport!(Yₜ, Y, p)
+        return nothing
+    end
     for ρχ_name in filter(is_tracer_var, propertynames(Y.c))
         ᶜχ = @. lazy(specific(Y.c.:($$ρχ_name), Y.c.ρ))
         @. Yₜ.c.:($$ρχ_name) -= split_divₕ(Y.c.ρ * ᶜu, ᶜχ)
