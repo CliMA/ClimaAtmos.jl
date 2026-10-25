@@ -1064,6 +1064,6 @@ where `p` is a degree-5 polynomial with the A&S coefficients, and
                 )
             )
         )
-    q = inv_sqrt2pi * exp(-z_abs * z_abs / 2) * poly
+    q = inv_sqrt2pi * exp(-z_abs^2 / 2) * poly
     return ifelse(z >= zero(FT), one(FT) - q, q)
 end

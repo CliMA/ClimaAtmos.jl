@@ -627,7 +627,9 @@ assumed to relax onto the saturation curve
 reconstructed excess can be blended with its subdomain mean through the
 parameters `sgs_liquid_uniform_fraction` and `sgs_ice_uniform_fraction`.
 The equilibrium condensate the reconstruction relaxes toward is the expected
-saturation excess ``\mathbb{E}[\max(0, S)]`` of the Gaussian, or, with
+saturation excess ``\mathbb{E}[\max(0, S)]`` of the Gaussian displacement
+truncated at ``c`` standard deviations (`sgs_displacement_truncation`,
+default 3), or, with
 `sgs_variance_curvature: true`, of the vertical displacement acting on the
 curved profile of the saturation excess. To second order in the displacement
 ``\delta = \ell_v x``,
@@ -649,6 +651,28 @@ profile reaches; the moist tail is then thinner than Gaussian and the
 condensate stops growing with ``\sigma_S``. The expectation is the
 truncated-Gaussian value plus the change the curvature makes to it, with the
 vertical model in closed form (`displacement_condensate`).
+
+The truncation bounds how far the displacement extrapolates the linearized
+profiles. The displacement ``x`` is a standard normal truncated to ``[-c, c]``
+and stretched by ``s = (1 - 2 c \phi(c) / Z)^{-1/2}``, with
+``Z = \Phi(c) - \Phi(-c)``, so that its variance remains that of the covariance
+closure, and
+
+```math
+\mathbb{E}[\max(0, S)] = \frac{1}{Z}
+  \left[\mu_S \left(\Phi(c) - \Phi(a)\right)
+  + s \sigma_S \left(\phi(a) - \phi(c)\right)\right],
+\qquad a = \max\!\left(-c, -\frac{\mu_S}{s \sigma_S}\right)
+```
+
+(`truncated_displacement_condensate`), which vanishes for
+``\mu_S \le -s c \sigma_S``, where no displaced parcel reaches saturation.
+Where a capping inversion is resolved by one or two cells, the displacement is
+longer than the layer over which the gradient holds, and the linear profile
+beyond a few standard deviations lies outside the air the displacement reaches.
+With the default ``c = 3`` (``s c \approx 3.04``), the condensate of a cell
+comes from within three standard deviations of its mean excess.
+``c = \infty`` restores the Gaussian.
 The cloud fraction is then the fraction of the distribution carrying positive
 local condensate, evaluated with a variance augmented by a non-equilibrium floor
 that scales with the saturation specific humidity and is released as the
@@ -856,6 +880,7 @@ covariance, quadrature and cloud-fraction closures,
 | ``c_g``, ``c_{\Delta x}``, ``w_{\mathrm{ref}}``, ``\Delta x_{\mathrm{ref}}``, ``p``, ``\tau_0`` | `sgs_variance_geometric_coeff`, `sgs_variance_horizontal_scale_factor`, `sgs_variance_vertical_velocity_floor`, `sgs_variance_floor_reference_resolution`, `sgs_variance_floor_resolution_exponent`, `sgs_variance_floor_time_scale` | `sgs_variance_geometric_coeff`, `sgs_variance_horizontal_scale_factor`, —, —, —, —                      |
 | ``r_{\Delta x,\theta}``, ``r_{v,\theta}``, ``r_{h,\theta q}``                                   | `sgs_variance_theta_horizontal_scale_ratio`, `sgs_variance_theta_vertical_scale_ratio`, `sgs_variance_horizontal_cross_correlation`                                                                                                  | —, —, —                                                                                                 |
 | ``r_{\max}``                                                                                    | `sgs_variance_max_rel_std` (bound ``\sigma_q \le r_{\max} q_t``)                                                                                                                                                                     | `sgs_variance_max_rel_std`                                                                              |
+| ``c``                                                                                           | `sgs_displacement_truncation` (displacement truncation, in standard deviations)                                                                                                                                                      | —                                                                                                       |
 
 The generated [Configuration Options](configuration_options.md) table lists the
 YAML keys; [Configuring and Tuning PROPHET](prophet_howto.md) explains which of

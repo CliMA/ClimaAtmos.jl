@@ -131,7 +131,12 @@ end
         @test CAP.sgs_precip_incloud_fraction(sq) == FT(0)
         @test CAP.sgs_precip_overlap_decay(sq) == FT(1)
         @test CAP.sgs_precip_fraction_floor(sq) == FT(0.5)
+        @test CAP.sgs_displacement_truncation(sq) == FT(3)
     end
+    @test_throws ArgumentError CA.SGSQuadratureParameters(
+        Float64,
+        (; sgs_displacement_truncation = 0.5),
+    )
     # A run toml overrides the defaults.
     mktemp() do path, io
         write(

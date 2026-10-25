@@ -796,6 +796,7 @@ NVTX.@annotate function set_implicit_precomputed_quantities!(Y, p, t)
             else
                 (zero(eltype(ᶜT)), zero(eltype(ᶜT)))
             end
+            c_trunc = equilibrium_condensate_truncation(p)
             @. ᶜsa_result = compute_sgs_saturation_adjustment(
                 thermo_params,
                 $(sgs_quad),
@@ -807,6 +808,7 @@ NVTX.@annotate function set_implicit_precomputed_quantities!(Y, p, t)
                 ᶜcorr_Tq,
                 ᶜlin,
                 ᶜcurv,
+                c_trunc,
             )
             @. ᶜq_liq = ᶜsa_result.q_liq
             @. ᶜq_ice = ᶜsa_result.q_ice

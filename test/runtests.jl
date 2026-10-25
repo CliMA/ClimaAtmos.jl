@@ -108,6 +108,7 @@ if TEST_GROUP in ("parameterizations", "all")
     @safetestset "SGS saturation tests" begin @time include("parameterized_tendencies/microphysics/sgs_saturation.jl") end
     @safetestset "Displacement condensate tests" begin @time include("parameterized_tendencies/microphysics/displacement_condensate.jl") end
     @safetestset "Conditional node rule tests" begin @time include("parameterized_tendencies/microphysics/conditional_nodes.jl") end
+    @safetestset "Truncated displacement tests" begin @time include("parameterized_tendencies/microphysics/truncated_displacement.jl") end
     @safetestset "BMT integration tests" begin @time include("parameterized_tendencies/microphysics/bmt_integration.jl") end
     @safetestset "Allocation tests" begin @time include("parameterized_tendencies/microphysics/allocations.jl") end
 

@@ -533,6 +533,7 @@ function materialized_variance_fidelity!(Y, p, ᶜl_mix_disp)
     else
         (zero(FT), zero(FT))
     end
+    c = equilibrium_condensate_truncation(p)
     @. ᶜα = sgs_variance_fidelity(
         A,
         sgs_microphysics_timescale(thp, ᶜT_mean, τ_cond, τ_sub),
@@ -546,6 +547,7 @@ function materialized_variance_fidelity!(Y, p, ᶜl_mix_disp)
         q_min,
         ᶜlin,
         ᶜcurv,
+        c,
     )
     return nothing
 end
@@ -1009,7 +1011,87 @@ Expected saturation excess `E[max(0, S)] = μ_S Φ(z) + σ_S φ(z)` with
     inv_sqrt2π = one(FT) / sqrt(FT(2) * FT(π))
     σ = max(FT(sigma_S), ϵ_numerics(FT))
     z = mu_S / σ
-    return max(zero(FT), mu_S * normal_cdf(z) + σ * exp(-z * z / 2) * inv_sqrt2π)
+    return max(zero(FT), mu_S * normal_cdf(z) + σ * exp(-z^2 / 2) * inv_sqrt2π)
+end
+
+"""
+    truncated_displacement_scale(c)
+
+Factor `s = (1 − 2c φ(c) / (2Φ(c) − 1))^(−1/2) ≥ 1` by which a standard normal
+truncated to `[−c, c]` is stretched to keep unit variance; `1` for `c = Inf`.
+"""
+@inline function truncated_displacement_scale(c)
+    FT = typeof(c)
+    inv_sqrt2π = one(FT) / sqrt(FT(2) * FT(π))
+    # Both arms of the `ifelse` are evaluated, so `c = Inf` is replaced before
+    # the finite-`c` arm, where `c φ(c)` would be `Inf * 0`.
+    c_finite = ifelse(isfinite(c), c, one(FT))
+    φc = exp(-c_finite^2 / 2) * inv_sqrt2π
+    Z = one(FT) - 2 * normal_cdf(-c_finite)
+    return ifelse(isfinite(c), sqrt(Z / (Z - 2 * c_finite * φc)), one(FT))
+end
+
+"""
+    truncated_displacement_condensate(mu_S, sigma_S, c)
+
+Expected saturation excess `E[max(0, S)]` for `S = μ_S + s σ_S x`, with the
+displacement `x` standard normal truncated to `[−c, c]` and `s`
+(`truncated_displacement_scale`) keeping the variance `σ_S²` of the covariance
+closure. With `Z = Φ(c) − Φ(−c)` and `a = max(−c, −μ_S / (s σ_S))`,
+
+    E[max(0, S)] = (μ_S (Φ(c) − Φ(a)) + s σ_S (φ(a) − φ(c))) / Z,
+
+which is zero for `μ_S ≤ −s c σ_S`, where no displaced parcel reaches
+saturation, and `μ_S` for `μ_S ≥ s c σ_S`. The displacement acts on the
+linearized profiles, so the truncation bounds how far it extrapolates the
+gradients. `c = Inf` returns `truncated_gaussian_condensate(μ_S, σ_S)` exactly.
+The factors that depend on `c` alone keep the parameter's type.
+"""
+@inline function truncated_displacement_condensate(mu_S, sigma_S, c)
+    FT = typeof(mu_S)
+    gaussian = truncated_gaussian_condensate(mu_S, sigma_S)
+    inv_sqrt2π = one(FT) / sqrt(FT(2) * FT(π))
+    c_finite = ifelse(isfinite(c), c, one(c))
+    Z = one(c) - 2 * normal_cdf(-c_finite)
+    σ = max(sigma_S, ϵ_numerics(FT)) * truncated_displacement_scale(c)
+    a = clamp(-mu_S / σ, -c_finite, c_finite)
+    # Upper-tail differences, accurate where `a` approaches `c`. Each difference
+    # takes the same expression at both ends, so it vanishes exactly where `a`
+    # is clamped to `c`.
+    I₀ = normal_cdf(-a) - normal_cdf(-c_finite)
+    I₁ = (exp(-a^2 / 2) - exp(-c_finite^2 / 2)) * inv_sqrt2π
+    truncated = max(zero(FT), (mu_S * I₀ + σ * I₁) / Z)
+    return ifelse(isfinite(c), truncated, gaussian)
+end
+
+"""
+    equilibrium_condensate(mu_S, sigma_S, lin, curv, c)
+
+Equilibrium condensate the SGS closures relax toward: the truncated-displacement
+expectation `truncated_displacement_condensate(μ_S, σ_S, c)`, or, with nonzero
+curvature `curv` (`sgs_variance_curvature`), the curvature-aware
+`displacement_condensate(μ_S, σ_S, lin, curv)`, whose tail is bounded by the
+quadratic where the curvature is negative. With `sgs_variance_curvature`, the
+callers pass `c = Inf` (`equilibrium_condensate_truncation`), so a cell with
+`curv = 0`, such as the bottom and top cells, has the Gaussian expectation, the
+limit of the curvature-aware one as `curv → 0`.
+"""
+@inline equilibrium_condensate(mu_S, sigma_S, lin, curv, c) = ifelse(
+    iszero(curv),
+    truncated_displacement_condensate(mu_S, sigma_S, c),
+    displacement_condensate(mu_S, sigma_S, lin, curv),
+)
+
+"""
+    equilibrium_condensate_truncation(p)
+
+Displacement truncation `c` passed to `equilibrium_condensate`: the parameter
+`sgs_displacement_truncation`, or `Inf` with `sgs_variance_curvature`, whose
+curvature-aware closure bounds the moist tail itself.
+"""
+function equilibrium_condensate_truncation(p)
+    c = CAP.sgs_displacement_truncation(p.params)
+    return p.atmos.sgs_variance_curvature ? oftype(c, Inf) : c
 end
 
 """
@@ -1023,8 +1105,8 @@ infinite limits.
 @inline function _gaussian_interval_moments(a, b)
     FT = typeof(a)
     inv_sqrt2π = one(FT) / sqrt(FT(2) * FT(π))
-    φa = ifelse(isfinite(a), exp(-a * a / 2) * inv_sqrt2π, zero(FT))
-    φb = ifelse(isfinite(b), exp(-b * b / 2) * inv_sqrt2π, zero(FT))
+    φa = ifelse(isfinite(a), exp(-a^2 / 2) * inv_sqrt2π, zero(FT))
+    φb = ifelse(isfinite(b), exp(-b^2 / 2) * inv_sqrt2π, zero(FT))
     I₀ = normal_cdf(b) - normal_cdf(a)
     I₁ = φa - φb
     I₂ = I₀ + ifelse(isfinite(a), a * φa, zero(FT)) -
@@ -1052,7 +1134,7 @@ is `truncated_gaussian_condensate(μ_S, |lin|)`.
     # Roots of ½ c x² + l x + m₀, with the stable form that keeps the root
     # that stays finite as c → 0 free of cancellation.
     m₀ = mu_S - c / 2
-    D = l * l - 2 * c * m₀
+    D = l^2 - 2 * c * m₀
     s = sqrt(max(D, zero(FT)))
     r = -(l + copysign(s, l)) / 2
     r_safe = ifelse(r == zero(FT), one(FT), r)
@@ -1152,7 +1234,7 @@ struct SmoothingBumpChange{FT}
 end
 @inline function (f::SmoothingBumpChange)(x)
     m_lin = f.mu_S + f.lin * x
-    m_curv = m_lin + f.curv * (x * x - 1) / 2
+    m_curv = m_lin + f.curv * (x^2 - 1) / 2
     return _smoothing_bump(m_curv, f.σ_h) - _smoothing_bump(m_lin, f.σ_h)
 end
 
@@ -1251,7 +1333,7 @@ end
 """
     sgs_variance_fidelity(
         A, τ_mp, c_d, tke, l_mix, w_eq, q_c_actual, mu_S, sigma_S, q_min,
-        lin = 0, curv = 0,
+        lin = 0, curv = 0, c = Inf32,
     )
 
 Local SGS variance fidelity `α = α_Da · α_eq` for the condensate
@@ -1263,19 +1345,21 @@ reconstruction `E[max(0, λ + α·S′)] = q_c`.
   - Equilibrium-ratio modulator `α_eq = r / (w_eq + (1 − w_eq) r)` with
     `r = (q_c_actual + q_min) / (q_c_eq + q_min)` and `q_c_eq` the expected
     saturation excess under the SGS PDF (always ≥ 0 even for subsaturated
-    means): the truncated-Gaussian expectation `μ_S Φ(z) + σ_S φ(z)`,
-    `z = μ_S/σ_S`, or, with nonzero displacement coefficients `lin`, `curv`,
-    the curvature-aware `displacement_condensate(μ_S, σ_S, lin, curv)`, the
-    same target the condensate relaxes toward.
+    means): `equilibrium_condensate(μ_S, σ_S, lin, curv, c)`, the expectation
+    under the displacement truncated at `c` standard deviations, or, with
+    nonzero displacement coefficients `lin`, `curv`, the curvature-aware
+    `displacement_condensate(μ_S, σ_S, lin, curv)`, the same target the
+    condensate relaxes toward.
 """
 @inline function sgs_variance_fidelity(
     A, τ_mp, c_d, tke, l_mix, w_eq, q_c_actual, mu_S, sigma_S, q_min,
-    lin = zero(mu_S), curv = zero(mu_S),
+    lin = zero(mu_S), curv = zero(mu_S), c = Inf32,
 )
     FT = typeof(tke)
     inv_τ_turb = FT(c_d) * sqrt(max(tke, zero(FT))) / max(l_mix, one(FT))
     α_Da = one(FT) / (one(FT) + FT(A) * FT(τ_mp) * inv_τ_turb)
-    q_c_eq = displacement_condensate(FT(mu_S), FT(sigma_S), FT(lin), FT(curv))
+    q_c_eq =
+        equilibrium_condensate(FT(mu_S), FT(sigma_S), FT(lin), FT(curv), c)
     r = (FT(q_c_actual) + FT(q_min)) / (q_c_eq + FT(q_min))
     w = FT(w_eq)
     α_eq = r / (w + (one(FT) - w) * r)
@@ -1315,14 +1399,14 @@ high.
     z0 = normal_cdf_inv(Φz0_safe)
 
     # 2. First Newton step: z₁ = (C − φ(z₀)) / Φ(z₀)
-    φz0 = exp(-z0 * z0 / 2) * inv_sqrt2π
+    φz0 = exp(-z0^2 / 2) * inv_sqrt2π
     z1 = (C - φz0) / Φz0_safe
 
     # 3. Second Newton step. Applied only where Φ(z₁) is above
     # the ϵ_numerics clamp; below that (z₁ ≲ −7 at Float32) the clamped
     # denominator corrupts the ratio φ(z₁)/Φ(z₁), and the result is
     # condensate- and cloud-free to machine precision either way.
-    φz1 = exp(-z1 * z1 / 2) * inv_sqrt2π
+    φz1 = exp(-z1^2 / 2) * inv_sqrt2π
     Φz1 = normal_cdf(z1)
     z2 = (C - φz1) / max(Φz1, ϵ_numerics(FT))
     return ifelse(Φz1 > ϵ_numerics(FT), z2, z1)
@@ -1504,7 +1588,7 @@ cloud_fraction_floor_params(params) = CloudFractionFloorParams(;
 """
     _compute_sgs_moments(
         thp, ρ, T, q_tot, q_c, sgs_quad, T′T′, q′q′, corr_Tq, α,
-        q_tot_cloud = q_tot, lin = 0, curv = 0,
+        q_tot_cloud = q_tot, lin = 0, curv = 0, c = Inf32,
     )
 
 The SGS moments `(sigma_S, λ_lagrange, λ_eq)` of the 1M condensate closures:
@@ -1517,11 +1601,20 @@ The SGS moments `(sigma_S, λ_lagrange, λ_eq)` of the 1M condensate closures:
     `σ_S_eff = α σ_S` floored so it stays finite where `q_c` and `α` both
     vanish).
   - `λ_eq`: the multiplier of the equilibrium condensate `max(0, λ_eq + S′)`,
-    whose expectation is `q_c_eq`: the mean cloud excess
-    `μ_{S,cloud} = q_tot_cloud − q_sat(T, ρ)` (`q_tot_cloud = q_tot − q_rai − q_sno`) itself, since `q_c_eq = truncated_gaussian_condensate(μ_{S,cloud}, σ_S)`, or, with nonzero displacement coefficients `(lin, curv)`
-    (`displacement_curvature_coefficients`), the mean of the Gaussian whose
-    expectation matches the curvature-aware
-    `displacement_condensate(μ_{S,cloud}, σ_S, lin, curv)`.
+    the mean of the Gaussian whose expectation is the equilibrium condensate
+    `q_c_eq = equilibrium_condensate(μ_{S,cloud}, σ_S, lin, curv, c)` of the
+    mean cloud excess `μ_{S,cloud} = q_tot_cloud − q_sat(T, ρ)`
+    (`q_tot_cloud = q_tot − q_rai − q_sno`): the expectation under the
+    displacement truncated at `c` standard deviations
+    (`truncated_displacement_condensate`), or, with nonzero displacement
+    coefficients `(lin, curv)` (`displacement_curvature_coefficients`), the
+    curvature-aware `displacement_condensate(μ_{S,cloud}, σ_S, lin, curv)`.
+    For the untruncated Gaussian (`c = Inf`, `curv = 0`), `λ_eq` is
+    `μ_{S,cloud}` itself; where the truncated `q_c_eq` vanishes,
+    `λ_eq = −Inf`, so that no node holds equilibrium condensate. The nodes
+    keep the Gaussian `S′`, so with truncation or curvature only the mean
+    equilibrium condensate is matched; its edge `−λ_eq` differs from the
+    support of the truncated distribution.
 
 The conditional-moment node rule integrates both piecewise-linear condensates
 exactly, so these continuous multipliers conserve the condensate at its nodes.
@@ -1536,6 +1629,7 @@ directly, matching the σ_S → 0 limit.
     q_tot_cloud = q_tot,
     lin = zero(ρ),
     curv = zero(ρ),
+    c = Inf32,
 )
     FT = typeof(ρ)
     q_sat = TD.q_vap_saturation(_unwrapped(thp), T, ρ)
@@ -1549,15 +1643,22 @@ directly, matching the σ_S → 0 limit.
 
     sigma_S = _sgs_linear_sigma_S(thp, ρ, T, T′T′, q′q′, corr_Tq)
     λ_lagrange = _continuous_lagrange(q_c, max(α * sigma_S, ϵ_numerics(FT)))
-    # Equilibrium condensate `q_c_eq = E[max(0, S_cloud)]`: truncated Gaussian,
-    # whose multiplier is exactly the mean cloud excess, or the curvature-aware
-    # displacement expectation where `curv ≠ 0`. Both are computed and one is
-    # selected, so cells with and without curvature cost the same.
-    λ_eq_curv = _continuous_lagrange(
-        displacement_condensate(mu_S_cloud, sigma_S, lin, curv),
-        sigma_S,
+    # Equilibrium condensate `q_c_eq = E[max(0, S_cloud)]` under the
+    # displacement truncated at `c` standard deviations, or the curvature-aware
+    # displacement expectation where `curv ≠ 0`, and the mean of the Gaussian
+    # with that expectation. The untruncated Gaussian's multiplier is the mean
+    # cloud excess itself. Where the truncated `q_c_eq` vanishes,
+    # `λ_eq = −Inf` puts the equilibrium cloud edge at infinity, which the
+    # node rule gives zero weight. All are evaluated and `ifelse` selects one,
+    # so the kernel has no branch on the curvature.
+    q_c_eq = equilibrium_condensate(mu_S_cloud, sigma_S, lin, curv, c)
+    λ_eq_fit = _continuous_lagrange(q_c_eq, sigma_S)
+    λ_eq_trunc = ifelse(
+        isinf(c),
+        mu_S_cloud,
+        ifelse(q_c_eq > zero(FT), λ_eq_fit, FT(-Inf)),
     )
-    λ_eq = curv == zero(FT) ? mu_S_cloud : λ_eq_curv
+    λ_eq = ifelse(iszero(curv), λ_eq_trunc, λ_eq_fit)
     return (; sigma_S, λ_lagrange, λ_eq)
 end
 
@@ -1611,6 +1712,7 @@ NVTX.@annotate function set_sgs_moments_and_cloud_fraction!(Y, p)
     FT = eltype(p.params)
     # Carried in by type, so the parameters fold to literals in the kernel.
     vthermo = _fold(ClimaComms.device(Y.c), thermo_params)
+    c = equilibrium_condensate_truncation(p)
     if p.atmos.sgs_variance_curvature
         ᶜdisp_S = p.precomputed.ᶜdisp_S
         DataLayouts.foreach_point(
@@ -1622,7 +1724,8 @@ NVTX.@annotate function set_sgs_moments_and_cloud_fraction!(Y, p)
             _sgs_moments_and_cloud_fraction_point!(
                 ᶜsgs_moments, ᶜcloud_fraction, ᶜρ_env, ᶜT_mean, ᶜq_mean,
                 ᶜq_cloud, ᶜq_lcl, ᶜq_icl, ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα,
-                ᶜdisp_S.lin, ᶜdisp_S.curv, vthermo, thermo_params, sgs_quad, floor,
+                ᶜdisp_S.lin, ᶜdisp_S.curv, c, vthermo, thermo_params, sgs_quad,
+                floor,
             )
         end
     else
@@ -1639,7 +1742,7 @@ NVTX.@annotate function set_sgs_moments_and_cloud_fraction!(Y, p)
             _sgs_moments_and_cloud_fraction_point!(
                 ᶜsgs_moments, ᶜcloud_fraction, ᶜρ_env, ᶜT_mean, ᶜq_mean,
                 ᶜq_cloud, ᶜq_lcl, ᶜq_icl, ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα,
-                lin₀, curv₀, vthermo, thermo_params, sgs_quad, floor,
+                lin₀, curv₀, c, vthermo, thermo_params, sgs_quad, floor,
             )
         end
     end
@@ -1652,26 +1755,27 @@ end
 """
     _sgs_moments_and_cloud_fraction_point!(
         ᶜsgs_moments, ᶜcloud_fraction, ᶜρ_env, ᶜT_mean, ᶜq_mean, ᶜq_cloud,
-        ᶜq_lcl, ᶜq_icl, ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα, lin, curv,
+        ᶜq_lcl, ᶜq_icl, ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα, lin, curv, c,
         vthermo, thermo_params, sgs_quad, floor,
     )
 
 Body of the `foreach_point` loop of `set_sgs_moments_and_cloud_fraction!`:
 fill the SGS moments (`_compute_sgs_moments`) and the cloud fraction
 (`_compute_cloud_fraction`) of one point. `lin` and `curv` are the
-displacement coefficients, a point of `ᶜdisp_S` or zeros. `vthermo` carries the
+displacement coefficients, a point of `ᶜdisp_S` or zeros, and `c` the
+displacement truncation (`sgs_displacement_truncation`). `vthermo` carries the
 thermodynamics parameters in its type, so they fold to literals in the quadrature
 kernel; `thermo_params` is the same parameters as a value, for the saturation
 calls beside it.
 """
 @inline function _sgs_moments_and_cloud_fraction_point!(
     ᶜsgs_moments, ᶜcloud_fraction, ᶜρ_env, ᶜT_mean, ᶜq_mean, ᶜq_cloud,
-    ᶜq_lcl, ᶜq_icl, ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα, lin, curv,
+    ᶜq_lcl, ᶜq_icl, ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα, lin, curv, c,
     vthermo, thermo_params, sgs_quad, floor,
 )
     @. ᶜsgs_moments = _compute_sgs_moments(
         vthermo, ᶜρ_env, ᶜT_mean, ᶜq_mean, ᶜq_lcl + ᶜq_icl,
-        $(sgs_quad), ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα, ᶜq_cloud, lin, curv,
+        $(sgs_quad), ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα, ᶜq_cloud, lin, curv, c,
     )
     # Recompute CF from q_c and σ_S using the augmented-σ closure. `Φ(λ/σ_aug)`
     # is not usable because λ was computed with the equilibrium σ_S_eff, not

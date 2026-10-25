@@ -1,4 +1,4 @@
-440
+441
 
 # **README**
 #
@@ -32,6 +32,12 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+441
+- The equilibrium SGS condensate is evaluated under the Gaussian displacement
+  truncated at `sgs_displacement_truncation` (3) standard deviations
+  (`truncated_displacement_condensate`), which removes the tail condensate at
+  the capping inversion of dry convective boundary layers.
+
 440
 - The SGS variance fidelity `ᶜα` is evaluated on the domain that carries the
   SGS closure (the environment under PrognosticEDMFX), and its equilibrium

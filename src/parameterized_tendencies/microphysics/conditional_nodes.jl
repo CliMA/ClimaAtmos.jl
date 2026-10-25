@@ -50,7 +50,7 @@ absolute accuracy of `normal_cdf` alone does not resolve beyond `z ≈ 2`.
     for k in 32:-1:1
         t = z_cf + FT(k) / t
     end
-    q_cf = exp(-z_cf * z_cf / 2) * inv_sqrt2π / t
+    q_cf = exp(-z_cf^2 / 2) * inv_sqrt2π / t
     return ifelse(z >= FT(2), q_cf, normal_cdf(-z))
 end
 
@@ -72,8 +72,8 @@ across it, from the upper tail probabilities `Qa = Q(|a|)`, `Qb = Q(|b|)`
 @inline function _gaussian_interval_moments4(a, b, Qa, Qb)
     FT = typeof(a)
     inv_sqrt2π = one(FT) / sqrt(FT(2) * FT(π))
-    φa = ifelse(isfinite(a), exp(-a * a / 2) * inv_sqrt2π, zero(FT))
-    φb = ifelse(isfinite(b), exp(-b * b / 2) * inv_sqrt2π, zero(FT))
+    φa = ifelse(isfinite(a), exp(-a^2 / 2) * inv_sqrt2π, zero(FT))
+    φb = ifelse(isfinite(b), exp(-b^2 / 2) * inv_sqrt2π, zero(FT))
     aφa = ifelse(isfinite(a), a * φa, zero(FT))
     bφb = ifelse(isfinite(b), b * φb, zero(FT))
     a²φa = ifelse(isfinite(a), a * aφa, zero(FT))
@@ -115,12 +115,12 @@ mean with `p₁ = p₂ = ½`. `Qa`, `Qb` are the edge tail probabilities of
     m = I₁ * inv_I₀
     m2 = I₂ * inv_I₀
     m3 = I₃ * inv_I₀
-    v = m2 - m * m
-    c₃ = m3 - 3 * m * m2 + 2 * m * m * m
-    degenerate = empty | (v <= 64 * eps(FT) * max(m * m, one(FT)))
+    v = m2 - m^2
+    c₃ = m3 - 3 * m * m2 + 2 * m^3
+    degenerate = empty | (v <= 64 * eps(FT) * max(m^2, one(FT)))
     v_safe = ifelse(degenerate, one(FT), v)
     s = ifelse(degenerate, zero(FT), c₃ / v_safe)
-    r = sqrt(s * s + 4 * v_safe)
+    r = sqrt(s^2 + 4 * v_safe)
     d₁ = (s - r) / 2
     d₂ = (s + r) / 2
     p₂ = ifelse(degenerate, FT(0.5), -d₁ / r)
@@ -482,7 +482,7 @@ deep tail.
     z = _compute_z(C)
     for _ in 1:2
         Φz = normal_cdf(z)
-        φz = exp(-z * z / 2) * inv_sqrt2π
+        φz = exp(-z^2 / 2) * inv_sqrt2π
         z_new = (C - φz) / max(Φz, ϵ_numerics(FT))
         z = ifelse(Φz > ϵ_numerics(FT), z_new, z)
     end
