@@ -17,7 +17,7 @@ value = 1.0e-5
 value = 0.7
 
 [turb_entr_param_vec]
-value = [0.001, 1e5]
+value = [0.007, 400.0]
 
 [entr_inv_tau]
 value = 0
