@@ -326,18 +326,11 @@ ClimaParams does not yet define or whose ClimaParams default it supersedes.
   - `sgs_fidelity_equilibrium_weight`: Weight `w_eq ∈ (0, 1)` on the
     equilibrium prediction in the SGS variance-fidelity modulator; default
     `0.5` (see `sgs_variance_fidelity`) [-].
-  - `cloud_fraction_eps_rel`: Residual fractional saturation variability
-    `ε_rel` in the augmented-`σ` floor of the cloud-fraction closure [-].
+  - `cloud_fraction_eps_rel`: Subsaturation-deficit scaling `ε_rel` in the
+    augmented-`σ` floor `σ_S_floor² = (ε_rel max(0, −μ_S))² + σ_abs²` of the
+    non-equilibrium condensate closure [-].
   - `cloud_fraction_sigma_abs`: Absolute floor `σ_abs` on the augmented
     saturation-deficit standard deviation [kg/kg].
-  - `cloud_fraction_floor_release_margin`: Saturation margin `c_w`, in
-    equilibrium PDF widths, at which the relative floor is released [-].
-  - `cloud_fraction_floor_release_abs_margin`: Absolute margin `c_a`, in floor
-    units, added in quadrature to the release width [-].
-  - `cloud_fraction_floor_release_sharpness`: Exponent `s` of the release
-    transition; larger values approach a switch [-].
-  - `cloud_fraction_floor_residual`: Fraction `D_min` of the relative floor
-    retained deep inside a saturated deck; 1 (default) disables the release [-].
   - `cloud_condensate_relative_variance_floor`: Relative variance of an
     unresolved, unit-mean in-cloud condensate inhomogeneity that multiplies the
     truncated-Gaussian in-cloud distribution in the radiative
@@ -371,10 +364,6 @@ Base.@kwdef struct SGSQuadratureParameters{FT} <: ASQP
     sgs_fidelity_equilibrium_weight::FT
     cloud_fraction_eps_rel::FT
     cloud_fraction_sigma_abs::FT
-    cloud_fraction_floor_release_margin::FT
-    cloud_fraction_floor_release_abs_margin::FT
-    cloud_fraction_floor_release_sharpness::FT
-    cloud_fraction_floor_residual::FT
     cloud_condensate_relative_variance_floor::FT
 end
 
