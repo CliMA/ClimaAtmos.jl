@@ -161,31 +161,45 @@ function microphysics_tendency!(Yₜ, Y, p, t,
     return nothing
 end
 
-function microphysics_tendency!(Yₜ, Y, p, t,
-    ::NonEquilibriumMicrophysics1M, turbconv_model::PrognosticEDMFX,
+function microphysics_tendency!(
+    Yₜ,
+    Y,
+    p,
+    t,
+    ::NonEquilibriumMicrophysics1M,
+    turbconv_model::PrognosticEDMFX,
 )
     (; ᶜmp_tendencyʲs, ᶜmp_tendency⁰) = p.precomputed
+    n_val = Val(n_mass_flux_subdomains(turbconv_model))
 
-    # Contribution to grid mean tendency from environment
-    # ᶜmp_tendency⁰ is computed from environmental microphysics variables
-    ᶜρa⁰ = @. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model))
-    @. Yₜ.c.ρq_lcl += ᶜρa⁰ * ᶜmp_tendency⁰.dq_lcl_dt
-    @. Yₜ.c.ρq_icl += ᶜρa⁰ * ᶜmp_tendency⁰.dq_icl_dt
-    @. Yₜ.c.ρq_rai += ᶜρa⁰ * ᶜmp_tendency⁰.dq_rai_dt
-    @. Yₜ.c.ρq_sno += ᶜρa⁰ * ᶜmp_tendency⁰.dq_sno_dt
+    DataLayouts.foreach_column(
+        Yₜ.c,
+        Y.c,
+        ᶜmp_tendency⁰,
+        ᶜmp_tendencyʲs,
+    ) do Yₜc, Yc, ᶜmp_tendency⁰, ᶜmp_tendencyʲs
+        ᶜρa⁰ = @. ρa⁰(Yc.ρ, Yc.sgsʲs, turbconv_model)
+        @. Yₜc.ρq_lcl += ᶜρa⁰ * ᶜmp_tendency⁰.dq_lcl_dt
+        @. Yₜc.ρq_icl += ᶜρa⁰ * ᶜmp_tendency⁰.dq_icl_dt
+        @. Yₜc.ρq_rai += ᶜρa⁰ * ᶜmp_tendency⁰.dq_rai_dt
+        @. Yₜc.ρq_sno += ᶜρa⁰ * ᶜmp_tendency⁰.dq_sno_dt
 
-    # Contribution from updraft microphysics to grid mean and updraft tendency
-    n = n_mass_flux_subdomains(turbconv_model)
-    for j in 1:n
-        @. Yₜ.c.ρq_lcl += Y.c.sgsʲs.:($$j).ρa * ᶜmp_tendencyʲs.:($$j).dq_lcl_dt
-        @. Yₜ.c.ρq_icl += Y.c.sgsʲs.:($$j).ρa * ᶜmp_tendencyʲs.:($$j).dq_icl_dt
-        @. Yₜ.c.ρq_rai += Y.c.sgsʲs.:($$j).ρa * ᶜmp_tendencyʲs.:($$j).dq_rai_dt
-        @. Yₜ.c.ρq_sno += Y.c.sgsʲs.:($$j).ρa * ᶜmp_tendencyʲs.:($$j).dq_sno_dt
+        _unrolled_ntuple(n_val) do j
+            ᶜρaʲ = Yc.sgsʲs.:($j).ρa
+            ᶜmpʲ = ᶜmp_tendencyʲs.:($j)
+            ᶜsgsʲₜ = Yₜc.sgsʲs.:($j)
+            @. Yₜc.ρq_lcl += ᶜρaʲ * ᶜmpʲ.dq_lcl_dt
+            @. Yₜc.ρq_icl += ᶜρaʲ * ᶜmpʲ.dq_icl_dt
+            @. Yₜc.ρq_rai += ᶜρaʲ * ᶜmpʲ.dq_rai_dt
+            @. Yₜc.ρq_sno += ᶜρaʲ * ᶜmpʲ.dq_sno_dt
 
-        @. Yₜ.c.sgsʲs.:($$j).q_lcl += ᶜmp_tendencyʲs.:($$j).dq_lcl_dt
-        @. Yₜ.c.sgsʲs.:($$j).q_icl += ᶜmp_tendencyʲs.:($$j).dq_icl_dt
-        @. Yₜ.c.sgsʲs.:($$j).q_rai += ᶜmp_tendencyʲs.:($$j).dq_rai_dt
-        @. Yₜ.c.sgsʲs.:($$j).q_sno += ᶜmp_tendencyʲs.:($$j).dq_sno_dt
+            @. ᶜsgsʲₜ.q_lcl += ᶜmpʲ.dq_lcl_dt
+            @. ᶜsgsʲₜ.q_icl += ᶜmpʲ.dq_icl_dt
+            @. ᶜsgsʲₜ.q_rai += ᶜmpʲ.dq_rai_dt
+            @. ᶜsgsʲₜ.q_sno += ᶜmpʲ.dq_sno_dt
+            return nothing
+        end
+        return nothing
     end
     return nothing
 end

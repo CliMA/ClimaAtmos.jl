@@ -99,45 +99,66 @@ source. The whole function returns early when
 `additional_tendency!`, i.e., treated explicitly. `t` is unused.
 """
 function surface_flux_tendency!(Yₜ, Y, p, t)
-
     p.atmos.disable_surface_flux_tendency && return
 
     FT = eltype(Y)
     (; turbconv_model) = p.atmos
-    (; sfc_conditions) = p.precomputed
+    (; sfc_conditions, ᶜh_tot) = p.precomputed
+    do_mom = !disable_momentum_vertical_diffusion(p.atmos.vertical_diffusion)
+    btt_uₕ =
+        do_mom ?
+        boundary_tendency_momentum(Y.c.ρ, Y.c.uₕ, sfc_conditions.ρ_flux_uₕ) :
+        nothing
+    btt_h = boundary_tendency_scalar(ᶜh_tot, sfc_conditions.ρ_flux_h_tot)
+    has_q_tot = MatrixFields.has_field(Y.c, @name(ρq_tot))
+    btt_q =
+        has_q_tot ?
+        boundary_tendency_scalar(
+            (@. lazy(specific(Y.c.ρq_tot, Y.c.ρ))),
+            sfc_conditions.ρ_flux_q_tot,
+        ) : nothing
 
-    if !disable_momentum_vertical_diffusion(p.atmos.vertical_diffusion)
-        btt = boundary_tendency_momentum(Y.c.ρ, Y.c.uₕ, sfc_conditions.ρ_flux_uₕ)
-        @. Yₜ.c.uₕ -= btt
-    end
-
-    (; ᶜh_tot) = p.precomputed
-    btt = boundary_tendency_scalar(ᶜh_tot, sfc_conditions.ρ_flux_h_tot)
-    @. Yₜ.c.ρe_tot -= btt
-
-    if turbconv_model isa PrognosticEDMFX
-        # assuming one updraft
-        @. Yₜ.c.sgsʲs.:(1).mse -= specific(btt, p.precomputed.ᶜρʲs.:(1))
-    end
-
-    ρ_flux_χ = p.scratch.sfc_temp_C3
-    foreach_gs_tracer(Yₜ, Y) do ᶜρχₜ, ᶜρχ, ρχ_name
-        ᶜχ = @. lazy(specific(ᶜρχ, Y.c.ρ))
-        if ρχ_name == @name(ρq_tot)
-            @. ρ_flux_χ = sfc_conditions.ρ_flux_q_tot
+    if turbconv_model isa PrognosticEDMFX && has_q_tot
+        ᶜρʲ = p.precomputed.ᶜρʲs.:(1)
+        if do_mom
+            DataLayouts.foreach_column(
+                Yₜ.c, ᶜρʲ, btt_uₕ, btt_h, btt_q,
+            ) do Yₜc, ᶜρʲ, btt_uₕ, btt_h, btt_q
+                @. Yₜc.uₕ -= btt_uₕ
+                @. Yₜc.ρe_tot -= btt_h
+                @. Yₜc.sgsʲs.:(1).mse -= specific(btt_h, ᶜρʲ)
+                @. Yₜc.ρq_tot -= btt_q
+                @. Yₜc.ρ -= btt_q
+                @. Yₜc.sgsʲs.:(1).q_tot -= specific(btt_q, ᶜρʲ)
+                return nothing
+            end
         else
-            @. ρ_flux_χ = C3(FT(0))
+            DataLayouts.foreach_column(
+                Yₜ.c, ᶜρʲ, btt_h, btt_q,
+            ) do Yₜc, ᶜρʲ, btt_h, btt_q
+                @. Yₜc.ρe_tot -= btt_h
+                @. Yₜc.sgsʲs.:(1).mse -= specific(btt_h, ᶜρʲ)
+                @. Yₜc.ρq_tot -= btt_q
+                @. Yₜc.ρ -= btt_q
+                @. Yₜc.sgsʲs.:(1).q_tot -= specific(btt_q, ᶜρʲ)
+                return nothing
+            end
         end
-        btt = boundary_tendency_scalar(ᶜχ, ρ_flux_χ)
-        @. ᶜρχₜ -= btt
-        if ρχ_name == @name(ρq_tot)
-            @. Yₜ.c.ρ -= btt
+    else
+        if do_mom
+            @. Yₜ.c.uₕ -= btt_uₕ
         end
-
+        @. Yₜ.c.ρe_tot -= btt_h
         if turbconv_model isa PrognosticEDMFX
-            # assuming one updraft
-            ᶜχʲₜ = MatrixFields.get_field(Yₜ.c, get_χʲ_name_from_ρχ_name(ρχ_name))
-            @. ᶜχʲₜ -= specific(btt, p.precomputed.ᶜρʲs.:(1))
+            @. Yₜ.c.sgsʲs.:(1).mse -= specific(btt_h, p.precomputed.ᶜρʲs.:(1))
+        end
+        if has_q_tot
+            @. Yₜ.c.ρq_tot -= btt_q
+            @. Yₜ.c.ρ -= btt_q
+            if turbconv_model isa PrognosticEDMFX
+                @. Yₜ.c.sgsʲs.:(1).q_tot -= specific(btt_q, p.precomputed.ᶜρʲs.:(1))
+            end
         end
     end
+    return nothing
 end

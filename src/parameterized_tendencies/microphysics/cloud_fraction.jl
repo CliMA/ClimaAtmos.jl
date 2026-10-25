@@ -1,5 +1,6 @@
 import NVTX
 import StaticArrays as SA
+import ClimaComms
 
 """
     set_covariance_cache_and_cloud_fraction!(Y, p)
@@ -30,46 +31,245 @@ gradients since the covariances represent sub-grid fluctuations within the
 environment, but this is a current approximation.
 """
 function set_covariance_cache_and_cloud_fraction!(Y, p)
-    (; cloud_model, microphysics_model) = p.atmos
+    (; cloud_model, microphysics_model, turbconv_model) = p.atmos
     (; ᶜgradᵥ_q_tot, ᶜgradᵥ_θ_liq_ice, ᶜcloud_fraction) = p.precomputed
-    (; ᶜbuoygrad) = p.precomputed
+    (; ᶜbuoygrad, ᶜbg_coeffs, ᶜq_tot_nonneg) = p.precomputed
     thermo_params = CAP.thermodynamics_params(p.params)
-    ᶜlg = Fields.local_geometry_field(Y.c)
 
     # Materialize the pointwise buoyancy-gradient chain-rule coefficients,
-    # exact face gradients, and centered vertical gradients of (θ_li, q_tot) once:
-    # the coefficients and materialized θ_li carry all of the expensive saturation
-    # thermodynamics and are independent of cloud fraction, so within the Picard
-    # iteration every buoyancy-gradient stencil reduces to a cheap `blended_N²` FMA broadcast.
+    # exact face gradients, and centered vertical gradients of (θ_li, q_tot)
+    # once (`ᶜθ_li` remains in `p.scratch.ᶜtemp_scalar`).
     set_buoyancy_gradient_inputs!(Y, p, thermo_params)
-    (; ᶜbg_coeffs) = p.precomputed
 
-    # The buoyancy gradient depends on cloud fraction, and cloud fraction depends
-    # on the covariance cache through the mixing length. For reproducible restart,
-    # first reconstruct the initial cloud fraction deterministically.
+    # Precompute horizontal gradient invariants once before the Picard loop:
+    # they depend only on `(ᶜq_tot_nonneg, ᶜθ_li)`, which are fixed during
+    # Picard.
+    c_Δx = CAP.sgs_variance_horizontal_scale_factor(p.params)
+    if uses_covariances(p.atmos) && !iszero(c_Δx)
+        ᶜθ_li = p.scratch.ᶜtemp_scalar
+        ᶜinv_q = p.scratch.ᶜtemp_scalar_5
+        ᶜinv_θ = Fields.Field(p.scratch.temp_data, axes(Y.c))
+        ᶜinv_θq = p.scratch.ᶜtemp_scalar_6
+        hgrad_invariant!(ᶜinv_q, ᶜq_tot_nonneg, p)
+        hgrad_invariant!(ᶜinv_θ, ᶜθ_li, p)
+        hgrad_cross_invariant!(ᶜinv_θq, ᶜθ_li, ᶜq_tot_nonneg, p)
+    end
+
     if p.atmos.numerics.reproducible_restart
         set_cloud_fraction!(Y, p, microphysics_model, GridScaleCloud())
     end
 
+    if turbconv_model isa PrognosticEDMFX &&
+       microphysics_model isa NonEquilibriumMicrophysics &&
+       cloud_model isa QuadratureCloud
+        let
+            (; ᶜp, ᶜT⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜρʲs) = p.precomputed
+            (; ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα, ᶜsgs_moments) = p.precomputed
+            FT = eltype(p.params)
+            zero_FT = zero(FT)
+            sgs_quad = p.atmos.sgs_quadrature
+            floor = cloud_fraction_floor_params(p.params)
+            n_val = Val(n_mass_flux_subdomains(turbconv_model))
+            vthermo = _fold(ClimaComms.device(Y.c), thermo_params)
+            c = equilibrium_condensate_truncation(p)
+            ᶜdisp_S_or_zero =
+                p.atmos.sgs_variance_curvature ? p.precomputed.ᶜdisp_S : ᶜcorr_Tq
+
+            c0 = p.scratch.ᶜtemp_scalar_4
+            c1 = p.scratch.ᶜtemp_scalar_7
+            ᶜρ_env = p.scratch.ᶜtemp_scalar
+            ᶜq_lcl = p.scratch.ᶜtemp_scalar_2
+            ᶜq_icl = p.scratch.ᶜtemp_scalar_3
+            ᶜq_precip = Fields.Field(
+                Fields.field_values(p.scratch.ᶜtemp_C3.components.data.:1),
+                axes(Y.c),
+            )
+
+            # Materialize `c0` and the Picard-invariant environment state in one
+            # column loop.
+            DataLayouts.foreach_column(
+                c0, ᶜρ_env, ᶜq_lcl, ᶜq_icl, ᶜq_precip,
+                ᶜcloud_fraction, Y.c, ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰,
+            ) do c0, ᶜρ_env, ᶜq_lcl, ᶜq_icl, ᶜq_precip,
+            ᶜcloud_fraction, Yc, ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰
+                @. c0 = ᶜcloud_fraction
+                @. ᶜρ_env = TD.air_density(
+                    thermo_params, ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰,
+                )
+                ᶜρa⁰ = @. ρa⁰(Yc.ρ, Yc.sgsʲs, turbconv_model)
+                @. ᶜq_lcl = max(
+                    0,
+                    specific_env_value(
+                        @name(q_lcl), Yc.ρq_lcl, Yc.ρ, Yc.sgsʲs, ᶜρa⁰, turbconv_model,
+                    ),
+                )
+                @. ᶜq_icl = max(
+                    0,
+                    specific_env_value(
+                        @name(q_icl), Yc.ρq_icl, Yc.ρ, Yc.sgsʲs, ᶜρa⁰, turbconv_model,
+                    ),
+                )
+                @. ᶜq_precip =
+                    max(
+                        0,
+                        specific_env_value(
+                            @name(q_rai), Yc.ρq_rai, Yc.ρ, Yc.sgsʲs, ᶜρa⁰, turbconv_model,
+                        ),
+                    ) +
+                    max(
+                        0,
+                        specific_env_value(
+                            @name(q_sno), Yc.ρq_sno, Yc.ρ, Yc.sgsʲs, ᶜρa⁰, turbconv_model,
+                        ),
+                    )
+                return nothing
+            end
+
+            env_state = (;
+                ᶜρ_env,
+                ᶜT_mean = ᶜT⁰,
+                ᶜq_mean = ᶜq_tot_nonneg⁰,
+                ᶜq_lcl,
+                ᶜq_icl,
+                ᶜq_precip,
+            )
+
+            # Picard step 1: fused buoygrad + covariance + l_mix + α, then fused
+            # cloud fraction + EDMF weighting + c1.
+            set_covariance_cache!(
+                Y,
+                p,
+                thermo_params;
+                recompute_hgrad = false,
+                recompute_buoygrad = true,
+                env_state,
+            )
+            DataLayouts.foreach_column(
+                ᶜcloud_fraction, c1,
+                Y.c, ᶜρʲs, ᶜT⁰, ᶜρ_env, ᶜq_tot_nonneg⁰, ᶜq_lcl, ᶜq_icl,
+                ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα,
+            ) do ᶜcloud_fraction, c1,
+            Yc, ᶜρʲs, ᶜT⁰, ᶜρ_env, ᶜq_tot_nonneg⁰, ᶜq_lcl, ᶜq_icl,
+            ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα
+                ᶜρa⁰ = @. lazy(ρa⁰(Yc.ρ, Yc.sgsʲs, turbconv_model))
+                @. ᶜcloud_fraction =
+                    _compute_cloud_fraction(
+                        $(vthermo), ᶜT⁰, ᶜρ_env, ᶜq_tot_nonneg⁰, ᶜq_lcl, ᶜq_icl,
+                        $(sgs_quad), ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα, $(floor),
+                    ) * draft_area(ᶜρa⁰, ᶜρ_env)
+                _unrolled_ntuple(n_val) do j
+                    ᶜsgsʲ = Yc.sgsʲs.:($j)
+                    @. ᶜcloud_fraction += ifelse(
+                        TD.has_condensate(
+                            thermo_params,
+                            max(0, ᶜsgsʲ.q_lcl + ᶜsgsʲ.q_icl),
+                        ),
+                        draft_area(ᶜsgsʲ.ρa, ᶜρʲs.:($$j)),
+                        0,
+                    )
+                    return nothing
+                end
+                @. c1 = ᶜcloud_fraction
+                return nothing
+            end
+
+            # Picard step 2 + Aitken acceleration fused into one cloud-fraction
+            # kernel.
+            set_covariance_cache!(
+                Y,
+                p,
+                thermo_params;
+                recompute_hgrad = false,
+                recompute_buoygrad = true,
+                env_state,
+            )
+            DataLayouts.foreach_column(
+                ᶜcloud_fraction, c0, c1,
+                Y.c, ᶜρʲs, ᶜT⁰, ᶜρ_env, ᶜq_tot_nonneg⁰, ᶜq_lcl, ᶜq_icl,
+                ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα,
+            ) do ᶜcloud_fraction, c0, c1,
+            Yc, ᶜρʲs, ᶜT⁰, ᶜρ_env, ᶜq_tot_nonneg⁰, ᶜq_lcl, ᶜq_icl,
+            ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα
+                ᶜρa⁰ = @. lazy(ρa⁰(Yc.ρ, Yc.sgsʲs, turbconv_model))
+                @. ᶜcloud_fraction =
+                    _compute_cloud_fraction(
+                        $(vthermo), ᶜT⁰, ᶜρ_env, ᶜq_tot_nonneg⁰, ᶜq_lcl, ᶜq_icl,
+                        $(sgs_quad), ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα, $(floor),
+                    ) * draft_area(ᶜρa⁰, ᶜρ_env)
+                _unrolled_ntuple(n_val) do j
+                    ᶜsgsʲ = Yc.sgsʲs.:($j)
+                    @. ᶜcloud_fraction += ifelse(
+                        TD.has_condensate(
+                            thermo_params,
+                            max(0, ᶜsgsʲ.q_lcl + ᶜsgsʲ.q_icl),
+                        ),
+                        draft_area(ᶜsgsʲ.ρa, ᶜρʲs.:($$j)),
+                        0,
+                    )
+                    return nothing
+                end
+                @. ᶜcloud_fraction = _aitken_picard_helper(c0, c1, ᶜcloud_fraction)
+                return nothing
+            end
+
+            # Final post-Aitken covariance + SGS moments + cloud fraction + precip
+            # fraction.
+            set_covariance_cache!(
+                Y,
+                p,
+                thermo_params;
+                recompute_hgrad = false,
+                recompute_buoygrad = true,
+                env_state,
+            )
+            DataLayouts.foreach_column(
+                ᶜsgs_moments, ᶜcloud_fraction,
+                Y.c, ᶜρʲs, ᶜT⁰, ᶜρ_env, ᶜq_tot_nonneg⁰, ᶜq_lcl, ᶜq_icl, ᶜq_precip,
+                ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα, ᶜdisp_S_or_zero,
+            ) do ᶜsgs_moments, ᶜcloud_fraction,
+            Yc, ᶜρʲs, ᶜT⁰, ᶜρ_env, ᶜq_tot_nonneg⁰, ᶜq_lcl, ᶜq_icl, ᶜq_precip,
+            ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα, ᶜdisp_S
+                @. ᶜsgs_moments = _compute_sgs_moments(
+                    vthermo, ᶜρ_env, ᶜT⁰, ᶜq_tot_nonneg⁰, ᶜq_lcl + ᶜq_icl,
+                    $(sgs_quad), ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα,
+                    max(zero_FT, ᶜq_tot_nonneg⁰ - ᶜq_precip),
+                    _disp_lin(ᶜdisp_S), _disp_curv(ᶜdisp_S), c,
+                )
+                ᶜρa⁰ = @. lazy(ρa⁰(Yc.ρ, Yc.sgsʲs, turbconv_model))
+                @. ᶜcloud_fraction =
+                    _compute_cloud_fraction(
+                        ᶜq_lcl + ᶜq_icl,
+                        ᶜq_tot_nonneg⁰ - TD.q_vap_saturation(thermo_params, ᶜT⁰, ᶜρ_env),
+                        _sgs_sigma_S(ᶜsgs_moments),
+                        TD.q_vap_saturation(thermo_params, ᶜT⁰, ᶜρ_env, ᶜq_lcl, ᶜq_icl),
+                        ᶜα,
+                        $(floor),
+                    ) * draft_area(ᶜρa⁰, ᶜρ_env)
+                _unrolled_ntuple(n_val) do j
+                    ᶜsgsʲ = Yc.sgsʲs.:($j)
+                    @. ᶜcloud_fraction += ifelse(
+                        TD.has_condensate(
+                            thermo_params,
+                            max(0, ᶜsgsʲ.q_lcl + ᶜsgsʲ.q_icl),
+                        ),
+                        draft_area(ᶜsgsʲ.ρa, ᶜρʲs.:($$j)),
+                        0,
+                    )
+                    return nothing
+                end
+                return nothing
+            end
+            set_precip_fraction!(Y, p, ᶜq_precip)
+        end
+        return nothing
+    end
 
     # One Picard step: use the current cloud fraction to update buoyancy
     # gradient and covariance cache, then recompute cloud fraction.
-    #
-    # The hybrid cloud fraction computes the linearized σ_S inline inside
-    # the CF broadcast (see `_compute_cloud_fraction`) — no separate moments
-    # materialization during Picard. CF, μ_S, and λ are all written once after
-    # Picard converges, in the final `set_sgs_moments_and_cloud_fraction!` call.
     function picard_step!()
-        @. ᶜbuoygrad = blended_N²(
-            ᶜbg_coeffs,
-            ᶜcloud_fraction,
-            projected_vector_data(C3, ᶜgradᵥ_θ_liq_ice, ᶜlg),
-            projected_vector_data(C3, ᶜgradᵥ_q_tot, ᶜlg),
+        set_covariance_cache!(
+            Y, p, thermo_params; recompute_hgrad = false, recompute_buoygrad = true,
         )
-        # Cache SGS covariances (no-op for dry/0M/GridScaleCloud configs). The vertical
-        # gradients and N² coefficients were materialized above by
-        # set_buoyancy_gradient_inputs! for every turbconv model.
-        set_covariance_cache!(Y, p, thermo_params)
         set_cloud_fraction!(Y, p, microphysics_model, cloud_model)
         return nothing
     end
@@ -78,41 +278,21 @@ function set_covariance_cache_and_cloud_fraction!(Y, p)
     #   c0 = initial cloud fraction
     #   c1 = first Picard iterate
     #   c2 = second Picard iterate
-    # ᶜtemp_scalar, ᶜtemp_scalar_2, ᶜtemp_scalar_3, ᶜtemp_scalar_5, ᶜtemp_scalar_6 might
-    # change inside the functions that are called in picard_step!() and should not be used
-    # here to store variables before calling picard_step!
-    # (`set_covariance_cache!` writes `ᶜtemp_scalar` (l_d), `_2` (N²_disp),
-    # `_3`, `_5`, `_6`; the QuadratureCloud `set_cloud_fraction!` writes
-    # `ᶜtemp_scalar`, `_2`, `_3`).
-    # Conversely, those callees and `set_sgs_moments_and_cloud_fraction!` must never write
-    # ᶜtemp_scalar_4 or ᶜtemp_scalar_7. c2 shares ᶜtemp_scalar, which is safe only
-    # because it is written after the last picard_step!() and consumed by the Aitken
-    # update before `set_sgs_moments_and_cloud_fraction!` overwrites it.
     c0 = p.scratch.ᶜtemp_scalar_4
     c1 = p.scratch.ᶜtemp_scalar_7
     c2 = p.scratch.ᶜtemp_scalar
 
-    # Picard iterates: c1 = f(c0), c2 = f(c1)
     @. c0 = ᶜcloud_fraction
     picard_step!()
     @. c1 = ᶜcloud_fraction
     picard_step!()
     @. c2 = ᶜcloud_fraction
 
-    # Apply aitken Δ² acceleration for better convergence
     @. ᶜcloud_fraction = _aitken_picard_helper(c0, c1, c2)
 
-    # Recompute buoyancy gradient and covariance cache with the final cloud fraction.
-    @. ᶜbuoygrad = blended_N²(
-        ᶜbg_coeffs,
-        ᶜcloud_fraction,
-        projected_vector_data(C3, ᶜgradᵥ_θ_liq_ice, ᶜlg),
-        projected_vector_data(C3, ᶜgradᵥ_q_tot, ᶜlg),
+    set_covariance_cache!(
+        Y, p, thermo_params; recompute_hgrad = false, recompute_buoygrad = true,
     )
-    set_covariance_cache!(Y, p, thermo_params)
-
-    # Final post-Aitken update: one pass refreshes both CF and the
-    # microphysics SGS moments (σ_S, λ_lagrange) using the final covariance.
     set_sgs_moments_and_cloud_fraction!(Y, p)
 
     return nothing
@@ -773,23 +953,46 @@ Scratch: `ᶜtemp_scalar` holds `l_d`, `ᶜtemp_scalar_2` `N²_disp`,
 `ᶜtemp_scalar_3` θ_li and then the θ→T Jacobian, `ᶜtemp_scalar_5` and `_6` the
 moisture and cross invariants (`ᶜT′T′` holds the θ_li invariant before Step 3).
 """
-function set_covariance_cache!(Y, p, thermo_params)
-    # Covariance fields are only allocated when the configuration needs them.
-    # No-op otherwise (e.g. EquilMoist + 0M + GridScaleCloud).
+@inline _disp_lin(d::NamedTuple) = d.lin
+@inline _disp_lin(d::Real) = zero(d)
+@inline _disp_curv(d::NamedTuple) = d.curv
+@inline _disp_curv(d::Real) = zero(d)
+@inline _sgs_sigma_S(m) = m.sigma_S
+@inline _1(t) = t[1]
+@inline _2(t) = t[2]
+@inline _3(t) = t[3]
+@inline _4(t) = t[4]
+
+function set_covariance_cache!(
+    Y,
+    p,
+    thermo_params;
+    recompute_hgrad::Bool = true,
+    recompute_buoygrad::Bool = false,
+    env_state = nothing,
+)
     uses_covariances(p.atmos) || return nothing
 
     FT = eltype(p.params)
     diag_corr = p.atmos.tq_correlation_model isa DiagnosedTqCorrelation
+    has_curvature = p.atmos.sgs_variance_curvature
     (;
         ᶜT′T′,
         ᶜq′q′,
+        ᶜcorr_Tq,
         ᶜgradᵥ_q_tot,
         ᶜgradᵥ_θ_liq_ice,
+        ᶠ∂θli∂z,
+        ᶠ∂qt∂z,
         ᶜq_tot_nonneg,
+        ᶜT,
+        ᶜq_liq,
+        ᶜq_ice,
+        ᶜbuoygrad,
+        ᶜbg_coeffs,
+        ᶜcloud_fraction,
     ) = p.precomputed
-    ᶜlg = Fields.local_geometry_field(Y.c)
 
-    # 1. Displacement scales.
     c_g = FT(CAP.sgs_variance_geometric_coeff(p.params))
     c_Δx = FT(CAP.sgs_variance_horizontal_scale_factor(p.params))
     r_Δx_θ = FT(CAP.sgs_variance_theta_horizontal_scale_ratio(p.params))
@@ -804,72 +1007,368 @@ function set_covariance_cache!(Y, p, thermo_params)
     ℓ_h_θ² = r_Δx_θ^2 * ℓ_h_q²
     ℓ_h_θq = r_h_θq * r_Δx_θ * ℓ_h_q²
     c_σ = FT(CAP.diagnostic_covariance_coeff(p.params))
-    ᶜl_d, ᶜl_mix_disp = materialized_displacement_length!(Y, p)
-    ᶜℓ_v_q² = @. lazy(2 * c_σ * ᶜl_d^2)
-    ᶜℓ_v_θ² = @. lazy(r_v_θ^2 * ᶜℓ_v_q²)
-    ᶜℓ_v_θq = @. lazy(r_v_θ * ᶜℓ_v_q²)
 
-    # 2. Horizontal gradient invariants.
     if iszero(c_Δx)
         ᶜinv_q = ᶜinv_θ = ᶜinv_θq = zero(FT)
     else
-        (; ᶜT, ᶜq_liq, ᶜq_ice) = p.precomputed
-        ᶜθ_li = p.scratch.ᶜtemp_scalar_3
-        @. ᶜθ_li = TD.liquid_ice_pottemp(
-            thermo_params, ᶜT, Y.c.ρ, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice,
-        )
         ᶜinv_q = p.scratch.ᶜtemp_scalar_5
-        ᶜinv_θ = ᶜT′T′
+        ᶜinv_θ = Fields.Field(p.scratch.temp_data, axes(Y.c))
         ᶜinv_θq = p.scratch.ᶜtemp_scalar_6
-        hgrad_invariant!(ᶜinv_q, ᶜq_tot_nonneg, p)
-        hgrad_invariant!(ᶜinv_θ, ᶜθ_li, p)
-        hgrad_cross_invariant!(ᶜinv_θq, ᶜθ_li, ᶜq_tot_nonneg, p)
+        if recompute_hgrad
+            ᶜθ_li = p.scratch.ᶜtemp_scalar_3
+            @. ᶜθ_li = TD.liquid_ice_pottemp(
+                thermo_params, ᶜT, Y.c.ρ, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice,
+            )
+            hgrad_invariant!(ᶜinv_q, ᶜq_tot_nonneg, p)
+            hgrad_invariant!(ᶜinv_θ, ᶜθ_li, p)
+            hgrad_cross_invariant!(ᶜinv_θq, ᶜθ_li, ᶜq_tot_nonneg, p)
+        end
     end
 
-    # 3. Covariances in the θ basis; ᶜT′T′ holds θ′θ′ until the transform.
-    ᶜ∂q∂z = @. lazy(projected_vector_data(C3, ᶜgradᵥ_q_tot, ᶜlg))
-    ᶜ∂θ∂z = @. lazy(projected_vector_data(C3, ᶜgradᵥ_θ_liq_ice, ᶜlg))
-    @. ᶜq′q′ = displacement_covariance(ℓ_h_q², ᶜℓ_v_q², ᶜinv_q, ᶜ∂q∂z, ᶜ∂q∂z)
-    @. ᶜT′T′ = displacement_covariance(ℓ_h_θ², ᶜℓ_v_θ², ᶜinv_θ, ᶜ∂θ∂z, ᶜ∂θ∂z)
-    if diag_corr
-        @. p.precomputed.ᶜT′q′ =
-            displacement_covariance(ℓ_h_θq, ᶜℓ_v_θq, ᶜinv_θq, ᶜ∂θ∂z, ᶜ∂q∂z)
+    turbconv_model = p.atmos.turbconv_model
+    is_edmf = turbconv_model isa AbstractEDMF
+    if !is_edmf
+        if recompute_buoygrad
+            ᶜlg_bg = Fields.local_geometry_field(Y.c)
+            @. ᶜbuoygrad = blended_N²(
+                ᶜbg_coeffs,
+                ᶜcloud_fraction,
+                projected_vector_data(C3, ᶜgradᵥ_θ_liq_ice, ᶜlg_bg),
+                projected_vector_data(C3, ᶜgradᵥ_q_tot, ᶜlg_bg),
+            )
+        end
+        ᶜl_mix = compute_gm_mixing_length(Y, p)
+    else
+        ᶜl_mix = p.precomputed.ᶜl_mix
     end
 
-    # 4. θ → T basis via the thermodynamic Jacobian ∂T/∂θ. q is unaffected.
-    ᶜ∂T_∂θ = p.scratch.ᶜtemp_scalar_3
-    compute_∂T_∂θ!(ᶜ∂T_∂θ, Y, p, thermo_params)
-    @. ᶜT′T′ = ᶜ∂T_∂θ^2 * ᶜT′T′
-    if diag_corr
-        @. p.precomputed.ᶜT′q′ = ᶜ∂T_∂θ * p.precomputed.ᶜT′q′
+    turbconv_params = CAP.turbconv_params(p.params)
+    c_b = FT(CAP.static_stab_coeff(turbconv_params))
+    κ_b_per_tke = c_b / (2 * c_σ)
+    w_min = floor_velocity(
+        horizontal_filter_scale(axes(Y.c)),
+        FT(CAP.sgs_variance_vertical_velocity_floor(p.params)),
+        FT(CAP.sgs_variance_floor_reference_resolution(p.params)),
+        FT(CAP.sgs_variance_floor_resolution_exponent(p.params)),
+    )
+    τ_0 = FT(CAP.sgs_variance_floor_time_scale(p.params))
+    κ_min = w_min^2 / (2 * c_σ * c_b)
+    c_b_κ_min = c_b * κ_min
+
+    r_max = FT(CAP.sgs_variance_max_rel_std(p.params))
+    corr_fallback = FT(correlation_Tq(p.params))
+    ᶜlg = Fields.local_geometry_field(Y.c)
+    ᶜΔz = Fields.Δz_field(axes(Y.c))
+    z_sfc = Fields.level(Fields.coordinate_field(Y.f).z, Fields.half)
+
+    has_tke = hasproperty(Y.c, :ρtke)
+    is_dry_or_0m = p.atmos.microphysics_model isa Union{DryModel, EquilibriumMicrophysics0M}
+    is_0m = p.atmos.microphysics_model isa EquilibriumMicrophysics0M
+    has_α = hasproperty(p.precomputed, :ᶜα)
+    A = FT(CAP.cloud_fraction_steepness_scale(p.params))
+    τ_cond = FT(CAP.condensation_evaporation_timescale(p.params))
+    τ_sub = FT(CAP.sublimation_deposition_timescale(p.params))
+    w_eq = FT(CAP.sgs_fidelity_equilibrium_weight(p.params))
+    q_min = FT(TD.Parameters.q_min(thermo_params))
+    c_d = tke_dissipation_coefficient(turbconv_params)
+    c_trunc = equilibrium_condensate_truncation(p)
+    sf_params = CAP.surface_fluxes_params(p.params)
+    vkc = CAP.von_karman_const(p.params)
+    ᶜΔ_f = resolvability_filter_scale(axes(Y.c))
+    scale_blending_method = is_edmf ? p.atmos.edmfx_model.scale_blending_method : nothing
+    (; sfc_conditions, ᶜstrain_rate_norm) = p.precomputed
+    ᶜα = has_α ? p.precomputed.ᶜα : ᶜcorr_Tq
+    ᶜT′q′ = diag_corr ? p.precomputed.ᶜT′q′ : ᶜcorr_Tq
+    ᶜdisp_S = has_curvature ? p.precomputed.ᶜdisp_S : ᶜcorr_Tq
+    (zero_FT, one_FT, ϵ_FT, inf_FT) = (zero(FT), one(FT), eps(FT), FT(Inf))
+
+    if has_α && !is_0m
+        if env_state !== nothing
+            (; ᶜρ_env, ᶜT_mean, ᶜq_mean, ᶜq_lcl, ᶜq_icl, ᶜq_precip) = env_state
+        else
+            ᶜρ_env_lazy, ᶜT_mean, ᶜq_mean =
+                _get_env_ρ_T_q(Y, p, thermo_params, turbconv_model)
+            ᶜq_lcl_lazy, ᶜq_icl_lazy =
+                _get_condensate_means(Y, p, turbconv_model, p.atmos.microphysics_model)
+            ᶜq_precip_lazy =
+                _get_precip_mean(Y, p, turbconv_model, p.atmos.microphysics_model)
+            ᶜρ_env =
+                ᶜρ_env_lazy isa Fields.Field ? ᶜρ_env_lazy :
+                (p.scratch.ᶜtemp_scalar .= ᶜρ_env_lazy)
+            ᶜq_lcl =
+                ᶜq_lcl_lazy isa Fields.Field ? ᶜq_lcl_lazy :
+                (p.scratch.ᶜtemp_scalar_2 .= ᶜq_lcl_lazy)
+            ᶜq_icl =
+                ᶜq_icl_lazy isa Fields.Field ? ᶜq_icl_lazy :
+                (p.scratch.ᶜtemp_scalar_3 .= ᶜq_icl_lazy)
+            if ᶜq_precip_lazy isa Union{Fields.Field, Number}
+                ᶜq_precip = ᶜq_precip_lazy
+            else
+                ᶜq_precip = Fields.Field(
+                    Fields.field_values(p.scratch.ᶜtemp_C3.components.data.:1),
+                    axes(Y.c),
+                )
+                @. ᶜq_precip = ᶜq_precip_lazy
+            end
+        end
+        ᶜenv_pack = @. lazy(tuple(ᶜρ_env, ᶜT_mean, ᶜq_mean - ᶜq_precip, ᶜq_lcl + ᶜq_icl))
+    else
+        ᶜenv_pack = @. lazy(tuple(ᶜcorr_Tq, ᶜcorr_Tq, ᶜcorr_Tq, ᶜcorr_Tq))
     end
-    if p.atmos.sgs_variance_curvature
-        set_displacement_curvature!(
-            p.precomputed.ᶜdisp_S, Y, p, thermo_params,
-            ᶜl_d, ᶜ∂T_∂θ, ᶜ∂q∂z, ᶜ∂θ∂z,
+    ᶜinv_pack = @. lazy(tuple(ᶜinv_q, ᶜinv_θq, ᶜinv_θ))
+
+    _set_covariance_cache_loop!(
+        Y, thermo_params,
+        ᶜbuoygrad, ᶜl_mix, ᶜq′q′, ᶜT′T′, ᶜT′q′, ᶜcorr_Tq, ᶜα, ᶜdisp_S,
+        ᶜbg_coeffs, ᶜcloud_fraction, ᶜgradᵥ_θ_liq_ice, ᶜgradᵥ_q_tot,
+        ᶠ∂θli∂z, ᶠ∂qt∂z,
+        ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice,
+        ᶜenv_pack, ᶜinv_pack,
+        ᶜlg, ᶜΔz, z_sfc, ᶜΔ_f,
+        sfc_conditions, ᶜstrain_rate_norm,
+        c_σ, r_v_θ, ℓ_h_q², ℓ_h_θ², ℓ_h_θq,
+        κ_b_per_tke, c_b_κ_min, τ_0, r_max, corr_fallback,
+        A, τ_cond, τ_sub, w_eq, q_min, c_d, c_trunc, vkc,
+        turbconv_params, sf_params, scale_blending_method,
+        zero_FT, one_FT, ϵ_FT, inf_FT,
+        Val(recompute_buoygrad),
+        Val(is_edmf),
+        Val(has_tke),
+        Val(diag_corr),
+        Val(has_curvature),
+        Val(is_dry_or_0m),
+        Val(has_α),
+        Val(is_0m),
+    )
+    return nothing
+end
+
+function _set_covariance_cache_loop!(
+    Y, thermo_params,
+    ᶜbuoygrad, ᶜl_mix, ᶜq′q′, ᶜT′T′, ᶜT′q′, ᶜcorr_Tq, ᶜα, ᶜdisp_S,
+    ᶜbg_coeffs, ᶜcloud_fraction, ᶜgradᵥ_θ_liq_ice, ᶜgradᵥ_q_tot,
+    ᶠ∂θli∂z, ᶠ∂qt∂z,
+    ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice,
+    ᶜenv_pack, ᶜinv_pack,
+    ᶜlg, ᶜΔz, z_sfc, ᶜΔ_f,
+    sfc_conditions, ᶜstrain_rate_norm,
+    c_σ, r_v_θ, ℓ_h_q², ℓ_h_θ², ℓ_h_θq,
+    κ_b_per_tke, c_b_κ_min, τ_0, r_max, corr_fallback,
+    A, τ_cond, τ_sub, w_eq, q_min, c_d, c_trunc, vkc,
+    turbconv_params, sf_params, scale_blending_method,
+    zero_FT, one_FT, ϵ_FT, inf_FT,
+    ::Val{recompute_buoygrad},
+    ::Val{is_edmf},
+    ::Val{has_tke},
+    ::Val{diag_corr},
+    ::Val{has_curvature},
+    ::Val{is_dry_or_0m},
+    ::Val{has_α},
+    ::Val{is_0m},
+) where {
+    recompute_buoygrad,
+    is_edmf,
+    has_tke,
+    diag_corr,
+    has_curvature,
+    is_dry_or_0m,
+    has_α,
+    is_0m,
+}
+    val_master = Val{:master}()
+    DataLayouts.foreach_column(
+        ᶜbuoygrad, ᶜl_mix, ᶜq′q′, ᶜT′T′, ᶜT′q′, ᶜcorr_Tq, ᶜα, ᶜdisp_S,
+        Y.c, ᶜbg_coeffs, ᶜcloud_fraction, ᶜgradᵥ_θ_liq_ice, ᶜgradᵥ_q_tot,
+        ᶠ∂θli∂z, ᶠ∂qt∂z,
+        ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice,
+        ᶜenv_pack, ᶜinv_pack,
+        ᶜlg, ᶜΔz, z_sfc, ᶜΔ_f,
+        sfc_conditions, ᶜstrain_rate_norm,
+    ) do ᶜbuoygrad, ᶜl_mix, ᶜq′q′, ᶜT′T′, ᶜT′q′, ᶜcorr_Tq, ᶜα, ᶜdisp_S,
+    Yc, ᶜbg_coeffs, ᶜcloud_fraction, ᶜgradᵥ_θ_liq_ice, ᶜgradᵥ_q_tot,
+    ᶠ∂θli∂z, ᶠ∂qt∂z,
+    ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice,
+    ᶜenv_pack, ᶜinv_pack,
+    ᶜlg, ᶜΔz, z_sfc, ᶜΔ_f,
+    sfc_conditions, ᶜstrain_rate_norm
+        ᶜz = ᶜlg.coordinates.z
+        ᶜtke = has_tke ? (@. lazy(specific(Yc.ρtke, Yc.ρ))) : zero_FT
+        sfc_tke =
+            has_tke ?
+            (@. lazy(specific(Fields.level(Yc.ρtke, 1), Fields.level(Yc.ρ, 1)))) :
+            zero_FT
+        if recompute_buoygrad && is_edmf
+            @. ᶜbuoygrad = blended_N²(
+                ᶜbg_coeffs,
+                ᶜcloud_fraction,
+                projected_vector_data(C3, ᶜgradᵥ_θ_liq_ice, ᶜlg),
+                projected_vector_data(C3, ᶜgradᵥ_q_tot, ᶜlg),
+            )
+        end
+        if is_edmf
+            ᶜprandtl_nvec = @. lazy(
+                turbulent_prandtl_number(turbconv_params, ᶜbuoygrad, ᶜstrain_rate_norm),
+            )
+            ᶜml = @. lazy(
+                mixing_length_lopez_gomez_2020(
+                    turbconv_params,
+                    sf_params,
+                    vkc,
+                    sfc_conditions.ustar,
+                    ᶜz,
+                    z_sfc,
+                    ᶜΔ_f,
+                    sfc_tke,
+                    ᶜbuoygrad,
+                    ᶜtke,
+                    sfc_conditions.obukhov_length,
+                    ᶜstrain_rate_norm,
+                    ᶜprandtl_nvec,
+                    scale_blending_method,
+                ),
+            )
+            @. ᶜl_mix = get_mixing_length_field(ᶜml, val_master)
+        end
+
+        nc = Spaces.nlevels(axes(ᶜbuoygrad))
+        ᶜθ_below = Operators.BottomBiasedF2C(
+            bottom = Operators.SetValue(Fields.level(ᶠ∂θli∂z, 1 + Fields.half)),
         )
+        ᶜθ_above = Operators.TopBiasedF2C(
+            top = Operators.SetValue(Fields.level(ᶠ∂θli∂z, nc - Fields.half)),
+        )
+        ᶜq_below = Operators.BottomBiasedF2C(
+            bottom = Operators.SetValue(Fields.level(ᶠ∂qt∂z, 1 + Fields.half)),
+        )
+        ᶜq_above = Operators.TopBiasedF2C(
+            top = Operators.SetValue(Fields.level(ᶠ∂qt∂z, nc - Fields.half)),
+        )
+        ᶜN²_disp = @. max(
+            dry_N²(ᶜbg_coeffs, ᶜθ_below(ᶠ∂θli∂z), ᶜq_below(ᶠ∂qt∂z)),
+            dry_N²(ᶜbg_coeffs, ᶜθ_above(ᶠ∂θli∂z), ᶜq_above(ᶠ∂qt∂z)),
+        )
+
+        if has_tke
+            ᶜtke_pos = @. lazy(max(ᶜtke, zero_FT))
+            ᶜl_mix_disp = @. buoyancy_bounded_mixing_length(
+                ᶜl_mix,
+                κ_b_per_tke * ᶜtke_pos,
+                ᶜN²_disp,
+            )
+            ᶜτ_turb = @. lazy(
+                turbulent_lagrangian_time(ᶜl_mix_disp, κ_b_per_tke * ᶜtke_pos),
+            )
+            ᶜl_d = @. displacement_length(
+                ᶜl_mix_disp,
+                floor_displacement_length(
+                    c_b_κ_min, ᶜN²_disp, ᶜτ_turb, τ_0, ᶜz - z_sfc, ᶜΔz,
+                ),
+                ᶜz - z_sfc,
+            )
+        else
+            ᶜl_mix_disp = one_FT
+            ᶜl_d = @. displacement_length(
+                ᶜl_mix,
+                floor_displacement_length(
+                    c_b_κ_min, ᶜN²_disp, inf_FT, τ_0, ᶜz - z_sfc, ᶜΔz,
+                ),
+                ᶜz - z_sfc,
+            )
+        end
+
+        ᶜℓ_v_q² = @. lazy(2 * c_σ * ᶜl_d^2)
+        ᶜℓ_v_θ² = @. lazy(r_v_θ^2 * ᶜℓ_v_q²)
+        ᶜℓ_v_θq = @. lazy(r_v_θ * ᶜℓ_v_q²)
+        ᶜ∂q∂z = @. lazy(projected_vector_data(C3, ᶜgradᵥ_q_tot, ᶜlg))
+        ᶜ∂θ∂z = @. lazy(projected_vector_data(C3, ᶜgradᵥ_θ_liq_ice, ᶜlg))
+
+        if is_dry_or_0m
+            ᶜq_l_jac = ᶜq_liq
+            ᶜq_i_jac = ᶜq_ice
+            ᶜq_t_jac = ᶜq_tot_nonneg
+        else
+            ᶜq_l_jac = @. lazy(specific(Yc.ρq_lcl, Yc.ρ))
+            ᶜq_i_jac = @. lazy(specific(Yc.ρq_icl, Yc.ρ))
+            ᶜq_t_jac = @. lazy(specific(Yc.ρq_tot, Yc.ρ))
+        end
+        ᶜθ_li_jac = @. lazy(
+            TD.liquid_ice_pottemp(thermo_params, ᶜT, Yc.ρ, ᶜq_t_jac, ᶜq_l_jac, ᶜq_i_jac),
+        )
+        ᶜ∂T_∂θ = @. ∂T_∂θ_li(
+            thermo_params, ᶜT, ᶜθ_li_jac, ᶜq_l_jac, ᶜq_i_jac, ᶜq_t_jac, Yc.ρ,
+        )
+
+        @. ᶜq′q′ = displacement_covariance(ℓ_h_q², ᶜℓ_v_q², _1(ᶜinv_pack), ᶜ∂q∂z, ᶜ∂q∂z)
+        @. ᶜT′T′ =
+            ᶜ∂T_∂θ^2 *
+            displacement_covariance(ℓ_h_θ², ᶜℓ_v_θ², _3(ᶜinv_pack), ᶜ∂θ∂z, ᶜ∂θ∂z)
+        if diag_corr
+            @. ᶜT′q′ =
+                ᶜ∂T_∂θ *
+                displacement_covariance(ℓ_h_θq, ᶜℓ_v_θq, _2(ᶜinv_pack), ᶜ∂θ∂z, ᶜ∂q∂z)
+            @. ᶜT′q′ *= sqrt(min(
+                one_FT,
+                (r_max * ᶜq_tot_nonneg)^2 / max(ᶜq′q′, ϵ_FT^2),
+            ))
+        end
+        if has_curvature
+            ᶜχ = @. lazy(r_v_θ * TD.∂q_vap_sat_∂T(thermo_params, ᶜT, Yc.ρ) * ᶜ∂T_∂θ)
+            @. ᶜdisp_S = displacement_curvature_coefficients(
+                sqrt(2 * c_σ) * ᶜl_d,
+                ᶜχ,
+                ᶜ∂q∂z,
+                ᶜ∂θ∂z,
+                (ᶜq_above(ᶠ∂qt∂z) - ᶜq_below(ᶠ∂qt∂z)) / ᶜΔz,
+                (ᶜθ_above(ᶠ∂θli∂z) - ᶜθ_below(ᶠ∂θli∂z)) / ᶜΔz,
+            )
+        end
+        @. ᶜq′q′ = min(ᶜq′q′, (r_max * ᶜq_tot_nonneg)^2)
+
+        if diag_corr
+            @. ᶜcorr_Tq = sgs_correlation_Tq(
+                ᶜT′T′, ᶜq′q′, ᶜT′q′, ᶜT, ᶜq_tot_nonneg, corr_fallback,
+            )
+        else
+            @. ᶜcorr_Tq = corr_fallback
+        end
+
+        if has_α
+            if is_0m
+                @. ᶜα = one_FT / A
+            else
+                ᶜγ = @. lazy(TD.∂q_vap_sat_∂T(thermo_params, _2(ᶜenv_pack), _1(ᶜenv_pack)))
+                ᶜsigma_S = @. lazy(
+                    sqrt(
+                        max(
+                            ᶜq′q′ - 2 * ᶜγ * ᶜcorr_Tq * sqrt(max(ᶜT′T′ * ᶜq′q′, zero_FT)) +
+                            ᶜγ^2 * ᶜT′T′,
+                            zero_FT,
+                        ),
+                    ),
+                )
+                ᶜmu_S = @. lazy(
+                    _3(ᶜenv_pack) -
+                    TD.q_vap_saturation(thermo_params, _2(ᶜenv_pack), _1(ᶜenv_pack)),
+                )
+                @. ᶜα = sgs_variance_fidelity(
+                    A,
+                    sgs_microphysics_timescale(thermo_params, _2(ᶜenv_pack), τ_cond, τ_sub),
+                    c_d,
+                    has_tke ? max(ᶜtke, zero_FT) : zero_FT,
+                    has_tke && is_edmf ? ᶜl_mix_disp : one_FT,
+                    w_eq,
+                    _4(ᶜenv_pack),
+                    ᶜmu_S,
+                    ᶜsigma_S,
+                    q_min,
+                    has_curvature ? _disp_lin(ᶜdisp_S) : zero_FT,
+                    has_curvature ? _disp_curv(ᶜdisp_S) : zero_FT,
+                    c_trunc,
+                )
+            end
+        end
+        return nothing
     end
-
-    # 5. Closure-validity bound `σ_q ≤ sgs_variance_max_rel_std · q_tot`
-    #    (default 0.5). A wider Gaussian puts a quadrature node at negative
-    #    total water; the clamped quadrature then carries more total water
-    #    than the grid mean holds, and condensing it can drive the grid-mean
-    #    vapour negative. T′q′ is rescaled by the same factor as σ_q so the
-    #    diagnosed correlation is invariant under the bound.
-    r_max = CAP.sgs_variance_max_rel_std(p.params)
-    if diag_corr
-        @. p.precomputed.ᶜT′q′ *= sqrt(min(
-            one(FT),
-            (r_max * ᶜq_tot_nonneg)^2 / max(ᶜq′q′, eps(FT)^2),
-        ))
-    end
-    @. ᶜq′q′ = min(ᶜq′q′, (r_max * ᶜq_tot_nonneg)^2)
-
-    # 6. The correlation the quadrature samples.
-    set_tq_correlation!(p, p.atmos.tq_correlation_model)
-
-    # 7. Refresh `ᶜα` with the current bounded `ᶜl_mix` and state.
-    materialized_variance_fidelity!(Y, p, ᶜl_mix_disp)
     return nothing
 end
 
@@ -1484,6 +1983,7 @@ The floor enters *only* the CF computation; the Lagrange multiplier `λ` (in
 """
 @inline function _compute_cloud_fraction(q_c, mu_S, sigma_S, q_sat, α, floor)
     FT = typeof(q_c)
+    q_c <= zero(FT) && return normal_cdf(_compute_z(zero(FT)))
     (; ε_rel, σ_abs, margin, abs_margin, sharpness, residual) = floor
     # Release the relative floor only where the mean is saturated by a
     # margin relative to the release width `w` — by default the
@@ -1540,12 +2040,15 @@ materialized to a Field.
     α,
     floor,
 )
+    q_c = q_liq + q_ice
+    FT = typeof(q_c)
+    q_c <= zero(FT) && return normal_cdf(_compute_z(zero(FT)))
     moments = _sgs_saturation_moments(
         thermo_params, ρ, T, q_tot, sgs_quad, T′T′, q′q′, corr_Tq,
     )
     q_sat = TD.q_vap_saturation(_unwrapped(thermo_params), T, ρ, q_liq, q_ice)
     return _compute_cloud_fraction(
-        q_liq + q_ice, moments.mu_S, moments.sigma_S, q_sat, α, floor,
+        q_c, moments.mu_S, moments.sigma_S, q_sat, α, floor,
     )
 end
 
@@ -1819,7 +2322,16 @@ and the node rule is required for conservation.
 
 Mutates `p.precomputed.ᶜprecip_frac`.
 """
-NVTX.@annotate function set_precip_fraction!(Y, p)
+NVTX.@annotate function set_precip_fraction!(
+    Y,
+    p,
+    ᶜq_precip = _get_precip_mean(
+        Y,
+        p,
+        p.atmos.turbconv_model,
+        p.atmos.microphysics_model,
+    ),
+)
     hasproperty(p.precomputed, :ᶜprecip_frac) || return nothing
     FT = eltype(p.params)
     f_decay = clamp(FT(CAP.sgs_precip_overlap_decay(p.params)), zero(FT), one(FT))
@@ -1827,7 +2339,7 @@ NVTX.@annotate function set_precip_fraction!(Y, p)
     _precip_fraction_sweep!(
         p.precomputed.ᶜprecip_frac,
         p.precomputed.ᶜcloud_fraction,
-        _get_precip_mean(Y, p, p.atmos.turbconv_model, p.atmos.microphysics_model),
+        ᶜq_precip,
         f_decay,
         FT(TD.Parameters.q_min(thermo_params)),
     )
@@ -1849,6 +2361,20 @@ of columns; its cost on GPU is one kernel launch per level.
 """
 function _precip_fraction_sweep!(ᶜprecip_frac, ᶜcf, ᶜq_precip, f_decay, q_precip_min)
     FT = eltype(ᶜprecip_frac)
+    (zero_FT, one_FT) = (zero(FT), one(FT))
+    if ClimaComms.device(ᶜprecip_frac) isa ClimaComms.CUDADevice
+        input = Base.broadcasted(tuple, ᶜcf, ᶜq_precip)
+        Operators.column_accumulate!(
+            ᶜprecip_frac, input; init = zero_FT, reverse = true,
+        ) do a_p_above, (cf, q_precip)
+            ifelse(
+                q_precip > q_precip_min,
+                min(one_FT, max(max(cf, zero_FT), f_decay * a_p_above)),
+                zero_FT,
+            )
+        end
+        return nothing
+    end
     # A negative value is the sentinel for a precipitation-free level, so the
     # seed takes the cover clamped non-negative.
     @. ᶜprecip_frac =
@@ -1870,19 +2396,6 @@ function _precip_fraction_sweep!(ᶜprecip_frac, ᶜcf, ᶜq_precip, f_decay, q_
     end
     return nothing
 end
-# `column_accumulate!` form of the same recursion (allocates on the CPU path,
-# see the docstring above):
-#     input = Base.broadcasted(tuple, ᶜcf, ᶜq_precip)
-#     Operators.column_accumulate!(
-#         ᶜprecip_frac, input; init = zero(FT), reverse = true,
-#     ) do a_p_above, (cf, q_precip)
-#         ifelse(
-#             q_precip > q_precip_min,
-#             min(one(FT), max(cf, f_decay * a_p_above)),
-#             zero(FT),
-#         )
-#     end
-
 
 # ============================================================================
 # Cloud Fraction Dispatch Methods

@@ -54,123 +54,104 @@ function edmfx_sgs_mass_flux_tendency!(
     ᶜρa⁰ = @. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model))
 
     if p.atmos.edmfx_model.sgs_mass_flux
-
-        # Enthalpy fluxes. First sum up the draft fluxes
+        # Fluxes of enthalpy, total water, and the SGS tracers, as one fused
+        # column loop per draft and one for the environment: the flux
+        # velocity `ᶠu³_diff` and the flux variable `ᶜa_scalar` of each
+        # quantity are loop temporaries (registers on GPUs) rather than scratch
+        # fields, and all quantities of a subdomain share one kernel.
         # TODO: Isolate assembly of flux term pattern to a function and
         # reuse (both in prognostic and diagnostic EDMFX)
         # [best after removal of precomputed quantities]
-        ᶠu³_diff = p.scratch.ᶠtemp_CT3
-        ᶜa_scalar = p.scratch.ᶜtemp_scalar
         (; ᶜh_tot) = p.precomputed
+        χ_names = sgs_tracer_names(Y)
+        ρχ_names = unrolled_map(get_ρχ_name, χ_names)
+
+        # Drafts
         for j in 1:n
-            @. ᶠu³_diff = ᶠu³ʲs.:($$j) - ᶠu³
-            @. ᶜa_scalar =
-                (Y.c.sgsʲs.:($$j).mse + ᶜKʲs.:($$j) - ᶜh_tot) *
-                draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j))
-            vtt = vertical_transport(
-                ᶜρʲs.:($j),
-                ᶠu³_diff,
-                ᶜa_scalar,
-                dt,
-                edmfx_sgsflux_upwinding,
+            ᶜsgsʲ = Y.c.sgsʲs.:($j)
+            ᶜχʲs = unrolled_map(
+                χ_name -> MatrixFields.get_field(ᶜsgsʲ, χ_name), χ_names,
             )
-            @. Yₜ.c.ρe_tot += vtt
+            DataLayouts.foreach_column(
+                Yₜ.c, Y.c, ᶜρʲs.:($j), ᶠu³, ᶠu³ʲs.:($j), ᶜKʲs.:($j), ᶜh_tot,
+                ᶜsgsʲ, ᶜχʲs...,
+            ) do Yₜc, Yc, ᶜρʲ, ᶠu³, ᶠu³ʲ, ᶜKʲ, ᶜh_tot, ᶜsgsʲ, ᶜχʲs...
+                ᶜaʲ = @. draft_area(ᶜsgsʲ.ρa, ᶜρʲ)
+                add_sgs_mass_flux_tendencies!(
+                    Yₜc, Yc, ᶜρʲ, ᶠu³, ᶠu³ʲ, ᶜKʲ, ᶜh_tot, ᶜsgsʲ.mse, ᶜsgsʲ.q_tot,
+                    ᶜaʲ, ᶜχʲs, ρχ_names, dt, edmfx_sgsflux_upwinding,
+                )
+                return nothing
+            end
         end
-        # Add the environment fluxes
-        @. ᶠu³_diff = ᶠu³⁰ - ᶠu³
+
+        # Environment
         ᶜmse⁰ = ᶜspecific_env_mse(Y, p)
-        @. ᶜa_scalar = (ᶜmse⁰ + ᶜK⁰ - ᶜh_tot) * draft_area(ᶜρa⁰, ᶜρ⁰)
-        vtt = vertical_transport(
-            ᶜρ⁰,
-            ᶠu³_diff,
-            ᶜa_scalar,
-            dt,
-            edmfx_sgsflux_upwinding,
-        )
-        @. Yₜ.c.ρe_tot += vtt
-
-        if !(p.atmos.microphysics_model isa DryModel)
-            # Specific humidity fluxes: First sum up the draft fluxes
-            for j in 1:n
-                @. ᶠu³_diff = ᶠu³ʲs.:($$j) - ᶠu³
-                @. ᶜa_scalar =
-                    (Y.c.sgsʲs.:($$j).q_tot - specific(Y.c.ρq_tot, Y.c.ρ)) *
-                    draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j))
-                vtt = vertical_transport(
-                    ᶜρʲs.:($j),
-                    ᶠu³_diff,
-                    ᶜa_scalar,
-                    dt,
-                    edmfx_sgsflux_upwinding,
-                )
-                @. Yₜ.c.ρq_tot += vtt
-                @. Yₜ.c.ρ += vtt  # Effect of SGS water flux on (moist) air mass
-            end
-            # Add the environment fluxes
-            ᶜq_tot⁰ = ᶜspecific_env_value(@name(q_tot), Y, p)
-            @. ᶠu³_diff = ᶠu³⁰ - ᶠu³
-            @. ᶜa_scalar =
-                (ᶜq_tot⁰ - specific(Y.c.ρq_tot, Y.c.ρ)) * draft_area(ᶜρa⁰, ᶜρ⁰)
-            vtt = vertical_transport(
-                ᶜρ⁰,
-                ᶠu³_diff,
-                ᶜa_scalar,
-                dt,
-                edmfx_sgsflux_upwinding,
+        ᶜq_tot⁰ = ᶜspecific_env_value(@name(q_tot), Y, p)
+        ᶜχ⁰s = unrolled_map(χ_name -> ᶜspecific_env_value(χ_name, Y, p), χ_names)
+        DataLayouts.foreach_column(
+            Yₜ.c, Y.c, ᶜρ⁰, ᶜρa⁰, ᶠu³, ᶠu³⁰, ᶜK⁰, ᶜh_tot, ᶜmse⁰, ᶜq_tot⁰, ᶜχ⁰s...,
+        ) do Yₜc, Yc, ᶜρ⁰, ᶜρa⁰, ᶠu³, ᶠu³⁰, ᶜK⁰, ᶜh_tot, ᶜmse⁰, ᶜq_tot⁰, ᶜχ⁰s...
+            ᶜa⁰ = @. draft_area(ᶜρa⁰, ᶜρ⁰)
+            add_sgs_mass_flux_tendencies!(
+                Yₜc, Yc, ᶜρ⁰, ᶠu³, ᶠu³⁰, ᶜK⁰, ᶜh_tot, ᶜmse⁰, ᶜq_tot⁰,
+                ᶜa⁰, ᶜχ⁰s, ρχ_names, dt, edmfx_sgsflux_upwinding,
             )
-            @. Yₜ.c.ρq_tot += vtt
-            @. Yₜ.c.ρ += vtt  # Effect of SGS water flux on (moist) air mass
-        end
-
-        # Auto-discovered SGS tracer fluxes (microphysics species and any
-        # user-defined passive tracers). Like the mse and q_tot fluxes above,
-        # these are difference-form fluxes ρᵏaᵏ(u³ᵏ - u³)(χᵏ - χ), which
-        # vanish identically for uniform χ, reconstructed with the same
-        # upwinding as the mse and q_tot fluxes so that the water-species
-        # fluxes stay consistent with the q_tot flux (the implied vapor flux
-        # is their difference). The grid-mean advection -∇·(ρ u³ χ) of each
-        # tracer is applied in explicit_vertical_advection_tendency!.
-        # Draft fluxes
-        for χ_name in sgs_tracer_names(Y)
-            ρχ_name = get_ρχ_name(χ_name)
-            ᶜρχ = MatrixFields.get_field(Y.c, ρχ_name)
-            for j in 1:n
-                ᶜχʲ = MatrixFields.get_field(Y.c.sgsʲs.:($j), χ_name)
-                @. ᶠu³_diff = ᶠu³ʲs.:($$j) - ᶠu³
-                @. ᶜa_scalar =
-                    (ᶜχʲ - specific(ᶜρχ, Y.c.ρ)) *
-                    draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j))
-                vtt = vertical_transport(
-                    ᶜρʲs.:($j),
-                    ᶠu³_diff,
-                    ᶜa_scalar,
-                    dt,
-                    edmfx_sgsflux_upwinding,
-                )
-                ᶜρχₜ = MatrixFields.get_field(Yₜ.c, ρχ_name)
-                @. ᶜρχₜ += vtt
-            end
-        end
-        # Environment fluxes
-        @. ᶠu³_diff = ᶠu³⁰ - ᶠu³
-        for χ_name in sgs_tracer_names(Y)
-            ρχ_name = get_ρχ_name(χ_name)
-            ᶜρχ = MatrixFields.get_field(Y.c, ρχ_name)
-            ᶜχ⁰ = ᶜspecific_env_value(χ_name, Y, p)
-            @. ᶜa_scalar =
-                (ᶜχ⁰ - specific(ᶜρχ, Y.c.ρ)) * draft_area(ᶜρa⁰, ᶜρ⁰)
-            vtt = vertical_transport(
-                ᶜρ⁰,
-                ᶠu³_diff,
-                ᶜa_scalar,
-                dt,
-                edmfx_sgsflux_upwinding,
-            )
-            ᶜρχₜ = MatrixFields.get_field(Yₜ.c, ρχ_name)
-            @. ᶜρχₜ += vtt
+            return nothing
         end
     end
-    # TODO - add vertical momentum fluxes
+    return nothing
+end
+
+"""
+    add_sgs_mass_flux_tendencies!(Yₜc, Yc, ᶜρ, ᶠu³, ᶠu³_sub, ᶜK_sub, ᶜh_tot, ᶜmse_sub,
+                                  ᶜq_tot_sub, ᶜa, ᶜχ_subs, ρχ_names, dt, upwinding)
+
+Add the SGS mass-flux tendencies of one subdomain (a draft or the environment)
+to the grid-mean `ρe_tot`, `ρq_tot`, `ρ`, and the SGS tracers `ρχ_names` of one
+column. The subdomain is described by its density `ᶜρ`, velocity `ᶠu³_sub`,
+kinetic energy `ᶜK_sub`, moist static energy `ᶜmse_sub`, total specific humidity
+`ᶜq_tot_sub`, area fraction `ᶜa`, and tracer values `ᶜχ_subs` (one per name in
+`ρχ_names`); `ᶠu³` and `ᶜh_tot` are the grid-mean velocity and total specific
+enthalpy. Called inside the fused column loops of
+[`edmfx_sgs_mass_flux_tendency!`](@ref), so its temporaries are loop
+temporaries and it must stay inlined.
+"""
+@inline function add_sgs_mass_flux_tendencies!(
+    Yₜc,
+    Yc,
+    ᶜρ,
+    ᶠu³,
+    ᶠu³_sub,
+    ᶜK_sub,
+    ᶜh_tot,
+    ᶜmse_sub,
+    ᶜq_tot_sub,
+    ᶜa,
+    ᶜχ_subs,
+    ρχ_names,
+    dt,
+    upwinding,
+)
+    ᶠu³_diff = @. ᶠu³_sub - ᶠu³
+    ᶜa_scalar = @. (ᶜmse_sub + ᶜK_sub - ᶜh_tot) * ᶜa
+    vtt = vertical_transport(ᶜρ, ᶠu³_diff, ᶜa_scalar, dt, upwinding)
+    @. Yₜc.ρe_tot += vtt
+    if MatrixFields.has_field(Yc, @name(ρq_tot))
+        ᶜa_scalar_q = @. (ᶜq_tot_sub - specific(Yc.ρq_tot, Yc.ρ)) * ᶜa
+        vtt_q = vertical_transport(ᶜρ, ᶠu³_diff, ᶜa_scalar_q, dt, upwinding)
+        @. Yₜc.ρq_tot += vtt_q
+        @. Yₜc.ρ += vtt_q  # Effect of SGS water flux on (moist) air mass
+    end
+    MatrixFields.unrolled_foreach(
+        _unrolled_zip(ρχ_names, ᶜχ_subs),
+    ) do (ρχ_name, ᶜχ_sub)
+        ᶜρχ = MatrixFields.get_field(Yc, ρχ_name)
+        ᶜρχₜ = MatrixFields.get_field(Yₜc, ρχ_name)
+        ᶜa_scalar_χ = @. (ᶜχ_sub - specific(ᶜρχ, Yc.ρ)) * ᶜa
+        vtt_χ = vertical_transport(ᶜρ, ᶠu³_diff, ᶜa_scalar_χ, dt, upwinding)
+        @. ᶜρχₜ += vtt_χ
+    end
     return nothing
 end
 
@@ -200,6 +181,37 @@ function ᶜenv_diffusing_water(Y, p)
     end
 end
 
+@inline function ᶜenv_diffusing_water(
+    Yc,
+    ᶜρa⁰,
+    ᶜq_liq⁰,
+    ᶜq_ice⁰,
+    turbconv_model,
+    microphysics_model,
+)
+    if microphysics_model isa NonEquilibriumMicrophysics
+        ᶜq_tot_eff⁰ = @. specific_env_value(
+            @name(q_tot), Yc.ρq_tot, Yc.ρ, Yc.sgsʲs, ᶜρa⁰, turbconv_model,
+        ) - specific_env_value(
+            @name(q_rai), Yc.ρq_rai, Yc.ρ, Yc.sgsʲs, ᶜρa⁰, turbconv_model,
+        ) - specific_env_value(
+            @name(q_sno), Yc.ρq_sno, Yc.ρ, Yc.sgsʲs, ᶜρa⁰, turbconv_model,
+        )
+        ᶜq_lcl⁰ = @. specific_env_value(
+            @name(q_lcl), Yc.ρq_lcl, Yc.ρ, Yc.sgsʲs, ᶜρa⁰, turbconv_model,
+        )
+        ᶜq_icl⁰ = @. specific_env_value(
+            @name(q_icl), Yc.ρq_icl, Yc.ρ, Yc.sgsʲs, ᶜρa⁰, turbconv_model,
+        )
+        return (ᶜq_tot_eff⁰, ᶜq_lcl⁰, ᶜq_icl⁰)
+    else
+        ᶜq_tot⁰ = @. specific_env_value(
+            @name(q_tot), Yc.ρq_tot, Yc.ρ, Yc.sgsʲs, ᶜρa⁰, turbconv_model,
+        )
+        return (ᶜq_tot⁰, ᶜq_liq⁰, ᶜq_ice⁰)
+    end
+end
+
 """
     ᶜupdraft_diffusing_water(Y, p, ::Val{j})
 
@@ -219,6 +231,20 @@ function ᶜupdraft_diffusing_water(Y, p, ::Val{j}) where {j}
     else
         (; ᶜq_liqʲs, ᶜq_iceʲs) = p.precomputed
         return (Y.c.sgsʲs.:($j).q_tot, ᶜq_liqʲs.:($j), ᶜq_iceʲs.:($j))
+    end
+end
+
+@inline function ᶜupdraft_diffusing_water(
+    ᶜsgsʲ,
+    ᶜq_liqʲ,
+    ᶜq_iceʲ,
+    microphysics_model,
+)
+    if microphysics_model isa NonEquilibriumMicrophysics
+        ᶜq_tot_effʲ = @. ᶜsgsʲ.q_tot - ᶜsgsʲ.q_rai - ᶜsgsʲ.q_sno
+        return (ᶜq_tot_effʲ, ᶜsgsʲ.q_lcl, ᶜsgsʲ.q_icl)
+    else
+        return (ᶜsgsʲ.q_tot, ᶜq_liqʲ, ᶜq_iceʲ)
     end
 end
 
@@ -256,6 +282,45 @@ function ᶜupdraft_diffusing_mse!(ᶜmse_eff, Y, p, ::Val{j}) where {j}
     end
 end
 
+@inline function ᶜupdraft_diffusing_mse!(
+    ᶜmse_eff,
+    ᶜsgsʲ,
+    ᶜTʲ,
+    thermo_params,
+    microphysics_model,
+)
+    ᶜmseʲ = ᶜsgsʲ.mse
+    if microphysics_model isa NonEquilibriumMicrophysics
+        ᶜq_raiʲ = ᶜsgsʲ.q_rai
+        ᶜq_snoʲ = ᶜsgsʲ.q_sno
+        if ᶜmse_eff === nothing
+            return @. ᶜmseʲ -
+                      (
+                TD.enthalpy_liquid(thermo_params, ᶜTʲ) -
+                TD.enthalpy_dry(thermo_params, ᶜTʲ)
+            ) * ᶜq_raiʲ -
+                      (
+                TD.enthalpy_ice(thermo_params, ᶜTʲ) -
+                TD.enthalpy_dry(thermo_params, ᶜTʲ)
+            ) * ᶜq_snoʲ
+        else
+            @. ᶜmse_eff =
+                ᶜmseʲ -
+                (
+                    TD.enthalpy_liquid(thermo_params, ᶜTʲ) -
+                    TD.enthalpy_dry(thermo_params, ᶜTʲ)
+                ) * ᶜq_raiʲ -
+                (
+                    TD.enthalpy_ice(thermo_params, ᶜTʲ) -
+                    TD.enthalpy_dry(thermo_params, ᶜTʲ)
+                ) * ᶜq_snoʲ
+            return ᶜmse_eff
+        end
+    else
+        return ᶜmseʲ
+    end
+end
+
 """
     edmfx_diffused_scalars(Y)
 
@@ -281,8 +346,8 @@ edmfx_diffused_scalars(Y) = (
 """
     ᶠupdraft_diffusion_weight!(ᶠwʲ, ᶜρaʲ, ᶠK_h, f_j)
 
-Write into `ᶠwʲ` and return the face weight of the vertical updraft diffusive
-flux `-ᶠwʲ ∇χʲ`,
+Write into `ᶠwʲ` (or allocate a column register field when `ᶠwʲ` is `nothing`)
+and return the face weight of the vertical updraft diffusive flux `-ᶠwʲ ∇χʲ`,
 
     ᶠwʲ = f_j K_h H(ρaʲ),    H(x, y) = 2 / (1/x + 1/y),
 
@@ -300,10 +365,14 @@ grid-mean diffusion at the same `K_h` for every value of `ρaʲ_c`, and the
 extensive flux through a face bounded by a draft-free cell vanishes. (An
 arithmetic face mean amplifies the intensive tendency by `ρaʲ_nb / ρaʲ_c`.)
 """
-function ᶠupdraft_diffusion_weight!(ᶠwʲ, ᶜρaʲ, ᶠK_h, f_j)
+@inline function ᶠupdraft_diffusion_weight!(ᶠwʲ, ᶜρaʲ, ᶠK_h, f_j)
     ϵ_FT = eps(eltype(ᶠwʲ))
     @. ᶠwʲ = f_j * ᶠK_h / ᶠinterp(1 / max(ᶜρaʲ, ϵ_FT))
     return ᶠwʲ
+end
+@inline function ᶠupdraft_diffusion_weight!(::Nothing, ᶜρaʲ, ᶠK_h, f_j)
+    ϵ_FT = eps(eltype(ᶠK_h))
+    return @. f_j * ᶠK_h / ᶠinterp(1 / max(ᶜρaʲ, ϵ_FT))
 end
 
 """

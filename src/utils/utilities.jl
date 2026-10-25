@@ -1067,3 +1067,12 @@ where `p` is a degree-5 polynomial with the A&S coefficients, and
     q = inv_sqrt2pi * exp(-z_abs^2 / 2) * poly
     return ifelse(z >= zero(FT), one(FT) - q, q)
 end
+
+"""
+    val_value(::Val{N})
+
+Return the value `N` carried by a `Val`, as a compile-time constant. Used inside
+fused column loops to index argument tuples of mixed field types at constant
+positions (a run-time index into such a tuple does not compile on GPUs).
+"""
+val_value(::Val{N}) where {N} = N

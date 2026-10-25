@@ -386,38 +386,54 @@ A lazy center `Field` with the environment value `χ⁰`.
 """
 function ᶜspecific_env_value(χ_name, Y, p)
     turbconv_model = p.atmos.turbconv_model
-
-    # Grid-scale density-weighted variable name, e.g., ρq_tot
-    ρχ_name = get_ρχ_name(χ_name)
-
-    ᶜρχ = MatrixFields.get_field(Y.c, ρχ_name)
-
-    # environment density-area-weighted mse (`ρa⁰χ⁰`).
-    # Numerator: ρa⁰χ⁰ = ρχ - (Σ ρaʲ * χʲ)
     if turbconv_model isa PrognosticEDMFX
-        #Numerator: ρa⁰χ⁰ = ρχ - (Σ sgsʲ.ρa * sgsʲ.χ)
-
-        ᶜρaχ⁰ = ᶜenv_value(
-            ᶜρχ,
-            sgsʲ ->
-                MatrixFields.get_field(sgsʲ, @name(ρa)) *
-                MatrixFields.get_field(sgsʲ, χ_name),
-            Y.c.sgsʲs,
-        )
-        # Denominator: ρa⁰ = ρ - Σ ρaʲ
         ᶜρa⁰ = @. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model))
-
+        return ᶜspecific_env_value(χ_name, Y.c, ᶜρa⁰, turbconv_model)
     elseif turbconv_model isa EDOnlyEDMFX
         error("Not implemented. You should use grid mean values.")
     end
+end
 
+@inline function ᶜspecific_env_value(
+    χ_name,
+    Yc,
+    ᶜρa⁰,
+    turbconv_model::PrognosticEDMFX,
+)
+    ρχ_name = get_ρχ_name(χ_name)
+    ᶜρχ = MatrixFields.get_field(Yc, ρχ_name)
+    ᶜρaχ⁰ = ᶜenv_value(
+        ᶜρχ,
+        sgsʲ ->
+            MatrixFields.get_field(sgsʲ, @name(ρa)) *
+            MatrixFields.get_field(sgsʲ, χ_name),
+        Yc.sgsʲs,
+    )
     return @. lazy(specific(
         ᶜρaχ⁰,                      # ρaχ for environment
-        ᶜρa⁰,                   # ρa for environment
-        ᶜρχ,               # Fallback ρχ is the grid-mean value
-        Y.c.ρ,                      # Fallback ρ is the grid-mean value
+        ᶜρa⁰,                       # ρa for environment
+        ᶜρχ,                        # Fallback ρχ is the grid-mean value
+        Yc.ρ,                       # Fallback ρ is the grid-mean value
         turbconv_model,
     ))
+end
+
+@inline function ᶜcol_specific_env_value(
+    χ_name,
+    Yc,
+    ᶜρa⁰,
+    turbconv_model::PrognosticEDMFX,
+)
+    ρχ_name = get_ρχ_name(χ_name)
+    ᶜρχ = MatrixFields.get_field(Yc, ρχ_name)
+    ᶜρaχ⁰ = ᶜenv_value(
+        ᶜρχ,
+        sgsʲ ->
+            MatrixFields.get_field(sgsʲ, @name(ρa)) *
+            MatrixFields.get_field(sgsʲ, χ_name),
+        Yc.sgsʲs,
+    )
+    return @. specific(ᶜρaχ⁰, ᶜρa⁰, ᶜρχ, Yc.ρ, turbconv_model)
 end
 
 """
@@ -435,15 +451,11 @@ This is the pairing that lets an SGS tracer `χ` in `Y.c.sgsʲs.:(j)` find its
 grid-mean counterpart `ρχ` in `Y.c`; see the Passive Tracers page of the
 documentation.
 """
-function get_ρχ_name(χ_name)
-    parent_name = MatrixFields.FieldName(MatrixFields.extract_first(χ_name))
-    child_name = MatrixFields.drop_first(χ_name)
-    ρχ_name =
-        (child_name == MatrixFields.@name()) ?
-        MatrixFields.FieldName(Symbol(:ρ, MatrixFields.extract_first(χ_name))) :
-        MatrixFields.append_internal_name(parent_name, get_ρχ_name(child_name))
-
-    return ρχ_name
+@generated function get_ρχ_name(
+    ::MatrixFields.FieldName{name_chain},
+) where {name_chain}
+    new_chain = (Base.front(name_chain)..., Symbol(:ρ, last(name_chain)))
+    return :($(MatrixFields.FieldName(new_chain...)))
 end
 
 """
@@ -641,4 +653,68 @@ composite types and the tuples may hold nested types such as
     ClimaCore.DataLayouts.unrolled_mapreduce(+, a, b) do an, bn
         add_auto_broadcasters(add_auto_broadcasters(an) * add_auto_broadcasters(bn))
     end
+end
+
+@inline _unrolled_ntuple(::Val{1}, f::F) where {F} = (@inline(f(1)),)
+@inline _unrolled_ntuple(::Val{2}, f::F) where {F} = (@inline(f(1)), @inline(f(2)))
+@inline _unrolled_ntuple(::Val{3}, f::F) where {F} =
+    (@inline(f(1)), @inline(f(2)), @inline(f(3)))
+@inline _unrolled_ntuple(::Val{4}, f::F) where {F} =
+    (@inline(f(1)), @inline(f(2)), @inline(f(3)), @inline(f(4)))
+@inline _unrolled_ntuple(::Val{5}, f::F) where {F} =
+    (@inline(f(1)), @inline(f(2)), @inline(f(3)), @inline(f(4)), @inline(f(5)))
+@inline _unrolled_ntuple(::Val{6}, f::F) where {F} = (
+    @inline(f(1)),
+    @inline(f(2)),
+    @inline(f(3)),
+    @inline(f(4)),
+    @inline(f(5)),
+    @inline(f(6)),
+)
+@inline _unrolled_ntuple(::Val{N}, f::F) where {F, N} =
+    ntuple(@inline(i -> @inline(f(i))), Val(N))
+@inline _unrolled_ntuple(f::F, v::Val) where {F} = _unrolled_ntuple(v, f)
+
+@inline _unrolled_zip(::Tuple{}, ::Tuple{}) = ()
+@inline _unrolled_zip(a::Tuple, b::Tuple) =
+    ((first(a), first(b)), _unrolled_zip(Base.tail(a), Base.tail(b))...)
+
+@inline _split_halves(::Tuple{}) = ((), ())
+@inline _split_halves(t::NTuple{2, Any}) = ((t[1],), (t[2],))
+@inline _split_halves(t::NTuple{4, Any}) = ((t[1], t[2]), (t[3], t[4]))
+@inline _split_halves(t::NTuple{6, Any}) =
+    ((t[1], t[2], t[3]), (t[4], t[5], t[6]))
+@inline _split_halves(t::NTuple{8, Any}) =
+    ((t[1], t[2], t[3], t[4]), (t[5], t[6], t[7], t[8]))
+@inline _split_halves(t::NTuple{10, Any}) =
+    ((t[1], t[2], t[3], t[4], t[5]), (t[6], t[7], t[8], t[9], t[10]))
+@inline _split_halves(t::NTuple{12, Any}) = (
+    (t[1], t[2], t[3], t[4], t[5], t[6]),
+    (t[7], t[8], t[9], t[10], t[11], t[12]),
+)
+
+# Pointwise counterparts of `ᶜspecific_env_mse` and `ᶜspecific_env_value` that
+# reuse a precomputed `ρa⁰` inside fused column loops.
+@inline function specific_env_mse(ρ, sgsʲs, h_tot, K, ρa⁰_val, turbconv_model)
+    ρmse = ρ * (h_tot - K)
+    ρa⁰mse⁰ = env_value(ρmse, sgsʲ -> sgsʲ.ρa * sgsʲ.mse, sgsʲs)
+    return specific(ρa⁰mse⁰, ρa⁰_val, ρmse, ρ, turbconv_model)
+end
+
+@inline function specific_env_value(
+    χ_name,
+    ρχ,
+    ρ,
+    sgsʲs,
+    ρa⁰_val,
+    turbconv_model,
+)
+    ρa⁰χ⁰ = env_value(
+        ρχ,
+        sgsʲ ->
+            MatrixFields.get_field(sgsʲ, @name(ρa)) *
+            MatrixFields.get_field(sgsʲ, χ_name),
+        sgsʲs,
+    )
+    return specific(ρa⁰χ⁰, ρa⁰_val, ρχ, ρ, turbconv_model)
 end
