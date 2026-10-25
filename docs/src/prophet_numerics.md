@@ -266,11 +266,16 @@ the single-pass behavior) that alternate the analytic ``u_3^j`` solve with
 the semi-implicit draft-scalar sweep (upwind vertical advection, lateral and
 turbulent entrainment toward the environment, first-cell surface mass-source
 relaxation of ``h_s^j`` and ``q_t^j``, and 1M microphysics), each round
-starting from the stage-initial `Y.(f,c).sgsʲs` and refreshing the draft
-thermodynamics and `ᶜmp_tendencyʲs` at the new iterate. The final analytic
-``u_3^j`` and ``\hat{\rho}^j`` solves then run with Picard-converged buoyancy
-and microphysics inputs; `ᶜmp_tendencyʲs` is frozen through the Newton solve
-so the Jacobian stays consistent.
+starting from the stage-initial `Y.(f,c).sgsʲs`. Within a round, the sweep
+transports every draft scalar first; the draft thermodynamics and
+`ᶜmp_tendencyʲs` are then evaluated at the transported state, so that the
+vapor of each cell is consistent with the condensate that arrives with it, and
+the condensate and precipitation tracers receive ``\gamma \Delta t`` times
+that source; the draft thermodynamics are refreshed again at the full iterate
+for the next ``u_3^j`` solve. The final analytic ``u_3^j`` and
+``\hat{\rho}^j`` solves then run with Picard-converged buoyancy and
+microphysics inputs; `ᶜmp_tendencyʲs` is frozen through the Newton solve so
+the Jacobian stays consistent.
 
 ### Vertical velocity
 

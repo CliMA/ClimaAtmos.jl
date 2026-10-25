@@ -304,7 +304,7 @@ first-cell updraft `mse` and `q_tot` toward their buoyant surface values,
     mass_flux_source / max(ρaʲ, ρʲ a_min).
 
 The floor `ρʲ a_min` keeps the rate finite for a vanishing updraft area.
-Called from the explicit tendency (`edmfx_boundary_condition_tendency!`),
+Called from the implicit tendency (`edmfx_boundary_condition_tendency!`),
 its Jacobian diagonal (`update_sgs_boundary_condition_jacobian!`), and the
 implicit-stage tracer predictor
 (`solve_sgs_updraft_tracers_implicit_stage_analytic!`).

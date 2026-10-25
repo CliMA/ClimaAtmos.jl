@@ -7,10 +7,13 @@ main
   (`solve_sgs_updraft_tracers_implicit_stage_analytic!`) includes lateral and
   turbulent entrainment `(ε + ε_turb) (χ⁰ − χʲ)` and the first-cell surface
   mass-flux source `F_sfc (χ_sfc − χʲ[1]) / max(ρa[1], ρʲ[1] a_min)` alongside
-  upwind advection and 1M microphysics, so that the updraft buoyancy and
-  microphysics tendencies passed to the final analytic `u₃` and `ρa` solves
-  reflect entrainment dilution and surface injection over the stage. The
-  predictor's cell-1 advection factor is zero, so the covariant `u₃` that
+  upwind advection and 1M microphysics, and evaluates the draft
+  thermodynamics and `ᶜmp_tendencyʲs` at the transported state before adding
+  `dtγ` times the source to the condensate and precipitation tracers, so
+  that the updraft buoyancy and microphysics tendencies passed to the final
+  analytic `u₃` and `ρa` solves reflect entrainment dilution, surface
+  injection, and condensation over the stage. The predictor's cell-1
+  advection factor is zero, so the covariant `u₃` that
   `set_velocity_at_surface!` leaves at the surface over sloped terrain does
   not advect the first cell.
 - ![][badge-🔥behavioralΔ] The equilibrium SGS condensate that the 1M

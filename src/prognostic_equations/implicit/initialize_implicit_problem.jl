@@ -17,8 +17,11 @@ For `PrognosticEDMFX`:
  1. Run `edmfx_model.updraft_picard_rounds` Picard rounds that alternate
     the analytic `u₃` solve with the semi-implicit tracer sweep, each
     round starting from the stage-initial `Y.(f,c).sgsʲs` (snapshotted
-    into pre-allocated scratch) and refreshing the draft thermodynamic
-    variables, buoyancy, and updraft microphysics tendencies at the new
+    into pre-allocated scratch). The sweep transports every solved tracer
+    and, for the non-equilibrium microphysics, evaluates the draft
+    thermodynamics and `ᶜmp_tendencyʲs` at the transported state and adds
+    `dtγ` times the source to the condensate and precipitation tracers;
+    the draft thermodynamics and buoyancy are refreshed again at the full
     iterate.
 
  2. Solve `u₃` and `ρa` analytically with the stage-initial values as
@@ -39,6 +42,9 @@ function initialize_implicit_stage_problem!(Y, p, dtγ)
     (; ᶜρ_diffʲs, ᶜρʲs) = p.precomputed
     n = n_mass_flux_subdomains(turbconv_model)
     n_picard = edmfx_model.updraft_picard_rounds
+    nonequilibrium_mp =
+        microphysics_model isa
+        Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M}
     # Cast `dtγ` to the parameter float type so broadcasts stay type-stable
     # (ClimaTimeSteppers passes `dtγ` as `Float64` even when the state is
     # `Float32`).
@@ -57,19 +63,18 @@ function initialize_implicit_stage_problem!(Y, p, dtγ)
             @. ᶜsnapshot.:($$j) = Y.c.sgsʲs.:($$j)
             @. ᶜρ_diffʲs.:($$j) = (ᶜρʲs.:($$j) - Y.c.ρ) / ᶜρʲs.:($$j)
         end
-        update_updraft_microphysics_tendency_cache!(
-            Y, p, microphysics_model, turbconv_model, dtγ,
-        )
         for round in 1:n_picard
             solve_sgs_u₃_implicit_stage_analytic!(Y, p, dtγ)
             solve_sgs_updraft_tracers_implicit_stage_analytic!(Y, p, dtγ)
-            # Refresh the buoyancy inputs for the next u₃ solve, then update
-            # the per-updraft microphysics tendency at the round-converged
-            # iterate — Y.c.sgsʲs condensates and ᶜρʲs/ᶜTʲs must agree, so
-            # the restore must come after. ᶜρ_diffʲs is only read by the
-            # next u₃ solve, so it is safe to fuse into the restore loop.
+            # Refresh the buoyancy inputs for the next u₃ solve. For the
+            # non-equilibrium schemes, the tracer sweep evaluates
+            # ᶜmp_tendencyʲs at the transported state and applies it, and
+            # that value is kept for the Newton solve; the 0-moment scheme
+            # has no prognostic condensate tracers and evaluates it here, at
+            # the full iterate. ᶜρ_diffʲs is only read by the next u₃ solve,
+            # so it is safe to fuse into the restore loop.
             set_prognostic_edmf_precomputed_quantities_draft_thermo!(Y, p)
-            update_updraft_microphysics_tendency_cache!(
+            nonequilibrium_mp || update_updraft_microphysics_tendency_cache!(
                 Y, p, microphysics_model, turbconv_model, dtγ,
             )
             # Restore for the next round (or for the final u₃ solve).
@@ -523,23 +528,27 @@ end
 
 Advance the buoyancy-affecting SGS/updraft specific tracers over the implicit
 stage by a semi-implicit first-order upwind sweep, overwriting
-`Y.c.sgsʲs.:(j).χ` in each EDMFX mass-flux subdomain `j`. A no-op for any
-`turbconv_model` other than `PrognosticEDMFX`.
+`Y.c.sgsʲs.:(j).χ` in each EDMFX mass-flux subdomain `j`. For the
+non-equilibrium microphysics, also refresh the draft thermodynamics
+(`ᶜTʲs`, `ᶜρʲs`, and the draft condensate fields) and `ᶜmp_tendencyʲs` in
+`p.precomputed`. Uses `p.scratch`. A no-op for any `turbconv_model` other
+than `PrognosticEDMFX`; returns `nothing`.
 
-Solved: `mse`, `q_tot`, and, for 1M microphysics, `q_lcl`, `q_icl`, `q_rai`,
-`q_sno`. The advective form with lateral and turbulent entrainment
-`ε_tot = ε + ε_turb` toward the environment value `χ⁰` and, in cell 1 for `mse`
-and `q_tot`, the surface mass-flux relaxation at the rate `r_sfc`
-(`edmfx_sfc_relaxation_rate`) toward the buoyant surface value `χ_sfc`,
+Solved: `mse`, `q_tot`, and, for the non-equilibrium microphysics, `q_lcl`,
+`q_icl`, `q_rai`, `q_sno`. The advective form with lateral and turbulent
+entrainment `ε_tot = ε + ε_turb` toward the environment value `χ⁰` and, in
+cell 1 for `mse` and `q_tot`, the surface mass-flux relaxation at the rate
+`r_sfc` (`edmfx_sfc_relaxation_rate`) toward the buoyant surface value
+`χ_sfc`,
 
     (χ_new - χ_old) / dtγ + α · (χ_new - χ_new[i-1])
-        = S_mp(χ) + ε_tot · (χ⁰ - χ_new) + δ_{i,1} r_sfc · (χ_sfc - χ_new),
+        = ε_tot · (χ⁰ - χ_new) + δ_{i,1} r_sfc · (χ_sfc - χ_new),
     α = ᶜbottom_bias(ᶠw) / ᶜdz,
 
 is swept bottom-to-top with `Operators.column_accumulate!` as
 
     χ_new[i] =
-        (χ_old[i]/dtγ + S_mp[i] + ε_tot[i] · χ⁰[i]
+        (χ_old[i]/dtγ + ε_tot[i] · χ⁰[i]
             + δ_{i,1} r_sfc · χ_sfc + α[i] · χ_new[i-1]) /
         (1/dtγ + α[i] + ε_tot[i] + δ_{i,1} r_sfc).
 
@@ -550,18 +559,77 @@ the current Picard round, which is the velocity the Newton solve's entrainment
 tendency sees once `ᶜuʲs` is refreshed from the stage `u₃`. `χ⁰` is diagnosed
 from `Y` before the sweep overwrites the draft scalar.
 
+For the non-equilibrium microphysics, the source follows the transport:
+`set_prognostic_edmf_precomputed_quantities_draft_thermo!` and
+`update_updraft_microphysics_tendency_cache!` evaluate the draft
+thermodynamics and `ᶜmp_tendencyʲs` at the transported state, and each
+condensate and precipitation tracer then receives `dtγ · S_mp`. Evaluating
+the source after the transport keeps the vapor of each cell consistent with
+the condensate that arrives with it, so water that arrives as condensate is
+not condensed a second time, and the cached source is the rate that takes
+the transported condensate to the stage condensate, as the Newton solve
+with frozen `ᶜmp_tendencyʲs` requires.
+
 Called from the Picard loop in `initialize_implicit_stage_problem!` as a
 predictor between successive `u₃` solves. The final analytic `u₃` and `ρa`
 solves at the end of `initialize_implicit_stage_problem!` evaluate buoyancy and
 `ᶜmp_tendencyʲs` at the final predictor iterate, which is also the initial
 guess for the Newton solve. Detrainment does not enter the intensive tracer
 equation because it removes updraft mass at the updraft's own scalar value.
-For 1M, `S_mp = 0` for `mse` and `q_tot`, and `S_mp` for the condensate and
-precipitation tracers is read from the cached `ᶜmp_tendencyʲs`.
 """
 function solve_sgs_updraft_tracers_implicit_stage_analytic!(Y, p, dtγ)
     p.atmos.turbconv_model isa PrognosticEDMFX || return
+    (; microphysics_model, turbconv_model) = p.atmos
 
+    # Names missing from the SGS schema (the condensates under 0M) are
+    # skipped by the sweep.
+    sgs_tracers = (
+        @name(mse),
+        @name(q_tot),
+        @name(q_lcl),
+        @name(q_icl),
+        @name(q_rai),
+        @name(q_sno),
+    )
+    _sweep_sgs_updraft_tracers!(Y, p, dtγ, sgs_tracers)
+
+    microphysics_model isa
+    Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M} ||
+        return nothing
+    set_prognostic_edmf_precomputed_quantities_draft_thermo!(Y, p)
+    update_updraft_microphysics_tendency_cache!(
+        Y, p, microphysics_model, turbconv_model, dtγ,
+    )
+    # (χ_name, S_name): a tracer and its entry in `ᶜmp_tendencyʲs`; a pair
+    # with either name missing is skipped.
+    condensate_sources = (
+        (@name(q_lcl), @name(dq_lcl_dt)),
+        (@name(q_icl), @name(dq_icl_dt)),
+        (@name(q_rai), @name(dq_rai_dt)),
+        (@name(q_sno), @name(dq_sno_dt)),
+    )
+    for j in 1:n_mass_flux_subdomains(turbconv_model)
+        sgsʲ = Y.c.sgsʲs.:($j)
+        ᶜmp_tendencyʲ = p.precomputed.ᶜmp_tendencyʲs.:($j)
+        MatrixFields.unrolled_foreach(condensate_sources) do (χ_name, S_name)
+            MatrixFields.has_field(sgsʲ, χ_name) &&
+            MatrixFields.has_field(ᶜmp_tendencyʲ, S_name) || return
+            χ = MatrixFields.get_field(sgsʲ, χ_name)
+            S = MatrixFields.get_field(ᶜmp_tendencyʲ, S_name)
+            @. χ += dtγ * S
+        end
+    end
+    return nothing
+end
+
+"""
+    _sweep_sgs_updraft_tracers!(Y, p, dtγ, sgs_tracers)
+
+Run the transport sweep of `solve_sgs_updraft_tracers_implicit_stage_analytic!`
+for the tracer names in `sgs_tracers`, skipping any name missing from the SGS
+schema.
+"""
+function _sweep_sgs_updraft_tracers!(Y, p, dtγ, sgs_tracers)
     FT = eltype(p.params)
     a_min = CAP.min_area(CAP.turbconv_params(p.params))
     ᶜdz = Fields.Δz_field(axes(Y.c))
@@ -578,19 +646,6 @@ function solve_sgs_updraft_tracers_implicit_stage_analytic!(Y, p, dtγ)
     den_first = Fields.field_values(Fields.level(ᶜdenominator, 1))
     advection_factor_first =
         Fields.field_values(Fields.level(ᶜadvection_factor, 1))
-
-    # (χ_name, S_name): S_name = nothing for source-free tracers; otherwise it
-    # names the matching entry in `p.precomputed.ᶜmp_tendencyʲs.:(j)`. Each
-    # pair whose χ_name is missing from the SGS schema (e.g. 1M condensate
-    # under 0M) is skipped by `has_field` below.
-    sgs_tracers = (
-        (@name(mse), nothing),
-        (@name(q_tot), nothing),
-        (@name(q_lcl), @name(dq_lcl_dt)),
-        (@name(q_icl), @name(dq_icl_dt)),
-        (@name(q_rai), @name(dq_rai_dt)),
-        (@name(q_sno), @name(dq_sno_dt)),
-    )
 
     for j in 1:n_mass_flux_subdomains(p.atmos.turbconv_model)
         sgsʲ = Y.c.sgsʲs.:($j)
@@ -618,20 +673,13 @@ function solve_sgs_updraft_tracers_implicit_stage_analytic!(Y, p, dtγ)
             mass_flux_source_val, ρaʲ_int_val, ρʲ_int_val, a_min,
         )
 
-        MatrixFields.unrolled_foreach(sgs_tracers) do (χ_name, S_name)
+        MatrixFields.unrolled_foreach(sgs_tracers) do χ_name
             MatrixFields.has_field(sgsʲ, χ_name) || return
             χ = MatrixFields.get_field(sgsʲ, χ_name)
             ᶜχ⁰ =
                 χ_name === @name(mse) ? ᶜspecific_env_mse(Y, p) :
                 ᶜspecific_env_value(χ_name, Y, p)
-            if isnothing(S_name)
-                @. ᶜnumerator = χ / dtγ + ᶜentr_tot * ᶜχ⁰
-            else
-                S = MatrixFields.get_field(
-                    p.precomputed.ᶜmp_tendencyʲs.:($j), S_name,
-                )
-                @. ᶜnumerator = χ / dtγ + S + ᶜentr_tot * ᶜχ⁰
-            end
+            @. ᶜnumerator = χ / dtγ + ᶜentr_tot * ᶜχ⁰
             # Cell 1 of `mse` and `q_tot` relaxes toward the buoyant surface
             # value; the denominator includes `r_sfc` only while one of them
             # is swept.

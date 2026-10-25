@@ -2,12 +2,13 @@
 Checks `solve_sgs_updraft_tracers_implicit_stage_analytic!`, the semi-implicit
 upwind predictor for the updraft scalars in the EDMFX implicit stage, against
 the recurrence its docstring states: upwind advection with the round's `u₃`,
-entrainment toward the environment value, the cached 1M microphysics source,
-and the cell-1 surface relaxation of `mse` and `q_tot`. A nonzero covariant
-`u₃` at the surface face (as over sloped terrain) leaves cell 1 unadvected.
-Two limits follow: fast entrainment pulls every scalar to the environment
-value, and with every other process switched off only cell 1 of `mse` and
-`q_tot` moves, to the surface-relaxed value.
+entrainment toward the environment value, the 1M microphysics source evaluated
+at the transported state, and the cell-1 surface relaxation of `mse` and
+`q_tot`. A nonzero covariant `u₃` at the surface face, as over
+sloped terrain, leaves cell 1 unadvected. Two limits follow: fast entrainment
+pulls every scalar to the environment value, and with advection and
+entrainment off only cell 1 of `mse` and `q_tot` moves, to the surface-relaxed
+value, while each condensate moves by `dtγ` times its source.
 =#
 using Test
 import ClimaComms
@@ -154,34 +155,37 @@ column(f) = vec(Array(parent(f)))
             CA.ᶜspecific_env_value(χ_name, Y, p)
         @. ᶜtmp = ᶜχ⁰
         χ⁰[χ_name] = column(ᶜtmp)
-        S[χ_name] =
-            isnothing(S_name) ? zeros(FT, nz) :
-            column(
-                MatrixFields.get_field(
-                    p.precomputed.ᶜmp_tendencyʲs.:(1),
-                    S_name,
-                ),
-            )
+        S[χ_name] = zeros(FT, nz)
     end
-    @test any(!=(0), S[@name(q_lcl)])
+    ᶜmp_tendencyʲ = p.precomputed.ᶜmp_tendencyʲs.:(1)
+    S_cached = column(MatrixFields.get_field(ᶜmp_tendencyʲ, @name(dq_lcl_dt)))
 
-    # The recurrence, swept bottom to top.
+    # The transport recurrence, swept bottom to top, then `dtγ` times the
+    # source.
     function predicted(χ_name; α = α, ε = ε, S = S[χ_name], r_sfc = r_sfc)
         χ_new = similar(α)
         χ_prev = zero(FT)
         for i in 1:nz
             r = i == 1 && sfc_forced(χ_name) ? r_sfc : zero(FT)
             num =
-                χ_old[χ_name][i] / dtγ + S[i] + ε[i] * χ⁰[χ_name][i] +
+                χ_old[χ_name][i] / dtγ + ε[i] * χ⁰[χ_name][i] +
                 r * χ_sfc(χ_name) + α[i] * χ_prev
             χ_new[i] = num / (1 / dtγ + α[i] + ε[i] + r)
             χ_prev = χ_new[i]
         end
-        return χ_new
+        return χ_new .+ dtγ .* S
     end
 
     @testset "matches the documented recurrence" begin
         CA.solve_sgs_updraft_tracers_implicit_stage_analytic!(Y, p, dtγ)
+        # The condensate source the sweep evaluates at the transported state
+        # stays cached.
+        for (χ_name, S_name) in sgs_tracers
+            isnothing(S_name) && continue
+            S[χ_name] = column(MatrixFields.get_field(ᶜmp_tendencyʲ, S_name))
+        end
+        @test any(!=(0), S[@name(q_lcl)])
+        @test S[@name(q_lcl)] != S_cached
         for (χ_name, _) in sgs_tracers
             @test column(MatrixFields.get_field(sgsʲ, χ_name)) ≈
                   predicted(χ_name) rtol = 1e-12
@@ -194,23 +198,27 @@ column(f) = vec(Array(parent(f)))
 
     @testset "fast entrainment relaxes to the environment value" begin
         Y .= Y_init
-        parent(p.precomputed.ᶜmp_tendencyʲs.:(1)) .= 0
-        # ε dtγ = 6e4, so the stage term leaves a relative residual of
-        # ~χ_old / (ε dtγ χ⁰) ≲ 1e-4.
+        # ε dtγ = 6e4, so the stage and source terms leave a relative residual
+        # of ~χ_old / (ε dtγ χ⁰) ≲ 1e-4.
         @. p.precomputed.ᶜturb_entrʲs.:(1) = FT(1e3)
         CA.solve_sgs_updraft_tracers_implicit_stage_analytic!(Y, p, dtγ)
-        for (χ_name, _) in sgs_tracers
+        for (χ_name, S_name) in sgs_tracers
             χ_new = column(MatrixFields.get_field(sgsʲ, χ_name))
+            # The condensates include `dtγ` times the source; the limit
+            # applies to the transported value.
+            if !isnothing(S_name)
+                S_used = column(MatrixFields.get_field(ᶜmp_tendencyʲ, S_name))
+                χ_new = χ_new - dtγ * S_used
+            end
             # Cell 1 of `mse` and `q_tot` also feels the surface relaxation.
             i₀ = sfc_forced(χ_name) ? 2 : 1
             @test χ_new[i₀:end] ≈ χ⁰[χ_name][i₀:end] rtol = 1e-3
         end
     end
 
-    @testset "surface relaxation alone moves only cell 1 of mse and q_tot" begin
+    @testset "advection and entrainment off" begin
         Y .= Y_init
         parent(ᶠu₃ʲ) .= 0
-        parent(p.precomputed.ᶜmp_tendencyʲs.:(1)) .= 0
         for ᶜrate in (
             p.precomputed.ᶜentr_vel_scaleʲs.:(1),
             p.precomputed.ᶜentr_nonvel_rateʲs.:(1),
@@ -220,7 +228,7 @@ column(f) = vec(Array(parent(f)))
             parent(ᶜrate) .= 0
         end
         CA.solve_sgs_updraft_tracers_implicit_stage_analytic!(Y, p, dtγ)
-        for (χ_name, _) in sgs_tracers
+        for (χ_name, S_name) in sgs_tracers
             χ_new = column(MatrixFields.get_field(sgsʲ, χ_name))
             if sfc_forced(χ_name)
                 @test χ_new[1] ≈
@@ -229,7 +237,8 @@ column(f) = vec(Array(parent(f)))
                 @test χ_new[1] != χ_old[χ_name][1]
                 @test χ_new[2:end] ≈ χ_old[χ_name][2:end] rtol = 1e-14
             else
-                @test χ_new ≈ χ_old[χ_name] rtol = 1e-14
+                S_used = column(MatrixFields.get_field(ᶜmp_tendencyʲ, S_name))
+                @test χ_new ≈ χ_old[χ_name] + dtγ * S_used rtol = 1e-12
             end
         end
     end
