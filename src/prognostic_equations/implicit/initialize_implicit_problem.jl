@@ -1134,7 +1134,45 @@ function _sweep_sgs_updraft_tracers!(
         sgs_tracers,
     )
     ᶜenv_sgsʲs = isnothing(ᶜsnapshot) ? Y.c.sgsʲs : ᶜsnapshot
+    # Shift of the dynamically entrained `mse` and `q_tot` toward the
+    # environment's subgrid tail, times the dynamical entrainment rate
+    # (`tail_entrainment_tendency!`); zero when `edmf_tail_entr_weight = 0`.
+    ᶜtail_mse = p.scratch.ᶜtemp_scalar_2
+    ᶜtail_q_tot = p.scratch.ᶜtemp_scalar_3
+    w_tail = FT(CAP.edmf_tail_entr_weight(p.params))
+    use_tail_entr = w_tail > 0 && hasproperty(p.precomputed, :ᶜT′T′)
     for j in 1:n_mass_flux_subdomains(turbconv_model)
+        if use_tail_entr
+            thermo_params = CAP.thermodynamics_params(p.params)
+            (; ᶜT⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜT′T′, ᶜq′q′, ᶜcorr_Tq) =
+                p.precomputed
+            (; dt) = p
+            ᶜρa⁰ = @. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model))
+            ᶜρaʲ = Y.c.sgsʲs.:($j).ρa
+            ᶜentrʲ = @. lazy(
+                compute_entrainment(
+                    ᶜentr_vel_scaleʲs.:($$j),
+                    ᶜentr_nonvel_rateʲs.:($$j),
+                    ᶜarea_bounding_entr_detrʲs.:($$j),
+                    ᶜinterp(Y.f.sgsʲs.:($$j).u₃.components.data.:1 / ᶠdz),
+                ),
+            )
+            @. ᶜtail_mse =
+                ᶜentrʲ * tail_entrainment_Δmse(
+                    thermo_params, w_tail, ᶜT⁰,
+                    ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜT′T′, ᶜq′q′,
+                    ᶜcorr_Tq, ᶜρa⁰, ᶜρaʲ, ᶜentrʲ, dt,
+                )
+            @. ᶜtail_q_tot =
+                ᶜentrʲ * tail_entrainment_Δq_tot(
+                    thermo_params, w_tail, ᶜT⁰,
+                    ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜT′T′, ᶜq′q′,
+                    ᶜcorr_Tq, ᶜρa⁰, ᶜρaʲ, ᶜentrʲ, dt,
+                )
+        else
+            fill!(ᶜtail_mse, zero_FT)
+            fill!(ᶜtail_q_tot, zero_FT)
+        end
         rates = (
             ᶜentr_vel_scaleʲs.:($j), ᶜentr_nonvel_rateʲs.:($j),
             ᶜarea_bounding_entr_detrʲs.:($j), ᶜturb_entrʲs.:($j),
@@ -1146,8 +1184,10 @@ function _sweep_sgs_updraft_tracers!(
         DataLayouts.foreach_column(
             Y.c.sgsʲs.:($j), Y.c, ᶜenv_sgsʲs, Y.f.sgsʲs.:($j).u₃, ᶜρʲs.:($j),
             ᶜadvection_factor, ᶜdz, ᶠdz, ᶜK, ᶜh_tot, rates, sfc,
+            (ᶜtail_mse, ᶜtail_q_tot),
         ) do ᶜsgsʲ, Yc, ᶜenv_sgsʲs, ᶠu₃ʲ, ᶜρʲ, ᶜadvection_factor, ᶜdz, ᶠdz, ᶜK,
-        ᶜh_tot, rates, (mass_flux_source, mse_sfc, q_tot_sfc)
+        ᶜh_tot, rates, (mass_flux_source, mse_sfc, q_tot_sfc),
+        (ᶜtail_mse, ᶜtail_q_tot)
             (ᶜentr_vel_scaleʲ, ᶜentr_nonvel_rateʲ, ᶜarea_bounding_entr_detrʲ, ᶜturb_entrʲ) =
                 rates
             ᶠw = @. ᶠu₃ʲ.components.data.:1 / ᶠdz
@@ -1179,7 +1219,8 @@ function _sweep_sgs_updraft_tracers!(
             # `specific_env_value` and `specific_env_mse`), and where `χ_old` and `χ⁰` of
             # every scalar other than `mse` are floored at zero. `mse` and `q_tot` also
             # relax toward their buoyant surface values at the rate `r_sfc`, which is zero
-            # above cell 1.
+            # above cell 1, and entrain the environment-tail shifts `tail_mse` and
+            # `tail_q_tot`.
             ᶜsgsʲ .=
                 (@inline (
                     sgsʲs,
@@ -1191,6 +1232,8 @@ function _sweep_sgs_updraft_tracers!(
                     r_sfc,
                     mse_sfc,
                     q_tot_sfc,
+                    tail_mse,
+                    tail_q_tot,
                 ) -> begin
                     sgsʲ = drop_auto_broadcasters(sgsʲs)[j]
                     ρa⁰_val = ρa⁰(ρ, env_sgsʲs, turbconv_model)
@@ -1206,9 +1249,10 @@ function _sweep_sgs_updraft_tracers!(
                             max(zero_FT, χ_old) / dtγ + entr_tot * max(zero_FT, χ⁰)
                         b =
                             χ_name === @name(mse) ?
-                            (num + r_sfc * mse_sfc) / (den + r_sfc) :
+                            (num + tail_mse + r_sfc * mse_sfc) / (den + r_sfc) :
                             χ_name === @name(q_tot) ?
-                            (num + r_sfc * q_tot_sfc) / (den + r_sfc) : num / den
+                            (num + tail_q_tot + r_sfc * q_tot_sfc) / (den + r_sfc) :
+                            num / den
                         merge(
                             sgs_offsets,
                             NamedTuple{(MatrixFields.extract_first(χ_name),)}((b,)),
@@ -1224,6 +1268,8 @@ function _sweep_sgs_updraft_tracers!(
                     ᶜr_sfc,
                     mse_sfc,
                     q_tot_sfc,
+                    ᶜtail_mse,
+                    ᶜtail_q_tot,
                 )
         end
         MatrixFields.unrolled_foreach(χ_names) do χ_name

@@ -562,6 +562,89 @@ function turbulent_entrainment(turbconv_params, ᶜaʲ)
 end
 
 """
+    environment_tail_shift(T′T′, q′q′, corr_Tq, α_T, α_q)
+
+Shift `(ΔT, Δq)` of the mean of the upper half `s′ > 0` of the environment's
+Gaussian subgrid `(T′, q′)` distribution relative to its mean, for the linear
+selector `s′ = α_T T′ + α_q q′`:
+
+    Δx = √(2/π) Cov(x′, s′) / σ_s,
+    σ_s² = α_T² σ_T² + 2 α_T α_q r σ_T σ_q + α_q² σ_q²,
+
+with `r` the T–q correlation (the conditional mean of a jointly Gaussian
+variable over a half-space). Returns zeros where the subgrid variance vanishes,
+so the environment mean is recovered as the variance goes to zero (fine grids).
+"""
+@inline function environment_tail_shift(T′T′, q′q′, corr_Tq, α_T, α_q)
+    FT = typeof(T′T′)
+    σ_T = sqrt(max(T′T′, zero(FT)))
+    σ_q = sqrt(max(q′q′, zero(FT)))
+    r = clamp(corr_Tq, -one(FT), one(FT))
+    cov_Ts = α_T * σ_T^2 + α_q * r * σ_T * σ_q
+    cov_qs = α_q * σ_q^2 + α_T * r * σ_T * σ_q
+    σ_s² = α_T * cov_Ts + α_q * cov_qs
+    has_variance = σ_s² > floatmin(FT)
+    k = sqrt(FT(2) / FT(π)) / sqrt(max(σ_s², floatmin(FT)))
+    return (
+        ifelse(has_variance, k * cov_Ts, zero(FT)),
+        ifelse(has_variance, k * cov_qs, zero(FT)),
+    )
+end
+
+"""
+    mse_selector_coefficients(thermo_params)
+
+Coefficients `(α_T, α_q) = (c_p, L_v)` of the moist-static-energy selector
+`s′ = α_T T′ + α_q q′` of the environment's subgrid tail.
+"""
+@inline mse_selector_coefficients(thermo_params) =
+    (TDP.cp_d(thermo_params), TDP.LH_v0(thermo_params))
+
+"""
+    tail_entrainment_increments(
+        thermo_params, w, T⁰, q_tot⁰, q_liq⁰, q_ice⁰,
+        T′T′, q′q′, corr_Tq, ρa⁰, ρaʲ, entr, dt,
+    )
+
+Increments `(Δmse, Δq_tot)` of the air drawn in by the dynamical entrainment
+`entr` [1/s], relative to the environment mean, when a fraction `w` of it comes
+from the upper half of the environment's subgrid distribution in moist static
+energy (`environment_tail_shift`, `mse_selector_coefficients`).
+
+Both increments come from the same tail state `(T⁰ + w ΔT, q_tot⁰ + w Δq)`, and
+the moist static energy uses the model's enthalpy with the environment's
+condensate, so the entrained air is one realizable parcel. Realizability: the
+mass entrained in one step, `entr ρaʲ dt`, cannot exceed the tail's mass
+`ρa⁰ / 2`; beyond that the weight is reduced. Because the environment is
+diagnosed as grid mean minus updrafts, the environment gives up exactly what the
+updraft entrains and total water and energy are unchanged. The environment's
+diagnosed subgrid variance does not account for its tail being removed
+preferentially (second order at small updraft area).
+"""
+@inline function tail_entrainment_increments(
+    thermo_params, w, T⁰, q_tot⁰, q_liq⁰, q_ice⁰,
+    T′T′, q′q′, corr_Tq, ρa⁰, ρaʲ, entr, dt,
+)
+    FT = typeof(T⁰)
+    α_T, α_q = map(FT, mse_selector_coefficients(thermo_params))
+    ΔT, Δq = environment_tail_shift(T′T′, q′q′, corr_Tq, α_T, α_q)
+    entrained_per_step = max(entr, zero(FT)) * max(ρaʲ, zero(FT)) * FT(dt)
+    w_eff =
+        FT(w) * min(
+            one(FT),
+            FT(0.5) * max(ρa⁰, zero(FT)) / max(entrained_per_step, floatmin(FT)),
+        )
+    q_tot_e = max(q_tot⁰ + w_eff * Δq, zero(FT))
+    T_e = T⁰ + w_eff * ΔT
+    Δmse =
+        TD.enthalpy(thermo_params, T_e, q_tot_e, q_liq⁰, q_ice⁰) -
+        TD.enthalpy(thermo_params, T⁰, q_tot⁰, q_liq⁰, q_ice⁰)
+    return (Δmse, q_tot_e - q_tot⁰)
+end
+@inline tail_entrainment_Δmse(args...) = tail_entrainment_increments(args...)[1]
+@inline tail_entrainment_Δq_tot(args...) = tail_entrainment_increments(args...)[2]
+
+"""
     edmfx_entr_detr_tendency!(Yₜ, Y, p, t, turbconv_model)
 
 Add the entrainment contribution to the EDMF scalar tendencies (`mse`,
@@ -578,7 +661,10 @@ velocity via `compute_entrainment`, and the turbulent entrainment
 `ᶜturb_entrʲs` (`turbulent_entrainment`) is added to it. Each updraft
 scalar `χʲ` is relaxed toward its **environment** value,
 
-    ∂χʲ/∂t += (entr + turb_entr) (χ⁰ - χʲ).
+    ∂χʲ/∂t += (entr + turb_entr) (χ⁰ - χʲ),
+
+plus, for `mse` and `q_tot`, the shift toward the environment's subgrid tail
+(`tail_entrainment_tendency!`).
 
 The generic method is a no-op; the `PrognosticEDMFX` method mutates
 `Yₜ.c.sgsʲs` and returns `nothing`. See the "PROPHET: Closures" page
@@ -625,6 +711,57 @@ function edmfx_entr_detr_tendency!(Yₜ, Y, p, t, turbconv_model::PrognosticEDMF
                 @. ᶜχʲₜ += ᶜentr_totʲ * (ᶜχ⁰ - ᶜχʲ)
             end
         end
+    end
+    tail_entrainment_tendency!(Yₜ, Y, p, turbconv_model)
+    return nothing
+end
+
+"""
+    tail_entrainment_tendency!(Yₜ, Y, p, turbconv_model)
+
+With `edmf_tail_entr_weight > 0`, add to each updraft's `mse` and `q_tot`
+tendencies the dynamical entrainment times the shift of the entrained air from
+the environment mean toward the environment's moist-static-energy tail
+(`tail_entrainment_Δmse`, `tail_entrainment_Δq_tot`). Turbulent entrainment, a
+two-way exchange outside the `ρa` equation, keeps the environment mean.
+Requires the SGS quadrature for the environment variances.
+"""
+function tail_entrainment_tendency!(Yₜ, Y, p, turbconv_model)
+    FT = eltype(p.params)
+    w_tail = FT(CAP.edmf_tail_entr_weight(p.params))
+    w_tail > 0 || return nothing
+    hasproperty(p.precomputed, :ᶜT′T′) ||
+        error("edmf_tail_entr_weight > 0 needs the SGS quadrature")
+    thermo_params = CAP.thermodynamics_params(p.params)
+    (; dt) = p
+    (; ᶜT⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜT′T′, ᶜq′q′, ᶜcorr_Tq) =
+        p.precomputed
+    (; ᶜuʲs, ᶜentr_vel_scaleʲs, ᶜentr_nonvel_rateʲs, ᶜarea_bounding_entr_detrʲs) =
+        p.precomputed
+    ᶜlg = Fields.local_geometry_field(Y.c)
+    ᶜρa⁰ = @. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model))
+    for j in 1:n_mass_flux_subdomains(turbconv_model)
+        ᶜentrʲ = @. lazy(
+            compute_entrainment(
+                ᶜentr_vel_scaleʲs.:($$j),
+                ᶜentr_nonvel_rateʲs.:($$j),
+                ᶜarea_bounding_entr_detrʲs.:($$j),
+                get_physical_w(ᶜuʲs.:($$j), ᶜlg),
+            ),
+        )
+        ᶜρaʲ = Y.c.sgsʲs.:($j).ρa
+        @. Yₜ.c.sgsʲs.:($$j).mse +=
+            ᶜentrʲ * tail_entrainment_Δmse(
+                thermo_params, w_tail, ᶜT⁰,
+                ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜT′T′, ᶜq′q′,
+                ᶜcorr_Tq, ᶜρa⁰, ᶜρaʲ, ᶜentrʲ, dt,
+            )
+        @. Yₜ.c.sgsʲs.:($$j).q_tot +=
+            ᶜentrʲ * tail_entrainment_Δq_tot(
+                thermo_params, w_tail, ᶜT⁰,
+                ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜT′T′, ᶜq′q′,
+                ᶜcorr_Tq, ᶜρa⁰, ᶜρaʲ, ᶜentrʲ, dt,
+            )
     end
     return nothing
 end

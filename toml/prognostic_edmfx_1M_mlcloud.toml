@@ -19,6 +19,9 @@ value = 0.7
 [turb_entr_param_vec]
 value = [0.007, 400.0]
 
+[edmf_tail_entr_weight]
+value = 0.5
+
 [entr_coeff]
 value = 0.1
 
