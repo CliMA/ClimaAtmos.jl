@@ -92,6 +92,7 @@ end
 """
     AllSkyRadiation{ACR}(; idealized_h2o = false, idealized_clouds = false,
                          cloud = InteractiveCloudInRadiation(),
+                         sw_cloud_inhomogeneity = true,
                          add_isothermal_boundary_layer = true, aerosol_radiation = false,
                          reset_rng_seed = false, deep_atmosphere = true)
 
@@ -107,6 +108,10 @@ Full RRTMGP correlated k-distribution radiation, including cloud optics.
     construction, instead of updating cloud properties every radiation step.
   - `cloud`: How cloud properties are obtained: `InteractiveCloudInRadiation` from the model
     state, or `PrescribedCloudInRadiation` from the ERA5 monthly climatology.
+  - `sw_cloud_inhomogeneity`: Whether the shortwave solve scales the in-cloud water paths
+    of interactive clouds by the subgrid inhomogeneity factor `χ`
+    (`set_sw_cloud_optical_depth_factor!`, `solve_fluxes!`). The longwave always sees the
+    mean in-cloud condensate. With `false`, so does the shortwave (`χ = 1`).
   - `add_isothermal_boundary_layer`: Whether RRTMGP appends an isothermal layer above the
     model top.
   - `aerosol_radiation`: Whether prescribed aerosols contribute to the shortwave optics.
@@ -120,6 +125,7 @@ Full RRTMGP correlated k-distribution radiation, including cloud optics.
     idealized_h2o::Bool = false
     idealized_clouds::Bool = false
     cloud::ACR = InteractiveCloudInRadiation()
+    sw_cloud_inhomogeneity::Bool = true
     add_isothermal_boundary_layer::Bool = true
     aerosol_radiation::Bool = false
     reset_rng_seed::Bool = false
@@ -139,6 +145,7 @@ The fields and their defaults are identical to `AllSkyRadiation`.
     idealized_h2o::Bool = false
     idealized_clouds::Bool = false
     cloud::ACR = InteractiveCloudInRadiation()
+    sw_cloud_inhomogeneity::Bool = true
     add_isothermal_boundary_layer::Bool = true
     aerosol_radiation::Bool = false
     reset_rng_seed::Bool = false

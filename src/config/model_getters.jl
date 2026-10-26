@@ -606,10 +606,10 @@ Otherwise:
 
 Any other value raises an error. The RRTMGP modes also read `idealized_h2o`,
 `idealized_clouds`, `prescribe_clouds_in_radiation` (through
-`get_cloud_in_radiation`), `add_isothermal_boundary_layer`, `aerosol_radiation`,
-`radiation_reset_rng_seed`, and `deep_atmosphere`; `idealized_clouds` and prescribed
-clouds are mutually exclusive, and the cloud-related keys warn when used with a
-non-all-sky mode.
+`get_cloud_in_radiation`), `cloud_inhomogeneity_in_sw_radiation`,
+`add_isothermal_boundary_layer`, `aerosol_radiation`, `radiation_reset_rng_seed`, and
+`deep_atmosphere`; `idealized_clouds` and prescribed clouds are mutually exclusive, and
+the cloud-related keys warn when used with a non-all-sky mode.
 """
 function get_radiation_mode(parsed_args, ::Type{FT}; setup_components) where {FT}
     radiation_name = parsed_args["rad"]
@@ -620,6 +620,7 @@ function get_radiation_mode(parsed_args, ::Type{FT}; setup_components) where {FT
     idealized_h2o = parsed_args["idealized_h2o"]
     idealized_clouds = parsed_args["idealized_clouds"]
     cloud = get_cloud_in_radiation(parsed_args)
+    sw_cloud_inhomogeneity = parsed_args["cloud_inhomogeneity_in_sw_radiation"]
     if idealized_clouds && (cloud isa PrescribedCloudInRadiation)
         error(
             "idealized_clouds and prescribe_clouds_in_radiation cannot be true at the same time",
@@ -653,6 +654,7 @@ function get_radiation_mode(parsed_args, ::Type{FT}; setup_components) where {FT
             idealized_h2o,
             idealized_clouds,
             cloud,
+            sw_cloud_inhomogeneity,
             add_isothermal_boundary_layer,
             aerosol_radiation,
             reset_rng_seed,
@@ -663,6 +665,7 @@ function get_radiation_mode(parsed_args, ::Type{FT}; setup_components) where {FT
             idealized_h2o,
             idealized_clouds,
             cloud,
+            sw_cloud_inhomogeneity,
             add_isothermal_boundary_layer,
             aerosol_radiation,
             reset_rng_seed,

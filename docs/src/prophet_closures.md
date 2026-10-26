@@ -888,14 +888,15 @@ these to change first.
 
 ## Where this is implemented
 
-| Closure                                              | Source                                                                                                                                         |
-|:---------------------------------------------------- |:---------------------------------------------------------------------------------------------------------------------------------------------- |
-| Entrainment, detrainment, area limiters              | [edmfx_entr_detr.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/prognostic_equations/edmfx_entr_detr.jl)                             |
-| Buoyancy, pressure drag, surface mass flux           | [mass_flux_closures.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/prognostic_equations/mass_flux_closures.jl)                       |
-| Mixing length, ``\mathrm{Pr}_t``, face diffusivities | [eddy_diffusion_closures.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/prognostic_equations/eddy_diffusion_closures.jl)             |
-| Grid-mean mixing length for non-EDMF paths           | [gm_sgs_closures.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/prognostic_equations/gm_sgs_closures.jl)                             |
-| TKE production, dissipation                          | [edmfx_tke.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/prognostic_equations/edmfx_tke.jl)                                         |
-| Variances, cloud fraction, Picard iteration          | [microphysics/cloud_fraction.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/parameterized_tendencies/microphysics/cloud_fraction.jl) |
-| SGS quadrature over ``(T, q_t)``                     | [microphysics/sgs_quadrature.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/parameterized_tendencies/microphysics/sgs_quadrature.jl) |
-| Surface conditions for the drafts                    | [edmfx_boundary_condition.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/prognostic_equations/edmfx_boundary_condition.jl)           |
-| Closure parameter set                                | [parameters/Parameters.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/parameters/Parameters.jl)                                      |
+| Closure                                              | Source                                                                                                                                                   |
+|:---------------------------------------------------- |:-------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Entrainment, detrainment, area limiters              | [edmfx_entr_detr.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/prognostic_equations/edmfx_entr_detr.jl)                                       |
+| Buoyancy, pressure drag, surface mass flux           | [mass_flux_closures.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/prognostic_equations/mass_flux_closures.jl)                                 |
+| Mixing length, ``\mathrm{Pr}_t``, face diffusivities | [eddy_diffusion_closures.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/prognostic_equations/eddy_diffusion_closures.jl)                       |
+| Grid-mean mixing length for non-EDMF paths           | [gm_sgs_closures.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/prognostic_equations/gm_sgs_closures.jl)                                       |
+| TKE production, dissipation                          | [edmfx_tke.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/prognostic_equations/edmfx_tke.jl)                                                   |
+| Variances, cloud fraction, Picard iteration          | [microphysics/cloud_fraction.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/parameterized_tendencies/microphysics/cloud_fraction.jl)           |
+| In-cloud condensate inhomogeneity for SW radiation   | [microphysics/cloud_inhomogeneity.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/parameterized_tendencies/microphysics/cloud_inhomogeneity.jl) |
+| SGS quadrature over ``(T, q_t)``                     | [microphysics/sgs_quadrature.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/parameterized_tendencies/microphysics/sgs_quadrature.jl)           |
+| Surface conditions for the drafts                    | [edmfx_boundary_condition.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/prognostic_equations/edmfx_boundary_condition.jl)                     |
+| Closure parameter set                                | [parameters/Parameters.jl](https://github.com/CliMA/ClimaAtmos.jl/blob/main/src/parameters/Parameters.jl)                                                |

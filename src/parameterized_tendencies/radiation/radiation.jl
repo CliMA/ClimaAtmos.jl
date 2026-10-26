@@ -456,7 +456,13 @@ function radiation_model_cache(
     cloud_cache = (;)
     if (radiation_mode isa RRTMGPI.AllSkyRadiation) ||
        (radiation_mode isa RRTMGPI.AllSkyRadiationWithClearSkyDiagnostics)
-        cloud_cache = get_cloud_cache(radiation_mode.cloud, Y, start_date)
+        cloud_cache = get_cloud_cache(
+            radiation_mode.cloud,
+            Y,
+            start_date,
+            radiation_mode.sw_cloud_inhomogeneity &&
+                !radiation_mode.idealized_clouds,
+        )
     end
     return merge(
         (; rrtmgp_solver, ᶠradiation_flux = similar(Y.f, Geometry.WVector{FT})),
@@ -466,18 +472,32 @@ function radiation_model_cache(
 end
 
 """
-    get_cloud_cache(cloud, Y, start_date)
+    get_cloud_cache(cloud, Y, start_date, sw_cloud_inhomogeneity)
 
 Return the cache needed to supply cloud properties to radiation.
 
-For `InteractiveCloudInRadiation` (and any other setting) the cache is empty, since cloud
-properties are diagnosed from the model state. For `PrescribedCloudInRadiation` it holds
+For `InteractiveCloudInRadiation`, and for `nothing` (`prescribe_clouds_in_radiation: ~`),
+which also passes the model clouds to radiation, it holds `ᶜsw_cloud_optical_depth_factor`,
+the shortwave subgrid inhomogeneity factor on the in-cloud water paths
+(`set_sw_cloud_optical_depth_factor!`), when `sw_cloud_inhomogeneity` is true, and is
+otherwise empty, which leaves the shortwave water paths unscaled. The caller passes
+`false` for `idealized_clouds`, whose water paths are written once at construction, so
+an in-place scaling would compound across calls. The cloud properties themselves are
+diagnosed from the model state. For
+`PrescribedCloudInRadiation` it holds
 the `prescribed_clouds_field` (cloud fraction `cc`, and liquid and ice water contents
 `clwc` and `ciwc`) together with the `TimeVaryingInput`s that read them from the ERA5
 monthly climatology, interpolated linearly in time on a one-year periodic calendar.
 """
-get_cloud_cache(_, _, _) = (;)
-function get_cloud_cache(::PrescribedCloudInRadiation, Y, start_date)
+get_cloud_cache(_, _, _, _) = (;)
+get_cloud_cache(
+    ::Union{Nothing, InteractiveCloudInRadiation},
+    Y,
+    start_date,
+    sw_cloud_inhomogeneity,
+) =
+    sw_cloud_inhomogeneity ? (; ᶜsw_cloud_optical_depth_factor = ones(axes(Y.c))) : (;)
+function get_cloud_cache(::PrescribedCloudInRadiation, Y, start_date, _)
     target_space = axes(Y.c)
     prescribed_cloud_names = ("cc", "clwc", "ciwc")
     prescribed_cloud_names_as_symbols = Symbol.(prescribed_cloud_names)
