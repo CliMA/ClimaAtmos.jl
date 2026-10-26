@@ -172,13 +172,55 @@ flux increments both ``\rho q_t`` and ``\rho``, so diffusing water carries the
 corresponding moist-air mass. In the non-equilibrium schemes (`1M`, `2M`, and
 `2MP3`), the prognostic suspended cloud species (`ρq_lcl`, `ρq_icl`, `ρn_lcl`,
 `ρn_ice`, and the rime mass `ρq_rim` and rime volume `ρb_rim` that P3 cloud ice
-carries) diffuse down their own specific gradients with the same ``\rho K_h``,
-matching the species fluxes ``\boldsymbol{\mathcal{F}}_{q_l^{\mathrm{cl}}}`` and
-``\boldsymbol{\mathcal{F}}_{q_i^{\mathrm{cl}}}`` whose latent enthalpy the
-energy equation carries (`add_moisture_diffusionᵥ!`). Because the rime fields
-diffuse with the same linear operator as cloud ice, the rime mass stays within
-the ice mass. In the equilibrium 0-moment scheme, ``q_l^{\mathrm{cl}}`` and ``q_i^{\mathrm{cl}}`` are
+carries) diffuse down their own specific gradients with the same ``\rho K_h``
+(`add_moisture_diffusionᵥ!`). Because the rime fields diffuse with the same
+linear operator as cloud ice, the rime mass stays within the ice mass. In the
+equilibrium 0-moment scheme, ``q_l^{\mathrm{cl}}`` and ``q_i^{\mathrm{cl}}`` are
 diagnostic (`ᶜq_liq` and `ᶜq_ice`) and have no separate prognostic equations.
+
+With the `1M` scheme, prognostic TKE, and the SGS saturation-excess moments,
+cloud liquid and ice instead carry a blend of two fluxes
+(`add_cloud_species_diffusionᵥ!`),
+
+```math
+\boldsymbol{\mathcal{F}}_{q_\mu} = (1-\lambda_\mu)\,(-\rho K_h \nabla_v q_\mu^{\mathrm{cl}})
+  + \lambda_\mu \left(c_{q_t}^\mu \boldsymbol{\mathcal{F}}_{q_t} + c_{s_l}^\mu \boldsymbol{\mathcal{F}}_{s_l}\right),
+\qquad \lambda_\mu = \frac{\tau_e}{\tau_e + \tau_\mu},
+```
+
+where ``\boldsymbol{\mathcal{F}}_{q_t} = -\rho K_h \nabla_v q_t^{\mathrm{eff}}`` and
+``\boldsymbol{\mathcal{F}}_{s_l} = -\rho K_h [c_p \nabla_v T + \nabla_v \Phi - L_v \nabla_v q_l^{\mathrm{cl}} - L_s \nabla_v q_i^{\mathrm{cl}}]``
+are the fluxes of total water and liquid–ice static energy, so that the energy
+flux is ``\boldsymbol{\mathcal{F}}_{s_l} + (h_v + \Phi)\boldsymbol{\mathcal{F}}_{q_t}``;
+``\tau_e = l_{\mathrm{mix}}/(c_d\sqrt{\mathrm{TKE}})`` is the eddy turnover time
+and ``\tau_\mu`` the relaxation time of the 1M condensation or deposition
+process at the cell state (`cloud_species_relaxation_time`; infinite, hence
+self-diffusion, where the process is off). A parcel that
+equilibrates within an eddy (``\lambda_\mu \to 1``) carries the equilibrium
+condensate of its conserved variables, linearized as
+``c_{q_t}^\mu = C\chi_\mu/(1 + C\gamma)`` and
+``c_{s_l}^\mu = -c_{q_t}^\mu (\partial q_{\mathrm{sat}}/\partial T)/c_p``, with
+``C = \Phi(\lambda_{\mathrm{eq}}/\sigma_S)`` the cloudy fraction of the
+equilibrium condensate ``\max(0, \lambda_{\mathrm{eq}} + S')`` the microphysics
+relaxes toward (``\lambda_{\mathrm{eq}} = \mu_S`` for the untruncated Gaussian
+target, ``-\infty`` where the truncated target vanishes; see
+[SGS condensate](prophet_closures.md)), ``\chi_\mu`` the phase
+share of the condensate, and
+``\gamma = (L/c_p)\,\partial q_{\mathrm{sat}}/\partial T``; the factor
+``1/(1 + C\gamma)`` is the latent-heat feedback of the condensation on the
+saturation excess, and ``C \to 0`` makes the equilibrium part vanish in clear
+air. A parcel that does not equilibrate (``\lambda_\mu \to 0``) carries its
+composition frozen, the down-gradient flux. The energy flux does not depend on
+``\lambda_\mu``, so a layer well mixed in ``(s_l, q_t)`` remains a fixed point
+of diffusion, and with ``\lambda_\mu = 1`` its condensate flux vanishes as
+well.
+``\partial q_{\mathrm{sat}}/\partial T`` is taken at the cell density, as in the
+microphysics; at fixed pressure it is larger by ``1/(1 - R_v T/L)``, 3–5%.
+Only the diffusive flux blends: it is the condensate that eddies exchange over
+``\tau_e``, during which a displaced parcel relaxes toward the equilibrium of
+its conserved variables. The prognostic condensate and its other tendencies
+describe condensate at rest in the cell, which the microphysics already relaxes
+at the rate ``1/\tau_\mu``.
 
 **Rain, snow, and rain number density** do not diffuse under the prescribed
 and PROPHET closures or the viscous sponge. They evolve through sedimentation and microphysical sources;

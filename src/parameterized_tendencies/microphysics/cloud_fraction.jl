@@ -458,8 +458,9 @@ end
 
 Refresh `p.precomputed.ᶜα` from the current TKE, condensate state, and the
 buoyancy-bounded mixing length `ᶜl_mix_disp` returned by
-`materialized_displacement_length!` (see `sgs_variance_fidelity`). Called at
-the end of `set_covariance_cache!` so `ᶜα` tracks each Picard iterate.
+`materialized_displacement_length!` (see `sgs_variance_fidelity`). Called from
+`materialized_displacement_length!` on every `set_covariance_cache!`, so `ᶜα`
+tracks each Picard iterate.
 
 The thermodynamic state, condensate, and precipitation are those of the domain
 that carries the SGS closure, as in `set_sgs_moments_and_cloud_fraction!`: the
@@ -474,7 +475,10 @@ combines these grid-mean variances with `γ` at the environment state. The
 cloud closure pairs the same variances with environment means.
 
 Non-EDMF configurations without TKE substitute `TKE = 0` and `l_mix = 1 m`,
-collapsing the Damköhler factor to 1.
+collapsing the Damköhler factor to 1. Its relaxation time is the
+phase-blended `set_sgs_microphysics_timescale!`, materialized in
+`p.scratch.ᶜtemp_scalar_6`, which `set_covariance_cache!` overwrites only
+after this call.
 """
 function materialized_variance_fidelity!(Y, p, ᶜl_mix_disp)
     hasproperty(p.precomputed, :ᶜα) || return nothing
@@ -487,8 +491,6 @@ function materialized_variance_fidelity!(Y, p, ᶜl_mix_disp)
         return nothing
     end
 
-    τ_cond = FT(CAP.condensation_evaporation_timescale(p.params))
-    τ_sub = FT(CAP.sublimation_deposition_timescale(p.params))
     w_eq = FT(CAP.sgs_fidelity_equilibrium_weight(p.params))
     thp = CAP.thermodynamics_params(p.params)
     q_min = FT(TD.Parameters.q_min(thp))
@@ -509,6 +511,20 @@ function materialized_variance_fidelity!(Y, p, ᶜl_mix_disp)
     ᶜρ_env, ᶜT_mean, ᶜq_mean = _get_env_ρ_T_q(Y, p, thp, turbconv_model)
     ᶜq_lcl, ᶜq_icl =
         _get_condensate_means(Y, p, turbconv_model, microphysics_model)
+    # Rain and snow are not in equilibrium with vapor, so the excess that the
+    # cloud condensate relaxes toward is `q_tot − q_rai − q_sno − q_sat`.
+    ᶜq_precip = _get_precip_mean(Y, p, turbconv_model, microphysics_model)
+    ᶜτ_mp = set_sgs_microphysics_timescale!(
+        p.scratch.ᶜtemp_scalar_6,
+        p,
+        thp,
+        ᶜT_mean,
+        ᶜρ_env,
+        (@. lazy(ᶜq_mean - ᶜq_precip)),
+        ᶜq_lcl,
+        ᶜq_icl,
+        microphysics_model,
+    )
     # Linear σ_S² = σ_q² − 2γ Cov(T,q) + γ² σ_T², with Clausius-Clapeyron γ.
     ᶜγ = @. lazy(TD.∂q_vap_sat_∂T(thp, ᶜT_mean, ᶜρ_env))
     ᶜsigma_S = @. lazy(
@@ -520,9 +536,6 @@ function materialized_variance_fidelity!(Y, p, ᶜl_mix_disp)
             ),
         ),
     )
-    # Rain and snow are not in equilibrium with vapor, so the excess that the
-    # cloud condensate relaxes toward is `q_tot − q_rai − q_sno − q_sat`.
-    ᶜq_precip = _get_precip_mean(Y, p, turbconv_model, microphysics_model)
     ᶜmu_S = @. lazy(
         ᶜq_mean - ᶜq_precip - TD.q_vap_saturation(thp, ᶜT_mean, ᶜρ_env),
     )
@@ -536,7 +549,7 @@ function materialized_variance_fidelity!(Y, p, ᶜl_mix_disp)
     c = equilibrium_condensate_truncation(p)
     @. ᶜα = sgs_variance_fidelity(
         A,
-        sgs_microphysics_timescale(thp, ᶜT_mean, τ_cond, τ_sub),
+        ᶜτ_mp,
         c_d,
         ᶜtke_or_zero,
         ᶜl_mix_or_one,
@@ -992,12 +1005,90 @@ end
 
 Phase-blended microphysics relaxation timescale
 `τ_mp = λ_eq(T)·τ_cond + (1 − λ_eq(T))·τ_sub`, with `λ_eq` the equilibrium
-liquid-fraction ramp. Used by `sgs_variance_fidelity`.
+liquid-fraction ramp. A phase of weight zero drops out even where its time is
+infinite (a disabled process), so the blend stays finite at either end of the
+ramp. Used by `sgs_variance_fidelity`.
 """
 @inline function sgs_microphysics_timescale(thp, T, τ_cond, τ_sub)
     FT = typeof(T)
     λ_eq = FT(TD.liquid_fraction_ramp(thp, T))
-    return λ_eq * FT(τ_cond) + (one(FT) - λ_eq) * FT(τ_sub)
+    τ_l, τ_i = FT(τ_cond), FT(τ_sub)
+    return ifelse(
+        λ_eq >= one(FT),
+        τ_l,
+        ifelse(λ_eq <= zero(FT), τ_i, λ_eq * τ_l + (one(FT) - λ_eq) * τ_i),
+    )
+end
+
+"""
+    set_sgs_microphysics_timescale!(
+        ᶜτ_mp, p, thp, ᶜT, ᶜρ, ᶜq_cloud, ᶜq_lcl, ᶜq_icl, microphysics_model,
+    )
+
+Write the phase-blended relaxation time `sgs_microphysics_timescale` of the
+Damköhler factor of `sgs_variance_fidelity` into `ᶜτ_mp` and return it. With
+the 1M scheme, the liquid and ice times are those of its
+condensation–evaporation and deposition–sublimation processes at the state
+`(T, ρ, q_cloud, q_lcl, q_icl)` (`cloud_species_relaxation_time`, with
+`q_cloud = q_tot − q_rai − q_sno` the cloud-available water), so the factor
+follows the configured ice-formation variant; with the other schemes, they
+are the constant parameters `condensation_evaporation_timescale` and
+`sublimation_deposition_timescale`, which are the relaxation times of the 2M
+scheme.
+"""
+function set_sgs_microphysics_timescale!(
+    ᶜτ_mp,
+    p,
+    thp,
+    ᶜT,
+    ᶜρ,
+    ᶜq_cloud,
+    ᶜq_lcl,
+    ᶜq_icl,
+    ::NonEquilibriumMicrophysics1M,
+)
+    cmp = CAP.microphysics_1m_params(p.params)
+    @. ᶜτ_mp = sgs_microphysics_timescale(
+        thp,
+        ᶜT,
+        cloud_species_relaxation_time(
+            cmp,
+            thp,
+            ᶜT,
+            ᶜρ,
+            ᶜq_cloud,
+            ᶜq_lcl,
+            ᶜq_icl,
+            TD.Liquid(),
+        ),
+        cloud_species_relaxation_time(
+            cmp,
+            thp,
+            ᶜT,
+            ᶜρ,
+            ᶜq_cloud,
+            ᶜq_lcl,
+            ᶜq_icl,
+            TD.Ice(),
+        ),
+    )
+    return ᶜτ_mp
+end
+function set_sgs_microphysics_timescale!(
+    ᶜτ_mp,
+    p,
+    thp,
+    ᶜT,
+    ᶜρ,
+    ᶜq_cloud,
+    ᶜq_lcl,
+    ᶜq_icl,
+    microphysics_model,
+)
+    τ_cond = CAP.condensation_evaporation_timescale(p.params)
+    τ_sub = CAP.sublimation_deposition_timescale(p.params)
+    @. ᶜτ_mp = sgs_microphysics_timescale(thp, ᶜT, τ_cond, τ_sub)
+    return ᶜτ_mp
 end
 
 """
@@ -1341,7 +1432,8 @@ reconstruction `E[max(0, λ + α·S′)] = q_c`.
 
   - Damköhler factor
     `α_Da = 1 / (1 + A · τ_mp · c_d · √TKE / max(l_mix, 1 m))`:
-    quiescent (TKE → 0) → 1, well-mixed → 0.
+    quiescent (TKE → 0) → 1, also for an infinite `τ_mp` (a disabled
+    process); well-mixed → 0.
   - Equilibrium-ratio modulator `α_eq = r / (w_eq + (1 − w_eq) r)` with
     `r = (q_c_actual + q_min) / (q_c_eq + q_min)` and `q_c_eq` the expected
     saturation excess under the SGS PDF (always ≥ 0 even for subsaturated
@@ -1357,7 +1449,15 @@ reconstruction `E[max(0, λ + α·S′)] = q_c`.
 )
     FT = typeof(tke)
     inv_τ_turb = FT(c_d) * sqrt(max(tke, zero(FT))) / max(l_mix, one(FT))
-    α_Da = one(FT) / (one(FT) + FT(A) * FT(τ_mp) * inv_τ_turb)
+    # The Damköhler number is zero in quiescent air (`inv_τ_turb = 0`) even
+    # where `τ_mp` is infinite (a disabled process), so `α_Da → 1` there
+    # with no `Inf · 0`.
+    Da = ifelse(
+        inv_τ_turb > zero(FT),
+        FT(A) * FT(τ_mp) * inv_τ_turb,
+        zero(FT),
+    )
+    α_Da = one(FT) / (one(FT) + Da)
     q_c_eq =
         equilibrium_condensate(FT(mu_S), FT(sigma_S), FT(lin), FT(curv), c)
     r = (FT(q_c_actual) + FT(q_min)) / (q_c_eq + FT(q_min))

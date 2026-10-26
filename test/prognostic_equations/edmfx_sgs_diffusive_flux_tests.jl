@@ -1,20 +1,21 @@
 #=
 Tests the EDMFX vertical SGS diffusive flux (`edmfx_sgs_diffusive_flux_tendency!`)
 and its implicit Jacobian (`update_diffusion_jacobian!`, `update_sgs_diffusion_jacobian!`):
-- Suspended cloud species diffuse down their own subdomain gradients while rain
-  and snow receive no `K_h` transport.
+- Draft cloud species diffuse down their own gradients; environment cloud liquid
+  and ice carry the blended flux of `add_cloud_species_diffusionᵥ!`; rain and
+  snow receive no `K_h` transport.
 - Updraft homogenization: uniform `mseʲ` gives zero updraft tendency; perturbed
   `mseʲ` diffuses down its own vertical gradient `∇mseʲ`.
 - Area-gradient signature: uniform environment and updraft scalars with
-  vertically varying draft area `aʲ(z)` produce zero grid-mean moisture and
-  cloud-species diffusive tendencies.
+  vertically varying draft area `aʲ(z)` produce no area-gradient contribution
+  to the grid-mean moisture and cloud-species diffusive tendencies.
 - Kirchhoff `T_0` reference-state invariance holds for both grid-mean `ρe_tot`
   and updraft `mseʲ`.
 - The intensive updraft tendency stays bounded as the draft area collapses, and
   the energy the environment absorbs from updraft diffusion is the enthalpy of
   the dry air that the diffusing water displaces.
-- Implicit Jacobian blocks for `ρq_lcl`, `mseʲ`, `q_totʲ`, and `q_lclʲ` match
-  finite differences.
+- Implicit Jacobian blocks for `mseʲ`, `q_totʲ`, and `q_lclʲ` match finite
+  differences, and the `ρq_lcl` diagonal bounds that of the blended flux.
 =#
 using Test
 import ClimaComms
@@ -61,6 +62,94 @@ include("../test_helpers.jl")
     ϵ_FT = eps(FT)
     turbconv_params = CAP.turbconv_params(p.params)
     updraft_kh_factor = CAP.edmfx_updraft_kh_diffusion_factor(turbconv_params)
+    thermo_params = CAP.thermodynamics_params(p.params)
+
+    # Expected environment flux divergence of a cloud species under the blended
+    # flux of `add_cloud_species_diffusionᵥ!`, assembled here from the
+    # environment state, the environment weight `ᶠw⁰`, and the pointwise
+    # coefficients `CA.equilibrium_condensate_sensitivities` and
+    # `CA.cloud_species_flux_blend`.
+    function expected_env_cloud_species!(ᶜout, Y, p, χ_name, phase, ᶠw⁰)
+        (; ᶜT⁰, ᶜp, ᶜl_mix, ᶜsgs_moments) = p.precomputed
+        ᶜq_water⁰_lazy = CA.ᶜenv_diffusing_water(Y, p)
+        ᶜq_tot⁰, ᶜq_liq⁰, ᶜq_ice⁰ = map(ᶜq_water⁰_lazy) do ᶜq
+            ᶜout_q = similar(Y.c.ρ)
+            @. ᶜout_q = ᶜq
+            ᶜout_q
+        end
+        ᶜχ⁰_lazy = CA.ᶜspecific_env_value(χ_name, Y, p)
+        ᶜχ⁰ = similar(Y.c.ρ)
+        @. ᶜχ⁰ = ᶜχ⁰_lazy
+        ᶜcp = @. TD.cp_m(thermo_params, ᶜq_tot⁰, ᶜq_liq⁰, ᶜq_ice⁰)
+        ᶜL_v = @. TD.latent_heat_vapor(thermo_params, ᶜT⁰)
+        ᶜL_s = @. TD.latent_heat_sublim(thermo_params, ᶜT⁰)
+        ᶠF_qt = @. -(ᶠw⁰ * CA.ᶠgradᵥ(ᶜq_tot⁰))
+        ᶠF_sl = @. -(
+            ᶠw⁰ * (
+                CA.ᶠinterp(ᶜcp) * CA.ᶠgradᵥ(ᶜT⁰) + CA.ᶠgradᵥ(p.core.ᶜΦ) -
+                CA.ᶠinterp(ᶜL_v) * CA.ᶠgradᵥ(ᶜq_liq⁰) -
+                CA.ᶠinterp(ᶜL_s) * CA.ᶠgradᵥ(ᶜq_ice⁰)
+            )
+        )
+        c_d = CA.tke_dissipation_coefficient(turbconv_params)
+        ᶜρ_air = @. TD.air_density(
+            thermo_params,
+            ᶜT⁰,
+            ᶜp,
+            ᶜq_tot⁰,
+            ᶜq_liq⁰,
+            ᶜq_ice⁰,
+        )
+        cmp = CAP.microphysics_1m_params(p.params)
+        ᶜλ = @. CA.cloud_species_flux_blend(
+            ᶜl_mix,
+            Y.c.ρtke / Y.c.ρ,
+            c_d,
+            CA.cloud_species_relaxation_time(
+                cmp,
+                thermo_params,
+                ᶜT⁰,
+                ᶜρ_air,
+                ᶜq_tot⁰,
+                ᶜq_liq⁰,
+                ᶜq_ice⁰,
+                phase,
+            ),
+        )
+        ᶜc_qt = @. first(
+            CA.equilibrium_condensate_sensitivities(
+                thermo_params,
+                ᶜT⁰,
+                ᶜρ_air,
+                ᶜq_tot⁰,
+                ᶜq_liq⁰,
+                ᶜq_ice⁰,
+                ᶜsgs_moments.sigma_S,
+                ᶜsgs_moments.λ_eq,
+                phase,
+            ),
+        )
+        ᶜc_sl = @. last(
+            CA.equilibrium_condensate_sensitivities(
+                thermo_params,
+                ᶜT⁰,
+                ᶜρ_air,
+                ᶜq_tot⁰,
+                ᶜq_liq⁰,
+                ᶜq_ice⁰,
+                ᶜsgs_moments.sigma_S,
+                ᶜsgs_moments.λ_eq,
+                phase,
+            ),
+        )
+        @. ᶜout =
+            -CA.ᶜdiffdivᵥ(
+                -((1 - CA.ᶠinterp(ᶜλ)) * ᶠw⁰ * CA.ᶠgradᵥ(ᶜχ⁰)) +
+                CA.ᶠinterp(ᶜλ) *
+                (CA.ᶠinterp(ᶜc_qt) * ᶠF_qt + CA.ᶠinterp(ᶜc_sl) * ᶠF_sl),
+            )
+        return ᶜout
+    end
 
     ᶜz = Fields.coordinate_field(Y.c).z
     @. Y.c.ρtke = FT(0.5) * Y.c.ρ
@@ -105,8 +194,9 @@ include("../test_helpers.jl")
     @test maximum(abs, parent(Yₜ.c.ρq_tot)) > 0
     @test parent(Yₜ.c.ρ) == parent(Yₜ.c.ρq_tot)
 
-    # Suspended cloud species diffuse down their own subdomain gradients:
-    # F_qμ = -(ᶠw⁰ ∇q_μ⁰ + ᶠw¹ ∇q_μ¹), while updraft species use
+    # Cloud liquid and ice: the environment carries the blended flux of
+    # `add_cloud_species_diffusionᵥ!` with weight ᶠw⁰, the draft its own
+    # down-gradient flux ᶠw¹ ∇q_μ¹, and updraft species use
     # -(1/ρa¹) ∇·(-ᶠw¹ ∇q_μ¹).
     (; ᶠK_h) = p.precomputed
     ᶜρa⁰ = similar(Y.c.ρ)
@@ -126,18 +216,16 @@ include("../test_helpers.jl")
         -CA.ᶜdiffdivᵥ(-(ᶠw¹ * CA.ᶠgradᵥ(ᶜq_tot_eff¹))) /
         max(Y.c.sgsʲs.:(1).ρa, ϵ_FT)
     @test parent(Yₜ.c.sgsʲs.:(1).q_tot) ≈ parent(ᶜexpected_up) rtol = FT(1e-11)
-    for (χ_name, ρq_sym, q_sym) in (
-        (@name(q_lcl), :ρq_lcl, :q_lcl),
-        (@name(q_icl), :ρq_icl, :q_icl),
+    for (χ_name, ρq_sym, q_sym, phase) in (
+        (@name(q_lcl), :ρq_lcl, :q_lcl, TD.Liquid()),
+        (@name(q_icl), :ρq_icl, :q_icl, TD.Ice()),
     )
-        ᶜχ⁰ = CA.ᶜspecific_env_value(χ_name, Y, p)
         ᶜχ¹ = getproperty(Y.c.sgsʲs.:(1), q_sym)
         @. ᶜexpected_up =
             -CA.ᶜdiffdivᵥ(-(ᶠw¹ * CA.ᶠgradᵥ(ᶜχ¹))) /
             max(Y.c.sgsʲs.:(1).ρa, ϵ_FT)
-        @. ᶜexpected =
-            -CA.ᶜdiffdivᵥ(-(ᶠw⁰ * CA.ᶠgradᵥ(ᶜχ⁰))) -
-            CA.ᶜdiffdivᵥ(-(ᶠw¹ * CA.ᶠgradᵥ(ᶜχ¹)))
+        expected_env_cloud_species!(ᶜexpected, Y, p, χ_name, phase, ᶠw⁰)
+        @. ᶜexpected -= CA.ᶜdiffdivᵥ(-(ᶠw¹ * CA.ᶠgradᵥ(ᶜχ¹)))
         @test parent(getproperty(Yₜ.c.sgsʲs.:(1), q_sym)) ≈
               parent(ᶜexpected_up) rtol = FT(1e-11)
         @test parent(getproperty(Yₜ.c, ρq_sym)) ≈ parent(ᶜexpected) rtol =
@@ -252,7 +340,10 @@ include("../test_helpers.jl")
     # are each vertically uniform (with χ¹ ≠ χ⁰) while draft area a¹(z) varies
     # vertically so that grid-mean χ̄ = a⁰ χ⁰ + a¹ χ¹ has a nonzero vertical
     # gradient, the subdomain-decomposed diffusive tendencies of ρq_tot, ρq_lcl,
-    # ρq_icl, q_tot¹, and q_lcl¹ are zero.
+    # ρq_icl, q_tot¹, and q_lcl¹ have no area-gradient contribution: ρq_tot,
+    # q_tot¹, and q_lcl¹ vanish, and ρq_lcl is the blended environment flux,
+    # which here reduces to its λ c_sl F_sl part because T⁰ is not well mixed in
+    # liquid–ice static energy.
     q_tot⁰_const = FT(8e-3)
     q_tot¹_const = FT(1.4e-2)
     q_lcl⁰_const = FT(1e-4)
@@ -280,15 +371,25 @@ include("../test_helpers.jl")
         t,
         p.atmos.turbconv_model,
     )
+    @. ᶜρa⁰ = CA.ρa⁰(Y.c.ρ, Y.c.sgsʲs, p.atmos.turbconv_model)
+    @. ᶠw⁰ = CA.ᶠinterp(ᶜρa⁰) * p.precomputed.ᶠK_h
     @test maximum(abs, parent(Yₜ.c.ρq_tot)) <= FT(1e-15)
-    @test maximum(abs, parent(Yₜ.c.ρq_lcl)) <= FT(1e-15)
+    expected_env_cloud_species!(
+        ᶜexpected,
+        Y,
+        p,
+        @name(q_lcl),
+        TD.Liquid(),
+        ᶠw⁰,
+    )
+    @test parent(Yₜ.c.ρq_lcl) ≈ parent(ᶜexpected) rtol = FT(1e-10) atol =
+        FT(1e-18)
     @test maximum(abs, parent(Yₜ.c.sgsʲs.:(1).q_tot)) <= FT(1e-15)
     @test maximum(abs, parent(Yₜ.c.sgsʲs.:(1).q_lcl)) <= FT(1e-15)
 
     # When `edmfx_vertical_diffusion = false`, `PrognosticEDMFX` reduces to the
-    # environment-only diffusive flux
-    # (`-ᶜdiffdivᵥ(-(ᶠw⁰ * ᶠgradᵥ(ᶜχ⁰)))`) with zero updraft diffusive
-    # tendencies.
+    # environment-only diffusive flux (for cloud liquid, the blended flux with
+    # weight ᶠw⁰) with zero updraft diffusive tendencies.
     @. Y.c.ρq_lcl = Y.c.ρ * FT(2e-4) * (1 + sin(FT(2π) * ᶜz / FT(3000)))
     @. Y.c.sgsʲs.:(1).q_lcl =
         FT(3e-4) * (1 + FT(0.5) * cos(FT(2π) * ᶜz / FT(3000)))
@@ -333,18 +434,23 @@ include("../test_helpers.jl")
         t,
         p_no_up.atmos.turbconv_model,
     )
-    ᶜq_lcl⁰ = CA.ᶜspecific_env_value(@name(q_lcl), Y, p_no_up)
-    ᶜq_scratch = similar(Y.c.ρ)
-    @. ᶜq_scratch = ᶜq_lcl⁰
-    @. ᶜexpected = -CA.ᶜdiffdivᵥ(-(ᶠw⁰ * CA.ᶠgradᵥ(ᶜq_scratch)))
-    @test parent(Yₜ_no_up.c.ρq_lcl) ≈ parent(ᶜexpected) rtol = FT(1e-11)
+    expected_env_cloud_species!(
+        ᶜexpected,
+        Y,
+        p_no_up,
+        @name(q_lcl),
+        TD.Liquid(),
+        ᶠw⁰,
+    )
+    @test parent(Yₜ_no_up.c.ρq_lcl) ≈ parent(ᶜexpected) rtol = FT(1e-10)
     @test all(iszero, parent(Yₜ_no_up.c.sgsʲs.:(1).mse))
     @test all(iszero, parent(Yₜ_no_up.c.sgsʲs.:(1).q_tot))
     @test all(iszero, parent(Yₜ_no_up.c.sgsʲs.:(1).q_lcl))
 
-    # Finite-difference verification of the new Jacobian diagonals for
-    # suspended cloud species (`c.ρq_lcl`) and updraft own-gradient diffusion
-    # (`c.sgsʲs.:(1).mse`, `c.sgsʲs.:(1).q_tot`, `c.sgsʲs.:(1).q_lcl`).
+    # Finite-difference verification of the Jacobian diagonals for suspended
+    # cloud species (`c.ρq_lcl`, a bound; see below) and updraft own-gradient
+    # diffusion (`c.sgsʲs.:(1).mse`, `c.sgsʲs.:(1).q_tot`, and
+    # `c.sgsʲs.:(1).q_lcl`).
     # Use a vertically uniform draft area fraction so that the `(1 - a¹)`
     # factors in `ᶠinterp(ρa⁰)` and `∂q_lcl⁰/∂ρq_lcl = 1/ρa⁰` cancel.
     @. Y.c.sgsʲs.:(1).ρa = FT(0.08) * Y.c.ρ
@@ -419,7 +525,19 @@ include("../test_helpers.jl")
         jac_col = similar(Y.c.ρ)
         block = matrix[state_name, state_name]
         @. jac_col = block * δχ
-        @test parent(jac_col) ≈ fd_col rtol = FT(1e-6)
+        if state_name == @name(c.ρq_lcl)
+            # The blended cloud-liquid flux has the self-diagonal
+            # (1 - λ) + λ C χ γ_l / (1 + C γ) ≤ 1 times that of
+            # self-diffusion, with γ_l the feedback of the liquid latent heat;
+            # the Jacobian keeps the unscaled self-diffusion diagonal, an
+            # upper bound with the same sign.
+            jac_kk = parent(jac_col)[k_test]
+            fd_kk = fd_col[k_test]
+            @test sign(jac_kk) == sign(fd_kk)
+            @test abs(fd_kk) <= abs(jac_kk) * (1 + FT(1e-6))
+        else
+            @test parent(jac_col) ≈ fd_col rtol = FT(1e-6)
+        end
     end
 
     # The intensive updraft tendency stays bounded as ρa¹ collapses.
