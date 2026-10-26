@@ -203,7 +203,7 @@ sedimenting_sgs_tracer_names(Y) =
 
 Return a `Tuple` of the `@name`s (relative to `Y.c.sgsʲs.:(1)`) of the
 sedimenting SGS condensate *mass* tracers, whose sedimentation couples to the
-updraft `q_tot`.
+updraft `q_tot` and `mse`.
 
 Returns `()` when prognostic EDMF is not active.
 """

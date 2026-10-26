@@ -324,7 +324,8 @@ end
     sgs_advection_jacobian_blocks(Y, atmos)
 
 Allocate the diagonal Jacobian blocks of the advected updraft scalars, plus the
-couplings of the sedimenting SGS condensate masses to the updraft `q_tot`.
+couplings of the sedimenting SGS condensate masses to the updraft `q_tot` and
+`mse`.
 
 These diagonals are shared by all of the implicit SGS processes: vertical
 advection and sedimentation (`update_sgs_advection_jacobian!`), diffusion
@@ -353,6 +354,12 @@ function sgs_advection_jacobian_blocks(Y, atmos)
         map(
             name ->
                 (@name(c.sgsʲs.:(1).q_tot), name) =>
+                    similar(Y.c, TridiagonalRow),
+            sgs_mass_names,
+        )...,
+        map(
+            name ->
+                (@name(c.sgsʲs.:(1).mse), name) =>
                     similar(Y.c, TridiagonalRow),
             sgs_mass_names,
         )...,
@@ -1343,7 +1350,7 @@ end
 
 Update the Jacobian blocks for implicit vertical advection of the updraft
 scalars with the updraft velocity, and for implicit sedimentation of the SGS
-condensate tracers (including their couplings to the updraft `q_tot`).
+condensate tracers (including their couplings to the updraft `q_tot` and `mse`).
 
 The advective-form derivative `∂ᵥ(u³ʲ) - ∂ᵥ(upwind(u³ʲ, ⋅))` uses the upwind
 matrix from `sgs_upwinding_operators`, with `edmfx_mse_q_tot_upwinding` for
@@ -1354,14 +1361,25 @@ run before the other SGS updates, which accumulate into them.
 The sedimentation derivative also carries the lateral-mixing correction that
 the tendency applies where the draft area decreases with height,
 `∂ᵥa (ρʲwʲχʲ - ρ⁰w⁰χ⁰)`, whose environment part contributes
-`∂ᵥa a ρʲwʲ / (1 - a)` to the diagonal. No-op unless `p.atmos.turbconv_model`
-is a `PrognosticEDMFX`. Writes `ᶜtemp_scalar_7`, `ᶠsed_tracer_advection`, and
-`ᶜtridiagonal_matrix_scalar` in `p.scratch`, mutates `matrix`, and returns
-`nothing`.
+`∂ᵥa a ρʲwʲ / (1 - a)` to the diagonal.
+
+The sedimented mass is a source of `ρaʲ`, so an intensive updraft scalar `χ`
+receives `(vtt_χ - χ Σ_μ vtt_μ) / ρaʲ`. The blocks keep the dependence of
+each species' own flux on its tracer, with the weights `(1 - q_μ) / ρaʲ` on
+the diagonal and `(1 - q_tot) / ρaʲ` for `q_tot`; for `mse`, the species
+static energy `h_μ(Tʲ) + Φ` multiplies the sedimentation operator on the right
+(at the donor cell) and `-mse` multiplies it on the left (at the receiver
+cell). The dilution diagonal `-Σ_μ vtt_μ / ρaʲ` and the cross-species blocks
+`-χ ∂vtt_μ/∂q_μ / ρaʲ` are omitted as O(q) smaller.
+
+No-op unless `p.atmos.turbconv_model` is a `PrognosticEDMFX`. Writes
+`ᶜtemp_scalar_7`, `ᶠsed_tracer_advection`, and `ᶜtridiagonal_matrix_scalar`
+in `p.scratch`, mutates `matrix`, and returns `nothing`.
 """
 function update_sgs_advection_jacobian!(matrix, Y, p, dtγ)
     p.atmos.turbconv_model isa PrognosticEDMFX || return nothing
-    (; ᶜρʲs, ᶠu³ʲs) = p.precomputed
+    (; ᶜρʲs, ᶠu³ʲs, ᶜTʲs) = p.precomputed
+    (; ᶜΦ) = p.core
     FT = Spaces.undertype(axes(Y.c))
     ᶜJ = Fields.local_geometry_field(Y.c).J
     ᶠJ = Fields.local_geometry_field(Y.f).J
@@ -1412,6 +1430,7 @@ function update_sgs_advection_jacobian!(matrix, Y, p, dtγ)
         NonEquilibriumMicrophysics1M,
         NonEquilibriumMicrophysics2M,
     }
+        thermo_params = CAP.thermodynamics_params(p.params)
         ᶜa = (@. lazy(draft_area(Y.c.sgsʲs.:(1).ρa, ᶜρʲs.:(1))))
         ᶜ∂a∂z = p.scratch.ᶜtemp_scalar_7
         @. ᶜ∂a∂z = ᶜprecipdivᵥ(ᶠinterp(ᶜJ) / ᶠJ * ᶠtop_bias(Geometry.WVector(ᶜa)))
@@ -1464,14 +1483,32 @@ function update_sgs_advection_jacobian!(matrix, Y, p, dtγ)
             # sedimentation
             # (pull out common subexpression for performance)
 
-            @. ∂ᶜχʲ_err_∂ᶜχʲ +=
-                DiagonalMatrixRow(ᶜinv_ρ̂) * ᶜtridiagonal_matrix_scalar
+            phase = condensate_phase(χ_name)
+            if isnothing(phase)
+                @. ∂ᶜχʲ_err_∂ᶜχʲ +=
+                    DiagonalMatrixRow(ᶜinv_ρ̂) * ᶜtridiagonal_matrix_scalar
+            else
+                ᶜqʲ = MatrixFields.get_field(Y.c.sgsʲs.:(1), χ_name)
+                @. ∂ᶜχʲ_err_∂ᶜχʲ +=
+                    DiagonalMatrixRow(ᶜinv_ρ̂ * (1 - ᶜqʲ)) *
+                    ᶜtridiagonal_matrix_scalar
 
-            if !isnothing(condensate_phase(χ_name))
                 ∂ᶜq_totʲ_err_∂ᶜχʲ =
                     matrix[@name(c.sgsʲs.:(1).q_tot), χ_state_name]
                 @. ∂ᶜq_totʲ_err_∂ᶜχʲ =
-                    DiagonalMatrixRow(ᶜinv_ρ̂) * ᶜtridiagonal_matrix_scalar
+                    DiagonalMatrixRow(ᶜinv_ρ̂ * (1 - Y.c.sgsʲs.:(1).q_tot)) *
+                    ᶜtridiagonal_matrix_scalar
+
+                ∂ᶜmseʲ_err_∂ᶜχʲ =
+                    matrix[@name(c.sgsʲs.:(1).mse), χ_state_name]
+                h_cond_func = enthalpy_function(phase)
+                ᶜh_cond = @. lazy(h_cond_func(thermo_params, ᶜTʲs.:(1)) + ᶜΦ)
+                @. ∂ᶜmseʲ_err_∂ᶜχʲ =
+                    DiagonalMatrixRow(ᶜinv_ρ̂) * (
+                        ᶜtridiagonal_matrix_scalar * DiagonalMatrixRow(ᶜh_cond) -
+                        DiagonalMatrixRow(Y.c.sgsʲs.:(1).mse) *
+                        ᶜtridiagonal_matrix_scalar
+                    )
             end
         end
     end

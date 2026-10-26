@@ -167,8 +167,8 @@ function set_precipitation_velocities!(
     (; ᶜΦ) = p.core
     (; ᶜp) = p.precomputed
     (; ᶜwₗ, ᶜwᵢ, ᶜwᵣ, ᶜwₛ, ᶜwₜqₜ, ᶜwₕhₜ) = p.precomputed
-    (; ᶜwₗʲs, ᶜwᵢʲs, ᶜwᵣʲs, ᶜwₛʲs, ᶜTʲs, ᶜρʲs) = p.precomputed
-    (; ᶜT⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰) = p.precomputed
+    (; ᶜwₗʲs, ᶜwᵢʲs, ᶜwᵣʲs, ᶜwₛʲs, ᶜTʲs, ᶜρʲs, ᶜuʲs) = p.precomputed
+    (; ᶜT⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜu⁰) = p.precomputed
     atmos = p.atmos
     params = p.params
 
@@ -243,7 +243,10 @@ function set_precipitation_velocities!(
 
             # Add contributions to energy and total water advection
             @. ᶜρwₕhₜ +=
-                Y.c.sgsʲs.:($$j).ρa * ᶜwʲ * ᶜχʲ * (e_int_func(thp, ᶜTʲs.:($$j)) + ᶜΦ)
+                Y.c.sgsʲs.:($$j).ρa *
+                ᶜwʲ *
+                ᶜχʲ *
+                (e_int_func(thp, ᶜTʲs.:($$j)) + ᶜΦ + $(Kin(ᶜwʲ, ᶜuʲs.:($j))))
         end
         # average
         @. ᶜw = gs_terminal_velocity(
@@ -256,7 +259,9 @@ function set_precipitation_velocities!(
         )
         @. ᶜimplied_env_mass_flux += MatrixFields.get_field(Y.c, get_ρχ_name(χ_name)) * ᶜw
         # contribution of env sedimentation to htot
-        @. ᶜρwₕhₜ += ᶜimplied_env_mass_flux * (e_int_func(thp, ᶜT⁰) + ᶜΦ)
+        @. ᶜρwₕhₜ +=
+            ᶜimplied_env_mass_flux *
+            (e_int_func(thp, ᶜT⁰) + ᶜΦ + $(Kin(ᶜw, ᶜu⁰)))
     end
 
     @. ᶜwₕhₜ = WVec(ᶜρwₕhₜ) / Y.c.ρ
@@ -367,7 +372,8 @@ function set_precipitation_velocities!(
     (; ᶜwₗ, ᶜwᵢ, ᶜwᵣ, ᶜwₛ, ᶜwₙₗ, ᶜwₙᵣ, ᶜwₜqₜ, ᶜwₕhₜ) = p.precomputed
     (; ᶜΦ) = p.core
     (; ᶜwₗʲs, ᶜwᵢʲs, ᶜwᵣʲs, ᶜwₛʲs, ᶜwₙₗʲs, ᶜwₙᵣʲs) = p.precomputed
-    (; ᶜp, ᶜTʲs, ᶜρʲs, ᶜT⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰) = p.precomputed
+    (; ᶜp, ᶜTʲs, ᶜρʲs, ᶜuʲs, ᶜT⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜu⁰) =
+        p.precomputed
     cmc = CAP.microphysics_cloud_params(p.params)
     cm1p = CAP.microphysics_1m_params(p.params)
     cm2p = CAP.microphysics_2m_params(p.params)
@@ -403,7 +409,7 @@ function set_precipitation_velocities!(
             cmc.stokes,
             max(zero(Y.c.ρ), ᶜq_lcl⁰),
             ᶜρ⁰,
-            max(zero(Y.c.ρ), ᶜn_lcl⁰),
+            max(zero(Y.c.ρ), ᶜρ⁰ * ᶜn_lcl⁰),
         ),
         1,
     )
@@ -434,7 +440,7 @@ function set_precipitation_velocities!(
             cmc.stokes,
             max(zero(Y.c.ρ), ᶜq_lcl⁰),
             ᶜρ⁰,
-            max(zero(Y.c.ρ), ᶜn_lcl⁰),
+            max(zero(Y.c.ρ), ᶜρ⁰ * ᶜn_lcl⁰),
         ),
         2,
     )
@@ -456,7 +462,11 @@ function set_precipitation_velocities!(
     end
     @. ᶜwₗ = ifelse(ᶜρχ > FT(0), ᶜwₗ / ᶜρχ, FT(0))
     # contribution of env cloud liquid advection to htot advection
-    @. ᶜρwₕhₜ = ᶜρa⁰ * ᶜq_lcl⁰ * ᶜw⁰ * (Iₗ(thp, ᶜT⁰) + ᶜΦ)
+    @. ᶜρwₕhₜ =
+        (
+            Y.c.ρq_lcl * ᶜwₗ -
+            Y.c.sgsʲs.:(1).ρa * Y.c.sgsʲs.:(1).q_lcl * ᶜwₗʲs.:(1)
+        ) * (Iₗ(thp, ᶜT⁰) + ᶜΦ + $(Kin(ᶜwₗ, ᶜu⁰)))
 
     ###
     ### Cloud ice
@@ -483,7 +493,11 @@ function set_precipitation_velocities!(
     end
     @. ᶜwᵢ = ifelse(ᶜρχ > FT(0), ᶜwᵢ / ᶜρχ, FT(0))
     # contribution of env cloud ice advection to htot advection
-    @. ᶜρwₕhₜ += ᶜρa⁰ * ᶜq_icl⁰ * ᶜw⁰ * (Iᵢ(thp, ᶜT⁰) + ᶜΦ)
+    @. ᶜρwₕhₜ +=
+        (
+            Y.c.ρq_icl * ᶜwᵢ -
+            Y.c.sgsʲs.:(1).ρa * Y.c.sgsʲs.:(1).q_icl * ᶜwᵢʲs.:(1)
+        ) * (Iᵢ(thp, ᶜT⁰) + ᶜΦ + $(Kin(ᶜwᵢ, ᶜu⁰)))
 
     ###
     ### Rain (number)
@@ -496,7 +510,7 @@ function set_precipitation_velocities!(
             cmc.Ch2022.rain,
             max(zero(Y.c.ρ), ᶜq_rai⁰),
             ᶜρ⁰,
-            max(zero(Y.c.ρ), ᶜn_rai⁰),
+            max(zero(Y.c.ρ), ᶜρ⁰ * ᶜn_rai⁰),
         ),
         1,
     )
@@ -527,7 +541,7 @@ function set_precipitation_velocities!(
             cmc.Ch2022.rain,
             max(zero(Y.c.ρ), ᶜq_rai⁰),
             ᶜρ⁰,
-            max(zero(Y.c.ρ), ᶜn_rai⁰),
+            max(zero(Y.c.ρ), ᶜρ⁰ * ᶜn_rai⁰),
         ),
         2,
     )
@@ -549,7 +563,11 @@ function set_precipitation_velocities!(
     end
     @. ᶜwᵣ = ifelse(ᶜρχ > FT(0), ᶜwᵣ / ᶜρχ, FT(0))
     # contribution of env rain advection to qtot advection
-    @. ᶜρwₕhₜ += ᶜρa⁰ * ᶜq_rai⁰ * ᶜw⁰ * (Iₗ(thp, ᶜT⁰) + ᶜΦ)
+    @. ᶜρwₕhₜ +=
+        (
+            Y.c.ρq_rai * ᶜwᵣ -
+            Y.c.sgsʲs.:(1).ρa * Y.c.sgsʲs.:(1).q_rai * ᶜwᵣʲs.:(1)
+        ) * (Iₗ(thp, ᶜT⁰) + ᶜΦ + $(Kin(ᶜwᵣ, ᶜu⁰)))
 
     ###
     ### Snow
@@ -576,18 +594,28 @@ function set_precipitation_velocities!(
     end
     @. ᶜwₛ = ifelse(ᶜρχ > FT(0), ᶜwₛ / ᶜρχ, FT(0))
     # contribution of env snow advection to htot advection
-    @. ᶜρwₕhₜ += ᶜρa⁰ * ᶜq_sno⁰ * ᶜw⁰ * (Iᵢ(thp, ᶜT⁰) + ᶜΦ)
+    @. ᶜρwₕhₜ +=
+        (
+            Y.c.ρq_sno * ᶜwₛ -
+            Y.c.sgsʲs.:(1).ρa * Y.c.sgsʲs.:(1).q_sno * ᶜwₛʲs.:(1)
+        ) * (Iᵢ(thp, ᶜT⁰) + ᶜΦ + $(Kin(ᶜwₛ, ᶜu⁰)))
 
     # Add contributions to energy and total water advection
-    # TODO do we need to add kinetic energy of subdomains?
     for j in 1:n
         @. ᶜρwₕhₜ +=
-            Y.c.sgsʲs.:($$j).ρa *
-            (
-                ᶜwₗʲs.:($$j) * Y.c.sgsʲs.:($$j).q_lcl * (Iₗ(thp, ᶜTʲs.:($$j)) + ᶜΦ) +
-                ᶜwᵢʲs.:($$j) * Y.c.sgsʲs.:($$j).q_icl * (Iᵢ(thp, ᶜTʲs.:($$j)) + ᶜΦ) +
-                ᶜwᵣʲs.:($$j) * Y.c.sgsʲs.:($$j).q_rai * (Iₗ(thp, ᶜTʲs.:($$j)) + ᶜΦ) +
-                ᶜwₛʲs.:($$j) * Y.c.sgsʲs.:($$j).q_sno * (Iᵢ(thp, ᶜTʲs.:($$j)) + ᶜΦ)
+            Y.c.sgsʲs.:($$j).ρa * (
+                ᶜwₗʲs.:($$j) *
+                Y.c.sgsʲs.:($$j).q_lcl *
+                (Iₗ(thp, ᶜTʲs.:($$j)) + ᶜΦ + $(Kin(ᶜwₗʲs.:($j), ᶜuʲs.:($j)))) +
+                ᶜwᵢʲs.:($$j) *
+                Y.c.sgsʲs.:($$j).q_icl *
+                (Iᵢ(thp, ᶜTʲs.:($$j)) + ᶜΦ + $(Kin(ᶜwᵢʲs.:($j), ᶜuʲs.:($j)))) +
+                ᶜwᵣʲs.:($$j) *
+                Y.c.sgsʲs.:($$j).q_rai *
+                (Iₗ(thp, ᶜTʲs.:($$j)) + ᶜΦ + $(Kin(ᶜwᵣʲs.:($j), ᶜuʲs.:($j)))) +
+                ᶜwₛʲs.:($$j) *
+                Y.c.sgsʲs.:($$j).q_sno *
+                (Iᵢ(thp, ᶜTʲs.:($$j)) + ᶜΦ + $(Kin(ᶜwₛʲs.:($j), ᶜuʲs.:($j))))
             )
     end
     @. ᶜwₕhₜ = WVec(ᶜρwₕhₜ) / Y.c.ρ
@@ -693,9 +721,11 @@ Dispatch on `microphysics_model` and `turbconv_model`:
   - `EquilibriumMicrophysics0M` with `PrognosticEDMFX`: re-aggregates the frozen
     per-subdomain specific tendencies `ᶜmp_tendency⁰` and `ᶜmp_tendencyʲs` with the
     current `ρa⁰` and `Y.c.sgsʲs.:(j).ρa`, then updates the surface fluxes.
-  - `NonEquilibriumMicrophysics` (1M, 2M, 2M+P3): calls
-    `set_precipitation_surface_fluxes!` only. Density weighting of the specific
-    tendencies is applied at tendency-evaluation time in `tendency.jl`.
+  - `NonEquilibriumMicrophysics` (1M, 2M, 2M+P3): refreshes the sedimentation
+    velocities with `set_precipitation_velocities!` (for 1M, when any mode is
+    state-dependent) and calls `set_precipitation_surface_fluxes!`. Density
+    weighting of the specific tendencies is applied at tendency-evaluation time
+    in `tendency.jl`.
   - Default: no-op (microphysics not active).
 """
 update_implicit_microphysics_cache!(Y, p, _, _) = nothing
@@ -732,7 +762,7 @@ end
 function update_implicit_microphysics_cache!(
     Y,
     p,
-    mm::NonEquilibriumMicrophysics1M,
+    mm::NonEquilibriumMicrophysics,
     tm,
 )
     # Recompute the sedimentation velocities from the current implicit-solver state.
@@ -741,22 +771,19 @@ function update_implicit_microphysics_cache!(
     # nonlinear part of the sedimentation flux explicitly.
     # No number of Newton iterations can correct a field that nothing updates.
     # Every mode other than `FixedTerminalVelocity` depends on the state.
-    modes = (
-        p.atmos.terminal_velocity_liquid,
-        p.atmos.terminal_velocity_ice,
-        p.atmos.terminal_velocity_rain,
-        p.atmos.terminal_velocity_snow,
-    )
-    if !all(mode -> mode isa FixedTerminalVelocity, modes)
+    if mm isa NonEquilibriumMicrophysics1M
+        modes = (
+            p.atmos.terminal_velocity_liquid,
+            p.atmos.terminal_velocity_ice,
+            p.atmos.terminal_velocity_rain,
+            p.atmos.terminal_velocity_snow,
+        )
+        if !all(mode -> mode isa FixedTerminalVelocity, modes)
+            set_precipitation_velocities!(Y, p, mm, tm)
+        end
+    else
         set_precipitation_velocities!(Y, p, mm, tm)
     end
-    set_precipitation_surface_fluxes!(Y, p, mm)
-    return nothing
-end
-
-function update_implicit_microphysics_cache!(
-    Y, p, mm::NonEquilibriumMicrophysics, _,
-)
     set_precipitation_surface_fluxes!(Y, p, mm)
     return nothing
 end

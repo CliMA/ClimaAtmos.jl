@@ -162,18 +162,15 @@ inside a flux divergence is numerically fragile [Weller2019](@cite).
 
 !!! note "TODO: not yet implemented"
 
-    Two terms of this equation are missing from the draft mass tendency, which
-    carries only horizontal advection, the analytic vertical solve, and the
-    microphysics and hyperdiffusion parts of ``\hat{S}_{q_t}^m``:
-
-      - the sedimentation mass flux ``-\nabla \cdot [\hat{\rho}^m W_{q_t}^m \hat{\boldsymbol{k}}]``. The grid mean does receive its counterpart, so
-        draft and grid-mean mass budgets treat falling condensate differently;
-      - the turbulent-diffusive part of ``\hat{S}_{q_t}^m``. The draft
-        ``q_t^m`` receives the subdomain diffusive flux while ``\hat{\rho}^m``
-        is held fixed across the diffusive step, so that the net moist-air mass
-        tendency ``\partial_t \rho = \partial_t (\rho q_t)|_{\mathrm{diff}}``
-        is absorbed by the environment residual
-        ``\hat{\rho}^0 = \rho - \sum_j \hat{\rho}^j``.
+    One term of this equation is missing from the draft mass tendency, which
+    includes horizontal advection, the analytic vertical solve with the
+    sedimentation mass flux, and the microphysics and hyperdiffusion parts of
+    ``\hat{S}_{q_t}^m``: the turbulent-diffusive part of ``\hat{S}_{q_t}^m``.
+    The draft ``q_t^m`` receives the subdomain diffusive flux while
+    ``\hat{\rho}^m`` is held fixed across the diffusive step, so that the net
+    moist-air mass tendency
+    ``\partial_t \rho = \partial_t (\rho q_t)|_{\mathrm{diff}}`` is absorbed by
+    the environment residual ``\hat{\rho}^0 = \rho - \sum_j \hat{\rho}^j``.
 
 **Momentum.** The shared horizontal velocity reduces this to a single equation
 for ``u_3^m``:
@@ -347,17 +344,36 @@ D_\psi^m = \frac{1}{\hat{\rho}^m} \left[
   \right] ,
 ```
 
-with ``W_\psi^m`` the mass-weighted sedimentation flux of ``\psi`` in subdomain
-``m``. The physical content beyond ordinary within-draft fallout is geometric:
-where a draft's volume fraction varies with height, its boundary is not
-vertical, and sedimenting condensate crosses it. A draft that narrows downward
-loses falling condensate to its surroundings; one that widens downward gains it.
-This transfer acts only on condensate species and carries pure condensate rather
-than a parcel at the source subdomain's composition, which makes it
-structurally distinct from the dynamical entrainment and detrainment below. The
-code implements it two-directionally, for a single draft exchanging with the
-environment, in `updraft_sedimentation!`; the second (``\psi^m``-weighted) term
-of ``D_\psi^m`` is neglected as small compared with the leading-order dynamics.
+with ``W_\psi^m`` the downward mass-weighted sedimentation flux of ``\psi`` in
+subdomain ``m``. The physical content beyond ordinary within-draft fallout is
+geometric: where a draft's volume fraction varies with height, its boundary is
+not vertical, and sedimenting condensate crosses it. A draft that narrows
+downward loses falling condensate to its surroundings; one that widens downward
+gains it. This transfer acts only on condensate species and carries pure
+condensate rather than a parcel at the source subdomain's composition, which
+makes it structurally distinct from the dynamical entrainment and detrainment
+below. For a single draft ``m`` exchanging with the environment,
+`updraft_sedimentation!` evaluates the first term in two branches according to
+the sign of ``\partial_z a^m``,
+
+```math
+S_{\psi,\mathrm{sed}}^m = \begin{cases}
+  a^m \partial_z(\rho^m W_\psi^m) , & \partial_z a^m \ge 0 , \\
+  \partial_z(\hat{\rho}^m W_\psi^m) - \rho^0 W_\psi^0 \partial_z a^m , & \partial_z a^m < 0 ,
+\end{cases}
+```
+
+with the environment flux reconstructed as the residual of the grid-mean flux,
+``\hat{\rho}^0 W_\mu^0 = \rho W_\mu - \hat{\rho}^m W_\mu^m`` and
+``\rho^0 W_\mu^0 = \max(\hat{\rho}^0 W_\mu^0 / (1 - a^m), 0)``. The sum of the
+condensate flux convergences ``S_{q_t,\mathrm{sed}}^m = \sum_\mu S_{q_\mu,\mathrm{sed}}^m``
+is the sedimentation term of the draft mass equation, applied in the analytic
+``\hat{\rho}^j`` solve, and each intensive draft scalar receives both terms of
+``D_\psi^m``: its own sedimentation source and the dilution
+``-\psi^m S_{q_t,\mathrm{sed}}^m / \hat{\rho}^m`` by the sedimented mass. For
+``h_s^m``, ``W_{h_s}^m = \sum_\mu q_\mu^m (h_\mu(T^m) + \Phi) w_\mu^m`` is
+evaluated inside `updraft_sedimentation!`, with laterally entrained environment
+condensate carrying ``h_\mu(T^0) + \Phi``.
 
 **Subdomain diffusive fluxes.** When `edmfx_vertical_diffusion` is enabled, each
 draft scalar ``\psi^m \in \{h_s^m, q_t^m, q_l^{\mathrm{cl},m}, q_i^{\mathrm{cl},m}, n_l^{\mathrm{cl},m}, n_i^{\mathrm{cl},m}, \chi^m\}``

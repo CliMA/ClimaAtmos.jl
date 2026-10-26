@@ -95,14 +95,15 @@ The environment tendency `ᶜmp_tendency⁰` (weighted by `ρa⁰`) and each upd
 tendency `ᶜmp_tendencyʲs` (weighted by `ρaʲ`) accumulate into the grid-mean
 `ρq_tot`, `ρ`, and `ρe_tot` sinks. Each updraft's prognostic state is also
 updated: `ρaʲ` loses the removed mass, `qₜʲ` receives the `(1 - qₜʲ)` conversion
-from the mass-removal rate to a specific-humidity tendency, and `mseʲ` changes by
-the removed specific energy relative to the updraft internal energy at `ᶜTʲs`.
+from the mass-removal rate to a specific-humidity tendency, and `mseʲ` receives
+`dq_tot_dt (e_tot_hlpr - mseʲ)`. The removed condensate carries `e_tot_hlpr`,
+its enthalpy plus `Φ`, so the updraft loses the static energy that the grid mean
+loses, and `Tʲ` is unchanged when the condensate leaves at `Tʲ`.
 """
 function microphysics_tendency!(Yₜ, Y, p, t,
     ::EquilibriumMicrophysics0M, turbconv_model::PrognosticEDMFX,
 )
-    (; ᶜmp_tendencyʲs, ᶜmp_tendency⁰, ᶜTʲs) = p.precomputed
-    thp = CAP.thermodynamics_params(p.params)
+    (; ᶜmp_tendencyʲs, ᶜmp_tendency⁰) = p.precomputed
     n = n_mass_flux_subdomains(turbconv_model)
 
     # Environment contribution to grid mean tendency
@@ -125,8 +126,7 @@ function microphysics_tendency!(Yₜ, Y, p, t,
             (1 - Y.c.sgsʲs.:($$j).q_tot)
         @. Yₜ.c.sgsʲs.:($$j).mse +=
             ᶜmp_tendencyʲs.:($$j).dq_tot_dt * (
-                ᶜmp_tendencyʲs.:($$j).e_tot_hlpr -
-                TD.internal_energy(thp, ᶜTʲs.:($$j))
+                ᶜmp_tendencyʲs.:($$j).e_tot_hlpr - Y.c.sgsʲs.:($$j).mse
             )
     end
     return nothing

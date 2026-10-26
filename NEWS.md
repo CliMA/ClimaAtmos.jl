@@ -3,6 +3,43 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- ![][badge-🔥behavioralΔ] 0M precipitation removal from a `PrognosticEDMFX`
+  updraft increments `mse` by `dq_tot_dt (e_tot_hlpr - mse)`, the mass-consistent
+  weight for removing condensate that carries its enthalpy plus `Φ`. The updraft
+  now loses the static energy that the grid mean loses, and `Tʲ` is unchanged
+  when the condensate leaves at `Tʲ`. The weight `e_tot_hlpr - e_int_dry(Tʲ)`
+  cooled the updraft by about `(Φ + R_d T + q_v L_v)/c_p` per unit mass removed
+  (0.004–0.014 K per 1e-4 kg/kg between 1.5 and 9 km), and the environment
+  residual warmed by the same energy.
+- ![][badge-🔥behavioralΔ] Updraft sedimentation of `q_lcl`, `q_icl`, `q_rai`,
+  and `q_sno` is a mass source of the updraft `ρaʲ` in the analytic
+  implicit-stage solve (`solve_sgs_ρa_implicit_stage_analytic!`,
+  `updraft_sedimentation_mass_source!`), as it is of the grid-mean `ρ`. Each
+  intensive updraft scalar receives its own sedimentation source minus the
+  dilution by the sedimented mass (`edmfx_sgs_vertical_advection_tendency!`),
+  and `mse` receives the flux-form static energy tendency
+  `(S_{h,μ}ʲ - mseʲ S_μʲ) / ρ̂ʲ`, where `S_{h,μ}ʲ` is the `updraft_sedimentation!`
+  convergence of `q_μʲ (h_μ(Tʲ) + Φ)` with laterally entrained environment
+  condensate carrying `h_μ(T⁰) + Φ`. The Jacobian
+  (`update_sgs_advection_jacobian!`) carries the `(mse, q_μ)` and `(q_tot, q_μ)`
+  couplings, with `h_μ(Tʲ) + Φ` at the donor cell and `-mseʲ` at the receiver
+  cell. The residual environment sedimentation flux `ᶜρ⁰w⁰χ⁰` and 2M number flux
+  `ᶜρ⁰w⁰n⁰` are clamped to non-negative values in the lateral entrainment branch,
+  and `initialize_implicit_stage_problem!` refreshes terminal velocities after
+  the Picard updraft predictor before solving for `ρaʲ`. Sedimentation that
+  changed `q_tot` at fixed `mse` and fixed `ρaʲ` acted as a spurious updraft
+  heat source (for ice, the latent heat of fusion), which the environment
+  residual absorbed with the opposite sign.
+- ![][badge-🐛bugfix] Under `PrognosticEDMFX`, the 2-moment environment terminal
+  velocity calls (`set_precipitation_velocities!`) convert the specific number
+  concentrations `ᶜn_lcl⁰` and `ᶜn_rai⁰` (`[1/kg]`) to volumetric number
+  concentrations (`[1/m³]`) by multiplying by `ᶜρ⁰`, matching the updraft calls
+  and `CloudMicrophysics.Microphysics2M`. In addition,
+  `update_implicit_microphysics_cache!` refreshes terminal velocities for 2M and
+  2M+P3 as well as 1M, and the `PrognosticEDMFX` column-integrated precipitation
+  energy flux `ᶜwₕhₜ` includes the hydrometeor kinetic energy `Kin` (and uses
+  the residual environment sedimentation flux in 2M), matching `water_advection.jl`
+  and the non-EDMF path.
 - ![][badge-🔥behavioralΔ] `radiation_tendency!` for `RadiationDYCOMS` selects the
   inversion height `z_i` as the highest level with `q_tot ≥ 0.008` kg/kg (falling
   back to the level closest to `0.008` kg/kg when the entire column is drier),

@@ -119,6 +119,20 @@ face-interpolated draft velocity and the normalized density excess,
 = I^c(\boldsymbol{u}_v^j) \cdot \frac{\rho^j - \rho}{\rho^j} \, G^c[\Phi] .
 ```
 
+Under non-equilibrium microphysics, `updraft_sedimentation!` evaluates, for
+each sedimenting draft condensate or precipitation species
+``q_\mu^{\sigma j}``, the downward-biased (`ᶠtop_bias`) sedimentation
+divergence ``S_\mu`` with the lateral-mixing correction where
+``\partial_z a^j < 0``. The sum ``S = \sum_\mu S_\mu`` is the sedimentation
+source of the analytic draft-mass solve
+(`solve_sgs_ρa_implicit_stage_analytic!`), and each intensive draft
+scalar ``\chi^j`` receives ``(S_\chi - \chi^j S) / \hat{\rho}^j``, with
+``S_\chi`` its own sedimentation tendency: ``S_\mu`` for ``q_\mu^{\sigma j}``,
+``S`` for ``q_t^j``, ``\sum_\mu S_{h,\mu}`` for ``h_s^j`` (the
+`updraft_sedimentation!` tendency of ``q_\mu^{\sigma j} (h_\mu(T^j) + \Phi)``,
+with laterally entrained environment condensate at ``h_\mu(T^0) + \Phi``), and
+zero for the other draft tracers.
+
 ### Draft vertical momentum
 
 Breaking the curl and cross-product terms into horizontal and vertical
@@ -342,7 +356,7 @@ the column,
 ```math
 \hat{\rho}^j[i] = \frac{n[i] + \alpha_{\mathrm{bot}}[i] \, \hat{\rho}^j[i-1]}{d[i]} ,
 \qquad
-n[i] = \frac{\hat{\rho}^{j,\mathrm{old}}[i]}{\gamma \Delta t} ,
+n[i] = \frac{\hat{\rho}^{j,\mathrm{old}}[i]}{\gamma \Delta t} + S[i] ,
 ```
 
 ```math
@@ -356,7 +370,10 @@ d[i] = \max\!\left( \frac{0.1}{\gamma \Delta t}, \;
 
 swept bottom to top, with the upwind density ``\rho^j[i]`` at the top face and
 ``\rho^j[i-1]`` at the bottom face. The floor on the denominator caps the
-per-step growth at roughly a factor of ten.
+per-step growth at roughly a factor of ten. The sedimentation mass source
+``S`` of the condensate species (`updraft_sedimentation_mass_source!`) is
+evaluated explicitly at the stage-start area and the Picard-converged tracers;
+it is absent under the equilibrium 0-moment microphysics.
 
 The recurrence routes detrainment, the surface source, and the area bound in
 ways that are easy to misread:

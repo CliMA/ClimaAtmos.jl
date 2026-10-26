@@ -139,8 +139,8 @@ function implicit_precomputed_quantities(Y, atmos)
     # Density-weighted 0M microphysics sources: rewritten from the current
     # Newton iterate (through ρ, or ρaʲ/ρa⁰ under EDMF) by
     # update_implicit_microphysics_cache!, so autodiff needs Dual-typed
-    # copies. (The 1M/2M implicit refresh writes only to scratch and to the
-    # surface-flux fields below.)
+    # copies. (The 1M/2M implicit refresh writes only to the velocity, scratch,
+    # and surface-flux fields.)
     implicit_mp_quantities =
         microphysics_model isa EquilibriumMicrophysics0M ?
         (;
