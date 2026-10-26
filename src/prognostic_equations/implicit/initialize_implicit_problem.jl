@@ -255,14 +255,15 @@ function blend_mp_tendency!(p, ω)
     return nothing
 end
 
-@inline function blend_tendency(ω, prev::T, new::T) where {T<:NamedTuple}
-    return T(ntuple(i -> (one(ω) - ω) * getfield(prev, i) + ω * getfield(new, i),
-                    fieldcount(T)))
+@inline function blend_tendency(ω, prev::T, new::T) where {T <: NamedTuple}
+    return T(
+        ntuple(i -> (one(ω) - ω) * getfield(prev, i) + ω * getfield(new, i),
+            fieldcount(T)),
+    )
 end
 
-@inline function blend_tendency_tuple(ω, prev::NTuple{n, T}, new::NTuple{n, T}) where {n, T}
-    return ntuple(j -> blend_tendency(ω, prev[j], new[j]), n)
-end
+@inline blend_tendency_tuple(ω, prev::Tuple, new::Tuple) =
+    map((prevʲ, newʲ) -> blend_tendency(ω, prevʲ, newʲ), prev, new)
 
 """
     refresh_sgs_quantities_after_resolve!(Y, p)
