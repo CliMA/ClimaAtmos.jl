@@ -720,6 +720,36 @@ interval lost the in-cloud spread below it, and a rule with a Gauss pair on each
 side of freezing cost about as much as the tensor rule. The linearized
 ``\sigma_S`` scored as well as the width sampled at the Gauss–Hermite points.
 
+The cell-mean rain and snow are spread uniformly over the nodes by default, or
+a fraction `sgs_precip_incloud_fraction` of them is confined to the
+precipitation shaft. With `sgs_precip_placement: loglinear` they are instead
+placed with mean-conserving factors in the standardized excess
+``\tilde{S} = S'/\sigma_S``,
+
+```math
+\phi_r = \frac{e^{\kappa_r \tilde{S}}}{\langle e^{\kappa_r \tilde{S}} \rangle}, \qquad
+\phi_s = \frac{e^{\kappa_s \tilde{S}}\, \psi(T)}{\langle e^{\kappa_s \tilde{S}}\, \psi(T) \rangle}, \qquad
+\psi(T) = e^{-\max(T - T_{\mathrm{freeze}},\, 0)/\Delta T_m},
+```
+
+where ``\langle\cdot\rangle`` is the mean over all points of the rule, the
+temperature points included, so the cell means are conserved exactly although
+the rule integrates the exponentials only approximately. The rain tilt rises
+with height above the surface,
+``\kappa_r = \kappa_{r0} + (d\kappa/dz) \max(0, z - z_s - z_1)``, and ``\psi``
+depletes the snow in air above freezing. A fraction
+``f = \min(1, c \max(a_p, a_{\min}))`` of each point precipitates, with
+``\phi q / f``, and the rest has none; the rates are ``f R_{\mathrm{in}} + (1 - f) R_{\mathrm{out}}``.
+Where a tilt is nonzero and the cell holds rain or snow, the rule gets the shaft
+edge of ``\max(a_p, a_{\min})``, which resolves the moist tail. Evaporation and
+accretion are sublinear in the rain with different exponents, so the
+intermittency cuts evaporation more than accretion, which the tilt alone cannot
+do. ``\kappa = 0``, ``f = 1`` and ``\Delta T_m = \infty`` recover the uniform
+placement. The tilts are the precipitation-weighted standardized excess within
+ne30 cells of 3.75 km MPAS (DYAMOND), ``c`` the offline fit of rain evaporation
+and accretion to the same data, and ``\Delta T_m`` the snow-weighted warmth of its
+melting layers; all are provisional.
+
 Because the variance depends on the mixing length, the mixing length on the
 buoyancy gradient, and the buoyancy gradient on the cloud fraction, the closure
 is solved as a fixed point at each timestep. Two Picard iterations are followed
@@ -746,8 +776,8 @@ no separate draft term.
     with the microphysics coupling in
     [Microphysics](microphysics.md); the configuration keys are `cloud_model`,
     `use_sgs_quadrature`, `sgs_distribution`, `quadrature_order`,
-    `tq_correlation_model` (default `diagnosed`), and `sgs_variance_curvature`
-    (default `false`).
+    `tq_correlation_model` (default `diagnosed`), `sgs_variance_curvature`
+    (default `false`), and `sgs_precip_placement` (default `shaft`).
 
 ## Boundary conditions
 

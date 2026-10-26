@@ -223,7 +223,7 @@ end
 @inline _fold(::ClimaComms.AbstractDevice, p) = Val(p)
 
 """
-    Microphysics1MEvaluator{S, MP, TPS, FT, Args}
+    Microphysics1MEvaluator{S, MP, TPS, FT, Args, PL}
 
 GPU-safe functor evaluating 1-moment microphysics tendencies at the nodes of
 the conditional-moment rule (`sum_over_conditional_nodes`).
@@ -260,8 +260,11 @@ the nodes.
   - `dt`: Timestep used for the time-averaged process rates [s].
   - `nsubs`: Number of substeps in the tendency averaging.
   - `args`: Extra trailing arguments forwarded to the CloudMicrophysics call.
+  - `placement`: `ShaftPrecipPlacement()` (the default; the placement is the
+    shaft of `β_precip`), or a normalized `LogLinearNodePlacement`, which
+    replaces it.
 """
-struct Microphysics1MEvaluator{S, MP, TPS, FT, Args <: Tuple}
+struct Microphysics1MEvaluator{S, MP, TPS, FT, Args <: Tuple, PL}
     scheme::S
     mp::MP
     tps::TPS
@@ -289,7 +292,26 @@ struct Microphysics1MEvaluator{S, MP, TPS, FT, Args <: Tuple}
     dt::FT
     nsubs::Int
     args::Args
+    # Rain and snow placement other than the shaft (zero-size by default)
+    placement::PL
 end
+
+# Without `placement`: the shaft placement of `β_precip`.
+@inline Microphysics1MEvaluator(
+    scheme, mp, tps, ρ, w,
+    q_rai, q_sno, λ,
+    ξ_liq, ξ_ice, q_lcl, q_icl,
+    λ_lagrange, λ_eq, mu_S, α,
+    β_precip, shaft_frac,
+    dt, nsubs, args,
+) = Microphysics1MEvaluator(
+    scheme, mp, tps, ρ, w,
+    q_rai, q_sno, λ,
+    ξ_liq, ξ_ice, q_lcl, q_icl,
+    λ_lagrange, λ_eq, mu_S, α,
+    β_precip, shaft_frac,
+    dt, nsubs, args, ShaftPrecipPlacement(),
+)
 
 # Without `λ_eq`: the grid-mean equilibrium multiplier `max(0, μ_S − q_rai − q_sno)`,
 # as in `microphysics_tendencies_1m`.
@@ -372,6 +394,147 @@ share has mean `λ q_c = q_lcl` (resp. `(1 − λ) q_c = q_icl`) by construction
     return (q_lcl_hat, q_icl_hat)
 end
 
+"""
+    LogLinearNodePlacement{FT}
+
+Log-linear placement of the cell-mean rain and snow over the points of the
+conditional-moment rule (`sgs_precip_placement: loglinear`). With
+`z = S′/σ_z` the standardized saturation excess the evaluator recovers at a
+point, the rain and snow there are the cell means times
+
+    φ_r = exp(κ_r z) / N_r,
+    φ_s = exp(κ_s z) ψ(T) / N_s,    ψ(T) = exp(−max(T − T_freeze, 0) / ΔT_m),
+
+with `N_r`, `N_s` the sums of the numerators over all points of the rule,
+temperature points included, so that the cell means are conserved exactly
+(`normalized_placement`). A fraction `f` of each point precipitates, with
+`φ q / f`; the rest has no rain or snow (`_placed_precip_tendencies`).
+`κ = 0` (both species), `ΔT_m = ∞` and `f = 1` give uniform rain and snow.
+
+Fields:
+
+  - `κ_r`, `κ_s`: rain and snow tilts [-].
+  - `inv_ΔT_m`: `1 / ΔT_m` [1/K]; `0` disables the warm-side depletion `ψ`.
+  - `T_freeze`: freezing temperature [K].
+  - `T_ref`: `max(T, T_freeze)` of the cell mean, where `ψ` is taken as `1`
+    (the constant cancels in the normalization and keeps the exponent small).
+  - `σ_z`: width standardizing `S′`, `σ_S` bounded below by the rounding of the
+    recovered `S′` [kg/kg].
+  - `f`: precipitating fraction of each point, in `(0, 1]` [-].
+  - `inv_N_r`, `inv_N_s`: inverse normalizations, `1` until
+    `normalized_placement` sets them.
+
+The exponents are bounded at `±20`, which only binds far outside the
+calibrated tilts and keeps the factors finite in `Float32`.
+"""
+struct LogLinearNodePlacement{FT}
+    κ_r::FT
+    κ_s::FT
+    inv_ΔT_m::FT
+    T_freeze::FT
+    T_ref::FT
+    σ_z::FT
+    f::FT
+    inv_N_r::FT
+    inv_N_s::FT
+end
+
+"""
+    loglinear_placement_weights(pl::LogLinearNodePlacement, S′, T)
+
+Unnormalized rain and snow weights `(exp(κ_r z), exp(κ_s z) ψ(T))` at a point
+with centred saturation excess `S′` [kg/kg] and temperature `T` [K], with
+`z = S′/σ_z` and `ψ` taken relative to the cell mean (`LogLinearNodePlacement`).
+"""
+@inline function loglinear_placement_weights(pl::LogLinearNodePlacement, S′, T)
+    FT = typeof(S′)
+    E = FT(20)
+    z = S′ / pl.σ_z
+    # (T − T_freeze)⁺ − (T_mean − T_freeze)⁺, in units of ΔT_m
+    warmth = (max(T, pl.T_freeze) - pl.T_ref) * pl.inv_ΔT_m
+    g_r = exp(clamp(pl.κ_r * z, -E, E))
+    g_s = exp(clamp(pl.κ_s * z - warmth, -E, E))
+    return (g_r, g_s)
+end
+
+"""
+    loglinear_node_precip(pl::LogLinearNodePlacement, q_rai, q_sno, S′, T)
+
+Rain and snow `(q_rai φ_r / f, q_sno φ_s / f)` [kg/kg] of the precipitating
+part of a point (`LogLinearNodePlacement`), from the cell means `q_rai`,
+`q_sno`. Their rule mean times `f` is the cell mean.
+"""
+@inline function loglinear_node_precip(pl::LogLinearNodePlacement, q_rai, q_sno, S′, T)
+    (g_r, g_s) = loglinear_placement_weights(pl, S′, T)
+    return (
+        q_rai * (g_r * pl.inv_N_r) / pl.f,
+        q_sno * (g_s * pl.inv_N_s) / pl.f,
+    )
+end
+
+"""
+    LogLinearPlacementWeights(thp, ρ, mu_S, placement)
+
+Functor `(T, q, flag) ↦ (; r, s)`, the unnormalized weights
+`loglinear_placement_weights` at a point of the rule, with `S′` recovered from
+`(T, q)` exactly as `Microphysics1MEvaluator` does. Its sum over the rule
+(`sum_over_conditional_nodes`) is the normalization of the placement.
+"""
+struct LogLinearPlacementWeights{TPS, FT}
+    thp::TPS
+    ρ::FT
+    mu_S::FT
+    placement::LogLinearNodePlacement{FT}
+end
+@inline function (g::LogLinearPlacementWeights)(T_hat, q_tot_hat, flag)
+    FT = typeof(g.ρ)
+    q_tot_hat = max(FT(0), q_tot_hat)
+    q_sat_hat = TD.q_vap_saturation(_unwrapped(g.thp), T_hat, g.ρ)
+    S′_hat = q_tot_hat - q_sat_hat - g.mu_S
+    (g_r, g_s) = loglinear_placement_weights(g.placement, S′_hat, T_hat)
+    return (; r = g_r, s = g_s)
+end
+
+"""
+    normalized_placement(placement, thp, ρ, mu_S, rule, spread)
+
+The placement with its normalization over the points of `rule` and `spread`
+(the same points `sum_over_conditional_nodes` evaluates): a
+`LogLinearNodePlacement` gets `inv_N_r`, `inv_N_s` from the sum of
+`LogLinearPlacementWeights`; `ShaftPrecipPlacement()` is returned as is.
+"""
+@inline normalized_placement(pl::ShaftPrecipPlacement, thp, ρ, mu_S, rule, spread) = pl
+@inline function normalized_placement(
+    pl::LogLinearNodePlacement, thp, ρ, mu_S, rule, spread,
+)
+    FT = typeof(ρ)
+    N = sum_over_conditional_nodes(
+        LogLinearPlacementWeights(thp, ρ, FT(mu_S), pl), rule, spread,
+    )
+    return LogLinearNodePlacement(
+        pl.κ_r, pl.κ_s, pl.inv_ΔT_m, pl.T_freeze, pl.T_ref, pl.σ_z, pl.f,
+        one(FT) / N.r, one(FT) / N.s,
+    )
+end
+
+"""
+    precip_placement_edge(placement, β_precip, S_star)
+
+The precipitation edge of the conditional-moment rule: the shaft edge `S_star`
+where the shaft is on (`β_precip > 0`), and, for the log-linear placement,
+wherever a tilt is nonzero, so that the rule resolves the moist tail the
+placement weights; `+Inf` (no edge) otherwise, which leaves the rule of the
+uniform placement.
+"""
+@inline precip_placement_edge(::ShaftPrecipPlacement, β_precip, S_star) =
+    ifelse(β_precip > zero(β_precip), S_star, oftype(S_star, Inf))
+@inline precip_placement_edge(pl::LogLinearNodePlacement, β_precip, S_star) =
+    ifelse(
+        (pl.κ_r != zero(pl.κ_r)) | (pl.κ_s != zero(pl.κ_s)),
+        S_star,
+        oftype(S_star, Inf),
+    )
+
 # `@noinline` here is the SGS node function barrier. The functor body
 # below (saturation, shape-function partition, plus the heavy
 # `BMT.average_bulk_microphysics_tendencies` call with its `nsubs`
@@ -453,6 +616,37 @@ with `dq_lcl_dt`, `dq_icl_dt`, `dq_rai_dt`, `dq_sno_dt` [kg/kg/s].
     )
     q_tot_eff = max(FT(0), q_sat_hat + S_eff_cloud + q_precip)
 
+    return _placed_precip_tendencies(
+        eval.placement, eval, T_hat, S′_hat, q_tot_eff, q_lcl_hat, q_icl_hat,
+        q_precip, flag_p,
+    )
+end
+
+# The CloudMicrophysics call of `Microphysics1MEvaluator` at one (sub-)point.
+@inline _node_bmt_1m(eval, T_hat, q_tot, q_lcl, q_icl, q_rai, q_sno) =
+    BMT.bulk_microphysics_tendencies(
+        BMT.LinearizedAverage(),
+        eval.scheme, _unwrapped(eval.mp), _unwrapped(eval.tps),
+        eval.ρ, T_hat, eval.w,
+        q_tot, q_lcl, q_icl, q_rai, q_sno,
+        eval.dt, eval.nsubs, eval.args...,
+    )
+
+"""
+    _placed_precip_tendencies(placement, eval, T_hat, S′_hat, q_tot_eff, q_lcl_hat, q_icl_hat, q_precip, flag_p)
+
+The tendencies of `Microphysics1MEvaluator` at the node point once its
+condensate (`q_lcl_hat`, `q_icl_hat`) and its total water with the cell-mean
+precipitation (`q_tot_eff`, `q_precip = q_rai + q_sno`) are set, with the rain
+and snow placed by `placement`. Either placement shifts the node total water by
+the change of the precipitation, so that the node vapour, and hence the
+condensate reconstruction, is unchanged by it.
+"""
+@inline function _placed_precip_tendencies(
+    ::ShaftPrecipPlacement, eval, T_hat, S′_hat, q_tot_eff, q_lcl_hat, q_icl_hat,
+    q_precip, flag_p,
+)
+    FT = typeof(eval.ρ)
     # Precipitation-fraction placement: the rain and snow this node sees are
     # the cell means scaled by φ_p (1 when disabled); the node total water is
     # shifted by the same amount so that the node vapour, and hence the
@@ -466,13 +660,43 @@ with `dq_lcl_dt`, `dq_icl_dt`, `dq_rai_dt`, `dq_sno_dt` [kg/kg/s].
             (eval.q_rai, eval.q_sno, q_tot_eff)
         end
 
-    return BMT.bulk_microphysics_tendencies(
-        BMT.LinearizedAverage(),
-        eval.scheme, _unwrapped(eval.mp), _unwrapped(eval.tps),
-        eval.ρ, T_hat, eval.w,
-        q_tot_node, q_lcl_hat, q_icl_hat, q_rai_node, q_sno_node,
-        eval.dt, eval.nsubs, eval.args...,
+    return _node_bmt_1m(
+        eval, T_hat, q_tot_node, q_lcl_hat, q_icl_hat, q_rai_node, q_sno_node,
     )
+end
+@inline function _placed_precip_tendencies(
+    pl::LogLinearNodePlacement, eval, T_hat, S′_hat, q_tot_eff, q_lcl_hat,
+    q_icl_hat, q_precip, flag_p,
+)
+    FT = typeof(eval.ρ)
+    f = pl.f
+    # The precipitating sub-point (`i = 1`): the node's rain and snow
+    # concentrated into the fraction `f`. The other sub-point (`i = 2`) has
+    # none, and is skipped when the whole node precipitates or nothing does.
+    # The total water carries each sub-point's precipitation in place of the
+    # cell mean. The sub-points share one call site, so the inlined
+    # CloudMicrophysics body is not duplicated in the node function (see the
+    # `@noinline` note above).
+    (q_rai_p, q_sno_p) =
+        loglinear_node_precip(pl, eval.q_rai, eval.q_sno, S′_hat, T_hat)
+    q_tot_cloud = q_tot_eff - q_precip
+    n = ifelse((f >= one(FT)) | !(q_precip > zero(FT)), 1, 2)
+    R = (;
+        dq_lcl_dt = zero(FT), dq_icl_dt = zero(FT),
+        dq_rai_dt = zero(FT), dq_sno_dt = zero(FT),
+    )
+    for i in 1:n
+        q_r = ifelse(i == 1, q_rai_p, zero(FT))
+        q_s = ifelse(i == 1, q_sno_p, zero(FT))
+        w = ifelse(n == 1, one(FT), ifelse(i == 1, f, one(FT) - f))
+        R_i = _node_bmt_1m(
+            eval, T_hat, max(FT(0), q_tot_cloud + (q_r + q_s)),
+            q_lcl_hat, q_icl_hat, q_r, q_s,
+        )
+        # (the closure captures values only: a captured type would be boxed)
+        R = map((r, r_i) -> r + w * r_i, R, R_i)
+    end
+    return R
 end
 
 """
@@ -600,7 +824,8 @@ end
     _sum_1m_over_sgs(scheme, sgs_quad, cmp, thp, ρ, T, w,
                      q_lcl, q_icl, q_rai, q_sno, T′T′, q′q′, corr_Tq,
                      λ_lagrange, α, ξ_liq, ξ_ice, dt, nsubs, λ, mu_S,
-                     β_precip, σ_S, S_star, λ_eq, args)
+                     β_precip, σ_S, S_star, λ_eq, args,
+                     placement = ShaftPrecipPlacement())
 
 Integrate the `Microphysics1MEvaluator` over the Gaussian SGS PDF with the
 conditional-moment node rule (the arguments are those of
@@ -619,20 +844,44 @@ edge `−λ/α` and the cloud fraction unchanged. The shaft fraction is the node
 weight of the shaft from the nodes' own flags
 (`conditional_rule_shaft_fraction`), so the placement conserves the cell-mean
 precipitation exactly for any `a_p` (the shaft is bounded below by
-`precip_frac_floor`).
+`precip_frac_floor`). A `LogLinearNodePlacement` `placement` replaces the
+shaft (`β_precip` is then `0`); its edge is `S_star` where a tilt is nonzero
+(`precip_placement_edge`), and, where the cell holds rain or snow, it is
+normalized over the same points (`normalized_placement`).
 """
 @inline function _sum_1m_over_sgs(
     scheme, sgs_quad, cmp, thp, ρ, T, w,
     q_lcl, q_icl, q_rai, q_sno, T′T′, q′q′, corr_Tq,
     λ_lagrange, α, ξ_liq, ξ_ice, dt, nsubs, λ, mu_S,
-    β_precip, σ_S, S_star, λ_eq, args,
+    β_precip, σ_S, S_star, λ_eq, args, placement = ShaftPrecipPlacement(),
+)
+    (evaluator, rule, spread) = _sgs_1m_rule_and_evaluator(
+        scheme, sgs_quad, cmp, thp, ρ, T, w,
+        q_lcl, q_icl, q_rai, q_sno, T′T′, q′q′, corr_Tq,
+        λ_lagrange, α, ξ_liq, ξ_ice, dt, nsubs, λ, mu_S,
+        β_precip, σ_S, S_star, λ_eq, args, placement,
+    )
+    return sum_over_conditional_nodes(evaluator, rule, spread)
+end
+
+"""
+    _sgs_1m_rule_and_evaluator(arguments of `_sum_1m_over_sgs`)
+
+The `Microphysics1MEvaluator`, `ConditionalRule` and `TemperatureSpread` that
+`_sum_1m_over_sgs` sums over.
+"""
+@inline function _sgs_1m_rule_and_evaluator(
+    scheme, sgs_quad, cmp, thp, ρ, T, w,
+    q_lcl, q_icl, q_rai, q_sno, T′T′, q′q′, corr_Tq,
+    λ_lagrange, α, ξ_liq, ξ_ice, dt, nsubs, λ, mu_S,
+    β_precip, σ_S, S_star, λ_eq, args, placement,
 )
     FT = typeof(ρ)
     q_c = q_lcl + q_icl
     α_safe = max(FT(α), ϵ_numerics(FT))
     t_a = -FT(λ_lagrange) / α_safe
     t_e = -FT(λ_eq)
-    t_p = ifelse(β_precip > zero(FT), S_star, FT(Inf))
+    t_p = precip_placement_edge(placement, β_precip, S_star)
     β_T = sgs_temperature_regression(thp, T, ρ, σ_S, T′T′, q′q′, corr_Tq)
     rule = conditional_rule(
         thp, ρ, T, mu_S, σ_S, β_T, t_a, t_e, t_p, sgs_quad.T_min, sgs_quad.q_max,
@@ -650,18 +899,22 @@ precipitation exactly for any `a_p` (the shaft is bounded below by
         conditional_rule_shaft_fraction(rule),
         one(FT),
     )
+    spread = TemperatureSpread(
+        thp, ρ, mu_S, sgs_temperature_spread_at_fixed_excess(T′T′, β_T, σ_S),
+        FT(TD.Parameters.T_freeze(_unwrapped(thp))), sgs_quad.T_min, sgs_quad.q_max,
+    )
+    # Without rain and snow the placement scales nothing: skip its normalization
+    placement_n =
+        q_rai + q_sno > zero(FT) ?
+        normalized_placement(placement, thp, ρ, mu_S, rule, spread) : placement
     evaluator = Microphysics1MEvaluator(
         scheme, cmp, thp, ρ, w,
         q_rai, q_sno, λ,
         ξ_liq, ξ_ice, q_lcl, q_icl,
         s * FT(λ_lagrange), λ_eq, mu_S, s * α_safe,
-        β_precip, shaft_frac, dt, nsubs, args,
+        β_precip, shaft_frac, dt, nsubs, args, placement_n,
     )
-    spread = TemperatureSpread(
-        thp, ρ, mu_S, sgs_temperature_spread_at_fixed_excess(T′T′, β_T, σ_S),
-        FT(TD.Parameters.T_freeze(_unwrapped(thp))), sgs_quad.T_min, sgs_quad.q_max,
-    )
-    return sum_over_conditional_nodes(evaluator, rule, spread)
+    return (evaluator, rule, spread)
 end
 
 """
@@ -733,6 +986,139 @@ form, so the two are identical.
         sgs_moments.λ_lagrange, α, opts.ξ_liq, opts.ξ_ice, dt, nsubs, λ, mu_S,
         opts.precip_incloud_fraction, precip_frac, sgs_moments.sigma_S,
         opts.precip_frac_floor, sgs_moments.λ_eq,
+    )
+end
+
+"""
+    LogLinearPrecipOptions{FT}
+
+Scalar parameters of the log-linear rain and snow placement
+(`sgs_precip_placement: loglinear`), built by `loglinear_precip_options` and
+broadcast as a scalar: the rain tilt `rain_tilt` (`κ_r0`), its height slope
+and offset (`loglinear_rain_tilt`), the snow tilt `snow_tilt` (`κ_s`), the
+intermittency coefficient and minimum (`f = min(1, c max(a_p, a_min))`), and
+the snow melt depletion width `ΔT_m` [K].
+"""
+Base.@kwdef struct LogLinearPrecipOptions{FT}
+    rain_tilt::FT
+    rain_tilt_height_slope::FT
+    rain_tilt_height_offset::FT
+    snow_tilt::FT
+    intermittency_coeff::FT
+    intermittency_min::FT
+    melt_depletion_width::FT
+end
+Base.broadcastable(o::LogLinearPrecipOptions) = tuple(o)
+
+"""
+    loglinear_precip_options(params)
+
+The `LogLinearPrecipOptions` of the run's parameters. Errors unless the
+intermittency coefficient and minimum and the melt depletion width are
+positive (the width may be `Inf`).
+"""
+function loglinear_precip_options(params)
+    o = LogLinearPrecipOptions(;
+        rain_tilt = CAP.sgs_precip_rain_tilt(params),
+        rain_tilt_height_slope = CAP.sgs_precip_rain_tilt_height_slope(params),
+        rain_tilt_height_offset = CAP.sgs_precip_rain_tilt_height_offset(params),
+        snow_tilt = CAP.sgs_precip_snow_tilt(params),
+        intermittency_coeff = CAP.sgs_precip_intermittency_coeff(params),
+        intermittency_min = CAP.sgs_precip_intermittency_min(params),
+        melt_depletion_width = CAP.sgs_snow_melt_depletion_width(params),
+    )
+    (o.intermittency_coeff > 0 && o.intermittency_min > 0) || error(
+        "sgs_precip_intermittency_coeff and sgs_precip_intermittency_min must \
+        be positive (got $(o.intermittency_coeff), $(o.intermittency_min)).",
+    )
+    o.melt_depletion_width > 0 || error(
+        "sgs_snow_melt_depletion_width must be positive or Inf (got \
+        $(o.melt_depletion_width)).",
+    )
+    return o
+end
+
+"""
+    loglinear_rain_tilt(o::LogLinearPrecipOptions, z_agl)
+
+Rain tilt `κ_r = κ_r0 + (dκ/dz) max(0, z_agl − z_1)` at the height `z_agl` [m]
+above the surface.
+"""
+@inline loglinear_rain_tilt(o::LogLinearPrecipOptions, z_agl) =
+    o.rain_tilt +
+    o.rain_tilt_height_slope * max(zero(z_agl), z_agl - o.rain_tilt_height_offset)
+
+"""
+    loglinear_node_placement(thp, T, q_tot_nonneg, mu_S, σ_S, precip_frac, κ_r, ll)
+
+The (unnormalized) `LogLinearNodePlacement` of a cell with mean temperature
+`T` [K], total water `q_tot_nonneg` and mean excess `mu_S` [kg/kg], width
+`σ_S` [kg/kg], precipitation fraction `a_p = precip_frac` and rain tilt `κ_r`,
+and the bounded fraction `max(a_p, a_min)`, with the scalars of the
+`LogLinearPrecipOptions` `ll`.
+"""
+@inline function loglinear_node_placement(
+    thp, T, q_tot_nonneg, mu_S, σ_S, precip_frac, κ_r, ll,
+)
+    FT = typeof(σ_S)
+    a_p = max(FT(precip_frac), FT(ll.intermittency_min))
+    T_freeze = FT(TD.Parameters.T_freeze(_unwrapped(thp)))
+    # Below about 256 ulps of the water contents, the S′ that the evaluator
+    # recovers from a point's state is rounding, not displacement.
+    σ_z = max(σ_S, 256 * eps(FT) * (abs(FT(q_tot_nonneg)) + abs(FT(mu_S))))
+    placement = LogLinearNodePlacement(
+        FT(κ_r), FT(ll.snow_tilt), one(FT) / FT(ll.melt_depletion_width),
+        T_freeze, max(FT(T), T_freeze), σ_z,
+        min(one(FT), FT(ll.intermittency_coeff) * a_p), one(FT), one(FT),
+    )
+    return (placement, a_p)
+end
+
+"""
+    microphysics_tendencies_1m(
+        scheme, sgs_quad, cmp, thp, ρ, T, w, q_tot_nonneg, q_lcl, q_icl, q_rai, q_sno,
+        T′T′, q′q′, corr_Tq, sgs_moments, α, dt, nsubs, λ, mu_S, precip_frac, κ_r,
+        opts::SGSMicrophysicsOptions, ll::LogLinearPrecipOptions,
+    )
+
+Packed form with the log-linear rain and snow placement
+(`LogLinearNodePlacement`) in place of the shaft: the cell's rain tilt `κ_r`
+(`loglinear_rain_tilt`) and the scalars of `ll`; `opts.ξ_liq` and
+`opts.ξ_ice` as in the other packed form, whose shaft keys are not used. The
+precipitating fraction is `f = min(1, c max(a_p, a_min))` with
+`a_p = precip_frac`, and the rule gets the edge `S_star` of `max(a_p, a_min)`
+(`precip_placement_edge`) where the cell holds rain or snow; without them the
+result is that of the uniform placement.
+"""
+@inline function microphysics_tendencies_1m(
+    scheme, sgs_quad, cmp, thp, ρ, T, w, q_tot_nonneg,
+    q_lcl, q_icl, q_rai, q_sno, T′T′, q′q′, corr_Tq,
+    sgs_moments, α, dt, nsubs, λ, mu_S, precip_frac, κ_r,
+    opts::SGSMicrophysicsOptions, ll::LogLinearPrecipOptions,
+)
+    FT = typeof(ρ)
+    not_quadrature(sgs_quad) && return microphysics_tendencies_1m(
+        ρ, q_tot_nonneg, q_lcl, q_icl, q_rai, q_sno, T, w, cmp, thp, dt, nsubs,
+    )
+    σ_S = FT(sgs_moments.sigma_S)
+    (placement, a_p) = loglinear_node_placement(
+        thp, T, q_tot_nonneg, mu_S, σ_S, precip_frac, κ_r, ll,
+    )
+    q_rai_c = max(zero(ρ), q_rai)
+    q_sno_c = max(zero(ρ), q_sno)
+    # The edge resolves the rain and snow placement: none without them, so a
+    # cell without rain and snow gets the rule of the uniform placement.
+    S_star = ifelse(
+        q_rai_c + q_sno_c > zero(FT),
+        sgs_precip_shaft_threshold(a_p, σ_S),
+        FT(Inf),
+    )
+    return _sum_1m_over_sgs(
+        scheme, sgs_quad, cmp, thp, ρ, T, w,
+        max(zero(ρ), q_lcl), max(zero(ρ), q_icl), q_rai_c, q_sno_c,
+        T′T′, q′q′, corr_Tq, sgs_moments.λ_lagrange, α,
+        FT(opts.ξ_liq), FT(opts.ξ_ice), dt, nsubs, λ, mu_S, zero(FT), σ_S,
+        S_star, FT(sgs_moments.λ_eq), (), placement,
     )
 end
 

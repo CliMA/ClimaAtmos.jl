@@ -312,6 +312,21 @@ ClimaParams does not yet define or whose ClimaParams default it supersedes.
   - `sgs_precip_fraction_floor`: Smallest precipitation fraction `a_p` the
     placement uses, in `(0, 1]`; the default `0.5` keeps the shaft at least
     half the cell. It must be positive when `sgs_precip_incloud_fraction > 0` [-].
+  - `sgs_precip_rain_tilt`, `sgs_precip_rain_tilt_height_slope`,
+    `sgs_precip_rain_tilt_height_offset`: Rain tilt of the log-linear placement
+    (`sgs_precip_placement: loglinear`),
+    `κ_r = κ_r0 + (dκ/dz) max(0, z − z_sfc − z_1)`, from `κ_r0` [-], `dκ/dz`
+    [1/m] and `z_1` [m]; `κ = 0` is uniform (`LogLinearNodePlacement`).
+  - `sgs_precip_snow_tilt`: Snow tilt `κ_s` of the log-linear placement [-].
+  - `sgs_precip_intermittency_coeff`, `sgs_precip_intermittency_min`:
+    Precipitating fraction `f = min(1, c max(a_p, a_min))` of each node in the
+    log-linear placement, from `c` and `a_min` [-]; `a_min` also bounds the
+    shaft edge that the log-linear placement adds to the node rule. Must be
+    positive.
+  - `sgs_snow_melt_depletion_width`: Warmth `ΔT_m` above freezing over which
+    the snow of the log-linear placement falls by a factor `e`,
+    `ψ(T) = exp(−max(T − T_freeze, 0)/ΔT_m)`; `Inf` disables it. Must be
+    positive [K].
   - `Tq_correlation_coefficient`: Correlation between `T'` and `q_tot'` in the
     SGS quadrature, in `[-1, 1]`. Used verbatim by `tq_correlation_model: constant`; the fallback where the variances vanish for
     `tq_correlation_model: diagnosed` [-].
@@ -357,6 +372,13 @@ Base.@kwdef struct SGSQuadratureParameters{FT} <: ASQP
     sgs_precip_incloud_fraction::FT
     sgs_precip_overlap_decay::FT
     sgs_precip_fraction_floor::FT
+    sgs_precip_rain_tilt::FT
+    sgs_precip_rain_tilt_height_slope::FT
+    sgs_precip_rain_tilt_height_offset::FT
+    sgs_precip_snow_tilt::FT
+    sgs_precip_intermittency_coeff::FT
+    sgs_precip_intermittency_min::FT
+    sgs_snow_melt_depletion_width::FT
     Tq_correlation_coefficient::FT
     cloud_fraction_steepness_scale::FT
     condensation_evaporation_timescale::FT

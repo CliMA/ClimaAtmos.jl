@@ -40,6 +40,16 @@ main
   advection factor is zero, so the covariant `u₃` that
   `set_velocity_at_surface!` leaves at the surface over sloped terrain does
   not advect the first cell.
+- ![][badge-✨feature/enhancement] Opt-in `sgs_precip_placement: loglinear`
+  (default `shaft` unchanged): places the 1M rain and snow over the
+  conditional-moment nodes with mean-conserving log-linear factors in the
+  standardized saturation excess, depletes the snow above freezing, and lets a
+  fraction `f = min(1, c max(a_p, a_min))` of each node precipitate
+  (`LogLinearNodePlacement`). New provisional parameters:
+  `sgs_precip_rain_tilt`, `sgs_precip_rain_tilt_height_slope`,
+  `sgs_precip_rain_tilt_height_offset`, `sgs_precip_snow_tilt`,
+  `sgs_precip_intermittency_coeff`, `sgs_precip_intermittency_min` and
+  `sgs_snow_melt_depletion_width`.
 - ![][badge-🔥behavioralΔ] The equilibrium SGS condensate that the 1M
   condensate relaxes toward (`λ_eq`), the 0M SGS saturation adjustment, and the
   variance fidelity evaluate `E[max(0, S)]` under the Gaussian displacement

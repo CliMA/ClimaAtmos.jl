@@ -1137,12 +1137,30 @@ function get_tq_correlation_model(parsed_args)
 end
 
 """
+    get_sgs_precip_placement(parsed_args)
+
+Return the `AbstractSGSPrecipPlacement` selected by the `sgs_precip_placement`
+config key: `"shaft"` → `ShaftPrecipPlacement()` (default), `"loglinear"` →
+`LogLinearPrecipPlacement()`.
+"""
+function get_sgs_precip_placement(parsed_args)
+    return parse_option(
+        get(parsed_args, "sgs_precip_placement", "shaft"),
+        Dict(
+            "shaft" => ShaftPrecipPlacement(),
+            "loglinear" => LogLinearPrecipPlacement(),
+        ),
+        "sgs_precip_placement",
+    )
+end
+
+"""
     AtmosWater(config::AtmosConfig, params, ::Type{FT}) where {FT}
 
 Assemble the `AtmosWater` group from a configuration.
 
 Combines `get_microphysics_model`, `get_cloud_model`, `get_sgs_quadrature`, and
-`get_tracer_nonnegativity_method`, and reads `implicit_microphysics` (which selects
+`get_tracer_nonnegativity_method` and `get_sgs_precip_placement`, and reads `implicit_microphysics` (which selects
 `Implicit` or `Explicit` microphysics timestepping), `sgs_variance_curvature`
 (the curvature-aware equilibrium condensate) and the four terminal velocity
 keys, each mapped to its `AbstractTerminalVelocityMode` with `parse_option`:
@@ -1158,9 +1176,15 @@ function AtmosWater(config::AtmosConfig, params, ::Type{FT}) where {FT}
     sgs_quadrature = get_sgs_quadrature(pa, params)
     tq_correlation_model = get_tq_correlation_model(pa)
     sgs_variance_curvature = pa["sgs_variance_curvature"]
+    sgs_precip_placement = get_sgs_precip_placement(pa)
 
     if microphysics_model isa DryModel
         @warn "Running simulations without any moisture present."
+    end
+    if sgs_precip_placement isa LogLinearPrecipPlacement && !isnothing(params) &&
+       CAP.sgs_precip_incloud_fraction(params) > 0
+        @warn "sgs_precip_placement: loglinear replaces the precipitation \
+               shaft; sgs_precip_incloud_fraction is not used."
     end
     if microphysics_model isa EquilibriumMicrophysics0M && isnothing(sgs_quadrature)
         error(
@@ -1202,6 +1226,7 @@ function AtmosWater(config::AtmosConfig, params, ::Type{FT}) where {FT}
         sgs_quadrature,
         tq_correlation_model,
         sgs_variance_curvature,
+        sgs_precip_placement,
         terminal_velocity_liquid,
         terminal_velocity_ice,
         terminal_velocity_rain,
