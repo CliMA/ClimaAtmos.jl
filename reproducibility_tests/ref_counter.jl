@@ -1,4 +1,4 @@
-441
+442
 
 # **README**
 #
@@ -32,6 +32,11 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+442
+- The implicit-stage Picard updraft tracer predictor includes lateral and
+  turbulent entrainment toward the environment and the first-cell surface
+  mass-flux source (`solve_sgs_updraft_tracers_implicit_stage_analytic!`).
+
 441
 - The equilibrium SGS condensate is evaluated under the Gaussian displacement
   truncated at `sgs_displacement_truncation` (3) standard deviations

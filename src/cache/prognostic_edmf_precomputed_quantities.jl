@@ -177,8 +177,10 @@ partition come from a pressure-enthalpy saturation adjustment that reuses the
 shared `ᶜsa_result` field as scratch. `ᶜρʲ` is diagnosed at the shared `ᶜp`.
 
 Called from `set_prognostic_edmf_precomputed_quantities_draft!` after the
-velocity block, and from the EDMFX implicit-stage Picard refresh in
-`initialize_implicit_stage_problem!`.
+velocity block, from the Picard loop of `initialize_implicit_stage_problem!`
+after each tracer sweep, and from
+`solve_sgs_updraft_tracers_implicit_stage_analytic!` after its transport
+sweep.
 """
 function set_prognostic_edmf_precomputed_quantities_draft_thermo!(Y, p)
     (; microphysics_model, turbconv_model) = p.atmos

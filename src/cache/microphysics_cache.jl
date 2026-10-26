@@ -822,10 +822,12 @@ current `Y`, using `dtγ` as the integration window. The expensive
 SGS-quadrature environment tendency `ᶜmp_tendency⁰` is left at its last
 `cache!` value.
 
-Called from the Picard sub-iteration in `initialize_implicit_stage_problem!`
-so the within-stage iterate sees a fresh source; the result is then frozen
-through the Newton solve, keeping it consistent with the Jacobian (which
-does not include derivatives of `ᶜmp_tendencyʲs`). A no-op for any
+Called from the implicit-stage tracer predictor
+(`solve_sgs_updraft_tracers_implicit_stage_analytic!`) for the
+non-equilibrium schemes, after its transport sweep, and from the Picard loop
+of `initialize_implicit_stage_problem!` for the 0-moment scheme. The result is
+frozen through the Newton solve, keeping it consistent with the Jacobian
+(which does not include derivatives of `ᶜmp_tendencyʲs`). A no-op for any
 combination not covered by a specialization.
 """
 update_updraft_microphysics_tendency_cache!(Y, p, _, _, dtγ) = nothing
