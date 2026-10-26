@@ -393,8 +393,14 @@ function edmfx_sgs_diffusive_flux_tendency!(
             ᶜq_scratch = p.scratch.ᶜtemp_scalar_4
 
             # Environment: sensible heat, water enthalpy, and total water down
-            # their environmental gradients
+            # their environmental gradients. The blend flag and its face
+            # fluxes are bound once here so that the closure over the
+            # environment scalars captures them unboxed; the scratch fields
+            # exist only with the 1M scheme.
             ᶜq_water⁰ = moist ? ᶜenv_diffusing_water(Y, p) : nothing
+            blend = blended_cloud_species_flux(Y, p)
+            ᶠF_qt⁰ = blend ? p.scratch.ᶠtemp_C3 : nothing
+            ᶠF_sl⁰ = blend ? p.scratch.ᶠtemp_C3_2 : nothing
             add_sensible_heat_diffusionᵥ!(
                 Yₜ.c.ρe_tot,
                 ᶠw⁰,
@@ -417,16 +423,59 @@ function edmfx_sgs_diffusive_flux_tendency!(
                 @. ᶜρχₜ_diffusion = -(ᶜdiffdivᵥ(-(ᶠw⁰ * ᶠgradᵥ(ᶜq_tot⁰))))
                 @. Yₜ.c.ρq_tot += ᶜρχₜ_diffusion
                 @. Yₜ.c.ρ += ᶜρχₜ_diffusion
+                # Face fluxes of environment total water and liquid–ice static
+                # energy for the blended cloud-species flux
+                if blend
+                    @. ᶠF_qt⁰ = -(ᶠw⁰ * ᶠgradᵥ(ᶜq_tot⁰))
+                    ᶠliquid_ice_static_energy_flux!(
+                        ᶠF_sl⁰,
+                        ᶠw⁰,
+                        ᶜT⁰,
+                        ᶜq_water⁰,
+                        p,
+                        ᶜscratch,
+                        ᶜq_scratch,
+                    )
+                end
             end
 
             # Environment: the other scalars down their environmental
             # gradients, or their grid-mean gradients if the updrafts do not
-            # carry them
+            # carry them; cloud liquid and ice take the blended flux of
+            # add_cloud_species_diffusionᵥ!, whose scratch fields exist only
+            # with the 1M scheme
+            ᶜblend_scratch =
+                blend ?
+                (
+                    p.scratch.ᶜtemp_scalar_8,
+                    p.scratch.ᶜtemp_scalar_9,
+                    p.scratch.ᶜtemp_scalar_10,
+                ) : nothing
             MatrixFields.unrolled_foreach(
                 edmfx_diffused_scalars(Y),
             ) do (χ_name, ρχ_name)
                 ᶜρχₜ = MatrixFields.get_field(Yₜ.c, ρχ_name)
-                if MatrixFields.has_field(Y.c.sgsʲs.:(1), χ_name)
+                phase = cloud_species_phase(χ_name)
+                if blend && !isnothing(phase)
+                    ᶜχ⁰ = maybe_materialize!(
+                        ᶜq_scratch,
+                        ᶜspecific_env_value(χ_name, Y, p),
+                    )
+                    add_cloud_species_diffusionᵥ!(
+                        ᶜρχₜ,
+                        Y,
+                        p,
+                        ᶠw⁰,
+                        ᶠF_qt⁰,
+                        ᶠF_sl⁰,
+                        ᶜT⁰,
+                        ᶜq_water⁰,
+                        p.precomputed.ᶜsgs_moments,
+                        ᶜχ⁰,
+                        phase,
+                        ᶜblend_scratch,
+                    )
+                elseif MatrixFields.has_field(Y.c.sgsʲs.:(1), χ_name)
                     ᶜχ⁰ = maybe_materialize!(
                         ᶜq_scratch,
                         ᶜspecific_env_value(χ_name, Y, p),

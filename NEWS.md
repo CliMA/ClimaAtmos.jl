@@ -3,6 +3,35 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- ![][badge-🔥behavioralΔ] `radiation_tendency!` for `RadiationDYCOMS` selects the
+  inversion height `z_i` as the highest level with `q_tot ≥ 0.008` kg/kg (falling
+  back to the level closest to `0.008` kg/kg when the entire column is drier),
+  and applies `-ᶜdivᵥ(ᶠradiation_flux) / ᶜρʲ` to each updraft's `mse` under
+  `PrognosticEDMFX`, matching `AbstractRRTMGPMode`.
+- ![][badge-🐛bugfix] The lateral term of the updraft sedimentation
+  (`updraft_sedimentation!`) has the sign of its docstring and Jacobian: where
+  the updraft widens downward (`∂a/∂z < 0`), sedimentation flux from the
+  environment enters the updraft through the tilted boundary,
+  `∂_z(a ρ w χ) − ∂a/∂z ρ⁰w⁰χ⁰`. The opposite sign, active since the lateral
+  coefficient defaulted to 1, removed `|∂a/∂z| ρ⁰w⁰χ⁰` of rain, snow and cloud
+  condensate from the updraft (and added it to the environment) wherever the
+  updraft narrows with height. The corresponding Jacobian diagonal carries the
+  area fraction of the exact derivative, `∂a/∂z a ρʲwʲ / (1 - a)`.
+- ![][badge-🔥behavioralΔ] With the 1M microphysics and prognostic TKE, the
+  turbulent flux of cloud liquid and ice blends down-gradient self-diffusion
+  with the flux implied by the conserved-variable fluxes of total water and
+  liquid–ice static energy, weighted by `λ = τ_e / (τ_e + τ_μ)` with the eddy
+  turnover time `τ_e = l_mix / (c_d √tke)` and the relaxation time `τ_μ` of
+  the 1M condensation or deposition process at the cell state
+  (`add_cloud_species_diffusionᵥ!`). The equilibrium part uses the cloudy
+  fraction `Φ(λ_eq/σ_S)` of the condensate the 1M microphysics relaxes toward
+  (`ᶜsgs_moments`) and vanishes in clear air. The Damköhler factor of the SGS
+  variance fidelity uses the same per-cell relaxation times of the 1M
+  processes (`set_sgs_microphysics_timescale!`).
+  The energy flux is unchanged, so a layer well mixed in `(s_l, q_t)` remains a
+  fixed point, and its condensate flux now vanishes too. Under PrognosticEDMFX
+  the environment cloud species take the blended flux; draft cloud species
+  diffuse down their own gradients.
 - ![][badge-🔥behavioralΔ] The implicit-stage Picard updraft tracer predictor
   (`solve_sgs_updraft_tracers_implicit_stage_analytic!`) includes lateral and
   turbulent entrainment `(ε + ε_turb) (χ⁰ − χʲ)` and the first-cell surface

@@ -473,8 +473,13 @@ flux is the sum of the environment and draft diffusive fluxes,
     - \sum_{j=1}^{M} \widehat{\hat{\rho}^j} \, f_j K_h \nabla \psi^j ,
 ```
 
-for ``\psi \in \{q_t^{\mathrm{eff}}, q_l^{\mathrm{cl}}, q_i^{\mathrm{cl}}, n_l^{\mathrm{cl}}, n_i^{\mathrm{cl}}, \chi\}``,
-while the grid-mean diffusive enthalpy flux sums the extensive brackets of
+for ``\psi \in \{q_t^{\mathrm{eff}}, q_l^{\mathrm{cl}}, q_i^{\mathrm{cl}}, n_l^{\mathrm{cl}}, n_i^{\mathrm{cl}}, \chi\}``.
+Where cloud liquid and ice carry the blended flux of [Diffusion](diffusion.md),
+the environment term for ``q_l^{\mathrm{cl}}`` and ``q_i^{\mathrm{cl}}`` is that
+flux evaluated with the environment state ``(T^0, q_t^0, q_\mu^0)`` and weight
+``\hat{\rho}^0 K_h``, while the drafts diffuse their cloud species down their
+own gradients. The grid-mean diffusive enthalpy flux sums the extensive
+brackets of
 [Diffusion](diffusion.md),
 ``c_p^m \nabla T^m + \nabla \Phi + \sum_\mu (h_\mu^m + \Phi) \nabla q_\mu^m``,
 evaluated with each subdomain's thermodynamic state. For a draft, that bracket

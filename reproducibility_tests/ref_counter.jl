@@ -1,4 +1,4 @@
-442
+445
 
 # **README**
 #
@@ -32,6 +32,23 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+445
+- `radiation_tendency!` for `RadiationDYCOMS` selects the inversion height `z_i`
+  as the highest level with `q_tot >= 0.008` kg/kg (falling back to the closest
+  level to `0.008` kg/kg when the entire column is drier), uses `p.precomputed.ᶜq_liq`,
+  and applies `-ᶜdivᵥ(ᶠradiation_flux) / ᶜρʲ` to each updraft's `mse` under
+  `PrognosticEDMFX`.
+
+444
+- Fix the sign of the environment lateral term in `updraft_sedimentation!`
+  (where the updraft widens downward, environment sedimentation flux enters the
+  updraft), and include the area fraction in its Jacobian diagonal.
+
+443
+- With the 1M microphysics and prognostic TKE, the turbulent flux of cloud
+  liquid and ice blends down-gradient self-diffusion with the flux implied by
+  the total-water and liquid–ice static energy fluxes (#4923).
+
 442
 - The implicit-stage Picard updraft tracer predictor includes lateral and
   turbulent entrainment toward the environment and the first-cell surface
