@@ -116,6 +116,17 @@ function test_restart(test_dict; job_id, comms_ctx, more_ignore = Symbol[])
             # Picard snapshots written each stage by `initialize_implicit_stage_problem!`
             :ᶠsgsʲs_picard_snapshot,
             :ᶜsgsʲs_picard_snapshot,
+            # Stage-scoped implicit-solve state: the stage `dtγ`, the stage-start
+            # and work fields of `resolve_sgs_u₃_ρa_stage!`, and the previous
+            # iterate's microphysics tendency of the under-relaxed refresh
+            :implicit_stage_dtγ,
+            :ᶠu₃_stage_startʲs,
+            :ᶜρa_stage_startʲs,
+            :ᶠsgsʲs_newton,
+            :ᶜsgsʲs_newton,
+            :ᶜmp_tendency_prevʲs,
+            :ᶜmp_tendency_prev⁰,
+            :mp_tendency_prev_valid,
             # The raw RRTMGP solver contains internal workspaces that are
             # uninitialized or only partially written by design; its
             # domain-masked outputs are compared through the public getters
@@ -180,6 +191,17 @@ function test_restart(test_dict; job_id, comms_ctx, more_ignore = Symbol[])
             # Picard snapshots written each stage by `initialize_implicit_stage_problem!`
             :ᶠsgsʲs_picard_snapshot,
             :ᶜsgsʲs_picard_snapshot,
+            # Stage-scoped implicit-solve state: the stage `dtγ`, the stage-start
+            # and work fields of `resolve_sgs_u₃_ρa_stage!`, and the previous
+            # iterate's microphysics tendency of the under-relaxed refresh
+            :implicit_stage_dtγ,
+            :ᶠu₃_stage_startʲs,
+            :ᶜρa_stage_startʲs,
+            :ᶠsgsʲs_newton,
+            :ᶜsgsʲs_newton,
+            :ᶜmp_tendency_prevʲs,
+            :ᶜmp_tendency_prev⁰,
+            :mp_tendency_prev_valid,
             # The raw RRTMGP solver contains internal workspaces that are
             # uninitialized or only partially written by design; its
             # domain-masked outputs are compared through the public getters

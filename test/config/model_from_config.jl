@@ -199,3 +199,61 @@ end
         mk(; γ = 0.5, h_frac = 0.1, α = 0.15),
     )
 end
+
+@testset "Newton-iterate options for moist convection" begin
+    FT = Float64
+
+    @test isnothing(CA.get_microphysics_averaging_window(nothing, FT))
+    @test CA.get_microphysics_averaging_window(10, FT) === FT(10)
+    @test CA.get_microphysics_averaging_window("stage", FT) == CA.StageAveragingWindow()
+    @test_throws ErrorException CA.get_microphysics_averaging_window(0, FT)
+    @test_throws ErrorException CA.get_microphysics_averaging_window("10secs", FT)
+
+    # The window is capped at the timestep, and `stage` falls back to the
+    # timestep before the first implicit stage.
+    p_with(window, dtγ) = (;
+        dt = FT(120),
+        atmos = (; microphysics_averaging_window = window),
+        precomputed = (; implicit_stage_dtγ = Ref(FT(dtγ))),
+    )
+    @test CA.microphysics_averaging_window(p_with(nothing, NaN)) == 120
+    @test CA.microphysics_averaging_window(p_with(FT(10), NaN)) == 10
+    @test CA.microphysics_averaging_window(p_with(FT(300), NaN)) == 120
+    @test CA.microphysics_averaging_window(p_with(CA.StageAveragingWindow(), NaN)) == 120
+    @test CA.microphysics_averaging_window(p_with(CA.StageAveragingWindow(), 35)) == 35
+
+    make_water(extra) = begin
+        config = CA.AtmosConfig(
+            merge(
+                Dict("microphysics_model" => "1M", "output_default_diagnostics" => false),
+                extra,
+            );
+            job_id = "test_newton_iterate_options",
+        )
+        CA.AtmosWater(config, CA.ClimaAtmosParameters(config), eltype(config))
+    end
+    water = make_water(Dict())
+    @test isnothing(water.microphysics_averaging_window)
+    @test !water.microphysics_newton_refresh
+    water = make_water(
+        Dict(
+            "microphysics_averaging_window" => "stage",
+            "microphysics_newton_refresh" => true,
+            "max_newton_iters_ode" => 2,
+            "ode_algo" => "ARS222",
+        ),
+    )
+    @test water.microphysics_averaging_window == CA.StageAveragingWindow()
+    @test water.microphysics_newton_refresh
+    @test_throws ErrorException make_water(
+        Dict(
+            "microphysics_newton_refresh" => true,
+            "implicit_microphysics" => false,
+        ),
+    )
+
+    blending = CA.SmoothMinimumBlending()
+    @test CA.EDMFXModel(; scale_blending_method = blending).newton_resolve == Val(false)
+    @test CA.EDMFXModel(; scale_blending_method = blending, newton_resolve = true).newton_resolve ==
+          Val(true)
+end

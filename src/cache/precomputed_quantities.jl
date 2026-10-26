@@ -413,6 +413,8 @@ function precomputed_quantities(Y, atmos)
     elseif atmos.microphysics_model isa NonEquilibriumMicrophysics1M
         precipitation_sgs_quantities = (;
             ᶜmp_tendencyʲs = similar(Y.c, NTuple{n, MP1_NT}),
+            ᶜmp_tendency_prevʲs = similar(Y.c, NTuple{n, MP1_NT}),
+            mp_tendency_prev_valid = Ref(false),
             ᶜwₗʲs = similar(Y.c, NTuple{n, FT}),
             ᶜwᵢʲs = similar(Y.c, NTuple{n, FT}),
             ᶜwᵣʲs = similar(Y.c, NTuple{n, FT}),
@@ -422,6 +424,7 @@ function precomputed_quantities(Y, atmos)
             precipitation_sgs_quantities = (;
                 precipitation_sgs_quantities...,
                 ᶜmp_tendency⁰ = similar(Y.c, MP1_NT),
+                ᶜmp_tendency_prev⁰ = similar(Y.c, MP1_NT),
             )
         end
     elseif atmos.microphysics_model isa NonEquilibriumMicrophysics2M
@@ -455,6 +458,7 @@ function precomputed_quantities(Y, atmos)
             ᶜρ_diffʲs = similar(Y.c, NTuple{n, FT}),
             ᶠu₃_tendencyʲs = similar(Y.f, NTuple{n, C3{FT}}),
             ᶜρa_tendencyʲs = similar(Y.c, NTuple{n, FT}),
+            newton_resolve_quantities(Y, n, atmos.edmfx_model.newton_resolve)...,
             # Per-updraft surface conditions at level 1.
             sfc_mass_flux_sourceʲs = similar(Fields.level(Y.c, 1), NTuple{n, FT}),
             sfc_mse_buoyantʲs = similar(Fields.level(Y.c, 1), NTuple{n, FT}),
@@ -491,7 +495,33 @@ function precomputed_quantities(Y, atmos)
         ᶜcloud_fraction,
         cosp_quantities...,
         covariance_quantities...,
-        smagorinsky_lilly_quantities...)
+        smagorinsky_lilly_quantities...,
+        # Step fraction of the current implicit stage, recorded by
+        # `initialize_implicit_stage_problem!`; NaN before the first stage. Kept in
+        # Float64 so that it holds the `dtγ` of the timestepper exactly, and the
+        # repeated stage solves use the same `dtγ` as the first.
+        implicit_stage_dtγ = Ref(NaN),
+    )
+end
+
+"""
+    newton_resolve_quantities(Y, n, newton_resolve)
+
+Fields used to repeat the analytic stage solves of the `n` updrafts on every
+Newton iterate (`resolve_sgs_u₃_ρa_stage!`), allocated only when `newton_resolve`
+is `Val(true)`: the stage-start `u₃ʲ` and `ρaʲ` (`ᶠu₃_stage_startʲs`,
+`ᶜρa_stage_startʲs`) and work copies of the updraft states that the solves
+read and overwrite (`ᶠsgsʲs_newton`, `ᶜsgsʲs_newton`).
+"""
+newton_resolve_quantities(Y, n, ::Val{false}) = (;)
+function newton_resolve_quantities(Y, n, ::Val{true})
+    FT = Spaces.undertype(axes(Y.c))
+    return (;
+        ᶠu₃_stage_startʲs = similar(Y.f, NTuple{n, C3{FT}}),
+        ᶜρa_stage_startʲs = similar(Y.c, NTuple{n, FT}),
+        ᶠsgsʲs_newton = similar(Y.f.sgsʲs),
+        ᶜsgsʲs_newton = similar(Y.c.sgsʲs),
+    )
 end
 
 """
@@ -951,18 +981,16 @@ NVTX.@annotate function set_explicit_precomputed_quantities!(Y, p, t)
         p.atmos.microphysics_model,
         p.atmos.turbconv_model,
     )
-    # Compute microphysics sources from grid mean and sub-domains.
-    # Always compute ᶜmp_tendency (and, for 0M, ᶜρ_dq_tot_dt / ᶜρ_de_tot_dt)
-    # here so both are fresh. When microphysics is implicit, the implicit stage
-    # will additionally refresh ᶜρ_dq_tot_dt / ᶜρ_de_tot_dt from the (now-fresh)
-    # ᶜmp_tendency using the current Newton-iterate Y, avoiding the allocating
-    # BMT broadcast.
-    set_microphysics_tendency_cache!(
-        Y,
-        p,
-        p.atmos.microphysics_model,
-        p.atmos.turbconv_model,
-    )
+    # With the 1M Newton-iterate refresh, the microphysics tendency cache is
+    # refreshed per Newton iterate from `set_newton_iterate_precomputed_quantities!`.
+    if !microphysics_newton_refresh(p.atmos)
+        set_microphysics_tendency_cache!(
+            Y,
+            p,
+            p.atmos.microphysics_model,
+            p.atmos.turbconv_model,
+        )
+    end
     # Compute surface precipitation fluxes (has to be after microphysics_sources_cache
     # because for the 0 moment microphysics it's an integral of the q_tot sink).
     set_precipitation_surface_fluxes!(Y, p, p.atmos.microphysics_model)

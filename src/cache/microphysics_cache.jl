@@ -967,10 +967,50 @@ end
 ### 1 Moment Microphysics
 ###
 
+"""
+    microphysics_newton_refresh(atmos)
+
+Whether the 1M process rates are recomputed on every Newton iterate (from
+`set_newton_iterate_precomputed_quantities!`) instead of in
+`set_explicit_precomputed_quantities!`: `atmos.microphysics_newton_refresh` with
+`NonEquilibriumMicrophysics1M`. For other microphysics models the option has no
+effect.
+"""
+microphysics_newton_refresh(atmos) =
+    atmos.microphysics_newton_refresh &&
+    atmos.microphysics_model isa NonEquilibriumMicrophysics1M
+
+"""
+    microphysics_averaging_window(p)
+
+Return the window [s] over which the 1M microphysics tendencies are time-averaged,
+set by `p.atmos.microphysics_averaging_window`:
+
+  - `nothing`: the timestep `p.dt`;
+  - a number: that many seconds, capped at `p.dt`;
+  - `StageAveragingWindow()`: the step fraction `dtγ` of the current implicit stage
+    (`p.precomputed.implicit_stage_dtγ`, recorded by
+    `initialize_implicit_stage_problem!`), capped at `p.dt`; `p.dt` before the first
+    implicit stage.
+
+The averaged tendency relaxes the supersaturation present at the start of the
+window with the forcing held fixed, so its effective rate decreases as the window
+grows. A window short compared with the condensation and deposition timescales
+keeps the effective rate close to the instantaneous one.
+"""
+microphysics_averaging_window(p) =
+    microphysics_averaging_window(p.atmos.microphysics_averaging_window, p)
+microphysics_averaging_window(::Nothing, p) = p.dt
+microphysics_averaging_window(window::Real, p) = min(p.dt, oftype(p.dt, window))
+function microphysics_averaging_window(::StageAveragingWindow, p)
+    dtγ = p.precomputed.implicit_stage_dtγ[]
+    return isnan(dtγ) ? p.dt : min(p.dt, oftype(p.dt, dtγ))
+end
+
 function set_microphysics_tendency_cache!(
     Y, p, mp1m::NonEquilibriumMicrophysics1M, _,
 )
-    (; dt) = p
+    dt = microphysics_averaging_window(p)
     (; ᶜT, ᶜu, ᶜq_tot_nonneg, ᶜmp_tendency) = p.precomputed
 
     thp = CAP.thermodynamics_params(p.params)
@@ -1014,7 +1054,7 @@ end
 function set_microphysics_tendency_cache!(
     Y, p, mp1m::NonEquilibriumMicrophysics1M, tm::PrognosticEDMFX,
 )
-    (; dt) = p
+    dt = microphysics_averaging_window(p)
     (; ᶜρʲs, ᶜTʲs, ᶜuʲs, ᶜq_tot_nonnegʲs) = p.precomputed
     (; ᶜu⁰, ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰) = p.precomputed
     (; ᶜmp_tendency⁰, ᶜmp_tendencyʲs) = p.precomputed

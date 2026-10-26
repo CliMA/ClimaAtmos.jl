@@ -198,7 +198,7 @@ function args_integrator(Y, p, tspan, ode_algo, callback,
                 ),
                 Wfact = update_jacobian!,
             )
-            cache_imp! = set_implicit_precomputed_quantities!
+            cache_imp! = set_newton_iterate_precomputed_quantities!
         else
             # `prescribed_flow` is an experimental case where the flow is prescribed,
             # so implicit tendencies are treated explicitly to avoid treatment of sound waves

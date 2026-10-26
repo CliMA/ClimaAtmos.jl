@@ -1149,8 +1149,10 @@ keys, each mapped to its `AbstractTerminalVelocityMode` with `parse_option`:
 `cloud_liquid_terminal_velocity` (`Fixed`, `Stokes`), `cloud_ice_terminal_velocity`
 (`Fixed`, `Chen2022`), `rain_terminal_velocity` and `snow_terminal_velocity` (`Fixed`,
 `Blk1M`, `Chen2022`); `Fixed` uses the fixed fall speed of the species from `params`.
-Errors when 0-moment microphysics is requested without `use_sgs_quadrature`, and
-warns when the run is dry.
+Also reads `microphysics_averaging_window` (see `get_microphysics_averaging_window`)
+and `microphysics_newton_refresh`. Errors when 0-moment microphysics is requested
+without `use_sgs_quadrature` or when `microphysics_newton_refresh` is set without
+`implicit_microphysics`, and warns when the run is dry.
 """
 function AtmosWater(config::AtmosConfig, params, ::Type{FT}) where {FT}
     pa = config.parsed_args
@@ -1192,12 +1194,37 @@ function AtmosWater(config::AtmosConfig, params, ::Type{FT}) where {FT}
         parse_option(pa["snow_terminal_velocity"], precip_modes, "snow_terminal_velocity")
 
     implicit_microphysics = pa["implicit_microphysics"]
+    microphysics_averaging_window =
+        get_microphysics_averaging_window(pa["microphysics_averaging_window"], FT)
+    microphysics_newton_refresh = pa["microphysics_newton_refresh"]
+    microphysics_newton_relaxation_factor =
+        Float64(pa["microphysics_newton_relaxation_factor"])
+    (0 < microphysics_newton_relaxation_factor <= 1) || error(
+        "`microphysics_newton_relaxation_factor` must be in `(0, 1]`; got $microphysics_newton_relaxation_factor",
+    )
+    if microphysics_newton_refresh
+        implicit_microphysics || error(
+            "`microphysics_newton_refresh: true` requires `implicit_microphysics: true`",
+        )
+        warn_newton_iterate_option(pa, "microphysics_newton_refresh")
+    elseif microphysics_newton_relaxation_factor < 1
+        @warn "`microphysics_newton_relaxation_factor` < 1 has no effect without `microphysics_newton_refresh: true`."
+    end
+    if !(microphysics_model isa NonEquilibriumMicrophysics1M) && (
+        microphysics_newton_refresh || !isnothing(microphysics_averaging_window)
+    )
+        @warn "`microphysics_newton_refresh` and `microphysics_averaging_window` only \
+               apply to 1M microphysics; they have no effect with $microphysics_model."
+    end
 
     return AtmosWater(;
         microphysics_model,
         cloud_model,
         microphysics_tendency_timestepping = implicit_microphysics ? Implicit() :
                                              Explicit(),
+        microphysics_averaging_window,
+        microphysics_newton_refresh,
+        microphysics_newton_relaxation_factor,
         tracer_nonnegativity_method = get_tracer_nonnegativity_method(pa),
         sgs_quadrature,
         tq_correlation_model,
@@ -1207,6 +1234,41 @@ function AtmosWater(config::AtmosConfig, params, ::Type{FT}) where {FT}
         terminal_velocity_rain,
         terminal_velocity_snow,
     )
+end
+
+"""
+    get_microphysics_averaging_window(window, ::Type{FT})
+
+Map the `microphysics_averaging_window` config value to the `AtmosWater` field:
+`nothing` (the timestep) for `~`, `StageAveragingWindow()` for `"stage"`, and the
+window in seconds as `FT` for a positive number.
+"""
+function get_microphysics_averaging_window(window, ::Type{FT}) where {FT}
+    isnothing(window) && return nothing
+    window == "stage" && return StageAveragingWindow()
+    (window isa Real && window > 0) || error(
+        "`microphysics_averaging_window` must be `~`, `stage`, or a positive number \
+         of seconds; got $(repr(window))",
+    )
+    return FT(window)
+end
+
+"""
+    warn_newton_iterate_option(pa, key)
+
+Warn when the option `key`, which refreshes part of the implicit stage on every
+Newton iterate, is used where it has no effect (`max_newton_iters_ode < 2`: the
+first iterate is the explicit prediction of the stage) or where it has not been
+validated (an `ode_algo` other than `ARS222`).
+"""
+function warn_newton_iterate_option(pa, key)
+    pa["max_newton_iters_ode"] < 2 &&
+        @warn "`$key: true` has no effect with `max_newton_iters_ode` < 2: the first \
+               Newton iterate is the explicit prediction of the stage."
+    pa["ode_algo"] == "ARS222" ||
+        @warn "`$key: true` has only been validated with `ode_algo: ARS222`; with \
+               `ARS343` the refreshed 1M rates do not converge in the Newton iteration."
+    return nothing
 end
 
 """
@@ -1276,9 +1338,19 @@ function AtmosTurbconv(config::AtmosConfig, params, ::Type{FT}) where {FT}
         vertical_diffusion = pa["edmfx_vertical_diffusion"],
         horizontal_diffusion = pa["edmfx_horizontal_diffusion"],
         filter = pa["edmfx_filter"],
+        newton_resolve = pa["edmfx_newton_resolve"],
         scale_blending_method,
         updraft_picard_rounds = pa["edmfx_updraft_picard_rounds"],
     )
+    if pa["edmfx_newton_resolve"]
+        pa["turbconv"] == "prognostic_edmfx" || error(
+            "`edmfx_newton_resolve: true` requires `turbconv: prognostic_edmfx`",
+        )
+        pa["update_cache_every"] == "stage" || error(
+            "`edmfx_newton_resolve: true` requires `update_cache_every: stage`",
+        )
+        warn_newton_iterate_option(pa, "edmfx_newton_resolve")
+    end
 
     n = pa["smagorinsky_lilly"]
     smagorinsky_lilly =
