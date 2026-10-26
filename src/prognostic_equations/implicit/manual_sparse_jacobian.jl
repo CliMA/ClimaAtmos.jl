@@ -1361,15 +1361,17 @@ run before the other SGS updates, which accumulate into them.
 The sedimentation derivative also carries the lateral-mixing correction that
 the tendency applies where the draft area decreases with height,
 `∂ᵥa (ρʲwʲχʲ - ρ⁰w⁰χ⁰)`, whose environment part contributes
-`∂ᵥa a ρʲwʲ / (1 - a)` to the diagonal.
+`∂ᵥa a ρʲwʲ / (1 - a)` to the diagonal where the residual environment flux
+`ρ⁰w⁰χ⁰` is positive and zero where its clamp at zero is active.
 
 The sedimented mass is a source of `ρaʲ`, so an intensive updraft scalar `χ`
 receives `(vtt_χ - χ Σ_μ vtt_μ) / ρaʲ`. The blocks keep the dependence of
 each species' own flux on its tracer, with the weights `(1 - q_μ) / ρaʲ` on
 the diagonal and `(1 - q_tot) / ρaʲ` for `q_tot`; for `mse`, the species
-static energy `h_μ(Tʲ) + Φ` multiplies the sedimentation operator on the right
-(at the donor cell) and `-mse` multiplies it on the left (at the receiver
-cell). The dilution diagonal `-Σ_μ vtt_μ / ρaʲ` and the cross-species blocks
+static energy `h_μ(Tʲ) + Φ` multiplies the within-updraft sedimentation
+operator on the right (at the donor cell), `h_μ(T⁰) + Φ` multiplies the
+lateral diagonal, and `-mse` multiplies the whole operator on the left (at the
+receiver cell). The dilution diagonal `-Σ_μ vtt_μ / ρaʲ` and the cross-species blocks
 `-χ ∂vtt_μ/∂q_μ / ρaʲ` are omitted as O(q) smaller.
 
 No-op unless `p.atmos.turbconv_model` is a `PrognosticEDMFX`. Writes
@@ -1378,7 +1380,7 @@ in `p.scratch`, mutates `matrix`, and returns `nothing`.
 """
 function update_sgs_advection_jacobian!(matrix, Y, p, dtγ)
     p.atmos.turbconv_model isa PrognosticEDMFX || return nothing
-    (; ᶜρʲs, ᶠu³ʲs, ᶜTʲs) = p.precomputed
+    (; ᶜρʲs, ᶠu³ʲs, ᶜTʲs, ᶜT⁰) = p.precomputed
     (; ᶜΦ) = p.core
     FT = Spaces.undertype(axes(Y.c))
     ᶜJ = Fields.local_geometry_field(Y.c).J
@@ -1431,6 +1433,11 @@ function update_sgs_advection_jacobian!(matrix, Y, p, dtγ)
         NonEquilibriumMicrophysics2M,
     }
         thermo_params = CAP.thermodynamics_params(p.params)
+        # Type-valued calls such as eps(eltype(ᶜa)) inside nested lazy
+        # broadcasts leave the matrix eltype uninferable, so the constants
+        # are computed here.
+        ε_area = eps(FT)
+        zero_FT = zero(FT)
         ᶜa = (@. lazy(draft_area(Y.c.sgsʲs.:(1).ρa, ᶜρʲs.:(1))))
         ᶜ∂a∂z = p.scratch.ᶜtemp_scalar_7
         @. ᶜ∂a∂z = ᶜprecipdivᵥ(ᶠinterp(ᶜJ) / ᶠJ * ᶠtop_bias(Geometry.WVector(ᶜa)))
@@ -1464,9 +1471,25 @@ function update_sgs_advection_jacobian!(matrix, Y, p, dtγ)
             # sedimentation
             # ∂a/∂z ≥ 0: a·∂_z(ρwχ)
             # ∂a/∂z < 0: ∂_z(aρwχ) − ∂a/∂z · ρ⁰w⁰χ⁰, with
-            #   ρ⁰w⁰χ⁰ = (w_GS·ρχ_GS − ρa¹·w¹·χ¹)/(1−a), so
-            #   ∂(ρ⁰w⁰χ⁰)/∂χʲ = −ρa¹·w¹/(1−a) and the lateral term contributes
-            #   ∂a/∂z · ρa¹·w¹/(1−a) = ∂a/∂z · a·ρ¹w¹/(1−a) to the diagonal
+            #   ρ⁰w⁰χ⁰ = max((w_GS·ρχ_GS − ρa¹·w¹·χ¹)/(1−a), 0), so where the
+            #   residual is positive ∂(ρ⁰w⁰χ⁰)/∂χʲ = −ρa¹·w¹/(1−a) and the
+            #   lateral term contributes ∂a/∂z · a·ρ¹w¹/(1−a) to the diagonal;
+            #   where the clamp is active, its derivative is zero.
+            ᶜχʲ = MatrixFields.get_field(Y.c.sgsʲs.:(1), χ_name)
+            ρχ_name = get_ρχ_name(χ_name)
+            ᶜρχ_gs = MatrixFields.get_field(Y.c, ρχ_name)
+            ᶜw_gs = MatrixFields.get_field(
+                p.precomputed,
+                sedimentation_velocity_name(ρχ_name),
+            )
+            ᶜlateral_coeff = @. lazy(
+                dtγ * ifelse(
+                    (ᶜ∂a∂z < 0) &
+                    (ᶜw_gs * ᶜρχ_gs - Y.c.sgsʲs.:(1).ρa * ᶜwʲ * ᶜχʲ > 0),
+                    ᶜ∂a∂z * ᶜa * ᶜρʲs.:(1) * ᶜwʲ / max(1 - ᶜa, ε_area),
+                    zero_FT,
+                ),
+            )
             @. ᶠsed_tracer_advection =
                 DiagonalMatrixRow(ᶠinterp(ᶜρʲs.:(1) * ᶜJ) / ᶠJ) *
                 ᶠtop_bias_matrix() *
@@ -1474,12 +1497,9 @@ function update_sgs_advection_jacobian!(matrix, Y, p, dtγ)
             @. ᶜtridiagonal_matrix_scalar =
                 dtγ * ifelse(ᶜ∂a∂z < 0,
                     -(ᶜprecipdivᵥ_matrix()) * ᶠsed_tracer_advection *
-                    DiagonalMatrixRow(ᶜa) +
-                    DiagonalMatrixRow(
-                        ᶜ∂a∂z * ᶜa * ᶜρʲs.:(1) * ᶜwʲ / max(1 - ᶜa, eps(eltype(ᶜa))),
-                    ),
+                    DiagonalMatrixRow(ᶜa),
                     -DiagonalMatrixRow(ᶜa) * ᶜprecipdivᵥ_matrix() * ᶠsed_tracer_advection,
-                )
+                ) + DiagonalMatrixRow(ᶜlateral_coeff)
             # sedimentation
             # (pull out common subexpression for performance)
 
@@ -1502,10 +1522,15 @@ function update_sgs_advection_jacobian!(matrix, Y, p, dtγ)
                 ∂ᶜmseʲ_err_∂ᶜχʲ =
                     matrix[@name(c.sgsʲs.:(1).mse), χ_state_name]
                 h_cond_func = enthalpy_function(phase)
-                ᶜh_cond = @. lazy(h_cond_func(thermo_params, ᶜTʲs.:(1)) + ᶜΦ)
+                ᶜh_condʲ = @. lazy(h_cond_func(thermo_params, ᶜTʲs.:(1)) + ᶜΦ)
+                ᶜh_cond⁰ = @. lazy(h_cond_func(thermo_params, ᶜT⁰) + ᶜΦ)
+                # The within-updraft flux carries h_μ(Tʲ) + Φ from the donor
+                # cell and the lateral influx carries h_μ(T⁰) + Φ; the
+                # dilution by the sedimented mass enters with -mseʲ.
                 @. ∂ᶜmseʲ_err_∂ᶜχʲ =
                     DiagonalMatrixRow(ᶜinv_ρ̂) * (
-                        ᶜtridiagonal_matrix_scalar * DiagonalMatrixRow(ᶜh_cond) -
+                        ᶜtridiagonal_matrix_scalar * DiagonalMatrixRow(ᶜh_condʲ) +
+                        DiagonalMatrixRow(ᶜlateral_coeff * (ᶜh_cond⁰ - ᶜh_condʲ)) -
                         DiagonalMatrixRow(Y.c.sgsʲs.:(1).mse) *
                         ᶜtridiagonal_matrix_scalar
                     )

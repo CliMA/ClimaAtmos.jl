@@ -634,7 +634,8 @@ Overwrite `ᶜS` with the sedimentation mass source of updraft `j`
 [kg m⁻³ s⁻¹], the sum over the condensate mass species of their within-updraft
 sedimentation tendencies from `foreach_updraft_sedimentation`. This is the
 sedimentation term `-∇⋅(ρ̂ʲ W_{q_t}ʲ k̂)` of the draft mass equation, which
-`solve_sgs_ρa_implicit_stage_analytic!` adds to the `ρa` recurrence. Uses the
+`solve_sgs_ρa_implicit_stage_analytic!` applies in the `ρa` recurrence as the
+rate `ᶜS / ρaʲ`. Uses the
 scratch fields of `foreach_updraft_sedimentation`, so `ᶜS` must be a different
 field. Returns `nothing`.
 """

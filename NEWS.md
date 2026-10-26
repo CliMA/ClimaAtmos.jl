@@ -14,16 +14,19 @@ main
 - ![][badge-🔥behavioralΔ] Updraft sedimentation of `q_lcl`, `q_icl`, `q_rai`,
   and `q_sno` is a mass source of the updraft `ρaʲ` in the analytic
   implicit-stage solve (`solve_sgs_ρa_implicit_stage_analytic!`,
-  `updraft_sedimentation_mass_source!`), as it is of the grid-mean `ρ`. Each
+  `updraft_sedimentation_mass_source!`), as it is of the grid-mean `ρ`,
+  applied as the rate `S/ρaʲ` at the stage-start area so that the stage source
+  matches the dilution the Newton solve applies at the stage area. Each
   intensive updraft scalar receives its own sedimentation source minus the
   dilution by the sedimented mass (`edmfx_sgs_vertical_advection_tendency!`),
   and `mse` receives the flux-form static energy tendency
   `(S_{h,μ}ʲ - mseʲ S_μʲ) / ρ̂ʲ`, where `S_{h,μ}ʲ` is the `updraft_sedimentation!`
   convergence of `q_μʲ (h_μ(Tʲ) + Φ)` with laterally entrained environment
   condensate carrying `h_μ(T⁰) + Φ`. The Jacobian
-  (`update_sgs_advection_jacobian!`) carries the `(mse, q_μ)` and `(q_tot, q_μ)`
-  couplings, with `h_μ(Tʲ) + Φ` at the donor cell and `-mseʲ` at the receiver
-  cell. The residual environment sedimentation flux `ᶜρ⁰w⁰χ⁰` and 2M number flux
+  (`update_sgs_advection_jacobian!`) includes the `(mse, q_μ)` and `(q_tot, q_μ)`
+  couplings, with `h_μ(Tʲ) + Φ` at the donor cell, `h_μ(T⁰) + Φ` on the
+  lateral diagonal (zero where the residual environment flux is clamped), and
+  `-mseʲ` at the receiver cell. The residual environment sedimentation flux `ᶜρ⁰w⁰χ⁰` and 2M number flux
   `ᶜρ⁰w⁰n⁰` are clamped to non-negative values in the lateral entrainment branch,
   and `initialize_implicit_stage_problem!` refreshes terminal velocities after
   the Picard updraft predictor before solving for `ρaʲ`. Sedimentation that

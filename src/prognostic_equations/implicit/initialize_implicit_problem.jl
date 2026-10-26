@@ -355,20 +355,24 @@ The flux-form stage equation `∂ρa/∂t + ∂(ρa·w)/∂z = (ε − δ)·ρa`
 under first-order upwinding (for upward `ᶠu₃ʲ`) to the forward recurrence
 
     ρa_new[i] = (numerator[i] + α_bot[i] · ρa_new[i−1]) / denominator[i],
-    numerator[i] = ρa_old[i]/dtγ + S_sed[i],
-    denominator[i] = max(0.1/dtγ, 1/dtγ + α_top[i] − (ε − δ)[i]),
+    numerator[i] = ρa_old[i]/dtγ,
+    denominator[i] = max(0.1/dtγ, 1/dtγ + α_top[i] − (ε − δ)[i] − r_sed[i]),
     α_face = (ᶠinterp(ρʲ·J)/ᶠJ · ᶠu₃ʲ/Δz_face) / (ρʲ_upwind · Δz[i]),
 
 evaluated bottom-to-top with `Operators.column_accumulate!`. The floor on the
 denominator caps the per-step growth at roughly a factor of ten.
 
-`S_sed` is the sedimentation mass source of the condensate species from
-`updraft_sedimentation_mass_source!` (absent under the equilibrium 0-moment
-microphysics), evaluated explicitly at the stage-start area and grid-mean state
-and the Picard-converged updraft tracers and terminal velocities, so that `ρaʲ`
-receives the sedimented mass that `q_totʲ` receives, as the grid-mean `ρ` does
-(the subsequent Newton solve re-evaluates the scalar dilution tendency at the
-converged stage tracers).
+`r_sed = S_sed · ρ̂⁻¹` is the sedimentation mass source of the condensate
+species from `updraft_sedimentation_mass_source!` (absent under the
+equilibrium 0-moment microphysics) as a rate, with `ρ̂⁻¹` the regularized
+inverse `specific(1, ρa, 0, ρʲ, turbconv_model)` that the tracer tendencies
+use. It is evaluated at the stage-start area and grid-mean state and the
+Picard-converged updraft tracers and terminal velocities, so the stage source
+is `r_sed · ρa_new`. Where the draft narrows downward, `S_sed` is proportional
+to the local area and `r_sed` does not depend on it, so this matches the
+dilution `χ S_sed ρ̂⁻¹` that the Newton solve applies at the stage area; `ρaʲ`
+then receives the sedimented mass that `q_totʲ` receives, as the grid-mean `ρ`
+does.
 
 `(ε − δ)` is assembled inline from area-bounding, velocity-scale, and
 buoyancy-driven pieces (see `detr_buoy_inv_time_scale`). The
@@ -414,8 +418,9 @@ function solve_sgs_ρa_implicit_stage_analytic!(Y, p, dtγ)
     a_max = CAP.max_area(turbconv_params)
 
     # Cell-centred coefficients of the recurrence:
-    #   ᶜnumerator            = ρa_old[i] / dtγ + S_sed[i]
+    #   ᶜnumerator            = ρa_old[i] / dtγ
     #   ᶜdenominator          = 1/dtγ + α_top · (1 − implicit_detr_prefactor) − (ε − δ)
+    #                           − r_sed
     #   ᶜmass_flux_factor_bot = α_bot · (1 − implicit_detr_prefactor)
     # where α_face = (ᶠinterp(ρʲ·J)/ᶠJ · ᶠu₃ʲ/Δz_face) / (ρʲ_upwind · Δz).
     # For upward flow the upwind density at the bottom face is ρʲ[i−1], which we
@@ -429,7 +434,7 @@ function solve_sgs_ρa_implicit_stage_analytic!(Y, p, dtγ)
     ᶜmass_flux_factor_bot = p.scratch.ᶜtemp_scalar_3
     ᶜexplicit_entr_minus_detr = p.scratch.ᶜtemp_scalar_4
     ᶠw = p.scratch.ᶠtemp_scalar
-    ᶜsed_mass_source = p.scratch.ᶜtemp_scalar_5
+    ᶜsed_rate = p.scratch.ᶜtemp_scalar_5
     nonequilibrium_mp =
         p.atmos.microphysics_model isa
         Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M}
@@ -439,7 +444,16 @@ function solve_sgs_ρa_implicit_stage_analytic!(Y, p, dtγ)
         # Computed first because `updraft_sedimentation!` writes the face
         # scratch that holds ᶠw.
         if nonequilibrium_mp
-            updraft_sedimentation_mass_source!(ᶜsed_mass_source, Y, p, j)
+            updraft_sedimentation_mass_source!(ᶜsed_rate, Y, p, j)
+            @. ᶜsed_rate *= specific(
+                FT(1),
+                Y.c.sgsʲs.:($$j).ρa,
+                FT(0),
+                ᶜρʲs.:($$j),
+                turbconv_model,
+            )
+        else
+            @. ᶜsed_rate = 0
         end
         @. ᶠw = Y.f.sgsʲs.:($$j).u₃.components.data.:1 / ᶠdz
 
@@ -493,14 +507,12 @@ function solve_sgs_ρa_implicit_stage_analytic!(Y, p, dtγ)
             ᶜlower_limiter_factor * detr_buoy_coeff * ᶜbuoy_inv_time_scale
 
         @. ᶜnumerator = Y.c.sgsʲs.:($$j).ρa / dtγ
-        if nonequilibrium_mp
-            @. ᶜnumerator += ᶜsed_mass_source
-        end
-        # Floor at 0.1/dtγ ⇒ (ε − δ) ≤ 0.9/dtγ (≈10× per-step growth cap).
+        # Floor at 0.1/dtγ ⇒ (ε − δ) + r_sed ≤ 0.9/dtγ
+        # (≈10× per-step growth cap).
         @. ᶜdenominator =
             max(
                 FT(0.1) / dtγ,
-                1 / dtγ - ᶜexplicit_entr_minus_detr +
+                1 / dtγ - ᶜexplicit_entr_minus_detr - ᶜsed_rate +
                 ᶜone_minus_implicit_detr_prefactor * ᶜtop_bias(
                     ᶠinterp(ᶜρʲs.:($$j) * ᶜJ) / ᶠJ * ᶠw,
                 ) / ᶜρʲs.:($$j) / ᶜdz,

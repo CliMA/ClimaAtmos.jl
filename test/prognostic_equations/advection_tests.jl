@@ -172,26 +172,53 @@ include("../test_helpers.jl")
         @test ρa .* arr(Yₜ.c.sgsʲs.:(1).mse) .+ mse .* S_arr ≈ arr(S_h) rtol =
             1e-10
 
-        # The analytic ρa solve adds the same mass source to ρa.
+        # The analytic ρa solve applies the mass source as the rate
+        # r = S ρ̂⁻¹ at the stage-start area, so the stage source is r ρa_new.
         ρa_old = copy(sgsʲ.ρa)
+        ᶜinv_ρ̂ = @. CA.specific(
+            FT(1),
+            ρa_old,
+            FT(0),
+            p.precomputed.ᶜρʲs.:(1),
+            p.atmos.turbconv_model,
+        )
         CA.solve_sgs_ρa_implicit_stage_analytic!(Y, p, dtγ)
-        @test (arr(sgsʲ.ρa) .- arr(ρa_old)) ./ dtγ ≈ S_arr rtol = 1e-8
+        r = S_arr .* arr(ᶜinv_ρ̂)
+        @test (arr(sgsʲ.ρa) .- arr(ρa_old)) ./ dtγ ≈ r .* arr(sgsʲ.ρa) rtol =
+            1e-8
         @. sgsʲ.ρa = ρa_old
 
         # The Jacobian couples each sedimenting species to q_tot with weight
-        # (1 - q_tot)/ρa and to mse with h_μ(Tʲ) + Φ at the donor cell and
-        # -mse at the receiver cell.
+        # (1 - q_tot)/ρa and to mse with h_μ(Tʲ) + Φ at the donor cell,
+        # h_μ(T⁰) + Φ on the lateral diagonal (zero where the residual
+        # environment flux is clamped), and -mse at the receiver cell. The
+        # lateral coefficient is reconstructed from the tendency's definition.
         CA.update_sgs_advection_jacobian!(matrix, Y, p, FT(1))
+        ᶜ∂a∂z = p.scratch.ᶜtemp_scalar_7
+        ᶜρʲ = p.precomputed.ᶜρʲs.:(1)
         for s in active
             ∂q_tot = matrix[CA.@name(c.sgsʲs.:(1).q_tot), s.state]
             ∂mse = matrix[CA.@name(c.sgsʲs.:(1).mse), s.state]
             @test maximum(abs, arr(∂q_tot)) > 0
+            (wʲ_sym, w_gs_sym) = velocity_fields[s.name]
+            ᶜwʲ = getproperty(p.precomputed, wʲ_sym).:(1)
+            ᶜw_gs = getproperty(p.precomputed, w_gs_sym)
+            ᶜρq_gs = getproperty(Y.c, Symbol(:ρ, s.name))
+            ᶜqʲ = getproperty(sgsʲ, s.name)
+            ᶜa = @. sgsʲ.ρa / ᶜρʲ
+            ᶜlateral = @. ᶜinv_ρ̂ * ifelse(
+                (ᶜ∂a∂z < 0) & (ᶜw_gs * ᶜρq_gs - sgsʲ.ρa * ᶜwʲ * ᶜqʲ > 0),
+                ᶜ∂a∂z * ᶜa * ᶜρʲ * ᶜwʲ / max(1 - ᶜa, eps(FT)),
+                FT(0),
+            )
             sed_op = @. CA.DiagonalMatrixRow(1 / (1 - sgsʲ.q_tot)) * ∂q_tot
             expected_∂mse =
-                @. sed_op * CA.DiagonalMatrixRow(ᶜh_condʲ) -
+                @. sed_op * CA.DiagonalMatrixRow(ᶜh_condʲ) +
+                   CA.DiagonalMatrixRow(ᶜlateral * (ᶜh_cond⁰ - ᶜh_condʲ)) -
                    CA.DiagonalMatrixRow(sgsʲ.mse) * sed_op
             @test arr(∂mse) ≈ arr(expected_∂mse) rtol = 1e-10
         end
+        return ᶜinv_ρ̂
     end
 
     check_sedimentation_budgets(liquid, TD.enthalpy_liquid)
@@ -243,7 +270,32 @@ include("../test_helpers.jl")
     @. p.precomputed.ᶜT⁰ = p.precomputed.ᶜTʲs.:(1) + FT(5)
     check_sedimentation_budgets(liquid, TD.enthalpy_liquid)
     @test !(arr(Yₜ.c.sgsʲs.:(1).mse) ≈ mse_tend_cold_env)
-    check_sedimentation_budgets(ice, TD.enthalpy_ice)
+    ᶜinv_ρ̂ = check_sedimentation_budgets(ice, TD.enthalpy_ice)
+
+    # 3. The lateral Jacobian diagonal vanishes where the residual environment
+    #    flux is clamped: zeroing the grid-mean snow removes exactly the
+    #    unclamped lateral coefficient from the (q_tot, q_sno) block and leaves
+    #    the off-diagonals unchanged.
+    q_sno_state = CA.@name(c.sgsʲs.:(1).q_sno)
+    CA.update_sgs_advection_jacobian!(matrix, Y, p, FT(1))
+    ∂q_tot_open = copy(matrix[CA.@name(c.sgsʲs.:(1).q_tot), q_sno_state])
+    ᶜ∂a∂z = copy(p.scratch.ᶜtemp_scalar_7)
+    ᶜρʲ = p.precomputed.ᶜρʲs.:(1)
+    ᶜa = @. sgsʲ.ρa / ᶜρʲ
+    ᶜwʲ = p.precomputed.ᶜwₛʲs.:(1)
+    ᶜlateral_open = @. ᶜinv_ρ̂ * (1 - sgsʲ.q_tot) *
+       ifelse(
+           ᶜ∂a∂z < 0,
+           ᶜ∂a∂z * ᶜa * ᶜρʲ * ᶜwʲ / max(1 - ᶜa, eps(FT)),
+           FT(0),
+       )
+    @test maximum(abs, arr(ᶜlateral_open)) > 0
+    fill!(Y.c.ρq_sno, FT(0))
+    CA.update_sgs_advection_jacobian!(matrix, Y, p, FT(1))
+    ∂q_tot_clamped = matrix[CA.@name(c.sgsʲs.:(1).q_tot), q_sno_state]
+    expected_clamped =
+        @. ∂q_tot_open - CA.DiagonalMatrixRow(ᶜlateral_open)
+    @test arr(∂q_tot_clamped) ≈ arr(expected_clamped) rtol = 1e-10
     @. p.precomputed.ᶜT⁰ = T⁰_orig
 end
 

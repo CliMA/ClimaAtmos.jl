@@ -356,13 +356,13 @@ the column,
 ```math
 \hat{\rho}^j[i] = \frac{n[i] + \alpha_{\mathrm{bot}}[i] \, \hat{\rho}^j[i-1]}{d[i]} ,
 \qquad
-n[i] = \frac{\hat{\rho}^{j,\mathrm{old}}[i]}{\gamma \Delta t} + S[i] ,
+n[i] = \frac{\hat{\rho}^{j,\mathrm{old}}[i]}{\gamma \Delta t} ,
 ```
 
 ```math
 d[i] = \max\!\left( \frac{0.1}{\gamma \Delta t}, \;
   \frac{1}{\gamma \Delta t} + \alpha_{\mathrm{top}}[i]
-  - (E^j - \Delta^j)[i] \right) ,
+  - (E^j - \Delta^j)[i] - r[i] \right) ,
 \qquad
 \alpha_{\mathrm{face}} = \frac{I^f(\rho^j J)}{J^f}
   \frac{u_3^j / \Delta z^f}{\rho^j_{\mathrm{upwind}} \, \Delta z} ,
@@ -371,9 +371,13 @@ d[i] = \max\!\left( \frac{0.1}{\gamma \Delta t}, \;
 swept bottom to top, with the upwind density ``\rho^j[i]`` at the top face and
 ``\rho^j[i-1]`` at the bottom face. The floor on the denominator caps the
 per-step growth at roughly a factor of ten. The sedimentation mass source
-``S`` of the condensate species (`updraft_sedimentation_mass_source!`) is
-evaluated explicitly at the stage-start area and the Picard-converged tracers;
-it is absent under the equilibrium 0-moment microphysics.
+``S`` of the condensate species (`updraft_sedimentation_mass_source!`) enters
+as the rate ``r = S / \hat{\rho}^j``, evaluated at the stage-start area and the
+Picard-converged tracers, so the stage source is ``r \hat{\rho}^j[i]``. Where
+the draft narrows downward, ``S`` is proportional to the local area and ``r``
+does not depend on it, so the stage source matches the dilution
+``\chi^j S / \hat{\rho}^j`` that the Newton solve applies at the stage area.
+The rate is absent under the equilibrium 0-moment microphysics.
 
 The recurrence routes detrainment, the surface source, and the area bound in
 ways that are easy to misread:
