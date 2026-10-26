@@ -3,6 +3,14 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- ![][badge-✨feature/enhancement] Tail entrainment for the prognostic EDMF
+  updraft (provisional parameter `edmf_tail_entr_weight`, default `0`, set to
+  `0.5` in `toml/prognostic_edmfx_1M.toml` and
+  `toml/prognostic_edmfx_1M_mlcloud.toml`): the air drawn in by dynamical
+  entrainment comes from the upper half, in moist static energy, of the
+  environment's Gaussian subgrid `(T, q_tot)` distribution
+  (`tail_entrainment_increments`). The environment is diagnosed as grid mean
+  minus updraft, so total water and energy are unchanged.
 - ![][badge-🔥behavioralΔ] Updraft condensate and precipitation sedimentation in
   `edmfx_sgs_vertical_advection_tendency!` (`q_lcl`, `q_icl`, `q_rai`, `q_sno`)
   adds the specific internal energy carried by the sedimenting water species,
