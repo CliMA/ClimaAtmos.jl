@@ -134,3 +134,90 @@ end
         @test XP[1] == RRTMGPI.uniform_z_p(XT[1], p₁, Tꜜ, p₂, Tꜛ)
     end
 end
+
+@testset "RadiationDYCOMS inversion isoline and updraft heating" for FT in (
+    Float32,
+    Float64,
+)
+    (; cent_space, face_space) = get_cartesian_spaces(; FT)
+    ᶜcoords = Fields.coordinate_field(cent_space)
+    ᶠcoords = Fields.coordinate_field(face_space)
+    sgs_nt = NamedTuple{(:mse,), Tuple{FT}}
+    Y = Fields.FieldVector(;
+        c = similar(
+            ᶜcoords,
+            NamedTuple{
+                (:ρ, :ρe_tot, :ρq_tot, :sgsʲs),
+                Tuple{FT, FT, FT, Tuple{sgs_nt}},
+            },
+        ),
+        f = similar(ᶠcoords, NamedTuple{(), Tuple{}}),
+    )
+    radiation_mode = CA.RadiationDYCOMS{FT}()
+    rad_cache = CA.radiation_model_cache(Y, radiation_mode)
+    ᶜq_liq = similar(Y.c, FT)
+    ᶜρʲ = similar(Y.c, FT)
+    fill!(Y.c.ρ, FT(1.1))
+    fill!(ᶜq_liq, FT(2e-4))
+    fill!(ᶜρʲ, FT(1.05))
+    p = (;
+        params = CA.ClimaAtmosParameters(FT),
+        atmos = (;
+            microphysics_model = CA.EquilibriumMicrophysics0M(),
+            turbconv_model = CA.PrognosticEDMFX(;
+                n_updrafts = 1,
+                prognostic_tke = false,
+                area_fraction = FT(1e-3),
+            ),
+            radiation_mode,
+        ),
+        radiation = rad_cache,
+        precomputed = (; ᶜq_liq, ᶜρʲs = (ᶜρʲ,)),
+    )
+
+    z_levels = sort(unique(Array(parent(ᶜcoords.z))))
+    n_levels = length(z_levels)
+    k_inv = cld(n_levels, 2)
+    z_inv = z_levels[k_inv]
+    z_above = z_levels[k_inv + 1]
+
+    # Case 1: levels 1..k_inv have q_tot >= 0.008 (with level k_inv at 0.0088),
+    # while level k_inv + 1 above the inversion has q_tot = 0.0079 (closer to
+    # 0.008 in |q_tot - 0.008|, but drier than the 0.008 threshold). The highest
+    # level with q_tot >= 0.008 (k_inv) must be selected.
+    @. Y.c.ρq_tot =
+        Y.c.ρ * ifelse(
+            ᶜcoords.z < z_inv,
+            FT(0.0092),
+            ifelse(
+                ᶜcoords.z == z_inv,
+                FT(0.0088),
+                ifelse(ᶜcoords.z == z_above, FT(0.0079), FT(0.002)),
+            ),
+        )
+
+    Yₜ = similar(Y)
+    fill!(Yₜ, FT(0))
+    CA.radiation_tendency!(Yₜ, Y, p, FT(0), radiation_mode)
+
+    zi_selected = Array(parent(rad_cache.isoline_z_ρ_ρq.z))[1]
+    @test zi_selected == z_inv
+
+    # Verify PrognosticEDMFX updraft mse receives the grid-mean radiative flux
+    # convergence divided by updraft density.
+    ρe_tend = Array(parent(Yₜ.c.ρe_tot))
+    mse_up_tend = Array(parent(Yₜ.c.sgsʲs.:(1).mse))
+    ρ_up = Array(parent(ᶜρʲ))
+    @test maximum(abs, ρe_tend) > 0
+    @test mse_up_tend ≈ ρe_tend ./ ρ_up rtol = 100 * eps(FT)
+
+    # Case 2: entire column drier than 0.008 kg/kg falls back to the level
+    # closest to 0.008 kg/kg (k_dry).
+    k_dry = max(1, k_inv - 1)
+    z_dry = z_levels[k_dry]
+    @. Y.c.ρq_tot = Y.c.ρ * ifelse(ᶜcoords.z == z_dry, FT(0.0075), FT(0.003))
+    fill!(Yₜ, FT(0))
+    CA.radiation_tendency!(Yₜ, Y, p, FT(0), radiation_mode)
+    zi_fallback = Array(parent(rad_cache.isoline_z_ρ_ρq.z))[1]
+    @test zi_fallback == z_dry
+end

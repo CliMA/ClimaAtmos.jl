@@ -595,8 +595,8 @@ end
 """
     radiation_tendency!(Yₜ, Y, p, t, radiation_mode::RadiationDYCOMS)
 
-Apply the DYCOMS RF01/RF02 idealized longwave radiation to `Yₜ.c.ρe_tot` in place; return
-`nothing`.
+Apply the DYCOMS RF01/RF02 idealized longwave radiation to `Yₜ.c.ρe_tot` (and, with
+`PrognosticEDMFX`, to each updraft's `mse`) in place; return `nothing`.
 
 The net upward flux of [Stevens2005](@cite) combines cloud-top cooling, cloud-base warming,
 and free-tropospheric warming above the inversion:
@@ -609,9 +609,10 @@ F(z) = F_0 e^{-Q(z, ∞)} + F_1 e^{-Q(0, z)} +
 
 where `Q(z₁, z₂) = ∫ κ ρ q_liq dz` is the liquid-water optical path, `D` is the large-scale
 divergence [1/s], and the last term applies only above the inversion height `z_i`, taken as
-the level whose `q_tot` is closest to 0.008 kg/kg. The tendency is
-`-ᶜdivᵥ(ᶠradiation_flux)`, applied explicitly at every stage. Requires a moist
-microphysics model.
+the highest level with `q_tot ≥ 0.008` kg/kg (or the level closest to `0.008` kg/kg if the
+entire column is drier). The tendency `-ᶜdivᵥ(ᶠradiation_flux)` is applied explicitly at
+every stage to `Yₜ.c.ρe_tot` and, with `PrognosticEDMFX`, to each updraft's `mse` (divided
+by the updraft density). Requires a moist microphysics model.
 
 Two documented departures from the reference remain (see the TODO comments): the extinction
 uses the specific content `q_liq` rather than the mixing ratio, and the third term uses the
@@ -622,6 +623,7 @@ function radiation_tendency!(Yₜ, Y, p, t, radiation_mode::RadiationDYCOMS)
     @assert !(p.atmos.microphysics_model isa DryModel)
 
     (; params) = p
+    (; turbconv_model) = p.atmos
     (; ᶜκρq, ∫_0_∞_κρq, ᶠ∫_0_z_κρq, isoline_z_ρ_ρq, ᶠradiation_flux) =
         p.radiation
     (; ᶜq_liq) = p.precomputed
@@ -640,13 +642,21 @@ function radiation_tendency!(Yₜ, Y, p, t, radiation_mode::RadiationDYCOMS)
 
     Operators.column_integral_indefinite!(ᶠ∫_0_z_κρq, ᶜκρq)
 
-    # Find the values of (z, ρ, q_tot) at the q_tot = 0.008 isoline, i.e., at
-    # the level whose value of q_tot is closest to 0.008.
+    # Find (z, ρ, q_tot) at the q_tot = 0.008 kg/kg inversion isoline: the
+    # highest level with q_tot >= 0.008 kg/kg, falling back to the level closest
+    # to 0.008 kg/kg if the entire column is drier.
     q_tot_isoline = FT(0.008)
     Operators.column_reduce!(
-        (nt1, nt2) ->
-            abs(specific.(nt1.ρq_tot, nt1.ρ) - q_tot_isoline) <
-            abs(specific.(nt2.ρq_tot, nt2.ρ) - q_tot_isoline) ? nt1 : nt2,
+        (acc, nt) -> begin
+            q_acc = specific(acc.ρq_tot, acc.ρ)
+            q = specific(nt.ρq_tot, nt.ρ)
+            is_closer = abs(q - q_tot_isoline) < abs(q_acc - q_tot_isoline)
+            ifelse(
+                (q >= q_tot_isoline) | ((q_acc < q_tot_isoline) & is_closer),
+                nt,
+                acc,
+            )
+        end,
         isoline_z_ρ_ρq,
         Base.broadcasted(NT ∘ tuple, ᶜz, Y.c.ρ, Y.c.ρq_tot),
     )
@@ -673,6 +683,13 @@ function radiation_tendency!(Yₜ, Y, p, t, radiation_mode::RadiationDYCOMS)
     )
 
     @. Yₜ.c.ρe_tot -= ᶜdivᵥ(ᶠradiation_flux)
+    if turbconv_model isa PrognosticEDMFX
+        (; ᶜρʲs) = p.precomputed
+        n = n_mass_flux_subdomains(turbconv_model)
+        for j in 1:n
+            @. Yₜ.c.sgsʲs.:($$j).mse -= ᶜdivᵥ(ᶠradiation_flux) / ᶜρʲs.:($$j)
+        end
+    end
 
     return nothing
 end

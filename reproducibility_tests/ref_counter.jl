@@ -1,4 +1,4 @@
-444
+445
 
 # **README**
 #
@@ -32,6 +32,13 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+445
+- `radiation_tendency!` for `RadiationDYCOMS` selects the inversion height `z_i`
+  as the highest level with `q_tot >= 0.008` kg/kg (falling back to the closest
+  level to `0.008` kg/kg when the entire column is drier), uses `p.precomputed.ᶜq_liq`,
+  and applies `-ᶜdivᵥ(ᶠradiation_flux) / ᶜρʲ` to each updraft's `mse` under
+  `PrognosticEDMFX`.
+
 444
 - Fix the sign of the environment lateral term in `updraft_sedimentation!`
   (where the updraft widens downward, environment sedimentation flux enters the
