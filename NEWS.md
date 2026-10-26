@@ -86,6 +86,14 @@ main
   condensate from the updraft (and added it to the environment) wherever the
   updraft narrows with height. The corresponding Jacobian diagonal carries the
   area fraction of the exact derivative, `∂a/∂z a ρʲwʲ / (1 - a)`.
+- ![][badge-✨feature/enhancement] Tail entrainment for the prognostic EDMF
+  updraft (provisional parameter `edmf_tail_entr_weight`, default `0`, set to
+  `0.5` in `toml/prognostic_edmfx_1M.toml` and
+  `toml/prognostic_edmfx_1M_mlcloud.toml`): the air drawn in by dynamical
+  entrainment comes from the upper half, in moist static energy, of the
+  environment's Gaussian subgrid `(T, q_tot)` distribution
+  (`tail_entrainment_increments`). The environment is diagnosed as grid mean
+  minus updraft, so total water and energy are unchanged.
 - ![][badge-🔥behavioralΔ] The non-equilibrium cloud-fraction floor
   (`_sgs_augmented_sigma`, `_compute_cloud_fraction`) scales with the
   subsaturation deficit `δ_sub = max(0, −μ_S)` of the cloud-available water
