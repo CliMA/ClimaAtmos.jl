@@ -276,6 +276,9 @@ sgs_variance_curvature:
 sgs_precip_placement:
   help: "Placement of the cell-mean rain and snow over the 1M conditional-moment nodes. `shaft` confines the fraction `sgs_precip_incloud_fraction` of them to the moistest `a_p` of the PDF (0, the default, is uniform). `loglinear` places them with mean-conserving factors exp(κ S̃)/⟨exp(κ S̃)⟩ in the standardized saturation excess S̃ = S′/σ_S (rain tilt rising with height above `sgs_precip_rain_tilt_height_offset`), depletes the snow in air above freezing (`sgs_snow_melt_depletion_width`), and lets a fraction f = min(1, c max(a_p, a_min)) of each node precipitate (`sgs_precip_intermittency_coeff`, `sgs_precip_intermittency_min`). [`shaft` (default), `loglinear`]"
   value: "shaft"
+sgs_variance_fidelity_model:
+  help: "Closure for the variance fidelity α of the condensate reconstruction. `equilibrium` uses α = α_Da α_eq. `updraft` (PrognosticEDMFX only; ignored otherwise) sets α = clamp(c_up q_c,up / σ_S, α_min, 2) from the condensate q_c,up of the cloudy updrafts (q_c > 1e-5) (`sgs_fidelity_updraft_coeff`, `sgs_fidelity_updraft_min`), blended with α_Da α_eq as their area grows from the EDMF minimum area to `sgs_fidelity_updraft_full_area`, and α_Da α_eq without them. [`equilibrium` (default), `updraft`]"
+  value: "equilibrium"
 microphysics_n_substeps:
   help: "Number of susbteps for time averaging bulk microphysics tendencies without subgrid-scale quadrature. Default: 3"
   value: 3

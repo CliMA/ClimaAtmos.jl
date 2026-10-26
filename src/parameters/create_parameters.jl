@@ -670,6 +670,16 @@ function SGSQuadratureParameters(
         sgs_precip_intermittency_coeff = FT(0.3),
         sgs_precip_intermittency_min = FT(0.1),
         sgs_snow_melt_depletion_width = FT(1),
+        # Updraft rule for the variance fidelity (`sgs_variance_fidelity_model:
+        # updraft`, `updraft_variance_fidelity`): α σ_S = c_u q_c,up, bounded
+        # below by α_min; c_u from FastEddy BOMEX environment liquid against
+        # the model's own BOMEX updraft (LES updraft: 0.75). The rule takes
+        # over from the equilibrium α as the cloudy-updraft area grows from the
+        # EDMF minimum area to `full_area`, well above the minimum where the
+        # area limiters hold inactive updrafts.
+        sgs_fidelity_updraft_coeff = FT(0.6),
+        sgs_fidelity_updraft_min = FT(0.05),
+        sgs_fidelity_updraft_full_area = FT(1e-3),
     )
     # A run toml defines a parameter that ClimaParams also defines when it
     # appears in the override dictionary or, for a `toml_dict` assembled

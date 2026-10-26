@@ -327,6 +327,13 @@ ClimaParams does not yet define or whose ClimaParams default it supersedes.
     the snow of the log-linear placement falls by a factor `e`,
     `ψ(T) = exp(−max(T − T_freeze, 0)/ΔT_m)`; `Inf` disables it. Must be
     positive [K].
+  - `sgs_fidelity_updraft_coeff`, `sgs_fidelity_updraft_min`: Coefficient `c_u`
+    and lower bound `α_min` of the updraft rule of the variance fidelity
+    (`sgs_variance_fidelity_model: updraft`),
+    `α = clamp(c_u q_c,up / σ_S, α_min, 2)` (`updraft_variance_fidelity`) [-].
+  - `sgs_fidelity_updraft_full_area`: Cloudy-updraft area fraction from which
+    the updraft rule sets `α` in full; from the EDMF `min_area` up to it, `α`
+    blends linearly from the equilibrium rule [-].
   - `Tq_correlation_coefficient`: Correlation between `T'` and `q_tot'` in the
     SGS quadrature, in `[-1, 1]`. Used verbatim by `tq_correlation_model: constant`; the fallback where the variances vanish for
     `tq_correlation_model: diagnosed` [-].
@@ -379,6 +386,9 @@ Base.@kwdef struct SGSQuadratureParameters{FT} <: ASQP
     sgs_precip_intermittency_coeff::FT
     sgs_precip_intermittency_min::FT
     sgs_snow_melt_depletion_width::FT
+    sgs_fidelity_updraft_coeff::FT
+    sgs_fidelity_updraft_min::FT
+    sgs_fidelity_updraft_full_area::FT
     Tq_correlation_coefficient::FT
     cloud_fraction_steepness_scale::FT
     condensation_evaporation_timescale::FT

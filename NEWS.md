@@ -50,6 +50,12 @@ main
   `sgs_precip_rain_tilt_height_offset`, `sgs_precip_snow_tilt`,
   `sgs_precip_intermittency_coeff`, `sgs_precip_intermittency_min` and
   `sgs_snow_melt_depletion_width`.
+- ![][badge-✨feature/enhancement] Opt-in `sgs_variance_fidelity_model:
+  updraft` (PrognosticEDMFX; default `equilibrium` unchanged): sets
+  `α σ_S = c_up q_c,up` from the condensate of active cloudy updrafts
+  (`updraft_variance_fidelity`). New provisional parameters:
+  `sgs_fidelity_updraft_coeff`, `sgs_fidelity_updraft_min` and
+  `sgs_fidelity_updraft_full_area`.
 - ![][badge-🔥behavioralΔ] The equilibrium SGS condensate that the 1M
   condensate relaxes toward (`λ_eq`), the 0M SGS saturation adjustment, and the
   variance fidelity evaluate `E[max(0, S)]` under the Gaussian displacement

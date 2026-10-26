@@ -750,6 +750,18 @@ ne30 cells of 3.75 km MPAS (DYAMOND), ``c`` the offline fit of rain evaporation
 and accretion to the same data, and ``\Delta T_m`` the snow-weighted warmth of its
 melting layers; all are provisional.
 
+The variance fidelity ``\alpha`` (`sgs_variance_fidelity`) can instead be set
+from the updrafts (`sgs_variance_fidelity_model: updraft`, PrognosticEDMFX
+only): with ``q_{c,\mathrm{up}}`` the area-weighted condensate of the updrafts
+that carry cloud (``q_c > 10^{-5}``), ``\alpha \sigma_S = c_{\mathrm{up}} q_{c,\mathrm{up}}``,
+bounded to ``[\alpha_{\min}, 2]``, so the width of the environment's condensate
+ramp follows the condensate its updrafts detrain rather than the variance closure
+(``c_{\mathrm{up}} = 0.6``, from LES shallow-cumulus environment liquid against
+the model's own updraft). The
+rule takes over from the equilibrium ``\alpha`` linearly as the area of the
+cloudy updrafts grows from the EDMF minimum area, where the area limiters hold
+inactive updrafts, to `sgs_fidelity_updraft_full_area`.
+
 Because the variance depends on the mixing length, the mixing length on the
 buoyancy gradient, and the buoyancy gradient on the cloud fraction, the closure
 is solved as a fixed point at each timestep. Two Picard iterations are followed
@@ -777,7 +789,8 @@ no separate draft term.
     [Microphysics](microphysics.md); the configuration keys are `cloud_model`,
     `use_sgs_quadrature`, `sgs_distribution`, `quadrature_order`,
     `tq_correlation_model` (default `diagnosed`), `sgs_variance_curvature`
-    (default `false`), and `sgs_precip_placement` (default `shaft`).
+    (default `false`), `sgs_precip_placement` (default `shaft`), and
+    `sgs_variance_fidelity_model` (default `equilibrium`).
 
 ## Boundary conditions
 

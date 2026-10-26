@@ -1155,12 +1155,32 @@ function get_sgs_precip_placement(parsed_args)
 end
 
 """
+    get_sgs_variance_fidelity_model(parsed_args)
+
+Return the `AbstractVarianceFidelityModel` selected by the
+`sgs_variance_fidelity_model` config key: `"equilibrium"` →
+`EquilibriumVarianceFidelity()` (default), `"updraft"` →
+`UpdraftVarianceFidelity()`.
+"""
+function get_sgs_variance_fidelity_model(parsed_args)
+    return parse_option(
+        get(parsed_args, "sgs_variance_fidelity_model", "equilibrium"),
+        Dict(
+            "equilibrium" => EquilibriumVarianceFidelity(),
+            "updraft" => UpdraftVarianceFidelity(),
+        ),
+        "sgs_variance_fidelity_model",
+    )
+end
+
+"""
     AtmosWater(config::AtmosConfig, params, ::Type{FT}) where {FT}
 
 Assemble the `AtmosWater` group from a configuration.
 
 Combines `get_microphysics_model`, `get_cloud_model`, `get_sgs_quadrature`, and
-`get_tracer_nonnegativity_method` and `get_sgs_precip_placement`, and reads `implicit_microphysics` (which selects
+`get_tracer_nonnegativity_method`, `get_sgs_precip_placement` and
+`get_sgs_variance_fidelity_model`, and reads `implicit_microphysics` (which selects
 `Implicit` or `Explicit` microphysics timestepping), `sgs_variance_curvature`
 (the curvature-aware equilibrium condensate) and the four terminal velocity
 keys, each mapped to its `AbstractTerminalVelocityMode` with `parse_option`:
@@ -1177,6 +1197,7 @@ function AtmosWater(config::AtmosConfig, params, ::Type{FT}) where {FT}
     tq_correlation_model = get_tq_correlation_model(pa)
     sgs_variance_curvature = pa["sgs_variance_curvature"]
     sgs_precip_placement = get_sgs_precip_placement(pa)
+    sgs_variance_fidelity_model = get_sgs_variance_fidelity_model(pa)
 
     if microphysics_model isa DryModel
         @warn "Running simulations without any moisture present."
@@ -1227,6 +1248,7 @@ function AtmosWater(config::AtmosConfig, params, ::Type{FT}) where {FT}
         tq_correlation_model,
         sgs_variance_curvature,
         sgs_precip_placement,
+        sgs_variance_fidelity_model,
         terminal_velocity_liquid,
         terminal_velocity_ice,
         terminal_velocity_rain,
