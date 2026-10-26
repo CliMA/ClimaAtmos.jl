@@ -3,6 +3,15 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- ![][badge-🐛bugfix] The lateral term of the updraft sedimentation
+  (`updraft_sedimentation!`) has the sign of its docstring and Jacobian: where
+  the updraft widens downward (`∂a/∂z < 0`), sedimentation flux from the
+  environment enters the updraft through the tilted boundary,
+  `∂_z(a ρ w χ) − ∂a/∂z ρ⁰w⁰χ⁰`. The opposite sign, active since the lateral
+  coefficient defaulted to 1, removed `|∂a/∂z| ρ⁰w⁰χ⁰` of rain, snow and cloud
+  condensate from the updraft (and added it to the environment) wherever the
+  updraft narrows with height. The corresponding Jacobian diagonal carries the
+  area fraction of the exact derivative, `∂a/∂z a ρʲwʲ / (1 - a)`.
 - ![][badge-🔥behavioralΔ] With the 1M microphysics and prognostic TKE, the
   turbulent flux of cloud liquid and ice blends down-gradient self-diffusion
   with the flux implied by the conserved-variable fluxes of total water and

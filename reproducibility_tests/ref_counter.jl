@@ -1,4 +1,4 @@
-443
+444
 
 # **README**
 #
@@ -32,6 +32,11 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+444
+- Fix the sign of the environment lateral term in `updraft_sedimentation!`
+  (where the updraft widens downward, environment sedimentation flux enters the
+  updraft), and include the area fraction in its Jacobian diagonal.
+
 443
 - With the 1M microphysics and prognostic TKE, the turbulent flux of cloud
   liquid and ice blends down-gradient self-diffusion with the flux implied by
