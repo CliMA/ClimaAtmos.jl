@@ -255,8 +255,12 @@ F(z) = F_0 \, e^{-Q(z, \infty)} + F_1 \, e^{-Q(0, z)}
 
 with ``Q(z_1, z_2) = \int \kappa \rho q_l \, dz`` the liquid-water optical path,
 ``D`` the large-scale divergence, and the last term active only above the
-inversion height ``z_i``, taken as the level whose ``q_t`` is closest to 0.008
-kg kg⁻¹. The implementation differs from the reference in three respects, each documented in the source: the optical path uses the specific liquid water content rather than
+inversion height ``z_i``, taken as the highest level with ``q_t \ge 0.008``
+kg kg⁻¹ (or the level closest to ``0.008`` kg kg⁻¹ if the entire column is
+drier). With `PrognosticEDMFX`, the same radiative heating rate is applied to
+each draft's moist static energy (divided by the draft density). The
+implementation differs from the reference in three respects, each documented in
+the source: the optical path uses the specific liquid water content rather than
 the mixing ratio, the third term uses the dry ``c_{pd}``, and that term is
 clipped to zero below ``z_i``, where the reference lets it act. All three match
 the original TurbulenceConvection implementation.

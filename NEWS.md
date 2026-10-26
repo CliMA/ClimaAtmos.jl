@@ -3,6 +3,11 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- ![][badge-🔥behavioralΔ] `radiation_tendency!` for `RadiationDYCOMS` selects the
+  inversion height `z_i` as the highest level with `q_tot ≥ 0.008` kg/kg (falling
+  back to the level closest to `0.008` kg/kg when the entire column is drier),
+  and applies `-ᶜdivᵥ(ᶠradiation_flux) / ᶜρʲ` to each updraft's `mse` under
+  `PrognosticEDMFX`, matching `AbstractRRTMGPMode`.
 - ![][badge-🐛bugfix] The lateral term of the updraft sedimentation
   (`updraft_sedimentation!`) has the sign of its docstring and Jacobian: where
   the updraft widens downward (`∂a/∂z < 0`), sedimentation flux from the
