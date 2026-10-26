@@ -968,6 +968,19 @@ end
 ###
 
 """
+    microphysics_newton_refresh(atmos)
+
+Whether the 1M process rates are recomputed on every Newton iterate (from
+`set_newton_iterate_precomputed_quantities!`) instead of in
+`set_explicit_precomputed_quantities!`: `atmos.microphysics_newton_refresh` with
+`NonEquilibriumMicrophysics1M`. For other microphysics models the option has no
+effect.
+"""
+microphysics_newton_refresh(atmos) =
+    atmos.microphysics_newton_refresh &&
+    atmos.microphysics_model isa NonEquilibriumMicrophysics1M
+
+"""
     microphysics_averaging_window(p)
 
 Return the window [s] over which the 1M microphysics tendencies are time-averaged,

@@ -981,9 +981,9 @@ NVTX.@annotate function set_explicit_precomputed_quantities!(Y, p, t)
         p.atmos.microphysics_model,
         p.atmos.turbconv_model,
     )
-    # When `microphysics_newton_refresh` is on, the microphysics tendency cache
-    # is refreshed per Newton iterate from `set_newton_iterate_precomputed_quantities!`.
-    if !p.atmos.microphysics_newton_refresh
+    # With the 1M Newton-iterate refresh, the microphysics tendency cache is
+    # refreshed per Newton iterate from `set_newton_iterate_precomputed_quantities!`.
+    if !microphysics_newton_refresh(p.atmos)
         set_microphysics_tendency_cache!(
             Y,
             p,

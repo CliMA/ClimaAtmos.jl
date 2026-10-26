@@ -190,9 +190,9 @@ function set_newton_iterate_precomputed_quantities!(Y, p, t)
     if p.atmos.turbconv_model isa PrognosticEDMFX &&
        p.atmos.edmfx_model.newton_resolve isa Val{true}
         resolve_sgs_u₃_ρa_stage!(Y, p)
-        refresh_sgs_quantities_after_resolve!(Y, p)
+        refresh_sgs_quantities_after_resolve!(Y, p, t)
     end
-    if p.atmos.microphysics_newton_refresh
+    if microphysics_newton_refresh(p.atmos)
         ω = eltype(p.params)(p.atmos.microphysics_newton_relaxation_factor)
         if ω < one(ω) && hasproperty(p.precomputed, :mp_tendency_prev_valid)
             # Under-relaxed: snapshot the previous iterate's tendency, compute
@@ -266,30 +266,33 @@ end
     map((prevʲ, newʲ) -> blend_tendency(ω, prevʲ, newʲ), prev, new)
 
 """
-    refresh_sgs_quantities_after_resolve!(Y, p)
+    refresh_sgs_quantities_after_resolve!(Y, p, t)
 
-Refresh the EDMFX velocity and kinetic-energy fields that depend on the updraft
-`u₃ʲ` and `ρaʲ` just written by `resolve_sgs_u₃_ρa_stage!`: per-updraft
-`ᶜuʲs`/`ᶠu³ʲs`/`ᶜKʲs`/`ᶠKᵥʲs`, and the environment `ᶠu₃⁰`/`ᶜu⁰`/`ᶠu³⁰`/`ᶜK⁰`.
-Thermodynamic fields (`ᶜρʲs`, `ᶜTʲs`, `ᶜq_*ʲs`, env versions) are not refreshed
-because `resolve_sgs_u₃_ρa_stage!` does not change them, so no update is needed.
-Returns `nothing`.
+Refresh the EDMFX precomputed quantities that depend on the updraft `u₃ʲ` and
+`ρaʲ` just written into `Y` by `resolve_sgs_u₃_ρa_stage!`. Returns `nothing`.
+
+The updraft velocity and kinetic-energy fields (`ᶜuʲs`, `ᶠu³ʲs`, `ᶜKʲs`,
+`ᶠKᵥʲs`) are recomputed from `u₃ʲ`; the updraft thermodynamic fields are
+specific quantities of the updraft and do not depend on `u₃ʲ` or `ρaʲ`. The
+whole environment state is recomputed with
+`set_prognostic_edmf_precomputed_quantities_environment!`: besides its velocity,
+the environment state (`ᶜT⁰`, `ᶜq_tot_nonneg⁰`, `ᶜq_liq⁰`, `ᶜq_ice⁰`) is
+reconstructed as grid mean minus updrafts and so depends on `ρaʲ`.
 """
-function refresh_sgs_quantities_after_resolve!(Y, p)
+function refresh_sgs_quantities_after_resolve!(Y, p, t)
     turbconv_model = p.atmos.turbconv_model
     turbconv_model isa PrognosticEDMFX || return nothing
     ᶠuₕ³ = p.scratch.ᶠtemp_CT3
-    (; ᶜuʲs, ᶠu³ʲs, ᶜKʲs, ᶠKᵥʲs, ᶠu₃⁰, ᶜu⁰, ᶠu³⁰, ᶜK⁰) = p.precomputed
-    n = n_mass_flux_subdomains(turbconv_model)
-    for j in 1:n
+    @. ᶠuₕ³ = $compute_ᶠuₕ³(Y.c.uₕ, Y.c.ρ)
+    (; ᶜuʲs, ᶠu³ʲs, ᶜKʲs, ᶠKᵥʲs) = p.precomputed
+    for j in 1:n_mass_flux_subdomains(turbconv_model)
         ᶠu₃ʲ = Y.f.sgsʲs.:($j).u₃
         set_velocity_quantities!(
             ᶜuʲs.:($j), ᶠu³ʲs.:($j), ᶜKʲs.:($j), ᶠu₃ʲ, Y.c.uₕ, ᶠuₕ³,
         )
         @. ᶠKᵥʲs.:($$j) = (adjoint(CT3(ᶠu₃ʲ)) * ᶠu₃ʲ) / 2
     end
-    set_sgs_ᶠu₃!(u₃⁰, ᶠu₃⁰, Y, turbconv_model)
-    set_velocity_quantities!(ᶜu⁰, ᶠu³⁰, ᶜK⁰, ᶠu₃⁰, Y.c.uₕ, ᶠuₕ³)
+    set_prognostic_edmf_precomputed_quantities_environment!(Y, p, ᶠuₕ³, t)
     return nothing
 end
 
