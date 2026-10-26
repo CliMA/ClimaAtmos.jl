@@ -675,11 +675,18 @@ comes from within three standard deviations of its mean excess.
 ``c = \infty`` restores the Gaussian.
 The cloud fraction is then the fraction of the distribution carrying positive
 local condensate, evaluated with a variance augmented by a non-equilibrium floor
-that scales with the subsaturation deficit ``\max(0, -\mu_S)`` in subsaturated
-air and vanishes in saturated cloud decks (`_sgs_augmented_sigma`). That floor
-keeps the cloud fraction from being driven to one by a vanishing equilibrium
-variance in subsaturated air while allowing quiescent saturated decks to reach
-overcast. Microphysical rates are evaluated
+that scales with the subsaturation deficit ``\delta_{\mathrm{sub}} = \max(0, -\mu_S)``
+in subsaturated air and vanishes in saturated cloud decks (`_sgs_augmented_sigma`).
+Equilibrium condensate ``\min(q_c, q_{c,\mathrm{eq}})`` supported by the
+subdomain's own saturation-excess fluctuations is normalized by ``\sigma_{\mathrm{aug}}``,
+whereas non-equilibrium condensate ``\max(0, q_c - q_{c,\mathrm{eq}})`` in
+subsaturated air (such as condensate detrained from updrafts) is normalized by
+``\sqrt{\sigma_{\mathrm{aug}}^2 + \delta_{\mathrm{sub}}^2}`` (`_compute_cloud_fraction`)
+and distributed across the quadrature nodes in proportion to the non-equilibrium
+excess fraction ``(q_c - q_{c,\mathrm{eq}})_+ / q_c`` (`_sum_1m_over_sgs`). That
+keeps subsaturated air with detrained or residual condensate patchy and exposes
+the non-equilibrium excess to evaporation on clear nodes while allowing quiescent
+saturated decks to reach overcast. Microphysical rates are evaluated
 at each node and aggregated linearly, which preserves total water and total
 energy at the subdomain level because the bulk rates preserve them pointwise.
 

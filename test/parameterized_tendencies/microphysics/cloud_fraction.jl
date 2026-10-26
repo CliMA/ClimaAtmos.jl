@@ -44,9 +44,24 @@ floor_nt(::Type{FT}; ε_rel = FT(0.02), σ_abs = FT(1e-7)) where {FT} =
 
                 @testset "Zero sigma, large condensate → cf ≈ 1" begin
                     cf = CA._compute_cloud_fraction(
-                        FT(1e-3), μ_sub, FT(0), α, floor,
+                        FT(1e-2), μ_sub, FT(0), α, floor,
                     )
                     @test cf > FT(0.99)
+                end
+
+                @testset "Non-equilibrium excess normalized by subsaturation deficit" begin
+                    # When σ_S = 0 and μ_S = -1e-3, q_c_eq = 0 so q_c = 1e-3 is
+                    # purely non-equilibrium condensate normalized by
+                    # σ_neq = √(σ_aug² + δ_sub²) ≈ 1e-3 (C ≈ 1, cf ≈ 0.70),
+                    # whereas at saturation (μ_S = 0) δ_sub = 0 and cf > 0.99.
+                    cf_neq = CA._compute_cloud_fraction(
+                        FT(1e-3), μ_sub, FT(0), α, floor,
+                    )
+                    cf_eq = CA._compute_cloud_fraction(
+                        FT(1e-3), FT(0), FT(0), α, floor,
+                    )
+                    @test FT(0.6) < cf_neq < FT(0.8)
+                    @test cf_eq > FT(0.99)
                 end
 
                 @testset "Large condensate, small sigma → cf ≈ 1" begin
