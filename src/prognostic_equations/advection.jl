@@ -209,6 +209,9 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     point_type = eltype(Fields.coordinate_field(Y.c))
     (; dt) = p
     ᶜJ = Fields.local_geometry_field(Y.c).J
+    ᶜρ = Y.c.ρ
+    ᶜρJ = @. lazy(ᶜρ * ᶜJ)
+    ᶠρJ = @. lazy(ᶠinterp(ᶜρJ))
     (; ᶜf³, ᶠf¹²) = p.core
     (; ᶜu, ᶠu³, ᶜK) = p.precomputed
     (; edmfx_mse_q_tot_upwinding) = n > 0 || advect_tke ? p.atmos.numerics : all_nothing
@@ -240,15 +243,13 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     end
     # Without the CT12(), the right-hand side would be a CT1 or CT2 in 2D space.
 
-    ᶜρ = Y.c.ρ
-
     # Full vertical advection of passive tracers (such as liq, rai, etc) with the
     # grid-mean flow. When EDMFX sgs_mass_flux is active, difference-form SGS
     # corrections ρᵏaᵏ(u³ᵏ - u³)(χᵏ - χ) are added on top of this in
     # edmfx_sgs_mass_flux_tendency!.
     foreach_gs_tracer(Yₜ, Y) do ᶜρχₜ, ᶜρχ, ρχ_name
         if !(ρχ_name in (@name(ρe_tot), @name(ρq_tot)))
-            ᶜχ = @. lazy(specific(ᶜρχ, Y.c.ρ))
+            ᶜχ = @. lazy(specific(ᶜρχ, ᶜρ))
             vtt = vertical_transport(ᶜρ, ᶠu³, ᶜχ, dt, tracer_upwinding)
             @. ᶜρχₜ += vtt
         end
@@ -261,9 +262,7 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
 
     if isnothing(ᶠf¹²)
         # shallow atmosphere
-        @. Yₜ.c.uₕ -=
-            ᶜinterp(ᶠω¹² × (ᶠinterp(Y.c.ρ * ᶜJ) * ᶠu³)) / (Y.c.ρ * ᶜJ) +
-            (ᶜf³ + ᶜω³) × CT12(ᶜu)
+        @. Yₜ.c.uₕ -= ᶜinterp(ᶠω¹² × (ᶠρJ * ᶠu³)) / ᶜρJ + (ᶜf³ + ᶜω³) × CT12(ᶜu)
         @. Yₜ.f.u₃ -= ᶠω¹² × ᶠinterp(CT12(ᶜu)) + ᶠgradᵥ(ᶜK)
         for j in 1:n
             @. Yₜ.f.sgsʲs.:($$j).u₃ -=
@@ -272,9 +271,7 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
         end
     else
         # deep atmosphere
-        @. Yₜ.c.uₕ -=
-            ᶜinterp((ᶠf¹² + ᶠω¹²) × (ᶠinterp(Y.c.ρ * ᶜJ) * ᶠu³)) /
-            (Y.c.ρ * ᶜJ) + (ᶜf³ + ᶜω³) × CT12(ᶜu)
+        @. Yₜ.c.uₕ -= ᶜinterp((ᶠf¹² + ᶠω¹²) × (ᶠρJ * ᶠu³)) / ᶜρJ + (ᶜf³ + ᶜω³) × CT12(ᶜu)
         @. Yₜ.f.u₃ -= (ᶠf¹² + ᶠω¹²) × ᶠinterp(CT12(ᶜu)) + ᶠgradᵥ(ᶜK)
         for j in 1:n
             @. Yₜ.f.sgsʲs.:($$j).u₃ -=
@@ -537,16 +534,17 @@ function updraft_sedimentation!(
     ᶜJ = Fields.local_geometry_field(axes(ᶜρ)).J
     # use output as a scratch field
     ∂a∂z = vtt
-    @. ∂a∂z = ᶜprecipdivᵥ(ᶠinterp(ᶜJ) / ᶠJ * ᶠtop_bias(Geometry.WVector(ᶜa)))
-    ᶠρ = @. p.scratch.ᶠtemp_scalar = ᶠinterp(ᶜρ * ᶜJ) / ᶠJ
+    @. ∂a∂z = ᶜprecipdivᵥ(ᶠinterp(ᶜJ) / ᶠJ * ᶠtop_bias(WVec(ᶜa)))
+    ᶠρ = p.scratch.ᶠtemp_scalar
+    ᶠρ .= ᶠface_density(ᶜρ)
     ᶠwχ = @. p.scratch.ᶠtemp_scalar_2 = ᶠtop_bias(-(ᶜw) * ᶜχ)
     ᶠwaχ = @. p.scratch.ᶠtemp_scalar_3 = ᶠtop_bias(-(ᶜw) * ᶜa * ᶜχ)
     # Base: within-updraft flux convergence a · ∂_z(ρ w χ)
     # Lateral correction: min(∂a/∂z, 0) · ρ⁰w⁰χ⁰
     @. vtt = ifelse(
         ∂a∂z < 0,
-        -(ᶜprecipdivᵥ(ᶠρ * Geometry.WVector(ᶠwaχ)) - ∂a∂z * ᶜρ⁰w⁰χ⁰),
-        -(ᶜa * ᶜprecipdivᵥ(ᶠρ * Geometry.WVector(ᶠwχ))),
+        -(ᶜprecipdivᵥ(ᶠρ * WVec(ᶠwaχ)) - ∂a∂z * ᶜρ⁰w⁰χ⁰),
+        -(ᶜa * ᶜprecipdivᵥ(ᶠρ * WVec(ᶠwχ))),
     )
     return
 end

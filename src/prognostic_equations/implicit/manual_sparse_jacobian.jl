@@ -728,11 +728,10 @@ function update_advection_jacobian!(matrix, Y, p, dtγ, topography_flag)
     cp_d = FT(CAP.cp_d(params))
     thermo_params = CAP.thermodynamics_params(params)
 
-    ᶜρ = Y.c.ρ
+    ᶜρ, ᶠρ = Y.c.ρ, ᶠface_density(Y.c.ρ)
     ᶜuₕ = Y.c.uₕ
     ᶠu₃ = Y.f.u₃
     ᶜJ = Fields.local_geometry_field(Y.c).J
-    ᶠJ = Fields.local_geometry_field(Y.f).J
     ᶜgⁱʲ = Fields.local_geometry_field(Y.c).gⁱʲ
     ᶠgⁱʲ = Fields.local_geometry_field(Y.f).gⁱʲ
     ᶠz = Fields.coordinate_field(Y.f).z
@@ -754,8 +753,7 @@ function update_advection_jacobian!(matrix, Y, p, dtγ, topography_flag)
 
     @. ᶠp_grad_matrix = DiagonalMatrixRow(-1 / ᶠinterp(ᶜρ)) * ᶠgradᵥ_matrix()
 
-    @. ᶜadvection_matrix =
-        -(ᶜadvdivᵥ_matrix()) * DiagonalMatrixRow(ᶠinterp(ᶜρ * ᶜJ) / ᶠJ)
+    @. ᶜadvection_matrix = -(ᶜadvdivᵥ_matrix()) * DiagonalMatrixRow(ᶠρ)
     @. p.scratch.ᶠbidiagonal_matrix_ct3xct12 =
         ᶠwinterp_matrix(ᶜJ * ᶜρ) * DiagonalMatrixRow(g³ʰ(ᶜgⁱʲ))
     if use_derivative(topography_flag)
@@ -895,9 +893,7 @@ function update_sedimentation_jacobian!(matrix, Y, p, dtγ)
     (; ᶜu, ᶜT) = p.precomputed
     thermo_params = CAP.thermodynamics_params(params)
 
-    ᶜρ = Y.c.ρ
-    ᶜJ = Fields.local_geometry_field(Y.c).J
-    ᶠJ = Fields.local_geometry_field(Y.f).J
+    ᶜρ, ᶠρ = Y.c.ρ, ᶠface_density(Y.c.ρ)
 
     ∂ᶜρe_tot_err_∂ᶜρe_tot = matrix[@name(c.ρe_tot), @name(c.ρe_tot)]
     @. ∂ᶜρe_tot_err_∂ᶜρe_tot = zero(typeof(∂ᶜρe_tot_err_∂ᶜρe_tot)) - (I,)
@@ -910,8 +906,7 @@ function update_sedimentation_jacobian!(matrix, Y, p, dtγ)
 
     # This scratch variable computation could be skipped if no tracers are present
     @. p.scratch.ᶜbidiagonal_adjoint_matrix_c3 =
-        dtγ * (-(ᶜprecipdivᵥ_matrix())) *
-        DiagonalMatrixRow(ᶠinterp(ᶜρ * ᶜJ) / ᶠJ)
+        dtγ * (-(ᶜprecipdivᵥ_matrix())) * DiagonalMatrixRow(ᶠρ)
 
     MatrixFields.unrolled_foreach(sedimenting_tracer_names(Y)) do ρχₚ_name
         wₚ_name = sedimentation_velocity_name(ρχₚ_name)
@@ -1414,7 +1409,8 @@ function update_sgs_advection_jacobian!(matrix, Y, p, dtγ)
     }
         ᶜa = (@. lazy(draft_area(Y.c.sgsʲs.:(1).ρa, ᶜρʲs.:(1))))
         ᶜ∂a∂z = p.scratch.ᶜtemp_scalar_7
-        @. ᶜ∂a∂z = ᶜprecipdivᵥ(ᶠinterp(ᶜJ) / ᶠJ * ᶠtop_bias(Geometry.WVector(ᶜa)))
+        @. ᶜ∂a∂z = ᶜprecipdivᵥ(ᶠinterp(ᶜJ) / ᶠJ * ᶠtop_bias(WVec(ᶜa)))
+        ᶠρʲ = ᶠface_density(ᶜρʲs.:(1))
         ᶜinv_ρ̂ = (@. lazy(
             specific(
                 FT(1),
@@ -1450,9 +1446,8 @@ function update_sgs_advection_jacobian!(matrix, Y, p, dtγ)
             #   ∂(ρ⁰w⁰χ⁰)/∂χʲ = −ρa¹·w¹/(1−a) and
             #   ∂/∂χʲ of correction = ∂a/∂z · ρ¹w¹/(1−a)
             @. ᶠsed_tracer_advection =
-                DiagonalMatrixRow(ᶠinterp(ᶜρʲs.:(1) * ᶜJ) / ᶠJ) *
-                ᶠtop_bias_matrix() *
-                DiagonalMatrixRow(-Geometry.WVector(ᶜwʲ))
+                DiagonalMatrixRow(ᶠρʲ) * ᶠtop_bias_matrix() *
+                DiagonalMatrixRow(-WVec(ᶜwʲ))
             @. ᶜtridiagonal_matrix_scalar =
                 dtγ * ifelse(ᶜ∂a∂z < 0,
                     -(ᶜprecipdivᵥ_matrix()) * ᶠsed_tracer_advection *
@@ -1718,11 +1713,10 @@ function update_sgs_massflux_jacobian!(matrix, Y, p, dtγ, diffusion_flag)
         @. ∂ᶜρq_tot_err_∂ᶜρ = zero(typeof(∂ᶜρq_tot_err_∂ᶜρ))
     end
 
+    ᶠρʲ = ᶠface_density(ᶜρʲs.:(1))
     ∂ᶜupdraft_mass_flux_∂ᶜscalar = ᶠbidiagonal_matrix_ct3
     @. ∂ᶜupdraft_mass_flux_∂ᶜscalar =
-        DiagonalMatrixRow(
-            (ᶠinterp(ᶜρʲs.:(1) * ᶜJ) / ᶠJ) * (ᶠu³ʲs.:(1) - ᶠu³),
-        ) * ᶠinterp_matrix() *
+        DiagonalMatrixRow(ᶠρʲ * (ᶠu³ʲs.:(1) - ᶠu³)) * ᶠinterp_matrix() *
         DiagonalMatrixRow(Y.c.sgsʲs.:(1).ρa / ᶜρʲs.:(1))
     @. p.scratch.ᶜtridiagonal_matrix_scalar =
         dtγ * ᶜadvdivᵥ_matrix() * ∂ᶜupdraft_mass_flux_∂ᶜscalar

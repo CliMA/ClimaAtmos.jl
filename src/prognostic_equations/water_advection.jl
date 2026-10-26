@@ -45,9 +45,6 @@ function vertical_advection_of_water_tendency!(Yₜ, Y, p, t)
     (; ᶜu, ᶜT) = p.precomputed
     thp = CAP.thermodynamics_params(params)
 
-    ᶜJ = Fields.local_geometry_field(Y.c).J
-    ᶠJ = Fields.local_geometry_field(Y.f).J
-
     microphysics_tracers = (
         (@name(ρq_lcl), @name(ᶜwₗ)),
         (@name(ρq_icl), @name(ᶜwᵢ)),
@@ -59,33 +56,23 @@ function vertical_advection_of_water_tendency!(Yₜ, Y, p, t)
         (name == @name(ρq_icl) || name == @name(ρq_sno)) ? TD.internal_energy_ice :
         nothing
 
-    ᶠρ = p.scratch.ᶠtemp_scalar
+    ᶠρ = ᶠface_density(Y.c.ρ)
     ᶜq = p.scratch.ᶜtemp_scalar
     vtt = p.scratch.ᶜtemp_scalar_2
-    @. ᶠρ = ᶠinterp(Y.c.ρ * ᶜJ) / ᶠJ
     MatrixFields.unrolled_foreach(microphysics_tracers) do (ρq_name, w_name)
         MatrixFields.has_field(Y.c, ρq_name) || return
 
         ᶜρq = MatrixFields.get_field(Y.c, ρq_name)
         ᶜw = MatrixFields.get_field(p.precomputed, w_name)
         @. ᶜq = specific(ᶜρq, Y.c.ρ)
-        @. vtt =
-            -1 * ᶜprecipdivᵥ(
-                ᶠρ * ᶠtop_bias(
-                    Geometry.WVector(-(ᶜw)) * ᶜq,
-                ),
-            )
+        @. vtt = -1 * ᶜprecipdivᵥ(ᶠρ * ᶠtop_bias(WVec(-(ᶜw)) * ᶜq))
         @. Yₜ.c.ρ += vtt
         @. Yₜ.c.ρq_tot += vtt
 
         e_int_func = internal_energy_func(ρq_name)
         @. p.scratch.ᶜtemp_scalar_3 =
             -(ᶜw) * ᶜq * (e_int_func(thp, ᶜT) + ᶜΦ + $(Kin(ᶜw, ᶜu)))
-        @. Yₜ.c.ρe_tot -= ᶜprecipdivᵥ(
-            ᶠρ * ᶠtop_bias(
-                Geometry.WVector(p.scratch.ᶜtemp_scalar_3),
-            ),
-        )
+        @. Yₜ.c.ρe_tot -= ᶜprecipdivᵥ(ᶠρ * ᶠtop_bias(WVec(p.scratch.ᶜtemp_scalar_3)))
     end
 
     # For prognostic edmf, augment the energy tendencies with the additional energy contributions
@@ -138,14 +125,13 @@ function vertical_advection_of_water_tendency!(Yₜ, Y, p, t)
             @. p.scratch.ᶜtemp_scalar_3 =
                 e_int_func(thp, ᶜTʲs.:(1)) + $(Kin(ᶜwʲ, ᶜuʲ)) -
                 p.scratch.ᶜtemp_scalar_2
-            @. Yₜ.c.ρe_tot -=
-                ᶜprecipdivᵥ(
-                    ᶠinterp(ᶜρʲs.:(1) * ᶜJ) / ᶠJ * ᶠtop_bias(
-                        Geometry.WVector(-(ᶜwʲ)) *
-                        draft_area(Y.c.sgsʲs.:(1).ρa, ᶜρʲs.:(1)) * ᶜqʲ *
-                        p.scratch.ᶜtemp_scalar_3,
-                    ),
-                )
+            ᶠρʲ = ᶠface_density(ᶜρʲs.:(1))
+            @. Yₜ.c.ρe_tot -= ᶜprecipdivᵥ(
+                ᶠρʲ * ᶠtop_bias(
+                    WVec(-(ᶜwʲ)) * draft_area(Y.c.sgsʲs.:(1).ρa, ᶜρʲs.:(1)) * ᶜqʲ *
+                    p.scratch.ᶜtemp_scalar_3,
+                ),
+            )
             # Environment correction: (e_int⁰ + Kin⁰) - (e_int + Kin). The
             # environment sedimentation velocity is not stored separately
             # (the environment mass flux is the residual ρqw - ρaʲqʲwʲ), so
@@ -156,13 +142,9 @@ function vertical_advection_of_water_tendency!(Yₜ, Y, p, t)
                 e_int_func(thp, ᶜT⁰) + $(Kin(ᶜw, ᶜu⁰)) -
                 p.scratch.ᶜtemp_scalar_2
             ᶜwaq⁰ = @. lazy((ᶜρq * ᶜw - Y.c.sgsʲs.:(1).ρa * ᶜqʲ * ᶜwʲ) / ᶜρ⁰)
+            ᶠρ⁰ = ᶠface_density(ᶜρ⁰)
             @. Yₜ.c.ρe_tot -=
-                ᶜprecipdivᵥ(
-                    ᶠinterp(ᶜρ⁰ * ᶜJ) / ᶠJ * ᶠtop_bias(
-                        Geometry.WVector(-(ᶜwaq⁰)) *
-                        p.scratch.ᶜtemp_scalar_3,
-                    ),
-                )
+                ᶜprecipdivᵥ(ᶠρ⁰ * ᶠtop_bias(WVec(-(ᶜwaq⁰)) * p.scratch.ᶜtemp_scalar_3))
         end
     end
 
