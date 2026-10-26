@@ -218,7 +218,6 @@ function precomputed_quantities(Y, atmos)
     n_prog = n_prognostic_mass_flux_subdomains(atmos.turbconv_model)
     @assert !(atmos.turbconv_model isa PrognosticEDMFX) || n_prog == 1
     gs_quantities = (;
-        ᶜwₜqₜ = similar(Y.c, Geometry.WVector{FT}),
         ᶜwₕhₜ = similar(Y.c, Geometry.WVector{FT}),
         # Moist buoyancy gradient N² at centers; same physical quantity as the
         # face-native `ᶠK`-pipeline `ᶠbuoygrad`, built from the centered

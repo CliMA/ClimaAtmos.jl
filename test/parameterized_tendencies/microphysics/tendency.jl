@@ -103,7 +103,7 @@ end
         # Expected cache variables for 0-moment
         expected_vars = (
             :ᶜmp_tendency, :ᶜρ_dq_tot_dt, :ᶜρ_de_tot_dt,
-            :surface_rain_flux, :surface_snow_flux, :ᶜwₜqₜ, :ᶜwₕhₜ,
+            :surface_rain_flux, :surface_snow_flux, :ᶜwₕhₜ,
         )
         test_precipitation_setup!(Y, p, expected_vars)
 
@@ -202,7 +202,7 @@ end
         expected_vars = (
             :ᶜmp_tendency,
             :surface_rain_flux, :surface_snow_flux,
-            :ᶜwₗ, :ᶜwᵢ, :ᶜwᵣ, :ᶜwₛ, :ᶜwₜqₜ, :ᶜwₕhₜ,
+            :ᶜwₗ, :ᶜwᵢ, :ᶜwᵣ, :ᶜwₛ, :ᶜwₕhₜ,
         )
         test_precipitation_setup!(Y, p, expected_vars)
 
@@ -255,7 +255,7 @@ end
     #     expected_vars = (
     #         :ᶜmp_tendency,
     #         :surface_rain_flux, :surface_snow_flux,
-    #         :ᶜwₗ, :ᶜwᵢ, :ᶜwᵣ, :ᶜwₛ, :ᶜwₙₗ, :ᶜwₙᵣ, :ᶜwₜqₜ, :ᶜwₕhₜ,
+    #         :ᶜwₗ, :ᶜwᵢ, :ᶜwᵣ, :ᶜwₛ, :ᶜwₙₗ, :ᶜwₙᵣ, :ᶜwₕhₜ,
     #     )
     #     test_precipitation_setup!(Y, p, expected_vars)
     #
@@ -300,7 +300,7 @@ end
         expected_vars = (
             :ᶜmp_tendency,
             :surface_rain_flux, :surface_snow_flux,
-            :ᶜwₗ, :ᶜwᵢ, :ᶜwᵣ, :ᶜwₛ, :ᶜwₜqₜ, :ᶜwₕhₜ,
+            :ᶜwₗ, :ᶜwᵢ, :ᶜwᵣ, :ᶜwₛ, :ᶜwₕhₜ,
         )
         test_precipitation_setup!(Y, p, expected_vars)
 
