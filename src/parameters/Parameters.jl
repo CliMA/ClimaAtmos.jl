@@ -319,8 +319,10 @@ ClimaParams does not yet define or whose ClimaParams default it supersedes.
     cloud-fraction/condensate relationship; 1 for an exact Gaussian SGS
     distribution [-].
   - `condensation_evaporation_timescale`, `sublimation_deposition_timescale`:
-    Shared ClimaParams/CloudMicrophysics 1M relaxation timescales
-    `τ_cond`, `τ_sub` used by `sgs_microphysics_timescale` [s].
+    Shared ClimaParams/CloudMicrophysics relaxation timescales `τ_cond`,
+    `τ_sub` of the SGS variance fidelity (`set_sgs_microphysics_timescale!`)
+    with the schemes other than 1M, which takes the relaxation times of its
+    own processes [s].
   - `sgs_fidelity_equilibrium_weight`: Weight `w_eq ∈ (0, 1)` on the
     equilibrium prediction in the SGS variance-fidelity modulator; default
     `0.5` (see `sgs_variance_fidelity`) [-].

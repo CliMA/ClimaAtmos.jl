@@ -403,3 +403,216 @@ end
         )
     @test parent(Yₜ.c.ρe_tot) ≈ parent(ᶜexpected) rtol = FT(1e-12)
 end
+
+@testset "Blended turbulent flux of suspended cloud species" begin
+    # With prognostic TKE, a mixing length, and the SGS saturation-excess width
+    # available, cloud liquid and ice take the blended flux
+    #   F_qμ = (1 - λ_μ) (-ρK ∇q_μ) + λ_μ (c_qt F_qt + c_sl F_sl),
+    # λ_μ = τ_e / (τ_e + τ_μ). λ_μ = 0 is the down-gradient self-diffusion;
+    # λ_μ = 1 is the flux implied by the conserved-variable fluxes, which
+    # vanishes in clear air and, in saturated air (C = 1), equals
+    #   χ_μ [F_qt - (∂q_sat/∂T / c_p) F_sl] / (1 + γ).
+    # The energy and total-water tendencies do not depend on λ_μ.
+    FT = Float64
+    params = CA.ClimaAtmosParameters(CP.create_toml_dict(FT))
+    thermo_params = CAP.thermodynamics_params(params)
+
+    (; cent_space, face_space) = get_cartesian_spaces(; FT)
+    coords = Fields.coordinate_field(cent_space)
+    ᶜz = coords.z
+
+    NT = NamedTuple{
+        (:ρ, :ρe_tot, :ρq_tot, :ρq_lcl, :ρq_icl, :ρq_rai, :ρq_sno, :ρtke),
+        NTuple{8, FT},
+    }
+    Yc = similar(coords, NT)
+    @. Yc.ρ = FT(1.2)
+    @. Yc.ρe_tot = Yc.ρ * FT(2.5e5)
+    @. Yc.ρq_lcl = Yc.ρ * (FT(2e-4) + FT(1e-4) * cos(ᶜz))
+    @. Yc.ρq_icl = Yc.ρ * (FT(1e-4) + FT(5e-5) * cos(ᶜz))
+    @. Yc.ρq_rai = FT(0)
+    @. Yc.ρq_sno = FT(0)
+    Y = Fields.FieldVector(; c = Yc)
+
+    ᶜu = @. Geometry.UVWVector(zero(ᶜz), zero(ᶜz), zero(ᶜz))
+    ᶜp = @. FT(1e5) - FT(1e3) * ᶜz
+    ᶜT = @. FT(280) - FT(20) * (ᶜz / FT(π))
+    ᶜq_liq = @. Yc.ρq_lcl / Yc.ρ
+    ᶜq_ice = @. Yc.ρq_icl / Yc.ρ
+    ᶜl_mix = similar(ᶜz)
+    ᶜsgs_moments = similar(
+        ᶜz,
+        @NamedTuple{sigma_S::FT, λ_lagrange::FT, λ_eq::FT},
+    )
+    fill!(ᶜsgs_moments, (; sigma_S = FT(1e-9), λ_lagrange = FT(0), λ_eq = FT(0)))
+    make_p(ᶜq_tot_nonneg) = (;
+        atmos = (;
+            vertical_diffusion = CA.DecayWithHeightDiffusion{FT}(;
+                disable_momentum_vertical_diffusion = true,
+                H = FT(1),
+                D₀ = FT(1),
+            ),
+            microphysics_model = CA.NonEquilibriumMicrophysics1M(),
+        ),
+        params,
+        precomputed = (;
+            ᶜu, ᶜp, ᶜT, ᶜq_liq, ᶜq_ice, ᶜq_tot_nonneg, ᶜl_mix, ᶜsgs_moments,
+        ),
+        core = (; ᶜΦ = (@. CAP.grav(params) * ᶜz)),
+        scratch = (;
+            ᶜtemp_scalar = similar(ᶜz),
+            ᶜtemp_scalar_2 = similar(ᶜz),
+            ᶜtemp_scalar_3 = similar(ᶜz),
+            ᶜtemp_scalar_4 = similar(ᶜz),
+            ᶜtemp_scalar_8 = similar(ᶜz),
+            ᶜtemp_scalar_9 = similar(ᶜz),
+            ᶜtemp_scalar_10 = similar(ᶜz),
+            ᶠtemp_C3 = Fields.Field(
+                Geometry.Covariant3Vector{FT},
+                face_space,
+            ),
+            ᶠtemp_C3_2 = Fields.Field(
+                Geometry.Covariant3Vector{FT},
+                face_space,
+            ),
+        ),
+    )
+    tendency(Y, p) = begin
+        Yₜ = Fields.FieldVector(; c = zero(Y.c))
+        CA.vertical_diffusion_boundary_layer_tendency!(Yₜ, Y, p, FT(0))
+        Yₜ
+    end
+    ᶜK_h = similar(ᶜz)
+    ᶜK_h .= CA.ᶜcompute_eddy_diffusivity_coefficient(
+        Yc.ρ,
+        make_p(ᶜq_liq).atmos.vertical_diffusion,
+    )
+    ᶠρK = similar(Fields.coordinate_field(face_space).z)
+    @. ᶠρK = CA.ᶠinterp(Yc.ρ) / CA.ᶠinterp(1 / max(ᶜK_h, eps(FT)))
+
+    # Blend weight limits, with τ_e = l_mix / (c_d √tke). The liquid
+    # relaxation time of the 1M microphysics is the constant
+    # `condensation_evaporation_timescale`; the ice time of these parameters
+    # (`ConstantTimescale`, the CloudMicrophysics default without a model) is
+    # `sublimation_deposition_timescale`.
+    c_d = CA.tke_dissipation_coefficient(CAP.turbconv_params(params))
+    τ_l = CAP.condensation_evaporation_timescale(params)
+    cmp = CAP.microphysics_1m_params(params)
+    ρ_ref = TD.air_density(thermo_params, FT(280), FT(1e5), FT(0), FT(0), FT(0))
+    @test CA.cloud_species_relaxation_time(
+        cmp, thermo_params, FT(280), ρ_ref, FT(5e-3), FT(1e-4), FT(0),
+        TD.Liquid(),
+    ) == τ_l
+    @test CA.cloud_species_relaxation_time(
+        cmp, thermo_params, FT(260), ρ_ref, FT(2e-3), FT(0), FT(1e-4),
+        TD.Ice(),
+    ) == CAP.sublimation_deposition_timescale(params)
+    @test CA.cloud_species_flux_blend(FT(50), FT(0.1), c_d, FT(0)) == 1
+    @test CA.cloud_species_flux_blend(FT(0), FT(0.1), c_d, FT(100)) == 0
+    @test CA.cloud_species_flux_blend(FT(50), FT(0.1), c_d, τ_l) ≈
+          FT(50) / (FT(50) + τ_l * c_d * sqrt(FT(0.1)))
+    # A disabled process gives self-diffusion at every TKE, with no NaN from
+    # `Inf · 0` at zero TKE; the ramp-blended fidelity time drops an infinite
+    # phase time of zero weight the same way.
+    @test CA.cloud_species_flux_blend(FT(50), FT(0.1), c_d, FT(Inf)) == 0
+    @test CA.cloud_species_flux_blend(FT(50), FT(0), c_d, FT(Inf)) == 0
+    @test CA.sgs_microphysics_timescale(thermo_params, FT(280), τ_l, FT(Inf)) ==
+          τ_l
+    @test CA.sgs_variance_fidelity(
+        FT(1), FT(Inf), c_d, FT(0), FT(50), FT(0.5), FT(1e-4), FT(0), FT(1e-4),
+        FT(1e-8),
+    ) == CA.sgs_variance_fidelity(
+        FT(1), τ_l, c_d, FT(0), FT(50), FT(0.5), FT(1e-4), FT(0), FT(1e-4),
+        FT(1e-8),
+    )
+
+    # Clear, subsaturated air (q_t ≪ q_sat, so λ_eq ≪ -σ_S): λ = 0 (l_mix = 0)
+    # recovers the down-gradient self-diffusion; λ = 1 (tke = 0) gives no
+    # species flux at all because the equilibrium cloudy fraction vanishes.
+    # The equilibrium multiplier is the mean saturation excess, as with the
+    # untruncated Gaussian target.
+    @. Yc.ρq_tot = Yc.ρ * (FT(1e-3) + FT(2e-4) * cos(ᶜz))
+    ᶜq_tot_nonneg = @. Yc.ρq_tot / Yc.ρ
+    @. ᶜsgs_moments.λ_eq =
+        ᶜq_tot_nonneg - TD.q_vap_saturation(thermo_params, ᶜT, Yc.ρ)
+    p = make_p(ᶜq_tot_nonneg)
+    @. ᶜl_mix = FT(0)
+    @. Yc.ρtke = Yc.ρ * FT(0.1)
+    Yₜ_self = tendency(Y, p)
+    ᶜexpected = similar(ᶜz)
+    @. ᶜexpected = -CA.ᶜdiffdivᵥ(-(ᶠρK * CA.ᶠgradᵥ(Yc.ρq_lcl / Yc.ρ)))
+    @test parent(Yₜ_self.c.ρq_lcl) ≈ parent(ᶜexpected) rtol = FT(1e-12)
+    @. ᶜexpected = -CA.ᶜdiffdivᵥ(-(ᶠρK * CA.ᶠgradᵥ(Yc.ρq_icl / Yc.ρ)))
+    @test parent(Yₜ_self.c.ρq_icl) ≈ parent(ᶜexpected) rtol = FT(1e-12)
+
+    @. ᶜl_mix = FT(50)
+    @. Yc.ρtke = FT(0)
+    Yₜ_eq = tendency(Y, p)
+    @test maximum(abs, parent(Yₜ_eq.c.ρq_lcl)) <=
+          FT(1e-12) * maximum(abs, parent(Yₜ_self.c.ρq_lcl))
+    @test maximum(abs, parent(Yₜ_eq.c.ρq_icl)) <=
+          FT(1e-12) * maximum(abs, parent(Yₜ_self.c.ρq_icl))
+    # Energy and total water do not depend on the blend.
+    @test parent(Yₜ_eq.c.ρe_tot) == parent(Yₜ_self.c.ρe_tot)
+    @test parent(Yₜ_eq.c.ρq_tot) == parent(Yₜ_self.c.ρq_tot)
+
+    # Saturated air (q_t > q_sat everywhere, λ_eq ≫ σ_S so C = 1): λ = 1
+    # gives the conserved-variable implied flux with the saturated-limit
+    # coefficients, split between liquid and ice by the liquid fraction.
+    ᶜq_sat = @. TD.q_vap_saturation(thermo_params, ᶜT, Yc.ρ)
+    @. Yc.ρq_tot = Yc.ρ * (ᶜq_sat + FT(2e-3))
+    ᶜq_tot_nonneg = @. Yc.ρq_tot / Yc.ρ
+    @. ᶜsgs_moments.λ_eq = ᶜq_tot_nonneg - ᶜq_sat
+    p = make_p(ᶜq_tot_nonneg)
+    Yₜ_sat = tendency(Y, p)
+    ᶠF_qt = @. -(ᶠρK * CA.ᶠgradᵥ(ᶜq_tot_nonneg))
+    ᶜcp = @. TD.cp_m(thermo_params, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice)
+    ᶜL_v = @. TD.latent_heat_vapor(thermo_params, ᶜT)
+    ᶜL_s = @. TD.latent_heat_sublim(thermo_params, ᶜT)
+    ᶠF_sl = @. -(
+        ᶠρK * (
+            CA.ᶠinterp(ᶜcp) * CA.ᶠgradᵥ(ᶜT) + CA.ᶠgradᵥ(p.core.ᶜΦ) -
+            CA.ᶠinterp(ᶜL_v) * CA.ᶠgradᵥ(ᶜq_liq) -
+            CA.ᶠinterp(ᶜL_s) * CA.ᶠgradᵥ(ᶜq_ice)
+        )
+    )
+    ᶜχ_l = @. TD.liquid_fraction(thermo_params, ᶜT, ᶜq_liq, ᶜq_ice)
+    # γ = (L / c_p) ∂q_sat/∂T for the phase mixture of Thermodynamics, with the
+    # density of the diffusing mixture from the gas law
+    ᶜρ_air = @. TD.air_density(
+        thermo_params,
+        ᶜT,
+        ᶜp,
+        ᶜq_tot_nonneg,
+        ᶜq_liq,
+        ᶜq_ice,
+    )
+    ᶜ∂q_sat_∂T = @. TD.∂q_vap_sat_∂T(thermo_params, ᶜT, ᶜρ_air)
+    ᶜL = @. TD.latent_heat_mixed(
+        thermo_params,
+        ᶜT,
+        TD.liquid_fraction_ramp(thermo_params, ᶜT),
+    )
+    ᶜγ = @. ᶜL / ᶜcp * ᶜ∂q_sat_∂T
+    ᶜc_qt_l = @. ᶜχ_l / (1 + ᶜγ)
+    ᶜc_sl_l = @. (-1) * ᶜc_qt_l * ᶜ∂q_sat_∂T / ᶜcp
+    ᶜc_qt_i = @. (1 - ᶜχ_l) / (1 + ᶜγ)
+    ᶜc_sl_i = @. (-1) * ᶜc_qt_i * ᶜ∂q_sat_∂T / ᶜcp
+    @. ᶜexpected = -CA.ᶜdiffdivᵥ(
+        CA.ᶠinterp(ᶜc_qt_l) * ᶠF_qt + CA.ᶠinterp(ᶜc_sl_l) * ᶠF_sl,
+    )
+    @test maximum(abs, parent(ᶜexpected)) > 0
+    @test parent(Yₜ_sat.c.ρq_lcl) ≈ parent(ᶜexpected) rtol = FT(1e-10)
+    @. ᶜexpected = -CA.ᶜdiffdivᵥ(
+        CA.ᶠinterp(ᶜc_qt_i) * ᶠF_qt + CA.ᶠinterp(ᶜc_sl_i) * ᶠF_sl,
+    )
+    @test parent(Yₜ_sat.c.ρq_icl) ≈ parent(ᶜexpected) rtol = FT(1e-10)
+
+    # Half-way blend is the average of the two limits (same state).
+    @. Yc.ρtke = Yc.ρ * (FT(50) / (τ_l * c_d))^2
+    Yₜ_mid = tendency(Y, p)
+    @. ᶜl_mix = FT(0)
+    Yₜ_sat_self = tendency(Y, p)
+    @. ᶜexpected = (Yₜ_sat.c.ρq_lcl + Yₜ_sat_self.c.ρq_lcl) / 2
+    @test parent(Yₜ_mid.c.ρq_lcl) ≈ parent(ᶜexpected) rtol = FT(1e-10)
+end

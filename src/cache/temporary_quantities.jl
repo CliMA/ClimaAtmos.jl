@@ -51,6 +51,28 @@ function implicit_temporary_quantities(Y, atmos)
     )
 end
 """
+    cloud_species_diffusion_temporary_quantities(Y, atmos)
+
+Allocate the scratch fields of the blended cloud-species flux
+(`add_cloud_species_diffusionᵥ!`): the face fluxes of total water and
+liquid–ice static energy, and the center blend weight and condensate
+sensitivities. The 1-moment microphysics is the only scheme that blends, so
+every other scheme gets an empty `NamedTuple`.
+"""
+function cloud_species_diffusion_temporary_quantities(Y, atmos)
+    atmos.microphysics_model isa NonEquilibriumMicrophysics1M || return (;)
+    center_space, face_space = axes(Y.c), axes(Y.f)
+    FT = Spaces.undertype(center_space)
+    return (;
+        ᶠtemp_C3 = Fields.Field(C3{FT}, face_space), # ᶠF_qt
+        ᶠtemp_C3_2 = Fields.Field(C3{FT}, face_space), # ᶠF_sl
+        ᶜtemp_scalar_8 = Fields.Field(FT, center_space), # ᶜλ
+        ᶜtemp_scalar_9 = Fields.Field(FT, center_space), # ᶜc_qt
+        ᶜtemp_scalar_10 = Fields.Field(FT, center_space), # ᶜc_sl
+    )
+end
+
+"""
     temporary_quantities(Y, atmos)
 
 Allocate the scratch fields stored in `p.scratch`.
@@ -87,6 +109,7 @@ function temporary_quantities(Y, atmos)
         ᶜtemp_scalar_5 = Fields.Field(FT, center_space),
         ᶜtemp_scalar_6 = Fields.Field(FT, center_space),
         ᶜtemp_scalar_7 = Fields.Field(FT, center_space),
+        cloud_species_diffusion_temporary_quantities(Y, atmos)...,
         cosp_temporary_quantities(Y, atmos.cosp)...,
         ᶠtemp_field_level = Fields.level(Fields.Field(FT, face_space), half),
         temp_field_level = Fields.level(Fields.Field(FT, center_space), 1),

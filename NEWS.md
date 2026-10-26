@@ -3,6 +3,21 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- ![][badge-🔥behavioralΔ] With the 1M microphysics and prognostic TKE, the
+  turbulent flux of cloud liquid and ice blends down-gradient self-diffusion
+  with the flux implied by the conserved-variable fluxes of total water and
+  liquid–ice static energy, weighted by `λ = τ_e / (τ_e + τ_μ)` with the eddy
+  turnover time `τ_e = l_mix / (c_d √tke)` and the relaxation time `τ_μ` of
+  the 1M condensation or deposition process at the cell state
+  (`add_cloud_species_diffusionᵥ!`). The equilibrium part uses the cloudy
+  fraction `Φ(λ_eq/σ_S)` of the condensate the 1M microphysics relaxes toward
+  (`ᶜsgs_moments`) and vanishes in clear air. The Damköhler factor of the SGS
+  variance fidelity uses the same per-cell relaxation times of the 1M
+  processes (`set_sgs_microphysics_timescale!`).
+  The energy flux is unchanged, so a layer well mixed in `(s_l, q_t)` remains a
+  fixed point, and its condensate flux now vanishes too. Under PrognosticEDMFX
+  the environment cloud species take the blended flux; draft cloud species
+  diffuse down their own gradients.
 - ![][badge-🔥behavioralΔ] The implicit-stage Picard updraft tracer predictor
   (`solve_sgs_updraft_tracers_implicit_stage_analytic!`) includes lateral and
   turbulent entrainment `(ε + ε_turb) (χ⁰ − χʲ)` and the first-cell surface

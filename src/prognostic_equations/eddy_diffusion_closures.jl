@@ -1036,6 +1036,330 @@ function add_water_enthalpy_diffusionᵥ!(
 end
 
 """
+    cloud_species_flux_blend(l_mix, tke, c_d, τ_μ)
+
+Weight `λ_μ = τ_e / (τ_e + τ_μ)` of the equilibrium-implied part of the
+turbulent flux of a suspended cloud species, with the eddy turnover time
+`τ_e = tke / ε = l_mix / (c_d √tke)` of the TKE dissipation
+`ε = c_d tke^{3/2} / l_mix` and the relaxation time `τ_μ` of the species
+(`cloud_species_relaxation_time`). The Damköhler factor of the SGS variance
+fidelity (`sgs_variance_fidelity`) uses the same relaxation times, blended by
+the liquid-fraction ramp, and the same turnover rate with the
+buoyancy-bounded mixing length and a 1 m floor; here, the master mixing
+length enters unfloored.
+
+A parcel that equilibrates fast relative to an eddy (`λ_μ → 1`) carries the
+equilibrium condensate of its conserved variables; one that equilibrates slowly
+(`λ_μ → 0`) carries its composition frozen, which is the down-gradient
+self-diffusion of the species; a disabled process (`τ_μ = Inf`) gives the
+latter for every TKE, the product `τ_μ √tke` being replaced by zero there so
+that `tke = 0` yields no NaN. The limits `tke → 0` and `l_mix → 0` leave the
+flux unaffected, since the eddy diffusivity of the TKE closure vanishes with
+them.
+"""
+@inline function cloud_species_flux_blend(l_mix, tke, c_d, τ_μ)
+    FT = typeof(l_mix)
+    τ = FT(τ_μ)
+    finite_τ = isfinite(τ)
+    τ_c_d_sqrt_tke =
+        ifelse(finite_τ, τ, zero(FT)) * FT(c_d) * sqrt(max(tke, zero(FT)))
+    λ = l_mix / max(l_mix + τ_c_d_sqrt_tke, eps(FT))
+    return ifelse(finite_τ, λ, zero(FT))
+end
+
+"""
+    cloud_species_relaxation_time(
+        cmp, thermo_params, T, ρ, q_tot, q_liq, q_ice, phase,
+    )
+
+Relaxation time `τ_μ` [s] of the suspended cloud species of `phase` at the
+state `(T, ρ, q_tot, q_liq, q_ice)`: the timescale of the 1M
+condensation–evaporation or deposition–sublimation process
+(`CMNe.τ_vap_to_q_lcl`, `CMNe.τ_vap_to_q_icl`) with the process options and
+parameters `cmp` of the microphysics, so that the blend weight of
+`cloud_species_flux_blend` follows the configured ice-formation variant, a
+constant timescale or one set by the ice number and the mean crystal radius,
+and is `Inf` where the process is off. Rain and snow do not enter these
+timescales and are passed as zero; the cloud species are clipped at zero as in
+the microphysics.
+"""
+@inline function cloud_species_relaxation_time(
+    cmp,
+    thermo_params,
+    T,
+    ρ,
+    q_tot,
+    q_liq,
+    q_ice,
+    phase::TD.Phase,
+)
+    FT = typeof(T)
+    micro = (;
+        q_tot,
+        q_lcl = max(q_liq, zero(FT)),
+        q_icl = max(q_ice, zero(FT)),
+        q_rai = zero(FT),
+        q_sno = zero(FT),
+    )
+    thermo = (; ρ, T)
+    processes = cmp.processes
+    return ifelse(
+        phase isa TD.Liquid,
+        CMNe.τ_vap_to_q_lcl(
+            processes.cloud_liquid_formation,
+            cmp,
+            thermo_params,
+            micro,
+            thermo,
+        ),
+        CMNe.τ_vap_to_q_icl(
+            processes.cloud_ice_formation,
+            cmp,
+            thermo_params,
+            micro,
+            thermo,
+        ),
+    )
+end
+
+"""
+    equilibrium_condensate_sensitivities(
+        thermo_params, T, ρ, q_tot, q_liq, q_ice, sigma_S, λ_eq, phase,
+    )
+
+Return `(c_qt, c_sl)`, the sensitivities of the SGS-mean equilibrium condensate
+of `phase` (`TD.Liquid()` or `TD.Ice()`) to the diffusing conserved variables,
+
+    c_qt = ∂q_μ/∂q_t |ₛₗ = C χ_μ / (1 + C γ),
+    c_sl = ∂q_μ/∂s_l |_qt = -c_qt (∂q_sat/∂T) / c_p.
+
+`C = Φ(λ_eq / σ_S)` is the cloudy fraction of the equilibrium condensate
+`max(0, λ_eq + S′)`, `S′ ~ N(0, σ_S²)`, that the 1M node rule relaxes toward
+(`Microphysics1MEvaluator`), with the multiplier `λ_eq` and width `σ_S` of
+`ᶜsgs_moments` (`_compute_sgs_moments`). With the untruncated Gaussian target
+(`sgs_displacement_truncation = Inf`, no curvature),
+`λ_eq = μ_S = q_t - q_sat(T, ρ)` and `C` is the derivative of `E[max(0, S)]`
+with respect to `μ_S`. Where the target is reshaped, by the truncated
+displacement (`truncated_displacement_condensate`) or the curvature-aware
+condensate (`sgs_variance_curvature`), `λ_eq` follows it and `C` stays the
+cloudy fraction of the distribution the condensate relaxes toward;
+`λ_eq = -Inf`, where the truncated target vanishes, gives `C = 0`. A width of
+`ϵ_numerics` marks a closure without SGS spread (`GridMeanSGS`, or vanishing
+variances), whose multiplier is clipped at zero; `C` is then the saturation
+switch `λ_eq > 0`. `γ = (L / c_p) ∂q_sat/∂T` is the Clausius–Clapeyron coupling,
+with the saturation specific humidity, its temperature derivative at the cell
+density, and the latent heat `L` of the phase mixture of Thermodynamics, as in
+the relaxation target and `σ_S`; at fixed pressure the derivative would be
+larger by `1 / (1 - R_v T / L)`, 3–5%. `c_p` is the heat capacity of the
+diffusing mixture; `χ_μ` is the phase share of the condensate, with the species
+clipped at zero as in the microphysics; and
+`s_l = c_p T + Φ - L_v q_l - L_s q_i` is the liquid–ice static energy. The
+factor `1 / (1 + C γ)` is the latent-heat feedback: condensing `δq_c` warms
+the cell mean by `L δq_c / c_p` and lowers `μ_S` by `γ δq_c`. With an SGS
+width, `C → 0` makes the sensitivities vanish smoothly in clear air.
+"""
+@inline function equilibrium_condensate_sensitivities(
+    thermo_params,
+    T,
+    ρ,
+    q_tot,
+    q_liq,
+    q_ice,
+    sigma_S,
+    λ_eq,
+    phase::TD.Phase,
+)
+    FT = typeof(T)
+    σ_S = max(FT(sigma_S), ϵ_numerics(FT))
+    C = ifelse(
+        σ_S > ϵ_numerics(FT),
+        normal_cdf(FT(λ_eq) / σ_S),
+        FT(λ_eq > zero(λ_eq)),
+    )
+    cp = TD.cp_m(thermo_params, q_tot, q_liq, q_ice)
+    ∂q_sat_∂T = TD.∂q_vap_sat_∂T(thermo_params, T, ρ)
+    L = TD.latent_heat_mixed(
+        thermo_params,
+        T,
+        TD.liquid_fraction_ramp(thermo_params, T),
+    )
+    γ = L / cp * ∂q_sat_∂T
+    χ_liq = TD.liquid_fraction(
+        thermo_params,
+        T,
+        max(q_liq, zero(FT)),
+        max(q_ice, zero(FT)),
+    )
+    χ = ifelse(phase isa TD.Liquid, χ_liq, one(FT) - χ_liq)
+    c_qt = C * χ / (one(FT) + C * γ)
+    return (c_qt, -c_qt * ∂q_sat_∂T / cp)
+end
+
+"""
+    ᶠliquid_ice_static_energy_flux!(
+        ᶠF_sl, ᶠw, ᶜT, ᶜq_water, p, ᶜscratch, ᶜq_scratch,
+    )
+
+Write the face flux of the liquid–ice static energy of the diffusing mixture,
+
+    F_sl = -ᶠw [c_p ∇T + ∇Φ + (h_l - h_v) ∇q_l + (h_i - h_v) ∇q_i],
+
+into `ᶠF_sl`, with the same terms and face interpolation as
+`add_sensible_heat_diffusionᵥ!` and the condensate terms of
+`add_water_enthalpy_diffusionᵥ!`, so that the diffusive energy flux is
+`F_sl + (h_v + Φ) F_qt` to rounding.
+"""
+function ᶠliquid_ice_static_energy_flux!(
+    ᶠF_sl,
+    ᶠw,
+    ᶜT,
+    ᶜq_water,
+    p,
+    ᶜscratch,
+    ᶜq_scratch,
+)
+    (; ᶜΦ) = p.core
+    thermo_params = CAP.thermodynamics_params(p.params)
+    _, ᶜq_liq, ᶜq_ice = ᶜq_water
+    ᶜcp = ᶜcp_diffusing!(ᶜscratch, thermo_params, ᶜq_water)
+    @. ᶠF_sl = -(ᶠw * (ᶠinterp(ᶜcp) * ᶠgradᵥ(ᶜT) + ᶠgradᵥ(ᶜΦ)))
+    ᶜh = ᶜh_liq_minus_vap!(ᶜscratch, thermo_params, ᶜT)
+    ᶜq = maybe_materialize!(ᶜq_scratch, ᶜq_liq)
+    @. ᶠF_sl -= ᶠw * ᶠinterp(ᶜh) * ᶠgradᵥ(ᶜq)
+    ᶜh = ᶜh_ice_minus_vap!(ᶜscratch, thermo_params, ᶜT)
+    ᶜq = maybe_materialize!(ᶜq_scratch, ᶜq_ice)
+    @. ᶠF_sl -= ᶠw * ᶠinterp(ᶜh) * ᶠgradᵥ(ᶜq)
+    return ᶠF_sl
+end
+
+"""
+    add_cloud_species_diffusionᵥ!(
+        ᶜρχₜ, Y, p, ᶠw, ᶠF_qt, ᶠF_sl, ᶜT, ᶜq_water, ᶜsgs_moments, ᶜq_μ, phase,
+        ᶜscratch,
+    )
+
+Add the tendency `-∇·F_qμ` of the blended turbulent flux of the suspended
+cloud species `q_μ` of `phase`,
+
+    F_qμ = (1 - λ_μ) (-ᶠw ∇q_μ) + λ_μ (c_qt F_qt + c_sl F_sl),
+
+to the extensive tendency `ᶜρχₜ`. `λ_μ` is `cloud_species_flux_blend` with
+the mixing length, the TKE, and the relaxation time of the 1M process at the
+cell state (`cloud_species_relaxation_time`), `(c_qt, c_sl)` are
+`equilibrium_condensate_sensitivities` with the width and equilibrium
+multiplier of `ᶜsgs_moments`, and `ᶠF_qt`, `ᶠF_sl` are the face fluxes
+of the diffusing total water and liquid–ice static energy with the same weight
+`ᶠw`. The coefficients are evaluated at cell centers and interpolated to the
+faces outside the gradients. `ᶜscratch` is a tuple of three center scalar
+fields.
+
+The energy flux is not rebuilt from `F_qμ`: a parcel conserves `(s_l, q_t)` in
+transit whether or not its condensate equilibrates, so `F_sl + (h_v + Φ) F_qt`
+is the energy flux for every `λ_μ`, and a layer well mixed in `(s_l, q_t)`
+remains a fixed point of diffusion; with `λ_μ = 1` the species flux vanishes
+there as well. The equilibrium part is not proportional to `∇q_μ`, so it obeys
+no maximum principle in `q_μ`; transient negative values are bounded by
+`Δt ∇·F_qμ` and handled by the existing limiters.
+
+Only the diffusive flux blends. The flux is the condensate that eddies exchange
+between cells over the turnover time `τ_e`, during which a displaced parcel
+relaxes toward the equilibrium of its conserved variables, so the composition
+it delivers is the blend. The prognostic `q_μ` and its other tendencies
+(advection, sedimentation, the microphysics sources) describe condensate at
+rest in the cell, which the microphysics already relaxes toward equilibrium at
+the rate `1/τ_μ`; a blended value of `q_μ` itself would apply that relaxation
+twice.
+"""
+function add_cloud_species_diffusionᵥ!(
+    ᶜρχₜ,
+    Y,
+    p,
+    ᶠw,
+    ᶠF_qt,
+    ᶠF_sl,
+    ᶜT,
+    ᶜq_water,
+    ᶜsgs_moments,
+    ᶜq_μ,
+    phase::TD.Phase,
+    ᶜscratch,
+)
+    thermo_params = CAP.thermodynamics_params(p.params)
+    cmp = CAP.microphysics_1m_params(p.params)
+    c_d = tke_dissipation_coefficient(CAP.turbconv_params(p.params))
+    (; ᶜl_mix, ᶜp) = p.precomputed
+    ᶜλ, ᶜc_qt, ᶜc_sl = ᶜscratch
+    ᶜq_tot, ᶜq_liq, ᶜq_ice = ᶜq_water
+    ᶜρ_air =
+        @. lazy(TD.air_density(thermo_params, ᶜT, ᶜp, ᶜq_tot, ᶜq_liq, ᶜq_ice))
+    @. ᶜλ = cloud_species_flux_blend(
+        ᶜl_mix,
+        specific(Y.c.ρtke, Y.c.ρ),
+        c_d,
+        cloud_species_relaxation_time(
+            cmp,
+            thermo_params,
+            ᶜT,
+            ᶜρ_air,
+            ᶜq_tot,
+            ᶜq_liq,
+            ᶜq_ice,
+            phase,
+        ),
+    )
+    ᶜsensitivities = @. lazy(
+        equilibrium_condensate_sensitivities(
+            thermo_params,
+            ᶜT,
+            ᶜρ_air,
+            ᶜq_tot,
+            ᶜq_liq,
+            ᶜq_ice,
+            ᶜsgs_moments.sigma_S,
+            ᶜsgs_moments.λ_eq,
+            phase,
+        ),
+    )
+    @. ᶜc_qt = first(ᶜsensitivities)
+    @. ᶜc_sl = last(ᶜsensitivities)
+    @. ᶜρχₜ -= ᶜdiffdivᵥ(
+        -((1 - ᶠinterp(ᶜλ)) * ᶠw * ᶠgradᵥ(ᶜq_μ)) +
+        ᶠinterp(ᶜλ) * (ᶠinterp(ᶜc_qt) * ᶠF_qt + ᶠinterp(ᶜc_sl) * ᶠF_sl),
+    )
+    return nothing
+end
+
+"""
+    blended_cloud_species_flux(Y, p)
+
+Whether cloud liquid and ice take the blended flux of
+`add_cloud_species_diffusionᵥ!`: the 1-moment non-equilibrium microphysics
+(number concentrations, which diffuse down their own gradients, are not
+prognostic), prognostic TKE with the mixing length `ᶜl_mix` for the eddy
+turnover time, and the SGS moments of the saturation excess (`ᶜsgs_moments`)
+for the cloudy fraction. Otherwise the species diffuse down their own
+gradients. The autodiff Jacobian, whose precomputed subset
+(`implicit_precomputed_quantities`) has neither field, also differentiates
+self-diffusion, matching the self-diffusion diagonal the manual Jacobian
+keeps as an upper bound.
+"""
+blended_cloud_species_flux(Y, p) =
+    p.atmos.microphysics_model isa NonEquilibriumMicrophysics1M &&
+    MatrixFields.has_field(Y, @name(c.ρtke)) &&
+    hasproperty(p.precomputed, :ᶜl_mix) &&
+    hasproperty(p.precomputed, :ᶜsgs_moments)
+
+"""
+    cloud_species_phase(χ_name)
+
+Return `TD.Liquid()` for the cloud liquid name, `TD.Ice()` for the cloud ice
+name, and `nothing` for every other species.
+"""
+cloud_species_phase(::typeof(@name(q_lcl))) = TD.Liquid()
+cloud_species_phase(::typeof(@name(q_icl))) = TD.Ice()
+cloud_species_phase(_) = nothing
+
+"""
     add_water_enthalpy_diffusionₕ!(
         ᶜρe_totₜ, ᶜw, ᶜT, ᶜq_water, p, ᶜscratch; ᶜq_scratch = nothing,
     )
@@ -1115,13 +1439,58 @@ function add_moisture_diffusionᵥ!(
     @. Yₜ.c.ρq_tot += ᶜρq_totₜ
     @. Yₜ.c.ρ += ᶜρq_totₜ
     add_water_enthalpy_diffusionᵥ!(Yₜ.c.ρe_tot, ᶠρK, ᶜT, ᶜq_water, p, ᶜscratch)
+    # Cloud liquid and ice take the blended flux of
+    # add_cloud_species_diffusionᵥ! where the turbulence closure provides an
+    # eddy turnover time; the face fluxes of total water and liquid–ice static
+    # energy it needs share the weight ᶠρK. Each scratch field is bound once,
+    # outside the branch, so that the closure below captures it unboxed; the
+    # fields exist only with the 1M scheme
+    # (`cloud_species_diffusion_temporary_quantities`).
+    blend = blended_cloud_species_flux(Y, p)
+    ᶠF_qt = blend ? p.scratch.ᶠtemp_C3 : nothing
+    ᶠF_sl = blend ? p.scratch.ᶠtemp_C3_2 : nothing
+    if blend
+        @. ᶠF_qt = -(ᶠρK * ᶠgradᵥ(ᶜq_tot))
+        ᶠliquid_ice_static_energy_flux!(
+            ᶠF_sl,
+            ᶠρK,
+            ᶜT,
+            ᶜq_water,
+            p,
+            ᶜscratch,
+            nothing,
+        )
+    end
     MatrixFields.unrolled_foreach(
         diffused_water_species(precipitation),
-    ) do (_, ρχ_name)
+    ) do (χ_name, ρχ_name)
         MatrixFields.has_field(Y.c, ρχ_name) || return
         ᶜρχ = MatrixFields.get_field(Y.c, ρχ_name)
         ᶜρχₜ = MatrixFields.get_field(Yₜ.c, ρχ_name)
-        @. ᶜρχₜ -= ᶜdiffdivᵥ(-(ᶠρK * ᶠgradᵥ(specific(ᶜρχ, ᶜρ))))
+        phase = cloud_species_phase(χ_name)
+        if isnothing(phase) || !blend
+            @. ᶜρχₜ -= ᶜdiffdivᵥ(-(ᶠρK * ᶠgradᵥ(specific(ᶜρχ, ᶜρ))))
+        else
+            ᶜq_μ = @. lazy(specific(ᶜρχ, ᶜρ))
+            add_cloud_species_diffusionᵥ!(
+                ᶜρχₜ,
+                Y,
+                p,
+                ᶠρK,
+                ᶠF_qt,
+                ᶠF_sl,
+                ᶜT,
+                ᶜq_water,
+                p.precomputed.ᶜsgs_moments,
+                ᶜq_μ,
+                phase,
+                (
+                    p.scratch.ᶜtemp_scalar_8,
+                    p.scratch.ᶜtemp_scalar_9,
+                    p.scratch.ᶜtemp_scalar_10,
+                ),
+            )
+        end
     end
     return nothing
 end

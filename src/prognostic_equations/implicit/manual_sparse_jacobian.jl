@@ -1208,7 +1208,10 @@ function update_diffusion_jacobian!(
 
         # The diffusing microphysics species diffuse down their own gradients
         # with ρ·K_h (see add_moisture_diffusionᵥ!); accumulate onto the
-        # diagonals initialized by update_sedimentation_jacobian!.
+        # diagonals initialized by update_sedimentation_jacobian!. For the
+        # blended cloud-species flux (add_cloud_species_diffusionᵥ!), whose
+        # self-diagonal is (1 - λ) + λ C χ γ_μ / (1 + C γ) ≤ 1 times this one,
+        # the self-diffusion diagonal is an upper bound of the same sign.
         MatrixFields.unrolled_foreach(
             diffused_water_species(precipitation),
         ) do (_, ρχ_name)
