@@ -3,21 +3,6 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
-- ![][badge-🔥behavioralΔ] The non-equilibrium cloud-fraction floor
-  (`_sgs_augmented_sigma`, `_compute_cloud_fraction`) scales with the
-  subsaturation deficit `δ_sub = max(0, −μ_S)` of the cloud-available water
-  `q_cloud = max(0, q_tot − q_rai − q_sno)`,
-  `σ_aug = √((α σ_S)² + (ε_rel max(0, −μ_S))² + σ_abs²)`, keeping trace
-  condensate in subsaturated air patchy while vanishing with continuous first
-  derivative across `μ_S = 0` so saturated stratocumulus decks reach overcast;
-  the provisional release-shape parameters `cloud_fraction_floor_release_margin`,
-  `cloud_fraction_floor_release_abs_margin`,
-  `cloud_fraction_floor_release_sharpness`, and `cloud_fraction_floor_residual`
-  are removed. Under non-equilibrium microphysics, `_updraft_cloud_fraction`
-  evaluates the truncated-Gaussian cover of the updraft cloud condensate against
-  the updraft vapor subsaturation deficit floored by `σ_abs`, so trace
-  condensate entrained or diffused into a subsaturated sub-cloud updraft does
-  not make the sub-cloud plume overcast.
 - Update to CloudMicrophysics 0.47.
 - ![][badge-🐛bugfix] `get_state_restart` closes its `HDF5Reader` after reading. The
   reader was left to a GC finalizer; under MPI, closing the file is collective, so a
@@ -101,6 +86,26 @@ main
   condensate from the updraft (and added it to the environment) wherever the
   updraft narrows with height. The corresponding Jacobian diagonal carries the
   area fraction of the exact derivative, `∂a/∂z a ρʲwʲ / (1 - a)`.
+- ![][badge-🔥behavioralΔ] The non-equilibrium cloud-fraction floor
+  (`_sgs_augmented_sigma`, `_compute_cloud_fraction`) scales with the
+  subsaturation deficit `δ_sub = max(0, −μ_S)` of the cloud-available water
+  `q_cloud = max(0, q_tot − q_rai − q_sno)`,
+  `σ_aug = √((α σ_S)² + (ε_rel max(0, −μ_S))² + σ_abs²)`, keeping trace
+  condensate in subsaturated air patchy while vanishing with continuous first
+  derivative across `μ_S = 0` so saturated stratocumulus decks reach overcast;
+  the provisional release-shape parameters `cloud_fraction_floor_release_margin`,
+  `cloud_fraction_floor_release_abs_margin`,
+  `cloud_fraction_floor_release_sharpness`, and `cloud_fraction_floor_residual`
+  are removed. In `_compute_cloud_fraction` and `_sum_1m_over_sgs`, condensate
+  is partitioned into its equilibrium part `min(q_c, q_c_eq)` (normalized by
+  `σ_aug`) and its non-equilibrium excess `max(0, q_c − q_c_eq)` (normalized by
+  `√(σ_aug² + δ_sub²)` in the cloud fraction and distributed across the
+  quadrature nodes in proportion to `(q_c − q_c_eq)_+ / q_c`). Under
+  non-equilibrium microphysics, `_updraft_cloud_fraction` evaluates the
+  truncated-Gaussian cover of the updraft cloud condensate against the updraft
+  vapor subsaturation deficit floored by `σ_abs`, so trace condensate entrained
+  or diffused into a subsaturated sub-cloud updraft does not make the sub-cloud
+  plume overcast.
 - ![][badge-🔥behavioralΔ] With the 1M microphysics and prognostic TKE, the
   turbulent flux of cloud liquid and ice blends down-gradient self-diffusion
   with the flux implied by the conserved-variable fluxes of total water and

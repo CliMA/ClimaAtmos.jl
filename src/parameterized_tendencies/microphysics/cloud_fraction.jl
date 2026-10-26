@@ -1538,15 +1538,46 @@ zero so quiescent decks reach full overcast.
 end
 
 """
-    _compute_cloud_fraction(q_c, mu_S, sigma_S, α, floor)
+    _compute_cloud_fraction(
+        q_c, mu_S, sigma_S, α, floor,
+        lin = zero(mu_S), curv = zero(mu_S), c = oftype(mu_S, 3),
+    )
 
 Cloud fraction `CF = Φ(z)`, where `z` solves the truncated-Gaussian condensate
-relation `q_c / σ_aug = z·Φ(z) + φ(z)` (`_compute_z`) with the augmented width
-`σ_aug = _sgs_augmented_sigma(mu_S, sigma_S, α, floor)`.
+relation `C = z·Φ(z) + φ(z)` (`_compute_z`) for the normalized condensate
+
+    C = min(q_c, q_c_eq) / σ_aug + max(0, q_c − q_c_eq) / √(σ_aug² + δ_sub²),
+
+with augmented width `σ_aug = _sgs_augmented_sigma(mu_S, sigma_S, α, floor)`,
+subsaturation deficit `δ_sub = max(0, −μ_S)`, and equilibrium condensate
+`q_c_eq = equilibrium_condensate(mu_S, sigma_S, lin, curv, c)`.
+
+Equilibrium condensate `min(q_c, q_c_eq)` supported by the subdomain's own
+saturation-excess fluctuations is normalized by `σ_aug`, whereas detrained or
+residual non-equilibrium condensate `max(0, q_c − q_c_eq)` in subsaturated air
+is normalized by `√(σ_aug² + δ_sub²)` because saturating the clear fraction at
+mean deficit `δ_sub` requires condensate of order `δ_sub`. Where `q_c ≤ q_c_eq`
+or `μ_S ≥ 0`, `C` reduces to `q_c / σ_aug`.
 """
-@inline function _compute_cloud_fraction(q_c, mu_S, sigma_S, α, floor)
+@inline function _compute_cloud_fraction(
+    q_c,
+    mu_S,
+    sigma_S,
+    α,
+    floor,
+    lin = zero(mu_S),
+    curv = zero(mu_S),
+    c = oftype(mu_S, 3),
+)
+    FT = typeof(mu_S)
     σ_aug = _sgs_augmented_sigma(mu_S, sigma_S, α, floor)
-    return normal_cdf(_compute_z(q_c / σ_aug))
+    q_c_eq =
+        equilibrium_condensate(FT(mu_S), FT(sigma_S), FT(lin), FT(curv), c)
+    q_c_eq_part = min(FT(q_c), q_c_eq)
+    q_c_neq_part = max(zero(FT), FT(q_c) - q_c_eq)
+    δ_sub = max(zero(FT), -FT(mu_S))
+    σ_neq = sqrt(σ_aug^2 + δ_sub^2)
+    return normal_cdf(_compute_z(q_c_eq_part / σ_aug + q_c_neq_part / σ_neq))
 end
 
 """
@@ -1815,6 +1846,9 @@ calls beside it.
         ᶜsgs_moments.sigma_S,
         ᶜα,
         $(floor),
+        lin,
+        curv,
+        c,
     )
     return nothing
 end
