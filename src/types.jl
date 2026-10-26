@@ -2182,7 +2182,43 @@ struct ConstantTqCorrelation <: AbstractTqCorrelationModel end
 struct DiagnosedTqCorrelation <: AbstractTqCorrelationModel end
 
 """
-    AtmosWater{MM, CM, MTTS, TNM, SQ, TQC, TVL, TVI, TVR, TVS}(; microphysics_model = DryModel(), kwargs...)
+    AbstractSGSPrecipPlacement
+
+Placement of the cell-mean rain and snow over the nodes of the 1M
+conditional-moment rule. Selected by the YAML key `sgs_precip_placement`.
+
+  - `ShaftPrecipPlacement` (`"shaft"`, default): the fraction
+    `sgs_precip_incloud_fraction` of the rain and snow is confined to the
+    moistest `a_p` of the PDF (`sgs_placement_factor`); `0` is uniform.
+  - `LogLinearPrecipPlacement` (`"loglinear"`): mean-conserving log-linear
+    placement in the standardized saturation excess, warm-side depletion of
+    the snow, and sub-node intermittency (`LogLinearNodePlacement`).
+"""
+abstract type AbstractSGSPrecipPlacement end
+struct ShaftPrecipPlacement <: AbstractSGSPrecipPlacement end
+struct LogLinearPrecipPlacement <: AbstractSGSPrecipPlacement end
+
+"""
+    AbstractVarianceFidelityModel
+
+Closure for the variance fidelity `α` of the condensate reconstruction
+(`materialized_variance_fidelity!`). Selected by the YAML key
+`sgs_variance_fidelity_model`.
+
+  - `EquilibriumVarianceFidelity` (`"equilibrium"`, default):
+    `α = α_Da · α_eq` (`sgs_variance_fidelity`).
+  - `UpdraftVarianceFidelity` (`"updraft"`): with `PrognosticEDMFX`, `α` is set
+    from the condensate of the cloudy updrafts, blended with `α_Da · α_eq` as
+    their area grows from the EDMF minimum area (`updraft_variance_fidelity`),
+    and is `α_Da · α_eq` without them. Other turbulence-convection models
+    ignore it.
+"""
+abstract type AbstractVarianceFidelityModel end
+struct EquilibriumVarianceFidelity <: AbstractVarianceFidelityModel end
+struct UpdraftVarianceFidelity <: AbstractVarianceFidelityModel end
+
+"""
+    AtmosWater{MM, CM, MTTS, TNM, SQ, TQC, SPP, SVF, TVL, TVI, TVR, TVS}(; microphysics_model = DryModel(), kwargs...)
 
 Group of moisture, cloud, and microphysics choices inside an
 `AtmosModel`.
@@ -2205,6 +2241,10 @@ Group of moisture, cloud, and microphysics choices inside an
     by the largest excess the displaced (quadratic) profile reaches; `false`
     (default) keeps
     the truncated-Gaussian expectation.
+  - `sgs_precip_placement`: An `AbstractSGSPrecipPlacement`;
+    `ShaftPrecipPlacement()` by default.
+  - `sgs_variance_fidelity_model`: An `AbstractVarianceFidelityModel`;
+    `EquilibriumVarianceFidelity()` by default.
   - `terminal_velocity_liquid`, `terminal_velocity_ice`, `terminal_velocity_rain`,
     `terminal_velocity_snow`: the `AbstractTerminalVelocityMode` of each species,
     `FixedTerminalVelocity()` for every species by default.
@@ -2218,7 +2258,7 @@ water = ClimaAtmos.AtmosWater(;
 )
 ```
 """
-@kwdef struct AtmosWater{MM, CM, MTTS, TNM, SQ, TQC, TVL, TVI, TVR, TVS}
+@kwdef struct AtmosWater{MM, CM, MTTS, TNM, SQ, TQC, SPP, SVF, TVL, TVI, TVR, TVS}
     microphysics_model::MM = DryModel()
     cloud_model::CM = QuadratureCloud()
     microphysics_tendency_timestepping::MTTS = nothing
@@ -2226,6 +2266,8 @@ water = ClimaAtmos.AtmosWater(;
     sgs_quadrature::SQ = nothing
     tq_correlation_model::TQC = DiagnosedTqCorrelation()
     sgs_variance_curvature::Bool = false
+    sgs_precip_placement::SPP = ShaftPrecipPlacement()
+    sgs_variance_fidelity_model::SVF = EquilibriumVarianceFidelity()
     terminal_velocity_liquid::TVL = FixedTerminalVelocity()
     terminal_velocity_ice::TVI = FixedTerminalVelocity()
     terminal_velocity_rain::TVR = FixedTerminalVelocity()
@@ -2674,6 +2716,7 @@ struct's docstring for the full list of admissible values.
   - [`AtmosWater`](@ref): `microphysics_model`, `cloud_model`,
     `microphysics_tendency_timestepping`, `tracer_nonnegativity_method`,
     `sgs_quadrature`, `tq_correlation_model`, `sgs_variance_curvature`,
+    `sgs_precip_placement`, `sgs_variance_fidelity_model`,
     `terminal_velocity_liquid`, `terminal_velocity_ice`, `terminal_velocity_rain`,
     `terminal_velocity_snow`.
   - `SCMSetup`: `subsidence`, `external_forcing`, `ls_adv`,

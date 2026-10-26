@@ -73,6 +73,8 @@ mass-flux contribution, and as a lighter boundary-layer scheme.
 | `sgs_distribution`                    | `"gaussian"`      | Assumed SGS distribution of ``(T, q_t)``: `gaussian` (the conditional-moment node rule for the 1M microphysics, Gauss–Hermite for 0M) or `mean`.                               |
 | `quadrature_order`                    | `3`               | Gauss–Hermite order per dimension, 1–5.                                                                                                                                        |
 | `sgs_variance_curvature`              | `false`           | Evaluate the equilibrium condensate under the vertical displacement of the curved saturation-excess profile, which bounds the moist tail. See [Closures](prophet_closures.md). |
+| `sgs_precip_placement`                | `"shaft"`         | Placement of the 1M rain and snow over the nodes: `shaft` (uniform unless `sgs_precip_incloud_fraction > 0`) or `loglinear`. See [Closures](prophet_closures.md).            |
+| `sgs_variance_fidelity_model`         | `"equilibrium"`   | Closure for the variance fidelity ``\alpha``: `equilibrium` or `updraft` (from the updraft condensate; PrognosticEDMFX only).                                                   |
 
 The generated [Configuration Options](configuration_options.md) table is the
 authoritative list; the help strings there come from

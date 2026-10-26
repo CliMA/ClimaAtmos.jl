@@ -479,6 +479,11 @@ collapsing the Damköhler factor to 1. Its relaxation time is the
 phase-blended `set_sgs_microphysics_timescale!`, materialized in
 `p.scratch.ᶜtemp_scalar_6`, which `set_covariance_cache!` overwrites only
 after this call.
+
+With `sgs_variance_fidelity_model: updraft`, PrognosticEDMFX and
+non-equilibrium microphysics, `α` is then replaced by the updraft rule where
+cloudy updrafts are active (`updraft_variance_fidelity`, with the same
+`σ_S`); other configurations ignore the option.
 """
 function materialized_variance_fidelity!(Y, p, ᶜl_mix_disp)
     hasproperty(p.precomputed, :ᶜα) || return nothing
@@ -562,6 +567,19 @@ function materialized_variance_fidelity!(Y, p, ᶜl_mix_disp)
         ᶜcurv,
         c,
     )
+    if p.atmos.sgs_variance_fidelity_model isa UpdraftVarianceFidelity &&
+       turbconv_model isa PrognosticEDMFX &&
+       microphysics_model isa NonEquilibriumMicrophysics
+        c_u = FT(CAP.sgs_fidelity_updraft_coeff(p.params))
+        α_min = FT(CAP.sgs_fidelity_updraft_min(p.params))
+        a_full = FT(CAP.sgs_fidelity_updraft_full_area(p.params))
+        a_min = FT(CAP.min_area(turbconv_params))
+        q_cloud = FT(1e-5)  # cloudy-updraft threshold of the LES fit of c_u
+        @. ᶜα = updraft_variance_fidelity(
+            ᶜα, Y.c.sgsʲs, p.precomputed.ᶜρʲs, a_min, a_full, ᶜsigma_S, c_u,
+            α_min, q_cloud,
+        )
+    end
     return nothing
 end
 
@@ -1464,6 +1482,65 @@ reconstruction `E[max(0, λ + α·S′)] = q_c`.
     w = FT(w_eq)
     α_eq = r / (w + (one(FT) - w) * r)
     return α_Da * α_eq
+end
+
+"""
+    updraft_variance_fidelity(α, sgsʲs, ρʲs, a_min, a_full, sigma_S, c_u, α_min, q_cloud)
+
+Variance fidelity of the updraft rule (`sgs_variance_fidelity_model: updraft`):
+the width `α σ_S` of the condensate ramp of the environment is set by the
+cloud condensate the updrafts carry,
+
+    α_up = clamp(c_u q_c,up / max(σ_S, ϵ_numerics), α_min, 2),
+
+where `q_c,up` is the area-weighted mean of `q_lcl + q_icl` over the cloudy
+updrafts `sgsʲs` (densities `ρʲs`): those whose area `ρa / ρʲ` exceeds `a_min`
+and whose condensate exceeds `q_cloud`. The upper bound is that of the
+equilibrium rule; it binds where `σ_S` is small against `q_c,up` (upper
+cumulus, stratocumulus). With `a_c` their total area, the result
+is `(1 − W) α + W α_up`, `W = clamp((a_c − a_min) / (a_full − a_min), 0, 1)`:
+the updraft rule from the area `a_full` on, and `α` unchanged without cloudy
+updrafts. The area limiters of the EDMF hold inactive updrafts near `a_min`, so
+the condensate they carry has a negligible weight.
+"""
+@inline function updraft_variance_fidelity(
+    α, sgsʲs, ρʲs, a_min, a_full, sigma_S, c_u, α_min, q_cloud,
+)
+    FT = typeof(α)
+    a_min_FT = FT(a_min)
+    q_cloud_FT = FT(q_cloud)
+    # (the closures capture values only: a captured type would be boxed)
+    terms = unrolled_map(
+        (sgsʲ, ρʲ) ->
+            _cloudy_updraft_area_and_condensate(sgsʲ, ρʲ, a_min_FT, q_cloud_FT),
+        sgsʲs,
+        ρʲs,
+    )
+    (a_c, aq_c) =
+        unrolled_reduce((x, y) -> (x[1] + y[1], x[2] + y[2]), terms)
+    q_c_up = aq_c / max(a_c, floatmin(FT))
+    α_up = clamp(
+        FT(c_u) * q_c_up / max(FT(sigma_S), ϵ_numerics(FT)),
+        FT(α_min),
+        FT(2),
+    )
+    # `W = 0` without cloudy updrafts (`a_c = 0`); the blend is exact at both ends
+    W = clamp(
+        (a_c - a_min_FT) / max(FT(a_full) - a_min_FT, floatmin(FT)),
+        zero(FT),
+        one(FT),
+    )
+    return (one(FT) - W) * FT(α) + W * α_up
+end
+
+# Area `a = ρa/ρʲ` of an updraft and `a (q_lcl + q_icl)` where `a > a_min` and
+# `q_lcl + q_icl > q_cloud`, zeros otherwise (`updraft_variance_fidelity`).
+@inline function _cloudy_updraft_area_and_condensate(sgsʲ, ρʲ, a_min, q_cloud)
+    FT = typeof(a_min)
+    a = FT(draft_area(sgsʲ.ρa, ρʲ))
+    q_c = FT(sgsʲ.q_lcl) + FT(sgsʲ.q_icl)
+    on = (a > a_min) & (q_c > q_cloud)
+    return (ifelse(on, a, zero(FT)), ifelse(on, a * q_c, zero(FT)))
 end
 
 

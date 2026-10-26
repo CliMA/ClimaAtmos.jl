@@ -969,6 +969,18 @@ end
 ### 1 Moment Microphysics
 ###
 
+"""
+    ᶜloglinear_rain_tilt(Y, ll::LogLinearPrecipOptions)
+
+Lazy rain tilt of the log-linear placement (`loglinear_rain_tilt`) at the
+height of the cell centres above the surface.
+"""
+function ᶜloglinear_rain_tilt(Y, ll)
+    ᶜz = Fields.coordinate_field(Y.c).z
+    z_sfc = Fields.level(Fields.coordinate_field(Y.f).z, Fields.half)
+    return @. lazy(loglinear_rain_tilt(ll, ᶜz - z_sfc))
+end
+
 function set_microphysics_tendency_cache!(
     Y, p, mp1m::NonEquilibriumMicrophysics1M, _,
 )
@@ -1000,14 +1012,29 @@ function set_microphysics_tendency_cache!(
         # One packed scalar-options argument keeps the broadcast short enough
         # for the GPU kernel (see `sgs_microphysics_options`).
         opts = sgs_microphysics_options(p.params)
-        @. ᶜmp_tendency = microphysics_tendencies_1m(
-            BMT.Microphysics1Moment(), sgs_quad, cmp, thp, Y.c.ρ, ᶜT, ᶜw_air,
-            ᶜq_tot_nonneg, ᶜq_lcl, ᶜq_icl, ᶜq_rai, ᶜq_sno,
-            ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜsgs_moments, ᶜα, dt, nsubs_quad,
-            TD.liquid_fraction(thp, ᶜT, max(0, ᶜq_lcl), max(0, ᶜq_icl)),
-            ᶜq_tot_nonneg - TD.q_vap_saturation(thp, ᶜT, Y.c.ρ),
-            ᶜprecip_frac, opts,
-        )
+        if p.atmos.sgs_precip_placement isa LogLinearPrecipPlacement
+            # Log-linear rain and snow placement, with the rain tilt of the
+            # height above the surface.
+            ll = loglinear_precip_options(p.params)
+            ᶜκ_r = ᶜloglinear_rain_tilt(Y, ll)
+            @. ᶜmp_tendency = microphysics_tendencies_1m(
+                BMT.Microphysics1Moment(), sgs_quad, cmp, thp, Y.c.ρ, ᶜT, ᶜw_air,
+                ᶜq_tot_nonneg, ᶜq_lcl, ᶜq_icl, ᶜq_rai, ᶜq_sno,
+                ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜsgs_moments, ᶜα, dt, nsubs_quad,
+                TD.liquid_fraction(thp, ᶜT, max(0, ᶜq_lcl), max(0, ᶜq_icl)),
+                ᶜq_tot_nonneg - TD.q_vap_saturation(thp, ᶜT, Y.c.ρ),
+                ᶜprecip_frac, ᶜκ_r, opts, ll,
+            )
+        else
+            @. ᶜmp_tendency = microphysics_tendencies_1m(
+                BMT.Microphysics1Moment(), sgs_quad, cmp, thp, Y.c.ρ, ᶜT, ᶜw_air,
+                ᶜq_tot_nonneg, ᶜq_lcl, ᶜq_icl, ᶜq_rai, ᶜq_sno,
+                ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜsgs_moments, ᶜα, dt, nsubs_quad,
+                TD.liquid_fraction(thp, ᶜT, max(0, ᶜq_lcl), max(0, ᶜq_icl)),
+                ᶜq_tot_nonneg - TD.q_vap_saturation(thp, ᶜT, Y.c.ρ),
+                ᶜprecip_frac, opts,
+            )
+        end
     end
 
     return nothing
@@ -1080,12 +1107,25 @@ function set_microphysics_tendency_cache!(
         ᶜmu_S⁰ = p.scratch.ᶜtemp_scalar_7
         @. ᶜλ⁰ = TD.liquid_fraction(thp, ᶜT⁰, max(0, ᶜq_lcl⁰), max(0, ᶜq_icl⁰))
         @. ᶜmu_S⁰ = ᶜq_tot_nonneg⁰ - TD.q_vap_saturation(thp, ᶜT⁰, ᶜρ⁰)
-        @. ᶜmp_tendency⁰ = microphysics_tendencies_1m(
-            BMT.Microphysics1Moment(), sgs_quad, vcmp, vthp, ᶜρ⁰, ᶜT⁰, ᶜw⁰_air,
-            ᶜq_tot_nonneg⁰, ᶜq_lcl⁰, ᶜq_icl⁰, ᶜq_rai⁰, ᶜq_sno⁰,
-            ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜsgs_moments, ᶜα, dt, nsubs_quad,
-            ᶜλ⁰, ᶜmu_S⁰, ᶜprecip_frac, opts,
-        )
+        if p.atmos.sgs_precip_placement isa LogLinearPrecipPlacement
+            # Log-linear rain and snow placement, with the rain tilt of the
+            # height above the surface.
+            ll = loglinear_precip_options(p.params)
+            ᶜκ_r = ᶜloglinear_rain_tilt(Y, ll)
+            @. ᶜmp_tendency⁰ = microphysics_tendencies_1m(
+                BMT.Microphysics1Moment(), sgs_quad, vcmp, vthp, ᶜρ⁰, ᶜT⁰, ᶜw⁰_air,
+                ᶜq_tot_nonneg⁰, ᶜq_lcl⁰, ᶜq_icl⁰, ᶜq_rai⁰, ᶜq_sno⁰,
+                ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜsgs_moments, ᶜα, dt, nsubs_quad,
+                ᶜλ⁰, ᶜmu_S⁰, ᶜprecip_frac, ᶜκ_r, opts, ll,
+            )
+        else
+            @. ᶜmp_tendency⁰ = microphysics_tendencies_1m(
+                BMT.Microphysics1Moment(), sgs_quad, vcmp, vthp, ᶜρ⁰, ᶜT⁰, ᶜw⁰_air,
+                ᶜq_tot_nonneg⁰, ᶜq_lcl⁰, ᶜq_icl⁰, ᶜq_rai⁰, ᶜq_sno⁰,
+                ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜsgs_moments, ᶜα, dt, nsubs_quad,
+                ᶜλ⁰, ᶜmu_S⁰, ᶜprecip_frac, opts,
+            )
+        end
     end
 
     return nothing
