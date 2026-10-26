@@ -1354,7 +1354,7 @@ run before the other SGS updates, which accumulate into them.
 The sedimentation derivative also carries the lateral-mixing correction that
 the tendency applies where the draft area decreases with height,
 `∂ᵥa (ρʲwʲχʲ - ρ⁰w⁰χ⁰)`, whose environment part contributes
-`∂ᵥa ρʲwʲ / (1 - a)` to the diagonal. No-op unless `p.atmos.turbconv_model`
+`∂ᵥa a ρʲwʲ / (1 - a)` to the diagonal. No-op unless `p.atmos.turbconv_model`
 is a `PrognosticEDMFX`. Writes `ᶜtemp_scalar_7`, `ᶠsed_tracer_advection`, and
 `ᶜtridiagonal_matrix_scalar` in `p.scratch`, mutates `matrix`, and returns
 `nothing`.
@@ -1443,12 +1443,11 @@ function update_sgs_advection_jacobian!(matrix, Y, p, dtγ)
                 ) - (I,)
 
             # sedimentation
-            # Base: a·∂_z(ρwχ) — always the same regardless of ∂a/∂z sign
-            # Correction when ∂a/∂z < 0 :
-            #   ∂a/∂z · (ρ¹w¹χ¹ − ρ⁰w⁰χ⁰)
+            # ∂a/∂z ≥ 0: a·∂_z(ρwχ)
+            # ∂a/∂z < 0: ∂_z(aρwχ) − ∂a/∂z · ρ⁰w⁰χ⁰, with
             #   ρ⁰w⁰χ⁰ = (w_GS·ρχ_GS − ρa¹·w¹·χ¹)/(1−a), so
-            #   ∂(ρ⁰w⁰χ⁰)/∂χʲ = −ρa¹·w¹/(1−a) and
-            #   ∂/∂χʲ of correction = ∂a/∂z · ρ¹w¹/(1−a)
+            #   ∂(ρ⁰w⁰χ⁰)/∂χʲ = −ρa¹·w¹/(1−a) and the lateral term contributes
+            #   ∂a/∂z · ρa¹·w¹/(1−a) = ∂a/∂z · a·ρ¹w¹/(1−a) to the diagonal
             @. ᶠsed_tracer_advection =
                 DiagonalMatrixRow(ᶠinterp(ᶜρʲs.:(1) * ᶜJ) / ᶠJ) *
                 ᶠtop_bias_matrix() *
@@ -1458,7 +1457,7 @@ function update_sgs_advection_jacobian!(matrix, Y, p, dtγ)
                     -(ᶜprecipdivᵥ_matrix()) * ᶠsed_tracer_advection *
                     DiagonalMatrixRow(ᶜa) +
                     DiagonalMatrixRow(
-                        ᶜ∂a∂z * ᶜρʲs.:(1) * ᶜwʲ / max(1 - ᶜa, eps(eltype(ᶜa))),
+                        ᶜ∂a∂z * ᶜa * ᶜρʲs.:(1) * ᶜwʲ / max(1 - ᶜa, eps(eltype(ᶜa))),
                     ),
                     -DiagonalMatrixRow(ᶜa) * ᶜprecipdivᵥ_matrix() * ᶠsed_tracer_advection,
                 )

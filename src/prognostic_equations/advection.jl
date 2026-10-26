@@ -504,7 +504,7 @@ environment properties, not updraft properties. The combined tendency is
 
 ```math
 \\text{tend} = a \\, \\partial_z(\\rho^{(1)} w^{(1)} \\chi^{(1)})
-            + \\alpha_{lat} \\, \\min(\\partial_z a,\\, 0) \\,
+            + \\min(\\partial_z a,\\, 0) \\,
               (\\rho^{(1)} w^{(1)} \\chi^{(1)} - \\rho^{(0)} w^{(0)} \\chi^{(0)})
 ```
 
@@ -541,11 +541,13 @@ function updraft_sedimentation!(
     ᶠρ = @. p.scratch.ᶠtemp_scalar = ᶠinterp(ᶜρ * ᶜJ) / ᶠJ
     ᶠwχ = @. p.scratch.ᶠtemp_scalar_2 = ᶠtop_bias(-(ᶜw) * ᶜχ)
     ᶠwaχ = @. p.scratch.ᶠtemp_scalar_3 = ᶠtop_bias(-(ᶜw) * ᶜa * ᶜχ)
-    # Base: within-updraft flux convergence a · ∂_z(ρ w χ)
-    # Lateral correction: min(∂a/∂z, 0) · ρ⁰w⁰χ⁰
+    # ∂a/∂z ≥ 0 (updraft narrows downward): a · ∂_z(ρ w χ).
+    # ∂a/∂z < 0 (updraft widens downward): a · ∂_z(ρwχ) + ∂a/∂z · (ρ¹w¹χ¹ − ρ⁰w⁰χ⁰)
+    #   = ∂_z(a ρ w χ) − ∂a/∂z · ρ⁰w⁰χ⁰: the environment flux entering through the
+    #   tilted boundary is a gain for the updraft (ρ⁰w⁰χ⁰ ≥ 0).
     @. vtt = ifelse(
         ∂a∂z < 0,
-        -(ᶜprecipdivᵥ(ᶠρ * Geometry.WVector(ᶠwaχ)) - ∂a∂z * ᶜρ⁰w⁰χ⁰),
+        -(ᶜprecipdivᵥ(ᶠρ * Geometry.WVector(ᶠwaχ)) + ∂a∂z * ᶜρ⁰w⁰χ⁰),
         -(ᶜa * ᶜprecipdivᵥ(ᶠρ * Geometry.WVector(ᶠwχ))),
     )
     return
