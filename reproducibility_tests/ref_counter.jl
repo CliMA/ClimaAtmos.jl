@@ -1,4 +1,4 @@
-449
+450
 
 # **README**
 #
@@ -32,6 +32,11 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+450
+- Fused column loops (`DataLayouts.foreach_column`) for the implicit and explicit
+  tendencies, the precomputed quantities and caches (including the SGS covariance
+  cache and cloud fraction), and the manual sparse Jacobian.
+
 449
 - Release v0.42.17: SurfaceFluxes v1.5.1 -> v1.6.0, ClimaCore v1.0.4 -> v1.0.6.
 
