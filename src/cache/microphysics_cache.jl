@@ -969,6 +969,61 @@ end
 ### 1 Moment Microphysics
 ###
 
+"""
+    env_detrained_condensate_fraction(
+        thp, ρ, T, q_tot, q_lcl, q_icl, q_rai, q_sno, sigma_S, c,
+    )
+    env_detrained_condensate_fraction(q_lcl, q_icl, sigma_S, λ_eq)
+
+Fraction `f_neq ∈ [0, 1]` of the environment cloud condensate
+`q_c = q_lcl + q_icl` in excess of the equilibrium condensate `q_c_eq` that the
+environment's own saturation-excess PDF supports:
+
+    f_neq = clamp((q_c − q_c_eq) / q_c, 0, 1),
+
+and `0` without condensate. The 10-argument method evaluates
+`q_c_eq = equilibrium_condensate(μ_S, σ_S, 0, 0, c)` directly from the
+cloud-available mean excess `μ_S = q_tot − q_rai − q_sno − q_sat(T, ρ)`; the
+4-argument method reconstructs `q_c_eq` from the precomputed equilibrium
+Lagrange multiplier `λ_eq` (`ᶜsgs_moments.λ_eq`, which includes
+subsaturated-environment tail truncation and curvature). Condensate in excess
+of equilibrium was detrained from updrafts or left behind by them, so `f_neq`
+marks environment condensate of convective origin.
+"""
+@inline function env_detrained_condensate_fraction(
+    thp,
+    ρ,
+    T,
+    q_tot,
+    q_lcl,
+    q_icl,
+    q_rai,
+    q_sno,
+    sigma_S,
+    c,
+)
+    FT = typeof(ρ)
+    q_c = max(FT(0), q_lcl) + max(FT(0), q_icl)
+    q_c > FT(0) || return FT(0)
+    q_sat = TD.q_vap_saturation(thp, T, ρ)
+    mu_S = q_tot - max(FT(0), q_rai) - max(FT(0), q_sno) - q_sat
+    q_c_eq = equilibrium_condensate(mu_S, FT(sigma_S), FT(0), FT(0), c)
+    return clamp((q_c - q_c_eq) / q_c, FT(0), FT(1))
+end
+
+@inline function env_detrained_condensate_fraction(q_lcl, q_icl, sigma_S, λ_eq)
+    FT = typeof(sigma_S)
+    q_c = max(FT(0), FT(q_lcl)) + max(FT(0), FT(q_icl))
+    q_c > FT(0) || return FT(0)
+    λ_eq_finite = ifelse(isfinite(λ_eq), FT(λ_eq), zero(FT))
+    q_c_eq = ifelse(
+        isfinite(λ_eq),
+        truncated_gaussian_condensate(λ_eq_finite, FT(sigma_S)),
+        zero(FT),
+    )
+    return clamp((q_c - q_c_eq) / q_c, FT(0), FT(1))
+end
+
 function set_microphysics_tendency_cache!(
     Y, p, mp1m::NonEquilibriumMicrophysics1M, _,
 )
@@ -1061,7 +1116,80 @@ function set_microphysics_tendency_cache!(
     ᶜq_rai⁰ .= ᶜspecific_env_value(@name(q_rai), Y, p)
     ᶜq_sno⁰ .= ᶜspecific_env_value(@name(q_sno), Y, p)
     sgs_quad = p.atmos.sgs_quadrature
-    ᶜw⁰_air = @. lazy(w_component(WVec(ᶜu⁰)))
+    # Vertical velocity of the environment warm-rain autoconversion. The
+    # environment descends by mass continuity wherever updrafts rise, so its own
+    # velocity would put `Kessler1M` at the quiescent (stratiform) threshold and
+    # timescale everywhere, including where the environment condensate was
+    # detrained from convective updrafts. In convective regimes, marked by the
+    # larger of the non-equilibrium condensate excess fraction `f_neq`
+    # (`env_detrained_condensate_fraction`) and the subsaturated-cumulus switch
+    # `w_cu` (`_env_subsat_cu_switch`), the environment condensate sees the
+    # velocity of the drafts that formed it,
+    #
+    #     w_conv = c_w Σⱼ aⱼ max(wⱼ, 0) / max(Σⱼ aⱼ, a_min) + w_d,
+    #     w_mp⁰ = max(w⁰, max(f_neq, w_cu) w_conv),
+    #
+    # the mass-flux-weighted updraft velocity of the cell with weight `c_w`,
+    # plus the reference velocity `w_d` of the drafts that detrained condensate
+    # which has outlived them. In a stratocumulus deck the condensate is in
+    # equilibrium (`f_neq ≈ 0`) and the subsaturation/stability switch vanishes
+    # (`w_cu ≈ 0`), so the environment stays stratiform; under cumulus the
+    # detrained condensate rains at the convective values.
+    FT = eltype(p.params)
+    c_w = FT(CAP.sgs_env_autoconversion_updraft_velocity_weight(p.params))
+    w_d = FT(CAP.sgs_env_autoconversion_detrained_velocity(p.params))
+    ᶜw⁰_mp = p.scratch.ᶜtemp_scalar_8
+    @. ᶜw⁰_mp = w_component(WVec(ᶜu⁰))
+    if (c_w > zero(FT) || w_d > zero(FT)) && !not_quadrature(sgs_quad)
+        (; ᶜsgs_moments) = p.precomputed
+        ᶜa_up = p.scratch.ᶜtemp_scalar_6
+        ᶜaw_up = p.scratch.ᶜtemp_scalar_7
+        @. ᶜa_up = zero(FT)
+        @. ᶜaw_up = zero(FT)
+        for j in 1:n
+            ᶜaʲ = @. lazy(
+                max(zero(FT), draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j))),
+            )
+            @. ᶜa_up += ᶜaʲ
+            @. ᶜaw_up += ᶜaʲ * max(zero(FT), w_component(WVec(ᶜuʲs.:($$j))))
+        end
+        a_min = FT(CAP.min_area(CAP.turbconv_params(p.params)))
+        ᶜw_conv_vel = p.scratch.ᶜtemp_scalar_7
+        @. ᶜw_conv_vel = $(c_w) * ᶜaw_up / max(ᶜa_up, $(a_min)) + $(w_d)
+        rh_trans = FT(CAP.sgs_env_subsat_rh_transition(p.params))
+        gamma_crit = FT(CAP.sgs_env_subsat_gamma_crit(p.params))
+        ᶜq_cloud⁰ = @. lazy(
+            max(
+                zero(FT),
+                ᶜq_tot_nonneg⁰ - max(zero(FT), ᶜq_rai⁰) -
+                max(zero(FT), ᶜq_sno⁰),
+            ),
+        )
+        ᶜw_cu = p.scratch.ᶜtemp_scalar_6
+        _materialize_subsat_cu_switch!(
+            ᶜw_cu,
+            p,
+            thp,
+            ᶜT⁰,
+            ᶜρ⁰,
+            ᶜq_cloud⁰,
+            rh_trans,
+            gamma_crit,
+        )
+        @. ᶜw⁰_mp = max(
+            ᶜw⁰_mp,
+            max(
+                env_detrained_condensate_fraction(
+                    ᶜq_lcl⁰,
+                    ᶜq_icl⁰,
+                    ᶜsgs_moments.sigma_S,
+                    ᶜsgs_moments.λ_eq,
+                ),
+                ᶜw_cu,
+            ) * ᶜw_conv_vel,
+        )
+    end
+    ᶜw⁰_air = ᶜw⁰_mp
     if not_quadrature(sgs_quad)
         @. ᶜmp_tendency⁰ = microphysics_tendencies_1m(
             ᶜρ⁰, ᶜq_tot_nonneg⁰, ᶜq_lcl⁰, ᶜq_icl⁰, ᶜq_rai⁰, ᶜq_sno⁰,
