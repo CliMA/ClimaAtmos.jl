@@ -7,6 +7,7 @@ import ..unit_basis_vector_data, ..projected_vector_data
 import ..geopotential
 import ..ColumnDatasets
 import ..parse_date
+import ..iscolumn
 
 import ClimaCore: Geometry, Fields
 import ClimaCore.Geometry: ⊗

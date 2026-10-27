@@ -1254,7 +1254,7 @@ grid is forced from `datasets[h]`. `forcing` defaults to `default_forcing_terms(
 typically call `ExternalDrivenTVForcing(path; forcing = (...,))`.
 """
 struct ExternalDrivenTVForcing{
-    CD <: ColumnDatasets.AbstractColumnData,
+    CD <: Union{ColumnDatasets.AbstractColumnData, ColumnDatasets.PerColumnDatasets},
     F <: Tuple,
     M,
 }
@@ -1263,7 +1263,7 @@ struct ExternalDrivenTVForcing{
     time_interpolation_method::M
 end
 function ExternalDrivenTVForcing(
-    dataset::ColumnDatasets.AbstractColumnData;
+    dataset::Union{ColumnDatasets.AbstractColumnData, ColumnDatasets.PerColumnDatasets};
     forcing = default_forcing_terms(),
     time_interpolation_method = ColumnDatasets.time_interpolation_method(dataset),
 )

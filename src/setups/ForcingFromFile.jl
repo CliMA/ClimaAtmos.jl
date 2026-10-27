@@ -43,7 +43,7 @@ setup = ForcingFromFile(
 ```
 """
 struct ForcingFromFile{
-    CD <: ColumnDatasets.AbstractColumnData,
+    CD <: Union{ColumnDatasets.AbstractColumnData, ColumnDatasets.PerColumnDatasets},
     F <: ExternalDrivenTVForcing,
     FS,
     ST,
@@ -60,7 +60,7 @@ struct ForcingFromFile{
 end
 
 function ForcingFromFile(
-    dataset::ColumnDatasets.AbstractColumnData,
+    dataset::Union{ColumnDatasets.AbstractColumnData, ColumnDatasets.PerColumnDatasets},
     start_date::String;
     forcing = default_forcing_terms(),
     flux_scheme = nothing,

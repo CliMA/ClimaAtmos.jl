@@ -13,6 +13,7 @@ import ClimaParams
 
 import ..Parameters as CAP
 import ..geopotential
+import ..issphere
 import ..C12, ..C3
 import ..background_p_and_T, ..background_u
 
@@ -61,6 +62,19 @@ import ..SurfaceConditions:
 # ============================================================================
 # Layer 1 interface — implemented by each setup
 # ============================================================================
+
+"""
+    center_initial_condition(setup, local_geometry, params, ::Val{sphere})
+
+Return the center state of `setup` at one grid point, where `sphere` is
+`issphere` of the space.
+
+Defaults to the method without `sphere`. Setups whose state depends on latitude
+or longitude extend this method instead, since multi-column grids also have
+latitude and longitude coordinates.
+"""
+center_initial_condition(setup, local_geometry, params, _) =
+    center_initial_condition(setup, local_geometry, params)
 
 """
     face_initial_condition(setup, local_geometry, params)
@@ -341,8 +355,9 @@ function initial_state(
     center_space,
     face_space,
 )
+    sphere = Val(issphere(center_space))
     center_ic(lg) = center_prognostic_variables(
-        center_initial_condition(setup, lg, params), lg, params, atmos_model,
+        center_initial_condition(setup, lg, params, sphere), lg, params, atmos_model,
     )
     face_ic(lg) = face_prognostic_variables(
         face_initial_condition(setup, lg, params), lg, atmos_model,
