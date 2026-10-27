@@ -122,6 +122,12 @@ value = 0.05
 [cloud_ice_specific_humidity_autoconversion_threshold]
 value = 5.0e-6
 
+[cloud_ice_number_max]
+value = 100000.0
+
+[cloud_ice_number_temperature_fit_prefactor]
+value = 3000.0
+
 [snow_autoconversion_timescale]
 value = 1360
 
