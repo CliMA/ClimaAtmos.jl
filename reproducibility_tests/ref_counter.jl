@@ -1,4 +1,4 @@
-446
+447
 
 # **README**
 #
@@ -32,6 +32,14 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+447
+- ClimaCore v1.0.6, whose operator and CPU array-view optimizations
+  (CliMA/ClimaCore.jl#2695, `dy/array_optimizations`) change results at
+  roundoff.
+- Fused column loops (`DataLayouts.foreach_column`) for the implicit and explicit
+  tendencies, the precomputed quantities and caches (including the SGS covariance
+  cache and cloud fraction), and the manual sparse Jacobian.
+
 446
 - Include condensate and precipitation sedimentation enthalpy and mass-source
   dilution in `PrognosticEDMFX` updraft `mse` and `ρaʲ`, clamp laterally
