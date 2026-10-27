@@ -654,6 +654,30 @@ function SGSQuadratureParameters(
         # Tail entrainment (`tail_entrainment_increments`): weight 0 = the
         # dynamical entrainment draws environment-mean air.
         edmf_tail_entr_weight = FT(0),
+        # Updraft mass-flux velocity weight [-] and detrained-condensate
+        # reference velocity [m/s] in the environment autoconversion velocity
+        # (`set_microphysics_tendency_cache!`): both 0 = environment velocity
+        # only.
+        sgs_env_autoconversion_updraft_velocity_weight = FT(0),
+        sgs_env_autoconversion_detrained_velocity = FT(0),
+        # Positive: the Damköhler factor of the variance fidelity and the
+        # cloud-species flux blend use the constant
+        # `condensation_evaporation_timescale` and
+        # `sublimation_deposition_timescale` in place of the per-cell 1M
+        # relaxation times (`cloud_species_relaxation_time`).
+        sgs_cloud_species_constant_timescales = FT(0),
+        # Fraction of the environment cloud liquid evaporated in the updraft
+        # buoyancy reference density (`ᶜupdraft_reference_density`): 0 = the
+        # grid-mean density.
+        edmf_buoyancy_clear_env_weight = FT(0),
+        # Subsaturated-environment tail partitioning
+        # (`_materialize_env_tail_partition!`, `_env_subsat_cu_switch`):
+        # upper-tail truncation at the updraft quantile (`c_tail = 0` = off),
+        # fourth-order relative-subsaturation transition scale `ΔRH_trans` [-],
+        # and static-stability scale `γ_crit` [K/m] of the inversion gate.
+        sgs_env_updraft_tail_truncation_coeff = FT(0),
+        sgs_env_subsat_rh_transition = FT(0.03),
+        sgs_env_subsat_gamma_crit = FT(0.0115),
     )
     # A run toml defines a parameter that ClimaParams also defines when it
     # appears in the override dictionary or, for a `toml_dict` assembled

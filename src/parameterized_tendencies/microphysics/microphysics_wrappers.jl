@@ -650,26 +650,10 @@ precipitation exactly for any `a_p` (the shaft is bounded below by
         conditional_rule_shaft_fraction(rule),
         one(FT),
     )
-    # Condensate in excess of the equilibrium mean `g_eq` supported by the
-    # subdomain's saturation-excess PDF (such as condensate detrained from
-    # updrafts into a subsaturated environment) is distributed across all
-    # quadrature nodes so that it is exposed to evaporation on the clear nodes.
-    g_eq = ifelse(
-        isfinite(λ_eq),
-        conditional_rule_mean(NodeCondensate(FT(λ_eq), one(FT)), rule),
-        zero(FT),
-    )
-    f_neq = ifelse(
-        q_c > g_eq,
-        clamp((q_c - g_eq) / max(q_c, floatmin(FT)), zero(FT), one(FT)),
-        zero(FT),
-    )
-    ξ_liq_eff = one(FT) - (one(FT) - ξ_liq) * (one(FT) - f_neq)
-    ξ_ice_eff = one(FT) - (one(FT) - ξ_ice) * (one(FT) - f_neq)
     evaluator = Microphysics1MEvaluator(
         scheme, cmp, thp, ρ, w,
         q_rai, q_sno, λ,
-        ξ_liq_eff, ξ_ice_eff, q_lcl, q_icl,
+        ξ_liq, ξ_ice, q_lcl, q_icl,
         s * FT(λ_lagrange), λ_eq, mu_S, s * α_safe,
         β_precip, shaft_frac, dt, nsubs, args,
     )

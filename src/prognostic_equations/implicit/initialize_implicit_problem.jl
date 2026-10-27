@@ -60,10 +60,11 @@ function initialize_implicit_stage_problem!(Y, p, dtγ)
     if n_picard > 0
         ᶠsnapshot = p.precomputed.ᶠsgsʲs_picard_snapshot
         ᶜsnapshot = p.precomputed.ᶜsgsʲs_picard_snapshot
+        ᶜρ_ref = ᶜupdraft_reference_density(Y, p)
         for j in 1:n
             @. ᶠsnapshot.:($$j) = Y.f.sgsʲs.:($$j)
             @. ᶜsnapshot.:($$j) = Y.c.sgsʲs.:($$j)
-            @. ᶜρ_diffʲs.:($$j) = (ᶜρʲs.:($$j) - Y.c.ρ) / ᶜρʲs.:($$j)
+            @. ᶜρ_diffʲs.:($$j) = (ᶜρʲs.:($$j) - ᶜρ_ref) / ᶜρʲs.:($$j)
         end
         for round in 1:n_picard
             solve_sgs_u₃_implicit_stage_analytic!(Y, p, dtγ)
@@ -83,8 +84,9 @@ function initialize_implicit_stage_problem!(Y, p, dtγ)
             # Faces: always, so u₃_old = stage u₃. Centers: only between
             # rounds — the last round leaves the Picard-converged draft
             # scalars as a warm start for the Newton solve.
+            ᶜρ_ref = ᶜupdraft_reference_density(Y, p)
             for j in 1:n
-                @. ᶜρ_diffʲs.:($$j) = (ᶜρʲs.:($$j) - Y.c.ρ) / ᶜρʲs.:($$j)
+                @. ᶜρ_diffʲs.:($$j) = (ᶜρʲs.:($$j) - ᶜρ_ref) / ᶜρʲs.:($$j)
                 @. Y.f.sgsʲs.:($$j) = ᶠsnapshot.:($$j)
                 round == n_picard || @. Y.c.sgsʲs.:($$j) = ᶜsnapshot.:($$j)
             end

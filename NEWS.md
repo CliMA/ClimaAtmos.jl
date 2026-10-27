@@ -86,6 +86,37 @@ main
   condensate from the updraft (and added it to the environment) wherever the
   updraft narrows with height. The corresponding Jacobian diagonal carries the
   area fraction of the exact derivative, `∂a/∂z a ρʲwʲ / (1 - a)`.
+- ![][badge-✨feature/enhancement] Subsaturated-environment upper-tail
+  truncation, convective environment autoconversion velocity, and
+  clear-environment updraft buoyancy reference for 1-moment `PrognosticEDMFX`
+  (provisional parameters `sgs_env_updraft_tail_truncation_coeff`,
+  `sgs_env_subsat_rh_transition`, `sgs_env_subsat_gamma_crit`,
+  `sgs_env_autoconversion_updraft_velocity_weight`,
+  `sgs_env_autoconversion_detrained_velocity`,
+  `edmf_buoyancy_clear_env_weight`, and
+  `sgs_cloud_species_constant_timescales`):
+  - In `truncated_displacement_condensate(mu_S, sigma_S, c, c_hi)` and
+    `env_equilibrium_condensate`, the subsaturated environment's
+    saturation-excess PDF is integrated over `[−c, c_hi]`, where
+    `c_hi = min(c, Φ⁻¹(1 − q_tail))` truncates the upper tail
+    `q_tail = clamp(w_cu c_tail max(a_up, 2e-3), 0, 0.49)` occupied by
+    mass-flux updrafts and `w_cu` (`_env_subsat_cu_switch`) combines the
+    fourth-order relative-subsaturation switch (`sgs_env_subsat_rh_transition`,
+    default `0.03`), warm-cloud ramp, and static-stability gate
+    (`sgs_env_subsat_gamma_crit`, default `0.0115 K/m`).
+  - In `set_microphysics_tendency_cache!`, the vertical velocity passed to the
+    environment 1-moment warm-rain autoconversion is
+    `w_mp⁰ = max(w⁰, max(f_neq, w_cu) (c_w Σⱼ aⱼ max(wⱼ, 0) / max(Σⱼ aⱼ, a_min) + w_d))`,
+    with `f_neq` (`env_detrained_condensate_fraction`) the fraction of the
+    environment condensate in excess of its own equilibrium `q_c_eq`.
+  - In `ᶜupdraft_reference_density`, a fraction
+    `edmf_buoyancy_clear_env_weight` of the environment cloud liquid is
+    evaporated adiabatically in the density the updraft buoyancy is referenced
+    to.
+  - Positive `sgs_cloud_species_constant_timescales` selects the constant
+    `condensation_evaporation_timescale` and `sublimation_deposition_timescale`
+    for the Damköhler factor of `sgs_variance_fidelity` and for
+    `add_cloud_species_diffusionᵥ!`.
 - ![][badge-✨feature/enhancement] Tail entrainment for the prognostic EDMF
   updraft (provisional parameter `edmf_tail_entr_weight`, default `0`, set to
   `0.5` in `toml/prognostic_edmfx_1M.toml` and
@@ -104,16 +135,14 @@ main
   the provisional release-shape parameters `cloud_fraction_floor_release_margin`,
   `cloud_fraction_floor_release_abs_margin`,
   `cloud_fraction_floor_release_sharpness`, and `cloud_fraction_floor_residual`
-  are removed. In `_compute_cloud_fraction` and `_sum_1m_over_sgs`, condensate
-  is partitioned into its equilibrium part `min(q_c, q_c_eq)` (normalized by
-  `σ_aug`) and its non-equilibrium excess `max(0, q_c − q_c_eq)` (normalized by
-  `√(σ_aug² + δ_sub²)` in the cloud fraction and distributed across the
-  quadrature nodes in proportion to `(q_c − q_c_eq)_+ / q_c`). Under
-  non-equilibrium microphysics, `_updraft_cloud_fraction` evaluates the
-  truncated-Gaussian cover of the updraft cloud condensate against the updraft
-  vapor subsaturation deficit floored by `σ_abs`, so trace condensate entrained
-  or diffused into a subsaturated sub-cloud updraft does not make the sub-cloud
-  plume overcast.
+  are removed. In `_compute_cloud_fraction`, condensate is partitioned into its
+  equilibrium part `min(q_c, q_c_eq)` (normalized by `σ_aug`) and its
+  non-equilibrium excess `max(0, q_c − q_c_eq)` (normalized by
+  `√(σ_aug² + δ_sub²)`). Under non-equilibrium microphysics,
+  `_updraft_cloud_fraction` evaluates the truncated-Gaussian cover of the
+  updraft cloud condensate against the updraft vapor subsaturation deficit
+  floored by `σ_abs`, so trace condensate entrained or diffused into a
+  subsaturated sub-cloud updraft does not make the sub-cloud plume overcast.
 - ![][badge-🔥behavioralΔ] With the 1M microphysics and prognostic TKE, the
   turbulent flux of cloud liquid and ice blends down-gradient self-diffusion
   with the flux implied by the conserved-variable fluxes of total water and

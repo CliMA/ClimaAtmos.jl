@@ -611,4 +611,123 @@ floor_nt(::Type{FT}; ε_rel = FT(0.02), σ_abs = FT(1e-7)) where {FT} =
         end
     end
 
+    @testset "Subsaturated environment tail truncation and detrained fraction" begin
+        for FT in (Float32, Float64)
+            @testset "FT = $FT" begin
+                config = CA.AtmosConfig(Dict("FLOAT_TYPE" => string(FT)))
+                params = CA.ClimaAtmosParameters(config)
+                thermo_params = CAP.thermodynamics_params(params)
+
+                # Upper-tail truncation c_hi < c reduces equilibrium condensate
+                # monotonically and vanishes when mu_S <= -s * c_hi * sigma_S.
+                mu_S = FT(-3e-4)
+                sigma_S = FT(2e-4)
+                c = FT(3)
+                q_sym = CA.truncated_displacement_condensate(mu_S, sigma_S, c)
+                @test CA.truncated_displacement_condensate(mu_S, sigma_S, c, c) ==
+                      q_sym
+                q_t2 = CA.truncated_displacement_condensate(
+                    mu_S,
+                    sigma_S,
+                    c,
+                    FT(2.5),
+                )
+                q_t1 = CA.truncated_displacement_condensate(
+                    mu_S,
+                    sigma_S,
+                    c,
+                    FT(1.8),
+                )
+                @test q_sym > q_t2 > q_t1 >= FT(0)
+                @test CA.truncated_displacement_condensate(
+                    mu_S,
+                    sigma_S,
+                    c,
+                    FT(1.2),
+                ) == FT(0)
+
+                # Subsaturated cumulus switch vanishes at saturation and across
+                # strong inversions, and approaches 1 in warm subsaturated air.
+                ρ = FT(1.1)
+                T = FT(295)
+                q_sat = TD.q_vap_saturation(thermo_params, T, ρ)
+                rh_trans = FT(0.03)
+                gamma_crit = FT(0.0115)
+                @test CA._env_subsat_cu_switch(
+                    thermo_params,
+                    T,
+                    ρ,
+                    q_sat,
+                    rh_trans,
+                    FT(0.002),
+                    gamma_crit,
+                ) == FT(0)
+                w_cu_sub = CA._env_subsat_cu_switch(
+                    thermo_params,
+                    T,
+                    ρ,
+                    FT(0.85) * q_sat,
+                    rh_trans,
+                    FT(0.002),
+                    gamma_crit,
+                )
+                w_cu_inv = CA._env_subsat_cu_switch(
+                    thermo_params,
+                    T,
+                    ρ,
+                    FT(0.85) * q_sat,
+                    rh_trans,
+                    FT(0.05),
+                    gamma_crit,
+                )
+                @test w_cu_sub > FT(0.95)
+                @test w_cu_inv < FT(5e-3)
+
+                c_hi_0 = CA._env_tail_c_hi_from_sums(
+                    FT(0.01),
+                    FT(0),
+                    c,
+                    FT(4),
+                )
+                c_hi_cu = CA._env_tail_c_hi_from_sums(
+                    FT(0.01),
+                    FT(1),
+                    c,
+                    FT(4),
+                )
+                @test c_hi_0 == c
+                @test c_hi_cu < c
+                @test c_hi_cu ≈ CA.normal_cdf_inv(FT(0.96)) rtol = FT(1e-4)
+
+                # Detrained condensate fraction is 0 at or below equilibrium and
+                # (q_c - q_c_eq) / q_c above equilibrium.
+                q_eq = CA.truncated_gaussian_condensate(mu_S, sigma_S)
+                @test CA.env_detrained_condensate_fraction(
+                    FT(0),
+                    FT(0),
+                    sigma_S,
+                    mu_S,
+                ) == FT(0)
+                @test CA.env_detrained_condensate_fraction(
+                    FT(0.5) * q_eq,
+                    FT(0),
+                    sigma_S,
+                    mu_S,
+                ) == FT(0)
+                @test CA.env_detrained_condensate_fraction(
+                    FT(2) * q_eq,
+                    FT(0),
+                    sigma_S,
+                    mu_S,
+                ) ≈ FT(0.5) rtol = FT(1e-5)
+                @test CA.env_detrained_condensate_fraction(
+                    FT(1e-4),
+                    FT(0),
+                    sigma_S,
+                    FT(-Inf),
+                ) == FT(1)
+            end
+        end
+    end
+
 end
