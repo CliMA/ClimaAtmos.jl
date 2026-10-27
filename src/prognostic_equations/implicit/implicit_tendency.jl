@@ -148,6 +148,23 @@ function vertical_transport(ᶜρ, ᶠu³, ᶜχ, dt, ::Val{:third_order})
 end
 
 """
+    add_vertical_transport!(ᶜρχₜ, ᶠρ, ᶠu³, ᶜχ, dt, upwinding)
+
+Add the vertical transport of `vertical_transport` to `ᶜρχₜ`, with the face
+density `ᶠρ = ᶠinterp(ᶜρ * ᶜJ) / ᶠJ` already computed, so that a fused column loop can
+share it between several tracers. Inlined, since it runs inside loop bodies (a lazy
+broadcast returned from a function is not inferred there).
+"""
+@inline add_vertical_transport!(ᶜρχₜ, ᶠρ, ᶠu³, ᶜχ, dt, ::Val{:none}) =
+    (@. ᶜρχₜ += -(ᶜadvdivᵥ(ᶠρ * ᶠu³ * ᶠinterp(ᶜχ))); nothing)
+@inline add_vertical_transport!(ᶜρχₜ, ᶠρ, ᶠu³, ᶜχ, dt, ::Val{:first_order}) =
+    (@. ᶜρχₜ += -(ᶜadvdivᵥ(ᶠρ * ᶠupwind1(ᶠu³, ᶜχ))); nothing)
+@inline add_vertical_transport!(ᶜρχₜ, ᶠρ, ᶠu³, ᶜχ, dt, ::Val{:vanleer_limiter}) =
+    (@. ᶜρχₜ += -(ᶜadvdivᵥ(ᶠρ * ᶠlin_vanleer(ᶠu³, ᶜχ, dt))); nothing)
+@inline add_vertical_transport!(ᶜρχₜ, ᶠρ, ᶠu³, ᶜχ, dt, ::Val{:third_order}) =
+    (@. ᶜρχₜ += -(ᶜadvdivᵥ(ᶠρ * ᶠupwind3(ᶠu³, ᶜχ))); nothing)
+
+"""
     vertical_advection(ᶠu³, ᶜχ, upwinding)
 
 Return a lazy center-space broadcast of the advective-form vertical advection

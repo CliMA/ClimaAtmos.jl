@@ -918,6 +918,7 @@ callers pass a scratch field.
 """
 @inline maybe_materialize!(::Nothing, ᶜχ) = ᶜχ
 @inline maybe_materialize!(ᶜscratch, ᶜχ::Fields.Field) = ᶜχ
+@inline maybe_materialize!(::Nothing, ᶜχ::Fields.Field) = ᶜχ
 @inline maybe_materialize!(ᶜscratch, ᶜχ) = @. ᶜscratch = ᶜχ
 
 """
