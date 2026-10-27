@@ -3,6 +3,24 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- ![][badge-🔥behavioralΔ] With `QuadratureCloud` and interactive clouds, the
+  in-cloud liquid and ice water paths seen by the RRTMGP shortwave solve are
+  scaled by the effective-thickness factor `χ` of the in-cloud condensate
+  (`set_sw_cloud_optical_depth_factor!`); the longwave solve keeps the mean
+  in-cloud paths, since the factor understates the emissivity of thin clouds
+  (`RRTMGPInterface.solve_fluxes!` runs the two bands separately on the same
+  McICA sample). The environment cloud is the
+  truncated-Gaussian tail of the cloud-fraction closure, Gamma-matched, and
+  under `PrognosticEDMFX` the cloudy updrafts enter as separate components of
+  the mixture; `χ` is the larger of the mixture's geometric-mean ratio
+  `exp(E[ln q]) / E[q]` and the Gamma factor of its mean and variance. An
+  unresolved inhomogeneity of relative variance
+  `cloud_condensate_relative_variance_floor` (new provisional parameter,
+  default 0.25) multiplies every component, so overcast layers keep `χ ≈ 0.84`.
+  Prescribed and idealized clouds, `GridScaleCloud`, and `MLCloud` are
+  unscaled, and the new config key `cloud_inhomogeneity_in_sw_radiation: false`
+  (field `sw_cloud_inhomogeneity` of the all-sky radiation modes) turns the
+  scaling off for comparison runs.
 - ![][badge-🔥behavioralΔ] `radiation_tendency!` for `RadiationDYCOMS` selects the
   inversion height `z_i` as the highest level with `q_tot ≥ 0.008` kg/kg (falling
   back to the level closest to `0.008` kg/kg when the entire column is drier),

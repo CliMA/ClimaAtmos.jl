@@ -85,9 +85,11 @@ import RRTMGP
 
 Run the RRTMGP radiative transfer solve and store the resulting net flux.
 
-Pushes the current atmospheric state into the solver, refreshes the insolation
-(`set_insolation_variables!`) and the surface albedo (`set_surface_albedo!`), solves, and
-copies the net flux into `p.radiation.ᶠradiation_flux`. That field is then held fixed and
+Diagnoses the shortwave subgrid inhomogeneity factor of the in-cloud water paths
+(`set_sw_cloud_optical_depth_factor!`), pushes the current atmospheric state into the
+solver, refreshes the insolation (`set_insolation_variables!`) and the surface albedo
+(`set_surface_albedo!`), solves both bands (`RRTMGPI.solve_fluxes!`), and copies the
+net flux into `p.radiation.ᶠradiation_flux`. That field is then held fixed and
 reused by the tendencies until the next radiation call, which is why the `dt_rad` cadence
 is much longer than the timestep.
 
@@ -98,15 +100,15 @@ NVTX.@annotate function rrtmgp_solver_callback!(integrator)
     Y = integrator.u
     p = integrator.p
     t = integrator.t
-    FT = eltype(Y)
     (; ᶠradiation_flux, rrtmgp_solver) = p.radiation
 
+    set_sw_cloud_optical_depth_factor!(Y, p)
     RRTMGPI.update_atmospheric_state!(integrator)
 
     set_insolation_variables!(Y, p, t, p.atmos.insolation)
     set_surface_albedo!(Y, p, t, p.atmos.surface_albedo)
 
-    RRTMGP.update_fluxes!(rrtmgp_solver, UInt32(floor(FT(t) / integrator.p.dt)))
+    RRTMGPI.solve_fluxes!(integrator)
     Fields.field2array(ᶠradiation_flux) .= RRTMGP.net_flux(rrtmgp_solver)
     return nothing
 end

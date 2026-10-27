@@ -32,25 +32,42 @@
 # slots.
 
 """
+    _mills_continued_fraction(x)
+
+Inner convergents `(d, e)` of Laplace's continued fraction
+`r(−x) = φ(x) / Q(x) = x + 1 / (x + d)`, `d = 2 / (x + e)`,
+`e = 3 / (x + 4 / (x + ⋯))` for the inverse Mills ratio of the standard
+normal tail at `x > 0`, evaluated to 32 levels.
+"""
+@inline function _mills_continued_fraction(x)
+    FT = typeof(x)
+    e = zero(FT)
+    for k in 32:-1:3
+        e = FT(k) / (x + e)
+    end
+    d = FT(2) / (x + e)
+    return d, e
+end
+
+"""
     normal_tail_prob(z)
 
 Upper tail probability `Q(z) = 1 − Φ(z)` of the standard normal with
 relative accuracy in the tail: for `z ≥ 2` the Laplace continued fraction
-`Q(z) = φ(z) / (z + 1/(z + 2/(z + 3/(z + ⋯))))` to 32 terms (relative error
-below `4 × 10⁻⁹`), otherwise `normal_cdf(−z)`, whose absolute error of
-`7.5 × 10⁻⁸` is a relative error below `4 × 10⁻⁶` there. The conditional
-moments of a tail interval are differences of such probabilities, which the
-absolute accuracy of `normal_cdf` alone does not resolve beyond `z ≈ 2`.
+`Q(z) = φ(z) / (z + 1/(z + 2/(z + 3/(z + ⋯))))` to 32 terms
+(`_mills_continued_fraction`, relative error below `4 × 10⁻⁹`), otherwise
+`normal_cdf(−z)`, whose absolute error of `7.5 × 10⁻⁸` is a relative error
+below `4 × 10⁻⁶` there. The conditional moments of a tail interval are
+differences of such probabilities, which the absolute accuracy of `normal_cdf`
+alone does not resolve beyond `z ≈ 2`.
 """
 @inline function normal_tail_prob(z)
     FT = typeof(z)
     inv_sqrt2π = one(FT) / sqrt(FT(2) * FT(π))
     z_cf = max(z, FT(2))
-    t = z_cf
-    for k in 32:-1:1
-        t = z_cf + FT(k) / t
-    end
-    q_cf = exp(-z_cf^2 / 2) * inv_sqrt2π / t
+    d, _ = _mills_continued_fraction(z_cf)
+    t = z_cf + inv(z_cf + d)
+    q_cf = exp(-FT(0.5) * z_cf * z_cf) * inv_sqrt2π / t
     return ifelse(z >= FT(2), q_cf, normal_cdf(-z))
 end
 

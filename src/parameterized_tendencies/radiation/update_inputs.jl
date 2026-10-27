@@ -306,7 +306,9 @@ effective radii through the `RRTMGP.cloud_liquid_water_path`, `RRTMGP.cloud_ice_
 `RRTMGP.cloud_fraction`, `RRTMGP.cloud_liquid_effective_radius`, and
 `RRTMGP.cloud_ice_effective_radius` getters. Water paths are grid-mean `ρ q Δz` divided by
 the cloud fraction (floored at `eps`) to make them in-cloud values, and are converted to
-the units RRTMGP expects: g/m² for the paths and microns for the radii.
+the units RRTMGP expects: g/m² for the paths and microns for the radii. The paths are
+the mean in-cloud values; the shortwave solve scales them by the subgrid inhomogeneity
+factor afterwards (`solve_fluxes!`).
 
 The liquid effective radius follows the Liu and Hallett (1997) parameterization, evaluated
 with a droplet number concentration diagnosed by `ml_N_cloud_liquid_droplets` from the
@@ -484,4 +486,51 @@ function ml_N_cloud_liquid_droplets(cmc, c_dust, c_seasalt, c_SO4, q_liq)
         α_SO4 * (log(max(c_SO4, eps(FT))) - log(c₀_SO4)) +
         α_q_liq * (log(max(q_liq, eps(FT))) - log(q₀_liq))
     )
+end
+
+"""
+    solve_fluxes!(integrator)
+
+Run the RRTMGP radiative transfer on the solver's current inputs; return `nothing`.
+Called from the radiation callback after `update_atmospheric_state!`, the insolation,
+and the surface albedo are set; the net flux is read afterwards with
+`RRTMGP.net_flux`.
+
+The McICA key is the timestep index, so the cloud sample is reproducible across
+restarts. With `p.radiation.ᶜsw_cloud_optical_depth_factor` present, the two bands are
+solved separately: the longwave sees the mean in-cloud water paths that
+`update_cloud_properties!` wrote, and the shortwave sees them scaled by the
+effective-thickness factor `χ` (`set_sw_cloud_optical_depth_factor!`), which is
+derived for reflectance and would understate the emissivity of thin clouds. The
+shortwave solve reuses the longwave McICA key, as `RRTMGP.update_fluxes!` does, so
+both bands sample the same cloud mask. The scaled paths stay in the solver until the
+next callback rewrites them, which is why the factor is only allocated for clouds
+that are rewritten every call (`get_cloud_cache`). Without the factor, the solve is
+the single `RRTMGP.update_fluxes!` call.
+"""
+function solve_fluxes!((; u, p, t)::I) where {I}
+    (; rrtmgp_solver) = p.radiation
+    FT = Spaces.undertype(axes(u.c))
+    key = UInt32(floor(FT(t) / p.dt))
+    if hasproperty(p.radiation, :ᶜsw_cloud_optical_depth_factor)
+        RRTMGP.check_values[] && RRTMGP.validate_inputs(rrtmgp_solver)
+        RRTMGP.prepare_atmosphere!(rrtmgp_solver)
+        RRTMGP.update_lw_fluxes!(rrtmgp_solver, key)
+        ᶜχ = p.radiation.ᶜsw_cloud_optical_depth_factor
+        ᶜlwp = Fields.array2field(
+            RRTMGP.cloud_liquid_water_path(rrtmgp_solver),
+            axes(u.c),
+        )
+        ᶜiwp = Fields.array2field(
+            RRTMGP.cloud_ice_water_path(rrtmgp_solver),
+            axes(u.c),
+        )
+        @. ᶜlwp *= ᶜχ
+        @. ᶜiwp *= ᶜχ
+        RRTMGP.update_sw_fluxes!(rrtmgp_solver)
+        RRTMGP.update_net_fluxes!(rrtmgp_solver)
+    else
+        RRTMGP.update_fluxes!(rrtmgp_solver, key)
+    end
+    return nothing
 end

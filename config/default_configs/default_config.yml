@@ -126,6 +126,9 @@ idealized_clouds:
 prescribe_clouds_in_radiation:
   help: "Use prescribed clouds in radiation model. Clouds are read from ERA5 data and updated every time radiation is called. The year 2010 is used and continuously repeated. This mode only affect radiation and is only relevant for the RRTGMP mode. [`false` (default), `true`]"
   value: false
+cloud_inhomogeneity_in_sw_radiation:
+  help: "Scale the in-cloud water paths seen by the RRTMGP shortwave solve by the subgrid inhomogeneity factor of the in-cloud condensate; the longwave always sees the mean in-cloud condensate. Only affects interactive clouds under the `quadrature` cloud model; `false` passes the mean condensate to the shortwave as well. [`true` (default), `false`]"
+  value: true
 insolation:
   help: "Insolation used in radiation model [`idealized` (default), `timevarying`, `rcemipii`, `externaldriventv`, `larcform1`]"
   value: "idealized"

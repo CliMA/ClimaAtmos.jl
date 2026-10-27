@@ -160,14 +160,115 @@ from the cloud model (see
 [PROPHET: Closures](prophet_closures.md#Variances-and-cloud-fraction) and
 [Microphysics](microphysics.md)). RRTMGP needs *in-cloud* water paths, so
 `update_cloud_properties!` converts the grid-mean contents to in-cloud values by
-dividing by the cloud fraction,
+dividing by the cloud fraction ``f_c``,
 
 ```math
 \mathrm{LWP} = \frac{\rho \, q_l^{cl} \, \Delta z}{\max(f_c, \epsilon)} ,
 ```
 
 and likewise for ice. Cloud fraction is passed separately, so the radiation sees
-a partially filled layer rather than a uniformly thin cloud.
+a partially filled layer rather than a uniformly thin cloud. The longwave solve
+uses these mean in-cloud paths; the shortwave solve uses them multiplied by the
+subgrid inhomogeneity factor ``\chi`` below (`solve_fluxes!`).
+
+**Subgrid inhomogeneity.** Plane-parallel reflectance is concave in optical
+depth, so evaluating the solver at the mean in-cloud water path overestimates
+it when condensate varies horizontally within the cloud. The
+effective-thickness approximation [Cahalan1994](@cite) evaluates the solver at
+the geometric mean of the optical depth, which scales the in-cloud water path
+by
+
+```math
+\chi = \frac{\exp(\mathrm{E}[\ln \tau])}{\mathrm{E}[\tau]} \le 1 .
+```
+
+For a Gamma-distributed optical depth with shape ``\nu``, the inverse relative
+variance [Barker1996](@cite), ``\chi = \exp(\psi(\nu)) / \nu`` with ``\psi``
+the digamma function. With `QuadratureCloud`, ``\nu`` follows from the subgrid
+distribution that also sets the cloud fraction. For a Gaussian saturation
+excess truncated at ``S > 0`` with ``f_c = \Phi(z)`` and inverse Mills ratio
+``r = \phi(z) / \Phi(z)``, the in-cloud condensate has mean ``m = z + r`` and
+variance ``v = 1 - z r - r^2``, so its relative variance is ``v / m^2``. It
+tends to ``1`` in sparse clouds and to ``0`` in overcast layers. Overcast
+stratocumulus, however, has a relative standard deviation of liquid water path
+of about 0.4–0.8 [Oreopoulos2005](@cite). An unresolved, independent, unit-mean
+inhomogeneity of relative variance ``\sigma_f^2``
+(`cloud_condensate_relative_variance_floor`, default 0.25) therefore multiplies
+the truncated-Gaussian condensate, giving
+
+```math
+\frac{1}{\nu} = \left(1 + \frac{v}{m^2}\right) \left(1 + \sigma_f^2\right) - 1 .
+```
+
+``\chi`` then increases monotonically with ``f_c``, from about 0.43 in sparse
+clouds through 0.58 at ``f_c = 0.5`` to 0.84 in overcast layers (0.59, 0.73,
+and 0.96 for ``\sigma_f^2 = 0``).
+
+Under `PrognosticEDMFX`, the cloud cover combines the truncated-Gaussian cloud
+of the environment with binary cloudy updrafts (see
+[PROPHET: Closures](prophet_closures.md#Variances-and-cloud-fraction)), and
+``\chi`` treats the cell's cloud as the same mixture. The environment
+contributes cloudy area ``a_0 f_{c,0}`` with in-cloud mean
+``q_{c,0} / f_{c,0}`` and the Gamma shape above; each cloudy updraft ``j``
+contributes area ``a_j`` with its own condensate ``q_{c,j}`` and relative
+variance ``\sigma_f^2``. ``\chi`` is the larger of two estimates that coincide
+for a single component. One is the geometric mean of the mixture, exact for the
+effective-thickness approximation because ``\mathrm{E}[\ln \tau]`` and
+``\mathrm{E}[\tau]`` are area-weighted sums over the components. The other is
+the Gamma factor of the mixture's own mean and variance. Each underestimates
+``\chi`` where the other holds. The geometric mean collapses when an updraft
+that the binary cover counts as cloudy holds only trace condensate, although
+such an updraft is optically clear. The moment-matched Gamma puts a small,
+dense updraft core into a heavy tail near zero, whereas the geometric mean
+weighs the core by its area, so a dense core beside a thin environment cloud
+lowers ``\chi`` below the environment value. Where nearly all of the cover is
+trace-condensate updraft area, both estimates are small; those levels hold
+almost no water. The
+radiation callback evaluates ``\chi`` (`set_sw_cloud_optical_depth_factor!`)
+before it passes the cloud properties to RRTMGP. Other cloud models
+(`GridScaleCloud`, `MLCloud`) have no in-cloud distribution, and prescribed
+ERA5 clouds already come from a different cloud scheme; for all of them
+``\chi = 1``. Setting `cloud_inhomogeneity_in_sw_radiation: false` leaves the
+interactive clouds unscaled as well (``\chi = 1``), for runs that isolate the
+effect of the factor.
+
+``\chi`` applies across all cloud regimes, extending the effective-thickness
+approximation beyond the marine boundary-layer clouds for which it was first
+derived.
+Retrievals find comparable or larger in-cloud variability in broken cumulus,
+over land, and in ice and convective clouds [Oreopoulos2005](@cite), and the
+truncated-Gaussian part comes from the same subgrid distribution that sets the
+cloud fraction in every regime. The default ``\sigma_f^2`` is set from overcast
+stratocumulus and is therefore likely too small for ice and convective clouds
+at coarse resolution, where the inhomogeneity also grows with the grid spacing.
+Ice condensate under non-equilibrium microphysics departs from saturation
+equilibrium, so for ice, the truncated-Gaussian shape is a weaker model and the
+floor accounts for more of the variability.
+
+The effective-thickness approximation is derived for shortwave reflectance,
+and ``\chi`` is applied to the shortwave solve only. Longwave emissivity,
+``1 - \exp(-\tau_a)`` in absorption optical depth ``\tau_a``, is linear for
+thin clouds and saturates for thick ones, so the shortwave factor would
+understate the emissivity of thin cirrus and raise the outgoing longwave
+radiation where the cloud top is coldest. For a Gamma distribution, the
+emissivity-averaged factor is
+``\chi_{\mathrm{LW}} = \nu \ln(1 + \tau_a / \nu) / \tau_a``, which tends to
+1 for thin clouds and falls below ``\chi`` only where the cloud is already
+nearly black. The longwave therefore uses the mean in-cloud water paths, and
+the callback runs the two band solves separately (`solve_fluxes!`), with both
+bands sampling the same McICA cloud mask. The COSP simulators sample
+homogeneous in-cloud condensate, so their simulated optical depths do not
+include ``\chi``.
+
+!!! note "TODO: fold the inhomogeneity into RRTMGP's cloud sampling"
+
+    Scaling the water path corrects the band-mean optics after the fact. The
+    consistent treatment is to give the McICA subcolumn generator in RRTMGP
+    the in-cloud condensate distribution (the Gamma shape ``\nu`` above), so
+    that each subcolumn draws its own condensate and both the shortwave and
+    the longwave average over it. That would replace ``\chi`` and the
+    band-specific handling in `solve_fluxes!` with one sampled cloud field and
+    give the longwave the ``\chi_{\mathrm{LW}}`` behavior above.
 
 **Effective radii.** The liquid effective radius follows the ``1/3``-power law
 of [LiuHallett1997](@cite), evaluated with a droplet number concentration
@@ -191,7 +292,9 @@ mode:
   - [`InteractiveCloudInRadiation`](@ref ClimaAtmos.InteractiveCloudInRadiation)
     (the default): condensate and cloud fraction from the model state, refreshed
     every callback. This is the coupled configuration, in which radiation and
-    clouds affect each other.
+    clouds affect each other. With `QuadratureCloud`, the shortwave in-cloud
+    water paths are scaled by the subgrid inhomogeneity factor ``\chi`` above,
+    unless `cloud_inhomogeneity_in_sw_radiation: false`.
   - [`PrescribedCloudInRadiation`](@ref ClimaAtmos.PrescribedCloudInRadiation)
     (`prescribe_clouds_in_radiation: true`): cloud liquid, cloud ice, and cloud
     fraction read from an ERA5 monthly climatology, with the year 2010 repeated

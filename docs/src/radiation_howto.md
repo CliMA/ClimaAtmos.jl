@@ -81,6 +81,7 @@ All of these apply only to the RRTMGP modes.
 ```yaml
 rad: allskywithclear
 prescribe_clouds_in_radiation: false   # ERA5 climatology instead of model clouds
+cloud_inhomogeneity_in_sw_radiation: true # subgrid factor χ on shortwave water paths
 idealized_clouds: false                # two fixed cloud layers
 idealized_h2o: false                   # prescribed RH instead of model vapor
 aerosol_radiation: false               # aerosols in the shortwave optics
@@ -100,6 +101,11 @@ want:
     for a controlled radiative forcing, not as an approximation to a cloud
     field.
   - `idealized_h2o: true` decouples the radiation from the model's moisture.
+
+`cloud_inhomogeneity_in_sw_radiation: false` passes the mean in-cloud condensate
+to the shortwave solve, with the subgrid inhomogeneity factor ``\chi`` set to 1
+(see [Radiation](radiation.md#Clouds)); the longwave solve always uses the mean
+condensate. Use it as the reference when measuring the effect of the factor.
 
 `aerosol_radiation: true` requires at least one species in
 `prescribed_aerosols`, from `DST01`–`DST05`, `SSLT01`–`SSLT05`, `SO4`, `CB1`,

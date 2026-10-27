@@ -654,6 +654,12 @@ function SGSQuadratureParameters(
         # Floor on the overlap precipitation fraction seen by the placement:
         # the shaft is never narrower than half the cell.
         sgs_precip_fraction_floor = FT(0.5),
+        # Unresolved in-cloud condensate inhomogeneity seen by radiation
+        # (`cloud_condensate_relative_variance`): relative variance 0.25, a
+        # relative standard deviation of 0.5, within the 0.4–0.8 observed for
+        # the liquid water path of overcast marine stratocumulus. Applied to all
+        # cloud types; ice and convective clouds are likely more inhomogeneous.
+        cloud_condensate_relative_variance_floor = FT(0.25),
     )
     # A run toml defines a parameter that ClimaParams also defines when it
     # appears in the override dictionary or, for a `toml_dict` assembled
@@ -694,6 +700,13 @@ function SGSQuadratureParameters(
     c >= 1 || throw(
         ArgumentError(
             "sgs_displacement_truncation must be at least 1; got $c",
+        ),
+    )
+    rv_floor = parameters.cloud_condensate_relative_variance_floor
+    rv_floor >= 0 || throw(
+        ArgumentError(
+            "cloud_condensate_relative_variance_floor must be non-negative; " *
+            "got $rv_floor",
         ),
     )
     CAP.SGSQuadratureParameters{FT}(; parameters...)
