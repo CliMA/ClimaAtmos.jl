@@ -3,6 +3,10 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- ![][badge-🐛bugfix] `get_state_restart` closes its `HDF5Reader` after reading. The
+  reader was left to a GC finalizer; under MPI, closing the file is collective, so a
+  finalizer that ran on one rank only could deadlock the next MPI exchange (seen on
+  4–8 GPUs while `build_cache` set up the DSS buffers).
 - ![][badge-🔥behavioralΔ] With `QuadratureCloud` and interactive clouds, the
   in-cloud liquid and ice water paths seen by the RRTMGP shortwave solve are
   scaled by the effective-thickness factor `χ` of the in-cloud condensate

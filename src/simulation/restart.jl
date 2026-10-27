@@ -41,6 +41,9 @@ function get_state_restart(
             @warn "Restart file $(restart_file) was constructed with a different AtmosModel"
         end
     end
+    # Close on all ranks now: under MPI, closing the file is collective, and leaving it
+    # to a GC finalizer that runs on one rank only deadlocks the next MPI exchange
+    Base.close(reader)
     return (Y, t_start)
 end
 
