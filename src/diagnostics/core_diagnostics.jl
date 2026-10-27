@@ -1177,7 +1177,7 @@ function compute_covariance_diagnostics(_, cache, _, type)
         return ᶜT′T′
     elseif type == :T_qt
         # covariance consistent with the correlation the quadrature samples
-        # (constant or diagnosed); see `set_tq_correlation!`
+        # (constant or diagnosed); see `set_covariance_cache!`
         return @. lazy(ᶜcorr_Tq * sqrt(max(0, ᶜT′T′)) * sqrt(max(0, ᶜq′q′)))
     else
         error("Unknown variance type")
