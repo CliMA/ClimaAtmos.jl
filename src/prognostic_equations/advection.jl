@@ -455,6 +455,10 @@ function edmfx_sgs_vertical_advection_tendency!(
                 (@name(c.sgsʲs.:(1).n_rai), @name(n_rai), @name(ᶜwₙᵣʲs.:(1)), @name(ᶜwₙᵣ)),
             )
 
+            # A closure stores a captured type as a `DataType`, so `eps(FT)`
+            # inside it dispatches at run time and allocates.
+            ε_area = eps(FT)
+            zero_FT = zero(FT)
             MatrixFields.unrolled_foreach(
                 sgs_microphysics_tracers,
             ) do (χʲ_name, name, wʲ_name, w_gs_name)
@@ -471,8 +475,8 @@ function edmfx_sgs_vertical_advection_tendency!(
                 ᶜρ⁰w⁰χ⁰ = @. lazy(
                     max(
                         (ᶜw_gs * ᶜρχ_gs - Y.c.sgsʲs.:($$j).ρa * ᶜwʲ * ᶜχʲ) /
-                        max(1 - ᶜa, eps(FT)),
-                        FT(0),
+                        max(1 - ᶜa, ε_area),
+                        zero_FT,
                     ),
                 )
 
@@ -585,6 +589,10 @@ and `updraft_sedimentation_mass_source!`.
 function foreach_updraft_sedimentation(f, Y, p, j)
     j == 1 || error("Updraft sedimentation supports a single updraft")
     FT = eltype(p.params)
+    # A closure stores a captured type as a `DataType`, so `eps(FT)` inside it
+    # dispatches at run time and allocates.
+    ε_area = eps(FT)
+    zero_FT = zero(FT)
     (; ᶜρʲs) = p.precomputed
     ᶠJ = Fields.local_geometry_field(axes(Y.f)).J
     ᶜa = (@. lazy(draft_area(Y.c.sgsʲs.:(1).ρa, ᶜρʲs.:(1))))
@@ -607,8 +615,8 @@ function foreach_updraft_sedimentation(f, Y, p, j)
         ᶜρ⁰w⁰χ⁰ = @. lazy(
             max(
                 (ᶜw_gs * ᶜρq_gs - Y.c.sgsʲs.:(1).ρa * ᶜwʲ * ᶜqʲ) /
-                max(1 - ᶜa, eps(FT)),
-                FT(0),
+                max(1 - ᶜa, ε_area),
+                zero_FT,
             ),
         )
         vtt = p.scratch.ᶜtemp_scalar_4
