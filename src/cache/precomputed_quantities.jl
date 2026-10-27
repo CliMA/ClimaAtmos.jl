@@ -388,7 +388,6 @@ function precomputed_quantities(Y, atmos)
                 precipitation_quantities...,
                 # ice quantities (P3)
                 ᶜwnᵢ = similar(Y.c, FT),
-                ᶜlogλ = similar(Y.c, FT),
                 ᶜScoll = similar(Y.c,
                     @NamedTuple{
                         ∂ₜq_c::FT, ∂ₜq_r::FT, ∂ₜN_c::FT, ∂ₜN_r::FT,

@@ -3,6 +3,7 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- Update to CloudMicrophysics 0.47.
 - ![][badge-🔥behavioralΔ] With `QuadratureCloud` and interactive clouds, the
   in-cloud liquid and ice water paths seen by the RRTMGP shortwave solve are
   scaled by the effective-thickness factor `χ` of the in-cloud condensate

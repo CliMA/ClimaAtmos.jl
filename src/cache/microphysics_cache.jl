@@ -6,6 +6,7 @@ import CloudMicrophysics.MicrophysicsNonEq as CMNe
 import CloudMicrophysics.Microphysics1M as CM1
 import CloudMicrophysics.Microphysics2M as CM2
 import CloudMicrophysics.BulkMicrophysicsTendencies as BMT
+import CloudMicrophysics.P3Scheme as CMP3
 
 import Thermodynamics as TD
 import ClimaCore.Operators as Operators
@@ -86,7 +87,7 @@ Dispatches on `microphysics_model` (`NonEquilibriumMicrophysics1M`,
 zeroes the advection contributions. Returns `nothing`.
 
 Mutates in `p.precomputed`: the velocity fields available for the scheme (`ᶜwₗ`,
-`ᶜwᵢ`, `ᶜwᵣ`, `ᶜwₛ`, plus number-weighted `ᶜwₙₗ`/`ᶜwₙᵣ` for 2M and `ᶜwnᵢ`/`ᶜlogλ`
+`ᶜwᵢ`, `ᶜwᵣ`, `ᶜwₛ`, plus number-weighted `ᶜwₙₗ`/`ᶜwₙᵣ` for 2M and `ᶜwnᵢ`
 for P3 ice) and the advection contributions `ᶜwₜqₜ` and `ᶜwₕhₜ`.
 
 For `PrognosticEDMFX`, the per-subdomain velocities (`ᶜwₗʲs`, `ᶜwᵢʲs`, `ᶜwᵣʲs`,
@@ -648,17 +649,17 @@ function set_precipitation_velocities!(
 
     # Number- and mass weighted ice terminal velocity [m/s]
     # Calculate terminal velocities
-    (; ᶜlogλ, ᶜwnᵢ) = p.precomputed
-    use_aspect_ratio = true  # TODO: Make a config option
-    ᶜF_rim = @. lazy(ρq_rim / ρq_icl)
-    ᶜρ_rim = @. lazy(ρq_rim / ρb_rim)
-    ᶜstate_p3 = @. lazy(CMP3.P3State(p3_ice.scheme,
-        max(0, ρq_icl), max(0, ρn_ice), ᶜF_rim, ᶜρ_rim,
-    ))
-    @. ᶜlogλ = CMP3.get_distribution_logλ(ᶜstate_p3)
-    args = (p3_ice.terminal_velocity, ρ, ᶜstate_p3, ᶜlogλ)
-    @. ᶜwnᵢ = CMP3.ice_terminal_velocity_number_weighted(args...; use_aspect_ratio)
-    @. ᶜwᵢ = CMP3.ice_terminal_velocity_mass_weighted(args...; use_aspect_ratio)
+    (; ᶜwnᵢ) = p.precomputed
+    ᶜstate_p3 = @. lazy(
+        CMP3.P3State(p3_ice.scheme, p3_ice.integration,
+            ρq_icl, ρn_ice, ρq_rim, ρb_rim,
+        ),
+    )
+    ᶜw_ice = @. lazy(
+        CMP3.ice_terminal_velocities(p3_ice.terminal_velocity, ᶜstate_p3, ρ),
+    )
+    @. ᶜwnᵢ = getindex(ᶜw_ice, 1)
+    @. ᶜwᵢ = getindex(ᶜw_ice, 2)
 
     # compute their contributions to energy and total water advection
     @. ᶜwₜqₜ = WVec(ᶜwₗ * ρq_lcl + ᶜwᵢ * ρq_icl + ᶜwᵣ * ρq_rai) / ρ
@@ -1258,7 +1259,7 @@ function set_microphysics_tendency_cache!(
     Y, p, ::NonEquilibriumMicrophysics2MP3, _,
 )
     (; dt) = p
-    (; ᶜT, ᶜmp_tendency, ᶜScoll, ᶜlogλ) = p.precomputed
+    (; ᶜT, ᶜmp_tendency, ᶜScoll) = p.precomputed
 
     # get thermodynamics and microphysics params
     params_2mp3 = CAP.microphysics_2mp3_params(p.params)
@@ -1279,7 +1280,7 @@ function set_microphysics_tendency_cache!(
     # TODO - looks like aerosol activation is missing
     @. ᶜmp_tendency = BMT.bulk_microphysics_tendencies(
         BMT.Microphysics2Moment(), params_2mp3, thp, Y.c.ρ, ᶜT,
-        ᶜq_lcl, ᶜn_lcl, ᶜq_rai, ᶜn_rai, ᶜq_icl, ᶜn_ice, ᶜq_rim, ᶜb_rim, ᶜlogλ,
+        ᶜq_lcl, ᶜn_lcl, ᶜq_rai, ᶜn_rai, ᶜq_icl, ᶜn_ice, ᶜq_rim, ᶜb_rim,
     )
     # Apply coupled limiting directly
     ᶜf_liq = @. lazy(
