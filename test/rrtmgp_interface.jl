@@ -244,8 +244,8 @@ end
     @test RRTMGPI.AllSkyRadiation().sw_cloud_inhomogeneity
     @test RRTMGPI.AllSkyRadiationWithClearSkyDiagnostics().sw_cloud_inhomogeneity
 
-    # Without the factor, the cloud cache is empty, so the shortwave water paths
-    # are unscaled and the factor setter is a no-op.
+    # With `sw_cloud_inhomogeneity = false`, the cloud cache is empty, leaving
+    # the shortwave water paths unscaled and the factor setter a no-op.
     for cloud in (CA.InteractiveCloudInRadiation(), nothing)
         @test CA.get_cloud_cache(cloud, Y, nothing, false) == (;)
         cache = CA.get_cloud_cache(cloud, Y, nothing, true)

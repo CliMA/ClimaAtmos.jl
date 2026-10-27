@@ -42,7 +42,7 @@ import ClimaAtmos as CA
             rv_floor,
         )
         L = CA.log_gamma_effective_thickness
-        # Without the floor, χ is the Gamma factor of the truncated Gaussian.
+        # With `rv_floor = 0`, χ is the Gamma factor of the truncated Gaussian.
         @test χ(FT(0.5), FT(0)) ≈ FT(0.732150) rtol = rtol
         @test χ(FT(1e-6), FT(0)) ≈ exp(-γ_E) rtol = FT(0.05)
         # The floor composes multiplicatively with the Gaussian variance.
@@ -85,7 +85,7 @@ import ClimaAtmos as CA
             cf, one(FT), FT(1e-4), zero(FT), zero(FT), zero(FT), zero(FT),
             rv_floor,
         )
-        # Two homogeneous updrafts (no environment cloud, no floor): the
+        # Two homogeneous updrafts (`q_env = 0`, `rv_floor = 0`): the
         # larger of the geometric-mean ratio and the moment-matched Gamma.
         as, qs = FT[0.05, 0.15], FT[1e-3, 4e-3]
         A = sum(as)
@@ -113,7 +113,7 @@ import ClimaAtmos as CA
         @test χ_trace > FT(0.85) * χ_deck
         # A small dense updraft core beside a thin environment cloud makes the
         # cell more inhomogeneous than the environment cloud alone, by an
-        # amount set by its area (the geometric mean), not by a heavy tail.
+        # amount set by its area (the geometric mean).
         a_core, q_core = FT(0.01), FT(1e-2)
         cf_env = FT(0.5)
         a_env = 1 - a_core

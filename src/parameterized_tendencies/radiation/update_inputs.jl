@@ -513,6 +513,7 @@ function solve_fluxes!((; u, p, t)::I) where {I}
     FT = Spaces.undertype(axes(u.c))
     key = UInt32(floor(FT(t) / p.dt))
     if hasproperty(p.radiation, :ᶜsw_cloud_optical_depth_factor)
+        RRTMGP.check_values[] && RRTMGP.validate_inputs(rrtmgp_solver)
         RRTMGP.prepare_atmosphere!(rrtmgp_solver)
         RRTMGP.update_lw_fluxes!(rrtmgp_solver, key)
         ᶜχ = p.radiation.ᶜsw_cloud_optical_depth_factor

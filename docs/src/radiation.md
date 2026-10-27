@@ -232,8 +232,9 @@ ERA5 clouds already come from a different cloud scheme; for all of them
 interactive clouds unscaled as well (``\chi = 1``), for runs that isolate the
 effect of the factor.
 
-``\chi`` applies to all cloud types, not only to the marine boundary-layer
-clouds on which the effective-thickness approximation was first derived.
+``\chi`` applies across all cloud regimes, extending the effective-thickness
+approximation beyond the marine boundary-layer clouds for which it was first
+derived.
 Retrievals find comparable or larger in-cloud variability in broken cumulus,
 over land, and in ice and convective clouds [Oreopoulos2005](@cite), and the
 truncated-Gaussian part comes from the same subgrid distribution that sets the

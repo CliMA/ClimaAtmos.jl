@@ -649,19 +649,11 @@ function get_radiation_mode(parsed_args, ::Type{FT}; setup_components) where {FT
             aerosol_radiation,
             deep_atmosphere,
         )
-    elseif radiation_name == "allsky"
-        RRTMGPI.AllSkyRadiation(;
-            idealized_h2o,
-            idealized_clouds,
-            cloud,
-            sw_cloud_inhomogeneity,
-            add_isothermal_boundary_layer,
-            aerosol_radiation,
-            reset_rng_seed,
-            deep_atmosphere,
-        )
-    elseif radiation_name == "allskywithclear"
-        RRTMGPI.AllSkyRadiationWithClearSkyDiagnostics(;
+    elseif radiation_name in ("allsky", "allskywithclear")
+        Mode =
+            radiation_name == "allsky" ? RRTMGPI.AllSkyRadiation :
+            RRTMGPI.AllSkyRadiationWithClearSkyDiagnostics
+        Mode(;
             idealized_h2o,
             idealized_clouds,
             cloud,
