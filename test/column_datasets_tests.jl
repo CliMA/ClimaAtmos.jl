@@ -222,16 +222,21 @@ end
         isapprox.(vec(parent(dest)), ta_itp.(vec(parent(ᶜz))), rtol = 1e-6),
     )
 
-    # surface series are read as in-memory (time,) inputs
+    # surface series are read onto the surface space
+    surface_space = ClimaCore.Spaces.level(
+        ClimaCore.Spaces.FaceFiniteDifferenceSpace(grid),
+        ClimaCore.Utilities.half,
+    )
     surface_fields = CD.surface_timevaryinginputs(
         data,
         CD.CANONICAL_SURFACE_VARS,
-        center_space,
+        surface_space,
         start_date,
     )
     @test keys(surface_fields) == CD.CANONICAL_SURFACE_VARS
-    evaluate!(dest, surface_fields.ts, 0.0)
-    @test all(parent(dest) .≈ 1)
+    sfc_dest = ClimaCore.Fields.zeros(surface_space)
+    evaluate!(sfc_dest, surface_fields.ts, 0.0)
+    @test all(parent(sfc_dest) .≈ 1)
 
     # the ForcingFromFile setup sources IC and models from the same handle
     setup = CA.Setups.ForcingFromFile(data, "20000506")
@@ -693,10 +698,22 @@ end
                 multi.center_space,
                 start_date,
             ),
+            repeated_surface = CD.surface_timevaryinginputs(
+                CD.PerColumnDatasets(fill(datasets[1], 3)),
+                (:ts,),
+                surface(multi),
+                start_date,
+            ),
+            shared_surface = CD.surface_timevaryinginputs(
+                datasets[1],
+                (:ts,),
+                surface(multi),
+                start_date,
+            ),
         )
         ᶜmulti, ᶜshared = (ClimaCore.Fields.zeros(multi.center_space) for _ in 1:2)
         ᶜsingle = ClimaCore.Fields.zeros(single.center_space)
-        sfc_multi = ClimaCore.Fields.zeros(surface(multi))
+        sfc_multi, sfc_shared = (ClimaCore.Fields.zeros(surface(multi)) for _ in 1:2)
         sfc_single = ClimaCore.Fields.zeros(surface(single))
         for t in (0.0, 1800.0, 5400.0, 10800.0)
             for (h, cd) in enumerate(datasets)
@@ -729,6 +746,9 @@ end
                 evaluate!(ᶜshared, inputs.shared[name], t)
                 @test parent(ᶜmulti) == parent(ᶜshared)
             end
+            evaluate!(sfc_multi, inputs.repeated_surface.ts, t)
+            evaluate!(sfc_shared, inputs.shared_surface.ts, t)
+            @test parent(sfc_multi) == parent(sfc_shared)
         end
 
         # Column h starts from the initial state of a single column on file h

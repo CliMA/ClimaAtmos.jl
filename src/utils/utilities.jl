@@ -966,9 +966,9 @@ iscolumn(space) = false
     issphere(space)
 
 Return whether `space` has a spherical global geometry except for column spaces
-which always return `false`.
+and their levels which always return `false`.
 """
-issphere(space::ColumnSpace) = false
+issphere(space::Union{ColumnSpace, Spaces.PointSpace, Spaces.MultiPointSpace}) = false
 issphere(space) =
     Spaces.global_geometry(space) isa Geometry.AbstractSphericalGlobalGeometry
 

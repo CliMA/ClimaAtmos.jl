@@ -252,8 +252,7 @@ steady GCM-driven profiles). Both provide the same reader interface
 (`column_timevaryinginputs`, `surface_timevaryinginputs`,
 `read_surface_series`, `read_initial_profiles`, `require_forcing_variables`,
 `time_interpolation_method`, `site_location`) and expose `column_vars` and
-`surface_vars`. [`PerColumnDatasets`](@ref), one source per column, provides the
-inputs and the checks.
+`surface_vars`.
 """
 abstract type AbstractColumnData end
 
@@ -331,7 +330,7 @@ One column data source per column of a multi-column grid. Column `h` reads
 [`InMemoryColumnData`](@ref) (`format` is `nothing`). `column_vars` and
 `surface_vars` are the variables that every source carries.
 """
-struct PerColumnDatasets{D <: AbstractColumnData, F} <: AbstractColumnData
+struct PerColumnDatasets{D <: AbstractColumnData, F}
     datasets::Vector{D}
     format::F
     column_vars::Vector{Symbol}
@@ -365,7 +364,11 @@ source_name(data::PerColumnDatasets) = join(source_name.(data.datasets), ", ")
 # ============================================================================
 
 # The variables in `column_vars`/`surface_vars` that the source does not carry.
-function _missing_required(data::AbstractColumnData, column_vars, surface_vars)
+function _missing_required(
+    data::Union{AbstractColumnData, PerColumnDatasets},
+    column_vars,
+    surface_vars,
+)
     return (
         column = setdiff(column_vars, data.column_vars),
         surface = setdiff(surface_vars, data.surface_vars),
@@ -381,18 +384,15 @@ The requested forcing variables absent from the file: those in the given
 vocabulary.
 """
 function missing_forcing_variables(
-    data::AbstractColumnData,
+    data::Union{AbstractColumnData, PerColumnDatasets},
     column_vars,
     surface_vars,
 )
     m = _missing_required(data, column_vars, surface_vars)
     return Symbol[m.column; m.surface]
 end
-missing_forcing_variables(data::AbstractColumnData) = missing_forcing_variables(
-    data,
-    CANONICAL_COLUMN_VARS,
-    CANONICAL_SURFACE_VARS,
-)
+missing_forcing_variables(data::Union{AbstractColumnData, PerColumnDatasets}) =
+    missing_forcing_variables(data, CANONICAL_COLUMN_VARS, CANONICAL_SURFACE_VARS)
 
 """
     require_forcing_variables(cd, column_vars, surface_vars)
@@ -402,7 +402,7 @@ Error, naming what is absent, unless the file carries every variable in
 (needed by the resolved model).
 """
 function require_forcing_variables(
-    data::AbstractColumnData,
+    data::Union{AbstractColumnData, PerColumnDatasets},
     column_vars,
     surface_vars,
 )
@@ -556,8 +556,8 @@ end
 
 Read the surface variables `names` in a single file open.
 
-The data layer that both `surface_timevaryinginputs` and data-backed
-surface components, such as a prescribed-flux scheme, build on.
+The data layer that data-backed surface components, such as a prescribed-flux
+scheme, build on.
 
 # Returns
 
@@ -578,27 +578,14 @@ end
 """
     surface_timevaryinginputs(cd, names, target_space, start_date; method)
 
-A `NamedTuple` of `TimeVaryingInput`s, one per requested surface variable,
-read into in-memory inputs on the simulation time axis (`t = 0` at
-`start_date`) from a single file open. For [`PerColumnDatasets`](@ref), each
-column reads the series of its own source.
+A `NamedTuple` of `TimeVaryingInput`s, one per requested surface variable, on
+the simulation time axis (`t = 0` at `start_date`). File-backed inputs are built
+like [`column_timevaryinginputs`](@ref), so `target_space` must have no levels,
+such as the model's surface space. For [`PerColumnDatasets`](@ref), each column
+reads the series of its own source.
 """
-function surface_timevaryinginputs(
-    cd::ColumnDataset,
-    names,
-    target_space,
-    start_date;
-    method = time_interpolation_method(cd.format),
-)
-    names = Tuple(names)
-    FT = ClimaCore.Spaces.undertype(target_space)
-    read = read_surface_series(cd, names, start_date)
-    times = FT.(read.times)
-    inputs = map(name -> TimeVaryingInput(times, FT.(read[name]); method), names)
-    return NamedTuple{names}(inputs)
-end
 surface_timevaryinginputs(
-    data::PerColumnDatasets{<:ColumnDataset},
+    data::Union{ColumnDataset, PerColumnDatasets{<:ColumnDataset}},
     args...;
     kwargs...,
 ) = column_timevaryinginputs(data, args...; kwargs...)
@@ -736,6 +723,11 @@ check_ncolumns(data::PerColumnDatasets, space) =
     length(data.datasets) == ClimaCore.Spaces.ncolumns(space) || error(
         "$(length(data.datasets)) column forcing sources were given for \
          $(ClimaCore.Spaces.ncolumns(space)) columns",
+    )
+
+check_ncolumns(data::PerColumnDatasets, ::ClimaCore.Spaces.PointSpace) =
+    length(data.datasets) == 1 || error(
+        "$(length(data.datasets)) column forcing sources were given for 1 column",
     )
 
 # Column `h` holds the steady profiles of `data.datasets[h]`, interpolated as on
