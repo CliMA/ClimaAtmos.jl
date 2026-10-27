@@ -89,7 +89,7 @@ The four-argument form is the diagnostic entry point: it dispatches on
 prognostic densities.
 """
 function compute_mp1m_source(state, cache, ::Val{F}) where {F}
-    cmp = CAP.microphysics_1m_params(cache.params)
+    cmp = CAP.cloud_liquid_formation_1m_params(cache.params)
     thp = CAP.thermodynamics_params(cache.params)
     ᶜρ = state.c.ρ
     ᶜT = cache.precomputed.ᶜT
@@ -129,7 +129,7 @@ The four-argument form dispatches jointly on `cache.atmos.microphysics_model` an
 humidities, so the tendencies are in-draft rather than area-weighted.
 """
 function compute_mp1m_source_updraft(state, cache, ::Val{F}) where {F}
-    cmp = CAP.microphysics_1m_params(cache.params)
+    cmp = CAP.cloud_liquid_formation_1m_params(cache.params)
     thp = CAP.thermodynamics_params(cache.params)
     ᶜρʲ = cache.precomputed.ᶜρʲs.:1
     ᶜTʲ = cache.precomputed.ᶜTʲs.:1
@@ -176,7 +176,7 @@ temperature and the grid-mean pressure; the condensate and precipitation mixing 
 come from `ᶜspecific_env_value`.
 """
 function compute_mp1m_source_env(state, cache, ::Val{F}) where {F}
-    cmp = CAP.microphysics_1m_params(cache.params)
+    cmp = CAP.cloud_liquid_formation_1m_params(cache.params)
     thp = CAP.thermodynamics_params(cache.params)
     (; ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰) = cache.precomputed
     ᶜρ⁰ = @. lazy(

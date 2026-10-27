@@ -52,7 +52,8 @@ The remaining keys select the process-option type that controls dispatch inside
 Values are looked up with `parse_option`, so an unknown string raises an error listing
 the valid choices. Each option string names the `CM.Parameters` type it maps to:
 
-  - `cloud_liquid_formation`: `"CloudLiquidFormation"`.
+  - `cloud_liquid_formation`: `"CloudLiquidFormation"` (CM's bulk-averaged
+    tendency), `"ImplicitCloudLiquidFormation"` (SGS-integrated implicit source).
   - `cloud_ice_formation`: `"PrescribedIceNumber"`, `"TemperatureDependentIceNumber"`,
     `"ConstantTimescale"`, `"TemperatureDependent"`.
   - `cloud_ice_melt`: `"CloudIceMelt"`.
@@ -87,8 +88,8 @@ function get_microphysics_1m_options(parsed_args)
     cloud_liquid_formation = parse_option(
         parsed_args["cloud_liquid_formation"],
         Dict(
-            "CloudLiquidFormation" =>
-                CMP.CloudLiquidFormation(),
+            "CloudLiquidFormation" => CMP.CloudLiquidFormation(),
+            "ImplicitCloudLiquidFormation" => ImplicitCloudLiquidFormation(),
         ),
         "cloud_liquid_formation",
     )

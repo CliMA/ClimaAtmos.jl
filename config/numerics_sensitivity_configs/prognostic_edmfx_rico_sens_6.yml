@@ -1,0 +1,6 @@
+# Sensitivity 6: dt=120s, picard=2, update_cache_every=stage, implicit cond, 3 Newton
+dt: "120secs"
+edmfx_updraft_picard_rounds: 2
+update_cache_every: "stage"
+cloud_liquid_formation: "ImplicitCloudLiquidFormation"
+max_newton_iters_ode: 3

@@ -1746,6 +1746,46 @@ function update_sgs_boundary_condition_jacobian!(matrix, Y, p, dtγ)
 end
 
 """
+    update_lcl_condensation_jacobian!(matrix, Y, p, dtγ)
+
+Add `−dtγ / τ_cond` to the `(ρq_lcl, ρq_lcl)` and each
+`(sgsʲs.:(j).q_lcl, sgsʲs.:(j).q_lcl)` diagonal, approximating
+`∂S_cond/∂q_lcl` with CM's latent-heat feedback factored out. This value
+is exact for the `q_lcl`-limited evaporation sub-branch (where
+`S = −q_lcl/τ`), exact for the updraft when `T` is diagnosed from `mse`
+at fixed `p` (so `Γ_cp` in the rate exactly cancels the T-feedback
+`dT/dq_lcl = L_v/c_p`), and an `O(Γ_e_v / Γ_cp)` approximation
+(≈ 1 within ~20%) for the grid-mean / env condensation / vapor-limited
+evaporation sub-branches at fixed `ρe_tot`. No `ρe_tot` cross-term
+under 1M.
+"""
+function update_lcl_condensation_jacobian!(matrix, Y, p, dtγ)
+    MatrixFields.has_field(Y, @name(c.ρq_lcl)) || return nothing
+    p.atmos.microphysics_tendency_timestepping isa Implicit || return nothing
+    microphysics_model = p.atmos.microphysics_model
+    microphysics_model isa NonEquilibriumMicrophysics1M || return nothing
+    # No implicit source → no Jacobian contribution.
+    isnothing(
+        CAP.microphysics_1m_implicit_params(p.params).processes.cloud_liquid_formation,
+    ) && return nothing
+    τ_cond = CAP.condensation_evaporation_timescale(p.params)
+    diagonal_entry = -dtγ / τ_cond
+
+    ∂ᶜρq_lcl_err_∂ᶜρq_lcl = matrix[@name(c.ρq_lcl), @name(c.ρq_lcl)]
+    @. ∂ᶜρq_lcl_err_∂ᶜρq_lcl += DiagonalMatrixRow(diagonal_entry)
+
+    if p.atmos.turbconv_model isa PrognosticEDMFX
+        for j in 1:n_mass_flux_subdomains(p.atmos.turbconv_model)
+            χ_state_name = @name(c.sgsʲs.:($j).q_lcl)
+            MatrixFields.has_field(Y, χ_state_name) || continue
+            ∂ᶜq_lclʲ_err_∂ᶜq_lclʲ = matrix[χ_state_name, χ_state_name]
+            @. ∂ᶜq_lclʲ_err_∂ᶜq_lclʲ += DiagonalMatrixRow(diagonal_entry)
+        end
+    end
+    return nothing
+end
+
+"""
     update_sgs_massflux_jacobian!(matrix, Y, p, dtγ, diffusion_flag)
 
 Update the Jacobian blocks for the contributions of the SGS mass flux to the
@@ -1994,6 +2034,7 @@ function update_jacobian!(alg::ManualSparseJacobian, cache, Y, p, dtγ, t)
     update_sgs_entr_detr_jacobian!(matrix, Y, p, dtγ)
     update_sgs_boundary_condition_jacobian!(matrix, Y, p, dtγ)
     update_sgs_massflux_jacobian!(matrix, Y, p, dtγ, diffusion_flag)
+    update_lcl_condensation_jacobian!(matrix, Y, p, dtγ)
 
     # NOTE: All velocity tendency derivatives should be set BEFORE this call.
     zero_velocity_jacobian!(matrix, Y, p, t)

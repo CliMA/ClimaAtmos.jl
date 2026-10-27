@@ -162,6 +162,7 @@ function microphysics_tendency!(Yₜ, Y, p, t,
     @. Yₜ.c.ρq_icl += Y.c.ρ * ᶜmp_tendency.dq_icl_dt
     @. Yₜ.c.ρq_rai += Y.c.ρ * ᶜmp_tendency.dq_rai_dt
     @. Yₜ.c.ρq_sno += Y.c.ρ * ᶜmp_tendency.dq_sno_dt
+    _add_implicit_lcl_condensation_grid_mean!(Yₜ, Y, p)
     return nothing
 end
 
@@ -191,6 +192,7 @@ function microphysics_tendency!(Yₜ, Y, p, t,
         @. Yₜ.c.sgsʲs.:($$j).q_rai += ᶜmp_tendencyʲs.:($$j).dq_rai_dt
         @. Yₜ.c.sgsʲs.:($$j).q_sno += ᶜmp_tendencyʲs.:($$j).dq_sno_dt
     end
+    _add_implicit_lcl_condensation_prognostic_edmfx!(Yₜ, Y, p, turbconv_model)
     return nothing
 end
 

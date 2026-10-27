@@ -38,6 +38,12 @@ column(f) = vec(Array(parent(f)))
             "implicit_diffusion" => true,
             "prognostic_tke" => true,
             "microphysics_model" => "1M",
+            # Route condensation through the implicit source so the predictor
+            # actually exercises `_cm_condensation_rate` (otherwise the implicit
+            # path dispatches on `nothing` and the predictor is a no-op for
+            # condensation).
+            "cloud_liquid_formation" => "ImplicitCloudLiquidFormation",
+            "implicit_microphysics" => true,
             "z_max" => 3000.0,
             "z_elem" => 30,
             "z_stretch" => false,
@@ -160,9 +166,33 @@ column(f) = vec(Array(parent(f)))
     ᶜmp_tendencyʲ = p.precomputed.ᶜmp_tendencyʲs.:(1)
     S_cached = column(MatrixFields.get_field(ᶜmp_tendencyʲ, @name(dq_lcl_dt)))
 
-    # The transport recurrence, swept bottom to top, then `dtγ` times the
-    # source.
-    function predicted(χ_name; α = α, ε = ε, S = S[χ_name], r_sfc = r_sfc)
+    # Implicit condensation runs between the transport sweep and the explicit
+    # `ᶜmp_tendencyʲ` sources, with the stage-averaged factor
+    # `τ·(1 − exp(−dtγ/τ))` on CM's instantaneous rate. The rate is evaluated
+    # at the transport-state condensates with thermo at the transported draft
+    # state. Both `ᶜTʲ` and `ᶜρʲ` are refreshed inside the solve just before
+    # the condensation block, so reading `p.precomputed.ᶜTʲs` after the solve
+    # returns gives the transport-state values.
+    mp_imp = CAP.microphysics_1m_implicit_params(p.params)
+    thp = CAP.thermodynamics_params(p.params)
+    τ_cond = CAP.condensation_evaporation_timescale(p.params)
+    cm_cond_predictor_active =
+        !isnothing(mp_imp.processes.cloud_liquid_formation)
+    @test cm_cond_predictor_active  # config should enable the implicit path
+    τ_factor = τ_cond * (one(FT) - exp(-dtγ / τ_cond))
+    function s_cond_predictor(q_lcl, q_icl, q_rai, q_sno)
+        cm_cond_predictor_active || return zeros(FT, nz)
+        ρʲ_col = column(p.precomputed.ᶜρʲs.:(1))
+        Tʲ_col = column(p.precomputed.ᶜTʲs.:(1))
+        q_tot_nonnegʲ_col = column(p.precomputed.ᶜq_tot_nonnegʲs.:(1))
+        return CA._cm_condensation_rate.(
+            Ref(mp_imp), Ref(thp), ρʲ_col, Tʲ_col, q_tot_nonnegʲ_col,
+            q_lcl, q_icl, q_rai, q_sno,
+        )
+    end
+
+    # Transport-only result of the recurrence, swept bottom to top.
+    function predicted_transport(χ_name; α = α, ε = ε, r_sfc = r_sfc)
         χ_new = similar(α)
         χ_prev = zero(FT)
         for i in 1:nz
@@ -173,8 +203,13 @@ column(f) = vec(Array(parent(f)))
             χ_new[i] = num / (1 / dtγ + α[i] + ε[i] + r)
             χ_prev = χ_new[i]
         end
-        return χ_new .+ dtγ .* S
+        return χ_new
     end
+
+    # Full prediction: transport + `dtγ · S` (used for `mse`, `q_tot`, and
+    # the non-liquid condensates). `q_lcl` goes through its own path below
+    # that interleaves the implicit condensation.
+    predicted(χ_name) = predicted_transport(χ_name) .+ dtγ .* S[χ_name]
 
     @testset "matches the documented recurrence" begin
         CA.solve_sgs_updraft_tracers_implicit_stage_analytic!(Y, p, dtγ)
@@ -186,9 +221,27 @@ column(f) = vec(Array(parent(f)))
         end
         @test any(!=(0), S[@name(q_lcl)])
         @test S[@name(q_lcl)] != S_cached
+        # Transport-only state (what the implicit condensation sees).
+        q_lcl_transport = predicted_transport(@name(q_lcl))
+        q_icl_transport = predicted_transport(@name(q_icl))
+        q_rai_transport = predicted_transport(@name(q_rai))
+        q_sno_transport = predicted_transport(@name(q_sno))
+        cond_amount =
+            τ_factor .* s_cond_predictor(
+                q_lcl_transport, q_icl_transport, q_rai_transport,
+                q_sno_transport,
+            )
+        @test any(!=(0), cond_amount)
         for (χ_name, _) in sgs_tracers
-            @test column(MatrixFields.get_field(sgsʲ, χ_name)) ≈
-                  predicted(χ_name) rtol = 1e-12
+            # q_lcl: transport + implicit cond + explicit source.
+            # others: transport + explicit source (or just transport for
+            # mse/q_tot via `predicted`).
+            expected =
+                χ_name === @name(q_lcl) ?
+                q_lcl_transport .+ cond_amount .+ dtγ .* S[@name(q_lcl)] :
+                predicted(χ_name)
+            @test column(MatrixFields.get_field(sgsʲ, χ_name)) ≈ expected rtol =
+                1e-12
         end
         # Draft area and velocity are untouched.
         @test parent(sgsʲ.ρa) == parent(Y_init.c.sgsʲs.:(1).ρa)
@@ -202,13 +255,25 @@ column(f) = vec(Array(parent(f)))
         # of ~χ_old / (ε dtγ χ⁰) ≲ 1e-4.
         @. p.precomputed.ᶜturb_entrʲs.:(1) = FT(1e3)
         CA.solve_sgs_updraft_tracers_implicit_stage_analytic!(Y, p, dtγ)
+        # In the fast-entrainment limit the transport recurrence is `≈ χ⁰(q_X)`,
+        # which is the state the implicit condensation sees. The explicit
+        # sources then stack on top for the condensates.
+        cond_amount =
+            τ_factor .* s_cond_predictor(
+                χ⁰[@name(q_lcl)], χ⁰[@name(q_icl)],
+                χ⁰[@name(q_rai)], χ⁰[@name(q_sno)],
+            )
         for (χ_name, S_name) in sgs_tracers
             χ_new = column(MatrixFields.get_field(sgsʲ, χ_name))
-            # The condensates include `dtγ` times the source; the limit
-            # applies to the transported value.
+            # Strip the explicit source off the condensates; strip the
+            # implicit condensation off q_lcl too. What remains is the
+            # transport result, which the fast-ε limit pulls to χ⁰.
             if !isnothing(S_name)
                 S_used = column(MatrixFields.get_field(ᶜmp_tendencyʲ, S_name))
                 χ_new = χ_new - dtγ * S_used
+                if χ_name === @name(q_lcl)
+                    χ_new = χ_new - cond_amount
+                end
             end
             # Cell 1 of `mse` and `q_tot` also feels the surface relaxation.
             i₀ = sfc_forced(χ_name) ? 2 : 1
@@ -228,6 +293,13 @@ column(f) = vec(Array(parent(f)))
             parent(ᶜrate) .= 0
         end
         CA.solve_sgs_updraft_tracers_implicit_stage_analytic!(Y, p, dtγ)
+        # Without transport the implicit condensation sees χ_old for every
+        # condensate, so the stage-averaged bump uses χ_old.
+        cond_amount =
+            τ_factor .* s_cond_predictor(
+                χ_old[@name(q_lcl)], χ_old[@name(q_icl)],
+                χ_old[@name(q_rai)], χ_old[@name(q_sno)],
+            )
         for (χ_name, S_name) in sgs_tracers
             χ_new = column(MatrixFields.get_field(sgsʲ, χ_name))
             if sfc_forced(χ_name)
@@ -238,8 +310,40 @@ column(f) = vec(Array(parent(f)))
                 @test χ_new[2:end] ≈ χ_old[χ_name][2:end] rtol = 1e-14
             else
                 S_used = column(MatrixFields.get_field(ᶜmp_tendencyʲ, S_name))
-                @test χ_new ≈ χ_old[χ_name] + dtγ * S_used rtol = 1e-12
+                expected = χ_old[χ_name] + dtγ * S_used
+                if χ_name === @name(q_lcl)
+                    expected = expected .+ cond_amount
+                end
+                @test χ_new ≈ expected rtol = 1e-12
             end
+        end
+    end
+
+    @testset "Jacobian diagonal is −dtγ/τ_cond" begin
+        # Build the full implicit-stage Jacobian matrix via the real cache
+        # builder, zero the two condensation-affected blocks, run only the
+        # condensation update, and verify the diagonals carry exactly
+        # `−dtγ/τ_cond`. The sum-over-entries trick (dims=4 is the row-entry
+        # dim of a MatrixRow Field) works for both `DiagonalMatrixRow` (1
+        # entry) and `TridiagonalMatrixRow` (3 entries, off-diagonals left
+        # at zero by this update).
+        alg = CA.ManualSparseJacobian(; approximate_solve_iters = 1)
+        cache = CA.jacobian_cache(alg, Y, p.atmos)
+        matrix = cache.matrix.matrix
+        blocks = [matrix[@name(c.ρq_lcl), @name(c.ρq_lcl)]]
+        for j in 1:CA.n_mass_flux_subdomains(p.atmos.turbconv_model)
+            χ_state_name = @name(c.sgsʲs.:($j).q_lcl)
+            MatrixFields.has_field(Y, χ_state_name) || continue
+            push!(blocks, matrix[χ_state_name, χ_state_name])
+        end
+        for block in blocks
+            parent(block) .= 0
+        end
+        CA.update_lcl_condensation_jacobian!(matrix, Y, p, dtγ)
+        expected_entry = -dtγ / τ_cond
+        for block in blocks
+            diag_per_level = vec(sum(parent(block); dims = 4))
+            @test all(≈(expected_entry), diag_per_level)
         end
     end
 end

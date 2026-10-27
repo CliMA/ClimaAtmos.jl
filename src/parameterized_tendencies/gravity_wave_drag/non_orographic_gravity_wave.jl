@@ -641,7 +641,10 @@ function compute_beres_convective_heating!(Y, p, ᶜN)
     # The grid-mean gw_Q_conv (Q₁) above is left untouched, as it still drives activation criteria and the z_bot threshold, which are calibrated to grid-mean Q₁ magnitudes.
     # The heating_latent flag requires 1M + PrognosticEDMFX at construction.
     if gw_beres_source.heating_latent
-        mp = CAP.microphysics_1m_params(p.params)
+        # Pick whichever 1M mp carries the active `CloudLiquidFormation`, so
+        # the latent heating from BMT does not vanish when condensation runs
+        # through the implicit source.
+        mp = CAP.cloud_liquid_formation_1m_params(p.params)
         thp = CAP.thermodynamics_params(p.params)
         ᶜq_tot_nonnegʲs = p.precomputed.ᶜq_tot_nonnegʲs
         gw_Q_conv_ic .= FT(0)

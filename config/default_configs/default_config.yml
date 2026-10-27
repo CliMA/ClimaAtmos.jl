@@ -298,7 +298,7 @@ snow_terminal_velocity:
   help: "Snow sedimentation velocity for 1M microphysics [`Fixed`, `Blk1M` (1-moment power law), `Chen2022` (default, Chen et al. 2022 large ice)]"
   value: "Chen2022"
 cloud_liquid_formation:
-  help: "Cloud liquid formation option for 1M microphysics [`CloudLiquidFormation` (default), ~]"
+  help: "Cloud liquid formation option for 1M microphysics. `CloudLiquidFormation` enables condensation / evaporation through CM's bulk-averaged tendency (explicit); `ImplicitCloudLiquidFormation` routes it through the SGS-integrated implicit source `_add_implicit_lcl_condensation_*` with a `-dtγ/(τ_cond·Γₗ)` Jacobian; `~` disables it. [`CloudLiquidFormation` (default), `ImplicitCloudLiquidFormation`, `~`]"
   value: "CloudLiquidFormation"
 cloud_ice_formation:
   help: "Cloud ice formation option for 1M microphysics [`PrescribedIceNumber` (default), `TemperatureDependentIceNumber`, `ConstantTimescale`, `TemperatureDependent`, ~]"

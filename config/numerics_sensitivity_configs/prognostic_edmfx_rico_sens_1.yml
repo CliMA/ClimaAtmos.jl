@@ -1,0 +1,6 @@
+# Sensitivity 1: dt=10s, picard=2, update_cache_every=stage, explicit cond, 1 Newton
+dt: "10secs"
+edmfx_updraft_picard_rounds: 2
+update_cache_every: "stage"
+cloud_liquid_formation: "CloudLiquidFormation"
+max_newton_iters_ode: 1
