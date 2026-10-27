@@ -95,6 +95,9 @@ value = 1
 [pressure_normalmode_drag_coeff]
 value = 8.0
 
+[ogw_smoothing_scale_fraction]
+value = 1.0
+
 [condensation_evaporation_timescale]
 value = 100
 
