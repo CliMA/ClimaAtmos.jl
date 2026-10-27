@@ -38,8 +38,10 @@ AllSkyRadiation
   ├─ idealized_h2o = false
   ├─ idealized_clouds = false
   ├─ cloud = ClimaAtmos.InteractiveCloudInRadiation()
+  ├─ sw_cloud_inhomogeneity = true
   ├─ add_isothermal_boundary_layer = true
   ├─ aerosol_radiation = false
+  ├─ include_snow = false
   ├─ reset_rng_seed = false
   └─ deep_atmosphere = true
 ```

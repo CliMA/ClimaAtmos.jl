@@ -338,6 +338,13 @@ ClimaParams does not yet define or whose ClimaParams default it supersedes.
     transition; larger values approach a switch [-].
   - `cloud_fraction_floor_residual`: Fraction `D_min` of the relative floor
     retained deep inside a saturated deck; 1 (default) disables the release [-].
+  - `cloud_condensate_relative_variance_floor`: Relative variance of an
+    unresolved, unit-mean in-cloud condensate inhomogeneity that multiplies the
+    truncated-Gaussian in-cloud distribution in the radiative
+    effective-thickness factor (`cloud_condensate_relative_variance`), `≥ 0`;
+    `0` keeps the truncated-Gaussian variance. Applies to all cloud types; the
+    default `0.25` is set from overcast stratocumulus and is likely low for ice
+    and convective clouds at coarse resolution [-].
 """
 Base.@kwdef struct SGSQuadratureParameters{FT} <: ASQP
     diagnostic_covariance_coeff::FT
@@ -368,6 +375,7 @@ Base.@kwdef struct SGSQuadratureParameters{FT} <: ASQP
     cloud_fraction_floor_release_abs_margin::FT
     cloud_fraction_floor_release_sharpness::FT
     cloud_fraction_floor_residual::FT
+    cloud_condensate_relative_variance_floor::FT
 end
 
 """

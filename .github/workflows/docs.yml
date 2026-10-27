@@ -62,6 +62,7 @@ jobs:
         shell: julia --project=docs {0}
         run: |
           using Pkg
+          Pkg.Registry.update()
           Pkg.develop(PackageSpec(path="."))
           Pkg.instantiate()
       - uses: ./.github/actions/julia-depot-save

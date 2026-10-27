@@ -105,6 +105,7 @@ if TEST_GROUP in ("parameterizations", "all")
     @safetestset "Tendency limiters tests" begin @time include("parameterized_tendencies/microphysics/tendency_limiters.jl") end
     @safetestset "Moisture fixers tests" begin @time include("parameterized_tendencies/microphysics/moisture_fixers.jl") end
     @safetestset "Cloud fraction tests" begin @time include("parameterized_tendencies/microphysics/cloud_fraction.jl") end
+    @safetestset "Cloud inhomogeneity tests" begin @time include("parameterized_tendencies/microphysics/cloud_inhomogeneity.jl") end
     @safetestset "Displacement length wiring" begin @time include("parameterized_tendencies/microphysics/displacement_length_wiring.jl") end
     @safetestset "SGS saturation tests" begin @time include("parameterized_tendencies/microphysics/sgs_saturation.jl") end
     @safetestset "Displacement condensate tests" begin @time include("parameterized_tendencies/microphysics/displacement_condensate.jl") end

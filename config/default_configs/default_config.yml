@@ -108,6 +108,9 @@ rad:
 idealized_h2o:
   help: "Use idealized H2O in radiation model [`false` (default), `true`]"
   value: false
+radiation_include_snow:
+  help: "Include snow in RRTMGP cloud optics as a placeholder (reuses ice optics, clamped to the ice-table max radius ~90 µm). Requires rad=allsky/allskywithclear and 1M microphysics. [`false` (default), `true`]"
+  value: false
 dt_rad:
   help: "Time between calling radiation callback for sphere configurations. Only applies to RRTMGP modes, ignored for `held_suarez`, which is applied every stage."
   value: "6hours"
@@ -126,6 +129,9 @@ idealized_clouds:
 prescribe_clouds_in_radiation:
   help: "Use prescribed clouds in radiation model. Clouds are read from ERA5 data and updated every time radiation is called. The year 2010 is used and continuously repeated. This mode only affect radiation and is only relevant for the RRTGMP mode. [`false` (default), `true`]"
   value: false
+cloud_inhomogeneity_in_sw_radiation:
+  help: "Scale the in-cloud water paths seen by the RRTMGP shortwave solve by the subgrid inhomogeneity factor of the in-cloud condensate; the longwave always sees the mean in-cloud condensate. Only affects interactive clouds under the `quadrature` cloud model; `false` passes the mean condensate to the shortwave as well. [`true` (default), `false`]"
+  value: true
 insolation:
   help: "Insolation used in radiation model [`idealized` (default), `timevarying`, `rcemipii`, `externaldriventv`, `larcform1`]"
   value: "idealized"

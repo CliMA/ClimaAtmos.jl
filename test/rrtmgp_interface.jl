@@ -221,3 +221,37 @@ end
     zi_fallback = Array(parent(rad_cache.isoline_z_ρ_ρq.z))[1]
     @test zi_fallback == z_dry
 end
+
+@testset "Cloud inhomogeneity switch" begin
+    FT = Float64
+    (; cent_space, face_space) = get_cartesian_spaces(; FT)
+    Y = Fields.FieldVector(; c = ones(cent_space), f = ones(face_space))
+    parsed_args = Dict(
+        "rad" => "allsky",
+        "idealized_h2o" => false,
+        "idealized_clouds" => false,
+        "radiation_include_snow" => false,
+        "prescribe_clouds_in_radiation" => false,
+        "cloud_inhomogeneity_in_sw_radiation" => false,
+        "add_isothermal_boundary_layer" => true,
+        "aerosol_radiation" => false,
+        "radiation_reset_rng_seed" => false,
+        "deep_atmosphere" => true,
+    )
+    setup_components = (; radiation_mode = nothing)
+    mode = CA.get_radiation_mode(parsed_args, FT; setup_components)
+    @test mode isa RRTMGPI.AllSkyRadiation
+    @test !mode.sw_cloud_inhomogeneity
+    @test RRTMGPI.AllSkyRadiation().sw_cloud_inhomogeneity
+    @test RRTMGPI.AllSkyRadiationWithClearSkyDiagnostics().sw_cloud_inhomogeneity
+
+    # With `sw_cloud_inhomogeneity = false`, the cloud cache is empty, leaving
+    # the shortwave water paths unscaled and the factor setter a no-op.
+    for cloud in (CA.InteractiveCloudInRadiation(), nothing)
+        @test CA.get_cloud_cache(cloud, Y, nothing, false) == (;)
+        cache = CA.get_cloud_cache(cloud, Y, nothing, true)
+        @test hasproperty(cache, :ᶜsw_cloud_optical_depth_factor)
+        @test all(==(1), parent(cache.ᶜsw_cloud_optical_depth_factor))
+    end
+    @test isnothing(CA.set_sw_cloud_optical_depth_factor!(Y, (; radiation = (;))))
+end

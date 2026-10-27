@@ -2140,25 +2140,47 @@ end
 # ============================================================================
 
 """
+    _env_air_density(p, thermo_params)
+
+Lazy environment air density `ᶜρ⁰` [kg/m³] for `PrognosticEDMFX`.
+"""
+function _env_air_density(p, thermo_params)
+    (; ᶜp, ᶜT⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰) = p.precomputed
+    return @. lazy(
+        TD.air_density(
+            thermo_params,
+            ᶜT⁰,
+            ᶜp,
+            ᶜq_tot_nonneg⁰,
+            ᶜq_liq⁰,
+            ᶜq_ice⁰,
+        ),
+    )
+end
+
+"""
+    _env_area_fraction(Y, p, thermo_params, turbconv_model)
+
+Environment area fraction `ᶜa⁰` [-] for `PrognosticEDMFX`, or `1` otherwise.
+"""
+function _env_area_fraction(Y, p, thermo_params, turbconv_model::PrognosticEDMFX)
+    ᶜρa⁰ = @. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model))
+    ᶜρ⁰ = _env_air_density(p, thermo_params)
+    return @. lazy(draft_area(ᶜρa⁰, ᶜρ⁰))
+end
+_env_area_fraction(Y, p, thermo_params, turbconv_model) = one(eltype(p.params))
+
+"""
     _get_env_ρ_T_q(Y, p, thermo_params, turbconv_model)
 
 Get environment density, temperature, and specific humidity for cloud fraction.
 Lightweight alternative to `_compute_cloud_state` when only ρ, T, and q are needed.
 """
 function _get_env_ρ_T_q(Y, p, thermo_params, turbconv_model)
-    (; ᶜp, ᶜT, ᶜq_tot_nonneg) = p.precomputed
+    (; ᶜT, ᶜq_tot_nonneg) = p.precomputed
     if turbconv_model isa PrognosticEDMFX
-        (; ᶜT⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰) = p.precomputed
-        ᶜρ_env = @. lazy(
-            TD.air_density(
-                thermo_params,
-                ᶜT⁰,
-                ᶜp,
-                ᶜq_tot_nonneg⁰,
-                ᶜq_liq⁰,
-                ᶜq_ice⁰,
-            ),
-        )
+        (; ᶜT⁰, ᶜq_tot_nonneg⁰) = p.precomputed
+        ᶜρ_env = _env_air_density(p, thermo_params)
         return ᶜρ_env, ᶜT⁰, ᶜq_tot_nonneg⁰
     else
         return Y.c.ρ, ᶜT, ᶜq_tot_nonneg
@@ -2177,20 +2199,11 @@ For PrognosticEDMFX, uses environment (⁰) fields; otherwise uses grid-scale fi
 Tuple: `(ᶜρ_env, ᶜT_mean, ᶜq_mean, ᶜθ_mean, ᶜq_lcl, ᶜq_icl, ᶜT′T′, ᶜq′q′)`
 """
 function _compute_cloud_state(Y, p, thermo_params, turbconv_model, microphysics_model)
-    (; ᶜp, ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice) = p.precomputed
+    (; ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice) = p.precomputed
 
     if turbconv_model isa PrognosticEDMFX
         (; ᶜT⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰) = p.precomputed
-        ᶜρ_env = @. lazy(
-            TD.air_density(
-                thermo_params,
-                ᶜT⁰,
-                ᶜp,
-                ᶜq_tot_nonneg⁰,
-                ᶜq_liq⁰,
-                ᶜq_ice⁰,
-            ),
-        )
+        ᶜρ_env = _env_air_density(p, thermo_params)
         ᶜT_mean = ᶜT⁰
         ᶜq_mean = ᶜq_tot_nonneg⁰
         ᶜθ_mean = @. lazy(
@@ -2299,42 +2312,18 @@ For PrognosticEDMFX:
 Updraft cloud fraction is binary: 1 if updraft contains condensate, 0 otherwise.
 """
 function _apply_edmf_cloud_weighting!(Y, p, turbconv_model, thermo_params)
-    (; ᶜp) = p.precomputed
-
     # Weight by environment area fraction if using PrognosticEDMFX (assumed 1 otherwise)
     if turbconv_model isa PrognosticEDMFX
-        ᶜρa⁰ = @. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model))
-        (; ᶜT⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰) = p.precomputed
-        ᶜρ⁰ = @. lazy(
-            TD.air_density(
-                thermo_params,
-                ᶜT⁰,
-                ᶜp,
-                ᶜq_tot_nonneg⁰,
-                ᶜq_liq⁰,
-                ᶜq_ice⁰,
-            ),
-        )
-        @. p.precomputed.ᶜcloud_fraction *= draft_area(ᶜρa⁰, ᶜρ⁰)
+        @. p.precomputed.ᶜcloud_fraction *=
+            $(_env_area_fraction(Y, p, thermo_params, turbconv_model))
 
         # Add contributions from the updrafts if using EDMF
-        n = n_mass_flux_subdomains(turbconv_model)
-        (; ᶜρʲs) = p.precomputed
         microphysics_model = p.atmos.microphysics_model
-        for j in 1:n
-            ᶜρaʲ = Y.c.sgsʲs.:($j).ρa
-            ᶜq_liqʲ, ᶜq_iceʲ =
-                _updraft_cloud_condensate(Y, p, j, microphysics_model)
-
-            @. p.precomputed.ᶜcloud_fraction +=
-                ifelse(
-                    TD.has_condensate(
-                        thermo_params,
-                        max(0, ᶜq_liqʲ + ᶜq_iceʲ),
-                    ),
-                    draft_area(ᶜρaʲ, ᶜρʲs.:($$j)),
-                    0,
-                )
+        for j in 1:n_mass_flux_subdomains(turbconv_model)
+            _, ᶜaʲ = _updraft_cloud_condensate_and_area(
+                Y, p, j, thermo_params, microphysics_model,
+            )
+            @. p.precomputed.ᶜcloud_fraction += ᶜaʲ
         end
     end
 end
@@ -2351,6 +2340,29 @@ _updraft_cloud_condensate(Y, p, j, ::NonEquilibriumMicrophysics) =
     (Y.c.sgsʲs.:($j).q_lcl, Y.c.sgsʲs.:($j).q_icl)
 _updraft_cloud_condensate(Y, p, j, microphysics_model) =
     (p.precomputed.ᶜq_liqʲs.:($j), p.precomputed.ᶜq_iceʲs.:($j))
+
+"""
+    _updraft_cloud_condensate_and_area(Y, p, j, thermo_params, microphysics_model)
+
+Non-negative cloud condensate `ᶜqʲ` [kg/kg] and binary cloudy area fraction
+`ᶜaʲ` [-] of updraft `j`, equal to `draft_area(ρaʲ, ρʲ)` where
+`TD.has_condensate(thermo_params, ᶜqʲ)` holds and `0` otherwise.
+"""
+function _updraft_cloud_condensate_and_area(
+    Y, p, j, thermo_params, microphysics_model,
+)
+    FT = eltype(p.params)
+    ᶜq_liqʲ, ᶜq_iceʲ = _updraft_cloud_condensate(Y, p, j, microphysics_model)
+    ᶜqʲ = @. lazy(max(zero(FT), ᶜq_liqʲ + ᶜq_iceʲ))
+    ᶜaʲ = @. lazy(
+        ifelse(
+            TD.has_condensate(thermo_params, ᶜqʲ),
+            draft_area(Y.c.sgsʲs.:($$j).ρa, p.precomputed.ᶜρʲs.:($$j)),
+            zero(FT),
+        ),
+    )
+    return ᶜqʲ, ᶜaʲ
+end
 
 # ============================================================================
 # Machine Learning Cloud Fraction
