@@ -205,21 +205,20 @@ Reads `Y`, the core fields `ᶜf³` and `ᶠf¹²`, the precomputed `ᶜu`, `ᶠ
 NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     (; turbconv_model, prescribed_flow) = p.atmos
     n = n_prognostic_mass_flux_subdomains(turbconv_model)
-    advect_tke = use_prognostic_tke(turbconv_model)
+    n_val = Val(n)
+    advect_tke_val = Val(use_prognostic_tke(turbconv_model))
     point_type = eltype(Fields.coordinate_field(Y.c))
     (; dt) = p
     ᶜJ = Fields.local_geometry_field(Y.c).J
+    ᶠJ = Fields.local_geometry_field(Y.f).J
     (; ᶜf³, ᶠf¹²) = p.core
     (; ᶜu, ᶠu³, ᶜK) = p.precomputed
-    (; edmfx_mse_q_tot_upwinding) = n > 0 || advect_tke ? p.atmos.numerics : all_nothing
+    (; edmfx_mse_q_tot_upwinding) =
+        n > 0 || advect_tke_val isa Val{true} ? p.atmos.numerics : all_nothing
     (; ᶜuʲs, ᶜKʲs, ᶠKᵥʲs) = n > 0 ? p.precomputed : all_nothing
     (; tracer_upwinding) = p.atmos.numerics
     thermo_params = CAP.thermodynamics_params(p.params)
 
-    ᶜtke =
-        advect_tke ?
-        (@. lazy(specific(Y.c.ρtke, Y.c.ρ))) :
-        nothing
     ᶜω³ = p.scratch.ᶜtemp_CT3
     ᶠω¹² = p.scratch.ᶠtemp_CT12
     ᶠω¹²ʲs = p.scratch.ᶠtemp_CT12ʲs
@@ -230,9 +229,19 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
         @. ᶜω³ = zero(ᶜω³)
     end
 
-    @. ᶠω¹² = ᶠcurlᵥ(Y.c.uₕ)
-    for j in 1:n
-        @. ᶠω¹²ʲs.:($$j) = ᶠω¹²
+    # The vertical curl and its copies for the drafts in one column loop.
+    if n > 0
+        DataLayouts.foreach_column(ᶠω¹², ᶠω¹²ʲs, Y.c.uₕ) do ᶠω¹², ᶠω¹²ʲs, ᶜuₕ
+            @. ᶠω¹² = ᶠcurlᵥ(ᶜuₕ)
+            ntuple(n_val) do j
+                ᶠω¹²ʲ = getproperty(ᶠω¹²ʲs, j)
+                @. ᶠω¹²ʲ = ᶠω¹²
+                return nothing
+            end
+            return nothing
+        end
+    else
+        @. ᶠω¹² = ᶠcurlᵥ(Y.c.uₕ)
     end
     @. ᶠω¹² += CT12(wcurlₕ(Y.f.u₃))
     for j in 1:n
@@ -240,52 +249,91 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     end
     # Without the CT12(), the right-hand side would be a CT1 or CT2 in 2D space.
 
-    ᶜρ = Y.c.ρ
-
-    # Full vertical advection of passive tracers (such as liq, rai, etc) with the
-    # grid-mean flow. When EDMFX sgs_mass_flux is active, difference-form SGS
-    # corrections ρᵏaᵏ(u³ᵏ - u³)(χᵏ - χ) are added on top of this in
-    # edmfx_sgs_mass_flux_tendency!.
-    foreach_gs_tracer(Yₜ, Y) do ᶜρχₜ, ᶜρχ, ρχ_name
-        if !(ρχ_name in (@name(ρe_tot), @name(ρq_tot)))
-            ᶜχ = @. lazy(specific(ᶜρχ, Y.c.ρ))
-            vtt = vertical_transport(ᶜρ, ᶠu³, ᶜχ, dt, tracer_upwinding)
-            @. ᶜρχₜ += vtt
-        end
-    end
     if !(p.atmos.microphysics_model isa DryModel)
         vtt_bc =
             ᶜρq_tot_vertical_transport_bc(prescribed_flow, thermo_params, t, ᶠu³)
         @. Yₜ.c.ρq_tot += vtt_bc
     end
 
-    if isnothing(ᶠf¹²)
-        # shallow atmosphere
-        @. Yₜ.c.uₕ -=
-            ᶜinterp(ᶠω¹² × (ᶠinterp(Y.c.ρ * ᶜJ) * ᶠu³)) / (Y.c.ρ * ᶜJ) +
-            (ᶜf³ + ᶜω³) × CT12(ᶜu)
-        @. Yₜ.f.u₃ -= ᶠω¹² × ᶠinterp(CT12(ᶜu)) + ᶠgradᵥ(ᶜK)
-        for j in 1:n
-            @. Yₜ.f.sgsʲs.:($$j).u₃ -=
-                ᶠω¹²ʲs.:($$j) × ᶠinterp(CT12(ᶜuʲs.:($$j))) +
-                ᶠgradᵥ(ᶜKʲs.:($$j) - ᶜinterp(ᶠKᵥʲs.:($$j)))
-        end
-    else
-        # deep atmosphere
-        @. Yₜ.c.uₕ -=
-            ᶜinterp((ᶠf¹² + ᶠω¹²) × (ᶠinterp(Y.c.ρ * ᶜJ) * ᶠu³)) /
-            (Y.c.ρ * ᶜJ) + (ᶜf³ + ᶜω³) × CT12(ᶜu)
-        @. Yₜ.f.u₃ -= (ᶠf¹² + ᶠω¹²) × ᶠinterp(CT12(ᶜu)) + ᶠgradᵥ(ᶜK)
-        for j in 1:n
-            @. Yₜ.f.sgsʲs.:($$j).u₃ -=
-                (ᶠf¹² + ᶠω¹²ʲs.:($$j)) × ᶠinterp(CT12(ᶜuʲs.:($$j))) +
-                ᶠgradᵥ(ᶜKʲs.:($$j) - ᶜinterp(ᶠKᵥʲs.:($$j)))
-        end
-    end
+    # Full vertical advection of passive tracers (such as liq, rai, etc) with the
+    # grid-mean flow. When EDMFX sgs_mass_flux is active, difference-form SGS
+    # corrections ρᵏaᵏ(u³ᵏ - u³)(χᵏ - χ) are added on top of this in
+    # edmfx_sgs_mass_flux_tendency!.
+    tracer_names = unrolled_filter(
+        ρχ_name -> !(ρχ_name in (@name(ρe_tot), @name(ρq_tot))),
+        gs_tracer_names(Y),
+    )
+    n_tracers_val = Val(length(tracer_names))
+    draft_fields =
+        n > 0 ?
+        (
+            ᶠω¹²ʲs,
+            ntuple(j -> getproperty(ᶜuʲs, j), n)...,
+            ntuple(j -> getproperty(ᶜKʲs, j), n)...,
+            ntuple(j -> getproperty(ᶠKᵥʲs, j), n)...,
+        ) : ()
+    deep_val = Val(!isnothing(ᶠf¹²)) # the Coriolis faces exist in a deep atmosphere
+    deep_fields = deep_val isa Val{true} ? (ᶠf¹²,) : ()
 
-    if use_prognostic_tke(turbconv_model) # advect_tke triggers allocations
-        vtt = vertical_transport(ᶜρ, ᶠu³, ᶜtke, dt, edmfx_mse_q_tot_upwinding)
-        @. Yₜ.c.ρtke += vtt
+    # The tracer transports, the vector-invariant momentum advection and the TKE
+    # transport in one fused column loop: the face density is a loop temporary
+    # shared by every transport, and the vorticity is read from scratch once.
+    DataLayouts.foreach_column(
+        Yₜ.c, Yₜ.f, Y.c, ᶜJ, ᶠJ, ᶠu³, ᶜu, ᶜK, ᶜf³, ᶜω³, ᶠω¹²,
+        draft_fields..., deep_fields...,
+    ) do Yₜc, Yₜf, Yc, ᶜJ, ᶠJ, ᶠu³, ᶜu, ᶜK, ᶜf³, ᶜω³, ᶠω¹², rest...
+        n_drafts = val_value(n_val) # compile-time tuple offsets
+        ᶜρ = Yc.ρ
+        ᶠρ = @. ᶠinterp(ᶜρ * ᶜJ) / ᶠJ
+
+        ntuple(n_tracers_val) do i
+            ᶜρχ = MatrixFields.get_field(Yc, tracer_names[i])
+            ᶜρχₜ = MatrixFields.get_field(Yₜc, tracer_names[i])
+            ᶜχ = @. lazy(specific(ᶜρχ, ᶜρ))
+            add_vertical_transport!(ᶜρχₜ, ᶠρ, ᶠu³, ᶜχ, dt, tracer_upwinding)
+            return nothing
+        end
+
+        if deep_val isa Val{false}
+            # shallow atmosphere
+            @. Yₜc.uₕ -=
+                ᶜinterp(ᶠω¹² × (ᶠinterp(ᶜρ * ᶜJ) * ᶠu³)) / (ᶜρ * ᶜJ) +
+                (ᶜf³ + ᶜω³) × CT12(ᶜu)
+            @. Yₜf.u₃ -= ᶠω¹² × ᶠinterp(CT12(ᶜu)) + ᶠgradᵥ(ᶜK)
+            ntuple(n_val) do j
+                ᶠω¹²ʲ = getproperty(rest[1], j)
+                ᶜuʲ = rest[1 + j]
+                ᶜKʲ = rest[1 + n_drafts + j]
+                ᶠKᵥʲ = rest[1 + 2 * n_drafts + j]
+                ᶠu₃ʲₜ = getproperty(Yₜf.sgsʲs, j).u₃
+                @. ᶠu₃ʲₜ -= ᶠω¹²ʲ × ᶠinterp(CT12(ᶜuʲ)) + ᶠgradᵥ(ᶜKʲ - ᶜinterp(ᶠKᵥʲ))
+                return nothing
+            end
+        else
+            # deep atmosphere
+            ᶠf¹²_col = rest[end] # a new name: assigning a captured name would box it
+            @. Yₜc.uₕ -=
+                ᶜinterp((ᶠf¹²_col + ᶠω¹²) × (ᶠinterp(ᶜρ * ᶜJ) * ᶠu³)) / (ᶜρ * ᶜJ) +
+                (ᶜf³ + ᶜω³) × CT12(ᶜu)
+            @. Yₜf.u₃ -= (ᶠf¹²_col + ᶠω¹²) × ᶠinterp(CT12(ᶜu)) + ᶠgradᵥ(ᶜK)
+            ntuple(n_val) do j
+                ᶠω¹²ʲ = getproperty(rest[1], j)
+                ᶜuʲ = rest[1 + j]
+                ᶜKʲ = rest[1 + n_drafts + j]
+                ᶠKᵥʲ = rest[1 + 2 * n_drafts + j]
+                ᶠu₃ʲₜ = getproperty(Yₜf.sgsʲs, j).u₃
+                @. ᶠu₃ʲₜ -=
+                    (ᶠf¹²_col + ᶠω¹²ʲ) × ᶠinterp(CT12(ᶜuʲ)) +
+                    ᶠgradᵥ(ᶜKʲ - ᶜinterp(ᶠKᵥʲ))
+                return nothing
+            end
+        end
+
+        if advect_tke_val isa Val{true} # advect_tke triggers allocations
+            ᶜtke = @. lazy(specific(Yc.ρtke, Yc.ρ))
+            add_vertical_transport!(Yₜc.ρtke, ᶠρ, ᶠu³, ᶜtke, dt, edmfx_mse_q_tot_upwinding)
+        end
+        return nothing
     end
 end
 

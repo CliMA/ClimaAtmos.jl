@@ -71,20 +71,98 @@ Reads `ᶜu`, `ᶠbuoygrad`, `ᶠK_h`, and `ᶠK_u` from `p.precomputed` and use
 """
 function edmfx_tke_sources!(Yₜ, Y, p)
     (; ᶜu, ᶠbuoygrad, ᶠK_h, ᶠK_u) = p.precomputed
+    turbconv_model = p.atmos.turbconv_model
+    if turbconv_model isa PrognosticEDMFX && n_mass_flux_subdomains(turbconv_model) > 0
+        n_val = Val(n_mass_flux_subdomains(turbconv_model))
+        edmfx_model = p.atmos.edmfx_model
+        turbconv_params = CAP.turbconv_params(p.params)
+        α_d = CAP.pressure_normalmode_drag_coeff(turbconv_params)
+        a_min = CAP.min_area(turbconv_params)
+        a_max = CAP.max_area(turbconv_params)
+        scale_height = CAP.R_d(p.params) * CAP.T_surf_ref(p.params) / CAP.grav(p.params)
+        entr_detr_buoy_inv_tau_max = CAP.entr_detr_buoy_inv_tau_max(turbconv_params)
+        detr_model = edmfx_model.detr_model
+        (;
+            ᶜρʲs,
+            ᶜρ_diffʲs,
+            ᶜarea_bounding_entr_detrʲs,
+            ᶜuʲs,
+            ᶠu³ʲs,
+            ᶜu⁰,
+        ) = p.precomputed
+        (; ᶠgradᵥ_ᶜΦ) = p.core
+        ᶜlg = Fields.local_geometry_field(Y.c)
+        ᶠlg = Fields.local_geometry_field(Y.f)
+        FT = Spaces.undertype(axes(Y.c))
+        half_FT = FT(0.5)
+        ᶠbottom_bias_zero_bot =
+            Operators.BottomBiasedC2F(bottom = Operators.SetValue(FT(0)))
 
-    # shear production: the face-local work of the momentum flux on the
-    # horizontal wind, brought to centers
-    ᶠstrain_rate = compute_strain_rate_face_vertical(ᶜu)
-    ᶠshear_production = p.scratch.ᶠtemp_scalar
-    @. ᶠshear_production = 2 * ᶠK_u * vertical_shear_norm_sqr(ᶠstrain_rate)
-    @. Yₜ.c.ρtke += Y.c.ρ * ᶜinterp(ᶠshear_production)
-    # buoyancy production/destruction (face-flux consistent)
-    @. Yₜ.c.ρtke -= Y.c.ρ * ᶜinterp(ᶠK_h * ᶠbuoygrad)
-
-    # Pressure-drag return-to-isotropy
-    edmfx_pressure_drag_tke_source!(Yₜ, Y, p, p.atmos.turbconv_model)
-    # Entr/detr shear-mixing source: 0.5 δ · ρa · |Δw|² per updraft.
-    edmfx_entr_detr_tke_source!(Yₜ, Y, p, p.atmos.turbconv_model)
+        DataLayouts.foreach_column(
+            Yₜ.c, Y.c, ᶜu, ᶠbuoygrad, ᶠK_h, ᶠK_u,
+            ᶜρʲs, ᶜρ_diffʲs, ᶜarea_bounding_entr_detrʲs, ᶜuʲs, ᶠu³ʲs, ᶜu⁰,
+            ᶠgradᵥ_ᶜΦ, ᶜlg, ᶠlg,
+        ) do Yₜc, Yc, ᶜu, ᶠbuoygrad, ᶠK_h, ᶠK_u,
+        ᶜρʲs, ᶜρ_diffʲs, ᶜarea_bounding_entr_detrʲs, ᶜuʲs, ᶠu³ʲs, ᶜu⁰,
+        ᶠgradᵥ_ᶜΦ, ᶜlg, ᶠlg
+            ᶠstrain_rate = compute_strain_rate_face_vertical(ᶜu)
+            ᶠshear_production = @. 2 * ᶠK_u * vertical_shear_norm_sqr(ᶠstrain_rate)
+            @. Yₜc.ρtke +=
+                Yc.ρ * ᶜinterp(ᶠshear_production) - Yc.ρ * ᶜinterp(ᶠK_h * ᶠbuoygrad)
+            ᶜa⁰_col = @. a⁰(Yc.sgsʲs, ᶜρʲs, turbconv_model)
+            _unrolled_ntuple(n_val) do j
+                ᶜρaʲ = Yc.sgsʲs.:($j).ρa
+                ᶜρʲ = ᶜρʲs.:($j)
+                ᶜaʲ = @. draft_area(ᶜρaʲ, ᶜρʲ)
+                ᶜΔw = @. get_physical_w(ᶜuʲs.:($$j) - ᶜu⁰, ᶜlg)
+                if edmfx_model.nh_pressure
+                    ᶜdrag_coeff = @. lazy(
+                        pressure_drag_coefficient(
+                            α_d, scale_height, ᶜaʲ, ᶜa⁰_col, a_min, a_max,
+                        ),
+                    )
+                    @. Yₜc.ρtke += ᶜρaʲ * ᶜa⁰_col * ᶜdrag_coeff * abs(ᶜΔw)^3
+                end
+                ᶜbuoy_inv_time_scale = @. lazy(
+                    ᶜinterp(
+                        detr_buoy_inv_time_scale(
+                            get_physical_w(ᶠu³ʲs.:($$j), ᶠlg),
+                            vertical_buoyancy_acceleration(
+                                ᶠinterp(ᶜρ_diffʲs.:($$j)),
+                                ᶠgradᵥ_ᶜΦ,
+                                ᶠlg,
+                            ),
+                            entr_detr_buoy_inv_tau_max,
+                        ),
+                    ),
+                )
+                ᶜdetr = @. lazy(
+                    compute_detrainment(
+                        turbconv_params,
+                        ᶜaʲ,
+                        ᶜρaʲ,
+                        ᶜbuoy_inv_time_scale,
+                        ᶜdivᵥ(ᶠbottom_bias_zero_bot(ᶜρaʲ) * ᶠu³ʲs.:($$j)),
+                        ᶜarea_bounding_entr_detrʲs.:($$j),
+                        detr_model,
+                    ),
+                )
+                @. Yₜc.ρtke += half_FT * ᶜdetr * ᶜρaʲ * ᶜΔw^2
+                return nothing
+            end
+            return nothing
+        end
+    else
+        DataLayouts.foreach_column(
+            Yₜ.c, Y.c, ᶜu, ᶠbuoygrad, ᶠK_h, ᶠK_u,
+        ) do Yₜc, Yc, ᶜu, ᶠbuoygrad, ᶠK_h, ᶠK_u
+            ᶠstrain_rate = compute_strain_rate_face_vertical(ᶜu)
+            ᶠshear_production = @. 2 * ᶠK_u * vertical_shear_norm_sqr(ᶠstrain_rate)
+            @. Yₜc.ρtke +=
+                Yc.ρ * ᶜinterp(ᶠshear_production) - Yc.ρ * ᶜinterp(ᶠK_h * ᶠbuoygrad)
+            return nothing
+        end
+    end
     return nothing
 end
 
