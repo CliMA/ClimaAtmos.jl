@@ -338,43 +338,33 @@ function edmfx_sgs_vertical_advection_tendency!(
 
     FT = eltype(p.params)
     ᶠJ = Fields.local_geometry_field(axes(Y.f)).J
+    χ_names = sgs_tracer_names(Y)
 
     for j in 1:n
         ᶜa = (@. lazy(draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j))))
 
-        # buoyancy term in mse equation
-        @. Yₜ.c.sgsʲs.:($$j).mse +=
-            adjoint(CT3(ᶜinterp(Y.f.sgsʲs.:($$j).u₃))) *
-            ᶜρ_diffʲs.:($$j) * ᶜgradᵥ_ᶠΦ
+        # One fused column loop per updraft: buoyancy and vertical advection of
+        # mse, q_tot, and the tracers.
+        DataLayouts.foreach_column(
+            Yₜ.c.sgsʲs.:($j), Y.c.sgsʲs.:($j), Y.f.sgsʲs.:($j).u₃, ᶠu³ʲs.:($j),
+            ᶜρ_diffʲs.:($j), ᶜgradᵥ_ᶠΦ,
+        ) do ᶜsgsʲₜ, ᶜsgsʲ, ᶠu₃ʲ, ᶠu³ʲ, ᶜρ_diffʲ, ᶜgradᵥ_ᶠΦ
+            @. ᶜsgsʲₜ.mse += adjoint(CT3(ᶜinterp(ᶠu₃ʲ))) * ᶜρ_diffʲ * ᶜgradᵥ_ᶠΦ
 
-        # Advective form advection of mse and q_tot with the updraft velocity
-        # Note: This allocates because the function is too long
-        va = vertical_advection(
-            ᶠu³ʲs.:($j),
-            Y.c.sgsʲs.:($j).mse,
-            edmfx_mse_q_tot_upwinding,
-        )
-        @. Yₜ.c.sgsʲs.:($$j).mse += va
+            va = vertical_advection(ᶠu³ʲ, ᶜsgsʲ.mse, edmfx_mse_q_tot_upwinding)
+            @. ᶜsgsʲₜ.mse += va
 
-        va = vertical_advection(
-            ᶠu³ʲs.:($j),
-            Y.c.sgsʲs.:($j).q_tot,
-            edmfx_mse_q_tot_upwinding,
-        )
-        @. Yₜ.c.sgsʲs.:($$j).q_tot += va
+            va = vertical_advection(ᶠu³ʲ, ᶜsgsʲ.q_tot, edmfx_mse_q_tot_upwinding)
+            @. ᶜsgsʲₜ.q_tot += va
 
-        # Advective form advection of auto-discovered SGS tracers
-        # (microphysics species and any user-defined passive tracers)
-        # with the updraft velocity
-        for χ_name in sgs_tracer_names(Y)
-            ᶜχʲ = MatrixFields.get_field(Y.c.sgsʲs.:($j), χ_name)
-            ᶜχʲₜ = MatrixFields.get_field(Yₜ.c.sgsʲs.:($j), χ_name)
-            va = vertical_advection(
-                ᶠu³ʲs.:($j),
-                ᶜχʲ,
-                edmfx_tracer_upwinding,
-            )
-            @. ᶜχʲₜ += va
+            MatrixFields.unrolled_foreach(χ_names) do χ_name
+                ᶜχʲ = MatrixFields.get_field(ᶜsgsʲ, χ_name)
+                ᶜχʲₜ = MatrixFields.get_field(ᶜsgsʲₜ, χ_name)
+                # (not `va`: assigning the enclosing body's name here would box it)
+                va_χ = vertical_advection(ᶠu³ʲ, ᶜχʲ, edmfx_tracer_upwinding)
+                @. ᶜχʲₜ += va_χ
+            end
+            return nothing
         end
 
         if p.atmos.microphysics_model isa

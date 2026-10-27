@@ -3,7 +3,7 @@
 #####
 
 import ClimaCore
-import ClimaCore: Fields, Geometry
+import ClimaCore: DataLayouts, Fields, Geometry
 
 """
     implicit_tendency!(Yₜ, Y, p, t)
@@ -197,107 +197,138 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     thermo_params = CAP.thermodynamics_params(params)
     cp_d = CAP.cp_d(params)
 
-    # Mass advection with zero flux through the top and bottom
-    # boundaries (ᶜadvdivᵥ). The state filter in
-    # set_implicit_precomputed_quantities! also sets ᶠu³ to 0 at both
-    # boundaries, and the ρ row of the manual Jacobian is built from
-    # ᶜadvdivᵥ_matrix(), so using ᶜadvdivᵥ here keeps the residual, the
-    # boundary conditions, and the Jacobian consistent.
-    @. Yₜ.c.ρ -= ᶜadvdivᵥ(ᶠinterp(Y.c.ρ * ᶜJ) / ᶠJ * ᶠu³)
-
-    # Central vertical advection of active tracers (ρe_tot and ρq_tot).
-    # The upwind correction is applied post-Newton via `T_post_imp!`
-    # (see `correct_implicit_advection_tendency!`), so that the upwind
-    # direction is taken with respect to the Newton-solved velocity rather
-    # than the initial guess.
-    vtt = vertical_transport(Y.c.ρ, ᶠu³, ᶜh_tot, dt, Val(:none))
-    @. Yₜ.c.ρe_tot += vtt
-    if !(microphysics_model isa DryModel)
-        ᶜq_tot = @. lazy(specific(Y.c.ρq_tot, Y.c.ρ))
-        vtt = vertical_transport(Y.c.ρ, ᶠu³, ᶜq_tot, dt, Val(:none))
-        @. Yₜ.c.ρq_tot += vtt
-    end
-
-    # Vertical advection of passive tracers with the mean flow
-    # is done in the explicit tendency.
-    # Here we add the vertical advection with precipitation terminal velocity
-    # using downward biasing and free outflow bottom boundary condition
+    # Tracers advected with their precipitation / sedimentation terminal
+    # velocity, as (tracer name, velocity) pairs, using downward biasing and a
+    # free outflow bottom boundary condition. Vertical advection of passive
+    # tracers with the mean flow is done in the explicit tendency.
+    sedimenting = ()
     if microphysics_model isa NonEquilibriumMicrophysics
         (; ᶜwₗ, ᶜwᵢ) = p.precomputed
-        @. Yₜ.c.ρq_lcl -= ᶜprecipdivᵥ(
-            ᶠinterp(Y.c.ρ * ᶜJ) / ᶠJ * ᶠtop_bias(
-                Geometry.WVector(-(ᶜwₗ)) * specific(Y.c.ρq_lcl, Y.c.ρ),
-            ),
-        )
-        @. Yₜ.c.ρq_icl -= ᶜprecipdivᵥ(
-            ᶠinterp(Y.c.ρ * ᶜJ) / ᶠJ * ᶠtop_bias(
-                Geometry.WVector(-(ᶜwᵢ)) * specific(Y.c.ρq_icl, Y.c.ρ),
-            ),
-        )
+        sedimenting = (sedimenting..., (@name(ρq_lcl), ᶜwₗ), (@name(ρq_icl), ᶜwᵢ))
     end
-    if microphysics_model isa
-       NonEquilibriumMicrophysics1M
+    if microphysics_model isa NonEquilibriumMicrophysics1M
         (; ᶜwᵣ, ᶜwₛ) = p.precomputed
-        @. Yₜ.c.ρq_rai -= ᶜprecipdivᵥ(
-            ᶠinterp(Y.c.ρ * ᶜJ) / ᶠJ * ᶠtop_bias(
-                Geometry.WVector(-(ᶜwᵣ)) * specific(Y.c.ρq_rai, Y.c.ρ),
-            ),
-        )
-        @. Yₜ.c.ρq_sno -= ᶜprecipdivᵥ(
-            ᶠinterp(Y.c.ρ * ᶜJ) / ᶠJ * ᶠtop_bias(
-                Geometry.WVector(-(ᶜwₛ)) * specific(Y.c.ρq_sno, Y.c.ρ),
-            ),
-        )
+        sedimenting = (sedimenting..., (@name(ρq_rai), ᶜwᵣ), (@name(ρq_sno), ᶜwₛ))
     end
-    if microphysics_model isa
-       NonEquilibriumMicrophysics2M
+    if microphysics_model isa NonEquilibriumMicrophysics2M
         (; ᶜwₙₗ, ᶜwₙᵣ, ᶜwᵣ, ᶜwₛ) = p.precomputed
-        @. Yₜ.c.ρn_lcl -= ᶜprecipdivᵥ(
-            ᶠinterp(Y.c.ρ * ᶜJ) / ᶠJ * ᶠtop_bias(
-                Geometry.WVector(-(ᶜwₙₗ)) * specific(Y.c.ρn_lcl, Y.c.ρ),
-            ),
-        )
-        @. Yₜ.c.ρn_rai -= ᶜprecipdivᵥ(
-            ᶠinterp(Y.c.ρ * ᶜJ) / ᶠJ * ᶠtop_bias(
-                Geometry.WVector(-(ᶜwₙᵣ)) * specific(Y.c.ρn_rai, Y.c.ρ),
-            ),
-        )
-        @. Yₜ.c.ρq_rai -= ᶜprecipdivᵥ(
-            ᶠinterp(Y.c.ρ * ᶜJ) / ᶠJ * ᶠtop_bias(
-                Geometry.WVector(-(ᶜwᵣ)) * specific(Y.c.ρq_rai, Y.c.ρ),
-            ),
-        )
-        @. Yₜ.c.ρq_sno -= ᶜprecipdivᵥ(
-            ᶠinterp(Y.c.ρ * ᶜJ) / ᶠJ * ᶠtop_bias(
-                Geometry.WVector(-(ᶜwₛ)) * specific(Y.c.ρq_sno, Y.c.ρ),
-            ),
+        sedimenting = (
+            sedimenting...,
+            (@name(ρn_lcl), ᶜwₙₗ),
+            (@name(ρn_rai), ᶜwₙᵣ),
+            (@name(ρq_rai), ᶜwᵣ),
+            (@name(ρq_sno), ᶜwₛ),
         )
     end
     if microphysics_model isa NonEquilibriumMicrophysics2MP3
-        (; ρ, ρn_ice, ρq_rim, ρb_rim) = Y.c
-        ᶜwnᵢ = @. lazy(Geometry.WVector(p.precomputed.ᶜwnᵢ))
-        ᶜwᵢ = @. lazy(Geometry.WVector(p.precomputed.ᶜwᵢ))
-        ᶠρ = @. lazy(ᶠinterp(ρ * ᶜJ) / ᶠJ)
-
         # Note: `ρq_icl` is handled above, in `microphysics_model isa NonEquilibriumMicrophysics`
-        @. Yₜ.c.ρn_ice -= ᶜprecipdivᵥ(ᶠρ * ᶠtop_bias(- ᶜwnᵢ * specific(ρn_ice, ρ)))
-        @. Yₜ.c.ρq_rim -= ᶜprecipdivᵥ(ᶠρ * ᶠtop_bias(- ᶜwᵢ * specific(ρq_rim, ρ)))
-        @. Yₜ.c.ρb_rim -= ᶜprecipdivᵥ(ᶠρ * ᶠtop_bias(- ᶜwᵢ * specific(ρb_rim, ρ)))
+        (; ᶜwnᵢ, ᶜwᵢ) = p.precomputed
+        sedimenting = (
+            sedimenting...,
+            (@name(ρn_ice), ᶜwnᵢ),
+            (@name(ρq_rim), ᶜwᵢ),
+            (@name(ρb_rim), ᶜwᵢ),
+        )
+    end
+    sedimenting_names = unrolled_map(first, sedimenting)
+    ᶜws = unrolled_map(last, sedimenting)
+
+    # One fused column loop for the center tendencies: the face density
+    # `ᶠinterp(ρ J) / J` is a loop temporary shared by every transport term.
+    DataLayouts.foreach_column(
+        Yₜ.c, Y.c, ᶜJ, ᶠJ, ᶠu³, ᶜh_tot, ᶜws...,
+    ) do Yₜc, Yc, ᶜJ, ᶠJ, ᶠu³, ᶜh_tot, ᶜws...
+        ᶠρ = @. ᶠinterp(Yc.ρ * ᶜJ) / ᶠJ
+
+        # Mass advection with zero flux through the top and bottom
+        # boundaries (ᶜadvdivᵥ). The state filter in
+        # set_implicit_precomputed_quantities! also sets ᶠu³ to 0 at both
+        # boundaries, and the ρ row of the manual Jacobian is built from
+        # ᶜadvdivᵥ_matrix(), so using ᶜadvdivᵥ here keeps the residual, the
+        # boundary conditions, and the Jacobian consistent.
+        @. Yₜc.ρ -= ᶜadvdivᵥ(ᶠρ * ᶠu³)
+
+        # Central vertical advection of active tracers (ρe_tot and ρq_tot).
+        # The upwind correction is applied post-Newton via `T_post_imp!`
+        # (see `correct_implicit_advection_tendency!`), so that the upwind
+        # direction is taken with respect to the Newton-solved velocity rather
+        # than the initial guess.
+        @. Yₜc.ρe_tot += -(ᶜadvdivᵥ(ᶠρ * ᶠu³ * ᶠinterp(ᶜh_tot)))
+        if MatrixFields.has_field(Yc, @name(ρq_tot))
+            ᶜq_tot = @. specific(Yc.ρq_tot, Yc.ρ)
+            @. Yₜc.ρq_tot += -(ᶜadvdivᵥ(ᶠρ * ᶠu³ * ᶠinterp(ᶜq_tot)))
+        end
+
+        MatrixFields.unrolled_foreach(
+            _unrolled_zip(sedimenting_names, ᶜws),
+        ) do (ρχ_name, ᶜw)
+            ᶜρχ = MatrixFields.get_field(Yc, ρχ_name)
+            ᶜρχₜ = MatrixFields.get_field(Yₜc, ρχ_name)
+            @. ᶜρχₜ -= ᶜprecipdivᵥ(
+                ᶠρ * ᶠtop_bias(Geometry.WVector(-(ᶜw)) * specific(ᶜρχ, Yc.ρ)),
+            )
+        end
+        return nothing
     end
 
     vertical_advection_of_water_tendency!(Yₜ, Y, p, t)
 
-    # This is equivalent to grad_v(Φ) + grad_v(p) / ρ
+    # Pressure gradient, buoyancy, and Rayleigh sponge tendencies of u₃ in one
+    # fused column loop; the virtual potential temperature is a loop temporary.
+    # The sponge is a lazy broadcast when active and a `NullBroadcasted`
+    # otherwise, which cannot be sliced, so it is passed only when active.
+    rst_u₃ = rayleigh_sponge_tendency_u₃(Y.f.u₃, rayleigh_sponge)
+    if rst_u₃ isa NullBroadcasted
+        DataLayouts.foreach_column(
+            Yₜ.f, ᶠgradᵥ_ᶜΦ, ᶜp, ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice,
+        ) do Yₜf, ᶠgradᵥ_ᶜΦ, ᶜp, ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice
+            add_implicit_u₃_tendency!(
+                Yₜf, ᶠgradᵥ_ᶜΦ, ᶜp, ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice,
+                thermo_params, cp_d,
+            )
+            return nothing
+        end
+    else
+        DataLayouts.foreach_column(
+            Yₜ.f, ᶠgradᵥ_ᶜΦ, ᶜp, ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice, rst_u₃,
+        ) do Yₜf, ᶠgradᵥ_ᶜΦ, ᶜp, ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice, rst_u₃
+            add_implicit_u₃_tendency!(
+                Yₜf, ᶠgradᵥ_ᶜΦ, ᶜp, ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice,
+                thermo_params, cp_d,
+            )
+            @. Yₜf.u₃ += rst_u₃
+            return nothing
+        end
+    end
+    return nothing
+end
+
+"""
+    add_implicit_u₃_tendency!(Yₜf, ᶠgradᵥ_ᶜΦ, ᶜp, ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice,
+                              thermo_params, cp_d)
+
+Add the Exner-form pressure gradient and buoyancy tendency
+`-(∂ᵥΦ - ∂ᵥΦ_r + cp_d (θ_v - θ_vr) ∂ᵥΠ)` to `Yₜf.u₃` for one column, which is
+equivalent to `grad_v(Φ) + grad_v(p) / ρ`. Called inside the fused column loop
+of `implicit_vertical_advection_tendency!`, so it must stay inlined.
+"""
+@inline function add_implicit_u₃_tendency!(
+    Yₜf,
+    ᶠgradᵥ_ᶜΦ,
+    ᶜp,
+    ᶜT,
+    ᶜq_tot_nonneg,
+    ᶜq_liq,
+    ᶜq_ice,
+    thermo_params,
+    cp_d,
+)
     ᶜΦ_r = @. lazy(phi_r(thermo_params, ᶜp))
-    ᶜθ_v = p.scratch.ᶜtemp_scalar
-    @. ᶜθ_v = theta_v(thermo_params, ᶜT, ᶜp, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice)
+    ᶜθ_v = @. theta_v(thermo_params, ᶜT, ᶜp, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice)
     ᶜθ_vr = @. lazy(theta_vr(thermo_params, ᶜp))
     ᶜΠ = @. lazy(TD.exner_given_pressure(thermo_params, ᶜp))
-    @. Yₜ.f.u₃ -= ᶠgradᵥ_ᶜΦ - ᶠgradᵥ(ᶜΦ_r) +
-                  cp_d * (ᶠinterp(ᶜθ_v - ᶜθ_vr)) * ᶠgradᵥ(ᶜΠ)
-
-    rst_u₃ = rayleigh_sponge_tendency_u₃(Y.f.u₃, rayleigh_sponge)
-    @. Yₜ.f.u₃ += rst_u₃
+    @. Yₜf.u₃ -= ᶠgradᵥ_ᶜΦ - ᶠgradᵥ(ᶜΦ_r) +
+                 cp_d * (ᶠinterp(ᶜθ_v - ᶜθ_vr)) * ᶠgradᵥ(ᶜΠ)
     return nothing
 end
 
