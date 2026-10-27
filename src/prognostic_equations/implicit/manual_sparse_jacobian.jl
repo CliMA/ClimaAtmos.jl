@@ -722,155 +722,363 @@ function update_advection_jacobian!(matrix, Y, p, dtγ, topography_flag)
     (; ᶜΦ) = p.core
     (; ᶜK, ᶜp, ᶜT, ᶜh_tot) = p.precomputed
     (; ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice) = p.precomputed
-    (; ∂ᶜK_∂ᶜuₕ, ∂ᶜK_∂ᶠu₃, ᶠp_grad_matrix, ᶜadvection_matrix) = p.scratch
     rs = p.atmos.rayleigh_sponge
 
     FT = Spaces.undertype(axes(Y.c))
     one_C3xACT3 = C3(FT(1)) * CT3(FT(1))'
 
     cv_d = FT(CAP.cv_d(params))
+    Δcv_v = FT(CAP.cv_v(params)) - cv_d
     T_0 = FT(CAP.T_0(params))
     R_d = FT(CAP.R_d(params))
     R_v = FT(CAP.R_v(params))
+    ΔR_v = R_v - R_d
+    e_int_v0 = FT(CAP.e_int_v0(params))
     cp_d = FT(CAP.cp_d(params))
     thermo_params = CAP.thermodynamics_params(params)
 
-    ᶜρ = Y.c.ρ
-    ᶜuₕ = Y.c.uₕ
-    ᶠu₃ = Y.f.u₃
     ᶜJ = Fields.local_geometry_field(Y.c).J
     ᶠJ = Fields.local_geometry_field(Y.f).J
     ᶜgⁱʲ = Fields.local_geometry_field(Y.c).gⁱʲ
     ᶠgⁱʲ = Fields.local_geometry_field(Y.f).gⁱʲ
     ᶠz = Fields.coordinate_field(Y.f).z
     zmax = Spaces.z_max(axes(Y.f))
+    has_topo = use_derivative(topography_flag)
+    has_q_tot = MatrixFields.has_field(Y, @name(c.ρq_tot))
 
-    ᶜkappa_m = ᶜkappa_m_field!(Y, p)
-    ᶜ∂p∂ρq_tot = ᶜ∂p∂ρq_tot_field!(Y, p, ᶜkappa_m)
+    if p.atmos.microphysics_model isa NonEquilibriumMicrophysics1M &&
+       has_q_tot &&
+       !has_topo
+        let
+            ∂ᶜρ_err_∂ᶠu₃ = matrix[@name(c.ρ), @name(f.u₃)]
+            ∂ᶜρe_tot_err_∂ᶠu₃ = matrix[@name(c.ρe_tot), @name(f.u₃)]
+            ∂ᶜρq_tot_err_∂ᶠu₃ = matrix[@name(c.ρq_tot), @name(f.u₃)]
+            DataLayouts.foreach_column(
+                ∂ᶜρ_err_∂ᶠu₃,
+                ∂ᶜρe_tot_err_∂ᶠu₃,
+                ∂ᶜρq_tot_err_∂ᶠu₃,
+                Y.c,
+                ᶜh_tot,
+                ᶜJ,
+                ᶠJ,
+                ᶠgⁱʲ,
+            ) do ∂ᶜρ_err_∂ᶠu₃,
+            ∂ᶜρe_tot_err_∂ᶠu₃,
+            ∂ᶜρq_tot_err_∂ᶠu₃,
+            Yc,
+            ᶜh_tot,
+            ᶜJ,
+            ᶠJ,
+            ᶠgⁱʲ
+                ᶜadv_mat = @. -(ᶜadvdivᵥ_matrix()) *
+                   DiagonalMatrixRow(ᶠinterp(Yc.ρ * ᶜJ) / ᶠJ)
+                @. ∂ᶜρ_err_∂ᶠu₃ =
+                    dtγ * ᶜadv_mat * DiagonalMatrixRow(g³³(ᶠgⁱʲ))
+                @. ∂ᶜρe_tot_err_∂ᶠu₃ =
+                    dtγ *
+                    ᶜadv_mat *
+                    DiagonalMatrixRow(ᶠinterp(ᶜh_tot) * g³³(ᶠgⁱʲ))
+                ᶜq_tot = @. lazy(specific(Yc.ρq_tot, Yc.ρ))
+                @. ∂ᶜρq_tot_err_∂ᶠu₃ =
+                    dtγ *
+                    ᶜadv_mat *
+                    DiagonalMatrixRow(ᶠinterp(ᶜq_tot) * g³³(ᶠgⁱʲ))
+                return nothing
+            end
 
-    if use_derivative(topography_flag)
-        @. ∂ᶜK_∂ᶜuₕ = DiagonalMatrixRow(
-            adjoint(CT12(ᶜuₕ)) + adjoint(ᶜinterp(ᶠu₃)) * g³ʰ(ᶜgⁱʲ),
-        )
-    else
-        @. ∂ᶜK_∂ᶜuₕ = DiagonalMatrixRow(adjoint(CT12(ᶜuₕ)))
+            ∂ᶠu₃_err_∂ᶜρ = matrix[@name(f.u₃), @name(c.ρ)]
+            ∂ᶠu₃_err_∂ᶜρe_tot = matrix[@name(f.u₃), @name(c.ρe_tot)]
+            ∂ᶠu₃_err_∂ᶜρq_tot = matrix[@name(f.u₃), @name(c.ρq_tot)]
+            ∂ᶠu₃_err_∂ᶜρq_lcl = matrix[@name(f.u₃), @name(c.ρq_lcl)]
+            ∂ᶠu₃_err_∂ᶜρq_icl = matrix[@name(f.u₃), @name(c.ρq_icl)]
+            ∂ᶠu₃_err_∂ᶜρq_rai = matrix[@name(f.u₃), @name(c.ρq_rai)]
+            ∂ᶠu₃_err_∂ᶜρq_sno = matrix[@name(f.u₃), @name(c.ρq_sno)]
+            ∂ᶠu₃_err_∂ᶜuₕ = matrix[@name(f.u₃), @name(c.uₕ)]
+            ∂ᶠu₃_err_∂ᶠu₃ = matrix[@name(f.u₃), @name(f.u₃)]
+            I_u₃ = DiagonalMatrixRow(one_C3xACT3)
+
+            e_int_liq = condensate_e_int_offset(TD.Liquid(), params)
+            ∂cv∂q_liq = condensate_cv_difference(TD.Liquid(), params)
+            e_int_ice = condensate_e_int_offset(TD.Ice(), params)
+            ∂cv∂q_ice = condensate_cv_difference(TD.Ice(), params)
+
+            DataLayouts.foreach_column(
+                ∂ᶠu₃_err_∂ᶜρ,
+                ∂ᶠu₃_err_∂ᶜρe_tot,
+                ∂ᶠu₃_err_∂ᶜρq_tot,
+                ∂ᶠu₃_err_∂ᶜρq_lcl,
+                ∂ᶠu₃_err_∂ᶜρq_icl,
+                ∂ᶠu₃_err_∂ᶜρq_rai,
+                ∂ᶠu₃_err_∂ᶜρq_sno,
+                ∂ᶠu₃_err_∂ᶜuₕ,
+                ∂ᶠu₃_err_∂ᶠu₃,
+                Y.c,
+                Y.f.u₃,
+                ᶜK,
+                ᶜp,
+                ᶜT,
+                ᶜΦ,
+                ᶜq_tot_nonneg,
+                ᶜq_liq,
+                ᶜq_ice,
+                ᶠz,
+            ) do ∂ᶠu₃_err_∂ᶜρ,
+            ∂ᶠu₃_err_∂ᶜρe_tot,
+            ∂ᶠu₃_err_∂ᶜρq_tot,
+            ∂ᶠu₃_err_∂ᶜρq_lcl,
+            ∂ᶠu₃_err_∂ᶜρq_icl,
+            ∂ᶠu₃_err_∂ᶜρq_rai,
+            ∂ᶠu₃_err_∂ᶜρq_sno,
+            ∂ᶠu₃_err_∂ᶜuₕ,
+            ∂ᶠu₃_err_∂ᶠu₃,
+            Yc,
+            ᶠu₃,
+            ᶜK,
+            ᶜp,
+            ᶜT,
+            ᶜΦ,
+            ᶜq_tot_nonneg,
+            ᶜq_liq,
+            ᶜq_ice,
+            ᶠz
+                ᶜkappa_m = @. TD.gas_constant_air(
+                    thermo_params,
+                    ᶜq_tot_nonneg,
+                    ᶜq_liq,
+                    ᶜq_ice,
+                ) / TD.cv_m(
+                    thermo_params,
+                    ᶜq_tot_nonneg,
+                    ᶜq_liq,
+                    ᶜq_ice,
+                )
+                ᶠp_grad = @. DiagonalMatrixRow(-1 / ᶠinterp(Yc.ρ)) * ᶠgradᵥ_matrix()
+
+                ᶜθ_v = @. lazy(
+                    theta_v(
+                        thermo_params,
+                        ᶜT,
+                        ᶜp,
+                        ᶜq_tot_nonneg,
+                        ᶜq_liq,
+                        ᶜq_ice,
+                    ),
+                )
+                ᶜΠ = @. lazy(TD.exner_given_pressure(thermo_params, ᶜp))
+                ᶜ∂p∂ρ = @. lazy(
+                    ᶜkappa_m * (T_0 * cp_d - ᶜK - ᶜΦ) +
+                    (R_d - ᶜkappa_m * cv_d) * ᶜT,
+                )
+                @. ∂ᶠu₃_err_∂ᶜρ =
+                    dtγ * (
+                        ᶠp_grad * DiagonalMatrixRow(ᶜ∂p∂ρ) +
+                        DiagonalMatrixRow(
+                            cp_d * ᶠinterp(ᶜθ_v) * ᶠgradᵥ(ᶜΠ) / ᶠinterp(Yc.ρ),
+                        ) * ᶠinterp_matrix()
+                    )
+                @. ∂ᶠu₃_err_∂ᶜρe_tot =
+                    dtγ * ᶠp_grad * DiagonalMatrixRow(ᶜkappa_m)
+
+                ᶜ∂p∂ρq_tot = @. lazy(
+                    ᶜkappa_m * (-e_int_v0 - R_d * T_0 - Δcv_v * (ᶜT - T_0)) +
+                    ΔR_v * ᶜT,
+                )
+                @. ∂ᶠu₃_err_∂ᶜρq_tot =
+                    dtγ * ᶠp_grad * DiagonalMatrixRow(ᶜ∂p∂ρq_tot)
+
+                ᶜ∂p∂ρq_liq = @. lazy(
+                    ᶜkappa_m * (e_int_liq - ∂cv∂q_liq * (ᶜT - T_0)) - R_v * ᶜT,
+                )
+                ᶠblock_liq = @. dtγ * ᶠp_grad * DiagonalMatrixRow(ᶜ∂p∂ρq_liq)
+                @. ∂ᶠu₃_err_∂ᶜρq_lcl = ᶠblock_liq
+                @. ∂ᶠu₃_err_∂ᶜρq_rai = ᶠblock_liq
+
+                ᶜ∂p∂ρq_ice = @. lazy(
+                    ᶜkappa_m * (e_int_ice - ∂cv∂q_ice * (ᶜT - T_0)) - R_v * ᶜT,
+                )
+                ᶠblock_ice = @. dtγ * ᶠp_grad * DiagonalMatrixRow(ᶜ∂p∂ρq_ice)
+                @. ∂ᶠu₃_err_∂ᶜρq_icl = ᶠblock_ice
+                @. ∂ᶠu₃_err_∂ᶜρq_sno = ᶠblock_ice
+
+                @. ∂ᶠu₃_err_∂ᶜuₕ =
+                    dtγ *
+                    ᶠp_grad *
+                    DiagonalMatrixRow(
+                        -(ᶜkappa_m) * Yc.ρ * adjoint(CT12(Yc.uₕ)),
+                    )
+                ∂ᶜK_∂ᶠu₃ = @. lazy(
+                    ᶜinterp_matrix() * DiagonalMatrixRow(adjoint(CT3(ᶠu₃))) +
+                    DiagonalMatrixRow(adjoint(CT3(Yc.uₕ))) * ᶜinterp_matrix(),
+                )
+                if rs isa RayleighSponge
+                    @. ∂ᶠu₃_err_∂ᶠu₃ =
+                        dtγ * (
+                            ᶠp_grad *
+                            DiagonalMatrixRow(-(ᶜkappa_m) * Yc.ρ) *
+                            ∂ᶜK_∂ᶠu₃ + DiagonalMatrixRow(
+                                -β_rayleigh_u₃(rs, ᶠz, zmax) * (one_C3xACT3,),
+                            )
+                        ) - (I_u₃,)
+                else
+                    @. ∂ᶠu₃_err_∂ᶠu₃ =
+                        dtγ *
+                        ᶠp_grad *
+                        DiagonalMatrixRow(-(ᶜkappa_m) * Yc.ρ) *
+                        ∂ᶜK_∂ᶠu₃ - (I_u₃,)
+                end
+                return nothing
+            end
+        end
+        return nothing
     end
-    @. ∂ᶜK_∂ᶠu₃ =
-        ᶜinterp_matrix() * DiagonalMatrixRow(adjoint(CT3(ᶠu₃))) +
-        DiagonalMatrixRow(adjoint(CT3(ᶜuₕ))) * ᶜinterp_matrix()
 
-    @. ᶠp_grad_matrix = DiagonalMatrixRow(-1 / ᶠinterp(ᶜρ)) * ᶠgradᵥ_matrix()
-
-    @. ᶜadvection_matrix =
-        -(ᶜadvdivᵥ_matrix()) * DiagonalMatrixRow(ᶠinterp(ᶜρ * ᶜJ) / ᶠJ)
-    @. p.scratch.ᶠbidiagonal_matrix_ct3xct12 =
-        ᶠwinterp_matrix(ᶜJ * ᶜρ) * DiagonalMatrixRow(g³ʰ(ᶜgⁱʲ))
-    if use_derivative(topography_flag)
-        ∂ᶜρ_err_∂ᶜuₕ = matrix[@name(c.ρ), @name(c.uₕ)]
-        @. ∂ᶜρ_err_∂ᶜuₕ =
-            dtγ * ᶜadvection_matrix * p.scratch.ᶠbidiagonal_matrix_ct3xct12
-    end
-    ∂ᶜρ_err_∂ᶠu₃ = matrix[@name(c.ρ), @name(f.u₃)]
-    @. ∂ᶜρ_err_∂ᶠu₃ = dtγ * ᶜadvection_matrix * DiagonalMatrixRow(g³³(ᶠgⁱʲ))
-
-    tracer_info = (@name(c.ρe_tot), @name(c.ρq_tot))
-
-    MatrixFields.unrolled_foreach(tracer_info) do ρχ_name
-        MatrixFields.has_field(Y, ρχ_name) || return
-        ᶜχ = ρχ_name === @name(c.ρe_tot) ? ᶜh_tot : (@. lazy(specific(Y.c.ρq_tot, Y.c.ρ)))
+    let
+        (; ∂ᶜK_∂ᶜuₕ, ∂ᶜK_∂ᶠu₃, ᶠp_grad_matrix, ᶜadvection_matrix) = p.scratch
+        ᶜρ = Y.c.ρ
+        ᶜuₕ = Y.c.uₕ
+        ᶠu₃ = Y.f.u₃
+        ᶜkappa_m = ᶜkappa_m_field!(Y, p)
+        ᶜ∂p∂ρq_tot = ᶜ∂p∂ρq_tot_field!(Y, p, ᶜkappa_m)
 
         if use_derivative(topography_flag)
-            ∂ᶜρχ_err_∂ᶜuₕ = matrix[ρχ_name, @name(c.uₕ)]
-            @. ∂ᶜρχ_err_∂ᶜuₕ =
-                dtγ * ᶜadvection_matrix * DiagonalMatrixRow(ᶠinterp(ᶜχ)) *
-                p.scratch.ᶠbidiagonal_matrix_ct3xct12
-        end
-
-        ∂ᶜρχ_err_∂ᶠu₃ = matrix[ρχ_name, @name(f.u₃)]
-        @. ∂ᶜρχ_err_∂ᶠu₃ =
-            dtγ * ᶜadvection_matrix * DiagonalMatrixRow(ᶠinterp(ᶜχ) * g³³(ᶠgⁱʲ))
-    end
-
-    ∂ᶠu₃_err_∂ᶜρ = matrix[@name(f.u₃), @name(c.ρ)]
-    ∂ᶠu₃_err_∂ᶜρe_tot = matrix[@name(f.u₃), @name(c.ρe_tot)]
-
-    ᶜθ_v = @. lazy(theta_v(thermo_params, ᶜT, ᶜp, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice))
-    ᶜΠ = @. lazy(TD.exner_given_pressure(thermo_params, ᶜp))
-    # Exner-form PGF tendency: grad(Φ) - grad(Φ_r) + cp_d int(θ_v - θ_vr) grad(Π).
-    # The reference terms satisfy grad(Φ_r(p)) + cp_d θ_vr(p) grad(Π(p)) ≡ 0
-    # pointwise for ANY p field (Φ_r′ = -cp_d θ_vr Π′ by construction), so their
-    # state derivative vanishes identically and the exact linearization carries
-    # the full θ_v:
-    #   d(PGF)·δχ = cp_d (∂θ_v/∂χ δχ) grad(Π)              [thermal buoyancy]
-    #             + cp_d θ_v (κ_d Π / p) grad(∂p/∂χ δχ)    [acoustic]
-    #             + cp_d θ_v grad(κ_d Π / p) ∂p/∂χ δχ.     [pressure buoyancy]
-    # With grad(κ_d Π/p) = -(1 - κ_d) (κ_d Π/p) grad(p)/p and the equation of
-    # state ρ = p^(1-κ_d) p₀^κ_d / (R_d θ_v), i.e.
-    #   δρ/ρ = (1 - κ_d) δp/p - δθ_v/θ_v,
-    # the two buoyancy terms combine into a single term proportional to the
-    # thermodynamic density derivative:
-    #   thermal + pressure buoyancy = -cp_d θ_v grad(Π) (∂ρ/∂χ δχ) / ρ.
-    # It therefore vanishes identically in the columns perturbed at fixed ρ
-    # (ρe_tot, the ρq's, and K through the velocities), where thermal and
-    # pressure buoyancy are equal and opposite — cancelling them analytically
-    # here avoids computing two large opposing terms — and it reduces to
-    # grad(p) δρ/ρ² in the ρ column. Since cp_d θ_v κ_d Π/p = R_m T/p = 1/ρ
-    # pointwise, the acoustic factor is the familiar -grad(·)/ρ operator
-    # (ᶠp_grad_matrix). Sound and gravity waves are thus both treated fully
-    # implicitly: acoustics couple ᶠu₃ to every thermodynamic column through
-    # ∂p/∂χ, and buoyancy couples it to the ρ column.
-    ᶜ∂p∂ρ = @. lazy(
-        ᶜkappa_m * (T_0 * cp_d - ᶜK - ᶜΦ) + (R_d - ᶜkappa_m * cv_d) * ᶜT,
-    )
-    @. ∂ᶠu₃_err_∂ᶜρ =
-        dtγ * (
-            ᶠp_grad_matrix * DiagonalMatrixRow(ᶜ∂p∂ρ) +
-            DiagonalMatrixRow(cp_d * ᶠinterp(ᶜθ_v) * ᶠgradᵥ(ᶜΠ) / ᶠinterp(ᶜρ)) *
-            ᶠinterp_matrix()
-        )
-    @. ∂ᶠu₃_err_∂ᶜρe_tot = dtγ * ᶠp_grad_matrix * DiagonalMatrixRow(ᶜkappa_m)
-
-    if MatrixFields.has_field(Y, @name(c.ρq_tot))
-        ∂ᶠu₃_err_∂ᶜρq_tot = matrix[@name(f.u₃), @name(c.ρq_tot)]
-        @. ∂ᶠu₃_err_∂ᶜρq_tot =
-            dtγ * ᶠp_grad_matrix * DiagonalMatrixRow(ᶜ∂p∂ρq_tot)
-    end
-
-    if p.atmos.microphysics_model isa Union{
-        NonEquilibriumMicrophysics1M,
-        NonEquilibriumMicrophysics2M,
-    }
-        for ρq_name in sedimenting_mass_names(Y)
-            phase = condensate_phase(ρq_name)
-            e_int_q = condensate_e_int_offset(phase, params)
-            ∂cv∂q = condensate_cv_difference(phase, params)
-            ∂ᶠu₃_err_∂ᶜρq = matrix[@name(f.u₃), center_state_name(ρq_name)]
-            # The -R_v T term is ∂p/∂q_c at fixed q_tot: condensate replaces
-            # vapor, ∂R_m/∂q_c = -R_v (R_m = (1 - q_tot) R_d + q_vap R_v).
-            ᶜ∂p∂ρχ = @. lazy(
-                ᶜkappa_m * (e_int_q - ∂cv∂q * (ᶜT - T_0)) - R_v * ᶜT,
+            @. ∂ᶜK_∂ᶜuₕ = DiagonalMatrixRow(
+                adjoint(CT12(ᶜuₕ)) + adjoint(ᶜinterp(ᶠu₃)) * g³ʰ(ᶜgⁱʲ),
             )
-            @. ∂ᶠu₃_err_∂ᶜρq =
-                dtγ * ᶠp_grad_matrix * DiagonalMatrixRow(ᶜ∂p∂ρχ)
+        else
+            @. ∂ᶜK_∂ᶜuₕ = DiagonalMatrixRow(adjoint(CT12(ᶜuₕ)))
         end
-    end
+        @. ∂ᶜK_∂ᶠu₃ =
+            ᶜinterp_matrix() * DiagonalMatrixRow(adjoint(CT3(ᶠu₃))) +
+            DiagonalMatrixRow(adjoint(CT3(ᶜuₕ))) * ᶜinterp_matrix()
 
-    ∂ᶠu₃_err_∂ᶜuₕ = matrix[@name(f.u₃), @name(c.uₕ)]
-    ∂ᶠu₃_err_∂ᶠu₃ = matrix[@name(f.u₃), @name(f.u₃)]
-    I_u₃ = DiagonalMatrixRow(one_C3xACT3)
-    @. ∂ᶠu₃_err_∂ᶜuₕ =
-        dtγ * ᶠp_grad_matrix * DiagonalMatrixRow(-(ᶜkappa_m) * ᶜρ) * ∂ᶜK_∂ᶜuₕ
-    if rs isa RayleighSponge
-        @. ∂ᶠu₃_err_∂ᶠu₃ =
+        @. ᶠp_grad_matrix = DiagonalMatrixRow(-1 / ᶠinterp(ᶜρ)) * ᶠgradᵥ_matrix()
+
+        @. ᶜadvection_matrix =
+            -(ᶜadvdivᵥ_matrix()) * DiagonalMatrixRow(ᶠinterp(ᶜρ * ᶜJ) / ᶠJ)
+        @. p.scratch.ᶠbidiagonal_matrix_ct3xct12 =
+            ᶠwinterp_matrix(ᶜJ * ᶜρ) * DiagonalMatrixRow(g³ʰ(ᶜgⁱʲ))
+        if use_derivative(topography_flag)
+            ∂ᶜρ_err_∂ᶜuₕ = matrix[@name(c.ρ), @name(c.uₕ)]
+            @. ∂ᶜρ_err_∂ᶜuₕ =
+                dtγ * ᶜadvection_matrix * p.scratch.ᶠbidiagonal_matrix_ct3xct12
+        end
+        ∂ᶜρ_err_∂ᶠu₃ = matrix[@name(c.ρ), @name(f.u₃)]
+        @. ∂ᶜρ_err_∂ᶠu₃ = dtγ * ᶜadvection_matrix * DiagonalMatrixRow(g³³(ᶠgⁱʲ))
+
+        tracer_info = (@name(c.ρe_tot), @name(c.ρq_tot))
+
+        MatrixFields.unrolled_foreach(tracer_info) do ρχ_name
+            MatrixFields.has_field(Y, ρχ_name) || return
+            ᶜχ =
+                ρχ_name === @name(c.ρe_tot) ? ᶜh_tot :
+                (@. lazy(specific(Y.c.ρq_tot, Y.c.ρ)))
+
+            if use_derivative(topography_flag)
+                ∂ᶜρχ_err_∂ᶜuₕ = matrix[ρχ_name, @name(c.uₕ)]
+                @. ∂ᶜρχ_err_∂ᶜuₕ =
+                    dtγ *
+                    ᶜadvection_matrix *
+                    DiagonalMatrixRow(ᶠinterp(ᶜχ)) *
+                    p.scratch.ᶠbidiagonal_matrix_ct3xct12
+            end
+
+            ∂ᶜρχ_err_∂ᶠu₃ = matrix[ρχ_name, @name(f.u₃)]
+            @. ∂ᶜρχ_err_∂ᶠu₃ =
+                dtγ *
+                ᶜadvection_matrix *
+                DiagonalMatrixRow(ᶠinterp(ᶜχ) * g³³(ᶠgⁱʲ))
+        end
+
+        ∂ᶠu₃_err_∂ᶜρ = matrix[@name(f.u₃), @name(c.ρ)]
+        ∂ᶠu₃_err_∂ᶜρe_tot = matrix[@name(f.u₃), @name(c.ρe_tot)]
+
+        ᶜθ_v = @. lazy(
+            theta_v(thermo_params, ᶜT, ᶜp, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice),
+        )
+        ᶜΠ = @. lazy(TD.exner_given_pressure(thermo_params, ᶜp))
+        # Exner-form PGF tendency: grad(Φ) - grad(Φ_r) + cp_d int(θ_v - θ_vr)
+        # grad(Π). The reference terms satisfy grad(Φ_r(p)) + cp_d θ_vr(p)
+        # grad(Π(p)) ≡ 0 pointwise for ANY p field (Φ_r′ = -cp_d θ_vr Π′ by
+        # construction), so their state derivative vanishes identically and the
+        # exact linearization carries the full θ_v:
+        #   d(PGF)·δχ = cp_d (∂θ_v/∂χ δχ) grad(Π)            [thermal buoyancy]
+        #             + cp_d θ_v (κ_d Π / p) grad(∂p/∂χ δχ)  [acoustic]
+        #             + cp_d θ_v grad(κ_d Π / p) ∂p/∂χ δχ.   [pressure buoyancy]
+        # With grad(κ_d Π/p) = -(1 - κ_d) (κ_d Π/p) grad(p)/p and the equation
+        # of state ρ = p^(1-κ_d) p₀^κ_d / (R_d θ_v), i.e.
+        #   δρ/ρ = (1 - κ_d) δp/p - δθ_v/θ_v,
+        # the two buoyancy terms combine into a single term proportional to the
+        # thermodynamic density derivative:
+        #   thermal + pressure buoyancy = -cp_d θ_v grad(Π) (∂ρ/∂χ δχ) / ρ.
+        # It therefore vanishes identically in the columns perturbed at fixed ρ
+        # (ρe_tot, the ρq's, and K through the velocities), where thermal and
+        # pressure buoyancy are equal and opposite — cancelling them
+        # analytically here avoids computing two large opposing terms — and it
+        # reduces to grad(p) δρ/ρ² in the ρ column. Since cp_d θ_v κ_d Π/p =
+        # R_m T/p = 1/ρ pointwise, the acoustic factor is the familiar
+        # -grad(·)/ρ operator (ᶠp_grad_matrix). Sound and gravity waves are thus
+        # both treated fully implicitly: acoustics couple ᶠu₃ to every
+        # thermodynamic column through ∂p/∂χ, and buoyancy couples it to the ρ
+        # column.
+        ᶜ∂p∂ρ = @. lazy(
+            ᶜkappa_m * (T_0 * cp_d - ᶜK - ᶜΦ) + (R_d - ᶜkappa_m * cv_d) * ᶜT,
+        )
+        @. ∂ᶠu₃_err_∂ᶜρ =
             dtγ * (
-                ᶠp_grad_matrix * DiagonalMatrixRow(-(ᶜkappa_m) * ᶜρ) *
-                ∂ᶜK_∂ᶠu₃ +
-                DiagonalMatrixRow(-β_rayleigh_u₃(rs, ᶠz, zmax) * (one_C3xACT3,))
-            ) - (I_u₃,)
-    else
-        @. ∂ᶠu₃_err_∂ᶠu₃ =
-            dtγ * ᶠp_grad_matrix * DiagonalMatrixRow(-(ᶜkappa_m) * ᶜρ) *
-            ∂ᶜK_∂ᶠu₃ - (I_u₃,)
+                ᶠp_grad_matrix * DiagonalMatrixRow(ᶜ∂p∂ρ) +
+                DiagonalMatrixRow(
+                    cp_d * ᶠinterp(ᶜθ_v) * ᶠgradᵥ(ᶜΠ) / ᶠinterp(ᶜρ),
+                ) * ᶠinterp_matrix()
+            )
+        @. ∂ᶠu₃_err_∂ᶜρe_tot =
+            dtγ * ᶠp_grad_matrix * DiagonalMatrixRow(ᶜkappa_m)
+
+        if MatrixFields.has_field(Y, @name(c.ρq_tot))
+            ∂ᶠu₃_err_∂ᶜρq_tot = matrix[@name(f.u₃), @name(c.ρq_tot)]
+            @. ∂ᶠu₃_err_∂ᶜρq_tot =
+                dtγ * ᶠp_grad_matrix * DiagonalMatrixRow(ᶜ∂p∂ρq_tot)
+        end
+
+        if p.atmos.microphysics_model isa Union{
+            NonEquilibriumMicrophysics1M,
+            NonEquilibriumMicrophysics2M,
+        }
+            for ρq_name in sedimenting_mass_names(Y)
+                phase = condensate_phase(ρq_name)
+                e_int_q = condensate_e_int_offset(phase, params)
+                ∂cv∂q = condensate_cv_difference(phase, params)
+                ∂ᶠu₃_err_∂ᶜρq = matrix[@name(f.u₃), center_state_name(ρq_name)]
+                # The -R_v T term is ∂p/∂q_c at fixed q_tot: condensate replaces
+                # vapor, ∂R_m/∂q_c = -R_v (R_m = (1 - q_tot) R_d + q_vap R_v).
+                ᶜ∂p∂ρχ = @. lazy(
+                    ᶜkappa_m * (e_int_q - ∂cv∂q * (ᶜT - T_0)) - R_v * ᶜT,
+                )
+                @. ∂ᶠu₃_err_∂ᶜρq =
+                    dtγ * ᶠp_grad_matrix * DiagonalMatrixRow(ᶜ∂p∂ρχ)
+            end
+        end
+
+        ∂ᶠu₃_err_∂ᶜuₕ = matrix[@name(f.u₃), @name(c.uₕ)]
+        ∂ᶠu₃_err_∂ᶠu₃ = matrix[@name(f.u₃), @name(f.u₃)]
+        I_u₃ = DiagonalMatrixRow(one_C3xACT3)
+        @. ∂ᶠu₃_err_∂ᶜuₕ =
+            dtγ * ᶠp_grad_matrix * DiagonalMatrixRow(-(ᶜkappa_m) * ᶜρ) * ∂ᶜK_∂ᶜuₕ
+        if rs isa RayleighSponge
+            @. ∂ᶠu₃_err_∂ᶠu₃ =
+                dtγ * (
+                    ᶠp_grad_matrix *
+                    DiagonalMatrixRow(-(ᶜkappa_m) * ᶜρ) *
+                    ∂ᶜK_∂ᶠu₃ + DiagonalMatrixRow(
+                        -β_rayleigh_u₃(rs, ᶠz, zmax) * (one_C3xACT3,),
+                    )
+                ) - (I_u₃,)
+        else
+            @. ∂ᶠu₃_err_∂ᶠu₃ =
+                dtγ *
+                ᶠp_grad_matrix *
+                DiagonalMatrixRow(-(ᶜkappa_m) * ᶜρ) *
+                ∂ᶜK_∂ᶠu₃ - (I_u₃,)
+        end
     end
     return nothing
 end
@@ -907,12 +1115,123 @@ function update_sedimentation_jacobian!(matrix, Y, p, dtγ)
     ᶠJ = Fields.local_geometry_field(Y.f).J
 
     ∂ᶜρe_tot_err_∂ᶜρe_tot = matrix[@name(c.ρe_tot), @name(c.ρe_tot)]
-    @. ∂ᶜρe_tot_err_∂ᶜρe_tot = zero(typeof(∂ᶜρe_tot_err_∂ᶜρe_tot)) - (I,)
-
     ∂ᶜρe_tot_err_∂ᶜρq_tot = matrix[@name(c.ρe_tot), @name(c.ρq_tot)]
-    @. ∂ᶜρe_tot_err_∂ᶜρq_tot = zero(typeof(∂ᶜρe_tot_err_∂ᶜρq_tot))
-
     ∂ᶜρq_tot_err_∂ᶜρq_tot = matrix[@name(c.ρq_tot), @name(c.ρq_tot)]
+
+    if p.atmos.microphysics_model isa NonEquilibriumMicrophysics1M
+        (; ᶜwₗ, ᶜwᵢ, ᶜwᵣ, ᶜwₛ) = p.precomputed
+        ρχ_names = (@name(ρq_lcl), @name(ρq_icl), @name(ρq_rai), @name(ρq_sno))
+        state_names = unrolled_map(center_state_name, ρχ_names)
+        ∂ᶜρχ_diags = unrolled_map(s -> matrix[s, s], state_names)
+        ∂ᶜρq_tot_cols =
+            unrolled_map(s -> matrix[@name(c.ρq_tot), s], state_names)
+        ∂ᶜρ_cols = unrolled_map(s -> matrix[@name(c.ρ), s], state_names)
+        ∂ᶜρe_tot_cols =
+            unrolled_map(s -> matrix[@name(c.ρe_tot), s], state_names)
+        zero_row = zero(eltype(∂ᶜρe_tot_err_∂ᶜρe_tot))
+
+        DataLayouts.foreach_column(
+            ∂ᶜρe_tot_err_∂ᶜρe_tot,
+            ∂ᶜρe_tot_err_∂ᶜρq_tot,
+            ∂ᶜρq_tot_err_∂ᶜρq_tot,
+            ∂ᶜρχ_diags[1],
+            ∂ᶜρχ_diags[2],
+            ∂ᶜρχ_diags[3],
+            ∂ᶜρχ_diags[4],
+            ∂ᶜρq_tot_cols[1],
+            ∂ᶜρq_tot_cols[2],
+            ∂ᶜρq_tot_cols[3],
+            ∂ᶜρq_tot_cols[4],
+            ∂ᶜρ_cols[1],
+            ∂ᶜρ_cols[2],
+            ∂ᶜρ_cols[3],
+            ∂ᶜρ_cols[4],
+            ∂ᶜρe_tot_cols[1],
+            ∂ᶜρe_tot_cols[2],
+            ∂ᶜρe_tot_cols[3],
+            ∂ᶜρe_tot_cols[4],
+            ᶜρ,
+            ᶜJ,
+            ᶠJ,
+            ᶜT,
+            ᶜΦ,
+            ᶜu,
+            ᶜwₗ,
+            ᶜwᵢ,
+            ᶜwᵣ,
+            ᶜwₛ,
+        ) do ∂ᶜρe_tot_err_∂ᶜρe_tot,
+        ∂ᶜρe_tot_err_∂ᶜρq_tot,
+        ∂ᶜρq_tot_err_∂ᶜρq_tot,
+        d1,
+        d2,
+        d3,
+        d4,
+        q1,
+        q2,
+        q3,
+        q4,
+        r1,
+        r2,
+        r3,
+        r4,
+        e1,
+        e2,
+        e3,
+        e4,
+        ᶜρ_col,
+        ᶜJ_col,
+        ᶠJ_col,
+        ᶜT_col,
+        ᶜΦ_col,
+        ᶜu_col,
+        ᶜw1,
+        ᶜw2,
+        ᶜw3,
+        ᶜw4
+            @. ∂ᶜρe_tot_err_∂ᶜρe_tot = (zero_row,) - (I,)
+            @. ∂ᶜρe_tot_err_∂ᶜρq_tot = (zero_row,)
+            @. ∂ᶜρq_tot_err_∂ᶜρq_tot = (zero_row,) - (I,)
+
+            ᶜbidiag = @. dtγ *
+               (-(ᶜprecipdivᵥ_matrix())) *
+               DiagonalMatrixRow(ᶠinterp(ᶜρ_col * ᶜJ_col) / ᶠJ_col)
+            species_tuples = (
+                (d1, q1, r1, e1, ᶜw1, ρχ_names[1]),
+                (d2, q2, r2, e2, ᶜw2, ρχ_names[2]),
+                (d3, q3, r3, e3, ᶜw3, ρχ_names[3]),
+                (d4, q4, r4, e4, ᶜw4, ρχ_names[4]),
+            )
+            MatrixFields.unrolled_foreach(
+                species_tuples,
+            ) do (∂ᶜρχ_diag, ∂ᶜρq_tot_col, ∂ᶜρ_col, ∂ᶜρe_tot_col, ᶜwₚ, ρχ_name)
+                phase = condensate_phase(ρχ_name)
+                e_int_func = internal_energy_function(phase)
+
+                ᶠband = @. lazy(
+                    ᶠtop_bias_matrix() * DiagonalMatrixRow(
+                        ClimaCore.Geometry.WVector(-(ᶜwₚ) / ᶜρ_col),
+                    ),
+                )
+                ᶜsed_op = @. ᶜbidiag * ᶠband
+                @. ∂ᶜρχ_diag = ᶜsed_op - (I,)
+                @. ∂ᶜρq_tot_col = ᶜsed_op
+                @. ∂ᶜρ_col = ᶜsed_op
+                @. ∂ᶜρe_tot_col =
+                    ᶜsed_op * DiagonalMatrixRow(
+                        e_int_func(thermo_params, ᶜT_col) +
+                        ᶜΦ_col +
+                        $(Kin(ᶜwₚ, ᶜu_col)),
+                    )
+                return nothing
+            end
+            return nothing
+        end
+        return nothing
+    end
+
+    @. ∂ᶜρe_tot_err_∂ᶜρe_tot = zero(typeof(∂ᶜρe_tot_err_∂ᶜρe_tot)) - (I,)
+    @. ∂ᶜρe_tot_err_∂ᶜρq_tot = zero(typeof(∂ᶜρe_tot_err_∂ᶜρq_tot))
     @. ∂ᶜρq_tot_err_∂ᶜρq_tot = zero(typeof(∂ᶜρq_tot_err_∂ᶜρq_tot)) - (I,)
 
     # This scratch variable computation could be skipped if no tracers are present
@@ -1003,6 +1322,15 @@ function eddy_diffusivity_coefficients!(Y, p)
     return (; ᶜK_u, ᶜK_h)
 end
 
+@inline _tke_diss_rate(tke, mixing_length, c_d, dt) =
+    tke >= 0 ?
+    c_d * sqrt(tke) / max(mixing_length, one(mixing_length)) :
+    1 / typeof(tke)(dt)
+@inline _∂tke_diss_rate_∂tke(tke, mixing_length, c_d) =
+    tke > 0 ?
+    c_d / (2 * max(mixing_length, one(mixing_length)) * sqrt(tke)) :
+    typeof(tke)(0)
+
 """
     update_diffusion_jacobian!(matrix, Y, p, dtγ, diffusion_flag, eddy_diffusivities)
 
@@ -1053,260 +1381,422 @@ function update_diffusion_jacobian!(
     (; ᶜK_u, ᶜK_h) = eddy_diffusivities
     FT = Spaces.undertype(axes(Y.c))
     T_0 = FT(CAP.T_0(params))
-
-    ᶜρ = Y.c.ρ
-
-    # In dry configurations, the ρe_tot diagonal is initialized here (moist
-    # configurations initialize it in update_sedimentation_jacobian!).
-    ∂ᶜρe_tot_err_∂ᶜρe_tot = matrix[@name(c.ρe_tot), @name(c.ρe_tot)]
-    if p.atmos.microphysics_model isa DryModel
-        @. ∂ᶜρe_tot_err_∂ᶜρe_tot = zero(typeof(∂ᶜρe_tot_err_∂ᶜρe_tot)) - (I,)
-    end
-
-    ∂ᶠρχ_dif_flux_∂ᶜχ = ᶠp_grad_matrix
-    # Face diffusivities, consistent with the diffusive tendencies:
-    # - AbstractEDMF: the face-native ᶠK_h/ᶠK_u (see
-    #   set_face_diffusivities! and edmfx_sgs_diffusive_flux_tendency!),
-    #   treated as frozen coefficients (no ∂K/∂state terms). For
-    #   PrognosticEDMFX, the grid-mean diffusive flux is the subdomain sum
-    #   a⁰ F⁰ + Σⱼ aʲ Fʲ; since ∂χ⁰/∂(ρχ) = 1/ρa⁰ at fixed updraft state, the
-    #   (1 - aʲ) factors in ᶠinterp(ρa⁰) and 1/ρa⁰ cancel when draft area is
-    #   vertically uniform, so the grid-mean diagonal uses ᶠinterp(ρ) * ᶠK_h
-    #   while omitting the (ρχ, χʲ) off-diagonal blocks (block-triangular
-    #   solver structure).
-    # - VerticalDiffusion/DecayWithHeightDiffusion: harmonic-mean face
-    #   interpolation of the center K (see
-    #   vertical_diffusion_boundary_layer_tendency!).
-    # - Smagorinsky: arithmetic interpolation, matching its tendency.
-    # ᶠK_h/ᶠK_u exist only for AbstractEDMF (see precomputed_quantities);
-    # the other closures use the center ᶜK_h/ᶜK_u, so the face fields are
-    # destructured inside the AbstractEDMF branches only.
     turbconv_model = p.atmos.turbconv_model
-    ϵK = eps(FT)
-    if turbconv_model isa AbstractEDMF
-        (; ᶠK_h) = p.precomputed
-        @. ∂ᶠρχ_dif_flux_∂ᶜχ =
-            DiagonalMatrixRow(ᶠinterp(ᶜρ) * ᶠK_h) * ᶠgradᵥ_matrix()
-    elseif is_smagorinsky_vertical(p.atmos.smagorinsky_lilly)
-        @. ∂ᶠρχ_dif_flux_∂ᶜχ =
-            DiagonalMatrixRow(ᶠinterp(ᶜρ) * ᶠinterp(ᶜK_h)) * ᶠgradᵥ_matrix()
-    else
-        @. ∂ᶠρχ_dif_flux_∂ᶜχ =
-            DiagonalMatrixRow(ᶠinterp(ᶜρ) / ᶠinterp(1 / max(ᶜK_h, ϵK))) *
-            ᶠgradᵥ_matrix()
+
+    if turbconv_model isa PrognosticEDMFX &&
+       p.atmos.microphysics_model isa NonEquilibriumMicrophysics1M &&
+       !is_smagorinsky_vertical(p.atmos.smagorinsky_lilly) &&
+       isempty(passive_gs_tracer_names(Y)) &&
+       MatrixFields.has_field(Y, @name(c.ρtke))
+        let
+            (; ᶠK_h, ᶠK_u, ᶜl_mix, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice) =
+                p.precomputed
+            (; ᶜΦ) = p.core
+            thermo_params = CAP.thermodynamics_params(params)
+            Δcv_v = FT(CAP.cv_v(params)) - FT(CAP.cv_d(params))
+            e_int_v0 = FT(CAP.e_int_v0(params))
+            e_int_liq = condensate_e_int_offset(TD.Liquid(), params)
+            ∂cv∂q_liq = condensate_cv_difference(TD.Liquid(), params)
+            e_int_ice = condensate_e_int_offset(TD.Ice(), params)
+            ∂cv∂q_ice = condensate_cv_difference(TD.Ice(), params)
+            turbconv_params = CAP.turbconv_params(params)
+            c_d = tke_dissipation_coefficient(turbconv_params)
+            (; dt) = p
+
+            ∂ᶜρe_tot_err_∂ᶜρ = matrix[@name(c.ρe_tot), @name(c.ρ)]
+            ∂ᶜρe_tot_err_∂ᶜρe_tot = matrix[@name(c.ρe_tot), @name(c.ρe_tot)]
+            ∂ᶜρe_tot_err_∂ᶜρq_tot = matrix[@name(c.ρe_tot), @name(c.ρq_tot)]
+            ∂ᶜρe_tot_err_∂ᶜρq_lcl = matrix[@name(c.ρe_tot), @name(c.ρq_lcl)]
+            ∂ᶜρe_tot_err_∂ᶜρq_icl = matrix[@name(c.ρe_tot), @name(c.ρq_icl)]
+            ∂ᶜρq_tot_err_∂ᶜρ = matrix[@name(c.ρq_tot), @name(c.ρ)]
+            ∂ᶜρq_tot_err_∂ᶜρq_tot = matrix[@name(c.ρq_tot), @name(c.ρq_tot)]
+            ∂ᶜρq_lcl_err_∂ᶜρq_lcl = matrix[@name(c.ρq_lcl), @name(c.ρq_lcl)]
+            ∂ᶜρq_icl_err_∂ᶜρq_icl = matrix[@name(c.ρq_icl), @name(c.ρq_icl)]
+            ∂ᶜρtke_err_∂ᶜρ = matrix[@name(c.ρtke), @name(c.ρ)]
+            ∂ᶜρtke_err_∂ᶜρtke = matrix[@name(c.ρtke), @name(c.ρtke)]
+            ∂ᶜuₕ_err_∂ᶜuₕ = matrix[@name(c.uₕ), @name(c.uₕ)]
+            zero_row = zero(eltype(∂ᶜρe_tot_err_∂ᶜρ))
+
+            DataLayouts.foreach_column(
+                ∂ᶜρe_tot_err_∂ᶜρ,
+                ∂ᶜρe_tot_err_∂ᶜρe_tot,
+                ∂ᶜρe_tot_err_∂ᶜρq_tot,
+                ∂ᶜρe_tot_err_∂ᶜρq_lcl,
+                ∂ᶜρe_tot_err_∂ᶜρq_icl,
+                ∂ᶜρq_tot_err_∂ᶜρ,
+                ∂ᶜρq_tot_err_∂ᶜρq_tot,
+                ∂ᶜρq_lcl_err_∂ᶜρq_lcl,
+                ∂ᶜρq_icl_err_∂ᶜρq_icl,
+                ∂ᶜρtke_err_∂ᶜρ,
+                ∂ᶜρtke_err_∂ᶜρtke,
+                ∂ᶜuₕ_err_∂ᶜuₕ,
+                Y.c,
+                ᶠK_h,
+                ᶠK_u,
+                ᶜl_mix,
+                ᶜT,
+                ᶜΦ,
+                ᶜq_tot_nonneg,
+                ᶜq_liq,
+                ᶜq_ice,
+            ) do ∂ᶜρe_tot_err_∂ᶜρ,
+            ∂ᶜρe_tot_err_∂ᶜρe_tot,
+            ∂ᶜρe_tot_err_∂ᶜρq_tot,
+            ∂ᶜρe_tot_err_∂ᶜρq_lcl,
+            ∂ᶜρe_tot_err_∂ᶜρq_icl,
+            ∂ᶜρq_tot_err_∂ᶜρ,
+            ∂ᶜρq_tot_err_∂ᶜρq_tot,
+            ∂ᶜρq_lcl_err_∂ᶜρq_lcl,
+            ∂ᶜρq_icl_err_∂ᶜρq_icl,
+            ∂ᶜρtke_err_∂ᶜρ,
+            ∂ᶜρtke_err_∂ᶜρtke,
+            ∂ᶜuₕ_err_∂ᶜuₕ,
+            Yc,
+            ᶠK_h,
+            ᶠK_u,
+            ᶜl_mix,
+            ᶜT,
+            ᶜΦ,
+            ᶜq_tot_nonneg,
+            ᶜq_liq,
+            ᶜq_ice
+                ᶠρ = @. ᶠinterp(Yc.ρ)
+                ᶠdif_h = @. lazy(DiagonalMatrixRow(ᶠρ * ᶠK_h) * ᶠgradᵥ_matrix())
+                ᶜdif_h_mat = @. ᶜadvdivᵥ_matrix() * ᶠdif_h
+
+                ᶜcp = @. TD.cp_m(
+                    thermo_params,
+                    specific(Yc.ρq_tot - Yc.ρq_rai - Yc.ρq_sno, Yc.ρ),
+                    specific(Yc.ρq_lcl, Yc.ρ),
+                    specific(Yc.ρq_icl, Yc.ρ),
+                )
+                ᶜdif_T_mat = @. ᶜadvdivᵥ_matrix() *
+                   (DiagonalMatrixRow(ᶠinterp(ᶜcp)) * ᶠdif_h)
+
+                ᶠdif_u = @. lazy(DiagonalMatrixRow(ᶠρ * ᶠK_u) * ᶠgradᵥ_matrix())
+                ᶜdif_u_mat = @. ᶜadvdivᵥ_matrix() * ᶠdif_u
+
+                ᶜcv_m = @. lazy(
+                    TD.cv_m(thermo_params, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice),
+                )
+                @. ∂ᶜρe_tot_err_∂ᶜρ = (zero_row,)
+                @. ∂ᶜρe_tot_err_∂ᶜρe_tot +=
+                    dtγ * ᶜdif_T_mat * DiagonalMatrixRow(1 / (ᶜcv_m * Yc.ρ))
+
+                ᶜh_vap = @. lazy(TD.enthalpy_vapor(thermo_params, ᶜT))
+                @. ∂ᶜρe_tot_err_∂ᶜρq_tot +=
+                    dtγ * (
+                        ᶜdif_h_mat * DiagonalMatrixRow((ᶜh_vap + ᶜΦ) / Yc.ρ) -
+                        ᶜdif_T_mat * DiagonalMatrixRow(
+                            (e_int_v0 + Δcv_v * (ᶜT - T_0)) / (ᶜcv_m * Yc.ρ),
+                        )
+                    )
+                @. ∂ᶜρq_tot_err_∂ᶜρ = (zero_row,)
+                ᶜdif_q_diag = @. dtγ * ᶜdif_h_mat * DiagonalMatrixRow(1 / Yc.ρ)
+                @. ∂ᶜρq_tot_err_∂ᶜρq_tot += ᶜdif_q_diag
+                @. ∂ᶜρq_lcl_err_∂ᶜρq_lcl += ᶜdif_q_diag
+                @. ∂ᶜρq_icl_err_∂ᶜρq_icl += ᶜdif_q_diag
+
+                @. ∂ᶜρe_tot_err_∂ᶜρq_lcl +=
+                    dtγ * (
+                        ᶜdif_h_mat * DiagonalMatrixRow(
+                            (TD.enthalpy_liquid(thermo_params, ᶜT) - ᶜh_vap) /
+                            Yc.ρ,
+                        ) +
+                        ᶜdif_T_mat * DiagonalMatrixRow(
+                            (e_int_liq - ∂cv∂q_liq * (ᶜT - T_0)) /
+                            (ᶜcv_m * Yc.ρ),
+                        )
+                    )
+                @. ∂ᶜρe_tot_err_∂ᶜρq_icl +=
+                    dtγ * (
+                        ᶜdif_h_mat * DiagonalMatrixRow(
+                            (TD.enthalpy_ice(thermo_params, ᶜT) - ᶜh_vap) /
+                            Yc.ρ,
+                        ) +
+                        ᶜdif_T_mat * DiagonalMatrixRow(
+                            (e_int_ice - ∂cv∂q_ice * (ᶜT - T_0)) /
+                            (ᶜcv_m * Yc.ρ),
+                        )
+                    )
+
+                ᶜtke = @. lazy(specific(Yc.ρtke, Yc.ρ))
+                ᶜdiss_diag =
+                    @. lazy(Yc.ρtke * _∂tke_diss_rate_∂tke(ᶜtke, ᶜl_mix, c_d))
+                @. ∂ᶜρtke_err_∂ᶜρ =
+                    dtγ *
+                    DiagonalMatrixRow(ᶜdiss_diag) *
+                    DiagonalMatrixRow(ᶜtke / Yc.ρ)
+                @. ∂ᶜρtke_err_∂ᶜρtke =
+                    dtγ * (
+                        (ᶜdif_u_mat - DiagonalMatrixRow(ᶜdiss_diag)) *
+                        DiagonalMatrixRow(1 / Yc.ρ) - DiagonalMatrixRow(
+                            _tke_diss_rate(ᶜtke, ᶜl_mix, c_d, dt),
+                        )
+                    ) - (I,)
+                @. ∂ᶜuₕ_err_∂ᶜuₕ =
+                    dtγ * DiagonalMatrixRow(1 / Yc.ρ) * ᶜdif_u_mat - (I,)
+                return nothing
+            end
+        end
+        return nothing
     end
-    @. ᶜdiffusion_h_matrix = ᶜadvdivᵥ_matrix() * ∂ᶠρχ_dif_flux_∂ᶜχ
 
-    # The sensible-heat operator ∇·(ρ K_h c_p ∇·), with c_p the heat capacity of
-    # the diffusing mixture (ᶜcp_diffusing!; under the vertical LES closure
-    # the mixture includes rain and snow) interpolated to faces as in
-    # add_sensible_heat_diffusionᵥ!.
-    thermo_params = CAP.thermodynamics_params(params)
-    precipitation = is_smagorinsky_vertical(p.atmos.smagorinsky_lilly)
-    ᶜq_water = ᶜdiffusing_water_phases(Y, p; precipitation)
-    ᶜdiffusion_T_matrix = p.scratch.ᶜtridiagonal_matrix_scalar
-    ᶜcp = ᶜcp_diffusing!(p.scratch.ᶜtemp_scalar_4, thermo_params, ᶜq_water)
-    @. ᶜdiffusion_T_matrix =
-        ᶜadvdivᵥ_matrix() *
-        (DiagonalMatrixRow(ᶠinterp(ᶜcp)) * ∂ᶠρχ_dif_flux_∂ᶜχ)
+    let
+        ᶜρ = Y.c.ρ
 
-    if (
-        MatrixFields.has_field(Y, @name(c.ρtke)) ||
-        !isnothing(p.atmos.turbconv_model) ||
-        !disable_momentum_vertical_diffusion(p.atmos.vertical_diffusion)
-    )
+        # In dry configurations, the ρe_tot diagonal is initialized here (moist
+        # configurations initialize it in update_sedimentation_jacobian!).
+        ∂ᶜρe_tot_err_∂ᶜρe_tot = matrix[@name(c.ρe_tot), @name(c.ρe_tot)]
+        if p.atmos.microphysics_model isa DryModel
+            @. ∂ᶜρe_tot_err_∂ᶜρe_tot =
+                zero(typeof(∂ᶜρe_tot_err_∂ᶜρe_tot)) - (I,)
+        end
+
+        ∂ᶠρχ_dif_flux_∂ᶜχ = ᶠp_grad_matrix
+        # Face diffusivities, consistent with the diffusive tendencies:
+        # - AbstractEDMF: the face-native ᶠK_h/ᶠK_u (see
+        #   set_face_diffusivities! and edmfx_sgs_diffusive_flux_tendency!),
+        #   treated as frozen coefficients (no ∂K/∂state terms). For
+        #   PrognosticEDMFX, the grid-mean diffusive flux is the subdomain sum
+        #   a⁰ F⁰ + Σⱼ aʲ Fʲ; since ∂χ⁰/∂(ρχ) = 1/ρa⁰ at fixed updraft state, the
+        #   (1 - aʲ) factors in ᶠinterp(ρa⁰) and 1/ρa⁰ cancel when draft area is
+        #   vertically uniform, so the grid-mean diagonal uses ᶠinterp(ρ) * ᶠK_h
+        #   while omitting the (ρχ, χʲ) off-diagonal blocks (block-triangular
+        #   solver structure).
+        # - VerticalDiffusion/DecayWithHeightDiffusion: harmonic-mean face
+        #   interpolation of the center K (see
+        #   vertical_diffusion_boundary_layer_tendency!).
+        # - Smagorinsky: arithmetic interpolation, matching its tendency.
+        # ᶠK_h/ᶠK_u exist only for AbstractEDMF (see precomputed_quantities);
+        # the other closures use the center ᶜK_h/ᶜK_u, so the face fields are
+        # destructured inside the AbstractEDMF branches only.
+        ϵK = eps(FT)
         if turbconv_model isa AbstractEDMF
-            (; ᶠK_u) = p.precomputed
+            (; ᶠK_h) = p.precomputed
             @. ∂ᶠρχ_dif_flux_∂ᶜχ =
-                DiagonalMatrixRow(ᶠinterp(ᶜρ) * ᶠK_u) * ᶠgradᵥ_matrix()
+                DiagonalMatrixRow(ᶠinterp(ᶜρ) * ᶠK_h) * ᶠgradᵥ_matrix()
         elseif is_smagorinsky_vertical(p.atmos.smagorinsky_lilly)
             @. ∂ᶠρχ_dif_flux_∂ᶜχ =
-                DiagonalMatrixRow(ᶠinterp(ᶜρ) * ᶠinterp(ᶜK_u)) *
-                ᶠgradᵥ_matrix()
+                DiagonalMatrixRow(ᶠinterp(ᶜρ) * ᶠinterp(ᶜK_h)) * ᶠgradᵥ_matrix()
         else
             @. ∂ᶠρχ_dif_flux_∂ᶜχ =
-                DiagonalMatrixRow(ᶠinterp(ᶜρ) / ᶠinterp(1 / max(ᶜK_u, ϵK))) *
+                DiagonalMatrixRow(ᶠinterp(ᶜρ) / ᶠinterp(1 / max(ᶜK_h, ϵK))) *
                 ᶠgradᵥ_matrix()
         end
-        @. ᶜdiffusion_u_matrix = ᶜadvdivᵥ_matrix() * ∂ᶠρχ_dif_flux_∂ᶜχ
-    end
+        @. ᶜdiffusion_h_matrix = ᶜadvdivᵥ_matrix() * ∂ᶠρχ_dif_flux_∂ᶜχ
 
-    # Jacobian of the diffusive enthalpy flux
-    #   F_h = -ρ K_h [c_p ∇T + ∇Φ + (h_v + Φ) ∇q_tot_eff + (h_l - h_v) ∇q_lcl +
-    #                 (h_i - h_v) ∇q_icl]
-    # (see edmfx_sgs_diffusive_flux_tendency!,
-    # vertical_diffusion_boundary_layer_tendency!, and
-    # vertical_smagorinsky_lilly_tendency!). The Jacobian includes the
-    # (ρe_tot, ρq_tot) and (ρe_tot, ρq_lcl / ρq_icl) cross-terms from both
-    # the temperature sensitivity at fixed e_tot (through the sensible-heat
-    # operator ᶜdiffusion_T_matrix) and the water-phase enthalpy transport,
-    # while treating c_p and q_tot_eff's rain/snow terms as frozen. The SGS
-    # mass-flux enthalpy Jacobian (update_sgs_massflux_jacobian!) is separate
-    # and transports whole parcels at h_tot.
-    (; ᶜΦ) = p.core
-    (; ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice) = p.precomputed
-    Δcv_v = FT(CAP.cv_v(params)) - FT(CAP.cv_d(params))
-    e_int_v0 = FT(CAP.e_int_v0(params))
-    ᶜcv_m = @. lazy(TD.cv_m(thermo_params, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice))
+        # The sensible-heat operator ∇·(ρ K_h c_p ∇·), with c_p the heat capacity of
+        # the diffusing mixture (ᶜcp_diffusing!; under the vertical LES closure
+        # the mixture includes rain and snow) interpolated to faces as in
+        # add_sensible_heat_diffusionᵥ!.
+        thermo_params = CAP.thermodynamics_params(params)
+        precipitation = is_smagorinsky_vertical(p.atmos.smagorinsky_lilly)
+        ᶜq_water = ᶜdiffusing_water_phases(Y, p; precipitation)
+        ᶜdiffusion_T_matrix = p.scratch.ᶜtridiagonal_matrix_scalar
+        ᶜcp = ᶜcp_diffusing!(p.scratch.ᶜtemp_scalar_4, thermo_params, ᶜq_water)
+        @. ᶜdiffusion_T_matrix =
+            ᶜadvdivᵥ_matrix() *
+            (DiagonalMatrixRow(ᶠinterp(ᶜcp)) * ∂ᶠρχ_dif_flux_∂ᶜχ)
 
-    # The (ρe_tot, ρ) and (ρq_tot, ρ) columns are zeroed here and later
-    # accumulate only the SGS mass-flux terms (update_sgs_massflux_jacobian!):
-    # the diffusive fluxes' ρ-dependence — through χ = ρχ/ρ and the ρ factor
-    # in ρ K ∇χ, and through the Yₜ.c.ρ counterpart of the ρq_tot diffusion —
-    # is neglected, like the other frozen-coefficient approximations in this
-    # Jacobian (convergence-rate impact only; the tendencies are exact).
-    ∂ᶜρe_tot_err_∂ᶜρ = matrix[@name(c.ρe_tot), @name(c.ρ)]
-    @. ∂ᶜρe_tot_err_∂ᶜρ = zero(typeof(∂ᶜρe_tot_err_∂ᶜρ))
-    @. ∂ᶜρe_tot_err_∂ᶜρe_tot +=
-        dtγ * ᶜdiffusion_T_matrix * DiagonalMatrixRow(1 / (ᶜcv_m * ᶜρ))
+        if (
+            MatrixFields.has_field(Y, @name(c.ρtke)) ||
+            !isnothing(p.atmos.turbconv_model) ||
+            !disable_momentum_vertical_diffusion(p.atmos.vertical_diffusion)
+        )
+            if turbconv_model isa AbstractEDMF
+                (; ᶠK_u) = p.precomputed
+                @. ∂ᶠρχ_dif_flux_∂ᶜχ =
+                    DiagonalMatrixRow(ᶠinterp(ᶜρ) * ᶠK_u) * ᶠgradᵥ_matrix()
+            elseif is_smagorinsky_vertical(p.atmos.smagorinsky_lilly)
+                @. ∂ᶠρχ_dif_flux_∂ᶜχ =
+                    DiagonalMatrixRow(ᶠinterp(ᶜρ) * ᶠinterp(ᶜK_u)) *
+                    ᶠgradᵥ_matrix()
+            else
+                @. ∂ᶠρχ_dif_flux_∂ᶜχ =
+                    DiagonalMatrixRow(
+                        ᶠinterp(ᶜρ) / ᶠinterp(1 / max(ᶜK_u, ϵK)),
+                    ) * ᶠgradᵥ_matrix()
+            end
+            @. ᶜdiffusion_u_matrix = ᶜadvdivᵥ_matrix() * ∂ᶠρχ_dif_flux_∂ᶜχ
+        end
 
-    if MatrixFields.has_field(Y, @name(c.ρq_tot))
-        ∂ᶜρe_tot_err_∂ᶜρq_tot = matrix[@name(c.ρe_tot), @name(c.ρq_tot)]
-        ∂ᶜρq_tot_err_∂ᶜρ = matrix[@name(c.ρq_tot), @name(c.ρ)]
-        ∂ᶜρq_tot_err_∂ᶜρq_tot = matrix[@name(c.ρq_tot), @name(c.ρq_tot)]
-        # ∂F/∂q_tot: T changes at fixed e_tot (through cv_m and e_int_v0),
-        # and the vapor-gradient term carries h_tot,v = h_v + Φ.
-        ᶜh_vap_plus_Φ = p.scratch.ᶜtemp_scalar_4
-        @. ᶜh_vap_plus_Φ = TD.enthalpy_vapor(thermo_params, ᶜT) + ᶜΦ
-        @. ∂ᶜρe_tot_err_∂ᶜρq_tot +=
-            dtγ * (
-                ᶜdiffusion_h_matrix * DiagonalMatrixRow(ᶜh_vap_plus_Φ / ᶜρ) -
-                ᶜdiffusion_T_matrix * DiagonalMatrixRow(
-                    (e_int_v0 + Δcv_v * (ᶜT - T_0)) / (ᶜcv_m * ᶜρ),
-                )
-            )
-        @. ∂ᶜρq_tot_err_∂ᶜρ = zero(typeof(∂ᶜρq_tot_err_∂ᶜρ))
-        @. ∂ᶜρq_tot_err_∂ᶜρq_tot +=
-            dtγ * ᶜdiffusion_h_matrix * DiagonalMatrixRow(1 / ᶜρ)
-    end
+        # Jacobian of the diffusive enthalpy flux
+        #   F_h = -ρ K_h [c_p ∇T + ∇Φ + (h_v + Φ) ∇q_tot_eff + (h_l - h_v) ∇q_lcl +
+        #                 (h_i - h_v) ∇q_icl]
+        # (see edmfx_sgs_diffusive_flux_tendency!,
+        # vertical_diffusion_boundary_layer_tendency!, and
+        # vertical_smagorinsky_lilly_tendency!). The Jacobian includes the
+        # (ρe_tot, ρq_tot) and (ρe_tot, ρq_lcl / ρq_icl) cross-terms from both
+        # the temperature sensitivity at fixed e_tot (through the sensible-heat
+        # operator ᶜdiffusion_T_matrix) and the water-phase enthalpy transport,
+        # while treating c_p and q_tot_eff's rain/snow terms as frozen. The SGS
+        # mass-flux enthalpy Jacobian (update_sgs_massflux_jacobian!) is separate
+        # and transports whole parcels at h_tot.
+        (; ᶜΦ) = p.core
+        (; ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice) = p.precomputed
+        Δcv_v = FT(CAP.cv_v(params)) - FT(CAP.cv_d(params))
+        e_int_v0 = FT(CAP.e_int_v0(params))
+        ᶜcv_m = @. lazy(TD.cv_m(thermo_params, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice))
 
-    if p.atmos.microphysics_model isa NonEquilibriumMicrophysics
-        # The vertical LES closure also diffuses precipitation, as liquid and
-        # ice water in the enthalpy flux (see ᶜdiffusing_water_phases).
-        condensate_names =
-            precipitation ? gs_sedimenting_mass_candidates :
-            (@name(ρq_lcl), @name(ρq_icl))
-        ᶜdq_cond_coeff = p.scratch.ᶜtemp_scalar_4
-        MatrixFields.unrolled_foreach(condensate_names) do ρq_name
-            MatrixFields.has_field(Y.c, ρq_name) || return
-            phase = condensate_phase(ρq_name)
-            e_int_q = condensate_e_int_offset(phase, params)
-            ∂cv∂q = condensate_cv_difference(phase, params)
-            h_cond_func = enthalpy_function(phase)
-            ∂ᶜρe_tot_err_∂ᶜρq =
-                matrix[@name(c.ρe_tot), center_state_name(ρq_name)]
-            # ∂F/∂q_cond at fixed q_tot: vapor→condensate conversion changes T
-            # (latent heating enters the sensible-heat flux) and moves
-            # water-gradient enthalpy from h_tot,v to h_tot,cond (the Φ parts
-            # cancel).
-            @. ᶜdq_cond_coeff =
-                (
-                    h_cond_func(thermo_params, ᶜT) -
-                    TD.enthalpy_vapor(thermo_params, ᶜT)
-                ) / ᶜρ
-            @. ∂ᶜρe_tot_err_∂ᶜρq +=
+        # The (ρe_tot, ρ) and (ρq_tot, ρ) columns are zeroed here and later
+        # accumulate only the SGS mass-flux terms (update_sgs_massflux_jacobian!):
+        # the diffusive fluxes' ρ-dependence — through χ = ρχ/ρ and the ρ factor
+        # in ρ K ∇χ, and through the Yₜ.c.ρ counterpart of the ρq_tot diffusion —
+        # is neglected, like the other frozen-coefficient approximations in this
+        # Jacobian (convergence-rate impact only; the tendencies are exact).
+        ∂ᶜρe_tot_err_∂ᶜρ = matrix[@name(c.ρe_tot), @name(c.ρ)]
+        @. ∂ᶜρe_tot_err_∂ᶜρ = zero(typeof(∂ᶜρe_tot_err_∂ᶜρ))
+        @. ∂ᶜρe_tot_err_∂ᶜρe_tot +=
+            dtγ * ᶜdiffusion_T_matrix * DiagonalMatrixRow(1 / (ᶜcv_m * ᶜρ))
+
+        if MatrixFields.has_field(Y, @name(c.ρq_tot))
+            ∂ᶜρe_tot_err_∂ᶜρq_tot = matrix[@name(c.ρe_tot), @name(c.ρq_tot)]
+            ∂ᶜρq_tot_err_∂ᶜρ = matrix[@name(c.ρq_tot), @name(c.ρ)]
+            ∂ᶜρq_tot_err_∂ᶜρq_tot = matrix[@name(c.ρq_tot), @name(c.ρq_tot)]
+            # ∂F/∂q_tot: T changes at fixed e_tot (through cv_m and e_int_v0),
+            # and the vapor-gradient term carries h_tot,v = h_v + Φ.
+            ᶜh_vap_plus_Φ = p.scratch.ᶜtemp_scalar_4
+            @. ᶜh_vap_plus_Φ = TD.enthalpy_vapor(thermo_params, ᶜT) + ᶜΦ
+            @. ∂ᶜρe_tot_err_∂ᶜρq_tot +=
                 dtγ * (
-                    ᶜdiffusion_h_matrix * DiagonalMatrixRow(ᶜdq_cond_coeff) +
+                    ᶜdiffusion_h_matrix * DiagonalMatrixRow(ᶜh_vap_plus_Φ / ᶜρ) -
                     ᶜdiffusion_T_matrix * DiagonalMatrixRow(
-                        (e_int_q - ∂cv∂q * (ᶜT - T_0)) / (ᶜcv_m * ᶜρ),
+                        (e_int_v0 + Δcv_v * (ᶜT - T_0)) / (ᶜcv_m * ᶜρ),
                     )
                 )
-        end
-
-        # The diffusing microphysics species diffuse down their own gradients
-        # with ρ·K_h (see add_moisture_diffusionᵥ!); accumulate onto the
-        # diagonals initialized by update_sedimentation_jacobian!. For the
-        # blended cloud-species flux (add_cloud_species_diffusionᵥ!), whose
-        # self-diagonal is (1 - λ) + λ C χ γ_μ / (1 + C γ) ≤ 1 times this one,
-        # the self-diffusion diagonal is an upper bound of the same sign.
-        MatrixFields.unrolled_foreach(
-            diffused_water_species(precipitation),
-        ) do (_, ρχ_name)
-            MatrixFields.has_field(Y.c, ρχ_name) || return
-            ρχ_state_name = center_state_name(ρχ_name)
-            ∂ᶜρχ_err_∂ᶜρχ = matrix[ρχ_state_name, ρχ_state_name]
-            @. ∂ᶜρχ_err_∂ᶜρχ +=
+            @. ∂ᶜρq_tot_err_∂ᶜρ = zero(typeof(∂ᶜρq_tot_err_∂ᶜρ))
+            @. ∂ᶜρq_tot_err_∂ᶜρq_tot +=
                 dtγ * ᶜdiffusion_h_matrix * DiagonalMatrixRow(1 / ᶜρ)
         end
-    end
 
-    # Passive (non-water) grid-scale tracers are diffused with ρ·K_h under
-    # both EDMF and non-EDMF vertical diffusion (see
-    # edmfx_sgs_diffusive_flux_tendency! and
-    # vertical_diffusion_boundary_layer_tendency!), captured by
-    # `ᶜdiffusion_h_matrix` above. Their diagonals receive no other
-    # implicit contributions, so they are initialized here.
-    MatrixFields.unrolled_foreach(passive_gs_tracer_names(Y)) do ρχ_name
-        ρχ_state_name = center_state_name(ρχ_name)
-        ∂ᶜρχ_err_∂ᶜρχ = matrix[ρχ_state_name, ρχ_state_name]
-        @. ∂ᶜρχ_err_∂ᶜρχ =
-            dtγ * ᶜdiffusion_h_matrix * DiagonalMatrixRow(1 / ᶜρ) - (I,)
-    end
+        if p.atmos.microphysics_model isa NonEquilibriumMicrophysics
+            # The vertical LES closure also diffuses precipitation, as liquid and
+            # ice water in the enthalpy flux (see ᶜdiffusing_water_phases).
+            condensate_names =
+                precipitation ? gs_sedimenting_mass_candidates :
+                (@name(ρq_lcl), @name(ρq_icl))
+            ᶜdq_cond_coeff = p.scratch.ᶜtemp_scalar_4
+            MatrixFields.unrolled_foreach(condensate_names) do ρq_name
+                MatrixFields.has_field(Y.c, ρq_name) || return
+                phase = condensate_phase(ρq_name)
+                e_int_q = condensate_e_int_offset(phase, params)
+                ∂cv∂q = condensate_cv_difference(phase, params)
+                h_cond_func = enthalpy_function(phase)
+                ∂ᶜρe_tot_err_∂ᶜρq =
+                    matrix[@name(c.ρe_tot), center_state_name(ρq_name)]
+                # ∂F/∂q_cond at fixed q_tot: vapor→condensate conversion changes T
+                # (latent heating enters the sensible-heat flux) and moves
+                # water-gradient enthalpy from h_tot,v to h_tot,cond (the Φ parts
+                # cancel).
+                @. ᶜdq_cond_coeff =
+                    (
+                        h_cond_func(thermo_params, ᶜT) -
+                        TD.enthalpy_vapor(thermo_params, ᶜT)
+                    ) / ᶜρ
+                @. ∂ᶜρe_tot_err_∂ᶜρq +=
+                    dtγ * (
+                        ᶜdiffusion_h_matrix * DiagonalMatrixRow(ᶜdq_cond_coeff) +
+                        ᶜdiffusion_T_matrix * DiagonalMatrixRow(
+                            (e_int_q - ∂cv∂q * (ᶜT - T_0)) / (ᶜcv_m * ᶜρ),
+                        )
+                    )
+            end
 
-    if MatrixFields.has_field(Y, @name(c.ρtke))
-        turbconv_params = CAP.turbconv_params(params)
-        c_d = tke_dissipation_coefficient(turbconv_params)
-        (; dt) = p
-        ᶜtke = @. lazy(specific(Y.c.ρtke, Y.c.ρ))
-        ᶜρtke = Y.c.ρtke
+            # The diffusing microphysics species diffuse down their own gradients
+            # with ρ·K_h (see add_moisture_diffusionᵥ!); accumulate onto the
+            # diagonals initialized by update_sedimentation_jacobian!. For the
+            # blended cloud-species flux (add_cloud_species_diffusionᵥ!), whose
+            # self-diagonal is (1 - λ) + λ C χ γ_μ / (1 + C γ) ≤ 1 times this one,
+            # the self-diffusion diagonal is an upper bound of the same sign.
+            MatrixFields.unrolled_foreach(
+                diffused_water_species(precipitation),
+            ) do (_, ρχ_name)
+                MatrixFields.has_field(Y.c, ρχ_name) || return
+                ρχ_state_name = center_state_name(ρχ_name)
+                ∂ᶜρχ_err_∂ᶜρχ = matrix[ρχ_state_name, ρχ_state_name]
+                @. ∂ᶜρχ_err_∂ᶜρχ +=
+                    dtγ * ᶜdiffusion_h_matrix * DiagonalMatrixRow(1 / ᶜρ)
+            end
+        end
 
-        # Precomputed master mixing length (see set_precomputed_quantities!)
-        ᶜmixing_length_field = p.precomputed.ᶜl_mix
+        # Passive (non-water) grid-scale tracers are diffused with ρ·K_h under
+        # both EDMF and non-EDMF vertical diffusion (see
+        # edmfx_sgs_diffusive_flux_tendency! and
+        # vertical_diffusion_boundary_layer_tendency!), captured by
+        # `ᶜdiffusion_h_matrix` above. Their diagonals receive no other
+        # implicit contributions, so they are initialized here.
+        MatrixFields.unrolled_foreach(passive_gs_tracer_names(Y)) do ρχ_name
+            ρχ_state_name = center_state_name(ρχ_name)
+            ∂ᶜρχ_err_∂ᶜρχ = matrix[ρχ_state_name, ρχ_state_name]
+            @. ∂ᶜρχ_err_∂ᶜρχ =
+                dtγ * ᶜdiffusion_h_matrix * DiagonalMatrixRow(1 / ᶜρ) - (I,)
+        end
 
-        # The dissipation derivative below differentiates c_d √tke / l_mix
-        # with respect to tke at frozen mixing length, although l_mix itself
-        # depends on tke (through l_TKE and l_N). Like the frozen K_h/K_u
-        # coefficients above, this omits a ∂l_mix/∂tke chain term — a
-        # convergence-rate approximation that is largest in the strongly
-        # stable cells where l_N ∝ √tke dominates the mixing length.
-        # `max(mixing_length, 1)` matches `tke_dissipation` in
-        # `edmfx_tke.jl`: the floor is applied at the point of division
-        # (dissipation only), not on the master mixing length itself.
-        @inline tke_dissipation_rate_tendency(tke, mixing_length) =
-            tke >= 0 ?
-            c_d * sqrt(tke) / max(mixing_length, one(mixing_length)) :
-            1 / typeof(tke)(dt)
-        @inline ∂tke_dissipation_rate_tendency_∂tke(tke, mixing_length) =
-            tke > 0 ?
-            c_d /
-            (2 * max(mixing_length, one(mixing_length)) * sqrt(tke)) :
-            typeof(tke)(0)
+        if MatrixFields.has_field(Y, @name(c.ρtke))
+            turbconv_params = CAP.turbconv_params(params)
+            c_d = tke_dissipation_coefficient(turbconv_params)
+            (; dt) = p
+            ᶜtke = @. lazy(specific(Y.c.ρtke, Y.c.ρ))
+            ᶜρtke = Y.c.ρtke
 
-        ᶜdissipation_matrix_diagonal = p.scratch.ᶜtemp_scalar
-        @. ᶜdissipation_matrix_diagonal =
-            ᶜρtke * ∂tke_dissipation_rate_tendency_∂tke(
-                ᶜtke,
-                ᶜmixing_length_field,
-            )
+            # Precomputed master mixing length (see set_precomputed_quantities!)
+            ᶜmixing_length_field = p.precomputed.ᶜl_mix
 
-        ∂ᶜρtke_err_∂ᶜρ = matrix[@name(c.ρtke), @name(c.ρ)]
-        ∂ᶜρtke_err_∂ᶜρtke =
-            matrix[@name(c.ρtke), @name(c.ρtke)]
-        @. ∂ᶜρtke_err_∂ᶜρ =
-            dtγ * (
-                DiagonalMatrixRow(ᶜdissipation_matrix_diagonal)
-            ) * DiagonalMatrixRow(ᶜtke / Y.c.ρ)
-        @. ∂ᶜρtke_err_∂ᶜρtke =
-            dtγ * (
-                (
-                    ᶜdiffusion_u_matrix -
-                    DiagonalMatrixRow(ᶜdissipation_matrix_diagonal)
-                ) * DiagonalMatrixRow(1 / Y.c.ρ) - DiagonalMatrixRow(
-                    tke_dissipation_rate_tendency(
-                        ᶜtke,
-                        ᶜmixing_length_field,
-                    ),
+            # The dissipation derivative below differentiates c_d √tke / l_mix
+            # with respect to tke at frozen mixing length, although l_mix itself
+            # depends on tke (through l_TKE and l_N). Like the frozen K_h/K_u
+            # coefficients above, this omits a ∂l_mix/∂tke chain term — a
+            # convergence-rate approximation that is largest in the strongly
+            # stable cells where l_N ∝ √tke dominates the mixing length.
+            # `max(mixing_length, 1)` matches `tke_dissipation` in
+            # `edmfx_tke.jl`: the floor is applied at the point of division
+            # (dissipation only), not on the master mixing length itself.
+            @inline tke_dissipation_rate_tendency(tke, mixing_length) =
+                tke >= 0 ?
+                c_d * sqrt(tke) / max(mixing_length, one(mixing_length)) :
+                1 / typeof(tke)(dt)
+            @inline ∂tke_dissipation_rate_tendency_∂tke(tke, mixing_length) =
+                tke > 0 ?
+                c_d /
+                (2 * max(mixing_length, one(mixing_length)) * sqrt(tke)) :
+                typeof(tke)(0)
+
+            ᶜdissipation_matrix_diagonal = p.scratch.ᶜtemp_scalar
+            @. ᶜdissipation_matrix_diagonal =
+                ᶜρtke * ∂tke_dissipation_rate_tendency_∂tke(
+                    ᶜtke,
+                    ᶜmixing_length_field,
                 )
-            ) - (I,)
-    end
 
-    if (
-        !isnothing(p.atmos.turbconv_model) ||
-        !disable_momentum_vertical_diffusion(p.atmos.vertical_diffusion)
-    )
-        ∂ᶜuₕ_err_∂ᶜuₕ = matrix[@name(c.uₕ), @name(c.uₕ)]
-        @. ∂ᶜuₕ_err_∂ᶜuₕ =
-            dtγ * DiagonalMatrixRow(1 / ᶜρ) * ᶜdiffusion_u_matrix - (I,)
+            ∂ᶜρtke_err_∂ᶜρ = matrix[@name(c.ρtke), @name(c.ρ)]
+            ∂ᶜρtke_err_∂ᶜρtke = matrix[@name(c.ρtke), @name(c.ρtke)]
+            @. ∂ᶜρtke_err_∂ᶜρ =
+                dtγ *
+                (DiagonalMatrixRow(ᶜdissipation_matrix_diagonal)) *
+                DiagonalMatrixRow(ᶜtke / Y.c.ρ)
+            @. ∂ᶜρtke_err_∂ᶜρtke =
+                dtγ * (
+                    (
+                        ᶜdiffusion_u_matrix -
+                        DiagonalMatrixRow(ᶜdissipation_matrix_diagonal)
+                    ) * DiagonalMatrixRow(1 / Y.c.ρ) - DiagonalMatrixRow(
+                        tke_dissipation_rate_tendency(
+                            ᶜtke,
+                            ᶜmixing_length_field,
+                        ),
+                    )
+                ) - (I,)
+        end
+
+        if (
+            !isnothing(p.atmos.turbconv_model) ||
+            !disable_momentum_vertical_diffusion(p.atmos.vertical_diffusion)
+        )
+            ∂ᶜuₕ_err_∂ᶜuₕ = matrix[@name(c.uₕ), @name(c.uₕ)]
+            @. ∂ᶜuₕ_err_∂ᶜuₕ =
+                dtγ * DiagonalMatrixRow(1 / ᶜρ) * ᶜdiffusion_u_matrix - (I,)
+        end
     end
     return nothing
 end
@@ -1589,42 +2079,89 @@ function update_sgs_diffusion_jacobian!(matrix, Y, p, dtγ, diffusion_flag)
     (; ᶠp_grad_matrix, ᶜtridiagonal_matrix_scalar) = p.scratch
     (; ᶠK_h) = p.precomputed
 
-    ᶜsgs_diff_op = ᶜtridiagonal_matrix_scalar
-    ᶜρaʲ = Y.c.sgsʲs.:(1).ρa
-    ᶠwʲ = ᶠupdraft_diffusion_weight!(
-        p.scratch.ᶠtemp_scalar,
-        ᶜρaʲ,
-        ᶠK_h,
-        updraft_kh_factor,
-    )
-    @. ᶠp_grad_matrix = DiagonalMatrixRow(ᶠwʲ) * ᶠgradᵥ_matrix()
-    @. ᶜsgs_diff_op =
-        DiagonalMatrixRow(1 / max(ᶜρaʲ, ϵ_FT)) *
-        (ᶜadvdivᵥ_matrix() * ᶠp_grad_matrix)
-
-    ∂ᶜmseʲ_err_∂ᶜmseʲ =
-        matrix[@name(c.sgsʲs.:(1).mse), @name(c.sgsʲs.:(1).mse)]
-    @. ∂ᶜmseʲ_err_∂ᶜmseʲ += dtγ * ᶜsgs_diff_op
-    if MatrixFields.has_field(Y, @name(c.sgsʲs.:(1).q_tot))
-        ∂ᶜq_totʲ_err_∂ᶜq_totʲ =
-            matrix[@name(c.sgsʲs.:(1).q_tot), @name(c.sgsʲs.:(1).q_tot)]
-        @. ∂ᶜq_totʲ_err_∂ᶜq_totʲ += dtγ * ᶜsgs_diff_op
+    if p.atmos.microphysics_model isa NonEquilibriumMicrophysics1M &&
+       isempty(passive_sgs_tracer_names(Y))
+        let
+            ∂ᶜmseʲ_diag =
+                matrix[@name(c.sgsʲs.:(1).mse), @name(c.sgsʲs.:(1).mse)]
+            ∂ᶜq_totʲ_diag =
+                matrix[@name(c.sgsʲs.:(1).q_tot), @name(c.sgsʲs.:(1).q_tot)]
+            ∂ᶜq_lclʲ_diag =
+                matrix[@name(c.sgsʲs.:(1).q_lcl), @name(c.sgsʲs.:(1).q_lcl)]
+            ∂ᶜq_iclʲ_diag =
+                matrix[@name(c.sgsʲs.:(1).q_icl), @name(c.sgsʲs.:(1).q_icl)]
+            DataLayouts.foreach_column(
+                ∂ᶜmseʲ_diag,
+                ∂ᶜq_totʲ_diag,
+                ∂ᶜq_lclʲ_diag,
+                ∂ᶜq_iclʲ_diag,
+                Y.c.sgsʲs.:(1).ρa,
+                ᶠK_h,
+            ) do ∂ᶜmseʲ_diag,
+            ∂ᶜq_totʲ_diag,
+            ∂ᶜq_lclʲ_diag,
+            ∂ᶜq_iclʲ_diag,
+            ᶜρaʲ,
+            ᶠK_h
+                ᶠwʲ_col = ᶠupdraft_diffusion_weight!(
+                    nothing,
+                    ᶜρaʲ,
+                    ᶠK_h,
+                    updraft_kh_factor,
+                )
+                ᶠp_grad = @. lazy(DiagonalMatrixRow(ᶠwʲ_col) * ᶠgradᵥ_matrix())
+                ᶜsgs_diff_contrib = @. dtγ * (
+                    DiagonalMatrixRow(1 / max(ᶜρaʲ, ϵ_FT)) *
+                    (ᶜadvdivᵥ_matrix() * ᶠp_grad)
+                )
+                @. ∂ᶜmseʲ_diag += ᶜsgs_diff_contrib
+                @. ∂ᶜq_totʲ_diag += ᶜsgs_diff_contrib
+                @. ∂ᶜq_lclʲ_diag += ᶜsgs_diff_contrib
+                @. ∂ᶜq_iclʲ_diag += ᶜsgs_diff_contrib
+                return nothing
+            end
+        end
+        return nothing
     end
 
-    # Suspended cloud species in the updraft diffuse down their own gradients
-    # with the same operator.
-    MatrixFields.unrolled_foreach(suspended_cloud_species) do (χ_name, _)
-        MatrixFields.has_field(Y.c.sgsʲs.:(1), χ_name) || return
-        χ_state_name = sgs_state_name(χ_name)
-        ∂ᶜχʲ_err_∂ᶜχʲ = matrix[χ_state_name, χ_state_name]
-        @. ∂ᶜχʲ_err_∂ᶜχʲ += dtγ * ᶜsgs_diff_op
-    end
+    let
+        ᶜsgs_diff_op = ᶜtridiagonal_matrix_scalar
+        ᶜρaʲ = Y.c.sgsʲs.:(1).ρa
+        ᶠwʲ = ᶠupdraft_diffusion_weight!(
+            p.scratch.ᶠtemp_scalar,
+            ᶜρaʲ,
+            ᶠK_h,
+            updraft_kh_factor,
+        )
+        @. ᶠp_grad_matrix = DiagonalMatrixRow(ᶠwʲ) * ᶠgradᵥ_matrix()
+        @. ᶜsgs_diff_op =
+            DiagonalMatrixRow(1 / max(ᶜρaʲ, ϵ_FT)) *
+            (ᶜadvdivᵥ_matrix() * ᶠp_grad_matrix)
 
-    # Passive SGS tracers diffuse with the same operator.
-    MatrixFields.unrolled_foreach(passive_sgs_tracer_names(Y)) do χ_name
-        χ_state_name = sgs_state_name(χ_name)
-        ∂ᶜχʲ_err_∂ᶜχʲ = matrix[χ_state_name, χ_state_name]
-        @. ∂ᶜχʲ_err_∂ᶜχʲ += dtγ * ᶜsgs_diff_op
+        ∂ᶜmseʲ_err_∂ᶜmseʲ =
+            matrix[@name(c.sgsʲs.:(1).mse), @name(c.sgsʲs.:(1).mse)]
+        @. ∂ᶜmseʲ_err_∂ᶜmseʲ += dtγ * ᶜsgs_diff_op
+        if MatrixFields.has_field(Y, @name(c.sgsʲs.:(1).q_tot))
+            ∂ᶜq_totʲ_err_∂ᶜq_totʲ =
+                matrix[@name(c.sgsʲs.:(1).q_tot), @name(c.sgsʲs.:(1).q_tot)]
+            @. ∂ᶜq_totʲ_err_∂ᶜq_totʲ += dtγ * ᶜsgs_diff_op
+        end
+
+        # Suspended cloud species in the updraft diffuse down their own gradients
+        # with the same operator.
+        MatrixFields.unrolled_foreach(suspended_cloud_species) do (χ_name, _)
+            MatrixFields.has_field(Y.c.sgsʲs.:(1), χ_name) || return
+            χ_state_name = sgs_state_name(χ_name)
+            ∂ᶜχʲ_err_∂ᶜχʲ = matrix[χ_state_name, χ_state_name]
+            @. ∂ᶜχʲ_err_∂ᶜχʲ += dtγ * ᶜsgs_diff_op
+        end
+
+        # Passive SGS tracers diffuse with the same operator.
+        MatrixFields.unrolled_foreach(passive_sgs_tracer_names(Y)) do χ_name
+            χ_state_name = sgs_state_name(χ_name)
+            ∂ᶜχʲ_err_∂ᶜχʲ = matrix[χ_state_name, χ_state_name]
+            @. ∂ᶜχʲ_err_∂ᶜχʲ += dtγ * ᶜsgs_diff_op
+        end
     end
     return nothing
 end
@@ -1655,14 +2192,7 @@ function update_sgs_entr_detr_jacobian!(matrix, Y, p, dtγ)
         ᶜuʲs,
     ) = p.precomputed
     ᶜlg = Fields.local_geometry_field(Y.c)
-    ᶜentrʲ = @. lazy(
-        compute_entrainment(
-            ᶜentr_vel_scaleʲs.:(1),
-            ᶜentr_nonvel_rateʲs.:(1),
-            ᶜarea_bounding_entr_detrʲs.:(1),
-            get_physical_w(ᶜuʲs.:(1), ᶜlg),
-        ),
-    )
+    turbconv_model = p.atmos.turbconv_model
 
     # Entrainment relaxation of updraft scalars: the implicit tendency
     # (edmfx_entr_detr_tendency!) applies (ε + ε_turb) * (χ⁰ - χʲ) to each
@@ -1672,25 +2202,95 @@ function update_sgs_entr_detr_jacobian!(matrix, Y, p, dtγ)
     # that diagnoses χ⁰ from the domain decomposition), which scales the
     # diagonal by (1 + w ρaʲ/ρa⁰). Only the entrainment rates themselves are
     # treated explicitly.
-    turbconv_model = p.atmos.turbconv_model
-    ᶜrelax_rateʲ = @. lazy(
-        (ᶜentrʲ + ᶜturb_entrʲs.:(1)) * (
-            1 + env_relaxation_feedback(
-                Y.c.sgsʲs.:(1).ρa,
-                ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model),
-                Y.c.ρ,
-                turbconv_model,
-            )
-        ),
-    )
-
     # All advected updraft scalars are entrained the same way: q_tot, mse,
     # sedimenting tracers (masses and number concentrations), and passive
     # tracers (e.g. chemistry tracers).
-    MatrixFields.unrolled_foreach(advected_sgs_scalar_names(Y)) do χ_name
-        χ_state_name = sgs_state_name(χ_name)
-        ∂ᶜχʲ_err_∂ᶜχʲ = matrix[χ_state_name, χ_state_name]
-        @. ∂ᶜχʲ_err_∂ᶜχʲ -= dtγ * DiagonalMatrixRow(ᶜrelax_rateʲ)
+    scalar_names = advected_sgs_scalar_names(Y)
+    state_names = unrolled_map(sgs_state_name, scalar_names)
+    ∂ᶜχʲ_diags = unrolled_map(s -> matrix[s, s], state_names)
+    if length(scalar_names) == 6
+        let
+            DataLayouts.foreach_column(
+                ∂ᶜχʲ_diags[1],
+                ∂ᶜχʲ_diags[2],
+                ∂ᶜχʲ_diags[3],
+                ∂ᶜχʲ_diags[4],
+                ∂ᶜχʲ_diags[5],
+                ∂ᶜχʲ_diags[6],
+                Y.c,
+                ᶜlg,
+                ᶜturb_entrʲs.:(1),
+                ᶜentr_vel_scaleʲs.:(1),
+                ᶜentr_nonvel_rateʲs.:(1),
+                ᶜarea_bounding_entr_detrʲs.:(1),
+                ᶜuʲs.:(1),
+            ) do d1,
+            d2,
+            d3,
+            d4,
+            d5,
+            d6,
+            Yc,
+            ᶜlg_col,
+            ᶜturb_entrʲ,
+            ᶜentr_vel_scaleʲ,
+            ᶜentr_nonvel_rateʲ,
+            ᶜarea_bounding_entr_detrʲ,
+            ᶜuʲ
+                ᶜentrʲ = @. lazy(
+                    compute_entrainment(
+                        ᶜentr_vel_scaleʲ,
+                        ᶜentr_nonvel_rateʲ,
+                        ᶜarea_bounding_entr_detrʲ,
+                        get_physical_w(ᶜuʲ, ᶜlg_col),
+                    ),
+                )
+                ᶜrelax_row = @. DiagonalMatrixRow(
+                    dtγ *
+                    (ᶜentrʲ + ᶜturb_entrʲ) *
+                    (
+                        1 + env_relaxation_feedback(
+                            Yc.sgsʲs.:(1).ρa,
+                            ρa⁰(Yc.ρ, Yc.sgsʲs, turbconv_model),
+                            Yc.ρ,
+                            turbconv_model,
+                        )
+                    ),
+                )
+                MatrixFields.unrolled_foreach(
+                    (d1, d2, d3, d4, d5, d6),
+                ) do ∂ᶜχʲ_diag
+                    @. ∂ᶜχʲ_diag -= ᶜrelax_row
+                end
+                return nothing
+            end
+        end
+        return nothing
+    end
+    let
+        ᶜentrʲ = @. lazy(
+            compute_entrainment(
+                ᶜentr_vel_scaleʲs.:(1),
+                ᶜentr_nonvel_rateʲs.:(1),
+                ᶜarea_bounding_entr_detrʲs.:(1),
+                get_physical_w(ᶜuʲs.:(1), ᶜlg),
+            ),
+        )
+        ᶜrelax_rateʲ = @. lazy(
+            (ᶜentrʲ + ᶜturb_entrʲs.:(1)) * (
+                1 + env_relaxation_feedback(
+                    Y.c.sgsʲs.:(1).ρa,
+                    ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model),
+                    Y.c.ρ,
+                    turbconv_model,
+                )
+            ),
+        )
+        MatrixFields.unrolled_foreach(scalar_names) do χ_name
+            χ_state_name = sgs_state_name(χ_name)
+            ∂ᶜχʲ_err_∂ᶜχʲ = matrix[χ_state_name, χ_state_name]
+            @. ∂ᶜχʲ_err_∂ᶜχʲ -= dtγ * DiagonalMatrixRow(ᶜrelax_rateʲ)
+        end
     end
     return nothing
 end
@@ -1703,9 +2303,8 @@ the first interior level.
 
 The boundary condition contributes
 `∂F_BC/∂mse[1] = ∂F_BC/∂q_tot[1] = -mass_flux_source/ρa_floor`, where
-`ρa_floor = max(ρa, ρʲ·a_min)` (`edmfx_sfc_relaxation_rate`). A level-1-only
-rate field (zero elsewhere) is built in `p.scratch.ᶜtemp_scalar` and
-subtracted from the updraft `mse` and `q_tot` diagonals.
+`ρa_floor = max(ρa, ρʲ·a_min)` (`edmfx_sfc_relaxation_rate`). Subtracted directly
+from the level-1 slices of the updraft `mse` and `q_tot` diagonals.
 
 No-op unless `p.atmos.turbconv_model` is a `PrognosticEDMFX`. Mutates `matrix`
 and returns `nothing`.
@@ -1717,31 +2316,37 @@ function update_sgs_boundary_condition_jacobian!(matrix, Y, p, dtγ)
     FT = Spaces.undertype(axes(Y.c))
 
     turbconv_params = CAP.turbconv_params(params)
-    a_min = CAP.min_area(turbconv_params)
-    ᶜsfc_bc_rate = p.scratch.ᶜtemp_scalar
-    @. ᶜsfc_bc_rate = FT(0)
-    ᶜsfc_bc_rate_first =
-        Fields.field_values(Fields.level(ᶜsfc_bc_rate, 1))
-    ρʲ_int_val =
-        Fields.field_values(Fields.level(ᶜρʲs.:(1), 1))
-    ρaʲ_int_val = Fields.field_values(
-        Fields.level(Y.c.sgsʲs.:(1).ρa, 1),
-    )
+    a_min = FT(CAP.min_area(turbconv_params))
+    ρʲ_int_val = Fields.field_values(Fields.level(ᶜρʲs.:(1), 1))
+    ρaʲ_int_val = Fields.field_values(Fields.level(Y.c.sgsʲs.:(1).ρa, 1))
     mass_flux_source_val = Fields.field_values(
         Fields.level(p.precomputed.sfc_mass_flux_sourceʲs.:(1), 1),
     )
-    @. ᶜsfc_bc_rate_first = edmfx_sfc_relaxation_rate(
-        mass_flux_source_val, ρaʲ_int_val, ρʲ_int_val, a_min,
-    )
 
-    ∂ᶜmseʲ_err_∂ᶜmseʲ =
-        matrix[@name(c.sgsʲs.:(1).mse), @name(c.sgsʲs.:(1).mse)]
-    ∂ᶜq_totʲ_err_∂ᶜq_totʲ =
-        matrix[@name(c.sgsʲs.:(1).q_tot), @name(c.sgsʲs.:(1).q_tot)]
-    @. ∂ᶜmseʲ_err_∂ᶜmseʲ -=
-        dtγ * DiagonalMatrixRow(ᶜsfc_bc_rate)
-    @. ∂ᶜq_totʲ_err_∂ᶜq_totʲ -=
-        dtγ * DiagonalMatrixRow(ᶜsfc_bc_rate)
+    ∂ᶜmseʲ_lvl1 = Fields.field_values(
+        Fields.level(
+            matrix[@name(c.sgsʲs.:(1).mse), @name(c.sgsʲs.:(1).mse)],
+            1,
+        ),
+    )
+    ∂ᶜq_totʲ_lvl1 = Fields.field_values(
+        Fields.level(
+            matrix[@name(c.sgsʲs.:(1).q_tot), @name(c.sgsʲs.:(1).q_tot)],
+            1,
+        ),
+    )
+    @. ∂ᶜmseʲ_lvl1 -=
+        dtγ * DiagonalMatrixRow(
+            edmfx_sfc_relaxation_rate(
+                mass_flux_source_val, ρaʲ_int_val, ρʲ_int_val, a_min,
+            ),
+        )
+    @. ∂ᶜq_totʲ_lvl1 -=
+        dtγ * DiagonalMatrixRow(
+            edmfx_sfc_relaxation_rate(
+                mass_flux_source_val, ρaʲ_int_val, ρʲ_int_val, a_min,
+            ),
+        )
     return nothing
 end
 
@@ -1777,171 +2382,434 @@ function update_sgs_massflux_jacobian!(matrix, Y, p, dtγ, diffusion_flag)
     (; ᶜΦ) = p.core
     (; ᶜρʲs, ᶠu³ʲs, ᶜKʲs) = p.precomputed
     (; ᶠu³, ᶜK, ᶜT, ᶜh_tot) = p.precomputed
-    (; ᶠbidiagonal_matrix_ct3) = p.scratch
 
     FT = Spaces.undertype(axes(Y.c))
     cv_d = FT(CAP.cv_d(params))
+    Δcv_v = FT(CAP.cv_v(params)) - cv_d
     T_0 = FT(CAP.T_0(params))
     R_d = FT(CAP.R_d(params))
     R_v = FT(CAP.R_v(params))
+    ΔR_v = R_v - R_d
+    e_int_v0 = FT(CAP.e_int_v0(params))
     cp_d = FT(CAP.cp_d(params))
+    thermo_params = CAP.thermodynamics_params(params)
 
-    ᶜρ = Y.c.ρ
     ᶜJ = Fields.local_geometry_field(Y.c).J
     ᶠJ = Fields.local_geometry_field(Y.f).J
     ᶠgⁱʲ = Fields.local_geometry_field(Y.f).gⁱʲ
 
-    # If diffusion is explicit, zero-initialize (ρe_tot, ρ) and
-    # (ρq_tot, ρ) here so both blocks can safely use +=.
-    ∂ᶜρe_tot_err_∂ᶜρ = matrix[@name(c.ρe_tot), @name(c.ρ)]
-    ∂ᶜρq_tot_err_∂ᶜρ = matrix[@name(c.ρq_tot), @name(c.ρ)]
-    if !use_derivative(diffusion_flag)
-        @. ∂ᶜρe_tot_err_∂ᶜρ = zero(typeof(∂ᶜρe_tot_err_∂ᶜρ))
-        @. ∂ᶜρq_tot_err_∂ᶜρ = zero(typeof(∂ᶜρq_tot_err_∂ᶜρ))
-    end
+    if p.atmos.microphysics_model isa NonEquilibriumMicrophysics1M
+        let
+            (; ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice) = p.precomputed
+            ∂ᶜρe_tot_err_∂ᶜρ = matrix[@name(c.ρe_tot), @name(c.ρ)]
+            ∂ᶜρe_tot_err_∂ᶜρq_tot = matrix[@name(c.ρe_tot), @name(c.ρq_tot)]
+            ∂ᶜρe_tot_err_∂ᶜρe_tot = matrix[@name(c.ρe_tot), @name(c.ρe_tot)]
+            ∂ᶜρe_tot_err_∂ᶜmseʲ =
+                matrix[@name(c.ρe_tot), @name(c.sgsʲs.:(1).mse)]
+            ∂ᶜρq_tot_err_∂ᶜρ = matrix[@name(c.ρq_tot), @name(c.ρ)]
+            ∂ᶜρq_tot_err_∂ᶜρq_tot = matrix[@name(c.ρq_tot), @name(c.ρq_tot)]
+            ∂ᶜρq_tot_err_∂ᶜq_totʲ =
+                matrix[@name(c.ρq_tot), @name(c.sgsʲs.:(1).q_tot)]
 
-    ∂ᶜupdraft_mass_flux_∂ᶜscalar = ᶠbidiagonal_matrix_ct3
-    @. ∂ᶜupdraft_mass_flux_∂ᶜscalar =
-        DiagonalMatrixRow(
-            (ᶠinterp(ᶜρʲs.:(1) * ᶜJ) / ᶠJ) * (ᶠu³ʲs.:(1) - ᶠu³),
-        ) * ᶠinterp_matrix() *
-        DiagonalMatrixRow(Y.c.sgsʲs.:(1).ρa / ᶜρʲs.:(1))
-    @. p.scratch.ᶜtridiagonal_matrix_scalar =
-        dtγ * ᶜadvdivᵥ_matrix() * ∂ᶜupdraft_mass_flux_∂ᶜscalar
+            ∂ᶜρe_tot_err_∂ᶜρq_lcl = matrix[@name(c.ρe_tot), @name(c.ρq_lcl)]
+            ∂ᶜρe_tot_err_∂ᶜρq_icl = matrix[@name(c.ρe_tot), @name(c.ρq_icl)]
+            ∂ᶜρe_tot_err_∂ᶜρq_rai = matrix[@name(c.ρe_tot), @name(c.ρq_rai)]
+            ∂ᶜρe_tot_err_∂ᶜρq_sno = matrix[@name(c.ρe_tot), @name(c.ρq_sno)]
 
-    # Derivative of total energy tendency with respect to updraft MSE
-    ## grid-mean ρe_tot
-    ᶜkappa_m = ᶜkappa_m_field!(Y, p)
-    ᶜ∂p∂ρq_tot = ᶜ∂p∂ρq_tot_field!(Y, p, ᶜkappa_m)
+            e_int_liq = condensate_e_int_offset(TD.Liquid(), params)
+            ∂cv∂q_liq = condensate_cv_difference(TD.Liquid(), params)
+            e_int_ice = condensate_e_int_offset(TD.Ice(), params)
+            ∂cv∂q_ice = condensate_cv_difference(TD.Ice(), params)
+            zero_row = zero(eltype(∂ᶜρe_tot_err_∂ᶜρ))
 
-    ᶜq_tot = @. lazy(specific(Y.c.ρq_tot, Y.c.ρ))
-    @. ∂ᶜρe_tot_err_∂ᶜρ +=
-        p.scratch.ᶜtridiagonal_matrix_scalar *
-        DiagonalMatrixRow(
-            (
-                -(ᶜh_tot) +
-                ᶜkappa_m * (T_0 * cp_d - ᶜK - ᶜΦ) +
-                (R_d - ᶜkappa_m * cv_d) * ᶜT
-            ) / ᶜρ,
-        )
-
-    ∂ᶜρe_tot_err_∂ᶜρq_tot = matrix[@name(c.ρe_tot), @name(c.ρq_tot)]
-    @. ∂ᶜρe_tot_err_∂ᶜρq_tot +=
-        p.scratch.ᶜtridiagonal_matrix_scalar *
-        DiagonalMatrixRow(ᶜ∂p∂ρq_tot / ᶜρ)
-
-    if p.atmos.microphysics_model isa Union{
-        NonEquilibriumMicrophysics1M,
-        NonEquilibriumMicrophysics2M,
-    }
-        for ρq_name in sedimenting_mass_names(Y)
-            phase = condensate_phase(ρq_name)
-            e_int_q = condensate_e_int_offset(phase, params)
-            ∂cv∂q = condensate_cv_difference(phase, params)
-            ∂ᶜρe_tot_err_∂ᶜρq =
-                matrix[@name(c.ρe_tot), center_state_name(ρq_name)]
-            @. ∂ᶜρe_tot_err_∂ᶜρq +=
-                p.scratch.ᶜtridiagonal_matrix_scalar *
-                DiagonalMatrixRow(
-                    (ᶜkappa_m * (e_int_q - ∂cv∂q * (ᶜT - T_0)) - R_v * ᶜT) / ᶜρ,
+            # Loop 1: scalar tridiagonal blocks for ρe_tot and ρq_tot
+            DataLayouts.foreach_column(
+                p.scratch.ᶜtridiagonal_matrix_scalar,
+                ∂ᶜρe_tot_err_∂ᶜρ,
+                ∂ᶜρe_tot_err_∂ᶜρq_tot,
+                ∂ᶜρe_tot_err_∂ᶜρe_tot,
+                ∂ᶜρe_tot_err_∂ᶜmseʲ,
+                ∂ᶜρq_tot_err_∂ᶜρ,
+                ∂ᶜρq_tot_err_∂ᶜρq_tot,
+                ∂ᶜρq_tot_err_∂ᶜq_totʲ,
+                ∂ᶜρe_tot_err_∂ᶜρq_lcl,
+                ∂ᶜρe_tot_err_∂ᶜρq_icl,
+                ∂ᶜρe_tot_err_∂ᶜρq_rai,
+                ∂ᶜρe_tot_err_∂ᶜρq_sno,
+                Y.c,
+                ᶜρʲs.:(1),
+                ᶠu³ʲs.:(1),
+                ᶠu³,
+                ᶜK,
+                ᶜT,
+                ᶜΦ,
+                ᶜh_tot,
+                ᶜq_tot_nonneg,
+                ᶜq_liq,
+                ᶜq_ice,
+                ᶜJ,
+                ᶠJ,
+            ) do ᶜtridiag,
+            ∂ᶜρe_tot_err_∂ᶜρ,
+            ∂ᶜρe_tot_err_∂ᶜρq_tot,
+            ∂ᶜρe_tot_err_∂ᶜρe_tot,
+            ∂ᶜρe_tot_err_∂ᶜmseʲ,
+            ∂ᶜρq_tot_err_∂ᶜρ,
+            ∂ᶜρq_tot_err_∂ᶜρq_tot,
+            ∂ᶜρq_tot_err_∂ᶜq_totʲ,
+            ∂ᶜρe_tot_err_∂ᶜρq_lcl,
+            ∂ᶜρe_tot_err_∂ᶜρq_icl,
+            ∂ᶜρe_tot_err_∂ᶜρq_rai,
+            ∂ᶜρe_tot_err_∂ᶜρq_sno,
+            Yc,
+            ᶜρʲ,
+            ᶠu³ʲ,
+            ᶠu³,
+            ᶜK,
+            ᶜT,
+            ᶜΦ,
+            ᶜh_tot,
+            ᶜq_tot_nonneg,
+            ᶜq_liq,
+            ᶜq_ice,
+            ᶜJ,
+            ᶠJ
+                if !use_derivative(diffusion_flag)
+                    @. ∂ᶜρe_tot_err_∂ᶜρ = (zero_row,)
+                    @. ∂ᶜρq_tot_err_∂ᶜρ = (zero_row,)
+                end
+                ᶠmf = @. lazy(
+                    DiagonalMatrixRow(
+                        (ᶠinterp(ᶜρʲ * ᶜJ) / ᶠJ) * (ᶠu³ʲ - ᶠu³),
+                    ) *
+                    ᶠinterp_matrix() *
+                    DiagonalMatrixRow(Yc.sgsʲs.:(1).ρa / ᶜρʲ),
                 )
+                @. ᶜtridiag = dtγ * ᶜadvdivᵥ_matrix() * ᶠmf
+
+                ᶜkappa_m = @. TD.gas_constant_air(
+                    thermo_params,
+                    ᶜq_tot_nonneg,
+                    ᶜq_liq,
+                    ᶜq_ice,
+                ) / TD.cv_m(
+                    thermo_params,
+                    ᶜq_tot_nonneg,
+                    ᶜq_liq,
+                    ᶜq_ice,
+                )
+                ᶜ∂p∂ρq_tot = @. lazy(
+                    ᶜkappa_m * (-e_int_v0 - R_d * T_0 - Δcv_v * (ᶜT - T_0)) +
+                    ΔR_v * ᶜT,
+                )
+                ᶜq_tot = @. lazy(specific(Yc.ρq_tot, Yc.ρ))
+
+                @. ∂ᶜρe_tot_err_∂ᶜρ +=
+                    ᶜtridiag * DiagonalMatrixRow(
+                        (
+                            -(ᶜh_tot) +
+                            ᶜkappa_m * (T_0 * cp_d - ᶜK - ᶜΦ) +
+                            (R_d - ᶜkappa_m * cv_d) * ᶜT
+                        ) / Yc.ρ,
+                    )
+                @. ∂ᶜρe_tot_err_∂ᶜρq_tot +=
+                    ᶜtridiag * DiagonalMatrixRow(ᶜ∂p∂ρq_tot / Yc.ρ)
+
+                ᶜ∂e_liq = @. ᶜtridiag * DiagonalMatrixRow(
+                    (
+                        ᶜkappa_m * (e_int_liq - ∂cv∂q_liq * (ᶜT - T_0)) -
+                        R_v * ᶜT
+                    ) / Yc.ρ,
+                )
+                @. ∂ᶜρe_tot_err_∂ᶜρq_lcl += ᶜ∂e_liq
+                @. ∂ᶜρe_tot_err_∂ᶜρq_rai += ᶜ∂e_liq
+
+                ᶜ∂e_ice = @. ᶜtridiag * DiagonalMatrixRow(
+                    (
+                        ᶜkappa_m * (e_int_ice - ∂cv∂q_ice * (ᶜT - T_0)) -
+                        R_v * ᶜT
+                    ) / Yc.ρ,
+                )
+                @. ∂ᶜρe_tot_err_∂ᶜρq_icl += ᶜ∂e_ice
+                @. ∂ᶜρe_tot_err_∂ᶜρq_sno += ᶜ∂e_ice
+
+                @. ∂ᶜρe_tot_err_∂ᶜρe_tot +=
+                    ᶜtridiag * DiagonalMatrixRow((1 + ᶜkappa_m) / Yc.ρ)
+                @. ∂ᶜρe_tot_err_∂ᶜmseʲ = -(ᶜtridiag)
+
+                @. ∂ᶜρq_tot_err_∂ᶜρ +=
+                    ᶜtridiag * DiagonalMatrixRow(-(ᶜq_tot) / Yc.ρ)
+                @. ∂ᶜρq_tot_err_∂ᶜρq_tot +=
+                    ᶜtridiag * DiagonalMatrixRow(1 / Yc.ρ)
+                @. ∂ᶜρq_tot_err_∂ᶜq_totʲ = -(ᶜtridiag)
+                return nothing
+            end
+
+            # Loop 2: ∂/∂u₃ blocks and microphysics tracer massflux blocks
+            ∂ᶜρe_tot_err_∂ᶠu₃ = matrix[@name(c.ρe_tot), @name(f.u₃)]
+            ∂ᶜρq_tot_err_∂ᶠu₃ = matrix[@name(c.ρq_tot), @name(f.u₃)]
+            ρχ_names =
+                (@name(ρq_lcl), @name(ρq_icl), @name(ρq_rai), @name(ρq_sno))
+            χ_names = (@name(q_lcl), @name(q_icl), @name(q_rai), @name(q_sno))
+            state_names = unrolled_map(center_state_name, ρχ_names)
+            sgs_names = unrolled_map(get_χʲ_name_from_ρχ_name, state_names)
+            ∂ᶜρχ_diags = unrolled_map(s -> matrix[s, s], state_names)
+            ∂ᶜρχ_sgs_cols = unrolled_map(
+                (s, s_sgs) -> matrix[s, s_sgs],
+                state_names,
+                sgs_names,
+            )
+            ∂ᶜρχ_u₃_cols =
+                unrolled_map(s -> matrix[s, @name(f.u₃)], state_names)
+
+            DataLayouts.foreach_column(
+                ∂ᶜρe_tot_err_∂ᶠu₃,
+                ∂ᶜρq_tot_err_∂ᶠu₃,
+                ∂ᶜρχ_diags[1],
+                ∂ᶜρχ_diags[2],
+                ∂ᶜρχ_diags[3],
+                ∂ᶜρχ_diags[4],
+                ∂ᶜρχ_sgs_cols[1],
+                ∂ᶜρχ_sgs_cols[2],
+                ∂ᶜρχ_sgs_cols[3],
+                ∂ᶜρχ_sgs_cols[4],
+                ∂ᶜρχ_u₃_cols[1],
+                ∂ᶜρχ_u₃_cols[2],
+                ∂ᶜρχ_u₃_cols[3],
+                ∂ᶜρχ_u₃_cols[4],
+                p.scratch.ᶜtridiagonal_matrix_scalar,
+                Y.c,
+                ᶜρʲs.:(1),
+                ᶜKʲs.:(1),
+                ᶜh_tot,
+                ᶜJ,
+                ᶠJ,
+                ᶠgⁱʲ,
+            ) do ∂ᶜρe_tot_err_∂ᶠu₃,
+            ∂ᶜρq_tot_err_∂ᶠu₃,
+            d1,
+            d2,
+            d3,
+            d4,
+            s1,
+            s2,
+            s3,
+            s4,
+            u1,
+            u2,
+            u3,
+            u4,
+            ᶜtridiag,
+            Yc,
+            ᶜρʲ,
+            ᶜKʲ,
+            ᶜh_tot_col,
+            ᶜJ_col,
+            ᶠJ_col,
+            ᶠgⁱʲ_col
+                ᶜsgsʲ = Yc.sgsʲs.:(1)
+                ᶜρʲ_J_a = @. ᶜρʲ * ᶜJ_col * draft_area(ᶜsgsʲ.ρa, ᶜρʲ)
+                ᶜinv_ρ = @. DiagonalMatrixRow(1 / Yc.ρ)
+
+                @. ∂ᶜρe_tot_err_∂ᶠu₃ +=
+                    dtγ *
+                    ᶜadvdivᵥ_matrix() *
+                    DiagonalMatrixRow(
+                        ᶠinterp((ᶜsgsʲ.mse + ᶜKʲ - ᶜh_tot_col) * ᶜρʲ_J_a) /
+                        ᶠJ_col * g³³(ᶠgⁱʲ_col),
+                    )
+                @. ∂ᶜρq_tot_err_∂ᶠu₃ +=
+                    dtγ *
+                    ᶜadvdivᵥ_matrix() *
+                    DiagonalMatrixRow(
+                        ᶠinterp(
+                            (ᶜsgsʲ.q_tot - specific(Yc.ρq_tot, Yc.ρ)) * ᶜρʲ_J_a,
+                        ) / ᶠJ_col * g³³(ᶠgⁱʲ_col),
+                    )
+                species_tuples = (
+                    (d1, s1, u1, ρχ_names[1], χ_names[1]),
+                    (d2, s2, u2, ρχ_names[2], χ_names[2]),
+                    (d3, s3, u3, ρχ_names[3], χ_names[3]),
+                    (d4, s4, u4, ρχ_names[4], χ_names[4]),
+                )
+                MatrixFields.unrolled_foreach(
+                    species_tuples,
+                ) do (∂ᶜρχ_diag, ∂ᶜρχ_sgs_col, ∂ᶜρχ_u₃_col, ρχ_name, χ_name)
+                    ᶜρχ = MatrixFields.get_field(Yc, ρχ_name)
+                    ᶜχʲ = MatrixFields.get_field(ᶜsgsʲ, χ_name)
+
+                    @. ∂ᶜρχ_sgs_col = -(ᶜtridiag)
+                    @. ∂ᶜρχ_diag += ᶜtridiag * ᶜinv_ρ
+                    @. ∂ᶜρχ_u₃_col =
+                        dtγ *
+                        ᶜadvdivᵥ_matrix() *
+                        DiagonalMatrixRow(
+                            ᶠinterp((ᶜχʲ - specific(ᶜρχ, Yc.ρ)) * ᶜρʲ_J_a) /
+                            ᶠJ_col * g³³(ᶠgⁱʲ_col),
+                        )
+                    return nothing
+                end
+                return nothing
+            end
         end
+        return nothing
     end
 
-    ∂ᶜρe_tot_err_∂ᶜρe_tot = matrix[@name(c.ρe_tot), @name(c.ρe_tot)]
-    @. ∂ᶜρe_tot_err_∂ᶜρe_tot +=
-        p.scratch.ᶜtridiagonal_matrix_scalar *
-        DiagonalMatrixRow((1 + ᶜkappa_m) / ᶜρ)
+    let
+        (; ᶠbidiagonal_matrix_ct3) = p.scratch
+        ᶜρ = Y.c.ρ
 
-    ∂ᶜρe_tot_err_∂ᶜmseʲ =
-        matrix[@name(c.ρe_tot), @name(c.sgsʲs.:(1).mse)]
-    @. ∂ᶜρe_tot_err_∂ᶜmseʲ =
-        -(p.scratch.ᶜtridiagonal_matrix_scalar)
+        # If diffusion is explicit, zero-initialize (ρe_tot, ρ) and
+        # (ρq_tot, ρ) here so both blocks can safely use +=.
+        ∂ᶜρe_tot_err_∂ᶜρ = matrix[@name(c.ρe_tot), @name(c.ρ)]
+        ∂ᶜρq_tot_err_∂ᶜρ = matrix[@name(c.ρq_tot), @name(c.ρ)]
+        if !use_derivative(diffusion_flag)
+            @. ∂ᶜρe_tot_err_∂ᶜρ = zero(typeof(∂ᶜρe_tot_err_∂ᶜρ))
+            @. ∂ᶜρq_tot_err_∂ᶜρ = zero(typeof(∂ᶜρq_tot_err_∂ᶜρ))
+        end
 
-    ## grid-mean ρq_tot
-    @. ∂ᶜρq_tot_err_∂ᶜρ +=
-        p.scratch.ᶜtridiagonal_matrix_scalar *
-        DiagonalMatrixRow(-(ᶜq_tot) / ᶜρ)
+        ∂ᶜupdraft_mass_flux_∂ᶜscalar = ᶠbidiagonal_matrix_ct3
+        @. ∂ᶜupdraft_mass_flux_∂ᶜscalar =
+            DiagonalMatrixRow(
+                (ᶠinterp(ᶜρʲs.:(1) * ᶜJ) / ᶠJ) * (ᶠu³ʲs.:(1) - ᶠu³),
+            ) *
+            ᶠinterp_matrix() *
+            DiagonalMatrixRow(Y.c.sgsʲs.:(1).ρa / ᶜρʲs.:(1))
+        @. p.scratch.ᶜtridiagonal_matrix_scalar =
+            dtγ * ᶜadvdivᵥ_matrix() * ∂ᶜupdraft_mass_flux_∂ᶜscalar
 
-    ∂ᶜρq_tot_err_∂ᶜρq_tot = matrix[@name(c.ρq_tot), @name(c.ρq_tot)]
-    @. ∂ᶜρq_tot_err_∂ᶜρq_tot +=
-        p.scratch.ᶜtridiagonal_matrix_scalar *
-        DiagonalMatrixRow(1 / ᶜρ)
+        # Derivative of total energy tendency with respect to updraft MSE
+        ## grid-mean ρe_tot
+        ᶜkappa_m = ᶜkappa_m_field!(Y, p)
+        ᶜ∂p∂ρq_tot = ᶜ∂p∂ρq_tot_field!(Y, p, ᶜkappa_m)
 
-    ∂ᶜρq_tot_err_∂ᶜq_totʲ =
-        matrix[@name(c.ρq_tot), @name(c.sgsʲs.:(1).q_tot)]
-    @. ∂ᶜρq_tot_err_∂ᶜq_totʲ =
-        -(p.scratch.ᶜtridiagonal_matrix_scalar)
+        ᶜq_tot = @. lazy(specific(Y.c.ρq_tot, Y.c.ρ))
+        @. ∂ᶜρe_tot_err_∂ᶜρ +=
+            p.scratch.ᶜtridiagonal_matrix_scalar * DiagonalMatrixRow(
+                (
+                    -(ᶜh_tot) +
+                    ᶜkappa_m * (T_0 * cp_d - ᶜK - ᶜΦ) +
+                    (R_d - ᶜkappa_m * cv_d) * ᶜT
+                ) / ᶜρ,
+            )
 
-    # grid-mean ∂/∂(u₃ʲ)
-    ∂ᶜρe_tot_err_∂ᶠu₃ = matrix[@name(c.ρe_tot), @name(f.u₃)]
-    @. ∂ᶜρe_tot_err_∂ᶠu₃ +=
-        dtγ * ᶜadvdivᵥ_matrix() *
-        DiagonalMatrixRow(
-            ᶠinterp(
-                (Y.c.sgsʲs.:(1).mse + ᶜKʲs.:(1) - ᶜh_tot) *
-                ᶜρʲs.:(1) *
-                ᶜJ *
-                draft_area(Y.c.sgsʲs.:(1).ρa, ᶜρʲs.:(1)),
-            ) / ᶠJ * (g³³(ᶠgⁱʲ)),
-        )
+        ∂ᶜρe_tot_err_∂ᶜρq_tot = matrix[@name(c.ρe_tot), @name(c.ρq_tot)]
+        @. ∂ᶜρe_tot_err_∂ᶜρq_tot +=
+            p.scratch.ᶜtridiagonal_matrix_scalar *
+            DiagonalMatrixRow(ᶜ∂p∂ρq_tot / ᶜρ)
 
-    ∂ᶜρq_tot_err_∂ᶠu₃ = matrix[@name(c.ρq_tot), @name(f.u₃)]
-    @. ∂ᶜρq_tot_err_∂ᶠu₃ +=
-        dtγ * ᶜadvdivᵥ_matrix() *
-        DiagonalMatrixRow(
-            ᶠinterp(
-                (Y.c.sgsʲs.:(1).q_tot - ᶜq_tot) *
-                ᶜρʲs.:(1) *
-                ᶜJ *
-                draft_area(Y.c.sgsʲs.:(1).ρa, ᶜρʲs.:(1)),
-            ) / ᶠJ * (g³³(ᶠgⁱʲ)),
-        )
+        if p.atmos.microphysics_model isa Union{
+            NonEquilibriumMicrophysics1M,
+            NonEquilibriumMicrophysics2M,
+        }
+            for ρq_name in sedimenting_mass_names(Y)
+                phase = condensate_phase(ρq_name)
+                e_int_q = condensate_e_int_offset(phase, params)
+                ∂cv∂q = condensate_cv_difference(phase, params)
+                ∂ᶜρe_tot_err_∂ᶜρq =
+                    matrix[@name(c.ρe_tot), center_state_name(ρq_name)]
+                @. ∂ᶜρe_tot_err_∂ᶜρq +=
+                    p.scratch.ᶜtridiagonal_matrix_scalar * DiagonalMatrixRow(
+                        (ᶜkappa_m * (e_int_q - ∂cv∂q * (ᶜT - T_0)) - R_v * ᶜT) /
+                        ᶜρ,
+                    )
+            end
+        end
 
-    # grid-mean tracers
-    # The implicit SGS tracer fluxes are difference-form
-    # corrections ρᵏaᵏ(u³ᵏ - u³)(χᵏ - χ) (the grid-mean advection
-    # -∇·(ρ u³ χ) is handled explicitly). As for mse and q_tot,
-    # the derivatives are linearized with the central interpolant
-    # (exact for the default :none upwinding), and the environment
-    # contributions are neglected: (χ⁰ - χ) and (u³⁰ - u³) are each
-    # O(aʲ), so every environment Jacobian entry is O(aʲ²) while
-    # the updraft entries are O(aʲ). The updraft entries reuse
-    # ᶜtridiagonal_matrix_scalar, which is the same for every scalar
-    # transported by the updraft flux.
-    if p.atmos.microphysics_model isa Union{
-        NonEquilibriumMicrophysics1M,
-        NonEquilibriumMicrophysics2M,
-    }
-        MatrixFields.unrolled_foreach(
-            sedimenting_tracer_names(Y),
-        ) do ρχ_name
-            ρχ_state_name = center_state_name(ρχ_name)
-            χʲ_name = get_χʲ_name_from_ρχ_name(ρχ_state_name)
-            MatrixFields.has_field(Y, χʲ_name) || return
-            ᶜρχ = MatrixFields.get_field(Y, ρχ_state_name)
-            ᶜχʲ = MatrixFields.get_field(Y, χʲ_name)
+        ∂ᶜρe_tot_err_∂ᶜρe_tot = matrix[@name(c.ρe_tot), @name(c.ρe_tot)]
+        @. ∂ᶜρe_tot_err_∂ᶜρe_tot +=
+            p.scratch.ᶜtridiagonal_matrix_scalar *
+            DiagonalMatrixRow((1 + ᶜkappa_m) / ᶜρ)
 
-            ∂ᶜρχ_err_∂ᶜχʲ = matrix[ρχ_state_name, χʲ_name]
-            @. ∂ᶜρχ_err_∂ᶜχʲ =
-                -(p.scratch.ᶜtridiagonal_matrix_scalar)
+        ∂ᶜρe_tot_err_∂ᶜmseʲ =
+            matrix[@name(c.ρe_tot), @name(c.sgsʲs.:(1).mse)]
+        @. ∂ᶜρe_tot_err_∂ᶜmseʲ = -(p.scratch.ᶜtridiagonal_matrix_scalar)
 
-            ∂ᶜρχ_err_∂ᶜρχ = matrix[ρχ_state_name, ρχ_state_name]
-            @. ∂ᶜρχ_err_∂ᶜρχ +=
-                p.scratch.ᶜtridiagonal_matrix_scalar *
-                DiagonalMatrixRow(1 / ᶜρ)
+        ## grid-mean ρq_tot
+        @. ∂ᶜρq_tot_err_∂ᶜρ +=
+            p.scratch.ᶜtridiagonal_matrix_scalar *
+            DiagonalMatrixRow(-(ᶜq_tot) / ᶜρ)
 
-            ∂ᶜρχ_err_∂ᶠu₃ = matrix[ρχ_state_name, @name(f.u₃)]
-            @. ∂ᶜρχ_err_∂ᶠu₃ =
-                dtγ * ᶜadvdivᵥ_matrix() *
-                DiagonalMatrixRow(
-                    ᶠinterp(
-                        (ᶜχʲ - specific(ᶜρχ, Y.c.ρ)) *
-                        ᶜρʲs.:(1) *
-                        ᶜJ *
-                        draft_area(Y.c.sgsʲs.:(1).ρa, ᶜρʲs.:(1)),
-                    ) / ᶠJ * (g³³(ᶠgⁱʲ)),
-                )
+        ∂ᶜρq_tot_err_∂ᶜρq_tot = matrix[@name(c.ρq_tot), @name(c.ρq_tot)]
+        @. ∂ᶜρq_tot_err_∂ᶜρq_tot +=
+            p.scratch.ᶜtridiagonal_matrix_scalar * DiagonalMatrixRow(1 / ᶜρ)
+
+        ∂ᶜρq_tot_err_∂ᶜq_totʲ =
+            matrix[@name(c.ρq_tot), @name(c.sgsʲs.:(1).q_tot)]
+        @. ∂ᶜρq_tot_err_∂ᶜq_totʲ = -(p.scratch.ᶜtridiagonal_matrix_scalar)
+
+        # grid-mean ∂/∂(u₃ʲ)
+        ∂ᶜρe_tot_err_∂ᶠu₃ = matrix[@name(c.ρe_tot), @name(f.u₃)]
+        @. ∂ᶜρe_tot_err_∂ᶠu₃ +=
+            dtγ *
+            ᶜadvdivᵥ_matrix() *
+            DiagonalMatrixRow(
+                ᶠinterp(
+                    (Y.c.sgsʲs.:(1).mse + ᶜKʲs.:(1) - ᶜh_tot) *
+                    ᶜρʲs.:(1) *
+                    ᶜJ *
+                    draft_area(Y.c.sgsʲs.:(1).ρa, ᶜρʲs.:(1)),
+                ) / ᶠJ * (g³³(ᶠgⁱʲ)),
+            )
+
+        ∂ᶜρq_tot_err_∂ᶠu₃ = matrix[@name(c.ρq_tot), @name(f.u₃)]
+        @. ∂ᶜρq_tot_err_∂ᶠu₃ +=
+            dtγ *
+            ᶜadvdivᵥ_matrix() *
+            DiagonalMatrixRow(
+                ᶠinterp(
+                    (Y.c.sgsʲs.:(1).q_tot - ᶜq_tot) *
+                    ᶜρʲs.:(1) *
+                    ᶜJ *
+                    draft_area(Y.c.sgsʲs.:(1).ρa, ᶜρʲs.:(1)),
+                ) / ᶠJ * (g³³(ᶠgⁱʲ)),
+            )
+
+        # grid-mean tracers
+        # The implicit SGS tracer fluxes are difference-form
+        # corrections ρᵏaᵏ(u³ᵏ - u³)(χᵏ - χ) (the grid-mean advection
+        # -∇·(ρ u³ χ) is handled explicitly). As for mse and q_tot,
+        # the derivatives are linearized with the central interpolant
+        # (exact for the default :none upwinding), and the environment
+        # contributions are neglected: (χ⁰ - χ) and (u³⁰ - u³) are each
+        # O(aʲ), so every environment Jacobian entry is O(aʲ²) while
+        # the updraft entries are O(aʲ). The updraft entries reuse
+        # ᶜtridiagonal_matrix_scalar, which is the same for every scalar
+        # transported by the updraft flux.
+        if p.atmos.microphysics_model isa Union{
+            NonEquilibriumMicrophysics1M,
+            NonEquilibriumMicrophysics2M,
+        }
+            MatrixFields.unrolled_foreach(
+                sedimenting_tracer_names(Y),
+            ) do ρχ_name
+                ρχ_state_name = center_state_name(ρχ_name)
+                χʲ_name = get_χʲ_name_from_ρχ_name(ρχ_state_name)
+                MatrixFields.has_field(Y, χʲ_name) || return
+                ᶜρχ = MatrixFields.get_field(Y, ρχ_state_name)
+                ᶜχʲ = MatrixFields.get_field(Y, χʲ_name)
+
+                ∂ᶜρχ_err_∂ᶜχʲ = matrix[ρχ_state_name, χʲ_name]
+                @. ∂ᶜρχ_err_∂ᶜχʲ = -(p.scratch.ᶜtridiagonal_matrix_scalar)
+
+                ∂ᶜρχ_err_∂ᶜρχ = matrix[ρχ_state_name, ρχ_state_name]
+                @. ∂ᶜρχ_err_∂ᶜρχ +=
+                    p.scratch.ᶜtridiagonal_matrix_scalar *
+                    DiagonalMatrixRow(1 / ᶜρ)
+
+                ∂ᶜρχ_err_∂ᶠu₃ = matrix[ρχ_state_name, @name(f.u₃)]
+                @. ∂ᶜρχ_err_∂ᶠu₃ =
+                    dtγ *
+                    ᶜadvdivᵥ_matrix() *
+                    DiagonalMatrixRow(
+                        ᶠinterp(
+                            (ᶜχʲ - specific(ᶜρχ, Y.c.ρ)) *
+                            ᶜρʲs.:(1) *
+                            ᶜJ *
+                            draft_area(Y.c.sgsʲs.:(1).ρa, ᶜρʲs.:(1)),
+                        ) / ᶠJ * (g³³(ᶠgⁱʲ)),
+                    )
+            end
         end
     end
     return nothing
