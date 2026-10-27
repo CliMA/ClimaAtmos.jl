@@ -423,24 +423,6 @@ end
     ))
 end
 
-@inline function ᶜcol_specific_env_value(
-    χ_name,
-    Yc,
-    ᶜρa⁰,
-    turbconv_model::PrognosticEDMFX,
-)
-    ρχ_name = get_ρχ_name(χ_name)
-    ᶜρχ = MatrixFields.get_field(Yc, ρχ_name)
-    ᶜρaχ⁰ = ᶜenv_value(
-        ᶜρχ,
-        sgsʲ ->
-            MatrixFields.get_field(sgsʲ, @name(ρa)) *
-            MatrixFields.get_field(sgsʲ, χ_name),
-        Yc.sgsʲs,
-    )
-    return @. specific(ᶜρaχ⁰, ᶜρa⁰, ᶜρχ, Yc.ρ, turbconv_model)
-end
-
 """
     get_ρχ_name(χ_name)
 

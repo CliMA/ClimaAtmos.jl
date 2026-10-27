@@ -101,7 +101,6 @@ source. The whole function returns early when
 function surface_flux_tendency!(Yₜ, Y, p, t)
     p.atmos.disable_surface_flux_tendency && return
 
-    FT = eltype(Y)
     (; turbconv_model) = p.atmos
     (; sfc_conditions, ᶜh_tot) = p.precomputed
     do_mom = !disable_momentum_vertical_diffusion(p.atmos.vertical_diffusion)

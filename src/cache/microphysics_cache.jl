@@ -182,9 +182,6 @@ function set_precipitation_velocities!(
         q,
     )
 
-    χ_names = (@name(q_lcl), @name(q_icl), @name(q_rai), @name(q_sno))
-    ρχ_names = unrolled_map(get_ρχ_name, χ_names)
-
     # Fuse the column loop across all 4 species and the final WVec outputs so
     # `ᶜρ⁰`, `ᶜρa⁰`, and `ᶜρwₕhₜ` stay in registers across species.
     # TODO: use Y.c.ρq instead of ᶜρχ for computing gs velocities by averaging

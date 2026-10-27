@@ -164,7 +164,6 @@ function temporary_quantities(Y, atmos)
         ᶜtemp_strain = Fields.Field(typeof(uvw_vec * uvw_vec'), center_space), # ᶜstrain_rate
         ᶠtemp_strain = Fields.Field(typeof(uvw_vec * uvw_vec'), face_space), # ᶠstrain_rate
         # TODO: Remove this hack
-        sfc_temp_C3 = Fields.Field(C3{FT}, Spaces.level(face_space, half)), # ρ_flux_χ
         # Implicit solver cache:
         ∂ᶜK_∂ᶜuₕ = similar(Y.c, DiagonalMatrixRow{typeof(CT12(FT(0), FT(0))')}),
         ∂ᶜK_∂ᶠu₃ = similar(Y.c, BidiagonalMatrixRow{typeof(CT3(FT(0))')}),

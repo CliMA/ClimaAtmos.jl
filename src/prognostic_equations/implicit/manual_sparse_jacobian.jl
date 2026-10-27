@@ -900,12 +900,12 @@ function update_advection_jacobian!(matrix, Y, p, dtγ, topography_flag)
                 @. ∂ᶠu₃_err_∂ᶜρq_icl = ᶠblock_ice
                 @. ∂ᶠu₃_err_∂ᶜρq_sno = ᶠblock_ice
 
+                # The factors of the unfused path, ∂ᶜK_∂ᶜuₕ without topography
                 @. ∂ᶠu₃_err_∂ᶜuₕ =
                     dtγ *
                     ᶠp_grad *
-                    DiagonalMatrixRow(
-                        -(ᶜkappa_m) * Yc.ρ * adjoint(CT12(Yc.uₕ)),
-                    )
+                    DiagonalMatrixRow(-(ᶜkappa_m) * Yc.ρ) *
+                    DiagonalMatrixRow(adjoint(CT12(Yc.uₕ)))
                 ∂ᶜK_∂ᶠu₃ = @. lazy(
                     ᶜinterp_matrix() * DiagonalMatrixRow(adjoint(CT3(ᶠu₃))) +
                     DiagonalMatrixRow(adjoint(CT3(Yc.uₕ))) * ᶜinterp_matrix(),
@@ -2245,15 +2245,16 @@ function update_sgs_entr_detr_jacobian!(matrix, Y, p, dtγ)
                         get_physical_w(ᶜuʲ, ᶜlg_col),
                     ),
                 )
+                # dtγ * (rate * feedback), the grouping of the unfused path
                 ᶜrelax_row = @. DiagonalMatrixRow(
-                    dtγ *
-                    (ᶜentrʲ + ᶜturb_entrʲ) *
-                    (
-                        1 + env_relaxation_feedback(
-                            Yc.sgsʲs.:(1).ρa,
-                            ρa⁰(Yc.ρ, Yc.sgsʲs, turbconv_model),
-                            Yc.ρ,
-                            turbconv_model,
+                    dtγ * (
+                        (ᶜentrʲ + ᶜturb_entrʲ) * (
+                            1 + env_relaxation_feedback(
+                                Yc.sgsʲs.:(1).ρa,
+                                ρa⁰(Yc.ρ, Yc.sgsʲs, turbconv_model),
+                                Yc.ρ,
+                                turbconv_model,
+                            )
                         )
                     ),
                 )
@@ -2608,14 +2609,18 @@ function update_sgs_massflux_jacobian!(matrix, Y, p, dtγ, diffusion_flag)
             ᶠJ_col,
             ᶠgⁱʲ_col
                 ᶜsgsʲ = Yc.sgsʲs.:(1)
-                ᶜρʲ_J_a = @. ᶜρʲ * ᶜJ_col * draft_area(ᶜsgsʲ.ρa, ᶜρʲ)
                 ᶜinv_ρ = @. DiagonalMatrixRow(1 / Yc.ρ)
 
                 @. ∂ᶜρe_tot_err_∂ᶠu₃ +=
                     dtγ *
                     ᶜadvdivᵥ_matrix() *
                     DiagonalMatrixRow(
-                        ᶠinterp((ᶜsgsʲ.mse + ᶜKʲ - ᶜh_tot_col) * ᶜρʲ_J_a) /
+                        ᶠinterp(
+                            (ᶜsgsʲ.mse + ᶜKʲ - ᶜh_tot_col) *
+                            ᶜρʲ *
+                            ᶜJ_col *
+                            draft_area(ᶜsgsʲ.ρa, ᶜρʲ),
+                        ) /
                         ᶠJ_col * g³³(ᶠgⁱʲ_col),
                     )
                 @. ∂ᶜρq_tot_err_∂ᶠu₃ +=
@@ -2623,7 +2628,10 @@ function update_sgs_massflux_jacobian!(matrix, Y, p, dtγ, diffusion_flag)
                     ᶜadvdivᵥ_matrix() *
                     DiagonalMatrixRow(
                         ᶠinterp(
-                            (ᶜsgsʲ.q_tot - specific(Yc.ρq_tot, Yc.ρ)) * ᶜρʲ_J_a,
+                            (ᶜsgsʲ.q_tot - specific(Yc.ρq_tot, Yc.ρ)) *
+                            ᶜρʲ *
+                            ᶜJ_col *
+                            draft_area(ᶜsgsʲ.ρa, ᶜρʲ),
                         ) / ᶠJ_col * g³³(ᶠgⁱʲ_col),
                     )
                 species_tuples = (
@@ -2644,7 +2652,12 @@ function update_sgs_massflux_jacobian!(matrix, Y, p, dtγ, diffusion_flag)
                         dtγ *
                         ᶜadvdivᵥ_matrix() *
                         DiagonalMatrixRow(
-                            ᶠinterp((ᶜχʲ - specific(ᶜρχ, Yc.ρ)) * ᶜρʲ_J_a) /
+                            ᶠinterp(
+                                (ᶜχʲ - specific(ᶜρχ, Yc.ρ)) *
+                                ᶜρʲ *
+                                ᶜJ_col *
+                                draft_area(ᶜsgsʲ.ρa, ᶜρʲ),
+                            ) /
                             ᶠJ_col * g³³(ᶠgⁱʲ_col),
                         )
                     return nothing

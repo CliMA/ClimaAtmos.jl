@@ -605,18 +605,6 @@ subdomain quantities (from `ᶠu₃⁰` and each `ᶠu₃ʲ`).
 end
 
 """
-    set_sgs_ᶠu₃!(w_function, ᶠu₃, Y, turbconv_model)
-
-Set the SGS vertical velocity `ᶠu₃` at faces by applying `w_function` to the
-face-interpolated subdomain area-weighted densities, the subdomain vertical
-velocities, the face-interpolated grid-mean density, and the grid-mean vertical
-velocity. Mutates `ᶠu₃` and returns `nothing`.
-
-Passing `u₃⁰` as `w_function` recovers the environment vertical velocity from the
-grid mean and the drafts.
-"""
-
-"""
     set_enthalpy_and_pressure!(ᶜh_tot, ᶜp, Yc, ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice, thermo_params)
 
 Set the total specific enthalpy `ᶜh_tot` and the pressure `ᶜp` from the state
@@ -655,6 +643,17 @@ inlined.
     return nothing
 end
 
+"""
+    set_sgs_ᶠu₃!(w_function, ᶠu₃, Y, turbconv_model)
+
+Set the SGS vertical velocity `ᶠu₃` at faces by applying `w_function` to the
+face-interpolated subdomain area-weighted densities, the subdomain vertical
+velocities, the face-interpolated grid-mean density, and the grid-mean vertical
+velocity. Mutates `ᶠu₃` and returns `nothing`.
+
+Passing `u₃⁰` as `w_function` recovers the environment vertical velocity from the
+grid mean and the drafts.
+"""
 set_sgs_ᶠu₃!(w_function, ᶠu₃, Y, turbconv_model) =
     set_sgs_ᶠu₃!(w_function, ᶠu₃, Y.c, Y.f, turbconv_model)
 # The (Yc, Yf) method also runs inside fused column loops on column slices of Y.c and Y.f.

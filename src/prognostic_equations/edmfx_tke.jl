@@ -107,22 +107,29 @@ function edmfx_tke_sources!(Yₜ, Y, p)
         ᶠgradᵥ_ᶜΦ, ᶜlg, ᶠlg
             ᶠstrain_rate = compute_strain_rate_face_vertical(ᶜu)
             ᶠshear_production = @. 2 * ᶠK_u * vertical_shear_norm_sqr(ᶠstrain_rate)
-            @. Yₜc.ρtke +=
-                Yc.ρ * ᶜinterp(ᶠshear_production) - Yc.ρ * ᶜinterp(ᶠK_h * ᶠbuoygrad)
+            @. Yₜc.ρtke += Yc.ρ * ᶜinterp(ᶠshear_production)
+            @. Yₜc.ρtke -= Yc.ρ * ᶜinterp(ᶠK_h * ᶠbuoygrad)
+            # Pressure-drag return-to-isotropy for every updraft, then the
+            # entrainment/detrainment shear-mixing source for every updraft
             ᶜa⁰_col = @. a⁰(Yc.sgsʲs, ᶜρʲs, turbconv_model)
+            edmfx_model.nh_pressure && _unrolled_ntuple(n_val) do j
+                ᶜρa_dragʲ = Yc.sgsʲs.:($j).ρa
+                ᶜa_dragʲ = @. draft_area(ᶜρa_dragʲ, ᶜρʲs.:($$j))
+                ᶜΔw_dragʲ = @. get_physical_w(ᶜuʲs.:($$j) - ᶜu⁰, ᶜlg)
+                ᶜdrag_coeff = @. lazy(
+                    pressure_drag_coefficient(
+                        α_d, scale_height, ᶜa_dragʲ, ᶜa⁰_col, a_min, a_max,
+                    ),
+                )
+                @. Yₜc.ρtke +=
+                    ᶜρa_dragʲ * ᶜa⁰_col * ᶜdrag_coeff * abs(ᶜΔw_dragʲ)^3
+                return nothing
+            end
             _unrolled_ntuple(n_val) do j
                 ᶜρaʲ = Yc.sgsʲs.:($j).ρa
                 ᶜρʲ = ᶜρʲs.:($j)
                 ᶜaʲ = @. draft_area(ᶜρaʲ, ᶜρʲ)
                 ᶜΔw = @. get_physical_w(ᶜuʲs.:($$j) - ᶜu⁰, ᶜlg)
-                if edmfx_model.nh_pressure
-                    ᶜdrag_coeff = @. lazy(
-                        pressure_drag_coefficient(
-                            α_d, scale_height, ᶜaʲ, ᶜa⁰_col, a_min, a_max,
-                        ),
-                    )
-                    @. Yₜc.ρtke += ᶜρaʲ * ᶜa⁰_col * ᶜdrag_coeff * abs(ᶜΔw)^3
-                end
                 ᶜbuoy_inv_time_scale = @. lazy(
                     ᶜinterp(
                         detr_buoy_inv_time_scale(
@@ -158,101 +165,10 @@ function edmfx_tke_sources!(Yₜ, Y, p)
         ) do Yₜc, Yc, ᶜu, ᶠbuoygrad, ᶠK_h, ᶠK_u
             ᶠstrain_rate = compute_strain_rate_face_vertical(ᶜu)
             ᶠshear_production = @. 2 * ᶠK_u * vertical_shear_norm_sqr(ᶠstrain_rate)
-            @. Yₜc.ρtke +=
-                Yc.ρ * ᶜinterp(ᶠshear_production) - Yc.ρ * ᶜinterp(ᶠK_h * ᶠbuoygrad)
+            @. Yₜc.ρtke += Yc.ρ * ᶜinterp(ᶠshear_production)
+            @. Yₜc.ρtke -= Yc.ρ * ᶜinterp(ᶠK_h * ᶠbuoygrad)
             return nothing
         end
-    end
-    return nothing
-end
-
-edmfx_pressure_drag_tke_source!(Yₜ, Y, p, turbconv_model) = nothing
-function edmfx_pressure_drag_tke_source!(
-    Yₜ, Y, p, turbconv_model::PrognosticEDMFX,
-)
-    p.atmos.edmfx_model.nh_pressure || return nothing
-    n = n_mass_flux_subdomains(turbconv_model)
-    n == 0 && return nothing
-
-    turbconv_params = CAP.turbconv_params(p.params)
-    α_d = CAP.pressure_normalmode_drag_coeff(turbconv_params)
-    a_min = CAP.min_area(turbconv_params)
-    a_max = CAP.max_area(turbconv_params)
-    scale_height = CAP.R_d(p.params) * CAP.T_surf_ref(p.params) / CAP.grav(p.params)
-    (; ᶜρʲs, ᶜuʲs, ᶜu⁰) = p.precomputed
-    # Environment area, shared across all updrafts.
-    ᶜa⁰ = @. lazy(a⁰(Y.c.sgsʲs, ᶜρʲs, turbconv_model))
-    ᶜdrag_coeff = p.scratch.ᶜtemp_scalar
-    ᶜlg = Fields.local_geometry_field(Y.c)
-    for j in 1:n
-        ᶜaʲ = @. lazy(draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j)))
-        # The coefficient of the momentum equation's drag sink, so the energy
-        # removed there is the energy received here.
-        @. ᶜdrag_coeff =
-            pressure_drag_coefficient(α_d, scale_height, ᶜaʲ, ᶜa⁰, a_min, a_max)
-        @. Yₜ.c.ρtke +=
-            Y.c.sgsʲs.:($$j).ρa * ᶜa⁰ * ᶜdrag_coeff *
-            abs(get_physical_w(ᶜuʲs.:($$j) - ᶜu⁰, ᶜlg))^3
-    end
-    return nothing
-end
-
-edmfx_entr_detr_tke_source!(Yₜ, Y, p, turbconv_model) = nothing
-function edmfx_entr_detr_tke_source!(
-    Yₜ, Y, p, turbconv_model::PrognosticEDMFX,
-)
-    n = n_mass_flux_subdomains(turbconv_model)
-    n == 0 && return nothing
-
-    (;
-        ᶜρʲs,
-        ᶜρ_diffʲs,
-        ᶜarea_bounding_entr_detrʲs,
-        ᶜuʲs,
-        ᶠu³ʲs,
-        ᶜu⁰,
-    ) = p.precomputed
-    (; ᶠgradᵥ_ᶜΦ) = p.core
-
-    turbconv_params = CAP.turbconv_params(p.params)
-    entr_detr_buoy_inv_tau_max =
-        CAP.entr_detr_buoy_inv_tau_max(turbconv_params)
-    detr_model = p.atmos.edmfx_model.detr_model
-    ᶜlg = Fields.local_geometry_field(Y.c)
-    ᶠlg = Fields.local_geometry_field(Y.f)
-    ᶠbottom_bias_zero_bot = Operators.BottomBiasedC2F(bottom = Operators.SetValue(0))
-    FT = Spaces.undertype(axes(Y.c))
-
-    for j in 1:n
-        ᶜaʲ = @. lazy(draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j)))
-        ᶜbuoy_inv_time_scale = @. lazy(
-            ᶜinterp(
-                detr_buoy_inv_time_scale(
-                    get_physical_w(ᶠu³ʲs.:($$j), ᶠlg),
-                    vertical_buoyancy_acceleration(
-                        ᶠinterp(ᶜρ_diffʲs.:($$j)),
-                        ᶠgradᵥ_ᶜΦ,
-                        ᶠlg,
-                    ),
-                    entr_detr_buoy_inv_tau_max,
-                ),
-            ),
-        )
-        ᶜdetr = @. lazy(
-            compute_detrainment(
-                turbconv_params,
-                ᶜaʲ,
-                Y.c.sgsʲs.:($$j).ρa,
-                ᶜbuoy_inv_time_scale,
-                ᶜdivᵥ(ᶠbottom_bias_zero_bot(Y.c.sgsʲs.:($$j).ρa) * ᶠu³ʲs.:($$j)),
-                ᶜarea_bounding_entr_detrʲs.:($$j),
-                detr_model,
-            ),
-        )
-
-        @. Yₜ.c.ρtke +=
-            FT(0.5) * ᶜdetr * Y.c.sgsʲs.:($$j).ρa *
-            get_physical_w(ᶜuʲs.:($$j) - ᶜu⁰, ᶜlg)^2
     end
     return nothing
 end
