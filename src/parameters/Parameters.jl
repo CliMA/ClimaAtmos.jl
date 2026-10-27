@@ -728,6 +728,7 @@ Base.@kwdef struct ClimaAtmosParameters{
 end
 
 Base.eltype(::ClimaAtmosParameters{FT}) where {FT} = FT
+Base.eltype(::TurbulenceConvectionParameters{FT}) where {FT} = FT
 
 #####
 ##### Generated accessors

@@ -142,7 +142,6 @@ function set_covariance_cache_and_cloud_fraction!(Y, p)
                 Y,
                 p,
                 thermo_params;
-                recompute_hgrad = false,
                 recompute_buoygrad = true,
                 env_state,
             )
@@ -181,7 +180,6 @@ function set_covariance_cache_and_cloud_fraction!(Y, p)
                 Y,
                 p,
                 thermo_params;
-                recompute_hgrad = false,
                 recompute_buoygrad = true,
                 env_state,
             )
@@ -220,7 +218,6 @@ function set_covariance_cache_and_cloud_fraction!(Y, p)
                 Y,
                 p,
                 thermo_params;
-                recompute_hgrad = false,
                 recompute_buoygrad = true,
                 env_state,
             )
@@ -270,7 +267,7 @@ function set_covariance_cache_and_cloud_fraction!(Y, p)
     # gradient and covariance cache, then recompute cloud fraction.
     function picard_step!()
         set_covariance_cache!(
-            Y, p, thermo_params; recompute_hgrad = false, recompute_buoygrad = true,
+            Y, p, thermo_params; recompute_buoygrad = true,
         )
         set_cloud_fraction!(Y, p, microphysics_model, cloud_model)
         return nothing
@@ -293,7 +290,7 @@ function set_covariance_cache_and_cloud_fraction!(Y, p)
     @. ᶜcloud_fraction = _aitken_picard_helper(c0, c1, c2)
 
     set_covariance_cache!(
-        Y, p, thermo_params; recompute_hgrad = false, recompute_buoygrad = true,
+        Y, p, thermo_params; recompute_buoygrad = true,
     )
     set_sgs_moments_and_cloud_fraction!(Y, p)
 
@@ -928,6 +925,16 @@ function set_tq_correlation!(p, ::DiagnosedTqCorrelation)
     return nothing
 end
 
+@inline _disp_lin(d::NamedTuple) = d.lin
+@inline _disp_lin(d::Real) = zero(d)
+@inline _disp_curv(d::NamedTuple) = d.curv
+@inline _disp_curv(d::Real) = zero(d)
+@inline _sgs_sigma_S(m) = m.sigma_S
+@inline _1(t) = t[1]
+@inline _2(t) = t[2]
+@inline _3(t) = t[3]
+@inline _4(t) = t[4]
+
 """
     set_covariance_cache!(Y, p, thermo_params)
 
@@ -968,21 +975,10 @@ Scratch: `ᶜtemp_scalar` holds `l_d`, `ᶜtemp_scalar_2` `N²_disp`,
 `ᶜtemp_scalar_3` θ_li and then the θ→T Jacobian, `ᶜtemp_scalar_5` and `_6` the
 moisture and cross invariants (`ᶜT′T′` holds the θ_li invariant before Step 3).
 """
-@inline _disp_lin(d::NamedTuple) = d.lin
-@inline _disp_lin(d::Real) = zero(d)
-@inline _disp_curv(d::NamedTuple) = d.curv
-@inline _disp_curv(d::Real) = zero(d)
-@inline _sgs_sigma_S(m) = m.sigma_S
-@inline _1(t) = t[1]
-@inline _2(t) = t[2]
-@inline _3(t) = t[3]
-@inline _4(t) = t[4]
-
 function set_covariance_cache!(
     Y,
     p,
     thermo_params;
-    recompute_hgrad::Bool = true,
     recompute_buoygrad::Bool = false,
     env_state = nothing,
 )
@@ -1028,16 +1024,8 @@ function set_covariance_cache!(
     else
         ᶜinv_q = p.scratch.ᶜtemp_scalar_5
         ᶜinv_θ = Fields.Field(p.scratch.temp_data, axes(Y.c))
+        # Filled by the caller (see set_covariance_cache_and_cloud_fraction!)
         ᶜinv_θq = p.scratch.ᶜtemp_scalar_6
-        if recompute_hgrad
-            ᶜθ_li = p.scratch.ᶜtemp_scalar_3
-            @. ᶜθ_li = TD.liquid_ice_pottemp(
-                thermo_params, ᶜT, Y.c.ρ, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice,
-            )
-            hgrad_invariant!(ᶜinv_q, ᶜq_tot_nonneg, p)
-            hgrad_invariant!(ᶜinv_θ, ᶜθ_li, p)
-            hgrad_cross_invariant!(ᶜinv_θq, ᶜθ_li, ᶜq_tot_nonneg, p)
-        end
     end
 
     turbconv_model = p.atmos.turbconv_model

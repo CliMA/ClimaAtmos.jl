@@ -131,8 +131,8 @@ NVTX.@annotate function horizontal_tracer_advection_tendency!(Yₜ, Y, p, t)
             # Auto-discovered SGS tracers (microphysics species and any
             # user-defined passive tracers)
             for χ_name in sgs_tracer_names(Y)
-                ᶜχʲ = MatrixFields.get_field(Y.c.sgsʲs.:(1), χ_name)
-                ᶜχʲₜ = MatrixFields.get_field(Yₜ.c.sgsʲs.:(1), χ_name)
+                ᶜχʲ = MatrixFields.get_field(Y.c.sgsʲs.:($j), χ_name)
+                ᶜχʲₜ = MatrixFields.get_field(Yₜ.c.sgsʲs.:($j), χ_name)
                 @. ᶜχʲₜ -=
                     split_divₕ(ᶜuʲs.:($$j), ᶜχʲ) -
                     ᶜχʲ * split_divₕ(ᶜuʲs.:($$j), 1)

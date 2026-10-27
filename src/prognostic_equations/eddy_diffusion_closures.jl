@@ -1770,8 +1770,6 @@ The strong-stability limit of this closure (`Pr(Ri) → ∞`) is what closes the
 TKE dissipation coefficient; see `tke_dissipation_coefficient` for that
 derivation.
 """
-Base.eltype(::CAP.TurbulenceConvectionParameters{FT}) where {FT} = FT
-
 turbulent_prandtl_number(
     params::CAP.ClimaAtmosParameters,
     ᶜN²,

@@ -206,7 +206,7 @@ Returns `nothing`.
 """
 function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     (; microphysics_model, rayleigh_sponge) = p.atmos
-    (; params, dt) = p
+    (; params) = p
     ᶜJ = Fields.local_geometry_field(axes(Y.c)).J
     ᶠJ = Fields.local_geometry_field(axes(Y.f)).J
     (; ᶠgradᵥ_ᶜΦ) = p.core
