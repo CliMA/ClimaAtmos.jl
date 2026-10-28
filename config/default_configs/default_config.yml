@@ -295,8 +295,8 @@ rain_terminal_velocity:
   help: "Rain sedimentation velocity for 1M microphysics [`Fixed` (default), `Blk1M` (1-moment power law), `Chen2022`]"
   value: "Fixed"
 snow_terminal_velocity:
-  help: "Snow sedimentation velocity for 1M microphysics [`Fixed` (default), `Blk1M` (1-moment power law), `Chen2022` (Chen et al. 2022 large ice)]"
-  value: "Fixed"
+  help: "Snow sedimentation velocity for 1M microphysics [`Fixed`, `Blk1M` (1-moment power law), `Chen2022` (default, Chen et al. 2022 large ice)]"
+  value: "Chen2022"
 cloud_liquid_formation:
   help: "Cloud liquid formation option for 1M microphysics [`CloudLiquidFormation` (default), ~]"
   value: "CloudLiquidFormation"
