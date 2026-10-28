@@ -518,13 +518,8 @@ end
     @test CA.cloud_species_flux_blend(FT(50), FT(0), c_d, FT(Inf)) == 0
     @test CA.sgs_microphysics_timescale(thermo_params, FT(280), τ_l, FT(Inf)) ==
           τ_l
-    @test CA.sgs_variance_fidelity(
-        FT(1), FT(Inf), c_d, FT(0), FT(50), FT(0.5), FT(1e-4), FT(0), FT(1e-4),
-        FT(1e-8),
-    ) == CA.sgs_variance_fidelity(
-        FT(1), τ_l, c_d, FT(0), FT(50), FT(0.5), FT(1e-4), FT(0), FT(1e-4),
-        FT(1e-8),
-    )
+    @test CA.sgs_variance_fidelity(FT(1), FT(Inf), c_d, FT(0), FT(50)) ==
+          CA.sgs_variance_fidelity(FT(1), τ_l, c_d, FT(0), FT(50))
 
     # Clear, subsaturated air (q_t ≪ q_sat, so λ_eq ≪ -σ_S): λ = 0 (l_mix = 0)
     # recovers the down-gradient self-diffusion; λ = 1 (tke = 0) gives no

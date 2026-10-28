@@ -175,7 +175,7 @@ const CA = ClimaAtmos
                     q_tot, q_lcl, q_icl, q_rai, q_sno, T′T′, q′q′, corr,
                     mom.λ_lagrange, α, FT(0.1), FT(0.1), FT(180), 2,
                     TD.liquid_fraction(thp, T, q_lcl, q_icl), mu_S,
-                    FT(0.5), FT(0.4), mom.sigma_S, FT(0.1), mom.λ_eq,
+                    FT(0.5), FT(0.4), mom.sigma_S, FT(0.1), Val(8),
                 )
                 @test out.dq_lcl_dt isa FT
                 # a warm cell without ice or snow makes none
@@ -185,7 +185,7 @@ const CA = ClimaAtmos
                     q_tot, q_lcl, q_icl, q_rai, q_sno, T′T′, q′q′, corr,
                     mom.λ_lagrange, α, FT(0.1), FT(0.1), FT(180), 2,
                     TD.liquid_fraction(thp, T, q_lcl, q_icl), mu_S,
-                    FT(0), a_p, mom.sigma_S, floor, mom.λ_eq,
+                    FT(0), a_p, mom.sigma_S, floor, Val(8),
                 )
                 out_u = uniform(FT(0.4), FT(0.1))
                 # without placement the shaft area and its floor do not enter
@@ -194,6 +194,23 @@ const CA = ClimaAtmos
                 # evaporates less and collects more cloud than uniform rain
                 @test out.dq_rai_dt > out_u.dq_rai_dt
                 @test out.dq_lcl_dt < out_u.dq_lcl_dt
+
+                # Default 6-node rule verifies increased rain growth with shaft placement
+                out6 = CA.microphysics_tendencies_1m(
+                    BMT.Microphysics1Moment(), quad, cmp, thp, ρ, T, FT(0.1),
+                    q_tot, q_lcl, q_icl, q_rai, q_sno, T′T′, q′q′, corr,
+                    mom.λ_lagrange, α, FT(0.1), FT(0.1), FT(180), 2,
+                    TD.liquid_fraction(thp, T, q_lcl, q_icl), mu_S,
+                    FT(0.5), FT(0.4), mom.sigma_S, FT(0.1),
+                )
+                out_u6 = CA.microphysics_tendencies_1m(
+                    BMT.Microphysics1Moment(), quad, cmp, thp, ρ, T, FT(0.1),
+                    q_tot, q_lcl, q_icl, q_rai, q_sno, T′T′, q′q′, corr,
+                    mom.λ_lagrange, α, FT(0.1), FT(0.1), FT(180), 2,
+                    TD.liquid_fraction(thp, T, q_lcl, q_icl), mu_S,
+                    FT(0), FT(0.4), mom.sigma_S, FT(0.1),
+                )
+                @test out6.dq_rai_dt > out_u6.dq_rai_dt
             end
         end
     end
@@ -243,6 +260,13 @@ const CA = ClimaAtmos
                 thp, ρ, T_frz + FT(0.2), mu_S, σ_S, β_T, -λ, -mu_S, t_p, FT(150),
                 FT(0.05),
             )
+            @test rule isa CA.ConditionalRule{8, FT}
+            rule6 = CA.conditional_rule(
+                thp, ρ, T_frz + FT(0.2), mu_S, σ_S, β_T, -λ, t_p, FT(150),
+                FT(0.05),
+            )
+            @test rule6 isa CA.ConditionalRule{6, FT}
+            @test sum(n.w for n in rule6.nodes) ≈ 1
             σ⊥ = CA.sgs_temperature_spread_at_fixed_excess(FT(1), β_T, σ_S)
             @test (β_T * σ_S)^2 + σ⊥^2 ≈ 1
             spread = CA.TemperatureSpread(thp, ρ, mu_S, σ⊥, T_frz, FT(150), FT(0.05))
@@ -290,7 +314,7 @@ const CA = ClimaAtmos
                     q_tot, q_lcl, q_icl, q_rai, q_sno, T′T′, q′q′, corr,
                     mom.λ_lagrange, α, FT(0), FT(0), FT(150), 2,
                     TD.liquid_fraction(thp, T, q_lcl, q_icl), mu_S,
-                    FT(0), FT(0.5), mom.sigma_S, FT(0.5), mom.λ_eq,
+                    FT(0), FT(0.5), mom.sigma_S, FT(0.5),
                 )
                 ref = CA.microphysics_tendencies_1m(
                     ρ, q_tot, q_lcl, q_icl, q_rai, q_sno, T, FT(0.1), cmp, thp,

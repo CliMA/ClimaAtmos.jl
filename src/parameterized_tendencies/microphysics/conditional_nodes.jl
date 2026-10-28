@@ -4,32 +4,25 @@
 #
 # With the Gaussian closure every quantity the 1M evaluator reads at a node is
 # a function of one random variable, the centred saturation excess
-# S′ ~ N(0, σ_S²), and of the temperature regressed on it. Three thresholds
-# partition S′:
+# S′ ~ N(0, σ_S²), and of the temperature regressed on it. Two interior
+# thresholds partition S′ in the 6-node rule:
 #
-#     t_a = −λ / α        actual cloud edge:       q_c(S′)    = max(0, λ + α S′)
-#     t_e = −λ_eq         equilibrium cloud edge:  q_c_eq(S′) = max(0, λ_eq + S′)
+#     t_a = −λ / α        actual cloud edge:       q_c(S′) = max(0, λ + α S′)
 #     t_p = S_star        precipitation shaft edge (the moistest a_p of the PDF)
 #
-# Sorting them gives at most four intervals, on each of which both condensates
-# are linear in S′ and the shaft flag is constant. The Gaussian interval
-# moments give each interval its probability weight and the conditional mean
-# and variance of S′ exactly, so one node at the conditional mean integrates
-# every linear function exactly (mass conservation and the mean relaxation
-# toward q_c_eq hold for any cloud fraction), and a two-point Gauss rule of the
-# truncated distribution, matched to the conditional mean, variance and third
-# moment, carries the in-cloud spread the power-law collision rates see. The
-# fixed Gauss–Hermite tensor rule instead places all of the condensate of a
-# cell with a small cloud fraction on its moistest corner node of weight 1/36
-# and the rates with it.
+# Sorting them gives three intervals on (-Inf, Inf), on each of which actual
+# condensate is linear in S′ and the shaft flag is constant. The Gaussian interval
+# moments give each interval its probability weight and the conditional moments
+# of S′; a two-point Gauss rule on each interval yields six nodes in all.
+# An 8-node variant with a third threshold t_e = −λ_eq is also retained for
+# ablation comparisons.
 #
 # The temperature also spreads at fixed S′. That spread, σ⊥, is the part of the
 # temperature variance the regression on S′ does not carry (q′ moves with
 # ∂q_sat/∂T T′ so that S′ stays fixed). The rates respond to it mainly through
 # the kink at the freezing point (melting of snow, rain–snow collisions), so a
 # node whose spread straddles T_freeze is split there; the temperature points
-# are generated in the sum over the nodes, so the rule itself keeps its eight
-# slots.
+# are generated in the sum over the nodes, so the rule itself keeps its slots.
 
 """
     normal_tail_prob(z)
@@ -175,6 +168,13 @@ regressed temperature spread `|β_T| σ_S` never exceeds `σ_T`.
 end
 
 """
+    _sort2(a, b)
+
+The two values in nondecreasing order.
+"""
+@inline _sort2(a, b) = (min(a, b), max(a, b))
+
+"""
     _sort3(a, b, c)
 
 The three values in nondecreasing order.
@@ -231,6 +231,54 @@ the node's shaft flag, `1` or `0`.
         TD.q_vap_saturation(_unwrapped(thp), T_node, ρ) + mu_S + S′, zero(FT), q_max,
     )
     return ConditionalNode(T_node, q_node, S′, w, ifelse(shaft, one(FT), zero(FT)))
+end
+
+"""
+    conditional_rule(
+        thp, ρ, T, mu_S, σ_S, β_T, t_a, t_p, T_min, q_max,
+    )
+
+The 6-node `ConditionalRule` of a cell with mean temperature `T` [K], density `ρ`,
+linearized mean saturation excess `mu_S` [kg/kg], linearized width `σ_S` [kg/kg]
+of the centred excess `S′`, temperature regression slope `β_T`
+(`sgs_temperature_regression`) and the two interior thresholds on `S′` [kg/kg]:
+
+  - `t_a`: actual cloud edge `−λ/α`; `S′ ≥ t_a` holds condensate,
+  - `t_p`: precipitation shaft edge (`sgs_precip_shaft_threshold`); `S′ ≥ t_p`
+    is the shaft.
+
+The thresholds, sorted, bound three intervals on `(-Inf, Inf)`; each gets the
+nodes of `_conditional_interval_nodes`, two Gauss nodes where it carries actual
+cloud and one node at its conditional mean otherwise, for six node slots in all.
+The weights sum to one; an interval of zero width contributes zero weight.
+"""
+@inline function conditional_rule(
+    thp, ρ, T, mu_S, σ_S, β_T, t_a, t_p, T_min, q_max,
+)
+    FT = typeof(σ_S)
+    (b₁, b₂) = _sort2(FT(t_a), FT(t_p))
+    bounds = (FT(-Inf), b₁, b₂, FT(Inf))
+    Qs = (
+        zero(FT),
+        normal_tail_prob(abs(b₁ / σ_S)),
+        normal_tail_prob(abs(b₂ / σ_S)),
+        zero(FT),
+    )
+    nodes = ntuple(Val(3)) do i
+        lo = bounds[i]
+        hi = bounds[i + 1]
+        _conditional_interval_nodes(
+            thp, ρ, T, mu_S, σ_S, β_T, lo, hi, Qs[i], Qs[i + 1],
+            lo >= t_a, lo >= t_p, T_min, q_max,
+        )
+    end
+    return ConditionalRule(
+        SA.SVector{6}(
+            nodes[1][1], nodes[1][2],
+            nodes[2][1], nodes[2][2],
+            nodes[3][1], nodes[3][2],
+        ),
+    )
 end
 
 """

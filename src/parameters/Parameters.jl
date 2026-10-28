@@ -412,6 +412,9 @@ Base.@kwdef struct SGSQuadratureParameters{FT} <: ASQP
     sgs_env_updraft_tail_truncation_coeff::FT
     sgs_env_subsat_rh_transition::FT
     sgs_env_subsat_gamma_crit::FT
+    sgs_variance_fidelity_mode::FT
+    sgs_variance_closure_mode::FT
+    cloud_fraction_use_delta_sub_split::FT
 end
 
 """

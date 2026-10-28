@@ -37,7 +37,7 @@ include("../../test_helpers.jl")
     @. Y.c.ρtke = FT(0.5) * Y.c.ρ
     CA.set_precomputed_quantities!(Y, p, simulation.integrator.t)
 
-    ᶜl_d_model, ᶜl_mix_disp_model = CA.materialized_displacement_length!(Y, p)
+    ᶜl_d_model, ᶜl_iso_model, ᶜl_mix_disp_model = CA.materialized_displacement_length!(Y, p)
     l_d = copy(ᶜl_d_model)
     l_mix_disp = similar(l_d)
     @. l_mix_disp = ᶜl_mix_disp_model

@@ -235,7 +235,7 @@ function _allocs_conditional_1m(thp, cmp, quad, ::Type{FT}, T = FT(285)) where {
         BMT.Microphysics1Moment(), quad, cmp, thp, ρ, T, FT(0.1), q_tot, q_lcl,
         FT(0), q_rai, FT(0), FT(0.25), FT(2.5e-7), FT(0.5), mom.λ_lagrange,
         FT(0.7), FT(0.1), FT(0.1), FT(180), 2, FT(1), mu_S, FT(0.5), FT(0.4),
-        mom.sigma_S, FT(0.1), mom.λ_eq,
+        mom.sigma_S, FT(0.1),
     )
     ClimaAtmos.microphysics_tendencies_1m(args...)
     a_mom = @allocated ClimaAtmos._compute_sgs_moments(

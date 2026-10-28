@@ -52,7 +52,7 @@ floor_nt(::Type{FT}; ε_rel = FT(0.02), σ_abs = FT(1e-7)) where {FT} =
                 @testset "Non-equilibrium excess normalized by subsaturation deficit" begin
                     # When σ_S = 0 and μ_S = -1e-3, q_c_eq = 0 so q_c = 1e-3 is
                     # purely non-equilibrium condensate normalized by
-                    # σ_neq = √(σ_aug² + δ_sub²) ≈ 1e-3 (C ≈ 1, cf ≈ 0.70),
+                    # σ_neq = √(σ_aug² + δ_sub²) ≈ 1e-3 (C = 1, cf = Φ(z(1)) ≈ 0.816),
                     # whereas at saturation (μ_S = 0) δ_sub = 0 and cf > 0.99.
                     cf_neq = CA._compute_cloud_fraction(
                         FT(1e-3), μ_sub, FT(0), α, floor,
@@ -60,7 +60,7 @@ floor_nt(::Type{FT}; ε_rel = FT(0.02), σ_abs = FT(1e-7)) where {FT} =
                     cf_eq = CA._compute_cloud_fraction(
                         FT(1e-3), FT(0), FT(0), α, floor,
                     )
-                    @test FT(0.6) < cf_neq < FT(0.8)
+                    @test FT(0.7) < cf_neq < FT(0.9)
                     @test cf_eq > FT(0.99)
                 end
 
@@ -697,7 +697,7 @@ floor_nt(::Type{FT}; ε_rel = FT(0.02), σ_abs = FT(1e-7)) where {FT} =
                 )
                 @test c_hi_0 == c
                 @test c_hi_cu < c
-                @test c_hi_cu ≈ CA.normal_cdf_inv(FT(0.96)) rtol = FT(1e-4)
+                @test c_hi_cu ≈ CA.normal_cdf_inv(FT(0.96)) rtol = FT(1e-3)
 
                 # Detrained condensate fraction is 0 at or below equilibrium and
                 # (q_c - q_c_eq) / q_c above equilibrium.

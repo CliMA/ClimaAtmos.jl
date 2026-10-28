@@ -125,27 +125,15 @@ end
                 )
                 @test m.sigma_S == m_default.sigma_S
                 @test m.λ_lagrange == m_default.λ_lagrange
-                # The equilibrium condensate `max(0, λ_eq + S′)` over the
-                # Gaussian `S′` has the truncated expectation.
+                # Under Simplification Q1, λ_eq is the linearized mean saturation excess mu_S.
+                @test m.λ_eq == mu_S
                 q_c_eq = CA.truncated_displacement_condensate(mu_S, m.sigma_S, FT(3))
-                if q_c_eq > FT(0)
-                    # To the accuracy of the Newton inversion, absolute in σ_S.
-                    @test CA.truncated_gaussian_condensate(m.λ_eq, m.sigma_S) ≈
-                          q_c_eq atol = (FT == Float32 ? 1e-6 : 1e-7) * m.sigma_S
-                else
-                    # Deep in the subsaturated tail the equilibrium cloud edge
-                    # is at infinity: no node holds equilibrium condensate.
-                    @test m.λ_eq == FT(-Inf)
-                end
                 mu_S < -FT(3.1) * m.sigma_S && @test q_c_eq == FT(0)
             end
         end
     end
 
-    # `λ_eq = −Inf` stands for "no equilibrium condensate". Every reader of
-    # `λ_eq` must tolerate it: a product with it, such as the `s λ` scaling of
-    # the actual multiplier, would turn `0 · Inf` into NaN.
-    @testset "1M tendencies with no equilibrium condensate (λ_eq = −Inf)" begin
+    @testset "1M tendencies in subsaturated tail" begin
         for FT in (Float32, Float64)
             toml_dict = CP.create_toml_dict(FT)
             thp = TD.Parameters.ThermodynamicsParameters(toml_dict)
@@ -160,7 +148,7 @@ end
             mu_S = -FT(4) * σ_S
             q_tot = TD.q_vap_saturation(thp, T, ρ) + mu_S
             # Clear sky; rain falling into it; an evaporating cloud with rain
-            # placed in a shaft, which sets all three thresholds of the rule.
+            # placed in a shaft.
             for (q_lcl, q_rai, β_p) in (
                 (FT(0), FT(0), FT(0)),
                 (FT(0), FT(1e-4), FT(0)),
@@ -170,27 +158,16 @@ end
                     thp, ρ, T, q_tot, q_lcl, quad, T′T′, q′q′, corr, α,
                     q_tot - q_rai, FT(0), FT(0), FT(3),
                 )
-                @test mom.λ_eq == FT(-Inf)
-                tendencies(λ_eq) = CA.microphysics_tendencies_1m(
+                @test mom.λ_eq ≈ mu_S - q_rai atol =
+                    64 * eps(FT) * TD.q_vap_saturation(thp, T, ρ)
+                out = CA.microphysics_tendencies_1m(
                     BMT.Microphysics1Moment(), quad, cmp, thp, ρ, T, w,
                     q_tot, q_lcl, FT(0), q_rai, FT(0), T′T′, q′q′, corr,
                     mom.λ_lagrange, α, FT(0.1), FT(0.1), FT(180), 2,
                     TD.liquid_fraction(thp, T, q_lcl, FT(0)), mu_S,
-                    β_p, FT(0.4), mom.sigma_S, FT(0.1), λ_eq,
+                    β_p, FT(0.4), mom.sigma_S, FT(0.1),
                 )
-                out = tendencies(mom.λ_eq)
                 @test all(isfinite, values(out))
-                # The limit of a finite equilibrium cloud edge far in the
-                # tail, `S′ = 20 σ_S`, whose tail weight leaves tendencies of
-                # order 1e-96 in Float64; the tolerance is relative to the
-                # tendency scale `σ_S / dt`.
-                ref = tendencies(-FT(20) * mom.sigma_S)
-                @test all(
-                    isapprox.(
-                        values(out), values(ref);
-                        rtol = sqrt(eps(FT)), atol = eps(FT) * mom.sigma_S / FT(180),
-                    ),
-                )
             end
         end
     end

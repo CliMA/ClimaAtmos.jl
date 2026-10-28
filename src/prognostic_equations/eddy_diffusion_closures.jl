@@ -1138,12 +1138,8 @@ of `phase` (`TD.Liquid()` or `TD.Ice()`) to the diffusing conserved variables,
 (`Microphysics1MEvaluator`), with the multiplier `λ_eq` and width `σ_S` of
 `ᶜsgs_moments` (`_compute_sgs_moments`). With the untruncated Gaussian target
 (`sgs_displacement_truncation = Inf`, no curvature),
-`λ_eq = μ_S = q_t - q_sat(T, ρ)` and `C` is the derivative of `E[max(0, S)]`
-with respect to `μ_S`. Where the target is reshaped, by the truncated
-displacement (`truncated_displacement_condensate`) or the curvature-aware
-condensate (`sgs_variance_curvature`), `λ_eq` follows it and `C` stays the
-cloudy fraction of the distribution the condensate relaxes toward;
-`λ_eq = -Inf`, where the truncated target vanishes, gives `C = 0`. A width of
+`λ_eq = μ_S = q_t - q_sat(T, ρ)` and `C = Φ(μ_S / σ_S)` is the analytical
+Gaussian derivative `∂q_c_eq / ∂μ_S` of the equilibrium condensate. A width of
 `ϵ_numerics` marks a closure without SGS spread (`GridMeanSGS`, or vanishing
 variances), whose multiplier is clipped at zero; `C` is then the saturation
 switch `λ_eq > 0`. `γ = (L / c_p) ∂q_sat/∂T` is the Clausius–Clapeyron coupling,
