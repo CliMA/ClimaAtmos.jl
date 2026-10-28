@@ -10,7 +10,8 @@ main
   when the condensate leaves at `Tʲ`. The weight `e_tot_hlpr - e_int_dry(Tʲ)`
   cooled the updraft by about `(Φ + R_d T + q_v L_v)/c_p` per unit mass removed
   (0.004–0.014 K per 1e-4 kg/kg between 1.5 and 9 km), and the environment
-  residual warmed by the same energy.
+  residual warmed by the same energy. With implicit microphysics (the default),
+  the analytic ρa solve removes this mass from `ρaʲ`, not from the environment.
 - ![][badge-🔥behavioralΔ] Updraft sedimentation of `q_lcl`, `q_icl`, `q_rai`,
   and `q_sno` is a mass source of the updraft `ρaʲ` in the analytic
   implicit-stage solve (`solve_sgs_ρa_implicit_stage_analytic!`,

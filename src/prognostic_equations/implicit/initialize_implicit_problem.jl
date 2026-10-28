@@ -372,7 +372,8 @@ is `r_sed · ρa_new`. Where the draft narrows downward, `S_sed` is proportional
 to the local area and `r_sed` does not depend on it, so this matches the
 dilution `χ S_sed ρ̂⁻¹` that the Newton solve applies at the stage area; `ρaʲ`
 then receives the sedimented mass that `q_totʲ` receives, as the grid-mean `ρ`
-does.
+does. With 0-moment microphysics and implicit microphysics tendencies, `r_sed`
+is the updraft precipitation removal rate `ᶜmp_tendencyʲs.dq_tot_dt` instead.
 
 `(ε − δ)` is assembled inline from area-bounding, velocity-scale, and
 buoyancy-driven pieces (see `detr_buoy_inv_time_scale`). The
@@ -438,6 +439,9 @@ function solve_sgs_ρa_implicit_stage_analytic!(Y, p, dtγ)
     nonequilibrium_mp =
         p.atmos.microphysics_model isa
         Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M}
+    implicit_0m_mp =
+        p.atmos.microphysics_model isa EquilibriumMicrophysics0M &&
+        p.atmos.microphysics_tendency_timestepping == Implicit()
 
     n = n_mass_flux_subdomains(turbconv_model)
     for j in 1:n
@@ -452,6 +456,8 @@ function solve_sgs_ρa_implicit_stage_analytic!(Y, p, dtγ)
                 ᶜρʲs.:($$j),
                 turbconv_model,
             )
+        elseif implicit_0m_mp
+            @. ᶜsed_rate = p.precomputed.ᶜmp_tendencyʲs.:($$j).dq_tot_dt
         else
             @. ᶜsed_rate = 0
         end

@@ -181,6 +181,24 @@ end
         @test maximum(abs, ρe_totₜ) > 0
         @test ρaʲₜ .* q_totʲ .+ ρaʲ .* q_totʲₜ ≈ ρq_totₜ rtol = 1e-10
         @test ρaʲₜ .* mseʲ .+ ρaʲ .* mseʲₜ ≈ ρe_totₜ rtol = 1e-10
+
+        # The analytic ρa solve removes the precipitated mass at the rate
+        # dq_tot_dt; every other process in that solve is zeroed.
+        fill!(Y.f.sgsʲs.:(1).u₃, CC.Geometry.Covariant3Vector(FT(0)))
+        for name in (
+            :ᶜρ_diffʲs,
+            :ᶜentr_vel_scaleʲs,
+            :ᶜentr_nonvel_rateʲs,
+            :ᶜarea_bounding_entr_detrʲs,
+            :sfc_mass_flux_sourceʲs,
+        )
+            fill!(getproperty(p.precomputed, name).:(1), FT(0))
+        end
+        dtγ = FT(10)
+        CA.solve_sgs_ρa_implicit_stage_analytic!(Y, p, dtγ)
+        stage_area_weighted_density = Array(parent(Y.c.sgsʲs.:(1).ρa))
+        @test (stage_area_weighted_density .- ρaʲ) ./ dtγ ≈
+              FT(-1e-6) .* stage_area_weighted_density rtol = 1e-8
     end
 
     @testset "NonEquilibrium moisture + 1-moment" begin
