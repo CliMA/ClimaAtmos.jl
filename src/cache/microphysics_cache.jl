@@ -1327,7 +1327,8 @@ Dispatch on `microphysics_model`:
   - `NonEquilibriumMicrophysics1M` and `NonEquilibriumMicrophysics2M`: the fluxes
     are evaluated at the bottom cell face from the level-1 specific humidities and
     terminal velocities (`ᶜwᵣ`, `ᶜwₛ`, `ᶜwₗ`, `ᶜwᵢ`), with a Jacobian-weighted
-    extrapolation of density to the surface. The rain energy flux is the rain mass
+    extrapolation of density to the surface. Uses `p.scratch` scalars.
+    The rain energy flux is the rain mass
     flux times the level-1 liquid internal energy plus geopotential,
     `Iₗ(T) + Φ`; the snow energy flux is the remainder of the total. With
     `PrognosticEDMFX` the rain energy uses the grid-mean temperature, so the
