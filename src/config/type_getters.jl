@@ -495,6 +495,8 @@ function get_grid(parsed_args, params, context)
         z_max = parsed_args["z_max"],
         z_stretch = parsed_args["z_stretch"],
         dz_bottom = parsed_args["dz_bottom"],
+        dz_top = parsed_args["dz_top"],
+        z_pbl = parsed_args["z_pbl"],
     )
 
     # Add topography parameters for non-column grids

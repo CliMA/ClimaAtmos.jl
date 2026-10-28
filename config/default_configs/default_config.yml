@@ -3,6 +3,12 @@
 dz_bottom:
   help: "Model bottom grid depth. Default: 500m"
   value: 500.0
+dz_top:
+  help: "Model top grid depth for two-scale vertical stretching. Default: 3000m"
+  value: 3000.0
+z_pbl:
+  help: "Boundary-layer scale height for two-scale vertical stretching. Default: 2200m"
+  value: 2200.0
 z_stretch:
   help: "Stretch grid in z-direction. [`true` (default), `false`]"
   value: true

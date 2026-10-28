@@ -51,9 +51,10 @@ at 60.
 
 Vertical resolution is set by `z_elem` layers between the surface and a model
 top at `z_max`. With `z_stretch: true`, the default, layers are stretched with a
-hyperbolic tangent profile anchored on `dz_bottom`, the thickness of the lowest
-layer, so that the boundary layer has high vertical resolution that becomes
-coarser aloft.
+two-scale hyperbolic tangent profile anchored on `dz_bottom` (the lowest-layer
+thickness), `dz_top` (the top-layer thickness, default 3000 m), and `z_pbl`
+(the boundary-layer scale height, default 2200 m), so that the boundary layer
+has high vertical resolution that transitions smoothly to coarser spacing aloft.
 
 Start from one of the numerical configurations in `config/common_configs/`,
 which pair a resolution with a timestep and a matching set of numerics:
