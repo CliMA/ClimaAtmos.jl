@@ -223,9 +223,6 @@ function precomputed_quantities(Y, atmos)
     gs_quantities = (;
         ᶜwₜqₜ = similar(Y.c, Geometry.WVector{FT}),
         ᶜwₕhₜ = similar(Y.c, Geometry.WVector{FT}),
-        # Liquid-phase (cloud liquid + rain) part of ᶜwₕhₜ, used to split the
-        # surface precipitation energy flux into rain and snow
-        ᶜwₕhₗ = similar(Y.c, Geometry.WVector{FT}),
         # Moist buoyancy gradient N² at centers; same physical quantity as the
         # face-native `ᶠK`-pipeline `ᶠbuoygrad`, built from the centered
         # (cloud-fraction-blended) vertical gradient instead of the two-point
