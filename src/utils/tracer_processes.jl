@@ -203,7 +203,7 @@ sedimenting_sgs_tracer_names(Y) =
 
 Return a `Tuple` of the `@name`s (relative to `Y.c.sgsʲs.:(1)`) of the
 sedimenting SGS condensate *mass* tracers, whose sedimentation couples to the
-updraft `q_tot`.
+updraft `q_tot` and `mse`.
 
 Returns `()` when prognostic EDMF is not active.
 """
@@ -268,6 +268,30 @@ enthalpy flux and of its Jacobian.
 """
 enthalpy_function(::TD.Liquid) = TD.enthalpy_liquid
 enthalpy_function(::TD.Ice) = TD.enthalpy_ice
+
+"""
+    condensate_heat_capacity(phase, thermo_params)
+
+Return the specific heat capacity [J/(kg K)] of a condensate with the given
+phase, `TD.Liquid()` or `TD.Ice()`: the temperature derivative of
+`enthalpy_function(phase)`.
+"""
+condensate_heat_capacity(::TD.Liquid, thermo_params) =
+    TD.Parameters.cp_l(thermo_params)
+condensate_heat_capacity(::TD.Ice, thermo_params) =
+    TD.Parameters.cp_i(thermo_params)
+
+"""
+    latent_heat_function(phase)
+
+Return the `Thermodynamics` function that computes the latent heat [J/kg] of
+the transition from vapor to a condensate with the given phase,
+`TD.latent_heat_vapor` for `TD.Liquid()` and `TD.latent_heat_sublim` for
+`TD.Ice()`. Divided by `cp_m`, it is the temperature change per unit
+condensate mass fraction at fixed enthalpy and `q_tot`.
+"""
+latent_heat_function(::TD.Liquid) = TD.latent_heat_vapor
+latent_heat_function(::TD.Ice) = TD.latent_heat_sublim
 
 """
     condensate_e_int_offset(phase, params)
