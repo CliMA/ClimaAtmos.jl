@@ -108,9 +108,12 @@ small-scale parts as [Schar2002](@cite) do, the smoothing above limits
 the small-scale deformation aloft.
 
 The reference levels themselves are stretched with
-[`ClimaCore.Meshes.HyperbolicTangentStretching`](@extref) when `z_stretch` is
-`true` (the default), anchored on the lowest-layer thickness `dz_bottom`, and
-uniform otherwise.
+[`ClimaCore.Meshes.BoundaryLayerHyperbolicTangentStretching`](@extref) when
+`z_stretch` is `true` (the default), anchored on the lowest-layer thickness
+`dz_bottom`, the top-layer thickness `dz_top` (default 3000 m), and the
+boundary-layer scale height `z_pbl` (default 2200 m) — falling back to
+[`ClimaCore.Meshes.HyperbolicTangentStretching`](@extref) on coarse test grids
+— and uniform otherwise.
 
 ## Consequences for the discretization
 
