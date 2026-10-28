@@ -603,7 +603,7 @@ condensing the clamped excess can drive the grid-mean vapor negative. The σ_q
 bound rescales ``\Sigma_{T q_t}`` by the same factor so the diagnosed
 correlation is invariant under the clamp.
 
-The total grid-mean subgrid covariance adds the inter-subdomain spread to this
+The total grid-mean subgrid covariance adds the inter-subdomain spread to the
 intra-subdomain part [Lappen2001, Siebesma2007](@cite),
 
 ```math
@@ -612,9 +612,26 @@ intra-subdomain part [Lappen2001, Siebesma2007](@cite),
 ```
 
 so that draft–environment asymmetry is carried by the spread while the
-isotropic piece supplies a uniform background. Because the coherent contrast is
-assigned to the spread, ``c_\sigma`` is the *intra*-subdomain coefficient and is
-correspondingly smaller than an effective grid-scale value.
+environment closure integrates over the intra-subdomain variance. Because the
+displacement covariance is evaluated on the grid-mean gradients and already
+includes the coherent draft–environment variance, `set_covariance_cache!`
+subtracts the coherent variance carried by active moist updrafts
+(``a_{\mathrm{act}}^j = \max(0, a^j - 1.5 a_{\min})`` where
+``q_t^j > q_t^0``) from the displacement variances (`_subtract_edmf_coherent_covariance!`),
+
+```math
+\Sigma_{\psi \psi}^{\mathrm{env}} = \mathrm{clamp}\!\left(
+  \Sigma_{\psi \psi} - \sum_{j} \frac{\rho^j a_{\mathrm{act}}^j}{\rho}
+  \left[s_\psi (\psi^j - \psi^0)\right]^2, \;
+  f_{\mathrm{turb}} \Sigma_{\psi \psi}, \;
+  \Sigma_{\psi \psi} \right) ,
+```
+
+with ``s_{q_t} = 1``, ``s_{\theta_{li}} = r_{v,\theta}``, and turbulent
+mixing-length floor ``f_{\mathrm{turb}} = \mathrm{clamp}((\min(l_{\mathrm{disp}}, l_d) / l_d)^2, 0, 1)``,
+and rescales ``\Sigma_{\theta_{li} q_t}`` by
+``\sqrt{\Sigma_{\theta_{li}\theta_{li}}^{\mathrm{env}} / \Sigma_{\theta_{li}\theta_{li}}} \sqrt{\Sigma_{q_t q_t}^{\mathrm{env}} / \Sigma_{q_t q_t}}`` so the diagnosed
+correlation is invariant under the subtraction.
 
 Given the mean state and this covariance, cloud fraction and microphysics are
 driven from a single reconstruction of the local condensate over the quadrature

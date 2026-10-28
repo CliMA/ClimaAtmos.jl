@@ -91,29 +91,39 @@ main
   with `dz_top = 3000.0 m` and `z_pbl = 2200.0 m` (`dz_top` and `z_pbl` keys in
   `default_config.yml`), falling back to `HyperbolicTangentStretching(dz_bottom)`
   on coarse test grids outside the two-scale regime.
-- ![][badge-✨feature/enhancement] Subsaturated-environment upper-tail
-  truncation, convective environment autoconversion velocity, and
-  clear-environment updraft buoyancy reference for 1-moment `PrognosticEDMFX`
-  (provisional parameters `sgs_env_updraft_tail_truncation_coeff`,
-  `sgs_env_subsat_rh_transition`, `sgs_env_subsat_gamma_crit`,
+- ![][badge-✨feature/enhancement] EDMF coherent covariance subtraction,
+  subsaturated-environment upper-tail truncation, convective environment
+  autoconversion velocity, and clear-environment updraft buoyancy reference for
+  1-moment `PrognosticEDMFX` (provisional parameters
+  `sgs_env_updraft_tail_truncation_coeff`, `sgs_env_subsat_rh_transition`,
   `sgs_env_autoconversion_updraft_velocity_weight`,
   `sgs_env_autoconversion_detrained_velocity`,
   `edmf_buoyancy_clear_env_weight`, and
   `sgs_cloud_species_constant_timescales`):
+  - In `set_covariance_cache!` (`_subtract_edmf_coherent_covariance!`), the
+    coherent between-subdomain variance carried by active moist updrafts
+    (`a_actʲ = max(0, aʲ − 1.5 a_min)` where `q_totʲ > q_tot⁰`) is subtracted
+    from the grid-scale displacement variances `ᶜq′q′` and `ᶜT′T′` (in the
+    `θ_li` basis, floored at the turbulent mixing-length share
+    `f_turb = (min(l_mix_disp, l_d) / l_d)²` of the total variance), and
+    `ᶜT′q′` is rescaled so the diagnosed `T`–`q_tot` correlation stays
+    invariant.
   - In `truncated_displacement_condensate(mu_S, sigma_S, c, c_hi)` and
     `env_equilibrium_condensate`, the subsaturated environment's
     saturation-excess PDF is integrated over `[−c, c_hi]`, where
     `c_hi = min(c, Φ⁻¹(1 − q_tail))` truncates the upper tail
-    `q_tail = clamp(w_cu c_tail max(a_up, 2e-3), 0, 0.49)` occupied by
-    mass-flux updrafts and `w_cu` (`_env_subsat_cu_switch`) combines the
-    fourth-order relative-subsaturation switch (`sgs_env_subsat_rh_transition`,
-    default `0.03`), warm-cloud ramp, and static-stability gate
-    (`sgs_env_subsat_gamma_crit`, default `0.0115 K/m`).
-  - In `set_microphysics_tendency_cache!`, the vertical velocity passed to the
-    environment 1-moment warm-rain autoconversion is
-    `w_mp⁰ = max(w⁰, max(f_neq, w_cu) (c_w Σⱼ aⱼ max(wⱼ, 0) / max(Σⱼ aⱼ, a_min) + w_d))`,
-    with `f_neq` (`env_detrained_condensate_fraction`) the fraction of the
-    environment condensate in excess of its own equilibrium `q_c_eq`.
+    `q_tail = clamp(w_cu c_tail a_up, 0, 0.49)` occupied by active moist
+    updrafts (`a_up = Σⱼ a_actʲ`) and `w_cu` (`_env_subsat_switch`) combines
+    the fourth-order relative-subsaturation switch
+    (`sgs_env_subsat_rh_transition`, default `0.03`) and warm-cloud ramp.
+  - In `set_microphysics_tendency_cache!` (`_env_conv_autoconv_velocity`), the
+    vertical velocity passed to the environment 1-moment warm-rain
+    autoconversion is
+    `w_mp⁰ = max(w⁰, max(f_neq, w_cu) w_up_vel + f_neq w_d)`, with
+    `w_up_vel = c_w Σⱼ a_actʲ max(wⱼ, 0) / max(Σⱼ a_actʲ, a_min)` when
+    `Σⱼ a_actʲ > 0` (`0` otherwise) and `f_neq`
+    (`env_detrained_condensate_fraction`) the fraction of the environment
+    condensate in excess of its own equilibrium `q_c_eq`.
   - In `ᶜupdraft_reference_density`, a fraction
     `edmf_buoyancy_clear_env_weight` of the environment cloud liquid is
     evaporated adiabatically in the density the updraft buoyancy is referenced

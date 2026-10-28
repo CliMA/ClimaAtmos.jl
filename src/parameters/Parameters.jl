@@ -318,19 +318,19 @@ ClimaParams does not yet define or whose ClimaParams default it supersedes.
     energy (`tail_entrainment_increments`); `0` (default) entrains the mean [-].
   - `sgs_env_autoconversion_updraft_velocity_weight`,
     `sgs_env_autoconversion_detrained_velocity`: Weight `c_w` [-] of the
-    mass-flux-weighted updraft velocity and reference velocity `w_d` [m/s] in
-    the vertical velocity the environment's 1-moment warm-rain autoconversion
+    active moist-updraft velocity `w_up_vel` and reference velocity `w_d` [m/s]
+    in the vertical velocity the environment's 1-moment warm-rain autoconversion
     sees for its convective condensate,
-    `w_mp⁰ = max(w⁰, max(f_neq, w_cu) (c_w Σⱼ aⱼ max(wⱼ, 0) / max(Σⱼ aⱼ, a_min) + w_d))`
-    (`set_microphysics_tendency_cache!`), with `f_neq` the fraction of the
-    environment condensate in excess of its own equilibrium
-    (`env_detrained_condensate_fraction`) and `w_cu` the subsaturated cumulus
-    switch (`_env_subsat_cu_switch`). The environment descends by mass
-    continuity wherever updrafts rise, so with both at `0` (default)
-    `Kessler1M` evaluates the environment at its quiescent (stratiform)
-    threshold and timescale even where its condensate was detrained from
-    convective updrafts; positive values let that condensate rain at the
-    convective values, `w_d` also where the drafts that detrained it have
+    `w_mp⁰ = max(w⁰, max(f_neq, w_cu) w_up_vel + f_neq w_d)`
+    (`_env_conv_autoconv_velocity`, `set_microphysics_tendency_cache!`), with
+    `f_neq` the fraction of the environment condensate in excess of its own
+    equilibrium (`env_detrained_condensate_fraction`) and `w_cu` the
+    subsaturated environment switch (`_env_subsat_switch`). The environment
+    descends by mass continuity wherever updrafts rise, so with both at `0`
+    (default) `Kessler1M` evaluates the environment at its quiescent
+    (stratiform) threshold and timescale even where its condensate was detrained
+    from convective updrafts; positive values let that condensate rain at the
+    convective values, `f_neq w_d` also where the drafts that detrained it have
     decayed.
   - `sgs_cloud_species_constant_timescales`: Positive selects the constant
     `condensation_evaporation_timescale` and `sublimation_deposition_timescale`
@@ -344,21 +344,15 @@ ClimaParams does not yet define or whose ClimaParams default it supersedes.
     the updraft buoyancy is referenced to (`ᶜupdraft_reference_density`); `0`
     (default) references the grid-mean density [-].
   - `sgs_env_updraft_tail_truncation_coeff`: Multiplier `c_tail ≥ 0` on the
-    effective updraft area fraction `max(a_up, 2e-3)` that sets the upper-tail
-    probability `q_tail = clamp(w_cu c_tail max(a_up, 2e-3), 0, 0.49)`
+    active moist-updraft area fraction `a_up` (`_active_moist_updraft_area`)
+    that sets the upper-tail probability `q_tail = clamp(w_cu c_tail a_up, 0, 0.49)`
     truncated from the subsaturated environment's saturation-excess PDF at
     quantile `c_hi = min(c, Φ⁻¹(1 − q_tail))` (`_env_tail_c_hi_from_sums`);
     `0` (default) disables upper-tail truncation [-].
   - `sgs_env_subsat_rh_transition`: Relative subsaturation scale
     `ΔRH_trans > 0` of the fourth-order rational switch
     `s_rh = u² / (1 + u²)` (`u = (max(0, −μ_S) / (ΔRH_trans q_sat))²`) in
-    `_env_subsat_cu_switch`; default `0.03` [-].
-  - `sgs_env_subsat_gamma_crit`: Static-stability scale `γ_crit > 0` [K/m] of
-    the inversion-suppression factor
-    `s_instab = 1 / (1 + (max(0, ∂_z θ_li) / γ_crit)⁴)` in
-    `_env_subsat_cu_switch`, evaluated at the larger of the two bounding face
-    gradients `ᶠ∂θli∂z` of the cell so that the subsaturated cumulus switch
-    vanishes across strong stratocumulus inversions; default `0.0115` [K/m].
+    `_env_subsat_switch`; default `0.03` [-].
   - `Tq_correlation_coefficient`: Correlation between `T'` and `q_tot'` in the
     SGS quadrature, in `[-1, 1]`. Used verbatim by `tq_correlation_model: constant`; the fallback where the variances vanish for
     `tq_correlation_model: diagnosed` [-].
@@ -419,7 +413,6 @@ Base.@kwdef struct SGSQuadratureParameters{FT} <: ASQP
     edmf_buoyancy_clear_env_weight::FT
     sgs_env_updraft_tail_truncation_coeff::FT
     sgs_env_subsat_rh_transition::FT
-    sgs_env_subsat_gamma_crit::FT
 end
 
 """

@@ -773,13 +773,18 @@ Pipeline:
  2. Horizontal gradient invariants of `θ_li` and `q_tot` (skipped when
     `sgs_variance_horizontal_scale_factor` is 0).
  3. θ′θ′, q′q′ and, for the diagnosed correlation, θ′q′ from the displacement.
- 4. Transform θ→T using `compute_∂T_∂θ!`; with `sgs_variance_curvature`,
+ 4. Under `PrognosticEDMFX`, subtract the coherent between-subdomain variance
+    carried by active moist updrafts (`_subtract_edmf_coherent_covariance!`),
+    floored at the turbulent mixing-length share `(min(l_mix_disp, l_d) / l_d)²`
+    of the total variance and rescaling `θ′q′` so the diagnosed correlation is
+    preserved.
+ 5. Transform θ→T using `compute_∂T_∂θ!`; with `sgs_variance_curvature`,
     the displacement coefficients `ᶜdisp_S` (`set_displacement_curvature!`).
- 5. Apply the closure-validity bound `σ_q ≤ sgs_variance_max_rel_std * q_tot`.
- 6. Set the sampled T–q correlation (`set_tq_correlation!`; for the diagnosed
+ 6. Apply the closure-validity bound `σ_q ≤ sgs_variance_max_rel_std * q_tot`.
+ 7. Set the sampled T–q correlation (`set_tq_correlation!`; for the diagnosed
     model the covariance is first rescaled with the bound so the correlation is
     invariant under it).
- 7. Refresh the variance fidelity `ᶜα`.
+ 8. Refresh the variance fidelity `ᶜα`.
 
 Scratch: `ᶜtemp_scalar` holds `l_d`, `ᶜtemp_scalar_2` `N²_disp`,
 `ᶜtemp_scalar_3` θ_li and then the θ→T Jacobian, `ᶜtemp_scalar_5` and `_6` the
@@ -848,7 +853,12 @@ function set_covariance_cache!(Y, p, thermo_params)
             displacement_covariance(ℓ_h_θq, ᶜℓ_v_θq, ᶜinv_θq, ᶜ∂θ∂z, ᶜ∂q∂z)
     end
 
-    # 4. θ → T basis via the thermodynamic Jacobian ∂T/∂θ. q is unaffected.
+    # 4. Subtract coherent between-subdomain variance under PrognosticEDMFX.
+    _subtract_edmf_coherent_covariance!(
+        Y, p, thermo_params, ᶜl_d, ᶜl_mix_disp, r_v_θ, diag_corr,
+    )
+
+    # 5. θ → T basis via the thermodynamic Jacobian ∂T/∂θ. q is unaffected.
     ᶜ∂T_∂θ = p.scratch.ᶜtemp_scalar_3
     compute_∂T_∂θ!(ᶜ∂T_∂θ, Y, p, thermo_params)
     @. ᶜT′T′ = ᶜ∂T_∂θ^2 * ᶜT′T′
@@ -862,7 +872,7 @@ function set_covariance_cache!(Y, p, thermo_params)
         )
     end
 
-    # 5. Closure-validity bound `σ_q ≤ sgs_variance_max_rel_std · q_tot`
+    # 6. Closure-validity bound `σ_q ≤ sgs_variance_max_rel_std · q_tot`
     #    (default 0.5). A wider Gaussian puts a quadrature node at negative
     #    total water; the clamped quadrature then carries more total water
     #    than the grid mean holds, and condensing it can drive the grid-mean
@@ -877,11 +887,199 @@ function set_covariance_cache!(Y, p, thermo_params)
     end
     @. ᶜq′q′ = min(ᶜq′q′, (r_max * ᶜq_tot_nonneg)^2)
 
-    # 6. The correlation the quadrature samples.
+    # 7. The correlation the quadrature samples.
     set_tq_correlation!(p, p.atmos.tq_correlation_model)
 
-    # 7. Refresh `ᶜα` with the current bounded `ᶜl_mix` and state.
+    # 8. Refresh `ᶜα` with the current bounded `ᶜl_mix` and state.
     materialized_variance_fidelity!(Y, p, ᶜl_mix_disp)
+    return nothing
+end
+
+"""
+    _active_moist_updraft_area(aʲ, a_min, q_totʲ, q_tot⁰)
+
+Active area fraction `max(0, aʲ − 1.5 a_min)` of updraft `j` when it is moister
+than the environment (`q_totʲ > q_tot⁰`), and `0` otherwise. The `1.5 a_min`
+margin excludes the minimum-area background seed (`aʲ ≈ a_min`), and the
+moisture condition excludes dry detraining remnants above inversions.
+"""
+@inline function _active_moist_updraft_area(aʲ, a_min, q_totʲ, q_tot⁰)
+    FT = typeof(aʲ)
+    a_act = max(zero(FT), aʲ - FT(1.5) * FT(a_min))
+    return ifelse(q_totʲ > q_tot⁰, a_act, zero(FT))
+end
+
+@inline function _env_theta_li(thermo_params, T⁰, p_val, q_tot⁰, q_liq⁰, q_ice⁰)
+    ρ⁰ = TD.air_density(thermo_params, T⁰, p_val, q_tot⁰, q_liq⁰, q_ice⁰)
+    return TD.liquid_ice_pottemp(
+        thermo_params, T⁰, ρ⁰, q_tot⁰, q_liq⁰, q_ice⁰,
+    )
+end
+
+"""
+    _updraft_coherent_var_q(ρaʲ, ρʲ, ρ, a_min, q_totʲ, q_tot⁰)
+
+Coherent moisture variance `(ρʲ a_actʲ / ρ) (q_totʲ − q_tot⁰)²` carried by an
+active moist updraft (`_active_moist_updraft_area`).
+"""
+@inline function _updraft_coherent_var_q(
+    ρaʲ,
+    ρʲ,
+    ρ,
+    a_min,
+    q_totʲ,
+    q_tot⁰,
+)
+    FT = typeof(ρ)
+    aʲ = max(zero(FT), draft_area(ρaʲ, ρʲ))
+    a_act = _active_moist_updraft_area(aʲ, a_min, q_totʲ, q_tot⁰)
+    wʲ = clamp(ρʲ * a_act / ρ, zero(FT), one(FT))
+    return wʲ * (q_totʲ - q_tot⁰)^2
+end
+
+"""
+    _updraft_coherent_var_θ(
+        thermo_params, ρaʲ, ρʲ, ρ, a_min, Tʲ, q_totʲ, q_liqʲ, q_iceʲ,
+        θ_li⁰, q_tot⁰, r_v_θ,
+    )
+
+Coherent liquid-ice potential-temperature variance
+`(ρʲ a_actʲ / ρ) (r_{v,θ} (θ_liʲ − θ_li⁰))²` carried by an active moist updraft,
+scaled by the vertical displacement ratio `r_{v,θ}` that relates the `θ_li` and
+`q_tot` displacement variances in `set_covariance_cache!`.
+"""
+@inline function _updraft_coherent_var_θ(
+    thermo_params,
+    ρaʲ,
+    ρʲ,
+    ρ,
+    a_min,
+    Tʲ,
+    q_totʲ,
+    q_liqʲ,
+    q_iceʲ,
+    θ_li⁰,
+    q_tot⁰,
+    r_v_θ,
+)
+    FT = typeof(ρ)
+    aʲ = max(zero(FT), draft_area(ρaʲ, ρʲ))
+    a_act = _active_moist_updraft_area(aʲ, a_min, q_totʲ, q_tot⁰)
+    wʲ = clamp(ρʲ * a_act / ρ, zero(FT), one(FT))
+    θ_liʲ = TD.liquid_ice_pottemp(
+        thermo_params, Tʲ, ρʲ, q_totʲ, q_liqʲ, q_iceʲ,
+    )
+    return wʲ * (FT(r_v_θ) * (θ_liʲ - θ_li⁰))^2
+end
+
+"""
+    _apply_env_var_subtraction(v_tot, dv_up, l_mix_disp, l_d)
+
+Subtract the coherent updraft variance `dv_up` from the total displacement
+variance `v_tot`, floored at the local turbulent mixing-length share
+`f_turb v_tot` with `f_turb = clamp((min(l_mix_disp, l_d) / l_d)², 0, 1)`.
+"""
+@inline function _apply_env_var_subtraction(v_tot, dv_up, l_mix_disp, l_d)
+    FT = typeof(v_tot)
+    f_turb = clamp(
+        (min(FT(l_mix_disp), FT(l_d)) / max(FT(l_d), eps(FT)))^2,
+        zero(FT),
+        one(FT),
+    )
+    return clamp(v_tot - dv_up, f_turb * v_tot, v_tot)
+end
+
+"""
+    _env_std_scale(v_tot, dv_up, l_mix_disp, l_d)
+
+Standard-deviation scaling factor `√(v_env / v_tot) ∈ [0, 1]` corresponding to
+`_apply_env_var_subtraction`, or `1` where `v_tot` vanishes. Multiplying `ᶜT′q′`
+by the product of the `θ_li` and `q_tot` factors keeps the diagnosed correlation
+invariant under the variance subtraction.
+"""
+@inline function _env_std_scale(v_tot, dv_up, l_mix_disp, l_d)
+    FT = typeof(v_tot)
+    v_env = _apply_env_var_subtraction(v_tot, dv_up, l_mix_disp, l_d)
+    return ifelse(
+        v_tot > floatmin(FT),
+        sqrt(clamp(v_env / max(v_tot, floatmin(FT)), zero(FT), one(FT))),
+        one(FT),
+    )
+end
+
+"""
+    _subtract_edmf_coherent_covariance!(
+        Y, p, thermo_params, ᶜl_d, ᶜl_mix_disp, r_v_θ, diag_corr,
+    )
+
+Subtract the coherent between-subdomain variance carried by active moist
+updrafts from the grid-scale displacement variances `ᶜq′q′` and `ᶜT′T′` (in the
+`θ_li` basis before Step 5 of `set_covariance_cache!`), and rescale `ᶜT′q′` so
+the diagnosed `T`–`q_tot` correlation is invariant under the subtraction. No-op
+when `p.atmos.turbconv_model` is not `PrognosticEDMFX`.
+"""
+function _subtract_edmf_coherent_covariance!(
+    Y,
+    p,
+    thermo_params,
+    ᶜl_d,
+    ᶜl_mix_disp,
+    r_v_θ,
+    diag_corr::Bool,
+)
+    turbconv_model = p.atmos.turbconv_model
+    turbconv_model isa PrognosticEDMFX || return nothing
+    FT = eltype(p.params)
+    a_min = FT(CAP.min_area(CAP.turbconv_params(p.params)))
+    (; ᶜT′T′, ᶜq′q′, ᶜp, ᶜT⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰) = p.precomputed
+
+    ᶜθ_li⁰ = p.scratch.ᶜtemp_scalar_3
+    @. ᶜθ_li⁰ = _env_theta_li(
+        thermo_params, ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰,
+    )
+
+    ᶜwq = p.scratch.ᶜtemp_scalar_5
+    ᶜwθ = p.scratch.ᶜtemp_scalar_6
+    @. ᶜwq = zero(FT)
+    @. ᶜwθ = zero(FT)
+
+    n = n_mass_flux_subdomains(turbconv_model)
+    (; ᶜρʲs, ᶜTʲs, ᶜq_tot_nonnegʲs, ᶜq_liqʲs, ᶜq_iceʲs) = p.precomputed
+    for j in 1:n
+        ᶜρaʲ = Y.c.sgsʲs.:($j).ρa
+        @. ᶜwq += _updraft_coherent_var_q(
+            ᶜρaʲ,
+            ᶜρʲs.:($$j),
+            Y.c.ρ,
+            $(a_min),
+            ᶜq_tot_nonnegʲs.:($$j),
+            ᶜq_tot_nonneg⁰,
+        )
+        @. ᶜwθ += _updraft_coherent_var_θ(
+            thermo_params,
+            ᶜρaʲ,
+            ᶜρʲs.:($$j),
+            Y.c.ρ,
+            $(a_min),
+            ᶜTʲs.:($$j),
+            ᶜq_tot_nonnegʲs.:($$j),
+            ᶜq_liqʲs.:($$j),
+            ᶜq_iceʲs.:($$j),
+            ᶜθ_li⁰,
+            ᶜq_tot_nonneg⁰,
+            $(r_v_θ),
+        )
+    end
+
+    ᶜl_mix_mat = p.scratch.ᶜtemp_scalar_3
+    @. ᶜl_mix_mat = ᶜl_mix_disp
+    if diag_corr
+        @. p.precomputed.ᶜT′q′ *=
+            _env_std_scale(ᶜT′T′, ᶜwθ, ᶜl_mix_mat, ᶜl_d) *
+            _env_std_scale(ᶜq′q′, ᶜwq, ᶜl_mix_mat, ᶜl_d)
+    end
+    @. ᶜq′q′ = _apply_env_var_subtraction(ᶜq′q′, ᶜwq, ᶜl_mix_mat, ᶜl_d)
+    @. ᶜT′T′ = _apply_env_var_subtraction(ᶜT′T′, ᶜwθ, ᶜl_mix_mat, ᶜl_d)
     return nothing
 end
 
@@ -1825,7 +2023,9 @@ end
     )
 
 Materialize the per-cell subsaturated-environment upper-tail truncation
-quantile `ᶜc_hi` into `p.scratch.ᶜtemp_scalar_3` and return it.
+quantile `ᶜc_hi` into `p.scratch.ᶜtemp_scalar_3` and return it. Only active
+moist updrafts (`_active_moist_updraft_area`) contribute to the truncated
+upper-tail area.
 """
 function _materialize_env_tail_partition!(
     Y,
@@ -1845,31 +2045,31 @@ function _materialize_env_tail_partition!(
     turbconv_model = p.atmos.turbconv_model
     c_tail = FT(CAP.sgs_env_updraft_tail_truncation_coeff(p.params))
     rh_trans = FT(CAP.sgs_env_subsat_rh_transition(p.params))
-    gamma_crit = FT(CAP.sgs_env_subsat_gamma_crit(p.params))
+    a_min = FT(CAP.min_area(CAP.turbconv_params(p.params)))
 
     @. ᶜc_hi = zero(FT)
 
     n = n_mass_flux_subdomains(turbconv_model)
-    (; ᶜρʲs) = p.precomputed
+    (; ᶜρʲs, ᶜq_tot_nonnegʲs, ᶜq_tot_nonneg⁰) = p.precomputed
     for j in 1:n
         ᶜρaʲ = Y.c.sgsʲs.:($j).ρa
-        @. ᶜc_hi += max(zero(FT), draft_area(ᶜρaʲ, ᶜρʲs.:($$j)))
+        @. ᶜc_hi += _active_moist_updraft_area(
+            max(zero(FT), draft_area(ᶜρaʲ, ᶜρʲs.:($$j))),
+            $(a_min),
+            ᶜq_tot_nonnegʲs.:($$j),
+            ᶜq_tot_nonneg⁰,
+        )
     end
 
-    ᶜw_cu = p.scratch.ᶜtemp_scalar_8
-    _materialize_subsat_cu_switch!(
-        ᶜw_cu,
-        p,
-        thermo_params,
-        ᶜT_mean,
-        ᶜρ_env,
-        ᶜq_cloud,
-        rh_trans,
-        gamma_crit,
-    )
     @. ᶜc_hi = _env_tail_c_hi_from_sums(
         ᶜc_hi,
-        ᶜw_cu,
+        _env_subsat_switch(
+            $(thermo_params),
+            ᶜT_mean,
+            ᶜρ_env,
+            ᶜq_cloud,
+            $(rh_trans),
+        ),
         $(c),
         $(c_tail),
     )
@@ -1901,104 +2101,19 @@ and warm-cloud ramp `w_warm = clamp((T_mean − 263.15 K) / 10 K, 0, 1)`.
 end
 
 """
-    _env_subsat_cu_switch(
-        thermo_params, T_mean, ρ_env, q_cloud, rh_trans, dθli_dz, gamma_crit,
-    )
-
-Subsaturated-cumulus switch `w_cu = s_rh · w_warm · s_instab ∈ [0, 1]`,
-combining `_env_subsat_switch` with the static-stability gate
-`s_instab = 1 / (1 + (max(0, dθli_dz) / γ_crit)⁴)` when `γ_crit > 0` (`1`
-otherwise), which suppresses the switch across strong stratocumulus inversions
-(`dθli_dz ≫ γ_crit`).
-"""
-@inline function _env_subsat_cu_switch(
-    thermo_params,
-    T_mean,
-    ρ_env,
-    q_cloud,
-    rh_trans,
-    dθli_dz,
-    gamma_crit,
-)
-    FT = typeof(T_mean)
-    s_base = _env_subsat_switch(thermo_params, T_mean, ρ_env, q_cloud, rh_trans)
-    γ_c = FT(gamma_crit)
-    v = ifelse(γ_c > zero(FT), max(zero(FT), FT(dθli_dz)) / γ_c, zero(FT))
-    s_instab = one(FT) / (one(FT) + v^4)
-    return s_base * s_instab
-end
-
-"""
-    _materialize_subsat_cu_switch!(
-        ᶜw_cu, p, thermo_params, ᶜT_mean, ᶜρ_env, ᶜq_cloud, rh_trans, gamma_crit,
-    )
-
-Write the per-cell subsaturated-cumulus switch `_env_subsat_cu_switch` into
-`ᶜw_cu` and return it. When `gamma_crit > 0` and `p.precomputed` carries
-`ᶠ∂θli∂z`, the vertical potential-temperature gradient at each cell center is
-taken as the larger of its two bounding face gradients, matching the
-face-maximum stability stencil of `set_displacement_buoyancy_gradient!`.
-"""
-function _materialize_subsat_cu_switch!(
-    ᶜw_cu,
-    p,
-    thermo_params,
-    ᶜT_mean,
-    ᶜρ_env,
-    ᶜq_cloud,
-    rh_trans,
-    gamma_crit,
-)
-    FT = eltype(p.params)
-    if gamma_crit > zero(FT) && hasproperty(p.precomputed, :ᶠ∂θli∂z)
-        (; ᶠ∂θli∂z) = p.precomputed
-        nc = Spaces.nlevels(axes(ᶜw_cu))
-        ᶜθ_below = Operators.BottomBiasedF2C(
-            bottom = Operators.SetValue(
-                Fields.level(ᶠ∂θli∂z, 1 + Fields.half),
-            ),
-        )
-        ᶜθ_above = Operators.TopBiasedF2C(
-            top = Operators.SetValue(
-                Fields.level(ᶠ∂θli∂z, nc - Fields.half),
-            ),
-        )
-        @. ᶜw_cu = _env_subsat_cu_switch(
-            $(thermo_params),
-            ᶜT_mean,
-            ᶜρ_env,
-            ᶜq_cloud,
-            $(rh_trans),
-            max(ᶜθ_below(ᶠ∂θli∂z), ᶜθ_above(ᶠ∂θli∂z)),
-            $(gamma_crit),
-        )
-    else
-        @. ᶜw_cu = _env_subsat_switch(
-            $(thermo_params),
-            ᶜT_mean,
-            ᶜρ_env,
-            ᶜq_cloud,
-            $(rh_trans),
-        )
-    end
-    return ᶜw_cu
-end
-
-"""
     _env_tail_c_hi_from_sums(a_up, w_eff, c, c_tail)
 
 Upper truncation quantile `c_hi = min(c, Φ⁻¹(1 − q_tail))` of the subsaturated
 environment's saturation-excess PDF for tail probability
-`q_tail = clamp(w_eff c_tail max(a_up, 2e-3), 0, 0.49)`; returns `c` when
-`q_tail == 0`.
+`q_tail = clamp(w_eff c_tail max(0, a_up), 0, 0.49)`; returns `c` when
+`q_tail ≤ eps(FT)`.
 """
 @inline function _env_tail_c_hi_from_sums(a_up, w_eff, c, c_tail)
     FT = typeof(a_up)
-    a_eff = max(a_up, FT(2e-3))
-    q_tail = clamp(w_eff * FT(c_tail) * a_eff, zero(FT), FT(0.49))
+    q_tail = clamp(w_eff * FT(c_tail) * max(zero(FT), a_up), zero(FT), FT(0.49))
     q_tail_safe = clamp(q_tail, eps(FT), FT(0.49))
     return ifelse(
-        q_tail > zero(FT),
+        q_tail > eps(FT),
         min(FT(c), normal_cdf_inv(one(FT) - q_tail_safe)),
         FT(c),
     )

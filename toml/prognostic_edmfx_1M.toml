@@ -47,10 +47,6 @@ type = "float"
 value = 0.03
 type = "float"
 
-[sgs_env_subsat_gamma_crit]
-value = 0.0115
-type = "float"
-
 [sgs_liquid_uniform_fraction]
 value = 0.0
 type = "float"
@@ -111,13 +107,13 @@ value = 100
 value = 0.000105
 
 [cloud_liquid_water_specific_humidity_autoconversion_threshold_stratiform_scale]
-value = 4.5
+value = 3.5
 
 [rain_autoconversion_timescale]
 value = 360
 
 [rain_autoconversion_timescale_stratiform_scale]
-value = 3.5
+value = 2.5
 
 [rain_autoconversion_velocity_scale]
 value = 0.05

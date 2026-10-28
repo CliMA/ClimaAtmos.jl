@@ -52,7 +52,7 @@ floor_nt(::Type{FT}; ε_rel = FT(0.02), σ_abs = FT(1e-7)) where {FT} =
                 @testset "Non-equilibrium excess normalized by subsaturation deficit" begin
                     # When σ_S = 0 and μ_S = -1e-3, q_c_eq = 0 so q_c = 1e-3 is
                     # purely non-equilibrium condensate normalized by
-                    # σ_neq = √(σ_aug² + δ_sub²) ≈ 1e-3 (C ≈ 1, cf ≈ 0.70),
+                    # σ_neq = √(σ_aug² + δ_sub²) ≈ 1e-3 (C ≈ 1, cf ≈ 0.82),
                     # whereas at saturation (μ_S = 0) δ_sub = 0 and cf > 0.99.
                     cf_neq = CA._compute_cloud_fraction(
                         FT(1e-3), μ_sub, FT(0), α, floor,
@@ -60,7 +60,7 @@ floor_nt(::Type{FT}; ε_rel = FT(0.02), σ_abs = FT(1e-7)) where {FT} =
                     cf_eq = CA._compute_cloud_fraction(
                         FT(1e-3), FT(0), FT(0), α, floor,
                     )
-                    @test FT(0.6) < cf_neq < FT(0.8)
+                    @test FT(0.75) < cf_neq < FT(0.85)
                     @test cf_eq > FT(0.99)
                 end
 
@@ -611,7 +611,7 @@ floor_nt(::Type{FT}; ε_rel = FT(0.02), σ_abs = FT(1e-7)) where {FT} =
         end
     end
 
-    @testset "Subsaturated environment tail truncation and detrained fraction" begin
+    @testset "Subsaturated environment tail truncation, coherent variance subtraction, and detrained fraction" begin
         for FT in (Float32, Float64)
             @testset "FT = $FT" begin
                 config = CA.AtmosConfig(Dict("FLOAT_TYPE" => string(FT)))
@@ -646,42 +646,75 @@ floor_nt(::Type{FT}; ε_rel = FT(0.02), σ_abs = FT(1e-7)) where {FT} =
                     FT(1.2),
                 ) == FT(0)
 
-                # Subsaturated cumulus switch vanishes at saturation and across
-                # strong inversions, and approaches 1 in warm subsaturated air.
+                # Subsaturation switch vanishes at saturation and approaches 1 in
+                # warm subsaturated air.
                 ρ = FT(1.1)
                 T = FT(295)
                 q_sat = TD.q_vap_saturation(thermo_params, T, ρ)
                 rh_trans = FT(0.03)
-                gamma_crit = FT(0.0115)
-                @test CA._env_subsat_cu_switch(
+                @test CA._env_subsat_switch(
                     thermo_params,
                     T,
                     ρ,
                     q_sat,
                     rh_trans,
-                    FT(0.002),
-                    gamma_crit,
                 ) == FT(0)
-                w_cu_sub = CA._env_subsat_cu_switch(
+                w_cu_sub = CA._env_subsat_switch(
                     thermo_params,
                     T,
                     ρ,
                     FT(0.85) * q_sat,
                     rh_trans,
-                    FT(0.002),
-                    gamma_crit,
-                )
-                w_cu_inv = CA._env_subsat_cu_switch(
-                    thermo_params,
-                    T,
-                    ρ,
-                    FT(0.85) * q_sat,
-                    rh_trans,
-                    FT(0.05),
-                    gamma_crit,
                 )
                 @test w_cu_sub > FT(0.95)
-                @test w_cu_inv < FT(5e-3)
+
+                # Active moist-updraft area requires aʲ > 1.5 a_min and q_totʲ > q_tot⁰.
+                a_min = FT(1e-5)
+                @test CA._active_moist_updraft_area(
+                    FT(1.2e-5),
+                    a_min,
+                    FT(0.012),
+                    FT(0.010),
+                ) == FT(0)
+                @test CA._active_moist_updraft_area(
+                    FT(0.02),
+                    a_min,
+                    FT(0.009),
+                    FT(0.010),
+                ) == FT(0)
+                @test CA._active_moist_updraft_area(
+                    FT(0.02),
+                    a_min,
+                    FT(0.012),
+                    FT(0.010),
+                ) ≈ FT(0.02) - FT(1.5) * a_min
+
+                # Coherent variance subtraction and correlation-preserving std scale.
+                v_tot = FT(1e-6)
+                dv_up = FT(6e-7)
+                v_env = CA._apply_env_var_subtraction(
+                    v_tot,
+                    dv_up,
+                    FT(30),
+                    FT(60),
+                )
+                @test v_env ≈ FT(4e-7)
+                # Floored at f_turb * v_tot = (30/60)^2 * v_tot = 0.25 * v_tot:
+                @test CA._apply_env_var_subtraction(
+                    v_tot,
+                    FT(9e-7),
+                    FT(30),
+                    FT(60),
+                ) ≈ FT(0.25) * v_tot
+                # When l_mix_disp == 0 (quiescent inversion), f_turb == 0:
+                @test CA._apply_env_var_subtraction(
+                    v_tot,
+                    FT(9e-7),
+                    FT(0),
+                    FT(60),
+                ) ≈ FT(1e-7)
+                @test CA._env_std_scale(v_tot, dv_up, FT(30), FT(60)) ≈
+                      sqrt(FT(0.4))
 
                 c_hi_0 = CA._env_tail_c_hi_from_sums(
                     FT(0.01),
@@ -698,6 +731,12 @@ floor_nt(::Type{FT}; ε_rel = FT(0.02), σ_abs = FT(1e-7)) where {FT} =
                 @test c_hi_0 == c
                 @test c_hi_cu < c
                 @test c_hi_cu ≈ CA.normal_cdf_inv(FT(0.96)) rtol = FT(1e-4)
+                @test CA._env_tail_c_hi_from_sums(
+                    FT(0),
+                    FT(1),
+                    c,
+                    FT(4),
+                ) == c
 
                 # Detrained condensate fraction is 0 at or below equilibrium and
                 # (q_c - q_c_eq) / q_c above equilibrium.
@@ -726,6 +765,27 @@ floor_nt(::Type{FT}; ε_rel = FT(0.02), σ_abs = FT(1e-7)) where {FT} =
                     sigma_S,
                     FT(-Inf),
                 ) == FT(1)
+                # _env_conv_autoconv_velocity weights w_d by f_neq only.
+                @test CA._env_conv_autoconv_velocity(
+                    FT(-0.01),
+                    FT(0.5) * q_eq,
+                    FT(0),
+                    sigma_S,
+                    mu_S,
+                    FT(1),
+                    FT(0),
+                    FT(0.13),
+                ) == FT(0)
+                @test CA._env_conv_autoconv_velocity(
+                    FT(-0.01),
+                    FT(2) * q_eq,
+                    FT(0),
+                    sigma_S,
+                    mu_S,
+                    FT(0),
+                    FT(0.4),
+                    FT(0.13),
+                ) ≈ FT(0.5) * FT(0.4) + FT(0.5) * FT(0.13) rtol = FT(1e-5)
             end
         end
     end

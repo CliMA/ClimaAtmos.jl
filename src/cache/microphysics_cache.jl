@@ -1022,6 +1022,31 @@ end
     return clamp((q_c - q_c_eq) / q_c, FT(0), FT(1))
 end
 
+"""
+    _env_conv_autoconv_velocity(
+        w⁰, q_lcl⁰, q_icl⁰, sigma_S, λ_eq, w_cu, w_up_vel, w_d,
+    )
+
+Vertical velocity `w_mp⁰ = max(w⁰, max(f_neq, w_cu) w_up_vel + f_neq w_d)`
+passed to the 1-moment warm-rain autoconversion of the environment under
+`PrognosticEDMFX`, combining the active moist-updraft velocity `w_up_vel` with
+the non-equilibrium detrained-condensate velocity `f_neq w_d`
+(`env_detrained_condensate_fraction`).
+"""
+@inline function _env_conv_autoconv_velocity(
+    w⁰,
+    q_lcl⁰,
+    q_icl⁰,
+    sigma_S,
+    λ_eq,
+    w_cu,
+    w_up_vel,
+    w_d,
+)
+    f_neq = env_detrained_condensate_fraction(q_lcl⁰, q_icl⁰, sigma_S, λ_eq)
+    return max(w⁰, max(f_neq, w_cu) * w_up_vel + f_neq * w_d)
+end
+
 function set_microphysics_tendency_cache!(
     Y, p, mp1m::NonEquilibriumMicrophysics1M, _,
 )
@@ -1118,21 +1143,18 @@ function set_microphysics_tendency_cache!(
     # environment descends by mass continuity wherever updrafts rise, so its own
     # velocity would put `Kessler1M` at the quiescent (stratiform) threshold and
     # timescale everywhere, including where the environment condensate was
-    # detrained from convective updrafts. In convective regimes, marked by the
-    # larger of the non-equilibrium condensate excess fraction `f_neq`
-    # (`env_detrained_condensate_fraction`) and the subsaturated-cumulus switch
-    # `w_cu` (`_env_subsat_cu_switch`), the environment condensate sees the
-    # velocity of the drafts that formed it,
+    # detrained from convective updrafts. In convective regimes, the active
+    # moist-updraft velocity `w_up_vel = c_w Σⱼ a_actʲ max(wⱼ, 0) / max(Σⱼ a_actʲ, a_min)`
+    # is weighted by `max(f_neq, w_cu)` and the reference velocity `w_d` of
+    # detrained condensate is weighted by `f_neq`
+    # (`_env_conv_autoconv_velocity`):
     #
-    #     w_conv = c_w Σⱼ aⱼ max(wⱼ, 0) / max(Σⱼ aⱼ, a_min) + w_d,
-    #     w_mp⁰ = max(w⁰, max(f_neq, w_cu) w_conv),
+    #     w_mp⁰ = max(w⁰, max(f_neq, w_cu) w_up_vel + f_neq w_d).
     #
-    # the mass-flux-weighted updraft velocity of the cell with weight `c_w`,
-    # plus the reference velocity `w_d` of the drafts that detrained condensate
-    # which has outlived them. In a stratocumulus deck the condensate is in
-    # equilibrium (`f_neq ≈ 0`) and the subsaturation/stability switch vanishes
-    # (`w_cu ≈ 0`), so the environment stays stratiform; under cumulus the
-    # detrained condensate rains at the convective values.
+    # In a stratocumulus deck the condensate is in equilibrium (`f_neq ≈ 0`) and
+    # no moister-than-environment updraft is active (`w_up_vel = 0`), so the
+    # environment stays stratiform; under cumulus the detrained condensate rains
+    # at the convective values.
     FT = eltype(p.params)
     c_w = FT(CAP.sgs_env_autoconversion_updraft_velocity_weight(p.params))
     w_d = FT(CAP.sgs_env_autoconversion_detrained_velocity(p.params))
@@ -1144,18 +1166,26 @@ function set_microphysics_tendency_cache!(
         ᶜaw_up = p.scratch.ᶜtemp_scalar_7
         @. ᶜa_up = zero(FT)
         @. ᶜaw_up = zero(FT)
-        for j in 1:n
-            ᶜaʲ = @. lazy(
-                max(zero(FT), draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j))),
-            )
-            @. ᶜa_up += ᶜaʲ
-            @. ᶜaw_up += ᶜaʲ * max(zero(FT), w_component(WVec(ᶜuʲs.:($$j))))
-        end
         a_min = FT(CAP.min_area(CAP.turbconv_params(p.params)))
+        for j in 1:n
+            ᶜa_actʲ = @. lazy(
+                _active_moist_updraft_area(
+                    max(zero(FT), draft_area(Y.c.sgsʲs.:($$j).ρa, ᶜρʲs.:($$j))),
+                    $(a_min),
+                    ᶜq_tot_nonnegʲs.:($$j),
+                    ᶜq_tot_nonneg⁰,
+                ),
+            )
+            @. ᶜa_up += ᶜa_actʲ
+            @. ᶜaw_up += ᶜa_actʲ * max(zero(FT), w_component(WVec(ᶜuʲs.:($$j))))
+        end
         ᶜw_conv_vel = p.scratch.ᶜtemp_scalar_7
-        @. ᶜw_conv_vel = $(c_w) * ᶜaw_up / max(ᶜa_up, $(a_min)) + $(w_d)
+        @. ᶜw_conv_vel = ifelse(
+            ᶜa_up > zero(FT),
+            $(c_w) * ᶜaw_up / max(ᶜa_up, $(a_min)),
+            zero(FT),
+        )
         rh_trans = FT(CAP.sgs_env_subsat_rh_transition(p.params))
-        gamma_crit = FT(CAP.sgs_env_subsat_gamma_crit(p.params))
         ᶜq_cloud⁰ = @. lazy(
             max(
                 zero(FT),
@@ -1164,27 +1194,22 @@ function set_microphysics_tendency_cache!(
             ),
         )
         ᶜw_cu = p.scratch.ᶜtemp_scalar_6
-        _materialize_subsat_cu_switch!(
-            ᶜw_cu,
-            p,
-            thp,
+        @. ᶜw_cu = _env_subsat_switch(
+            $(thp),
             ᶜT⁰,
             ᶜρ⁰,
             ᶜq_cloud⁰,
-            rh_trans,
-            gamma_crit,
+            $(rh_trans),
         )
-        @. ᶜw⁰_mp = max(
+        @. ᶜw⁰_mp = _env_conv_autoconv_velocity(
             ᶜw⁰_mp,
-            max(
-                env_detrained_condensate_fraction(
-                    ᶜq_lcl⁰,
-                    ᶜq_icl⁰,
-                    ᶜsgs_moments.sigma_S,
-                    ᶜsgs_moments.λ_eq,
-                ),
-                ᶜw_cu,
-            ) * ᶜw_conv_vel,
+            ᶜq_lcl⁰,
+            ᶜq_icl⁰,
+            ᶜsgs_moments.sigma_S,
+            ᶜsgs_moments.λ_eq,
+            ᶜw_cu,
+            ᶜw_conv_vel,
+            $(w_d),
         )
     end
     ᶜw⁰_air = ᶜw⁰_mp
