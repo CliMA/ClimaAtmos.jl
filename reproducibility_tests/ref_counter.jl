@@ -1,4 +1,4 @@
-445
+446
 
 # **README**
 #
@@ -32,6 +32,13 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+446
+- Include condensate and precipitation sedimentation enthalpy and mass-source
+  dilution in `PrognosticEDMFX` updraft `mse` and `ρaʲ`, clamp laterally
+  entrained environment sedimentation fluxes to non-negative values, refresh
+  terminal velocities after the Picard updraft predictor, and fix 0M updraft
+  precipitation removal `mse` weighting.
+
 445
 - `radiation_tendency!` for `RadiationDYCOMS` selects the inversion height `z_i`
   as the highest level with `q_tot >= 0.008` kg/kg (falling back to the closest

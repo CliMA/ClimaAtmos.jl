@@ -119,6 +119,21 @@ face-interpolated draft velocity and the normalized density excess,
 = I^c(\boldsymbol{u}_v^j) \cdot \frac{\rho^j - \rho}{\rho^j} \, G^c[\Phi] .
 ```
 
+Under non-equilibrium microphysics, `updraft_sedimentation!` evaluates, for
+each sedimenting draft condensate or precipitation species
+``q_\mu^{\sigma j}``, the downward-biased (`ᶠtop_bias`) sedimentation
+divergence ``S_\mu`` with the lateral-mixing correction where
+``\partial_z a^j < 0``. The sum ``S = \sum_\mu S_\mu`` is the sedimentation
+source of the draft mass, which the analytic draft-mass solve
+(`solve_sgs_ρa_implicit_stage_analytic!`) applies as a rate, and each
+intensive draft scalar ``\chi^j`` receives
+``(S_\chi - \chi^j S) / \hat{\rho}^j``, with ``S_\chi`` its own
+sedimentation tendency: ``S_\mu`` for ``q_\mu^{\sigma j}``,
+``S`` for ``q_t^j``, ``\sum_\mu S_{h,\mu}`` for ``h_s^j`` (the
+`updraft_sedimentation!` tendency of ``q_\mu^{\sigma j} (h_\mu(T^j) + \Phi)``,
+with laterally entrained environment condensate at ``h_\mu(T^0) + \Phi``), and
+zero for the other draft tracers.
+
 ### Draft vertical momentum
 
 Breaking the curl and cross-product terms into horizontal and vertical
@@ -348,7 +363,7 @@ n[i] = \frac{\hat{\rho}^{j,\mathrm{old}}[i]}{\gamma \Delta t} ,
 ```math
 d[i] = \max\!\left( \frac{0.1}{\gamma \Delta t}, \;
   \frac{1}{\gamma \Delta t} + \alpha_{\mathrm{top}}[i]
-  - (E^j - \Delta^j)[i] \right) ,
+  - (E^j - \Delta^j)[i] - r[i] \right) ,
 \qquad
 \alpha_{\mathrm{face}} = \frac{I^f(\rho^j J)}{J^f}
   \frac{u_3^j / \Delta z^f}{\rho^j_{\mathrm{upwind}} \, \Delta z} ,
@@ -356,7 +371,32 @@ d[i] = \max\!\left( \frac{0.1}{\gamma \Delta t}, \;
 
 swept bottom to top, with the upwind density ``\rho^j[i]`` at the top face and
 ``\rho^j[i-1]`` at the bottom face. The floor on the denominator caps the
-per-step growth at roughly a factor of ten.
+per-step growth at roughly a factor of ten. The sedimentation mass source of
+the condensate species enters as the rate (`updraft_sedimentation_rate!`)
+
+```math
+r = \frac{1}{\gamma \Delta t} \sum_\mu \Delta q_\mu ,
+\qquad
+\left( I - \gamma \Delta t \, \hat{\rho}^{-1}
+  \frac{\partial S_\mu}{\partial q_\mu} \right) \Delta q_\mu
+= \gamma \Delta t \, \hat{\rho}^{-1} S_\mu ,
+```
+
+the change of each draft condensate by sedimentation in one linearized
+backward-Euler step from the Picard-converged tracers, at the stage-start
+area. The flux through each face comes from the cell above, so the operator is
+upper bidiagonal and each column is solved in one top-to-bottom sweep. The
+stage source is ``r \hat{\rho}^j[i]``. The Newton solve takes the same step for
+the condensate, so the mass the draft gains matches the dilution
+``\chi^j S / \hat{\rho}^j`` that it applies, also at Courant numbers above
+one, where the condensate that arrives over the stage differs from the
+stage-start ``S``. Where the draft narrows downward, ``S_\mu`` and its
+derivative are proportional to the local area and ``\Delta q_\mu`` does not
+depend on it, so the rate also holds at the stage area. Under the
+equilibrium 0-moment microphysics with implicit microphysics tendencies, ``r``
+is the draft precipitation removal rate (the ``q_t^j`` tendency
+`ᶜmp_tendencyʲs.dq_tot_dt`); with explicit tendencies, the removal enters
+``\hat{\rho}^j`` through the explicit tendency, and ``r`` is zero.
 
 The recurrence routes detrainment, the surface source, and the area bound in
 ways that are easy to misread:
@@ -391,13 +431,13 @@ The implicit residual is linearized by the Jacobian algorithms of
 blocks are assembled by five update functions that mirror the tendency
 structure, in a fixed order because they accumulate into shared blocks:
 
-| Update                                    | Covers                                                                                                                                                         |
-|:----------------------------------------- |:-------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `update_sgs_advection_jacobian!`          | vertical advection of the draft scalars (assigns the diagonals, including the ``-I`` residual term) and draft sedimentation with its lateral-mixing correction |
-| `update_sgs_diffusion_jacobian!`          | vertical diffusion of the draft scalars down their own gradients                                                                                               |
-| `update_sgs_entr_detr_jacobian!`          | the entrainment relaxation, including the feedback through the environment residual                                                                            |
-| `update_sgs_boundary_condition_jacobian!` | the surface mass-source relaxation in the first cell                                                                                                           |
-| `update_sgs_massflux_jacobian!`           | the mass-flux contributions to the grid-mean scalars                                                                                                           |
+| Update                                    | Covers                                                                                                                                                                                                         |
+|:----------------------------------------- |:-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `update_sgs_advection_jacobian!`          | vertical advection of the draft scalars (assigns the diagonals, including the ``-I`` residual term) and draft sedimentation with its lateral-mixing correction and the ``T^j`` dependence of its enthalpy flux |
+| `update_sgs_diffusion_jacobian!`          | vertical diffusion of the draft scalars down their own gradients                                                                                                                                               |
+| `update_sgs_entr_detr_jacobian!`          | the entrainment relaxation, including the feedback through the environment residual                                                                                                                            |
+| `update_sgs_boundary_condition_jacobian!` | the surface mass-source relaxation in the first cell                                                                                                                                                           |
+| `update_sgs_massflux_jacobian!`           | the mass-flux contributions to the grid-mean scalars                                                                                                                                                           |
 
 The ``\hat{\rho}^j`` and ``u_3^j`` rows receive fallback identity blocks,
 since their stage values come from the analytic solves. The block solver
