@@ -22,11 +22,13 @@ For `PrognosticEDMFX`:
     thermodynamics and `ᶜmp_tendencyʲs` at the transported state and adds
     `dtγ` times the source to the condensate and precipitation tracers;
     the draft thermodynamics and buoyancy are refreshed again at the full
-    iterate.
+    iterate, and the precipitation terminal velocities are refreshed after
+    the last round.
 
  2. Solve `u₃` and `ρa` analytically with the stage-initial values as
-    `*_old` and the Picard-converged buoyancy/mp inputs, then cache the
-    implied tendencies `(u₃_stage - u₃_old) / dtγ` and
+    `*_old` and the Picard-converged buoyancy, microphysics, and
+    sedimentation inputs, then cache the implied tendencies
+    `(u₃_stage - u₃_old) / dtγ` and
     `(ρa_stage - ρa_old) / dtγ` in `p.precomputed.ᶠu₃_tendencyʲs` and
     `p.precomputed.ᶜρa_tendencyʲs`. The matching `sgs_*_implicit_tendency!`
     routines feed these to the Newton solve so it reproduces the analytic
@@ -87,6 +89,9 @@ function initialize_implicit_stage_problem!(Y, p, dtγ)
                 round == n_picard || @. Y.c.sgsʲs.:($$j) = ᶜsnapshot.:($$j)
             end
         end
+        nonequilibrium_mp && set_precipitation_velocities!(
+            Y, p, microphysics_model, turbconv_model,
+        )
     end
 
     solve_sgs_u₃_implicit_stage_analytic!(Y, p, dtγ)
@@ -351,11 +356,30 @@ under first-order upwinding (for upward `ᶠu₃ʲ`) to the forward recurrence
 
     ρa_new[i] = (numerator[i] + α_bot[i] · ρa_new[i−1]) / denominator[i],
     numerator[i] = ρa_old[i]/dtγ,
-    denominator[i] = max(0.1/dtγ, 1/dtγ + α_top[i] − (ε − δ)[i]),
+    denominator[i] = max(0.1/dtγ, 1/dtγ + α_top[i] − (ε − δ)[i] − r_mass[i]),
     α_face = (ᶠinterp(ρʲ·J)/ᶠJ · ᶠu₃ʲ/Δz_face) / (ρʲ_upwind · Δz[i]),
 
 evaluated bottom-to-top with `Operators.column_accumulate!`. The floor on the
 denominator caps the per-step growth at roughly a factor of ten.
+
+`r_mass` is the mass source rate of the updraft condensate. Under the
+non-equilibrium microphysics, it is the sedimentation rate from
+`updraft_sedimentation_rate!`, `Σ_μ Δq_μ / dtγ` with `Δq_μ` the change of the
+updraft condensate by sedimentation in one linearized backward-Euler step from
+the Picard-converged updraft tracers and terminal velocities, at the
+stage-start area and grid-mean state. The Newton solve takes the same step for
+the condensate, so `r_mass ρ̂` matches the sum `S_sed` of the condensate
+sedimentation tendencies in the dilution `χ S_sed ρ̂⁻¹` that it applies, also
+at Courant numbers above one, where the condensate arriving over the stage
+differs from the stage-start flux convergence. Where the draft narrows
+downward, `S_sed` and its derivative are proportional to the local area and
+`Δq_μ` does not depend on it, so the rate also holds at the stage area. Under
+the 0-moment microphysics with implicit microphysics tendencies, `r_mass` is
+the updraft precipitation removal rate `ᶜmp_tendencyʲs.dq_tot_dt`, the rate at
+which the Newton solve removes `q_totʲ` (with explicit tendencies, the removal
+enters `ρaʲ` through the explicit tendency, and `r_mass` is zero). The stage
+source is `r_mass · ρa_new`, so `ρaʲ` receives the mass that `q_totʲ` receives,
+as the grid-mean `ρ` does.
 
 `(ε − δ)` is assembled inline from area-bounding, velocity-scale, and
 buoyancy-driven pieces (see `detr_buoy_inv_time_scale`). The
@@ -403,6 +427,7 @@ function solve_sgs_ρa_implicit_stage_analytic!(Y, p, dtγ)
     # Cell-centred coefficients of the recurrence:
     #   ᶜnumerator            = ρa_old[i] / dtγ
     #   ᶜdenominator          = 1/dtγ + α_top · (1 − implicit_detr_prefactor) − (ε − δ)
+    #                           − r_mass
     #   ᶜmass_flux_factor_bot = α_bot · (1 − implicit_detr_prefactor)
     # where α_face = (ᶠinterp(ρʲ·J)/ᶠJ · ᶠu₃ʲ/Δz_face) / (ρʲ_upwind · Δz).
     # For upward flow the upwind density at the bottom face is ρʲ[i−1], which we
@@ -416,9 +441,25 @@ function solve_sgs_ρa_implicit_stage_analytic!(Y, p, dtγ)
     ᶜmass_flux_factor_bot = p.scratch.ᶜtemp_scalar_3
     ᶜexplicit_entr_minus_detr = p.scratch.ᶜtemp_scalar_4
     ᶠw = p.scratch.ᶠtemp_scalar
+    ᶜmass_source_rate = p.scratch.ᶜtemp_scalar_5
+    nonequilibrium_mp =
+        p.atmos.microphysics_model isa
+        Union{NonEquilibriumMicrophysics1M, NonEquilibriumMicrophysics2M}
+    implicit_0m_mp =
+        p.atmos.microphysics_model isa EquilibriumMicrophysics0M &&
+        p.atmos.microphysics_tendency_timestepping == Implicit()
 
     n = n_mass_flux_subdomains(turbconv_model)
     for j in 1:n
+        # Computed first because `updraft_sedimentation!` writes the face
+        # scratch that holds ᶠw.
+        if nonequilibrium_mp
+            updraft_sedimentation_rate!(ᶜmass_source_rate, Y, p, j, dtγ)
+        elseif implicit_0m_mp
+            @. ᶜmass_source_rate = p.precomputed.ᶜmp_tendencyʲs.:($$j).dq_tot_dt
+        else
+            @. ᶜmass_source_rate = 0
+        end
         @. ᶠw = Y.f.sgsʲs.:($$j).u₃.components.data.:1 / ᶠdz
 
         # entr and detr
@@ -471,11 +512,12 @@ function solve_sgs_ρa_implicit_stage_analytic!(Y, p, dtγ)
             ᶜlower_limiter_factor * detr_buoy_coeff * ᶜbuoy_inv_time_scale
 
         @. ᶜnumerator = Y.c.sgsʲs.:($$j).ρa / dtγ
-        # Floor at 0.1/dtγ ⇒ (ε − δ) ≤ 0.9/dtγ (≈10× per-step growth cap).
+        # Floor at 0.1/dtγ ⇒ (ε − δ) + r_mass ≤ 0.9/dtγ
+        # (≈10× per-step growth cap).
         @. ᶜdenominator =
             max(
                 FT(0.1) / dtγ,
-                1 / dtγ - ᶜexplicit_entr_minus_detr +
+                1 / dtγ - ᶜexplicit_entr_minus_detr - ᶜmass_source_rate +
                 ᶜone_minus_implicit_detr_prefactor * ᶜtop_bias(
                     ᶠinterp(ᶜρʲs.:($$j) * ᶜJ) / ᶠJ * ᶠw,
                 ) / ᶜρʲs.:($$j) / ᶜdz,

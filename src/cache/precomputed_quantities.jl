@@ -140,8 +140,8 @@ function implicit_precomputed_quantities(Y, atmos)
     # Density-weighted 0M microphysics sources: rewritten from the current
     # Newton iterate (through ρ, or ρaʲ/ρa⁰ under EDMF) by
     # update_implicit_microphysics_cache!, so autodiff needs Dual-typed
-    # copies. (The 1M/2M implicit refresh writes only to scratch and to the
-    # surface-flux fields below.)
+    # copies. (The 1M/2M implicit refresh writes only to the velocity, scratch,
+    # and surface-flux fields.)
     implicit_mp_quantities =
         microphysics_model isa EquilibriumMicrophysics0M ?
         (;
@@ -221,7 +221,6 @@ function precomputed_quantities(Y, atmos)
     n_prog = n_prognostic_mass_flux_subdomains(atmos.turbconv_model)
     @assert !(atmos.turbconv_model isa PrognosticEDMFX) || n_prog == 1
     gs_quantities = (;
-        ᶜwₜqₜ = similar(Y.c, Geometry.WVector{FT}),
         ᶜwₕhₜ = similar(Y.c, Geometry.WVector{FT}),
         # Moist buoyancy gradient N² at centers; same physical quantity as the
         # face-native `ᶠK`-pipeline `ᶠbuoygrad`, built from the centered
@@ -393,7 +392,6 @@ function precomputed_quantities(Y, atmos)
                 precipitation_quantities...,
                 # ice quantities (P3)
                 ᶜwnᵢ = similar(Y.c, FT),
-                ᶜlogλ = similar(Y.c, FT),
                 ᶜScoll = similar(Y.c,
                     @NamedTuple{
                         ∂ₜq_c::FT, ∂ₜq_r::FT, ∂ₜN_c::FT, ∂ₜN_r::FT,

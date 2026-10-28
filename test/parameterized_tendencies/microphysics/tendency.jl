@@ -128,6 +128,88 @@ end
 
     end
 
+    @testset "Equilibrium moisture + 0-moment + PrognosticEDMFX updraft budget" begin
+        config = CA.AtmosConfig(
+            Dict{String, Any}(
+                "initial_condition" => "Bomex",
+                "FLOAT_TYPE" => "Float64",
+                "config" => "column",
+                "turbconv" => "prognostic_edmfx",
+                "edmfx_entr_model" => "Generalized",
+                "edmfx_detr_model" => "Generalized",
+                "edmfx_sgs_mass_flux" => true,
+                "edmfx_sgs_diffusive_flux" => false,
+                "edmfx_vertical_diffusion" => false,
+                "edmfx_nh_pressure" => true,
+                "implicit_diffusion" => false,
+                "prognostic_tke" => false,
+                "microphysics_model" => "0M",
+                "z_max" => 3000.0,
+                "z_elem" => 15,
+                "z_stretch" => false,
+                "dt" => "10secs",
+                "t_end" => "10secs",
+                "ode_algo" => "SSP333",
+                "toml" =>
+                    [joinpath(pkgdir(CA), "toml", "prognostic_edmfx.toml")],
+                "output_default_diagnostics" => false,
+            );
+            job_id = "tendency_0M_prognostic_edmfx",
+        )
+        (; Y, p) = generate_test_simulation(config)
+        FT = eltype(Y)
+        thp = CAP.thermodynamics_params(p.params)
+        (; ᶜmp_tendencyʲs, ᶜmp_tendency⁰, ᶜTʲs, ᶜρʲs) = p.precomputed
+        (; ᶜΦ) = p.core
+
+        # Only the updraft removes condensate, carrying liquid enthalpy at Tʲ.
+        @. ᶜmp_tendency⁰.dq_tot_dt = FT(0)
+        @. ᶜmp_tendency⁰.e_tot_hlpr = FT(0)
+        ᶜmpʲ = ᶜmp_tendencyʲs.:(1)
+        @. ᶜmpʲ.dq_tot_dt = FT(-1e-6)
+        @. ᶜmpʲ.e_tot_hlpr = TD.internal_energy_liquid(thp, ᶜTʲs.:(1)) + ᶜΦ
+        @. Y.c.sgsʲs.:(1).ρa = FT(0.1) * ᶜρʲs.:(1)
+
+        Yₜ = zero(Y)
+        CA.microphysics_tendency!(
+            Yₜ, Y, p, FT(0),
+            p.atmos.microphysics_model, p.atmos.turbconv_model,
+        )
+
+        ρaʲ = Array(parent(Y.c.sgsʲs.:(1).ρa))
+        q_totʲ = Array(parent(Y.c.sgsʲs.:(1).q_tot))
+        mseʲ = Array(parent(Y.c.sgsʲs.:(1).mse))
+        ρaʲₜ = Array(parent(Yₜ.c.sgsʲs.:(1).ρa))
+        q_totʲₜ = Array(parent(Yₜ.c.sgsʲs.:(1).q_tot))
+        mseʲₜ = Array(parent(Yₜ.c.sgsʲs.:(1).mse))
+        ρq_totₜ = Array(parent(Yₜ.c.ρq_tot))
+        ρe_totₜ = Array(parent(Yₜ.c.ρe_tot))
+
+        # The updraft loses the water and static energy that the grid mean
+        # loses, so the environment residual is unaffected.
+        @test maximum(abs, ρe_totₜ) > 0
+        @test ρaʲₜ .* q_totʲ .+ ρaʲ .* q_totʲₜ ≈ ρq_totₜ rtol = 1e-10
+        @test ρaʲₜ .* mseʲ .+ ρaʲ .* mseʲₜ ≈ ρe_totₜ rtol = 1e-10
+
+        # The analytic ρa solve removes the precipitated mass at the rate
+        # dq_tot_dt; every other process in that solve is zeroed.
+        fill!(Y.f.sgsʲs.:(1).u₃, CC.Geometry.Covariant3Vector(FT(0)))
+        for name in (
+            :ᶜρ_diffʲs,
+            :ᶜentr_vel_scaleʲs,
+            :ᶜentr_nonvel_rateʲs,
+            :ᶜarea_bounding_entr_detrʲs,
+            :sfc_mass_flux_sourceʲs,
+        )
+            fill!(getproperty(p.precomputed, name).:(1), FT(0))
+        end
+        dtγ = FT(10)
+        CA.solve_sgs_ρa_implicit_stage_analytic!(Y, p, dtγ)
+        stage_area_weighted_density = Array(parent(Y.c.sgsʲs.:(1).ρa))
+        @test (stage_area_weighted_density .- ρaʲ) ./ dtγ ≈
+              FT(-1e-6) .* stage_area_weighted_density rtol = 1e-8
+    end
+
     @testset "NonEquilibrium moisture + 1-moment" begin
         config = CA.AtmosConfig(
             Dict(
