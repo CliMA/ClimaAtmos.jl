@@ -1024,6 +1024,9 @@ end
     return clamp((q_c - q_c_eq) / q_c, FT(0), FT(1))
 end
 
+_sgs_quad_nodes_val(params) =
+    Int(CAP.sgs_quadrature_nodes(params)) == 8 ? Val(8) : Val(6)
+
 function set_microphysics_tendency_cache!(
     Y, p, mp1m::NonEquilibriumMicrophysics1M, _,
 )
@@ -1054,7 +1057,7 @@ function set_microphysics_tendency_cache!(
         (; ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα, ᶜsgs_moments, ᶜprecip_frac) = p.precomputed
         # One packed scalar-options argument keeps the broadcast short enough
         # for the GPU kernel (see `sgs_microphysics_options`).
-        opts = sgs_microphysics_options(p.params)
+        opts = sgs_microphysics_options(p.params, _sgs_quad_nodes_val(p.params))
         @. ᶜmp_tendency = microphysics_tendencies_1m(
             BMT.Microphysics1Moment(), sgs_quad, cmp, thp, Y.c.ρ, ᶜT, ᶜw_air,
             ᶜq_tot_nonneg, ᶜq_lcl, ᶜq_icl, ᶜq_rai, ᶜq_sno,
@@ -1206,7 +1209,7 @@ function set_microphysics_tendency_cache!(
         (; ᶜT′T′, ᶜq′q′, ᶜcorr_Tq, ᶜα, ᶜsgs_moments, ᶜprecip_frac) = p.precomputed
         # One packed scalar-options argument keeps the broadcast short enough
         # for the GPU kernel (see `sgs_microphysics_options`).
-        opts = sgs_microphysics_options(p.params)
+        opts = sgs_microphysics_options(p.params, _sgs_quad_nodes_val(p.params))
         # The liquid fraction `λ` and the linearized SGS saturation-excess mean
         # `mu_S` are held fixed across the quadrature (they depend only on the mean
         # state), so compute them once here and pass them in, instead of recomputing

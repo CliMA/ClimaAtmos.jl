@@ -3,10 +3,10 @@ Unit tests for cloud_fraction.jl
 
 Tests cover:
 1. `_compute_cloud_fraction(q_c, mu_S, sigma_S, α, floor)` -
-   truncated-Gaussian CF closure with the subsaturation-deficit floor
-   `σ_S_floor² = (ε_rel · max(0, −μ_S))² + σ_abs²`, which keeps subsaturated
-   air with trace condensate patchy while vanishing smoothly (`C¹` across
-   `μ_S = 0`) in saturated cloud decks (`μ_S ≥ 0`).
+   truncated-Gaussian CF closure with the augmented floor
+   `σ_aug = max(sqrt((α · σ_S)² + σ_abs²), ϵ_numerics(FT))`, which keeps
+   subsaturated air with trace condensate patchy while vanishing smoothly
+   (`C¹` across `μ_S = 0`) in saturated cloud decks (`μ_S ≥ 0`).
 =#
 
 using Test
@@ -17,8 +17,8 @@ import ClimaCore.CommonSpaces
 import ClimaAtmos.Parameters as CAP
 import Thermodynamics as TD
 
-floor_nt(::Type{FT}; ε_rel = FT(0.02), σ_abs = FT(1e-7)) where {FT} =
-    CA.CloudFractionFloorParams(; ε_rel, σ_abs)
+floor_nt(::Type{FT}; σ_abs = FT(1e-7)) where {FT} =
+    CA.CloudFractionFloorParams(; σ_abs)
 
 @testset "Cloud Fraction" begin
     @testset "`_compute_cloud_fraction`" begin
@@ -104,10 +104,10 @@ floor_nt(::Type{FT}; ε_rel = FT(0.02), σ_abs = FT(1e-7)) where {FT} =
                 end
 
                 # Stratocumulus vs. subsaturated cumulus regime:
-                # q_c = 0.25 g/kg, quiescent σ_S = 1e-5, ε_rel = 0.15.
+                # q_c = 0.25 g/kg, quiescent σ_S = 1e-5.
                 q_c = FT(2.5e-4)
                 σ_S = FT(1e-5)
-                floor_sc = floor_nt(FT; ε_rel = FT(0.15))
+                floor_sc = floor_nt(FT)
 
                 @testset "Overcast vs. subsaturated limit" begin
                     # Saturated deck (μ_S ≥ 0): δ_sub = 0, so CF → 1.
@@ -115,8 +115,7 @@ floor_nt(::Type{FT}; ε_rel = FT(0.02), σ_abs = FT(1e-7)) where {FT} =
                         q_c, q_c, σ_S, α, floor_sc,
                     )
                     @test cf_sat > FT(0.99)
-                    # Subsaturated air (μ_S = -1e-2): δ_sub = 1e-2,
-                    # floor = 1.5e-3, CF < 0.6.
+                    # Subsaturated air (μ_S = -1e-2): δ_sub = 1e-2, CF < 0.6.
                     cf_floored = CA._compute_cloud_fraction(
                         q_c, FT(-1e-2), σ_S, α, floor_sc,
                     )
@@ -134,13 +133,13 @@ floor_nt(::Type{FT}; ε_rel = FT(0.02), σ_abs = FT(1e-7)) where {FT} =
                     end
                 end
 
-                @testset "Saturated regime (μ_S ≥ 0) is independent of ε_rel" begin
+                @testset "Saturated regime (μ_S ≥ 0) is independent of subsaturation deficit" begin
                     cf_ref = CA._compute_cloud_fraction(
-                        q_c, FT(0), σ_S, α, floor_nt(FT; ε_rel = FT(0)),
+                        q_c, FT(0), σ_S, α, floor_sc,
                     )
-                    for μ_pos in FT[0, 1e-4, 2.5e-4, 1e-3], ε in FT[0.02, 0.15, 0.5]
+                    for μ_pos in FT[0, 1e-4, 2.5e-4, 1e-3]
                         cf = CA._compute_cloud_fraction(
-                            q_c, μ_pos, σ_S, α, floor_nt(FT; ε_rel = ε),
+                            q_c, μ_pos, σ_S, α, floor_sc,
                         )
                         @test cf ≈ cf_ref rtol = sqrt(eps(FT))
                     end
@@ -160,11 +159,11 @@ floor_nt(::Type{FT}; ε_rel = FT(0.02), σ_abs = FT(1e-7)) where {FT} =
                     @test cf0 == cf⁺
                 end
 
-                @testset "ε_rel = 0 → guard keeps result finite" begin
+                @testset "Subsaturation floor guard keeps result finite" begin
                     for μ in FT[0, -1e-3]
                         cf = CA._compute_cloud_fraction(
                             FT(1e-3), μ, FT(3.16e-4), α,
-                            floor_nt(FT; ε_rel = FT(0)),
+                            floor_sc,
                         )
                         @test isfinite(cf)
                         @test FT(0) <= cf <= FT(1)

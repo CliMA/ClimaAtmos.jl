@@ -373,11 +373,11 @@ ClimaParams does not yet define or whose ClimaParams default it supersedes.
   - `sgs_fidelity_equilibrium_weight`: Weight `w_eq ∈ (0, 1)` on the
     equilibrium prediction in the SGS variance-fidelity modulator; default
     `0.5` (see `sgs_variance_fidelity`) [-].
-  - `cloud_fraction_eps_rel`: Subsaturation-deficit scaling `ε_rel` in the
-    augmented-`σ` floor `σ_S_floor² = (ε_rel max(0, −μ_S))² + σ_abs²` of the
-    non-equilibrium condensate closure [-].
+  - `cloud_fraction_eps_rel`: Subsaturation-deficit scaling parameter `ε_rel` [-].
   - `cloud_fraction_sigma_abs`: Absolute floor `σ_abs` on the augmented
     saturation-deficit standard deviation [kg/kg].
+  - `sgs_quadrature_nodes`: Number of conditional-moment quadrature nodes in
+    1M microphysics (6 default, 8 ablation) [-].
 """
 Base.@kwdef struct SGSQuadratureParameters{FT} <: ASQP
     diagnostic_covariance_coeff::FT
@@ -415,6 +415,7 @@ Base.@kwdef struct SGSQuadratureParameters{FT} <: ASQP
     sgs_variance_fidelity_mode::FT
     sgs_variance_closure_mode::FT
     cloud_fraction_use_delta_sub_split::FT
+    sgs_quadrature_nodes::FT
 end
 
 """

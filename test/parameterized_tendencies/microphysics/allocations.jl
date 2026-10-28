@@ -85,7 +85,7 @@ end
 # --- Function barrier helpers ---
 
 _test_floor_params(::Type{FT}) where {FT} =
-    CA.CloudFractionFloorParams(; ε_rel = FT(0.02), σ_abs = FT(1e-7))
+    CA.CloudFractionFloorParams(; σ_abs = FT(1e-7))
 
 function _allocs_cloud_fraction_simple()
     FT = Float64

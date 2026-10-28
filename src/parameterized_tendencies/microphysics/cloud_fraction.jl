@@ -82,8 +82,10 @@ function set_covariance_cache_and_cloud_fraction!(Y, p)
     # change inside the functions that are called in picard_step!() and should not be used
     # here to store variables before calling picard_step!
     # (`set_covariance_cache!` writes `ᶜtemp_scalar` (l_d), `_2` (N²_disp),
-    # `_3`, `_5`, `_6`; the QuadratureCloud `set_cloud_fraction!` writes
-    # `ᶜtemp_scalar`, `_2`, `_3`).
+    # `_3`, `_5`, `_6`; `set_cloud_fraction!` writes `ᶜtemp_scalar`, `_2`, `_3`,
+    # and `_6` for `ᶜw_cu` in `_materialize_env_tail_partition!` and `ᶜq_c_eq`).
+    # Aliasing `ᶜtemp_scalar_6` is safe because `ᶜw_cu` is consumed into `ᶜc_hi`
+    # before `ᶜq_c_eq` is written.
     # Conversely, those callees and `set_sgs_moments_and_cloud_fraction!` must never write
     # ᶜtemp_scalar_4 or ᶜtemp_scalar_7. c2 shares ᶜtemp_scalar, which is safe only
     # because it is written after the last picard_step!() and consumed by the Aitken
@@ -1605,7 +1607,7 @@ subsaturation deficit `δ_sub = max(0, −μ_S)`, and equilibrium condensate
 Equilibrium condensate `min(q_c, q_c_eq)` supported by the subdomain's own
 saturation-excess fluctuations is normalized by `σ_aug`, whereas detrained or
 residual non-equilibrium condensate `max(0, q_c − q_c_eq)` in subsaturated air
-is normalized by `√(σ_aug² + δ_sub²)` (or `σ_aug` when `SCCU_TUNE.use_delta_sub_split == false`).
+is normalized by `√(σ_aug² + δ_sub²)` (or `σ_aug` when use_delta_sub_split is false).
 Where `q_c ≤ q_c_eq` or `μ_S ≥ 0`, `C` reduces to `q_c / σ_aug`.
 """
 @inline function _compute_cloud_fraction_from_q_c_eq(
@@ -1703,7 +1705,6 @@ Augmented-`σ` floor parameters for `_sgs_augmented_sigma` and
 Base.@kwdef struct CloudFractionFloorParams{FT}
     use_delta_sub_split::Bool = true
     σ_abs::FT
-    ε_rel::FT = FT(0)
 end
 Base.broadcastable(x::CloudFractionFloorParams) = tuple(x)
 
@@ -1715,7 +1716,6 @@ Build the `CloudFractionFloorParams` bundle from the model parameter set.
 cloud_fraction_floor_params(params) = CloudFractionFloorParams(;
     use_delta_sub_split = (CAP.cloud_fraction_use_delta_sub_split(params) > 0),
     σ_abs = CAP.cloud_fraction_sigma_abs(params),
-    ε_rel = CAP.cloud_fraction_eps_rel(params),
 )
 
 """
@@ -2001,8 +2001,11 @@ Uses `_compute_sgs_moments` to fill
 runs `set_precip_fraction!`, the column overlap sweep that turns the fresh
 cover into the precipitation fraction `ᶜprecip_frac`.
 
-Overwrites `p.scratch.ᶜtemp_scalar`, `ᶜtemp_scalar_2`, `ᶜtemp_scalar_3`, and
-`ᶜtemp_scalar_5`. It must not touch `ᶜtemp_scalar_4` or `ᶜtemp_scalar_7`, which
+Overwrites `p.scratch.ᶜtemp_scalar`, `ᶜtemp_scalar_2`, `ᶜtemp_scalar_3`,
+`ᶜtemp_scalar_5`, and `ᶜtemp_scalar_6` (written first as `ᶜw_cu` in
+`_materialize_env_tail_partition!` and subsequently reused as `ᶜq_c_eq`; this
+aliasing is safe because `ᶜw_cu` is consumed into `ᶜc_hi` before `ᶜq_c_eq` is
+written). It must not touch `ᶜtemp_scalar_4` or `ᶜtemp_scalar_7`, which
 `set_covariance_cache_and_cloud_fraction!` reserves for the Picard iterates.
 """
 NVTX.@annotate function set_sgs_moments_and_cloud_fraction!(Y, p)
