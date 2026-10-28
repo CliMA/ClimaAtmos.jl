@@ -3,6 +3,7 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+- Update to CloudMicrophysics 0.47.
 - ![][badge-🐛bugfix] `get_state_restart` closes its `HDF5Reader` after reading. The
   reader was left to a GC finalizer; under MPI, closing the file is collective, so a
   finalizer that ran on one rank only could deadlock the next MPI exchange (seen on
