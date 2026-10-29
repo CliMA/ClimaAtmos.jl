@@ -2354,6 +2354,7 @@ function update_sgs_massflux_jacobian!(matrix, Y, p, dtγ, diffusion_flag)
     tracer_args...
         ᶜsgsʲ = Yc.sgsʲs.:(1)
         ᶜinv_ρ = @. DiagonalMatrixRow(1 / Yc.ρ)
+        ᶜaʲ = @. draft_area(ᶜsgsʲ.ρa, ᶜρʲ)
 
         @. ∂ᶜρe_tot_err_∂ᶠu₃ +=
             dtγ *
@@ -2363,7 +2364,7 @@ function update_sgs_massflux_jacobian!(matrix, Y, p, dtγ, diffusion_flag)
                     (ᶜsgsʲ.mse + ᶜKʲ - ᶜh_tot_col) *
                     ᶜρʲ *
                     ᶜJ_col *
-                    draft_area(ᶜsgsʲ.ρa, ᶜρʲ),
+                    ᶜaʲ,
                 ) /
                 ᶠJ_col * g³³(ᶠgⁱʲ_col),
             )
@@ -2375,7 +2376,7 @@ function update_sgs_massflux_jacobian!(matrix, Y, p, dtγ, diffusion_flag)
                     (ᶜsgsʲ.q_tot - specific(Yc.ρq_tot, Yc.ρ)) *
                     ᶜρʲ *
                     ᶜJ_col *
-                    draft_area(ᶜsgsʲ.ρa, ᶜρʲ),
+                    ᶜaʲ,
                 ) / ᶠJ_col * g³³(ᶠgⁱʲ_col),
             )
         tracer_groups, _ = _split_groups(Val(3), n_tracers_val, tracer_args)
@@ -2394,7 +2395,7 @@ function update_sgs_massflux_jacobian!(matrix, Y, p, dtγ, diffusion_flag)
                         (ᶜχʲ - specific(ᶜρχ, Yc.ρ)) *
                         ᶜρʲ *
                         ᶜJ_col *
-                        draft_area(ᶜsgsʲ.ρa, ᶜρʲ),
+                        ᶜaʲ,
                     ) /
                     ᶠJ_col * g³³(ᶠgⁱʲ_col),
                 )

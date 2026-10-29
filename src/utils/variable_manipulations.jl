@@ -390,7 +390,10 @@ function ᶜspecific_env_value(χ_name, Y, p)
     turbconv_model = p.atmos.turbconv_model
     if turbconv_model isa PrognosticEDMFX
         ᶜρa⁰ = @. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model))
-        return ᶜspecific_env_value(χ_name, Y.c, ᶜρa⁰, turbconv_model)
+        ᶜρχ = MatrixFields.get_field(Y.c, get_ρχ_name(χ_name))
+        return @. lazy(
+            specific_env_value(χ_name, ᶜρχ, Y.c.ρ, Y.c.sgsʲs, ᶜρa⁰, turbconv_model),
+        )
     elseif turbconv_model isa EDOnlyEDMFX
         error("Not implemented. You should use grid mean values.")
     else
@@ -399,18 +402,6 @@ function ᶜspecific_env_value(χ_name, Y, p)
             nameof(typeof(turbconv_model)),
         )
     end
-end
-
-@inline function ᶜspecific_env_value(
-    χ_name,
-    Yc,
-    ᶜρa⁰,
-    turbconv_model::PrognosticEDMFX,
-)
-    ᶜρχ = MatrixFields.get_field(Yc, get_ρχ_name(χ_name))
-    return @. lazy(
-        specific_env_value(χ_name, ᶜρχ, Yc.ρ, Yc.sgsʲs, ᶜρa⁰, turbconv_model),
-    )
 end
 
 """

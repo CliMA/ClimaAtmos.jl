@@ -243,8 +243,8 @@ function precomputed_quantities(Y, atmos)
         # leaking to the adjacent interior face.
         #
         # All three face fields are written by `set_face_diffusivities!` on
-        # every explicit update, and ᶜl_mix by `materialized_mixing_length!`,
-        # before any read, so `similar` is safe.
+        # every explicit update, and ᶜl_mix by `set_covariance_cache!` or the
+        # explicit stage, before any read, so `similar` is safe.
         (
             atmos.turbconv_model isa AbstractEDMF ?
             (;
@@ -988,7 +988,7 @@ NVTX.@annotate function set_explicit_precomputed_quantities!(Y, p, t)
     # (TKE dissipation, covariance closure, updraft internal diffusion,
     # diagnostics). When the configuration uses (co)variances, ᶜl_mix is
     # materialized inside the covariance/cloud-fraction iteration (see
-    # materialized_mixing_length!), so it would be redundant to recompute it
+    # set_covariance_cache!), so it would be redundant to recompute it
     # here; `uses_covariances` is the shared predicate that keeps the two
     # paths from disagreeing.
     if !uses_covariances(p.atmos) && turbconv_model isa AbstractEDMF
