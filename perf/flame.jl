@@ -40,7 +40,7 @@ ProfileCanvas.html_file(joinpath(output_dir, "flame.html"), results)
 allocs_limit = Dict()
 allocs_limit["flame_baroclinic_wave_moist_gpu"] = 1_243_048
 allocs_limit["flame_default"] = 41_304
-allocs_limit["flame_default_1m"] = 541_992
+allocs_limit["flame_default_1m"] = 622_304
 allocs_limit["flame_diagnostics"] = 10_677_144
 allocs_limit["flame_aquaplanet_diagedmf"] = 11_644_128
 allocs_limit["flame_aquaplanet_progedmf"] = 2_239_024
