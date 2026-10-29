@@ -73,7 +73,7 @@ function edmfx_tke_sources!(Yₜ, Y, p)
     (; ᶜu, ᶠbuoygrad, ᶠK_h, ᶠK_u) = p.precomputed
     turbconv_model = p.atmos.turbconv_model
     if turbconv_model isa PrognosticEDMFX && n_mass_flux_subdomains(turbconv_model) > 0
-        n_val = Val(n_mass_flux_subdomains(turbconv_model))
+        draft_indices = StaticOneTo(n_mass_flux_subdomains(turbconv_model))
         edmfx_model = p.atmos.edmfx_model
         turbconv_params = CAP.turbconv_params(p.params)
         α_d = CAP.pressure_normalmode_drag_coeff(turbconv_params)
@@ -105,14 +105,12 @@ function edmfx_tke_sources!(Yₜ, Y, p)
         ) do Yₜc, Yc, ᶜu, ᶠbuoygrad, ᶠK_h, ᶠK_u,
         ᶜρʲs, ᶜρ_diffʲs, ᶜarea_bounding_entr_detrʲs, ᶜuʲs, ᶠu³ʲs, ᶜu⁰,
         ᶠgradᵥ_ᶜΦ, ᶜlg, ᶠlg
-            ᶠstrain_rate = compute_strain_rate_face_vertical(ᶜu)
-            ᶠshear_production = @. 2 * ᶠK_u * vertical_shear_norm_sqr(ᶠstrain_rate)
-            @. Yₜc.ρtke += Yc.ρ * ᶜinterp(ᶠshear_production)
-            @. Yₜc.ρtke -= Yc.ρ * ᶜinterp(ᶠK_h * ᶠbuoygrad)
+            add_shear_buoyancy_tke_sources!(Yₜc, Yc, ᶜu, ᶠbuoygrad, ᶠK_h, ᶠK_u)
             # Pressure-drag return-to-isotropy for every updraft, then the
             # entrainment/detrainment shear-mixing source for every updraft
             ᶜa⁰_col = @. a⁰(Yc.sgsʲs, ᶜρʲs, turbconv_model)
-            edmfx_model.nh_pressure && _unrolled_ntuple(n_val) do j
+            edmfx_model.nh_pressure && unrolled_foreach(draft_indices) do j
+                @inline
                 ᶜρa_dragʲ = Yc.sgsʲs.:($j).ρa
                 ᶜa_dragʲ = @. draft_area(ᶜρa_dragʲ, ᶜρʲs.:($$j))
                 ᶜΔw_dragʲ = @. get_physical_w(ᶜuʲs.:($$j) - ᶜu⁰, ᶜlg)
@@ -125,7 +123,8 @@ function edmfx_tke_sources!(Yₜ, Y, p)
                     ᶜρa_dragʲ * ᶜa⁰_col * ᶜdrag_coeff * abs(ᶜΔw_dragʲ)^3
                 return nothing
             end
-            _unrolled_ntuple(n_val) do j
+            unrolled_foreach(draft_indices) do j
+                @inline
                 ᶜρaʲ = Yc.sgsʲs.:($j).ρa
                 ᶜρʲ = ᶜρʲs.:($j)
                 ᶜaʲ = @. draft_area(ᶜρaʲ, ᶜρʲ)
@@ -163,13 +162,19 @@ function edmfx_tke_sources!(Yₜ, Y, p)
         DataLayouts.foreach_column(
             Yₜ.c, Y.c, ᶜu, ᶠbuoygrad, ᶠK_h, ᶠK_u,
         ) do Yₜc, Yc, ᶜu, ᶠbuoygrad, ᶠK_h, ᶠK_u
-            ᶠstrain_rate = compute_strain_rate_face_vertical(ᶜu)
-            ᶠshear_production = @. 2 * ᶠK_u * vertical_shear_norm_sqr(ᶠstrain_rate)
-            @. Yₜc.ρtke += Yc.ρ * ᶜinterp(ᶠshear_production)
-            @. Yₜc.ρtke -= Yc.ρ * ᶜinterp(ᶠK_h * ᶠbuoygrad)
+            add_shear_buoyancy_tke_sources!(Yₜc, Yc, ᶜu, ᶠbuoygrad, ᶠK_h, ᶠK_u)
             return nothing
         end
     end
+    return nothing
+end
+
+# Column body of the shear production and buoyancy flux TKE sources.
+@inline function add_shear_buoyancy_tke_sources!(Yₜc, Yc, ᶜu, ᶠbuoygrad, ᶠK_h, ᶠK_u)
+    ᶠstrain_rate = compute_strain_rate_face_vertical(ᶜu)
+    ᶠshear_production = @. 2 * ᶠK_u * vertical_shear_norm_sqr(ᶠstrain_rate)
+    @. Yₜc.ρtke += Yc.ρ * ᶜinterp(ᶠshear_production)
+    @. Yₜc.ρtke -= Yc.ρ * ᶜinterp(ᶠK_h * ᶠbuoygrad)
     return nothing
 end
 

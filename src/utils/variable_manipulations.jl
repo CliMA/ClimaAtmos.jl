@@ -1,5 +1,7 @@
 import ClimaCore.MatrixFields: @name
 import ClimaCore.Utilities: add_auto_broadcasters, drop_auto_broadcasters
+import UnrolledUtilities:
+    StaticOneTo, unrolled_take, unrolled_drop, unrolled_partition, unrolled_foreach
 
 """
     specific(ρχ, ρ)
@@ -405,22 +407,10 @@ end
     ᶜρa⁰,
     turbconv_model::PrognosticEDMFX,
 )
-    ρχ_name = get_ρχ_name(χ_name)
-    ᶜρχ = MatrixFields.get_field(Yc, ρχ_name)
-    ᶜρaχ⁰ = ᶜenv_value(
-        ᶜρχ,
-        sgsʲ ->
-            MatrixFields.get_field(sgsʲ, @name(ρa)) *
-            MatrixFields.get_field(sgsʲ, χ_name),
-        Yc.sgsʲs,
+    ᶜρχ = MatrixFields.get_field(Yc, get_ρχ_name(χ_name))
+    return @. lazy(
+        specific_env_value(χ_name, ᶜρχ, Yc.ρ, Yc.sgsʲs, ᶜρa⁰, turbconv_model),
     )
-    return @. lazy(specific(
-        ᶜρaχ⁰,                      # ρaχ for environment
-        ᶜρa⁰,                       # ρa for environment
-        ᶜρχ,                        # Fallback ρχ is the grid-mean value
-        Yc.ρ,                       # Fallback ρ is the grid-mean value
-        turbconv_model,
-    ))
 end
 
 """
@@ -438,12 +428,14 @@ This is the pairing that lets an SGS tracer `χ` in `Y.c.sgsʲs.:(j)` find its
 grid-mean counterpart `ρχ` in `Y.c`; see the Passive Tracers page of the
 documentation.
 """
-@generated function get_ρχ_name(
-    ::MatrixFields.FieldName{name_chain},
-) where {name_chain}
-    new_chain = (Base.front(name_chain)..., Symbol(:ρ, last(name_chain)))
-    return :($(MatrixFields.FieldName(new_chain...)))
-end
+@inline get_ρχ_name(::MatrixFields.FieldName{name_chain}) where {name_chain} =
+    MatrixFields.FieldName(
+        unrolled_take(name_chain, Val(length(name_chain) - 1))...,
+        ρ_prefixed(last(name_chain)),
+    )
+
+# Foldable, so that the name is a compile-time constant and calls in kernels compile.
+Base.@assume_effects :foldable ρ_prefixed(name::Symbol) = Symbol(:ρ, name)
 
 """
     get_χʲ_name_from_ρχ_name(ρχ_name)
@@ -535,7 +527,7 @@ Compute the specific moist static energy of the environment, `mse⁰` [J/kg].
 rather than `ᶜspecific_env_value`: the grid-scale density of moist static energy
 is reconstructed as `ρ mse = ρ (h_tot - K)` from the precomputed total specific
 enthalpy `ᶜh_tot` and specific kinetic energy `ᶜK`. Domain decomposition through
-`ᶜenv_value` then supplies the environment numerator and `ρa⁰` the denominator,
+`env_value` then supplies the environment numerator and `ρa⁰` the denominator,
 and the quotient is formed with the regularized `specific`.
 
 Only `PrognosticEDMFX` is supported; `EDOnlyEDMFX` throws, since its environment
@@ -555,20 +547,14 @@ function ᶜspecific_env_mse(Y, p)
     turbconv_model = p.atmos.turbconv_model
     (; ᶜK, ᶜh_tot) = p.precomputed
 
-    # grid-scale moist static energy density `ρ * mse`.
-    ᶜρmse = @. lazy(Y.c.ρ * (ᶜh_tot - ᶜK))
-
-    # environment density-area-weighted mse (`ρa⁰mse⁰`).
-    # Numerator: ρa⁰mse⁰ = ρmse - (Σ ρaʲ * mseʲ)
-
     if turbconv_model isa PrognosticEDMFX
-        ρa⁰mse⁰ = ᶜenv_value(ᶜρmse, sgsʲ -> sgsʲ.ρa * sgsʲ.mse, Y.c.sgsʲs)
         ᶜρa⁰ = @. lazy(ρa⁰(Y.c.ρ, Y.c.sgsʲs, turbconv_model))
     elseif turbconv_model isa EDOnlyEDMFX
         error("Not implemented. You should use grid mean values.")
     end
-
-    return @. lazy(specific(ρa⁰mse⁰, ᶜρa⁰, ᶜρmse, Y.c.ρ, turbconv_model))
+    return @. lazy(
+        specific_env_mse(Y.c.ρ, Y.c.sgsʲs, ᶜh_tot, ᶜK, ᶜρa⁰, turbconv_model),
+    )
 end
 
 """
@@ -642,48 +628,29 @@ composite types and the tuples may hold nested types such as
     end
 end
 
-@inline _unrolled_ntuple(::Val{1}, f::F) where {F} = (@inline(f(1)),)
-@inline _unrolled_ntuple(::Val{2}, f::F) where {F} = (@inline(f(1)), @inline(f(2)))
-@inline _unrolled_ntuple(::Val{3}, f::F) where {F} =
-    (@inline(f(1)), @inline(f(2)), @inline(f(3)))
-@inline _unrolled_ntuple(::Val{4}, f::F) where {F} =
-    (@inline(f(1)), @inline(f(2)), @inline(f(3)), @inline(f(4)))
-@inline _unrolled_ntuple(::Val{5}, f::F) where {F} =
-    (@inline(f(1)), @inline(f(2)), @inline(f(3)), @inline(f(4)), @inline(f(5)))
-@inline _unrolled_ntuple(::Val{6}, f::F) where {F} = (
-    @inline(f(1)),
-    @inline(f(2)),
-    @inline(f(3)),
-    @inline(f(4)),
-    @inline(f(5)),
-    @inline(f(6)),
-)
-@inline _unrolled_ntuple(::Val{N}, f::F) where {F, N} =
-    ntuple(@inline(i -> @inline(f(i))), Val(N))
-# The function first, for do-block syntax; a `Function`, so that it does not overlap the
-# methods above when both arguments are `Val`s.
-@inline _unrolled_ntuple(f::F, v::Val) where {F <: Function} = _unrolled_ntuple(v, f)
-
 @inline _unrolled_zip(::Tuple{}, ::Tuple{}) = ()
 @inline _unrolled_zip(a::Tuple, b::Tuple) =
     ((first(a), first(b)), _unrolled_zip(Base.tail(a), Base.tail(b))...)
 
-@inline _split_halves(::Tuple{}) = ((), ())
-@inline _split_halves(t::NTuple{2, Any}) = ((t[1],), (t[2],))
-@inline _split_halves(t::NTuple{4, Any}) = ((t[1], t[2]), (t[3], t[4]))
-@inline _split_halves(t::NTuple{6, Any}) =
-    ((t[1], t[2], t[3]), (t[4], t[5], t[6]))
-@inline _split_halves(t::NTuple{8, Any}) =
-    ((t[1], t[2], t[3], t[4]), (t[5], t[6], t[7], t[8]))
-@inline _split_halves(t::NTuple{10, Any}) =
-    ((t[1], t[2], t[3], t[4], t[5]), (t[6], t[7], t[8], t[9], t[10]))
-@inline _split_halves(t::NTuple{12, Any}) = (
-    (t[1], t[2], t[3], t[4], t[5], t[6]),
-    (t[7], t[8], t[9], t[10], t[11], t[12]),
-)
+# The first and second halves of a tuple of even length, at constant indices.
+@inline function _split_halves(t::NTuple{N, Any}) where {N}
+    iseven(N) || error("_split_halves needs a tuple of even length")
+    return _split_at(Val(N ÷ 2), t)
+end
 
-# Pointwise counterparts of `ᶜspecific_env_mse` and `ᶜspecific_env_value` that
-# reuse a precomputed `ρa⁰` inside fused column loops.
+# The first `K` elements of a tuple and the remaining elements, at constant indices.
+@inline _split_at(::Val{K}, t::Tuple) where {K} =
+    (unrolled_take(t, Val(K)), unrolled_drop(t, Val(K)))
+
+# The first `G` groups of `K` consecutive elements of a tuple, and the remaining
+# elements, at constant indices (for regrouping splatted column-loop arguments).
+@inline function _split_groups(::Val{K}, ::Val{G}, t::Tuple) where {K, G}
+    grouped, rest = _split_at(Val(K * G), t)
+    return (unrolled_partition(grouped, Val(K)), rest)
+end
+
+# Pointwise forms of `ᶜspecific_env_mse` and `ᶜspecific_env_value`, which take a
+# precomputed `ρa⁰` (fused column loops use them directly).
 @inline function specific_env_mse(ρ, sgsʲs, h_tot, K, ρa⁰_val, turbconv_model)
     ρmse = ρ * (h_tot - K)
     ρa⁰mse⁰ = env_value(ρmse, sgsʲ -> sgsʲ.ρa * sgsʲ.mse, sgsʲs)

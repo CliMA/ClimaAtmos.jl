@@ -145,7 +145,7 @@ condensate `μ_k`, and Gamma-distributed in-cloud condensate of shape `ν_k`
 
 Each underestimates `χ` where the other holds. The geometric mean diverges to
 zero when a component holds almost no condensate, such as an updraft that the
-binary cover test (`_apply_edmf_cloud_weighting!`) counts as cloudy with trace
+binary cover test (`_edmf_weight_cloud_fraction!`) counts as cloudy with trace
 condensate, although such a component is optically clear and reflects linearly
 in its optical depth. The moment-matched Gamma puts the excess of a small,
 dense component into a heavy tail near zero, whereas the geometric mean weighs

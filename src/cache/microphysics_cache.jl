@@ -169,7 +169,7 @@ function set_precipitation_velocities!(
     cmc = CAP.microphysics_cloud_params(params)
     cmp = CAP.microphysics_1m_params(params)
     thp = CAP.thermodynamics_params(params)
-    n_val = Val(n_mass_flux_subdomains(turbconv_model))
+    draft_indices = StaticOneTo(n_mass_flux_subdomains(turbconv_model))
 
     terminal_velocity_function(name, ρ, q) = terminal_velocity(
         microphysics_model,
@@ -217,7 +217,8 @@ function set_precipitation_velocities!(
             @. ᶜw = ᶜρa⁰χ⁰ * terminal_velocity_function(χ_name, ᶜρ⁰, ᶜχ⁰)
             ᶜimplied_env_mass_flux = @. zero(Yc.ρ)
 
-            _unrolled_ntuple(n_val) do j
+            unrolled_foreach(draft_indices) do j
+                @inline
                 ᶜsgsʲ = Yc.sgsʲs.:($j)
                 ᶜχʲ = MatrixFields.get_field(ᶜsgsʲ, χ_name)
                 ᶜwʲ = ᶜwʲs.:($j)
@@ -1050,7 +1051,6 @@ function set_microphysics_tendency_cache!(
     ᶜλ⁰ = p.scratch.ᶜtemp_scalar_6
     ᶜmu_S⁰ = p.scratch.ᶜtemp_scalar_7
     sgs_quad = p.atmos.sgs_quadrature
-    is_quad = !not_quadrature(sgs_quad)
 
     DataLayouts.foreach_column(
         ᶜρ⁰, ᶜq_lcl⁰, ᶜq_icl⁰, ᶜq_rai⁰, ᶜq_sno⁰, ᶜλ⁰, ᶜmu_S⁰,
@@ -1071,7 +1071,7 @@ function set_microphysics_tendency_cache!(
     end
 
     ᶜw⁰_air = @. lazy(w_component(WVec(ᶜu⁰)))
-    if !is_quad
+    if not_quadrature(sgs_quad)
         @. ᶜmp_tendency⁰ = microphysics_tendencies_1m(
             ᶜρ⁰, ᶜq_tot_nonneg⁰, ᶜq_lcl⁰, ᶜq_icl⁰, ᶜq_rai⁰, ᶜq_sno⁰,
             ᶜT⁰, ᶜw⁰_air, vcmp, vthp, dt, nsubs,

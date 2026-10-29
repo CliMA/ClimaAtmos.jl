@@ -174,7 +174,7 @@ function microphysics_tendency!(
     turbconv_model::PrognosticEDMFX,
 )
     (; ᶜmp_tendencyʲs, ᶜmp_tendency⁰) = p.precomputed
-    n_val = Val(n_mass_flux_subdomains(turbconv_model))
+    draft_indices = StaticOneTo(n_mass_flux_subdomains(turbconv_model))
 
     DataLayouts.foreach_column(
         Yₜ.c,
@@ -188,7 +188,8 @@ function microphysics_tendency!(
         @. Yₜc.ρq_rai += ᶜρa⁰ * ᶜmp_tendency⁰.dq_rai_dt
         @. Yₜc.ρq_sno += ᶜρa⁰ * ᶜmp_tendency⁰.dq_sno_dt
 
-        _unrolled_ntuple(n_val) do j
+        unrolled_foreach(draft_indices) do j
+            @inline
             ᶜρaʲ = Yc.sgsʲs.:($j).ρa
             ᶜmpʲ = ᶜmp_tendencyʲs.:($j)
             ᶜsgsʲₜ = Yₜc.sgsʲs.:($j)

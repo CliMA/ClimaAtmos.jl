@@ -299,7 +299,7 @@ function precomputed_quantities(Y, atmos)
             ᶜT′T′ = zeros(axes(Y.c)),
             ᶜq′q′ = zeros(axes(Y.c)),
             # T–q correlation the quadrature actually samples (filled by
-            # `set_tq_correlation!`): `T′q′ / √(T′T′ q′q′)` for
+            # `set_covariance_cache!`): `T′q′ / √(T′T′ q′q′)` for
             # `tq_correlation_model: diagnosed`, or the prescribed
             # `Tq_correlation_coefficient` for `tq_correlation_model: constant`.
             # The displacement covariance `ᶜT′q′` is only allocated for the
@@ -315,7 +315,8 @@ function precomputed_quantities(Y, atmos)
             # Linear and curvature coefficients `(lin, curv)` of the saturation
             # excess under the vertical displacement, `S = μ_S + lin x +
             # ½ curv (x² − 1) + h` with `x` standard normal
-            # (`set_displacement_curvature!`); only for the curvature-aware
+            # (`displacement_curvature_coefficients`, set in
+            # `set_covariance_cache!`); only for the curvature-aware
             # equilibrium condensate (`sgs_variance_curvature`).
             (
                 atmos.sgs_variance_curvature ?

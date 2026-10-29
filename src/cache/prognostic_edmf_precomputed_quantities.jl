@@ -249,29 +249,9 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_draft!(
             ᶜsgsʲ, ᶠu₃ʲ, ᶜuₕ, ᶠuₕ³, ᶜΦ, ᶜp
                 set_velocity_quantities!(ᶜuʲ, ᶠu³ʲ, ᶜKʲ, ᶠu₃ʲ, ᶜuₕ, ᶠuₕ³)
                 @. ᶠKᵥʲ = (adjoint(CT3(ᶠu₃ʲ)) * ᶠu₃ʲ) / 2
-                @. ᶜq_liqʲ = max(0, ᶜsgsʲ.q_lcl + ᶜsgsʲ.q_rai)
-                @. ᶜq_iceʲ = max(0, ᶜsgsʲ.q_icl + ᶜsgsʲ.q_sno)
-                # Clamp q_tot ≥ q_cond to ensure non-negative vapor (q_vap = q_tot - q_cond)
-                @. ᶜq_tot_nonnegʲ = max(ᶜq_liqʲ + ᶜq_iceʲ, ᶜsgsʲ.q_tot)
-                ᶜhʲ = @. lazy(ᶜsgsʲ.mse - ᶜΦ)
-                @. ᶜTʲ = max(
-                    T_min_sgs,
-                    TD.air_temperature(
-                        thermo_params,
-                        TD.ph(),
-                        ᶜhʲ,
-                        ᶜq_tot_nonnegʲ,
-                        ᶜq_liqʲ,
-                        ᶜq_iceʲ,
-                    ),
-                )
-                @. ᶜρʲ = TD.air_density(
-                    thermo_params,
-                    ᶜTʲ,
-                    ᶜp,
-                    ᶜq_tot_nonnegʲ,
-                    ᶜq_liqʲ,
-                    ᶜq_iceʲ,
+                set_draft_thermo_column!(
+                    ᶜTʲ, ᶜq_tot_nonnegʲ, ᶜq_liqʲ, ᶜq_iceʲ, ᶜρʲ, ᶜsgsʲ, ᶜΦ, ᶜp,
+                    thermo_params, T_min_sgs,
                 )
                 return nothing
             end
@@ -285,28 +265,88 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_draft!(
                 @. ᶜq_tot_nonnegʲ = max(0, ᶜsgsʲ.q_tot)
                 return nothing
             end
-            (; ᶜsa_result) = p.precomputed
-            @. ᶜsa_result = saturation_adjustment_tuple(
-                thermo_params,
-                TD.ph(),
-                ᶜp,
-                ᶜsgsʲ.mse - ᶜΦ,
-                ᶜq_tot_nonnegʲ,
+            set_draft_saturation_adjustment!(
+                ᶜTʲ, ᶜq_liqʲ, ᶜq_iceʲ, ᶜρʲ, p.precomputed.ᶜsa_result,
+                ᶜsgsʲ, ᶜq_tot_nonnegʲ, ᶜΦ, ᶜp, thermo_params,
             )
-            @. ᶜTʲ = ᶜsa_result.T
-            @. ᶜq_liqʲ = ᶜsa_result.q_liq
-            @. ᶜq_iceʲ = ᶜsa_result.q_ice
-            @. ᶜρʲ =
-                TD.air_density(
-                    thermo_params,
-                    ᶜTʲ,
-                    ᶜp,
-                    ᶜq_tot_nonnegʲ,
-                    ᶜq_liqʲ,
-                    ᶜq_iceʲ,
-                )
         end
     end
+    return nothing
+end
+
+"""
+    set_draft_thermo_column!(
+        ᶜTʲ, ᶜq_tot_nonnegʲ, ᶜq_liqʲ, ᶜq_iceʲ, ᶜρʲ, ᶜsgsʲ, ᶜΦ, ᶜp,
+        thermo_params, T_min_sgs,
+    )
+
+Column body of the draft thermodynamic state for non-equilibrium microphysics:
+condensate from the prognostic draft tracers, `q_tot` clamped to at least the
+condensate, `T` from the enthalpy `mse - Φ` floored at `T_min_sgs`, and `ρ` at the
+grid-mean pressure.
+"""
+@inline function set_draft_thermo_column!(
+    ᶜTʲ, ᶜq_tot_nonnegʲ, ᶜq_liqʲ, ᶜq_iceʲ, ᶜρʲ, ᶜsgsʲ, ᶜΦ, ᶜp,
+    thermo_params, T_min_sgs,
+)
+    @. ᶜq_liqʲ = max(0, ᶜsgsʲ.q_lcl + ᶜsgsʲ.q_rai)
+    @. ᶜq_iceʲ = max(0, ᶜsgsʲ.q_icl + ᶜsgsʲ.q_sno)
+    # Clamp q_tot ≥ q_cond to keep q_vap = q_tot - q_cond non-negative.
+    @. ᶜq_tot_nonnegʲ = max(ᶜq_liqʲ + ᶜq_iceʲ, ᶜsgsʲ.q_tot)
+    ᶜhʲ = @. lazy(ᶜsgsʲ.mse - ᶜΦ)
+    @. ᶜTʲ = max(
+        T_min_sgs,
+        TD.air_temperature(
+            thermo_params,
+            TD.ph(),
+            ᶜhʲ,
+            ᶜq_tot_nonnegʲ,
+            ᶜq_liqʲ,
+            ᶜq_iceʲ,
+        ),
+    )
+    @. ᶜρʲ = TD.air_density(
+        thermo_params,
+        ᶜTʲ,
+        ᶜp,
+        ᶜq_tot_nonnegʲ,
+        ᶜq_liqʲ,
+        ᶜq_iceʲ,
+    )
+    return nothing
+end
+
+"""
+    set_draft_saturation_adjustment!(
+        ᶜTʲ, ᶜq_liqʲ, ᶜq_iceʲ, ᶜρʲ, ᶜsa_result, ᶜsgsʲ, ᶜq_tot_nonnegʲ, ᶜΦ, ᶜp,
+        thermo_params,
+    )
+
+Draft temperature, phase partition, and density from a pressure-enthalpy
+saturation adjustment (equilibrium microphysics), using `ᶜsa_result` as scratch.
+"""
+function set_draft_saturation_adjustment!(
+    ᶜTʲ, ᶜq_liqʲ, ᶜq_iceʲ, ᶜρʲ, ᶜsa_result, ᶜsgsʲ, ᶜq_tot_nonnegʲ, ᶜΦ, ᶜp,
+    thermo_params,
+)
+    @. ᶜsa_result = saturation_adjustment_tuple(
+        thermo_params,
+        TD.ph(),
+        ᶜp,
+        ᶜsgsʲ.mse - ᶜΦ,
+        ᶜq_tot_nonnegʲ,
+    )
+    @. ᶜTʲ = ᶜsa_result.T
+    @. ᶜq_liqʲ = ᶜsa_result.q_liq
+    @. ᶜq_iceʲ = ᶜsa_result.q_ice
+    @. ᶜρʲ = TD.air_density(
+        thermo_params,
+        ᶜTʲ,
+        ᶜp,
+        ᶜq_tot_nonnegʲ,
+        ᶜq_liqʲ,
+        ᶜq_iceʲ,
+    )
     return nothing
 end
 
@@ -328,8 +368,8 @@ shared `ᶜsa_result` field as scratch. `ᶜρʲ` is diagnosed at the shared `�
 Called from the Picard loop of `initialize_implicit_stage_problem!` after each
 tracer sweep, and from `solve_sgs_updraft_tracers_implicit_stage_analytic!`
 after its transport sweep. `set_prognostic_edmf_precomputed_quantities_draft!`
-computes the same thermodynamics in its fused column loop, so the two must be
-kept consistent.
+computes the same thermodynamics (`set_draft_thermo_column!`,
+`set_draft_saturation_adjustment!`) in its fused column loop.
 """
 function set_prognostic_edmf_precomputed_quantities_draft_thermo!(Y, p)
     (; microphysics_model, turbconv_model) = p.atmos
@@ -355,53 +395,18 @@ function set_prognostic_edmf_precomputed_quantities_draft_thermo!(Y, p)
                 ᶜsgsʲ, ᶜΦ, ᶜp,
             ) do ᶜTʲ, ᶜq_tot_nonnegʲ, ᶜq_liqʲ, ᶜq_iceʲ, ᶜρʲ,
             ᶜsgsʲ, ᶜΦ, ᶜp
-                @. ᶜq_liqʲ = max(0, ᶜsgsʲ.q_lcl + ᶜsgsʲ.q_rai)
-                @. ᶜq_iceʲ = max(0, ᶜsgsʲ.q_icl + ᶜsgsʲ.q_sno)
-                # Clamp q_tot ≥ q_cond to keep q_vap = q_tot - q_cond non-negative.
-                @. ᶜq_tot_nonnegʲ = max(ᶜq_liqʲ + ᶜq_iceʲ, ᶜsgsʲ.q_tot)
-                ᶜhʲ = @. lazy(ᶜsgsʲ.mse - ᶜΦ)
-                @. ᶜTʲ = max(
-                    T_min_sgs,
-                    TD.air_temperature(
-                        thermo_params,
-                        TD.ph(),
-                        ᶜhʲ,
-                        ᶜq_tot_nonnegʲ,
-                        ᶜq_liqʲ,
-                        ᶜq_iceʲ,
-                    ),
-                )
-                @. ᶜρʲ = TD.air_density(
-                    thermo_params,
-                    ᶜTʲ,
-                    ᶜp,
-                    ᶜq_tot_nonnegʲ,
-                    ᶜq_liqʲ,
-                    ᶜq_iceʲ,
+                set_draft_thermo_column!(
+                    ᶜTʲ, ᶜq_tot_nonnegʲ, ᶜq_liqʲ, ᶜq_iceʲ, ᶜρʲ, ᶜsgsʲ, ᶜΦ, ᶜp,
+                    thermo_params, T_min_sgs,
                 )
                 return nothing
             end
         else
             # EquilibriumMicrophysics0M: pressure-enthalpy saturation adjustment.
             @. ᶜq_tot_nonnegʲ = max(0, ᶜsgsʲ.q_tot)
-            (; ᶜsa_result) = p.precomputed
-            @. ᶜsa_result = saturation_adjustment_tuple(
-                thermo_params,
-                TD.ph(),
-                ᶜp,
-                ᶜsgsʲ.mse - ᶜΦ,
-                ᶜq_tot_nonnegʲ,
-            )
-            @. ᶜTʲ = ᶜsa_result.T
-            @. ᶜq_liqʲ = ᶜsa_result.q_liq
-            @. ᶜq_iceʲ = ᶜsa_result.q_ice
-            @. ᶜρʲ = TD.air_density(
-                thermo_params,
-                ᶜTʲ,
-                ᶜp,
-                ᶜq_tot_nonnegʲ,
-                ᶜq_liqʲ,
-                ᶜq_iceʲ,
+            set_draft_saturation_adjustment!(
+                ᶜTʲ, ᶜq_liqʲ, ᶜq_iceʲ, ᶜρʲ, p.precomputed.ᶜsa_result,
+                ᶜsgsʲ, ᶜq_tot_nonnegʲ, ᶜΦ, ᶜp, thermo_params,
             )
         end
     end
@@ -477,7 +482,8 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
 
     entr_model = p.atmos.edmfx_model.entr_model
     zero_FT = FT(0) # (a scalar, not the type: loop bodies must capture isbits values only)
-    _unrolled_ntuple(Val(n)) do j
+    unrolled_foreach(StaticOneTo(n)) do j
+        @inline
         # Compute the entrainment velocity scale, non-velocity entrainment rate,
         # and the signed area-bounding rate, in one fused column loop per draft
         # (the draft area and buoyancy are loop temporaries shared by the

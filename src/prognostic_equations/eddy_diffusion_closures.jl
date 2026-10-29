@@ -839,12 +839,12 @@ The result is written into a field rather than returned lazily because every
 caller passes it to a divergence operator, where the nested expression exceeds
 GPU kernel parameter limits.
 """
-function ᶜh_eff_plus_Φ!(ᶜout, thermo_params, ᶜT, ᶜΦ, ᶜq_water)
+@inline function ᶜh_eff_plus_Φ!(ᶜout, thermo_params, ᶜT, ᶜΦ, ᶜq_water)
     ᶜh_eff!(ᶜout, thermo_params, ᶜT, ᶜq_water)
     @. ᶜout += ᶜΦ
     return ᶜout
 end
-function ᶜh_eff_minus_h_d!(ᶜout, thermo_params, ᶜT, ᶜq_water)
+@inline function ᶜh_eff_minus_h_d!(ᶜout, thermo_params, ᶜT, ᶜq_water)
     ᶜh_eff!(ᶜout, thermo_params, ᶜT, ᶜq_water)
     @. ᶜout -= TD.enthalpy_dry(thermo_params, ᶜT)
     return ᶜout
@@ -856,7 +856,7 @@ end
 Write the mass-weighted specific enthalpy `h_eff` of the diffusing water into
 `ᶜout` and return it. Called from `ᶜh_eff_plus_Φ!` and `ᶜh_eff_minus_h_d!`.
 """
-function ᶜh_eff!(ᶜout, thermo_params, ᶜT, ᶜq_water)
+@inline function ᶜh_eff!(ᶜout, thermo_params, ᶜT, ᶜq_water)
     FT = eltype(ᶜout)
     ϵ_FT = eps(FT)
     ᶜq_tot, ᶜq_liq, ᶜq_ice = ᶜq_water
@@ -1686,25 +1686,30 @@ configurations, returns `nothing`.
 """
 function ᶜdiffusing_water_phases(Y, p; precipitation = false)
     p.atmos.microphysics_model isa DryModel && return nothing
-    p.atmos.microphysics_model isa NonEquilibriumMicrophysics ||
-        return (
-            (@. lazy(specific(Y.c.ρq_tot, Y.c.ρ))),
-            p.precomputed.ᶜq_liq,
-            p.precomputed.ᶜq_ice,
-        )
-    ᶜρ = Y.c.ρ
-    return precipitation ?
-           (
-        (@. lazy(specific(Y.c.ρq_tot, ᶜρ))),
-        (@. lazy(specific(Y.c.ρq_lcl + Y.c.ρq_rai, ᶜρ))),
-        (@. lazy(specific(Y.c.ρq_icl + Y.c.ρq_sno, ᶜρ))),
-    ) :
-           (
-        (@. lazy(specific(Y.c.ρq_tot - Y.c.ρq_rai - Y.c.ρq_sno, ᶜρ))),
-        (@. lazy(specific(Y.c.ρq_lcl, ᶜρ))),
-        (@. lazy(specific(Y.c.ρq_icl, ᶜρ))),
+    (; ᶜq_liq, ᶜq_ice) = p.precomputed
+    return diffusing_water_phases(
+        Y.c, ᶜq_liq, ᶜq_ice, p.atmos.microphysics_model, Val(precipitation),
     )
 end
+
+# `ᶜdiffusing_water_phases` of the center state `ᶜY`, a whole field or one column
+# of a fused loop, with the cached diagnostic `ᶜq_liq` and `ᶜq_ice`.
+@inline diffusing_water_phases(ᶜY, ᶜq_liq, ᶜq_ice, microphysics_model, _) =
+    ((@. lazy(specific(ᶜY.ρq_tot, ᶜY.ρ))), ᶜq_liq, ᶜq_ice)
+@inline diffusing_water_phases(
+    ᶜY, ᶜq_liq, ᶜq_ice, ::NonEquilibriumMicrophysics, ::Val{true},
+) = (
+    (@. lazy(specific(ᶜY.ρq_tot, ᶜY.ρ))),
+    (@. lazy(specific(ᶜY.ρq_lcl + ᶜY.ρq_rai, ᶜY.ρ))),
+    (@. lazy(specific(ᶜY.ρq_icl + ᶜY.ρq_sno, ᶜY.ρ))),
+)
+@inline diffusing_water_phases(
+    ᶜY, ᶜq_liq, ᶜq_ice, ::NonEquilibriumMicrophysics, ::Val{false},
+) = (
+    (@. lazy(specific(ᶜY.ρq_tot - ᶜY.ρq_rai - ᶜY.ρq_sno, ᶜY.ρ))),
+    (@. lazy(specific(ᶜY.ρq_lcl, ᶜY.ρ))),
+    (@. lazy(specific(ᶜY.ρq_icl, ᶜY.ρ))),
+)
 
 """
     gradient_richardson_number(params, ᶜN², ᶜstrain_rate_norm)

@@ -116,48 +116,32 @@ function surface_flux_tendency!(Yₜ, Y, p, t)
             (@. lazy(specific(Y.c.ρq_tot, Y.c.ρ))),
             sfc_conditions.ρ_flux_q_tot,
         ) : nothing
+    is_edmf = turbconv_model isa PrognosticEDMFX
+    do_mom_val, q_tot_val, edmf_val = Val(do_mom), Val(has_q_tot), Val(is_edmf)
 
-    if turbconv_model isa PrognosticEDMFX && has_q_tot
-        ᶜρʲ = p.precomputed.ᶜρʲs.:(1)
-        if do_mom
-            DataLayouts.foreach_column(
-                Yₜ.c, ᶜρʲ, btt_uₕ, btt_h, btt_q,
-            ) do Yₜc, ᶜρʲ, btt_uₕ, btt_h, btt_q
-                @. Yₜc.uₕ -= btt_uₕ
-                @. Yₜc.ρe_tot -= btt_h
-                @. Yₜc.sgsʲs.:(1).mse -= specific(btt_h, ᶜρʲ)
-                @. Yₜc.ρq_tot -= btt_q
-                @. Yₜc.ρ -= btt_q
+    # Absent fields are replaced by placeholders the loop never reads.
+    DataLayouts.foreach_column(
+        Yₜ.c,
+        btt_h,
+        do_mom ? btt_uₕ : btt_h,
+        has_q_tot ? btt_q : btt_h,
+        is_edmf ? p.precomputed.ᶜρʲs.:(1) : Y.c.ρ,
+    ) do Yₜc, btt_h, btt_uₕ, btt_q, ᶜρʲ
+        if do_mom_val isa Val{true}
+            @. Yₜc.uₕ -= btt_uₕ
+        end
+        @. Yₜc.ρe_tot -= btt_h
+        if edmf_val isa Val{true}
+            @. Yₜc.sgsʲs.:(1).mse -= specific(btt_h, ᶜρʲ)
+        end
+        if q_tot_val isa Val{true}
+            @. Yₜc.ρq_tot -= btt_q
+            @. Yₜc.ρ -= btt_q
+            if edmf_val isa Val{true}
                 @. Yₜc.sgsʲs.:(1).q_tot -= specific(btt_q, ᶜρʲ)
-                return nothing
-            end
-        else
-            DataLayouts.foreach_column(
-                Yₜ.c, ᶜρʲ, btt_h, btt_q,
-            ) do Yₜc, ᶜρʲ, btt_h, btt_q
-                @. Yₜc.ρe_tot -= btt_h
-                @. Yₜc.sgsʲs.:(1).mse -= specific(btt_h, ᶜρʲ)
-                @. Yₜc.ρq_tot -= btt_q
-                @. Yₜc.ρ -= btt_q
-                @. Yₜc.sgsʲs.:(1).q_tot -= specific(btt_q, ᶜρʲ)
-                return nothing
             end
         end
-    else
-        if do_mom
-            @. Yₜ.c.uₕ -= btt_uₕ
-        end
-        @. Yₜ.c.ρe_tot -= btt_h
-        if turbconv_model isa PrognosticEDMFX
-            @. Yₜ.c.sgsʲs.:(1).mse -= specific(btt_h, p.precomputed.ᶜρʲs.:(1))
-        end
-        if has_q_tot
-            @. Yₜ.c.ρq_tot -= btt_q
-            @. Yₜ.c.ρ -= btt_q
-            if turbconv_model isa PrognosticEDMFX
-                @. Yₜ.c.sgsʲs.:(1).q_tot -= specific(btt_q, p.precomputed.ᶜρʲs.:(1))
-            end
-        end
+        return nothing
     end
     return nothing
 end
