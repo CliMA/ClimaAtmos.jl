@@ -263,7 +263,6 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
         ρχ_name -> !(ρχ_name in (@name(ρe_tot), @name(ρq_tot))),
         gs_tracer_names(Y),
     )
-    n_tracers_val = Val(length(tracer_names))
     draft_fields =
         n > 0 ?
         (
@@ -286,9 +285,9 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
         ᶜρ = Yc.ρ
         ᶠρ = @. ᶠinterp(ᶜρ * ᶜJ) / ᶠJ
 
-        ntuple(n_tracers_val) do i
-            ᶜρχ = MatrixFields.get_field(Yc, tracer_names[i])
-            ᶜρχₜ = MatrixFields.get_field(Yₜc, tracer_names[i])
+        MatrixFields.unrolled_foreach(tracer_names) do ρχ_name
+            ᶜρχ = MatrixFields.get_field(Yc, ρχ_name)
+            ᶜρχₜ = MatrixFields.get_field(Yₜc, ρχ_name)
             ᶜχ = @. lazy(specific(ᶜρχ, ᶜρ))
             add_vertical_transport!(ᶜρχₜ, ᶠρ, ᶠu³, ᶜχ, dt, tracer_upwinding)
             return nothing
@@ -301,7 +300,8 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
             ᶜinterp(ᶠω¹²_tot × (ᶠinterp(ᶜρ * ᶜJ) * ᶠu³)) / (ᶜρ * ᶜJ) +
             (ᶜf³ + ᶜω³) × CT12(ᶜu)
         @. Yₜf.u₃ -= ᶠω¹²_tot × ᶠinterp(CT12(ᶜu)) + ᶠgradᵥ(ᶜK)
-        ntuple(n_val) do j
+        MatrixFields.unrolled_foreach(ntuple(Val, n_val)) do j_val
+            j = val_value(j_val)
             ᶠω¹²ʲ = getproperty(rest[1], j)
             ᶠω¹²ʲ_tot =
                 deep_val isa Val{true} ? (@. lazy(rest[end] + ᶠω¹²ʲ)) : ᶠω¹²ʲ

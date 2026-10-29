@@ -1770,9 +1770,12 @@ function update_sgs_advection_jacobian!(matrix, Y, p, dtγ)
     # stays below the length up to which Julia unrolls a splat. The
     # sedimentation operator (`updraft_sedimentation_matrix!`) and its face
     # flux matrix are written to the column of a scratch field, since
-    # band-matrix loop temporaries would be allocated in a GPU kernel.
+    # band-matrix loop temporaries would be allocated in a GPU kernel. The
+    # species' fields are loop arguments, so species of the same phase share a
+    # kernel.
     MatrixFields.unrolled_foreach(sed_names) do χ_name
-        is_mass_val = Val(!isnothing(condensate_phase(χ_name)))
+        phase = condensate_phase(χ_name)
+        is_mass_val = Val(!isnothing(phase))
         ᶜwʲ = MatrixFields.get_field(
             p.precomputed,
             sgs_sedimentation_velocity_name(χ_name),
@@ -1793,11 +1796,14 @@ function update_sgs_advection_jacobian!(matrix, Y, p, dtγ)
                 ᶜq_tot_nonnegʲs.:(1),
                 ᶜq_liqʲs.:(1),
                 ᶜq_iceʲs.:(1),
+                ∂ᶜmseʲ_∂ᶜχʲ(χ_name),
                 mse_cols...,
             ) : ()
         DataLayouts.foreach_column(
             sgs_diag(χ_name),
             Y.c,
+            MatrixFields.get_field(Y.c.sgsʲs.:(1), χ_name),
+            MatrixFields.get_field(Y.c, ρχ_name),
             ᶜρʲs.:(1),
             ᶠu³ʲs.:(1),
             ᶜwʲ,
@@ -1805,12 +1811,11 @@ function update_sgs_advection_jacobian!(matrix, Y, p, dtγ)
             ᶜtridiagonal_matrix_scalar,
             ᶠsed_tracer_advection,
             mass_args...,
-        ) do ∂ᶜχʲ_diag, Yc, ᶜρʲ, ᶠu³ʲ, ᶜwʲ, ᶜw_gs, ᶜM, ᶠsed, mass_blocks...
+        ) do ∂ᶜχʲ_diag, Yc, ᶜχʲ, ᶜρχ_gs, ᶜρʲ, ᶠu³ʲ, ᶜwʲ, ᶜw_gs, ᶜM, ᶠsed,
+        mass_blocks...
             ᶜJ = Fields.local_geometry_field(axes(ᶜρʲ)).J
             ᶠJ = Fields.local_geometry_field(axes(ᶠu³ʲ)).J
             ᶜsgsʲ = Yc.sgsʲs.:(1)
-            ᶜχʲ = MatrixFields.get_field(ᶜsgsʲ, χ_name)
-            ᶜρχ_gs = MatrixFields.get_field(Yc, ρχ_name)
             ᶜa = @. draft_area(ᶜsgsʲ.ρa, ᶜρʲ)
             ᶜ∂a∂z =
                 @. ᶜprecipdivᵥ(ᶠinterp(ᶜJ) / ᶠJ * ᶠtop_bias(Geometry.WVector(ᶜa)))
@@ -1839,7 +1844,7 @@ function update_sgs_advection_jacobian!(matrix, Y, p, dtγ)
                 return nothing
             end
 
-            point_blocks, mse_col_blocks = _split_at(Val(8), mass_blocks)
+            point_blocks, mse_col_blocks = _split_at(Val(9), mass_blocks)
             ∂ᶜq_totʲ_∂ᶜχʲ = point_blocks[1]
             ∂ᶜmseʲ_diag = point_blocks[2]
             ᶜTʲ = point_blocks[3]
@@ -1850,6 +1855,7 @@ function update_sgs_advection_jacobian!(matrix, Y, p, dtγ)
             ᶜq_tot_nonnegʲ = point_blocks[6]
             ᶜq_liqʲ = point_blocks[7]
             ᶜq_iceʲ = point_blocks[8]
+            ∂ᶜmseʲ_∂ᶜχʲ_col = point_blocks[9]
             @. ∂ᶜχʲ_diag += DiagonalMatrixRow(ᶜinv_ρ̂ * (1 - ᶜχʲ)) * ᶜM
             @. ∂ᶜq_totʲ_∂ᶜχʲ =
                 DiagonalMatrixRow(ᶜinv_ρ̂ * (1 - ᶜsgsʲ.q_tot)) * ᶜM
@@ -1857,23 +1863,15 @@ function update_sgs_advection_jacobian!(matrix, Y, p, dtγ)
             # The within-updraft flux carries h_μ(Tʲ) + Φ from the donor cell
             # and the lateral influx carries h_μ(T⁰) + Φ; the dilution by the
             # sedimented mass enters with -mseʲ.
-            phase = condensate_phase(χ_name)
             h_cond_func = enthalpy_function(phase)
             ᶜh_condʲ = @. h_cond_func(thermo_params, ᶜTʲ) + ᶜΦ_col
             ᶜh_cond⁰ = @. h_cond_func(thermo_params, ᶜT⁰_col) + ᶜΦ_col
-            MatrixFields.unrolled_foreach(
-                _unrolled_zip(mass_names, mse_col_blocks),
-            ) do (μ_name, ∂ᶜmseʲ_∂ᶜqʲ)
-                μ_name == χ_name || return nothing
-                @. ∂ᶜmseʲ_∂ᶜqʲ +=
-                    DiagonalMatrixRow(ᶜinv_ρ̂) * (
-                        ᶜM * DiagonalMatrixRow(ᶜh_condʲ) +
-                        DiagonalMatrixRow(
-                            ᶜlateral_coeff * (ᶜh_cond⁰ - ᶜh_condʲ),
-                        ) - DiagonalMatrixRow(ᶜsgsʲ.mse) * ᶜM
-                    )
-                return nothing
-            end
+            @. ∂ᶜmseʲ_∂ᶜχʲ_col +=
+                DiagonalMatrixRow(ᶜinv_ρ̂) * (
+                    ᶜM * DiagonalMatrixRow(ᶜh_condʲ) +
+                    DiagonalMatrixRow(ᶜlateral_coeff * (ᶜh_cond⁰ - ᶜh_condʲ)) -
+                    DiagonalMatrixRow(ᶜsgsʲ.mse) * ᶜM
+                )
             # Through h_μ(Tʲ), the within-updraft flux (the operator without the
             # lateral diagonal) also depends on mse, with ∂Tʲ/∂mse = 1/cp_m, and
             # on each condensate q_ν at fixed mse and q_tot, with

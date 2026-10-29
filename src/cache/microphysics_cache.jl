@@ -163,7 +163,9 @@ function set_precipitation_velocities!(
     (; ᶜwₗ, ᶜwᵢ, ᶜwᵣ, ᶜwₛ, ᶜwₕhₜ) = p.precomputed
     (; ᶜwₗʲs, ᶜwᵢʲs, ᶜwᵣʲs, ᶜwₛʲs, ᶜTʲs, ᶜρʲs, ᶜuʲs) = p.precomputed
     (; ᶜT⁰, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜu⁰) = p.precomputed
-    atmos = p.atmos
+    # `velocity_mode` reads the terminal velocity modes from the water model, so
+    # the loop does not capture the whole `p.atmos`, which is not a bits type.
+    water = p.atmos.water
     params = p.params
 
     cmc = CAP.microphysics_cloud_params(params)
@@ -173,7 +175,7 @@ function set_precipitation_velocities!(
 
     terminal_velocity_function(name, ρ, q) = terminal_velocity(
         microphysics_model,
-        velocity_mode(atmos, name),
+        velocity_mode(water, name),
         name,
         params,
         cmc,
@@ -239,7 +241,7 @@ function set_precipitation_velocities!(
 
             @. ᶜw = gs_terminal_velocity(
                 microphysics_model,
-                velocity_mode(atmos, χ_name),
+                velocity_mode(water, χ_name),
                 χ_name,
                 params,
                 ᶜw,

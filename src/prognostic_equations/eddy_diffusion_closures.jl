@@ -850,39 +850,34 @@ caller passes it to a divergence operator, where the nested expression exceeds
 GPU kernel parameter limits.
 """
 @inline function ᶜh_eff_plus_Φ!(ᶜout, thermo_params, ᶜT, ᶜΦ, ᶜq_water)
-    ᶜh_eff!(ᶜout, thermo_params, ᶜT, ᶜq_water)
-    @. ᶜout += ᶜΦ
+    ᶜq_tot, ᶜq_liq, ᶜq_ice = ᶜq_water
+    @. ᶜout = h_eff(thermo_params, ᶜT, ᶜq_tot, ᶜq_liq, ᶜq_ice) + ᶜΦ
     return ᶜout
 end
 @inline function ᶜh_eff_minus_h_d!(ᶜout, thermo_params, ᶜT, ᶜq_water)
-    ᶜh_eff!(ᶜout, thermo_params, ᶜT, ᶜq_water)
-    @. ᶜout -= TD.enthalpy_dry(thermo_params, ᶜT)
+    ᶜq_tot, ᶜq_liq, ᶜq_ice = ᶜq_water
+    @. ᶜout =
+        h_eff(thermo_params, ᶜT, ᶜq_tot, ᶜq_liq, ᶜq_ice) -
+        TD.enthalpy_dry(thermo_params, ᶜT)
     return ᶜout
 end
 
 """
-    ᶜh_eff!(ᶜout, thermo_params, ᶜT, ᶜq_water)
+    h_eff(thermo_params, T, q_tot, q_liq, q_ice)
 
-Write the mass-weighted specific enthalpy `h_eff` of the diffusing water into
-`ᶜout` and return it. Called from `ᶜh_eff_plus_Φ!` and `ᶜh_eff_minus_h_d!`.
+Return the mass-weighted specific enthalpy `h_eff` of the diffusing water.
+Called from `ᶜh_eff_plus_Φ!` and `ᶜh_eff_minus_h_d!`.
 """
-@inline function ᶜh_eff!(ᶜout, thermo_params, ᶜT, ᶜq_water)
-    FT = eltype(ᶜout)
-    ϵ_FT = eps(FT)
-    ᶜq_tot, ᶜq_liq, ᶜq_ice = ᶜq_water
-    @. ᶜout =
-        (
-            TD.enthalpy_vapor(thermo_params, ᶜT) *
-            max(FT(0), ᶜq_tot - ᶜq_liq - ᶜq_ice) +
-            TD.enthalpy_liquid(thermo_params, ᶜT) * max(FT(0), ᶜq_liq) +
-            TD.enthalpy_ice(thermo_params, ᶜT) * max(FT(0), ᶜq_ice)
-        ) / max(
-            max(FT(0), ᶜq_tot - ᶜq_liq - ᶜq_ice) +
-            max(FT(0), ᶜq_liq) +
-            max(FT(0), ᶜq_ice),
-            ϵ_FT,
-        )
-    return ᶜout
+@inline function h_eff(thermo_params, T, q_tot, q_liq, q_ice)
+    FT = typeof(T)
+    q_vap = max(FT(0), q_tot - q_liq - q_ice)
+    q_liq_nonneg = max(FT(0), q_liq)
+    q_ice_nonneg = max(FT(0), q_ice)
+    return (
+        TD.enthalpy_vapor(thermo_params, T) * q_vap +
+        TD.enthalpy_liquid(thermo_params, T) * q_liq_nonneg +
+        TD.enthalpy_ice(thermo_params, T) * q_ice_nonneg
+    ) / max(q_vap + q_liq_nonneg + q_ice_nonneg, eps(FT))
 end
 
 """
