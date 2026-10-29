@@ -57,16 +57,20 @@ the valid choices. Each option string names the `CM.Parameters` type it maps to:
     `"ConstantTimescale"`, `"TemperatureDependent"`.
   - `cloud_ice_melt`: `"CloudIceMelt"`.
   - `cloud_liquid_freezing`: `"HomogeneousAndHeterogeneous"`, `"Homogeneous"`, `"Heterogeneous"`.
-  - `rain_autoconversion`: `"Kessler1M"`, `"PrescribedNd"`. `Kessler1M` is the Kessler scheme
-    whose timescale and threshold blend between convective and stratiform values with the vertical
-    velocity of the subdomain being evaluated (grid mean, updraft, or environment). The stratiform
-    values are the convective ones times the dimensionless scales (both
-    default 1.0, giving the classic velocity-independent scheme).
+  - `rain_autoconversion`: `"Kessler1M"`, `"PrescribedNd"`, `"KK2000"`. `Kessler1M` is the Kessler
+    scheme whose timescale and threshold blend between convective and stratiform values with the
+    vertical velocity of the subdomain being evaluated (grid mean, updraft, or environment). The
+    stratiform values are the convective ones times the dimensionless scales (both
+    default 1.0, giving the classic velocity-independent scheme). `KK2000` is the Khairoutdinov and
+    Kogan (2000) autoconversion (`KK2000Autoconversion`) with the cloud droplet number prescribed by
+    the ClimaParams `prescribed_cloud_droplet_number_concentration`, the value also used by the
+    radiation effective radius.
   - `snow_autoconversion`: `"NoSupersaturation"`, `"WithSupersaturation"`.
   - `rain_condensation_evaporation`: `"RainEvaporation"`.
   - `snow_deposition_sublimation`: `"SublimationOnly"`, `"DepositionAndSublimation"`.
   - `snow_melt`: `"SnowMelt"`.
-  - `cloud_liquid_rain_accretion`: `"CloudLiquidRainAccretion"`.
+  - `cloud_liquid_rain_accretion`: `"CloudLiquidRainAccretion"` (Marshall-Palmer kernel) or
+    `"KK2000"` (Khairoutdinov and Kogan 2000 rate, `KK2000Accretion`).
   - `cloud_liquid_snow_accretion`: `"CloudLiquidSnowAccretion"`.
   - `cloud_ice_rain_accretion`: `"CloudIceRainAccretion"`.
   - `cloud_ice_snow_accretion`: `"CloudIceSnowAccretion"`.
@@ -112,6 +116,7 @@ function get_microphysics_1m_options(parsed_args)
         Dict(
             "Kessler1M" => CMP.Kessler1M(),
             "PrescribedNd" => CMP.PrescribedNd(),
+            "KK2000" => CMP.KK2000Autoconversion(),
         ),
         "rain_autoconversion",
     )
@@ -161,6 +166,7 @@ function get_microphysics_1m_options(parsed_args)
         Dict(
             "CloudLiquidRainAccretion" =>
                 CMP.CloudLiquidRainAccretion(),
+            "KK2000" => CMP.KK2000Accretion(),
         ),
         "cloud_liquid_rain_accretion",
     )
