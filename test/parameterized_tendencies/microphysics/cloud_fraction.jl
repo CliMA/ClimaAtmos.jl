@@ -15,6 +15,7 @@ import ClimaAtmos as CA
 import ClimaCore: Fields, Spaces
 import ClimaCore.CommonSpaces
 import ClimaAtmos.Parameters as CAP
+import ClimaParams as CP
 import Thermodynamics as TD
 
 floor_nt(::Type{FT}; σ_abs = FT(1e-7)) where {FT} =
@@ -734,6 +735,46 @@ floor_nt(::Type{FT}; σ_abs = FT(1e-7)) where {FT} =
                     sigma_S,
                     FT(-Inf),
                 ) == FT(1)
+            end
+        end
+    end
+
+    @testset "`_env_tail_partition_active`" begin
+        for FT in (Float32, Float64)
+            @testset "FT = $FT" begin
+                for (mode, c_tail, expected) in (
+                    (3.0, 0.0, false),
+                    (3.0, 4.0, true),
+                    (2.0, 4.0, true),
+                    (1.0, 4.0, true),
+                    (0.0, 4.0, false),
+                    (-1.0, 4.0, false),
+                )
+                    mktemp() do path, io
+                        write(
+                            io,
+                            """
+[sgs_variance_closure_mode]
+value = $mode
+type = "float"
+[sgs_env_updraft_tail_truncation_coeff]
+value = $c_tail
+type = "float"
+""",
+                        )
+                        close(io)
+                        toml_dict = CP.create_toml_dict(FT; override_file = path)
+                        params = CA.ClimaAtmosParameters(toml_dict)
+                        atmos = (;
+                            turbconv_model = CA.PrognosticEDMFX(;
+                                area_fraction = FT(1e-5),
+                            ),
+                            microphysics_model = CA.NonEquilibriumMicrophysics1M(),
+                        )
+                        p = (; params, atmos)
+                        @test CA._env_tail_partition_active(p) == expected
+                    end
+                end
             end
         end
     end

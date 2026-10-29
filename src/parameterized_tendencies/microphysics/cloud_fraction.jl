@@ -2045,13 +2045,13 @@ end
 
 Return `true` when subsaturated-environment upper-tail truncation is active:
 `PrognosticEDMFX` with `NonEquilibriumMicrophysics`, positive
-`sgs_env_updraft_tail_truncation_coeff`, and `sgs_variance_closure_mode` in (1, 2).
+`sgs_env_updraft_tail_truncation_coeff`, and `sgs_variance_closure_mode` in (1, 2, 3).
 """
 @inline function _env_tail_partition_active(p)
     FT = eltype(p.params)
     c_tail = FT(CAP.sgs_env_updraft_tail_truncation_coeff(p.params))
     var_closure_mode = Int(CAP.sgs_variance_closure_mode(p.params))
-    return var_closure_mode in (1, 2) &&
+    return var_closure_mode in (1, 2, 3) &&
            p.atmos.turbconv_model isa PrognosticEDMFX &&
            p.atmos.microphysics_model isa NonEquilibriumMicrophysics &&
            c_tail > zero(FT)

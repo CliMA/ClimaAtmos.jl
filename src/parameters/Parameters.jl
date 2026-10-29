@@ -385,7 +385,8 @@ ClimaParams does not yet define or whose ClimaParams default it supersedes.
   - `sgs_variance_closure_mode`: SGS variance closure mode (-1: unattenuated
     status quo, 0: Approach A2 scalar displacement attenuation, 1: Approach B
     upper-tail truncation, 2: Approach A2+B, 3: Approach A2′ full vertical
-    displacement attenuation) [-].
+    displacement attenuation, with optional Approach B upper-tail truncation
+    when c_tail > 0) [-].
   - `cloud_fraction_closure_mode`: Cloud fraction closure formulation
     (0: status-quo hybrid closure C = q_c / (α σ_S), 1: Φ-Gaussian tail with
     effective saturation deficit C = normal_cdf(z_c), 2: Φ-hybrid bounded with
