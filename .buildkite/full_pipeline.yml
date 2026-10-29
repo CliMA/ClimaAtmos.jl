@@ -944,15 +944,15 @@ steps:
           slurm_ntasks: 2
           slurm_mem: 32G
 
-      # This job occasionally times out. We add a soft file when the agent is
-      # lost because of timeout
+      # Each rank compiles the model for the GPU, which takes about 40 minutes
+      # before the first checkpoint is written. Soft-fail when the agent is lost.
       - label: ":computer: Restart 2-process MPI, GPU"
         command: >
           srun julia --color=yes --project=.buildkite test/restart.jl
         env:
           CLIMACOMMS_CONTEXT: "MPI"
           CLIMACOMMS_DEVICE: "CUDA"
-        timeout_in_minutes: 30
+        timeout_in_minutes: 50
         soft_fail:
           - exit_status: -1
           - exit_status: 255
