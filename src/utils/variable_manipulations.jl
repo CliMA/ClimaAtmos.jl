@@ -34,7 +34,7 @@ sum exactly to the grid mean) where the area fraction is small.
     [kg/m³ × units of `χ`].
   - `ρa`: Density-area product of the SGS subdomain [kg/m³].
   - `turbconv_model`: Turbulence-convection model; supplies the regularization
-    parameter `a_half`.
+    parameter `a_half`. A number in its place is used as the weight `w`.
 
 # Returns
 
@@ -47,7 +47,9 @@ specific(ρχ, ρ) = ρχ / ρ
 function specific(ρaχ, ρa, ρχ, ρ, turbconv_model)
     # TODO: Replace turbconv_model struct by parameters, and include a_half in
     # parameters, not in config
-    weight = sgs_weight_function(ρa / ρ, turbconv_model.a_half)
+    return specific(ρaχ, ρa, ρχ, ρ, sgs_weight_function(ρa / ρ, turbconv_model.a_half))
+end
+function specific(ρaχ, ρa, ρχ, ρ, weight::Number)
     # If ρa is exactly zero, the weight is zero, making the first term NaN (0 * … / 0).
     # For negligible ρa the weight is also zero, and autodiff can still produce NaNs.
     # The ifelse handles both cases explicitly by returning the grid-mean value when ρa < eps.

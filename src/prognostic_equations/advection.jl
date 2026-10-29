@@ -296,10 +296,11 @@ NVTX.@annotate function explicit_vertical_advection_tendency!(Yₜ, Y, p, t)
         # In a deep atmosphere, the vorticity carries the horizontal Coriolis term.
         ᶠω¹²_tot =
             deep_val isa Val{true} ? (@. lazy(rest[end] + ᶠω¹²)) : ᶠω¹²
+        ᶜu¹² = @. CT12(ᶜu)
         @. Yₜc.uₕ -=
             ᶜinterp(ᶠω¹²_tot × (ᶠinterp(ᶜρ * ᶜJ) * ᶠu³)) / (ᶜρ * ᶜJ) +
-            (ᶜf³ + ᶜω³) × CT12(ᶜu)
-        @. Yₜf.u₃ -= ᶠω¹²_tot × ᶠinterp(CT12(ᶜu)) + ᶠgradᵥ(ᶜK)
+            (ᶜf³ + ᶜω³) × ᶜu¹²
+        @. Yₜf.u₃ -= ᶠω¹²_tot × ᶠinterp(ᶜu¹²) + ᶠgradᵥ(ᶜK)
         MatrixFields.unrolled_foreach(ntuple(Val, n_val)) do j_val
             j = val_value(j_val)
             ᶠω¹²ʲ = getproperty(rest[1], j)
@@ -368,7 +369,7 @@ function edmfx_sgs_vertical_advection_tendency!(
     n = n_prognostic_mass_flux_subdomains(turbconv_model)
     (; edmfx_mse_q_tot_upwinding, edmfx_tracer_upwinding) = p.atmos.numerics
     (; ᶠu³ʲs, ᶜρʲs, ᶜρ_diffʲs, ᶜTʲs, ᶜT⁰) = p.precomputed
-    (; ᶜgradᵥ_ᶠΦ, ᶜΦ) = p.core
+    (; ᶜgradᵥ_ᶠΦ, ᶜΦ, ᶠ∂ξ³∂x³) = p.core
     (; microphysics_model) = p.atmos
 
     FT = eltype(p.params)
@@ -431,10 +432,10 @@ function edmfx_sgs_vertical_advection_tendency!(
         # per-species fluxes are loop temporaries rather than scratch fields.
         DataLayouts.foreach_column(
             Yₜ.c.sgsʲs.:($j), Y.c.sgsʲs.:($j), Y.f.sgsʲs.:($j).u₃, ᶠu³ʲs.:($j),
-            ᶜρ_diffʲs.:($j), ᶜgradᵥ_ᶠΦ, ᶜρʲs.:($j), ᶜTʲs.:($j), ᶜT⁰, ᶜΦ, Y.c,
+            ᶜρ_diffʲs.:($j), ᶜgradᵥ_ᶠΦ, ᶜρʲs.:($j), ᶜTʲs.:($j), ᶜT⁰, ᶜΦ, ᶠ∂ξ³∂x³, Y.c,
             ᶜwʲs..., ᶜw_gss...,
-        ) do ᶜsgsʲₜ, ᶜsgsʲ, ᶠu₃ʲ, ᶠu³ʲ, ᶜρ_diffʲ, ᶜgradᵥ_ᶠΦ, ᶜρʲ, ᶜTʲ, ᶜT⁰, ᶜΦ, Yc,
-        ᶜws...
+        ) do ᶜsgsʲₜ, ᶜsgsʲ, ᶠu₃ʲ, ᶠu³ʲ, ᶜρ_diffʲ, ᶜgradᵥ_ᶠΦ, ᶜρʲ, ᶜTʲ, ᶜT⁰, ᶜΦ, ᶠ∂ξ³∂x³,
+        Yc, ᶜws...
             @. ᶜsgsʲₜ.mse += adjoint(CT3(ᶜinterp(ᶠu₃ʲ))) * ᶜρ_diffʲ * ᶜgradᵥ_ᶠΦ
 
             va = vertical_advection(ᶠu³ʲ, ᶜsgsʲ.mse, edmfx_mse_q_tot_upwinding)
@@ -457,7 +458,7 @@ function edmfx_sgs_vertical_advection_tendency!(
             ᶠJ = Fields.local_geometry_field(axes(ᶠu³ʲ)).J
             ᶜa = @. draft_area(ᶜsgsʲ.ρa, ᶜρʲ)
             ᶜinv_ρ̂ = @. specific(one_FT, ᶜsgsʲ.ρa, zero_FT, ᶜρʲ, turbconv_model)
-            ∂a∂z = @. ᶜprecipdivᵥ(ᶠinterp(ᶜJ) / ᶠJ * ᶠtop_bias(Geometry.WVector(ᶜa)))
+            ∂a∂z = @. ᶜprecipdivᵥ(CT3(ᶠ∂ξ³∂x³ * (ᶠinterp(ᶜJ) / ᶠJ * ᶠtop_bias(ᶜa))))
             ᶠρ = @. ᶠinterp(ᶜρʲ * ᶜJ) / ᶠJ
             ᶜwʲs_col, ᶜw_gss_col = _split_halves(ᶜws)
             ᶜw_massʲs, ᶜw_numberʲs = _split_at(n_mass_val, ᶜwʲs_col)
@@ -482,14 +483,14 @@ function edmfx_sgs_vertical_advection_tendency!(
                     (ᶜw_gs * ᶜρq_gs - ᶜsgsʲ.ρa * ᶜwʲ * ᶜqʲ) / max(1 - ᶜa, ε_area),
                     zero_FT,
                 )
-                vtt_q = updraft_sedimentation(ᶠρ, ∂a∂z, ᶜwʲ, ᶜa, ᶜqʲ, ᶜρ⁰w⁰q⁰)
+                vtt_q = updraft_sedimentation(ᶠ∂ξ³∂x³, ᶠρ, ∂a∂z, ᶜwʲ, ᶜa, ᶜqʲ, ᶜρ⁰w⁰q⁰)
                 @. ᶜqʲₜ += ᶜinv_ρ̂ * vtt_q
                 @. ᶜsgsʲₜ.q_tot += ᶜinv_ρ̂ * vtt_q
                 @. ᶜsed_mass_source += vtt_q
                 h_cond_func = enthalpy_function(condensate_phase(name))
                 ᶜqhʲ = @. ᶜqʲ * (h_cond_func(thp, ᶜTʲ) + ᶜΦ)
                 ᶜρ⁰w⁰qh⁰ = @. ᶜρ⁰w⁰q⁰ * (h_cond_func(thp, ᶜT⁰) + ᶜΦ)
-                vtt_h = updraft_sedimentation(ᶠρ, ∂a∂z, ᶜwʲ, ᶜa, ᶜqhʲ, ᶜρ⁰w⁰qh⁰)
+                vtt_h = updraft_sedimentation(ᶠ∂ξ³∂x³, ᶠρ, ∂a∂z, ᶜwʲ, ᶜa, ᶜqhʲ, ᶜρ⁰w⁰qh⁰)
                 @. ᶜsgsʲₜ.mse += ᶜinv_ρ̂ * vtt_h
                 return nothing
             end
@@ -516,7 +517,7 @@ function edmfx_sgs_vertical_advection_tendency!(
                     (ᶜw_gs * ᶜρχ_gs - ᶜsgsʲ.ρa * ᶜwʲ * ᶜχʲ) / max(1 - ᶜa, ε_area),
                     zero_FT,
                 )
-                vtt_n = updraft_sedimentation(ᶠρ, ∂a∂z, ᶜwʲ, ᶜa, ᶜχʲ, ᶜρ⁰w⁰χ⁰)
+                vtt_n = updraft_sedimentation(ᶠ∂ξ³∂x³, ᶠρ, ∂a∂z, ᶜwʲ, ᶜa, ᶜχʲ, ᶜρ⁰w⁰χ⁰)
                 @. ᶜχʲₜ += ᶜinv_ρ̂ * vtt_n
                 return nothing
             end
@@ -596,22 +597,23 @@ function updraft_sedimentation!(
 end
 
 """
-    updraft_sedimentation(ᶠρ, ∂a∂z, ᶜw, ᶜa, ᶜχ, ᶜρ⁰w⁰χ⁰)
+    updraft_sedimentation(ᶠ∂ξ³∂x³, ᶠρ, ∂a∂z, ᶜw, ᶜa, ᶜχ, ᶜρ⁰w⁰χ⁰)
 
 Column-loop form of `updraft_sedimentation!`: return the flux-form
 sedimentation tendency of the updraft tracer `ᶜχ` as a loop temporary, given
 the face updraft density `ᶠρ = ᶠinterp(ρʲ J) / ᶠJ` and the area gradient
 `∂a∂z = ᶜprecipdivᵥ(ᶠinterp(J) / ᶠJ ᶠtop_bias(a))`, which do not depend on the
-tracer and are computed once per column. Called from the fused column loop of
-`edmfx_sgs_vertical_advection_tendency!`, so it must stay inlined.
+tracer and are computed once per column, and `p.core.ᶠ∂ξ³∂x³`. Called from the
+fused column loop of `edmfx_sgs_vertical_advection_tendency!`, so it must stay
+inlined.
 """
-@inline function updraft_sedimentation(ᶠρ, ∂a∂z, ᶜw, ᶜa, ᶜχ, ᶜρ⁰w⁰χ⁰)
+@inline function updraft_sedimentation(ᶠ∂ξ³∂x³, ᶠρ, ∂a∂z, ᶜw, ᶜa, ᶜχ, ᶜρ⁰w⁰χ⁰)
     ᶠwχ = @. ᶠtop_bias(-(ᶜw) * ᶜχ)
     ᶠwaχ = @. ᶠtop_bias(-(ᶜw) * ᶜa * ᶜχ)
     return @. ifelse(
         ∂a∂z < 0,
-        -(ᶜprecipdivᵥ(ᶠρ * Geometry.WVector(ᶠwaχ)) + ∂a∂z * ᶜρ⁰w⁰χ⁰),
-        -(ᶜa * ᶜprecipdivᵥ(ᶠρ * Geometry.WVector(ᶠwχ))),
+        -(ᶜprecipdivᵥ(CT3(ᶠ∂ξ³∂x³ * (ᶠρ * ᶠwaχ))) + ∂a∂z * ᶜρ⁰w⁰χ⁰),
+        -(ᶜa * ᶜprecipdivᵥ(CT3(ᶠ∂ξ³∂x³ * (ᶠρ * ᶠwχ)))),
     )
 end
 
@@ -736,12 +738,12 @@ function updraft_sedimentation_matrix!(ᶜM, Y, p, dtγ, χ_name, ᶜ∂a∂z)
     @. ᶠsed_tracer_advection =
         DiagonalMatrixRow(ᶠinterp(ᶜρʲs.:(1) * ᶜJ) / ᶠJ) *
         ᶠtop_bias_matrix() *
-        DiagonalMatrixRow(-Geometry.WVector(ᶜwʲ))
+        DiagonalMatrixRow(-(ᶜwʲ))
+    ᶠsed = @. lazy(DiagonalMatrixRow(CT3(p.core.ᶠ∂ξ³∂x³)) * ᶠsed_tracer_advection)
     @. ᶜM =
         dtγ * ifelse(ᶜ∂a∂z < 0,
-            -(ᶜprecipdivᵥ_matrix()) * ᶠsed_tracer_advection *
-            DiagonalMatrixRow(ᶜa),
-            -DiagonalMatrixRow(ᶜa) * ᶜprecipdivᵥ_matrix() * ᶠsed_tracer_advection,
+            -(ᶜprecipdivᵥ_matrix()) * ᶠsed * DiagonalMatrixRow(ᶜa),
+            -DiagonalMatrixRow(ᶜa) * ᶜprecipdivᵥ_matrix() * ᶠsed,
         ) + DiagonalMatrixRow(ᶜlateral_coeff)
     return ᶜlateral_coeff
 end

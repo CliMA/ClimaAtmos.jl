@@ -167,7 +167,7 @@ function temporary_quantities(Y, atmos)
             ClimaCore.MatrixFields.BandMatrixRow{
                 ClimaCore.Utilities.PlusHalf{Int64}(0),
                 1,
-                ClimaCore.Geometry.WVector{FT},
+                FT,
             },
         ),
         ᶠbidiagonal_matrix_ct3_2 = similar(Y.f, BidiagonalMatrixRow{CT3{FT}}),

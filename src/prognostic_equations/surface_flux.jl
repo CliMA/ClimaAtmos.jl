@@ -130,15 +130,18 @@ function surface_flux_tendency!(Yₜ, Y, p, t)
         if do_mom_val isa Val{true}
             @. Yₜc.uₕ -= btt_uₕ
         end
-        @. Yₜc.ρe_tot -= btt_h
+        # Each boundary tendency is evaluated once, into registers.
+        ᶜbtt_h = Base.materialize(btt_h)
+        @. Yₜc.ρe_tot -= ᶜbtt_h
         if edmf_val isa Val{true}
-            @. Yₜc.sgsʲs.:(1).mse -= specific(btt_h, ᶜρʲ)
+            @. Yₜc.sgsʲs.:(1).mse -= specific(ᶜbtt_h, ᶜρʲ)
         end
         if q_tot_val isa Val{true}
-            @. Yₜc.ρq_tot -= btt_q
-            @. Yₜc.ρ -= btt_q
+            ᶜbtt_q = Base.materialize(btt_q)
+            @. Yₜc.ρq_tot -= ᶜbtt_q
+            @. Yₜc.ρ -= ᶜbtt_q
             if edmf_val isa Val{true}
-                @. Yₜc.sgsʲs.:(1).q_tot -= specific(btt_q, ᶜρʲ)
+                @. Yₜc.sgsʲs.:(1).q_tot -= specific(ᶜbtt_q, ᶜρʲ)
             end
         end
         return nothing

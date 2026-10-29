@@ -41,7 +41,7 @@ the implicitly treated vertical transport. See the "Microphysics" page of the do
 function vertical_advection_of_water_tendency!(Yₜ, Y, p, t)
 
     (; params) = p
-    (; ᶜΦ) = p.core
+    (; ᶜΦ, ᶠ∂ξ³∂x³) = p.core
     (; ᶜu, ᶜT) = p.precomputed
     thp = CAP.thermodynamics_params(params)
 
@@ -69,20 +69,21 @@ function vertical_advection_of_water_tendency!(Yₜ, Y, p, t)
     # GPUs) rather than scratch fields, and the five broadcasts per species run in
     # the same kernel.
     DataLayouts.foreach_column(
-        Yₜ.c, Y.c, ᶜJ, ᶠJ, ᶜT, ᶜΦ, ᶜu, ᶜws...,
-    ) do Yₜc, Yc, ᶜJ, ᶠJ, ᶜT, ᶜΦ, ᶜu, ᶜws...
+        Yₜ.c, Y.c, ᶜJ, ᶠJ, ᶜT, ᶜΦ, ᶜu, ᶠ∂ξ³∂x³, ᶜws...,
+    ) do Yₜc, Yc, ᶜJ, ᶠJ, ᶜT, ᶜΦ, ᶜu, ᶠ∂ξ³∂x³, ᶜws...
         ᶠρ = @. ᶠinterp(Yc.ρ * ᶜJ) / ᶠJ
+        ᶜuvw = @. Geometry.UVWVector(ᶜu) # converted once for every species
         MatrixFields.unrolled_foreach(
             _unrolled_zip(ρq_names, ᶜws),
         ) do (ρq_name, ᶜw)
             ᶜρq = MatrixFields.get_field(Yc, ρq_name)
             e_int_func = internal_energy_func(ρq_name)
             ᶜq = @. specific(ᶜρq, Yc.ρ)
-            vtt = @. -1 * ᶜprecipdivᵥ(ᶠρ * ᶠtop_bias(Geometry.WVector(-(ᶜw)) * ᶜq))
+            vtt = @. -1 * ᶜprecipdivᵥ(CT3(ᶠ∂ξ³∂x³ * (ᶠρ * ᶠtop_bias(-(ᶜw) * ᶜq))))
             @. Yₜc.ρ += vtt
             @. Yₜc.ρq_tot += vtt
-            ᶜρwe = @. -(ᶜw) * ᶜq * (e_int_func(thp, ᶜT) + ᶜΦ + $(Kin(ᶜw, ᶜu)))
-            @. Yₜc.ρe_tot -= ᶜprecipdivᵥ(ᶠρ * ᶠtop_bias(Geometry.WVector(ᶜρwe)))
+            ᶜρwe = @. -(ᶜw) * ᶜq * (e_int_func(thp, ᶜT) + ᶜΦ + $(Kin(ᶜw, ᶜuvw)))
+            @. Yₜc.ρe_tot -= ᶜprecipdivᵥ(CT3(ᶠ∂ξ³∂x³ * (ᶠρ * ᶠtop_bias(ᶜρwe))))
         end
         return nothing
     end
@@ -133,14 +134,18 @@ function vertical_advection_of_water_tendency!(Yₜ, Y, p, t)
         # specific energies are loop temporaries.
         DataLayouts.foreach_column(
             Yₜ.c, Y.c, ᶜJ, ᶠJ, ᶜT, ᶜu, ᶜρʲs.:(1), ᶜTʲs.:(1), ᶜuʲs.:(1),
-            ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜu⁰, ᶜwʲs..., ᶜws...,
+            ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜu⁰, ᶠ∂ξ³∂x³, ᶜwʲs..., ᶜws...,
         ) do Yₜc, Yc, ᶜJ, ᶠJ, ᶜT, ᶜu, ᶜρʲ, ᶜTʲ, ᶜuʲ,
-        ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜu⁰, ᶜwʲs_and_ᶜws...
+        ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰, ᶜu⁰, ᶠ∂ξ³∂x³, ᶜwʲs_and_ᶜws...
             ᶜρ⁰ = @. TD.air_density(thp, ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰)
             ᶠρʲ = @. ᶠinterp(ᶜρʲ * ᶜJ) / ᶠJ
             ᶠρ⁰ = @. ᶠinterp(ᶜρ⁰ * ᶜJ) / ᶠJ
             ᶜρaʲ = Yc.sgsʲs.:(1).ρa
             ᶜaʲ = @. draft_area(ᶜρaʲ, ᶜρʲ)
+            # The velocities are converted once for every species.
+            ᶜuvw = @. Geometry.UVWVector(ᶜu)
+            ᶜuvwʲ = @. Geometry.UVWVector(ᶜuʲ)
+            ᶜuvw⁰ = @. Geometry.UVWVector(ᶜu⁰)
             ᶜwʲs_col, ᶜws_col = _split_halves(ᶜwʲs_and_ᶜws)
             MatrixFields.unrolled_foreach(
                 _unrolled_zip(q_names, _unrolled_zip(ᶜwʲs_col, ᶜws_col)),
@@ -151,11 +156,11 @@ function vertical_advection_of_water_tendency!(Yₜ, Y, p, t)
                 # Grid-mean specific energy carried by the sedimentation flux
                 # applied above (Φ is identical in all subdomains at a given
                 # level, so it cancels in the subdomain differences).
-                ᶜe_gm = @. e_int_func(thp, ᶜT) + $(Kin(ᶜw, ᶜu))
+                ᶜe_gm = @. e_int_func(thp, ᶜT) + $(Kin(ᶜw, ᶜuvw))
                 # Updraft correction: (e_intʲ + Kinʲ) - (e_int + Kin)
-                ᶜΔeʲ = @. e_int_func(thp, ᶜTʲ) + $(Kin(ᶜwʲ, ᶜuʲ)) - ᶜe_gm
+                ᶜΔeʲ = @. e_int_func(thp, ᶜTʲ) + $(Kin(ᶜwʲ, ᶜuvwʲ)) - ᶜe_gm
                 @. Yₜc.ρe_tot -= ᶜprecipdivᵥ(
-                    ᶠρʲ * ᶠtop_bias(Geometry.WVector(-(ᶜwʲ)) * ᶜaʲ * ᶜqʲ * ᶜΔeʲ),
+                    CT3(ᶠ∂ξ³∂x³ * (ᶠρʲ * ᶠtop_bias(-(ᶜwʲ) * ᶜaʲ * ᶜqʲ * ᶜΔeʲ))),
                 )
                 # Environment correction: (e_int⁰ + Kin⁰) - (e_int + Kin). The
                 # environment sedimentation velocity is not stored separately
@@ -163,10 +168,10 @@ function vertical_advection_of_water_tendency!(Yₜ, Y, p, t)
                 # Kin⁰ is approximated with the grid-mean terminal velocity ᶜw.
                 # TODO: Update for when updraft area fraction is not necessarily
                 # small
-                ᶜΔe⁰ = @. e_int_func(thp, ᶜT⁰) + $(Kin(ᶜw, ᶜu⁰)) - ᶜe_gm
+                ᶜΔe⁰ = @. e_int_func(thp, ᶜT⁰) + $(Kin(ᶜw, ᶜuvw⁰)) - ᶜe_gm
                 ᶜwaq⁰ = @. (ᶜρq * ᶜw - ᶜρaʲ * ᶜqʲ * ᶜwʲ) / ᶜρ⁰
                 @. Yₜc.ρe_tot -= ᶜprecipdivᵥ(
-                    ᶠρ⁰ * ᶠtop_bias(Geometry.WVector(-(ᶜwaq⁰)) * ᶜΔe⁰),
+                    CT3(ᶠ∂ξ³∂x³ * (ᶠρ⁰ * ᶠtop_bias(-(ᶜwaq⁰) * ᶜΔe⁰))),
                 )
             end
             return nothing
