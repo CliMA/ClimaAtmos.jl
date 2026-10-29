@@ -789,6 +789,44 @@ floor_nt(::Type{FT}; σ_abs = FT(1e-7)) where {FT} =
                 @test l_d_env_a2p ≈ l_d_env_a2p_expected rtol = FT(1e-5)
             end
         end
+
+        @testset "SGS variance fidelity mode 2 (equilibrium-modulated, unclamped)" begin
+            for FT in (Float32, Float64)
+                A = FT(1.2)
+                τ_mp = FT(100)
+                c_d = FT(0.1)
+                tke = FT(0.5)
+                l_mix = FT(50)
+                w_eq = FT(0.5)
+                q_min = FT(1e-7)
+                mu_S = FT(-0.001)
+                sigma_S = FT(0.002)
+
+                inv_τ_turb = c_d * sqrt(tke) / l_mix
+                Da = A * τ_mp * inv_τ_turb
+                α_Da = 1 / (1 + Da)
+                q_c_eq = CA.equilibrium_condensate(mu_S, sigma_S, FT(0), FT(0), FT(Inf32))
+
+                # Case A: moderate condensate matches exact α_Da * α_eq
+                q_c_actual = FT(1e-4)
+                r_A = (q_c_actual + q_min) / (q_c_eq + q_min)
+                α_eq_A = r_A / (w_eq + (1 - w_eq) * r_A)
+                α_A = CA.sgs_variance_fidelity(
+                    A, τ_mp, c_d, tke, l_mix, w_eq, q_c_actual, mu_S, sigma_S, q_min,
+                )
+                @test α_A ≈ α_Da * α_eq_A rtol = FT(1e-6)
+
+                # Case B: trace condensate (q_c << q_c_eq) showing α can drop below 0.05 (unclamped)
+                q_c_trace = FT(1e-8)
+                r_B = (q_c_trace + q_min) / (q_c_eq + q_min)
+                α_eq_B = r_B / (w_eq + (1 - w_eq) * r_B)
+                α_B = CA.sgs_variance_fidelity(
+                    A, τ_mp, c_d, tke, l_mix, w_eq, q_c_trace, mu_S, sigma_S, q_min,
+                )
+                @test α_B ≈ α_Da * α_eq_B rtol = FT(1e-6)
+                @test α_B < FT(0.05)
+            end
+        end
     end
 
 end

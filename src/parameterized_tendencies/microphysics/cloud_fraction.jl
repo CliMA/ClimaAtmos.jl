@@ -520,7 +520,7 @@ function materialized_variance_fidelity!(Y, p, ᶜl_mix_disp)
         return nothing
     elseif fid_mode == 2
         w_eq = FT(CAP.sgs_fidelity_equilibrium_weight(p.params))
-        q_min = FT(1e-12)
+        q_min = FT(TD.Parameters.q_min(thp))
         (; ᶜT′T′, ᶜq′q′, ᶜcorr_Tq) = p.precomputed
         ᶜlin, ᶜcurv = if p.atmos.sgs_variance_curvature
             (p.precomputed.ᶜdisp_S.lin, p.precomputed.ᶜdisp_S.curv)
@@ -1571,10 +1571,10 @@ end
 """
     sgs_variance_fidelity(
         A, τ_mp, c_d, tke, l_mix, w_eq, q_c_actual, mu_S, sigma_S, q_min,
-        lin = 0, curv = 0, c = Inf32, α_min = 0.05,
+        lin = 0, curv = 0, c = Inf32,
     )
 
-Equilibrium-modulated SGS variance fidelity `α = clamp(α_Da · α_eq, α_min, 1)`
+Equilibrium-modulated SGS variance fidelity `α = α_Da · α_eq`
 (`sgs_variance_fidelity_mode = 2`) for the condensate reconstruction
 `E[max(0, λ + α·S′)] = q_c`.
 
@@ -1587,7 +1587,7 @@ Equilibrium-modulated SGS variance fidelity `α = clamp(α_Da · α_eq, α_min, 
 """
 @inline function sgs_variance_fidelity(
     A, τ_mp, c_d, tke, l_mix, w_eq, q_c_actual, mu_S, sigma_S, q_min,
-    lin = zero(mu_S), curv = zero(mu_S), c = Inf32, α_min = typeof(tke)(0.05),
+    lin = zero(mu_S), curv = zero(mu_S), c = Inf32,
 )
     FT = typeof(tke)
     inv_τ_turb = FT(c_d) * sqrt(max(tke, zero(FT))) / max(l_mix, one(FT))
@@ -1602,7 +1602,7 @@ Equilibrium-modulated SGS variance fidelity `α = clamp(α_Da · α_eq, α_min, 
     r = (FT(q_c_actual) + FT(q_min)) / (q_c_eq + FT(q_min))
     w = FT(w_eq)
     α_eq = r / (w + (one(FT) - w) * r)
-    return clamp(α_Da * α_eq, FT(α_min), one(FT))
+    return α_Da * α_eq
 end
 
 """
