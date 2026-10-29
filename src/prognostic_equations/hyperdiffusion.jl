@@ -416,8 +416,7 @@ function dss_hyperdiffusion_tendency_pairs(p)
 
     (; ᶜ∇²specific_tracers) = p.hyperdiff
     has_passive_tracers = any(propertynames(ᶜ∇²specific_tracers)) do name
-        fn = MatrixFields.FieldName((name,))
-        fn != @name(ρq_tot) && !(fn in hyperdiffusion_excluded_gs_names)
+        is_hyperdiffused_passive_tracer(MatrixFields.FieldName((name,)))
     end
     core_tracer_pairs =
         has_passive_tracers ?
@@ -445,8 +444,7 @@ NVTX.@annotate function prep_tracer_hyperdiffusion_tendency!(Yₜ, Y, p, t)
     (; ᶜ∇²specific_tracers) = p.hyperdiff
 
     foreach_gs_tracer(Y, ᶜ∇²specific_tracers) do ᶜρχ, ᶜ∇²χ, ρχ_name
-        ρχ_name == @name(ρq_tot) && return
-        ρχ_name in hyperdiffusion_excluded_gs_names && return
+        is_hyperdiffused_passive_tracer(ρχ_name) || return
         @. ᶜ∇²χ = wdivₕ(gradₕ(specific(ᶜρχ, Y.c.ρ)))
     end
     return nothing
@@ -458,6 +456,10 @@ end
 # the total-water tendency (or none at all) in place of a ∇⁴ tendency.
 const hyperdiffusion_excluded_gs_names = gs_sedimenting_tracer_candidates
 const hyperdiffusion_excluded_sgs_names = sgs_sedimenting_tracer_candidates
+
+# Whether the grid-mean tracer `ρχ_name` takes the generic ∇⁴ tracer tendency.
+is_hyperdiffused_passive_tracer(ρχ_name) =
+    ρχ_name != @name(ρq_tot) && !(ρχ_name in hyperdiffusion_excluded_gs_names)
 
 """
     apply_tracer_hyperdiffusion_tendency!(Yₜ, Y, p, t)
@@ -640,15 +642,12 @@ function passive_tracer_hyperdiffusion_tendency!(
     # density), the mass redistributed by hyperdiffusion will not be conserved
     # by the limiter. Is this a significant problem?
     foreach_gs_tracer(Yₜ, ᶜ∇²specific_tracers) do ᶜρχₜ, ᶜ∇²χ, ρχ_name
-        ρχ_name == @name(ρq_tot) && return
-        ρχ_name in hyperdiffusion_excluded_gs_names && return
+        is_hyperdiffused_passive_tracer(ρχ_name) || return
         @. ᶜρχₜ -= ν₄_scalar * wdivₕ(Y.c.ρ * gradₕ(ᶜ∇²χ))
     end
     isempty(sgs_tracer_names(Y)) && return nothing
     (; ᶜ∇²sgs_tracerʲs) = p.hyperdiff
     for χ_name in sgs_tracer_names(Y)
-        # `continue`, not `return`: this is a plain for-loop, not a do-block, so
-        # `return` would skip any passive tracers after a microphysics one.
         χ_name in hyperdiffusion_excluded_sgs_names && continue
         for j in 1:n
             ᶜχʲ = MatrixFields.get_field(Y.c.sgsʲs.:($j), χ_name)

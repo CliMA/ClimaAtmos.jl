@@ -78,9 +78,7 @@ function set_covariance_cache_and_cloud_fraction!(Y, p)
     # fraction. The first step stores its iterate in `c1`; the second applies
     # the Aitken acceleration.
     function picard_step!(::Val{aitken}) where {aitken}
-        set_covariance_cache!(
-            Y, p, thermo_params; recompute_buoygrad = true, env_state,
-        )
+        set_covariance_cache!(Y, p, thermo_params; env_state)
         if fused
             set_quadrature_cloud_fraction!(Y, p, env_state, c0, c1, Val(aitken))
         else
@@ -99,9 +97,7 @@ function set_covariance_cache_and_cloud_fraction!(Y, p)
     # Final post-Aitken covariance, then, for the 1M and 2M schemes, the SGS
     # moments, the cloud fraction consistent with them, and the precipitation
     # fraction.
-    set_covariance_cache!(
-        Y, p, thermo_params; recompute_buoygrad = true, env_state,
-    )
+    set_covariance_cache!(Y, p, thermo_params; env_state)
     hasproperty(p.precomputed, :ᶜsgs_moments) || return nothing
     final_env_state =
         fused ? env_state :
@@ -166,11 +162,10 @@ uses_covariances(atmos) =
     materialized_mixing_length!(Y, p)
 
 Materialize the SGS master mixing length into a center field and return it.
-For an `AbstractEDMF` this writes the persistent `ᶜl_mix` cache (computed once,
-reused by TKE dissipation, the covariance closure, variance fidelity, and
-diagnostics); every `AbstractEDMF` carries `Y.c.ρtke`, so `ᶜmixing_length` is
-well defined. Otherwise it falls back to the grid-mean Smagorinsky-Lilly
-length, materialized in `p.scratch.ᶜtemp_scalar` by `compute_gm_mixing_length`.
+For an `AbstractEDMF` this writes the persistent `ᶜl_mix` cache; every
+`AbstractEDMF` carries `Y.c.ρtke`, so `ᶜmixing_length` is well defined.
+Otherwise it falls back to the grid-mean Smagorinsky-Lilly length, materialized
+in `p.scratch.ᶜtemp_scalar` by `compute_gm_mixing_length`.
 """
 function materialized_mixing_length!(Y, p)
     if p.atmos.turbconv_model isa AbstractEDMF
@@ -454,7 +449,6 @@ end
 @inline _disp_lin(d::Real) = zero(d)
 @inline _disp_curv(d::NamedTuple) = d.curv
 @inline _disp_curv(d::Real) = zero(d)
-@inline _sgs_sigma_S(m) = m.sigma_S
 @inline _1(t) = t[1]
 @inline _2(t) = t[2]
 @inline _3(t) = t[3]
@@ -463,7 +457,7 @@ end
 @inline _6(t) = t[6]
 
 """
-    set_covariance_cache!(Y, p, thermo_params)
+    set_covariance_cache!(Y, p, thermo_params; env_state = nothing)
 
 Materializes T-based SGS covariances into cached fields for use by downstream
 computations (SGS quadrature, cloud fraction). Populates
@@ -486,8 +480,8 @@ enforces.
 Each column is evaluated in one fused loop (`_set_covariance_cache_loop!`):
 
  1. The mixing length: under `AbstractEDMF`, `ᶜl_mix` is refreshed in the loop
-    (with `ᶜbuoygrad` first when `recompute_buoygrad`); otherwise the grid-mean
-    mixing length is passed in.
+    (with `ᶜbuoygrad` first); otherwise the grid-mean mixing length is passed
+    in.
  2. The displacement length `l_d` (`displacement_length`) of the buoyancy-bounded
     mixing length (`buoyancy_bounded_mixing_length`; `l_mix` without TKE) and the
     floor displacement scale (`floor_displacement_length`), both with the
@@ -539,7 +533,6 @@ function set_covariance_cache!(
     Y,
     p,
     thermo_params;
-    recompute_buoygrad::Bool = false,
     env_state = nothing,
 )
     uses_covariances(p.atmos) || return nothing
@@ -670,7 +663,6 @@ function set_covariance_cache!(
         A, τ_mp_params, w_eq, q_min, c_d, c_trunc, vkc,
         turbconv_params, sf_params, scale_blending_method,
         zero_FT, one_FT, ϵ_FT, inf_FT,
-        Val(recompute_buoygrad),
         Val(is_edmf),
         Val(has_tke),
         Val(diag_corr),
@@ -696,7 +688,6 @@ function _set_covariance_cache_loop!(
     A, τ_mp_params, w_eq, q_min, c_d, c_trunc, vkc,
     turbconv_params, sf_params, scale_blending_method,
     zero_FT, one_FT, ϵ_FT, inf_FT,
-    ::Val{recompute_buoygrad},
     ::Val{is_edmf},
     ::Val{has_tke},
     ::Val{diag_corr},
@@ -705,7 +696,6 @@ function _set_covariance_cache_loop!(
     ::Val{has_α},
     ::Val{is_0m},
 ) where {
-    recompute_buoygrad,
     is_edmf,
     has_tke,
     diag_corr,
@@ -736,7 +726,7 @@ function _set_covariance_cache_loop!(
             has_tke ?
             (@. lazy(specific(Fields.level(Yc.ρtke, 1), Fields.level(Yc.ρ, 1)))) :
             zero_FT
-        if recompute_buoygrad && is_edmf
+        if is_edmf
             @. ᶜbuoygrad = blended_N²(
                 ᶜbg_coeffs,
                 ᶜcloud_fraction,
@@ -901,7 +891,7 @@ function _set_covariance_cache_loop!(
                         _6(ᶜenv_pack),
                     ),
                     c_d,
-                    has_tke ? max(ᶜtke, zero_FT) : zero_FT,
+                    max(ᶜtke, zero_FT),
                     has_tke && is_edmf ? ᶜl_mix_disp : one_FT,
                     w_eq,
                     _4(ᶜenv_pack),

@@ -205,7 +205,7 @@ Vertical advection of passive tracers by the mean flow is treated explicitly.
 Returns `nothing`.
 """
 function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
-    (; microphysics_model, rayleigh_sponge) = p.atmos
+    (; rayleigh_sponge) = p.atmos
     (; params) = p
     ᶜJ = Fields.local_geometry_field(axes(Y.c)).J
     ᶠJ = Fields.local_geometry_field(axes(Y.f)).J
@@ -215,40 +215,13 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     cp_d = CAP.cp_d(params)
 
     # Tracers advected with their precipitation / sedimentation terminal
-    # velocity, as (tracer name, velocity) pairs, using downward biasing and a
-    # free outflow bottom boundary condition. Vertical advection of passive
-    # tracers with the mean flow is done in the explicit tendency.
-    sedimenting = ()
-    if microphysics_model isa NonEquilibriumMicrophysics
-        (; ᶜwₗ, ᶜwᵢ) = p.precomputed
-        sedimenting = (sedimenting..., (@name(ρq_lcl), ᶜwₗ), (@name(ρq_icl), ᶜwᵢ))
+    # velocity, using downward biasing and a free outflow bottom boundary
+    # condition. Vertical advection of passive tracers with the mean flow is
+    # done in the explicit tendency.
+    sedimenting_names = sedimenting_tracer_names(Y)
+    ᶜws = unrolled_map(sedimenting_names) do ρχ_name
+        MatrixFields.get_field(p.precomputed, sedimentation_velocity_name(ρχ_name))
     end
-    if microphysics_model isa NonEquilibriumMicrophysics1M
-        (; ᶜwᵣ, ᶜwₛ) = p.precomputed
-        sedimenting = (sedimenting..., (@name(ρq_rai), ᶜwᵣ), (@name(ρq_sno), ᶜwₛ))
-    end
-    if microphysics_model isa NonEquilibriumMicrophysics2M
-        (; ᶜwₙₗ, ᶜwₙᵣ, ᶜwᵣ, ᶜwₛ) = p.precomputed
-        sedimenting = (
-            sedimenting...,
-            (@name(ρn_lcl), ᶜwₙₗ),
-            (@name(ρn_rai), ᶜwₙᵣ),
-            (@name(ρq_rai), ᶜwᵣ),
-            (@name(ρq_sno), ᶜwₛ),
-        )
-    end
-    if microphysics_model isa NonEquilibriumMicrophysics2MP3
-        # Note: `ρq_icl` is handled above, in `microphysics_model isa NonEquilibriumMicrophysics`
-        (; ᶜwnᵢ, ᶜwᵢ) = p.precomputed
-        sedimenting = (
-            sedimenting...,
-            (@name(ρn_ice), ᶜwnᵢ),
-            (@name(ρq_rim), ᶜwᵢ),
-            (@name(ρb_rim), ᶜwᵢ),
-        )
-    end
-    sedimenting_names = unrolled_map(first, sedimenting)
-    ᶜws = unrolled_map(last, sedimenting)
 
     # One fused column loop for the center tendencies: the face density
     # `ᶠinterp(ρ J) / J` is a loop temporary shared by every transport term.

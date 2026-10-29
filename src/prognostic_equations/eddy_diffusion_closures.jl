@@ -599,19 +599,29 @@ from the vertical-gradient strain rate of the face velocity
 `ᶠinterp(uₕ) + u³`. This is the shear term of the TKE budget, `Ri`, `Pr_t`,
 and the mixing lengths for both the EDMF and the grid-mean closures.
 
-Reads `ᶠu³` from `p.precomputed` and uses `p.scratch.ᶠtemp_C123`; returns
-`nothing`.
+Reads `ᶠu³` from `p.precomputed`; returns `nothing`.
 """
 function set_strain_rate_norm!(Y, p)
     (; ᶠu³, ᶜstrain_rate_norm) = p.precomputed
     DataLayouts.foreach_column(
         ᶜstrain_rate_norm, Y.c.uₕ, ᶠu³,
     ) do ᶜstrain_rate_norm, ᶜuₕ, ᶠu³
-        ᶠu_col = @. C123(ᶠinterp(ᶜuₕ)) + C123(ᶠu³)
-        ᶜstrain_rate_col = compute_strain_rate_center_vertical(ᶠu_col)
-        @. ᶜstrain_rate_norm = vertical_shear_norm_sqr(ᶜstrain_rate_col)
+        set_strain_rate_norm_column!(ᶜstrain_rate_norm, ᶜuₕ, ᶠu³)
         return nothing
     end
+    return nothing
+end
+
+"""
+    set_strain_rate_norm_column!(ᶜstrain_rate_norm, ᶜuₕ, ᶠu³)
+
+Column body of [`set_strain_rate_norm!`](@ref), shared with the fused EDMF
+closure loop.
+"""
+@inline function set_strain_rate_norm_column!(ᶜstrain_rate_norm, ᶜuₕ, ᶠu³)
+    ᶠu_col = @. C123(ᶠinterp(ᶜuₕ)) + C123(ᶠu³)
+    ᶜstrain_rate_col = compute_strain_rate_center_vertical(ᶠu_col)
+    @. ᶜstrain_rate_norm = vertical_shear_norm_sqr(ᶜstrain_rate_col)
     return nothing
 end
 

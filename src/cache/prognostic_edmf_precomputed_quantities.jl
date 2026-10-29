@@ -548,9 +548,7 @@ NVTX.@annotate function set_prognostic_edmf_precomputed_quantities_explicit_clos
             @. ᶜρ_diffʲ = (ᶜρʲ - Yc.ρ) / ᶜρʲ
 
             if j == 1
-                ᶠu_col = @. C123(ᶠinterp(Yc.uₕ)) + C123(ᶠu³)
-                ᶜstrain_rate_col = compute_strain_rate_center_vertical(ᶠu_col)
-                @. ᶜstrain_rate_norm = vertical_shear_norm_sqr(ᶜstrain_rate_col)
+                set_strain_rate_norm_column!(ᶜstrain_rate_norm, Yc.uₕ, ᶠu³)
             end
             return nothing
         end
