@@ -133,15 +133,17 @@ temporaries and it must stay inlined.
     dt,
     upwinding,
 )
+    ᶜJ = Fields.local_geometry_field(axes(ᶜρ)).J
+    ᶠJ = Fields.local_geometry_field(axes(ᶠu³)).J
+    ᶠρ = @. ᶠinterp(ᶜρ * ᶜJ) / ᶠJ # shared by every transport
     ᶠu³_diff = @. ᶠu³_sub - ᶠu³
     ᶜa_scalar = @. (ᶜmse_sub + ᶜK_sub - ᶜh_tot) * ᶜa
-    vtt = vertical_transport(ᶜρ, ᶠu³_diff, ᶜa_scalar, dt, upwinding)
-    @. Yₜc.ρe_tot += vtt
+    add_vertical_transport!(Yₜc.ρe_tot, ᶠρ, ᶠu³_diff, ᶜa_scalar, dt, upwinding)
     if MatrixFields.has_field(Yc, @name(ρq_tot))
         ᶜa_scalar_q = @. (ᶜq_tot_sub - specific(Yc.ρq_tot, Yc.ρ)) * ᶜa
-        vtt_q = vertical_transport(ᶜρ, ᶠu³_diff, ᶜa_scalar_q, dt, upwinding)
-        @. Yₜc.ρq_tot += vtt_q
-        @. Yₜc.ρ += vtt_q  # Effect of SGS water flux on (moist) air mass
+        add_vertical_transport!(Yₜc.ρq_tot, ᶠρ, ᶠu³_diff, ᶜa_scalar_q, dt, upwinding)
+        # Effect of SGS water flux on (moist) air mass
+        add_vertical_transport!(Yₜc.ρ, ᶠρ, ᶠu³_diff, ᶜa_scalar_q, dt, upwinding)
     end
     MatrixFields.unrolled_foreach(
         _unrolled_zip(ρχ_names, ᶜχ_subs),
@@ -149,8 +151,7 @@ temporaries and it must stay inlined.
         ᶜρχ = MatrixFields.get_field(Yc, ρχ_name)
         ᶜρχₜ = MatrixFields.get_field(Yₜc, ρχ_name)
         ᶜa_scalar_χ = @. (ᶜχ_sub - specific(ᶜρχ, Yc.ρ)) * ᶜa
-        vtt_χ = vertical_transport(ᶜρ, ᶠu³_diff, ᶜa_scalar_χ, dt, upwinding)
-        @. ᶜρχₜ += vtt_χ
+        add_vertical_transport!(ᶜρχₜ, ᶠρ, ᶠu³_diff, ᶜa_scalar_χ, dt, upwinding)
     end
     return nothing
 end

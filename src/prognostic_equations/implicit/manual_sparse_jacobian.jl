@@ -973,7 +973,7 @@ No-op for `DryModel`. Runs in one column loop over the tracers of
 function update_sedimentation_jacobian!(matrix, Y, p, dtγ)
     p.atmos.microphysics_model isa DryModel && return nothing
     (; params) = p
-    (; ᶜΦ) = p.core
+    (; ᶜΦ, ᶠ∂ξ³∂x³) = p.core
     (; ᶜu, ᶜT) = p.precomputed
     thermo_params = CAP.thermodynamics_params(params)
 
@@ -1020,6 +1020,7 @@ function update_sedimentation_jacobian!(matrix, Y, p, dtγ)
         ᶜT,
         ᶜΦ,
         ᶜu,
+        ᶠ∂ξ³∂x³,
         mass_args...,
         other_args...,
     ) do ∂ᶜρe_tot_err_∂ᶜρe_tot,
@@ -1031,6 +1032,7 @@ function update_sedimentation_jacobian!(matrix, Y, p, dtγ)
     ᶜT_col,
     ᶜΦ_col,
     ᶜu_col,
+    ᶠ∂ξ³∂x³_col,
     species_args...
         @. ∂ᶜρe_tot_err_∂ᶜρe_tot = (zero_row,) - (I,)
         @. ∂ᶜρe_tot_err_∂ᶜρq_tot = (zero_row,)
@@ -1043,19 +1045,20 @@ function update_sedimentation_jacobian!(matrix, Y, p, dtγ)
            DiagonalMatrixRow(ᶠinterp(ᶜρ_col * ᶜJ_col) / ᶠJ_col)
         MatrixFields.unrolled_foreach(other_groups) do (∂ᶜρχ_diag, ᶜwₚ)
             ᶠband = @. lazy(
-                ᶠtop_bias_matrix() *
-                DiagonalMatrixRow(ClimaCore.Geometry.WVector(-(ᶜwₚ) / ᶜρ_col)),
+                DiagonalMatrixRow(CT3(ᶠ∂ξ³∂x³_col)) *
+                (ᶠtop_bias_matrix() * DiagonalMatrixRow(-(ᶜwₚ) / ᶜρ_col)),
             )
             @. ∂ᶜρχ_diag = ᶜbidiag * ᶠband - (I,)
             return nothing
         end
+        ᶜuvw = @. Geometry.UVWVector(ᶜu_col) # converted once for every species
         MatrixFields.unrolled_foreach(
             _unrolled_zip(mass_names, mass_groups),
         ) do (ρχ_name, (∂ᶜρχ_diag, ∂ᶜρq_tot_col, ∂ᶜρ_col, ∂ᶜρe_tot_col, ᶜwₚ))
             e_int_func = internal_energy_function(condensate_phase(ρχ_name))
             ᶠband = @. lazy(
-                ᶠtop_bias_matrix() *
-                DiagonalMatrixRow(ClimaCore.Geometry.WVector(-(ᶜwₚ) / ᶜρ_col)),
+                DiagonalMatrixRow(CT3(ᶠ∂ξ³∂x³_col)) *
+                (ᶠtop_bias_matrix() * DiagonalMatrixRow(-(ᶜwₚ) / ᶜρ_col)),
             )
             ᶜsed_op = @. ᶜbidiag * ᶠband
             @. ∂ᶜρχ_diag = ᶜsed_op - (I,)
@@ -1071,7 +1074,7 @@ function update_sedimentation_jacobian!(matrix, Y, p, dtγ)
             # columns with heavy sedimentation.
             @. ∂ᶜρe_tot_col =
                 ᶜsed_op * DiagonalMatrixRow(
-                    e_int_func(thermo_params, ᶜT_col) + ᶜΦ_col + $(Kin(ᶜwₚ, ᶜu_col)),
+                    e_int_func(thermo_params, ᶜT_col) + ᶜΦ_col + $(Kin(ᶜwₚ, ᶜuvw)),
                 )
             return nothing
         end
@@ -1588,8 +1591,7 @@ function update_edmf_diffusion_jacobian!(matrix, Y, p, dtγ)
         if tke_val isa Val{true}
             ∂ᶜρtke_err_∂ᶜρ, ∂ᶜρtke_err_∂ᶜρtke = tke_group
             ᶜtke = @. lazy(specific(Yc.ρtke, Yc.ρ))
-            ᶜdiss_diag =
-                @. lazy(Yc.ρtke * _∂tke_diss_rate_∂tke(ᶜtke, ᶜl_mix, c_d))
+            ᶜdiss_diag = @. Yc.ρtke * _∂tke_diss_rate_∂tke(ᶜtke, ᶜl_mix, c_d)
             @. ∂ᶜρtke_err_∂ᶜρ =
                 dtγ *
                 DiagonalMatrixRow(ᶜdiss_diag) *
@@ -1697,7 +1699,7 @@ function update_sgs_advection_jacobian!(matrix, Y, p, dtγ)
     p.atmos.turbconv_model isa PrognosticEDMFX || return nothing
     (; ᶜρʲs, ᶠu³ʲs, ᶜTʲs, ᶜT⁰) = p.precomputed
     (; ᶜq_tot_nonnegʲs, ᶜq_liqʲs, ᶜq_iceʲs) = p.precomputed
-    (; ᶜΦ) = p.core
+    (; ᶜΦ, ᶠ∂ξ³∂x³) = p.core
     (; ᶜtridiagonal_matrix_scalar, ᶠsed_tracer_advection) = p.scratch
     FT = Spaces.undertype(axes(Y.c))
     turbconv_model = p.atmos.turbconv_model
@@ -1810,15 +1812,16 @@ function update_sgs_advection_jacobian!(matrix, Y, p, dtγ)
             ᶜw_gs,
             ᶜtridiagonal_matrix_scalar,
             ᶠsed_tracer_advection,
+            ᶠ∂ξ³∂x³,
             mass_args...,
-        ) do ∂ᶜχʲ_diag, Yc, ᶜχʲ, ᶜρχ_gs, ᶜρʲ, ᶠu³ʲ, ᶜwʲ, ᶜw_gs, ᶜM, ᶠsed,
+        ) do ∂ᶜχʲ_diag, Yc, ᶜχʲ, ᶜρχ_gs, ᶜρʲ, ᶠu³ʲ, ᶜwʲ, ᶜw_gs, ᶜM, ᶠsed, ᶠ∂ξ³∂x³,
         mass_blocks...
             ᶜJ = Fields.local_geometry_field(axes(ᶜρʲ)).J
             ᶠJ = Fields.local_geometry_field(axes(ᶠu³ʲ)).J
             ᶜsgsʲ = Yc.sgsʲs.:(1)
             ᶜa = @. draft_area(ᶜsgsʲ.ρa, ᶜρʲ)
             ᶜ∂a∂z =
-                @. ᶜprecipdivᵥ(ᶠinterp(ᶜJ) / ᶠJ * ᶠtop_bias(Geometry.WVector(ᶜa)))
+                @. ᶜprecipdivᵥ(CT3(ᶠ∂ξ³∂x³ * (ᶠinterp(ᶜJ) / ᶠJ * ᶠtop_bias(ᶜa))))
             ᶜinv_ρ̂ = @. specific(one_FT, ᶜsgsʲ.ρa, zero_FT, ᶜρʲ, turbconv_model)
 
             # The operator of `updraft_sedimentation_matrix!`, with its lateral
@@ -1832,11 +1835,12 @@ function update_sgs_advection_jacobian!(matrix, Y, p, dtγ)
             @. ᶠsed =
                 DiagonalMatrixRow(ᶠinterp(ᶜρʲ * ᶜJ) / ᶠJ) *
                 ᶠtop_bias_matrix() *
-                DiagonalMatrixRow(-Geometry.WVector(ᶜwʲ))
+                DiagonalMatrixRow(-(ᶜwʲ))
+            ᶠsed_ct3 = @. lazy(DiagonalMatrixRow(CT3(ᶠ∂ξ³∂x³)) * ᶠsed)
             @. ᶜM =
                 dtγ * ifelse(ᶜ∂a∂z < 0,
-                    -(ᶜprecipdivᵥ_matrix()) * ᶠsed * DiagonalMatrixRow(ᶜa),
-                    -DiagonalMatrixRow(ᶜa) * ᶜprecipdivᵥ_matrix() * ᶠsed,
+                    -(ᶜprecipdivᵥ_matrix()) * ᶠsed_ct3 * DiagonalMatrixRow(ᶜa),
+                    -DiagonalMatrixRow(ᶜa) * ᶜprecipdivᵥ_matrix() * ᶠsed_ct3,
                 ) + DiagonalMatrixRow(ᶜlateral_coeff)
 
             if is_mass_val isa Val{false}

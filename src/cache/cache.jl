@@ -234,6 +234,9 @@ function build_cache(
         ᶜgradᵥ_ᶠΦ = ᶜgradᵥ.(ᶠΦ),
         ᶜf³,
         ᶠf¹²,
+        # ∂ξ³/∂x³ on faces: a vertical flux is CT3(ᶠ∂ξ³∂x³ * w), the value that
+        # converting WVector(w) computes from the 3x3 inverse of ∂x∂ξ
+        ᶠ∂ξ³∂x³ = (lg -> parent(lg.∂ξ∂x)[3, 3]).(Fields.local_geometry_field(Y.f)),
         # Used by diagnostics such as hfres, evspblw
         surface_ct3_unit = CT3.(
             unit_basis_vector_data.(CT3, sfc_local_geometry),

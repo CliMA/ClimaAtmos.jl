@@ -183,21 +183,16 @@ function microphysics_tendency!(
         ᶜmp_tendencyʲs,
     ) do Yₜc, Yc, ᶜmp_tendency⁰, ᶜmp_tendencyʲs
         ᶜρa⁰ = @. ρa⁰(Yc.ρ, Yc.sgsʲs, turbconv_model)
-        @. Yₜc.ρq_lcl += ᶜρa⁰ * ᶜmp_tendency⁰.dq_lcl_dt
-        @. Yₜc.ρq_icl += ᶜρa⁰ * ᶜmp_tendency⁰.dq_icl_dt
-        @. Yₜc.ρq_rai += ᶜρa⁰ * ᶜmp_tendency⁰.dq_rai_dt
-        @. Yₜc.ρq_sno += ᶜρa⁰ * ᶜmp_tendency⁰.dq_sno_dt
+        sgs_args = (ᶜρa⁰, ᶜmp_tendency⁰, Yc.sgsʲs, ᶜmp_tendencyʲs)
+        @. Yₜc.ρq_lcl = add_sgs_tendencies(Yₜc.ρq_lcl, sgs_args..., @name(dq_lcl_dt))
+        @. Yₜc.ρq_icl = add_sgs_tendencies(Yₜc.ρq_icl, sgs_args..., @name(dq_icl_dt))
+        @. Yₜc.ρq_rai = add_sgs_tendencies(Yₜc.ρq_rai, sgs_args..., @name(dq_rai_dt))
+        @. Yₜc.ρq_sno = add_sgs_tendencies(Yₜc.ρq_sno, sgs_args..., @name(dq_sno_dt))
 
         unrolled_foreach(draft_indices) do j
             @inline
-            ᶜρaʲ = Yc.sgsʲs.:($j).ρa
             ᶜmpʲ = ᶜmp_tendencyʲs.:($j)
             ᶜsgsʲₜ = Yₜc.sgsʲs.:($j)
-            @. Yₜc.ρq_lcl += ᶜρaʲ * ᶜmpʲ.dq_lcl_dt
-            @. Yₜc.ρq_icl += ᶜρaʲ * ᶜmpʲ.dq_icl_dt
-            @. Yₜc.ρq_rai += ᶜρaʲ * ᶜmpʲ.dq_rai_dt
-            @. Yₜc.ρq_sno += ᶜρaʲ * ᶜmpʲ.dq_sno_dt
-
             @. ᶜsgsʲₜ.q_lcl += ᶜmpʲ.dq_lcl_dt
             @. ᶜsgsʲₜ.q_icl += ᶜmpʲ.dq_icl_dt
             @. ᶜsgsʲₜ.q_rai += ᶜmpʲ.dq_rai_dt
@@ -207,6 +202,15 @@ function microphysics_tendency!(
         return nothing
     end
     return nothing
+end
+
+# `ρχₜ + ρa⁰ dχ⁰ + Σⱼ ρaʲ dχʲ`, added in this order, where `dχ` is the tendency
+# `name` of the environment (`mp⁰`) or of a draft (`mpʲs`).
+@inline add_sgs_tendencies(ρχₜ, ρa⁰, mp⁰, sgsʲs, mpʲs, name) = unrolled_reduce(
+    StaticOneTo(length(sgsʲs)),
+    ρχₜ + ρa⁰ * MatrixFields.get_field(mp⁰, name),
+) do total, j
+    total + sgsʲs[j].ρa * MatrixFields.get_field(mpʲs[j], name)
 end
 
 #####

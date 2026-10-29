@@ -198,6 +198,9 @@ function set_precipitation_velocities!(
         ᶜρa⁰ = @. ρa⁰(Yc.ρ, Yc.sgsʲs, turbconv_model)
         ᶜρa⁰_pos = @. max(zero(Yc.ρ), ᶜρa⁰)
         ᶜρwₕhₜ = @. zero(Yc.ρ)
+        # Velocities in UVW components, converted once for all species
+        ᶜuvw⁰ = @. Geometry.UVWVector(ᶜu⁰)
+        ᶜuvwʲs = unrolled_map(j -> (@. Geometry.UVWVector(ᶜuʲs.:($$j))), draft_indices)
 
         species_tuples = (
             (@name(q_lcl), @name(ρq_lcl), ᶜwₗ, ᶜwₗʲs),
@@ -226,7 +229,7 @@ function set_precipitation_velocities!(
                 ᶜwʲ = ᶜwʲs.:($j)
                 ᶜρʲ = ᶜρʲs.:($j)
                 ᶜTʲ = ᶜTʲs.:($j)
-                ᶜuʲ = ᶜuʲs.:($j)
+                ᶜuʲ = ᶜuvwʲs[j]
 
                 ᶜρaʲχʲ = @. max(zero(Yc.ρ), ᶜsgsʲ.ρa) * max(zero(Yc.ρ), ᶜχʲ)
                 @. ᶜρχ += ᶜρaʲχʲ
@@ -250,7 +253,7 @@ function set_precipitation_velocities!(
             @. ᶜimplied_env_mass_flux += ᶜρχ_gs * ᶜw
             @. ᶜρwₕhₜ +=
                 ᶜimplied_env_mass_flux *
-                (e_int_func(thp, ᶜT⁰) + ᶜΦ + $(Kin(ᶜw, ᶜu⁰)))
+                (e_int_func(thp, ᶜT⁰) + ᶜΦ + $(Kin(ᶜw, ᶜuvw⁰)))
             return nothing
         end
 
@@ -1061,10 +1064,12 @@ function set_microphysics_tendency_cache!(
     Yc, ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰
         @. ᶜρ⁰ = TD.air_density(thp, ᶜT⁰, ᶜp, ᶜq_tot_nonneg⁰, ᶜq_liq⁰, ᶜq_ice⁰)
         ᶜρa⁰ = @. ρa⁰(Yc.ρ, Yc.sgsʲs, tm)
-        @. ᶜq_lcl⁰ = specific_env_value(@name(q_lcl), Yc.ρq_lcl, Yc.ρ, Yc.sgsʲs, ᶜρa⁰, tm)
-        @. ᶜq_icl⁰ = specific_env_value(@name(q_icl), Yc.ρq_icl, Yc.ρ, Yc.sgsʲs, ᶜρa⁰, tm)
-        @. ᶜq_rai⁰ = specific_env_value(@name(q_rai), Yc.ρq_rai, Yc.ρ, Yc.sgsʲs, ᶜρa⁰, tm)
-        @. ᶜq_sno⁰ = specific_env_value(@name(q_sno), Yc.ρq_sno, Yc.ρ, Yc.sgsʲs, ᶜρa⁰, tm)
+        # The weight of `specific`, shared by the four species.
+        ᶜw⁰ = @. sgs_weight_function(ᶜρa⁰ / Yc.ρ, tm.a_half)
+        @. ᶜq_lcl⁰ = specific_env_value(@name(q_lcl), Yc.ρq_lcl, Yc.ρ, Yc.sgsʲs, ᶜρa⁰, ᶜw⁰)
+        @. ᶜq_icl⁰ = specific_env_value(@name(q_icl), Yc.ρq_icl, Yc.ρ, Yc.sgsʲs, ᶜρa⁰, ᶜw⁰)
+        @. ᶜq_rai⁰ = specific_env_value(@name(q_rai), Yc.ρq_rai, Yc.ρ, Yc.sgsʲs, ᶜρa⁰, ᶜw⁰)
+        @. ᶜq_sno⁰ = specific_env_value(@name(q_sno), Yc.ρq_sno, Yc.ρ, Yc.sgsʲs, ᶜρa⁰, ᶜw⁰)
         if !not_quadrature(sgs_quad)
             @. ᶜλ⁰ = TD.liquid_fraction(thp, ᶜT⁰, max(0, ᶜq_lcl⁰), max(0, ᶜq_icl⁰))
             @. ᶜmu_S⁰ = ᶜq_tot_nonneg⁰ - TD.q_vap_saturation(thp, ᶜT⁰, ᶜρ⁰)

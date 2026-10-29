@@ -599,17 +599,18 @@ function radiation_tendency!(Yₜ, Y, p, t, ::RRTMGPI.AbstractRRTMGPMode)
     n_val = Val(n)
     ᶜρʲs = n > 0 ? ntuple(j -> getproperty(p.precomputed.ᶜρʲs, j), n) : ()
     # The grid-mean and updraft tendencies in one column loop, with the flux
-    # divergence evaluated for the grid mean and again for each updraft.
+    # divergence evaluated once.
     DataLayouts.foreach_column(
         Yₜ.c,
         ᶠradiation_flux,
         ᶜρʲs...,
     ) do Yₜc, ᶠradiation_flux, ᶜρʲs...
-        @. Yₜc.ρe_tot -= ᶜdivᵥ(ᶠradiation_flux)
+        ᶜdiv_flux = @. ᶜdivᵥ(ᶠradiation_flux)
+        @. Yₜc.ρe_tot -= ᶜdiv_flux
         ntuple(n_val) do j
             ᶜρʲ = ᶜρʲs[j]
             ᶜmseʲₜ = getproperty(Yₜc.sgsʲs, j).mse
-            @. ᶜmseʲₜ -= ᶜdivᵥ(ᶠradiation_flux) / ᶜρʲ
+            @. ᶜmseʲₜ -= ᶜdiv_flux / ᶜρʲ
             return nothing
         end
         return nothing

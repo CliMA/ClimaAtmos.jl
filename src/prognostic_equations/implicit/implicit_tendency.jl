@@ -209,7 +209,7 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     (; params) = p
     ᶜJ = Fields.local_geometry_field(axes(Y.c)).J
     ᶠJ = Fields.local_geometry_field(axes(Y.f)).J
-    (; ᶠgradᵥ_ᶜΦ) = p.core
+    (; ᶠgradᵥ_ᶜΦ, ᶠ∂ξ³∂x³) = p.core
     (; ᶠu³, ᶜp, ᶜh_tot, ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice) = p.precomputed
     thermo_params = CAP.thermodynamics_params(params)
     cp_d = CAP.cp_d(params)
@@ -226,8 +226,8 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
     # One fused column loop for the center tendencies: the face density
     # `ᶠinterp(ρ J) / J` is a loop temporary shared by every transport term.
     DataLayouts.foreach_column(
-        Yₜ.c, Y.c, ᶜJ, ᶠJ, ᶠu³, ᶜh_tot, ᶜws...,
-    ) do Yₜc, Yc, ᶜJ, ᶠJ, ᶠu³, ᶜh_tot, ᶜws...
+        Yₜ.c, Y.c, ᶜJ, ᶠJ, ᶠu³, ᶜh_tot, ᶠ∂ξ³∂x³, ᶜws...,
+    ) do Yₜc, Yc, ᶜJ, ᶠJ, ᶠu³, ᶜh_tot, ᶠ∂ξ³∂x³, ᶜws...
         ᶠρ = @. ᶠinterp(Yc.ρ * ᶜJ) / ᶠJ
 
         # Mass advection with zero flux through the top and bottom
@@ -255,7 +255,7 @@ function implicit_vertical_advection_tendency!(Yₜ, Y, p, t)
             ᶜρχ = MatrixFields.get_field(Yc, ρχ_name)
             ᶜρχₜ = MatrixFields.get_field(Yₜc, ρχ_name)
             @. ᶜρχₜ -= ᶜprecipdivᵥ(
-                ᶠρ * ᶠtop_bias(Geometry.WVector(-(ᶜw)) * specific(ᶜρχ, Yc.ρ)),
+                CT3(ᶠ∂ξ³∂x³ * (ᶠρ * ᶠtop_bias(-(ᶜw) * specific(ᶜρχ, Yc.ρ)))),
             )
         end
         return nothing

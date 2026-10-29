@@ -1139,19 +1139,17 @@ The factors that depend on `c` alone keep the parameter's type.
 """
 @inline function truncated_displacement_condensate(mu_S, sigma_S, c)
     FT = typeof(mu_S)
-    gaussian = truncated_gaussian_condensate(mu_S, sigma_S)
+    isfinite(c) || return truncated_gaussian_condensate(mu_S, sigma_S)
     inv_sqrt2π = one(FT) / sqrt(FT(2) * FT(π))
-    c_finite = ifelse(isfinite(c), c, one(c))
-    Z = one(c) - 2 * normal_cdf(-c_finite)
+    Z = one(c) - 2 * normal_cdf(-c)
     σ = max(sigma_S, ϵ_numerics(FT)) * truncated_displacement_scale(c)
-    a = clamp(-mu_S / σ, -c_finite, c_finite)
+    a = clamp(-mu_S / σ, -c, c)
     # Upper-tail differences, accurate where `a` approaches `c`. Each difference
     # takes the same expression at both ends, so it vanishes exactly where `a`
     # is clamped to `c`.
-    I₀ = normal_cdf(-a) - normal_cdf(-c_finite)
-    I₁ = (exp(-a^2 / 2) - exp(-c_finite^2 / 2)) * inv_sqrt2π
-    truncated = max(zero(FT), (mu_S * I₀ + σ * I₁) / Z)
-    return ifelse(isfinite(c), truncated, gaussian)
+    I₀ = normal_cdf(-a) - normal_cdf(-c)
+    I₁ = (exp(-a^2 / 2) - exp(-c^2 / 2)) * inv_sqrt2π
+    return max(zero(FT), (mu_S * I₀ + σ * I₁) / Z)
 end
 
 """
@@ -1277,7 +1275,13 @@ estimate of `E[g(x)]` for standard normal `x`.
 """
 @inline function _gauss_hermite_10_sum(g::G, ::Type{FT}) where {G, FT}
     (nodes, weights) = _gauss_hermite_10(FT)
-    return sum(ntuple(k -> weights[k] * (g(nodes[k]) + g(-nodes[k])), Val(5)))
+    # A loop keeps one copy of `g` in a GPU kernel; it adds the terms in order,
+    # starting from -0, the exact identity of `+`.
+    result = -zero(FT)
+    for k in 1:5
+        result += weights[k] * (g(nodes[k]) + g(-nodes[k]))
+    end
+    return result
 end
 
 """
@@ -1306,7 +1310,7 @@ end
 @inline function (f::VerticalCurvatureChange)(y)
     m = f.mu_S + f.σ_h * y
     return quadratic_condensate(m, f.lin, f.curv) -
-           quadratic_condensate(m, f.lin, zero(m))
+           truncated_gaussian_condensate(m, abs(f.lin))
 end
 
 """
@@ -1366,7 +1370,7 @@ the variance.
     end
     over_x = if w_x > zero(FT)
         quadratic_condensate(mu_S, lin, curv) -
-        quadratic_condensate(mu_S, lin, zero(FT)) +
+        truncated_gaussian_condensate(mu_S, abs(lin)) +
         _gauss_hermite_10_sum(SmoothingBumpChange(mu_S, σ_h, lin, curv), FT)
     else
         zero(FT)

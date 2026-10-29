@@ -126,7 +126,7 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
             Yₜ.c, Y.c, ᶜh_tot, ᶜK, ᶜz,
         ) do Yₜc, Yc, ᶜh_tot, ᶜK, ᶜz
             @. Yₜc.uₕ -= β_rayleigh_uₕ(rayleigh_sponge, ᶜz, zmax) * Yc.uₕ
-            ᶜβ_tr = @. lazy(β_rayleigh_tracer(rayleigh_sponge, ᶜz, zmax))
+            ᶜβ_tr = @. β_rayleigh_tracer(rayleigh_sponge, ᶜz, zmax)
             if tke_val isa Val{true}
                 @. Yₜc.ρtke -= ᶜβ_tr * Yc.ρtke
             end
