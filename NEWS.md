@@ -3,6 +3,9 @@ ClimaAtmos.jl Release Notes
 
 main
 ----
+
+0.42.16
+-------
 - ![][badge-🔥behavioralΔ] Snow falls at the Chen et al. (2022) speed by default
   (`snow_terminal_velocity: Chen2022`); `toml/prognostic_edmfx_1M.toml` sets
   `snow_apparent_density` to 200 kg/m³. 1M configs that do not load that TOML use
