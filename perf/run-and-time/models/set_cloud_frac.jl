@@ -105,11 +105,26 @@ end
 """
     case_run(state)
 
-Run `set_cloud_fraction!` under measurement. May be called multiple times on
-the same state.
+Run one cloud fraction update under measurement: `set_quadrature_cloud_fraction!`
+for a moist `QuadratureCloud`, `set_cloud_fraction!` otherwise. May be called
+multiple times on the same state.
 """
 function case_run(state)
-    (; cloud_model, microphysics_model) = state.p.atmos
-    CA.set_cloud_fraction!(state.Y, state.p, microphysics_model, cloud_model)
+    (; Y, p) = state
+    (; cloud_model, microphysics_model, turbconv_model) = p.atmos
+    if cloud_model isa CA.QuadratureCloud &&
+       microphysics_model isa CA.MoistMicrophysics
+        # One Picard update of the quadrature cloud fraction, as in
+        # `set_covariance_cache_and_cloud_fraction!`.
+        thermo_params = CA.CAP.thermodynamics_params(p.params)
+        materialize = turbconv_model isa CA.PrognosticEDMFX
+        env_state = CA.cloud_env_state(Y, p, thermo_params; materialize)
+        (; ᶜtemp_scalar_4, ᶜtemp_scalar_7) = p.scratch
+        CA.set_quadrature_cloud_fraction!(
+            Y, p, env_state, ᶜtemp_scalar_4, ᶜtemp_scalar_7, Val(false),
+        )
+    else
+        CA.set_cloud_fraction!(Y, p, microphysics_model, cloud_model)
+    end
     return nothing
 end

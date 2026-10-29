@@ -655,7 +655,7 @@ function SGSQuadratureParameters(
         cloud_fraction_floor_release_sharpness = FT(1),
         cloud_fraction_floor_residual = FT(1),
         # Unresolved vertical motions and horizontal scale factor in the
-        # variance closure (`materialized_displacement_length!`,
+        # variance closure (`floor_displacement_length`,
         # `set_covariance_cache!`): horizontal grid scale multiplier [-],
         # velocity scale [m/s] at the reference horizontal grid scale [m], the
         # exponent of its growth with the grid scale, and the persistence time

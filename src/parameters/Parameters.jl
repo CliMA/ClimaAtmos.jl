@@ -249,7 +249,7 @@ ClimaParams does not yet define or whose ClimaParams default it supersedes.
 
   - `diagnostic_covariance_coeff`: Coefficient `c_σ` of the vertical
     displacement variance of the SGS covariance closure, `ℓ_v² = 2 c_σ l_d²`
-    with `l_d` the displacement length (`materialized_displacement_length!`),
+    with `l_d` the displacement length (`displacement_length`),
     the production–dissipation balance of the turbulent variance [-].
   - `sgs_variance_geometric_coeff`: Coefficient `c_g` of the horizontal
     displacement variance, `ℓ_h² = c_g (c_Δx Δx_h)²`. `1/12` is the variance of
@@ -320,7 +320,7 @@ ClimaParams does not yet define or whose ClimaParams default it supersedes.
     distribution [-].
   - `condensation_evaporation_timescale`, `sublimation_deposition_timescale`:
     Shared ClimaParams/CloudMicrophysics relaxation timescales `τ_cond`,
-    `τ_sub` of the SGS variance fidelity (`set_sgs_microphysics_timescale!`)
+    `τ_sub` of the SGS variance fidelity (`sgs_microphysics_relaxation_time`)
     with the schemes other than 1M, which takes the relaxation times of its
     own processes [s].
   - `sgs_fidelity_equilibrium_weight`: Weight `w_eq ∈ (0, 1)` on the

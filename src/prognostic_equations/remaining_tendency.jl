@@ -118,45 +118,36 @@ NVTX.@annotate function additional_tendency!(Yₜ, Y, p, t)
     if !isnothing(rayleigh_sponge)
         (; ᶜz, ᶠz) = z_coordinate_fields(axes(Y.c))
         zmax = Spaces.z_max(axes(ᶠz))
-        has_tke = use_prognostic_tke(turbconv_model)
-        if turbconv_model isa PrognosticEDMFX
-            n_val = Val(n_mass_flux_subdomains(turbconv_model))
-            χ_names = sgs_tracer_names(Y)
-            ρχ_names = unrolled_map(get_ρχ_name, χ_names)
-            DataLayouts.foreach_column(
-                Yₜ.c, Y.c, ᶜh_tot, ᶜK, ᶜz,
-            ) do Yₜc, Yc, ᶜh_tot, ᶜK, ᶜz
-                @. Yₜc.uₕ -= β_rayleigh_uₕ(rayleigh_sponge, ᶜz, zmax) * Yc.uₕ
-                ᶜβ_tr = @. lazy(β_rayleigh_tracer(rayleigh_sponge, ᶜz, zmax))
-                if use_prognostic_tke(turbconv_model)
-                    @. Yₜc.ρtke -= ᶜβ_tr * Yc.ρtke
-                end
-                ᶜmse = @. lazy(ᶜh_tot - ᶜK)
-                ᶜq_tot = @. lazy(specific(Yc.ρq_tot, Yc.ρ))
-                _unrolled_ntuple(n_val) do j
-                    ᶜsgsʲ = Yc.sgsʲs.:($j)
-                    ᶜsgsʲₜ = Yₜc.sgsʲs.:($j)
-                    @. ᶜsgsʲₜ.mse -= ᶜβ_tr * (ᶜsgsʲ.mse - ᶜmse)
-                    @. ᶜsgsʲₜ.q_tot -= ᶜβ_tr * (ᶜsgsʲ.q_tot - ᶜq_tot)
-                    MatrixFields.unrolled_foreach(
-                        _unrolled_zip(χ_names, ρχ_names),
-                    ) do (χ_name, ρχ_name)
-                        ᶜρχ = MatrixFields.get_field(Yc, ρχ_name)
-                        ᶜsgs_χ = MatrixFields.get_field(ᶜsgsʲ, χ_name)
-                        ᶜsgs_χₜ = MatrixFields.get_field(ᶜsgsʲₜ, χ_name)
-                        @. ᶜsgs_χₜ -= ᶜβ_tr * (ᶜsgs_χ - specific(ᶜρχ, Yc.ρ))
-                    end
-                    return nothing
+        tke_val = Val(use_prognostic_tke(turbconv_model))
+        draft_indices = StaticOneTo(n_mass_flux_subdomains(turbconv_model))
+        χ_names = sgs_tracer_names(Y)
+        ρχ_names = unrolled_map(get_ρχ_name, χ_names)
+        DataLayouts.foreach_column(
+            Yₜ.c, Y.c, ᶜh_tot, ᶜK, ᶜz,
+        ) do Yₜc, Yc, ᶜh_tot, ᶜK, ᶜz
+            @. Yₜc.uₕ -= β_rayleigh_uₕ(rayleigh_sponge, ᶜz, zmax) * Yc.uₕ
+            ᶜβ_tr = @. lazy(β_rayleigh_tracer(rayleigh_sponge, ᶜz, zmax))
+            if tke_val isa Val{true}
+                @. Yₜc.ρtke -= ᶜβ_tr * Yc.ρtke
+            end
+            # Updrafts relax toward the grid mean.
+            unrolled_foreach(draft_indices) do j
+                @inline
+                ᶜsgsʲ = Yc.sgsʲs.:($j)
+                ᶜsgsʲₜ = Yₜc.sgsʲs.:($j)
+                @. ᶜsgsʲₜ.mse -= ᶜβ_tr * (ᶜsgsʲ.mse - (ᶜh_tot - ᶜK))
+                @. ᶜsgsʲₜ.q_tot -= ᶜβ_tr * (ᶜsgsʲ.q_tot - specific(Yc.ρq_tot, Yc.ρ))
+                MatrixFields.unrolled_foreach(
+                    _unrolled_zip(χ_names, ρχ_names),
+                ) do (χ_name, ρχ_name)
+                    ᶜρχ = MatrixFields.get_field(Yc, ρχ_name)
+                    ᶜsgs_χ = MatrixFields.get_field(ᶜsgsʲ, χ_name)
+                    ᶜsgs_χₜ = MatrixFields.get_field(ᶜsgsʲₜ, χ_name)
+                    @. ᶜsgs_χₜ -= ᶜβ_tr * (ᶜsgs_χ - specific(ᶜρχ, Yc.ρ))
                 end
                 return nothing
             end
-        else
-            rst_uₕ = rayleigh_sponge_tendency_uₕ(ᶜuₕ, rayleigh_sponge)
-            @. Yₜ.c.uₕ += rst_uₕ
-            if has_tke
-                rst_ρtke = rayleigh_sponge_tendency_tracer(Y.c.ρtke, rayleigh_sponge)
-                @. Yₜ.c.ρtke += rst_ρtke
-            end
+            return nothing
         end
     end
     # For HeldSuarezForcing, the radiation_mode is used as the forcing parameter
