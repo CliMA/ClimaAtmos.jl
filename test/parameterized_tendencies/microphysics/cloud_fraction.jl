@@ -698,6 +698,15 @@ floor_nt(::Type{FT}; σ_abs = FT(1e-7)) where {FT} =
                 @test c_hi_cu < c
                 @test c_hi_cu ≈ CA.normal_cdf_inv(FT(0.96)) rtol = FT(1e-3)
 
+                c_hi_cu_floor = CA._env_tail_c_hi_from_sums(
+                    FT(0),
+                    FT(1),
+                    c,
+                    FT(4),
+                    FT(2e-3),
+                )
+                @test c_hi_cu_floor ≈ CA.normal_cdf_inv(FT(1 - 4 * 2e-3)) rtol = FT(1e-3)
+
                 # Detrained condensate fraction is 0 at or below equilibrium and
                 # (q_c - q_c_eq) / q_c above equilibrium.
                 q_eq = CA.truncated_gaussian_condensate(mu_S, sigma_S)

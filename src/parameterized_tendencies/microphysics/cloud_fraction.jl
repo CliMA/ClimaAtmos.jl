@@ -156,14 +156,32 @@ end
 
 Materialize the θ→T Jacobian (∂T/∂θ_li) into `dest`.
 
-Evaluated at the environment state for PrognosticEDMFX, and at the grid-mean
-state otherwise.
+Evaluated at the environment state for PrognosticEDMFX when
+`sgs_jacobian_state` is 0 (default), and at the grid-mean state when
+`sgs_jacobian_state` is 1.
 """
 function compute_∂T_∂θ!(dest, Y, p, thermo_params)
-    turbconv_model = p.atmos.turbconv_model
-    microphysics_model = p.atmos.microphysics_model
-    ᶜρ, ᶜT, ᶜq_tot = _get_env_ρ_T_q(Y, p, thermo_params, turbconv_model)
-    ᶜq_liq, ᶜq_ice = _get_condensate_means(Y, p, turbconv_model, microphysics_model)
+    jacobian_state = CAP.sgs_jacobian_state(p.params)
+    ᶜρ, ᶜT, ᶜq_tot, ᶜq_liq, ᶜq_ice = if jacobian_state > 0
+        (; ᶜT) = p.precomputed
+        ᶜρ = Y.c.ρ
+        if p.atmos.microphysics_model isa Union{DryModel, EquilibriumMicrophysics0M}
+            (; ᶜq_liq, ᶜq_ice, ᶜq_tot_nonneg) = p.precomputed
+            (ᶜρ, ᶜT, ᶜq_tot_nonneg, ᶜq_liq, ᶜq_ice)
+        else
+            ᶜq_liq = @. lazy(specific(Y.c.ρq_lcl, Y.c.ρ))
+            ᶜq_ice = @. lazy(specific(Y.c.ρq_icl, Y.c.ρ))
+            ᶜq_tot = @. lazy(specific(Y.c.ρq_tot, Y.c.ρ))
+            (ᶜρ, ᶜT, ᶜq_tot, ᶜq_liq, ᶜq_ice)
+        end
+    else
+        turbconv_model = p.atmos.turbconv_model
+        microphysics_model = p.atmos.microphysics_model
+        env_ρ, env_T, env_q = _get_env_ρ_T_q(Y, p, thermo_params, turbconv_model)
+        env_qliq, env_qice =
+            _get_condensate_means(Y, p, turbconv_model, microphysics_model)
+        (env_ρ, env_T, env_q, env_qliq, env_qice)
+    end
     ᶜθ_li = @. lazy(
         TD.liquid_ice_pottemp(thermo_params, ᶜT, ᶜρ, ᶜq_tot, ᶜq_liq, ᶜq_ice),
     )
@@ -1952,6 +1970,7 @@ directly, matching the σ_S → 0 limit.
     lin = zero(ρ),
     curv = zero(ρ),
     c = Inf32,
+    lambda_eq_mode::Int = 0,
 )
     FT = typeof(ρ)
     q_sat = TD.q_vap_saturation(_unwrapped(thp), T, ρ)
@@ -1964,12 +1983,21 @@ directly, matching the σ_S → 0 limit.
         )
 
     sigma_S = _sgs_linear_sigma_S(thp, ρ, T, T′T′, q′q′, corr_Tq)
+    q_c_eq = if lambda_eq_mode == 1
+        equilibrium_condensate(mu_S_cloud, sigma_S, lin, curv, c)
+    else
+        zero(FT)
+    end
     return _compute_sgs_moments_from_eq(
         mu_S_cloud,
         sigma_S,
         q_c,
+        q_c_eq,
         α,
         false,
+        isinf(c),
+        !iszero(curv),
+        lambda_eq_mode,
     )
 end
 
@@ -1977,8 +2005,12 @@ end
     mu_S,
     sigma_S,
     q_c,
+    q_c_eq,
     α,
     not_quad::Bool,
+    use_exact_mu_S::Bool = true,
+    has_curv::Bool = false,
+    lambda_eq_mode::Int = 0,
 )
     FT = typeof(mu_S)
     not_quad &&
@@ -1989,9 +2021,24 @@ end
         )
 
     λ_lagrange = _continuous_lagrange(q_c, max(α * sigma_S, ϵ_numerics(FT)))
-    λ_eq = mu_S
+    λ_eq = if lambda_eq_mode == 1
+        λ_eq_fit = _continuous_lagrange(q_c_eq, max(sigma_S, ϵ_numerics(FT)))
+        λ_eq_trunc = ifelse(
+            use_exact_mu_S,
+            mu_S,
+            ifelse(q_c_eq > zero(FT), λ_eq_fit, FT(-Inf)),
+        )
+        ifelse(has_curv, λ_eq_fit, λ_eq_trunc)
+    else
+        mu_S
+    end
     return (; sigma_S, λ_lagrange, λ_eq)
 end
+
+@inline _compute_sgs_moments_from_eq(mu_S, sigma_S, q_c, α, not_quad::Bool) =
+    _compute_sgs_moments_from_eq(
+        mu_S, sigma_S, q_c, zero(mu_S), α, not_quad, true, false, 0,
+    )
 
 """
     _env_tail_partition_active(p)
@@ -2037,6 +2084,7 @@ function _materialize_env_tail_partition!(
     c_tail = FT(CAP.sgs_env_updraft_tail_truncation_coeff(p.params))
     rh_trans = FT(CAP.sgs_env_subsat_rh_transition(p.params))
     gamma_crit = FT(CAP.sgs_env_subsat_gamma_crit(p.params))
+    a_floor = FT(CAP.sgs_env_tail_area_floor(p.params))
 
     @. ᶜc_hi = zero(FT)
 
@@ -2063,6 +2111,7 @@ function _materialize_env_tail_partition!(
         ᶜw_cu,
         $(c),
         $(c_tail),
+        $(a_floor),
     )
     return ᶜc_hi
 end
@@ -2176,16 +2225,30 @@ function _materialize_subsat_cu_switch!(
 end
 
 """
-    _env_tail_c_hi_from_sums(a_up, w_eff, c, c_tail)
+    _env_tail_c_hi_from_sums(a_up, w_eff, c, c_tail, a_floor = zero(typeof(a_up)))
 
-Zero-anchored smooth upper truncation quantile `c_hi = min(c, Φ⁻¹(1 − q_tail))`
-with `q_tail = q_max * tanh(w_eff * c_tail * max(a_up, 0) / q_max)`, `q_max = 0.49`.
+Upper truncation quantile `c_hi = min(c, Φ⁻¹(1 − q_tail))`. When `a_floor > 0`,
+evaluates the clamp form `q_tail = clamp(w_eff * c_tail * max(a_up, a_floor), 0, q_max)`;
+when `a_floor == 0`, evaluates the zero-anchored smooth form
+`q_tail = q_max * tanh(w_eff * c_tail * max(a_up, 0) / q_max)` with `q_max = 0.49`.
 """
-@inline function _env_tail_c_hi_from_sums(a_up, w_eff, c, c_tail)
+@inline function _env_tail_c_hi_from_sums(
+    a_up,
+    w_eff,
+    c,
+    c_tail,
+    a_floor = zero(typeof(a_up)),
+)
     FT = typeof(a_up)
     q_max = FT(0.49)
-    q_tail = q_max * tanh(w_eff * FT(c_tail) * max(a_up, zero(FT)) / q_max)
-    q_tail_safe = clamp(q_tail, eps(FT), q_max)
+    if a_floor > zero(FT)
+        a_eff = max(a_up, FT(a_floor))
+        q_tail = clamp(w_eff * FT(c_tail) * a_eff, zero(FT), q_max)
+        q_tail_safe = clamp(q_tail, eps(FT), q_max)
+    else
+        q_tail = q_max * tanh(w_eff * FT(c_tail) * max(a_up, zero(FT)) / q_max)
+        q_tail_safe = clamp(q_tail, eps(FT), q_max)
+    end
     return ifelse(
         q_tail > zero(FT),
         min(FT(c), normal_cdf_inv(one(FT) - q_tail_safe)),
@@ -2259,6 +2322,7 @@ NVTX.@annotate function set_sgs_moments_and_cloud_fraction!(Y, p)
     end
     ᶜq_c_eq = p.scratch.ᶜtemp_scalar_6
     untruncated = isinf(c) && !_env_tail_partition_active(p)
+    lambda_eq_mode = Int(CAP.sgs_lambda_eq_mode(p.params))
     if p.atmos.sgs_variance_curvature
         ᶜdisp_S = p.precomputed.ᶜdisp_S
         @. ᶜq_c_eq = env_equilibrium_condensate(
@@ -2277,7 +2341,8 @@ NVTX.@annotate function set_sgs_moments_and_cloud_fraction!(Y, p)
         ᶜdisp_S,
         ᶜc_hi
             @. ᶜsgs_moments = _compute_sgs_moments_from_eq(
-                ᶜmu_S, ᶜsigma_S, ᶜq_c, ᶜα, $(not_quad),
+                ᶜmu_S, ᶜsigma_S, ᶜq_c, ᶜq_c_eq, ᶜα, $(not_quad), $(untruncated),
+                !iszero(ᶜdisp_S.curv), $(lambda_eq_mode),
             )
             @. ᶜcloud_fraction = _compute_cloud_fraction_from_q_c_eq(
                 ᶜq_c, ᶜmu_S, ᶜsigma_S, ᶜα, $(floor), ᶜq_c_eq, $(c), ᶜc_hi,
@@ -2290,7 +2355,8 @@ NVTX.@annotate function set_sgs_moments_and_cloud_fraction!(Y, p)
             ᶜsgs_moments, ᶜcloud_fraction, ᶜq_c, ᶜmu_S, ᶜsigma_S, ᶜq_c_eq, ᶜα, ᶜc_hi,
         ) do ᶜsgs_moments, ᶜcloud_fraction, ᶜq_c, ᶜmu_S, ᶜsigma_S, ᶜq_c_eq, ᶜα, ᶜc_hi
             @. ᶜsgs_moments = _compute_sgs_moments_from_eq(
-                ᶜmu_S, ᶜsigma_S, ᶜq_c, ᶜα, $(not_quad),
+                ᶜmu_S, ᶜsigma_S, ᶜq_c, ᶜq_c_eq, ᶜα, $(not_quad), $(untruncated),
+                false, $(lambda_eq_mode),
             )
             @. ᶜcloud_fraction = _compute_cloud_fraction_from_q_c_eq(
                 ᶜq_c, ᶜmu_S, ᶜsigma_S, ᶜα, $(floor), ᶜq_c_eq, $(c), ᶜc_hi,

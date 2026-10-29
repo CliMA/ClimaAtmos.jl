@@ -125,10 +125,74 @@ end
                 )
                 @test m.sigma_S == m_default.sigma_S
                 @test m.λ_lagrange == m_default.λ_lagrange
-                # Under Simplification Q1, λ_eq is the linearized mean saturation excess mu_S.
+                # Under default sgs_lambda_eq_mode = 0, λ_eq is the linearized mean saturation excess mu_S.
                 @test m.λ_eq == mu_S
                 q_c_eq = CA.truncated_displacement_condensate(mu_S, m.sigma_S, FT(3))
                 mu_S < -FT(3.1) * m.sigma_S && @test q_c_eq == FT(0)
+
+                # Under sgs_lambda_eq_mode = 1, λ_eq matches the truncated condensate.
+                m_fitted = CA._compute_sgs_moments(
+                    thp, ρ, T, q_tot, FT(0), quad, T′T′, q′q′, corr, FT(1),
+                    q_tot, FT(0), FT(0), FT(3), 1,
+                )
+                if q_c_eq > FT(0)
+                    @test CA.truncated_gaussian_condensate(
+                        m_fitted.λ_eq,
+                        m_fitted.sigma_S,
+                    ) ≈
+                          q_c_eq atol = (FT == Float32 ? 1e-6 : 1e-7) * m_fitted.sigma_S
+                else
+                    @test m_fitted.λ_eq == FT(-Inf)
+                end
+            end
+        end
+    end
+
+    # `λ_eq = −Inf` stands for "no equilibrium condensate". Every reader of
+    # `λ_eq` must tolerate it: a product with it, such as the `s λ` scaling of
+    # the actual multiplier, would turn `0 · Inf` into NaN.
+    @testset "1M tendencies with no equilibrium condensate (λ_eq = −Inf)" begin
+        for FT in (Float32, Float64)
+            toml_dict = CP.create_toml_dict(FT)
+            thp = TD.Parameters.ThermodynamicsParameters(toml_dict)
+            cmp = CMP.Microphysics1MParams(toml_dict)
+            quad = CA.SGSQuadrature(
+                FT; quadrature_order = 3, distribution = CA.GaussianSGS(),
+            )
+            ρ, T, w = FT(1.1), FT(285), FT(0.1)
+            T′T′, q′q′, corr, α = FT(0.25), FT(2.5e-7), FT(-0.9), FT(0.7)
+            σ_S = CA._sgs_linear_sigma_S(thp, ρ, T, T′T′, q′q′, corr)
+            # Below the truncated support (`s c ≈ 3.04` for `c = 3`).
+            mu_S = -FT(4) * σ_S
+            q_tot = TD.q_vap_saturation(thp, T, ρ) + mu_S
+            # Clear sky; rain falling into it; an evaporating cloud with rain
+            # placed in a shaft, which sets all three thresholds of the rule.
+            for (q_lcl, q_rai, β_p) in (
+                (FT(0), FT(0), FT(0)),
+                (FT(0), FT(1e-4), FT(0)),
+                (FT(2e-5), FT(1e-4), FT(0.5)),
+            )
+                mom = CA._compute_sgs_moments(
+                    thp, ρ, T, q_tot, q_lcl, quad, T′T′, q′q′, corr, α,
+                    q_tot - q_rai, FT(0), FT(0), FT(3), 1,
+                )
+                @test mom.λ_eq == FT(-Inf)
+                tendencies(λ_eq) = CA.microphysics_tendencies_1m(
+                    BMT.Microphysics1Moment(), quad, cmp, thp, ρ, T, w,
+                    q_tot, q_lcl, FT(0), q_rai, FT(0), T′T′, q′q′, corr,
+                    mom.λ_lagrange, α, FT(0.1), FT(0.1), FT(180), 2,
+                    TD.liquid_fraction(thp, T, q_lcl, FT(0)), mu_S,
+                    β_p, FT(0.4), mom.sigma_S, FT(0.1), λ_eq,
+                )
+                out = tendencies(mom.λ_eq)
+                @test all(isfinite, values(out))
+                ref = tendencies(-FT(20) * mom.sigma_S)
+                @test all(
+                    isapprox.(
+                        values(out), values(ref);
+                        rtol = sqrt(eps(FT)), atol = eps(FT) * mom.sigma_S / FT(180),
+                    ),
+                )
             end
         end
     end

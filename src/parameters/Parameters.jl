@@ -392,6 +392,17 @@ ClimaParams does not yet define or whose ClimaParams default it supersedes.
     exact truncated normal CDF and in-cloud condensate lower bound) [-].
   - `cloud_fraction_qc_in_min`: Minimum physical in-cloud condensate density
     threshold q_c,in,min used in Φ-type cloud fraction closures [kg/kg].
+  - `sgs_node_relaxation_mode`: 1M microphysics node relaxation excess mode
+    (0: raw linearized node total water q_tot_hat, 1: d9fbfe65a S_eff_cloud
+    reconstruction from max(0, λ_eq + S′)) [-].
+  - `sgs_lambda_eq_mode`: SGS equilibrium multiplier λ_eq mode
+    (0: linearized mean excess μ_S, 1: continuous Lagrange multiplier
+    _continuous_lagrange(q_c_eq, σ_S) with truncated support) [-].
+  - `sgs_jacobian_state`: State at which the θ→T Jacobian ∂T/∂θ_li is evaluated
+    in compute_∂T_∂θ! (0: environment state for PrognosticEDMFX, 1: grid-mean state) [-].
+  - `sgs_env_tail_area_floor`: Updraft area floor a_floor in environment upper-tail
+    truncation quantile calculation (0: zero-anchored tanh form, > 0: clamp form with
+    a_eff = max(a_up, a_floor)) [-].
 """
 Base.@kwdef struct SGSQuadratureParameters{FT} <: ASQP
     diagnostic_covariance_coeff::FT
@@ -432,6 +443,10 @@ Base.@kwdef struct SGSQuadratureParameters{FT} <: ASQP
     sgs_quadrature_nodes::FT
     cloud_fraction_closure_mode::FT
     cloud_fraction_qc_in_min::FT
+    sgs_node_relaxation_mode::FT
+    sgs_lambda_eq_mode::FT
+    sgs_jacobian_state::FT
+    sgs_env_tail_area_floor::FT
 end
 
 """

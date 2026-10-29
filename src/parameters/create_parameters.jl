@@ -678,6 +678,10 @@ function SGSQuadratureParameters(
         sgs_quadrature_nodes = FT(8),
         cloud_fraction_closure_mode = FT(0),
         cloud_fraction_qc_in_min = FT(1.5e-5),
+        sgs_node_relaxation_mode = FT(0),
+        sgs_lambda_eq_mode = FT(0),
+        sgs_jacobian_state = FT(0),
+        sgs_env_tail_area_floor = FT(0),
     )
     # A run toml defines a parameter that ClimaParams also defines when it
     # appears in the override dictionary or, for a `toml_dict` assembled

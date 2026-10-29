@@ -274,10 +274,12 @@ struct Microphysics1MEvaluator{S, MP, TPS, FT, Args <: Tuple}
     ξ_ice::FT
     q_lcl::FT
     q_icl::FT
-    # Truncated-Gaussian Lagrange multiplier, μ_S, and variance fidelity
+    # Truncated-Gaussian Lagrange multipliers, μ_S, and variance fidelity
     λ_lagrange::FT # Lagrange multiplier for actual condensate q_c
+    λ_eq::FT       # equilibrium multiplier for q_c_eq
     mu_S::FT       # linearized SGS mean μ_S = q_tot_mean − q_sat(T_mean, ρ)
     α::FT          # variance fidelity parameter (from sgs_variance_fidelity)
+    node_relaxation_mode::Int # 0: raw node excess, 1: S_eff_cloud reconstruction
     # Precipitation-fraction placement
     β_precip::FT
     shaft_frac::FT
@@ -286,6 +288,23 @@ struct Microphysics1MEvaluator{S, MP, TPS, FT, Args <: Tuple}
     nsubs::Int
     args::Args
 end
+
+# Constructor without λ_eq and node_relaxation_mode for testing/unattenuated default.
+@inline Microphysics1MEvaluator(
+    scheme, mp, tps, ρ, w,
+    q_rai, q_sno, λ,
+    ξ_liq, ξ_ice, q_lcl, q_icl,
+    λ_lagrange, mu_S, α,
+    β_precip, shaft_frac,
+    dt, nsubs, args,
+) = Microphysics1MEvaluator(
+    scheme, mp, tps, ρ, w,
+    q_rai, q_sno, λ,
+    ξ_liq, ξ_ice, q_lcl, q_icl,
+    λ_lagrange, mu_S, mu_S, α, 0,
+    β_precip, shaft_frac,
+    dt, nsubs, args,
+)
 
 """
     sgs_precip_shaft_threshold(a_p, sigma_S)
@@ -415,7 +434,18 @@ with `dq_lcl_dt`, `dq_icl_dt`, `dq_rai_dt`, `dq_sno_dt` [kg/kg/s].
         eval.λ, shifted_excess, eval.ξ_liq, eval.ξ_ice, eval.q_lcl, eval.q_icl,
     )
     q_precip = eval.q_rai + eval.q_sno
-    q_tot_eff = max(FT(0), q_tot_hat)
+    q_tot_eff = if eval.node_relaxation_mode == 1
+        q_c_eq_hat = max(FT(0), eval.λ_eq + S′_hat)
+        S_raw_cloud = q_tot_hat - q_precip - q_sat_hat
+        S_eff_cloud = ifelse(
+            q_c_eq_hat > zero(FT),
+            q_c_eq_hat,
+            min(zero(FT), S_raw_cloud),
+        )
+        max(FT(0), q_sat_hat + S_eff_cloud + q_precip)
+    else
+        max(FT(0), q_tot_hat)
+    end
 
     # Precipitation-fraction placement: the rain and snow this node sees are
     # the cell means scaled by φ_p (1 when disabled); the node total water is
@@ -539,6 +569,8 @@ end
     sigma_S = _sgs_linear_sigma_S(thp, ρ, T, T′T′, q′q′, corr_Tq),
     precip_frac_floor = zero(ρ),
     quad_nodes::Val{N} = Val(8),
+    λ_eq = mu_S - (max(zero(ρ), q_rai) + max(zero(ρ), q_sno)),
+    node_relaxation_mode::Int = 0,
     args...,
 ) where {N}
     FT = typeof(ρ)
@@ -557,7 +589,23 @@ end
         max(zero(ρ), q_lcl), max(zero(ρ), q_icl),
         max(zero(ρ), q_rai), max(zero(ρ), q_sno),
         T′T′, q′q′, corr_Tq, λ_lagrange, α, FT(ξ_liq), FT(ξ_ice), dt, nsubs, λ,
-        mu_S, FT(precip_incloud_fraction), σ_S, S_star, args,
+        mu_S, FT(precip_incloud_fraction), σ_S, S_star, FT(λ_eq), node_relaxation_mode, args,
+    )
+end
+
+@inline function microphysics_tendencies_1m(
+    scheme, sgs_quad, cmp, thp, ρ, T, w, q_tot_nonneg,
+    q_lcl, q_icl, q_rai, q_sno, T′T′, q′q′, corr_Tq,
+    λ_lagrange, α, ξ_liq, ξ_ice, dt, nsubs,
+    λ, mu_S, precip_incloud_fraction, precip_frac, sigma_S,
+    precip_frac_floor, λ_eq::Real, args...,
+)
+    return microphysics_tendencies_1m(
+        scheme, sgs_quad, cmp, thp, ρ, T, w, q_tot_nonneg,
+        q_lcl, q_icl, q_rai, q_sno, T′T′, q′q′, corr_Tq,
+        λ_lagrange, α, ξ_liq, ξ_ice, dt, nsubs,
+        λ, mu_S, precip_incloud_fraction, precip_frac, sigma_S,
+        precip_frac_floor, Val(8), λ_eq, 1, args...,
     )
 end
 
@@ -565,7 +613,7 @@ end
     _sum_1m_over_sgs(::Val{6}, scheme, sgs_quad, cmp, thp, ρ, T, w,
                      q_lcl, q_icl, q_rai, q_sno, T′T′, q′q′, corr_Tq,
                      λ_lagrange, α, ξ_liq, ξ_ice, dt, nsubs, λ, mu_S,
-                     β_precip, σ_S, S_star, args)
+                     β_precip, σ_S, S_star, λ_eq, node_relaxation_mode, args)
 
 Integrate the `Microphysics1MEvaluator` over the Gaussian SGS PDF with the
 6-node conditional-moment rule using two interior thresholds `t_a` and `t_p`.
@@ -575,7 +623,7 @@ Integrate the `Microphysics1MEvaluator` over the Gaussian SGS PDF with the
     scheme, sgs_quad, cmp, thp, ρ, T, w,
     q_lcl, q_icl, q_rai, q_sno, T′T′, q′q′, corr_Tq,
     λ_lagrange, α, ξ_liq, ξ_ice, dt, nsubs, λ, mu_S,
-    β_precip, σ_S, S_star, args,
+    β_precip, σ_S, S_star, λ_eq, node_relaxation_mode, args,
 )
     FT = typeof(ρ)
     q_c = q_lcl + q_icl
@@ -601,7 +649,7 @@ Integrate the `Microphysics1MEvaluator` over the Gaussian SGS PDF with the
         scheme, cmp, thp, ρ, w,
         q_rai, q_sno, λ,
         ξ_liq, ξ_ice, q_lcl, q_icl,
-        s * FT(λ_lagrange), mu_S, s * α_safe,
+        s * FT(λ_lagrange), FT(λ_eq), mu_S, s * α_safe, node_relaxation_mode,
         β_precip, shaft_frac, dt, nsubs, args,
     )
     spread = TemperatureSpread(
@@ -615,24 +663,23 @@ end
     _sum_1m_over_sgs(::Val{8}, scheme, sgs_quad, cmp, thp, ρ, T, w,
                      q_lcl, q_icl, q_rai, q_sno, T′T′, q′q′, corr_Tq,
                      λ_lagrange, α, ξ_liq, ξ_ice, dt, nsubs, λ, mu_S,
-                     β_precip, σ_S, S_star, args)
+                     β_precip, σ_S, S_star, λ_eq, node_relaxation_mode, args)
 
 Integrate the `Microphysics1MEvaluator` over the Gaussian SGS PDF with the
-8-node conditional-moment rule using three thresholds `(t_a, t_e = -mu_S, t_p)`.
+8-node conditional-moment rule using three thresholds `(t_a, t_e = -λ_eq, t_p)`.
 """
 @inline function _sum_1m_over_sgs(
     ::Val{8},
     scheme, sgs_quad, cmp, thp, ρ, T, w,
     q_lcl, q_icl, q_rai, q_sno, T′T′, q′q′, corr_Tq,
     λ_lagrange, α, ξ_liq, ξ_ice, dt, nsubs, λ, mu_S,
-    β_precip, σ_S, S_star, args,
+    β_precip, σ_S, S_star, λ_eq, node_relaxation_mode, args,
 )
     FT = typeof(ρ)
     q_c = q_lcl + q_icl
     α_safe = max(FT(α), ϵ_numerics(FT))
     t_a = -FT(λ_lagrange) / α_safe
-    t_e_raw = (q_rai + q_sno) - FT(mu_S)
-    t_e = ifelse(abs(t_e_raw - t_a) < FT(1e-3) * σ_S, t_a, t_e_raw)
+    t_e = -FT(λ_eq)
     t_p = ifelse(β_precip > zero(FT), S_star, FT(Inf))
     β_T = sgs_temperature_regression(thp, T, ρ, σ_S, T′T′, q′q′, corr_Tq)
     rule = conditional_rule(
@@ -653,7 +700,7 @@ Integrate the `Microphysics1MEvaluator` over the Gaussian SGS PDF with the
         scheme, cmp, thp, ρ, w,
         q_rai, q_sno, λ,
         ξ_liq, ξ_ice, q_lcl, q_icl,
-        s * FT(λ_lagrange), mu_S, s * α_safe,
+        s * FT(λ_lagrange), FT(λ_eq), mu_S, s * α_safe, node_relaxation_mode,
         β_precip, shaft_frac, dt, nsubs, args,
     )
     spread = TemperatureSpread(
@@ -662,6 +709,21 @@ Integrate the `Microphysics1MEvaluator` over the Gaussian SGS PDF with the
     )
     return sum_over_conditional_nodes(evaluator, rule, spread)
 end
+
+@inline _sum_1m_over_sgs(
+    nodes::Union{Val{6}, Val{8}},
+    scheme, sgs_quad, cmp, thp, ρ, T, w,
+    q_lcl, q_icl, q_rai, q_sno, T′T′, q′q′, corr_Tq,
+    λ_lagrange, α, ξ_liq, ξ_ice, dt, nsubs, λ, mu_S,
+    β_precip, σ_S, S_star, args,
+) = _sum_1m_over_sgs(
+    nodes,
+    scheme, sgs_quad, cmp, thp, ρ, T, w,
+    q_lcl, q_icl, q_rai, q_sno, T′T′, q′q′, corr_Tq,
+    λ_lagrange, α, ξ_liq, ξ_ice, dt, nsubs, λ, mu_S,
+    β_precip, σ_S, S_star,
+    mu_S - (max(zero(ρ), q_rai) + max(zero(ρ), q_sno)), 0, args,
+)
 
 """
     SGSMicrophysicsOptions{FT, N}
@@ -675,6 +737,7 @@ Base.@kwdef struct SGSMicrophysicsOptions{FT, N}
     precip_incloud_fraction::FT
     precip_frac_floor::FT
     quad_nodes::Val{N} = Val(8)
+    node_relaxation_mode::Int = 0
 end
 SGSMicrophysicsOptions(
     ξ_liq::FT,
@@ -687,6 +750,7 @@ SGSMicrophysicsOptions(
     precip_incloud_fraction,
     precip_frac_floor,
     Val(8),
+    0,
 )
 Base.broadcastable(o::SGSMicrophysicsOptions) = tuple(o)
 
@@ -711,6 +775,7 @@ function sgs_microphysics_options(params, quad_nodes::Val{N} = Val(8)) where {N}
         precip_incloud_fraction = β_p,
         precip_frac_floor = floor,
         quad_nodes = quad_nodes,
+        node_relaxation_mode = Int(CAP.sgs_node_relaxation_mode(params)),
     )
 end
 
@@ -736,7 +801,8 @@ Packed form of the quadrature driver: the scalar options come as the
         q_lcl, q_icl, q_rai, q_sno, T′T′, q′q′, corr_Tq,
         sgs_moments.λ_lagrange, α, opts.ξ_liq, opts.ξ_ice, dt, nsubs, λ, mu_S,
         opts.precip_incloud_fraction, precip_frac, sgs_moments.sigma_S,
-        opts.precip_frac_floor, opts.quad_nodes,
+        opts.precip_frac_floor, opts.quad_nodes, sgs_moments.λ_eq,
+        opts.node_relaxation_mode,
     )
 end
 

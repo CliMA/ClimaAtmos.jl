@@ -196,12 +196,20 @@ end
                 @test m.λ_lagrange == m0.λ_lagrange
                 mu_S = q_tot - q_sat
                 q_c_eq = CA.displacement_condensate(mu_S, m.sigma_S, lin, curv)
-                # Under Simplification Q1, λ_eq is the linearized mean saturation excess mu_S.
+                # Under default sgs_lambda_eq_mode = 0, λ_eq is the linearized mean saturation excess mu_S.
                 @test m.λ_eq == mu_S
                 # Negative curvature with a subsaturated mean lowers the
                 # equilibrium condensate below the Gaussian value.
                 fc < 0 && dq < 0 &&
                     @test q_c_eq < CA.truncated_gaussian_condensate(mu_S, m.sigma_S)
+
+                # Under sgs_lambda_eq_mode = 1, λ_eq reconstructs the curvature-aware condensate.
+                m_fitted = CA._compute_sgs_moments(
+                    thp, ρ, T, q_tot, q_c, quad, T′T′, q′q′, corr, α,
+                    q_tot, lin, curv, Inf32, 1,
+                )
+                @test CA.truncated_gaussian_condensate(m_fitted.λ_eq, m_fitted.sigma_S) ≈
+                      q_c_eq atol = (FT == Float32 ? 1e-6 : 1e-7) * m_fitted.sigma_S
             end
         end
     end

@@ -1179,25 +1179,40 @@ function set_microphysics_tendency_cache!(
             rh_trans,
             gamma_crit,
         )
-        c = FT(CAP.sgs_displacement_truncation(p.params))
-        @. ᶜw⁰_mp = max(
-            ᶜw⁰_mp,
-            max(
-                env_detrained_condensate_fraction(
-                    thp,
-                    ᶜρ⁰,
-                    ᶜT⁰,
-                    ᶜq_tot_nonneg⁰,
-                    ᶜq_lcl⁰,
-                    ᶜq_icl⁰,
-                    ᶜq_rai⁰,
-                    ᶜq_sno⁰,
-                    ᶜsgs_moments.sigma_S,
-                    c,
-                ),
-                ᶜw_cu,
-            ) * ᶜw_conv_vel,
-        )
+        if Int(CAP.sgs_lambda_eq_mode(p.params)) > 0
+            @. ᶜw⁰_mp = max(
+                ᶜw⁰_mp,
+                max(
+                    env_detrained_condensate_fraction(
+                        ᶜq_lcl⁰,
+                        ᶜq_icl⁰,
+                        ᶜsgs_moments.sigma_S,
+                        ᶜsgs_moments.λ_eq,
+                    ),
+                    ᶜw_cu,
+                ) * ᶜw_conv_vel,
+            )
+        else
+            c = FT(CAP.sgs_displacement_truncation(p.params))
+            @. ᶜw⁰_mp = max(
+                ᶜw⁰_mp,
+                max(
+                    env_detrained_condensate_fraction(
+                        thp,
+                        ᶜρ⁰,
+                        ᶜT⁰,
+                        ᶜq_tot_nonneg⁰,
+                        ᶜq_lcl⁰,
+                        ᶜq_icl⁰,
+                        ᶜq_rai⁰,
+                        ᶜq_sno⁰,
+                        ᶜsgs_moments.sigma_S,
+                        c,
+                    ),
+                    ᶜw_cu,
+                ) * ᶜw_conv_vel,
+            )
+        end
     end
     ᶜw⁰_air = ᶜw⁰_mp
     if not_quadrature(sgs_quad)

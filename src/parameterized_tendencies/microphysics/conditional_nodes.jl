@@ -306,7 +306,12 @@ weights sum to one; an interval of zero width contributes zero weight.
     thp, ρ, T, mu_S, σ_S, β_T, t_a, t_e, t_p, T_min, q_max,
 )
     FT = typeof(σ_S)
-    t_e_guarded = ifelse(abs(FT(t_e) - FT(t_a)) < FT(1e-3) * FT(σ_S), FT(t_a), FT(t_e))
+    t_e_guarded = ifelse(
+        isfinite(t_e) & isfinite(t_a) &
+        (abs(FT(t_e) - FT(t_a)) < FT(1e-3) * FT(σ_S)),
+        FT(t_a),
+        FT(t_e),
+    )
     (b₁, b₂, b₃) = _sort3(FT(t_a), t_e_guarded, FT(t_p))
     bounds = (FT(-Inf), b₁, b₂, b₃, FT(Inf))
     # the upper tail probability Q(|b|/σ_S) of each edge, shared by the two
