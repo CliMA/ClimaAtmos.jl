@@ -729,4 +729,66 @@ floor_nt(::Type{FT}; σ_abs = FT(1e-7)) where {FT} =
         end
     end
 
+    @testset "`compute_effective_env_displacement_length` (A2 and A2′)" begin
+        for FT in (Float32, Float64)
+            @testset "FT = $FT" begin
+                l_d = FT(150)
+                l_iso = FT(50)
+                c_σ = FT(0.5)
+                r_v_θ = FT(0.38)
+                ∂q∂z = FT(-3e-3)
+                ∂θ∂z = FT(4e-3)
+                ρ = FT(1.15)
+                q_tot_0 = FT(14e-3)
+                θ_li_0 = FT(300)
+
+                # 1. Identity recovery at a_up = 0 (ρa_up = 0)
+                l_d_env_a2_0 = CA.compute_effective_env_displacement_length(
+                    l_d, l_iso, c_σ, r_v_θ, ∂q∂z, ∂θ∂z, ρ, FT(0),
+                    FT(16e-3), FT(302), q_tot_0, θ_li_0, false,
+                )
+                l_d_env_a2p_0 = CA.compute_effective_env_displacement_length(
+                    l_d, l_iso, c_σ, r_v_θ, ∂q∂z, ∂θ∂z, ρ, FT(0),
+                    FT(16e-3), FT(302), q_tot_0, θ_li_0, true,
+                )
+                @test l_d_env_a2_0 == l_d
+                @test l_d_env_a2p_0 == l_d
+
+                # 2. Updraft presence attenuates displacement length
+                ρa_up = FT(0.1 * 1.15)
+                q_tot_up = FT(16e-3)
+                θ_li_up = FT(301.5)
+
+                l_d_env_a2 = CA.compute_effective_env_displacement_length(
+                    l_d, l_iso, c_σ, r_v_θ, ∂q∂z, ∂θ∂z, ρ, ρa_up,
+                    q_tot_up, θ_li_up, q_tot_0, θ_li_0, false,
+                )
+                l_d_env_a2p = CA.compute_effective_env_displacement_length(
+                    l_d, l_iso, c_σ, r_v_θ, ∂q∂z, ∂θ∂z, ρ, ρa_up,
+                    q_tot_up, θ_li_up, q_tot_0, θ_li_0, true,
+                )
+
+                # Both respect Loewner order: l_d_env <= l_d
+                @test l_d_env_a2 < l_d
+                @test l_d_env_a2p < l_d
+                @test l_d_env_a2 >= l_iso
+                # A2' attenuates the full vertical displacement, so l_d_env_a2p < l_d_env_a2
+                @test l_d_env_a2p < l_d_env_a2
+                @test l_d_env_a2p > FT(0)
+
+                # 3. Exact formula verification for A2' (full_attenuation = true):
+                # l_d_env^2 = l_d^2 / (1 + ξ_v)
+                w1 = ρa_up / ρ
+                w0 = one(FT) - w1
+                Σ_qq = w0 * w1 * (q_tot_up - q_tot_0)^2
+                Σ_θθ = (r_v_θ)^2 * w0 * w1 * (θ_li_up - θ_li_0)^2
+                denom_q = 2 * c_σ * l_d^2 * (∂q∂z)^2
+                denom_θ = 2 * c_σ * (r_v_θ)^2 * l_d^2 * (∂θ∂z)^2
+                ξ_v_expected = max(Σ_qq / denom_q, Σ_θθ / denom_θ)
+                l_d_env_a2p_expected = l_d / sqrt(one(FT) + ξ_v_expected)
+                @test l_d_env_a2p ≈ l_d_env_a2p_expected rtol = FT(1e-5)
+            end
+        end
+    end
+
 end

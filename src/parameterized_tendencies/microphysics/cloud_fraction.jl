@@ -708,11 +708,14 @@ end
 """
     compute_effective_env_displacement_length(
         l_d, l_iso, c_σ, r_v_θ, ∂q∂z, ∂θ∂z, ρ, ρa_up, q_tot_up, θ_li_up, q_tot_0, θ_li_0,
+        full_attenuation = false,
     )
 
-Attenuate the excess vertical displacement length `sqrt(max(l_d^2 - l_iso^2, 0))`
-by the coherent updraft variance to obtain the environmental displacement length
-`l_d_env` (Approach A2, Formulation A2).
+Attenuate the vertical displacement length by the coherent updraft variance to
+obtain the environmental displacement length `l_d_env`. When `full_attenuation`
+is false (Approach A2, Formulation A2), attenuation acts on the excess vertical
+displacement length `max(l_d^2 - l_iso^2, 0)`. When `full_attenuation` is true
+(Approach A2′), attenuation acts on the full vertical displacement length `l_d^2`.
 """
 @inline function compute_effective_env_displacement_length(
     l_d::FT,
@@ -727,6 +730,7 @@ by the coherent updraft variance to obtain the environmental displacement length
     θ_li_up::FT,
     q_tot_0::FT,
     θ_li_0::FT,
+    full_attenuation::Bool = false,
 ) where {FT}
     w1 = ifelse(ρ > zero(FT), max(zero(FT), ρa_up) / ρ, zero(FT))
     w1_safe = clamp(w1, zero(FT), one(FT))
@@ -737,14 +741,14 @@ by the coherent updraft variance to obtain the environmental displacement length
     Σ_qq_inter = w0_safe * w1_safe * dq^2
     Σ_θθ_inter_eff = (r_v_θ)^2 * w0_safe * w1_safe * dθ^2
 
-    excess_l2 = max(l_d^2 - l_iso^2, zero(FT))
-    excess_q = max(2 * c_σ * excess_l2 * (∂q∂z)^2, FT(1e-18))
-    excess_θ = max(2 * c_σ * (r_v_θ)^2 * excess_l2 * (∂θ∂z)^2, FT(1e-12))
+    denom_l2 = ifelse(full_attenuation, l_d^2, max(l_d^2 - l_iso^2, zero(FT)))
+    excess_q = max(2 * c_σ * denom_l2 * (∂q∂z)^2, FT(1e-18))
+    excess_θ = max(2 * c_σ * (r_v_θ)^2 * denom_l2 * (∂θ∂z)^2, FT(1e-12))
 
     ξ_v = max(Σ_qq_inter / excess_q, Σ_θθ_inter_eff / excess_θ)
     ϕ_v = one(FT) / (one(FT) + ξ_v)
 
-    l_d_env_sq = max(l_d^2 - (one(FT) - ϕ_v) * excess_l2, zero(FT))
+    l_d_env_sq = max(l_d^2 - (one(FT) - ϕ_v) * denom_l2, zero(FT))
     return sqrt(l_d_env_sq)
 end
 
@@ -825,9 +829,9 @@ function set_covariance_cache!(Y, p, thermo_params)
     ᶜ∂q∂z = @. lazy(projected_vector_data(C3, ᶜgradᵥ_q_tot, ᶜlg))
     ᶜ∂θ∂z = @. lazy(projected_vector_data(C3, ᶜgradᵥ_θ_liq_ice, ᶜlg))
 
-    # Under PrognosticEDMFX, attenuate excess vertical displacement length via Approach A2
+    # Under PrognosticEDMFX, attenuate vertical displacement length via Approach A2 (0, 2) or A2' (3)
     var_closure_mode = Int(CAP.sgs_variance_closure_mode(p.params))
-    if p.atmos.turbconv_model isa PrognosticEDMFX && var_closure_mode in (0, 2)
+    if p.atmos.turbconv_model isa PrognosticEDMFX && var_closure_mode in (0, 2, 3)
         n = n_mass_flux_subdomains(p.atmos.turbconv_model)
         if n == 1
             (; ᶜρʲs, ᶜTʲs, ᶜq_tot_nonnegʲs, ᶜq_liqʲs, ᶜq_iceʲs, ᶜq_liq⁰, ᶜq_ice⁰) =
@@ -846,6 +850,7 @@ function set_covariance_cache!(Y, p, thermo_params)
                     ᶜq_iceʲs.:(1),
                 ),
             )
+            full_attenuation = (var_closure_mode == 3)
             @. ᶜl_d = compute_effective_env_displacement_length(
                 ᶜl_d,
                 ᶜl_iso,
@@ -859,6 +864,7 @@ function set_covariance_cache!(Y, p, thermo_params)
                 ᶜθ_li¹,
                 ᶜq_tot⁰,
                 ᶜθ_li⁰,
+                $(full_attenuation),
             )
         else
             error(

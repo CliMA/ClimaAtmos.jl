@@ -378,6 +378,10 @@ ClimaParams does not yet define or whose ClimaParams default it supersedes.
     saturation-deficit standard deviation [kg/kg].
   - `sgs_quadrature_nodes`: Number of conditional-moment quadrature nodes in
     1M microphysics (6 default, 8 ablation) [-].
+  - `sgs_variance_closure_mode`: SGS variance closure mode (-1: unattenuated
+    status quo, 0: Approach A2 scalar displacement attenuation, 1: Approach B
+    upper-tail truncation, 2: Approach A2+B, 3: Approach A2′ full vertical
+    displacement attenuation) [-].
 """
 Base.@kwdef struct SGSQuadratureParameters{FT} <: ASQP
     diagnostic_covariance_coeff::FT
