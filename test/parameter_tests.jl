@@ -132,7 +132,7 @@ end
         @test CAP.sgs_precip_overlap_decay(sq) == FT(1)
         @test CAP.sgs_precip_fraction_floor(sq) == FT(0.5)
         @test CAP.sgs_displacement_truncation(sq) == FT(3)
-        @test CAP.sgs_quadrature_nodes(sq) == FT(6)
+        @test CAP.sgs_quadrature_nodes(sq) == FT(8)
     end
     @test_throws ArgumentError CA.SGSQuadratureParameters(
         Float64,

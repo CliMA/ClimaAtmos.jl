@@ -59,6 +59,10 @@ type = "float"
 value = 0.0
 type = "float"
 
+[sgs_quadrature_nodes]
+value = 8.0
+type = "float"
+
 [cloud_fraction_eps_rel]
 value = 0.05
 

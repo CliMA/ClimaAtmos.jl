@@ -1025,7 +1025,7 @@ end
 end
 
 _sgs_quad_nodes_val(params) =
-    Int(CAP.sgs_quadrature_nodes(params)) == 8 ? Val(8) : Val(6)
+    Int(CAP.sgs_quadrature_nodes(params)) == 6 ? Val(6) : Val(8)
 
 function set_microphysics_tendency_cache!(
     Y, p, mp1m::NonEquilibriumMicrophysics1M, _,

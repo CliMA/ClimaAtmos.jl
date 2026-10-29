@@ -597,7 +597,7 @@ import ClimaAtmos:
                     @test microphysics_tendencies_1m(
                         args_m..., FT(0), FT(0.3), m.sigma_S,
                     ) == uni_m
-                    # Float32 summation order across the 6 quadrature nodes differs between
+                    # Float32 summation order across the 8 quadrature nodes differs between
                     # uniform-precipitation (tp = ∞) and shaft (tp = -∞) partitions by ~10 eps(Float32).
                     @test all(
                         isapprox.(

@@ -94,6 +94,26 @@ const CA = ClimaAtmos
                 @test g ≈ q_c rtol = (FT == Float32 ? 3e-3 : 2e-3)
                 g_eq = CA.conditional_rule_mean(CA.NodeCondensate(mu_S, one(FT)), rule)
                 @test g_eq ≈ q_c_eq rtol = (FT == Float32 ? 3e-3 : 2e-3)
+
+                # Test clear-sky nucleation at qc = 0 with subsaturated mean (mu_S < 0)
+                rule_nucleation = CA.conditional_rule(
+                    thp, ρ, T, mu_S, σ_S, β_T, FT(Inf), -mu_S, t_p, FT(150), FT(0.05),
+                )
+                g_nucleation = CA.conditional_rule_mean(
+                    CA.NodeCondensate(mu_S, one(FT)),
+                    rule_nucleation,
+                )
+                @test g_nucleation ≈ q_c_eq rtol = (FT == Float32 ? 3e-3 : 2e-3)
+
+                # Test sliver guard: when |t_e - t_a| < 1e-3 * σ_S, weights sum to 1 with zero weight on sliver
+                t_e_sliver = -λ / α + FT(0.5e-3) * σ_S
+                rule_sliver = CA.conditional_rule(
+                    thp, ρ, T, mu_S, σ_S, β_T, -λ / α, t_e_sliver, t_p, FT(150),
+                    FT(0.05),
+                )
+                @test sum(n.w for n in rule_sliver.nodes) ≈ 1 atol =
+                    (FT == Float32 ? 1e-6 : 1e-8)
+                @test all(n.w >= 0 for n in rule_sliver.nodes)
                 shaft = CA.conditional_rule_shaft_fraction(rule)
                 # exact up to the quantile approximation of the threshold:
                 # |δz| < 4.5e-4 in `normal_cdf_inv`, so |shaft − a_p| ≤ φ(0)·4.5e-4 < 2e-4

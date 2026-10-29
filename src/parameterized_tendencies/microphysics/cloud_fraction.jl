@@ -514,6 +514,41 @@ function materialized_variance_fidelity!(Y, p, ᶜl_mix_disp)
         ᶜq_icl,
         microphysics_model,
     )
+    fid_mode = Int(CAP.sgs_variance_fidelity_mode(p.params))
+    if fid_mode == 1
+        @. ᶜα = one(FT)
+        return nothing
+    elseif fid_mode == 2
+        w_eq = FT(CAP.sgs_fidelity_equilibrium_weight(p.params))
+        q_min = FT(1e-12)
+        (; ᶜT′T′, ᶜq′q′, ᶜcorr_Tq) = p.precomputed
+        ᶜlin, ᶜcurv = if p.atmos.sgs_variance_curvature
+            (p.precomputed.ᶜdisp_S.lin, p.precomputed.ᶜdisp_S.curv)
+        else
+            (zero(FT), zero(FT))
+        end
+        c = equilibrium_condensate_truncation(p)
+        ᶜq_c = @. lazy(ᶜq_lcl + ᶜq_icl)
+        ᶜmu_S = @. lazy(ᶜq_cloud - TD.q_vap_saturation(thp, ᶜT_mean, ᶜρ_env))
+        ᶜsigma_S =
+            @. lazy(_sgs_linear_sigma_S(thp, ᶜρ_env, ᶜT_mean, ᶜT′T′, ᶜq′q′, ᶜcorr_Tq))
+        @. ᶜα = sgs_variance_fidelity(
+            A,
+            ᶜτ_mp,
+            c_d,
+            ᶜtke_or_zero,
+            ᶜl_mix_or_one,
+            $(w_eq),
+            ᶜq_c,
+            ᶜmu_S,
+            ᶜsigma_S,
+            $(q_min),
+            ᶜlin,
+            ᶜcurv,
+            $(c),
+        )
+        return nothing
+    end
     @. ᶜα = sgs_variance_fidelity(
         A,
         ᶜτ_mp,
@@ -1531,6 +1566,43 @@ for the condensate reconstruction `E[max(0, λ + α·S′)] = q_c`.
     )
     α_Da = one(FT) / (one(FT) + Da)
     return clamp(α_Da, FT(α_min), one(FT))
+end
+
+"""
+    sgs_variance_fidelity(
+        A, τ_mp, c_d, tke, l_mix, w_eq, q_c_actual, mu_S, sigma_S, q_min,
+        lin = 0, curv = 0, c = Inf32, α_min = 0.05,
+    )
+
+Equilibrium-modulated SGS variance fidelity `α = clamp(α_Da · α_eq, α_min, 1)`
+(`sgs_variance_fidelity_mode = 2`) for the condensate reconstruction
+`E[max(0, λ + α·S′)] = q_c`.
+
+  - Damköhler factor
+    `α_Da = 1 / (1 + A · τ_mp · c_d · √TKE / max(l_mix, 1 m))`.
+  - Equilibrium-ratio modulator `α_eq = r / (w_eq + (1 − w_eq) r)` with
+    `r = (q_c_actual + q_min) / (q_c_eq + q_min)` and `q_c_eq` the expected
+    saturation excess under the SGS PDF:
+    `equilibrium_condensate(μ_S, σ_S, lin, curv, c)`.
+"""
+@inline function sgs_variance_fidelity(
+    A, τ_mp, c_d, tke, l_mix, w_eq, q_c_actual, mu_S, sigma_S, q_min,
+    lin = zero(mu_S), curv = zero(mu_S), c = Inf32, α_min = typeof(tke)(0.05),
+)
+    FT = typeof(tke)
+    inv_τ_turb = FT(c_d) * sqrt(max(tke, zero(FT))) / max(l_mix, one(FT))
+    Da = ifelse(
+        inv_τ_turb > zero(FT),
+        FT(A) * FT(τ_mp) * inv_τ_turb,
+        zero(FT),
+    )
+    α_Da = one(FT) / (one(FT) + Da)
+    q_c_eq =
+        equilibrium_condensate(FT(mu_S), FT(sigma_S), FT(lin), FT(curv), c)
+    r = (FT(q_c_actual) + FT(q_min)) / (q_c_eq + FT(q_min))
+    w = FT(w_eq)
+    α_eq = r / (w + (one(FT) - w) * r)
+    return clamp(α_Da * α_eq, FT(α_min), one(FT))
 end
 
 """

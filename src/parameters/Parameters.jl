@@ -377,7 +377,11 @@ ClimaParams does not yet define or whose ClimaParams default it supersedes.
   - `cloud_fraction_sigma_abs`: Absolute floor `σ_abs` on the augmented
     saturation-deficit standard deviation [kg/kg].
   - `sgs_quadrature_nodes`: Number of conditional-moment quadrature nodes in
-    1M microphysics (6 default, 8 ablation) [-].
+    1M microphysics (8 default, 6 ablation) [-].
+  - `sgs_variance_fidelity_mode`: SGS variance fidelity mode (0: Damköhler
+    scaling α = clamp(α_Da, α_min, 1) [S1a], 1: unit fidelity α ≡ 1 [S1b],
+    2: equilibrium-modulated fidelity α = α_Da · α_eq with equilibrium weight
+    w_eq) [-].
   - `sgs_variance_closure_mode`: SGS variance closure mode (-1: unattenuated
     status quo, 0: Approach A2 scalar displacement attenuation, 1: Approach B
     upper-tail truncation, 2: Approach A2+B, 3: Approach A2′ full vertical

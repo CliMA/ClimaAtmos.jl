@@ -504,7 +504,7 @@ sampling (`GridMeanSGS`) it is the grid-mean form.
     `φ_p ≤ (1 − β_p) + β_p / precip_frac_floor`; it must be positive when
     `precip_incloud_fraction > 0` (`sgs_microphysics_options` checks the model
     parameters). Defaults to `0`, with the placement off [-].
-  - `quad_nodes`: Static `Val{6}` (default) or `Val{8}` conditional-moment
+  - `quad_nodes`: Static `Val{8}` (default) or `Val{6}` conditional-moment
     quadrature rule.
   - `args...`: Extra trailing arguments forwarded to CloudMicrophysics.
 
@@ -538,7 +538,7 @@ end
     precip_frac = one(ρ),
     sigma_S = _sgs_linear_sigma_S(thp, ρ, T, T′T′, q′q′, corr_Tq),
     precip_frac_floor = zero(ρ),
-    quad_nodes::Val{N} = Val(6),
+    quad_nodes::Val{N} = Val(8),
     args...,
 ) where {N}
     FT = typeof(ρ)
@@ -631,7 +631,8 @@ Integrate the `Microphysics1MEvaluator` over the Gaussian SGS PDF with the
     q_c = q_lcl + q_icl
     α_safe = max(FT(α), ϵ_numerics(FT))
     t_a = -FT(λ_lagrange) / α_safe
-    t_e = -FT(mu_S)
+    t_e_raw = (q_rai + q_sno) - FT(mu_S)
+    t_e = ifelse(abs(t_e_raw - t_a) < FT(1e-3) * σ_S, t_a, t_e_raw)
     t_p = ifelse(β_precip > zero(FT), S_star, FT(Inf))
     β_T = sgs_temperature_regression(thp, T, ρ, σ_S, T′T′, q′q′, corr_Tq)
     rule = conditional_rule(
@@ -673,31 +674,31 @@ Base.@kwdef struct SGSMicrophysicsOptions{FT, N}
     ξ_ice::FT
     precip_incloud_fraction::FT
     precip_frac_floor::FT
-    quad_nodes::Val{N} = Val(6)
+    quad_nodes::Val{N} = Val(8)
 end
 SGSMicrophysicsOptions(
     ξ_liq::FT,
     ξ_ice::FT,
     precip_incloud_fraction::FT,
     precip_frac_floor::FT,
-) where {FT} = SGSMicrophysicsOptions{FT, 6}(
+) where {FT} = SGSMicrophysicsOptions{FT, 8}(
     ξ_liq,
     ξ_ice,
     precip_incloud_fraction,
     precip_frac_floor,
-    Val(6),
+    Val(8),
 )
 Base.broadcastable(o::SGSMicrophysicsOptions) = tuple(o)
 
 """
-    sgs_microphysics_options(params, quad_nodes = Val(6))
+    sgs_microphysics_options(params, quad_nodes = Val(8))
 
 The per-run scalar options of the 1M quadrature microphysics as one
 `SGSMicrophysicsOptions` (`ξ_liq`, `ξ_ice`, and the
 precipitation-placement keys), so the tendency broadcast passes one argument
 instead of four.
 """
-function sgs_microphysics_options(params, quad_nodes::Val{N} = Val(6)) where {N}
+function sgs_microphysics_options(params, quad_nodes::Val{N} = Val(8)) where {N}
     FT = eltype(params)
     β_p = FT(CAP.sgs_precip_incloud_fraction(params))
     floor = FT(CAP.sgs_precip_fraction_floor(params))
