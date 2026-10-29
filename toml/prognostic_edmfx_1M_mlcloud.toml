@@ -59,6 +59,38 @@ type = "float"
 value = 0.0
 type = "float"
 
+[sgs_quadrature_nodes]
+value = 8.0
+type = "float"
+
+[sgs_variance_closure_mode]
+value = 1.0
+type = "float"
+
+[sgs_variance_fidelity_mode]
+value = 2.0
+type = "float"
+
+[sgs_node_relaxation_mode]
+value = 1.0
+type = "float"
+
+[sgs_lambda_eq_mode]
+value = 1.0
+type = "float"
+
+[sgs_jacobian_state]
+value = 0.0
+type = "float"
+
+[sgs_env_tail_area_floor]
+value = 0.0
+type = "float"
+
+[cloud_fraction_closure_mode]
+value = 0.0
+type = "float"
+
 [cloud_fraction_eps_rel]
 value = 0.05
 

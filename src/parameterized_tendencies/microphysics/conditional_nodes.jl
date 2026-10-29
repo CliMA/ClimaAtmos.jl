@@ -4,18 +4,19 @@
 #
 # With the Gaussian closure every quantity the 1M evaluator reads at a node is
 # a function of one random variable, the centred saturation excess
-# S′ ~ N(0, σ_S²), and of the temperature regressed on it. Two interior
-# thresholds partition S′ in the 6-node rule:
+# S′ ~ N(0, σ_S²), and of the temperature regressed on it. Three interior
+# thresholds partition S′ in the default 8-node rule:
 #
 #     t_a = −λ / α        actual cloud edge:       q_c(S′) = max(0, λ + α S′)
+#     t_e = −λ_eq         equilibrium cloud edge:  q_c,eq(S′) = max(0, λ_eq + S′)
 #     t_p = S_star        precipitation shaft edge (the moistest a_p of the PDF)
 #
-# Sorting them gives three intervals on (-Inf, Inf), on each of which actual
-# condensate is linear in S′ and the shaft flag is constant. The Gaussian interval
-# moments give each interval its probability weight and the conditional moments
-# of S′; a two-point Gauss rule on each interval yields six nodes in all.
-# An 8-node variant with a third threshold t_e = −λ_eq is also retained for
-# ablation comparisons.
+# Sorting them gives four intervals on (-Inf, Inf), on each of which actual
+# condensate and equilibrium excess are linear in S′ and the shaft flag is
+# constant. The Gaussian interval moments give each interval its probability weight
+# and the conditional moments of S′; a two-point Gauss rule on each interval
+# yields eight nodes in all. A 6-node variant with two thresholds (t_a, t_p) is
+# also available for two-threshold ablation comparisons.
 #
 # The temperature also spreads at fixed S′. That spread, σ⊥, is the part of the
 # temperature variance the regression on S′ does not carry (q′ moves with

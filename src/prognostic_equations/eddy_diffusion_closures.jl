@@ -1136,13 +1136,16 @@ of `phase` (`TD.Liquid()` or `TD.Ice()`) to the diffusing conserved variables,
 `C = Φ(λ_eq / σ_S)` is the cloudy fraction of the equilibrium condensate
 `max(0, λ_eq + S′)`, `S′ ~ N(0, σ_S²)`, that the 1M node rule relaxes toward
 (`Microphysics1MEvaluator`), with the multiplier `λ_eq` and width `σ_S` of
-`ᶜsgs_moments` (`_compute_sgs_moments`). With the untruncated Gaussian target
-(`sgs_displacement_truncation = Inf`, no curvature),
+`ᶜsgs_moments` (`_compute_sgs_moments`). In the untruncated Gaussian limit
+(`sgs_displacement_truncation = Inf`, no curvature, or `sgs_lambda_eq_mode = 0`),
 `λ_eq = μ_S = q_t - q_sat(T, ρ)` and `C = Φ(μ_S / σ_S)` is the analytical
-Gaussian derivative `∂q_c_eq / ∂μ_S` of the equilibrium condensate. A width of
-`ϵ_numerics` marks a closure without SGS spread (`GridMeanSGS`, or vanishing
-variances), whose multiplier is clipped at zero; `C` is then the saturation
-switch `λ_eq > 0`. `γ = (L / c_p) ∂q_sat/∂T` is the Clausius–Clapeyron coupling,
+Gaussian derivative `∂q_c_eq / ∂μ_S` of the equilibrium condensate. Under
+truncated or curvature-aware SGS displacement (`sgs_lambda_eq_mode = 1`),
+`λ_eq` matches the truncated condensate and evaluates to `-Inf` when
+`q_c_eq = 0`, giving `C = 0` identically in subsaturated air outside the
+truncated support. A width of `ϵ_numerics` marks a closure without SGS
+spread (`GridMeanSGS`, or vanishing variances), whose multiplier is clipped at
+zero; `C` is then the saturation switch `λ_eq > 0`. `γ = (L / c_p) ∂q_sat/∂T` is the Clausius–Clapeyron coupling,
 with the saturation specific humidity, its temperature derivative at the cell
 density, and the latent heat `L` of the phase mixture of Thermodynamics, as in
 the relaxation target and `σ_S`; at fixed pressure the derivative would be

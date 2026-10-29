@@ -394,7 +394,7 @@ ClimaParams does not yet define or whose ClimaParams default it supersedes.
   - `cloud_fraction_qc_in_min`: Minimum physical in-cloud condensate density
     threshold q_c,in,min used in Φ-type cloud fraction closures [kg/kg].
   - `sgs_node_relaxation_mode`: 1M microphysics node relaxation excess mode
-    (0: raw linearized node total water q_tot_hat, 1: d9fbfe65a S_eff_cloud
+    (0: raw linearized node total water q_tot_hat, 1: truncated-equilibrium S_eff_cloud
     reconstruction from max(0, λ_eq + S′)) [-].
   - `sgs_lambda_eq_mode`: SGS equilibrium multiplier λ_eq mode
     (0: linearized mean excess μ_S, 1: continuous Lagrange multiplier
