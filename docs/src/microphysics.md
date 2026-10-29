@@ -21,8 +21,10 @@ The cloud condensate and phase partitioning are diagnosed using saturation adjus
 and the 0-moment microphysics provides a sink on total water due to precipitation.
 Precipitation is immediately removed from the computational domain, except for the part
 that evaporates or sublimates below cloud. This evaporation is off by default
-(`precipitation_evaporation_coefficient = 0`); when on, a top-down column scan returns
-part of the falling flux to vapor, limited by the flux and by wet-bulb cooling.
+(`precipitation_evaporation_coefficient = 0`) and on when the coefficient is positive,
+in which case the other `precipitation_evaporation_*` parameters are read; a top-down
+column scan then returns part of the falling flux to vapor, limited by the flux and by
+wet-bulb cooling.
 With `PrognosticEDMFX`, updraft condensate precipitates on its own timescale,
 `precipitation_timescale_updraft_ratio` times `precipitation_timescale`
 (the default ratio is 1).

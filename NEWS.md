@@ -5,12 +5,14 @@ main
 ----
 - ![][badge-✨feature/enhancement] 0M: optional below-cloud evaporation and
   sublimation of the precipitation flux (CloudMicrophysics `Evaporation0M`, off
-  unless `precipitation_evaporation_coefficient > 0`), and, with
+  unless `precipitation_evaporation_coefficient > 0`; the other
+  `precipitation_evaporation_*` parameters are read only then), and, with
   `PrognosticEDMFX`, a separate updraft precipitation timescale
   `precipitation_timescale_updraft_ratio * precipitation_timescale` (ratio 1
   by default, so behavior is unchanged). Requires ClimaParams 1.3.2 and the
-  next CloudMicrophysics release (compat `0.47.1`). New diagnostics `prevap`,
-  `tnhusevp` and `prup`. The TRMM 0M EDMF column job turns evaporation on.
+  next breaking CloudMicrophysics release (compat `0.48.0` is a placeholder
+  until that release is tagged). New diagnostics `prevap`, `tnhusevp` and
+  `prup`. The TRMM 0M EDMF column job turns evaporation on.
 - ![][badge-💥breaking] The `linear` orographic gravity-wave option and the
   `LinearOrographicGravityWave` type are removed; they were unreachable (no cache fields,
   no tendency method). Use `raw_topo`, `raw_topo_online`, or `gfdl_restart`.

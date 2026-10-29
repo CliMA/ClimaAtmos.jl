@@ -105,7 +105,17 @@ function ClimaAtmosParameters(
     microphysics_cloud_params = cloud_parameters(toml_dict)
     MPC = typeof(microphysics_cloud_params)
 
-    microphysics_0m_params = CM.Parameters.Microphysics0MParams(toml_dict)
+    # Evaporation of the 0M precipitation flux is on when its coefficient is
+    # positive; otherwise its parameters are `nothing`.
+    (; precipitation_evaporation_coefficient) = CP.get_parameter_values(
+        toml_dict,
+        "precipitation_evaporation_coefficient",
+        "ClimaAtmos",
+    )
+    microphysics_0m_params = CM.Parameters.Microphysics0MParams(
+        toml_dict;
+        with_evaporation = precipitation_evaporation_coefficient > 0,
+    )
     # Two 1M parameter sets: `bulk` carries the user's process choices for CM
     # BMT; `implicit` carries only `cloud_liquid_formation`, `cloud_ice_formation`,
     # `rain_condensation_evaporation`, and `snow_deposition_sublimation` (all

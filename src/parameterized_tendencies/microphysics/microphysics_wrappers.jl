@@ -248,7 +248,8 @@ end
 
 One level of the top-down scan (`Operators.column_accumulate!` with
 `reverse = true`) of the 0-moment precipitation flux with below-cloud
-evaporation of rain and sublimation of snow.
+evaporation of rain and sublimation of snow, with the `CMP.Evaporation0M`
+parameters `evaporation` (only called when evaporation is on).
 
 `state = (F_r, F_s, F_rl, F_sl, ρE_r, ρE_s, ρe_r, ρe_s)` holds the rain and
 snow fluxes [kg m⁻² s⁻¹] entering the cell from above (on output: leaving it at
@@ -263,8 +264,8 @@ specific humidity and geopotential of the air into which precipitation
 evaporates.
 
 The incoming fluxes evaporate at `ρa_env` times
-`CloudMicrophysics.Microphysics0M.evaporate_precipitation`, rain with the
-deficit over liquid and snow with the deficit over ice (over liquid above
+`CloudMicrophysics.Microphysics0M.evaporate_precipitation`, rain against
+saturation over liquid and snow against saturation over ice (over liquid above
 freezing). Each rate is limited by the flux falling into the cell and by the
 wet-bulb vapor deficit of its phase (`wet_bulb_vapor_deficit`, over liquid with
 `L_v` for rain and over ice with `L_s` for snow below freezing); their sum is
@@ -291,12 +292,8 @@ rain and `F_sl / F_s` for snow.
     L_sno = ifelse(
         snow_over_ice, TD.latent_heat_sublim(thp, T), TD.latent_heat_vapor(thp, T),
     )
-    E_r = CM0.evaporate_precipitation(
-        evaporation, RH_c * q_sat_liq - q_vap, p_over_ps, F_r,
-    )
-    E_s = CM0.evaporate_precipitation(
-        evaporation, RH_c * q_sat_sno - q_vap, p_over_ps, F_s,
-    )
+    E_r = CM0.evaporate_precipitation(evaporation, q_vap, q_sat_liq, p_over_ps, F_r)
+    E_s = CM0.evaporate_precipitation(evaporation, q_vap, q_sat_sno, p_over_ps, F_s)
     Δq_wb_liq = wet_bulb_vapor_deficit(
         thp, RH_c, q_sat_liq, q_vap, TD.latent_heat_vapor(thp, T), T,
     )

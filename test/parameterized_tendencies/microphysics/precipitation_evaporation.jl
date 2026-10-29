@@ -88,6 +88,8 @@ getd(name, Y, p) = Base.materialize(
             (Y0, p0) = build(edmf)
             (Y1, p1) = build(edmf; overrides = EVAP_ON)
             @test parent(Y0) == parent(Y1)
+            @test isnothing(CAP.microphysics_0m_params(p0.params).evaporation)
+            @test !isnothing(CAP.microphysics_0m_params(p1.params).evaporation)
             sfc(p) = (
                 scalar(p.precomputed.surface_rain_flux),
                 scalar(p.precomputed.surface_snow_flux),

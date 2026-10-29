@@ -152,11 +152,11 @@ precipitation flux, `p.precomputed.ᶜprecip_evap` (see
 `precip_evap_scale_rai` and `precip_evap_scale_sno` (see
 `set_precipitation_surface_fluxes!`), to the grid-mean `ρq_tot`, `ρ` and
 `ρe_tot`. With `PrognosticEDMFX` the updraft prognostics are not touched, so
-the water and the evaporative cooling go to the environment. A no-op when the
-evaporation coefficient is zero.
+the water and the evaporative cooling go to the environment. A no-op when
+evaporation is off (`evaporation` parameters are `nothing`).
 """
 function precipitation_evaporation_tendency!(Yₜ, p)
-    iszero(CAP.microphysics_0m_params(p.params).evaporation.k_E) &&
+    isnothing(CAP.microphysics_0m_params(p.params).evaporation) &&
         return nothing
     (; ᶜprecip_evap, precip_evap_scale_rai, precip_evap_scale_sno) =
         p.precomputed

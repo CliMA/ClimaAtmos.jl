@@ -1314,8 +1314,9 @@ the air with density `ᶜρ_env`, mass per unit volume of the grid box `ᶜρa_e
 temperature `ᶜT_env` and vapor specific humidity `ᶜq_vap`: the grid mean, or
 the environment with `PrognosticEDMFX`. Writes `p.precomputed.ᶜprecip_evap`
 (`ρ_evap_rai`, `ρ_evap_sno` [kg m⁻³ s⁻¹] and their energies `ρe_evap_rai`,
-`ρe_evap_sno` [W m⁻³]). Returns `nothing` without computing anything when the
-evaporation coefficient is zero, leaving `ᶜprecip_evap` zero.
+`ρe_evap_sno` [W m⁻³]). Returns `nothing` without computing anything when
+evaporation is off (the `evaporation` parameters of
+`CAP.microphysics_0m_params` are `nothing`), leaving `ᶜprecip_evap` zero.
 
 Must run after `ᶜρ_dq_tot_dt` and `ᶜρ_de_tot_dt` are set. The column is scanned
 top-down (`precipitation_evaporation_step`): the rain and snow fluxes gain the
@@ -1332,7 +1333,7 @@ function set_precipitation_evaporation_cache!(
     Y, p, ᶜρ_env, ᶜρa_env, ᶜT_env, ᶜq_vap,
 )
     (; evaporation) = CAP.microphysics_0m_params(p.params)
-    iszero(evaporation.k_E) && return nothing
+    isnothing(evaporation) && return nothing
 
     (; dt) = p
     (; ᶜΦ) = p.core

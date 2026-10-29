@@ -306,16 +306,14 @@ end
 @testset "0M precipitation evaporation parameters" begin
     m0 = CA.EquilibriumMicrophysics0M()
     for FT in (Float32, Float64)
-        # The ClimaParams defaults switch evaporation off.
-        params = CA.ClimaAtmosParameters(
-            CP.create_toml_dict(FT);
-            microphysics_model = m0,
-        )
-        evaporation = CAP.microphysics_0m_params(params).evaporation
-        @test evaporation isa CAP.CM.Parameters.Evaporation0M{FT}
-        @test iszero(evaporation.k_E)
-        @test 0 < evaporation.RH_c <= 1
-        @test 0 < evaporation.a_p <= 1
+        # The ClimaParams defaults switch evaporation off: no evaporation
+        # parameters are built, and the coefficient is logged as used.
+        toml_dict = CP.create_toml_dict(FT)
+        params = CA.ClimaAtmosParameters(toml_dict; microphysics_model = m0)
+        @test isnothing(CAP.microphysics_0m_params(params).evaporation)
+        @test isbits(CAP.microphysics_0m_params(params))
+        @test "ClimaAtmos" in
+              toml_dict.data["precipitation_evaporation_coefficient"]["used_in"]
 
         override = Dict(
             "precipitation_evaporation_coefficient" => 1.36e-4,
@@ -333,6 +331,8 @@ end
         )
         params = CA.ClimaAtmosParameters(toml_dict; microphysics_model = m0)
         evaporation = CAP.microphysics_0m_params(params).evaporation
+        @test evaporation isa CAP.CM.Parameters.Evaporation0M{FT}
+        @test isbits(CAP.microphysics_0m_params(params))
         @test evaporation.k_E === FT(1.36e-4)
         @test evaporation.RH_c === FT(0.85)
         @test evaporation.a_p === FT(0.5)
