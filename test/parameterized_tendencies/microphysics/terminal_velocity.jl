@@ -30,7 +30,7 @@ import ClimaCore.MatrixFields: @name
                 @test water.terminal_velocity_liquid isa CA.FixedTerminalVelocity
                 @test water.terminal_velocity_ice isa CA.FixedTerminalVelocity
                 @test water.terminal_velocity_rain isa CA.FixedTerminalVelocity
-                @test water.terminal_velocity_snow isa CA.FixedTerminalVelocity
+                @test water.terminal_velocity_snow isa CA.Chen2022TerminalVelocity
 
                 (; water) = make_water(
                     Dict(
@@ -48,11 +48,11 @@ import ClimaCore.MatrixFields: @name
                 (; water) = make_water(
                     Dict(
                         "rain_terminal_velocity" => "Fixed",
-                        "snow_terminal_velocity" => "Chen2022",
+                        "snow_terminal_velocity" => "Fixed",
                     ),
                 )
                 @test water.terminal_velocity_rain isa CA.FixedTerminalVelocity
-                @test water.terminal_velocity_snow isa CA.Chen2022TerminalVelocity
+                @test water.terminal_velocity_snow isa CA.FixedTerminalVelocity
 
                 # closures a species does not support are rejected
                 @test_throws ErrorException make_water(

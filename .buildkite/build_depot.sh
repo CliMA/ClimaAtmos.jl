@@ -4,7 +4,7 @@
 # (set in depot_pipeline.yml). See that file for the overall design.
 set -euo pipefail
 
-STAGING="$JULIA_DEPOT_PATH"                 # Julia builds here
+STAGING="${JULIA_DEPOT_PATH%%:*}"           # Julia builds here
 mkdir -p "$STAGING"
 
 # Start from the last published depot so we only build the delta and stay

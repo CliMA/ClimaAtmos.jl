@@ -1,4 +1,4 @@
-446
+447
 
 # **README**
 #
@@ -32,6 +32,10 @@
 # 3) (optional) leave a link to the buildkite run that prompted this ref counter bump.
 
 #=
+447
+- Snow falls at the Chen et al. (2022) speed by default;
+  `toml/prognostic_edmfx_1M.toml` sets `snow_apparent_density` to 200.
+
 446
 - Include condensate and precipitation sedimentation enthalpy and mass-source
   dilution in `PrognosticEDMFX` updraft `mse` and `ρaʲ`, clamp laterally
